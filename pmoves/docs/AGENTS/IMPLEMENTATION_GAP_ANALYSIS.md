@@ -1,8 +1,12 @@
 # AGENTS Documentation Implementation Gap Analysis
 
-**Date:** 2026-02-02
-**Branch:** PMOVES.AI-Edition-Hardened
+**Date:** 2026-03-01 (updated from 2026-02-02)
+**Branch:** PMOVES.AI-Edition-Hardened / main
 **Purpose:** Identify gaps between AGENTS documentation and current hardened branch implementation
+**Cross-References:**
+- [CODEX_RUNTIME_PROTOCOL.md](./CODEX_RUNTIME_PROTOCOL.md) — Operating modes and validation standards
+- [CODEX_OPERATOR_HOME.md](./CODEX_OPERATOR_HOME.md) — Active endpoint catalog
+- [AGENT_RESILIENCE_PATTERNS.md](./AGENT_RESILIENCE_PATTERNS.md) — Recovery patterns born from Phase C
 
 ---
 
@@ -20,11 +24,26 @@ The AGENTS documentation in `pmoves/docs/AGENTS/` describes a sophisticated agen
 |-----------|--------|-------|
 | **Agent Zero** | ✅ Implemented | Located at `pmoves/services/agent-zero/` with Dockerfile and main.py |
 | **Archon** | ✅ Implemented | Located at `pmoves/services/archon/` with README |
-| **MCP Integration** | ✅ Partial | MCP adapters exist in `pmoves/integrations/archon/` |
-| **NATS Message Bus** | ✅ Implemented | Core infrastructure for agent communication |
+| **MCP Integration** | ✅ Partial | MCP adapters exist in `pmoves/integrations/archon/`; Agent Zero exposes `/mcp/*` |
+| **NATS Message Bus** | ✅ Implemented | Core infrastructure for agent communication (auth hardened 2026-02-16) |
 | **Gateway Agent** | ✅ Implemented | Located at `pmoves/services/gateway-agent/` |
 | **BotZ Gateway** | ✅ Implemented | Located at `pmoves/services/botz-gateway/` |
 | **Distributed Compute Services** | ✅ Implemented | Node Registry, vLLM Orchestrator, GPU Orchestrator |
+
+### ✅ Completed Since Last Analysis (Phase 1 — Feb 2026)
+
+| Component | Status | Notes |
+|-----------|--------|-------|
+| **Security Patterns** | ✅ Implemented | `security/patterns.yaml` with damage-control hooks (deterministic + probabilistic) |
+| **Cipher Memory** | ✅ Implemented | Port 8096, Neo4j backend, MCP bridge at `pmoves-cipher-mcp/`, `agent_plan/checkpoint/completion` categories |
+| **Codex Runtime Protocol** | ✅ Implemented | `CODEX_RUNTIME_PROTOCOL.md` with focus/scout modes, confidence gates, PR sweep |
+| **KRISS KROSS Accord** | ✅ Ratified | Collision-safe multi-agent traversal with Graphiti trail + CHIT attestation (2026-02-25) |
+| **Agent Resilience Patterns** | ✅ Implemented | 3-layer model (preventive → Cipher recovery → registry systemic) |
+| **Agent Class Taxonomy** | ✅ v1.4.0 | 60 agents registered in `agent_registry.yaml` with types, tiers, NATS, CHIT toggles |
+| **Persona Seeds** | ✅ Implemented | 8 standard personas seeded via `17_persona_seed.sql` with model preferences |
+| **Model Registry** | ✅ Implemented | `gpu-models.yaml` reconciled with SQL registry (Anthropic, TTS, expanded mappings) |
+| **CHIT Geometry Bus** | ⚠️ Partial | Endpoints exist (`/geometry/calibration/report` on Hi-RAG), NATS subjects active (`geometry.cgp.v1`), but full CGP encode/decode pipeline incomplete |
+| **Codex-Claude Parity** | ✅ 100% | 113/113 CLI tokens mapped (see `CODEX_CLAUDE_PARITY_GAPS.md`) |
 
 ---
 
@@ -34,19 +53,23 @@ The AGENTS documentation in `pmoves/docs/AGENTS/` describes a sophisticated agen
 
 **Documented In:** `AI Agent Integration and Best Practices.md`
 
-**Gap:** The documentation describes full A2A server and client implementation for Agent Zero and Archon. Currently:
+**Status: ⚠️ Foundation exists, full A2A server NOT exposed (updated 2026-03-01)**
 
-- ❌ `/.well-known/agent.json` endpoint not implemented
+Agent Zero provides an MCP API at `/mcp/*` (port 8080) that serves as the coordination foundation. However, the formal A2A protocol (Google's Agent-to-Agent spec) is not yet implemented:
+
+- ✅ Agent Zero MCP API live at `/mcp/*` — provides command execution and health check
+- ✅ Archon connects to Agent Zero MCP for agent coordination
+- ❌ `/.well-known/agent.json` Agent Card discovery endpoint not implemented
 - ❌ A2A task lifecycle (submitted → working → completed/failed) not implemented
 - ❌ Server-Sent Events (SSE) streaming for task updates not implemented
 - ❌ A2A client library integration in Archon not implemented
 
 **Action Required:**
 1. Add A2A server endpoint to Agent Zero: `python/features/a2a/server.py`
-2. Implement Agent Card discovery endpoint
+2. Implement Agent Card discovery endpoint (`/.well-known/agent.json`)
 3. Add JSON-RPC 2.0 handler for task management
 4. Implement SSE streaming for real-time updates
-5. Integrate A2A client in Archon for agent discovery and task submission
+5. Consider whether MCP API already covers A2A use cases sufficiently
 
 ### 2. Vertical Slice Architecture Refactoring
 
@@ -154,43 +177,23 @@ skills/
 
 **Documented In:** `AI Agent Integration and Best Practices.md`
 
-**Gap:** Documentation calls for `security/patterns.yaml` with deterministic and probabilistic hooks.
+**Status: ✅ Implemented (Phase C hardening, 2026-02-16)**
 
-**Required Implementation:**
-```yaml
-# security/patterns.yaml
-global_protection:
-  blocked_commands:
-    - pattern: "rm -rf /"
-      reason: "Catastrophic system destruction"
-    - pattern: "git push --force"
-      reason: "History rewriting forbidden"
-    - pattern: "drop database"
-      reason: "Database destruction requires human approval"
+The damage-control hook system is live in the parent PMOVES.AI repo:
 
-  protected_paths:
-    - path: ".env"
-      level: "zero_access"
-    - path: ".git/"
-      level: "read_only"
-    - path: "src/core/"
-      level: "no_delete"
+- ✅ `security/patterns.yaml` deployed with self-protection (`**/security/patterns.yaml` in `zero_access`)
+- ✅ Deterministic hooks: `.env*` file edits blocked (template files use `ask` pattern)
+- ✅ Known Roads model: dangerous Docker operations redirected to Make targets (see `.claude/CLAUDE.md`)
+- ✅ Adversarial instruction detection (GAN defense) active in pre-execution hooks
+- ✅ Template ask-path: `check_path()` returns `(blocked, reason, is_template)`
 
-hooks:
-  pre_execution:
-    - name: "Probabilistic Safety Check"
-      type: "llm_eval"
-      model: "utility"  # TensorZero role — routes to fast/cheap model
-      trigger_on: "shell_command"
-      action_on_risk: "ask_user"
-```
+**Remaining gap: Portability**
 
-**Action Required:**
-1. Create `security/patterns.yaml`
-2. Implement `security/hooks/pre_command.py` for deterministic hooks
-3. Implement `security/hooks/prompt_scan.py` for probabilistic hooks
-4. Integrate hooks into Agent Zero's tool execution flow
-5. Add Haiku model integration for safety checks
+Hooks only apply in the parent PMOVES.AI repo. When agents operate in submodule worktrees (e.g., `PMOVES-BoTZ/`), the parent repo's hooks do not apply. See [AGENT_RESILIENCE_PATTERNS.md § Known Limitation](./AGENT_RESILIENCE_PATTERNS.md#known-limitation-hooksettings-portability) for workaround patterns.
+
+**Not implemented:**
+- ❌ Probabilistic LLM-based safety checks (Haiku model integration for pre-execution risk scoring)
+- ❌ Prompt scan hooks (`security/hooks/prompt_scan.py`)
 
 ### 6. Dynamic Context Priming (R&D Framework)
 
@@ -211,20 +214,27 @@ hooks:
 
 **Documented In:** `PMOVES.AI Agentic Architecture Deep Dive.md`
 
-**Gap:** Advanced geometry-based reasoning and CGP (Contextual Geometry Packets) not implemented.
+**Status: ⚠️ Partially Implemented (updated 2026-03-01)**
 
-**Required Components:**
+CHIT Geometry Bus infrastructure is live but the full CGP pipeline is incomplete:
+
+**Implemented:**
+- ✅ Hi-RAG v2 exposes `/geometry/calibration/report` endpoint (port 8086)
+- ✅ NATS subjects active: `geometry.cgp.v1`, `geometry.swarm.meta.v1`, `pmoves.geometry.cgp.ready.v1`
+- ✅ EvoSwarm Controller (port 8113) publishes `geometry.swarm.meta.v1`
+- ✅ Swarm Attribution agent registered, subscribes to `geometry.attribution.request.v1`
+- ✅ CHIT toggles defined for all 60 agents in `agent_registry.yaml`
+- ✅ `sign_cgp()` available in `chit_security.py` for trail signing
+
+**Still Required:**
 1. **Geometry Normalizer** - Standardize inputs to coordinate system
-2. **Shape Attributor** - Analyze topological features
+2. **Shape Attributor** - Full implementation (agent registered but runtime not deployed)
 3. **Composite Builder** - Merge shapes into constellations
-4. **Visualizer** - Render as cymatic patterns
+4. **Visualizer** - Render as cymatic patterns (Hyperdimensions placeholder exists)
+5. **MACA** - Multi-Agent Consensus Alignment algorithm
+6. **CGP version migration** - v0.1 → v0.2 → v1.0 progression undocumented
 
-**Action Required:**
-1. Implement CHIT Geometry Bus integration
-2. Add shape-attribution agent capability
-3. Create CGP serialization/deserialization
-4. Implement MACA (Multi-Agent Consensus Alignment)
-5. Add entropy-based consensus mechanism
+**See:** [CODEX_OPERATOR_HOME.md](./CODEX_OPERATOR_HOME.md#chit-geometry-bus) for live endpoint catalog
 
 ---
 
@@ -293,12 +303,16 @@ hooks:
 
 ## Implementation Roadmap
 
-### Phase 1: Foundation (Week 1-2)
+### Phase 1: Foundation (Week 1-2) ✅ COMPLETE
 
-1. ✅ Create `security/patterns.yaml`
-2. ✅ Implement deterministic hooks (pre_command.py)
-3. ✅ Create SKILL.md template
+1. ✅ Create `security/patterns.yaml` — Deployed with damage-control hooks
+2. ✅ Implement deterministic hooks (pre_command.py) — Known Roads + GAN defense active
+3. ✅ Create SKILL.md template — BoTZ skill marketplace operational
 4. ✅ Convert one instrument to skill format as proof-of-concept
+5. ✅ Cipher Memory deployed (port 8096) with agent plan/checkpoint/completion categories
+6. ✅ Agent Registry created (`agent_registry.yaml`) with 60 agents, resilience attributes
+7. ✅ Codex Runtime Protocol ratified with focus/scout modes
+8. ✅ KRISS KROSS Accord ratified for multi-agent collision safety
 
 ### Phase 2: Protocol Integration (Week 3-4)
 
