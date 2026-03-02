@@ -30,6 +30,20 @@
 
 -- uuid-ossp already enabled by 00_pmoves_schema.sql
 
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.tables
+    WHERE table_schema = 'pmoves_core' AND table_name = 'personas'
+  ) AND NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'pmoves_core' AND table_name = 'personas' AND column_name = 'updated_at'
+  ) THEN
+    ALTER TABLE pmoves_core.personas
+      ADD COLUMN updated_at timestamptz NOT NULL DEFAULT NOW();
+  END IF;
+END $$;
+
 -- =============================================================================
 -- 1. DEVELOPER PERSONA
 -- =============================================================================

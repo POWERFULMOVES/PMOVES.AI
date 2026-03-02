@@ -1,10 +1,10 @@
 # PMOVES Tooling Overlay Audit
-_Generated: 2026-02-26_
+_Generated: 2026-03-02_
 
 ## Summary
-- PMOVES scripts/tools scanned: **207**
+- PMOVES scripts/tools scanned: **211**
 - PMOVES auth/user/login-focused entries: **34**
-- Submodule keyword-matched scripts/tools: **107**
+- Submodule keyword-matched scripts/tools: **105**
 - Potential overlap rows: **112**
 - Keywords with overlap: **auth, bootstrap, credential, profile, secret, token, user**
 - Findings: **0 error(s)**, **0 warning(s)**
@@ -26,10 +26,6 @@ _Generated: 2026-02-26_
 ## Overlap Candidates
 | Keyword | Score | PMOVES Script/Tool | Submodule | Submodule Script/Tool | Shared Tokens |
 | --- | --- | --- | --- | --- | --- |
-| `auth` | 0.57 | `pmoves/tools/auth_bootstrap_check.py` | `PMOVES-transcribe-and-fetch` | `PMOVES-transcribe-and-fetch/pmoves-integrations/auth/bootstrap.py` | auth, bootstrap, pmoves, py |
-| `auth` | 0.38 | `pmoves/scripts/integration-auth-setup.sh` | `PMOVES-transcribe-and-fetch` | `PMOVES-transcribe-and-fetch/pmoves-integrations/auth/bootstrap.sh` | auth, pmoves, sh |
-| `auth` | 0.38 | `pmoves/tools/auth_alignment_check.py` | `PMOVES-transcribe-and-fetch` | `PMOVES-transcribe-and-fetch/pmoves-integrations/auth/bootstrap.py` | auth, pmoves, py |
-| `auth` | 0.38 | `pmoves/tools/auth_bootstrap_check.py` | `PMOVES-transcribe-and-fetch` | `PMOVES-transcribe-and-fetch/pmoves-integrations/auth/bootstrap.sh` | auth, bootstrap, pmoves |
 | `auth` | 0.33 | `pmoves/tools/auth_alignment_check.py` | `PMOVES-Open-Notebook` | `PMOVES-Open-Notebook/api/auth.py` | auth, pmoves, py |
 | `auth` | 0.33 | `pmoves/tools/auth_bootstrap_check.py` | `PMOVES-Open-Notebook` | `PMOVES-Open-Notebook/api/auth.py` | auth, pmoves, py |
 | `auth` | 0.25 | `pmoves/tools/auth_alignment_check.py` | `PMOVES-transcribe-and-fetch` | `PMOVES-transcribe-and-fetch/pmoves-ottomator-agents/tweet-generator-agent/twitter_auth.py` | auth, pmoves, py |
@@ -37,7 +33,6 @@ _Generated: 2026-02-26_
 | `auth` | 0.25 | `pmoves/tools/auth_bootstrap_check.py` | `PMOVES-transcribe-and-fetch` | `PMOVES-transcribe-and-fetch/pmoves-ottomator-agents/tweet-generator-agent/twitter_auth.py` | auth, pmoves, py |
 | `auth` | 0.25 | `pmoves/tools/auth_bootstrap_check.py` | `PMOVES-Open-Notebook` | `PMOVES-Open-Notebook/api/routers/auth.py` | auth, py |
 | `auth` | 0.22 | `pmoves/scripts/integration-auth-setup.sh` | `Pmoves-hyperdimensions` | `Pmoves-hyperdimensions/portal/portal-auth.js` | auth, pmoves |
-| `auth` | 0.22 | `pmoves/scripts/integration-auth-setup.sh` | `PMOVES-transcribe-and-fetch` | `PMOVES-transcribe-and-fetch/pmoves-integrations/auth/bootstrap.py` | auth, pmoves |
 | `auth` | 0.22 | `pmoves/scripts/integration-auth-setup.sh` | `PMOVES-DoX` | `PMOVES-DoX/external/PMOVES-supabase/scripts/authorizeVercelDeploys.ts` | pmoves, scripts |
 | `auth` | 0.22 | `pmoves/scripts/integration-auth-setup.sh` | `PMOVES-Tailscale` | `PMOVES-Tailscale/cmd/nginx-auth/mkdeb.sh` | auth, sh |
 | `auth` | 0.22 | `pmoves/scripts/integration-auth-setup.sh` | `PMOVES-Tailscale` | `PMOVES-Tailscale/cmd/nginx-auth/deb/postinst.sh` | auth, sh |
@@ -46,6 +41,11 @@ _Generated: 2026-02-26_
 | `auth` | 0.22 | `pmoves/scripts/integration-auth-setup.sh` | `PMOVES-Tailscale` | `PMOVES-Tailscale/cmd/nginx-auth/rpm/postinst.sh` | auth, sh |
 | `auth` | 0.22 | `pmoves/scripts/integration-auth-setup.sh` | `PMOVES-Tailscale` | `PMOVES-Tailscale/cmd/nginx-auth/rpm/postrm.sh` | auth, sh |
 | `auth` | 0.22 | `pmoves/scripts/integration-auth-setup.sh` | `PMOVES-Tailscale` | `PMOVES-Tailscale/cmd/nginx-auth/rpm/prerm.sh` | auth, sh |
+| `auth` | 0.22 | `pmoves/scripts/integration-auth-setup.sh` | `PMOVES-supabase` | `PMOVES-supabase/scripts/authorizeVercelDeploys.ts` | pmoves, scripts |
+| `auth` | 0.22 | `pmoves/tools/auth_alignment_check.py` | `PMOVES-BoTZ` | `PMOVES-BoTZ/features/mcp_bridge/auth.py` | auth, py |
+| `auth` | 0.22 | `pmoves/tools/auth_alignment_check.py` | `Pmoves-hyperdimensions` | `Pmoves-hyperdimensions/portal/portal-auth.js` | auth, pmoves |
+| `auth` | 0.22 | `pmoves/tools/auth_bootstrap_check.py` | `PMOVES-BoTZ` | `PMOVES-BoTZ/features/mcp_bridge/auth.py` | auth, py |
+| `auth` | 0.22 | `pmoves/tools/auth_bootstrap_check.py` | `Pmoves-hyperdimensions` | `Pmoves-hyperdimensions/portal/portal-auth.js` | auth, pmoves |
 | `bootstrap` | 0.57 | `pmoves/scripts/bootstrap_env.py` | `PMOVES-Archon` | `PMOVES-Archon/external/PMOVES-BoTZ/scripts/bootstrap_env.ps1` | bootstrap, env, pmoves, scripts |
 | `bootstrap` | 0.57 | `pmoves/scripts/bootstrap_env.py` | `PMOVES-BoTZ` | `PMOVES-BoTZ/scripts/bootstrap_env.ps1` | bootstrap, env, pmoves, scripts |
 | `bootstrap` | 0.57 | `pmoves/scripts/bootstrap_env.py` | `PMOVES-DoX` | `PMOVES-DoX/scripts/bootstrap_env.ps1` | bootstrap, env, pmoves, scripts |
@@ -62,10 +62,10 @@ _Generated: 2026-02-26_
 | `bootstrap` | 0.57 | `pmoves/scripts/windows_bootstrap.ps1` | `PMOVES-BoTZ` | `PMOVES-BoTZ/scripts/bootstrap_env.ps1` | bootstrap, pmoves, ps1, scripts |
 | `bootstrap` | 0.57 | `pmoves/scripts/windows_bootstrap.ps1` | `PMOVES-DoX` | `PMOVES-DoX/scripts/bootstrap_env.ps1` | bootstrap, pmoves, ps1, scripts |
 | `bootstrap` | 0.57 | `pmoves/scripts/windows_bootstrap.ps1` | `pmoves/integrations/archon` | `pmoves/integrations/archon/external/PMOVES-BoTZ/scripts/bootstrap_env.ps1` | bootstrap, pmoves, ps1, scripts |
-| `bootstrap` | 0.57 | `pmoves/tools/auth_bootstrap_check.py` | `PMOVES-transcribe-and-fetch` | `PMOVES-transcribe-and-fetch/pmoves-integrations/auth/bootstrap.py` | auth, bootstrap, pmoves, py |
 | `bootstrap` | 0.50 | `pmoves/scripts/codex_bootstrap.ps1` | `PMOVES-Agent-Zero` | `PMOVES-Agent-Zero/scripts/bootstrap_credentials.ps1` | bootstrap, pmoves, ps1, scripts |
 | `bootstrap` | 0.50 | `pmoves/scripts/codex_bootstrap.ps1` | `PMOVES-Archon` | `PMOVES-Archon/external/PMOVES-Agent-Zero/scripts/bootstrap_credentials.ps1` | bootstrap, pmoves, ps1, scripts |
 | `bootstrap` | 0.50 | `pmoves/scripts/codex_bootstrap.ps1` | `PMOVES-DoX` | `PMOVES-DoX/external/PMOVES-Agent-Zero/scripts/bootstrap_credentials.ps1` | bootstrap, pmoves, ps1, scripts |
+| `bootstrap` | 0.50 | `pmoves/scripts/codex_bootstrap.ps1` | `pmoves/integrations/archon` | `pmoves/integrations/archon/external/PMOVES-Agent-Zero/scripts/bootstrap_credentials.ps1` | bootstrap, pmoves, ps1, scripts |
 | `credential` | 0.50 | `pmoves/scripts/fetch_credentials.sh` | `PMOVES-Agent-Zero` | `PMOVES-Agent-Zero/scripts/bootstrap_credentials.sh` | credentials, pmoves, scripts, sh |
 | `credential` | 0.50 | `pmoves/scripts/fetch_credentials.sh` | `PMOVES-Archon` | `PMOVES-Archon/external/PMOVES-Agent-Zero/scripts/bootstrap_credentials.sh` | credentials, pmoves, scripts, sh |
 | `credential` | 0.50 | `pmoves/scripts/fetch_credentials.sh` | `PMOVES-DoX` | `PMOVES-DoX/external/PMOVES-Agent-Zero/scripts/bootstrap_credentials.sh` | credentials, pmoves, scripts, sh |

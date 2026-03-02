@@ -49,7 +49,22 @@ COMMENT ON VIEW pmoves_core.persona_model_resolution IS
 -- =============================================================================
 -- Views inherit RLS from base tables; grant explicit SELECT to API roles.
 
-GRANT SELECT ON pmoves_core.persona_model_resolution TO postgrest_anon, postgrest_auth_user;
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'postgrest_anon') THEN
+    EXECUTE 'GRANT SELECT ON pmoves_core.persona_model_resolution TO postgrest_anon';
+  END IF;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
+    EXECUTE 'GRANT SELECT ON pmoves_core.persona_model_resolution TO anon';
+  END IF;
+
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'postgrest_auth_user') THEN
+    EXECUTE 'GRANT SELECT ON pmoves_core.persona_model_resolution TO postgrest_auth_user';
+  END IF;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
+    EXECUTE 'GRANT SELECT ON pmoves_core.persona_model_resolution TO authenticated';
+  END IF;
+END $$;
 
 -- =============================================================================
 -- Convenience: Active persona summary for quick lookup
@@ -78,4 +93,19 @@ WHERE p.is_active = true;
 COMMENT ON VIEW pmoves_core.active_persona_summary IS
     'Quick-lookup view of active personas with resolved model/provider info.';
 
-GRANT SELECT ON pmoves_core.active_persona_summary TO postgrest_anon, postgrest_auth_user;
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'postgrest_anon') THEN
+    EXECUTE 'GRANT SELECT ON pmoves_core.active_persona_summary TO postgrest_anon';
+  END IF;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
+    EXECUTE 'GRANT SELECT ON pmoves_core.active_persona_summary TO anon';
+  END IF;
+
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'postgrest_auth_user') THEN
+    EXECUTE 'GRANT SELECT ON pmoves_core.active_persona_summary TO postgrest_auth_user';
+  END IF;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
+    EXECUTE 'GRANT SELECT ON pmoves_core.active_persona_summary TO authenticated';
+  END IF;
+END $$;
