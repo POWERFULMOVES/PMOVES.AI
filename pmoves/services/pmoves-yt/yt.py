@@ -84,7 +84,10 @@ except Exception:  # pragma: no cover - fallback when yt-dlp is unavailable
         module is unavailable in the runtime environment.
         """
         pass
-import boto3
+try:
+    import boto3
+except Exception:  # pragma: no cover - fallback when boto3 is unavailable
+    boto3 = None  # type: ignore[assignment]
 import requests
 from urllib.parse import urlparse, parse_qs, urlunparse, quote
 from nats.aio.client import Client as NATS
@@ -600,6 +603,8 @@ def s3_client():
         Uses MINIO_ENDPOINT, MINIO_ACCESS_KEY, MINIO_SECRET_KEY, and MINIO_SECURE
         environment variables for configuration.
     """
+    if boto3 is None:
+        raise HTTPException(503, "boto3 is not installed in this runtime")
     endpoint_url = MINIO_ENDPOINT if "://" in MINIO_ENDPOINT else f"{'https' if MINIO_SECURE else 'http'}://{MINIO_ENDPOINT}"
     return boto3.client("s3", aws_access_key_id=MINIO_ACCESS_KEY, aws_secret_access_key=MINIO_SECRET_KEY, endpoint_url=endpoint_url)
 
