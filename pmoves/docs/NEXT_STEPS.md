@@ -11,11 +11,22 @@ _Last updated: 2026-03-02_
   - `#745` chore(submodules): transcribe-and-fetch + cipher parity bumps (hardened)
   - `#744` fix(a2a): discovery/task hardening + upstream agent-card parity (hardened)
   - promotion sync: `#746` hardened -> main
-- Open PR queue is currently `5` (`#754`, `#755`, `#756`, `#757`, `#758`).
-- CI status: hosted gates are moving; self-hosted lanes remain capacity-constrained/queued and require queue hygiene before merge promotion.
+- Follow-on Mar 2 merge wave landed on `main`:
+  - `#748` roadmap refresh
+  - `#749` audit summary API
+  - `#750` dashboard hydration closeout
+  - `#751` presign health endpoint fix
+  - `#752` submodule bumps (Agent-Zero, cipher, transcribe-and-fetch)
+  - `#753` queue guard/drain targets
+  - `#754`, `#755`, `#756`, `#757` Dependabot updates
+  - `#758` production runtime/db/env hardening sitrep
+  - `#759` CI SQL/Python collision fixes
+  - `#760` ToKenism submodule gitlink bump (after merged submodule PR #46)
+- Open PR queue is currently `1` (`#761` docs cataclysm closeout).
+- CI status: hosted gates complete quickly; self-hosted lanes still re-queue and require queue hygiene/cancellation of stale main-branch jobs.
 - Live security backlog snapshot:
-  - Dependabot alerts open: `5` (`1 critical`, `1 high`, `1 medium`, `2 low`)
-  - Code scanning alerts open: `36` (`33 error`, `3 warning`)
+  - Dependabot alerts open: `2` (`1 high`, `1 low`)
+  - Code scanning alerts open: `34` (`31 error`, `3 warning`)
 
 ### Latest changes (Mar 1, 2026)
 - Hardened release PR queue is clear (`0` open PRs).
