@@ -90,9 +90,8 @@ Rationale:
 ## Deterministic Verification
 Run in order:
 1. `make -C pmoves supabase-bootstrap`
-2. `make -C pmoves model-readiness`
-3. `make -C pmoves verify-all`
-4. SQL spot checks:
+2. `make -C pmoves verify-all` (includes `model-readiness`)
+3. SQL spot checks:
    - `SELECT count(*) FROM pmoves_core.personas;`
    - `SELECT count(*) FROM pmoves_core.models;`
    - `SELECT persona_name, model_preference, model_name, provider_name FROM pmoves_core.persona_model_resolution;`

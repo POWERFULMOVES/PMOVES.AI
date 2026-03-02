@@ -1,5 +1,5 @@
 # PMOVES Agent Registry — Single Source of Truth
-# Last updated: 2026-02-17
+# Last updated: 2026-03-01
 #
 # This file encodes every agent's class, type(s), tier, layers,
 # NATS subjects, health endpoint, CHIT toggles, and evolution stage.
@@ -210,7 +210,8 @@ agents:
     class: standard
     primary_type: worker
     secondary_type: data
-    port: 8086
+    port: 8086           # CPU instance
+    gpu_port: 8087       # GPU instance (cross-encoder reranking)
     health: "/healthz"
     layers: [L0, L2, L2.5, L4, L5]
     evolution_stage: stage_2
@@ -694,6 +695,15 @@ agents:
     health: "http://localhost:8222/varz"
     layers: [L0, L2]
     evolution_stage: base
+    nats:
+      publishes: []
+      subscribes: []
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: false
+      attribution_gated: false
     description: "JetStream-enabled event broker — the nervous system"
 
   supabase:
@@ -705,6 +715,15 @@ agents:
     health: null
     layers: [L0, L5]
     evolution_stage: base
+    nats:
+      publishes: []
+      subscribes: []
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: false
+      attribution_gated: false
     description: "Postgres with pgvector — metadata and state"
 
   qdrant:
@@ -716,6 +735,15 @@ agents:
     health: "/healthz"
     layers: [L0, L5]
     evolution_stage: base
+    nats:
+      publishes: []
+      subscribes: []
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: false
+      attribution_gated: false
     description: "Vector embeddings for semantic search"
 
   neo4j:
@@ -727,6 +755,15 @@ agents:
     health: null
     layers: [L0, L5]
     evolution_stage: base
+    nats:
+      publishes: []
+      subscribes: []
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: false
+      attribution_gated: false
     description: "Knowledge graph storage"
 
   meilisearch:
@@ -738,6 +775,15 @@ agents:
     health: "/health"
     layers: [L0, L5]
     evolution_stage: base
+    nats:
+      publishes: []
+      subscribes: []
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: false
+      attribution_gated: false
     description: "Full-text keyword search"
 
   minio:
@@ -749,6 +795,15 @@ agents:
     health: "/minio/health/live"
     layers: [L0, L5]
     evolution_stage: base
+    nats:
+      publishes: []
+      subscribes: []
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: false
+      attribution_gated: false
     description: "S3-compatible object storage"
 
   prometheus:
@@ -760,6 +815,15 @@ agents:
     health: "/-/healthy"
     layers: [L0]
     evolution_stage: base
+    nats:
+      publishes: []
+      subscribes: []
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: false
+      attribution_gated: false
     description: "Metrics scraping from all services"
 
   grafana:
@@ -771,6 +835,15 @@ agents:
     health: "/api/health"
     layers: [L0]
     evolution_stage: base
+    nats:
+      publishes: []
+      subscribes: []
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: false
+      attribution_gated: false
     description: "Dashboard visualization"
 
   loki:
@@ -782,6 +855,15 @@ agents:
     health: "/ready"
     layers: [L0]
     evolution_stage: base
+    nats:
+      publishes: []
+      subscribes: []
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: false
+      attribution_gated: false
     description: "Centralized log aggregation"
 
   # --- Missing agents added in Phase E (source dual enforcement) ---
