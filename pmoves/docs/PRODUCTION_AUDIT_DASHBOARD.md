@@ -41,13 +41,13 @@
 
 | Submodule | Local State | Targeted PR Recommendation |
 |---|---|---|
-| `PMOVES-Archon` | docs lane merged; integration split lanes opened | PR #9 merged; PR #10 (`NATS default auth parity`) and PR #11 (`nested pointer sync`) open |
+| `PMOVES-Archon` | docs + split integration lanes merged | PR #9, PR #10, PR #11 merged |
 | `PMOVES-HiRAG` | `CLAUDE.md` lane merged | PR #4 merged |
 | `PMOVES-Open-Notebook` | docs lane + CI guard merged | PR #10 merged (includes fail-open guard for missing Claude auth secrets) |
 | `PMOVES-Pipecat` | auth/default + lint lane merged | PR #2 merged |
 | `PMOVES-transcribe-and-fetch` | local checkout shows 4 modified LFS/assets; clean hardened worktree shows no content delta | Treat as local LFS/worktree artifact until checkout normalized; do not promote pointer bump yet |
-| `pmoves/integrations/archon` | split into runtime and pointer lanes | PR #10 + PR #11 open (both against `PMOVES.AI-Edition-Hardened`) |
-| `PMOVES-A2UI` | docs artifact lane opened | PR #4 open (`A2UI_EVALUATION_REPORT.md`) |
+| `pmoves/integrations/archon` | split lanes merged and synced | runtime auth/default lane + pointer sync lane merged via Archon PR #10/#11 |
+| `PMOVES-A2UI` | docs artifact lane merged | PR #4 merged (`A2UI_EVALUATION_REPORT.md`) |
 
 ### Release Closeout (2026-02-24)
 
@@ -375,6 +375,7 @@ If `generatedAt` is older than 24 hours, a `(stale)` indicator appears beside th
 
 | Date | Change |
 |------|--------|
+| 2026-03-02 | **Split-lane merge closeout (Codex):** merged PMOVES-A2UI `#4`, PMOVES-Archon `#10`, and PMOVES-Archon `#11`; pushed final parent gitlink bump `a115a040` (A2UI + Archon + integrations/archon). |
 | 2026-03-02 | **Submodule merge + split closeout (Codex):** merged PMOVES-HiRAG `#4`, PMOVES-Open-Notebook `#10`, PMOVES-Archon `#9`, and pmoves-pipecat `#2`; pushed parent gitlink bump commit `51f71013`. Opened follow-on split lanes: PMOVES-A2UI `#4`, PMOVES-Archon `#10` (runtime auth defaults), PMOVES-Archon `#11` (nested pointer sync). Transcribe-and-fetch asset lane validated as a local LFS/worktree artifact in primary checkout (no delta in clean hardened worktree). |
 | 2026-03-02 | **Submodule atomic PR wave (Codex):** opened targeted lanes — PMOVES-HiRAG `#4`, PMOVES-Open-Notebook `#10`, PMOVES-Archon `#9`, pmoves-pipecat `#2`. Remaining mixed lanes held for split/verification: transcribe-and-fetch PR `#46` asset/LFS edits, `pmoves/integrations/archon` runtime+pointer mix, and detached `PMOVES-A2UI` docs artifact. |
 | 2026-03-02 | **Local production remediation + commit-lane audit**: pushed 4 atomic commits (`bd336349`, `c7e227b6`, `8db4e472`, `19dae85b`) covering yt-docs sync parity, bring-up hardening, env/compose resilience, and DB migration compatibility. Updated live backlog metrics (Open PRs `4`, CodeQL `36`, Dependabot `5`) and added submodule-targeted PR map for dirty submodules. |
