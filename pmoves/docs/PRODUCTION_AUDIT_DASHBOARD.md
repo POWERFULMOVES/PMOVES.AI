@@ -3,9 +3,9 @@
 > **Single source of truth** for PMOVES.AI production readiness.
 > Supersedes all individual audit documents accumulated Feb 7 -- Feb 18, 2026.
 
-**Last Updated:** 2026-03-02 (submodule merge+split wave + local lane refresh)
-**Branch:** `chore/submodule-bumps-mar02` (local integration lane)
-**Commit:** `19dae85b` (local HEAD)
+**Last Updated:** 2026-03-02 (post-split-lane cleanup — conflict resolution, env churn fix, review comments)
+**Branch:** `chore/submodule-bumps-mar02` (PR #758)
+**Commit:** (merge with origin/main)
 **Consolidated From:** 27 audit documents
 **Evidence:** `pmoves/docs/evidence/audit-validation-2026-02-20-production-runtime.md`
 
@@ -23,8 +23,8 @@
 | High | 2 |
 | Medium | 2 |
 | Low | 0 |
-| CodeQL alerts (open) | **36 open** (33 `error`, 3 `warning`) |
-| Dependabot alerts | **5 open** (1 critical, 1 high, 1 medium, 2 low) |
+| CodeQL alerts (open) | **43 open** (35 `error`, 8 `warning`) — PR #715 fixed 25, expanded scan scope + new code introduced 31 new (as of 2026-02-28) |
+| Dependabot alerts | **7 open** (5 high, 2 low) — serialize-javascript x2, minimatch x2, qs x1, fast-xml-parser x1, qs-low x1 (as of 2026-02-28) |
 | Open PRs | **5** (#754, #755, #756, #757, #758) |
 | CI (commit 17f73f39) | Hosted gates pass; self-hosted lanes still queue-blocked |
 
@@ -375,6 +375,7 @@ If `generatedAt` is older than 24 hours, a `(stale)` indicator appears beside th
 
 | Date | Change |
 |------|--------|
+| 2026-03-02 | **Post-split-lane cleanup:** merged origin/main (PRs #752, #753), resolved conflicts, fixed env churn idempotency, addressed 13 CodeRabbit review comments (SQL grants, credential fallbacks, docs_sync hardening, PostgREST schema, bringup runtime detection). |
 | 2026-03-02 | **Split-lane merge closeout (Codex):** merged PMOVES-A2UI `#4`, PMOVES-Archon `#10`, and PMOVES-Archon `#11`; pushed final parent gitlink bump `a115a040` (A2UI + Archon + integrations/archon). |
 | 2026-03-02 | **Submodule merge + split closeout (Codex):** merged PMOVES-HiRAG `#4`, PMOVES-Open-Notebook `#10`, PMOVES-Archon `#9`, and pmoves-pipecat `#2`; pushed parent gitlink bump commit `51f71013`. Opened follow-on split lanes: PMOVES-A2UI `#4`, PMOVES-Archon `#10` (runtime auth defaults), PMOVES-Archon `#11` (nested pointer sync). Transcribe-and-fetch asset lane validated as a local LFS/worktree artifact in primary checkout (no delta in clean hardened worktree). |
 | 2026-03-02 | **Submodule atomic PR wave (Codex):** opened targeted lanes — PMOVES-HiRAG `#4`, PMOVES-Open-Notebook `#10`, PMOVES-Archon `#9`, pmoves-pipecat `#2`. Remaining mixed lanes held for split/verification: transcribe-and-fetch PR `#46` asset/LFS edits, `pmoves/integrations/archon` runtime+pointer mix, and detached `PMOVES-A2UI` docs artifact. |
