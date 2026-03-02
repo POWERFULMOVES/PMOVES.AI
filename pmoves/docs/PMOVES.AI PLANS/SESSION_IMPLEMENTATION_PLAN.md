@@ -145,8 +145,30 @@ This working session establishes the concrete implementation tasks needed to clo
 
 Use this section to capture evidence as steps are executed. Attach screenshots/log snippets adjacent to this file as needed.
 
+### 2026-03-02 Production Parity Replay (Codex)
+
+- `make -C pmoves env-setup ARGS="--accept-defaults"` now runs non-interactively and passes strict Supabase env doctor checks after syncing critical Supabase keys into `pmoves/.env.local`.
+- Production chain replayed successfully for core runtime:
+  - `make -C pmoves env-check`
+  - `make -C pmoves supa-start`
+  - `make -C pmoves supabase-bootstrap`
+  - `make -C pmoves up`
+  - `make -C pmoves smoke`
+  - `GPU_SMOKE_STRICT=true make -C pmoves smoke-gpu`
+- M2 activation lane blockers captured:
+  - Legacy checklist targets currently referenced in docs are absent in Make (`discord-smoke`, `smoke-wger`, `smoke-firefly`).
+  - `make -C pmoves jellyfin-verify` fails on default `http://localhost:8096` probe in this mixed overlay runtime; `python pmoves/tools/jellyfin_verify.py --jellyfin-url http://localhost:9096` passes all checks.
+  - `voice-agent-discord-smoke` no longer depends on `jq`; current blocker is runtime `404` from `http://localhost:5678/webhook/voice-agent/ingest` until the n8n webhook flow is imported/activated.
+  - Firefly container logs show `MissingAppKeyException` when `FIREFLY_APP_KEY` is unset; runtime requires explicit key injection before reliable health verification.
+
 | Step | Timestamp (UTC) | Evidence Link/Note |
 | --- | --- | --- |
+
+| Production chain replay (`env-setup` -> `smoke-gpu`) | 2026-03-02T22:04:02Z | `env-check` PASS; `supa-start` PASS; `supabase-bootstrap` PASS; `make up` PASS; `make smoke` PASS (Meili/Neo4j UI warnings remain non-blocking); `GPU_SMOKE_STRICT=true make smoke-gpu` PASS. |
+| M2 command drift triage | 2026-03-02T22:04:02Z | `make -C pmoves discord-smoke`, `smoke-wger`, `smoke-firefly` each return `No rule to make target` (target drift vs docs checklist). |
+| Jellyfin verify runtime probe | 2026-03-02T22:04:02Z | `make -C pmoves jellyfin-verify` FAILS only on `localhost:8096`; direct verify with `--jellyfin-url http://localhost:9096` returns full PASS. |
+| Voice→Discord smoke prerequisite | 2026-03-02T22:04:02Z | `make -C pmoves voice-agent-discord-smoke` now runs without `jq`; current blocker is n8n webhook `404` (`/webhook/voice-agent/ingest`) until flow activation. |
+| Firefly auth bootstrap gate | 2026-03-02T22:04:02Z | `pmoves-firefly` logs report `MissingAppKeyException` until `FIREFLY_APP_KEY` is provided; mark as required for external-stack validation. |
 
 | agent-zero health OK | 2025-10-17T15:29:23Z | `curl -sv http://localhost:8080/healthz` → `nats.connected=true`, JetStream active. |
 | jellyfin-bridge health OK | — | Not exercised during this session. |
