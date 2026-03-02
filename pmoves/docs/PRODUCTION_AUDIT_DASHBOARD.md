@@ -3,9 +3,9 @@
 > **Single source of truth** for PMOVES.AI production readiness.
 > Supersedes all individual audit documents accumulated Feb 7 -- Feb 18, 2026.
 
-**Last Updated:** 2026-02-28 (audit refresh — 7 PRs merged since 2026-02-25, live API counts verified)
+**Last Updated:** 2026-03-02 (Mar 2 merge wave — PRs #748-#751 merged, worktree cleanup 11→1)
 **Branch:** `main`
-**Commit:** `17f73f39` (main HEAD)
+**Commit:** `5833d363` (main HEAD)
 **Consolidated From:** 27 audit documents
 **Evidence:** `pmoves/docs/evidence/audit-validation-2026-02-20-production-runtime.md`
 
@@ -25,7 +25,7 @@
 | Low | 0 |
 | CodeQL alerts (open) | **43 open** (35 `error`, 8 `warning`) — PR #715 fixed 25, but expanded scan scope + new code introduced 31 new alerts |
 | Dependabot alerts | **7 open** (5 high, 2 low) — severity recomposition: serialize-javascript x2, minimatch x2, qs x1, fast-xml-parser x1, qs-low x1 |
-| Open PRs | **1** (#717 dependabot npm_and_yarn — awaiting rebase) |
+| Open PRs | **1** (#752 submodule bumps — Agent-Zero, cipher, transcribe-and-fetch) |
 | CI (commit 17f73f39) | Hosted gates pass; self-hosted lanes still queue-blocked |
 
 ### Release Closeout (2026-02-24)
@@ -354,6 +354,7 @@ If `generatedAt` is older than 24 hours, a `(stale)` indicator appears beside th
 
 | Date | Change |
 |------|--------|
+| 2026-03-02 | **Mar 2 merge wave**: PRs #748-#751 merged. Dashboard hydration (#750) with staleness + source hints. Presign port fix (#751). Audit summary API (#749). Roadmap refresh (#748). 3 submodule bumps landed (Agent-Zero, cipher, transcribe-and-fetch — PR #752). Worktree cleanup (11→1). 8 stale CodeQL runs cancelled. |
 | 2026-02-28 | **Audit refresh**: 7 PRs merged (#712-719). CodeQL: 43 open (35 error, 8 warning) — PR #715 fixed 25 (Groups A-E), 31 new from expanded scan scope. Dependabot: 7 open (5 high, 2 low) — severity recomposed (serialize-javascript, minimatch, qs). PRs #577-581 all CLOSED. Open PR: #717 (dependabot, awaiting rebase). |
 | 2026-02-25 | **Hardened→main sync** (#707): DAO recontext docs, DARKXSIDE registration, KRISS KROSS accord rewrite, release gates RG-1..RG-4, drift checks merged from Hardened. |
 | 2026-02-24 | **Lock-step release closeout refresh**: merged PR sequence `#703 -> #704 -> #700 -> #701 -> #702 -> #699`, promoted to `main` at commit `1a21c038`, and updated dashboard blockers/metrics for remaining queue deadlock + credential/runtime validation. |
