@@ -1,7 +1,20 @@
 
 # PMOVES v5 • NEXT_STEPS
 Note: Consolidated plan index at pmoves/docs/PMOVES.AI PLANS/README_DOCS_INDEX.md.
-_Last updated: 2026-03-01_
+_Last updated: 2026-03-02_
+
+### Latest changes (Mar 2, 2026)
+- Merge wave complete (order executed and synced):
+  - `#743` chore: runtime-data/DAO gitignore cleanup (main)
+  - `#741` feat(models): model registry + persona seeds + readiness (main)
+  - `#742` docs(agents): AGENTS review/cross-reference refresh (main)
+  - `#745` chore(submodules): transcribe-and-fetch + cipher parity bumps (hardened)
+  - `#744` fix(a2a): discovery/task hardening + upstream agent-card parity (hardened)
+  - promotion sync: `#746` hardened -> main
+- Open PR queue is currently `0` (`gh pr list --state open`).
+- Live security backlog snapshot:
+  - Dependabot alerts open: `5` (`1 critical`, `1 high`, `1 medium`, `2 low`)
+  - Code scanning alerts open: `36` (`33 error`, `3 warning`)
 
 ### Latest changes (Mar 1, 2026)
 - Hardened release PR queue is clear (`0` open PRs).
