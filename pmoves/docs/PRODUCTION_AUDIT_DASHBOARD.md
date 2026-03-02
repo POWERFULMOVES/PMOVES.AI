@@ -3,7 +3,7 @@
 > **Single source of truth** for PMOVES.AI production readiness.
 > Supersedes all individual audit documents accumulated Feb 7 -- Feb 18, 2026.
 
-**Last Updated:** 2026-03-02 (local atomic-lane review + runtime remediation wave)
+**Last Updated:** 2026-03-02 (submodule atomic PR wave + local lane refresh)
 **Branch:** `chore/submodule-bumps-mar02` (local integration lane)
 **Commit:** `19dae85b` (local HEAD)
 **Consolidated From:** 27 audit documents
@@ -25,7 +25,7 @@
 | Low | 0 |
 | CodeQL alerts (open) | **36 open** (33 `error`, 3 `warning`) |
 | Dependabot alerts | **5 open** (1 critical, 1 high, 1 medium, 2 low) |
-| Open PRs | **4** (#754, #755, #756, #757 — Dependabot queue) |
+| Open PRs | **5** (#754, #755, #756, #757, #758) |
 | CI (commit 17f73f39) | Hosted gates pass; self-hosted lanes still queue-blocked |
 
 ### Local Atomic Lanes (2026-03-02)
@@ -41,12 +41,13 @@
 
 | Submodule | Local State | Targeted PR Recommendation |
 |---|---|---|
-| `PMOVES-Archon` | `CLAUDE.md` + nested `external/PMOVES-BoTZ` dirty | docs-only cleanup PR in submodule; separate nested BoTZ pointer PR |
-| `PMOVES-HiRAG` | `CLAUDE.md` dirty | docs-only PR (single-file atomic) |
-| `PMOVES-Open-Notebook` | `CLAUDE.md` dirty | docs-only PR (single-file atomic) |
-| `PMOVES-Pipecat` | `CLAUDE.md`, `docker-compose.pmoves.yml`, `envared`, announcer/health/registry modules, new `PMOVES_VERSION_PIN.md` | split into infra/env PR + package/module PR + docs PR |
-| `PMOVES-transcribe-and-fetch` | 4 static asset file edits under `font/` and `public/` | UI-assets-only PR |
-| `pmoves/integrations/archon` | compose/env + announcer/health/registry + nested submodule pointers dirty | split into integration runtime PR + nested pointer PR |
+| `PMOVES-Archon` | `CLAUDE.md` committed; nested `external/PMOVES-BoTZ` still dirty | Open PR #9 (`docs(claude): add CHIT-aware Archon integration context`); keep nested BoTZ pointer lane separate |
+| `PMOVES-HiRAG` | `CLAUDE.md` committed | Open PR #4 (`docs(claude): add CHIT + Geometry Bus integration context`) |
+| `PMOVES-Open-Notebook` | `CLAUDE.md` committed | Open PR #10 (`docs(claude): clarify CHIT/Geometry Bus non-applicability`) |
+| `PMOVES-Pipecat` | `CLAUDE.md` + NATS/auth default parity files committed | Open PR #2 (`fix(auth): align NATS defaults + document CHIT scope`) |
+| `PMOVES-transcribe-and-fetch` | 4 LFS/static asset edits on `codex/pipecat-discovery-auth` (PR #46 lane) | Hold for dedicated asset/LFS verification commit before merging PR #46 |
+| `pmoves/integrations/archon` | compose/env + announcer/health/registry + nested submodule pointers dirty | Pending split: integration runtime lane and nested pointer lane |
+| `PMOVES-A2UI` | detached `HEAD` with untracked `A2UI_EVALUATION_REPORT.md` | Pending docs lane; no PR opened in this pass |
 
 ### Release Closeout (2026-02-24)
 
@@ -374,6 +375,7 @@ If `generatedAt` is older than 24 hours, a `(stale)` indicator appears beside th
 
 | Date | Change |
 |------|--------|
+| 2026-03-02 | **Submodule atomic PR wave (Codex):** opened targeted lanes — PMOVES-HiRAG `#4`, PMOVES-Open-Notebook `#10`, PMOVES-Archon `#9`, pmoves-pipecat `#2`. Remaining mixed lanes held for split/verification: transcribe-and-fetch PR `#46` asset/LFS edits, `pmoves/integrations/archon` runtime+pointer mix, and detached `PMOVES-A2UI` docs artifact. |
 | 2026-03-02 | **Local production remediation + commit-lane audit**: pushed 4 atomic commits (`bd336349`, `c7e227b6`, `8db4e472`, `19dae85b`) covering yt-docs sync parity, bring-up hardening, env/compose resilience, and DB migration compatibility. Updated live backlog metrics (Open PRs `4`, CodeQL `36`, Dependabot `5`) and added submodule-targeted PR map for dirty submodules. |
 | 2026-03-02 | **Mar 2 merge wave**: PRs #748-#751 merged. Dashboard hydration (#750) with staleness + source hints. Presign port fix (#751). Audit summary API (#749). Roadmap refresh (#748). 3 submodule bumps landed (Agent-Zero, cipher, transcribe-and-fetch — PR #752). Worktree cleanup (11→1). 8 stale CodeQL runs cancelled. |
 | 2026-02-28 | **Audit refresh**: 7 PRs merged (#712-719). CodeQL: 43 open (35 error, 8 warning) — PR #715 fixed 25 (Groups A-E), 31 new from expanded scan scope. Dependabot: 7 open (5 high, 2 low) — severity recomposed (serialize-javascript, minimatch, qs). PRs #577-581 all CLOSED. Open PR: #717 (dependabot, awaiting rebase). |
