@@ -509,15 +509,15 @@ services:
     profiles:
     - supabase-local
     environment:
-    - POSTGRES_USER=${SUPABASE_DB_USER}
-    - POSTGRES_PASSWORD=${SUPABASE_DB_PASSWORD}
-    - POSTGRES_DB=${SUPABASE_DB_NAME}
+    - POSTGRES_USER=${SUPABASE_DB_USER:-postgres}
+    - POSTGRES_PASSWORD=${SUPABASE_DB_PASSWORD:-postgres}
+    - POSTGRES_DB=${SUPABASE_DB_NAME:-postgres}
     - POSTGRES_INITDB_ARGS=--encoding=UTF-8
     # PMOVES extensions
-    - DOCKED_MODE=${DOCKED_MODE}
+    - DOCKED_MODE=${DOCKED_MODE:-true}
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
-    - PARENT_SYSTEM=${PARENT_SYSTEM}
-    - PARENT_VERSION=${PARENT_VERSION}
+    - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
+    - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 10s
@@ -545,14 +545,14 @@ services:
     - GOTRUE_API_PORT=9999
     # Database connection
     - GOTRUE_DB_DRIVER=postgres
-    - GOTRUE_DB_DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD_URLENCODED:-${POSTGRES_PASSWORD}}@supabase-db:5432/${POSTGRES_DB}?sslmode=disable
+    - GOTRUE_DB_DATABASE_URL=postgres://${POSTGRES_USER:-${SUPABASE_DB_USER:-postgres}}:${POSTGRES_PASSWORD_URLENCODED:-${POSTGRES_PASSWORD:-${SUPABASE_DB_PASSWORD:-postgres}}}@supabase-db:5432/${POSTGRES_DB:-${SUPABASE_DB_NAME:-postgres}}?sslmode=disable
     # JWT configuration (2025: RS256)
     # Standard variable names from PMOVES-supabase fork with fallbacks
     - GOTRUE_JWT_SECRET=${JWT_SECRET:-${SUPABASE_JWT_SECRET}}
     - GOTRUE_JWT_ALGORITHM=${SUPABASE_JWT_ALGORITHM:-HS256}
     - GOTRUE_JWT_EXP=${JWT_EXPIRY:-${SUPABASE_JWT_EXP:-3600} }
     # 2025 key naming (service_role_key from PMOVES-supabase standard)
-    - GOTRUE_JWT_ADMIN_SECRET=${SERVICE_ROLE_KEY:-${SUPABASE_SECRET_KEY:-}}
+    - GOTRUE_JWT_ADMIN_SECRET=${SUPABASE_SERVICE_ROLE_KEY:-${SERVICE_ROLE_KEY:-${SUPABASE_SECRET_KEY:-}}}
     - GOTRUE_JWT_DEFAULT_GROUP_NAME=authenticated
     # Logging
     - GOTRUE_LOG_LEVEL=info
@@ -566,10 +566,10 @@ services:
     - GOTRUE_EXTERNAL_GOOGLE_REDIRECT_URI=${SUPABASE_AUTH_EXTERNAL_GOOGLE_REDIRECT_URI:-}
     - GOTRUE_EXTERNAL_GOOGLE_SKIP_NONCE_CHECK=${SUPABASE_AUTH_EXTERNAL_GOOGLE_SKIP_NONCE_CHECK:-false}
     # PMOVES context
-    - DOCKED_MODE=${DOCKED_MODE}
+    - DOCKED_MODE=${DOCKED_MODE:-true}
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
-    - PARENT_SYSTEM=${PARENT_SYSTEM}
-    - PARENT_VERSION=${PARENT_VERSION}
+    - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
+    - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9999/health"]
       interval: 15s
@@ -593,23 +593,23 @@ services:
     - supabase-local
     environment:
     # Database connection (from env.tier-supabase)
-    - PGRST_DB_URI=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD_URLENCODED:-${POSTGRES_PASSWORD}}@supabase-db:5432/${POSTGRES_DB}
+    - PGRST_DB_URI=postgres://${POSTGRES_USER:-${SUPABASE_DB_USER:-postgres}}:${POSTGRES_PASSWORD_URLENCODED:-${POSTGRES_PASSWORD:-${SUPABASE_DB_PASSWORD:-postgres}}}@supabase-db:5432/${POSTGRES_DB:-${SUPABASE_DB_NAME:-postgres}}
     # JWT secret (must match gotrue) - standard variable name
     - PGRST_JWT_SECRET=${JWT_SECRET:-${SUPABASE_JWT_SECRET:-}}
-    - PGRST_JWT_ALGORITHM=${SUPABASE_JWT_ALGORITHM}
+    - PGRST_JWT_ALGORITHM=${SUPABASE_JWT_ALGORITHM:-HS256}
     # 2025 key naming (service role key for admin access)
     - PGRST_JWT_SECRET_IS_BASE64=false
     # API configuration
-    - PGRST_SCHEMA=${SUPABASE_SCHEMA}
-    - PGRST_ANON_ROLE=${SUPABASE_ANON_ROLE}
-    - PGRST_DB_MAX_ROWS=${SUPABASE_MAX_ROWS}
-    - PGRST_DB_POOL=${SUPABASE_DB_POOL}
-    - PGRST_DB_POOL_TIMEOUT=${SUPABASE_POOL_TIMEOUT}
+    - PGRST_SCHEMA=${SUPABASE_SCHEMA:-public}
+    - PGRST_ANON_ROLE=${SUPABASE_ANON_ROLE:-anon}
+    - PGRST_DB_MAX_ROWS=${SUPABASE_MAX_ROWS:-1000}
+    - PGRST_DB_POOL=${SUPABASE_DB_POOL:-15}
+    - PGRST_DB_POOL_TIMEOUT=${SUPABASE_POOL_TIMEOUT:-5}
     # PMOVES context
-    - DOCKED_MODE=${DOCKED_MODE}
+    - DOCKED_MODE=${DOCKED_MODE:-true}
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
-    - PARENT_SYSTEM=${PARENT_SYSTEM}
-    - PARENT_VERSION=${PARENT_VERSION}
+    - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
+    - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
     # Note: No healthcheck - postgrest/postgrest image is distroless without shell tools
     depends_on:
       supabase-db:
@@ -630,9 +630,9 @@ services:
     # Database configuration (Kong uses Postgres for config storage)
     - KONG_DATABASE=postgres
     - KONG_PG_HOST=supabase-db
-    - KONG_PG_DATABASE=${POSTGRES_DB}
-    - KONG_PG_USER=${POSTGRES_USER}
-    - KONG_PG_PASSWORD=${POSTGRES_PASSWORD}
+    - KONG_PG_DATABASE=${POSTGRES_DB:-${SUPABASE_DB_NAME:-postgres}}
+    - KONG_PG_USER=${POSTGRES_USER:-${SUPABASE_DB_USER:-postgres}}
+    - KONG_PG_PASSWORD=${POSTGRES_PASSWORD:-${SUPABASE_DB_PASSWORD:-postgres}}
     # Kong configuration
     - KONG_PROXY_ACCESS_LOG=/dev/stdout
     - KONG_ADMIN_ACCESS_LOG=/dev/stdout
@@ -644,10 +644,10 @@ services:
     - KONG_PLUGINS=bundled,jwt
     - KONG_NGINX_PROXY_PROXY_BUFFERS=8 16k
     # PMOVES context
-    - DOCKED_MODE=${DOCKED_MODE}
+    - DOCKED_MODE=${DOCKED_MODE:-true}
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
-    - PARENT_SYSTEM=${PARENT_SYSTEM}
-    - PARENT_VERSION=${PARENT_VERSION}
+    - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
+    - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
     entrypoint: ["/bin/sh", "-c", "kong migrations bootstrap --yes 2>/dev/null || true; exec /docker-entrypoint.sh kong docker-start"]
     healthcheck:
       test: ["CMD", "kong", "health"]
@@ -675,9 +675,9 @@ services:
     # Database connection
     - DB_HOST=supabase-db
     - DB_PORT=5432
-    - DB_NAME=${POSTGRES_DB}
-    - DB_USER=${POSTGRES_USER}
-    - DB_PASSWORD=${POSTGRES_PASSWORD}
+    - DB_NAME=${POSTGRES_DB:-${SUPABASE_DB_NAME:-postgres}}
+    - DB_USER=${POSTGRES_USER:-${SUPABASE_DB_USER:-postgres}}
+    - DB_PASSWORD=${POSTGRES_PASSWORD:-${SUPABASE_DB_PASSWORD:-postgres}}
     - DB_SSL=false
     # App configuration
     - APP_NAME=realtime
@@ -685,12 +685,12 @@ services:
     - RLIMIT_NOFILE=1048576
     # JWT secret (must match gotrue) - standard variable name
     - JWT_SECRET=${JWT_SECRET:-${SUPABASE_JWT_SECRET:-}}
-    - SECRET_KEY_BASE=${SUPABASE_REALTIME_SECRET}
+    - SECRET_KEY_BASE=${SUPABASE_REALTIME_SECRET:-${JWT_SECRET:-${SUPABASE_JWT_SECRET:-}}}
     # PMOVES context
-    - DOCKED_MODE=${DOCKED_MODE}
+    - DOCKED_MODE=${DOCKED_MODE:-true}
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
-    - PARENT_SYSTEM=${PARENT_SYSTEM}
-    - PARENT_VERSION=${PARENT_VERSION}
+    - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
+    - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
     # Healthcheck: Simple HTTP check (Realtime serves HTML on /)
     # Note: Official Supabase uses /api/tenants/{tenant}/health with Bearer token, but that endpoint returns 500 until DB migrations complete
     healthcheck:
@@ -716,32 +716,32 @@ services:
     - supabase-local
     environment:
     # 2025 key naming - standard Supabase variable names with fallbacks
-    - ANON_KEY=${ANON_KEY:-${SUPABASE_PUBLISHABLE_KEY:-}}
-    - SERVICE_KEY=${SERVICE_ROLE_KEY:-${SUPABASE_SECRET_KEY:-}}
+    - ANON_KEY=${SUPABASE_ANON_KEY:-${ANON_KEY:-${SUPABASE_PUBLISHABLE_KEY:-}}}
+    - SERVICE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-${SERVICE_ROLE_KEY:-${SUPABASE_SECRET_KEY:-}}}
     # JWT secret - standard variable name
     - PGRST_JWT_SECRET=${JWT_SECRET:-${SUPABASE_JWT_SECRET:-}}
-    - PGRST_JWT_ALGORITHM=${SUPABASE_JWT_ALGORITHM}
+    - PGRST_JWT_ALGORITHM=${SUPABASE_JWT_ALGORITHM:-HS256}
     # PostgREST connection
     - POSTGREST_URL=http://supabase-postgrest:3000
     # Database connection (use env variables, not hardcoded credentials)
-    - DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD_URLENCODED:-${POSTGRES_PASSWORD}}@supabase-db:5432/${POSTGRES_DB}
+    - DATABASE_URL=postgres://${POSTGRES_USER:-${SUPABASE_DB_USER:-postgres}}:${POSTGRES_PASSWORD_URLENCODED:-${POSTGRES_PASSWORD:-${SUPABASE_DB_PASSWORD:-postgres}}}@supabase-db:5432/${POSTGRES_DB:-${SUPABASE_DB_NAME:-postgres}}
     # Storage configuration
     - FILE_SIZE_LIMIT=52428800
     - STORAGE_BACKEND=file
     - FILE_STORAGE_BACKEND_PATH=/var/lib/storage
-    - REGION=${SUPABASE_STORAGE_REGION}
+    - REGION=${SUPABASE_STORAGE_REGION:-local}
     # Global S3 bucket (if using MinIO for actual storage)
-    - GLOBAL_S3_BUCKET=${SUPABASE_S3_BUCKET}
-    - GLOBAL_S3_ENDPOINT=${MINIO_ENDPOINT}
+    - GLOBAL_S3_BUCKET=${SUPABASE_S3_BUCKET:-assets}
+    - GLOBAL_S3_ENDPOINT=${MINIO_ENDPOINT:-http://minio:9000}
     - GLOBAL_S3_FORCE_PATH_STYLE=true
     # Tenant mode (single tenant for self-hosted)
     - TENANT_ID=stub
-    - TENANTSStub_REGION=${SUPABASE_STORAGE_REGION}
+    - TENANTSStub_REGION=${SUPABASE_STORAGE_REGION:-local}
     # PMOVES context
-    - DOCKED_MODE=${DOCKED_MODE}
+    - DOCKED_MODE=${DOCKED_MODE:-true}
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
-    - PARENT_SYSTEM=${PARENT_SYSTEM}
-    - PARENT_VERSION=${PARENT_VERSION}
+    - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
+    - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
     # Healthcheck: Use 127.0.0.1 explicitly (localhost resolves to ::1 on IPv6, causing connection refused)
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:5000/status"]
@@ -776,12 +776,12 @@ services:
     - SUPABASE_URL=http://supabase-gotrue:9999
     # 2025 key naming - standard variable names with fallbacks
     - SUPABASE_PUBLIC_URL=${API_EXTERNAL_URL:-${SUPABASE_PUBLIC_URL:-}}
-    - SUPABASE_ANON_KEY=${ANON_KEY:-${SUPABASE_PUBLISHABLE_KEY:-}}
+    - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY:-${ANON_KEY:-${SUPABASE_PUBLISHABLE_KEY:-}}}
     # PMOVES context
-    - DOCKED_MODE=${DOCKED_MODE}
+    - DOCKED_MODE=${DOCKED_MODE:-true}
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
-    - PARENT_SYSTEM=${PARENT_SYSTEM}
-    - PARENT_VERSION=${PARENT_VERSION}
+    - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
+    - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
     # Healthcheck: External check (Next.js 16 binds to container hostname, not localhost)
     # Note: Official Supabase uses node -e fetch but their image has different network config
     # We rely on container being started successfully (logs show "Ready in Xms")
@@ -1642,8 +1642,8 @@ services:
       - ARCHON_SUPABASE_BASE_URL=${ARCHON_SUPABASE_BASE_URL:-${SUPA_REST_INTERNAL_URL:-${SUPA_REST_URL:-http://host.docker.internal:65421/rest/v1}}}
       - SUPABASE_URL=${SUPABASE_INTERNAL_URL:-http://host.docker.internal:65421}
       - SUPABASE_REST_URL=${SUPA_REST_INTERNAL_URL:-${SUPA_REST_URL:-http://host.docker.internal:65421/rest/v1}}
-      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
-      - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-${SERVICE_ROLE_KEY:-${SUPABASE_SECRET_KEY:-}}}
+      - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY:-${SUPABASE_SERVICE_ROLE_KEY:-${SERVICE_ROLE_KEY:-${SUPABASE_SECRET_KEY:-}}}}
       - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
       - SUPA_REST_URL=${SUPA_REST_INTERNAL_URL:-${SUPA_REST_URL:-http://host.docker.internal:65421/rest/v1}}
     depends_on:

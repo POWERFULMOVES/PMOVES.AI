@@ -11,6 +11,7 @@ import argparse
 import datetime as _dt
 import json
 import os
+import re
 import secrets
 import string
 import sys
@@ -163,11 +164,32 @@ class EnvFile:
                 self.comments.append(line)
 
     def get(self, key: str) -> Optional[str]:
+        raw: Optional[str] = None
         if key in self.managed_values:
-            return self.managed_values[key]
-        if key in self.original_values:
-            return self.original_values[key]
-        return None
+            raw = self.managed_values[key]
+        elif key in self.original_values:
+            raw = self.original_values[key]
+        if raw is None:
+            return None
+        return self._resolve_placeholder(raw)
+
+    def _resolve_placeholder(self, value: str, depth: int = 0) -> Optional[str]:
+        """Resolve ${VAR} placeholders from values already present in this file.
+
+        This avoids treating unresolved aliases as real values during bootstrap.
+        """
+        if depth > 4:
+            return None
+        match = re.fullmatch(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}", value.strip())
+        if not match:
+            return value
+        ref_key = match.group(1)
+        ref_val = self.managed_values.get(ref_key)
+        if ref_val in (None, ""):
+            ref_val = self.original_values.get(ref_key)
+        if ref_val in (None, ""):
+            return None
+        return self._resolve_placeholder(ref_val, depth + 1)
 
     def set(self, key: str, value: str) -> None:
         if key not in self.managed_order:
