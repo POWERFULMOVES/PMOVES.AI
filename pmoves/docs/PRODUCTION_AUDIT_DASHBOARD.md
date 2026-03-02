@@ -3,7 +3,7 @@
 > **Single source of truth** for PMOVES.AI production readiness.
 > Supersedes all individual audit documents accumulated Feb 7 -- Feb 18, 2026.
 
-**Last Updated:** 2026-03-02 (submodule atomic PR wave + local lane refresh)
+**Last Updated:** 2026-03-02 (submodule merge+split wave + local lane refresh)
 **Branch:** `chore/submodule-bumps-mar02` (local integration lane)
 **Commit:** `19dae85b` (local HEAD)
 **Consolidated From:** 27 audit documents
@@ -41,13 +41,13 @@
 
 | Submodule | Local State | Targeted PR Recommendation |
 |---|---|---|
-| `PMOVES-Archon` | `CLAUDE.md` committed; nested `external/PMOVES-BoTZ` still dirty | Open PR #9 (`docs(claude): add CHIT-aware Archon integration context`); keep nested BoTZ pointer lane separate |
-| `PMOVES-HiRAG` | `CLAUDE.md` committed | Open PR #4 (`docs(claude): add CHIT + Geometry Bus integration context`) |
-| `PMOVES-Open-Notebook` | `CLAUDE.md` committed | Open PR #10 (`docs(claude): clarify CHIT/Geometry Bus non-applicability`) |
-| `PMOVES-Pipecat` | `CLAUDE.md` + NATS/auth default parity files committed | Open PR #2 (`fix(auth): align NATS defaults + document CHIT scope`) |
-| `PMOVES-transcribe-and-fetch` | 4 LFS/static asset edits on `codex/pipecat-discovery-auth` (PR #46 lane) | Hold for dedicated asset/LFS verification commit before merging PR #46 |
-| `pmoves/integrations/archon` | compose/env + announcer/health/registry + nested submodule pointers dirty | Pending split: integration runtime lane and nested pointer lane |
-| `PMOVES-A2UI` | detached `HEAD` with untracked `A2UI_EVALUATION_REPORT.md` | Pending docs lane; no PR opened in this pass |
+| `PMOVES-Archon` | docs lane merged; integration split lanes opened | PR #9 merged; PR #10 (`NATS default auth parity`) and PR #11 (`nested pointer sync`) open |
+| `PMOVES-HiRAG` | `CLAUDE.md` lane merged | PR #4 merged |
+| `PMOVES-Open-Notebook` | docs lane + CI guard merged | PR #10 merged (includes fail-open guard for missing Claude auth secrets) |
+| `PMOVES-Pipecat` | auth/default + lint lane merged | PR #2 merged |
+| `PMOVES-transcribe-and-fetch` | local checkout shows 4 modified LFS/assets; clean hardened worktree shows no content delta | Treat as local LFS/worktree artifact until checkout normalized; do not promote pointer bump yet |
+| `pmoves/integrations/archon` | split into runtime and pointer lanes | PR #10 + PR #11 open (both against `PMOVES.AI-Edition-Hardened`) |
+| `PMOVES-A2UI` | docs artifact lane opened | PR #4 open (`A2UI_EVALUATION_REPORT.md`) |
 
 ### Release Closeout (2026-02-24)
 
@@ -375,6 +375,7 @@ If `generatedAt` is older than 24 hours, a `(stale)` indicator appears beside th
 
 | Date | Change |
 |------|--------|
+| 2026-03-02 | **Submodule merge + split closeout (Codex):** merged PMOVES-HiRAG `#4`, PMOVES-Open-Notebook `#10`, PMOVES-Archon `#9`, and pmoves-pipecat `#2`; pushed parent gitlink bump commit `51f71013`. Opened follow-on split lanes: PMOVES-A2UI `#4`, PMOVES-Archon `#10` (runtime auth defaults), PMOVES-Archon `#11` (nested pointer sync). Transcribe-and-fetch asset lane validated as a local LFS/worktree artifact in primary checkout (no delta in clean hardened worktree). |
 | 2026-03-02 | **Submodule atomic PR wave (Codex):** opened targeted lanes — PMOVES-HiRAG `#4`, PMOVES-Open-Notebook `#10`, PMOVES-Archon `#9`, pmoves-pipecat `#2`. Remaining mixed lanes held for split/verification: transcribe-and-fetch PR `#46` asset/LFS edits, `pmoves/integrations/archon` runtime+pointer mix, and detached `PMOVES-A2UI` docs artifact. |
 | 2026-03-02 | **Local production remediation + commit-lane audit**: pushed 4 atomic commits (`bd336349`, `c7e227b6`, `8db4e472`, `19dae85b`) covering yt-docs sync parity, bring-up hardening, env/compose resilience, and DB migration compatibility. Updated live backlog metrics (Open PRs `4`, CodeQL `36`, Dependabot `5`) and added submodule-targeted PR map for dirty submodules. |
 | 2026-03-02 | **Mar 2 merge wave**: PRs #748-#751 merged. Dashboard hydration (#750) with staleness + source hints. Presign port fix (#751). Audit summary API (#749). Roadmap refresh (#748). 3 submodule bumps landed (Agent-Zero, cipher, transcribe-and-fetch — PR #752). Worktree cleanup (11→1). 8 stale CodeQL runs cancelled. |
