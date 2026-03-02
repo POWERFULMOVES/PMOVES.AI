@@ -22,8 +22,12 @@ _Last updated: 2026-03-02_
   - `#758` production runtime/db/env hardening sitrep
   - `#759` CI SQL/Python collision fixes
   - `#760` ToKenism submodule gitlink bump (after merged submodule PR #46)
-- Open PR queue is currently `1` (`#761` docs cataclysm closeout).
-- CI status: hosted gates complete quickly; self-hosted lanes experience recurring queue starvation (CodeQL/GHCR lanes); mitigate by cancelling stale main-branch runs.
+- Mar 2 closeout merges landed on `main`:
+  - `#763` chore(submodules): bump transcribe-and-fetch (font removal + LFS fix)
+  - `#764` feat(agents): Agent Zero MCP auto-seed + plugin catalog + Codex parity docs
+  - `#767` fix(integrations): align Agent0 plugin manifests to `CATACLYSM-STUDIOS-INC`
+- Open PR queue is currently `0`.
+- CI status: hosted gates complete quickly; self-hosted lanes experience recurring queue starvation (CodeQL/GHCR lanes); mitigate by cancelling stale non-main queued/pending runs first, then preserving the latest `main` runs.
 - Live security backlog snapshot:
   - Dependabot alerts open: `2` (`1 high`, `1 low`)
   - Code scanning alerts open: `34` (`31 error`, `3 warning`)
