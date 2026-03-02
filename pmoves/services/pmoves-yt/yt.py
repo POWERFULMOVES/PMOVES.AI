@@ -286,10 +286,12 @@ logger.propagate = True
 # are not always available. Fall back to local module import.
 try:
     from pmoves.services.pmoves_yt.docs_sync import collect_yt_dlp_docs, sync_to_supabase  # type: ignore
-except Exception:  # pragma: no cover
+except ImportError:  # pragma: no cover
+    logger.debug("docs_sync: absolute import failed, trying relative")
     try:
         from docs_sync import collect_yt_dlp_docs, sync_to_supabase  # type: ignore
-    except Exception:
+    except ImportError:
+        logger.debug("docs_sync: not available — docs sync disabled")
         collect_yt_dlp_docs = None  # type: ignore
         sync_to_supabase = None  # type: ignore
 try:

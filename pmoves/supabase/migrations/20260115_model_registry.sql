@@ -283,7 +283,8 @@ BEGIN
     EXECUTE 'GRANT USAGE ON SCHEMA pmoves_core TO postgrest_anon';
     EXECUTE 'GRANT SELECT ON ALL TABLES IN SCHEMA pmoves_core TO postgrest_anon';
     EXECUTE 'GRANT USAGE ON ALL SEQUENCES IN SCHEMA pmoves_core TO postgrest_anon';
-  ELSIF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
+  END IF;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
     EXECUTE 'GRANT USAGE ON SCHEMA pmoves_core TO anon';
     EXECUTE 'GRANT SELECT ON ALL TABLES IN SCHEMA pmoves_core TO anon';
     EXECUTE 'GRANT USAGE ON ALL SEQUENCES IN SCHEMA pmoves_core TO anon';
@@ -294,7 +295,8 @@ BEGIN
     EXECUTE 'GRANT SELECT ON ALL TABLES IN SCHEMA pmoves_core TO postgrest_auth_user';
     EXECUTE 'GRANT INSERT, UPDATE ON ALL TABLES IN SCHEMA pmoves_core TO postgrest_auth_user';
     EXECUTE 'GRANT USAGE ON ALL SEQUENCES IN SCHEMA pmoves_core TO postgrest_auth_user';
-  ELSIF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
+  END IF;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
     EXECUTE 'GRANT USAGE ON SCHEMA pmoves_core TO authenticated';
     EXECUTE 'GRANT SELECT ON ALL TABLES IN SCHEMA pmoves_core TO authenticated';
     EXECUTE 'GRANT INSERT, UPDATE ON ALL TABLES IN SCHEMA pmoves_core TO authenticated';

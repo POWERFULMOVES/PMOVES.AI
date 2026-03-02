@@ -509,8 +509,8 @@ services:
     profiles:
     - supabase-local
     environment:
-    - POSTGRES_USER=${SUPABASE_DB_USER:-postgres}
-    - POSTGRES_PASSWORD=${SUPABASE_DB_PASSWORD:-postgres}
+    - POSTGRES_USER=${SUPABASE_DB_USER:?Set SUPABASE_DB_USER in env.tier-supabase}
+    - POSTGRES_PASSWORD=${SUPABASE_DB_PASSWORD:?Set SUPABASE_DB_PASSWORD in env.tier-supabase}
     - POSTGRES_DB=${SUPABASE_DB_NAME:-postgres}
     - POSTGRES_INITDB_ARGS=--encoding=UTF-8
     # PMOVES extensions
@@ -552,7 +552,7 @@ services:
     - GOTRUE_JWT_ALGORITHM=${SUPABASE_JWT_ALGORITHM:-HS256}
     - GOTRUE_JWT_EXP=${JWT_EXPIRY:-${SUPABASE_JWT_EXP:-3600} }
     # 2025 key naming (service_role_key from PMOVES-supabase standard)
-    - GOTRUE_JWT_ADMIN_SECRET=${SUPABASE_SERVICE_ROLE_KEY:-${SERVICE_ROLE_KEY:-${SUPABASE_SECRET_KEY:-}}}
+    - GOTRUE_JWT_ADMIN_SECRET=${SUPABASE_SERVICE_ROLE_KEY:-${SERVICE_ROLE_KEY:?Set SERVICE_ROLE_KEY or SUPABASE_SERVICE_ROLE_KEY}}
     - GOTRUE_JWT_DEFAULT_GROUP_NAME=authenticated
     # Logging
     - GOTRUE_LOG_LEVEL=info
@@ -600,7 +600,7 @@ services:
     # 2025 key naming (service role key for admin access)
     - PGRST_JWT_SECRET_IS_BASE64=false
     # API configuration
-    - PGRST_SCHEMA=${SUPABASE_SCHEMA:-public}
+    - PGRST_DB_SCHEMAS=${SUPABASE_SCHEMA:-public,pmoves_core}
     - PGRST_ANON_ROLE=${SUPABASE_ANON_ROLE:-anon}
     - PGRST_DB_MAX_ROWS=${SUPABASE_MAX_ROWS:-1000}
     - PGRST_DB_POOL=${SUPABASE_DB_POOL:-15}

@@ -17,7 +17,14 @@ BEGIN
 
     ALTER TABLE pmoves_core.personas
       ALTER COLUMN tools_access TYPE jsonb
-      USING COALESCE(to_jsonb(tools_access), '{}'::jsonb);
+      USING COALESCE(
+        CASE WHEN json_typeof(to_jsonb(tools_access)) = 'array' THEN
+          (SELECT COALESCE(jsonb_object_agg(elem, 'true'::jsonb), '{}'::jsonb)
+           FROM unnest(tools_access) AS elem)
+        ELSE to_jsonb(tools_access)
+        END,
+        '{}'::jsonb
+      );
 
     ALTER TABLE pmoves_core.personas
       ALTER COLUMN tools_access SET DEFAULT '{}'::jsonb;

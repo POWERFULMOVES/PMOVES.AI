@@ -196,6 +196,13 @@ class EnvFile:
             self.managed_order.append(key)
         self.managed_values[key] = value
 
+    @staticmethod
+    def _strip_timestamp(text: str) -> str:
+        """Return *text* with the ``# Generated at ...`` line removed for comparison."""
+        return "\n".join(
+            ln for ln in text.splitlines() if not ln.startswith("# Generated at ")
+        )
+
     def write(self) -> bool:
         if not self.managed_order:
             # No managed keys for this file – leave the original content untouched.
@@ -203,7 +210,7 @@ class EnvFile:
 
         lines: List[str] = []
         lines.append("# Managed by pmoves/scripts/bootstrap_env.py")
-        lines.append(f"# Generated at {_dt.datetime.now(_dt.timezone.utc).isoformat()}Z")
+        lines.append("")  # placeholder — filled with timestamp only on real change
         lines.append("")
         for key in self.managed_order:
             value = self.managed_values.get(key, "")
@@ -220,14 +227,18 @@ class EnvFile:
             lines.extend(preserved)
             lines.extend(self.comments)
 
-        new_text = "\n".join(lines).rstrip() + "\n"
-        if new_text != self.original_text:
-            self.path.parent.mkdir(parents=True, exist_ok=True)
-            with self.path.open("w", encoding="utf-8") as fh:
-                fh.write(new_text)
-            self.original_text = new_text
-            return True
-        return False
+        new_body = "\n".join(lines).rstrip() + "\n"
+        if self._strip_timestamp(new_body) == self._strip_timestamp(self.original_text):
+            return False  # No value change — skip rewrite to avoid timestamp churn
+
+        # Values actually changed — inject fresh timestamp and write.
+        lines[1] = f"# Generated at {_dt.datetime.now(_dt.timezone.utc).isoformat()}Z"
+        final_text = "\n".join(lines).rstrip() + "\n"
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        with self.path.open("w", encoding="utf-8") as fh:
+            fh.write(final_text)
+        self.original_text = final_text
+        return True
 
 
 def select_services(registry: Dict, selected_ids: Optional[Iterable[str]]) -> List[Dict]:

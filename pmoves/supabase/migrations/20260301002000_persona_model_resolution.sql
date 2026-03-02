@@ -53,13 +53,15 @@ DO $$
 BEGIN
   IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'postgrest_anon') THEN
     EXECUTE 'GRANT SELECT ON pmoves_core.persona_model_resolution TO postgrest_anon';
-  ELSIF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
+  END IF;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
     EXECUTE 'GRANT SELECT ON pmoves_core.persona_model_resolution TO anon';
   END IF;
 
   IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'postgrest_auth_user') THEN
     EXECUTE 'GRANT SELECT ON pmoves_core.persona_model_resolution TO postgrest_auth_user';
-  ELSIF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
+  END IF;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
     EXECUTE 'GRANT SELECT ON pmoves_core.persona_model_resolution TO authenticated';
   END IF;
 END $$;
@@ -95,13 +97,15 @@ DO $$
 BEGIN
   IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'postgrest_anon') THEN
     EXECUTE 'GRANT SELECT ON pmoves_core.active_persona_summary TO postgrest_anon';
-  ELSIF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
+  END IF;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
     EXECUTE 'GRANT SELECT ON pmoves_core.active_persona_summary TO anon';
   END IF;
 
   IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'postgrest_auth_user') THEN
     EXECUTE 'GRANT SELECT ON pmoves_core.active_persona_summary TO postgrest_auth_user';
-  ELSIF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
+  END IF;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
     EXECUTE 'GRANT SELECT ON pmoves_core.active_persona_summary TO authenticated';
   END IF;
 END $$;

@@ -133,7 +133,8 @@ BEGIN
   IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'postgrest_anon') THEN
     EXECUTE 'GRANT SELECT ON pmoves_core.model_metrics TO postgrest_anon';
     EXECUTE 'GRANT SELECT ON pmoves_core.model_strengths TO postgrest_anon';
-  ELSIF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
+  END IF;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
     EXECUTE 'GRANT SELECT ON pmoves_core.model_metrics TO anon';
     EXECUTE 'GRANT SELECT ON pmoves_core.model_strengths TO anon';
   END IF;
@@ -143,7 +144,8 @@ BEGIN
     EXECUTE 'GRANT SELECT ON pmoves_core.model_strengths TO postgrest_auth_user';
     EXECUTE 'GRANT INSERT, UPDATE ON pmoves_core.model_metrics TO postgrest_auth_user';
     EXECUTE 'GRANT INSERT, UPDATE ON pmoves_core.model_strengths TO postgrest_auth_user';
-  ELSIF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
+  END IF;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
     EXECUTE 'GRANT SELECT ON pmoves_core.model_metrics TO authenticated';
     EXECUTE 'GRANT SELECT ON pmoves_core.model_strengths TO authenticated';
     EXECUTE 'GRANT INSERT, UPDATE ON pmoves_core.model_metrics TO authenticated';

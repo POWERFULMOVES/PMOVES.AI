@@ -13,8 +13,16 @@ ENABLE_JELLYFIN_AI=${ENABLE_JELLYFIN_AI:-1}
 
 # Service URLs
 YTB=${YTB:-http://localhost:8077}
-SUPABASE_REST_READY_URL=${SUPABASE_REST_READY_URL:-http://127.0.0.1:54321/rest/v1/}
-SUPABASE_STUDIO_READY_URL=${SUPABASE_STUDIO_READY_URL:-http://127.0.0.1:54323}
+
+# Runtime-aware Supabase defaults: CLI uses ports 54321/54323, compose uses 3010/3001.
+SUPABASE_RUNTIME=${SUPABASE_RUNTIME:-cli}
+if [ "$SUPABASE_RUNTIME" = "compose" ]; then
+  SUPABASE_REST_READY_URL=${SUPABASE_REST_READY_URL:-http://127.0.0.1:3010/}
+  SUPABASE_STUDIO_READY_URL=${SUPABASE_STUDIO_READY_URL:-http://127.0.0.1:3001}
+else
+  SUPABASE_REST_READY_URL=${SUPABASE_REST_READY_URL:-http://127.0.0.1:54321/rest/v1/}
+  SUPABASE_STUDIO_READY_URL=${SUPABASE_STUDIO_READY_URL:-http://127.0.0.1:54323}
+fi
 
 if [ -f .supabase.status.env ]; then
   api_url="$(grep -m1 '^API_URL=' .supabase.status.env | cut -d= -f2- | sed -e 's/^"//' -e 's/"$//')"
@@ -230,7 +238,9 @@ if [ "${PARALLEL:-0}" = "1" ]; then
   check_http_bg "n8n UI" "http://localhost:5678" "$WAIT_T_SHORT"
   check_http_bg "TensorZero UI" "http://localhost:4000" "$WAIT_T_SHORT"
   check_http_bg "TensorZero GW" "http://localhost:3030/metrics" "$WAIT_T_SHORT"
-  check_http_bg "Jellyfin" "http://localhost:9096" "$WAIT_T_SHORT"
+  if [ "${ENABLE_JELLYFIN_AI}" = "1" ]; then
+    check_http_bg "Jellyfin" "http://localhost:9096" "$WAIT_T_SHORT"
+  fi
   check_container_bg "Presign" "pmoves-presign-1" "$WAIT_T_SHORT"
   check_container_bg "Firefly" "pmoves-firefly" "$WAIT_T_SHORT"
   check_container_bg "Wger" "pmoves-wger-nginx" "$WAIT_T_SHORT"
@@ -267,7 +277,9 @@ else
   wait_http "http://localhost:5678" $WAIT_T_SHORT || TIMEOUT_SERVICES+=("n8n UI")
   wait_http "http://localhost:4000" $WAIT_T_SHORT || TIMEOUT_SERVICES+=("TensorZero UI")
   wait_http "http://localhost:3030/metrics" $WAIT_T_SHORT || TIMEOUT_SERVICES+=("TensorZero GW")
-  wait_http "http://localhost:9096" $WAIT_T_SHORT || TIMEOUT_SERVICES+=("Jellyfin")
+  if [ "${ENABLE_JELLYFIN_AI}" = "1" ]; then
+    wait_http "http://localhost:9096" $WAIT_T_SHORT || TIMEOUT_SERVICES+=("Jellyfin")
+  fi
   wait_container_ready "pmoves-firefly" $WAIT_T_SHORT || TIMEOUT_SERVICES+=("Firefly")
   wait_container_ready "pmoves-wger-nginx" $WAIT_T_SHORT || TIMEOUT_SERVICES+=("Wger")
   wait_container_ready "pmoves-open-notebook-ext-1" $WAIT_T_SHORT || TIMEOUT_SERVICES+=("Open Notebook")

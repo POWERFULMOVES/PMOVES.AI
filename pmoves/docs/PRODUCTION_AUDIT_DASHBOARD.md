@@ -74,6 +74,25 @@ Release coordination note: `https://github.com/POWERFULMOVES/PMOVES.AI/pull/699#
 | #713 | fix(compose): hardening batch — NATS auth, docs v4.0 | MERGED | 2026-02-26 |
 | #712 | feat: topology+CHIT gate hardening | MERGED | 2026-02-25 |
 
+### Recent Merge Activity (2026-03-02 — Main Branch)
+
+| PR | Scope | Status | Date |
+|----|-------|--------|------|
+| #753 | feat(ci): queued-run guard and drain targets for self-hosted deadlocks | MERGED | 2026-03-02 |
+| #752 | chore(submodules): bump Agent-Zero, cipher, transcribe-and-fetch | MERGED | 2026-03-02 |
+
+### Submodule Targeted PR Merges (Split-Lane Wave)
+
+| Submodule | PR | Scope | Date |
+|-----------|-----|-------|------|
+| PMOVES-A2UI | #4 | docs artifact (`A2UI_EVALUATION_REPORT.md`) | 2026-03-02 |
+| PMOVES-Archon | #9 | targeted hardening lane | 2026-03-02 |
+| PMOVES-Archon | #10 | runtime auth defaults | 2026-03-02 |
+| PMOVES-Archon | #11 | nested pointer sync | 2026-03-02 |
+| PMOVES-HiRAG | #4 | CLAUDE.md lane | 2026-03-02 |
+| PMOVES-Open-Notebook | #10 | docs + CI guard (fail-open for missing Claude auth) | 2026-03-02 |
+| pmoves-pipecat | #2 | auth/default + lint lane | 2026-03-02 |
+
 ### Current Hardening Drift Checks (2026-02-24)
 
 - Production bring-up scripts still need a strict audit to ensure no `*-dev-*` targets are used in production lanes by default.

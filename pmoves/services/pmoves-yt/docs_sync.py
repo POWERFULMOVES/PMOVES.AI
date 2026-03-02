@@ -12,11 +12,13 @@ SUPA = (
 
 
 def _candidate_keys() -> list[str]:
+    # Only service-role keys are valid for write operations.
+    # SUPABASE_ANON_KEY is intentionally excluded — anon tokens lack INSERT
+    # privileges on pmoves_core tables and would silently produce 403s.
     keys = [
         os.environ.get("SUPABASE_SERVICE_ROLE_KEY"),
         os.environ.get("SUPABASE_SERVICE_KEY"),
         os.environ.get("SUPABASE_KEY"),
-        os.environ.get("SUPABASE_ANON_KEY"),
     ]
     out: list[str] = []
     for key in keys:
@@ -80,6 +82,7 @@ def sync_to_supabase(docs: Dict[str, Any]) -> Dict[str, Any]:
     last_error: str | None = None
     for target in targets:
         missing_relation = False
+        transport_error = False
         for key in keys:
             headers = {
                 "apikey": key,
@@ -90,10 +93,15 @@ def sync_to_supabase(docs: Dict[str, Any]) -> Dict[str, Any]:
             if target["schema"]:
                 headers["Accept-Profile"] = target["schema"]
                 headers["Content-Profile"] = target["schema"]
-            r = requests.post(target["url"], headers=headers, data=json.dumps(rows), timeout=20)
+            try:
+                r = requests.post(target["url"], headers=headers, data=json.dumps(rows), timeout=20)
+            except requests.RequestException as exc:
+                last_error = f"transport error: {exc}"
+                transport_error = True
+                break
             try:
                 body = r.json()
-            except Exception:
+            except ValueError:
                 body = {"text": r.text}
             if r.ok:
                 return {"status": "ok", "count": len(rows), "version": ver}
@@ -106,7 +114,7 @@ def sync_to_supabase(docs: Dict[str, Any]) -> Dict[str, Any]:
             if r.status_code in (404, 406):
                 missing_relation = True
             break
-        if missing_relation:
+        if missing_relation or transport_error:
             continue
 
     raise RuntimeError(f"Supabase upsert failed: {last_error}")
