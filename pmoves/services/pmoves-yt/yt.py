@@ -91,7 +91,52 @@ except Exception:  # pragma: no cover - fallback when boto3 is unavailable
 import requests
 from urllib.parse import urlparse, parse_qs, urlunparse, quote
 from nats.aio.client import Client as NATS
-from tenacity import AsyncRetrying, retry_if_exception, wait_exponential, stop_after_attempt, RetryError
+try:
+    from tenacity import AsyncRetrying, retry_if_exception, wait_exponential, stop_after_attempt, RetryError
+except Exception:  # pragma: no cover - fallback when tenacity is unavailable
+    class _FallbackRetryState:
+        def __init__(self, attempt_number: int = 1):
+            self.attempt_number = attempt_number
+
+    class _FallbackAttempt:
+        def __init__(self, attempt_number: int = 1):
+            self.retry_state = _FallbackRetryState(attempt_number)
+
+    class _FallbackLastAttempt:
+        def __init__(self, exc: Optional[BaseException] = None):
+            self._exc = exc
+
+        def exception(self) -> Optional[BaseException]:
+            return self._exc
+
+    class RetryError(Exception):
+        def __init__(self, last_attempt: Optional[_FallbackLastAttempt] = None):
+            super().__init__("retry failed")
+            self.last_attempt = last_attempt or _FallbackLastAttempt()
+
+    class AsyncRetrying:
+        """Minimal async iterator fallback: executes a single attempt without retries."""
+
+        def __init__(self, *args, **kwargs):
+            self._yielded = False
+
+        def __aiter__(self):
+            return self
+
+        async def __anext__(self):
+            if self._yielded:
+                raise StopAsyncIteration
+            self._yielded = True
+            return _FallbackAttempt(1)
+
+    def retry_if_exception(*args, **kwargs):
+        return None
+
+    def wait_exponential(*args, **kwargs):
+        return None
+
+    def stop_after_attempt(*args, **kwargs):
+        return None
 # Prefer shared envelope util if present; otherwise, fall back to a local stub
 try:
     from services.common.events import envelope  # type: ignore
