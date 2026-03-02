@@ -43,13 +43,26 @@ def _is_allowed_scheme(url: str) -> bool:
 
 def http_get(url: str, timeout: int = 10) -> dict | None:
     """GET request returning parsed JSON or None on failure."""
+    raw = http_get_raw(url, timeout=timeout)
+    if raw is None:
+        return None
+    _, body = raw
+    try:
+        return json.loads(body)
+    except json.JSONDecodeError:
+        return None
+
+
+def http_get_raw(url: str, timeout: int = 10) -> tuple[int, str] | None:
+    """GET request returning (status_code, text_body) or None on failure."""
     if not _is_allowed_scheme(url):
         return None
     try:
         req = urllib.request.Request(url, headers={"Accept": "application/json"})
         with urllib.request.urlopen(req, timeout=timeout) as resp:
-            return json.loads(resp.read().decode())
-    except (urllib.error.URLError, json.JSONDecodeError, OSError):
+            body = resp.read().decode(errors="replace")
+            return int(getattr(resp, "status", 200)), body
+    except (urllib.error.URLError, OSError):
         return None
 
 
@@ -165,15 +178,14 @@ class ReadinessChecker:
     def check_tensorzero(self) -> None:
         """Check TensorZero gateway is operational."""
         print("\n[4] TensorZero gateway")
-        # TensorZero doesn't have a /v1/models endpoint like OpenAI
-        # Check if the service responds at all
-        data = http_get(f"{self.tensorzero_url}/health")
+        # TensorZero doesn't always return JSON on health/root; use HTTP success for reachability.
+        data = http_get_raw(f"{self.tensorzero_url}/health")
         if data is not None:
             self._check("TensorZero health", True, "gateway responding")
             return
 
         # Fallback: try root
-        data = http_get(self.tensorzero_url)
+        data = http_get_raw(self.tensorzero_url)
         if data is not None:
             self._check("TensorZero reachable", True, "gateway responding (root)")
         else:
