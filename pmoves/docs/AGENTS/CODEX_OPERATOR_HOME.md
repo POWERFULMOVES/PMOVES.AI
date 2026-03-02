@@ -88,6 +88,12 @@ Claude setup, but keeps Codex workflows command-first and Makefile-native.
 - For parity checks across all submodules, regenerate:
   - `make -C pmoves codex-audit`
 
+## Known Gaps
+
+For a comprehensive view of what's implemented vs. what's still planned, see:
+- [IMPLEMENTATION_GAP_ANALYSIS.md](./IMPLEMENTATION_GAP_ANALYSIS.md) — Full gap analysis with Phase 1 completion status
+- Key gaps: A2A server (`/.well-known/agent.json`) not exposed, probabilistic safety hooks not implemented, CGP pipeline incomplete
+
 ## Priority links
 
 - Codex submodule audit:
