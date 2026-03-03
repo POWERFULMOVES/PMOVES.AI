@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-02-26 18:15 UTC",
+  "generated_at": "2026-03-03 03:52 UTC",
   "manifest": "pmoves/configs/submodule_layer_validation_manifest.json",
   "summary": {
     "submodules": 1,
@@ -12,7 +12,7 @@
       "path": "PMOVES-A2UI",
       "url": "https://github.com/POWERFULMOVES/PMOVES-A2UI.git",
       "status_prefix": " ",
-      "commit": "9f6b203e81b2eccd62e0146179ae5bd6a3cc3364",
+      "commit": "2bac549045e08fb87fd7b891366f48a492863374",
       "initialized": true,
       "remote_commit_reachable": "local",
       "required_files_any_ok": true,
