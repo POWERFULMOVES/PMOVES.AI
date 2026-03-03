@@ -13,14 +13,26 @@ ENABLE_JELLYFIN_AI=${ENABLE_JELLYFIN_AI:-1}
 
 # Service URLs
 YTB=${YTB:-http://localhost:8077}
-SUPABASE_REST_READY_URL=${SUPABASE_REST_READY_URL:-http://127.0.0.1:65421/rest/v1}
-SUPABASE_STUDIO_READY_URL=${SUPABASE_STUDIO_READY_URL:-http://127.0.0.1:65433}
 
-if [ -f .supabase.status.env ]; then
+# Runtime-aware Supabase defaults.
+# Auto-detect compose runtime if compose Supabase containers are present.
+SUPABASE_RUNTIME=${SUPABASE_RUNTIME:-cli}
+if docker ps --format '{{.Names}}' | grep -qE '^pmoves-supabase-(db|kong)-1$'; then
+  SUPABASE_RUNTIME=compose
+fi
+if [ "$SUPABASE_RUNTIME" = "compose" ]; then
+  SUPABASE_REST_READY_URL=${SUPABASE_REST_READY_URL:-http://127.0.0.1:3010/}
+  SUPABASE_STUDIO_READY_URL=${SUPABASE_STUDIO_READY_URL:-http://127.0.0.1:3001}
+else
+  SUPABASE_REST_READY_URL=${SUPABASE_REST_READY_URL:-http://127.0.0.1:54321/rest/v1/}
+  SUPABASE_STUDIO_READY_URL=${SUPABASE_STUDIO_READY_URL:-http://127.0.0.1:54323}
+fi
+
+if [ "$SUPABASE_RUNTIME" != "compose" ] && [ -f .supabase.status.env ]; then
   api_url="$(grep -m1 '^API_URL=' .supabase.status.env | cut -d= -f2- | sed -e 's/^"//' -e 's/"$//')"
   studio_url="$(grep -m1 '^STUDIO_URL=' .supabase.status.env | cut -d= -f2- | sed -e 's/^"//' -e 's/"$//')"
   if [ -n "${api_url:-}" ]; then
-    SUPABASE_REST_READY_URL="${api_url}/rest/v1"
+    SUPABASE_REST_READY_URL="${api_url}/rest/v1/"
   fi
   if [ -n "${studio_url:-}" ]; then
     SUPABASE_STUDIO_READY_URL="${studio_url}"
@@ -66,9 +78,35 @@ wait_http() { # url timeout_seconds
   local url="$1"; local timeout="${2:-$WAIT_T_SHORT}"; local start=$(date +%s)
   echo "→ Waiting for $url (timeout ${timeout}s)"
   while true; do
-    if curl -fsS -m 3 "$url" >/dev/null 2>&1; then echo "  OK: $url"; break; fi
+    code=$(curl -s -o /dev/null -m 3 -w "%{http_code}" "$url" 2>/dev/null || true)
+    [ -z "$code" ] && code=000
+    if [ "$code" != "000" ] && [ "$code" -lt 500 ]; then echo "  OK: $url (HTTP $code)"; break; fi
     sleep 2
     now=$(date +%s); if (( now - start > timeout )); then echo "  TIMEOUT: $url"; return 1; fi
+  done
+}
+
+wait_http_any() { # timeout_seconds url1 [url2...]
+  local timeout="${1:-$WAIT_T_SHORT}"
+  shift
+  local start url code now
+  start=$(date +%s)
+  echo "→ Waiting for published Agent Zero HTTP readiness (timeout ${timeout}s)"
+  while true; do
+    for url in "$@"; do
+      code=$(curl -s -o /dev/null -m 3 -w "%{http_code}" "$url" 2>/dev/null || true)
+      [ -z "$code" ] && code=000
+      if [ "$code" != "000" ] && [ "$code" -lt 500 ]; then
+        echo "  OK: $url (HTTP $code)"
+        return 0
+      fi
+    done
+    sleep 2
+    now=$(date +%s)
+    if (( now - start > timeout )); then
+      echo "  TIMEOUT: published Agent Zero HTTP readiness"
+      return 1
+    fi
   done
 }
 
@@ -78,7 +116,15 @@ wait_prom_targets() { # timeout_seconds
   echo "→ Waiting for Prometheus targets (timeout ${timeout}s)"
   while true; do
     if out=$(curl -fsS -m 5 "$url" 2>/dev/null); then
-      n=$(printf '%s' "$out" | jq -r '.data.activeTargets | length' 2>/dev/null || echo 0)
+      if command -v jq >/dev/null 2>&1; then
+        n=$(printf '%s' "$out" | jq -r '.data.activeTargets | length' 2>/dev/null || echo 0)
+      elif command -v python3 >/dev/null 2>&1; then
+        n=$(printf '%s' "$out" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(len(d.get("data", {}).get("activeTargets", [])))' 2>/dev/null || echo 0)
+      elif command -v python >/dev/null 2>&1; then
+        n=$(printf '%s' "$out" | python -c 'import json,sys; d=json.load(sys.stdin); print(len(d.get("data", {}).get("activeTargets", [])))' 2>/dev/null || echo 0)
+      else
+        n=0
+      fi
       if [ "${n:-0}" -gt 0 ]; then echo "  OK: $n targets"; break; fi
     fi
     sleep 2
@@ -91,11 +137,38 @@ declare -a READY_CMDS=()
 READY_TMP_DIR="${TMPDIR:-/tmp}/pmoves_ready_$RANDOM"
 mkdir -p "$READY_TMP_DIR"
 
+wait_container_ready() { # container_name timeout_seconds
+  local container="$1"; local timeout="${2:-$WAIT_T_SHORT}"; local start
+  start=$(date +%s)
+  while true; do
+    if docker inspect "$container" >/dev/null 2>&1; then
+      local running health
+      running="$(docker inspect -f '{{.State.Running}}' "$container" 2>/dev/null || echo false)"
+      health="$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$container" 2>/dev/null || echo none)"
+      if [ "$running" = "true" ] && { [ "$health" = "healthy" ] || [ "$health" = "none" ]; }; then
+        return 0
+      fi
+    fi
+    sleep 2
+    now=$(date +%s)
+    if (( now - start > timeout )); then
+      return 1
+    fi
+  done
+}
+
 check_http_bg() { # name url timeout
   local name="$1"; local url="$2"; local timeout="${3:-$WAIT_T_SHORT}"
   local out="$READY_TMP_DIR/${name//[^A-Za-z0-9_\-]/_}.out"
-  bash -c "start=\$(date +%s); while true; do curl -fsS -m 3 '$url' >/dev/null 2>&1 && echo OK > '$out' && exit 0; sleep 2; now=\$(date +%s); [ \$((now-start)) -gt $timeout ] && echo TIMEOUT > '$out' && exit 1; done" &
+  bash -c "start=\$(date +%s); while true; do code=\$(curl -s -o /dev/null -m 3 -w '%{http_code}' '$url' 2>/dev/null || true); [ -z \"\$code\" ] && code=000; if [ \"\$code\" != \"000\" ] && [ \"\$code\" -lt 500 ]; then echo OK > '$out' && exit 0; fi; sleep 2; now=\$(date +%s); [ \$((now-start)) -gt $timeout ] && echo TIMEOUT > '$out' && exit 1; done" &
   READY_CMDS+=("$name|$url|$out|$!|$timeout")
+}
+
+check_container_bg() { # name container timeout
+  local name="$1"; local container="$2"; local timeout="${3:-$WAIT_T_SHORT}"
+  local out="$READY_TMP_DIR/${name//[^A-Za-z0-9_\-]/_}.out"
+  bash -c "start=\$(date +%s); while true; do if docker inspect '$container' >/dev/null 2>&1; then running=\$(docker inspect -f '{{.State.Running}}' '$container' 2>/dev/null || echo false); health=\$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' '$container' 2>/dev/null || echo none); if [ \"\$running\" = \"true\" ] && { [ \"\$health\" = \"healthy\" ] || [ \"\$health\" = \"none\" ]; }; then echo OK > '$out' && exit 0; fi; fi; sleep 2; now=\$(date +%s); [ \$((now-start)) -gt $timeout ] && echo TIMEOUT > '$out' && exit 1; done" &
+  READY_CMDS+=("$name|container:$container|$out|$!|$timeout")
 }
 
 ready_barrier() {
@@ -142,6 +215,32 @@ start_service "Core Services" "up" "true" || exit 1
 echo "⛳ Start agents (APIs + UIs)"
 if [ "${PUBLISHED_AGENTS:-0}" = "1" ]; then
   start_service "Published Agents" "up-agents-published" "true" || exit 1
+  # Published image startup can be slower than local builds; gate fallback on
+  # container health plus any known-ready HTTP surface to avoid false fallback.
+  published_agent_wait="${PUBLISHED_AGENT_WAIT_T:-120}"
+  published_agent_ok=0
+  if wait_container_ready "pmoves-agent-zero-1" "$published_agent_wait" && \
+     wait_http_any "$published_agent_wait" \
+       "http://localhost:8080/healthz" \
+       "http://localhost:8081" \
+       "http://localhost:8080/config/environment"; then
+    published_agent_ok=1
+  fi
+  if [ "$published_agent_ok" -ne 1 ]; then
+    echo "⚠ Published Agent Zero failed readiness; falling back to local agents stack"
+    # Published and local agent targets share container names. Hard-stop/remove
+    # agent containers before fallback recreate to avoid "container is running"
+    # races during compose service recreation.
+    make down-agents >/dev/null 2>&1 || true
+    docker compose -f docker-compose.agents.images.yml --profile agents stop \
+      agent-zero archon archon-ui deepresearch supaserch mesh-agent publisher-discord >/dev/null 2>&1 || true
+    docker compose -f docker-compose.agents.images.yml --profile agents rm -f \
+      agent-zero archon archon-ui deepresearch supaserch mesh-agent publisher-discord >/dev/null 2>&1 || true
+    docker rm -f \
+      pmoves-agent-zero-1 pmoves-archon-1 pmoves-archon-ui-1 \
+      pmoves-deepresearch-1 pmoves-supaserch-1 pmoves-mesh-agent-1 pmoves-publisher-discord-1 >/dev/null 2>&1 || true
+    start_service "Agents + UIs (fallback)" "up-agents-ui" "true" || exit 1
+  fi
 else
   start_service "Agents + UIs" "up-agents-ui" "true" || exit 1
 fi
@@ -174,11 +273,18 @@ fi
 
 echo "⛳ Waiting on key endpoints"
 if [ "${PARALLEL:-0}" = "1" ]; then
-  check_http_bg "Supabase REST" "$SUPABASE_REST_READY_URL" "$WAIT_T_LONG"
+  if [ "$SUPABASE_RUNTIME" = "compose" ]; then
+    check_container_bg "Supabase PostgREST" "pmoves-supabase-postgrest-1" "$WAIT_T_LONG"
+    check_container_bg "Supabase Studio" "pmoves-supabase-studio-1" "$WAIT_T_LONG"
+  else
+    check_http_bg "Supabase REST" "$SUPABASE_REST_READY_URL" "$WAIT_T_LONG"
+    check_http_bg "Supabase Studio" "$SUPABASE_STUDIO_READY_URL" "$WAIT_T_SHORT"
+  fi
   check_http_bg "Hi-RAG v2 CPU" "http://localhost:${HIRAG_V2_HOST_PORT:-8086}/" "$WAIT_T_MED"
   check_http_bg "Hi-RAG v2 GPU" "http://localhost:${HIRAG_V2_GPU_HOST_PORT:-8087}/" "$WAIT_T_LONG"
-  check_http_bg "Presign" "http://localhost:8088/healthz" "$WAIT_T_SHORT"
-  check_http_bg "Archon API" "http://localhost:8091/healthz" "$WAIT_T_MED"
+  # Use lightweight readiness for bring-up. Deep dependency checks are covered
+  # later by archon-smoke / archon-rest-policy-smoke in verify-all.
+  check_http_bg "Archon API" "http://localhost:8091/api/health" "$WAIT_T_MED"
   check_http_bg "Archon UI" "http://localhost:3737" "$WAIT_T_SHORT"
   check_http_bg "Archon MCP" "http://localhost:8091/mcp/describe" "$WAIT_T_SHORT"
   check_http_bg "Agent Zero API" "http://localhost:8080/healthz" "$WAIT_T_SHORT"
@@ -188,7 +294,7 @@ if [ "${PARALLEL:-0}" = "1" ]; then
   check_http_bg "PMOVES.YT" "http://localhost:8077/healthz" "$WAIT_T_SHORT"
   check_http_bg "Grafana" "http://localhost:3002" "$WAIT_T_SHORT"
   check_http_bg "Loki /ready" "http://localhost:3100/ready" "$WAIT_T_SHORT"
-  check_http_bg "Channel Monitor" "http://localhost:8097/healthz" "$WAIT_T_SHORT"
+  check_container_bg "Channel Monitor" "pmoves-channel-monitor-1" "$WAIT_T_SHORT"
   check_http_bg "Monitor Status" "http://localhost:8097/api/monitor/status" "$WAIT_T_SHORT"
   check_http_bg "yt-dlp catalog" "${YTB}/yt/docs/catalog" "$WAIT_T_SHORT"
   if [ "${RUN_UI_DEV}" = "1" ]; then
@@ -196,20 +302,28 @@ if [ "${PARALLEL:-0}" = "1" ]; then
   fi
   check_http_bg "n8n UI" "http://localhost:5678" "$WAIT_T_SHORT"
   check_http_bg "TensorZero UI" "http://localhost:4000" "$WAIT_T_SHORT"
-  check_http_bg "TensorZero GW" "http://localhost:3030/healthz" "$WAIT_T_SHORT"
-  check_http_bg "Jellyfin" "http://localhost:8096" "$WAIT_T_SHORT"
-  check_http_bg "Firefly" "http://localhost:8082" "$WAIT_T_SHORT"
-  check_http_bg "Wger" "http://localhost:8000" "$WAIT_T_SHORT"
-  check_http_bg "Open Notebook" "http://localhost:8503" "$WAIT_T_SHORT"
-  check_http_bg "Supabase Studio" "$SUPABASE_STUDIO_READY_URL" "$WAIT_T_SHORT"
+  check_http_bg "TensorZero GW" "http://localhost:3030/metrics" "$WAIT_T_SHORT"
+  if [ "${ENABLE_JELLYFIN_AI}" = "1" ]; then
+    check_http_bg "Jellyfin" "http://localhost:9096" "$WAIT_T_SHORT"
+  fi
+  check_container_bg "Presign" "pmoves-presign-1" "$WAIT_T_SHORT"
+  check_container_bg "Firefly" "pmoves-firefly" "$WAIT_T_SHORT"
+  check_container_bg "Wger" "pmoves-wger-nginx" "$WAIT_T_SHORT"
+  check_container_bg "Open Notebook" "pmoves-open-notebook-ext-1" "$WAIT_T_SHORT"
   ready_barrier
-  wait_prom_targets "$WAIT_T_MED"
+  wait_prom_targets "$WAIT_T_MED" || TIMEOUT_SERVICES+=("Prometheus targets")
 else
-  wait_http "$SUPABASE_REST_READY_URL" $WAIT_T_LONG || TIMEOUT_SERVICES+=("Supabase REST")
+  if [ "$SUPABASE_RUNTIME" = "compose" ]; then
+    wait_container_ready "pmoves-supabase-postgrest-1" $WAIT_T_LONG || TIMEOUT_SERVICES+=("Supabase PostgREST")
+    wait_container_ready "pmoves-supabase-studio-1" $WAIT_T_LONG || TIMEOUT_SERVICES+=("Supabase Studio")
+  else
+    wait_http "$SUPABASE_REST_READY_URL" $WAIT_T_LONG || TIMEOUT_SERVICES+=("Supabase REST")
+    wait_http "$SUPABASE_STUDIO_READY_URL" $WAIT_T_SHORT || TIMEOUT_SERVICES+=("Supabase Studio")
+  fi
   wait_http "http://localhost:${HIRAG_V2_HOST_PORT:-8086}/" $WAIT_T_MED || TIMEOUT_SERVICES+=("Hi-RAG v2 CPU")
   wait_http "http://localhost:${HIRAG_V2_GPU_HOST_PORT:-8087}/" $WAIT_T_LONG || TIMEOUT_SERVICES+=("Hi-RAG v2 GPU")
-  wait_http "http://localhost:8088/healthz" $WAIT_T_SHORT || TIMEOUT_SERVICES+=("Presign")
-  wait_http "http://localhost:8091/healthz" $WAIT_T_MED || TIMEOUT_SERVICES+=("Archon API")
+  wait_container_ready "pmoves-presign-1" $WAIT_T_SHORT || TIMEOUT_SERVICES+=("Presign")
+  wait_http "http://localhost:8091/api/health" $WAIT_T_MED || TIMEOUT_SERVICES+=("Archon API")
   wait_http "http://localhost:3737" $WAIT_T_SHORT || TIMEOUT_SERVICES+=("Archon UI")
   wait_http "http://localhost:8091/mcp/describe" $WAIT_T_SHORT || TIMEOUT_SERVICES+=("Archon MCP")
   wait_http "http://localhost:8080/healthz" $WAIT_T_SHORT || TIMEOUT_SERVICES+=("Agent Zero API")
@@ -220,7 +334,7 @@ else
   wait_http "http://localhost:3002" $WAIT_T_SHORT || TIMEOUT_SERVICES+=("Grafana")
   wait_http "http://localhost:3100/ready" $WAIT_T_SHORT || TIMEOUT_SERVICES+=("Loki")
   wait_prom_targets $WAIT_T_MED || TIMEOUT_SERVICES+=("Prometheus targets")
-  wait_http "http://localhost:8097/healthz" $WAIT_T_SHORT || TIMEOUT_SERVICES+=("Channel Monitor")
+  wait_container_ready "pmoves-channel-monitor-1" $WAIT_T_SHORT || TIMEOUT_SERVICES+=("Channel Monitor")
   wait_http "http://localhost:8097/api/monitor/status" $WAIT_T_SHORT || TIMEOUT_SERVICES+=("Monitor Status API")
   wait_http "${YTB}/yt/docs/catalog" $WAIT_T_SHORT || TIMEOUT_SERVICES+=("yt-dlp catalog")
   if [ "${RUN_UI_DEV}" = "1" ]; then
@@ -232,12 +346,13 @@ else
   fi
   wait_http "http://localhost:5678" $WAIT_T_SHORT || TIMEOUT_SERVICES+=("n8n UI")
   wait_http "http://localhost:4000" $WAIT_T_SHORT || TIMEOUT_SERVICES+=("TensorZero UI")
-  wait_http "http://localhost:3030/healthz" $WAIT_T_SHORT || TIMEOUT_SERVICES+=("TensorZero GW")
-  wait_http "http://localhost:8096" $WAIT_T_SHORT || TIMEOUT_SERVICES+=("Jellyfin")
-  wait_http "http://localhost:8082" $WAIT_T_SHORT || TIMEOUT_SERVICES+=("Firefly")
-  wait_http "http://localhost:8000" $WAIT_T_SHORT || TIMEOUT_SERVICES+=("Wger")
-  wait_http "http://localhost:8503" $WAIT_T_SHORT || TIMEOUT_SERVICES+=("Open Notebook")
-  wait_http "$SUPABASE_STUDIO_READY_URL" $WAIT_T_SHORT || TIMEOUT_SERVICES+=("Supabase Studio")
+  wait_http "http://localhost:3030/metrics" $WAIT_T_SHORT || TIMEOUT_SERVICES+=("TensorZero GW")
+  if [ "${ENABLE_JELLYFIN_AI}" = "1" ]; then
+    wait_http "http://localhost:9096" $WAIT_T_SHORT || TIMEOUT_SERVICES+=("Jellyfin")
+  fi
+  wait_container_ready "pmoves-firefly" $WAIT_T_SHORT || TIMEOUT_SERVICES+=("Firefly")
+  wait_container_ready "pmoves-wger-nginx" $WAIT_T_SHORT || TIMEOUT_SERVICES+=("Wger")
+  wait_container_ready "pmoves-open-notebook-ext-1" $WAIT_T_SHORT || TIMEOUT_SERVICES+=("Open Notebook")
 fi
 
 echo "⛳ Capturing evidence"

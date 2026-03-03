@@ -32,7 +32,7 @@ else
 SECRETS_FUNNEL_BOOT_USER_TARGET :=
 endif
 
-.PHONY: codex-config codex-audit codex-parity-check codex-parity-check-strict codex-home codex-health-quick secrets-audit tooling-audit tooling-audit-strict chit-export chit-manifest-sync chit-manifest-check secrets-runtime-hydrate secrets-funnel-sync secrets-funnel
+.PHONY: codex-config codex-audit codex-parity-check codex-parity-check-strict codex-home codex-health-quick secrets-audit tooling-audit tooling-audit-strict chit-export chit-manifest-sync chit-manifest-check secrets-runtime-hydrate secrets-funnel-sync secrets-funnel a0-plugins-check a0-plugins-check-remote
 codex-config: ## Install repo-pinned Codex config into ~/.codex/config.toml
 	@pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/codex_apply_config.ps1
 
@@ -101,6 +101,12 @@ secrets-funnel: ## Portable secrets flow: CHIT export -> manifest sync -> audit 
 ifneq ($(SECRETS_FUNNEL_BOOT_USER_TARGET),)
 	@$(MAKE) --no-print-directory $(SECRETS_FUNNEL_BOOT_USER_TARGET)
 endif
+
+a0-plugins-check: ## Validate local Agent0 plugin catalog manifests (structure + field constraints)
+	@$(CODEX_PY) tools/a0_plugins_check.py --catalog-root integrations/agent0-plugins/catalog
+
+a0-plugins-check-remote: ## Validate local Agent0 plugin catalog + remote GitHub repo/plugin.yaml existence
+	@$(CODEX_PY) tools/a0_plugins_check.py --catalog-root integrations/agent0-plugins/catalog --require-remote
 
 # ---------------------------------------------------------------------------
 # Submodule sync targets

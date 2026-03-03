@@ -429,7 +429,7 @@ export const SERVICE_CATALOG: ServiceDefinition[] = [
     color: 'ember',
     endpoints: [
       { name: 'API', port: '8088', path: '/', type: 'api' },
-      { name: 'Health', port: '8080', path: '/healthz', type: 'health' },
+      { name: 'Health', port: '8088', path: '/healthz', type: 'health' },
     ],
     capabilities: ['URL presigning', 'Secure downloads'],
   },

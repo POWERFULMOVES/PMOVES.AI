@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-02-26 18:15 UTC",
+  "generated_at": "2026-03-03 03:52 UTC",
   "manifest": "pmoves/configs/submodule_layer_validation_manifest.json",
   "summary": {
     "submodules": 1,
@@ -12,7 +12,7 @@
       "path": "PMOVES-Agent-Zero",
       "url": "https://github.com/POWERFULMOVES/PMOVES-Agent-Zero.git",
       "status_prefix": " ",
-      "commit": "ee1aed46aa3456535c6300abf02dd4f69ae640f4",
+      "commit": "76923745d7601bcd5d8dcc441dee97449b65ef99",
       "initialized": true,
       "remote_commit_reachable": "local",
       "required_files_any_ok": true,

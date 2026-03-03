@@ -78,7 +78,7 @@ jobs:
       - name: Generate GitHub App token
         id: app_token
         continue-on-error: true
-        uses: actions/create-github-app-token@v1
+        uses: actions/create-github-app-token@v2
         with:
           app-id: ${{ secrets.GH_APP_ID }}
           private-key: ${{ secrets.GH_APP_SEC }}

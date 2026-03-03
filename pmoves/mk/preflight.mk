@@ -1,4 +1,4 @@
-.PHONY: env-bootstrap-lite env-setup env-check preflight flight-check flight-check-retro preflight-retro showtime bringup-showtime smoke-showtime showtime-links showtime-links-open showtime-links-strict submodule-integrity submodule-layer-validate submodule-layer-validate-one submodule-layer-validate-all submodule-layer-validate-all-strict submodule-layer-validate-strict submodule-branch-policy-check audit-layers audit-layers-static audit-layers-runtime ci-runners-check ci-runners-check-strict ci-runners-map ci-runners-map-strict ci-runners-lockdown ci-runners-lockdown-strict ci-runners-local-cert-up ci-runners-local-cert-down ci-runners-local-cert-status skill-registry-validate auth-alignment auth-alignment-strict topology-chit-gate topology-chit-gate-strict pr-monitor pr-monitor-strict pr-monitor-chit-packet floos-status floos-pr-monitor-validate floos-pr-monitor-resolve floos-pr-monitor-run-dry chit-flow-pr-monitor chit-flow-pr-monitor-strict ports-resolve sign-trail
+.PHONY: env-bootstrap-lite env-setup env-check preflight flight-check flight-check-retro preflight-retro showtime bringup-showtime smoke-showtime showtime-links showtime-links-open showtime-links-strict submodule-integrity submodule-layer-validate submodule-layer-validate-one submodule-layer-validate-all submodule-layer-validate-all-strict submodule-layer-validate-strict submodule-branch-policy-check audit-layers audit-layers-static audit-layers-runtime ci-runners-check ci-runners-check-strict ci-runners-map ci-runners-map-strict ci-runners-lockdown ci-runners-lockdown-strict ci-runners-local-cert-up ci-runners-local-cert-down ci-runners-local-cert-status ci-queue-sitrep ci-queue-drain-nonpr ci-queue-drain-nonpr-apply skill-registry-validate auth-alignment auth-alignment-strict topology-chit-gate topology-chit-gate-strict pr-monitor pr-monitor-strict pr-monitor-chit-packet floos-status floos-pr-monitor-validate floos-pr-monitor-resolve floos-pr-monitor-run-dry chit-flow-pr-monitor chit-flow-pr-monitor-strict ports-resolve sign-trail
 RETRO_THEME_QUICK ?= cb
 RETRO_THEME_FULL ?= galaxy
 RETRO_FLAGS ?=
@@ -72,6 +72,15 @@ ci-runners-local-cert-down: ## Stop local-cert runner containers (ai-lab + vps) 
 
 ci-runners-local-cert-status: ## Show local-cert runner container and GitHub registration status
 	@$(PRECHECK_PY) tools/local_cert_runners.py status $(ARGS)
+
+ci-queue-sitrep: ## Show queued workflow runs and classify keep/cancel candidates (dry-run)
+	@$(PRECHECK_PY) tools/ci_queue_guard.py --json-out docs/logs/ci_queue_guard_latest.json $(ARGS)
+
+ci-queue-drain-nonpr: ## Dry-run queued-run drain policy (cancels only with APPLY=1)
+	@$(PRECHECK_PY) tools/ci_queue_guard.py $${APPLY:+--apply} --threshold "$${QUEUE_THRESHOLD:-9}" --json-out docs/logs/ci_queue_guard_latest.json $(ARGS)
+
+ci-queue-drain-nonpr-apply: ## Cancel queued runs not tied to open PR branches (threshold-guarded)
+	@$(PRECHECK_PY) tools/ci_queue_guard.py --apply --threshold "$${QUEUE_THRESHOLD:-9}" --json-out docs/logs/ci_queue_guard_latest.json $(ARGS)
 
 submodule-layer-validate: ## Deterministic submodule-level validation (manifest-driven)
 	@$(PRECHECK_PY) tools/submodule_layer_validate.py --manifest "$(SUBMODULE_LAYER_MANIFEST)" $(ARGS)

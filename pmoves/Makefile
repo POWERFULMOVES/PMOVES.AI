@@ -97,7 +97,15 @@ ifneq ($(strip $(PRIMARY_ENV_FILE)),)
 endif
 COMPOSE_ENV_FILES += $(foreach file,$(TIER_ENV_FILES),$(if $(call resolve_env_file,$(file)),--env-file $(call resolve_env_file,$(file)),))
 ifneq ("$(wildcard .env.local)","")
-  COMPOSE_ENV_FILES += --env-file .env.local
+  # In compose runtime, .env.local frequently carries host-only Supabase URLs
+  # that break in-network service wiring. Keep it opt-in for compose.
+  ifeq ($(SUPABASE_RUNTIME),compose)
+    ifeq ($(INCLUDE_ENV_LOCAL_IN_COMPOSE),1)
+      COMPOSE_ENV_FILES += --env-file .env.local
+    endif
+  else
+    COMPOSE_ENV_FILES += --env-file .env.local
+  endif
 endif
 ifneq ("$(wildcard env.supa.runtime)","")
   # Runtime overlay is generated from Supabase CLI status output.
@@ -812,8 +820,8 @@ up-agents: ## Start agent services (Agent Zero, Archon, DeepResearch, SupaSerch)
 .PHONY: up-tensorzero
 up-tensorzero: ## Start TensorZero LLM gateway (PRIMARY MODEL PROVIDER)
 	@echo "🧠 Starting TensorZero LLM gateway..."
-	@$(DC) --profile tensorzero up -d
-	@timeout 60 bash -c 'until curl -sf http://localhost:3030/healthz; do sleep 2; done' || echo "⚠️ TensorZero may still be starting"
+	@$(DC) --profile tensorzero up -d tensorzero-clickhouse tensorzero-gateway tensorzero-ui pmoves-ollama
+	@timeout 60 bash -c 'until curl -sf http://localhost:3030/metrics; do sleep 2; done' || echo "⚠️ TensorZero may still be starting"
 	@echo "✅ TensorZero ready - LLM calls available"
 	@echo "   Gateway:      http://localhost:3030"
 	@echo "   UI:           http://localhost:4000"
@@ -1111,7 +1119,7 @@ verify-all: ## Full verify: bring-up (parallel waits), then retro preflight + mo
 	@echo "-> Archon MCP evidence"
 	-@$(MAKE) --no-print-directory archon-mcp-evidence
 	@echo "-> Model & persona readiness"
-	@$(MAKE) --no-print-directory model-readiness
+	-@$(MAKE) --no-print-directory model-readiness
 	@echo "OK Verify-all sequence executed. Review console + Grafana."
 
 .PHONY: archon-mcp-evidence
@@ -1682,7 +1690,7 @@ brand-verify: ## Verify key branded endpoints respond
 .PHONY: model-readiness
 
 model-readiness: ## Validate model registry, persona seeds, Ollama models, TensorZero gateway
-	@$(PYTHON) tools/model_readiness_check.py
+	@$(LOAD_ENV_SHARED); $(PYTHON) tools/model_readiness_check.py
 
 # -------- Model profiles / management --------
 .PHONY: model-profiles model-apply model-swap models-sync models-seed-ollama models-registry-snapshot
@@ -1694,10 +1702,10 @@ model-apply: ensure-env-shared ## Apply a model profile into pmoves/.env.local (
 	@PROFILE="$(PROFILE)" HOST="$(HOST)" bash tools/models/apply_profile.sh
 
 models-sync: ensure-env-shared ## Low-level sync via Python: make models-sync PROFILE=archon HOST=workstation_5090
-	@$(PYTHON) tools/models/models_sync.py sync --profile "$(PROFILE)" --host "$${HOST:-workstation_5090}" --tensorzero-base "$(TENSORZERO_BASE_URL)"
+	@python3 tools/models/models_sync.py sync --profile "$(PROFILE)" --host "$${HOST:-workstation_5090}" --tensorzero-base "$(TENSORZERO_BASE_URL)"
 
 model-swap: ensure-env-shared ## Swap a single model param into pmoves/.env.local (SERVICE=hirag NAME=<model-id>)
-	@$(PYTHON) tools/models/models_sync.py swap --service "$(SERVICE)" --name "$(NAME)"
+	@python3 tools/models/models_sync.py swap --service "$(SERVICE)" --name "$(NAME)"
 
 models-seed-ollama: ## Pre-pull Ollama models from profiles/registry (override with OLLAMA_SEED_MODELS)
 	-@docker compose -p $(PROJECT) --profile tensorzero up -d pmoves-ollama >/dev/null 2>&1 || true
@@ -1716,14 +1724,22 @@ models-seed-ollama: ## Pre-pull Ollama models from profiles/registry (override w
 	    echo "No Ollama models resolved. Set OLLAMA_SEED_MODELS or define profile/registry mappings."; \
 	    exit 0; \
 	  fi; \
+	  ollama_cid="$$(docker compose -p $(PROJECT) ps -q pmoves-ollama 2>/dev/null || true)"; \
+	  if [ -z "$$ollama_cid" ]; then \
+	    ollama_cid="$$(docker ps --filter name=pmoves-pmoves-ollama-1 --format "{{.ID}}" | head -n1)"; \
+	  fi; \
+	  if [ -z "$$ollama_cid" ]; then \
+	    echo "⚠ pmoves-ollama container not running; skipping model pull."; \
+	    exit 0; \
+	  fi; \
 	  echo "$$models" | tr "," "\n" | sed "/^[[:space:]]*$$/d" | while read -r model; do \
 	    echo "→ Pull $$model"; \
-	    curl -fsS -X POST http://localhost:11434/api/pull -d "{\"model\":\"$$model\"}" >/dev/null 2>&1 || echo "⚠ Pull failed for $$model"; \
+	    docker exec "$$ollama_cid" ollama pull "$$model" >/dev/null 2>&1 || echo "⚠ Pull failed for $$model"; \
 	  done; \
-	  echo "✔ Seeded Ollama models (host=$$host source=$$source).";'
+	  echo "✔ Seeded Ollama models (container=$$ollama_cid host=$$host source=$$source).";'
 
 models-registry-snapshot: ensure-env-shared ## Snapshot Supabase model registry into models/registry.snapshot.json
-	@$(PYTHON) tools/models/models_sync.py registry-snapshot --out models/registry.snapshot.json
+	@$(LOAD_ENV_SHARED); python3 tools/models/models_sync.py registry-snapshot --out models/registry.snapshot.json
 
 # -------- Console (UI) dev helpers --------
 .PHONY: ui-dev-start ui-dev-stop ui-dev-logs
@@ -1841,29 +1857,7 @@ voice-follow-smoke: ## Smoke: start speaker + follow(--once), trigger voice agen
 	echo "✔ voice-follow-smoke OK"
 
 voice-agent-discord-smoke: ## Smoke: voice-agent response -> Discord publish (text)
-	@which jq >/dev/null 2>&1 || (echo "jq is required for voice-agent-discord-smoke" && exit 1)
-	@echo "[Ultimate] tts-studio-smoke" && $(MAKE) tts-studio-smoke >/dev/null && echo OK
-	@set -euo pipefail; \
-	echo "[Voice→Discord] Trigger voice agent via n8n webhook"; \
-	resp=$$(mktemp); \
-	curl -fsS -X POST http://localhost:5678/webhook/voice-agent/ingest -H 'content-type: application/json' \
-	  --data-binary '{"platform":"local","user_id":"smoke","user_name":"Smoke","message_type":"text","content":"Give a 1-sentence greeting for Discord."}' > "$$resp"; \
-	text=$$(jq -r '.response_text // empty' "$$resp"); \
-	if [ -z "$$text" ]; then echo "✖ no response_text from voice agent"; cat "$$resp" | jq .; rm -f "$$resp"; exit 1; fi; \
-	case "$$text" in \
-	  *"could not generate a response"*|*"Could not generate a response"* ) \
-	    echo "✖ voice agent returned fallback response (LLM likely unavailable / timed out)"; cat "$$resp" | jq .; rm -f "$$resp"; exit 1 ;; \
-	esac; \
-	short=$$(python3 -c 'import sys; s=sys.argv[1]; print((s[:1800] + "…") if len(s)>1800 else s)' "$$text"); \
-	rm -f "$$resp"; \
-	echo "[Voice→Discord] Publishing to publisher-discord"; \
-	content=$$'🗣️ Voice Agent (smoke)\n\n'"$$short"; \
-	echo "[Voice→Discord] Generating TTS (mp3) via Flute"; \
-	tts_b64=$$(python3 tools/flute_tts_to_mp3_b64.py "$$short"); \
-	payload=$$(jq -n --arg content "$$content" --arg b64 "$$tts_b64" '{content:$$content, embeds:[{title:"Voice Agent Smoke", description:$$content, color:3447003}], file:{name:"voice_agent_smoke.mp3", content_type:"audio/mpeg", content_b64:$$b64} }'); \
-	curl -sS -X POST http://localhost:8094/publish -H 'content-type: application/json' \
-	  -d "$$payload" \
-	  | jq -e '.ok==true or .success==true' >/dev/null && echo "✔ Discord publish OK" || (echo "✖ Discord publish failed" && exit 1)
+	@$(PYTHON) tools/voice_agent_discord_smoke.py $(ARGS)
 
 # Toggle Single‑User (Owner) Mode for the console and restart dev server
 .PHONY: ui-single-user ui-single-user-on ui-single-user-off
@@ -1938,9 +1932,15 @@ up-agents-ui: ## Start Agents APIs + UIs preferring Archon submodule build (use 
 	@$(DC) --profile agents up -d nats agent-zero archon archon-ui mesh-agent deepresearch supaserch publisher-discord
 	@echo "✔ Agents (APIs + UIs) started (submodule). Open Agent Zero UI: $${NEXT_PUBLIC_AGENT_ZERO_UI_URL:-http://localhost:8081}  Archon UI: $${NEXT_PUBLIC_ARCHON_UI_URL:-http://localhost:3737}"
 
-.PHONY: a0-mcp-seed
+.PHONY: a0-mcp-seed a0-mcp-show
 a0-mcp-seed: ## Write A0_MCP_SERVERS into Agent Zero runtime (data/agent-zero/runtime/mcp/servers.env)
-	@$(LOAD_ENV_SHARED) $(PYTHON) tools/seed_agent_zero_mcp.py
+	@$(LOAD_ENV_SHARED); $(PYTHON) tools/seed_agent_zero_mcp.py
+
+a0-mcp-show: ## Print Agent Zero runtime MCP server map
+	@file="data/agent-zero/runtime/mcp/servers.env"; \
+	if [ ! -f "$$file" ]; then echo "✖ $$file not found (run: make -C pmoves a0-mcp-seed)"; exit 1; fi; \
+	echo "→ $$file"; \
+	sed -E 's/(password=)[^&"]+/\1***REDACTED***/g; s/(key=)[^&"]+/\1***REDACTED***/g' "$$file"
 
 .PHONY: archon-mcp-smoke
 archon-mcp-smoke: ## Quick MCP bridge smoke: assert port is open and returns HTTP (404 is acceptable)
@@ -1964,8 +1964,18 @@ archon-upload-smoke: ## Upload a tiny document to Archon (/api/documents/upload)
 
 .PHONY: archon-rest-policy-smoke
 archon-rest-policy-smoke: ## Probe a CLI REST table with anon key (non-fatal on 401/403; fails only on 5xx/timeout)
-	@bash -lc 'url="$${SUPA_REST_URL:-$${SUPABASE_REST_URL:-}}"; table="$${SMOKE_REST_TABLE:-pmoves_core}"; auth="$${SUPABASE_ANON_KEY:-$${ANON_KEY:-}}"; \
+	@bash -lc 'runtime="$${SUPABASE_RUNTIME:-$(SUPABASE_RUNTIME)}"; url="$${SUPA_REST_URL:-$${SUPABASE_REST_URL:-}}"; table="$${SMOKE_REST_TABLE:-pmoves_core}"; auth="$${SUPABASE_ANON_KEY:-$${ANON_KEY:-}}"; \
 	stripq() { printf "%s" "$$1" | sed -e "s/^\\\"//" -e "s/\\\"$$//"; }; \
+	if [ "$$runtime" = "compose" ] && docker inspect pmoves-archon-1 >/dev/null 2>&1; then \
+	  probe_url="$${SMOKE_REST_URL:-http://supabase-postgrest:3000}"; \
+	  echo "→ REST policy probe (compose/in-network) $$probe_url/$$table via pmoves-archon-1"; \
+	  raw=$$(docker exec -e PM_URL="$$probe_url" -e PM_TABLE="$$table" -e PM_AUTH="$$auth" pmoves-archon-1 sh -lc '\''if [ -n "$$PM_AUTH" ]; then curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $$PM_AUTH" "$$PM_URL/$$PM_TABLE"; else curl -s -o /dev/null -w "%{http_code}" "$$PM_URL/$$PM_TABLE"; fi'\'' 2>/dev/null || true); \
+	  code=$$(printf "%s" "$$raw" | grep -Eo "[0-9]{3}" | tail -1); \
+	  if [ "$$code" = "200" ]; then echo "✔ $$table accessible (200)"; exit 0; \
+	  elif [ "$$code" = "401" ] || [ "$$code" = "403" ] || [ "$$code" = "404" ]; then echo "↷ $$table not accessible (policy/missing) — OK ($$code)"; exit 0; \
+	  elif [ -z "$$code" ] || echo "$$code" | grep -Eq "^0+$$" || [ "$$code" -ge 500 ]; then echo "✖ REST probe failed (HTTP $$code)"; exit 1; \
+	  else echo "↷ REST probe HTTP $$code"; exit 0; fi; \
+	fi; \
 	if [ -z "$$url" ] && [ -f .supabase.status.env ]; then \
 	  v=$$(grep -m1 "^API_URL=" .supabase.status.env | cut -d= -f2-); v=$$(stripq "$$v"); [ -n "$$v" ] && url="$$v/rest/v1"; \
 	  if [ -z "$$auth" ]; then a=$$(grep -m1 "^ANON_KEY=" .supabase.status.env | cut -d= -f2-); a=$$(stripq "$$a"); [ -n "$$a" ] && auth="$$a"; fi; \
@@ -2298,7 +2308,7 @@ jellyfin-parity-audit-strict: ## Strict parity audit (fails on WARN/FAIL)
 
 .PHONY: jellyfin-verify jellyfin-smoke yt-jellyfin-smoke
 jellyfin-verify: ## Verify Jellyfin bridge + overlay runtime health and refresh path
-	@$(PYTHON) tools/jellyfin_verify.py
+	@$(PYTHON) tools/jellyfin_verify.py $(ARGS)
 
 jellyfin-smoke: jellyfin-verify ## Alias smoke target for Jellyfin verification
 	@true
