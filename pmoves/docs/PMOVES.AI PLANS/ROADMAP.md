@@ -55,7 +55,7 @@ A production-ready, self-hostable orchestration mesh for creative + agent worklo
   - `archon-rest-policy-smoke` now probes in-network in compose runtime (no false host-url failures)
   - `yt-docs-sync` fixed in compose topology (PMOVES.YT now reaches Supabase over in-network PostgREST route)
   - bring-up Prometheus wait no longer depends on `jq` (python fallback parser added)
-  - model-readiness now uses compose-aware docker/db fallback and reports true registry/model gaps instead of transport/auth false negatives
+  - model-readiness now uses compose-aware docker/db fallback; model registry reseed restored provider/model/persona parity (remaining warnings are only Ollama model pre-pull state)
 
 ## Current Sprint Overlay (Hardened)
 
