@@ -8,11 +8,19 @@ import json
 import subprocess
 import sys
 import urllib.error
+import urllib.parse
 import urllib.request
 from pathlib import Path
 
 
+def _validate_http_url(url: str) -> None:
+    parsed = urllib.parse.urlparse(url)
+    if parsed.scheme not in {"http", "https"}:
+        raise ValueError(f"unsupported URL scheme for smoke request: {url}")
+
+
 def _request_json(url: str, payload: dict | None = None, timeout: float = 20.0) -> tuple[int, dict]:
+    _validate_http_url(url)
     body = None
     headers = {}
     if payload is not None:
@@ -27,12 +35,16 @@ def _request_json(url: str, payload: dict | None = None, timeout: float = 20.0) 
 def _tts_to_mp3_b64(text: str) -> str:
     root = Path(__file__).resolve().parents[1]
     script = root / "tools" / "flute_tts_to_mp3_b64.py"
-    proc = subprocess.run(
-        [sys.executable, str(script), text],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    try:
+        proc = subprocess.run(
+            [sys.executable, str(script), text],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=60,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError("flute_tts_to_mp3_b64 timed out after 60s") from exc
     if proc.returncode != 0:
         raise RuntimeError(f"flute_tts_to_mp3_b64 failed: {proc.stderr.strip()}")
     return proc.stdout.strip()
@@ -43,6 +55,12 @@ def main() -> int:
     parser.add_argument("--voice-url", default="http://localhost:5678/webhook/voice-agent/ingest")
     parser.add_argument("--discord-url", default="http://localhost:8094/publish")
     args = parser.parse_args()
+    try:
+        _validate_http_url(args.voice_url)
+        _validate_http_url(args.discord_url)
+    except ValueError as exc:
+        print(f"FAIL: {exc}")
+        return 1
 
     print("[Voice->Discord] Trigger voice agent via n8n webhook")
     try:
@@ -120,4 +138,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

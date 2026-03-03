@@ -1841,7 +1841,7 @@ voice-follow-smoke: ## Smoke: start speaker + follow(--once), trigger voice agen
 	echo "✔ voice-follow-smoke OK"
 
 voice-agent-discord-smoke: ## Smoke: voice-agent response -> Discord publish (text)
-	@$(PYTHON) tools/voice_agent_discord_smoke.py
+	@$(PYTHON) tools/voice_agent_discord_smoke.py $(ARGS)
 
 # Toggle Single‑User (Owner) Mode for the console and restart dev server
 .PHONY: ui-single-user ui-single-user-on ui-single-user-off
@@ -2282,7 +2282,7 @@ jellyfin-parity-audit-strict: ## Strict parity audit (fails on WARN/FAIL)
 
 .PHONY: jellyfin-verify jellyfin-smoke yt-jellyfin-smoke
 jellyfin-verify: ## Verify Jellyfin bridge + overlay runtime health and refresh path
-	@$(PYTHON) tools/jellyfin_verify.py
+	@$(PYTHON) tools/jellyfin_verify.py $(ARGS)
 
 jellyfin-smoke: jellyfin-verify ## Alias smoke target for Jellyfin verification
 	@true

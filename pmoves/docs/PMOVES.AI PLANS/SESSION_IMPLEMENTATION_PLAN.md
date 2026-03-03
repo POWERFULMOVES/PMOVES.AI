@@ -157,7 +157,7 @@ Use this section to capture evidence as steps are executed. Attach screenshots/l
   - `GPU_SMOKE_STRICT=true make -C pmoves smoke-gpu`
 - M2 activation lane blockers captured:
   - Legacy checklist targets currently referenced in docs are absent in Make (`discord-smoke`, `smoke-wger`, `smoke-firefly`).
-  - `make -C pmoves jellyfin-verify` fails on default `http://localhost:8096` probe in this mixed overlay runtime; `python pmoves/tools/jellyfin_verify.py --jellyfin-url http://localhost:9096` passes all checks.
+  - `make -C pmoves jellyfin-verify` still fails when the primary probe `http://localhost:8096` is unavailable; fallback probe `http://localhost:9096` is diagnostic only. For overlay-only stacks, run `make -C pmoves jellyfin-verify ARGS="--jellyfin-url http://localhost:9096 --jellyfin-fallback-url http://localhost:9096"`.
   - `voice-agent-discord-smoke` no longer depends on `jq`; current blocker is runtime `404` from `http://localhost:5678/webhook/voice-agent/ingest` until the n8n webhook flow is imported/activated.
   - Firefly container logs show `MissingAppKeyException` when `FIREFLY_APP_KEY` is unset; runtime requires explicit key injection before reliable health verification.
 
@@ -166,7 +166,7 @@ Use this section to capture evidence as steps are executed. Attach screenshots/l
 
 | Production chain replay (`env-setup` -> `smoke-gpu`) | 2026-03-02T22:04:02Z | `env-check` PASS; `supa-start` PASS; `supabase-bootstrap` PASS; `make up` PASS; `make smoke` PASS (Meili/Neo4j UI warnings remain non-blocking); `GPU_SMOKE_STRICT=true make smoke-gpu` PASS. |
 | M2 command drift triage | 2026-03-02T22:04:02Z | `make -C pmoves discord-smoke`, `smoke-wger`, `smoke-firefly` each return `No rule to make target` (target drift vs docs checklist). |
-| Jellyfin verify runtime probe | 2026-03-02T22:04:02Z | `make -C pmoves jellyfin-verify` FAILS only on `localhost:8096`; direct verify with `--jellyfin-url http://localhost:9096` returns full PASS. |
+| Jellyfin verify runtime probe | 2026-03-02T22:04:02Z | `make -C pmoves jellyfin-verify` FAILS on primary `localhost:8096` when unavailable; fallback on `9096` is reported but does not clear the primary failure. Overlay-only PASS: `make -C pmoves jellyfin-verify ARGS="--jellyfin-url http://localhost:9096 --jellyfin-fallback-url http://localhost:9096"`. |
 | Voice→Discord smoke prerequisite | 2026-03-02T22:04:02Z | `make -C pmoves voice-agent-discord-smoke` now runs without `jq`; current blocker is n8n webhook `404` (`/webhook/voice-agent/ingest`) until flow activation. |
 | Firefly auth bootstrap gate | 2026-03-02T22:04:02Z | `pmoves-firefly` logs report `MissingAppKeyException` until `FIREFLY_APP_KEY` is provided; mark as required for external-stack validation. |
 
