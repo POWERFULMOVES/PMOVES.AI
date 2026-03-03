@@ -7,7 +7,7 @@
 **Branch:** `main`
 **Commit:** local audit lane (uncommitted)
 **Consolidated From:** 27 audit documents
-**Evidence:** `pmoves/PR_EVIDENCE/2026-03-03_03-31-01`
+**Evidence:** `pmoves/PR_EVIDENCE/2026-03-03_10-48-34`
 
 ---
 
@@ -32,12 +32,12 @@
 
 | Check | Result | Notes |
 |---|---|---|
-| `make -C pmoves verify-all` | PASS (non-fatal defects remain) | Evidence: `pmoves/PR_EVIDENCE/2026-03-03_03-31-01` |
+| `make -C pmoves verify-all` | PASS (non-fatal defects remain) | Evidence: `pmoves/PR_EVIDENCE/2026-03-03_10-48-34` |
 | Archon compose health | PASS | `/healthz` now returns 200 on in-network Supabase (`http://supabase-postgrest:3000`) |
 | `make -C pmoves archon-rest-policy-smoke` | PASS | Compose-aware probe now runs in-network via `pmoves-archon-1` |
-| Prometheus targets wait | WARN | `wait_prom_targets` timeout still occurs during bring-up |
-| `yt-docs-sync` | WARN | `/yt/docs/sync` returns HTTP 500 intermittently |
-| `model-readiness` | WARN (non-fatal in verify-all) | Missing `SUPABASE_ANON_KEY`, host-side Supabase/Ollama endpoints not reachable in compose-only topology |
+| Prometheus targets wait | PASS | `wait_prom_targets` now succeeds without `jq` dependency |
+| `yt-docs-sync` | PASS | `/yt/docs/sync` now returns 200 in compose runtime |
+| `model-readiness` | WARN (non-fatal in verify-all) | Connectivity/auth drift resolved; now reporting real data gaps (providers/models/mappings/Ollama pull state) |
 
 ### Local Atomic Lanes (2026-03-02)
 
