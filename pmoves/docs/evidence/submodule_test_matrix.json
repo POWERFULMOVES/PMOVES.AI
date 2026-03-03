@@ -1,0 +1,93 @@
+{
+  "generated_utc": "2026-03-03T02:48:42Z",
+  "runs": [
+    {
+      "submodule": "PMOVES-Agent-Zero",
+      "command": "python -m pytest -q tests --maxfail=1",
+      "status": "fail",
+      "exit_code": 1,
+      "duration_sec": 0.08,
+      "output_tail": "C:\\Users\\russe\\Documents\\GitHub\\PMOVES.AI\\pmoves-cipher-mcp\\.venv\\Scripts\\python.exe: No module named pytest"
+    },
+    {
+      "submodule": "PMOVES-Archon",
+      "command": "make test-be",
+      "status": "fail",
+      "exit_code": 2,
+      "duration_sec": 9.68,
+      "output_tail": "\"Running backend tests...\"\nwarning: `VIRTUAL_ENV=C:\\Users\\russe\\Documents\\GitHub\\PMOVES.AI\\pmoves-cipher-mcp\\.venv` does not match the project environment path `.venv` and will be ignored; use `--active` to target the active environment instead\nUsing CPython 3.13.5\nCreating virtual environment at: .venv\nwarning: `pypdfium2==4.30.1` is yanked (reason: \"Text extraction regression in pdfium, crbug.com/387277993\")\nDownloading faker (1.9MiB)\nDownloading mypy (9.1MiB)\nDownloading ruff (12.3MiB)\n Downloading ruff\n Downloading faker\n Downloading mypy\nInstalled 23 packages in 1.78s\nImportError while loading conftest 'C:\\Users\\russe\\Documents\\GitHub\\PMOVES.AI\\PMOVES-Archon\\python\\tests\\conftest.py'.\ntests\\conftest.py:7: in <module>\n    from fastapi.testclient import TestClient\nE   ModuleNotFoundError: No module named 'fastapi'\nmake: *** [Makefile:141: test-be] Error 4"
+    },
+    {
+      "submodule": "PMOVES-BoTZ",
+      "command": "make test-smoke",
+      "status": "fail",
+      "exit_code": 2,
+      "duration_sec": 0.58,
+      "output_tail": "\"Running smoke tests...\"\nTraceback (most recent call last):\n  File \"C:\\Users\\russe\\Documents\\GitHub\\PMOVES.AI\\PMOVES-BoTZ\\scripts\\smoke_tests.py\", line 11, in <module>\n    import requests\nModuleNotFoundError: No module named 'requests'\nmake: *** [Makefile:171: test-smoke] Error 1"
+    },
+    {
+      "submodule": "PMOVES-BotZ-gateway",
+      "command": "python -m pytest -q --maxfail=1",
+      "status": "fail",
+      "exit_code": 1,
+      "duration_sec": 0.08,
+      "output_tail": "C:\\Users\\russe\\Documents\\GitHub\\PMOVES.AI\\pmoves-cipher-mcp\\.venv\\Scripts\\python.exe: No module named pytest"
+    },
+    {
+      "submodule": "Pmoves-cipher",
+      "command": "npm run test -- --runInBand",
+      "status": "fail",
+      "exit_code": 1,
+      "duration_sec": 0.71,
+      "output_tail": "> @byterover/cipher@0.3.0 test\n> vitest run --runInBand\nfile:///C:/Users/russe/Documents/GitHub/PMOVES.AI/Pmoves-cipher/node_modules/.pnpm/vitest@3.2.4_@types+node@24.1.0_tsx@4.20.3_yaml@2.8.0/node_modules/vitest/dist/chunks/cac.Cb-PYCCB.js:404\n          throw new CACError(`Unknown option \\`${name.length > 1 ? `--${name}` : `-${name}`}\\``);\n                ^\nCACError: Unknown option `--runInBand`\n    at Command.checkUnknownOptions (file:///C:/Users/russe/Documents/GitHub/PMOVES.AI/Pmoves-cipher/node_modules/.pnpm/vitest@3.2.4_@types+node@24.1.0_tsx@4.20.3_yaml@2.8.0/node_modules/vitest/dist/chunks/cac.Cb-PYCCB.js:404:17)\n    at CAC.runMatchedCommand (file:///C:/Users/russe/Documents/GitHub/PMOVES.AI/Pmoves-cipher/node_modules/.pnpm/vitest@3.2.4_@types+node@24.1.0_tsx@4.20.3_yaml@2.8.0/node_modules/vitest/dist/chunks/cac.Cb-PYCCB.js:604:13)\n    at CAC.parse (file:///C:/Users/russe/Documents/GitHub/PMOVES.AI/Pmoves-cipher/node_modules/.pnpm/vitest@3.2.4_@types+node@24.1.0_tsx@4.20.3_yaml@2.8.0/node_modules/vitest/dist/chunks/cac.Cb-PYCCB.js:545:12)\n    at file:///C:/Users/russe/Documents/GitHub/PMOVES.AI/Pmoves-cipher/node_modules/.pnpm/vitest@3.2.4_@types+node@24.1.0_tsx@4.20.3_yaml@2.8.0/node_modules/vitest/dist/cli.js:27:13\n    at ModuleJob.run (node:internal/modules/esm/module_job:329:25)\n    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:644:26)\n    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5)\nNode.js v22.17.1"
+    },
+    {
+      "submodule": "PMOVES-HiRAG",
+      "command": "python -m pytest -q --maxfail=1",
+      "status": "fail",
+      "exit_code": 1,
+      "duration_sec": 0.07,
+      "output_tail": "C:\\Users\\russe\\Documents\\GitHub\\PMOVES.AI\\pmoves-cipher-mcp\\.venv\\Scripts\\python.exe: No module named pytest"
+    },
+    {
+      "submodule": "PMOVES-transcribe-and-fetch",
+      "command": "npm test -- --runInBand --watch=false",
+      "status": "fail",
+      "exit_code": 1,
+      "duration_sec": 12.42,
+      "output_tail": "> pmoves-transcriber@0.1.0 test\n> jest --runInBand --watch=false"
+    },
+    {
+      "submodule": "PMOVES-ToKenism-Multi",
+      "command": "python -m pytest -q tests --maxfail=1",
+      "status": "fail",
+      "exit_code": 1,
+      "duration_sec": 0.07,
+      "output_tail": "C:\\Users\\russe\\Documents\\GitHub\\PMOVES.AI\\pmoves-cipher-mcp\\.venv\\Scripts\\python.exe: No module named pytest"
+    },
+    {
+      "submodule": "PMOVES-DoX",
+      "command": "make test-standalone",
+      "status": "fail",
+      "exit_code": 2,
+      "duration_sec": 0.18,
+      "output_tail": "\"Ensuring external networks exist for standalone mode...\"\nnetwork was unexpected at this time.\nmake: *** [Makefile:54: ensure-standalone-networks] Error 255"
+    },
+    {
+      "submodule": "PMOVES-Open-Notebook",
+      "command": "python -m pytest -q tests --maxfail=1",
+      "status": "fail",
+      "exit_code": 1,
+      "duration_sec": 0.07,
+      "output_tail": "C:\\Users\\russe\\Documents\\GitHub\\PMOVES.AI\\pmoves-cipher-mcp\\.venv\\Scripts\\python.exe: No module named pytest"
+    },
+    {
+      "submodule": "PMOVES.YT",
+      "command": "make test",
+      "status": "fail",
+      "exit_code": 2,
+      "duration_sec": 0.48,
+      "output_tail": "/usr/bin/env python3 -m pytest -Werror\nThe system cannot find the path specified.\n\"\" was unexpected at this time.\n'sed' is not recognized as an internal or external command,\noperable program or batch file.\nf was unexpected at this time.\n'sed' is not recognized as an internal or external command,\noperable program or batch file.\nf was unexpected at this time.\nFile not found - *.py\nprocess_begin: CreateProcess(NULL, sh.exe -c \"/usr/bin/env python3 -m pytest -Werror\", ...) failed.\nmake (e=2): The system cannot find the file specified.\nmake: *** [Makefile:84: test] Error 2"
+    }
+  ]
+}
