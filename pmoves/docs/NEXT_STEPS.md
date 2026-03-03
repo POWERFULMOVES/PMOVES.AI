@@ -1,7 +1,22 @@
 
 # PMOVES v5 • NEXT_STEPS
 Note: Consolidated plan index at pmoves/docs/PMOVES.AI PLANS/README_DOCS_INDEX.md.
-_Last updated: 2026-03-02_
+_Last updated: 2026-03-03_
+
+### Latest changes (Mar 3, 2026)
+- Production audit lane re-run completed on `main` with fresh evidence (`pmoves/PR_EVIDENCE/2026-03-03_03-31-01`).
+- Compose topology parity hardening landed:
+  - `.env.local` is no longer included in compose runtime by default (set `INCLUDE_ENV_LOCAL_IN_COMPOSE=1` to opt in).
+  - Archon compose Supabase defaults now target in-network PostgREST (`http://supabase-postgrest:3000`) instead of host-only URLs.
+  - `make -C pmoves archon-rest-policy-smoke` is compose-aware and executes probe in-network via `pmoves-archon-1`.
+- Live backlog snapshot:
+  - Open PRs: `0`
+  - Dependabot alerts: `1` (`1 low`)
+  - Code scanning alerts: `34` (`31 error`, `3 warning`)
+- Remaining runtime defects to close:
+  - `yt-docs-sync` intermittently returns HTTP 500 during bring-up evidence capture.
+  - Prometheus target wait can time out in `bringup_with_ui.sh` even when later monitoring targets are up.
+  - `model-readiness` still expects host-exposed Supabase/Ollama endpoints in compose-only mode.
 
 ### Latest changes (Mar 2, 2026)
 - Merge wave complete (order executed and synced):
