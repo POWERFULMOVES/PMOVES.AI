@@ -8,7 +8,7 @@ A production-ready, self-hostable orchestration mesh for creative + agent worklo
 
 - Branch strategy: `PMOVES.AI-Edition-Hardened` is the production release branch; `main` receives promoted merges from hardened.
 - PR queue and workflow health are tracked in `pmoves/docs/PRODUCTION_AUDIT_DASHBOARD.md`; use that doc as the live source before merge decisions.
-- Open PR queue (live): `1` open (`#761` docs cataclysm closeout; currently queue-blocked on self-hosted CI capacity).
+- Open PR queue (live): `0` open.
 - Dependency/code scanning backlog (live): Dependabot open `2` (`1 high`, `1 low`); Code Scanning open `34` (`31 error`, `3 warning`).
 - Active remediation focus: production-mode bring-up parity (no dev-target defaults), dynamic port/namespace hygiene, hardened runtime auth consistency across compose/submodules, and recurring self-hosted queue starvation for CodeQL/GHCR lanes.
 - GHCR operations lane now enforces local-first validation for SupaSerch (`build-local-supaserch` → `ghcr-prepublish-supaserch` → targeted dispatch), with secret bootstrap reuse via `ghcr-bootstrap-secrets`.
@@ -36,6 +36,10 @@ A production-ready, self-hostable orchestration mesh for creative + agent worklo
   - `#758` production runtime/db/env hardening sitrep
   - `#759` CI SQL/Python collision fixes
   - `#760` ToKenism submodule gitlink bump after merged PR #46
+- March 2 closeout merges completed on `main`:
+  - `#763` transcribe-and-fetch submodule bump (font removal + LFS fix)
+  - `#764` Agent Zero MCP auto-seed + plugin catalog + Codex parity docs
+  - `#767` Agent0 plugin manifest namespace alignment (`CATACLYSM-STUDIOS-INC`)
 - DAO recontext + ingestion planning is now tracked at `DAO_RECONTEXT_INGESTION_PLAN_2026-02-24.md` with a normalized projection envelope for operator-safe planning.
 - Hardened release PR queue is clear (`0` open PRs).
 - Recent production PR closures on hardened: `#720`, `#722`, `#723`, `#724`, `#725`, `#726`, `#727`.
