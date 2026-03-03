@@ -1,5 +1,5 @@
 # PMOVES v5 • ROADMAP
-Last updated: 2026-03-02
+Last updated: 2026-03-03
 
 ## Vision
 A production-ready, self-hostable orchestration mesh for creative + agent workloads across GPU boxes and Jetsons: **hybrid Hi‑RAG**, **Supabase Studio**, **n8n orchestration**, **Jellyfin publishing**, and **graph-aware retrieval**.
@@ -9,7 +9,7 @@ A production-ready, self-hostable orchestration mesh for creative + agent worklo
 - Branch strategy: `PMOVES.AI-Edition-Hardened` is the production release branch; `main` receives promoted merges from hardened.
 - PR queue and workflow health are tracked in `pmoves/docs/PRODUCTION_AUDIT_DASHBOARD.md`; use that doc as the live source before merge decisions.
 - Open PR queue (live): `0` open.
-- Dependency/code scanning backlog (live): Dependabot open `2` (`1 high`, `1 low`); Code Scanning open `34` (`31 error`, `3 warning`).
+- Dependency/code scanning backlog (live): Dependabot open `1` (`1 low`); Code Scanning open `34` (`31 error`, `3 warning`).
 - Active remediation focus: production-mode bring-up parity (no dev-target defaults), dynamic port/namespace hygiene, hardened runtime auth consistency across compose/submodules, and recurring self-hosted queue starvation for CodeQL/GHCR lanes.
 - GHCR operations lane now enforces local-first validation for SupaSerch (`build-local-supaserch` → `ghcr-prepublish-supaserch` → targeted dispatch), with secret bootstrap reuse via `ghcr-bootstrap-secrets`.
 - Creator lane now includes Jellyfin parity auditing (`make -C pmoves jellyfin-parity-audit[‑strict]`) plus a dedicated worktree review runbook for PMOVES.YT/Jellyfin/CHIT convergence.
@@ -49,6 +49,10 @@ A production-ready, self-hostable orchestration mesh for creative + agent worklo
 - Runner lane stability update:
   - local-cert runner flow now falls back to `json-file` logging when Docker lacks Loki plugin support (`#725`)
   - `ci-runners-check` lane validation is passing for required labels
+- Production audit lane refresh (Mar 3):
+  - compose bring-up now ignores `.env.local` by default (`INCLUDE_ENV_LOCAL_IN_COMPOSE=1` to opt-in), preventing host-only URL drift in production topology
+  - Archon compose wiring now defaults to in-network Supabase PostgREST (`http://supabase-postgrest:3000`)
+  - `archon-rest-policy-smoke` now probes in-network in compose runtime (no false host-url failures)
 
 ## Current Sprint Overlay (Hardened)
 

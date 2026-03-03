@@ -3,11 +3,11 @@
 > **Single source of truth** for PMOVES.AI production readiness.
 > Supersedes all individual audit documents accumulated Feb 7 -- Feb 18, 2026.
 
-**Last Updated:** 2026-03-02 (post-split-lane cleanup + live CI/status sync)
-**Branch:** `chore/submodule-bumps-mar02` (PR #758)
-**Commit:** (merge with origin/main)
+**Last Updated:** 2026-03-03 (production audit lane refresh + compose topology parity)
+**Branch:** `main`
+**Commit:** local audit lane (uncommitted)
 **Consolidated From:** 27 audit documents
-**Evidence:** `pmoves/docs/evidence/audit-validation-2026-02-20-production-runtime.md`
+**Evidence:** `pmoves/PR_EVIDENCE/2026-03-03_03-31-01`
 
 ---
 
@@ -15,18 +15,29 @@
 
 | Metric | Value |
 |--------|-------|
-| Quantitative snapshot timestamp | 2026-03-02 (live GitHub + CI snapshot) |
+| Quantitative snapshot timestamp | 2026-03-03 (live GitHub + local verify-all snapshot) |
 | Total tracked items | 24 |
 | Resolved | 22 (+3 since last update) |
-| Active blockers | 4 (AB-4/5/6/9) |
+| Active blockers | 3 (runtime verification defects, non-fatal) |
 | Critical | 0 |
 | High | 2 |
 | Medium | 2 |
 | Low | 0 |
-| CodeQL alerts (open) | **36 open** (live count via GitHub API on 2026-03-02) |
-| Dependabot alerts | **5 open** (live count via GitHub API on 2026-03-02) |
-| Open PRs | **5** (#754, #755, #756, #757, #758) |
-| CI (PR #758 @ `db6b3a13`) | Hosted gates pass; self-hosted lanes queued due runner capacity |
+| CodeQL alerts (open) | **34 open** (`31 error`, `3 warning`; live GitHub API on 2026-03-03) |
+| Dependabot alerts | **1 open** (`1 low`; live GitHub API on 2026-03-03) |
+| Open PRs | **0** |
+| CI queue | Hosted gates healthy; self-hosted queue starvation remains intermittent (queue guard merged) |
+
+### Runtime Verification Snapshot (2026-03-03)
+
+| Check | Result | Notes |
+|---|---|---|
+| `make -C pmoves verify-all` | PASS (non-fatal defects remain) | Evidence: `pmoves/PR_EVIDENCE/2026-03-03_03-31-01` |
+| Archon compose health | PASS | `/healthz` now returns 200 on in-network Supabase (`http://supabase-postgrest:3000`) |
+| `make -C pmoves archon-rest-policy-smoke` | PASS | Compose-aware probe now runs in-network via `pmoves-archon-1` |
+| Prometheus targets wait | WARN | `wait_prom_targets` timeout still occurs during bring-up |
+| `yt-docs-sync` | WARN | `/yt/docs/sync` returns HTTP 500 intermittently |
+| `model-readiness` | WARN (non-fatal in verify-all) | Missing `SUPABASE_ANON_KEY`, host-side Supabase/Ollama endpoints not reachable in compose-only topology |
 
 ### Local Atomic Lanes (2026-03-02)
 
