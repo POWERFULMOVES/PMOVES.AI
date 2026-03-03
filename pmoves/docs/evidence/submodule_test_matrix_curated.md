@@ -89,7 +89,7 @@ python\tests\test_token_optimization_integration.py ss..                 [ 96%]
 python\tests\test_url_canonicalization.py ..........                     [ 97%]
 python\tests\test_url_handler.py ...............                         [100%]
 =========== 725 passed, 12 skipped, 64 warnings in 92.53s (0:01:32) ===========
-warning: `VIRTUAL_ENV=C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves-cipher-mcp\.venv` does not match the project environment path `python\.venv` and will be ignored; use `--active` to target the active environment instead
+warning: `VIRTUAL_ENV=<WORKSTATION_PATH>\pmoves-cipher-mcp\.venv` does not match the project environment path `python\.venv` and will be ignored; use `--active` to target the active environment instead
 ```
 
 ### PMOVES-BoTZ (fail)
@@ -112,7 +112,7 @@ warning: `VIRTUAL_ENV=C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves-cipher-mc
 [22:17:33] FAIL: VL-Sentinel: error reaching http://localhost:7072/health: HTTPConnectionPool(host='localhost', port=7072): Max retries exceeded with url: /health (Caused by NewConnectionError("HTTPConnection(host='localhost', port=7072): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it"))
 [22:17:33] FAIL: VL-Sentinel Health tests FAILED
 [22:17:33] INFO: Running Cipher Memory Integration tests...
-[22:17:33] PASS: Cipher Cipher Submodule: Found at C:\Users\russe\Documents\GitHub\PMOVES.AI\PMOVES-BoTZ\features\cipher\pmoves_cipher
+[22:17:33] PASS: Cipher Cipher Submodule: Found at <WORKSTATION_PATH>\PMOVES-BoTZ\features\cipher\pmoves_cipher
 [22:17:33] FAIL: Cipher Cipher Build: Cipher not built - run setup script
 [22:17:33] PASS: Cipher OpenAI API: No cloud LLM key set; cipher will run with limited capabilities until VENICE_API_KEY or OPENAI_API_KEY is provided
 [22:17:33] PASS: Cipher Cipher Config: PMOVES cipher configuration found
@@ -161,42 +161,42 @@ No root-level deterministic test command found.
 [22m[39m22:18:30 INFO: DuckDuckGo: Initialized for platform: linux (x64)
 [90mstderr[2m | src/core/brain/tools/definitions/web-search/engine/__test__/duckduckgo.test.ts[2m > [22m[2mDuckDuckGoPuppeteerProvider[2m > [22m[2mBrowser Management[2m > [22m[2mshould reuse browser instance across searches
 [22m[39mDuckDuckGo Puppeteer search error: Error: Test error
-    at [90mC:\Users\russe\Documents\GitHub\PMOVES.AI\Pmoves-cipher\[39msrc\core\brain\tools\definitions\web-search\engine\__test__\duckduckgo.test.ts:467:40
-    at [90mfile:///C:/Users/russe/Documents/GitHub/PMOVES.AI/Pmoves-cipher/[39mnode_modules/[4m.pnpm[24m/@vitest+runner@3.2.4/node_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:155:11
-    at [90mfile:///C:/Users/russe/Documents/GitHub/PMOVES.AI/Pmoves-cipher/[39mnode_modules/[4m.pnpm[24m/@vitest+runner@3.2.4/node_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:752:26
-    at [90mfile:///C:/Users/russe/Documents/GitHub/PMOVES.AI/Pmoves-cipher/[39mnode_modules/[4m.pnpm[24m/@vitest+runner@3.2.4/node_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:1897:20
+    at [90m<WORKSTATION_PATH>\Pmoves-cipher\[39msrc\core\brain\tools\definitions\web-search\engine\__test__\duckduckgo.test.ts:467:40
+    at [90mfile:///<WORKSTATION_PATH>/Pmoves-cipher/[39mnode_modules/[4m.pnpm[24m/@vitest+runner@3.2.4/node_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:155:11
+    at [90mfile:///<WORKSTATION_PATH>/Pmoves-cipher/[39mnode_modules/[4m.pnpm[24m/@vitest+runner@3.2.4/node_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:752:26
+    at [90mfile:///<WORKSTATION_PATH>/Pmoves-cipher/[39mnode_modules/[4m.pnpm[24m/@vitest+runner@3.2.4/node_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:1897:20
     at new Promise (<anonymous>)
-    at runWithTimeout [90m(file:///C:/Users/russe/Documents/GitHub/PMOVES.AI/Pmoves-cipher/[39mnode_modules/[4m.pnpm[24m/@vitest+runner@3.2.4/node_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:1863:10[90m)[39m
-    at runTest [90m(file:///C:/Users/russe/Documents/GitHub/PMOVES.AI/Pmoves-cipher/[39mnode_modules/[4m.pnpm[24m/@vitest+runner@3.2.4/node_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:1574:12[90m)[39m
-    at runSuite [90m(file:///C:/Users/russe/Documents/GitHub/PMOVES.AI/Pmoves-cipher/[39mnode_modules/[4m.pnpm[24m/@vitest+runner@3.2.4/node_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:1729:8[90m)[39m
-    at runSuite [90m(file:///C:/Users/russe/Documents/GitHub/PMOVES.AI/Pmoves-cipher/[39mnode_modules/[4m.pnpm[24m/@vitest+runner@3.2.4/node_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:1729:8[90m)[39m
-    at runSuite [90m(file:///C:/Users/russe/Documents/GitHub/PMOVES.AI/Pmoves-cipher/[39mnode_modules/[4m.pnpm[24m/@vitest+runner@3.2.4/node_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:1729:8[90m)[39m
+    at runWithTimeout [90m(file:///<WORKSTATION_PATH>/Pmoves-cipher/[39mnode_modules/[4m.pnpm[24m/@vitest+runner@3.2.4/node_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:1863:10[90m)[39m
+    at runTest [90m(file:///<WORKSTATION_PATH>/Pmoves-cipher/[39mnode_modules/[4m.pnpm[24m/@vitest+runner@3.2.4/node_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:1574:12[90m)[39m
+    at runSuite [90m(file:///<WORKSTATION_PATH>/Pmoves-cipher/[39mnode_modules/[4m.pnpm[24m/@vitest+runner@3.2.4/node_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:1729:8[90m)[39m
+    at runSuite [90m(file:///<WORKSTATION_PATH>/Pmoves-cipher/[39mnode_modules/[4m.pnpm[24m/@vitest+runner@3.2.4/node_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:1729:8[90m)[39m
+    at runSuite [90m(file:///<WORKSTATION_PATH>/Pmoves-cipher/[39mnode_modules/[4m.pnpm[24m/@vitest+runner@3.2.4/node_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:1729:8[90m)[39m
 [90mstderr[2m | src/core/brain/tools/definitions/web-search/engine/__test__/duckduckgo.test.ts[2m > [22m[2mDuckDuckGoPuppeteerProvider[2m > [22m[2mBrowser Management[2m > [22m[2mshould reuse browser instance across searches
 [22m[39mDuckDuckGo Puppeteer search error: Error: Test error
-    at [90mC:\Users\russe\Documents\GitHub\PMOVES.AI\Pmoves-cipher\[39msrc\core\brain\tools\definitions\web-search\engine\__test__\duckduckgo.test.ts:467:40
-    at [90mfile:///C:/Users/russe/Documents/GitHub/PMOVES.AI/Pmoves-cipher/[39mnode_modules/[4m.pnpm[24m/@vitest+runner@3.2.4/node_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:155:11
-    at [90mfile:///C:/Users/russe/Documents/GitHub/PMOVES.AI/Pmoves-cipher/[39mnode_modules/[4m.pnpm[24m/@vitest+runner@3.2.4/node_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:752:26
-    at [90mfile:///C:/Users/russe/Documents/GitHub/PMOVES.AI/Pmoves-cipher/[39mnode_modules/[4m.pnpm[24m/@vitest+runner@3.2.4/node_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:1897:20
+    at [90m<WORKSTATION_PATH>\Pmoves-cipher\[39msrc\core\brain\tools\definitions\web-search\engine\__test__\duckduckgo.test.ts:467:40
+    at [90mfile:///<WORKSTATION_PATH>/Pmoves-cipher/[39mnode_modules/[4m.pnpm[24m/@vitest+runner@3.2.4/node_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:155:11
+    at [90mfile:///<WORKSTATION_PATH>/Pmoves-cipher/[39mnode_modules/[4m.pnpm[24m/@vitest+runner@3.2.4/node_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:752:26
+    at [90mfile:///<WORKSTATION_PATH>/Pmoves-cipher/[39mnode_modules/[4m.pnpm[24m/@vitest+runner@3.2.4/node_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:1897:20
     at new Promise (<anonymous>)
-    at runWithTimeout [90m(file:///C:/Users/russe/Documents/GitHub/PMOVES.AI/Pmoves-cipher/[39mnode_modules/[4m.pnpm[24m/@vitest+runner@3.2.4/node_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:1863:10[90m)[39m
-    at runTest [90m(file:///C:/Users/russe/Documents/GitHub/PMOVES.AI/Pmoves-cipher/[39mnode_modules/[4m.pnpm[24m/@vitest+runner@3.2.4/node_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:1574:12[90m)[39m
-    at runSuite [90m(file:///C:/Users/russe/Documents/GitHub/PMOVES.AI/Pmoves-cipher/[39mnode_modules/[4m.pnpm[24m/@vitest+runner@3.2.4/node_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:1729:8[90m)[39m
-    at runSuite [90m(file:///C:/Users/russe/Documents/GitHub/PMOVES.AI/Pmoves-cipher/[39mnode_modules/[4m.pnpm[24m/@vitest+runner@3.2.4/node_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:1729:8[90m)[39m
-    at runSuite [90m(file:///C:/Users/russe/Documents/GitHub/PMOVES.AI/Pmoves-cipher/[39mnode_modules/[4m.pnpm[24m/@vitest+runner@3.2.4/node_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:1729:8[90m)[39m
+    at runWithTimeout [90m(file:///<WORKSTATION_PATH>/Pmoves-cipher/[39mnode_modules/[4m.pnpm[24m/@vitest+runner@3.2.4/node_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:1863:10[90m)[39m
+    at runTest [90m(file:///<WORKSTATION_PATH>/Pmoves-cipher/[39mnode_modules/[4m.pnpm[24m/@vitest+runner@3.2.4/node_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:1574:12[90m)[39m
+    at runSuite [90m(file:///<WORKSTATION_PATH>/Pmoves-cipher/[39mnode_modules/[4m.pnpm[24m/@vitest+runner@3.2.4/node_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:1729:8[90m)[39m
+    at runSuite [90m(file:///<WORKSTATION_PATH>/Pmoves-cipher/[39mnode_modules/[4m.pnpm[24m/@vitest+runner@3.2.4/node_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:1729:8[90m)[39m
+    at runSuite [90m(file:///<WORKSTATION_PATH>/Pmoves-cipher/[39mnode_modules/[4m.pnpm[24m/@vitest+runner@3.2.4/node_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:1729:8[90m)[39m
 [90mstderr[2m | src/core/brain/tools/definitions/web-search/engine/__test__/duckduckgo.test.ts[2m > [22m[2mDuckDuckGoPuppeteerProvider[2m > [22m[2mBrowser Management[2m > [22m[2mshould cleanup browser on cleanup call
 [22m[39m22:18:36 INFO: DuckDuckGo: Initialized for platform: linux (x64)
 [90mstderr[2m | src/core/brain/tools/definitions/web-search/engine/__test__/duckduckgo.test.ts[2m > [22m[2mDuckDuckGoPuppeteerProvider[2m > [22m[2mBrowser Management[2m > [22m[2mshould cleanup browser on cleanup call
 [22m[39mDuckDuckGo Puppeteer search error: Error: Test error
-    at [90mC:\Users\russe\Documents\GitHub\PMOVES.AI\Pmoves-cipher\[39msrc\core\brain\tools\definitions\web-search\engine\__test__\duckduckgo.test.ts:467:40
-    at [90mfile:///C:/Users/russe/Documents/GitHub/PMOVES.AI/Pmoves-cipher/[39mnode_modules/[4m.pnpm[24m/@vitest+runner@3.2.4/node_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:155:11
-    at [90mfile:///C:/Users/russe/Documents/GitHub/PMOVES.AI/Pmoves-cipher/[39mnode_modules/[4m.pnpm[24m/@vitest+runner@3.2.4/node_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:752:26
-    at [90mfile:///C:/Users/russe/Documents/GitHub/PMOVES.AI/Pmoves-cipher/[39mnode_modules/[4m.pnpm[24m/@vitest+runner@3.2.4/node_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:1897:20
+    at [90m<WORKSTATION_PATH>\Pmoves-cipher\[39msrc\core\brain\tools\definitions\web-search\engine\__test__\duckduckgo.test.ts:467:40
+    at [90mfile:///<WORKSTATION_PATH>/Pmoves-cipher/[39mnode_modules/[4m.pnpm[24m/@vitest+runner@3.2.4/node_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:155:11
+    at [90mfile:///<WORKSTATION_PATH>/Pmoves-cipher/[39mnode_modules/[4m.pnpm[24m/@vitest+runner@3.2.4/node_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:752:26
+    at [90mfile:///<WORKSTATION_PATH>/Pmoves-cipher/[39mnode_modules/[4m.pnpm[24m/@vitest+runner@3.2.4/node_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:1897:20
     at new Promise (<anonymous>)
-    at runWithTimeout [90m(file:///C:/Users/russe/Documents/GitHub/PMOVES.AI/Pmoves-cipher/[39mnode_modules/[4m.pnpm[24m/@vitest+runner@3.2.4/node_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:1863:10[90m)[39m
-    at runTest [90m(file:///C:/Users/russe/Documents/GitHub/PMOVES.AI/Pmoves-cipher/[39mnode_modules/[4m.pnpm[24m/@vitest+runner@3.2.4/node_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:1574:12[90m)[39m
-    at runSuite [90m(file:///C:/Users/russe/Documents/GitHub/PMOVES.AI/Pmoves-cipher/[39mnode_modules/[4m.pnpm[24m/@vitest+runner@3.2.4/node_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:1729:8[90m)[39m
-    at runSuite [90m(file:///C:/Users/russe/Documents/GitHub/PMOVES.AI/Pmoves-cipher/[39mnode_modules/[4m.pnpm[24m/@vitest+runner@3.2.4/node_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:1729:8[90m)[39m
-    at runSuite [90m(file:///C:/Users/russe/Documents/GitHub/PMOVES.AI/Pmoves-cipher/[39mnode_modules/[4m.pnpm[24m/@vitest+runner@3.2.4/node_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:1729:8[90m)[39m
+    at runWithTimeout [90m(file:///<WORKSTATION_PATH>/Pmoves-cipher/[39mnode_modules/[4m.pnpm[24m/@vitest+runner@3.2.4/node_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:1863:10[90m)[39m
+    at runTest [90m(file:///<WORKSTATION_PATH>/Pmoves-cipher/[39mnode_modules/[4m.pnpm[24m/@vitest+runner@3.2.4/node_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:1574:12[90m)[39m
+    at runSuite [90m(file:///<WORKSTATION_PATH>/Pmoves-cipher/[39mnode_modules/[4m.pnpm[24m/@vitest+runner@3.2.4/node_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:1729:8[90m)[39m
+    at runSuite [90m(file:///<WORKSTATION_PATH>/Pmoves-cipher/[39mnode_modules/[4m.pnpm[24m/@vitest+runner@3.2.4/node_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:1729:8[90m)[39m
+    at runSuite [90m(file:///<WORKSTATION_PATH>/Pmoves-cipher/[39mnode_modules/[4m.pnpm[24m/@vitest+runner@3.2.4/node_modules/[4m@vitest[24m/runner/dist/chunk-hooks.js:1729:8[90m)[39m
 [90mstderr[2m | src/core/brain/tools/definitions/web-search/engine/__test__/duckduckgo.test.ts[2m > [22m[2mDuckDuckGoPuppeteerProvider[2m > [22m[2mBrowser Management[2m > [22m[2mshould handle cleanup when no browser exists
 [22m[39m22:18:39 INFO: DuckDuckGo: Initialized for platform: linux (x64)
 [90mstderr[2m | src/core/brain/tools/definitions/web-search/engine/__test__/duckduckgo.test.ts[2m > [22m[2mDuckDuckGoPuppeteerProvider[2m > [22m[2mUtility Methods[2m > [22m[2mshould sanitize queries correctly
@@ -300,23 +300,23 @@ Ran all test suites.
   <frozen importlib._bootstrap>:488: DeprecationWarning: builtin type swigvarlink has no __module__ attribute
 backend\app\main.py:279
 backend\app\main.py:279
-  C:\Users\russe\Documents\GitHub\PMOVES.AI\PMOVES-DoX\backend\app\main.py:279: DeprecationWarning: 
+  <WORKSTATION_PATH>\PMOVES-DoX\backend\app\main.py:279: DeprecationWarning: 
           on_event is deprecated, use lifespan event handlers instead.
           Read more about it in the
           [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
     @app.on_event("startup")
 ..\..\..\..\AppData\Local\uv\cache\archive-v0\HvuA5oIP2jb_YBxFMpHe8\Lib\site-packages\fastapi\applications.py:4599
 ..\..\..\..\AppData\Local\uv\cache\archive-v0\HvuA5oIP2jb_YBxFMpHe8\Lib\site-packages\fastapi\applications.py:4599
-  C:\Users\russe\AppData\Local\uv\cache\archive-v0\HvuA5oIP2jb_YBxFMpHe8\Lib\site-packages\fastapi\applications.py:4599: DeprecationWarning: 
+  <WORKSTATION_CACHE>\archive-v0\HvuA5oIP2jb_YBxFMpHe8\Lib\site-packages\fastapi\applications.py:4599: DeprecationWarning: 
           on_event is deprecated, use lifespan event handlers instead.
           Read more about it in the
           [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
     return self.router.on_event(event_type)
 backend\app\services\reasoning_service.py:81
-  C:\Users\russe\Documents\GitHub\PMOVES.AI\PMOVES-DoX\backend\app\services\reasoning_service.py:81: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+  <WORKSTATION_PATH>\PMOVES-DoX\backend\app\services\reasoning_service.py:81: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
     class ReasoningTrace(BaseModel):
 backend\app\services\thread_manager.py:103
-  C:\Users\russe\Documents\GitHub\PMOVES.AI\PMOVES-DoX\backend\app\services\thread_manager.py:103: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+  <WORKSTATION_PATH>\PMOVES-DoX\backend\app\services\thread_manager.py:103: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
     class ThreadContext(BaseModel):
 tests/test_agent_dispatcher.py::TestAgentInfo::test_agent_info_defaults
 tests/test_agent_dispatcher.py::TestAgentInfo::test_agent_info_with_capabilities
@@ -327,25 +327,25 @@ tests/test_agent_dispatcher.py::TestDispatchResult::test_mark_timeout
 tests/test_agent_dispatcher.py::TestCachedAgent::test_cached_agent_creation
 tests/test_agent_dispatcher.py::TestCachedAgent::test_is_expired_fresh
 tests/test_agent_dispatcher.py::TestCachedAgent::test_is_expired_old
-  C:\Users\russe\AppData\Local\uv\cache\archive-v0\HvuA5oIP2jb_YBxFMpHe8\Lib\site-packages\pydantic\main.py:250: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  <WORKSTATION_CACHE>\archive-v0\HvuA5oIP2jb_YBxFMpHe8\Lib\site-packages\pydantic\main.py:250: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
     validated_self = self.__pydantic_validator__.validate_python(data, self_instance=self)
 tests/test_agent_dispatcher.py::TestDispatchResult::test_mark_completed
-  C:\Users\russe\Documents\GitHub\PMOVES.AI\PMOVES-DoX\backend\app\services\agent_dispatcher.py:139: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  <WORKSTATION_PATH>\PMOVES-DoX\backend\app\services\agent_dispatcher.py:139: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
     self.end_time = datetime.utcnow()
 tests/test_agent_dispatcher.py::TestDispatchResult::test_mark_failed
-  C:\Users\russe\Documents\GitHub\PMOVES.AI\PMOVES-DoX\backend\app\services\agent_dispatcher.py:146: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  <WORKSTATION_PATH>\PMOVES-DoX\backend\app\services\agent_dispatcher.py:146: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
     self.end_time = datetime.utcnow()
 tests/test_agent_dispatcher.py::TestDispatchResult::test_mark_timeout
-  C:\Users\russe\Documents\GitHub\PMOVES.AI\PMOVES-DoX\backend\app\services\agent_dispatcher.py:153: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  <WORKSTATION_PATH>\PMOVES-DoX\backend\app\services\agent_dispatcher.py:153: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
     self.end_time = datetime.utcnow()
 tests/test_agent_dispatcher.py::TestCachedAgent::test_cached_agent_creation
 tests/test_agent_dispatcher.py::TestCachedAgent::test_is_expired_fresh
 tests/test_agent_dispatcher.py::TestCachedAgent::test_is_expired_old
-  C:\Users\russe\Documents\GitHub\PMOVES.AI\PMOVES-DoX\backend\app\services\agent_dispatcher.py:168: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  <WORKSTATION_PATH>\PMOVES-DoX\backend\app\services\agent_dispatcher.py:168: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
     self.cached_at = datetime.utcnow()
 tests/test_agent_dispatcher.py::TestCachedAgent::test_is_expired_fresh
 tests/test_agent_dispatcher.py::TestCachedAgent::test_is_expired_old
-  C:\Users\russe\Documents\GitHub\PMOVES.AI\PMOVES-DoX\backend\app\services\agent_dispatcher.py:174: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  <WORKSTATION_PATH>\PMOVES-DoX\backend\app\services\agent_dispatcher.py:174: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
     return datetime.utcnow() >= self.expires_at
 -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
 =========================== short test summary info ===========================
@@ -360,18 +360,18 @@ FAILED backend\tests\test_agent_dispatcher.py::TestAgentDispatcherInit::test_ini
 ..........................                                               [100%]
 ============================== warnings summary ===============================
 .venv\Lib\site-packages\surreal_commands\core\retry.py:41
-  C:\Users\russe\Documents\GitHub\PMOVES.AI\PMOVES-Open-Notebook\.venv\Lib\site-packages\surreal_commands\core\retry.py:41: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+  <WORKSTATION_PATH>\PMOVES-Open-Notebook\.venv\Lib\site-packages\surreal_commands\core\retry.py:41: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
     class RetryConfig(BaseModel):
 -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
 98 passed, 1 warning in 15.36s
-warning: `VIRTUAL_ENV=C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves-cipher-mcp\.venv` does not match the project environment path `.venv` and will be ignored; use `--active` to target the active environment instead
+warning: `VIRTUAL_ENV=<WORKSTATION_PATH>\pmoves-cipher-mcp\.venv` does not match the project environment path `.venv` and will be ignored; use `--active` to target the active environment instead
 ```
 
 ### PMOVES.YT (fail)
 ```text
 ============================= test session starts =============================
 platform win32 -- Python 3.11.14, pytest-8.4.2, pluggy-1.6.0
-rootdir: C:\Users\russe\Documents\GitHub\PMOVES.AI\PMOVES.YT
+rootdir: <WORKSTATION_PATH>\PMOVES.YT
 configfile: pyproject.toml
 collected 7418 items
 test\test_InfoExtractor.py ....................                          [  0%]
@@ -404,5 +404,5 @@ ERROR: [youtube] HtVdAasjOgU: Sign in to confirm your age. This video may be ina
 FAILED test/test_age_restriction.py::TestAgeRestriction::test_youtube - Asser...
 !!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!
 ======================== 1 failed, 66 passed in 11.36s ========================
-warning: `VIRTUAL_ENV=C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves-cipher-mcp\.venv` does not match the project environment path `.venv` and will be ignored; use `--active` to target the active environment instead
+warning: `VIRTUAL_ENV=<WORKSTATION_PATH>\pmoves-cipher-mcp\.venv` does not match the project environment path `.venv` and will be ignored; use `--active` to target the active environment instead
 ```

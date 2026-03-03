@@ -22,13 +22,13 @@
 
 ### PMOVES-Agent-Zero (fail)
 ```text
-C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves-cipher-mcp\.venv\Scripts\python.exe: No module named pytest
+<WORKSTATION_PATH>\pmoves-cipher-mcp\.venv\Scripts\python.exe: No module named pytest
 ```
 
 ### PMOVES-Archon (fail)
 ```text
 "Running backend tests..."
-warning: `VIRTUAL_ENV=C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves-cipher-mcp\.venv` does not match the project environment path `.venv` and will be ignored; use `--active` to target the active environment instead
+warning: `VIRTUAL_ENV=<WORKSTATION_PATH>\pmoves-cipher-mcp\.venv` does not match the project environment path `.venv` and will be ignored; use `--active` to target the active environment instead
 Using CPython 3.13.5
 Creating virtual environment at: .venv
 warning: `pypdfium2==4.30.1` is yanked (reason: "Text extraction regression in pdfium, crbug.com/387277993")
@@ -39,7 +39,7 @@ Downloading ruff (12.3MiB)
  Downloading faker
  Downloading mypy
 Installed 23 packages in 1.78s
-ImportError while loading conftest 'C:\Users\russe\Documents\GitHub\PMOVES.AI\PMOVES-Archon\python\tests\conftest.py'.
+ImportError while loading conftest '<WORKSTATION_PATH>\PMOVES-Archon\python\tests\conftest.py'.
 tests\conftest.py:7: in <module>
     from fastapi.testclient import TestClient
 E   ModuleNotFoundError: No module named 'fastapi'
@@ -50,7 +50,7 @@ make: *** [Makefile:141: test-be] Error 4
 ```text
 "Running smoke tests..."
 Traceback (most recent call last):
-  File "C:\Users\russe\Documents\GitHub\PMOVES.AI\PMOVES-BoTZ\scripts\smoke_tests.py", line 11, in <module>
+  File "<WORKSTATION_PATH>\PMOVES-BoTZ\scripts\smoke_tests.py", line 11, in <module>
     import requests
 ModuleNotFoundError: No module named 'requests'
 make: *** [Makefile:171: test-smoke] Error 1
@@ -58,21 +58,21 @@ make: *** [Makefile:171: test-smoke] Error 1
 
 ### PMOVES-BotZ-gateway (fail)
 ```text
-C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves-cipher-mcp\.venv\Scripts\python.exe: No module named pytest
+<WORKSTATION_PATH>\pmoves-cipher-mcp\.venv\Scripts\python.exe: No module named pytest
 ```
 
 ### Pmoves-cipher (fail)
 ```text
 > @byterover/cipher@0.3.0 test
 > vitest run --runInBand
-file:///C:/Users/russe/Documents/GitHub/PMOVES.AI/Pmoves-cipher/node_modules/.pnpm/vitest@3.2.4_@types+node@24.1.0_tsx@4.20.3_yaml@2.8.0/node_modules/vitest/dist/chunks/cac.Cb-PYCCB.js:404
+file:///<WORKSTATION_PATH>/Pmoves-cipher/node_modules/.pnpm/vitest@3.2.4_@types+node@24.1.0_tsx@4.20.3_yaml@2.8.0/node_modules/vitest/dist/chunks/cac.Cb-PYCCB.js:404
           throw new CACError(`Unknown option \`${name.length > 1 ? `--${name}` : `-${name}`}\``);
                 ^
 CACError: Unknown option `--runInBand`
-    at Command.checkUnknownOptions (file:///C:/Users/russe/Documents/GitHub/PMOVES.AI/Pmoves-cipher/node_modules/.pnpm/vitest@3.2.4_@types+node@24.1.0_tsx@4.20.3_yaml@2.8.0/node_modules/vitest/dist/chunks/cac.Cb-PYCCB.js:404:17)
-    at CAC.runMatchedCommand (file:///C:/Users/russe/Documents/GitHub/PMOVES.AI/Pmoves-cipher/node_modules/.pnpm/vitest@3.2.4_@types+node@24.1.0_tsx@4.20.3_yaml@2.8.0/node_modules/vitest/dist/chunks/cac.Cb-PYCCB.js:604:13)
-    at CAC.parse (file:///C:/Users/russe/Documents/GitHub/PMOVES.AI/Pmoves-cipher/node_modules/.pnpm/vitest@3.2.4_@types+node@24.1.0_tsx@4.20.3_yaml@2.8.0/node_modules/vitest/dist/chunks/cac.Cb-PYCCB.js:545:12)
-    at file:///C:/Users/russe/Documents/GitHub/PMOVES.AI/Pmoves-cipher/node_modules/.pnpm/vitest@3.2.4_@types+node@24.1.0_tsx@4.20.3_yaml@2.8.0/node_modules/vitest/dist/cli.js:27:13
+    at Command.checkUnknownOptions (file:///<WORKSTATION_PATH>/Pmoves-cipher/node_modules/.pnpm/vitest@3.2.4_@types+node@24.1.0_tsx@4.20.3_yaml@2.8.0/node_modules/vitest/dist/chunks/cac.Cb-PYCCB.js:404:17)
+    at CAC.runMatchedCommand (file:///<WORKSTATION_PATH>/Pmoves-cipher/node_modules/.pnpm/vitest@3.2.4_@types+node@24.1.0_tsx@4.20.3_yaml@2.8.0/node_modules/vitest/dist/chunks/cac.Cb-PYCCB.js:604:13)
+    at CAC.parse (file:///<WORKSTATION_PATH>/Pmoves-cipher/node_modules/.pnpm/vitest@3.2.4_@types+node@24.1.0_tsx@4.20.3_yaml@2.8.0/node_modules/vitest/dist/chunks/cac.Cb-PYCCB.js:545:12)
+    at file:///<WORKSTATION_PATH>/Pmoves-cipher/node_modules/.pnpm/vitest@3.2.4_@types+node@24.1.0_tsx@4.20.3_yaml@2.8.0/node_modules/vitest/dist/cli.js:27:13
     at ModuleJob.run (node:internal/modules/esm/module_job:329:25)
     at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:644:26)
     at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5)
@@ -81,7 +81,7 @@ Node.js v22.17.1
 
 ### PMOVES-HiRAG (fail)
 ```text
-C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves-cipher-mcp\.venv\Scripts\python.exe: No module named pytest
+<WORKSTATION_PATH>\pmoves-cipher-mcp\.venv\Scripts\python.exe: No module named pytest
 ```
 
 ### PMOVES-transcribe-and-fetch (fail)
@@ -92,7 +92,7 @@ C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves-cipher-mcp\.venv\Scripts\python
 
 ### PMOVES-ToKenism-Multi (fail)
 ```text
-C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves-cipher-mcp\.venv\Scripts\python.exe: No module named pytest
+<WORKSTATION_PATH>\pmoves-cipher-mcp\.venv\Scripts\python.exe: No module named pytest
 ```
 
 ### PMOVES-DoX (fail)
@@ -104,7 +104,7 @@ make: *** [Makefile:54: ensure-standalone-networks] Error 255
 
 ### PMOVES-Open-Notebook (fail)
 ```text
-C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves-cipher-mcp\.venv\Scripts\python.exe: No module named pytest
+<WORKSTATION_PATH>\pmoves-cipher-mcp\.venv\Scripts\python.exe: No module named pytest
 ```
 
 ### PMOVES.YT (fail)

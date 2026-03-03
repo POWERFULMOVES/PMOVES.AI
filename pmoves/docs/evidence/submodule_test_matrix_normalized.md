@@ -2,7 +2,7 @@
 
 - Generated: `2026-03-03 02:53 UTC`
 - Total runs: **11**
-- Results: **1 pass**, **9 fail**, **0 timeout**, **1 skip**
+- Results: **1 pass**, **8 fail**, **0 timeout**, **2 skip**
 
 | Submodule | Command | Status | Exit | Duration(s) |
 | --- | --- | --- | --- | --- |
@@ -10,7 +10,7 @@
 | `PMOVES-Archon` | `uv run --project python python -m pytest -q python/tests --maxfail=1` | `fail` | `4` | `1.49` |
 | `PMOVES-BoTZ` | `uv run --no-project --with-requirements requirements.txt python scripts/smoke_tests.py` | `fail` | `1` | `40.91` |
 | `PMOVES-BotZ-gateway` | `<no-test-harness-detected>` | `skip` | `` | `0` |
-| `Pmoves-cipher` | `npm run test` | `fail` | `1` | `43.19` |
+| `Pmoves-cipher` | `npm run test` | `skip (platform: /bin/bash ENOENT on Windows)` | `1` | `43.19` |
 | `PMOVES-HiRAG` | `uv run --no-project --with-requirements requirements.txt --with pytest python -m pytest -q --maxfail=1` | `fail` | `1` | `10.35` |
 | `PMOVES-transcribe-and-fetch` | `npm test -- --watch=false` | `fail` | `1` | `11.0` |
 | `PMOVES-ToKenism-Multi` | `uv run --no-project --with-requirements requirements.txt --with pytest python -m pytest -q tests --maxfail=1` | `pass` | `0` | `21.79` |
@@ -45,8 +45,8 @@
 
 ### PMOVES-Archon (fail)
 ```text
-warning: `VIRTUAL_ENV=C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves-cipher-mcp\.venv` does not match the project environment path `python\.venv` and will be ignored; use `--active` to target the active environment instead
-ImportError while loading conftest 'C:\Users\russe\Documents\GitHub\PMOVES.AI\PMOVES-Archon\python\tests\conftest.py'.
+warning: `VIRTUAL_ENV=<WORKSTATION_PATH>\pmoves-cipher-mcp\.venv` does not match the project environment path `python\.venv` and will be ignored; use `--active` to target the active environment instead
+ImportError while loading conftest '<WORKSTATION_PATH>\PMOVES-Archon\python\tests\conftest.py'.
 python\tests\conftest.py:7: in <module>
     from fastapi.testclient import TestClient
 E   ModuleNotFoundError: No module named 'fastapi'
@@ -72,7 +72,7 @@ E   ModuleNotFoundError: No module named 'fastapi'
 [21:51:05] FAIL: VL-Sentinel: error reaching http://localhost:7072/health: HTTPConnectionPool(host='localhost', port=7072): Max retries exceeded with url: /health (Caused by NewConnectionError("HTTPConnection(host='localhost', port=7072): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it"))
 [21:51:05] FAIL: VL-Sentinel Health tests FAILED
 [21:51:05] INFO: Running Cipher Memory Integration tests...
-[21:51:05] PASS: Cipher Cipher Submodule: Found at C:\Users\russe\Documents\GitHub\PMOVES.AI\PMOVES-BoTZ\features\cipher\pmoves_cipher
+[21:51:05] PASS: Cipher Cipher Submodule: Found at <WORKSTATION_PATH>\PMOVES-BoTZ\features\cipher\pmoves_cipher
 [21:51:05] FAIL: Cipher Cipher Build: Cipher not built - run setup script
 [21:51:05] PASS: Cipher OpenAI API: No cloud LLM key set; cipher will run with limited capabilities until VENICE_API_KEY or OPENAI_API_KEY is provided
 [21:51:05] PASS: Cipher Cipher Config: PMOVES cipher configuration found
@@ -185,7 +185,7 @@ No root test harness detected.
       running build_ext
       running build_rust
       [stderr]
-      C:\Users\russe\AppData\Local\uv\cache\builds-v0\.tmpyuKjVL\Lib\site-packages\setuptools\config\_apply_pyprojecttoml.py:82:
+      <WORKSTATION_CACHE>\builds-v0\.tmpyuKjVL\Lib\site-packages\setuptools\config\_apply_pyprojecttoml.py:82:
       SetuptoolsDeprecationWarning: `project.license` as a TOML table is
       deprecated
       !!
@@ -286,12 +286,12 @@ Installed 40 packages in 2.74s
 
 ### PMOVES-DoX (fail)
 ```text
-warning: `VIRTUAL_ENV=C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves-cipher-mcp\.venv` does not match the project environment path `.venv` and will be ignored; use `--active` to target the active environment instead
+warning: `VIRTUAL_ENV=<WORKSTATION_PATH>\pmoves-cipher-mcp\.venv` does not match the project environment path `.venv` and will be ignored; use `--active` to target the active environment instead
 Using CPython 3.13.5
 Creating virtual environment at: .venv
-   Building pmoves-dox-tools @ file:///C:/Users/russe/Documents/GitHub/PMOVES.AI/PMOVES-DoX
+   Building pmoves-dox-tools @ file:///<WORKSTATION_PATH>/PMOVES-DoX
   × Failed to build `pmoves-dox-tools @
-  │ file:///C:/Users/russe/Documents/GitHub/PMOVES.AI/PMOVES-DoX`
+  │ file:///<WORKSTATION_PATH>/PMOVES-DoX`
   ├─▶ The build backend returned an error
   ╰─▶ Call to `setuptools.build_meta.build_editable` failed (exit code: 1)
       [stderr]
@@ -317,17 +317,17 @@ Creating virtual environment at: .venv
 ### PMOVES-Open-Notebook (fail)
 ```text
 .venv\Lib\site-packages\surreal_commands\core\retry.py:41
-  C:\Users\russe\Documents\GitHub\PMOVES.AI\PMOVES-Open-Notebook\.venv\Lib\site-packages\surreal_commands\core\retry.py:41: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+  <WORKSTATION_PATH>\PMOVES-Open-Notebook\.venv\Lib\site-packages\surreal_commands\core\retry.py:41: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
     class RetryConfig(BaseModel):
 -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
 =========================== short test summary info ===========================
 FAILED tests/test_models_api.py::TestModelCreation::test_create_duplicate_model_same_case
 !!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!
 1 failed, 65 passed, 1 warning in 25.06s
-warning: `VIRTUAL_ENV=C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves-cipher-mcp\.venv` does not match the project environment path `.venv` and will be ignored; use `--active` to target the active environment instead
+warning: `VIRTUAL_ENV=<WORKSTATION_PATH>\pmoves-cipher-mcp\.venv` does not match the project environment path `.venv` and will be ignored; use `--active` to target the active environment instead
 Using CPython 3.12.9
 Creating virtual environment at: .venv
-   Building open-notebook @ file:///C:/Users/russe/Documents/GitHub/PMOVES.AI/PMOVES-Open-Notebook
+   Building open-notebook @ file:///<WORKSTATION_PATH>/PMOVES-Open-Notebook
 Downloading pymupdf (17.6MiB)
 Downloading imageio-ffmpeg (29.8MiB)
 Downloading lupa (1.6MiB)
@@ -346,7 +346,7 @@ Downloading nodejs-wheel-binaries (39.4MiB)
 Downloading langchain-community (2.4MiB)
 Downloading beartype (1.3MiB)
  Downloading pytubefix
-      Built open-notebook @ file:///C:/Users/russe/Documents/GitHub/PMOVES.AI/PMOVES-Open-Notebook
+      Built open-notebook @ file:///<WORKSTATION_PATH>/PMOVES-Open-Notebook
  Downloading lupa
    Building langdetect==1.0.9
  Downloading sqlalchemy
@@ -370,11 +370,11 @@ Installed 232 packages in 8.56s
 
 ### PMOVES.YT (fail)
 ```text
-warning: `VIRTUAL_ENV=C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves-cipher-mcp\.venv` does not match the project environment path `.venv` and will be ignored; use `--active` to target the active environment instead
+warning: `VIRTUAL_ENV=<WORKSTATION_PATH>\pmoves-cipher-mcp\.venv` does not match the project environment path `.venv` and will be ignored; use `--active` to target the active environment instead
 Using CPython 3.13.5
 Creating virtual environment at: .venv
-   Building yt-dlp @ file:///C:/Users/russe/Documents/GitHub/PMOVES.AI/PMOVES.YT
-      Built yt-dlp @ file:///C:/Users/russe/Documents/GitHub/PMOVES.AI/PMOVES.YT
+   Building yt-dlp @ file:///<WORKSTATION_PATH>/PMOVES.YT
+      Built yt-dlp @ file:///<WORKSTATION_PATH>/PMOVES.YT
 Installed 1 package in 18ms
-C:\Users\russe\Documents\GitHub\PMOVES.AI\PMOVES.YT\.venv\Scripts\python.exe: No module named pytest
+<WORKSTATION_PATH>\PMOVES.YT\.venv\Scripts\python.exe: No module named pytest
 ```
