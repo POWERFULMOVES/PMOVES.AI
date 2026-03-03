@@ -75,7 +75,7 @@ COPY services /app/services
 
 # Security: non-root user (PMOVES standard)
 RUN groupadd -r pmoves --gid=65532 \
-    && useradd -r -g pmoves --uid=65532 --home-dir=/app --shell=/sbin/nologin pmoves \
+    && useradd -g pmoves --uid=65532 --home-dir=/app --shell=/sbin/nologin pmoves \
     && chown -R pmoves:pmoves /app /a0 /git/agent-zero \
     && if [ -d /opt/venv-a0 ]; then chown -R pmoves:pmoves /opt/venv-a0; fi \
     && if [ -d /opt/pyenv ]; then chown -R pmoves:pmoves /opt/pyenv; fi
