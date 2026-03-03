@@ -53,6 +53,9 @@ A production-ready, self-hostable orchestration mesh for creative + agent worklo
   - compose bring-up now ignores `.env.local` by default (`INCLUDE_ENV_LOCAL_IN_COMPOSE=1` to opt-in), preventing host-only URL drift in production topology
   - Archon compose wiring now defaults to in-network Supabase PostgREST (`http://supabase-postgrest:3000`)
   - `archon-rest-policy-smoke` now probes in-network in compose runtime (no false host-url failures)
+  - `yt-docs-sync` fixed in compose topology (PMOVES.YT now reaches Supabase over in-network PostgREST route)
+  - bring-up Prometheus wait no longer depends on `jq` (python fallback parser added)
+  - model-readiness now uses compose-aware docker/db fallback and reports true registry/model gaps instead of transport/auth false negatives
 
 ## Current Sprint Overlay (Hardened)
 
