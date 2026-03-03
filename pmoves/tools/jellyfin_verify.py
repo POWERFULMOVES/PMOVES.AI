@@ -81,7 +81,7 @@ def main() -> int:
         try:
             code = _request_status(args.jellyfin_fallback_url, timeout=args.timeout)
             if code == 200:
-                print(f"[PASS] jellyfin-server-fallback: {args.jellyfin_fallback_url} -> {code}")
+                print(f"[INFO] jellyfin-server-fallback: {args.jellyfin_fallback_url} -> {code} (diagnostic only, primary still failed)")
             else:
                 print(f"[FAIL] jellyfin-server-fallback: {args.jellyfin_fallback_url} -> HTTP {code}")
         except Exception as exc:  # noqa: BLE001
