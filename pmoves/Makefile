@@ -1702,10 +1702,10 @@ model-apply: ensure-env-shared ## Apply a model profile into pmoves/.env.local (
 	@PROFILE="$(PROFILE)" HOST="$(HOST)" bash tools/models/apply_profile.sh
 
 models-sync: ensure-env-shared ## Low-level sync via Python: make models-sync PROFILE=archon HOST=workstation_5090
-	@$(PYTHON) tools/models/models_sync.py sync --profile "$(PROFILE)" --host "$${HOST:-workstation_5090}" --tensorzero-base "$(TENSORZERO_BASE_URL)"
+	@python3 tools/models/models_sync.py sync --profile "$(PROFILE)" --host "$${HOST:-workstation_5090}" --tensorzero-base "$(TENSORZERO_BASE_URL)"
 
 model-swap: ensure-env-shared ## Swap a single model param into pmoves/.env.local (SERVICE=hirag NAME=<model-id>)
-	@$(PYTHON) tools/models/models_sync.py swap --service "$(SERVICE)" --name "$(NAME)"
+	@python3 tools/models/models_sync.py swap --service "$(SERVICE)" --name "$(NAME)"
 
 models-seed-ollama: ## Pre-pull Ollama models from profiles/registry (override with OLLAMA_SEED_MODELS)
 	-@docker compose -p $(PROJECT) --profile tensorzero up -d pmoves-ollama >/dev/null 2>&1 || true
@@ -1724,14 +1724,22 @@ models-seed-ollama: ## Pre-pull Ollama models from profiles/registry (override w
 	    echo "No Ollama models resolved. Set OLLAMA_SEED_MODELS or define profile/registry mappings."; \
 	    exit 0; \
 	  fi; \
+	  ollama_cid="$$(docker compose -p $(PROJECT) ps -q pmoves-ollama 2>/dev/null || true)"; \
+	  if [ -z "$$ollama_cid" ]; then \
+	    ollama_cid="$$(docker ps --filter name=pmoves-pmoves-ollama-1 --format "{{.ID}}" | head -n1)"; \
+	  fi; \
+	  if [ -z "$$ollama_cid" ]; then \
+	    echo "⚠ pmoves-ollama container not running; skipping model pull."; \
+	    exit 0; \
+	  fi; \
 	  echo "$$models" | tr "," "\n" | sed "/^[[:space:]]*$$/d" | while read -r model; do \
 	    echo "→ Pull $$model"; \
-	    curl -fsS -X POST http://localhost:11434/api/pull -d "{\"model\":\"$$model\"}" >/dev/null 2>&1 || echo "⚠ Pull failed for $$model"; \
+	    docker exec "$$ollama_cid" ollama pull "$$model" >/dev/null 2>&1 || echo "⚠ Pull failed for $$model"; \
 	  done; \
-	  echo "✔ Seeded Ollama models (host=$$host source=$$source).";'
+	  echo "✔ Seeded Ollama models (container=$$ollama_cid host=$$host source=$$source).";'
 
 models-registry-snapshot: ensure-env-shared ## Snapshot Supabase model registry into models/registry.snapshot.json
-	@$(PYTHON) tools/models/models_sync.py registry-snapshot --out models/registry.snapshot.json
+	@$(LOAD_ENV_SHARED); python3 tools/models/models_sync.py registry-snapshot --out models/registry.snapshot.json
 
 # -------- Console (UI) dev helpers --------
 .PHONY: ui-dev-start ui-dev-stop ui-dev-logs

@@ -1927,6 +1927,10 @@ services:
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
     volumes:
     - pmoves-ollama-models:/root/.ollama/models
+    # Prevent transient Docker embedded-DNS failures from blocking model pull.
+    dns:
+    - ${OLLAMA_DNS_PRIMARY:-1.1.1.1}
+    - ${OLLAMA_DNS_SECONDARY:-8.8.8.8}
     networks:
     - pmoves_api
   tensorzero-clickhouse:
