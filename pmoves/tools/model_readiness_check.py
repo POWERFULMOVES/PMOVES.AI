@@ -233,12 +233,13 @@ def http_get_supabase(url: str, key: str, timeout: int = 10, schema: str = "pmov
 
 class ReadinessChecker:
     def __init__(self, supabase_url: str, supabase_key: str,
-                 ollama_url: str, tensorzero_url: str) -> None:
+                 ollama_url: str, tensorzero_url: str, strict_ollama: bool = False) -> None:
         """Store service endpoints and counters for a readiness run."""
         self.supabase_url = _normalize_supabase_base(supabase_url).rstrip("/")
         self.supabase_key = supabase_key
         self.ollama_url = ollama_url.rstrip("/")
         self.tensorzero_url = tensorzero_url.rstrip("/")
+        self.strict_ollama = strict_ollama
         self.passed = 0
         self.failed = 0
         self.warnings = 0
@@ -379,8 +380,10 @@ class ReadinessChecker:
         # Check critical models
         for model in CRITICAL_OLLAMA_MODELS:
             found = model.strip().lower() in pulled_base
-            if not found:
+            if not found and self.strict_ollama:
                 self._check(f"Model '{model}'", False, "not pulled")
+            elif not found:
+                self._warn(f"Model '{model}'", "not pulled")
             else:
                 self._check(f"Model '{model}'", True, "available")
 
@@ -485,6 +488,7 @@ def main() -> None:
         or os.environ.get("TENSORZERO_BASE_URL")
         or "http://localhost:3030"
     )
+    default_strict_ollama = os.environ.get("MODEL_READINESS_STRICT_OLLAMA", "0").strip().lower() in {"1", "true", "yes", "on"}
 
     parser = argparse.ArgumentParser(description="Model & Persona Readiness Check")
     parser.add_argument("--supabase-url",
@@ -499,6 +503,10 @@ def main() -> None:
     parser.add_argument("--tensorzero-url",
                         default=default_tensorzero,
                         help="TensorZero gateway URL (default: $TENSORZERO_URL or localhost:3030)")
+    parser.add_argument("--strict-ollama",
+                        action="store_true",
+                        default=default_strict_ollama,
+                        help="Fail when critical Ollama models are missing (default: warn only)")
     args = parser.parse_args()
 
     if not args.supabase_key:
@@ -512,6 +520,7 @@ def main() -> None:
         supabase_key=args.supabase_key,
         ollama_url=args.ollama_url,
         tensorzero_url=args.tensorzero_url,
+        strict_ollama=args.strict_ollama,
     )
     sys.exit(checker.run())
 
