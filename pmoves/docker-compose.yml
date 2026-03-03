@@ -971,6 +971,7 @@ services:
     - workers
     networks:
     - pmoves_app
+    - pmoves_api
     - pmoves_bus
     extra_hosts:
     - host.docker.internal:host-gateway
@@ -1239,7 +1240,7 @@ services:
     - YT_BUCKET=${YT_BUCKET:-assets}
     - YT_OUTPUT_BUCKET=${YT_OUTPUT_BUCKET:-outputs}
     - INDEXER_NAMESPACE=${INDEXER_NAMESPACE:-pmoves}
-    - SUPA_REST_URL=${SUPA_REST_INTERNAL_URL:-${SUPA_REST_URL:-http://host.docker.internal:54321/rest/v1}}
+    - SUPA_REST_URL=${PMOVES_YT_SUPA_REST_URL:-${SUPABASE_REST_URL:-http://supabase-postgrest:3000}}
     - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
     - HIRAG_URL=${HIRAG_URL:-http://hi-rag-gateway-v2:8086}
     - YT_PLAYER_CLIENT=${YT_PLAYER_CLIENT:-web_safari}
@@ -1266,6 +1267,7 @@ services:
     - ${PMOVES_YT_PORT:-8077}:8077
     networks:
     - pmoves_app
+    - pmoves_api
     - pmoves_bus
     - pmoves_external  # Required for YouTube API access
   bgutil-pot-provider:

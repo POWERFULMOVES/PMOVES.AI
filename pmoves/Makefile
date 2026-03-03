@@ -1690,7 +1690,7 @@ brand-verify: ## Verify key branded endpoints respond
 .PHONY: model-readiness
 
 model-readiness: ## Validate model registry, persona seeds, Ollama models, TensorZero gateway
-	@$(PYTHON) tools/model_readiness_check.py
+	@$(LOAD_ENV_SHARED); $(PYTHON) tools/model_readiness_check.py
 
 # -------- Model profiles / management --------
 .PHONY: model-profiles model-apply model-swap models-sync models-seed-ollama models-registry-snapshot
