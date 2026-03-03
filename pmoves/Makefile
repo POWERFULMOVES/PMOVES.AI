@@ -2248,6 +2248,15 @@ vibevoice-smoke: ## Check VibeVoice realtime /config (requires VibeVoice running
 ps:
 	@$(DC) ps
 
+.PHONY: compose
+compose: ensure-env-shared ## Run docker compose with PMOVES env layering. Usage: make compose ARGS="--profile agents up -d nats agent-zero"
+	@if [ -z "$(strip $(ARGS))" ]; then \
+		echo "Usage: make compose ARGS=\"<docker compose args>\""; \
+		echo "Example: make compose ARGS=\"--profile agents up -d nats agent-zero\""; \
+		exit 1; \
+	fi
+	@$(DC) $(ARGS)
+
 # -------- External stacks (forks / published images) ----------
 
 .PHONY: up-external
