@@ -86,6 +86,30 @@ wait_http() { # url timeout_seconds
   done
 }
 
+wait_http_any() { # timeout_seconds url1 [url2...]
+  local timeout="${1:-$WAIT_T_SHORT}"
+  shift
+  local start url code now
+  start=$(date +%s)
+  echo "→ Waiting for published Agent Zero HTTP readiness (timeout ${timeout}s)"
+  while true; do
+    for url in "$@"; do
+      code=$(curl -s -o /dev/null -m 3 -w "%{http_code}" "$url" 2>/dev/null || true)
+      [ -z "$code" ] && code=000
+      if [ "$code" != "000" ] && [ "$code" -lt 500 ]; then
+        echo "  OK: $url (HTTP $code)"
+        return 0
+      fi
+    done
+    sleep 2
+    now=$(date +%s)
+    if (( now - start > timeout )); then
+      echo "  TIMEOUT: published Agent Zero HTTP readiness"
+      return 1
+    fi
+  done
+}
+
 wait_prom_targets() { # timeout_seconds
   local timeout="${1:-$WAIT_T_SHORT}"; local start=$(date +%s)
   local url="http://localhost:${PROMETHEUS_HOST_PORT:-9090}/api/v1/targets"
@@ -191,10 +215,18 @@ start_service "Core Services" "up" "true" || exit 1
 echo "⛳ Start agents (APIs + UIs)"
 if [ "${PUBLISHED_AGENTS:-0}" = "1" ]; then
   start_service "Published Agents" "up-agents-published" "true" || exit 1
-  # Some published images can drift from repo runtime expectations. If the
-  # primary API is not reachable, fall back to local agents build to keep
-  # production bring-up deterministic.
-  if ! wait_http "http://localhost:8080/healthz" 45; then
+  # Published image startup can be slower than local builds; gate fallback on
+  # container health plus any known-ready HTTP surface to avoid false fallback.
+  published_agent_wait="${PUBLISHED_AGENT_WAIT_T:-120}"
+  published_agent_ok=0
+  if wait_container_ready "pmoves-agent-zero-1" "$published_agent_wait" && \
+     wait_http_any "$published_agent_wait" \
+       "http://localhost:8080/healthz" \
+       "http://localhost:8081" \
+       "http://localhost:8080/config/environment"; then
+    published_agent_ok=1
+  fi
+  if [ "$published_agent_ok" -ne 1 ]; then
     echo "⚠ Published Agent Zero failed readiness; falling back to local agents stack"
     # Published and local agent targets share container names. Hard-stop/remove
     # agent containers before fallback recreate to avoid "container is running"
