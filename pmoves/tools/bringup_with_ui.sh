@@ -14,8 +14,12 @@ ENABLE_JELLYFIN_AI=${ENABLE_JELLYFIN_AI:-1}
 # Service URLs
 YTB=${YTB:-http://localhost:8077}
 
-# Runtime-aware Supabase defaults: CLI uses ports 54321/54323, compose uses 3010/3001.
+# Runtime-aware Supabase defaults.
+# Auto-detect compose runtime if compose Supabase containers are present.
 SUPABASE_RUNTIME=${SUPABASE_RUNTIME:-cli}
+if docker ps --format '{{.Names}}' | grep -qE '^pmoves-supabase-(db|kong)-1$'; then
+  SUPABASE_RUNTIME=compose
+fi
 if [ "$SUPABASE_RUNTIME" = "compose" ]; then
   SUPABASE_REST_READY_URL=${SUPABASE_REST_READY_URL:-http://127.0.0.1:3010/}
   SUPABASE_STUDIO_READY_URL=${SUPABASE_STUDIO_READY_URL:-http://127.0.0.1:3001}
@@ -24,7 +28,7 @@ else
   SUPABASE_STUDIO_READY_URL=${SUPABASE_STUDIO_READY_URL:-http://127.0.0.1:54323}
 fi
 
-if [ -f .supabase.status.env ]; then
+if [ "$SUPABASE_RUNTIME" != "compose" ] && [ -f .supabase.status.env ]; then
   api_url="$(grep -m1 '^API_URL=' .supabase.status.env | cut -d= -f2- | sed -e 's/^"//' -e 's/"$//')"
   studio_url="$(grep -m1 '^STUDIO_URL=' .supabase.status.env | cut -d= -f2- | sed -e 's/^"//' -e 's/"$//')"
   if [ -n "${api_url:-}" ]; then
@@ -74,7 +78,9 @@ wait_http() { # url timeout_seconds
   local url="$1"; local timeout="${2:-$WAIT_T_SHORT}"; local start=$(date +%s)
   echo "→ Waiting for $url (timeout ${timeout}s)"
   while true; do
-    if curl -fsS -m 3 "$url" >/dev/null 2>&1; then echo "  OK: $url"; break; fi
+    code=$(curl -s -o /dev/null -m 3 -w "%{http_code}" "$url" 2>/dev/null || true)
+    [ -z "$code" ] && code=000
+    if [ "$code" != "000" ] && [ "$code" -lt 500 ]; then echo "  OK: $url (HTTP $code)"; break; fi
     sleep 2
     now=$(date +%s); if (( now - start > timeout )); then echo "  TIMEOUT: $url"; return 1; fi
   done
@@ -122,7 +128,7 @@ wait_container_ready() { # container_name timeout_seconds
 check_http_bg() { # name url timeout
   local name="$1"; local url="$2"; local timeout="${3:-$WAIT_T_SHORT}"
   local out="$READY_TMP_DIR/${name//[^A-Za-z0-9_\-]/_}.out"
-  bash -c "start=\$(date +%s); while true; do curl -fsS -m 3 '$url' >/dev/null 2>&1 && echo OK > '$out' && exit 0; sleep 2; now=\$(date +%s); [ \$((now-start)) -gt $timeout ] && echo TIMEOUT > '$out' && exit 1; done" &
+  bash -c "start=\$(date +%s); while true; do code=\$(curl -s -o /dev/null -m 3 -w '%{http_code}' '$url' 2>/dev/null || true); [ -z \"\$code\" ] && code=000; if [ \"\$code\" != \"000\" ] && [ \"\$code\" -lt 500 ]; then echo OK > '$out' && exit 0; fi; sleep 2; now=\$(date +%s); [ \$((now-start)) -gt $timeout ] && echo TIMEOUT > '$out' && exit 1; done" &
   READY_CMDS+=("$name|$url|$out|$!|$timeout")
 }
 
@@ -182,6 +188,17 @@ if [ "${PUBLISHED_AGENTS:-0}" = "1" ]; then
   # production bring-up deterministic.
   if ! wait_http "http://localhost:8080/healthz" 45; then
     echo "⚠ Published Agent Zero failed readiness; falling back to local agents stack"
+    # Published and local agent targets share container names. Hard-stop/remove
+    # agent containers before fallback recreate to avoid "container is running"
+    # races during compose service recreation.
+    make down-agents >/dev/null 2>&1 || true
+    docker compose -f docker-compose.agents.images.yml --profile agents stop \
+      agent-zero archon archon-ui deepresearch supaserch mesh-agent publisher-discord >/dev/null 2>&1 || true
+    docker compose -f docker-compose.agents.images.yml --profile agents rm -f \
+      agent-zero archon archon-ui deepresearch supaserch mesh-agent publisher-discord >/dev/null 2>&1 || true
+    docker rm -f \
+      pmoves-agent-zero-1 pmoves-archon-1 pmoves-archon-ui-1 \
+      pmoves-deepresearch-1 pmoves-supaserch-1 pmoves-mesh-agent-1 pmoves-publisher-discord-1 >/dev/null 2>&1 || true
     start_service "Agents + UIs (fallback)" "up-agents-ui" "true" || exit 1
   fi
 else
@@ -216,10 +233,18 @@ fi
 
 echo "⛳ Waiting on key endpoints"
 if [ "${PARALLEL:-0}" = "1" ]; then
-  check_http_bg "Supabase REST" "$SUPABASE_REST_READY_URL" "$WAIT_T_LONG"
+  if [ "$SUPABASE_RUNTIME" = "compose" ]; then
+    check_container_bg "Supabase PostgREST" "pmoves-supabase-postgrest-1" "$WAIT_T_LONG"
+    check_container_bg "Supabase Studio" "pmoves-supabase-studio-1" "$WAIT_T_LONG"
+  else
+    check_http_bg "Supabase REST" "$SUPABASE_REST_READY_URL" "$WAIT_T_LONG"
+    check_http_bg "Supabase Studio" "$SUPABASE_STUDIO_READY_URL" "$WAIT_T_SHORT"
+  fi
   check_http_bg "Hi-RAG v2 CPU" "http://localhost:${HIRAG_V2_HOST_PORT:-8086}/" "$WAIT_T_MED"
   check_http_bg "Hi-RAG v2 GPU" "http://localhost:${HIRAG_V2_GPU_HOST_PORT:-8087}/" "$WAIT_T_LONG"
-  check_http_bg "Archon API" "http://localhost:8091/healthz" "$WAIT_T_MED"
+  # Use lightweight readiness for bring-up. Deep dependency checks are covered
+  # later by archon-smoke / archon-rest-policy-smoke in verify-all.
+  check_http_bg "Archon API" "http://localhost:8091/api/health" "$WAIT_T_MED"
   check_http_bg "Archon UI" "http://localhost:3737" "$WAIT_T_SHORT"
   check_http_bg "Archon MCP" "http://localhost:8091/mcp/describe" "$WAIT_T_SHORT"
   check_http_bg "Agent Zero API" "http://localhost:8080/healthz" "$WAIT_T_SHORT"
@@ -245,15 +270,20 @@ if [ "${PARALLEL:-0}" = "1" ]; then
   check_container_bg "Firefly" "pmoves-firefly" "$WAIT_T_SHORT"
   check_container_bg "Wger" "pmoves-wger-nginx" "$WAIT_T_SHORT"
   check_container_bg "Open Notebook" "pmoves-open-notebook-ext-1" "$WAIT_T_SHORT"
-  check_http_bg "Supabase Studio" "$SUPABASE_STUDIO_READY_URL" "$WAIT_T_SHORT"
   ready_barrier
   wait_prom_targets "$WAIT_T_MED" || TIMEOUT_SERVICES+=("Prometheus targets")
 else
-  wait_http "$SUPABASE_REST_READY_URL" $WAIT_T_LONG || TIMEOUT_SERVICES+=("Supabase REST")
+  if [ "$SUPABASE_RUNTIME" = "compose" ]; then
+    wait_container_ready "pmoves-supabase-postgrest-1" $WAIT_T_LONG || TIMEOUT_SERVICES+=("Supabase PostgREST")
+    wait_container_ready "pmoves-supabase-studio-1" $WAIT_T_LONG || TIMEOUT_SERVICES+=("Supabase Studio")
+  else
+    wait_http "$SUPABASE_REST_READY_URL" $WAIT_T_LONG || TIMEOUT_SERVICES+=("Supabase REST")
+    wait_http "$SUPABASE_STUDIO_READY_URL" $WAIT_T_SHORT || TIMEOUT_SERVICES+=("Supabase Studio")
+  fi
   wait_http "http://localhost:${HIRAG_V2_HOST_PORT:-8086}/" $WAIT_T_MED || TIMEOUT_SERVICES+=("Hi-RAG v2 CPU")
   wait_http "http://localhost:${HIRAG_V2_GPU_HOST_PORT:-8087}/" $WAIT_T_LONG || TIMEOUT_SERVICES+=("Hi-RAG v2 GPU")
   wait_container_ready "pmoves-presign-1" $WAIT_T_SHORT || TIMEOUT_SERVICES+=("Presign")
-  wait_http "http://localhost:8091/healthz" $WAIT_T_MED || TIMEOUT_SERVICES+=("Archon API")
+  wait_http "http://localhost:8091/api/health" $WAIT_T_MED || TIMEOUT_SERVICES+=("Archon API")
   wait_http "http://localhost:3737" $WAIT_T_SHORT || TIMEOUT_SERVICES+=("Archon UI")
   wait_http "http://localhost:8091/mcp/describe" $WAIT_T_SHORT || TIMEOUT_SERVICES+=("Archon MCP")
   wait_http "http://localhost:8080/healthz" $WAIT_T_SHORT || TIMEOUT_SERVICES+=("Agent Zero API")
@@ -283,7 +313,6 @@ else
   wait_container_ready "pmoves-firefly" $WAIT_T_SHORT || TIMEOUT_SERVICES+=("Firefly")
   wait_container_ready "pmoves-wger-nginx" $WAIT_T_SHORT || TIMEOUT_SERVICES+=("Wger")
   wait_container_ready "pmoves-open-notebook-ext-1" $WAIT_T_SHORT || TIMEOUT_SERVICES+=("Open Notebook")
-  wait_http "$SUPABASE_STUDIO_READY_URL" $WAIT_T_SHORT || TIMEOUT_SERVICES+=("Supabase Studio")
 fi
 
 echo "⛳ Capturing evidence"
