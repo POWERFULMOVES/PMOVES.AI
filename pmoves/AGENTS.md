@@ -114,14 +114,24 @@ See also: `pmoves/docs/SERVICE_HEALTH_ENDPOINTS.md`.
 
 ### MCP (Agent‑to‑Agent) wiring
 
-- Register MCP servers for Agent Zero with `A0_MCP_SERVERS` in `pmoves/env.shared`. Example:
+- Preferred: set discrete MCP defaults in `pmoves/env.shared` and let the seed tool build
+  `A0_MCP_SERVERS` automatically:
 
 ```
+A0_MCP_ENABLE_DEFAULTS=true
+A0_MCP_FILESYSTEM_ROOTS=/data
+A0_MCP_ARCHON_ENDPOINT=http://archon-server:8051
+A0_MCP_NEO4J_URL=bolt://neo4j:7687
+A0_MCP_SUPABASE_URL=http://kong:8000
+A0_MCP_GATEWAY_ENDPOINT=http://gateway:8086
+A0_MCP_SERVERS_EXTRA=
 A0_MCP_SERVERS=
-  fs: "mcp://filesystem?roots=/data";
-  archon: "mcp://http?endpoint=http://archon-server:8051";
-  neo4j: "mcp://neo4j?url=bolt://neo4j:7687&user=neo4j&password=${NEO4J_PASSWORD}";
-  supabase: "mcp://supabase?url=${SUPABASE_URL}&key=${SUPABASE_SERVICE_ROLE_KEY}";
+```
+
+- Optional advanced override (must be a single line):
+
+```
+A0_MCP_SERVERS=fs: "mcp://filesystem?roots=/data"; archon: "mcp://http?endpoint=http://archon-server:8051";
 ```
 
 - Seed the runtime mapping file for Agent Zero (writes to `pmoves/data/agent-zero/runtime/mcp/servers.env`):

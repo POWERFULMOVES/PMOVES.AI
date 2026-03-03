@@ -237,6 +237,17 @@ This file summarizes the most-used targets and maps them to what they do under d
   - Stops/removes the Docker-hosted local-cert runner containers (`gha-runner-ai-lab`, `gha-runner-vps`).
 - `make ci-runners-local-cert-status`
   - Shows both local container status and GitHub runner registration status for `pmoves-ai-lab-runner` and `pmoves-vps-runner`.
+- `make ci-queue-sitrep`
+  - Lists queued workflow runs and classifies each as:
+    - `KEEP` for PR events on open PR branches
+    - `WOULD_CANCEL` for non-PR runs or PR runs for closed/non-open branches
+  - Writes `pmoves/docs/logs/ci_queue_guard_latest.json`.
+- `make ci-queue-drain-nonpr`
+  - Same policy with threshold guard (`QUEUE_THRESHOLD`, default `9`).
+  - Dry-run by default; set `APPLY=1` to execute cancellations.
+- `make ci-queue-drain-nonpr-apply`
+  - Executes queued-run cancellations immediately (still threshold-guarded).
+  - Intended for deadlock recovery when self-hosted lanes are starved by stale runs.
 - `make bringup-showtime`
   - Bring-up orchestration + retro diagnostics + Codex quick health in one sequence.
   - Starts a live readiness watcher by default (`SHOWTIME_WATCH=1`) so service transitions are visible while bring-up runs.

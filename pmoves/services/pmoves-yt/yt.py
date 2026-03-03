@@ -207,13 +207,39 @@ def _resolve_service_url(
     return docker_fallback
 
 # Prometheus metrics
-from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
+from prometheus_client import CollectorRegistry, Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
 
-http_requests_total = Counter('pmoves_yt_http_requests_total', 'Total HTTP requests', ['method', 'endpoint', 'status'])
-http_request_duration = Histogram('pmoves_yt_http_request_duration_seconds', 'HTTP request duration')
-videos_downloaded_total = Counter('pmoves_yt_videos_downloaded_total', 'Videos downloaded')
-transcripts_processed_total = Counter('pmoves_yt_transcripts_processed_total', 'Transcripts processed')
-nats_messages_total = Counter('pmoves_yt_nats_messages_total', 'NATS messages published', ['subject'])
+# Use a service-local registry so duplicate module imports in tests do not collide
+# on the process-global default CollectorRegistry.
+PROM_REGISTRY = CollectorRegistry()
+
+http_requests_total = Counter(
+    'pmoves_yt_http_requests_total',
+    'Total HTTP requests',
+    ['method', 'endpoint', 'status'],
+    registry=PROM_REGISTRY,
+)
+http_request_duration = Histogram(
+    'pmoves_yt_http_request_duration_seconds',
+    'HTTP request duration',
+    registry=PROM_REGISTRY,
+)
+videos_downloaded_total = Counter(
+    'pmoves_yt_videos_downloaded_total',
+    'Videos downloaded',
+    registry=PROM_REGISTRY,
+)
+transcripts_processed_total = Counter(
+    'pmoves_yt_transcripts_processed_total',
+    'Transcripts processed',
+    registry=PROM_REGISTRY,
+)
+nats_messages_total = Counter(
+    'pmoves_yt_nats_messages_total',
+    'NATS messages published',
+    ['subject'],
+    registry=PROM_REGISTRY,
+)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -281,12 +307,19 @@ if not logger.handlers:
     logger.addHandler(handler)
 logger.propagate = True
 
-# Optional import for docs sync helpers (underscore package path is import-safe)
+# Optional import for docs sync helpers.
+# Container images run /app directly, so absolute "pmoves.services..." imports
+# are not always available. Fall back to local module import.
 try:
     from pmoves.services.pmoves_yt.docs_sync import collect_yt_dlp_docs, sync_to_supabase  # type: ignore
-except Exception:  # pragma: no cover
-    collect_yt_dlp_docs = None  # type: ignore
-    sync_to_supabase = None  # type: ignore
+except ImportError:  # pragma: no cover
+    logger.debug("docs_sync: absolute import failed, trying relative")
+    try:
+        from docs_sync import collect_yt_dlp_docs, sync_to_supabase  # type: ignore
+    except ImportError:
+        logger.debug("docs_sync: not available — docs sync disabled")
+        collect_yt_dlp_docs = None  # type: ignore
+        sync_to_supabase = None  # type: ignore
 try:
     from .docs_catalog import options_catalog, extractor_count, version_info  # type: ignore
 except Exception:  # pragma: no cover
@@ -737,7 +770,7 @@ def metrics():
     Returns:
         Response with Prometheus metrics text/plain content.
     """
-    return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
+    return Response(generate_latest(PROM_REGISTRY), media_type=CONTENT_TYPE_LATEST)
 
 def _publish_event(topic: str, payload: Dict[str, Any]):
     """Publish an event to the NATS message bus.

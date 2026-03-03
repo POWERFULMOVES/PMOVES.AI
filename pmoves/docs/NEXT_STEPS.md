@@ -1,7 +1,55 @@
 
 # PMOVES v5 • NEXT_STEPS
 Note: Consolidated plan index at pmoves/docs/PMOVES.AI PLANS/README_DOCS_INDEX.md.
-_Last updated: 2026-03-01_
+_Last updated: 2026-03-03_
+
+### Latest changes (Mar 3, 2026)
+- Production audit lane re-run completed on `main` with fresh evidence (`pmoves/PR_EVIDENCE/2026-03-03_11-27-10`).
+- Compose topology parity hardening landed:
+  - `.env.local` is no longer included in compose runtime by default (set `INCLUDE_ENV_LOCAL_IN_COMPOSE=1` to opt in).
+  - Archon compose Supabase defaults now target in-network PostgREST (`http://supabase-postgrest:3000`) instead of host-only URLs.
+  - `make -C pmoves archon-rest-policy-smoke` is compose-aware and executes probe in-network via `pmoves-archon-1`.
+- Live backlog snapshot:
+  - Open PRs: `0`
+  - Dependabot alerts: `1` (`1 low`)
+  - Code scanning alerts: `34` (`31 error`, `3 warning`)
+- Remaining runtime defects to close:
+  - `model-readiness` now passes in compose mode after registry reseed + db fallback, but still reports Ollama pre-pull warnings (`qwen3`, `nomic-embed-text`).
+  - Optional hardening follow-up: pre-pull baseline Ollama models during first-run/bootstrap so readiness is warning-free without manual pulls.
+- Additional Mar 3 closeout landed on `main` (`26c86452`):
+  - `bringup_with_ui.sh` published-agent fallback now gates on container health + multi-endpoint HTTP readiness (`8080/healthz`, `8081`, `8080/config/environment`) before failing over to local agents.
+  - Restored missing model tooling under `pmoves/tools/models/` (`models_sync.py`, `apply_profile.sh`); Make targets now execute instead of path-failing.
+  - `models-registry-snapshot` now works in compose runtime via DB-container fallback when host REST URL is unavailable.
+  - `pmoves-ollama` service now supports explicit DNS fallback envs (`OLLAMA_DNS_PRIMARY`, `OLLAMA_DNS_SECONDARY`) for pull stability.
+
+### Latest changes (Mar 2, 2026)
+- Merge wave complete (order executed and synced):
+  - `#743` chore: runtime-data/DAO gitignore cleanup (main)
+  - `#741` feat(models): model registry + persona seeds + readiness (main)
+  - `#742` docs(agents): AGENTS review/cross-reference refresh (main)
+  - `#745` chore(submodules): transcribe-and-fetch + cipher parity bumps (hardened)
+  - `#744` fix(a2a): discovery/task hardening + upstream agent-card parity (hardened)
+  - promotion sync: `#746` hardened -> main
+- Follow-on Mar 2 merge wave landed on `main`:
+  - `#748` roadmap refresh
+  - `#749` audit summary API
+  - `#750` dashboard hydration closeout
+  - `#751` presign health endpoint fix
+  - `#752` submodule bumps (Agent-Zero, cipher, transcribe-and-fetch)
+  - `#753` queue guard/drain targets
+  - `#754`, `#755`, `#756`, `#757` Dependabot updates
+  - `#758` production runtime/db/env hardening sitrep
+  - `#759` CI SQL/Python collision fixes
+  - `#760` ToKenism submodule gitlink bump (after merged submodule PR #46)
+- Mar 2 closeout merges landed on `main`:
+  - `#763` chore(submodules): bump transcribe-and-fetch (font removal + LFS fix)
+  - `#764` feat(agents): Agent Zero MCP auto-seed + plugin catalog + Codex parity docs
+  - `#767` fix(integrations): align Agent0 plugin manifests to `CATACLYSM-STUDIOS-INC`
+- Open PR queue is currently `0`.
+- CI status: hosted gates complete quickly; self-hosted lanes experience recurring queue starvation (CodeQL/GHCR lanes); mitigate by cancelling stale non-main queued/pending runs first, then preserving the latest `main` runs.
+- Live security backlog snapshot:
+  - Dependabot alerts open: `2` (`1 high`, `1 low`)
+  - Code scanning alerts open: `34` (`31 error`, `3 warning`)
 
 ### Latest changes (Mar 1, 2026)
 - Hardened release PR queue is clear (`0` open PRs).

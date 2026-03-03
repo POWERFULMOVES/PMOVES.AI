@@ -65,3 +65,15 @@ This file is the operator list of active CHIT-adjacent flows, ordered for produc
   - `pmoves/docs/logs/pr_monitor_learnings_latest.md`
   - `pmoves/docs/logs/pr_monitor_learnings_latest.cgp.json`
   - FlOO$ pairing: `pr-monitor-graphiti-chit` in `pmoves/configs/skill-pairings.yaml`
+
+## CHIT-FLOW-007: Codex MCP + PMOVES Integration Parity
+- Scope: keep Codex MCP wiring and Agent Zero MCP runtime map aligned with production topology.
+- Entry commands:
+  - `make -C pmoves a0-mcp-seed`
+  - `cat pmoves/data/agent-zero/runtime/mcp/servers.env`
+  - `make -C pmoves archon-mcp-smoke`
+  - `make -C pmoves codex-health-quick`
+- Output:
+  - Refreshed MCP server map for Agent Zero runtime
+  - Verified Archon MCP bridge reachability
+  - Fast Codex health evidence for core PMOVES services
