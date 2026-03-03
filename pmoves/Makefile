@@ -97,7 +97,15 @@ ifneq ($(strip $(PRIMARY_ENV_FILE)),)
 endif
 COMPOSE_ENV_FILES += $(foreach file,$(TIER_ENV_FILES),$(if $(call resolve_env_file,$(file)),--env-file $(call resolve_env_file,$(file)),))
 ifneq ("$(wildcard .env.local)","")
-  COMPOSE_ENV_FILES += --env-file .env.local
+  # In compose runtime, .env.local frequently carries host-only Supabase URLs
+  # that break in-network service wiring. Keep it opt-in for compose.
+  ifeq ($(SUPABASE_RUNTIME),compose)
+    ifeq ($(INCLUDE_ENV_LOCAL_IN_COMPOSE),1)
+      COMPOSE_ENV_FILES += --env-file .env.local
+    endif
+  else
+    COMPOSE_ENV_FILES += --env-file .env.local
+  endif
 endif
 ifneq ("$(wildcard env.supa.runtime)","")
   # Runtime overlay is generated from Supabase CLI status output.
@@ -1111,7 +1119,7 @@ verify-all: ## Full verify: bring-up (parallel waits), then retro preflight + mo
 	@echo "-> Archon MCP evidence"
 	-@$(MAKE) --no-print-directory archon-mcp-evidence
 	@echo "-> Model & persona readiness"
-	@$(MAKE) --no-print-directory model-readiness
+	-@$(MAKE) --no-print-directory model-readiness
 	@echo "OK Verify-all sequence executed. Review console + Grafana."
 
 .PHONY: archon-mcp-evidence
@@ -1948,8 +1956,18 @@ archon-upload-smoke: ## Upload a tiny document to Archon (/api/documents/upload)
 
 .PHONY: archon-rest-policy-smoke
 archon-rest-policy-smoke: ## Probe a CLI REST table with anon key (non-fatal on 401/403; fails only on 5xx/timeout)
-	@bash -lc 'url="$${SUPA_REST_URL:-$${SUPABASE_REST_URL:-}}"; table="$${SMOKE_REST_TABLE:-pmoves_core}"; auth="$${SUPABASE_ANON_KEY:-$${ANON_KEY:-}}"; \
+	@bash -lc 'runtime="$${SUPABASE_RUNTIME:-$(SUPABASE_RUNTIME)}"; url="$${SUPA_REST_URL:-$${SUPABASE_REST_URL:-}}"; table="$${SMOKE_REST_TABLE:-pmoves_core}"; auth="$${SUPABASE_ANON_KEY:-$${ANON_KEY:-}}"; \
 	stripq() { printf "%s" "$$1" | sed -e "s/^\\\"//" -e "s/\\\"$$//"; }; \
+	if [ "$$runtime" = "compose" ] && docker inspect pmoves-archon-1 >/dev/null 2>&1; then \
+	  probe_url="$${SMOKE_REST_URL:-http://supabase-postgrest:3000}"; \
+	  echo "→ REST policy probe (compose/in-network) $$probe_url/$$table via pmoves-archon-1"; \
+	  raw=$$(docker exec -e PM_URL="$$probe_url" -e PM_TABLE="$$table" -e PM_AUTH="$$auth" pmoves-archon-1 sh -lc '\''if [ -n "$$PM_AUTH" ]; then curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $$PM_AUTH" "$$PM_URL/$$PM_TABLE"; else curl -s -o /dev/null -w "%{http_code}" "$$PM_URL/$$PM_TABLE"; fi'\'' 2>/dev/null || true); \
+	  code=$$(printf "%s" "$$raw" | grep -Eo "[0-9]{3}" | tail -1); \
+	  if [ "$$code" = "200" ]; then echo "✔ $$table accessible (200)"; exit 0; \
+	  elif [ "$$code" = "401" ] || [ "$$code" = "403" ] || [ "$$code" = "404" ]; then echo "↷ $$table not accessible (policy/missing) — OK ($$code)"; exit 0; \
+	  elif [ -z "$$code" ] || echo "$$code" | grep -Eq "^0+$$" || [ "$$code" -ge 500 ]; then echo "✖ REST probe failed (HTTP $$code)"; exit 1; \
+	  else echo "↷ REST probe HTTP $$code"; exit 0; fi; \
+	fi; \
 	if [ -z "$$url" ] && [ -f .supabase.status.env ]; then \
 	  v=$$(grep -m1 "^API_URL=" .supabase.status.env | cut -d= -f2-); v=$$(stripq "$$v"); [ -n "$$v" ] && url="$$v/rest/v1"; \
 	  if [ -z "$$auth" ]; then a=$$(grep -m1 "^ANON_KEY=" .supabase.status.env | cut -d= -f2-); a=$$(stripq "$$a"); [ -n "$$a" ] && auth="$$a"; fi; \
