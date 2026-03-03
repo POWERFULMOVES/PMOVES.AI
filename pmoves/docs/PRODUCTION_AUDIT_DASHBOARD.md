@@ -7,7 +7,7 @@
 **Branch:** `main`
 **Commit:** local audit lane (uncommitted)
 **Consolidated From:** 27 audit documents
-**Evidence:** `pmoves/PR_EVIDENCE/2026-03-03_10-48-34`
+**Evidence:** `pmoves/PR_EVIDENCE/2026-03-03_11-27-10`
 
 ---
 
@@ -32,12 +32,12 @@
 
 | Check | Result | Notes |
 |---|---|---|
-| `make -C pmoves verify-all` | PASS (non-fatal defects remain) | Evidence: `pmoves/PR_EVIDENCE/2026-03-03_10-48-34` |
+| `make -C pmoves verify-all` | PASS (non-fatal defects remain) | Evidence: `pmoves/PR_EVIDENCE/2026-03-03_11-27-10` |
 | Archon compose health | PASS | `/healthz` now returns 200 on in-network Supabase (`http://supabase-postgrest:3000`) |
 | `make -C pmoves archon-rest-policy-smoke` | PASS | Compose-aware probe now runs in-network via `pmoves-archon-1` |
 | Prometheus targets wait | PASS | `wait_prom_targets` now succeeds without `jq` dependency |
 | `yt-docs-sync` | PASS | `/yt/docs/sync` now returns 200 in compose runtime |
-| `model-readiness` | WARN (non-fatal in verify-all) | Connectivity/auth drift resolved; now reporting real data gaps (providers/models/mappings/Ollama pull state) |
+| `model-readiness` | PASS with warnings | Supabase/provider/model/persona checks pass; only Ollama pre-pull warnings remain (`qwen3`, `nomic-embed-text`) |
 
 ### Local Atomic Lanes (2026-03-02)
 

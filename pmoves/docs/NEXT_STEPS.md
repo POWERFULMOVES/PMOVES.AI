@@ -4,7 +4,7 @@ Note: Consolidated plan index at pmoves/docs/PMOVES.AI PLANS/README_DOCS_INDEX.m
 _Last updated: 2026-03-03_
 
 ### Latest changes (Mar 3, 2026)
-- Production audit lane re-run completed on `main` with fresh evidence (`pmoves/PR_EVIDENCE/2026-03-03_10-48-34`).
+- Production audit lane re-run completed on `main` with fresh evidence (`pmoves/PR_EVIDENCE/2026-03-03_11-27-10`).
 - Compose topology parity hardening landed:
   - `.env.local` is no longer included in compose runtime by default (set `INCLUDE_ENV_LOCAL_IN_COMPOSE=1` to opt in).
   - Archon compose Supabase defaults now target in-network PostgREST (`http://supabase-postgrest:3000`) instead of host-only URLs.
@@ -14,11 +14,8 @@ _Last updated: 2026-03-03_
   - Dependabot alerts: `1` (`1 low`)
   - Code scanning alerts: `34` (`31 error`, `3 warning`)
 - Remaining runtime defects to close:
-  - `model-readiness` is now compose-aware and DB-backed, but reports real readiness gaps:
-    - provider coverage gap (`anthropic_primary`, `tts_local`)
-    - model/mapping thresholds below target (26/35 models, 14/15 mappings)
-    - Ollama model pull gap (`qwen3`, `nomic-embed-text`)
-    - persona-model resolution still unresolved for 8 personas
+  - `model-readiness` now passes in compose mode after registry reseed + db fallback, but still reports Ollama pre-pull warnings (`qwen3`, `nomic-embed-text`).
+  - Optional hardening follow-up: pre-pull baseline Ollama models during first-run/bootstrap so readiness is warning-free without manual pulls.
 
 ### Latest changes (Mar 2, 2026)
 - Merge wave complete (order executed and synced):
