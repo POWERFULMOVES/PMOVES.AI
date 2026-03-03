@@ -16,6 +16,11 @@ _Last updated: 2026-03-03_
 - Remaining runtime defects to close:
   - `model-readiness` now passes in compose mode after registry reseed + db fallback, but still reports Ollama pre-pull warnings (`qwen3`, `nomic-embed-text`).
   - Optional hardening follow-up: pre-pull baseline Ollama models during first-run/bootstrap so readiness is warning-free without manual pulls.
+- Additional Mar 3 closeout landed on `main` (`26c86452`):
+  - `bringup_with_ui.sh` published-agent fallback now gates on container health + multi-endpoint HTTP readiness (`8080/healthz`, `8081`, `8080/config/environment`) before failing over to local agents.
+  - Restored missing model tooling under `pmoves/tools/models/` (`models_sync.py`, `apply_profile.sh`); Make targets now execute instead of path-failing.
+  - `models-registry-snapshot` now works in compose runtime via DB-container fallback when host REST URL is unavailable.
+  - `pmoves-ollama` service now supports explicit DNS fallback envs (`OLLAMA_DNS_PRIMARY`, `OLLAMA_DNS_SECONDARY`) for pull stability.
 
 ### Latest changes (Mar 2, 2026)
 - Merge wave complete (order executed and synced):

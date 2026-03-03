@@ -56,6 +56,9 @@ A production-ready, self-hostable orchestration mesh for creative + agent worklo
   - `yt-docs-sync` fixed in compose topology (PMOVES.YT now reaches Supabase over in-network PostgREST route)
   - bring-up Prometheus wait no longer depends on `jq` (python fallback parser added)
   - model-readiness now uses compose-aware docker/db fallback; model registry reseed restored provider/model/persona parity (remaining warnings are only Ollama model pre-pull state)
+  - published Agent Zero bring-up now waits on container-health + multi-endpoint HTTP readiness before fallback; false-fallback risk reduced while retaining deterministic fallback when published image is broken
+  - model tooling path restored under `pmoves/tools/models/` (`models_sync.py`, `apply_profile.sh`) so `model-apply`, `models-sync`, `models-seed-ollama`, and `models-registry-snapshot` are operational again
+  - `pmoves-ollama` now has explicit DNS fallback (`OLLAMA_DNS_PRIMARY/SECONDARY`) to reduce Docker embedded-DNS flake during model pulls
 
 ## Current Sprint Overlay (Hardened)
 
