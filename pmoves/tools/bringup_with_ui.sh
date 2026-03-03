@@ -92,7 +92,15 @@ wait_prom_targets() { # timeout_seconds
   echo "→ Waiting for Prometheus targets (timeout ${timeout}s)"
   while true; do
     if out=$(curl -fsS -m 5 "$url" 2>/dev/null); then
-      n=$(printf '%s' "$out" | jq -r '.data.activeTargets | length' 2>/dev/null || echo 0)
+      if command -v jq >/dev/null 2>&1; then
+        n=$(printf '%s' "$out" | jq -r '.data.activeTargets | length' 2>/dev/null || echo 0)
+      elif command -v python3 >/dev/null 2>&1; then
+        n=$(printf '%s' "$out" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(len(d.get("data", {}).get("activeTargets", [])))' 2>/dev/null || echo 0)
+      elif command -v python >/dev/null 2>&1; then
+        n=$(printf '%s' "$out" | python -c 'import json,sys; d=json.load(sys.stdin); print(len(d.get("data", {}).get("activeTargets", [])))' 2>/dev/null || echo 0)
+      else
+        n=0
+      fi
       if [ "${n:-0}" -gt 0 ]; then echo "  OK: $n targets"; break; fi
     fi
     sleep 2
