@@ -120,6 +120,44 @@ Comprehensive reference of all production services, ports, APIs, and integration
 - **Dependencies:** Agent Zero, DeepResearch, databases
 - **Compose Profile:** `orchestration`
 
+### Model Registry
+- **Ports:** 8110
+- **Port Note:** `8110` also appears in the BoTZ VPN MCP stack; these are profile-separated deployments (`orchestration` vs `vpn/remote`) and should not be exposed on the same host at the same time.
+- **Purpose:** Dynamic model configuration service — central catalog for LLM/embedding model providers, mappings, and active deployments
+- **Key APIs:**
+  - `GET /healthz` - Service health
+  - `GET /api/models` - List registered models
+  - `GET /api/providers` - List model providers
+  - `GET /api/deployments` - List active model deployments
+- **NATS Topics:**
+  - Publish: `model.registry.updated.v1` (catalog mutation notifications)
+  - Subscribe: `mesh.gpu.model.loaded.v1`, `mesh.gpu.model.unloaded.v1` (syncs deployment state from GPU Orchestrator)
+- **Dependencies:** Supabase (required), NATS
+- **Docker Image:** Custom build from `services/model-registry`
+- **Compose Profile:** `orchestration`
+- **Lifecycle:** Formerly dormant; activated in PR #787-791
+
+### GPU Orchestrator
+- **Ports:** 8200
+- **Purpose:** Dynamic GPU resource management and model lifecycle controller
+- **Key APIs:**
+  - `GET /healthz` - Service health
+  - `GET /api/v1/status` - GPU status (VRAM utilization, loaded models, temperature)
+  - `GET /api/v1/models` - List models loaded on GPU
+  - `GET /metrics` - Prometheus metrics
+- **NATS Topics:**
+  - Publish: `mesh.gpu.status.v1` (every 5s), `mesh.gpu.model.loaded.v1`, `mesh.gpu.model.unloaded.v1`, `mesh.gpu.vram.warning.v1`, `mesh.gpu.command.result.v1`
+  - Subscribe: `mesh.gpu.command.v1` (model load/unload/optimize requests)
+- **Features:**
+  - Bidirectional NATS wiring with model-registry
+  - VRAM warning rate-limited to 1/min
+  - Command execution results via fire-and-forget NATS (no request-reply)
+- **Dependencies:** NATS (required), NVIDIA GPU runtime
+- **Docker Image:** Custom build from `services/gpu-orchestrator`
+- **Compose Profile:** `gpu`
+- **Note:** Only started by `make up-model-management` when NVIDIA runtime is detected
+- **Lifecycle:** Formerly dormant; activated in PR #787-791
+
 ### Open Notebook (External Integration)
 - **Purpose:** Knowledge base / note-taking (SurrealDB-backed)
 - **Access:** Via `OPEN_NOTEBOOK_API_URL` + API token
@@ -257,6 +295,16 @@ Comprehensive reference of all production services, ports, APIs, and integration
 - **Dependencies:** Open Notebook, LangExtract, Extract Worker
 - **Compose Profile:** `orchestration`
 
+### Transcribe Backend
+- **Ports:** 8074
+- **Purpose:** Text transcription service (PMOVES-transcribe-and-fetch submodule)
+- **Key APIs:**
+  - `GET /healthz` - Service health
+- **Dependencies:** Supabase, NATS
+- **Submodule:** `PMOVES-transcribe-and-fetch`
+- **Compose Profile:** `workers`
+- **Lifecycle:** Formerly dormant; activated in PR #787-791
+
 ## Utility & Integration Services
 
 ### Presign
@@ -362,6 +410,7 @@ Comprehensive reference of all production services, ports, APIs, and integration
 
 ### BoTZ VPN MCP Server
 - **Port:** 8110
+- **Port Note:** Collides with Model Registry (`8110`) when both stacks are host-exposed; run this service only with `vpn/remote` profiles on hosts that are not exposing `model-registry`.
 - **Purpose:** MCP server exposing VPN and remote desktop tools
 - **Transport:** SSE
 - **MCP Tools:**
@@ -549,6 +598,10 @@ http://localhost:8080/healthz  # Agent Zero
 http://localhost:8091/healthz  # Archon
 http://localhost:8097/healthz  # Channel Monitor
 
+# Model Management
+http://localhost:8110/healthz  # Model Registry
+http://localhost:8200/healthz  # GPU Orchestrator (GPU only)
+
 # Retrieval & Knowledge
 http://localhost:8086/healthz  # Hi-RAG v2 CPU
 http://localhost:8087/healthz  # Hi-RAG v2 GPU
@@ -569,6 +622,7 @@ http://localhost:8083/healthz  # Extract Worker
 http://localhost:8084/healthz  # LangExtract
 http://localhost:8092/healthz  # PDF Ingest
 http://localhost:8095/healthz  # Notebook Sync
+http://localhost:8074/healthz  # Transcribe Backend
 
 # CHIT & Geometry
 http://localhost:8103/healthz  # Tokenism Simulator
