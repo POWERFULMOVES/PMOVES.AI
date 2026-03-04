@@ -31,3 +31,33 @@ POSTGREST_URL=http://localhost:3011
 ```
 
 After editing `pmoves/env.shared`, run `make -C pmoves env-setup` (or restart the console dev server) so changes apply to the UI.
+
+## Model Registry
+- Default base URL: `http://localhost:8110`
+- Health path: `/healthz`
+- Additional endpoints:
+  - `GET /api/models` — List registered models
+  - `GET /api/providers` — List model providers
+  - `GET /api/deployments` — List active model deployments
+- NATS: Publishes `model.registry.updated.v1` on catalog mutations
+- Compose profile: `orchestration`
+
+## GPU Orchestrator
+- Default base URL: `http://localhost:8200`
+- Health path: `/healthz`
+- Additional endpoints:
+  - `GET /api/v1/status` — GPU status (VRAM, loaded models)
+  - `GET /api/v1/models` — List models loaded on GPU
+  - `GET /metrics` — Prometheus metrics
+- NATS subjects:
+  - Publishes: `mesh.gpu.status.v1` (every 5s), `mesh.gpu.model.loaded.v1`, `mesh.gpu.model.unloaded.v1`, `mesh.gpu.vram.warning.v1`
+  - Subscribes: `mesh.gpu.command.v1` (load/unload/optimize requests)
+  - Publishes: `mesh.gpu.command.result.v1` (command execution results)
+- **Note:** Only available when NVIDIA GPU runtime is present. The `make up-model-management` target auto-detects this.
+- Compose profile: `gpu`
+
+## Transcribe Backend
+- Default base URL: `http://localhost:8074`
+- Health path: `/healthz`
+- Submodule: `PMOVES-transcribe-and-fetch`
+- Compose profile: `workers`
