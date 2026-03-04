@@ -109,7 +109,7 @@ function Resolve-SupabaseAnonKey {
 
 function Resolve-SupabaseServiceKey {
   $tierSupabase = Join-Path $Script:ProjectRoot 'env.tier-supabase'
-  foreach ($k in @('SERVICE_ROLE_KEY', 'SUPABASE_SECRET_KEY', 'SUPABASE_SERVICE_ROLE_KEY')) {
+  foreach ($k in @('SUPABASE_SERVICE_ROLE_KEY', 'SUPABASE_SECRET_KEY', 'SERVICE_ROLE_KEY')) {
     $v = Get-EnvFileValue -Path $tierSupabase -Key $k
     if (-not [string]::IsNullOrWhiteSpace($v)) {
       return $v.Trim()
@@ -124,7 +124,7 @@ function Resolve-SupabaseServiceKey {
   }
 
   $runtimeOverlay = Join-Path $Script:ProjectRoot 'env.supa.runtime'
-  foreach ($k in @('SERVICE_ROLE_KEY', 'SUPABASE_SECRET_KEY', 'SUPABASE_SERVICE_ROLE_KEY')) {
+  foreach ($k in @('SUPABASE_SERVICE_ROLE_KEY', 'SUPABASE_SECRET_KEY', 'SERVICE_ROLE_KEY')) {
     $v = Get-EnvFileValue -Path $runtimeOverlay -Key $k
     if (-not [string]::IsNullOrWhiteSpace($v)) {
       return $v.Trim()
@@ -132,6 +132,22 @@ function Resolve-SupabaseServiceKey {
   }
 
   return $null
+}
+
+function Resolve-ProbeUrl {
+  param(
+    [Parameter(Mandatory)][string]$Url
+  )
+  try {
+    $uri = [System.Uri]$Url
+  } catch {
+    return $Url
+  }
+  $builder = New-Object System.UriBuilder($uri)
+  if ($builder.Host -eq 'localhost' -or $builder.Host -eq '127.0.0.1') {
+    $builder.Host = 'host.docker.internal'
+  }
+  return $builder.Uri.AbsoluteUri.TrimEnd('/')
 }
 
 function Resolve-ChitPassphrase {
@@ -365,6 +381,7 @@ function Test-QdrantReady {
 
 try {
   $supaRestBase = Resolve-SupabaseRestUrl
+  $supaProbeRestBase = Resolve-ProbeUrl -Url "$supaRestBase/"
   $supaAnonKey = Resolve-SupabaseAnonKey
   $supaServiceKey = Resolve-SupabaseServiceKey
   $chitPassphrase = Resolve-ChitPassphrase
@@ -417,10 +434,10 @@ try {
   Write-Step "[6/12] PostgREST reachable..."
   Invoke-With-Retry -TimeoutSec $TimeoutSec -DelayMs $RetryDelayMs -Script {
     try {
-      Test-Http200WithFallback -PrimaryUrl "$supaRestBase/" -ProbeUrl 'http://supabase-postgrest:3000/' -Headers $supaHeaders | Out-Null
+      Test-Http200WithFallback -PrimaryUrl "$supaRestBase/" -ProbeUrl "$supaProbeRestBase/" -Headers $supaHeaders | Out-Null
       return $true
     } catch {
-      $status = Invoke-ProbeStatus -Url 'http://supabase-postgrest:3000/' -Method 'GET' -Headers $supaHeaders
+      $status = Invoke-ProbeStatus -Url "$supaProbeRestBase/" -Method 'GET' -Headers $supaHeaders
       if ($status -eq 401) { return $true }
       throw
     }
@@ -441,12 +458,12 @@ try {
   $rows = $null
   try {
     $rows = Invoke-With-Retry -TimeoutSec $TimeoutSec -DelayMs $RetryDelayMs -Script {
-      Invoke-GetJsonWithFallback -PrimaryUrl "$supaRestBase/studio_board?order=id.desc&limit=1" -ProbeUrl "http://supabase-postgrest:3000/studio_board?order=id.desc&limit=1" -Headers $supaHeaders
+      Invoke-GetJsonWithFallback -PrimaryUrl "$supaRestBase/studio_board?order=id.desc&limit=1" -ProbeUrl "$supaProbeRestBase/studio_board?order=id.desc&limit=1" -Headers $supaHeaders
     }
   } catch {
     if ($null -eq $supaServiceHeaders) { throw }
     $rows = Invoke-With-Retry -TimeoutSec $TimeoutSec -DelayMs $RetryDelayMs -Script {
-      Invoke-GetJsonWithFallback -PrimaryUrl "$supaRestBase/studio_board?order=id.desc&limit=1" -ProbeUrl "http://supabase-postgrest:3000/studio_board?order=id.desc&limit=1" -Headers $supaServiceHeaders
+      Invoke-GetJsonWithFallback -PrimaryUrl "$supaRestBase/studio_board?order=id.desc&limit=1" -ProbeUrl "$supaProbeRestBase/studio_board?order=id.desc&limit=1" -Headers $supaServiceHeaders
     }
   }
   if ($null -eq $rows -or $rows.Count -lt 1 -or $null -eq $rows[0].title) { throw 'No row with title found' }
