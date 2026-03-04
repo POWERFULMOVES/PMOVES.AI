@@ -32,6 +32,13 @@ from fastapi import FastAPI, HTTPException, BackgroundTasks
 from pydantic import BaseModel, Field
 import uvicorn
 
+try:
+    from nats.aio.client import Client as NATS
+    from nats.aio.errors import ErrConnectionClosed, ErrTimeout
+    NATS_AVAILABLE = True
+except ImportError:
+    NATS_AVAILABLE = False
+
 # Configure logging
 logging.basicConfig(
     level=os.environ.get("LOG_LEVEL", "INFO"),
@@ -56,13 +63,25 @@ async def lifespan(app: FastAPI):
 
     Yields control after startup, performs cleanup on shutdown.
     """
+    global nats_client
+
     # Startup
     logger.info("PMOVES Model Registry starting up...")
     logger.info(f"Supabase URL: {SUPABASE_URL}")
     logger.info(f"NATS URL: {NATS_URL}")
+
+    # Connect to NATS for GPU event sync + catalog change publishing
+    nats_client = RegistryNatsClient(NATS_URL, supabase)
+    connected = await nats_client.connect()
+    if not connected:
+        logger.warning("Running without NATS — deployment sync disabled")
+
     yield
+
     # Shutdown
     logger.info("PMOVES Model Registry shutting down...")
+    if nats_client:
+        await nats_client.disconnect()
 
 
 app = FastAPI(
@@ -240,6 +259,134 @@ class SupabaseClient:
 
 # Global Supabase client
 supabase = SupabaseClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
+
+
+# ============================================================================
+# NATS Integration
+# ============================================================================
+
+class RegistryNatsClient:
+    """NATS client for model registry — subscribes to GPU events, publishes catalog changes."""
+
+    # Subjects we subscribe to (from gpu-orchestrator)
+    SUB_MODEL_LOADED = "mesh.gpu.model.loaded.v1"
+    SUB_MODEL_UNLOADED = "mesh.gpu.model.unloaded.v1"
+
+    # Subject we publish on catalog mutations
+    PUB_REGISTRY_UPDATED = "model.registry.updated.v1"
+
+    def __init__(self, nats_url: str, supabase_client: SupabaseClient):
+        self.nats_url = nats_url
+        self.supabase = supabase_client
+        self._nc: Optional[NATS] = None
+        self._connected = False
+
+    async def connect(self) -> bool:
+        """Connect to NATS and set up subscriptions."""
+        if not NATS_AVAILABLE:
+            logger.warning("NATS library not available — running without NATS")
+            return False
+        try:
+            self._nc = NATS()
+            await self._nc.connect(
+                servers=[self.nats_url],
+                reconnect_time_wait=2,
+                max_reconnect_attempts=-1,
+            )
+            self._connected = True
+            logger.info(f"Model Registry connected to NATS at {self.nats_url}")
+
+            # Subscribe to GPU orchestrator events
+            await self._nc.subscribe(self.SUB_MODEL_LOADED, cb=self._on_model_loaded)
+            await self._nc.subscribe(self.SUB_MODEL_UNLOADED, cb=self._on_model_unloaded)
+            logger.info("Subscribed to mesh.gpu.model.{loaded,unloaded}.v1")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to connect to NATS: {e}")
+            self._connected = False
+            return False
+
+    async def disconnect(self) -> None:
+        """Gracefully disconnect from NATS."""
+        if self._nc and self._connected:
+            try:
+                await self._nc.drain()
+            except Exception as e:
+                logger.debug(f"Error draining NATS connection: {e}")
+        self._connected = False
+        logger.info("Model Registry disconnected from NATS")
+
+    async def publish_catalog_change(
+        self, action: str, resource_type: str, resource_id: str
+    ) -> None:
+        """Publish a catalog change event to NATS."""
+        if not self._nc or not self._connected:
+            return
+        try:
+            payload = json.dumps({
+                "type": self.PUB_REGISTRY_UPDATED,
+                "action": action,
+                "resource_type": resource_type,
+                "resource_id": str(resource_id),
+                "ts": int(datetime.now(timezone.utc).timestamp()),
+            }).encode()
+            await self._nc.publish(self.PUB_REGISTRY_UPDATED, payload)
+        except Exception as e:
+            logger.error(f"Error publishing catalog change: {e}")
+
+    async def _on_model_loaded(self, msg) -> None:
+        """Handle mesh.gpu.model.loaded.v1 — upsert deployment as loaded."""
+        try:
+            data = json.loads(msg.data.decode())
+            model_key = data.get("model_key", "")
+            vram_mb = data.get("vram_mb", 0)
+
+            # model_key format: "provider/model_id"
+            parts = model_key.split("/", 1)
+            if len(parts) != 2:
+                logger.warning(f"Invalid model_key format: {model_key}")
+                return
+
+            provider, model_id = parts
+            deployment = ModelDeployment(
+                model_id=model_id,
+                node_id="gpu-orchestrator",
+                provider_type=provider,
+                status="loaded",
+                vram_allocated_mb=vram_mb,
+            )
+            await self.supabase.upsert_deployment(deployment)
+            logger.info(f"Deployment synced: {model_key} -> loaded ({vram_mb}MB)")
+        except Exception as e:
+            logger.error(f"Error handling model loaded event: {e}")
+
+    async def _on_model_unloaded(self, msg) -> None:
+        """Handle mesh.gpu.model.unloaded.v1 — update deployment to unloaded."""
+        try:
+            data = json.loads(msg.data.decode())
+            model_key = data.get("model_key", "")
+
+            parts = model_key.split("/", 1)
+            if len(parts) != 2:
+                logger.warning(f"Invalid model_key format: {model_key}")
+                return
+
+            provider, model_id = parts
+            deployment = ModelDeployment(
+                model_id=model_id,
+                node_id="gpu-orchestrator",
+                provider_type=provider,
+                status="unloaded",
+                vram_allocated_mb=0,
+            )
+            await self.supabase.upsert_deployment(deployment)
+            logger.info(f"Deployment synced: {model_key} -> unloaded")
+        except Exception as e:
+            logger.error(f"Error handling model unloaded event: {e}")
+
+
+# Global NATS client
+nats_client: Optional[RegistryNatsClient] = None
 
 
 # ============================================================================
@@ -500,7 +647,12 @@ async def list_deployments(
 @app.post("/api/deployments")
 async def register_deployment(deployment: ModelDeployment):
     """Register or update a model deployment (called by GPU Orchestrator)."""
-    return await supabase.upsert_deployment(deployment)
+    result = await supabase.upsert_deployment(deployment)
+    if nats_client:
+        await nats_client.publish_catalog_change(
+            "updated", "deployment", deployment.model_id
+        )
+    return result
 
 
 # ============================================================================
