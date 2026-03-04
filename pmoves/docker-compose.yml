@@ -1028,6 +1028,7 @@ services:
     environment:
     - SUPABASE_URL=${MODEL_REGISTRY_SUPABASE_URL:-http://supabase_kong_PMOVES.AI:8000}
     - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY:-${SUPABASE_SERVICE_ROLE_KEY:?MODEL_REGISTRY requires SUPABASE_SERVICE_KEY or SUPABASE_SERVICE_ROLE_KEY}}
+    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
     - MODEL_REGISTRY_PORT=${MODEL_REGISTRY_PORT:-8110}
     - DOCKED_MODE=${DOCKED_MODE:-true}
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
@@ -1035,6 +1036,10 @@ services:
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
     ports:
     - ${MODEL_REGISTRY_PORT:-8110}:8110
+    depends_on:
+      nats:
+        condition: service_healthy
+        required: false
     profiles:
     - orchestration
     healthcheck:
@@ -1145,6 +1150,36 @@ services:
     networks:
     - pmoves_app
     - pmoves_bus
+
+  # Transcribe-and-Fetch backend (submodule: PMOVES-transcribe-and-fetch)
+  transcribe-backend:
+    <<: *tier-worker-hardened
+    build:
+      context: ../PMOVES-transcribe-and-fetch
+      dockerfile: backend/Dockerfile
+    image: ${TRANSCRIBE_BACKEND_IMAGE:-ghcr.io/powerfulmoves/pmoves-transcribe-backend:latest}
+    restart: unless-stopped
+    environment:
+    - SUPABASE_URL=${SUPA_REST_INTERNAL_URL:-${SUPA_REST_URL:-http://supabase-kong:8000/rest/v1}}
+    - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-}
+    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - MINIO_ENDPOINT=${MINIO_ENDPOINT:-minio:9000}
+    - MINIO_SECURE=${MINIO_SECURE:-false}
+    depends_on:
+      nats:
+        condition: service_healthy
+        required: false
+      minio:
+        condition: service_started
+    ports:
+    - ${TRANSCRIBE_HOST_PORT:-8074}:8000
+    profiles:
+    - workers
+    networks:
+    - pmoves_app
+    - pmoves_bus
+    - pmoves_api
+
   ffmpeg-whisper:
     <<: *tier-media-hardened
     build:
@@ -2047,6 +2082,7 @@ services:
     - GPU_ORCHESTRATOR_MAX_MODELS=${GPU_ORCHESTRATOR_MAX_MODELS:-3}
     - GPU_ORCHESTRATOR_VRAM_THRESHOLD=${GPU_ORCHESTRATOR_VRAM_THRESHOLD:-0.9}
     - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - MODEL_REGISTRY_URL=${MODEL_REGISTRY_URL:-http://model-registry:8110}
     volumes:
       # SECURITY: Docker socket required for spawning GPU model containers.
       # Mounted read-only with hardened security context (no-new-privileges, cap_drop).
@@ -2071,10 +2107,12 @@ services:
     - pmoves_bus
     - pmoves_monitoring
     ports:
-    - 8100:8100
-    - 8200:8200
+    - ${GPU_ORCHESTRATOR_HOST_PORT:-8200}:8200
     depends_on:
       nats:
+        condition: service_healthy
+        required: false
+      model-registry:
         condition: service_healthy
         required: false
   evo-controller:

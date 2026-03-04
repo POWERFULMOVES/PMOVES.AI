@@ -627,3 +627,59 @@ nats server report connections
 - `nats_server_subscriptions` - Active subscriptions
 - `nats_server_messages_in` - Messages received
 - `nats_server_messages_out` - Messages sent
+
+## GPU Mesh & Model Lifecycle Subjects
+
+### GPU Orchestrator → Model Registry
+
+**`mesh.gpu.status.v1`**
+- **Direction:** Published by gpu-orchestrator (every 5s) → Consumed by monitoring
+- **Purpose:** Periodic GPU status broadcast (VRAM, loaded models, health)
+
+**`mesh.gpu.model.loaded.v1`**
+- **Direction:** Published by gpu-orchestrator → Consumed by model-registry
+- **Purpose:** Notify registry that a model was loaded on GPU
+- **Payload:**
+  ```json
+  {"type": "mesh.gpu.model.loaded.v1", "model_key": "ollama/qwen3:8b", "vram_mb": 6144, "ts": 1709568000}
+  ```
+
+**`mesh.gpu.model.unloaded.v1`**
+- **Direction:** Published by gpu-orchestrator → Consumed by model-registry
+- **Purpose:** Notify registry that a model was unloaded from GPU
+- **Payload:**
+  ```json
+  {"type": "mesh.gpu.model.unloaded.v1", "model_key": "ollama/qwen3:8b", "ts": 1709568000}
+  ```
+
+**`mesh.gpu.vram.warning.v1`**
+- **Direction:** Published by gpu-orchestrator → Consumed by monitoring/alerting
+- **Purpose:** VRAM usage exceeded threshold (rate-limited to 1/min)
+
+### Model Registry → Downstream
+
+**`model.registry.updated.v1`**
+- **Direction:** Published by model-registry → Consumed by future consumers
+- **Purpose:** Catalog mutation notification (model/provider/mapping CRUD)
+- **Payload:**
+  ```json
+  {"type": "model.registry.updated.v1", "action": "created|updated|deleted", "resource_type": "model|provider|mapping|deployment", "resource_id": "...", "ts": 1709568000}
+  ```
+
+### Any Service → GPU Orchestrator (Commands)
+
+**`mesh.gpu.command.v1`**
+- **Direction:** Published by any service → Consumed by gpu-orchestrator
+- **Purpose:** Request model lifecycle operations via NATS
+- **Payload:**
+  ```json
+  {"action": "load|unload|optimize", "model_id": "qwen3:8b", "provider": "ollama", "priority": 5, "session_id": "optional-session-id"}
+  ```
+
+**`mesh.gpu.command.result.v1`**
+- **Direction:** Published by gpu-orchestrator → Consumed by requestor
+- **Purpose:** Command execution result (fire-and-forget, no request-reply)
+- **Payload:**
+  ```json
+  {"type": "mesh.gpu.command.result.v1", "success": true, "model_key": "ollama/qwen3:8b", "ts": 1709568000}
+  ```
