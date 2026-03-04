@@ -27,7 +27,7 @@ FROM agent0ai/agent-zero-base:latest AS app
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PYTHONPATH="/app" \
+    PYTHONPATH="/app:/app/services" \
     AGENT_ZERO_HOME=/a0 \
     AGENT_ZERO_ROOT=/a0 \
     PATH="/opt/venv-a0/bin:${PATH}"
@@ -73,6 +73,10 @@ COPY configs /app/configs
 # PMOVES services (includes services/common, services/agent_zero, etc.)
 COPY services /app/services
 
+# Compatibility overlay: recent flaredantic builds may omit Microsoft/notifier symbols.
+# Keep Agent Zero startup resilient by overlaying a tunnel manager that degrades gracefully.
+COPY services/agent-zero/overrides/tunnel_manager.py /git/agent-zero/python/helpers/tunnel_manager.py
+
 # Security: non-root user (PMOVES standard)
 RUN groupadd -r pmoves --gid=65532 \
     && useradd -r -g pmoves --uid=65532 --home-dir=/app --shell=/sbin/nologin pmoves \
@@ -84,4 +88,4 @@ USER pmoves:pmoves
 
 EXPOSE 8080
 ENTRYPOINT ["/bin/bash", "-lc", \
-  "/usr/local/bin/init-a0.sh 2>/dev/null || true && /opt/venv-a0/bin/python /git/agent-zero/prepare.py --dockerized=true 2>/dev/null || true && exec /opt/venv-a0/bin/python services/agent-zero/main.py"]
+  "/usr/local/bin/init-a0.sh 2>/dev/null || true && if [ \"$(id -u)\" = \"0\" ]; then /opt/venv-a0/bin/python /git/agent-zero/prepare.py --dockerized=true 2>/dev/null || true; fi && export PYTHONPATH=/app:/app/services:${PYTHONPATH:-} && exec /opt/venv-a0/bin/python /app/services/agent-zero/main.py"]
