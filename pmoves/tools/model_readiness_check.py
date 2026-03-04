@@ -116,15 +116,16 @@ def _docker_db_available() -> bool:
     for candidate in DOCKER_DB_CONTAINER_CANDIDATES:
         try:
             result = subprocess.run(
-                ["docker", "inspect", candidate],
-                stdout=subprocess.DEVNULL,
+                ["docker", "inspect", "--format", "{{.State.Running}}", candidate],
+                stdout=subprocess.PIPE,
                 stderr=subprocess.DEVNULL,
+                text=True,
                 check=False,
                 timeout=5,
             )
         except (OSError, subprocess.SubprocessError):
             continue
-        if result.returncode == 0:
+        if result.returncode == 0 and (result.stdout or "").strip().lower() == "true":
             _DOCKER_DB_CONTAINER_SELECTED = candidate
             _DOCKER_DB_AVAILABLE = True
             return True
