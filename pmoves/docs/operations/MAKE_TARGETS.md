@@ -22,6 +22,20 @@ This file summarizes the most-used targets and maps them to what they do under d
 - `make recreate-v2-gpu`
   - Force-recreate v2‑GPU container without dependencies.
 
+## Model Management
+- `make up-model-management`
+  - Starts model-registry (`orchestration` profile), then gpu-orchestrator (`gpu` profile) if NVIDIA runtime is detected.
+  - GPU detection: `docker info --format '{{json .Runtimes}}' | grep nvidia`.
+  - Idempotent — safe to re-run without stopping first.
+- `make down-model-management`
+  - Stops model-registry and gpu-orchestrator; removes containers.
+  - Included in the `down-all` cascade (after `down-agents`, before `down-workers`).
+- `make health-dormant`
+  - Container-state-aware health check for dormant/newly-activated services.
+  - Checks: model-registry, gpu-orchestrator, pdf-ingest, botz-gateway, tokenism-simulator, transcribe-backend.
+  - Reports per-service: `healthy` / `running` (no healthcheck) / `starting` / `FAIL` / `SKIP` (not running).
+  - Uses `docker inspect` instead of HTTP probes, avoiding false negatives for Docker-network-only services.
+
 ## Model Profiles & Registry
 - `make model-profiles`
   - Lists local fallback profiles under `pmoves/models/*.yaml`.
@@ -248,6 +262,10 @@ This file summarizes the most-used targets and maps them to what they do under d
 - `make ci-queue-drain-nonpr-apply`
   - Executes queued-run cancellations immediately (still threshold-guarded).
   - Intended for deadlock recovery when self-hosted lanes are starved by stale runs.
+- `make bringup-layered`
+  - Deterministic local layered bring-up: minimal → model-management → workers → agents → monitoring → prod smoke.
+  - Model-management layer sits between minimal and workers, ensuring model-registry and (optionally) gpu-orchestrator are ready before dependent workers start.
+  - Respects `SUPABASE_RUNTIME` (default `cli`).
 - `make bringup-showtime`
   - Bring-up orchestration + retro diagnostics + Codex quick health in one sequence.
   - Starts a live readiness watcher by default (`SHOWTIME_WATCH=1`) so service transitions are visible while bring-up runs.
