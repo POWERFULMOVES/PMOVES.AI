@@ -11,6 +11,7 @@ A production-ready, self-hostable orchestration mesh for creative + agent worklo
 - Open PR queue (live): `1` open (`#782` Dependabot, low severity).
 - Dependency/code scanning backlog (live): Dependabot open `1` (`1 low`); Code Scanning open `34` (`31 error`, `3 warning`).
 - Active remediation focus: production-mode bring-up parity (no dev-target defaults), dynamic port/namespace hygiene, hardened runtime auth consistency across compose/submodules, and recurring self-hosted queue starvation for CodeQL/GHCR lanes.
+- Queue-governance hardening landed for self-hosted CI pressure: stale push/PR runs now auto-cancel per ref, heavy matrix jobs are throttled (`max-parallel`), and GHCR autobuild triggers are scoped to image-affecting paths.
 - March 4 hardening merge wave completed on `PMOVES.AI-Edition-Hardened`:
   - `#776` CodeQL JS/TS PR analysis alignment
   - `#777` `pmoves-ollama` egress fix for model pulls

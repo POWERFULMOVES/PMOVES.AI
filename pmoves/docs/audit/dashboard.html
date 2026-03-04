@@ -303,7 +303,7 @@ tr:hover td{background:var(--void-hover)}
 <!-- ═══ Footer ═══ -->
 <div class="footer">
   <span>PMOVES.AI Audit Dashboard v1.0 — Cataclysm Studios Inc.</span>
-  <span>Data sources: 6 files | serviceCatalog.ts (43 of 70 services) | 40 submodules | 43 CodeQL alerts</span>
+  <span>Data sources: 6 files | serviceCatalog.ts (43 of 70 services) | 40 submodules | 34 CodeQL alerts</span>
 </div>
 
 </div><!-- /dashboard -->
@@ -319,17 +319,17 @@ const PR_DATA = {
   count: 1,
   items: [
     {
-      number: 737,
-      title: "fix(security): auth-gate Agent Zero A2A discovery endpoint",
-      url: "https://github.com/POWERFULMOVES/PMOVES.AI/pull/737",
-      head: "codex/agent-zero-discovery-auth",
+      number: 782,
+      title: "chore(deps): bump fast-xml-parser 5.3.6 → 5.4.1 in a2ui-renderer",
+      url: "https://github.com/POWERFULMOVES/PMOVES.AI/pull/782",
+      head: "dependabot/npm_and_yarn/pmoves/services/a2ui-renderer/npm_and_yarn-group",
       base: "main",
       mergeable: "MERGEABLE",
       merge_state_status: "BLOCKED",
-      review_decision: "REVIEW_REQUIRED",
+      review_decision: null,
       is_draft: false,
-      checks: { passed: 3, failed: 0, pending: 4 },
-      blockers: ["merge_state=BLOCKED", "pending_checks=4"]
+      checks: { passed: 2, failed: 0, pending: 3 },
+      blockers: ["merge_state=BLOCKED", "pending_checks=3"]
     }
   ]
 };
@@ -544,7 +544,7 @@ const kpis = [
   {label:"CHIT Full",value:CHIT_DATA.full.length,sub:`${CHIT_DATA.partial.length} partial, ${CHIT_DATA.none.length} none`,cls:"purple"},
   {label:"Release Gates",value:"2/4",sub:"2 PASS, 2 DEFERRED",cls:"cyan"},
   {label:"Active Blockers",value:BLOCKER_DATA.length,sub:`${BLOCKER_DATA.filter(b=>b.sev==='HIGH').length} high severity`,cls:"ember"},
-  {label:"Dependabot",value:7,sub:"5 high, 2 low",cls:"gold"},
+  {label:"Dependabot",value:1,sub:"1 open (fast-xml-parser)",cls:"gold"},
 ];
 $('#kpi-grid').innerHTML = kpis.map(k => `
   <div class="kpi ${k.cls}">
@@ -814,7 +814,7 @@ function applyLiveData(data) {
       cls: data.runtimeHealth.percentage >= 80 ? "forest" : data.runtimeHealth.percentage >= 50 ? "gold" : "rose"
     });
   } else {
-    liveKpis.push({label:"Dependabot",value:7,sub:"5 high, 2 low",cls:"gold"});
+    liveKpis.push({label:"Dependabot",value:1,sub:"1 open (fast-xml-parser)",cls:"gold"});
   }
 
   $('#kpi-grid').innerHTML = liveKpis.map(k => `

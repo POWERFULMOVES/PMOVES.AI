@@ -3,7 +3,7 @@
 > **Single source of truth** for PMOVES.AI production readiness.
 > Supersedes all individual audit documents accumulated Feb 7 -- Feb 18, 2026.
 
-**Last Updated:** 2026-03-04 (post-merge hardening wave + promotion sync)
+**Last Updated:** 2026-03-04 (post-merge hardening wave + promotion sync + CI queue policy pass)
 **Branch:** `PMOVES.AI-Edition-Hardened` (production release lane)
 **Commit:** `3bcc9541`
 **Consolidated From:** 27 audit documents
@@ -21,6 +21,17 @@
   - Published Agent Zero startup in agents-image mode is stable (`/healthz` 200) via compose shim.
   - Local Supabase vector instability is controlled with CLI exclude support (`SUPABASE_CLI_EXCLUDE=vector`) in `supa-start`.
 - CI queue remains the primary blocker class: self-hosted CodeQL/GHCR lanes still exhibit queue starvation; stale queued runs were drained during this audit pass.
+- CI queue policy controls are now applied in-repo:
+  - stale push/PR runs cancel per ref for `CodeQL Advanced`, `Docker Hardening Validation`, and `integrations-ghcr` (manual dispatch preserved; CodeQL schedule preserved)
+  - matrix fan-out throttled (`CodeQL=1`, hardening dockerfile matrix `=2`, GHCR matrix `=2`)
+  - GHCR push/PR triggers scoped to image-affecting paths to reduce docs-only queue noise
+
+### Workflow Queue Best-Practice References (Official GitHub Docs)
+
+- Concurrency groups + `cancel-in-progress`: https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency
+- Matrix throttling (`strategy.max-parallel`): https://docs.github.com/en/actions/using-jobs/using-a-matrix-for-your-jobs
+- Path filters (`paths` / `paths-ignore`) and skipped-workflow caveats: https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax
+- Self-hosted autoscaling/ephemeral runners (ARC): https://docs.github.com/en/actions/concepts/runners/actions-runner-controller
 
 ## Executive Summary
 
@@ -162,13 +173,13 @@ Evidence log: `pmoves/docs/evidence/audit-validation-2026-02-20-production-runti
 
 | ID | Blocker | Source Doc | Severity | Status | Next Action |
 |----|---------|-----------|----------|--------|-------------|
-| AB-9 | Self-hosted runner queue starvation on CodeQL/GHCR lanes | Release closeout 2026-02-24 | **HIGH** | OPEN | Keep queue drain policy active, preserve latest `main` + active PR runs, and validate at least one current `CodeQL Advanced` + GHCR matrix run reaches execution |
+| AB-9 | Self-hosted runner queue starvation on CodeQL/GHCR lanes | Release closeout 2026-02-24 | **HIGH** | MITIGATING | Keep queue drain policy active, verify new concurrency/path throttles reduce queue depth, and validate at least one current `CodeQL Advanced` + GHCR matrix run reaches execution |
 | AB-10 | `main` vs hardened commit-history divergence after squash promotion | Sync pass 2026-03-04 | **LOW** | TRACKED | Maintain content parity (`git diff` clean). Use explicit promotion + back-sync notes to avoid false-positive divergence alarms in ops reports |
 
 ### Blocker Detail
 
 **AB-9: Runner Queue Deadlock**
-Queue pressure remains the dominant operational risk. Even after stale-run drain, multiple `CodeQL Advanced` jobs remain queued on self-hosted lanes; hosted checks complete quickly.
+Queue pressure remains the dominant operational risk. Even after stale-run drain, multiple `CodeQL Advanced` jobs remained queued on self-hosted lanes. In-repo workflow controls now mitigate this (`cancel-in-progress` for stale push/PR refs, matrix throttling, GHCR path scoping), but lane behavior still needs live verification over multiple merge cycles.
 
 **AB-10: Commit-History Divergence Noise**
 `main` and `PMOVES.AI-Edition-Hardened` are currently content-parity clean (no file delta), but commit graphs diverge due squash promotion + back-sync merges. Treat this as an expected history artifact unless file-level diff appears.

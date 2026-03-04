@@ -39,7 +39,8 @@ on:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+  # Keep manual/scheduled audits intact, but cancel stale push/PR runs on the same ref.
+  cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' && github.event_name != 'schedule' }}
 
 jobs:
   analyze:
@@ -66,6 +67,8 @@ jobs:
 
     strategy:
       fail-fast: false
+      # Avoid self-hosted queue spikes by serializing CodeQL language lanes.
+      max-parallel: 1
       matrix:
         include:
         - language: actions
