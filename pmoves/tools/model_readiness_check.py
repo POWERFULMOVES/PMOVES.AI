@@ -38,9 +38,16 @@ CRITICAL_OLLAMA_MODELS: tuple[str, ...] = ("qwen3", "nomic-embed-text")
 MIN_ACTIVE_MODELS = 35
 MIN_SERVICE_MODEL_MAPPINGS = 15
 DOCKER_PROXY_CONTAINER = os.environ.get("MODEL_READINESS_DOCKER_PROXY", "pmoves-archon-1")
-DOCKER_DB_CONTAINER = os.environ.get("MODEL_READINESS_DB_CONTAINER", "pmoves-supabase-db-1")
+DOCKER_DB_CONTAINER_ENV = os.environ.get("MODEL_READINESS_DB_CONTAINER", "").strip()
+DOCKER_DB_CONTAINER_CANDIDATES = []
+if DOCKER_DB_CONTAINER_ENV:
+    DOCKER_DB_CONTAINER_CANDIDATES.append(DOCKER_DB_CONTAINER_ENV)
+for _default_db in ("supabase_db_pmoves", "pmoves-supabase-db-1"):
+    if _default_db not in DOCKER_DB_CONTAINER_CANDIDATES:
+        DOCKER_DB_CONTAINER_CANDIDATES.append(_default_db)
 _DOCKER_PROXY_AVAILABLE: bool | None = None
 _DOCKER_DB_AVAILABLE: bool | None = None
+_DOCKER_DB_CONTAINER_SELECTED: str | None = None
 
 
 def _is_allowed_scheme(url: str) -> bool:
@@ -102,29 +109,45 @@ def _docker_proxy_available() -> bool:
 
 def _docker_db_available() -> bool:
     """Check once whether Supabase DB container exists and is runnable."""
-    global _DOCKER_DB_AVAILABLE
+    global _DOCKER_DB_AVAILABLE, _DOCKER_DB_CONTAINER_SELECTED
     if _DOCKER_DB_AVAILABLE is not None:
         return _DOCKER_DB_AVAILABLE
-    try:
-        result = subprocess.run(
-            ["docker", "inspect", DOCKER_DB_CONTAINER],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            check=False,
-            timeout=5,
-        )
-        _DOCKER_DB_AVAILABLE = result.returncode == 0
-    except (OSError, subprocess.SubprocessError):
-        _DOCKER_DB_AVAILABLE = False
+
+    for candidate in DOCKER_DB_CONTAINER_CANDIDATES:
+        try:
+            result = subprocess.run(
+                ["docker", "inspect", candidate],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                check=False,
+                timeout=5,
+            )
+        except (OSError, subprocess.SubprocessError):
+            continue
+        if result.returncode == 0:
+            _DOCKER_DB_CONTAINER_SELECTED = candidate
+            _DOCKER_DB_AVAILABLE = True
+            return True
+
+    _DOCKER_DB_AVAILABLE = False
     return _DOCKER_DB_AVAILABLE
+
+
+def _docker_db_container_name() -> str:
+    if _DOCKER_DB_CONTAINER_SELECTED:
+        return _DOCKER_DB_CONTAINER_SELECTED
+    if DOCKER_DB_CONTAINER_CANDIDATES:
+        return DOCKER_DB_CONTAINER_CANDIDATES[0]
+    return "unknown"
 
 
 def _db_query_rows(sql: str) -> list[str] | None:
     """Run SQL in Supabase DB container and return non-empty output rows."""
     if not _docker_db_available():
         return None
+    container = _docker_db_container_name()
     cmd = [
-        "docker", "exec", DOCKER_DB_CONTAINER,
+        "docker", "exec", container,
         "psql", "-U", "postgres", "-d", "postgres", "-At",
         "-c", sql,
     ]
@@ -272,7 +295,7 @@ class ReadinessChecker:
             if rows is None:
                 self._check("Supabase reachable", False, f"cannot reach {self.supabase_url}")
                 return
-            self._check("Supabase reachable", True, f"db fallback via {DOCKER_DB_CONTAINER}")
+            self._check("Supabase reachable", True, f"db fallback via {_docker_db_container_name()}")
             names = {row.split("|", 1)[0].strip() for row in rows}
             self._check("Providers populated", len(rows) >= 8,
                         f"{len(rows)} active providers (need >=8: ollama, anthropic, openai, etc.)")
