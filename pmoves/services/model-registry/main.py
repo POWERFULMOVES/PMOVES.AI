@@ -312,7 +312,7 @@ class RegistryNatsClient:
             try:
                 await self._nc.drain()
             except Exception as e:
-                logger.debug(f"Error draining NATS connection: {e}")
+                logger.warning(f"Error draining NATS connection: {e}")
         self._connected = False
         logger.info("Model Registry disconnected from NATS")
 
@@ -321,6 +321,10 @@ class RegistryNatsClient:
     ) -> None:
         """Publish a catalog change event to NATS."""
         if not self._nc or not self._connected:
+            logger.warning(
+                f"NATS disconnected — catalog change notification dropped: "
+                f"{action} {resource_type}/{resource_id}"
+            )
             return
         try:
             payload = json.dumps({
@@ -357,8 +361,10 @@ class RegistryNatsClient:
             )
             await self.supabase.upsert_deployment(deployment)
             logger.info(f"Deployment synced: {model_key} -> loaded ({vram_mb}MB)")
+        except (json.JSONDecodeError, UnicodeDecodeError) as e:
+            logger.error(f"Malformed NATS message on {self.SUB_MODEL_LOADED}: {e}")
         except Exception as e:
-            logger.error(f"Error handling model loaded event: {e}")
+            logger.error(f"Error handling model loaded event: {e}", exc_info=True)
 
     async def _on_model_unloaded(self, msg) -> None:
         """Handle mesh.gpu.model.unloaded.v1 — update deployment to unloaded."""
@@ -381,8 +387,10 @@ class RegistryNatsClient:
             )
             await self.supabase.upsert_deployment(deployment)
             logger.info(f"Deployment synced: {model_key} -> unloaded")
+        except (json.JSONDecodeError, UnicodeDecodeError) as e:
+            logger.error(f"Malformed NATS message on {self.SUB_MODEL_UNLOADED}: {e}")
         except Exception as e:
-            logger.error(f"Error handling model unloaded event: {e}")
+            logger.error(f"Error handling model unloaded event: {e}", exc_info=True)
 
 
 # Global NATS client

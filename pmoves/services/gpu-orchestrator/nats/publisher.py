@@ -91,6 +91,7 @@ class GpuNatsPublisher:
     async def subscribe_commands(self) -> None:
         """Subscribe to mesh.gpu.command.v1 for inbound model commands."""
         if not self._nc or not self._connected:
+            logger.warning("Cannot subscribe to commands — NATS not connected")
             return
         await self._nc.subscribe(GpuSubjects.COMMAND, cb=self._on_command)
         logger.info(f"Subscribed to {GpuSubjects.COMMAND}")
@@ -99,15 +100,28 @@ class GpuNatsPublisher:
         """Handle inbound model lifecycle commands via NATS."""
         try:
             data = json.loads(msg.data.decode())
-            action = data.get("action", "")
-            model_id = data.get("model_id", "")
-            provider = data.get("provider", "ollama")
-            priority = data.get("priority", 5)
-            session_id = data.get("session_id")
+        except (json.JSONDecodeError, UnicodeDecodeError) as e:
+            logger.error(f"Malformed command message: {e}")
+            return
 
+        action = data.get("action", "")
+        model_id = data.get("model_id", "")
+        provider = data.get("provider", "ollama")
+        priority = data.get("priority", 5)
+        session_id = data.get("session_id")
+        model_key = f"{provider}/{model_id}"
+
+        if not action:
+            await self._publish_command_result(False, model_key, "Missing required field: action")
+            return
+        if action in ("load", "unload") and not model_id:
+            await self._publish_command_result(False, model_key, "Missing required field: model_id")
+            return
+
+        try:
             if not self._lifecycle_manager:
                 await self._publish_command_result(
-                    False, f"{provider}/{model_id}", "Lifecycle manager not available"
+                    False, model_key, "Lifecycle manager not available"
                 )
                 return
 
@@ -119,7 +133,7 @@ class GpuNatsPublisher:
                     session_id=session_id,
                 )
                 await self._publish_command_result(
-                    True, f"{provider}/{model_id}",
+                    True, model_key,
                     None,
                     {"request_id": request_id, "already_loaded": already_loaded},
                 )
@@ -128,7 +142,7 @@ class GpuNatsPublisher:
                     model_id=model_id, provider=provider
                 )
                 await self._publish_command_result(
-                    success, f"{provider}/{model_id}",
+                    success, model_key,
                     None if success else "Unload failed or model not found",
                 )
             elif action == "optimize":
@@ -138,12 +152,15 @@ class GpuNatsPublisher:
                 )
             else:
                 await self._publish_command_result(
-                    False, f"{provider}/{model_id}", "Unknown action"
+                    False, model_key, "Unknown action"
                 )
 
         except Exception as e:
-            logger.error(f"Error handling command: {e}")
-            await self._publish_command_result(False, "", "Internal command processing error")
+            logger.error(f"Error handling command action={action} model={model_key}: {e}", exc_info=True)
+            try:
+                await self._publish_command_result(False, model_key, "Internal command processing error")
+            except Exception as pub_err:
+                logger.error(f"Double fault — could not publish error result: {pub_err}")
 
     async def _publish_command_result(
         self, success: bool, model_key: str, error: Optional[str] = None,
