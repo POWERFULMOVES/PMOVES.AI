@@ -25,7 +25,7 @@ This file summarizes the most-used targets and maps them to what they do under d
 ## Model Management
 - `make up-model-management`
   - Starts model-registry (`orchestration` profile), then gpu-orchestrator (`gpu` profile) if NVIDIA runtime is detected.
-  - GPU detection: `docker info --format '{{json .Runtimes}}' | grep nvidia`.
+  - GPU detection: `docker info --format '{{json .Runtimes}}' | grep -qi nvidia`.
   - Idempotent — safe to re-run without stopping first.
 - `make down-model-management`
   - Stops model-registry and gpu-orchestrator; removes containers.
