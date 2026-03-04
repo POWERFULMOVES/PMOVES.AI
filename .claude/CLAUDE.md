@@ -264,6 +264,13 @@ make -C pmoves auth-alignment     # Cross-tier credential consistency check
 - `ingest.summary.ready.v1` - Summary generated
 - `ingest.chapters.ready.v1` - Chapter markers created
 
+**GPU Mesh & Model Lifecycle:**
+- `mesh.gpu.status.v1` - Periodic GPU status (every 5s from gpu-orchestrator)
+- `mesh.gpu.model.loaded.v1` / `mesh.gpu.model.unloaded.v1` - Model load/unload events → model-registry syncs deployments
+- `mesh.gpu.command.v1` - Command model load/unload/optimize via NATS
+- `mesh.gpu.command.result.v1` - Command execution result
+- `model.registry.updated.v1` - Catalog mutation notifications
+
 **Agent Observability (for Claude Code CLI hooks):**
 - `claude.code.tool.executed.v1` - Claude CLI tool execution events
 - `agent.graphiti.signed.v1` - Agent trail attribution events (emitted by BoTZ gateway; extend to Agent Zero + Archon)
