@@ -33,7 +33,7 @@ This file summarizes the most-used targets and maps them to what they do under d
 - `make health-dormant`
   - Container-state-aware health check for dormant/newly-activated services.
   - Checks: model-registry, gpu-orchestrator, pdf-ingest, botz-gateway, tokenism-simulator, transcribe-backend.
-  - Reports per-service: `healthy` / `running` (no healthcheck) / `starting` / `FAIL` / `SKIP` (not running).
+  - Reports per-service: `OK` (state is `healthy` or `running`), `STARTING`, `FAIL`, or `SKIP` (not running).
   - Uses `docker inspect` instead of HTTP probes, avoiding false negatives for Docker-network-only services.
 
 ## Model Profiles & Registry
