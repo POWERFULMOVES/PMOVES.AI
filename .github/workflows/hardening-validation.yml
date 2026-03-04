@@ -17,7 +17,8 @@ on:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+  # Keep manual reruns intact, but cancel stale push/PR runs on the same ref.
+  cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}
 
 permissions:
   contents: read
@@ -90,6 +91,8 @@ jobs:
     runs-on: [self-hosted, Linux, X64]
     strategy:
       fail-fast: false
+      # Limit fan-out to reduce self-hosted queue contention.
+      max-parallel: 2
       matrix:
         dockerfile:
           - pmoves/services/archon/Dockerfile
@@ -307,4 +310,3 @@ jobs:
           name: validation-summary
           path: summary.md
           retention-days: 90
-

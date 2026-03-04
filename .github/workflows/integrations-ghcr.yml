@@ -32,9 +32,14 @@ on:
         type: string
   push:
     branches: [main, PMOVES.AI-Edition-Hardened]
-  pull_request:
-    branches: [main, PMOVES.AI-Edition-Hardened]
     paths:
+      - 'pmoves/services/agent-zero/**'
+      - 'pmoves/services/archon/**'
+      - 'pmoves/services/pmoves-yt/**'
+      - 'pmoves/services/deepresearch/**'
+      - 'pmoves/services/supaserch/**'
+      - 'pmoves/images/firefly-iii/**'
+      - 'pmoves/images/jellyfin/**'
       - 'PMOVES-Open-Notebook'
       - 'PMOVES-Agent-Zero'
       - 'PMOVES-Archon'
@@ -42,12 +47,34 @@ on:
       - 'PMOVES-Jellyfin'
       - 'PMOVES-Supaserch'
       - '.github/workflows/integrations-ghcr.yml'
+      - '.github/workflows/integrations-ghcr.matrix.json'
+      - '.github/trivy/**'
+  pull_request:
+    branches: [main, PMOVES.AI-Edition-Hardened]
+    paths:
+      - 'pmoves/services/agent-zero/**'
+      - 'pmoves/services/archon/**'
+      - 'pmoves/services/pmoves-yt/**'
+      - 'pmoves/services/deepresearch/**'
+      - 'pmoves/services/supaserch/**'
+      - 'pmoves/images/firefly-iii/**'
+      - 'pmoves/images/jellyfin/**'
+      - 'PMOVES-Open-Notebook'
+      - 'PMOVES-Agent-Zero'
+      - 'PMOVES-Archon'
+      - 'PMOVES.YT'
+      - 'PMOVES-Jellyfin'
+      - 'PMOVES-Supaserch'
+      - '.github/workflows/integrations-ghcr.yml'
+      - '.github/workflows/integrations-ghcr.matrix.json'
+      - '.github/trivy/**'
   # schedule:
   #   - cron: '17 7 * * *'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+  # Keep manual reruns intact, but cancel stale push/PR runs on the same ref.
+  cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}
 
 env:
   REGISTRY: ghcr.io
@@ -112,6 +139,8 @@ jobs:
       id-token: write
     strategy:
       fail-fast: false
+      # Throttle multi-arch matrix fan-out to protect shared self-hosted capacity.
+      max-parallel: 2
       matrix:
         name: ${{ fromJSON(needs.resolve-matrix.outputs.names) }}
 
