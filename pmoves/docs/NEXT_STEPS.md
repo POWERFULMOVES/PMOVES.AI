@@ -24,6 +24,10 @@ _Last updated: 2026-03-04_
 - CI queue status:
   - self-hosted CodeQL/GHCR queue starvation remains active
   - stale queued runs from merged fix branches were drained during this pass to reduce lane pressure
+  - workflow controls were tightened using GitHub Actions best-practice levers:
+    - stale push/PR runs now auto-cancel per ref in `codeql.yml`, `hardening-validation.yml`, and `integrations-ghcr.yml` (manual dispatch remains non-canceling)
+    - matrix fan-out now throttled (`CodeQL max-parallel=1`, hardening Dockerfile checks `=2`, GHCR build matrix `=2`)
+    - GHCR push/PR triggers are now scoped to integration image source paths + workflow/matrix/trivy files to avoid docs-only queue churn
 
 ### Latest changes (Mar 3, 2026)
 - Production audit lane re-run completed on `main` with fresh evidence (`pmoves/PR_EVIDENCE/2026-03-03_11-27-10`).
