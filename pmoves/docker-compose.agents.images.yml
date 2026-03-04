@@ -2,6 +2,11 @@ services:
   agent-zero:
     build: null
     image: ${AGENT_ZERO_IMAGE:-ghcr.io/powerfulmoves/pmoves-agent-zero:pmoves-latest}
+    environment:
+      - PYTHONPATH=${AGENT_ZERO_PYTHONPATH:-/app:/app/services}
+    volumes:
+      # Published image compatibility shim: provide pmoves.chit if image tag lags source packaging.
+      - ./chit:/app/pmoves/chit:ro
   archon:
     build: null
     image: ${ARCHON_IMAGE:-ghcr.io/powerfulmoves/pmoves-archon:pmoves-latest}
