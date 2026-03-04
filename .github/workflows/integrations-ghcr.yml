@@ -90,6 +90,8 @@ env:
 jobs:
   resolve-matrix:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     outputs:
       names: ${{ steps.resolve.outputs.names }}
     steps:
