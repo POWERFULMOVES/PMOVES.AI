@@ -32,6 +32,7 @@ class Settings(BaseSettings):
 
     # Model registry
     model_registry_path: str = "/app/config/gpu-models.yaml"
+    model_registry_url: str = "http://model-registry:8110"
 
     # GPU settings
     gpu_index: int = 0

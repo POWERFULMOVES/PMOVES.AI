@@ -130,3 +130,36 @@ images:
     context: pmoves
     dockerfile: services/flute-gateway/Dockerfile
     image: ghcr.io/powerfulmoves/pmoves-flute-gateway
+
+  - name: pmoves-pdf-ingest
+    context: pmoves
+    dockerfile: services/pdf-ingest/Dockerfile
+    image: ghcr.io/powerfulmoves/pmoves-pdf-ingest
+
+  - name: pmoves-botz-gateway
+    context: pmoves
+    dockerfile: services/botz-gateway/Dockerfile
+    image: ghcr.io/powerfulmoves/pmoves-botz-gateway
+
+  - name: pmoves-tokenism-simulator
+    context: pmoves
+    dockerfile: services/tokenism-simulator/Dockerfile
+    image: ghcr.io/powerfulmoves/pmoves-tokenism-simulator
+
+  - name: pmoves-model-registry
+    context: pmoves
+    dockerfile: services/model-registry/Dockerfile
+    image: ghcr.io/powerfulmoves/pmoves-model-registry
+
+  - name: pmoves-gpu-orchestrator
+    context: pmoves
+    dockerfile: services/gpu-orchestrator/Dockerfile
+    image: ghcr.io/powerfulmoves/pmoves-gpu-orchestrator
+
+  # Submodule-backed services
+  - name: pmoves-transcribe-backend
+    repo: PMOVES-transcribe-and-fetch
+    ref: heads/PMOVES.AI-Edition-Hardened
+    context: .
+    dockerfile: backend/Dockerfile
+    image: ghcr.io/powerfulmoves/pmoves-transcribe-backend

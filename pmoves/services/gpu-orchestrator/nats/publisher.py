@@ -1,10 +1,10 @@
-"""NATS publisher for GPU mesh events."""
+"""NATS publisher and command subscriber for GPU mesh events."""
 
 import asyncio
 import json
 import logging
-from datetime import datetime
-from typing import Callable, Dict, Optional
+from datetime import datetime, timezone
+from typing import Any, Callable, Dict, Optional
 
 try:
     from nats.aio.client import Client as NATS
@@ -28,16 +28,21 @@ class GpuSubjects:
     MODEL_UNLOADED = "mesh.gpu.model.unloaded.v1"
     VRAM_WARNING = "mesh.gpu.vram.warning.v1"
     COMMAND = "mesh.gpu.command.v1"
+    COMMAND_RESULT = "mesh.gpu.command.result.v1"
 
 
 class GpuNatsPublisher:
-    """Publishes GPU status and events to NATS.
+    """Publishes GPU status and events to NATS, subscribes to commands.
 
-    Events:
+    Published events:
     - mesh.gpu.status.v1: Periodic status updates (every 5s)
     - mesh.gpu.model.loaded.v1: Model loaded event
     - mesh.gpu.model.unloaded.v1: Model unloaded event
     - mesh.gpu.vram.warning.v1: VRAM threshold warning
+    - mesh.gpu.command.result.v1: Command execution result
+
+    Subscribed commands:
+    - mesh.gpu.command.v1: {action: load|unload|optimize, model_id, provider, priority}
     """
 
     def __init__(
@@ -55,6 +60,7 @@ class GpuNatsPublisher:
         self._status_task: Optional[asyncio.Task] = None
         self._get_status_callback: Optional[Callable] = None
         self._last_warning_sent: Optional[datetime] = None
+        self._lifecycle_manager: Optional[Any] = None
 
     async def connect(self) -> bool:
         """Connect to NATS server."""
@@ -77,6 +83,101 @@ class GpuNatsPublisher:
             logger.error(f"Failed to connect to NATS: {e}")
             self._connected = False
             return False
+
+    def set_lifecycle_manager(self, manager: Any) -> None:
+        """Set lifecycle manager for command routing."""
+        self._lifecycle_manager = manager
+
+    async def subscribe_commands(self) -> None:
+        """Subscribe to mesh.gpu.command.v1 for inbound model commands."""
+        if not self._nc or not self._connected:
+            logger.warning("Cannot subscribe to commands — NATS not connected")
+            return
+        await self._nc.subscribe(GpuSubjects.COMMAND, cb=self._on_command)
+        logger.info(f"Subscribed to {GpuSubjects.COMMAND}")
+
+    async def _on_command(self, msg) -> None:
+        """Handle inbound model lifecycle commands via NATS."""
+        try:
+            data = json.loads(msg.data.decode())
+        except (json.JSONDecodeError, UnicodeDecodeError) as e:
+            logger.error(f"Malformed command message: {e}")
+            return
+
+        action = data.get("action", "")
+        model_id = data.get("model_id", "")
+        provider = data.get("provider", "ollama")
+        priority = data.get("priority", 5)
+        session_id = data.get("session_id")
+        model_key = f"{provider}/{model_id}"
+
+        if not action:
+            await self._publish_command_result(False, model_key, "Missing required field: action")
+            return
+        if action in ("load", "unload") and not model_id:
+            await self._publish_command_result(False, model_key, "Missing required field: model_id")
+            return
+
+        try:
+            if not self._lifecycle_manager:
+                await self._publish_command_result(
+                    False, model_key, "Lifecycle manager not available"
+                )
+                return
+
+            if action == "load":
+                request_id, already_loaded = await self._lifecycle_manager.request_load(
+                    model_id=model_id,
+                    provider=provider,
+                    priority=priority,
+                    session_id=session_id,
+                )
+                await self._publish_command_result(
+                    True, model_key,
+                    None,
+                    {"request_id": request_id, "already_loaded": already_loaded},
+                )
+            elif action == "unload":
+                success = await self._lifecycle_manager.unload_model(
+                    model_id=model_id, provider=provider
+                )
+                await self._publish_command_result(
+                    success, model_key,
+                    None if success else "Unload failed or model not found",
+                )
+            elif action == "optimize":
+                result = await self._lifecycle_manager.optimize()
+                await self._publish_command_result(
+                    True, "optimize", None, result,
+                )
+            else:
+                await self._publish_command_result(
+                    False, model_key, "Unknown action"
+                )
+
+        except Exception as e:
+            logger.error(f"Error handling command action={action} model={model_key}: {e}", exc_info=True)
+            try:
+                await self._publish_command_result(False, model_key, "Internal command processing error")
+            except Exception as pub_err:
+                logger.error(f"Double fault — could not publish error result: {pub_err}")
+
+    async def _publish_command_result(
+        self, success: bool, model_key: str, error: Optional[str] = None,
+        extra: Optional[Dict] = None,
+    ) -> None:
+        """Publish command execution result."""
+        payload = {
+            "type": GpuSubjects.COMMAND_RESULT,
+            "success": success,
+            "model_key": model_key,
+            "ts": int(datetime.now(timezone.utc).timestamp()),
+        }
+        if error:
+            payload["error"] = error
+        if extra:
+            payload.update(extra)
+        await self._publish(GpuSubjects.COMMAND_RESULT, payload)
 
     async def disconnect(self) -> None:
         """Disconnect from NATS."""

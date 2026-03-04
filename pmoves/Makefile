@@ -887,14 +887,29 @@ up-minimal: ## Start minimal stack (Supabase + Data + Bus only)
 	@echo "✅ Minimal stack ready (Supabase + Data + Bus)"
 
 .PHONY: bringup-layered
-bringup-layered: ## Deterministic local layered bring-up (minimal -> workers -> agents -> monitoring -> prod smoke)
+bringup-layered: ## Deterministic local layered bring-up (minimal -> model-mgmt -> workers -> agents -> monitoring -> prod smoke)
 	@echo "🚀 Layered local bring-up (runtime=$${SUPABASE_RUNTIME:-cli})"
 	@SUPABASE_RUNTIME=$${SUPABASE_RUNTIME:-cli} $(MAKE) --no-print-directory up-minimal
+	@SUPABASE_RUNTIME=$${SUPABASE_RUNTIME:-cli} $(MAKE) --no-print-directory up-model-management
 	@SUPABASE_RUNTIME=$${SUPABASE_RUNTIME:-cli} $(MAKE) --no-print-directory up-workers
 	@SUPABASE_RUNTIME=$${SUPABASE_RUNTIME:-cli} $(MAKE) --no-print-directory up-agents
 	@SUPABASE_RUNTIME=$${SUPABASE_RUNTIME:-cli} $(MAKE) --no-print-directory up-monitoring
 	@SUPABASE_RUNTIME=$${SUPABASE_RUNTIME:-cli} $(MAKE) --no-print-directory smoke-prod
 	@echo "✅ Layered local bring-up passed"
+
+.PHONY: up-model-management
+up-model-management: ## Start model management layer (model-registry + gpu-orchestrator if GPU available)
+	@echo "🧠 Starting model management layer..."
+	@$(DC) --profile orchestration up -d model-registry
+	@$(DC) --profile gpu up -d gpu-orchestrator 2>/dev/null || echo "⚠️ GPU not available, skipping gpu-orchestrator"
+	@echo "✅ Model management ready"
+
+.PHONY: health-dormant
+health-dormant: ## Health-check dormant/newly-activated services
+	@for svc in model-registry:8110 gpu-orchestrator:8200 pdf-ingest:8092 botz-gateway:8054 tokenism-simulator:8103 transcribe-backend:8074; do \
+	  name=$${svc%%:*}; port=$${svc##*:}; \
+	  curl -sf http://localhost:$$port/healthz >/dev/null 2>&1 && echo "$$name: OK" || echo "$$name: FAIL/SKIP"; \
+	done
 
 # =============================================================================
 # GRACEFUL SHUTDOWN (Reverse Dependency Order)
@@ -1410,8 +1425,8 @@ endif
 endif
 
 # Canonical layer service sets for deterministic tiered bring-up/down.
-WORKER_SERVICES := hi-rag-gateway-v2 retrieval-eval render-webhook langextract extract-worker
-AGENT_SERVICES := agent-zero archon deepresearch supaserch mesh-agent publisher-discord
+WORKER_SERVICES := hi-rag-gateway-v2 retrieval-eval render-webhook langextract extract-worker pdf-ingest transcribe-backend
+AGENT_SERVICES := agent-zero archon deepresearch supaserch mesh-agent publisher-discord botz-gateway tokenism-simulator
 
 down:
 	@$(DC) down
