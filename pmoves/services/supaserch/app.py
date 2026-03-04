@@ -543,6 +543,6 @@ async def search(q: str = Query(..., min_length=1, description="Search query")) 
     except Exception as exc:  # noqa: BLE001
         REQUEST_ERRORS.labels(channel=channel, reason=exc.__class__.__name__).inc()
         logger.exception("HTTP search failed")
-        raise HTTPException(status_code=500, detail="pipeline_error") from exc
+        raise HTTPException(status_code=500, detail="pipeline_error") from None
     finally:
         REQUEST_LATENCY.labels(channel=channel).observe(time.perf_counter() - start)
