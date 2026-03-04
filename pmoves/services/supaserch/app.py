@@ -366,7 +366,8 @@ async def run_http_fallback(query: str, *, request_id: str) -> Dict[str, Any]:
             "status": "error",
             "url": target_url,
             "via": "http",
-            "error": str(exc),
+            # Do not expose exception text in API payloads.
+            "error": "invalid_fallback_url",
             "latency_ms": 0.0,
             "request_id": request_id,
         }
@@ -399,7 +400,8 @@ async def run_http_fallback(query: str, *, request_id: str) -> Dict[str, Any]:
             "status": "error",
             "url": target_url,
             "via": "http",
-            "error": str(exc),
+            # Keep client payload generic; details are in server logs.
+            "error": "http_fallback_failed",
             "latency_ms": round(latency * 1000, 2),
             "request_id": request_id,
         }
