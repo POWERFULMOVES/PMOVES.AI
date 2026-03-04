@@ -122,6 +122,7 @@ Comprehensive reference of all production services, ports, APIs, and integration
 
 ### Model Registry
 - **Ports:** 8110
+- **Port Note:** `8110` also appears in the BoTZ VPN MCP stack; these are profile-separated deployments (`orchestration` vs `vpn/remote`) and should not be exposed on the same host at the same time.
 - **Purpose:** Dynamic model configuration service — central catalog for LLM/embedding model providers, mappings, and active deployments
 - **Key APIs:**
   - `GET /healthz` - Service health
@@ -409,6 +410,7 @@ Comprehensive reference of all production services, ports, APIs, and integration
 
 ### BoTZ VPN MCP Server
 - **Port:** 8110
+- **Port Note:** Collides with Model Registry (`8110`) when both stacks are host-exposed; run this service only with `vpn/remote` profiles on hosts that are not exposing `model-registry`.
 - **Purpose:** MCP server exposing VPN and remote desktop tools
 - **Transport:** SSE
 - **MCP Tools:**
