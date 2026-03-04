@@ -1,7 +1,29 @@
 
 # PMOVES v5 • NEXT_STEPS
 Note: Consolidated plan index at pmoves/docs/PMOVES.AI PLANS/README_DOCS_INDEX.md.
-_Last updated: 2026-03-03_
+_Last updated: 2026-03-04_
+
+### Latest changes (Mar 4, 2026)
+- Divergence remediation + merge wave closeout completed:
+  - hardened fixes merged: `#776`, `#777`, `#778`, `#779`, `#780`
+  - promotion sync merged: `#781` (`PMOVES.AI-Edition-Hardened` -> `main`)
+- Current branch parity:
+  - file-content parity between `main` and hardened is clean (`git diff` empty)
+  - commit-history divergence remains expected due squash promotion + explicit back-sync merge commits
+- Runtime verification status:
+  - `make -C pmoves smoke` PASS
+  - `make -C pmoves model-readiness` PASS (`14/14`, `0 warnings`)
+  - unhealthy/restarting running containers: `0`
+- Supabase local reliability follow-up landed:
+  - `make -C pmoves supa-start` now supports `SUPABASE_CLI_EXCLUDE`
+  - `SUPABASE_CLI_EXCLUDE=vector` is now deterministic (stale `supabase_vector_*` container is removed when excluded)
+- Live backlog snapshot:
+  - Open PRs: `1` (`#782` Dependabot, low)
+  - Dependabot alerts: `1` (`1 low`)
+  - Code scanning alerts: `34` (`31 error`, `3 warning`)
+- CI queue status:
+  - self-hosted CodeQL/GHCR queue starvation remains active
+  - stale queued runs from merged fix branches were drained during this pass to reduce lane pressure
 
 ### Latest changes (Mar 3, 2026)
 - Production audit lane re-run completed on `main` with fresh evidence (`pmoves/PR_EVIDENCE/2026-03-03_11-27-10`).

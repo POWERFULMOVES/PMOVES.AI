@@ -3,41 +3,52 @@
 > **Single source of truth** for PMOVES.AI production readiness.
 > Supersedes all individual audit documents accumulated Feb 7 -- Feb 18, 2026.
 
-**Last Updated:** 2026-03-03 (production audit lane refresh + compose topology parity)
-**Branch:** `main`
-**Commit:** local audit lane (uncommitted)
+**Last Updated:** 2026-03-04 (post-merge hardening wave + promotion sync)
+**Branch:** `PMOVES.AI-Edition-Hardened` (production release lane)
+**Commit:** `3bcc9541`
 **Consolidated From:** 27 audit documents
-**Evidence:** `pmoves/PR_EVIDENCE/2026-03-03_11-27-10`
+**Evidence:** live runbook execution on 2026-03-04 (`make smoke`, `make model-readiness`, queue drain)
 
 ---
+
+## Latest Changes (Mar 4, 2026)
+
+- Hardened fix wave merged in sequence: `#776`, `#777`, `#778`, `#779`, `#780`.
+- Promotion sync merged: `#781` (`PMOVES.AI-Edition-Hardened` -> `main`).
+- Branch content parity is restored: `git diff origin/main..origin/PMOVES.AI-Edition-Hardened` returns no file deltas.
+- Runtime posture improved:
+  - `model-readiness` now passes warning-free (`14/14`, `0` warnings) after Ollama model pre-pull + DB fallback running-container fix.
+  - Published Agent Zero startup in agents-image mode is stable (`/healthz` 200) via compose shim.
+  - Local Supabase vector instability is controlled with CLI exclude support (`SUPABASE_CLI_EXCLUDE=vector`) in `supa-start`.
+- CI queue remains the primary blocker class: self-hosted CodeQL/GHCR lanes still exhibit queue starvation; stale queued runs were drained during this audit pass.
 
 ## Executive Summary
 
 | Metric | Value |
 |--------|-------|
-| Quantitative snapshot timestamp | 2026-03-03 (live GitHub + local verify-all snapshot) |
+| Quantitative snapshot timestamp | 2026-03-04 (live GitHub + local smoke/model-readiness snapshot) |
 | Total tracked items | 24 |
-| Resolved | 22 (+3 since last update) |
-| Active blockers | 3 (runtime verification defects, non-fatal) |
+| Resolved | 23 (+1 since last update) |
+| Active blockers | 1 (self-hosted queue starvation) |
 | Critical | 0 |
-| High | 2 |
-| Medium | 2 |
+| High | 1 |
+| Medium | 0 |
 | Low | 0 |
-| CodeQL alerts (open) | **34 open** (`31 error`, `3 warning`; live GitHub API on 2026-03-03) |
-| Dependabot alerts | **1 open** (`1 low`; live GitHub API on 2026-03-03) |
-| Open PRs | **0** |
-| CI queue | Hosted gates healthy; self-hosted queue starvation remains intermittent (queue guard merged) |
+| CodeQL alerts (open) | **34 open** (`31 error`, `3 warning`; live GitHub API on 2026-03-04) |
+| Dependabot alerts | **1 open** (`1 low`; live GitHub API on 2026-03-04) |
+| Open PRs | **1** (`#782` Dependabot low-severity bump) |
+| CI queue | Hosted gates healthy; self-hosted queue starvation persists on CodeQL/GHCR lanes |
 
-### Runtime Verification Snapshot (2026-03-03)
+### Runtime Verification Snapshot (2026-03-04)
 
 | Check | Result | Notes |
 |---|---|---|
-| `make -C pmoves verify-all` | PASS (non-fatal defects remain) | Evidence: `pmoves/PR_EVIDENCE/2026-03-03_11-27-10` |
-| Archon compose health | PASS | `/healthz` now returns 200 on in-network Supabase (`http://supabase-postgrest:3000`) |
-| `make -C pmoves archon-rest-policy-smoke` | PASS | Compose-aware probe now runs in-network via `pmoves-archon-1` |
-| Prometheus targets wait | PASS | `wait_prom_targets` now succeeds without `jq` dependency |
-| `yt-docs-sync` | PASS | `/yt/docs/sync` now returns 200 in compose runtime |
-| `model-readiness` | PASS with warnings | Supabase/provider/model/persona checks pass; only Ollama pre-pull warnings remain (`qwen3`, `nomic-embed-text`) |
+| `make -C pmoves smoke` | PASS | Core production smoke completed with Agent Zero/geometry lanes green |
+| `make -C pmoves model-readiness` | PASS | `14/14` passed; `0` failed; `0` warnings |
+| Agent Zero published image health | PASS | `/healthz` returns `200` after compose PYTHONPATH + `pmoves.chit` shim |
+| Strict GPU smoke | PASS | `make -C pmoves smoke-gpu` with strict mode enabled in PowerShell |
+| Container health sitrep | PASS | `0` running unhealthy/restarting containers |
+| Supabase CLI vector exclusion | PASS | `SUPABASE_CLI_EXCLUDE=vector` now supported in `supa-start` |
 
 ### Local Atomic Lanes (2026-03-02)
 
@@ -151,21 +162,16 @@ Evidence log: `pmoves/docs/evidence/audit-validation-2026-02-20-production-runti
 
 | ID | Blocker | Source Doc | Severity | Status | Next Action |
 |----|---------|-----------|----------|--------|-------------|
-| AB-4 | `env.tier-data` missing credentials | Env Tier Audit 2026-02-07 | **HIGH** | OPEN | Run `make -C pmoves secrets-funnel` with real credentials for Neo4j, PostgreSQL, admin user |
-| AB-5 | 18 service health checks not validated | Readiness Audit 2026-02-07 | **MEDIUM** | DEFERRED | Depends on AB-4; run `make -C pmoves verify-all` with full stack up |
-| AB-6 | DB migrations not validated | Readiness Audit 2026-02-07 | **MEDIUM** | DEFERRED | Depends on AB-4; validate Supabase, Neo4j, Qdrant migrations |
-| AB-9 | Self-hosted runner queue deadlock on hardening/GHCR lanes | Release closeout 2026-02-24 | **HIGH** | OPEN | Drain/cancel stale queued runs, verify runner pickup, rerun targeted hardening lane (`#700`/`main`) and one GHCR integration build (`supaserch`) |
+| AB-9 | Self-hosted runner queue starvation on CodeQL/GHCR lanes | Release closeout 2026-02-24 | **HIGH** | OPEN | Keep queue drain policy active, preserve latest `main` + active PR runs, and validate at least one current `CodeQL Advanced` + GHCR matrix run reaches execution |
+| AB-10 | `main` vs hardened commit-history divergence after squash promotion | Sync pass 2026-03-04 | **LOW** | TRACKED | Maintain content parity (`git diff` clean). Use explicit promotion + back-sync notes to avoid false-positive divergence alarms in ops reports |
 
 ### Blocker Detail
 
-**AB-4: Missing Data Credentials**
-`env.tier-data` has empty: `SERVICE_PASSWORD_ADMIN`, `SERVICE_PASSWORD_POSTGRES`, `SERVICE_USER_ADMIN`. Neo4j password is `changeme`. Secrets funnel must inject real credentials before any runtime validation can succeed.
-
-**AB-5 / AB-6: Runtime Validation**
-Health checks and DB migrations cannot be validated until the full stack is brought up with real credentials (depends on AB-4). Partial smoke runs show Qdrant, Meilisearch, Neo4j UI, and Presign passing, but `render-webhook` and several agent services failing.
-
 **AB-9: Runner Queue Deadlock**
-At release closeout, both self-hosted runners were online but long-lived queued lanes remained blocked (`Docker Hardening Validation`, `Build and publish integration images to GHCR`, `CodeQL Advanced`, `Python Tests`). Hosted checks completed, but self-hosted queue recovery still needs explicit operator action.
+Queue pressure remains the dominant operational risk. Even after stale-run drain, multiple `CodeQL Advanced` jobs remain queued on self-hosted lanes; hosted checks complete quickly.
+
+**AB-10: Commit-History Divergence Noise**
+`main` and `PMOVES.AI-Edition-Hardened` are currently content-parity clean (no file delta), but commit graphs diverge due squash promotion + back-sync merges. Treat this as an expected history artifact unless file-level diff appears.
 
 **AB-7: CodeRabbit Fixes — RESOLVED**
 All PR #606 findings addressed. See Blocker Resolutions below.
