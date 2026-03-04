@@ -279,7 +279,16 @@ supa-start: check-tools ensure-env-shared ## Start Supabase stack for selected r
 		$(MAKE) --no-print-directory supa-init; \
 		echo "🗄️ Starting Supabase CLI stack..."; \
 		docker network create "$(SUPABASE_NETWORK)" >/dev/null 2>&1 || true; \
-		supabase start --workdir "." --network-id "$(SUPABASE_NETWORK)"; \
+		extra_start_args=""; \
+		if [ -n "$${SUPABASE_CLI_EXCLUDE:-}" ]; then \
+			extra_start_args="$$extra_start_args -x $${SUPABASE_CLI_EXCLUDE}"; \
+			echo "↷ supabase start exclude: $${SUPABASE_CLI_EXCLUDE}"; \
+		fi; \
+		eval "supabase start --workdir \".\" --network-id \"$(SUPABASE_NETWORK)\" $$extra_start_args"; \
+		if echo ",$${SUPABASE_CLI_EXCLUDE:-}," | grep -q ",vector,"; then \
+			vector_container="supabase_vector_$$(basename "$$(pwd)")"; \
+			docker rm -f "$$vector_container" >/dev/null 2>&1 || true; \
+		fi; \
 	else \
 		echo "🗄️ Starting Supabase Kong/Compose stack (SUPABASE_RUNTIME=$(SUPABASE_RUNTIME))..."; \
 		$(DC) up -d supabase-db; \
