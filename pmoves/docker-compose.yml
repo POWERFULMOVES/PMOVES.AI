@@ -1935,6 +1935,7 @@ services:
     - ${OLLAMA_DNS_SECONDARY:-8.8.8.8}
     networks:
     - pmoves_api
+    - pmoves_external
   tensorzero-clickhouse:
     <<: *tier-llm-hardened
     image: clickhouse/clickhouse-server:24.12-alpine
