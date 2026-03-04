@@ -1598,8 +1598,8 @@ monitoring-smoke-prod: up-monitoring ## Production-profile monitoring smoke (req
 		MONITORING_SMOKE_REQUIRED_JOBS="$${MONITORING_SMOKE_REQUIRED_JOBS:-prometheus,loki,blackbox_http,supabase_health,supabase-realtime,hi-rag-gateway-v2,agent-zero,archon,presign}" \
 		MONITORING_SMOKE_REQUIRE_JOB_UP="$${MONITORING_SMOKE_REQUIRE_JOB_UP:-1}" \
 		MONITORING_SMOKE_MIN_HEALTHY_RATIO="$${MONITORING_SMOKE_MIN_HEALTHY_RATIO:-0.50}" \
-		MONITORING_SMOKE_EXPECT_SUPABASE_RUNTIME="$${MONITORING_SMOKE_EXPECT_SUPABASE_RUNTIME:-$${SUPABASE_RUNTIME:-compose,kong}}" \
-		MONITORING_SMOKE_REALTIME_DEV_POLICY="$${MONITORING_SMOKE_REALTIME_DEV_POLICY:-$$( [ "$${SUPABASE_RUNTIME:-compose}" = "cli" ] && echo warn || echo forbid )}" \
+		MONITORING_SMOKE_EXPECT_SUPABASE_RUNTIME="$${MONITORING_SMOKE_EXPECT_SUPABASE_RUNTIME:-$(SUPABASE_RUNTIME)}" \
+		MONITORING_SMOKE_REALTIME_DEV_POLICY="$${MONITORING_SMOKE_REALTIME_DEV_POLICY:-$$(case ",$${MONITORING_SMOKE_EXPECT_SUPABASE_RUNTIME:-$(SUPABASE_RUNTIME)}," in *,cli,*|*,mixed,*) echo warn;; *) echo forbid;; esac)}" \
 		$(PYTHON) tools/monitoring_smoke.py
 
 observability-audit: ## Generate observability mapping report (Prom jobs -> dashboards -> live target health)

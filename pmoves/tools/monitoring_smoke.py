@@ -17,6 +17,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Iterable, List, Sequence
 
 
@@ -123,6 +124,41 @@ def _runtime_matches(detected: str, expected: Sequence[str]) -> bool:
     return False
 
 
+def _strip_yaml_scalar(raw: str) -> str:
+    value = raw.strip()
+    if (value.startswith('"') and value.endswith('"')) or (value.startswith("'") and value.endswith("'")):
+        value = value[1:-1]
+    return value.strip()
+
+
+def _provisioned_datasource_names(repo_root: Path) -> set[str]:
+    datasource_file = repo_root / "monitoring" / "grafana" / "datasources" / "datasource.yml"
+    if not datasource_file.exists():
+        return set()
+    names: set[str] = set()
+    try:
+        for line in datasource_file.read_text(encoding="utf-8").splitlines():
+            match = re.match(r"^\s*-\s*name:\s*(.+?)\s*$", line)
+            if not match:
+                continue
+            name = _strip_yaml_scalar(match.group(1))
+            if name:
+                names.add(name.lower())
+    except Exception:
+        return set()
+    return names
+
+
+def _provisioned_dashboard_count(repo_root: Path) -> int:
+    dashboard_dir = repo_root / "monitoring" / "grafana" / "dashboards"
+    if not dashboard_dir.exists() or not dashboard_dir.is_dir():
+        return 0
+    try:
+        return sum(1 for item in dashboard_dir.glob("*.json") if item.is_file())
+    except Exception:
+        return 0
+
+
 @dataclass
 class FailureState:
     failures: List[str]
@@ -193,6 +229,7 @@ def main() -> int:
         time.sleep(2)
 
     state = FailureState(failures=[], warnings=[])
+    repo_root = Path(__file__).resolve().parents[1]
 
     try:
         targets_payload = _http_json(f"{prom}/api/v1/targets")
@@ -213,16 +250,24 @@ def main() -> int:
     try:
         ds_payload = _http_json(f"{grafana}/api/datasources", auth=(guser, gpass))
         datasource_names = {str(item.get("name", "")).lower() for item in ds_payload if isinstance(item, dict)}
-    except Exception:
+    except Exception as exc:
         datasource_names = set()
+        fallback_names = _provisioned_datasource_names(repo_root)
+        if fallback_names:
+            datasource_names = fallback_names
+            state.warn(f"Grafana datasource API unavailable; used provisioning fallback ({exc})")
     has_prom = "prometheus" in datasource_names
     has_loki = "loki" in datasource_names
 
     try:
         dash_payload = _http_json(f"{grafana}/api/search?type=dash-db", auth=(guser, gpass))
         dash_count = len(dash_payload) if isinstance(dash_payload, list) else 0
-    except Exception:
+    except Exception as exc:
         dash_count = 0
+        fallback_dash_count = _provisioned_dashboard_count(repo_root)
+        if fallback_dash_count > 0:
+            dash_count = fallback_dash_count
+            state.warn(f"Grafana dashboard API unavailable; used provisioning fallback ({exc})")
 
     print("Monitoring Smoke Report")
     print(f"- prom.ready: {prom_code}")
