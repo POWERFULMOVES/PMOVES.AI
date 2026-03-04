@@ -384,28 +384,27 @@ const SUBMODULE_DATA = {
 
 // CodeQL Triage (CODEQL_TRIAGE_2026-02-28.md — parsed)
 const CODEQL_DATA = {
-  total: 43,
-  severity: { critical: 4, high: 6, medium: 5, fp: 28 },
-  real_count: 15,
-  fp_count: 28,
+  total: 34,
+  severity: { critical: 0, high: 1, medium: 1 },  // Post-triage real findings
+  real_count: 2,
+  fp_count: 31,
+  accepted_risk: 1,
   alerts: [
-    {id:170,sev:"critical",rule:"js/path-injection",file:"a2ui-renderer/index.ts:151",verdict:"REAL",action:"Add format allowlist"},
-    {id:68,sev:"critical",rule:"py/stack-trace-exposure",file:"gateway/workflow.py:191",verdict:"REAL",action:"Replace str(exc) with generic msg"},
-    {id:"171-174",sev:"critical",rule:"js/missing-rate-limiting",file:"a2ui-renderer/index.ts",verdict:"REAL",action:"Add express-rate-limit"},
-    {id:60,sev:"high",rule:"py/stack-trace-exposure",file:"supaserch/app.py:539",verdict:"REAL",action:"Change from exc to from None"},
-    {id:163,sev:"high",rule:"py/stack-trace-exposure",file:"showtime-api/app.py:189",verdict:"LIKELY FP",action:"Defensive generator wrap"},
-    {id:168,sev:"high",rule:"py/clear-text-logging",file:"flute-gateway/main.py:363",verdict:"FALSE POSITIVE",action:"Audit log calls"},
-    {id:"82,150,151",sev:"high",rule:"py/stack-trace-exposure",file:"consciousness-service/main.py",verdict:"FALSE POSITIVE",action:"Add suppression comments"},
-    {id:176,sev:"medium",rule:"py/clear-text-logging",file:"chit_credential_demo.py:122",verdict:"FP (dead code)",action:"Remove unused assignment"},
-    {id:"166,167",sev:"medium",rule:"py/clear-text-storage",file:"supabase env scripts",verdict:"ACCEPTED RISK",action:"Add suppression comments"},
-    {id:169,sev:"medium",rule:"actions/missing-perms",file:"integrations-ghcr.yml:65",verdict:"REAL",action:"Add permissions block"},
-    {id:165,sev:"medium",rule:"js/tainted-format-string",file:"jellyfin-ai/server.js:524",verdict:"FALSE POSITIVE",action:"None"},
-    {id:"44,46,...",sev:"low/fp",rule:"py/path-injection",file:"pmoves-yt/yt.py (11 alerts)",verdict:"FALSE POSITIVE",action:"Suppression — _safe_video_id guards"},
-    {id:"156-161",sev:"low/fp",rule:"py/path-injection",file:"gateway/chit.py, viz.py (9 alerts)",verdict:"FALSE POSITIVE",action:"Suppression — multi-layer sanitization"},
-    {id:"179,180",sev:"low/fp",rule:"py/path-injection",file:"hf-mcp-server/main.py",verdict:"FALSE POSITIVE",action:"Suppression — _safe_model_path"},
-    {id:"190,191",sev:"low/fp",rule:"py/full-ssrf",file:"hi-rag-gateway v1+v2",verdict:"FALSE POSITIVE",action:"Suppression — full SSRF defense"},
-    {id:152,sev:"low/fp",rule:"js/xss-through-dom",file:"gateway/web/client.html:70",verdict:"FALSE POSITIVE",action:"Suppression — hex regex"},
-    {id:175,sev:"low/fp",rule:"js/resource-exhaustion",file:"ui/serviceHealth.ts:56",verdict:"FALSE POSITIVE",action:"Suppression — timeout clamped"},
+    // REAL (fixed in this handoff)
+    {id:169,sev:"medium",rule:"actions/missing-workflow-permissions",file:"integrations-ghcr.yml:resolve-matrix",verdict:"FIXED",action:"Added permissions: contents: read to resolve-matrix job"},
+    {id:60,sev:"high",rule:"py/stack-trace-exposure",file:"supaserch/app.py:546",verdict:"FIXED",action:"Changed exception chaining from exc to from None"},
+    // ACCEPTED RISK
+    {id:176,sev:"medium",rule:"py/clear-text-logging-sensitive-data",file:"chit_credential_demo.py:122",verdict:"ACCEPTED RISK",action:"Demo/dead-code path with masked output"},
+    // FALSE POSITIVES (defenses documented in dismissal notes)
+    {id:"44,46,47,48,49,50,51,52,53,54,55",sev:"high",rule:"py/path-injection",file:"pmoves-yt/yt.py (11 alerts)",verdict:"FALSE POSITIVE",action:"_safe_video_id allowlist + basename + fail-closed"},
+    {id:"156,157,158,159,160,161",sev:"high",rule:"py/path-injection",file:"gateway/viz.py (6 alerts)",verdict:"FALSE POSITIVE",action:"regex allowlist + basename + path containment"},
+    {id:"253,260,262",sev:"high",rule:"py/path-injection",file:"gateway/chit.py (3 alerts)",verdict:"FALSE POSITIVE",action:"filename allowlist + basename + containment"},
+    {id:"179,180",sev:"high",rule:"py/path-injection",file:"hf-mcp-server/main.py (2 alerts)",verdict:"FALSE POSITIVE",action:"safe model-path validation and traversal rejection"},
+    {id:"190,191",sev:"high",rule:"py/full-ssrf",file:"hi-rag-gateway v1+v2 (2 alerts)",verdict:"FALSE POSITIVE",action:"private-IP validation + DNS rebinding protections"},
+    {id:175,sev:"medium",rule:"js/resource-exhaustion",file:"ui/serviceHealth.ts:58",verdict:"FALSE POSITIVE",action:"timeout bounded with clamp"},
+    {id:168,sev:"high",rule:"py/clear-text-logging",file:"flute-gateway/main.py:363",verdict:"FALSE POSITIVE",action:"logging path uses redacted URL"},
+    {id:165,sev:"medium",rule:"js/tainted-format-string",file:"jellyfin-ai/server.js:524",verdict:"FALSE POSITIVE",action:"template literal context; no format expansion sink"},
+    {id:"82,150,151",sev:"high",rule:"py/stack-trace-exposure",file:"consciousness-service/main.py (3 alerts)",verdict:"FALSE POSITIVE",action:"generic client responses with server-side traceback only"},
   ]
 };
 
@@ -617,7 +616,7 @@ const sevBars = [
   {label:'Critical',count:CODEQL_DATA.severity.critical,color:'var(--rose)',max:CODEQL_DATA.total},
   {label:'High',count:CODEQL_DATA.severity.high,color:'var(--ember)',max:CODEQL_DATA.total},
   {label:'Medium',count:CODEQL_DATA.severity.medium,color:'var(--gold)',max:CODEQL_DATA.total},
-  {label:'FP / Low',count:CODEQL_DATA.severity.fp,color:'var(--ink-muted)',max:CODEQL_DATA.total},
+  {label:'FP / Low',count:CODEQL_DATA.fp_count || 0,color:'var(--ink-muted)',max:CODEQL_DATA.total},
 ];
 $('#severity-bars').innerHTML = sevBars.map(b => `
   <div class="bar-row">
