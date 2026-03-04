@@ -2071,8 +2071,7 @@ services:
     - pmoves_bus
     - pmoves_monitoring
     ports:
-    - 8100:8100
-    - 8200:8200
+    - ${GPU_ORCHESTRATOR_HOST_PORT:-8200}:8200
     depends_on:
       nats:
         condition: service_healthy
