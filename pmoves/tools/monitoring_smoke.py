@@ -250,7 +250,10 @@ def main() -> int:
     try:
         ds_payload = _http_json(f"{grafana}/api/datasources", auth=(guser, gpass))
         datasource_names = {str(item.get("name", "")).lower() for item in ds_payload if isinstance(item, dict)}
-    except Exception as exc:
+    except urllib.error.HTTPError as exc:
+        datasource_names = set()
+        state.fail(f"Grafana datasource API returned HTTP {exc.code}; verify Grafana auth/provisioning")
+    except urllib.error.URLError as exc:
         datasource_names = set()
         fallback_names = _provisioned_datasource_names(repo_root)
         if fallback_names:
