@@ -139,6 +139,8 @@ pmoves/jellyfin-ai/
 pmoves/pmoves/PR_EVIDENCE/
 pmoves/docs/logs/pr_monitor_*.json
 pmoves/docs/logs/pr_monitor_*.md
+pmoves/docs/logs/ci_queue_guard_latest.json
+pmoves/docs/logs/branch_divergence_*.txt
 
 # =============================================================================
 # DAO Documentation (managed separately)
