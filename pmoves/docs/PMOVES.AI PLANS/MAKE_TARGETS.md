@@ -19,6 +19,9 @@
 
 - `make ps`
   - Shortcut for `docker compose -p pmoves ps` to inspect service status.
+- `make compose ARGS="<docker compose args>"`
+  - Runs Docker Compose through the PMOVES Make wrapper, preserving the layered `--env-file` chain (`env.shared`, `env.tier-*`, runtime overlays).
+  - Use this instead of raw `docker compose ...` when starting partial stacks (for example agents-only) to avoid secret interpolation failures caused by missing shell-exported variables.
 
 ### New convenience targets
 - `make update` — pull repo + images, reconcile containers.
@@ -119,5 +122,6 @@ Set `EXTERNAL_NEO4J|MEILI|QDRANT|SUPABASE=true` in `.env.local` to skip local in
 ### Notes
 
 - `.env.local` overlays `.env` for services that declare `env_file: [.env, .env.local]`. Run one of the Supabase switch helpers above when Compose warns about a missing `.env.local`.
+- For manual compose operations, prefer `make compose ARGS="..."` over raw `docker compose ...`; the Make wrapper injects all required env files and keeps interpolation deterministic.
 - pmoves.yt ships without NATS by default. Run `make up-nats` to enable event publishing or to unlock the agents profile.
 - See `pmoves/README.md` for full startup decision trees and profile walkthroughs.
