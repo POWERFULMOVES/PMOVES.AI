@@ -264,7 +264,7 @@ This file summarizes the most-used targets and maps them to what they do under d
   - Intended for deadlock recovery when self-hosted lanes are starved by stale runs.
 - `make bringup-layered`
   - Deterministic local layered bring-up: minimal → model-management → workers → agents → monitoring → prod smoke.
-  - Model-management layer sits between minimal and workers, ensuring model-registry and (optionally) gpu-orchestrator are ready before dependent workers start.
+  - Model-management layer sits between minimal and workers, starting model-registry and (optionally) gpu-orchestrator before dependent workers (no explicit readiness gate).
   - Respects `SUPABASE_RUNTIME` (default `cli`).
 - `make bringup-showtime`
   - Bring-up orchestration + retro diagnostics + Codex quick health in one sequence.
