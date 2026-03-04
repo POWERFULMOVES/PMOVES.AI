@@ -3,7 +3,7 @@
 import asyncio
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Callable, Dict, Optional
 
 try:
@@ -138,12 +138,12 @@ class GpuNatsPublisher:
                 )
             else:
                 await self._publish_command_result(
-                    False, model_id, f"Unknown action: {action}"
+                    False, f"{provider}/{model_id}", "Unknown action"
                 )
 
         except Exception as e:
             logger.error(f"Error handling command: {e}")
-            await self._publish_command_result(False, "", str(e))
+            await self._publish_command_result(False, "", "Internal command processing error")
 
     async def _publish_command_result(
         self, success: bool, model_key: str, error: Optional[str] = None,
@@ -154,7 +154,7 @@ class GpuNatsPublisher:
             "type": GpuSubjects.COMMAND_RESULT,
             "success": success,
             "model_key": model_key,
-            "ts": int(datetime.now().timestamp()),
+            "ts": int(datetime.now(timezone.utc).timestamp()),
         }
         if error:
             payload["error"] = error
