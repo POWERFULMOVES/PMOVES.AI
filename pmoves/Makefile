@@ -901,14 +901,29 @@ bringup-layered: ## Deterministic local layered bring-up (minimal -> model-mgmt 
 up-model-management: ## Start model management layer (model-registry + gpu-orchestrator if GPU available)
 	@echo "🧠 Starting model management layer..."
 	@$(DC) --profile orchestration up -d model-registry
-	@$(DC) --profile gpu up -d gpu-orchestrator 2>/dev/null || echo "⚠️ GPU not available, skipping gpu-orchestrator"
+	@if docker info --format '{{json .Runtimes}}' | grep -qi nvidia; then \
+		$(DC) --profile gpu up -d gpu-orchestrator; \
+	else \
+		echo "⚠️ NVIDIA runtime not detected, skipping gpu-orchestrator"; \
+	fi
 	@echo "✅ Model management ready"
 
 .PHONY: health-dormant
 health-dormant: ## Health-check dormant/newly-activated services
-	@for svc in model-registry:8110 gpu-orchestrator:8200 pdf-ingest:8092 botz-gateway:8054 tokenism-simulator:8103 transcribe-backend:8074; do \
-	  name=$${svc%%:*}; port=$${svc##*:}; \
-	  curl -sf http://localhost:$$port/healthz >/dev/null 2>&1 && echo "$$name: OK" || echo "$$name: FAIL/SKIP"; \
+	@for name in model-registry gpu-orchestrator pdf-ingest botz-gateway tokenism-simulator transcribe-backend; do \
+	  cid=$$($(DC) ps -q $$name 2>/dev/null); \
+	  if [ -z "$$cid" ]; then \
+	    echo "$$name: SKIP (not running)"; \
+	    continue; \
+	  fi; \
+	  state=$$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' $$cid 2>/dev/null); \
+	  if [ "$$state" = "healthy" ] || [ "$$state" = "running" ]; then \
+	    echo "$$name: OK"; \
+	  elif [ "$$state" = "starting" ]; then \
+	    echo "$$name: STARTING"; \
+	  else \
+	    echo "$$name: FAIL ($$state)"; \
+	  fi; \
 	done
 
 # =============================================================================
@@ -921,6 +936,7 @@ down-all: ## Stop ALL services in graceful reverse order
 	@-$(MAKE) --no-print-directory down-integrations 2>/dev/null
 	@-$(MAKE) --no-print-directory down-tensorzero
 	@-$(MAKE) --no-print-directory down-agents
+	@-$(MAKE) --no-print-directory down-model-management
 	@-$(MAKE) --no-print-directory down-workers
 	@-$(MAKE) --no-print-directory down-bus
 	@-$(MAKE) --no-print-directory down-data
@@ -949,6 +965,12 @@ down-workers: ## Stop worker services
 	@echo "⚙️ Stopping workers..."
 	@$(DC) stop $(WORKER_SERVICES) >/dev/null 2>&1 || true
 	@$(DC) rm -f $(WORKER_SERVICES) >/dev/null 2>&1 || true
+
+.PHONY: down-model-management
+down-model-management: ## Stop model-registry and gpu-orchestrator layer
+	@echo "🧠 Stopping model management layer..."
+	@$(DC) stop model-registry gpu-orchestrator >/dev/null 2>&1 || true
+	@$(DC) rm -f model-registry gpu-orchestrator >/dev/null 2>&1 || true
 
 .PHONY: down-bus
 down-bus: ## Stop message bus
