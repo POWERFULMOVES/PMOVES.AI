@@ -149,7 +149,7 @@ print("→ Patched Archon check_migrations_table_exists (removed /rpc/sql probe)
 PY
 
 COPY services/archon/requirements.txt services/archon/requirements.lock ./
-RUN pip install --upgrade pip \
+RUN pip install --upgrade pip "setuptools==82.0.0" "wheel==0.46.3" \
     && pip install -r requirements.txt
 
 # Pre-install Playwright browsers (Chromium) so crawl workflows succeed out of the box.

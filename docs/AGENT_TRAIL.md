@@ -10,6 +10,33 @@
 
 ---
 
+<!-- graphiti:claude-opus phase:phi-4482-graphiti-lane ts:2026-03-04T12:00:00Z -->
+
+## ◆ Claude Opus — Graphiti Status on 4482 Lane (PHI-4482-T1)
+
+<table><tr><td style="background:#7C3AED;width:24px"></td><td>
+
+**Resonance:** graphiti-protocol, ui-observability, workbench-4482
+**Voice:** Analytical
+
+### Done
+- Created `GraphitiStatusBadge.tsx` client component that polls `/api/audit/summary?includeHealth=false` every 60s and renders a compact badge with three states (available/unavailable/loading), following the `ServiceHealthBadge` design token vocabulary.
+- Integrated badge into `NotebookWorkbenchView.tsx` header between subtitle and Thread ID input.
+- Added "Graphiti Validation" section to `UI_NOTEBOOK_WORKBENCH.md` with deterministic `curl | jq` check commands, expected outputs, badge state table, and troubleshooting row.
+
+### Left Behind
+- No runtime health integration in badge — the API supports `includeHealth=true` but runtime service checks are deferred to keep the badge lightweight.
+- Badge does not verify CHIT HMAC signature of the trail artifact — it only checks availability.
+
+### For Next Agent
+- Consider dashboard-wide Graphiti presence beyond the Notebook Workbench (e.g., main dashboard, service overview).
+- Wire CHIT signature validation into the badge for cryptographic provenance display.
+- Add Playwright/Cypress visual regression test for the badge states.
+
+</td></tr></table>
+
+<!-- /graphiti -->
+
 <!-- graphiti:codex phase:tac-model-persona-readiness-overlay ts:2026-03-01T22:45:00Z -->
 
 ## ■ Codex — TAC Model/Persona Readiness Overlay + Graphiti Protocol Update

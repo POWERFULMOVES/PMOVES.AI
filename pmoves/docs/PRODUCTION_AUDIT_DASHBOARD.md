@@ -3,11 +3,11 @@
 > **Single source of truth** for PMOVES.AI production readiness.
 > Supersedes all individual audit documents accumulated Feb 7 -- Feb 18, 2026.
 
-**Last Updated:** 2026-03-04 (post-merge hardening wave + promotion sync + CI queue policy pass)
+**Last Updated:** 2026-03-04 (post-validation admin merge closeout)
 **Branch:** `PMOVES.AI-Edition-Hardened` (production release lane)
-**Commit:** `3bcc9541`
+**Commit:** `96adc266`
 **Consolidated From:** 27 audit documents
-**Evidence:** live runbook execution on 2026-03-04 (`make smoke`, `make model-readiness`, queue drain)
+**Evidence:** live runbook execution on 2026-03-04 (`make smoke`, `make model-readiness`, `GPU_SMOKE_STRICT=true make smoke-gpu`)
 
 ---
 
@@ -15,9 +15,16 @@
 
 - Hardened fix wave merged in sequence: `#776`, `#777`, `#778`, `#779`, `#780`.
 - Promotion sync merged: `#781` (`PMOVES.AI-Edition-Hardened` -> `main`).
+- Admin merge closeout completed:
+  - `PMOVES.AI`: `#782`, `#792`, `#793`, `#794`, `#795` merged
+  - `PMOVES-Agent-Zero`: `#9` merged (hardened backport for submodule pin policy)
+  - `PMOVES-BoTZ`: `#75` merged
+  - `PMOVES-DoX`: `#117`, `#118`, `#119` merged
 - Branch content parity is restored: `git diff origin/main..origin/PMOVES.AI-Edition-Hardened` returns no file deltas.
 - Runtime posture improved:
   - `model-readiness` now passes warning-free (`14/14`, `0` warnings) after Ollama model pre-pull + DB fallback running-container fix.
+  - strict GPU smoke passes (`GPU_SMOKE_STRICT=true make -C pmoves smoke-gpu`); v1 GPU lane remains optional and can warn when absent.
+  - local operator evidence logs captured for smoke/model-readiness/strict-GPU runs during this audit pass.
   - Published Agent Zero startup in agents-image mode is stable (`/healthz` 200) via compose shim.
   - Local Supabase vector instability is controlled with CLI exclude support (`SUPABASE_CLI_EXCLUDE=vector`) in `supa-start`.
 - CI queue remains the primary blocker class: self-hosted CodeQL/GHCR lanes still exhibit queue starvation; stale queued runs were drained during this audit pass.
@@ -45,9 +52,9 @@
 | High | 1 |
 | Medium | 0 |
 | Low | 0 |
-| CodeQL alerts (open) | **34 open** (`31 error`, `3 warning`; live GitHub API on 2026-03-04) |
-| Dependabot alerts | **1 open** (`1 low`; live GitHub API on 2026-03-04) |
-| Open PRs | **1** (`#782` Dependabot low-severity bump) |
+| CodeQL alerts (open) | **0 open** (live GitHub API on 2026-03-04) |
+| Dependabot alerts | **1 open** (`1 medium`; live GitHub API on 2026-03-04) |
+| Open PRs | **0** |
 | CI queue | Hosted gates healthy; self-hosted queue starvation persists on CodeQL/GHCR lanes |
 
 ### Runtime Verification Snapshot (2026-03-04)
@@ -57,7 +64,7 @@
 | `make -C pmoves smoke` | PASS | Core production smoke completed with Agent Zero/geometry lanes green |
 | `make -C pmoves model-readiness` | PASS | `14/14` passed; `0` failed; `0` warnings |
 | Agent Zero published image health | PASS | `/healthz` returns `200` after compose PYTHONPATH + `pmoves.chit` shim |
-| Strict GPU smoke | PASS | `make -C pmoves smoke-gpu` with strict mode enabled in PowerShell |
+| Strict GPU smoke | PASS | `GPU_SMOKE_STRICT=true make -C pmoves smoke-gpu` passed; optional v1 GPU endpoint returned warning only |
 | Container health sitrep | PASS | `0` running unhealthy/restarting containers |
 | Supabase CLI vector exclusion | PASS | `SUPABASE_CLI_EXCLUDE=vector` now supported in `supa-start` |
 
@@ -200,7 +207,8 @@ These are tracked as release gates and should be closed with command evidence be
 
 ## CodeQL Alert Triage (2026-02-18 Baseline → 2026-02-28 Update)
 
-**2026-02-28 status:** PR #715 resolved Groups A–D (25 SSRF + path injection alerts fixed). However, expanded CodeQL scan scope and new code from PRs #716-719 introduced 31 new alerts. Net position: **43 open** (35 error, 8 warning), up from 37 at baseline. The remaining alerts are primarily in new/modified files not covered by the original triage groups.
+**Historical section:** this table preserves the 2026-02-28 triage baseline for traceability.
+**Live status on 2026-03-04:** CodeQL open alerts are now **0** (all prior findings triaged/dismissed/fixed).
 
 | Group | Count | Severity | Rule | Files | Remediation | Status |
 |-------|-------|----------|------|-------|-------------|--------|
@@ -219,7 +227,8 @@ These are tracked as release gates and should be closed with command evidence be
 
 ## Dependabot Alert Triage (2026-02-18 Baseline → 2026-02-28 Update)
 
-**2026-02-28 status:** 7 open alerts. Severity composition shifted: was 2 high / 1 medium / 4 low, now **5 high / 2 low**. New high-severity alerts for `serialize-javascript` and `minimatch` appeared; previous `transformers` alert auto-dismissed.
+**Historical section:** this table preserves the 2026-02-28 triage baseline for traceability.
+**Live status on 2026-03-04:** Dependabot open alerts are **1 medium**.
 
 | Alert | Severity | Package | Manifest | Assessment |
 |-------|----------|---------|----------|------------|

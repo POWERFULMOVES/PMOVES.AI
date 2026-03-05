@@ -1,17 +1,23 @@
 # PMOVES v5 • ROADMAP
-Last updated: 2026-03-04
+Last updated: 2026-03-05
 
 ## Vision
 A production-ready, self-hostable orchestration mesh for creative + agent workloads across GPU boxes and Jetsons: **hybrid Hi‑RAG**, **Supabase Studio**, **n8n orchestration**, **Jellyfin publishing**, and **graph-aware retrieval**.
 
-## Audit Snapshot (2026-03-04)
+## Audit Snapshot (2026-03-05)
 
 - Branch strategy: `PMOVES.AI-Edition-Hardened` is the production release branch; `main` receives promoted merges from hardened.
+- Production Python GHCR image toolchains now use reproducible exact pins with automated weekly canary validation (`.github/workflows/python-images-toolchain-canary.yml`): detect latest PyPI candidate -> patch managed Dockerfiles (`supaserch`, `deepresearch`, `pmoves-yt`, `archon`) -> build -> Trivy HIGH/CRITICAL gate -> auto-PR on pass.
 - PR queue and workflow health are tracked in `pmoves/docs/PRODUCTION_AUDIT_DASHBOARD.md`; use that doc as the live source before merge decisions.
-- Open PR queue (live): `1` open (`#782` Dependabot, low severity).
-- Dependency/code scanning backlog (live): Dependabot open `1` (`1 low`); Code Scanning open `34` (`31 error`, `3 warning`).
+- Open PR queue (live): `0` open.
+- Dependency/code scanning backlog (live): Dependabot open `1` (`1 medium`); Code Scanning open `0`.
 - Active remediation focus: production-mode bring-up parity (no dev-target defaults), dynamic port/namespace hygiene, hardened runtime auth consistency across compose/submodules, and recurring self-hosted queue starvation for CodeQL/GHCR lanes.
 - Queue-governance hardening landed for self-hosted CI pressure: stale push/PR runs now auto-cancel per ref, heavy matrix jobs are throttled (`max-parallel`), and GHCR autobuild triggers are scoped to image-affecting paths.
+- March 4 post-validation/admin merge closeout completed:
+  - `PMOVES.AI`: `#782`, `#792`, `#793`, `#794`, `#795` merged
+  - `PMOVES-Agent-Zero`: `#9` merged (hardened backport for submodule pin policy)
+  - `PMOVES-BoTZ`: `#75` merged
+  - `PMOVES-DoX`: `#117`, `#118`, `#119` merged
 - March 4 hardening merge wave completed on `PMOVES.AI-Edition-Hardened`:
   - `#776` CodeQL JS/TS PR analysis alignment
   - `#777` `pmoves-ollama` egress fix for model pulls
@@ -22,9 +28,11 @@ A production-ready, self-hostable orchestration mesh for creative + agent worklo
 - Runtime verification post-wave:
   - `make -C pmoves smoke` PASS
   - `make -C pmoves model-readiness` PASS (`14/14`, `0` warnings)
+  - `GPU_SMOKE_STRICT=true make -C pmoves smoke-gpu` PASS (v1 GPU endpoint remains optional and may warn when absent)
+  - local operator evidence logs captured for smoke/model-readiness/strict-GPU runs during this audit pass
   - running unhealthy/restarting containers: `0`
 - `main` and hardened currently have zero file-content drift (`git diff` clean); commit-history divergence reflects squash + back-sync merge topology.
-- GHCR operations lane now enforces local-first validation for SupaSerch (`build-local-supaserch` → `ghcr-prepublish-supaserch` → targeted dispatch), with secret bootstrap reuse via `ghcr-bootstrap-secrets`.
+- GHCR operations lane now enforces matrix-driven local-first validation for production images (`ghcr-prepublish-inrepo` → `ghcr-dispatch-all` by default, with targeted `ghcr-prepublish-supaserch` when isolating one lane), with secret bootstrap reuse via `ghcr-bootstrap-secrets`.
 - Creator lane now includes Jellyfin parity auditing (`make -C pmoves jellyfin-parity-audit[‑strict]`) plus a dedicated worktree review runbook for PMOVES.YT/Jellyfin/CHIT convergence.
 - Submodule production release lane now has deterministic checklist coverage for all tracked submodules (40/40), including branch policy gating, static/runtime gate packs, and hardened merge-order policy (`pmoves/docs/integrations/SUBMODULE_PRODUCTION_RELEASE_CHECKLIST.md`).
 - Codex submodule overlay parity is now complete for tracked modules (40/40), with focus-module codex coverage at 14/14 and deterministic refresh via `make -C pmoves codex-audit`.

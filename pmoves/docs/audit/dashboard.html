@@ -218,8 +218,8 @@ tr:hover td{background:var(--void-hover)}
   <div class="section">
     <div class="section-header">
       <h2>CodeQL Security Findings</h2>
-      <span class="badge">43 alerts</span>
-      <span class="tag">CODEQL_TRIAGE_2026-02-28</span>
+      <span class="badge">0 alerts</span>
+      <span class="tag">CODEQL_LIVE_2026-03-04</span>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin:16px 0">
       <!-- Severity Distribution -->
@@ -303,7 +303,7 @@ tr:hover td{background:var(--void-hover)}
 <!-- ═══ Footer ═══ -->
 <div class="footer">
   <span>PMOVES.AI Audit Dashboard v1.0 — Cataclysm Studios Inc.</span>
-  <span>Data sources: 6 files | serviceCatalog.ts (43 of 70 services) | 40 submodules | 34 CodeQL alerts</span>
+  <span>Data sources: 6 files | serviceCatalog.ts (43 of 70 services) | 40 submodules | 0 CodeQL alerts</span>
 </div>
 
 </div><!-- /dashboard -->
@@ -316,22 +316,8 @@ tr:hover td{background:var(--void-hover)}
 // PR Monitor (pr_monitor_latest.json)
 const PR_DATA = {
   repo: "POWERFULMOVES/PMOVES.AI",
-  count: 1,
-  items: [
-    {
-      number: 782,
-      title: "chore(deps): bump fast-xml-parser 5.3.6 → 5.4.1 in a2ui-renderer",
-      url: "https://github.com/POWERFULMOVES/PMOVES.AI/pull/782",
-      head: "dependabot/npm_and_yarn/pmoves/services/a2ui-renderer/npm_and_yarn-group",
-      base: "main",
-      mergeable: "MERGEABLE",
-      merge_state_status: "BLOCKED",
-      review_decision: null,
-      is_draft: false,
-      checks: { passed: 2, failed: 0, pending: 3 },
-      blockers: ["merge_state=BLOCKED", "pending_checks=3"]
-    }
-  ]
+  count: 0,
+  items: []
 };
 
 // Submodule Validation (submodule_layer_validation.json)
@@ -382,30 +368,14 @@ const SUBMODULE_DATA = {
   ]
 };
 
-// CodeQL Triage (CODEQL_TRIAGE_2026-02-28.md — parsed)
+// CodeQL Live Snapshot (GitHub API, 2026-03-04)
 const CODEQL_DATA = {
-  total: 34,
-  severity: { critical: 0, high: 1, medium: 1 },  // Post-triage real findings
-  real_count: 2,
-  fp_count: 31,
-  accepted_risk: 1,
-  alerts: [
-    // REAL (fixed in this handoff)
-    {id:169,sev:"medium",rule:"actions/missing-workflow-permissions",file:"integrations-ghcr.yml:resolve-matrix",verdict:"FIXED",action:"Added permissions: contents: read to resolve-matrix job"},
-    {id:60,sev:"high",rule:"py/stack-trace-exposure",file:"supaserch/app.py:546",verdict:"FIXED",action:"Changed exception chaining from exc to from None"},
-    // ACCEPTED RISK
-    {id:176,sev:"medium",rule:"py/clear-text-logging-sensitive-data",file:"chit_credential_demo.py:122",verdict:"ACCEPTED RISK",action:"Demo/dead-code path with masked output"},
-    // FALSE POSITIVES (defenses documented in dismissal notes)
-    {id:"44,46,47,48,49,50,51,52,53,54,55",sev:"high",rule:"py/path-injection",file:"pmoves-yt/yt.py (11 alerts)",verdict:"FALSE POSITIVE",action:"_safe_video_id allowlist + basename + fail-closed"},
-    {id:"156,157,158,159,160,161",sev:"high",rule:"py/path-injection",file:"gateway/viz.py (6 alerts)",verdict:"FALSE POSITIVE",action:"regex allowlist + basename + path containment"},
-    {id:"253,260,262",sev:"high",rule:"py/path-injection",file:"gateway/chit.py (3 alerts)",verdict:"FALSE POSITIVE",action:"filename allowlist + basename + containment"},
-    {id:"179,180",sev:"high",rule:"py/path-injection",file:"hf-mcp-server/main.py (2 alerts)",verdict:"FALSE POSITIVE",action:"safe model-path validation and traversal rejection"},
-    {id:"190,191",sev:"high",rule:"py/full-ssrf",file:"hi-rag-gateway v1+v2 (2 alerts)",verdict:"FALSE POSITIVE",action:"private-IP validation + DNS rebinding protections"},
-    {id:175,sev:"medium",rule:"js/resource-exhaustion",file:"ui/serviceHealth.ts:58",verdict:"FALSE POSITIVE",action:"timeout bounded with clamp"},
-    {id:168,sev:"high",rule:"py/clear-text-logging",file:"flute-gateway/main.py:363",verdict:"FALSE POSITIVE",action:"logging path uses redacted URL"},
-    {id:165,sev:"medium",rule:"js/tainted-format-string",file:"jellyfin-ai/server.js:524",verdict:"FALSE POSITIVE",action:"template literal context; no format expansion sink"},
-    {id:"82,150,151",sev:"high",rule:"py/stack-trace-exposure",file:"consciousness-service/main.py (3 alerts)",verdict:"FALSE POSITIVE",action:"generic client responses with server-side traceback only"},
-  ]
+  total: 0,
+  severity: { critical: 0, high: 0, medium: 0 },
+  real_count: 0,
+  fp_count: 0,
+  accepted_risk: 0,
+  alerts: []
 };
 
 // CHIT Integration (CHIT_INTEGRATION_STATUS.md — parsed)
@@ -446,10 +416,7 @@ const GATE_DATA = [
 
 // Active Blockers (PRODUCTION_AUDIT_DASHBOARD.md — parsed)
 const BLOCKER_DATA = [
-  {id:"AB-4",sev:"HIGH",title:"env.tier-data missing credentials",desc:"Neo4j, PostgreSQL, admin user passwords still default. Run make -C pmoves secrets-funnel with real credentials."},
-  {id:"AB-5",sev:"MEDIUM",title:"18 service health checks not validated",desc:"Depends on AB-4; run make -C pmoves verify-all with full stack up."},
-  {id:"AB-6",sev:"MEDIUM",title:"DB migrations not validated",desc:"Depends on AB-4; validate Supabase, Neo4j, Qdrant migrations."},
-  {id:"AB-9",sev:"HIGH",title:"Self-hosted runner queue deadlock",desc:"Drain/cancel stale queued runs, verify runner pickup, rerun targeted hardening lane."},
+  {id:"AB-9",sev:"HIGH",title:"Self-hosted runner queue starvation",desc:"Queue pressure persists on CodeQL/GHCR lanes. Keep stale-run drain + runner lane checks active and validate pickup over multiple merge cycles."},
 ];
 
 // Service catalog (from serviceCatalog.ts — key services with health endpoints)
@@ -594,7 +561,7 @@ $('#sub-tbody').innerHTML = SUBMODULE_DATA.results.map(s => {
 
 // ── PR Table ──
 $('#pr-count').textContent = PR_DATA.count + ' open';
-$('#pr-tbody').innerHTML = PR_DATA.items.map(p => `
+$('#pr-tbody').innerHTML = PR_DATA.items.length ? PR_DATA.items.map(p => `
   <tr>
     <td><a href="${p.url}" target="_blank" rel="noreferrer">#${p.number}</a></td>
     <td><strong>${p.title}</strong><br><span style="font-family:var(--font-mono);font-size:10px;color:var(--ink-muted)">${p.head}</span></td>
@@ -609,7 +576,11 @@ $('#pr-tbody').innerHTML = PR_DATA.items.map(p => `
     <td>${pill(p.review_decision)}</td>
     <td style="font-size:11px;color:var(--ink-secondary)">${p.blockers.join(', ')}</td>
   </tr>
-`).join('');
+`).join('') : `
+  <tr>
+    <td colspan="8" style="color:var(--ink-secondary)">No open PRs in the latest snapshot.</td>
+  </tr>
+`;
 
 // ── Security: Severity Bars ──
 const sevBars = [
@@ -622,14 +593,14 @@ $('#severity-bars').innerHTML = sevBars.map(b => `
   <div class="bar-row">
     <div class="bar-label">${b.label}</div>
     <div class="bar-track">
-      <div class="bar-fill" style="width:${(b.count/b.max)*100}%;background:${b.color}"></div>
+      <div class="bar-fill" style="width:${b.max ? (b.count/b.max)*100 : 0}%;background:${b.color}"></div>
     </div>
     <div class="bar-count">${b.count}</div>
   </div>
 `).join('');
 
 // ── Security: Donut ──
-const realPct = Math.round((CODEQL_DATA.real_count / CODEQL_DATA.total) * 100);
+const realPct = CODEQL_DATA.total ? Math.round((CODEQL_DATA.real_count / CODEQL_DATA.total) * 100) : 0;
 const fpPct = 100 - realPct;
 $('#donut-wrap').innerHTML = `
   <div class="donut" style="background:conic-gradient(var(--rose) 0% ${realPct}%, var(--ink-muted) ${realPct}% 100%)">
@@ -646,7 +617,7 @@ $('#donut-wrap').innerHTML = `
 `;
 
 // ── Security: Alert Table ──
-$('#sec-tbody').innerHTML = CODEQL_DATA.alerts.map(a => `
+$('#sec-tbody').innerHTML = CODEQL_DATA.alerts.length ? CODEQL_DATA.alerts.map(a => `
   <tr>
     <td style="font-family:var(--font-mono)">#${a.id}</td>
     <td>${pill(a.sev)}</td>
@@ -655,7 +626,11 @@ $('#sec-tbody').innerHTML = CODEQL_DATA.alerts.map(a => `
     <td>${pill(a.verdict)}</td>
     <td style="font-size:11px;color:var(--ink-secondary)">${a.action}</td>
   </tr>
-`).join('');
+`).join('') : `
+  <tr>
+    <td colspan="6" style="color:var(--ink-secondary)">No open CodeQL alerts in the latest snapshot.</td>
+  </tr>
+`;
 
 // ── CHIT: Bars ──
 const chitBars = [

@@ -1,5 +1,10 @@
 PMOVES_HOME ?= $(if $(HOME),$(HOME),$(USERPROFILE))
-CHIT_EXPORT_PATH ?= $(PMOVES_HOME)/.config/pmoves/chit/env.cgp.json
+# On Windows, GH Actions runner writes CGP to APPDATA; on Unix to XDG_CONFIG_HOME
+ifeq ($(OS),Windows_NT)
+CHIT_EXPORT_PATH ?= $(if $(APPDATA),$(APPDATA),$(PMOVES_HOME)/AppData/Roaming)/pmoves/chit/env.cgp.json
+else
+CHIT_EXPORT_PATH ?= $(if $(XDG_CONFIG_HOME),$(XDG_CONFIG_HOME),$(PMOVES_HOME)/.config)/pmoves/chit/env.cgp.json
+endif
 CHIT_EXPORT_ENV ?= env.shared
 CHIT_NO_CLEARTEXT ?= 1
 CHIT_MANIFEST_SOURCE ?= pmoves/chit/secrets_manifest_v2.yaml
