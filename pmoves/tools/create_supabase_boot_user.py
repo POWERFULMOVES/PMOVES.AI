@@ -147,6 +147,14 @@ def _ensure_user(env: Env, email: str, password: str, *, name: Optional[str], ro
             json=payload,
             timeout=10,
         )
+        if resp.status_code == 405:
+            # Some Supabase deployments only allow PUT for admin user updates.
+            resp = requests.put(
+                f"{env.service_url}/auth/v1/admin/users/{existing['id']}",
+                headers=_admin_headers(env),
+                json=payload,
+                timeout=10,
+            )
         if resp.status_code >= 300:
             raise SystemExit(
                 f"Failed to rotate password ({resp.status_code}): {resp.text}"
@@ -245,7 +253,7 @@ def _emit_output(
         )
         return
 
-    print("✅ Supabase boot user ready\n")
+    print("Supabase boot user ready\n")
     print("Add these entries to pmoves/env.shared (and sync to .env.local):")
     print(f"  SUPABASE_BOOT_USER_EMAIL={email}")
     print(f"  SUPABASE_BOOT_USER_PASSWORD={password}")
