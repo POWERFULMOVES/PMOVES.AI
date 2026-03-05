@@ -247,6 +247,7 @@ This file summarizes the most-used targets and maps them to what they do under d
 - `make ci-runners-local-cert-up`
   - Starts Docker-hosted local-cert runner containers for `ai-lab` and `vps` lanes on the current machine.
   - Uses `gh` to mint registration tokens unless `RUNNER_TOKEN` (or lane-specific `RUNNER_TOKEN_AI_LAB` / `RUNNER_TOKEN_VPS`) is preset.
+  - Recovery best practice: prefer `make -C pmoves ci-runners-local-cert-down && make -C pmoves ci-runners-local-cert-up` over `docker restart` on runner containers. This forces fresh registration and avoids stale token/config loops.
 - `make ci-runners-local-cert-down`
   - Stops/removes the Docker-hosted local-cert runner containers (`gha-runner-ai-lab`, `gha-runner-vps`).
 - `make ci-runners-local-cert-status`
