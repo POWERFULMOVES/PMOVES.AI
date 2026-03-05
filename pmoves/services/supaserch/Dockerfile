@@ -7,7 +7,7 @@ RUN apt-get update \
 
 COPY supaserch/requirements.txt /tmp/requirements.txt
 RUN pip install --no-cache-dir --upgrade pip \
-    "setuptools>=82.0.0" "wheel>=0.46.2" \
+    "setuptools==82.0.0" "wheel==0.46.3" \
     && pip install --no-cache-dir -r /tmp/requirements.txt
 
 COPY . /app/services
