@@ -572,9 +572,16 @@ supabase-boot-user: ensure-env-shared ## Create/rotate default Supabase boot use
 .PHONY: auth-check
 auth-check: ensure-env-shared ## Validate auth/bootstrap state (JWT or Google mode) and secondary setup labels
 	@bash -lc '. ./scripts/with-env.sh; \
+		[ -f ./.supabase.status.env ] && . ./.supabase.status.env || true; \
 		flags=""; \
 		if [ "$(AUTH_BOOTSTRAP_STRICT)" = "1" ]; then flags="$$flags --strict"; fi; \
-		python3 tools/auth_bootstrap_check.py --env-file env.shared --mode "$(AUTH_BOOTSTRAP_MODE)" $$flags'
+		auth_url="$${AUTH_HEALTH_URL:-$${SUPABASE_AUTH_HEALTH_URL:-$${SUPABASE_LOCAL_AUTH_HEALTH_URL:-}}}"; \
+		if [ -z "$$auth_url" ]; then \
+			base_url="$${SUPABASE_CLI_API_URL:-$${API_URL:-}}"; \
+			if [ -n "$$base_url" ]; then auth_url="$${base_url%/}/auth/v1/health"; fi; \
+		fi; \
+		if [ -z "$$auth_url" ]; then auth_url="http://127.0.0.1:54321/auth/v1/health"; fi; \
+		python3 tools/auth_bootstrap_check.py --env-file env.shared --mode "$(AUTH_BOOTSTRAP_MODE)" --auth-health-url "$$auth_url" $$flags'
 
 .PHONY: auth-bootstrap
 auth-bootstrap: ensure-env-shared ## Run boot-order auth phase: runtime hydration -> optional user bootstrap -> auth checks
