@@ -149,7 +149,7 @@ export function getUrlFromEnv(config: ServiceConfig): string | null {
 
     for (const pattern of patterns) {
       if (pattern && process.env[pattern]) {
-        return process.env[pattern];
+        return process.env[pattern] ?? null;
       }
     }
   } else {
@@ -165,7 +165,7 @@ export function getUrlFromEnv(config: ServiceConfig): string | null {
       // @ts-expect-error - dynamic env access
       if (pattern && import.meta.env[pattern]) {
         // @ts-expect-error - dynamic env access
-        return import.meta.env[pattern];
+        return import.meta.env[pattern] ?? null;
       }
     }
   }
@@ -207,7 +207,7 @@ async function fetchFromSupabase(
       .select('*')
       .eq('slug', slug)
       .eq('active', true)
-      .maybe_single();
+      .maybeSingle();
 
     if (error || !data) {
       return null;
@@ -372,17 +372,8 @@ export async function getServicesByTier(
   tier: ServiceTier,
   options?: ServiceDiscoveryOptions
 ): Promise<ServiceInfo[]> {
-  const supabaseUrl =
-    options?.supabaseUrl ||
-    (typeof process !== 'undefined'
-      ? process.env.NEXT_PUBLIC_SUPABASE_URL
-      : import.meta.env?.NEXT_PUBLIC_SUPABASE_URL);
-
-  const supabaseAnonKey =
-    options?.supabaseAnonKey ||
-    (typeof process !== 'undefined'
-      ? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-      : import.meta.env?.NEXT_PUBLIC_SUPABASE_ANON_KEY);
+  const supabaseUrl = options?.supabaseUrl || process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseAnonKey = options?.supabaseAnonKey || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
   if (!supabaseUrl || !supabaseAnonKey) {
     return [];
@@ -548,26 +539,3 @@ export function createServiceUrlResolver(
   return () => getServiceUrl(config, options);
 }
 
-/* ═══════════════════════════════════════════════════════════════════════════
-   Module Exports
-   ═══════════════════════════════════════════════════════════════════════════ */
-
-export {
-  // Main functions
-  getServiceUrl,
-  getServiceInfo,
-  getServicesByTier,
-  checkServiceHealth,
-  resolveMultipleServiceUrls,
-  createServiceUrlResolver,
-
-  // Utility functions
-  clearServiceCache,
-  getUrlFromEnv,
-
-  // Types
-  type ServiceConfig,
-  type ServiceInfo,
-  type ServiceDiscoveryOptions,
-  type ServiceTier,
-};
