@@ -826,6 +826,10 @@ up-agents: ## Start agent services (Agent Zero, Archon, DeepResearch, SupaSerch)
 	@$(MAKE) --no-print-directory wait-agents
 	@echo "✅ Agents ready"
 
+.PHONY: archon-db-setup
+archon-db-setup: ## Run Archon DB migrations (complete_setup + 001-011 + TensorZero LLM config)
+	@bash scripts/archon_db_setup.sh
+
 .PHONY: up-tensorzero
 up-tensorzero: ## Start TensorZero LLM gateway (PRIMARY MODEL PROVIDER)
 	@echo "🧠 Starting TensorZero LLM gateway..."
@@ -2112,6 +2116,11 @@ GHCR_DISPATCH_REF ?= $(shell git rev-parse --abbrev-ref HEAD 2>/dev/null || echo
 GHCR_NAMESPACE ?=
 GH_SECRET_ENV ?= Dev
 GH_REPO ?= $(shell gh repo view --json nameWithOwner -q .nameWithOwner 2>/dev/null || echo POWERFULMOVES/PMOVES.AI)
+GHCR_PREPUBLISH_SCRIPT ?= tools/ghcr_local_prepublish.py
+GHCR_MATRIX_FILE ?= ../.github/workflows/integrations-ghcr.matrix.json
+GHCR_PREPUBLISH_TAG_SUFFIX ?= local-smoke
+GHCR_PREPUBLISH_PLATFORM ?= linux/amd64
+GHCR_LOCAL_INTEGRATIONS ?= agent-zero archon firefly-iii jellyfin pmoves-yt deepresearch supaserch
 
 .PHONY: buildx-setup docker-login
 buildx-setup: ## Ensure docker buildx builder exists and is bootstrapped
@@ -2151,8 +2160,52 @@ build-local-supaserch: buildx-setup ## Build SupaSerch locally (amd64, no push) 
 	 docker buildx build --platform linux/amd64 -f "$$df" -t "$$img" "$$ctx" --load
 
 .PHONY: ghcr-prepublish-supaserch
-ghcr-prepublish-supaserch: build-local-supaserch ## Local-first gate before GHCR workflow dispatch
-	@echo "✔ SupaSerch local prepublish gate passed"
+ghcr-prepublish-supaserch: buildx-setup ## Local-first SupaSerch gate before GHCR workflow dispatch (build + Trivy)
+	@$(PYTHON) $(GHCR_PREPUBLISH_SCRIPT) \
+	  --matrix-file "$(GHCR_MATRIX_FILE)" \
+	  --repo-root .. \
+	  --tag-suffix "$(GHCR_PREPUBLISH_TAG_SUFFIX)" \
+	  --platform "$(GHCR_PREPUBLISH_PLATFORM)" \
+	  --integration supaserch
+
+.PHONY: ghcr-prepublish-inrepo
+ghcr-prepublish-inrepo: buildx-setup ## Local-first GHCR gate for all in-repo integration images (build + Trivy)
+	@args=""; \
+	for name in $(GHCR_LOCAL_INTEGRATIONS); do args="$$args --integration $$name"; done; \
+	$(PYTHON) $(GHCR_PREPUBLISH_SCRIPT) \
+	  --matrix-file "$(GHCR_MATRIX_FILE)" \
+	  --repo-root .. \
+	  --tag-suffix "$(GHCR_PREPUBLISH_TAG_SUFFIX)" \
+	  --platform "$(GHCR_PREPUBLISH_PLATFORM)" \
+	  $$args
+
+.PHONY: ghcr-prepublish-inrepo-build
+ghcr-prepublish-inrepo-build: buildx-setup ## Local-first GHCR build-only gate (skip Trivy)
+	@args=""; \
+	for name in $(GHCR_LOCAL_INTEGRATIONS); do args="$$args --integration $$name"; done; \
+	$(PYTHON) $(GHCR_PREPUBLISH_SCRIPT) \
+	  --matrix-file "$(GHCR_MATRIX_FILE)" \
+	  --repo-root .. \
+	  --tag-suffix "$(GHCR_PREPUBLISH_TAG_SUFFIX)" \
+	  --platform "$(GHCR_PREPUBLISH_PLATFORM)" \
+	  --skip-trivy \
+	  $$args
+
+.PHONY: ghcr-prepublish-all
+ghcr-prepublish-all: buildx-setup ## Local-first GHCR gate for full integration matrix (includes external repos)
+	@$(PYTHON) $(GHCR_PREPUBLISH_SCRIPT) \
+	  --matrix-file "$(GHCR_MATRIX_FILE)" \
+	  --repo-root .. \
+	  --tag-suffix "$(GHCR_PREPUBLISH_TAG_SUFFIX)" \
+	  --platform "$(GHCR_PREPUBLISH_PLATFORM)" \
+	  --include-external
+
+.PHONY: ghcr-dispatch-all
+ghcr-dispatch-all: ci-runners-check-strict ## Dispatch GHCR workflow for full integration matrix after local validation
+	@args="-f integration=all -f push_to_dockerhub=false"; \
+	if [ -n "$(GHCR_NAMESPACE)" ]; then args="$$args -f ghcr_namespace=$(GHCR_NAMESPACE)"; fi; \
+	gh workflow run "$(GHCR_WORKFLOW)" --repo "$(GH_REPO)" --ref "$(GHCR_DISPATCH_REF)" $$args
+	@echo "✔ Dispatched $(GHCR_WORKFLOW) for integration=all on ref $(GHCR_DISPATCH_REF)"
 
 .PHONY: ghcr-dispatch-supaserch
 ghcr-dispatch-supaserch: ci-runners-check-strict ## Dispatch GHCR workflow for SupaSerch after local prepublish gate

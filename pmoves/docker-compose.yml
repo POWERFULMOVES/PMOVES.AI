@@ -1628,11 +1628,27 @@ services:
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
+    # LLM routing: use TensorZero gateway as OpenAI-compatible provider
+    # Agent Zero's get_default_value() reads A0_SET_* from env (dotenv priority)
+    - A0_SET_chat_model_provider=openai
+    - A0_SET_chat_model_name=agent_zero
+    - A0_SET_chat_model_api_base=http://tensorzero-gateway:3000/openai/v1
+    - A0_SET_util_model_provider=openai
+    - A0_SET_util_model_name=langextract
+    - A0_SET_util_model_api_base=http://tensorzero-gateway:3000/openai/v1
+    - A0_SET_embed_model_provider=openai
+    - A0_SET_embed_model_name=gemma_embed_local
+    - A0_SET_embed_model_api_base=http://tensorzero-gateway:3000/openai/v1
+    - A0_SET_browser_model_provider=openai
+    - A0_SET_browser_model_name=agent_zero
+    - A0_SET_browser_model_api_base=http://tensorzero-gateway:3000/openai/v1
     depends_on:
       nats:
         condition: service_healthy
       nats-init:
         condition: service_completed_successfully
+      tensorzero-gateway:
+        condition: service_healthy
     ports:
     - ${AGENT_ZERO_PORT:-8080}:8080
     - ${AGENT_ZERO_PORT:-8081}:80
@@ -1687,8 +1703,14 @@ services:
       - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY:-${SUPABASE_SERVICE_ROLE_KEY:-${SERVICE_ROLE_KEY:-${SUPABASE_SECRET_KEY:-}}}}
       - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
       - SUPA_REST_URL=${ARCHON_SUPABASE_REST_URL:-${SUPABASE_REST_URL:-http://supabase-postgrest:3000}}
+      # TensorZero routing — _sync_openai_compat_env() in services/archon/main.py
+      # reads TENSORZERO_BASE_URL and populates OPENAI_COMPATIBLE_BASE_URL* vars
+      - TENSORZERO_BASE_URL=${TENSORZERO_BASE_URL:-http://tensorzero-gateway:3000}
+      - TENSORZERO_URL=${TENSORZERO_URL:-http://tensorzero-gateway:3000}
     depends_on:
       nats:
+        condition: service_healthy
+      tensorzero-gateway:
         condition: service_healthy
     command:
     - python
