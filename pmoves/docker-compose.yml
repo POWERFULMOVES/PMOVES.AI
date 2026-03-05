@@ -827,6 +827,12 @@ services:
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
     volumes:
     - qdrant-data:/qdrant/storage
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:6333/healthz >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 15s
   meilisearch:
     <<: *tier-data-hardened
     image: getmeili/meilisearch:v1.8
@@ -843,6 +849,12 @@ services:
     - pmoves_data
     volumes:
     - meilisearch-data:/meili_data
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:7700/health >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 15s
   neo4j:
     image: neo4j:5.22
     env_file:
@@ -903,6 +915,12 @@ services:
     networks:
     - pmoves_data
     - pmoves_bus
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:9000/minio/health/live || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 15s
   hi-rag-gateway:
     <<: *tier-api-hardened
     build:
@@ -947,6 +965,12 @@ services:
     - pmoves_api
     - pmoves_data
     - pmoves_bus
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8086/healthz', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
   retrieval-eval:
     <<: *tier-worker-hardened
     build: ./services/retrieval-eval
@@ -995,6 +1019,12 @@ services:
     depends_on:
       minio:
         condition: service_started
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/healthz', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
   render-webhook:
     <<: *tier-api-hardened
     build: ./services/render-webhook
@@ -1019,6 +1049,12 @@ services:
     depends_on:
       nats:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8085/healthz', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
   model-registry:
     <<: *tier-api-hardened
     build:
@@ -1083,6 +1119,12 @@ services:
         condition: service_started
       minio:
         condition: service_started
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8083/healthz', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
   pdf-ingest:
     <<: *tier-worker-hardened
     build:
@@ -1111,6 +1153,12 @@ services:
     networks:
     - pmoves_app
     - pmoves_bus
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8092/healthz', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
   langextract:
     <<: *tier-worker-hardened
     build:
@@ -1124,6 +1172,12 @@ services:
     - orchestration
     networks:
     - pmoves_app
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8084/healthz', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
   notebook-sync:
     <<: *tier-worker-hardened
     build: ./services/notebook-sync
@@ -1150,6 +1204,12 @@ services:
     networks:
     - pmoves_app
     - pmoves_bus
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8095/healthz', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
 
   # Transcribe-and-Fetch backend (submodule: PMOVES-transcribe-and-fetch)
   transcribe-backend:
@@ -1179,6 +1239,12 @@ services:
     - pmoves_app
     - pmoves_bus
     - pmoves_api
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthz', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
 
   ffmpeg-whisper:
     <<: *tier-media-hardened
@@ -1212,6 +1278,12 @@ services:
     networks:
     - pmoves_app
     - pmoves_bus
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8078/healthz', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
   media-video:
     <<: *tier-media-hardened
     build: ./services/media-video
@@ -1238,6 +1310,12 @@ services:
     networks:
     - pmoves_app
     - pmoves_bus
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8079/healthz', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
   media-audio:
     <<: *tier-media-hardened
     build: ./services/media-audio
@@ -1262,6 +1340,12 @@ services:
     networks:
     - pmoves_app
     - pmoves_bus
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8082/healthz', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
   pmoves-yt:
     <<: *tier-media-hardened
     image: ${PMOVES_YT_IMAGE:-}
@@ -1307,6 +1391,12 @@ services:
     - pmoves_api
     - pmoves_bus
     - pmoves_external  # Required for YouTube API access
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8077/healthz', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
   bgutil-pot-provider:
     image: brainicism/bgutil-ytdlp-pot-provider:1.2.2
     restart: unless-stopped
@@ -1321,6 +1411,12 @@ services:
     - pmoves_app
     - pmoves_bus
     - pmoves_external  # Required for YouTube processing
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -f 'node|python' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
   channel-monitor:
     <<: *tier-agent-hardened-ro
     build: ./services/channel-monitor
@@ -1413,6 +1509,12 @@ services:
     - pmoves_data
     - pmoves_bus
     - pmoves_external  # Required for reranker API calls
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8086/healthz', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
   hi-rag-gateway-gpu:
     <<: *tier-api-hardened
     build:
@@ -1471,6 +1573,12 @@ services:
     - pmoves_api
     - pmoves_data
     - pmoves_bus
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8086/healthz', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
   hi-rag-gateway-v2-gpu:
     <<: *tier-api-hardened-gpu
     build:
@@ -1555,6 +1663,12 @@ services:
     - pmoves_external  # Required for hub fallback and host-gateway Supabase routes
     extra_hosts:
     - host.docker.internal:host-gateway
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8086/healthz', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
   nats:
     <<: *tier-data-hardened
     # Pinned 2025-02-04: Latest stable 2.11.x alpine version
@@ -1785,6 +1899,12 @@ services:
     depends_on: [nats]
     profiles: ["agents"]
     networks: [pmoves_app, pmoves_bus]
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -f 'python' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
 
   # Tier: agent (BoTZ Gateway - Bot management with Geometry BUS integration)
   botz-gateway:
@@ -1884,6 +2004,12 @@ services:
     networks:
     - pmoves_app
     - pmoves_bus
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8098/healthz', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
   supaserch:
     <<: *tier-agent-hardened-ro
     build:
@@ -1906,6 +2032,12 @@ services:
     depends_on:
       nats:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8099/healthz', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
   nats-echo-req:
     <<: *tier-agent-hardened-ro
     build:
@@ -1922,6 +2054,12 @@ services:
     - diag
     networks:
     - pmoves_bus
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -f 'python' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
   nats-echo-res:
     <<: *tier-agent-hardened-ro
     build:
@@ -1938,6 +2076,12 @@ services:
     - diag
     networks:
     - pmoves_bus
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -f 'python' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
   publisher-discord:
     <<: *tier-agent-hardened-ro
     build:
@@ -1959,6 +2103,12 @@ services:
     networks:
     - pmoves_app
     - pmoves_bus
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8092/healthz', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
   jellyfin-bridge:
     <<: *tier-agent-hardened-ro
     build: ./services/jellyfin-bridge
@@ -1974,6 +2124,12 @@ services:
     - pmoves_app
     - pmoves_bus
     - pmoves_external  # Required for host reachability + external media metadata lookups
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8093/healthz', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
   pmoves-ollama:
     <<: *tier-llm-hardened
     image: ${PMOVES_OLLAMA_IMAGE:-ollama/ollama:0.12.6@sha256:ea37dcbf693248c80796654500fccf1e12f55da20ec7c78c30870a9a227c4cdd}
@@ -1994,6 +2150,12 @@ services:
     networks:
     - pmoves_api
     - pmoves_external
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:11434/api/version || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
   tensorzero-clickhouse:
     <<: *tier-llm-hardened
     image: clickhouse/clickhouse-server:24.12-alpine
@@ -2058,6 +2220,12 @@ services:
     - pmoves_external
     extra_hosts:
     - host.docker.internal:host-gateway
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/health >/dev/null 2>&1 || curl -fsS http://localhost:3000/health || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
   tensorzero-ui:
     <<: *tier-llm-hardened
     # Pinned 2025-02-04: Latest stable from TensorZero (matches gateway version)
@@ -2085,6 +2253,12 @@ services:
     - pmoves_app
     - pmoves_data
     - pmoves_external
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:4000/ >/dev/null 2>&1 || curl -fsS http://localhost:4000/ || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
   gpu-orchestrator:
     env_file:
     - env.shared
@@ -2130,6 +2304,12 @@ services:
     - pmoves_monitoring
     ports:
     - ${GPU_ORCHESTRATOR_HOST_PORT:-8200}:8200
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8200/healthz', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
     depends_on:
       nats:
         condition: service_healthy
@@ -2160,6 +2340,12 @@ services:
     networks: [pmoves_app, pmoves_api, pmoves_bus]
     extra_hosts:
     - host.docker.internal:host-gateway
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8113/healthz', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
 
   # Ultimate TTS Studio - Multi-engine TTS with 7 engines (Gradio UI)
   ultimate-tts-studio:
@@ -2222,6 +2408,12 @@ services:
     networks: [pmoves_app, pmoves_api, pmoves_bus]
     extra_hosts:
     - host.docker.internal:host-gateway
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8055/healthz', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
 
   # Tier: agent (Tokenism Simulator - CHIT/geometry bus simulation service)
   tokenism-simulator:
@@ -2275,6 +2467,12 @@ services:
     ports: ["${TOKENISM_UI_HOST_PORT:-8504}:8504"]
     profiles: ["agents", "botz"]
     networks: [pmoves_app]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8504/ >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
 
   # PMOVES Central UI - Main dashboard (port 4482)
   pmoves-ui:
@@ -2354,6 +2552,12 @@ services:
     - pmoves_bus
     depends_on:
       - hi-rag-gateway-v2
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8100/healthz', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
 
   # Comfy Watcher - ComfyUI output watcher for NATS integration
   comfy-watcher:
@@ -2486,6 +2690,12 @@ services:
     networks:
     - pmoves_app
     - pmoves_bus
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8282/ >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
   invidious:
     # Quay tags churn; default to latest unless explicitly pinned via env.
     image: ${INVIDIOUS_IMAGE:-quay.io/invidious/invidious:latest}
@@ -2552,6 +2762,12 @@ services:
     networks:
     - pmoves_app
     - pmoves_bus
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/healthz', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
   grayjay-server:
     image: registry.gitlab.futo.org/videostreaming/grayjay/grayjay:latest
     restart: unless-stopped
@@ -2578,6 +2794,12 @@ services:
     networks:
     - pmoves_app
     - pmoves_bus
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:9095/ >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
   cloudflared:
     image: cloudflare/cloudflared:2024.8.0
     restart: unless-stopped
@@ -2603,6 +2825,12 @@ services:
     - cloudflare
     networks:
     - pmoves_app
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -f 'cloudflared' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
   invidious-companion-proxy:
     build: ./services/invidious-companion-proxy
     restart: unless-stopped
@@ -2621,6 +2849,12 @@ services:
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:80/ || wget -qO- http://localhost:80/ >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
   # Llama.cpp throughput benchmarking toolkit (GPU, on-demand)
   llama-throughput-lab:
     build:
