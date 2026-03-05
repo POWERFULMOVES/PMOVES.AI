@@ -1,7 +1,19 @@
 
 # PMOVES v5 • NEXT_STEPS
 Note: Consolidated plan index at pmoves/docs/PMOVES.AI PLANS/README_DOCS_INDEX.md.
-_Last updated: 2026-03-04_
+_Last updated: 2026-03-05_
+
+### Latest changes (Mar 5, 2026)
+- Production Python GHCR image reproducibility lane hardened:
+  - pinned Dockerfile build toolchain versions (`setuptools==82.0.0`, `wheel==0.46.3`) for `supaserch`, `deepresearch`, `pmoves-yt`, and `archon`
+  - added weekly canary workflow `.github/workflows/python-images-toolchain-canary.yml` (plus manual dispatch)
+  - canary gate behavior: candidate pin patch -> per-image local build -> per-image Trivy HIGH/CRITICAL gate -> auto-PR on pass
+- GHCR production release local-first validation broadened beyond SupaSerch:
+  - added matrix-driven local prepublish validator (`pmoves/tools/ghcr_local_prepublish.py`)
+  - added Make targets `ghcr-prepublish-inrepo`, `ghcr-prepublish-inrepo-build`, `ghcr-prepublish-all`, and `ghcr-dispatch-all`
+  - release default now validates all in-repo GHCR integrations locally before self-hosted dispatch
+- Notebook Workbench smoke lint updated to path-glob coverage so new/renamed workbench files are included automatically.
+- GHCR integration builds now target `vps` runner lane to avoid consuming GPU runner capacity for non-GPU build/scan jobs.
 
 ### Latest changes (Mar 4, 2026)
 - Divergence remediation + merge wave closeout completed:
