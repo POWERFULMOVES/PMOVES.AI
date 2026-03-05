@@ -1565,7 +1565,12 @@ notebook-seed-models: ## Seed Open Notebook models based on provider keys from t
 .PHONY: notebook-workbench-smoke
 notebook-workbench-smoke: ensure-env-shared ## Lint the Notebook Workbench bundle and verify Supabase connectivity
 	@echo "→ Linting Notebook Workbench UI…"
-	@npm --prefix ui run lint
+	@cd ui && node scripts/with-env.mjs node ./node_modules/eslint/bin/eslint.js \
+		components/NotebookWorkbenchView.tsx \
+		components/GraphitiStatusBadge.tsx \
+		app/notebook-workbench/page.tsx \
+		app/dashboard/notebook/runtime/page.tsx \
+		--ext ts,tsx,js,jsx --max-warnings=0
 	@echo "→ Validating Supabase environment…"
 	@bash -c '$(LOAD_ENV_SHARED) node scripts/notebook_workbench_smoke.mjs $(ARGS)'
 
