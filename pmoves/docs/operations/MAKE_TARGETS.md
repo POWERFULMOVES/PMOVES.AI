@@ -229,7 +229,17 @@ This file summarizes the most-used targets and maps them to what they do under d
   - Builds `pmoves-supaserch:local-smoke` locally (`linux/amd64`, no push) using the same Dockerfile/context contract as CI.
   - Use as the first gate before publishing.
 - `make ghcr-prepublish-supaserch`
-  - Local-first wrapper around `build-local-supaserch`; fail here before spending self-hosted runner/GHCR cycles.
+  - Local-first targeted SupaSerch gate (build + Trivy) using the integrations matrix contract.
+- `make ghcr-prepublish-inrepo`
+  - Local-first production gate for all in-repo GHCR integrations (`agent-zero`, `archon`, `firefly-iii`, `jellyfin`, `pmoves-yt`, `deepresearch`, `supaserch`).
+  - Uses `pmoves/tools/ghcr_local_prepublish.py` to run deterministic build + Trivy validation aligned to `.github/workflows/integrations-ghcr.matrix.json`.
+- `make ghcr-prepublish-inrepo-build`
+  - Same matrix as `ghcr-prepublish-inrepo` but build-only (`--skip-trivy`) for rapid local triage.
+- `make ghcr-prepublish-all`
+  - Extends local prepublish validation to the full integrations matrix, including external repos (requires clone access/token where needed).
+- `make ghcr-dispatch-all`
+  - Dispatches `.github/workflows/integrations-ghcr.yml` with `integration=all` after local validation.
+  - Respects `GHCR_DISPATCH_REF` (defaults current branch) and optional `GHCR_NAMESPACE=<org>`.
 - `make ghcr-dispatch-supaserch`
   - Dispatches `.github/workflows/integrations-ghcr.yml` for `integration=supaserch` after local validation.
   - Respects `GHCR_DISPATCH_REF` (defaults to current branch), optional `GHCR_NAMESPACE=<org>`, and requires runner lane checks to pass.
@@ -247,6 +257,7 @@ This file summarizes the most-used targets and maps them to what they do under d
 - `make ci-runners-local-cert-up`
   - Starts Docker-hosted local-cert runner containers for `ai-lab` and `vps` lanes on the current machine.
   - Uses `gh` to mint registration tokens unless `RUNNER_TOKEN` (or lane-specific `RUNNER_TOKEN_AI_LAB` / `RUNNER_TOKEN_VPS`) is preset.
+  - Recovery best practice: prefer `make -C pmoves ci-runners-local-cert-down && make -C pmoves ci-runners-local-cert-up` over `docker restart` on runner containers. This forces fresh registration and avoids stale token/config loops.
 - `make ci-runners-local-cert-down`
   - Stops/removes the Docker-hosted local-cert runner containers (`gha-runner-ai-lab`, `gha-runner-vps`).
 - `make ci-runners-local-cert-status`

@@ -1,26 +1,43 @@
 
 # PMOVES v5 • NEXT_STEPS
 Note: Consolidated plan index at pmoves/docs/PMOVES.AI PLANS/README_DOCS_INDEX.md.
-_Last updated: 2026-03-04_
+_Last updated: 2026-03-05_
+
+### Latest changes (Mar 5, 2026)
+- Production Python GHCR image reproducibility lane hardened:
+  - pinned Dockerfile build toolchain versions (`setuptools==82.0.0`, `wheel==0.46.3`) for `supaserch`, `deepresearch`, `pmoves-yt`, and `archon`
+  - added weekly canary workflow `.github/workflows/python-images-toolchain-canary.yml` (plus manual dispatch)
+  - canary gate behavior: candidate pin patch -> per-image local build -> per-image Trivy HIGH/CRITICAL gate -> auto-PR on pass
+- GHCR production release local-first validation broadened beyond SupaSerch:
+  - added matrix-driven local prepublish validator (`pmoves/tools/ghcr_local_prepublish.py`)
+  - added Make targets `ghcr-prepublish-inrepo`, `ghcr-prepublish-inrepo-build`, `ghcr-prepublish-all`, and `ghcr-dispatch-all`
+  - release default now validates all in-repo GHCR integrations locally before self-hosted dispatch
+- Notebook Workbench smoke lint updated to path-glob coverage so new/renamed workbench files are included automatically.
+- GHCR integration builds now target `vps` runner lane to avoid consuming GPU runner capacity for non-GPU build/scan jobs.
 
 ### Latest changes (Mar 4, 2026)
 - Divergence remediation + merge wave closeout completed:
   - hardened fixes merged: `#776`, `#777`, `#778`, `#779`, `#780`
   - promotion sync merged: `#781` (`PMOVES.AI-Edition-Hardened` -> `main`)
+- Admin merge closeout completed for review-blocked lanes:
+  - `PMOVES.AI`: `#782`, `#792`, `#793`, `#794`, `#795` merged
+  - submodules: `PMOVES-Agent-Zero #9`, `PMOVES-BoTZ #75`, `PMOVES-DoX #117/#118/#119` merged
 - Current branch parity:
   - file-content parity between `main` and hardened is clean (`git diff` empty)
   - commit-history divergence remains expected due squash promotion + explicit back-sync merge commits
 - Runtime verification status:
   - `make -C pmoves smoke` PASS
   - `make -C pmoves model-readiness` PASS (`14/14`, `0 warnings`)
+  - `GPU_SMOKE_STRICT=true make -C pmoves smoke-gpu` PASS (v1 GPU endpoint optional warning observed)
+  - local operator evidence logs captured for smoke/model-readiness/strict-GPU runs during this pass
   - unhealthy/restarting running containers: `0`
 - Supabase local reliability follow-up landed:
   - `make -C pmoves supa-start` now supports `SUPABASE_CLI_EXCLUDE`
   - `SUPABASE_CLI_EXCLUDE=vector` is now deterministic (stale `supabase_vector_*` container is removed when excluded)
 - Live backlog snapshot:
-  - Open PRs: `1` (`#782` Dependabot, low)
-  - Dependabot alerts: `1` (`1 low`)
-  - Code scanning alerts: `34` (`31 error`, `3 warning`)
+  - Open PRs: `0`
+  - Dependabot alerts: `1` (`1 medium`)
+  - Code scanning alerts: `0`
 - CI queue status:
   - self-hosted CodeQL/GHCR queue starvation remains active
   - stale queued runs from merged fix branches were drained during this pass to reduce lane pressure

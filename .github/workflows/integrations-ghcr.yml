@@ -134,7 +134,8 @@ jobs:
   build-publish:
     name: Build ${{ matrix.name }}
     needs: resolve-matrix
-    runs-on: [self-hosted, Linux, X64]
+    # GHCR build/scan lane does not require GPU and should avoid consuming ai-lab capacity.
+    runs-on: [self-hosted, Linux, X64, vps]
     permissions:
       contents: read
       packages: write

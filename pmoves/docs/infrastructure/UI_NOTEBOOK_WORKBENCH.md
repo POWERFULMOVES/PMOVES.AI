@@ -48,6 +48,42 @@ Exit codes are non-zero on failure, which keeps CI-style executions honest. Capt
 
 Environment variables can be used instead of flags (`NOTEBOOK_SMOKE_THREAD_ID`, `NOTEBOOK_SMOKE_LIMIT`). Flags take precedence over env values.
 
+## Graphiti Validation
+
+The workbench header includes a **Graphiti Status Badge** that polls `/api/audit/summary?includeHealth=false` every 60 seconds and displays the availability of the signed agent trail artifact (`graphiti_signed_latest.json`).
+
+### Deterministic Check
+
+```bash
+curl -s http://localhost:4482/api/audit/summary?includeHealth=false | jq '.graphiti'
+```
+
+**Expected success output:**
+```json
+{
+  "available": true,
+  "source": "/path/to/pmoves/docs/logs/graphiti_signed_latest.json",
+  "generatedAt": "2026-03-01T..."
+}
+```
+
+**Expected failure output (no trail artifact):**
+```json
+{
+  "available": false,
+  "source": null,
+  "generatedAt": null
+}
+```
+
+### Badge States
+
+| State | Visual | Meaning |
+| --- | --- | --- |
+| Available | Green dot + "Graphiti Active" + relative timestamp | Trail artifact exists and was parsed successfully |
+| Unavailable | Muted dot + "Graphiti Unavailable" | `graphiti_signed_latest.json` missing or unreadable |
+| Loading | Gold dot + "Checking…" | Initial fetch in progress |
+
 ## Troubleshooting
 
 | Symptom | Fix |
@@ -57,6 +93,7 @@ Environment variables can be used instead of flags (`NOTEBOOK_SMOKE_THREAD_ID`, 
 | No snapshot ticks appear | Ensure the RPCs from `docs/ops/sql/03_snapshots_and_rpcs.sql` have been applied. Run `codex run db_all_in_one` or re-run the migrations bundle. |
 | Realtime updates fail | Confirm `supabase start` is running (or Realtime is enabled on hosted Supabase) and that your anon key has Realtime access to the `public` schema. |
 | `401 Unauthorized` during smoketest fetch | Check that `NEXT_PUBLIC_SUPABASE_ANON_KEY` matches the project’s anon key and that Row Level Security policies allow the anon role to select from `chat_messages`. |
+| Graphiti badge shows "Unavailable" | The badge reads `pmoves/docs/logs/graphiti_signed_latest.json`. Confirm the file exists: `ls pmoves/docs/logs/graphiti_signed_latest.json`. If missing, run `make -C pmoves sign-trail SUMMARY="test" AGENT=claude-opus PHASE="Phase H"` to generate it, or check that `CHIT_PASSPHRASE` is set for signed payloads. |
 
 ## Related References
 

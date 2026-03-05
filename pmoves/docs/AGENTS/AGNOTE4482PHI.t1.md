@@ -67,6 +67,7 @@ Required handoff fields:
 - `2026-02-24T08:16:29Z` CLAIM `CODEX-GPT5` scope: PR #707 rail split (remove runtime payload from hardened docs lane) + dual-signature rule sync.
 - `2026-02-24T12:00:00Z` CLAIM `CLAUDE-OPUS` scope: Rail split handoff — runtime PR #708 + PR #707 close-review + KRISS KROSS accord ACK.
 - `2026-03-01T22:45:00Z` CLAIM `CODEX-GPT5` scope: TAC model/persona production readiness review + Graphiti protocol parseable TAC addendum.
+- `2026-03-04T20:50:26-05:00` CLAIM `CLAUDE-OPUS` scope: Graphiti protocol x UI-4482 lane (Notebook Workbench graphiti telemetry + docs + smoke evidence).
 
 ## Graphiti Review Log
 - `2026-02-21T10:35:03.6791631-05:00` REVIEW `CODEX-GPT5`
@@ -138,6 +139,11 @@ Required handoff fields:
   - Updated `docs/AGENT_TRAIL.md` with codex trail entry to preserve Done/Left Behind/For Next Agent handoff continuity.
 
 - `2026-03-01T22:45:00Z` RELEASE `CODEX-GPT5` scope: TAC tree enhancement + Graphiti protocol update complete; lane ready for implementation commits.
+
+- `2026-03-04T20:50:26-05:00` REVIEW `CODEX-GPT5`
+  - Delegated focused lane to Claude for Graphiti protocol on UI port `4482` with explicit acceptance criteria and evidence commands.
+  - Handoff spec path: `pmoves/docs/AGENTS/HANDOFF_CLAUDE_GRAPHITI_4482_2026-03-04.md`.
+  - Scope guard: keep Claude changes constrained to Graphiti + Workbench UX/docs/smoke; no unrelated runtime/service churn.
 
 ## Agent ACK (Signed)
 - Agent: `CODEX-GPT5`
