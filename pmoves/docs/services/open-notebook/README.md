@@ -66,14 +66,14 @@ Troubleshooting
 - If port conflicts occur, set `OPEN_NOTEBOOK_UI_PORT` / `OPEN_NOTEBOOK_API_PORT` in `.env.local` (or export inline) before running Make/Compose.
 - Ensure the shared network exists: `docker network create cataclysm-net` (Make and Compose create/attach automatically when needed).
 - Set required credentials in `pmoves/env.shared` before starting. Open Notebook compose now fails fast when these are unset:
-  ```
+  ```dotenv
   OPEN_NOTEBOOK_API_URL=http://cataclysm-open-notebook:5055
   OPEN_NOTEBOOK_PASSWORD=<strong-password>
   OPEN_NOTEBOOK_API_TOKEN=<generated-token>
   OPEN_NOTEBOOK_SURREAL_USER=<surreal-user>
   OPEN_NOTEBOOK_SURREAL_PASS=<surreal-password>
-  OPEN_NOTEBOOK_SURREAL_URL=ws://cataclysm-open-notebook-surrealdb:8000/rpc
-  OPEN_NOTEBOOK_SURREAL_ADDRESS=cataclysm-open-notebook-surrealdb
+  OPEN_NOTEBOOK_SURREAL_URL=ws://open-notebook-surrealdb-ext:8000/rpc
+  OPEN_NOTEBOOK_SURREAL_ADDRESS=open-notebook-surrealdb-ext
   ```
 - The password that unlocks the UI can also serve as the API bearer. Keep `OPEN_NOTEBOOK_API_TOKEN` aligned with `OPEN_NOTEBOOK_PASSWORD` if you want a single shared credential across UI, CLI helpers, and agents.
 - The `OPEN_NOTEBOOK_SURREAL_*` variables drive both the local SurrealDB container and any external Surreal endpoint; `SURREAL_*` aliases remain for legacy agents/Make targets that still read the older names.
@@ -88,7 +88,7 @@ Troubleshooting
   3. Verify `curl -H "Authorization: Bearer new-strong-pass" http://localhost:${OPEN_NOTEBOOK_API_PORT:-5055}/api/sources?limit=1`.
 - Migrating older stacks: if `2025-10-26_transcripts_video_fk.sql` fails because of duplicate `videos.video_id` rows or orphan transcripts, run
 - Migrating older stacks: if `2025-10-26_transcripts_video_fk.sql` fails because of duplicate `videos.video_id` rows or orphan transcripts, run
-  ```
+  ```sql
   delete from public.videos v using public.videos v2 where v.video_id = v2.video_id and v.id > v2.id;
   insert into public.videos (video_id, namespace, source_url)
     select distinct t.video_id, coalesce(t.meta->>'namespace', 'default'), 'https://youtube.com/watch?v=' || t.video_id

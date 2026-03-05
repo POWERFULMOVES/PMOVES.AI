@@ -9,6 +9,7 @@ on:
       - 'pmoves/docker/**'
       - 'Dockerfile*'
       - 'docker-compose*.yml'
+      - '**/docker-compose*.yml'
       - '.github/workflows/self-hosted-builds*.yml'
   # NOTE: PR trigger disabled until self-hosted runners are deployed
   # Re-enable when AI Lab + VPS runners are operational

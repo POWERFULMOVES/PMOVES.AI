@@ -1607,8 +1607,11 @@ channel-monitor-up: ensure-env-shared ## Start channel-monitor with runtime-awar
 	      db_url=$$(printf "%s" "$$v" | sed -e "s@127\\.0\\.0\\.1@host.docker.internal@g" -e "s@localhost@host.docker.internal@g"); \
 	    fi; \
 	  fi; \
-	  if [ -z "$$db_url" ] && [ "$$runtime" != "compose" ]; then \
-	    db_url="postgresql://$${SUPABASE_DB_USER:-postgres}:$${SUPABASE_DB_PASSWORD:-postgres}@supabase-db:5432/$${SUPABASE_DB_NAME:-postgres}"; \
+	  if [ -z "$$db_url" ] && [ "$$runtime" = "cli" ]; then \
+	    db_url="postgresql://$${SUPABASE_DB_USER:-postgres}:$${SUPABASE_DB_PASSWORD:-postgres}@host.docker.internal:$${SUPABASE_DB_PORT:-54322}/$${SUPABASE_DB_NAME:-postgres}"; \
+	  fi; \
+	  if [ -z "$$db_url" ] && [ "$$runtime" != "compose" ] && [ "$$runtime" != "cli" ]; then \
+	    db_url="postgresql://$${SUPABASE_DB_USER:-postgres}:$${SUPABASE_DB_PASSWORD:-postgres}@$${SUPABASE_DB_HOST:-supabase-db}:$${SUPABASE_DB_PORT:-5432}/$${SUPABASE_DB_NAME:-postgres}"; \
 	  fi; \
 	  echo "→ Starting channel-monitor (runtime=$$runtime)"; \
 	  if [ -n "$$db_url" ]; then \

@@ -9,8 +9,6 @@ x-env-tier-worker: &env-tier-worker
       required: false
     - path: .env.generated
       required: false
-    - path: .env.local
-      required: false
 
 services:
   open-notebook:
