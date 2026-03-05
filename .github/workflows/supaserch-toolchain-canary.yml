@@ -1,0 +1,183 @@
+name: SupaSerch toolchain canary
+
+on:
+  schedule:
+    - cron: "0 9 * * 1" # Mondays 09:00 UTC
+  workflow_dispatch:
+    inputs:
+      setuptools_version:
+        description: "Optional setuptools override (defaults to latest PyPI)"
+        required: false
+        type: string
+      wheel_version:
+        description: "Optional wheel override (defaults to latest PyPI)"
+        required: false
+        type: string
+      open_pr:
+        description: "Open/update PR when candidate passes build+Trivy"
+        required: true
+        default: true
+        type: boolean
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  supaserch-toolchain-canary:
+    name: SupaSerch toolchain canary
+    # GHCR build/scan lane does not require GPU.
+    runs-on: [self-hosted, Linux, X64, vps]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Resolve current and candidate versions
+        id: versions
+        env:
+          INPUT_SETUPTOOLS_VERSION: ${{ github.event.inputs.setuptools_version || '' }}
+          INPUT_WHEEL_VERSION: ${{ github.event.inputs.wheel_version || '' }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          import pathlib
+          import re
+          import sys
+          import urllib.request
+
+          dockerfile = pathlib.Path("pmoves/services/supaserch/Dockerfile")
+          text = dockerfile.read_text(encoding="utf-8")
+          m = re.search(r'"setuptools==([^"]+)"\s+"wheel==([^"]+)"', text)
+          if not m:
+              print("::error::Could not locate pinned setuptools/wheel in SupaSerch Dockerfile.")
+              sys.exit(1)
+
+          current_setuptools, current_wheel = m.group(1), m.group(2)
+
+          def latest(package: str) -> str:
+              with urllib.request.urlopen(f"https://pypi.org/pypi/{package}/json", timeout=30) as resp:
+                  payload = json.loads(resp.read().decode("utf-8"))
+              return str(payload["info"]["version"])
+
+          candidate_setuptools = os.environ.get("INPUT_SETUPTOOLS_VERSION", "").strip() or latest("setuptools")
+          candidate_wheel = os.environ.get("INPUT_WHEEL_VERSION", "").strip() or latest("wheel")
+
+          should_update = (
+              candidate_setuptools != current_setuptools
+              or candidate_wheel != current_wheel
+          )
+
+          summary = (
+              f"current: setuptools=={current_setuptools}, wheel=={current_wheel}; "
+              f"candidate: setuptools=={candidate_setuptools}, wheel=={candidate_wheel}; "
+              f"update={str(should_update).lower()}"
+          )
+          print(summary)
+
+          out = pathlib.Path(os.environ["GITHUB_OUTPUT"])
+          with out.open("a", encoding="utf-8") as fh:
+              fh.write(f"current_setuptools={current_setuptools}\n")
+              fh.write(f"current_wheel={current_wheel}\n")
+              fh.write(f"candidate_setuptools={candidate_setuptools}\n")
+              fh.write(f"candidate_wheel={candidate_wheel}\n")
+              fh.write(f"should_update={'true' if should_update else 'false'}\n")
+              fh.write(f"summary={summary}\n")
+          PY
+
+      - name: No-op summary
+        if: ${{ steps.versions.outputs.should_update != 'true' }}
+        run: |
+          echo "No SupaSerch toolchain update required."
+          echo "${{ steps.versions.outputs.summary }}"
+
+      - name: Patch SupaSerch Dockerfile pins
+        if: ${{ steps.versions.outputs.should_update == 'true' }}
+        env:
+          CANDIDATE_SETUPTOOLS: ${{ steps.versions.outputs.candidate_setuptools }}
+          CANDIDATE_WHEEL: ${{ steps.versions.outputs.candidate_wheel }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import os
+          import pathlib
+          import re
+          import sys
+
+          path = pathlib.Path("pmoves/services/supaserch/Dockerfile")
+          text = path.read_text(encoding="utf-8")
+          replacement = (
+              f"\"setuptools=={os.environ['CANDIDATE_SETUPTOOLS']}\" "
+              f"\"wheel=={os.environ['CANDIDATE_WHEEL']}\""
+          )
+          updated, count = re.subn(
+              r'"setuptools==[^"]+"\s+"wheel==[^"]+"',
+              replacement,
+              text,
+              count=1,
+          )
+          if count != 1:
+              print("::error::Failed to patch SupaSerch Dockerfile pins.")
+              sys.exit(1)
+          path.write_text(updated, encoding="utf-8")
+          PY
+          git diff -- pmoves/services/supaserch/Dockerfile
+
+      - name: Build candidate SupaSerch image
+        if: ${{ steps.versions.outputs.should_update == 'true' }}
+        uses: docker/build-push-action@v6
+        with:
+          context: pmoves/services
+          file: pmoves/services/supaserch/Dockerfile
+          push: false
+          load: true
+          platforms: linux/amd64
+          tags: local/pmoves-supaserch:toolchain-canary
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Trivy vulnerability gate (HIGH/CRITICAL, ignore-unfixed)
+        if: ${{ steps.versions.outputs.should_update == 'true' }}
+        uses: aquasecurity/trivy-action@0.34.1
+        with:
+          image-ref: local/pmoves-supaserch:toolchain-canary
+          format: table
+          exit-code: "1"
+          ignore-unfixed: true
+          vuln-type: "os,library"
+          severity: "HIGH,CRITICAL"
+          scanners: "vuln"
+
+      - name: Create PR for pinned bump
+        if: ${{ steps.versions.outputs.should_update == 'true' && github.event.inputs.open_pr != 'false' }}
+        uses: peter-evans/create-pull-request@v7
+        with:
+          branch: chore/supaserch-toolchain-canary
+          delete-branch: true
+          title: >-
+            chore(supaserch): bump pinned toolchain to
+            setuptools==${{ steps.versions.outputs.candidate_setuptools }},
+            wheel==${{ steps.versions.outputs.candidate_wheel }}
+          body: |
+            Automated SupaSerch toolchain canary bump.
+
+            Candidate pins:
+            - `setuptools==${{ steps.versions.outputs.candidate_setuptools }}`
+            - `wheel==${{ steps.versions.outputs.candidate_wheel }}`
+
+            Validation performed in this run:
+            - Docker build (`linux/amd64`) for `pmoves/services/supaserch/Dockerfile`
+            - Trivy gate (`HIGH,CRITICAL`, `ignore-unfixed=true`)
+
+            If this PR is approved, merge through normal production promotion flow.
+          commit-message: >-
+            chore(supaserch): bump pinned toolchain to
+            setuptools==${{ steps.versions.outputs.candidate_setuptools }},
+            wheel==${{ steps.versions.outputs.candidate_wheel }}
+          add-paths: |
+            pmoves/services/supaserch/Dockerfile
