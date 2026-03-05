@@ -1344,7 +1344,7 @@ recreate-v2: ## Force-recreate v2 CPU container (no deps)
 up-open-notebook: ensure-env-shared ## Bring up Open Notebook on cataclysm-net (defaults UI :8503, API :5055)
 	@docker network create cataclysm-net >/dev/null 2>&1 || true
 	@docker compose -f docker-compose.open-notebook.yml up -d open-notebook
-	@echo "✔ Open Notebook up (http://localhost:${OPEN_NOTEBOOK_UI_PORT:-8503}, API :${OPEN_NOTEBOOK_API_PORT:-5055})"
+	@echo "✔ Open Notebook up (http://localhost:$${OPEN_NOTEBOOK_UI_PORT:-8503}, API :$${OPEN_NOTEBOOK_API_PORT:-5055})"
 
 .PHONY: notebook-set-password
 notebook-set-password: ## Update Open Notebook password/token (and optionally notebook id). Usage: make notebook-set-password PASSWORD=secret [TOKEN=api-token NOTEBOOK_ID=notebook:abc123]
@@ -1585,6 +1585,46 @@ up-workers-core:
 # YouTube ingest + whisper stack
 up-yt:
 	@$(DC) --profile data --profile workers --profile yt up -d bgutil-pot-provider ffmpeg-whisper pmoves-yt
+
+.PHONY: channel-monitor-up
+channel-monitor-up: ensure-env-shared ## Start channel-monitor with runtime-aware Supabase DB URL wiring
+	@bash -lc 'set -euo pipefail; \
+	  runtime="$${SUPABASE_RUNTIME:-$(SUPABASE_RUNTIME)}"; \
+	  if docker ps --format "{{.Names}}" | grep -Eq "^supabase_db_"; then runtime="cli"; fi; \
+	  stripq() { printf "%s" "$$1" | sed -e "s/^\\\"//" -e "s/\\\"$$//"; }; \
+	  db_url="$${CHANNEL_MONITOR_DATABASE_URL:-}"; \
+	  if [ "$$runtime" = "cli" ] && [ -f .supabase.status.env ]; then \
+	    v=$$(grep -m1 "^DB_URL=" .supabase.status.env | cut -d= -f2- || true); \
+	    v=$$(stripq "$$v"); \
+	    if [ -n "$$v" ]; then \
+	      db_url=$$(printf "%s" "$$v" | sed -e "s@127\\.0\\.0\\.1@host.docker.internal@g" -e "s@localhost@host.docker.internal@g"); \
+	    fi; \
+	  fi; \
+	  if [ -z "$$db_url" ] && [ "$$runtime" != "compose" ]; then \
+	    db_url="postgresql://$${SUPABASE_DB_USER:-postgres}:$${SUPABASE_DB_PASSWORD:-postgres}@supabase-db:5432/$${SUPABASE_DB_NAME:-postgres}"; \
+	  fi; \
+	  echo "→ Starting channel-monitor (runtime=$$runtime)"; \
+	  if [ -n "$$db_url" ]; then \
+	    CHANNEL_MONITOR_DATABASE_URL="$$db_url" $(DC) --profile workers --profile yt up -d channel-monitor; \
+	  else \
+	    $(DC) --profile workers --profile yt up -d channel-monitor; \
+	  fi; \
+	  echo "✔ Channel monitor up"; \
+	'
+
+.PHONY: channel-monitor-smoke
+channel-monitor-smoke: ## Verify channel-monitor HTTP endpoints
+	@bash -lc 'set -euo pipefail; \
+	  base="http://localhost:$${CHANNEL_MONITOR_PORT:-8097}"; \
+	  for path in /healthz /api/monitor/status /api/monitor/stats; do \
+	    code=$$(curl -s -o /dev/null -w "%{http_code}" "$$base$$path" || true); \
+	    if [ "$$code" != "200" ]; then \
+	      echo "✖ channel-monitor $$path => $$code"; \
+	      exit 1; \
+	    fi; \
+	    echo "✔ channel-monitor $$path 200"; \
+	  done; \
+	'
 
 .PHONY: up-yt-published
 up-yt-published: ## Start YouTube ingest stack using published images (no local builds)
@@ -2366,6 +2406,7 @@ compose: ensure-env-shared ## Run docker compose with PMOVES env layering. Usage
 .PHONY: up-external
 up-external: ensure-env-shared ## Start external integration services (Wger, Firefly, Open Notebook, Jellyfin)
 	@echo "→ Starting external stacks (Wger, Firefly, Open Notebook, Jellyfin)..."
+	@docker network inspect pmoves_external >/dev/null 2>&1 || docker network create --driver bridge pmoves_external
 	@$(EXTERNAL_DC) up -d
 	@echo "✔ External stacks up"
 

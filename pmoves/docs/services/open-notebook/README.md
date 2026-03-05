@@ -65,14 +65,17 @@ and `--include-synced` if you need to reprocess existing entries.
 Troubleshooting
 - If port conflicts occur, set `OPEN_NOTEBOOK_UI_PORT` / `OPEN_NOTEBOOK_API_PORT` in `.env.local` (or export inline) before running Make/Compose.
 - Ensure the shared network exists: `docker network create cataclysm-net` (Make and Compose create/attach automatically when needed).
-- Set credentials in `pmoves/env.shared` before starting (either edit by hand or run `make notebook-set-password PASSWORD="yours" NOTEBOOK_ID=notebook:xyz"` right after the first login so operators can set their own secret and target notebook):
+- Set required credentials in `pmoves/env.shared` before starting. Open Notebook compose now fails fast when these are unset:
   ```
   OPEN_NOTEBOOK_API_URL=http://cataclysm-open-notebook:5055
+  OPEN_NOTEBOOK_PASSWORD=<strong-password>
   OPEN_NOTEBOOK_API_TOKEN=<generated-token>
+  OPEN_NOTEBOOK_SURREAL_USER=<surreal-user>
+  OPEN_NOTEBOOK_SURREAL_PASS=<surreal-password>
   OPEN_NOTEBOOK_SURREAL_URL=ws://cataclysm-open-notebook-surrealdb:8000/rpc
   OPEN_NOTEBOOK_SURREAL_ADDRESS=cataclysm-open-notebook-surrealdb
   ```
-- The password that unlocks the UI also serves as the API bearer. Keep `OPEN_NOTEBOOK_API_TOKEN` identical to `OPEN_NOTEBOOK_PASSWORD` (branded defaults ship this way) so CLI helpers and agents reuse the same secret.
+- The password that unlocks the UI can also serve as the API bearer. Keep `OPEN_NOTEBOOK_API_TOKEN` aligned with `OPEN_NOTEBOOK_PASSWORD` if you want a single shared credential across UI, CLI helpers, and agents.
 - The `OPEN_NOTEBOOK_SURREAL_*` variables drive both the local SurrealDB container and any external Surreal endpoint; `SURREAL_*` aliases remain for legacy agents/Make targets that still read the older names.
 - If embeddings are not configured (no `OPENAI_API_KEY`, `GROQ_API_KEY`, etc.), run the ingestion helpers with `--no-embed` so `/api/sources/json` doesn’t attempt to call EsperanTO’s provider chain and fail with `ValueError("OpenAI API key not found")`.
 - Local-only embeddings: point `OLLAMA_API_BASE` (or another self-hosted provider endpoint) at your Compose service, then rerun `make notebook-seed-models`. The seeder already registers `ollama` models (`llama3.1`, `mxbai-embed-large`) whenever the base URL is present, letting Open Notebook stay inside the PMOVES stack without touching external APIs.

@@ -14,7 +14,17 @@ name: "CodeQL Advanced"
 on:
   push:
     branches: [ "main", "PMOVES.AI-Edition-Hardened" ]
-    # Skip analyzing gitignored directories (integrations-workspace, vendor, venv, node_modules)
+    # Only run on source code changes — skip docs, configs, media
+    paths:
+      - '**/*.py'
+      - '**/*.js'
+      - '**/*.ts'
+      - '**/*.tsx'
+      - '**/*.jsx'
+      - '**/*.yml'
+      - '**/*.yaml'
+      - '.github/**'
+    # Also exclude vendored/generated directories
     paths-ignore:
       - 'integrations-workspace/**'
       - '**/.venv/**'
@@ -25,6 +35,15 @@ on:
       - '**/.eggs/**'
   pull_request:
     branches: [ "main", "PMOVES.AI-Edition-Hardened" ]
+    paths:
+      - '**/*.py'
+      - '**/*.js'
+      - '**/*.ts'
+      - '**/*.tsx'
+      - '**/*.jsx'
+      - '**/*.yml'
+      - '**/*.yaml'
+      - '.github/**'
     paths-ignore:
       - 'integrations-workspace/**'
       - '**/.venv/**'
