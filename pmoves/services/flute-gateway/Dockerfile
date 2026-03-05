@@ -1,7 +1,8 @@
 # ── Stage 1: Builder ─────────────────────────────────────────────
 # Install build deps and compile Python wheels.  This stage is
 # discarded — only the pip-installed packages survive into runtime.
-FROM python:3.11-slim AS builder
+# Base image pinned 2026-03-05 — refresh monthly or via Dependabot
+FROM python:3.11-slim@sha256:d6e4d224f70f9e0172a06a3a2eba2f768eb146811a349278b38fff3a36463b47 AS builder
 
 WORKDIR /build
 
@@ -31,7 +32,8 @@ RUN pip install --no-cache-dir --user -r requirements-pipecat.txt
 
 # ── Stage 2: Runtime ─────────────────────────────────────────────
 # Clean image with only runtime shared libs — no gcc, no -dev headers.
-FROM python:3.11-slim
+# Base image pinned 2026-03-05 — refresh monthly or via Dependabot
+FROM python:3.11-slim@sha256:d6e4d224f70f9e0172a06a3a2eba2f768eb146811a349278b38fff3a36463b47
 
 LABEL org.opencontainers.image.source="https://github.com/POWERFULMOVES/PMOVES.AI"
 LABEL org.opencontainers.image.description="Flute Gateway - Multimodal Voice Communication Layer"
