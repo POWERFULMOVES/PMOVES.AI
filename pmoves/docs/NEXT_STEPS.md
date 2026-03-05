@@ -7,20 +7,25 @@ _Last updated: 2026-03-04_
 - Divergence remediation + merge wave closeout completed:
   - hardened fixes merged: `#776`, `#777`, `#778`, `#779`, `#780`
   - promotion sync merged: `#781` (`PMOVES.AI-Edition-Hardened` -> `main`)
+- Admin merge closeout completed for review-blocked lanes:
+  - `PMOVES.AI`: `#782`, `#792`, `#793`, `#794`, `#795` merged
+  - submodules: `PMOVES-Agent-Zero #9`, `PMOVES-BoTZ #75`, `PMOVES-DoX #117/#118/#119` merged
 - Current branch parity:
   - file-content parity between `main` and hardened is clean (`git diff` empty)
   - commit-history divergence remains expected due squash promotion + explicit back-sync merge commits
 - Runtime verification status:
   - `make -C pmoves smoke` PASS
   - `make -C pmoves model-readiness` PASS (`14/14`, `0 warnings`)
+  - `GPU_SMOKE_STRICT=true make -C pmoves smoke-gpu` PASS (v1 GPU endpoint optional warning observed)
+  - local operator evidence logs captured for smoke/model-readiness/strict-GPU runs during this pass
   - unhealthy/restarting running containers: `0`
 - Supabase local reliability follow-up landed:
   - `make -C pmoves supa-start` now supports `SUPABASE_CLI_EXCLUDE`
   - `SUPABASE_CLI_EXCLUDE=vector` is now deterministic (stale `supabase_vector_*` container is removed when excluded)
 - Live backlog snapshot:
-  - Open PRs: `1` (`#782` Dependabot, low)
-  - Dependabot alerts: `1` (`1 low`)
-  - Code scanning alerts: `34` (`31 error`, `3 warning`)
+  - Open PRs: `0`
+  - Dependabot alerts: `1` (`1 medium`)
+  - Code scanning alerts: `0`
 - CI queue status:
   - self-hosted CodeQL/GHCR queue starvation remains active
   - stale queued runs from merged fix branches were drained during this pass to reduce lane pressure

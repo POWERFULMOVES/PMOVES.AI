@@ -8,10 +8,15 @@ A production-ready, self-hostable orchestration mesh for creative + agent worklo
 
 - Branch strategy: `PMOVES.AI-Edition-Hardened` is the production release branch; `main` receives promoted merges from hardened.
 - PR queue and workflow health are tracked in `pmoves/docs/PRODUCTION_AUDIT_DASHBOARD.md`; use that doc as the live source before merge decisions.
-- Open PR queue (live): `1` open (`#782` Dependabot, low severity).
-- Dependency/code scanning backlog (live): Dependabot open `1` (`1 low`); Code Scanning open `34` (`31 error`, `3 warning`).
+- Open PR queue (live): `0` open.
+- Dependency/code scanning backlog (live): Dependabot open `1` (`1 medium`); Code Scanning open `0`.
 - Active remediation focus: production-mode bring-up parity (no dev-target defaults), dynamic port/namespace hygiene, hardened runtime auth consistency across compose/submodules, and recurring self-hosted queue starvation for CodeQL/GHCR lanes.
 - Queue-governance hardening landed for self-hosted CI pressure: stale push/PR runs now auto-cancel per ref, heavy matrix jobs are throttled (`max-parallel`), and GHCR autobuild triggers are scoped to image-affecting paths.
+- March 4 post-validation/admin merge closeout completed:
+  - `PMOVES.AI`: `#782`, `#792`, `#793`, `#794`, `#795` merged
+  - `PMOVES-Agent-Zero`: `#9` merged (hardened backport for submodule pin policy)
+  - `PMOVES-BoTZ`: `#75` merged
+  - `PMOVES-DoX`: `#117`, `#118`, `#119` merged
 - March 4 hardening merge wave completed on `PMOVES.AI-Edition-Hardened`:
   - `#776` CodeQL JS/TS PR analysis alignment
   - `#777` `pmoves-ollama` egress fix for model pulls
@@ -22,6 +27,8 @@ A production-ready, self-hostable orchestration mesh for creative + agent worklo
 - Runtime verification post-wave:
   - `make -C pmoves smoke` PASS
   - `make -C pmoves model-readiness` PASS (`14/14`, `0` warnings)
+  - `GPU_SMOKE_STRICT=true make -C pmoves smoke-gpu` PASS (v1 GPU endpoint remains optional and may warn when absent)
+  - local operator evidence logs captured for smoke/model-readiness/strict-GPU runs during this audit pass
   - running unhealthy/restarting containers: `0`
 - `main` and hardened currently have zero file-content drift (`git diff` clean); commit-history divergence reflects squash + back-sync merge topology.
 - GHCR operations lane now enforces local-first validation for SupaSerch (`build-local-supaserch` → `ghcr-prepublish-supaserch` → targeted dispatch), with secret bootstrap reuse via `ghcr-bootstrap-secrets`.

@@ -2,7 +2,9 @@
 
 Comprehensive hardening posture, CI/CD build infrastructure, and service runtime status for the PMOVES.AI platform.
 
-Last updated: 2026-02-28
+Last updated: 2026-03-04
+
+Live snapshot (2026-03-04): `PMOVES.AI` open PRs `0`, CodeQL open alerts `0`, Dependabot open alerts `1` (`medium`). Use `pmoves/docs/PRODUCTION_AUDIT_DASHBOARD.md` as the source-of-truth for live counters.
 
 ---
 
@@ -11,8 +13,8 @@ Last updated: 2026-02-28
 | Category | Coverage | Status |
 |----------|----------|--------|
 | **P1 Security Issues** | 0 remaining (10/10 fixed) | CLEAR |
-| **CodeQL High-Severity** | Phase H scope (19/19) fixed; 43 total alerts open (35 error, 8 warning) — see Dashboard for Group H triage | CLEAR (Phase H) |
-| **Dependabot High** | 5 open (serialize-javascript x2, minimatch x2, qs x1) | REGRESSION |
+| **CodeQL High-Severity** | 0 open CodeQL alerts (live snapshot 2026-03-04) | CLEAR |
+| **Dependabot High** | 0 open high-severity Dependabot alerts (live snapshot 2026-03-04) | CLEAR |
 | **Non-Root Users (USER directive)** | 29/29 services (100%) | COMPLETE |
 | **Read-Only Filesystems** | 30/30 services (100%) | COMPLETE |
 | **Cap Drop ALL** | All services including nats-init | COMPLETE |
@@ -292,7 +294,7 @@ All 5 infrastructure blockers (B1-B5) resolved as of 2026-02-17. See `pmoves/doc
 
 ---
 
-**Target achieved:** 0 open P1, 0 high CodeQL (Phase H scope)
-**Dependabot High regression:** 5 new high alerts (serialize-javascript, minimatch, qs) — requires remediation sprint
+**Target achieved:** 0 open P1, 0 open CodeQL alerts (live snapshot)
+**Dependabot posture:** 1 open medium alert, 0 open high alerts (live snapshot 2026-03-04)
 **Previous version:** v3.0 (2026-02-17)
-**Last updated:** 2026-02-28
+**Last updated:** 2026-03-04
