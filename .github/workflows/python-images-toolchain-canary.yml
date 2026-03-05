@@ -1,4 +1,4 @@
-name: SupaSerch toolchain canary
+name: Integration Python images toolchain canary
 
 on:
   schedule:
@@ -14,7 +14,7 @@ on:
         required: false
         type: string
       open_pr:
-        description: "Open/update PR when candidate passes build+Trivy"
+        description: "Open/update PR when all candidates pass build+Trivy"
         required: true
         default: true
         type: boolean
@@ -28,10 +28,12 @@ permissions:
   pull-requests: write
 
 jobs:
-  supaserch-toolchain-canary:
-    name: SupaSerch toolchain canary
-    # GHCR build/scan lane does not require GPU.
+  python-images-toolchain-canary:
+    name: Python images toolchain canary
+    # Build/scan lane does not require GPU.
     runs-on: [self-hosted, Linux, X64, vps]
+    env:
+      TRIVY_IMAGE: aquasec/trivy:0.57.1
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -55,7 +57,7 @@ jobs:
           text = dockerfile.read_text(encoding="utf-8")
           m = re.search(r'"setuptools==([^"]+)"\s+"wheel==([^"]+)"', text)
           if not m:
-              print("::error::Could not locate pinned setuptools/wheel in SupaSerch Dockerfile.")
+              print("::error::Could not locate pinned setuptools/wheel baseline in SupaSerch Dockerfile.")
               sys.exit(1)
 
           current_setuptools, current_wheel = m.group(1), m.group(2)
@@ -93,11 +95,12 @@ jobs:
       - name: No-op summary
         if: ${{ steps.versions.outputs.should_update != 'true' }}
         run: |
-          echo "No SupaSerch toolchain update required."
+          echo "No Python image toolchain update required."
           echo "${{ steps.versions.outputs.summary }}"
 
-      - name: Patch SupaSerch Dockerfile pins
+      - name: Patch toolchain pins across integration Python images
         if: ${{ steps.versions.outputs.should_update == 'true' }}
+        id: patch
         env:
           CANDIDATE_SETUPTOOLS: ${{ steps.versions.outputs.candidate_setuptools }}
           CANDIDATE_WHEEL: ${{ steps.versions.outputs.candidate_wheel }}
@@ -109,75 +112,130 @@ jobs:
           import re
           import sys
 
-          path = pathlib.Path("pmoves/services/supaserch/Dockerfile")
-          text = path.read_text(encoding="utf-8")
-          replacement = (
-              f"\"setuptools=={os.environ['CANDIDATE_SETUPTOOLS']}\" "
-              f"\"wheel=={os.environ['CANDIDATE_WHEEL']}\""
+          targets = [
+              pathlib.Path("pmoves/services/supaserch/Dockerfile"),
+              pathlib.Path("pmoves/services/deepresearch/Dockerfile"),
+              pathlib.Path("pmoves/services/pmoves-yt/Dockerfile"),
+              pathlib.Path("pmoves/services/archon/Dockerfile"),
+          ]
+
+          pin = (
+              f'"setuptools=={os.environ["CANDIDATE_SETUPTOOLS"]}" '
+              f'"wheel=={os.environ["CANDIDATE_WHEEL"]}"'
           )
-          updated, count = re.subn(
-              r'"setuptools==[^"]+"\s+"wheel==[^"]+"',
-              replacement,
-              text,
-              count=1,
-          )
-          if count != 1:
-              print("::error::Failed to patch SupaSerch Dockerfile pins.")
+
+          changed = []
+
+          def apply_patch(text: str) -> tuple[str, int]:
+              updated, count = re.subn(
+                  r'"setuptools==[^"]+"\s+"wheel==[^"]+"',
+                  pin,
+                  text,
+                  count=1,
+              )
+              if count:
+                  return updated, count
+
+              for pattern in [
+                  r'(--upgrade\s+pip)(\s*\\\\)',
+                  r'(--upgrade\s+pip)(\s*&&)',
+                  r'(--upgrade\s+pip)(\s*$)',
+              ]:
+                  repl = rf'\1 {pin}\2'
+                  updated, count = re.subn(pattern, repl, text, count=1, flags=re.MULTILINE)
+                  if count:
+                      return updated, count
+
+              return text, 0
+
+          for path in targets:
+              original = path.read_text(encoding="utf-8")
+              updated, count = apply_patch(original)
+              if count == 0:
+                  print(f"::error::{path}: could not locate pip upgrade command to pin toolchain")
+                  sys.exit(1)
+              if updated != original:
+                  path.write_text(updated, encoding="utf-8")
+                  changed.append(str(path))
+
+          if not changed:
+              print("::error::Expected toolchain updates, but no files changed.")
               sys.exit(1)
-          path.write_text(updated, encoding="utf-8")
+
+          print("Updated Dockerfiles:")
+          for item in changed:
+              print(f"- {item}")
+
+          out = pathlib.Path(os.environ["GITHUB_OUTPUT"])
+          with out.open("a", encoding="utf-8") as fh:
+              fh.write("changed_files<<EOF\n")
+              fh.write("\n".join(changed) + "\n")
+              fh.write("EOF\n")
           PY
-          git diff -- pmoves/services/supaserch/Dockerfile
+          git diff -- pmoves/services/*/Dockerfile || true
 
-      - name: Build candidate SupaSerch image
+      - name: Build + Trivy gate for each integration Python image
         if: ${{ steps.versions.outputs.should_update == 'true' }}
-        uses: docker/build-push-action@v6
-        with:
-          context: pmoves/services
-          file: pmoves/services/supaserch/Dockerfile
-          push: false
-          load: true
-          platforms: linux/amd64
-          tags: local/pmoves-supaserch:toolchain-canary
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+        run: |
+          set -euo pipefail
 
-      - name: Trivy vulnerability gate (HIGH/CRITICAL, ignore-unfixed)
-        if: ${{ steps.versions.outputs.should_update == 'true' }}
-        uses: aquasecurity/trivy-action@0.34.1
-        with:
-          image-ref: local/pmoves-supaserch:toolchain-canary
-          format: table
-          exit-code: "1"
-          ignore-unfixed: true
-          vuln-type: "os,library"
-          severity: "HIGH,CRITICAL"
-          scanners: "vuln"
+          targets=(
+            "supaserch|pmoves/services|pmoves/services/supaserch/Dockerfile|local/pmoves-supaserch:toolchain-canary"
+            "deepresearch|pmoves|pmoves/services/deepresearch/Dockerfile|local/pmoves-deepresearch:toolchain-canary"
+            "pmoves-yt|pmoves/services/pmoves-yt|pmoves/services/pmoves-yt/Dockerfile|local/pmoves-yt:toolchain-canary"
+            "archon|pmoves|pmoves/services/archon/Dockerfile|local/pmoves-archon:toolchain-canary"
+          )
 
-      - name: Create PR for pinned bump
+          for entry in "${targets[@]}"; do
+            IFS='|' read -r name context dockerfile tag <<<"$entry"
+            echo "==> Building ${name} (${dockerfile})"
+            docker buildx build --platform linux/amd64 -f "$dockerfile" -t "$tag" "$context" --load
+
+            echo "==> Trivy gate ${name} (${tag})"
+            docker run --rm \
+              -v /var/run/docker.sock:/var/run/docker.sock \
+              "$TRIVY_IMAGE" image \
+              --severity HIGH,CRITICAL \
+              --ignore-unfixed \
+              --format table \
+              --exit-code 1 \
+              "$tag"
+          done
+
+      - name: Create PR for pinned bump (all integration Python images)
         if: ${{ steps.versions.outputs.should_update == 'true' && github.event.inputs.open_pr != 'false' }}
         uses: peter-evans/create-pull-request@v7
         with:
-          branch: chore/supaserch-toolchain-canary
+          branch: chore/python-images-toolchain-canary
           delete-branch: true
           title: >-
-            chore(supaserch): bump pinned toolchain to
+            chore(images): bump pinned python toolchain to
             setuptools==${{ steps.versions.outputs.candidate_setuptools }},
             wheel==${{ steps.versions.outputs.candidate_wheel }}
           body: |
-            Automated SupaSerch toolchain canary bump.
+            Automated Python image toolchain canary bump.
 
             Candidate pins:
             - `setuptools==${{ steps.versions.outputs.candidate_setuptools }}`
             - `wheel==${{ steps.versions.outputs.candidate_wheel }}`
 
-            Validation performed in this run:
-            - Docker build (`linux/amd64`) for `pmoves/services/supaserch/Dockerfile`
-            - Trivy gate (`HIGH,CRITICAL`, `ignore-unfixed=true`)
+            Validated images in this repo:
+            - `supaserch`
+            - `deepresearch`
+            - `pmoves-yt`
+            - `archon`
 
-            If this PR is approved, merge through normal production promotion flow.
+            Validation performed in this run:
+            - Docker builds (`linux/amd64`) for each image
+            - Trivy gate (`HIGH,CRITICAL`, `ignore-unfixed=true`) for each image
+
+            If approved, merge through normal production promotion flow.
           commit-message: >-
-            chore(supaserch): bump pinned toolchain to
+            chore(images): bump pinned python toolchain to
             setuptools==${{ steps.versions.outputs.candidate_setuptools }},
             wheel==${{ steps.versions.outputs.candidate_wheel }}
           add-paths: |
             pmoves/services/supaserch/Dockerfile
+            pmoves/services/deepresearch/Dockerfile
+            pmoves/services/pmoves-yt/Dockerfile
+            pmoves/services/archon/Dockerfile

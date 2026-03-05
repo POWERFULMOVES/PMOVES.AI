@@ -142,9 +142,9 @@ Expected required groups:
 
 If strict mode fails, bring the runner(s) online first. Otherwise GHCR and hardened build workflows will queue indefinitely.
 
-## 8. GHCR Local-First Prepublish Gate (SupaSerch)
+## 8. GHCR Local-First Prepublish Gate (Production Matrix)
 
-Before dispatching `integrations-ghcr.yml` for SupaSerch, optionally bootstrap GHCR auth secrets (when rotation/refresh is needed), then run the local gate so non-VPS operators can validate Dockerfile/context correctness locally.
+Before dispatching `integrations-ghcr.yml`, optionally bootstrap GHCR auth secrets (when rotation/refresh is needed), then run the local gate so non-VPS operators can validate production image Dockerfile/context correctness locally.
 
 If GHCR auth secrets need rotation/bootstrap from existing credentials in `env.shared`:
 
@@ -153,14 +153,35 @@ cd pmoves
 make ghcr-bootstrap-secrets GH_SECRET_ENV=Dev GH_REPO=<org>/<repo>
 ```
 
-Then run the local prepublish gate:
+Then run the local prepublish gate for all in-repo production images:
+
+```bash
+cd pmoves
+make ghcr-prepublish-inrepo
+```
+
+Optional: include external integration repos from the matrix as part of local validation:
+
+```bash
+cd pmoves
+make ghcr-prepublish-all
+```
+
+Use the targeted SupaSerch gate when triaging one image:
 
 ```bash
 cd pmoves
 make ghcr-prepublish-supaserch
 ```
 
-Then dispatch the targeted matrix build:
+Then dispatch the full production matrix build:
+
+```bash
+cd pmoves
+make ghcr-dispatch-all GHCR_DISPATCH_REF=<branch> GHCR_NAMESPACE=<org-namespace>
+```
+
+Or dispatch a targeted integration lane:
 
 ```bash
 cd pmoves
@@ -191,6 +212,45 @@ Use the per-submodule matrix in:
 
 `pmoves/docs/integrations/SUBMODULE_PRODUCTION_RELEASE_CHECKLIST.md`
 
+## 10. Python Images Toolchain Canary (weekly + manual)
+
+Production Python image toolchain pins are intentionally exact for reproducibility. Weekly canary checks for new `setuptools`/`wheel` releases, validates build+Trivy across the managed image set (`supaserch`, `deepresearch`, `pmoves-yt`, `archon`), and opens a bump PR only when every candidate passes.
+
+Manual dispatch:
+
+```bash
+gh workflow run python-images-toolchain-canary.yml \
+  --repo POWERFULMOVES/PMOVES.AI \
+  --ref PMOVES.AI-Edition-Hardened
+```
+
+Manual dispatch with explicit versions:
+
+```bash
+gh workflow run python-images-toolchain-canary.yml \
+  --repo POWERFULMOVES/PMOVES.AI \
+  --ref PMOVES.AI-Edition-Hardened \
+  -f setuptools_version=82.0.0 \
+  -f wheel_version=0.46.3 \
+  -f open_pr=true
+```
+
+Local parity:
+
+```bash
+docker buildx build --platform linux/amd64 \
+  -f pmoves/services/supaserch/Dockerfile \
+  -t local/pmoves-supaserch:toolchain-canary \
+  pmoves/services --load
+
+docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+  aquasec/trivy:0.57.1 image --severity HIGH,CRITICAL \
+  --ignore-unfixed --format table --exit-code 1 \
+  local/pmoves-supaserch:toolchain-canary
+```
+
+Runbook: `docs/hardening/PYTHON_IMAGES_TOOLCHAIN_CANARY.md`
+
 ## Checklists
 
 Copy these bullets into PR descriptions (or tick the template boxes) after each local run:
@@ -203,7 +263,8 @@ Copy these bullets into PR descriptions (or tick the template boxes) after each 
 - [ ] Integration contract check (`make integration-contract-check-strict`; plus `INTEGRATION_PATH=...` when onboarding/updating an opted-in integration)
 - [ ] Discord embed smoke (`make demo-content-published`) when validating multimedia metadata
 - [ ] Self-hosted runner lane check (`make ci-runners-check-strict`) before GHCR/self-hosted dispatches
-- [ ] GHCR local-first prepublish gate (`make ghcr-prepublish-supaserch`) before targeted GHCR dispatch
+- [ ] GHCR local-first prepublish gate (`make ghcr-prepublish-inrepo`) before production GHCR dispatch
+- [ ] Python images toolchain canary dispatch/review (`python-images-toolchain-canary.yml`) when bumping Docker toolchain pins
 - [ ] Submodule deterministic gate (`make submodule-layer-validate-all-strict` through `make smoke-prod`, plus `make submodule-branch-policy-check`)
 
 If any check is intentionally skipped (e.g., doc-only change), note the reason in the PR “Testing” section.
