@@ -16,7 +16,7 @@
     "@supabase/supabase-js": "^2.38.4",
     "neo4j-driver": "^5.15.0",
     "redis": "^4.6.10",
-    "multer": "^2.1.0",
+    "multer": "^2.1.1",
     "express-rate-limit": "^7.1.5",
     "jsonwebtoken": "^9.0.3",
     "dotenv": "^16.3.1",
