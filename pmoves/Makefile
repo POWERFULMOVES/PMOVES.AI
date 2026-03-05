@@ -1600,11 +1600,15 @@ channel-monitor-up: ensure-env-shared ## Start channel-monitor with runtime-awar
 	      db_url=$$(printf "%s" "$$v" | sed -e "s@127\\.0\\.0\\.1@host.docker.internal@g" -e "s@localhost@host.docker.internal@g"); \
 	    fi; \
 	  fi; \
-	  if [ -z "$$db_url" ]; then \
+	  if [ -z "$$db_url" ] && [ "$$runtime" != "compose" ]; then \
 	    db_url="postgresql://$${SUPABASE_DB_USER:-postgres}:$${SUPABASE_DB_PASSWORD:-postgres}@supabase-db:5432/$${SUPABASE_DB_NAME:-postgres}"; \
 	  fi; \
 	  echo "→ Starting channel-monitor (runtime=$$runtime)"; \
-	  CHANNEL_MONITOR_DATABASE_URL="$$db_url" $(DC) --profile workers --profile yt up -d channel-monitor; \
+	  if [ -n "$$db_url" ]; then \
+	    CHANNEL_MONITOR_DATABASE_URL="$$db_url" $(DC) --profile workers --profile yt up -d channel-monitor; \
+	  else \
+	    $(DC) --profile workers --profile yt up -d channel-monitor; \
+	  fi; \
 	  echo "✔ Channel monitor up"; \
 	'
 
@@ -2402,6 +2406,7 @@ compose: ensure-env-shared ## Run docker compose with PMOVES env layering. Usage
 .PHONY: up-external
 up-external: ensure-env-shared ## Start external integration services (Wger, Firefly, Open Notebook, Jellyfin)
 	@echo "→ Starting external stacks (Wger, Firefly, Open Notebook, Jellyfin)..."
+	@docker network inspect pmoves_external >/dev/null 2>&1 || docker network create --driver bridge pmoves_external
 	@$(EXTERNAL_DC) up -d
 	@echo "✔ External stacks up"
 

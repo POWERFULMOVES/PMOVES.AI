@@ -7,5 +7,5 @@ export const metadata: Metadata = {
 };
 
 export default function TokenismPage() {
-  redirect('/dashboard/services/tokenism');
+  redirect('/dashboard/services');
 }
