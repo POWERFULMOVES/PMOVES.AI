@@ -24,15 +24,14 @@ on:
       - '**/*.yml'
       - '**/*.yaml'
       - '.github/**'
-    # Also exclude vendored/generated directories
-    paths-ignore:
-      - 'integrations-workspace/**'
-      - '**/.venv/**'
-      - '**/venv/**'
-      - '**/vendor/**'
-      - '**/node_modules/**'
-      - '**/site-packages/**'
-      - '**/.eggs/**'
+      # Exclude vendored/generated directories via negated patterns.
+      - '!integrations-workspace/**'
+      - '!**/.venv/**'
+      - '!**/venv/**'
+      - '!**/vendor/**'
+      - '!**/node_modules/**'
+      - '!**/site-packages/**'
+      - '!**/.eggs/**'
   pull_request:
     branches: [ "main", "PMOVES.AI-Edition-Hardened" ]
     paths:
@@ -44,14 +43,13 @@ on:
       - '**/*.yml'
       - '**/*.yaml'
       - '.github/**'
-    paths-ignore:
-      - 'integrations-workspace/**'
-      - '**/.venv/**'
-      - '**/venv/**'
-      - '**/vendor/**'
-      - '**/node_modules/**'
-      - '**/site-packages/**'
-      - '**/.eggs/**'
+      - '!integrations-workspace/**'
+      - '!**/.venv/**'
+      - '!**/venv/**'
+      - '!**/vendor/**'
+      - '!**/node_modules/**'
+      - '!**/site-packages/**'
+      - '!**/.eggs/**'
   workflow_dispatch:
   schedule:
     - cron: '16 20 * * 5'
