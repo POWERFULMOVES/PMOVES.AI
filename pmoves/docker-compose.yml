@@ -956,7 +956,7 @@ services:
     - ${HIRAG_V1_HOST_PORT:-8089}:8086
     depends_on:
       qdrant:
-        condition: service_started
+        condition: service_healthy
         required: false
       neo4j:
         condition: service_healthy
@@ -966,7 +966,7 @@ services:
     - pmoves_data
     - pmoves_bus
     healthcheck:
-      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8086/healthz', timeout=5)"]
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8086/hirag/admin/stats', timeout=5)"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -1018,7 +1018,7 @@ services:
     - pmoves_bus
     depends_on:
       minio:
-        condition: service_started
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/healthz', timeout=5)"]
       interval: 30s
@@ -1114,11 +1114,11 @@ services:
     - host.docker.internal:host-gateway
     depends_on:
       qdrant:
-        condition: service_started
+        condition: service_healthy
       meilisearch:
-        condition: service_started
+        condition: service_healthy
       minio:
-        condition: service_started
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8083/healthz', timeout=5)"]
       interval: 30s
@@ -1144,7 +1144,7 @@ services:
       extract-worker:
         condition: service_started
       minio:
-        condition: service_started
+        condition: service_healthy
     ports:
     - ${PDF_INGEST_PORT:-8092}:8092
     profiles:
@@ -1230,7 +1230,7 @@ services:
         condition: service_healthy
         required: false
       minio:
-        condition: service_started
+        condition: service_healthy
     ports:
     - ${TRANSCRIBE_HOST_PORT:-8074}:8000
     profiles:
@@ -1383,7 +1383,7 @@ services:
     - ./config:/app/config
     depends_on:
       minio:
-        condition: service_started
+        condition: service_healthy
     ports:
     - ${PMOVES_YT_PORT:-8077}:8077
     networks:
@@ -1501,7 +1501,7 @@ services:
     - ${HIRAG_V2_HOST_PORT:-8086}:8086
     depends_on:
       qdrant:
-        condition: service_started
+        condition: service_healthy
       neo4j:
         condition: service_healthy
     networks:
@@ -1510,7 +1510,7 @@ services:
     - pmoves_bus
     - pmoves_external  # Required for reranker API calls
     healthcheck:
-      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8086/healthz', timeout=5)"]
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8086/hirag/admin/stats', timeout=5)"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -1564,7 +1564,7 @@ services:
     - ${HIRAG_V2_GPU_HOST_PORT:-8090}:8086
     depends_on:
       qdrant:
-        condition: service_started
+        condition: service_healthy
         required: false
       neo4j:
         condition: service_healthy
@@ -1574,7 +1574,7 @@ services:
     - pmoves_data
     - pmoves_bus
     healthcheck:
-      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8086/healthz', timeout=5)"]
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8086/hirag/admin/stats', timeout=5)"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -1651,7 +1651,7 @@ services:
     - ${HIRAG_V2_GPU_HOST_PORT:-8087}:8086
     depends_on:
       qdrant:
-        condition: service_started
+        condition: service_healthy
         required: false
       neo4j:
         condition: service_healthy
@@ -1664,7 +1664,7 @@ services:
     extra_hosts:
     - host.docker.internal:host-gateway
     healthcheck:
-      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8086/healthz', timeout=5)"]
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8086/hirag/admin/stats', timeout=5)"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -2578,7 +2578,7 @@ services:
       nats:
         condition: service_healthy
       minio:
-        condition: service_started
+        condition: service_healthy
     volumes:
       - comfy-watcher-output:/data
       - comfy-watcher-state:/state
