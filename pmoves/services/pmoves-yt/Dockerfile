@@ -9,6 +9,7 @@ COPY requirements.lock ./
 ARG YTDLP_VERSION=
 ARG YTDLP_PIP_URL=
 RUN pip install --no-cache-dir --upgrade pip \
+    "setuptools==82.0.0" "wheel==0.46.3" \
     && pip install --no-cache-dir -r requirements.lock \
     && if [ -n "$YTDLP_PIP_URL" ]; then pip install --no-cache-dir "$YTDLP_PIP_URL"; \
        elif [ -n "$YTDLP_VERSION" ]; then pip install --no-cache-dir "yt-dlp[default]==${YTDLP_VERSION}"; \
