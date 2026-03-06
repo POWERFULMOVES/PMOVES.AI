@@ -1,7 +1,21 @@
 
 # PMOVES v5 • NEXT_STEPS
 Note: Consolidated plan index at pmoves/docs/PMOVES.AI PLANS/README_DOCS_INDEX.md.
-_Last updated: 2026-03-05_
+_Last updated: 2026-03-06_
+
+### Latest changes (Mar 6, 2026)
+- Merge queue closeout completed on `main`:
+  - merged: `#797`, `#798`, `#799`, `#800`, `#802`, `#803`, `#804`, `#805`, `#806`, `#807`
+  - closed as superseded: `#801` (changes incorporated into `#802`)
+- CI blocker remediation merged in `#802`:
+  - fixed invalid CodeQL path filter syntax causing startup failures
+  - restored auth/bootstrap runtime compatibility (`auth-check`, `supabase-boot-user`)
+  - addressed outstanding CodeRabbit operational blockers (self-hosted trigger coverage, Open Notebook env/docs alignment, channel-monitor fallback)
+- Runtime production validation rerun:
+  - `make -C pmoves smoke` PASS
+  - `make -C pmoves model-readiness` PASS (`14/14`)
+  - `GPU_SMOKE_STRICT=true make -C pmoves smoke-gpu` PASS (v1 GPU optional warning only)
+- Remaining ops focus: keep non-main queued self-hosted runs drained to preserve throughput for `main` audits and release checks.
 
 ### Latest changes (Mar 5, 2026)
 - Production Python GHCR image reproducibility lane hardened:
