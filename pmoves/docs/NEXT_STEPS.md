@@ -16,6 +16,9 @@ _Last updated: 2026-03-06_
   - `make -C pmoves model-readiness` PASS (`14/14`)
   - `GPU_SMOKE_STRICT=true make -C pmoves smoke-gpu` PASS (v1 GPU optional warning only)
 - Remaining ops focus: keep non-main queued self-hosted runs drained to preserve throughput for `main` audits and release checks.
+- Published a canonical cross-integration model abstraction policy: `pmoves/docs/MODEL_FABRIC_CONTRACT.md`.
+  - codifies model/provider contract across Agent Zero, Archon, Open Notebook overlays, TensorZero routing, GPU orchestration, creator media lanes, and AgentGym-RL dataset/model loops.
+  - establishes upstream-first overlay rules and readiness gates for model-routing changes.
 
 ### Latest changes (Mar 5, 2026)
 - Production Python GHCR image reproducibility lane hardened:

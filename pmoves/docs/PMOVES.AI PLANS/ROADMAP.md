@@ -13,6 +13,7 @@ A production-ready, self-hostable orchestration mesh for creative + agent worklo
   - `make -C pmoves model-readiness` PASS (`14/14`, `0` failed, `0` warnings)
   - `GPU_SMOKE_STRICT=true make -C pmoves smoke-gpu` PASS (optional v1 GPU endpoint warning only)
 - Remaining active blockers shifted from code defects to runner-capacity operations (self-hosted queue pressure and stale queued runs).
+- Cross-integration model abstraction contract published: `pmoves/docs/MODEL_FABRIC_CONTRACT.md` to unify provider/model routing policy across agents, notebook, creator, GPU orchestration, and RL training lanes.
 
 - Branch strategy: `PMOVES.AI-Edition-Hardened` is the production release branch; `main` receives promoted merges from hardened.
 - Production Python GHCR image toolchains now use reproducible exact pins with automated weekly canary validation (`.github/workflows/python-images-toolchain-canary.yml`): detect latest PyPI candidate -> patch managed Dockerfiles (`supaserch`, `deepresearch`, `pmoves-yt`, `archon`) -> build -> Trivy HIGH/CRITICAL gate -> auto-PR on pass.
