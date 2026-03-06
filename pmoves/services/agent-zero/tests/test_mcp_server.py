@@ -64,13 +64,42 @@ def test_notebook_search_uses_modern_endpoint(monkeypatch: pytest.MonkeyPatch, m
     assert result["notes"][0]["id"] == "n1"
 
 
-def test_notebook_search_with_filters_uses_legacy_endpoint(monkeypatch: pytest.MonkeyPatch, mcp_module: ModuleType) -> None:
+def test_notebook_search_with_filters_uses_modern_endpoint(monkeypatch: pytest.MonkeyPatch, mcp_module: ModuleType) -> None:
     monkeypatch.setattr(mcp_module, "NOTEBOOK_API_URL", "http://notebook:5055")
     monkeypatch.setattr(mcp_module, "NOTEBOOK_API_TOKEN", "token")
     monkeypatch.setattr(mcp_module, "NOTEBOOK_WORKSPACE", None)
 
     calls: list[tuple[str, Dict[str, Any]]] = []
     sequence = [
+        _DummyResponse(200, payload={"results": [{"note": {"id": "modern-1", "title": "Modern note"}}], "total": 1}),
+    ]
+
+    def _post(url: str, json: Dict[str, Any], headers: Dict[str, str], timeout: int) -> _DummyResponse:
+        calls.append((url, json))
+        return sequence[len(calls) - 1]
+
+    monkeypatch.setattr(mcp_module.requests, "post", _post)
+    result = mcp_module.notebook_search({"query": "pmoves", "limit": 2, "notebook_id": "nb-1"})
+
+    assert [url for url, _ in calls] == [
+        "http://notebook:5055/api/search",
+    ]
+    assert calls[0][1] == {"query": "pmoves", "limit": 2, "filters": {"notebook_id": "nb-1"}}
+    assert result["endpoint"] == "/api/search"
+    assert result["notes"][0]["id"] == "modern-1"
+
+
+def test_notebook_search_with_filters_falls_back_to_legacy_endpoint(
+    monkeypatch: pytest.MonkeyPatch, mcp_module: ModuleType
+) -> None:
+    monkeypatch.setattr(mcp_module, "NOTEBOOK_API_URL", "http://notebook:5055")
+    monkeypatch.setattr(mcp_module, "NOTEBOOK_API_TOKEN", "token")
+    monkeypatch.setattr(mcp_module, "NOTEBOOK_WORKSPACE", None)
+
+    calls: list[tuple[str, Dict[str, Any]]] = []
+    sequence = [
+        _DummyResponse(404, payload={"detail": "not found"}),
+        _DummyResponse(404, payload={"detail": "not found"}),
         _DummyResponse(200, payload={"results": [{"note": {"id": "legacy-1", "title": "Legacy note"}}], "total": 1}),
     ]
 
@@ -82,9 +111,12 @@ def test_notebook_search_with_filters_uses_legacy_endpoint(monkeypatch: pytest.M
     result = mcp_module.notebook_search({"query": "pmoves", "limit": 2, "notebook_id": "nb-1"})
 
     assert [url for url, _ in calls] == [
+        "http://notebook:5055/api/search",
+        "http://notebook:5055/search",
         "http://notebook:5055/api/v1/notebooks/search",
     ]
     assert calls[0][1]["filters"] == {"notebook_id": "nb-1"}
+    assert calls[2][1]["filters"] == {"notebook_id": "nb-1"}
     assert result["endpoint"] == "/api/v1/notebooks/search"
     assert result["notes"][0]["id"] == "legacy-1"
 

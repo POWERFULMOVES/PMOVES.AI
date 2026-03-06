@@ -198,12 +198,13 @@ def notebook_search(payload: Dict[str, Any]) -> Dict[str, Any]:
     if query:
         legacy_body["query"] = query
     if filters:
+        modern_body["filters"] = filters
         legacy_body["filters"] = filters
 
-    # Open Notebook 1.8 moved search to /api/search. Keep legacy fallback.
-    # Filtered searches still require the legacy endpoint.
+    # Open Notebook 1.8 moved search to /api/search. Keep legacy fallback for
+    # older deployments where /api/v1/notebooks/search still exists.
     attempts: List[tuple[str, Dict[str, Any]]] = []
-    if query and not filters:
+    if query or filters:
         attempts.append((NOTEBOOK_SEARCH_ENDPOINTS[0], modern_body))
         attempts.append((NOTEBOOK_SEARCH_ENDPOINTS[1], modern_body))
     attempts.append((NOTEBOOK_SEARCH_ENDPOINTS[2], legacy_body))
