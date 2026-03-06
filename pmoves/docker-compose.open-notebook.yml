@@ -49,6 +49,7 @@ services:
           - open-notebook
       pmoves_app:
         aliases:
+          - cataclysm-open-notebook
           - open-notebook
 networks:
   cataclysm:

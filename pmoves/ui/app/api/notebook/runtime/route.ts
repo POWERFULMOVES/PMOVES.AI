@@ -6,7 +6,7 @@ import { ErrorIds } from '@/lib/constants/errorIds';
 const NOTEBOOK_SYNC_URL = (
   process.env.NOTEBOOK_SYNC_URL ||
   process.env.NEXT_PUBLIC_NOTEBOOK_SYNC_URL ||
-  'http://localhost:8095'
+  'http://notebook-sync:8095'
 ).replace(/\/$/, '');
 
 export async function GET(_req: NextRequest) {
