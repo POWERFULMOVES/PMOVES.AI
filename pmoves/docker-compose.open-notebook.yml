@@ -12,8 +12,8 @@ x-env-tier-worker: &env-tier-worker
 
 services:
   open-notebook:
-    image: ${OPEN_NOTEBOOK_IMAGE:-ghcr.io/powerfulmoves/pmoves-open-notebook:pmoves-latest}
-    # Default to the Open Notebook fork; override OPEN_NOTEBOOK_IMAGE to pin your own tag.
+    image: ${OPEN_NOTEBOOK_IMAGE:-ghcr.io/lfnovo/open-notebook:1.8.0}
+    # Pinned upstream default; override OPEN_NOTEBOOK_IMAGE for PMOVES fork/custom tags.
     container_name: cataclysm-open-notebook
     restart: unless-stopped
     <<: *env-tier-worker
@@ -21,8 +21,8 @@ services:
       # UI talks to API on localhost inside container.
       API_URL: http://localhost:5055
       HOSTNAME: 0.0.0.0
-      OPEN_NOTEBOOK_PASSWORD: ${OPEN_NOTEBOOK_PASSWORD:?Set OPEN_NOTEBOOK_PASSWORD}
-      OPEN_NOTEBOOK_API_TOKEN: ${OPEN_NOTEBOOK_API_TOKEN:?Set OPEN_NOTEBOOK_API_TOKEN}
+      OPEN_NOTEBOOK_PASSWORD: ${OPEN_NOTEBOOK_PASSWORD:-${OPEN_NOTEBOOK_API_TOKEN:?Set OPEN_NOTEBOOK_PASSWORD or OPEN_NOTEBOOK_API_TOKEN}}
+      OPEN_NOTEBOOK_API_TOKEN: ${OPEN_NOTEBOOK_API_TOKEN:-${OPEN_NOTEBOOK_PASSWORD:?Set OPEN_NOTEBOOK_API_TOKEN or OPEN_NOTEBOOK_PASSWORD}}
       NOTEBOOK_PROVIDER_MODE: ${NOTEBOOK_PROVIDER_MODE:-tensorzero}
       TENSORZERO_BASE_URL: ${TENSORZERO_BASE_URL:-http://tensorzero-gateway:3030/v1}
       TENSORZERO_API_KEY: ${TENSORZERO_API_KEY:-pmoves-internal}
@@ -32,8 +32,8 @@ services:
       SURREAL_URL: ws://${OPEN_NOTEBOOK_SURREAL_ADDRESS:-open-notebook-surrealdb-ext}:${OPEN_NOTEBOOK_SURREAL_PORT:-8000}/rpc
       SURREAL_ADDRESS: ${OPEN_NOTEBOOK_SURREAL_ADDRESS:-open-notebook-surrealdb-ext}
       SURREAL_PORT: ${OPEN_NOTEBOOK_SURREAL_PORT:-8000}
-      SURREAL_USER: ${OPEN_NOTEBOOK_SURREAL_USER:?Set OPEN_NOTEBOOK_SURREAL_USER}
-      SURREAL_PASS: ${OPEN_NOTEBOOK_SURREAL_PASS:?Set OPEN_NOTEBOOK_SURREAL_PASS}
+      SURREAL_USER: ${OPEN_NOTEBOOK_SURREAL_USER:-${SURREAL_USER:?Set OPEN_NOTEBOOK_SURREAL_USER or SURREAL_USER}}
+      SURREAL_PASS: ${OPEN_NOTEBOOK_SURREAL_PASS:-${SURREAL_PASS:?Set OPEN_NOTEBOOK_SURREAL_PASS or SURREAL_PASS}}
       SURREAL_NAMESPACE: ${OPEN_NOTEBOOK_SURREAL_NAMESPACE:-open-notebook}
       SURREAL_DATABASE: ${OPEN_NOTEBOOK_SURREAL_DATABASE:-open-notebook}
     ports:
@@ -54,6 +54,7 @@ services:
           - open-notebook
       pmoves_app:
         aliases:
+          - cataclysm-open-notebook
           - open-notebook
 networks:
   cataclysm:

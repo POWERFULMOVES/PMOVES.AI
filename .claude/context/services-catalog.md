@@ -159,10 +159,18 @@ Comprehensive reference of all production services, ports, APIs, and integration
 - **Lifecycle:** Formerly dormant; activated in PR #787-791
 
 ### Open Notebook (External Integration)
-- **Purpose:** Knowledge base / note-taking (SurrealDB-backed)
-- **Access:** Via `OPEN_NOTEBOOK_API_URL` + API token
-- **Used By:** DeepResearch, notebook-sync
-- **Status:** External submodule integration
+- **Ports:** 8503 (UI), 5055 (API)
+- **Purpose:** Knowledge base / note-taking workspace
+- **Compose File:** `pmoves/docker-compose.open-notebook.yml` (or `pmoves/docker-compose.external.yml` in external profile)
+- **Stack:** Next.js UI + FastAPI backend + SurrealDB
+- **Key Endpoints:**
+  - `GET http://localhost:5055/health` - API health
+  - `GET http://localhost:8503/` - UI readiness
+  - `GET http://localhost:4482/api/notebook/runtime` - PMOVES Notebook Workbench runtime status
+- **Access:** Via `OPEN_NOTEBOOK_API_URL` + bearer token (`OPEN_NOTEBOOK_API_TOKEN`)
+- **Branded Defaults:** `OPEN_NOTEBOOK_PASSWORD` and `OPEN_NOTEBOOK_API_TOKEN` are expected to be identical in the PMOVES bundle
+- **Used By:** DeepResearch, notebook-sync, PMOVES.YT sync, Agent Zero, Notebook Workbench API routes
+- **Status:** External integration (upstream image default, PMOVES image override supported)
 
 ## Voice & Speech Services
 
@@ -633,6 +641,7 @@ http://localhost:8088/healthz  # Presign
 http://localhost:8085/healthz  # Render Webhook
 http://localhost:8093/healthz  # Jellyfin Bridge
 http://localhost:8094/healthz  # Publisher-Discord
+http://localhost:5055/health   # Open Notebook API
 ```
 
 ### All Metrics Endpoints
