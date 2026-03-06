@@ -3,7 +3,7 @@
 > **Single source of truth** for PMOVES.AI production readiness.
 > Supersedes all individual audit documents accumulated Feb 7 -- Feb 18, 2026.
 
-**Last Updated:** 2026-03-05 (GHCR production prepublish validation refresh)
+**Last Updated:** 2026-03-06 (merge queue closeout + production re-validation)
 **Branch:** `PMOVES.AI-Edition-Hardened` (production release lane)
 **Commit:** `96adc266`
 **Consolidated From:** 27 audit documents
@@ -25,6 +25,24 @@
   - summary CSV: `pmoves/docs/logs/ghcr-local-prepublish/summary-2026-03-05.csv`
   - vuln-only summary CSV: `pmoves/docs/logs/ghcr-local-prepublish/summary-2026-03-05-vulnonly.csv`
   - per-image `.log` files are generated locally under `pmoves/docs/logs/ghcr-local-prepublish/` (ignored in git)
+
+---
+
+## Latest Changes (Mar 6, 2026)
+
+- Merge queue closeout completed on `main`:
+  - merged: `#797`, `#798`, `#799`, `#800`, `#802`, `#803`, `#804`, `#805`, `#806`, `#807`
+  - superseded closure: `#801` (scope absorbed into `#802`)
+- CI/startup blocker class closed for `#802`:
+  - CodeQL workflow parse failure fixed (valid path filter semantics)
+  - auth/bootstrap runtime compatibility restored (`auth-check` + `supabase-boot-user`)
+  - remaining CodeRabbit major comments resolved in follow-up commits before merge
+- Production runtime validation (post-merge) now green:
+  - `make -C pmoves smoke` PASS
+  - `make -C pmoves model-readiness` PASS (`14/14`, `0` failed, `0` warnings)
+  - `GPU_SMOKE_STRICT=true make -C pmoves smoke-gpu` PASS (optional v1 GPU endpoint warning only)
+- Queue hygiene pass executed:
+  - stale non-main queued/pending self-hosted runs canceled to free runner capacity for release-critical lanes.
 
 ---
 

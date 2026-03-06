@@ -1,10 +1,18 @@
 # PMOVES v5 • ROADMAP
-Last updated: 2026-03-05
+Last updated: 2026-03-06
 
 ## Vision
 A production-ready, self-hostable orchestration mesh for creative + agent workloads across GPU boxes and Jetsons: **hybrid Hi‑RAG**, **Supabase Studio**, **n8n orchestration**, **Jellyfin publishing**, and **graph-aware retrieval**.
 
-## Audit Snapshot (2026-03-05)
+## Audit Snapshot (2026-03-06)
+
+- March 6 merge wave completed on `main`: `#797`, `#798`, `#799`, `#800`, `#802`, plus Dependabot workflow updates `#803`-`#807`.
+- Superseded lane cleanup completed: `#801` closed (scope incorporated into `#802`).
+- Production runtime re-validation passed after merge wave:
+  - `make -C pmoves smoke` PASS
+  - `make -C pmoves model-readiness` PASS (`14/14`, `0` failed, `0` warnings)
+  - `GPU_SMOKE_STRICT=true make -C pmoves smoke-gpu` PASS (optional v1 GPU endpoint warning only)
+- Remaining active blockers shifted from code defects to runner-capacity operations (self-hosted queue pressure and stale queued runs).
 
 - Branch strategy: `PMOVES.AI-Edition-Hardened` is the production release branch; `main` receives promoted merges from hardened.
 - Production Python GHCR image toolchains now use reproducible exact pins with automated weekly canary validation (`.github/workflows/python-images-toolchain-canary.yml`): detect latest PyPI candidate -> patch managed Dockerfiles (`supaserch`, `deepresearch`, `pmoves-yt`, `archon`) -> build -> Trivy HIGH/CRITICAL gate -> auto-PR on pass.
