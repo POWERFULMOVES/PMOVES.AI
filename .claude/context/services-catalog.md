@@ -169,7 +169,7 @@ Comprehensive reference of all production services, ports, APIs, and integration
   - `GET http://localhost:4482/api/notebook/runtime` - PMOVES Notebook Workbench runtime status
 - **Access:** Via `OPEN_NOTEBOOK_API_URL` + bearer token (`OPEN_NOTEBOOK_API_TOKEN`)
 - **Branded Defaults:** `OPEN_NOTEBOOK_PASSWORD` and `OPEN_NOTEBOOK_API_TOKEN` are expected to be identical in the PMOVES bundle
-- **Used By:** DeepResearch, notebook-sync, Notebook Workbench API routes
+- **Used By:** DeepResearch, notebook-sync, PMOVES.YT sync, Agent Zero, Notebook Workbench API routes
 - **Status:** External integration (upstream image default, PMOVES image override supported)
 
 ## Voice & Speech Services
