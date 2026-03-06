@@ -14,12 +14,26 @@ updates:
       prefix: "chore(deps)"
       include: "scope"
 
-  # GitHub Actions workflows
+  # Docker base images in shared docker assets
+  - package-ecosystem: "docker"
+    directory: "/pmoves/docker"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+    labels:
+      - "dependencies"
+      - "docker"
+    commit-message:
+      prefix: "chore(deps)"
+      include: "scope"
+
+  # GitHub Actions workflows — staggered to Wednesday to avoid Monday spike
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
-      day: "monday"
+      day: "wednesday"
       time: "09:00"
     labels:
       - "dependencies"
@@ -28,12 +42,12 @@ updates:
       prefix: "chore(deps)"
       include: "scope"
 
-  # Python dependencies for Agent Zero
+  # Python dependencies for Agent Zero — staggered to Friday
   - package-ecosystem: "pip"
     directory: "/pmoves/services/agent-zero"
     schedule:
       interval: "weekly"
-      day: "monday"
+      day: "friday"
       time: "09:00"
     labels:
       - "dependencies"
@@ -42,12 +56,12 @@ updates:
       prefix: "chore(deps)"
       include: "scope"
 
-  # Python dependencies for Archon
+  # Python dependencies for Archon — staggered to Friday
   - package-ecosystem: "pip"
     directory: "/pmoves/services/archon"
     schedule:
       interval: "weekly"
-      day: "monday"
+      day: "friday"
       time: "09:00"
     labels:
       - "dependencies"
@@ -56,12 +70,12 @@ updates:
       prefix: "chore(deps)"
       include: "scope"
 
-  # Python dependencies for DeepResearch
+  # Python dependencies for DeepResearch — staggered to Friday
   - package-ecosystem: "pip"
     directory: "/pmoves/services/deepresearch"
     schedule:
       interval: "weekly"
-      day: "monday"
+      day: "friday"
       time: "09:00"
     labels:
       - "dependencies"
