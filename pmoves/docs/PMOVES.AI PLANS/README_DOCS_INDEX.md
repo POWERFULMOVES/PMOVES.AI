@@ -47,6 +47,7 @@ After the 2026-02-18 reorganization, `pmoves/docs/` is organized as:
 - **Docs Validation (local source-of-truth audit)** — `../DOCS_VALIDATION_LOCAL_2026-02-14.md`
 - **Docs Consolidation + Archival Policy** — `../DOCS_CONSOLIDATION_ARCHIVAL_POLICY.md`
 - **Model Source Of Truth (Registry + Profiles + Tooling)** — `../MODEL_SOURCE_OF_TRUTH.md`
+- **Model Fabric Contract (Cross-Integration Abstraction Policy)** — `../MODEL_FABRIC_CONTRACT.md`
 - **Python Images Toolchain Canary (weekly build+Trivy bump lane)** — `../../../docs/hardening/PYTHON_IMAGES_TOOLCHAIN_CANARY.md`
 - **Submodule Integration Contract** — `../submodules/SUBMODULE_INTEGRATION_CONTRACT.md`
 - **Submodule Production Release Checklist (deterministic gates + merge order)** — `../integrations/SUBMODULE_PRODUCTION_RELEASE_CHECKLIST.md`
