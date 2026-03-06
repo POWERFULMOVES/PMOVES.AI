@@ -68,7 +68,7 @@ jobs:
           docker run --rm --gpus all nvidia/cuda:12.0-base nvidia-smi
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Generate GitHub App token
         id: app_token
@@ -153,7 +153,7 @@ jobs:
           submodules: recursive
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Generate GitHub App token
         id: app_token
