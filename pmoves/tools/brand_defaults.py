@@ -24,6 +24,19 @@ DEFAULTS = {
     # Presign/Render webhook secrets (demo defaults – replace for production)
     "PRESIGN_SHARED_SECRET": "change_me",
     "RENDER_WEBHOOK_SHARED_SECRET": "change_me",
+    # Open Notebook local branded defaults (non-production)
+    "OPEN_NOTEBOOK_PASSWORD": "pmoves4482",
+    "OPEN_NOTEBOOK_API_TOKEN": "pmoves4482",
+    "SURREAL_USER": "root",
+    "SURREAL_PASS": "root",
+    "OPEN_NOTEBOOK_SURREAL_USER": "root",
+    "OPEN_NOTEBOOK_SURREAL_PASS": "root",
+}
+
+PLACEHOLDER_VALUES = {
+    "",
+    "SURREAL_USER_HERE",
+    "SURREAL_PASS_HERE",
 }
 
 def _strong_random(n_bytes: int) -> str:
@@ -59,7 +72,7 @@ def upsert_env(path: Path, pairs: dict) -> None:
             # keep existing non-empty values
             m = re.search(rf"^\s*{re.escape(k)}\s*=(.*)$", text, re.M)
             current = (m.group(1).strip() if m else "").strip()
-            if current:
+            if current and current not in PLACEHOLDER_VALUES:
                 continue
             text = _set_kv(text, k, v)
         else:
@@ -111,7 +124,7 @@ def main() -> int:
     if not ENV.exists():
         ENV.write_text("", encoding="utf-8")
     upsert_env(ENV, DEFAULTS)
-    print(f"✔ Branded defaults applied to {ENV}")
+    print(f"Branded defaults applied to {ENV}")
     return 0
 
 if __name__ == "__main__":
