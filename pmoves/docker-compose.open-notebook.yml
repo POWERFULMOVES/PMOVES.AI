@@ -1,7 +1,13 @@
 # YAML anchors for tier-based env file loading
 x-env-tier-worker: &env-tier-worker
   env_file:
+    - path: env.shared.generated
+      required: false
+    - path: env.shared
+      required: false
     - path: env.tier-worker
+      required: false
+    - path: .env.generated
       required: false
 
 services:
@@ -14,6 +20,17 @@ services:
     environment:
       # UI talks to API on localhost inside container.
       API_URL: http://localhost:5055
+      HOSTNAME: 0.0.0.0
+      OPEN_NOTEBOOK_PASSWORD: ${OPEN_NOTEBOOK_PASSWORD:?Set OPEN_NOTEBOOK_PASSWORD}
+      OPEN_NOTEBOOK_API_TOKEN: ${OPEN_NOTEBOOK_API_TOKEN:?Set OPEN_NOTEBOOK_API_TOKEN}
+      # Ensure notebook can reach SurrealDB over pmoves_app.
+      SURREAL_URL: ws://${OPEN_NOTEBOOK_SURREAL_ADDRESS:-open-notebook-surrealdb-ext}:${OPEN_NOTEBOOK_SURREAL_PORT:-8000}/rpc
+      SURREAL_ADDRESS: ${OPEN_NOTEBOOK_SURREAL_ADDRESS:-open-notebook-surrealdb-ext}
+      SURREAL_PORT: ${OPEN_NOTEBOOK_SURREAL_PORT:-8000}
+      SURREAL_USER: ${OPEN_NOTEBOOK_SURREAL_USER:?Set OPEN_NOTEBOOK_SURREAL_USER}
+      SURREAL_PASS: ${OPEN_NOTEBOOK_SURREAL_PASS:?Set OPEN_NOTEBOOK_SURREAL_PASS}
+      SURREAL_NAMESPACE: ${OPEN_NOTEBOOK_SURREAL_NAMESPACE:-open-notebook}
+      SURREAL_DATABASE: ${OPEN_NOTEBOOK_SURREAL_DATABASE:-open-notebook}
     ports:
       - "${OPEN_NOTEBOOK_UI_PORT:-8503}:8502"
       - "${OPEN_NOTEBOOK_API_PORT:-5055}:5055"
@@ -34,6 +51,9 @@ services:
         aliases:
           - open-notebook
 networks:
+  cataclysm:
+    external: true
+    name: cataclysm-net
   pmoves:
     external: true
     name: pmoves-net

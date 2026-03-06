@@ -992,6 +992,7 @@ services:
     networks:
     - pmoves_api
     - pmoves_bus
+    - pmoves_external
     depends_on:
       minio:
         condition: service_started
@@ -1336,6 +1337,8 @@ services:
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
+    extra_hosts:
+    - host.docker.internal:host-gateway
     volumes:
     - ./config:/app/config
     depends_on:
@@ -2324,7 +2327,7 @@ services:
     ports:
       - "4482:3000"
     # Note: flute-gateway is optional (for voice features). Start with workers profile for full functionality.
-    networks: [ pmoves_app, pmoves_api, supabase_net ]
+    networks: [ pmoves_app, pmoves_api, pmoves_external ]
     profiles: [ "ui" ]
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:3000/api/health || exit 1"]
