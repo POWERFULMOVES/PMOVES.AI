@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import logging
 import os
+import sys
 import time
 from pathlib import Path
 from typing import Any
@@ -16,27 +17,21 @@ import httpx
 logger = logging.getLogger("showtime.notebook_client")
 
 
-def _get_secret(key: str) -> str:
-    """Read secret from KEY or KEY_FILE for container secret compatibility."""
-    value = os.environ.get(key, "").strip()
-    if value:
-        return value
-    file_path = os.environ.get(f"{key}_FILE", "").strip()
-    if not file_path:
-        return ""
-    p = Path(file_path)
-    if not p.is_file():
-        return ""
-    return p.read_text(encoding="utf-8").strip()
+try:
+    from pmoves.services.common.env import get_secret
+except ModuleNotFoundError:
+    # Runtime fallback for direct script execution where repo root is not on sys.path.
+    sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
+    from pmoves.services.common.env import get_secret
 
 
 NOTEBOOK_API_URL = os.environ.get("OPEN_NOTEBOOK_API_URL", "http://localhost:5055")
 # OPEN_NOTEBOOK_API_TOKEN is the repo-standard variable.
 # Keep OPEN_NOTEBOOK_PASSWORD / OPEN_NOTEBOOK_API_KEY as compatibility fallbacks.
 NOTEBOOK_API_TOKEN = (
-    _get_secret("OPEN_NOTEBOOK_API_TOKEN")
-    or _get_secret("OPEN_NOTEBOOK_PASSWORD")
-    or _get_secret("OPEN_NOTEBOOK_API_KEY")
+    (get_secret("OPEN_NOTEBOOK_API_TOKEN") or "").strip()
+    or (get_secret("OPEN_NOTEBOOK_PASSWORD") or "").strip()
+    or (get_secret("OPEN_NOTEBOOK_API_KEY") or "").strip()
 )
 CACHE_TTL = int(os.environ.get("NOTEBOOK_CACHE_TTL", "60"))
 

@@ -41,6 +41,13 @@ PLACEHOLDER_VALUES = {
 }
 
 
+def _normalize_env_value(value: str) -> str:
+    value = value.strip()
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+        return value[1:-1].strip()
+    return value
+
+
 def _strong_random(n_bytes: int) -> str:
     return secrets.token_urlsafe(n_bytes)
 
@@ -59,7 +66,8 @@ def _rand_alnum(n_chars: int) -> str:
 
 def _get_kv(text: str, key: str) -> str:
     m = re.search(rf"^\s*{re.escape(key)}\s*=(.*)$", text, re.M)
-    return (m.group(1).strip() if m else "").strip()
+    raw = (m.group(1).strip() if m else "").strip()
+    return _normalize_env_value(raw)
 
 
 def _set_kv(text: str, key: str, value: str) -> str:
@@ -70,7 +78,8 @@ def _set_kv(text: str, key: str, value: str) -> str:
 
 
 def _is_blank_or_placeholder(value: str) -> bool:
-    return not value or value in PLACEHOLDER_VALUES
+    normalized = _normalize_env_value(value)
+    return not normalized or normalized in PLACEHOLDER_VALUES
 
 
 def _first_real(text: str, keys: list[str]) -> str:
@@ -135,6 +144,7 @@ def upsert_env(path: Path, env_gen_path: Path, pairs: dict[str, str]) -> None:
     path.write_text(text, encoding="utf-8")
 
     # Mirror NEO4J_AUTH into .env.generated for compose-only consumers.
+    env_gen_path.parent.mkdir(parents=True, exist_ok=True)
     gen = env_gen_path.read_text(encoding="utf-8") if env_gen_path.exists() else ""
     gen = _set_kv(gen, "NEO4J_AUTH", f"neo4j/{neo4j_password}")
     env_gen_path.write_text(gen, encoding="utf-8")

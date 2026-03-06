@@ -42,7 +42,7 @@ The following paths are expected to work against upstream `1.8.0` and PMOVES `1.
 Compatibility expectations:
 - API base must include port `5055`.
 - Source creation endpoint `/api/sources/json` is supported.
-- API auth is bearer password (`Authorization: Bearer <OPEN_NOTEBOOK_PASSWORD>`).
+- API auth is bearer token (`Authorization: Bearer <OPEN_NOTEBOOK_API_TOKEN>`).
 - PMOVES keeps `OPEN_NOTEBOOK_API_TOKEN` and `OPEN_NOTEBOOK_PASSWORD` aligned by default to avoid credential drift.
 
 Supporting operator checks:

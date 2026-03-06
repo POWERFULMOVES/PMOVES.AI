@@ -95,8 +95,6 @@ services:
       pmoves_app:
         aliases:
           - open-notebook-ext
-          - open-notebook
-          - cataclysm-open-notebook
       pmoves_external: {}
     environment:
       # UI talks to API on localhost inside container.
