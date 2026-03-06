@@ -21,8 +21,14 @@ services:
       # UI talks to API on localhost inside container.
       API_URL: http://localhost:5055
       HOSTNAME: 0.0.0.0
+<<<<<<< HEAD
       OPEN_NOTEBOOK_PASSWORD: ${OPEN_NOTEBOOK_PASSWORD:-${OPEN_NOTEBOOK_API_TOKEN:?Set OPEN_NOTEBOOK_PASSWORD or OPEN_NOTEBOOK_API_TOKEN}}
       OPEN_NOTEBOOK_API_TOKEN: ${OPEN_NOTEBOOK_API_TOKEN:-${OPEN_NOTEBOOK_PASSWORD:?Set OPEN_NOTEBOOK_API_TOKEN or OPEN_NOTEBOOK_PASSWORD}}
+      NOTEBOOK_PROVIDER_MODE: ${NOTEBOOK_PROVIDER_MODE:-tensorzero}
+      TENSORZERO_BASE_URL: ${TENSORZERO_BASE_URL:-http://tensorzero-gateway:3030/v1}
+      TENSORZERO_API_KEY: ${TENSORZERO_API_KEY:-pmoves-internal}
+      MODEL_REGISTRY_URL: ${MODEL_REGISTRY_URL:-http://model-registry:8110}
+      OPEN_NOTEBOOK_ENCRYPTION_KEY: ${OPEN_NOTEBOOK_ENCRYPTION_KEY:-pmoves-default-change-me}
       # Ensure notebook can reach SurrealDB over pmoves_app.
       SURREAL_URL: ws://${OPEN_NOTEBOOK_SURREAL_ADDRESS:-open-notebook-surrealdb-ext}:${OPEN_NOTEBOOK_SURREAL_PORT:-8000}/rpc
       SURREAL_ADDRESS: ${OPEN_NOTEBOOK_SURREAL_ADDRESS:-open-notebook-surrealdb-ext}
