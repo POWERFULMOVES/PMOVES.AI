@@ -1,6 +1,7 @@
 # Build context: repo root (pmoves/)
 # Usage: docker build -f services/agent-zero/Dockerfile .
-FROM agent0ai/agent-zero:latest
+# Base image pinned 2026-03-05 (v0.9.8.2) — refresh monthly or via Dependabot
+FROM agent0ai/agent-zero:v0.9.8.2@sha256:6c56558df02618dcd9fc671de0b081ac7c8dc63d955ae5da55be9805b5f5bfa7
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
