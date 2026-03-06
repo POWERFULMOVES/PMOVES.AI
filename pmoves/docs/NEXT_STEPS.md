@@ -15,6 +15,10 @@ _Last updated: 2026-03-06_
   - `make -C pmoves smoke` PASS
   - `make -C pmoves model-readiness` PASS (`14/14`)
   - `GPU_SMOKE_STRICT=true make -C pmoves smoke-gpu` PASS (v1 GPU optional warning only)
+- UI production validation hardening:
+  - new topology-aware gate `make -C pmoves ui-topology-smoke` (`core`) and `make -C pmoves ui-topology-smoke-all` (`external overlays`)
+  - PMOVES UI service detail route now renders catalog fallback for valid slugs without dedicated markdown runbooks, preventing broad `/dashboard/services/<slug>` 404 regressions during bring-up
+  - service catalog now includes branded external surfaces (`open-notebook`, `firefly`, `wger`, `jellyfin`, `jellyfin-ai-dashboard`) for consistent health/navigation coverage
 - Remaining ops focus: keep non-main queued self-hosted runs drained to preserve throughput for `main` audits and release checks.
 - Published a canonical cross-integration model abstraction policy: `pmoves/docs/MODEL_FABRIC_CONTRACT.md`.
   - codifies model/provider contract across Agent Zero, Archon, Open Notebook overlays, TensorZero routing, GPU orchestration, creator media lanes, and AgentGym-RL dataset/model loops.
