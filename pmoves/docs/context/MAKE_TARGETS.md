@@ -103,5 +103,5 @@
 - `make up-external` – start Wger, Firefly III, Open Notebook, and Jellyfin from published images on `cataclysm-net`.
 - `make up-external-wger` / `up-external-firefly` / `up-external-on` / `up-external-jellyfin` – bring up individually.
 - `make wger-brand-defaults` – reapplies the PMOVES-branded Django `Site`, admin profile, and default gym name using `WGER_BRAND_*` env vars (automatically invoked after `make up-external-wger`).
-- Images are configurable via env: `WGER_IMAGE`, `FIREFLY_IMAGE`, `OPEN_NOTEBOOK_IMAGE` (default `ghcr.io/lfnovo/open-notebook:v1-latest`), `JELLYFIN_IMAGE`.
+- Images are configurable via env: `WGER_IMAGE`, `FIREFLY_IMAGE`, `OPEN_NOTEBOOK_IMAGE` (default `ghcr.io/lfnovo/open-notebook:1.8.0`), `JELLYFIN_IMAGE`.
 - See `pmoves/docs/EXTERNAL_INTEGRATIONS_BRINGUP.md` for linking your forks and publishing to GHCR.

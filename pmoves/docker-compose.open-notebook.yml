@@ -12,8 +12,8 @@ x-env-tier-worker: &env-tier-worker
 
 services:
   open-notebook:
-    image: ${OPEN_NOTEBOOK_IMAGE:-ghcr.io/powerfulmoves/pmoves-open-notebook:pmoves-latest}
-    # Default to the Open Notebook fork; override OPEN_NOTEBOOK_IMAGE to pin your own tag.
+    image: ${OPEN_NOTEBOOK_IMAGE:-ghcr.io/lfnovo/open-notebook:1.8.0}
+    # Pinned upstream default; override OPEN_NOTEBOOK_IMAGE for PMOVES fork/custom tags.
     container_name: cataclysm-open-notebook
     restart: unless-stopped
     <<: *env-tier-worker
