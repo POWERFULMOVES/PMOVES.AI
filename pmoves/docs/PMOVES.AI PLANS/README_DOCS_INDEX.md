@@ -1,5 +1,5 @@
 # PMOVES v5 • Documentation Index
-_Last updated: 2026-03-05 — SupaSerch toolchain canary docs refresh_
+_Last updated: 2026-03-06 — Model Fabric Contract index entry_
 
 ## Directory Map
 

@@ -28,7 +28,7 @@ test.describe('Notebook dashboard', () => {
     ).toBeVisible();
 
     // Health indicator dot should exist (healthy, error, or unknown)
-    await expect(page.locator('.rounded-full')).toBeVisible();
+    await expect(page.getByTestId('health-indicator')).toBeVisible();
   });
 
   test('notebook sources API returns valid shape', async ({ request }) => {

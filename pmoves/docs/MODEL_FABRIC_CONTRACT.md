@@ -23,8 +23,10 @@ This is the execution policy for:
 ## Planes
 ### 1) Control Plane (authoritative state)
 - Supabase tables/views in `pmoves_core` for providers, models, mappings, personas, deployments.
-- Canonical docs: `MODEL_REGISTRY.md`, `MODEL_SOURCE_OF_TRUTH.md`, `TAC_MODEL_INFRA_PERSONA_PROD_READINESS.md`.
-- All service routing decisions resolve through this plane.
+- Canonical docs: `MODEL_REGISTRY.md`, `MODEL_SOURCE_OF_TRUTH.md`, `TAC/TAC_MODEL_INFRA_PERSONA_PROD_READINESS.md`.
+- Target state: all service routing decisions should resolve through this plane.
+- Current migration evidence (still being normalized): literal `model_name` entries in `tensorzero/config/tensorzero.toml`, static entries in `services/gpu-orchestrator/models/model_registry.py`, and hardcoded `llm` fields in `models/agent-zero.yaml`.
+- Migration path: replace direct bindings with alias-to-model resolution in `pmoves_core` and promote via `MODEL_REGISTRY.md` / `MODEL_SOURCE_OF_TRUTH.md` governance.
 
 ### 2) Routing Plane (execution)
 - TensorZero is the default routing gateway for OpenAI-compatible APIs.
@@ -88,8 +90,7 @@ This is the execution policy for:
 - Coding agents should modify adapters/mappings/docs before touching core runtime behavior.
 
 ## Near-Term Standardization Backlog
-1. Add `hybrid` provider mode and registry-driven bootstrap in Open Notebook overlay.
-2. Normalize model type taxonomy across registry, GPU orchestrator, and creator services.
-3. Add one compatibility matrix doc per integration lane (agents, creator, voice, notebook, RL).
-4. Gate PRs that alter model routing with mandatory readiness evidence attachments.
-
+1. Add `hybrid` provider mode and registry-driven bootstrap in Open Notebook overlay. (Tracking: `MF-ONB-HYBRID` -> `NEXT_STEPS.md` current focus lane)
+2. Normalize model type taxonomy across registry, GPU orchestrator, and creator services. (Tracking: `MF-TAXONOMY-ALIGN` -> `PMOVES.AI PLANS/ROADMAP.md` model standardization lane)
+3. Add one compatibility matrix doc per integration lane (agents, creator, voice, notebook, RL). (Tracking: `MF-COMPAT-MATRIX` -> `PMOVES.AI PLANS/README_DOCS_INDEX.md` canonical docs map)
+4. Gate PRs that alter model routing with mandatory readiness evidence attachments. (Tracking: `MF-EVIDENCE-GATE` -> `NEXT_STEPS.md` / `ROADMAP.md` release evidence policy)
