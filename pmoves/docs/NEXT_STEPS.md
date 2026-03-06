@@ -20,6 +20,10 @@ _Last updated: 2026-03-06_
   - PMOVES UI service detail route now renders catalog fallback for valid slugs without dedicated markdown runbooks, preventing broad `/dashboard/services/<slug>` 404 regressions during bring-up
   - service catalog now includes branded external surfaces (`open-notebook`, `firefly`, `wger`, `jellyfin`, `jellyfin-ai-dashboard`) for consistent health/navigation coverage
 - Remaining ops focus: keep non-main queued self-hosted runs drained to preserve throughput for `main` audits and release checks.
+- Self-hosted runner lane alignment validated against current GitHub Actions docs:
+  - queued-job behavior matches label-and semantics (all `runs-on` labels must match one online runner)
+  - current fleet status: only Windows `ai-lab` runner online; Linux `vps` and Linux `ai-lab` lanes offline, so Linux-targeted jobs remain queued
+  - `self-hosted-builds*.yml` GPU jobs now require explicit `Linux,X64` labels, and `ci_runner_check.py` strict defaults now enforce Linux lane availability (`self-hosted,Linux,X64,vps` + `self-hosted,Linux,X64,ai-lab,gpu`)
 - Published a canonical cross-integration model abstraction policy: `pmoves/docs/MODEL_FABRIC_CONTRACT.md`.
   - codifies model/provider contract across Agent Zero, Archon, Open Notebook overlays, TensorZero routing, GPU orchestration, creator media lanes, and AgentGym-RL dataset/model loops.
   - establishes upstream-first overlay rules and readiness gates for model-routing changes.

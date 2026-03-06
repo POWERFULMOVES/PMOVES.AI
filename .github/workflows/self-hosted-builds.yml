@@ -47,7 +47,7 @@ jobs:
   # ============================================================================
   build-gpu:
     name: GPU Services
-    runs-on: [self-hosted, ai-lab, gpu]
+    runs-on: [self-hosted, Linux, X64, ai-lab, gpu]
     permissions:
       contents: read
       packages: write
