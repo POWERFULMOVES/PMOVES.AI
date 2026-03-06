@@ -61,7 +61,7 @@ SurrealDB env note:
 - `make notebook-up`
 - `make notebook-down`
 - `make notebook-logs`
-- `make notebook-set-password PASSWORD="pmoves4482"`
+- `make notebook-set-password PASSWORD="<your-secret>"` (reuse the generated Open Notebook credential from your install/bootstrap flow)
 - `make notebook-seed-models`
 
 ## PMOVES.YT transcript sync
