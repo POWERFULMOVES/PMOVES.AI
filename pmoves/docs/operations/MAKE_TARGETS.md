@@ -396,7 +396,7 @@ This file summarizes the most-used targets and maps them to what they do under d
 - `make up-external` – start Wger, PMOVES-Wealth (Firefly III), Open Notebook, and Jellyfin from published images.
 - `make up-external-wger` / `up-external-firefly` / `up-external-on` / `up-external-jellyfin` – bring up individually.
 - `make wger-brand-defaults` – idempotently updates the Django `Site`, default admin profile, and seed gym name using `WGER_BRAND_*` env vars (this runs automatically after `up-external-wger`; run it again if you wipe the SQLite volume).
-- Images are configurable via env: `WGER_IMAGE`, `FIREFLY_IMAGE`, `OPEN_NOTEBOOK_IMAGE` (default `ghcr.io/lfnovo/open-notebook:v1-latest`), `JELLYFIN_IMAGE`.
+- Images are configurable via env: `WGER_IMAGE`, `FIREFLY_IMAGE`, `OPEN_NOTEBOOK_IMAGE` (default `ghcr.io/lfnovo/open-notebook:1.8.0`), `JELLYFIN_IMAGE`.
 - See `pmoves/docs/EXTERNAL_INTEGRATIONS_BRINGUP.md` for linking your forks and publishing to GHCR.
 
 ## Integrations Compose (local dev)
