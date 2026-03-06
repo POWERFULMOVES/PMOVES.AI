@@ -39,6 +39,8 @@
     "QDRANT_URL",
     "NEO4J_URL",
     "MINIO_ENDPOINT",
+    "OPEN_NOTEBOOK_API_URL",
+    "NOTEBOOK_API_URL",
     "DATABASE_URL",
     "POSTGRES_URL"
   ],
