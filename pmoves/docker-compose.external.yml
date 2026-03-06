@@ -74,9 +74,9 @@ services:
       - --bind
       - 0.0.0.0:8000
       - --user
-      - ${OPEN_NOTEBOOK_SURREAL_USER:?Set OPEN_NOTEBOOK_SURREAL_USER}
+      - ${OPEN_NOTEBOOK_SURREAL_USER:-${SURREAL_USER:?Set OPEN_NOTEBOOK_SURREAL_USER or SURREAL_USER}}
       - --pass
-      - ${OPEN_NOTEBOOK_SURREAL_PASS:?Set OPEN_NOTEBOOK_SURREAL_PASS}
+      - ${OPEN_NOTEBOOK_SURREAL_PASS:-${SURREAL_PASS:?Set OPEN_NOTEBOOK_SURREAL_PASS or SURREAL_PASS}}
       - rocksdb:/mydata/surreal.db
     networks:
       pmoves_app:
@@ -92,8 +92,12 @@ services:
     depends_on:
       - open-notebook-surrealdb-ext
     networks:
-      - pmoves_app
-      - pmoves_external
+      pmoves_app:
+        aliases:
+          - open-notebook-ext
+          - open-notebook
+          - cataclysm-open-notebook
+      pmoves_external: {}
     environment:
       # UI talks to API on localhost inside container.
       API_URL: http://localhost:5055
