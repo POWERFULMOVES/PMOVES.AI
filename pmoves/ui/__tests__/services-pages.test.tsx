@@ -2,8 +2,6 @@ import React from 'react';
 import { render, screen } from '@testing-library/react';
 import ServicesIndexPage from '@/app/dashboard/services/page';
 import ServiceDetailPage from '@/app/dashboard/services/[service]/page';
-import { INTEGRATION_SERVICES } from '@/lib/services';
-import { SERVICE_CATALOG } from '@/lib/serviceCatalog';
 import { notFound } from 'next/navigation';
 
 jest.mock('react-markdown', () => ({
@@ -60,6 +58,20 @@ describe('Services dashboards', () => {
       screen.getByRole('heading', { name: /open notebook/i })
     ).toBeInTheDocument();
     expect(screen.getByText(/Service Guide/i)).toBeInTheDocument();
+    expect(mockedNotFound).not.toHaveBeenCalled();
+  });
+
+  it('renders catalog fallback for known services without markdown runbooks', async () => {
+    const element = await ServiceDetailPage({
+      params: { service: 'pmoves-ui' },
+    });
+
+    render(element);
+
+    expect(
+      screen.getByRole('heading', { name: /pmoves ui/i })
+    ).toBeInTheDocument();
+    expect(screen.getByText(/Service Overview/i)).toBeInTheDocument();
     expect(mockedNotFound).not.toHaveBeenCalled();
   });
 
