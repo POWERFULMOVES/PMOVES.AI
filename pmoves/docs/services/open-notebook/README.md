@@ -41,6 +41,7 @@ The following paths are expected to work against upstream `1.8.0` and PMOVES `1.
 
 Compatibility expectations:
 - API base must include port `5055`.
+- Search API for v1.8 uses `POST /api/search` (legacy fallback remains `POST /api/v1/notebooks/search` for older deployments).
 - Source creation endpoint `/api/sources/json` is supported.
 - API auth is bearer token (`Authorization: Bearer <OPEN_NOTEBOOK_API_TOKEN>`).
 - PMOVES keeps `OPEN_NOTEBOOK_API_TOKEN` and `OPEN_NOTEBOOK_PASSWORD` aligned by default to avoid credential drift.
