@@ -6,7 +6,7 @@ Overview
 - Lightweight notebook UI + API for local workflows. Lives on the shared `cataclysm-net` so it can talk to services if needed. Host ports are overridable so the UI/API can coexist with other stacks.
 
 Compose
-- Image (default): `ghcr.io/lfnovo/open-notebook:v1-latest` — tracked from the integration workspace fork (Open Notebook 1.x, React/Next.js build). Override via `OPEN_NOTEBOOK_IMAGE` to pin a specific tag (for example `ghcr.io/lfnovo/open-notebook:1.2.0`). Run `make docker-login-ghcr` (uses `DOCKER_USERNAME` / `DOCKER_PASS`) before pulling or pushing images.
+- Image (default): `ghcr.io/lfnovo/open-notebook:1.8.0` — pinned to a stable upstream release. Override via `OPEN_NOTEBOOK_IMAGE` to pin a different tag. Run `make docker-login-ghcr` (uses `DOCKER_USERNAME` / `DOCKER_PASS`) before pulling or pushing images.
 - Migration reference: `integrations-workspace/Pmoves-open-notebook/MIGRATION.md` captures upstream breaking changes between the legacy Streamlit build and v1+.
 - File: `pmoves/docker-compose.open-notebook.yml`
 - Service: `open-notebook`
