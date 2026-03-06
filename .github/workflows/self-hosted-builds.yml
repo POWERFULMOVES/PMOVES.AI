@@ -79,7 +79,7 @@ jobs:
           private-key: ${{ secrets.GH_APP_SEC }}
 
       - name: Login to GHCR
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ steps.app_token.outputs.token && 'x-access-token' || env.GHCR_USERNAME }}
@@ -164,7 +164,7 @@ jobs:
           private-key: ${{ secrets.GH_APP_SEC }}
 
       - name: Login to GHCR
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ steps.app_token.outputs.token && 'x-access-token' || env.GHCR_USERNAME }}
