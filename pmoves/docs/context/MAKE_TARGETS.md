@@ -49,7 +49,7 @@
   - Starts the NATS broker (`agents` profile) and rewrites `.env.local` so `YT_NATS_ENABLE=true` with `NATS_URL=nats://nats:pmoves@nats:4222`.
   - Use this before opting into the agents profile (Agent Zero, Archon, mesh-agent, Discord publisher).
 - `make notebook-up` / `make notebook-down`
-  - Bring the Open Notebook UI/API online (Streamlit on host `:${OPEN_NOTEBOOK_UI_PORT:-8503}`, FastAPI on `:${OPEN_NOTEBOOK_API_PORT:-5055}`) or stop it while leaving data in `pmoves/data/open-notebook/`.
+  - Bring the Open Notebook UI/API online (Next.js UI on host `:${OPEN_NOTEBOOK_UI_PORT:-8503}`, FastAPI on `:${OPEN_NOTEBOOK_API_PORT:-5055}`) or stop it while leaving data in `pmoves/data/open-notebook/`.
 - `make notebook-seed-models`
   - Calls `scripts/open_notebook_seed.py` to register provider models/defaults once `env.shared` contains `OPEN_NOTEBOOK_API_TOKEN` (or password) and any desired provider keys (`OPENAI_API_KEY`, `GROQ_API_KEY`, etc.). Run this after starting the container so the UI drop-downs populate automatically.
 - `make mindmap-notebook-sync`

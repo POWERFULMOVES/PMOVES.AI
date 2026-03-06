@@ -15,7 +15,13 @@ import httpx
 logger = logging.getLogger("showtime.notebook_client")
 
 NOTEBOOK_API_URL = os.environ.get("OPEN_NOTEBOOK_API_URL", "http://localhost:5055")
-NOTEBOOK_API_KEY = os.environ.get("OPEN_NOTEBOOK_API_KEY", "")
+# OPEN_NOTEBOOK_API_TOKEN is the repo-standard variable.
+# Keep OPEN_NOTEBOOK_API_KEY as a legacy fallback for older env files.
+NOTEBOOK_API_TOKEN = (
+    os.environ.get("OPEN_NOTEBOOK_API_TOKEN")
+    or os.environ.get("OPEN_NOTEBOOK_PASSWORD")
+    or os.environ.get("OPEN_NOTEBOOK_API_KEY", "")
+)
 CACHE_TTL = int(os.environ.get("NOTEBOOK_CACHE_TTL", "60"))
 
 # Simple in-memory cache: key -> (timestamp, data)
@@ -36,8 +42,8 @@ async def fetch_notebooks(cursor: str | None = None, limit: int = 20) -> dict[st
             return cached_data
 
     headers: dict[str, str] = {"Content-Type": "application/json"}
-    if NOTEBOOK_API_KEY:
-        headers["Authorization"] = f"Bearer {NOTEBOOK_API_KEY}"
+    if NOTEBOOK_API_TOKEN:
+        headers["Authorization"] = f"Bearer {NOTEBOOK_API_TOKEN}"
 
     params: dict[str, Any] = {"limit": limit}
     if cursor:
