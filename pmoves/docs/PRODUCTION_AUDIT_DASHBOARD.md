@@ -3,11 +3,28 @@
 > **Single source of truth** for PMOVES.AI production readiness.
 > Supersedes all individual audit documents accumulated Feb 7 -- Feb 18, 2026.
 
-**Last Updated:** 2026-03-04 (post-validation admin merge closeout)
+**Last Updated:** 2026-03-05 (GHCR production prepublish validation refresh)
 **Branch:** `PMOVES.AI-Edition-Hardened` (production release lane)
 **Commit:** `96adc266`
 **Consolidated From:** 27 audit documents
-**Evidence:** live runbook execution on 2026-03-04 (`make smoke`, `make model-readiness`, `GPU_SMOKE_STRICT=true make smoke-gpu`)
+**Evidence:** live runbook execution on 2026-03-05 (`make ghcr-prepublish-inrepo-build`, strict local Trivy sweep logs under `pmoves/docs/logs/ghcr-local-prepublish/`)
+
+---
+
+## Latest Changes (Mar 5, 2026)
+
+- GHCR production local-first validation widened from single-image checks to matrix-driven validation:
+  - local validator: `pmoves/tools/ghcr_local_prepublish.py`
+  - operator targets: `ghcr-prepublish-inrepo`, `ghcr-prepublish-inrepo-build`, `ghcr-prepublish-all`, `ghcr-dispatch-all`
+- In-repo GHCR integration build sweep (`linux/amd64`, local): `7/7 PASS`
+  - `agent-zero`, `archon`, `firefly-iii`, `jellyfin`, `pmoves-yt`, `deepresearch`, `supaserch`
+- Strict local Trivy sweep (HIGH/CRITICAL, ignore-unfixed, vuln-only): `3 PASS / 4 FAIL`
+  - PASS: `firefly-iii`, `jellyfin`, `supaserch`
+  - FAIL: `agent-zero` (scan timeout at 5m on large layer analysis), `archon` (known fixable HIGH/CRITICAL backlog), `pmoves-yt` (urllib3 CVE-2026-21441), `deepresearch` (known fixable HIGH/CRITICAL backlog)
+- Evidence artifacts:
+  - summary CSV: `pmoves/docs/logs/ghcr-local-prepublish/summary-2026-03-05.csv`
+  - vuln-only summary CSV: `pmoves/docs/logs/ghcr-local-prepublish/summary-2026-03-05-vulnonly.csv`
+  - per-image `.log` files are generated locally under `pmoves/docs/logs/ghcr-local-prepublish/` (ignored in git)
 
 ---
 
