@@ -1350,7 +1350,7 @@ recreate-v2: ## Force-recreate v2 CPU container (no deps)
 .PHONY: up-open-notebook
 up-open-notebook: ensure-env-shared ## Bring up Open Notebook on cataclysm-net (defaults UI :8503, API :5055)
 	@docker network create cataclysm-net >/dev/null 2>&1 || true
-	@docker compose -f docker-compose.open-notebook.yml up -d open-notebook
+	@$(NOTEBOOK_DC) up -d open-notebook
 	@echo "✔ Open Notebook up (http://localhost:$${OPEN_NOTEBOOK_UI_PORT:-8503}, API :$${OPEN_NOTEBOOK_API_PORT:-5055})"
 
 .PHONY: notebook-set-password
@@ -1363,7 +1363,7 @@ notebook-set-password: ## Update Open Notebook password/token (and optionally no
 
 .PHONY: down-open-notebook
 down-open-notebook: ## Stop Open Notebook
-	@docker compose -f docker-compose.open-notebook.yml down
+	@$(NOTEBOOK_DC) down
 	@echo "✔ Open Notebook down"
 
 up-both-gateways: ## Ensure both hi-rag gateways are up (idempotent)
@@ -1424,6 +1424,7 @@ export INTEGRATIONS_WORKSPACE
 
 NOTEBOOK_COMPOSE ?= docker-compose.open-notebook.yml
 NOTEBOOK_PROJECT ?= $(PROJECT)-notebook
+NOTEBOOK_DC := docker compose -p $(NOTEBOOK_PROJECT) --project-directory $(CURDIR) $(COMPOSE_ENV_FILES) -f $(NOTEBOOK_COMPOSE)
 
 JELLYFIN_AI_BASE ?= jellyfin-ai
 export JELLYFIN_AI_BASE
@@ -1561,13 +1562,13 @@ cloudflare-url: ## Print the most recent Cloudflare tunnel URL from connector lo
 
 notebook-up: ## Launch the Open Notebook stack alongside cataclysm-net
 	docker network create cataclysm-net >/dev/null 2>&1 || true
-	docker compose -p $(NOTEBOOK_PROJECT) -f $(NOTEBOOK_COMPOSE) up -d open-notebook
+	$(NOTEBOOK_DC) up -d open-notebook
 
 notebook-down: ## Stop the Open Notebook container and remove its resources
-	docker compose -p $(NOTEBOOK_PROJECT) -f $(NOTEBOOK_COMPOSE) down
+	$(NOTEBOOK_DC) down
 
 notebook-logs: ## Follow logs for the Open Notebook service
-	docker compose -p $(NOTEBOOK_PROJECT) -f $(NOTEBOOK_COMPOSE) logs -f open-notebook
+	$(NOTEBOOK_DC) logs -f open-notebook
 
 notebook-seed-models: ## Seed Open Notebook models based on provider keys from the environment
 	@echo "Seeding Open Notebook providers..."
