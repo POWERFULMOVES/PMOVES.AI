@@ -14,25 +14,42 @@ name: "CodeQL Advanced"
 on:
   push:
     branches: [ "main", "PMOVES.AI-Edition-Hardened" ]
-    # Skip analyzing gitignored directories (integrations-workspace, vendor, venv, node_modules)
-    paths-ignore:
-      - 'integrations-workspace/**'
-      - '**/.venv/**'
-      - '**/venv/**'
-      - '**/vendor/**'
-      - '**/node_modules/**'
-      - '**/site-packages/**'
-      - '**/.eggs/**'
+    # Only run on source code changes — skip docs, configs, media
+    paths:
+      - '**/*.py'
+      - '**/*.js'
+      - '**/*.ts'
+      - '**/*.tsx'
+      - '**/*.jsx'
+      - '**/*.yml'
+      - '**/*.yaml'
+      - '.github/**'
+      # Exclude vendored/generated directories via negated patterns.
+      - '!integrations-workspace/**'
+      - '!**/.venv/**'
+      - '!**/venv/**'
+      - '!**/vendor/**'
+      - '!**/node_modules/**'
+      - '!**/site-packages/**'
+      - '!**/.eggs/**'
   pull_request:
     branches: [ "main", "PMOVES.AI-Edition-Hardened" ]
-    paths-ignore:
-      - 'integrations-workspace/**'
-      - '**/.venv/**'
-      - '**/venv/**'
-      - '**/vendor/**'
-      - '**/node_modules/**'
-      - '**/site-packages/**'
-      - '**/.eggs/**'
+    paths:
+      - '**/*.py'
+      - '**/*.js'
+      - '**/*.ts'
+      - '**/*.tsx'
+      - '**/*.jsx'
+      - '**/*.yml'
+      - '**/*.yaml'
+      - '.github/**'
+      - '!integrations-workspace/**'
+      - '!**/.venv/**'
+      - '!**/venv/**'
+      - '!**/vendor/**'
+      - '!**/node_modules/**'
+      - '!**/site-packages/**'
+      - '!**/.eggs/**'
   workflow_dispatch:
   schedule:
     - cron: '16 20 * * 5'

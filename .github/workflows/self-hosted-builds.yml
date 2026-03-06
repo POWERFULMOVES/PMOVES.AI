@@ -5,9 +5,12 @@ on:
     branches: [main, develop]
     paths:
       - 'services/**'
-      - 'pmoves/**'
+      - 'pmoves/services/**'
+      - 'pmoves/docker/**'
       - 'Dockerfile*'
       - 'docker-compose*.yml'
+      - '**/docker-compose*.yml'
+      - '.github/workflows/self-hosted-builds*.yml'
   # NOTE: PR trigger disabled until self-hosted runners are deployed
   # Re-enable when AI Lab + VPS runners are operational
   # pull_request:
@@ -131,6 +134,7 @@ jobs:
       contents: read
       packages: write
     strategy:
+      max-parallel: 2
       matrix:
         service:
           - name: agent-zero

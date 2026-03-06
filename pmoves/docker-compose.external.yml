@@ -8,6 +8,7 @@ services:
       pmoves_app:
         aliases:
           - pmoves-wger
+      pmoves_external: {}
     environment:
       DJANGO_DEBUG: "${WGER_DJANGO_DEBUG:-False}"
       WGER_USE_GUNICORN: "${WGER_USE_GUNICORN:-True}"
@@ -28,6 +29,7 @@ services:
       pmoves_app:
         aliases:
           - pmoves-wger-nginx
+      pmoves_external: {}
     ports:
       - "${WGER_HOST_PORT:-8000}:80"
     volumes:
@@ -43,6 +45,7 @@ services:
       pmoves_app:
         aliases:
           - pmoves-firefly
+      pmoves_external: {}
     environment:
       # Keep secrets sourced from env files / runtime secrets. Do not inline defaults.
       APP_KEY: ${FIREFLY_APP_KEY}
@@ -51,6 +54,8 @@ services:
       DB_DATABASE: ${FIREFLY_DB_DATABASE:-/var/www/html/storage/database/database.sqlite}
       TRUSTED_PROXIES: ${FIREFLY_TRUSTED_PROXIES:-**}
       TZ: ${FIREFLY_TZ:-America/New_York}
+    ports:
+      - "${FIREFLY_PORT:-8082}:8080"
     volumes:
       - firefly-storage:/var/www/html/storage
       - ./integrations/pr-kits/firefly/nginx-buffers.conf:/etc/nginx/conf.d/zz_buffers.conf:ro
@@ -69,9 +74,9 @@ services:
       - --bind
       - 0.0.0.0:8000
       - --user
-      - ${OPEN_NOTEBOOK_SURREAL_USER:-test}
+      - ${OPEN_NOTEBOOK_SURREAL_USER:?Set OPEN_NOTEBOOK_SURREAL_USER}
       - --pass
-      - ${OPEN_NOTEBOOK_SURREAL_PASS:-test}
+      - ${OPEN_NOTEBOOK_SURREAL_PASS:?Set OPEN_NOTEBOOK_SURREAL_PASS}
       - rocksdb:/mydata/surreal.db
     networks:
       pmoves_app:
@@ -88,19 +93,24 @@ services:
       - open-notebook-surrealdb-ext
     networks:
       - pmoves_app
+      - pmoves_external
     environment:
       # UI talks to API on localhost inside container.
       API_URL: http://localhost:5055
-      OPEN_NOTEBOOK_PASSWORD: ${OPEN_NOTEBOOK_PASSWORD}
-      OPEN_NOTEBOOK_API_TOKEN: ${OPEN_NOTEBOOK_API_TOKEN:-${OPEN_NOTEBOOK_PASSWORD}}
+      HOSTNAME: 0.0.0.0
+      OPEN_NOTEBOOK_PASSWORD: ${OPEN_NOTEBOOK_PASSWORD:?Set OPEN_NOTEBOOK_PASSWORD}
+      OPEN_NOTEBOOK_API_TOKEN: ${OPEN_NOTEBOOK_API_TOKEN:?Set OPEN_NOTEBOOK_API_TOKEN}
       # Ensure notebook can reach SurrealDB over the compose network.
       SURREAL_URL: ws://open-notebook-surrealdb-ext:8000/rpc
       SURREAL_ADDRESS: ${OPEN_NOTEBOOK_SURREAL_ADDRESS:-open-notebook-surrealdb-ext}
       SURREAL_PORT: ${OPEN_NOTEBOOK_SURREAL_PORT:-8000}
-      SURREAL_USER: ${OPEN_NOTEBOOK_SURREAL_USER:-test}
-      SURREAL_PASS: ${OPEN_NOTEBOOK_SURREAL_PASS:-test}
+      SURREAL_USER: ${OPEN_NOTEBOOK_SURREAL_USER:?Set OPEN_NOTEBOOK_SURREAL_USER}
+      SURREAL_PASS: ${OPEN_NOTEBOOK_SURREAL_PASS:?Set OPEN_NOTEBOOK_SURREAL_PASS}
       SURREAL_NAMESPACE: ${OPEN_NOTEBOOK_SURREAL_NAMESPACE:-open-notebook}
       SURREAL_DATABASE: ${OPEN_NOTEBOOK_SURREAL_DATABASE:-open-notebook}
+    ports:
+      - "${OPEN_NOTEBOOK_UI_PORT:-8503}:8502"
+      - "${OPEN_NOTEBOOK_API_PORT:-5055}:5055"
 
   jellyfin-ext:
     image: ${JELLYFIN_IMAGE:-ghcr.io/powerfulmoves/pmoves-jellyfin:pmoves-latest}
@@ -113,6 +123,7 @@ services:
       pmoves_app:
         aliases:
           - pmoves-jellyfin
+      pmoves_external: {}
     environment:
       JELLYFIN_PublishedServerUrl: ${JELLYFIN_PUBLISHED_URL:-http://localhost:8096}
       JELLYFIN_MEDIA_ROOT: ${JELLYFIN_MEDIA_ROOT:-/media}
@@ -126,6 +137,8 @@ services:
 
 networks:
   pmoves_app:
+    external: true
+  pmoves_external:
     external: true
 
 volumes:
