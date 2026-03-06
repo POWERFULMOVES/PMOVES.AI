@@ -251,6 +251,26 @@ docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
 
 Runbook: `docs/hardening/PYTHON_IMAGES_TOOLCHAIN_CANARY.md`
 
+## 11. UI Topology Smoke (4482 + branded overlays)
+
+When release work touches service wiring, compose topology, or branded integrations, run the UI topology gate so backend bring-up and UI routing stay in sync:
+
+```bash
+cd pmoves
+make ui-topology-smoke
+make ui-topology-smoke-all
+```
+
+Notes:
+- `ui-topology-smoke` defaults to the core profile (`PMOVES UI`, `Agent Zero UI`, `Archon UI`, `Open Notebook UI`, and service detail routes that commonly regressed to 404s).
+- `ui-topology-smoke-all` adds external surfaces (`Firefly`, `Wger`, `Jellyfin`, `Jellyfin AI dashboard/API`, and Open Notebook API).
+- To avoid hard failures for intentionally-down optional surfaces during local iteration, use:
+
+```bash
+cd pmoves
+UI_TOPOLOGY_ALLOW_MISSING=true make ui-topology-smoke-all
+```
+
 ## Checklists
 
 Copy these bullets into PR descriptions (or tick the template boxes) after each local run:
@@ -265,6 +285,7 @@ Copy these bullets into PR descriptions (or tick the template boxes) after each 
 - [ ] Self-hosted runner lane check (`make ci-runners-check-strict`) before GHCR/self-hosted dispatches
 - [ ] GHCR local-first prepublish gate (`make ghcr-prepublish-inrepo`) before production GHCR dispatch
 - [ ] Python images toolchain canary dispatch/review (`python-images-toolchain-canary.yml`) when bumping Docker toolchain pins
+- [ ] UI topology smoke (`make ui-topology-smoke`; plus `make ui-topology-smoke-all` for external-stack release validation)
 - [ ] Submodule deterministic gate (`make submodule-layer-validate-all-strict` through `make smoke-prod`, plus `make submodule-branch-policy-check`)
 
 If any check is intentionally skipped (e.g., doc-only change), note the reason in the PR “Testing” section.

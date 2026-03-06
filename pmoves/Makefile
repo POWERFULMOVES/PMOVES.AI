@@ -1995,6 +1995,13 @@ ui-ingest-smoke: ## Exercise boot-jwt status and ingest smoke via API health end
 	AUTH=""; if [ -n "$$SECRET" ]; then AUTH="-H 'Authorization: Bearer $$SECRET'"; fi; \
 	bash -c "curl -fsS $$AUTH -X POST '$$BASE/api/health/ingest-smoke' -H 'content-type: application/json'" | jq . || true
 
+.PHONY: ui-topology-smoke ui-topology-smoke-all
+ui-topology-smoke: ## Validate branded UI topology surfaces (core/default or set UI_TOPOLOGY_PROFILE=all)
+	@$(LOAD_ENV_SHARED) $(PYTHON) tools/ui_topology_smoke.py --profile "$${UI_TOPOLOGY_PROFILE:-core}" $(ARGS)
+
+ui-topology-smoke-all: ## Validate full UI topology including external + Jellyfin AI overlay surfaces
+	@$(LOAD_ENV_SHARED) $(PYTHON) tools/ui_topology_smoke.py --profile all $(ARGS)
+
 .PHONY: ui-videos-realtime-smoke
 ui-videos-realtime-smoke: ## Insert a dummy video row via Supabase REST; verify UI shows it (Realtime)
 	@chmod +x ../scripts/ui_videos_realtime_smoke.sh
