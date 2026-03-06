@@ -95,15 +95,13 @@ services:
       pmoves_app:
         aliases:
           - open-notebook-ext
-          - open-notebook
-          - cataclysm-open-notebook
       pmoves_external: {}
     environment:
       # UI talks to API on localhost inside container.
       API_URL: http://localhost:5055
       HOSTNAME: 0.0.0.0
-      OPEN_NOTEBOOK_PASSWORD: ${OPEN_NOTEBOOK_PASSWORD:-${OPEN_NOTEBOOK_API_TOKEN:?Set OPEN_NOTEBOOK_PASSWORD or OPEN_NOTEBOOK_API_TOKEN}}
       OPEN_NOTEBOOK_API_TOKEN: ${OPEN_NOTEBOOK_API_TOKEN:-${OPEN_NOTEBOOK_PASSWORD:?Set OPEN_NOTEBOOK_API_TOKEN or OPEN_NOTEBOOK_PASSWORD}}
+      OPEN_NOTEBOOK_PASSWORD: ${OPEN_NOTEBOOK_PASSWORD:-${OPEN_NOTEBOOK_API_TOKEN}}
       # Ensure notebook can reach SurrealDB over the compose network.
       SURREAL_URL: ws://open-notebook-surrealdb-ext:8000/rpc
       SURREAL_ADDRESS: ${OPEN_NOTEBOOK_SURREAL_ADDRESS:-open-notebook-surrealdb-ext}

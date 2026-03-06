@@ -33,7 +33,8 @@ This guide covers preflight wiring, starting the core stack, and running the loc
 4. External integrations: copy tokens into `pmoves/.env.local` so the health/finance automations can run without errors.
    - `WGER_API_TOKEN`, `WGER_BASE_URL=http://cataclysm-wger:8000`
    - `FIREFLY_ACCESS_TOKEN`, `FIREFLY_BASE_URL=http://cataclysm-firefly:8080`
-  - `OPEN_NOTEBOOK_API_TOKEN`, `OPEN_NOTEBOOK_API_URL=http://open-notebook:5055`
+  - `OPEN_NOTEBOOK_API_TOKEN`, `OPEN_NOTEBOOK_API_URL=http://localhost:5055`
+  - Use `http://open-notebook:5055` only in container-only env files (for example `env.shared` consumed by Docker Compose services).
    - `JELLYFIN_API_KEY`, `JELLYFIN_URL=http://cataclysm-jellyfin:8096`
 - Override ports before `make -C pmoves up-external` if your host is already using `8000`, `8080`, `8096`, or `8503` (for example, `export FIREFLY_PORT=8082` keeps Firefly off Agent Zero’s 8080 binding). See `pmoves/docs/EXTERNAL_INTEGRATIONS_BRINGUP.md` for per-service bring-up notes.
 5. Buckets: ensure MinIO has buckets you plan to use (defaults: `assets`, `outputs`). You can create buckets via the MinIO Console at `http://localhost:9001` if needed.

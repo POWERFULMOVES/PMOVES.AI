@@ -152,11 +152,11 @@ class AgentZeroRuntimeConfig:
         default_factory=lambda: os.environ.get("AGENT_ZERO_API_KEY")
     )
     health_path: str = field(
-        default_factory=lambda: os.environ.get("AGENT_ZERO_HEALTH_PATH", "/health")
+        default_factory=lambda: os.environ.get("AGENT_ZERO_HEALTH_PATH", "/healthz")
     )
     health_path_fallback: str = field(
         default_factory=lambda: os.environ.get(
-            "AGENT_ZERO_HEALTH_PATH_FALLBACK", "/healthz"
+            "AGENT_ZERO_HEALTH_PATH_FALLBACK", "/health"
         )
     )
     startup_timeout: float = field(
