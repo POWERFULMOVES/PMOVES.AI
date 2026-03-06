@@ -29,21 +29,26 @@ Recommendation:
   - API `${OPEN_NOTEBOOK_API_PORT:-5055}:5055` (FastAPI backend)
 - Network: shared `cataclysm-net` plus PMOVES compatibility aliases.
 
-## PMOVES integration compatibility
-The following PMOVES paths are compatible with both upstream `1.8.0` and PMOVES `1.6.2`:
-- `pmoves/scripts/yt_transcripts_to_notebook.py`
-- `pmoves/scripts/mindmap_to_notebook.py`
-- `pmoves/scripts/hirag_search_to_notebook.py`
-- `pmoves/services/notebook-sync/sync.py`
-- `pmoves/services/deepresearch/worker.py`
-- `pmoves/services/agent-zero/mcp_server.py`
-- `pmoves/ui/app/api/notebook/sources/route.ts`
+## PMOVES expected compatibility (with evidence level)
+The following paths are expected to work against upstream `1.8.0` and PMOVES `1.6.2`.
+- `pmoves/scripts/yt_transcripts_to_notebook.py` (manual dry-run verification)
+- `pmoves/scripts/mindmap_to_notebook.py` (docs-verified API contract)
+- `pmoves/scripts/hirag_search_to_notebook.py` (docs-verified API contract)
+- `pmoves/services/notebook-sync/sync.py` (runtime integration via `notebook-sync`)
+- `pmoves/services/deepresearch/worker.py` (runtime integration via `OPEN_NOTEBOOK_API_URL`)
+- `pmoves/services/agent-zero/mcp_server.py` (contract-level compatibility)
+- `pmoves/ui/app/api/notebook/sources/route.ts` (live probe through Notebook Workbench API route)
 
 Compatibility expectations:
 - API base must include port `5055`.
 - Source creation endpoint `/api/sources/json` is supported.
 - API auth is bearer password (`Authorization: Bearer <OPEN_NOTEBOOK_PASSWORD>`).
 - PMOVES keeps `OPEN_NOTEBOOK_API_TOKEN` and `OPEN_NOTEBOOK_PASSWORD` aligned by default to avoid credential drift.
+
+Supporting operator checks:
+- `make -C pmoves notebook-workbench-smoke`
+- `curl -s http://localhost:5055/health`
+- `curl -s http://localhost:4482/api/notebook/sources`
 
 SurrealDB env note:
 - Upstream docs use `SURREAL_PASSWORD`.
@@ -57,7 +62,6 @@ SurrealDB env note:
 - `make notebook-logs`
 - `make notebook-set-password PASSWORD="pmoves4482"`
 - `make notebook-seed-models`
-- `make yt-notebook-sync ARGS="--limit 25 --dry-run"`
 
 ## PMOVES.YT transcript sync
 `scripts/yt_transcripts_to_notebook.py` mirrors unsynced transcripts into Open Notebook and writes back:
@@ -73,8 +77,8 @@ Required env:
 
 Run:
 ```bash
-make yt-notebook-sync ARGS="--limit 5 --dry-run"
-make yt-notebook-sync ARGS="--limit 25"
+python pmoves/scripts/yt_transcripts_to_notebook.py --limit 5 --dry-run
+python pmoves/scripts/yt_transcripts_to_notebook.py --limit 25
 ```
 
 ## Quick validation commands
