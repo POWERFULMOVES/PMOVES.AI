@@ -204,7 +204,7 @@ jobs:
 
       - name: Create PR for pinned bump (all integration Python images)
         if: ${{ steps.versions.outputs.should_update == 'true' && github.event.inputs.open_pr != 'false' }}
-        uses: peter-evans/create-pull-request@v7
+        uses: peter-evans/create-pull-request@v8
         with:
           branch: chore/python-images-toolchain-canary
           delete-branch: true
