@@ -118,7 +118,7 @@ PMOVES is a **distributed multi-agent orchestration mesh** for autonomous self-i
 
 | Service | Port | Purpose | Communication |
 |---------|------|---------|---------------|
-| **open-notebook-ext** | 8503 (UI, override `OPEN_NOTEBOOK_UI_PORT`)<br>5055 (API, override `OPEN_NOTEBOOK_API_PORT`) | Research workspace (Streamlit UI + SurrealDB API). Operators capture notes/assets that sync back into Supabase via notebook-sync. | HTTP (UI), REST API |
+| **open-notebook-ext** | 8503 (UI, override `OPEN_NOTEBOOK_UI_PORT`)<br>5055 (API, override `OPEN_NOTEBOOK_API_PORT`) | Research workspace (Next.js UI + FastAPI/SurrealDB backend). Operators capture notes/assets that sync back into Supabase via notebook-sync. | HTTP (UI), REST API |
 | **pmoves-health-wger** | 8000 | Self-hosted Wger instance for workout metrics. n8n flows pull workouts → Supabase (`health_workouts`) → hi-rag geometry summaries. | REST, n8n webhooks |
 | **pmoves-firefly-iii** | 8081 (mapped to container 8080) | Finance host (Firefly III). n8n flows ingest transactions → Supabase (`finance_transactions`) → geometry summaries. | REST, Supabase service tokens |
 | **pmoves-open-notebook (internal)** | - | (See notebook-sync service) Connects pmoves stack to the external Open Notebook API for SurrealDB sync. | REST |
