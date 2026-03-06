@@ -36,6 +36,11 @@ services:
       SURREAL_PASS: ${OPEN_NOTEBOOK_SURREAL_PASS:-${SURREAL_PASS:?Set OPEN_NOTEBOOK_SURREAL_PASS or SURREAL_PASS}}
       SURREAL_NAMESPACE: ${OPEN_NOTEBOOK_SURREAL_NAMESPACE:-open-notebook}
       SURREAL_DATABASE: ${OPEN_NOTEBOOK_SURREAL_DATABASE:-open-notebook}
+      # TensorZero provider mode (tensorzero routes all LLM calls via gateway)
+      NOTEBOOK_PROVIDER_MODE: ${NOTEBOOK_PROVIDER_MODE:-tensorzero}
+      TENSORZERO_BASE_URL: ${TENSORZERO_BASE_URL:-http://tensorzero-gateway:3030/v1}
+      TENSORZERO_API_KEY: ${TENSORZERO_API_KEY:-pmoves-internal}
+      OPEN_NOTEBOOK_ENCRYPTION_KEY: ${OPEN_NOTEBOOK_ENCRYPTION_KEY:-pmoves-default-change-me}
     ports:
       - "${OPEN_NOTEBOOK_UI_PORT:-8503}:8502"
       - "${OPEN_NOTEBOOK_API_PORT:-5055}:5055"
