@@ -2181,7 +2181,7 @@ GHCR_PREPUBLISH_SCRIPT ?= tools/ghcr_local_prepublish.py
 GHCR_MATRIX_FILE ?= ../.github/workflows/integrations-ghcr.matrix.json
 GHCR_PREPUBLISH_TAG_SUFFIX ?= local-smoke
 GHCR_PREPUBLISH_PLATFORM ?= linux/amd64
-GHCR_LOCAL_INTEGRATIONS ?= agent-zero archon firefly-iii jellyfin pmoves-yt deepresearch supaserch
+GHCR_LOCAL_INTEGRATIONS ?= agent-zero archon firefly-iii jellyfin pmoves-yt deepresearch supaserch a2ui-nats-bridge session-context-worker tokenism-ui
 
 .PHONY: buildx-setup docker-login
 buildx-setup: ## Ensure docker buildx builder exists and is bootstrapped
@@ -2274,6 +2274,40 @@ ghcr-dispatch-supaserch: ci-runners-check-strict ## Dispatch GHCR workflow for S
 	if [ -n "$(GHCR_NAMESPACE)" ]; then args="$$args -f ghcr_namespace=$(GHCR_NAMESPACE)"; fi; \
 	gh workflow run "$(GHCR_WORKFLOW)" --repo "$(GH_REPO)" --ref "$(GHCR_DISPATCH_REF)" $$args
 	@echo "✔ Dispatched $(GHCR_WORKFLOW) for supaserch on ref $(GHCR_DISPATCH_REF)"
+
+.PHONY: ghcr-build-one
+ghcr-build-one: buildx-setup ## Build a single GHCR image locally: make ghcr-build-one IMAGE=agent-zero
+	@if [ -z "$(IMAGE)" ]; then echo "Usage: make ghcr-build-one IMAGE=<name>"; exit 1; fi
+	@$(PYTHON) $(GHCR_PREPUBLISH_SCRIPT) \
+	  --matrix-file "$(GHCR_MATRIX_FILE)" \
+	  --repo-root .. \
+	  --integration "$(IMAGE)" \
+	  --skip-trivy \
+	  --platform "$(GHCR_PREPUBLISH_PLATFORM)" \
+	  --builder "$(BUILDX_BUILDER)" \
+	  --tag-suffix "$(GHCR_PREPUBLISH_TAG_SUFFIX)"
+
+.PHONY: ghcr-prepublish-one
+ghcr-prepublish-one: buildx-setup ## Build + Trivy gate a single image: make ghcr-prepublish-one IMAGE=agent-zero
+	@if [ -z "$(IMAGE)" ]; then echo "Usage: make ghcr-prepublish-one IMAGE=<name>"; exit 1; fi
+	@$(PYTHON) $(GHCR_PREPUBLISH_SCRIPT) \
+	  --matrix-file "$(GHCR_MATRIX_FILE)" \
+	  --repo-root .. \
+	  --integration "$(IMAGE)" \
+	  --platform "$(GHCR_PREPUBLISH_PLATFORM)" \
+	  --builder "$(BUILDX_BUILDER)" \
+	  --tag-suffix "$(GHCR_PREPUBLISH_TAG_SUFFIX)"
+
+.PHONY: ghcr-dispatch-one
+ghcr-dispatch-one: ci-runners-check-strict ## Dispatch GHCR workflow for a single image: make ghcr-dispatch-one IMAGE=agent-zero
+	@if [ -z "$(IMAGE)" ]; then echo "Usage: make ghcr-dispatch-one IMAGE=<name>"; exit 1; fi
+	@args="-f integration=$(IMAGE) -f push_to_dockerhub=false"; \
+	if [ -n "$(GHCR_NAMESPACE)" ]; then args="$$args -f ghcr_namespace=$(GHCR_NAMESPACE)"; fi; \
+	gh workflow run "$(GHCR_WORKFLOW)" --repo "$(GH_REPO)" --ref "$(GHCR_DISPATCH_REF)" $$args
+
+.PHONY: ghcr-list
+ghcr-list: ## List all images in the integrations-ghcr matrix
+	@$(PYTHON) -c "import json,pathlib;[print(e['name']) for e in json.loads(pathlib.Path('$(GHCR_MATRIX_FILE)').read_text())]"
 
 .PHONY: deepresearch-smoke
 deepresearch-smoke: ## Publish a sample DeepResearch request and wait for a result (requires worker running)

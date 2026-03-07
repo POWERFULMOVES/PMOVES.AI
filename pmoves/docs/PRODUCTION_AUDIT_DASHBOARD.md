@@ -3,7 +3,7 @@
 > **Single source of truth** for PMOVES.AI production readiness.
 > Supersedes all individual audit documents accumulated Feb 7 -- Feb 18, 2026.
 
-**Last Updated:** 2026-03-06 (merge queue closeout + production re-validation)
+**Last Updated:** 2026-03-07 (8-PR merge wave + GHCR matrix gap analysis)
 **Branch:** `PMOVES.AI-Edition-Hardened` (production release lane)
 **Commit:** `96adc266`
 **Consolidated From:** 27 audit documents
@@ -25,6 +25,54 @@
   - summary CSV: `pmoves/docs/logs/ghcr-local-prepublish/summary-2026-03-05.csv`
   - vuln-only summary CSV: `pmoves/docs/logs/ghcr-local-prepublish/summary-2026-03-05-vulnonly.csv`
   - per-image `.log` files are generated locally under `pmoves/docs/logs/ghcr-local-prepublish/` (ignored in git)
+
+---
+
+## Latest Changes (Mar 7, 2026)
+
+- Merge wave completed on `main`: 8 PRs merged in 3 batches (#814-#821)
+  - Batch 1 (06:00 UTC): #814 UI build fix, #815 smoke Supabase discovery, #816 healthcheck stability, #817 CI runner alignment, #819 DoX submodule bump
+  - Batch 2 (07:01 UTC): #818 model fabric + coding-plan wiring (rebased after 8 CodeRabbit comments)
+  - Batch 3 (17:11 UTC): #820 distributed topology docs, #821 chrome extension (9 security fixes)
+- Chrome extension security review completed (9/11 actionable CodeRabbit items addressed):
+  - `chrome.storage.sync` → `session` for auth credentials
+  - innerHTML XSS eliminated in options shapes display
+  - Mock server method allowlist + pathname routing
+  - `synthesizeAudio` timeout (AbortController)
+  - Processing status TTL cleanup
+  - Config load race condition (configReady promise)
+  - Storage read-modify-write serialization
+  - Content Security Policy added to manifest.json
+- GHCR matrix gap analysis completed (see section below)
+- Live metrics: Open PRs `0`, Dependabot `1` (medium), Code Scanning `0`
+
+---
+
+### GHCR Matrix Gap Analysis (Mar 7, 2026)
+
+**Build pipelines:**
+- `integrations-ghcr.yml` — 10 images (matrix-driven, multi-arch, Trivy + Cosign)
+- `self-hosted-builds.yml` — 11 CPU + 2 GPU images (push-triggered, amd64)
+- `build-images.yml` — 24 images from `images.yaml` (manual dispatch)
+
+**GHCR registry:** 23 packages published.
+
+**Compose → GHCR coverage gaps (4 truly missing):**
+
+| Service | Compose Image Reference | In GHCR? | In CI? |
+|---------|------------------------|----------|--------|
+| `a2ui-nats-bridge` | `ghcr.io/.../pmoves-a2ui-nats-bridge:pmoves-latest` | ❌ | ❌ |
+| `llama-throughput-lab` | `ghcr.io/.../pmoves-llama-throughput-lab:latest` | ❌ | ❌ |
+| `session-context-worker` | `ghcr.io/.../pmoves-session-context-worker:latest` | ❌ | ❌ |
+| `tokenism-ui` | `ghcr.io/.../pmoves-tokenism-ui:pmoves-latest` | ❌ | ❌ |
+| `ultimate-tts-studio` | `ghcr.io/.../pmoves-ultimate-tts-studio:pmoves-latest` | ✅ (manual) | ❌ |
+
+**Cross-reference gaps:**
+- `integrations-ghcr.matrix.json` covers 10/24 `images.yaml` entries
+- `self-hosted-builds.yml` builds 13 services not in `integrations-ghcr.matrix.json`
+- 2 submodules in `images.yaml` still track `main` instead of `PMOVES.AI-Edition-Hardened` (`pmoves-botz`, `pmoves-tailscale`)
+
+**Recommendation:** Add build definitions for the 4 missing images, or convert their compose references to local `build:` directives if they're dev-only.
 
 ---
 
@@ -85,7 +133,7 @@
 
 | Metric | Value |
 |--------|-------|
-| Quantitative snapshot timestamp | 2026-03-04 (live GitHub + local smoke/model-readiness snapshot) |
+| Quantitative snapshot timestamp | 2026-03-07 (live GitHub + local smoke/model-readiness snapshot) |
 | Total tracked items | 24 |
 | Resolved | 23 (+1 since last update) |
 | Active blockers | 1 (self-hosted queue starvation) |
@@ -93,8 +141,8 @@
 | High | 1 |
 | Medium | 0 |
 | Low | 0 |
-| CodeQL alerts (open) | **0 open** (live GitHub API on 2026-03-04) |
-| Dependabot alerts | **1 open** (`1 medium`; live GitHub API on 2026-03-04) |
+| CodeQL alerts (open) | **0 open** (live GitHub API on 2026-03-07) |
+| Dependabot alerts | **1 open** (`1 medium`; live GitHub API on 2026-03-07) |
 | Open PRs | **0** |
 | CI queue | Hosted gates healthy; self-hosted queue starvation persists on CodeQL/GHCR lanes |
 

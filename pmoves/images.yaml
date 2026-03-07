@@ -80,7 +80,7 @@ images:
 
   - name: pmoves-botz
     repo: PMOVES-BoTZ
-    ref: heads/main
+    ref: heads/PMOVES.AI-Edition-Hardened
     context: .
     dockerfile: Dockerfile
     image: ghcr.io/powerfulmoves/pmoves-botz
@@ -101,7 +101,7 @@ images:
 
   - name: pmoves-tailscale
     repo: PMOVES-Tailscale
-    ref: heads/main
+    ref: heads/PMOVES.AI-Edition-Hardened
     context: .
     dockerfile: Dockerfile
     image: ghcr.io/powerfulmoves/pmoves-tailscale
@@ -156,6 +156,29 @@ images:
     dockerfile: services/gpu-orchestrator/Dockerfile
     image: ghcr.io/powerfulmoves/pmoves-gpu-orchestrator
 
+  - name: pmoves-a2ui-nats-bridge
+    context: pmoves
+    dockerfile: services/a2ui-nats-bridge/Dockerfile
+    image: ghcr.io/powerfulmoves/pmoves-a2ui-nats-bridge
+
+  - name: pmoves-session-context-worker
+    context: pmoves
+    dockerfile: services/session-context-worker/Dockerfile
+    image: ghcr.io/powerfulmoves/pmoves-session-context-worker
+
+  - name: pmoves-tokenism-ui
+    repo: PMOVES-ToKenism-Multi
+    ref: heads/PMOVES.AI-Edition-Hardened
+    context: pmoves-nextjs
+    dockerfile: pmoves-nextjs/Dockerfile
+    image: ghcr.io/powerfulmoves/pmoves-tokenism-ui
+
+  # GPU-heavy services (manual dispatch only — not in integrations-ghcr matrix)
+  - name: pmoves-ultimate-tts-studio
+    context: pmoves
+    dockerfile: docker/ultimate-tts-studio/Dockerfile
+    image: ghcr.io/powerfulmoves/pmoves-ultimate-tts-studio
+
   # Submodule-backed services
   - name: pmoves-transcribe-backend
     repo: PMOVES-transcribe-and-fetch
@@ -163,3 +186,10 @@ images:
     context: .
     dockerfile: backend/Dockerfile
     image: ghcr.io/powerfulmoves/pmoves-transcribe-backend
+
+  - name: pmoves-llama-throughput-lab
+    repo: PMOVES-llama-throughput-lab
+    ref: heads/main
+    context: .
+    dockerfile: Dockerfile
+    image: ghcr.io/powerfulmoves/pmoves-llama-throughput-lab
