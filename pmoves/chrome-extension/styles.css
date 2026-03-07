@@ -1,0 +1,283 @@
+/* PMOVES.AI Chrome Extension - YouTube Overlay Styles */
+
+/* ─── Floating Action Button ─────────────────── */
+
+.pmoves-float-button {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 9999;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+  color: white;
+  user-select: none;
+}
+
+.pmoves-float-button:hover {
+  transform: scale(1.1);
+  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+}
+
+.pmoves-gpu-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 22px;
+  height: 18px;
+  border-radius: 9px;
+  background: #4CAF50;
+  color: white;
+  font-size: 10px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 4px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+}
+
+/* ─── Action Menu ────────────────────────────── */
+
+.pmoves-action-menu {
+  position: fixed;
+  background: #1e1e2e;
+  border: 1px solid rgba(102, 126, 234, 0.3);
+  border-radius: 12px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
+  padding: 8px 0;
+  z-index: 10000;
+  min-width: 240px;
+  backdrop-filter: blur(12px);
+}
+
+.pmoves-menu-item {
+  padding: 10px 16px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+  font-size: 13px;
+  color: #e0e0e0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.pmoves-menu-item:hover {
+  background: rgba(102, 126, 234, 0.15);
+}
+
+.pmoves-menu-icon {
+  font-size: 16px;
+  width: 20px;
+  text-align: center;
+}
+
+/* ─── Thumbnail Process Button ───────────────── */
+
+.pmoves-thumbnail-button {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 28px;
+  height: 28px;
+  background: rgba(102, 126, 234, 0.85);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  z-index: 10;
+}
+
+ytd-thumbnail:hover .pmoves-thumbnail-button,
+ytd-rich-grid-media:hover .pmoves-thumbnail-button {
+  opacity: 1;
+}
+
+.pmoves-thumbnail-button:hover {
+  background: rgba(102, 126, 234, 1);
+  transform: scale(1.15);
+}
+
+/* ─── Video Page Process Button ──────────────── */
+
+.pmoves-process-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  margin: 8px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  border-radius: 20px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.pmoves-process-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+/* ─── Toast Notification ─────────────────────── */
+
+.pmoves-toast {
+  position: fixed;
+  bottom: 90px;
+  right: 20px;
+  background: #1e1e2e;
+  color: #e0e0e0;
+  padding: 12px 20px;
+  border-radius: 8px;
+  border: 1px solid rgba(102, 126, 234, 0.3);
+  font-size: 13px;
+  opacity: 0;
+  transform: translateY(20px);
+  transition: all 0.3s ease;
+  z-index: 10001;
+  max-width: 300px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.pmoves-toast-show {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* ─── Modal ──────────────────────────────────── */
+
+.pmoves-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10002;
+  backdrop-filter: blur(4px);
+}
+
+.pmoves-modal-content {
+  background: #1e1e2e;
+  color: #e0e0e0;
+  border: 1px solid rgba(102, 126, 234, 0.3);
+  border-radius: 16px;
+  padding: 24px;
+  max-width: 600px;
+  width: 90%;
+  max-height: 80vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+
+.pmoves-modal-content h2 {
+  margin: 0 0 16px;
+  font-size: 18px;
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* ─── Search Modal ───────────────────────────── */
+
+.pmoves-search-modal {
+  max-width: 700px;
+}
+
+.pmoves-search-input-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.pmoves-search-input-row input {
+  flex: 1;
+  padding: 10px 14px;
+  border-radius: 8px;
+  border: 1px solid rgba(102, 126, 234, 0.3);
+  background: #2a2a3e;
+  color: #e0e0e0;
+  font-size: 14px;
+  outline: none;
+}
+
+.pmoves-search-input-row input:focus {
+  border-color: #667eea;
+}
+
+/* ─── History List ───────────────────────────── */
+
+.pmoves-history-list {
+  margin: 12px 0;
+}
+
+.pmoves-history-item {
+  padding: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.pmoves-history-title {
+  font-size: 14px;
+  font-weight: 500;
+  word-break: break-all;
+}
+
+.pmoves-history-meta {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 4px;
+  font-size: 12px;
+  color: #888;
+}
+
+.pmoves-status-processing { color: #2196F3; }
+.pmoves-status-completed  { color: #4CAF50; }
+.pmoves-status-failed     { color: #f44336; }
+.pmoves-status-queued     { color: #FF9800; }
+
+/* ─── Close Button ───────────────────────────── */
+
+.pmoves-close-button {
+  padding: 8px 20px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  transition: opacity 0.2s;
+}
+
+.pmoves-close-button:hover {
+  opacity: 0.9;
+}
+
+/* ─── Health Dots (used in popup, reusable) ──── */
+
+.pmoves-health-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.pmoves-health-dot.ok      { background: #4CAF50; }
+.pmoves-health-dot.degraded { background: #FF9800; }
+.pmoves-health-dot.down     { background: #F44336; }
+.pmoves-health-dot.unknown  { background: #9E9E9E; }
