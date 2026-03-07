@@ -83,6 +83,39 @@ function Resolve-SupabaseRestUrl {
     return ("{0}/rest/v1" -f $apiUrl.TrimEnd('/'))
   }
 
+  foreach ($path in @(
+    (Join-Path $Script:ProjectRoot 'env.supa.runtime'),
+    (Join-Path $Script:ProjectRoot 'env.tier-supabase'),
+    (Join-Path $Script:ProjectRoot 'env.shared')
+  )) {
+    foreach ($key in @('SUPA_REST_URL', 'SUPABASE_REST_URL', 'SUPABASE_URL', 'SUPABASE_CLI_API_URL', 'API_URL')) {
+      $value = Get-EnvFileValue -Path $path -Key $key
+      if ([string]::IsNullOrWhiteSpace($value)) { continue }
+      $normalized = $value.TrimEnd('/')
+      if ($normalized -match '/rest/v1$') {
+        return $normalized
+      }
+      return ("{0}/rest/v1" -f $normalized)
+    }
+  }
+
+  foreach ($candidate in @(
+    'http://127.0.0.1:54321/rest/v1',
+    'http://localhost:54321/rest/v1',
+    'http://127.0.0.1:65421/rest/v1',
+    'http://localhost:65421/rest/v1'
+  )) {
+    try {
+      Invoke-WebRequest -Uri "$candidate/" -Method GET -UseBasicParsing -TimeoutSec 2 | Out-Null
+      return $candidate
+    } catch {
+      if ($_.Exception.Response) {
+        # Reachable but auth-restricted still means endpoint is up.
+        return $candidate
+      }
+    }
+  }
+
   return 'http://localhost:3010'
 }
 
@@ -102,6 +135,14 @@ function Resolve-SupabaseAnonKey {
   $overlayAnon = Get-EnvFileValue -Path $runtimeOverlay -Key 'SUPABASE_ANON_KEY'
   if (-not [string]::IsNullOrWhiteSpace($overlayAnon)) {
     return $overlayAnon.Trim()
+  }
+
+  $statusFile = Join-Path $Script:ProjectRoot '.supabase.status.env'
+  foreach ($key in @('SUPABASE_ANON_KEY', 'ANON_KEY')) {
+    $statusAnon = Get-EnvFileValue -Path $statusFile -Key $key
+    if (-not [string]::IsNullOrWhiteSpace($statusAnon)) {
+      return $statusAnon.Trim()
+    }
   }
 
   return $null
@@ -126,6 +167,14 @@ function Resolve-SupabaseServiceKey {
   $runtimeOverlay = Join-Path $Script:ProjectRoot 'env.supa.runtime'
   foreach ($k in @('SUPABASE_SERVICE_ROLE_KEY', 'SUPABASE_SECRET_KEY', 'SERVICE_ROLE_KEY')) {
     $v = Get-EnvFileValue -Path $runtimeOverlay -Key $k
+    if (-not [string]::IsNullOrWhiteSpace($v)) {
+      return $v.Trim()
+    }
+  }
+
+  $statusFile = Join-Path $Script:ProjectRoot '.supabase.status.env'
+  foreach ($k in @('SUPABASE_SERVICE_ROLE_KEY', 'SERVICE_ROLE_KEY', 'SUPABASE_SECRET_KEY')) {
+    $v = Get-EnvFileValue -Path $statusFile -Key $k
     if (-not [string]::IsNullOrWhiteSpace($v)) {
       return $v.Trim()
     }
