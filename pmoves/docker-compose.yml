@@ -828,7 +828,7 @@ services:
     volumes:
     - qdrant-data:/qdrant/storage
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:6333/healthz >/dev/null 2>&1 || exit 1"]
+      test: ["CMD-SHELL", "bash -lc \"exec 3<>/dev/tcp/127.0.0.1/6333 && printf 'GET /healthz HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && grep -q '200 OK' <&3\" || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -850,7 +850,7 @@ services:
     volumes:
     - meilisearch-data:/meili_data
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:7700/health >/dev/null 2>&1 || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:7700/health >/dev/null 2>&1 || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 5
