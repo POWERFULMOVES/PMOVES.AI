@@ -13,6 +13,7 @@
 | **Flute Voice** | `flute-gateway.md` | `FLUTE_PROSODIC_ARCHITECTURE.md` | `nats-subjects.md` |
 | **Personas** | `PERSONAS.md` | `voice-personas.md` | `voice.persona.*` |
 | **Services** | `services-catalog.md` | CLAUDE.md | `nats-subjects.md` |
+| **Chrome Extension** | `chrome-extension.md` | `pmoves/chrome-extension/` | Polls via Gateway |
 | **Brand** | `CATACLYSM_STUDIOS_INC.md` | Services | N/A |
 | **Agents/CODEX** | `CODEX_OPERATOR_HOME.md` | `CODEX_CLAUDE_PARITY_MAP.md` | — |
 | **Tooling Audit** | `TOOLING_SCRIPT_AUDIT.md` | `AGENTS/` | — |
@@ -139,6 +140,16 @@ agent.voice.speaking.v1  # Agent voice state
 
 ---
 
+## Chrome Extension
+
+| Document | Path | Purpose |
+|----------|------|---------|
+| Integration Reference | `.claude/context/chrome-extension.md` | Full API, message protocol, auth |
+| Quick Start | `pmoves/chrome-extension/README.md` | Install + usage |
+| Mock Server | `pmoves/chrome-extension/test/mock-server.js` | Development testing |
+
+---
+
 ## Brand & Platform
 
 | Document | Path | Purpose |
@@ -200,6 +211,7 @@ agent.voice.speaking.v1  # Agent voice state
 | Agent Zero | 8080 | `agent.*`, `claude.code.*` |
 | SupaSerch | 8099 | `supaserch.request.v1` |
 | DeepResearch | 8098 | `research.deepresearch.*` |
+| Chrome Extension | N/A (client) | Publishes via Agent Zero `/events/publish` |
 
 ---
 

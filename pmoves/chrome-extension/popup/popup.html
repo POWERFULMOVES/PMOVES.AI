@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PMOVES.AI</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <header>
+    <div class="logo">
+      <img src="../icons/icon32.png" alt="PMOVES.AI" width="24" height="24">
+      <span>PMOVES.AI</span>
+    </div>
+    <div style="display:flex;gap:6px;">
+      <button id="help-btn" title="Help">?</button>
+      <button id="refresh-btn" title="Refresh health">&#8635;</button>
+    </div>
+  </header>
+
+  <!-- Health Grid -->
+  <section class="health-grid" id="health-grid">
+    <div class="health-item" data-service="tensorzero">
+      <span class="health-dot unknown"></span>
+      <span class="health-label">TensorZero</span>
+      <span class="health-latency"></span>
+    </div>
+    <div class="health-item" data-service="gpuOrchestrator">
+      <span class="health-dot unknown"></span>
+      <span class="health-label">GPU</span>
+      <span class="health-latency"></span>
+    </div>
+    <div class="health-item" data-service="hirag">
+      <span class="health-dot unknown"></span>
+      <span class="health-label">Hi-RAG</span>
+      <span class="health-latency"></span>
+    </div>
+    <div class="health-item" data-service="pmovesYt">
+      <span class="health-dot unknown"></span>
+      <span class="health-label">YT</span>
+      <span class="health-latency"></span>
+    </div>
+    <div class="health-item" data-service="agentZero">
+      <span class="health-dot unknown"></span>
+      <span class="health-label">Agent0</span>
+      <span class="health-latency"></span>
+    </div>
+    <div class="health-item" data-service="fluteGateway">
+      <span class="health-dot unknown"></span>
+      <span class="health-label">Flute</span>
+      <span class="health-latency"></span>
+    </div>
+    <div class="health-item" data-service="prometheus">
+      <span class="health-dot unknown"></span>
+      <span class="health-label">Mesh</span>
+      <span class="health-latency"></span>
+    </div>
+    <div class="health-item" data-service="gateway">
+      <span class="health-dot unknown"></span>
+      <span class="health-label">CHIT</span>
+      <span class="health-latency"></span>
+    </div>
+  </section>
+
+  <!-- GPU Panel -->
+  <section class="gpu-panel" id="gpu-panel">
+    <h3>GPU Status</h3>
+    <div class="gpu-stats">
+      <div class="gpu-stat">
+        <span class="gpu-stat-label">VRAM</span>
+        <div class="gpu-bar-container">
+          <div class="gpu-bar" id="gpu-vram-bar" style="width:0%"></div>
+        </div>
+        <span class="gpu-stat-value" id="gpu-vram-text">--</span>
+      </div>
+      <div class="gpu-stat-row">
+        <span>Temp: <strong id="gpu-temp">--</strong></span>
+        <span>Util: <strong id="gpu-util">--</strong></span>
+        <span>Models: <strong id="gpu-models">--</strong></span>
+      </div>
+    </div>
+    <button id="gpu-optimize-btn" class="action-btn small">Optimize VRAM</button>
+  </section>
+
+  <!-- Quick Actions -->
+  <section class="quick-actions">
+    <h3>Quick Actions</h3>
+    <div class="action-row">
+      <input type="text" id="ingest-url" placeholder="YouTube URL to ingest...">
+      <button id="ingest-btn" class="action-btn">Ingest</button>
+    </div>
+    <div class="action-row">
+      <input type="text" id="rag-query" placeholder="Search knowledge base...">
+      <button id="rag-btn" class="action-btn">Search</button>
+    </div>
+    <div class="action-row">
+      <input type="text" id="chat-input" placeholder="Ask AI (TensorZero)...">
+      <button id="chat-btn" class="action-btn">Ask</button>
+    </div>
+    <div class="action-row">
+      <input type="text" id="tts-input" placeholder="Text to speak (Flute)...">
+      <button id="tts-btn" class="action-btn">Speak</button>
+    </div>
+    <div id="action-result" class="action-result" style="display:none;"></div>
+  </section>
+
+  <!-- Agent Tasks -->
+  <section class="agent-tasks">
+    <h3>Agent Tasks</h3>
+    <div class="action-row">
+      <input type="text" id="agent-task-input" placeholder="Describe a task for Agent Zero...">
+      <button id="agent-task-btn" class="action-btn">Run</button>
+    </div>
+    <div id="agent-task-result" class="action-result" style="display:none;"></div>
+  </section>
+
+  <!-- CHIT Pipeline -->
+  <section class="chit-pipeline">
+    <h3>CHIT Geometry</h3>
+    <div class="action-row">
+      <input type="text" id="chit-demo-url" placeholder="YouTube URL for CHIT pipeline...">
+      <button id="chit-demo-btn" class="action-btn">Pipeline</button>
+    </div>
+    <div class="action-row">
+      <input type="text" id="chit-input" placeholder="Constellation IDs (comma-separated)...">
+      <button id="chit-btn" class="action-btn">Decode</button>
+    </div>
+    <div id="chit-shapes-list" class="shapes-list"></div>
+    <div id="chit-result" class="action-result" style="display:none;"></div>
+  </section>
+
+  <!-- Recent Activity -->
+  <section class="recent-activity" id="recent-activity">
+    <h3>Recent Activity</h3>
+    <div id="activity-list" class="activity-list">
+      <div class="activity-empty">No recent activity</div>
+    </div>
+  </section>
+
+  <footer>
+    <a href="#" id="settings-link">Settings</a>
+    <span class="version" id="version-label">v1.0.0</span>
+  </footer>
+
+  <script src="popup.js" type="module"></script>
+</body>
+</html>

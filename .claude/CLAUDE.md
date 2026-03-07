@@ -499,6 +499,7 @@ See `.claude/context/` for detailed documentation:
 - `observability-patterns.md` - Prometheus, Grafana, Loki, TensorZero metrics
 - `agent-zero-orchestration.md` - MCP API reference, task flow, subordinate model
 - `tier-architecture.md` - 7-tier env security model, network segmentation
+- `chrome-extension.md` - Chrome Extension integration (8 services, message protocol, auth)
 
 **GEOMETRY BUS & CHIT Integration:**
 - `pmoves/docs/PMOVESCHIT/GEOMETRY_BUS_INTEGRATION.md` - CGP integration guide
