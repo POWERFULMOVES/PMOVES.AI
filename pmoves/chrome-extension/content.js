@@ -5,6 +5,7 @@
   'use strict';
 
   let extensionConfig = null;
+  let gpuBadgeInterval = null;
 
   // Load config from background
   chrome.runtime.sendMessage({ action: 'getConfig' }, (cfg) => {
@@ -34,9 +35,10 @@
     btn.addEventListener('click', toggleActionMenu);
     document.body.appendChild(btn);
 
-    // Periodically update GPU badge
+    // Periodically update GPU badge (clear previous to prevent stacking)
+    if (gpuBadgeInterval) clearInterval(gpuBadgeInterval);
     updateGpuBadge();
-    setInterval(updateGpuBadge, 30000);
+    gpuBadgeInterval = setInterval(updateGpuBadge, 30000);
   }
 
   async function updateGpuBadge() {
@@ -107,9 +109,25 @@
 
   // ─── Thumbnail Buttons ─────────────────────────
 
+  function attachThumbnailButton(container, href) {
+    const videoUrl = `https://www.youtube.com${href}`;
+    const btn = document.createElement('div');
+    btn.className = 'pmoves-thumbnail-button';
+    btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 2L2 7L12 12L22 7L12 2Z" stroke="white" stroke-width="2.5"/></svg>`;
+    btn.title = 'Process with PMOVES.AI';
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      processVideo(videoUrl);
+    });
+    container.style.position = 'relative';
+    container.appendChild(btn);
+  }
+
   function addThumbnailButtons() {
     if (!extensionConfig?.features?.showThumbnailButtons) return;
 
+    // Pass 1: ytd-thumbnail elements (homepage, search results)
     const thumbnails = document.querySelectorAll('ytd-thumbnail:not(.pmoves-processed)');
     thumbnails.forEach((thumb) => {
       thumb.classList.add('pmoves-processed');
@@ -117,19 +135,21 @@
       if (!link) return;
       const href = link.getAttribute('href');
       if (!href || !href.includes('/watch')) return;
-      const videoUrl = `https://www.youtube.com${href}`;
+      attachThumbnailButton(thumb, href);
+    });
 
-      const btn = document.createElement('div');
-      btn.className = 'pmoves-thumbnail-button';
-      btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 2L2 7L12 12L22 7L12 2Z" stroke="white" stroke-width="2.5"/></svg>`;
-      btn.title = 'Process with PMOVES.AI';
-      btn.addEventListener('click', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        processVideo(videoUrl);
-      });
-      thumb.style.position = 'relative';
-      thumb.appendChild(btn);
+    // Pass 2: sidebar/related video links not inside ytd-thumbnail
+    const sidebarRenderers = 'ytd-compact-video-renderer, ytd-video-renderer, ytd-grid-video-renderer, ytd-rich-item-renderer';
+    const watchLinks = document.querySelectorAll(`${sidebarRenderers} a[href*="/watch"]:not(.pmoves-link-processed)`);
+    watchLinks.forEach((link) => {
+      link.classList.add('pmoves-link-processed');
+      // Skip if already handled by Pass 1 (inside a processed ytd-thumbnail)
+      if (link.closest('ytd-thumbnail.pmoves-processed')) return;
+      const container = link.closest(sidebarRenderers);
+      if (!container || container.querySelector('.pmoves-thumbnail-button')) return;
+      const href = link.getAttribute('href');
+      if (!href) return;
+      attachThumbnailButton(container, href);
     });
   }
 
@@ -222,6 +242,7 @@
       </div>
     `;
     document.body.appendChild(overlay);
+    enableEscClose(overlay);
 
     overlay.querySelector('.pmoves-close-modal').addEventListener('click', () => overlay.remove());
     overlay.querySelector('#pmoves-search-btn').addEventListener('click', doSearch);
@@ -243,7 +264,7 @@
         rerank: true,
       }, (response) => {
         if (chrome.runtime.lastError || response?.error) {
-          resultsDiv.innerHTML = `<div class="pmoves-history-item pmoves-status-failed">Error: ${response?.error || 'unknown'}</div>`;
+          resultsDiv.innerHTML = `<div class="pmoves-history-item pmoves-status-failed">Error: ${escapeHtml(response?.error || 'unknown')}</div>`;
           return;
         }
         const results = response?.results || [];
@@ -291,6 +312,7 @@
       </div>
     `;
     document.body.appendChild(modal);
+    enableEscClose(modal);
     modal.querySelector('.pmoves-close-button').addEventListener('click', () => modal.remove());
   }
 
@@ -307,6 +329,7 @@
       </div>
     `;
     document.body.appendChild(modal);
+    enableEscClose(modal);
     modal.querySelector('.pmoves-close-button').addEventListener('click', () => modal.remove());
   }
 
@@ -316,9 +339,18 @@
     chrome.runtime.sendMessage({ action: 'openSettings' });
   }
 
-  // ─── Utilities ─────────────────────────────────
+  // ─── Utilities ─────────────────────────────
+
+  function enableEscClose(modalEl) {
+    function onKey(e) {
+      if (e.key === 'Escape') { modalEl.remove(); document.removeEventListener('keydown', onKey); }
+    }
+    document.addEventListener('keydown', onKey);
+  }
 
   function showToast(message) {
+    const existing = document.querySelectorAll('.pmoves-toast');
+    if (existing.length >= 3) existing[0].remove();
     const toast = document.createElement('div');
     toast.className = 'pmoves-toast';
     toast.textContent = message;

@@ -99,7 +99,11 @@
 }
 
 ytd-thumbnail:hover .pmoves-thumbnail-button,
-ytd-rich-grid-media:hover .pmoves-thumbnail-button {
+ytd-rich-grid-media:hover .pmoves-thumbnail-button,
+ytd-compact-video-renderer:hover .pmoves-thumbnail-button,
+ytd-video-renderer:hover .pmoves-thumbnail-button,
+ytd-grid-video-renderer:hover .pmoves-thumbnail-button,
+ytd-rich-item-renderer:hover .pmoves-thumbnail-button {
   opacity: 1;
 }
 
