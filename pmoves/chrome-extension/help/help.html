@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PMOVES.AI Help</title>
+  <link rel="stylesheet" href="help.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <img src="../icons/icon48.png" alt="PMOVES.AI" width="32" height="32">
+      <div>
+        <h1>PMOVES.AI Help</h1>
+        <p class="subtitle">Quick reference for the Chrome Extension</p>
+      </div>
+    </header>
+
+    <!-- Dashboard -->
+    <details open>
+      <summary>Dashboard (Popup)</summary>
+      <div class="help-content">
+        <div class="card-grid">
+          <div class="card">
+            <h4>Health Grid</h4>
+            <p>8 dots showing service status. <span class="dot green"></span> healthy, <span class="dot red"></span> down, <span class="dot gray"></span> unknown. Latency shown below each dot.</p>
+          </div>
+          <div class="card">
+            <h4>GPU Panel</h4>
+            <p>VRAM usage bar, temperature, utilization, loaded model count. Click <strong>Optimize VRAM</strong> to free memory.</p>
+          </div>
+          <div class="card">
+            <h4>YouTube Ingest</h4>
+            <p>Paste a YouTube URL and click <strong>Ingest</strong> to queue it for transcription and indexing.</p>
+          </div>
+          <div class="card">
+            <h4>RAG Search</h4>
+            <p>Type a question, click <strong>Search</strong>. Results come from Hi-RAG v2 (vector + graph + full-text).</p>
+          </div>
+          <div class="card">
+            <h4>Chat with AI</h4>
+            <p>Ask anything via TensorZero gateway. Uses Claude or other configured models.</p>
+          </div>
+          <div class="card">
+            <h4>Text-to-Speech</h4>
+            <p>Type text, click <strong>Speak</strong>. Synthesized via Flute Gateway with prosodic emphasis.</p>
+          </div>
+          <div class="card">
+            <h4>Agent Tasks</h4>
+            <p>Describe a task for Agent Zero. It uses MCP tools to complete complex multi-step operations.</p>
+          </div>
+          <div class="card">
+            <h4>CHIT Pipeline</h4>
+            <p>Run full geometry analysis on a video, or decode constellation IDs. Browse shapes with SVG links.</p>
+          </div>
+        </div>
+        <p class="tip">Press <kbd>Enter</kbd> in any input field to trigger the action button.</p>
+      </div>
+    </details>
+
+    <!-- YouTube Features -->
+    <details>
+      <summary>YouTube Features</summary>
+      <div class="help-content">
+        <h4>Floating Button (bottom-right)</h4>
+        <p>A purple circle appears on YouTube pages with 8 menu items:</p>
+        <ol>
+          <li><strong>Process Current Video</strong> — ingest the video you're watching</li>
+          <li><strong>Search Knowledge</strong> — opens a Hi-RAG search overlay</li>
+          <li><strong>Summarize with AI</strong> — AI summary of the video</li>
+          <li><strong>Read Aloud</strong> — TTS of the video title</li>
+          <li><strong>Process All on Page</strong> — queue every video on the page</li>
+          <li><strong>Monitor Channel</strong> — track the channel for new content</li>
+          <li><strong>Processing History</strong> — view past jobs</li>
+          <li><strong>Settings</strong> — open extension settings</li>
+        </ol>
+
+        <h4>Thumbnail Buttons</h4>
+        <p>Hover over any video thumbnail to see a small PMOVES.AI icon. Click to process that video.</p>
+
+        <h4>GPU Badge</h4>
+        <p>The floating button shows a colored badge with GPU utilization: <span class="dot green"></span> &lt;70%, <span class="dot orange"></span> 70-90%, <span class="dot red"></span> &gt;90%.</p>
+
+        <p class="tip">Press <kbd>Escape</kbd> to close any overlay or modal.</p>
+      </div>
+    </details>
+
+    <!-- Settings -->
+    <details>
+      <summary>Settings</summary>
+      <div class="help-content">
+        <h4>Service Endpoints</h4>
+        <p>Default URLs point to localhost. Change only if your services run elsewhere. Use the <strong>Test</strong> button to verify each.</p>
+
+        <h4>Authentication</h4>
+        <ul>
+          <li><strong>Agent Zero Token</strong> — from your <code>.env</code> (<code>AGENTZERO_API_TOKEN</code>)</li>
+          <li><strong>Flute API Key</strong> — optional, from Flute <code>.env</code> (<code>FLUTE_API_KEY</code>)</li>
+        </ul>
+
+        <h4>Feature Toggles</h4>
+        <ul>
+          <li><strong>Auto-process</strong> — automatically ingest videos on page load (off by default)</li>
+          <li><strong>Floating button</strong> — the purple circle on YouTube (on by default)</li>
+          <li><strong>Thumbnail buttons</strong> — icons on video hover (on by default)</li>
+          <li><strong>Notifications</strong> — desktop alerts for events (on by default)</li>
+        </ul>
+
+        <h4>Diagnostics</h4>
+        <p>Test all services at once, inspect Agent Zero health and MCP commands, browse CHIT shapes and events.</p>
+      </div>
+    </details>
+
+    <!-- Toolbar Badge -->
+    <details>
+      <summary>Toolbar Badge</summary>
+      <div class="help-content">
+        <table>
+          <tr><td><span class="badge green-badge">OK</span></td><td>All 8 services healthy</td></tr>
+          <tr><td><span class="badge orange-badge">5/8</span></td><td>Some services down</td></tr>
+          <tr><td><span class="badge red-badge">OFF</span></td><td>All services unreachable</td></tr>
+          <tr><td><span class="badge gray-badge">?</span></td><td>Polling error</td></tr>
+        </table>
+      </div>
+    </details>
+
+    <!-- Troubleshooting -->
+    <details>
+      <summary>Troubleshooting</summary>
+      <div class="help-content">
+        <table class="trouble-table">
+          <tr><th>Symptom</th><th>Fix</th></tr>
+          <tr><td>All services red</td><td>Check Docker is running: <code>docker ps</code></td></tr>
+          <tr><td>Ingestion stuck</td><td>Check PMOVES.YT at port 8077, inspect Docker logs</td></tr>
+          <tr><td>AI chat fails</td><td>Verify TensorZero at port 3030, check API keys</td></tr>
+          <tr><td>TTS silent</td><td>Check Flute at port 8055, add API key if needed</td></tr>
+          <tr><td>No floating button</td><td>Enable toggle in Settings, reload YouTube page</td></tr>
+          <tr><td>Badge shows "?"</td><td>Services unreachable — check network and Docker</td></tr>
+          <tr><td>No search results</td><td>Ingest content first — knowledge base starts empty</td></tr>
+        </table>
+      </div>
+    </details>
+
+    <!-- Full Guide Link -->
+    <div class="full-guide">
+      <p>For comprehensive instructions, see the <a href="../docs/USER_GUIDE.md" target="_blank">full User Guide</a>.</p>
+    </div>
+
+    <footer>
+      <span>PMOVES.AI Chrome Extension</span>
+      <span class="version">v1.0.0</span>
+    </footer>
+  </div>
+</body>
+</html>

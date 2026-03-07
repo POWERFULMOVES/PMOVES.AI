@@ -77,10 +77,89 @@ Click the toolbar icon to see:
 ```
 background.js     Service worker: config, health polling, message routing
 content.js        YouTube page injection: buttons, menus, overlays
-lib/pmoves-api.js Shared API client for all 7 PMOVES.AI services
+lib/pmoves-api.js Shared API client for all 8 PMOVES.AI services
 lib/constants.js  Default config, service URLs, health endpoints
 popup/            Dashboard: health grid, GPU panel, quick actions
 options/          Settings: endpoints, auth, features, diagnostics
 ```
 
 The extension uses Chrome Manifest V3 with ES modules. The service worker (`background.js`) acts as the central message router between the popup, content script, and PMOVES.AI services.
+
+## Integration Overview
+
+The extension communicates **bidirectionally** with 8 PMOVES.AI services:
+
+- **Outbound:** Content script and popup send `chrome.runtime.sendMessage()` to the background service worker, which proxies all API calls via `lib/pmoves-api.js`. This includes video ingestion, knowledge queries, LLM chat, GPU management, TTS synthesis, agent tasks, and CHIT pipeline operations.
+- **Inbound:** The extension is **poll-only** — health status is refreshed every 30s via `chrome.alarms`, and GPU metrics update on the same interval. There are no WebSocket or NATS subscriptions.
+
+For complete API reference, message protocol, and authentication details, see [`.claude/context/chrome-extension.md`](../../.claude/context/chrome-extension.md).
+
+## Development
+
+### Mock Server
+
+```bash
+cd pmoves/chrome-extension
+node test/mock-server.js
+```
+
+Simulates all 8 service endpoints on their default ports for local development without the full Docker stack.
+
+### Testing
+
+1. Load the extension in developer mode (see Install above)
+2. Run the mock server for offline testing
+3. Open YouTube and verify floating button, thumbnail buttons, and context menus
+
+### Adding New Service Integrations
+
+Five-file checklist:
+
+1. `lib/constants.js` — Add to `DEFAULT_SERVICES` and `HEALTH_ENDPOINTS`
+2. `lib/pmoves-api.js` — Add API client module
+3. `background.js` — Add `case` entries to `handleMessage()`
+4. `manifest.json` — Add port to `host_permissions`
+5. UI files (popup/options) — Add relevant controls
+
+## Troubleshooting
+
+| Symptom | Likely Cause | Fix |
+|---------|-------------|-----|
+| All services show red | Docker not running | Run `docker compose --profile agents --profile workers up -d` |
+| Video ingestion stuck at "queued" | PMOVES.YT down | Check `docker logs pmoves-yt`, verify port 8077 |
+| AI chat/summary fails | TensorZero unreachable | Check `http://localhost:3030/healthz`, verify API keys |
+| TTS not working | Flute Gateway down or no API key | Check port 8055, add Flute API key in Settings |
+| No floating button on YouTube | Feature toggle off or page not reloaded | Enable in Settings > Features, reload the YouTube page |
+| Toolbar badge shows "?" | Extension can't reach services | Check Docker, network, and firewall settings |
+| Knowledge search returns nothing | No content ingested yet | Ingest videos first — the knowledge base starts empty |
+
+**Checking service logs:**
+
+```bash
+# Individual service
+docker logs <container-name>
+
+# All services
+docker compose logs -f --tail=50
+```
+
+## FAQ
+
+**Can I use this without PMOVES.AI running?**
+No — the extension is a frontend for PMOVES.AI Docker services. Without them, all features will show errors.
+
+**Does it work on non-YouTube pages?**
+The popup dashboard (health, chat, search, TTS, agent tasks, CHIT) works on any page. YouTube-specific features (floating button, thumbnail buttons) only appear on youtube.com.
+
+**How do I update the extension?**
+Pull the latest PMOVES.AI code, then go to `chrome://extensions` and click the refresh icon on the PMOVES.AI extension card.
+
+**Where is my data stored?**
+Settings and history use `chrome.storage.local` — local to your browser, not synced or uploaded anywhere.
+
+**What does "Optimize VRAM" do?**
+Calls the GPU Orchestrator to unload idle models from GPU memory, freeing VRAM for other tasks.
+
+## User Guide
+
+For comprehensive usage instructions including detailed feature walkthroughs, see **[docs/USER_GUIDE.md](docs/USER_GUIDE.md)**.

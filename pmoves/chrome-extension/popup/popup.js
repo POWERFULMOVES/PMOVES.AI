@@ -232,6 +232,10 @@ $('#settings-link').addEventListener('click', (e) => {
   chrome.runtime.openOptionsPage();
 });
 
+$('#help-btn').addEventListener('click', () => {
+  chrome.tabs.create({ url: chrome.runtime.getURL('help/help.html') });
+});
+
 $('#refresh-btn').addEventListener('click', () => {
   refreshHealth();
   refreshGpu();
