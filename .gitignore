@@ -153,3 +153,7 @@ CATACLYSM_STUDIOS_INC/PMOVES DAO/
 pmoves/env.jellyfin-ai
 pmoves/env.supa.runtime.bak.*
 
+
+# Windows
+desktop.ini
+Thumbs.db
