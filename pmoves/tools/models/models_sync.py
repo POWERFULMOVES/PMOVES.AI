@@ -39,6 +39,7 @@ MODEL_SYNC_DB_CANDIDATES = (
 
 
 def _read_yaml(path: Path) -> dict:
+    """Load a YAML file and return its contents as a dict."""
     data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
     if not isinstance(data, dict):
         raise SystemExit(f"invalid manifest format (expected mapping): {path}")
@@ -46,12 +47,14 @@ def _read_yaml(path: Path) -> dict:
 
 
 def _write_env(path: Path, env_map: dict[str, object]) -> None:
+    """Write key=value pairs to an env override file, sorted alphabetically."""
     lines = [f"{k}={v}" for k, v in sorted(env_map.items())]
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     print(f"wrote {path}")
 
 
 def _manifest(profile: str) -> dict:
+    """Load a named model profile manifest from the models directory."""
     path = MODELS_DIR / f"{profile}.yaml"
     if not path.exists():
         raise SystemExit(f"manifest not found: {path}")
@@ -59,6 +62,7 @@ def _manifest(profile: str) -> dict:
 
 
 def _target_for_host(targets: dict, host: str) -> dict:
+    """Resolve a host-specific target config, falling back to the first available."""
     if host in targets and isinstance(targets[host], dict):
         return targets[host]
     for value in targets.values():
@@ -68,10 +72,12 @@ def _target_for_host(targets: dict, host: str) -> dict:
 
 
 def _parse_bool(value: str | None) -> bool:
+    """Return True if the string value is a common truthy representation."""
     return (value or "").strip().lower() in {"1", "true", "yes", "on"}
 
 
 def _parse_csv_env(value: str | None, default: tuple[str, ...]) -> tuple[str, ...]:
+    """Parse a comma-separated env value into a tuple, using default if empty."""
     if not value:
         return default
     items = [item.strip() for item in value.split(",") if item.strip()]
@@ -79,6 +85,7 @@ def _parse_csv_env(value: str | None, default: tuple[str, ...]) -> tuple[str, ..
 
 
 def _supabase_rest_base() -> str:
+    """Resolve the Supabase REST base URL from env, appending /rest/v1 if needed."""
     url = (
         os.environ.get("SUPABASE_REST_URL")
         or os.environ.get("SUPA_REST_URL")
@@ -92,6 +99,7 @@ def _supabase_rest_base() -> str:
 
 
 def _supabase_key() -> str:
+    """Resolve the Supabase API key from env (service role preferred, anon fallback)."""
     key = (
         os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
         or os.environ.get("SERVICE_ROLE_KEY")
@@ -242,6 +250,7 @@ def _normalize_model_id(value: object) -> str:
 
 
 def _provider_lane(provider_name: str, provider_type: str) -> str:
+    """Classify a provider into a routing lane (local, ollama_cloud, cloudflare_free, etc.)."""
     name = provider_name.lower()
     ptype = provider_type.lower()
 
@@ -312,6 +321,7 @@ def _filter_rows(
 
 
 def _select_best(rows: list[dict], cloud_order: tuple[str, ...]) -> tuple[dict | None, tuple[str, ...]]:
+    """Select the best model row and build a fallback chain ordered by lane priority."""
     if not rows:
         return None, ()
 
@@ -491,6 +501,7 @@ def _sync_creator(manifest: dict, host: str) -> None:
 
 
 def cmd_sync(args: argparse.Namespace) -> int:
+    """Sync a static model profile manifest into service override env files."""
     manifest = _manifest(args.profile)
     if args.profile == "agent-zero":
         _sync_agent_zero(manifest, args.host, args.tensorzero_base)
@@ -506,6 +517,7 @@ def cmd_sync(args: argparse.Namespace) -> int:
 
 
 def cmd_sync_dynamic(args: argparse.Namespace) -> int:
+    """Sync override env files from live Supabase model registry mappings."""
     cloud_order = _parse_csv_env(
         args.cloud_order or os.environ.get("MODEL_CLOUD_FALLBACK_ORDER"),
         DEFAULT_CLOUD_FALLBACK_ORDER,
@@ -594,6 +606,7 @@ def _seed_list_from_dynamic_registry(cloud_order: tuple[str, ...]) -> set[str]:
 
 
 def cmd_seed_list(args: argparse.Namespace) -> int:
+    """Print comma-separated list of local models to pre-pull on startup."""
     source = args.source.lower()
     cloud_order = _parse_csv_env(
         os.environ.get("MODEL_CLOUD_FALLBACK_ORDER"),
@@ -613,6 +626,7 @@ def cmd_seed_list(args: argparse.Namespace) -> int:
 
 
 def cmd_swap(args: argparse.Namespace) -> int:
+    """Hot-swap a single model for a target service by writing its override env."""
     service = args.service.strip().lower()
     if not args.name:
         raise SystemExit("--name is required for swap")
@@ -637,6 +651,7 @@ def cmd_swap(args: argparse.Namespace) -> int:
 
 
 def cmd_registry_snapshot(args: argparse.Namespace) -> int:
+    """Export the active Supabase model registry to a JSON snapshot file."""
     base = _supabase_rest_base()
     key = _supabase_key()
     endpoint = (
@@ -664,6 +679,7 @@ def cmd_registry_snapshot(args: argparse.Namespace) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
+    """Build the CLI argument parser with all subcommands."""
     parser = argparse.ArgumentParser(description="PMOVES model sync utilities")
     sub = parser.add_subparsers(dest="cmd", required=True)
 
@@ -698,6 +714,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main() -> int:
+    """Entry point: parse args and dispatch to the selected subcommand."""
     parser = build_parser()
     args = parser.parse_args()
     return int(args.func(args))
