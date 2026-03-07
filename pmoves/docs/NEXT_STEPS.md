@@ -1,7 +1,34 @@
 
 # PMOVES v5 • NEXT_STEPS
 Note: Consolidated plan index at pmoves/docs/PMOVES.AI PLANS/README_DOCS_INDEX.md.
-_Last updated: 2026-03-06_
+_Last updated: 2026-03-07_
+
+### Latest changes (Mar 7, 2026)
+- Merge wave completed on `main`: 8 PRs merged in 3 batches
+  - Batch 1: `#814` (UI build fix), `#815` (smoke Supabase discovery), `#816` (healthcheck stability), `#817` (CI runner alignment), `#819` (DoX submodule bump)
+  - Batch 2: `#818` (model fabric + coding-plan wiring — rebased after 8 CodeRabbit comments)
+  - Batch 3: `#820` (distributed topology docs/examples), `#821` (chrome extension + 9 security fixes)
+- Chrome extension security hardening (`#821`):
+  - auth credentials moved from `chrome.storage.sync` to `session` (memory-only)
+  - XSS eliminated in options page (innerHTML → createElement)
+  - mock server hardened (method allowlist, pathname parsing)
+  - `synthesizeAudio` timeout added (AbortController)
+  - processing status auto-cleanup (5min TTL)
+  - config race condition fixed (configReady promise)
+  - storage write serialization (promise queue)
+  - CSP added to manifest.json
+- Distributed deployment documentation landed (`#820`):
+  - topology visualization with ASCII architecture diagrams
+  - example configs for local-network, Tailscale, and VPS deployments
+  - env.shared.example expanded with distributed config vars
+- GHCR matrix gap analysis completed:
+  - 4 compose-referenced images lack CI build definitions: `a2ui-nats-bridge`, `llama-throughput-lab`, `session-context-worker`, `tokenism-ui`
+  - `ultimate-tts-studio` is in GHCR (manually pushed) but has no automated CI build
+  - `integrations-ghcr.matrix.json` covers 10 of 24 `images.yaml` entries
+- Live backlog snapshot:
+  - Open PRs: `0`
+  - Dependabot alerts: `1` (`1 medium`)
+  - Code scanning alerts: `0`
 
 ### Latest changes (Mar 6, 2026)
 - Merge queue closeout completed on `main`:

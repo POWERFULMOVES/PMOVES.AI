@@ -1,11 +1,15 @@
 # PMOVES v5 • ROADMAP
-Last updated: 2026-03-06
+Last updated: 2026-03-07
 
 ## Vision
 A production-ready, self-hostable orchestration mesh for creative + agent workloads across GPU boxes and Jetsons: **hybrid Hi‑RAG**, **Supabase Studio**, **n8n orchestration**, **Jellyfin publishing**, and **graph-aware retrieval**.
 
-## Audit Snapshot (2026-03-06)
+## Audit Snapshot (2026-03-07)
 
+- March 7 merge wave completed on `main`: `#814`, `#815`, `#816`, `#817`, `#818`, `#819`, `#820`, `#821` (8 PRs, 3 batches).
+- Chrome extension security hardening landed in `#821`: 9 CodeRabbit review items addressed (auth storage isolation, XSS remediation, mock server hardening, timeout guards, state management fixes, CSP).
+- Distributed topology documentation + examples landed in `#820`.
+- GHCR matrix gap analysis: 4 compose-referenced images (`a2ui-nats-bridge`, `llama-throughput-lab`, `session-context-worker`, `tokenism-ui`) have no CI build definition — tracked as ops follow-up.
 - March 6 merge wave completed on `main`: `#797`, `#798`, `#799`, `#800`, `#802`, plus Dependabot workflow updates `#803`-`#807`.
 - Superseded lane cleanup completed: `#801` closed (scope incorporated into `#802`).
 - Production runtime re-validation passed after merge wave:
