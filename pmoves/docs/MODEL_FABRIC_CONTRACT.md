@@ -15,27 +15,32 @@ This is the execution policy for:
 ## Architecture Principles
 1. Model-agnostic runtime: services route by alias/role, not hardcoded model IDs.
 2. Upstream-first overlays: PMOVES additions remain additive modules and ImportError-guarded.
-3. Local-first, cloud-capable: prefer local providers; allow cloud fallback by policy.
+3. Local-first cloud-hybrid: always prefer local providers, then low-cost cloud fallbacks only.
 4. Idempotent bootstrap: provider/model seed flows must be safe to rerun.
 5. Single control plane: Supabase model registry + persona mappings are authoritative.
 6. Measurable rollout: every model change requires readiness checks and smoke evidence.
+7. Topology-safe rails: worker and agent changes must respect Graphiti protocol and CHIT wiring gates.
 
 ## Planes
 ### 1) Control Plane (authoritative state)
 - Supabase tables/views in `pmoves_core` for providers, models, mappings, personas, deployments.
 - Canonical docs: `MODEL_REGISTRY.md`, `MODEL_SOURCE_OF_TRUTH.md`, `TAC/TAC_MODEL_INFRA_PERSONA_PROD_READINESS.md`.
-- Target state: all service routing decisions should resolve through this plane.
-- Current migration evidence (still being normalized): literal `model_name` entries in `tensorzero/config/tensorzero.toml`, static entries in `services/gpu-orchestrator/models/model_registry.py`, and hardcoded `llm` fields in `models/agent-zero.yaml`.
-- Migration path: replace direct bindings with alias-to-model resolution in `pmoves_core` and promote via `MODEL_REGISTRY.md` / `MODEL_SOURCE_OF_TRUTH.md` governance.
+- All service routing decisions resolve through this plane.
 
 ### 2) Routing Plane (execution)
-- TensorZero is the default routing gateway for OpenAI-compatible APIs.
-- Open Notebook in PMOVES uses provider mode overlay (`tensorzero`, future `hybrid`, `native`).
+- TensorZero is the default routing gateway for OpenAI-compatible execution.
+- Runtime model calls from agents/workers route through TensorZero unless a lane has explicit exemption.
+- TensorZero runs must be visible in observability (ClickHouse + Prometheus/Grafana + model-readiness evidence).
+- Open Notebook in PMOVES uses provider mode overlay (`tensorzero`, `hybrid`, `native`).
 - Agent Zero and Archon consume aliases and endpoint contracts, not provider-specific schemas.
 
 ### 3) Runtime Plane (inference providers)
-- Local providers: Ollama, vLLM, LM Studio/OpenAI-compatible, HuggingFace local endpoints, TTS engines.
-- Cloud providers: OpenRouter and other OpenAI-compatible endpoints.
+- Local providers (default): Ollama local, vLLM, LM Studio/OpenAI-compatible, HuggingFace local endpoints, TTS engines.
+- Cloud fallback order (explicit):
+  1. Ollama Cloud
+  2. Cloudflare Workers AI free-tier lanes (through TensorZero/OpenAI-compatible bridge)
+  3. Coding-plan lanes (`GLM coding plan`, `Claude Code`, `Codex CLI`) for coding workflows
+- Direct high-cost API fallback providers are disabled by default in production lanes and require explicit opt-in with cost/risk justification.
 - GPU Orchestrator manages load/unload/eviction and publishes lifecycle events.
 
 ### 4) Training Plane (feedback + model production)
@@ -56,24 +61,32 @@ This is the execution policy for:
 2. Must not hardcode concrete model IDs in runtime request paths.
 3. Must expose health/readiness including model provider connectivity where relevant.
 4. Must publish/consume model lifecycle events when loading/unloading on GPU nodes.
-5. Must support OpenAI-compatible fallback path for cross-provider portability.
+5. Must implement fallback priority: local -> Ollama Cloud -> Cloudflare free tier -> coding-plan lanes.
 6. Must keep secrets in approved channels (`*_FILE`, GH secrets, vault), never static defaults.
+7. Must preserve Graphiti + CHIT rail compliance for agent/worker PRs (`chit-flow-pr-monitor-strict` in merge lane).
 
 ## Open Notebook Overlay Policy
 - Keep upstream credential system and provider UX intact.
 - PMOVES-specific behavior lives in additive `pmoves_provider/` modules.
 - Bootstrap mode selects runtime behavior:
   - `tensorzero`: seed TensorZero-compatible provider and models.
-  - `hybrid` (target): seed TensorZero + selected local providers from registry.
+  - `hybrid`: seed TensorZero + selected local providers from registry + approved cloud fallbacks.
   - `native`: upstream behavior only.
 - Overlay failures must be non-fatal to upstream startup unless explicit strict mode is enabled.
 
+## Worker Rails (Graphiti + CHIT)
+- Worker lanes that publish/consume agent outcomes must:
+  - emit/consume traceable subjects aligned with Graphiti protocol where applicable.
+  - keep CHIT contract checks green before merge (`make -C pmoves chit-flow-pr-monitor-strict`).
+  - avoid topology drift (service DNS aliases, network namespaces, and port policies must remain deterministic).
+
 ## Model Change Lifecycle
-1. Discover candidate model/provider (local or cloud).
+1. Discover candidate model/provider (local first; cloud only by fallback policy).
 2. Register in Supabase model registry + mappings + persona relevance.
 3. Sync routing artifacts (TensorZero/Open Notebook/GPU registry).
 4. Run readiness and domain smokes (agents, creator, voice, retrieval).
-5. Promote by branch policy (Integrations -> Hardened -> Main) with evidence.
+5. Verify observability visibility for routed calls/runs.
+6. Promote by branch policy (Integrations -> Hardened -> Main) with evidence.
 
 ## Required Validation for Promotions
 - `make -C pmoves model-readiness`
@@ -83,6 +96,17 @@ This is the execution policy for:
   - agents (`agents-headless-smoke`)
   - notebook (`notebook-workbench-smoke`)
   - creator/media/voice smokes as applicable
+- PR monitor + CHIT/Graphiti gate:
+  - `make -C pmoves pr-monitor-strict`
+  - `make -C pmoves chit-flow-pr-monitor-strict`
+
+## PR Review Lens (Topology + Agents)
+Every PR touching networking, agents, or model routing should be reviewed for:
+1. Local-first fallback ordering is preserved.
+2. TensorZero remains primary route and call telemetry is observable.
+3. Graphiti/CHIT rails remain intact for worker handoffs.
+4. Compose/network namespace/port changes do not break deterministic topology.
+5. Evidence includes model-readiness + relevant smokes.
 
 ## Operator and Coding-Agent Roles
 - Agent Zero / Archon: runtime orchestration + policy execution.
@@ -90,7 +114,7 @@ This is the execution policy for:
 - Coding agents should modify adapters/mappings/docs before touching core runtime behavior.
 
 ## Near-Term Standardization Backlog
-1. Add `hybrid` provider mode and registry-driven bootstrap in Open Notebook overlay. (Tracking: `MF-ONB-HYBRID` -> `NEXT_STEPS.md` current focus lane)
-2. Normalize model type taxonomy across registry, GPU orchestrator, and creator services. (Tracking: `MF-TAXONOMY-ALIGN` -> `PMOVES.AI PLANS/ROADMAP.md` model standardization lane)
-3. Add one compatibility matrix doc per integration lane (agents, creator, voice, notebook, RL). (Tracking: `MF-COMPAT-MATRIX` -> `PMOVES.AI PLANS/README_DOCS_INDEX.md` canonical docs map)
-4. Gate PRs that alter model routing with mandatory readiness evidence attachments. (Tracking: `MF-EVIDENCE-GATE` -> `NEXT_STEPS.md` / `ROADMAP.md` release evidence policy)
+1. Complete registry-driven `hybrid` bootstrap in Open Notebook overlay for local + approved cloud fallback lanes.
+2. Normalize model type taxonomy across registry, GPU orchestrator, and creator services.
+3. Add one compatibility matrix doc per integration lane (agents, creator, voice, notebook, RL).
+4. Gate PRs that alter model routing with mandatory readiness + observability evidence attachments.

@@ -43,12 +43,17 @@ This file summarizes the most-used targets and maps them to what they do under d
   - Applies model settings into `.env.local` via `pmoves/tools/models/apply_profile.sh`.
 - `make models-sync PROFILE=<profile> HOST=<host>`
   - Low-level sync command (`pmoves/tools/models/models_sync.py`) for profile/registry operations.
+- `make models-sync-dynamic TARGET=<all|agent-zero|archon|creator> HOST=<host>`
+  - Resolves model picks from live Supabase registry mappings (`pmoves_core.v_service_models`) and writes dynamic overrides.
+  - Policy order is local-first with cloud fallbacks from `MODEL_CLOUD_FALLBACK_ORDER` (default `ollama_cloud,cloudflare_free,coding_plan`).
 - `make model-swap SERVICE=<service> NAME=<model-id-or-alias>`
   - Swaps one service model quickly without full profile rewrite.
 - `make models-registry-snapshot`
   - Captures Supabase model-registry state to `pmoves/models/registry.snapshot.json`.
 - `make models-seed-ollama HOST=<host>`
   - Pulls local Ollama models derived from profile + registry mappings.
+  - To include weekly registry-driven changes, use dynamic source directly:
+    - `python pmoves/tools/models/models_sync.py seed-list --source dynamic --host <host>`
 
 ## Open Notebook
 - `make up-open-notebook`

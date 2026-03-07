@@ -43,6 +43,12 @@
   - `GPU_SMOKE_STRICT=true make -C pmoves smoke-gpu` PASS (optional v1 GPU endpoint warning only)
 - Queue hygiene pass executed:
   - stale non-main queued/pending self-hosted runs canceled to free runner capacity for release-critical lanes.
+- Coding-plan wiring refresh landed for production env alignment:
+  - Alibaba Qwen provider lane added in TensorZero (`chat_alibaba_qwen`) using OpenAI-compatible DashScope endpoint.
+  - gateway/model credential wiring now uses canonical `ALIBABA_PRO_CODING_PLAN` only.
+  - model-readiness now validates GLM/Alibaba credential presence when coding-plan lanes are enabled.
+- Persona grounding audit lane expanded:
+  - release checks now require persona runtime grounding artifacts (`pmoves_core.persona_model_resolution`) and persona lookup indexes (`idx_personas_model_preference`, `idx_personas_active_name`) to be present before promotion.
 
 ---
 
@@ -237,6 +243,7 @@ These are tracked as release gates and should be closed with command evidence be
 2. `RG-2` Dynamic port and namespace parity: confirm compose services publish via configured env/namespace values, not hard-coded host assumptions.
 3. `RG-3` Supabase collation/version hygiene: re-check logs after full rebuild/bootstrap and document whether `ALTER DATABASE ... REFRESH COLLATION VERSION` is required.
 4. `RG-4` Auth unification regression pass: run JWT/key rotation flow and verify all core services re-auth without manual per-service patching.
+5. `RG-5` Persona grounding/index gate: verify `pmoves_core.persona_model_resolution` resolves active personas and persona lookup indexes are present (`idx_personas_model_preference`, `idx_personas_active_name`) before release promotion.
 
 ---
 
