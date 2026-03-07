@@ -79,6 +79,10 @@ test.describe('Notebook dashboard', () => {
     expect(canonicalJson).toHaveProperty('services');
     expect(aliasJson).toHaveProperty('percentage');
     expect(canonicalJson).toHaveProperty('percentage');
+
+    // Service count and percentage should match between alias and canonical
+    expect(aliasJson.services.length).toBe(canonicalJson.services.length);
+    expect(aliasJson.percentage).toBe(canonicalJson.percentage);
   });
 
   test('Open Notebook card visible on services dashboard', async ({ page }) => {

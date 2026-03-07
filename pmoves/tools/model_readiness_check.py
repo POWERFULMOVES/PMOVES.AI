@@ -28,13 +28,8 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-PERSONA_MODEL_PREFERENCES: set[str] = {
-    "claude-sonnet-4-5",
-    "claude-opus-4-5",
-    "claude-haiku-4-5",
-}
-
-CRITICAL_OLLAMA_MODELS: tuple[str, ...] = ("qwen3", "nomic-embed-text")
+DEFAULT_CRITICAL_OLLAMA_MODELS: tuple[str, ...] = ("qwen3", "nomic-embed-text")
+MIN_PERSONA_MODEL_DIVERSITY = 3
 MIN_ACTIVE_MODELS = 35
 MIN_SERVICE_MODEL_MAPPINGS = 15
 DOCKER_PROXY_CONTAINER = os.environ.get("MODEL_READINESS_DOCKER_PROXY", "pmoves-archon-1")
@@ -48,6 +43,29 @@ for _default_db in ("supabase_db_pmoves", "pmoves-supabase-db-1"):
 _DOCKER_PROXY_AVAILABLE: bool | None = None
 _DOCKER_DB_AVAILABLE: bool | None = None
 _DOCKER_DB_CONTAINER_SELECTED: str | None = None
+
+
+def _is_truthy(value: str | None) -> bool:
+    return (value or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _parse_csv(value: str | None) -> tuple[str, ...]:
+    if not value:
+        return ()
+    return tuple(item.strip() for item in value.split(",") if item.strip())
+
+
+def _required_persona_models() -> set[str]:
+    return set(_parse_csv(os.environ.get("MODEL_READINESS_REQUIRED_PERSONA_MODELS")))
+
+
+def _critical_ollama_models() -> tuple[str, ...]:
+    configured = _parse_csv(os.environ.get("MODEL_READINESS_CRITICAL_OLLAMA_MODELS"))
+    return configured if configured else DEFAULT_CRITICAL_OLLAMA_MODELS
+
+
+def _has_any_env(*names: str) -> bool:
+    return any((os.environ.get(name) or "").strip() for name in names)
 
 
 def _is_allowed_scheme(url: str) -> bool:
@@ -298,12 +316,37 @@ class ReadinessChecker:
                 return
             self._check("Supabase reachable", True, f"db fallback via {_docker_db_container_name()}")
             names = {row.split("|", 1)[0].strip() for row in rows}
+            names_lower = {name.lower() for name in names}
             self._check("Providers populated", len(rows) >= 8,
                         f"{len(rows)} active providers (need >=8: ollama, anthropic, openai, etc.)")
             self._check("Anthropic provider exists", "anthropic_primary" in names,
                         "anthropic_primary" + (" found" if "anthropic_primary" in names else " MISSING"))
             self._check("TTS provider exists", "tts_local" in names,
                         "tts_local" + (" found" if "tts_local" in names else " MISSING"))
+            if _is_truthy(os.environ.get("GLM_CODING_PLAN_ENABLED")) or _is_truthy(os.environ.get("ALIBABA_PRO_CODING_PLAN_ENABLED")):
+                has_glm_lane = any(token in name for name in names_lower for token in ("zai", "glm", "alibaba"))
+                self._check("Coding-plan lane (GLM/Alibaba) enabled", has_glm_lane,
+                            "provider with zai/glm/alibaba tag is active" if has_glm_lane else "enable a provider tagged zai/glm/alibaba")
+            if _is_truthy(os.environ.get("GLM_CODING_PLAN_ENABLED")):
+                has_glm_key = _has_any_env("Z_AI_API_KEY")
+                self._check("GLM coding-plan credential present", has_glm_key,
+                            "Z_AI_API_KEY is set" if has_glm_key else "set Z_AI_API_KEY")
+            if _is_truthy(os.environ.get("ALIBABA_PRO_CODING_PLAN_ENABLED")):
+                has_alibaba_key = _has_any_env("ALIBABA_PRO_CODING_PLAN")
+                self._check("Alibaba coding-plan credential present", has_alibaba_key,
+                            "ALIBABA_PRO_CODING_PLAN is set" if has_alibaba_key else "set ALIBABA_PRO_CODING_PLAN")
+            if _is_truthy(os.environ.get("CLAUDE_CODE_PLAN_ENABLED")):
+                has_claude_lane = any(token in name for name in names_lower for token in ("anthropic", "claude"))
+                self._check("Coding-plan lane (Claude Code) enabled", has_claude_lane,
+                            "provider with anthropic/claude tag is active" if has_claude_lane else "enable anthropic/claude provider")
+            if _is_truthy(os.environ.get("CODEX_CLI_PLAN_ENABLED")):
+                has_codex_lane = any(token in name for name in names_lower for token in ("openai", "codex"))
+                self._check("Coding-plan lane (Codex CLI) enabled", has_codex_lane,
+                            "provider with openai/codex tag is active" if has_codex_lane else "enable openai/codex provider")
+            if os.environ.get("OLLAMA_CLOUD_BASE_URL", "").strip():
+                has_ollama_cloud = any("ollama_cloud" in name for name in names_lower)
+                self._check("Ollama Cloud fallback provider registered", has_ollama_cloud,
+                            "ollama_cloud provider active" if has_ollama_cloud else "add/activate ollama_cloud provider in model registry")
 
             models_rows = _db_query_rows("select count(*) from pmoves_core.models where active = true;")
             if not models_rows:
@@ -330,12 +373,37 @@ class ReadinessChecker:
 
         # Check for Anthropic specifically
         names = {p.get("name") for p in data} if isinstance(data, list) else set()
+        names_lower = {str(name).lower() for name in names if name}
         self._check("Anthropic provider exists", "anthropic_primary" in names,
                      "anthropic_primary" + (" found" if "anthropic_primary" in names else " MISSING"))
 
         # Check for TTS provider
         self._check("TTS provider exists", "tts_local" in names,
                      "tts_local" + (" found" if "tts_local" in names else " MISSING"))
+        if _is_truthy(os.environ.get("GLM_CODING_PLAN_ENABLED")) or _is_truthy(os.environ.get("ALIBABA_PRO_CODING_PLAN_ENABLED")):
+            has_glm_lane = any(token in name for name in names_lower for token in ("zai", "glm", "alibaba"))
+            self._check("Coding-plan lane (GLM/Alibaba) enabled", has_glm_lane,
+                        "provider with zai/glm/alibaba tag is active" if has_glm_lane else "enable a provider tagged zai/glm/alibaba")
+        if _is_truthy(os.environ.get("GLM_CODING_PLAN_ENABLED")):
+            has_glm_key = _has_any_env("Z_AI_API_KEY")
+            self._check("GLM coding-plan credential present", has_glm_key,
+                        "Z_AI_API_KEY is set" if has_glm_key else "set Z_AI_API_KEY")
+        if _is_truthy(os.environ.get("ALIBABA_PRO_CODING_PLAN_ENABLED")):
+            has_alibaba_key = _has_any_env("ALIBABA_PRO_CODING_PLAN")
+            self._check("Alibaba coding-plan credential present", has_alibaba_key,
+                        "ALIBABA_PRO_CODING_PLAN is set" if has_alibaba_key else "set ALIBABA_PRO_CODING_PLAN")
+        if _is_truthy(os.environ.get("CLAUDE_CODE_PLAN_ENABLED")):
+            has_claude_lane = any(token in name for name in names_lower for token in ("anthropic", "claude"))
+            self._check("Coding-plan lane (Claude Code) enabled", has_claude_lane,
+                        "provider with anthropic/claude tag is active" if has_claude_lane else "enable anthropic/claude provider")
+        if _is_truthy(os.environ.get("CODEX_CLI_PLAN_ENABLED")):
+            has_codex_lane = any(token in name for name in names_lower for token in ("openai", "codex"))
+            self._check("Coding-plan lane (Codex CLI) enabled", has_codex_lane,
+                        "provider with openai/codex tag is active" if has_codex_lane else "enable openai/codex provider")
+        if os.environ.get("OLLAMA_CLOUD_BASE_URL", "").strip():
+            has_ollama_cloud = any("ollama_cloud" in name for name in names_lower)
+            self._check("Ollama Cloud fallback provider registered", has_ollama_cloud,
+                        "ollama_cloud provider active" if has_ollama_cloud else "add/activate ollama_cloud provider in model registry")
 
         # Check model registry size threshold
         models_url = f"{self.supabase_url}/rest/v1/models?select=id&active=eq.true"
@@ -372,10 +440,15 @@ class ReadinessChecker:
             self._check("Personas populated", count >= 8,
                         f"{count} active personas (need >=8)")
             models = {row.split("|", 1)[1].strip() for row in rows if "|" in row}
-            missing = PERSONA_MODEL_PREFERENCES - models
-            self._check("Persona model preferences valid",
-                        len(missing) == 0,
-                        f"missing model refs: {missing}" if missing else "all 3 Claude models referenced")
+            required = _required_persona_models()
+            self._check("Persona model diversity",
+                        len(models) >= MIN_PERSONA_MODEL_DIVERSITY,
+                        f"{len(models)} unique active model preferences (need >={MIN_PERSONA_MODEL_DIVERSITY})")
+            if required:
+                missing = required - models
+                self._check("Required persona model preferences present",
+                            len(missing) == 0,
+                            f"missing model refs: {sorted(missing)}" if missing else "all required model refs present")
             return
 
         count = len(data) if isinstance(data, list) else 0
@@ -384,10 +457,16 @@ class ReadinessChecker:
 
         if isinstance(data, list) and count > 0:
             models = {p.get("model_preference") for p in data}
-            missing = PERSONA_MODEL_PREFERENCES - models
-            self._check("Persona model preferences valid",
-                         len(missing) == 0,
-                         f"missing model refs: {missing}" if missing else "all 3 Claude models referenced")
+            models = {str(model).strip() for model in models if model}
+            required = _required_persona_models()
+            self._check("Persona model diversity",
+                        len(models) >= MIN_PERSONA_MODEL_DIVERSITY,
+                        f"{len(models)} unique active model preferences (need >={MIN_PERSONA_MODEL_DIVERSITY})")
+            if required:
+                missing = required - models
+                self._check("Required persona model preferences present",
+                            len(missing) == 0,
+                            f"missing model refs: {sorted(missing)}" if missing else "all required model refs present")
 
     def check_ollama(self) -> None:
         """Check Ollama has expected local models pulled."""
@@ -401,8 +480,8 @@ class ReadinessChecker:
         pulled_base = {m.get("name", "").split(":")[0].strip().lower() for m in models if m.get("name")}
         self._check("Ollama responding", True, f"{len(models)} models loaded")
 
-        # Check critical models
-        for model in CRITICAL_OLLAMA_MODELS:
+        # Check critical models (env override: MODEL_READINESS_CRITICAL_OLLAMA_MODELS)
+        for model in _critical_ollama_models():
             found = model.strip().lower() in pulled_base
             if not found and self.strict_ollama:
                 self._check(f"Model '{model}'", False, "not pulled")
@@ -418,12 +497,32 @@ class ReadinessChecker:
         data = http_get_raw(f"{self.tensorzero_url}/health")
         if data is not None:
             self._check("TensorZero health", True, "gateway responding")
+            models_payload = http_get(f"{self.tensorzero_url}/v1/models")
+            if isinstance(models_payload, dict):
+                model_data = models_payload.get("data")
+                if isinstance(model_data, list):
+                    self._check("TensorZero model catalog", len(model_data) > 0,
+                                f"{len(model_data)} models routed")
+                else:
+                    self._warn("TensorZero model catalog", "/v1/models returned non-list payload")
+            else:
+                self._warn("TensorZero model catalog", "/v1/models unavailable; health is up")
             return
 
         # Fallback: try root
         data = http_get_raw(self.tensorzero_url)
         if data is not None:
             self._check("TensorZero reachable", True, "gateway responding (root)")
+            models_payload = http_get(f"{self.tensorzero_url}/v1/models")
+            if isinstance(models_payload, dict):
+                model_data = models_payload.get("data")
+                if isinstance(model_data, list):
+                    self._check("TensorZero model catalog", len(model_data) > 0,
+                                f"{len(model_data)} models routed")
+                else:
+                    self._warn("TensorZero model catalog", "/v1/models returned non-list payload")
+            else:
+                self._warn("TensorZero model catalog", "/v1/models unavailable; root is up")
         else:
             self._check("TensorZero reachable", False, f"cannot reach {self.tensorzero_url}")
 

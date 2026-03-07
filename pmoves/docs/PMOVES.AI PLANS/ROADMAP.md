@@ -14,10 +14,9 @@ A production-ready, self-hostable orchestration mesh for creative + agent worklo
   - `GPU_SMOKE_STRICT=true make -C pmoves smoke-gpu` PASS (optional v1 GPU endpoint warning only)
 - Remaining active blockers shifted from code defects to runner-capacity operations (self-hosted queue pressure and stale queued runs).
 - Cross-integration model abstraction contract published: `pmoves/docs/MODEL_FABRIC_CONTRACT.md` to unify provider/model routing policy across agents, notebook, creator, GPU orchestration, and RL training lanes.
-- UI validation lane expanded for production audits:
-  - added `make -C pmoves ui-topology-smoke` (core) and `make -C pmoves ui-topology-smoke-all` (external overlays)
-  - service detail route now falls back to live service catalog metadata when a markdown runbook is absent, eliminating broad `/dashboard/services/<slug>` 404 regressions for valid catalog slugs
-  - external branded surfaces (`open-notebook`, `firefly`, `wger`, `jellyfin`, `jellyfin-ai-dashboard`) are now explicitly represented in the UI service catalog so topology checks and navigation stay aligned
+- Local-first cloud-hybrid policy is now explicit in that contract:
+  - cloud fallbacks are ordered as `Ollama Cloud -> Cloudflare free tier -> coding-plan lanes (GLM/Claude Code/Codex CLI)` and direct high-cost API fallback is disabled-by-default.
+  - topology/agent PRs must also satisfy Graphiti + CHIT merge rails (`pr-monitor-strict` + `chit-flow-pr-monitor-strict`).
 
 - Branch strategy: `PMOVES.AI-Edition-Hardened` is the production release branch; `main` receives promoted merges from hardened.
 - Production Python GHCR image toolchains now use reproducible exact pins with automated weekly canary validation (`.github/workflows/python-images-toolchain-canary.yml`): detect latest PyPI candidate -> patch managed Dockerfiles (`supaserch`, `deepresearch`, `pmoves-yt`, `archon`) -> build -> Trivy HIGH/CRITICAL gate -> auto-PR on pass.
