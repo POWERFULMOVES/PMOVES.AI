@@ -3,6 +3,7 @@ import path from 'node:path';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import type { ReactElement } from 'react';
 import DashboardNavigation from '../../../../components/DashboardNavigation';
 import MarkdownRenderer from '../../../../lib/markdown';
 import {
@@ -210,7 +211,7 @@ export default async function ServiceDetailPage({ params }: ServicePageProps) {
     notFound();
   }
 
-  let content: JSX.Element;
+  let content: ReactElement;
   if (service) {
     try {
       const markdown = await readServiceMarkdown(service.docPath);
