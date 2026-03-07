@@ -47,7 +47,11 @@ $('#gpu-optimize-btn').addEventListener('click', async () => {
   btn.textContent = 'Optimizing...';
   try {
     const result = await msg({ action: 'gpuOptimize' });
-    showResult(result?.message || 'Optimization complete');
+    if (result?.error) {
+      showResult('Error: ' + result.error);
+    } else {
+      showResult(result?.message || 'Optimization complete');
+    }
     refreshGpu();
   } catch (e) {
     showResult('Error: ' + e.message);

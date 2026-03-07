@@ -235,14 +235,30 @@ $('#diag-recent-shapes').addEventListener('click', async () => {
   const r = await msgBg({ action: 'chitRecentShapes', limit: 10 });
   if (r?.shapes?.length) {
     shapesDiv.style.display = 'block';
-    shapesDiv.innerHTML = r.shapes.map(s => {
-      const svgUrl = `${$('#url-gateway')?.value || 'http://localhost:8085'}/viz/shape/${encodeURIComponent(s.shape_id)}.svg`;
-      return `<div style="margin:4px 0;font-size:13px;">
-        <strong>${escapeHtml(s.label || s.shape_id)}</strong>
-        <span style="color:#888;margin-left:8px;">${s.created_at || ''}</span>
-        <a href="${svgUrl}" target="_blank" style="margin-left:8px;color:#667eea;">View SVG</a>
-      </div>`;
-    }).join('');
+    shapesDiv.innerHTML = '';
+    r.shapes.forEach(s => {
+      const div = document.createElement('div');
+      div.style.cssText = 'margin:4px 0;font-size:13px;';
+
+      const label = document.createElement('strong');
+      label.textContent = s.label || s.shape_id;
+      div.appendChild(label);
+
+      const time = document.createElement('span');
+      time.style.cssText = 'color:#888;margin-left:8px;';
+      time.textContent = s.created_at || '';
+      div.appendChild(time);
+
+      const link = document.createElement('a');
+      const gatewayBase = $('#url-gateway')?.value || 'http://localhost:8085';
+      link.href = `${gatewayBase}/viz/shape/${encodeURIComponent(s.shape_id)}.svg`;
+      link.target = '_blank';
+      link.style.cssText = 'margin-left:8px;color:#667eea;';
+      link.textContent = 'View SVG';
+      div.appendChild(link);
+
+      shapesDiv.appendChild(div);
+    });
     pre.textContent = JSON.stringify(r, null, 2);
   } else {
     shapesDiv.style.display = 'none';

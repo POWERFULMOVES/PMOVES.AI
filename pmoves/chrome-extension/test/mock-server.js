@@ -207,17 +207,24 @@ services.forEach(({ name, port, routes }) => {
     const handler = routes[key] || routes[keyWithQs];
 
     if (!handler) {
-      // Try partial match (for paths with dynamic segments)
-      const match = Object.keys(routes).find(k => {
-        const [m, p] = k.split(' ');
-        return m === req.method && req.url.startsWith(p);
+      // Try partial match for paths with dynamic segments (e.g. /jobs/:id)
+      // Only match against the parsed pathname, not the full URL with query string
+      let pathname;
+      try { pathname = new URL(req.url, 'http://localhost').pathname; } catch { pathname = req.url.split('?')[0]; }
+
+      const ALLOWED_METHODS = new Set(['GET', 'POST', 'PUT', 'DELETE', 'PATCH']);
+      const match = ALLOWED_METHODS.has(req.method) && Object.keys(routes).find(k => {
+        const spaceIdx = k.indexOf(' ');
+        const m = k.substring(0, spaceIdx);
+        const p = k.substring(spaceIdx + 1);
+        return m === req.method && pathname.startsWith(p) && pathname.length < p.length + 64;
       });
       if (match) {
         respond(res, routes[match], req);
         return;
       }
       res.writeHead(404, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: 'Not found', path: req.url }));
+      res.end(JSON.stringify({ error: 'Not found', path: pathname }));
       return;
     }
 

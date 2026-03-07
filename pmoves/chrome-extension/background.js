@@ -11,16 +11,32 @@ const processingStatus = new Map();
 
 // ─── Config ──────────────────────────────────────
 
+let configReadyResolve;
+const configReady = new Promise((resolve) => { configReadyResolve = resolve; });
+
 async function loadConfig() {
-  const result = await chrome.storage.sync.get(['pmovesConfig']);
-  if (result.pmovesConfig) {
-    config = { ...config, ...result.pmovesConfig };
+  const [syncResult, sessionResult] = await Promise.all([
+    chrome.storage.sync.get(['pmovesConfig']),
+    chrome.storage.session.get(['pmovesAuth']),
+  ]);
+  if (syncResult.pmovesConfig) {
+    config = { ...config, ...syncResult.pmovesConfig };
+  }
+  // Auth credentials live in session storage (memory-only, not synced to other devices)
+  if (sessionResult.pmovesAuth) {
+    config.auth = { ...config.auth, ...sessionResult.pmovesAuth };
   }
   setServiceUrls(config.services);
+  configReadyResolve();
 }
 
 async function saveConfig() {
-  await chrome.storage.sync.set({ pmovesConfig: config });
+  // Separate auth from the rest — auth goes to session (memory-only), config to sync
+  const { auth, ...syncable } = config;
+  await Promise.all([
+    chrome.storage.sync.set({ pmovesConfig: syncable }),
+    chrome.storage.session.set({ pmovesAuth: auth }),
+  ]);
 }
 
 loadConfig();
@@ -124,9 +140,10 @@ async function processVideo(url) {
 
   processingStatus.set(videoId || url, 'queued');
 
+  const key = videoId || url;
   try {
     const result = await yt.ingest(url);
-    processingStatus.set(videoId || url, 'processing');
+    processingStatus.set(key, 'processing');
     notify('Video Queued', 'Video sent to PMOVES.YT for ingestion.');
     storeInHistory(url, videoId);
 
@@ -134,16 +151,23 @@ async function processVideo(url) {
     chrome.action.setBadgeBackgroundColor({ color: BADGE_COLORS.healthy });
     setTimeout(() => chrome.action.setBadgeText({ text: '' }), 5000);
 
+    // Clean up processing status after a reasonable window (5 min)
+    setTimeout(() => processingStatus.delete(key), 300_000);
+
     return { status: 'queued', result };
   } catch (err) {
-    processingStatus.delete(videoId || url);
+    processingStatus.delete(key);
     notify('Ingestion Error', err.message);
     return { status: 'error', error: err.message };
   }
 }
 
+let historyWriteQueue = Promise.resolve();
+
 function storeInHistory(url, videoId) {
-  chrome.storage.local.get(['processingHistory'], (result) => {
+  // Serialize read-modify-write to avoid race conditions
+  historyWriteQueue = historyWriteQueue.then(async () => {
+    const result = await chrome.storage.local.get(['processingHistory']);
     const history = result.processingHistory || [];
     history.unshift({
       url,
@@ -152,8 +176,8 @@ function storeInHistory(url, videoId) {
       status: 'processing',
     });
     if (history.length > 100) history.length = 100;
-    chrome.storage.local.set({ processingHistory: history });
-  });
+    await chrome.storage.local.set({ processingHistory: history });
+  }).catch(() => {});
 }
 
 function notify(title, message) {
@@ -200,6 +224,7 @@ async function handleMessage(req) {
 
     // Config
     case 'getConfig':
+      await configReady;
       return config;
 
     case 'updateConfig':

@@ -212,22 +212,30 @@ export const flute = {
   },
 
   async synthesizeAudio(apiKey, text, opts = {}) {
-    const res = await fetch(url('fluteGateway', '/v1/voice/synthesize/audio'), {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(apiKey ? { 'X-API-Key': apiKey } : {}),
-      },
-      body: JSON.stringify({
-        text,
-        persona_id: opts.personaId,
-        provider: opts.provider,
-        voice: opts.voice,
-        output_format: opts.outputFormat ?? 'wav',
-      }),
-    });
-    if (!res.ok) throw new Error(`Flute ${res.status}: ${res.statusText}`);
-    return res.arrayBuffer();
+    const controller = new AbortController();
+    const timeout = opts.timeout ?? 30000;
+    const timer = setTimeout(() => controller.abort(), timeout);
+    try {
+      const res = await fetch(url('fluteGateway', '/v1/voice/synthesize/audio'), {
+        method: 'POST',
+        signal: controller.signal,
+        headers: {
+          'Content-Type': 'application/json',
+          ...(apiKey ? { 'X-API-Key': apiKey } : {}),
+        },
+        body: JSON.stringify({
+          text,
+          persona_id: opts.personaId,
+          provider: opts.provider,
+          voice: opts.voice,
+          output_format: opts.outputFormat ?? 'wav',
+        }),
+      });
+      if (!res.ok) throw new Error(`Flute ${res.status}: ${res.statusText}`);
+      return res.arrayBuffer();
+    } finally {
+      clearTimeout(timer);
+    }
   },
 
   async personas(apiKey) {
