@@ -648,7 +648,7 @@ supabase-clean: ## Compose fallback only: remove gotrue/realtime/storage/studio 
 .PHONY: neo4j-bootstrap
 neo4j-bootstrap: ## Seed Neo4j with persona aliases + CHIT geometry fixtures
 	@echo "📊 Applying Neo4j seeds..."
-	@if ! docker ps --format '{{.Names}}' | grep -q 'neo4j\|pmoves-neo4j'; then \
+	@if ! docker ps --format '{{.Names}}' | grep -qE '(neo4j|pmoves-neo4j)$$'; then \
 		echo "⚠️  Neo4j not running. Skipping seeds."; \
 		echo "   Start with: make up-data-tier"; \
 	else \
@@ -659,7 +659,7 @@ neo4j-bootstrap: ## Seed Neo4j with persona aliases + CHIT geometry fixtures
 .PHONY: seed-data
 seed-data: ## Seed Qdrant/Meilisearch with demo corpus via Hi-RAG v2
 	@echo "📚 Seeding Qdrant/Meili demo corpus..."
-	@if ! docker ps --format '{{.Names}}' | grep -q 'qdrant'; then \
+	@if ! docker ps --format '{{.Names}}' | grep -q 'qdrant$$'; then \
 		echo "⚠️  Qdrant not running. Starting data tier..."; \
 		$(MAKE) --no-print-directory up-data-tier; \
 	fi
@@ -1141,7 +1141,7 @@ validate-tier: ## Validate tier network compliance (backend services should NOT 
 yt-docs-sync: ## Ask PMOVES.YT to capture yt-dlp help/extractors and upsert into Supabase
 	@$(LOAD_ENV_SHARED); \
 	  base=$${PMOVES_YT_BASE_URL:-http://localhost:8077}; \
-	  if echo "$$base" | grep -q "pmoves-yt"; then base=$$(echo "$$base" | sed "s|pmoves-yt|localhost|g"); fi; \
+	  if echo "$$base" | grep -q "pmoves-yt$$"; then base=$$(echo "$$base" | sed "s|pmoves-yt|localhost|g"); fi; \
 	  echo "→ Syncing yt-dlp docs via $$base/yt/docs/sync"; \
 	  if command -v jq >/dev/null 2>&1; then \
 	    curl -fsS -X POST "$$base/yt/docs/sync" | jq .; \
@@ -1152,7 +1152,7 @@ yt-docs-sync: ## Ask PMOVES.YT to capture yt-dlp help/extractors and upsert into
 yt-docs-catalog-smoke: ## Smoke check for /yt/docs/catalog (counts + version)
 	@$(LOAD_ENV_SHARED); \
 	  base=$${PMOVES_YT_BASE_URL:-http://localhost:8077}; \
-	  if echo "$$base" | grep -q "pmoves-yt"; then base=$$(echo "$$base" | sed "s|pmoves-yt|localhost|g"); fi; \
+	  if echo "$$base" | grep -q "pmoves-yt$$"; then base=$$(echo "$$base" | sed "s|pmoves-yt|localhost|g"); fi; \
 	  echo "→ Hitting $$base/yt/docs/catalog"; \
 	  if command -v jq >/dev/null 2>&1; then \
 	    curl -fsS "$$base/yt/docs/catalog" | jq "{ok, meta, counts}"; \
