@@ -7,7 +7,7 @@ Example configuration for deploying PMOVES submodules with a hybrid VPS and home
 **Hostinger VPS Cluster:**
 - **KVM4-1** - API Gateway (BoTZ MCP Gateway, reverse proxy)
 - **KVM4-2** - Data Services (DoX Backend, NATS)
-- **KVM2** - Exit Node (Tailscale/WireGuard exit)
+- **KVM2** - Exit Node (Tailscale exit node)
 
 **Home Network:**
 - **GPU Workstations** - Tokenism, local inference, development
@@ -34,7 +34,7 @@ Example configuration for deploying PMOVES submodules with a hybrid VPS and home
 │            │                        │                       │               │
 │            └────────────────────────┼───────────────────────┘               │
 │                                     │                                       │
-│                              WireGuard/Tailscale                            │
+│                              Tailscale Mesh                                │
 │                                     │                                       │
 ├─────────────────────────────────────┼───────────────────────────────────────┤
 │                              Home Network                                   │
@@ -83,33 +83,34 @@ ufw allow 4222/tcp  # NATS (restrict to home IP)
 ufw enable
 ```
 
-### 2. WireGuard VPN Setup
+### 2. Tailscale Mesh Setup
 
-On KVM2 (exit node):
+On KVM4-1 and KVM4-2:
 
 ```bash
-apt install wireguard
+# Install Tailscale
+curl -fsSL https://tailscale.com/install.sh | sh
 
-# Generate keys
-wg genkey | tee /etc/wireguard/privatekey | wg pubkey > /etc/wireguard/publickey
+# Join mesh with tagged auth key (tagged keys auto-disable key expiry)
+# Generate at https://login.tailscale.com/admin/settings/keys
+tailscale up --auth-key tskey-xxx --hostname <pmoves-kvm4-1|pmoves-kvm4-2> --accept-routes --accept-dns
+```
 
-# Configure /etc/wireguard/wg0.conf
-cat > /etc/wireguard/wg0.conf << 'EOF'
-[Interface]
-PrivateKey = <server-private-key>
-Address = 10.0.0.1/24
-ListenPort = 51820
-PostUp = iptables -A FORWARD -i wg0 -j ACCEPT; iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
-PostDown = iptables -D FORWARD -i wg0 -j ACCEPT; iptables -t nat -D POSTROUTING -o eth0 -j MASQUERADE
+On KVM2 (exit node), also enable IP forwarding and advertise:
 
-[Peer]
-# Home network
-PublicKey = <home-public-key>
-AllowedIPs = 192.168.1.0/24, 10.0.0.2/32
+```bash
+# Enable IP forwarding
+sysctl -w net.ipv4.ip_forward=1
+sysctl -w net.ipv6.conf.all.forwarding=1
+cat > /etc/sysctl.d/99-tailscale-exit-node.conf <<'EOF'
+net.ipv4.ip_forward = 1
+net.ipv6.conf.all.forwarding = 1
 EOF
 
-systemctl enable wg-quick@wg0
-systemctl start wg-quick@wg0
+# Advertise as exit node
+tailscale up --auth-key tskey-xxx --hostname pmoves-kvm2 --advertise-exit-node --accept-routes --accept-dns
+
+# Approve exit node in admin console: https://login.tailscale.com/admin/machines
 ```
 
 ### 3. Let's Encrypt Certificates
@@ -161,8 +162,9 @@ docker compose -f docker-compose.yml -f docker-compose.distributed.yml \
 cd ~/PMOVES-ToKenism-Multi
 cp /path/to/examples/vps/home-tokenism.env .env
 
-# Connect via WireGuard
-wg-quick up wg0
+# Verify Tailscale mesh connectivity
+tailscale status
+tailscale ping pmoves-kvm4-2
 
 docker compose up -d
 ```
@@ -236,9 +238,9 @@ server {
 ufw allow from 192.168.1.0/24 to any port 2091  # BoTZ from home
 ufw allow 443/tcp                                 # Public HTTPS
 
-# KVM4-2 (Data Services)
-ufw allow from 10.0.0.0/24 to any port 8484      # DoX from WireGuard
-ufw allow from 10.0.0.0/24 to any port 4222      # NATS from WireGuard
+# KVM4-2 (Data Services) — allow traffic from Tailscale interface
+ufw allow in on tailscale0 to any port 8484       # DoX from Tailscale mesh
+ufw allow in on tailscale0 to any port 4222       # NATS from Tailscale mesh
 ```
 
 ### 2. Rate Limiting
@@ -303,9 +305,10 @@ scrape_configs:
 
 ### VPS Cannot Reach Home Network
 
-1. Check WireGuard status: `wg show`
-2. Verify routing: `ip route show`
-3. Test connectivity: `ping 10.0.0.2`
+1. Check Tailscale status: `tailscale status`
+2. Ping the target node: `tailscale ping pmoves-kvm4-2`
+3. Check key expiry: `tailscale debug key-expiry`
+4. Verify routing: `ip route show`
 
 ### SSL Certificate Issues
 

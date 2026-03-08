@@ -158,6 +158,7 @@ pmoves/env.supa.runtime.bak.*
 # Terraform
 # =============================================================================
 *.tfvars
+*.tfvars.json
 !*.tfvars.example
 .terraform/
 *.tfstate
