@@ -1,0 +1,38 @@
+# PMOVES.AI Terraform Variables — Example Configuration
+# Copy to variables.auto.tfvars and fill in real values.
+# NEVER commit the actual .tfvars file (it's in .gitignore).
+
+# Hostinger API (get from hPanel → API)
+hostinger_api_token = "YOUR_HOSTINGER_API_TOKEN"
+
+# Project settings
+project_name = "pmoves-ai"
+data_center_id = 13  # US
+
+# Node plans (see Hostinger VPS plans)
+vps_plan = "hostingercom-vps-kvm4-usd-4m"
+
+# OS template (verify via Hostinger API — 1 = Ubuntu 22.04 placeholder)
+os_template_id = 1
+
+# SSH access
+root_password = "YourStr0ngP@ssword!"
+ssh_public_key = "ssh-ed25519 AAAA..."
+
+# Domain
+domain_name = "pmoves.ai"
+
+# Git
+git_repo_url = "https://github.com/POWERFULMOVES/PMOVES.AI.git"
+git_branch = "main"
+submodule_init = true
+
+# Docker Compose profile
+docker_compose_profile = "full"
+enable_gpu = false
+
+# NATS (with authentication)
+nats_url = "nats://nats:pmoves@nats:4222"
+
+# Monitoring
+monitoring_retention_days = 30
