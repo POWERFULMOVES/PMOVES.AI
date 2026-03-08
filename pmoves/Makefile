@@ -484,7 +484,7 @@ supa-collation-check: ## Check for collation version mismatches
 	result=$$(docker exec -i "$$db" psql -U postgres -tAc \
 		"SELECT datname || ': ' || COALESCE(datcollversion, 'NULL') FROM pg_database WHERE datname NOT IN ('template0','template1') ORDER BY datname;"); \
 	echo "$$result"; \
-	if echo "$$result" | grep -q ': NULL'; then \
+	if echo "$$result" | grep -q ': NULL$$'; then \
 		echo "❌ Collation mismatch detected — run 'make supa-collation-refresh'"; \
 		exit 1; \
 	fi; \
