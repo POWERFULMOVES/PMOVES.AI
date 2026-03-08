@@ -181,6 +181,17 @@ MCP_SPECS: List[MCPSpec] = [
         },
         required_env="N8N_API_KEY",
     ),
+    MCPSpec(
+        key="hostinger",
+        config={
+            "type": "stdio",
+            "command": "docker",
+            "args": ["exec", "-i", "pmz-hostinger", "hostinger-api-mcp"],
+            "timeout": 60,
+        },
+        required_commands=["docker"],
+        required_env="HOSTINGER_API_KEY",
+    ),
 ]
 
 
