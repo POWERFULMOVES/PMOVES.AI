@@ -187,8 +187,8 @@
 | High | 1 |
 | Medium | 0 |
 | Low | 0 |
-| CodeQL alerts (open) | **0 open** (live GitHub API on 2026-03-07) |
-| Dependabot alerts | **1 open** (`1 medium`; live GitHub API on 2026-03-07) |
+| CodeQL alerts (open) | **0 open** (live GitHub API on 2026-03-08) |
+| Dependabot alerts | **1 open** (`1 medium`; live GitHub API on 2026-03-08) |
 | Open PRs | **0** |
 | CI queue | Hosted gates healthy; self-hosted queue starvation persists on CodeQL/GHCR lanes |
 
