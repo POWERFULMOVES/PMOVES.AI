@@ -106,22 +106,90 @@ get_auth_key() {
     return 0
 }
 
-# Connect to Tailscale
-connect_tailscale() {
-    log_info "Connecting to Tailscale mesh network: $PMOVES_MESH_NAME"
-    log_info "This machine will be known as: $MESH_HOSTNAME"
+# Detect Hostinger VPS environment and determine node type
+detect_hostinger_node() {
+    local node_type="${1:-auto}"
 
-    # Run tailscale up with auth key
-    if tailscale up \
-        --authkey "$TAILSCALE_AUTHKEY" \
-        --hostname "$MESH_HOSTNAME" \
-        --accept-routes \
-        --accept-dns \
-        --operator="$PMOVES_MESH_NAME"; then
+    if [[ "$node_type" != "auto" ]]; then
+        echo "$node_type"
+        return
+    fi
+
+    # Detect via hostname patterns
+    local hn
+    hn="$(hostname -f 2>/dev/null || hostname)"
+    case "$hn" in
+        *kvm4-1*|*kvm4_1*) echo "kvm4-1" ;;
+        *kvm4-2*|*kvm4_2*) echo "kvm4-2" ;;
+        *kvm2*)             echo "kvm2"   ;;
+        *)
+            # Detect via Hostinger metadata or /etc/machine-id patterns
+            if [[ -f /etc/hostinger ]]; then
+                echo "vps-generic"
+            else
+                echo "workstation"
+            fi
+            ;;
+    esac
+}
+
+# Build Tailscale tags for a node type
+get_tailscale_tags() {
+    local node_type="$1"
+    local tags="tag:pmoves"
+
+    case "$node_type" in
+        kvm4-1) tags="$tags,tag:vps,tag:api-gateway" ;;
+        kvm4-2) tags="$tags,tag:vps,tag:data-services" ;;
+        kvm2)   tags="$tags,tag:vps,tag:exit-node" ;;
+        *)      tags="$tags,tag:workstation" ;;
+    esac
+
+    echo "$tags"
+}
+
+# Connect to Tailscale
+# Usage: connect_tailscale [node_type]
+#   node_type: kvm4-1, kvm4-2, kvm2, workstation, or auto (default)
+connect_tailscale() {
+    local node_type
+    node_type="$(detect_hostinger_node "${1:-auto}")"
+    local tags
+    tags="$(get_tailscale_tags "$node_type")"
+
+    log_info "Connecting to Tailscale mesh network: $PMOVES_MESH_NAME"
+    log_info "This machine will be known as: $MESH_HOSTNAME (type: $node_type)"
+
+    # Build tailscale up args
+    local ts_args=(
+        --auth-key "$TAILSCALE_AUTHKEY"
+        --hostname "$MESH_HOSTNAME"
+        --accept-routes
+        --accept-dns
+    )
+
+    # Add tags if the ACL policy allows them
+    # (requires "tagOwners" in Tailscale ACL)
+    if [[ "$node_type" != "workstation" ]]; then
+        ts_args+=(--advertise-tags="$tags")
+    fi
+
+    # KVM2 is the exit node
+    if [[ "$node_type" == "kvm2" ]]; then
+        ts_args+=(--advertise-exit-node)
+        log_info "Advertising as exit node (KVM2)"
+    fi
+
+    if tailscale up "${ts_args[@]}"; then
         log_success "Connected to Tailscale mesh network"
     else
         log_error "Failed to connect to Tailscale"
         return 1
+    fi
+
+    # Disable key expiry for persistent nodes (default 180-day timeout)
+    if ! tailscale set --key-expiry-disabled 2>/dev/null; then
+        log_warning "Could not disable key expiry — approve manually in admin console"
     fi
 
     # Wait for connection to be ready
@@ -160,11 +228,12 @@ else:
 configure_tailscale() {
     log_info "Configuring Tailscale for PMOVES mesh..."
 
-    # Enable subnet router if in NATS mode
+    # Accept subnet routes for NATS discovery across nodes
     if [[ "$MESH_NETWORK_MODE" == "both" || "$MESH_NETWORK_MODE" == "nats" ]]; then
-        log_info "Enabling NATS subnet routing..."
-        # This allows other mesh nodes to reach our NATS server
-        tailscale up --advertise-exit-node --reset 2>/dev/null || true
+        log_info "Accepting subnet routes for cross-node NATS discovery..."
+        if ! tailscale set --accept-routes 2>/dev/null; then
+            log_warning "Failed to accept subnet routes — cross-node routing may not work"
+        fi
     fi
 
     log_success "Tailscale configured for PMOVES mesh"
