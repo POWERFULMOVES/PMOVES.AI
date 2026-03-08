@@ -1,7 +1,30 @@
 
 # PMOVES v5 • NEXT_STEPS
 Note: Consolidated plan index at pmoves/docs/PMOVES.AI PLANS/README_DOCS_INDEX.md.
-_Last updated: 2026-03-07_
+_Last updated: 2026-03-08_
+
+### Latest changes (Mar 8, 2026)
+- Post-merge production audit sweep completed after PRs `#823` and `#824` merged:
+  - `#823`: post-cleanup sitrep refresh (branch/stash/worktree hygiene + stale doc archival)
+  - `#824`: fix 8 broken links + 3 path mismatches in docs index (CodeRabbit review addressed)
+- Static gate sweep: 6/7 PASS (secrets-audit timed out — auth-alignment confirms 0 errors)
+  - Submodule integrity: 40 gitlinks, 0 drifted, 0 conflicts
+  - Branch policy: 40 checked, DoX override acknowledged
+  - Tooling audit: 0 errors, 0 warnings
+- Runtime verification snapshot:
+  - `smoke`: PASS (10/12 OK; Meilisearch + Neo4j pre-existing WARN)
+  - `model-readiness`: PASS (17/17, 0 failed, 1 TZ catalog warning)
+  - `monitoring-smoke`: PASS (Prometheus 36 active/28 healthy, 20 Grafana dashboards)
+  - `auth-alignment`: PASS (0 errors, 62 placeholder warnings)
+  - `GPU smoke (strict)`: PASS (v1 GPU optional warning only)
+- Release gate spot-checks:
+  - RG-1 PASS, RG-2 PASS, RG-3 KNOWN (collation mismatch pre-existing), RG-4 PASS, RG-5 PASS (8 personas)
+- CI/AB-9 status: all 4 runners offline, 4 queued runs identified as cancel candidates
+- Live backlog snapshot:
+  - Open PRs: `0`
+  - Dependabot alerts: `1` (`1 medium`)
+  - Code scanning alerts: `0`
+- Next focus: drain 4 stale queued CI runs, bring runners online for fresh CodeQL/GHCR verification
 
 ### Latest changes (Mar 7, 2026)
 - Merge wave completed on `main`: 8 PRs merged in 3 batches
