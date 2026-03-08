@@ -13,17 +13,17 @@ Post-audit follow-up: Phase C identified P1/P2 issues across critical submodules
 | [DoX](dox-review.md) | 2 | 4 | 3/4 PARTIAL | 2 P1, 4 P2 | 1 PR triaged | ALL FIXED (PR #114) |
 | **TOTAL** | **7** | **20** | | | **4 PRs** | **ALL FIXED** |
 
-## Fix Status (Updated 2026-03-01)
+## Fix Status (Updated 2026-03-07)
 
-All P1 and P2 findings have been addressed. Fix PRs are open in each submodule:
+All P1 and P2 findings have been addressed. All fix PRs merged.
 
-| Submodule | Fix PR | Branch | Status |
-|-----------|--------|--------|--------|
-| BoTZ | [#70](https://github.com/POWERFULMOVES/PMOVES-BoTZ/pull/70) | `fix/botz-review-2026-03-01` | Open — auth-gate agent card endpoint added |
-| ToKenism-Multi | [#46](https://github.com/POWERFULMOVES/PMOVES-ToKenism-Multi/pull/46) | `fix/tokenism-review-2026-03-01` | Open — all P1/P2 resolved |
-| Agent-Zero | [#8](https://github.com/POWERFULMOVES/PMOVES-Agent-Zero/pull/8) | `fix/agentzero-review-2026-03-01` | Open — path containment + supervisord |
-| transcribe-and-fetch | [#44](https://github.com/POWERFULMOVES/PMOVES-transcribe-and-fetch/pull/44) | `fix/tandf-review-2026-03-01` | Open — openai v2 alignment + doc scrub |
-| DoX | [#114](https://github.com/POWERFULMOVES/PMOVES-DoX/pull/114) | `fix/dox-review-2026-03-01` | Open — secrets externalized, honest 501 |
+| Submodule | Fix PR | Branch | Status | Merged |
+|-----------|--------|--------|--------|--------|
+| BoTZ | [#70](https://github.com/POWERFULMOVES/PMOVES-BoTZ/pull/70) | `fix/botz-review-2026-03-01` | **MERGED** | Subsumed by PR #75 (Mar 4) |
+| ToKenism-Multi | [#46](https://github.com/POWERFULMOVES/PMOVES-ToKenism-Multi/pull/46) | `fix/tokenism-review-2026-03-01` | **MERGED** | Mar 2, 2026 |
+| Agent-Zero | [#8](https://github.com/POWERFULMOVES/PMOVES-Agent-Zero/pull/8) | `fix/agentzero-review-2026-03-01` | **MERGED** | Subsumed by PR #9 (Mar 4) |
+| transcribe-and-fetch | [#44](https://github.com/POWERFULMOVES/PMOVES-transcribe-and-fetch/pull/44) | `fix/tandf-review-2026-03-01` | **MERGED** | Mar 1, 2026 |
+| DoX | [#114](https://github.com/POWERFULMOVES/PMOVES-DoX/pull/114) | `fix/dox-review-2026-03-01` | **MERGED** | Subsumed by PR #117/#118/#119 (Mar 4) |
 
 ### Dependabot PRs — All Resolved
 
@@ -87,4 +87,4 @@ grep -rn "^USER" PMOVES-BoTZ/features/*/Dockerfile PMOVES-Agent-Zero/docker/*/Do
 ---
 
 *Reviews conducted 2026-03-01. Fixes implemented and verified 2026-03-01.*
-*All fix PRs open and ready for merge.*
+*All fix PRs merged by Mar 4, 2026. Status refreshed: Mar 7, 2026.*
