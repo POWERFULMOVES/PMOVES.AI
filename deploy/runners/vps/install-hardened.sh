@@ -56,7 +56,7 @@ get_labels() {
             echo "${base_labels},kvm4,kvm4-1,production"
             ;;
         *kvm4-2*)
-            echo "${base_labels},kvm4,kvm4-2,production"
+            echo "${base_labels},kvm4-2,production"
             ;;
         *kvm4*)
             echo "${base_labels},kvm4,production"
