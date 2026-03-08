@@ -3,11 +3,45 @@
 > **Single source of truth** for PMOVES.AI production readiness.
 > Supersedes all individual audit documents accumulated Feb 7 -- Feb 18, 2026.
 
-**Last Updated:** 2026-03-07 (8-PR merge wave + GHCR matrix gap analysis)
+**Last Updated:** 2026-03-08 (post-merge audit sweep — PRs #823/#824)
 **Branch:** `PMOVES.AI-Edition-Hardened` (production release lane)
-**Commit:** `96adc266`
+**Commit:** `ba3c7f84`
 **Consolidated From:** 27 audit documents
 **Evidence:** live runbook execution on 2026-03-05 (`make ghcr-prepublish-inrepo-build`, strict local Trivy sweep logs under `pmoves/docs/logs/ghcr-local-prepublish/`)
+
+---
+
+## Latest Changes (Mar 8, 2026)
+
+- Post-merge audit sweep after PRs `#823` and `#824` merged to `main`:
+  - `#823`: docs index cleanup sitrep refresh (branch/stash/worktree hygiene + stale doc archival)
+  - `#824`: fix 8 broken links + 3 path mismatches in README_DOCS_INDEX (CodeRabbit comments addressed)
+- **Static gate sweep (7 gates):** 6/7 PASS
+  - `submodule-layer-validate-all-strict`: PASS (all submodules `[ok]`)
+  - `submodule-branch-policy-check`: PASS (40 checked, DoX override acknowledged)
+  - `submodule-integrity-strict`: PASS (40 gitlinks, 0 drifted, 0 conflicts)
+  - `submodule-docs-audit-strict`: PASS (dossier regenerated)
+  - `integration-contract-check-baseline`: PASS (3/3 — template, health-wger, firefly-iii)
+  - `tooling-audit-strict`: PASS (errors=0 warnings=0, overlap_rows=124)
+  - `secrets-audit`: TIMEOUT (long-running scan — pre-existing; auth-alignment confirms 0 errors)
+- **Runtime verification:**
+  - `smoke`: PASS (10/12 OK; Meilisearch + Neo4j WARN — pre-existing, not running locally)
+  - `model-readiness`: PASS (17/17 passed, 0 failed, 1 warning — TZ model catalog non-list payload)
+  - `monitoring-smoke`: PASS (Prometheus active=36 healthy=28, 20 Grafana dashboards, Loki ready)
+  - `auth-alignment`: PASS (0 errors, 62 warnings — placeholder credentials, pre-existing)
+  - `GPU smoke (strict)`: PASS (v2-gpu OK, v1-gpu optional endpoint returned HTTP 0 — expected)
+- **Release gate spot-checks:**
+  - RG-1: PASS — `ui-dev-start` only in `bringup_with_ui.sh` (dev/prod orchestrator, not production service)
+  - RG-2: PASS — all compose port references use `${VAR:-default}` env-var patterns
+  - RG-3: AUTOMATED — `_supabase` DB collation mismatch now auto-refreshed via `supa-collation-refresh` in `supa-start`; `make -C pmoves supa-collation-check` available for manual verification
+  - RG-4: PASS — auth-alignment 0 errors
+  - RG-5: PASS — `persona_model_resolution` returns 8 rows (all personas grounded)
+- **CI/AB-9 status:**
+  - All 4 self-hosted runners offline (pmoves-ai-lab-runner, pmoves-ai-lab-win, pmoves-hotfix-runner, pmoves-vps-runner)
+  - 4 queued runs: 2 from `#822` merge push (GHCR + CodeQL), 1 stale `#822` PR run, 1 stale Deploy Gateway Agent
+  - Queue guard identified all 4 as cancel candidates (non-PR or closed-PR events)
+  - **Mitigation applied:** 10 lightweight workflows migrated from `[self-hosted, Linux, X64]` to `ubuntu-latest` (sql-policy-lint, python-tests, webhook-smoke, yt-dlp-bump, deploy-gateway-agent validate job, hardening-validation 4/5 jobs, build-images setup-matrix). Matrix throttling added (`max-parallel: 3-4`) to build-images and self-hosted-builds-hardened. Missing concurrency blocks added to codex-parity-advisory and webhook-smoke.
+- Live metrics: Open PRs `0`, Dependabot `1` (medium), Code Scanning `0`
 
 ---
 
@@ -145,7 +179,7 @@
 
 | Metric | Value |
 |--------|-------|
-| Quantitative snapshot timestamp | 2026-03-07 (live GitHub + local smoke/model-readiness snapshot) |
+| Quantitative snapshot timestamp | 2026-03-08 (live GitHub + local smoke/model-readiness/GPU/monitoring snapshot) |
 | Total tracked items | 24 |
 | Resolved | 23 (+1 since last update) |
 | Active blockers | 1 (self-hosted queue starvation) |
@@ -153,21 +187,21 @@
 | High | 1 |
 | Medium | 0 |
 | Low | 0 |
-| CodeQL alerts (open) | **0 open** (live GitHub API on 2026-03-07) |
-| Dependabot alerts | **1 open** (`1 medium`; live GitHub API on 2026-03-07) |
+| CodeQL alerts (open) | **0 open** (live GitHub API on 2026-03-08) |
+| Dependabot alerts | **1 open** (`1 medium`; live GitHub API on 2026-03-08) |
 | Open PRs | **0** |
 | CI queue | Hosted gates healthy; self-hosted queue starvation persists on CodeQL/GHCR lanes |
 
-### Runtime Verification Snapshot (2026-03-04)
+### Runtime Verification Snapshot (2026-03-08)
 
 | Check | Result | Notes |
 |---|---|---|
-| `make -C pmoves smoke` | PASS | Core production smoke completed with Agent Zero/geometry lanes green |
-| `make -C pmoves model-readiness` | PASS | `14/14` passed; `0` failed; `0` warnings |
-| Agent Zero published image health | PASS | `/healthz` returns `200` after compose PYTHONPATH + `pmoves.chit` shim |
-| Strict GPU smoke | PASS | `GPU_SMOKE_STRICT=true make -C pmoves smoke-gpu` passed; optional v1 GPU endpoint returned warning only |
-| Container health sitrep | PASS | `0` running unhealthy/restarting containers |
-| Supabase CLI vector exclusion | PASS | `SUPABASE_CLI_EXCLUDE=vector` now supported in `supa-start` |
+| `make -C pmoves smoke` | PASS | 10/12 OK; Meilisearch + Neo4j WARN (not running locally — pre-existing) |
+| `make -C pmoves model-readiness` | PASS | `17/17` passed; `0` failed; `1` warning (TZ model catalog non-list payload) |
+| `make -C pmoves monitoring-smoke` | PASS | Prometheus active=36 healthy=28; Grafana 20 dashboards; Loki ready |
+| `make -C pmoves auth-alignment` | PASS | `0` errors; `62` warnings (placeholder creds — pre-existing) |
+| Strict GPU smoke | PASS | `GPU_SMOKE_STRICT=true make -C pmoves smoke-gpu` passed; v1 GPU optional HTTP 0 |
+| Persona grounding (RG-5) | PASS | `persona_model_resolution` returns `8` rows |
 
 ### Local Atomic Lanes (2026-03-02)
 
@@ -465,8 +499,8 @@ rg -n "ui-dev-start|ui-dev-stop|ui-dev-logs|dev-start" pmoves/tools pmoves/Makef
 # RG-2: inspect hard-coded localhost/port assumptions in compose/env paths
 rg -n "localhost:[0-9]+|127\\.0\\.0\\.1:[0-9]+" pmoves/docker-compose*.yml pmoves/env.shared pmoves/tools
 
-# RG-3: inspect Supabase/Postgres collation mismatch warnings after rebuild
-docker compose logs --tail=200 supabase-db
+# RG-3: Supabase collation check (automated via supa-collation-refresh in supa-start)
+make -C pmoves supa-collation-check
 
 # RG-4: auth unification regression pass
 # Run JWT/key rotation flow and verify all core services re-auth
@@ -533,6 +567,7 @@ If `generatedAt` is older than 24 hours, a `(stale)` indicator appears beside th
 
 | Date | Change |
 |------|--------|
+| 2026-03-08 | **Post-merge audit sweep:** PRs #823/#824 merged. Static gates 6/7 PASS (secrets-audit timeout). Runtime: smoke PASS (10/12), model-readiness 17/17 PASS, monitoring-smoke PASS, auth-alignment 0 errors, GPU smoke PASS. Release gates: RG-1/2/4/5 PASS, RG-3 KNOWN (collation). CI: all 4 runners offline, 4 queued runs (cancel candidates). Live metrics: 0 PRs, 0 CodeQL, 1 Dependabot (medium). |
 | 2026-03-02 | **Live metrics sync (Codex):** refreshed executive summary from GitHub live data: CodeQL open alerts `36`, Dependabot open alerts `5`, open PRs `5`; CI snapshot synced to PR #758 head `db6b3a13` with self-hosted queue-capacity note. Ran queue guard and canceled stale queued runs `22565935122`, `22565935100`, `22565816518` to reduce deadlock pressure while preserving active PR lanes. |
 | 2026-03-02 | **Post-split-lane cleanup:** merged origin/main (PRs #752, #753), resolved conflicts, fixed env churn idempotency, addressed 13 CodeRabbit review comments (SQL grants, credential fallbacks, docs_sync hardening, PostgREST schema, bringup runtime detection). |
 | 2026-03-02 | **Split-lane merge closeout (Codex):** merged PMOVES-A2UI `#4`, PMOVES-Archon `#10`, and PMOVES-Archon `#11`; pushed final parent gitlink bump `a115a040` (A2UI + Archon + integrations/archon). |

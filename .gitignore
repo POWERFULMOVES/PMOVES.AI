@@ -154,6 +154,15 @@ pmoves/env.jellyfin-ai
 pmoves/env.supa.runtime.bak.*
 
 
+# =============================================================================
+# Terraform
+# =============================================================================
+*.tfvars
+!*.tfvars.example
+.terraform/
+*.tfstate
+*.tfstate.*
+
 # Windows
 desktop.ini
 Thumbs.db

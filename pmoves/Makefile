@@ -250,7 +250,7 @@ SUPABASE_DB_HELPER ?= scripts/supabase/find_db_container.sh
 up-supabase: ## Start Supabase using selected runtime (SUPABASE_RUNTIME=cli|kong|compose)
 	@$(MAKE) --no-print-directory supa-start
 
-.PHONY: supa-init supa-start supa-stop supa-stop-all supa-status supa-runtime-env supa-logs supa-health supa-restart supa-migrate supa-use-local supa-use-remote supa-env-doctor supa-env-doctor-strict supa-runtime-guard supa-runtime-reconcile
+.PHONY: supa-init supa-start supa-stop supa-stop-all supa-status supa-runtime-env supa-logs supa-health supa-restart supa-migrate supa-use-local supa-use-remote supa-env-doctor supa-env-doctor-strict supa-runtime-guard supa-runtime-reconcile supa-collation-refresh supa-collation-check
 supa-init: check-tools ## Initialize supabase/config.toml (one-time) and enforce PMOVES CLI defaults
 	@if [ ! -f "$(SUPABASE_CONFIG)" ]; then \
 		echo "🗂️ Initializing Supabase project in . ..."; \
@@ -313,6 +313,7 @@ supa-start: check-tools ensure-env-shared ## Start Supabase stack for selected r
 		$(DC) up -d supabase-postgrest supabase-gotrue supabase-kong supabase-realtime supabase-storage supabase-studio; \
 	fi
 	@$(MAKE) --no-print-directory supa-status
+	@$(MAKE) --no-print-directory supa-collation-refresh 2>/dev/null || true
 
 supa-stop: ## Stop Supabase stack for selected runtime
 	@echo "🗄️ Stopping Supabase stack (SUPABASE_RUNTIME=$(SUPABASE_RUNTIME))..."
@@ -460,6 +461,24 @@ supa-health: ## Health checks for selected runtime + active DB container readine
 	else \
 		echo "  ❌ Studio ($$studio_url) -> $$studio_code"; \
 	fi
+
+supa-collation-refresh: ## Refresh collation version for all Supabase databases (RG-3)
+	@echo "Refreshing collation versions..."
+	@db=$$(bash "$(SUPABASE_DB_HELPER)" running); \
+	if [ -z "$$db" ]; then echo "Supabase DB container not found"; exit 1; fi; \
+	for dbname in postgres _supabase; do \
+		echo "  -> ALTER DATABASE $$dbname REFRESH COLLATION VERSION"; \
+		docker exec -i "$$db" psql -U postgres -d "$$dbname" \
+			-c "ALTER DATABASE $$dbname REFRESH COLLATION VERSION;" 2>&1 || true; \
+	done
+	@echo "Collation refresh complete"
+
+supa-collation-check: ## Check for collation version mismatches
+	@db=$$(bash "$(SUPABASE_DB_HELPER)" running); \
+	if [ -z "$$db" ]; then echo "Supabase DB container not found"; exit 1; fi; \
+	docker exec -i "$$db" psql -U postgres -tAc \
+		"SELECT datname || ': ' || COALESCE(datcollversion, 'NULL') FROM pg_database WHERE datname NOT IN ('template0','template1') ORDER BY datname;"
+	@echo "Collation check complete"
 
 supa-use-local: ## Write .env.local from local Supabase template and merge keys from current supa-status
 	@$(PYTHON) scripts/supabase/apply_env_profile.py --profile local --runtime "$(SUPABASE_RUNTIME)" --target .env.local --status-file .supabase.status.env

@@ -684,6 +684,30 @@ agents:
     submodule: "Pmoves-hyperdimensions"
     description: "Geometry visualization surface and control plane (L2.5)"
 
+  vps_fleet_manager:
+    name: "VPS Fleet Manager"
+    class: utility
+    primary_type: api
+    secondary_type: agent
+    port: null
+    health: null
+    layers: [L0, L2]
+    evolution_stage: base
+    nats:
+      publishes: ["mesh.vps.deploy.v1", "mesh.vps.status.v1"]
+      subscribes: ["mesh.vps.command.v1"]
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: false
+      attribution_gated: false
+    resilience:
+      context_budget: small
+      checkpoint_frequency: per_wave
+      recovery_strategy: manual_handoff
+    description: "Hostinger KVM fleet orchestration — deploy, status, restart via MCP tools"
+
   # --- Data infrastructure (Utility class) ---
 
   nats:
