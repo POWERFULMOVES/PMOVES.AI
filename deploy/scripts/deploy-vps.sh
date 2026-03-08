@@ -74,14 +74,14 @@ deploy_node() {
 
     # Pull latest code
     log_info "$node: Pulling latest code..."
-    if ! ssh "$ssh_target" "cd /opt/pmoves && git pull --ff-only origin main"; then
+    if ! ssh -o BatchMode=yes "$ssh_target" "cd /opt/pmoves && git pull --ff-only origin main"; then
         log_error "$node: git pull failed — deploying with stale code"
         failed=1
     fi
 
     # Build and start services
     log_info "$node: Starting services: $services"
-    if ! ssh "$ssh_target" "cd ${WORK_DIR} && ${COMPOSE_CMD} pull ${services} 2>/dev/null && ${COMPOSE_CMD} up -d ${services}"; then
+    if ! ssh -o BatchMode=yes "$ssh_target" "cd ${WORK_DIR} && ${COMPOSE_CMD} pull ${services} 2>/dev/null && ${COMPOSE_CMD} up -d ${services}"; then
         log_error "$node: compose pull/up failed"
         failed=1
     fi
@@ -92,17 +92,17 @@ deploy_node() {
     local health_fail=0
     case "$node" in
         kvm4-1)
-            ssh "$ssh_target" "curl -sf http://localhost:8080/healthz >/dev/null && echo 'Agent Zero: OK' || { echo 'Agent Zero: FAIL'; exit 1; }" || health_fail=1
-            ssh "$ssh_target" "curl -sf http://localhost:3030/healthz >/dev/null && echo 'TensorZero: OK' || { echo 'TensorZero: FAIL'; exit 1; }" || health_fail=1
-            ssh "$ssh_target" "curl -sf http://localhost:8100/healthz >/dev/null && echo 'Gateway Agent: OK' || { echo 'Gateway Agent: FAIL'; exit 1; }" || health_fail=1
+            ssh -o BatchMode=yes "$ssh_target" "curl -sf http://localhost:8080/healthz >/dev/null && echo 'Agent Zero: OK' || { echo 'Agent Zero: FAIL'; exit 1; }" || health_fail=1
+            ssh -o BatchMode=yes "$ssh_target" "curl -sf http://localhost:3030/healthz >/dev/null && echo 'TensorZero: OK' || { echo 'TensorZero: FAIL'; exit 1; }" || health_fail=1
+            ssh -o BatchMode=yes "$ssh_target" "curl -sf http://localhost:8100/healthz >/dev/null && echo 'Gateway Agent: OK' || { echo 'Gateway Agent: FAIL'; exit 1; }" || health_fail=1
             ;;
         kvm4-2)
-            ssh "$ssh_target" "curl -sf http://localhost:9090/api/v1/targets >/dev/null && echo 'Prometheus: OK' || { echo 'Prometheus: FAIL'; exit 1; }" || health_fail=1
-            ssh "$ssh_target" "curl -sf http://localhost:6333/healthz >/dev/null && echo 'Qdrant: OK' || { echo 'Qdrant: FAIL'; exit 1; }" || health_fail=1
+            ssh -o BatchMode=yes "$ssh_target" "curl -sf http://localhost:9090/api/v1/targets >/dev/null && echo 'Prometheus: OK' || { echo 'Prometheus: FAIL'; exit 1; }" || health_fail=1
+            ssh -o BatchMode=yes "$ssh_target" "curl -sf http://localhost:6333/healthz >/dev/null && echo 'Qdrant: OK' || { echo 'Qdrant: FAIL'; exit 1; }" || health_fail=1
             ;;
         kvm2)
             local kvm2_status
-            kvm2_status=$(ssh "$ssh_target" "cd ${WORK_DIR} && ${COMPOSE_CMD} ps nginx --format '{{.Status}}'" 2>/dev/null)
+            kvm2_status=$(ssh -o BatchMode=yes "$ssh_target" "cd ${WORK_DIR} && ${COMPOSE_CMD} ps nginx --format '{{.Status}}'" 2>/dev/null)
             if echo "$kvm2_status" | grep -qi "Up"; then
                 echo "nginx: $kvm2_status"
             else
