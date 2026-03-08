@@ -1,0 +1,18 @@
+{
+  "run": [
+    {
+      "method": "shell.run",
+      "params": {
+        "message": [
+          "echo 'Deploying KVM4-1 (API Gateway) via Tailscale SSH...'",
+          "echo 'NOTE: SSH as root — key-only auth enforced (PasswordAuthentication no)'",
+          "ssh root@pmoves-kvm4-1 'cd /opt/pmoves && git pull --ff-only origin main && cd pmoves && docker compose -f docker-compose.yml -f docker-compose.vps.override.yml pull tensorzero agent-zero hi-rag-gateway-v2 archon-server mesh-agent gateway-agent extract-worker && docker compose -f docker-compose.yml -f docker-compose.vps.override.yml up -d tensorzero agent-zero hi-rag-gateway-v2 archon-server mesh-agent gateway-agent extract-worker'",
+          "echo 'Verifying health...'",
+          "ssh root@pmoves-kvm4-1 'curl -sf http://localhost:8080/healthz && echo \" Agent Zero: OK\" || echo \" Agent Zero: FAIL\"'",
+          "ssh root@pmoves-kvm4-1 'curl -sf http://localhost:3030/healthz && echo \" TensorZero: OK\" || echo \" TensorZero: FAIL\"'",
+          "echo 'KVM4-1 deployment complete.'"
+        ]
+      }
+    }
+  ]
+}
