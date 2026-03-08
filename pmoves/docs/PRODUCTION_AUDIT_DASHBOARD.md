@@ -56,7 +56,7 @@
 - Doc branch audit: 6 documentation-only branches verified (content confirmed on main) and deleted
   - `chit-audit-document`, `docs-pr-doc-review`, `docs/agents-review-2026-03-01`
   - `docs/nats-gpu-mesh-subjects`, `docs/roadmap-nextsteps-image-sitrep`, `docs/roadmap-nextsteps-post-merge`
-- Post-cleanup state: 0 open PRs, ~56 remote branches, 2 local branches, 0 stashes, 1 worktree
+- Post-cleanup state: 0 open PRs, 56 remote branches (62 minus 6 doc branches), 2 local branches, 0 stashes, 1 worktree
 
 ---
 

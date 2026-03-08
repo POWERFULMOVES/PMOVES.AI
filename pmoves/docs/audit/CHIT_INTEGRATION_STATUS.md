@@ -15,7 +15,7 @@
 > **Mar 1 review wave completed.** Mar 4 promotion sync merged fix PRs across 5 submodules.
 > Key status changes:
 > - **Agent Zero**: Phase C P1s fixed (non-root USER, NATS auth hardened)
-> - **BoTZ**: JWT `HAS_JOSE` fail-open still present at `auth.py:57-59` (tracked, fix PR merged Mar 4)
+> - **BoTZ**: JWT `HAS_JOSE` fail-open (fixed in PR #70, merged via #75 on Mar 4)
 > - **DoX**: NATS auth fixed in `nats.conf`
 
 ### What is CHIT?
