@@ -81,7 +81,10 @@ deploy_node() {
 
     # Build and start services
     log_info "$node: Starting services: $services"
-    ssh "$ssh_target" "cd ${WORK_DIR} && ${COMPOSE_CMD} pull ${services} 2>/dev/null && ${COMPOSE_CMD} up -d ${services}"
+    if ! ssh "$ssh_target" "cd ${WORK_DIR} && ${COMPOSE_CMD} pull ${services} 2>/dev/null && ${COMPOSE_CMD} up -d ${services}"; then
+        log_error "$node: compose pull/up failed"
+        failed=1
+    fi
 
     # Health check
     sleep 5
@@ -98,7 +101,14 @@ deploy_node() {
             ssh "$ssh_target" "curl -sf http://localhost:6333/healthz >/dev/null && echo 'Qdrant: OK' || { echo 'Qdrant: FAIL'; exit 1; }" || health_fail=1
             ;;
         kvm2)
-            ssh "$ssh_target" "docker compose -f docker-compose.yml -f docker-compose.vps.override.yml ps nginx --format '{{.Status}}'"
+            local kvm2_status
+            kvm2_status=$(ssh "$ssh_target" "docker compose -f docker-compose.yml -f docker-compose.vps.override.yml ps nginx --format '{{.Status}}'" 2>/dev/null)
+            if echo "$kvm2_status" | grep -qi "Up"; then
+                echo "nginx: $kvm2_status"
+            else
+                log_error "kvm2: nginx not running (status: ${kvm2_status:-empty})"
+                health_fail=1
+            fi
             ;;
     esac
 

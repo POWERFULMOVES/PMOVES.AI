@@ -85,17 +85,15 @@ ufw enable
 
 ### 2. Tailscale Mesh Setup
 
-On each node (KVM4-1, KVM4-2, KVM2):
+On KVM4-1 and KVM4-2:
 
 ```bash
 # Install Tailscale
 curl -fsSL https://tailscale.com/install.sh | sh
 
-# Join mesh with auth key (generate at https://login.tailscale.com/admin/settings/keys)
-tailscale up --auth-key tskey-xxx --hostname pmoves-kvm4-1 --accept-routes --accept-dns
-
-# Disable 180-day key expiry for persistent VPS nodes
-tailscale set --key-expiry-disabled
+# Join mesh with tagged auth key (tagged keys auto-disable key expiry)
+# Generate at https://login.tailscale.com/admin/settings/keys
+tailscale up --auth-key tskey-xxx --hostname <pmoves-kvm4-1|pmoves-kvm4-2> --accept-routes --accept-dns
 ```
 
 On KVM2 (exit node), also enable IP forwarding and advertise:
