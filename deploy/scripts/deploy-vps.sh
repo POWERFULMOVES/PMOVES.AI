@@ -45,19 +45,19 @@ NODE_SERVICES["kvm4-1"]="tensorzero agent-zero hi-rag-gateway-v2 archon-server m
 NODE_SERVICES["kvm4-2"]="supabase-db supabase-rest qdrant neo4j meilisearch nats prometheus grafana loki minio"
 NODE_SERVICES["kvm2"]="nginx"
 
-COMPOSE_CMD="docker compose -f docker-compose.yml -f docker-compose.vps.override.yml"
+COMPOSE_CMD="docker compose -f docker-compose.yml -f docker-compose.vps.override.yml --env-file .env.vps"
 WORK_DIR="/opt/pmoves/pmoves"
 
-# Check Tailscale connectivity to a node
+# Check connectivity to a node via SSH (honors HOSTINGER_*_IP overrides)
 check_node() {
     local node="$1"
     local ssh_target="${NODE_SSH[$node]}"
 
-    if tailscale ping --timeout 3s "pmoves-${node}" &>/dev/null; then
-        log_info "$node: Tailscale reachable"
+    if ssh -o BatchMode=yes -o ConnectTimeout=3 -o StrictHostKeyChecking=no "$ssh_target" true &>/dev/null; then
+        log_info "$node: Reachable ($ssh_target)"
         return 0
     else
-        log_error "$node: Not reachable via Tailscale"
+        log_error "$node: Not reachable ($ssh_target)"
         return 1
     fi
 }
