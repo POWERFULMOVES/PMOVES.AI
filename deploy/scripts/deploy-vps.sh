@@ -102,7 +102,7 @@ deploy_node() {
             ;;
         kvm2)
             local kvm2_status
-            kvm2_status=$(ssh "$ssh_target" "docker compose -f docker-compose.yml -f docker-compose.vps.override.yml ps nginx --format '{{.Status}}'" 2>/dev/null)
+            kvm2_status=$(ssh "$ssh_target" "cd ${WORK_DIR} && ${COMPOSE_CMD} ps nginx --format '{{.Status}}'" 2>/dev/null)
             if echo "$kvm2_status" | grep -qi "Up"; then
                 echo "nginx: $kvm2_status"
             else
@@ -133,7 +133,7 @@ fleet_status() {
         local ssh_target="${NODE_SSH[$node]}"
 
         echo -n "  $node: "
-        if tailscale ping --timeout 3s "pmoves-${node}" &>/dev/null 2>&1; then
+        if ssh -o BatchMode=yes -o ConnectTimeout=3 -o StrictHostKeyChecking=no "$ssh_target" true &>/dev/null; then
             echo -e "${GREEN}ONLINE${NC}"
             ssh "$ssh_target" "cd ${WORK_DIR} && ${COMPOSE_CMD} ps --format 'table {{.Name}}\t{{.Status}}' 2>/dev/null" | sed 's/^/    /'
         else
