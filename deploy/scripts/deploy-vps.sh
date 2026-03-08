@@ -135,7 +135,7 @@ fleet_status() {
         echo -n "  $node: "
         if ssh -o BatchMode=yes -o ConnectTimeout=3 -o StrictHostKeyChecking=no "$ssh_target" true &>/dev/null; then
             echo -e "${GREEN}ONLINE${NC}"
-            ssh "$ssh_target" "cd ${WORK_DIR} && ${COMPOSE_CMD} ps --format 'table {{.Name}}\t{{.Status}}' 2>/dev/null" | sed 's/^/    /'
+            ssh -o BatchMode=yes "$ssh_target" "cd ${WORK_DIR} && ${COMPOSE_CMD} ps --format 'table {{.Name}}\t{{.Status}}' 2>/dev/null" | sed 's/^/    /'
         else
             echo -e "${RED}OFFLINE${NC}"
         fi
