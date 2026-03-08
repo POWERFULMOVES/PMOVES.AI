@@ -96,9 +96,9 @@ chmod 600 .env.vps
 # 7. Start Services
 # ============================================================================
 %{ if docker_compose_profile == "full" ~}
-docker compose -f docker-compose.yml -f docker-compose.vps.override.yml up -d
+docker compose -f docker-compose.yml -f docker-compose.vps.override.yml --env-file .env.vps up -d
 %{ else ~}
-docker compose -f docker-compose.yml -f docker-compose.vps.override.yml --profile ${docker_compose_profile} up -d
+docker compose -f docker-compose.yml -f docker-compose.vps.override.yml --env-file .env.vps --profile ${docker_compose_profile} up -d
 %{ endif ~}
 
 # ============================================================================

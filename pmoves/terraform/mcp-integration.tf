@@ -8,7 +8,7 @@ terraform {
   required_providers {
     hostinger = {
       source  = "hostinger/hostinger"
-      version = "~> 0.1"
+      version = "0.1.22"
     }
     docker = {
       source  = "kreuzwerker/docker"
