@@ -55,10 +55,10 @@ else
     tailscale set --advertise-exit-node
 fi
 
-# Step 4: Disable key expiry for persistent VPS node (default 180-day timeout)
-if ! tailscale set --key-expiry-disabled 2>/dev/null; then
-    log_warn "Could not disable key expiry — approve manually in admin console"
-fi
+# Step 4: Key expiry — tagged auth keys auto-disable expiry.
+# For untagged keys, disable manually via Admin Console or Tailscale API:
+#   POST /api/v2/device/{deviceID}/key  {"keyExpiryDisabled": true}
+log_info "Key expiry is auto-disabled for tagged auth keys"
 
 # Step 5: Allow LAN access through exit node
 if ! tailscale set --exit-node-allow-lan-access 2>/dev/null; then

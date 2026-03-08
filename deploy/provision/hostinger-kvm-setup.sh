@@ -223,10 +223,10 @@ EOF
 
     tailscale up "${ts_args[@]}"
 
-    # Disable key expiry for persistent VPS node (default 180-day timeout)
-    if ! tailscale set --key-expiry-disabled 2>/dev/null; then
-        log_warn "Could not disable key expiry — approve manually in admin console"
-    fi
+    # Key expiry: tagged auth keys (--auth-key with tag:server) auto-disable expiry.
+    # For untagged keys, disable manually via Admin Console or Tailscale API:
+    #   POST /api/v2/device/{deviceID}/key  {"keyExpiryDisabled": true}
+    log_info "Key expiry is auto-disabled for tagged auth keys"
 
     # Verify connection
     sleep 3
