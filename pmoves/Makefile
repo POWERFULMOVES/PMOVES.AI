@@ -466,19 +466,29 @@ supa-collation-refresh: ## Refresh collation version for all Supabase databases 
 	@echo "Refreshing collation versions..."
 	@db=$$(bash "$(SUPABASE_DB_HELPER)" running); \
 	if [ -z "$$db" ]; then echo "Supabase DB container not found"; exit 1; fi; \
+	failed=0; \
 	for dbname in postgres _supabase; do \
 		echo "  -> ALTER DATABASE $$dbname REFRESH COLLATION VERSION"; \
-		docker exec -i "$$db" psql -U postgres -d "$$dbname" \
-			-c "ALTER DATABASE $$dbname REFRESH COLLATION VERSION;" 2>&1 || true; \
-	done
+		if ! docker exec -i "$$db" psql -U postgres -d "$$dbname" \
+			-c "ALTER DATABASE $$dbname REFRESH COLLATION VERSION;" 2>&1; then \
+			echo "  ❌ ALTER DATABASE $$dbname failed"; \
+			failed=1; \
+		fi; \
+	done; \
+	if [ "$$failed" -ne 0 ]; then echo "Collation refresh FAILED"; exit 1; fi
 	@echo "Collation refresh complete"
 
 supa-collation-check: ## Check for collation version mismatches
 	@db=$$(bash "$(SUPABASE_DB_HELPER)" running); \
 	if [ -z "$$db" ]; then echo "Supabase DB container not found"; exit 1; fi; \
-	docker exec -i "$$db" psql -U postgres -tAc \
-		"SELECT datname || ': ' || COALESCE(datcollversion, 'NULL') FROM pg_database WHERE datname NOT IN ('template0','template1') ORDER BY datname;"
-	@echo "Collation check complete"
+	result=$$(docker exec -i "$$db" psql -U postgres -tAc \
+		"SELECT datname || ': ' || COALESCE(datcollversion, 'NULL') FROM pg_database WHERE datname NOT IN ('template0','template1') ORDER BY datname;"); \
+	echo "$$result"; \
+	if echo "$$result" | grep -q ': NULL$$'; then \
+		echo "❌ Collation mismatch detected — run 'make supa-collation-refresh'"; \
+		exit 1; \
+	fi; \
+	echo "✅ Collation versions OK"
 
 supa-use-local: ## Write .env.local from local Supabase template and merge keys from current supa-status
 	@$(PYTHON) scripts/supabase/apply_env_profile.py --profile local --runtime "$(SUPABASE_RUNTIME)" --target .env.local --status-file .supabase.status.env

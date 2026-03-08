@@ -43,6 +43,18 @@
   - **Mitigation applied:** 10 lightweight workflows migrated from `[self-hosted, Linux, X64]` to `ubuntu-latest` (sql-policy-lint, python-tests, webhook-smoke, yt-dlp-bump, deploy-gateway-agent validate job, hardening-validation 4/5 jobs, build-images setup-matrix). Matrix throttling added (`max-parallel: 3-4`) to build-images and self-hosted-builds-hardened. Missing concurrency blocks added to codex-parity-advisory and webhook-smoke.
 - Live metrics: Open PRs `0`, Dependabot `1` (medium), Code Scanning `0`
 
+### VPS Fleet Workstream
+
+| Component | Status | Notes |
+|-----------|--------|-------|
+| Tailscale mesh (3 nodes) | CONFIGURED | kvm4-1, kvm4-2, kvm2 — Tailscale hostnames `pmoves-kvm4-1`, `pmoves-kvm4-2`, `pmoves-kvm2` |
+| Node role assignments | DEFINED | kvm4-1: API Gateway (TZ, A0, HiRAG, Archon), kvm4-2: Data Services (Supabase, Qdrant, Neo4j, Meilisearch, NATS), kvm2: Exit Node (Nginx) |
+| Deploy script (`deploy-vps.sh`) | VALIDATED | SSH probe replaces Tailscale-only check, honors `HOSTINGER_*_IP` overrides |
+| VPS compose override | VALIDATED | CPU-only resource limits, GPU services disabled via `gpu-only` profile |
+| `.env.vps` wiring | FIXED | `--env-file .env.vps` added to compose commands in bootstrap and deploy scripts |
+| Hostinger Terraform provider | PINNED | `0.1.22` (was `~> 0.1`) |
+| Docker Bench Security | BLOCKED | Requires self-hosted runners (AB-9) |
+
 ---
 
 ## Latest Changes (Mar 5, 2026)

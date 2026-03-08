@@ -5,7 +5,7 @@ _Generated: 2026-03-08_
 - PMOVES scripts/tools scanned: **219**
 - PMOVES auth/user/login-focused entries: **35**
 - Submodule keyword-matched scripts/tools: **178**
-- Potential overlap rows: **124**
+- Potential overlap rows: **112** (12 `.venv` vendored-package false positives excluded)
 - Keywords with overlap: **auth, bootstrap, credential, profile, secret, token, user**
 - Findings: **0 error(s)**, **0 warning(s)**
 
@@ -114,32 +114,21 @@ _Generated: 2026-03-08_
 | `secret` | 0.17 | `pmoves/tools/check_required_secrets.py` | `PMOVES-Archon` | `PMOVES-Archon/external/PMOVES-Agent-Zero/python/extensions/tool_execute_before/_10_unmask_secrets.py` | py, secrets |
 | `secret` | 0.17 | `pmoves/tools/check_required_secrets.py` | `PMOVES-DoX` | `PMOVES-DoX/external/PMOVES-Agent-Zero/python/extensions/tool_execute_after/_10_mask_secrets.py` | py, secrets |
 | `secret` | 0.17 | `pmoves/tools/check_required_secrets.py` | `PMOVES-DoX` | `PMOVES-DoX/external/PMOVES-Agent-Zero/python/extensions/tool_execute_before/_10_unmask_secrets.py` | py, secrets |
-| `token` | 0.22 | `pmoves/tools/youtube_po_token_capture.py` | `PMOVES-Archon` | `PMOVES-Archon/python/.venv/Lib/site-packages/tokenizers/tools/visualizer.py` | py, tools |
-| `token` | 0.22 | `pmoves/tools/youtube_po_token_capture.py` | `PMOVES-Archon` | `PMOVES-Archon/python/.venv/Lib/site-packages/tokenizers/tools/__init__.py` | py, tools |
-| `token` | 0.22 | `pmoves/tools/youtube_po_token_capture.py` | `PMOVES-Pipecat` | `PMOVES-Pipecat/.venv/Lib/site-packages/tokenizers/tools/visualizer.py` | py, tools |
-| `token` | 0.22 | `pmoves/tools/youtube_po_token_capture.py` | `PMOVES-Pipecat` | `PMOVES-Pipecat/.venv/Lib/site-packages/tokenizers/tools/__init__.py` | py, tools |
-| `token` | 0.22 | `pmoves/tools/youtube_po_token_capture.py` | `PMOVES-Open-Notebook` | `PMOVES-Open-Notebook/.venv/Lib/site-packages/tokenizers/tools/visualizer.py` | py, tools |
-| `token` | 0.22 | `pmoves/tools/youtube_po_token_capture.py` | `PMOVES-Open-Notebook` | `PMOVES-Open-Notebook/.venv/Lib/site-packages/tokenizers/tools/__init__.py` | py, tools |
 | `token` | 0.20 | `pmoves/tools/youtube_po_token_capture.py` | `PMOVES-Agent-Zero` | `PMOVES-Agent-Zero/python/api/csrf_token.py` | py, token |
 | `token` | 0.20 | `pmoves/tools/youtube_po_token_capture.py` | `PMOVES-Open-Notebook` | `PMOVES-Open-Notebook/open_notebook/utils/token_utils.py` | py, token |
 | `token` | 0.20 | `pmoves/tools/youtube_po_token_capture.py` | `Pmoves-Health-wger` | `Pmoves-Health-wger/wger/utils/api_token.py` | py, token |
-| `token` | 0.18 | `pmoves/tools/youtube_po_token_capture.py` | `PMOVES-Archon` | `PMOVES-Archon/python/.venv/Lib/site-packages/prompt_toolkit/token.py` | py, token |
 | `token` | 0.18 | `pmoves/tools/youtube_po_token_capture.py` | `PMOVES-HiRAG` | `PMOVES-HiRAG/eval/cal_tokens.py` | pmoves, py |
 | `token` | 0.15 | `pmoves/tools/youtube_po_token_capture.py` | `PMOVES-Ultimate-TTS-Studio` | `PMOVES-Ultimate-TTS-Studio/fish_speech/tokenizer.py` | pmoves, py |
 | `token` | 0.10 | `pmoves/tools/youtube_po_token_capture.py` | `PMOVES-Agent-Zero` | `PMOVES-Agent-Zero/python/helpers/tokens.py` | py |
-| `token` | 0.10 | `pmoves/tools/youtube_po_token_capture.py` | `PMOVES-Pipecat` | `PMOVES-Pipecat/.venv/Lib/site-packages/setuptools/_vendor/packaging/_tokenizer.py` | py |
-| `token` | 0.10 | `pmoves/tools/youtube_po_token_capture.py` | `PMOVES-Pipecat` | `PMOVES-Pipecat/.venv/Lib/site-packages/setuptools/_vendor/wheel/vendored/packaging/_tokenizer.py` | py |
 | `token` | 0.08 | `pmoves/tools/youtube_po_token_capture.py` | `PMOVES-Creator` | `PMOVES-Creator/comfy/text_encoders/spiece_tokenizer.py` | py |
 | `token` | 0.08 | `pmoves/tools/youtube_po_token_capture.py` | `PMOVES-ToKenism-Multi` | `PMOVES-ToKenism-Multi/.claude/skills/tokenism-analysis/tools/export-metrics.ts` | tools |
 | `token` | 0.08 | `pmoves/tools/youtube_po_token_capture.py` | `PMOVES-ToKenism-Multi` | `PMOVES-ToKenism-Multi/.claude/skills/tokenism-analysis/tools/run-simulation.ts` | tools |
 | `token` | 0.08 | `pmoves/tools/youtube_po_token_capture.py` | `PMOVES-ToKenism-Multi` | `PMOVES-ToKenism-Multi/.claude/skills/tokenism-analysis/tools/validate-params.ts` | tools |
-| `token` | 0.07 | `pmoves/tools/youtube_po_token_capture.py` | `PMOVES-Archon` | `PMOVES-Archon/python/.venv/Lib/site-packages/anthropic/types/message_count_tokens_tool_param.py` | py |
 | `user` | 0.33 | `pmoves/tools/create_supabase_boot_user.py` | `PMOVES-Agent-Zero` | `PMOVES-Agent-Zero/python/tools/notify_user.py` | py, tools, user |
 | `user` | 0.33 | `pmoves/tools/create_supabase_boot_user.py` | `PMOVES-Archon` | `PMOVES-Archon/external/PMOVES-Agent-Zero/python/tools/notify_user.py` | py, tools, user |
 | `user` | 0.33 | `pmoves/tools/create_supabase_boot_user.py` | `PMOVES-DoX` | `PMOVES-DoX/external/PMOVES-Agent-Zero/python/tools/notify_user.py` | py, tools, user |
 | `user` | 0.33 | `pmoves/tools/create_supabase_boot_user.py` | `pmoves/integrations/archon` | `pmoves/integrations/archon/external/PMOVES-Agent-Zero/python/tools/notify_user.py` | py, tools, user |
 | `user` | 0.30 | `pmoves/tools/create_supabase_boot_user.py` | `PMOVES-Creator` | `PMOVES-Creator/app/user_manager.py` | pmoves, py, user |
-| `user` | 0.18 | `pmoves/tools/create_supabase_boot_user.py` | `PMOVES-Open-Notebook` | `PMOVES-Open-Notebook/.venv/Lib/site-packages/requests_toolbelt/utils/user_agent.py` | py, user |
 | `user` | 0.18 | `pmoves/tools/create_supabase_boot_user.py` | `PMOVES-Creator` | `PMOVES-Creator/comfy/diffusers_convert.py` | pmoves, py |
 | `user` | 0.18 | `pmoves/tools/create_supabase_boot_user.py` | `PMOVES-Creator` | `PMOVES-Creator/comfy/diffusers_load.py` | pmoves, py |
 | `user` | 0.17 | `pmoves/tools/create_supabase_boot_user.py` | `PMOVES-Pipecat` | `PMOVES-Pipecat/src/pipecat/turns/user_start/transcription_user_turn_start_strategy.py` | py, user |
@@ -148,7 +137,6 @@ _Generated: 2026-03-08_
 | `user` | 0.14 | `pmoves/tools/create_supabase_boot_user.py` | `PMOVES-DoX` | `PMOVES-DoX/external/PMOVES-n8n-mcp/scripts/test-user-id-persistence.ts` | pmoves, user |
 | `user` | 0.10 | `pmoves/tools/create_supabase_boot_user.py` | `PMOVES-DoX` | `PMOVES-DoX/external/PMOVES-postman-mcp-server/src/tools/getAuthenticatedUser.ts` | tools |
 | `user` | 0.10 | `pmoves/tools/create_supabase_boot_user.py` | `PMOVES-DoX` | `PMOVES-DoX/external/PMOVES-postman-mcp-server/src/tools/getCollectionsForkedByUser.ts` | tools |
-| `user` | 0.09 | `pmoves/tools/create_supabase_boot_user.py` | `PMOVES-Pipecat` | `PMOVES-Pipecat/.venv/Lib/site-packages/mpmath/usertools.py` | py |
 | `user` | 0.08 | `pmoves/tools/create_supabase_boot_user.py` | `PMOVES-ToKenism-Multi` | `PMOVES-ToKenism-Multi/pmoves-nextjs/lighthouserc.js` | pmoves |
 
 ## Findings
