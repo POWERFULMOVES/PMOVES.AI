@@ -499,8 +499,8 @@ rg -n "ui-dev-start|ui-dev-stop|ui-dev-logs|dev-start" pmoves/tools pmoves/Makef
 # RG-2: inspect hard-coded localhost/port assumptions in compose/env paths
 rg -n "localhost:[0-9]+|127\\.0\\.0\\.1:[0-9]+" pmoves/docker-compose*.yml pmoves/env.shared pmoves/tools
 
-# RG-3: inspect Supabase/Postgres collation mismatch warnings after rebuild
-docker compose logs --tail=200 supabase-db
+# RG-3: Supabase collation check (automated via supa-collation-refresh in supa-start)
+make -C pmoves supa-collation-check
 
 # RG-4: auth unification regression pass
 # Run JWT/key rotation flow and verify all core services re-auth

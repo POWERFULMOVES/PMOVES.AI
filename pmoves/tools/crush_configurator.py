@@ -190,7 +190,7 @@ MCP_SPECS: List[MCPSpec] = [
             "timeout": 60,
         },
         required_commands=["docker"],
-        required_env="HOSTINGER_API_KEY",
+        required_env="HOSTINGER_API_TOKEN",
     ),
 ]
 
