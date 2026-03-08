@@ -3,15 +3,26 @@
 > **Single source of truth** for PMOVES.AI production readiness.
 > Supersedes all individual audit documents accumulated Feb 7 -- Feb 18, 2026.
 
-**Last Updated:** 2026-03-08 (post-merge audit sweep — PRs #823/#824)
+**Last Updated:** 2026-03-08 (post-merge — PR #827 CodeRabbit follow-up)
 **Branch:** `PMOVES.AI-Edition-Hardened` (production release lane)
-**Commit:** `ba3c7f84`
+**Commit:** `ed6e3cc4`
 **Consolidated From:** 27 audit documents
 **Evidence:** live runbook execution on 2026-03-05 (`make ghcr-prepublish-inrepo-build`, strict local Trivy sweep logs under `pmoves/docs/logs/ghcr-local-prepublish/`)
 
 ---
 
 ## Latest Changes (Mar 8, 2026)
+
+- **PR #827 merged** (`fix/coderabbit-followup-825-826`): 7 deferred CodeRabbit items from PRs #825/#826 + 4 review fixes
+  - VPS deploy: `fleet_status()` SSH probe consistency (replaced `tailscale ping` with SSH probe matching `check_node()`)
+  - VPS deploy: kvm2 health check now uses `${COMPOSE_CMD}` (loads `.env.vps` consistently)
+  - VPS deploy: `BatchMode=yes` added to follow-up SSH calls for hang prevention
+  - Makefile: `supa-collation-check` grep anchored with `$` to prevent false positives
+  - Terraform: Hostinger provider pin `0.1.22`, bootstrap `.env.vps` wiring
+  - Docs: tooling script audit trimmed redundant entries, production dashboard VPS fleet section added
+- Live metrics: Open PRs `0`, Dependabot `1` (medium), Code Scanning `0`
+
+### Previous (Mar 8 — PRs #823/#824)
 
 - Post-merge audit sweep after PRs `#823` and `#824` merged to `main`:
   - `#823`: docs index cleanup sitrep refresh (branch/stash/worktree hygiene + stale doc archival)
@@ -579,6 +590,7 @@ If `generatedAt` is older than 24 hours, a `(stale)` indicator appears beside th
 
 | Date | Change |
 |------|--------|
+| 2026-03-08 | **PR #827 merged:** 7 deferred CodeRabbit items from #825/#826 + 4 review fixes (SSH probe consistency, COMPOSE_CMD in kvm2, BatchMode=yes, grep anchor). VPS Fleet workstream validated. |
 | 2026-03-08 | **Post-merge audit sweep:** PRs #823/#824 merged. Static gates 6/7 PASS (secrets-audit timeout). Runtime: smoke PASS (10/12), model-readiness 17/17 PASS, monitoring-smoke PASS, auth-alignment 0 errors, GPU smoke PASS. Release gates: RG-1/2/4/5 PASS, RG-3 KNOWN (collation). CI: all 4 runners offline, 4 queued runs (cancel candidates). Live metrics: 0 PRs, 0 CodeQL, 1 Dependabot (medium). |
 | 2026-03-02 | **Live metrics sync (Codex):** refreshed executive summary from GitHub live data: CodeQL open alerts `36`, Dependabot open alerts `5`, open PRs `5`; CI snapshot synced to PR #758 head `db6b3a13` with self-hosted queue-capacity note. Ran queue guard and canceled stale queued runs `22565935122`, `22565935100`, `22565816518` to reduce deadlock pressure while preserving active PR lanes. |
 | 2026-03-02 | **Post-split-lane cleanup:** merged origin/main (PRs #752, #753), resolved conflicts, fixed env churn idempotency, addressed 13 CodeRabbit review comments (SQL grants, credential fallbacks, docs_sync hardening, PostgREST schema, bringup runtime detection). |
