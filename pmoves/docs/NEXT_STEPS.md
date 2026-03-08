@@ -29,6 +29,11 @@ _Last updated: 2026-03-07_
   - Open PRs: `0`
   - Dependabot alerts: `1` (`1 medium`)
   - Code scanning alerts: `0`
+- Repo hygiene sweep completed:
+  - `make -C pmoves branch-cleanup EXECUTE=1` — remote branches: 553 → 62 (275 merged-deleted, 216 archived as `archive/*` tags)
+  - Local cleanup: 93 → 2 branches, 1 worktree removed, 5 stashes cleared
+  - Doc branch audit: 6 branches verified (content on main) and deleted
+  - Post-cleanup validation: all cross-linked docs intact
 
 ### Latest changes (Mar 6, 2026)
 - Merge queue closeout completed on `main`:

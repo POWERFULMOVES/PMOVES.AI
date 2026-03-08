@@ -1,3 +1,5 @@
+> **RESOLVED** — All 43 alerts from this Feb 28 triage have been addressed. Live CodeQL alerts: **0 open** (as of Mar 7, 2026).
+
 # CodeQL Alert Triage Report — 2026-02-28
 
 **Total open alerts:** 43

@@ -1,3 +1,6 @@
+> **ARCHIVED** — This SITREP is from Feb 14-17, 2026. All issues documented here have been resolved.
+> Current state: see `SUBMODULE_LAYER_VALIDATION.md` (Mar 3, 2026) — 40/40 submodules initialized, 0 errors, 0 warnings.
+
 # Submodule Alignment SITREP
 _Generated: 2026-02-17 15:06:41Z_
 
