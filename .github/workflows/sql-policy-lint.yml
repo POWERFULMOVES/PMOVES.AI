@@ -23,8 +23,7 @@ permissions:
 
 jobs:
   lint:
-    # PMOVES.AI: Use self-hosted runners for production CI
-    runs-on: [self-hosted, Linux, X64]
+    runs-on: ubuntu-latest
     permissions:
       contents: read
     steps:

@@ -32,19 +32,43 @@
       "status": "planned",
       "notes": "Staging deploy runner — not yet provisioned"
     },
+    "self-hosted,vps,kvm4-1": {
+      "host": "kvm4-1",
+      "runner_name": "pmoves-kvm4-1-runner",
+      "registration_script": "deploy/runners/vps/install-hardened.sh",
+      "status": "provisioning",
+      "role": "api-gateway",
+      "notes": "KVM4-1: API Gateway node — TensorZero, Agent Zero, Hi-RAG CPU"
+    },
+    "self-hosted,vps,kvm4-2": {
+      "host": "kvm4-2",
+      "runner_name": "pmoves-kvm4-2-runner",
+      "registration_script": "deploy/runners/vps/install-hardened.sh",
+      "status": "provisioning",
+      "role": "data-storage",
+      "notes": "KVM4-2: Data node — Supabase, Qdrant, Neo4j, Meilisearch, NATS"
+    },
+    "self-hosted,vps,kvm2": {
+      "host": "kvm2",
+      "runner_name": "pmoves-kvm2-runner",
+      "registration_script": "deploy/runners/vps/install-hardened.sh",
+      "status": "provisioning",
+      "role": "exit-proxy",
+      "notes": "KVM2: Exit node — Tailscale exit, Nginx reverse proxy, SSL termination"
+    },
     "self-hosted,kvm4,production": {
-      "host": "kvm4",
-      "runner_name": "pmoves-kvm4-production",
-      "registration_script": "integrations/github-runners/compose/register-runner.sh",
-      "status": "planned",
-      "notes": "Production deploy runner — not yet provisioned"
+      "host": "kvm4-1",
+      "runner_name": "pmoves-kvm4-1-runner",
+      "registration_script": "deploy/runners/vps/install-hardened.sh",
+      "status": "provisioning",
+      "notes": "Production deploy runner — routes to kvm4-1 by default"
     },
     "self-hosted,kvm4": {
-      "host": "kvm4",
-      "runner_name": "pmoves-kvm4-runner",
-      "registration_script": "integrations/github-runners/compose/register-runner.sh",
-      "status": "planned",
-      "notes": "Gateway deploy runner — not yet provisioned"
+      "host": "kvm4-1",
+      "runner_name": "pmoves-kvm4-1-runner",
+      "registration_script": "deploy/runners/vps/install-hardened.sh",
+      "status": "provisioning",
+      "notes": "Gateway deploy runner — routes to kvm4-1 by default"
     }
   }
 }

@@ -32,8 +32,7 @@ env:
 jobs:
   validate:
     name: Validate Configuration
-    # PMOVES.AI: Use self-hosted runners for production CI
-    runs-on: [self-hosted, Linux, X64]
+    runs-on: ubuntu-latest
     permissions:
       contents: read
     steps:
@@ -177,9 +176,15 @@ jobs:
 
       - name: Verify secrets loaded
         run: |
-          secrets=$(curl -s http://localhost:8100/secrets)
-          echo "✓ Secrets endpoint response:"
-          echo "$secrets" | jq '.'
+          count=$(curl -sf http://localhost:8100/secrets | jq 'length' 2>/dev/null) || {
+            echo "✗ Failed to query secrets endpoint"
+            exit 1
+          }
+          if [ "$count" -eq 0 ] 2>/dev/null; then
+            echo "✗ Zero secret keys loaded — check GitHub Secrets configuration"
+            exit 1
+          fi
+          echo "✓ $count secret keys loaded"
 
   # ============================================================================
   # Rollback
