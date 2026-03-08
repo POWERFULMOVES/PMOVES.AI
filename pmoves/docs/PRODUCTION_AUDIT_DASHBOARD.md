@@ -33,13 +33,14 @@
 - **Release gate spot-checks:**
   - RG-1: PASS — `ui-dev-start` only in `bringup_with_ui.sh` (dev/prod orchestrator, not production service)
   - RG-2: PASS — all compose port references use `${VAR:-default}` env-var patterns
-  - RG-3: KNOWN — `_supabase` DB collation mismatch persists (153.121 vs 153.120); pre-existing since Mar 4
+  - RG-3: AUTOMATED — `_supabase` DB collation mismatch now auto-refreshed via `supa-collation-refresh` in `supa-start`; `make -C pmoves supa-collation-check` available for manual verification
   - RG-4: PASS — auth-alignment 0 errors
   - RG-5: PASS — `persona_model_resolution` returns 8 rows (all personas grounded)
 - **CI/AB-9 status:**
   - All 4 self-hosted runners offline (pmoves-ai-lab-runner, pmoves-ai-lab-win, pmoves-hotfix-runner, pmoves-vps-runner)
   - 4 queued runs: 2 from `#822` merge push (GHCR + CodeQL), 1 stale `#822` PR run, 1 stale Deploy Gateway Agent
   - Queue guard identified all 4 as cancel candidates (non-PR or closed-PR events)
+  - **Mitigation applied:** 10 lightweight workflows migrated from `[self-hosted, Linux, X64]` to `ubuntu-latest` (sql-policy-lint, python-tests, webhook-smoke, yt-dlp-bump, deploy-gateway-agent validate job, hardening-validation 4/5 jobs, build-images setup-matrix). Matrix throttling added (`max-parallel: 3-4`) to build-images and self-hosted-builds-hardened. Missing concurrency blocks added to codex-parity-advisory and webhook-smoke.
 - Live metrics: Open PRs `0`, Dependabot `1` (medium), Code Scanning `0`
 
 ---

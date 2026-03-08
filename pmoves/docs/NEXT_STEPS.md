@@ -3,7 +3,18 @@
 Note: Consolidated plan index at pmoves/docs/PMOVES.AI PLANS/README_DOCS_INDEX.md.
 _Last updated: 2026-03-08_
 
-### Latest changes (Mar 8, 2026)
+### Latest changes (Mar 8, 2026) — CI Runner Migration + RG-3 Automation
+- **AB-9 mitigation:** Migrated 10 lightweight CI jobs from `[self-hosted, Linux, X64]` to `ubuntu-latest`:
+  - `sql-policy-lint`, `python-tests`, `webhook-smoke`, `yt-dlp-bump`, `deploy-gateway-agent` (validate only)
+  - `hardening-validation` (4/5 jobs; docker-bench kept on self-hosted with `vps` label)
+  - `build-images` (setup-matrix job only)
+- Added `max-parallel` throttling: `build-images` matrix (4), `self-hosted-builds-hardened` CPU matrix (3)
+- Added missing concurrency blocks: `codex-parity-advisory`, `webhook-smoke`
+- Added QEMU/Buildx setup to `yt-dlp-bump` for multi-arch builds on GitHub-hosted runners
+- **RG-3 automated:** New `supa-collation-refresh` and `supa-collation-check` Make targets; collation refresh runs automatically in `supa-start` bootstrap
+- Recommendation: consolidate `self-hosted-builds.yml` (subset of hardened version) by disabling its push trigger
+
+### Latest changes (Mar 8, 2026) — Post-Merge Audit Sweep
 - Post-merge production audit sweep completed after PRs `#823` and `#824` merged:
   - `#823`: post-cleanup sitrep refresh (branch/stash/worktree hygiene + stale doc archival)
   - `#824`: fix 8 broken links + 3 path mismatches in docs index (CodeRabbit review addressed)
