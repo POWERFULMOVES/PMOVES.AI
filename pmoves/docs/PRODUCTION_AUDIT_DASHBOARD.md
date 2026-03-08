@@ -46,6 +46,18 @@
 - GHCR matrix gap analysis completed (see section below)
 - Live metrics: Open PRs `0`, Dependabot `1` (medium), Code Scanning `0`
 
+### Repo Hygiene Sweep (Mar 7, 2026)
+
+- Branch cleanup completed (`make -C pmoves branch-cleanup EXECUTE=1`):
+  - Remote branches: 553 → 62 (275 merged-deleted, 216 archived as `archive/*` tags)
+  - Local branches: 93 → 2 (`main` + `PMOVES.AI-Edition-Hardened`)
+  - Worktrees: 1 stale removed (`PMOVES.AI-prod-validate`)
+  - Stashes: 5 superseded stashes cleared
+- Doc branch audit: 6 documentation-only branches verified (content confirmed on main) and deleted
+  - `chit-audit-document`, `docs-pr-doc-review`, `docs/agents-review-2026-03-01`
+  - `docs/nats-gpu-mesh-subjects`, `docs/roadmap-nextsteps-image-sitrep`, `docs/roadmap-nextsteps-post-merge`
+- Post-cleanup state: 0 open PRs, ~56 remote branches, 2 local branches, 0 stashes, 1 worktree
+
 ---
 
 ### GHCR Matrix Gap Analysis (Mar 7, 2026)

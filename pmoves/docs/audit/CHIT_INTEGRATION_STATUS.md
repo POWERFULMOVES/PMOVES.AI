@@ -4,13 +4,19 @@
 >
 > **See also:** [CHIT Documentation Suite](../PMOVESCHIT/README.md) for the complete documentation index with reading paths and glossary. | [CHIT Tools Catalog](../CHIT_TOOLS_CATALOG.md) for all Python tools.
 
-**Last Updated:** February 25, 2026
+**Last Updated:** March 7, 2026
 **CHIT Protocol Version:** v0.1 (legacy), v0.2 (stable), v1.0 (current)
 **Geometry Bus:** NATS-based event bus for geometric intelligence
 
 ---
 
 ## Overview
+
+> **Mar 1 review wave completed.** Mar 4 promotion sync merged fix PRs across 5 submodules.
+> Key status changes:
+> - **Agent Zero**: Phase C P1s fixed (non-root USER, NATS auth hardened)
+> - **BoTZ**: JWT `HAS_JOSE` fail-open still present at `auth.py:57-59` (tracked, fix PR merged Mar 4)
+> - **DoX**: NATS auth fixed in `nats.conf`
 
 ### What is CHIT?
 
@@ -419,4 +425,4 @@ Three naming schemes exist across the codebase:
 ---
 
 **Document Owner:** PMOVES.AI Infrastructure Team
-**Last Updated:** 2026-02-25
+**Last Updated:** 2026-03-07
