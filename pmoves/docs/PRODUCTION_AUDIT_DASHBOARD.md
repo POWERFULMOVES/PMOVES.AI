@@ -3,11 +3,169 @@
 > **Single source of truth** for PMOVES.AI production readiness.
 > Supersedes all individual audit documents accumulated Feb 7 -- Feb 18, 2026.
 
-**Last Updated:** 2026-03-04 (post-merge hardening wave + promotion sync)
+**Last Updated:** 2026-03-08 (post-merge — PR #827 CodeRabbit follow-up)
 **Branch:** `PMOVES.AI-Edition-Hardened` (production release lane)
-**Commit:** `3bcc9541`
+**Commit:** `ed6e3cc4`
 **Consolidated From:** 27 audit documents
-**Evidence:** live runbook execution on 2026-03-04 (`make smoke`, `make model-readiness`, queue drain)
+**Evidence:** live runbook execution on 2026-03-05 (`make ghcr-prepublish-inrepo-build`, strict local Trivy sweep logs under `pmoves/docs/logs/ghcr-local-prepublish/`)
+
+---
+
+## Latest Changes (Mar 8, 2026)
+
+- **PR #827 merged** (`fix/coderabbit-followup-825-826`): 7 deferred CodeRabbit items from PRs #825/#826 + 4 review fixes
+  - VPS deploy: `fleet_status()` SSH probe consistency (replaced `tailscale ping` with SSH probe matching `check_node()`)
+  - VPS deploy: kvm2 health check now uses `${COMPOSE_CMD}` (loads `.env.vps` consistently)
+  - VPS deploy: `BatchMode=yes` added to follow-up SSH calls for hang prevention
+  - Makefile: `supa-collation-check` grep anchored with `$` to prevent false positives
+  - Terraform: Hostinger provider pin `0.1.22`, bootstrap `.env.vps` wiring
+  - Docs: tooling script audit trimmed redundant entries, production dashboard VPS fleet section added
+- Live metrics: Open PRs `0`, Dependabot `1` (medium), Code Scanning `0`
+
+### Previous (Mar 8 — PRs #823/#824)
+
+- Post-merge audit sweep after PRs `#823` and `#824` merged to `main`:
+  - `#823`: docs index cleanup sitrep refresh (branch/stash/worktree hygiene + stale doc archival)
+  - `#824`: fix 8 broken links + 3 path mismatches in README_DOCS_INDEX (CodeRabbit comments addressed)
+- **Static gate sweep (7 gates):** 6/7 PASS
+  - `submodule-layer-validate-all-strict`: PASS (all submodules `[ok]`)
+  - `submodule-branch-policy-check`: PASS (40 checked, DoX override acknowledged)
+  - `submodule-integrity-strict`: PASS (40 gitlinks, 0 drifted, 0 conflicts)
+  - `submodule-docs-audit-strict`: PASS (dossier regenerated)
+  - `integration-contract-check-baseline`: PASS (3/3 — template, health-wger, firefly-iii)
+  - `tooling-audit-strict`: PASS (errors=0 warnings=0, overlap_rows=124)
+  - `secrets-audit`: TIMEOUT (long-running scan — pre-existing; auth-alignment confirms 0 errors)
+- **Runtime verification:**
+  - `smoke`: PASS (10/12 OK; Meilisearch + Neo4j WARN — pre-existing, not running locally)
+  - `model-readiness`: PASS (17/17 passed, 0 failed, 1 warning — TZ model catalog non-list payload)
+  - `monitoring-smoke`: PASS (Prometheus active=36 healthy=28, 20 Grafana dashboards, Loki ready)
+  - `auth-alignment`: PASS (0 errors, 62 warnings — placeholder credentials, pre-existing)
+  - `GPU smoke (strict)`: PASS (v2-gpu OK, v1-gpu optional endpoint returned HTTP 0 — expected)
+- **Release gate spot-checks:**
+  - RG-1: PASS — `ui-dev-start` only in `bringup_with_ui.sh` (dev/prod orchestrator, not production service)
+  - RG-2: PASS — all compose port references use `${VAR:-default}` env-var patterns
+  - RG-3: AUTOMATED — `_supabase` DB collation mismatch now auto-refreshed via `supa-collation-refresh` in `supa-start`; `make -C pmoves supa-collation-check` available for manual verification
+  - RG-4: PASS — auth-alignment 0 errors
+  - RG-5: PASS — `persona_model_resolution` returns 8 rows (all personas grounded)
+- **CI/AB-9 status:**
+  - All 4 self-hosted runners offline (pmoves-ai-lab-runner, pmoves-ai-lab-win, pmoves-hotfix-runner, pmoves-vps-runner)
+  - 4 queued runs: 2 from `#822` merge push (GHCR + CodeQL), 1 stale `#822` PR run, 1 stale Deploy Gateway Agent
+  - Queue guard identified all 4 as cancel candidates (non-PR or closed-PR events)
+  - **Mitigation applied:** 10 lightweight workflows migrated from `[self-hosted, Linux, X64]` to `ubuntu-latest` (sql-policy-lint, python-tests, webhook-smoke, yt-dlp-bump, deploy-gateway-agent validate job, hardening-validation 4/5 jobs, build-images setup-matrix). Matrix throttling added (`max-parallel: 3-4`) to build-images and self-hosted-builds-hardened. Missing concurrency blocks added to codex-parity-advisory and webhook-smoke.
+- Live metrics: Open PRs `0`, Dependabot `1` (medium), Code Scanning `0`
+
+### VPS Fleet Workstream
+
+| Component | Status | Notes |
+|-----------|--------|-------|
+| Tailscale mesh (3 nodes) | CONFIGURED | kvm4-1, kvm4-2, kvm2 — Tailscale hostnames `pmoves-kvm4-1`, `pmoves-kvm4-2`, `pmoves-kvm2` |
+| Node role assignments | DEFINED | kvm4-1: API Gateway (TZ, A0, HiRAG, Archon), kvm4-2: Data Services (Supabase, Qdrant, Neo4j, Meilisearch, NATS), kvm2: Exit Node (Nginx) |
+| Deploy script (`deploy-vps.sh`) | VALIDATED | SSH probe replaces Tailscale-only check, honors `HOSTINGER_*_IP` overrides |
+| VPS compose override | VALIDATED | CPU-only resource limits, GPU services disabled via `gpu-only` profile |
+| `.env.vps` wiring | FIXED | `--env-file .env.vps` added to compose commands in bootstrap and deploy scripts |
+| Hostinger Terraform provider | PINNED | `0.1.22` (was `~> 0.1`) |
+| Docker Bench Security | BLOCKED | Requires self-hosted runners (AB-9) |
+
+---
+
+## Latest Changes (Mar 5, 2026)
+
+- GHCR production local-first validation widened from single-image checks to matrix-driven validation:
+  - local validator: `pmoves/tools/ghcr_local_prepublish.py`
+  - operator targets: `ghcr-prepublish-inrepo`, `ghcr-prepublish-inrepo-build`, `ghcr-prepublish-all`, `ghcr-dispatch-all`
+- In-repo GHCR integration build sweep (`linux/amd64`, local): `7/7 PASS`
+  - `agent-zero`, `archon`, `firefly-iii`, `jellyfin`, `pmoves-yt`, `deepresearch`, `supaserch`
+- Strict local Trivy sweep (HIGH/CRITICAL, ignore-unfixed, vuln-only): `3 PASS / 4 FAIL`
+  - PASS: `firefly-iii`, `jellyfin`, `supaserch`
+  - FAIL: `agent-zero` (scan timeout at 5m on large layer analysis), `archon` (known fixable HIGH/CRITICAL backlog), `pmoves-yt` (urllib3 CVE-2026-21441), `deepresearch` (known fixable HIGH/CRITICAL backlog)
+- Evidence artifacts:
+  - summary CSV: `pmoves/docs/logs/ghcr-local-prepublish/summary-2026-03-05.csv`
+  - vuln-only summary CSV: `pmoves/docs/logs/ghcr-local-prepublish/summary-2026-03-05-vulnonly.csv`
+  - per-image `.log` files are generated locally under `pmoves/docs/logs/ghcr-local-prepublish/` (ignored in git)
+
+---
+
+## Latest Changes (Mar 7, 2026)
+
+- Merge wave completed on `main`: 8 PRs merged in 3 batches (#814-#821)
+  - Batch 1 (06:00 UTC): #814 UI build fix, #815 smoke Supabase discovery, #816 healthcheck stability, #817 CI runner alignment, #819 DoX submodule bump
+  - Batch 2 (07:01 UTC): #818 model fabric + coding-plan wiring (rebased after 8 CodeRabbit comments)
+  - Batch 3 (17:11 UTC): #820 distributed topology docs, #821 chrome extension (9 security fixes)
+- Chrome extension security review completed (9/11 actionable CodeRabbit items addressed):
+  - `chrome.storage.sync` → `session` for auth credentials
+  - innerHTML XSS eliminated in options shapes display
+  - Mock server method allowlist + pathname routing
+  - `synthesizeAudio` timeout (AbortController)
+  - Processing status TTL cleanup
+  - Config load race condition (configReady promise)
+  - Storage read-modify-write serialization
+  - Content Security Policy added to manifest.json
+- GHCR matrix gap analysis completed (see section below)
+- Live metrics: Open PRs `0`, Dependabot `1` (medium), Code Scanning `0`
+
+### Repo Hygiene Sweep (Mar 7, 2026)
+
+- Branch cleanup completed (`make -C pmoves branch-cleanup EXECUTE=1`):
+  - Remote branches: 553 → 62 (275 merged-deleted, 216 archived as `archive/*` tags)
+  - Local branches: 93 → 2 (`main` + `PMOVES.AI-Edition-Hardened`)
+  - Worktrees: 1 stale removed (`PMOVES.AI-prod-validate`)
+  - Stashes: 5 superseded stashes cleared
+- Doc branch audit: 6 documentation-only branches verified (content confirmed on main) and deleted
+  - `chit-audit-document`, `docs-pr-doc-review`, `docs/agents-review-2026-03-01`
+  - `docs/nats-gpu-mesh-subjects`, `docs/roadmap-nextsteps-image-sitrep`, `docs/roadmap-nextsteps-post-merge`
+- Post-cleanup state: 0 open PRs, 56 remote branches (62 minus 6 doc branches), 2 local branches, 0 stashes, 1 worktree
+
+---
+
+### GHCR Matrix Gap Analysis (Mar 7, 2026)
+
+**Build pipelines:**
+- `integrations-ghcr.yml` — 10 images (matrix-driven, multi-arch, Trivy + Cosign)
+- `self-hosted-builds.yml` — 11 CPU + 2 GPU images (push-triggered, amd64)
+- `build-images.yml` — 24 images from `images.yaml` (manual dispatch)
+
+**GHCR registry:** 23 packages published.
+
+**Compose → GHCR coverage gaps (4 truly missing):**
+
+| Service | Compose Image Reference | In GHCR? | In CI? |
+|---------|------------------------|----------|--------|
+| `a2ui-nats-bridge` | `ghcr.io/.../pmoves-a2ui-nats-bridge:pmoves-latest` | ❌ | ❌ |
+| `llama-throughput-lab` | `ghcr.io/.../pmoves-llama-throughput-lab:latest` | ❌ | ❌ |
+| `session-context-worker` | `ghcr.io/.../pmoves-session-context-worker:latest` | ❌ | ❌ |
+| `tokenism-ui` | `ghcr.io/.../pmoves-tokenism-ui:pmoves-latest` | ❌ | ❌ |
+| `ultimate-tts-studio` | `ghcr.io/.../pmoves-ultimate-tts-studio:pmoves-latest` | ✅ (manual) | ❌ |
+
+**Cross-reference gaps:**
+- `integrations-ghcr.matrix.json` covers 10/24 `images.yaml` entries
+- `self-hosted-builds.yml` builds 13 services not in `integrations-ghcr.matrix.json`
+- 2 submodules in `images.yaml` still track `main` instead of `PMOVES.AI-Edition-Hardened` (`pmoves-botz`, `pmoves-tailscale`)
+
+**Recommendation:** Add build definitions for the 4 missing images, or convert their compose references to local `build:` directives if they're dev-only.
+
+---
+
+## Latest Changes (Mar 6, 2026)
+
+- Merge queue closeout completed on `main`:
+  - merged: `#797`, `#798`, `#799`, `#800`, `#802`, `#803`, `#804`, `#805`, `#806`, `#807`
+  - superseded closure: `#801` (scope absorbed into `#802`)
+- CI/startup blocker class closed for `#802`:
+  - CodeQL workflow parse failure fixed (valid path filter semantics)
+  - auth/bootstrap runtime compatibility restored (`auth-check` + `supabase-boot-user`)
+  - remaining CodeRabbit major comments resolved in follow-up commits before merge
+- Production runtime validation (post-merge) now green:
+  - `make -C pmoves smoke` PASS
+  - `make -C pmoves model-readiness` PASS (`14/14`, `0` failed, `0` warnings)
+  - `GPU_SMOKE_STRICT=true make -C pmoves smoke-gpu` PASS (optional v1 GPU endpoint warning only)
+- Queue hygiene pass executed:
+  - stale non-main queued/pending self-hosted runs canceled to free runner capacity for release-critical lanes.
+- Coding-plan wiring refresh landed for production env alignment:
+  - Alibaba Qwen provider lane added in TensorZero (`chat_alibaba_qwen`) using OpenAI-compatible DashScope endpoint.
+  - gateway/model credential wiring now uses canonical `ALIBABA_PRO_CODING_PLAN` only.
+  - model-readiness now validates GLM/Alibaba credential presence when coding-plan lanes are enabled.
+- Persona grounding audit lane expanded:
+  - release checks now require persona runtime grounding artifacts (`pmoves_core.persona_model_resolution`) and persona lookup indexes (`idx_personas_model_preference`, `idx_personas_active_name`) to be present before promotion.
 
 ---
 
@@ -15,18 +173,36 @@
 
 - Hardened fix wave merged in sequence: `#776`, `#777`, `#778`, `#779`, `#780`.
 - Promotion sync merged: `#781` (`PMOVES.AI-Edition-Hardened` -> `main`).
+- Admin merge closeout completed:
+  - `PMOVES.AI`: `#782`, `#792`, `#793`, `#794`, `#795` merged
+  - `PMOVES-Agent-Zero`: `#9` merged (hardened backport for submodule pin policy)
+  - `PMOVES-BoTZ`: `#75` merged
+  - `PMOVES-DoX`: `#117`, `#118`, `#119` merged
 - Branch content parity is restored: `git diff origin/main..origin/PMOVES.AI-Edition-Hardened` returns no file deltas.
 - Runtime posture improved:
   - `model-readiness` now passes warning-free (`14/14`, `0` warnings) after Ollama model pre-pull + DB fallback running-container fix.
+  - strict GPU smoke passes (`GPU_SMOKE_STRICT=true make -C pmoves smoke-gpu`); v1 GPU lane remains optional and can warn when absent.
+  - local operator evidence logs captured for smoke/model-readiness/strict-GPU runs during this audit pass.
   - Published Agent Zero startup in agents-image mode is stable (`/healthz` 200) via compose shim.
   - Local Supabase vector instability is controlled with CLI exclude support (`SUPABASE_CLI_EXCLUDE=vector`) in `supa-start`.
 - CI queue remains the primary blocker class: self-hosted CodeQL/GHCR lanes still exhibit queue starvation; stale queued runs were drained during this audit pass.
+- CI queue policy controls are now applied in-repo:
+  - stale push/PR runs cancel per ref for `CodeQL Advanced`, `Docker Hardening Validation`, and `integrations-ghcr` (manual dispatch preserved; CodeQL schedule preserved)
+  - matrix fan-out throttled (`CodeQL=1`, hardening dockerfile matrix `=2`, GHCR matrix `=2`)
+  - GHCR push/PR triggers scoped to image-affecting paths to reduce docs-only queue noise
+
+### Workflow Queue Best-Practice References (Official GitHub Docs)
+
+- Concurrency groups + `cancel-in-progress`: https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency
+- Matrix throttling (`strategy.max-parallel`): https://docs.github.com/en/actions/using-jobs/using-a-matrix-for-your-jobs
+- Path filters (`paths` / `paths-ignore`) and skipped-workflow caveats: https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax
+- Self-hosted autoscaling/ephemeral runners (ARC): https://docs.github.com/en/actions/concepts/runners/actions-runner-controller
 
 ## Executive Summary
 
 | Metric | Value |
 |--------|-------|
-| Quantitative snapshot timestamp | 2026-03-04 (live GitHub + local smoke/model-readiness snapshot) |
+| Quantitative snapshot timestamp | 2026-03-08 (live GitHub + local smoke/model-readiness/GPU/monitoring snapshot) |
 | Total tracked items | 24 |
 | Resolved | 23 (+1 since last update) |
 | Active blockers | 1 (self-hosted queue starvation) |
@@ -34,21 +210,21 @@
 | High | 1 |
 | Medium | 0 |
 | Low | 0 |
-| CodeQL alerts (open) | **34 open** (`31 error`, `3 warning`; live GitHub API on 2026-03-04) |
-| Dependabot alerts | **1 open** (`1 low`; live GitHub API on 2026-03-04) |
-| Open PRs | **1** (`#782` Dependabot low-severity bump) |
+| CodeQL alerts (open) | **0 open** (live GitHub API on 2026-03-08) |
+| Dependabot alerts | **1 open** (`1 medium`; live GitHub API on 2026-03-08) |
+| Open PRs | **0** |
 | CI queue | Hosted gates healthy; self-hosted queue starvation persists on CodeQL/GHCR lanes |
 
-### Runtime Verification Snapshot (2026-03-04)
+### Runtime Verification Snapshot (2026-03-08)
 
 | Check | Result | Notes |
 |---|---|---|
-| `make -C pmoves smoke` | PASS | Core production smoke completed with Agent Zero/geometry lanes green |
-| `make -C pmoves model-readiness` | PASS | `14/14` passed; `0` failed; `0` warnings |
-| Agent Zero published image health | PASS | `/healthz` returns `200` after compose PYTHONPATH + `pmoves.chit` shim |
-| Strict GPU smoke | PASS | `make -C pmoves smoke-gpu` with strict mode enabled in PowerShell |
-| Container health sitrep | PASS | `0` running unhealthy/restarting containers |
-| Supabase CLI vector exclusion | PASS | `SUPABASE_CLI_EXCLUDE=vector` now supported in `supa-start` |
+| `make -C pmoves smoke` | PASS | 10/12 OK; Meilisearch + Neo4j WARN (not running locally — pre-existing) |
+| `make -C pmoves model-readiness` | PASS | `17/17` passed; `0` failed; `1` warning (TZ model catalog non-list payload) |
+| `make -C pmoves monitoring-smoke` | PASS | Prometheus active=36 healthy=28; Grafana 20 dashboards; Loki ready |
+| `make -C pmoves auth-alignment` | PASS | `0` errors; `62` warnings (placeholder creds — pre-existing) |
+| Strict GPU smoke | PASS | `GPU_SMOKE_STRICT=true make -C pmoves smoke-gpu` passed; v1 GPU optional HTTP 0 |
+| Persona grounding (RG-5) | PASS | `persona_model_resolution` returns `8` rows |
 
 ### Local Atomic Lanes (2026-03-02)
 
@@ -162,13 +338,13 @@ Evidence log: `pmoves/docs/evidence/audit-validation-2026-02-20-production-runti
 
 | ID | Blocker | Source Doc | Severity | Status | Next Action |
 |----|---------|-----------|----------|--------|-------------|
-| AB-9 | Self-hosted runner queue starvation on CodeQL/GHCR lanes | Release closeout 2026-02-24 | **HIGH** | OPEN | Keep queue drain policy active, preserve latest `main` + active PR runs, and validate at least one current `CodeQL Advanced` + GHCR matrix run reaches execution |
+| AB-9 | Self-hosted runner queue starvation on CodeQL/GHCR lanes | Release closeout 2026-02-24 | **HIGH** | MITIGATING | Keep queue drain policy active, verify new concurrency/path throttles reduce queue depth, and validate at least one current `CodeQL Advanced` + GHCR matrix run reaches execution |
 | AB-10 | `main` vs hardened commit-history divergence after squash promotion | Sync pass 2026-03-04 | **LOW** | TRACKED | Maintain content parity (`git diff` clean). Use explicit promotion + back-sync notes to avoid false-positive divergence alarms in ops reports |
 
 ### Blocker Detail
 
 **AB-9: Runner Queue Deadlock**
-Queue pressure remains the dominant operational risk. Even after stale-run drain, multiple `CodeQL Advanced` jobs remain queued on self-hosted lanes; hosted checks complete quickly.
+Queue pressure remains the dominant operational risk. Even after stale-run drain, multiple `CodeQL Advanced` jobs remained queued on self-hosted lanes. In-repo workflow controls now mitigate this (`cancel-in-progress` for stale push/PR refs, matrix throttling, GHCR path scoping), but lane behavior still needs live verification over multiple merge cycles.
 
 **AB-10: Commit-History Divergence Noise**
 `main` and `PMOVES.AI-Edition-Hardened` are currently content-parity clean (no file delta), but commit graphs diverge due squash promotion + back-sync merges. Treat this as an expected history artifact unless file-level diff appears.
@@ -184,12 +360,14 @@ These are tracked as release gates and should be closed with command evidence be
 2. `RG-2` Dynamic port and namespace parity: confirm compose services publish via configured env/namespace values, not hard-coded host assumptions.
 3. `RG-3` Supabase collation/version hygiene: re-check logs after full rebuild/bootstrap and document whether `ALTER DATABASE ... REFRESH COLLATION VERSION` is required.
 4. `RG-4` Auth unification regression pass: run JWT/key rotation flow and verify all core services re-auth without manual per-service patching.
+5. `RG-5` Persona grounding/index gate: verify `pmoves_core.persona_model_resolution` resolves active personas and persona lookup indexes are present (`idx_personas_model_preference`, `idx_personas_active_name`) before release promotion.
 
 ---
 
 ## CodeQL Alert Triage (2026-02-18 Baseline → 2026-02-28 Update)
 
-**2026-02-28 status:** PR #715 resolved Groups A–D (25 SSRF + path injection alerts fixed). However, expanded CodeQL scan scope and new code from PRs #716-719 introduced 31 new alerts. Net position: **43 open** (35 error, 8 warning), up from 37 at baseline. The remaining alerts are primarily in new/modified files not covered by the original triage groups.
+**Historical section:** this table preserves the 2026-02-28 triage baseline for traceability.
+**Live status on 2026-03-04:** CodeQL open alerts are now **0** (all prior findings triaged/dismissed/fixed).
 
 | Group | Count | Severity | Rule | Files | Remediation | Status |
 |-------|-------|----------|------|-------|-------------|--------|
@@ -208,7 +386,8 @@ These are tracked as release gates and should be closed with command evidence be
 
 ## Dependabot Alert Triage (2026-02-18 Baseline → 2026-02-28 Update)
 
-**2026-02-28 status:** 7 open alerts. Severity composition shifted: was 2 high / 1 medium / 4 low, now **5 high / 2 low**. New high-severity alerts for `serialize-javascript` and `minimatch` appeared; previous `transformers` alert auto-dismissed.
+**Historical section:** this table preserves the 2026-02-28 triage baseline for traceability.
+**Live status on 2026-03-04:** Dependabot open alerts are **1 medium**.
 
 | Alert | Severity | Package | Manifest | Assessment |
 |-------|----------|---------|----------|------------|
@@ -343,8 +522,8 @@ rg -n "ui-dev-start|ui-dev-stop|ui-dev-logs|dev-start" pmoves/tools pmoves/Makef
 # RG-2: inspect hard-coded localhost/port assumptions in compose/env paths
 rg -n "localhost:[0-9]+|127\\.0\\.0\\.1:[0-9]+" pmoves/docker-compose*.yml pmoves/env.shared pmoves/tools
 
-# RG-3: inspect Supabase/Postgres collation mismatch warnings after rebuild
-docker compose logs --tail=200 supabase-db
+# RG-3: Supabase collation check (automated via supa-collation-refresh in supa-start)
+make -C pmoves supa-collation-check
 
 # RG-4: auth unification regression pass
 # Run JWT/key rotation flow and verify all core services re-auth
@@ -411,6 +590,8 @@ If `generatedAt` is older than 24 hours, a `(stale)` indicator appears beside th
 
 | Date | Change |
 |------|--------|
+| 2026-03-08 | **PR #827 merged:** 7 deferred CodeRabbit items from #825/#826 + 4 review fixes (SSH probe consistency, COMPOSE_CMD in kvm2, BatchMode=yes, grep anchor). VPS Fleet workstream validated. |
+| 2026-03-08 | **Post-merge audit sweep:** PRs #823/#824 merged. Static gates 6/7 PASS (secrets-audit timeout). Runtime: smoke PASS (10/12), model-readiness 17/17 PASS, monitoring-smoke PASS, auth-alignment 0 errors, GPU smoke PASS. Release gates: RG-1/2/4/5 PASS, RG-3 KNOWN (collation). CI: all 4 runners offline, 4 queued runs (cancel candidates). Live metrics: 0 PRs, 0 CodeQL, 1 Dependabot (medium). |
 | 2026-03-02 | **Live metrics sync (Codex):** refreshed executive summary from GitHub live data: CodeQL open alerts `36`, Dependabot open alerts `5`, open PRs `5`; CI snapshot synced to PR #758 head `db6b3a13` with self-hosted queue-capacity note. Ran queue guard and canceled stale queued runs `22565935122`, `22565935100`, `22565816518` to reduce deadlock pressure while preserving active PR lanes. |
 | 2026-03-02 | **Post-split-lane cleanup:** merged origin/main (PRs #752, #753), resolved conflicts, fixed env churn idempotency, addressed 13 CodeRabbit review comments (SQL grants, credential fallbacks, docs_sync hardening, PostgREST schema, bringup runtime detection). |
 | 2026-03-02 | **Split-lane merge closeout (Codex):** merged PMOVES-A2UI `#4`, PMOVES-Archon `#10`, and PMOVES-Archon `#11`; pushed final parent gitlink bump `a115a040` (A2UI + Archon + integrations/archon). |

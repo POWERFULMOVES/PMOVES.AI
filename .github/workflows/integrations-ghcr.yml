@@ -32,9 +32,14 @@ on:
         type: string
   push:
     branches: [main, PMOVES.AI-Edition-Hardened]
-  pull_request:
-    branches: [main, PMOVES.AI-Edition-Hardened]
     paths:
+      - 'pmoves/services/agent-zero/**'
+      - 'pmoves/services/archon/**'
+      - 'pmoves/services/pmoves-yt/**'
+      - 'pmoves/services/deepresearch/**'
+      - 'pmoves/services/supaserch/**'
+      - 'pmoves/images/firefly-iii/**'
+      - 'pmoves/images/jellyfin/**'
       - 'PMOVES-Open-Notebook'
       - 'PMOVES-Agent-Zero'
       - 'PMOVES-Archon'
@@ -42,12 +47,34 @@ on:
       - 'PMOVES-Jellyfin'
       - 'PMOVES-Supaserch'
       - '.github/workflows/integrations-ghcr.yml'
+      - '.github/workflows/integrations-ghcr.matrix.json'
+      - '.github/trivy/**'
+  pull_request:
+    branches: [main, PMOVES.AI-Edition-Hardened]
+    paths:
+      - 'pmoves/services/agent-zero/**'
+      - 'pmoves/services/archon/**'
+      - 'pmoves/services/pmoves-yt/**'
+      - 'pmoves/services/deepresearch/**'
+      - 'pmoves/services/supaserch/**'
+      - 'pmoves/images/firefly-iii/**'
+      - 'pmoves/images/jellyfin/**'
+      - 'PMOVES-Open-Notebook'
+      - 'PMOVES-Agent-Zero'
+      - 'PMOVES-Archon'
+      - 'PMOVES.YT'
+      - 'PMOVES-Jellyfin'
+      - 'PMOVES-Supaserch'
+      - '.github/workflows/integrations-ghcr.yml'
+      - '.github/workflows/integrations-ghcr.matrix.json'
+      - '.github/trivy/**'
   # schedule:
   #   - cron: '17 7 * * *'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+  # Keep manual reruns intact, but cancel stale push/PR runs on the same ref.
+  cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}
 
 env:
   REGISTRY: ghcr.io
@@ -63,6 +90,8 @@ env:
 jobs:
   resolve-matrix:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     outputs:
       names: ${{ steps.resolve.outputs.names }}
     steps:
@@ -105,13 +134,16 @@ jobs:
   build-publish:
     name: Build ${{ matrix.name }}
     needs: resolve-matrix
-    runs-on: [self-hosted, Linux, X64]
+    # GHCR build/scan lane does not require GPU and should avoid consuming ai-lab capacity.
+    runs-on: [self-hosted, Linux, X64, vps]
     permissions:
       contents: read
       packages: write
       id-token: write
     strategy:
       fail-fast: false
+      # Throttle multi-arch matrix fan-out to protect shared self-hosted capacity.
+      max-parallel: 2
       matrix:
         name: ${{ fromJSON(needs.resolve-matrix.outputs.names) }}
 
@@ -218,10 +250,10 @@ jobs:
           df -h
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+        uses: docker/setup-qemu-action@v4
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Install Cosign
         uses: sigstore/cosign-installer@v4.0.0
@@ -238,7 +270,7 @@ jobs:
         id: login_ghcr_app
         if: ${{ steps.app_token.outputs.token != '' }}
         continue-on-error: true
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ${{ env.REGISTRY }}
           username: x-access-token
@@ -248,7 +280,7 @@ jobs:
         id: login_ghcr_pat
         if: ${{ steps.login_ghcr_app.outcome != 'success' && env.GHCR_USERNAME != '' && env.GHCR_PAT != '' }}
         continue-on-error: true
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ env.GHCR_USERNAME }}
@@ -258,7 +290,7 @@ jobs:
         id: login_ghcr_actions
         if: ${{ steps.login_ghcr_app.outcome != 'success' && steps.login_ghcr_pat.outcome != 'success' }}
         continue-on-error: true
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -272,7 +304,7 @@ jobs:
 
       - name: Optional login to Docker Hub
         if: ${{ github.event_name != 'pull_request' && env.DOCKERHUB_USERNAME && env.DOCKERHUB_PASSWORD }}
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: docker.io
           username: ${{ env.DOCKERHUB_USERNAME }}
@@ -421,7 +453,7 @@ jobs:
 
       - name: Trivy vulnerability scan (HIGH/CRITICAL)
         if: ${{ github.event_name != 'pull_request' && steps.meta.outputs.has_tags == 'true' }}
-        uses: aquasecurity/trivy-action@0.34.1
+        uses: aquasecurity/trivy-action@0.34.2
         with:
           # Gate on HIGH/CRITICAL with fixes available (vendor/unfixed CVEs are still surfaced by the next step).
           # This avoids blocking nightly builds on upstream issues we can't remediate immediately, while keeping
@@ -437,7 +469,7 @@ jobs:
 
       - name: Trivy vulnerability scan report (includes unfixed)
         if: ${{ github.event_name != 'pull_request' && steps.meta.outputs.has_tags == 'true' }}
-        uses: aquasecurity/trivy-action@0.34.1
+        uses: aquasecurity/trivy-action@0.34.2
         with:
           image-ref: ${{ steps.meta.outputs.primary_tag }}
           format: table

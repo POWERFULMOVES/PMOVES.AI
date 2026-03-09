@@ -7,5 +7,4 @@ This document has moved to:
 
 Open the new location: [pmoves/docs/PMOVES.AI PLANS/ROADMAP.md](PMOVES.AI%20PLANS/ROADMAP.md)
 
-_Last updated: 2025-10-18_
-
+_Last updated: 2026-03-04_

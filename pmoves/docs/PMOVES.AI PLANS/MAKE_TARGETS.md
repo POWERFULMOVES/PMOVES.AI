@@ -60,6 +60,12 @@ Set `EXTERNAL_NEO4J|MEILI|QDRANT|SUPABASE=true` in `.env.local` to skip local in
 
 - `make up-jellyfin`
   - Launches the Jellyfin bridge in isolation.
+- `make ui-topology-smoke`
+  - Runs topology-aware UI checks for core branded surfaces (PMOVES UI on `:4482`, Agent Zero UI, Archon UI, Open Notebook UI, and key `/dashboard/services/*` routes that previously regressed to 404).
+  - Default profile is `core`; override with `UI_TOPOLOGY_PROFILE=all` or use `make ui-topology-smoke-all`.
+- `make ui-topology-smoke-all`
+  - Expands the UI smoke to external overlays (`Firefly`, `Wger`, `Jellyfin`, `Jellyfin AI dashboard/API`, Open Notebook API).
+  - For iterative local work when optional surfaces are intentionally down, set `UI_TOPOLOGY_ALLOW_MISSING=true`.
 
 - `make up-nats`
   - Starts the NATS broker (`agents` profile) and rewrites `.env.local` so `YT_NATS_ENABLE=true` with `NATS_URL=nats://nats:pmoves@nats:4222`.

@@ -209,6 +209,11 @@ curl http://localhost:9090/api/v1/query?query=sum(rate(github_runner_jobs_total[
 1. Check runner machine is running
 2. Verify GitHub Actions runner service is active
 3. Check NATS connectivity for status events
+4. For Docker local-cert lanes (`gha-runner-ai-lab`, `gha-runner-vps`), re-register instead of restart:
+   - `make -C pmoves ci-runners-local-cert-down`
+   - `make -C pmoves ci-runners-local-cert-up`
+   - `make -C pmoves ci-runners-local-cert-status`
+5. If runner auth still fails, clear any stale `RUNNER_TOKEN*` shell env vars and rerun `ci-runners-local-cert-up` so `gh api .../registration-token` mints fresh tokens.
 
 ---
 

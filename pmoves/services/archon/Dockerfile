@@ -1,4 +1,5 @@
-FROM python:3.12-slim
+# Base image pinned 2026-03-05 — refresh monthly or via Dependabot
+FROM python:3.12-slim@sha256:ccc7089399c8bb65dd1fb3ed6d55efa538a3f5e7fca3f5988ac3b5b87e593bf0
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -149,7 +150,7 @@ print("→ Patched Archon check_migrations_table_exists (removed /rpc/sql probe)
 PY
 
 COPY services/archon/requirements.txt services/archon/requirements.lock ./
-RUN pip install --upgrade pip \
+RUN pip install --upgrade pip "setuptools==82.0.0" "wheel==0.46.3" \
     && pip install -r requirements.txt
 
 # Pre-install Playwright browsers (Chromium) so crawl workflows succeed out of the box.

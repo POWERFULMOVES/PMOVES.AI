@@ -4,11 +4,11 @@
 # ====================================================================
 
 terraform {
-  required_version = ">= 1.0"
+  required_version = ">= 1.3.0"
   required_providers {
     hostinger = {
       source  = "hostinger/hostinger"
-      version = "~> 0.1.3"
+      version = "0.1.22"
     }
     docker = {
       source  = "kreuzwerker/docker"
@@ -47,10 +47,60 @@ variable "vps_plan" {
   default     = "hostingercom-vps-kvm2-usd-4m"  # 8GB RAM / 8 vCPU / 200GB SSD
 }
 
+variable "kvm_nodes" {
+  description = "Multi-node VPS fleet configuration"
+  type = map(object({
+    plan        = string
+    role        = string
+    hostname    = string
+    profile     = string
+  }))
+  default = {
+    "kvm4-1" = {
+      plan     = "hostingercom-vps-kvm4-usd-4m"
+      role     = "api-gateway"
+      hostname = "pmoves-kvm4-1"
+      profile  = "agents"
+    }
+    "kvm4-2" = {
+      plan     = "hostingercom-vps-kvm4-usd-4m"
+      role     = "data-services"
+      hostname = "pmoves-kvm4-2"
+      profile  = "knowledge"
+    }
+    "kvm2" = {
+      plan     = "hostingercom-vps-kvm2-usd-4m"
+      role     = "exit-node"
+      hostname = "pmoves-kvm2"
+      profile  = "monitoring"
+    }
+  }
+}
+
+variable "tailscale_authkey" {
+  description = "Tailscale auth key for mesh network (reusable, ephemeral)"
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "github_pat" {
+  description = "GitHub PAT for self-hosted runner registration"
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
 variable "data_center_id" {
   description = "Data center location (13=US, 23=UK, 4=Canada, etc.)"
   type        = number
   default     = 13
+}
+
+variable "os_template_id" {
+  description = "OS template ID for VPS provisioning (e.g., Ubuntu 22.04). Required by Hostinger provider."
+  type        = number
+  default     = 1 # Ubuntu 22.04 — verify via Hostinger API or hPanel
 }
 
 variable "hostname" {
@@ -60,9 +110,13 @@ variable "hostname" {
 }
 
 variable "root_password" {
-  description = "Root password for VPS (12+ chars, mixed case)"
+  description = "Root password for VPS (16+ chars, mixed case)"
   type        = string
   sensitive   = true
+  validation {
+    condition     = length(var.root_password) >= 16
+    error_message = "Root password must be at least 16 characters for production VPS."
+  }
 }
 
 variable "ssh_public_key" {
@@ -178,25 +232,28 @@ locals {
   region      = "us-east-1"
   
   service_ports = {
-    agent_zero   = 8080
+    agent_zero    = 8080
     agent_zero_ui = 8081
-    archon       = 8091
-    archon_ui    = 3737
-    pmoves_yt    = 8077
-    hirag        = 8192
-    comfyui      = 8188
-    supabase_rest = 65421
+    archon        = 8091
+    archon_ui     = 3737
+    tensorzero    = 3030
+    hirag_v2_cpu  = 8086
+    hirag_v2_gpu  = 8087
+    gateway_agent = 8100
+    pmoves_yt     = 8077
+    supabase_rest = 3010
     neo4j_browser = 7474
-    neo4j_bolt   = 7687
-    qdrant       = 6333
-    prometheus   = 9090
-    grafana      = 3000
-    nats         = 4222
-    nats_mgmt    = 8222
-    minio_api    = 9000
+    neo4j_bolt    = 7687
+    qdrant        = 6333
+    meilisearch   = 7700
+    prometheus    = 9090
+    grafana       = 3000
+    nats          = 4222
+    nats_mgmt     = 8222
+    minio_api     = 9000
     minio_console = 9001
-    nginx_http   = 80
-    nginx_https  = 443
+    nginx_http    = 80
+    nginx_https   = 443
   }
   
   submodules = [
@@ -224,6 +281,7 @@ locals {
 resource "hostinger_vps" "pmoves_gateway" {
   plan           = var.vps_plan
   data_center_id = var.data_center_id
+  template_id    = var.os_template_id
   hostname       = var.hostname
   password       = var.root_password
   
@@ -241,12 +299,39 @@ resource "hostinger_vps" "pmoves_gateway" {
   }
 }
 
+# ====================================================================
+# Multi-Node VPS Fleet (KVM4-1, KVM4-2, KVM2)
+# ====================================================================
+
+resource "hostinger_vps" "fleet" {
+  for_each = var.kvm_nodes
+
+  plan           = each.value.plan
+  data_center_id = var.data_center_id
+  template_id    = var.os_template_id
+  hostname       = each.value.hostname
+  password       = var.root_password
+
+  ssh_key_ids = var.ssh_public_key != "" ? [hostinger_vps_ssh_key.deployer[0].id] : []
+
+  tags = {
+    Environment = "production"
+    Project     = var.project_name
+    Role        = each.value.role
+    NodeID      = each.key
+  }
+
+  lifecycle {
+    ignore_changes = [password, ssh_key_ids]
+  }
+}
+
 # SSH Key Management (optional)
+# Official schema (v0.1.22): name, key
 resource "hostinger_vps_ssh_key" "deployer" {
-  count       = var.ssh_public_key != "" ? 1 : 0
-  name        = "${var.project_name}-deployer"
-  public_key  = var.ssh_public_key
-  description = "Deployer SSH key for PMOVES.AI CI/CD"
+  count = var.ssh_public_key != "" ? 1 : 0
+  name  = "${var.project_name}-deployer"
+  key   = var.ssh_public_key
 }
 
 # ====================================================================
@@ -254,10 +339,10 @@ resource "hostinger_vps_ssh_key" "deployer" {
 # ====================================================================
 
 resource "hostinger_vps_post_install_script" "pmoves_bootstrap" {
-  name        = "${var.project_name}-bootstrap"
-  description = "Initialize VPS with Docker, Git, and PMOVES.AI deployment"
-  
-  script = base64encode(templatefile("${path.module}/bootstrap-script.sh", {
+  name = "${var.project_name}-bootstrap"
+
+  # Official schema (v0.1.22): name, content (plain text, not base64)
+  content = templatefile("${path.module}/bootstrap-script.sh", {
     project_name                = var.project_name
     git_repo_url                = var.git_repo_url
     git_branch                  = var.git_branch
@@ -274,7 +359,7 @@ resource "hostinger_vps_post_install_script" "pmoves_bootstrap" {
     youtube_api_key             = var.youtube_api_key
     monitoring_retention_days   = var.monitoring_retention_days
     domain_name                 = var.domain_name
-  }))
+  })
 }
 
 # ====================================================================
@@ -291,7 +376,7 @@ resource "local_file" "deployment_manifest" {
     
     ## Gateway VPS
     - **Hostname**: ${hostinger_vps.pmoves_gateway.hostname}
-    - **IP Address**: ${hostinger_vps.pmoves_gateway.ip_address}
+    - **IP Address**: ${hostinger_vps.pmoves_gateway.ipv4_address}
     - **VPS ID**: ${hostinger_vps.pmoves_gateway.id}
     - **Plan**: ${var.vps_plan}
     - **Status**: ${hostinger_vps.pmoves_gateway.status}
@@ -303,12 +388,12 @@ resource "local_file" "deployment_manifest" {
       - Control plane supervisor
       - NATS event bus integration
       - MCP command interface
-      - Dashboard: http://${hostinger_vps.pmoves_gateway.ip_address}:8081
+      - Dashboard: http://${hostinger_vps.pmoves_gateway.ipv4_address}:8081
     
     - **Archon** (Port 8091/3737)
       - Supabase-driven agent
       - Form-based prompt management
-      - Archon UI: http://${hostinger_vps.pmoves_gateway.ip_address}:3737
+      - Archon UI: http://${hostinger_vps.pmoves_gateway.ipv4_address}:3737
     
     - **Mesh Agent**
       - Distributed node announcer
@@ -318,7 +403,7 @@ resource "local_file" "deployment_manifest" {
     - **PMOVES.YT** (Port 8077)
       - Video ingestion pipeline
       - Transcription & chunking
-      - Ingest API: POST http://${hostinger_vps.pmoves_gateway.ip_address}:8077/yt/ingest
+      - Ingest API: POST http://${hostinger_vps.pmoves_gateway.ipv4_address}:8077/yt/ingest
     
     - **Channel Monitor**
       - YouTube/RSS feed watcher
@@ -344,12 +429,12 @@ resource "local_file" "deployment_manifest" {
     - **Neo4j** (Ports 7474/7687)
       - Knowledge graph database
       - Entity relationship management
-      - Browser UI: http://${hostinger_vps.pmoves_gateway.ip_address}:7474
+      - Browser UI: http://${hostinger_vps.pmoves_gateway.ipv4_address}:7474
     
     - **Qdrant** (Port 6333)
       - Vector embeddings storage
       - Semantic search index
-      - REST API: http://${hostinger_vps.pmoves_gateway.ip_address}:6333
+      - REST API: http://${hostinger_vps.pmoves_gateway.ipv4_address}:6333
     
     - **Open Notebook API**
       - Knowledge base storage
@@ -359,18 +444,18 @@ resource "local_file" "deployment_manifest" {
     - **NATS** (Port 4222/8222)
       - Pub/Sub event broker
       - Inter-service communication
-      - Management: http://${hostinger_vps.pmoves_gateway.ip_address}:8222
+      - Management: http://${hostinger_vps.pmoves_gateway.ipv4_address}:8222
     
     ### Monitoring & Observability
     - **Prometheus** (Port 9090)
       - Metrics collection
       - Retention: ${var.monitoring_retention_days} days
-      - Dashboard: http://${hostinger_vps.pmoves_gateway.ip_address}:9090
+      - Dashboard: http://${hostinger_vps.pmoves_gateway.ipv4_address}:9090
     
     - **Grafana** (Port 3000)
       - Visualization & dashboards
       - Data source: Prometheus
-      - Dashboard: http://${hostinger_vps.pmoves_gateway.ip_address}:3000
+      - Dashboard: http://${hostinger_vps.pmoves_gateway.ipv4_address}:3000
     
     ### Reverse Proxy & Load Balancing
     - **Nginx** (Ports 80/443)
@@ -434,7 +519,7 @@ resource "local_file" "deployment_manifest" {
     
     ### SSH Access
     \`\`\`bash
-    ssh root@${hostinger_vps.pmoves_gateway.ip_address}
+    ssh root@${hostinger_vps.pmoves_gateway.ipv4_address}
     \`\`\`
     
     ### View Running Services
@@ -465,22 +550,22 @@ resource "local_file" "deployment_manifest" {
     
     ### Agent Zero
     \`\`\`bash
-    curl http://${hostinger_vps.pmoves_gateway.ip_address}:8080/healthz
+    curl http://${hostinger_vps.pmoves_gateway.ipv4_address}:8080/healthz
     \`\`\`
     
     ### Archon
     \`\`\`bash
-    curl http://${hostinger_vps.pmoves_gateway.ip_address}:8091/healthz
+    curl http://${hostinger_vps.pmoves_gateway.ipv4_address}:8091/healthz
     \`\`\`
     
     ### Neo4j
     \`\`\`bash
-    curl http://${hostinger_vps.pmoves_gateway.ip_address}:7474/browser/
+    curl http://${hostinger_vps.pmoves_gateway.ipv4_address}:7474/browser/
     \`\`\`
     
     ### Prometheus
     \`\`\`bash
-    curl http://${hostinger_vps.pmoves_gateway.ip_address}:9090/api/v1/targets
+    curl http://${hostinger_vps.pmoves_gateway.ipv4_address}:9090/api/v1/targets
     \`\`\`
     
     ## Typical Workflow
@@ -534,7 +619,7 @@ resource "local_file" "deployment_manifest" {
     
     1. SSH into gateway and verify Docker Compose health
     2. Configure firewall rules for service accessibility
-    3. Set up DNS records pointing to ${hostinger_vps.pmoves_gateway.ip_address}
+    3. Set up DNS records pointing to ${hostinger_vps.pmoves_gateway.ipv4_address}
     4. Install/configure SSL/TLS certificates
     5. Create PMOVES.AI admin accounts in Supabase
     6. Configure YouTube API key in Channel Monitor
@@ -570,7 +655,7 @@ output "gateway_hostname" {
 
 output "gateway_ip_address" {
   description = "Gateway VPS public IP address"
-  value       = hostinger_vps.pmoves_gateway.ip_address
+  value       = hostinger_vps.pmoves_gateway.ipv4_address
 }
 
 output "gateway_id" {
@@ -580,24 +665,23 @@ output "gateway_id" {
 
 output "ssh_access_command" {
   description = "SSH command to connect to gateway"
-  value       = "ssh root@${hostinger_vps.pmoves_gateway.ip_address}"
+  value       = "ssh root@${hostinger_vps.pmoves_gateway.ipv4_address}"
 }
 
 output "service_endpoints" {
   description = "All service endpoints"
   value = {
-    agent_zero    = "http://${hostinger_vps.pmoves_gateway.ip_address}:${local.service_ports.agent_zero}"
-    agent_zero_ui = "http://${hostinger_vps.pmoves_gateway.ip_address}:${local.service_ports.agent_zero_ui}"
-    archon_api    = "http://${hostinger_vps.pmoves_gateway.ip_address}:${local.service_ports.archon}"
-    archon_ui     = "http://${hostinger_vps.pmoves_gateway.ip_address}:${local.service_ports.archon_ui}"
-    pmoves_yt     = "http://${hostinger_vps.pmoves_gateway.ip_address}:${local.service_ports.pmoves_yt}/yt"
-    hirag         = "http://${hostinger_vps.pmoves_gateway.ip_address}:${local.service_ports.hirag}"
-    comfyui       = "http://${hostinger_vps.pmoves_gateway.ip_address}:${local.service_ports.comfyui}"
-    neo4j_browser = "http://${hostinger_vps.pmoves_gateway.ip_address}:${local.service_ports.neo4j_browser}"
-    qdrant        = "http://${hostinger_vps.pmoves_gateway.ip_address}:${local.service_ports.qdrant}"
-    prometheus    = "http://${hostinger_vps.pmoves_gateway.ip_address}:${local.service_ports.prometheus}"
-    grafana       = "http://${hostinger_vps.pmoves_gateway.ip_address}:${local.service_ports.grafana}"
-    nats_mgmt     = "http://${hostinger_vps.pmoves_gateway.ip_address}:${local.service_ports.nats_mgmt}"
+    agent_zero    = "http://${hostinger_vps.pmoves_gateway.ipv4_address}:${local.service_ports.agent_zero}"
+    agent_zero_ui = "http://${hostinger_vps.pmoves_gateway.ipv4_address}:${local.service_ports.agent_zero_ui}"
+    archon_api    = "http://${hostinger_vps.pmoves_gateway.ipv4_address}:${local.service_ports.archon}"
+    archon_ui     = "http://${hostinger_vps.pmoves_gateway.ipv4_address}:${local.service_ports.archon_ui}"
+    pmoves_yt     = "http://${hostinger_vps.pmoves_gateway.ipv4_address}:${local.service_ports.pmoves_yt}/yt"
+    hirag_v2      = "http://${hostinger_vps.pmoves_gateway.ipv4_address}:${local.service_ports.hirag_v2_cpu}"
+    neo4j_browser = "http://${hostinger_vps.pmoves_gateway.ipv4_address}:${local.service_ports.neo4j_browser}"
+    qdrant        = "http://${hostinger_vps.pmoves_gateway.ipv4_address}:${local.service_ports.qdrant}"
+    prometheus    = "http://${hostinger_vps.pmoves_gateway.ipv4_address}:${local.service_ports.prometheus}"
+    grafana       = "http://${hostinger_vps.pmoves_gateway.ipv4_address}:${local.service_ports.grafana}"
+    nats_mgmt     = "http://${hostinger_vps.pmoves_gateway.ipv4_address}:${local.service_ports.nats_mgmt}"
   }
 }
 
@@ -619,4 +703,28 @@ output "docker_compose_profile" {
 output "gpu_support_enabled" {
   description = "GPU acceleration enabled for Hi-RAG v2 / ComfyUI"
   value       = var.enable_gpu
+}
+
+# ====================================================================
+# Fleet Outputs
+# ====================================================================
+
+output "fleet_nodes" {
+  description = "All fleet node IPs and hostnames"
+  sensitive   = true
+  value = {
+    for key, node in hostinger_vps.fleet : key => {
+      hostname   = node.hostname
+      ip_address = node.ipv4_address
+      role       = var.kvm_nodes[key].role
+    }
+  }
+}
+
+output "fleet_ssh_commands" {
+  description = "SSH commands for each fleet node"
+  sensitive   = true
+  value = {
+    for key, node in hostinger_vps.fleet : key => "ssh root@${node.ipv4_address}"
+  }
 }

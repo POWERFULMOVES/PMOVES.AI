@@ -17,7 +17,8 @@ on:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+  # Keep manual reruns intact, but cancel stale push/PR runs on the same ref.
+  cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}
 
 permissions:
   contents: read
@@ -30,7 +31,7 @@ jobs:
   # ============================================================================
   validate-hardening:
     name: Validate Hardening Patterns
-    runs-on: [self-hosted, Linux, X64]
+    runs-on: ubuntu-latest
 
     steps:
       - name: Harden Runner
@@ -87,9 +88,11 @@ jobs:
   # ============================================================================
   validate-dockerfiles:
     name: Validate Dockerfiles
-    runs-on: [self-hosted, Linux, X64]
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
+      # Limit fan-out to reduce self-hosted queue contention.
+      max-parallel: 2
       matrix:
         dockerfile:
           - pmoves/services/archon/Dockerfile
@@ -163,7 +166,7 @@ jobs:
   # ============================================================================
   docker-bench:
     name: Docker Bench Security
-    runs-on: [self-hosted, Linux, X64]
+    runs-on: [self-hosted, Linux, X64, vps]
 
     steps:
       - name: Harden Runner
@@ -197,7 +200,7 @@ jobs:
   # ============================================================================
   validate-compose:
     name: Validate Compose Files
-    runs-on: [self-hosted, Linux, X64]
+    runs-on: ubuntu-latest
 
     steps:
       - name: Harden Runner
@@ -274,7 +277,7 @@ jobs:
   # ============================================================================
   summary:
     name: Validation Summary
-    runs-on: [self-hosted, Linux, X64]
+    runs-on: ubuntu-latest
     needs: [validate-hardening, validate-dockerfiles, validate-compose]
     if: always()
 
@@ -307,4 +310,3 @@ jobs:
           name: validation-summary
           path: summary.md
           retention-days: 90
-

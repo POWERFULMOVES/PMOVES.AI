@@ -97,7 +97,10 @@ export default function NotebookRuntimePage() {
         <div className="flex items-center gap-3">
           <h1 className="text-2xl font-semibold">Notebook Runtime</h1>
           <div className="flex items-center gap-1.5 text-xs">
-            <span className={`w-2 h-2 rounded-full ${healthColor} ${runtime?.health === 'ok' || runtime?.health === 'healthy' ? 'animate-pulse' : ''}`} />
+            <span
+              data-testid="health-indicator"
+              className={`w-2 h-2 rounded-full ${healthColor} ${runtime?.health === 'ok' || runtime?.health === 'healthy' ? 'animate-pulse' : ''}`}
+            />
             <span className="text-neutral-500">{healthText}</span>
           </div>
         </div>

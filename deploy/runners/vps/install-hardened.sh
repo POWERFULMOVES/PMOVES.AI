@@ -17,16 +17,17 @@
 #
 # Labels applied based on RUNNER_NAME:
 #   cloudstartup: self-hosted, vps, cloudstartup, staging, linux, x64
-#   kvm4:         self-hosted, vps, kvm4, production, linux, x64
+#   kvm4-1:       self-hosted, vps, kvm4, kvm4-1, production, linux, x64
+#   kvm4-2:       self-hosted, vps, kvm4, kvm4-2, production, linux, x64
 #   kvm2:         self-hosted, vps, kvm2, backup, linux, x64
 
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 RUNNER_DIR="${RUNNER_DIR:-/opt/actions-runner}"
-RUNNER_VERSION="${RUNNER_VERSION:-2.311.0}"
+RUNNER_VERSION="${RUNNER_VERSION:-2.321.0}"
 RUNNER_ARCH="linux-x64"
-GITHUB_ORG="${GITHUB_ORG:-frostbytten}"
+GITHUB_ORG="${GITHUB_ORG:-POWERFULMOVES}"
 GITHUB_REPO="${GITHUB_REPO:-PMOVES.AI}"
 RUNNER_NAME="${RUNNER_NAME:-vps-$(hostname)}"
 JIT_MODE=false
@@ -50,6 +51,12 @@ get_labels() {
     case "$RUNNER_NAME" in
         *cloudstartup*)
             echo "${base_labels},cloudstartup,staging"
+            ;;
+        *kvm4-1*)
+            echo "${base_labels},kvm4,kvm4-1,production"
+            ;;
+        *kvm4-2*)
+            echo "${base_labels},kvm4-2,production"
             ;;
         *kvm4*)
             echo "${base_labels},kvm4,production"
@@ -432,6 +439,12 @@ show_verification() {
     case "$RUNNER_NAME" in
         *cloudstartup*)
             echo "  runs-on: [self-hosted, cloudstartup, staging]"
+            ;;
+        *kvm4-1*)
+            echo "  runs-on: [self-hosted, vps, kvm4-1, production]"
+            ;;
+        *kvm4-2*)
+            echo "  runs-on: [self-hosted, vps, kvm4-2, production]"
             ;;
         *kvm4*)
             echo "  runs-on: [self-hosted, kvm4, production]"
