@@ -341,20 +341,20 @@ Three CI pipelines build Docker images. This matrix is the single cross-referenc
 
 | Metric | Value |
 |--------|-------|
-| Quantitative snapshot timestamp | 2026-03-08 (live GitHub + local smoke/model-readiness/GPU/monitoring snapshot) |
+| Quantitative snapshot timestamp | 2026-03-09 (live GitHub + local smoke/model-readiness/GPU/monitoring snapshot) |
 | Total tracked items | 24 |
-| Resolved | 23 (+1 since last update) |
-| Active blockers | 1 (self-hosted queue starvation) |
+| Resolved | 24 (+1 since last update) |
+| Active blockers | 0 |
 | Critical | 0 |
-| High | 1 |
+| High | 0 |
 | Medium | 0 |
 | Low | 0 |
-| CodeQL alerts (open) | **0 open** (live GitHub API on 2026-03-08) |
-| Dependabot alerts | **1 open** (`1 medium`; live GitHub API on 2026-03-08) |
+| CodeQL alerts (open) | **0 open** (live GitHub API on 2026-03-09) |
+| Dependabot alerts | **0 open** (live GitHub API on 2026-03-09) |
 | Open PRs | **0** |
-| CI queue | Hosted gates healthy; self-hosted queue starvation persists on CodeQL/GHCR lanes |
+| CI queue | Healthy — hosted + self-hosted (3/4 runners online) |
 
-### Runtime Verification Snapshot (2026-03-08)
+### Runtime Verification Snapshot (2026-03-09)
 
 | Check | Result | Notes |
 |---|---|---|
