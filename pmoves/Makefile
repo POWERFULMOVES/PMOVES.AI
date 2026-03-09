@@ -153,6 +153,7 @@ help: ## Show available make targets and descriptions
 include mk/codex.mk
 include mk/preflight.mk
 include mk/infra.mk
+include mk/build-gate.mk
 
 .PHONY: update-service-docs
 update-service-docs: ## Regenerate service update notes from git metadata

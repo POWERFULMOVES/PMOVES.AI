@@ -32,6 +32,9 @@
     "uuid": "9.0.1",
     "yaml": "^2.8.1"
   },
+  "overrides": {
+    "dompurify": ">=3.3.2"
+  },
   "devDependencies": {
     "@playwright/test": "^1.56.1",
     "@testing-library/jest-dom": "6.9.1",

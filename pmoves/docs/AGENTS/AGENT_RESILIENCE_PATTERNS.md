@@ -300,5 +300,5 @@ This is a Claude Code CLI architectural limitation, not a PMOVES bug. The workar
 - [Agent Class Taxonomy](./PMOVES_AGENT_CLASS_TAXONOMY.md)
 - [Taxonomy Cross-Reference](./AGENT_TAXONOMY_CROSS_REFERENCE.md)
 - [Cipher Memory Service](../../.claude/context/services-catalog.md) (port 8096)
-- [Phase C Audit Summary](../hardening/PMOVES-hardening-tracker.md)
+- [Phase C Audit Summary](../../../docs/hardening/PMOVES-hardening-tracker.md)
 - [Model Source of Truth](../MODEL_SOURCE_OF_TRUTH.md) — Role names vs concrete model IDs

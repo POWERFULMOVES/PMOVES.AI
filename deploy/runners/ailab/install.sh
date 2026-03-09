@@ -19,9 +19,9 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 RUNNER_DIR="${RUNNER_DIR:-/opt/actions-runner}"
-RUNNER_VERSION="${RUNNER_VERSION:-2.311.0}"
+RUNNER_VERSION="${RUNNER_VERSION:-2.332.0}"
 RUNNER_ARCH="linux-x64"
-GITHUB_ORG="${GITHUB_ORG:-frostbytten}"
+GITHUB_ORG="${GITHUB_ORG:-POWERFULMOVES}"
 GITHUB_REPO="${GITHUB_REPO:-PMOVES.AI}"
 RUNNER_NAME="${RUNNER_NAME:-ailab-gpu}"
 LABELS="self-hosted,ai-lab,gpu,cuda,linux,x64"
@@ -192,7 +192,7 @@ version: '3.8'
 
 services:
   github-runner:
-    image: myoung34/github-runner:latest
+    image: myoung34/github-runner:2.332.0
     container_name: github-runner-ailab
     restart: unless-stopped
     environment:
