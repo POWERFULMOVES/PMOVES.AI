@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Manage local-certification GitHub runners via Docker containers.
 
-This keeps the local-cert lanes (`ai-lab` and `vps`) reproducible across
-Windows/WSL/Linux without manual shell sequences.
+This keeps the local-cert lanes (`ai-lab`, `vps`, and `hotfix`) reproducible
+across Windows/WSL/Linux without manual shell sequences.
 """
 
 from __future__ import annotations
@@ -37,15 +37,23 @@ LANES: tuple[RunnerLane, ...] = (
         runner_name="pmoves-vps-runner",
         labels="self-hosted,vps,Linux,X64",
     ),
+    RunnerLane(
+        lane="hotfix",
+        container_name="gha-runner-hotfix",
+        runner_name="pmoves-hotfix-runner",
+        labels="self-hosted,hotfix,Linux,X64",
+    ),
 )
 
 
-def run_cmd(args: list[str], check: bool = True) -> subprocess.CompletedProcess[str]:
+def run_cmd(args: list[str], check: bool = True,
+            timeout: int = 120) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         args,
         check=check,
         text=True,
         capture_output=True,
+        timeout=timeout,
     )
 
 
@@ -98,6 +106,11 @@ LANE_RESOURCES: dict[str, dict[str, str]] = {
         "memory": os.getenv("RUNNER_VPS_MEMORY", "4g"),
         "gpus": "",
     },
+    "hotfix": {
+        "cpus": os.getenv("RUNNER_HOTFIX_CPUS", "2"),
+        "memory": os.getenv("RUNNER_HOTFIX_MEMORY", "4g"),
+        "gpus": "",
+    },
 }
 
 
@@ -144,6 +157,7 @@ def _runner_log_args(lane: RunnerLane) -> list[str]:
     info = run_cmd(
         ["docker", "info", "--format", "{{json .Plugins.Log}}"],
         check=False,
+        timeout=15,
     )
     if info.returncode == 0:
         payload = (info.stdout or "").strip()
