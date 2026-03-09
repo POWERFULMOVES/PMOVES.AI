@@ -48,13 +48,26 @@ LANES: tuple[RunnerLane, ...] = (
 
 def run_cmd(args: list[str], check: bool = True,
             timeout: int = 120) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
-        args,
-        check=check,
-        text=True,
-        capture_output=True,
-        timeout=timeout,
-    )
+    """Run a subprocess command with timeout handling.
+
+    TimeoutExpired is re-raised when check=True but returns a synthetic
+    CompletedProcess(returncode=-1) when check=False so callers like
+    docker_rm and _runner_log_args degrade gracefully.
+    """
+    try:
+        return subprocess.run(
+            args,
+            check=check,
+            text=True,
+            capture_output=True,
+            timeout=timeout,
+        )
+    except subprocess.TimeoutExpired:
+        if check:
+            raise
+        return subprocess.CompletedProcess(
+            args, returncode=-1, stdout="", stderr="timed out",
+        )
 
 
 def require_tool(name: str) -> None:
