@@ -144,6 +144,18 @@
     "trivy_ignorefile": ""
   },
   {
+    "name": "tokenism-ui",
+    "git_url": "https://github.com/POWERFULMOVES/PMOVES-ToKenism-Multi.git",
+    "ref": "PMOVES.AI-Edition-Hardened",
+    "context": "pmoves-nextjs",
+    "dockerfile": "pmoves-nextjs/Dockerfile",
+    "image_name": "pmoves-tokenism-ui",
+    "build_args": "",
+    "platforms": "linux/amd64,linux/arm64",
+    "generate_sbom": true,
+    "trivy_ignorefile": ""
+  },
+  {
     "name": "llama-throughput-lab",
     "git_url": "https://github.com/POWERFULMOVES/PMOVES-llama-throughput-lab.git",
     "ref": "main",
