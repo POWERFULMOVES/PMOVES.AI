@@ -3707,6 +3707,8 @@ def yt_search(body: Dict[str,Any] = Body(...)):
             continue
         
         video_id = doc_id.split(':')[1] if ':' in doc_id else doc_id
+        if not _SAFE_VID_RE.match(video_id):
+            continue
         if video_id in seen_videos:
             continue
         
