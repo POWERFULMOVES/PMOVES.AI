@@ -57,10 +57,10 @@ jobs:
     permissions:
       contents: read
       packages: write
-    if: |
-      github.event_name == 'push' ||
-      github.event_name == 'workflow_dispatch' ||
-      contains(github.event.pull_request.labels.*.name, 'gpu-build')
+    # TODO: Re-enable when in-tree GPU Dockerfiles are created for ollama and hirag-gateway
+    # Currently both ./services/ollama and ./services/hirag-gateway don't exist;
+    # hirag-gateway is built via integrations-ghcr from the submodule repo instead.
+    if: false
 
     steps:
       - name: Checkout
@@ -144,13 +144,9 @@ jobs:
       matrix:
         service:
           - name: agent-zero
-            context: ./services/agent-zero
-          - name: hirag-gateway
-            context: ./services/hirag-gateway
-          - name: hirag-gateway-v2
-            context: ./services/hirag-gateway-v2
+            context: ./pmoves/services/agent-zero
           - name: extract-worker
-            context: ./services/extract-worker
+            context: ./pmoves/services/extract-worker
           - name: publisher-discord
             context: ./pmoves/services/publisher-discord
           - name: pmoves-yt
@@ -160,7 +156,7 @@ jobs:
           - name: archon
             context: ./pmoves/services/archon
           - name: ffmpeg-whisper
-            context: ./services/ffmpeg-whisper
+            context: ./pmoves/services/ffmpeg-whisper
           - name: model-registry
             context: ./pmoves/services/model-registry
           - name: gpu-orchestrator
@@ -290,7 +286,7 @@ jobs:
     runs-on: [self-hosted, kvm4, production]
     permissions:
       contents: read
-    needs: [build-cpu, build-gpu, validate-contracts, deploy-staging]
+    needs: [build-cpu, validate-contracts, deploy-staging]
     if: |
       github.ref == 'refs/heads/main' ||
       github.event.inputs.deploy_target == 'production'
@@ -303,7 +299,6 @@ jobs:
       - name: Pull latest images
         run: |
           docker pull ${{ env.IMAGE_PREFIX }}/pmoves-agent-zero:${{ github.sha }}
-          docker pull ${{ env.IMAGE_PREFIX }}/pmoves-hirag-gateway:${{ github.sha }}
 
       - name: Deploy to production
         run: |

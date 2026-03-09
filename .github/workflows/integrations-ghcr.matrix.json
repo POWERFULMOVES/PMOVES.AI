@@ -154,17 +154,5 @@
     "platforms": "linux/amd64",
     "generate_sbom": false,
     "trivy_ignorefile": ""
-  },
-  {
-    "name": "tokenism-ui",
-    "git_url": "https://github.com/POWERFULMOVES/PMOVES.AI.git",
-    "ref": "main",
-    "context": "PMOVES-ToKenism-Multi/pmoves-nextjs",
-    "dockerfile": "PMOVES-ToKenism-Multi/pmoves-nextjs/Dockerfile",
-    "image_name": "pmoves-tokenism-ui",
-    "build_args": "",
-    "platforms": "linux/amd64,linux/arm64",
-    "generate_sbom": false,
-    "trivy_ignorefile": ""
   }
 ]
