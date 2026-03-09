@@ -3,15 +3,27 @@
 > **Single source of truth** for PMOVES.AI production readiness.
 > Supersedes all individual audit documents accumulated Feb 7 -- Feb 18, 2026.
 
-**Last Updated:** 2026-03-08 (post-merge — PR #827 CodeRabbit follow-up)
+**Last Updated:** 2026-03-09 (post-merge — PRs #834/#835 build-gate + hotfix runner)
 **Branch:** `PMOVES.AI-Edition-Hardened` (production release lane)
-**Commit:** `ed6e3cc4`
+**Commit:** `ff9f5da1`
 **Consolidated From:** 27 audit documents
 **Evidence:** live runbook execution on 2026-03-05 (`make ghcr-prepublish-inrepo-build`, strict local Trivy sweep logs under `pmoves/docs/logs/ghcr-local-prepublish/`)
 
 ---
 
 ## Latest Changes (Mar 9, 2026)
+
+- **AB-9 RESOLVED** — 3/4 self-hosted runners back online (ai-lab-runner, hotfix-runner, vps-runner). Only `pmoves-ai-lab-win` (Windows) remains offline. CI queue healthy with zero starvation. CodeQL runs completing in ~4min. Concurrency/path throttles from PRs #832/#834/#835 confirmed effective.
+- **PRs #834/#835 merged** — build-gate Phase 2 (`build_gate.py` + `build-gate.mk`) and hotfix runner lane with `subprocess.TimeoutExpired` handling
+- **Dependabot alerts**: 0 open (was 1 medium — now resolved)
+- **P2 tracker refreshed** — 14 items remain open, 1 previously closed (HiRAG stale). No P2s fixed by intervening merges. Tracker date updated to 2026-03-09. Re-prioritized into 3 tiers: 4 production-blocking (P2-HIGH/MED), 6 tracked improvements, 5 cosmetic/env syntax.
+- **Trivy failure triage** (from 2026-03-05 sweep):
+  - `agent-zero`: Scan timeout at 5m — infra issue, not vulnerability. Increase timeout to 10m or use `--skip-java-db` to reduce scan time. **Not a blocker.**
+  - `archon`: 19 HIGH + 4 CRITICAL — key items: Crawl4AI RCE (CVE-2026-26216, upgrade to 0.8.0), langchain-core RCE (CVE-2025-68664, upgrade to 1.2.5), pydantic-ai info-disclosure. Upstream pins needed.
+  - `deepresearch`: 23 HIGH + 2 CRITICAL — key items: Ray RCE (CVE-2025-62593, upgrade to 2.52.0), vLLM RCE (CVE-2026-22778, upgrade to 0.14.1). Upstream pins needed.
+  - `pmoves-yt`: 1 HIGH — urllib3 CVE-2026-21441 (decompression bomb). Fix: pin `urllib3>=2.6.3` in requirements. **Quick fix.**
+
+### Previous (Mar 9 — Build Visibility Matrix)
 
 - **Build Visibility Matrix added** to dashboard — single cross-reference mapping all compose services → CI pipelines → Dockerfiles → architectures
   - 3 pipeline summary tables: `integrations-ghcr` (16 images, multi-arch, Trivy+Cosign), `self-hosted-builds` (9 images, amd64), `build-images` (29 images, manual dispatch)
@@ -29,7 +41,7 @@
   - Makefile: `supa-collation-check` grep anchored with `$` to prevent false positives
   - Terraform: Hostinger provider pin `0.1.22`, bootstrap `.env.vps` wiring
   - Docs: tooling script audit trimmed redundant entries, production dashboard VPS fleet section added
-- Live metrics: Open PRs `0`, Dependabot `1` (medium), Code Scanning `0`
+- Live metrics: Open PRs `0`, Dependabot `0`, Code Scanning `0`
 
 ### Previous (Mar 8 — PRs #823/#824)
 
@@ -73,7 +85,7 @@
 | VPS compose override | VALIDATED | CPU-only resource limits, GPU services disabled via `gpu-only` profile |
 | `.env.vps` wiring | FIXED | `--env-file .env.vps` added to compose commands in bootstrap and deploy scripts |
 | Hostinger Terraform provider | PINNED | `0.1.22` (was `~> 0.1`) |
-| Docker Bench Security | BLOCKED | Requires self-hosted runners (AB-9) |
+| Docker Bench Security | UNBLOCKED | AB-9 resolved — self-hosted runners available, schedule execution |
 
 ---
 
@@ -465,13 +477,13 @@ Evidence log: `pmoves/docs/evidence/audit-validation-2026-02-20-production-runti
 
 | ID | Blocker | Source Doc | Severity | Status | Next Action |
 |----|---------|-----------|----------|--------|-------------|
-| AB-9 | Self-hosted runner queue starvation on CodeQL/GHCR lanes | Release closeout 2026-02-24 | **HIGH** | MITIGATING | Keep queue drain policy active, verify new concurrency/path throttles reduce queue depth, and validate at least one current `CodeQL Advanced` + GHCR matrix run reaches execution |
+| AB-9 | Self-hosted runner queue starvation on CodeQL/GHCR lanes | Release closeout 2026-02-24 | **HIGH** | **RESOLVED** | 3/4 runners online (ai-lab, hotfix, vps). Windows runner offline (non-blocking). CI queue healthy, CodeQL ~4min. Concurrency throttles effective. Resolved 2026-03-09. |
 | AB-10 | `main` vs hardened commit-history divergence after squash promotion | Sync pass 2026-03-04 | **LOW** | TRACKED | Maintain content parity (`git diff` clean). Use explicit promotion + back-sync notes to avoid false-positive divergence alarms in ops reports |
 
 ### Blocker Detail
 
-**AB-9: Runner Queue Deadlock**
-Queue pressure remains the dominant operational risk. Even after stale-run drain, multiple `CodeQL Advanced` jobs remained queued on self-hosted lanes. In-repo workflow controls now mitigate this (`cancel-in-progress` for stale push/PR refs, matrix throttling, GHCR path scoping), but lane behavior still needs live verification over multiple merge cycles.
+**AB-9: Runner Queue Deadlock — RESOLVED 2026-03-09**
+Concurrency/path throttles from PRs #832/#834/#835 resolved the queue starvation. 3/4 self-hosted runners confirmed online: `pmoves-ai-lab-runner` (idle), `pmoves-hotfix-runner` (idle), `pmoves-vps-runner` (busy). Only `pmoves-ai-lab-win` (Windows) remains offline — non-blocking for Linux CI. CodeQL Advanced runs completing in ~4min with no queue buildup. Migration of 10 lightweight workflows to `ubuntu-latest` freed self-hosted capacity for builds that need hardware.
 
 **AB-10: Commit-History Divergence Noise**
 `main` and `PMOVES.AI-Edition-Hardened` are currently content-parity clean (no file delta), but commit graphs diverge due squash promotion + back-sync merges. Treat this as an expected history artifact unless file-level diff appears.
