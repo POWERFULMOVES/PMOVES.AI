@@ -116,6 +116,7 @@ audit-layers-static: ## Submodule-first static certification pass before runtime
 	@$(MAKE) --no-print-directory ci-runners-lockdown-strict
 	@$(MAKE) --no-print-directory supa-runtime-guard SUPABASE_RUNTIME="$${SUPABASE_RUNTIME:-cli}"
 	@$(MAKE) --no-print-directory skill-registry-validate
+	@$(MAKE) --no-print-directory docs-reconcile-check || true
 
 audit-layers-runtime: ## Runtime certification pass once services are online
 	@$(MAKE) --no-print-directory audit-layers-static
