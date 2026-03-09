@@ -3,7 +3,7 @@
 > **Single source of truth** for PMOVES.AI production readiness.
 > Supersedes all individual audit documents accumulated Feb 7 -- Feb 18, 2026.
 
-**Last Updated:** 2026-03-09 (post-merge — PRs #834/#835 build-gate + hotfix runner)
+**Last Updated:** 2026-03-09 (Dockerfile audit fixes + runner recovery)
 **Branch:** `PMOVES.AI-Edition-Hardened` (production release lane)
 **Commit:** `ff9f5da1`
 **Consolidated From:** 27 audit documents
@@ -13,7 +13,12 @@
 
 ## Latest Changes (Mar 9, 2026)
 
-- **AB-9 RESOLVED** — 3/4 self-hosted runners back online (ai-lab-runner, hotfix-runner, vps-runner). Only `pmoves-ai-lab-win` (Windows) remains offline. CI queue healthy with zero starvation. CodeQL runs completing in ~4min. Concurrency/path throttles from PRs #832/#834/#835 confirmed effective.
+- **AB-9 UPDATE** — All 4 self-hosted runners offline as of Mar 9 investigation. Previous "3/4 online" claim was stale. Root causes: `ai-lab-runner` (WSL2, no systemd service installed — process stopped), `ai-lab-win` (no Windows service — process stopped), `hotfix-runner` + `vps-runner` (remote machines, not accessible from dev workstation). WSL2 systemd now enabled (`/etc/wsl.conf`). Local runners require manual restart via `svc.sh install` (WSL) or interactive `run.cmd` (Windows). GHCR builds targeting `[self-hosted, Linux, X64, vps]` remain blocked until VPS runner is restored.
+- **Dockerfile audit fixes (4 images):**
+  - `pmoves-archon`: Renamed `MCP_CREDENTIALS_PATH` → `MCP_CONFIG_PATH` to eliminate BuildKit `SecretsUsedInArgOrEnv` warning
+  - `pmoves-archon-ui`: Added USER directive (uid 65532, alpine `adduser`)
+  - `pmoves-firefly-iii`: Added `USER www-data` defense-in-depth (upstream default)
+  - `pmoves-llama-throughput-lab`: Added USER directive (uid 65532) + nginx permission fixup for non-root
 - **PRs #834/#835 merged** — build-gate Phase 2 (`build_gate.py` + `build-gate.mk`) and hotfix runner lane with `subprocess.TimeoutExpired` handling
 - **Dependabot alerts**: 0 open (was 1 medium — now resolved)
 - **P2 tracker refreshed** — 15 items remain open, 1 previously closed (HiRAG stale). No P2s fixed by intervening merges. Tracker date updated to 2026-03-09. Re-prioritized into 3 tiers: 4 production-blocking (P2-HIGH/MED), 6 tracked improvements, 5 cosmetic/env syntax.
@@ -352,7 +357,7 @@ Three CI pipelines build Docker images. This matrix is the single cross-referenc
 | CodeQL alerts (open) | **0 open** (live GitHub API on 2026-03-09) |
 | Dependabot alerts | **0 open** (live GitHub API on 2026-03-09) |
 | Open PRs | **0** |
-| CI queue | Healthy — hosted + self-hosted (3/4 runners online) |
+| CI queue | DEGRADED — 1/4 self-hosted runners online (`ai-lab-win`); WSL runner needs manual start; VPS+hotfix remote; hosted (ubuntu-latest) workflows healthy |
 
 ### Runtime Verification Snapshot (2026-03-09)
 
@@ -477,7 +482,7 @@ Evidence log: `pmoves/docs/evidence/audit-validation-2026-02-20-production-runti
 
 | ID | Blocker | Source Doc | Severity | Status | Next Action |
 |----|---------|-----------|----------|--------|-------------|
-| AB-9 | Self-hosted runner queue starvation on CodeQL/GHCR lanes | Release closeout 2026-02-24 | **HIGH** | **RESOLVED** | 3/4 runners online (ai-lab, hotfix, vps). Windows runner offline (non-blocking). CI queue healthy, CodeQL ~4min. Concurrency throttles effective. Resolved 2026-03-09. |
+| AB-9 | Self-hosted runner queue starvation on CodeQL/GHCR lanes | Release closeout 2026-02-24 | **HIGH** | **REGRESSED** | All 4 runners offline (no persistent services installed). WSL2 systemd enabled, local runners need manual `svc.sh install`/`run.cmd`. VPS+hotfix runners remote-only. GHCR builds blocked. Hosted workflows (ubuntu-latest) unaffected. |
 | AB-10 | `main` vs hardened commit-history divergence after squash promotion | Sync pass 2026-03-04 | **LOW** | TRACKED | Maintain content parity (`git diff` clean). Use explicit promotion + back-sync notes to avoid false-positive divergence alarms in ops reports |
 
 ### Blocker Detail
