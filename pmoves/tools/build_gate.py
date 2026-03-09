@@ -257,7 +257,6 @@ def run_docker_build(target: BuildTarget, *, use_buildx: bool = False) -> tuple[
     else:
         cmd = [
             "docker", "build",
-            "--load",
             "-f", str(target.dockerfile),
             "-t", f"build-gate/{target.name}:local-test",
             str(target.context),
@@ -364,11 +363,12 @@ def audit_dockerfile(dockerfile: Path, context: Path | None = None) -> list[Audi
     lines = text.splitlines()
 
     # --- USER-001 / USER-002: Non-root USER directive ---
-    # Match Dockerfile USER instruction (uppercase) only
+    # Dockerfile instructions are case-insensitive per spec
     user_lines: list[tuple[int, str]] = []
     for i, line in enumerate(lines, 1):
         stripped = line.strip()
-        if stripped.startswith("USER ") and not stripped.startswith("#"):
+        stripped_upper = stripped.upper()
+        if stripped_upper.startswith("USER ") and not stripped.startswith("#"):
             user_lines.append((i, stripped))
 
     if not user_lines:
@@ -389,7 +389,7 @@ def audit_dockerfile(dockerfile: Path, context: Path | None = None) -> list[Audi
 
     # --- HEALTHCHECK-001: HEALTHCHECK directive ---
     has_healthcheck = any(
-        line.strip().startswith("HEALTHCHECK ")
+        line.strip().upper().startswith("HEALTHCHECK ")
         and not line.strip().startswith("#")
         for line in lines
     )
@@ -407,7 +407,7 @@ def audit_dockerfile(dockerfile: Path, context: Path | None = None) -> list[Audi
     local_stages: set[str] = set()
     for i, line in enumerate(lines, 1):
         stripped = line.strip()
-        if stripped.startswith("FROM ") and not stripped.startswith("#"):
+        if stripped.upper().startswith("FROM ") and not stripped.startswith("#"):
             from_lines.append((i, stripped))
             # Track local stage alias: FROM ... AS <name>
             as_match = re.search(r"\bAS\s+(\S+)", stripped, re.IGNORECASE)
@@ -466,11 +466,11 @@ def audit_dockerfile(dockerfile: Path, context: Path | None = None) -> list[Audi
         stripped = line.strip()
         if stripped.startswith("#"):
             continue
-        if stripped.startswith("RUN "):
+        if stripped.upper().startswith("RUN "):
             # Start a new RUN block
             in_run = True
             run_start = i
-            content = stripped[4:]  # text after "RUN "
+            content = stripped[4:]  # text after "RUN " (4 chars regardless of case)
             if content.endswith("\\"):
                 run_buf = [content[:-1]]
             else:
@@ -592,6 +592,7 @@ def validate_ci_fields(matrix: list[dict[str, Any]], repo_root: Path) -> list[st
 # ---------------------------------------------------------------------------
 
 def print_header(msg: str) -> None:
+    """Print a visually distinct section header to stdout."""
     print(f"\n{'=' * 60}")
     print(f"  {msg}")
     print(f"{'=' * 60}")
@@ -761,6 +762,7 @@ def run_gate(targets: list[BuildTarget], *, lint: bool = False,
 
 
 def main() -> None:
+    """CLI entry point — parse args and dispatch to the build gate."""
     parser = argparse.ArgumentParser(
         description="Local build validation gate for CI runner images",
     )

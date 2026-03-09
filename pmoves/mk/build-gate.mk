@@ -41,5 +41,5 @@ build-gate-audit-all: ## Audit ALL images.yaml Dockerfiles for hardening complia
 build-gate-validate-ci: ## Validate CI matrix field references (trivy, build_args)
 	@$(CODEX_PY) tools/build_gate.py --ci-matrix --validate-ci $(ARGS)
 
-build-gate-full: ## Full pre-dispatch gate: audit + check + lint (no build)
-	@$(CODEX_PY) tools/build_gate.py --ci-matrix --audit --check --lint $(ARGS)
+build-gate-full: ## Full pre-dispatch gate: audit + check + lint + CI validation (no build)
+	@$(CODEX_PY) tools/build_gate.py --ci-matrix --audit --check --lint --validate-ci $(ARGS)
