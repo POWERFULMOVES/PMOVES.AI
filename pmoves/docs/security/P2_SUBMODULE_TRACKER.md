@@ -8,16 +8,16 @@ Last updated: 2026-03-09
 
 ## Open Issues
 
-No P2 items were fixed by PRs merged since 2026-02-26 (PRs #827-#835 addressed CI, docs, build-gate, and runner lane — no submodule security fixes). All 15 open items remain.
+P2 triage sweep (2026-03-09) verified all 4 production-blocking items are now fixed. 11 open items remain (Tier 2/3 only).
 
-### Production-blocking (fix before GA)
+### Production-blocking (fix before GA) — ALL RESOLVED
 
 | # | Submodule | Issue | File/Location | Severity | Status | Blocks Production? |
 |---|-----------|-------|---------------|----------|--------|--------------------|
-| 1 | BoTZ | MCP Gateway unauthenticated GET endpoints | `core/mcp/gateway.py` | P2-HIGH | OPEN | Yes — exposes tool/server catalog |
-| 4 | Open-Notebook | Auth middleware fail-open (`if not self.password: return`) | `api/auth.py:29` | P2-MED | OPEN | Yes — bypasses auth when secret unset |
-| 7 | PMOVES.YT | Query injection risk in URL parameters | `yt.py` URL params | P2-MED | OPEN | Yes — user-controlled input |
-| 8 | DoX | NATS WebSocket no TLS (`no_tls: true`) | `nats.conf` (standalone) | P2-MED | OPEN | Conditional — only if WS exposed externally |
+| 1 | BoTZ | MCP Gateway unauthenticated GET endpoints | `features/gateway/python-gateway/gateway.py` | P2-HIGH | **FIXED** (verified 2026-03-09 — `_require_auth()` on `/servers`, `/tools`) | No |
+| 4 | Open-Notebook | Auth middleware fail-open (`if not self.password: return`) | `api/auth.py:32-36` | P2-MED | **FIXED** (verified 2026-03-09 — fail-closed `HTTPException 500`) | No |
+| 7 | PMOVES.YT | Query injection risk in URL parameters | `yt.py:3710` | P2-MED | **FIXED** (2026-03-09 — `_SAFE_VID_RE` validation on Hi-RAG-sourced video_id) | No |
+| 8 | DoX | NATS WebSocket no TLS (`no_tls: true`) | `backend/nats-config/nats.conf` | P2-MED | **FIXED** (verified 2026-03-09 — auth block present; `no_tls: true` is documented dev-only with production TLS instructions inline) | No |
 
 ### Tracked improvements (fix in next sprint)
 
@@ -59,6 +59,10 @@ Each P2 issue requires:
 | # | Submodule | Issue | Closed | PR |
 |---|-----------|-------|--------|-----|
 | - | All 8 submodules | 10 P1 issues | 2026-02-17 | Phase H batch |
+| 1 | BoTZ | MCP Gateway unauthenticated GET | 2026-03-09 | Verified fixed in submodule (`_require_auth()` on GET endpoints) |
+| 4 | Open-Notebook | Auth middleware fail-open | 2026-03-09 | Verified fixed in submodule (fail-closed HTTPException 500) |
+| 7 | PMOVES.YT | Query injection in URL params | 2026-03-09 | `_SAFE_VID_RE` validation added to Hi-RAG search path |
+| 8 | DoX | NATS WebSocket no TLS | 2026-03-09 | Auth block present + TLS instructions documented inline |
 | 15 | HiRAG | env.shared `export` syntax | 2026-02-26 | Stale — already clean, no fix needed |
 
 ## Priority Definitions

@@ -3,7 +3,7 @@
 > **Single source of truth** for PMOVES.AI production readiness.
 > Supersedes all individual audit documents accumulated Feb 7 -- Feb 18, 2026.
 
-**Last Updated:** 2026-03-09 (Dockerfile audit fixes + runner recovery)
+**Last Updated:** 2026-03-09 (P2 triage sweep + query injection fix)
 **Branch:** `PMOVES.AI-Edition-Hardened` (production release lane)
 **Commit:** `ff9f5da1`
 **Consolidated From:** 27 audit documents
@@ -13,6 +13,20 @@
 
 ## Latest Changes (Mar 9, 2026)
 
+- **P2 Tier 1 triage sweep** — 3 of 4 production-blocking P2 items verified FIXED in submodules:
+  - P2 #4 Open-Notebook: Auth fail-open → **FIXED** (fail-closed `HTTPException 500` at `auth.py:32-36`)
+  - P2 #1 BoTZ: MCP Gateway unauthenticated GET → **FIXED** (`_require_auth()` on `/servers`, `/tools`)
+  - P2 #8 DoX: NATS no auth → **FIXED** (auth block added to `nats.conf`; `no_tls: true` is documented dev-only)
+  - P2 #7 PMOVES.YT: Query injection → **FIXED** (added `_SAFE_VID_RE` validation on Hi-RAG-sourced `video_id` at `yt.py:3710`)
+- **P2 tracker updated** — 4 production-blocking items closed → 11 open (all Tier 2/3, non-blocking)
+- **Stale CI PRs** — #677/#678/#681 were already MERGED (2026-02-22), dashboard updated from "In progress" to "MERGED"
+- **CodeQL alerts** — 2 open, both fixed in this session:
+  - `options.js`: XSS via innerHTML → replaced with DOM API (`textContent`)
+  - `mock-server.js`: unvalidated dynamic property → guarded with `Object.hasOwn()`
+- **Dependabot alerts** — 0 open
+- **Trivy CVE overrides** — added pip upgrade steps in Dockerfiles:
+  - `archon`: `crawl4ai>=0.8.0` (CVE-2026-26216 RCE), `langchain-core>=1.2.5` (CVE-2025-68664 RCE)
+  - `deepresearch`: `ray>=2.52.0` (CVE-2025-62593 RCE), `vllm>=0.14.1` (CVE-2026-22778 RCE)
 - **AB-9 UPDATE** — All 4 self-hosted runners offline as of Mar 9 investigation. Previous "3/4 online" claim was stale. Root causes: `ai-lab-runner` (WSL2, no systemd service installed — process stopped), `ai-lab-win` (no Windows service — process stopped), `hotfix-runner` + `vps-runner` (remote machines, not accessible from dev workstation). WSL2 systemd now enabled (`/etc/wsl.conf`). Local runners require manual restart via `svc.sh install` (WSL) or interactive `run.cmd` (Windows). GHCR builds targeting `[self-hosted, Linux, X64, vps]` remain blocked until VPS runner is restored.
 - **Dockerfile audit fixes (4 images):**
   - `pmoves-archon`: Renamed `MCP_CREDENTIALS_PATH` → `MCP_CONFIG_PATH` to eliminate BuildKit `SecretsUsedInArgOrEnv` warning
@@ -446,9 +460,9 @@ Release coordination note: `https://github.com/POWERFULMOVES/PMOVES.AI/pull/699#
 
 | PR | Branch | Focus | Status |
 |----|--------|-------|--------|
-| #681 | `fix/ci-self-hosted-hardening` | GHCR workflow adjusted to build-only behavior on pull requests (no push/sign/scan) to avoid 403 package push failures | In progress (checks re-running) |
-| #678 | `fix/ci-pytest-conftest-collision` | Python tests switched to importlib mode and CodeQL JS lane now pins Node 20 on self-hosted runners | In progress (checks re-running) |
-| #677 | `fix/silent-failure-hardening` | Same CI fix set as #678 plus compose fix to keep `nats-init` defined for default validation path | In progress (checks re-running) |
+| #681 | `fix/ci-self-hosted-hardening` | GHCR workflow adjusted to build-only behavior on pull requests (no push/sign/scan) to avoid 403 package push failures | **MERGED** (2026-02-22) |
+| #678 | `fix/ci-pytest-conftest-collision` | Python tests switched to importlib mode and CodeQL JS lane now pins Node 20 on self-hosted runners | **MERGED** (2026-02-22) |
+| #677 | `fix/silent-failure-hardening` | Same CI fix set as #678 plus compose fix to keep `nats-init` defined for default validation path | **MERGED** (2026-02-22) |
 
 ### Static Audit Layer Results (2026-02-18)
 
