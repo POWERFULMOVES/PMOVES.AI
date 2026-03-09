@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-02-19 20:22 UTC",
-  "manifest": "C:\\Users\\russe\\Documents\\GitHub\\PMOVES.AI\\pmoves\\configs\\submodule_layer_validation_manifest.json",
+  "generated_at": "2026-03-08 12:45 UTC",
+  "manifest": "pmoves/configs/submodule_layer_validation_manifest.json",
   "summary": {
     "submodules": 1,
     "errors": 0,
@@ -12,7 +12,7 @@
       "path": "PMOVES-BotZ-gateway",
       "url": "https://github.com/POWERFULMOVES/PMOVES-BotZ-gateway.git",
       "status_prefix": " ",
-      "commit": "83fd34534de90fc80fa5bfd0b0eff56225ea1734",
+      "commit": "0dc9aaafb4deafabe851a266b904ec089a17d948",
       "initialized": true,
       "remote_commit_reachable": "local",
       "required_files_any_ok": true,

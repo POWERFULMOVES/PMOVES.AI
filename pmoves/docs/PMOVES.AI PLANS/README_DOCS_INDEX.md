@@ -1,5 +1,5 @@
 # PMOVES v5 • Documentation Index
-_Last updated: 2026-02-24 — hardened docs convergence pass_
+_Last updated: 2026-03-07 — fix 8 broken links + 3 path mismatches_
 
 ## Directory Map
 
@@ -34,23 +34,19 @@ After the 2026-02-18 reorganization, `pmoves/docs/` is organized as:
 - **Presign Service** — `COMFYUI_MINIO_PRESIGN.md` (includes health check for presign API)
   - Storage policy: Supabase Storage is the default S3-compatible backend for local bring-up; standalone MinIO is off by default. See `../operations/ENVIRONMENT_POLICY.md` for single‑env mode expectations and storage endpoints.
 - **Smoke Tests** — `../operations/SMOKETESTS.md`
-- **Local CI Checklists** — `LOCAL_CI_CHECKS.md`
 - **Production Audit Prep (latest runbook)** — `../audit/PRODUCTION_AUDIT_PREP_2026-02-14.md`
 - **Production Audit Dashboard (live status)** — `../PRODUCTION_AUDIT_DASHBOARD.md`
 - **DAO Recontext + Ingestion Plan (hardened)** — `DAO_RECONTEXT_INGESTION_PLAN_2026-02-24.md`
-- **Local Certification Lockdown (hard-stop policy)** — `../AGENTS/LOCAL_CERTIFICATION_LOCKDOWN.md`
 - **KRISS KROSS Accord (agent collision protocol)** — `../AGENTS/KRISS_KROSS_ACCORD.md`
-- **Pinokio + Docker + Cloudflare + GitHub launch strategy** — `PINOKIO_DOCKER_CLOUDFLARE_GITHUB_STRATEGY.md`
-- **Secrets + CHIT Portability Workflow** — `../SECRETS_CHIT_PORTABILITY_WORKFLOW.md`
 - **Tooling Overlay Audit (scripts/tools vs submodules)** — `../AGENTS/TOOLING_SCRIPT_AUDIT.md`
-- **Alias Map (legacy -> canonical names)** — `../ALIASES_AND_CANONICAL_NAMES.md`
-- **Docs Validation (local source-of-truth audit)** — `../DOCS_VALIDATION_LOCAL_2026-02-14.md`
-- **Docs Consolidation + Archival Policy** — `../DOCS_CONSOLIDATION_ARCHIVAL_POLICY.md`
 - **Model Source Of Truth (Registry + Profiles + Tooling)** — `../MODEL_SOURCE_OF_TRUTH.md`
+- **Model Fabric Contract (Cross-Integration Abstraction Policy)** — `../MODEL_FABRIC_CONTRACT.md`
+  - includes enforced fallback order (`local -> Ollama Cloud -> Cloudflare free tier -> coding-plan lanes`) plus Graphiti+CHIT PR review rails.
+- **Python Images Toolchain Canary (weekly build+Trivy bump lane)** — `../../../docs/hardening/PYTHON_IMAGES_TOOLCHAIN_CANARY.md`
 - **Submodule Integration Contract** — `../submodules/SUBMODULE_INTEGRATION_CONTRACT.md`
 - **Submodule Production Release Checklist (deterministic gates + merge order)** — `../integrations/SUBMODULE_PRODUCTION_RELEASE_CHECKLIST.md`
-- **First-Run Bootstrap** — `FIRST_RUN.md`
-- **Auth + Boot Order Runbook** — `../AUTH_BOOT_ORDER_RUNBOOK.md`
+- **Docker Build Operator Guide** — `../operations/DOCKER_BUILD_GUIDE.md`
+- **First-Run Bootstrap** — `../operations/FIRST_RUN.md`
 - **Archon Updates + Supabase wiring** — `archonupdateforpmoves.md`
 - **Supabase Service Guide** — `../services/supabase/README.md`
 - **Archon Service README** — `../services/archon/README.md`
@@ -103,7 +99,7 @@ Other tracked submodules:
 - Pmoves-hyperdimensions — `PMOVES_HYPERDIMENSIONS_STATUS.md`
 
 ## Codex + MCP
-- Full bundle and profiles: `../codex_full_config_bundle/README-Codex-MCP-Full.md`
+- Full bundle and profiles: `../archive/codex_full_config_bundle/README-Codex-MCP-Full.md`
   - Includes `config.toml` with Docker MCP gateway, web search enabled, and multiple profiles for network/sandbox modes.
 - Codex operator runbook: `../AGENTS/CODEX_OPERATOR_HOME.md`
 - Hyperdimensions control-plane taxonomy: `../AGENTS/PMOVES_HYPERDIMENSIONS_CONTROL_PLANE.md`
@@ -122,19 +118,7 @@ Other tracked submodules:
 - CSV log helper: created by `make evidence-log` at `pmoves/docs/evidence/log.csv`
 - How to capture: see `M2_VALIDATION_GUIDE.md` (Helpers section)
 
-
-## Link Validation Checklist
-
-- [x] `CREATOR_PIPELINE.md`
-- [x] `COMFYUI_END_TO_END.md`
-- [x] `HI_RAG_RERANK_PROVIDERS.md`
-- [x] `HIRAG_QWEN_CUDA_NOTES.md`
-- [x] `RETRIEVAL_EVAL_GUIDE.md`
-- [x] `COMFYUI_MINIO_PRESIGN.md`
-- [x] `SMOKETESTS.md`
-- [x] `RENDER_COMPLETION_WEBHOOK.md`
-
-- **Next Steps** — current plan: [`NEXT_STEPS.md`](NEXT_STEPS.md); archive: [`NEXT_STEPS_2025-09-08`](archive/NEXT_STEPS_2025-09-08.md)
+- **Next Steps** — current plan: [`NEXT_STEPS.md`](NEXT_STEPS.md); archive: [`NEXT_STEPS_2025-10-05`](archive/NEXT_STEPS_2025-10-05.md)
 
 ## CLIP + Qwen Plan
 - Multimodal enrichment plan: `CLIP_QWEN_INTEGRATION_PLAN.md`

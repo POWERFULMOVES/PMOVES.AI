@@ -7,15 +7,32 @@ from __future__ import annotations
 
 import logging
 import os
+import sys
 import time
+from pathlib import Path
 from typing import Any
 
 import httpx
 
 logger = logging.getLogger("showtime.notebook_client")
 
+
+try:
+    from pmoves.services.common.env import get_secret
+except ModuleNotFoundError:
+    # Runtime fallback for direct script execution where repo root is not on sys.path.
+    sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
+    from pmoves.services.common.env import get_secret
+
+
 NOTEBOOK_API_URL = os.environ.get("OPEN_NOTEBOOK_API_URL", "http://localhost:5055")
-NOTEBOOK_API_KEY = os.environ.get("OPEN_NOTEBOOK_API_KEY", "")
+# OPEN_NOTEBOOK_API_TOKEN is the repo-standard variable.
+# Keep OPEN_NOTEBOOK_PASSWORD / OPEN_NOTEBOOK_API_KEY as compatibility fallbacks.
+NOTEBOOK_API_TOKEN = (
+    (get_secret("OPEN_NOTEBOOK_API_TOKEN") or "").strip()
+    or (get_secret("OPEN_NOTEBOOK_PASSWORD") or "").strip()
+    or (get_secret("OPEN_NOTEBOOK_API_KEY") or "").strip()
+)
 CACHE_TTL = int(os.environ.get("NOTEBOOK_CACHE_TTL", "60"))
 
 # Simple in-memory cache: key -> (timestamp, data)
@@ -36,8 +53,8 @@ async def fetch_notebooks(cursor: str | None = None, limit: int = 20) -> dict[st
             return cached_data
 
     headers: dict[str, str] = {"Content-Type": "application/json"}
-    if NOTEBOOK_API_KEY:
-        headers["Authorization"] = f"Bearer {NOTEBOOK_API_KEY}"
+    if NOTEBOOK_API_TOKEN:
+        headers["Authorization"] = f"Bearer {NOTEBOOK_API_TOKEN}"
 
     params: dict[str, Any] = {"limit": limit}
     if cursor:

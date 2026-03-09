@@ -66,6 +66,8 @@ Required handoff fields:
 - `2026-02-24T04:32:28Z` CLAIM `CODEX-GPT5` scope: hardened dao-recontext + roadmap/next-steps + production-audit dashboard convergence.
 - `2026-02-24T08:16:29Z` CLAIM `CODEX-GPT5` scope: PR #707 rail split (remove runtime payload from hardened docs lane) + dual-signature rule sync.
 - `2026-02-24T12:00:00Z` CLAIM `CLAUDE-OPUS` scope: Rail split handoff — runtime PR #708 + PR #707 close-review + KRISS KROSS accord ACK.
+- `2026-03-01T22:45:00Z` CLAIM `CODEX-GPT5` scope: TAC model/persona production readiness review + Graphiti protocol parseable TAC addendum.
+- `2026-03-04T20:50:26-05:00` CLAIM `CLAUDE-OPUS` scope: Graphiti protocol x UI-4482 lane (Notebook Workbench graphiti telemetry + docs + smoke evidence).
 
 ## Graphiti Review Log
 - `2026-02-21T10:35:03.6791631-05:00` REVIEW `CODEX-GPT5`
@@ -126,6 +128,23 @@ Required handoff fields:
 
 - `2026-02-25T15:00:00Z` RELEASE `CLAUDE-OPUS` scope: Context sync + CHIT awareness audit complete; CODEX validation handoff accepted.
 
+- `2026-03-01T22:45:00Z` REVIEW `CODEX-GPT5`
+  - Reviewed TAC tree proposal for model infrastructure + persona production readiness against current repository state.
+  - Added execution overlay doc: `pmoves/docs/TAC/TAC_MODEL_INFRA_PERSONA_PROD_READINESS.md`.
+  - Confirmed current lane reality:
+    - model registry work is already substantially present in `pmoves/supabase/initdb/12_model_registry_seed.sql`
+    - persona seed file exists at `pmoves/supabase/initdb/17_persona_seed.sql` and needs promotion path
+    - persona-model resolution migration and model readiness tooling are present in local working-tree artifacts and now explicitly sequenced for commit/promotion
+  - Updated `AI_GRAPHITI_PROTOCOL.md` with machine-parseable TAC block format and added `witness` voice enum parity with DARKXSIDE registration.
+  - Updated `docs/AGENT_TRAIL.md` with codex trail entry to preserve Done/Left Behind/For Next Agent handoff continuity.
+
+- `2026-03-01T22:45:00Z` RELEASE `CODEX-GPT5` scope: TAC tree enhancement + Graphiti protocol update complete; lane ready for implementation commits.
+
+- `2026-03-04T20:50:26-05:00` REVIEW `CODEX-GPT5`
+  - Delegated focused lane to Claude for Graphiti protocol on UI port `4482` with explicit acceptance criteria and evidence commands.
+  - Handoff spec path: `pmoves/docs/AGENTS/HANDOFF_CLAUDE_GRAPHITI_4482_2026-03-04.md`.
+  - Scope guard: keep Claude changes constrained to Graphiti + Workbench UX/docs/smoke; no unrelated runtime/service churn.
+
 ## Agent ACK (Signed)
 - Agent: `CODEX-GPT5`
 - Ack: `I acknowledge control of the current convergence lane and will not overlap branch edits without explicit handoff.`
@@ -167,3 +186,9 @@ Required handoff fields:
 - Ack: `I reviewed CODEX operator home, Kriss Kross Accord (including Stash-Safe amendment ratification), Graphiti Protocol (added DARKXSIDE), and submodule integration audit. Context files audited for sync: 6 submodule CLAUDE.md files remediated with CHIT awareness stanzas, main CLAUDE.md expanded with NATS WS + CHIT section, CHIT integration status refreshed with NATS auth fix + CGP naming standardization. Validation: codex-parity-check=31% coverage (78 missing tokens — expected, Codex scaffolding pending), codex-audit=report regenerated, topology-chit-gate=PASS (0 errors, 0 warnings, 56 containers), smoke=PARTIAL (Qdrant+presign+render-webhook+PostgREST OK; Meilisearch+Neo4j offline; render-webhook POST 500). Validation handoff accepted.`
 - Signature: `ACK::CLAUDE-OPUS::PHI-4482-T1::CONTEXT-SYNC-CODEX-HANDOFF`
 - Timestamp: `2026-02-25T15:00:00Z`
+
+## Agent ACK (Signed, TAC Model/Persona Overlay)
+- Agent: `CODEX-GPT5`
+- Ack: `I translated TAC model/persona readiness into deterministic branch sequence, parseable Graphiti TAC blocks, and explicit merge gate expectations for Integrations -> Hardened promotion.`
+- Signature: `ACK::CODEX-GPT5::PHI-4482-T1::TAC-MODEL-PERSONA-OVERLAY`
+- Timestamp: `2026-03-01T22:45:00Z`

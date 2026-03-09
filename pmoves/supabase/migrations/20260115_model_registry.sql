@@ -145,10 +145,15 @@ SELECT
   p.type as provider_type,
   p.api_base,
   p.api_key_env_var,
-  json_agg(DISTINCT jsonb_build_object(
-    'alias', a.alias,
-    'context', a.context
-  ) ORDER BY a.context) as aliases
+  COALESCE(
+    jsonb_agg(
+      DISTINCT jsonb_build_object(
+        'alias', a.alias,
+        'context', a.context
+      )
+    ) FILTER (WHERE a.alias IS NOT NULL),
+    '[]'::jsonb
+  ) as aliases
 FROM pmoves_core.models m
 JOIN pmoves_core.model_providers p ON m.provider_id = p.id
 LEFT JOIN pmoves_core.model_aliases a ON m.id = a.model_id
@@ -272,10 +277,32 @@ CREATE TRIGGER update_models_updated_at
 -- =============================================================================
 -- Grant Permissions for PostgREST
 -- =============================================================================
-GRANT USAGE ON SCHEMA pmoves_core TO postgrest_anon, postgrest_auth_user;
-GRANT SELECT ON ALL TABLES IN SCHEMA pmoves_core TO postgrest_anon, postgrest_auth_user;
-GRANT INSERT, UPDATE ON ALL TABLES IN SCHEMA pmoves_core TO postgrest_auth_user;
-GRANT USAGE ON ALL SEQUENCES IN SCHEMA pmoves_core TO postgrest_anon, postgrest_auth_user;
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'postgrest_anon') THEN
+    EXECUTE 'GRANT USAGE ON SCHEMA pmoves_core TO postgrest_anon';
+    EXECUTE 'GRANT SELECT ON ALL TABLES IN SCHEMA pmoves_core TO postgrest_anon';
+    EXECUTE 'GRANT USAGE ON ALL SEQUENCES IN SCHEMA pmoves_core TO postgrest_anon';
+  END IF;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
+    EXECUTE 'GRANT USAGE ON SCHEMA pmoves_core TO anon';
+    EXECUTE 'GRANT SELECT ON ALL TABLES IN SCHEMA pmoves_core TO anon';
+    EXECUTE 'GRANT USAGE ON ALL SEQUENCES IN SCHEMA pmoves_core TO anon';
+  END IF;
+
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'postgrest_auth_user') THEN
+    EXECUTE 'GRANT USAGE ON SCHEMA pmoves_core TO postgrest_auth_user';
+    EXECUTE 'GRANT SELECT ON ALL TABLES IN SCHEMA pmoves_core TO postgrest_auth_user';
+    EXECUTE 'GRANT INSERT, UPDATE ON ALL TABLES IN SCHEMA pmoves_core TO postgrest_auth_user';
+    EXECUTE 'GRANT USAGE ON ALL SEQUENCES IN SCHEMA pmoves_core TO postgrest_auth_user';
+  END IF;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
+    EXECUTE 'GRANT USAGE ON SCHEMA pmoves_core TO authenticated';
+    EXECUTE 'GRANT SELECT ON ALL TABLES IN SCHEMA pmoves_core TO authenticated';
+    EXECUTE 'GRANT INSERT, UPDATE ON ALL TABLES IN SCHEMA pmoves_core TO authenticated';
+    EXECUTE 'GRANT USAGE ON ALL SEQUENCES IN SCHEMA pmoves_core TO authenticated';
+  END IF;
+END $$;
 
 -- =============================================================================
 -- Helper Functions

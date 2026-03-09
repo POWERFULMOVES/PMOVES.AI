@@ -2,7 +2,9 @@
 
 Comprehensive hardening posture, CI/CD build infrastructure, and service runtime status for the PMOVES.AI platform.
 
-Last updated: 2026-02-26
+Last updated: 2026-03-05
+
+Live snapshot (2026-03-04): `PMOVES.AI` open PRs `0`, CodeQL open alerts `0`, Dependabot open alerts `1` (`medium`). Use `pmoves/docs/PRODUCTION_AUDIT_DASHBOARD.md` as the source-of-truth for live counters.
 
 ---
 
@@ -11,8 +13,8 @@ Last updated: 2026-02-26
 | Category | Coverage | Status |
 |----------|----------|--------|
 | **P1 Security Issues** | 0 remaining (10/10 fixed) | CLEAR |
-| **CodeQL High-Severity** | 0 remaining (19/19 fixed) | CLEAR |
-| **Dependabot High** | 0 remaining (3/3 fixed) | CLEAR |
+| **CodeQL High-Severity** | 0 open CodeQL alerts (live snapshot 2026-03-04) | CLEAR |
+| **Dependabot High** | 0 open high-severity Dependabot alerts (live snapshot 2026-03-04) | CLEAR |
 | **Non-Root Users (USER directive)** | 29/29 services (100%) | COMPLETE |
 | **Read-Only Filesystems** | 30/30 services (100%) | COMPLETE |
 | **Cap Drop ALL** | All services including nats-init | COMPLETE |
@@ -104,7 +106,7 @@ Tracked in `pmoves/docs/security/P2_SUBMODULE_TRACKER.md`.
 
 ## CI/CD Build Infrastructure
 
-### Workflows (16 total)
+### Workflows (17 total)
 
 | Workflow | Type | Trigger |
 |----------|------|---------|
@@ -124,6 +126,7 @@ Tracked in `pmoves/docs/security/P2_SUBMODULE_TRACKER.md`.
 | `sync-secrets-local.yml` | CGP/env secret sync | Manual |
 | `webhook-smoke.yml` | Render webhook smoke test | Manual |
 | `yt-dlp-bump.yml` | Weekly yt-dlp dependency bump | Schedule (Mon 08:00) |
+| `python-images-toolchain-canary.yml` | Weekly pinned Python image toolchain canary (build + Trivy + PR) | Schedule (Mon 09:00) + manual |
 
 ### Build Matrix (`pmoves/images.yaml` -- 16 services)
 
@@ -237,6 +240,26 @@ All 5 infrastructure blockers (B1-B5) resolved as of 2026-02-17. See `pmoves/doc
 
 ---
 
+## Recent Activity (2026-02-26 to 2026-02-28)
+
+- **PR #715** (2026-02-26): Fixed 25 CodeQL alerts across Tiers 1+2 — SSRF (`py/full-ssrf`), path injection (`py/path-injection`), stack trace exposure (`py/stack-trace-exposure`). Groups A-E from Dashboard triage fully resolved.
+- **PR #713** (2026-02-26): Hardening batch — NATS auth enforcement across services, `nats-init` service hardened with cap_drop:ALL/read_only/no-new-privileges/tmpfs, documentation brought to v4.0.
+- **PR #719** (2026-02-28): Cipher MCP stdio→SSE migration, portable `sed`→`awk` in hooks, PowerShell crypto RNG for Windows, CHIT docs `:?` alignment.
+- **PR #718** (2026-02-27): minimatch dependency bump in Solidity contracts.
+- **Dependabot regression**: 5 new high-severity alerts appeared (serialize-javascript RCE x2, minimatch ReDoS x2, qs DoS x1) replacing the previously-cleared 3 high alerts. Total open: 7 (5H, 2L).
+
+## Recent Activity (2026-03-05)
+
+- Added weekly Python image toolchain canary workflow (`.github/workflows/python-images-toolchain-canary.yml`) to keep production Dockerfile pins reproducible while still testing newest `setuptools`/`wheel` releases.
+- Canary gate behavior: patch candidate pins for managed GHCR Python images (`supaserch`, `deepresearch`, `pmoves-yt`, `archon`) -> build `linux/amd64` -> Trivy HIGH/CRITICAL gate (`ignore-unfixed=true`) -> open/update PR only on pass.
+- Added operator runbook: `docs/hardening/PYTHON_IMAGES_TOOLCHAIN_CANARY.md`.
+- Added local production GHCR matrix validator (`pmoves/tools/ghcr_local_prepublish.py`) with operator targets:
+  - `make -C pmoves ghcr-prepublish-inrepo` (default production gate)
+  - `make -C pmoves ghcr-prepublish-all` (includes external integration repos)
+  - `make -C pmoves ghcr-dispatch-all` (full matrix dispatch after local gate)
+
+---
+
 ## Gaps & Recommended Next Steps
 
 ### Quick Wins (Low Effort, High Value)
@@ -282,6 +305,7 @@ All 5 infrastructure blockers (B1-B5) resolved as of 2026-02-17. See `pmoves/doc
 
 ---
 
-**Target achieved:** 0 open P1, 0 high CodeQL, 0 high Dependabot
+**Target achieved:** 0 open P1, 0 open CodeQL alerts (live snapshot)
+**Dependabot posture:** 1 open medium alert, 0 open high alerts (live snapshot 2026-03-04)
 **Previous version:** v3.0 (2026-02-17)
-**Last updated:** 2026-02-26
+**Last updated:** 2026-03-05

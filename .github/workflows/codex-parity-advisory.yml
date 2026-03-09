@@ -1,0 +1,75 @@
+name: Codex Parity Advisory
+
+on:
+  pull_request:
+    branches:
+      - main
+      - PMOVES.AI-Edition-Hardened
+      - PMOVES.AI-Edition-Hardened-Integrations
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  codex-parity-advisory:
+    name: codex-parity-advisory
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Generate parity report
+        run: make -C pmoves codex-parity-check
+
+      - name: Advisory strict parity gate
+        continue-on-error: true
+        run: make -C pmoves codex-parity-check-strict
+
+      - name: Publish parity summary
+        run: |
+          python - <<'PY'
+          import pathlib
+          import re
+
+          report = pathlib.Path("pmoves/docs/AGENTS/CODEX_CLAUDE_PARITY_GAPS.md")
+          if not report.exists():
+              print("Parity report missing:", report)
+              raise SystemExit(1)
+          text = report.read_text(encoding="utf-8")
+
+          def pick(label: str) -> str:
+              m = re.search(rf"{re.escape(label)}:\s+\*\*(.+?)\*\*", text)
+              return m.group(1) if m else "unknown"
+
+          lines = [
+              "## Codex Parity Advisory",
+              f"- Claude tokens: {pick('Claude command tokens')}",
+              f"- Mapped tokens: {pick('Mapped tokens')}",
+              f"- Missing tokens: {pick('Missing tokens')}",
+              f"- Coverage: {pick('Coverage')}",
+              "- This workflow is advisory and does not block merges.",
+          ]
+          summary = pathlib.Path("codex-parity-summary.md")
+          summary.write_text("\n".join(lines) + "\n", encoding="utf-8")
+          print(summary.read_text(encoding="utf-8"))
+          with pathlib.Path(__import__('os').environ["GITHUB_STEP_SUMMARY"]).open("a", encoding="utf-8") as fp:
+              fp.write(summary.read_text(encoding="utf-8"))
+          PY
+
+      - name: Upload parity artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: codex-parity-report
+          path: |
+            pmoves/docs/AGENTS/CODEX_CLAUDE_PARITY_GAPS.md
+            codex-parity-summary.md

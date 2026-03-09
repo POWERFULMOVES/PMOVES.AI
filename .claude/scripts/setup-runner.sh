@@ -3,7 +3,7 @@
 # Generated: 2025-12-23
 #
 # Usage: ./setup-runner.sh <HOST_TYPE>
-# Where HOST_TYPE is one of: ai-lab, vps, cloudstartup, kvm4
+# Where HOST_TYPE is one of: ai-lab, vps, cloudstartup, kvm4, kvm4-1, kvm4-2, kvm2
 
 set -e
 
@@ -21,10 +21,13 @@ HOST_LABELS["ai-lab"]="self-hosted,ai-lab,gpu,Linux,X64"
 HOST_LABELS["vps"]="self-hosted,vps,Linux,X64"
 HOST_LABELS["cloudstartup"]="self-hosted,cloudstartup,staging,Linux,X64"
 HOST_LABELS["kvm4"]="self-hosted,kvm4,production,Linux,X64"
+HOST_LABELS["kvm4-1"]="self-hosted,vps,kvm4,kvm4-1,production,Linux,X64"
+HOST_LABELS["kvm4-2"]="self-hosted,vps,kvm4,kvm4-2,production,Linux,X64"
+HOST_LABELS["kvm2"]="self-hosted,vps,kvm2,backup,Linux,X64"
 
 if [[ -z "$HOST_TYPE" ]] || [[ ! ${HOST_LABELS[$HOST_TYPE]+_} ]]; then
     echo "Usage: $0 <HOST_TYPE>"
-    echo "HOST_TYPE must be one of: ai-lab, vps, cloudstartup, kvm4"
+    echo "HOST_TYPE must be one of: ai-lab, vps, cloudstartup, kvm4, kvm4-1, kvm4-2, kvm2"
     exit 1
 fi
 

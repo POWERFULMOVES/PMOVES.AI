@@ -207,7 +207,15 @@ export function TokenismGeometricView({ result, week }: GeometricViewProps) {
     };
     const radius = Math.min(canvas.width, canvas.height) / 2 - 20;
 
-    const edges = cgp?.geometry.edges || [];
+    const edges: [number, number][] = (cgp?.geometry.edges || [])
+      .filter(
+        (edge): edge is number[] =>
+          Array.isArray(edge)
+          && edge.length >= 2
+          && Number.isFinite(edge[0])
+          && Number.isFinite(edge[1]),
+      )
+      .map((edge) => [edge[0], edge[1]]);
 
     drawPoincareDisk(ctx, points, edges, canvas.width, canvas.height, center, radius);
   }, [points, cgp]);

@@ -59,6 +59,20 @@ Evidence format:
 - pass/fail
 - next action if fail
 
+## PR Review Sweep (Merge Gate)
+
+Before merge or promotion:
+1. Run `make -C pmoves pr-monitor`.
+2. Inspect:
+   - `pmoves/docs/logs/pr_monitor_latest.json`
+   - `pmoves/docs/logs/pr_monitor_learnings_latest.md`
+3. Optional CHIT artifact handoff: `make -C pmoves pr-monitor-chit-packet` to generate `pmoves/docs/logs/pr_monitor_learnings_latest.cgp.json`.
+4. Address actionable comments (including out-of-diff review findings) in atomic commits.
+5. Re-run `make -C pmoves pr-monitor-strict` and require exit code `0` before merge.
+6. For CHIT/FlOO$ parity in production lanes, run `make -C pmoves chit-flow-pr-monitor-strict`.
+
+Nitpicks are cataloged for follow-up. Blocking actionable comments are merge blockers; out-of-diff line comments stay in the learnings queue unless they escalate into blocking feedback. Bot actionable comments only block when marked `P0`/`P1`.
+
 ## Token/time estimate handshake
 
 For long-running tasks, Codex should provide:
@@ -71,10 +85,21 @@ Template:
 - `mode`: focus or open-chat+scout
 - `next evidence checkpoint`: command or artifact to expect
 
+## Codex-Claude Collision Handling
+
+When Codex and Claude operate in overlapping scope (same branch, same files):
+
+1. **Check KRISS KROSS Accord** — [KRISS_KROSS_ACCORD.md](./KRISS_KROSS_ACCORD.md) defines the handshake protocol
+2. **Parity work** uses `CODEX_CLAUDE_PARITY_MAP.md` as the canonical token-mapping reference
+3. **Codex-led windows**: Codex is implementation owner; Claude is scout/reviewer
+4. **Claude-led windows**: Claude is implementation owner; Codex validates via `codex-parity-check`
+5. **Neither overrides the other** without a KRISS KROSS handshake block recorded in `AGNOTE4482PHI.t1.md`
+
+If the Codex Runtime Protocol's `focus` mode and the KRISS KROSS Accord's lane rules conflict, the KRISS KROSS Accord takes precedence (it is the collision-safety layer, while this protocol governs individual agent discipline).
+
 ## PMOVES-specific production notes
 
 - Production audit is local-first and hardened-first.
 - No optional service assumptions: all required submodules/services are in-scope.
 - Secrets must never be committed; tracked env files must remain placeholders.
 - Geometry Bus + CHIT + EvoSwarm flows must preserve observability and replayability.
-

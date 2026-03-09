@@ -11,7 +11,7 @@ from collections import Counter, defaultdict
 from pathlib import Path
 
 
-PARITY_CMD_RE = re.compile(r"`/([a-z0-9][a-z0-9-]*:[a-z0-9][a-z0-9-]*)`")
+PARITY_CMD_RE = re.compile(r"`/([a-z0-9][a-z0-9-]*(?::[a-z0-9][a-z0-9-]*)?)`")
 
 
 def _repo_root() -> Path:
@@ -44,6 +44,13 @@ def _prefix(token: str) -> str:
     if ":" not in token:
         return "root"
     return token.split(":", 1)[0]
+
+
+def _display_path(path: Path, repo_root: Path) -> str:
+    try:
+        return str(path.relative_to(repo_root))
+    except ValueError:
+        return str(path)
 
 
 def _render_report(
@@ -161,8 +168,8 @@ def main(argv: list[str] | None = None) -> int:
             missing=missing,
             claude_tokens=claude_tokens,
             parity_tokens=parity_tokens,
-            parity_map_path=str(parity_map),
-            commands_path=str(commands_root),
+            parity_map_path=_display_path(parity_map, root),
+            commands_path=_display_path(commands_root, root),
         )
         write_report.parent.mkdir(parents=True, exist_ok=True)
         write_report.write_text(report, encoding="utf-8")

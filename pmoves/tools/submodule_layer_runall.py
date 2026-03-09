@@ -167,7 +167,7 @@ def main() -> int:
         print(f"[{status}] {module_path} errors={errors} warnings={warnings}")
 
     data = {
-        "manifest": str(args.manifest.resolve()),
+        "manifest": args.manifest.resolve().relative_to(REPO_ROOT).as_posix(),
         "modules_checked": len(runs),
         "total_errors": sum(run.errors for run in runs),
         "total_warnings": sum(run.warnings for run in runs),

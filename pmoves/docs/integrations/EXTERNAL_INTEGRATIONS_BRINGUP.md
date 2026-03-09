@@ -69,7 +69,7 @@ docker compose up -d
 ```
 2) In `pmoves/env.shared`:
 ```
-OPEN_NOTEBOOK_API_URL=http://cataclysm-open-notebook:5055
+OPEN_NOTEBOOK_API_URL=http://open-notebook:5055
 OPEN_NOTEBOOK_API_TOKEN=<token>
 OPEN_NOTEBOOK_PASSWORD=<optional-password-if-used>
 # Provider keys (only add the ones you have)
@@ -78,6 +78,7 @@ GROQ_API_KEY=<groq>
 ANTHROPIC_API_KEY=<anthropic>
 GEMINI_API_KEY=<gemini>
 ```
+Use the in-network alias `open-notebook` for container-to-container calls; `cataclysm-open-notebook` remains an accepted compatibility alias.
 3) PMOVES Make target: `make up-open-notebook` (uses a local add‑on) as an alternative.
 4) Seed models/defaults once the container is running:
 ```bash

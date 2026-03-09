@@ -10,6 +10,161 @@
 
 ---
 
+<!-- graphiti:claude-opus phase:phi-4482-graphiti-lane ts:2026-03-04T12:00:00Z -->
+
+## ◆ Claude Opus — Graphiti Status on 4482 Lane (PHI-4482-T1)
+
+<table><tr><td style="background:#7C3AED;width:24px"></td><td>
+
+**Resonance:** graphiti-protocol, ui-observability, workbench-4482
+**Voice:** Analytical
+
+### Done
+- Created `GraphitiStatusBadge.tsx` client component that polls `/api/audit/summary?includeHealth=false` every 60s and renders a compact badge with three states (available/unavailable/loading), following the `ServiceHealthBadge` design token vocabulary.
+- Integrated badge into `NotebookWorkbenchView.tsx` header between subtitle and Thread ID input.
+- Added "Graphiti Validation" section to `UI_NOTEBOOK_WORKBENCH.md` with deterministic `curl | jq` check commands, expected outputs, badge state table, and troubleshooting row.
+
+### Left Behind
+- No runtime health integration in badge — the API supports `includeHealth=true` but runtime service checks are deferred to keep the badge lightweight.
+- Badge does not verify CHIT HMAC signature of the trail artifact — it only checks availability.
+
+### For Next Agent
+- Consider dashboard-wide Graphiti presence beyond the Notebook Workbench (e.g., main dashboard, service overview).
+- Wire CHIT signature validation into the badge for cryptographic provenance display.
+- Add Playwright/Cypress visual regression test for the badge states.
+
+</td></tr></table>
+
+<!-- /graphiti -->
+
+<!-- graphiti:codex phase:tac-model-persona-readiness-overlay ts:2026-03-01T22:45:00Z -->
+
+## ■ Codex — TAC Model/Persona Readiness Overlay + Graphiti Protocol Update
+
+<table><tr><td style="background:#2563EB;width:24px"></td><td>
+
+**Resonance:** release-governance, model-registry, handoff-protocol
+**Voice:** Terse
+
+### Done
+- Reviewed the proposed TAC tree against live repository state and separated already-landed work from remaining gaps.
+- Added `pmoves/docs/TAC/TAC_MODEL_INFRA_PERSONA_PROD_READINESS.md` with deterministic execution order, atomic commit boundaries, and merge-gate commands.
+- Updated `pmoves/docs/AGENTS/AI_GRAPHITI_PROTOCOL.md` with a machine-parseable TAC block format (`graphiti:tac`) and explicit status transition rules.
+- Aligned voice registry docs by adding `witness` to the Graphiti protocol voice list (matches DARKXSIDE registration).
+- Updated `pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md` with CLAIM/REVIEW/RELEASE + signed ACK for this overlay pass.
+
+### Left Behind
+- Runtime implementation tasks are staged in local working-tree artifacts for persona-model resolution migration and readiness tooling (`model-readiness` target + script), but still need commit/promotion sequencing.
+- Model/persona seed files are present in workspace but still need commit discipline and PR promotion sequencing.
+
+### For Next Agent
+- Execute TAC branches in this order: B/D -> A -> C -> F -> E.
+- Keep one atomic commit per branch objective and run `make -C pmoves pr-monitor-strict` + `make -C pmoves chit-flow-pr-monitor-strict` before merge requests.
+- Route runtime-affecting changes through Integrations first, then promote to Hardened.
+
+</td></tr></table>
+
+<!-- /graphiti -->
+
+<!-- graphiti:codex phase:submodule-parity-wave2 ts:2026-03-01T04:22:00Z -->
+
+## ■ Codex — Submodule Codex Home Coverage Expansion
+
+<table><tr><td style="background:#2563EB;width:24px"></td><td>
+
+**Resonance:** submodule-parity, documentation-governance, release-readiness
+**Voice:** Terse
+
+### Done
+- Added 32 new overlay docs under `pmoves/docs/AGENTS/SUBMODULE_CODEX_HOMES`, bringing codex overlay coverage to **40/40** tracked submodules.
+- Closed all prior focus-module gaps; focus coverage is now **14/14**, including BotZ gateway, A2UI, AgentGym lanes, Creator, and `pmoves/integrations/archon`.
+- Regenerated the deterministic audit artifact with `make -C pmoves codex-audit` and updated `pmoves/docs/AGENTS/CODEX_SUBMODULE_INTEGRATION_AUDIT.md`.
+- Kept this lane docs-only with no submodule pointer churn.
+
+### Left Behind
+- Submodules remain not checked out in this workspace lane (`checked_out=0`), so this pass provides operator parity overlays rather than in-module native `.codex` assets.
+- Per-module native Codex docs still need upstream adoption in each submodule repo over time.
+
+### For Next Agent
+- When touching a submodule, port the overlay guidance into native `.codex` assets and link from that module README.
+- Re-run `make -C pmoves codex-audit` after any submodule add/rename to keep matrix parity deterministic.
+- Keep Graphiti + CHIT handoff updates in sync before hardened promotion PRs.
+
+</td></tr></table>
+
+<!-- /graphiti -->
+
+<!-- graphiti:codex phase:chit-floos-pr-monitor-weave ts:2026-02-28T18:05:00Z -->
+
+## ■ Codex — CHIT FlOO$ PR Monitor Flow Integration
+
+<table><tr><td style="background:#2563EB;width:24px"></td><td>
+
+**Resonance:** chit-flows, pr-governance, graphiti-handoff
+**Voice:** Terse
+
+### Done
+- Added CHIT/FlOO$ PR monitor flow targets:
+  - `make -C pmoves pr-monitor-chit-packet`
+  - `make -C pmoves floos-pr-monitor-validate`
+  - `make -C pmoves floos-pr-monitor-resolve`
+  - `make -C pmoves floos-pr-monitor-run-dry`
+  - `make -C pmoves chit-flow-pr-monitor`
+  - `make -C pmoves chit-flow-pr-monitor-strict`
+- Added FlOO$ pairing `pr-monitor-graphiti-chit` in `pmoves/configs/skill-pairings.yaml` with CHIT + Graphiti hook chain.
+- Updated CHIT flow index and operator target docs for the new lane.
+- Updated Graphiti/Codex runtime protocols to include CHIT packet + strict CHIT flow merge gate.
+
+### Left Behind
+- This Windows environment still throws Git Bash pipe/CreateFileMapping errors when invoking these targets through `make`.
+- Direct Python execution validates the same flow successfully (validate/resolve/dry-run + packet encode).
+
+### For Next Agent
+- Re-run `make -C pmoves chit-flow-pr-monitor-strict` on a shell host without the local Git Bash pipe restriction.
+- Keep `pmoves/docs/logs/pr_monitor_learnings_latest.cgp.json` runtime-generated; do not commit unless explicitly required as evidence.
+- Continue clearing actionable review comments until `pr-monitor-strict` is clean.
+
+</td></tr></table>
+
+<!-- /graphiti -->
+
+<!-- graphiti:codex phase:pr-monitor-learnings-upgrade ts:2026-02-28T17:25:00Z -->
+
+## ■ Codex — PR Monitor Learnings + Trail Integration
+
+<table><tr><td style="background:#2563EB;width:24px"></td><td>
+
+**Resonance:** review-ops, merge-readiness, trail-governance
+**Voice:** Terse
+
+### Done
+- Added `pmoves/tools/pr_monitor.py` support for full review surfaces:
+  - in-diff line comments
+  - out-of-diff comments
+  - PR issue comments
+  - review body comments
+- Added classification and reporting for `actionable`, `nitpick`, and `out-of-diff`.
+- Added learnings catalog output:
+  - `pmoves/docs/logs/pr_monitor_latest.json`
+  - `pmoves/docs/logs/pr_monitor_learnings_latest.md`
+- Wired monitor targets:
+  - `make -C pmoves pr-monitor`
+  - `make -C pmoves pr-monitor-strict`
+- Updated Graphiti/runtime protocol docs so PR learnings are required in handoff flow.
+
+### Left Behind
+- Merge queue still blocked by pending CI checks on active PRs.
+- Learnings artifacts are generated at runtime and should be reviewed each pass, not committed by default.
+
+### For Next Agent
+- Run `make -C pmoves pr-monitor-strict` before any merge attempt.
+- If actionable comments appear, fix in atomic commits and rerun strict monitor.
+- Keep trail entries synchronized with resolved review learnings.
+
+</td></tr></table>
+
+<!-- /graphiti -->
+
 <!-- graphiti:claude-opus phase:context-sync-codex-handoff ts:2026-02-25T15:00:00Z -->
 
 ## ◆ Claude Opus — Context Sync, CHIT Awareness Audit & CODEX Validation Handoff
@@ -554,4 +709,3 @@ Welcome home, ◇.
 </td></tr></table>
 
 <!-- /graphiti -->
-

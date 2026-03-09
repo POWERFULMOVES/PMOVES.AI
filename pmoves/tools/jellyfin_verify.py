@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import urllib.error
 import urllib.request
@@ -34,7 +35,16 @@ def _request_status(url: str, timeout: float = 5.0) -> int:
 def main() -> int:
     parser = argparse.ArgumentParser(description="Verify Jellyfin bridge/overlay readiness.")
     parser.add_argument("--bridge-url", default="http://localhost:8093", help="Jellyfin bridge base URL")
-    parser.add_argument("--jellyfin-url", default="http://localhost:8096", help="Jellyfin AI overlay URL")
+    parser.add_argument(
+        "--jellyfin-url",
+        default=os.environ.get("JELLYFIN_VERIFY_URL", "http://localhost:8096"),
+        help="Primary Jellyfin server URL",
+    )
+    parser.add_argument(
+        "--jellyfin-fallback-url",
+        default=os.environ.get("JELLYFIN_VERIFY_FALLBACK_URL", "http://localhost:9096"),
+        help="Fallback Jellyfin server URL used when primary probe fails",
+    )
     parser.add_argument("--api-url", default="http://localhost:8300/health", help="Jellyfin API gateway health URL")
     parser.add_argument("--dashboard-url", default="http://localhost:8400", help="Jellyfin dashboard URL")
     parser.add_argument("--timeout", type=float, default=5.0, help="HTTP timeout seconds")
@@ -48,11 +58,15 @@ def main() -> int:
         ("jellyfin-api", args.api_url),
         ("jellyfin-dashboard", args.dashboard_url),
     ]
+
+    jellyfin_server_ok = False
     for name, url in checks:
         try:
             code = _request_status(url, timeout=args.timeout)
             if code == 200:
                 print(f"[PASS] {name}: {url} -> {code}")
+                if name == "jellyfin-server":
+                    jellyfin_server_ok = True
             else:
                 print(f"[FAIL] {name}: {url} -> HTTP {code}")
                 failures.append(name)
@@ -62,6 +76,16 @@ def main() -> int:
         except Exception as exc:  # noqa: BLE001
             print(f"[FAIL] {name}: {url} unreachable ({exc})")
             failures.append(name)
+
+    if not jellyfin_server_ok and args.jellyfin_fallback_url and args.jellyfin_fallback_url != args.jellyfin_url:
+        try:
+            code = _request_status(args.jellyfin_fallback_url, timeout=args.timeout)
+            if code == 200:
+                print(f"[INFO] jellyfin-server-fallback: {args.jellyfin_fallback_url} -> {code} (diagnostic only, primary still failed)")
+            else:
+                print(f"[FAIL] jellyfin-server-fallback: {args.jellyfin_fallback_url} -> HTTP {code}")
+        except Exception as exc:  # noqa: BLE001
+            print(f"[FAIL] jellyfin-server-fallback: {args.jellyfin_fallback_url} unreachable ({exc})")
 
     refresh_url = f"{args.bridge_url}/jellyfin/refresh"
     try:

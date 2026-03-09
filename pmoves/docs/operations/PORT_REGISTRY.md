@@ -12,7 +12,7 @@ Central registry of all service ports to prevent conflicts and ensure consistenc
 | 6000-6999 | Vector/Search | Qdrant 6333, Meilisearch 7700† |
 | 7000-7999 | Core Services | Agent Zero 8080‡ |
 | 8000-8199 | Agent/Worker Services | session-context-worker 8100, gateway-agent 8100, github-runner-ctl 8104 |
-| 8200-8999 | Orchestration Services | Archon 8181 |
+| 8200-8999 | Orchestration Services | GPU Orchestrator 8200, Jellyfin AI Gateway 8300 |
 | 9000-9999 | Infrastructure | Prometheus 9090, NATS 4222‡ |
 
 *Postgres uses standard 5432
@@ -70,7 +70,9 @@ Central registry of all service ports to prevent conflicts and ensure consistenc
 | 8097 | Channel Monitor | External content watcher |
 | 8098 | DeepResearch | Research planner |
 | 8099 | SupaSerch | Multimodal search orchestrator |
+| 8074 | Transcribe Backend | Text transcription (PMOVES-transcribe-and-fetch) |
 | 8110 | Model Registry | Dynamic model configuration service |
+| 8200 | GPU Orchestrator | Dynamic GPU resource management & model lifecycle |
 
 ### Agent/Worker Services (Tier 3)
 

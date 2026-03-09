@@ -163,6 +163,11 @@ THEMES = {
 RETRO_SUB = Text("> PMOVES initial diagnostic boot sequence", style="bold cyan")
 
 
+def _terminal_supports_unicode() -> bool:
+    enc = (getattr(getattr(console, "file", None), "encoding", None) or "").lower()
+    return "utf" in enc or "65001" in enc
+
+
 def run_cmd(args: list[str]) -> tuple[bool, str]:
     try:
         cp = subprocess.run(args, capture_output=True, text=True, timeout=5)
@@ -237,24 +242,34 @@ PMOVES_BANNER = """
 ╚═════╝ ╚═╝     ╚═╝ ╚═════╝  ╚═════╝ ╚══════╝╚══════╝
 """
 
+PMOVES_BANNER_ASCII = r"""
+ ____  __  __  _____ __      ________  _____
+|  _ \|  \/  |/ _ \ V \    / /  ____|/ ____|
+| |_) | \  / | | | \  \ \  / /| |__  | (___
+|  __/| |\/| | | | |  |\ \/ / |  __|  \___ \
+| |   | |  | | |_| |  | \  /  | |____ ____) |
+|_|   |_|  |_|\___/|  |  \/   |______|_____/
+"""
+
 
 def _banner_text_for_theme(theme: str) -> Text:
     t = THEMES.get(theme, THEMES["green"])
+    banner = PMOVES_BANNER if _terminal_supports_unicode() else PMOVES_BANNER_ASCII
     if theme in ("neon", "galaxy") and "accent2" in t:
         # alternate lines between accent and accent2 for a quick retro gradient vibe
-        lines = PMOVES_BANNER.strip("\n").splitlines()
+        lines = banner.strip("\n").splitlines()
         out = Text()
         for i, ln in enumerate(lines):
             color = t["accent"] if i % 2 == 0 else t["accent2"]
             out.append(ln + "\n", style=color)
         return out
-    return Text(PMOVES_BANNER, style=t["accent"])
+    return Text(banner, style=t["accent"])
 
 
 def boot_animation(theme: str = "green"):
     """CRT-like flicker followed by a big PMOVES banner."""
     t = THEMES.get(theme, THEMES["green"])
-    noise_chars = [" ", "░", "▒", "▓", "░", " "]
+    noise_chars = [" ", "░", "▒", "▓", "░", " "] if _terminal_supports_unicode() else [" ", ".", ":", "#", ":", " "]
     width = 60
     height = 6
     for i in range(8):

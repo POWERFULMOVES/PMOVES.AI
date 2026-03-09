@@ -509,15 +509,15 @@ services:
     profiles:
     - supabase-local
     environment:
-    - POSTGRES_USER=${SUPABASE_DB_USER}
-    - POSTGRES_PASSWORD=${SUPABASE_DB_PASSWORD}
-    - POSTGRES_DB=${SUPABASE_DB_NAME}
+    - POSTGRES_USER=${SUPABASE_DB_USER:?Set SUPABASE_DB_USER in env.tier-supabase}
+    - POSTGRES_PASSWORD=${SUPABASE_DB_PASSWORD:?Set SUPABASE_DB_PASSWORD in env.tier-supabase}
+    - POSTGRES_DB=${SUPABASE_DB_NAME:-postgres}
     - POSTGRES_INITDB_ARGS=--encoding=UTF-8
     # PMOVES extensions
-    - DOCKED_MODE=${DOCKED_MODE}
+    - DOCKED_MODE=${DOCKED_MODE:-true}
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
-    - PARENT_SYSTEM=${PARENT_SYSTEM}
-    - PARENT_VERSION=${PARENT_VERSION}
+    - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
+    - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 10s
@@ -545,14 +545,14 @@ services:
     - GOTRUE_API_PORT=9999
     # Database connection
     - GOTRUE_DB_DRIVER=postgres
-    - GOTRUE_DB_DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD_URLENCODED:-${POSTGRES_PASSWORD}}@supabase-db:5432/${POSTGRES_DB}?sslmode=disable
+    - GOTRUE_DB_DATABASE_URL=postgres://${POSTGRES_USER:-${SUPABASE_DB_USER:-postgres}}:${POSTGRES_PASSWORD_URLENCODED:-${POSTGRES_PASSWORD:-${SUPABASE_DB_PASSWORD:-postgres}}}@supabase-db:5432/${POSTGRES_DB:-${SUPABASE_DB_NAME:-postgres}}?sslmode=disable
     # JWT configuration (2025: RS256)
     # Standard variable names from PMOVES-supabase fork with fallbacks
     - GOTRUE_JWT_SECRET=${JWT_SECRET:-${SUPABASE_JWT_SECRET}}
     - GOTRUE_JWT_ALGORITHM=${SUPABASE_JWT_ALGORITHM:-HS256}
     - GOTRUE_JWT_EXP=${JWT_EXPIRY:-${SUPABASE_JWT_EXP:-3600} }
     # 2025 key naming (service_role_key from PMOVES-supabase standard)
-    - GOTRUE_JWT_ADMIN_SECRET=${SERVICE_ROLE_KEY:-${SUPABASE_SECRET_KEY:-}}
+    - GOTRUE_JWT_ADMIN_SECRET=${SUPABASE_SERVICE_ROLE_KEY:-${SERVICE_ROLE_KEY:?Set SERVICE_ROLE_KEY or SUPABASE_SERVICE_ROLE_KEY}}
     - GOTRUE_JWT_DEFAULT_GROUP_NAME=authenticated
     # Logging
     - GOTRUE_LOG_LEVEL=info
@@ -566,10 +566,10 @@ services:
     - GOTRUE_EXTERNAL_GOOGLE_REDIRECT_URI=${SUPABASE_AUTH_EXTERNAL_GOOGLE_REDIRECT_URI:-}
     - GOTRUE_EXTERNAL_GOOGLE_SKIP_NONCE_CHECK=${SUPABASE_AUTH_EXTERNAL_GOOGLE_SKIP_NONCE_CHECK:-false}
     # PMOVES context
-    - DOCKED_MODE=${DOCKED_MODE}
+    - DOCKED_MODE=${DOCKED_MODE:-true}
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
-    - PARENT_SYSTEM=${PARENT_SYSTEM}
-    - PARENT_VERSION=${PARENT_VERSION}
+    - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
+    - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9999/health"]
       interval: 15s
@@ -593,23 +593,23 @@ services:
     - supabase-local
     environment:
     # Database connection (from env.tier-supabase)
-    - PGRST_DB_URI=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD_URLENCODED:-${POSTGRES_PASSWORD}}@supabase-db:5432/${POSTGRES_DB}
+    - PGRST_DB_URI=postgres://${POSTGRES_USER:-${SUPABASE_DB_USER:-postgres}}:${POSTGRES_PASSWORD_URLENCODED:-${POSTGRES_PASSWORD:-${SUPABASE_DB_PASSWORD:-postgres}}}@supabase-db:5432/${POSTGRES_DB:-${SUPABASE_DB_NAME:-postgres}}
     # JWT secret (must match gotrue) - standard variable name
     - PGRST_JWT_SECRET=${JWT_SECRET:-${SUPABASE_JWT_SECRET:-}}
-    - PGRST_JWT_ALGORITHM=${SUPABASE_JWT_ALGORITHM}
+    - PGRST_JWT_ALGORITHM=${SUPABASE_JWT_ALGORITHM:-HS256}
     # 2025 key naming (service role key for admin access)
     - PGRST_JWT_SECRET_IS_BASE64=false
     # API configuration
-    - PGRST_SCHEMA=${SUPABASE_SCHEMA}
-    - PGRST_ANON_ROLE=${SUPABASE_ANON_ROLE}
-    - PGRST_DB_MAX_ROWS=${SUPABASE_MAX_ROWS}
-    - PGRST_DB_POOL=${SUPABASE_DB_POOL}
-    - PGRST_DB_POOL_TIMEOUT=${SUPABASE_POOL_TIMEOUT}
+    - PGRST_DB_SCHEMAS=${SUPABASE_SCHEMA:-public,pmoves_core}
+    - PGRST_ANON_ROLE=${SUPABASE_ANON_ROLE:-anon}
+    - PGRST_DB_MAX_ROWS=${SUPABASE_MAX_ROWS:-1000}
+    - PGRST_DB_POOL=${SUPABASE_DB_POOL:-15}
+    - PGRST_DB_POOL_TIMEOUT=${SUPABASE_POOL_TIMEOUT:-5}
     # PMOVES context
-    - DOCKED_MODE=${DOCKED_MODE}
+    - DOCKED_MODE=${DOCKED_MODE:-true}
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
-    - PARENT_SYSTEM=${PARENT_SYSTEM}
-    - PARENT_VERSION=${PARENT_VERSION}
+    - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
+    - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
     # Note: No healthcheck - postgrest/postgrest image is distroless without shell tools
     depends_on:
       supabase-db:
@@ -630,9 +630,9 @@ services:
     # Database configuration (Kong uses Postgres for config storage)
     - KONG_DATABASE=postgres
     - KONG_PG_HOST=supabase-db
-    - KONG_PG_DATABASE=${POSTGRES_DB}
-    - KONG_PG_USER=${POSTGRES_USER}
-    - KONG_PG_PASSWORD=${POSTGRES_PASSWORD}
+    - KONG_PG_DATABASE=${POSTGRES_DB:-${SUPABASE_DB_NAME:-postgres}}
+    - KONG_PG_USER=${POSTGRES_USER:-${SUPABASE_DB_USER:-postgres}}
+    - KONG_PG_PASSWORD=${POSTGRES_PASSWORD:-${SUPABASE_DB_PASSWORD:-postgres}}
     # Kong configuration
     - KONG_PROXY_ACCESS_LOG=/dev/stdout
     - KONG_ADMIN_ACCESS_LOG=/dev/stdout
@@ -644,10 +644,10 @@ services:
     - KONG_PLUGINS=bundled,jwt
     - KONG_NGINX_PROXY_PROXY_BUFFERS=8 16k
     # PMOVES context
-    - DOCKED_MODE=${DOCKED_MODE}
+    - DOCKED_MODE=${DOCKED_MODE:-true}
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
-    - PARENT_SYSTEM=${PARENT_SYSTEM}
-    - PARENT_VERSION=${PARENT_VERSION}
+    - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
+    - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
     entrypoint: ["/bin/sh", "-c", "kong migrations bootstrap --yes 2>/dev/null || true; exec /docker-entrypoint.sh kong docker-start"]
     healthcheck:
       test: ["CMD", "kong", "health"]
@@ -675,9 +675,9 @@ services:
     # Database connection
     - DB_HOST=supabase-db
     - DB_PORT=5432
-    - DB_NAME=${POSTGRES_DB}
-    - DB_USER=${POSTGRES_USER}
-    - DB_PASSWORD=${POSTGRES_PASSWORD}
+    - DB_NAME=${POSTGRES_DB:-${SUPABASE_DB_NAME:-postgres}}
+    - DB_USER=${POSTGRES_USER:-${SUPABASE_DB_USER:-postgres}}
+    - DB_PASSWORD=${POSTGRES_PASSWORD:-${SUPABASE_DB_PASSWORD:-postgres}}
     - DB_SSL=false
     # App configuration
     - APP_NAME=realtime
@@ -685,12 +685,12 @@ services:
     - RLIMIT_NOFILE=1048576
     # JWT secret (must match gotrue) - standard variable name
     - JWT_SECRET=${JWT_SECRET:-${SUPABASE_JWT_SECRET:-}}
-    - SECRET_KEY_BASE=${SUPABASE_REALTIME_SECRET}
+    - SECRET_KEY_BASE=${SUPABASE_REALTIME_SECRET:-${JWT_SECRET:-${SUPABASE_JWT_SECRET:-}}}
     # PMOVES context
-    - DOCKED_MODE=${DOCKED_MODE}
+    - DOCKED_MODE=${DOCKED_MODE:-true}
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
-    - PARENT_SYSTEM=${PARENT_SYSTEM}
-    - PARENT_VERSION=${PARENT_VERSION}
+    - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
+    - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
     # Healthcheck: Simple HTTP check (Realtime serves HTML on /)
     # Note: Official Supabase uses /api/tenants/{tenant}/health with Bearer token, but that endpoint returns 500 until DB migrations complete
     healthcheck:
@@ -716,32 +716,32 @@ services:
     - supabase-local
     environment:
     # 2025 key naming - standard Supabase variable names with fallbacks
-    - ANON_KEY=${ANON_KEY:-${SUPABASE_PUBLISHABLE_KEY:-}}
-    - SERVICE_KEY=${SERVICE_ROLE_KEY:-${SUPABASE_SECRET_KEY:-}}
+    - ANON_KEY=${SUPABASE_ANON_KEY:-${ANON_KEY:-${SUPABASE_PUBLISHABLE_KEY:-}}}
+    - SERVICE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-${SERVICE_ROLE_KEY:-${SUPABASE_SECRET_KEY:-}}}
     # JWT secret - standard variable name
     - PGRST_JWT_SECRET=${JWT_SECRET:-${SUPABASE_JWT_SECRET:-}}
-    - PGRST_JWT_ALGORITHM=${SUPABASE_JWT_ALGORITHM}
+    - PGRST_JWT_ALGORITHM=${SUPABASE_JWT_ALGORITHM:-HS256}
     # PostgREST connection
     - POSTGREST_URL=http://supabase-postgrest:3000
     # Database connection (use env variables, not hardcoded credentials)
-    - DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD_URLENCODED:-${POSTGRES_PASSWORD}}@supabase-db:5432/${POSTGRES_DB}
+    - DATABASE_URL=postgres://${POSTGRES_USER:-${SUPABASE_DB_USER:-postgres}}:${POSTGRES_PASSWORD_URLENCODED:-${POSTGRES_PASSWORD:-${SUPABASE_DB_PASSWORD:-postgres}}}@supabase-db:5432/${POSTGRES_DB:-${SUPABASE_DB_NAME:-postgres}}
     # Storage configuration
     - FILE_SIZE_LIMIT=52428800
     - STORAGE_BACKEND=file
     - FILE_STORAGE_BACKEND_PATH=/var/lib/storage
-    - REGION=${SUPABASE_STORAGE_REGION}
+    - REGION=${SUPABASE_STORAGE_REGION:-local}
     # Global S3 bucket (if using MinIO for actual storage)
-    - GLOBAL_S3_BUCKET=${SUPABASE_S3_BUCKET}
-    - GLOBAL_S3_ENDPOINT=${MINIO_ENDPOINT}
+    - GLOBAL_S3_BUCKET=${SUPABASE_S3_BUCKET:-assets}
+    - GLOBAL_S3_ENDPOINT=${MINIO_ENDPOINT:-http://minio:9000}
     - GLOBAL_S3_FORCE_PATH_STYLE=true
     # Tenant mode (single tenant for self-hosted)
     - TENANT_ID=stub
-    - TENANTSStub_REGION=${SUPABASE_STORAGE_REGION}
+    - TENANTSStub_REGION=${SUPABASE_STORAGE_REGION:-local}
     # PMOVES context
-    - DOCKED_MODE=${DOCKED_MODE}
+    - DOCKED_MODE=${DOCKED_MODE:-true}
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
-    - PARENT_SYSTEM=${PARENT_SYSTEM}
-    - PARENT_VERSION=${PARENT_VERSION}
+    - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
+    - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
     # Healthcheck: Use 127.0.0.1 explicitly (localhost resolves to ::1 on IPv6, causing connection refused)
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:5000/status"]
@@ -776,12 +776,12 @@ services:
     - SUPABASE_URL=http://supabase-gotrue:9999
     # 2025 key naming - standard variable names with fallbacks
     - SUPABASE_PUBLIC_URL=${API_EXTERNAL_URL:-${SUPABASE_PUBLIC_URL:-}}
-    - SUPABASE_ANON_KEY=${ANON_KEY:-${SUPABASE_PUBLISHABLE_KEY:-}}
+    - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY:-${ANON_KEY:-${SUPABASE_PUBLISHABLE_KEY:-}}}
     # PMOVES context
-    - DOCKED_MODE=${DOCKED_MODE}
+    - DOCKED_MODE=${DOCKED_MODE:-true}
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
-    - PARENT_SYSTEM=${PARENT_SYSTEM}
-    - PARENT_VERSION=${PARENT_VERSION}
+    - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
+    - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
     # Healthcheck: External check (Next.js 16 binds to container hostname, not localhost)
     # Note: Official Supabase uses node -e fetch but their image has different network config
     # We rely on container being started successfully (logs show "Ready in Xms")
@@ -827,6 +827,12 @@ services:
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
     volumes:
     - qdrant-data:/qdrant/storage
+    healthcheck:
+      test: ["CMD-SHELL", "bash -lc \"exec 3<>/dev/tcp/127.0.0.1/6333 && printf 'GET /healthz HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && grep -q '200 OK' <&3\" || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 15s
   meilisearch:
     <<: *tier-data-hardened
     image: getmeili/meilisearch:v1.8
@@ -843,6 +849,12 @@ services:
     - pmoves_data
     volumes:
     - meilisearch-data:/meili_data
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:7700/health >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 15s
   neo4j:
     image: neo4j:5.22
     env_file:
@@ -903,6 +915,12 @@ services:
     networks:
     - pmoves_data
     - pmoves_bus
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:9000/minio/health/live || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 15s
   hi-rag-gateway:
     <<: *tier-api-hardened
     build:
@@ -929,16 +947,16 @@ services:
     - TAILSCALE_CIDRS=${TAILSCALE_CIDRS:-}
     - CHIT_REQUIRE_SIGNATURE=${CHIT_PROD_REQUIRE_SIGNATURE:-true}
     - CHIT_DECRYPT_ANCHORS=${CHIT_PROD_DECRYPT_ANCHORS:-true}
-    - CHIT_PASSPHRASE=${CHIT_PROD_PASSPHRASE:-${JWT_SECRET:-}}
+    - CHIT_PASSPHRASE=${CHIT_PROD_PASSPHRASE:?set CHIT_PROD_PASSPHRASE in env.shared}
     - DOCKED_MODE=${DOCKED_MODE:-true}
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
     ports:
-    - ${HIRAG_V2_HOST_PORT:-8089}:8086
+    - ${HIRAG_V1_HOST_PORT:-8089}:8086
     depends_on:
       qdrant:
-        condition: service_started
+        condition: service_healthy
         required: false
       neo4j:
         condition: service_healthy
@@ -947,6 +965,12 @@ services:
     - pmoves_api
     - pmoves_data
     - pmoves_bus
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8086/hirag/admin/stats', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
   retrieval-eval:
     <<: *tier-worker-hardened
     build: ./services/retrieval-eval
@@ -961,10 +985,17 @@ services:
     volumes:
     - ./services/retrieval-eval:/app:rw
     - ./datasets:/app/data:rw
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8090/healthz', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
     profiles:
     - workers
     networks:
     - pmoves_app
+    - pmoves_api
     - pmoves_bus
     extra_hosts:
     - host.docker.internal:host-gateway
@@ -985,15 +1016,24 @@ services:
     networks:
     - pmoves_api
     - pmoves_bus
+    - pmoves_external
     depends_on:
       minio:
-        condition: service_started
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/healthz', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
   render-webhook:
     <<: *tier-api-hardened
     build: ./services/render-webhook
     restart: unless-stopped
     environment:
-    - SUPA_REST_URL=${SUPA_REST_URL:-http://host.docker.internal:54321/rest/v1}
+    - SUPA_REST_URL=${RENDER_WEBHOOK_SUPA_REST_URL:-${SUPA_REST_INTERNAL_URL:-${SUPA_REST_URL:-http://supabase-postgrest:3000}}}
+    - SUPABASE_SERVICE_ROLE_KEY=${RENDER_WEBHOOK_SUPABASE_SERVICE_ROLE_KEY:-${SUPABASE_SERVICE_ROLE_KEY:-${SERVICE_ROLE_KEY:-}}}
+    - SUPABASE_ANON_KEY=${RENDER_WEBHOOK_SUPABASE_ANON_KEY:-${SUPABASE_ANON_KEY:-${ANON_KEY:-}}}
     - DEFAULT_NAMESPACE=${INDEXER_NAMESPACE:-pmoves}
     - RENDER_AUTO_APPROVE=${RENDER_AUTO_APPROVE:-false}
     ports:
@@ -1010,6 +1050,12 @@ services:
     depends_on:
       nats:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8085/healthz', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
   model-registry:
     <<: *tier-api-hardened
     build:
@@ -1017,8 +1063,9 @@ services:
       dockerfile: Dockerfile
     restart: unless-stopped
     environment:
-    - SUPABASE_URL=${MODEL_REGISTRY_SUPABASE_URL:-http://host.docker.internal:54321}
-    - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY:-}
+    - SUPABASE_URL=${MODEL_REGISTRY_SUPABASE_URL:-http://supabase_kong_PMOVES.AI:8000}
+    - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY:-${SUPABASE_SERVICE_ROLE_KEY:?MODEL_REGISTRY requires SUPABASE_SERVICE_KEY or SUPABASE_SERVICE_ROLE_KEY}}
+    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
     - MODEL_REGISTRY_PORT=${MODEL_REGISTRY_PORT:-8110}
     - DOCKED_MODE=${DOCKED_MODE:-true}
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
@@ -1026,16 +1073,20 @@ services:
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
     ports:
     - ${MODEL_REGISTRY_PORT:-8110}:8110
+    depends_on:
+      nats:
+        condition: service_healthy
+        required: false
     profiles:
     - orchestration
     healthcheck:
       test:
       - CMD-SHELL
       - curl -f http://localhost:8110/healthz || exit 1
-      interval: 15s
-      timeout: 5s
+      interval: 30s
+      timeout: 10s
       retries: 5
-      start_period: 10s
+      start_period: 30s
     networks:
     - pmoves_api
     - pmoves_bus
@@ -1064,11 +1115,17 @@ services:
     - host.docker.internal:host-gateway
     depends_on:
       qdrant:
-        condition: service_started
+        condition: service_healthy
       meilisearch:
-        condition: service_started
+        condition: service_healthy
       minio:
-        condition: service_started
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8083/healthz', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
   pdf-ingest:
     <<: *tier-worker-hardened
     build:
@@ -1088,7 +1145,7 @@ services:
       extract-worker:
         condition: service_started
       minio:
-        condition: service_started
+        condition: service_healthy
     ports:
     - ${PDF_INGEST_PORT:-8092}:8092
     profiles:
@@ -1097,6 +1154,12 @@ services:
     networks:
     - pmoves_app
     - pmoves_bus
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8092/healthz', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
   langextract:
     <<: *tier-worker-hardened
     build:
@@ -1110,11 +1173,18 @@ services:
     - orchestration
     networks:
     - pmoves_app
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8084/healthz', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
   notebook-sync:
     <<: *tier-worker-hardened
     build: ./services/notebook-sync
     restart: unless-stopped
     environment:
+    - OPEN_NOTEBOOK_API_URL=${NOTEBOOK_SYNC_OPEN_NOTEBOOK_API_URL:-http://open-notebook:5055}
     - OPEN_NOTEBOOK_API_TOKEN=${OPEN_NOTEBOOK_API_TOKEN:-}
     - NOTEBOOK_SYNC_INTERVAL_SECONDS=${NOTEBOOK_SYNC_INTERVAL_SECONDS:-300}
     - NOTEBOOK_SYNC_NAMESPACE=${NOTEBOOK_SYNC_NAMESPACE:-open-notebook}
@@ -1136,6 +1206,48 @@ services:
     networks:
     - pmoves_app
     - pmoves_bus
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8095/healthz', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+  # Transcribe-and-Fetch backend (submodule: PMOVES-transcribe-and-fetch)
+  transcribe-backend:
+    <<: *tier-worker-hardened
+    build:
+      context: ../PMOVES-transcribe-and-fetch
+      dockerfile: backend/Dockerfile
+    image: ${TRANSCRIBE_BACKEND_IMAGE:-ghcr.io/powerfulmoves/pmoves-transcribe-backend:latest}
+    restart: unless-stopped
+    environment:
+    - SUPABASE_URL=${SUPA_REST_INTERNAL_URL:-${SUPA_REST_URL:-http://supabase-kong:8000/rest/v1}}
+    - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-}
+    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - MINIO_ENDPOINT=${MINIO_ENDPOINT:-minio:9000}
+    - MINIO_SECURE=${MINIO_SECURE:-false}
+    depends_on:
+      nats:
+        condition: service_healthy
+        required: false
+      minio:
+        condition: service_healthy
+    ports:
+    - ${TRANSCRIBE_HOST_PORT:-8074}:8000
+    profiles:
+    - workers
+    networks:
+    - pmoves_app
+    - pmoves_bus
+    - pmoves_api
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthz', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
   ffmpeg-whisper:
     <<: *tier-media-hardened
     build:
@@ -1168,6 +1280,12 @@ services:
     networks:
     - pmoves_app
     - pmoves_bus
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8078/healthz', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
   media-video:
     <<: *tier-media-hardened
     build: ./services/media-video
@@ -1194,6 +1312,12 @@ services:
     networks:
     - pmoves_app
     - pmoves_bus
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8079/healthz', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
   media-audio:
     <<: *tier-media-hardened
     build: ./services/media-audio
@@ -1218,6 +1342,12 @@ services:
     networks:
     - pmoves_app
     - pmoves_bus
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8082/healthz', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
   pmoves-yt:
     <<: *tier-media-hardened
     image: ${PMOVES_YT_IMAGE:-}
@@ -1233,7 +1363,7 @@ services:
     - YT_BUCKET=${YT_BUCKET:-assets}
     - YT_OUTPUT_BUCKET=${YT_OUTPUT_BUCKET:-outputs}
     - INDEXER_NAMESPACE=${INDEXER_NAMESPACE:-pmoves}
-    - SUPA_REST_URL=${SUPA_REST_INTERNAL_URL:-${SUPA_REST_URL:-http://host.docker.internal:54321/rest/v1}}
+    - SUPA_REST_URL=${PMOVES_YT_SUPA_REST_URL:-${SUPABASE_REST_URL:-http://supabase-postgrest:3000}}
     - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
     - HIRAG_URL=${HIRAG_URL:-http://hi-rag-gateway-v2:8086}
     - YT_PLAYER_CLIENT=${YT_PLAYER_CLIENT:-web_safari}
@@ -1255,13 +1385,20 @@ services:
     - ./config:/app/config
     depends_on:
       minio:
-        condition: service_started
+        condition: service_healthy
     ports:
     - ${PMOVES_YT_PORT:-8077}:8077
     networks:
     - pmoves_app
+    - pmoves_api
     - pmoves_bus
     - pmoves_external  # Required for YouTube API access
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8077/healthz', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
   bgutil-pot-provider:
     image: brainicism/bgutil-ytdlp-pot-provider:1.2.2
     restart: unless-stopped
@@ -1276,6 +1413,12 @@ services:
     - pmoves_app
     - pmoves_bus
     - pmoves_external  # Required for YouTube processing
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -f 'node|python' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
   channel-monitor:
     <<: *tier-agent-hardened-ro
     build: ./services/channel-monitor
@@ -1284,6 +1427,7 @@ services:
     - CHANNEL_MONITOR_CONFIG_PATH=${CHANNEL_MONITOR_CONFIG_PATH:-/app/config/channel_monitor.json}
     - CHANNEL_MONITOR_QUEUE_URL=${CHANNEL_MONITOR_QUEUE_URL:-http://pmoves-yt:8077/yt/ingest}
     - CHANNEL_MONITOR_NAMESPACE=${CHANNEL_MONITOR_NAMESPACE:-pmoves}
+    - OPEN_NOTEBOOK_API_URL=${CHANNEL_MONITOR_OPEN_NOTEBOOK_API_URL:-http://open-notebook:5055}
     # Database URL - points to Supabase DB (note: supabase-db runs on pmoves_data network)
     - CHANNEL_MONITOR_DATABASE_URL=${CHANNEL_MONITOR_DATABASE_URL:-postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD_URLENCODED:-${POSTGRES_PASSWORD:-postgres}}@supabase-db:5432/${POSTGRES_DB:-postgres}}
     - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
@@ -1291,6 +1435,8 @@ services:
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
+    extra_hosts:
+    - host.docker.internal:host-gateway
     volumes:
     - ./config:/app/config
     depends_on:
@@ -1300,6 +1446,12 @@ services:
         condition: service_healthy
     ports:
     - ${CHANNEL_MONITOR_PORT:-8097}:8097
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8097/healthz', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
     networks:
     - pmoves_app
     - pmoves_bus
@@ -1343,7 +1495,7 @@ services:
     - SUPABASE_REALTIME_URL=${SUPABASE_REALTIME_URL:-ws://host.docker.internal:54321/realtime/v1}
     - CHIT_REQUIRE_SIGNATURE=${CHIT_PROD_REQUIRE_SIGNATURE:-true}
     - CHIT_DECRYPT_ANCHORS=${CHIT_PROD_DECRYPT_ANCHORS:-true}
-    - CHIT_PASSPHRASE=${CHIT_PROD_PASSPHRASE:-${JWT_SECRET:-}}
+    - CHIT_PASSPHRASE=${CHIT_PROD_PASSPHRASE:?set CHIT_PROD_PASSPHRASE in env.shared}
     - DOCKED_MODE=${DOCKED_MODE:-true}
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
@@ -1354,7 +1506,7 @@ services:
     - ${HIRAG_V2_HOST_PORT:-8086}:8086
     depends_on:
       qdrant:
-        condition: service_started
+        condition: service_healthy
       neo4j:
         condition: service_healthy
     networks:
@@ -1362,6 +1514,12 @@ services:
     - pmoves_data
     - pmoves_bus
     - pmoves_external  # Required for reranker API calls
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8086/hirag/admin/stats', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
   hi-rag-gateway-gpu:
     <<: *tier-api-hardened
     build:
@@ -1395,7 +1553,7 @@ services:
     - RERANK_K=${RERANK_K:-10}
     - CHIT_REQUIRE_SIGNATURE=${CHIT_PROD_REQUIRE_SIGNATURE:-true}
     - CHIT_DECRYPT_ANCHORS=${CHIT_PROD_DECRYPT_ANCHORS:-true}
-    - CHIT_PASSPHRASE=${CHIT_PROD_PASSPHRASE:-${JWT_SECRET:-}}
+    - CHIT_PASSPHRASE=${CHIT_PROD_PASSPHRASE:?set CHIT_PROD_PASSPHRASE in env.shared}
     - DOCKED_MODE=${DOCKED_MODE:-true}
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
@@ -1411,7 +1569,7 @@ services:
     - ${HIRAG_V2_GPU_HOST_PORT:-8090}:8086
     depends_on:
       qdrant:
-        condition: service_started
+        condition: service_healthy
         required: false
       neo4j:
         condition: service_healthy
@@ -1420,6 +1578,12 @@ services:
     - pmoves_api
     - pmoves_data
     - pmoves_bus
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8086/hirag/admin/stats', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
   hi-rag-gateway-v2-gpu:
     <<: *tier-api-hardened-gpu
     build:
@@ -1474,7 +1638,7 @@ services:
     - TENSORZERO_EMBED_MODEL=${TENSORZERO_EMBED_MODEL:-tensorzero::embedding_model_name::gemma_embed_local}
     - CHIT_REQUIRE_SIGNATURE=${CHIT_PROD_REQUIRE_SIGNATURE:-true}
     - CHIT_DECRYPT_ANCHORS=${CHIT_PROD_DECRYPT_ANCHORS:-true}
-    - CHIT_PASSPHRASE=${CHIT_PROD_PASSPHRASE:-${JWT_SECRET:-}}
+    - CHIT_PASSPHRASE=${CHIT_PROD_PASSPHRASE:?set CHIT_PROD_PASSPHRASE in env.shared}
     - NVIDIA_DRIVER_CAPABILITIES=${NVIDIA_DRIVER_CAPABILITIES:-compute,utility}
     - DOCKED_MODE=${DOCKED_MODE:-true}
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
@@ -1492,7 +1656,7 @@ services:
     - ${HIRAG_V2_GPU_HOST_PORT:-8087}:8086
     depends_on:
       qdrant:
-        condition: service_started
+        condition: service_healthy
         required: false
       neo4j:
         condition: service_healthy
@@ -1504,6 +1668,12 @@ services:
     - pmoves_external  # Required for hub fallback and host-gateway Supabase routes
     extra_hosts:
     - host.docker.internal:host-gateway
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8086/hirag/admin/stats', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
   nats:
     <<: *tier-data-hardened
     # Pinned 2025-02-04: Latest stable 2.11.x alpine version
@@ -1564,23 +1734,42 @@ services:
     - PORT=8080
     # NATS_URL from env.tier-agent has credentials: nats://nats:pmoves@nats:4222
     - AGENT_ZERO_API_BASE=${AGENT_ZERO_API_BASE:-http://127.0.0.1:80}
+    - AGENT_ZERO_HEALTH_PATH=${AGENT_ZERO_HEALTH_PATH:-/healthz}
+    - AGENT_ZERO_HEALTH_PATH_FALLBACK=${AGENT_ZERO_HEALTH_PATH_FALLBACK:-/health}
     - AGENT_ZERO_CAPTURE_OUTPUT=${AGENT_ZERO_CAPTURE_OUTPUT:-true}
     - AGENT_ZERO_EXTRA_ARGS=${AGENT_ZERO_EXTRA_ARGS:---port=80 --host=0.0.0.0}
+    - PYTHONPATH=${AGENT_ZERO_PYTHONPATH:-/app:/app/services}
     - AGENTZERO_JETSTREAM=${AGENTZERO_JETSTREAM:-true}
     - AGENTZERO_JS_UNAVAILABLE_THRESHOLD=${AGENTZERO_JS_UNAVAILABLE_THRESHOLD:-1}
     - TENSORZERO_URL=${TENSORZERO_URL:-http://tensorzero-gateway:3000}
     - CHIT_REQUIRE_SIGNATURE=${CHIT_PROD_REQUIRE_SIGNATURE:-true}
     - CHIT_DECRYPT_ANCHORS=${CHIT_PROD_DECRYPT_ANCHORS:-true}
-    - CHIT_PASSPHRASE=${CHIT_PROD_PASSPHRASE:-${JWT_SECRET:-}}
+    - CHIT_PASSPHRASE=${CHIT_PROD_PASSPHRASE:?set CHIT_PROD_PASSPHRASE in env.shared}
     - DOCKED_MODE=${DOCKED_MODE:-true}
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
+    # LLM routing: use TensorZero gateway as OpenAI-compatible provider
+    # Agent Zero's get_default_value() reads A0_SET_* from env (dotenv priority)
+    - A0_SET_chat_model_provider=openai
+    - A0_SET_chat_model_name=agent_zero
+    - A0_SET_chat_model_api_base=http://tensorzero-gateway:3000/openai/v1
+    - A0_SET_util_model_provider=openai
+    - A0_SET_util_model_name=langextract
+    - A0_SET_util_model_api_base=http://tensorzero-gateway:3000/openai/v1
+    - A0_SET_embed_model_provider=openai
+    - A0_SET_embed_model_name=gemma_embed_local
+    - A0_SET_embed_model_api_base=http://tensorzero-gateway:3000/openai/v1
+    - A0_SET_browser_model_provider=openai
+    - A0_SET_browser_model_name=agent_zero
+    - A0_SET_browser_model_api_base=http://tensorzero-gateway:3000/openai/v1
     depends_on:
       nats:
         condition: service_healthy
       nats-init:
         condition: service_completed_successfully
+      tensorzero-gateway:
+        condition: service_healthy
     ports:
     - ${AGENT_ZERO_PORT:-8080}:8080
     - ${AGENT_ZERO_PORT:-8081}:80
@@ -1626,16 +1815,23 @@ services:
       - ARCHON_VENDOR_FORCE_PLACEHOLDER=${ARCHON_VENDOR_FORCE_PLACEHOLDER:-0}
       - ENVIRONMENT=${ENVIRONMENT:-production}
       - ARCHON_ENV=${ARCHON_ENV:-production}
-      # Prefer runtime-resolved Supabase URLs (CLI or compose) instead of hardcoding postgrest.
-      - ARCHON_SUPABASE_BASE_URL=${ARCHON_SUPABASE_BASE_URL:-${SUPA_REST_INTERNAL_URL:-${SUPA_REST_URL:-http://host.docker.internal:65421/rest/v1}}}
-      - SUPABASE_URL=${SUPABASE_INTERNAL_URL:-http://host.docker.internal:65421}
-      - SUPABASE_REST_URL=${SUPA_REST_INTERNAL_URL:-${SUPA_REST_URL:-http://host.docker.internal:65421/rest/v1}}
-      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
-      - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+      # Compose-first Archon Supabase wiring. CLI mode can override via
+      # ARCHON_SUPABASE_* / SUPABASE_* env values.
+      - ARCHON_SUPABASE_BASE_URL=${ARCHON_SUPABASE_BASE_URL:-${ARCHON_SUPABASE_REST_URL:-${SUPABASE_REST_URL:-http://supabase-postgrest:3000}}}
+      - SUPABASE_URL=${ARCHON_SUPABASE_URL:-${SUPABASE_INTERNAL_URL:-http://supabase-postgrest:3000}}
+      - SUPABASE_REST_URL=${ARCHON_SUPABASE_REST_URL:-${SUPABASE_REST_URL:-http://supabase-postgrest:3000}}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-${SERVICE_ROLE_KEY:-${SUPABASE_SECRET_KEY:-}}}
+      - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY:-${SUPABASE_SERVICE_ROLE_KEY:-${SERVICE_ROLE_KEY:-${SUPABASE_SECRET_KEY:-}}}}
       - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
-      - SUPA_REST_URL=${SUPA_REST_INTERNAL_URL:-${SUPA_REST_URL:-http://host.docker.internal:65421/rest/v1}}
+      - SUPA_REST_URL=${ARCHON_SUPABASE_REST_URL:-${SUPABASE_REST_URL:-http://supabase-postgrest:3000}}
+      # TensorZero routing — _sync_openai_compat_env() in services/archon/main.py
+      # reads TENSORZERO_BASE_URL and populates OPENAI_COMPATIBLE_BASE_URL* vars
+      - TENSORZERO_BASE_URL=${TENSORZERO_BASE_URL:-http://tensorzero-gateway:3000}
+      - TENSORZERO_URL=${TENSORZERO_URL:-http://tensorzero-gateway:3000}
     depends_on:
       nats:
+        condition: service_healthy
+      tensorzero-gateway:
         condition: service_healthy
     command:
     - python
@@ -1683,7 +1879,7 @@ services:
       - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
       - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
       - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
-    command: ["node", "dist/src/app/index.cjs", "--mode", "api", "--port", "3000", "--host", "0.0.0.0", "--agent", "/app/memAgent/cipher.yml"]
+    command: ["node", "dist/src/app/index.cjs", "--mode", "api", "--port", "3000", "--host", "0.0.0.0", "--agent", "/app/memAgent/cipher.yml", "--mcp-transport-type", "sse"]
     ports:
       - "${CIPHER_PORT:-8096}:3000"
     depends_on:
@@ -1710,6 +1906,12 @@ services:
     depends_on: [nats]
     profiles: ["agents"]
     networks: [pmoves_app, pmoves_bus]
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -f 'python' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
 
   # Tier: agent (BoTZ Gateway - Bot management with Geometry BUS integration)
   botz-gateway:
@@ -1794,6 +1996,7 @@ services:
     - DEEPRESEARCH_OPENROUTER_API_BASE=${DEEPRESEARCH_OPENROUTER_API_BASE:-https://openrouter.ai/api}
     - DEEPRESEARCH_NOTEBOOK_EMBED=${DEEPRESEARCH_NOTEBOOK_EMBED:-true}
     - DEEPRESEARCH_NOTEBOOK_ASYNC=${DEEPRESEARCH_NOTEBOOK_ASYNC:-true}
+    - OPEN_NOTEBOOK_API_URL=${DEEPRESEARCH_NOTEBOOK_API_URL:-http://open-notebook:5055}
     - DEEPRESEARCH_HEALTH_PORT=${DEEPRESEARCH_HEALTH_PORT:-8098}
     - DOCKED_MODE=${DOCKED_MODE:-true}
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
@@ -1809,6 +2012,12 @@ services:
     networks:
     - pmoves_app
     - pmoves_bus
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8098/healthz', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
   supaserch:
     <<: *tier-agent-hardened-ro
     build:
@@ -1831,6 +2040,12 @@ services:
     depends_on:
       nats:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8099/healthz', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
   nats-echo-req:
     <<: *tier-agent-hardened-ro
     build:
@@ -1847,6 +2062,12 @@ services:
     - diag
     networks:
     - pmoves_bus
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -f 'python' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
   nats-echo-res:
     <<: *tier-agent-hardened-ro
     build:
@@ -1863,6 +2084,12 @@ services:
     - diag
     networks:
     - pmoves_bus
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -f 'python' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
   publisher-discord:
     <<: *tier-agent-hardened-ro
     build:
@@ -1884,6 +2111,12 @@ services:
     networks:
     - pmoves_app
     - pmoves_bus
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8092/healthz', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
   jellyfin-bridge:
     <<: *tier-agent-hardened-ro
     build: ./services/jellyfin-bridge
@@ -1899,6 +2132,12 @@ services:
     - pmoves_app
     - pmoves_bus
     - pmoves_external  # Required for host reachability + external media metadata lookups
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8093/healthz', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
   pmoves-ollama:
     <<: *tier-llm-hardened
     image: ${PMOVES_OLLAMA_IMAGE:-ollama/ollama:0.12.6@sha256:ea37dcbf693248c80796654500fccf1e12f55da20ec7c78c30870a9a227c4cdd}
@@ -1912,8 +2151,19 @@ services:
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
     volumes:
     - pmoves-ollama-models:/root/.ollama/models
+    # Prevent transient Docker embedded-DNS failures from blocking model pull.
+    dns:
+    - ${OLLAMA_DNS_PRIMARY:-1.1.1.1}
+    - ${OLLAMA_DNS_SECONDARY:-8.8.8.8}
     networks:
     - pmoves_api
+    - pmoves_external
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:11434/api/version || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
   tensorzero-clickhouse:
     <<: *tier-llm-hardened
     image: clickhouse/clickhouse-server:24.12-alpine
@@ -1957,6 +2207,7 @@ services:
     - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-local-disabled}
     - VENICE_API_KEY=${VENICE_API_KEY:-local-disabled}
     - Z_AI_API_KEY=${Z_AI_API_KEY:-local-disabled}
+    - ALIBABA_PRO_CODING_PLAN=${ALIBABA_PRO_CODING_PLAN:-local-disabled}
     - TOGETHER_AI_API_KEY=${TOGETHER_AI_API_KEY:-local-disabled}
     - CLOUDFLARE_API_TOKEN=${CLOUDFLARE_API_TOKEN:-local-disabled}
     - OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=${OTEL_EXPORTER_OTLP_TRACES_ENDPOINT:-http://host.docker.internal:4317}
@@ -1978,6 +2229,12 @@ services:
     - pmoves_external
     extra_hosts:
     - host.docker.internal:host-gateway
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/health >/dev/null 2>&1 || curl -fsS http://localhost:3000/health || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
   tensorzero-ui:
     <<: *tier-llm-hardened
     # Pinned 2025-02-04: Latest stable from TensorZero (matches gateway version)
@@ -2005,6 +2262,12 @@ services:
     - pmoves_app
     - pmoves_data
     - pmoves_external
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:4000/ >/dev/null 2>&1 || curl -fsS http://localhost:4000/ || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
   gpu-orchestrator:
     env_file:
     - env.shared
@@ -2024,6 +2287,7 @@ services:
     - GPU_ORCHESTRATOR_MAX_MODELS=${GPU_ORCHESTRATOR_MAX_MODELS:-3}
     - GPU_ORCHESTRATOR_VRAM_THRESHOLD=${GPU_ORCHESTRATOR_VRAM_THRESHOLD:-0.9}
     - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - MODEL_REGISTRY_URL=${MODEL_REGISTRY_URL:-http://model-registry:8110}
     volumes:
       # SECURITY: Docker socket required for spawning GPU model containers.
       # Mounted read-only with hardened security context (no-new-privileges, cap_drop).
@@ -2048,33 +2312,49 @@ services:
     - pmoves_bus
     - pmoves_monitoring
     ports:
-    - 8100:8100
-    - 8200:8200
+    - ${GPU_ORCHESTRATOR_HOST_PORT:-8200}:8200
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8200/healthz', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
     depends_on:
       nats:
+        condition: service_healthy
+        required: false
+      model-registry:
         condition: service_healthy
         required: false
   evo-controller:
     <<: *tier-agent-hardened-ro
     build:
-      context: ./services/evo-controller
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: services/evo-controller/Dockerfile
     image: ${EVO_CONTROLLER_IMAGE:-ghcr.io/powerfulmoves/pmoves-evo-controller:latest}
     restart: unless-stopped
     environment:
     # NATS_URL from env.tier-agent has credentials: nats://nats:pmoves@nats:4222
       - PORT=8113
-      - SUPA_REST_URL=${SUPA_REST_URL:-http://host.docker.internal:54321/rest/v1}
+      - SUPA_REST_URL=${SUPA_REST_INTERNAL_URL:-${SUPA_REST_URL:-http://supabase-kong:8000/rest/v1}}
       - EVOSWARM_POLL_SECONDS=${EVOSWARM_POLL_SECONDS:-300}
       - EVOSWARM_SAMPLE_LIMIT=${EVOSWARM_SAMPLE_LIMIT:-25}
       - EVOSWARM_NAMESPACE=${EVOSWARM_NAMESPACE:-}
       - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
       - CHIT_REQUIRE_SIGNATURE=${CHIT_PROD_REQUIRE_SIGNATURE:-true}
       - CHIT_DECRYPT_ANCHORS=${CHIT_PROD_DECRYPT_ANCHORS:-true}
-      - CHIT_PASSPHRASE=${CHIT_PROD_PASSPHRASE:-${JWT_SECRET:-}}
+      - CHIT_PASSPHRASE=${CHIT_PROD_PASSPHRASE:?set CHIT_PROD_PASSPHRASE in env.shared}
     ports: ["8113:8113"]
     profiles: ["orchestration"]
-    networks: [pmoves_app, pmoves_bus]
+    networks: [pmoves_app, pmoves_api, pmoves_bus]
+    extra_hosts:
+    - host.docker.internal:host-gateway
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8113/healthz', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
 
   # Ultimate TTS Studio - Multi-engine TTS with 7 engines (Gradio UI)
   ultimate-tts-studio:
@@ -2107,33 +2387,42 @@ services:
         limits:
           memory: 8G
     healthcheck:
-      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:7861/', timeout=5)"]
+      test: ["CMD-SHELL", "curl -f http://localhost:7861/gradio_api/info || exit 1"]
       interval: 30s
       timeout: 10s
-      retries: 3
-      start_period: 60s
+      retries: 5
+      start_period: 180s
 
   # Flute Gateway - Multimodal voice communication layer (TTS/STT)
   flute-gateway:
     <<: *tier-media-hardened
     build:
-      context: ./services/flute-gateway
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: services/flute-gateway/Dockerfile
     image: ${FLUTE_GATEWAY_IMAGE:-ghcr.io/powerfulmoves/pmoves-flute-gateway:latest}
     restart: unless-stopped
     environment:
     # NATS_URL from env.shared/env.tier-media has credentials: nats://nats:pmoves@nats:4222
       - PORT=8055
       - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
-      - SUPABASE_URL=${SUPABASE_URL:-http://host.docker.internal:54321}
+      - SUPABASE_URL=${SUPABASE_INTERNAL_URL:-${SUPABASE_URL:-http://supabase-kong:8000}}
+      - TENSORZERO_URL=${TENSORZERO_URL:-http://tensorzero-gateway:3000}
       - DEFAULT_VOICE_PROVIDER=${DEFAULT_VOICE_PROVIDER:-vibevoice}
       - FLUTE_API_KEY=${FLUTE_API_KEY:-}
       - CHIT_REQUIRE_SIGNATURE=${CHIT_PROD_REQUIRE_SIGNATURE:-true}
       - CHIT_DECRYPT_ANCHORS=${CHIT_PROD_DECRYPT_ANCHORS:-true}
-      - CHIT_PASSPHRASE=${CHIT_PROD_PASSPHRASE:-${JWT_SECRET:-}}
+      - CHIT_PASSPHRASE=${CHIT_PROD_PASSPHRASE:?set CHIT_PROD_PASSPHRASE in env.shared}
     ports: ["8055:8055", "8056:8056"]
     profiles: ["orchestration", "media"]
-    networks: [pmoves_app, pmoves_bus]
+    networks: [pmoves_app, pmoves_api, pmoves_bus]
+    extra_hosts:
+    - host.docker.internal:host-gateway
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8055/healthz', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
 
   # Tier: agent (Tokenism Simulator - CHIT/geometry bus simulation service)
   tokenism-simulator:
@@ -2187,6 +2476,12 @@ services:
     ports: ["${TOKENISM_UI_HOST_PORT:-8504}:8504"]
     profiles: ["agents", "botz"]
     networks: [pmoves_app]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8504/ >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
 
   # PMOVES Central UI - Main dashboard (port 4482)
   pmoves-ui:
@@ -2199,11 +2494,11 @@ services:
       - NODE_ENV=production
       # Supabase
       - NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL:-http://localhost:8000}
-      - NEXT_PUBLIC_SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
+      - NEXT_PUBLIC_SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY:-${ANON_KEY:-${SUPABASE_PUBLISHABLE_KEY:-}}}
       - NEXT_PUBLIC_SUPABASE_REST_URL=${NEXT_PUBLIC_SUPABASE_REST_URL:-http://localhost:3010}
       # Supabase (CLI uses port 54321)
       - NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL:-http://localhost:54321}
-      - NEXT_PUBLIC_SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
+      - NEXT_PUBLIC_SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY:-${ANON_KEY:-${SUPABASE_PUBLISHABLE_KEY:-}}}
       - NEXT_PUBLIC_SUPABASE_REST_URL=${NEXT_PUBLIC_SUPABASE_REST_URL:-http://localhost:54321/rest/v1}
       # Voice/TTS
       - NEXT_PUBLIC_FLUTE_GATEWAY_URL=${NEXT_PUBLIC_FLUTE_GATEWAY_URL:-http://localhost:8055}
@@ -2215,7 +2510,7 @@ services:
       - NEXT_PUBLIC_ARCHON_UI_URL=${NEXT_PUBLIC_ARCHON_UI_URL:-http://localhost:3737}
       # Knowledge & Search
       - NEXT_PUBLIC_HIRAG_URL=${NEXT_PUBLIC_HIRAG_URL:-http://localhost:8086}
-      - NEXT_PUBLIC_OPEN_NOTEBOOK_API_URL=${NEXT_PUBLIC_OPEN_NOTEBOOK_API_URL:-http://localhost:8503}
+      - NEXT_PUBLIC_OPEN_NOTEBOOK_API_URL=${NEXT_PUBLIC_OPEN_NOTEBOOK_API_URL:-http://localhost:5055}
       - NEXT_PUBLIC_TENSORZERO_UI_URL=${NEXT_PUBLIC_TENSORZERO_UI_URL:-http://localhost:4000}
       # Media & Ingestion
       - NEXT_PUBLIC_PRESIGN_URL=${NEXT_PUBLIC_PRESIGN_URL:-http://localhost:8088}
@@ -2231,12 +2526,12 @@ services:
       - POSTGREST_URL=http://host.docker.internal:54321
       - PRESIGN_SHARED_SECRET=${PRESIGN_SHARED_SECRET}
       - RENDER_WEBHOOK_URL=${RENDER_WEBHOOK_URL:-http://render-webhook:8085/comfy/webhook}
-      - OPEN_NOTEBOOK_API_URL=${OPEN_NOTEBOOK_API_URL:-http://open-notebook:8503}
+      - OPEN_NOTEBOOK_API_URL=${OPEN_NOTEBOOK_API_URL:-http://open-notebook:5055}
       - TOKENISM_URL=${TOKENISM_URL:-http://pmoves-tokenism-simulator-1:8100}
     ports:
       - "4482:3000"
     # Note: flute-gateway is optional (for voice features). Start with workers profile for full functionality.
-    networks: [ pmoves_app, pmoves_api, supabase_net ]
+    networks: [ pmoves_app, pmoves_api, pmoves_external ]
     profiles: [ "ui" ]
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:3000/api/health || exit 1"]
@@ -2266,6 +2561,12 @@ services:
     - pmoves_bus
     depends_on:
       - hi-rag-gateway-v2
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8100/healthz', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
 
   # Comfy Watcher - ComfyUI output watcher for NATS integration
   comfy-watcher:
@@ -2286,14 +2587,14 @@ services:
       nats:
         condition: service_healthy
       minio:
-        condition: service_started
+        condition: service_healthy
     volumes:
       - comfy-watcher-output:/data
       - comfy-watcher-state:/state
     profiles: ["orchestration", "workers"]
     networks: [pmoves_bus, pmoves_data]
     healthcheck:
-      test: ["CMD", "python3", "-c", "from watcher import load_state; load_state()"]
+      test: ["CMD", "python3", "-c", "import os, sys; sys.exit(0 if os.path.exists('/state') else 1)"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -2398,6 +2699,12 @@ services:
     networks:
     - pmoves_app
     - pmoves_bus
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8282/ >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
   invidious:
     # Quay tags churn; default to latest unless explicitly pinned via env.
     image: ${INVIDIOUS_IMAGE:-quay.io/invidious/invidious:latest}
@@ -2464,6 +2771,12 @@ services:
     networks:
     - pmoves_app
     - pmoves_bus
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/healthz', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
   grayjay-server:
     image: registry.gitlab.futo.org/videostreaming/grayjay/grayjay:latest
     restart: unless-stopped
@@ -2490,6 +2803,12 @@ services:
     networks:
     - pmoves_app
     - pmoves_bus
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:9095/ >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
   cloudflared:
     image: cloudflare/cloudflared:2024.8.0
     restart: unless-stopped
@@ -2515,6 +2834,12 @@ services:
     - cloudflare
     networks:
     - pmoves_app
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -f 'cloudflared' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
   invidious-companion-proxy:
     build: ./services/invidious-companion-proxy
     restart: unless-stopped
@@ -2533,6 +2858,12 @@ services:
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:80/ || wget -qO- http://localhost:80/ >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
   # Llama.cpp throughput benchmarking toolkit (GPU, on-demand)
   llama-throughput-lab:
     build:

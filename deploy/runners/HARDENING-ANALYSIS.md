@@ -423,7 +423,7 @@ JIT runners require encoded configuration from GitHub API instead of persistent 
 set -e
 
 GITHUB_PAT="${GITHUB_PAT}"
-GITHUB_ORG="${GITHUB_ORG:-frostbytten}"
+GITHUB_ORG="${GITHUB_ORG:-POWERFULMOVES}"
 GITHUB_REPO="${GITHUB_REPO:-PMOVES.AI}"
 RUNNER_NAME="${1:-jit-runner-$(uuidgen | cut -d- -f1)}"
 
@@ -584,7 +584,7 @@ RUN [ ! -f /root/.pip/pip.conf ] && echo "Secret verified absent"
    helm install pmoves-vps-runners \
      --namespace arc-runners \
      --create-namespace \
-     --set githubConfigUrl="https://github.com/frostbytten/PMOVES.AI" \
+     --set githubConfigUrl="https://github.com/POWERFULMOVES/PMOVES.AI" \
      --set githubConfigSecret.github_token="${GITHUB_PAT}" \
      --set containerMode.type="dind" \
      --set minRunners=1 \
@@ -594,7 +594,7 @@ RUN [ ! -f /root/.pip/pip.conf ] && echo "Secret verified absent"
    # GPU runner set (AI Lab - if Kubernetes deployed)
    helm install pmoves-gpu-runners \
      --namespace arc-runners \
-     --set githubConfigUrl="https://github.com/frostbytten/PMOVES.AI" \
+     --set githubConfigUrl="https://github.com/POWERFULMOVES/PMOVES.AI" \
      --set githubConfigSecret.github_token="${GITHUB_PAT}" \
      --set containerMode.type="dind" \
      --set template.spec.containers[0].resources.limits."nvidia\.com/gpu"=1 \
@@ -699,7 +699,7 @@ Use this checklist to track hardening progress:
 **Setup:**
 1. Navigate to https://app.stepsecurity.io
 2. Connect GitHub account
-3. Add `frostbytten/PMOVES.AI` repository
+3. Add `POWERFULMOVES/PMOVES.AI` repository
 4. Configure alerts for suspicious network egress
 
 **Monitoring:**
@@ -714,7 +714,7 @@ Use this checklist to track hardening progress:
 curl -sf -X POST \
   -H "Authorization: token ${GITHUB_PAT}" \
   -H "Accept: application/vnd.github.v3+json" \
-  "https://api.github.com/repos/frostbytten/PMOVES.AI/actions/runners/registration-token" \
+  "https://api.github.com/repos/POWERFULMOVES/PMOVES.AI/actions/runners/registration-token" \
   | jq -r '.token'
 ```
 

@@ -1,6 +1,8 @@
+> **Historical** — changes described below were implemented in PR #838 (2026-03-09).
+
 # Phase 2 Task 2.2: BuildKit Secrets Migration Plan
 
-**Status:** Analysis complete - Ready for TAC implementation
+**Status:** Implemented (PR #838)
 **Priority:** HIGH (Prevents secret leakage in build logs and image layers)
 **Effort:** 2-3 hours with TAC
 **Date:** 2025-12-06
@@ -105,7 +107,7 @@ ARG POSTGRES_PORT_DEFAULT=5432
 ARG MCP_SERVICE_URL_DEFAULT=http://archon-mcp:8051
 ARG MCP_CLIENT_ID_DEFAULT=archon
 ARG MCP_CLIENT_SECRET_DEFAULT=replace-with-mcp-secret
-ARG MCP_CREDENTIALS_PATH_DEFAULT=/app/config/mcp/credentials.json
+ARG MCP_CONFIG_PATH_DEFAULT=/app/config/mcp/credentials.json
 
 ENV SUPABASE_URL=${SUPABASE_URL_DEFAULT} \
     SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_ROLE_KEY_DEFAULT} \
@@ -119,7 +121,7 @@ ENV SUPABASE_URL=${SUPABASE_URL_DEFAULT} \
     MCP_SERVICE_URL=${MCP_SERVICE_URL_DEFAULT} \
     MCP_CLIENT_ID=${MCP_CLIENT_ID_DEFAULT} \
     MCP_CLIENT_SECRET=${MCP_CLIENT_SECRET_DEFAULT} \
-    MCP_CREDENTIALS_PATH=${MCP_CREDENTIALS_PATH_DEFAULT}
+    MCP_CONFIG_PATH=${MCP_CONFIG_PATH_DEFAULT}
 ```
 
 **Target Archon Dockerfile (SECURE):**
@@ -132,7 +134,7 @@ ENV ARCHON_FORM=POWERFULMOVES \
     AGENT_FORMS_DIR=/app/configs/agents/forms \
     ARCHON_UI_STATIC_DIR=/app/static/archon-ui \
     ARCHON_VENDOR_ROOT=/app/vendor/archon \
-    MCP_CREDENTIALS_PATH=/app/config/mcp/credentials.json
+    MCP_CONFIG_PATH=/app/config/mcp/credentials.json
 
 # Sensitive values MUST be provided at runtime via:
 # - docker-compose env_file
@@ -222,7 +224,7 @@ ENV ARCHON_FORM=POWERFULMOVES \
     AGENT_FORMS_DIR=/app/configs/agents/forms \
     ARCHON_UI_STATIC_DIR=/app/static/archon-ui \
     ARCHON_VENDOR_ROOT=/app/vendor/archon \
-    MCP_CREDENTIALS_PATH=/app/config/mcp/credentials.json
+    MCP_CONFIG_PATH=/app/config/mcp/credentials.json
 
 # SECURITY: All sensitive configuration MUST be provided at runtime via:
 # - docker-compose env_file directive

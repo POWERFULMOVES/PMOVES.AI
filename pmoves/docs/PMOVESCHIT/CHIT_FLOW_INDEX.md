@@ -50,3 +50,30 @@ This file is the operator list of active CHIT-adjacent flows, ordered for produc
 - Output: targeted GHCR matrix runs only after local proof, plus auditable credential/bootstrap pathway.
 - Related runbook:
   - `pmoves/docs/AGENTS/OPERATION_DOCK_TIER_GIT_FLARE_PARITY.md`
+
+## CHIT-FLOW-006: PR Review Learnings -> FlOO$ -> Graphiti
+- Scope: keep PR queue actionable and machine-traceable by chaining monitor output into CHIT and Graphiti handoff context.
+- Entry commands:
+  - `make -C pmoves pr-monitor`
+  - `make -C pmoves pr-monitor-chit-packet`
+  - `make -C pmoves floos-pr-monitor-validate`
+  - `make -C pmoves floos-pr-monitor-resolve`
+  - `make -C pmoves floos-pr-monitor-run-dry`
+  - `make -C pmoves chit-flow-pr-monitor-strict`
+- Output:
+  - `pmoves/docs/logs/pr_monitor_latest.json`
+  - `pmoves/docs/logs/pr_monitor_learnings_latest.md`
+  - `pmoves/docs/logs/pr_monitor_learnings_latest.cgp.json`
+  - FlOO$ pairing: `pr-monitor-graphiti-chit` in `pmoves/configs/skill-pairings.yaml`
+
+## CHIT-FLOW-007: Codex MCP + PMOVES Integration Parity
+- Scope: keep Codex MCP wiring and Agent Zero MCP runtime map aligned with production topology.
+- Entry commands:
+  - `make -C pmoves a0-mcp-seed`
+  - `cat pmoves/data/agent-zero/runtime/mcp/servers.env`
+  - `make -C pmoves archon-mcp-smoke`
+  - `make -C pmoves codex-health-quick`
+- Output:
+  - Refreshed MCP server map for Agent Zero runtime
+  - Verified Archon MCP bridge reachability
+  - Fast Codex health evidence for core PMOVES services

@@ -181,6 +181,51 @@ Contains data processing worker configurations.
 
 CHIT (Cognitive Holographic Information Transfer) provides secure encoding/decoding of environment secrets with multi-target output.
 
+### CHIT_PROD_PASSPHRASE (Required for Production)
+
+Generate a 64-character passphrase and write it into `pmoves/env.shared` (gitignored):
+
+**Linux / macOS / WSL:**
+
+```bash
+# Generate passphrase
+PASS=$(openssl rand -base64 48 | tr -d '\n=' | cut -c1-64)
+
+# Write to env.shared (idempotent — updates existing or appends)
+for KEY in CHIT_PASSPHRASE CHIT_PROD_PASSPHRASE; do
+  if grep -q "^${KEY}=" pmoves/env.shared 2>/dev/null; then
+    awk -F= -v k="$KEY" -v v="$PASS" 'BEGIN{OFS="="} $1==k{$0=k OFS v}1' \
+      pmoves/env.shared > pmoves/env.shared.tmp && mv pmoves/env.shared.tmp pmoves/env.shared
+  else
+    printf '%s=%s\n' "$KEY" "$PASS" >> pmoves/env.shared
+  fi
+done
+```
+
+**PowerShell (Windows):**
+
+```powershell
+# Generate passphrase
+$bytes = New-Object byte[] 48
+[System.Security.Cryptography.RandomNumberGenerator]::Fill($bytes)
+$pass = [Convert]::ToBase64String($bytes).TrimEnd('=').Replace('+','-').Replace('/','_').Substring(0,64)
+
+# Write to env.shared (idempotent — updates existing or appends)
+$file = "pmoves\env.shared"
+if (!(Test-Path $file)) { New-Item -ItemType File -Path $file | Out-Null }
+foreach ($key in @("CHIT_PASSPHRASE", "CHIT_PROD_PASSPHRASE")) {
+  $content = Get-Content $file -Raw -ErrorAction SilentlyContinue
+  if ($content -match "(?m)^${key}=") {
+    $content = $content -replace "(?m)^${key}=.*$", "${key}=$pass"
+    Set-Content $file $content -NoNewline
+  } else {
+    Add-Content $file "${key}=$pass"
+  }
+}
+```
+
+Verify with `make -C pmoves topology-chit-gate-strict` — must show 0 warnings.
+
 ### Encoding Secrets
 
 ```bash

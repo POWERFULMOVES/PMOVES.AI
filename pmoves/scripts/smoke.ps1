@@ -83,10 +83,49 @@ function Resolve-SupabaseRestUrl {
     return ("{0}/rest/v1" -f $apiUrl.TrimEnd('/'))
   }
 
+  foreach ($path in @(
+    (Join-Path $Script:ProjectRoot 'env.supa.runtime'),
+    (Join-Path $Script:ProjectRoot 'env.tier-supabase'),
+    (Join-Path $Script:ProjectRoot 'env.shared')
+  )) {
+    foreach ($key in @('SUPA_REST_URL', 'SUPABASE_REST_URL', 'SUPABASE_URL', 'SUPABASE_CLI_API_URL', 'API_URL')) {
+      $value = Get-EnvFileValue -Path $path -Key $key
+      if ([string]::IsNullOrWhiteSpace($value)) { continue }
+      $normalized = $value.TrimEnd('/')
+      if ($normalized -match '/rest/v1$') {
+        return $normalized
+      }
+      return ("{0}/rest/v1" -f $normalized)
+    }
+  }
+
+  foreach ($candidate in @(
+    'http://127.0.0.1:54321/rest/v1',
+    'http://localhost:54321/rest/v1',
+    'http://127.0.0.1:65421/rest/v1',
+    'http://localhost:65421/rest/v1'
+  )) {
+    try {
+      Invoke-WebRequest -Uri "$candidate/" -Method GET -UseBasicParsing -TimeoutSec 2 | Out-Null
+      return $candidate
+    } catch {
+      if ($_.Exception.Response) {
+        # Reachable but auth-restricted still means endpoint is up.
+        return $candidate
+      }
+    }
+  }
+
   return 'http://localhost:3010'
 }
 
 function Resolve-SupabaseAnonKey {
+  $tierSupabase = Join-Path $Script:ProjectRoot 'env.tier-supabase'
+  $tierAnon = Get-EnvFileValue -Path $tierSupabase -Key 'SUPABASE_ANON_KEY'
+  if (-not [string]::IsNullOrWhiteSpace($tierAnon)) {
+    return $tierAnon.Trim()
+  }
+
   $direct = $env:SUPABASE_ANON_KEY
   if (-not [string]::IsNullOrWhiteSpace($direct)) {
     return $direct.Trim()
@@ -98,13 +137,109 @@ function Resolve-SupabaseAnonKey {
     return $overlayAnon.Trim()
   }
 
-  $tierSupabase = Join-Path $Script:ProjectRoot 'env.tier-supabase'
-  $tierAnon = Get-EnvFileValue -Path $tierSupabase -Key 'SUPABASE_ANON_KEY'
-  if (-not [string]::IsNullOrWhiteSpace($tierAnon)) {
-    return $tierAnon.Trim()
+  $statusFile = Join-Path $Script:ProjectRoot '.supabase.status.env'
+  foreach ($key in @('SUPABASE_ANON_KEY', 'ANON_KEY')) {
+    $statusAnon = Get-EnvFileValue -Path $statusFile -Key $key
+    if (-not [string]::IsNullOrWhiteSpace($statusAnon)) {
+      return $statusAnon.Trim()
+    }
   }
 
   return $null
+}
+
+function Resolve-SupabaseServiceKey {
+  $tierSupabase = Join-Path $Script:ProjectRoot 'env.tier-supabase'
+  foreach ($k in @('SUPABASE_SERVICE_ROLE_KEY', 'SUPABASE_SECRET_KEY', 'SERVICE_ROLE_KEY')) {
+    $v = Get-EnvFileValue -Path $tierSupabase -Key $k
+    if (-not [string]::IsNullOrWhiteSpace($v)) {
+      return $v.Trim()
+    }
+  }
+
+  $direct = $env:SERVICE_ROLE_KEY
+  if ([string]::IsNullOrWhiteSpace($direct)) { $direct = $env:SUPABASE_SECRET_KEY }
+  if ([string]::IsNullOrWhiteSpace($direct)) { $direct = $env:SUPABASE_SERVICE_ROLE_KEY }
+  if (-not [string]::IsNullOrWhiteSpace($direct)) {
+    return $direct.Trim()
+  }
+
+  $runtimeOverlay = Join-Path $Script:ProjectRoot 'env.supa.runtime'
+  foreach ($k in @('SUPABASE_SERVICE_ROLE_KEY', 'SUPABASE_SECRET_KEY', 'SERVICE_ROLE_KEY')) {
+    $v = Get-EnvFileValue -Path $runtimeOverlay -Key $k
+    if (-not [string]::IsNullOrWhiteSpace($v)) {
+      return $v.Trim()
+    }
+  }
+
+  $statusFile = Join-Path $Script:ProjectRoot '.supabase.status.env'
+  foreach ($k in @('SUPABASE_SERVICE_ROLE_KEY', 'SERVICE_ROLE_KEY', 'SUPABASE_SECRET_KEY')) {
+    $v = Get-EnvFileValue -Path $statusFile -Key $k
+    if (-not [string]::IsNullOrWhiteSpace($v)) {
+      return $v.Trim()
+    }
+  }
+
+  return $null
+}
+
+function Resolve-ProbeUrl {
+  param(
+    [Parameter(Mandatory)][string]$Url
+  )
+  try {
+    $uri = [System.Uri]$Url
+  } catch {
+    return $Url
+  }
+  $builder = New-Object System.UriBuilder($uri)
+  if ($builder.Host -eq 'localhost' -or $builder.Host -eq '127.0.0.1') {
+    $builder.Host = 'host.docker.internal'
+  }
+  return $builder.Uri.AbsoluteUri.TrimEnd('/')
+}
+
+function Resolve-ChitPassphrase {
+  foreach ($k in @('CHIT_PASSPHRASE', 'CHIT_PROD_PASSPHRASE')) {
+    $v = (Get-Item -Path "Env:$k" -ErrorAction SilentlyContinue).Value
+    if (-not [string]::IsNullOrWhiteSpace($v)) {
+      return $v.Trim()
+    }
+  }
+
+  foreach ($path in @(
+    (Join-Path $Script:ProjectRoot 'env.tier-agent'),
+    (Join-Path $Script:ProjectRoot 'env.shared'),
+    (Join-Path $Script:ProjectRoot 'env.tier-api')
+  )) {
+    foreach ($k in @('CHIT_PASSPHRASE', 'CHIT_PROD_PASSPHRASE')) {
+      $v = Get-EnvFileValue -Path $path -Key $k
+      if (-not [string]::IsNullOrWhiteSpace($v)) {
+        return $v.Trim()
+      }
+    }
+  }
+  return $null
+}
+
+function Sign-CgpJson {
+  param(
+    [Parameter(Mandatory)][string]$CgpJson,
+    [Parameter(Mandatory)][string]$Passphrase
+  )
+  $py = @'
+import json, sys
+from tools.chit_security import sign_cgp
+
+doc = json.loads(sys.stdin.read())
+signed = sign_cgp(doc, sys.argv[1])
+sys.stdout.write(json.dumps(signed, separators=(",", ":")))
+'@
+  $signed = ($CgpJson | python -c $py $Passphrase)
+  if ([string]::IsNullOrWhiteSpace($signed)) {
+    throw "Failed to sign CGP payload"
+  }
+  return $signed
 }
 
 function Escape-ShSingleQuotes {
@@ -295,9 +430,20 @@ function Test-QdrantReady {
 
 try {
   $supaRestBase = Resolve-SupabaseRestUrl
+  $supaProbeRestBase = Resolve-ProbeUrl -Url "$supaRestBase/"
   $supaAnonKey = Resolve-SupabaseAnonKey
+  $supaServiceKey = Resolve-SupabaseServiceKey
+  $chitPassphrase = Resolve-ChitPassphrase
   $supaHeaders = $null
-  if (-not [string]::IsNullOrWhiteSpace($supaAnonKey)) {
+  $supaServiceHeaders = $null
+  if (-not [string]::IsNullOrWhiteSpace($supaServiceKey)) {
+    $supaServiceHeaders = @{
+      'apikey' = $supaServiceKey
+      'Authorization' = "Bearer $supaServiceKey"
+    }
+    # Prefer service-role auth for smoke verification when available.
+    $supaHeaders = $supaServiceHeaders
+  } elseif (-not [string]::IsNullOrWhiteSpace($supaAnonKey)) {
     $supaHeaders = @{
       'apikey' = $supaAnonKey
       'Authorization' = "Bearer $supaAnonKey"
@@ -337,10 +483,10 @@ try {
   Write-Step "[6/12] PostgREST reachable..."
   Invoke-With-Retry -TimeoutSec $TimeoutSec -DelayMs $RetryDelayMs -Script {
     try {
-      Test-Http200WithFallback -PrimaryUrl "$supaRestBase/" -ProbeUrl 'http://supabase-postgrest:3000/' -Headers $supaHeaders | Out-Null
+      Test-Http200WithFallback -PrimaryUrl "$supaRestBase/" -ProbeUrl "$supaProbeRestBase/" -Headers $supaHeaders | Out-Null
       return $true
     } catch {
-      $status = Invoke-ProbeStatus -Url 'http://supabase-postgrest:3000/' -Method 'GET' -Headers $supaHeaders
+      $status = Invoke-ProbeStatus -Url "$supaProbeRestBase/" -Method 'GET' -Headers $supaHeaders
       if ($status -eq 401) { return $true }
       throw
     }
@@ -358,7 +504,17 @@ try {
 
   # 8. Verify studio_board row
   Write-Step "[8/12] Verify studio_board row..."
-  $rows = Invoke-With-Retry -TimeoutSec $TimeoutSec -DelayMs $RetryDelayMs -Script { Invoke-GetJsonWithFallback -PrimaryUrl "$supaRestBase/studio_board?order=id.desc&limit=1" -ProbeUrl "http://supabase-postgrest:3000/studio_board?order=id.desc&limit=1" -Headers $supaHeaders }
+  $rows = $null
+  try {
+    $rows = Invoke-With-Retry -TimeoutSec $TimeoutSec -DelayMs $RetryDelayMs -Script {
+      Invoke-GetJsonWithFallback -PrimaryUrl "$supaRestBase/studio_board?order=id.desc&limit=1" -ProbeUrl "$supaProbeRestBase/studio_board?order=id.desc&limit=1" -Headers $supaHeaders
+    }
+  } catch {
+    if ($null -eq $supaServiceHeaders) { throw }
+    $rows = Invoke-With-Retry -TimeoutSec $TimeoutSec -DelayMs $RetryDelayMs -Script {
+      Invoke-GetJsonWithFallback -PrimaryUrl "$supaRestBase/studio_board?order=id.desc&limit=1" -ProbeUrl "$supaProbeRestBase/studio_board?order=id.desc&limit=1" -Headers $supaServiceHeaders
+    }
+  }
   if ($null -eq $rows -or $rows.Count -lt 1 -or $null -eq $rows[0].title) { throw 'No row with title found' }
   Write-OK
 
@@ -419,6 +575,11 @@ try {
     )
   }
   $eventBody = @{ type = "geometry.cgp.v1"; data = $cgp } | ConvertTo-Json -Depth 10
+  if (-not [string]::IsNullOrWhiteSpace($chitPassphrase)) {
+    $cgpJson = $cgp | ConvertTo-Json -Depth 10 -Compress
+    $signedCgpJson = Sign-CgpJson -CgpJson $cgpJson -Passphrase $chitPassphrase
+    $eventBody = '{"type":"geometry.cgp.v1","data":' + $signedCgpJson + '}'
+  }
   Invoke-With-Retry -TimeoutSec $TimeoutSec -DelayMs $RetryDelayMs -Script { Invoke-PostJson -Url 'http://localhost:8086/geometry/event' -BodyJson $eventBody } | Out-Null
   Write-OK
 

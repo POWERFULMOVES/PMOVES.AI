@@ -1,0 +1,209 @@
+{
+  "repo": "POWERFULMOVES/PMOVES.AI",
+  "threshold": 9,
+  "apply_requested": true,
+  "applied": true,
+  "queued_considered": 17,
+  "queued_raw": 17,
+  "open_pr_branches": [
+    "chore/submodule-bumps-mar02",
+    "dependabot/github_actions/actions/create-github-app-token-2",
+    "dependabot/github_actions/actions/upload-artifact-7",
+    "dependabot/github_actions/anchore/sbom-action-0.23.0",
+    "dependabot/pip/pmoves/services/agent-zero/python-jose-cryptography--3.5.0"
+  ],
+  "workflows_filter": [],
+  "cancel_candidates": 3,
+  "kept": 14,
+  "cancelled": 3,
+  "failures": [],
+  "items": [
+    {
+      "run_id": 22574695428,
+      "workflow": "Build and publish integration images to GHCR",
+      "event": "pull_request",
+      "head_branch": "chore/submodule-bumps-mar02",
+      "title": "fix(prod): atomic runtime/db/env hardening + audit dashboard sitrep",
+      "url": "https://github.com/POWERFULMOVES/PMOVES.AI/actions/runs/22574695428",
+      "created_at": "2026-03-02T11:49:49Z",
+      "action": "keep",
+      "reason": "open_pr_branch"
+    },
+    {
+      "run_id": 22574695414,
+      "workflow": "Python Tests",
+      "event": "pull_request",
+      "head_branch": "chore/submodule-bumps-mar02",
+      "title": "fix(prod): atomic runtime/db/env hardening + audit dashboard sitrep",
+      "url": "https://github.com/POWERFULMOVES/PMOVES.AI/actions/runs/22574695414",
+      "created_at": "2026-03-02T11:49:49Z",
+      "action": "keep",
+      "reason": "open_pr_branch"
+    },
+    {
+      "run_id": 22574695447,
+      "workflow": "CodeQL Advanced",
+      "event": "pull_request",
+      "head_branch": "chore/submodule-bumps-mar02",
+      "title": "fix(prod): atomic runtime/db/env hardening + audit dashboard sitrep",
+      "url": "https://github.com/POWERFULMOVES/PMOVES.AI/actions/runs/22574695447",
+      "created_at": "2026-03-02T11:49:49Z",
+      "action": "keep",
+      "reason": "open_pr_branch"
+    },
+    {
+      "run_id": 22574695405,
+      "workflow": "SQL Policy Lint",
+      "event": "pull_request",
+      "head_branch": "chore/submodule-bumps-mar02",
+      "title": "fix(prod): atomic runtime/db/env hardening + audit dashboard sitrep",
+      "url": "https://github.com/POWERFULMOVES/PMOVES.AI/actions/runs/22574695405",
+      "created_at": "2026-03-02T11:49:49Z",
+      "action": "keep",
+      "reason": "open_pr_branch"
+    },
+    {
+      "run_id": 22574008498,
+      "workflow": "Docker Hardening Validation",
+      "event": "pull_request",
+      "head_branch": "chore/submodule-bumps-mar02",
+      "title": "fix(prod): atomic runtime/db/env hardening + audit dashboard sitrep",
+      "url": "https://github.com/POWERFULMOVES/PMOVES.AI/actions/runs/22574008498",
+      "created_at": "2026-03-02T11:29:49Z",
+      "action": "keep",
+      "reason": "open_pr_branch"
+    },
+    {
+      "run_id": 22570105886,
+      "workflow": "CodeQL Advanced",
+      "event": "pull_request",
+      "head_branch": "dependabot/pip/pmoves/services/agent-zero/python-jose-cryptography--3.5.0",
+      "title": "chore(deps)(deps): bump python-jose[cryptography] from 3.3.0 to 3.5.0 in /pmoves/services/agent-zero",
+      "url": "https://github.com/POWERFULMOVES/PMOVES.AI/actions/runs/22570105886",
+      "created_at": "2026-03-02T09:40:29Z",
+      "action": "keep",
+      "reason": "open_pr_branch"
+    },
+    {
+      "run_id": 22570094964,
+      "workflow": "CodeQL Advanced",
+      "event": "pull_request",
+      "head_branch": "dependabot/github_actions/anchore/sbom-action-0.23.0",
+      "title": "chore(deps)(deps): bump anchore/sbom-action from 0.22.2 to 0.23.0",
+      "url": "https://github.com/POWERFULMOVES/PMOVES.AI/actions/runs/22570094964",
+      "created_at": "2026-03-02T09:40:12Z",
+      "action": "keep",
+      "reason": "open_pr_branch"
+    },
+    {
+      "run_id": 22570094982,
+      "workflow": "Build and publish integration images to GHCR",
+      "event": "pull_request",
+      "head_branch": "dependabot/github_actions/anchore/sbom-action-0.23.0",
+      "title": "chore(deps)(deps): bump anchore/sbom-action from 0.22.2 to 0.23.0",
+      "url": "https://github.com/POWERFULMOVES/PMOVES.AI/actions/runs/22570094982",
+      "created_at": "2026-03-02T09:40:12Z",
+      "action": "keep",
+      "reason": "open_pr_branch"
+    },
+    {
+      "run_id": 22570088752,
+      "workflow": "CodeQL Advanced",
+      "event": "pull_request",
+      "head_branch": "dependabot/github_actions/actions/create-github-app-token-2",
+      "title": "chore(deps)(deps): bump actions/create-github-app-token from 1 to 2",
+      "url": "https://github.com/POWERFULMOVES/PMOVES.AI/actions/runs/22570088752",
+      "created_at": "2026-03-02T09:40:02Z",
+      "action": "keep",
+      "reason": "open_pr_branch"
+    },
+    {
+      "run_id": 22570088789,
+      "workflow": "Build and publish integration images to GHCR",
+      "event": "pull_request",
+      "head_branch": "dependabot/github_actions/actions/create-github-app-token-2",
+      "title": "chore(deps)(deps): bump actions/create-github-app-token from 1 to 2",
+      "url": "https://github.com/POWERFULMOVES/PMOVES.AI/actions/runs/22570088789",
+      "created_at": "2026-03-02T09:40:02Z",
+      "action": "keep",
+      "reason": "open_pr_branch"
+    },
+    {
+      "run_id": 22570086061,
+      "workflow": "Docker Hardening Validation",
+      "event": "pull_request",
+      "head_branch": "dependabot/github_actions/actions/upload-artifact-7",
+      "title": "chore(deps)(deps): bump actions/upload-artifact from 4 to 7",
+      "url": "https://github.com/POWERFULMOVES/PMOVES.AI/actions/runs/22570086061",
+      "created_at": "2026-03-02T09:39:58Z",
+      "action": "keep",
+      "reason": "open_pr_branch"
+    },
+    {
+      "run_id": 22570086085,
+      "workflow": "CodeQL Advanced",
+      "event": "pull_request",
+      "head_branch": "dependabot/github_actions/actions/upload-artifact-7",
+      "title": "chore(deps)(deps): bump actions/upload-artifact from 4 to 7",
+      "url": "https://github.com/POWERFULMOVES/PMOVES.AI/actions/runs/22570086085",
+      "created_at": "2026-03-02T09:39:58Z",
+      "action": "keep",
+      "reason": "open_pr_branch"
+    },
+    {
+      "run_id": 22570086073,
+      "workflow": "Build and publish integration images to GHCR",
+      "event": "pull_request",
+      "head_branch": "dependabot/github_actions/actions/upload-artifact-7",
+      "title": "chore(deps)(deps): bump actions/upload-artifact from 4 to 7",
+      "url": "https://github.com/POWERFULMOVES/PMOVES.AI/actions/runs/22570086073",
+      "created_at": "2026-03-02T09:39:58Z",
+      "action": "keep",
+      "reason": "open_pr_branch"
+    },
+    {
+      "run_id": 22568037713,
+      "workflow": "Weekly yt-dlp bump",
+      "event": "schedule",
+      "head_branch": "main",
+      "title": "Weekly yt-dlp bump",
+      "url": "https://github.com/POWERFULMOVES/PMOVES.AI/actions/runs/22568037713",
+      "created_at": "2026-03-02T08:41:06Z",
+      "action": "cancel",
+      "reason": "non_pr_event"
+    },
+    {
+      "run_id": 22565947342,
+      "workflow": "CodeQL Advanced",
+      "event": "push",
+      "head_branch": "main",
+      "title": "chore(submodules): bump Agent-Zero, cipher, transcribe-and-fetch (#752)",
+      "url": "https://github.com/POWERFULMOVES/PMOVES.AI/actions/runs/22565947342",
+      "created_at": "2026-03-02T07:33:05Z",
+      "action": "cancel",
+      "reason": "non_pr_event"
+    },
+    {
+      "run_id": 22565947316,
+      "workflow": "Build and publish integration images to GHCR",
+      "event": "push",
+      "head_branch": "main",
+      "title": "chore(submodules): bump Agent-Zero, cipher, transcribe-and-fetch (#752)",
+      "url": "https://github.com/POWERFULMOVES/PMOVES.AI/actions/runs/22565947316",
+      "created_at": "2026-03-02T07:33:05Z",
+      "action": "cancel",
+      "reason": "non_pr_event"
+    },
+    {
+      "run_id": 22565721221,
+      "workflow": "Build and publish integration images to GHCR",
+      "event": "pull_request",
+      "head_branch": "chore/submodule-bumps-mar02",
+      "title": "chore(submodules): bump Agent-Zero, cipher, transcribe-and-fetch",
+      "url": "https://github.com/POWERFULMOVES/PMOVES.AI/actions/runs/22565721221",
+      "created_at": "2026-03-02T07:25:16Z",
+      "action": "keep",
+      "reason": "open_pr_branch"
+    }
+  ]
+}

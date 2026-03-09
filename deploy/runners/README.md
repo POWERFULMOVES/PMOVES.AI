@@ -33,10 +33,10 @@ export GITHUB_PAT="ghp_your_token_here"
 export RUNNER_NAME="ailab-gpu"
 
 # Run installation
-curl -sSL https://raw.githubusercontent.com/frostbytten/PMOVES.AI/main/deploy/runners/ailab/install.sh | bash
+curl -sSL https://raw.githubusercontent.com/POWERFULMOVES/PMOVES.AI/main/deploy/runners/ailab/install.sh | bash
 
 # Or clone and run locally
-git clone https://github.com/frostbytten/PMOVES.AI.git
+git clone https://github.com/POWERFULMOVES/PMOVES.AI.git
 cd PMOVES.AI/deploy/runners/ailab
 ./install.sh
 ```
@@ -52,7 +52,7 @@ export GITHUB_PAT="ghp_your_token_here"
 export RUNNER_NAME="cloudstartup"  # or "kvm4", "kvm2"
 
 # Run installation
-curl -sSL https://raw.githubusercontent.com/frostbytten/PMOVES.AI/main/deploy/runners/vps/install.sh | bash
+curl -sSL https://raw.githubusercontent.com/POWERFULMOVES/PMOVES.AI/main/deploy/runners/vps/install.sh | bash
 ```
 
 ## Workflow Usage
@@ -152,10 +152,10 @@ Runners expose metrics via the GitHub API:
 
 ```bash
 # List all runners
-gh api repos/frostbytten/PMOVES.AI/actions/runners
+gh api repos/POWERFULMOVES/PMOVES.AI/actions/runners
 
 # Get specific runner
-gh api repos/frostbytten/PMOVES.AI/actions/runners/{runner_id}
+gh api repos/POWERFULMOVES/PMOVES.AI/actions/runners/{runner_id}
 ```
 
 ## Security Notes

@@ -1,5 +1,5 @@
 {
-  "manifest": "C:\\Users\\russe\\Documents\\GitHub\\PMOVES.AI\\pmoves\\configs\\submodule_layer_validation_manifest.json",
+  "manifest": "pmoves/configs/submodule_layer_validation_manifest.json",
   "modules_checked": 40,
   "total_errors": 0,
   "total_warnings": 0,

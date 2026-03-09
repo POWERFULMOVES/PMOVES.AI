@@ -15,6 +15,26 @@ import httpx
 from fastapi import Body, Depends, FastAPI, HTTPException, Path as FPath, Query, Response
 from pydantic import BaseModel, Field
 
+def _bootstrap_import_paths() -> None:
+    """Ensure PMOVES package roots are importable in container/runtime variants."""
+    try:
+        here = Path(__file__).resolve()
+        candidates = (
+            here.parents[2],  # /app
+            here.parents[1],  # /app/services
+            here.parent,      # /app/services/agent-zero
+        )
+        for path in candidates:
+            text = str(path)
+            if text not in sys.path:
+                sys.path.insert(0, text)
+    except Exception:
+        # Keep startup resilient; downstream imports will raise explicit errors if unresolved.
+        pass
+
+
+_bootstrap_import_paths()
+
 from services.common.env import get_secret
 
 # NATS service announcement integration
@@ -23,16 +43,6 @@ try:
     NATS_ANNOUNCE_AVAILABLE = True
 except ImportError:
     NATS_ANNOUNCE_AVAILABLE = False
-
-try:
-    _services_root = Path(__file__).resolve().parents[2]
-    if str(_services_root) not in sys.path:
-        sys.path.insert(0, str(_services_root))
-    _service_dir = Path(__file__).resolve().parent
-    if str(_service_dir) not in sys.path:
-        sys.path.insert(0, str(_service_dir))
-except Exception:
-    pass
 
 logger = logging.getLogger("pmoves.agent_zero.service")
 logging.basicConfig(level=os.environ.get("LOG_LEVEL", "INFO"))
@@ -142,7 +152,12 @@ class AgentZeroRuntimeConfig:
         default_factory=lambda: os.environ.get("AGENT_ZERO_API_KEY")
     )
     health_path: str = field(
-        default_factory=lambda: os.environ.get("AGENT_ZERO_HEALTH_PATH", "/health")
+        default_factory=lambda: os.environ.get("AGENT_ZERO_HEALTH_PATH", "/healthz")
+    )
+    health_path_fallback: str = field(
+        default_factory=lambda: os.environ.get(
+            "AGENT_ZERO_HEALTH_PATH_FALLBACK", "/health"
+        )
     )
     startup_timeout: float = field(
         default_factory=lambda: float(
@@ -368,9 +383,27 @@ class AgentZeroClient:
             if isinstance(result, dict):
                 return result
             return {"status": "ok", "raw": result}
-        except (
-            AgentZeroRequestError
-        ) as exc:  # pragma: no cover - runtime might not be ready
+        except AgentZeroRequestError as exc:  # pragma: no cover - runtime might not be ready
+            fallback = self._config.health_path_fallback
+            if (
+                exc.status_code == 404
+                and fallback
+                and fallback != self._config.health_path
+            ):
+                try:
+                    result = await self._request(
+                        "GET",
+                        fallback,
+                        timeout=self._config.health_timeout,
+                    )
+                    if isinstance(result, dict):
+                        return result
+                    return {"status": "ok", "raw": result}
+                except AgentZeroRequestError as fallback_exc:
+                    logger.debug(
+                        "Agent Zero fallback health check failed: %s", fallback_exc
+                    )
+                    raise
             logger.debug("Agent Zero health check failed: %s", exc)
             raise
 

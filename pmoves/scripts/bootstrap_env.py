@@ -11,6 +11,7 @@ import argparse
 import datetime as _dt
 import json
 import os
+import re
 import secrets
 import string
 import sys
@@ -163,16 +164,44 @@ class EnvFile:
                 self.comments.append(line)
 
     def get(self, key: str) -> Optional[str]:
+        raw: Optional[str] = None
         if key in self.managed_values:
-            return self.managed_values[key]
-        if key in self.original_values:
-            return self.original_values[key]
-        return None
+            raw = self.managed_values[key]
+        elif key in self.original_values:
+            raw = self.original_values[key]
+        if raw is None:
+            return None
+        return self._resolve_placeholder(raw)
+
+    def _resolve_placeholder(self, value: str, depth: int = 0) -> Optional[str]:
+        """Resolve ${VAR} placeholders from values already present in this file.
+
+        This avoids treating unresolved aliases as real values during bootstrap.
+        """
+        if depth > 4:
+            return None
+        match = re.fullmatch(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}", value.strip())
+        if not match:
+            return value
+        ref_key = match.group(1)
+        ref_val = self.managed_values.get(ref_key)
+        if ref_val in (None, ""):
+            ref_val = self.original_values.get(ref_key)
+        if ref_val in (None, ""):
+            return None
+        return self._resolve_placeholder(ref_val, depth + 1)
 
     def set(self, key: str, value: str) -> None:
         if key not in self.managed_order:
             self.managed_order.append(key)
         self.managed_values[key] = value
+
+    @staticmethod
+    def _strip_timestamp(text: str) -> str:
+        """Return *text* with the ``# Generated at ...`` line removed for comparison."""
+        return "\n".join(
+            ln for ln in text.splitlines() if not ln.startswith("# Generated at ")
+        )
 
     def write(self) -> bool:
         if not self.managed_order:
@@ -181,7 +210,7 @@ class EnvFile:
 
         lines: List[str] = []
         lines.append("# Managed by pmoves/scripts/bootstrap_env.py")
-        lines.append(f"# Generated at {_dt.datetime.now(_dt.timezone.utc).isoformat()}Z")
+        lines.append("")  # placeholder — filled with timestamp only on real change
         lines.append("")
         for key in self.managed_order:
             value = self.managed_values.get(key, "")
@@ -198,14 +227,18 @@ class EnvFile:
             lines.extend(preserved)
             lines.extend(self.comments)
 
-        new_text = "\n".join(lines).rstrip() + "\n"
-        if new_text != self.original_text:
-            self.path.parent.mkdir(parents=True, exist_ok=True)
-            with self.path.open("w", encoding="utf-8") as fh:
-                fh.write(new_text)
-            self.original_text = new_text
-            return True
-        return False
+        new_body = "\n".join(lines).rstrip() + "\n"
+        if self._strip_timestamp(new_body) == self._strip_timestamp(self.original_text):
+            return False  # No value change — skip rewrite to avoid timestamp churn
+
+        # Values actually changed — inject fresh timestamp and write.
+        lines[1] = f"# Generated at {_dt.datetime.now(_dt.timezone.utc).isoformat()}Z"
+        final_text = "\n".join(lines).rstrip() + "\n"
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        with self.path.open("w", encoding="utf-8") as fh:
+            fh.write(final_text)
+        self.original_text = final_text
+        return True
 
 
 def select_services(registry: Dict, selected_ids: Optional[Iterable[str]]) -> List[Dict]:

@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-02-19 20:25 UTC",
-  "manifest": "C:\\Users\\russe\\Documents\\GitHub\\PMOVES.AI\\pmoves\\configs\\submodule_layer_validation_manifest.json",
+  "generated_at": "2026-03-08 12:47 UTC",
+  "manifest": "pmoves/configs/submodule_layer_validation_manifest.json",
   "summary": {
     "submodules": 1,
     "errors": 0,
@@ -12,7 +12,7 @@
       "path": "PMOVES-ToKenism-Multi",
       "url": "https://github.com/POWERFULMOVES/PMOVES-ToKenism-Multi.git",
       "status_prefix": " ",
-      "commit": "d5cccc1dada47261cadfcc7fd603f9adff23b27e",
+      "commit": "0471493b946edca8e69f2754487a6fad01dc6cb4",
       "initialized": true,
       "remote_commit_reachable": "local",
       "required_files_any_ok": true,

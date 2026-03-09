@@ -1,0 +1,880 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PMOVES.AI — Repo Audit Dashboard</title>
+<style>
+/* ═══ Reset & Dark Theme ═══ */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --void:#0a0a0f;--void-soft:#12121a;--void-card:#16161f;--void-hover:#1c1c28;
+  --border:#2a2a3a;--border-subtle:#1e1e2e;
+  --ink:#e4e4ec;--ink-secondary:#a0a0b8;--ink-muted:#6a6a80;
+  --purple:#7C3AED;--purple-soft:#A78BFA;--purple-dim:rgba(124,58,237,.12);
+  --cyan:#22d3ee;--ember:#f97316;--forest:#22c55e;--gold:#eab308;--rose:#f43f5e;
+  --font-display:'Segoe UI',system-ui,-apple-system,sans-serif;
+  --font-mono:'Cascadia Code','Fira Code','JetBrains Mono',monospace;
+}
+html{background:var(--void);color:var(--ink);font-family:var(--font-display);font-size:14px;line-height:1.5}
+body{min-height:100vh;padding:0}
+a{color:var(--purple-soft);text-decoration:none}
+a:hover{color:var(--purple);text-decoration:underline}
+
+/* ═══ Layout ═══ */
+.dashboard{max-width:1440px;margin:0 auto;padding:24px 32px 64px}
+.header{display:flex;align-items:center;justify-content:space-between;padding:16px 0 24px;border-bottom:1px solid var(--border)}
+.header h1{font-size:24px;font-weight:700;letter-spacing:-.02em}
+.header h1 .accent{color:var(--purple)}
+.header .meta{font-family:var(--font-mono);font-size:11px;color:var(--ink-muted);text-align:right}
+.header .meta span{display:block}
+
+/* ═══ KPI Cards ═══ */
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin:24px 0}
+.kpi{background:var(--void-card);border:1px solid var(--border-subtle);padding:16px 20px;position:relative;overflow:hidden}
+.kpi::before{content:'';position:absolute;top:0;left:0;width:3px;height:100%}
+.kpi .label{font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--ink-muted);font-family:var(--font-mono)}
+.kpi .value{font-size:28px;font-weight:700;margin:4px 0 2px;font-variant-numeric:tabular-nums}
+.kpi .sub{font-size:11px;color:var(--ink-secondary)}
+.kpi.purple::before{background:var(--purple)}.kpi.purple .value{color:var(--purple-soft)}
+.kpi.cyan::before{background:var(--cyan)}.kpi.cyan .value{color:var(--cyan)}
+.kpi.forest::before{background:var(--forest)}.kpi.forest .value{color:var(--forest)}
+.kpi.ember::before{background:var(--ember)}.kpi.ember .value{color:var(--ember)}
+.kpi.rose::before{background:var(--rose)}.kpi.rose .value{color:var(--rose)}
+.kpi.gold::before{background:var(--gold)}.kpi.gold .value{color:var(--gold)}
+
+/* ═══ Section ═══ */
+.section{margin:32px 0}
+.section-header{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+.section-header h2{font-size:16px;font-weight:600}
+.section-header .badge{font-family:var(--font-mono);font-size:10px;padding:2px 8px;background:var(--purple-dim);color:var(--purple-soft);border:1px solid rgba(124,58,237,.25)}
+.section-header .tag{font-family:var(--font-mono);font-size:10px;padding:2px 8px;color:var(--ink-muted);border:1px solid var(--border)}
+
+/* ═══ Tables ═══ */
+.table-wrap{overflow-x:auto;border:1px solid var(--border-subtle)}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th{background:var(--void-soft);font-family:var(--font-mono);font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--ink-muted);padding:10px 14px;text-align:left;position:sticky;top:0;border-bottom:1px solid var(--border)}
+td{padding:8px 14px;border-bottom:1px solid var(--border-subtle);vertical-align:middle}
+tr:hover td{background:var(--void-hover)}
+
+/* Status pills */
+.pill{display:inline-block;font-family:var(--font-mono);font-size:10px;padding:2px 8px;border-radius:0;font-weight:600}
+.pill-ok{background:rgba(34,197,94,.12);color:var(--forest);border:1px solid rgba(34,197,94,.25)}
+.pill-warn{background:rgba(234,179,8,.12);color:var(--gold);border:1px solid rgba(234,179,8,.25)}
+.pill-err{background:rgba(249,115,22,.12);color:var(--ember);border:1px solid rgba(249,115,22,.25)}
+.pill-crit{background:rgba(244,63,94,.12);color:var(--rose);border:1px solid rgba(244,63,94,.25)}
+.pill-info{background:rgba(124,58,237,.12);color:var(--purple-soft);border:1px solid rgba(124,58,237,.25)}
+.pill-muted{background:var(--void-soft);color:var(--ink-muted);border:1px solid var(--border)}
+.pill-defer{background:rgba(34,211,238,.08);color:var(--cyan);border:1px solid rgba(34,211,238,.2)}
+
+/* ═══ Bar Charts ═══ */
+.bar-row{display:flex;align-items:center;gap:8px;margin:4px 0}
+.bar-label{font-family:var(--font-mono);font-size:11px;color:var(--ink-secondary);width:80px;text-align:right;flex-shrink:0}
+.bar-track{flex:1;height:18px;background:var(--void-soft);position:relative;overflow:hidden}
+.bar-fill{height:100%;transition:width .6s ease}
+.bar-count{font-family:var(--font-mono);font-size:11px;color:var(--ink-muted);width:32px;text-align:right;flex-shrink:0}
+
+/* ═══ Donut Chart (CSS) ═══ */
+.donut-wrap{display:flex;align-items:center;gap:24px;padding:16px 0}
+.donut{width:120px;height:120px;border-radius:50%;position:relative;flex-shrink:0}
+.donut-center{position:absolute;inset:20px;border-radius:50%;background:var(--void-card);display:flex;align-items:center;justify-content:center;flex-direction:column}
+.donut-center .big{font-size:22px;font-weight:700;color:var(--purple-soft)}
+.donut-center .sm{font-size:9px;color:var(--ink-muted);text-transform:uppercase;letter-spacing:.08em}
+.legend{display:flex;flex-direction:column;gap:6px}
+.legend-item{display:flex;align-items:center;gap:8px;font-size:12px}
+.legend-dot{width:10px;height:10px;flex-shrink:0}
+
+/* ═══ Responsive ═══ */
+@media(max-width:768px){
+  .dashboard{padding:16px}
+  .kpi-grid{grid-template-columns:repeat(2,1fr)}
+  .header{flex-direction:column;align-items:flex-start;gap:8px}
+  .header .meta{text-align:left}
+}
+
+/* ═══ Tabs ═══ */
+.tabs{display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:16px}
+.tab{padding:8px 16px;font-size:12px;font-family:var(--font-mono);color:var(--ink-muted);cursor:pointer;border-bottom:2px solid transparent;transition:all .15s}
+.tab:hover{color:var(--ink)}
+.tab.active{color:var(--purple-soft);border-bottom-color:var(--purple)}
+.tab-panel{display:none}
+.tab-panel.active{display:block}
+
+/* ═══ Scrollable table ═══ */
+.table-scroll{max-height:480px;overflow-y:auto}
+.table-scroll::-webkit-scrollbar{width:6px}
+.table-scroll::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+.table-scroll::-webkit-scrollbar-track{background:var(--void-soft)}
+
+/* ═══ Blockers ═══ */
+.blocker{background:var(--void-card);border:1px solid var(--border-subtle);padding:16px;margin-bottom:8px}
+.blocker .id{font-family:var(--font-mono);font-size:11px;font-weight:700;color:var(--ember)}
+.blocker .title{font-weight:600;margin:4px 0}
+.blocker .desc{font-size:12px;color:var(--ink-secondary)}
+
+/* Footer */
+.footer{margin-top:48px;padding-top:16px;border-top:1px solid var(--border-subtle);font-size:11px;color:var(--ink-muted);font-family:var(--font-mono);display:flex;justify-content:space-between}
+
+/* ═══ Live indicator ═══ */
+.live-dot{width:7px;height:7px;border-radius:50%;background:var(--forest);display:inline-block;animation:pulse-live 2s ease-in-out infinite}
+@keyframes pulse-live{0%,100%{opacity:1}50%{opacity:.4}}
+.warn-bar{background:rgba(234,179,8,.10);border:1px solid rgba(234,179,8,.25);color:var(--gold);font-size:11px;font-family:var(--font-mono);padding:6px 16px;margin:12px 0 0}
+</style>
+</head>
+<body>
+<div class="dashboard">
+
+<!-- ═══ Header ═══ -->
+<header class="header">
+  <div>
+    <h1><span class="accent">PMOVES.AI</span> Repo Audit Dashboard</h1>
+    <div style="font-size:12px;color:var(--ink-secondary);margin-top:4px">
+      Unified audit view — security, compliance, submodules, PRs, release gates
+    </div>
+  </div>
+  <div class="meta">
+    <span id="live-status" style="display:inline-flex;align-items:center;gap:6px;margin-bottom:4px">
+      <span style="font-size:10px;color:var(--ink-muted);font-family:var(--font-mono)">Snapshot</span>
+    </span>
+    <span>Generated: <strong id="gen-time"></strong></span>
+    <span>Branch: <strong id="gen-branch">main</strong></span>
+    <span>Agent: Claude Opus 4.6</span>
+  </div>
+</header>
+
+<!-- ═══ KPI Cards ═══ -->
+<div class="kpi-grid" id="kpi-grid"></div>
+
+<!-- ═══ Tab Navigation ═══ -->
+<div class="tabs" id="tabs">
+  <div class="tab active" data-tab="services">Services</div>
+  <div class="tab" data-tab="submodules">Submodules</div>
+  <div class="tab" data-tab="prs">PR Readiness</div>
+  <div class="tab" data-tab="security">Security</div>
+  <div class="tab" data-tab="chit">CHIT Integration</div>
+  <div class="tab" data-tab="gates">Release Gates</div>
+  <div class="tab" data-tab="blockers">Active Blockers</div>
+</div>
+
+<!-- ═══ Tab Panels ═══ -->
+
+<!-- Services Panel -->
+<div class="tab-panel active" id="panel-services">
+  <div class="section">
+    <div class="section-header">
+      <h2>Service Catalog</h2>
+      <span class="badge" id="svc-count"></span>
+      <span class="tag">from serviceCatalog.ts</span>
+    </div>
+    <div class="table-wrap">
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>Service</th><th>Category</th><th>Port</th><th>Health Endpoint</th><th>Capabilities</th></tr></thead>
+          <tbody id="svc-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Submodules Panel -->
+<div class="tab-panel" id="panel-submodules">
+  <div class="section">
+    <div class="section-header">
+      <h2>Submodule Compliance Grid</h2>
+      <span class="badge" id="sub-count"></span>
+      <span class="tag">submodule_layer_validation.json — 2026-02-26</span>
+    </div>
+    <div class="table-wrap">
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>Module</th><th>Init</th><th>Required Files</th><th>Top-Level OK</th><th>Nested .gitmodules</th><th>Python Compile</th><th>Findings</th></tr></thead>
+          <tbody id="sub-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- PR Readiness Panel -->
+<div class="tab-panel" id="panel-prs">
+  <div class="section">
+    <div class="section-header">
+      <h2>PR Merge Readiness</h2>
+      <span class="badge" id="pr-count"></span>
+      <span class="tag">pr_monitor_latest.json</span>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>PR</th><th>Title</th><th>Base</th><th>Mergeable</th><th>Merge State</th><th>Checks</th><th>Review</th><th>Blockers</th></tr></thead>
+        <tbody id="pr-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Security Panel -->
+<div class="tab-panel" id="panel-security">
+  <div class="section">
+    <div class="section-header">
+      <h2>CodeQL Security Findings</h2>
+      <span class="badge">0 alerts</span>
+      <span class="tag">CODEQL_LIVE_2026-03-04</span>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin:16px 0">
+      <!-- Severity Distribution -->
+      <div>
+        <div style="font-size:12px;color:var(--ink-muted);margin-bottom:12px;font-family:var(--font-mono);text-transform:uppercase;letter-spacing:.08em">Severity Distribution</div>
+        <div id="severity-bars"></div>
+      </div>
+      <!-- Donut -->
+      <div>
+        <div style="font-size:12px;color:var(--ink-muted);margin-bottom:12px;font-family:var(--font-mono);text-transform:uppercase;letter-spacing:.08em">Real vs False Positive</div>
+        <div class="donut-wrap" id="donut-wrap"></div>
+      </div>
+    </div>
+    <div class="table-wrap" style="margin-top:16px">
+      <table>
+        <thead><tr><th>Alert #</th><th>Severity</th><th>Rule</th><th>File</th><th>Verdict</th><th>Action</th></tr></thead>
+        <tbody id="sec-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- CHIT Integration Panel -->
+<div class="tab-panel" id="panel-chit">
+  <div class="section">
+    <div class="section-header">
+      <h2>CHIT Integration Matrix</h2>
+      <span class="badge">28 services</span>
+      <span class="tag">CHIT_INTEGRATION_STATUS.md</span>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin:16px 0">
+      <div>
+        <div style="font-size:12px;color:var(--ink-muted);margin-bottom:12px;font-family:var(--font-mono);text-transform:uppercase;letter-spacing:.08em">Integration Levels</div>
+        <div id="chit-bars"></div>
+      </div>
+      <div>
+        <div style="font-size:12px;color:var(--ink-muted);margin-bottom:12px;font-family:var(--font-mono);text-transform:uppercase;letter-spacing:.08em">Coverage</div>
+        <div class="donut-wrap" id="chit-donut"></div>
+      </div>
+    </div>
+    <div class="table-wrap" style="margin-top:16px">
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>Service</th><th>Port</th><th>Level</th><th>CGP Version</th><th>NATS Subjects</th><th>Gap</th></tr></thead>
+          <tbody id="chit-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Release Gates Panel -->
+<div class="tab-panel" id="panel-gates">
+  <div class="section">
+    <div class="section-header">
+      <h2>Release Gate Status</h2>
+      <span class="badge">4 gates</span>
+      <span class="tag">RELEASE_GATE_CHECK_2026-02-28</span>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Gate</th><th>Description</th><th>Status</th><th>Action Needed</th></tr></thead>
+        <tbody id="gate-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Active Blockers Panel -->
+<div class="tab-panel" id="panel-blockers">
+  <div class="section">
+    <div class="section-header">
+      <h2>Active Blockers</h2>
+      <span class="badge">4 open</span>
+      <span class="tag">PRODUCTION_AUDIT_DASHBOARD.md</span>
+    </div>
+    <div id="blockers-list"></div>
+  </div>
+</div>
+
+<!-- ═══ Footer ═══ -->
+<div class="footer">
+  <span>PMOVES.AI Audit Dashboard v1.0 — Cataclysm Studios Inc.</span>
+  <span>Data sources: 6 files | serviceCatalog.ts (43 of 70 services) | 40 submodules | 0 CodeQL alerts</span>
+</div>
+
+</div><!-- /dashboard -->
+
+<script>
+/* ═══════════════════════════════════════════════════════════════════════════
+   INLINE DATA — baked at generation time from audit artifacts
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+// PR Monitor (pr_monitor_latest.json)
+const PR_DATA = {
+  repo: "POWERFULMOVES/PMOVES.AI",
+  count: 0,
+  items: []
+};
+
+// Submodule Validation (submodule_layer_validation.json)
+const SUBMODULE_DATA = {
+  generated_at: "2026-02-26 18:22 UTC",
+  summary: { submodules: 40, errors: 0, warnings: 0 },
+  results: [
+    {name:"PMOVES-A2UI",initialized:true,required_files_any_ok:true,top_level_files_ok:true,nested_gitmodules_ok:true,python_compile_ok:"skip",findings:[]},
+    {name:"PMOVES-Agent-Zero",initialized:true,required_files_any_ok:true,top_level_files_ok:true,nested_gitmodules_ok:true,python_compile_ok:"pass",findings:[]},
+    {name:"PMOVES-AgentGym",initialized:true,required_files_any_ok:true,top_level_files_ok:true,nested_gitmodules_ok:true,python_compile_ok:"skip",findings:[]},
+    {name:"Pmoves-AgentGym-RL",initialized:true,required_files_any_ok:true,top_level_files_ok:true,nested_gitmodules_ok:true,python_compile_ok:"skip",findings:[]},
+    {name:"PMOVES-Archon",initialized:true,required_files_any_ok:true,top_level_files_ok:true,nested_gitmodules_ok:true,python_compile_ok:"pass",findings:[]},
+    {name:"PMOVES-BoTZ",initialized:true,required_files_any_ok:true,top_level_files_ok:true,nested_gitmodules_ok:true,python_compile_ok:"pass",findings:[]},
+    {name:"PMOVES-BotZ-gateway",initialized:true,required_files_any_ok:true,top_level_files_ok:true,nested_gitmodules_ok:true,python_compile_ok:"skip",findings:[]},
+    {name:"Pmoves-cipher",initialized:true,required_files_any_ok:true,top_level_files_ok:true,nested_gitmodules_ok:true,python_compile_ok:"skip",findings:[]},
+    {name:"PMOVES-Creator",initialized:true,required_files_any_ok:true,top_level_files_ok:true,nested_gitmodules_ok:true,python_compile_ok:"skip",findings:[]},
+    {name:"PMOVES-crush",initialized:true,required_files_any_ok:true,top_level_files_ok:true,nested_gitmodules_ok:true,python_compile_ok:"skip",findings:[]},
+    {name:"PMOVES-Danger-infra",initialized:true,required_files_any_ok:true,top_level_files_ok:true,nested_gitmodules_ok:true,python_compile_ok:"skip",findings:[]},
+    {name:"PMOVES-Deep-Serch",initialized:true,required_files_any_ok:true,top_level_files_ok:true,nested_gitmodules_ok:true,python_compile_ok:"skip",findings:[]},
+    {name:"PMOVES-DoX",initialized:true,required_files_any_ok:true,top_level_files_ok:true,nested_gitmodules_ok:true,python_compile_ok:"skip",findings:[]},
+    {name:"PMOVES-E2B-Danger-Room",initialized:true,required_files_any_ok:true,top_level_files_ok:true,nested_gitmodules_ok:true,python_compile_ok:"skip",findings:[]},
+    {name:"PMOVES-E2B-Danger-Room-Desktop",initialized:true,required_files_any_ok:true,top_level_files_ok:true,nested_gitmodules_ok:true,python_compile_ok:"skip",findings:[]},
+    {name:"pmoves-e2b-mcp-server",initialized:true,required_files_any_ok:true,top_level_files_ok:true,nested_gitmodules_ok:true,python_compile_ok:"skip",findings:[]},
+    {name:"PMOVES-E2b-Spells",initialized:true,required_files_any_ok:true,top_level_files_ok:true,nested_gitmodules_ok:true,python_compile_ok:"skip",findings:[]},
+    {name:"PMOVES-Headscale",initialized:true,required_files_any_ok:true,top_level_files_ok:true,nested_gitmodules_ok:true,python_compile_ok:"skip",findings:[]},
+    {name:"Pmoves-Health-wger",initialized:true,required_files_any_ok:true,top_level_files_ok:true,nested_gitmodules_ok:true,python_compile_ok:"skip",findings:[]},
+    {name:"PMOVES-HiRAG",initialized:true,required_files_any_ok:true,top_level_files_ok:true,nested_gitmodules_ok:true,python_compile_ok:"pass",findings:[]},
+    {name:"Pmoves-hyperdimensions",initialized:true,required_files_any_ok:true,top_level_files_ok:true,nested_gitmodules_ok:true,python_compile_ok:"skip",findings:[]},
+    {name:"PMOVES-Jellyfin",initialized:true,required_files_any_ok:true,top_level_files_ok:true,nested_gitmodules_ok:true,python_compile_ok:"skip",findings:[]},
+    {name:"Pmoves-Jellyfin-AI-Media-Stack",initialized:true,required_files_any_ok:true,top_level_files_ok:true,nested_gitmodules_ok:true,python_compile_ok:"skip",findings:[]},
+    {name:"PMOVES-llama-throughput-lab",initialized:true,required_files_any_ok:true,top_level_files_ok:true,nested_gitmodules_ok:true,python_compile_ok:"skip",findings:[]},
+    {name:"PMOVES-MAI-UI",initialized:true,required_files_any_ok:true,top_level_files_ok:true,nested_gitmodules_ok:true,python_compile_ok:"skip",findings:[]},
+    {name:"PMOVES-n8n",initialized:true,required_files_any_ok:true,top_level_files_ok:true,nested_gitmodules_ok:true,python_compile_ok:"skip",findings:[]},
+    {name:"PMOVES-Open-Notebook",initialized:true,required_files_any_ok:true,top_level_files_ok:true,nested_gitmodules_ok:true,python_compile_ok:"skip",findings:[]},
+    {name:"PMOVES-Pinokio-Ultimate-TTS-Studio",initialized:true,required_files_any_ok:true,top_level_files_ok:true,nested_gitmodules_ok:true,python_compile_ok:"skip",findings:[]},
+    {name:"PMOVES-Pipecat",initialized:true,required_files_any_ok:true,top_level_files_ok:true,nested_gitmodules_ok:true,python_compile_ok:"pass",findings:[]},
+    {name:"PMOVES-Remote-View",initialized:true,required_files_any_ok:true,top_level_files_ok:true,nested_gitmodules_ok:true,python_compile_ok:"skip",findings:[]},
+    {name:"PMOVES-supabase",initialized:true,required_files_any_ok:true,top_level_files_ok:true,nested_gitmodules_ok:true,python_compile_ok:"skip",findings:[]},
+    {name:"PMOVES-surf",initialized:true,required_files_any_ok:true,top_level_files_ok:true,nested_gitmodules_ok:true,python_compile_ok:"skip",findings:[]},
+    {name:"PMOVES-Tailscale",initialized:true,required_files_any_ok:true,top_level_files_ok:true,nested_gitmodules_ok:true,python_compile_ok:"skip",findings:[]},
+    {name:"PMOVES-tensorzero",initialized:true,required_files_any_ok:true,top_level_files_ok:true,nested_gitmodules_ok:true,python_compile_ok:"skip",findings:[]},
+    {name:"PMOVES-ToKenism-Multi",initialized:true,required_files_any_ok:true,top_level_files_ok:true,nested_gitmodules_ok:true,python_compile_ok:"skip",findings:[]},
+    {name:"PMOVES-transcribe-and-fetch",initialized:true,required_files_any_ok:true,top_level_files_ok:true,nested_gitmodules_ok:true,python_compile_ok:"skip",findings:[]},
+    {name:"PMOVES-Ultimate-TTS-Studio",initialized:true,required_files_any_ok:true,top_level_files_ok:true,nested_gitmodules_ok:true,python_compile_ok:"skip",findings:[]},
+    {name:"PMOVES-Wealth",initialized:true,required_files_any_ok:true,top_level_files_ok:true,nested_gitmodules_ok:true,python_compile_ok:"skip",findings:[]},
+    {name:"PMOVES.YT",initialized:true,required_files_any_ok:true,top_level_files_ok:true,nested_gitmodules_ok:true,python_compile_ok:"skip",findings:[]},
+    {name:"pmoves/integrations/archon",initialized:true,required_files_any_ok:true,top_level_files_ok:true,nested_gitmodules_ok:true,python_compile_ok:"skip",findings:[]}
+  ]
+};
+
+// CodeQL Live Snapshot (GitHub API, 2026-03-04)
+const CODEQL_DATA = {
+  total: 0,
+  severity: { critical: 0, high: 0, medium: 0 },
+  real_count: 0,
+  fp_count: 0,
+  accepted_risk: 0,
+  alerts: []
+};
+
+// CHIT Integration (CHIT_INTEGRATION_STATUS.md — parsed)
+const CHIT_DATA = {
+  full: [
+    {name:"Tokenism Simulator",port:8103,cgp:"v0.2",nats:["tokenism.cgp.ready.v1","tokenism.simulation.result.v1"],gap:""},
+    {name:"Hi-RAG Gateway v2",port:"8086/8087",cgp:"v0.1/v0.2",nats:["geometry.cgp.v1","geometry.swarm.meta.v1"],gap:""},
+    {name:"Gateway Service",port:"internal",cgp:"v0.1/v0.2",nats:["POST /geometry/event"],gap:""},
+    {name:"Neo4j Mind Map",port:"via Gateway",cgp:"v0.2",nats:["GET /mindmap/{id}"],gap:""},
+    {name:"Agent Zero",port:"8080/8081",cgp:"v0.1/v0.2",nats:["geometry.publish_cgp","geometry.jump"],gap:""},
+  ],
+  partial: [
+    {name:"A2UI NATS Bridge",port:9224,cgp:"-",nats:["geometry.> (subscribe)"],gap:"Consumer-only, no CGP production"},
+    {name:"PMOVES.YT",port:8077,cgp:"v0.1",nats:["geometry.cgp.v1"],gap:"Video CGP only, no audio geometry"},
+    {name:"DeepResearch Worker",port:8098,cgp:"v0.1",nats:["tokenism.cgp.ready.v1"],gap:"v0.1 packets only, no geometry consumption"},
+    {name:"SupaSerch",port:8099,cgp:"v0.1",nats:["tokenism.cgp.ready.v1"],gap:"CGP for search results only"},
+    {name:"Consciousness Service",port:8096,cgp:"-",nats:["persona.publish.result.v1"],gap:"CHR pipeline not connected"},
+    {name:"Evo Controller",port:8113,cgp:"-",nats:["geometry.swarm.meta.v1"],gap:"Fitness landscape geometry incomplete"},
+    {name:"AgentGym RL Coordinator",port:"-",cgp:"-",nats:["internal"],gap:"Internal CGP only, no NATS publishing"},
+    {name:"Flute Gateway",port:"8055/8056",cgp:"-",nats:["tokenism.geometry.event.v1"],gap:"Voice geometry only"},
+  ],
+  none: [
+    {name:"Extract Worker",port:8083},{name:"PDF Ingest",port:8092},{name:"FFmpeg Whisper",port:8078},
+    {name:"Media Video Analyzer",port:8079},{name:"Media Audio Analyzer",port:8082},{name:"Channel Monitor",port:8097},
+    {name:"Presign",port:8088},{name:"Render Webhook",port:8085},{name:"Publisher Discord",port:8094},
+    {name:"Publisher",port:"-"},{name:"Chat Relay",port:"-"},{name:"Mesh Agent",port:"-"},
+    {name:"N8N",port:"-"},{name:"GPU Orchestrator",port:"-"},{name:"MCP YouTube Adapter",port:"-"},
+  ]
+};
+
+// Release Gates (RELEASE_GATE_CHECK_2026-02-28.md — parsed)
+const GATE_DATA = [
+  {id:"RG-1",desc:"Production Command Parity — no dev-only targets in prod paths",status:"PASS",action:"None — dev targets correctly scoped"},
+  {id:"RG-2",desc:"Port Hardcoding Audit — all localhost ports are fallback defaults",status:"PASS",action:"Document production env overrides in deployment guide"},
+  {id:"RG-3",desc:"Supabase Collation Check — DB collation version hygiene",status:"DEFERRED",action:"Run after AB-4 credential injection"},
+  {id:"RG-4",desc:"Auth Unification / JWT Rotation — cross-service re-auth test",status:"DEFERRED",action:"Run after AB-4 credential injection"},
+];
+
+// Active Blockers (PRODUCTION_AUDIT_DASHBOARD.md — parsed)
+const BLOCKER_DATA = [
+  {id:"AB-9",sev:"HIGH",title:"Self-hosted runner queue starvation",desc:"Queue pressure persists on CodeQL/GHCR lanes. Keep stale-run drain + runner lane checks active and validate pickup over multiple merge cycles."},
+];
+
+// Service catalog (from serviceCatalog.ts — key services with health endpoints)
+const SERVICE_CATALOG = [
+  {slug:"prometheus",title:"Prometheus",cat:"observability",port:"9090",health:"/-/ready",caps:["Metrics scraping","Alerting"]},
+  {slug:"grafana",title:"Grafana",cat:"observability",port:"3002",health:"/api/health",caps:["Dashboards","Visualization"]},
+  {slug:"loki",title:"Loki",cat:"observability",port:"3100",health:"/ready",caps:["Log aggregation"]},
+  {slug:"cadvisor",title:"cAdvisor",cat:"observability",port:"8080",health:"",caps:["Container stats"]},
+  {slug:"postgres",title:"PostgreSQL",cat:"database",port:"5432",health:"",caps:["pgvector","RLS"]},
+  {slug:"postgrest",title:"PostgREST",cat:"database",port:"3010",health:"",caps:["Auto-generated REST"]},
+  {slug:"supabase-studio",title:"Supabase Studio",cat:"database",port:"65433",health:"",caps:["Table editor","SQL editor"]},
+  {slug:"qdrant",title:"Qdrant",cat:"data",port:"6333",health:"/",caps:["Vector search","Embeddings"]},
+  {slug:"neo4j",title:"Neo4j",cat:"data",port:"7474",health:"/",caps:["Graph traversal","Cypher"]},
+  {slug:"meilisearch",title:"Meilisearch",cat:"data",port:"7700",health:"/health",caps:["Full-text search"]},
+  {slug:"minio",title:"MinIO",cat:"data",port:"9000",health:"/minio/health/live",caps:["Object storage"]},
+  {slug:"nats",title:"NATS",cat:"bus",port:"4222",health:"",caps:["Pub/Sub","JetStream"]},
+  {slug:"agent-zero",title:"Agent Zero",cat:"agents",port:"8080",health:"/healthz",caps:["MCP gateway","Orchestration"]},
+  {slug:"archon",title:"Archon",cat:"agents",port:"8091",health:"/healthz",caps:["Prompt management"]},
+  {slug:"deepresearch",title:"DeepResearch",cat:"agents",port:"8098",health:"/healthz",caps:["Research planning"]},
+  {slug:"supaserch",title:"SupaSerch",cat:"agents",port:"8099",health:"/healthz",caps:["Deep search"]},
+  {slug:"consciousness-service",title:"Consciousness Service",cat:"agents",port:"8096",health:"/healthz",caps:["Agent reflection"]},
+  {slug:"botz-gateway",title:"BotZ Gateway",cat:"agents",port:"8054",health:"/healthz",caps:["MCP server"]},
+  {slug:"extract-worker",title:"Extract Worker",cat:"workers",port:"8083",health:"/healthz",caps:["Embeddings","Indexing"]},
+  {slug:"langextract",title:"LangExtract",cat:"workers",port:"8084",health:"/healthz",caps:["Language detection"]},
+  {slug:"notebook-sync",title:"Notebook Sync",cat:"workers",port:"8095",health:"/healthz",caps:["Notebook sync"]},
+  {slug:"presign",title:"Presign",cat:"workers",port:"8088",health:"",caps:["URL presigning"]},
+  {slug:"render-webhook",title:"Render Webhook",cat:"workers",port:"8085",health:"",caps:["Render callbacks"]},
+  {slug:"publisher-discord",title:"Publisher Discord",cat:"workers",port:"8094",health:"",caps:["Discord notifications"]},
+  {slug:"jellyfin-bridge",title:"Jellyfin Bridge",cat:"workers",port:"8093",health:"",caps:["Metadata sync"]},
+  {slug:"gpu-orchestrator",title:"GPU Orchestrator",cat:"gpu",port:"8200",health:"/healthz",caps:["VRAM tracking"]},
+  {slug:"hi-rag-gateway-v2",title:"Hi-RAG v2 CPU",cat:"gpu",port:"8086",health:"/hirag/admin/stats",caps:["Vector search","Reranking"]},
+  {slug:"hi-rag-gateway-v2-gpu",title:"Hi-RAG v2 GPU",cat:"gpu",port:"8087",health:"/hirag/admin/stats",caps:["GPU-accelerated RAG"]},
+  {slug:"ultimate-tts",title:"Ultimate TTS Studio",cat:"gpu",port:"7861",health:"/gradio_api/info",caps:["7 TTS engines"]},
+  {slug:"flute-gateway",title:"Flute Gateway",cat:"gpu",port:"8055",health:"/healthz",caps:["Prosodic TTS","WebSocket"]},
+  {slug:"pmoves-yt",title:"PMOVES.YT",cat:"media",port:"8077",health:"",caps:["YouTube ingestion"]},
+  {slug:"channel-monitor",title:"Channel Monitor",cat:"media",port:"8097",health:"",caps:["Channel watching"]},
+  {slug:"ffmpeg-whisper",title:"FFmpeg Whisper",cat:"media",port:"8078",health:"",caps:["Transcription"]},
+  {slug:"media-video",title:"Media Video Analyzer",cat:"media",port:"8079",health:"/healthz",caps:["YOLO detection"]},
+  {slug:"media-audio",title:"Media Audio Analyzer",cat:"media",port:"8082",health:"/healthz",caps:["Emotion detection"]},
+  {slug:"tensorzero-gateway",title:"TensorZero Gateway",cat:"llm",port:"3030",health:"/healthz",caps:["Multi-provider LLM"]},
+  {slug:"tensorzero-ui",title:"TensorZero UI",cat:"llm",port:"4000",health:"",caps:["Request logs"]},
+  {slug:"tensorzero-ch",title:"TensorZero ClickHouse",cat:"llm",port:"8123",health:"/ping",caps:["Metrics storage"]},
+  {slug:"pmoves-ui",title:"PMOVES UI",cat:"ui",port:"4482",health:"/api/health",caps:["Service catalog"]},
+  {slug:"tokenism",title:"Tokenism Simulator",cat:"integration",port:"8103",health:"/healthz",caps:["Token economy","CHIT geometry"]},
+  {slug:"dox-backend",title:"DoX Backend",cat:"dox",port:"8484",health:"/health",caps:["PDF analysis","CHR pipeline"]},
+  {slug:"mcp-cipher",title:"MCP Cipher",cat:"mcp",port:"3025",health:"/health",caps:["CHIT protocol"]},
+  {slug:"mcp-docling",title:"MCP Docling",cat:"mcp",port:"3020",health:"/health",caps:["Document parsing"]},
+];
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   RENDER FUNCTIONS
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+const $ = (sel) => document.querySelector(sel);
+const $$ = (sel) => document.querySelectorAll(sel);
+
+function pillFor(status) {
+  const map = {
+    PASS: 'pill-ok', MERGED: 'pill-ok', pass: 'pill-ok', healthy: 'pill-ok',
+    BLOCKED: 'pill-err', FAIL: 'pill-err', OPEN: 'pill-err', HIGH: 'pill-err',
+    DEFERRED: 'pill-defer', MEDIUM: 'pill-warn', pending: 'pill-warn',
+    MERGEABLE: 'pill-ok', REVIEW_REQUIRED: 'pill-warn',
+    critical: 'pill-crit', high: 'pill-err', medium: 'pill-warn', 'low/fp': 'pill-muted',
+    Full: 'pill-ok', Partial: 'pill-warn', None: 'pill-muted',
+    skip: 'pill-muted', 'FALSE POSITIVE': 'pill-muted', 'REAL': 'pill-crit',
+    'LIKELY FP': 'pill-muted', 'FP (dead code)': 'pill-muted', 'ACCEPTED RISK': 'pill-warn',
+  };
+  return map[status] || 'pill-info';
+}
+
+function pill(text) {
+  return `<span class="pill ${pillFor(text)}">${text}</span>`;
+}
+
+// Category color mapping
+const CAT_COLORS = {
+  observability:'var(--cyan)',database:'var(--purple-soft)',data:'var(--forest)',bus:'var(--gold)',
+  workers:'var(--ember)',agents:'var(--cyan)',gpu:'var(--forest)',media:'var(--ember)',
+  llm:'var(--gold)',ui:'var(--purple-soft)',integration:'var(--cyan)',dox:'var(--forest)',mcp:'var(--gold)'
+};
+
+// ── Timestamp ──
+$('#gen-time').textContent = new Date().toISOString().replace('T',' ').slice(0,19) + ' UTC';
+
+// ── KPI Cards ──
+const svcWithHealth = SERVICE_CATALOG.filter(s => s.health);
+const kpis = [
+  {label:"Total Services",value:SERVICE_CATALOG.length,sub:`${svcWithHealth.length} with health endpoints`,cls:"purple"},
+  {label:"Submodules",value:SUBMODULE_DATA.summary.submodules,sub:`${SUBMODULE_DATA.summary.errors} errors, ${SUBMODULE_DATA.summary.warnings} warnings`,cls:"forest"},
+  {label:"Open PRs",value:PR_DATA.count,sub:PR_DATA.items.filter(p=>p.merge_state_status==='BLOCKED').length + " blocked",cls:"gold"},
+  {label:"Security Alerts",value:CODEQL_DATA.total,sub:`${CODEQL_DATA.severity.critical} critical, ${CODEQL_DATA.severity.high} high`,cls:"rose"},
+  {label:"CHIT Full",value:CHIT_DATA.full.length,sub:`${CHIT_DATA.partial.length} partial, ${CHIT_DATA.none.length} none`,cls:"purple"},
+  {label:"Release Gates",value:"2/4",sub:"2 PASS, 2 DEFERRED",cls:"cyan"},
+  {label:"Active Blockers",value:BLOCKER_DATA.length,sub:`${BLOCKER_DATA.filter(b=>b.sev==='HIGH').length} high severity`,cls:"ember"},
+  {label:"Dependabot",value:1,sub:"1 open (fast-xml-parser)",cls:"gold"},
+];
+$('#kpi-grid').innerHTML = kpis.map(k => `
+  <div class="kpi ${k.cls}">
+    <div class="label">${k.label}</div>
+    <div class="value">${k.value}</div>
+    <div class="sub">${k.sub}</div>
+  </div>
+`).join('');
+
+// ── Tabs ──
+$$('.tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    $$('.tab').forEach(t => t.classList.remove('active'));
+    $$('.tab-panel').forEach(p => p.classList.remove('active'));
+    tab.classList.add('active');
+    $(`#panel-${tab.dataset.tab}`).classList.add('active');
+  });
+});
+
+// ── Services Table ──
+$('#svc-count').textContent = SERVICE_CATALOG.length + ' services';
+$('#svc-tbody').innerHTML = SERVICE_CATALOG.map(s => `
+  <tr>
+    <td><strong>${s.title}</strong><br><span style="font-family:var(--font-mono);font-size:10px;color:var(--ink-muted)">${s.slug}</span></td>
+    <td><span style="color:${CAT_COLORS[s.cat]||'var(--ink-muted)'};font-family:var(--font-mono);font-size:11px">${s.cat}</span></td>
+    <td style="font-family:var(--font-mono)">${s.port}</td>
+    <td style="font-family:var(--font-mono);font-size:11px;color:${s.health?'var(--forest)':'var(--ink-muted)'}">${s.health || '—'}</td>
+    <td style="font-size:11px;color:var(--ink-secondary)">${s.caps.join(', ')}</td>
+  </tr>
+`).join('');
+
+// ── Submodules Table ──
+$('#sub-count').textContent = SUBMODULE_DATA.summary.submodules + ' submodules';
+$('#sub-tbody').innerHTML = SUBMODULE_DATA.results.map(s => {
+  const pyPill = s.python_compile_ok === 'pass' ? pill('pass') : s.python_compile_ok === 'skip' ? pill('skip') : pill(s.python_compile_ok);
+  return `
+  <tr>
+    <td><strong>${s.name}</strong></td>
+    <td>${pill(s.initialized ? 'PASS' : 'FAIL')}</td>
+    <td>${pill(s.required_files_any_ok ? 'PASS' : 'FAIL')}</td>
+    <td>${pill(s.top_level_files_ok ? 'PASS' : 'FAIL')}</td>
+    <td>${pill(s.nested_gitmodules_ok ? 'PASS' : 'FAIL')}</td>
+    <td>${pyPill}</td>
+    <td style="font-family:var(--font-mono);font-size:11px">${s.findings.length === 0 ? '<span style="color:var(--forest)">0</span>' : '<span style="color:var(--ember)">'+s.findings.length+'</span>'}</td>
+  </tr>`;
+}).join('');
+
+// ── PR Table ──
+$('#pr-count').textContent = PR_DATA.count + ' open';
+$('#pr-tbody').innerHTML = PR_DATA.items.length ? PR_DATA.items.map(p => `
+  <tr>
+    <td><a href="${p.url}" target="_blank" rel="noreferrer">#${p.number}</a></td>
+    <td><strong>${p.title}</strong><br><span style="font-family:var(--font-mono);font-size:10px;color:var(--ink-muted)">${p.head}</span></td>
+    <td style="font-family:var(--font-mono)">${p.base}</td>
+    <td>${pill(p.mergeable)}</td>
+    <td>${pill(p.merge_state_status)}</td>
+    <td style="font-family:var(--font-mono);font-size:11px">
+      <span style="color:var(--forest)">${p.checks.passed}P</span> /
+      <span style="color:var(--ember)">${p.checks.failed}F</span> /
+      <span style="color:var(--gold)">${p.checks.pending}?</span>
+    </td>
+    <td>${pill(p.review_decision)}</td>
+    <td style="font-size:11px;color:var(--ink-secondary)">${p.blockers.join(', ')}</td>
+  </tr>
+`).join('') : `
+  <tr>
+    <td colspan="8" style="color:var(--ink-secondary)">No open PRs in the latest snapshot.</td>
+  </tr>
+`;
+
+// ── Security: Severity Bars ──
+const sevBars = [
+  {label:'Critical',count:CODEQL_DATA.severity.critical,color:'var(--rose)',max:CODEQL_DATA.total},
+  {label:'High',count:CODEQL_DATA.severity.high,color:'var(--ember)',max:CODEQL_DATA.total},
+  {label:'Medium',count:CODEQL_DATA.severity.medium,color:'var(--gold)',max:CODEQL_DATA.total},
+  {label:'FP / Low',count:CODEQL_DATA.fp_count || 0,color:'var(--ink-muted)',max:CODEQL_DATA.total},
+];
+$('#severity-bars').innerHTML = sevBars.map(b => `
+  <div class="bar-row">
+    <div class="bar-label">${b.label}</div>
+    <div class="bar-track">
+      <div class="bar-fill" style="width:${b.max ? (b.count/b.max)*100 : 0}%;background:${b.color}"></div>
+    </div>
+    <div class="bar-count">${b.count}</div>
+  </div>
+`).join('');
+
+// ── Security: Donut ──
+const realPct = CODEQL_DATA.total ? Math.round((CODEQL_DATA.real_count / CODEQL_DATA.total) * 100) : 0;
+const fpPct = 100 - realPct;
+$('#donut-wrap').innerHTML = `
+  <div class="donut" style="background:conic-gradient(var(--rose) 0% ${realPct}%, var(--ink-muted) ${realPct}% 100%)">
+    <div class="donut-center">
+      <div class="big">${realPct}%</div>
+      <div class="sm">Real</div>
+    </div>
+  </div>
+  <div class="legend">
+    <div class="legend-item"><div class="legend-dot" style="background:var(--rose)"></div>Real findings: ${CODEQL_DATA.real_count}</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--ink-muted)"></div>False positives: ${CODEQL_DATA.fp_count}</div>
+    <div class="legend-item" style="margin-top:8px;font-size:11px;color:var(--ink-muted)">Total alerts: ${CODEQL_DATA.total}</div>
+  </div>
+`;
+
+// ── Security: Alert Table ──
+$('#sec-tbody').innerHTML = CODEQL_DATA.alerts.length ? CODEQL_DATA.alerts.map(a => `
+  <tr>
+    <td style="font-family:var(--font-mono)">#${a.id}</td>
+    <td>${pill(a.sev)}</td>
+    <td style="font-family:var(--font-mono);font-size:11px">${a.rule}</td>
+    <td style="font-family:var(--font-mono);font-size:11px">${a.file}</td>
+    <td>${pill(a.verdict)}</td>
+    <td style="font-size:11px;color:var(--ink-secondary)">${a.action}</td>
+  </tr>
+`).join('') : `
+  <tr>
+    <td colspan="6" style="color:var(--ink-secondary)">No open CodeQL alerts in the latest snapshot.</td>
+  </tr>
+`;
+
+// ── CHIT: Bars ──
+const chitBars = [
+  {label:'Full',count:CHIT_DATA.full.length,color:'var(--forest)',max:28},
+  {label:'Partial',count:CHIT_DATA.partial.length,color:'var(--gold)',max:28},
+  {label:'None',count:CHIT_DATA.none.length,color:'var(--ink-muted)',max:28},
+];
+$('#chit-bars').innerHTML = chitBars.map(b => `
+  <div class="bar-row">
+    <div class="bar-label">${b.label}</div>
+    <div class="bar-track">
+      <div class="bar-fill" style="width:${(b.count/b.max)*100}%;background:${b.color}"></div>
+    </div>
+    <div class="bar-count">${b.count}</div>
+  </div>
+`).join('');
+
+// ── CHIT: Donut ──
+const chitTotal = CHIT_DATA.full.length + CHIT_DATA.partial.length + CHIT_DATA.none.length;
+const chitFullPct = Math.round((CHIT_DATA.full.length / chitTotal) * 100);
+const chitPartialPct = Math.round((CHIT_DATA.partial.length / chitTotal) * 100);
+$('#chit-donut').innerHTML = `
+  <div class="donut" style="background:conic-gradient(var(--forest) 0% ${chitFullPct}%, var(--gold) ${chitFullPct}% ${chitFullPct+chitPartialPct}%, var(--ink-muted) ${chitFullPct+chitPartialPct}% 100%)">
+    <div class="donut-center">
+      <div class="big">${chitFullPct}%</div>
+      <div class="sm">Full</div>
+    </div>
+  </div>
+  <div class="legend">
+    <div class="legend-item"><div class="legend-dot" style="background:var(--forest)"></div>Full: ${CHIT_DATA.full.length} services</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--gold)"></div>Partial: ${CHIT_DATA.partial.length} services</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--ink-muted)"></div>None: ${CHIT_DATA.none.length} services</div>
+  </div>
+`;
+
+// ── CHIT: Table ──
+const chitRows = [
+  ...CHIT_DATA.full.map(s => ({...s, level:'Full'})),
+  ...CHIT_DATA.partial.map(s => ({...s, level:'Partial'})),
+  ...CHIT_DATA.none.map(s => ({...s, level:'None', cgp:'-', nats:[], gap:'Not integrated'})),
+];
+$('#chit-tbody').innerHTML = chitRows.map(s => `
+  <tr>
+    <td><strong>${s.name}</strong></td>
+    <td style="font-family:var(--font-mono)">${s.port || '-'}</td>
+    <td>${pill(s.level)}</td>
+    <td style="font-family:var(--font-mono);font-size:11px">${s.cgp || '-'}</td>
+    <td style="font-family:var(--font-mono);font-size:10px;color:var(--ink-secondary)">${(s.nats||[]).join(', ') || '-'}</td>
+    <td style="font-size:11px;color:var(--ink-muted)">${s.gap || '-'}</td>
+  </tr>
+`).join('');
+
+// ── Release Gates Table ──
+$('#gate-tbody').innerHTML = GATE_DATA.map(g => `
+  <tr>
+    <td style="font-family:var(--font-mono);font-weight:700">${g.id}</td>
+    <td>${g.desc}</td>
+    <td>${pill(g.status)}</td>
+    <td style="font-size:11px;color:var(--ink-secondary)">${g.action}</td>
+  </tr>
+`).join('');
+
+// ── Active Blockers ──
+$('#blockers-list').innerHTML = BLOCKER_DATA.map(b => `
+  <div class="blocker">
+    <div style="display:flex;align-items:center;gap:8px">
+      <span class="id">${b.id}</span>
+      ${pill(b.sev)}
+    </div>
+    <div class="title">${b.title}</div>
+    <div class="desc">${b.desc}</div>
+  </div>
+`).join('');
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   LIVE HYDRATION — optional overlay from /api/audit/summary
+   Fail-soft: baked data remains if aggregator is unreachable.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+function setLiveStatus(mode, timestamp) {
+  const el = $('#live-status');
+  if (mode === 'live') {
+    el.innerHTML = `<span class="live-dot"></span>`
+      + `<span style="font-size:10px;color:var(--forest);font-family:var(--font-mono)">Live</span>`
+      + `<span style="font-size:9px;color:var(--ink-muted);font-family:var(--font-mono)">${timestamp || ''}</span>`;
+  } else if (mode === 'offline') {
+    el.innerHTML = `<span style="font-size:10px;color:var(--ink-muted);font-family:var(--font-mono)">Offline</span>`;
+  }
+  // 'snapshot' is the default HTML — no change needed
+}
+
+function showWarnings(warnings) {
+  if (!warnings || warnings.length === 0) return;
+  const existing = $('#warn-bar');
+  if (existing) existing.remove();
+  const bar = document.createElement('div');
+  bar.id = 'warn-bar';
+  bar.className = 'warn-bar';
+  bar.textContent = warnings.join(' | ');
+  const header = $('header.header');
+  header.parentNode.insertBefore(bar, header.nextSibling);
+}
+
+function applyLiveData(data) {
+  // ── a) Header metadata ──
+  if (data.generatedAt) {
+    const timeEl = $('#gen-time');
+    timeEl.textContent = data.generatedAt.replace('T', ' ').slice(0, 19) + ' UTC';
+    const ageMs = Date.now() - new Date(data.generatedAt).getTime();
+    const STALE_THRESHOLD = 24 * 60 * 60 * 1000; // 24h
+    if (ageMs > STALE_THRESHOLD) {
+      timeEl.insertAdjacentHTML('afterend',
+        ' <span style="color:var(--gold);font-size:10px;font-family:var(--font-mono)">(stale — ' + Math.round(ageMs / 3600000) + 'h ago)</span>');
+    }
+  }
+  if (data.productionAudit && data.productionAudit.branch) {
+    $('#gen-branch').textContent = data.productionAudit.branch;
+  }
+
+  // ── b) KPI cards — rebuild with live values ──
+  const liveBlockerCount = data.productionAudit && data.productionAudit.activeBlockers
+    ? data.productionAudit.activeBlockers.length
+    : BLOCKER_DATA.length;
+  const liveHighBlockers = data.productionAudit && data.productionAudit.activeBlockers
+    ? data.productionAudit.activeBlockers.filter(b => b.severity === 'HIGH' || b.sev === 'HIGH').length
+    : BLOCKER_DATA.filter(b => b.sev === 'HIGH').length;
+  const livePrCount = data.prMonitor ? data.prMonitor.count : PR_DATA.count;
+  const livePrBlockers = data.prMonitor ? data.prMonitor.totalBlockers : PR_DATA.items.filter(p => p.merge_state_status === 'BLOCKED').length;
+
+  const liveKpis = [
+    {label:"Total Services",value:SERVICE_CATALOG.length,sub:`${svcWithHealth.length} with health endpoints`,cls:"purple"},
+    {label:"Submodules",value:SUBMODULE_DATA.summary.submodules,sub:`${SUBMODULE_DATA.summary.errors} errors, ${SUBMODULE_DATA.summary.warnings} warnings`,cls:"forest"},
+    {label:"Open PRs",value:livePrCount,sub:livePrBlockers + " blocked",cls:"gold"},
+    {label:"Security Alerts",value:CODEQL_DATA.total,sub:`${CODEQL_DATA.severity.critical} critical, ${CODEQL_DATA.severity.high} high`,cls:"rose"},
+    {label:"CHIT Full",value:CHIT_DATA.full.length,sub:`${CHIT_DATA.partial.length} partial, ${CHIT_DATA.none.length} none`,cls:"purple"},
+  ];
+
+  // Release gates from live data
+  if (data.releaseGates && data.releaseGates.items) {
+    const gateItems = data.releaseGates.items;
+    const gatePass = gateItems.filter(g => g.status === 'PASS').length;
+    const gateTotal = gateItems.length;
+    liveKpis.push({label:"Release Gates",value:`${gatePass}/${gateTotal}`,sub:`${gatePass} PASS, ${gateTotal - gatePass} other`,cls:"cyan"});
+  } else {
+    liveKpis.push({label:"Release Gates",value:"2/4",sub:"2 PASS, 2 DEFERRED",cls:"cyan"});
+  }
+
+  liveKpis.push({label:"Active Blockers",value:liveBlockerCount,sub:`${liveHighBlockers} high severity`,cls:"ember"});
+
+  // Runtime health KPI (new — only when live data available)
+  if (data.runtimeHealth) {
+    liveKpis.push({
+      label:"Runtime Health",
+      value: data.runtimeHealth.percentage + '%',
+      sub:`${data.runtimeHealth.healthy}/${data.runtimeHealth.total} healthy`,
+      cls: data.runtimeHealth.percentage >= 80 ? "forest" : data.runtimeHealth.percentage >= 50 ? "gold" : "rose"
+    });
+  } else {
+    liveKpis.push({label:"Dependabot",value:1,sub:"1 open (fast-xml-parser)",cls:"gold"});
+  }
+
+  $('#kpi-grid').innerHTML = liveKpis.map(k => `
+    <div class="kpi ${k.cls}">
+      <div class="label">${k.label}</div>
+      <div class="value">${k.value}</div>
+      <div class="sub">${k.sub}</div>
+    </div>
+  `).join('');
+
+  // ── c) Release Gates table ──
+  if (data.releaseGates && data.releaseGates.items && data.releaseGates.items.length > 0) {
+    const liveGates = data.releaseGates.items;
+    $('#gate-tbody').innerHTML = liveGates.map(g => {
+      // Aggregator provides {id, status, notes}; baked data uses {desc, action}
+      const desc = g.desc || g.notes || '';
+      const action = g.action || g.notes || '';
+      return `
+      <tr>
+        <td style="font-family:var(--font-mono);font-weight:700">${g.id}</td>
+        <td>${desc}</td>
+        <td>${pill(g.status)}</td>
+        <td style="font-size:11px;color:var(--ink-secondary)">${action}</td>
+      </tr>`;
+    }).join('');
+    const gateBadge = document.querySelector('#panel-gates .badge');
+    if (gateBadge) gateBadge.textContent = liveGates.length + ' gates';
+  }
+
+  // ── d) Active Blockers panel ──
+  if (data.productionAudit && data.productionAudit.activeBlockers && data.productionAudit.activeBlockers.length > 0) {
+    const liveBlockers = data.productionAudit.activeBlockers;
+    $('#blockers-list').innerHTML = liveBlockers.map(b => `
+      <div class="blocker">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span class="id">${b.id}</span>
+          ${pill(b.severity || b.sev || 'MEDIUM')}
+        </div>
+        <div class="title">${b.title}</div>
+        <div class="desc">${b.description || b.desc || ''}</div>
+      </div>
+    `).join('');
+    const blockerBadge = document.querySelector('#panel-blockers .badge');
+    if (blockerBadge) blockerBadge.textContent = liveBlockers.length + ' open';
+  }
+
+  // ── e) PR badge update ──
+  if (data.prMonitor) {
+    $('#pr-count').textContent = data.prMonitor.count + ' open';
+  }
+
+  // ── f) Warnings (with source hints) ──
+  const hints = [];
+  if (data.productionAudit && data.productionAudit.source)
+    hints.push('Audit: ' + data.productionAudit.source);
+  if (data.releaseGates && data.releaseGates.source)
+    hints.push('Gates: ' + data.releaseGates.source);
+  const allWarnings = [...hints, ...(data.warnings || [])];
+  showWarnings(allWarnings);
+}
+
+async function hydrate() {
+  // file:// — offline mode, keep baked data
+  if (location.protocol === 'file:') return;
+
+  try {
+    const res = await fetch('/api/audit/summary?includeHealth=true&timeout=3000');
+    if (!res.ok) {
+      setLiveStatus('offline');
+      return;
+    }
+    const data = await res.json();
+    applyLiveData(data);
+    const ts = data.generatedAt
+      ? new Date(data.generatedAt).toLocaleTimeString()
+      : new Date().toLocaleTimeString();
+    setLiveStatus('live', ts);
+  } catch {
+    setLiveStatus('offline');
+  }
+}
+
+// Kick off hydration after initial baked render
+hydrate();
+
+</script>
+</body>
+</html>

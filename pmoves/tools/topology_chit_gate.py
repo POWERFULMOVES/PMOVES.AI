@@ -276,6 +276,25 @@ def _ports_published(inspect_data: Mapping[str, object], container_port: int) ->
     return isinstance(value, list) and len(value) > 0
 
 
+def _published_host_port(inspect_data: Mapping[str, object], container_port: int) -> str | None:
+    net = inspect_data.get("NetworkSettings")
+    if not isinstance(net, Mapping):
+        return None
+    ports = net.get("Ports")
+    if not isinstance(ports, Mapping):
+        return None
+    value = ports.get(f"{container_port}/tcp")
+    if not isinstance(value, list) or not value:
+        return None
+    first = value[0]
+    if not isinstance(first, Mapping):
+        return None
+    host_port = first.get("HostPort")
+    if not isinstance(host_port, str) or not host_port.strip():
+        return None
+    return host_port.strip()
+
+
 def _published_bindings(inspect_data: Mapping[str, object]) -> List[tuple[str, str, str]]:
     net = inspect_data.get("NetworkSettings")
     if not isinstance(net, Mapping):
@@ -557,38 +576,42 @@ def _check_archon_topology(
     archon_hit = _find_container_by_service(inspections, "archon")
 
     if not archon_ui_hit:
-        errors.append("archon-ui container is not running")
-        return
+        warnings.append("archon-ui container is not running (headless deployment?)")
     if not archon_hit:
         errors.append("archon container is not running")
         return
 
-    archon_ui, ui_info = archon_ui_hit
     archon, archon_info = archon_hit
 
-    if not _ports_published(ui_info, 3737):
-        errors.append(f"{archon_ui} is missing host publish for 3737/tcp")
     if not _ports_published(archon_info, 8091):
         errors.append(f"{archon} is missing host publish for 8091/tcp")
-
-    ui_nets = set(_container_networks(ui_info))
-    archon_nets = set(_container_networks(archon_info))
-    if not (ui_nets & archon_nets):
-        errors.append("archon-ui and archon do not share any docker network")
-
-    if "pmoves_external" not in ui_nets:
-        warnings.append(
-            "archon-ui is not attached to pmoves_external; host reachability may break on internal api networks"
-        )
 
     archon_code = _http_code("http://localhost:8091/healthz", retries=2, delay_s=1.0)
     if archon_code != 200:
         errors.append(f"archon API health check failed: http://localhost:8091/healthz => {archon_code}")
 
-    # First request can fail while Vite preview initializes.
-    ui_code = _http_code("http://localhost:3737/", retries=6, delay_s=2.0)
-    if ui_code != 200:
-        errors.append(f"archon-ui health check failed: http://localhost:3737/ => {ui_code}")
+    if archon_ui_hit:
+        archon_ui, ui_info = archon_ui_hit
+
+        if not _ports_published(ui_info, 3737):
+            errors.append(f"{archon_ui} is missing host publish for 3737/tcp")
+
+        ui_nets = set(_container_networks(ui_info))
+        archon_nets = set(_container_networks(archon_info))
+        if not (ui_nets & archon_nets):
+            errors.append("archon-ui and archon do not share any docker network")
+
+        if "pmoves_external" not in ui_nets:
+            warnings.append(
+                "archon-ui is not attached to pmoves_external; host reachability may break on internal api networks"
+            )
+
+        # First request can fail while Vite preview initializes.
+        ui_host_port = _published_host_port(ui_info, 3737) or "3737"
+        ui_url = f"http://localhost:{ui_host_port}/"
+        ui_code = _http_code(ui_url, retries=6, delay_s=2.0)
+        if ui_code != 200:
+            errors.append(f"archon-ui health check failed: {ui_url} => {ui_code}")
 
 
 def _check_chit_sync(

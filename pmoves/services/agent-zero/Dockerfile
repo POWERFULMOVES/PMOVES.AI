@@ -1,6 +1,7 @@
 # Build context: repo root (pmoves/)
 # Usage: docker build -f services/agent-zero/Dockerfile .
-FROM agent0ai/agent-zero:latest
+# Base image pinned 2026-03-05 (v0.9.8.2) — refresh monthly or via Dependabot
+FROM agent0ai/agent-zero:v0.9.8.2@sha256:6c56558df02618dcd9fc671de0b081ac7c8dc63d955ae5da55be9805b5f5bfa7
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -42,12 +43,18 @@ COPY contracts /app/contracts
 # Include PMOVES agent forms (used by /mcp/execute form.get and related flows).
 COPY configs /app/configs
 
+# Include PMOVES python package modules (e.g. pmoves.chit).
+COPY __init__.py /app/pmoves/__init__.py
+COPY pmoves /app/pmoves
+COPY chit /app/pmoves/chit
+COPY chit /app/chit
+
 # Copy PMOVES service implementation on top of the upstream runtime
 COPY services /app/services
 
 # Security: Run as non-root user (PMOVES standard: UID/GID 65532)
 RUN groupadd -r pmoves --gid=65532 && \
-    useradd -r -g pmoves --uid=65532 --home-dir=/app --shell=/sbin/nologin pmoves && \
+    useradd -g pmoves --uid=65532 --home-dir=/app --shell=/sbin/nologin pmoves && \
     chown -R pmoves:pmoves /app && \
     mkdir -p /a0 && chown -R pmoves:pmoves /a0 && \
     chown -R pmoves:pmoves /git/agent-zero && \
@@ -61,4 +68,4 @@ RUN groupadd -r pmoves --gid=65532 && \
 USER pmoves:pmoves
 
 # Entrypoint handles optional privileged setup then drops to pmoves user
-ENTRYPOINT ["/bin/bash", "-lc", "/ins/copy_A0.sh 2>/dev/null || true && /opt/venv-a0/bin/python /git/agent-zero/prepare.py --dockerized=true 2>/dev/null || true && exec /opt/venv-a0/bin/python services/agent-zero/main.py"]
+ENTRYPOINT ["/bin/bash", "-lc", "/ins/copy_A0.sh 2>/dev/null || true && /opt/venv-a0/bin/python /git/agent-zero/prepare.py --dockerized=true 2>/dev/null || true && export PYTHONPATH=/app:${PYTHONPATH:-} && exec /opt/venv-a0/bin/python /app/services/agent-zero/main.py"]

@@ -1,7 +1,220 @@
 
 # PMOVES v5 • NEXT_STEPS
 Note: Consolidated plan index at pmoves/docs/PMOVES.AI PLANS/README_DOCS_INDEX.md.
-_Last updated: 2026-02-24_
+_Last updated: 2026-03-08_
+
+### Latest changes (Mar 8, 2026) — CI Runner Migration + RG-3 Automation
+- **AB-9 mitigation:** Migrated 10 lightweight CI jobs from `[self-hosted, Linux, X64]` to `ubuntu-latest`:
+  - `sql-policy-lint`, `python-tests`, `webhook-smoke`, `yt-dlp-bump`, `deploy-gateway-agent` (validate only)
+  - `hardening-validation` (4/5 jobs; docker-bench kept on self-hosted with `vps` label)
+  - `build-images` (setup-matrix job only)
+- Added `max-parallel` throttling: `build-images` matrix (4), `self-hosted-builds-hardened` CPU matrix (3)
+- Added missing concurrency blocks: `codex-parity-advisory`, `webhook-smoke`
+- Added QEMU/Buildx setup to `yt-dlp-bump` for multi-arch builds on GitHub-hosted runners
+- **RG-3 automated:** New `supa-collation-refresh` and `supa-collation-check` Make targets; collation refresh runs automatically in `supa-start` bootstrap
+- Recommendation: consolidate `self-hosted-builds.yml` (subset of hardened version) by disabling its push trigger
+
+### Latest changes (Mar 8, 2026) — Post-Merge Audit Sweep
+- Post-merge production audit sweep completed after PRs `#823` and `#824` merged:
+  - `#823`: post-cleanup sitrep refresh (branch/stash/worktree hygiene + stale doc archival)
+  - `#824`: fix 8 broken links + 3 path mismatches in docs index (CodeRabbit review addressed)
+- Static gate sweep: 6/7 PASS (secrets-audit timed out — auth-alignment confirms 0 errors)
+  - Submodule integrity: 40 gitlinks, 0 drifted, 0 conflicts
+  - Branch policy: 40 checked, DoX override acknowledged
+  - Tooling audit: 0 errors, 0 warnings
+- Runtime verification snapshot:
+  - `smoke`: PASS (10/12 OK; Meilisearch + Neo4j pre-existing WARN)
+  - `model-readiness`: PASS (17/17, 0 failed, 1 TZ catalog warning)
+  - `monitoring-smoke`: PASS (Prometheus 36 active/28 healthy, 20 Grafana dashboards)
+  - `auth-alignment`: PASS (0 errors, 62 placeholder warnings)
+  - `GPU smoke (strict)`: PASS (v1 GPU optional warning only)
+- Release gate spot-checks:
+  - RG-1 PASS, RG-2 PASS, RG-3 KNOWN (collation mismatch pre-existing), RG-4 PASS, RG-5 PASS (8 personas)
+- CI/AB-9 status: all 4 runners offline, 4 queued runs identified as cancel candidates
+- Live backlog snapshot:
+  - Open PRs: `0`
+  - Dependabot alerts: `1` (`1 medium`)
+  - Code scanning alerts: `0`
+- Next focus: drain 4 stale queued CI runs, bring runners online for fresh CodeQL/GHCR verification
+
+### Latest changes (Mar 7, 2026)
+- Merge wave completed on `main`: 8 PRs merged in 3 batches
+  - Batch 1: `#814` (UI build fix), `#815` (smoke Supabase discovery), `#816` (healthcheck stability), `#817` (CI runner alignment), `#819` (DoX submodule bump)
+  - Batch 2: `#818` (model fabric + coding-plan wiring — rebased after 8 CodeRabbit comments)
+  - Batch 3: `#820` (distributed topology docs/examples), `#821` (chrome extension + 9 security fixes)
+- Chrome extension security hardening (`#821`):
+  - auth credentials moved from `chrome.storage.sync` to `session` (memory-only)
+  - XSS eliminated in options page (innerHTML → createElement)
+  - mock server hardened (method allowlist, pathname parsing)
+  - `synthesizeAudio` timeout added (AbortController)
+  - processing status auto-cleanup (5min TTL)
+  - config race condition fixed (configReady promise)
+  - storage write serialization (promise queue)
+  - CSP added to manifest.json
+- Distributed deployment documentation landed (`#820`):
+  - topology visualization with ASCII architecture diagrams
+  - example configs for local-network, Tailscale, and VPS deployments
+  - env.shared.example expanded with distributed config vars
+- GHCR matrix gap analysis completed:
+  - 4 compose-referenced images lack CI build definitions: `a2ui-nats-bridge`, `llama-throughput-lab`, `session-context-worker`, `tokenism-ui`
+  - `ultimate-tts-studio` is in GHCR (manually pushed) but has no automated CI build
+  - `integrations-ghcr.matrix.json` covers 10 of 24 `images.yaml` entries
+- Live backlog snapshot:
+  - Open PRs: `0`
+  - Dependabot alerts: `1` (`1 medium`)
+  - Code scanning alerts: `0`
+- Repo hygiene sweep completed:
+  - `make -C pmoves branch-cleanup EXECUTE=1` — remote branches: 553 → 62 (275 merged-deleted, 216 archived as `archive/*` tags)
+  - Local cleanup: 93 → 2 branches, 1 worktree removed, 5 stashes cleared
+  - Doc branch audit: 6 branches verified (content on main) and deleted
+  - Post-cleanup validation: all cross-linked docs intact
+
+### Latest changes (Mar 6, 2026)
+- Merge queue closeout completed on `main`:
+  - merged: `#797`, `#798`, `#799`, `#800`, `#802`, `#803`, `#804`, `#805`, `#806`, `#807`
+  - closed as superseded: `#801` (changes incorporated into `#802`)
+- CI blocker remediation merged in `#802`:
+  - fixed invalid CodeQL path filter syntax causing startup failures
+  - restored auth/bootstrap runtime compatibility (`auth-check`, `supabase-boot-user`)
+  - addressed outstanding CodeRabbit operational blockers (self-hosted trigger coverage, Open Notebook env/docs alignment, channel-monitor fallback)
+- Runtime production validation rerun:
+  - `make -C pmoves smoke` PASS
+  - `make -C pmoves model-readiness` PASS (`14/14`)
+  - `GPU_SMOKE_STRICT=true make -C pmoves smoke-gpu` PASS (v1 GPU optional warning only)
+- Remaining ops focus: keep non-main queued self-hosted runs drained to preserve throughput for `main` audits and release checks.
+- Published a canonical cross-integration model abstraction policy: `pmoves/docs/MODEL_FABRIC_CONTRACT.md`.
+  - codifies model/provider contract across Agent Zero, Archon, Open Notebook overlays, TensorZero routing, GPU orchestration, creator media lanes, and AgentGym-RL dataset/model loops.
+  - establishes upstream-first overlay rules and readiness gates for model-routing changes.
+  - enforces local-first cloud-hybrid fallback order:
+    - `local -> Ollama Cloud -> Cloudflare free tier -> coding-plan lanes (GLM coding plan, Claude Code, Codex CLI)`
+  - requires topology/agent PR review through Graphiti + CHIT rails (`pr-monitor-strict`, `chit-flow-pr-monitor-strict`) before merge.
+
+### Latest changes (Mar 5, 2026)
+- Production Python GHCR image reproducibility lane hardened:
+  - pinned Dockerfile build toolchain versions (`setuptools==82.0.0`, `wheel==0.46.3`) for `supaserch`, `deepresearch`, `pmoves-yt`, and `archon`
+  - added weekly canary workflow `.github/workflows/python-images-toolchain-canary.yml` (plus manual dispatch)
+  - canary gate behavior: candidate pin patch -> per-image local build -> per-image Trivy HIGH/CRITICAL gate -> auto-PR on pass
+- GHCR production release local-first validation broadened beyond SupaSerch:
+  - added matrix-driven local prepublish validator (`pmoves/tools/ghcr_local_prepublish.py`)
+  - added Make targets `ghcr-prepublish-inrepo`, `ghcr-prepublish-inrepo-build`, `ghcr-prepublish-all`, and `ghcr-dispatch-all`
+  - release default now validates all in-repo GHCR integrations locally before self-hosted dispatch
+- Notebook Workbench smoke lint updated to path-glob coverage so new/renamed workbench files are included automatically.
+- GHCR integration builds now target `vps` runner lane to avoid consuming GPU runner capacity for non-GPU build/scan jobs.
+
+### Latest changes (Mar 4, 2026)
+- Divergence remediation + merge wave closeout completed:
+  - hardened fixes merged: `#776`, `#777`, `#778`, `#779`, `#780`
+  - promotion sync merged: `#781` (`PMOVES.AI-Edition-Hardened` -> `main`)
+- Admin merge closeout completed for review-blocked lanes:
+  - `PMOVES.AI`: `#782`, `#792`, `#793`, `#794`, `#795` merged
+  - submodules: `PMOVES-Agent-Zero #9`, `PMOVES-BoTZ #75`, `PMOVES-DoX #117/#118/#119` merged
+- Current branch parity:
+  - file-content parity between `main` and hardened is clean (`git diff` empty)
+  - commit-history divergence remains expected due squash promotion + explicit back-sync merge commits
+- Runtime verification status:
+  - `make -C pmoves smoke` PASS
+  - `make -C pmoves model-readiness` PASS (`14/14`, `0 warnings`)
+  - `GPU_SMOKE_STRICT=true make -C pmoves smoke-gpu` PASS (v1 GPU endpoint optional warning observed)
+  - local operator evidence logs captured for smoke/model-readiness/strict-GPU runs during this pass
+  - unhealthy/restarting running containers: `0`
+- Supabase local reliability follow-up landed:
+  - `make -C pmoves supa-start` now supports `SUPABASE_CLI_EXCLUDE`
+  - `SUPABASE_CLI_EXCLUDE=vector` is now deterministic (stale `supabase_vector_*` container is removed when excluded)
+- Live backlog snapshot:
+  - Open PRs: `0`
+  - Dependabot alerts: `1` (`1 medium`)
+  - Code scanning alerts: `0`
+- CI queue status:
+  - self-hosted CodeQL/GHCR queue starvation remains active
+  - stale queued runs from merged fix branches were drained during this pass to reduce lane pressure
+  - workflow controls were tightened using GitHub Actions best-practice levers:
+    - stale push/PR runs now auto-cancel per ref in `codeql.yml`, `hardening-validation.yml`, and `integrations-ghcr.yml` (manual dispatch remains non-canceling)
+    - matrix fan-out now throttled (`CodeQL max-parallel=1`, hardening Dockerfile checks `=2`, GHCR build matrix `=2`)
+    - GHCR push/PR triggers are now scoped to integration image source paths + workflow/matrix/trivy files to avoid docs-only queue churn
+
+### Latest changes (Mar 3, 2026)
+- Production audit lane re-run completed on `main` with fresh evidence (`pmoves/PR_EVIDENCE/2026-03-03_11-27-10`).
+- Compose topology parity hardening landed:
+  - `.env.local` is no longer included in compose runtime by default (set `INCLUDE_ENV_LOCAL_IN_COMPOSE=1` to opt in).
+  - Archon compose Supabase defaults now target in-network PostgREST (`http://supabase-postgrest:3000`) instead of host-only URLs.
+  - `make -C pmoves archon-rest-policy-smoke` is compose-aware and executes probe in-network via `pmoves-archon-1`.
+- Live backlog snapshot:
+  - Open PRs: `0`
+  - Dependabot alerts: `1` (`1 low`)
+  - Code scanning alerts: `34` (`31 error`, `3 warning`)
+- Remaining runtime defects to close:
+  - `model-readiness` now passes in compose mode after registry reseed + db fallback, but still reports Ollama pre-pull warnings (`qwen3`, `nomic-embed-text`).
+  - Optional hardening follow-up: pre-pull baseline Ollama models during first-run/bootstrap so readiness is warning-free without manual pulls.
+- Additional Mar 3 closeout landed on `main` (`26c86452`):
+  - `bringup_with_ui.sh` published-agent fallback now gates on container health + multi-endpoint HTTP readiness (`8080/healthz`, `8081`, `8080/config/environment`) before failing over to local agents.
+  - Restored missing model tooling under `pmoves/tools/models/` (`models_sync.py`, `apply_profile.sh`); Make targets now execute instead of path-failing.
+  - `models-registry-snapshot` now works in compose runtime via DB-container fallback when host REST URL is unavailable.
+  - `pmoves-ollama` service now supports explicit DNS fallback envs (`OLLAMA_DNS_PRIMARY`, `OLLAMA_DNS_SECONDARY`) for pull stability.
+
+### Latest changes (Mar 2, 2026)
+- Merge wave complete (order executed and synced):
+  - `#743` chore: runtime-data/DAO gitignore cleanup (main)
+  - `#741` feat(models): model registry + persona seeds + readiness (main)
+  - `#742` docs(agents): AGENTS review/cross-reference refresh (main)
+  - `#745` chore(submodules): transcribe-and-fetch + cipher parity bumps (hardened)
+  - `#744` fix(a2a): discovery/task hardening + upstream agent-card parity (hardened)
+  - promotion sync: `#746` hardened -> main
+- Follow-on Mar 2 merge wave landed on `main`:
+  - `#748` roadmap refresh
+  - `#749` audit summary API
+  - `#750` dashboard hydration closeout
+  - `#751` presign health endpoint fix
+  - `#752` submodule bumps (Agent-Zero, cipher, transcribe-and-fetch)
+  - `#753` queue guard/drain targets
+  - `#754`, `#755`, `#756`, `#757` Dependabot updates
+  - `#758` production runtime/db/env hardening sitrep
+  - `#759` CI SQL/Python collision fixes
+  - `#760` ToKenism submodule gitlink bump (after merged submodule PR #46)
+- Mar 2 closeout merges landed on `main`:
+  - `#763` chore(submodules): bump transcribe-and-fetch (font removal + LFS fix)
+  - `#764` feat(agents): Agent Zero MCP auto-seed + plugin catalog + Codex parity docs
+  - `#767` fix(integrations): align Agent0 plugin manifests to `CATACLYSM-STUDIOS-INC`
+- Open PR queue is currently `0`.
+- CI status: hosted gates complete quickly; self-hosted lanes experience recurring queue starvation (CodeQL/GHCR lanes); mitigate by cancelling stale non-main queued/pending runs first, then preserving the latest `main` runs.
+- Live security backlog snapshot:
+  - Dependabot alerts open: `2` (`1 high`, `1 low`)
+  - Code scanning alerts open: `34` (`31 error`, `3 warning`)
+
+### Latest changes (Mar 1, 2026)
+- Hardened release PR queue is clear (`0` open PRs).
+- Codex submodule overlay parity pass completed: `pmoves/docs/AGENTS/SUBMODULE_CODEX_HOMES/` now covers all tracked submodules (40/40), and `make -C pmoves codex-audit` reports focus coverage at 14/14.
+- Closed hardened production PR wave:
+  - `#720` fix(security): resolve 3 critical CodeQL alerts
+  - `#722` fix(topology): clean core archon-ui gate parity
+  - `#723` chore(ops): add live PR monitor targets
+  - `#724` docs(ops): roadmap/next-steps queue sitrep refresh
+  - `#725` fix(runners): local-cert log-driver fallback (`loki` -> `json-file` when plugin missing)
+  - `#726` docs(ops): credential bootstrap workflow
+  - `#727` fix(bootstrap): MinIO defaults + Jellyfin service URL
+- Live security backlog snapshot:
+  - Dependabot alerts open: `3` (`1 high`, `2 low`)
+  - Code scanning alerts open: `36`
+
+### Latest changes (Feb 28, 2026)
+- Production queue hygiene + runner recovery pass executed:
+  - force-cancelled stale GHCR matrix runs:
+    - `22522345591` (`main`, long-running with stuck lanes)
+    - `22523184680` (`PMOVES.AI-Edition-Hardened`, queued)
+    - `22523183016` (`main`, pending)
+  - confirmed canceled status on those queue entries.
+- Local-first image validation rerun for targeted SupaSerch lane:
+  - `make -C pmoves ghcr-prepublish-supaserch` PASS (local image gate).
+  - dispatched targeted GHCR build:
+    - `make -C pmoves ghcr-dispatch-supaserch GHCR_DISPATCH_REF=PMOVES.AI-Edition-Hardened GHCR_NAMESPACE=cataclysmstudios-inc`
+    - run id: `22529075577` (targeted `Build supaserch` lane).
+- Runner lane incident discovered and mitigated:
+  - scripted `ci-runners-local-cert-up --lane vps` failed because host lacks Docker Loki logging plugin (`error looking up logging plugin loki`).
+  - original `pmoves-vps-runner` remained `offline` with session conflict after restart attempts.
+  - temporary replacement runner `pmoves-vps-runner-hotfix` started with labels `self-hosted,vps,Linux,X64`; `ci-runners-check` now resolves required lane to this runner.
+- PR monitor + CHIT FlOO$ merge-gate lane shipped (`#723`):
+  - new flow wrappers for `pr-monitor` -> FlOO$ -> CHIT packet generation
+  - graphiti trail/protocol docs updated to include CHIT flow strict gate before merge.
+- Queue status update: those lanes are now merged; use this section as historical trace.
 
 ### Latest changes (Feb 24, 2026)
 - Completed lock-step production merge wave:
@@ -140,7 +353,7 @@ _Last updated: 2026-02-24_
 
 ### Latest changes (Feb 16, 2026)
 - Hardened release queue is currently clear: open PRs on `POWERFULMOVES/PMOVES.AI` = `0`.
-- Current security backlog snapshot (live): Dependabot `14` open (`3 high`, `9 medium`, `2 low`); Code Scanning open in first-page sample (`3 critical`, `64 high`, `33 medium`).
+- Current security backlog snapshot (live): Dependabot `3` open (`1 high`, `2 low`); Code Scanning open `36`.
 - Security remediation in progress for production audit:
   - Hi‑RAG gateway (`services/hi-rag-gateway/gateway.py`) now validates remote image URL scheme/host/credentials, blocks private/internal hosts by default, and disallows redirects for CHIT image decode fetches.
   - Hi‑RAG v2 (`services/hi-rag-gateway-v2/app.py`) now applies the same URL/redirect controls for image decode and preserves explicit HTTP errors instead of collapsing them into 500s.

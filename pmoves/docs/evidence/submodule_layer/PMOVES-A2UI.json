@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-02-19 20:22 UTC",
-  "manifest": "C:\\Users\\russe\\Documents\\GitHub\\PMOVES.AI\\pmoves\\configs\\submodule_layer_validation_manifest.json",
+  "generated_at": "2026-03-08 12:44 UTC",
+  "manifest": "pmoves/configs/submodule_layer_validation_manifest.json",
   "summary": {
     "submodules": 1,
     "errors": 0,
@@ -12,7 +12,7 @@
       "path": "PMOVES-A2UI",
       "url": "https://github.com/POWERFULMOVES/PMOVES-A2UI.git",
       "status_prefix": " ",
-      "commit": "f283f926dfa97529ddd2902831dabbb1972ca5b9",
+      "commit": "2bac549045e08fb87fd7b891366f48a492863374",
       "initialized": true,
       "remote_commit_reachable": "local",
       "required_files_any_ok": true,

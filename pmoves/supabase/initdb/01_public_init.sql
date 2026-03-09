@@ -29,7 +29,9 @@ exception when duplicate_object then null; end $$;
 
 do $$ begin
   create role service_role noinherit bypassrls;
-exception when duplicate_object then null; end $$;
+exception when duplicate_object then
+  alter role service_role bypassrls;
+end $$;
 
 grant usage on schema public to anon, authenticated, service_role;
 grant select, insert, update, delete on table studio_board to anon, authenticated, service_role;
@@ -39,4 +41,12 @@ alter table studio_board enable row level security;
 do $$ begin
   create policy studio_board_anon_all on studio_board for all to anon
     using (true) with check (true);
+exception when duplicate_object then null; end $$;
+do $$ begin
+  create policy studio_board_authenticated_all on studio_board for all to authenticated
+    using (true) with check (true);
+exception when duplicate_object then null; end $$;
+do $$ begin
+  create policy studio_board_service_role_all on studio_board for all to service_role
+    using (auth.role() = 'service_role') with check (auth.role() = 'service_role');
 exception when duplicate_object then null; end $$;

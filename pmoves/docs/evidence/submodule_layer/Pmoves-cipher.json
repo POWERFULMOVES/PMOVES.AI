@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-02-19 20:22 UTC",
-  "manifest": "C:\\Users\\russe\\Documents\\GitHub\\PMOVES.AI\\pmoves\\configs\\submodule_layer_validation_manifest.json",
+  "generated_at": "2026-03-08 12:45 UTC",
+  "manifest": "pmoves/configs/submodule_layer_validation_manifest.json",
   "summary": {
     "submodules": 1,
     "errors": 0,
@@ -12,7 +12,7 @@
       "path": "Pmoves-cipher",
       "url": "https://github.com/POWERFULMOVES/Pmoves-cipher.git",
       "status_prefix": " ",
-      "commit": "c2d4d50fc41510640bbf998391c1a99e2efd5bc8",
+      "commit": "2bd33b9d2dc8f7974c5bf995375658f291bab7c2",
       "initialized": true,
       "remote_commit_reachable": "local",
       "required_files_any_ok": true,

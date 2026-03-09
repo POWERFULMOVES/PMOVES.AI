@@ -18,6 +18,7 @@ Comprehensive reference of all production services, ports, APIs, and integration
   - `AGENTZERO_JETSTREAM=true` - Enable reliable delivery
 - **Docker Image:** `agent0ai/agent-zero:latest`
 - **Compose Profile:** `agents`
+- **CI Pipeline:** `integrations-ghcr` (multi-arch, Trivy+Cosign+SBOM), `self-hosted-builds` (amd64)
 
 ### Archon
 - **Ports:** 8091 (API), 3737 (UI), 8051/8052 (internal MCP)
@@ -29,6 +30,7 @@ Comprehensive reference of all production services, ports, APIs, and integration
   - `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`
 - **Docker Image:** `coleam00/archon-server:latest`, `coleam00/archon-mcp:latest`
 - **Compose Profile:** `agents`
+- **CI Pipeline:** `integrations-ghcr` (multi-arch, Cosign), `self-hosted-builds` (amd64)
 
 ### Mesh Agent
 - **Ports:** None (no HTTP interface)
@@ -37,6 +39,7 @@ Comprehensive reference of all production services, ports, APIs, and integration
 - **Environment:**
   - `ANNOUNCE_SEC=15` - Announcement interval
 - **Compose Profile:** `agents`
+- **CI Pipeline:** `none` (no Dockerfile — uses agent-zero image or inline build)
 
 ### Channel Monitor
 - **Ports:** 8097
@@ -46,6 +49,7 @@ Comprehensive reference of all production services, ports, APIs, and integration
 - **Integration:** Triggers PMOVES.YT `/yt/ingest` on new content
 - **Dependencies:** PMOVES.YT, Supabase
 - **Compose Profile:** `orchestration`
+- **CI Pipeline:** `self-hosted-builds` (amd64)
 
 ### BoTZ MCP Gateway
 - **Ports:** 2091
@@ -61,6 +65,7 @@ Comprehensive reference of all production services, ports, APIs, and integration
   - Publish: `botz.mcp.tool.executed.v1`, `botz.gateway.task.dispatched.v1`, `agent.graphiti.signed.v1`
 - **Dependencies:** NATS, Supabase
 - **Compose Profile:** `agents` (submodule lane)
+- **CI Pipeline:** `build-images` (amd64, manual dispatch)
 
 ## Retrieval & Knowledge Services
 
@@ -80,12 +85,14 @@ Comprehensive reference of all production services, ports, APIs, and integration
 - **Dependencies:** Qdrant, Neo4j, Meilisearch, Supabase
 - **Docker Image:** Custom build from `services/hi-rag-gateway-v2`
 - **Compose Profile:** Default
+- **CI Pipeline:** `build-images` (amd64, manual dispatch)
 
 ### Hi-RAG Gateway v1 (LEGACY)
 - **Ports:** 8089 (CPU), 8090 (GPU)
 - **Purpose:** Original hybrid RAG implementation
 - **Status:** Use v2 for new features
 - **Compose Profile:** Default
+- **CI Pipeline:** `build-images` (amd64, manual dispatch)
 
 ### DeepResearch
 - **Ports:** 8098 (health monitoring)
@@ -103,6 +110,7 @@ Comprehensive reference of all production services, ports, APIs, and integration
   - `OPENROUTER_API_KEY` - For cloud mode
   - `DEEPRESEARCH_LOCAL=true` - For local mode
 - **Compose Profile:** `orchestration`
+- **CI Pipeline:** `integrations-ghcr` (amd64-only, Cosign), `build-images` (manual dispatch)
 
 ### SupaSerch
 - **Ports:** 8099
@@ -119,12 +127,62 @@ Comprehensive reference of all production services, ports, APIs, and integration
   - Queries Supabase/Qdrant/Meilisearch
 - **Dependencies:** Agent Zero, DeepResearch, databases
 - **Compose Profile:** `orchestration`
+- **CI Pipeline:** `integrations-ghcr` (multi-arch, Cosign+SBOM), `build-images` (manual dispatch)
+
+### Model Registry
+- **Ports:** 8110
+- **Port Note:** `8110` also appears in the BoTZ VPN MCP stack; these are profile-separated deployments (`orchestration` vs `vpn/remote`) and should not be exposed on the same host at the same time.
+- **Purpose:** Dynamic model configuration service — central catalog for LLM/embedding model providers, mappings, and active deployments
+- **Key APIs:**
+  - `GET /healthz` - Service health
+  - `GET /api/models` - List registered models
+  - `GET /api/providers` - List model providers
+  - `GET /api/deployments` - List active model deployments
+- **NATS Topics:**
+  - Publish: `model.registry.updated.v1` (catalog mutation notifications)
+  - Subscribe: `mesh.gpu.model.loaded.v1`, `mesh.gpu.model.unloaded.v1` (syncs deployment state from GPU Orchestrator)
+- **Dependencies:** Supabase (required), NATS
+- **Docker Image:** Custom build from `services/model-registry`
+- **Compose Profile:** `orchestration`
+- **CI Pipeline:** `self-hosted-builds` (amd64), `build-images` (manual dispatch)
+- **Lifecycle:** Formerly dormant; activated in PR #787-791
+
+### GPU Orchestrator
+- **Ports:** 8200
+- **Purpose:** Dynamic GPU resource management and model lifecycle controller
+- **Key APIs:**
+  - `GET /healthz` - Service health
+  - `GET /api/v1/status` - GPU status (VRAM utilization, loaded models, temperature)
+  - `GET /api/v1/models` - List models loaded on GPU
+  - `GET /metrics` - Prometheus metrics
+- **NATS Topics:**
+  - Publish: `mesh.gpu.status.v1` (every 5s), `mesh.gpu.model.loaded.v1`, `mesh.gpu.model.unloaded.v1`, `mesh.gpu.vram.warning.v1`, `mesh.gpu.command.result.v1`
+  - Subscribe: `mesh.gpu.command.v1` (model load/unload/optimize requests)
+- **Features:**
+  - Bidirectional NATS wiring with model-registry
+  - VRAM warning rate-limited to 1/min
+  - Command execution results via fire-and-forget NATS (no request-reply)
+- **Dependencies:** NATS (required), NVIDIA GPU runtime
+- **Docker Image:** Custom build from `services/gpu-orchestrator`
+- **Compose Profile:** `gpu`
+- **CI Pipeline:** `self-hosted-builds` (amd64), `build-images` (manual dispatch)
+- **Note:** Only started by `make up-model-management` when NVIDIA runtime is detected
+- **Lifecycle:** Formerly dormant; activated in PR #787-791
 
 ### Open Notebook (External Integration)
-- **Purpose:** Knowledge base / note-taking (SurrealDB-backed)
-- **Access:** Via `OPEN_NOTEBOOK_API_URL` + API token
-- **Used By:** DeepResearch, notebook-sync
-- **Status:** External submodule integration
+- **Ports:** 8503 (UI), 5055 (API)
+- **Purpose:** Knowledge base / note-taking workspace
+- **Compose File:** `pmoves/docker-compose.open-notebook.yml` (or `pmoves/docker-compose.external.yml` in external profile)
+- **Stack:** Next.js UI + FastAPI backend + SurrealDB
+- **Key Endpoints:**
+  - `GET http://localhost:5055/health` - API health
+  - `GET http://localhost:8503/` - UI readiness
+  - `GET http://localhost:4482/api/notebook/runtime` - PMOVES Notebook Workbench runtime status
+- **Access:** Via `OPEN_NOTEBOOK_API_URL` + bearer token (`OPEN_NOTEBOOK_API_TOKEN`)
+- **Branded Defaults:** `OPEN_NOTEBOOK_PASSWORD` and `OPEN_NOTEBOOK_API_TOKEN` are expected to be identical in the PMOVES bundle
+- **Used By:** DeepResearch, notebook-sync, PMOVES.YT sync, Agent Zero, Notebook Workbench API routes
+- **Status:** External integration (upstream image default, PMOVES image override supported)
+- **CI Pipeline:** `integrations-ghcr` (multi-arch, Trivy+Cosign+SBOM), `build-images` (manual dispatch)
 
 ## Voice & Speech Services
 
@@ -149,6 +207,7 @@ Comprehensive reference of all production services, ports, APIs, and integration
   - `VIBEVOICE_URL` - Alternative TTS backend
 - **Docker Image:** Custom build from `services/flute-gateway`
 - **Compose Profile:** `workers`, `orchestration`
+- **CI Pipeline:** `build-images` (amd64, manual dispatch)
 
 ### Ultimate-TTS-Studio
 - **Ports:** 7861
@@ -172,6 +231,7 @@ Comprehensive reference of all production services, ports, APIs, and integration
 - **Metrics:** Gradio-based (no native Prometheus /metrics endpoint)
 - **Docker Image:** Custom build from `docker/ultimate-tts-studio`
 - **Compose Profile:** `gpu`, `tts`
+- **CI Pipeline:** `build-images` (amd64, manual dispatch only — GPU-heavy)
 
 ## Media Ingestion & Processing
 
@@ -190,6 +250,7 @@ Comprehensive reference of all production services, ports, APIs, and integration
   - Publish: `ingest.transcript.ready.v1`
 - **Dependencies:** MinIO, Supabase, NATS
 - **Compose Profile:** `yt`
+- **CI Pipeline:** `integrations-ghcr` (multi-arch, Cosign+SBOM), `self-hosted-builds` (amd64)
 
 ### FFmpeg-Whisper
 - **Ports:** 8078
@@ -202,6 +263,7 @@ Comprehensive reference of all production services, ports, APIs, and integration
   - Model: `small` (configurable)
 - **Storage:** Reads/writes MinIO
 - **Compose Profile:** `gpu`
+- **CI Pipeline:** `self-hosted-builds` (amd64)
 
 ### Media-Video Analyzer
 - **Ports:** 8079
@@ -214,12 +276,14 @@ Comprehensive reference of all production services, ports, APIs, and integration
   - Confidence threshold: 0.25
 - **Output:** Supabase
 - **Compose Profile:** `gpu`
+- **CI Pipeline:** `local-build-only` (compose `build:` directive)
 
 ### Media-Audio Analyzer
 - **Ports:** 8082
 - **Purpose:** Audio emotion/speaker detection
 - **Model:** `superb/hubert-large-superb-er`
 - **Compose Profile:** `gpu`
+- **CI Pipeline:** `local-build-only` (compose `build:` directive)
 
 ### Extract Worker
 - **Ports:** 8083
@@ -233,6 +297,7 @@ Comprehensive reference of all production services, ports, APIs, and integration
   - Stores metadata in Supabase
 - **Dependencies:** Qdrant, Meilisearch, Supabase
 - **Compose Profile:** `workers`
+- **CI Pipeline:** `self-hosted-builds` (amd64)
 
 ### PDF Ingest
 - **Ports:** 8092
@@ -241,12 +306,14 @@ Comprehensive reference of all production services, ports, APIs, and integration
 - **NATS Topics:**
   - Publish: `ingest.file.added.v1`
 - **Compose Profile:** `workers`
+- **CI Pipeline:** `build-images` (amd64, manual dispatch)
 
 ### LangExtract
 - **Ports:** 8084
 - **Purpose:** Language detection and NLP preprocessing
 - **Used By:** Notebook sync, text analysis pipelines
 - **Compose Profile:** `workers`
+- **CI Pipeline:** `local-build-only` (compose `build:` directive)
 
 ### Notebook Sync
 - **Ports:** 8095
@@ -256,6 +323,18 @@ Comprehensive reference of all production services, ports, APIs, and integration
   - Calls LangExtract + Extract Worker for indexing
 - **Dependencies:** Open Notebook, LangExtract, Extract Worker
 - **Compose Profile:** `orchestration`
+- **CI Pipeline:** `local-build-only` (compose `build:` directive)
+
+### Transcribe Backend
+- **Ports:** 8074
+- **Purpose:** Text transcription service (PMOVES-transcribe-and-fetch submodule)
+- **Key APIs:**
+  - `GET /healthz` - Service health
+- **Dependencies:** Supabase, NATS
+- **Submodule:** `PMOVES-transcribe-and-fetch`
+- **Compose Profile:** `workers`
+- **CI Pipeline:** `build-images` (amd64, manual dispatch)
+- **Lifecycle:** Formerly dormant; activated in PR #787-791
 
 ## Utility & Integration Services
 
@@ -267,6 +346,7 @@ Comprehensive reference of all production services, ports, APIs, and integration
 - **Security:** Requires `PRESIGN_SHARED_SECRET`
 - **Allowed Buckets:** `assets`, `outputs` (configurable)
 - **Compose Profile:** Default
+- **CI Pipeline:** `local-build-only` (compose `build:` directive)
 
 ### Render Webhook
 - **Ports:** 8085
@@ -274,6 +354,7 @@ Comprehensive reference of all production services, ports, APIs, and integration
 - **Security:** Requires `RENDER_WEBHOOK_SHARED_SECRET`
 - **Integration:** Writes to Supabase, stores to MinIO
 - **Compose Profile:** Default
+- **CI Pipeline:** `local-build-only` (compose `build:` directive)
 
 ### Publisher-Discord
 - **Ports:** 8094
@@ -286,12 +367,14 @@ Comprehensive reference of all production services, ports, APIs, and integration
 - **Environment:**
   - `DISCORD_WEBHOOK_URL` - Webhook for notifications
 - **Compose Profile:** Default
+- **CI Pipeline:** `self-hosted-builds` (amd64)
 
 ### Jellyfin Bridge
 - **Ports:** 8093
 - **Purpose:** Jellyfin metadata webhook and helper
 - **Features:** Syncs Jellyfin events to Supabase
 - **Compose Profile:** `health` (optional)
+- **CI Pipeline:** `local-build-only` (compose `build:` directive)
 
 ## Health & Wellness Services (Planned)
 
@@ -313,6 +396,7 @@ Comprehensive reference of all production services, ports, APIs, and integration
 - **TAC Tree:** `pmoves/docs/TAC/TAC_HEALTH.md`
 - **Submodule:** `Pmoves-Health-wger`
 - **Compose Profile:** `health`
+- **CI Pipeline:** `integrations-ghcr` (multi-arch, Cosign+SBOM), `build-images` (manual dispatch)
 
 ### Wealth (Firefly III)
 - **Ports:** TBD (default Laravel 8080)
@@ -332,6 +416,7 @@ Comprehensive reference of all production services, ports, APIs, and integration
 - **TAC Tree:** `pmoves/docs/TAC/TAC_WEALTH.md`
 - **Submodule:** `PMOVES-Wealth`
 - **Compose Profile:** `wealth`
+- **CI Pipeline:** `build-images` (amd64, manual dispatch)
 
 ## Remote Access Services
 
@@ -350,6 +435,7 @@ Comprehensive reference of all production services, ports, APIs, and integration
   - `GET /api/v1/machines` - List connected nodes
 - **Configuration:** `pmoves/config/headscale/config.yaml`, `acl.yaml`
 - **Compose Profile:** `remote`
+- **CI Pipeline:** `vendor` (upstream headscale image)
 
 ### RustDesk Relay (Self-hosted Remote Desktop)
 - **Ports:** 21115-21119 (various protocols)
@@ -359,9 +445,11 @@ Comprehensive reference of all production services, ports, APIs, and integration
   - `hbbr` (ports 21117, 21119) - Relay server
 - **Features:** P2P direct connections, relay fallback, WebRTC support
 - **Compose Profile:** `remote`
+- **CI Pipeline:** `vendor` (upstream rustdesk image)
 
 ### BoTZ VPN MCP Server
 - **Port:** 8110
+- **Port Note:** Collides with Model Registry (`8110`) when both stacks are host-exposed; run this service only with `vpn/remote` profiles on hosts that are not exposing `model-registry`.
 - **Purpose:** MCP server exposing VPN and remote desktop tools
 - **Transport:** SSE
 - **MCP Tools:**
@@ -377,6 +465,7 @@ Comprehensive reference of all production services, ports, APIs, and integration
   - NATS for event coordination
 - **Compose Profile:** `vpn`, `remote` (in PMOVES-BoTZ)
 - **Health:** `GET http://localhost:8110/health`
+- **CI Pipeline:** `build-images` (amd64, manual dispatch — via PMOVES-BoTZ submodule)
 
 ### Cipher Memory API (cipher-api)
 - **Port:** 8096 (remapped from internal 3000 to avoid Grafana conflict)
@@ -397,6 +486,7 @@ Comprehensive reference of all production services, ports, APIs, and integration
 - **Resilience Role:** Stores `agent_plan`, `agent_checkpoint`, and `agent_completion` snapshots for all agents. See `pmoves/docs/AGENTS/AGENT_RESILIENCE_PATTERNS.md` for checkpoint protocol.
 - **Dependencies:** Neo4j (shared), NATS
 - **Compose Profile:** `agents`
+- **CI Pipeline:** `local-build-only` (compose `build:` directive)
 - **Health:** `GET http://localhost:8096/health`
 
 ## CHIT & Geometry Services
@@ -417,6 +507,7 @@ Comprehensive reference of all production services, ports, APIs, and integration
 - **Dependencies:** NATS (required), TensorZero, Supabase, Agent Zero
 - **Docker Image:** `ghcr.io/powerfulmoves/pmoves-tokenism:pmoves-latest`
 - **Compose Profile:** `agents`, `orchestration`, `botz`
+- **CI Pipeline:** `build-images` (amd64, manual dispatch)
 
 ### Evo Controller
 - **Ports:** 8113
@@ -432,6 +523,7 @@ Comprehensive reference of all production services, ports, APIs, and integration
 - **Dependencies:** Supabase, NATS
 - **Docker Image:** `ghcr.io/powerfulmoves/pmoves-evo-controller:latest`
 - **Compose Profile:** `orchestration`
+- **CI Pipeline:** `build-images` (amd64, manual dispatch)
 
 ### A2UI NATS Bridge
 - **Ports:** 9224
@@ -447,6 +539,7 @@ Comprehensive reference of all production services, ports, APIs, and integration
 - **Dependencies:** NATS (required, service_healthy + nats-init)
 - **Docker Image:** `ghcr.io/powerfulmoves/pmoves-a2ui-nats-bridge:pmoves-latest`
 - **Compose Profile:** `agents`
+- **CI Pipeline:** `integrations-ghcr` (multi-arch, Cosign), `build-images` (manual dispatch)
 
 ### Session Context Worker
 - **Ports:** 8102 (host) → 8100 (internal)
@@ -457,6 +550,7 @@ Comprehensive reference of all production services, ports, APIs, and integration
 - **Dependencies:** Hi-RAG v2 (required), NATS
 - **Docker Image:** `ghcr.io/powerfulmoves/pmoves-session-context-worker:latest`
 - **Compose Profile:** `workers`
+- **CI Pipeline:** `integrations-ghcr` (multi-arch, Cosign), `build-images` (manual dispatch)
 
 ## Monitoring Stack
 
@@ -468,6 +562,7 @@ Comprehensive reference of all production services, ports, APIs, and integration
   - Health endpoint monitoring via blackbox exporter
 - **Query API:** `GET http://localhost:9090/api/v1/query?query=<promql>`
 - **Compose Profile:** `monitoring`
+- **CI Pipeline:** `vendor` (upstream prom/prometheus image)
 
 ### Grafana
 - **Ports:** 3000
@@ -475,6 +570,7 @@ Comprehensive reference of all production services, ports, APIs, and integration
 - **Datasources:** Prometheus, Loki
 - **Dashboards:** "Services Overview" (pre-configured)
 - **Compose Profile:** `monitoring`
+- **CI Pipeline:** `vendor` (upstream grafana/grafana image)
 - **⚠ Port 3000 Conflict Note:** Several services default to port 3000 via env vars:
   `supabase-postgrest` (`SUPABASE_POSTGREST_PORT`), Invidious (`INVIDIOUS_PORT`),
   VibeVoice (`VIBEVOICE_HOST_PORT`). When Grafana is active, these services **must**
@@ -487,11 +583,13 @@ Comprehensive reference of all production services, ports, APIs, and integration
 - **Used With:** Promtail (log collector)
 - **All services:** Configured with Loki labels for centralized logging
 - **Compose Profile:** `monitoring`
+- **CI Pipeline:** `vendor` (upstream grafana/loki image)
 
 ### cAdvisor
 - **Ports:** 8080 (conflicts with Agent Zero, use different port)
 - **Purpose:** Container metrics for Prometheus
 - **Compose Profile:** `monitoring`
+- **CI Pipeline:** `vendor` (upstream gcr.io/cadvisor image)
 
 ## Data Storage
 
@@ -504,6 +602,7 @@ Comprehensive reference of all production services, ports, APIs, and integration
 - **WebSocket:** DoX standalone uses 9222, docker-compose docked mode uses 9223
 - **Key Subjects:** See `.claude/context/nats-subjects.md`
 - **Compose Profile:** Default (always required)
+- **CI Pipeline:** `vendor` (upstream nats:2.10-alpine image)
 
 ### Supabase
 - **Ports:** 3010 (PostgREST), 5432 (Postgres)
@@ -511,6 +610,7 @@ Comprehensive reference of all production services, ports, APIs, and integration
 - **Schema:** `pmoves_core`, Archon prompts
 - **Features:** Postgres + PostgREST + pgvector + realtime
 - **Compose Profile:** Default (always required)
+- **CI Pipeline:** `vendor` (upstream supabase/postgres image)
 
 ### Qdrant
 - **Ports:** 6333
@@ -518,6 +618,7 @@ Comprehensive reference of all production services, ports, APIs, and integration
 - **Version:** v1.10.0
 - **Collection:** `pmoves_chunks`
 - **Compose Profile:** Default (always required)
+- **CI Pipeline:** `vendor` (upstream qdrant/qdrant image)
 
 ### Neo4j
 - **Ports:** 7474 (HTTP), 7687 (Bolt)
@@ -525,6 +626,7 @@ Comprehensive reference of all production services, ports, APIs, and integration
 - **Version:** 5.22
 - **Features:** Entity relationships, graph traversal
 - **Compose Profile:** Default (always required)
+- **CI Pipeline:** `vendor` (upstream neo4j image)
 
 ### Meilisearch
 - **Ports:** 7700
@@ -532,6 +634,7 @@ Comprehensive reference of all production services, ports, APIs, and integration
 - **Version:** v1.8
 - **Features:** Typo-tolerant, substring search
 - **Compose Profile:** Default (always required)
+- **CI Pipeline:** `vendor` (upstream getmeili/meilisearch image)
 
 ### MinIO
 - **Ports:** 9000 (API), 9001 (Console)
@@ -539,6 +642,7 @@ Comprehensive reference of all production services, ports, APIs, and integration
 - **Buckets:** `assets`, `outputs`
 - **Stores:** Videos, audio, images, analysis results
 - **Compose Profile:** Default (always required)
+- **CI Pipeline:** `vendor` (upstream minio/minio image)
 
 ## Quick Reference
 
@@ -548,6 +652,10 @@ Comprehensive reference of all production services, ports, APIs, and integration
 http://localhost:8080/healthz  # Agent Zero
 http://localhost:8091/healthz  # Archon
 http://localhost:8097/healthz  # Channel Monitor
+
+# Model Management
+http://localhost:8110/healthz  # Model Registry
+http://localhost:8200/healthz  # GPU Orchestrator (GPU only)
 
 # Retrieval & Knowledge
 http://localhost:8086/healthz  # Hi-RAG v2 CPU
@@ -569,6 +677,7 @@ http://localhost:8083/healthz  # Extract Worker
 http://localhost:8084/healthz  # LangExtract
 http://localhost:8092/healthz  # PDF Ingest
 http://localhost:8095/healthz  # Notebook Sync
+http://localhost:8074/healthz  # Transcribe Backend
 
 # CHIT & Geometry
 http://localhost:8103/healthz  # Tokenism Simulator
@@ -579,6 +688,7 @@ http://localhost:8088/healthz  # Presign
 http://localhost:8085/healthz  # Render Webhook
 http://localhost:8093/healthz  # Jellyfin Bridge
 http://localhost:8094/healthz  # Publisher-Discord
+http://localhost:5055/health   # Open Notebook API
 ```
 
 ### All Metrics Endpoints

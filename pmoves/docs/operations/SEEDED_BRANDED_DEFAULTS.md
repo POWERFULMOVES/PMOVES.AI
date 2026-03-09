@@ -79,7 +79,7 @@ your own before or after `make first-run`.
     `make env-setup` before restarting the Invidious stack.
 
 - **Open Notebook**
-  - UI at `http://localhost:8503` (Streamlit + SurrealDB).
+  - UI at `http://localhost:8503` (Next.js) and API at `http://localhost:5055` (FastAPI + SurrealDB).
   - Initial branded login:
     - `OPEN_NOTEBOOK_PASSWORD` — UI password.
     - `OPEN_NOTEBOOK_API_TOKEN` — bearer token for API access.

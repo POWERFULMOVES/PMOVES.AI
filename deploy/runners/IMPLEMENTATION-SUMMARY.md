@@ -153,7 +153,7 @@ gh run watch
 # Phase 1: Test on kvm2 (backup runner)
 ssh kvm2
 GITHUB_PAT=$GITHUB_PAT RUNNER_NAME=kvm2 \
-  curl -sSL https://raw.githubusercontent.com/frostbytten/PMOVES.AI/main/deploy/runners/vps/install-hardened.sh | bash
+  curl -sSL https://raw.githubusercontent.com/POWERFULMOVES/PMOVES.AI/main/deploy/runners/vps/install-hardened.sh | bash
 
 # Validate: Check runner appears in GitHub UI
 # Run test workflow targeting [self-hosted, kvm2, backup]
@@ -280,7 +280,7 @@ Estimated Score: 95/100
 ### 1. StepSecurity Dashboard
 - Navigate to: https://app.stepsecurity.io
 - Connect GitHub account
-- Add `frostbytten/PMOVES.AI` repository
+- Add `POWERFULMOVES/PMOVES.AI` repository
 - Configure email alerts for suspicious egress
 
 ### 2. GitHub Security Tab
@@ -296,7 +296,7 @@ Estimated Score: 95/100
 
 ### 4. Runner Labels Verification
 After installation, verify runners appear with correct labels:
-- Go to: https://github.com/frostbytten/PMOVES.AI/settings/actions/runners
+- Go to: https://github.com/POWERFULMOVES/PMOVES.AI/settings/actions/runners
 - Check:
   - `ailab-gpu`: self-hosted, ai-lab, gpu, cuda, linux, x64
   - `cloudstartup`: self-hosted, vps, cloudstartup, staging, linux, x64
@@ -431,7 +431,7 @@ After installation, verify runners appear with correct labels:
 - **Recommended Review:** Weekly
 
 ### GitHub Security Tab
-- **URL:** https://github.com/frostbytten/PMOVES.AI/security
+- **URL:** https://github.com/POWERFULMOVES/PMOVES.AI/security
 - **Metrics:** Trivy vulnerability findings, Dependabot alerts
 - **Alerts:** Automatic PR creation for security updates
 - **Recommended Review:** After each workflow run

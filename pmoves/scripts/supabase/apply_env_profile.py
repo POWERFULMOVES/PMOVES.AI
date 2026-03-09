@@ -7,6 +7,13 @@ import argparse
 from pathlib import Path
 
 
+def _strip_wrapping_quotes(value: str) -> str:
+    raw = value.strip()
+    if len(raw) >= 2 and raw[0] == raw[-1] and raw[0] in {"'", '"'}:
+        return raw[1:-1]
+    return raw
+
+
 def parse_env_file(path: Path) -> dict[str, str]:
     values: dict[str, str] = {}
     if not path.exists():
@@ -16,7 +23,7 @@ def parse_env_file(path: Path) -> dict[str, str]:
         if not line or line.startswith("#") or "=" not in line:
             continue
         key, value = line.split("=", 1)
-        values[key.strip()] = value.strip()
+        values[key.strip()] = _strip_wrapping_quotes(value)
     return values
 
 
@@ -70,15 +77,21 @@ def main() -> int:
         rest_url = f"{api_url}/rest/v1" if api_url else ""
         internal_api_url = to_internal_api(api_url)
         internal_rest_url = f"{internal_api_url}/rest/v1" if internal_api_url else ""
+        anon_key = status.get("ANON_KEY", "")
+        service_role_key = status.get("SERVICE_ROLE_KEY", "")
+        jwt_secret = status.get("JWT_SECRET", "")
         updates = {
             "SUPABASE_URL": api_url,
             "SUPABASE_INTERNAL_URL": internal_api_url,
             "SUPABASE_REST_URL": rest_url,
             "SUPA_REST_URL": rest_url,
             "SUPA_REST_INTERNAL_URL": internal_rest_url or rest_url,
-            "SUPABASE_ANON_KEY": status.get("ANON_KEY", ""),
-            "SUPABASE_SERVICE_ROLE_KEY": status.get("SERVICE_ROLE_KEY", ""),
-            "SUPABASE_JWT_SECRET": status.get("JWT_SECRET", ""),
+            "SUPABASE_ANON_KEY": anon_key,
+            "ANON_KEY": anon_key,
+            "SUPABASE_SERVICE_ROLE_KEY": service_role_key,
+            "SERVICE_ROLE_KEY": service_role_key,
+            "SUPABASE_SECRET_KEY": service_role_key,
+            "SUPABASE_JWT_SECRET": jwt_secret,
         }
     else:
         updates = {}

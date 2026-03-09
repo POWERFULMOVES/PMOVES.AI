@@ -8,6 +8,9 @@ usage() {
   cat <<'EOF'
 push-gh-secrets.sh [-f env_file] [-r owner/repo] [--env ENV] [--only key1,key2] [--all] [--manifest path] [--dry-run] [--ghcr-bootstrap]
 
+NOTE: GHCR auth now prefers the PMOVES.AI GitHub App (GH_APP_ID + GH_APP_SEC secrets).
+      The --ghcr-bootstrap flag is a fallback for environments without a configured App.
+
 Options:
   -f, --file     Path to env file (default: pmoves/env.shared)
   -r, --repo     GitHub repo in owner/name form (default: derive from git remote)
@@ -166,6 +169,12 @@ if [[ $GHCR_BOOTSTRAP -eq 1 ]]; then
   ghcr_token="$(lookup_value "$GHCR_TOKEN_FROM" || true)"
   if [[ -z "$ghcr_token" ]]; then
     ghcr_token="$(lookup_value "$GHCR_FALLBACK_TOKEN_FROM" || true)"
+  fi
+  if [[ -z "$ghcr_token" ]]; then
+    ghcr_token="$(gh auth token 2>/dev/null || true)"
+    if [[ -n "$ghcr_token" ]]; then
+      echo "ℹ Using gh CLI token as GHCR fallback (ensure write:packages scope)"
+    fi
   fi
   if [[ -z "$ghcr_user" ]]; then
     ghcr_user="${GITHUB_ACTOR:-}"

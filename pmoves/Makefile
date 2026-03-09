@@ -97,10 +97,22 @@ ifneq ($(strip $(PRIMARY_ENV_FILE)),)
 endif
 COMPOSE_ENV_FILES += $(foreach file,$(TIER_ENV_FILES),$(if $(call resolve_env_file,$(file)),--env-file $(call resolve_env_file,$(file)),))
 ifneq ("$(wildcard .env.local)","")
-  COMPOSE_ENV_FILES += --env-file .env.local
+  # In compose runtime, .env.local frequently carries host-only Supabase URLs
+  # that break in-network service wiring. Keep it opt-in for compose.
+  ifeq ($(SUPABASE_RUNTIME),compose)
+    ifeq ($(INCLUDE_ENV_LOCAL_IN_COMPOSE),1)
+      COMPOSE_ENV_FILES += --env-file .env.local
+    endif
+  else
+    COMPOSE_ENV_FILES += --env-file .env.local
+  endif
 endif
 ifneq ("$(wildcard env.supa.runtime)","")
-  COMPOSE_ENV_FILES += --env-file env.supa.runtime
+  # Runtime overlay is generated from Supabase CLI status output.
+  # In compose runtime it can become stale and override valid in-network URLs.
+  ifeq ($(SUPABASE_RUNTIME),cli)
+    COMPOSE_ENV_FILES += --env-file env.supa.runtime
+  endif
 endif
 ifneq ("$(wildcard env.tier-supabase.urlencoded)","")
   COMPOSE_ENV_FILES += --env-file env.tier-supabase.urlencoded
@@ -141,6 +153,7 @@ help: ## Show available make targets and descriptions
 include mk/codex.mk
 include mk/preflight.mk
 include mk/infra.mk
+include mk/build-gate.mk
 
 .PHONY: update-service-docs
 update-service-docs: ## Regenerate service update notes from git metadata
@@ -225,16 +238,20 @@ check-tools: ## Check required tools and versions
 
 SUPABASE_NETWORK ?= pmoves-net
 SUPABASE_CONFIG ?= supabase/config.toml
-SUPABASE_LOCAL_REST_URL ?= http://127.0.0.1:65421/rest/v1
-SUPABASE_LOCAL_AUTH_HEALTH_URL ?= http://127.0.0.1:65421/auth/v1/health
-SUPABASE_LOCAL_STUDIO_URL ?= http://127.0.0.1:65433
+SUPABASE_CLI_API_URL ?= http://127.0.0.1:54321
+SUPABASE_CLI_REST_URL ?= $(SUPABASE_CLI_API_URL)/rest/v1
+SUPABASE_CLI_AUTH_HEALTH_URL ?= $(SUPABASE_CLI_API_URL)/auth/v1/health
+SUPABASE_CLI_STUDIO_URL ?= http://127.0.0.1:54323
+SUPABASE_LOCAL_REST_URL ?= $(SUPABASE_CLI_REST_URL)
+SUPABASE_LOCAL_AUTH_HEALTH_URL ?= $(SUPABASE_CLI_AUTH_HEALTH_URL)
+SUPABASE_LOCAL_STUDIO_URL ?= $(SUPABASE_CLI_STUDIO_URL)
 SUPABASE_DB_HELPER ?= scripts/supabase/find_db_container.sh
 
 .PHONY: up-supabase
 up-supabase: ## Start Supabase using selected runtime (SUPABASE_RUNTIME=cli|kong|compose)
 	@$(MAKE) --no-print-directory supa-start
 
-.PHONY: supa-init supa-start supa-stop supa-stop-all supa-status supa-runtime-env supa-logs supa-health supa-restart supa-migrate supa-use-local supa-use-remote supa-env-doctor supa-env-doctor-strict supa-runtime-guard supa-runtime-reconcile
+.PHONY: supa-init supa-start supa-stop supa-stop-all supa-status supa-runtime-env supa-logs supa-health supa-restart supa-migrate supa-use-local supa-use-remote supa-env-doctor supa-env-doctor-strict supa-runtime-guard supa-runtime-reconcile supa-collation-refresh supa-collation-check
 supa-init: check-tools ## Initialize supabase/config.toml (one-time) and enforce PMOVES CLI defaults
 	@if [ ! -f "$(SUPABASE_CONFIG)" ]; then \
 		echo "🗂️ Initializing Supabase project in . ..."; \
@@ -263,7 +280,16 @@ supa-start: check-tools ensure-env-shared ## Start Supabase stack for selected r
 		$(MAKE) --no-print-directory supa-init; \
 		echo "🗄️ Starting Supabase CLI stack..."; \
 		docker network create "$(SUPABASE_NETWORK)" >/dev/null 2>&1 || true; \
-		supabase start --workdir "." --network-id "$(SUPABASE_NETWORK)"; \
+		extra_start_args=""; \
+		if [ -n "$${SUPABASE_CLI_EXCLUDE:-}" ]; then \
+			extra_start_args="$$extra_start_args -x $${SUPABASE_CLI_EXCLUDE}"; \
+			echo "↷ supabase start exclude: $${SUPABASE_CLI_EXCLUDE}"; \
+		fi; \
+		eval "supabase start --workdir \".\" --network-id \"$(SUPABASE_NETWORK)\" $$extra_start_args"; \
+		if echo ",$${SUPABASE_CLI_EXCLUDE:-}," | grep -q ",vector,"; then \
+			vector_container="supabase_vector_$$(basename "$$(pwd)")"; \
+			docker rm -f "$$vector_container" >/dev/null 2>&1 || true; \
+		fi; \
 	else \
 		echo "🗄️ Starting Supabase Kong/Compose stack (SUPABASE_RUNTIME=$(SUPABASE_RUNTIME))..."; \
 		$(DC) up -d supabase-db; \
@@ -288,6 +314,7 @@ supa-start: check-tools ensure-env-shared ## Start Supabase stack for selected r
 		$(DC) up -d supabase-postgrest supabase-gotrue supabase-kong supabase-realtime supabase-storage supabase-studio; \
 	fi
 	@$(MAKE) --no-print-directory supa-status
+	@$(MAKE) --no-print-directory supa-collation-refresh 2>/dev/null || true
 
 supa-stop: ## Stop Supabase stack for selected runtime
 	@echo "🗄️ Stopping Supabase stack (SUPABASE_RUNTIME=$(SUPABASE_RUNTIME))..."
@@ -336,11 +363,26 @@ supa-status: ## Show Supabase status for selected runtime and export env snapsho
 				grep -E '^(SUPABASE_URL|SUPA_REST_URL|SUPABASE_SERVICE_ROLE_KEY)=' env.supa.runtime || true; \
 			fi; \
 		fi; \
+		rest_url="$(SUPABASE_LOCAL_REST_URL)"; \
+		auth_url="$(SUPABASE_LOCAL_AUTH_HEALTH_URL)"; \
+		studio_url="$(SUPABASE_LOCAL_STUDIO_URL)"; \
+		if [ -s ".supabase.status.env" ]; then \
+			api_url=$$(grep -m1 '^API_URL=' .supabase.status.env | cut -d= -f2- | tr -d '"'); \
+			studio_from_status=$$(grep -m1 '^STUDIO_URL=' .supabase.status.env | cut -d= -f2- | tr -d '"'); \
+			if [ -n "$$api_url" ]; then \
+				api_url=$${api_url%/}; \
+				rest_url="$$api_url/rest/v1"; \
+				auth_url="$$api_url/auth/v1/health"; \
+			fi; \
+			if [ -n "$$studio_from_status" ]; then \
+				studio_url="$$studio_from_status"; \
+			fi; \
+		fi; \
 		echo ""; \
 		echo "Expected local endpoints:"; \
-		echo "  REST:   $(SUPABASE_LOCAL_REST_URL)"; \
-		echo "  Auth:   $(SUPABASE_LOCAL_AUTH_HEALTH_URL)"; \
-		echo "  Studio: $(SUPABASE_LOCAL_STUDIO_URL)"; \
+		echo "  REST:   $$rest_url"; \
+		echo "  Auth:   $$auth_url"; \
+		echo "  Studio: $$studio_url"; \
 	else \
 		$(DC) ps supabase-db supabase-postgrest supabase-gotrue supabase-kong supabase-realtime supabase-storage supabase-studio 2>/dev/null || true; \
 		echo ""; \
@@ -376,6 +418,9 @@ supa-logs: ## Tail logs for selected runtime (set SVC=<container/service> for a 
 supa-health: ## Health checks for selected runtime + active DB container readiness
 	@echo "🏥 Supabase health check:"
 	@db=$$(bash "$(SUPABASE_DB_HELPER)" running 2>/dev/null || true); \
+	if [ -z "$$db" ] && [ "$(SUPABASE_RUNTIME)" = "cli" ]; then \
+		db=$$(docker ps --format '{{.Names}}' | grep -m1 '^supabase_db_' || true); \
+	fi; \
 	if [ -n "$$db" ] && docker exec "$$db" pg_isready -U postgres -d postgres >/dev/null 2>&1; then \
 		echo "  ✅ Database ($$db)"; \
 	elif [ -n "$$db" ]; then \
@@ -387,17 +432,64 @@ supa-health: ## Health checks for selected runtime + active DB container readine
 		rest_url="$(SUPABASE_LOCAL_REST_URL)"; \
 		auth_url="$(SUPABASE_LOCAL_AUTH_HEALTH_URL)"; \
 		studio_url="$(SUPABASE_LOCAL_STUDIO_URL)"; \
+		if [ -s ".supabase.status.env" ]; then \
+			api_url=$$(grep -m1 '^API_URL=' .supabase.status.env | cut -d= -f2- | tr -d '"'); \
+			studio_from_status=$$(grep -m1 '^STUDIO_URL=' .supabase.status.env | cut -d= -f2- | tr -d '"'); \
+			if [ -n "$$api_url" ]; then \
+				api_url=$${api_url%/}; \
+				rest_url="$$api_url/rest/v1"; \
+				auth_url="$$api_url/auth/v1/health"; \
+			fi; \
+			if [ -n "$$studio_from_status" ]; then \
+				studio_url="$$studio_from_status"; \
+			fi; \
+		fi; \
 	else \
 		rest_url="http://localhost:$${SUPABASE_POSTGREST_PORT:-3000}"; \
 		auth_url="http://localhost:$${SUPABASE_GOTRUE_PORT:-9999}/health"; \
 		studio_url="http://localhost:$${SUPABASE_STUDIO_PORT:-54323}"; \
 	fi; \
 	rest_code=$$(curl -s -o /dev/null -w "%{http_code}" "$$rest_url" || true); \
+	if [ "$$rest_code" = "404" ]; then \
+		rest_code=$$(curl -s -o /dev/null -w "%{http_code}" "$${rest_url%/}/" || true); \
+	fi; \
 	auth_code=$$(curl -s -o /dev/null -w "%{http_code}" "$$auth_url" || true); \
 	studio_code=$$(curl -s -o /dev/null -w "%{http_code}" "$$studio_url" || true); \
 	if [ "$$rest_code" = "200" ]; then echo "  ✅ REST ($$rest_url)"; else echo "  ❌ REST ($$rest_url) -> $$rest_code"; fi; \
 	if [ "$$auth_code" = "200" ]; then echo "  ✅ Auth ($$auth_url)"; else echo "  ❌ Auth ($$auth_url) -> $$auth_code"; fi; \
-	if [ "$$studio_code" = "200" ]; then echo "  ✅ Studio ($$studio_url)"; else echo "  ❌ Studio ($$studio_url) -> $$studio_code"; fi
+	if [ "$$studio_code" = "200" ] || [ "$$studio_code" = "301" ] || [ "$$studio_code" = "302" ] || [ "$$studio_code" = "307" ] || [ "$$studio_code" = "308" ]; then \
+		echo "  ✅ Studio ($$studio_url)"; \
+	else \
+		echo "  ❌ Studio ($$studio_url) -> $$studio_code"; \
+	fi
+
+supa-collation-refresh: ## Refresh collation version for all Supabase databases (RG-3)
+	@echo "Refreshing collation versions..."
+	@db=$$(bash "$(SUPABASE_DB_HELPER)" running); \
+	if [ -z "$$db" ]; then echo "Supabase DB container not found"; exit 1; fi; \
+	failed=0; \
+	for dbname in postgres _supabase; do \
+		echo "  -> ALTER DATABASE $$dbname REFRESH COLLATION VERSION"; \
+		if ! docker exec -i "$$db" psql -U postgres -d "$$dbname" \
+			-c "ALTER DATABASE $$dbname REFRESH COLLATION VERSION;" 2>&1; then \
+			echo "  ❌ ALTER DATABASE $$dbname failed"; \
+			failed=1; \
+		fi; \
+	done; \
+	if [ "$$failed" -ne 0 ]; then echo "Collation refresh FAILED"; exit 1; fi
+	@echo "Collation refresh complete"
+
+supa-collation-check: ## Check for collation version mismatches
+	@db=$$(bash "$(SUPABASE_DB_HELPER)" running); \
+	if [ -z "$$db" ]; then echo "Supabase DB container not found"; exit 1; fi; \
+	result=$$(docker exec -i "$$db" psql -U postgres -tAc \
+		"SELECT datname || ': ' || COALESCE(datcollversion, 'NULL') FROM pg_database WHERE datname NOT IN ('template0','template1') ORDER BY datname;"); \
+	echo "$$result"; \
+	if echo "$$result" | grep -q ': NULL$$'; then \
+		echo "❌ Collation mismatch detected — run 'make supa-collation-refresh'"; \
+		exit 1; \
+	fi; \
+	echo "✅ Collation versions OK"
 
 supa-use-local: ## Write .env.local from local Supabase template and merge keys from current supa-status
 	@$(PYTHON) scripts/supabase/apply_env_profile.py --profile local --runtime "$(SUPABASE_RUNTIME)" --target .env.local --status-file .supabase.status.env
@@ -505,14 +597,21 @@ supabase-boot-user: ensure-env-shared ## Create/rotate default Supabase boot use
 		    [ -n "$${SERVICE_ROLE_KEY:-}" ] && service_key="$$SERVICE_ROLE_KEY" ;; \
 		esac; \
 		SUPABASE_SERVICE_URL="$$service_url" SUPABASE_SERVICE_ROLE_KEY="$$service_key" SUPABASE_SERVICE_KEY="$$service_key" \
-		python3 tools/create_supabase_boot_user.py "$(SUPABASE_BOOT_USER_EMAIL)" --env-file env.shared --rotate-password --write-env env.shared --write-env .env.local $(ARGS)'
+		$(PYTHON) tools/create_supabase_boot_user.py "$(SUPABASE_BOOT_USER_EMAIL)" --rotate-password --write-env env.shared --write-env .env.local $(ARGS)'
 
 .PHONY: auth-check
 auth-check: ensure-env-shared ## Validate auth/bootstrap state (JWT or Google mode) and secondary setup labels
 	@bash -lc '. ./scripts/with-env.sh; \
+		[ -f ./.supabase.status.env ] && . ./.supabase.status.env || true; \
 		flags=""; \
 		if [ "$(AUTH_BOOTSTRAP_STRICT)" = "1" ]; then flags="$$flags --strict"; fi; \
-		python3 tools/auth_bootstrap_check.py --env-file env.shared --mode "$(AUTH_BOOTSTRAP_MODE)" $$flags'
+		auth_url="$${AUTH_HEALTH_URL:-$${SUPABASE_AUTH_HEALTH_URL:-$${SUPABASE_LOCAL_AUTH_HEALTH_URL:-}}}"; \
+		if [ -z "$$auth_url" ]; then \
+			base_url="$${SUPABASE_CLI_API_URL:-$${API_URL:-}}"; \
+			if [ -n "$$base_url" ]; then auth_url="$${base_url%/}/auth/v1/health"; fi; \
+		fi; \
+		if [ -z "$$auth_url" ]; then auth_url="http://127.0.0.1:54321/auth/v1/health"; fi; \
+		$(PYTHON) tools/auth_bootstrap_check.py --env-file env.shared --mode "$(AUTH_BOOTSTRAP_MODE)" --auth-health-url "$$auth_url" $$flags'
 
 .PHONY: auth-bootstrap
 auth-bootstrap: ensure-env-shared ## Run boot-order auth phase: runtime hydration -> optional user bootstrap -> auth checks
@@ -550,7 +649,7 @@ supabase-clean: ## Compose fallback only: remove gotrue/realtime/storage/studio 
 .PHONY: neo4j-bootstrap
 neo4j-bootstrap: ## Seed Neo4j with persona aliases + CHIT geometry fixtures
 	@echo "📊 Applying Neo4j seeds..."
-	@if ! docker ps --format '{{.Names}}' | grep -q 'neo4j\|pmoves-neo4j'; then \
+	@if ! docker ps --format '{{.Names}}' | grep -qE '(neo4j|pmoves-neo4j)$$'; then \
 		echo "⚠️  Neo4j not running. Skipping seeds."; \
 		echo "   Start with: make up-data-tier"; \
 	else \
@@ -561,7 +660,7 @@ neo4j-bootstrap: ## Seed Neo4j with persona aliases + CHIT geometry fixtures
 .PHONY: seed-data
 seed-data: ## Seed Qdrant/Meilisearch with demo corpus via Hi-RAG v2
 	@echo "📚 Seeding Qdrant/Meili demo corpus..."
-	@if ! docker ps --format '{{.Names}}' | grep -q 'qdrant'; then \
+	@if ! docker ps --format '{{.Names}}' | grep -q 'qdrant$$'; then \
 		echo "⚠️  Qdrant not running. Starting data tier..."; \
 		$(MAKE) --no-print-directory up-data-tier; \
 	fi
@@ -764,11 +863,15 @@ up-agents: ## Start agent services (Agent Zero, Archon, DeepResearch, SupaSerch)
 	@$(MAKE) --no-print-directory wait-agents
 	@echo "✅ Agents ready"
 
+.PHONY: archon-db-setup
+archon-db-setup: ## Run Archon DB migrations (complete_setup + 001-011 + TensorZero LLM config)
+	@bash scripts/archon_db_setup.sh
+
 .PHONY: up-tensorzero
 up-tensorzero: ## Start TensorZero LLM gateway (PRIMARY MODEL PROVIDER)
 	@echo "🧠 Starting TensorZero LLM gateway..."
-	@$(DC) --profile tensorzero up -d
-	@timeout 60 bash -c 'until curl -sf http://localhost:3030/healthz; do sleep 2; done' || echo "⚠️ TensorZero may still be starting"
+	@$(DC) --profile tensorzero up -d tensorzero-clickhouse tensorzero-gateway tensorzero-ui pmoves-ollama
+	@timeout 60 bash -c 'until curl -sf http://localhost:3030/metrics; do sleep 2; done' || echo "⚠️ TensorZero may still be starting"
 	@echo "✅ TensorZero ready - LLM calls available"
 	@echo "   Gateway:      http://localhost:3030"
 	@echo "   UI:           http://localhost:4000"
@@ -825,14 +928,44 @@ up-minimal: ## Start minimal stack (Supabase + Data + Bus only)
 	@echo "✅ Minimal stack ready (Supabase + Data + Bus)"
 
 .PHONY: bringup-layered
-bringup-layered: ## Deterministic local layered bring-up (minimal -> workers -> agents -> monitoring -> prod smoke)
+bringup-layered: ## Deterministic local layered bring-up (minimal -> model-mgmt -> workers -> agents -> monitoring -> prod smoke)
 	@echo "🚀 Layered local bring-up (runtime=$${SUPABASE_RUNTIME:-cli})"
 	@SUPABASE_RUNTIME=$${SUPABASE_RUNTIME:-cli} $(MAKE) --no-print-directory up-minimal
+	@SUPABASE_RUNTIME=$${SUPABASE_RUNTIME:-cli} $(MAKE) --no-print-directory up-model-management
 	@SUPABASE_RUNTIME=$${SUPABASE_RUNTIME:-cli} $(MAKE) --no-print-directory up-workers
 	@SUPABASE_RUNTIME=$${SUPABASE_RUNTIME:-cli} $(MAKE) --no-print-directory up-agents
 	@SUPABASE_RUNTIME=$${SUPABASE_RUNTIME:-cli} $(MAKE) --no-print-directory up-monitoring
 	@SUPABASE_RUNTIME=$${SUPABASE_RUNTIME:-cli} $(MAKE) --no-print-directory smoke-prod
 	@echo "✅ Layered local bring-up passed"
+
+.PHONY: up-model-management
+up-model-management: ## Start model management layer (model-registry + gpu-orchestrator if GPU available)
+	@echo "🧠 Starting model management layer..."
+	@$(DC) --profile orchestration up -d model-registry
+	@if docker info --format '{{json .Runtimes}}' | grep -qi nvidia; then \
+		$(DC) --profile gpu up -d gpu-orchestrator; \
+	else \
+		echo "⚠️ NVIDIA runtime not detected, skipping gpu-orchestrator"; \
+	fi
+	@echo "✅ Model management ready"
+
+.PHONY: health-dormant
+health-dormant: ## Health-check dormant/newly-activated services
+	@for name in model-registry gpu-orchestrator pdf-ingest botz-gateway tokenism-simulator transcribe-backend; do \
+	  cid=$$($(DC) ps -q $$name 2>/dev/null); \
+	  if [ -z "$$cid" ]; then \
+	    echo "$$name: SKIP (not running)"; \
+	    continue; \
+	  fi; \
+	  state=$$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' $$cid 2>/dev/null); \
+	  if [ "$$state" = "healthy" ] || [ "$$state" = "running" ]; then \
+	    echo "$$name: OK"; \
+	  elif [ "$$state" = "starting" ]; then \
+	    echo "$$name: STARTING"; \
+	  else \
+	    echo "$$name: FAIL ($$state)"; \
+	  fi; \
+	done
 
 # =============================================================================
 # GRACEFUL SHUTDOWN (Reverse Dependency Order)
@@ -844,6 +977,7 @@ down-all: ## Stop ALL services in graceful reverse order
 	@-$(MAKE) --no-print-directory down-integrations 2>/dev/null
 	@-$(MAKE) --no-print-directory down-tensorzero
 	@-$(MAKE) --no-print-directory down-agents
+	@-$(MAKE) --no-print-directory down-model-management
 	@-$(MAKE) --no-print-directory down-workers
 	@-$(MAKE) --no-print-directory down-bus
 	@-$(MAKE) --no-print-directory down-data
@@ -872,6 +1006,12 @@ down-workers: ## Stop worker services
 	@echo "⚙️ Stopping workers..."
 	@$(DC) stop $(WORKER_SERVICES) >/dev/null 2>&1 || true
 	@$(DC) rm -f $(WORKER_SERVICES) >/dev/null 2>&1 || true
+
+.PHONY: down-model-management
+down-model-management: ## Stop model-registry and gpu-orchestrator layer
+	@echo "🧠 Stopping model management layer..."
+	@$(DC) stop model-registry gpu-orchestrator >/dev/null 2>&1 || true
+	@$(DC) rm -f model-registry gpu-orchestrator >/dev/null 2>&1 || true
 
 .PHONY: down-bus
 down-bus: ## Stop message bus
@@ -1001,15 +1141,25 @@ validate-tier: ## Validate tier network compliance (backend services should NOT 
 
 yt-docs-sync: ## Ask PMOVES.YT to capture yt-dlp help/extractors and upsert into Supabase
 	@$(LOAD_ENV_SHARED); \
-	  base=$${PMOVES_YT_BASE_URL:-http://localhost:8091}; \
+	  base=$${PMOVES_YT_BASE_URL:-http://localhost:8077}; \
+	  if echo "$$base" | grep -q "pmoves-yt$$"; then base=$$(echo "$$base" | sed "s|pmoves-yt|localhost|g"); fi; \
 	  echo "→ Syncing yt-dlp docs via $$base/yt/docs/sync"; \
-	  curl -fsS -X POST "$$base/yt/docs/sync" | jq .
+	  if command -v jq >/dev/null 2>&1; then \
+	    curl -fsS -X POST "$$base/yt/docs/sync" | jq .; \
+	  else \
+	    curl -fsS -X POST "$$base/yt/docs/sync"; echo; \
+	  fi
 
 yt-docs-catalog-smoke: ## Smoke check for /yt/docs/catalog (counts + version)
 	@$(LOAD_ENV_SHARED); \
-	  base=$${PMOVES_YT_BASE_URL:-http://localhost:8091}; \
+	  base=$${PMOVES_YT_BASE_URL:-http://localhost:8077}; \
+	  if echo "$$base" | grep -q "pmoves-yt$$"; then base=$$(echo "$$base" | sed "s|pmoves-yt|localhost|g"); fi; \
 	  echo "→ Hitting $$base/yt/docs/catalog"; \
-	  curl -fsS "$$base/yt/docs/catalog" | jq '{ok, meta, counts}'
+	  if command -v jq >/dev/null 2>&1; then \
+	    curl -fsS "$$base/yt/docs/catalog" | jq "{ok, meta, counts}"; \
+	  else \
+	    curl -fsS "$$base/yt/docs/catalog"; echo; \
+	  fi
 
 .PHONY: gpu-rerank-evidence
 gpu-rerank-evidence: ## Run strict GPU rerank smoke and save evidence under pmoves/docs/logs/
@@ -1021,7 +1171,11 @@ gpu-rerank-evidence: ## Run strict GPU rerank smoke and save evidence under pmov
 
 .PHONY: evidence-auto
 evidence-auto: ## Capture basic evidence (yt-dlp, Loki, hi-rag v2 CPU/GPU, presign) into pmoves/PR_EVIDENCE
-	@bash tools/capture_evidence.sh
+	@if [ -f tools/capture_evidence.sh ]; then \
+	  bash tools/capture_evidence.sh; \
+	else \
+	  echo "↷ tools/capture_evidence.sh missing — skipping evidence capture"; \
+	fi
 
 .PHONY: bringup-with-ui
 bringup-with-ui: ## One-shot: supabase, core, agents, externals, monitoring, UI (dev), then auto-capture evidence
@@ -1030,7 +1184,7 @@ bringup-with-ui: ## One-shot: supabase, core, agents, externals, monitoring, UI 
 .PHONY: verify-all
 verify-all: ## Full verify: bring-up (parallel waits), then retro preflight + monitoring report + core/gpu smokes
 	@echo "-> Full verify starting (parallel readiness)"
-	@$(MAKE) --no-print-directory bringup-with-ui PARALLEL=1 WAIT_T_LONG=$(or $(WAIT_T_LONG),300)
+	@$(MAKE) --no-print-directory bringup-with-ui PARALLEL=$(or $(VERIFY_PARALLEL),1) WAIT_T_LONG=$(or $(WAIT_T_LONG),300)
 	@echo "-> Retro preflight"
 	@$(MAKE) --no-print-directory preflight-retro
 	@echo "-> Monitoring report"
@@ -1051,6 +1205,8 @@ verify-all: ## Full verify: bring-up (parallel waits), then retro preflight + mo
 	-@$(MAKE) --no-print-directory agents-headless-smoke
 	@echo "-> Archon MCP evidence"
 	-@$(MAKE) --no-print-directory archon-mcp-evidence
+	@echo "-> Model & persona readiness"
+	-@$(MAKE) --no-print-directory model-readiness
 	@echo "OK Verify-all sequence executed. Review console + Grafana."
 
 .PHONY: archon-mcp-evidence
@@ -1224,8 +1380,8 @@ recreate-v2: ## Force-recreate v2 CPU container (no deps)
 .PHONY: up-open-notebook
 up-open-notebook: ensure-env-shared ## Bring up Open Notebook on cataclysm-net (defaults UI :8503, API :5055)
 	@docker network create cataclysm-net >/dev/null 2>&1 || true
-	@docker compose -f docker-compose.open-notebook.yml up -d open-notebook
-	@echo "✔ Open Notebook up (http://localhost:${OPEN_NOTEBOOK_UI_PORT:-8503}, API :${OPEN_NOTEBOOK_API_PORT:-5055})"
+	@$(NOTEBOOK_DC) up -d open-notebook
+	@echo "✔ Open Notebook up (http://localhost:$${OPEN_NOTEBOOK_UI_PORT:-8503}, API :$${OPEN_NOTEBOOK_API_PORT:-5055})"
 
 .PHONY: notebook-set-password
 notebook-set-password: ## Update Open Notebook password/token (and optionally notebook id). Usage: make notebook-set-password PASSWORD=secret [TOKEN=api-token NOTEBOOK_ID=notebook:abc123]
@@ -1237,7 +1393,7 @@ notebook-set-password: ## Update Open Notebook password/token (and optionally no
 
 .PHONY: down-open-notebook
 down-open-notebook: ## Stop Open Notebook
-	@docker compose -f docker-compose.open-notebook.yml down
+	@$(NOTEBOOK_DC) down
 	@echo "✔ Open Notebook down"
 
 up-both-gateways: ## Ensure both hi-rag gateways are up (idempotent)
@@ -1298,6 +1454,7 @@ export INTEGRATIONS_WORKSPACE
 
 NOTEBOOK_COMPOSE ?= docker-compose.open-notebook.yml
 NOTEBOOK_PROJECT ?= $(PROJECT)-notebook
+NOTEBOOK_DC := docker compose -p $(NOTEBOOK_PROJECT) --project-directory $(CURDIR) $(COMPOSE_ENV_FILES) -f $(NOTEBOOK_COMPOSE)
 
 JELLYFIN_AI_BASE ?= jellyfin-ai
 export JELLYFIN_AI_BASE
@@ -1332,8 +1489,8 @@ endif
 endif
 
 # Canonical layer service sets for deterministic tiered bring-up/down.
-WORKER_SERVICES := hi-rag-gateway-v2 retrieval-eval render-webhook langextract extract-worker
-AGENT_SERVICES := agent-zero archon deepresearch supaserch mesh-agent publisher-discord
+WORKER_SERVICES := hi-rag-gateway-v2 retrieval-eval render-webhook langextract extract-worker pdf-ingest transcribe-backend
+AGENT_SERVICES := agent-zero archon deepresearch supaserch mesh-agent publisher-discord botz-gateway tokenism-simulator
 
 down:
 	@$(DC) down
@@ -1435,13 +1592,13 @@ cloudflare-url: ## Print the most recent Cloudflare tunnel URL from connector lo
 
 notebook-up: ## Launch the Open Notebook stack alongside cataclysm-net
 	docker network create cataclysm-net >/dev/null 2>&1 || true
-	docker compose -p $(NOTEBOOK_PROJECT) -f $(NOTEBOOK_COMPOSE) up -d open-notebook
+	$(NOTEBOOK_DC) up -d open-notebook
 
 notebook-down: ## Stop the Open Notebook container and remove its resources
-	docker compose -p $(NOTEBOOK_PROJECT) -f $(NOTEBOOK_COMPOSE) down
+	$(NOTEBOOK_DC) down
 
 notebook-logs: ## Follow logs for the Open Notebook service
-	docker compose -p $(NOTEBOOK_PROJECT) -f $(NOTEBOOK_COMPOSE) logs -f open-notebook
+	$(NOTEBOOK_DC) logs -f open-notebook
 
 notebook-seed-models: ## Seed Open Notebook models based on provider keys from the environment
 	@echo "Seeding Open Notebook providers..."
@@ -1450,7 +1607,12 @@ notebook-seed-models: ## Seed Open Notebook models based on provider keys from t
 .PHONY: notebook-workbench-smoke
 notebook-workbench-smoke: ensure-env-shared ## Lint the Notebook Workbench bundle and verify Supabase connectivity
 	@echo "→ Linting Notebook Workbench UI…"
-	@npm --prefix ui run lint
+	@cd ui && node scripts/with-env.mjs node ./node_modules/eslint/bin/eslint.js \
+		"app/notebook-workbench/**/*.{ts,tsx,js,jsx}" \
+		"app/dashboard/notebook/runtime/**/*.{ts,tsx,js,jsx}" \
+		"components/**/*NotebookWorkbench*.{ts,tsx,js,jsx}" \
+		"components/**/*Graphiti*.{ts,tsx,js,jsx}" \
+		--max-warnings=0
 	@echo "→ Validating Supabase environment…"
 	@bash -c '$(LOAD_ENV_SHARED) node scripts/notebook_workbench_smoke.mjs $(ARGS)'
 
@@ -1461,6 +1623,49 @@ up-workers-core:
 # YouTube ingest + whisper stack
 up-yt:
 	@$(DC) --profile data --profile workers --profile yt up -d bgutil-pot-provider ffmpeg-whisper pmoves-yt
+
+.PHONY: channel-monitor-up
+channel-monitor-up: ensure-env-shared ## Start channel-monitor with runtime-aware Supabase DB URL wiring
+	@bash -lc 'set -euo pipefail; \
+	  runtime="$${SUPABASE_RUNTIME:-$(SUPABASE_RUNTIME)}"; \
+	  if docker ps --format "{{.Names}}" | grep -Eq "^supabase_db_"; then runtime="cli"; fi; \
+	  stripq() { printf "%s" "$$1" | sed -e "s/^\\\"//" -e "s/\\\"$$//"; }; \
+	  db_url="$${CHANNEL_MONITOR_DATABASE_URL:-}"; \
+	  if [ "$$runtime" = "cli" ] && [ -f .supabase.status.env ]; then \
+	    v=$$(grep -m1 "^DB_URL=" .supabase.status.env | cut -d= -f2- || true); \
+	    v=$$(stripq "$$v"); \
+	    if [ -n "$$v" ]; then \
+	      db_url=$$(printf "%s" "$$v" | sed -e "s@127\\.0\\.0\\.1@host.docker.internal@g" -e "s@localhost@host.docker.internal@g"); \
+	    fi; \
+	  fi; \
+	  if [ -z "$$db_url" ] && [ "$$runtime" = "cli" ]; then \
+	    db_url="postgresql://$${SUPABASE_DB_USER:-postgres}:$${SUPABASE_DB_PASSWORD:-postgres}@host.docker.internal:$${SUPABASE_DB_PORT:-54322}/$${SUPABASE_DB_NAME:-postgres}"; \
+	  fi; \
+	  if [ -z "$$db_url" ] && [ "$$runtime" != "compose" ] && [ "$$runtime" != "cli" ]; then \
+	    db_url="postgresql://$${SUPABASE_DB_USER:-postgres}:$${SUPABASE_DB_PASSWORD:-postgres}@$${SUPABASE_DB_HOST:-supabase-db}:$${SUPABASE_DB_PORT:-5432}/$${SUPABASE_DB_NAME:-postgres}"; \
+	  fi; \
+	  echo "→ Starting channel-monitor (runtime=$$runtime)"; \
+	  if [ -n "$$db_url" ]; then \
+	    CHANNEL_MONITOR_DATABASE_URL="$$db_url" $(DC) --profile workers --profile yt up -d channel-monitor; \
+	  else \
+	    $(DC) --profile workers --profile yt up -d channel-monitor; \
+	  fi; \
+	  echo "✔ Channel monitor up"; \
+	'
+
+.PHONY: channel-monitor-smoke
+channel-monitor-smoke: ## Verify channel-monitor HTTP endpoints
+	@bash -lc 'set -euo pipefail; \
+	  base="http://localhost:$${CHANNEL_MONITOR_PORT:-8097}"; \
+	  for path in /healthz /api/monitor/status /api/monitor/stats; do \
+	    code=$$(curl -s -o /dev/null -w "%{http_code}" "$$base$$path" || true); \
+	    if [ "$$code" != "200" ]; then \
+	      echo "✖ channel-monitor $$path => $$code"; \
+	      exit 1; \
+	    fi; \
+	    echo "✔ channel-monitor $$path 200"; \
+	  done; \
+	'
 
 .PHONY: up-yt-published
 up-yt-published: ## Start YouTube ingest stack using published images (no local builds)
@@ -1529,8 +1734,8 @@ monitoring-smoke-prod: up-monitoring ## Production-profile monitoring smoke (req
 		MONITORING_SMOKE_REQUIRED_JOBS="$${MONITORING_SMOKE_REQUIRED_JOBS:-prometheus,loki,blackbox_http,supabase_health,supabase-realtime,hi-rag-gateway-v2,agent-zero,archon,presign}" \
 		MONITORING_SMOKE_REQUIRE_JOB_UP="$${MONITORING_SMOKE_REQUIRE_JOB_UP:-1}" \
 		MONITORING_SMOKE_MIN_HEALTHY_RATIO="$${MONITORING_SMOKE_MIN_HEALTHY_RATIO:-0.50}" \
-		MONITORING_SMOKE_EXPECT_SUPABASE_RUNTIME="$${MONITORING_SMOKE_EXPECT_SUPABASE_RUNTIME:-$${SUPABASE_RUNTIME:-compose,kong}}" \
-		MONITORING_SMOKE_REALTIME_DEV_POLICY="$${MONITORING_SMOKE_REALTIME_DEV_POLICY:-$$( [ "$${SUPABASE_RUNTIME:-compose}" = "cli" ] && echo warn || echo forbid )}" \
+		MONITORING_SMOKE_EXPECT_SUPABASE_RUNTIME="$${MONITORING_SMOKE_EXPECT_SUPABASE_RUNTIME:-$(SUPABASE_RUNTIME)}" \
+		MONITORING_SMOKE_REALTIME_DEV_POLICY="$${MONITORING_SMOKE_REALTIME_DEV_POLICY:-$$(case ",$${MONITORING_SMOKE_EXPECT_SUPABASE_RUNTIME:-$(SUPABASE_RUNTIME)}," in *,cli,*|*,mixed,*) echo warn;; *) echo forbid;; esac)}" \
 		$(PYTHON) tools/monitoring_smoke.py
 
 observability-audit: ## Generate observability mapping report (Prom jobs -> dashboards -> live target health)
@@ -1617,8 +1822,14 @@ brand-verify: ## Verify key branded endpoints respond
 	@echo "Neo4j bolt (mapped):" && echo 'EXPECT 7474/7687 open' || true
 	@echo "✔ Brand verification complete (inspect codes above)"
 
+# -------- Model & persona readiness --------
+.PHONY: model-readiness
+
+model-readiness: ## Validate model registry, persona seeds, Ollama models, TensorZero gateway
+	@$(LOAD_ENV_SHARED); $(PYTHON) tools/model_readiness_check.py
+
 # -------- Model profiles / management --------
-.PHONY: model-profiles model-apply model-swap models-sync models-seed-ollama models-registry-snapshot
+.PHONY: model-profiles model-apply model-swap models-sync models-sync-dynamic models-seed-ollama models-registry-snapshot
 
 model-profiles: ## List available model manifests
 	@ls -1 models/*.yaml | sed 's#models/##' | sed 's#\.yaml##'
@@ -1627,10 +1838,13 @@ model-apply: ensure-env-shared ## Apply a model profile into pmoves/.env.local (
 	@PROFILE="$(PROFILE)" HOST="$(HOST)" bash tools/models/apply_profile.sh
 
 models-sync: ensure-env-shared ## Low-level sync via Python: make models-sync PROFILE=archon HOST=workstation_5090
-	@$(PYTHON) tools/models/models_sync.py sync --profile "$(PROFILE)" --host "$${HOST:-workstation_5090}" --tensorzero-base "$(TENSORZERO_BASE_URL)"
+	@python3 tools/models/models_sync.py sync --profile "$(PROFILE)" --host "$${HOST:-workstation_5090}" --tensorzero-base "$(TENSORZERO_BASE_URL)"
+
+models-sync-dynamic: ensure-env-shared ## Dynamic sync from live model registry mappings (TARGET=all|agent-zero|archon|creator)
+	@python3 tools/models/models_sync.py sync-dynamic --target "$${TARGET:-all}" --host "$${HOST:-workstation_5090}" --tensorzero-base "$(TENSORZERO_BASE_URL)"
 
 model-swap: ensure-env-shared ## Swap a single model param into pmoves/.env.local (SERVICE=hirag NAME=<model-id>)
-	@$(PYTHON) tools/models/models_sync.py swap --service "$(SERVICE)" --name "$(NAME)"
+	@python3 tools/models/models_sync.py swap --service "$(SERVICE)" --name "$(NAME)"
 
 models-seed-ollama: ## Pre-pull Ollama models from profiles/registry (override with OLLAMA_SEED_MODELS)
 	-@docker compose -p $(PROJECT) --profile tensorzero up -d pmoves-ollama >/dev/null 2>&1 || true
@@ -1649,14 +1863,22 @@ models-seed-ollama: ## Pre-pull Ollama models from profiles/registry (override w
 	    echo "No Ollama models resolved. Set OLLAMA_SEED_MODELS or define profile/registry mappings."; \
 	    exit 0; \
 	  fi; \
+	  ollama_cid="$$(docker compose -p $(PROJECT) ps -q pmoves-ollama 2>/dev/null || true)"; \
+	  if [ -z "$$ollama_cid" ]; then \
+	    ollama_cid="$$(docker ps --filter name=pmoves-pmoves-ollama-1 --format "{{.ID}}" | head -n1)"; \
+	  fi; \
+	  if [ -z "$$ollama_cid" ]; then \
+	    echo "⚠ pmoves-ollama container not running; skipping model pull."; \
+	    exit 0; \
+	  fi; \
 	  echo "$$models" | tr "," "\n" | sed "/^[[:space:]]*$$/d" | while read -r model; do \
 	    echo "→ Pull $$model"; \
-	    curl -fsS -X POST http://localhost:11434/api/pull -d "{\"model\":\"$$model\"}" >/dev/null 2>&1 || echo "⚠ Pull failed for $$model"; \
+	    docker exec "$$ollama_cid" ollama pull "$$model" >/dev/null 2>&1 || echo "⚠ Pull failed for $$model"; \
 	  done; \
-	  echo "✔ Seeded Ollama models (host=$$host source=$$source).";'
+	  echo "✔ Seeded Ollama models (container=$$ollama_cid host=$$host source=$$source).";'
 
 models-registry-snapshot: ensure-env-shared ## Snapshot Supabase model registry into models/registry.snapshot.json
-	@$(PYTHON) tools/models/models_sync.py registry-snapshot --out models/registry.snapshot.json
+	@$(LOAD_ENV_SHARED); python3 tools/models/models_sync.py registry-snapshot --out models/registry.snapshot.json
 
 # -------- Console (UI) dev helpers --------
 .PHONY: ui-dev-start ui-dev-stop ui-dev-logs
@@ -1774,29 +1996,7 @@ voice-follow-smoke: ## Smoke: start speaker + follow(--once), trigger voice agen
 	echo "✔ voice-follow-smoke OK"
 
 voice-agent-discord-smoke: ## Smoke: voice-agent response -> Discord publish (text)
-	@which jq >/dev/null 2>&1 || (echo "jq is required for voice-agent-discord-smoke" && exit 1)
-	@echo "[Ultimate] tts-studio-smoke" && $(MAKE) tts-studio-smoke >/dev/null && echo OK
-	@set -euo pipefail; \
-	echo "[Voice→Discord] Trigger voice agent via n8n webhook"; \
-	resp=$$(mktemp); \
-	curl -fsS -X POST http://localhost:5678/webhook/voice-agent/ingest -H 'content-type: application/json' \
-	  --data-binary '{"platform":"local","user_id":"smoke","user_name":"Smoke","message_type":"text","content":"Give a 1-sentence greeting for Discord."}' > "$$resp"; \
-	text=$$(jq -r '.response_text // empty' "$$resp"); \
-	if [ -z "$$text" ]; then echo "✖ no response_text from voice agent"; cat "$$resp" | jq .; rm -f "$$resp"; exit 1; fi; \
-	case "$$text" in \
-	  *"could not generate a response"*|*"Could not generate a response"* ) \
-	    echo "✖ voice agent returned fallback response (LLM likely unavailable / timed out)"; cat "$$resp" | jq .; rm -f "$$resp"; exit 1 ;; \
-	esac; \
-	short=$$(python3 -c 'import sys; s=sys.argv[1]; print((s[:1800] + "…") if len(s)>1800 else s)' "$$text"); \
-	rm -f "$$resp"; \
-	echo "[Voice→Discord] Publishing to publisher-discord"; \
-	content=$$'🗣️ Voice Agent (smoke)\n\n'"$$short"; \
-	echo "[Voice→Discord] Generating TTS (mp3) via Flute"; \
-	tts_b64=$$(python3 tools/flute_tts_to_mp3_b64.py "$$short"); \
-	payload=$$(jq -n --arg content "$$content" --arg b64 "$$tts_b64" '{content:$$content, embeds:[{title:"Voice Agent Smoke", description:$$content, color:3447003}], file:{name:"voice_agent_smoke.mp3", content_type:"audio/mpeg", content_b64:$$b64} }'); \
-	curl -sS -X POST http://localhost:8094/publish -H 'content-type: application/json' \
-	  -d "$$payload" \
-	  | jq -e '.ok==true or .success==true' >/dev/null && echo "✔ Discord publish OK" || (echo "✖ Discord publish failed" && exit 1)
+	@$(PYTHON) tools/voice_agent_discord_smoke.py $(ARGS)
 
 # Toggle Single‑User (Owner) Mode for the console and restart dev server
 .PHONY: ui-single-user ui-single-user-on ui-single-user-off
@@ -1827,6 +2027,13 @@ ui-ingest-smoke: ## Exercise boot-jwt status and ingest smoke via API health end
 	echo "→ Ingest smoke:"; \
 	AUTH=""; if [ -n "$$SECRET" ]; then AUTH="-H 'Authorization: Bearer $$SECRET'"; fi; \
 	bash -c "curl -fsS $$AUTH -X POST '$$BASE/api/health/ingest-smoke' -H 'content-type: application/json'" | jq . || true
+
+.PHONY: ui-topology-smoke ui-topology-smoke-all
+ui-topology-smoke: ## Validate branded UI topology surfaces (core/default or set UI_TOPOLOGY_PROFILE=all)
+	@$(LOAD_ENV_SHARED) $(PYTHON) tools/ui_topology_smoke.py --profile "$${UI_TOPOLOGY_PROFILE:-core}" $(ARGS)
+
+ui-topology-smoke-all: ## Validate full UI topology including external + Jellyfin AI overlay surfaces
+	@$(LOAD_ENV_SHARED) $(PYTHON) tools/ui_topology_smoke.py --profile all $(ARGS)
 
 .PHONY: ui-videos-realtime-smoke
 ui-videos-realtime-smoke: ## Insert a dummy video row via Supabase REST; verify UI shows it (Realtime)
@@ -1871,9 +2078,15 @@ up-agents-ui: ## Start Agents APIs + UIs preferring Archon submodule build (use 
 	@$(DC) --profile agents up -d nats agent-zero archon archon-ui mesh-agent deepresearch supaserch publisher-discord
 	@echo "✔ Agents (APIs + UIs) started (submodule). Open Agent Zero UI: $${NEXT_PUBLIC_AGENT_ZERO_UI_URL:-http://localhost:8081}  Archon UI: $${NEXT_PUBLIC_ARCHON_UI_URL:-http://localhost:3737}"
 
-.PHONY: a0-mcp-seed
+.PHONY: a0-mcp-seed a0-mcp-show
 a0-mcp-seed: ## Write A0_MCP_SERVERS into Agent Zero runtime (data/agent-zero/runtime/mcp/servers.env)
-	@$(LOAD_ENV_SHARED) $(PYTHON) tools/seed_agent_zero_mcp.py
+	@$(LOAD_ENV_SHARED); $(PYTHON) tools/seed_agent_zero_mcp.py
+
+a0-mcp-show: ## Print Agent Zero runtime MCP server map
+	@file="data/agent-zero/runtime/mcp/servers.env"; \
+	if [ ! -f "$$file" ]; then echo "✖ $$file not found (run: make -C pmoves a0-mcp-seed)"; exit 1; fi; \
+	echo "→ $$file"; \
+	sed -E 's/(password=)[^&"]+/\1***REDACTED***/g; s/(key=)[^&"]+/\1***REDACTED***/g' "$$file"
 
 .PHONY: archon-mcp-smoke
 archon-mcp-smoke: ## Quick MCP bridge smoke: assert port is open and returns HTTP (404 is acceptable)
@@ -1897,16 +2110,51 @@ archon-upload-smoke: ## Upload a tiny document to Archon (/api/documents/upload)
 
 .PHONY: archon-rest-policy-smoke
 archon-rest-policy-smoke: ## Probe a CLI REST table with anon key (non-fatal on 401/403; fails only on 5xx/timeout)
-	@bash -lc 'url="http://127.0.0.1:65421/rest/v1"; table="$${SMOKE_REST_TABLE:-pmoves_core}"; auth=""; \
-	if [ -f pmoves/.env.local ]; then \
-	  v=$$(grep -m1 '^SUPA_REST_URL=' pmoves/.env.local | cut -d= -f2-); [ -n "$$v" ] && url="$$v"; \
-	  a=$$(grep -m1 '^SUPABASE_ANON_KEY=' pmoves/.env.local | cut -d= -f2-); [ -n "$$a" ] && auth="$$a"; \
+	@bash -lc 'runtime="$${SUPABASE_RUNTIME:-$(SUPABASE_RUNTIME)}"; url="$${SUPA_REST_URL:-$${SUPABASE_REST_URL:-}}"; table="$${SMOKE_REST_TABLE:-pmoves_core}"; auth="$${SUPABASE_ANON_KEY:-$${ANON_KEY:-}}"; \
+	stripq() { printf "%s" "$$1" | sed -e "s/^\\\"//" -e "s/\\\"$$//"; }; \
+	if [ "$$runtime" = "compose" ] && docker inspect pmoves-archon-1 >/dev/null 2>&1; then \
+	  probe_url="$${SMOKE_REST_URL:-http://supabase-postgrest:3000}"; \
+	  echo "→ REST policy probe (compose/in-network) $$probe_url/$$table via pmoves-archon-1"; \
+	  raw=$$(docker exec -e PM_URL="$$probe_url" -e PM_TABLE="$$table" -e PM_AUTH="$$auth" pmoves-archon-1 sh -lc '\''if [ -n "$$PM_AUTH" ]; then curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $$PM_AUTH" "$$PM_URL/$$PM_TABLE"; else curl -s -o /dev/null -w "%{http_code}" "$$PM_URL/$$PM_TABLE"; fi'\'' 2>/dev/null || true); \
+	  code=$$(printf "%s" "$$raw" | grep -Eo "[0-9]{3}" | tail -1); \
+	  if [ "$$code" = "200" ]; then echo "✔ $$table accessible (200)"; exit 0; \
+	  elif [ "$$code" = "401" ] || [ "$$code" = "403" ] || [ "$$code" = "404" ]; then echo "↷ $$table not accessible (policy/missing) — OK ($$code)"; exit 0; \
+	  elif [ -z "$$code" ] || echo "$$code" | grep -Eq "^0+$$" || [ "$$code" -ge 500 ]; then echo "✖ REST probe failed (HTTP $$code)"; exit 1; \
+	  else echo "↷ REST probe HTTP $$code"; exit 0; fi; \
 	fi; \
-	hdr=""; [ -n "$$auth" ] && hdr="-H Authorization: Bearer $$auth"; echo "→ REST policy probe $$url/$$table"; \
-	code=$$(curl -s -o /dev/null -w "%{http_code}" $$hdr "$$url/$$table" || true); \
+	if [ -z "$$url" ] && [ -f .supabase.status.env ]; then \
+	  v=$$(grep -m1 "^API_URL=" .supabase.status.env | cut -d= -f2-); v=$$(stripq "$$v"); [ -n "$$v" ] && url="$$v/rest/v1"; \
+	  if [ -z "$$auth" ]; then a=$$(grep -m1 "^ANON_KEY=" .supabase.status.env | cut -d= -f2-); a=$$(stripq "$$a"); [ -n "$$a" ] && auth="$$a"; fi; \
+	fi; \
+	if [ -z "$$url" ] && [ -f env.supa.runtime ]; then \
+	  v=$$(grep -m1 "^SUPA_REST_URL=" env.supa.runtime | cut -d= -f2-); v=$$(stripq "$$v"); [ -n "$$v" ] && url="$$v"; \
+	  if [ -z "$$auth" ]; then a=$$(grep -m1 "^SUPABASE_ANON_KEY=" env.supa.runtime | cut -d= -f2-); a=$$(stripq "$$a"); [ -n "$$a" ] && auth="$$a"; fi; \
+	fi; \
+	if [ -z "$$url" ] && [ -f .env.local ]; then \
+	  v=$$(grep -m1 "^SUPA_REST_URL=" .env.local | cut -d= -f2-); v=$$(stripq "$$v"); [ -n "$$v" ] && url="$$v"; \
+	  if [ -z "$$auth" ]; then a=$$(grep -m1 "^SUPABASE_ANON_KEY=" .env.local | cut -d= -f2-); a=$$(stripq "$$a"); [ -n "$$a" ] && auth="$$a"; fi; \
+	fi; \
+	if [ -n "$$url" ]; then \
+	  c=$$(curl -s -o /dev/null -w "%{http_code}" "$$url/" || true); \
+	  if echo "$$c" | grep -Eq "^0+$$"; then url=""; fi; \
+	fi; \
+	if [ -z "$$url" ]; then \
+	  for cand in "http://127.0.0.1:65421/rest/v1" "http://localhost:65421/rest/v1" "http://localhost:8000/rest/v1" "http://localhost:3000"; do \
+	    c=$$(curl -s -o /dev/null -w "%{http_code}" "$$cand/" || true); \
+	    case "$$c" in 2*|3*|4*) url="$$cand"; break;; esac; \
+	  done; \
+	fi; \
+	[ -z "$$url" ] && url="http://127.0.0.1:65421/rest/v1"; \
+	echo "→ REST policy probe $$url/$$table"; \
+	if [ -n "$$auth" ]; then \
+	  raw=$$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $$auth" "$$url/$$table" || true); \
+	else \
+	  raw=$$(curl -s -o /dev/null -w "%{http_code}" "$$url/$$table" || true); \
+	fi; \
+	code=$$(printf "%s" "$$raw" | grep -Eo "[0-9]{3}" | tail -1); \
 	if [ "$$code" = "200" ]; then echo "✔ $$table accessible (200)"; \
 	elif [ "$$code" = "401" ] || [ "$$code" = "403" ] || [ "$$code" = "404" ]; then echo "↷ $$table not accessible (policy/missing) — OK ($$code)"; \
-	elif [ -z "$$code" ] || [ "$$code" = "000" ] || [ "$$code" -ge 500 ]; then echo "✖ REST probe failed (HTTP $$code)"; exit 1; \
+	elif [ -z "$$code" ] || echo "$$code" | grep -Eq "^0+$$" || [ "$$code" -ge 500 ]; then echo "✖ REST probe failed (HTTP $$code)"; exit 1; \
 	else echo "↷ REST probe HTTP $$code"; fi'
 
 .PHONY: archon-headless-smoke
@@ -1959,6 +2207,11 @@ GHCR_DISPATCH_REF ?= $(shell git rev-parse --abbrev-ref HEAD 2>/dev/null || echo
 GHCR_NAMESPACE ?=
 GH_SECRET_ENV ?= Dev
 GH_REPO ?= $(shell gh repo view --json nameWithOwner -q .nameWithOwner 2>/dev/null || echo POWERFULMOVES/PMOVES.AI)
+GHCR_PREPUBLISH_SCRIPT ?= tools/ghcr_local_prepublish.py
+GHCR_MATRIX_FILE ?= ../.github/workflows/integrations-ghcr.matrix.json
+GHCR_PREPUBLISH_TAG_SUFFIX ?= local-smoke
+GHCR_PREPUBLISH_PLATFORM ?= linux/amd64
+GHCR_LOCAL_INTEGRATIONS ?= agent-zero archon firefly-iii jellyfin pmoves-yt deepresearch supaserch a2ui-nats-bridge session-context-worker tokenism-ui
 
 .PHONY: buildx-setup docker-login
 buildx-setup: ## Ensure docker buildx builder exists and is bootstrapped
@@ -1998,8 +2251,52 @@ build-local-supaserch: buildx-setup ## Build SupaSerch locally (amd64, no push) 
 	 docker buildx build --platform linux/amd64 -f "$$df" -t "$$img" "$$ctx" --load
 
 .PHONY: ghcr-prepublish-supaserch
-ghcr-prepublish-supaserch: build-local-supaserch ## Local-first gate before GHCR workflow dispatch
-	@echo "✔ SupaSerch local prepublish gate passed"
+ghcr-prepublish-supaserch: buildx-setup ## Local-first SupaSerch gate before GHCR workflow dispatch (build + Trivy)
+	@$(PYTHON) $(GHCR_PREPUBLISH_SCRIPT) \
+	  --matrix-file "$(GHCR_MATRIX_FILE)" \
+	  --repo-root .. \
+	  --tag-suffix "$(GHCR_PREPUBLISH_TAG_SUFFIX)" \
+	  --platform "$(GHCR_PREPUBLISH_PLATFORM)" \
+	  --integration supaserch
+
+.PHONY: ghcr-prepublish-inrepo
+ghcr-prepublish-inrepo: buildx-setup ## Local-first GHCR gate for all in-repo integration images (build + Trivy)
+	@args=""; \
+	for name in $(GHCR_LOCAL_INTEGRATIONS); do args="$$args --integration $$name"; done; \
+	$(PYTHON) $(GHCR_PREPUBLISH_SCRIPT) \
+	  --matrix-file "$(GHCR_MATRIX_FILE)" \
+	  --repo-root .. \
+	  --tag-suffix "$(GHCR_PREPUBLISH_TAG_SUFFIX)" \
+	  --platform "$(GHCR_PREPUBLISH_PLATFORM)" \
+	  $$args
+
+.PHONY: ghcr-prepublish-inrepo-build
+ghcr-prepublish-inrepo-build: buildx-setup ## Local-first GHCR build-only gate (skip Trivy)
+	@args=""; \
+	for name in $(GHCR_LOCAL_INTEGRATIONS); do args="$$args --integration $$name"; done; \
+	$(PYTHON) $(GHCR_PREPUBLISH_SCRIPT) \
+	  --matrix-file "$(GHCR_MATRIX_FILE)" \
+	  --repo-root .. \
+	  --tag-suffix "$(GHCR_PREPUBLISH_TAG_SUFFIX)" \
+	  --platform "$(GHCR_PREPUBLISH_PLATFORM)" \
+	  --skip-trivy \
+	  $$args
+
+.PHONY: ghcr-prepublish-all
+ghcr-prepublish-all: buildx-setup ## Local-first GHCR gate for full integration matrix (includes external repos)
+	@$(PYTHON) $(GHCR_PREPUBLISH_SCRIPT) \
+	  --matrix-file "$(GHCR_MATRIX_FILE)" \
+	  --repo-root .. \
+	  --tag-suffix "$(GHCR_PREPUBLISH_TAG_SUFFIX)" \
+	  --platform "$(GHCR_PREPUBLISH_PLATFORM)" \
+	  --include-external
+
+.PHONY: ghcr-dispatch-all
+ghcr-dispatch-all: ci-runners-check-strict ## Dispatch GHCR workflow for full integration matrix after local validation
+	@args="-f integration=all -f push_to_dockerhub=false"; \
+	if [ -n "$(GHCR_NAMESPACE)" ]; then args="$$args -f ghcr_namespace=$(GHCR_NAMESPACE)"; fi; \
+	gh workflow run "$(GHCR_WORKFLOW)" --repo "$(GH_REPO)" --ref "$(GHCR_DISPATCH_REF)" $$args
+	@echo "✔ Dispatched $(GHCR_WORKFLOW) for integration=all on ref $(GHCR_DISPATCH_REF)"
 
 .PHONY: ghcr-dispatch-supaserch
 ghcr-dispatch-supaserch: ci-runners-check-strict ## Dispatch GHCR workflow for SupaSerch after local prepublish gate
@@ -2007,6 +2304,40 @@ ghcr-dispatch-supaserch: ci-runners-check-strict ## Dispatch GHCR workflow for S
 	if [ -n "$(GHCR_NAMESPACE)" ]; then args="$$args -f ghcr_namespace=$(GHCR_NAMESPACE)"; fi; \
 	gh workflow run "$(GHCR_WORKFLOW)" --repo "$(GH_REPO)" --ref "$(GHCR_DISPATCH_REF)" $$args
 	@echo "✔ Dispatched $(GHCR_WORKFLOW) for supaserch on ref $(GHCR_DISPATCH_REF)"
+
+.PHONY: ghcr-build-one
+ghcr-build-one: buildx-setup ## Build a single GHCR image locally: make ghcr-build-one IMAGE=agent-zero
+	@if [ -z "$(IMAGE)" ]; then echo "Usage: make ghcr-build-one IMAGE=<name>"; exit 1; fi
+	@$(PYTHON) $(GHCR_PREPUBLISH_SCRIPT) \
+	  --matrix-file "$(GHCR_MATRIX_FILE)" \
+	  --repo-root .. \
+	  --integration "$(IMAGE)" \
+	  --skip-trivy \
+	  --platform "$(GHCR_PREPUBLISH_PLATFORM)" \
+	  --builder "$(BUILDX_BUILDER)" \
+	  --tag-suffix "$(GHCR_PREPUBLISH_TAG_SUFFIX)"
+
+.PHONY: ghcr-prepublish-one
+ghcr-prepublish-one: buildx-setup ## Build + Trivy gate a single image: make ghcr-prepublish-one IMAGE=agent-zero
+	@if [ -z "$(IMAGE)" ]; then echo "Usage: make ghcr-prepublish-one IMAGE=<name>"; exit 1; fi
+	@$(PYTHON) $(GHCR_PREPUBLISH_SCRIPT) \
+	  --matrix-file "$(GHCR_MATRIX_FILE)" \
+	  --repo-root .. \
+	  --integration "$(IMAGE)" \
+	  --platform "$(GHCR_PREPUBLISH_PLATFORM)" \
+	  --builder "$(BUILDX_BUILDER)" \
+	  --tag-suffix "$(GHCR_PREPUBLISH_TAG_SUFFIX)"
+
+.PHONY: ghcr-dispatch-one
+ghcr-dispatch-one: ci-runners-check-strict ## Dispatch GHCR workflow for a single image: make ghcr-dispatch-one IMAGE=agent-zero
+	@if [ -z "$(IMAGE)" ]; then echo "Usage: make ghcr-dispatch-one IMAGE=<name>"; exit 1; fi
+	@args="-f integration=$(IMAGE) -f push_to_dockerhub=false"; \
+	if [ -n "$(GHCR_NAMESPACE)" ]; then args="$$args -f ghcr_namespace=$(GHCR_NAMESPACE)"; fi; \
+	gh workflow run "$(GHCR_WORKFLOW)" --repo "$(GH_REPO)" --ref "$(GHCR_DISPATCH_REF)" $$args
+
+.PHONY: ghcr-list
+ghcr-list: ## List all images in the integrations-ghcr matrix
+	@$(PYTHON) -c "import json,pathlib;[print(e['name']) for e in json.loads(pathlib.Path('$(GHCR_MATRIX_FILE)').read_text())]"
 
 .PHONY: deepresearch-smoke
 deepresearch-smoke: ## Publish a sample DeepResearch request and wait for a result (requires worker running)
@@ -2146,11 +2477,21 @@ vibevoice-smoke: ## Check VibeVoice realtime /config (requires VibeVoice running
 ps:
 	@$(DC) ps
 
+.PHONY: compose
+compose: ensure-env-shared ## Run docker compose with PMOVES env layering. Usage: make compose ARGS="--profile agents up -d nats agent-zero"
+	@if [ -z "$(strip $(ARGS))" ]; then \
+		echo "Usage: make compose ARGS=\"<docker compose args>\""; \
+		echo "Example: make compose ARGS=\"--profile agents up -d nats agent-zero\""; \
+		exit 1; \
+	fi
+	@$(DC) $(ARGS)
+
 # -------- External stacks (forks / published images) ----------
 
 .PHONY: up-external
 up-external: ensure-env-shared ## Start external integration services (Wger, Firefly, Open Notebook, Jellyfin)
 	@echo "→ Starting external stacks (Wger, Firefly, Open Notebook, Jellyfin)..."
+	@docker network inspect pmoves_external >/dev/null 2>&1 || docker network create --driver bridge pmoves_external
 	@$(EXTERNAL_DC) up -d
 	@echo "✔ External stacks up"
 
@@ -2206,7 +2547,7 @@ jellyfin-parity-audit-strict: ## Strict parity audit (fails on WARN/FAIL)
 
 .PHONY: jellyfin-verify jellyfin-smoke yt-jellyfin-smoke
 jellyfin-verify: ## Verify Jellyfin bridge + overlay runtime health and refresh path
-	@$(PYTHON) tools/jellyfin_verify.py
+	@$(PYTHON) tools/jellyfin_verify.py $(ARGS)
 
 jellyfin-smoke: jellyfin-verify ## Alias smoke target for Jellyfin verification
 	@true
@@ -2267,3 +2608,16 @@ structure-enforce: ## Enforce structural best practices
 .PHONY: structure-enforce-strict
 structure-enforce-strict: ## Enforce structural best practices (strict mode, fails on P1/P2)
 	@$(PYTHON) tools/structure_enforcer.py --strict
+
+# Living Document Freshness Automation
+.PHONY: docs-reconcile
+docs-reconcile: ## Reconcile living document metadata (dashboard + P2 tracker)
+	@$(PYTHON) tools/docs_reconcile.py --update $(ARGS)
+
+.PHONY: docs-reconcile-check
+docs-reconcile-check: ## Check living document freshness (read-only, CI-safe)
+	@$(PYTHON) tools/docs_reconcile.py --check $(ARGS)
+
+.PHONY: docs-reconcile-json
+docs-reconcile-json: ## Living document freshness report (JSON output)
+	@$(PYTHON) tools/docs_reconcile.py --check --json $(ARGS)

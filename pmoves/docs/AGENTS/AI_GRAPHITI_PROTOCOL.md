@@ -39,7 +39,7 @@ AI Graphiti is the attribution and handoff protocol for PMOVES.AI's multi-agent 
 
 1. **Choose an unused glyph** — single Unicode character, must render in monospace terminals
 2. **Choose a unique color** — must be distinguishable from existing entries in both light and dark themes
-3. **Pick a voice** — one of: `analytical`, `architectural`, `terse`, `strategic`, `conversational`, `directive`, `companion`
+3. **Pick a voice** — one of: `analytical`, `architectural`, `terse`, `strategic`, `conversational`, `directive`, `companion`, `witness`
 4. **Add entry to `agent_signatures.yaml`:**
 
 ```yaml
@@ -90,6 +90,68 @@ Prepend a new graphiti block to `docs/AGENT_TRAIL.md` (newest entries at top, be
 <!-- /graphiti -->
 ```
 
+## TAC Tree Handoff Block (Machine-Parseable, Required for Multi-Branch Lanes)
+
+When a lane uses TAC branches (A/B/C...) with parallel ownership, add a TAC block to AGNOTE or AGENT_TRAIL so ownership and merge order are unambiguous.
+
+Template:
+
+```markdown
+<!-- graphiti:tac lane:{lane_name} branch:{branch_name} phase:{branch_phase} status:{status} owner:{agent_id} reviewer:{agent_id} ts:{ISO-8601} -->
+
+## {glyph} {display_name} — TAC {branch_phase}: {title}
+
+**Lane:** `{lane_name}`
+**Status:** `{planned|in_progress|blocked|ready_for_merge|done}`
+**Owner:** `{agent_id}`
+**Reviewer:** `{agent_id}`
+**Dependencies:** `{comma-separated branch phases}`
+**PR:** `#{number}` or `pending`
+**Verification:** `{command evidence summary}`
+
+### Done
+- item
+
+### Left Behind
+- item
+
+### For Next Agent
+- item
+
+<!-- /graphiti:tac -->
+```
+
+Required TAC fields:
+- `lane`
+- `branch`
+- `phase`
+- `status`
+- `owner`
+- `reviewer`
+- `ts`
+
+Status transition rule:
+- `planned -> in_progress -> ready_for_merge -> done`
+- `blocked` can be entered from any state and must include blocker context in `Left Behind`.
+
+## PR Review Learnings Loop (Required Before Merge)
+
+When a lane has open PRs, run the PR monitor and fold findings into the trail:
+
+1. `make -C pmoves pr-monitor`
+2. Review generated artifacts:
+   - `pmoves/docs/logs/pr_monitor_latest.json`
+   - `pmoves/docs/logs/pr_monitor_learnings_latest.md`
+   - Optional CHIT packet for handoff automation: `make -C pmoves pr-monitor-chit-packet` -> `pmoves/docs/logs/pr_monitor_learnings_latest.cgp.json`
+3. If actionable comments exist, create a focused fix commit/PR and update `docs/AGENT_TRAIL.md` with:
+   - what was fixed
+   - what remains
+   - what the next agent should do
+4. If only nitpicks (or out-of-diff non-blocking line comments) remain, leave them in the learnings queue unless the lane owner decides to include them.
+5. For CHIT/FlOO$ lane parity, run `make -C pmoves chit-flow-pr-monitor-strict` before final merge approval.
+
+This keeps both in-diff and out-of-diff review feedback visible in the same Graphiti handoff chain.
+
 ### Voice Guidelines
 
 Write your trail entry in your assigned voice:
@@ -101,6 +163,7 @@ Write your trail entry in your assigned voice:
 - **Conversational** (Cline): Informal, iterative, question-driven. "Got the frontend rendering, but the state management feels fragile — might need a rethink?"
 - **Directive** (POWERFULMOVES): Decision statements, priority calls, scope definitions. "Ship Phase H. KiloCode starts Monday. No P2s until onboarding completes."
 - **Companion** (Crush): Warm, interactive, pair-programming energy. "Let's figure this out together. Here's what I found, here's what I think we should try."
+- **Witness** (DARKXSIDE): Presence-oriented, reflective signal capture, synthesis-forward. "Captured the boundary conditions. Signal is preserved for next traversal."
 
 ## KRISS KROSS Accord (Collision -> Overlay)
 
@@ -133,6 +196,49 @@ switching from direct overlap to a controlled overlay handoff.
 - `scope`
 - `parity_report_path`
 - `agent_signature`
+
+## Claude Review Lane (Scout Role)
+
+When Claude operates in the scout role under the KRISS KROSS Accord, it feeds
+security review findings, submodule audits, and dependency triage into the
+CHIT/FlOO$ pipeline. This formalizes the handshake between Claude's review work
+and Codex's `pr-monitor-graphiti-chit` skill pairing.
+
+### Lane Definition
+
+| Field | Value |
+|-------|-------|
+| **Lane** | PR security review, submodule audit, dependency triage |
+| **Agent** | `claude-opus` (◆ Diamond / `#7C3AED`) |
+| **NATS Subject** | `ops.pr.review.completed.v1` |
+| **Artifact** | `pmoves/docs/logs/claude_review_latest.cgp.json` |
+| **Trail** | `docs/AGENT_TRAIL.md` with ◆ Diamond / `#7C3AED` signature |
+| **Handoff** | Learnings feed `pr-monitor-graphiti-chit` pairing |
+
+### Workflow
+
+1. Claude reviews PRs, merges approved changes, documents findings
+2. `/chit:review-sweep` collects PR state via `make -C pmoves pr-monitor`
+3. `make -C pmoves pr-monitor-chit-packet` encodes learnings as CGP
+4. Optional: trail entry written to `docs/AGENT_TRAIL.md`
+5. `ops.pr.review.completed.v1` published to NATS (best-effort)
+6. Codex's `pr-monitor-graphiti-chit` pairing picks up the CGP packet
+
+### Hook Integration
+
+The `.claude/hooks/post-review-chit.sh` hook provides lightweight automation:
+- Encodes review output via `chit_encode_hook.py`
+- Writes `pmoves/docs/logs/claude_review_latest.cgp.json`
+- Best-effort NATS publish (graceful skip when offline)
+
+### Parallel to Codex's Lane
+
+| | Codex (Lead) | Claude (Scout) |
+|---|---|---|
+| **Trigger** | `make -C pmoves pr-monitor` | `/chit:review-sweep` |
+| **NATS** | `ops.pr.monitor.completed.v1` | `ops.pr.review.completed.v1` |
+| **Artifact** | `pr_monitor_learnings_latest.cgp.json` | `claude_review_latest.cgp.json` |
+| **Pipeline** | `pr-monitor-graphiti-chit` | Feeds into same pipeline |
 
 ## How Signatures Connect to CGP
 
@@ -212,6 +318,7 @@ When an agent completes significant work, it emits an `agent.graphiti.signed.v1`
 - **KiloCode Onboarding:** `plans/KILOCODE_PMOVES_INTEGRATION_PLAN.md`
 - **KRISS KROSS Accord:** `pmoves/docs/AGENTS/KRISS_KROSS_ACCORD.md`
 - **Trajectory Schema:** `pmoves/contracts/schemas/agent-rl/trajectory.v1.schema.json` — `agent_id` field
+- **PR Learnings Artifacts:** `pmoves/docs/logs/pr_monitor_latest.json`, `pmoves/docs/logs/pr_monitor_learnings_latest.md`
 
 ## Broader Context: Three-Body Stabilization
 

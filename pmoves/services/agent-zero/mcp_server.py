@@ -10,7 +10,30 @@ from typing import Any, Dict, List, Optional
 import requests
 import yaml
 
-from pmoves.chit import CGP_SPEC_VERSION
+def _bootstrap_import_paths() -> None:
+    """Ensure PMOVES service modules resolve when PYTHONPATH is not preset."""
+    try:
+        here = Path(__file__).resolve()
+        candidates = (
+            here.parents[2],  # /app
+            here.parents[1],  # /app/services
+            here.parent,      # /app/services/agent-zero
+        )
+        for path in candidates:
+            text = str(path)
+            if text not in sys.path:
+                sys.path.insert(0, text)
+    except Exception:
+        pass
+
+
+_bootstrap_import_paths()
+
+try:
+    from pmoves.chit import CGP_SPEC_VERSION
+except ModuleNotFoundError:
+    # Container fallback: allow direct import when pmoves package wrappers are unavailable.
+    from chit import CGP_SPEC_VERSION
 from services.common.env import get_secret
 from services.common.forms import (
     DEFAULT_AGENT_FORM,
@@ -32,6 +55,11 @@ NOTEBOOK_API_TOKEN = os.environ.get(
 )
 NOTEBOOK_WORKSPACE = os.environ.get(
     "OPEN_NOTEBOOK_WORKSPACE", os.environ.get("NOTEBOOK_WORKSPACE")
+)
+NOTEBOOK_SEARCH_ENDPOINTS = (
+    "/api/search",  # Open Notebook >= 1.8
+    "/search",  # Upstream docs path alias
+    "/api/v1/notebooks/search",  # Legacy endpoint
 )
 
 # E2B Configuration
@@ -160,27 +188,71 @@ def notebook_search(payload: Dict[str, Any]) -> Dict[str, Any]:
     if not query and not filters:
         raise ValueError("Provide at least a 'query' or filter (e.g. 'notebook_id')")
 
-    request_body: Dict[str, Any] = {"limit": limit}
-    if query:
-        request_body["query"] = query
-    if filters:
-        request_body["filters"] = filters
-
     headers = {
         "Authorization": f"Bearer {NOTEBOOK_API_TOKEN}",
         "Accept": "application/json",
     }
 
-    response = requests.post(
-        f"{NOTEBOOK_API_URL.rstrip('/')}/api/v1/notebooks/search",
-        json=request_body,
-        headers=headers,
-        timeout=20,
-    )
-    response.raise_for_status()
-    data = response.json()
+    modern_body: Dict[str, Any] = {"query": query, "limit": limit}
+    legacy_body: Dict[str, Any] = {"limit": limit}
+    if query:
+        legacy_body["query"] = query
+    if filters:
+        modern_body["filters"] = filters
+        legacy_body["filters"] = filters
 
-    results = data.get("results") or data.get("items") or []
+    # Open Notebook 1.8 moved search to /api/search. Keep legacy fallback for
+    # older deployments where /api/v1/notebooks/search still exists.
+    attempts: List[tuple[str, Dict[str, Any]]] = []
+    if query or filters:
+        attempts.append((NOTEBOOK_SEARCH_ENDPOINTS[0], modern_body))
+        attempts.append((NOTEBOOK_SEARCH_ENDPOINTS[1], modern_body))
+    attempts.append((NOTEBOOK_SEARCH_ENDPOINTS[2], legacy_body))
+
+    data: Optional[Dict[str, Any]] = None
+    selected_endpoint: Optional[str] = None
+    last_404 = False
+    for endpoint, body in attempts:
+        try:
+            response = requests.post(
+                f"{NOTEBOOK_API_URL.rstrip('/')}{endpoint}",
+                json=body,
+                headers=headers,
+                timeout=20,
+            )
+        except requests.exceptions.RequestException as exc:
+            raise ValueError(f"Open Notebook request failed: {exc}") from None
+
+        if response.status_code == 404:
+            last_404 = True
+            continue
+        if response.status_code in (401, 403):
+            raise ValueError(
+                "Open Notebook authentication failed; check OPEN_NOTEBOOK_API_TOKEN / OPEN_NOTEBOOK_PASSWORD alignment."
+            ) from None
+        try:
+            response.raise_for_status()
+        except requests.exceptions.HTTPError:
+            detail = response.text.strip() or f"status {response.status_code}"
+            raise ValueError(f"Open Notebook search failed: {detail}") from None
+        try:
+            parsed = response.json()
+        except ValueError:
+            raise ValueError("Open Notebook returned non-JSON search response") from None
+        if not isinstance(parsed, dict):
+            raise ValueError("Open Notebook search response must be a JSON object") from None
+        data = parsed
+        selected_endpoint = endpoint
+        break
+
+    if data is None:
+        if last_404:
+            raise ValueError(
+                "Open Notebook search endpoint not found; expected /api/search (v1.8+) or /api/v1/notebooks/search (legacy)."
+            ) from None
+        raise ValueError("Open Notebook search failed") from None
+
+    results = data.get("data") or data.get("items") or data.get("results") or []
     curated: List[Dict[str, Any]] = []
     for item in results:
         note: Dict[str, Any]
@@ -202,7 +274,9 @@ def notebook_search(payload: Dict[str, Any]) -> Dict[str, Any]:
             }
         )
 
-    total = data.get("total")
+    total = data.get("total_count")
+    if total is None:
+        total = data.get("total")
     if total is None:
         total = len(results)
 
@@ -212,6 +286,7 @@ def notebook_search(payload: Dict[str, Any]) -> Dict[str, Any]:
         "filters": filters,
         "total": total,
         "notes": curated,
+        "endpoint": selected_endpoint,
         "next_cursor": data.get("next_cursor") or data.get("next"),
     }
 
@@ -594,4 +669,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
