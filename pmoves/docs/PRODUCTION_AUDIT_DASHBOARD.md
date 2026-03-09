@@ -344,7 +344,7 @@ Three CI pipelines build Docker images. This matrix is the single cross-referenc
 | Quantitative snapshot timestamp | 2026-03-09 (live GitHub + local smoke/model-readiness/GPU/monitoring snapshot) |
 | Total tracked items | 24 |
 | Resolved | 24 (+1 since last update) |
-| Active blockers | 0 |
+| Active blockers (release-blocking) | 0 |
 | Critical | 0 |
 | High | 0 |
 | Medium | 0 |
@@ -506,7 +506,7 @@ These are tracked as release gates and should be closed with command evidence be
 ## CodeQL Alert Triage (2026-02-18 Baseline → 2026-02-28 Update)
 
 **Historical section:** this table preserves the 2026-02-28 triage baseline for traceability.
-**Live status on 2026-03-04:** CodeQL open alerts are now **0** (all prior findings triaged/dismissed/fixed).
+**Live status on 2026-03-09:** CodeQL open alerts are **0** (live GitHub API; all prior findings triaged/dismissed/fixed).
 
 | Group | Count | Severity | Rule | Files | Remediation | Status |
 |-------|-------|----------|------|-------|-------------|--------|
@@ -526,7 +526,7 @@ These are tracked as release gates and should be closed with command evidence be
 ## Dependabot Alert Triage (2026-02-18 Baseline → 2026-02-28 Update)
 
 **Historical section:** this table preserves the 2026-02-28 triage baseline for traceability.
-**Live status on 2026-03-04:** Dependabot open alerts are **1 medium**.
+**Live status on 2026-03-09:** Dependabot open alerts are **0** (live GitHub API; prior medium alert resolved).
 
 | Alert | Severity | Package | Manifest | Assessment |
 |-------|----------|---------|----------|------------|
