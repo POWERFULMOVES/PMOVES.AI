@@ -120,6 +120,7 @@ jobs:
           exit-code: '0'  # Don't fail initially; set to '1' after baseline established
           severity: 'HIGH,CRITICAL'
           ignore-unfixed: true
+          timeout: '10m0s'
 
       - name: Upload Trivy results for Ollama CUDA
         if: github.event_name != 'pull_request'
@@ -152,6 +153,7 @@ jobs:
           exit-code: '0'
           severity: 'HIGH,CRITICAL'
           ignore-unfixed: true
+          timeout: '10m0s'
 
       - name: Upload Trivy results for Hi-RAG GPU
         if: github.event_name != 'pull_request'
@@ -279,6 +281,7 @@ jobs:
           severity: 'HIGH,CRITICAL'
           ignore-unfixed: true
           vuln-type: 'os,library'
+          timeout: '10m0s'
 
       - name: Upload Trivy results for ${{ matrix.service.name }}
         if: github.event_name != 'pull_request'
