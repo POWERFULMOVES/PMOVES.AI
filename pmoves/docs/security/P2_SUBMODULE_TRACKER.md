@@ -4,11 +4,12 @@ Authoritative tracker for P2 security issues in PMOVES.AI submodules that requir
 
 **All P1 issues were fixed in Phase H (2026-02-17).** This tracker covers remaining P2 items.
 
-Last updated: 2026-03-09
+Last updated: 2026-03-09 (reconciliation sweep — all 7 Phase C P1 submodule findings verified fixed)
 
 ## Open Issues
 
 P2 triage sweep (2026-03-09) verified all 4 production-blocking items are now fixed. 11 open items remain (Tier 2/3 only).
+Reconciliation sweep (2026-03-09) verified all 7 reported P1 submodule issues from Phase C audit (2026-02-16) are already resolved on `PMOVES.AI-Edition-Hardened` branches. **0 P1 items remain open.**
 
 ### Production-blocking (fix before GA) — ALL RESOLVED
 
@@ -56,9 +57,16 @@ Each P2 issue requires:
 
 ## Closed Issues (Reference)
 
-| # | Submodule | Issue | Closed | PR |
+| # | Submodule | Issue | Closed | PR / Evidence |
 |---|-----------|-------|--------|-----|
 | - | All 8 submodules | 10 P1 issues | 2026-02-17 | Phase H batch |
+| P1-1 | BoTZ | JWT fail-open (`HAS_JOSE` branch returns True) | 2026-03-09 | Verified `auth.py:57-67` raises `HTTPException` on missing jose |
+| P1-2 | BoTZ | MCP Gateway unauthenticated GET endpoints (`/servers`, `/tools`) | 2026-03-09 | Verified `gateway.py:496-528` calls `_require_auth()` |
+| P1-3 | DoX | Hardcoded Supabase credentials in `docker-compose.supabase.yml` | 2026-03-09 | Verified uses `${VAR:?required}` pattern — no hardcoded creds |
+| P1-4 | DoX | DELETE `/cipher/memory` silent no-op | 2026-03-09 | Verified `cipher.py:77-99` returns 501 Not Implemented |
+| P1-5 | ToKenism-Multi | NATS client unauthenticated default URL | 2026-03-09 | Verified `nats-client.ts:114` defaults to `nats://nats:pmoves@...` |
+| P1-6 | ToKenism-Multi | MinIO default credentials in env tiers | 2026-03-09 | Verified `env.tier-*` use `${VAR:?required}` pattern |
+| P1-7 | transcribe-and-fetch | Hardcoded admin passwords in `integrate_backend.py` | 2026-03-09 | Verified uses `CHANGE_ME` placeholders (not real creds) |
 | 1 | BoTZ | MCP Gateway unauthenticated GET | 2026-03-09 | Verified fixed in submodule (`_require_auth()` on GET endpoints) |
 | 4 | Open-Notebook | Auth middleware fail-open | 2026-03-09 | Verified fixed in submodule (fail-closed HTTPException 500) |
 | 7 | PMOVES.YT | Query injection in URL params | 2026-03-09 | `_SAFE_VID_RE` validation added to Hi-RAG search path |
