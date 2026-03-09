@@ -153,8 +153,8 @@ COPY services/archon/requirements.txt services/archon/requirements.lock ./
 RUN pip install --upgrade pip "setuptools==82.0.0" "wheel==0.46.3" \
     && pip install -r requirements.txt \
     && pip install --no-cache-dir \
-       "crawl4ai>=0.8.0" \
-       "langchain-core>=1.2.5" \
+       "crawl4ai==0.8.0" \
+       "langchain-core==1.2.5" \
     # ^^^ CVE overrides: Crawl4AI RCE (CVE-2026-26216), langchain-core RCE (CVE-2025-68664)
 
 # Pre-install Playwright browsers (Chromium) so crawl workflows succeed out of the box.

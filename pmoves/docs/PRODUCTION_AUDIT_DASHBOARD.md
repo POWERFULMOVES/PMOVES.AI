@@ -23,7 +23,7 @@
   - transcribe-and-fetch: Hardcoded passwords → **FIXED** (`integrate_backend.py` uses `CHANGE_ME` placeholders)
   - **Result: 0 P1 items remain open across all submodules.** P2 tracker and dashboard fully reconciled.
   - Stray `2.6.3` artifact deleted from repo root (was untracked).
-- **P2 Tier 1 triage sweep** — 3 of 4 production-blocking P2 items verified FIXED in submodules:
+- **P2 Tier 1 triage sweep** — 4 of 4 production-blocking P2 items verified FIXED in submodules:
   - P2 #4 Open-Notebook: Auth fail-open → **FIXED** (fail-closed `HTTPException 500` at `auth.py:32-36`)
   - P2 #1 BoTZ: MCP Gateway unauthenticated GET → **FIXED** (`_require_auth()` on `/servers`, `/tools`)
   - P2 #8 DoX: NATS no auth → **FIXED** (auth block added to `nats.conf`; `no_tls: true` is documented dev-only)
@@ -35,8 +35,8 @@
   - `mock-server.js`: unvalidated dynamic property → guarded with `Object.hasOwn()`
 - **Dependabot alerts** — 0 open
 - **Trivy CVE overrides** — added pip upgrade steps in Dockerfiles:
-  - `archon`: `crawl4ai>=0.8.0` (CVE-2026-26216 RCE), `langchain-core>=1.2.5` (CVE-2025-68664 RCE)
-  - `deepresearch`: `ray>=2.52.0` (CVE-2025-62593 RCE), `vllm>=0.14.1` (CVE-2026-22778 RCE)
+  - `archon`: `crawl4ai==0.8.0` (CVE-2026-26216 RCE), `langchain-core==1.2.5` (CVE-2025-68664 RCE)
+  - `deepresearch`: `ray==2.52.0` (CVE-2025-62593 RCE), `vllm==0.14.1` (CVE-2026-22778 RCE)
 - **AB-9 UPDATE** — All 4 self-hosted runners offline as of Mar 9 investigation. Previous "3/4 online" claim was stale. Root causes: `ai-lab-runner` (WSL2, no systemd service installed — process stopped), `ai-lab-win` (no Windows service — process stopped), `hotfix-runner` + `vps-runner` (remote machines, not accessible from dev workstation). WSL2 systemd now enabled (`/etc/wsl.conf`). Local runners require manual restart via `svc.sh install` (WSL) or interactive `run.cmd` (Windows). GHCR builds targeting `[self-hosted, Linux, X64, vps]` remain blocked until VPS runner is restored.
 - **Dockerfile audit fixes (4 images):**
   - `pmoves-archon`: Renamed `MCP_CREDENTIALS_PATH` → `MCP_CONFIG_PATH` to eliminate BuildKit `SecretsUsedInArgOrEnv` warning
@@ -45,7 +45,7 @@
   - `pmoves-llama-throughput-lab`: Added USER directive (uid 65532) + nginx permission fixup for non-root
 - **PRs #834/#835 merged** — build-gate Phase 2 (`build_gate.py` + `build-gate.mk`) and hotfix runner lane with `subprocess.TimeoutExpired` handling
 - **Dependabot alerts**: 0 open (was 1 medium — now resolved)
-- **P2 tracker refreshed** — 15 items remain open, 1 previously closed (HiRAG stale). No P2s fixed by intervening merges. Tracker date updated to 2026-03-09. Re-prioritized into 3 tiers: 4 production-blocking (P2-HIGH/MED), 6 tracked improvements, 5 cosmetic/env syntax.
+- **P2 tracker refreshed** — 15 items remain open (pre-triage; Tier 1 sweep later closed 4 → 11 open), 1 previously closed (HiRAG stale). No P2s fixed by intervening merges. Tracker date updated to 2026-03-09. Re-prioritized into 3 tiers: 4 production-blocking (P2-HIGH/MED), 6 tracked improvements, 5 cosmetic/env syntax.
 - **Trivy failure triage** (from 2026-03-05 sweep):
   - `agent-zero`: Scan timeout at 5m — infra issue, not vulnerability. Increase timeout to 10m or use `--skip-java-db` to reduce scan time. **Not a blocker.**
   - `archon`: 19 HIGH + 4 CRITICAL — key items: Crawl4AI RCE (CVE-2026-26216, upgrade to 0.8.0), langchain-core RCE (CVE-2025-68664, upgrade to 1.2.5), pydantic-ai info-disclosure. Upstream pins needed.
@@ -114,7 +114,7 @@
 | VPS compose override | VALIDATED | CPU-only resource limits, GPU services disabled via `gpu-only` profile |
 | `.env.vps` wiring | FIXED | `--env-file .env.vps` added to compose commands in bootstrap and deploy scripts |
 | Hostinger Terraform provider | PINNED | `0.1.22` (was `~> 0.1`) |
-| Docker Bench Security | UNBLOCKED | AB-9 resolved — self-hosted runners available, schedule execution |
+| Docker Bench Security | BLOCKED | AB-9 REGRESSED — all 4 self-hosted runners offline, requires manual service install |
 
 ---
 
@@ -381,7 +381,7 @@ Three CI pipelines build Docker images. This matrix is the single cross-referenc
 | CodeQL alerts (open) | **0 open** (live GitHub API on 2026-03-09) |
 | Dependabot alerts | **0 open** (live GitHub API on 2026-03-09) |
 | Open PRs | **0** |
-| CI queue | DEGRADED — 1/4 self-hosted runners online (`ai-lab-win`); WSL runner needs manual start; VPS+hotfix remote; hosted (ubuntu-latest) workflows healthy |
+| CI queue | DEGRADED — 0/4 self-hosted runners online (all offline as of Mar 9); WSL runner needs `svc.sh install`; Windows runner needs `svc.cmd`; VPS+hotfix remote; hosted (ubuntu-latest) workflows healthy |
 
 ### Runtime Verification Snapshot (2026-03-09)
 
@@ -511,8 +511,8 @@ Evidence log: `pmoves/docs/evidence/audit-validation-2026-02-20-production-runti
 
 ### Blocker Detail
 
-**AB-9: Runner Queue Deadlock — RESOLVED 2026-03-09**
-Concurrency/path throttles from PRs #832/#834/#835 resolved the queue starvation. 3/4 self-hosted runners confirmed online: `pmoves-ai-lab-runner` (idle), `pmoves-hotfix-runner` (idle), `pmoves-vps-runner` (busy). Only `pmoves-ai-lab-win` (Windows) remains offline — non-blocking for Linux CI. CodeQL Advanced runs completing in ~4min with no queue buildup. Migration of 10 lightweight workflows to `ubuntu-latest` freed self-hosted capacity for builds that need hardware.
+**AB-9: Runner Queue Deadlock — REGRESSED 2026-03-09**
+Previous "3/4 online" claim was stale (from throttle-only fix in PRs #832/#834/#835). Mar 9 investigation found all 4 runners offline: `ai-lab-runner` (WSL2, no systemd service — process stopped), `ai-lab-win` (no Windows service — process stopped), `hotfix-runner` + `vps-runner` (remote machines, not accessible from dev workstation). WSL2 systemd now enabled (`/etc/wsl.conf`). Local runners require manual restart via `svc.sh install` (WSL) or interactive `run.cmd` (Windows). GHCR builds targeting `[self-hosted, Linux, X64, vps]` remain blocked until VPS runner is restored. Hosted workflows (ubuntu-latest) unaffected. Migration of 10 lightweight workflows to `ubuntu-latest` freed self-hosted capacity for builds that need hardware.
 
 **AB-10: Commit-History Divergence Noise**
 `main` and `PMOVES.AI-Edition-Hardened` are currently content-parity clean (no file delta), but commit graphs diverge due squash promotion + back-sync merges. Treat this as an expected history artifact unless file-level diff appears.

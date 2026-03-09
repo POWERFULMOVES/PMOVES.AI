@@ -1,6 +1,8 @@
+> **Historical** — changes described below were implemented in PR #838 (2026-03-09).
+
 # Phase 2 Task 2.2: BuildKit Secrets Migration Plan
 
-**Status:** Analysis complete - Ready for TAC implementation
+**Status:** Implemented (PR #838)
 **Priority:** HIGH (Prevents secret leakage in build logs and image layers)
 **Effort:** 2-3 hours with TAC
 **Date:** 2025-12-06

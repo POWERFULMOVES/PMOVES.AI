@@ -15,8 +15,8 @@ RUN pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir -r /tmp/requirements.txt \
     && pip install --no-cache-dir -r /opt/DeepResearch/requirements.txt \
     && pip install --no-cache-dir \
-       "ray>=2.52.0" \
-       "vllm>=0.14.1" \
+       "ray==2.52.0" \
+       "vllm==0.14.1" \
     # ^^^ CVE overrides: Ray RCE (CVE-2025-62593), vLLM RCE (CVE-2026-22778)
 COPY services/deepresearch /app/services/deepresearch
 COPY services/common /app/services/common
