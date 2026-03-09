@@ -10,6 +10,11 @@ PR: https://github.com/POWERFULMOVES/PMOVES.AI/pull/483
 import pytest
 import httpx
 
+from _smoke_helpers import PMOVES_DIR, grep_file, grep_numbered
+
+
+COMPOSE = PMOVES_DIR / "docker-compose.yml"
+
 
 @pytest.mark.smoke
 async def test_tensorzero_uses_internal_port(http_client: httpx.AsyncClient) -> None:
@@ -39,22 +44,13 @@ async def test_agent_zero_connects_to_tensorzero(http_client: httpx.AsyncClient)
 @pytest.mark.smoke
 def test_tensorzero_port_configuration() -> None:
     """Verify TensorZero port configuration in docker-compose.yml uses internal port."""
-    import subprocess
-    import re
+    matches = grep_numbered(COMPOSE, r"TENSORZERO_URL", fixed=True)
 
-    # Read docker-compose.yml and check TensorZero URL configurations
-    result = subprocess.run(
-        ["grep", "-n", "TENSORZERO_URL", "docker-compose.yml"],
-        capture_output=True,
-        text=True,
-        cwd="/home/pmoves/PMOVES.AI/pmoves",
-    )
-
-    if result.returncode != 0:
+    if not matches:
         pytest.skip("docker-compose.yml not accessible")
 
     # All TENSORZERO_URL references should use port 3000 (internal), not 3030 (host)
-    for line in result.stdout.splitlines():
+    for line in matches:
         # Port 3030 should only appear in port mappings, not in service URLs
         if "TENSORZERO_URL" in line and ":3030" in line:
             pytest.fail(
@@ -66,20 +62,12 @@ def test_tensorzero_port_configuration() -> None:
 @pytest.mark.smoke
 def test_no_legacy_tensorzero_port_3030_in_urls() -> None:
     """Scan for any remaining hardcoded port 3030 references in service configurations."""
-    import subprocess
+    matches = grep_numbered(COMPOSE, r":3030", fixed=True)
 
-    # Check for port 3030 in environment variable sections (excluding port mappings)
-    result = subprocess.run(
-        ["grep", "-n", ":3030", "docker-compose.yml"],
-        capture_output=True,
-        text=True,
-        cwd="/home/pmoves/PMOVES.AI/pmoves",
-    )
-
-    if result.returncode != 0:
+    if not matches:
         return  # No matches found - test passes
 
-    for line in result.stdout.splitlines():
+    for line in matches:
         # Port 3030 is only valid in port mappings (e.g., "3030:3000")
         # It should NOT appear in environment variable values
         if "environment:" in line or (

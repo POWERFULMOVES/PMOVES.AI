@@ -319,7 +319,9 @@ run_smoke_tests() {
         fi
 
         log_verbose "Running $test_file..."
-        if python3 -m pytest "$test_file" -v --tb=short -q 2>&1 | tee -a /tmp/smoke_test.log; then
+        local log_file
+        log_file=$(mktemp "${TMPDIR:-/tmp}/smoke_test_XXXXXX.log")
+        if python3 -m pytest "$test_file" -v --tb=short -q 2>&1 | tee -a "$log_file"; then
             log_success "Smoke test passed: $test_file"
         else
             log_warning "Smoke test failed: $test_file (may be expected if services not running)"
