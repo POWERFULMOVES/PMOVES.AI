@@ -3,7 +3,7 @@
 > **Single source of truth** for PMOVES.AI production readiness.
 > Supersedes all individual audit documents accumulated Feb 7 -- Feb 18, 2026.
 
-**Last Updated:** 2026-03-09 (P2 triage sweep + query injection fix)
+**Last Updated:** 2026-03-09 (tracker reconciliation — 0 P1 submodule issues remain)
 **Branch:** `PMOVES.AI-Edition-Hardened` (production release lane)
 **Commit:** `ff9f5da1`
 **Consolidated From:** 27 audit documents
@@ -13,6 +13,16 @@
 
 ## Latest Changes (Mar 9, 2026)
 
+- **Tracker reconciliation sweep** — verified all 7 reported P1 submodule issues (from Phase C audit, 2026-02-16) are already fixed on `PMOVES.AI-Edition-Hardened` branches:
+  - BoTZ: JWT `HAS_JOSE` fail-open → **FIXED** (`auth.py:57-67` raises HTTPException)
+  - BoTZ: MCP Gateway unauthenticated GET → **FIXED** (`gateway.py:496-528` calls `_require_auth()`)
+  - DoX: Hardcoded Supabase creds → **FIXED** (`docker-compose.supabase.yml` uses `${VAR:?required}`)
+  - DoX: DELETE `/cipher/memory` silent no-op → **FIXED** (`cipher.py:77-99` returns 501)
+  - ToKenism-Multi: NATS unauthenticated default → **FIXED** (`nats-client.ts:114` uses authenticated URL)
+  - ToKenism-Multi: MinIO default creds → **FIXED** (`env.tier-*` use `${VAR:?required}`)
+  - transcribe-and-fetch: Hardcoded passwords → **FIXED** (`integrate_backend.py` uses `CHANGE_ME` placeholders)
+  - **Result: 0 P1 items remain open across all submodules.** P2 tracker and dashboard fully reconciled.
+  - Stray `2.6.3` artifact deleted from repo root (was untracked).
 - **P2 Tier 1 triage sweep** — 3 of 4 production-blocking P2 items verified FIXED in submodules:
   - P2 #4 Open-Notebook: Auth fail-open → **FIXED** (fail-closed `HTTPException 500` at `auth.py:32-36`)
   - P2 #1 BoTZ: MCP Gateway unauthenticated GET → **FIXED** (`_require_auth()` on `/servers`, `/tools`)
@@ -360,7 +370,7 @@ Three CI pipelines build Docker images. This matrix is the single cross-referenc
 
 | Metric | Value |
 |--------|-------|
-| Quantitative snapshot timestamp | 2026-03-09 (live GitHub + local smoke/model-readiness/GPU/monitoring snapshot) |
+| Quantitative snapshot timestamp | 2026-03-09 (tracker reconciliation — all P1 submodule findings verified fixed) |
 | Total tracked items | 24 |
 | Resolved | 24 (+1 since last update) |
 | Active blockers (release-blocking) | 0 |
@@ -748,6 +758,7 @@ If `generatedAt` is older than 24 hours, a `(stale)` indicator appears beside th
 
 | Date | Change |
 |------|--------|
+| 2026-03-09 | **Tracker reconciliation:** verified all 7 Phase C P1 submodule findings (BoTZ JWT/gateway, DoX creds/cipher, ToKenism NATS/MinIO, transcribe-and-fetch passwords) already fixed on Hardened branches. P2 tracker updated with individual evidence entries. Executive summary: 0 P1 open. Stray `2.6.3` artifact deleted. |
 | 2026-03-08 | **PR #827 merged:** 7 deferred CodeRabbit items from #825/#826 + 4 review fixes (SSH probe consistency, COMPOSE_CMD in kvm2, BatchMode=yes, grep anchor). VPS Fleet workstream validated. |
 | 2026-03-08 | **Post-merge audit sweep:** PRs #823/#824 merged. Static gates 6/7 PASS (secrets-audit timeout). Runtime: smoke PASS (10/12), model-readiness 17/17 PASS, monitoring-smoke PASS, auth-alignment 0 errors, GPU smoke PASS. Release gates: RG-1/2/4/5 PASS, RG-3 KNOWN (collation). CI: all 4 runners offline, 4 queued runs (cancel candidates). Live metrics: 0 PRs, 0 CodeQL, 1 Dependabot (medium). |
 | 2026-03-02 | **Live metrics sync (Codex):** refreshed executive summary from GitHub live data: CodeQL open alerts `36`, Dependabot open alerts `5`, open PRs `5`; CI snapshot synced to PR #758 head `db6b3a13` with self-hosted queue-capacity note. Ran queue guard and canceled stale queued runs `22565935122`, `22565935100`, `22565816518` to reduce deadlock pressure while preserving active PR lanes. |
