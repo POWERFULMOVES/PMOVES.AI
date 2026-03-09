@@ -47,10 +47,10 @@
 - **Dependabot alerts**: 0 open (was 1 medium — now resolved)
 - **P2 tracker refreshed** — 15 items remain open (pre-triage; Tier 1 sweep later closed 4 → 11 open), 1 previously closed (HiRAG stale). No P2s fixed by intervening merges. Tracker date updated to 2026-03-09. Re-prioritized into 3 tiers: 4 production-blocking (P2-HIGH/MED), 6 tracked improvements, 5 cosmetic/env syntax.
 - **Trivy failure triage** (from 2026-03-05 sweep):
-  - `agent-zero`: Scan timeout at 5m — infra issue, not vulnerability. Increase timeout to 10m or use `--skip-java-db` to reduce scan time. **Not a blocker.**
+  - `agent-zero`: Scan timeout at default 5m — infra issue, not vulnerability. **FIXED:** CI timeout increased to 10m in `integrations-ghcr.yml` and `self-hosted-builds-hardened.yml`. **Not a blocker.**
   - `archon`: 19 HIGH + 4 CRITICAL — key items: Crawl4AI RCE (CVE-2026-26216, upgrade to 0.8.0), langchain-core RCE (CVE-2025-68664, upgrade to 1.2.5), pydantic-ai info-disclosure. Upstream pins needed.
   - `deepresearch`: 23 HIGH + 2 CRITICAL — key items: Ray RCE (CVE-2025-62593, upgrade to 2.52.0), vLLM RCE (CVE-2026-22778, upgrade to 0.14.1). Upstream pins needed.
-  - `pmoves-yt`: 1 HIGH — urllib3 CVE-2026-21441 (decompression bomb). Fix: pin `urllib3>=2.6.3` in requirements. **Quick fix.**
+  - `pmoves-yt`: 1 HIGH — urllib3 CVE-2026-21441 (decompression bomb). **FIXED:** `urllib3>=2.6.3` pinned in submodule (commit `0ae7bf1d3`), gitlink updated.
 
 ### Previous (Mar 9 — Build Visibility Matrix)
 
@@ -127,7 +127,7 @@
   - `agent-zero`, `archon`, `firefly-iii`, `jellyfin`, `pmoves-yt`, `deepresearch`, `supaserch`
 - Strict local Trivy sweep (HIGH/CRITICAL, ignore-unfixed, vuln-only): `3 PASS / 4 FAIL`
   - PASS: `firefly-iii`, `jellyfin`, `supaserch`
-  - FAIL: `agent-zero` (scan timeout at 5m on large layer analysis), `archon` (known fixable HIGH/CRITICAL backlog), `pmoves-yt` (urllib3 CVE-2026-21441), `deepresearch` (known fixable HIGH/CRITICAL backlog)
+  - FAIL: `agent-zero` (scan timeout — CI timeout increased to 10m), `archon` (known fixable HIGH/CRITICAL backlog), `pmoves-yt` (urllib3 CVE-2026-21441 — **FIXED** in submodule), `deepresearch` (known fixable HIGH/CRITICAL backlog)
 - Evidence artifacts:
   - summary CSV: `pmoves/docs/logs/ghcr-local-prepublish/summary-2026-03-05.csv`
   - vuln-only summary CSV: `pmoves/docs/logs/ghcr-local-prepublish/summary-2026-03-05-vulnonly.csv`
@@ -758,6 +758,7 @@ If `generatedAt` is older than 24 hours, a `(stale)` indicator appears beside th
 
 | Date | Change |
 |------|--------|
+| 2026-03-09 | **Post-cleanup sit rep:** Trivy scan timeout increased to 10m in `integrations-ghcr.yml` + `self-hosted-builds-hardened.yml` (5 scan steps). `PMOVES.AI-Edition-Hardened-Integrations` branch synced (was 234 commits behind main). 5 new smoke tests added (env consistency, port conflicts, NATS config, Supabase realtime, Supabase selfhosted) with cross-platform path resolution. Local Hardened branch pruned. urllib3 CVE-2026-21441 already fixed in submodule. |
 | 2026-03-09 | **Tracker reconciliation:** verified all 7 Phase C P1 submodule findings (BoTZ JWT/gateway, DoX creds/cipher, ToKenism NATS/MinIO, transcribe-and-fetch passwords) already fixed on Hardened branches. P2 tracker updated with individual evidence entries. Executive summary: 0 P1 open. Stray `2.6.3` artifact deleted. |
 | 2026-03-08 | **PR #827 merged:** 7 deferred CodeRabbit items from #825/#826 + 4 review fixes (SSH probe consistency, COMPOSE_CMD in kvm2, BatchMode=yes, grep anchor). VPS Fleet workstream validated. |
 | 2026-03-08 | **Post-merge audit sweep:** PRs #823/#824 merged. Static gates 6/7 PASS (secrets-audit timeout). Runtime: smoke PASS (10/12), model-readiness 17/17 PASS, monitoring-smoke PASS, auth-alignment 0 errors, GPU smoke PASS. Release gates: RG-1/2/4/5 PASS, RG-3 KNOWN (collation). CI: all 4 runners offline, 4 queued runs (cancel candidates). Live metrics: 0 PRs, 0 CodeQL, 1 Dependabot (medium). |
