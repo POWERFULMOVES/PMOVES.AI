@@ -45,6 +45,7 @@ After the 2026-02-18 reorganization, `pmoves/docs/` is organized as:
 - **Python Images Toolchain Canary (weekly build+Trivy bump lane)** — `../../../docs/hardening/PYTHON_IMAGES_TOOLCHAIN_CANARY.md`
 - **Submodule Integration Contract** — `../submodules/SUBMODULE_INTEGRATION_CONTRACT.md`
 - **Submodule Production Release Checklist (deterministic gates + merge order)** — `../integrations/SUBMODULE_PRODUCTION_RELEASE_CHECKLIST.md`
+- **Docker Build Operator Guide** — `../operations/DOCKER_BUILD_GUIDE.md`
 - **First-Run Bootstrap** — `../operations/FIRST_RUN.md`
 - **Archon Updates + Supabase wiring** — `archonupdateforpmoves.md`
 - **Supabase Service Guide** — `../services/supabase/README.md`
