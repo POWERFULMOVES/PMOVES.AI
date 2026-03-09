@@ -72,7 +72,7 @@ async def test_supabase_postgrest_accessible() -> None:
             assert response.status_code == 200, f"PostgREST should be accessible, got {response.status_code}"
             assert "openapi" in response.text.lower(), "Response should contain OpenAPI spec"
 
-    except (httpx.ConnectError, httpx.TimeoutError) as e:
+    except (httpx.ConnectError, httpx.TimeoutException) as e:
         pytest.skip(f"Supabase PostgREST not accessible at {SUPABASE_POSTGREST_URL}: {e}")
 
 
@@ -102,7 +102,7 @@ async def test_supabase_realtime_accessible() -> None:
                 f"Realtime should respond, got {response.status_code}"
             )
 
-    except (httpx.ConnectError, httpx.TimeoutError) as e:
+    except (httpx.ConnectError, httpx.TimeoutException) as e:
         pytest.skip(f"Supabase Realtime not accessible at {SUPABASE_REALTIME_URL}: {e}")
 
 

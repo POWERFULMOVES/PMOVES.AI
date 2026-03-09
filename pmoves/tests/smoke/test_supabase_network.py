@@ -74,7 +74,7 @@ async def test_supabase_kong_accessible_via_host() -> None:
             assert response.status_code == 200
             assert "openapi" in response.text.lower()
 
-    except (httpx.ConnectError, httpx.TimeoutError) as e:
+    except (httpx.ConnectError, httpx.TimeoutException) as e:
         pytest.skip(f"Supabase Kong not accessible on host port 54321: {e}")
 
 
@@ -90,7 +90,7 @@ async def test_supabase_studio_accessible_via_host() -> None:
             assert response.status_code == 200
             assert "html" in response.headers.get("content-type", "").lower()
 
-    except (httpx.ConnectError, httpx.TimeoutError) as e:
+    except (httpx.ConnectError, httpx.TimeoutException) as e:
         pytest.skip(f"Supabase Studio not accessible on host port 65433: {e}")
 
 
@@ -168,7 +168,7 @@ async def test_pmoves_ui_accessible() -> None:
             data = response.json()
             assert data.get("status") == "healthy"
 
-    except (httpx.ConnectError, httpx.TimeoutError) as e:
+    except (httpx.ConnectError, httpx.TimeoutException) as e:
         pytest.skip(f"pmoves-ui not accessible on port 4482: {e}")
 
 

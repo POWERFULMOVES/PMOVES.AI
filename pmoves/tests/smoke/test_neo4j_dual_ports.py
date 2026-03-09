@@ -110,7 +110,7 @@ async def test_neo4j_http_accessible() -> None:
             # Neo4j returns 200 OK when accessible
             assert response.status_code == 200
 
-    except (httpx.ConnectError, httpx.TimeoutError) as e:
+    except (httpx.ConnectError, httpx.TimeoutException) as e:
         pytest.skip(f"Neo4j not accessible on port 7474: {e}")
 
 

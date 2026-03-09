@@ -60,7 +60,7 @@ async def test_supabase_realtime_http_accessible() -> None:
                 f"Realtime should respond, got {response.status_code}"
             )
 
-    except (httpx.ConnectError, httpx.TimeoutError) as e:
+    except (httpx.ConnectError, httpx.TimeoutException) as e:
         pytest.skip(f"Supabase Realtime not accessible at {SUPABASE_REALTIME_URL}: {e}")
 
 
@@ -93,7 +93,7 @@ async def test_supabase_realtime_tenant_exists() -> None:
             else:
                 pytest.fail(f"Unexpected response from PostgREST: {response.status_code}")
 
-    except (httpx.ConnectError, httpx.TimeoutError) as e:
+    except (httpx.ConnectError, httpx.TimeoutException) as e:
         pytest.skip(f"Supabase PostgREST not accessible: {e}")
 
 

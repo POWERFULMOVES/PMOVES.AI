@@ -4,6 +4,9 @@ import subprocess
 import sys
 from pathlib import Path
 
+import httpx
+import pytest
+
 # Add the smoke directory to sys.path so _smoke_helpers can be imported
 _smoke_dir = str(Path(__file__).resolve().parent)
 if _smoke_dir not in sys.path:
@@ -26,3 +29,11 @@ def is_docker_service_running(name: str) -> bool:
         return bool(result.stdout.strip())
     except (FileNotFoundError, subprocess.TimeoutExpired):
         return False
+
+
+@pytest.fixture(scope="session")
+async def http_client():
+    """Shared async HTTP client for smoke tests."""
+    timeout = httpx.Timeout(10.0, connect=5.0)
+    async with httpx.AsyncClient(timeout=timeout) as client:
+        yield client
