@@ -154,11 +154,11 @@ jobs:
           - name: publisher-discord
             context: ./pmoves/services/publisher-discord
           - name: pmoves-yt
-            context: ./services/pmoves-yt
+            context: ./pmoves/services/pmoves-yt
           - name: channel-monitor
             context: ./pmoves/services/channel-monitor
           - name: archon
-            context: ./services/archon
+            context: ./pmoves/services/archon
           - name: ffmpeg-whisper
             context: ./services/ffmpeg-whisper
           - name: model-registry
