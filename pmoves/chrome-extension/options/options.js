@@ -182,14 +182,21 @@ $('#test-all-btn').addEventListener('click', async () => {
     results.push({ svc, status, latency, detail });
   }));
 
-  tbody.innerHTML = results.map(r => `
-    <tr class="${r.status === 'OK' ? 'row-ok' : 'row-fail'}">
-      <td>${r.svc}</td>
-      <td>${r.status}</td>
-      <td>${r.latency}ms</td>
-      <td>${escapeHtml((r.detail || '').substring(0, 80))}</td>
-    </tr>
-  `).join('');
+  tbody.innerHTML = '';
+  results.forEach(r => {
+    const tr = document.createElement('tr');
+    tr.className = r.status === 'OK' ? 'row-ok' : 'row-fail';
+    const tdSvc = document.createElement('td');
+    tdSvc.textContent = r.svc;
+    const tdStatus = document.createElement('td');
+    tdStatus.textContent = r.status;
+    const tdLatency = document.createElement('td');
+    tdLatency.textContent = `${r.latency}ms`;
+    const tdDetail = document.createElement('td');
+    tdDetail.textContent = (r.detail || '').substring(0, 80);
+    tr.append(tdSvc, tdStatus, tdLatency, tdDetail);
+    tbody.appendChild(tr);
+  });
 });
 
 function escapeHtml(str) {
