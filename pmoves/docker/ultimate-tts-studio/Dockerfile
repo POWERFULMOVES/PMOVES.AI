@@ -7,7 +7,8 @@ ARG CUDA_VERSION=12.4.1
 
 # Stage 1: Builder - Install all dependencies
 # =============================================================================
-FROM pytorch/pytorch:2.5.1-cuda12.4-cudnn9-runtime AS builder
+# Base image pinned 2026-03-05 — refresh monthly or via Dependabot
+FROM pytorch/pytorch:2.5.1-cuda12.4-cudnn9-runtime@sha256:c8268a92a69bd500f8be0e665b2630ee006dadaf7bfbc24249141b15ff622755 AS builder
 
 ENV DEBIAN_FRONTEND=noninteractive \
     PYTHONDONTWRITEBYTECODE=1 \
@@ -133,7 +134,8 @@ RUN huggingface-cli download cocktailpeanut/oa --local-dir ./checkpoints/openaud
 # =============================================================================
 # Using nvidia/cuda base image for complete CUDA toolkit (includes nvrtc)
 # This follows the hi-rag-gateway-v2-gpu pattern
-FROM nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04 AS runtime
+# Base image pinned 2026-03-05 — refresh monthly or via Dependabot
+FROM nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04@sha256:2fcc4280646484290cc50dce5e65f388dd04352b07cbe89a635703bd1f9aedb6 AS runtime
 
 ENV DEBIAN_FRONTEND=noninteractive \
     PYTHONDONTWRITEBYTECODE=1 \

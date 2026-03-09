@@ -27,7 +27,7 @@ volume-reset: ## Reset a service volume: make volume-reset SERVICE=tensorzero-cl
 	@echo "Step 3/5: Identifying volumes..."
 	@docker volume ls --filter "name=$(PROJECT)_" --filter "name=$(SERVICE)" --format '{{.Name}}'
 	@echo "Step 4/5: Removing matching volumes..."
-	@for vol in $$(docker volume ls --filter "name=$(PROJECT)_" --format '{{.Name}}' | grep -i "$(SERVICE)"); do \
+	@for vol in $$(docker volume ls --filter "name=$(PROJECT)_" --format '{{.Name}}' | grep -iE "(^$(PROJECT)_.*$(SERVICE)|$(SERVICE)$$)"); do \
 	  echo "  Removing $$vol"; \
 	  docker volume rm "$$vol" || echo "  WARNING: Could not remove $$vol (may be in use)"; \
 	done

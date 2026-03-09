@@ -154,6 +154,11 @@ class AgentZeroRuntimeConfig:
     health_path: str = field(
         default_factory=lambda: os.environ.get("AGENT_ZERO_HEALTH_PATH", "/healthz")
     )
+    health_path_fallback: str = field(
+        default_factory=lambda: os.environ.get(
+            "AGENT_ZERO_HEALTH_PATH_FALLBACK", "/health"
+        )
+    )
     startup_timeout: float = field(
         default_factory=lambda: float(
             os.environ.get("AGENT_ZERO_STARTUP_TIMEOUT", "180")
@@ -378,9 +383,27 @@ class AgentZeroClient:
             if isinstance(result, dict):
                 return result
             return {"status": "ok", "raw": result}
-        except (
-            AgentZeroRequestError
-        ) as exc:  # pragma: no cover - runtime might not be ready
+        except AgentZeroRequestError as exc:  # pragma: no cover - runtime might not be ready
+            fallback = self._config.health_path_fallback
+            if (
+                exc.status_code == 404
+                and fallback
+                and fallback != self._config.health_path
+            ):
+                try:
+                    result = await self._request(
+                        "GET",
+                        fallback,
+                        timeout=self._config.health_timeout,
+                    )
+                    if isinstance(result, dict):
+                        return result
+                    return {"status": "ok", "raw": result}
+                except AgentZeroRequestError as fallback_exc:
+                    logger.debug(
+                        "Agent Zero fallback health check failed: %s", fallback_exc
+                    )
+                    raise
             logger.debug("Agent Zero health check failed: %s", exc)
             raise
 

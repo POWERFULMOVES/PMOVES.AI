@@ -1,0 +1,5 @@
+"image","status","exit_code","log"
+"agent-zero","FAIL","1","pmoves/docs/logs/ghcr-local-prepublish/agent-zero-2026-03-05-vulnonly.log"
+"archon","FAIL","1","pmoves/docs/logs/ghcr-local-prepublish/archon-2026-03-05-vulnonly.log"
+"pmoves-yt","FAIL","1","pmoves/docs/logs/ghcr-local-prepublish/pmoves-yt-2026-03-05-vulnonly.log"
+"deepresearch","FAIL","1","pmoves/docs/logs/ghcr-local-prepublish/deepresearch-2026-03-05-vulnonly.log"

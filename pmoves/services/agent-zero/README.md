@@ -40,7 +40,7 @@ The service reads configuration from environment variables and exposes the resol
 | `HIRAG_URL` / `GATEWAY_URL` | `http://localhost:8086` | Geometry gateway base URL. |
 | `YT_URL` | `http://localhost:8077` | YouTube ingest + transcript gateway. |
 | `RENDER_WEBHOOK_URL` | `http://localhost:8085` | ComfyUI render webhook. |
-| `OPEN_NOTEBOOK_API_URL` / `NOTEBOOK_API_URL` | — | Base URL for the Open Notebook API queried by `notebook.search`. |
+| `OPEN_NOTEBOOK_API_URL` / `NOTEBOOK_API_URL` | — | Base URL for the Open Notebook API queried by `notebook.search` (prefers `/api/search` for Open Notebook `1.8+`, falls back to legacy `/api/v1/notebooks/search`). |
 | `OPEN_NOTEBOOK_API_TOKEN` / `NOTEBOOK_API_TOKEN` | — | Bearer token used to authenticate notebook search requests. |
 | `OPEN_NOTEBOOK_WORKSPACE` / `NOTEBOOK_WORKSPACE` | — | Optional workspace identifier automatically applied to notebook searches. |
 | `AGENT_FORM` | `POWERFULMOVES` | Default MCP form. |

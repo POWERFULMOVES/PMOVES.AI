@@ -179,6 +179,15 @@ api_base = "https://openrouter.ai/api/v1"
 model_name = "openai/gpt-4o-mini"
 api_key_location = "env::OPENROUTER_API_KEY"
 
+[models.chat_alibaba_qwen]
+routing = ["alibaba_qwen_primary"]
+
+[models.chat_alibaba_qwen.providers.alibaba_qwen_primary]
+type = "openai"
+api_base = "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"
+model_name = "qwen3-coder-plus"
+api_key_location = "env::ALIBABA_PRO_CODING_PLAN"
+
 [models.chat_venice]
 routing = ["venice_primary"]
 
@@ -360,6 +369,10 @@ model = "chat_moonshot"
 type = "chat_completion"
 model = "chat_openrouter"
 
+[functions.agent_zero.variants.hosted_alibaba_qwen]
+type = "chat_completion"
+model = "chat_alibaba_qwen"
+
 [functions.agent_zero.variants.hosted_venice]
 type = "chat_completion"
 model = "chat_venice"
@@ -403,6 +416,10 @@ model = "chat_moonshot"
 type = "chat_completion"
 model = "chat_openrouter"
 
+[functions.langextract.variants.langextract_alibaba_qwen]
+type = "chat_completion"
+model = "chat_alibaba_qwen"
+
 [functions.langextract.variants.langextract_venice]
 type = "chat_completion"
 model = "chat_venice"
@@ -434,6 +451,10 @@ model = "agent_zero_mistral7b_local"
 [functions.agent_zero_subordinate.variants.hosted_openrouter]
 type = "chat_completion"
 model = "chat_openrouter"
+
+[functions.agent_zero_subordinate.variants.hosted_alibaba_qwen]
+type = "chat_completion"
+model = "chat_alibaba_qwen"
 
 [functions.agent_zero_subordinate.variants.hosted_together]
 type = "chat_completion"
@@ -487,6 +508,10 @@ model = "qwen2_5_14b"
 type = "chat_completion"
 model = "chat_openrouter"
 
+[functions.pmoves_research_coordinator.variants.hosted_alibaba_qwen]
+type = "chat_completion"
+model = "chat_alibaba_qwen"
+
 [functions.pmoves_research_coordinator.variants.hosted_together]
 type = "chat_completion"
 model = "chat_together"
@@ -525,6 +550,10 @@ model = "qwen2_5_14b"
 type = "chat_completion"
 model = "chat_openrouter"
 
+[functions.archon_work_orders.variants.hosted_alibaba_qwen]
+type = "chat_completion"
+model = "chat_alibaba_qwen"
+
 [functions.archon_work_orders.variants.hosted_together]
 type = "chat_completion"
 model = "chat_together"
@@ -540,6 +569,10 @@ model = "qwen2_5_32b"
 [functions.archon_code_review.variants.hosted_openrouter]
 type = "chat_completion"
 model = "chat_openrouter"
+
+[functions.archon_code_review.variants.hosted_alibaba_qwen]
+type = "chat_completion"
+model = "chat_alibaba_qwen"
 
 # --- Hi-RAG Reranking Function -----------------------------------------------
 [functions.hirag_rerank]
@@ -561,6 +594,10 @@ type = "chat"
 [functions.deepresearch.variants.nemotron_mini]
 type = "chat_completion"
 model = "nemotron_mini"
+
+[functions.deepresearch.variants.hosted_alibaba_qwen]
+type = "chat_completion"
+model = "chat_alibaba_qwen"
 
 # --- New BoTZ Models (Added 2025-12-21) ---
 
@@ -645,6 +682,11 @@ weight = 0.0
 [functions.coding.variants.fallback_cloud]
 type = "chat_completion"
 model = "coding_llama3_cloud"
+weight = 0.0
+
+[functions.coding.variants.fallback_alibaba_qwen]
+type = "chat_completion"
+model = "chat_alibaba_qwen"
 weight = 0.0
 
 # Function: Orchestrator

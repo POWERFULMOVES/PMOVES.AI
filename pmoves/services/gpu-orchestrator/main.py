@@ -120,6 +120,10 @@ async def lifespan(app: FastAPI):
         metrics_exporter.set_status_callback(get_status_for_nats)
         await nats_publisher.start_status_loop()
 
+        # Wire command subscription for bidirectional NATS integration
+        nats_publisher.set_lifecycle_manager(lifecycle_manager)
+        await nats_publisher.subscribe_commands()
+
         # Set up lifecycle callbacks for NATS events
         async def on_model_loaded(model_key: str):
             model = lifecycle_manager.loaded_models.get(model_key)

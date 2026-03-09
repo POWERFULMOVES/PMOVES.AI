@@ -1,4 +1,5 @@
-FROM python:3.10-slim
+# Base image pinned 2026-03-05 — refresh monthly or via Dependabot
+FROM python:3.10-slim@sha256:4b0a8ebf16cf4563f3d3732bd4f4a464abb2f671b3b9d00aab281d705d224457
 WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 RUN apt-get update \
@@ -10,6 +11,7 @@ RUN git clone https://github.com/Alibaba-NLP/DeepResearch.git /opt/DeepResearch 
 COPY services/deepresearch/requirements.txt /tmp/requirements.txt
 COPY services/deepresearch/requirements.lock /tmp/requirements.lock
 RUN pip install --no-cache-dir --upgrade pip \
+    "setuptools==82.0.0" "wheel==0.46.3" \
     && pip install --no-cache-dir -r /tmp/requirements.txt \
     && pip install --no-cache-dir -r /opt/DeepResearch/requirements.txt
 COPY services/deepresearch /app/services/deepresearch
