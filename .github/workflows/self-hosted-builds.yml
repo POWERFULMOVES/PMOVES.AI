@@ -6,6 +6,10 @@ on:
     paths:
       - 'services/**'
       - 'pmoves/services/**'
+      # Exclude services already built multi-arch by integrations-ghcr.yml
+      - '!pmoves/services/agent-zero/**'
+      - '!pmoves/services/archon/**'
+      - '!pmoves/services/pmoves-yt/**'
       - 'pmoves/docker/**'
       - 'Dockerfile*'
       - 'docker-compose*.yml'
