@@ -188,26 +188,40 @@ async function handlePullRequestEvent(payload, env) {
   }
 
   // Fetch changed files from GitHub API
-  let changedFiles = [];
+  // null = fetch failed/skipped (conservative fallback), [] = genuinely empty diff
+  let changedFiles = null;
   if (!env.GITHUB_TOKEN) {
-    console.warn('GITHUB_TOKEN not configured — PR file analysis will be empty');
-  }
-  if (env.GITHUB_TOKEN) {
+    console.warn('GITHUB_TOKEN not configured — PR file analysis skipped, using conservative routing');
+  } else {
     try {
-      const filesUrl = `https://api.github.com/repos/${repository.full_name}/pulls/${pull_request.number}/files?per_page=300`;
-      const resp = await fetch(filesUrl, {
-        headers: {
-          'Authorization': `token ${env.GITHUB_TOKEN}`,
-          'Accept': 'application/vnd.github.v3+json',
-          'User-Agent': 'pmoves-ci-orchestrator'
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 5000);
+      changedFiles = [];
+      let page = 1;
+      while (true) {
+        const filesUrl = `https://api.github.com/repos/${repository.full_name}/pulls/${pull_request.number}/files?per_page=100&page=${page}`;
+        const resp = await fetch(filesUrl, {
+          headers: {
+            'Authorization': `token ${env.GITHUB_TOKEN}`,
+            'Accept': 'application/vnd.github.v3+json',
+            'User-Agent': 'pmoves-ci-orchestrator'
+          },
+          signal: controller.signal
+        });
+        if (!resp.ok) {
+          console.error(`GitHub API returned ${resp.status} fetching PR files`);
+          changedFiles = null;
+          break;
         }
-      });
-      if (resp.ok) {
         const files = await resp.json();
-        changedFiles = files.map(f => f.filename);
+        changedFiles.push(...files.map(f => f.filename));
+        if (files.length < 100) break;
+        page++;
       }
+      clearTimeout(timeout);
     } catch (e) {
       console.error('Failed to fetch PR files:', e.message);
+      changedFiles = null;
     }
   }
   const analysis = analyzeChanges(changedFiles);
@@ -276,6 +290,18 @@ async function handleWorkflowRunEvent(payload, env) {
  * Analyze changed files to determine build requirements
  */
 function analyzeChanges(files) {
+  // null means file metadata unavailable — assume conservative (non-lightweight)
+  if (files === null) {
+    return {
+      requires_gpu: false,
+      requires_docker: true,
+      is_lightweight: false,
+      services_affected: [],
+      estimated_duration_seconds: 300,
+      metadata_unavailable: true
+    };
+  }
+
   const analysis = {
     requires_gpu: false,
     requires_docker: false,
