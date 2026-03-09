@@ -14,8 +14,6 @@
  * that intelligently routes CI/CD jobs to the best runner based on requirements.
  */
 
-import crypto from 'crypto';
-
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -66,25 +64,45 @@ async function verifyGitHubSignature(request, secret) {
   if (!signature) return false;
 
   const body = await request.text();
-  const expectedSignature = 'sha256=' +
-    crypto.createHmac('sha256', secret)
-      .update(body)
-      .digest('hex');
+  const encoder = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    'raw',
+    encoder.encode(secret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  );
+  const sig = await crypto.subtle.sign('HMAC', key, encoder.encode(body));
+  const hexDigest = [...new Uint8Array(sig)]
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join('');
+  const expectedSignature = 'sha256=' + hexDigest;
 
-  return signature === expectedSignature;
+  // Constant-time comparison
+  if (signature.length !== expectedSignature.length) return false;
+  const a = encoder.encode(signature);
+  const b = encoder.encode(expectedSignature);
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a[i] ^ b[i];
+  return diff === 0;
 }
 
 /**
  * Handle GitHub webhook events
  */
 async function handleGitHubWebhook(request, env, ctx) {
-  // Verify signature if webhook secret is configured
-  if (env.WEBHOOK_SECRET) {
-    const clonedRequest = request.clone();
-    const isValid = await verifyGitHubSignature(clonedRequest, env.WEBHOOK_SECRET);
-    if (!isValid) {
-      return new Response('Invalid signature', { status: 401 });
-    }
+  // Fail-closed: reject all requests if webhook secret is not configured
+  if (!env.WEBHOOK_SECRET) {
+    return new Response(JSON.stringify({ error: 'Webhook secret not configured' }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
+
+  const clonedRequest = request.clone();
+  const isValid = await verifyGitHubSignature(clonedRequest, env.WEBHOOK_SECRET);
+  if (!isValid) {
+    return new Response('Invalid signature', { status: 401 });
   }
 
   const event = request.headers.get('X-GitHub-Event');
@@ -169,7 +187,43 @@ async function handlePullRequestEvent(payload, env) {
     return { status: 'ignored', action };
   }
 
-  const changedFiles = []; // Would need to fetch via GitHub API
+  // Fetch changed files from GitHub API
+  // null = fetch failed/skipped (conservative fallback), [] = genuinely empty diff
+  let changedFiles = null;
+  if (!env.GITHUB_TOKEN) {
+    console.warn('GITHUB_TOKEN not configured — PR file analysis skipped, using conservative routing');
+  } else {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 5000);
+      changedFiles = [];
+      let page = 1;
+      while (true) {
+        const filesUrl = `https://api.github.com/repos/${repository.full_name}/pulls/${pull_request.number}/files?per_page=100&page=${page}`;
+        const resp = await fetch(filesUrl, {
+          headers: {
+            'Authorization': `token ${env.GITHUB_TOKEN}`,
+            'Accept': 'application/vnd.github.v3+json',
+            'User-Agent': 'pmoves-ci-orchestrator'
+          },
+          signal: controller.signal
+        });
+        if (!resp.ok) {
+          console.error(`GitHub API returned ${resp.status} fetching PR files`);
+          changedFiles = null;
+          break;
+        }
+        const files = await resp.json();
+        changedFiles.push(...files.map(f => f.filename));
+        if (files.length < 100) break;
+        page++;
+      }
+      clearTimeout(timeout);
+    } catch (e) {
+      console.error('Failed to fetch PR files:', e.message);
+      changedFiles = null;
+    }
+  }
   const analysis = analyzeChanges(changedFiles);
   const runnerStrategy = determineRunnerStrategy(analysis, env.RUNNER_DISPATCH_MODE);
 
@@ -236,6 +290,18 @@ async function handleWorkflowRunEvent(payload, env) {
  * Analyze changed files to determine build requirements
  */
 function analyzeChanges(files) {
+  // null means file metadata unavailable — assume conservative (non-lightweight)
+  if (files === null) {
+    return {
+      requires_gpu: false,
+      requires_docker: true,
+      is_lightweight: false,
+      services_affected: [],
+      estimated_duration_seconds: 300,
+      metadata_unavailable: true
+    };
+  }
+
   const analysis = {
     requires_gpu: false,
     requires_docker: false,
