@@ -466,6 +466,7 @@ jobs:
           vuln-type: 'os,library'
           severity: 'HIGH,CRITICAL'
           scanners: 'vuln'
+          timeout: '10m0s'
 
       - name: Trivy vulnerability scan report (includes unfixed)
         if: ${{ github.event_name != 'pull_request' && steps.meta.outputs.has_tags == 'true' }}
@@ -481,6 +482,7 @@ jobs:
           vuln-type: 'os,library'
           severity: 'HIGH,CRITICAL'
           scanners: 'vuln'
+          timeout: '10m0s'
 
       - name: Upload Trivy report artifact
         if: ${{ github.event_name != 'pull_request' && steps.meta.outputs.has_tags == 'true' }}
