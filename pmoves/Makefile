@@ -2608,3 +2608,16 @@ structure-enforce: ## Enforce structural best practices
 .PHONY: structure-enforce-strict
 structure-enforce-strict: ## Enforce structural best practices (strict mode, fails on P1/P2)
 	@$(PYTHON) tools/structure_enforcer.py --strict
+
+# Living Document Freshness Automation
+.PHONY: docs-reconcile
+docs-reconcile: ## Reconcile living document metadata (dashboard + P2 tracker)
+	@$(PYTHON) tools/docs_reconcile.py --update $(ARGS)
+
+.PHONY: docs-reconcile-check
+docs-reconcile-check: ## Check living document freshness (read-only, CI-safe)
+	@$(PYTHON) tools/docs_reconcile.py --check $(ARGS)
+
+.PHONY: docs-reconcile-json
+docs-reconcile-json: ## Living document freshness report (JSON output)
+	@$(PYTHON) tools/docs_reconcile.py --check --json $(ARGS)

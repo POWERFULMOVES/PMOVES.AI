@@ -204,7 +204,8 @@ services.forEach(({ name, port, routes }) => {
     const key = `${req.method} ${req.url.split('?')[0]}`;
     // Also try with query string for Prometheus
     const keyWithQs = `${req.method} ${req.url}`;
-    const handler = routes[key] || routes[keyWithQs];
+    const handler = (Object.hasOwn(routes, key) && routes[key])
+      || (Object.hasOwn(routes, keyWithQs) && routes[keyWithQs]);
 
     if (!handler) {
       // Try partial match for paths with dynamic segments (e.g. /jobs/:id)

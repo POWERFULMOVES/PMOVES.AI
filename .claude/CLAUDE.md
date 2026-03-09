@@ -381,6 +381,19 @@ encapsulate the correct stop/restart/env-injection flow.
 
 **When raw commands are appropriate:** Only when the user explicitly directs it. The `ask` prompt will surface to the user who can approve or deny.
 
+### Living Document Maintenance
+
+Two living documents require freshness maintenance:
+- `pmoves/docs/PRODUCTION_AUDIT_DASHBOARD.md` — production readiness dashboard (commit SHA, date)
+- `pmoves/docs/security/P2_SUBMODULE_TRACKER.md` — P2 issue tracker (open/fixed status)
+
+**Rules:**
+- After audit/security work, run `make -C pmoves docs-reconcile` or `/docs:reconcile --update`
+- Review flagged stale tracker items — manually verify before closing entries
+- If you edited `pmoves/docs/security/`, `pmoves/docs/audit/`, or updated submodule gitlinks → run docs-reconcile before committing
+- Automated check (CI-safe, read-only): `make -C pmoves docs-reconcile-check`
+- JSON output for tooling: `make -C pmoves docs-reconcile-json`
+
 ### Service Discovery Pattern
 All services expose:
 - `/healthz` - Health check endpoint
