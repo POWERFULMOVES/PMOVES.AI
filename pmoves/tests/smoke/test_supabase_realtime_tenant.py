@@ -18,9 +18,10 @@ import httpx
 import asyncio
 from pathlib import Path
 
-PROJECT_ROOT = Path(__file__).resolve().parents[3]
-PMOVES_DIR = PROJECT_ROOT / "pmoves"
-COMPOSE_FILE = str(PMOVES_DIR / "docker-compose.yml")
+from _smoke_helpers import grep_file, grep_context, PROJECT_ROOT, PMOVES_DIR
+
+
+COMPOSE_FILE = PMOVES_DIR / "docker-compose.yml"
 
 SUPABASE_REALTIME_URL = os.getenv(
     "SUPABASE_REALTIME_URL",
@@ -52,11 +53,9 @@ async def test_supabase_realtime_http_accessible() -> None:
     """Verify Supabase Realtime HTTP endpoint is accessible."""
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
-            # Convert ws:// to http:// for HTTP check
             http_url = SUPABASE_REALTIME_URL.replace("ws://", "http://").replace("/socket/websocket", "/")
             response = await client.get(http_url)
 
-            # Realtime serves HTML or returns 404/426 for WebSocket upgrade requests
             assert response.status_code in [200, 404, 426], (
                 f"Realtime should respond, got {response.status_code}"
             )
@@ -71,7 +70,6 @@ async def test_supabase_realtime_tenant_exists() -> None:
     """Verify tenant(s) exist in the Realtime database schema."""
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
-            # Query _realtime.tenants table via PostgREST
             response = await client.get(
                 f"{SUPABASE_POSTGREST_URL}/_realtime_tenants",
                 headers={
@@ -80,20 +78,17 @@ async def test_supabase_realtime_tenant_exists() -> None:
                 }
             )
 
-            # Should get tenants array
             if response.status_code == 200:
                 tenants = response.json()
                 assert isinstance(tenants, list), "Tenants response should be a list"
                 assert len(tenants) > 0, "At least one tenant should be configured"
 
-                # Check for expected tenant external IDs
                 external_ids = [t.get("external_id") for t in tenants]
                 assert "stub" in external_ids or "localhost" in external_ids, (
                     f"Expected tenant external_id 'stub' or 'localhost', got: {external_ids}"
                 )
 
             elif response.status_code == 404:
-                # Table might not exist yet (migrations not run)
                 pytest.skip("_realtime_tenants table not found (migrations may not be complete)")
             else:
                 pytest.fail(f"Unexpected response from PostgREST: {response.status_code}")
@@ -105,16 +100,10 @@ async def test_supabase_realtime_tenant_exists() -> None:
 @pytest.mark.smoke
 def test_realtime_has_seed_self_host_enabled() -> None:
     """Verify SEED_SELF_HOST is enabled in docker-compose.yml."""
-    result = subprocess.run(
-        ["grep", "-A", "20", "supabase-realtime:", COMPOSE_FILE],
-        capture_output=True,
-        text=True,
-    )
+    output = grep_context(COMPOSE_FILE, r"supabase-realtime:", after=20)
+    assert output, "supabase-realtime service not found in docker-compose.yml"
 
-    assert result.returncode == 0, "supabase-realtime service not found in docker-compose.yml"
-
-    config = result.stdout
-    assert "SEED_SELF_HOST=true" in config, (
+    assert "SEED_SELF_HOST=true" in output, (
         "SEED_SELF_HOST should be enabled for automatic tenant seeding"
     )
 
@@ -122,21 +111,13 @@ def test_realtime_has_seed_self_host_enabled() -> None:
 @pytest.mark.smoke
 def test_realtime_jwt_secret_configured() -> None:
     """Verify Realtime JWT secret is configured."""
-    result = subprocess.run(
-        ["grep", "-A", "20", "supabase-realtime:", COMPOSE_FILE],
-        capture_output=True,
-        text=True,
-    )
+    output = grep_context(COMPOSE_FILE, r"supabase-realtime:", after=20)
+    assert output, "supabase-realtime service not found in docker-compose.yml"
 
-    assert result.returncode == 0, "supabase-realtime service not found in docker-compose.yml"
-
-    config = result.stdout
-    # Should have JWT_SECRET configured
-    assert "JWT_SECRET=${SUPABASE_JWT_SECRET}" in config, (
+    assert "JWT_SECRET=${SUPABASE_JWT_SECRET}" in output, (
         "Realtime JWT_SECRET should reference SUPABASE_JWT_SECRET"
     )
-    # Should have API_JWT_SECRET as well
-    assert "API_JWT_SECRET=${SUPABASE_JWT_SECRET}" in config, (
+    assert "API_JWT_SECRET=${SUPABASE_JWT_SECRET}" in output, (
         "Realtime API_JWT_SECRET should reference SUPABASE_JWT_SECRET"
     )
 
@@ -146,28 +127,21 @@ def test_realtime_jwt_secret_configured() -> None:
 async def test_realtime_websocket_upgrade() -> None:
     """Verify Realtime accepts WebSocket upgrade requests."""
     try:
-        # Use websockets library for proper WebSocket testing
         import websockets
 
         ws_url = SUPABASE_REALTIME_URL.replace("ws://", "ws://localhost:4000/")
 
-        # Try to connect with a timeout
         try:
             async with websockets.connect(ws_url, close_timeout=5) as ws:
-                # Send a ping to verify connection
                 await ws.ping()
                 # If we get here, WebSocket is working
-                assert True, "WebSocket connection successful"
 
         except asyncio.TimeoutError:
-            # Timeout might mean service is up but not accepting our specific connection
-            # That's okay - we verified HTTP endpoint works
             pytest.skip("WebSocket connection timed out (may require authentication)")
 
         except websockets.exceptions.InvalidStatusCode as e:
-            # 401 or 403 is expected if authentication is required
             if e.status_code in [401, 403]:
-                assert True, "WebSocket requires authentication (expected)"
+                pass  # 401/403 expected if authentication required
             else:
                 pytest.fail(f"Unexpected WebSocket status code: {e.status_code}")
 
@@ -199,21 +173,14 @@ def test_realtime_database_schema_exists() -> None:
 @pytest.mark.smoke
 def test_realtime_healthcheck_configured() -> None:
     """Verify Realtime has a healthcheck configured in docker-compose."""
-    result = subprocess.run(
-        ["grep", "-A", "30", "supabase-realtime:", COMPOSE_FILE],
-        capture_output=True,
-        text=True,
-    )
+    output = grep_context(COMPOSE_FILE, r"supabase-realtime:", after=30)
+    assert output, "supabase-realtime service not found"
 
-    assert result.returncode == 0, "supabase-realtime service not found"
-
-    config = result.stdout
-    assert "healthcheck:" in config, (
+    assert "healthcheck:" in output, (
         "Realtime should have a healthcheck configured"
     )
 
-    # Check healthcheck command
-    assert "curl" in config and "4000" in config, (
+    assert "curl" in output and "4000" in output, (
         "Healthcheck should verify Realtime on port 4000"
     )
 
@@ -221,30 +188,18 @@ def test_realtime_healthcheck_configured() -> None:
 @pytest.mark.smoke
 def test_hirag_v2_has_realtime_url_configured() -> None:
     """Verify Hi-RAG v2 service has SUPABASE_REALTIME_URL configured."""
-    result = subprocess.run(
-        ["grep", "-A", "10", "hirag-v2:", COMPOSE_FILE],
-        capture_output=True,
-        text=True,
-    )
+    output = grep_context(COMPOSE_FILE, r"hirag-v2:", after=10)
 
-    if result.returncode != 0:
-        # hirag-v2 might have a different service name
-        result = subprocess.run(
-            ["grep", "-A", "10", "hi-rag-gateway-v2:", COMPOSE_FILE],
-            capture_output=True,
-            text=True,
-        )
+    if not output:
+        output = grep_context(COMPOSE_FILE, r"hi-rag-gateway-v2:", after=10)
 
-    if result.returncode != 0:
+    if not output:
         pytest.skip("Hi-RAG v2 service not found in docker-compose.yml")
 
-    config = result.stdout
-    # Should have SUPABASE_REALTIME_URL
-    assert "SUPABASE_REALTIME_URL" in config, (
+    assert "SUPABASE_REALTIME_URL" in output, (
         "Hi-RAG v2 should have SUPABASE_REALTIME_URL configured"
     )
-    # Should point to supabase-realtime container
-    assert "supabase-realtime:4000" in config or "realtime:4000" in config, (
+    assert "supabase-realtime:4000" in output or "realtime:4000" in output, (
         "SUPABASE_REALTIME_URL should point to supabase-realtime container"
     )
 
@@ -260,14 +215,12 @@ def test_realtime_on_correct_networks() -> None:
     )
 
     if result.returncode != 0:
-        # Container might not exist or have a different name
         result = subprocess.run(
             ["docker", "ps", "--filter", "name=realtime", "--format", "{{.Names}}"],
             capture_output=True,
             text=True,
         )
         if result.returncode == 0 and result.stdout.strip():
-            # Try with the actual container name
             container_name = result.stdout.strip().split("\n")[0]
             result = subprocess.run(
                 ["docker", "inspect", container_name, "--format", "{{json .NetworkSettings.Networks}}"],
@@ -279,9 +232,11 @@ def test_realtime_on_correct_networks() -> None:
             pytest.skip("Realtime container not found")
 
     import json
-    networks = json.loads(result.stdout)
+    try:
+        networks = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        pytest.fail(f"Failed to parse docker inspect output: {result.stdout[:200]}")
 
-    # Should be on pmoves_api or pmoves_data network
     assert len(networks) > 0, "Realtime should be on at least one network"
     assert any("pmoves" in net.lower() for net in networks.keys()), (
         f"Realtime should be on pmoves network(s), got: {list(networks.keys())}"
@@ -291,22 +246,14 @@ def test_realtime_on_correct_networks() -> None:
 @pytest.mark.smoke
 def test_realtime_environment_has_db_params() -> None:
     """Verify Realtime service has database connection parameters configured."""
-    result = subprocess.run(
-        ["grep", "-A", "25", "supabase-realtime:", COMPOSE_FILE],
-        capture_output=True,
-        text=True,
-    )
+    output = grep_context(COMPOSE_FILE, r"supabase-realtime:", after=25)
+    assert output, "supabase-realtime service not found"
 
-    assert result.returncode == 0, "supabase-realtime service not found"
+    assert "DB_HOST=supabase-db" in output, "Should have DB_HOST configured"
+    assert "DB_NAME=${SUPABASE_DB_NAME}" in output, "Should have DB_NAME configured"
+    assert "DB_USER=${SUPABASE_DB_USER}" in output, "Should have DB_USER configured"
+    assert "DB_PASSWORD=${SUPABASE_DB_PASSWORD}" in output, "Should have DB_PASSWORD configured"
 
-    config = result.stdout
-    # Check database connection parameters
-    assert "DB_HOST=supabase-db" in config, "Should have DB_HOST configured"
-    assert "DB_NAME=${SUPABASE_DB_NAME}" in config, "Should have DB_NAME configured"
-    assert "DB_USER=${SUPABASE_DB_USER}" in config, "Should have DB_USER configured"
-    assert "DB_PASSWORD=${SUPABASE_DB_PASSWORD}" in config, "Should have DB_PASSWORD configured"
-
-    # Check search_path is set to _realtime schema
-    assert "search_path TO _realtime" in config, (
+    assert "search_path TO _realtime" in output, (
         "Should set search_path to _realtime schema"
     )

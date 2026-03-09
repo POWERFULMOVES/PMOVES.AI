@@ -246,18 +246,23 @@ check_port_conflicts() {
     while IFS= read -r file; do
         # Extract port mappings (e.g., "8000:80" -> external port 8000)
         local ports
-        ports=$(grep -oP '"\K[0-9]+(?=:)' "$file" 2>/dev/null || true)
+        ports=$(grep -oE '"[0-9]+:' "$file" 2>/dev/null | grep -oE '[0-9]+' || true)
         while IFS= read -r port; do
             if [[ " ${ports_used[@]} " =~ " ${port} " ]]; then
-                log_warning "Port $port used in multiple compose files"
+                log_error "Port $port used in multiple compose files"
+                ((failed++))
             else
                 ports_used+=("$port")
             fi
         done <<< "$ports"
     done <<< "$compose_files"
 
-    log_success "Port conflict check completed (${#ports_used[@]} ports tracked)"
-    return 0
+    if [[ $failed -eq 0 ]]; then
+        log_success "Port conflict check completed (${#ports_used[@]} ports tracked)"
+    else
+        FAILED_CHECKS+=("port_conflicts:$failed duplicate ports")
+    fi
+    return $failed
 }
 
 check_typescript_imports() {
@@ -323,7 +328,10 @@ run_smoke_tests() {
     done
 
     cd "$PROJECT_ROOT"
-    return 0  # Don't fail for smoke tests (services may not be running)
+    if [[ $failed -gt 0 ]]; then
+        FAILED_CHECKS+=("smoke_tests:$failed test files had failures (services may not be running)")
+    fi
+    return 0  # Non-blocking: smoke failures are tracked but don't abort validation
 }
 
 # ============================================================================
@@ -338,15 +346,27 @@ main() {
 
     echo ""
 
-    # Run all checks
-    check_python_syntax || true
-    check_yaml_syntax || true
-    check_docker_compose_credentials || true
-    check_environment_consistency || true
-    check_no_cli_references || true
-    check_port_conflicts || true
-    check_typescript_imports || true
-    run_smoke_tests || true
+    # Run all checks (rc > 127 indicates a crash/missing tool, not a validation failure)
+    _run_check() {
+        local name="$1"
+        shift
+        "$@" || {
+            local rc=$?
+            if [[ $rc -gt 127 ]]; then
+                log_error "Check '$name' crashed (exit code $rc) — tool may be missing"
+                FAILED_CHECKS+=("${name}:crashed with exit code $rc")
+            fi
+        }
+    }
+
+    _run_check "python_syntax" check_python_syntax
+    _run_check "yaml_syntax" check_yaml_syntax
+    _run_check "docker_credentials" check_docker_compose_credentials
+    _run_check "env_consistency" check_environment_consistency
+    _run_check "cli_references" check_no_cli_references
+    _run_check "port_conflicts" check_port_conflicts
+    _run_check "typescript_imports" check_typescript_imports
+    _run_check "smoke_tests" run_smoke_tests
 
     echo ""
     log_info "Validation complete"
