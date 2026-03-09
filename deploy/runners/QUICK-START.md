@@ -58,7 +58,7 @@ gh run watch
 open https://app.stepsecurity.io
 
 # 5. Review Trivy results
-open https://github.com/frostbytten/PMOVES.AI/security/code-scanning
+open https://github.com/POWERFULMOVES/PMOVES.AI/security/code-scanning
 ```
 
 **Expected Results:**
@@ -81,13 +81,13 @@ open https://github.com/frostbytten/PMOVES.AI/security/code-scanning
 # Phase 1: Test on backup runner (kvm2)
 ssh kvm2
 cd /opt
-wget https://raw.githubusercontent.com/frostbytten/PMOVES.AI/main/deploy/runners/vps/install-hardened.sh
+wget https://raw.githubusercontent.com/POWERFULMOVES/PMOVES.AI/main/deploy/runners/vps/install-hardened.sh
 chmod +x install-hardened.sh
 
 GITHUB_PAT=$GITHUB_PAT RUNNER_NAME=kvm2 ./install-hardened.sh
 
 # Verify runner appears in GitHub UI
-open https://github.com/frostbytten/PMOVES.AI/settings/actions/runners
+open https://github.com/POWERFULMOVES/PMOVES.AI/settings/actions/runners
 
 # Run test workflow
 gh workflow run self-hosted-builds.yml -f deploy_target=none
@@ -115,7 +115,7 @@ gh workflow run self-hosted-builds.yml -f deploy_target=none
 open https://app.stepsecurity.io
 
 # Connect GitHub account
-# Add repository: frostbytten/PMOVES.AI
+# Add repository: POWERFULMOVES/PMOVES.AI
 # Enable email alerts
 ```
 
@@ -123,7 +123,7 @@ open https://app.stepsecurity.io
 
 ```bash
 # Enable Code Scanning
-open https://github.com/frostbytten/PMOVES.AI/settings/security_analysis
+open https://github.com/POWERFULMOVES/PMOVES.AI/settings/security_analysis
 
 # Check:
 # [x] Dependency graph
@@ -359,7 +359,7 @@ Controls:
 
 ### External Links
 - **StepSecurity:** https://app.stepsecurity.io
-- **GitHub Security:** https://github.com/frostbytten/PMOVES.AI/security
+- **GitHub Security:** https://github.com/POWERFULMOVES/PMOVES.AI/security
 - **Rootless Docker:** https://docs.docker.com/engine/security/rootless/
 - **Trivy:** https://aquasecurity.github.io/trivy
 

@@ -375,6 +375,23 @@ This file summarizes the most-used targets and maps them to what they do under d
   - Pre-pulls Ollama models derived from model profiles and/or Supabase registry mappings.
   - Override with `OLLAMA_SEED_MODELS` when you need explicit pull lists.
 
+## Docker Build
+
+For the full Docker image lifecycle (local validation, CI pipelines, compose profiles, model runners), see the consolidated **[Docker Build Operator Guide](DOCKER_BUILD_GUIDE.md)**.
+
+Key targets summary:
+
+| Target | Description |
+|--------|-------------|
+| `make ghcr-prepublish-inrepo` | Full gate (build + Trivy) for all in-repo images |
+| `make ghcr-prepublish-inrepo-build` | Build-only (skip Trivy) for rapid triage |
+| `make ghcr-prepublish-one IMAGE=<name>` | Single image with Trivy |
+| `make ghcr-build-one IMAGE=<name>` | Single image build-only |
+| `make ghcr-prepublish-all` | Full matrix including external repos |
+| `make ghcr-dispatch-all` | Dispatch integrations-ghcr workflow after local validation |
+| `make buildx-setup` | Bootstrap Docker buildx builder |
+| `make docker-login` | Login to GHCR |
+
 ## CHIT Demo Mappers
 - `make demo-health-cgp`
   - Converts `contracts/samples/health.weekly.summary.v1.sample.json` to a CGP and posts it to `HIRAG_URL/geometry/event`.

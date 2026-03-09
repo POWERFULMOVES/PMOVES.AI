@@ -11,6 +11,15 @@
 
 ---
 
+## Latest Changes (Mar 9, 2026)
+
+- **Build Visibility Matrix added** to dashboard — single cross-reference mapping all compose services → CI pipelines → Dockerfiles → architectures
+  - 3 pipeline summary tables: `integrations-ghcr` (16 images, multi-arch, Trivy+Cosign), `self-hosted-builds` (9 images, amd64), `build-images` (29 images, manual dispatch)
+  - Service-to-pipeline mapping organized by category (Agent, Retrieval, Media, Voice, CHIT, Utility, Data/Monitoring)
+  - Dockerfile hardening snapshot with approximate counts vs targets
+- **Push trigger overlap fixed** in `self-hosted-builds.yml`: added path exclusions for `agent-zero`, `archon`, `pmoves-yt` to push trigger (matching existing PR trigger exclusions), preventing duplicate builds when both `self-hosted-builds` and `integrations-ghcr` would fire
+- **Services catalog CI annotations**: added `**CI Pipeline:**` field to every service entry in `.claude/context/services-catalog.md` with values: `integrations-ghcr`, `self-hosted-builds`, `build-images`, `vendor`, `local-build-only`, or `none`
+
 ## Latest Changes (Mar 8, 2026)
 
 - **PR #827 merged** (`fix/coderabbit-followup-825-826`): 7 deferred CodeRabbit items from PRs #825/#826 + 4 review fixes
@@ -142,6 +151,124 @@
 - 2 submodules in `images.yaml` still track `main` instead of `PMOVES.AI-Edition-Hardened` (`pmoves-botz`, `pmoves-tailscale`)
 
 **Recommendation:** Add build definitions for the 4 missing images, or convert their compose references to local `build:` directives if they're dev-only.
+
+### Build Visibility Matrix (Mar 9, 2026)
+
+Three CI pipelines build Docker images. This matrix is the single cross-reference for which pipeline builds which service, with what security features.
+
+#### Pipeline Coverage Summary
+
+| Pipeline | Workflow File | Matrix Source | Images | Arch | Trivy | Cosign | SBOM | Trigger |
+|----------|--------------|---------------|--------|------|-------|--------|------|---------|
+| `integrations-ghcr` | `integrations-ghcr.yml` | `integrations-ghcr.matrix.json` | 16 | amd64+arm64 | Yes (HIGH/CRIT gate) | Yes (keyless) | Conditional (10/16) | push/PR/dispatch |
+| `self-hosted-builds` | `self-hosted-builds.yml` | inline matrix | 9¹ | amd64 only | No | No | No | push/PR/dispatch |
+| `build-images` | `build-images.yml` | `pmoves/images.yaml` | 29 | amd64 (default) | No | No | Yes (all) | manual dispatch only |
+
+#### Service-to-Pipeline Mapping
+
+**Agent & Orchestration**
+
+| Compose Service | Image | integrations-ghcr | self-hosted-builds | build-images | Arch |
+|----------------|-------|-------------------|-------------------|--------------|------|
+| agent-zero | pmoves-agent-zero | ✅ (Trivy+Cosign+SBOM) | ✅ | ✅ | amd64+arm64 |
+| archon | pmoves-archon | ✅ (Cosign) | ✅ | ✅ | amd64+arm64 |
+| archon-ui | pmoves-archon-ui | ✅ (Trivy+Cosign+SBOM) | — | — | amd64+arm64 |
+| mesh-agent | (uses agent-zero image) | — | — | — | — |
+| channel-monitor | pmoves-channel-monitor | — | ✅ | — | amd64 |
+| botz-gateway | pmoves-botz-gateway | — | — | ✅ | amd64 |
+| cipher-api | pmoves-cipher-memory | — | — | — | vendor |
+
+**Retrieval & Knowledge**
+
+| Compose Service | Image | integrations-ghcr | self-hosted-builds | build-images | Arch |
+|----------------|-------|-------------------|-------------------|--------------|------|
+| hi-rag-gateway-v2 | pmoves-hirag | — | — | ✅ | amd64 |
+| hi-rag-gateway-v1 | pmoves-hirag | — | — | ✅ | amd64 |
+| deepresearch | pmoves-deepresearch | ✅ (Cosign) | — | ✅ | amd64 only |
+| supaserch | pmoves-supaserch | ✅ (Cosign+SBOM) | — | ✅ | amd64+arm64 |
+| model-registry | pmoves-model-registry | — | ✅ | ✅ | amd64 |
+| gpu-orchestrator | pmoves-gpu-orchestrator | — | ✅ | ✅ | amd64 |
+| open-notebook | pmoves-open-notebook | ✅ (Trivy+Cosign+SBOM) | — | ✅ | amd64+arm64 |
+
+**Media Processing**
+
+| Compose Service | Image | integrations-ghcr | self-hosted-builds | build-images | Arch |
+|----------------|-------|-------------------|-------------------|--------------|------|
+| pmoves-yt | pmoves-yt | ✅ (Cosign+SBOM) | ✅ | ✅ | amd64+arm64 |
+| ffmpeg-whisper | pmoves-ffmpeg-whisper | — | ✅ | — | amd64 |
+| media-video | (compose build) | — | — | — | local-build |
+| media-audio | (compose build) | — | — | — | local-build |
+| extract-worker | pmoves-extract-worker | — | ✅ | — | amd64 |
+| pdf-ingest | pmoves-pdf-ingest | — | — | ✅ | amd64 |
+| langextract | (compose build) | — | — | — | local-build |
+| notebook-sync | (compose build) | — | — | — | local-build |
+| transcribe-backend | pmoves-transcribe-backend | — | — | ✅ | amd64 |
+
+**Voice & Speech**
+
+| Compose Service | Image | integrations-ghcr | self-hosted-builds | build-images | Arch |
+|----------------|-------|-------------------|-------------------|--------------|------|
+| flute-gateway | pmoves-flute-gateway | — | — | ✅ | amd64 |
+| ultimate-tts-studio | pmoves-ultimate-tts-studio | — | — | ✅ (manual) | amd64 |
+
+**CHIT & Geometry**
+
+| Compose Service | Image | integrations-ghcr | self-hosted-builds | build-images | Arch |
+|----------------|-------|-------------------|-------------------|--------------|------|
+| tokenism-simulator | pmoves-tokenism-simulator | — | — | ✅ | amd64 |
+| tokenism-ui | pmoves-tokenism-ui | ✅ (Cosign+SBOM) | — | ✅ | amd64+arm64 |
+| evo-controller | pmoves-evo-controller | — | — | ✅ | amd64 |
+| a2ui-nats-bridge | pmoves-a2ui-nats-bridge | ✅ (Cosign) | — | ✅ | amd64+arm64 |
+| session-context-worker | pmoves-session-context-worker | ✅ (Cosign) | — | ✅ | amd64+arm64 |
+
+**Utility & External**
+
+| Compose Service | Image | integrations-ghcr | self-hosted-builds | build-images | Arch |
+|----------------|-------|-------------------|-------------------|--------------|------|
+| publisher-discord | pmoves-publisher-discord | — | ✅ | — | amd64 |
+| jellyfin | pmoves-jellyfin | ✅ (Trivy+Cosign+SBOM) | — | ✅ | amd64+arm64 |
+| jellyfin-ai-media-stack | pmoves-jellyfin-ai-media-stack | — | — | ✅ | amd64 |
+| wger (health) | pmoves-wger | ✅ (Cosign+SBOM) | — | ✅ | amd64+arm64 |
+| firefly-iii (wealth) | pmoves-firefly-iii | ✅ (Cosign+SBOM) | — | ✅ | amd64+arm64 |
+| llama-throughput-lab | pmoves-llama-throughput-lab | ✅ (Cosign) | — | ✅ | amd64 only |
+| presign | (compose build) | — | — | — | local-build |
+| render-webhook | (compose build) | — | — | — | local-build |
+| jellyfin-bridge | (compose build) | — | — | — | local-build |
+
+**Data & Monitoring** (vendor images — no PMOVES build)
+
+| Compose Service | Image Source | Notes |
+|----------------|-------------|-------|
+| nats | nats:2.10-alpine | Vendor |
+| supabase-db | supabase/postgres | Vendor |
+| qdrant | qdrant/qdrant:v1.10.0 | Vendor |
+| neo4j | neo4j:5.22 | Vendor |
+| meilisearch | getmeili/meilisearch:v1.8 | Vendor |
+| minio | minio/minio | Vendor |
+| prometheus | prom/prometheus | Vendor |
+| grafana | grafana/grafana | Vendor |
+| loki | grafana/loki | Vendor |
+| promtail | grafana/promtail | Vendor |
+| cadvisor | gcr.io/cadvisor/cadvisor | Vendor |
+| tensorzero | tensorzero/gateway | Vendor |
+| tensorzero-clickhouse | clickhouse/clickhouse-server | Vendor |
+| tensorzero-ui | tensorzero/ui | Vendor |
+
+**Pipeline overlap note:** `agent-zero`, `archon`, and `pmoves-yt` appear in both `integrations-ghcr` (multi-arch, Trivy+Cosign) and `self-hosted-builds` (amd64-only). Push trigger exclusions added to `self-hosted-builds` to prevent duplicate builds on push to main (PR #832 fix).
+
+¹ 9 images in the `self-hosted-builds` matrix; 3 (`agent-zero`, `archon`, `pmoves-yt`) are excluded from auto-trigger on push/PR by path filters (built by `integrations-ghcr` instead). All 9 remain buildable via manual `workflow_dispatch`.
+
+**Operator Guide:** See [`pmoves/docs/operations/DOCKER_BUILD_GUIDE.md`](operations/DOCKER_BUILD_GUIDE.md) for the consolidated local → CI Docker build workflow.
+
+#### Dockerfile Hardening Snapshot
+
+| Metric | Approximate Count | Target | Notes |
+|--------|-------------------|--------|-------|
+| Non-root USER directive | ~49/51 Dockerfiles | 100% | 2 remaining: Agent Zero supervisord, TensorZero provider-proxy |
+| HEALTHCHECK instruction | ~16/51 Dockerfiles | 100% | Most rely on compose-level healthchecks instead |
+| SHA-pinned base image | ~13/51 Dockerfiles | 100% | Remainder use `:latest` or version tags |
+
+**Full per-service details:** `pmoves/docs/hardening/PMOVES-hardening-tracker.md`
 
 ---
 
