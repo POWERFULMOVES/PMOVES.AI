@@ -9,8 +9,8 @@ PR: https://github.com/POWERFULMOVES/PMOVES.AI/pull/483
 
 import pytest
 import httpx
-import subprocess
-import json
+
+from _smoke_helpers import PMOVES_DIR, grep_context, grep_file
 
 
 @pytest.mark.smoke
@@ -57,19 +57,12 @@ async def test_agent_zero_nats_not_using_unauthenticated_url(http_client: httpx.
 @pytest.mark.smoke
 def test_agent_zero_env_file_has_nats_credentials() -> None:
     """Verify env.tier-agent defines NATS_URL with credentials."""
-    import subprocess
+    matches = grep_file(PMOVES_DIR / "env.tier-agent", r"^NATS_URL=")
 
-    result = subprocess.run(
-        ["grep", "^NATS_URL=", "env.tier-agent"],
-        capture_output=True,
-        text=True,
-        cwd="/home/pmoves/PMOVES.AI/pmoves",
-    )
-
-    if result.returncode != 0:
+    if not matches:
         pytest.fail("NATS_URL not found in env.tier-agent")
 
-    nats_url = result.stdout.strip()
+    nats_url = matches[0]
 
     # Should have credentials in the URL
     assert "pmoves@" in nats_url or ":" in nats_url, (
@@ -80,17 +73,12 @@ def test_agent_zero_env_file_has_nats_credentials() -> None:
 @pytest.mark.smoke
 def test_comfy_watcher_env_file_has_nats_credentials() -> None:
     """Verify env.tier-worker defines NATS_URL with credentials for comfy-watcher."""
-    result = subprocess.run(
-        ["grep", "^NATS_URL=", "env.tier-worker"],
-        capture_output=True,
-        text=True,
-        cwd="/home/pmoves/PMOVES.AI/pmoves",
-    )
+    matches = grep_file(PMOVES_DIR / "env.tier-worker", r"^NATS_URL=")
 
-    if result.returncode != 0:
+    if not matches:
         pytest.fail("NATS_URL not found in env.tier-worker")
 
-    nats_url = result.stdout.strip()
+    nats_url = matches[0]
 
     # Should have credentials in the URL
     assert "pmoves@" in nats_url or ":" in nats_url, (
@@ -101,15 +89,10 @@ def test_comfy_watcher_env_file_has_nats_credentials() -> None:
 @pytest.mark.smoke
 def test_nats_url_removed_from_env_shared() -> None:
     """Verify NATS_URL was removed from env.shared (moved to tier-specific files)."""
-    result = subprocess.run(
-        ["grep", "^NATS_URL=", "env.shared"],
-        capture_output=True,
-        text=True,
-        cwd="/home/pmoves/PMOVES.AI/pmoves",
-    )
+    matches = grep_file(PMOVES_DIR / "env.shared", r"^NATS_URL=")
 
     # env.shared should NOT have NATS_URL defined (it's now tier-specific)
-    assert result.returncode != 0, (
+    assert len(matches) == 0, (
         "NATS_URL should be removed from env.shared and defined in tier env files"
     )
 
@@ -117,36 +100,17 @@ def test_nats_url_removed_from_env_shared() -> None:
 @pytest.mark.smoke
 def test_env_shared_still_has_nats_user_and_password() -> None:
     """Verify env.shared still has NATS_USER and NATS_PASSWORD for reference."""
-    result = subprocess.run(
-        ["grep", "-E", "^NATS_(USER|PASSWORD)=", "env.shared"],
-        capture_output=True,
-        text=True,
-        cwd="/home/pmoves/PMOVES.AI/pmoves",
-    )
+    matches = grep_file(PMOVES_DIR / "env.shared", r"^NATS_(USER|PASSWORD)=")
 
     # env.shared should still have the credential components
-    assert result.returncode == 0, (
-        "env.shared should have NATS_USER and NATS_PASSWORD for reference"
-    )
-
-    lines = result.stdout.strip().split("\n")
-    assert len(lines) >= 2, "Should have both NATS_USER and NATS_PASSWORD"
+    assert len(matches) >= 2, "Should have both NATS_USER and NATS_PASSWORD"
 
 
 @pytest.mark.smoke
 def test_comfy_watcher_service_uses_tier_nats_url() -> None:
     """Verify comfy-watcher service does NOT override NATS_URL from env files."""
-    import subprocess
-
-    # Check that comfy-watcher doesn't have NATS_URL override in environment section
-    result = subprocess.run(
-        ["awk", "/comfy-watcher:/,/^\\S/{print}", "docker-compose.yml"],
-        capture_output=True,
-        text=True,
-        cwd="/home/pmoves/PMOVES.AI/pmoves",
-    )
-
-    comfy_watcher_config = result.stdout
+    compose = PMOVES_DIR / "docker-compose.yml"
+    comfy_watcher_config = grep_context(compose, r"comfy-watcher:", after=20)
 
     # Should NOT have NATS_URL override in environment section
     # (it should use the value from env.shared/env.tier-worker via env_file)
@@ -169,17 +133,8 @@ def test_comfy_watcher_service_uses_tier_nats_url() -> None:
 @pytest.mark.smoke
 def test_agent_zero_service_uses_tier_nats_url() -> None:
     """Verify agent-zero service does NOT override NATS_URL from env files."""
-    import subprocess
-
-    # Check that agent-zero doesn't have NATS_URL override in environment section
-    result = subprocess.run(
-        ["awk", "/agent-zero:/,/^\\S/{print}", "docker-compose.yml"],
-        capture_output=True,
-        text=True,
-        cwd="/home/pmoves/PMOVES.AI/pmoves",
-    )
-
-    agent_zero_config = result.stdout
+    compose = PMOVES_DIR / "docker-compose.yml"
+    agent_zero_config = grep_context(compose, r"agent-zero:", after=20)
 
     # Should NOT have NATS_URL override in environment section
     has_nats_override = False

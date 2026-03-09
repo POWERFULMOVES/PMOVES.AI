@@ -9,22 +9,20 @@ PR: https://github.com/POWERFULMOVES/PMOVES.AI/pull/483
 
 import pytest
 import httpx
-import subprocess
+
+from _smoke_helpers import PMOVES_DIR, grep_context, grep_file
+
+
+COMPOSE = PMOVES_DIR / "docker-compose.yml"
 
 
 @pytest.mark.smoke
 def test_neo4j_http_port_exposed() -> None:
     """Verify Neo4j HTTP interface is exposed on port 7474."""
-    result = subprocess.run(
-        ["grep", "-A", "5", "neo4j:", "docker-compose.yml"],
-        capture_output=True,
-        text=True,
-        cwd="/home/pmoves/PMOVES.AI/pmoves",
-    )
+    config = grep_context(COMPOSE, r"neo4j:", after=5)
 
-    assert result.returncode == 0, "neo4j service not found in docker-compose.yml"
+    assert config, "neo4j service not found in docker-compose.yml"
 
-    config = result.stdout
     has_http_port = "${NEO4J_HTTP_PORT:-7474}:7474" in config
 
     assert has_http_port, (
@@ -35,16 +33,10 @@ def test_neo4j_http_port_exposed() -> None:
 @pytest.mark.smoke
 def test_neo4j_bolt_port_exposed() -> None:
     """Verify Neo4j Bolt protocol is exposed on port 7687."""
-    result = subprocess.run(
-        ["grep", "-A", "5", "neo4j:", "docker-compose.yml"],
-        capture_output=True,
-        text=True,
-        cwd="/home/pmoves/PMOVES.AI/pmoves",
-    )
+    config = grep_context(COMPOSE, r"neo4j:", after=5)
 
-    assert result.returncode == 0, "neo4j service not found in docker-compose.yml"
+    assert config, "neo4j service not found in docker-compose.yml"
 
-    config = result.stdout
     has_bolt_port = "${NEO4J_BOLT_PORT:-7687}:7687" in config
 
     assert has_bolt_port, (
@@ -55,16 +47,10 @@ def test_neo4j_bolt_port_exposed() -> None:
 @pytest.mark.smoke
 def test_neo4j_ports_not_using_single_variable() -> None:
     """Verify Neo4j does NOT use a single NEO4J_PORT for both HTTP and Bolt."""
-    result = subprocess.run(
-        ["grep", "-A", "5", "neo4j:", "docker-compose.yml"],
-        capture_output=True,
-        text=True,
-        cwd="/home/pmoves/PMOVES.AI/pmoves",
-    )
+    config = grep_context(COMPOSE, r"neo4j:", after=5)
 
-    assert result.returncode == 0, "neo4j service not found in docker-compose.yml"
+    assert config, "neo4j service not found in docker-compose.yml"
 
-    config = result.stdout
     lines = config.split("\n")
 
     # Check that we DON'T have the old format where both ports use NEO4J_PORT
@@ -86,18 +72,14 @@ def test_neo4j_ports_not_using_single_variable() -> None:
 @pytest.mark.smoke
 def test_neo4j_http_port_mapping() -> None:
     """Verify HTTP port mapping format is correct."""
-    result = subprocess.run(
-        ["grep", "NEO4J_HTTP_PORT", "docker-compose.yml"],
-        capture_output=True,
-        text=True,
-        cwd="/home/pmoves/PMOVES.AI/pmoves",
-    )
+    matches = grep_file(COMPOSE, r"NEO4J_HTTP_PORT", fixed=True)
 
-    if result.returncode != 0:
+    if not matches:
         pytest.skip("NEO4J_HTTP_PORT not found in docker-compose.yml")
 
+    combined = "\n".join(matches)
     # Should map internal 7474 to host NEO4J_HTTP_PORT (default 7474)
-    assert "${NEO4J_HTTP_PORT:-7474}:7474" in result.stdout, (
+    assert "${NEO4J_HTTP_PORT:-7474}:7474" in combined, (
         "HTTP port mapping should use NEO4J_HTTP_PORT variable with default 7474"
     )
 
@@ -105,18 +87,14 @@ def test_neo4j_http_port_mapping() -> None:
 @pytest.mark.smoke
 def test_neo4j_bolt_port_mapping() -> None:
     """Verify Bolt port mapping format is correct."""
-    result = subprocess.run(
-        ["grep", "NEO4J_BOLT_PORT", "docker-compose.yml"],
-        capture_output=True,
-        text=True,
-        cwd="/home/pmoves/PMOVES.AI/pmoves",
-    )
+    matches = grep_file(COMPOSE, r"NEO4J_BOLT_PORT", fixed=True)
 
-    if result.returncode != 0:
+    if not matches:
         pytest.skip("NEO4J_BOLT_PORT not found in docker-compose.yml")
 
+    combined = "\n".join(matches)
     # Should map internal 7687 to host NEO4J_BOLT_PORT (default 7687)
-    assert "${NEO4J_BOLT_PORT:-7687}:7687" in result.stdout, (
+    assert "${NEO4J_BOLT_PORT:-7687}:7687" in combined, (
         "Bolt port mapping should use NEO4J_BOLT_PORT variable with default 7687"
     )
 
@@ -132,7 +110,7 @@ async def test_neo4j_http_accessible() -> None:
             # Neo4j returns 200 OK when accessible
             assert response.status_code == 200
 
-    except (httpx.ConnectError, httpx.TimeoutError) as e:
+    except (httpx.ConnectError, httpx.TimeoutException) as e:
         pytest.skip(f"Neo4j not accessible on port 7474: {e}")
 
 
@@ -140,34 +118,24 @@ async def test_neo4j_http_accessible() -> None:
 def test_neo4j_env_file_has_both_ports() -> None:
     """Verify env.tier-data can configure both HTTP and Bolt ports independently."""
     # Check that tier env files support both port variables
-    result = subprocess.run(
-        ["grep", "-E", "NEO4J_(HTTP|BOLT)_PORT", "env.tier-data.example"],
-        capture_output=True,
-        text=True,
-        cwd="/home/pmoves/PMOVES.AI/pmoves",
+    matches = grep_file(
+        PMOVES_DIR / "env.tier-data.example",
+        r"NEO4J_(HTTP|BOLT)_PORT",
     )
 
     # env.tier-data.example should have both port variables documented
-    if result.returncode == 0:
-        lines = result.stdout.strip().split("\n")
+    if matches:
         # At least one of the port variables should be documented
-        assert len(lines) > 0, "Neo4j port variables should be documented in env.tier-data.example"
+        assert len(matches) > 0, "Neo4j port variables should be documented in env.tier-data.example"
 
 
 @pytest.mark.smoke
 def test_hirag_v2_uses_neo4j_bolt_port() -> None:
     """Verify Hi-RAG v2 service can connect to Neo4j via Bolt protocol."""
-    result = subprocess.run(
-        ["grep", "-A", "30", "hi-rag-gateway-v2:", "docker-compose.yml"],
-        capture_output=True,
-        text=True,
-        cwd="/home/pmoves/PMOVES.AI/pmoves",
-    )
+    config = grep_context(COMPOSE, r"hi-rag-gateway-v2:", after=30)
 
-    if result.returncode != 0:
+    if not config:
         pytest.skip("hi-rag-gateway-v2 service not found")
-
-    config = result.stdout
 
     # Hi-RAG v2 should have NEO4J_URL configured for Bolt connection
     has_bolt_url = "NEO4J_URL" in config or "bolt://neo4j:7687" in config
