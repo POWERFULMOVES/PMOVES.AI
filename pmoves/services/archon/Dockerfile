@@ -71,7 +71,7 @@ ENV ARCHON_FORM=POWERFULMOVES \
     AGENT_FORMS_DIR=/app/configs/agents/forms \
     ARCHON_UI_STATIC_DIR=/app/static/archon-ui \
     ARCHON_VENDOR_ROOT=/app/vendor/archon \
-    MCP_CREDENTIALS_PATH=/app/config/mcp/credentials.json
+    MCP_CONFIG_PATH=/app/config/mcp/credentials.json
 
 # Local vendor seed (submodule) for USE_LOCAL_VENDOR=1 builds.
 # NOTE: This requires the submodule to be present in the build context.
