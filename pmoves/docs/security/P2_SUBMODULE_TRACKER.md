@@ -8,7 +8,7 @@ Last updated: 2026-03-09
 
 ## Open Issues
 
-No P2 items were fixed by PRs merged since 2026-02-26 (PRs #827-#835 addressed CI, docs, build-gate, and runner lane — no submodule security fixes). All 14 open items remain.
+No P2 items were fixed by PRs merged since 2026-02-26 (PRs #827-#835 addressed CI, docs, build-gate, and runner lane — no submodule security fixes). All 15 open items remain.
 
 ### Production-blocking (fix before GA)
 

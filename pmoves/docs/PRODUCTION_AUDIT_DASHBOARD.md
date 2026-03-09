@@ -16,7 +16,7 @@
 - **AB-9 RESOLVED** — 3/4 self-hosted runners back online (ai-lab-runner, hotfix-runner, vps-runner). Only `pmoves-ai-lab-win` (Windows) remains offline. CI queue healthy with zero starvation. CodeQL runs completing in ~4min. Concurrency/path throttles from PRs #832/#834/#835 confirmed effective.
 - **PRs #834/#835 merged** — build-gate Phase 2 (`build_gate.py` + `build-gate.mk`) and hotfix runner lane with `subprocess.TimeoutExpired` handling
 - **Dependabot alerts**: 0 open (was 1 medium — now resolved)
-- **P2 tracker refreshed** — 14 items remain open, 1 previously closed (HiRAG stale). No P2s fixed by intervening merges. Tracker date updated to 2026-03-09. Re-prioritized into 3 tiers: 4 production-blocking (P2-HIGH/MED), 6 tracked improvements, 5 cosmetic/env syntax.
+- **P2 tracker refreshed** — 15 items remain open, 1 previously closed (HiRAG stale). No P2s fixed by intervening merges. Tracker date updated to 2026-03-09. Re-prioritized into 3 tiers: 4 production-blocking (P2-HIGH/MED), 6 tracked improvements, 5 cosmetic/env syntax.
 - **Trivy failure triage** (from 2026-03-05 sweep):
   - `agent-zero`: Scan timeout at 5m — infra issue, not vulnerability. Increase timeout to 10m or use `--skip-java-db` to reduce scan time. **Not a blocker.**
   - `archon`: 19 HIGH + 4 CRITICAL — key items: Crawl4AI RCE (CVE-2026-26216, upgrade to 0.8.0), langchain-core RCE (CVE-2025-68664, upgrade to 1.2.5), pydantic-ai info-disclosure. Upstream pins needed.
