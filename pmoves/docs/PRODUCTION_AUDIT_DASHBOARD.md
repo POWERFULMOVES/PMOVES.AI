@@ -161,7 +161,7 @@ Three CI pipelines build Docker images. This matrix is the single cross-referenc
 | Pipeline | Workflow File | Matrix Source | Images | Arch | Trivy | Cosign | SBOM | Trigger |
 |----------|--------------|---------------|--------|------|-------|--------|------|---------|
 | `integrations-ghcr` | `integrations-ghcr.yml` | `integrations-ghcr.matrix.json` | 16 | amd64+arm64 | Yes (HIGH/CRIT gate) | Yes (keyless) | Conditional (10/16) | push/PR/dispatch |
-| `self-hosted-builds` | `self-hosted-builds.yml` | inline matrix | 9 | amd64 only | No | No | No | push/PR/dispatch |
+| `self-hosted-builds` | `self-hosted-builds.yml` | inline matrix | 9¹ | amd64 only | No | No | No | push/PR/dispatch |
 | `build-images` | `build-images.yml` | `pmoves/images.yaml` | 29 | amd64 (default) | No | No | Yes (all) | manual dispatch only |
 
 #### Service-to-Pipeline Mapping
@@ -255,6 +255,10 @@ Three CI pipelines build Docker images. This matrix is the single cross-referenc
 | tensorzero-ui | tensorzero/ui | Vendor |
 
 **Pipeline overlap note:** `agent-zero`, `archon`, and `pmoves-yt` appear in both `integrations-ghcr` (multi-arch, Trivy+Cosign) and `self-hosted-builds` (amd64-only). Push trigger exclusions added to `self-hosted-builds` to prevent duplicate builds on push to main (PR #832 fix).
+
+¹ 9 images in the `self-hosted-builds` matrix; 3 (`agent-zero`, `archon`, `pmoves-yt`) are excluded from auto-trigger on push/PR by path filters (built by `integrations-ghcr` instead). All 9 remain buildable via manual `workflow_dispatch`.
+
+**Operator Guide:** See [`pmoves/docs/operations/DOCKER_BUILD_GUIDE.md`](operations/DOCKER_BUILD_GUIDE.md) for the consolidated local → CI Docker build workflow.
 
 #### Dockerfile Hardening Snapshot
 

@@ -67,7 +67,7 @@ jobs:
       packages: write
     # TODO: Re-enable when in-tree GPU Dockerfiles are created for ollama and hirag-gateway
     # Currently both ./services/ollama and ./services/hirag-gateway don't exist;
-    # hirag-gateway is built via integrations-ghcr from the submodule repo instead.
+    # hirag-gateway is built via build-images.yml (manual dispatch) from pmoves/images.yaml.
     if: ${{ false }}
 
     steps:
@@ -317,7 +317,9 @@ jobs:
         run: |
           sleep 60
           curl -sf http://localhost:8080/healthz || exit 1
-          curl -sf http://localhost:8086/hirag/health || exit 1
+          # hirag-gateway is built by build-images.yml (manual dispatch), not this workflow.
+          # Best-effort check — non-fatal if hirag-gateway is not deployed.
+          curl -sf http://localhost:8086/hirag/health || true
           echo "Production deployment healthy"
 
       - name: Notify Discord
