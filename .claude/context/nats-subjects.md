@@ -628,6 +628,55 @@ nats server report connections
 - `nats_server_messages_in` - Messages received
 - `nats_server_messages_out` - Messages sent
 
+## BoTZ MCP GitHub Subjects
+
+### GitHub Tool Execution
+
+**`botz.mcp.github.tool.executed.v1`**
+- **Direction:** Published by BoTZ GitHub MCP server → Consumed by monitoring
+- **Purpose:** Track all GitHub MCP tool calls for observability
+- **Payload:**
+  ```json
+  {
+    "tool": "create_pull_request",
+    "repo": "POWERFULMOVES/PMOVES.AI",
+    "timestamp": "2026-03-10T12:00:00Z",
+    "success": true,
+    "duration_ms": 450
+  }
+  ```
+- **Subscribers:** Observability dashboards, Graphiti trail
+
+**`botz.mcp.github.pr.created.v1`**
+- **Direction:** Published by BoTZ GitHub MCP server → Consumed by Agent Zero, Discord
+- **Purpose:** Notify that a PR was created via MCP tooling
+- **Payload:**
+  ```json
+  {
+    "repo": "POWERFULMOVES/PMOVES.AI",
+    "pr_number": 849,
+    "title": "feat(github-app): docs, registry, and org-wide strategy",
+    "author": "pmoves-ai[bot]",
+    "timestamp": "2026-03-10T12:00:00Z"
+  }
+  ```
+- **Subscribers:** Agent Zero, Discord Publisher, PR Monitor
+
+**`botz.mcp.github.issue.created.v1`**
+- **Direction:** Published by BoTZ GitHub MCP server → Consumed by Agent Zero, Discord
+- **Purpose:** Notify that an issue was created via MCP tooling
+- **Payload:**
+  ```json
+  {
+    "repo": "POWERFULMOVES/PMOVES.AI",
+    "issue_number": 100,
+    "title": "Issue title",
+    "labels": ["bug"],
+    "timestamp": "2026-03-10T12:00:00Z"
+  }
+  ```
+- **Subscribers:** Agent Zero, Discord Publisher
+
 ## GPU Mesh & Model Lifecycle Subjects
 
 ### GPU Orchestrator → Model Registry
