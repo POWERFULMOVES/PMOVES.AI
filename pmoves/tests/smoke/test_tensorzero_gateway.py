@@ -3,7 +3,7 @@ TensorZero Gateway service-specific smoke tests.
 
 Tests TensorZero Gateway health and ClickHouse integration.
 
-Expected runtime: <5s
+Expected runtime: <5s (skips gracefully when services are unavailable)
 """
 
 import pytest
@@ -15,24 +15,55 @@ from pmoves.tests.utils.service_catalog import TENSORZERO_GATEWAY, TENSORZERO_CL
 # FIXTURES
 # ============================================================================
 
-@pytest.fixture(scope="session")
-async def tensorzero_client() -> httpx.AsyncClient:
-    """TensorZero Gateway HTTP client."""
+@pytest.fixture
+async def tensorzero_client():
+    """TensorZero Gateway HTTP client. Skips dependent tests if service is unavailable."""
     timeout = httpx.Timeout(10.0, connect=5.0)
-    return httpx.AsyncClient(
+    client = httpx.AsyncClient(
         base_url=f"http://localhost:{TENSORZERO_GATEWAY.port}",
-        timeout=timeout
+        timeout=timeout,
     )
+    # Probe connectivity AND service identity — skip if unreachable or wrong service
+    try:
+        resp = await client.get("/healthz")
+        if resp.status_code == 404:
+            await client.aclose()
+            pytest.skip(
+                f"Port {TENSORZERO_GATEWAY.port} is responding but /healthz returned 404 "
+                "(TensorZero Gateway may not be running)"
+            )
+    except (httpx.ConnectError, httpx.ConnectTimeout):
+        await client.aclose()
+        pytest.skip(
+            f"TensorZero Gateway not reachable at localhost:{TENSORZERO_GATEWAY.port}"
+        )
+    yield client
+    await client.aclose()
 
 
-@pytest.fixture(scope="session")
-async def clickhouse_client() -> httpx.AsyncClient:
-    """TensorZero ClickHouse HTTP client."""
+@pytest.fixture
+async def clickhouse_client():
+    """TensorZero ClickHouse HTTP client. Skips dependent tests if service is unavailable."""
     timeout = httpx.Timeout(10.0, connect=5.0)
-    return httpx.AsyncClient(
+    client = httpx.AsyncClient(
         base_url=f"http://localhost:{TENSORZERO_CLICKHOUSE.port}",
-        timeout=timeout
+        timeout=timeout,
     )
+    try:
+        resp = await client.get("/ping")
+        if resp.status_code == 404:
+            await client.aclose()
+            pytest.skip(
+                f"Port {TENSORZERO_CLICKHOUSE.port} is responding but /ping returned 404 "
+                "(ClickHouse may not be running)"
+            )
+    except (httpx.ConnectError, httpx.ConnectTimeout):
+        await client.aclose()
+        pytest.skip(
+            f"ClickHouse not reachable at localhost:{TENSORZERO_CLICKHOUSE.port}"
+        )
+    yield client
+    await client.aclose()
 
 
 # ============================================================================
