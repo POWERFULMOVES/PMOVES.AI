@@ -16,8 +16,14 @@ if [ -z "$INPUT" ]; then
     exit 0
 fi
 
+# Resolve Python command (python3 on Linux/macOS, python on Windows)
+PYTHON_CMD="$(command -v python3 2>/dev/null || command -v python 2>/dev/null || echo "")"
+if [ -z "$PYTHON_CMD" ]; then
+    exit 0
+fi
+
 # Extract file_path from tool_input
-FILE_PATH="$(echo "$INPUT" | python3 -c "
+FILE_PATH="$(echo "$INPUT" | $PYTHON_CMD -c "
 import sys, json
 try:
     d = json.load(sys.stdin)
@@ -55,13 +61,24 @@ BASENAME="$(basename "$FILE_PATH" 2>/dev/null)" || BASENAME="trail-entry"
 SUMMARY="Auto-signed trail write: $BASENAME"
 
 # Sign the trail entry (best-effort, 8s timeout)
-SIGNED_JSON="$(timeout 8 python3 "$SIGN_TOOL" \
-    --agent-id "${AGENT_ID:-claude-opus}" \
-    --summary "$SUMMARY" \
-    --phase "${PHASE:-Phase H}" \
-    2>/dev/null)" || {
-    exit 0
-}
+TIMEOUT_CMD="$(command -v timeout 2>/dev/null || echo "")"
+if [ -n "$TIMEOUT_CMD" ]; then
+    SIGNED_JSON="$($TIMEOUT_CMD 8 $PYTHON_CMD "$SIGN_TOOL" \
+        --agent-id "${AGENT_ID:-claude-opus}" \
+        --summary "$SUMMARY" \
+        --phase "${PHASE:-Phase H}" \
+        2>/dev/null)" || {
+        exit 0
+    }
+else
+    SIGNED_JSON="$($PYTHON_CMD "$SIGN_TOOL" \
+        --agent-id "${AGENT_ID:-claude-opus}" \
+        --summary "$SUMMARY" \
+        --phase "${PHASE:-Phase H}" \
+        2>/dev/null)" || {
+        exit 0
+    }
+fi
 
 if [ -z "$SIGNED_JSON" ]; then
     exit 0

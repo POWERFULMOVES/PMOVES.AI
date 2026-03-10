@@ -1686,13 +1686,13 @@ services:
     - -m
     - '8222'
     - --user
-    - nats
+    - ${NATS_USER:-nats}
     - --pass
-    - pmoves
+    - ${NATS_PASSWORD:-pmoves}
     restart: unless-stopped
     ports:
     - ${NATS_PORT:-4222}:4222
-    - ${NATS_MONITORING_PORT:-9223}:4223
+    - ${NATS_MONITORING_PORT:-9223}:8222
     networks:
     - pmoves_bus
     environment:
