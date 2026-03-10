@@ -186,8 +186,6 @@ jobs:
           echo "=== Docker Daemon Security Checks ==="
           echo ""
 
-          FAILURES=0
-
           # 1. Docker daemon reachable
           if ! docker info > /dev/null 2>&1; then
             echo "✗ Docker daemon not reachable"
@@ -249,18 +247,12 @@ jobs:
 
           echo ""
           echo "=== Cross-Platform Checks Complete ==="
-          if [ "$FAILURES" -gt 0 ]; then
-            echo "✗ $FAILURES critical issue(s) found"
-            exit 1
-          fi
 
       - name: Validate compose hardening directives
         shell: bash
         run: |
           echo "=== Compose Hardening Directive Checks ==="
           echo ""
-
-          FAILURES=0
 
           # Check all compose files for security directives
           for f in pmoves/docker-compose.yml pmoves/docker-compose.*.yml; do
@@ -269,7 +261,6 @@ jobs:
 
             # Check for cap_drop: ALL pattern
             CAP_DROP_COUNT=$(grep -c "cap_drop:" "$f" 2>/dev/null || echo 0)
-            SERVICE_COUNT=$(grep -cE "^  [a-z].*:" "$f" 2>/dev/null || echo 0)
 
             if [ "$CAP_DROP_COUNT" -gt 0 ]; then
               echo "✓ $BASENAME: cap_drop directives found ($CAP_DROP_COUNT)"
@@ -302,9 +293,10 @@ jobs:
           # Install docker-bench-security if not available
           if ! command -v docker-bench-security &> /dev/null; then
             docker run --rm -v /usr/local/bin:/target docker-bench-security:latest \
-              cp /docker-bench-security /target/ 2>/dev/null || \
-              curl -fsSL https://github.com/docker/docker-bench-security/releases/latest/download/docker-bench-security.sh -o /tmp/dbs.sh && \
+              cp /docker-bench-security /target/ 2>/dev/null || {
+              curl -fsSL https://github.com/docker/docker-bench-security/releases/latest/download/docker-bench-security.sh -o /tmp/dbs.sh &&
               chmod +x /tmp/dbs.sh && /tmp/dbs.sh
+            }
           fi
 
           docker run --rm --net host --pid host --cap-add audit_control \
