@@ -167,6 +167,8 @@ jobs:
   docker-bench:
     name: Docker Bench Security
     runs-on: [self-hosted, ai-lab]
+    env:
+      DOCKER_CONTENT_TRUST: 1
 
     steps:
       - name: Harden Runner
@@ -209,7 +211,7 @@ jobs:
           if [ "$LIVE_RESTORE" = "true" ]; then
             echo "✓ Live restore enabled"
           else
-            echo "⚠ Live restore disabled (containers stop if daemon restarts)"
+            echo "ℹ Live restore disabled (daemon config — not CI-fixable)"
           fi
 
           # 5. Check no containers running as privileged
