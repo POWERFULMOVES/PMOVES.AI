@@ -162,7 +162,7 @@ jobs:
           fi
 
   # ============================================================================
-  # Docker Bench Security Scan
+  # Docker Security Checks (Cross-Platform)
   # ============================================================================
   docker-bench:
     name: Docker Bench Security
@@ -177,8 +177,121 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Run Docker Bench
+      # ---- Cross-platform checks (Linux + Windows) ----
+      - name: Check Docker daemon security config
+        shell: bash
         run: |
+          echo "=== Docker Daemon Security Checks ==="
+          echo ""
+
+          FAILURES=0
+
+          # 1. Docker daemon reachable
+          if ! docker info > /dev/null 2>&1; then
+            echo "✗ Docker daemon not reachable"
+            exit 1
+          fi
+          echo "✓ Docker daemon reachable"
+
+          # 2. Check content trust (image signing)
+          if docker info --format '{{.SecurityOptions}}' 2>/dev/null | grep -qi "content-trust"; then
+            echo "✓ Content trust enabled"
+          else
+            echo "⚠ Content trust not enabled (set DOCKER_CONTENT_TRUST=1)"
+          fi
+
+          # 3. Check default runtime
+          RUNTIME=$(docker info --format '{{.DefaultRuntime}}' 2>/dev/null || echo "unknown")
+          echo "ℹ Default runtime: $RUNTIME"
+
+          # 4. Check live-restore (daemon resilience)
+          LIVE_RESTORE=$(docker info --format '{{.LiveRestoreEnabled}}' 2>/dev/null || echo "unknown")
+          if [ "$LIVE_RESTORE" = "true" ]; then
+            echo "✓ Live restore enabled"
+          else
+            echo "⚠ Live restore disabled (containers stop if daemon restarts)"
+          fi
+
+          # 5. Check no containers running as privileged
+          PRIV_CONTAINERS=$(docker ps -q 2>/dev/null | xargs -r docker inspect --format '{{.Name}} {{.HostConfig.Privileged}}' 2>/dev/null | grep "true" || true)
+          if [ -n "$PRIV_CONTAINERS" ]; then
+            echo "✗ Privileged containers found:"
+            echo "$PRIV_CONTAINERS"
+            FAILURES=$((FAILURES + 1))
+          else
+            echo "✓ No privileged containers running"
+          fi
+
+          # 6. Check no containers with pid=host
+          PID_HOST=$(docker ps -q 2>/dev/null | xargs -r docker inspect --format '{{.Name}} {{.HostConfig.PidMode}}' 2>/dev/null | grep "host" || true)
+          if [ -n "$PID_HOST" ]; then
+            echo "⚠ Containers with PID host mode:"
+            echo "$PID_HOST"
+          else
+            echo "✓ No containers using PID host mode"
+          fi
+
+          # 7. Check no containers with net=host
+          NET_HOST=$(docker ps -q 2>/dev/null | xargs -r docker inspect --format '{{.Name}} {{.HostConfig.NetworkMode}}' 2>/dev/null | grep "host" || true)
+          if [ -n "$NET_HOST" ]; then
+            echo "⚠ Containers with host network mode:"
+            echo "$NET_HOST"
+          else
+            echo "✓ No containers using host network mode"
+          fi
+
+          echo ""
+          echo "=== Cross-Platform Checks Complete ==="
+          if [ "$FAILURES" -gt 0 ]; then
+            echo "✗ $FAILURES critical issue(s) found"
+            exit 1
+          fi
+
+      - name: Validate compose hardening directives
+        shell: bash
+        run: |
+          echo "=== Compose Hardening Directive Checks ==="
+          echo ""
+
+          FAILURES=0
+
+          # Check all compose files for security directives
+          for f in pmoves/docker-compose.yml pmoves/docker-compose.*.yml; do
+            [ -f "$f" ] || continue
+            BASENAME=$(basename "$f")
+
+            # Check for cap_drop: ALL pattern
+            CAP_DROP_COUNT=$(grep -c "cap_drop:" "$f" 2>/dev/null || echo 0)
+            SERVICE_COUNT=$(grep -cE "^  [a-z].*:" "$f" 2>/dev/null || echo 0)
+
+            if [ "$CAP_DROP_COUNT" -gt 0 ]; then
+              echo "✓ $BASENAME: cap_drop directives found ($CAP_DROP_COUNT)"
+            elif echo "$BASENAME" | grep -qE "(agentgym|external|remote|open-notebook|supabase|jellyfin|vps)"; then
+              echo "ℹ $BASENAME: override file (inherits from base)"
+            else
+              echo "⚠ $BASENAME: no cap_drop directives"
+            fi
+
+            # Check for security_opt: no-new-privileges
+            NO_NEW_PRIV=$(grep -c "no-new-privileges" "$f" 2>/dev/null || echo 0)
+            if [ "$NO_NEW_PRIV" -gt 0 ]; then
+              echo "✓ $BASENAME: no-new-privileges found ($NO_NEW_PRIV)"
+            elif echo "$BASENAME" | grep -qE "(agentgym|external|remote|open-notebook|supabase|jellyfin|vps)"; then
+              : # override files inherit
+            else
+              echo "⚠ $BASENAME: no no-new-privileges directives"
+            fi
+          done
+
+          echo ""
+          echo "=== Compose Hardening Complete ==="
+
+      # ---- Linux-only: Full CIS Docker Bench ----
+      - name: Run CIS Docker Bench (Linux only)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          echo "=== CIS Docker Community Edition Benchmark ==="
           # Install docker-bench-security if not available
           if ! command -v docker-bench-security &> /dev/null; then
             docker run --rm -v /usr/local/bin:/target docker-bench-security:latest \
@@ -187,8 +300,6 @@ jobs:
               chmod +x /tmp/dbs.sh && /tmp/dbs.sh
           fi
 
-          # Run checks on sample service
-          echo "Running Docker Bench security checks..."
           docker run --rm --net host --pid host --cap-add audit_control \
             -v /var/lib/docker:/var/lib/docker:ro \
             -v /usr/lib/systemd:/usr/lib/systemd:ro \
