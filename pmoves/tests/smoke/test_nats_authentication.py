@@ -7,6 +7,7 @@ rather than unauthenticated fallbacks.
 PR: https://github.com/POWERFULMOVES/PMOVES.AI/pull/483
 """
 
+import re
 import subprocess
 import pytest
 import httpx
@@ -75,8 +76,8 @@ def test_agent_zero_env_file_has_nats_credentials() -> None:
 
     nats_url = matches[0]
 
-    assert "@" in nats_url, (
-        f"NATS_URL in env.tier-agent should have credentials (user:pass@host), got: {nats_url}"
+    assert re.search(r"nats://[^:@]+:[^@]+@", nats_url), (
+        f"NATS_URL in env.tier-agent should have credentials (nats://user:pass@host), got: {nats_url}"
     )
 
 
@@ -94,8 +95,8 @@ def test_comfy_watcher_env_file_has_nats_credentials() -> None:
 
     nats_url = matches[0]
 
-    assert "@" in nats_url, (
-        f"NATS_URL in env.tier-worker should have credentials (user:pass@host), got: {nats_url}"
+    assert re.search(r"nats://[^:@]+:[^@]+@", nats_url), (
+        f"NATS_URL in env.tier-worker should have credentials (nats://user:pass@host), got: {nats_url}"
     )
 
 

@@ -121,7 +121,10 @@ def test_no_duplicate_host_ports() -> None:
     conflicts = []
     for port, services in host_ports.items():
         if len(services) > 1:
-            # Skip profile-guarded or cross-compose-file intentional overlaps
+            # Skip profile-guarded ports — intentionally shared across
+            # different compose profiles/stacks, or dual-protocol (TCP+UDP)
+            # on the same service.  Note: the port extraction regex may
+            # also match env-var URL references as false positives.
             if port in PROFILE_GUARDED_PORTS:
                 continue
 
@@ -247,7 +250,7 @@ def test_no_localhost_references_in_compose_ports() -> None:
             if stripped == "ports:":
                 in_ports = True
             elif in_ports and stripped.startswith("-"):
-                if re.search(r'localhost:\d+', stripped):
+                if re.search(r'localhost:(\d+|\$\{)', stripped):
                     pytest.fail(
                         f"{compose_file.name} contains 'localhost:PORT' in port mapping: {stripped}. "
                         f"Use 'PORT:container_port' format instead."

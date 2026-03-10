@@ -7,10 +7,10 @@ inter-service coordination in PMOVES.AI.  Every agent, worker, and orchestrator
 communicates through NATS subjects.
 
 - **Image:** `nats:2.11.8-alpine`
-- **Client port:** 4222 (TCP)
-- **Monitoring:** 8222 (`/varz`, `/connz`, `/routez`)
-- **WebSocket:** 9223 (docked mode)
+- **Client port:** 4222 (`${NATS_PORT:-4222}:4222`)
+- **Monitoring:** 8222 (internal only — used by healthcheck: `curl http://localhost:8222/varz`)
 - **JetStream:** enabled (`-js` flag)
+- **WebSocket:** not configured in main compose (available in DoX standalone at 9222/9223)
 
 ## Standard Configuration
 
@@ -47,6 +47,16 @@ Full catalog: `.claude/context/nats-subjects.md`
 | `mesh.gpu.status.v1`                 | gpu-orchestrator   | GPU heartbeat (5s)         |
 | `claude.code.tool.executed.v1`       | Claude Code hooks  | CLI tool telemetry         |
 | `agent.graphiti.signed.v1`           | BoTZ gateway       | Agent trail attribution    |
+
+## JetStream Streams
+
+Created by `nats-init` sidecar (`pmoves/scripts/nats/init_streams.sh`):
+
+| Stream                 | Subject      | Retention | Max Age | Max Size |
+|------------------------|--------------|-----------|---------|----------|
+| `GEOMETRY_CGP`         | `geometry.>` | limits    | 30d     | 1 GB     |
+| `TOKENISM_ATTRIBUTION` | `tokenism.>` | interest  | 90d     | 2 GB     |
+| `BOTZ_COORDINATION`    | `botz.>`     | limits    | 7d      | 500 MB   |
 
 ## Debugging
 

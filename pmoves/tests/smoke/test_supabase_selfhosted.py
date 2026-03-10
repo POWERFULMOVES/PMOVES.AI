@@ -168,6 +168,9 @@ def test_no_cli_references_in_compose() -> None:
 @pytest.mark.smoke
 def test_env_uses_selfhosted_urls() -> None:
     """Verify environment files use self-hosted Supabase URLs."""
+    if not ENV_SHARED.exists():
+        pytest.skip("env.shared not found (runtime-generated, gitignored)")
+
     # Check for SUPABASE_REST_URL or SUPA_REST_URL with container-based URL
     rest_matches = grep_file(ENV_SHARED, "SUPABASE_REST_URL", fixed=True)
     supa_matches = grep_file(ENV_SHARED, "SUPA_REST_URL", fixed=True)

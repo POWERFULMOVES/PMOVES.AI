@@ -64,16 +64,33 @@ def test_nats_service_has_documentation_header() -> None:
 
 @pytest.mark.smoke
 def test_nats_url_defined_in_tier_files() -> None:
-    """Verify NATS_URL is defined in tier env files (not env.shared)."""
-    tier_agent = PMOVES_DIR / "env.tier-agent"
-    tier_worker = PMOVES_DIR / "env.tier-worker"
+    """Verify NATS_URL is defined in all required tier env files (not env.shared)."""
+    import warnings
 
-    agent_matches = grep_file(tier_agent, r"^NATS_URL=") if tier_agent.exists() else []
-    worker_matches = grep_file(tier_worker, r"^NATS_URL=") if tier_worker.exists() else []
+    required_tiers = ["env.tier-agent", "env.tier-worker"]
+    optional_tiers = ["env.tier-ui"]  # May not exist yet
 
-    assert agent_matches or worker_matches, (
-        "NATS_URL should be defined in env.tier-agent and/or env.tier-worker"
+    missing: list[str] = []
+    for tier in required_tiers:
+        path = PMOVES_DIR / tier
+        if not path.exists():
+            missing.append(f"{tier} (file missing)")
+            continue
+        matches = grep_file(path, r"^NATS_URL=")
+        if not matches:
+            missing.append(f"{tier} (no NATS_URL)")
+
+    assert not missing, (
+        f"NATS_URL should be defined in all required tier files. Missing: {missing}"
     )
+
+    # Advisory: check optional tiers too
+    for tier in optional_tiers:
+        path = PMOVES_DIR / tier
+        if path.exists():
+            matches = grep_file(path, r"^NATS_URL=")
+            if not matches:
+                warnings.warn(f"NATS_URL not found in {tier} (optional)")
 
 
 @pytest.mark.smoke

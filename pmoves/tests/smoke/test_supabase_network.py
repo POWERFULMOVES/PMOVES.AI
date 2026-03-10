@@ -34,21 +34,25 @@ def _docker_available() -> bool:
 
 @pytest.mark.smoke
 def test_supabase_network_name_correct_in_compose() -> None:
-    """Verify docker-compose.yml references a Supabase-accessible network."""
-    # The network may be named supabase_net, pmoves_data, or pmoves_external
-    # depending on the deployment mode (CLI vs self-hosted).
+    """Verify Supabase services and consumers share a reachable network."""
     content = COMPOSE.read_text()
 
-    has_supabase_network = (
-        "supabase_net" in content
-        or "pmoves_data" in content
-        or "pmoves_external" in content
+    network_names = ["supabase_net", "pmoves_data", "pmoves_external", "pmoves_app", "pmoves_api"]
+
+    # Find which networks exist in compose
+    present = [n for n in network_names if n in content]
+    assert present, (
+        "docker-compose.yml should define a Supabase-accessible network "
+        "(supabase_net, pmoves_data, pmoves_external, pmoves_app, or pmoves_api)"
     )
 
-    assert has_supabase_network, (
-        "docker-compose.yml should define a network for Supabase connectivity "
-        "(supabase_net, pmoves_data, or pmoves_external)"
-    )
+    # Verify supabase-postgrest is on at least one of these shared networks
+    postgrest_block = grep_context(COMPOSE, r"supabase-postgrest:", after=40)
+    if postgrest_block:
+        postgrest_networks = [n for n in present if n in postgrest_block]
+        assert postgrest_networks, (
+            f"supabase-postgrest should be on a shared network ({present})"
+        )
 
 
 @pytest.mark.smoke
@@ -61,6 +65,7 @@ def test_pmoves_ui_on_supabase_network() -> None:
 
     has_network = (
         "supabase_net" in config
+        or "pmoves_api" in config
         or "pmoves_app" in config
         or "pmoves_external" in config
     )
@@ -162,6 +167,17 @@ def test_archon_uses_host_dot_internal_for_supabase() -> None:
     assert has_supabase_ref, (
         "Archon should reference Supabase (host.docker.internal or container URL)"
     )
+
+    # When SUPA_REST_URL is used, validate it points to the right host
+    for line in config.split("\n"):
+        if "SUPA_REST_URL" in line and "=" in line:
+            value = line.split("=", 1)[1].strip().strip('"').strip("'")
+            # Skip variable references (${...}) — only validate literal values
+            if value and "${" not in value:
+                assert "supabase-postgrest" in value or "host.docker.internal" in value, (
+                    f"SUPA_REST_URL should point to supabase-postgrest or "
+                    f"host.docker.internal, got: {value}"
+                )
 
 
 @pytest.mark.smoke
