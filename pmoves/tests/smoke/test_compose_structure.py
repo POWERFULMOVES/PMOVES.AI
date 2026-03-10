@@ -390,23 +390,20 @@ def test_override_depends_on_targets_defined():
                 if dep_str not in all_service_names:
                     missing.append(f"{filename}:{svc_name} -> {dep_str}")
 
-    # These are real issues — override files expect services from main compose
-    # to be loaded together. Warn but don't fail (intended compose -f stacking).
-    if missing:
-        import warnings
-        warnings.warn(
-            f"Override files reference depends_on targets assumed from other compose files: "
-            f"{', '.join(missing[:5])}"
-        )
+    # Hard-fail on undefined dependencies — all cross-file deps should resolve
+    # when all compose files are loaded together.
+    assert not missing, (
+        f"Override files reference undefined depends_on targets: "
+        f"{', '.join(missing[:5])}"
+    )
 
 
 @pytest.mark.smoke
 def test_gpu_profile_naming_consistent():
-    """Verify GPU profile naming is consistent across compose files.
+    """Verify all GPU services use the standard 'gpu' profile name.
 
-    Services should use 'gpu' as the standard GPU profile name.
-    'gpu-only' is an alternative for VPS deployments but should be
-    documented and not conflict with 'gpu'.
+    All GPU-accelerated services must use 'gpu' as their profile name
+    for consistent activation via --profile gpu.
     """
     all_files = _load_all_compose_files()
 
@@ -427,13 +424,14 @@ def test_gpu_profile_naming_consistent():
                         f"{filename}:{svc_name}"
                     )
 
-    # Warn if multiple GPU profile names exist
-    if len(gpu_profiles) > 2:
-        import warnings
-        warnings.warn(
-            f"Multiple GPU profile names in use: {gpu_profiles}. "
-            f"Consider standardizing to 'gpu' and 'gpu-only'."
-        )
+    # All GPU services should use 'gpu' as the standard profile name.
+    # No other GPU-related profile names should exist.
+    non_standard = gpu_profiles - {"gpu"}
+    assert not non_standard, (
+        f"Non-standard GPU profile names found: {non_standard}. "
+        f"All GPU profiles should use 'gpu'. "
+        f"Offenders: {[gpu_profile_usage[p] for p in non_standard]}"
+    )
 
 
 @pytest.mark.smoke
@@ -500,19 +498,29 @@ def test_cross_compose_port_conflicts():
                     (filename, svc_name)
                 )
 
-    conflicts = []
+    same_file_conflicts = []
+    cross_file_conflicts = []
     for port, usages in port_usage.items():
-        # Get unique service names at this port
         unique_services = set(svc for _, svc in usages)
         if len(unique_services) > 1:
-            # Same port, different services — potential conflict
             details = [f"{f}:{s}" for f, s in usages]
-            conflicts.append(f"Port {port}: {', '.join(details)}")
+            entry = f"Port {port}: {', '.join(details)}"
+            # Check if all usages are in the same file
+            unique_files = set(f for f, _ in usages)
+            if len(unique_files) == 1:
+                same_file_conflicts.append(entry)
+            else:
+                cross_file_conflicts.append(entry)
 
-    # Advisory — cross-file conflicts may be intentional (different profiles/hosts)
-    if conflicts:
+    # Hard-fail on same-file port conflicts — these are always bugs
+    assert not same_file_conflicts, (
+        f"Same-file port conflicts: {'; '.join(same_file_conflicts)}"
+    )
+
+    # Advisory for cross-file overlaps — typically mutually exclusive stacks
+    if cross_file_conflicts:
         import warnings
         warnings.warn(
-            f"Cross-compose port overlaps (verify profiles are mutually exclusive): "
-            f"{'; '.join(conflicts[:5])}"
+            f"Cross-compose port overlaps (verify stacks are mutually exclusive): "
+            f"{'; '.join(cross_file_conflicts[:5])}"
         )
