@@ -3,9 +3,9 @@
 > **Single source of truth** for PMOVES.AI production readiness.
 > Supersedes all individual audit documents accumulated Feb 7 -- Feb 18, 2026.
 
-**Last Updated:** 2026-03-10 (PR #844 — UI smoke test alignment)
-**Branch:** `fix/static-smoke-blockers` → `main`
-**Commit:** `f74f1db0` + catalog alignment + UI test fixes
+**Last Updated:** 2026-03-10 (P2 verification sweep + Trivy triage correction)
+**Branch:** `main`
+**Commit:** `f1c98a14` + P2 tracker verification
 **Consolidated From:** 27 audit documents
 **Evidence:** live runbook execution on 2026-03-05 (`make ghcr-prepublish-inrepo-build`, strict local Trivy sweep logs under `pmoves/docs/logs/ghcr-local-prepublish/`)
 
@@ -13,7 +13,21 @@
 
 ## Latest Changes (Mar 10, 2026)
 
-### Service Catalog & Contract Alignment (PR #844 continued)
+### P2 Verification Sweep + Trivy Triage Correction
+
+- **P2 tracker verification sweep** — checked all 11 open items against current submodule SHAs:
+  - **6 CLOSED:** #2 BoTZ export syntax (no `export` in file), #6 PMOVES.YT MinIO creds (`${VAR:?required}` pattern), #9 Pipecat MCP allowlist (`tools_filter` implemented in `MCPClient`), #11 A2UI env.shared export (clean), #12 A2UI NATS auth (authenticated URL present), #16 A2UI env.tier-ui.sh export (clean)
+  - **1 IMPROVED:** #5 Open-Notebook health endpoint (`/healthz` alias added, `/metrics` still absent)
+  - **4 CONFIRMED OPEN:** #3 Open-Notebook SurrealDB root:root (still hardcoded), #10 Pipecat metrics (internal only, no Prometheus), #13/#14 tensorzero (upstream)
+  - **P2 tracker: 4 open + 1 improved / 17 total** (down from 11 open)
+- **Trivy CVE override correction** — dashboard previously claimed "added pip upgrade steps in Dockerfiles" for archon (crawl4ai, langchain-core) and deepresearch (ray, vllm). **These pins were never committed.** Corrected to "triaged with remediation plan" status:
+  - `archon`: `crawl4ai==0.7.4` still in `pyproject.toml` (target: 0.8.0), `langchain-core` unpinned (target: 1.2.5)
+  - `deepresearch`: No Dockerfile in submodule; upstream ray/vllm pins needed
+  - **Accepted risk**: Both images run in isolated Docker networks with no external ingress. CVE patches require upstream submodule PRs.
+- **Dependabot alerts**: 0 open (confirmed)
+- **Open PRs**: 0 (confirmed)
+
+### Previous — Service Catalog & Contract Alignment (PR #844 continued)
 
 - **Service catalog aligned to actual API contracts** (11 fixes in `service_catalog.py`):
   - `expected_fields` corrected: agent-zero (`status` only, not `version`/`timestamp`), archon (`status` only), pmoves-yt/presign/render-webhook/jellyfin-bridge (`ok` not `status`)
@@ -77,9 +91,10 @@
   - `options.js`: XSS via innerHTML → replaced with DOM API (`textContent`)
   - `mock-server.js`: unvalidated dynamic property → guarded with `Object.hasOwn()`
 - **Dependabot alerts** — 0 open
-- **Trivy CVE overrides** — added pip upgrade steps in Dockerfiles:
-  - `archon`: `crawl4ai==0.8.0` (CVE-2026-26216 RCE), `langchain-core==1.2.5` (CVE-2025-68664 RCE)
-  - `deepresearch`: `ray==2.52.0` (CVE-2025-62593 RCE), `vllm==0.14.1` (CVE-2026-22778 RCE)
+- **Trivy CVE triage** — remediation targets identified (NOT yet applied to Dockerfiles):
+  - `archon`: target `crawl4ai>=0.8.0` (CVE-2026-26216 RCE), `langchain-core>=1.2.5` (CVE-2025-68664 RCE) — currently at 0.7.4/unpinned
+  - `deepresearch`: target `ray>=2.52.0` (CVE-2025-62593 RCE), `vllm>=0.14.1` (CVE-2026-22778 RCE) — requires upstream submodule PRs
+  - **Accepted risk:** Both services run in isolated Docker networks with no direct external ingress
 - **AB-9 UPDATE** — All 4 self-hosted runners offline as of Mar 9 investigation. Previous "3/4 online" claim was stale. Root causes: `ai-lab-runner` (WSL2, no systemd service installed — process stopped), `ai-lab-win` (no Windows service — process stopped), `hotfix-runner` + `vps-runner` (remote machines, not accessible from dev workstation). WSL2 systemd now enabled (`/etc/wsl.conf`). Local runners require manual restart via `svc.sh install` (WSL) or interactive `run.cmd` (Windows). GHCR builds targeting `[self-hosted, Linux, X64, vps]` remain blocked until VPS runner is restored.
 - **Dockerfile audit fixes (4 images):**
   - `pmoves-archon`: Renamed `MCP_CREDENTIALS_PATH` → `MCP_CONFIG_PATH` to eliminate BuildKit `SecretsUsedInArgOrEnv` warning

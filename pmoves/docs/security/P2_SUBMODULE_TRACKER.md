@@ -4,11 +4,11 @@ Authoritative tracker for P2 security issues in PMOVES.AI submodules that requir
 
 **All P1 issues were fixed in Phase H (2026-02-17).** This tracker covers remaining P2 items.
 
-Last updated: 2026-03-09 (reconciliation sweep — all 7 Phase C P1 submodule findings verified fixed)
+Last updated: 2026-03-10 (P2 verification sweep — 5 items closed, 6 remain open)
 
 ## Open Issues
 
-P2 triage sweep (2026-03-09) verified all 4 production-blocking items are now fixed. 11 open items remain (Tier 2/3 only).
+P2 verification sweep (2026-03-10) checked all 11 open items against current submodule SHAs on main. 6 items closed (fixes verified in submodules), 5 remain open (all Tier 2/3, non-blocking).
 Reconciliation sweep (2026-03-09) verified all 7 reported P1 submodule issues from Phase C audit (2026-02-16) are already resolved on `PMOVES.AI-Edition-Hardened` branches. **0 P1 items remain open.**
 
 ### Production-blocking (fix before GA) — ALL RESOLVED
@@ -24,28 +24,28 @@ Reconciliation sweep (2026-03-09) verified all 7 reported P1 submodule issues fr
 
 | # | Submodule | Issue | File/Location | Severity | Status | Blocks Production? |
 |---|-----------|-------|---------------|----------|--------|--------------------|
-| 3 | Open-Notebook | SurrealDB root:root credentials in default config | `docker-compose*.yml` | P2-MED | OPEN | No — mitigated by network isolation |
-| 5 | Open-Notebook | Non-standard health endpoint (`/health` not `/healthz`), no `/metrics` | `api/main.py` | P2-LOW | OPEN | No — cosmetic |
-| 6 | PMOVES.YT | MinIO default credentials in env defaults | `env` files | P2-LOW | OPEN | No — mitigated by secrets-funnel |
-| 9 | Pipecat | No MCP tool allowlisting | Application layer | P2-LOW | OPEN | No — library scope, app-layer auth |
-| 10 | Pipecat | No Prometheus metrics export | Library scope | P2-LOW | OPEN | No — observability gap only |
-| 12 | A2UI | NATS URL missing auth credentials | `env.shared` | P2-LOW | OPEN | No — main compose overrides |
+| 3 | Open-Notebook | SurrealDB root:root credentials in default config | `docker-compose*.yml` | P2-MED | OPEN | No — mitigated by network isolation. Verified 2026-03-10: still hardcoded `SURREAL_USER=root`/`SURREAL_PASSWORD=root` in all compose files |
+| 5 | Open-Notebook | Non-standard health endpoint (`/health` not `/healthz`), no `/metrics` | `api/main.py` | P2-LOW | IMPROVED | No — `/healthz` alias now registered (line 143), `/metrics` still absent. Verified 2026-03-10 |
+| 10 | Pipecat | No Prometheus metrics export | Library scope | P2-LOW | OPEN | No — internal `MetricsFrame` only, no `prometheus_client`. Verified 2026-03-10 |
 
 ### Cosmetic / env syntax (no runtime impact)
 
 | # | Submodule | Issue | File/Location | Severity | Status | Blocks Production? |
 |---|-----------|-------|---------------|----------|--------|--------------------|
-| 2 | BoTZ | env.tier-agent.sh uses `export` syntax (Docker incompatible) | `env.tier-agent.sh` | P2-LOW | OPEN | No — not used by main compose `env_file` |
-| 11 | A2UI | env.shared uses `export` syntax (Docker incompatible) | `env.shared` | P2-LOW | OPEN | No — not used by main compose `env_file` |
 | 13 | tensorzero | 4 RUSTSEC advisories in dependencies | `deny.toml` | P2-LOW | OPEN | No — upstream vendor scope |
 | 14 | tensorzero | 30+ example compose files with hardcoded secrets | `examples/` | P2-LOW | OPEN | No — examples only, not production |
-| 16 | A2UI | env.tier-ui.sh uses `export` syntax (Docker incompatible) | `env.tier-ui.sh` | P2-LOW | OPEN | No — not used by main compose `env_file` |
 
 ### Closed
 
 | # | Submodule | Issue | File/Location | Severity | Status |
 |---|-----------|-------|---------------|----------|--------|
+| 2 | BoTZ | env.tier-agent.sh uses `export` syntax | `env.tier-agent.sh` | P2-LOW | FIXED (verified 2026-03-10 — no `export` syntax, dual file pattern: `.sh` for shell, plain for Docker) |
+| 9 | Pipecat | No MCP tool allowlisting | `src/pipecat/services/mcp_service.py` | P2-LOW | FIXED (verified 2026-03-10 — `tools_filter` parameter + filtering in `MCPClient._list_tools_helper()`) |
+| 6 | PMOVES.YT | MinIO default credentials in env defaults | `env.shared` | P2-LOW | FIXED (verified 2026-03-10 — uses `${MINIO_ACCESS_KEY:?required}` fail-closed pattern, no minioadmin defaults) |
+| 11 | A2UI | env.shared uses `export` syntax | `env.shared` | P2-LOW | FIXED (verified 2026-03-10 — no `export` syntax in env.shared, uses `${VAR:-default}` format) |
+| 12 | A2UI | NATS URL missing auth credentials | `env.shared` | P2-LOW | FIXED (verified 2026-03-10 — `NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}` with auth credentials) |
 | 15 | HiRAG | env.shared uses `export` syntax (Docker incompatible) | `env.shared` | P2 | FIXED (stale — env.shared already clean) |
+| 16 | A2UI | env.tier-ui.sh uses `export` syntax | `env.tier-ui.sh` | P2-LOW | FIXED (verified 2026-03-10 — no `export` syntax, plain KEY=VALUE format) |
 
 ## Resolution Process
 
@@ -71,7 +71,13 @@ Each P2 issue requires:
 | 4 | Open-Notebook | Auth middleware fail-open | 2026-03-09 | Verified fixed in submodule (fail-closed HTTPException 500) |
 | 7 | PMOVES.YT | Query injection in URL params | 2026-03-09 | `_SAFE_VID_RE` validation added to Hi-RAG search path |
 | 8 | DoX | NATS WebSocket no TLS | 2026-03-09 | Auth block present + TLS instructions documented inline |
+| 2 | BoTZ | env.tier-agent.sh `export` syntax | 2026-03-10 | No `export` in file — dual file pattern (`.sh` + dotenv) |
+| 6 | PMOVES.YT | MinIO default credentials | 2026-03-10 | Uses `${VAR:?required}` fail-closed pattern |
+| 9 | Pipecat | MCP tool allowlisting | 2026-03-10 | `tools_filter` param + filtering in `MCPClient._list_tools_helper()` |
+| 11 | A2UI | env.shared `export` syntax | 2026-03-10 | No `export` in env.shared |
+| 12 | A2UI | NATS URL missing auth | 2026-03-10 | Authenticated URL: `nats://nats:pmoves@nats:4222` |
 | 15 | HiRAG | env.shared `export` syntax | 2026-02-26 | Stale — already clean, no fix needed |
+| 16 | A2UI | env.tier-ui.sh `export` syntax | 2026-03-10 | No `export` in file — plain KEY=VALUE format |
 
 ## Priority Definitions
 
