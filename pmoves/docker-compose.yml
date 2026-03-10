@@ -1566,7 +1566,7 @@ services:
             - gpu
             count: ${GPU_COUNT:-all}
     ports:
-    - ${HIRAG_V2_GPU_HOST_PORT:-8090}:8086
+    - ${HIRAG_V2_GPU_HOST_PORT:-8187}:8086  # Default 8187; 8090 reserved for retrieval-eval
     depends_on:
       qdrant:
         condition: service_healthy
@@ -1674,6 +1674,9 @@ services:
       timeout: 10s
       retries: 5
       start_period: 120s
+  # ── NATS Message Bus — JetStream-enabled event broker ──────────────────
+  # Auth: nats://nats:pmoves@nats:4222 | Monitoring: :8222/varz
+  # See: pmoves/docs/NATS_CONFIGURATION.md
   nats:
     <<: *tier-data-hardened
     # Pinned 2025-02-04: Latest stable 2.11.x alpine version
@@ -1683,13 +1686,13 @@ services:
     - -m
     - '8222'
     - --user
-    - nats
+    - ${NATS_USER:-nats}
     - --pass
-    - pmoves
+    - ${NATS_PASSWORD:-pmoves}
     restart: unless-stopped
     ports:
     - ${NATS_PORT:-4222}:4222
-    - ${NATS_MONITORING_PORT:-9223}:4223
+    - ${NATS_MONITORING_PORT:-9223}:8222
     networks:
     - pmoves_bus
     environment:
@@ -2523,7 +2526,7 @@ services:
       - NEXT_PUBLIC_PROMETHEUS_URL=${NEXT_PUBLIC_PROMETHEUS_URL:-http://localhost:9090}
       - NEXT_PUBLIC_LOKI_URL=${NEXT_PUBLIC_LOKI_URL:-http://localhost:3100}
       # Server-side only (Docker hostnames OK)
-      - POSTGREST_URL=http://host.docker.internal:54321
+      - POSTGREST_URL=${POSTGREST_URL:-http://supabase-postgrest:3000}
       - PRESIGN_SHARED_SECRET=${PRESIGN_SHARED_SECRET}
       - RENDER_WEBHOOK_URL=${RENDER_WEBHOOK_URL:-http://render-webhook:8085/comfy/webhook}
       - OPEN_NOTEBOOK_API_URL=${OPEN_NOTEBOOK_API_URL:-http://open-notebook:5055}
@@ -2608,7 +2611,7 @@ services:
       - env.shared
       - .env.generated
     environment:
-      - PORT=8110
+      - PORT=${GATEWAY_AGENT_PORT:-8111}
       - AGENT_ZERO_URL=${AGENT_ZERO_URL:-http://agent-zero:8080}
       - CIPHER_URL=${CIPHER_URL:-http://cipher-api:8096}
       - TENSORZERO_URL=${TENSORZERO_URL:-http://tensorzero-gateway:3000}
@@ -2616,11 +2619,11 @@ services:
       - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY}
       - TOOL_CACHE_TTL=${TOOL_CACHE_TTL:-300}
     ports:
-      - "8110:8110"
+      - "${GATEWAY_AGENT_PORT:-8111}:${GATEWAY_AGENT_PORT:-8111}"  # Default 8111; 8110 reserved for model-registry
     profiles: ["agents"]
     networks: [pmoves_api, pmoves_app, pmoves_bus]
     healthcheck:
-      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8110/healthz', timeout=5)"]
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8111/healthz', timeout=5)"]
       interval: 30s
       timeout: 10s
       retries: 3

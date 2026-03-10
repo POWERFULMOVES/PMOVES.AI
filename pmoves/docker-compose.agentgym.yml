@@ -1,8 +1,9 @@
 # AgentGym-RL Integration Services
 # Provides geometry-aware reinforcement learning for LLM agents
 #
+# REQUIRES: docker-compose.yml (provides supabase-db, nats, hi-rag-gateway-v2, evo-controller)
 # Usage:
-#   docker compose -f docker-compose.yml -f docker-compose.agentgym.yml --profile agentgym up -d
+#   docker compose -f docker-compose.yml -f docker-compose.agentgym.yml --profile agentgym --profile supabase-local up -d
 #
 # Services:
 #   - agentgym-rl-coordinator: Training job orchestrator
@@ -103,11 +104,16 @@ services:
       - ./services/agentgym-rl-coordinator:/app
 
     depends_on:
-      - nats
-      - hi-rag-gateway-v2
-      - evo-controller
-      - agentgym-env-pmoves
-      - postgres
+      nats:
+        condition: service_healthy
+      hi-rag-gateway-v2:
+        condition: service_started
+      evo-controller:
+        condition: service_started
+      agentgym-env-pmoves:
+        condition: service_started
+      supabase-db:
+        condition: service_healthy
 
     profiles:
       - agents
@@ -197,8 +203,10 @@ services:
       - agentgym-task-cache:/cache
 
     depends_on:
-      - hi-rag-gateway-v2
-      - postgres
+      hi-rag-gateway-v2:
+        condition: service_started
+      supabase-db:
+        condition: service_healthy
 
     profiles:
       - agents

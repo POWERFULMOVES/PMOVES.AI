@@ -3,7 +3,7 @@
   "phases": {
     "local-certification": {
       "description": "Both runners on local Docker containers for development/CI",
-      "required_online": ["self-hosted,Linux,X64", "self-hosted,ai-lab,gpu"],
+      "required_online": ["self-hosted,Linux,X64", "self-hosted,Linux,X64,ai-lab,gpu"],
       "required_offline": [],
       "min_runners": 2
     },

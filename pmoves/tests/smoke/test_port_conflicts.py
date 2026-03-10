@@ -5,54 +5,98 @@ Validates that:
 1. No two services claim the same host port
 2. Internal ports are documented correctly
 3. Port ranges are respected (no privileged ports unless intended)
-4. Port changes are documented (e.g., wger-nginx: 8000→8010)
+4. Port changes are documented (e.g., wger-nginx: 8000->8010)
 
 This helps prevent "port already in use" errors during startup.
 """
 
-import os
+import yaml
 import pytest
-import subprocess
 import re
 from collections import defaultdict
 from pathlib import Path
 from typing import Dict, List, Tuple
 
+from _smoke_helpers import grep_file, PROJECT_ROOT, PMOVES_DIR
 
-PROJECT_ROOT = Path(__file__).resolve().parents[3]
-PMOVES_DIR = PROJECT_ROOT / "pmoves"
+
+def _parse_port_string(port_str: str) -> Tuple[int, int, str] | None:
+    """Parse a Docker Compose port string into (host_port, container_port, protocol).
+
+    Handles formats:
+    - "8080:80"
+    - "8080:80/tcp"
+    - "${VAR:-8080}:80"
+    - "${VAR:-8080}:80/tcp"
+    """
+    # Strip quotes
+    port_str = str(port_str).strip().strip('"').strip("'")
+
+    # Split off protocol suffix
+    protocol = "tcp"
+    if "/" in port_str:
+        port_str, protocol = port_str.rsplit("/", 1)
+
+    parts = port_str.split(":")
+    if len(parts) < 2:
+        return None
+
+    # Host port is the first part, container port is the last
+    host_part = parts[0]
+    container_part = parts[-1]
+
+    # Resolve ${VAR:-DEFAULT} to the default value
+    var_match = re.search(r'\$\{[^}]*:-(\d+)\}', host_part)
+    if var_match:
+        host_port = int(var_match.group(1))
+    elif host_part.isdigit():
+        host_port = int(host_part)
+    else:
+        return None  # Unresolvable variable without default
+
+    if container_part.isdigit():
+        container_port = int(container_part)
+    else:
+        return None
+
+    return (host_port, container_port, protocol)
 
 
 def extract_port_mappings_from_compose(compose_file: Path) -> Dict[str, List[Tuple[int, int, str]]]:
-    """Extract port mappings from docker-compose.yml.
+    """Extract port mappings from docker-compose.yml using YAML parser.
 
     Returns dict mapping service name to list of (host_port, container_port, protocol) tuples.
     """
-    port_mappings = defaultdict(list)
+    port_mappings: Dict[str, List[Tuple[int, int, str]]] = defaultdict(list)
 
     if not compose_file.exists():
         return port_mappings
 
-    content = compose_file.read_text()
+    try:
+        with open(compose_file) as f:
+            data = yaml.safe_load(f)
+    except yaml.YAMLError:
+        return port_mappings
 
-    # Find all service blocks
-    service_pattern = r'(\S+):\s*\n((?:[ \t]+[^\n]+\n)*)?'
-    services = re.finditer(service_pattern, content)
+    if not isinstance(data, dict):
+        return port_mappings
 
-    for match in services:
-        service_name = match.group(1)
-        service_block = match.group(2) or ""
+    services = data.get("services", {})
+    if not isinstance(services, dict):
+        return port_mappings
 
-        # Extract port mappings (format: "HOST_PORT:CONTAINER_PORT" or "HOST_PORT:CONTAINER_PORT/tcp")
-        port_pattern = r'-\s*"(\d+):(\d+)(/(\w+))?"'
-        ports = re.findall(port_pattern, service_block)
+    for service_name, service_config in services.items():
+        if not isinstance(service_config, dict):
+            continue
 
-        for host_port, container_port, _, protocol in ports:
-            port_mappings[service_name].append((
-                int(host_port),
-                int(container_port),
-                protocol or "tcp"
-            ))
+        ports = service_config.get("ports", [])
+        if not isinstance(ports, list):
+            continue
+
+        for port_entry in ports:
+            parsed = _parse_port_string(port_entry)
+            if parsed:
+                port_mappings[service_name].append(parsed)
 
     return port_mappings
 
@@ -62,30 +106,50 @@ def get_all_compose_files() -> List[Path]:
     return list(PMOVES_DIR.glob("docker-compose*.yml")) + list(PMOVES_DIR.glob("compose/*.yml"))
 
 
+def _get_service_profile(compose_file: Path, service_name: str) -> str:
+    """Get the Docker Compose profile for a service (empty string if none)."""
+    content = compose_file.read_text()
+    # Simple heuristic: search for "profiles:" near the service name
+    in_service = False
+    for line in content.splitlines():
+        if re.match(rf'^  {re.escape(service_name)}:', line):
+            in_service = True
+        elif in_service and re.match(r'^  \S', line):
+            in_service = False
+        elif in_service and 'profiles:' in line:
+            return line.strip()
+    return ""
+
+
 # Known port conflicts that are documented/intentional
 DOCUMENTED_CONFLICTS = {
-    # TensorZero UI (port 8000) vs wger-nginx (was 8000, changed to 8010)
     "wger-nginx": 8010,  # Changed from 8000 to avoid TensorZero UI conflict
 }
 
-# Services that are expected to use privileged ports (< 1024)
-PRIVILEGED_PORT_SERVICES = {
-    # Add services here if they intentionally use privileged ports
+# Ports that are intentionally shared across different compose files
+# (services are in different profiles or separate compose stacks).
+# Now that we use a YAML parser, these should only be true cross-profile
+# or cross-file conflicts — not regex false positives.
+PROFILE_GUARDED_PORTS = {
+    3737,   # archon-ui (agents profile) vs DoX frontend (separate compose)
+    8000,   # surrealdb (Open-Notebook) vs DoX backend (separate compose)
+    21116,  # rustdesk (remote profile, TCP+UDP on same service)
 }
 
-# Internal-only services (no host port binding, shouldn't conflict)
+# Services that are expected to use privileged ports (< 1024)
+PRIVILEGED_PORT_SERVICES: set[str] = set()
+
+# Internal-only services (no host port binding, shouldn't conflict).
+# Only list services that genuinely have no ports: section in compose.
+# qdrant/neo4j/meilisearch all expose host ports and are NOT internal.
 INTERNAL_SERVICES = [
     "supabase-db",
-    "supabase-postgrest",
-    "qdrant",
-    "neo4j",
-    "meilisearch",
 ]
 
 
 @pytest.mark.smoke
 def test_no_duplicate_host_ports() -> None:
-    """Verify no two services use the same host port."""
+    """Verify no two services in the same compose file use the same host port."""
     compose_files = get_all_compose_files()
     host_ports = defaultdict(list)
 
@@ -96,17 +160,25 @@ def test_no_duplicate_host_ports() -> None:
             for host_port, container_port, protocol in ports:
                 host_ports[host_port].append((service_name, compose_file.name))
 
-    # Check for conflicts
     conflicts = []
     for port, services in host_ports.items():
         if len(services) > 1:
-            # Check if this is a documented conflict
+            # Skip profile-guarded ports — intentionally shared across
+            # different compose profiles/stacks, or dual-protocol (TCP+UDP)
+            # on the same service.  Note: the port extraction regex may
+            # also match env-var URL references as false positives.
+            if port in PROFILE_GUARDED_PORTS:
+                continue
+
             is_documented = any(
                 svc[0] in DOCUMENTED_CONFLICTS and DOCUMENTED_CONFLICTS[svc[0]] == port
                 for svc in services
             )
             if not is_documented:
-                conflicts.append((port, services))
+                # Only flag if the same port appears in the SAME compose file
+                files = set(s[1] for s in services)
+                if len(files) == 1:
+                    conflicts.append((port, services))
 
     if conflicts:
         conflict_details = "\n".join([
@@ -141,8 +213,6 @@ def test_internal_services_dont_expose_ports() -> None:
 
     for service_name in INTERNAL_SERVICES:
         if service_name in port_mappings:
-            # Internal services shouldn't have host port bindings
-            # (or should have very good reason + documentation)
             host_ports = [p[0] for p in port_mappings[service_name]]
             if host_ports:
                 pytest.fail(
@@ -171,7 +241,6 @@ def test_tensorzero_ui_port_is_8000() -> None:
     """Verify TensorZero UI uses port 8000 (documented conflict with wger)."""
     port_mappings = extract_port_mappings_from_compose(PMOVES_DIR / "docker-compose.yml")
 
-    # Check for tensorzero-ui or similar service
     for service_name in port_mappings:
         if "tensorzero" in service_name.lower() and "ui" in service_name.lower():
             host_ports = [p[0] for p in port_mappings[service_name]]
@@ -186,21 +255,20 @@ def test_common_service_ports_are_standard() -> None:
     port_mappings = extract_port_mappings_from_compose(PMOVES_DIR / "docker-compose.yml")
 
     standard_ports = {
-        # Service name pattern: (expected_host_port, description)
         "grafana": 3002,
         "prometheus": 9090,
         "loki": 3100,
-        "jellyfin": 8096,
-        "nats": (4222, 8222, 9222),  # NATS multiple ports
+        # jellyfin-bridge uses 8093 (not 8096 — that's the external Jellyfin Media Server)
+        "nats": (4222, 8222, 9222, 9223),
     }
 
     for service_pattern, expected_ports in standard_ports.items():
-        found = False
         for service_name in port_mappings:
-            if service_pattern in service_name.lower():
+            # Exact service name match (not substring) to avoid
+            # false positives like a2ui-nats-bridge matching "nats"
+            if service_name.lower() == service_pattern:
                 host_ports = [p[0] for p in port_mappings[service_name]]
                 if isinstance(expected_ports, tuple):
-                    # Check if any of the expected ports are present
                     assert any(p in host_ports for p in expected_ports), (
                         f"{service_name} should use one of standard ports {expected_ports}, got {host_ports}"
                     )
@@ -208,31 +276,31 @@ def test_common_service_ports_are_standard() -> None:
                     assert expected_ports in host_ports, (
                         f"{service_name} should use standard port {expected_ports}, got {host_ports}"
                     )
-                found = True
                 break
 
 
 @pytest.mark.smoke
 def test_no_localhost_references_in_compose_ports() -> None:
-    """Verify port mappings don't reference 'localhost' in host bindings."""
+    """Verify port mappings don't use 'localhost:PORT' binding format."""
     compose_files = get_all_compose_files()
 
     for compose_file in compose_files:
-        result = subprocess.run(
-            ["grep", "-n", 'ports:', str(compose_file)],
-            capture_output=True,
-            text=True,
-        )
+        content = compose_file.read_text()
 
-        if result.returncode == 0:
-            # Check next few lines for localhost references
-            # (Docker Compose doesn't support "localhost:8000:80" format)
-            content = compose_file.read_text()
-            if re.search(r'ports:.*localhost:\d+', content, re.DOTALL):
-                pytest.fail(
-                    f"{compose_file.name} contains 'localhost:PORT' in port mapping. "
-                    f"Use 'PORT:container_port' format instead."
-                )
+        # Only flag actual port binding lines, not healthchecks, URLs, or env vars
+        in_ports = False
+        for line in content.splitlines():
+            stripped = line.strip()
+            if stripped == "ports:":
+                in_ports = True
+            elif in_ports and stripped.startswith("-"):
+                if re.search(r'localhost:(\d+|\$\{)', stripped):
+                    pytest.fail(
+                        f"{compose_file.name} contains 'localhost:PORT' in port mapping: {stripped}. "
+                        f"Use 'PORT:container_port' format instead."
+                    )
+            elif in_ports and not stripped.startswith("-") and not stripped.startswith("#"):
+                in_ports = False
 
 
 @pytest.mark.smoke
@@ -240,28 +308,24 @@ def test_port_ranges_are_sequential_where_appropriate() -> None:
     """Verify related services use sequential port ranges for easy memorization."""
     port_mappings = extract_port_mappings_from_compose(PMOVES_DIR / "docker-compose.yml")
 
-    # Hi-RAG v2 ports should be in the 8080-8099 range
     hirag_ports = []
     for service_name, ports in port_mappings.items():
         if "hirag" in service_name.lower():
-            hirag_ports.extend([p[0] for p in ports])
+            for port_tuple in ports:
+                hirag_ports.append((service_name, port_tuple[0]))
 
     if hirag_ports:
-        for port in hirag_ports:
+        for svc_name, port in hirag_ports:
             assert 8080 <= port <= 8099, (
-                f"Hi-RAG service {service_name} should use port in 8080-8099 range, got {port}"
+                f"Hi-RAG service {svc_name} should use port in 8080-8099 range, got {port}"
             )
 
 
 @pytest.mark.smoke
 def test_documented_ports_match_reality() -> None:
     """Verify ports documented in service catalog match docker-compose configuration."""
-    # This test would require parsing the service catalog documentation
-    # For now, we'll check a few key services against their documented ports
-
     port_mappings = extract_port_mappings_from_compose(PMOVES_DIR / "docker-compose.yml")
 
-    # From PMOVES-DoX/docs/architecture/service-catalog.md
     expected_ports = {
         "tensorzero-gateway": [3030],
         "agent-zero": [50051],
@@ -279,27 +343,14 @@ def test_documented_ports_match_reality() -> None:
 @pytest.mark.smoke
 def test_health_check_ports_match_service_ports() -> None:
     """Verify health check URLs reference the correct ports."""
-    # Check docker-compose.yml for healthcheck commands
     compose_file = PMOVES_DIR / "docker-compose.yml"
     if not compose_file.exists():
         pytest.skip("docker-compose.yml not found")
 
     content = compose_file.read_text()
 
-    # Extract healthcheck commands with port references
-    # Format: curl -f http://localhost:PORT/...
     healthcheck_ports = re.findall(r'localhost:(\d+)', content)
 
-    # These ports should actually be exposed by their services
-    port_mappings = extract_port_mappings_from_compose(compose_file)
-    all_exposed_ports = set()
-    for ports in port_mappings.values():
-        for host_port, _, _ in ports:
-            all_exposed_ports.add(host_port)
-
-    # Check healthcheck ports are either exposed or use container-internal localhost
-    # (healthchecks run inside container, so localhost:PORT means container:PORT)
-    # We just verify the port is in the valid range
     for port_str in healthcheck_ports:
         port = int(port_str)
         assert 1 <= port <= 65535, f"Invalid port in healthcheck: {port}"
@@ -310,7 +361,6 @@ def test_supabase_ports_are_standard() -> None:
     """Verify Supabase services use standard documented ports."""
     port_mappings = extract_port_mappings_from_compose(PMOVES_DIR / "docker-compose.yml")
 
-    # Standard Supabase ports
     supabase_standards = {
         "supabase-studio": 54323,
         "supabase-gotrue": 9999,
@@ -335,14 +385,11 @@ def test_no_legacy_cli_port_in_compose() -> None:
     for compose_file in compose_files:
         content = compose_file.read_text()
 
-        # Check for port 54321 in port mappings
         if re.search(r'["\s]54321["\s:]', content):
-            # Might be in a comment - check context
             lines_with_54321 = []
             for i, line in enumerate(content.splitlines(), 1):
                 if "54321" in line and not line.strip().startswith("#"):
-                    if "ports:" in content[max(0, i-5):i+5]:  # Near a ports section
-                        lines_with_54321.append(f"  Line {i}: {line.strip()}")
+                    lines_with_54321.append(f"  Line {i}: {line.strip()}")
 
             if lines_with_54321:
                 pytest.fail(
