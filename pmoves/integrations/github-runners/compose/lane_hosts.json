@@ -1,29 +1,40 @@
 {
   "lane_hosts": {
     "self-hosted,Linux,X64": {
-      "host": "vps / ai-lab",
+      "host": "ai-lab (Docker container)",
       "runner_name": "pmoves-vps-runner",
-      "registration_script": "integrations/github-runners/compose/register-runner.sh"
+      "registration_script": "make -C pmoves ci-runners-local-cert-up --lane vps",
+      "notes": "Containerized Linux runner via Docker Desktop — managed by local_cert_runners.py"
+    },
+    "self-hosted,Linux,X64,ai-lab,gpu": {
+      "host": "ai-lab (Docker container)",
+      "runner_name": "pmoves-ai-lab-runner",
+      "registration_script": "make -C pmoves ci-runners-local-cert-up --lane ai-lab",
+      "notes": "Containerized Linux GPU runner via Docker Desktop + NVIDIA Container Toolkit"
     },
     "self-hosted,ai-lab,gpu": {
-      "host": "ai-lab",
+      "host": "ai-lab (Docker container)",
       "runner_name": "pmoves-ai-lab-runner",
-      "registration_script": "integrations/github-runners/compose/register-runner.sh"
+      "registration_script": "make -C pmoves ci-runners-local-cert-up --lane ai-lab",
+      "notes": "Alias for ai-lab GPU runner container"
     },
     "self-hosted,ai-lab": {
-      "host": "ai-lab",
+      "host": "ai-lab (Docker container)",
       "runner_name": "pmoves-ai-lab-runner",
-      "registration_script": "integrations/github-runners/compose/register-runner.sh"
+      "registration_script": "make -C pmoves ci-runners-local-cert-up --lane ai-lab",
+      "notes": "Routes to ai-lab GPU runner container"
     },
     "self-hosted,vps,Linux,X64": {
-      "host": "vps",
+      "host": "ai-lab (Docker container)",
       "runner_name": "pmoves-vps-runner",
-      "registration_script": "integrations/github-runners/compose/register-runner.sh"
+      "registration_script": "make -C pmoves ci-runners-local-cert-up --lane vps",
+      "notes": "VPS-labelled runner, containerized locally for local-certification phase"
     },
     "self-hosted,gpu": {
-      "host": "ai-lab",
+      "host": "ai-lab (Docker container)",
       "runner_name": "pmoves-ai-lab-runner",
-      "registration_script": "integrations/github-runners/compose/register-runner.sh"
+      "registration_script": "make -C pmoves ci-runners-local-cert-up --lane ai-lab",
+      "notes": "Alias for ai-lab GPU runner container"
     },
     "self-hosted,cloudstartup,staging": {
       "host": "cloudstartup",

@@ -19,7 +19,7 @@ COMPOSE = PMOVES_DIR / "docker-compose.yml"
 @pytest.mark.smoke
 def test_neo4j_http_port_exposed() -> None:
     """Verify Neo4j HTTP interface is exposed on port 7474."""
-    config = grep_context(COMPOSE, r"neo4j:", after=5)
+    config = grep_context(COMPOSE, r"neo4j:", after=30)
 
     assert config, "neo4j service not found in docker-compose.yml"
 
@@ -33,7 +33,7 @@ def test_neo4j_http_port_exposed() -> None:
 @pytest.mark.smoke
 def test_neo4j_bolt_port_exposed() -> None:
     """Verify Neo4j Bolt protocol is exposed on port 7687."""
-    config = grep_context(COMPOSE, r"neo4j:", after=5)
+    config = grep_context(COMPOSE, r"neo4j:", after=30)
 
     assert config, "neo4j service not found in docker-compose.yml"
 
@@ -47,7 +47,7 @@ def test_neo4j_bolt_port_exposed() -> None:
 @pytest.mark.smoke
 def test_neo4j_ports_not_using_single_variable() -> None:
     """Verify Neo4j does NOT use a single NEO4J_PORT for both HTTP and Bolt."""
-    config = grep_context(COMPOSE, r"neo4j:", after=5)
+    config = grep_context(COMPOSE, r"neo4j:", after=30)
 
     assert config, "neo4j service not found in docker-compose.yml"
 
