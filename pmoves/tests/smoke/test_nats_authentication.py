@@ -101,14 +101,22 @@ def test_comfy_watcher_env_file_has_nats_credentials() -> None:
 
 
 @pytest.mark.smoke
-def test_nats_url_removed_from_env_shared() -> None:
-    """Verify NATS_URL was removed from env.shared (moved to tier-specific files)."""
+def test_nats_url_in_env_shared_is_authenticated() -> None:
+    """Verify NATS_URL in env.shared uses authenticated credentials."""
     matches = grep_file(PMOVES_DIR / "env.shared", r"^NATS_URL=")
 
-    # env.shared should NOT have NATS_URL defined (it's now tier-specific)
-    assert len(matches) == 0, (
-        "NATS_URL should be removed from env.shared and defined in tier env files"
+    # env.shared should have NATS_URL defined with credentials
+    assert len(matches) > 0, (
+        "NATS_URL should be defined in env.shared for all services"
     )
+
+    # Verify the URL includes authentication (user:pass@host pattern)
+    import re
+    for line in matches:
+        url = line.split("=", 1)[1].strip()
+        assert re.search(r"nats://[^:@]+:[^@]+@", url), (
+            f"NATS_URL must use authenticated URL (nats://user:pass@host), got: {url}"
+        )
 
 
 @pytest.mark.smoke

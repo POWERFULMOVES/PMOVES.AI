@@ -3,9 +3,9 @@
 > **Single source of truth** for PMOVES.AI production readiness.
 > Supersedes all individual audit documents accumulated Feb 7 -- Feb 18, 2026.
 
-**Last Updated:** 2026-03-10 (PR #844 review cycle)
+**Last Updated:** 2026-03-10 (PR #844 — service catalog alignment)
 **Branch:** `fix/static-smoke-blockers` → `main`
-**Commit:** `f74f1db0`
+**Commit:** `f74f1db0` + catalog alignment
 **Consolidated From:** 27 audit documents
 **Evidence:** live runbook execution on 2026-03-05 (`make ghcr-prepublish-inrepo-build`, strict local Trivy sweep logs under `pmoves/docs/logs/ghcr-local-prepublish/`)
 
@@ -13,7 +13,22 @@
 
 ## Latest Changes (Mar 10, 2026)
 
-### PR #844 Review Cycle — Static Smoke Blockers + AB-9 Fix
+### Service Catalog & Contract Alignment (PR #844 continued)
+
+- **Service catalog aligned to actual API contracts** (11 fixes in `service_catalog.py`):
+  - `expected_fields` corrected: agent-zero (`status` only, not `version`/`timestamp`), archon (`status` only), pmoves-yt/presign/render-webhook/jellyfin-bridge (`ok` not `status`)
+  - `health_path` corrected: tensorzero `/healthz`→`/health`, hi-rag-v2 `/healthz`→`/`, loki `/readyz`→`/ready`
+  - media-audio moved to INTERNAL_SERVICES (no host port mapped, port 8082 is Firefly)
+- **Service-specific test fixes**: agent-zero (accept `ok` status, allow 404 on `/mcp`), archon (accept `ok` status), tensorzero (use catalog health_path, fix ClickHouse field check, skip missing `/openapi.json`)
+- **env.shared consistency fixes**: added `NATS_URL` with authenticated creds, removed duplicate `SUPABASE_JWT_SECRET`, synced `SUPABASE_DB_PASSWORD` with tier-supabase, trimmed trailing whitespace
+- **NATS auth test updated**: `test_nats_url_removed_from_env_shared` → `test_nats_url_in_env_shared_is_authenticated` (validates creds in URL)
+- **Full smoke suite** (with Docker stack): **115 passed, 83 skipped, 16 failed, 1 error** (174s)
+  - Down from 33 failed → 16 failed (**17 failures eliminated**)
+  - Remaining 16: 7 hi-rag-v2 UI + 9 jellyfin-bridge UI (API schema mismatches, follow-up PR)
+  - 1 error: transient async fixture teardown (ClickHouse latency test, passes in isolation)
+- **P2 tracker**: 14 open — unchanged (all Tier 2/3, non-blocking)
+
+### Previous — PR #844 Review Cycle — Static Smoke Blockers + AB-9 Fix
 
 - **PR #844** (`fix/static-smoke-blockers`, 4 commits ending at `f74f1db0`):
   - 22 static smoke test failures resolved (NATS tier migration, port conflicts, Supabase URL fixes, compose structure)

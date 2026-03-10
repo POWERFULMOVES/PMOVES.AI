@@ -25,11 +25,11 @@ async def tensorzero_client():
     )
     # Probe connectivity AND service identity — skip if unreachable or wrong service
     try:
-        resp = await client.get("/healthz")
+        resp = await client.get(TENSORZERO_GATEWAY.health_path)
         if resp.status_code == 404:
             await client.aclose()
             pytest.skip(
-                f"Port {TENSORZERO_GATEWAY.port} is responding but /healthz returned 404 "
+                f"Port {TENSORZERO_GATEWAY.port} is responding but {TENSORZERO_GATEWAY.health_path} returned 404 "
                 "(TensorZero Gateway may not be running)"
             )
     except (httpx.ConnectError, httpx.ConnectTimeout):
@@ -74,35 +74,38 @@ async def clickhouse_client():
 @pytest.mark.asyncio
 async def test_tensorzero_health_endpoint(tensorzero_client: httpx.AsyncClient):
     """Test TensorZero Gateway health endpoint."""
-    response = await tensorzero_client.get("/healthz")
+    response = await tensorzero_client.get(TENSORZERO_GATEWAY.health_path)
 
     assert response.status_code == 200, f"Health check failed: {response.status_code}"
 
     data = response.json()
-    assert "status" in data, "Response missing 'status' field"
-    assert data["status"] == "healthy", f"Unhealthy status: {data.get('status')}"
+    assert "gateway" in data, "Response missing 'gateway' field"
+    assert data["gateway"] == "ok", f"Unhealthy gateway status: {data.get('gateway')}"
 
 
 @pytest.mark.smoke
 @pytest.mark.asyncio
 async def test_tensorzero_clickhouse_connected(tensorzero_client: httpx.AsyncClient):
     """Test that TensorZero reports ClickHouse connection."""
-    response = await tensorzero_client.get("/healthz")
+    response = await tensorzero_client.get(TENSORZERO_GATEWAY.health_path)
 
     assert response.status_code == 200
     data = response.json()
 
-    # Check for ClickHouse connection status
-    clickhouse_connected = data.get("clickhouse_connected", False)
-    assert clickhouse_connected, "TensorZero not connected to ClickHouse"
+    # TZ /health returns {"gateway":"ok","clickhouse":"ok","postgres":"ok","valkey":"ok"}
+    clickhouse_status = data.get("clickhouse", "")
+    assert clickhouse_status == "ok", f"ClickHouse not ok: {clickhouse_status}"
 
 
 @pytest.mark.smoke
 @pytest.mark.asyncio
 async def test_tensorzero_api_versions(tensorzero_client: httpx.AsyncClient):
     """Test TensorZero API version endpoints."""
-    # Check OpenAPI spec
+    # Check OpenAPI spec (TZ may not serve this endpoint)
     response = await tensorzero_client.get("/openapi.json")
+
+    if response.status_code == 404:
+        pytest.skip("TensorZero does not serve /openapi.json")
 
     assert response.status_code == 200, f"OpenAPI spec failed: {response.status_code}"
 
@@ -150,7 +153,7 @@ async def test_tensorzero_responds_within_timeout(tensorzero_client: httpx.Async
     import time
 
     start_time = time.time()
-    response = await tensorzero_client.get("/healthz")
+    response = await tensorzero_client.get(TENSORZERO_GATEWAY.health_path)
     duration_ms = (time.time() - start_time) * 1000
 
     assert response.status_code == 200

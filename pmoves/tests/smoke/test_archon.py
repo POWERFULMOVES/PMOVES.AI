@@ -49,7 +49,7 @@ async def test_archon_health_endpoint(archon_client: httpx.AsyncClient):
 
     data = response.json()
     assert "status" in data, "Response missing 'status' field"
-    assert data["status"] == "healthy", f"Unhealthy status: {data.get('status')}"
+    assert data["status"] in ("ok", "healthy"), f"Unhealthy status: {data.get('status')}"
 
 
 @pytest.mark.smoke
