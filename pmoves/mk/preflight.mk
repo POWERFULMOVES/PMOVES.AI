@@ -65,13 +65,16 @@ ci-runners-lockdown-strict: ## Strict phase policy check (hard-stop when policy 
 	@$(PRECHECK_PY) tools/runner_lane_map.py --check-gh --enforce-phase --phase "$(RUNNER_PHASE)" --strict $(ARGS)
 
 ci-runners-local-cert-up: ## Start local-cert runner containers (ai-lab + vps) on this host
-	@$(PRECHECK_PY) tools/local_cert_runners.py up $(ARGS)
+	@set -a && [ -f $(CURDIR)/env.shared ] && . $(CURDIR)/env.shared; \
+	$(PRECHECK_PY) tools/local_cert_runners.py up $(ARGS)
 
 ci-runners-local-cert-down: ## Stop local-cert runner containers (ai-lab + vps) on this host
-	@$(PRECHECK_PY) tools/local_cert_runners.py down $(ARGS)
+	@set -a && [ -f $(CURDIR)/env.shared ] && . $(CURDIR)/env.shared; \
+	$(PRECHECK_PY) tools/local_cert_runners.py down $(ARGS)
 
 ci-runners-local-cert-status: ## Show local-cert runner container and GitHub registration status
-	@$(PRECHECK_PY) tools/local_cert_runners.py status $(ARGS)
+	@set -a && [ -f $(CURDIR)/env.shared ] && . $(CURDIR)/env.shared; \
+	$(PRECHECK_PY) tools/local_cert_runners.py status $(ARGS)
 
 ci-queue-sitrep: ## Show queued workflow runs and classify keep/cancel candidates (dry-run)
 	@$(PRECHECK_PY) tools/ci_queue_guard.py --json-out docs/logs/ci_queue_guard_latest.json $(ARGS)

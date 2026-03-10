@@ -5,7 +5,7 @@
 
 **Last Updated:** 2026-03-10 (all P2 items resolved — 0 open)
 **Branch:** `main`
-**Commit:** `6a257466`
+**Commit:** pending (P2 final resolution)
 **Consolidated From:** 27 audit documents
 **Evidence:** live runbook execution on 2026-03-05 (`make ghcr-prepublish-inrepo-build`, strict local Trivy sweep logs under `pmoves/docs/logs/ghcr-local-prepublish/`)
 
