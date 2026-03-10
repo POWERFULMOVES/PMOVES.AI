@@ -104,7 +104,7 @@ def test_env_shared_exists() -> None:
 
     env_vars = extract_env_vars_from_file(env_shared)
 
-    critical_vars = ["NATS_URL", "POSTGRES_USER", "POSTGRES_PASSWORD"]
+    critical_vars = ["NATS_URL", "SUPABASE_DB_PASSWORD"]
     for var in critical_vars:
         assert var in env_vars, f"{var} should be defined in env.shared"
 
