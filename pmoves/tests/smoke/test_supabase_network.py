@@ -13,23 +13,10 @@ import pytest
 import httpx
 
 from _smoke_helpers import PMOVES_DIR, grep_context, grep_file
+from conftest import docker_available
 
 
 COMPOSE = PMOVES_DIR / "docker-compose.yml"
-
-
-def _docker_available() -> bool:
-    """Check if Docker CLI is available and responsive."""
-    try:
-        result = subprocess.run(
-            ["docker", "info"],
-            capture_output=True,
-            text=True,
-            timeout=5,
-        )
-        return result.returncode == 0
-    except (FileNotFoundError, subprocess.TimeoutExpired):
-        return False
 
 
 @pytest.mark.smoke
@@ -66,12 +53,14 @@ def test_pmoves_ui_on_supabase_network() -> None:
     has_network = (
         "supabase_net" in config
         or "pmoves_api" in config
+        or "pmoves_data" in config
         or "pmoves_app" in config
         or "pmoves_external" in config
     )
 
     assert has_network, (
-        "pmoves-ui should be on a network with Supabase access"
+        "pmoves-ui should be on a Supabase-accessible network "
+        "(supabase_net, pmoves_api, pmoves_data, pmoves_app, or pmoves_external)"
     )
 
 
@@ -217,7 +206,7 @@ async def test_pmoves_ui_accessible() -> None:
 @pytest.mark.smoke
 def test_supabase_network_exists() -> None:
     """Verify a Supabase-accessible Docker network exists."""
-    if not _docker_available():
+    if not docker_available():
         pytest.skip("Docker not available")
 
     try:
@@ -231,11 +220,13 @@ def test_supabase_network_exists() -> None:
         pytest.skip("docker CLI not available")
         return
 
-    has_network = (
-        "supabase_network" in result.stdout
-        or "pmoves" in result.stdout
+    networks = result.stdout.strip().splitlines()
+    expected_prefixes = ("pmoves_data", "pmoves_api", "pmoves_app", "pmoves_bus", "pmoves_external")
+    has_network = any(
+        net.startswith(prefix) for net in networks for prefix in expected_prefixes
     )
 
     assert has_network, (
-        "A Supabase-accessible network should exist (supabase_network_* or pmoves_*)"
+        f"A Supabase-accessible Docker network should exist "
+        f"(one of {expected_prefixes}), got: {networks}"
     )

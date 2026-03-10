@@ -96,19 +96,30 @@ def test_nats_url_defined_in_tier_files() -> None:
 @pytest.mark.smoke
 def test_nats_url_has_credentials() -> None:
     """Verify NATS_URL includes authentication credentials in tier files."""
+    checked = 0
     for tier_file in ["env.tier-agent", "env.tier-worker", "env.tier-ui"]:
         path = PMOVES_DIR / tier_file
         if not path.exists():
             continue
         matches = grep_file(path, r"^NATS_URL=")
         if matches:
+            checked += 1
             url = matches[0].split("=", 1)[1]
             assert "nats://" in url, (
                 f"NATS_URL in {tier_file} should use nats:// protocol, got: {url}"
             )
-            assert "@" in url, (
-                f"NATS_URL in {tier_file} should include credentials (user:pass@host), got: {url}"
+            # Use robust regex to match user:pass@ pattern (not just "@" which
+            # could be part of other URL components)
+            assert re.search(r"nats://[^:@]+:[^@]+@", url), (
+                f"NATS_URL in {tier_file} should include credentials "
+                f"(nats://user:pass@host), got: {url}"
             )
+
+    if checked == 0:
+        pytest.fail(
+            "No tier files with NATS_URL found — at least env.tier-agent and "
+            "env.tier-worker must define NATS_URL"
+        )
 
 
 @pytest.mark.smoke
@@ -247,8 +258,8 @@ def test_nats_on_correct_networks() -> None:
     output = grep_context(COMPOSE_FILE, r"^  nats:", after=25)
 
     if output:
-        assert "pmoves_bus" in output or "pmoves" in output, (
-            "NATS should be on pmoves_bus or pmoves network"
+        assert "pmoves_bus" in output, (
+            "NATS should be on pmoves_bus network (not just any pmoves-prefixed network)"
         )
 
 
@@ -278,6 +289,8 @@ def test_nats_documentation_matches_env_shared() -> None:
     assert "nats://" in doc_content, (
         "NATS documentation should reference nats:// protocol"
     )
-    assert "pmoves" in doc_content, (
-        "NATS documentation should reference the pmoves credentials"
+    # Match the full authenticated URL pattern (nats://user:pass@host)
+    assert re.search(r"nats://[^:@]+:[^@]+@", doc_content), (
+        "NATS documentation should include the full authenticated URL "
+        "(nats://user:pass@host format)"
     )

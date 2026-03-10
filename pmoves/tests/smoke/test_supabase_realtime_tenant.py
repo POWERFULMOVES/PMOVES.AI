@@ -19,6 +19,7 @@ import asyncio
 from pathlib import Path
 
 from _smoke_helpers import grep_file, grep_context, PROJECT_ROOT, PMOVES_DIR
+from conftest import docker_available
 
 
 COMPOSE_FILE = PMOVES_DIR / "docker-compose.yml"
@@ -33,24 +34,10 @@ SUPABASE_POSTGREST_URL = os.getenv(
 )
 
 
-def _docker_available() -> bool:
-    """Check if Docker CLI is available and responsive."""
-    try:
-        result = subprocess.run(
-            ["docker", "info"],
-            capture_output=True,
-            text=True,
-            timeout=5,
-        )
-        return result.returncode == 0
-    except (FileNotFoundError, subprocess.TimeoutExpired):
-        return False
-
-
 @pytest.mark.smoke
 def test_supabase_realtime_container_running() -> None:
     """Verify Supabase Realtime container is running."""
-    if not _docker_available():
+    if not docker_available():
         pytest.skip("Docker not available")
 
     result = subprocess.run(
@@ -194,7 +181,7 @@ async def test_realtime_websocket_upgrade() -> None:
 @pytest.mark.smoke
 def test_realtime_database_schema_exists() -> None:
     """Verify _realtime schema exists in Supabase database."""
-    if not _docker_available():
+    if not docker_available():
         pytest.skip("Docker not available")
 
     result = subprocess.run(
@@ -248,7 +235,7 @@ def test_hirag_v2_has_realtime_url_configured() -> None:
 @pytest.mark.smoke
 def test_realtime_on_correct_networks() -> None:
     """Verify Realtime is on the correct Docker networks."""
-    if not _docker_available():
+    if not docker_available():
         pytest.skip("Docker not available")
 
     result = subprocess.run(

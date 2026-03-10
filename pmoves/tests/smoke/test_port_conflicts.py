@@ -10,6 +10,7 @@ Validates that:
 This helps prevent "port already in use" errors during startup.
 """
 
+import yaml
 import pytest
 import re
 from collections import defaultdict
@@ -19,37 +20,83 @@ from typing import Dict, List, Tuple
 from _smoke_helpers import grep_file, PROJECT_ROOT, PMOVES_DIR
 
 
+def _parse_port_string(port_str: str) -> Tuple[int, int, str] | None:
+    """Parse a Docker Compose port string into (host_port, container_port, protocol).
+
+    Handles formats:
+    - "8080:80"
+    - "8080:80/tcp"
+    - "${VAR:-8080}:80"
+    - "${VAR:-8080}:80/tcp"
+    """
+    # Strip quotes
+    port_str = str(port_str).strip().strip('"').strip("'")
+
+    # Split off protocol suffix
+    protocol = "tcp"
+    if "/" in port_str:
+        port_str, protocol = port_str.rsplit("/", 1)
+
+    parts = port_str.split(":")
+    if len(parts) < 2:
+        return None
+
+    # Host port is the first part, container port is the last
+    host_part = parts[0]
+    container_part = parts[-1]
+
+    # Resolve ${VAR:-DEFAULT} to the default value
+    var_match = re.search(r'\$\{[^}]*:-(\d+)\}', host_part)
+    if var_match:
+        host_port = int(var_match.group(1))
+    elif host_part.isdigit():
+        host_port = int(host_part)
+    else:
+        return None  # Unresolvable variable without default
+
+    if container_part.isdigit():
+        container_port = int(container_part)
+    else:
+        return None
+
+    return (host_port, container_port, protocol)
+
+
 def extract_port_mappings_from_compose(compose_file: Path) -> Dict[str, List[Tuple[int, int, str]]]:
-    """Extract port mappings from docker-compose.yml.
+    """Extract port mappings from docker-compose.yml using YAML parser.
 
     Returns dict mapping service name to list of (host_port, container_port, protocol) tuples.
     """
-    port_mappings = defaultdict(list)
+    port_mappings: Dict[str, List[Tuple[int, int, str]]] = defaultdict(list)
 
     if not compose_file.exists():
         return port_mappings
 
-    content = compose_file.read_text()
+    try:
+        with open(compose_file) as f:
+            data = yaml.safe_load(f)
+    except yaml.YAMLError:
+        return port_mappings
 
-    # Find all service blocks
-    service_pattern = r'(\S+):\s*\n((?:[ \t]+[^\n]+\n)*)?'
-    services = re.finditer(service_pattern, content)
+    if not isinstance(data, dict):
+        return port_mappings
 
-    for match in services:
-        service_name = match.group(1)
-        service_block = match.group(2) or ""
+    services = data.get("services", {})
+    if not isinstance(services, dict):
+        return port_mappings
 
-        # Extract port mappings: "HOST_PORT:CONTAINER_PORT" or "HOST_PORT:CONTAINER_PORT/tcp"
-        # Also handle ${VAR:-DEFAULT}:CONTAINER_PORT patterns
-        port_pattern = r'-\s*"(?:\$\{[^}]*:-)?(\d+)\}?:(\d+)(/(\w+))?"'
-        ports = re.findall(port_pattern, service_block)
+    for service_name, service_config in services.items():
+        if not isinstance(service_config, dict):
+            continue
 
-        for host_port, container_port, _, protocol in ports:
-            port_mappings[service_name].append((
-                int(host_port),
-                int(container_port),
-                protocol or "tcp"
-            ))
+        ports = service_config.get("ports", [])
+        if not isinstance(ports, list):
+            continue
+
+        for port_entry in ports:
+            parsed = _parse_port_string(port_entry)
+            if parsed:
+                port_mappings[service_name].append(parsed)
 
     return port_mappings
 
@@ -80,28 +127,23 @@ DOCUMENTED_CONFLICTS = {
 }
 
 # Ports that are intentionally shared across different compose files
-# (services are in different profiles or separate compose stacks)
+# (services are in different profiles or separate compose stacks).
+# Now that we use a YAML parser, these should only be true cross-profile
+# or cross-file conflicts — not regex false positives.
 PROFILE_GUARDED_PORTS = {
     3737,   # archon-ui (agents profile) vs DoX frontend (separate compose)
     8000,   # surrealdb (Open-Notebook) vs DoX backend (separate compose)
-    8096,   # jellyfin (external profile) — unique within main compose
-    5055,   # open-notebook (external profile) — unique within main compose
-    9096,   # grayjay-plugin-host (main) vs jellyfin-ai (separate compose)
     21116,  # rustdesk (remote profile, TCP+UDP on same service)
 }
 
 # Services that are expected to use privileged ports (< 1024)
-PRIVILEGED_PORT_SERVICES = {
-    # Add services here if they intentionally use privileged ports
-}
+PRIVILEGED_PORT_SERVICES: set[str] = set()
 
-# Internal-only services (no host port binding, shouldn't conflict)
+# Internal-only services (no host port binding, shouldn't conflict).
+# Only list services that genuinely have no ports: section in compose.
+# qdrant/neo4j/meilisearch all expose host ports and are NOT internal.
 INTERNAL_SERVICES = [
     "supabase-db",
-    "supabase-postgrest",
-    "qdrant",
-    "neo4j",
-    "meilisearch",
 ]
 
 
@@ -216,13 +258,15 @@ def test_common_service_ports_are_standard() -> None:
         "grafana": 3002,
         "prometheus": 9090,
         "loki": 3100,
-        "jellyfin": 8096,
-        "nats": (4222, 8222, 9222),
+        # jellyfin-bridge uses 8093 (not 8096 — that's the external Jellyfin Media Server)
+        "nats": (4222, 8222, 9222, 9223),
     }
 
     for service_pattern, expected_ports in standard_ports.items():
         for service_name in port_mappings:
-            if service_pattern in service_name.lower():
+            # Exact service name match (not substring) to avoid
+            # false positives like a2ui-nats-bridge matching "nats"
+            if service_name.lower() == service_pattern:
                 host_ports = [p[0] for p in port_mappings[service_name]]
                 if isinstance(expected_ports, tuple):
                     assert any(p in host_ports for p in expected_ports), (

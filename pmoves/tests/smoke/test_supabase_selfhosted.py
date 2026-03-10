@@ -15,6 +15,7 @@ import httpx
 from pathlib import Path
 
 from _smoke_helpers import grep_file, grep_context, PROJECT_ROOT, PMOVES_DIR
+from conftest import docker_available, container_running
 
 
 COMPOSE_FILE = PMOVES_DIR / "docker-compose.yml"
@@ -33,38 +34,10 @@ SUPABASE_DB_HOST = os.getenv("SUPABASE_DB_HOST", "localhost")
 SUPABASE_DB_PORT = os.getenv("SUPABASE_DB_PORT", "5432")
 
 
-def _docker_available() -> bool:
-    """Check if Docker CLI is available and responsive."""
-    try:
-        result = subprocess.run(
-            ["docker", "info"],
-            capture_output=True,
-            text=True,
-            timeout=5,
-        )
-        return result.returncode == 0
-    except (FileNotFoundError, subprocess.TimeoutExpired):
-        return False
-
-
-def _container_running(name: str) -> bool:
-    """Check if a Docker container is running."""
-    try:
-        result = subprocess.run(
-            ["docker", "ps", "--filter", f"name={name}", "--format", "{{.Status}}"],
-            capture_output=True,
-            text=True,
-            timeout=10,
-        )
-        return result.returncode == 0 and "Up" in result.stdout
-    except (FileNotFoundError, subprocess.TimeoutExpired):
-        return False
-
-
 @pytest.mark.smoke
-def test_supabase_postgrest_container_running() -> None:
+def test_supabase_postgrestcontainer_running() -> None:
     """Verify self-hosted Supabase PostgREST container is running."""
-    if not _docker_available():
+    if not docker_available():
         pytest.skip("Docker not available")
 
     result = subprocess.run(
@@ -79,9 +52,9 @@ def test_supabase_postgrest_container_running() -> None:
 
 
 @pytest.mark.smoke
-def test_supabase_db_container_running() -> None:
+def test_supabase_dbcontainer_running() -> None:
     """Verify self-hosted Supabase database container is running."""
-    if not _docker_available():
+    if not docker_available():
         pytest.skip("Docker not available")
 
     result = subprocess.run(
@@ -113,7 +86,7 @@ async def test_supabase_postgrest_accessible() -> None:
 @pytest.mark.smoke
 def test_supabase_pg_isready() -> None:
     """Verify self-hosted Supabase database is ready for connections."""
-    if not _docker_available() or not _container_running("supabase-db"):
+    if not docker_available() or not container_running("supabase-db"):
         pytest.skip("supabase-db container not running")
 
     result = subprocess.run(
@@ -193,7 +166,7 @@ def test_env_uses_selfhosted_urls() -> None:
 @pytest.mark.smoke
 def test_supabase_network_exists() -> None:
     """Verify the Supabase container network exists."""
-    if not _docker_available():
+    if not docker_available():
         pytest.skip("Docker not available")
 
     result = subprocess.run(
@@ -232,7 +205,7 @@ def test_supabase_tenant_configured() -> None:
 @pytest.mark.asyncio
 async def test_supabase_health_check() -> None:
     """Verify self-hosted Supabase stack health via container checks."""
-    if not _docker_available():
+    if not docker_available():
         pytest.skip("Docker not available")
 
     services = ["supabase-db", "supabase-postgrest", "supabase-realtime"]
@@ -264,7 +237,7 @@ def test_env_shared_has_jwt_comment() -> None:
     matches = grep_context(ENV_SHARED, "SUPABASE_JWT_SECRET", before=3, after=2)
     assert matches, "JWT secret reference not found in env.shared"
 
-    assert "env.tier-supabase" in matches or "tier" in matches.lower(), (
+    assert "env.tier-supabase" in matches, (
         "env.shared should document that JWT secret is in env.tier-supabase"
     )
 
