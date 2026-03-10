@@ -3,9 +3,9 @@
 > **Single source of truth** for PMOVES.AI production readiness.
 > Supersedes all individual audit documents accumulated Feb 7 -- Feb 18, 2026.
 
-**Last Updated:** 2026-03-10 (archon CVE pins + deepresearch status correction)
+**Last Updated:** 2026-03-10 (all P2 items resolved — 0 open)
 **Branch:** `main`
-**Commit:** `7eb5112e` (archon CVE overrides + deepresearch correction)
+**Commit:** pending (P2 final resolution)
 **Consolidated From:** 27 audit documents
 **Evidence:** live runbook execution on 2026-03-05 (`make ghcr-prepublish-inrepo-build`, strict local Trivy sweep logs under `pmoves/docs/logs/ghcr-local-prepublish/`)
 
@@ -13,7 +13,16 @@
 
 ## Latest Changes (Mar 10, 2026)
 
-### P2 Verification Sweep + Trivy Triage Correction
+### P2 Final Resolution — All Items Closed
+
+- **P2 tracker: 0 open / 17 total** — all items resolved
+  - **#3 FIXED:** Open-Notebook SurrealDB credentials — all compose files now use `${SURREAL_PASSWORD:-changeme_surreal}` env var substitution
+  - **#5 FIXED:** Open-Notebook `/metrics` — `prometheus_client` added, `make_asgi_app()` mounted at `/metrics` endpoint
+  - **#10 CLOSED (wontfix):** Pipecat metrics — library scope; Prometheus metrics exposed at service layer by Flute-Gateway
+  - **#13 CLOSED (accepted risk):** tensorzero RUSTSEC — all 4 advisories are transitive deps with documented justification in `deny.toml`
+  - **#14 CLOSED (false positive):** tensorzero example secrets — examples use `${VAR:?required}` fail-closed pattern, not hardcoded secrets
+
+### Previous — P2 Verification Sweep + Trivy Triage Correction
 
 - **P2 tracker verification sweep** — checked all 11 open items against current submodule SHAs:
   - **6 CLOSED:** #2 BoTZ export syntax (no `export` in file), #6 PMOVES.YT MinIO creds (`${VAR:?required}` pattern), #9 Pipecat MCP allowlist (`tools_filter` implemented in `MCPClient`), #11 A2UI env.shared export (clean), #12 A2UI NATS auth (authenticated URL present), #16 A2UI env.tier-ui.sh export (clean)
@@ -826,6 +835,7 @@ If `generatedAt` is older than 24 hours, a `(stale)` indicator appears beside th
 
 | Date | Change |
 |------|--------|
+| 2026-03-10 | **P2 final resolution:** All remaining P2 items closed (0 open / 17 total). Open-Notebook: SurrealDB creds parameterized (#3), `/metrics` Prometheus endpoint added (#5). Pipecat #10 closed (library scope, Flute-Gateway covers). tensorzero #13 closed (accepted risk, upstream). tensorzero #14 closed (false positive, `${VAR:?required}` pattern). |
 | 2026-03-09 | **Post-cleanup sit rep:** Trivy scan timeout increased to 10m in `integrations-ghcr.yml` + `self-hosted-builds-hardened.yml` (5 scan steps). `PMOVES.AI-Edition-Hardened-Integrations` branch synced (was 234 commits behind main). 5 new smoke tests added (env consistency, port conflicts, NATS config, Supabase realtime, Supabase selfhosted) with cross-platform path resolution. Local Hardened branch pruned. urllib3 CVE-2026-21441 already fixed in submodule. |
 | 2026-03-09 | **Tracker reconciliation:** verified all 7 Phase C P1 submodule findings (BoTZ JWT/gateway, DoX creds/cipher, ToKenism NATS/MinIO, transcribe-and-fetch passwords) already fixed on Hardened branches. P2 tracker updated with individual evidence entries. Executive summary: 0 P1 open. Stray `2.6.3` artifact deleted. |
 | 2026-03-08 | **PR #827 merged:** 7 deferred CodeRabbit items from #825/#826 + 4 review fixes (SSH probe consistency, COMPOSE_CMD in kvm2, BatchMode=yes, grep anchor). VPS Fleet workstream validated. |
