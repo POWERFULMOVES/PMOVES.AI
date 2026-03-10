@@ -1,7 +1,7 @@
 {
   "manifest": "pmoves/configs/submodule_layer_validation_manifest.json",
   "modules_checked": 40,
-  "total_errors": 0,
+  "total_errors": 1,
   "total_warnings": 0,
   "runs": [
     {
@@ -214,8 +214,8 @@
     {
       "name": "PMOVES-llama-throughput-lab",
       "path": "PMOVES-llama-throughput-lab",
-      "returncode": 0,
-      "errors": 0,
+      "returncode": 1,
+      "errors": 1,
       "warnings": 0,
       "json_path": "pmoves/docs/evidence/submodule_layer/PMOVES-llama-throughput-lab.json",
       "md_path": "pmoves/docs/evidence/submodule_layer/PMOVES-llama-throughput-lab.md"

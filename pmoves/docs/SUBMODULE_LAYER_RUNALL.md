@@ -3,7 +3,7 @@
 ## Summary
 - Manifest: `C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\configs\submodule_layer_validation_manifest.json`
 - Modules checked: **40**
-- Total errors: **0**
+- Total errors: **1**
 - Total warnings: **0**
 
 ## Per-module results
@@ -32,7 +32,7 @@
 | `Pmoves-hyperdimensions` | `Pmoves-hyperdimensions` | `0` | `0` | `0` | `pmoves/docs/evidence/submodule_layer/Pmoves-hyperdimensions.json` | `pmoves/docs/evidence/submodule_layer/Pmoves-hyperdimensions.md` |
 | `PMOVES-Jellyfin` | `PMOVES-Jellyfin` | `0` | `0` | `0` | `pmoves/docs/evidence/submodule_layer/PMOVES-Jellyfin.json` | `pmoves/docs/evidence/submodule_layer/PMOVES-Jellyfin.md` |
 | `Pmoves-Jellyfin-AI-Media-Stack` | `Pmoves-Jellyfin-AI-Media-Stack` | `0` | `0` | `0` | `pmoves/docs/evidence/submodule_layer/Pmoves-Jellyfin-AI-Media-Stack.json` | `pmoves/docs/evidence/submodule_layer/Pmoves-Jellyfin-AI-Media-Stack.md` |
-| `PMOVES-llama-throughput-lab` | `PMOVES-llama-throughput-lab` | `0` | `0` | `0` | `pmoves/docs/evidence/submodule_layer/PMOVES-llama-throughput-lab.json` | `pmoves/docs/evidence/submodule_layer/PMOVES-llama-throughput-lab.md` |
+| `PMOVES-llama-throughput-lab` | `PMOVES-llama-throughput-lab` | `1` | `1` | `0` | `pmoves/docs/evidence/submodule_layer/PMOVES-llama-throughput-lab.json` | `pmoves/docs/evidence/submodule_layer/PMOVES-llama-throughput-lab.md` |
 | `PMOVES-MAI-UI` | `PMOVES-MAI-UI` | `0` | `0` | `0` | `pmoves/docs/evidence/submodule_layer/PMOVES-MAI-UI.json` | `pmoves/docs/evidence/submodule_layer/PMOVES-MAI-UI.md` |
 | `PMOVES-n8n` | `PMOVES-n8n` | `0` | `0` | `0` | `pmoves/docs/evidence/submodule_layer/PMOVES-n8n.json` | `pmoves/docs/evidence/submodule_layer/PMOVES-n8n.md` |
 | `PMOVES-Open-Notebook` | `PMOVES-Open-Notebook` | `0` | `0` | `0` | `pmoves/docs/evidence/submodule_layer/PMOVES-Open-Notebook.json` | `pmoves/docs/evidence/submodule_layer/PMOVES-Open-Notebook.md` |

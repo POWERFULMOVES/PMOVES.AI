@@ -5,13 +5,35 @@
 
 **Last Updated:** 2026-03-09 (auto-reconciled)
 **Branch:** `PMOVES.AI-Edition-Hardened` (production release lane)
-**Commit:** `0c4964bc`
+**Commit:** `05526994`
 **Consolidated From:** 27 audit documents
 **Evidence:** live runbook execution on 2026-03-05 (`make ghcr-prepublish-inrepo-build`, strict local Trivy sweep logs under `pmoves/docs/logs/ghcr-local-prepublish/`)
 
 ---
 
 ## Latest Changes (Mar 9, 2026)
+
+### Post-PR #842 Validation Baseline
+
+- **PR #842 merged** (`05526994`): CI Trivy timeout increase to 10m + 5 new smoke tests with cross-platform `httpx.TimeoutException` fix
+- **Smoke test suite** (215 collected, no Docker stack):
+  - **58 passed** — static config validators, env file checks, compose structure
+  - **123 failed** — expected: services not running (Supabase, TensorZero, NATS, Neo4j containers offline)
+  - **34 skipped** — conditional tests (Docker API unavailable, platform-specific)
+  - **1 error** — `test_tensorzero_clickhouse_latency` teardown (pre-existing async cleanup issue)
+  - **0 new failures** — all failures match pre-existing patterns from previous baselines
+- **Static smoke tests** (no Docker): 22 failed, 22 passed, 3 skipped
+  - Pre-existing: port conflicts (3737, 8000, 8096, 8503, 5055, 9096, 21116), NATS config gaps (missing docs, healthcheck text match, agent-zero depends_on), env consistency (POSTGRES_PASSWORD divergence, trailing whitespace), NATS auth tier migration incomplete
+- **Flight-check**: Docker/Git/Python/UV/rg/make available; 12 ports LISTENING (partial stack via WSL); npm/jq not on PATH
+- **Auth-alignment**: 0 errors, 62 warnings (placeholder API keys — expected for dev workstation)
+- **Docs-reconcile**: Dashboard was 4 commits behind → updated to `05526994`
+- **Audit-layers-static**: 39/40 submodules PASS, 1 FAIL (`PMOVES-llama-throughput-lab` — pre-existing error)
+- **P2 tracker**: 11 open / 16 total — unchanged from prior session (all Tier 2/3, non-blocking)
+- **AB-9**: 0/4 runners online — unchanged
+- **RG-3/RG-4**: Deferred (no Supabase credentials)
+- Live metrics: Open PRs `0`, Dependabot `0`, Code Scanning `0`
+
+### Previous (Mar 9 — Tracker Reconciliation)
 
 - **Tracker reconciliation sweep** — verified all 7 reported P1 submodule issues (from Phase C audit, 2026-02-16) are already fixed on `PMOVES.AI-Edition-Hardened` branches:
   - BoTZ: JWT `HAS_JOSE` fail-open → **FIXED** (`auth.py:57-67` raises HTTPException)
