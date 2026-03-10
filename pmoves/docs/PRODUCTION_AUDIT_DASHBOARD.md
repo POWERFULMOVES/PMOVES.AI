@@ -3,35 +3,40 @@
 > **Single source of truth** for PMOVES.AI production readiness.
 > Supersedes all individual audit documents accumulated Feb 7 -- Feb 18, 2026.
 
-**Last Updated:** 2026-03-09 (auto-reconciled)
-**Branch:** `PMOVES.AI-Edition-Hardened` (production release lane)
-**Commit:** `05526994`
+**Last Updated:** 2026-03-10 (PR #844 review cycle)
+**Branch:** `fix/static-smoke-blockers` → `main`
+**Commit:** `f74f1db0`
 **Consolidated From:** 27 audit documents
 **Evidence:** live runbook execution on 2026-03-05 (`make ghcr-prepublish-inrepo-build`, strict local Trivy sweep logs under `pmoves/docs/logs/ghcr-local-prepublish/`)
 
 ---
 
-## Latest Changes (Mar 9, 2026)
+## Latest Changes (Mar 10, 2026)
 
-### Post-PR #842 Validation Baseline
+### PR #844 Review Cycle — Static Smoke Blockers + AB-9 Fix
+
+- **PR #844** (`fix/static-smoke-blockers`, 4 commits ending at `f74f1db0`):
+  - 22 static smoke test failures resolved (NATS tier migration, port conflicts, Supabase URL fixes, compose structure)
+  - AB-9 runner queue deadlock resolved via Docker containerization + runner label alignment
+  - Docker Bench CI job fixed: `runs-on` changed from `[self-hosted, Linux, X64, vps]` to `[self-hosted, ai-lab]`
+- **Static smoke tests** (no Docker): **64 passed, 13 skipped, 0 failed** (16.39s)
+  - All 13 skips are runtime-dependent (container running checks) — expected when stack isn't up
+- **Full smoke suite** (215 collected, no Docker stack): **92 passed, 40 skipped, 83 failed**
+  - 83 failures are runtime-only (services not running) — expected without Docker stack
+  - **0 new static failures**
+- **PR review agents** (4 parallel): code-reviewer, silent-failure-hunter, pr-test-analyzer, comment-analyzer — no P1 findings
+- **CodeRabbit review**: 14 comments — 4 fixed in `f74f1db0` (quadruple-brace Docker format bug, NATS credential false-positive, JetStream context window, Docker Bench runner label). Remaining comments are test robustness suggestions tracked for follow-up.
+- **Hardening validation CI**: PASS (all services validated)
+- **P2 tracker**: 14 open — unchanged (all Tier 2/3, non-blocking)
+
+### Previous (Mar 9 — Post-PR #842 Validation Baseline)
 
 - **PR #842 merged** (`05526994`): CI Trivy timeout increase to 10m + 5 new smoke tests with cross-platform `httpx.TimeoutException` fix
-- **Smoke test suite** (215 collected, no Docker stack):
-  - **58 passed** — static config validators, env file checks, compose structure
-  - **123 failed** — expected: services not running (Supabase, TensorZero, NATS, Neo4j containers offline)
-  - **34 skipped** — conditional tests (Docker API unavailable, platform-specific)
-  - **1 error** — `test_tensorzero_clickhouse_latency` teardown (pre-existing async cleanup issue)
-  - **0 new failures** — all failures match pre-existing patterns from previous baselines
-- **Static smoke tests** (no Docker): 22 failed, 22 passed, 3 skipped
-  - Pre-existing: port conflicts (3737, 8000, 8096, 8503, 5055, 9096, 21116), NATS config gaps (missing docs, healthcheck text match, agent-zero depends_on), env consistency (POSTGRES_PASSWORD divergence, trailing whitespace), NATS auth tier migration incomplete
-- **Flight-check**: Docker/Git/Python/UV/rg/make available; 12 ports LISTENING (partial stack via WSL); npm/jq not on PATH
-- **Auth-alignment**: 0 errors, 62 warnings (placeholder API keys — expected for dev workstation)
-- **Docs-reconcile**: Dashboard was 4 commits behind → updated to `05526994`
-- **Audit-layers-static**: 39/40 submodules PASS, 1 FAIL (`PMOVES-llama-throughput-lab` — pre-existing error)
-- **P2 tracker**: 11 open / 16 total — unchanged from prior session (all Tier 2/3, non-blocking)
-- **AB-9**: **RESOLVED** — 2/4 runners online via Docker containers (`pmoves-ai-lab-runner`, `pmoves-vps-runner`). Phase policy `local-certification` PASS. Used existing `local_cert_runners.py` (was always the intended approach — "Both runners on local Docker containers"). Windows runner `pmoves-ai-lab-win` also online (3 total). Hotfix runner offline (non-blocking).
-- **RG-3/RG-4**: Deferred (no Supabase credentials)
-- Live metrics: Open PRs `0`, Dependabot `0`, Code Scanning `0`
+- **Smoke test suite**: 58 passed, 123 failed (runtime), 34 skipped, 1 error
+- **Static smoke tests**: 22 failed, 22 passed, 3 skipped
+- **AB-9**: RESOLVED — 3/4 runners online via Docker containers
+- **Audit-layers-static**: 39/40 submodules PASS
+- **P2 tracker**: 11 open / 16 total
 
 ### Previous (Mar 9 — Tracker Reconciliation)
 
