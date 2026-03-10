@@ -3,9 +3,9 @@
 > **Single source of truth** for PMOVES.AI production readiness.
 > Supersedes all individual audit documents accumulated Feb 7 -- Feb 18, 2026.
 
-**Last Updated:** 2026-03-10 (P2 verification sweep + Trivy triage correction)
+**Last Updated:** 2026-03-10 (archon CVE pins + deepresearch status correction)
 **Branch:** `main`
-**Commit:** `f1c98a14` + P2 tracker verification
+**Commit:** `8cae12c1` (archon CVE overrides + deepresearch correction)
 **Consolidated From:** 27 audit documents
 **Evidence:** live runbook execution on 2026-03-05 (`make ghcr-prepublish-inrepo-build`, strict local Trivy sweep logs under `pmoves/docs/logs/ghcr-local-prepublish/`)
 
@@ -20,10 +20,10 @@
   - **1 IMPROVED:** #5 Open-Notebook health endpoint (`/healthz` alias added, `/metrics` still absent)
   - **4 CONFIRMED OPEN:** #3 Open-Notebook SurrealDB root:root (still hardcoded), #10 Pipecat metrics (internal only, no Prometheus), #13/#14 tensorzero (upstream)
   - **P2 tracker: 4 open + 1 improved / 17 total** (down from 11 open)
-- **Trivy CVE override correction** — dashboard previously claimed "added pip upgrade steps in Dockerfiles" for archon (crawl4ai, langchain-core) and deepresearch (ray, vllm). **These pins were never committed.** Corrected to "triaged with remediation plan" status:
-  - `archon`: `crawl4ai==0.7.4` still in `pyproject.toml` (target: 0.8.0), `langchain-core` unpinned (target: 1.2.5)
-  - `deepresearch`: No Dockerfile in submodule; upstream ray/vllm pins needed
-  - **Accepted risk**: Both images run in isolated Docker networks with no external ingress. CVE patches require upstream submodule PRs.
+- **Trivy CVE override status** — corrected per-image status:
+  - `deepresearch`: **COMPLETE** — `ray==2.52.0` + `vllm==0.14.1` already pinned in `pmoves/services/deepresearch/Dockerfile:17-20`
+  - `archon`: **COMPLETE** — `crawl4ai>=0.8.0` + `langchain-core>=1.2.5` override added to `pmoves/integrations/archon/python/Dockerfile.server` (CVE-2026-26216, CVE-2025-68664)
+  - Previous correction over-stated: deepresearch pins were committed but missed during verification. Now both images have CVE overrides in place.
 - **Dependabot alerts**: 0 open (confirmed)
 - **Open PRs**: 0 (confirmed)
 
@@ -91,10 +91,10 @@
   - `options.js`: XSS via innerHTML → replaced with DOM API (`textContent`)
   - `mock-server.js`: unvalidated dynamic property → guarded with `Object.hasOwn()`
 - **Dependabot alerts** — 0 open
-- **Trivy CVE triage** — remediation targets identified (NOT yet applied to Dockerfiles):
-  - `archon`: target `crawl4ai>=0.8.0` (CVE-2026-26216 RCE), `langchain-core>=1.2.5` (CVE-2025-68664 RCE) — currently at 0.7.4/unpinned
-  - `deepresearch`: target `ray>=2.52.0` (CVE-2025-62593 RCE), `vllm>=0.14.1` (CVE-2026-22778 RCE) — requires upstream submodule PRs
-  - **Accepted risk:** Both services run in isolated Docker networks with no direct external ingress
+- **Trivy CVE triage** — CVE override pins applied to both affected images:
+  - `archon`: **FIXED** — `crawl4ai>=0.8.0` + `langchain-core>=1.2.5` override in `Dockerfile.server` (CVE-2026-26216, CVE-2025-68664)
+  - `deepresearch`: **FIXED** — `ray==2.52.0` + `vllm==0.14.1` pinned in `Dockerfile:17-20` (CVE-2025-62593, CVE-2026-22778)
+  - Both services run in isolated Docker networks with no direct external ingress (defense-in-depth)
 - **AB-9 UPDATE** — All 4 self-hosted runners offline as of Mar 9 investigation. Previous "3/4 online" claim was stale. Root causes: `ai-lab-runner` (WSL2, no systemd service installed — process stopped), `ai-lab-win` (no Windows service — process stopped), `hotfix-runner` + `vps-runner` (remote machines, not accessible from dev workstation). WSL2 systemd now enabled (`/etc/wsl.conf`). Local runners require manual restart via `svc.sh install` (WSL) or interactive `run.cmd` (Windows). GHCR builds targeting `[self-hosted, Linux, X64, vps]` remain blocked until VPS runner is restored.
 - **Dockerfile audit fixes (4 images):**
   - `pmoves-archon`: Renamed `MCP_CREDENTIALS_PATH` → `MCP_CONFIG_PATH` to eliminate BuildKit `SecretsUsedInArgOrEnv` warning
@@ -107,7 +107,7 @@
 - **Trivy failure triage** (from 2026-03-05 sweep):
   - `agent-zero`: Scan timeout at default 5m — infra issue, not vulnerability. **FIXED:** CI timeout increased to 10m in `integrations-ghcr.yml` and `self-hosted-builds-hardened.yml`. **Not a blocker.**
   - `archon`: 19 HIGH + 4 CRITICAL — key items: Crawl4AI RCE (CVE-2026-26216, upgrade to 0.8.0), langchain-core RCE (CVE-2025-68664, upgrade to 1.2.5), pydantic-ai info-disclosure. Upstream pins needed.
-  - `deepresearch`: 23 HIGH + 2 CRITICAL — key items: Ray RCE (CVE-2025-62593, upgrade to 2.52.0), vLLM RCE (CVE-2026-22778, upgrade to 0.14.1). Upstream pins needed.
+  - `deepresearch`: 23 HIGH + 2 CRITICAL — key items: Ray RCE (CVE-2025-62593), vLLM RCE (CVE-2026-22778). **FIXED** — `ray==2.52.0` + `vllm==0.14.1` pinned in Dockerfile.
   - `pmoves-yt`: 1 HIGH — urllib3 CVE-2026-21441 (decompression bomb). **FIXED:** `urllib3>=2.6.3` pinned in submodule (commit `0ae7bf1d3`), gitlink updated.
 
 ### Previous (Mar 9 — Build Visibility Matrix)
