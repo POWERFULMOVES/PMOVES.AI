@@ -32,6 +32,14 @@ async def tensorzero_client():
                 f"Port {TENSORZERO_GATEWAY.port} is responding but {TENSORZERO_GATEWAY.health_path} returned 404 "
                 "(TensorZero Gateway may not be running)"
             )
+        # Validate response body is actually TensorZero (not another service on same port)
+        try:
+            data = resp.json()
+            if "gateway" not in data:
+                await client.aclose()
+                pytest.skip("Port responds but doesn't look like TensorZero Gateway")
+        except Exception:
+            pass  # Non-JSON health response is acceptable for probe
     except (httpx.ConnectError, httpx.ConnectTimeout):
         await client.aclose()
         pytest.skip(
@@ -172,3 +180,51 @@ async def test_tensorzero_clickhouse_latency(clickhouse_client: httpx.AsyncClien
 
     assert response.status_code == 200
     assert duration_ms < 500, f"ClickHouse too slow: {duration_ms:.0f}ms"
+
+
+# ============================================================================
+# STATIC CONFIGURATION TESTS (no running services required)
+# ============================================================================
+
+@pytest.mark.smoke
+def test_tensorzero_compose_configuration():
+    """Validate TensorZero Gateway compose config statically."""
+    import yaml
+    from _smoke_helpers import PMOVES_DIR
+
+    compose = PMOVES_DIR / "docker-compose.yml"
+    if not compose.exists():
+        pytest.skip("docker-compose.yml not found")
+
+    data = yaml.safe_load(compose.read_text())
+    services = data.get("services", {})
+    svc = services.get("tensorzero-gateway", {})
+    assert svc, "tensorzero-gateway service should exist in compose"
+
+    # Validate port mapping
+    ports = svc.get("ports", [])
+    assert any("3030" in str(p) for p in ports), "Should map host port 3030"
+
+    # Validate healthcheck exists (directly or via anchor inheritance)
+    hc = svc.get("healthcheck", {})
+    assert hc, "Should have healthcheck defined (directly or via anchor)"
+
+
+@pytest.mark.smoke
+def test_tensorzero_clickhouse_compose_configuration():
+    """Validate TensorZero ClickHouse compose config statically."""
+    import yaml
+    from _smoke_helpers import PMOVES_DIR
+
+    compose = PMOVES_DIR / "docker-compose.yml"
+    if not compose.exists():
+        pytest.skip("docker-compose.yml not found")
+
+    data = yaml.safe_load(compose.read_text())
+    services = data.get("services", {})
+    svc = services.get("tensorzero-clickhouse", {})
+    assert svc, "tensorzero-clickhouse service should exist in compose"
+
+    # Validate port mapping
+    ports = svc.get("ports", [])
+    assert any("8123" in str(p) for p in ports), "Should map host port 8123"
