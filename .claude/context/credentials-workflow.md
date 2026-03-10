@@ -45,19 +45,26 @@ The CHIT bundle is the **primary source for external API keys** on self-hosted r
 env.cgp.json → secrets_sync.py generate → env.shared (+ env.tier-*)
 ```
 
-### 2. GitHub App (`GH_APP_ID` + `GH_APP_SEC`)
+### 2. GitHub App (`GH_APP_ID` + `GH_APP_SEC` + `GH_APP_CLIENT_ID`)
 
-Used **exclusively in CI** for GHCR (GitHub Container Registry) authentication.
+Installed **org-wide** on all POWERFULMOVES repositories. Used in CI for GHCR auth
+and available for runtime token minting by services (BoTZ MCP gateway, Archon).
 
 | Property | Value |
 |----------|-------|
-| Purpose | Generate ephemeral `GITHUB_TOKEN` for Docker image push/pull |
-| Action | `actions/create-github-app-token@v1` |
+| Purpose | Ephemeral tokens for GHCR, cross-repo ops, MCP GitHub tools |
+| Action | `actions/create-github-app-token@v2` |
 | Workflows | `build-images.yml`, `integrations-ghcr.yml`, `self-hosted-builds.yml` |
 | Local setup | `docs/GITHUB_APP_LOCAL_SETUP.md` |
+| Strategy doc | `pmoves/docs/infrastructure/github-app-strategy.md` |
+| Secrets | `GH_APP_ID`, `GH_APP_SEC` (PEM), `GH_APP_CLIENT_ID`, `GH_APP_INSTALLATION_ID` |
 
-**NOT for pulling secrets** — GitHub API is write-only for secret values. The GitHub
-App generates short-lived tokens scoped to `packages:write` for GHCR operations.
+**Token hierarchy:**
+- **CI:** `actions/create-github-app-token@v2` → ephemeral GitHub App installation token for GHCR
+- **Runtime:** Services mint installation tokens from `GH_APP_ID` + `GH_APP_SEC`
+- **MCP:** BoTZ GitHub MCP server uses minted tokens for org-wide GitHub API access
+
+**NOT for pulling secrets** — GitHub API is write-only for secret values.
 
 ### 3. `sync-secrets-local.yml` Workflow
 
