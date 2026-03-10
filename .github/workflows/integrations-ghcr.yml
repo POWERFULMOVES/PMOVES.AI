@@ -142,8 +142,8 @@ jobs:
       id-token: write
     strategy:
       fail-fast: false
-      # Throttle multi-arch matrix fan-out to protect shared self-hosted capacity.
-      max-parallel: 2
+      # Allow all self-hosted runners (ai-lab, vps, hotfix) to build in parallel.
+      max-parallel: 4
       matrix:
         name: ${{ fromJSON(needs.resolve-matrix.outputs.names) }}
 
@@ -382,6 +382,7 @@ jobs:
           echo "EOF" >> $GITHUB_OUTPUT
 
       # PRs validate Dockerfile/build correctness without publishing artifacts.
+      # Build native amd64 only — skip arm64 QEMU emulation to cut PR time ~50%.
       - name: Build (PR validation, no push)
         if: ${{ github.event_name == 'pull_request' }}
         uses: docker/build-push-action@v6
@@ -392,7 +393,7 @@ jobs:
           build-args: |
             PIP_CONSTRAINT=requirements.lock
             ${{ steps.cfg.outputs.build_args }}
-          platforms: ${{ steps.cfg.outputs.platforms }}
+          platforms: linux/amd64
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -440,13 +441,14 @@ jobs:
           name: ${{ matrix.name }}-sbom
           path: ${{ steps.sbom.outputs.sbom_path }}
 
-      - name: Free disk space (docker prune)
+      - name: Free disk space (keep BuildKit cache)
         run: |
           set -euxo pipefail
           docker system df || true
-          docker buildx prune -af || true
-          docker builder prune -af || true
-          docker system prune -af --volumes || true
+          # Remove dangling images and stopped containers but preserve BuildKit
+          # layer cache and volumes for faster subsequent builds.
+          docker image prune -f || true
+          docker container prune -f || true
           df -h
 
       - name: Pull image for Trivy (private GHCR)
