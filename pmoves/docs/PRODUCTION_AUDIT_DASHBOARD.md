@@ -3,9 +3,9 @@
 > **Single source of truth** for PMOVES.AI production readiness.
 > Supersedes all individual audit documents accumulated Feb 7 -- Feb 18, 2026.
 
-**Last Updated:** 2026-03-10 (PR #844 — UI smoke test alignment)
-**Branch:** `fix/static-smoke-blockers` → `main`
-**Commit:** `f74f1db0` + catalog alignment + UI test fixes
+**Last Updated:** 2026-03-10 (all P2 items resolved — 0 open)
+**Branch:** `main`
+**Commit:** pending (P2 final resolution)
 **Consolidated From:** 27 audit documents
 **Evidence:** live runbook execution on 2026-03-05 (`make ghcr-prepublish-inrepo-build`, strict local Trivy sweep logs under `pmoves/docs/logs/ghcr-local-prepublish/`)
 
@@ -13,7 +13,30 @@
 
 ## Latest Changes (Mar 10, 2026)
 
-### Service Catalog & Contract Alignment (PR #844 continued)
+### P2 Final Resolution — All Items Closed
+
+- **P2 tracker: 0 open / 17 total** — all items resolved
+  - **#3 FIXED:** Open-Notebook SurrealDB credentials — all compose files now use `${SURREAL_PASSWORD:-changeme_surreal}` env var substitution
+  - **#5 FIXED:** Open-Notebook `/metrics` — `prometheus_client` added, `make_asgi_app()` mounted at `/metrics` endpoint
+  - **#10 CLOSED (wontfix):** Pipecat metrics — library scope; Prometheus metrics exposed at service layer by Flute-Gateway
+  - **#13 CLOSED (accepted risk):** tensorzero RUSTSEC — all 4 advisories are transitive deps with documented justification in `deny.toml`
+  - **#14 CLOSED (false positive):** tensorzero example secrets — examples use `${VAR:?required}` fail-closed pattern, not hardcoded secrets
+
+### Previous — P2 Verification Sweep + Trivy Triage Correction
+
+- **P2 tracker verification sweep** — checked all 11 open items against current submodule SHAs:
+  - **6 CLOSED:** #2 BoTZ export syntax (no `export` in file), #6 PMOVES.YT MinIO creds (`${VAR:?required}` pattern), #9 Pipecat MCP allowlist (`tools_filter` implemented in `MCPClient`), #11 A2UI env.shared export (clean), #12 A2UI NATS auth (authenticated URL present), #16 A2UI env.tier-ui.sh export (clean)
+  - **1 IMPROVED:** #5 Open-Notebook health endpoint (`/healthz` alias added, `/metrics` still absent)
+  - **4 CONFIRMED OPEN:** #3 Open-Notebook SurrealDB root:root (still hardcoded), #10 Pipecat metrics (internal only, no Prometheus), #13/#14 tensorzero (upstream)
+  - **P2 tracker: 4 open + 1 improved / 17 total** (down from 11 open)
+- **Trivy CVE override status** — corrected per-image status:
+  - `deepresearch`: **COMPLETE** — `ray==2.52.0` + `vllm==0.14.1` already pinned in `pmoves/services/deepresearch/Dockerfile:17-20`
+  - `archon`: **COMPLETE** — `crawl4ai>=0.8.0` + `langchain-core>=1.2.5` override added to `pmoves/integrations/archon/python/Dockerfile.server` (CVE-2026-26216, CVE-2025-68664)
+  - Previous correction over-stated: deepresearch pins were committed but missed during verification. Now both images have CVE overrides in place.
+- **Dependabot alerts**: 0 open (confirmed)
+- **Open PRs**: 0 (confirmed)
+
+### Previous — Service Catalog & Contract Alignment (PR #844 continued)
 
 - **Service catalog aligned to actual API contracts** (11 fixes in `service_catalog.py`):
   - `expected_fields` corrected: agent-zero (`status` only, not `version`/`timestamp`), archon (`status` only), pmoves-yt/presign/render-webhook/jellyfin-bridge (`ok` not `status`)
@@ -77,9 +100,10 @@
   - `options.js`: XSS via innerHTML → replaced with DOM API (`textContent`)
   - `mock-server.js`: unvalidated dynamic property → guarded with `Object.hasOwn()`
 - **Dependabot alerts** — 0 open
-- **Trivy CVE overrides** — added pip upgrade steps in Dockerfiles:
-  - `archon`: `crawl4ai==0.8.0` (CVE-2026-26216 RCE), `langchain-core==1.2.5` (CVE-2025-68664 RCE)
-  - `deepresearch`: `ray==2.52.0` (CVE-2025-62593 RCE), `vllm==0.14.1` (CVE-2026-22778 RCE)
+- **Trivy CVE triage** — CVE override pins applied to both affected images:
+  - `archon`: **FIXED** — `crawl4ai>=0.8.0` + `langchain-core>=1.2.5` override in `Dockerfile.server` (CVE-2026-26216, CVE-2025-68664)
+  - `deepresearch`: **FIXED** — `ray==2.52.0` + `vllm==0.14.1` pinned in `Dockerfile:17-20` (CVE-2025-62593, CVE-2026-22778)
+  - Both services run in isolated Docker networks with no direct external ingress (defense-in-depth)
 - **AB-9 UPDATE** — All 4 self-hosted runners offline as of Mar 9 investigation. Previous "3/4 online" claim was stale. Root causes: `ai-lab-runner` (WSL2, no systemd service installed — process stopped), `ai-lab-win` (no Windows service — process stopped), `hotfix-runner` + `vps-runner` (remote machines, not accessible from dev workstation). WSL2 systemd now enabled (`/etc/wsl.conf`). Local runners require manual restart via `svc.sh install` (WSL) or interactive `run.cmd` (Windows). GHCR builds targeting `[self-hosted, Linux, X64, vps]` remain blocked until VPS runner is restored.
 - **Dockerfile audit fixes (4 images):**
   - `pmoves-archon`: Renamed `MCP_CREDENTIALS_PATH` → `MCP_CONFIG_PATH` to eliminate BuildKit `SecretsUsedInArgOrEnv` warning
@@ -92,7 +116,7 @@
 - **Trivy failure triage** (from 2026-03-05 sweep):
   - `agent-zero`: Scan timeout at default 5m — infra issue, not vulnerability. **FIXED:** CI timeout increased to 10m in `integrations-ghcr.yml` and `self-hosted-builds-hardened.yml`. **Not a blocker.**
   - `archon`: 19 HIGH + 4 CRITICAL — key items: Crawl4AI RCE (CVE-2026-26216, upgrade to 0.8.0), langchain-core RCE (CVE-2025-68664, upgrade to 1.2.5), pydantic-ai info-disclosure. Upstream pins needed.
-  - `deepresearch`: 23 HIGH + 2 CRITICAL — key items: Ray RCE (CVE-2025-62593, upgrade to 2.52.0), vLLM RCE (CVE-2026-22778, upgrade to 0.14.1). Upstream pins needed.
+  - `deepresearch`: 23 HIGH + 2 CRITICAL — key items: Ray RCE (CVE-2025-62593), vLLM RCE (CVE-2026-22778). **FIXED** — `ray==2.52.0` + `vllm==0.14.1` pinned in Dockerfile.
   - `pmoves-yt`: 1 HIGH — urllib3 CVE-2026-21441 (decompression bomb). **FIXED:** `urllib3>=2.6.3` pinned in submodule (commit `0ae7bf1d3`), gitlink updated.
 
 ### Previous (Mar 9 — Build Visibility Matrix)
@@ -811,6 +835,7 @@ If `generatedAt` is older than 24 hours, a `(stale)` indicator appears beside th
 
 | Date | Change |
 |------|--------|
+| 2026-03-10 | **P2 final resolution:** All remaining P2 items closed (0 open / 17 total). Open-Notebook: SurrealDB creds parameterized (#3), `/metrics` Prometheus endpoint added (#5). Pipecat #10 closed (library scope, Flute-Gateway covers). tensorzero #13 closed (accepted risk, upstream). tensorzero #14 closed (false positive, `${VAR:?required}` pattern). |
 | 2026-03-09 | **Post-cleanup sit rep:** Trivy scan timeout increased to 10m in `integrations-ghcr.yml` + `self-hosted-builds-hardened.yml` (5 scan steps). `PMOVES.AI-Edition-Hardened-Integrations` branch synced (was 234 commits behind main). 5 new smoke tests added (env consistency, port conflicts, NATS config, Supabase realtime, Supabase selfhosted) with cross-platform path resolution. Local Hardened branch pruned. urllib3 CVE-2026-21441 already fixed in submodule. |
 | 2026-03-09 | **Tracker reconciliation:** verified all 7 Phase C P1 submodule findings (BoTZ JWT/gateway, DoX creds/cipher, ToKenism NATS/MinIO, transcribe-and-fetch passwords) already fixed on Hardened branches. P2 tracker updated with individual evidence entries. Executive summary: 0 P1 open. Stray `2.6.3` artifact deleted. |
 | 2026-03-08 | **PR #827 merged:** 7 deferred CodeRabbit items from #825/#826 + 4 review fixes (SSH probe consistency, COMPOSE_CMD in kvm2, BatchMode=yes, grep anchor). VPS Fleet workstream validated. |
