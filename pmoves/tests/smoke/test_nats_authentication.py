@@ -75,8 +75,8 @@ def test_agent_zero_env_file_has_nats_credentials() -> None:
 
     nats_url = matches[0]
 
-    assert "pmoves@" in nats_url or ":" in nats_url, (
-        f"NATS_URL in env.tier-agent should have credentials, got: {nats_url}"
+    assert "@" in nats_url, (
+        f"NATS_URL in env.tier-agent should have credentials (user:pass@host), got: {nats_url}"
     )
 
 
@@ -94,8 +94,8 @@ def test_comfy_watcher_env_file_has_nats_credentials() -> None:
 
     nats_url = matches[0]
 
-    assert "pmoves@" in nats_url or ":" in nats_url, (
-        f"NATS_URL in env.tier-worker should have credentials, got: {nats_url}"
+    assert "@" in nats_url, (
+        f"NATS_URL in env.tier-worker should have credentials (user:pass@host), got: {nats_url}"
     )
 
 

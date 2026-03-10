@@ -166,7 +166,7 @@ jobs:
   # ============================================================================
   docker-bench:
     name: Docker Bench Security
-    runs-on: [self-hosted, Linux, X64, vps]
+    runs-on: [self-hosted, ai-lab]
 
     steps:
       - name: Harden Runner

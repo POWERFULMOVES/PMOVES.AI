@@ -51,7 +51,7 @@ def _container_running(name: str) -> bool:
     """Check if a Docker container is running."""
     try:
         result = subprocess.run(
-            ["docker", "ps", "--filter", f"name={name}", "--format", "{{{{.Status}}}}"],
+            ["docker", "ps", "--filter", f"name={name}", "--format", "{{.Status}}"],
             capture_output=True,
             text=True,
             timeout=10,
@@ -244,7 +244,7 @@ async def test_supabase_health_check() -> None:
 
         if result.returncode != 0 or "no such" in result.stderr.lower():
             result = subprocess.run(
-                ["docker", "ps", "--filter", f"name={service}", "--format", "{{{{.Status}}}}"],
+                ["docker", "ps", "--filter", f"name={service}", "--format", "{{.Status}}"],
                 capture_output=True,
                 text=True,
             )

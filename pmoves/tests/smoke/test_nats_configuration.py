@@ -153,7 +153,7 @@ def test_nats_has_correct_ports_exposed() -> None:
 @pytest.mark.smoke
 def test_nats_includes_jetstream() -> None:
     """Verify NATS is configured with JetStream enabled."""
-    output = grep_context(COMPOSE_FILE, r"^  nats:", after=10)
+    output = grep_context(COMPOSE_FILE, r"^  nats:", after=35)
     assert output, "NATS service not found"
 
     assert "-js" in output or "jetstream" in output.lower(), (
