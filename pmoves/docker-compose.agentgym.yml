@@ -3,7 +3,7 @@
 #
 # REQUIRES: docker-compose.yml (provides supabase-db, nats, hi-rag-gateway-v2, evo-controller)
 # Usage:
-#   docker compose -f docker-compose.yml -f docker-compose.agentgym.yml --profile agentgym up -d
+#   docker compose -f docker-compose.yml -f docker-compose.agentgym.yml --profile agentgym --profile supabase-local up -d
 #
 # Services:
 #   - agentgym-rl-coordinator: Training job orchestrator
