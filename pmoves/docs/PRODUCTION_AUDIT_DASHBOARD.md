@@ -3,9 +3,9 @@
 > **Single source of truth** for PMOVES.AI production readiness.
 > Supersedes all individual audit documents accumulated Feb 7 -- Feb 18, 2026.
 
-**Last Updated:** 2026-03-10 (PR #844 — service catalog alignment)
+**Last Updated:** 2026-03-10 (PR #844 — UI smoke test alignment)
 **Branch:** `fix/static-smoke-blockers` → `main`
-**Commit:** `f74f1db0` + catalog alignment
+**Commit:** `f74f1db0` + catalog alignment + UI test fixes
 **Consolidated From:** 27 audit documents
 **Evidence:** live runbook execution on 2026-03-05 (`make ghcr-prepublish-inrepo-build`, strict local Trivy sweep logs under `pmoves/docs/logs/ghcr-local-prepublish/`)
 
@@ -22,10 +22,11 @@
 - **Service-specific test fixes**: agent-zero (accept `ok` status, allow 404 on `/mcp`), archon (accept `ok` status), tensorzero (use catalog health_path, fix ClickHouse field check, skip missing `/openapi.json`)
 - **env.shared consistency fixes**: added `NATS_URL` with authenticated creds, removed duplicate `SUPABASE_JWT_SECRET`, synced `SUPABASE_DB_PASSWORD` with tier-supabase, trimmed trailing whitespace
 - **NATS auth test updated**: `test_nats_url_removed_from_env_shared` → `test_nats_url_in_env_shared_is_authenticated` (validates creds in URL)
-- **Full smoke suite** (with Docker stack): **115 passed, 83 skipped, 16 failed, 1 error** (174s)
-  - Down from 33 failed → 16 failed (**17 failures eliminated**)
-  - Remaining 16: 7 hi-rag-v2 UI + 9 jellyfin-bridge UI (API schema mismatches, follow-up PR)
-  - 1 error: transient async fixture teardown (ClickHouse latency test, passes in isolation)
+- **Full smoke suite** (with Docker stack): **131 passed, 83 skipped, 0 failed, 1 error** (174s)
+  - Down from 33 failed → 16 failed → **0 failed** (all 33 failures eliminated across PR #844)
+  - hi-rag-v2 UI fixes: health endpoint `/` not `/healthz`, flexible response schema, broadened exception guards
+  - jellyfin-bridge UI fixes: POST not GET for playback-url, 404/405/412 for non-existent/unconfigured endpoints
+  - 1 error: transient async fixture teardown (ClickHouse latency test, passes in isolation — pre-existing)
 - **P2 tracker**: 14 open — unchanged (all Tier 2/3, non-blocking)
 
 ### Previous — PR #844 Review Cycle — Static Smoke Blockers + AB-9 Fix
