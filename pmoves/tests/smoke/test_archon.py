@@ -3,7 +3,7 @@ Archon service-specific smoke tests.
 
 Tests Archon health and Supabase integration.
 
-Expected runtime: <5s
+Expected runtime: <5s (skips gracefully when services are unavailable)
 """
 
 import pytest
@@ -15,11 +15,24 @@ from pmoves.tests.utils.service_catalog import ARCHON
 # FIXTURES
 # ============================================================================
 
-@pytest.fixture(scope="session")
-async def archon_client() -> httpx.AsyncClient:
-    """Archon HTTP client."""
+@pytest.fixture
+async def archon_client():
+    """Archon HTTP client. Skips dependent tests if service is unavailable."""
     timeout = httpx.Timeout(10.0, connect=5.0)
-    return httpx.AsyncClient(base_url=f"http://localhost:{ARCHON.port}", timeout=timeout)
+    client = httpx.AsyncClient(base_url=f"http://localhost:{ARCHON.port}", timeout=timeout)
+    try:
+        resp = await client.get("/healthz")
+        if resp.status_code == 404:
+            await client.aclose()
+            pytest.skip(
+                f"Port {ARCHON.port} is responding but /healthz returned 404 "
+                "(Archon may not be running)"
+            )
+    except (httpx.ConnectError, httpx.ConnectTimeout):
+        await client.aclose()
+        pytest.skip(f"Archon not reachable at localhost:{ARCHON.port}")
+    yield client
+    await client.aclose()
 
 
 # ============================================================================
