@@ -60,7 +60,7 @@ and available for runtime token minting by services (BoTZ MCP gateway, Archon).
 | Secrets | `GH_APP_ID`, `GH_APP_SEC` (PEM), `GH_APP_CLIENT_ID`, `GH_APP_INSTALLATION_ID` |
 
 **Token hierarchy:**
-- **CI:** `actions/create-github-app-token@v2` → ephemeral `GITHUB_TOKEN` for GHCR
+- **CI:** `actions/create-github-app-token@v2` → ephemeral GitHub App installation token for GHCR
 - **Runtime:** Services mint installation tokens from `GH_APP_ID` + `GH_APP_SEC`
 - **MCP:** BoTZ GitHub MCP server uses minted tokens for org-wide GitHub API access
 

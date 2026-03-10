@@ -68,11 +68,11 @@ All image build workflows use the App for GHCR login:
     private-key: ${{ secrets.GH_APP_SEC }}
 
 - name: Login GHCR
-  uses: docker/login-action@v3
+  uses: docker/login-action@v4
   with:
     registry: ghcr.io
-    username: ${{ github.actor }}
-    password: ${{ steps.app_token.outputs.token || secrets.GHCR_TOKEN }}
+    username: ${{ steps.app_token.outputs.token && 'x-access-token' || env.GHCR_USERNAME }}
+    password: ${{ steps.app_token.outputs.token || env.GHCR_PASSWORD }}
 ```
 
 **Workflows:** `build-images.yml`, `integrations-ghcr.yml`, `self-hosted-builds.yml`, `self-hosted-builds-hardened.yml`

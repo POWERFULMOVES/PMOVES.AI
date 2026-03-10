@@ -64,7 +64,11 @@ The `actions/create-github-app-token@v2` action has strict PEM validation. If yo
 
 1. **Re-set the secret from the raw PEM file:**
 ```bash
+# Bash / WSL
 gh secret set GH_APP_SEC --repo POWERFULMOVES/PMOVES.AI < /path/to/private-key.pem
+
+# PowerShell
+Get-Content .\private-key.pem -Raw | gh secret set GH_APP_SEC --repo POWERFULMOVES/PMOVES.AI
 ```
 
 2. **Verify the PEM file is valid:**
@@ -113,7 +117,8 @@ def mint_installation_token():
 
     resp = requests.post(
         f"https://api.github.com/app/installations/{install_id}/access_tokens",
-        headers={"Authorization": f"Bearer {jwt_token}", "Accept": "application/vnd.github+json"}
+        headers={"Authorization": f"Bearer {jwt_token}", "Accept": "application/vnd.github+json"},
+        timeout=10,
     )
     resp.raise_for_status()
     return resp.json()["token"]

@@ -752,7 +752,7 @@
           "file": "pmoves/env.shared",
           "prompt": "GitHub App ID",
           "help": "Numeric App ID from GitHub App settings page.",
-          "required": false,
+          "required": true,
           "type": "string"
         },
         {
@@ -768,7 +768,7 @@
           "file": "pmoves/env.shared",
           "prompt": "GitHub App PEM private key",
           "help": "Full PEM private key contents. For CI, set via: gh secret set GH_APP_SEC < /path/to/key.pem",
-          "required": false,
+          "required": true,
           "sensitive": true
         },
         {
@@ -776,7 +776,7 @@
           "file": "pmoves/env.shared",
           "prompt": "GitHub App installation ID (POWERFULMOVES org)",
           "help": "Get via: gh api /user/installations --jq '.installations[].id'",
-          "required": false,
+          "required": true,
           "type": "string"
         }
       ]
