@@ -29,7 +29,7 @@
 - **Docs-reconcile**: Dashboard was 4 commits behind → updated to `05526994`
 - **Audit-layers-static**: 39/40 submodules PASS, 1 FAIL (`PMOVES-llama-throughput-lab` — pre-existing error)
 - **P2 tracker**: 11 open / 16 total — unchanged from prior session (all Tier 2/3, non-blocking)
-- **AB-9**: 0/4 runners online — unchanged
+- **AB-9**: **RESOLVED** — 2/4 runners online via Docker containers (`pmoves-ai-lab-runner`, `pmoves-vps-runner`). Phase policy `local-certification` PASS. Used existing `local_cert_runners.py` (was always the intended approach — "Both runners on local Docker containers"). Windows runner `pmoves-ai-lab-win` also online (3 total). Hotfix runner offline (non-blocking).
 - **RG-3/RG-4**: Deferred (no Supabase credentials)
 - Live metrics: Open PRs `0`, Dependabot `0`, Code Scanning `0`
 
@@ -119,11 +119,12 @@
   - RG-3: AUTOMATED — `_supabase` DB collation mismatch now auto-refreshed via `supa-collation-refresh` in `supa-start`; `make -C pmoves supa-collation-check` available for manual verification
   - RG-4: PASS — auth-alignment 0 errors
   - RG-5: PASS — `persona_model_resolution` returns 8 rows (all personas grounded)
-- **CI/AB-9 status:**
-  - All 4 self-hosted runners offline (pmoves-ai-lab-runner, pmoves-ai-lab-win, pmoves-hotfix-runner, pmoves-vps-runner)
-  - 4 queued runs: 2 from `#822` merge push (GHCR + CodeQL), 1 stale `#822` PR run, 1 stale Deploy Gateway Agent
-  - Queue guard identified all 4 as cancel candidates (non-PR or closed-PR events)
-  - **Mitigation applied:** 10 lightweight workflows migrated from `[self-hosted, Linux, X64]` to `ubuntu-latest` (sql-policy-lint, python-tests, webhook-smoke, yt-dlp-bump, deploy-gateway-agent validate job, hardening-validation 4/5 jobs, build-images setup-matrix). Matrix throttling added (`max-parallel: 3-4`) to build-images and self-hosted-builds-hardened. Missing concurrency blocks added to codex-parity-advisory and webhook-smoke.
+- **CI/AB-9 status: RESOLVED**
+  - 3/4 runners online: `pmoves-ai-lab-runner` (Docker), `pmoves-vps-runner` (Docker), `pmoves-ai-lab-win` (Windows native)
+  - Docker runners launched via `make ci-runners-local-cert-up` using existing `local_cert_runners.py`
+  - Phase policy `local-certification` PASS — was always designed for Docker containers, just never launched
+  - `lane_hosts.json` and `runner_phase_policy.json` updated to match containerized topology
+  - **Previous mitigation retained:** 10 lightweight workflows on `ubuntu-latest`, matrix throttling on build workflows
 - Live metrics: Open PRs `0`, Dependabot `1` (medium), Code Scanning `0`
 
 ### VPS Fleet Workstream
@@ -136,7 +137,7 @@
 | VPS compose override | VALIDATED | CPU-only resource limits, GPU services disabled via `gpu-only` profile |
 | `.env.vps` wiring | FIXED | `--env-file .env.vps` added to compose commands in bootstrap and deploy scripts |
 | Hostinger Terraform provider | PINNED | `0.1.22` (was `~> 0.1`) |
-| Docker Bench Security | BLOCKED | AB-9 REGRESSED — all 4 self-hosted runners offline, requires manual service install |
+| Docker Bench Security | UNBLOCKED | AB-9 RESOLVED — runners containerized via `local_cert_runners.py`, `make ci-runners-local-cert-up` |
 
 ---
 
@@ -403,7 +404,7 @@ Three CI pipelines build Docker images. This matrix is the single cross-referenc
 | CodeQL alerts (open) | **0 open** (live GitHub API on 2026-03-09) |
 | Dependabot alerts | **0 open** (live GitHub API on 2026-03-09) |
 | Open PRs | **0** |
-| CI queue | DEGRADED — 0/4 self-hosted runners online (all offline as of Mar 9); WSL runner needs `svc.sh install`; Windows runner needs `svc.cmd`; VPS+hotfix remote; hosted (ubuntu-latest) workflows healthy |
+| CI queue | **HEALTHY** — 3/4 self-hosted runners online (2 Docker containers via `local_cert_runners.py` + 1 Windows native). Phase policy `local-certification` PASS. Start: `make -C pmoves ci-runners-local-cert-up`. Hotfix runner offline (non-blocking). |
 
 ### Runtime Verification Snapshot (2026-03-09)
 
@@ -528,13 +529,22 @@ Evidence log: `pmoves/docs/evidence/audit-validation-2026-02-20-production-runti
 
 | ID | Blocker | Source Doc | Severity | Status | Next Action |
 |----|---------|-----------|----------|--------|-------------|
-| AB-9 | Self-hosted runner queue starvation on CodeQL/GHCR lanes | Release closeout 2026-02-24 | **HIGH** | **REGRESSED** | All 4 runners offline (no persistent services installed). WSL2 systemd enabled, local runners need manual `svc.sh install`/`run.cmd`. VPS+hotfix runners remote-only. GHCR builds blocked. Hosted workflows (ubuntu-latest) unaffected. |
+| AB-9 | Self-hosted runner queue starvation on CodeQL/GHCR lanes | Release closeout 2026-02-24 | **HIGH** | **RESOLVED** | Docker-containerized runners via `local_cert_runners.py` — `make ci-runners-local-cert-up`. Phase policy `local-certification` PASS (2/2 required lanes online). No WSL/manual intervention needed. |
 | AB-10 | `main` vs hardened commit-history divergence after squash promotion | Sync pass 2026-03-04 | **LOW** | TRACKED | Maintain content parity (`git diff` clean). Use explicit promotion + back-sync notes to avoid false-positive divergence alarms in ops reports |
 
 ### Blocker Detail
 
-**AB-9: Runner Queue Deadlock — REGRESSED 2026-03-09**
-Previous "3/4 online" claim was stale (from throttle-only fix in PRs #832/#834/#835). Mar 9 investigation found all 4 runners offline: `ai-lab-runner` (WSL2, no systemd service — process stopped), `ai-lab-win` (no Windows service — process stopped), `hotfix-runner` + `vps-runner` (remote machines, not accessible from dev workstation). WSL2 systemd now enabled (`/etc/wsl.conf`). Local runners require manual restart via `svc.sh install` (WSL) or interactive `run.cmd` (Windows). GHCR builds targeting `[self-hosted, Linux, X64, vps]` remain blocked until VPS runner is restored. Hosted workflows (ubuntu-latest) unaffected. Migration of 10 lightweight workflows to `ubuntu-latest` freed self-hosted capacity for builds that need hardware.
+**AB-9: Runner Queue Deadlock — RESOLVED 2026-03-09**
+Root cause: runners were installed as bare-metal services (WSL2 systemd, Windows svc.cmd) that stopped and had no auto-recovery. The `local-certification` phase policy was always designed for "both runners on local Docker containers" but this was never implemented until now.
+
+**Resolution:** Used existing `local_cert_runners.py` (`make ci-runners-local-cert-up`) which launches `myoung34/github-runner` containers via Docker Desktop. No WSL2 or manual service management needed — containers auto-restart via `restart: unless-stopped` policy. Updated `lane_hosts.json` to reflect containerized topology and `runner_phase_policy.json` to match actual workflow label sets.
+
+**Timeline of missed fixes:**
+- PRs #832/#834/#835 (Mar 7-8): Added CI throttle timeouts but didn't address root cause (runners offline)
+- PR #842 (Mar 9): Captured validation baseline showing 0/4 runners, noted as AB-9 REGRESSED
+- This fix (Mar 9): Discovered `local_cert_runners.py` already existed with full Docker runner management — just needed to be run
+
+**Current state:** 3 runners online (ai-lab container, vps container, ai-lab-win native). Phase policy PASS. Hotfix runner offline (non-blocking).
 
 **AB-10: Commit-History Divergence Noise**
 `main` and `PMOVES.AI-Edition-Hardened` are currently content-parity clean (no file delta), but commit graphs diverge due squash promotion + back-sync merges. Treat this as an expected history artifact unless file-level diff appears.
