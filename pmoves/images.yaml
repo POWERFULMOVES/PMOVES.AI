@@ -189,7 +189,7 @@ images:
 
   - name: pmoves-llama-throughput-lab
     repo: PMOVES-llama-throughput-lab
-    ref: heads/main
+    ref: heads/PMOVES.AI-Edition-Hardened
     context: .
     dockerfile: Dockerfile
     image: ghcr.io/powerfulmoves/pmoves-llama-throughput-lab
