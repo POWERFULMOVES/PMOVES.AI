@@ -8,13 +8,14 @@ communicates through NATS subjects.
 
 - **Image:** `nats:2.11.8-alpine`
 - **Client port:** 4222 (`${NATS_PORT:-4222}:4222`)
-- **Monitoring:** 8222 (internal only — used by healthcheck: `curl http://localhost:8222/varz`)
+- **Monitoring:** 8222 (`${NATS_MONITORING_PORT:-9223}:8222`) — healthcheck: `wget http://localhost:8222/varz`
 - **JetStream:** enabled (`-js` flag)
+- **Auth:** `--user ${NATS_USER:-nats} --pass ${NATS_PASSWORD:-pmoves}`
 - **WebSocket:** not configured in main compose (available in DoX standalone at 9222/9223)
 
 ## Standard Configuration
 
-```
+```bash
 NATS_URL=nats://nats:pmoves@nats:4222
 ```
 
@@ -47,6 +48,11 @@ Full catalog: `.claude/context/nats-subjects.md`
 | `mesh.gpu.status.v1`                 | gpu-orchestrator   | GPU heartbeat (5s)         |
 | `claude.code.tool.executed.v1`       | Claude Code hooks  | CLI tool telemetry         |
 | `agent.graphiti.signed.v1`           | BoTZ gateway       | Agent trail attribution    |
+| `geometry.cgp.v1`                    | Tokenism           | CGP schema events          |
+| `geometry.swarm.meta.v1`            | Tokenism           | Swarm meta signals         |
+| `tokenism.cgp.ready.v1`             | Tokenism Simulator | CGP readiness              |
+| `tokenism.simulation.result.v1`     | Tokenism Simulator | Simulation results         |
+| `botz.skill.registered.v1`          | BoTZ gateway       | Skill registration         |
 
 ## JetStream Streams
 

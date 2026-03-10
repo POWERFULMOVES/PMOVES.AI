@@ -50,7 +50,7 @@
 - **PR #842 merged** (`05526994`): CI Trivy timeout increase to 10m + 5 new smoke tests with cross-platform `httpx.TimeoutException` fix
 - **Smoke test suite**: 58 passed, 123 failed (runtime), 34 skipped, 1 error
 - **Static smoke tests**: 22 failed, 22 passed, 3 skipped
-- **AB-9**: RESOLVED — 3/4 runners online via Docker containers
+- **AB-9**: RESOLVED — 3/4 Docker-containerized Linux runners online (`local_cert_runners.py`)
 - **Audit-layers-static**: 39/40 submodules PASS
 - **P2 tracker**: 11 open / 16 total
 
@@ -142,7 +142,7 @@
   - RG-5: PASS — `persona_model_resolution` returns 8 rows (all personas grounded)
 - **CI/AB-9 status: RESOLVED**
   - 3/4 runners online: `pmoves-ai-lab-runner` (Docker), `pmoves-vps-runner` (Docker), `pmoves-ai-lab-win` (Windows native)
-  - Docker runners launched via `make ci-runners-local-cert-up` using existing `local_cert_runners.py`
+  - Docker runners launched via `make -C pmoves ci-runners-local-cert-up` using existing `local_cert_runners.py`
   - Phase policy `local-certification` PASS — was always designed for Docker containers, just never launched
   - `lane_hosts.json` and `runner_phase_policy.json` updated to match containerized topology
   - **Previous mitigation retained:** 10 lightweight workflows on `ubuntu-latest`, matrix throttling on build workflows
@@ -158,7 +158,7 @@
 | VPS compose override | VALIDATED | CPU-only resource limits, GPU services disabled via `gpu-only` profile |
 | `.env.vps` wiring | FIXED | `--env-file .env.vps` added to compose commands in bootstrap and deploy scripts |
 | Hostinger Terraform provider | PINNED | `0.1.22` (was `~> 0.1`) |
-| Docker Bench Security | UNBLOCKED | AB-9 RESOLVED — runners containerized via `local_cert_runners.py`, `make ci-runners-local-cert-up` |
+| Docker Bench Security | UNBLOCKED | AB-9 RESOLVED — runners containerized via `local_cert_runners.py`, `make -C pmoves ci-runners-local-cert-up` |
 
 ---
 
@@ -550,7 +550,7 @@ Evidence log: `pmoves/docs/evidence/audit-validation-2026-02-20-production-runti
 
 | ID | Blocker | Source Doc | Severity | Status | Next Action |
 |----|---------|-----------|----------|--------|-------------|
-| AB-9 | Self-hosted runner queue starvation on CodeQL/GHCR lanes | Release closeout 2026-02-24 | **HIGH** | **RESOLVED** | Docker-containerized runners via `local_cert_runners.py` — `make ci-runners-local-cert-up`. Phase policy `local-certification` PASS (2/2 required lanes online). No WSL/manual intervention needed. |
+| AB-9 | Self-hosted runner queue starvation on CodeQL/GHCR lanes | Release closeout 2026-02-24 | **HIGH** | **RESOLVED** | Docker-containerized runners via `local_cert_runners.py` — `make -C pmoves ci-runners-local-cert-up`. Phase policy `local-certification` PASS (2/2 required lanes online). No WSL/manual intervention needed. |
 | AB-10 | `main` vs hardened commit-history divergence after squash promotion | Sync pass 2026-03-04 | **LOW** | TRACKED | Maintain content parity (`git diff` clean). Use explicit promotion + back-sync notes to avoid false-positive divergence alarms in ops reports |
 
 ### Blocker Detail
@@ -558,7 +558,7 @@ Evidence log: `pmoves/docs/evidence/audit-validation-2026-02-20-production-runti
 **AB-9: Runner Queue Deadlock — RESOLVED 2026-03-09**
 Root cause: runners were installed as bare-metal services (WSL2 systemd, Windows svc.cmd) that stopped and had no auto-recovery. The `local-certification` phase policy was always designed for "both runners on local Docker containers" but this was never implemented until now.
 
-**Resolution:** Used existing `local_cert_runners.py` (`make ci-runners-local-cert-up`) which launches `myoung34/github-runner` containers via Docker Desktop. No WSL2 or manual service management needed — containers auto-restart via `restart: unless-stopped` policy. Updated `lane_hosts.json` to reflect containerized topology and `runner_phase_policy.json` to match actual workflow label sets.
+**Resolution:** Used existing `local_cert_runners.py` (`make -C pmoves ci-runners-local-cert-up`) which launches `myoung34/github-runner` containers via Docker Desktop. No WSL2 or manual service management needed — containers auto-restart via `restart: unless-stopped` policy. Updated `lane_hosts.json` to reflect containerized topology and `runner_phase_policy.json` to match actual workflow label sets.
 
 **Timeline of missed fixes:**
 - PRs #832/#834/#835 (Mar 7-8): Added CI throttle timeouts but didn't address root cause (runners offline)
