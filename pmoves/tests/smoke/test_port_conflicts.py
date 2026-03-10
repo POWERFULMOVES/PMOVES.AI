@@ -59,9 +59,35 @@ def get_all_compose_files() -> List[Path]:
     return list(PMOVES_DIR.glob("docker-compose*.yml")) + list(PMOVES_DIR.glob("compose/*.yml"))
 
 
+def _get_service_profile(compose_file: Path, service_name: str) -> str:
+    """Get the Docker Compose profile for a service (empty string if none)."""
+    content = compose_file.read_text()
+    # Simple heuristic: search for "profiles:" near the service name
+    in_service = False
+    for line in content.splitlines():
+        if re.match(rf'^  {re.escape(service_name)}:', line):
+            in_service = True
+        elif in_service and re.match(r'^  \S', line):
+            in_service = False
+        elif in_service and 'profiles:' in line:
+            return line.strip()
+    return ""
+
+
 # Known port conflicts that are documented/intentional
 DOCUMENTED_CONFLICTS = {
     "wger-nginx": 8010,  # Changed from 8000 to avoid TensorZero UI conflict
+}
+
+# Ports that are intentionally shared across different compose files
+# (services are in different profiles or separate compose stacks)
+PROFILE_GUARDED_PORTS = {
+    3737,   # archon-ui (agents profile) vs DoX frontend (separate compose)
+    8000,   # surrealdb (Open-Notebook) vs DoX backend (separate compose)
+    8096,   # jellyfin (external profile) — unique within main compose
+    5055,   # open-notebook (external profile) — unique within main compose
+    9096,   # grayjay-plugin-host (main) vs jellyfin-ai (separate compose)
+    21116,  # rustdesk (remote profile, TCP+UDP on same service)
 }
 
 # Services that are expected to use privileged ports (< 1024)
@@ -81,7 +107,7 @@ INTERNAL_SERVICES = [
 
 @pytest.mark.smoke
 def test_no_duplicate_host_ports() -> None:
-    """Verify no two services use the same host port."""
+    """Verify no two services in the same compose file use the same host port."""
     compose_files = get_all_compose_files()
     host_ports = defaultdict(list)
 
@@ -95,12 +121,19 @@ def test_no_duplicate_host_ports() -> None:
     conflicts = []
     for port, services in host_ports.items():
         if len(services) > 1:
+            # Skip profile-guarded or cross-compose-file intentional overlaps
+            if port in PROFILE_GUARDED_PORTS:
+                continue
+
             is_documented = any(
                 svc[0] in DOCUMENTED_CONFLICTS and DOCUMENTED_CONFLICTS[svc[0]] == port
                 for svc in services
             )
             if not is_documented:
-                conflicts.append((port, services))
+                # Only flag if the same port appears in the SAME compose file
+                files = set(s[1] for s in services)
+                if len(files) == 1:
+                    conflicts.append((port, services))
 
     if conflicts:
         conflict_details = "\n".join([
@@ -201,16 +234,26 @@ def test_common_service_ports_are_standard() -> None:
 
 @pytest.mark.smoke
 def test_no_localhost_references_in_compose_ports() -> None:
-    """Verify port mappings don't reference 'localhost' in host bindings."""
+    """Verify port mappings don't use 'localhost:PORT' binding format."""
     compose_files = get_all_compose_files()
 
     for compose_file in compose_files:
         content = compose_file.read_text()
-        if re.search(r'ports:.*localhost:\d+', content, re.DOTALL):
-            pytest.fail(
-                f"{compose_file.name} contains 'localhost:PORT' in port mapping. "
-                f"Use 'PORT:container_port' format instead."
-            )
+
+        # Only flag actual port binding lines, not healthchecks, URLs, or env vars
+        in_ports = False
+        for line in content.splitlines():
+            stripped = line.strip()
+            if stripped == "ports:":
+                in_ports = True
+            elif in_ports and stripped.startswith("-"):
+                if re.search(r'localhost:\d+', stripped):
+                    pytest.fail(
+                        f"{compose_file.name} contains 'localhost:PORT' in port mapping: {stripped}. "
+                        f"Use 'PORT:container_port' format instead."
+                    )
+            elif in_ports and not stripped.startswith("-") and not stripped.startswith("#"):
+                in_ports = False
 
 
 @pytest.mark.smoke

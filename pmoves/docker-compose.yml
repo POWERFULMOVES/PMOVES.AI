@@ -1674,6 +1674,9 @@ services:
       timeout: 10s
       retries: 5
       start_period: 120s
+  # ── NATS Message Bus — JetStream-enabled event broker ──────────────────
+  # Auth: nats://nats:pmoves@nats:4222 | Monitoring: :8222/varz
+  # See: pmoves/docs/NATS_CONFIGURATION.md
   nats:
     <<: *tier-data-hardened
     # Pinned 2025-02-04: Latest stable 2.11.x alpine version
@@ -2523,7 +2526,7 @@ services:
       - NEXT_PUBLIC_PROMETHEUS_URL=${NEXT_PUBLIC_PROMETHEUS_URL:-http://localhost:9090}
       - NEXT_PUBLIC_LOKI_URL=${NEXT_PUBLIC_LOKI_URL:-http://localhost:3100}
       # Server-side only (Docker hostnames OK)
-      - POSTGREST_URL=http://host.docker.internal:54321
+      - POSTGREST_URL=${POSTGREST_URL:-http://supabase-postgrest:3000}
       - PRESIGN_SHARED_SECRET=${PRESIGN_SHARED_SECRET}
       - RENDER_WEBHOOK_URL=${RENDER_WEBHOOK_URL:-http://render-webhook:8085/comfy/webhook}
       - OPEN_NOTEBOOK_API_URL=${OPEN_NOTEBOOK_API_URL:-http://open-notebook:5055}
