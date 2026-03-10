@@ -37,9 +37,10 @@ jobs:
         id: set-matrix
         run: |
           python3 - <<'EOF'
-          import yaml, json, pathlib
+          import yaml, json, pathlib, os
           data = yaml.safe_load(pathlib.Path("pmoves/images.yaml").read_text())
-          print(f"matrix={json.dumps(data['images'])}")
+          with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+              f.write(f"matrix={json.dumps(data['images'])}\n")
           EOF
 
   build:
