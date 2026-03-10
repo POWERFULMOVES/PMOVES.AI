@@ -155,7 +155,7 @@
 | Tailscale mesh (3 nodes) | CONFIGURED | kvm4-1, kvm4-2, kvm2 — Tailscale hostnames `pmoves-kvm4-1`, `pmoves-kvm4-2`, `pmoves-kvm2` |
 | Node role assignments | DEFINED | kvm4-1: API Gateway (TZ, A0, HiRAG, Archon), kvm4-2: Data Services (Supabase, Qdrant, Neo4j, Meilisearch, NATS), kvm2: Exit Node (Nginx) |
 | Deploy script (`deploy-vps.sh`) | VALIDATED | SSH probe replaces Tailscale-only check, honors `HOSTINGER_*_IP` overrides |
-| VPS compose override | VALIDATED | CPU-only resource limits, GPU services disabled via `gpu-only` profile |
+| VPS compose override | VALIDATED | CPU-only resource limits, GPU services disabled via `gpu` profile |
 | `.env.vps` wiring | FIXED | `--env-file .env.vps` added to compose commands in bootstrap and deploy scripts |
 | Hostinger Terraform provider | PINNED | `0.1.22` (was `~> 0.1`) |
 | Docker Bench Security | UNBLOCKED | AB-9 RESOLVED — runners containerized via `local_cert_runners.py`, `make -C pmoves ci-runners-local-cert-up` |

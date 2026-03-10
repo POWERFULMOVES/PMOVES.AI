@@ -104,11 +104,16 @@ services:
       - ./services/agentgym-rl-coordinator:/app
 
     depends_on:
-      - nats
-      - hi-rag-gateway-v2
-      - evo-controller
-      - agentgym-env-pmoves
-      - supabase-db
+      nats:
+        condition: service_healthy
+      hi-rag-gateway-v2:
+        condition: service_started
+      evo-controller:
+        condition: service_started
+      agentgym-env-pmoves:
+        condition: service_started
+      supabase-db:
+        condition: service_healthy
 
     profiles:
       - agents
@@ -198,8 +203,10 @@ services:
       - agentgym-task-cache:/cache
 
     depends_on:
-      - hi-rag-gateway-v2
-      - supabase-db
+      hi-rag-gateway-v2:
+        condition: service_started
+      supabase-db:
+        condition: service_healthy
 
     profiles:
       - agents
