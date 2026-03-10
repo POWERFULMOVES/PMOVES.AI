@@ -5,7 +5,7 @@
 
 **Last Updated:** 2026-03-10 (archon CVE pins + deepresearch status correction)
 **Branch:** `main`
-**Commit:** `8cae12c1` (archon CVE overrides + deepresearch correction)
+**Commit:** `7eb5112e` (archon CVE overrides + deepresearch correction)
 **Consolidated From:** 27 audit documents
 **Evidence:** live runbook execution on 2026-03-05 (`make ghcr-prepublish-inrepo-build`, strict local Trivy sweep logs under `pmoves/docs/logs/ghcr-local-prepublish/`)
 
