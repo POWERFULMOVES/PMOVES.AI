@@ -55,7 +55,7 @@ services:
       TRUSTED_PROXIES: ${FIREFLY_TRUSTED_PROXIES:-**}
       TZ: ${FIREFLY_TZ:-America/New_York}
     ports:
-      - "${FIREFLY_PORT:-8081}:8080"  # Default 8081; 8082 reserved for media-audio in docker-compose.yml
+      - "${FIREFLY_PORT:-8075}:8080"  # Default 8075; 8082 reserved for media-audio in docker-compose.yml
     volumes:
       - firefly-storage:/var/www/html/storage
       - ./integrations/pr-kits/firefly/nginx-buffers.conf:/etc/nginx/conf.d/zz_buffers.conf:ro

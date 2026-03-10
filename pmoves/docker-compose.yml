@@ -1566,7 +1566,7 @@ services:
             - gpu
             count: ${GPU_COUNT:-all}
     ports:
-    - ${HIRAG_V2_GPU_HOST_PORT:-8090}:8086
+    - ${HIRAG_V2_GPU_HOST_PORT:-8187}:8086  # Default 8187; 8090 reserved for retrieval-eval
     depends_on:
       qdrant:
         condition: service_healthy
@@ -2611,7 +2611,7 @@ services:
       - env.shared
       - .env.generated
     environment:
-      - PORT=8110
+      - PORT=${GATEWAY_AGENT_PORT:-8111}
       - AGENT_ZERO_URL=${AGENT_ZERO_URL:-http://agent-zero:8080}
       - CIPHER_URL=${CIPHER_URL:-http://cipher-api:8096}
       - TENSORZERO_URL=${TENSORZERO_URL:-http://tensorzero-gateway:3000}
@@ -2619,11 +2619,11 @@ services:
       - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY}
       - TOOL_CACHE_TTL=${TOOL_CACHE_TTL:-300}
     ports:
-      - "8110:8110"
+      - "${GATEWAY_AGENT_PORT:-8111}:${GATEWAY_AGENT_PORT:-8111}"  # Default 8111; 8110 reserved for model-registry
     profiles: ["agents"]
     networks: [pmoves_api, pmoves_app, pmoves_bus]
     healthcheck:
-      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8110/healthz', timeout=5)"]
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8111/healthz', timeout=5)"]
       interval: 30s
       timeout: 10s
       retries: 3
