@@ -728,6 +728,60 @@
       ]
     },
     {
+      "id": "ci-runners",
+      "name": "CI Runners",
+      "description": "GitHub Actions self-hosted runner authentication for local-cert containers.",
+      "variables": [
+        {
+          "key": "RUNNER_PAT",
+          "file": "pmoves/env.shared",
+          "prompt": "GitHub PAT for persistent runner auto-registration (repo scope)",
+          "help": "Used as ACCESS_TOKEN by myoung34/github-runner containers. Allows automatic re-registration on reboot without minting short-lived tokens. Requires 'repo' scope. Falls back to GH_TOKEN or short-lived RUNNER_TOKEN if unset.",
+          "required": false,
+          "sensitive": true
+        }
+      ]
+    },
+    {
+      "id": "github-app",
+      "name": "GitHub App",
+      "description": "PMOVES.AI GitHub App credentials for CI GHCR auth, runtime token minting, and BoTZ MCP GitHub tools.",
+      "variables": [
+        {
+          "key": "GH_APP_ID",
+          "file": "pmoves/env.shared",
+          "prompt": "GitHub App ID",
+          "help": "Numeric App ID from GitHub App settings page.",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "key": "GH_APP_CLIENT_ID",
+          "file": "pmoves/env.shared",
+          "prompt": "GitHub App OAuth Client ID",
+          "help": "Client ID from GitHub App settings page.",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "key": "GH_APP_SEC",
+          "file": "pmoves/env.shared",
+          "prompt": "GitHub App PEM private key",
+          "help": "Full PEM private key contents. For CI, set via: gh secret set GH_APP_SEC < /path/to/key.pem",
+          "required": false,
+          "sensitive": true
+        },
+        {
+          "key": "GH_APP_INSTALLATION_ID",
+          "file": "pmoves/env.shared",
+          "prompt": "GitHub App installation ID (POWERFULMOVES org)",
+          "help": "Get via: gh api /user/installations --jq '.installations[].id'",
+          "required": false,
+          "type": "string"
+        }
+      ]
+    },
+    {
       "id": "invidious",
       "name": "Invidious",
       "description": "YouTube front-end with privacy features, used by PMOVES.YT.",
