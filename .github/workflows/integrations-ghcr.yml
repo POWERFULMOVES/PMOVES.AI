@@ -380,7 +380,7 @@ jobs:
       # PRs validate Dockerfile/build correctness without publishing artifacts.
       - name: Build (PR validation, no push)
         if: ${{ github.event_name == 'pull_request' }}
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: integration-src/${{ steps.cfg.outputs.context }}
           file: integration-src/${{ steps.cfg.outputs.dockerfile }}
@@ -395,7 +395,7 @@ jobs:
       - name: Build and push (multi-arch)
         if: ${{ github.event_name != 'pull_request' && steps.meta.outputs.has_tags == 'true' }}
         id: build
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: integration-src/${{ steps.cfg.outputs.context }}
           file: integration-src/${{ steps.cfg.outputs.dockerfile }}
