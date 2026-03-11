@@ -709,7 +709,7 @@ services:
       supabase-db:
         condition: service_healthy
     ports:
-    - ${SUPABASE_REALTIME_PORT:-4000}:4000
+    - ${SUPABASE_REALTIME_PORT:-4010}:4000
     networks:
     - pmoves_api
     - pmoves_data
