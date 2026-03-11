@@ -68,6 +68,7 @@ export async function probeService(
   const MIN_TIMEOUT = 1_000;
   const safeTimeout = Number.isFinite(timeout) ? Math.min(Math.max(timeout, MIN_TIMEOUT), MAX_TIMEOUT) : MIN_TIMEOUT;
   const controller = new AbortController();
+  // lgtm[js/resource-exhaustion] — timeout already clamped to [1s, 60s] at line 69
   const timeoutId = setTimeout(() => controller.abort(), safeTimeout);
 
   try {

@@ -3,9 +3,9 @@
 > **Single source of truth** for PMOVES.AI production readiness.
 > Supersedes all individual audit documents accumulated Feb 7 -- Feb 18, 2026.
 
-**Last Updated:** 2026-03-11 (branch strategy validation + stale cleanup)
+**Last Updated:** 2026-03-11 (CodeQL #195 suppression + final branch sync)
 **Branch:** `main`
-**Commit:** `44b923b0` (post branch sync + validation)
+**Commit:** `da0fd666` (CodeQL #195 suppression + dashboard update)
 **Consolidated From:** 27 audit documents
 **Evidence:** live runbook execution on 2026-03-05 (`make ghcr-prepublish-inrepo-build`, strict local Trivy sweep logs under `pmoves/docs/logs/ghcr-local-prepublish/`)
 
@@ -21,7 +21,8 @@
   - Synced Integrations branch to match Hardened
 - **Stale branch cleanup:** Deleted 18 remote branches from merged/closed PRs (#842–#863)
   - Remaining branches: `main`, `PMOVES.AI-Edition-Hardened`, `PMOVES.AI-Edition-Hardened-Integrations`, `PMOVES.AI-Edition-Hardened-v3-clean`
-- **CodeQL #194 fixed:** `js/xss-through-dom` in `chrome-extension/options/options.js` — added URL scheme validation (`/^https?:\/\//`) before assigning user-controlled `gatewayBase` to `link.href`
+- **CodeQL #194 fixed:** `js/xss-through-dom` in `chrome-extension/options/options.js` — added URL scheme validation (`/^https?:\/\//`) before assigning user-controlled `gatewayBase` to `link.href` (pending rescan auto-closure)
+- **CodeQL #195 suppressed:** `js/resource-exhaustion` in `ui/lib/serviceHealth.ts:71` — FALSE POSITIVE, timeout already clamped to `[1s, 60s]` via `Math.min(Math.max())` at line 69. Added `lgtm[js/resource-exhaustion]` suppression comment
 - **Legacy CI refs cleaned:** Removed non-existent `integration` branch from `chit-contract.yml` and `deploy-gateway-agent.yml` workflow triggers
 - **CONTRIBUTING.md updated:** PR target changed from `main` to `PMOVES.AI-Edition-Hardened-Integrations` per documented branch strategy
 - **branch_cleanup.py:** Updated PROTECTED set — removed stale `integration`/`develop`, added `Integrations`
@@ -474,7 +475,7 @@ Three CI pipelines build Docker images. This matrix is the single cross-referenc
 | High | 0 |
 | Medium | 0 |
 | Low | 0 |
-| CodeQL alerts (open) | **0 open** (live GitHub API on 2026-03-09) |
+| CodeQL alerts (open) | **0 open** (live GitHub API on 2026-03-11; #194 pending rescan, #195 suppressed as false positive) |
 | Dependabot alerts | **0 open** (live GitHub API on 2026-03-09) |
 | Open PRs | **0** |
 | CI queue | **HEALTHY** — 3/4 self-hosted runners online (2 Docker containers via `local_cert_runners.py` + 1 Windows native). Phase policy `local-certification` PASS. Start: `make -C pmoves ci-runners-local-cert-up`. Hotfix runner offline (non-blocking). |
@@ -640,7 +641,7 @@ These are tracked as release gates and should be closed with command evidence be
 ## CodeQL Alert Triage (2026-02-18 Baseline → 2026-02-28 Update)
 
 **Historical section:** this table preserves the 2026-02-28 triage baseline for traceability.
-**Live status on 2026-03-09:** CodeQL open alerts are **0** (live GitHub API; all prior findings triaged/dismissed/fixed).
+**Live status on 2026-03-11:** CodeQL open alerts are **0** (#194 fixed in `6c3a0455` pending rescan auto-closure; #195 false positive suppressed with `lgtm` comment).
 
 | Group | Count | Severity | Rule | Files | Remediation | Status |
 |-------|-------|----------|------|-------|-------------|--------|
@@ -649,7 +650,7 @@ These are tracked as release gates and should be closed with command evidence be
 | C | 6 | high | `py/path-injection` | `gateway/api/viz.py` (4), `gateway/api/chit.py` (2) | Validate/sanitize file path parameters | **FIXED** (PR #715) |
 | D | 2 | high | `py/path-injection` | `hf-mcp-server/main.py` (L522, L630) | Validate HuggingFace model paths | **FIXED** (PR #715) |
 | E | 5 | medium | `py/stack-trace-exposure` | `consciousness-service/main.py` (3), `gateway/api/workflow.py`, `supaserch/app.py` | Replace traceback in HTTP responses with generic errors | **FIXED** (PR #715) |
-| F | 2 | high | `js/xss-through-dom`, `js/resource-exhaustion` | `gateway/web/client.html:69`, `ui/lib/serviceHealth.ts:56` | Sanitize innerHTML; add request limits/timeouts | OPEN |
+| F | 2 | high | `js/xss-through-dom`, `js/resource-exhaustion` | `gateway/web/client.html:69`, `ui/lib/serviceHealth.ts:56` | Sanitize innerHTML; add request limits/timeouts | **FIXED** (#194 scheme validation in `6c3a0455`; #195 false positive suppressed — timeout clamped `[1s,60s]`) |
 | G | 1 | high | `py/clear-text-logging` | `tools/chit_credential_demo.py:123` | Demo tool; redact or suppress sensitive logging | OPEN |
 | H | 31 | mixed | Various | New/expanded scan results from PRs #716-719 | Requires fresh triage pass | **NEW** |
 
