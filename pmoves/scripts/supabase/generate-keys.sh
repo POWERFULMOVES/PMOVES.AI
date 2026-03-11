@@ -38,15 +38,16 @@ generate_jwt_token() {
     # Cross-platform base64 (GNU uses -w0, macOS uses no flag but outputs single line for short inputs)
     b64_encode() { openssl base64 -A; }
 
-    # JWT header
-    local header=$(echo -n '{"alg":"HS256","typ":"JWT"}' | b64_encode | tr -d '=' | tr '/+' '_-' | tr -d '\n')
+    # JWT header — split local/assignment so pipefail propagates errors
+    local header payload signing_input signature
+    header=$(echo -n '{"alg":"HS256","typ":"JWT"}' | b64_encode | tr -d '=' | tr '/+' '_-' | tr -d '\n')
 
     # JWT payload
-    local payload=$(echo -n "{\"role\":\"$role\",\"iss\":\"supabase-local\",\"iat\":$iat,\"exp\":$exp}" | b64_encode | tr -d '=' | tr '/+' '_-' | tr -d '\n')
+    payload=$(echo -n "{\"role\":\"$role\",\"iss\":\"supabase-local\",\"iat\":$iat,\"exp\":$exp}" | b64_encode | tr -d '=' | tr '/+' '_-' | tr -d '\n')
 
     # JWT signature
-    local signing_input="${header}.${payload}"
-    local signature=$(echo -n "$signing_input" | openssl dgst -sha256 -hmac "$secret" -binary | b64_encode | tr -d '=' | tr '/+' '_-' | tr -d '\n')
+    signing_input="${header}.${payload}"
+    signature=$(echo -n "$signing_input" | openssl dgst -sha256 -hmac "$secret" -binary | b64_encode | tr -d '=' | tr '/+' '_-' | tr -d '\n')
 
     echo "${header}.${payload}.${signature}"
 }
