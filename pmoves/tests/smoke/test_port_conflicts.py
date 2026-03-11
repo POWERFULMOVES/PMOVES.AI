@@ -124,6 +124,7 @@ def _get_service_profile(compose_file: Path, service_name: str) -> str:
 # Known port conflicts that are documented/intentional
 DOCUMENTED_CONFLICTS = {
     "wger-nginx": 8010,  # Changed from 8000 to avoid TensorZero UI conflict
+    "supabase-realtime": 4010,  # Changed from 4000 to avoid TensorZero UI conflict
 }
 
 # Ports that are intentionally shared across different compose files
@@ -203,6 +204,21 @@ def test_wger_nginx_port_changed_from_8000() -> None:
         )
         assert 8000 not in host_ports, (
             "wger-nginx should NOT use port 8000 (conflicts with TensorZero UI)"
+        )
+
+
+@pytest.mark.smoke
+def test_supabase_realtime_port_changed_from_4000() -> None:
+    """Verify supabase-realtime uses port 4010 (not 4000) to avoid TensorZero UI conflict."""
+    port_mappings = extract_port_mappings_from_compose(PMOVES_DIR / "docker-compose.yml")
+
+    if "supabase-realtime" in port_mappings:
+        host_ports = [p[0] for p in port_mappings["supabase-realtime"]]
+        assert 4010 in host_ports, (
+            "supabase-realtime should use host port 4010 (changed from 4000)"
+        )
+        assert 4000 not in host_ports, (
+            "supabase-realtime should NOT use port 4000 (conflicts with TensorZero UI)"
         )
 
 
@@ -365,7 +381,7 @@ def test_supabase_ports_are_standard() -> None:
         "supabase-studio": 54323,
         "supabase-gotrue": 9999,
         "supabase-postgrest": 3000,
-        "supabase-realtime": 4000,
+        "supabase-realtime": 4010,
         "supabase-storage": 5000,
     }
 

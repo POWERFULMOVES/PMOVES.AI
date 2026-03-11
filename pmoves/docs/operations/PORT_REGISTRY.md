@@ -92,7 +92,7 @@ Central registry of all service ports to prevent conflicts and ensure consistenc
 | 5432 | Supabase DB | PostgreSQL 17 (internal only) | pmoves_data |
 | 3010 | PostgREST | Supabase REST API | pmoves_api, pmoves_data |
 | 9999 | GoTrue | JWT authentication service | pmoves_api, pmoves_data |
-| 4000 | Realtime | WebSocket for real-time subscriptions | pmoves_api, pmoves_data |
+| 4010 | Realtime | WebSocket for real-time subscriptions (remapped from 4000) | pmoves_api, pmoves_data |
 | 5000 | Storage | S3-compatible file storage | pmoves_api, pmoves_data |
 | 8000 | Kong Gateway | API Gateway (proxy/routing) | pmoves_api |
 | 8001 | Kong Admin | Kong administration interface | pmoves_api |
@@ -136,12 +136,12 @@ SUPABASE_DB_PORT=54322           # External access (if needed)
 
 ## Conflict Resolution
 
-### Port 4000 Conflict (Identified 2026-02-04)
+### Port 4000 Conflict (Identified 2026-02-04, Resolved 2026-03-11)
 
 - **TensorZero UI:** Uses 4000 (always runs)
-- **Supabase Realtime:** Uses 4000 (optional, profile: `supabase`)
+- **Supabase Realtime:** Was 4000 → **Changed to 4010** (PRs #868, #869)
 
-**Resolution:** Realtime should be configured to use a different port or run in a separate profile when TensorZero UI is active.
+**Resolution:** Realtime remapped to port 4010 via `SUPABASE_REALTIME_PORT` env var. Internal container port unchanged (4000) — only host mapping affected.
 
 ### Port 8100 Conflict (Resolved 2025-12-30)
 
