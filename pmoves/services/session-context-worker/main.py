@@ -270,7 +270,7 @@ def _transform_to_kb_upsert(context: Dict[str, Any]) -> Dict[str, Any]:
     return kb_upsert
 
 
-async def _handle_session_context(msg: NATS.Msg) -> None:
+async def _handle_session_context(msg: nats.aio.msg.Msg) -> None:
     """
     Handle incoming session context messages.
 
