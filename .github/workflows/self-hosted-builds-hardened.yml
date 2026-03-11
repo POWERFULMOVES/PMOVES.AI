@@ -97,7 +97,7 @@ jobs:
           password: ${{ steps.app_token.outputs.token || env.GHCR_PASSWORD }}
 
       - name: Build Ollama CUDA
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: ./services/ollama
           file: ./services/ollama/Dockerfile.cuda
@@ -112,7 +112,7 @@ jobs:
 
       - name: Scan Ollama CUDA with Trivy
         if: github.event_name != 'pull_request'
-        uses: aquasecurity/trivy-action@0.34.2
+        uses: aquasecurity/trivy-action@0.35.0
         with:
           image-ref: ${{ env.IMAGE_PREFIX }}/pmoves-ollama:cuda-${{ github.sha }}
           format: sarif
@@ -120,6 +120,7 @@ jobs:
           exit-code: '0'  # Don't fail initially; set to '1' after baseline established
           severity: 'HIGH,CRITICAL'
           ignore-unfixed: true
+          timeout: '10m0s'
 
       - name: Upload Trivy results for Ollama CUDA
         if: github.event_name != 'pull_request'
@@ -129,7 +130,7 @@ jobs:
           category: trivy-ollama-cuda
 
       - name: Build Hi-RAG GPU
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: ./services/hirag-gateway
           file: ./services/hirag-gateway/Dockerfile.gpu
@@ -144,7 +145,7 @@ jobs:
 
       - name: Scan Hi-RAG GPU with Trivy
         if: github.event_name != 'pull_request'
-        uses: aquasecurity/trivy-action@0.34.2
+        uses: aquasecurity/trivy-action@0.35.0
         with:
           image-ref: ${{ env.IMAGE_PREFIX }}/pmoves-hirag-gateway:gpu-${{ github.sha }}
           format: sarif
@@ -152,6 +153,7 @@ jobs:
           exit-code: '0'
           severity: 'HIGH,CRITICAL'
           ignore-unfixed: true
+          timeout: '10m0s'
 
       - name: Upload Trivy results for Hi-RAG GPU
         if: github.event_name != 'pull_request'
@@ -253,7 +255,7 @@ jobs:
           password: ${{ steps.app_token.outputs.token || env.GHCR_PASSWORD }}
 
       - name: Build ${{ matrix.service.name }}
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: ${{ matrix.service.context }}
           push: ${{ github.event_name != 'pull_request' }}
@@ -270,7 +272,7 @@ jobs:
 
       - name: Scan ${{ matrix.service.name }} with Trivy
         if: github.event_name != 'pull_request'
-        uses: aquasecurity/trivy-action@0.34.2
+        uses: aquasecurity/trivy-action@0.35.0
         with:
           image-ref: ${{ env.IMAGE_PREFIX }}/pmoves-${{ matrix.service.name }}:${{ github.sha }}
           format: sarif
@@ -279,6 +281,7 @@ jobs:
           severity: 'HIGH,CRITICAL'
           ignore-unfixed: true
           vuln-type: 'os,library'
+          timeout: '10m0s'
 
       - name: Upload Trivy results for ${{ matrix.service.name }}
         if: github.event_name != 'pull_request'

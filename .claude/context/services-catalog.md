@@ -88,7 +88,7 @@ Comprehensive reference of all production services, ports, APIs, and integration
 - **CI Pipeline:** `build-images` (amd64, manual dispatch)
 
 ### Hi-RAG Gateway v1 (LEGACY)
-- **Ports:** 8089 (CPU), 8090 (GPU)
+- **Ports:** 8089 (CPU), 8187 (GPU)
 - **Purpose:** Original hybrid RAG implementation
 - **Status:** Use v2 for new features
 - **Compose Profile:** Default
@@ -130,8 +130,8 @@ Comprehensive reference of all production services, ports, APIs, and integration
 - **CI Pipeline:** `integrations-ghcr` (multi-arch, Cosign+SBOM), `build-images` (manual dispatch)
 
 ### Model Registry
-- **Ports:** 8110
-- **Port Note:** `8110` also appears in the BoTZ VPN MCP stack; these are profile-separated deployments (`orchestration` vs `vpn/remote`) and should not be exposed on the same host at the same time.
+- **Ports:** 8111
+- **Port Note:** Previously 8110, changed to 8111 to avoid conflict with gateway-agent (PR #845).
 - **Purpose:** Dynamic model configuration service — central catalog for LLM/embedding model providers, mappings, and active deployments
 - **Key APIs:**
   - `GET /healthz` - Service health
@@ -449,7 +449,7 @@ Comprehensive reference of all production services, ports, APIs, and integration
 
 ### BoTZ VPN MCP Server
 - **Port:** 8110
-- **Port Note:** Collides with Model Registry (`8110`) when both stacks are host-exposed; run this service only with `vpn/remote` profiles on hosts that are not exposing `model-registry`.
+- **Port Note:** No longer collides with Model Registry (moved to 8111 in PR #845). Port 8110 is now exclusive to BoTZ VPN MCP.
 - **Purpose:** MCP server exposing VPN and remote desktop tools
 - **Transport:** SSE
 - **MCP Tools:**
@@ -654,7 +654,7 @@ http://localhost:8091/healthz  # Archon
 http://localhost:8097/healthz  # Channel Monitor
 
 # Model Management
-http://localhost:8110/healthz  # Model Registry
+http://localhost:8111/healthz  # Model Registry
 http://localhost:8200/healthz  # GPU Orchestrator (GPU only)
 
 # Retrieval & Knowledge

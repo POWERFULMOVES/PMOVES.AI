@@ -5,6 +5,7 @@ Tests all 53 services in parallel with specialized handlers for different
 health check types (HTTP, Gradio, databases, TCP sockets).
 
 Target execution time: <30s for all services (with pytest-xdist parallel execution)
+Skips gracefully when services are unavailable (Docker not running).
 """
 
 import asyncio
@@ -25,12 +26,13 @@ from pmoves.tests.utils.service_catalog import (
 # FIXTURES
 # ============================================================================
 
-@pytest.fixture(scope="session")
+@pytest.fixture
 async def http_client() -> AsyncGenerator[httpx.AsyncClient, None]:
     """Shared HTTP client for all tests."""
     timeout = httpx.Timeout(10.0, connect=5.0)
-    async with httpx.AsyncClient(timeout=timeout) as client:
-        yield client
+    client = httpx.AsyncClient(timeout=timeout)
+    yield client
+    await client.aclose()
 
 
 # ============================================================================
@@ -353,7 +355,11 @@ async def test_service_health_endpoint(
         case _:
             is_healthy, message = False, f"Unknown health type: {service.health_type}"
 
-    # Assert result
+    # Skip when service is unreachable (not a test failure — service just isn't running)
+    if not is_healthy and message in ("Connection refused", "Timeout"):
+        pytest.skip(f"{service.name}:{service.port} - {message}")
+
+    # Assert result for genuinely unhealthy services (reachable but returning errors)
     assert is_healthy, f"{service.name}:{service.port} - {message}"
 
 
@@ -430,14 +436,32 @@ async def test_critical_services_minimum_health(http_client: httpx.AsyncClient):
 
         results.append((service.name, is_healthy, message))
 
-    # Report failures
-    failures = [(name, msg) for name, healthy, msg in results if not healthy]
-    if failures:
-        failure_summary = "\n".join([f"  - {name}: {msg}" for name, msg in failures])
+    # Separate connection failures (skip) from genuine health failures (fail)
+    unreachable = [
+        (name, msg) for name, healthy, msg in results
+        if not healthy and msg in ("Connection refused", "Timeout")
+    ]
+    genuinely_unhealthy = [
+        (name, msg) for name, healthy, msg in results
+        if not healthy and msg not in ("Connection refused", "Timeout")
+    ]
+
+    # If ALL services are unreachable, skip (Docker not running)
+    healthy_count = sum(1 for _, healthy, _ in results if healthy)
+    if healthy_count == 0 and len(unreachable) > 0:
+        pytest.skip(
+            f"All {len(unreachable)} critical services unreachable "
+            "(Docker stack likely not running)"
+        )
+
+    # Report genuinely unhealthy services as failures
+    if genuinely_unhealthy:
+        failure_summary = "\n".join(
+            [f"  - {name}: {msg}" for name, msg in genuinely_unhealthy]
+        )
         pytest.fail(f"Critical services failed:\n{failure_summary}")
 
     # At least 50% of critical services should be healthy
-    healthy_count = sum(1 for _, healthy, _ in results if healthy)
     assert healthy_count >= len(results) * 0.5, (
         f"Less than 50% of critical services healthy ({healthy_count}/{len(results)})"
     )

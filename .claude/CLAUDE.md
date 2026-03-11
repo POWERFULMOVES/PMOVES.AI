@@ -76,7 +76,7 @@ PMOVES.AI is a **production-ready multi-agent orchestration platform** featuring
 - Request: `{"query": "...", "top_k": 10, "rerank": true}`
 - **Use for:** Knowledge retrieval, semantic search, RAG queries
 
-**Hi-RAG Gateway v1** [Port 8089 CPU, 8090 GPU] **[LEGACY]**
+**Hi-RAG Gateway v1** [Port 8089 CPU, 8187 GPU] **[LEGACY]**
 - Original hybrid RAG implementation
 - Use v2 instead for new features
 

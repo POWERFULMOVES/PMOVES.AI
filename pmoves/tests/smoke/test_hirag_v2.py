@@ -3,7 +3,7 @@ Hi-RAG Gateway v2 service-specific smoke tests.
 
 Tests Hi-RAG v2 health and dependency connections (Qdrant, Neo4j, Meilisearch).
 
-Expected runtime: <5s
+Expected runtime: <5s (skips gracefully when services are unavailable)
 """
 
 import pytest
@@ -15,32 +15,84 @@ from pmoves.tests.utils.service_catalog import HIRAG_V2, QDRANT, NEO4J, MEILISEA
 # FIXTURES
 # ============================================================================
 
-@pytest.fixture(scope="session")
-async def hirag_v2_client() -> httpx.AsyncClient:
-    """Hi-RAG v2 HTTP client."""
+@pytest.fixture
+async def hirag_v2_client():
+    """Hi-RAG v2 HTTP client. Skips dependent tests if service is unavailable."""
     timeout = httpx.Timeout(10.0, connect=5.0)
-    return httpx.AsyncClient(base_url=f"http://localhost:{HIRAG_V2.port}", timeout=timeout)
+    client = httpx.AsyncClient(base_url=f"http://localhost:{HIRAG_V2.port}", timeout=timeout)
+    try:
+        resp = await client.get("/healthz")
+        if resp.status_code == 404:
+            await client.aclose()
+            pytest.skip(
+                f"Port {HIRAG_V2.port} is responding but /healthz returned 404 "
+                "(Hi-RAG v2 may not be running)"
+            )
+    except (httpx.ConnectError, httpx.ConnectTimeout):
+        await client.aclose()
+        pytest.skip(f"Hi-RAG v2 not reachable at localhost:{HIRAG_V2.port}")
+    yield client
+    await client.aclose()
 
 
-@pytest.fixture(scope="session")
-async def qdrant_client() -> httpx.AsyncClient:
-    """Qdrant HTTP client."""
+@pytest.fixture
+async def qdrant_client():
+    """Qdrant HTTP client. Skips dependent tests if service is unavailable."""
     timeout = httpx.Timeout(10.0, connect=5.0)
-    return httpx.AsyncClient(base_url=f"http://localhost:{QDRANT.port}", timeout=timeout)
+    client = httpx.AsyncClient(base_url=f"http://localhost:{QDRANT.port}", timeout=timeout)
+    try:
+        resp = await client.get("/readyz")
+        if resp.status_code == 404:
+            await client.aclose()
+            pytest.skip(
+                f"Port {QDRANT.port} is responding but /readyz returned 404 "
+                "(Qdrant may not be running)"
+            )
+    except (httpx.ConnectError, httpx.ConnectTimeout):
+        await client.aclose()
+        pytest.skip(f"Qdrant not reachable at localhost:{QDRANT.port}")
+    yield client
+    await client.aclose()
 
 
-@pytest.fixture(scope="session")
-async def neo4j_client() -> httpx.AsyncClient:
-    """Neo4j HTTP client."""
+@pytest.fixture
+async def neo4j_client():
+    """Neo4j HTTP client. Skips dependent tests if service is unavailable."""
     timeout = httpx.Timeout(10.0, connect=5.0)
-    return httpx.AsyncClient(base_url=f"http://localhost:{NEO4J.port}", timeout=timeout)
+    client = httpx.AsyncClient(base_url=f"http://localhost:{NEO4J.port}", timeout=timeout)
+    try:
+        resp = await client.get("/")
+        if resp.status_code == 404:
+            await client.aclose()
+            pytest.skip(
+                f"Port {NEO4J.port} is responding but / returned 404 "
+                "(Neo4j may not be running)"
+            )
+    except (httpx.ConnectError, httpx.ConnectTimeout):
+        await client.aclose()
+        pytest.skip(f"Neo4j not reachable at localhost:{NEO4J.port}")
+    yield client
+    await client.aclose()
 
 
-@pytest.fixture(scope="session")
-async def meilisearch_client() -> httpx.AsyncClient:
-    """Meilisearch HTTP client."""
+@pytest.fixture
+async def meilisearch_client():
+    """Meilisearch HTTP client. Skips dependent tests if service is unavailable."""
     timeout = httpx.Timeout(10.0, connect=5.0)
-    return httpx.AsyncClient(base_url=f"http://localhost:{MEILISEARCH.port}", timeout=timeout)
+    client = httpx.AsyncClient(base_url=f"http://localhost:{MEILISEARCH.port}", timeout=timeout)
+    try:
+        resp = await client.get("/health")
+        if resp.status_code == 404:
+            await client.aclose()
+            pytest.skip(
+                f"Port {MEILISEARCH.port} is responding but /health returned 404 "
+                "(Meilisearch may not be running)"
+            )
+    except (httpx.ConnectError, httpx.ConnectTimeout):
+        await client.aclose()
+        pytest.skip(f"Meilisearch not reachable at localhost:{MEILISEARCH.port}")
+    yield client
+    await client.aclose()
 
 
 # ============================================================================

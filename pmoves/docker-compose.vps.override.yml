@@ -170,40 +170,40 @@ services:
 
 
   # ============================================================================
-  # GPU Services - DISABLED on VPS
+  # GPU Services - Moved to 'gpu' profile (effectively disabled on CPU-only VPS)
   # ============================================================================
 
   hi-rag-gateway-v2-gpu:
     profiles:
-      - gpu-only
+      - gpu
 
   ffmpeg-whisper:
     profiles:
-      - gpu-only
+      - gpu
 
   ultimate-tts-studio:
     profiles:
-      - gpu-only
+      - gpu
 
   ollama:
     profiles:
-      - gpu-only
+      - gpu
 
   vllm:
     profiles:
-      - gpu-only
+      - gpu
 
   comfyui:
     profiles:
-      - gpu-only
+      - gpu
 
   media-video:
     profiles:
-      - gpu-only
+      - gpu
 
   media-audio:
     profiles:
-      - gpu-only
+      - gpu
 
 volumes:
   supabase-data:
