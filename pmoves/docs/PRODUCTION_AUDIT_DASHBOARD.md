@@ -3,9 +3,9 @@
 > **Single source of truth** for PMOVES.AI production readiness.
 > Supersedes all individual audit documents accumulated Feb 7 -- Feb 18, 2026.
 
-**Last Updated:** 2026-03-11 (CodeQL #195 suppression + final branch sync)
+**Last Updated:** 2026-03-11 (Post-PR #866 CodeRabbit URL validation follow-up)
 **Branch:** `main`
-**Commit:** `da0fd666` (CodeQL #195 suppression + dashboard update)
+**Commit:** `de18437a` (post-PR #865 dashboard + CodeRabbit follow-up)
 **Consolidated From:** 27 audit documents
 **Evidence:** live runbook execution on 2026-03-05 (`make ghcr-prepublish-inrepo-build`, strict local Trivy sweep logs under `pmoves/docs/logs/ghcr-local-prepublish/`)
 
@@ -13,7 +13,32 @@
 
 ## Latest Changes (Mar 11, 2026)
 
-### Branch Strategy Validation & Final Cleanup
+### Post-PR #866 — CodeRabbit URL Validation Follow-up
+
+- **CodeRabbit finding fixed:** `options.js` lines 131, 169 — added `validateServiceUrl()` helper using `new URL()` constructor with `http:`/`https:` protocol allowlist, matching the existing CodeQL #196 fix pattern at line 262
+- Both `fetch()` call sites (individual test + test-all) now reject `javascript:`, `data:`, `file:` schemes
+- Invalid URLs show "No URL" (individual) or "Invalid URL" status (test-all) instead of attempting fetch
+
+### Post-PR #865 — Supabase Unification Complete
+
+- **Supabase unification merged (PR #865):** 4 competing compose stacks → 1 canonical stack
+  - 13 services under `supabase-local` profile (DB, GoTrue, PostgREST, Kong, Realtime, Storage, Studio, imgproxy, pg-meta, Edge Functions, Analytics/Logflare, Vector, Supavisor)
+  - Consumer URL: `http://supabase-kong:8000/rest/v1`
+  - All 13 services healthchecked (12 native + PostgREST documented exception)
+  - `generate-keys.sh` fixed: pipefail-safe local/assignment split + macOS `openssl base64 -A` compat
+  - ServiceTier aligned to canonical 7 tiers (added missing `ui` tier)
+- **PR #864 closed** — superseded by #865 (integration credentials folded into unification)
+- **CodeQL #196 fixed:** `js/xss-through-dom` in `chrome-extension/options/options.js:264` — strengthened URL sanitization from regex to `new URL()` constructor with strict protocol allowlist (`http:`/`https:` only via `parsed.href`)
+- **CodeQL #194 auto-closed:** Rescan confirmed fix from `6c3a0455` (scheme validation)
+- **Branch sync:** main → Hardened synced (`6726c146`)
+- **Branch cleanup:** Deleted 2 feature branches (`feat/supabase-unify`, `fix/review-864`)
+- **Remaining branches:** `main`, `PMOVES.AI-Edition-Hardened`, `PMOVES.AI-Edition-Hardened-Integrations`, `PMOVES.AI-Edition-Hardened-v3-clean`
+- **CodeRabbit non-blocking follow-ups from PR #865:**
+  - `health_to_research.json`: DeepResearch endpoint reference (cosmetic)
+  - `integration_status_reporter.json`: Discord notification field names (cosmetic)
+  - `voice_health_checkin.json`: Orphaned prompt template (cleanup)
+
+### Previous — Branch Strategy Validation & Final Cleanup
 
 - **Branch sync completed:** Reconciled bidirectional divergence (16 Hardened-only / 24 main-only commits)
   - Merged main → Hardened (PRs #848–#863 squash-merges)
@@ -21,7 +46,7 @@
   - Synced Integrations branch to match Hardened
 - **Stale branch cleanup:** Deleted 18 remote branches from merged/closed PRs (#842–#863)
   - Remaining branches: `main`, `PMOVES.AI-Edition-Hardened`, `PMOVES.AI-Edition-Hardened-Integrations`, `PMOVES.AI-Edition-Hardened-v3-clean`
-- **CodeQL #194 fixed:** `js/xss-through-dom` in `chrome-extension/options/options.js` — added URL scheme validation (`/^https?:\/\//`) before assigning user-controlled `gatewayBase` to `link.href` (pending rescan auto-closure)
+- **CodeQL #194 fixed:** `js/xss-through-dom` in `chrome-extension/options/options.js` — added URL scheme validation (`/^https?:\/\//`) before assigning user-controlled `gatewayBase` to `link.href` (auto-closed by rescan)
 - **CodeQL #195 suppressed:** `js/resource-exhaustion` in `ui/lib/serviceHealth.ts:71` — FALSE POSITIVE, timeout already clamped to `[1s, 60s]` via `Math.min(Math.max())` at line 69. Added `lgtm[js/resource-exhaustion]` suppression comment
 - **Legacy CI refs cleaned:** Removed non-existent `integration` branch from `chit-contract.yml` and `deploy-gateway-agent.yml` workflow triggers
 - **CONTRIBUTING.md updated:** PR target changed from `main` to `PMOVES.AI-Edition-Hardened-Integrations` per documented branch strategy
@@ -467,7 +492,7 @@ Three CI pipelines build Docker images. This matrix is the single cross-referenc
 
 | Metric | Value |
 |--------|-------|
-| Quantitative snapshot timestamp | 2026-03-11 (PR gate sweep — all PRs merged, 0 open) |
+| Quantitative snapshot timestamp | 2026-03-11 (Post-PR #865 Supabase unification + CodeQL #196 fix) |
 | Total tracked items | 24 |
 | Resolved | 24 (+1 since last update) |
 | Active blockers (release-blocking) | 0 |
@@ -475,7 +500,7 @@ Three CI pipelines build Docker images. This matrix is the single cross-referenc
 | High | 0 |
 | Medium | 0 |
 | Low | 0 |
-| CodeQL alerts (open) | **0 open** (live GitHub API on 2026-03-11; #194 pending rescan, #195 suppressed as false positive) |
+| CodeQL alerts (open) | **1 open** → **0 after merge** (#194 auto-closed by rescan; #195 suppressed as FP; #196 fixed in this PR via `new URL()` constructor) |
 | Dependabot alerts | **0 open** (live GitHub API on 2026-03-09) |
 | Open PRs | **0** |
 | CI queue | **HEALTHY** — 3/4 self-hosted runners online (2 Docker containers via `local_cert_runners.py` + 1 Windows native). Phase policy `local-certification` PASS. Start: `make -C pmoves ci-runners-local-cert-up`. Hotfix runner offline (non-blocking). |
@@ -641,7 +666,7 @@ These are tracked as release gates and should be closed with command evidence be
 ## CodeQL Alert Triage (2026-02-18 Baseline → 2026-02-28 Update)
 
 **Historical section:** this table preserves the 2026-02-28 triage baseline for traceability.
-**Live status on 2026-03-11:** CodeQL open alerts are **0** (#194 fixed in `6c3a0455` pending rescan auto-closure; #195 false positive suppressed with `lgtm` comment).
+**Live status on 2026-03-11:** CodeQL open alerts are **0** after merge (#194 auto-closed by rescan; #195 false positive suppressed with `lgtm` comment; #196 fixed via `new URL()` constructor sanitization in `options.js:263-268`).
 
 | Group | Count | Severity | Rule | Files | Remediation | Status |
 |-------|-------|----------|------|-------|-------------|--------|
@@ -650,7 +675,7 @@ These are tracked as release gates and should be closed with command evidence be
 | C | 6 | high | `py/path-injection` | `gateway/api/viz.py` (4), `gateway/api/chit.py` (2) | Validate/sanitize file path parameters | **FIXED** (PR #715) |
 | D | 2 | high | `py/path-injection` | `hf-mcp-server/main.py` (L522, L630) | Validate HuggingFace model paths | **FIXED** (PR #715) |
 | E | 5 | medium | `py/stack-trace-exposure` | `consciousness-service/main.py` (3), `gateway/api/workflow.py`, `supaserch/app.py` | Replace traceback in HTTP responses with generic errors | **FIXED** (PR #715) |
-| F | 2 | high | `js/xss-through-dom`, `js/resource-exhaustion` | `gateway/web/client.html:69`, `ui/lib/serviceHealth.ts:56` | Sanitize innerHTML; add request limits/timeouts | **FIXED** (#194 scheme validation in `6c3a0455`; #195 false positive suppressed — timeout clamped `[1s,60s]`) |
+| F | 3 | high | `js/xss-through-dom`, `js/resource-exhaustion` | `gateway/web/client.html:69`, `ui/lib/serviceHealth.ts:56`, `chrome-extension/options/options.js:264` | Sanitize innerHTML; add request limits/timeouts | **FIXED** (#194 scheme validation in `6c3a0455`; #195 FP suppressed; #196 `new URL()` constructor sanitization) |
 | G | 1 | high | `py/clear-text-logging` | `tools/chit_credential_demo.py:123` | Demo tool; redact or suppress sensitive logging | OPEN |
 | H | 31 | mixed | Various | New/expanded scan results from PRs #716-719 | Requires fresh triage pass | **NEW** |
 
