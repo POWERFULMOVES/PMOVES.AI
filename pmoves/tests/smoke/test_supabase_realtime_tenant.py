@@ -24,9 +24,11 @@ from conftest import docker_available
 
 COMPOSE_FILE = PMOVES_DIR / "docker-compose.yml"
 
+SUPABASE_REALTIME_PORT = os.getenv("SUPABASE_REALTIME_PORT", "4010")
+
 SUPABASE_REALTIME_URL = os.getenv(
     "SUPABASE_REALTIME_URL",
-    "ws://localhost:4000/socket/websocket"
+    f"ws://localhost:{SUPABASE_REALTIME_PORT}/socket/websocket"
 )
 SUPABASE_POSTGREST_URL = os.getenv(
     "SUPABASE_POSTGREST_URL",
@@ -132,7 +134,7 @@ def test_realtime_has_seed_self_host_enabled() -> None:
 @pytest.mark.smoke
 def test_realtime_jwt_secret_configured() -> None:
     """Verify Realtime JWT secret is configured."""
-    output = grep_context(COMPOSE_FILE, r"supabase-realtime:", after=30)
+    output = grep_context(COMPOSE_FILE, r"supabase-realtime:", after=55)
     if not output:
         pytest.skip("supabase-realtime service not found in docker-compose.yml")
 
@@ -203,7 +205,7 @@ def test_realtime_database_schema_exists() -> None:
 @pytest.mark.smoke
 def test_realtime_healthcheck_configured() -> None:
     """Verify Realtime has a healthcheck configured in docker-compose."""
-    output = grep_context(COMPOSE_FILE, r"supabase-realtime:", after=30)
+    output = grep_context(COMPOSE_FILE, r"supabase-realtime:", after=55)
     assert output, "supabase-realtime service not found"
 
     assert "healthcheck:" in output, (
