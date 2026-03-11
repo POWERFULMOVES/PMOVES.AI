@@ -839,6 +839,7 @@ services:
     restart: unless-stopped
     environment:
     - MEILI_ENV=production
+    - MEILI_MASTER_KEY=${MEILI_MASTER_KEY:-changeme_16bytes!}
     - DOCKED_MODE=${DOCKED_MODE:-true}
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
@@ -2529,12 +2530,16 @@ services:
       - NEXT_PUBLIC_GRAFANA_URL=${NEXT_PUBLIC_GRAFANA_URL:-http://localhost:3002}
       - NEXT_PUBLIC_PROMETHEUS_URL=${NEXT_PUBLIC_PROMETHEUS_URL:-http://localhost:9090}
       - NEXT_PUBLIC_LOKI_URL=${NEXT_PUBLIC_LOKI_URL:-http://localhost:3100}
+      # Server-side health checks: rewrite localhost → host.docker.internal
+      - HEALTH_CHECK_HOST=host.docker.internal
       # Server-side only (Docker hostnames OK)
       - POSTGREST_URL=${POSTGREST_URL:-http://supabase-postgrest:3000}
       - PRESIGN_SHARED_SECRET=${PRESIGN_SHARED_SECRET}
       - RENDER_WEBHOOK_URL=${RENDER_WEBHOOK_URL:-http://render-webhook:8085/comfy/webhook}
       - OPEN_NOTEBOOK_API_URL=${OPEN_NOTEBOOK_API_URL:-http://open-notebook:5055}
       - TOKENISM_URL=${TOKENISM_URL:-http://pmoves-tokenism-simulator-1:8100}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "4482:3000"
     # Note: flute-gateway is optional (for voice features). Start with workers profile for full functionality.
