@@ -6,7 +6,6 @@ on:
   push:
     branches:
       - main
-      - integration
       - PMOVES.AI-Edition-Hardened
     paths:
       - 'pmoves/supabase/**/*.sql'
@@ -17,7 +16,6 @@ on:
   pull_request:
     branches:
       - main
-      - integration
       - PMOVES.AI-Edition-Hardened
     paths:
       - 'pmoves/supabase/**/*.sql'

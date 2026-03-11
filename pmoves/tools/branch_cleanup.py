@@ -24,10 +24,9 @@ from typing import List
 # Protected branches that are never deleted
 PROTECTED = frozenset({
     "main",
-    "integration",
     "PMOVES.AI-Edition-Hardened",
+    "PMOVES.AI-Edition-Hardened-Integrations",
     "PMOVES.AI-Edition-Hardened-v3-clean",
-    "develop",
 })
 
 # Default TTL for branch types (days)
