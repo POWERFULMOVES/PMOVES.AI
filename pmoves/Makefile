@@ -2174,11 +2174,11 @@ deepresearch-health: ## Check DeepResearch health endpoint (200 expected)
 
 .PHONY: up-nats-echo nats-echo-logs deepresearch-diag
 up-nats-echo: ## Start NATS echo subscribers for request/result subjects
-	@docker compose -p $(PROJECT) up -d nats-echo-req nats-echo-res
+	@$(DC) up -d nats-echo-req nats-echo-res
 	@echo "✔ nats-echo subscribers started"
 
 nats-echo-logs: ## Tail logs from NATS echo subscribers
-	@docker compose -p $(PROJECT) logs -n 40 nats-echo-req nats-echo-res
+	@$(DC) logs -n 40 nats-echo-req nats-echo-res
 
 deepresearch-diag: ## Publish a diagnostic DeepResearch request via worker and show echo logs
 	@curl -s -X POST http://localhost:8098/diag/publish -H 'content-type: application/json' -d '{"query":"diag smoke","mode":"local","correlation_id":"diag-echo"}' | jq .
