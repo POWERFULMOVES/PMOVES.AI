@@ -839,7 +839,7 @@ services:
     restart: unless-stopped
     environment:
     - MEILI_ENV=production
-    - MEILI_MASTER_KEY=${MEILI_MASTER_KEY:-changeme_16bytes!}
+    - MEILI_MASTER_KEY=${MEILI_MASTER_KEY:?Set MEILI_MASTER_KEY in env.shared or env.tier-data}
     - DOCKED_MODE=${DOCKED_MODE:-true}
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}

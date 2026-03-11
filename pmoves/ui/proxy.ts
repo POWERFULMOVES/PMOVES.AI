@@ -19,7 +19,7 @@ const isPublicPath = (pathname: string) => {
   }
 
   // API routes consumed by public pages must also be public
-  if (pathname.startsWith('/api/services-hub') || pathname.startsWith('/api/health')) {
+  if (pathname === '/api/services-hub' || pathname === '/api/health') {
     return true;
   }
 
