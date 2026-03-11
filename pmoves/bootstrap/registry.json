@@ -4,14 +4,14 @@
     {
       "id": "supabase",
       "name": "Supabase",
-      "description": "Primary database stack configuration used by most PMOVES services.",
+      "description": "Unified self-hosted Supabase stack (13 services). Standard naming: JWT_SECRET, ANON_KEY, SERVICE_ROLE_KEY.",
       "variables": [
         {
           "key": "SUPA_REST_URL",
           "file": "pmoves/.env.local",
           "prompt": "Supabase REST endpoint (host)",
-          "default": "http://localhost:65421/rest/v1",
-          "help": "Host-facing PostgREST endpoint exposed by `supabase start` or your remote deployment.",
+          "default": "http://localhost:8000/rest/v1",
+          "help": "Host-facing REST endpoint via Kong gateway.",
           "required": true,
           "type": "url"
         },
@@ -19,52 +19,16 @@
           "key": "SUPA_REST_INTERNAL_URL",
           "file": "pmoves/.env.local",
           "prompt": "Supabase REST endpoint (in-docker)",
-          "default": "http://api.supabase.internal:8000/rest/v1",
-          "help": "Internal PostgREST URL reachable from Docker services when using Supabase CLI.",
+          "default": "http://supabase-kong:8000/rest/v1",
+          "help": "Internal REST URL reachable from Docker services via Kong.",
           "required": true,
           "type": "url"
         },
         {
-          "key": "GOTRUE_SITE_URL",
-          "file": "pmoves/.env.local",
-          "prompt": "GoTrue site URL",
-          "default": "http://localhost:54323",
-          "help": "GoTrue site URL used for auth callbacks.",
-          "required": true,
-          "type": "url"
-        },
-        {
-          "key": "GOTRUE_API_EXTERNAL_URL",
-          "file": "pmoves/.env.local",
-          "prompt": "GoTrue external API URL",
-          "default": "http://localhost:9999",
-          "help": "External GoTrue API endpoint (defaults to Supabase CLI port).",
-          "required": true,
-          "type": "url"
-        },
-        {
-          "key": "SUPABASE_STORAGE_URL",
-          "file": "pmoves/.env.local",
-          "prompt": "Supabase storage URL",
-          "default": "http://localhost:5000",
-          "help": "Storage service base URL exposed by Supabase CLI.",
-          "required": true,
-          "type": "url"
-        },
-        {
-          "key": "SUPABASE_PUBLIC_STORAGE_BASE",
-          "file": "pmoves/.env.local",
-          "prompt": "Public storage base URL",
-          "default": "http://localhost:5000",
-          "help": "Public storage base used to build asset links.",
-          "required": true,
-          "type": "url"
-        },
-        {
-          "key": "SUPABASE_ANON_KEY",
-          "file": "pmoves/env.shared",
-          "prompt": "Supabase anon key",
-          "help": "Copy from `make supa-status` or your remote Supabase settings.",
+          "key": "JWT_SECRET",
+          "file": "pmoves/env.tier-supabase",
+          "prompt": "JWT signing secret",
+          "help": "Shared by GoTrue, PostgREST, Realtime, Storage, Kong, Edge Functions. Generate: openssl rand -base64 32",
           "required": true,
           "sensitive": true,
           "generate": {
@@ -73,10 +37,10 @@
           }
         },
         {
-          "key": "SUPABASE_SERVICE_ROLE_KEY",
-          "file": "pmoves/env.shared",
-          "prompt": "Supabase service role key",
-          "help": "Copy from `make supa-status` or your remote Supabase settings.",
+          "key": "ANON_KEY",
+          "file": "pmoves/env.tier-supabase",
+          "prompt": "Supabase anon key (JWT token)",
+          "help": "JWT signed with JWT_SECRET, role=anon. Generate via scripts/supabase/generate-keys.sh",
           "required": true,
           "sensitive": true,
           "generate": {
@@ -85,15 +49,87 @@
           }
         },
         {
-          "key": "SUPABASE_JWT_SECRET",
-          "file": "pmoves/env.shared",
-          "prompt": "Supabase JWT secret",
-          "help": "JWT secret used by Supabase auth. Use the value reported by `make supa-status`.",
+          "key": "SERVICE_ROLE_KEY",
+          "file": "pmoves/env.tier-supabase",
+          "prompt": "Supabase service role key (JWT token)",
+          "help": "JWT signed with JWT_SECRET, role=service_role. Generate via scripts/supabase/generate-keys.sh",
           "required": true,
           "sensitive": true,
           "generate": {
             "type": "random_urlsafe",
             "length": 64
+          }
+        },
+        {
+          "key": "POSTGRES_PASSWORD",
+          "file": "pmoves/env.tier-supabase",
+          "prompt": "PostgreSQL password",
+          "help": "Database password for Supabase Postgres.",
+          "required": true,
+          "sensitive": true,
+          "generate": {
+            "type": "random_urlsafe",
+            "length": 48
+          }
+        },
+        {
+          "key": "SECRET_KEY_BASE",
+          "file": "pmoves/env.tier-supabase",
+          "prompt": "Secret key base (Realtime + Supavisor encryption)",
+          "help": "Used by Realtime and Supavisor. Generate: openssl rand -base64 48",
+          "required": true,
+          "sensitive": true,
+          "generate": {
+            "type": "random_urlsafe",
+            "length": 64
+          }
+        },
+        {
+          "key": "VAULT_ENC_KEY",
+          "file": "pmoves/env.tier-supabase",
+          "prompt": "Vault encryption key (Supavisor)",
+          "help": "32+ char hex key. Generate: openssl rand -hex 16",
+          "required": true,
+          "sensitive": true,
+          "generate": {
+            "type": "random_hex",
+            "length": 32
+          }
+        },
+        {
+          "key": "PG_META_CRYPTO_KEY",
+          "file": "pmoves/env.tier-supabase",
+          "prompt": "Postgres Meta encryption key",
+          "help": "Used by pg-meta for Studio. Generate: openssl rand -hex 16",
+          "required": true,
+          "sensitive": true,
+          "generate": {
+            "type": "random_hex",
+            "length": 32
+          }
+        },
+        {
+          "key": "LOGFLARE_PUBLIC_ACCESS_TOKEN",
+          "file": "pmoves/env.tier-supabase",
+          "prompt": "Logflare public access token",
+          "help": "Analytics (Logflare) public token for log shipping.",
+          "required": true,
+          "sensitive": true,
+          "generate": {
+            "type": "random_urlsafe",
+            "length": 32
+          }
+        },
+        {
+          "key": "LOGFLARE_PRIVATE_ACCESS_TOKEN",
+          "file": "pmoves/env.tier-supabase",
+          "prompt": "Logflare private access token",
+          "help": "Analytics (Logflare) private token for admin access.",
+          "required": true,
+          "sensitive": true,
+          "generate": {
+            "type": "random_urlsafe",
+            "length": 32
           }
         }
       ]
@@ -322,6 +358,17 @@
           "sensitive": true
         },
         {
+          "key": "FIREFLY_APP_KEY",
+          "file": "pmoves/env.shared",
+          "prompt": "Firefly III Laravel APP_KEY",
+          "required": true,
+          "help": "Laravel encryption key (base64: + 32 bytes). Auto-generated by brand_defaults.py.",
+          "sensitive": true,
+          "generate": {
+            "type": "laravel_app_key"
+          }
+        },
+        {
           "key": "FIREFLY_ACCESS_TOKEN",
           "file": "pmoves/env.shared",
           "prompt": "Firefly access token",
@@ -391,20 +438,36 @@
           "sensitive": true
         },
         {
+          "key": "N8N_ENCRYPTION_KEY",
+          "file": "pmoves/env.shared",
+          "prompt": "n8n encryption key",
+          "required": true,
+          "help": "Encrypts workflow credentials at rest. Auto-generated by brand_defaults.py.",
+          "sensitive": true,
+          "generate": {
+            "type": "random_urlsafe",
+            "length": 32
+          }
+        },
+        {
           "key": "N8N_API_KEY",
           "file": "pmoves/env.shared",
           "prompt": "n8n API key",
           "required": false,
-          "help": "Required for CLI + Agent flows that call the n8n REST API.",
+          "help": "Required for CLI + Agent flows that call the n8n REST API. Must be created from the n8n UI — cannot be auto-generated.",
           "sensitive": true
         },
         {
           "key": "N8N_RUNNERS_AUTH_TOKEN",
           "file": "pmoves/env.shared",
           "prompt": "n8n runners auth token",
-          "required": false,
-          "help": "Shared secret for the n8n runners container.",
-          "sensitive": true
+          "required": true,
+          "help": "Shared secret for the n8n runners container. Auto-generated by brand_defaults.py.",
+          "sensitive": true,
+          "generate": {
+            "type": "random_urlsafe",
+            "length": 24
+          }
         },
         {
           "key": "JELLYFIN_URL",
@@ -448,8 +511,8 @@
           "key": "SUPABASE_URL",
           "file": "pmoves/env.jellyfin-ai",
           "prompt": "Supabase internal REST URL for Jellyfin stack",
-          "default": "http://host.docker.internal:54321",
-          "help": "Supabase REST endpoint reachable from the Jellyfin containers (use host.docker.internal with Supabase CLI).",
+          "default": "http://supabase-kong:8000",
+          "help": "Supabase endpoint reachable from Jellyfin containers via Kong gateway.",
           "required": true,
           "type": "url"
         },

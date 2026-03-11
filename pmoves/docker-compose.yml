@@ -11,8 +11,7 @@
 # 5. pmoves_monitoring - Observability tier (Prometheus, Grafana, Loki)
 #
 # Additional Networks:
-# - pmoves        - Legacy compatibility bridge (Supabase connectivity)
-# - supabase_net  - Supabase CLI local stack (external dependency)
+# - pmoves        - Cross-profile bridge (external services)
 #
 # Service Tier Assignment:
 # ------------------------
@@ -496,10 +495,9 @@ services:
   # =============================================================================
   # SUPABASE SELF-HOSTED STACK (2025 Best Practices)
   # =============================================================================
-  # Integrated Supabase services - no external CLI dependency
-  # All services run on pmoves internal networks for security
-  # 2025 Key Naming: PUBLISHABLE_KEY / SECRET_KEY (legacy: ANON_KEY / SERVICE_ROLE_KEY)
-  # 2025 JWT: RS256 asymmetric (legacy: HS256 symmetric)
+  # Unified 13-service self-hosted stack (profile: supabase-local)
+  # Standard naming: JWT_SECRET, ANON_KEY, SERVICE_ROLE_KEY (SUPABASE_* aliases for compat)
+  # JWT: HS256 symmetric
   # =============================================================================
 
   supabase-db:
@@ -538,7 +536,6 @@ services:
     profiles:
     - supabase-local
     environment:
-    # 2025: Use RS256 for asymmetric JWT (public/private key pair)
     - GOTRUE_SITE_URL=${SUPABASE_SITE_URL}
     - API_EXTERNAL_URL=${SUPABASE_PUBLIC_URL}
     - GOTRUE_API_HOST=0.0.0.0
@@ -546,8 +543,7 @@ services:
     # Database connection
     - GOTRUE_DB_DRIVER=postgres
     - GOTRUE_DB_DATABASE_URL=postgres://${POSTGRES_USER:-${SUPABASE_DB_USER:-postgres}}:${POSTGRES_PASSWORD_URLENCODED:-${POSTGRES_PASSWORD:-${SUPABASE_DB_PASSWORD:-postgres}}}@supabase-db:5432/${POSTGRES_DB:-${SUPABASE_DB_NAME:-postgres}}?sslmode=disable
-    # JWT configuration (2025: RS256)
-    # Standard variable names from PMOVES-supabase fork with fallbacks
+    # JWT configuration — standard names with legacy fallbacks
     - GOTRUE_JWT_SECRET=${JWT_SECRET:-${SUPABASE_JWT_SECRET}}
     - GOTRUE_JWT_ALGORITHM=${SUPABASE_JWT_ALGORITHM:-HS256}
     - GOTRUE_JWT_EXP=${JWT_EXPIRY:-${SUPABASE_JWT_EXP:-3600} }
@@ -587,7 +583,7 @@ services:
 
   supabase-postgrest:
     <<: *tier-supabase-hardened-ro
-    image: postgrest/postgrest:v12.2.0
+    image: postgrest/postgrest:v14.3
     restart: unless-stopped
     profiles:
     - supabase-local
@@ -597,8 +593,11 @@ services:
     # JWT secret (must match gotrue) - standard variable name
     - PGRST_JWT_SECRET=${JWT_SECRET:-${SUPABASE_JWT_SECRET:-}}
     - PGRST_JWT_ALGORITHM=${SUPABASE_JWT_ALGORITHM:-HS256}
-    # 2025 key naming (service role key for admin access)
     - PGRST_JWT_SECRET_IS_BASE64=false
+    # PostgREST v14+ settings
+    - PGRST_DB_USE_LEGACY_GUCS=false
+    - PGRST_APP_SETTINGS_JWT_SECRET=${JWT_SECRET:-${SUPABASE_JWT_SECRET:-}}
+    - PGRST_APP_SETTINGS_JWT_EXP=${JWT_EXPIRY:-${SUPABASE_JWT_EXP:-3600}}
     # API configuration
     - PGRST_DB_SCHEMAS=${SUPABASE_SCHEMA:-public,pmoves_core}
     - PGRST_ANON_ROLE=${SUPABASE_ANON_ROLE:-anon}
@@ -640,7 +639,7 @@ services:
     - KONG_ADMIN_ERROR_LOG=/dev/stderr
     - KONG_PROXY_LISTEN=0.0.0.0:8000
     - KONG_ADMIN_LISTEN=0.0.0.0:8001
-    # JWT plugin (2025: RS256 support)
+    # JWT plugin
     - KONG_PLUGINS=bundled,jwt
     - KONG_NGINX_PROXY_PROXY_BUFFERS=8 16k
     # PMOVES context
@@ -667,7 +666,7 @@ services:
 
   supabase-realtime:
     <<: *tier-supabase-hardened
-    image: supabase/realtime:v2.30.26
+    image: supabase/realtime:v2.72.0
     restart: unless-stopped
     profiles:
     - supabase-local
@@ -679,13 +678,20 @@ services:
     - DB_USER=${POSTGRES_USER:-${SUPABASE_DB_USER:-postgres}}
     - DB_PASSWORD=${POSTGRES_PASSWORD:-${SUPABASE_DB_PASSWORD:-postgres}}
     - DB_SSL=false
+    - DB_AFTER_CONNECT_QUERY=SET search_path TO _realtime
+    - DB_ENC_KEY=${SUPABASE_REALTIME_SECRET:-supabaserealtime}
     # App configuration
     - APP_NAME=realtime
     - PORT=4000
-    - RLIMIT_NOFILE=1048576
+    - RLIMIT_NOFILE=10000
+    - SEED_SELF_HOST=true
+    - RUN_JANITOR=true
+    - DISABLE_HEALTHCHECK_LOGGING=true
+    - ERL_AFLAGS=-proto_dist inet_tcp
+    - DNS_NODES=''
     # JWT secret (must match gotrue) - standard variable name
-    - JWT_SECRET=${JWT_SECRET:-${SUPABASE_JWT_SECRET:-}}
-    - SECRET_KEY_BASE=${SUPABASE_REALTIME_SECRET:-${JWT_SECRET:-${SUPABASE_JWT_SECRET:-}}}
+    - API_JWT_SECRET=${JWT_SECRET:-${SUPABASE_JWT_SECRET:-}}
+    - SECRET_KEY_BASE=${SECRET_KEY_BASE:-${SUPABASE_REALTIME_SECRET:-${JWT_SECRET:-${SUPABASE_JWT_SECRET:-}}}}
     # PMOVES context
     - DOCKED_MODE=${DOCKED_MODE:-true}
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
@@ -710,14 +716,14 @@ services:
 
   supabase-storage:
     <<: *tier-supabase-hardened
-    image: supabase/storage-api:v1.36.2
+    image: supabase/storage-api:v1.37.1
     restart: unless-stopped
     profiles:
     - supabase-local
     environment:
-    # 2025 key naming - standard Supabase variable names with fallbacks
-    - ANON_KEY=${SUPABASE_ANON_KEY:-${ANON_KEY:-${SUPABASE_PUBLISHABLE_KEY:-}}}
-    - SERVICE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-${SERVICE_ROLE_KEY:-${SUPABASE_SECRET_KEY:-}}}
+    # Standard key names with legacy fallbacks
+    - ANON_KEY=${ANON_KEY:-${SUPABASE_ANON_KEY:-}}
+    - SERVICE_KEY=${SERVICE_ROLE_KEY:-${SUPABASE_SERVICE_ROLE_KEY:-}}
     # JWT secret - standard variable name
     - PGRST_JWT_SECRET=${JWT_SECRET:-${SUPABASE_JWT_SECRET:-}}
     - PGRST_JWT_ALGORITHM=${SUPABASE_JWT_ALGORITHM:-HS256}
@@ -729,14 +735,14 @@ services:
     - FILE_SIZE_LIMIT=52428800
     - STORAGE_BACKEND=file
     - FILE_STORAGE_BACKEND_PATH=/var/lib/storage
-    - REGION=${SUPABASE_STORAGE_REGION:-local}
-    # Global S3 bucket (if using MinIO for actual storage)
-    - GLOBAL_S3_BUCKET=${SUPABASE_S3_BUCKET:-assets}
-    - GLOBAL_S3_ENDPOINT=${MINIO_ENDPOINT:-http://minio:9000}
-    - GLOBAL_S3_FORCE_PATH_STYLE=true
+    - REQUEST_ALLOW_X_FORWARDED_PATH=true
+    # Image transformation via imgproxy
+    - ENABLE_IMAGE_TRANSFORMATION=true
+    - IMGPROXY_URL=http://supabase-imgproxy:5001
     # Tenant mode (single tenant for self-hosted)
     - TENANT_ID=stub
-    - TENANTSStub_REGION=${SUPABASE_STORAGE_REGION:-local}
+    - REGION=${SUPABASE_STORAGE_REGION:-stub}
+    - GLOBAL_S3_BUCKET=${SUPABASE_S3_BUCKET:-stub}
     # PMOVES context
     - DOCKED_MODE=${DOCKED_MODE:-true}
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
@@ -753,7 +759,9 @@ services:
       supabase-db:
         condition: service_healthy
       supabase-postgrest:
-        condition: service_started
+        condition: service_started  # distroless image — no shell for healthcheck
+      supabase-imgproxy:
+        condition: service_healthy
     volumes:
     - supabase-storage-data:/var/lib/storage
     ports:
@@ -770,13 +778,21 @@ services:
     profiles:
     - supabase-local
     environment:
-    # PostgREST connection
-    - STUDIO_PG_META_URL=http://supabase-postgrest:3000
-    # Auth connection
-    - SUPABASE_URL=http://supabase-gotrue:9999
-    # 2025 key naming - standard variable names with fallbacks
+    # Postgres Meta connection (Studio uses pg-meta, not PostgREST directly)
+    - STUDIO_PG_META_URL=http://supabase-meta:8080
+    # Auth / Kong gateway
+    - SUPABASE_URL=http://supabase-kong:8000
     - SUPABASE_PUBLIC_URL=${API_EXTERNAL_URL:-${SUPABASE_PUBLIC_URL:-}}
-    - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY:-${ANON_KEY:-${SUPABASE_PUBLISHABLE_KEY:-}}}
+    - SUPABASE_ANON_KEY=${ANON_KEY:-${SUPABASE_ANON_KEY:-}}
+    - SUPABASE_SERVICE_KEY=${SERVICE_ROLE_KEY:-${SUPABASE_SERVICE_ROLE_KEY:-}}
+    - AUTH_JWT_SECRET=${JWT_SECRET:-${SUPABASE_JWT_SECRET:-}}
+    - PG_META_CRYPTO_KEY=${PG_META_CRYPTO_KEY:-}
+    # Analytics (Logflare) integration
+    - LOGFLARE_PUBLIC_ACCESS_TOKEN=${LOGFLARE_PUBLIC_ACCESS_TOKEN:-}
+    - LOGFLARE_PRIVATE_ACCESS_TOKEN=${LOGFLARE_PRIVATE_ACCESS_TOKEN:-}
+    - LOGFLARE_URL=http://supabase-analytics:4000
+    - NEXT_PUBLIC_ENABLE_LOGS=true
+    - NEXT_ANALYTICS_BACKEND_PROVIDER=postgres
     # PMOVES context
     - DOCKED_MODE=${DOCKED_MODE:-true}
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
@@ -792,14 +808,206 @@ services:
       retries: 3
       start_period: 30s
     depends_on:
-      supabase-postgrest:
-        condition: service_started
+      supabase-meta:
+        condition: service_healthy
       supabase-gotrue:
+        condition: service_healthy
+      supabase-analytics:
         condition: service_healthy
     ports:
     - ${SUPABASE_STUDIO_PORT:-54323}:3000
     networks:
     - pmoves_api
+    - pmoves_data  # reach supabase-meta, supabase-analytics
+
+  # ---------------------------------------------------------------------------
+  # Supabase imgproxy — image transformation for Storage
+  # ---------------------------------------------------------------------------
+  supabase-imgproxy:
+    <<: *tier-supabase-hardened-ro
+    image: darthsim/imgproxy:v3.30.1
+    restart: unless-stopped
+    profiles:
+    - supabase-local
+    environment:
+    - IMGPROXY_BIND=:5001
+    - IMGPROXY_LOCAL_FILESYSTEM_ROOT=/
+    - IMGPROXY_USE_ETAG=true
+    - IMGPROXY_ENABLE_WEBP_DETECTION=${IMGPROXY_ENABLE_WEBP_DETECTION:-true}
+    - IMGPROXY_MAX_SRC_RESOLUTION=16.8
+    healthcheck:
+      test: ["CMD", "imgproxy", "health"]
+      interval: 5s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    volumes:
+    - supabase-storage-data:/var/lib/storage:ro
+    networks:
+    - pmoves_data
+
+  # ---------------------------------------------------------------------------
+  # Supabase postgres-meta — database metadata API for Studio
+  # ---------------------------------------------------------------------------
+  supabase-meta:
+    <<: *tier-supabase-hardened-ro
+    image: supabase/postgres-meta:v0.95.2
+    restart: unless-stopped
+    profiles:
+    - supabase-local
+    environment:
+    - PG_META_PORT=8080
+    - PG_META_DB_HOST=supabase-db
+    - PG_META_DB_PORT=5432
+    - PG_META_DB_NAME=${POSTGRES_DB:-${SUPABASE_DB_NAME:-postgres}}
+    - PG_META_DB_USER=${POSTGRES_USER:-${SUPABASE_DB_USER:-postgres}}
+    - PG_META_DB_PASSWORD=${POSTGRES_PASSWORD:-${SUPABASE_DB_PASSWORD:-postgres}}
+    - CRYPTO_KEY=${PG_META_CRYPTO_KEY:-}
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8080/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    depends_on:
+      supabase-db:
+        condition: service_healthy
+    networks:
+    - pmoves_data
+
+  # ---------------------------------------------------------------------------
+  # Supabase Edge Runtime — Deno edge functions
+  # ---------------------------------------------------------------------------
+  supabase-edge-functions:
+    <<: *tier-supabase-hardened
+    image: supabase/edge-runtime:v1.70.0
+    restart: unless-stopped
+    profiles:
+    - supabase-local
+    environment:
+    - JWT_SECRET=${JWT_SECRET:?Set JWT_SECRET in env.tier-supabase}
+    - SUPABASE_URL=http://supabase-kong:8000
+    - SUPABASE_ANON_KEY=${ANON_KEY:?Set ANON_KEY in env.tier-supabase}
+    - SUPABASE_SERVICE_ROLE_KEY=${SERVICE_ROLE_KEY:?Set SERVICE_ROLE_KEY in env.tier-supabase}
+    - SUPABASE_DB_URL=postgresql://${POSTGRES_USER:-${SUPABASE_DB_USER:-postgres}}:${POSTGRES_PASSWORD:-${SUPABASE_DB_PASSWORD:-postgres}}@supabase-db:5432/${POSTGRES_DB:-${SUPABASE_DB_NAME:-postgres}}
+    - VERIFY_JWT=${FUNCTIONS_VERIFY_JWT:-true}
+    command: ["start", "--main-service", "/home/deno/functions/main"]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sSf http://localhost:9000/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    depends_on:
+      supabase-analytics:
+        condition: service_healthy
+    networks:
+    - pmoves_api
+    - pmoves_data  # reach supabase-db, supabase-analytics
+
+  # ---------------------------------------------------------------------------
+  # Supabase Analytics (Logflare) — log analytics backend
+  # ---------------------------------------------------------------------------
+  supabase-analytics:
+    <<: *tier-supabase-hardened
+    image: supabase/logflare:1.30.3
+    restart: unless-stopped
+    profiles:
+    - supabase-local
+    environment:
+    - LOGFLARE_NODE_HOST=127.0.0.1
+    - DB_USERNAME=${POSTGRES_USER:-${SUPABASE_DB_USER:-postgres}}
+    - DB_DATABASE=_supabase
+    - DB_HOSTNAME=supabase-db
+    - DB_PORT=5432
+    - DB_PASSWORD=${POSTGRES_PASSWORD:-${SUPABASE_DB_PASSWORD:-postgres}}
+    - DB_SCHEMA=_analytics
+    - LOGFLARE_PUBLIC_ACCESS_TOKEN=${LOGFLARE_PUBLIC_ACCESS_TOKEN:-}
+    - LOGFLARE_PRIVATE_ACCESS_TOKEN=${LOGFLARE_PRIVATE_ACCESS_TOKEN:-}
+    - LOGFLARE_SINGLE_TENANT=true
+    - LOGFLARE_SUPABASE_MODE=true
+    - POSTGRES_BACKEND_URL=postgresql://${POSTGRES_USER:-${SUPABASE_DB_USER:-postgres}}:${POSTGRES_PASSWORD:-${SUPABASE_DB_PASSWORD:-postgres}}@supabase-db:5432/_supabase
+    - POSTGRES_BACKEND_SCHEMA=_analytics
+    - LOGFLARE_FEATURE_FLAG_OVERRIDE=multibackend=true
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:4000/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    depends_on:
+      supabase-db:
+        condition: service_healthy
+    networks:
+    - pmoves_data
+
+  # ---------------------------------------------------------------------------
+  # Supabase Vector — log collection pipeline (ships to Analytics)
+  # ---------------------------------------------------------------------------
+  supabase-vector:
+    <<: *tier-supabase-hardened
+    image: timberio/vector:0.28.1-alpine
+    restart: unless-stopped
+    profiles:
+    - supabase-local
+    environment:
+    - LOGFLARE_PUBLIC_ACCESS_TOKEN=${LOGFLARE_PUBLIC_ACCESS_TOKEN:-}
+    volumes:
+    - supabase-vector-data:/var/lib/vector
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9001/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    depends_on:
+      supabase-analytics:
+        condition: service_healthy
+    networks:
+    - pmoves_data
+
+  # ---------------------------------------------------------------------------
+  # Supavisor — connection pooler (PgBouncer replacement)
+  # ---------------------------------------------------------------------------
+  supabase-pooler:
+    <<: *tier-supabase-hardened
+    image: supabase/supavisor:2.7.4
+    restart: unless-stopped
+    profiles:
+    - supabase-local
+    environment:
+    - PORT=4000
+    - POSTGRES_PORT=5432
+    - POSTGRES_DB=${POSTGRES_DB:-${SUPABASE_DB_NAME:-postgres}}
+    - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-${SUPABASE_DB_PASSWORD:-postgres}}
+    - DATABASE_URL=ecto://${POSTGRES_USER:-${SUPABASE_DB_USER:-postgres}}:${POSTGRES_PASSWORD:-${SUPABASE_DB_PASSWORD:-postgres}}@supabase-db:5432/_supabase
+    - CLUSTER_POSTGRES=true
+    - SECRET_KEY_BASE=${SECRET_KEY_BASE:?Set SECRET_KEY_BASE in env.tier-supabase}
+    - VAULT_ENC_KEY=${VAULT_ENC_KEY:?Set VAULT_ENC_KEY in env.tier-supabase}
+    - API_JWT_SECRET=${JWT_SECRET:?Set JWT_SECRET in env.tier-supabase}
+    - METRICS_JWT_SECRET=${JWT_SECRET}
+    - REGION=local
+    - ERL_AFLAGS=-proto_dist inet_tcp
+    - POOLER_TENANT_ID=${POOLER_TENANT_ID:-default-tenant}
+    - POOLER_DEFAULT_POOL_SIZE=${POOLER_DEFAULT_POOL_SIZE:-20}
+    - POOLER_MAX_CLIENT_CONN=${POOLER_MAX_CLIENT_CONN:-100}
+    - POOLER_POOL_MODE=transaction
+    - DB_POOL_SIZE=${POOLER_DB_POOL_SIZE:-5}
+    command: ["/bin/sh", "-c", "/app/bin/migrate && if [ -f /etc/pooler/pooler.exs ]; then /app/bin/supavisor eval \"$$(cat /etc/pooler/pooler.exs)\"; else echo 'WARN: /etc/pooler/pooler.exs not found, skipping tenant seeding'; fi && /app/bin/server"]
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://127.0.0.1:4000/api/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    depends_on:
+      supabase-db:
+        condition: service_healthy
+    ports:
+    - ${SUPABASE_POOLER_PORT:-54329}:5432
+    - ${SUPABASE_POOLER_TRANSACTION_PORT:-6543}:6543
+    networks:
+    - pmoves_data
 
   # =============================================================================
   # END SUPABASE STACK
@@ -1032,7 +1240,7 @@ services:
     build: ./services/render-webhook
     restart: unless-stopped
     environment:
-    - SUPA_REST_URL=${RENDER_WEBHOOK_SUPA_REST_URL:-${SUPA_REST_INTERNAL_URL:-${SUPA_REST_URL:-http://supabase-postgrest:3000}}}
+    - SUPA_REST_URL=${RENDER_WEBHOOK_SUPA_REST_URL:-${SUPA_REST_INTERNAL_URL:-${SUPA_REST_URL:-http://supabase-kong:8000/rest/v1}}}
     - SUPABASE_SERVICE_ROLE_KEY=${RENDER_WEBHOOK_SUPABASE_SERVICE_ROLE_KEY:-${SUPABASE_SERVICE_ROLE_KEY:-${SERVICE_ROLE_KEY:-}}}
     - SUPABASE_ANON_KEY=${RENDER_WEBHOOK_SUPABASE_ANON_KEY:-${SUPABASE_ANON_KEY:-${ANON_KEY:-}}}
     - DEFAULT_NAMESPACE=${INDEXER_NAMESPACE:-pmoves}
@@ -1064,7 +1272,7 @@ services:
       dockerfile: Dockerfile
     restart: unless-stopped
     environment:
-    - SUPABASE_URL=${MODEL_REGISTRY_SUPABASE_URL:-http://supabase_kong_PMOVES.AI:8000}
+    - SUPABASE_URL=${MODEL_REGISTRY_SUPABASE_URL:-http://supabase-kong:8000}
     - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY:-${SUPABASE_SERVICE_ROLE_KEY:?MODEL_REGISTRY requires SUPABASE_SERVICE_KEY or SUPABASE_SERVICE_ROLE_KEY}}
     - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
     - MODEL_REGISTRY_PORT=${MODEL_REGISTRY_PORT:-8110}
@@ -1102,8 +1310,8 @@ services:
     - QDRANT_COLLECTION=${QDRANT_COLLECTION:-pmoves_chunks}
     - SENTENCE_MODEL=${SENTENCE_MODEL:-all-MiniLM-L6-v2}
     - MEILI_URL=${MEILI_URL:-http://meilisearch:7700}
-    - SUPA_REST_URL=${SUPA_REST_URL:-http://host.docker.internal:54321/rest/v1}
-    - SUPA_REST_INTERNAL_URL=${SUPA_REST_INTERNAL_URL:-http://host.docker.internal:54321/rest/v1}
+    - SUPA_REST_URL=${SUPA_REST_URL:-http://supabase-kong:8000/rest/v1}
+    - SUPA_REST_INTERNAL_URL=${SUPA_REST_INTERNAL_URL:-http://supabase-kong:8000/rest/v1}
     ports:
     - ${EXTRACT_WORKER_PORT:-8083}:8083
     profiles:
@@ -1112,6 +1320,7 @@ services:
     networks:
     - pmoves_app
     - pmoves_bus
+    - pmoves_api  # reach supabase-kong for REST API
     extra_hosts:
     - host.docker.internal:host-gateway
     depends_on:
@@ -1364,7 +1573,7 @@ services:
     - YT_BUCKET=${YT_BUCKET:-assets}
     - YT_OUTPUT_BUCKET=${YT_OUTPUT_BUCKET:-outputs}
     - INDEXER_NAMESPACE=${INDEXER_NAMESPACE:-pmoves}
-    - SUPA_REST_URL=${PMOVES_YT_SUPA_REST_URL:-${SUPABASE_REST_URL:-http://supabase-postgrest:3000}}
+    - SUPA_REST_URL=${PMOVES_YT_SUPA_REST_URL:-${SUPABASE_REST_URL:-http://supabase-kong:8000/rest/v1}}
     - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
     - HIRAG_URL=${HIRAG_URL:-http://hi-rag-gateway-v2:8086}
     - YT_PLAYER_CLIENT=${YT_PLAYER_CLIENT:-web_safari}
@@ -1492,8 +1701,8 @@ services:
     - NEO4J_DICT_LIMIT=${NEO4J_DICT_LIMIT:-50000}
     - TAILSCALE_ONLY=${TAILSCALE_ONLY:-false}
     - TAILSCALE_CIDRS=${TAILSCALE_CIDRS:-100.64.0.0/10}
-    - SUPA_REST_URL=${SUPA_REST_URL:-http://host.docker.internal:54321/rest/v1}
-    - SUPABASE_REALTIME_URL=${SUPABASE_REALTIME_URL:-ws://host.docker.internal:54321/realtime/v1}
+    - SUPA_REST_URL=${SUPA_REST_URL:-http://supabase-kong:8000/rest/v1}
+    - SUPABASE_REALTIME_URL=${SUPABASE_REALTIME_URL:-ws://supabase-realtime:4000}
     - CHIT_REQUIRE_SIGNATURE=${CHIT_PROD_REQUIRE_SIGNATURE:-true}
     - CHIT_DECRYPT_ANCHORS=${CHIT_PROD_DECRYPT_ANCHORS:-true}
     - CHIT_PASSPHRASE=${CHIT_PROD_PASSPHRASE:?set CHIT_PROD_PASSPHRASE in env.shared}
@@ -1630,8 +1839,8 @@ services:
     - PGUSER=${POSTGRES_USER:-pmoves}
     - PGPASSWORD=${POSTGRES_PASSWORD:-pmoves}
     - PGDATABASE=${POSTGRES_DB:-pmoves}
-    - SUPA_REST_URL=${SUPA_REST_URL:-http://host.docker.internal:54321/rest/v1}
-    - SUPABASE_REALTIME_URL=${SUPABASE_REALTIME_URL:-ws://host.docker.internal:54321/realtime/v1}
+    - SUPA_REST_URL=${SUPA_REST_URL:-http://supabase-kong:8000/rest/v1}
+    - SUPABASE_REALTIME_URL=${SUPABASE_REALTIME_URL:-ws://supabase-realtime:4000}
     - OLLAMA_URL=${OLLAMA_URL:-http://pmoves-ollama:11434}
     - OLLAMA_EMBED_MODEL=${OLLAMA_EMBED_MODEL:-embeddinggemma:300m}
     - TENSORZERO_BASE_URL=${TENSORZERO_BASE_URL:-http://tensorzero-gateway:3000}
@@ -1821,13 +2030,13 @@ services:
       - ARCHON_ENV=${ARCHON_ENV:-production}
       # Compose-first Archon Supabase wiring. CLI mode can override via
       # ARCHON_SUPABASE_* / SUPABASE_* env values.
-      - ARCHON_SUPABASE_BASE_URL=${ARCHON_SUPABASE_BASE_URL:-${ARCHON_SUPABASE_REST_URL:-${SUPABASE_REST_URL:-http://supabase-postgrest:3000}}}
-      - SUPABASE_URL=${ARCHON_SUPABASE_URL:-${SUPABASE_INTERNAL_URL:-http://supabase-postgrest:3000}}
-      - SUPABASE_REST_URL=${ARCHON_SUPABASE_REST_URL:-${SUPABASE_REST_URL:-http://supabase-postgrest:3000}}
+      - ARCHON_SUPABASE_BASE_URL=${ARCHON_SUPABASE_BASE_URL:-${ARCHON_SUPABASE_REST_URL:-${SUPABASE_REST_URL:-http://supabase-kong:8000/rest/v1}}}
+      - SUPABASE_URL=${ARCHON_SUPABASE_URL:-${SUPABASE_INTERNAL_URL:-http://supabase-kong:8000}}
+      - SUPABASE_REST_URL=${ARCHON_SUPABASE_REST_URL:-${SUPABASE_REST_URL:-http://supabase-kong:8000/rest/v1}}
       - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-${SERVICE_ROLE_KEY:-${SUPABASE_SECRET_KEY:-}}}
       - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY:-${SUPABASE_SERVICE_ROLE_KEY:-${SERVICE_ROLE_KEY:-${SUPABASE_SECRET_KEY:-}}}}
       - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
-      - SUPA_REST_URL=${ARCHON_SUPABASE_REST_URL:-${SUPABASE_REST_URL:-http://supabase-postgrest:3000}}
+      - SUPA_REST_URL=${ARCHON_SUPABASE_REST_URL:-${SUPABASE_REST_URL:-http://supabase-kong:8000/rest/v1}}
       # TensorZero routing — _sync_openai_compat_env() in services/archon/main.py
       # reads TENSORZERO_BASE_URL and populates OPENAI_COMPATIBLE_BASE_URL* vars
       - TENSORZERO_BASE_URL=${TENSORZERO_BASE_URL:-http://tensorzero-gateway:3000}
@@ -1928,7 +2137,7 @@ services:
     restart: unless-stopped
     environment:
       - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
-      - SUPABASE_URL=${SUPABASE_URL:-http://host.docker.internal:54321}
+      - SUPABASE_URL=${SUPABASE_URL:-http://supabase-kong:8000}
       - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_KEY}
       - TENSORZERO_URL=${TENSORZERO_URL:-http://tensorzero-gateway:3000}
       - BOTZ_HEARTBEAT_INTERVAL=${BOTZ_HEARTBEAT_INTERVAL:-30}
@@ -2038,7 +2247,7 @@ services:
     - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
     - SUPASERCH_PORT=${SUPASERCH_PORT:-8099}
     - HIRAG_URL=${HIRAG_URL:-http://hi-rag-gateway-v2:8086}
-    - SUPA_REST_URL=${SUPA_REST_URL:-http://host.docker.internal:54321/rest/v1}
+    - SUPA_REST_URL=${SUPA_REST_URL:-http://supabase-kong:8000/rest/v1}
     - TENSORZERO_URL=${TENSORZERO_URL:-http://tensorzero-gateway:3000}
     ports:
     - ${SUPASERCH_PORT:-8099}:8099
@@ -2131,7 +2340,7 @@ services:
     restart: unless-stopped
     environment:
     - JELLYFIN_URL=${JELLYFIN_INTERNAL_URL:-http://cataclysm-jellyfin:8096}
-    - SUPA_REST_URL=${SUPA_REST_INTERNAL_URL:-${SUPA_REST_URL:-http://host.docker.internal:54321/rest/v1}}
+    - SUPA_REST_URL=${SUPA_REST_INTERNAL_URL:-${SUPA_REST_URL:-http://supabase-kong:8000/rest/v1}}
     ports:
     - 8093:8093
     profiles:
@@ -2451,7 +2660,7 @@ services:
       - NATS_JETSTREAM=${NATS_JETSTREAM:-true}
       - TENSORZERO_URL=${TENSORZERO_URL:-http://tensorzero-gateway:3000}
       - TENSORZERO_MODEL=${TENSORZERO_MODEL:-claude-sonnet-4-5}
-      - SUPABASE_URL=${SUPABASE_URL:-http://host.docker.internal:54321}
+      - SUPABASE_URL=${SUPABASE_URL:-http://supabase-kong:8000}
       - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
       - AGENTZERO_URL=${AGENTZERO_URL:-http://agent-zero:8080}
       - AGENTZERO_MCP_ENABLED=${AGENTZERO_MCP_ENABLED:-true}
@@ -2503,11 +2712,7 @@ services:
       # Supabase
       - NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL:-http://localhost:8000}
       - NEXT_PUBLIC_SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY:-${ANON_KEY:-${SUPABASE_PUBLISHABLE_KEY:-}}}
-      - NEXT_PUBLIC_SUPABASE_REST_URL=${NEXT_PUBLIC_SUPABASE_REST_URL:-http://localhost:3010}
-      # Supabase (CLI uses port 54321)
-      - NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL:-http://localhost:54321}
-      - NEXT_PUBLIC_SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY:-${ANON_KEY:-${SUPABASE_PUBLISHABLE_KEY:-}}}
-      - NEXT_PUBLIC_SUPABASE_REST_URL=${NEXT_PUBLIC_SUPABASE_REST_URL:-http://localhost:54321/rest/v1}
+      - NEXT_PUBLIC_SUPABASE_REST_URL=${NEXT_PUBLIC_SUPABASE_REST_URL:-http://localhost:8000/rest/v1}
       # Voice/TTS
       - NEXT_PUBLIC_FLUTE_GATEWAY_URL=${NEXT_PUBLIC_FLUTE_GATEWAY_URL:-http://localhost:8055}
       - NEXT_PUBLIC_FLUTE_WS_URL=${NEXT_PUBLIC_FLUTE_WS_URL:-ws://localhost:8056}
@@ -2533,7 +2738,7 @@ services:
       # Server-side health checks: rewrite localhost → host.docker.internal
       - HEALTH_CHECK_HOST=host.docker.internal
       # Server-side only (Docker hostnames OK)
-      - POSTGREST_URL=${POSTGREST_URL:-http://supabase-postgrest:3000}
+      - POSTGREST_URL=${POSTGREST_URL:-http://supabase-kong:8000/rest/v1}
       - PRESIGN_SHARED_SECRET=${PRESIGN_SHARED_SECRET}
       - RENDER_WEBHOOK_URL=${RENDER_WEBHOOK_URL:-http://render-webhook:8085/comfy/webhook}
       - OPEN_NOTEBOOK_API_URL=${OPEN_NOTEBOOK_API_URL:-http://open-notebook:5055}
@@ -2624,7 +2829,7 @@ services:
       - AGENT_ZERO_URL=${AGENT_ZERO_URL:-http://agent-zero:8080}
       - CIPHER_URL=${CIPHER_URL:-http://cipher-api:8096}
       - TENSORZERO_URL=${TENSORZERO_URL:-http://tensorzero-gateway:3000}
-      - SUPABASE_URL=${SUPABASE_URL:-http://host.docker.internal:54321}
+      - SUPABASE_URL=${SUPABASE_URL:-http://supabase-kong:8000}
       - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY}
       - TOOL_CACHE_TTL=${TOOL_CACHE_TTL:-300}
     ports:
@@ -2924,7 +3129,9 @@ volumes:
   supabase-data: {}
   # 2025 Supabase integrated volumes
   supabase-db-data: {}
+  supabase-db-config: {}
   supabase-storage-data: {}
+  supabase-vector-data: {}
   notebook-sync-data: {}
   tensorzero-clickhouse-data: {}
   invidious-postgres-data: {}

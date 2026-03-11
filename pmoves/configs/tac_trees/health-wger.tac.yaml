@@ -1,0 +1,95 @@
+# TAC Tree: Health-Wger Integration Review
+# Audits documentation, overlay compliance, and n8n alignment
+
+name: "Health-Wger Integration Review"
+version: "1.0.0"
+description: "Review and fix Wger health integration documentation, overlay surface, and n8n workflow alignment"
+
+root:
+  id: health-wger
+  task: "Health-Wger integration review"
+  context: "Pmoves-Health-wger/ submodule + pmoves/integrations/health-wger/"
+  agent_hint: codex
+  children:
+    - id: health-wger.docs
+      task: "Documentation completeness"
+      context: "Pmoves-Health-wger/PMOVES.AI_INTEGRATION.md"
+      agent_hint: codex
+      children:
+        - id: health-wger.docs.template
+          task: "Fill PMOVES.AI_INTEGRATION.md template ($t → actual values)"
+          action:
+            type: grep
+            target: "Pmoves-Health-wger/PMOVES.AI_INTEGRATION.md"
+            pattern: "\\$t|_TBD_"
+            expect: "No $t or _TBD_ placeholders remain"
+          context: "Module name=Pmoves-Health-wger, path=Pmoves-Health-wger/, port=8000"
+          agent_hint: codex
+
+        - id: health-wger.docs.mobile
+          task: "Document mobile app capabilities (Flutter Android/iOS)"
+          action:
+            type: grep
+            target: "Pmoves-Health-wger/PMOVES.AI_INTEGRATION.md"
+            pattern: "[Ff]lutter|[Mm]obile|[Aa]ndroid|iOS"
+            expect: "Mobile app section exists"
+          context: "Wger has official Flutter apps for Android/iOS"
+          agent_hint: codex
+
+    - id: health-wger.overlay
+      task: "Overlay compliance checks"
+      context: "pmoves/integrations/health-wger/"
+      agent_hint: codex
+      children:
+        - id: health-wger.overlay.bootstrap
+          task: "Auth bootstrap script is functional (not no-op)"
+          action:
+            type: grep
+            target: "pmoves/integrations/health-wger/auth/bootstrap.sh"
+            pattern: "no-op"
+            expect: "Should NOT contain 'no-op' — must have real checks"
+          context: "Replace placeholder with Wger health check + token validation"
+          agent_hint: codex
+
+        - id: health-wger.overlay.flows
+          task: "n8n flows directory populated with workflow JSONs"
+          action:
+            type: file_exists
+            target: "pmoves/integrations/health-wger/n8n/flows/health_wger_sync.json"
+            expect: "At least 4 workflow files present"
+          context: "Should contain sync, CGP, webhook, and Supabase workflows"
+          agent_hint: codex
+
+        - id: health-wger.overlay.subjects
+          task: "NATS subjects include workout sync and anomaly events"
+          action:
+            type: grep
+            target: "pmoves/integrations/health-wger/events/subjects.yaml"
+            pattern: "health\\.workouts\\.synced|health\\.anomaly\\.detected"
+            expect: "Workout sync and anomaly detection subjects present"
+          context: "Required for health-sync FlOOS pipeline"
+          agent_hint: codex
+
+    - id: health-wger.n8n
+      task: "n8n workflow env alignment"
+      context: "n8n workflows referencing Wger env vars"
+      agent_hint: codex
+      children:
+        - id: health-wger.n8n.env
+          task: "Verify WGER_BASE_URL and WGER_API_TOKEN env refs in workflows"
+          action:
+            type: grep
+            target: "pmoves/integrations/health-wger/n8n/flows/"
+            pattern: "WGER_BASE_URL|WGER_API_TOKEN"
+            expect: "Workflows reference correct env var names"
+          context: "Compose passes these via env_file; n8n reads via $env.VAR"
+          agent_hint: codex
+
+        - id: health-wger.n8n.cross-domain
+          task: "Cross-domain workflow (health_to_research.json) exists"
+          action:
+            type: file_exists
+            target: "pmoves/integrations/health-wger/n8n/flows/health_to_research.json"
+            expect: "Cross-domain health→research workflow present"
+          context: "Triggers DeepResearch on health anomaly detection"
+          agent_hint: codex
