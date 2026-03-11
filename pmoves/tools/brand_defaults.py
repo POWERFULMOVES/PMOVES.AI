@@ -36,6 +36,7 @@ PLACEHOLDER_VALUES = {
     "changeme",
     "change_me",
     "base64:CHANGE_ME",
+    "GENERATE_FROM_WGER_UI",
     "SURREAL_USER_HERE",
     "SURREAL_PASS_HERE",
     "root",
@@ -133,10 +134,12 @@ def _ensure_integration_credentials(text: str) -> str:
     if _is_blank_or_placeholder(n8n_runners):
         text = _set_kv(text, "N8N_RUNNERS_AUTH_TOKEN", _strong_random(24))
 
-    # Wger API token: prefixed with pm_wger_ for easy identification
+    # Wger API token: Django REST Framework tokens must be created via the
+    # admin UI — random tokens are rejected.  Set a sentinel so operators
+    # know to generate one from http://localhost:8000/api/v2/token.
     wger_token = _get_kv(text, "WGER_API_TOKEN")
     if _is_blank_or_placeholder(wger_token):
-        text = _set_kv(text, "WGER_API_TOKEN", "pm_wger_" + _strong_random(24))
+        text = _set_kv(text, "WGER_API_TOKEN", "GENERATE_FROM_WGER_UI")
 
     return text
 
@@ -199,10 +202,14 @@ def main() -> int:
     args = parse_args()
     env_path = args.env_file
     env_gen_path = args.generated_env_file
-    env_path.parent.mkdir(parents=True, exist_ok=True)
-    if not env_path.exists():
-        env_path.write_text("", encoding="utf-8")
-    upsert_env(env_path, env_gen_path, DEFAULTS)
+    try:
+        env_path.parent.mkdir(parents=True, exist_ok=True)
+        if not env_path.exists():
+            env_path.write_text("", encoding="utf-8")
+        upsert_env(env_path, env_gen_path, DEFAULTS)
+    except OSError as e:
+        print(f"Error writing env files: {e}", file=sys.stderr)
+        return 1
     print(f"Branded defaults applied to {env_path}")
     return 0
 
