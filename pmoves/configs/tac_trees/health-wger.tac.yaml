@@ -22,7 +22,8 @@ root:
             type: grep
             target: "Pmoves-Health-wger/PMOVES.AI_INTEGRATION.md"
             pattern: "\\$t|_TBD_"
-            expect: "No $t or _TBD_ placeholders remain"
+            invert: true
+            expect: "No placeholders remain — pattern should NOT match"
           context: "Module name=Pmoves-Health-wger, path=Pmoves-Health-wger/, port=8000"
           agent_hint: codex
 
@@ -47,7 +48,8 @@ root:
             type: grep
             target: "pmoves/integrations/health-wger/auth/bootstrap.sh"
             pattern: "no-op"
-            expect: "Should NOT contain 'no-op' — must have real checks"
+            invert: true
+            expect: "Must not contain 'no-op' — pattern should NOT match"
           context: "Replace placeholder with Wger health check + token validation"
           agent_hint: codex
 
