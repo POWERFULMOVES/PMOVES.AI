@@ -287,7 +287,7 @@ async def health_check():
     Returns 'healthy' if NATS is connected, 'degraded' otherwise.
     This allows downstream monitoring to detect connection issues.
     """
-    nats_status = bool(nc and nc.is_connected())
+    nats_status = bool(nc and nc.is_connected)
     overall_status = "healthy" if nats_status else "degraded"
 
     return {
