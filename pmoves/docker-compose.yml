@@ -864,7 +864,7 @@ services:
     - PG_META_DB_PASSWORD=${POSTGRES_PASSWORD:-${SUPABASE_DB_PASSWORD:-postgres}}
     - CRYPTO_KEY=${PG_META_CRYPTO_KEY:-}
     healthcheck:
-      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8080/health || exit 1"]
+      test: ["CMD-SHELL", "node -e \"const h=require('http');h.get('http://localhost:8080/health',r=>{r.resume();process.exit(r.statusCode===200?0:1)}).on('error',()=>process.exit(1))\""]
       interval: 10s
       timeout: 5s
       retries: 3
