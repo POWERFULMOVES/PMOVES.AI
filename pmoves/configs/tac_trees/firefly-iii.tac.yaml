@@ -22,7 +22,8 @@ root:
             type: grep
             target: "PMOVES-Wealth/PMOVES.AI_INTEGRATION.md"
             pattern: "8096"
-            expect: "No references to port 8096 — should be 8075"
+            invert: true
+            expect: "No references to port 8096 — pattern should NOT match"
           context: "Port 8096 is Cipher Memory, Firefly uses FIREFLY_PORT=8075"
           agent_hint: codex
 
@@ -62,7 +63,8 @@ root:
             type: grep
             target: "pmoves/integrations/firefly-iii/auth/bootstrap.sh"
             pattern: "no-op"
-            expect: "Should NOT contain 'no-op' — must validate FIREFLY_APP_KEY"
+            invert: true
+            expect: "Must not contain 'no-op' — pattern should NOT match"
           context: "Replace placeholder with APP_KEY validation + access token check"
           agent_hint: codex
 

@@ -14,6 +14,7 @@ import argparse
 import json
 import os
 import re
+import shlex
 import subprocess
 import sys
 from pathlib import Path
@@ -26,18 +27,33 @@ except ImportError:
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
+# Only these commands may be executed by TAC command nodes.
+_ALLOWED_COMMANDS = frozenset({
+    "curl",
+    "docker",
+    "git",
+    "grep",
+    "make",
+    "nats",
+    "python",
+    "python3",
+    "uv",
+})
 
-def _check_file_exists(target: str) -> tuple[str, str]:
+
+def _check_file_exists(target: str) -> tuple[str, str, bool]:
+    """Returns (status, detail, is_error)."""
     path = REPO_ROOT / target
     if path.exists():
-        return "pass", f"exists: {target}"
-    return "fail", f"missing: {target}"
+        return "pass", f"exists: {target}", False
+    return "fail", f"missing: {target}", False
 
 
-def _check_grep(target: str, pattern: str) -> tuple[str, str]:
+def _check_grep(target: str, pattern: str) -> tuple[str, str, bool]:
+    """Returns (status, detail, is_error)."""
     path = REPO_ROOT / target
     if not path.exists():
-        return "fail", f"target not found: {target}"
+        return "fail", f"target not found: {target}", True
 
     if path.is_dir():
         # Search all files in directory
@@ -51,35 +67,52 @@ def _check_grep(target: str, pattern: str) -> tuple[str, str]:
                 except Exception:
                     continue
         if found:
-            return "pass", f"pattern found in: {', '.join(found[:3])}"
-        return "fail", f"pattern '{pattern}' not found in {target}"
+            return "pass", f"pattern found in: {', '.join(found[:3])}", False
+        return "fail", f"pattern '{pattern}' not found in {target}", False
 
     try:
         text = path.read_text(encoding="utf-8", errors="ignore")
         if re.search(pattern, text):
-            return "pass", f"pattern found in {target}"
-        return "fail", f"pattern '{pattern}' not found in {target}"
+            return "pass", f"pattern found in {target}", False
+        return "fail", f"pattern '{pattern}' not found in {target}", False
     except Exception as e:
-        return "fail", f"error reading {target}: {e}"
+        return "fail", f"error reading {target}: {e}", True
 
 
-def _check_command(target: str) -> tuple[str, str]:
+def _check_command(target: str) -> tuple[str, str, bool]:
+    """Returns (status, detail, is_error).
+
+    Uses shlex.split + shell=False to prevent shell injection.
+    Only commands whose base name is in _ALLOWED_COMMANDS may run.
+    """
+    try:
+        argv = shlex.split(target)
+    except ValueError as e:
+        return "fail", f"bad command syntax: {e}", True
+
+    if not argv:
+        return "fail", "empty command", True
+
+    base = Path(argv[0]).name
+    if base not in _ALLOWED_COMMANDS:
+        return "fail", f"command not in allowlist: {base}", True
+
     try:
         result = subprocess.run(
-            target,
-            shell=True,
+            argv,
+            shell=False,
             cwd=str(REPO_ROOT),
             capture_output=True,
             text=True,
             timeout=30,
         )
         if result.returncode == 0:
-            return "pass", result.stdout.strip()[:200]
-        return "fail", result.stderr.strip()[:200]
+            return "pass", result.stdout.strip()[:200], False
+        return "fail", result.stderr.strip()[:200], False
     except subprocess.TimeoutExpired:
-        return "fail", "command timed out (30s)"
+        return "fail", "command timed out (30s)", True
     except Exception as e:
-        return "fail", str(e)
+        return "fail", str(e), True
 
 
 def evaluate_node(node: dict) -> dict:
@@ -100,20 +133,22 @@ def evaluate_node(node: dict) -> dict:
         pattern = action.get("pattern", "")
 
         if action_type == "file_exists":
-            result["status"], result["detail"] = _check_file_exists(target)
+            status, detail, is_error = _check_file_exists(target)
+            result["status"] = status
+            result["detail"] = detail
         elif action_type == "grep":
-            # For grep checks where we expect NO matches (negative check)
-            expect = action.get("expect", "")
-            status, detail = _check_grep(target, pattern)
-            if "Should NOT contain" in expect or "No " in expect:
-                # Invert: finding the pattern means FAIL
+            status, detail, is_error = _check_grep(target, pattern)
+            # Explicit invert field: when true, finding the pattern means FAIL.
+            # Never invert on errors (missing file, permission denied, etc.)
+            if action.get("invert", False) and not is_error:
                 result["status"] = "fail" if status == "pass" else "pass"
-                result["detail"] = detail
             else:
                 result["status"] = status
-                result["detail"] = detail
+            result["detail"] = detail
         elif action_type == "command":
-            result["status"], result["detail"] = _check_command(target)
+            status, detail, is_error = _check_command(target)
+            result["status"] = status
+            result["detail"] = detail
         elif action_type == "manual":
             result["status"] = "pending"
             result["detail"] = "requires manual review"
