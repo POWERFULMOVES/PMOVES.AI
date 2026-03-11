@@ -13,5 +13,5 @@ RUN groupadd -r pmoves --gid=65532 && \
     chown -R pmoves:pmoves /app
 
 USER pmoves:pmoves
-# Let the script read NATS_URL from the environment to avoid empty-arg edge cases.
-CMD ["python", "/app/nats_echo.py", "--subject", "${NATS_ECHO_SUBJECT}"]
+# Script reads NATS_URL and NATS_ECHO_SUBJECT from the environment.
+CMD ["python", "/app/nats_echo.py"]
