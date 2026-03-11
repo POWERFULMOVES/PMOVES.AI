@@ -37,9 +37,10 @@ jobs:
         id: set-matrix
         run: |
           python3 - <<'EOF'
-          import yaml, json, pathlib
+          import yaml, json, pathlib, os
           data = yaml.safe_load(pathlib.Path("pmoves/images.yaml").read_text())
-          print(f"matrix={json.dumps(data['images'])}")
+          with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+              f.write(f"matrix={json.dumps(data['images'])}\n")
           EOF
 
   build:
@@ -99,7 +100,7 @@ jobs:
         continue-on-error: true
 
       - name: Build & push
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v7
         with:
           context: ${{ matrix.context || format('{0}/{1}', github.workspace, matrix.repo) }}
           file: ${{ matrix.dockerfile || format('{0}/{1}/Dockerfile', github.workspace, matrix.repo) }}

@@ -839,6 +839,7 @@ services:
     restart: unless-stopped
     environment:
     - MEILI_ENV=production
+    - MEILI_MASTER_KEY=${MEILI_MASTER_KEY:?Set MEILI_MASTER_KEY in env.shared or env.tier-data}
     - DOCKED_MODE=${DOCKED_MODE:-true}
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
@@ -1831,6 +1832,10 @@ services:
       # reads TENSORZERO_BASE_URL and populates OPENAI_COMPATIBLE_BASE_URL* vars
       - TENSORZERO_BASE_URL=${TENSORZERO_BASE_URL:-http://tensorzero-gateway:3000}
       - TENSORZERO_URL=${TENSORZERO_URL:-http://tensorzero-gateway:3000}
+      # GitHub App credentials — archon MCP cross-repo cloning (planned)
+      - GH_APP_ID=${GH_APP_ID:-}
+      - GH_APP_SEC=${GH_APP_SEC:-}
+      - GH_APP_INSTALLATION_ID=${GH_APP_INSTALLATION_ID:-}
     depends_on:
       nats:
         condition: service_healthy
@@ -1910,7 +1915,7 @@ services:
     profiles: ["agents"]
     networks: [pmoves_app, pmoves_bus]
     healthcheck:
-      test: ["CMD-SHELL", "pgrep -f 'python' || exit 1"]
+      test: ["CMD", "python3", "-c", "import os; os.kill(1, 0)"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -2066,7 +2071,7 @@ services:
     networks:
     - pmoves_bus
     healthcheck:
-      test: ["CMD-SHELL", "pgrep -f 'python' || exit 1"]
+      test: ["CMD", "python3", "-c", "import os; os.kill(1, 0)"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -2088,7 +2093,7 @@ services:
     networks:
     - pmoves_bus
     healthcheck:
-      test: ["CMD-SHELL", "pgrep -f 'python' || exit 1"]
+      test: ["CMD", "python3", "-c", "import os; os.kill(1, 0)"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -2162,7 +2167,7 @@ services:
     - pmoves_api
     - pmoves_external
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:11434/api/version || exit 1"]
+      test: ["CMD", "ollama", "list"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -2525,12 +2530,16 @@ services:
       - NEXT_PUBLIC_GRAFANA_URL=${NEXT_PUBLIC_GRAFANA_URL:-http://localhost:3002}
       - NEXT_PUBLIC_PROMETHEUS_URL=${NEXT_PUBLIC_PROMETHEUS_URL:-http://localhost:9090}
       - NEXT_PUBLIC_LOKI_URL=${NEXT_PUBLIC_LOKI_URL:-http://localhost:3100}
+      # Server-side health checks: rewrite localhost → host.docker.internal
+      - HEALTH_CHECK_HOST=host.docker.internal
       # Server-side only (Docker hostnames OK)
       - POSTGREST_URL=${POSTGREST_URL:-http://supabase-postgrest:3000}
       - PRESIGN_SHARED_SECRET=${PRESIGN_SHARED_SECRET}
       - RENDER_WEBHOOK_URL=${RENDER_WEBHOOK_URL:-http://render-webhook:8085/comfy/webhook}
       - OPEN_NOTEBOOK_API_URL=${OPEN_NOTEBOOK_API_URL:-http://open-notebook:5055}
       - TOKENISM_URL=${TOKENISM_URL:-http://pmoves-tokenism-simulator-1:8100}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "4482:3000"
     # Note: flute-gateway is optional (for voice features). Start with workers profile for full functionality.
