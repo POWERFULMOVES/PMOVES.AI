@@ -26,9 +26,11 @@ SUPABASE_POSTGREST_URL = os.getenv(
     "SUPABASE_POSTGREST_URL",
     "http://localhost:3010/rest/v1/"
 )
+SUPABASE_REALTIME_PORT = os.getenv("SUPABASE_REALTIME_PORT", "4010")
+
 SUPABASE_REALTIME_URL = os.getenv(
     "SUPABASE_REALTIME_URL",
-    "ws://localhost:4000/socket/websocket"
+    f"ws://localhost:{SUPABASE_REALTIME_PORT}/socket/websocket"
 )
 SUPABASE_DB_HOST = os.getenv("SUPABASE_DB_HOST", "localhost")
 SUPABASE_DB_PORT = os.getenv("SUPABASE_DB_PORT", "5432")
