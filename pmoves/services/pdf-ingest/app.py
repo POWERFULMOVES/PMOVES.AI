@@ -27,7 +27,7 @@ except Exception:  # pragma: no cover - fallback for local runs without shared m
         env = {
             "id": str(uuid.uuid4()),
             "topic": topic,
-            "ts": datetime.datetime.now(timezone.utc).isoformat() + "Z",
+            "ts": datetime.datetime.now(datetime.timezone.utc).isoformat() + "Z",
             "version": "v1",
             "source": source,
             "payload": payload,
@@ -78,38 +78,6 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="PMOVES PDF Ingest", version="0.1.0", lifespan=lifespan)
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Prometheus Metrics
-# ─────────────────────────────────────────────────────────────────────────────
-PDF_INGEST_REQUESTS = Counter(
-    "pdf_ingest_requests_total",
-    "Total PDF ingest requests",
-    ["status"]
-)
-PDF_INGEST_CHUNKS = Counter(
-    "pdf_ingest_chunks_total",
-    "Total chunks extracted from PDFs"
-)
-PDF_INGEST_BYTES = Counter(
-    "pdf_ingest_bytes_total",
-    "Total bytes processed from PDFs"
-)
-PDF_INGEST_LATENCY = Histogram(
-    "pdf_ingest_latency_seconds",
-    "PDF ingest processing latency in seconds",
-    buckets=[0.5, 1.0, 2.5, 5.0, 10.0, 30.0, 60.0]
-)
-PDF_MINIO_OPS = Counter(
-    "pdf_ingest_minio_ops_total",
-    "Total MinIO operations",
-    ["operation", "status"]
-)
-PDF_NATS_PUBLISHED = Counter(
-    "pdf_ingest_nats_published_total",
-    "Total NATS events published",
-    ["topic"]
-)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Prometheus Metrics
