@@ -1910,7 +1910,7 @@ services:
     profiles: ["agents"]
     networks: [pmoves_app, pmoves_bus]
     healthcheck:
-      test: ["CMD-SHELL", "pgrep -f 'python' || exit 1"]
+      test: ["CMD", "python3", "-c", "import os; os.kill(1, 0)"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -2066,7 +2066,7 @@ services:
     networks:
     - pmoves_bus
     healthcheck:
-      test: ["CMD-SHELL", "pgrep -f 'python' || exit 1"]
+      test: ["CMD", "python3", "-c", "import os; os.kill(1, 0)"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -2088,7 +2088,7 @@ services:
     networks:
     - pmoves_bus
     healthcheck:
-      test: ["CMD-SHELL", "pgrep -f 'python' || exit 1"]
+      test: ["CMD", "python3", "-c", "import os; os.kill(1, 0)"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -2162,7 +2162,7 @@ services:
     - pmoves_api
     - pmoves_external
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:11434/api/version || exit 1"]
+      test: ["CMD", "ollama", "list"]
       interval: 30s
       timeout: 10s
       retries: 5
