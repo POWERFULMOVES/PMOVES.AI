@@ -24,9 +24,11 @@ from conftest import docker_available
 
 COMPOSE_FILE = PMOVES_DIR / "docker-compose.yml"
 
+SUPABASE_REALTIME_PORT = os.getenv("SUPABASE_REALTIME_PORT", "4010")
+
 SUPABASE_REALTIME_URL = os.getenv(
     "SUPABASE_REALTIME_URL",
-    "ws://localhost:4000/socket/websocket"
+    f"ws://localhost:{SUPABASE_REALTIME_PORT}/socket/websocket"
 )
 SUPABASE_POSTGREST_URL = os.getenv(
     "SUPABASE_POSTGREST_URL",

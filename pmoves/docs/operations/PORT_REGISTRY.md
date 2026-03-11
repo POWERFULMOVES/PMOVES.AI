@@ -110,7 +110,7 @@ Central registry of all service ports to prevent conflicts and ensure consistenc
 # env.tier-supabase
 SUPABASE_POSTGREST_PORT=3010    # NOT 3000 (Grafana conflict)
 SUPABASE_GOTRUE_PORT=9999
-SUPABASE_REALTIME_PORT=4000     # Conflicts with TensorZero UI (use profile separation)
+SUPABASE_REALTIME_PORT=4010     # Remapped from 4000 to avoid TensorZero UI collision
 SUPABASE_STORAGE_PORT=5000
 SUPABASE_KONG_PROXY_PORT=8000
 SUPABASE_KONG_ADMIN_PORT=8001
