@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 # In Docker, environment variables are injected via docker-compose.
 # For local development, optionally load from env.shared via dotenv.
-if not os.getenv("DOCKER_CONTAINER"):
+if not os.getenv("DOCKER_CONTAINER") and not os.getenv("DOCKER_ENV"):
     try:
         from dotenv import load_dotenv
         # Walk up from config/__init__.py looking for env.shared

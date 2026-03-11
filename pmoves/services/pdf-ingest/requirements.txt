@@ -6,4 +6,4 @@ pydantic==2.9.2
 PyMuPDF==1.24.11
 requests==2.32.4
 uvicorn[standard]==0.30.6
-lxml==5.3.0
+lxml>=5.3.2,<7
