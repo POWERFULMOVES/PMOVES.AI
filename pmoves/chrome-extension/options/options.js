@@ -118,7 +118,7 @@ document.querySelectorAll('.test-btn').forEach((btn) => {
   btn.addEventListener('click', async () => {
     const svc = btn.dataset.service;
     const urlEl = $(`#url-${svc}`);
-    const baseUrl = urlEl?.value || '';
+    const baseUrl = validateServiceUrl(urlEl?.value || '');
     if (!baseUrl) { btn.textContent = 'No URL'; return; }
 
     btn.textContent = '...';
@@ -159,7 +159,8 @@ $('#test-all-btn').addEventListener('click', async () => {
   const results = [];
 
   await Promise.all(SERVICES.map(async (svc) => {
-    const baseUrl = $(`#url-${svc}`)?.value || '';
+    const baseUrl = validateServiceUrl($(`#url-${svc}`)?.value || '');
+    if (!baseUrl) { results.push({ svc, status: 'Invalid URL', latency: 0, detail: '' }); return; }
     const start = performance.now();
     let status, latency, detail;
 
@@ -203,6 +204,17 @@ function escapeHtml(str) {
   const d = document.createElement('div');
   d.textContent = str;
   return d.innerHTML;
+}
+
+/** Validate a user-configured service URL — allow only http/https schemes. */
+function validateServiceUrl(raw) {
+  try {
+    const parsed = new URL(raw);
+    if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+      return parsed.href.replace(/\/+$/, '');
+    }
+  } catch { /* invalid URL */ }
+  return null;
 }
 
 // ─── Agent Zero Diagnostics ─────────────────────
@@ -259,10 +271,13 @@ $('#diag-recent-shapes').addEventListener('click', async () => {
       const link = document.createElement('a');
       const gatewayBase = $('#url-gateway')?.value || 'http://localhost:8085';
       const vizUrl = `${gatewayBase}/viz/shape/${encodeURIComponent(s.shape_id)}.svg`;
-      // Validate URL scheme to prevent javascript: XSS (CodeQL #194)
-      if (/^https?:\/\//.test(vizUrl)) {
-        link.href = vizUrl;
-      }
+      // Validate URL via constructor to prevent XSS (CodeQL #194, #196)
+      try {
+        const parsed = new URL(vizUrl);
+        if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+          link.href = parsed.href;
+        }
+      } catch { /* invalid URL — skip href assignment */ }
       link.target = '_blank';
       link.style.cssText = 'margin-left:8px;color:#667eea;';
       link.textContent = 'View SVG';
