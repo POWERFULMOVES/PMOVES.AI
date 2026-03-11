@@ -258,7 +258,11 @@ $('#diag-recent-shapes').addEventListener('click', async () => {
 
       const link = document.createElement('a');
       const gatewayBase = $('#url-gateway')?.value || 'http://localhost:8085';
-      link.href = `${gatewayBase}/viz/shape/${encodeURIComponent(s.shape_id)}.svg`;
+      const vizUrl = `${gatewayBase}/viz/shape/${encodeURIComponent(s.shape_id)}.svg`;
+      // Validate URL scheme to prevent javascript: XSS (CodeQL #194)
+      if (/^https?:\/\//.test(vizUrl)) {
+        link.href = vizUrl;
+      }
       link.target = '_blank';
       link.style.cssText = 'margin-left:8px;color:#667eea;';
       link.textContent = 'View SVG';

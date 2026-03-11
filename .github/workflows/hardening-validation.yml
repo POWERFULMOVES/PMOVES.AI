@@ -339,8 +339,10 @@ jobs:
 
       - name: Validate compose syntax
         env:
-          # Required by ${:?} guards — CI uses a dummy value for syntax validation only
+          # Required by ${:?} guards — CI uses dummy values for syntax validation only
           CHIT_PROD_PASSPHRASE: ci-validation-placeholder
+          SECRET_KEY_BASE: ci-validation-placeholder
+          VAULT_ENC_KEY: ci-validation-placeholder
         run: |
           echo "Validating docker-compose files..."
 

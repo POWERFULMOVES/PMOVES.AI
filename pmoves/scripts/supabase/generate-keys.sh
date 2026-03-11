@@ -22,6 +22,12 @@ generate_secret() {
     openssl rand -base64 48 | tr -d '\n=' | cut -c1-"$length"
 }
 
+# Function to generate hex secret (for encryption keys)
+generate_hex_secret() {
+    local bytes=${1:-16}
+    openssl rand -hex "$bytes"
+}
+
 # Function to generate Supabase JWT token
 generate_jwt_token() {
     local role=${1:-anon}
@@ -29,73 +35,95 @@ generate_jwt_token() {
     local iat=${3:-1641769200}  # Fixed timestamp for reproducibility
     local exp=${4:-1799535600}  # Far future expiry
 
-    # JWT header
-    local header=$(echo -n '{"alg":"HS256","typ":"JWT"}' | base64 -w0 | tr -d '=' | tr '/+' '_-' | tr -d '\n')
+    # Cross-platform base64 (GNU uses -w0, macOS uses no flag but outputs single line for short inputs)
+    b64_encode() { openssl base64 -A; }
+
+    # JWT header — split local/assignment so pipefail propagates errors
+    local header payload signing_input signature
+    header=$(echo -n '{"alg":"HS256","typ":"JWT"}' | b64_encode | tr -d '=' | tr '/+' '_-' | tr -d '\n')
 
     # JWT payload
-    local payload=$(echo -n "{\"role\":\"$role\",\"iss\":\"supabase-local\",\"iat\":$iat,\"exp\":$exp}" | base64 -w0 | tr -d '=' | tr '/+' '_-' | tr -d '\n')
+    payload=$(echo -n "{\"role\":\"$role\",\"iss\":\"supabase-local\",\"iat\":$iat,\"exp\":$exp}" | b64_encode | tr -d '=' | tr '/+' '_-' | tr -d '\n')
 
     # JWT signature
-    local signing_input="${header}.${payload}"
-    local signature=$(echo -n "$signing_input" | openssl dgst -sha256 -hmac "$secret" -binary | base64 -w0 | tr -d '=' | tr '/+' '_-' | tr -d '\n')
+    signing_input="${header}.${payload}"
+    signature=$(echo -n "$signing_input" | openssl dgst -sha256 -hmac "$secret" -binary | b64_encode | tr -d '=' | tr '/+' '_-' | tr -d '\n')
 
     echo "${header}.${payload}.${signature}"
 }
 
-echo -e "${GREEN}=== PMOVES.AI Supabase Key Generation ===${NC}"
-echo -e "${YELLOW}Generating secure random credentials...${NC}"
-echo ""
+echo -e "${GREEN}=== PMOVES.AI Supabase Key Generation ===${NC}" >&2
+echo -e "${YELLOW}Generating secure random credentials...${NC}" >&2
+echo "" >&2
 
-# Generate JWT Secret (256-bit base64 encoded)
+# Generate secrets
 JWT_SECRET=$(generate_secret 64)
-
-# Generate database password
 DB_PASSWORD=$(generate_secret 48)
+SECRET_KEY_BASE=$(generate_secret 64)
+VAULT_ENC_KEY=$(generate_hex_secret 16)
+PG_META_CRYPTO_KEY=$(generate_hex_secret 16)
+LOGFLARE_PUBLIC_TOKEN=$(generate_secret 32)
+LOGFLARE_PRIVATE_TOKEN=$(generate_secret 32)
+REALTIME_SECRET=$(generate_secret 64)
 
 # Generate JWT tokens
 ANON_KEY=$(generate_jwt_token "anon" "$JWT_SECRET")
 SERVICE_ROLE_KEY=$(generate_jwt_token "service_role" "$JWT_SECRET")
 
-# Output variables
-cat << 'EOF'
+# Output variables in env file format
+cat << EOF
 # PMOVES.AI Supabase Credentials
-# Generated: $(date)
+# Generated: $(date -u +"%Y-%m-%dT%H:%M:%SZ")
 # WARNING: These are for LOCAL DEVELOPMENT only
 
-# Core Supabase variables (standard naming per PMOVES-supabase fork)
-JWT_SECRET=PLACEHOLDER_JWT_SECRET_HERE
+# =============================================================================
+# Core secrets (standard Supabase naming — canonical)
+# =============================================================================
+JWT_SECRET=${JWT_SECRET}
 JWT_EXPIRY=3600
 JWT_ALGORITHM=HS256
 
-# Public keys (these can be committed - they're signed with JWT_SECRET)
-ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlLWRlbW8iLCJpYXQiOjE2NDE3NjkyMDAsImV4cCI6MTc5OTUzNTYwMH0.dc_X5iR_VP_qT0zsiyj_I_OZ2T9FtRU2BBNWN8Bu4GE
-SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoic2VydmljZV9yb2xlIiwiaXNzIjoic3VwYWJhc2UtZGVtbyIsImlhdCI6MTY0MTc2OTIwMCwiZXhwIjoxNzk5NTM1NjAwfQ.DaYlNEoUrrEn2Ig7tqibS-PHK5vgusbcbo7X36XVt4Q
+# Public keys (signed with JWT_SECRET)
+ANON_KEY=${ANON_KEY}
+SERVICE_ROLE_KEY=${SERVICE_ROLE_KEY}
 
-# URLs
-SITE_URL=http://localhost:3000
-API_EXTERNAL_URL=http://localhost:8000
+# Backward-compatible aliases (duplicated values — env_file does NOT interpolate)
+SUPABASE_JWT_SECRET=${JWT_SECRET}
+SUPABASE_ANON_KEY=${ANON_KEY}
+SUPABASE_SERVICE_ROLE_KEY=${SERVICE_ROLE_KEY}
 
+# =============================================================================
 # Database credentials
+# =============================================================================
+POSTGRES_USER=pmoves
+POSTGRES_PASSWORD=${DB_PASSWORD}
+POSTGRES_DB=pmoves
 SUPABASE_DB_USER=pmoves
-SUPABASE_DB_PASSWORD=PLACEHOLDER_DB_PASSWORD_HERE
+SUPABASE_DB_PASSWORD=${DB_PASSWORD}
 SUPABASE_DB_NAME=pmoves
 
-# Legacy variable names (for backward compatibility)
-SUPABASE_JWT_SECRET=${JWT_SECRET}
-SUPABASE_JWT_EXP=${JWT_EXPIRY}
-SUPABASE_PUBLISHABLE_KEY=${ANON_KEY}
-SUPABASE_SECRET_KEY=${SERVICE_ROLE_KEY}
-SUPABASE_SITE_URL=${SITE_URL}
-SUPABASE_PUBLIC_URL=${API_EXTERNAL_URL}
+# =============================================================================
+# URLs
+# =============================================================================
+SITE_URL=http://localhost:3000
+API_EXTERNAL_URL=http://localhost:8000
+SUPABASE_SITE_URL=http://localhost:3000
+SUPABASE_PUBLIC_URL=http://localhost:8000
+
+# =============================================================================
+# New service secrets (imgproxy, meta, analytics, vector, supavisor)
+# =============================================================================
+SECRET_KEY_BASE=${SECRET_KEY_BASE}
+VAULT_ENC_KEY=${VAULT_ENC_KEY}
+PG_META_CRYPTO_KEY=${PG_META_CRYPTO_KEY}
+LOGFLARE_PUBLIC_ACCESS_TOKEN=${LOGFLARE_PUBLIC_TOKEN}
+LOGFLARE_PRIVATE_ACCESS_TOKEN=${LOGFLARE_PRIVATE_TOKEN}
+SUPABASE_REALTIME_SECRET=${REALTIME_SECRET}
 EOF
 
-echo ""
-echo -e "${GREEN}Generated values (for local use only):${NC}"
-echo -e "JWT_SECRET=${JWT_SECRET}"
-echo -e "DB_PASSWORD=${DB_PASSWORD}"
-echo ""
-echo -e "${YELLOW}To apply these values:${NC}"
-echo -e "1. Copy the JWT_SECRET and DB_PASSWORD above"
-echo -e "2. Replace PLACEHOLDER_JWT_SECRET_HERE and PLACEHOLDER_DB_PASSWORD_HERE in pmoves/env.shared"
-echo ""
-echo -e "${RED}WARNING: Never commit actual JWT_SECRET or DB_PASSWORD values to git!${NC}"
+echo "" >&2
+echo -e "${GREEN}Generated all secrets successfully.${NC}" >&2
+echo -e "${YELLOW}To apply: redirect output to env.tier-supabase${NC}" >&2
+echo -e "  ./generate-keys.sh > ../env.tier-supabase" >&2
+echo "" >&2
+echo -e "${RED}WARNING: Never commit actual secrets to git!${NC}" >&2

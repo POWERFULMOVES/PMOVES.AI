@@ -82,7 +82,7 @@ Before creating an issue:
    Types: `feat`, `fix`, `docs`, `style`, `refactor`, `test`, `chore`, `ci`
 
 5. **Submit PR:**
-   - Target the `main` branch
+   - Target the `PMOVES.AI-Edition-Hardened-Integrations` branch (see `pmoves/docs/BRANCH_STRATEGY.md`)
    - Fill out the PR template completely
    - Link related issues
    - Ensure CI passes

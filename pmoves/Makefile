@@ -311,7 +311,7 @@ supa-start: check-tools ensure-env-shared ## Start Supabase stack for selected r
 			-e KONG_PG_USER=$${SUPABASE_DB_USER:-postgres} \
 			-e KONG_PG_PASSWORD=$${SUPABASE_DB_PASSWORD:-postgres} \
 			kong:3.7.1 kong migrations bootstrap --yes >/dev/null 2>&1 || true; \
-		$(DC) up -d supabase-postgrest supabase-gotrue supabase-kong supabase-realtime supabase-storage supabase-studio; \
+		$(DC) up -d supabase-postgrest supabase-gotrue supabase-kong supabase-realtime supabase-storage supabase-studio supabase-imgproxy supabase-meta supabase-edge-functions supabase-analytics supabase-vector supabase-pooler; \
 	fi
 	@$(MAKE) --no-print-directory supa-status
 	@$(MAKE) --no-print-directory supa-collation-refresh 2>/dev/null || true
@@ -321,14 +321,14 @@ supa-stop: ## Stop Supabase stack for selected runtime
 	@if [ "$(SUPABASE_RUNTIME)" = "cli" ]; then \
 		supabase stop --workdir "." >/dev/null 2>&1 || true; \
 	else \
-		$(DC) stop supabase-db supabase-postgrest supabase-gotrue supabase-kong supabase-realtime supabase-storage supabase-studio >/dev/null 2>&1 || true; \
+		$(DC) stop supabase-db supabase-postgrest supabase-gotrue supabase-kong supabase-realtime supabase-storage supabase-studio supabase-imgproxy supabase-meta supabase-edge-functions supabase-analytics supabase-vector supabase-pooler >/dev/null 2>&1 || true; \
 	fi
 	@echo "✅ Supabase stopped"
 
 supa-stop-all: ## Stop both Supabase runtimes (CLI and compose) to clear mixed-state drift
 	@echo "🛑 Stopping all Supabase runtimes..."
 	@supabase stop --workdir "." >/dev/null 2>&1 || true
-	@$(DC) stop supabase-db supabase-postgrest supabase-gotrue supabase-kong supabase-realtime supabase-storage supabase-studio >/dev/null 2>&1 || true
+	@$(DC) stop supabase-db supabase-postgrest supabase-gotrue supabase-kong supabase-realtime supabase-storage supabase-studio supabase-imgproxy supabase-meta supabase-edge-functions supabase-analytics supabase-vector supabase-pooler >/dev/null 2>&1 || true
 	@echo "✅ All Supabase runtimes stopped"
 
 supa-restart: ## Restart Supabase stack for selected runtime
@@ -384,7 +384,7 @@ supa-status: ## Show Supabase status for selected runtime and export env snapsho
 		echo "  Auth:   $$auth_url"; \
 		echo "  Studio: $$studio_url"; \
 	else \
-		$(DC) ps supabase-db supabase-postgrest supabase-gotrue supabase-kong supabase-realtime supabase-storage supabase-studio 2>/dev/null || true; \
+		$(DC) ps supabase-db supabase-postgrest supabase-gotrue supabase-kong supabase-realtime supabase-storage supabase-studio supabase-imgproxy supabase-meta supabase-edge-functions supabase-analytics supabase-vector supabase-pooler 2>/dev/null || true; \
 		echo ""; \
 		echo "Expected local endpoints:"; \
 		echo "  PostgREST: http://localhost:$${SUPABASE_POSTGREST_PORT:-3000}"; \
@@ -412,7 +412,7 @@ supa-logs: ## Tail logs for selected runtime (set SVC=<container/service> for a 
 			docker logs --tail=80 "$$c" || true; \
 		done; \
 	else \
-		$(DC) logs --tail=120 supabase-db supabase-postgrest supabase-gotrue supabase-kong supabase-realtime supabase-storage supabase-studio || true; \
+		$(DC) logs --tail=120 supabase-db supabase-postgrest supabase-gotrue supabase-kong supabase-realtime supabase-storage supabase-studio supabase-imgproxy supabase-meta supabase-edge-functions supabase-analytics supabase-vector supabase-pooler || true; \
 	fi
 
 supa-health: ## Health checks for selected runtime + active DB container readiness
@@ -630,21 +630,15 @@ else
 endif
 	@$(MAKE) --no-print-directory auth-check
 
-supabase-up: ## Compose fallback only: start gotrue/realtime/storage/studio sidecars
-	@if [ "$(SUPABASE_RUNTIME)" != "compose" ] && [ "$(SUPA_PROVIDER)" != "compose" ]; then \
-		echo "↷ SUPABASE_RUNTIME=$(SUPABASE_RUNTIME) (compose fallback skipped)"; \
-		exit 0; \
-	fi
-	@$(DC) -f docker-compose.supabase.yml up -d gotrue realtime storage studio
-	@echo "✅ Compose Supabase sidecars started (fallback mode)"
+supabase-up: ## Alias for up-supabase (shim removed — all services in main compose)
+	@$(MAKE) --no-print-directory up-supabase
 
-supabase-stop: ## Compose fallback only: stop gotrue/realtime/storage/studio sidecars
-	@$(DC) -f docker-compose.supabase.yml stop gotrue realtime storage studio >/dev/null 2>&1 || true
-	@echo "✅ Compose Supabase sidecars stopped"
+supabase-stop: ## Alias for supa-stop (shim removed — all services in main compose)
+	@$(MAKE) --no-print-directory supa-stop
 
-supabase-clean: ## Compose fallback only: remove gotrue/realtime/storage/studio containers + volumes
-	@$(DC) -f docker-compose.supabase.yml down -v --remove-orphans >/dev/null 2>&1 || true
-	@echo "✅ Compose Supabase sidecars cleaned"
+supabase-clean: ## Stop + remove Supabase containers and volumes
+	@$(DC) --profile supabase-local down -v --remove-orphans >/dev/null 2>&1 || true
+	@echo "✅ Supabase stack cleaned"
 
 .PHONY: neo4j-bootstrap
 neo4j-bootstrap: ## Seed Neo4j with persona aliases + CHIT geometry fixtures
@@ -1041,7 +1035,7 @@ down-supabase: ## Stop Supabase
 	@if [ "$(SUPABASE_RUNTIME)" = "cli" ]; then \
 		supabase stop --workdir "$(CURDIR)" >/dev/null 2>&1 || true; \
 	else \
-		$(DC) stop supabase-db supabase-postgrest supabase-gotrue supabase-kong supabase-realtime supabase-storage supabase-studio >/dev/null 2>&1 || true; \
+		$(DC) stop supabase-db supabase-postgrest supabase-gotrue supabase-kong supabase-realtime supabase-storage supabase-studio supabase-imgproxy supabase-meta supabase-edge-functions supabase-analytics supabase-vector supabase-pooler >/dev/null 2>&1 || true; \
 	fi
 
 # =============================================================================
@@ -1316,15 +1310,17 @@ populate-tier-envs: bootstrap-tier-envs ## Populate tier env files with defaults
 		echo "✓ Populated env.tier-data"; \
 	fi; \
 	if [ -f "env.tier-supabase" ]; then \
-		sed -i "s|^SUPABASE_JWT_SECRET=.*|SUPABASE_JWT_SECRET=$${SUPABASE_JWT_SECRET:-$(shell openssl rand -base64 32)}|" env.tier-supabase; \
-		sed -i "s|^SUPABASE_ANON_KEY=.*|SUPABASE_ANON_KEY=$${SUPABASE_ANON_KEY:-$(shell openssl rand -base64 32)}|" env.tier-supabase; \
-		sed -i "s|^SUPABASE_SERVICE_ROLE_KEY=.*|SUPABASE_SERVICE_ROLE_KEY=$${SUPABASE_SERVICE_ROLE_KEY:-$(shell openssl rand -base64 32)}|" env.tier-supabase; \
-		sed -i "s|^SUPABASE_PUBLISHABLE_KEY=.*|SUPABASE_PUBLISHABLE_KEY=$${SUPABASE_PUBLISHABLE_KEY:-$(shell openssl rand -base64 32)}|" env.tier-supabase; \
-		sed -i "s|^SUPABASE_SECRET_KEY=.*|SUPABASE_SECRET_KEY=$${SUPABASE_SECRET_KEY:-$(shell openssl rand -base64 32)}|" env.tier-supabase; \
-		sed -i "s|^SUPABASE_REALTIME_SECRET=.*|SUPABASE_REALTIME_SECRET=$${SUPABASE_REALTIME_SECRET:-$(shell openssl rand -base64 32)}|" env.tier-supabase; \
-		sed -i "s|^SUPABASE_DB_PASSWORD=.*|SUPABASE_DB_PASSWORD=$${SUPABASE_DB_PASSWORD:-$(shell openssl rand -base64 24)}|" env.tier-supabase; \
-		sed -i "s|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=$${POSTGRES_PASSWORD:-$(shell openssl rand -base64 24)}|" env.tier-supabase; \
-		echo "✓ Populated env.tier-supabase"; \
+		if grep -q "your_jwt_secret_here\|your_anon_key_here\|your_service_role_key_here" env.tier-supabase 2>/dev/null; then \
+			echo "Generating Supabase secrets with proper JWT tokens..."; \
+			if [ -x scripts/supabase/generate-keys.sh ]; then \
+				scripts/supabase/generate-keys.sh > env.tier-supabase; \
+				echo "✓ Populated env.tier-supabase (via generate-keys.sh with valid JWTs)"; \
+			else \
+				echo "⚠ scripts/supabase/generate-keys.sh not found — run 'make supa-init' to generate proper JWT keys"; \
+			fi; \
+		else \
+			echo "✓ env.tier-supabase already has real values, skipping"; \
+		fi; \
 	fi; \
 	if [ -f "env.tier-api" ]; then \
 		sed -i "s|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=$${POSTGRES_PASSWORD:-$(shell openssl rand -base64 24)}|" env.tier-api; \

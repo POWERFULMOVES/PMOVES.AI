@@ -25,9 +25,9 @@ This aggregates the entire onboarding sequence: env bootstrap, Supabase CLI brin
   - Install the `supabase` CLI and run `make supa-init` once per repo.
   - Start/stop with `make supa-start` / `make supa-stop`, inspect endpoints with `make supa-status`, then `make supa-use-local` to copy the CLI defaults into `.env.local` before starting the stack.
   - Deep dive: `docs/SUPABASE_FULL.md` (CLI bootstrap) and `docs/SUPABASE_SWITCH.md` (switching between CLI vs. remote).
-- **Compose-backed Supabase (lightweight alt.)**
-  - Run `make up-compose` to boot the core stack with compose Postgres/PostgREST enabled, then `make supabase-up` to add GoTrue/Realtime/Storage/Studio from `docker-compose.supabase.yml`.
-  - Stop the Supabase sidecars with `make supabase-stop` (or `make down` for everything) and clear data with `make supabase-clean`.
+- **Compose-backed Supabase (unified stack)**
+  - All 13 Supabase services are in the main `docker-compose.yml` under the `supabase-local` profile.
+  - Run `make up-supabase` to start all services, `make supa-stop` to stop, `make supabase-clean` to remove containers + volumes.
 - **Remote/self-hosted Supabase**
   - Populate `.env.supa.remote` with your endpoints/keys (generate from `supa.md` via `make supa-extract-remote` if provided).
   - Apply the remote profile with `make supa-use-remote` before running the main stack.
@@ -122,8 +122,8 @@ Agents Profile
 - Wger and Firefly are started with PMOVES‑branded defaults driven by `WGER_BRAND_*` and related envs in `pmoves/env.shared`; the full set of seeded values is listed in `pmoves/docs/FIRST_RUN.md` under “Seeded & Branded Defaults”.
 - Open Notebook’s branded login is configured via `OPEN_NOTEBOOK_PASSWORD`; keep `OPEN_NOTEBOOK_API_TOKEN` in lockstep so agents and CLI helpers reuse the same secret (see `pmoves/docs/services/open-notebook/README.md`).
 
-Supabase (Full)
-- Recommended: Supabase CLI (see `docs/SUPABASE_FULL.md`). Or use `docker-compose.supabase.yml` with `./scripts/pmoves.ps1 up-fullsupabase`.
+Supabase (Full — 13 services)
+- All services in main `docker-compose.yml` under `supabase-local` profile. Use `make up-supabase` or `./scripts/pmoves.ps1 up-fullsupabase`.
 - Realtime demo: `http://localhost:8090/static/realtime.html` (subscribe to `studio_board`, `it_errors`; upload avatar and assign to a row).
 
 ## Codex VM Bootstrap
