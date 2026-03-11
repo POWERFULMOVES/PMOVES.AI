@@ -3,9 +3,9 @@
 > **Single source of truth** for PMOVES.AI production readiness.
 > Supersedes all individual audit documents accumulated Feb 7 -- Feb 18, 2026.
 
-**Last Updated:** 2026-03-11 (PR gate sweep — all PRs merged, 0 open)
+**Last Updated:** 2026-03-11 (branch strategy validation + stale cleanup)
 **Branch:** `main`
-**Commit:** `0c785f9b` (PR #854 squash-merge)
+**Commit:** `44b923b0` (post branch sync + validation)
 **Consolidated From:** 27 audit documents
 **Evidence:** live runbook execution on 2026-03-05 (`make ghcr-prepublish-inrepo-build`, strict local Trivy sweep logs under `pmoves/docs/logs/ghcr-local-prepublish/`)
 
@@ -13,7 +13,20 @@
 
 ## Latest Changes (Mar 11, 2026)
 
-### PR Gate Sweep — All Open PRs Merged
+### Branch Strategy Validation & Final Cleanup
+
+- **Branch sync completed:** Reconciled bidirectional divergence (16 Hardened-only / 24 main-only commits)
+  - Merged main → Hardened (PRs #848–#863 squash-merges)
+  - Merged Hardened → main (distributed topology docs, submodule pins, dashboard refresh)
+  - Synced Integrations branch to match Hardened
+- **Stale branch cleanup:** Deleted 18 remote branches from merged/closed PRs (#842–#863)
+  - Remaining branches: `main`, `PMOVES.AI-Edition-Hardened`, `PMOVES.AI-Edition-Hardened-Integrations`, `PMOVES.AI-Edition-Hardened-v3-clean`
+- **CodeQL #194 fixed:** `js/xss-through-dom` in `chrome-extension/options/options.js` — added URL scheme validation (`/^https?:\/\//`) before assigning user-controlled `gatewayBase` to `link.href`
+- **Legacy CI refs cleaned:** Removed non-existent `integration` branch from `chit-contract.yml` and `deploy-gateway-agent.yml` workflow triggers
+- **CONTRIBUTING.md updated:** PR target changed from `main` to `PMOVES.AI-Edition-Hardened-Integrations` per documented branch strategy
+- **branch_cleanup.py:** Updated PROTECTED set — removed stale `integration`/`develop`, added `Integrations`
+
+### Previous — PR Gate Sweep — All Open PRs Merged
 
 - **Dependabot CI action bumps** (#860–#863) merged with `--admin`:
   - `aquasecurity/trivy-action` 0.34.2 → 0.35.0 (patch)
