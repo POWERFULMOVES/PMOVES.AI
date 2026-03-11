@@ -90,7 +90,7 @@ Central registry of all service ports to prevent conflicts and ensure consistenc
 | Port | Service | Description | Network |
 |------|---------|-------------|---------|
 | 5432 | Supabase DB | PostgreSQL 17 (internal only) | pmoves_data |
-| 3010 | PostgREST | Supabase REST API | pmoves_api, pmoves_data |
+| 3000 | PostgREST | Supabase REST API (container-internal) | pmoves_api, pmoves_data |
 | 9999 | GoTrue | JWT authentication service | pmoves_api, pmoves_data |
 | 4010 | Realtime | WebSocket for real-time subscriptions (remapped from 4000) | pmoves_api, pmoves_data |
 | 5000 | Storage | S3-compatible file storage | pmoves_api, pmoves_data |
@@ -101,14 +101,14 @@ Central registry of all service ports to prevent conflicts and ensure consistenc
 
 **Notes:**
 - **PostgreSQL (5432):** Internal-only, accessible via pmoves_data network
-- **PostgREST (3010):** NOT 3000 (avoids Grafana conflict on port 3000)
+- **PostgREST (3000):** Container port 3000 (Grafana on 3002 — no conflict)
 - **Kong (8000):** Primary external access point for all Supabase APIs
 - **Services on pmoves_api + pmoves_data:** Need database access for queries
 
 **Environment Variables:**
 ```bash
 # env.tier-supabase
-SUPABASE_POSTGREST_PORT=3010    # NOT 3000 (Grafana conflict)
+SUPABASE_POSTGREST_PORT=3000    # Container-internal (Grafana on 3002)
 SUPABASE_GOTRUE_PORT=9999
 SUPABASE_REALTIME_PORT=4010     # Remapped from 4000 to avoid TensorZero UI collision
 SUPABASE_STORAGE_PORT=5000
