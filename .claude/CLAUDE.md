@@ -208,10 +208,13 @@ PMOVES.AI is a **production-ready multi-agent orchestration platform** featuring
 - Auth: `nats://nats:pmoves@nats:4222` (always use authenticated URL)
 - **Critical subjects:** See `.claude/context/nats-subjects.md`
 
-**Supabase** [PostgREST Port 3010]
-- Postgres with pgvector extension
+**Supabase** [Kong Port 8000, PostgREST Port 3000, Studio Port 54323]
+- Unified 13-service self-hosted stack (profile: `supabase-local`)
+- Services: DB (Postgres 17.6.1), GoTrue, PostgREST v14.3, Kong 3.7.1, Realtime v2.72.0, Storage v1.37.1, Studio, imgproxy, pg-meta, Edge Functions, Analytics (Logflare), Vector, Supavisor
+- Canonical consumer URL: `http://supabase-kong:8000/rest/v1` (via Kong gateway)
+- Standard variable names: `JWT_SECRET`, `ANON_KEY`, `SERVICE_ROLE_KEY` (SUPABASE_* aliases for compat)
 - Schema: `pmoves_core`, Archon prompts
-- **Use for:** Metadata storage, content records, agent state
+- **Use for:** Metadata storage, content records, agent state, auth, connection pooling
 
 **Qdrant** [Port 6333]
 - Vector embeddings for semantic search

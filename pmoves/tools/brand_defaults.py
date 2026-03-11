@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import argparse
+import base64
 import re
 import secrets
 import string
@@ -34,6 +35,7 @@ PLACEHOLDER_VALUES = {
     "",
     "changeme",
     "change_me",
+    "base64:CHANGE_ME",
     "SURREAL_USER_HERE",
     "SURREAL_PASS_HERE",
     "root",
@@ -111,6 +113,34 @@ def _ensure_notebook_and_surreal_credentials(text: str) -> str:
     return text
 
 
+def _ensure_integration_credentials(text: str) -> str:
+    """Auto-generate credentials for Firefly III, n8n, and Wger if missing."""
+    # Firefly III APP_KEY: Laravel requires 'base64:' + 32 random bytes base64-encoded
+    firefly_key = _get_kv(text, "FIREFLY_APP_KEY")
+    if _is_blank_or_placeholder(firefly_key) or firefly_key == "base64:CHANGE_ME":
+        raw = secrets.token_bytes(32)
+        firefly_key = "base64:" + base64.b64encode(raw).decode("ascii")
+        text = _set_kv(text, "FIREFLY_APP_KEY", firefly_key)
+
+    # n8n encryption key: 32-byte urlsafe token for workflow credential encryption.
+    # NOTE: N8N_API_KEY cannot be auto-generated — it must be created from the n8n UI.
+    n8n_enc = _get_kv(text, "N8N_ENCRYPTION_KEY")
+    if _is_blank_or_placeholder(n8n_enc):
+        text = _set_kv(text, "N8N_ENCRYPTION_KEY", _strong_random(32))
+
+    # n8n runners auth token: shared secret for the runners container
+    n8n_runners = _get_kv(text, "N8N_RUNNERS_AUTH_TOKEN")
+    if _is_blank_or_placeholder(n8n_runners):
+        text = _set_kv(text, "N8N_RUNNERS_AUTH_TOKEN", _strong_random(24))
+
+    # Wger API token: prefixed with pm_wger_ for easy identification
+    wger_token = _get_kv(text, "WGER_API_TOKEN")
+    if _is_blank_or_placeholder(wger_token):
+        text = _set_kv(text, "WGER_API_TOKEN", "pm_wger_" + _strong_random(24))
+
+    return text
+
+
 def upsert_env(path: Path, env_gen_path: Path, pairs: dict[str, str]) -> None:
     text = path.read_text(encoding="utf-8") if path.exists() else ""
     for key, value in pairs.items():
@@ -140,6 +170,9 @@ def upsert_env(path: Path, env_gen_path: Path, pairs: dict[str, str]) -> None:
 
     # Generate Open Notebook + Surreal credentials per install if missing.
     text = _ensure_notebook_and_surreal_credentials(text)
+
+    # Generate integration credentials (Firefly III, n8n, Wger) if missing.
+    text = _ensure_integration_credentials(text)
 
     path.write_text(text, encoding="utf-8")
 
