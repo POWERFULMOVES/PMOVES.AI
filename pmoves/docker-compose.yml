@@ -759,7 +759,7 @@ services:
       supabase-db:
         condition: service_healthy
       supabase-postgrest:
-        condition: service_healthy
+        condition: service_started  # distroless image — no shell for healthcheck
       supabase-imgproxy:
         condition: service_healthy
     volumes:
@@ -818,6 +818,7 @@ services:
     - ${SUPABASE_STUDIO_PORT:-54323}:3000
     networks:
     - pmoves_api
+    - pmoves_data  # reach supabase-meta, supabase-analytics
 
   # ---------------------------------------------------------------------------
   # Supabase imgproxy — image transformation for Storage
@@ -902,6 +903,7 @@ services:
         condition: service_healthy
     networks:
     - pmoves_api
+    - pmoves_data  # reach supabase-db, supabase-analytics
 
   # ---------------------------------------------------------------------------
   # Supabase Analytics (Logflare) — log analytics backend
@@ -1318,6 +1320,7 @@ services:
     networks:
     - pmoves_app
     - pmoves_bus
+    - pmoves_api  # reach supabase-kong for REST API
     extra_hosts:
     - host.docker.internal:host-gateway
     depends_on:
