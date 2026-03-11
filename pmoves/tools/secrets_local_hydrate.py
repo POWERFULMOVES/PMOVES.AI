@@ -147,9 +147,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     env_shared = args.env_shared.expanduser().resolve()
 
     if not local_env.exists():
-        print(f"⚠ local.env not found at {local_env}")
-        print("  Run sync-secrets-local.yml workflow first, or provide --local-env path")
-        return 1
+        print(f"ℹ local.env not found at {local_env} — skipping hydration")
+        print("  (Optional: run sync-secrets-local.yml workflow or provide --local-env path)")
+        return 0
 
     if not env_shared.exists():
         print(f"⚠ env.shared not found at {env_shared}")
