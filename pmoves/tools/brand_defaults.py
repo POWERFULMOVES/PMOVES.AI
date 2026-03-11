@@ -36,6 +36,7 @@ PLACEHOLDER_VALUES = {
     "changeme",
     "change_me",
     "base64:CHANGE_ME",
+    "GENERATE_FROM_WGER_UI",
     "SURREAL_USER_HERE",
     "SURREAL_PASS_HERE",
     "root",
@@ -115,14 +116,16 @@ def _ensure_notebook_and_surreal_credentials(text: str) -> str:
 
 def _ensure_integration_credentials(text: str) -> str:
     """Auto-generate credentials for Firefly III, n8n, and Wger if missing."""
-    # Firefly III APP_KEY: Laravel requires 'base64:' + 32 random bytes base64-encoded
+    # Firefly III APP_KEY: Laravel requires 'base64:' + 32 random bytes base64-encoded.
+    # "base64:CHANGE_ME" is in PLACEHOLDER_VALUES so _is_blank_or_placeholder catches it.
     firefly_key = _get_kv(text, "FIREFLY_APP_KEY")
-    if _is_blank_or_placeholder(firefly_key) or firefly_key == "base64:CHANGE_ME":
+    if _is_blank_or_placeholder(firefly_key):
         raw = secrets.token_bytes(32)
         firefly_key = "base64:" + base64.b64encode(raw).decode("ascii")
         text = _set_kv(text, "FIREFLY_APP_KEY", firefly_key)
 
-    # n8n encryption key: 32-byte urlsafe token for workflow credential encryption.
+    # n8n encryption key: 32 bytes of entropy (43-char urlsafe-encoded token)
+    # for workflow credential encryption at rest.
     # NOTE: N8N_API_KEY cannot be auto-generated — it must be created from the n8n UI.
     n8n_enc = _get_kv(text, "N8N_ENCRYPTION_KEY")
     if _is_blank_or_placeholder(n8n_enc):
@@ -133,10 +136,13 @@ def _ensure_integration_credentials(text: str) -> str:
     if _is_blank_or_placeholder(n8n_runners):
         text = _set_kv(text, "N8N_RUNNERS_AUTH_TOKEN", _strong_random(24))
 
-    # Wger API token: prefixed with pm_wger_ for easy identification
+    # Wger API token: must be created via Wger UI or Django management commands.
+    # We set an explicit sentinel so operators know a manual step is required.
+    # Auto-generating a random token would give false confidence since Wger
+    # validates tokens against its database (Django REST Framework auth).
     wger_token = _get_kv(text, "WGER_API_TOKEN")
     if _is_blank_or_placeholder(wger_token):
-        text = _set_kv(text, "WGER_API_TOKEN", "pm_wger_" + _strong_random(24))
+        text = _set_kv(text, "WGER_API_TOKEN", "GENERATE_FROM_WGER_UI")
 
     return text
 
@@ -202,7 +208,11 @@ def main() -> int:
     env_path.parent.mkdir(parents=True, exist_ok=True)
     if not env_path.exists():
         env_path.write_text("", encoding="utf-8")
-    upsert_env(env_path, env_gen_path, DEFAULTS)
+    try:
+        upsert_env(env_path, env_gen_path, DEFAULTS)
+    except OSError as e:
+        print(f"Failed to update {env_path}: {e}", file=sys.stderr)
+        return 1
     print(f"Branded defaults applied to {env_path}")
     return 0
 

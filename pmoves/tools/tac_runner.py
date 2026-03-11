@@ -12,7 +12,6 @@ Usage:
 
 import argparse
 import json
-import os
 import re
 import subprocess
 import sys
@@ -25,6 +24,9 @@ except ImportError:
     sys.exit(1)
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+
+# Shell metacharacters disallowed in command targets to prevent injection
+_DISALLOWED_SHELL_CHARS = {";", "|", "&&", "||", "`", "$("}
 
 
 def _check_file_exists(target: str) -> tuple[str, str]:
@@ -39,31 +41,49 @@ def _check_grep(target: str, pattern: str) -> tuple[str, str]:
     if not path.exists():
         return "fail", f"target not found: {target}"
 
+    # Validate regex before use
+    try:
+        compiled = re.compile(pattern)
+    except re.error as e:
+        return "fail", f"invalid regex pattern '{pattern}': {e}"
+
     if path.is_dir():
-        # Search all files in directory
         found = []
+        skipped = []
         for f in path.rglob("*"):
             if f.is_file():
                 try:
                     text = f.read_text(encoding="utf-8", errors="ignore")
-                    if re.search(pattern, text):
+                    if compiled.search(text):
                         found.append(str(f.relative_to(REPO_ROOT)))
-                except Exception:
-                    continue
+                except PermissionError:
+                    skipped.append(str(f.relative_to(REPO_ROOT)))
+                except OSError as e:
+                    skipped.append(f"{f.relative_to(REPO_ROOT)}: {e}")
+        detail_suffix = ""
+        if skipped:
+            detail_suffix = f" (skipped {len(skipped)} files: {', '.join(skipped[:3])})"
         if found:
-            return "pass", f"pattern found in: {', '.join(found[:3])}"
-        return "fail", f"pattern '{pattern}' not found in {target}"
+            return "pass", f"pattern found in: {', '.join(found[:3])}{detail_suffix}"
+        return "fail", f"pattern '{pattern}' not found in {target}{detail_suffix}"
 
     try:
         text = path.read_text(encoding="utf-8", errors="ignore")
-        if re.search(pattern, text):
+        if compiled.search(text):
             return "pass", f"pattern found in {target}"
         return "fail", f"pattern '{pattern}' not found in {target}"
-    except Exception as e:
+    except PermissionError:
+        return "fail", f"permission denied: {target}"
+    except OSError as e:
         return "fail", f"error reading {target}: {e}"
 
 
 def _check_command(target: str) -> tuple[str, str]:
+    # Validate against shell injection
+    for char in _DISALLOWED_SHELL_CHARS:
+        if char in target:
+            return "fail", f"command contains disallowed shell metacharacter: {char}"
+
     try:
         result = subprocess.run(
             target,
@@ -78,7 +98,7 @@ def _check_command(target: str) -> tuple[str, str]:
         return "fail", result.stderr.strip()[:200]
     except subprocess.TimeoutExpired:
         return "fail", "command timed out (30s)"
-    except Exception as e:
+    except OSError as e:
         return "fail", str(e)
 
 
@@ -95,28 +115,32 @@ def evaluate_node(node: dict) -> dict:
 
     action = node.get("action")
     if action:
-        action_type = action.get("type", "manual")
-        target = action.get("target", "")
-        pattern = action.get("pattern", "")
+        if not isinstance(action, dict):
+            result["status"] = "fail"
+            result["detail"] = f"action must be a dict, got {type(action).__name__}"
+        else:
+            action_type = action.get("type", "manual")
+            target = action.get("target", "")
+            pattern = action.get("pattern", "")
 
-        if action_type == "file_exists":
-            result["status"], result["detail"] = _check_file_exists(target)
-        elif action_type == "grep":
-            # For grep checks where we expect NO matches (negative check)
-            expect = action.get("expect", "")
-            status, detail = _check_grep(target, pattern)
-            if "Should NOT contain" in expect or "No " in expect:
-                # Invert: finding the pattern means FAIL
-                result["status"] = "fail" if status == "pass" else "pass"
+            if action_type == "file_exists":
+                result["status"], result["detail"] = _check_file_exists(target)
+            elif action_type == "grep":
+                status, detail = _check_grep(target, pattern)
+                # Explicit invert field for negative grep checks
+                if action.get("invert", False):
+                    result["status"] = "fail" if status == "pass" else "pass"
+                else:
+                    result["status"] = status
                 result["detail"] = detail
+            elif action_type == "command":
+                result["status"], result["detail"] = _check_command(target)
+            elif action_type == "manual":
+                result["status"] = "pending"
+                result["detail"] = "requires manual review"
             else:
-                result["status"] = status
-                result["detail"] = detail
-        elif action_type == "command":
-            result["status"], result["detail"] = _check_command(target)
-        elif action_type == "manual":
-            result["status"] = "pending"
-            result["detail"] = "requires manual review"
+                result["status"] = "fail"
+                result["detail"] = f"unknown action type: {action_type}"
 
     # Recurse into children
     for child in node.get("children", []):
@@ -136,8 +160,8 @@ def evaluate_node(node: dict) -> dict:
 
 
 def count_statuses(node: dict) -> dict[str, int]:
-    """Count pass/fail/pending/skip across all nodes."""
-    counts: dict[str, int] = {"pass": 0, "fail": 0, "pending": 0, "skip": 0}
+    """Count pass/fail/pending across all leaf nodes."""
+    counts: dict[str, int] = {"pass": 0, "fail": 0, "pending": 0}
     status = node.get("status", "pending")
     if node.get("action") or not node.get("children"):
         counts[status] = counts.get(status, 0) + 1
@@ -149,7 +173,7 @@ def count_statuses(node: dict) -> dict[str, int]:
 
 def format_text(node: dict, indent: int = 0) -> str:
     """Format result as indented text for human reading."""
-    icons = {"pass": "[PASS]", "fail": "[FAIL]", "pending": "[....]", "skip": "[SKIP]"}
+    icons = {"pass": "[PASS]", "fail": "[FAIL]", "pending": "[....]"}
     prefix = "  " * indent
     icon = icons.get(node["status"], "[????]")
     lines = [f"{prefix}{icon} {node['id']}: {node['task']}"]
@@ -186,6 +210,10 @@ def main() -> int:
     with open(args.tree, encoding="utf-8") as f:
         tree = yaml.safe_load(f)
 
+    if not isinstance(tree, dict) or "root" not in tree:
+        print(f"Invalid TAC tree: must be a YAML dict with 'root' key", file=sys.stderr)
+        return 1
+
     root = tree.get("root", {})
     result = evaluate_node(root)
     counts = count_statuses(result)
@@ -205,7 +233,7 @@ def main() -> int:
         _safe_print("\n" + "=" * 60)
         _safe_print(
             f"Summary: {counts['pass']} pass, {counts['fail']} fail, "
-            f"{counts['pending']} pending, {counts['skip']} skip"
+            f"{counts['pending']} pending"
         )
 
     return 1 if counts["fail"] > 0 else 0

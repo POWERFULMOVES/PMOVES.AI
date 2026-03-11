@@ -1,0 +1,139 @@
+{
+  "name": "Integration Status Reporter",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "hours", "hoursInterval": 6 }]
+        }
+      },
+      "id": "schedule-1",
+      "name": "6-Hour Schedule",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "notes": "Check integration health every 6 hours"
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.WGER_BASE_URL || 'http://wger:8000' }}/api/v2/version",
+        "options": {
+          "timeout": 5000
+        }
+      },
+      "id": "check-wger-1",
+      "name": "Check Wger Health",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [470, 150],
+      "notes": "Wger API version endpoint",
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.FIREFLY_BASE_URL || 'http://firefly:8080' }}/api/v1/about",
+        "options": {
+          "timeout": 5000
+        }
+      },
+      "id": "check-firefly-1",
+      "name": "Check Firefly Health",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [470, 300],
+      "notes": "Firefly III about endpoint",
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "url": "http://nats:8222/varz",
+        "options": {
+          "timeout": 5000
+        }
+      },
+      "id": "check-nats-1",
+      "name": "Check NATS Health",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [470, 450],
+      "notes": "NATS monitoring endpoint",
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combinationMode": "mergeByPosition",
+        "options": {}
+      },
+      "id": "merge-1",
+      "name": "Merge Results",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2,
+      "position": [690, 300],
+      "notes": "Combine all health check results"
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.DISCORD_WEBHOOK_URL }}",
+        "method": "POST",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "content",
+              "value": "=**PMOVES Integration Status Report**\n- Wger: {{ $json.wger_status || 'unknown' }}\n- Firefly III: {{ $json.firefly_status || 'unknown' }}\n- NATS: {{ $json.nats_status || 'unknown' }}\n- Timestamp: {{ $now.toISO() }}"
+            },
+            {
+              "name": "username",
+              "value": "PMOVES Monitor"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "discord-report-1",
+      "name": "Send Discord Report",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [910, 300],
+      "notes": "Post status report to Discord channel"
+    }
+  ],
+  "connections": {
+    "6-Hour Schedule": {
+      "main": [
+        [
+          { "node": "Check Wger Health", "type": "main", "index": 0 },
+          { "node": "Check Firefly Health", "type": "main", "index": 0 },
+          { "node": "Check NATS Health", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Check Wger Health": {
+      "main": [
+        [{ "node": "Merge Results", "type": "main", "index": 0 }]
+      ]
+    },
+    "Check Firefly Health": {
+      "main": [
+        [{ "node": "Merge Results", "type": "main", "index": 1 }]
+      ]
+    },
+    "Check NATS Health": {
+      "main": [
+        [{ "node": "Merge Results", "type": "main", "index": 2 }]
+      ]
+    },
+    "Merge Results": {
+      "main": [
+        [{ "node": "Send Discord Report", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "instanceId": "pmoves-integration-status-reporter"
+  }
+}

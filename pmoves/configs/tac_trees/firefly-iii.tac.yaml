@@ -22,7 +22,8 @@ root:
             type: grep
             target: "PMOVES-Wealth/PMOVES.AI_INTEGRATION.md"
             pattern: "8096"
-            expect: "No references to port 8096 — should be 8075"
+            invert: true
+            expect: "Port references use 8075, not 8096"
           context: "Port 8096 is Cipher Memory, Firefly uses FIREFLY_PORT=8075"
           agent_hint: codex
 
@@ -62,7 +63,8 @@ root:
             type: grep
             target: "pmoves/integrations/firefly-iii/auth/bootstrap.sh"
             pattern: "no-op"
-            expect: "Should NOT contain 'no-op' — must validate FIREFLY_APP_KEY"
+            invert: true
+            expect: "Bootstrap script validates FIREFLY_APP_KEY (not a no-op placeholder)"
           context: "Replace placeholder with APP_KEY validation + access token check"
           agent_hint: codex
 
@@ -71,7 +73,7 @@ root:
           action:
             type: file_exists
             target: "pmoves/integrations/firefly-iii/n8n/flows/finance_firefly_sync.json"
-            expect: "At least 4 workflow files present"
+            expect: "Sync workflow file exists"
           context: "Should contain sync, CGP, webhook, and Supabase workflows"
           agent_hint: codex
 

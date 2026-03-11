@@ -1,0 +1,168 @@
+{
+  "name": "Finance Health Crosswalk",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "hours", "hoursInterval": 24 }]
+        }
+      },
+      "id": "schedule-1",
+      "name": "Daily Schedule",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "notes": "Run daily to correlate health and finance data"
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.FIREFLY_BASE_URL || 'http://firefly:8080' }}/api/v1/transactions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $env.FIREFLY_ACCESS_TOKEN }}"
+            }
+          ]
+        },
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "type",
+              "value": "withdrawal"
+            },
+            {
+              "name": "start",
+              "value": "={{ $now.minus(30, 'days').toISO() }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "fetch-transactions-1",
+      "name": "Fetch Health-Related Transactions",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [470, 200],
+      "notes": "Fetch supplement, gym, and health-related purchases from last 30 days"
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.WGER_BASE_URL }}/api/v2/workoutsession/",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Token {{ $env.WGER_API_TOKEN }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "fetch-workouts-1",
+      "name": "Fetch Recent Workouts",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [470, 400],
+      "notes": "Fetch workout sessions from last 30 days"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combinationMode": "mergeByPosition",
+        "options": {}
+      },
+      "id": "merge-1",
+      "name": "Merge Data",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2,
+      "position": [690, 300],
+      "notes": "Combine transaction and workout data for correlation analysis"
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.SUPA_REST_URL || 'http://supabase-postgrest:3000' }}/rest/v1/health_finance_crosswalk",
+        "method": "POST",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "correlation_data",
+              "value": "={{ JSON.stringify($json) }}"
+            },
+            {
+              "name": "period_start",
+              "value": "={{ $now.minus(30, 'days').toISO() }}"
+            },
+            {
+              "name": "period_end",
+              "value": "={{ $now.toISO() }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "store-crosswalk-1",
+      "name": "Store Crosswalk to Supabase",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [910, 300],
+      "notes": "Store correlation data for agent consumption and dashboard"
+    }
+  ],
+  "connections": {
+    "Daily Schedule": {
+      "main": [
+        [
+          { "node": "Fetch Health-Related Transactions", "type": "main", "index": 0 },
+          { "node": "Fetch Recent Workouts", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Fetch Health-Related Transactions": {
+      "main": [
+        [{ "node": "Merge Data", "type": "main", "index": 0 }]
+      ]
+    },
+    "Fetch Recent Workouts": {
+      "main": [
+        [{ "node": "Merge Data", "type": "main", "index": 1 }]
+      ]
+    },
+    "Merge Data": {
+      "main": [
+        [{ "node": "Store Crosswalk to Supabase", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "instanceId": "pmoves-finance-health-crosswalk"
+  }
+}
