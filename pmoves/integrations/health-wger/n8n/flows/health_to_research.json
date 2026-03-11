@@ -1,0 +1,114 @@
+{
+  "name": "Health to Research (Anomaly Detection)",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "trigger-1",
+      "name": "NATS Trigger",
+      "type": "n8n-nodes-base.trigger",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "notes": "Listens for health.anomaly.detected.v1 via webhook or polling"
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.WGER_BASE_URL }}/api/v2/workoutsession/",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Token {{ $env.WGER_API_TOKEN }}"
+            }
+          ]
+        },
+        "options": {
+          "queryParameterArrays": "multiItems"
+        }
+      },
+      "id": "fetch-recent-1",
+      "name": "Fetch Recent Workouts",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [470, 300],
+      "notes": "Fetch last 7 days of workout data for anomaly context"
+    },
+    {
+      "parameters": {
+        "url": "http://deepresearch:8098/api/v1/research",
+        "method": "POST",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "query",
+              "value": "=Analyze health anomaly: {{ $json.anomaly_type }}. Recent workout data: {{ JSON.stringify($json.results) }}"
+            },
+            {
+              "name": "depth",
+              "value": "standard"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "deepresearch-1",
+      "name": "Trigger DeepResearch",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [690, 300],
+      "notes": "Send anomaly context to DeepResearch for investigation"
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.NATS_HTTP_URL || 'http://nats:8222' }}/publish",
+        "method": "POST",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "subject",
+              "value": "research.deepresearch.request.v1"
+            },
+            {
+              "name": "payload",
+              "value": "={{ JSON.stringify({ source: 'health-anomaly', research_id: $json.research_id }) }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "nats-publish-1",
+      "name": "Publish Research Event",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [910, 300],
+      "notes": "Notify ecosystem that research was triggered by health anomaly"
+    }
+  ],
+  "connections": {
+    "NATS Trigger": {
+      "main": [
+        [{ "node": "Fetch Recent Workouts", "type": "main", "index": 0 }]
+      ]
+    },
+    "Fetch Recent Workouts": {
+      "main": [
+        [{ "node": "Trigger DeepResearch", "type": "main", "index": 0 }]
+      ]
+    },
+    "Trigger DeepResearch": {
+      "main": [
+        [{ "node": "Publish Research Event", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "instanceId": "pmoves-health-research-crossdomain"
+  }
+}

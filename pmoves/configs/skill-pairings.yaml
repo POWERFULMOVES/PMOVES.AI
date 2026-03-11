@@ -266,6 +266,58 @@ pairings:
           on_error: "ops.pr.monitor.failed.v1"
     nats_subject: "skills.pipeline.pr-monitor-graphiti-chit.v1"
 
+  # Health Data Sync Pipeline
+  health-sync:
+    name: "Health Data Sync"
+    description: "Sync Wger health data via n8n, generate weekly CGP summary"
+    chain:
+      - skill: n8n-health-sync
+        output: sync_result
+        agent: n8n
+        depends:
+          services: ["nats:4222", "n8n:5678"]
+          health: "http://localhost:8000/api/v2/version"
+        hooks:
+          on_complete: "health.workouts.synced.v1"
+          on_error: "skills.error.v1"
+      - skill: health-weekly-cgp
+        input: sync_result
+        output: cgp_summary
+        agent: tokenism
+        depends:
+          services: ["nats:4222", "tensorzero:3030"]
+          skills: ["n8n-health-sync"]
+        hooks:
+          on_complete: "health.weekly.summary.v1"
+          on_error: "skills.error.v1"
+    nats_subject: "skills.pipeline.health-sync.v1"
+
+  # Finance Data Sync Pipeline
+  finance-sync:
+    name: "Finance Data Sync"
+    description: "Sync Firefly III transactions via n8n, generate monthly CGP summary"
+    chain:
+      - skill: n8n-finance-sync
+        output: sync_result
+        agent: n8n
+        depends:
+          services: ["nats:4222", "n8n:5678"]
+          health: "http://localhost:8075/api/v1/about"
+        hooks:
+          on_complete: "finance.transactions.synced.v1"
+          on_error: "skills.error.v1"
+      - skill: finance-monthly-cgp
+        input: sync_result
+        output: cgp_summary
+        agent: tokenism
+        depends:
+          services: ["nats:4222", "tensorzero:3030"]
+          skills: ["n8n-finance-sync"]
+        hooks:
+          on_complete: "finance.monthly.summary.v1"
+          on_error: "skills.error.v1"
+    nats_subject: "skills.pipeline.finance-sync.v1"
+
 # Handoff protocol configuration
 handoff:
   # How agents pass work between each other
@@ -293,6 +345,10 @@ skill_sources:
   pr-monitor: "pmoves/tools/pr_monitor.py"
   pr-learnings-encode: "pmoves/tools/chit_encode_hook.py"
   graphiti-trail-sync: "docs/AGENT_TRAIL.md"
+  n8n-health-sync: "pmoves/integrations/health-wger/n8n/flows/"
+  n8n-finance-sync: "pmoves/integrations/firefly-iii/n8n/flows/"
+  health-weekly-cgp: "pmoves/integrations/health-wger/n8n/flows/health_weekly_to_cgp.json"
+  finance-monthly-cgp: "pmoves/integrations/firefly-iii/n8n/flows/finance_monthly_to_cgp.json"
 
 # FlOO$ configuration
 floos:

@@ -1,0 +1,131 @@
+{
+  "name": "Voice Health Check-In",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "hours", "hoursInterval": 24 }]
+        }
+      },
+      "id": "schedule-1",
+      "name": "Daily Morning Schedule",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "notes": "Trigger daily voice check-in prompt"
+    },
+    {
+      "parameters": {
+        "url": "http://flute-gateway:8055/v1/voice/synthesize/prosodic",
+        "method": "POST",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "text",
+              "value": "Good morning. How are you feeling today? Did you complete any workouts yesterday? Any pain or discomfort to report?"
+            },
+            {
+              "name": "voice_id",
+              "value": "default"
+            },
+            {
+              "name": "format",
+              "value": "wav"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "voice-prompt-1",
+      "name": "Generate Voice Prompt",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [470, 300],
+      "notes": "Synthesize check-in prompt via Flute-Gateway prosodic API"
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.WGER_BASE_URL }}/api/v2/workoutsession/",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Token {{ $env.WGER_API_TOKEN }}"
+            }
+          ]
+        },
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "ordering",
+              "value": "-date"
+            },
+            {
+              "name": "limit",
+              "value": "1"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "fetch-last-workout-1",
+      "name": "Fetch Last Workout",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [470, 500],
+      "notes": "Check if yesterday had a logged workout"
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.DISCORD_WEBHOOK_URL }}",
+        "method": "POST",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "content",
+              "value": "=Daily health check-in sent. Last workout: {{ $json.results ? $json.results[0]?.date || 'none logged' : 'none logged' }}"
+            },
+            {
+              "name": "username",
+              "value": "PMOVES Health"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "discord-notify-1",
+      "name": "Discord Notification",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [690, 400],
+      "notes": "Notify via Discord about check-in status"
+    }
+  ],
+  "connections": {
+    "Daily Morning Schedule": {
+      "main": [
+        [
+          { "node": "Generate Voice Prompt", "type": "main", "index": 0 },
+          { "node": "Fetch Last Workout", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Fetch Last Workout": {
+      "main": [
+        [{ "node": "Discord Notification", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "instanceId": "pmoves-voice-health-checkin"
+  }
+}
