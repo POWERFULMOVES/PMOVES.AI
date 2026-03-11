@@ -3,17 +3,32 @@
 > **Single source of truth** for PMOVES.AI production readiness.
 > Supersedes all individual audit documents accumulated Feb 7 -- Feb 18, 2026.
 
-**Last Updated:** 2026-03-10 (all P2 items resolved — 0 open)
+**Last Updated:** 2026-03-11 (PR gate sweep — all PRs merged, 0 open)
 **Branch:** `main`
-**Commit:** pending (P2 final resolution)
+**Commit:** `0c785f9b` (PR #854 squash-merge)
 **Consolidated From:** 27 audit documents
 **Evidence:** live runbook execution on 2026-03-05 (`make ghcr-prepublish-inrepo-build`, strict local Trivy sweep logs under `pmoves/docs/logs/ghcr-local-prepublish/`)
 
 ---
 
-## Latest Changes (Mar 10, 2026)
+## Latest Changes (Mar 11, 2026)
 
-### P2 Final Resolution — All Items Closed
+### PR Gate Sweep — All Open PRs Merged
+
+- **Dependabot CI action bumps** (#860–#863) merged with `--admin`:
+  - `aquasecurity/trivy-action` 0.34.2 → 0.35.0 (patch)
+  - `sigstore/cosign-installer` 4.0.0 → 4.1.0 (minor)
+  - `anchore/sbom-action` 0.23.0 → 0.23.1 (patch)
+  - `docker/build-push-action` 5 → 7 (major — Node 24 runtime, no deprecated vars used)
+- **PR #854** (`feat/github-app-credentials`) — 4 CodeRabbit threads resolved:
+  - **FIXED:** `MEILI_MASTER_KEY` changed from `:-` fallback default to `:?` fail-closed (prevents deployment with predictable key)
+  - **FIXED:** `proxy.ts` auth bypass narrowed from `startsWith('/api/health')` to exact match `=== '/api/health'`
+  - **Explained:** App token org-scope (intentional for dynamic matrix), GH_APP_* forward-wiring (no-op until consumed)
+- **CI queue cleanup**: 13 stale queued runs cancelled (merged dependabot branches, old feature branches, stale deploy runs)
+- **Open PRs**: 0 (all 5 merged)
+- **Dependabot alerts**: 0 open
+
+### Previous (Mar 10, 2026) — P2 Final Resolution — All Items Closed
 
 - **P2 tracker: 0 open / 17 total** — all items resolved
   - **#3 FIXED:** Open-Notebook SurrealDB credentials — all compose files now use `${SURREAL_PASSWORD:-changeme_surreal}` env var substitution
@@ -438,7 +453,7 @@ Three CI pipelines build Docker images. This matrix is the single cross-referenc
 
 | Metric | Value |
 |--------|-------|
-| Quantitative snapshot timestamp | 2026-03-09 (tracker reconciliation — all P1 submodule findings verified fixed) |
+| Quantitative snapshot timestamp | 2026-03-11 (PR gate sweep — all PRs merged, 0 open) |
 | Total tracked items | 24 |
 | Resolved | 24 (+1 since last update) |
 | Active blockers (release-blocking) | 0 |
@@ -835,6 +850,7 @@ If `generatedAt` is older than 24 hours, a `(stale)` indicator appears beside th
 
 | Date | Change |
 |------|--------|
+| 2026-03-11 | **PR gate sweep:** 5 open PRs merged (4 dependabot CI action bumps #860–#863, 1 feature PR #854 with security fixes). `MEILI_MASTER_KEY` hardened to `:?` fail-closed, `proxy.ts` auth bypass narrowed to exact match. 13 stale CI runs cancelled. Open PRs: 0. |
 | 2026-03-10 | **P2 final resolution:** All remaining P2 items closed (0 open / 17 total). Open-Notebook: SurrealDB creds parameterized (#3), `/metrics` Prometheus endpoint added (#5). Pipecat #10 closed (library scope, Flute-Gateway covers). tensorzero #13 closed (accepted risk, upstream). tensorzero #14 closed (false positive, `${VAR:?required}` pattern). |
 | 2026-03-09 | **Post-cleanup sit rep:** Trivy scan timeout increased to 10m in `integrations-ghcr.yml` + `self-hosted-builds-hardened.yml` (5 scan steps). `PMOVES.AI-Edition-Hardened-Integrations` branch synced (was 234 commits behind main). 5 new smoke tests added (env consistency, port conflicts, NATS config, Supabase realtime, Supabase selfhosted) with cross-platform path resolution. Local Hardened branch pruned. urllib3 CVE-2026-21441 already fixed in submodule. |
 | 2026-03-09 | **Tracker reconciliation:** verified all 7 Phase C P1 submodule findings (BoTZ JWT/gateway, DoX creds/cipher, ToKenism NATS/MinIO, transcribe-and-fetch passwords) already fixed on Hardened branches. P2 tracker updated with individual evidence entries. Executive summary: 0 P1 open. Stray `2.6.3` artifact deleted. |
