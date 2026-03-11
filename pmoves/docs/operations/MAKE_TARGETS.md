@@ -261,7 +261,9 @@ This file summarizes the most-used targets and maps them to what they do under d
   - Override phase with `RUNNER_PHASE=lab-expansion` or `RUNNER_PHASE=production`.
 - `make ci-runners-local-cert-up`
   - Starts Docker-hosted local-cert runner containers for `ai-lab` and `vps` lanes on the current machine.
-  - Uses `gh` to mint registration tokens unless `RUNNER_TOKEN` (or lane-specific `RUNNER_TOKEN_AI_LAB` / `RUNNER_TOKEN_VPS`) is preset.
+  - **Token cascade** (first match wins): `RUNNER_PAT_{LANE}` → `RUNNER_PAT` → `GH_TOKEN` → short-lived `RUNNER_TOKEN` via `gh api`.
+  - When a PAT is found, it is passed as `ACCESS_TOKEN` to the container, enabling automatic re-registration on reboot without token expiry issues.
+  - Set `RUNNER_PAT` in `env.shared` for reboot-survivable authentication (the Make target sources `env.shared` automatically).
   - Recovery best practice: prefer `make -C pmoves ci-runners-local-cert-down && make -C pmoves ci-runners-local-cert-up` over `docker restart` on runner containers. This forces fresh registration and avoids stale token/config loops.
 - `make ci-runners-local-cert-down`
   - Stops/removes the Docker-hosted local-cert runner containers (`gha-runner-ai-lab`, `gha-runner-vps`).
