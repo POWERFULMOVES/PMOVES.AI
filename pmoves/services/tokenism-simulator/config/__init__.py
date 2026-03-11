@@ -38,7 +38,7 @@ if not os.getenv("DOCKER_CONTAINER"):
 @dataclass(frozen=True)
 class NATSConfig:
     """NATS message bus configuration."""
-    url: str = os.getenv('NATS_URL', 'nats://localhost:4222')
+    url: str = os.getenv('NATS_URL', 'nats://nats:pmoves@nats:4222')
     client_name: str = os.getenv('NATS_CLIENT_NAME', 'tokenism-simulator')
     jetstream_enabled: bool = os.getenv('NATS_JETSTREAM', 'true').lower() == 'true'
 
@@ -82,7 +82,7 @@ class AgentZeroConfig:
 class CHITConfig:
     """CHIT/Geometry Bus configuration."""
     enabled: bool = os.getenv('CHIT_ENABLED', 'true').lower() == 'true'
-    geometry_bus_url: str = os.getenv('GEOMETRY_BUS_URL', 'nats://localhost:4222')
+    geometry_bus_url: str = os.getenv('GEOMETRY_BUS_URL', 'nats://nats:pmoves@nats:4222')
     cgp_version: str = os.getenv('CGP_VERSION', '1.0')
 
 
