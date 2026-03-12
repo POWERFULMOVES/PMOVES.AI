@@ -34,8 +34,14 @@ YouTube ingest helper that emits CHIT geometry after analysis.
 
 ## Testing
 - Unit suite: `python -m pytest pmoves/services/pmoves-yt/tests`
-- Async playlist pacing coverage (`tests/test_rate_limit.py::test_playlist_rate_limit_sleep`) now relies on `pytest-asyncio` for event loop orchestration. The dependency ships in `services/pmoves-yt/requirements.txt`, so re-run `python -m pip install -r services/pmoves-yt/requirements.txt` after pulling this change to keep the test harness green.
+- For runtime/defaults validation, prefer the authoritative submodule suite: `python -m pytest -q PMOVES.YT/pmoves_yt_service/tests`
 - Offline bundle refresh: `make vendor-httpx` (requires [uv](https://github.com/astral-sh/uv)) rebuilds `pmoves/vendor/python/` so helper scripts like `pmoves/scripts/backfill_jellyfin_metadata.py` can import `httpx` without pip.
+
+## Production defaults
+
+- Root compose intentionally overrides the submodule runtime with `YT_PLAYER_CLIENT=web_safari` plus a Safari user agent.
+- bgutil POT provider is the preferred production path; companion/Invidious stay available as fallback lanes.
+- For downloader/client changes, update the submodule first and keep the compose override in [docker-compose.yml](C:/Users/russe/Documents/GitHub/PMOVES.AI/pmoves/docker-compose.yml) aligned.
 
 ## Resilient Playlist Ingest (2025-10)
 - `/yt/playlist` now runs downloads concurrently (bounded by `YT_CONCURRENCY`) with
@@ -119,8 +125,9 @@ and tag a local image quickly with a custom `YTDLP_VERSION`.
 To surface the full, current yt‑dlp CLI options to the UI and automations,
 pmoves-yt can ingest its own help into Supabase:
 
-```
-curl -X POST http://localhost:8091/yt/docs/sync
+```bash
+curl -X POST http://localhost:8077/yt/docs/sync \
+  -H 'X-API-Key: YOUR_API_KEY'
 ```
 
 This captures `yt-dlp --help`, `--list-extractors`, and `--dump-user-agent` and

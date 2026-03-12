@@ -8,7 +8,9 @@ _Last updated: 2026-03-12_
 - Added a structured yt-dlp catalog inside the submodule (`/yt/docs/catalog`) so live runtime metadata exposes extractor counts, option inventory, and the active yt-dlp version.
 - Refreshed the Supabase docs sync path (`/yt/docs/sync`) for the current CLI stack: `pmoves_core.tool_docs` writes now use schema-profile headers plus URL-encoded `on_conflict`, and live sync is green again.
 - Kept the root `pmoves/services/pmoves-yt` package as a compatibility shim so existing tests and import paths remain stable during the production transition.
-- Next focus: commit/open the paired `PMOVES.YT` + root PRs, then move the remaining creator/channel-monitor runbooks off demo framing and onto this new authoritative runtime.
+- Modernized the downloader path around the authoritative runtime: PMOVES.YT now documents current yt-dlp client/token behavior, root compose passes companion URLs explicitly, and Jellyfin/channel-monitor docs are moving off older MCP/future-work framing.
+- Added `pmoves/docs/PMOVES.AI PLANS/CREATOR_NETWORK_CONTROL_PLANE.md` to frame YouTube, Discord agents, transcribe-and-fetch, model routing, and Tokenism as one creator-network lane.
+- Next focus: finish review cleanup, get PMOVES.YT/root checks green, and keep the creator/channel-monitor runbooks aligned with the authoritative runtime instead of the compatibility mirror.
 
 ### Latest changes (Mar 8, 2026) — CI Runner Migration + RG-3 Automation
 - **AB-9 mitigation:** Migrated 10 lightweight CI jobs from `[self-hosted, Linux, X64]` to `ubuntu-latest`:
