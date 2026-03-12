@@ -3,6 +3,8 @@
 Scope:
 - YouTube ingest, transcript acquisition, and media-to-knowledge routing parity.
 - Authoritative runtime now lives in the PMOVES.YT submodule package `pmoves_yt_service/`.
+- This is also the creator control lane for owned channels, watched sources, playlist management,
+  fallback extraction, and operator-facing YouTube workflows.
 
 Use this when:
 - the task starts from YouTube URLs, channels, playlists, captions, or transcript fallback
@@ -14,7 +16,20 @@ PMOVES companions:
 - `PMOVES-transcribe-and-fetch` for auxiliary transcript/fetch workflows
 - `PMOVES-HiRAG` and `Extract Worker` for downstream retrieval/indexing
 - `PMOVES-Jellyfin` for playback/publishing
-- `Invidious` for fallback reachability
+- `Invidious` and `invidious-companion` for fallback reachability and PO token support
+- `Discord` and `BoTZ` for creator/operator interaction
+- `Tokenism` for attribution and value tracking
+
+Operator intent classes:
+- owned sources: manage channel, playlists, metadata, and PMOVES-origin publishing
+- watched sources: monitor creators, ingest references, and prepare attribution-aware follow-up
+- candidate sources: scout adjacent creators and queue for review rather than auto-engage
+
+Preferred traversal:
+- start with `pmoves/docs/PMOVES.AI PLANS/CREATOR_NETWORK_CONTROL_PLANE.md`
+- then verify the PMOVES.YT service and its downloader posture
+- then inspect Channel Monitor and transcribe-and-fetch if the task spans discovery or transcript fallback
+- only use direct downloader overrides when the default PMOVES.YT strategy is insufficient
 
 Core checks:
 - `git submodule status -- PMOVES.YT`
@@ -23,8 +38,15 @@ Core checks:
 - `curl -fsS http://localhost:8077/healthz`
 - `curl -fsS http://localhost:8077/yt/docs/catalog`
 - `curl -fsS -X POST http://localhost:8077/yt/docs/sync`
+- `curl -fsS "http://localhost:8077/yt/search?q=pmoves"`
 - `make -C pmoves channel-monitor-smoke`
 - `make -C pmoves yt-jellyfin-smoke`
+
+Implementation notes:
+- prefer the modern client chain and current yt-dlp defaults rather than hardcoded legacy Android assumptions
+- prefer companion-fetched PO tokens and current client-context formatting when tokenized access is needed
+- keep root compose wiring for `INVIDIOUS_BASE_URL` and `INVIDIOUS_COMPANION_URL` aligned with the submodule runtime
+- public comments or creator outreach actions should be human-approved by default unless the workflow explicitly declares autonomous behavior
 
 Related parity tokens:
 - `/yt:status`
