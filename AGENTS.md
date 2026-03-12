@@ -17,6 +17,9 @@
   - `docs/README_DOCS_INDEX.md` — high-level index of the documentation set and where to find service-specific guides.
   - Jellyfin integration runbooks live under `pmoves/docs/PMOVES.AI PLANS/` (see `JELLYFIN_BRIDGE_INTEGRATION.md`, `JELLYFIN_BACKFILL_PLAN.md`, and `Enhanced Media Stack with Advanced AudioVideo Analysis/`).
   - Additional operational primers live alongside services (e.g., `services/**/README.md`) and should be consulted when touching those areas.
+  - `pmoves/docs/AGENTS/CODEX_OPERATOR_HOME.md`, `pmoves/docs/AGENTS/CODEX_ECOSYSTEM_TRAVERSAL.md`, `pmoves/docs/AGENTS/CODEX_RUNTIME_PROTOCOL.md`, and `pmoves/docs/AGENTS/CODEX_CLAUDE_PARITY_MAP.md` define the Codex-first production workflow; keep them aligned with `.claude/CLAUDE.md` and `.claude/commands/` whenever agent tooling or operator paths change.
+  - `.claude/context/submodules.md`, `.claude/context/submodule-workflow.md`, and `pmoves/docs/AGENTS/SUBMODULE_CODEX_HOMES/README.md` are the required submodule references before changing PMOVES forks, overlays, or gitlinks.
+  - Final-stage production rule: treat Codex parity as a release concern, not a follow-up. If you add a new operator command path, submodule overlay, or agent workflow, update both the Claude-facing and Codex-facing docs in the same PR.
 
 ## Build, Test, and Development Commands
 - `make up`: Starts core data services and workers (qdrant, neo4j, meilisearch, hi-rag-gateway, retrieval-eval) via Docker Compose profiles, assuming Supabase CLI is already running on the `pmoves-net` network.
@@ -142,11 +145,13 @@ Archon runs headless for orchestrations (Agent Zero → Archon via MCP) while th
   - `make -C pmoves build-agents-integrations`
   - `make -C pmoves up-agents-integrations`
 
-### Claude Code CLI context (keep tools aligned)
-- Always read `.claude/CLAUDE.md` before tooling; it is the live “service map” for Agent Zero, Archon, NATS subjects, and MCP wiring.
+### Agent tooling context (Claude + Codex)
+- Always read `.claude/CLAUDE.md`, `pmoves/docs/AGENTS/CODEX_OPERATOR_HOME.md`, and `pmoves/docs/AGENTS/CODEX_ECOSYSTEM_TRAVERSAL.md` before tooling; `.claude/CLAUDE.md` is the live service map, while the Codex docs define the command-first production runbook and ecosystem traversal path.
+- Use `pmoves/docs/AGENTS/CODEX_RUNTIME_PROTOCOL.md`, `pmoves/docs/AGENTS/CODEX_CLAUDE_PARITY_MAP.md`, and `pmoves/docs/AGENTS/KRISS_KROSS_ACCORD.md` when Codex and Claude overlap on the same branch, release lane, or operator workflow.
+- For submodule work, consult `.claude/context/submodules.md`, `.claude/context/submodule-workflow.md`, and `pmoves/docs/AGENTS/SUBMODULE_CODEX_HOMES/README.md` first; work in the submodule, land the submodule commit, then update the PMOVES.AI gitlink.
 - Slash commands live in `.claude/commands/` (e.g., `/agents:status`, `/search:hirag`, `/yt:*`). Reuse these when adding workflows so doc/automation stay in sync. Quick uptime probe: `.claude/commands/health/quick.md` (pings core services + GPU stats).
 - Hooks: `.claude/hooks/pre-tool.sh` blocks destructive shell (e.g., `rm -rf /`, `DROP DATABASE`); `.claude/hooks/post-tool.sh` publishes `claude.code.tool.executed.v1` to NATS for observability. Keep new scripts compliant.
-- If you add or move services/endpoints, mirror the change in `.claude/context/services-catalog.md` and, when relevant, add a command stub so operators get a one-liner.
+- If you add or move services/endpoints, mirror the change in `.claude/context/services-catalog.md`, `pmoves/docs/AGENTS/CODEX_CLAUDE_PARITY_MAP.md`, and any impacted `pmoves/docs/AGENTS/SUBMODULE_CODEX_HOMES/*.md` overlay so Claude and Codex stay in parity.
 
 ### Hardening status (in-flight)
 - Hardened CI now builds/scans multi-arch images (amd64+arm64) for exposed services; Trivy gates on HIGH/CRITICAL in `.github/workflows/self-hosted-builds-hardened.yml`.

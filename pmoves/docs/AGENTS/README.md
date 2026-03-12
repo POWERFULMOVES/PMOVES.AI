@@ -1,7 +1,7 @@
 # PMOVES.AI Agents Documentation
 
-**Last updated:** 2026-03-01
-**Files:** 72+ documents across 7 tiers
+**Last updated:** 2026-03-12
+**Files:** 73+ documents across 7 tiers
 **Registry:** 60 agents in `pmoves/config/agent_registry.yaml` (taxonomy v1.4.0)
 
 ---
@@ -12,6 +12,18 @@
 2. **[PMOVES_AGENT_CLASS_TAXONOMY.md](./PMOVES_AGENT_CLASS_TAXONOMY.md)** — 4 classes (legendary/standard/specialized/utility), 7 service tiers, evolution stages
 3. **[AGENT_TAXONOMY_CROSS_REFERENCE.md](./AGENT_TAXONOMY_CROSS_REFERENCE.md)** — Maps 18 documents with change-impact matrix
 4. **[IMPLEMENTATION_GAP_ANALYSIS.md](./IMPLEMENTATION_GAP_ANALYSIS.md)** — What's built vs. what's planned
+5. **[CODEX_ECOSYSTEM_TRAVERSAL.md](./CODEX_ECOSYSTEM_TRAVERSAL.md)** — Codex-first traversal path across skills, memory, personas, voice, services, and submodules
+
+### External Contributor Lanes
+
+The runtime registry keeps deployable services in `agents`, while Git-based AI
+contributors live in `external_contributors`. Codex is part of that contributor
+list and should be treated as a first-class PMOVES traversal/operator lane.
+
+Canonical identity sources:
+- `pmoves/config/agent_registry.yaml` -> `external_contributors`
+- `pmoves/config/agent_signatures.yaml` -> `codex`
+- `pmoves/docs/AGENTS/CODEX_ECOSYSTEM_TRAVERSAL.md`
 
 ---
 
@@ -51,13 +63,14 @@ Machine-readable configuration referenced by scripts and services.
 | `model_strengths.yaml` | `pmoves/config/` | Model capability ratings for routing |
 | `skill-pairings.yaml` | `pmoves/configs/` | 7 FlOO$ skill pairings with dependencies |
 
-### Tier 4: Operator Guides (8 files)
+### Tier 4: Operator Guides (9 files)
 
 Runbooks for Codex and Claude operators.
 
 | File | Purpose |
 |------|---------|
 | [CODEX_OPERATOR_HOME.md](./CODEX_OPERATOR_HOME.md) | Codex-first operations guide with endpoint catalog |
+| [CODEX_ECOSYSTEM_TRAVERSAL.md](./CODEX_ECOSYSTEM_TRAVERSAL.md) | Codex traversal map across PMOVES skills, memory, personas, voice, and submodules |
 | [CODEX_RUNTIME_PROTOCOL.md](./CODEX_RUNTIME_PROTOCOL.md) | Focus/scout modes, confidence gates, PR sweep |
 | [CODEX_CLAUDE_PARITY_MAP.md](./CODEX_CLAUDE_PARITY_MAP.md) | Token-by-token Codex ↔ Claude command mapping |
 | [CODEX_CLAUDE_PARITY_GAPS.md](./CODEX_CLAUDE_PARITY_GAPS.md) | Auto-generated parity gap report (113/113 mapped) |
@@ -128,10 +141,12 @@ Strategic and theoretical foundations (preserve as-is, no regular updates needed
 ## Quick Links
 
 - **Agent count:** 60 registered agents (`python -m pmoves.tools.agent_taxonomy_helper list`)
+- **External contributors:** 7 listed in `pmoves/config/agent_registry.yaml` (`claude-opus`, `kilocode`, `codex`, `gemini`, `cline`, `powerfulmoves`, `crush`)
 - **Taxonomy version:** v1.4.0
 - **Persona seeds:** 8 standard personas in `pmoves/supabase/initdb/17_persona_seed.sql`
 - **Model registry:** `pmoves/config/gpu-models.yaml`
 - **Skill pairings:** `pmoves/configs/skill-pairings.yaml` (7 FlOO$ pairings)
+- **Submodule skill routing:** `pmoves/configs/submodule_skill_registry.json`
 - **Mermaid diagrams:** 5 regenerable via `python -m pmoves.tools.agent_taxonomy_helper`
 
 ---
