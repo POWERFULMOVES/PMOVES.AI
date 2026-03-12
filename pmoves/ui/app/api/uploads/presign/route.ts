@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
     }
 
     const cookieStore = request.cookies;
-    const supabase = createSupabaseRouteHandlerClient(() => cookieStore);
+    const supabase = createSupabaseRouteHandlerClient(cookieStore);
     const {
       data: { session },
     } = await supabase.auth.getSession();
