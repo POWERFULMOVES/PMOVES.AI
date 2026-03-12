@@ -11,6 +11,11 @@ This document promotes the prototype in `youtube_channel_monitor.py` into an act
 - Persist discovery state (avoid duplicates, track status, expose stats).
 - Provide a lightweight REST API for manual triggers and monitoring.
 
+Current status note (March 12, 2026):
+- the service is no longer just a prototype backlog item
+- Google OAuth token storage and API-first fetch paths are already present
+- the active gap is production cleanup: preferences, observability, and alignment with the authoritative `PMOVES.YT` runtime/docs
+
 ---
 
 ## 2. Deliverables

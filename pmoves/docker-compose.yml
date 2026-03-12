@@ -1563,7 +1563,8 @@ services:
     <<: *tier-media-hardened
     image: ${PMOVES_YT_IMAGE:-}
     build:
-      context: ./services/pmoves-yt
+      context: ../PMOVES.YT
+      dockerfile: pmoves_yt_service/Dockerfile
       args:
       - YTDLP_VERSION=${YTDLP_VERSION:-}
     restart: unless-stopped
@@ -1583,6 +1584,8 @@ services:
     - YT_COOKIES=${YT_COOKIES:-/app/config/cookies/darkxside.youtube.cookies.txt}
     - BGUTIL_HTTP_BASE_URL=${BGUTIL_HTTP_BASE_URL:-http://bgutil-pot-provider:4416}
     - BGUTIL_DISABLE_INNERTUBE=${BGUTIL_DISABLE_INNERTUBE:-1}
+    - INVIDIOUS_BASE_URL=${INVIDIOUS_BASE_URL:-http://invidious:3000}
+    - INVIDIOUS_COMPANION_URL=${INVIDIOUS_COMPANION_URL:-http://invidious-companion:8282}
     - CHANNEL_MONITOR_STATUS_URL=${CHANNEL_MONITOR_STATUS_URL:-http://channel-monitor:8097/api/monitor/status}
     - YT_TRANSCRIPT_PROVIDER=${YT_TRANSCRIPT_PROVIDER:-faster-whisper}
     - YT_WHISPER_MODEL=${YT_WHISPER_MODEL:-small}
