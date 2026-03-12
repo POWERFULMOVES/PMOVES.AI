@@ -188,7 +188,13 @@ async def _handle_ytcontrol_interaction(payload: Dict[str, Any]) -> Optional[Dic
                 headers=headers,
                 json=review_payload,
             )
-            response.raise_for_status()
+            try:
+                response.raise_for_status()
+            except httpx.HTTPStatusError as exc:
+                raise RuntimeError(
+                    f"channel-monitor returned {exc.response.status_code}: "
+                    f"{exc.response.text[:500]}"
+                ) from exc
             body = response.json()
     except Exception as exc:
         logger.warning("YouTube control Discord interaction failed for %s: %s", action_id, exc)

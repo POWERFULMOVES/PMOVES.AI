@@ -347,6 +347,13 @@ class YouTubeControlRequest(BaseModel):
         description="Optional Open Notebook publish overrides (notebook_id, title_prefix, embed, async_processing)",
     )
 
+    @validator("action")
+    def _validate_action(cls, value: str) -> str:
+        valid_actions = {"playlist_add", "playlist_remove", "playlist_reorder", "comment_create"}
+        if value not in valid_actions:
+            raise ValueError(f"action must be one of {sorted(valid_actions)}")
+        return value
+
 
 class YouTubeControlReviewRequest(BaseModel):
     action_ids: List[str] = Field(..., description="Pending action IDs to approve or reject")

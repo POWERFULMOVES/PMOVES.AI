@@ -114,6 +114,14 @@ class _FakePool:
         return _FakeAcquire(self._conn)
 
 
+class _FakeTransaction:
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb):
+        return False
+
+
 def test_apply_filters_respects_age_and_keywords(tmp_path):
     monitor = _build_monitor(tmp_path)
     now = datetime.now(timezone.utc)
@@ -521,6 +529,40 @@ def test_create_youtube_control_request_persists_pending_row(tmp_path):
     conn.execute.assert_awaited_once()
 
 
+def test_create_youtube_control_request_rejects_invalid_action(tmp_path):
+    monitor = _build_monitor(tmp_path)
+    conn = SimpleNamespace(execute=AsyncMock())
+    monitor._pool = _FakePool(conn)  # type: ignore[assignment]
+
+    with pytest.raises(ValueError, match="Unsupported YouTube control action"):
+        asyncio.run(
+            monitor.create_youtube_control_request(
+                action="playlist_replace",
+                details={"playlist_id": "PL123", "video_id": "vid-123"},
+                request_source="discord_agent",
+            )
+        )
+
+    conn.execute.assert_not_awaited()
+
+
+def test_create_youtube_control_request_requires_action_fields(tmp_path):
+    monitor = _build_monitor(tmp_path)
+    conn = SimpleNamespace(execute=AsyncMock())
+    monitor._pool = _FakePool(conn)  # type: ignore[assignment]
+
+    with pytest.raises(ValueError, match="playlist_add requires playlist_id, video_id"):
+        asyncio.run(
+            monitor.create_youtube_control_request(
+                action="playlist_add",
+                details={},
+                request_source="discord_agent",
+            )
+        )
+
+    conn.execute.assert_not_awaited()
+
+
 def test_create_youtube_control_request_can_notify_messaging_gateway(tmp_path, monkeypatch):
     monitor = _build_monitor(tmp_path)
     conn = SimpleNamespace(execute=AsyncMock())
@@ -561,6 +603,10 @@ def test_create_youtube_control_request_can_notify_messaging_gateway(tmp_path, m
     assert requests_made[0][0] == "http://messaging.test/v1/send"
     assert requests_made[0][1]["platforms"] == ["discord"]
     assert requests_made[0][1]["embeds"][0]["title"] == "YouTube control request pending review"
+    assert requests_made[0][1]["metadata"]["details"] == {
+        "playlist_id": "PL123",
+        "video_id": "vid-123",
+    }
 
 
 def test_create_youtube_control_request_renders_template_and_publishes_notebook(tmp_path, monkeypatch):
@@ -629,7 +675,7 @@ def test_review_youtube_control_actions_executes_pmoves_yt_call(tmp_path, monkey
             "details": {"video_id": "vid-123", "text": "hello", "request_summary": "Comment create: hello"},
         }
     ]
-    conn = SimpleNamespace(fetch=AsyncMock(return_value=rows), execute=AsyncMock())
+    conn = SimpleNamespace(fetch=AsyncMock(return_value=rows), execute=AsyncMock(), transaction=lambda: _FakeTransaction())
     monitor._pool = _FakePool(conn)  # type: ignore[assignment]
 
     requests_made = []
@@ -675,3 +721,33 @@ def test_review_youtube_control_actions_executes_pmoves_yt_call(tmp_path, monkey
     assert requests_made[0][1]["approved_by"] == "discord-agent"
     assert requests_made[0][2]["X-API-Key"] == "secret-key"
     assert conn.execute.await_count == 1
+
+
+def test_review_youtube_control_actions_marks_failed_when_execution_errors(tmp_path):
+    monitor = _build_monitor(tmp_path)
+    rows = [
+        {
+            "id": "11111111-1111-1111-1111-111111111111",
+            "action": "comment_create",
+            "details": {"video_id": "vid-123", "text": "hello", "request_summary": "Comment create: hello"},
+        }
+    ]
+    conn = SimpleNamespace(fetch=AsyncMock(return_value=rows), execute=AsyncMock(), transaction=lambda: _FakeTransaction())
+    monitor._pool = _FakePool(conn)  # type: ignore[assignment]
+    monitor._invoke_yt_control_action = AsyncMock(side_effect=RuntimeError("upstream boom"))  # type: ignore[method-assign]
+
+    result = asyncio.run(
+        monitor.review_youtube_control_actions(
+            action_ids=["11111111-1111-1111-1111-111111111111"],
+            approve=True,
+            actor="discord-agent",
+            reason="approved in ops",
+        )
+    )
+
+    assert result["processed"] == 1
+    assert result["actions"][0]["status"] == "failed"
+    assert result["actions"][0]["error"] == "upstream boom"
+    update_args = conn.execute.await_args.args
+    assert update_args[2] == "failed"
+    assert update_args[6] == "upstream boom"

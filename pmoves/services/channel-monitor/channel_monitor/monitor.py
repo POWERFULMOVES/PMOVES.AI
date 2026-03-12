@@ -37,6 +37,11 @@ YOUTUBE_CONTROL_ENDPOINTS = {
     "playlist_reorder": "/yt/control/playlist/reorder",
     "comment_create": "/yt/control/comment",
 }
+YOUTUBE_CONTROL_REQUIRED_FIELDS = {
+    "playlist_add": ("playlist_id", "video_id"),
+    "playlist_remove": ("playlist_item_id",),
+    "playlist_reorder": ("playlist_item_id", "position"),
+}
 
 
 def utcnow() -> datetime:
@@ -152,10 +157,19 @@ def _prepare_youtube_control_details(
     details: Dict[str, Any],
     draft: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
+    if action not in YOUTUBE_CONTROL_ACTION_LABELS:
+        raise ValueError(
+            f"Unsupported YouTube control action: {action!r}. "
+            f"Valid actions: {sorted(YOUTUBE_CONTROL_ACTION_LABELS)}"
+        )
     normalized = dict(details)
     draft_dict = dict(draft) if isinstance(draft, dict) else {}
     if draft_dict.get("source_class") and not normalized.get("source_class"):
         normalized["source_class"] = draft_dict["source_class"]
+    required_fields = YOUTUBE_CONTROL_REQUIRED_FIELDS.get(action, ())
+    missing_fields = [field for field in required_fields if normalized.get(field) in (None, "")]
+    if missing_fields:
+        raise ValueError(f"{action} requires {', '.join(missing_fields)}")
     if action == "comment_create":
         text_value = normalized.get("text")
         if not isinstance(text_value, str) or not text_value.strip():
@@ -342,6 +356,9 @@ class ChannelMonitor:
                 self._youtube_client = None  # Explicitly disable if init fails
 
     def _yt_control_base_url(self) -> str:
+        explicit = (os.getenv("CHANNEL_MONITOR_YT_CONTROL_URL") or "").strip().rstrip("/")
+        if explicit:
+            return explicit
         base = self.queue_url.rstrip("/")
         if base.endswith("/yt/ingest"):
             return base[: -len("/yt/ingest")]
@@ -1977,8 +1994,19 @@ class ChannelMonitor:
                 "action_id": action_id,
                 "action": action,
                 "request_source": request_source,
-                "details": details,
                 "summary": summary,
+                "details": _compact(
+                    {
+                        "playlist_id": details.get("playlist_id"),
+                        "playlist_item_id": details.get("playlist_item_id"),
+                        "video_id": details.get("video_id"),
+                        "position": details.get("position"),
+                        "text_preview": details.get("text_preview"),
+                        "source_class": details.get("source_class"),
+                        "notebook_entry_id": notebook_meta.get("entry_id"),
+                    }
+                )
+                or {},
             },
         }
         try:
@@ -2075,7 +2103,13 @@ class ChannelMonitor:
                 json=payload,
                 headers=headers,
             )
-            response.raise_for_status()
+            try:
+                response.raise_for_status()
+            except httpx.HTTPStatusError as exc:
+                raise RuntimeError(
+                    f"PMOVES.YT returned {exc.response.status_code}: "
+                    f"{exc.response.text[:500]}"
+                ) from exc
             return response.json()
 
     async def review_youtube_control_actions(
@@ -2092,16 +2126,25 @@ class ChannelMonitor:
             raise ValueError("action_ids is required")
 
         async with self._pool.acquire() as conn:
-            rows = await conn.fetch(
-                """
-                SELECT id, action, details
-                FROM pmoves_core.youtube_control_actions
-                WHERE status = 'pending_review'
-                  AND id = ANY($1::uuid[])
-                ORDER BY created_at ASC
-                """,
-                wanted_ids,
-            )
+            async with conn.transaction():
+                rows = await conn.fetch(
+                    """
+                    WITH claimed AS (
+                        SELECT id
+                        FROM pmoves_core.youtube_control_actions
+                        WHERE status = 'pending_review'
+                          AND id = ANY($1::uuid[])
+                        ORDER BY created_at ASC
+                        FOR UPDATE SKIP LOCKED
+                    )
+                    UPDATE pmoves_core.youtube_control_actions AS actions
+                    SET status = 'processing'
+                    FROM claimed
+                    WHERE actions.id = claimed.id
+                    RETURNING actions.id, actions.action, actions.details
+                    """,
+                    wanted_ids,
+                )
 
         processed_ids: List[str] = []
         action_summaries: List[Dict[str, Any]] = []
@@ -2119,14 +2162,29 @@ class ChannelMonitor:
             }
             error_text = reason or "rejected"
             if approve:
-                result_payload = await self._invoke_yt_control_action(
-                    action=action,
-                    details=details,
-                    approved_by=actor or "channel-monitor",
-                    approval_note=reason,
-                )
-                new_status = "approved"
-                error_text = None
+                try:
+                    result_payload = await self._invoke_yt_control_action(
+                        action=action,
+                        details=details,
+                        approved_by=actor or "channel-monitor",
+                        approval_note=reason,
+                    )
+                    new_status = "approved"
+                    error_text = None
+                except Exception as exc:
+                    new_status = "failed"
+                    error_text = str(exc)
+                    result_payload = {
+                        "status": "failed",
+                        "error": str(exc),
+                        "summary": summary,
+                    }
+                    LOGGER.error(
+                        "YouTube control execution failed for %s (%s): %s",
+                        action_id,
+                        action,
+                        exc,
+                    )
 
             async with self._pool.acquire() as conn:
                 await conn.execute(
@@ -2156,6 +2214,7 @@ class ChannelMonitor:
                         "summary": summary,
                         "notebook_entry_id": notebook_meta.get("entry_id"),
                         "reason": reason,
+                        "error": error_text,
                     }
                 )
                 or {
