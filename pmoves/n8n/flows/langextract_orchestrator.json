@@ -252,9 +252,9 @@
       "description": "Process documents via LangExtract orchestrator pipeline. Accepts file paths and returns extraction results with chunk counts and ingestion status."
     },
     "pinData": null,
-    "versionId": "langextract-orch-v1",
+    "versionId": "c904e951-20ec-4034-acd6-9e2833c4eac9",
     "versionCounter": 1,
     "triggerCount": 0,
-    "tags": ["langextract", "orchestrator", "document-processing"]
+    "tags": []
   }
 ]

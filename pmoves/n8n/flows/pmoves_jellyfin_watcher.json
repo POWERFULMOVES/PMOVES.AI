@@ -14,7 +14,10 @@
         "name": "Jellyfin Webhook",
         "type": "n8n-nodes-base.webhook",
         "typeVersion": 1,
-        "position": [200, 300]
+        "position": [
+          200,
+          300
+        ]
       },
       {
         "parameters": {
@@ -24,7 +27,10 @@
         "name": "Parse Jellyfin Event",
         "type": "n8n-nodes-base.function",
         "typeVersion": 2,
-        "position": [460, 300]
+        "position": [
+          460,
+          300
+        ]
       },
       {
         "parameters": {
@@ -42,7 +48,10 @@
         "name": "Is Item Added?",
         "type": "n8n-nodes-base.if",
         "typeVersion": 1,
-        "position": [720, 200]
+        "position": [
+          720,
+          200
+        ]
       },
       {
         "parameters": {
@@ -60,7 +69,10 @@
         "name": "Is Playback Event?",
         "type": "n8n-nodes-base.if",
         "typeVersion": 1,
-        "position": [720, 400]
+        "position": [
+          720,
+          400
+        ]
       },
       {
         "parameters": {
@@ -70,7 +82,10 @@
         "name": "Build Ingest Request",
         "type": "n8n-nodes-base.function",
         "typeVersion": 2,
-        "position": [980, 200]
+        "position": [
+          980,
+          200
+        ]
       },
       {
         "parameters": {
@@ -87,7 +102,10 @@
         "name": "Publish Item Added Event",
         "type": "n8n-nodes-base.httpRequest",
         "typeVersion": 4,
-        "position": [1240, 100]
+        "position": [
+          1240,
+          100
+        ]
       },
       {
         "parameters": {
@@ -105,7 +123,10 @@
         "name": "Is Video Content?",
         "type": "n8n-nodes-base.if",
         "typeVersion": 1,
-        "position": [1240, 300]
+        "position": [
+          1240,
+          300
+        ]
       },
       {
         "parameters": {
@@ -122,7 +143,10 @@
         "name": "Trigger Video Analysis",
         "type": "n8n-nodes-base.httpRequest",
         "typeVersion": 4,
-        "position": [1500, 200]
+        "position": [
+          1500,
+          200
+        ]
       },
       {
         "parameters": {
@@ -139,7 +163,10 @@
         "name": "Trigger Audio Analysis",
         "type": "n8n-nodes-base.httpRequest",
         "typeVersion": 4,
-        "position": [1500, 400]
+        "position": [
+          1500,
+          400
+        ]
       },
       {
         "parameters": {
@@ -149,7 +176,10 @@
         "name": "Log Playback Event",
         "type": "n8n-nodes-base.function",
         "typeVersion": 2,
-        "position": [980, 400]
+        "position": [
+          980,
+          400
+        ]
       },
       {
         "parameters": {
@@ -166,45 +196,108 @@
         "name": "Publish Playback Event",
         "type": "n8n-nodes-base.httpRequest",
         "typeVersion": 4,
-        "position": [1240, 400]
+        "position": [
+          1240,
+          400
+        ]
       }
     ],
     "connections": {
       "Jellyfin Webhook": {
-        "main": [[{"node": "Parse Jellyfin Event", "type": "main", "index": 0}]]
+        "main": [
+          [
+            {
+              "node": "Parse Jellyfin Event",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
       },
       "Parse Jellyfin Event": {
-        "main": [[
-          {"node": "Is Item Added?", "type": "main", "index": 0},
-          {"node": "Is Playback Event?", "type": "main", "index": 0}
-        ]]
+        "main": [
+          [
+            {
+              "node": "Is Item Added?",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Is Playback Event?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
       },
       "Is Item Added?": {
         "main": [
-          [{"node": "Build Ingest Request", "type": "main", "index": 0}],
+          [
+            {
+              "node": "Build Ingest Request",
+              "type": "main",
+              "index": 0
+            }
+          ],
           []
         ]
       },
       "Is Playback Event?": {
         "main": [
-          [{"node": "Log Playback Event", "type": "main", "index": 0}],
+          [
+            {
+              "node": "Log Playback Event",
+              "type": "main",
+              "index": 0
+            }
+          ],
           []
         ]
       },
       "Build Ingest Request": {
-        "main": [[
-          {"node": "Publish Item Added Event", "type": "main", "index": 0},
-          {"node": "Is Video Content?", "type": "main", "index": 0}
-        ]]
+        "main": [
+          [
+            {
+              "node": "Publish Item Added Event",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Is Video Content?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
       },
       "Is Video Content?": {
         "main": [
-          [{"node": "Trigger Video Analysis", "type": "main", "index": 0}],
-          [{"node": "Trigger Audio Analysis", "type": "main", "index": 0}]
+          [
+            {
+              "node": "Trigger Video Analysis",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Trigger Audio Analysis",
+              "type": "main",
+              "index": 0
+            }
+          ]
         ]
       },
       "Log Playback Event": {
-        "main": [[{"node": "Publish Playback Event", "type": "main", "index": 0}]]
+        "main": [
+          [
+            {
+              "node": "Publish Playback Event",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
       }
     },
     "settings": {},
@@ -214,9 +307,9 @@
       "description": "Jellyfin event watcher: handles item additions and playback events, triggers analysis pipelines"
     },
     "pinData": null,
-    "versionId": "jellyfin-watcher-v1",
+    "versionId": "c11fc268-081a-461b-8355-b6c8caa598ba",
     "versionCounter": 1,
     "triggerCount": 0,
-    "tags": ["pmoves", "jellyfin", "media", "ingestion"]
+    "tags": []
   }
 ]

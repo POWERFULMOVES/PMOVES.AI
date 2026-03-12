@@ -4,13 +4,17 @@
 
 This guide explains how the Jellyfin backfill system integrates with the PMOVES.yt YouTube transcript corpus to create semantically enriched content metadata.
 
+Status update (March 12, 2026):
+- `PMOVES.YT` is the authoritative YouTube ingest runtime.
+- Jellyfin backfill uses `POST /yt/search` on that runtime directly.
+- References to a standalone MCP YouTube adapter in this document are historical unless you explicitly choose to run that extra service.
+
 ## Architecture Overview
 
 ```mermaid
 graph TB
     A[Jellyfin Media Server] -->|Metadata| B[Backfill Script]
-    C[PMOVES.yt Corpus] -->|Transcripts| D[MCP YouTube Adapter]
-    D -->|Semantic Search| B
+    C[PMOVES.YT Runtime] -->|/yt/search| B
     B -->|Enriched Payload| E[Agent Zero]
     E -->|content.published.v1| F[Discord Webhook]
     E -->|Store| G[Supabase studio_board]
@@ -47,21 +51,23 @@ python scripts/backfill_jellyfin_metadata.py \
   --youtube-threshold 0.75
 ```
 
-### 2. MCP YouTube Adapter
-**Location**: `pmoves/services/mcp_youtube_adapter.py`
+### 2. PMOVES.YT Search Runtime
+**Location**: `PMOVES.YT/pmoves_yt_service/yt.py`
 
-**Purpose**: REST API for semantic search across YouTube transcript corpus.
+**Purpose**: Authoritative REST API for ingest, transcript indexing, and semantic search across the YouTube corpus.
 
 **Endpoints**:
-- `POST /youtube/search` - Semantic search with embedding similarity
-- `GET /youtube/video/{video_id}` - Fetch video metadata and transcript
-- `POST /youtube/ingest` - Add new videos to corpus (future)
-- `GET /health` - Service health check
+- `POST /yt/search` - Semantic search with transcript excerpts and timestamps
+- `POST /yt/ingest` - Download + ingest a video
+- `POST /yt/emit` - Push transcript chunks into Hi-RAG
+- `GET /healthz` - Service health check
 
-**Start Service**:
+**Validation**:
 ```bash
-cd pmoves
-uvicorn services.mcp_youtube_adapter:app --host 0.0.0.0 --port 8081
+curl http://localhost:8077/healthz
+curl -X POST http://localhost:8077/yt/search \
+  -H "Content-Type: application/json" \
+  -d '{"query":"machine learning tutorial","limit":5,"threshold":0.70}'
 ```
 
 ### 3. PMOVES.yt Batch Processor

@@ -14,7 +14,10 @@
         "name": "Webhook Trigger",
         "type": "n8n-nodes-base.webhook",
         "typeVersion": 1,
-        "position": [200, 300]
+        "position": [
+          200,
+          300
+        ]
       },
       {
         "parameters": {
@@ -24,7 +27,10 @@
         "name": "Detect Content Type",
         "type": "n8n-nodes-base.function",
         "typeVersion": 2,
-        "position": [460, 300]
+        "position": [
+          460,
+          300
+        ]
       },
       {
         "parameters": {
@@ -41,7 +47,10 @@
         "name": "Is Audio?",
         "type": "n8n-nodes-base.if",
         "typeVersion": 1,
-        "position": [720, 100]
+        "position": [
+          720,
+          100
+        ]
       },
       {
         "parameters": {
@@ -58,7 +67,10 @@
         "name": "Is Video?",
         "type": "n8n-nodes-base.if",
         "typeVersion": 1,
-        "position": [720, 300]
+        "position": [
+          720,
+          300
+        ]
       },
       {
         "parameters": {
@@ -75,7 +87,10 @@
         "name": "Is Image?",
         "type": "n8n-nodes-base.if",
         "typeVersion": 1,
-        "position": [720, 500]
+        "position": [
+          720,
+          500
+        ]
       },
       {
         "parameters": {
@@ -92,7 +107,10 @@
         "name": "Trigger Audio Pipeline",
         "type": "n8n-nodes-base.httpRequest",
         "typeVersion": 4,
-        "position": [980, 100]
+        "position": [
+          980,
+          100
+        ]
       },
       {
         "parameters": {
@@ -109,7 +127,10 @@
         "name": "Trigger Video Pipeline",
         "type": "n8n-nodes-base.httpRequest",
         "typeVersion": 4,
-        "position": [980, 300]
+        "position": [
+          980,
+          300
+        ]
       },
       {
         "parameters": {
@@ -126,7 +147,10 @@
         "name": "Trigger Image Pipeline",
         "type": "n8n-nodes-base.httpRequest",
         "typeVersion": 4,
-        "position": [980, 500]
+        "position": [
+          980,
+          500
+        ]
       },
       {
         "parameters": {
@@ -136,36 +160,97 @@
         "name": "Log Unhandled",
         "type": "n8n-nodes-base.function",
         "typeVersion": 2,
-        "position": [980, 700]
+        "position": [
+          980,
+          700
+        ]
       }
     ],
     "connections": {
       "Webhook Trigger": {
-        "main": [[{"node": "Detect Content Type", "type": "main", "index": 0}]]
+        "main": [
+          [
+            {
+              "node": "Detect Content Type",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
       },
       "Detect Content Type": {
-        "main": [[
-          {"node": "Is Audio?", "type": "main", "index": 0},
-          {"node": "Is Video?", "type": "main", "index": 0},
-          {"node": "Is Image?", "type": "main", "index": 0}
-        ]]
+        "main": [
+          [
+            {
+              "node": "Is Audio?",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Is Video?",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Is Image?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
       },
       "Is Audio?": {
         "main": [
-          [{"node": "Trigger Audio Pipeline", "type": "main", "index": 0}],
-          [{"node": "Is Video?", "type": "main", "index": 0}]
+          [
+            {
+              "node": "Trigger Audio Pipeline",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Is Video?",
+              "type": "main",
+              "index": 0
+            }
+          ]
         ]
       },
       "Is Video?": {
         "main": [
-          [{"node": "Trigger Video Pipeline", "type": "main", "index": 0}],
-          [{"node": "Is Image?", "type": "main", "index": 0}]
+          [
+            {
+              "node": "Trigger Video Pipeline",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Is Image?",
+              "type": "main",
+              "index": 0
+            }
+          ]
         ]
       },
       "Is Image?": {
         "main": [
-          [{"node": "Trigger Image Pipeline", "type": "main", "index": 0}],
-          [{"node": "Log Unhandled", "type": "main", "index": 0}]
+          [
+            {
+              "node": "Trigger Image Pipeline",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Log Unhandled",
+              "type": "main",
+              "index": 0
+            }
+          ]
         ]
       }
     },
@@ -176,9 +261,9 @@
       "description": "Central dispatcher for all content ingestion - routes to appropriate analysis pipeline based on content type"
     },
     "pinData": null,
-    "versionId": "ingestion-hub-v1",
+    "versionId": "60492d99-f1c2-46f1-9d09-a0fa3af8a383",
     "versionCounter": 1,
     "triggerCount": 0,
-    "tags": ["pmoves", "ingestion", "routing"]
+    "tags": []
   }
 ]

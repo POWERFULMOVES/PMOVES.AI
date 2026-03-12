@@ -2,6 +2,13 @@
 
 **Goal**: Enable YouTube transcript linking in Jellyfin backfill using existing `pmoves-yt` service
 
+## Current Status (March 12, 2026)
+
+- `PMOVES.YT` is now the authoritative runtime for YouTube ingest and search.
+- `POST /yt/search` already exists in that runtime and is the supported search path for Jellyfin backfill.
+- `pmoves/scripts/backfill_jellyfin_metadata.py` already calls `POST /yt/search` when `--link-youtube` is enabled.
+- The implementation work below is historical context. Do not treat it as the primary source of truth for the live stack.
+
 ## Prerequisites
 
 - ✅ pmoves-yt running on port 8077 (already deployed)

@@ -343,6 +343,8 @@ jobs:
           CHIT_PROD_PASSPHRASE: ci-validation-placeholder
           SECRET_KEY_BASE: ci-validation-placeholder
           VAULT_ENC_KEY: ci-validation-placeholder
+          LOGFLARE_PUBLIC_ACCESS_TOKEN: ci-validation-placeholder
+          LOGFLARE_PRIVATE_ACCESS_TOKEN: ci-validation-placeholder
         run: |
           echo "Validating docker-compose files..."
 
