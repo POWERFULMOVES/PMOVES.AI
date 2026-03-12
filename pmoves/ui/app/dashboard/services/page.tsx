@@ -37,9 +37,9 @@ const BORDER_CLASSES: Record<string, string> = {
 
 const PORT_LINKS = [
   { name: 'TensorZero UI', port: '4000', href: 'http://localhost:4000' },
-  { name: 'Grafana', port: '3000', href: 'http://localhost:3000' },
+  { name: 'Grafana', port: '3002', href: 'http://localhost:3002' },
   { name: 'Prometheus', port: '9090', href: 'http://localhost:9090' },
-  { name: 'Supabase Studio', port: '65433', href: 'http://127.0.0.1:65433' },
+  { name: 'Supabase Studio', port: '54323', href: 'http://localhost:54323' },
   { name: 'Agent Zero UI', port: '8081', href: 'http://localhost:8081' },
   { name: 'Archon UI', port: '3737', href: 'http://localhost:3737' },
   { name: 'Jellyfin', port: '8096', href: 'http://localhost:8096' },

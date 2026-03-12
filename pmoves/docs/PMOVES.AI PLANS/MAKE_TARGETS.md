@@ -42,7 +42,9 @@ Set `EXTERNAL_NEO4J|MEILI|QDRANT|SUPABASE=true` in `.env.local` to skip local in
 - `make up-yt`
   - Boots the YouTube ingest stack (`bgutil-pot-provider`, `ffmpeg-whisper`, `pmoves-yt`) with the required profiles.
 - `make channel-monitor-up`
-  - Starts Channel Monitor with runtime-aware Supabase DB URL wiring (`.supabase.status.env` -> `CHANNEL_MONITOR_DATABASE_URL`) so CLI/compose port drift does not break production checks.
+    - Starts Channel Monitor via `scripts/channel_monitor_up.sh` with runtime-aware Supabase DB wiring.
+    - Prefers in-network `supabase-db:5432` when the PMOVES Supabase services are running in the local compose project, and only falls back to `.supabase.status.env` host wiring when needed.
+    - Pins Channel Monitor to the Supabase `postgres` database by default (`CHANNEL_MONITOR_DB_NAME` override supported) so the expected `pmoves.*` tables resolve in the CLI stack.
 - `make channel-monitor-smoke`
   - Verifies Channel Monitor health endpoints (`/healthz`, `/api/monitor/status`, `/api/monitor/stats`).
 - `make channel-monitor-discord-drop-smoke`

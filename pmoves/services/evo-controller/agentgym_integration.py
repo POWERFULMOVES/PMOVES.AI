@@ -413,7 +413,7 @@ class AgentGymIntegration:
         """
         Return current AgentGym training status for observability.
 
-        Exposed via /config or /swarm/status endpoint.
+        Exposed via /config endpoint.
         """
         return {
             "enabled": self.enable_training,

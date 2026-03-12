@@ -51,7 +51,7 @@ function resolveNamespace(meta: Record<string, unknown> | null | undefined, fall
 export async function POST(request: NextRequest) {
   try {
     const cookieStore = request.cookies;
-    const supabaseAuth = createSupabaseRouteHandlerClient(() => cookieStore);
+    const supabaseAuth = createSupabaseRouteHandlerClient(cookieStore);
     const {
       data: { session },
     } = await supabaseAuth.auth.getSession();

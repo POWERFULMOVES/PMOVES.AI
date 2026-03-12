@@ -155,7 +155,7 @@ export const SERVICE_CATALOG: ServiceDefinition[] = [
     category: 'database',
     color: 'violet',
     endpoints: [
-      { name: 'Web UI', port: '65433', path: '/', type: 'ui' },
+      { name: 'Web UI', port: '54323', path: '/', type: 'ui' },
     ],
     external: true,
     capabilities: ['Table editor', 'SQL editor', 'Auth UI'],

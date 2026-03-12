@@ -41,3 +41,21 @@ The audit script records these as:
 - If a new submodule is added to `.gitmodules`, add a matching overlay file in this folder in the same PR.
 - Keep overlays docs-only and deterministic; do not change submodule pointers in this lane.
 - Do **not** rename files to "standardize" casing — the names match submodule names by design.
+
+## Overlay Content Standard
+
+Each overlay should be short, but it should answer five traversal questions:
+
+1. What role does this submodule play inside PMOVES.AI?
+2. When should Codex route work here instead of another PMOVES surface?
+3. Which PMOVES services, skills, personas, memory paths, or voice surfaces pair with it?
+4. Which validation commands prove the lane is wired correctly?
+5. Which parity tokens or docs should Codex consult next?
+
+Prefer these headings when expanding an overlay:
+- `Scope`
+- `Use this when`
+- `PMOVES companions`
+- `Core checks`
+- `Related parity tokens`
+- `Related docs`

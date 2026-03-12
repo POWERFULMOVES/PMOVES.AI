@@ -526,6 +526,7 @@ services:
     - ${SUPABASE_DB_PORT:-54322}:5432
     volumes:
     - supabase-db-data:/var/lib/postgresql/data
+    - ./supabase/initdb:/docker-entrypoint-initdb.d/pmoves-init:ro
     networks:
     - pmoves_data
 
@@ -679,7 +680,7 @@ services:
     - DB_PASSWORD=${POSTGRES_PASSWORD:-${SUPABASE_DB_PASSWORD:-postgres}}
     - DB_SSL=false
     - DB_AFTER_CONNECT_QUERY=SET search_path TO _realtime
-    - DB_ENC_KEY=${SUPABASE_REALTIME_SECRET:-supabaserealtime}
+    - DB_ENC_KEY=${SUPABASE_REALTIME_ENC_KEY:-supabaserealtime}
     # App configuration
     - APP_NAME=realtime
     - PORT=4000
@@ -922,19 +923,19 @@ services:
     - DB_PORT=5432
     - DB_PASSWORD=${POSTGRES_PASSWORD:-${SUPABASE_DB_PASSWORD:-postgres}}
     - DB_SCHEMA=_analytics
-    - LOGFLARE_PUBLIC_ACCESS_TOKEN=${LOGFLARE_PUBLIC_ACCESS_TOKEN:-}
-    - LOGFLARE_PRIVATE_ACCESS_TOKEN=${LOGFLARE_PRIVATE_ACCESS_TOKEN:-}
+    - LOGFLARE_PUBLIC_ACCESS_TOKEN=${LOGFLARE_PUBLIC_ACCESS_TOKEN:?Set LOGFLARE_PUBLIC_ACCESS_TOKEN in env.tier-supabase}
+    - LOGFLARE_PRIVATE_ACCESS_TOKEN=${LOGFLARE_PRIVATE_ACCESS_TOKEN:?Set LOGFLARE_PRIVATE_ACCESS_TOKEN in env.tier-supabase}
     - LOGFLARE_SINGLE_TENANT=true
     - LOGFLARE_SUPABASE_MODE=true
-    - POSTGRES_BACKEND_URL=postgresql://${POSTGRES_USER:-${SUPABASE_DB_USER:-postgres}}:${POSTGRES_PASSWORD:-${SUPABASE_DB_PASSWORD:-postgres}}@supabase-db:5432/_supabase
+    - POSTGRES_BACKEND_URL=postgresql://${POSTGRES_USER:-${SUPABASE_DB_USER:-postgres}}:${POSTGRES_PASSWORD_URLENCODED:-${POSTGRES_PASSWORD:-${SUPABASE_DB_PASSWORD:-postgres}}}@supabase-db:5432/_supabase
     - POSTGRES_BACKEND_SCHEMA=_analytics
     - LOGFLARE_FEATURE_FLAG_OVERRIDE=multibackend=true
     healthcheck:
-      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:4000/health || exit 1"]
-      interval: 10s
+      test: ["CMD-SHELL", "curl -sSf http://localhost:4000/health -o /dev/null || exit 1"]
+      interval: 15s
       timeout: 5s
       retries: 10
-      start_period: 30s
+      start_period: 120s
     depends_on:
       supabase-db:
         condition: service_healthy
@@ -980,7 +981,7 @@ services:
     - POSTGRES_PORT=5432
     - POSTGRES_DB=${POSTGRES_DB:-${SUPABASE_DB_NAME:-postgres}}
     - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-${SUPABASE_DB_PASSWORD:-postgres}}
-    - DATABASE_URL=ecto://${POSTGRES_USER:-${SUPABASE_DB_USER:-postgres}}:${POSTGRES_PASSWORD:-${SUPABASE_DB_PASSWORD:-postgres}}@supabase-db:5432/_supabase
+    - DATABASE_URL=ecto://${POSTGRES_USER:-${SUPABASE_DB_USER:-postgres}}:${POSTGRES_PASSWORD_URLENCODED:-${POSTGRES_PASSWORD:-${SUPABASE_DB_PASSWORD:-postgres}}}@supabase-db:5432/_supabase
     - CLUSTER_POSTGRES=true
     - SECRET_KEY_BASE=${SECRET_KEY_BASE:?Set SECRET_KEY_BASE in env.tier-supabase}
     - VAULT_ENC_KEY=${VAULT_ENC_KEY:?Set VAULT_ENC_KEY in env.tier-supabase}
@@ -995,11 +996,11 @@ services:
     - DB_POOL_SIZE=${POOLER_DB_POOL_SIZE:-5}
     command: ["/bin/sh", "-c", "/app/bin/migrate && if [ -f /etc/pooler/pooler.exs ]; then /app/bin/supavisor eval \"$$(cat /etc/pooler/pooler.exs)\"; else echo 'WARN: /etc/pooler/pooler.exs not found, skipping tenant seeding'; fi && /app/bin/server"]
     healthcheck:
-      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://127.0.0.1:4000/api/health || exit 1"]
+      test: ["CMD-SHELL", "curl -sSf http://127.0.0.1:4000/api/health -o /dev/null || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 15s
+      start_period: 30s
     depends_on:
       supabase-db:
         condition: service_healthy
@@ -1639,7 +1640,7 @@ services:
     - CHANNEL_MONITOR_NAMESPACE=${CHANNEL_MONITOR_NAMESPACE:-pmoves}
     - OPEN_NOTEBOOK_API_URL=${CHANNEL_MONITOR_OPEN_NOTEBOOK_API_URL:-http://open-notebook:5055}
     # Database URL - points to Supabase DB (note: supabase-db runs on pmoves_data network)
-    - CHANNEL_MONITOR_DATABASE_URL=${CHANNEL_MONITOR_DATABASE_URL:-postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD_URLENCODED:-${POSTGRES_PASSWORD:-postgres}}@supabase-db:5432/${POSTGRES_DB:-postgres}}
+    - CHANNEL_MONITOR_DATABASE_URL=${CHANNEL_MONITOR_DATABASE_URL:-postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD_URLENCODED:-${SUPABASE_DB_PASSWORD_URLENCODED:-${POSTGRES_PASSWORD:-${SUPABASE_DB_PASSWORD:-postgres}}}}@supabase-db:5432/${CHANNEL_MONITOR_DB_NAME:-postgres}}
     - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
     - DOCKED_MODE=${DOCKED_MODE:-true}
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
@@ -2563,7 +2564,8 @@ services:
       - CHIT_PASSPHRASE=${CHIT_PROD_PASSPHRASE:?set CHIT_PROD_PASSPHRASE in env.shared}
     ports: ["8113:8113"]
     profiles: ["orchestration"]
-    networks: [pmoves_app, pmoves_api, pmoves_bus]
+    # Docker Desktop does not publish host ports for services attached only to internal networks.
+    networks: [pmoves_app, pmoves_api, pmoves_bus, pmoves_external]
     extra_hosts:
     - host.docker.internal:host-gateway
     healthcheck:
@@ -2631,7 +2633,8 @@ services:
       - CHIT_PASSPHRASE=${CHIT_PROD_PASSPHRASE:?set CHIT_PROD_PASSPHRASE in env.shared}
     ports: ["8055:8055", "8056:8056"]
     profiles: ["orchestration", "media"]
-    networks: [pmoves_app, pmoves_api, pmoves_bus]
+    # Attach a non-internal bridge so published host ports resolve on Docker Desktop.
+    networks: [pmoves_app, pmoves_api, pmoves_bus, pmoves_external]
     extra_hosts:
     - host.docker.internal:host-gateway
     healthcheck:

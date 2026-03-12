@@ -1622,32 +1622,7 @@ up-yt:
 
 .PHONY: channel-monitor-up
 channel-monitor-up: ensure-env-shared ## Start channel-monitor with runtime-aware Supabase DB URL wiring
-	@bash -lc 'set -euo pipefail; \
-	  runtime="$${SUPABASE_RUNTIME:-$(SUPABASE_RUNTIME)}"; \
-	  if docker ps --format "{{.Names}}" | grep -Eq "^supabase_db_"; then runtime="cli"; fi; \
-	  stripq() { printf "%s" "$$1" | sed -e "s/^\\\"//" -e "s/\\\"$$//"; }; \
-	  db_url="$${CHANNEL_MONITOR_DATABASE_URL:-}"; \
-	  if [ "$$runtime" = "cli" ] && [ -f .supabase.status.env ]; then \
-	    v=$$(grep -m1 "^DB_URL=" .supabase.status.env | cut -d= -f2- || true); \
-	    v=$$(stripq "$$v"); \
-	    if [ -n "$$v" ]; then \
-	      db_url=$$(printf "%s" "$$v" | sed -e "s@127\\.0\\.0\\.1@host.docker.internal@g" -e "s@localhost@host.docker.internal@g"); \
-	    fi; \
-	  fi; \
-	  if [ -z "$$db_url" ] && [ "$$runtime" = "cli" ]; then \
-	    db_url="postgresql://$${SUPABASE_DB_USER:-postgres}:$${SUPABASE_DB_PASSWORD:-postgres}@host.docker.internal:$${SUPABASE_DB_PORT:-54322}/$${SUPABASE_DB_NAME:-postgres}"; \
-	  fi; \
-	  if [ -z "$$db_url" ] && [ "$$runtime" != "compose" ] && [ "$$runtime" != "cli" ]; then \
-	    db_url="postgresql://$${SUPABASE_DB_USER:-postgres}:$${SUPABASE_DB_PASSWORD:-postgres}@$${SUPABASE_DB_HOST:-supabase-db}:$${SUPABASE_DB_PORT:-5432}/$${SUPABASE_DB_NAME:-postgres}"; \
-	  fi; \
-	  echo "→ Starting channel-monitor (runtime=$$runtime)"; \
-	  if [ -n "$$db_url" ]; then \
-	    CHANNEL_MONITOR_DATABASE_URL="$$db_url" $(DC) --profile workers --profile yt up -d channel-monitor; \
-	  else \
-	    $(DC) --profile workers --profile yt up -d channel-monitor; \
-	  fi; \
-	  echo "✔ Channel monitor up"; \
-	'
+	@bash ./scripts/channel_monitor_up.sh
 
 .PHONY: channel-monitor-smoke
 channel-monitor-smoke: ## Verify channel-monitor HTTP endpoints

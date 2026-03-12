@@ -4,6 +4,10 @@ _Last updated: 2026-03-02_
 This is the Codex-first operations guide for PMOVES.AI. It mirrors the mature
 Claude setup, but keeps Codex workflows command-first and Makefile-native.
 
+For the full PMOVES traversal map, including skills, memory, personas, voice,
+service selection, and submodule routing, see:
+- `pmoves/docs/AGENTS/CODEX_ECOSYSTEM_TRAVERSAL.md`
+
 ## Runtime signaling
 
 - Use `mode=focus` for implementation/validation windows.
@@ -24,6 +28,21 @@ Claude setup, but keeps Codex workflows command-first and Makefile-native.
    - `codex --profile pmoves`
 3. Open this runbook plus parity map:
    - `pmoves/docs/AGENTS/CODEX_CLAUDE_PARITY_MAP.md`
+
+## Ecosystem traversal
+
+Codex should not act like a standalone code assistant in PMOVES.AI. It should
+traverse the existing PMOVES surfaces in this order:
+
+1. Operator lane: this runbook + `CODEX_RUNTIME_PROTOCOL.md`
+2. Service map: `.claude/CLAUDE.md`
+3. Submodule map: `.claude/context/submodules.md`
+4. Skill map: `PmovesSKillZ.md` + `pmoves/configs/skill-pairings.yaml`
+5. Memory path: `CODEX_CIPHER_MEMORY_IMPLEMENTATION_MAP.md`
+6. Persona + voice path: `PERSONAS.md` + `CODEX_PERSONA_STYLE_PLAYBOOK.md`
+
+Use `CODEX_ECOSYSTEM_TRAVERSAL.md` as the canonical quick route across these
+surfaces.
 
 ## Codex Config Parity (Mar 2026)
 
@@ -65,8 +84,8 @@ Claude setup, but keeps Codex workflows command-first and Makefile-native.
 
 - Controller health:
   - `curl -fsS http://localhost:8113/healthz`
-- Swarm status:
-  - `curl -fsS http://localhost:8113/swarm/status | jq .`
+- Controller config:
+  - `curl -fsS http://localhost:8113/config | jq .`
 - Ensure downstream services persist and publish `pack_id` metadata in CGP flow.
 
 ## Flute + Voice stack
@@ -135,6 +154,8 @@ For a comprehensive view of what's implemented vs. what's still planned, see:
 
 - Codex submodule audit:
   - `pmoves/docs/AGENTS/CODEX_SUBMODULE_INTEGRATION_AUDIT.md`
+- Codex ecosystem traversal:
+  - `pmoves/docs/AGENTS/CODEX_ECOSYSTEM_TRAVERSAL.md`
 - Hyperdimensions control plane taxonomy:
   - `pmoves/docs/AGENTS/PMOVES_HYPERDIMENSIONS_CONTROL_PLANE.md`
 - Claude parity map:

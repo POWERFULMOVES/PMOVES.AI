@@ -50,7 +50,7 @@ operations (`make`, `curl`, and existing PMOVES scripts).
 | `/chit:visualize` | use geometry UI/demo targets (`make -C pmoves web-geometry`) |
 | `/chit:bpm` | `curl -fsS http://localhost:8086/geometry/calibration/report | jq .` and validate bpm-derived geometry metadata |
 | `/chit:floos` | `make -C pmoves pr-monitor-flows` then `make -C pmoves pr-monitor-chit-packet` |
-| EvoSwarm checks | `curl -fsS http://localhost:8113/healthz` and `curl -fsS http://localhost:8113/swarm/status | jq .` |
+| EvoSwarm checks | `curl -fsS http://localhost:8113/healthz` and `curl -fsS http://localhost:8113/config | jq .` |
 
 ## Agent orchestration and MCP
 
