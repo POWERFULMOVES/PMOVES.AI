@@ -176,16 +176,26 @@ describe('probeService — health check behavior', () => {
 // ═══════════════════════════════════════════════════════════════════════════
 
 describe('probeService — resolveHealthUrl', () => {
-  it('rewrites localhost when HEALTH_CHECK_HOST is set', async () => {
-    // HEALTH_CHECK_HOST is read at module level, so we need to re-import.
-    // Instead, test indirectly: the fetch call should use the rewritten URL
-    // only when HEALTH_CHECK_HOST is set before module load.
-    // Since the module is already loaded with HEALTH_HOST = '', we verify
-    // the default behavior: URL unchanged.
+  it('leaves URL unchanged when HEALTH_CHECK_HOST is unset', async () => {
     global.fetch = jest.fn().mockResolvedValue({ ok: true, status: 200 });
     await probeService(MOCK_SERVICE);
     expect(global.fetch).toHaveBeenCalledWith(
       'http://localhost:9999/healthz',
+      expect.objectContaining({ method: 'GET' })
+    );
+  });
+
+  it('rewrites localhost when HEALTH_CHECK_HOST is set', async () => {
+    // HEALTH_HOST is captured at module level, so we must re-import the
+    // module after setting the env var to exercise the rewrite path.
+    process.env.HEALTH_CHECK_HOST = 'host.docker.internal';
+    jest.resetModules();
+    const { probeService: freshProbe } = await import('../lib/serviceHealth');
+
+    global.fetch = jest.fn().mockResolvedValue({ ok: true, status: 200 });
+    await freshProbe(MOCK_SERVICE);
+    expect(global.fetch).toHaveBeenCalledWith(
+      'http://host.docker.internal:9999/healthz',
       expect.objectContaining({ method: 'GET' })
     );
   });

@@ -16,7 +16,7 @@ on:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/PMOVES.AI-Edition-Hardened' }}
 
 env:
   # GitHub Secrets - Service Credentials
@@ -199,7 +199,7 @@ jobs:
     permissions:
       contents: read
     needs: deploy-ai-lab
-    if: failure()
+    if: failure() || cancelled()
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -217,7 +217,7 @@ jobs:
     permissions:
       contents: read
     needs: deploy-vps
-    if: failure()
+    if: failure() || cancelled()
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
