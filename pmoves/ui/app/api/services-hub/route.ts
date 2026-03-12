@@ -176,8 +176,8 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(hubData, {
       headers: {
-        // Cache catalog data, but not health
-        'Cache-Control': 'public, s-maxage=10, stale-while-revalidate=30',
+        // Health data must always be fresh
+        'Cache-Control': 'private, no-store, max-age=0',
         'Content-Type': 'application/json',
       },
     });
