@@ -32,16 +32,23 @@ transcripts, Jellyfin playback, Discord outreach, or model-routing across the PM
 
 1. **[CODEX_OPERATOR_HOME.md](./CODEX_OPERATOR_HOME.md)** — Codex-first operator runbook with creator control plane commands
 2. **[../PMOVES.AI PLANS/CREATOR_NETWORK_CONTROL_PLANE.md](../PMOVES.AI%20PLANS/CREATOR_NETWORK_CONTROL_PLANE.md)** — 2026 creator-network operating model
-3. **[JELLYFIN_CREATOR_WORKTREE_REVIEW.md](./JELLYFIN_CREATOR_WORKTREE_REVIEW.md)** — Jellyfin/creator worktree review and current gaps
-4. **[SUBMODULE_CODEX_HOMES/PMOVES.YT.md](./SUBMODULE_CODEX_HOMES/PMOVES.YT.md)** — authoritative YouTube runtime traversal
-5. **[SUBMODULE_CODEX_HOMES/PMOVES-transcribe-and-fetch.md](./SUBMODULE_CODEX_HOMES/PMOVES-transcribe-and-fetch.md)** — transcript/fetch auxiliary lane
+3. **[SUBMODULE_CODEX_HOMES/PMOVES-Creator.md](./SUBMODULE_CODEX_HOMES/PMOVES-Creator.md)** — creator strategy, networking, and campaign lane
+4. **[SUBMODULE_CODEX_HOMES/PMOVES-Open-Notebook.md](./SUBMODULE_CODEX_HOMES/PMOVES-Open-Notebook.md)** — planning, drafting, evidence, and operator memory lane
+5. **[PMOVES_YT_CONTROL_WORKTREE_REVIEW.md](./PMOVES_YT_CONTROL_WORKTREE_REVIEW.md)** — PMOVES.YT integration worktree runbook across discovery, transcripts, playback, control, and model routing
+6. **[JELLYFIN_CREATOR_WORKTREE_REVIEW.md](./JELLYFIN_CREATOR_WORKTREE_REVIEW.md)** — Jellyfin/creator worktree review and current gaps
+7. **[SUBMODULE_CODEX_HOMES/PMOVES.YT.md](./SUBMODULE_CODEX_HOMES/PMOVES.YT.md)** — authoritative YouTube runtime traversal
+8. **[SUBMODULE_CODEX_HOMES/PMOVES-transcribe-and-fetch.md](./SUBMODULE_CODEX_HOMES/PMOVES-transcribe-and-fetch.md)** — transcript/fetch auxiliary lane
+9. **[../PMOVESCHIT/CATACLYSM_STUDIOS_INC.md](../PMOVESCHIT/CATACLYSM_STUDIOS_INC.md)** — platform, brand, and governance context for creator actions
 
 The creator-network lane treats Codex as a legendary operator that can traverse:
+- PMOVES-Creator for channel strategy, outreach posture, collaboration plays, and campaign framing
+- PMOVES-Open-Notebook for draft assembly, evidence capture, notes, and reusable operator context
 - PMOVES.YT for owned/watched channel ingest, playlist control, metadata sync, and downloader fallback
 - Channel Monitor for source discovery, scheduling, and event routing
 - transcribe-and-fetch for transcript and fetch augmentation
 - Jellyfin and publisher surfaces for playback, packaging, and downstream publishing
 - Discord and BoTZ for agent-mediated response, routing, and operator interaction
+- CATACLYSM_STUDIOS_INC for business, brand, and community constraints that govern what the stack should do
 - local and remote model tiers for extraction, embedding, rerank, narration, and orchestration
 
 ---
@@ -106,9 +113,13 @@ single-service codebase.
 | File | Purpose |
 |------|---------|
 | [../PMOVES.AI PLANS/CREATOR_NETWORK_CONTROL_PLANE.md](../PMOVES.AI%20PLANS/CREATOR_NETWORK_CONTROL_PLANE.md) | 2026 creator-network map across PMOVES.YT, Channel Monitor, Discord, Jellyfin, and Tokenism |
+| [SUBMODULE_CODEX_HOMES/PMOVES-Creator.md](./SUBMODULE_CODEX_HOMES/PMOVES-Creator.md) | Creator strategy, networking, and campaign traversal |
+| [SUBMODULE_CODEX_HOMES/PMOVES-Open-Notebook.md](./SUBMODULE_CODEX_HOMES/PMOVES-Open-Notebook.md) | Planning, drafting, evidence, and notebook memory traversal |
+| [PMOVES_YT_CONTROL_WORKTREE_REVIEW.md](./PMOVES_YT_CONTROL_WORKTREE_REVIEW.md) | Worktree-first review path for PMOVES.YT, channel-monitor, transcribe-and-fetch, Jellyfin, and model routing |
 | [JELLYFIN_CREATOR_WORKTREE_REVIEW.md](./JELLYFIN_CREATOR_WORKTREE_REVIEW.md) | Current creator/Jellyfin worktree findings and follow-ups |
 | [SUBMODULE_CODEX_HOMES/PMOVES.YT.md](./SUBMODULE_CODEX_HOMES/PMOVES.YT.md) | Codex home for YouTube ingest and creator control |
 | [SUBMODULE_CODEX_HOMES/PMOVES-transcribe-and-fetch.md](./SUBMODULE_CODEX_HOMES/PMOVES-transcribe-and-fetch.md) | Codex home for transcript and fetch support |
+| [../PMOVESCHIT/CATACLYSM_STUDIOS_INC.md](../PMOVESCHIT/CATACLYSM_STUDIOS_INC.md) | Cataclysm Studios platform/brand context that governs creator operations |
 
 ### Tier 5: Vision & Notes (12 files)
 

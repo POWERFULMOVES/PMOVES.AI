@@ -23,6 +23,10 @@ Core checks:
 - `curl -fsS http://localhost:8077/healthz`
 - `curl -fsS http://localhost:8097/api/monitor/status | jq .`
 
+Worktree review:
+- use `pmoves/docs/AGENTS/PMOVES_YT_CONTROL_WORKTREE_REVIEW.md` when the task spans
+  PMOVES.YT, channel-monitor, Jellyfin, Discord, or model-routing parity
+
 Operating rules:
 - do not fork behavior away from PMOVES.YT without documenting why the auxiliary lane is needed
 - preserve metadata that lets downstream services track source, model family, and transcript provenance

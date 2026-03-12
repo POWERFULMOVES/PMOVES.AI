@@ -27,6 +27,7 @@ Operator intent classes:
 
 Preferred traversal:
 - start with `pmoves/docs/PMOVES.AI PLANS/CREATOR_NETWORK_CONTROL_PLANE.md`
+- then use `pmoves/docs/AGENTS/PMOVES_YT_CONTROL_WORKTREE_REVIEW.md` if the task spans multiple companion services
 - then verify the PMOVES.YT service and its downloader posture
 - then inspect Channel Monitor and transcribe-and-fetch if the task spans discovery or transcript fallback
 - only use direct downloader overrides when the default PMOVES.YT strategy is insufficient

@@ -83,7 +83,7 @@ if "yt_dlp" not in sys.modules:
     yt_dlp_stub.YoutubeDL = _YoutubeDL  # type: ignore[attr-defined]
     sys.modules["yt_dlp"] = yt_dlp_stub
 
-from channel_monitor.monitor import ChannelMonitor, _extract_youtube_video_id
+from channel_monitor.monitor import ChannelMonitor, _extract_youtube_video_id  # noqa: E402
 
 
 def _build_monitor(tmp_path, config_name: str = "channel.json") -> ChannelMonitor:
@@ -93,6 +93,33 @@ def _build_monitor(tmp_path, config_name: str = "channel.json") -> ChannelMonito
         queue_url="http://example.test/yt/ingest",
         database_url="postgresql://pmoves:pmoves@localhost:5432/pmoves",
     )
+
+
+class _FakeAcquire:
+    def __init__(self, conn):
+        self._conn = conn
+
+    async def __aenter__(self):
+        return self._conn
+
+    async def __aexit__(self, exc_type, exc, tb):
+        return False
+
+
+class _FakePool:
+    def __init__(self, conn):
+        self._conn = conn
+
+    def acquire(self):
+        return _FakeAcquire(self._conn)
+
+
+class _FakeTransaction:
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb):
+        return False
 
 
 def test_apply_filters_respects_age_and_keywords(tmp_path):
@@ -370,6 +397,7 @@ def test_queue_videos_uses_custom_ingest_source(tmp_path, monkeypatch):
         "ingest_source": "discord_agent",
         "platform": "discord",
         "source_type": "discord_drop",
+        "source_class": "candidate",
     }
     videos = [
         {
@@ -386,6 +414,7 @@ def test_queue_videos_uses_custom_ingest_source(tmp_path, monkeypatch):
     assert payload["source"] == "discord_agent"
     assert payload["metadata"]["platform"] == "discord"
     assert payload["metadata"]["source_type"] == "discord_drop"
+    assert payload["metadata"]["source_class"] == "candidate"
     assert statuses[0][0:3] == ("custom-source-1", "processing", None)
     assert statuses[1][0:3] == ("custom-source-1", "queued", None)
 
@@ -407,7 +436,7 @@ def test_ingest_manual_urls_queues_discord_drop(tmp_path):
             source="discord_agent",
             channel_id="discord:ops",
             channel_name="ops-drops",
-            metadata={"guild_id": "guild-1"},
+            metadata={"guild_id": "guild-1", "source_class": "candidate"},
         )
     )
 
@@ -423,7 +452,11 @@ def test_ingest_manual_urls_queues_discord_drop(tmp_path):
     queued_videos = persist_args[1]
     assert channel_payload["platform"] == "discord"
     assert channel_payload["ingest_source"] == "discord_agent"
-    assert channel_payload["payload_metadata"]["source_context"] == {"guild_id": "guild-1"}
+    assert channel_payload["source_class"] == "candidate"
+    assert channel_payload["payload_metadata"]["source_context"] == {
+        "guild_id": "guild-1",
+        "source_class": "candidate",
+    }
     assert channel_payload["tags"] == ["review", "discord"]
     assert queued_videos[0]["payload_metadata"]["manual_drop_source"] == "discord_agent"
 
@@ -473,3 +506,536 @@ def test_extract_youtube_video_id_allows_valid_hosts(url, expected):
 )
 def test_extract_youtube_video_id_rejects_spoofed_hosts(url):
     assert _extract_youtube_video_id(url) is None
+
+
+def test_create_youtube_control_request_persists_pending_row(tmp_path):
+    monitor = _build_monitor(tmp_path)
+    conn = SimpleNamespace(execute=AsyncMock())
+    monitor._pool = _FakePool(conn)  # type: ignore[assignment]
+    monitor._notify_youtube_control_request = AsyncMock(return_value=False)  # type: ignore[method-assign]
+
+    result = asyncio.run(
+        monitor.create_youtube_control_request(
+            action="playlist_add",
+            details={"playlist_id": "PL123", "video_id": "vid-123"},
+            request_source="discord_agent",
+        )
+    )
+
+    assert result["status"] == "pending_review"
+    assert result["action"] == "playlist_add"
+    assert result["notified"] is False
+    assert result["details"]["request_summary"].startswith("Playlist add:")
+    conn.execute.assert_awaited_once()
+
+
+def test_create_youtube_control_request_supports_playlist_create(tmp_path):
+    monitor = _build_monitor(tmp_path)
+    conn = SimpleNamespace(execute=AsyncMock())
+    monitor._pool = _FakePool(conn)  # type: ignore[assignment]
+    monitor._notify_youtube_control_request = AsyncMock(return_value=False)  # type: ignore[method-assign]
+
+    result = asyncio.run(
+        monitor.create_youtube_control_request(
+            action="playlist_create",
+            details={"title": "PMOVES Creator Queue", "privacy_status": "private"},
+            request_source="discord_agent",
+        )
+    )
+
+    assert result["status"] == "pending_review"
+    assert result["action"] == "playlist_create"
+    assert result["details"]["request_summary"].startswith("Playlist create:")
+    conn.execute.assert_awaited_once()
+
+
+def test_create_youtube_control_request_supports_playlist_update(tmp_path):
+    monitor = _build_monitor(tmp_path)
+    conn = SimpleNamespace(execute=AsyncMock())
+    monitor._pool = _FakePool(conn)  # type: ignore[assignment]
+    monitor._notify_youtube_control_request = AsyncMock(return_value=False)  # type: ignore[method-assign]
+
+    result = asyncio.run(
+        monitor.create_youtube_control_request(
+            action="playlist_update",
+            details={"playlist_id": "PL123", "title": "Updated Queue", "privacy_status": "unlisted"},
+            request_source="discord_agent",
+        )
+    )
+
+    assert result["status"] == "pending_review"
+    assert result["action"] == "playlist_update"
+    assert result["details"]["request_summary"].startswith("Playlist update:")
+    conn.execute.assert_awaited_once()
+
+
+def test_create_youtube_control_request_supports_playlist_delete(tmp_path):
+    monitor = _build_monitor(tmp_path)
+    conn = SimpleNamespace(execute=AsyncMock())
+    monitor._pool = _FakePool(conn)  # type: ignore[assignment]
+    monitor._notify_youtube_control_request = AsyncMock(return_value=False)  # type: ignore[method-assign]
+
+    result = asyncio.run(
+        monitor.create_youtube_control_request(
+            action="playlist_delete",
+            details={"playlist_id": "PL123"},
+            request_source="discord_agent",
+        )
+    )
+
+    assert result["status"] == "pending_review"
+    assert result["action"] == "playlist_delete"
+    assert result["details"]["request_summary"].startswith("Playlist delete:")
+    conn.execute.assert_awaited_once()
+
+
+def test_create_youtube_control_request_rejects_invalid_action(tmp_path):
+    monitor = _build_monitor(tmp_path)
+    conn = SimpleNamespace(execute=AsyncMock())
+    monitor._pool = _FakePool(conn)  # type: ignore[assignment]
+
+    with pytest.raises(ValueError, match="Unsupported YouTube control action"):
+        asyncio.run(
+            monitor.create_youtube_control_request(
+                action="playlist_replace",
+                details={"playlist_id": "PL123", "video_id": "vid-123"},
+                request_source="discord_agent",
+            )
+        )
+
+    conn.execute.assert_not_awaited()
+
+
+def test_create_youtube_control_request_requires_action_fields(tmp_path):
+    monitor = _build_monitor(tmp_path)
+    conn = SimpleNamespace(execute=AsyncMock())
+    monitor._pool = _FakePool(conn)  # type: ignore[assignment]
+
+    with pytest.raises(ValueError, match="playlist_add requires playlist_id, video_id"):
+        asyncio.run(
+            monitor.create_youtube_control_request(
+                action="playlist_add",
+                details={},
+                request_source="discord_agent",
+            )
+        )
+
+    conn.execute.assert_not_awaited()
+
+
+def test_create_youtube_control_request_requires_playlist_update_mutation(tmp_path):
+    monitor = _build_monitor(tmp_path)
+    conn = SimpleNamespace(execute=AsyncMock())
+    monitor._pool = _FakePool(conn)  # type: ignore[assignment]
+
+    with pytest.raises(ValueError, match="playlist_update requires at least one mutable field"):
+        asyncio.run(
+            monitor.create_youtube_control_request(
+                action="playlist_update",
+                details={"playlist_id": "PL123"},
+                request_source="discord_agent",
+            )
+        )
+
+    conn.execute.assert_not_awaited()
+
+
+def test_create_youtube_control_request_can_notify_messaging_gateway(tmp_path, monkeypatch):
+    monitor = _build_monitor(tmp_path)
+    conn = SimpleNamespace(execute=AsyncMock())
+    monitor._pool = _FakePool(conn)  # type: ignore[assignment]
+    requests_made = []
+
+    class DummyResponse:
+        def raise_for_status(self):
+            return None
+
+    class DummyAsyncClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        async def post(self, url, json=None):
+            requests_made.append((url, json))
+            return DummyResponse()
+
+    monkeypatch.setenv("CHANNEL_MONITOR_MESSAGING_URL", "http://messaging.test/v1/send")
+    monkeypatch.setattr("channel_monitor.monitor.httpx.AsyncClient", DummyAsyncClient)
+
+    result = asyncio.run(
+        monitor.create_youtube_control_request(
+            action="playlist_add",
+            details={"playlist_id": "PL123", "video_id": "vid-123"},
+            request_source="discord_agent",
+            notify_platforms=["discord"],
+        )
+    )
+
+    assert result["notified"] is True
+    assert requests_made[0][0] == "http://messaging.test/v1/send"
+    assert requests_made[0][1]["platforms"] == ["discord"]
+    assert requests_made[0][1]["embeds"][0]["title"] == "YouTube control request pending review"
+    assert requests_made[0][1]["metadata"]["details"] == {
+        "playlist_id": "PL123",
+        "video_id": "vid-123",
+    }
+    buttons = requests_made[0][1]["buttons"]
+    assert buttons[0]["id"].startswith("ytcontrol:approve:")
+    assert buttons[1]["id"].endswith(":revise")
+    assert buttons[2]["id"].endswith(":scope")
+    assert buttons[3]["id"].endswith(":policy")
+    assert buttons[4]["id"].endswith(":other")
+
+
+def test_create_youtube_control_request_renders_template_and_publishes_notebook(tmp_path, monkeypatch):
+    monitor = _build_monitor(tmp_path)
+    conn = SimpleNamespace(execute=AsyncMock())
+    monitor._pool = _FakePool(conn)  # type: ignore[assignment]
+    requests_made = []
+
+    class DummyResponse:
+        def __init__(self, payload):
+            self._payload = payload
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return self._payload
+
+    class DummyAsyncClient:
+        def __init__(self, *args, **kwargs):
+            self.base_url = kwargs.get("base_url")
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        async def post(self, url, json=None):
+            requests_made.append((str(self.base_url or ""), url, json))
+            return DummyResponse({"id": "notebook-entry-1"})
+
+    monkeypatch.setenv("OPEN_NOTEBOOK_API_URL", "http://notebook.test")
+    monkeypatch.setenv("OPEN_NOTEBOOK_API_TOKEN", "nb-token")
+    monkeypatch.setenv("CHANNEL_MONITOR_YT_NOTEBOOK_ID", "nb-123")
+    monkeypatch.setattr("channel_monitor.monitor.httpx.AsyncClient", DummyAsyncClient)
+
+    result = asyncio.run(
+        monitor.create_youtube_control_request(
+            action="comment_create",
+            details={"video_id": "vid-123", "text_template": "Thanks {creator_name} for the {topic} breakdown."},
+            request_source="discord_agent",
+            draft={
+                "variables": {"creator_name": "Alice", "topic": "Qwen"},
+                "channel_name": "Alice AI",
+                "source_class": "watched",
+            },
+            notebook={"title_prefix": "Creator draft"},
+        )
+    )
+
+    assert result["details"]["text"] == "Thanks Alice for the Qwen breakdown."
+    assert result["details"]["template_rendered"] is True
+    assert result["details"]["notebook"]["entry_id"] == "notebook-entry-1"
+    assert requests_made[0][0] == "http://notebook.test"
+    assert requests_made[0][1] == "/api/sources/json"
+    assert requests_made[0][2]["title"].startswith("Creator draft")
+
+
+def test_create_youtube_control_request_renders_policy_template(tmp_path):
+    monitor = _build_monitor(tmp_path)
+    conn = SimpleNamespace(execute=AsyncMock())
+    monitor._pool = _FakePool(conn)  # type: ignore[assignment]
+    monitor._notify_youtube_control_request = AsyncMock(return_value=False)  # type: ignore[method-assign]
+
+    result = asyncio.run(
+        monitor.create_youtube_control_request(
+            action="comment_create",
+            details={
+                "video_id": "vid-123",
+                "policy_template": "creator_attribution_bridge",
+                "topic": "Qwen 3",
+            },
+            request_source="discord_agent",
+            draft={
+                "channel_name": "Example Creator",
+                "pmoves_application": "creator review automation",
+                "notebook_surface": "Open Notebook",
+                "source_class": "owned",
+            },
+        )
+    )
+
+    assert result["details"]["template_rendered"] is True
+    assert result["details"]["policy_template"] == "creator_attribution_bridge"
+    assert "Example Creator" in result["details"]["text"]
+    assert "creator review automation" in result["details"]["text"]
+    assert result["details"]["policy_context"]["notebook_surface"] == "Open Notebook"
+
+
+def test_create_youtube_control_request_reply_summary_uses_parent_comment(tmp_path):
+    monitor = _build_monitor(tmp_path)
+    conn = SimpleNamespace(execute=AsyncMock())
+    monitor._pool = _FakePool(conn)  # type: ignore[assignment]
+    monitor._notify_youtube_control_request = AsyncMock(return_value=False)  # type: ignore[method-assign]
+
+    result = asyncio.run(
+        monitor.create_youtube_control_request(
+            action="comment_create",
+            details={
+                "video_id": "vid-123",
+                "parent_comment_id": "comment-parent-1",
+                "text": "Replying with a PMOVES follow-up",
+            },
+            request_source="discord_agent",
+        )
+    )
+
+    assert "reply on comment-parent-1" in result["details"]["request_summary"]
+    conn.execute.assert_awaited_once()
+
+
+def test_create_youtube_control_request_supports_comment_delete(tmp_path):
+    monitor = _build_monitor(tmp_path)
+    conn = SimpleNamespace(execute=AsyncMock())
+    monitor._pool = _FakePool(conn)  # type: ignore[assignment]
+    monitor._notify_youtube_control_request = AsyncMock(return_value=False)  # type: ignore[method-assign]
+
+    result = asyncio.run(
+        monitor.create_youtube_control_request(
+            action="comment_delete",
+            details={"comment_id": "comment-1", "video_id": "vid-123"},
+            request_source="discord_agent",
+        )
+    )
+
+    assert result["status"] == "pending_review"
+    assert result["action"] == "comment_delete"
+    assert result["details"]["request_summary"].startswith("Comment delete:")
+    conn.execute.assert_awaited_once()
+
+
+def test_create_youtube_control_request_rejects_unknown_policy_template(tmp_path):
+    monitor = _build_monitor(tmp_path)
+    conn = SimpleNamespace(execute=AsyncMock())
+    monitor._pool = _FakePool(conn)  # type: ignore[assignment]
+
+    with pytest.raises(ValueError, match="Unknown comment policy template"):
+        asyncio.run(
+            monitor.create_youtube_control_request(
+                action="comment_create",
+                details={"video_id": "vid-123", "policy_template": "unknown_policy"},
+                request_source="discord_agent",
+            )
+        )
+
+    conn.execute.assert_not_awaited()
+
+
+def test_create_youtube_control_request_requires_comment_target(tmp_path):
+    monitor = _build_monitor(tmp_path)
+    conn = SimpleNamespace(execute=AsyncMock())
+    monitor._pool = _FakePool(conn)  # type: ignore[assignment]
+
+    with pytest.raises(ValueError, match="comment_create requires video_id or parent_comment_id"):
+        asyncio.run(
+            monitor.create_youtube_control_request(
+                action="comment_create",
+                details={"policy_template": "creator_research_receipt"},
+                request_source="discord_agent",
+            )
+        )
+
+    conn.execute.assert_not_awaited()
+
+
+def test_review_youtube_control_actions_executes_pmoves_yt_call(tmp_path, monkeypatch):
+    monitor = _build_monitor(tmp_path)
+    rows = [
+        {
+            "id": "11111111-1111-1111-1111-111111111111",
+            "action": "comment_create",
+            "details": {"video_id": "vid-123", "text": "hello", "request_summary": "Comment create: hello"},
+        }
+    ]
+    conn = SimpleNamespace(fetch=AsyncMock(return_value=rows), execute=AsyncMock(), transaction=lambda: _FakeTransaction())
+    monitor._pool = _FakePool(conn)  # type: ignore[assignment]
+
+    requests_made = []
+
+    class DummyResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"status": "executed", "result": {"id": "comment-1"}}
+
+    class DummyAsyncClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        async def post(self, url, json=None, headers=None):
+            requests_made.append((url, json, headers))
+            return DummyResponse()
+
+    monkeypatch.setenv("CHANNEL_MONITOR_YT_API_KEY", "secret-key")
+    monkeypatch.setattr("channel_monitor.monitor.httpx.AsyncClient", DummyAsyncClient)
+
+    result = asyncio.run(
+        monitor.review_youtube_control_actions(
+            action_ids=["11111111-1111-1111-1111-111111111111"],
+            approve=True,
+            actor="discord-agent",
+            reason="approved in ops",
+        )
+    )
+
+    assert result["approved"] is True
+    assert result["processed"] == 1
+    assert result["actions"][0]["summary"] == "Comment create: hello"
+    assert "request_source" not in result["actions"][0]
+    assert result["actions"][0]["target_ref"] == "vid-123"
+    assert requests_made[0][0] == "http://example.test/yt/control/comment"
+    assert requests_made[0][1]["execute"] is True
+    assert requests_made[0][1]["approved_by"] == "discord-agent"
+    assert requests_made[0][2]["X-API-Key"] == "secret-key"
+    # 2 execute calls: 1 for processing-timeout recovery + 1 per-row status update
+    assert conn.execute.await_count == 2
+
+
+def test_review_youtube_control_reply_actions_use_parent_comment_target(tmp_path):
+    monitor = _build_monitor(tmp_path)
+    rows = [
+        {
+            "id": "11111111-1111-1111-1111-111111111111",
+            "action": "comment_create",
+            "details": {
+                "video_id": "vid-123",
+                "parent_comment_id": "comment-parent-1",
+                "text": "reply text",
+                "request_summary": "Comment create: reply on comment-parent-1 - reply text",
+            },
+        }
+    ]
+    conn = SimpleNamespace(fetch=AsyncMock(return_value=rows), execute=AsyncMock(), transaction=lambda: _FakeTransaction())
+    monitor._pool = _FakePool(conn)  # type: ignore[assignment]
+    monitor._invoke_yt_control_action = AsyncMock(return_value={"status": "executed", "result": {"id": "reply-1"}})  # type: ignore[method-assign]
+
+    result = asyncio.run(
+        monitor.review_youtube_control_actions(
+            action_ids=["11111111-1111-1111-1111-111111111111"],
+            approve=True,
+            actor="discord-agent",
+        )
+    )
+
+    assert result["actions"][0]["target_ref"] == "comment-parent-1"
+
+
+def test_review_youtube_control_comment_delete_uses_comment_target(tmp_path):
+    monitor = _build_monitor(tmp_path)
+    rows = [
+        {
+            "id": "11111111-1111-1111-1111-111111111111",
+            "action": "comment_delete",
+            "details": {
+                "comment_id": "comment-1",
+                "video_id": "vid-123",
+                "request_summary": "Comment delete: delete comment comment-1",
+            },
+        }
+    ]
+    conn = SimpleNamespace(fetch=AsyncMock(return_value=rows), execute=AsyncMock(), transaction=lambda: _FakeTransaction())
+    monitor._pool = _FakePool(conn)  # type: ignore[assignment]
+    monitor._invoke_yt_control_action = AsyncMock(return_value={"status": "executed", "result": {"id": "comment-1"}})  # type: ignore[method-assign]
+
+    result = asyncio.run(
+        monitor.review_youtube_control_actions(
+            action_ids=["11111111-1111-1111-1111-111111111111"],
+            approve=True,
+            actor="discord-agent",
+        )
+    )
+
+    assert result["actions"][0]["target_ref"] == "comment-1"
+
+
+def test_review_youtube_control_actions_marks_failed_when_execution_errors(tmp_path):
+    monitor = _build_monitor(tmp_path)
+    rows = [
+        {
+            "id": "11111111-1111-1111-1111-111111111111",
+            "action": "comment_create",
+            "details": {"video_id": "vid-123", "text": "hello", "request_summary": "Comment create: hello"},
+        }
+    ]
+    conn = SimpleNamespace(fetch=AsyncMock(return_value=rows), execute=AsyncMock(), transaction=lambda: _FakeTransaction())
+    monitor._pool = _FakePool(conn)  # type: ignore[assignment]
+    monitor._invoke_yt_control_action = AsyncMock(side_effect=RuntimeError("upstream boom"))  # type: ignore[method-assign]
+
+    result = asyncio.run(
+        monitor.review_youtube_control_actions(
+            action_ids=["11111111-1111-1111-1111-111111111111"],
+            approve=True,
+            actor="discord-agent",
+            reason="approved in ops",
+        )
+    )
+
+    assert result["processed"] == 1
+    assert result["actions"][0]["status"] == "failed"
+    assert result["actions"][0]["error"] == "upstream boom"
+    update_args = conn.execute.await_args.args
+    assert update_args[2] == "failed"
+    assert update_args[6] == "upstream boom"
+
+
+def test_review_youtube_control_actions_applies_structured_rejection_reason(tmp_path):
+    monitor = _build_monitor(tmp_path)
+    rows = [
+        {
+            "id": "11111111-1111-1111-1111-111111111111",
+            "action": "comment_create",
+            "request_source": "discord_agent",
+            "details": {
+                "video_id": "vid-123",
+                "text": "hello",
+                "source_class": "owned",
+                "request_summary": "Comment create: hello",
+            },
+        }
+    ]
+    conn = SimpleNamespace(fetch=AsyncMock(return_value=rows), execute=AsyncMock(), transaction=lambda: _FakeTransaction())
+    monitor._pool = _FakePool(conn)  # type: ignore[assignment]
+
+    result = asyncio.run(
+        monitor.review_youtube_control_actions(
+            action_ids=["11111111-1111-1111-1111-111111111111"],
+            approve=False,
+            actor="discord-agent",
+            reason_code="policy",
+        )
+    )
+
+    assert result["approved"] is False
+    assert result["reason_code"] == "policy"
+    assert result["reason"] == "rejected from Discord (policy/brand alignment)"
+    assert result["actions"][0]["reason_code"] == "policy"
+    assert result["actions"][0]["source_class"] == "owned"
+    assert result["actions"][0]["target_ref"] == "vid-123"
+    update_args = conn.execute.await_args.args
+    assert update_args[3] == "discord-agent"
+    assert update_args[4] == "rejected from Discord (policy/brand alignment)"

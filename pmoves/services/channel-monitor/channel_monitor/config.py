@@ -35,6 +35,7 @@ DEFAULT_CONFIG: Dict[str, Any] = {
             "channel_name": "Google Developers",
             "platform": "youtube",
             "source_type": "channel",
+            "source_class": "watched",
             "source_url": "https://www.youtube.com/@GoogleDevelopers",
             "enabled": False,
             "check_interval_minutes": 60,
