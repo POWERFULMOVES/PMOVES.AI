@@ -9,6 +9,7 @@ import os
 from contextlib import asynccontextmanager
 from typing import Any, Dict, Optional
 
+import httpx
 from fastapi import FastAPI, HTTPException, Request
 from nats.aio.client import Client as NATS
 from pydantic import BaseModel
@@ -64,6 +65,8 @@ DISCORD_WEBHOOK_URL = os.environ.get("DISCORD_WEBHOOK_URL", "")
 DISCORD_APPLICATION_ID = os.environ.get("DISCORD_APPLICATION_ID", "")
 DISCORD_PUBLIC_KEY = os.environ.get("DISCORD_PUBLIC_KEY", "")
 WHATSAPP_ACCESS_TOKEN = os.environ.get("WHATSAPP_ACCESS_TOKEN", "")
+CHANNEL_MONITOR_URL = os.environ.get("CHANNEL_MONITOR_URL", "http://channel-monitor:8097")
+CHANNEL_MONITOR_SECRET = os.environ.get("CHANNEL_MONITOR_SECRET", "")
 
 # NATS subjects to subscribe to for auto-forwarding
 SUBJECTS = os.environ.get(
@@ -116,6 +119,75 @@ class SendMessageRequest(BaseModel):
     embeds: Optional[list[dict]] = None
     buttons: Optional[list[dict]] = None  # Platform-agnostic button definitions
     metadata: Optional[dict] = None
+
+
+def _interaction_actor(payload: Dict[str, Any]) -> str:
+    member = payload.get("member") if isinstance(payload.get("member"), dict) else {}
+    user = member.get("user") if isinstance(member.get("user"), dict) else payload.get("user", {})
+    username = user.get("username") if isinstance(user, dict) else None
+    user_id = user.get("id") if isinstance(user, dict) else None
+    if username and user_id:
+        return f"{username}:{user_id}"
+    if user_id:
+        return str(user_id)
+    return "discord-user"
+
+
+async def _handle_ytcontrol_interaction(payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    data = payload.get("data") if isinstance(payload.get("data"), dict) else {}
+    custom_id = data.get("custom_id")
+    if not isinstance(custom_id, str) or not custom_id.startswith("ytcontrol:"):
+        return None
+
+    parts = custom_id.split(":", 2)
+    if len(parts) != 3:
+        return {
+            "type": 4,
+            "data": {"content": "Invalid YouTube control action id.", "flags": 64},
+        }
+    _, action, action_id = parts
+    approve = action == "approve"
+    if action not in {"approve", "reject"}:
+        return {
+            "type": 4,
+            "data": {"content": f"Unsupported YouTube control action: {action}", "flags": 64},
+        }
+
+    headers = {"content-type": "application/json"}
+    if CHANNEL_MONITOR_SECRET:
+        headers["X-Channel-Monitor-Token"] = CHANNEL_MONITOR_SECRET
+    review_payload = {
+        "action_ids": [action_id],
+        "approve": approve,
+        "actor": _interaction_actor(payload),
+        "reason": "approved from Discord" if approve else "rejected from Discord",
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            response = await client.post(
+                f"{CHANNEL_MONITOR_URL.rstrip('/')}/api/monitor/youtube-control/review",
+                headers=headers,
+                json=review_payload,
+            )
+            response.raise_for_status()
+            body = response.json()
+    except Exception as exc:
+        logger.warning("YouTube control Discord interaction failed for %s: %s", action_id, exc)
+        return {
+            "type": 4,
+            "data": {"content": f"Review action failed for {action_id}: {exc}", "flags": 64},
+        }
+
+    processed = body.get("processed", 0)
+    if approve:
+        content = f"Approved YouTube control request `{action_id}`. Processed: {processed}."
+    else:
+        content = f"Rejected YouTube control request `{action_id}`. Processed: {processed}."
+    return {
+        "type": 4,
+        "data": {"content": content, "flags": 64},
+    }
 
 
 @app.get("/healthz")
@@ -216,6 +288,10 @@ async def discord_webhook(request: Request):
     # Handle ping (type 1) for Discord URL verification
     if payload.get("type") == 1:
         return {"type": 1}
+
+    ytcontrol_response = await _handle_ytcontrol_interaction(payload)
+    if ytcontrol_response is not None:
+        return ytcontrol_response
 
     return await discord_platform.handle_interaction(payload)
 

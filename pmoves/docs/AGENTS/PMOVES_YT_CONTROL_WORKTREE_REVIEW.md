@@ -158,6 +158,9 @@ As of March 12, 2026, use these findings as the starting bias for this worktree 
     by calling PMOVES.YT control endpoints directly
   - queued control requests can now optionally notify `messaging-gateway` so Discord-ready review
     prompts come from the same request path
+  - `messaging-gateway` now intercepts `ytcontrol:*` button clicks and turns them into
+    `channel-monitor` review calls, closing the approval loop from Discord click to PMOVES.YT
+    execution
   - broader channel-management tasks and first-class Discord interaction wiring are still follow-up
     work
 

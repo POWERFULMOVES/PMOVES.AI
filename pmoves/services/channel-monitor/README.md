@@ -180,6 +180,8 @@ curl -X POST http://localhost:8097/api/monitor/youtube-control/review \
 Set `CHANNEL_MONITOR_YT_API_KEY` when PMOVES.YT control endpoints require `X-API-Key`.
 Set `CHANNEL_MONITOR_MESSAGING_URL` to the messaging gateway `/v1/send` endpoint to emit
 Discord-ready approval notifications when requests are queued.
+`messaging-gateway` now intercepts `ytcontrol:approve:<id>` / `ytcontrol:reject:<id>` button
+interactions and maps them back into `POST /api/monitor/youtube-control/review`.
 
 ### Observability
 
