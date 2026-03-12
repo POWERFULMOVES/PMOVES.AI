@@ -9,7 +9,7 @@ services:
     build:
       context: ../PMOVES-n8n
       dockerfile: compose/n8n/Dockerfile
-    image: pmoves/n8n:2.1.0-sqlite
+    image: pmoves/n8n:2.1.0-runtime
     container_name: pmoves-n8n
     restart: unless-stopped
     <<: *env-tier-worker
@@ -17,6 +17,7 @@ services:
       - N8N_PORT=5678
       - N8N_PROTOCOL=http
       - N8N_HOST=localhost
+      - N8N_SECURE_COOKIE=false
       - N8N_DEFAULT_TIMEZONE=${TZ:-America/New_York}
       - WEBHOOK_URL=http://localhost:5678
       - GENERIC_TIMEZONE=${TZ:-America/New_York}
@@ -45,6 +46,7 @@ services:
       - N8N_LOG_LEVEL=debug
       - N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=true
     ports: ["5678:5678"]
+    networks: [cataclysm]
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
@@ -61,6 +63,7 @@ services:
       - N8N_RUNNERS_AUTO_SHUTDOWN_TIMEOUT=300
     depends_on:
       - n8n
+    networks: [cataclysm]
     volumes:
       - n8n-data:/home/node/.n8n
 volumes:

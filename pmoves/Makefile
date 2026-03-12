@@ -1417,9 +1417,22 @@ N8N_SUBMODULE_DIR ?= ../PMOVES-n8n
 N8N_CANONICAL_FLOWS_DIR ?= $(N8N_SUBMODULE_DIR)/workflows
 
 # n8n persistence mode:
-# - sqlite: simplest local bring-up (default)
-# - postgres: production-grade n8n DB (recommended for VPS)
-N8N_DB ?= sqlite
+# - postgres: production-grade n8n DB (default)
+# - sqlite: legacy/local escape hatch only
+N8N_DB ?= postgres
+N8N_DB_NAME ?= n8n
+N8N_DB_USER ?= n8n
+N8N_DB_PASSWORD ?= pmoves_n8n_local
+N8N_DB_SCHEMA ?= public
+N8N_BASE_URL ?= http://localhost:5678
+N8N_API_URL ?= $(N8N_BASE_URL)/api/v1
+N8N_OWNER_EMAIL ?= $(if $(PMOVES_OPERATOR_EMAIL),$(PMOVES_OPERATOR_EMAIL),$(SUPABASE_BOOT_USER_EMAIL))
+N8N_OWNER_FIRST_NAME ?= PMOVES
+N8N_OWNER_LAST_NAME ?= Operator
+N8N_API_KEY_LABEL ?= PMOVES.AI automation bootstrap
+N8N_ENV_WRITE_FILE ?= .env.local
+export N8N_DB N8N_DB_NAME N8N_DB_USER N8N_DB_PASSWORD N8N_DB_SCHEMA
+export N8N_BASE_URL N8N_API_URL N8N_OWNER_EMAIL N8N_OWNER_FIRST_NAME N8N_OWNER_LAST_NAME N8N_API_KEY_LABEL
 ifeq ($(N8N_DB),postgres)
   N8N_DB_STACK_FILE := -f docker-compose.n8n.postgres.yml
 else
@@ -2346,12 +2359,13 @@ up-agents-integrations: ## Start agents using your forks (builds from $(INTEGRAT
 	@$(DC) -f docker-compose.agents.integrations.yml --profile agents up -d nats agent-zero archon archon-ui mesh-agent publisher-discord
 	@echo "✔ Agents started from integrations workspace. Workspace: $(INTEGRATIONS_WORKSPACE)"
 
-.PHONY: up-n8n n8n-sync-submodule-flows n8n-import-flows n8n-activate-flows n8n-bootstrap n8n-export-repo-flows
+.PHONY: up-n8n n8n-sync-submodule-flows n8n-api-bootstrap n8n-import-flows n8n-activate-flows n8n-sync-supabase-registry n8n-bootstrap n8n-export-repo-flows
 n8n-sync-submodule-flows: ## Mirror canonical PMOVES-n8n workflows into pmoves/n8n/flows
 	@$(PYTHON) -c "from pathlib import Path; import shutil; src=Path(r'$(N8N_CANONICAL_FLOWS_DIR)'); dst=Path(r'$(CURDIR)/n8n/flows'); dst.mkdir(parents=True, exist_ok=True); [shutil.copy2(path, dst / path.name) for path in sorted(src.glob('*.json'))]"
 	@echo "✔ Mirrored PMOVES-n8n workflows into pmoves/n8n/flows"
 
 up-n8n: ensure-env-shared n8n-sync-submodule-flows
+	@docker network create cataclysm-net >/dev/null 2>&1 || true
 	@if [ "$(N8N_DB)" = "postgres" ]; then \
 	  echo "→ n8n DB mode: postgres"; \
 	  $(N8N_DC) up -d n8n-db n8n n8n-runners; \
@@ -2365,13 +2379,26 @@ down-n8n: ## Stop n8n workflow services
 	@$(N8N_DC) stop n8n n8n-runners n8n-db >/dev/null 2>&1 || true
 	@$(N8N_DC) rm -f n8n n8n-runners n8n-db >/dev/null 2>&1 || true
 
+n8n-api-bootstrap: ## Create/login the n8n owner and mint a fresh Public API key into the local env file
+	@$(LOAD_ENV_SHARED); $(PYTHON) "$(N8N_SUBMODULE_DIR)/scripts/bootstrap_n8n_api.py" \
+		--base-url "$(N8N_BASE_URL)" \
+		--api-url "$(N8N_API_URL)" \
+		--email "$(N8N_OWNER_EMAIL)" \
+		--first-name "$(N8N_OWNER_FIRST_NAME)" \
+		--last-name "$(N8N_OWNER_LAST_NAME)" \
+		--label "$(N8N_API_KEY_LABEL)" \
+		--write-env "$(N8N_ENV_WRITE_FILE)"
+
 n8n-import-flows: ## Import canonical PMOVES-n8n workflows into the live n8n instance
-	@$(PYTHON) "$(N8N_SUBMODULE_DIR)/scripts/import_repo_flows.py" --container pmoves-n8n --workflow-dir "$(N8N_CANONICAL_FLOWS_DIR)"
+	@$(LOAD_ENV_SHARED); $(PYTHON) "$(N8N_SUBMODULE_DIR)/scripts/import_repo_flows.py" --container pmoves-n8n --workflow-dir "$(N8N_CANONICAL_FLOWS_DIR)" --skip-activation
 
 n8n-activate-flows: ## Publish canonical PMOVES-n8n workflows (keeps chat-platform voice flows inactive unless VOICE_PLATFORMS=1)
-	@$(PYTHON) "$(N8N_SUBMODULE_DIR)/scripts/import_repo_flows.py" --container pmoves-n8n --workflow-dir "$(N8N_CANONICAL_FLOWS_DIR)" --activate-only $(if $(VOICE_PLATFORMS),--voice-platforms,)
+	@$(LOAD_ENV_SHARED); $(PYTHON) "$(N8N_SUBMODULE_DIR)/scripts/import_repo_flows.py" --container pmoves-n8n --workflow-dir "$(N8N_CANONICAL_FLOWS_DIR)" --activate-only $(if $(VOICE_PLATFORMS),--voice-platforms,)
 
-n8n-bootstrap: up-n8n n8n-import-flows n8n-activate-flows ## Bring up n8n, import workflows, and publish the default set
+n8n-sync-supabase-registry: ## Upsert live n8n workflow state into pmoves_core.n8n_workflow_registry
+	@$(LOAD_ENV_SHARED); $(PYTHON) "$(N8N_SUBMODULE_DIR)/scripts/sync_supabase_registry.py" --workflow-dir "$(N8N_CANONICAL_FLOWS_DIR)"
+
+n8n-bootstrap: up-n8n n8n-api-bootstrap n8n-import-flows n8n-activate-flows n8n-sync-supabase-registry ## Bring up n8n, bootstrap API access, import workflows, publish defaults, and sync Supabase tracking
 	@echo "✔ n8n bootstrap complete"
 
 n8n-export-repo-flows: ## Export live n8n workflows into PMOVES-n8n and refresh the compatibility mirror

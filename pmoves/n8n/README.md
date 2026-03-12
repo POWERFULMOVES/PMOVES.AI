@@ -7,7 +7,9 @@ Canonical n8n workflow ownership lives in [`PMOVES-n8n/workflows/`](../../PMOVES
 Canonical edit path:
 
 ```bash
+make -C pmoves n8n-api-bootstrap
 make -C pmoves n8n-sync-submodule-flows
 make -C pmoves n8n-import-flows
 make -C pmoves n8n-activate-flows
+make -C pmoves n8n-sync-supabase-registry
 ```

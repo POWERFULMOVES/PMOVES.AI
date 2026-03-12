@@ -124,7 +124,8 @@ def _ensure_integration_credentials(text: str) -> str:
         text = _set_kv(text, "FIREFLY_APP_KEY", firefly_key)
 
     # n8n encryption key: 32-byte urlsafe token for workflow credential encryption.
-    # NOTE: N8N_API_KEY cannot be auto-generated — it must be created from the n8n UI.
+    # N8N_API_KEY is still not generated here because it requires a live n8n
+    # instance; use `make -C pmoves n8n-api-bootstrap` after bring-up.
     n8n_enc = _get_kv(text, "N8N_ENCRYPTION_KEY")
     if _is_blank_or_placeholder(n8n_enc):
         text = _set_kv(text, "N8N_ENCRYPTION_KEY", _strong_random(32))
