@@ -52,6 +52,8 @@ jobs:
             files.pythonhosted.org:443
 
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
       - name: Free Disk Space (Ubuntu)
         uses: jlumbroso/free-disk-space@main
         continue-on-error: true          # Self-hosted runner: bash arithmetic fails on large disks (scientific notation)
