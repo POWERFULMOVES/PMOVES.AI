@@ -10,6 +10,7 @@ _Last updated: 2026-03-12_
 - Kept the root `pmoves/services/pmoves-yt` package as a compatibility shim so existing tests and import paths remain stable during the production transition.
 - Modernized the downloader path around the authoritative runtime: PMOVES.YT now documents current yt-dlp client/token behavior, root compose passes companion URLs explicitly, and Jellyfin/channel-monitor docs are moving off older MCP/future-work framing.
 - Added `pmoves/docs/PMOVES.AI PLANS/CREATOR_NETWORK_CONTROL_PLANE.md` to frame YouTube, Discord agents, transcribe-and-fetch, model routing, and Tokenism as one creator-network lane.
+- Updated the AGENTS creator fast path so `PMOVES-Creator`, `PMOVES-Open-Notebook`, and `CATACLYSM_STUDIOS_INC` are explicit traversal docs for creator strategy, notebook evidence, and brand/governance context.
 - Next focus: finish review cleanup, get PMOVES.YT/root checks green, and keep the creator/channel-monitor runbooks aligned with the authoritative runtime instead of the compatibility mirror.
 
 ### Latest changes (Mar 12, 2026) — n8n Production Control Plane Refresh

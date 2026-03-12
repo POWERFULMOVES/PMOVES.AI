@@ -4,6 +4,7 @@ Use this runbook when the task is not just "fix PMOVES.YT", but review the creat
 path around it in one isolated worktree.
 
 This is the correct lane when you need to validate:
+- creator strategy and notebook context
 - PMOVES.YT runtime behavior
 - channel-monitor discovery and queue handoff
 - transcribe-and-fetch fallback or repair posture
@@ -27,13 +28,28 @@ Recommended branch naming:
 ## Traversal order
 
 1. Read `pmoves/docs/PMOVES.AI PLANS/CREATOR_NETWORK_CONTROL_PLANE.md`
-2. Read `pmoves/docs/AGENTS/SUBMODULE_CODEX_HOMES/PMOVES.YT.md`
-3. Read `pmoves/docs/AGENTS/SUBMODULE_CODEX_HOMES/PMOVES-transcribe-and-fetch.md`
-4. Read `pmoves/services/channel-monitor/README.md`
-5. Read `pmoves/docs/AGENTS/JELLYFIN_CREATOR_WORKTREE_REVIEW.md`
-6. Then inspect the live service contracts in code and compose
+2. Read `pmoves/docs/AGENTS/SUBMODULE_CODEX_HOMES/PMOVES-Creator.md`
+3. Read `pmoves/docs/AGENTS/SUBMODULE_CODEX_HOMES/PMOVES-Open-Notebook.md`
+4. Read `pmoves/docs/AGENTS/SUBMODULE_CODEX_HOMES/PMOVES.YT.md`
+5. Read `pmoves/docs/AGENTS/SUBMODULE_CODEX_HOMES/PMOVES-transcribe-and-fetch.md`
+6. Read `pmoves/services/channel-monitor/README.md`
+7. Read `pmoves/docs/AGENTS/JELLYFIN_CREATOR_WORKTREE_REVIEW.md`
+8. Read `pmoves/docs/PMOVESCHIT/CATACLYSM_STUDIOS_INC.md`
+9. Then inspect the live service contracts in code and compose
 
 ## Review lanes
+
+### Lane 0 — creator strategy and notebook context
+
+- Files:
+  - `pmoves/docs/AGENTS/SUBMODULE_CODEX_HOMES/PMOVES-Creator.md`
+  - `pmoves/docs/AGENTS/SUBMODULE_CODEX_HOMES/PMOVES-Open-Notebook.md`
+  - `pmoves/docs/PMOVESCHIT/CATACLYSM_STUDIOS_INC.md`
+  - `CATACLYSM_STUDIOS_INC/README.md`
+- Questions:
+  - Is the operator task aligned with creator strategy rather than just service mechanics?
+  - Should the task produce notebook artifacts, drafts, or evidence before execution?
+  - Does the action fit the Cataclysm Studios platform story, brand, and community posture?
 
 ### Lane A — PMOVES.YT runtime
 
@@ -124,6 +140,11 @@ Use a code-review mindset by default:
 - then validation evidence
 - then merge order
 
+When the task affects creator actions, also say:
+- where creator intent should live
+- where notebook evidence should live
+- which CATACLYSM_STUDIOS_INC constraints shaped the recommendation
+
 If no findings are present, say so explicitly and call out residual risks:
 - creator outreach governance
 - transcript/fetch divergence
@@ -161,17 +182,24 @@ As of March 12, 2026, use these findings as the starting bias for this worktree 
   - `messaging-gateway` now intercepts `ytcontrol:*` button clicks and turns them into
     `channel-monitor` review calls, closing the approval loop from Discord click to PMOVES.YT
     execution
-  - broader channel-management tasks and first-class Discord interaction wiring are still follow-up
-    work
+- broader channel-management tasks and first-class Discord interaction wiring are still follow-up
+  work
+- `PMOVES-Creator` and `PMOVES-Open-Notebook` are now part of the intended traversal path for
+  creator-control work, but their current Codex homes still need richer operational examples as
+  the action surface grows.
+- `CATACLYSM_STUDIOS_INC` should now be treated as the governing context for creator-network
+  actions so outreach, automation, and monetization stay aligned with the platform story.
 
 ## Recommended next implementation steps
 
-1. Keep `channel-monitor` source metadata explicit in config, API payloads, and downstream PMOVES.YT
+1. Keep creator strategy and notebook artifacts explicit in the AGENTS traversal so action
+   requests start with intent, draft context, and approval posture instead of raw endpoint input.
+2. Keep `channel-monitor` source metadata explicit in config, API payloads, and downstream PMOVES.YT
    ingest metadata.
-2. Replace PMOVES.YT alias-env bridging with live registry-backed alias resolution where the
+3. Replace PMOVES.YT alias-env bridging with live registry-backed alias resolution where the
    model-registry service is available.
-3. Move PMOVES-transcribe-and-fetch runtime call paths fully onto shared alias/role resolution,
+4. Move PMOVES-transcribe-and-fetch runtime call paths fully onto shared alias/role resolution,
    since the fallback catalog and registry compatibility seams are now PMOVES-native but the
    backend still mixes direct model ids and alias-based calls in older modules.
-4. Expand the new PMOVES.YT owned-channel control plane from approval-gated playlist/comment
+5. Expand the new PMOVES.YT owned-channel control plane from approval-gated playlist/comment
    actions into richer YouTube Data API coverage plus first-class Discord interaction wiring.
