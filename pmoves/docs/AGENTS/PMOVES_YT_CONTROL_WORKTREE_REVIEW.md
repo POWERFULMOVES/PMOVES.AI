@@ -194,9 +194,17 @@ As of March 12, 2026, use these findings as the starting bias for this worktree 
   notebook metadata alongside the pending audit row.
 - `comment_create` review requests can now render a draft template into final comment text before
   approval, and the same rendered summary is surfaced in Discord review messages.
-- the PMOVES.YT control plane now covers `playlist_add`, `playlist_remove`, `playlist_reorder`,
-  and `comment_create`; `channel-monitor` strips draft/notebook metadata before execution so the
-  live YouTube API payload stays narrow.
+- reply actions stay on the same `comment_create` rail, but `parent_comment_id` is now treated as
+  first-class operator context in summaries, target refs, and review docs so Discord approvals can
+  distinguish a public comment from a creator-network reply.
+- creator comment drafting now supports named policy templates (`creator_attribution_bridge`,
+  `creator_network_invite`, `creator_research_receipt`) so PMOVES-Creator posture and
+  PMOVES-Open-Notebook evidence can shape comment text without embedding one-off strings directly
+  in each request.
+- the PMOVES.YT control plane now covers `playlist_create`, `playlist_update`, `playlist_delete`,
+  `playlist_add`, `playlist_remove`, `playlist_reorder`, `comment_create`, and `comment_delete`;
+  `channel-monitor` strips draft/notebook metadata before
+  execution so the live YouTube API payload stays narrow.
 
 ## Recommended next implementation steps
 
@@ -210,5 +218,5 @@ As of March 12, 2026, use these findings as the starting bias for this worktree 
    since the fallback catalog and registry compatibility seams are now PMOVES-native but the
    backend still mixes direct model ids and alias-based calls in older modules.
 5. Expand the PMOVES.YT owned-channel control plane further into broader channel-management
-   actions and richer comment/reply policy templates now that playlist mutation, notebook
-   artifacts, and Discord approval summaries are in place.
+   actions and richer comment policy templates now that playlist mutation, notebook artifacts,
+   and Discord approval summaries are in place.

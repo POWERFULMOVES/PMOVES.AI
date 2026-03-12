@@ -70,7 +70,13 @@ def test_handle_ytcontrol_interaction_approve(monkeypatch):
             return {
                 "processed": 1,
                 "reason": "approved from Discord",
-                "actions": [{"summary": "Playlist add: add vid-123 to playlist PL123", "notebook_entry_id": "nb-1"}],
+                "actions": [{
+                    "summary": "Playlist add: add vid-123 to playlist PL123",
+                    "notebook_entry_id": "nb-1",
+                    "request_source": "discord_agent",
+                    "source_class": "owned",
+                    "target_ref": "vid-123",
+                }],
             }
 
     class DummyAsyncClient:
@@ -102,6 +108,9 @@ def test_handle_ytcontrol_interaction_approve(monkeypatch):
     assert response["type"] == 4
     assert "Approved YouTube control request" in response["data"]["content"]
     assert "Playlist add" in response["data"]["content"]
+    assert "source `discord_agent`" in response["data"]["content"]
+    assert "class `owned`" in response["data"]["content"]
+    assert "target `vid-123`" in response["data"]["content"]
     assert "Notebook: `nb-1`" in response["data"]["content"]
     assert requests_made[0][0] == "http://channel-monitor:8097/api/monitor/youtube-control/review"
     assert requests_made[0][1]["X-Channel-Monitor-Token"] == "secret-token"
@@ -119,8 +128,14 @@ def test_handle_ytcontrol_interaction_reject(monkeypatch):
         def json(self):
             return {
                 "processed": 1,
-                "reason": "rejected from Discord",
-                "actions": [{"summary": "Comment create: reply on vid-123"}],
+                "reason": "rejected from Discord (policy issue)",
+                "reason_code": "policy",
+                "actions": [{
+                    "summary": "Comment create: reply on vid-123",
+                    "request_source": "channel_monitor",
+                    "source_class": "watched",
+                    "target_ref": "vid-123",
+                }],
             }
 
     class DummyAsyncClient:
@@ -140,7 +155,7 @@ def test_handle_ytcontrol_interaction_reject(monkeypatch):
 
     payload = {
         "type": 3,
-        "data": {"custom_id": "ytcontrol:reject:22222222-2222-2222-2222-222222222222"},
+        "data": {"custom_id": "ytcontrol:reject:22222222-2222-2222-2222-222222222222:policy"},
         "user": {"id": "77"},
     }
 
@@ -149,3 +164,20 @@ def test_handle_ytcontrol_interaction_reject(monkeypatch):
     assert response["type"] == 4
     assert "Rejected YouTube control request" in response["data"]["content"]
     assert "Comment create" in response["data"]["content"]
+    assert "Reason type: Policy issue." in response["data"]["content"]
+    assert "source `channel_monitor`" in response["data"]["content"]
+
+
+def test_handle_ytcontrol_interaction_reject_invalid_reason_code():
+    module = _load_main_module()
+
+    payload = {
+        "type": 3,
+        "data": {"custom_id": "ytcontrol:reject:22222222-2222-2222-2222-222222222222:badcode"},
+        "user": {"id": "77"},
+    }
+
+    response = module.asyncio.run(module._handle_ytcontrol_interaction(payload))
+
+    assert response["type"] == 4
+    assert "Unsupported YouTube control reject reason" in response["data"]["content"]
