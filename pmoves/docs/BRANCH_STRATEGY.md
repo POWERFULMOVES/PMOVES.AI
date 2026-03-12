@@ -32,6 +32,7 @@ feature/* ──► PMOVES.AI-Edition-Hardened-Integrations ──► PMOVES.AI-
 | `codex/*` | AI-assisted development | 14 days | `codex/archon-hirag-stability` |
 | `chore/*` | Maintenance tasks | 7 days | `chore/dependency-update` |
 | `docs/*` | Documentation only | 7 days | `docs/api-reference` |
+| `ref/docs/*` | Long-lived reference documentation | Manual archival | `ref/docs/chit-geometry-math` |
 
 ### Branch TTL Policy
 
