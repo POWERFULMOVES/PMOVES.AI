@@ -35,15 +35,15 @@ create policy "n8n workflow registry read"
     on pmoves_core.n8n_workflow_registry
     for select
     to authenticated
-    using (true);
+    using (auth.role() = 'authenticated');
 
 drop policy if exists "n8n workflow registry service write" on pmoves_core.n8n_workflow_registry;
 create policy "n8n workflow registry service write"
     on pmoves_core.n8n_workflow_registry
     for all
     to service_role
-    using (true)
-    with check (true);
+    using (auth.role() = 'service_role')
+    with check (auth.role() = 'service_role');
 
 comment on table pmoves_core.n8n_workflow_registry is
     'Live n8n workflow inventory synced from PMOVES-n8n via the n8n Public API.';
