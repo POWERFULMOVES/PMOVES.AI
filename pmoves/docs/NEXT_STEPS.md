@@ -11,7 +11,10 @@ _Last updated: 2026-03-12_
 - Modernized the downloader path around the authoritative runtime: PMOVES.YT now documents current yt-dlp client/token behavior, root compose passes companion URLs explicitly, and Jellyfin/channel-monitor docs are moving off older MCP/future-work framing.
 - Added `pmoves/docs/PMOVES.AI PLANS/CREATOR_NETWORK_CONTROL_PLANE.md` to frame YouTube, Discord agents, transcribe-and-fetch, model routing, and Tokenism as one creator-network lane.
 - Updated the AGENTS creator fast path so `PMOVES-Creator`, `PMOVES-Open-Notebook`, and `CATACLYSM_STUDIOS_INC` are explicit traversal docs for creator strategy, notebook evidence, and brand/governance context.
-- Next focus: finish review cleanup, get PMOVES.YT/root checks green, and keep the creator/channel-monitor runbooks aligned with the authoritative runtime instead of the compatibility mirror.
+- Added the first creator-control production lane now under review:
+  - `PMOVES.YT #4` adds approval-gated YouTube Data API actions, summary model-role routing, and modernized overlay lint/CI coverage.
+  - `PMOVES.AI #884` adds channel-monitor review queue endpoints, Discord approval routing, Supabase audit storage, and notebook-backed creator review artifacts.
+- Next focus: merge `PMOVES.YT #4` then `PMOVES.AI #884`, then expand the creator-control surface instead of doing more compatibility-mirror work.
 
 ### Latest changes (Mar 12, 2026) — n8n Production Control Plane Refresh
 - `PMOVES-n8n` is now the authoritative n8n runtime/workflow lane; root `pmoves` consumes it instead of treating `pmoves/n8n/flows` as canon.
@@ -20,6 +23,23 @@ _Last updated: 2026-03-12_
 - Workflow activation/import now targets the n8n Public API path, replacing the failing CLI publish/unpublish fallback for the production lane.
 - Added Supabase tracking schema `pmoves_core.n8n_workflow_registry` plus `make -C pmoves n8n-sync-supabase-registry` so PMOVES can inventory live workflow state.
 - Next focus: validate the full bootstrap against Postgres-backed n8n, refresh PMOVES.YT from demo to production against the same automation lane, and decide which BotZ/MCP workflows join the shared canonical catalog.
+
+## Immediate Actions
+
+1. Close the current hardened merge lane.
+   - merge `PMOVES.YT #4`
+   - merge `PMOVES.AI #884`
+   - verify hardened stays green after the submodule-first merge order
+
+2. Expand the M2 creator-control surface.
+   - add broader playlist and channel-management actions beyond the first owned-channel slice
+   - improve Discord rejection metadata and operator feedback
+   - move comment/reply generation onto policy-driven templates tied to `PMOVES-Creator`, `PMOVES-Open-Notebook`, and CATACLYSM context
+
+3. Keep the n8n control plane aligned with the creator lane.
+   - validate Postgres-backed `PMOVES-n8n` bootstrap end-to-end
+   - decide which BotZ/MCP workflows become canonical shared automation flows
+   - keep Supabase workflow registry sync green as creator automation expands
 
 ### Latest changes (Mar 8, 2026) — CI Runner Migration + RG-3 Automation
 - **AB-9 mitigation:** Migrated 10 lightweight CI jobs from `[self-hosted, Linux, X64]` to `ubuntu-latest`:
