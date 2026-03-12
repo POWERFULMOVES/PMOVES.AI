@@ -2361,7 +2361,7 @@ up-agents-integrations: ## Start agents using your forks (builds from $(INTEGRAT
 
 .PHONY: up-n8n n8n-sync-submodule-flows n8n-api-bootstrap n8n-import-flows n8n-activate-flows n8n-sync-supabase-registry n8n-bootstrap n8n-export-repo-flows
 n8n-sync-submodule-flows: ## Mirror canonical PMOVES-n8n workflows into pmoves/n8n/flows
-	@$(PYTHON) -c "from pathlib import Path; import shutil; src=Path(r'$(N8N_CANONICAL_FLOWS_DIR)'); dst=Path(r'$(CURDIR)/n8n/flows'); dst.mkdir(parents=True, exist_ok=True); [shutil.copy2(path, dst / path.name) for path in sorted(src.glob('*.json'))]"
+	@$(PYTHON) -c "from pathlib import Path; import shutil; src=Path(r'$(N8N_CANONICAL_FLOWS_DIR)'); dst=Path(r'$(CURDIR)/n8n/flows'); shutil.rmtree(dst, ignore_errors=True); dst.mkdir(parents=True, exist_ok=True); [shutil.copy2(path, dst / path.name) for path in sorted(src.glob('*.json'))]"
 	@echo "✔ Mirrored PMOVES-n8n workflows into pmoves/n8n/flows"
 
 up-n8n: ensure-env-shared n8n-sync-submodule-flows
@@ -2393,12 +2393,14 @@ n8n-import-flows: ## Import canonical PMOVES-n8n workflows into the live n8n ins
 	@$(LOAD_ENV_SHARED); $(PYTHON) "$(N8N_SUBMODULE_DIR)/scripts/import_repo_flows.py" --container pmoves-n8n --workflow-dir "$(N8N_CANONICAL_FLOWS_DIR)" --skip-activation
 
 n8n-activate-flows: ## Publish canonical PMOVES-n8n workflows (keeps chat-platform voice flows inactive unless VOICE_PLATFORMS=1)
-	@$(LOAD_ENV_SHARED); $(PYTHON) "$(N8N_SUBMODULE_DIR)/scripts/import_repo_flows.py" --container pmoves-n8n --workflow-dir "$(N8N_CANONICAL_FLOWS_DIR)" --activate-only $(if $(VOICE_PLATFORMS),--voice-platforms,)
+	@$(LOAD_ENV_SHARED); $(PYTHON) "$(N8N_SUBMODULE_DIR)/scripts/import_repo_flows.py" --container pmoves-n8n --workflow-dir "$(N8N_CANONICAL_FLOWS_DIR)" --activate-only $(if $(filter 1 yes true,$(VOICE_PLATFORMS)),--voice-platforms,)
 
 n8n-sync-supabase-registry: ## Upsert live n8n workflow state into pmoves_core.n8n_workflow_registry
 	@$(LOAD_ENV_SHARED); $(PYTHON) "$(N8N_SUBMODULE_DIR)/scripts/sync_supabase_registry.py" --workflow-dir "$(N8N_CANONICAL_FLOWS_DIR)"
 
 n8n-bootstrap: up-n8n n8n-api-bootstrap n8n-import-flows n8n-activate-flows n8n-sync-supabase-registry ## Bring up n8n, bootstrap API access, import workflows, publish defaults, and sync Supabase tracking
+	@echo "NOTE: n8n-sync-supabase-registry writes to pmoves_core.n8n_workflow_registry."
+	@echo "      Run 'make -C pmoves db-migrate' first if the migration has not been applied."
 	@echo "✔ n8n bootstrap complete"
 
 n8n-export-repo-flows: ## Export live n8n workflows into PMOVES-n8n and refresh the compatibility mirror

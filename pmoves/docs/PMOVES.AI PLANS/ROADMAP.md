@@ -4,7 +4,7 @@ Last updated: 2026-03-12
 ## Vision
 A production-ready, self-hostable orchestration mesh for creative + agent workloads across GPU boxes and Jetsons: **hybrid Hi‑RAG**, **Supabase Studio**, **n8n orchestration**, **Jellyfin publishing**, and **graph-aware retrieval**.
 
-## Audit Snapshot (2026-03-07)
+## Audit Snapshot (2026-03-12)
 
 - March 12 PMOVES.YT production-path remediation landed locally:
   - `PMOVES.YT` is now the authoritative runtime/docs lane for the YouTube ingest service; root `pmoves` consumes the submodule Dockerfile directly instead of treating `pmoves/services/pmoves-yt` as canon.

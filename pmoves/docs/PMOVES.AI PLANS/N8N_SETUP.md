@@ -19,7 +19,9 @@ This guide covers the production n8n path for PMOVES.AI. `PMOVES-n8n` is the aut
 - Secrets at hand: `SUPABASE_SERVICE_ROLE_KEY`, `DISCORD_WEBHOOK_URL`, `N8N_RUNNERS_AUTH_TOKEN`
 
 ## Environment (n8n)
-Set these in n8n (Settings → Variables) or via container env:
+
+### Prerequisites (set manually before bootstrap)
+These must be populated in `pmoves/env.shared` or `pmoves/.env.local` before running `make -C pmoves n8n-bootstrap`:
 - `SUPABASE_REST_URL` = `http://host.docker.internal:65421/rest/v1`
 - `SUPABASE_SERVICE_ROLE_KEY` = `<your service role key>`
 - `AGENT_ZERO_BASE_URL` = `http://agent-zero:8080`
@@ -30,6 +32,9 @@ Set these in n8n (Settings → Variables) or via container env:
 - `N8N_DEFAULT_TIMEZONE` = `America/New_York` (aligns cron schedules with project TZ)
 - `N8N_DB_NAME` / `N8N_DB_USER` / `N8N_DB_PASSWORD` = dedicated `n8n-db` credentials
 - `N8N_OWNER_EMAIL` / `N8N_OWNER_PASSWORD` = owner bootstrap credentials used by `make -C pmoves n8n-api-bootstrap`
+
+### Auto-Generated (by bootstrap — do not set manually)
+These are created or rotated by `make -C pmoves n8n-api-bootstrap` and written to `pmoves/.env.local`:
 - `N8N_API_KEY` = Public API key minted by `make -C pmoves n8n-api-bootstrap`
 
 ### n8n persistence mode (SQLite vs Postgres)
