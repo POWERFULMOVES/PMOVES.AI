@@ -156,6 +156,8 @@ As of March 12, 2026, use these findings as the starting bias for this worktree 
     lane has a durable Supabase audit trail instead of event-only visibility
   - `channel-monitor` now provides queue/list/review endpoints for those actions and approves them
     by calling PMOVES.YT control endpoints directly
+  - queued control requests can now optionally notify `messaging-gateway` so Discord-ready review
+    prompts come from the same request path
   - broader channel-management tasks and first-class Discord interaction wiring are still follow-up
     work
 

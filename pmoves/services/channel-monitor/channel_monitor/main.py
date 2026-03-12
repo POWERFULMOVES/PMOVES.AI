@@ -331,6 +331,10 @@ class YouTubeControlRequest(BaseModel):
     action: str = Field(..., description="Control action type: playlist_add or comment_create")
     details: Dict[str, Any] = Field(..., description="PMOVES.YT control payload without execute fields")
     request_source: str = Field("channel_monitor", description="Logical request source for audit rows")
+    notify_platforms: List[str] | None = Field(
+        None,
+        description="Optional messaging-gateway platforms to notify (e.g. ['discord'])",
+    )
 
 
 class YouTubeControlReviewRequest(BaseModel):
@@ -637,6 +641,7 @@ async def queue_youtube_control_action(
             action=payload.action,
             details=payload.details,
             request_source=payload.request_source,
+            notify_platforms=payload.notify_platforms,
         )
         return {"status": "ok", "queued": True, "approval_state": "pending_review", "request": result}
     except ValueError as exc:

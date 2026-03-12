@@ -1666,6 +1666,7 @@ class ChannelMonitor:
         action: str,
         details: Dict[str, Any],
         request_source: str,
+        notify_platforms: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
         assert self._pool
         action_id = str(uuid4())
@@ -1691,7 +1692,62 @@ class ChannelMonitor:
                 request_source,
                 json.dumps(details),
             )
+        notified = await self._notify_youtube_control_request(
+            action_id=action_id,
+            action=action,
+            details=details,
+            request_source=request_source,
+            platforms=notify_platforms or [],
+        )
+        row["notified"] = notified
         return row
+
+    async def _notify_youtube_control_request(
+        self,
+        *,
+        action_id: str,
+        action: str,
+        details: Dict[str, Any],
+        request_source: str,
+        platforms: List[str],
+    ) -> bool:
+        active_platforms = [value for value in platforms if isinstance(value, str) and value.strip()]
+        if not active_platforms:
+            return False
+        messaging_url = (os.getenv("CHANNEL_MONITOR_MESSAGING_URL") or "").strip()
+        if not messaging_url:
+            LOGGER.info("Skipping YouTube control notification; CHANNEL_MONITOR_MESSAGING_URL is not set")
+            return False
+
+        content = (
+            f"YouTube control request pending review\n"
+            f"- action: {action}\n"
+            f"- source: {request_source}\n"
+            f"- action_id: {action_id}"
+        )
+        buttons = [
+            {"id": f"ytcontrol:approve:{action_id}", "label": "Approve", "style": "primary"},
+            {"id": f"ytcontrol:reject:{action_id}", "label": "Reject", "style": "danger"},
+        ]
+        payload = {
+            "platforms": active_platforms,
+            "content": content,
+            "buttons": buttons,
+            "metadata": {
+                "action_id": action_id,
+                "action": action,
+                "request_source": request_source,
+                "details": details,
+            },
+        }
+        try:
+            async with httpx.AsyncClient(timeout=20.0) as client:
+                response = await client.post(messaging_url, json=payload)
+                response.raise_for_status()
+            return True
+        except Exception as exc:  # pragma: no cover - best effort
+            LOGGER.warning("Failed to notify messaging gateway for YouTube control request %s: %s", action_id, exc)
+            return False
 
     async def list_pending_youtube_control_actions(
         self,

@@ -504,6 +504,7 @@ def test_create_youtube_control_request_persists_pending_row(tmp_path):
     monitor = _build_monitor(tmp_path)
     conn = SimpleNamespace(execute=AsyncMock())
     monitor._pool = _FakePool(conn)  # type: ignore[assignment]
+    monitor._notify_youtube_control_request = AsyncMock(return_value=False)  # type: ignore[method-assign]
 
     result = asyncio.run(
         monitor.create_youtube_control_request(
@@ -515,7 +516,49 @@ def test_create_youtube_control_request_persists_pending_row(tmp_path):
 
     assert result["status"] == "pending_review"
     assert result["action"] == "playlist_add"
+    assert result["notified"] is False
     conn.execute.assert_awaited_once()
+
+
+def test_create_youtube_control_request_can_notify_messaging_gateway(tmp_path, monkeypatch):
+    monitor = _build_monitor(tmp_path)
+    conn = SimpleNamespace(execute=AsyncMock())
+    monitor._pool = _FakePool(conn)  # type: ignore[assignment]
+    requests_made = []
+
+    class DummyResponse:
+        def raise_for_status(self):
+            return None
+
+    class DummyAsyncClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        async def post(self, url, json=None):
+            requests_made.append((url, json))
+            return DummyResponse()
+
+    monkeypatch.setenv("CHANNEL_MONITOR_MESSAGING_URL", "http://messaging.test/v1/send")
+    monkeypatch.setattr("channel_monitor.monitor.httpx.AsyncClient", DummyAsyncClient)
+
+    result = asyncio.run(
+        monitor.create_youtube_control_request(
+            action="playlist_add",
+            details={"playlist_id": "PL123", "video_id": "vid-123"},
+            request_source="discord_agent",
+            notify_platforms=["discord"],
+        )
+    )
+
+    assert result["notified"] is True
+    assert requests_made[0][0] == "http://messaging.test/v1/send"
+    assert requests_made[0][1]["platforms"] == ["discord"]
 
 
 def test_review_youtube_control_actions_executes_pmoves_yt_call(tmp_path, monkeypatch):

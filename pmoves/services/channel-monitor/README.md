@@ -164,7 +164,8 @@ curl -X POST http://localhost:8097/api/monitor/youtube-control \
       "playlist_id": "PL123",
       "video_id": "dQw4w9WgXcQ"
     },
-    "request_source": "discord_agent"
+    "request_source": "discord_agent",
+    "notify_platforms": ["discord"]
   }'
 
 curl -X GET "http://localhost:8097/api/monitor/youtube-control/pending" \
@@ -177,6 +178,8 @@ curl -X POST http://localhost:8097/api/monitor/youtube-control/review \
 ```
 
 Set `CHANNEL_MONITOR_YT_API_KEY` when PMOVES.YT control endpoints require `X-API-Key`.
+Set `CHANNEL_MONITOR_MESSAGING_URL` to the messaging gateway `/v1/send` endpoint to emit
+Discord-ready approval notifications when requests are queued.
 
 ### Observability
 
