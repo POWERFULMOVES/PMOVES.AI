@@ -81,13 +81,21 @@ transcripts, Discord, Jellyfin, or cross-model orchestration.
 ### Primary traversal order
 
 1. `pmoves/docs/PMOVES.AI PLANS/CREATOR_NETWORK_CONTROL_PLANE.md`
-2. `pmoves/docs/AGENTS/SUBMODULE_CODEX_HOMES/PMOVES.YT.md`
-3. `pmoves/docs/AGENTS/SUBMODULE_CODEX_HOMES/PMOVES-transcribe-and-fetch.md`
-4. `pmoves/services/channel-monitor/README.md`
-5. `pmoves/docs/AGENTS/JELLYFIN_CREATOR_WORKTREE_REVIEW.md`
+2. `pmoves/docs/AGENTS/SUBMODULE_CODEX_HOMES/PMOVES-Creator.md`
+3. `pmoves/docs/AGENTS/SUBMODULE_CODEX_HOMES/PMOVES-Open-Notebook.md`
+4. `pmoves/docs/AGENTS/PMOVES_YT_CONTROL_WORKTREE_REVIEW.md`
+5. `pmoves/docs/AGENTS/SUBMODULE_CODEX_HOMES/PMOVES.YT.md`
+6. `pmoves/docs/AGENTS/SUBMODULE_CODEX_HOMES/PMOVES-transcribe-and-fetch.md`
+7. `pmoves/services/channel-monitor/README.md`
+8. `pmoves/docs/AGENTS/JELLYFIN_CREATOR_WORKTREE_REVIEW.md`
+9. `pmoves/docs/PMOVESCHIT/CATACLYSM_STUDIOS_INC.md`
 
 ### Service posture
 
+- `PMOVES-Creator` should be treated as the strategy and collaboration lane where creator goals,
+  networking intent, and campaign posture are defined before execution.
+- `PMOVES-Open-Notebook` should be treated as the drafting, evidence, and operator memory lane
+  where notes, approval artifacts, and reusable context are staged.
 - `PMOVES.YT` is the authoritative runtime for YouTube ingest, metadata, docs catalog, and
   downloader fallback strategy.
 - `Channel Monitor` owns source discovery, polling cadence, and fan-out into PMOVES.YT ingest.
@@ -98,6 +106,8 @@ transcripts, Discord, Jellyfin, or cross-model orchestration.
   to human approval unless the workflow explicitly declares autonomous behavior.
 - `Tokenism` should be treated as the value-tracking lane for attribution, monetization, and
   network effects that result from creator operations.
+- `CATACLYSM_STUDIOS_INC` is the governing business and brand context; use it to decide whether a
+  creator action aligns with the larger platform story, audience, and partnership posture.
 
 ### Creator control checks
 
@@ -204,10 +214,16 @@ For a comprehensive view of what's implemented vs. what's still planned, see:
 
 - Creator-network control plane:
   - `pmoves/docs/PMOVES.AI PLANS/CREATOR_NETWORK_CONTROL_PLANE.md`
+- PMOVES-Creator submodule home:
+  - `pmoves/docs/AGENTS/SUBMODULE_CODEX_HOMES/PMOVES-Creator.md`
+- PMOVES-Open-Notebook submodule home:
+  - `pmoves/docs/AGENTS/SUBMODULE_CODEX_HOMES/PMOVES-Open-Notebook.md`
 - PMOVES.YT submodule home:
   - `pmoves/docs/AGENTS/SUBMODULE_CODEX_HOMES/PMOVES.YT.md`
 - PMOVES-transcribe-and-fetch submodule home:
   - `pmoves/docs/AGENTS/SUBMODULE_CODEX_HOMES/PMOVES-transcribe-and-fetch.md`
+- PMOVES.YT control worktree review:
+  - `pmoves/docs/AGENTS/PMOVES_YT_CONTROL_WORKTREE_REVIEW.md`
 - Jellyfin creator review:
   - `pmoves/docs/AGENTS/JELLYFIN_CREATOR_WORKTREE_REVIEW.md`
 - Codex submodule audit:
@@ -230,6 +246,8 @@ For a comprehensive view of what's implemented vs. what's still planned, see:
   - `pmoves/docs/AGENTS/CODEX_CIPHER_MEMORY_IMPLEMENTATION_MAP.md`
 - PMOVES skill bundles:
   - `pmoves/docs/AGENTS/PmovesSKillZ.md`
+- Cataclysm Studios context:
+  - `pmoves/docs/PMOVESCHIT/CATACLYSM_STUDIOS_INC.md`
 - Existing Claude context stack:
   - `.claude/CLAUDE.md`
   - `.claude/context/`
