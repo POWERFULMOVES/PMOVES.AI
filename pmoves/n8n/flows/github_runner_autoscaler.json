@@ -17,7 +17,10 @@
         "name": "Schedule Trigger",
         "type": "n8n-nodes-base.scheduleTrigger",
         "typeVersion": 1.1,
-        "position": [480, 240]
+        "position": [
+          480,
+          240
+        ]
       },
       {
         "parameters": {
@@ -29,7 +32,10 @@
         "name": "Get Runner Status",
         "type": "n8n-nodes-base.httpRequest",
         "typeVersion": 4.1,
-        "position": [700, 240]
+        "position": [
+          700,
+          240
+        ]
       },
       {
         "parameters": {
@@ -39,7 +45,10 @@
         "name": "Analyze Runner Status",
         "type": "n8n-nodes-base.functionItem",
         "typeVersion": 1,
-        "position": [920, 240]
+        "position": [
+          920,
+          240
+        ]
       },
       {
         "parameters": {
@@ -62,7 +71,10 @@
         "name": "Check Scale Needed",
         "type": "n8n-nodes-base.if",
         "typeVersion": 1,
-        "position": [1140, 240]
+        "position": [
+          1140,
+          240
+        ]
       },
       {
         "parameters": {
@@ -72,7 +84,10 @@
         "name": "Check Cloud Capacity",
         "type": "n8n-nodes-base.functionItem",
         "typeVersion": 1,
-        "position": [1380, 120]
+        "position": [
+          1380,
+          120
+        ]
       },
       {
         "parameters": {
@@ -89,7 +104,10 @@
         "name": "Can Scale Up?",
         "type": "n8n-nodes-base.if",
         "typeVersion": 1,
-        "position": [1600, 120]
+        "position": [
+          1600,
+          120
+        ]
       },
       {
         "parameters": {
@@ -99,7 +117,10 @@
         "name": "Prepare Scale Alert",
         "type": "n8n-nodes-base.functionItem",
         "typeVersion": 1,
-        "position": [1820, 0]
+        "position": [
+          1820,
+          0
+        ]
       },
       {
         "parameters": {
@@ -115,7 +136,10 @@
         "name": "Send Discord Alert",
         "type": "n8n-nodes-base.httpRequest",
         "typeVersion": 4.1,
-        "position": [2040, 0]
+        "position": [
+          2040,
+          0
+        ]
       },
       {
         "parameters": {
@@ -125,7 +149,10 @@
         "name": "Prepare Normal Status",
         "type": "n8n-nodes-base.functionItem",
         "typeVersion": 1,
-        "position": [1380, 380]
+        "position": [
+          1380,
+          380
+        ]
       },
       {
         "parameters": {
@@ -141,7 +168,10 @@
         "name": "Send Status Update",
         "type": "n8n-nodes-base.httpRequest",
         "typeVersion": 4.1,
-        "position": [1600, 380]
+        "position": [
+          1600,
+          380
+        ]
       },
       {
         "parameters": {
@@ -151,7 +181,10 @@
         "name": "Prepare Blocked Alert",
         "type": "n8n-nodes-base.functionItem",
         "typeVersion": 1,
-        "position": [1820, 240]
+        "position": [
+          1820,
+          240
+        ]
       },
       {
         "parameters": {
@@ -167,42 +200,125 @@
         "name": "Send Blocked Alert",
         "type": "n8n-nodes-base.httpRequest",
         "typeVersion": 4.1,
-        "position": [2040, 240]
+        "position": [
+          2040,
+          240
+        ]
       }
     ],
     "connections": {
       "Schedule Trigger": {
-        "main": [[{"node": "Get Runner Status", "type": "main", "index": 0}]]
+        "main": [
+          [
+            {
+              "node": "Get Runner Status",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
       },
       "Get Runner Status": {
-        "main": [[{"node": "Analyze Runner Status", "type": "main", "index": 0}]]
+        "main": [
+          [
+            {
+              "node": "Analyze Runner Status",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
       },
       "Analyze Runner Status": {
-        "main": [[{"node": "Check Scale Needed", "type": "main", "index": 0}]]
+        "main": [
+          [
+            {
+              "node": "Check Scale Needed",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
       },
       "Check Scale Needed": {
         "main": [
-          [{"node": "Check Cloud Capacity", "type": "main", "index": 0}],
-          [{"node": "Prepare Normal Status", "type": "main", "index": 0}]
+          [
+            {
+              "node": "Check Cloud Capacity",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Prepare Normal Status",
+              "type": "main",
+              "index": 0
+            }
+          ]
         ]
       },
       "Check Cloud Capacity": {
-        "main": [[{"node": "Can Scale Up?", "type": "main", "index": 0}]]
+        "main": [
+          [
+            {
+              "node": "Can Scale Up?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
       },
       "Can Scale Up?": {
         "main": [
-          [{"node": "Prepare Scale Alert", "type": "main", "index": 0}],
-          [{"node": "Prepare Blocked Alert", "type": "main", "index": 0}]
+          [
+            {
+              "node": "Prepare Scale Alert",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Prepare Blocked Alert",
+              "type": "main",
+              "index": 0
+            }
+          ]
         ]
       },
       "Prepare Scale Alert": {
-        "main": [[{"node": "Send Discord Alert", "type": "main", "index": 0}]]
+        "main": [
+          [
+            {
+              "node": "Send Discord Alert",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
       },
       "Prepare Normal Status": {
-        "main": [[{"node": "Send Status Update", "type": "main", "index": 0}]]
+        "main": [
+          [
+            {
+              "node": "Send Status Update",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
       },
       "Prepare Blocked Alert": {
-        "main": [[{"node": "Send Blocked Alert", "type": "main", "index": 0}]]
+        "main": [
+          [
+            {
+              "node": "Send Blocked Alert",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
       }
     },
     "settings": {
@@ -213,6 +329,10 @@
     "meta": {
       "instanceId": "pmoves-github"
     },
-    "tags": ["github", "runners", "autoscaling", "ci-cd"]
+    "pinData": null,
+    "versionId": "3446e348-3748-4c23-a713-31d798c7cc95",
+    "versionCounter": 1,
+    "triggerCount": 0,
+    "tags": []
   }
 ]

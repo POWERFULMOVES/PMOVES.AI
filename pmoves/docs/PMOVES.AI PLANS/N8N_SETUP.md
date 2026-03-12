@@ -1,8 +1,8 @@
 # n8n Setup Checklist (Supabase → Agent Zero → Discord)
-_Last updated: 2025-12-14_
+_Last updated: 2026-03-12_
 
 ## Overview
-This guide streamlines importing and running the PMOVES approval and publish workflows in n8n. It targets Supabase CLI on the host, Agent Zero + NATS in Docker, and Discord webhooks.
+This guide covers the production n8n path for PMOVES.AI. `PMOVES-n8n` is the authoritative runtime/workflow fork, n8n internals live on the dedicated `n8n-db` Postgres sidecar, and Supabase tracks PMOVES workflow state in `pmoves_core.n8n_workflow_registry`.
 
 ## Preflight (quick)
 - Start stacks: `make up && make up-agents && make up-n8n`
@@ -14,8 +14,8 @@ This guide streamlines importing and running the PMOVES approval and publish wor
 - Supabase CLI running locally: `supabase start` or `make supa-start`
 - PMOVES stack up: `make up && make up-agents`
 - n8n running:
-  - Local/dev (SQLite): `make up-n8n` (UI at `http://localhost:5678`, launches `n8n` + `n8n-runners`)
-  - VPS/prod (Postgres): `N8N_DB=postgres make up-n8n` (adds `n8n-db` Postgres for durable state)
+  - Production/default: `make -C pmoves up-n8n` (starts `n8n`, `n8n-runners`, and `n8n-db`)
+  - Legacy escape hatch only: `N8N_DB=sqlite make -C pmoves up-n8n`
 - Secrets at hand: `SUPABASE_SERVICE_ROLE_KEY`, `DISCORD_WEBHOOK_URL`, `N8N_RUNNERS_AUTH_TOKEN`
 
 ## Environment (n8n)
@@ -28,16 +28,21 @@ Set these in n8n (Settings → Variables) or via container env:
 - `DISCORD_WEBHOOK_USERNAME` = `PMOVES Publisher`
 - `N8N_RUNNERS_AUTH_TOKEN` = `<shared secret – must match the sidecar>`
 - `N8N_DEFAULT_TIMEZONE` = `America/New_York` (aligns cron schedules with project TZ)
+- `N8N_DB_NAME` / `N8N_DB_USER` / `N8N_DB_PASSWORD` = dedicated `n8n-db` credentials
+- `N8N_OWNER_EMAIL` / `N8N_OWNER_PASSWORD` = owner bootstrap credentials used by `make -C pmoves n8n-api-bootstrap`
+- `N8N_API_KEY` = Public API key minted by `make -C pmoves n8n-api-bootstrap`
 
 ### n8n persistence mode (SQLite vs Postgres)
-By default, `make up-n8n` runs n8n with SQLite for quick local bring-up.
+By default, `make -C pmoves up-n8n` runs n8n on the dedicated Postgres sidecar.
 
-For VPS/production, run n8n on Postgres:
-- Set `N8N_DB=postgres`
-- Set `N8N_DB_NAME`, `N8N_DB_USER`, `N8N_DB_PASSWORD` (in `pmoves/env.shared` or injected secrets)
-- Bring up: `N8N_DB=postgres make -C pmoves up-n8n`
+For production, keep n8n on Postgres:
+- `N8N_DB=postgres`
+- `N8N_DB_NAME`, `N8N_DB_USER`, `N8N_DB_PASSWORD`
+- `make -C pmoves up-n8n`
 
 This uses `pmoves/docker-compose.n8n.postgres.yml` to add a dedicated `n8n-db` container. It does **not** move your PMOVES app data into n8n — it only stores n8n’s own workflow/execution state in Postgres.
+
+Supabase remains the PMOVES system of record for workflow tracking, approvals, publishing, and operator UI state.
 
 > **Supabase runtime note:** The CLI runtime binds REST on port `65421` per `supabase/config.toml`. If you switch back to the docker-compose PostgREST service, update `SUPABASE_REST_URL` accordingly (typically `http://host.docker.internal:54321/rest/v1`).
 
@@ -45,23 +50,28 @@ Tip: These defaults are prewired in `docker-compose.n8n.yml`. If you use `make u
 
 Note: n8n 1.115.3 already executes cron triggers in the main process. Avoid re-adding the deprecated `EXECUTIONS_PROCESS` flag—the service emits a warning and ignores it.
 
+## Production Bootstrap
+- `make -C pmoves up-n8n`
+- `make -C pmoves n8n-api-bootstrap`
+- `make -C pmoves n8n-import-flows`
+- `make -C pmoves n8n-activate-flows`
+- `make -C pmoves n8n-sync-supabase-registry`
+- `make -C pmoves n8n-bootstrap`
+
+`n8n-api-bootstrap` creates or logs into the n8n owner account, rotates the `PMOVES.AI automation bootstrap` Public API key, validates it against `/api/v1/workflows`, and writes the resulting `N8N_API_KEY` plus owner credentials into `pmoves/.env.local`.
+
 ## Container Tooling
 - The custom image defined in `compose/n8n/Dockerfile` bakes in the `sqlite3` CLI so DB inspections persist across restarts.
 - Run `make up-n8n` after pulling updates to rebuild the service when the Dockerfile changes.
 
 ## Import Workflows
-1. Open n8n → Workflows → Import from File.
-2. Import the core approvals stack:
-   - `pmoves/n8n/flows/approval_poller.json`
-   - `pmoves/n8n/flows/echo_publisher.json`
-3. Import the creative webhooks (requires ComfyUI hosts prepared via [`pmoves/creator/README.md`](../creator/README.md)):
-   - `pmoves/n8n/flows/wan_to_cgp.webhook.json`
-   - `pmoves/n8n/flows/qwen_to_cgp.webhook.json`
-   - `pmoves/n8n/flows/vibevoice_to_cgp.webhook.json`
-4. (Optional) Import the audio enrichment flows:
-   - `pmoves/n8n/flows/vibevoice_audio_ingest.json`
-   - `pmoves/n8n/flows/vibevoice_discord_preview.json`
-5. Keep everything inactive until env is confirmed (Supabase keys, MinIO buckets, Discord webhooks).
+Canonical workflow JSON now lives in `PMOVES-n8n/workflows/`.
+
+- Recommended: `make -C pmoves n8n-import-flows`
+- Activation: `make -C pmoves n8n-activate-flows`
+- Full bootstrap: `make -C pmoves n8n-bootstrap`
+
+The root `pmoves/n8n/flows/` directory is now only a compatibility mirror.
 
 ## Validate Env Bindings
 - Approval Poller
@@ -85,6 +95,8 @@ Note: n8n 1.115.3 already executes cron triggers in the main process. Avoid re-a
 5. Activate echo publisher → confirm Discord embed (title/link/thumbnail if provided)
 6. Optional: Post directly to n8n webhook (flow must be active)
    - `make n8n-webhook-demo`
+7. Sync the live workflow registry back into Supabase:
+   - `make -C pmoves n8n-sync-supabase-registry`
 
 ### Voice platform flows (Discord/Telegram)
 The repo includes optional chat-platform voice agent flows (Discord/Telegram) that require additional credentials and/or custom n8n nodes.
@@ -126,6 +138,8 @@ These flows extend the core approval automations so we can surface RVC voice out
 
 ## Troubleshooting
 - 404 from Supabase in n8n: ensure `/rest/v1` is included in `SUPABASE_REST_URL`.
+- `401` from `/api/v1/workflows`: run `make -C pmoves n8n-api-bootstrap` to rotate the Public API key.
+- Workflow import works but activation fails: use the Public API path (`n8n-api-bootstrap` + `n8n-activate-flows`) instead of the legacy CLI publish fallback.
 - 503 from Agent Zero: confirm NATS + Agent Zero are running (`make up-agents`).
 - Discord no messages: verify `DISCORD_WEBHOOK_URL` and check rate limits in n8n logs.
 - n8n cannot reach host services on Linux: replace `host.docker.internal` with the host IP or Docker gateway (`172.17.0.1`).

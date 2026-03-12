@@ -14,7 +14,10 @@
         "name": "Webhook Trigger",
         "type": "n8n-nodes-base.webhook",
         "typeVersion": 1,
-        "position": [200, 300]
+        "position": [
+          200,
+          300
+        ]
       },
       {
         "parameters": {
@@ -24,7 +27,10 @@
         "name": "Prepare Publish Request",
         "type": "n8n-nodes-base.function",
         "typeVersion": 2,
-        "position": [460, 300]
+        "position": [
+          460,
+          300
+        ]
       },
       {
         "parameters": {
@@ -34,7 +40,10 @@
         "name": "Build Discord Payload",
         "type": "n8n-nodes-base.function",
         "typeVersion": 2,
-        "position": [720, 200]
+        "position": [
+          720,
+          200
+        ]
       },
       {
         "parameters": {
@@ -44,7 +53,10 @@
         "name": "Build Twitter Thread",
         "type": "n8n-nodes-base.function",
         "typeVersion": 2,
-        "position": [720, 400]
+        "position": [
+          720,
+          400
+        ]
       },
       {
         "parameters": {
@@ -61,7 +73,10 @@
         "name": "Post to Discord",
         "type": "n8n-nodes-base.httpRequest",
         "typeVersion": 4,
-        "position": [1000, 200]
+        "position": [
+          1000,
+          200
+        ]
       },
       {
         "parameters": {
@@ -79,7 +94,10 @@
         "name": "Publish to Twitter?",
         "type": "n8n-nodes-base.if",
         "typeVersion": 1,
-        "position": [1000, 400]
+        "position": [
+          1000,
+          400
+        ]
       },
       {
         "parameters": {
@@ -89,7 +107,10 @@
         "name": "Post to Twitter",
         "type": "n8n-nodes-base.function",
         "typeVersion": 2,
-        "position": [1260, 400]
+        "position": [
+          1260,
+          400
+        ]
       },
       {
         "parameters": {
@@ -99,7 +120,10 @@
         "name": "Collect Results",
         "type": "n8n-nodes-base.function",
         "typeVersion": 2,
-        "position": [1520, 300]
+        "position": [
+          1520,
+          300
+        ]
       },
       {
         "parameters": {
@@ -116,7 +140,10 @@
         "name": "Publish Completion Event",
         "type": "n8n-nodes-base.httpRequest",
         "typeVersion": 4,
-        "position": [1780, 300]
+        "position": [
+          1780,
+          300
+        ]
       },
       {
         "parameters": {
@@ -133,7 +160,10 @@
         "name": "Has Studio Board ID?",
         "type": "n8n-nodes-base.if",
         "typeVersion": 1,
-        "position": [1780, 500]
+        "position": [
+          1780,
+          500
+        ]
       },
       {
         "parameters": {
@@ -142,59 +172,151 @@
           "sendHeaders": true,
           "headerParameters": {
             "parameters": [
-              {"name": "content-type", "value": "application/json"},
-              {"name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"},
-              {"name": "Authorization", "value": "=Bearer {{$env.SUPABASE_SERVICE_ROLE_KEY}}"}
+              {
+                "name": "content-type",
+                "value": "application/json"
+              },
+              {
+                "name": "apikey",
+                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Authorization",
+                "value": "=Bearer {{$env.SUPABASE_SERVICE_ROLE_KEY}}"
+              }
             ]
           },
           "sendBody": true,
           "body": "={{ JSON.stringify({ status: 'published', meta: { published_at: new Date().toISOString(), platforms: $node['Collect Results'].json.platforms } }) }}",
-          "options": {"timeout": 10000}
+          "options": {
+            "timeout": 10000
+          }
         },
         "id": "update_studio",
         "name": "Update Studio Board",
         "type": "n8n-nodes-base.httpRequest",
         "typeVersion": 4,
-        "position": [2040, 500]
+        "position": [
+          2040,
+          500
+        ]
       }
     ],
     "connections": {
       "Webhook Trigger": {
-        "main": [[{"node": "Prepare Publish Request", "type": "main", "index": 0}]]
+        "main": [
+          [
+            {
+              "node": "Prepare Publish Request",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
       },
       "Prepare Publish Request": {
-        "main": [[
-          {"node": "Build Discord Payload", "type": "main", "index": 0},
-          {"node": "Build Twitter Thread", "type": "main", "index": 0}
-        ]]
+        "main": [
+          [
+            {
+              "node": "Build Discord Payload",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Build Twitter Thread",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
       },
       "Build Discord Payload": {
-        "main": [[{"node": "Post to Discord", "type": "main", "index": 0}]]
+        "main": [
+          [
+            {
+              "node": "Post to Discord",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
       },
       "Build Twitter Thread": {
-        "main": [[{"node": "Publish to Twitter?", "type": "main", "index": 0}]]
+        "main": [
+          [
+            {
+              "node": "Publish to Twitter?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
       },
       "Publish to Twitter?": {
         "main": [
-          [{"node": "Post to Twitter", "type": "main", "index": 0}],
-          [{"node": "Collect Results", "type": "main", "index": 0}]
+          [
+            {
+              "node": "Post to Twitter",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Collect Results",
+              "type": "main",
+              "index": 0
+            }
+          ]
         ]
       },
       "Post to Discord": {
-        "main": [[{"node": "Collect Results", "type": "main", "index": 0}]]
+        "main": [
+          [
+            {
+              "node": "Collect Results",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
       },
       "Post to Twitter": {
-        "main": [[{"node": "Collect Results", "type": "main", "index": 0}]]
+        "main": [
+          [
+            {
+              "node": "Collect Results",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
       },
       "Collect Results": {
-        "main": [[
-          {"node": "Publish Completion Event", "type": "main", "index": 0},
-          {"node": "Has Studio Board ID?", "type": "main", "index": 0}
-        ]]
+        "main": [
+          [
+            {
+              "node": "Publish Completion Event",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Has Studio Board ID?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
       },
       "Has Studio Board ID?": {
         "main": [
-          [{"node": "Update Studio Board", "type": "main", "index": 0}],
+          [
+            {
+              "node": "Update Studio Board",
+              "type": "main",
+              "index": 0
+            }
+          ],
           []
         ]
       }
@@ -206,9 +328,9 @@
       "description": "Multi-platform social publisher: Discord + Twitter/X with studio_board tracking"
     },
     "pinData": null,
-    "versionId": "social-publisher-v1",
+    "versionId": "63087df4-4db9-4e52-82c7-023dfd56a347",
     "versionCounter": 1,
     "triggerCount": 0,
-    "tags": ["pmoves", "publishing", "discord", "twitter", "social"]
+    "tags": []
   }
 ]
