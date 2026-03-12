@@ -148,6 +148,14 @@ As of March 12, 2026, use these findings as the starting bias for this worktree 
     model-role aliases
 - Invidious + companion fallback is present and should remain part of the runtime review path for
   owned and watched YouTube sources.
+- PMOVES.YT is still stronger on ingest/read/download than owned-channel mutation:
+  - yt-dlp + companion + Invidious cover extraction and fallback download paths
+  - PMOVES.YT now has a first owned-channel YouTube Data API control slice for playlist-add and
+    comment/reply actions, but it is intentionally narrow and approval-gated
+  - preview/executed actions now append to `pmoves_core.youtube_control_actions` so the creator
+    lane has a durable Supabase audit trail instead of event-only visibility
+  - broader channel-management tasks, richer review flow, and Discord interaction wiring are still
+    follow-up work
 
 ## Recommended next implementation steps
 
