@@ -1,4 +1,6 @@
 CREATE SCHEMA IF NOT EXISTS realtime;
+CREATE SCHEMA IF NOT EXISTS _realtime;
+CREATE SCHEMA IF NOT EXISTS _supabase;
 
 CREATE TABLE IF NOT EXISTS realtime.tenants (
     id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),

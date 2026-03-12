@@ -73,11 +73,8 @@ NVML_ENABLED=true                                # Enable NVIDIA power monitorin
 **`GET /healthz`**
 - Health check for Evo Controller
 
-**`GET /swarm/status`**
-- Current swarm status, population info, best fitness
-
-**`POST /swarm/force-evolution`**
-- Manually trigger evolution cycle (for testing)
+**`GET /config`**
+- Current runtime configuration (`poll_seconds`, `sample_limit`, namespace, REST wiring)
 
 ## Genome Definition
 
@@ -332,7 +329,8 @@ CREATE TABLE geometry_swarm_runs (
 ### Check Controller Status
 
 ```bash
-curl http://localhost:8113/swarm/status
+curl http://localhost:8113/healthz
+curl http://localhost:8113/config
 ```
 
 Response:
@@ -379,11 +377,11 @@ uvicorn app:app --reload --port 8113
 ### Testing Evolution
 
 ```bash
-# Force evolution cycle
-curl -X POST http://localhost:8113/swarm/force-evolution
+# Check controller liveness
+curl http://localhost:8113/healthz
 
-# Check results
-curl http://localhost:8113/swarm/status
+# Inspect active controller configuration
+curl http://localhost:8113/config
 ```
 
 ### Integration Testing
@@ -428,7 +426,7 @@ Planned EvoSwarm features:
 **For Claude Code CLI users:**
 - EvoSwarm runs automatically in the background
 - Parameter packs are consumed transparently by geometry services
-- Monitor evolution via `/swarm/status` endpoint
+- Monitor controller health via `/healthz` and runtime settings via `/config`
 - Use test namespace for development: `namespace="test"`
 - Check CGP metadata to see which pack was used
 - Telemetry feeds back to controller automatically

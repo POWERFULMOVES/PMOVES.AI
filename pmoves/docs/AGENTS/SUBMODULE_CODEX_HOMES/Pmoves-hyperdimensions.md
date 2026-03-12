@@ -6,7 +6,7 @@ Scope:
 Core checks:
 - `make -C pmoves web-geometry`
 - `curl -fsS http://localhost:8086/geometry/calibration/report | jq .`
-- `curl -fsS http://localhost:8113/swarm/status | jq .`
+- `curl -fsS http://localhost:8113/config | jq .`
 
 Related parity tokens:
 - `/hyperdim:render`

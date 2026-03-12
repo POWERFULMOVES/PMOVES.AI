@@ -61,6 +61,20 @@ describe('Services dashboards', () => {
     expect(mockedNotFound).not.toHaveBeenCalled();
   });
 
+  it('renders markdown for a newly mapped operational service runbook', async () => {
+    const element = await ServiceDetailPage({
+      params: { service: 'botz-gateway' },
+    });
+
+    render(element);
+
+    expect(
+      screen.getByRole('heading', { name: /botz gateway/i })
+    ).toBeInTheDocument();
+    expect(screen.getByText(/work-item distribution service/i)).toBeInTheDocument();
+    expect(mockedNotFound).not.toHaveBeenCalled();
+  });
+
   it('renders catalog fallback for known services without markdown runbooks', async () => {
     const element = await ServiceDetailPage({
       params: { service: 'pmoves-ui' },
