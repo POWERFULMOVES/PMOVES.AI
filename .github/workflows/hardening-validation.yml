@@ -167,6 +167,7 @@ jobs:
   docker-bench:
     name: Docker Bench Security
     runs-on: [self-hosted, ai-lab]
+    timeout-minutes: 15
     env:
       DOCKER_CONTENT_TRUST: 1
 
@@ -285,11 +286,27 @@ jobs:
           echo "=== Compose Hardening Complete ==="
 
       # ---- Linux-only: Full CIS Docker Bench ----
-      - name: Run CIS Docker Bench (Linux only)
+      # Requires bare-metal or VM runner with Docker socket + /var/lib/docker access.
+      # Containerized runners (DinD) lack host PID/net/volume access and will hang.
+      - name: Run CIS Docker Bench (Linux bare-metal only)
         if: runner.os == 'Linux'
+        timeout-minutes: 5
         shell: bash
         run: |
           echo "=== CIS Docker Community Edition Benchmark ==="
+
+          # Skip on containerized runners — DinD can't bind-mount /var/lib/docker
+          if [ -f /.dockerenv ] || grep -qsm1 'docker\|containerd' /proc/1/cgroup 2>/dev/null; then
+            echo "ℹ Skipping CIS Docker Bench: running inside a container (DinD unsupported)"
+            exit 0
+          fi
+
+          # Verify host paths exist before attempting mount
+          if [ ! -d /var/lib/docker ]; then
+            echo "ℹ Skipping CIS Docker Bench: /var/lib/docker not accessible"
+            exit 0
+          fi
+
           # Install docker-bench-security if not available
           if ! command -v docker-bench-security &> /dev/null; then
             docker run --rm -v /usr/local/bin:/target docker-bench-security:latest \

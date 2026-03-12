@@ -46,6 +46,7 @@ jobs:
   build-gpu:
     name: GPU Services
     runs-on: [self-hosted, Linux, X64, ai-lab, gpu]
+    timeout-minutes: 90
     if: |
       github.event_name == 'push' ||
       github.event_name == 'workflow_dispatch' ||
@@ -183,6 +184,7 @@ jobs:
   build-cpu:
     name: CPU Services
     runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       max-parallel: 3
@@ -296,6 +298,7 @@ jobs:
   validate-contracts:
     name: Validate NATS Contracts
     runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 15
 
     steps:
       - name: Harden Runner
@@ -345,6 +348,7 @@ jobs:
   deploy-staging:
     name: Deploy Staging
     runs-on: [self-hosted, cloudstartup, staging]
+    timeout-minutes: 30
     needs: [build-cpu, validate-contracts]
     if: |
       github.ref == 'refs/heads/develop' ||
@@ -382,6 +386,7 @@ jobs:
   deploy-production:
     name: Deploy Production
     runs-on: [self-hosted, kvm4, production]
+    timeout-minutes: 30
     needs: [build-cpu, build-gpu, validate-contracts, deploy-staging]
     if: |
       github.ref == 'refs/heads/main' ||
@@ -433,6 +438,7 @@ jobs:
   functional-tests:
     name: Functional Tests
     runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 30
     needs: [deploy-staging]
     if: needs.deploy-staging.result == 'success'
 
