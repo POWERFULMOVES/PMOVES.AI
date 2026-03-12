@@ -13,8 +13,10 @@ if str(_SUBMODULE_ROOT) not in sys.path:
 _IMPL = _SUBMODULE_ROOT / "pmoves_yt_service" / "yt.py"
 __package__ = "pmoves_yt_service"
 __path__ = [str(_SUBMODULE_ROOT / "pmoves_yt_service")]
-code = _IMPL.read_text(encoding="utf-8")
-exec(compile(code, str(_IMPL), "exec"))
+
+if _IMPL.exists():
+    code = _IMPL.read_text(encoding="utf-8")
+    exec(compile(code, str(_IMPL), "exec"))
 
 if globals().get("yt_dlp") is None:
     yt_dlp = SimpleNamespace(YoutubeDL=None)
