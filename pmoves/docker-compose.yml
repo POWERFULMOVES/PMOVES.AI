@@ -1639,7 +1639,7 @@ services:
     - CHANNEL_MONITOR_NAMESPACE=${CHANNEL_MONITOR_NAMESPACE:-pmoves}
     - OPEN_NOTEBOOK_API_URL=${CHANNEL_MONITOR_OPEN_NOTEBOOK_API_URL:-http://open-notebook:5055}
     # Database URL - points to Supabase DB (note: supabase-db runs on pmoves_data network)
-    - CHANNEL_MONITOR_DATABASE_URL=${CHANNEL_MONITOR_DATABASE_URL:-postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD_URLENCODED:-${POSTGRES_PASSWORD:-postgres}}@supabase-db:5432/${POSTGRES_DB:-postgres}}
+    - CHANNEL_MONITOR_DATABASE_URL=${CHANNEL_MONITOR_DATABASE_URL:-postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD_URLENCODED:-${SUPABASE_DB_PASSWORD_URLENCODED:-${POSTGRES_PASSWORD:-${SUPABASE_DB_PASSWORD:-postgres}}}}@supabase-db:5432/${CHANNEL_MONITOR_DB_NAME:-postgres}}
     - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
     - DOCKED_MODE=${DOCKED_MODE:-true}
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
@@ -2563,7 +2563,8 @@ services:
       - CHIT_PASSPHRASE=${CHIT_PROD_PASSPHRASE:?set CHIT_PROD_PASSPHRASE in env.shared}
     ports: ["8113:8113"]
     profiles: ["orchestration"]
-    networks: [pmoves_app, pmoves_api, pmoves_bus]
+    # Docker Desktop does not publish host ports for services attached only to internal networks.
+    networks: [pmoves_app, pmoves_api, pmoves_bus, pmoves_external]
     extra_hosts:
     - host.docker.internal:host-gateway
     healthcheck:
@@ -2631,7 +2632,8 @@ services:
       - CHIT_PASSPHRASE=${CHIT_PROD_PASSPHRASE:?set CHIT_PROD_PASSPHRASE in env.shared}
     ports: ["8055:8055", "8056:8056"]
     profiles: ["orchestration", "media"]
-    networks: [pmoves_app, pmoves_api, pmoves_bus]
+    # Attach a non-internal bridge so published host ports resolve on Docker Desktop.
+    networks: [pmoves_app, pmoves_api, pmoves_bus, pmoves_external]
     extra_hosts:
     - host.docker.internal:host-gateway
     healthcheck:
