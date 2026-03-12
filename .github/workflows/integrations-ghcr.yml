@@ -136,6 +136,7 @@ jobs:
     needs: resolve-matrix
     # Distribute across all available self-hosted Linux runners for parallel builds.
     runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 60
     permissions:
       contents: read
       packages: write

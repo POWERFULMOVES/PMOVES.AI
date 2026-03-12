@@ -16,7 +16,7 @@ on:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/PMOVES.AI-Edition-Hardened' }}
 
 env:
   # GitHub Secrets - Service Credentials
@@ -57,6 +57,7 @@ jobs:
   build-ai-lab:
     name: Build Gateway Agent (AI-Lab)
     runs-on: [self-hosted, ai-lab]
+    timeout-minutes: 30
     permissions:
       contents: read
     needs: validate
@@ -80,6 +81,7 @@ jobs:
   deploy-ai-lab:
     name: Deploy to AI-Lab
     runs-on: [self-hosted, ai-lab]
+    timeout-minutes: 15
     permissions:
       contents: read
     needs: build-ai-lab
@@ -126,6 +128,7 @@ jobs:
   deploy-vps:
     name: Deploy to VPS (KVM4-1)
     runs-on: [self-hosted, kvm4]
+    timeout-minutes: 15
     permissions:
       contents: read
     needs: validate
@@ -192,10 +195,11 @@ jobs:
   rollback-ai-lab:
     name: Rollback AI-Lab
     runs-on: [self-hosted, ai-lab]
+    timeout-minutes: 10
     permissions:
       contents: read
     needs: deploy-ai-lab
-    if: failure()
+    if: failure() || cancelled()
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -209,10 +213,11 @@ jobs:
   rollback-vps:
     name: Rollback VPS
     runs-on: [self-hosted, kvm4]
+    timeout-minutes: 10
     permissions:
       contents: read
     needs: deploy-vps
-    if: failure()
+    if: failure() || cancelled()
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
