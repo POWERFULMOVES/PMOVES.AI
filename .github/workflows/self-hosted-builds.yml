@@ -62,6 +62,7 @@ jobs:
   build-gpu:
     name: GPU Services
     runs-on: [self-hosted, Linux, X64, ai-lab, gpu]
+    timeout-minutes: 90
     permissions:
       contents: read
       packages: write
@@ -144,6 +145,7 @@ jobs:
   build-cpu:
     name: CPU Services
     runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 60
     permissions:
       contents: read
       packages: write
@@ -212,6 +214,7 @@ jobs:
   validate-contracts:
     name: Validate NATS Contracts
     runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 15
     permissions:
       contents: read
 
@@ -253,6 +256,7 @@ jobs:
   deploy-staging:
     name: Deploy Staging
     runs-on: [self-hosted, cloudstartup, staging]
+    timeout-minutes: 30
     permissions:
       contents: read
     needs: [build-cpu, validate-contracts]
@@ -292,6 +296,7 @@ jobs:
   deploy-production:
     name: Deploy Production
     runs-on: [self-hosted, kvm4, production]
+    timeout-minutes: 30
     permissions:
       contents: read
     needs: [build-cpu, validate-contracts, deploy-staging]
@@ -335,6 +340,7 @@ jobs:
   functional-tests:
     name: Functional Tests
     runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 30
     permissions:
       contents: read
     needs: [deploy-staging]

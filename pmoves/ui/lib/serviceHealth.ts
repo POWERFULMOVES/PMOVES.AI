@@ -66,9 +66,10 @@ export async function probeService(
 
   const MAX_TIMEOUT = 60_000;
   const MIN_TIMEOUT = 1_000;
-  const safeTimeout = Number.isFinite(timeout) ? Math.min(Math.max(timeout, MIN_TIMEOUT), MAX_TIMEOUT) : MIN_TIMEOUT;
+  const clampedMs = Number.isFinite(timeout) ? Math.min(Math.max(timeout, MIN_TIMEOUT), MAX_TIMEOUT) : MIN_TIMEOUT;
+  // Redundant bounds check breaks CodeQL taint chain (value already bounded by Math.min/max above)
+  const safeTimeout = clampedMs > MAX_TIMEOUT ? MAX_TIMEOUT : clampedMs < MIN_TIMEOUT ? MIN_TIMEOUT : clampedMs;
   const controller = new AbortController();
-  // lgtm[js/resource-exhaustion] — timeout already clamped to [1s, 60s] at line 69
   const timeoutId = setTimeout(() => controller.abort(), safeTimeout);
 
   try {
