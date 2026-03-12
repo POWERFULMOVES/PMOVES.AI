@@ -5,7 +5,7 @@
 **Last Updated:** 2026-03-11
 **AGNOTE:** 4482
 
-> Complete protocol specification for the Graphiti Trail system — HMAC-signed provenance records that attribute work to specific agents with cryptographic verification. Covers trail format, signing, NATS emission, validation, and the 9-agent registry.
+> Complete protocol specification for the Graphiti Trail system — HMAC-signed provenance records that attribute work to specific agents with cryptographic verification. Covers trail format, signing, NATS emission, validation, and the 8-agent registry.
 
 ---
 
@@ -309,7 +309,7 @@ agents:
     co_author: "Claude Opus 4.6 <noreply@anthropic.com>"
 ```
 
-### Complete Registry (9 Agents)
+### Complete Registry (8 Agents)
 
 | Agent ID | Glyph | Color | Voice | Primary Domains |
 |----------|-------|-------|-------|----------------|
@@ -582,7 +582,7 @@ print(verify_cgp(payload, 'dev-secret'))
 | Signing logic | `pmoves/tools/chit_security.py` | `sign_cgp()`, `verify_cgp()` functions |
 | CLI tool | `pmoves/tools/sign_trail.py` | `build_payload()`, CLI entry point |
 | Make target | `pmoves/mk/preflight.mk` | `sign-trail` target |
-| Agent registry | `pmoves/config/agent_signatures.yaml` | 9-agent identity catalog |
+| Agent registry | `pmoves/config/agent_signatures.yaml` | 8-agent identity catalog |
 | JSON schema | `pmoves/contracts/schemas/agent-graphiti/signature.v1.schema.json` | Payload validation |
 | Log artifact | `pmoves/docs/logs/graphiti_signed_latest.json` | Latest payload (gitignored) |
 | NATS subject | `agent.graphiti.signed.v1` | Trail emission bus |
