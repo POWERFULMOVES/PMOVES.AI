@@ -12,6 +12,14 @@ _Last updated: 2026-03-12_
 - Added `pmoves/docs/PMOVES.AI PLANS/CREATOR_NETWORK_CONTROL_PLANE.md` to frame YouTube, Discord agents, transcribe-and-fetch, model routing, and Tokenism as one creator-network lane.
 - Next focus: finish review cleanup, get PMOVES.YT/root checks green, and keep the creator/channel-monitor runbooks aligned with the authoritative runtime instead of the compatibility mirror.
 
+### Latest changes (Mar 12, 2026) — n8n Production Control Plane Refresh
+- `PMOVES-n8n` is now the authoritative n8n runtime/workflow lane; root `pmoves` consumes it instead of treating `pmoves/n8n/flows` as canon.
+- n8n defaults to the dedicated `n8n-db` Postgres sidecar (`make -C pmoves up-n8n`), with SQLite reduced to a legacy escape hatch only.
+- Added `make -C pmoves n8n-api-bootstrap` to automate owner bootstrap + Public API key rotation for n8n 2.1.
+- Workflow activation/import now targets the n8n Public API path, replacing the failing CLI publish/unpublish fallback for the production lane.
+- Added Supabase tracking schema `pmoves_core.n8n_workflow_registry` plus `make -C pmoves n8n-sync-supabase-registry` so PMOVES can inventory live workflow state.
+- Next focus: validate the full bootstrap against Postgres-backed n8n, refresh PMOVES.YT from demo to production against the same automation lane, and decide which BotZ/MCP workflows join the shared canonical catalog.
+
 ### Latest changes (Mar 8, 2026) — CI Runner Migration + RG-3 Automation
 - **AB-9 mitigation:** Migrated 10 lightweight CI jobs from `[self-hosted, Linux, X64]` to `ubuntu-latest`:
   - `sql-policy-lint`, `python-tests`, `webhook-smoke`, `yt-dlp-bump`, `deploy-gateway-agent` (validate only)

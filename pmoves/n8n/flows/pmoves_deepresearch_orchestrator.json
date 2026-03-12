@@ -14,7 +14,10 @@
         "name": "Webhook Trigger",
         "type": "n8n-nodes-base.webhook",
         "typeVersion": 1,
-        "position": [200, 300]
+        "position": [
+          200,
+          300
+        ]
       },
       {
         "parameters": {
@@ -24,7 +27,10 @@
         "name": "Prepare Research Request",
         "type": "n8n-nodes-base.function",
         "typeVersion": 2,
-        "position": [460, 300]
+        "position": [
+          460,
+          300
+        ]
       },
       {
         "parameters": {
@@ -41,7 +47,10 @@
         "name": "Publish Research Request",
         "type": "n8n-nodes-base.httpRequest",
         "typeVersion": 4,
-        "position": [720, 300]
+        "position": [
+          720,
+          300
+        ]
       },
       {
         "parameters": {
@@ -58,7 +67,10 @@
         "name": "Call DeepResearch API",
         "type": "n8n-nodes-base.httpRequest",
         "typeVersion": 4,
-        "position": [720, 500]
+        "position": [
+          720,
+          500
+        ]
       },
       {
         "parameters": {
@@ -68,7 +80,10 @@
         "name": "Process Research Result",
         "type": "n8n-nodes-base.function",
         "typeVersion": 2,
-        "position": [980, 500]
+        "position": [
+          980,
+          500
+        ]
       },
       {
         "parameters": {
@@ -78,7 +93,10 @@
         "name": "Build CGP Envelope",
         "type": "n8n-nodes-base.function",
         "typeVersion": 2,
-        "position": [1240, 500]
+        "position": [
+          1240,
+          500
+        ]
       },
       {
         "parameters": {
@@ -95,7 +113,10 @@
         "name": "Index to Hi-RAG",
         "type": "n8n-nodes-base.httpRequest",
         "typeVersion": 4,
-        "position": [1500, 400]
+        "position": [
+          1500,
+          400
+        ]
       },
       {
         "parameters": {
@@ -112,7 +133,10 @@
         "name": "Publish Result Event",
         "type": "n8n-nodes-base.httpRequest",
         "typeVersion": 4,
-        "position": [1500, 600]
+        "position": [
+          1500,
+          600
+        ]
       },
       {
         "parameters": {
@@ -129,7 +153,10 @@
         "name": "Auto Publish?",
         "type": "n8n-nodes-base.if",
         "typeVersion": 1,
-        "position": [1760, 500]
+        "position": [
+          1760,
+          500
+        ]
       },
       {
         "parameters": {
@@ -146,39 +173,92 @@
         "name": "Trigger Content Generation",
         "type": "n8n-nodes-base.httpRequest",
         "typeVersion": 4,
-        "position": [2020, 400]
+        "position": [
+          2020,
+          400
+        ]
       }
     ],
     "connections": {
       "Webhook Trigger": {
-        "main": [[{"node": "Prepare Research Request", "type": "main", "index": 0}]]
+        "main": [
+          [
+            {
+              "node": "Prepare Research Request",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
       },
       "Prepare Research Request": {
         "main": [
           [
-            {"node": "Publish Research Request", "type": "main", "index": 0},
-            {"node": "Call DeepResearch API", "type": "main", "index": 0}
+            {
+              "node": "Publish Research Request",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Call DeepResearch API",
+              "type": "main",
+              "index": 0
+            }
           ]
         ]
       },
       "Call DeepResearch API": {
-        "main": [[{"node": "Process Research Result", "type": "main", "index": 0}]]
+        "main": [
+          [
+            {
+              "node": "Process Research Result",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
       },
       "Process Research Result": {
-        "main": [[{"node": "Build CGP Envelope", "type": "main", "index": 0}]]
+        "main": [
+          [
+            {
+              "node": "Build CGP Envelope",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
       },
       "Build CGP Envelope": {
         "main": [
           [
-            {"node": "Index to Hi-RAG", "type": "main", "index": 0},
-            {"node": "Publish Result Event", "type": "main", "index": 0},
-            {"node": "Auto Publish?", "type": "main", "index": 0}
+            {
+              "node": "Index to Hi-RAG",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Publish Result Event",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Auto Publish?",
+              "type": "main",
+              "index": 0
+            }
           ]
         ]
       },
       "Auto Publish?": {
         "main": [
-          [{"node": "Trigger Content Generation", "type": "main", "index": 0}],
+          [
+            {
+              "node": "Trigger Content Generation",
+              "type": "main",
+              "index": 0
+            }
+          ],
           []
         ]
       }
@@ -190,9 +270,9 @@
       "description": "DeepResearch orchestrator: triggers research, indexes results to Hi-RAG, publishes NATS events, optionally triggers content generation"
     },
     "pinData": null,
-    "versionId": "deepresearch-v1",
+    "versionId": "8ab8e5c9-32d7-438a-96bb-cf47ffa24302",
     "versionCounter": 1,
     "triggerCount": 0,
-    "tags": ["pmoves", "research", "deepresearch", "knowledge"]
+    "tags": []
   }
 ]

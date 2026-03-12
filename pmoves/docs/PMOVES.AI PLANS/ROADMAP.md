@@ -12,6 +12,12 @@ A production-ready, self-hostable orchestration mesh for creative + agent worklo
   - the Supabase docs sync contract was refreshed for the current CLI stack: `pmoves_core.tool_docs` writes now use schema-profile headers plus URL-encoded `on_conflict`.
   - root `pmoves/services/pmoves-yt` remains as a compatibility shim so existing tests/import paths keep working while production moves to the submodule.
   - downloader defaults are being normalized around the authoritative runtime: PMOVES.YT now documents the modern client/token path, root compose passes explicit companion wiring, and Jellyfin/channel-monitor docs are being moved off older MCP and future-work framing.
+- March 12 n8n production-path remediation landed locally:
+  - `PMOVES-n8n` is now the authoritative runtime/workflow lane consumed by the root repo.
+  - `make -C pmoves up-n8n` now defaults to the dedicated `n8n-db` Postgres sidecar instead of SQLite.
+  - n8n owner/bootstrap automation is scripted (`n8n-api-bootstrap`) so Public API keys no longer depend on manual UI steps.
+  - workflow activation now targets the n8n 2.1 Public API (`/api/v1/workflows/{id}/activate|deactivate`) instead of the brittle CLI publish fallback.
+  - Supabase tracking contract added: `pmoves_core.n8n_workflow_registry` stores live workflow state synced from n8n.
 - March 7 merge wave completed on `main`: `#814`, `#815`, `#816`, `#817`, `#818`, `#819`, `#820`, `#821` (8 PRs, 3 batches).
 - Chrome extension security hardening landed in `#821`: 9 CodeRabbit review items addressed (auth storage isolation, XSS remediation, mock server hardening, timeout guards, state management fixes, CSP).
 - Distributed topology documentation + examples landed in `#820`.
