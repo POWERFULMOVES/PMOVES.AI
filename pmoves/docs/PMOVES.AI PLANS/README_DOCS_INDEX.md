@@ -102,8 +102,14 @@ Other tracked submodules:
 - Full bundle and profiles: `../archive/codex_full_config_bundle/README-Codex-MCP-Full.md`
   - Includes `config.toml` with Docker MCP gateway, web search enabled, and multiple profiles for network/sandbox modes.
 - Codex operator runbook: `../AGENTS/CODEX_OPERATOR_HOME.md`
+- Codex ecosystem traversal: `../AGENTS/CODEX_ECOSYSTEM_TRAVERSAL.md`
+- Codex runtime protocol: `../AGENTS/CODEX_RUNTIME_PROTOCOL.md`
 - Hyperdimensions control-plane taxonomy: `../AGENTS/PMOVES_HYPERDIMENSIONS_CONTROL_PLANE.md`
 - Claude -> Codex parity map: `../AGENTS/CODEX_CLAUDE_PARITY_MAP.md`
+- KRISS KROSS collision protocol: `../AGENTS/KRISS_KROSS_ACCORD.md`
+- Submodule workflow: `../../../.claude/context/submodule-workflow.md`
+- Submodule catalog: `../../../.claude/context/submodules.md`
+- Submodule Codex homes: `../AGENTS/SUBMODULE_CODEX_HOMES/README.md`
 - Submodule parity audit: `../AGENTS/CODEX_SUBMODULE_INTEGRATION_AUDIT.md`
 - Tooling overlay audit: `../AGENTS/TOOLING_SCRIPT_AUDIT.md`
 - Persona style playbook: `../AGENTS/CODEX_PERSONA_STYLE_PLAYBOOK.md`
