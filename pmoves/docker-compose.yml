@@ -1563,7 +1563,8 @@ services:
     <<: *tier-media-hardened
     image: ${PMOVES_YT_IMAGE:-}
     build:
-      context: ./services/pmoves-yt
+      context: ../PMOVES.YT
+      dockerfile: pmoves_yt_service/Dockerfile
       args:
       - YTDLP_VERSION=${YTDLP_VERSION:-}
     restart: unless-stopped

@@ -2,6 +2,7 @@
 
 Scope:
 - YouTube ingest, transcript acquisition, and media-to-knowledge routing parity.
+- Authoritative runtime now lives in the PMOVES.YT submodule package `pmoves_yt_service/`.
 
 Use this when:
 - the task starts from YouTube URLs, channels, playlists, captions, or transcript fallback
@@ -16,7 +17,12 @@ PMOVES companions:
 - `Invidious` for fallback reachability
 
 Core checks:
+- `git submodule status -- PMOVES.YT`
+- `make -C pmoves submodule-layer-validate-one SUBMODULE=PMOVES.YT`
+- `make -C pmoves submodule-branch-policy-check`
 - `curl -fsS http://localhost:8077/healthz`
+- `curl -fsS http://localhost:8077/yt/docs/catalog`
+- `curl -fsS -X POST http://localhost:8077/yt/docs/sync`
 - `make -C pmoves channel-monitor-smoke`
 - `make -C pmoves yt-jellyfin-smoke`
 
@@ -25,6 +31,9 @@ Related parity tokens:
 - `/yt:list-channels`
 - `/yt:ingest-video`
 - `/yt:check-now`
+- `/worktree:status`
+- `/github:checks`
+- `/deploy:status`
 
 Related docs:
 - `pmoves/docs/AGENTS/CODEX_ECOSYSTEM_TRAVERSAL.md`

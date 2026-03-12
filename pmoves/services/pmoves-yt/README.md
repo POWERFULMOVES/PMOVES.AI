@@ -1,4 +1,20 @@
-# PMOVES.YT — Ingest + CGP Publisher
+# PMOVES.YT — Compatibility Mirror
+
+This directory is no longer the authoritative PMOVES.YT runtime.
+
+Canonical source now lives in the [PMOVES.YT submodule](C:/Users/russe/Documents/GitHub/PMOVES.AI/PMOVES.YT) under `pmoves_yt_service/`.
+
+PMOVES.AI keeps this path only as a compatibility shim for:
+- existing imports under `pmoves.services.pmoves_yt`
+- older docs/test references that still point at `pmoves/services/pmoves-yt`
+
+For real runtime/docs changes, edit:
+- [PMOVES.YT/pmoves_yt_service/yt.py](C:/Users/russe/Documents/GitHub/PMOVES.AI/PMOVES.YT/pmoves_yt_service/yt.py)
+- [PMOVES.YT/pmoves_yt_service/docs_sync.py](C:/Users/russe/Documents/GitHub/PMOVES.AI/PMOVES.YT/pmoves_yt_service/docs_sync.py)
+- [PMOVES.YT/pmoves_yt_service/docs_catalog.py](C:/Users/russe/Documents/GitHub/PMOVES.AI/PMOVES.YT/pmoves_yt_service/docs_catalog.py)
+- [PMOVES.YT/docs/RUNTIME.md](C:/Users/russe/Documents/GitHub/PMOVES.AI/PMOVES.YT/docs/RUNTIME.md)
+
+# Historical Notes
 
 YouTube ingest helper that emits CHIT geometry after analysis.
 
