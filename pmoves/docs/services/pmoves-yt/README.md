@@ -4,12 +4,16 @@ Status: Implemented (compose)
 
 Overview
 - YouTube ingest and processing; integrates with MinIO and Supabase.
+- Authoritative runtime now lives in the [PMOVES.YT submodule](C:/Users/russe/Documents/GitHub/PMOVES.AI/PMOVES.YT) under `pmoves_yt_service/`.
+- Root `pmoves/services/pmoves-yt` is now a compatibility mirror/shim, not the source of truth.
 
 Compose
 - Service: `pmoves-yt`
 - Port: `8077:8077`
 - Profiles: `orchestration`, `workers`, `agents`
 - Depends on: `minio`
+- Build context: `../PMOVES.YT`
+- Dockerfile: `pmoves_yt_service/Dockerfile`
 
 Environment
 - `MINIO_ENDPOINT`, `MINIO_ACCESS_KEY`, `MINIO_SECRET_KEY`, `MINIO_SECURE`
@@ -24,6 +28,8 @@ Smoke
 ```
 docker compose up -d minio pmoves-yt
 docker compose ps pmoves-yt
-curl -sS http://localhost:8077/ | head -c 200 || true
+curl -sS http://localhost:8077/healthz
+curl -sS http://localhost:8077/yt/docs/catalog
+curl -sS -X POST http://localhost:8077/yt/docs/sync
 docker compose logs -n 50 pmoves-yt
 ```

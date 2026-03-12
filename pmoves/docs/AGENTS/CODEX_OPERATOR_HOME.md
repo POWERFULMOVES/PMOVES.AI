@@ -1,5 +1,5 @@
 # Codex Operator Home (PMOVES)
-_Last updated: 2026-03-02_
+_Last updated: 2026-03-12_
 
 This is the Codex-first operations guide for PMOVES.AI. It mirrors the mature
 Claude setup, but keeps Codex workflows command-first and Makefile-native.
@@ -7,6 +7,11 @@ Claude setup, but keeps Codex workflows command-first and Makefile-native.
 For the full PMOVES traversal map, including skills, memory, personas, voice,
 service selection, and submodule routing, see:
 - `pmoves/docs/AGENTS/CODEX_ECOSYSTEM_TRAVERSAL.md`
+
+For the current sprint, treat PMOVES as a 2026 creator-network control plane as well as a
+service mesh. Codex should be able to traverse the full operator path from creator intent to
+source discovery, ingest, transcript acquisition, model routing, playback, Discord interaction,
+and PMOVES-native value tracking.
 
 ## Runtime signaling
 
@@ -67,6 +72,51 @@ surfaces.
 - `make -C pmoves codex-parity-check`
 - `make -C pmoves a0-plugins-check`
 - `make -C pmoves a0-plugins-check-remote`
+
+## Creator network control plane
+
+Use this lane when the operator task spans YouTube channels, playlists, creator outreach,
+transcripts, Discord, Jellyfin, or cross-model orchestration.
+
+### Primary traversal order
+
+1. `pmoves/docs/PMOVES.AI PLANS/CREATOR_NETWORK_CONTROL_PLANE.md`
+2. `pmoves/docs/AGENTS/SUBMODULE_CODEX_HOMES/PMOVES.YT.md`
+3. `pmoves/docs/AGENTS/SUBMODULE_CODEX_HOMES/PMOVES-transcribe-and-fetch.md`
+4. `pmoves/services/channel-monitor/README.md`
+5. `pmoves/docs/AGENTS/JELLYFIN_CREATOR_WORKTREE_REVIEW.md`
+
+### Service posture
+
+- `PMOVES.YT` is the authoritative runtime for YouTube ingest, metadata, docs catalog, and
+  downloader fallback strategy.
+- `Channel Monitor` owns source discovery, polling cadence, and fan-out into PMOVES.YT ingest.
+- `PMOVES-transcribe-and-fetch` remains the auxiliary fetch/transcript lane for parity, repair,
+  and specialized extraction cases.
+- `Jellyfin` is the playback and packaging surface for owned and harvested media.
+- `BoTZ` and Discord are the operator/engagement lane, but public-facing actions should default
+  to human approval unless the workflow explicitly declares autonomous behavior.
+- `Tokenism` should be treated as the value-tracking lane for attribution, monetization, and
+  network effects that result from creator operations.
+
+### Creator control checks
+
+- `curl -fsS http://localhost:8077/healthz`
+- `curl -fsS http://localhost:8077/yt/docs/catalog | jq .`
+- `curl -fsS http://localhost:8097/api/monitor/status | jq .`
+- `make -C pmoves channel-monitor-smoke`
+- `make -C pmoves yt-jellyfin-smoke`
+- `make -C pmoves transcribe-and-fetch-smoke`
+
+### Model-routing stance
+
+- Prefer local PMOVES model tiers first for extraction, transcript cleanup, rerank, and operator
+  assist when the quality bar is met.
+- Use Qwen-family, NVIDIA/Nemotron, Google multimodal/embedding, HuggingFace, Ollama, and other
+  available backends as routing options selected by task shape rather than by a single hardcoded
+  provider.
+- Geometry-bus, retrieval, and creator workflows should record enough metadata that downstream
+  services can understand which model family produced the artifact.
 
 ## CHIT Geometry Bus
 
@@ -152,6 +202,14 @@ For a comprehensive view of what's implemented vs. what's still planned, see:
 
 ## Priority links
 
+- Creator-network control plane:
+  - `pmoves/docs/PMOVES.AI PLANS/CREATOR_NETWORK_CONTROL_PLANE.md`
+- PMOVES.YT submodule home:
+  - `pmoves/docs/AGENTS/SUBMODULE_CODEX_HOMES/PMOVES.YT.md`
+- PMOVES-transcribe-and-fetch submodule home:
+  - `pmoves/docs/AGENTS/SUBMODULE_CODEX_HOMES/PMOVES-transcribe-and-fetch.md`
+- Jellyfin creator review:
+  - `pmoves/docs/AGENTS/JELLYFIN_CREATOR_WORKTREE_REVIEW.md`
 - Codex submodule audit:
   - `pmoves/docs/AGENTS/CODEX_SUBMODULE_INTEGRATION_AUDIT.md`
 - Codex ecosystem traversal:

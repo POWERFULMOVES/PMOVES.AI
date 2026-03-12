@@ -2,6 +2,11 @@
 
 Automates discovery of new YouTube videos from configured channels and queues them for ingestion via `pmoves-yt`.
 
+Current production fetch order:
+- YouTube Data API with Google OAuth refresh tokens when available
+- yt-dlp flat extraction / RSS fallback when API auth is unavailable or source coverage requires it
+- queue handoff to the authoritative `PMOVES.YT` runtime at `/yt/ingest`
+
 ### Environment
 
 | Variable | Description | Default |
@@ -10,6 +15,10 @@ Automates discovery of new YouTube videos from configured channels and queues th
 | `CHANNEL_MONITOR_QUEUE_URL` | Endpoint that receives discovered URLs (typically pmoves-yt `/yt/ingest`). | `http://pmoves-yt:8077/yt/ingest` |
 | `CHANNEL_MONITOR_DATABASE_URL` | Postgres connection string used for persistence. | `postgresql://pmoves:pmoves@postgres:5432/pmoves` |
 | `CHANNEL_MONITOR_NAMESPACE` | Default namespace applied when queuing videos. | `pmoves` |
+| `CHANNEL_MONITOR_GOOGLE_CLIENT_ID` | Google OAuth client id for YouTube Data API access. | _(unset)_ |
+| `CHANNEL_MONITOR_GOOGLE_CLIENT_SECRET` | Google OAuth client secret for token refresh. | _(unset)_ |
+| `CHANNEL_MONITOR_GOOGLE_REDIRECT_URI` | OAuth redirect URI served by channel-monitor. | `http://localhost:8097/api/oauth/google/callback` |
+| `CHANNEL_MONITOR_GOOGLE_SCOPES` | OAuth scopes used for YouTube access. | `https://www.googleapis.com/auth/youtube.readonly` |
 | `CHANNEL_MONITOR_SECRET` | Optional shared secret required by protected write endpoints (`/api/monitor/status`, `/api/monitor/discord-drop`). | _(unset)_ |
 | `CHANNEL_MONITOR_DISCORD_APPROVAL_MODE` | Default Discord intake mode (`ask` or `auto`). | `ask` |
 

@@ -1,7 +1,16 @@
 
 # PMOVES v5 • NEXT_STEPS
 Note: Consolidated plan index at pmoves/docs/PMOVES.AI PLANS/README_DOCS_INDEX.md.
-_Last updated: 2026-03-08_
+_Last updated: 2026-03-12_
+
+### Latest changes (Mar 12, 2026) — PMOVES.YT Authoritative Runtime Refresh
+- `PMOVES.YT` is now the authoritative runtime/docs lane for `pmoves-yt`; the root repo now builds the service from the submodule Dockerfile instead of treating `pmoves/services/pmoves-yt` as the source of truth.
+- Added a structured yt-dlp catalog inside the submodule (`/yt/docs/catalog`) so live runtime metadata exposes extractor counts, option inventory, and the active yt-dlp version.
+- Refreshed the Supabase docs sync path (`/yt/docs/sync`) for the current CLI stack: `pmoves_core.tool_docs` writes now use schema-profile headers plus URL-encoded `on_conflict`, and live sync is green again.
+- Kept the root `pmoves/services/pmoves-yt` package as a compatibility shim so existing tests and import paths remain stable during the production transition.
+- Modernized the downloader path around the authoritative runtime: PMOVES.YT now documents current yt-dlp client/token behavior, root compose passes companion URLs explicitly, and Jellyfin/channel-monitor docs are moving off older MCP/future-work framing.
+- Added `pmoves/docs/PMOVES.AI PLANS/CREATOR_NETWORK_CONTROL_PLANE.md` to frame YouTube, Discord agents, transcribe-and-fetch, model routing, and Tokenism as one creator-network lane.
+- Next focus: finish review cleanup, get PMOVES.YT/root checks green, and keep the creator/channel-monitor runbooks aligned with the authoritative runtime instead of the compatibility mirror.
 
 ### Latest changes (Mar 8, 2026) — CI Runner Migration + RG-3 Automation
 - **AB-9 mitigation:** Migrated 10 lightweight CI jobs from `[self-hosted, Linux, X64]` to `ubuntu-latest`:

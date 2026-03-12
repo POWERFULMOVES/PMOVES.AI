@@ -1,5 +1,5 @@
 # PMOVES v5 • Documentation Index
-_Last updated: 2026-03-07 — fix 8 broken links + 3 path mismatches_
+_Last updated: 2026-03-12 — add PMOVES.YT authoritative runtime path_
 
 ## Directory Map
 
@@ -52,6 +52,7 @@ After the 2026-02-18 reorganization, `pmoves/docs/` is organized as:
 - **Archon Service README** — `../services/archon/README.md`
 - **Monitoring Stack (Prometheus, Grafana, Loki)** — `../services/monitoring/README.md`
 - **n8n Setup (Supabase→Agent Zero→Discord)** — `N8N_SETUP.md`
+- **PMOVES.YT Service Guide** — `../services/pmoves-yt/README.md`
 - **Supabase→Discord Playbook** — `SUPABASE_DISCORD_AUTOMATION.md`
 - **Tailnet + Discord Deployment** — `TAILSCALE_DISCORD_RUNBOOK.md`
 - **M2 Validation Guide** — `M2_VALIDATION_GUIDE.md`
@@ -93,6 +94,7 @@ These pair with UI frameworks in:
 | PMOVES-Wealth | `PMOVES_WEALTH_STATUS.md` |
 | PMOVES-crush | `PMOVES_CRUSH_STATUS.md` |
 | PMOVES-n8n | `N8N_SETUP.md` |
+| PMOVES.YT | `PMOVES.yt/PMOVES_YT.md` |
 | PMOVES-tensorzero | `PMOVES_TENSORZERO_STATUS.md` |
 
 Other tracked submodules:

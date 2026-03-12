@@ -25,6 +25,25 @@ Canonical identity sources:
 - `pmoves/config/agent_signatures.yaml` -> `codex`
 - `pmoves/docs/AGENTS/CODEX_ECOSYSTEM_TRAVERSAL.md`
 
+## 2026 Creator Network Fast Path
+
+Use this path when the task involves creator operations, channel growth, YouTube ingest,
+transcripts, Jellyfin playback, Discord outreach, or model-routing across the PMOVES stack.
+
+1. **[CODEX_OPERATOR_HOME.md](./CODEX_OPERATOR_HOME.md)** — Codex-first operator runbook with creator control plane commands
+2. **[../PMOVES.AI PLANS/CREATOR_NETWORK_CONTROL_PLANE.md](../PMOVES.AI%20PLANS/CREATOR_NETWORK_CONTROL_PLANE.md)** — 2026 creator-network operating model
+3. **[JELLYFIN_CREATOR_WORKTREE_REVIEW.md](./JELLYFIN_CREATOR_WORKTREE_REVIEW.md)** — Jellyfin/creator worktree review and current gaps
+4. **[SUBMODULE_CODEX_HOMES/PMOVES.YT.md](./SUBMODULE_CODEX_HOMES/PMOVES.YT.md)** — authoritative YouTube runtime traversal
+5. **[SUBMODULE_CODEX_HOMES/PMOVES-transcribe-and-fetch.md](./SUBMODULE_CODEX_HOMES/PMOVES-transcribe-and-fetch.md)** — transcript/fetch auxiliary lane
+
+The creator-network lane treats Codex as a legendary operator that can traverse:
+- PMOVES.YT for owned/watched channel ingest, playlist control, metadata sync, and downloader fallback
+- Channel Monitor for source discovery, scheduling, and event routing
+- transcribe-and-fetch for transcript and fetch augmentation
+- Jellyfin and publisher surfaces for playback, packaging, and downstream publishing
+- Discord and BoTZ for agent-mediated response, routing, and operator interaction
+- local and remote model tiers for extraction, embedding, rerank, narration, and orchestration
+
 ---
 
 ## Directory by Tier
@@ -78,6 +97,18 @@ Runbooks for Codex and Claude operators.
 | [CODEX_PERSONA_STYLE_PLAYBOOK.md](./CODEX_PERSONA_STYLE_PLAYBOOK.md) | Persona voice/style configuration |
 | [KRISS_KROSS_ACCORD.md](./KRISS_KROSS_ACCORD.md) | Multi-agent collision safety protocol (ratified 2026-02-25) |
 | [KRISS_KROSS_ACK.md](./KRISS_KROSS_ACK.md) | Witness attestation for KRISS KROSS ratification |
+
+### Creator Control Plane
+
+These docs matter when traversing PMOVES as a creator and media operations system rather than a
+single-service codebase.
+
+| File | Purpose |
+|------|---------|
+| [../PMOVES.AI PLANS/CREATOR_NETWORK_CONTROL_PLANE.md](../PMOVES.AI%20PLANS/CREATOR_NETWORK_CONTROL_PLANE.md) | 2026 creator-network map across PMOVES.YT, Channel Monitor, Discord, Jellyfin, and Tokenism |
+| [JELLYFIN_CREATOR_WORKTREE_REVIEW.md](./JELLYFIN_CREATOR_WORKTREE_REVIEW.md) | Current creator/Jellyfin worktree findings and follow-ups |
+| [SUBMODULE_CODEX_HOMES/PMOVES.YT.md](./SUBMODULE_CODEX_HOMES/PMOVES.YT.md) | Codex home for YouTube ingest and creator control |
+| [SUBMODULE_CODEX_HOMES/PMOVES-transcribe-and-fetch.md](./SUBMODULE_CODEX_HOMES/PMOVES-transcribe-and-fetch.md) | Codex home for transcript and fetch support |
 
 ### Tier 5: Vision & Notes (12 files)
 
