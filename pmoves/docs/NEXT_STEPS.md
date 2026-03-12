@@ -3,6 +3,8 @@
 Note: Consolidated plan index at pmoves/docs/PMOVES.AI PLANS/README_DOCS_INDEX.md.
 _Last updated: 2026-03-12_
 
+## Current Status
+
 ### Latest changes (Mar 12, 2026) — PMOVES.YT Authoritative Runtime Refresh
 - `PMOVES.YT` is now the authoritative runtime/docs lane for `pmoves-yt`; the root repo now builds the service from the submodule Dockerfile instead of treating `pmoves/services/pmoves-yt` as the source of truth.
 - Added a structured yt-dlp catalog inside the submodule (`/yt/docs/catalog`) so live runtime metadata exposes extractor counts, option inventory, and the active yt-dlp version.
