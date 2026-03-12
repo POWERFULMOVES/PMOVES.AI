@@ -154,16 +154,19 @@ As of March 12, 2026, use these findings as the starting bias for this worktree 
     comment/reply actions, but it is intentionally narrow and approval-gated
   - preview/executed actions now append to `pmoves_core.youtube_control_actions` so the creator
     lane has a durable Supabase audit trail instead of event-only visibility
-  - broader channel-management tasks, richer review flow, and Discord interaction wiring are still
-    follow-up work
+  - `channel-monitor` now provides queue/list/review endpoints for those actions and approves them
+    by calling PMOVES.YT control endpoints directly
+  - broader channel-management tasks and first-class Discord interaction wiring are still follow-up
+    work
 
 ## Recommended next implementation steps
 
 1. Keep `channel-monitor` source metadata explicit in config, API payloads, and downstream PMOVES.YT
    ingest metadata.
-2. Move PMOVES.YT summary selection from model-id envs to model-role aliases documented in
-   `pmoves/docs/MODEL_FABRIC_CONTRACT.md`.
-3. Collapse `PMOVES-transcribe-and-fetch` static model inventory behind the same registry/alias
-   contract its UI already expects.
-4. Review owned-channel playlist control against Google API credentials and Discord approval flow,
-   not only yt-dlp ingest.
+2. Replace PMOVES.YT alias-env bridging with live registry-backed alias resolution where the
+   model-registry service is available.
+3. Move PMOVES-transcribe-and-fetch runtime call paths fully onto shared alias/role resolution,
+   since the fallback catalog and registry compatibility seams are now PMOVES-native but the
+   backend still mixes direct model ids and alias-based calls in older modules.
+4. Expand the new PMOVES.YT owned-channel control plane from approval-gated playlist/comment
+   actions into richer YouTube Data API coverage plus first-class Discord interaction wiring.

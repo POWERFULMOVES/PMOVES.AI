@@ -95,6 +95,25 @@ def _build_monitor(tmp_path, config_name: str = "channel.json") -> ChannelMonito
     )
 
 
+class _FakeAcquire:
+    def __init__(self, conn):
+        self._conn = conn
+
+    async def __aenter__(self):
+        return self._conn
+
+    async def __aexit__(self, exc_type, exc, tb):
+        return False
+
+
+class _FakePool:
+    def __init__(self, conn):
+        self._conn = conn
+
+    def acquire(self):
+        return _FakeAcquire(self._conn)
+
+
 def test_apply_filters_respects_age_and_keywords(tmp_path):
     monitor = _build_monitor(tmp_path)
     now = datetime.now(timezone.utc)
@@ -479,3 +498,77 @@ def test_extract_youtube_video_id_allows_valid_hosts(url, expected):
 )
 def test_extract_youtube_video_id_rejects_spoofed_hosts(url):
     assert _extract_youtube_video_id(url) is None
+
+
+def test_create_youtube_control_request_persists_pending_row(tmp_path):
+    monitor = _build_monitor(tmp_path)
+    conn = SimpleNamespace(execute=AsyncMock())
+    monitor._pool = _FakePool(conn)  # type: ignore[assignment]
+
+    result = asyncio.run(
+        monitor.create_youtube_control_request(
+            action="playlist_add",
+            details={"playlist_id": "PL123", "video_id": "vid-123"},
+            request_source="discord_agent",
+        )
+    )
+
+    assert result["status"] == "pending_review"
+    assert result["action"] == "playlist_add"
+    conn.execute.assert_awaited_once()
+
+
+def test_review_youtube_control_actions_executes_pmoves_yt_call(tmp_path, monkeypatch):
+    monitor = _build_monitor(tmp_path)
+    rows = [
+        {
+            "id": "11111111-1111-1111-1111-111111111111",
+            "action": "comment_create",
+            "details": {"video_id": "vid-123", "text": "hello"},
+        }
+    ]
+    conn = SimpleNamespace(fetch=AsyncMock(return_value=rows), execute=AsyncMock())
+    monitor._pool = _FakePool(conn)  # type: ignore[assignment]
+
+    requests_made = []
+
+    class DummyResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"status": "executed", "result": {"id": "comment-1"}}
+
+    class DummyAsyncClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        async def post(self, url, json=None, headers=None):
+            requests_made.append((url, json, headers))
+            return DummyResponse()
+
+    monkeypatch.setenv("CHANNEL_MONITOR_YT_API_KEY", "secret-key")
+    monkeypatch.setattr("channel_monitor.monitor.httpx.AsyncClient", DummyAsyncClient)
+
+    result = asyncio.run(
+        monitor.review_youtube_control_actions(
+            action_ids=["11111111-1111-1111-1111-111111111111"],
+            approve=True,
+            actor="discord-agent",
+            reason="approved in ops",
+        )
+    )
+
+    assert result["approved"] is True
+    assert result["processed"] == 1
+    assert requests_made[0][0] == "http://example.test/yt/control/comment"
+    assert requests_made[0][1]["execute"] is True
+    assert requests_made[0][1]["approved_by"] == "discord-agent"
+    assert requests_made[0][2]["X-API-Key"] == "secret-key"
+    assert conn.execute.await_count == 1

@@ -327,6 +327,19 @@ class DiscordDropApprovalRequest(BaseModel):
     reason: str | None = Field(None, description="Optional rejection reason")
 
 
+class YouTubeControlRequest(BaseModel):
+    action: str = Field(..., description="Control action type: playlist_add or comment_create")
+    details: Dict[str, Any] = Field(..., description="PMOVES.YT control payload without execute fields")
+    request_source: str = Field("channel_monitor", description="Logical request source for audit rows")
+
+
+class YouTubeControlReviewRequest(BaseModel):
+    action_ids: List[str] = Field(..., description="Pending action IDs to approve or reject")
+    approve: bool = Field(True, description="When true execute the control action, otherwise reject it")
+    actor: str | None = Field(None, description="Reviewer/agent id performing the action")
+    reason: str | None = Field(None, description="Optional review note or rejection reason")
+
+
 async def require_secret(token: str | None = Header(default=None, alias="X-Channel-Monitor-Token")) -> None:
     """Verify authentication token for protected endpoints.
 
@@ -610,6 +623,52 @@ async def review_discord_drop(
         return {"status": "ok", "approved": False, **result}
     except ValueError as exc:
         DISCORD_DROP_REVIEWS_TOTAL.labels(action="error").inc()
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/monitor/youtube-control")
+async def queue_youtube_control_action(
+    payload: YouTubeControlRequest,
+    _: None = Depends(require_secret),
+    monitor: ChannelMonitor = Depends(get_monitor),
+):
+    try:
+        result = await monitor.create_youtube_control_request(
+            action=payload.action,
+            details=payload.details,
+            request_source=payload.request_source,
+        )
+        return {"status": "ok", "queued": True, "approval_state": "pending_review", "request": result}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.get("/api/monitor/youtube-control/pending")
+async def list_pending_youtube_control_actions(
+    _: None = Depends(require_secret),
+    monitor: ChannelMonitor = Depends(get_monitor),
+    action: str | None = Query(default=None, description="Optional action filter"),
+    limit: int = Query(default=100, ge=1, le=500, description="Maximum pending rows to return"),
+):
+    pending = await monitor.list_pending_youtube_control_actions(action=action, limit=limit)
+    return {"status": "ok", "count": len(pending), "pending": pending}
+
+
+@app.post("/api/monitor/youtube-control/review")
+async def review_youtube_control_actions(
+    payload: YouTubeControlReviewRequest,
+    _: None = Depends(require_secret),
+    monitor: ChannelMonitor = Depends(get_monitor),
+):
+    try:
+        result = await monitor.review_youtube_control_actions(
+            action_ids=payload.action_ids,
+            approve=payload.approve,
+            actor=payload.actor,
+            reason=payload.reason,
+        )
+        return {"status": "ok", **result}
+    except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 

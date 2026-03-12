@@ -152,6 +152,32 @@ curl -X POST http://localhost:8097/api/monitor/discord-drop/approve \
   -d '{"video_ids":["dQw4w9WgXcQ"],"approve":true,"actor":"discord-agent"}'
 ```
 
+Queue/review owned-channel PMOVES.YT control actions:
+
+```bash
+curl -X POST http://localhost:8097/api/monitor/youtube-control \
+  -H 'content-type: application/json' \
+  -H 'x-channel-monitor-token: $CHANNEL_MONITOR_SECRET' \
+  -d '{
+    "action": "playlist_add",
+    "details": {
+      "playlist_id": "PL123",
+      "video_id": "dQw4w9WgXcQ"
+    },
+    "request_source": "discord_agent"
+  }'
+
+curl -X GET "http://localhost:8097/api/monitor/youtube-control/pending" \
+  -H 'x-channel-monitor-token: $CHANNEL_MONITOR_SECRET'
+
+curl -X POST http://localhost:8097/api/monitor/youtube-control/review \
+  -H 'content-type: application/json' \
+  -H 'x-channel-monitor-token: $CHANNEL_MONITOR_SECRET' \
+  -d '{"action_ids":["11111111-1111-1111-1111-111111111111"],"approve":true,"actor":"discord-agent"}'
+```
+
+Set `CHANNEL_MONITOR_YT_API_KEY` when PMOVES.YT control endpoints require `X-API-Key`.
+
 ### Observability
 
 `GET /api/monitor/stats` now returns:

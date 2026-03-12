@@ -4,10 +4,11 @@ import asyncio
 import hashlib
 import json
 import logging
+import os
 from datetime import datetime, timezone, timedelta
 from functools import partial
 from typing import Any, Dict, List, Optional, Set
-from uuid import UUID
+from uuid import UUID, uuid4
 from urllib.parse import parse_qs, urlparse
 
 import asyncpg
@@ -215,6 +216,14 @@ class ChannelMonitor:
             except (ValueError, TypeError) as exc:  # pragma: no cover - known config errors
                 LOGGER.warning("YouTube API integration disabled due to configuration error: %s", exc)
                 self._youtube_client = None  # Explicitly disable if init fails
+
+    def _yt_control_base_url(self) -> str:
+        base = self.queue_url.rstrip("/")
+        if base.endswith("/yt/ingest"):
+            return base[: -len("/yt/ingest")]
+        if base.endswith("/yt"):
+            return base
+        return base
 
     async def start(self) -> None:
         if self._pool is None:
@@ -1650,6 +1659,201 @@ class ChannelMonitor:
             if changed:
                 rejected += 1
         return {"rejected": rejected, "requested": len(wanted_ids)}
+
+    async def create_youtube_control_request(
+        self,
+        *,
+        action: str,
+        details: Dict[str, Any],
+        request_source: str,
+    ) -> Dict[str, Any]:
+        assert self._pool
+        action_id = str(uuid4())
+        row = {
+            "id": action_id,
+            "action": action,
+            "status": "pending_review",
+            "execute_requested": True,
+            "request_source": request_source,
+            "details": details,
+        }
+        async with self._pool.acquire() as conn:
+            await conn.execute(
+                """
+                INSERT INTO pmoves_core.youtube_control_actions (
+                    id, action, status, execute_requested, request_source, details
+                ) VALUES ($1::uuid, $2, $3, $4, $5, $6::jsonb)
+                """,
+                action_id,
+                action,
+                "pending_review",
+                True,
+                request_source,
+                json.dumps(details),
+            )
+        return row
+
+    async def list_pending_youtube_control_actions(
+        self,
+        *,
+        action: Optional[str] = None,
+        limit: int = 100,
+    ) -> List[Dict[str, Any]]:
+        assert self._pool
+        capped_limit = max(1, min(limit, 500))
+        async with self._pool.acquire() as conn:
+            if action:
+                rows = await conn.fetch(
+                    """
+                    SELECT id, action, status, request_source, approved_by, approval_note, details, result, error, created_at
+                    FROM pmoves_core.youtube_control_actions
+                    WHERE status = 'pending_review' AND action = $1
+                    ORDER BY created_at ASC
+                    LIMIT $2
+                    """,
+                    action,
+                    capped_limit,
+                )
+            else:
+                rows = await conn.fetch(
+                    """
+                    SELECT id, action, status, request_source, approved_by, approval_note, details, result, error, created_at
+                    FROM pmoves_core.youtube_control_actions
+                    WHERE status = 'pending_review'
+                    ORDER BY created_at ASC
+                    LIMIT $1
+                    """,
+                    capped_limit,
+                )
+
+        pending: List[Dict[str, Any]] = []
+        for row in rows:
+            pending.append(
+                {
+                    "id": str(row.get("id")),
+                    "action": row.get("action"),
+                    "status": row.get("status"),
+                    "request_source": row.get("request_source"),
+                    "approved_by": row.get("approved_by"),
+                    "approval_note": row.get("approval_note"),
+                    "details": row.get("details") if isinstance(row.get("details"), dict) else {},
+                    "result": row.get("result"),
+                    "error": row.get("error"),
+                    "created_at": _to_iso(row.get("created_at")),
+                }
+            )
+        return pending
+
+    async def _invoke_yt_control_action(
+        self,
+        *,
+        action: str,
+        details: Dict[str, Any],
+        approved_by: str,
+        approval_note: Optional[str],
+    ) -> Dict[str, Any]:
+        endpoint_map = {
+            "playlist_add": "/yt/control/playlist/add",
+            "comment_create": "/yt/control/comment",
+        }
+        endpoint = endpoint_map.get(action)
+        if not endpoint:
+            raise ValueError(f"Unsupported YouTube control action: {action}")
+
+        payload = dict(details)
+        payload["execute"] = True
+        payload["approved_by"] = approved_by
+        if approval_note:
+            payload["approval_note"] = approval_note
+
+        headers: Dict[str, str] = {}
+        api_key = (
+            os.getenv("CHANNEL_MONITOR_YT_API_KEY")
+            or os.getenv("NEXT_PUBLIC_BACKEND_API_KEY")
+            or os.getenv("BACKEND_API_KEY")
+            or ""
+        ).strip()
+        if api_key:
+            headers["X-API-Key"] = api_key
+
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            response = await client.post(
+                f"{self._yt_control_base_url()}{endpoint}",
+                json=payload,
+                headers=headers,
+            )
+            response.raise_for_status()
+            return response.json()
+
+    async def review_youtube_control_actions(
+        self,
+        *,
+        action_ids: List[str],
+        approve: bool,
+        actor: Optional[str] = None,
+        reason: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        assert self._pool
+        wanted_ids = [value.strip() for value in action_ids if isinstance(value, str) and value.strip()]
+        if not wanted_ids:
+            raise ValueError("action_ids is required")
+
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(
+                """
+                SELECT id, action, details
+                FROM pmoves_core.youtube_control_actions
+                WHERE status = 'pending_review'
+                  AND id = ANY($1::uuid[])
+                ORDER BY created_at ASC
+                """,
+                wanted_ids,
+            )
+
+        processed_ids: List[str] = []
+        for row in rows:
+            action_id = str(row.get("id"))
+            action = row.get("action")
+            details = row.get("details") if isinstance(row.get("details"), dict) else {}
+            new_status = "rejected"
+            result_payload: Dict[str, Any] | None = None
+            error_text = reason if not approve else None
+            if approve:
+                result_payload = await self._invoke_yt_control_action(
+                    action=action,
+                    details=details,
+                    approved_by=actor or "channel-monitor",
+                    approval_note=reason,
+                )
+                new_status = "approved"
+
+            async with self._pool.acquire() as conn:
+                await conn.execute(
+                    """
+                    UPDATE pmoves_core.youtube_control_actions
+                    SET status = $2,
+                        approved_by = $3,
+                        approval_note = COALESCE($4, approval_note),
+                        result = COALESCE($5::jsonb, result),
+                        error = $6
+                    WHERE id = $1::uuid
+                    """,
+                    action_id,
+                    new_status,
+                    actor,
+                    reason,
+                    json.dumps(result_payload) if result_payload is not None else None,
+                    error_text,
+                )
+            processed_ids.append(action_id)
+
+        missing_ids = sorted(set(wanted_ids) - set(processed_ids))
+        return {
+            "processed": len(processed_ids),
+            "processed_ids": processed_ids,
+            "missing_ids": missing_ids,
+            "approved": approve,
+        }
 
     async def get_stats(self) -> Dict[str, Any]:
         assert self._pool
