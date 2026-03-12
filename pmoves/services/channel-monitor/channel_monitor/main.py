@@ -87,6 +87,8 @@ DATABASE_URL = os.getenv(
 )
 DEFAULT_NAMESPACE = os.getenv("CHANNEL_MONITOR_NAMESPACE", "pmoves")
 STATUS_SECRET = os.getenv("CHANNEL_MONITOR_SECRET")
+if not STATUS_SECRET:
+    LOGGER.warning("CHANNEL_MONITOR_SECRET is not set — all protected endpoints are unauthenticated")
 DISCORD_APPROVAL_MODE_DEFAULT = os.getenv("CHANNEL_MONITOR_DISCORD_APPROVAL_MODE", "ask").strip().lower()
 GOOGLE_CLIENT_ID = os.getenv("CHANNEL_MONITOR_GOOGLE_CLIENT_ID")
 GOOGLE_CLIENT_SECRET = os.getenv("CHANNEL_MONITOR_GOOGLE_CLIENT_SECRET")
@@ -330,7 +332,7 @@ class DiscordDropApprovalRequest(BaseModel):
 class YouTubeControlRequest(BaseModel):
     action: str = Field(
         ...,
-        description="Control action type: playlist_add, playlist_remove, playlist_reorder, or comment_create",
+        description="Control action type: playlist_create, playlist_update, playlist_delete, playlist_add, playlist_remove, playlist_reorder, comment_create, or comment_delete",
     )
     details: Dict[str, Any] = Field(..., description="PMOVES.YT control payload without execute fields")
     request_source: str = Field("channel_monitor", description="Logical request source for audit rows")
@@ -349,7 +351,16 @@ class YouTubeControlRequest(BaseModel):
 
     @validator("action")
     def _validate_action(cls, value: str) -> str:
-        valid_actions = {"playlist_add", "playlist_remove", "playlist_reorder", "comment_create"}
+        valid_actions = {
+            "playlist_create",
+            "playlist_update",
+            "playlist_delete",
+            "playlist_add",
+            "playlist_remove",
+            "playlist_reorder",
+            "comment_create",
+            "comment_delete",
+        }
         if value not in valid_actions:
             raise ValueError(f"action must be one of {sorted(valid_actions)}")
         return value
@@ -360,6 +371,10 @@ class YouTubeControlReviewRequest(BaseModel):
     approve: bool = Field(True, description="When true execute the control action, otherwise reject it")
     actor: str | None = Field(None, description="Reviewer/agent id performing the action")
     reason: str | None = Field(None, description="Optional review note or rejection reason")
+    reason_code: str | None = Field(
+        None,
+        description="Optional structured rejection code from operator UX (e.g. revise, scope, policy, other)",
+    )
 
 
 async def require_secret(token: str | None = Header(default=None, alias="X-Channel-Monitor-Token")) -> None:
@@ -654,6 +669,7 @@ async def queue_youtube_control_action(
     _: None = Depends(require_secret),
     monitor: ChannelMonitor = Depends(get_monitor),
 ):
+    """Queue a new YouTube control action for human review."""
     try:
         result = await monitor.create_youtube_control_request(
             action=payload.action,
@@ -675,6 +691,7 @@ async def list_pending_youtube_control_actions(
     action: str | None = Query(default=None, description="Optional action filter"),
     limit: int = Query(default=100, ge=1, le=500, description="Maximum pending rows to return"),
 ):
+    """List YouTube control actions awaiting human review."""
     pending = await monitor.list_pending_youtube_control_actions(action=action, limit=limit)
     return {"status": "ok", "count": len(pending), "pending": pending}
 
@@ -685,12 +702,14 @@ async def review_youtube_control_actions(
     _: None = Depends(require_secret),
     monitor: ChannelMonitor = Depends(get_monitor),
 ):
+    """Approve or reject pending YouTube control actions."""
     try:
         result = await monitor.review_youtube_control_actions(
             action_ids=payload.action_ids,
             approve=payload.approve,
             actor=payload.actor,
             reason=payload.reason,
+            reason_code=payload.reason_code,
         )
         return {"status": "ok", **result}
     except ValueError as exc:

@@ -17,7 +17,11 @@ $$;
 create table if not exists pmoves_core.youtube_control_actions (
   id uuid primary key,
   action text not null check (
-    action in ('playlist_add', 'playlist_remove', 'playlist_reorder', 'comment_create')
+    action in (
+      'playlist_create', 'playlist_update', 'playlist_delete',
+      'playlist_add', 'playlist_remove', 'playlist_reorder',
+      'comment_create', 'comment_delete'
+    )
   ),
   status text not null,
   execute_requested boolean not null default false,
@@ -75,7 +79,7 @@ begin
 
   begin
     grant usage on schema pmoves_core to service_role;
-    grant select, insert on pmoves_core.youtube_control_actions to service_role;
+    grant select, insert, update on pmoves_core.youtube_control_actions to service_role;
   exception when undefined_object then
     null;
   end;
