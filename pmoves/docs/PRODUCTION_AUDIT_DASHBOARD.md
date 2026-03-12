@@ -3,15 +3,25 @@
 > **Single source of truth** for PMOVES.AI production readiness.
 > Supersedes all individual audit documents accumulated Feb 7 -- Feb 18, 2026.
 
-**Last Updated:** 2026-03-11 (Post-PRs #867-#871 port registry + smoke fixes)
+**Last Updated:** 2026-03-12 (auto-reconciled)
 **Branch:** `main`
-**Commit:** `c81b2431` (fix(ui): align PostgREST port registry + widen Jellyfin smoke codes)
+**Commit:** `a3cf7770` (fix(ui): align PostgREST port registry + widen Jellyfin smoke codes)
 **Consolidated From:** 27 audit documents
 **Evidence:** live runbook execution on 2026-03-05 (`make ghcr-prepublish-inrepo-build`, strict local Trivy sweep logs under `pmoves/docs/logs/ghcr-local-prepublish/`)
 
 ---
 
-## Latest Changes (Mar 11, 2026)
+## Latest Changes (Mar 12, 2026)
+
+### PR #886 — YouTube Control Actions with Human-in-the-Loop (Mar 12, 2026)
+
+- **PR #886** (`feat(channel-monitor)`): YouTube owned-channel control actions (playlist CRUD, comment create/delete) with Discord-based human-in-the-loop approval flow
+- **Submodule PR #5** (PMOVES.YT): Expanded YouTube API client with playlist and comment endpoints
+- **SQL migration:** `20260312095500_youtube_control_actions.sql` — audit table with CHECK constraint for 8 action types
+- **Test coverage:** 38 tests (35 channel-monitor + 3 messaging-gateway)
+- **Services modified:** channel-monitor (+263 lines monitor.py), messaging-gateway (+48 lines), pmoves-yt (yt.py guard)
+- **Branch sync:** hardened → main synced (`723b1241`)
+- **Two-repo merge pattern:** Submodule PR merged first (`--admin`, 16/16 CI green), then parent rebased onto hardened base, applied as single squash commit
 
 ### PRs #867-#871 — Port Registry, Smoke Test & Security Fixes
 
@@ -406,6 +416,7 @@ Three CI pipelines build Docker images. This matrix is the single cross-referenc
 | llama-throughput-lab | pmoves-llama-throughput-lab | ✅ (Cosign) | — | ✅ | amd64 only |
 | presign | (compose build) | — | — | — | local-build |
 | render-webhook | (compose build) | — | — | — | local-build |
+| messaging-gateway | (compose build) | — | — | — | local-build |
 | jellyfin-bridge | (compose build) | — | — | — | local-build |
 
 **Data & Monitoring** (vendor images — no PMOVES build)
