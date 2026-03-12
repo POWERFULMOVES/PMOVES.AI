@@ -23,10 +23,10 @@
         }
       },
       {
-	        "parameters": {
-	          "mode": "rules",
-	          "rules": {
-	            "values": [
+        "parameters": {
+          "mode": "rules",
+          "rules": {
+            "values": [
               {
                 "conditions": {
                   "options": {
@@ -417,19 +417,6 @@
     "versionId": "e4e60c53-cc9f-4903-9f62-d8c9e3f65e09",
     "versionCounter": 4,
     "triggerCount": 0,
-    "tags": [
-      {
-        "updatedAt": "2025-12-12T13:18:03.530Z",
-        "createdAt": "2025-12-12T13:18:03.530Z",
-        "id": "0A3B8qR44ylHUdFz",
-        "name": "voice-agent"
-      },
-      {
-        "updatedAt": "2025-12-12T13:18:05.345Z",
-        "createdAt": "2025-12-12T13:18:05.345Z",
-        "id": "LR1zVxH2cj8fd7cd",
-        "name": "discord"
-      }
-    ]
+    "tags": []
   }
 ]

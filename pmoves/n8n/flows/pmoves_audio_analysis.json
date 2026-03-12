@@ -14,7 +14,10 @@
         "name": "Webhook Trigger",
         "type": "n8n-nodes-base.webhook",
         "typeVersion": 1,
-        "position": [200, 300]
+        "position": [
+          200,
+          300
+        ]
       },
       {
         "parameters": {
@@ -24,7 +27,10 @@
         "name": "Prepare Audio Request",
         "type": "n8n-nodes-base.function",
         "typeVersion": 2,
-        "position": [460, 300]
+        "position": [
+          460,
+          300
+        ]
       },
       {
         "parameters": {
@@ -41,7 +47,10 @@
         "name": "FFmpeg-Whisper Transcribe",
         "type": "n8n-nodes-base.httpRequest",
         "typeVersion": 4,
-        "position": [720, 200]
+        "position": [
+          720,
+          200
+        ]
       },
       {
         "parameters": {
@@ -58,7 +67,10 @@
         "name": "Media-Audio Analysis",
         "type": "n8n-nodes-base.httpRequest",
         "typeVersion": 4,
-        "position": [720, 400]
+        "position": [
+          720,
+          400
+        ]
       },
       {
         "parameters": {
@@ -68,7 +80,10 @@
         "name": "Merge Results",
         "type": "n8n-nodes-base.function",
         "typeVersion": 2,
-        "position": [980, 300]
+        "position": [
+          980,
+          300
+        ]
       },
       {
         "parameters": {
@@ -78,7 +93,10 @@
         "name": "Build CGP Envelope",
         "type": "n8n-nodes-base.function",
         "typeVersion": 2,
-        "position": [1240, 300]
+        "position": [
+          1240,
+          300
+        ]
       },
       {
         "parameters": {
@@ -95,7 +113,10 @@
         "name": "Index to Hi-RAG",
         "type": "n8n-nodes-base.httpRequest",
         "typeVersion": 4,
-        "position": [1500, 300]
+        "position": [
+          1500,
+          300
+        ]
       },
       {
         "parameters": {
@@ -112,7 +133,10 @@
         "name": "Publish NATS Event",
         "type": "n8n-nodes-base.httpRequest",
         "typeVersion": 4,
-        "position": [1500, 500]
+        "position": [
+          1500,
+          500
+        ]
       },
       {
         "parameters": {
@@ -129,7 +153,10 @@
         "name": "Auto Research?",
         "type": "n8n-nodes-base.if",
         "typeVersion": 1,
-        "position": [1760, 300]
+        "position": [
+          1760,
+          300
+        ]
       },
       {
         "parameters": {
@@ -146,42 +173,103 @@
         "name": "Trigger DeepResearch",
         "type": "n8n-nodes-base.httpRequest",
         "typeVersion": 4,
-        "position": [2020, 200]
+        "position": [
+          2020,
+          200
+        ]
       }
     ],
     "connections": {
       "Webhook Trigger": {
-        "main": [[{"node": "Prepare Audio Request", "type": "main", "index": 0}]]
+        "main": [
+          [
+            {
+              "node": "Prepare Audio Request",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
       },
       "Prepare Audio Request": {
         "main": [
           [
-            {"node": "FFmpeg-Whisper Transcribe", "type": "main", "index": 0},
-            {"node": "Media-Audio Analysis", "type": "main", "index": 0}
+            {
+              "node": "FFmpeg-Whisper Transcribe",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Media-Audio Analysis",
+              "type": "main",
+              "index": 0
+            }
           ]
         ]
       },
       "FFmpeg-Whisper Transcribe": {
-        "main": [[{"node": "Merge Results", "type": "main", "index": 0}]]
+        "main": [
+          [
+            {
+              "node": "Merge Results",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
       },
       "Media-Audio Analysis": {
-        "main": [[{"node": "Merge Results", "type": "main", "index": 0}]]
+        "main": [
+          [
+            {
+              "node": "Merge Results",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
       },
       "Merge Results": {
-        "main": [[{"node": "Build CGP Envelope", "type": "main", "index": 0}]]
+        "main": [
+          [
+            {
+              "node": "Build CGP Envelope",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
       },
       "Build CGP Envelope": {
         "main": [
           [
-            {"node": "Index to Hi-RAG", "type": "main", "index": 0},
-            {"node": "Publish NATS Event", "type": "main", "index": 0},
-            {"node": "Auto Research?", "type": "main", "index": 0}
+            {
+              "node": "Index to Hi-RAG",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Publish NATS Event",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Auto Research?",
+              "type": "main",
+              "index": 0
+            }
           ]
         ]
       },
       "Auto Research?": {
         "main": [
-          [{"node": "Trigger DeepResearch", "type": "main", "index": 0}],
+          [
+            {
+              "node": "Trigger DeepResearch",
+              "type": "main",
+              "index": 0
+            }
+          ],
           []
         ]
       }
@@ -193,9 +281,9 @@
       "description": "Audio analysis pipeline: transcription (FFmpeg-Whisper) + emotion/feature analysis (Media-Audio) + Hi-RAG indexing"
     },
     "pinData": null,
-    "versionId": "audio-analysis-v1",
+    "versionId": "4e367856-aed6-45ba-abc6-278685ac3bbb",
     "versionCounter": 1,
     "triggerCount": 0,
-    "tags": ["pmoves", "audio", "analysis", "transcription"]
+    "tags": []
   }
 ]

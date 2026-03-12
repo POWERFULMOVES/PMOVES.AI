@@ -14,7 +14,10 @@
         "name": "Webhook Trigger",
         "type": "n8n-nodes-base.webhook",
         "typeVersion": 1,
-        "position": [200, 300]
+        "position": [
+          200,
+          300
+        ]
       },
       {
         "parameters": {
@@ -24,7 +27,10 @@
         "name": "Prepare Generation Job",
         "type": "n8n-nodes-base.function",
         "typeVersion": 2,
-        "position": [460, 300]
+        "position": [
+          460,
+          300
+        ]
       },
       {
         "parameters": {
@@ -41,7 +47,10 @@
         "name": "Is Qwen Edit?",
         "type": "n8n-nodes-base.if",
         "typeVersion": 1,
-        "position": [720, 100]
+        "position": [
+          720,
+          100
+        ]
       },
       {
         "parameters": {
@@ -58,7 +67,10 @@
         "name": "Is WAN Animate?",
         "type": "n8n-nodes-base.if",
         "typeVersion": 1,
-        "position": [720, 300]
+        "position": [
+          720,
+          300
+        ]
       },
       {
         "parameters": {
@@ -76,7 +88,10 @@
         "name": "Is Voice?",
         "type": "n8n-nodes-base.if",
         "typeVersion": 1,
-        "position": [720, 500]
+        "position": [
+          720,
+          500
+        ]
       },
       {
         "parameters": {
@@ -86,7 +101,10 @@
         "name": "Build Qwen Prompt",
         "type": "n8n-nodes-base.function",
         "typeVersion": 2,
-        "position": [980, 100]
+        "position": [
+          980,
+          100
+        ]
       },
       {
         "parameters": {
@@ -96,7 +114,10 @@
         "name": "Build WAN Prompt",
         "type": "n8n-nodes-base.function",
         "typeVersion": 2,
-        "position": [980, 300]
+        "position": [
+          980,
+          300
+        ]
       },
       {
         "parameters": {
@@ -106,7 +127,10 @@
         "name": "Build Voice Prompt",
         "type": "n8n-nodes-base.function",
         "typeVersion": 2,
-        "position": [980, 500]
+        "position": [
+          980,
+          500
+        ]
       },
       {
         "parameters": {
@@ -123,7 +147,10 @@
         "name": "Submit to ComfyUI",
         "type": "n8n-nodes-base.httpRequest",
         "typeVersion": 4,
-        "position": [1240, 300]
+        "position": [
+          1240,
+          300
+        ]
       },
       {
         "parameters": {
@@ -133,7 +160,10 @@
         "name": "Track Job Status",
         "type": "n8n-nodes-base.function",
         "typeVersion": 2,
-        "position": [1500, 300]
+        "position": [
+          1500,
+          300
+        ]
       },
       {
         "parameters": {
@@ -150,52 +180,135 @@
         "name": "Publish Generation Event",
         "type": "n8n-nodes-base.httpRequest",
         "typeVersion": 4,
-        "position": [1760, 300]
+        "position": [
+          1760,
+          300
+        ]
       }
     ],
     "connections": {
       "Webhook Trigger": {
-        "main": [[{"node": "Prepare Generation Job", "type": "main", "index": 0}]]
+        "main": [
+          [
+            {
+              "node": "Prepare Generation Job",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
       },
       "Prepare Generation Job": {
-        "main": [[
-          {"node": "Is Qwen Edit?", "type": "main", "index": 0},
-          {"node": "Is WAN Animate?", "type": "main", "index": 0},
-          {"node": "Is Voice?", "type": "main", "index": 0}
-        ]]
+        "main": [
+          [
+            {
+              "node": "Is Qwen Edit?",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Is WAN Animate?",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Is Voice?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
       },
       "Is Qwen Edit?": {
         "main": [
-          [{"node": "Build Qwen Prompt", "type": "main", "index": 0}],
+          [
+            {
+              "node": "Build Qwen Prompt",
+              "type": "main",
+              "index": 0
+            }
+          ],
           []
         ]
       },
       "Is WAN Animate?": {
         "main": [
-          [{"node": "Build WAN Prompt", "type": "main", "index": 0}],
+          [
+            {
+              "node": "Build WAN Prompt",
+              "type": "main",
+              "index": 0
+            }
+          ],
           []
         ]
       },
       "Is Voice?": {
         "main": [
-          [{"node": "Build Voice Prompt", "type": "main", "index": 0}],
+          [
+            {
+              "node": "Build Voice Prompt",
+              "type": "main",
+              "index": 0
+            }
+          ],
           []
         ]
       },
       "Build Qwen Prompt": {
-        "main": [[{"node": "Submit to ComfyUI", "type": "main", "index": 0}]]
+        "main": [
+          [
+            {
+              "node": "Submit to ComfyUI",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
       },
       "Build WAN Prompt": {
-        "main": [[{"node": "Submit to ComfyUI", "type": "main", "index": 0}]]
+        "main": [
+          [
+            {
+              "node": "Submit to ComfyUI",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
       },
       "Build Voice Prompt": {
-        "main": [[{"node": "Submit to ComfyUI", "type": "main", "index": 0}]]
+        "main": [
+          [
+            {
+              "node": "Submit to ComfyUI",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
       },
       "Submit to ComfyUI": {
-        "main": [[{"node": "Track Job Status", "type": "main", "index": 0}]]
+        "main": [
+          [
+            {
+              "node": "Track Job Status",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
       },
       "Track Job Status": {
-        "main": [[{"node": "Publish Generation Event", "type": "main", "index": 0}]]
+        "main": [
+          [
+            {
+              "node": "Publish Generation Event",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
       }
     },
     "settings": {},
@@ -205,9 +318,9 @@
       "description": "ComfyUI generation hub: routes generation requests to appropriate workflow (Qwen Image Edit, WAN Animate, VibeVoice)"
     },
     "pinData": null,
-    "versionId": "comfy-hub-v1",
+    "versionId": "2fe9ede5-8936-4fbb-a4d2-d9cb291a9729",
     "versionCounter": 1,
     "triggerCount": 0,
-    "tags": ["pmoves", "comfyui", "generation", "creative"]
+    "tags": []
   }
 ]
