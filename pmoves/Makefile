@@ -1413,6 +1413,8 @@ up-legacy-both: ## Ensure v1 hi-rag gateway CPU+GPU are up
 # always operate on the same stack regardless of cwd/path.
 PROJECT ?= pmoves
 export PROJECT
+N8N_SUBMODULE_DIR ?= ../PMOVES-n8n
+N8N_CANONICAL_FLOWS_DIR ?= $(N8N_SUBMODULE_DIR)/workflows
 
 # n8n persistence mode:
 # - sqlite: simplest local bring-up (default)
@@ -2344,8 +2346,12 @@ up-agents-integrations: ## Start agents using your forks (builds from $(INTEGRAT
 	@$(DC) -f docker-compose.agents.integrations.yml --profile agents up -d nats agent-zero archon archon-ui mesh-agent publisher-discord
 	@echo "✔ Agents started from integrations workspace. Workspace: $(INTEGRATIONS_WORKSPACE)"
 
-.PHONY: up-n8n
-up-n8n: ensure-env-shared
+.PHONY: up-n8n n8n-sync-submodule-flows n8n-import-flows n8n-activate-flows n8n-bootstrap n8n-export-repo-flows
+n8n-sync-submodule-flows: ## Mirror canonical PMOVES-n8n workflows into pmoves/n8n/flows
+	@$(PYTHON) -c "from pathlib import Path; import shutil; src=Path(r'$(N8N_CANONICAL_FLOWS_DIR)'); dst=Path(r'$(CURDIR)/n8n/flows'); dst.mkdir(parents=True, exist_ok=True); [shutil.copy2(path, dst / path.name) for path in sorted(src.glob('*.json'))]"
+	@echo "✔ Mirrored PMOVES-n8n workflows into pmoves/n8n/flows"
+
+up-n8n: ensure-env-shared n8n-sync-submodule-flows
 	@if [ "$(N8N_DB)" = "postgres" ]; then \
 	  echo "→ n8n DB mode: postgres"; \
 	  $(N8N_DC) up -d n8n-db n8n n8n-runners; \
@@ -2358,6 +2364,19 @@ up-n8n: ensure-env-shared
 down-n8n: ## Stop n8n workflow services
 	@$(N8N_DC) stop n8n n8n-runners n8n-db >/dev/null 2>&1 || true
 	@$(N8N_DC) rm -f n8n n8n-runners n8n-db >/dev/null 2>&1 || true
+
+n8n-import-flows: ## Import canonical PMOVES-n8n workflows into the live n8n instance
+	@$(PYTHON) "$(N8N_SUBMODULE_DIR)/scripts/import_repo_flows.py" --container pmoves-n8n --workflow-dir "$(N8N_CANONICAL_FLOWS_DIR)"
+
+n8n-activate-flows: ## Publish canonical PMOVES-n8n workflows (keeps chat-platform voice flows inactive unless VOICE_PLATFORMS=1)
+	@$(PYTHON) "$(N8N_SUBMODULE_DIR)/scripts/import_repo_flows.py" --container pmoves-n8n --workflow-dir "$(N8N_CANONICAL_FLOWS_DIR)" --activate-only $(if $(VOICE_PLATFORMS),--voice-platforms,)
+
+n8n-bootstrap: up-n8n n8n-import-flows n8n-activate-flows ## Bring up n8n, import workflows, and publish the default set
+	@echo "✔ n8n bootstrap complete"
+
+n8n-export-repo-flows: ## Export live n8n workflows into PMOVES-n8n and refresh the compatibility mirror
+	@$(PYTHON) "$(N8N_SUBMODULE_DIR)/scripts/export_repo_flows.py" --container pmoves-n8n --workflow-dir "$(N8N_CANONICAL_FLOWS_DIR)"
+	@$(MAKE) n8n-sync-submodule-flows
 
 .PHONY: up-comfyui comfyui-smoke
 up-comfyui: ## Start ComfyUI (docker profile; used by n8n pmoves_comfy_gen flow)

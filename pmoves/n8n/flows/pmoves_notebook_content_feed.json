@@ -14,7 +14,10 @@
         "name": "Notebook Sync Webhook",
         "type": "n8n-nodes-base.webhook",
         "typeVersion": 1,
-        "position": [200, 300]
+        "position": [
+          200,
+          300
+        ]
       },
       {
         "parameters": {
@@ -24,7 +27,10 @@
         "name": "Parse Notebook Content",
         "type": "n8n-nodes-base.function",
         "typeVersion": 2,
-        "position": [460, 300]
+        "position": [
+          460,
+          300
+        ]
       },
       {
         "parameters": {
@@ -41,7 +47,10 @@
         "name": "Publish Sync Event",
         "type": "n8n-nodes-base.httpRequest",
         "typeVersion": 4,
-        "position": [720, 200]
+        "position": [
+          720,
+          200
+        ]
       },
       {
         "parameters": {
@@ -58,7 +67,10 @@
         "name": "Is Publishable?",
         "type": "n8n-nodes-base.if",
         "typeVersion": 1,
-        "position": [720, 400]
+        "position": [
+          720,
+          400
+        ]
       },
       {
         "parameters": {
@@ -68,7 +80,10 @@
         "name": "Generate Social Snippets",
         "type": "n8n-nodes-base.function",
         "typeVersion": 2,
-        "position": [980, 400]
+        "position": [
+          980,
+          400
+        ]
       },
       {
         "parameters": {
@@ -78,7 +93,10 @@
         "name": "Create Studio Board Draft",
         "type": "n8n-nodes-base.function",
         "typeVersion": 2,
-        "position": [1240, 400]
+        "position": [
+          1240,
+          400
+        ]
       },
       {
         "parameters": {
@@ -87,21 +105,38 @@
           "sendHeaders": true,
           "headerParameters": {
             "parameters": [
-              {"name": "content-type", "value": "application/json"},
-              {"name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"},
-              {"name": "Authorization", "value": "=Bearer {{$env.SUPABASE_SERVICE_ROLE_KEY}}"},
-              {"name": "Prefer", "value": "return=representation"}
+              {
+                "name": "content-type",
+                "value": "application/json"
+              },
+              {
+                "name": "apikey",
+                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Authorization",
+                "value": "=Bearer {{$env.SUPABASE_SERVICE_ROLE_KEY}}"
+              },
+              {
+                "name": "Prefer",
+                "value": "return=representation"
+              }
             ]
           },
           "sendBody": true,
           "body": "={{ JSON.stringify($json) }}",
-          "options": {"timeout": 10000}
+          "options": {
+            "timeout": 10000
+          }
         },
         "id": "save_draft",
         "name": "Save to Studio Board",
         "type": "n8n-nodes-base.httpRequest",
         "typeVersion": 4,
-        "position": [1500, 400]
+        "position": [
+          1500,
+          400
+        ]
       },
       {
         "parameters": {
@@ -111,7 +146,10 @@
         "name": "Build CGP Envelope",
         "type": "n8n-nodes-base.function",
         "typeVersion": 2,
-        "position": [720, 600]
+        "position": [
+          720,
+          600
+        ]
       },
       {
         "parameters": {
@@ -128,7 +166,10 @@
         "name": "Index to Hi-RAG",
         "type": "n8n-nodes-base.httpRequest",
         "typeVersion": 4,
-        "position": [980, 600]
+        "position": [
+          980,
+          600
+        ]
       },
       {
         "parameters": {
@@ -145,37 +186,100 @@
         "name": "Publish Draft Created Event",
         "type": "n8n-nodes-base.httpRequest",
         "typeVersion": 4,
-        "position": [1760, 400]
+        "position": [
+          1760,
+          400
+        ]
       }
     ],
     "connections": {
       "Notebook Sync Webhook": {
-        "main": [[{"node": "Parse Notebook Content", "type": "main", "index": 0}]]
+        "main": [
+          [
+            {
+              "node": "Parse Notebook Content",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
       },
       "Parse Notebook Content": {
-        "main": [[
-          {"node": "Publish Sync Event", "type": "main", "index": 0},
-          {"node": "Is Publishable?", "type": "main", "index": 0},
-          {"node": "Build CGP Envelope", "type": "main", "index": 0}
-        ]]
+        "main": [
+          [
+            {
+              "node": "Publish Sync Event",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Is Publishable?",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Build CGP Envelope",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
       },
       "Is Publishable?": {
         "main": [
-          [{"node": "Generate Social Snippets", "type": "main", "index": 0}],
+          [
+            {
+              "node": "Generate Social Snippets",
+              "type": "main",
+              "index": 0
+            }
+          ],
           []
         ]
       },
       "Generate Social Snippets": {
-        "main": [[{"node": "Create Studio Board Draft", "type": "main", "index": 0}]]
+        "main": [
+          [
+            {
+              "node": "Create Studio Board Draft",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
       },
       "Create Studio Board Draft": {
-        "main": [[{"node": "Save to Studio Board", "type": "main", "index": 0}]]
+        "main": [
+          [
+            {
+              "node": "Save to Studio Board",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
       },
       "Save to Studio Board": {
-        "main": [[{"node": "Publish Draft Created Event", "type": "main", "index": 0}]]
+        "main": [
+          [
+            {
+              "node": "Publish Draft Created Event",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
       },
       "Build CGP Envelope": {
-        "main": [[{"node": "Index to Hi-RAG", "type": "main", "index": 0}]]
+        "main": [
+          [
+            {
+              "node": "Index to Hi-RAG",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
       }
     },
     "settings": {},
@@ -185,9 +289,9 @@
       "description": "Open Notebook content feed: syncs notebook content, creates studio_board drafts, indexes to Hi-RAG"
     },
     "pinData": null,
-    "versionId": "notebook-feed-v1",
+    "versionId": "ba51090c-fc13-42d1-9e00-a1b2468cec70",
     "versionCounter": 1,
     "triggerCount": 0,
-    "tags": ["pmoves", "notebook", "content", "publishing"]
+    "tags": []
   }
 ]

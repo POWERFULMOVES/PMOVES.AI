@@ -19,10 +19,10 @@
         "webhookId": "telegram-voice-webhook"
       },
       {
-	        "parameters": {
-	          "mode": "rules",
-	          "rules": {
-	            "values": [
+        "parameters": {
+          "mode": "rules",
+          "rules": {
+            "values": [
               {
                 "conditions": {
                   "options": {
@@ -443,19 +443,6 @@
     "versionId": "9b90a1d1-c767-428d-95c3-c1ff0cbec1c9",
     "versionCounter": 4,
     "triggerCount": 0,
-    "tags": [
-      {
-        "updatedAt": "2025-12-12T13:18:03.530Z",
-        "createdAt": "2025-12-12T13:18:03.530Z",
-        "id": "0A3B8qR44ylHUdFz",
-        "name": "voice-agent"
-      },
-      {
-        "updatedAt": "2025-12-12T13:18:07.141Z",
-        "createdAt": "2025-12-12T13:18:07.141Z",
-        "id": "qqizk7QbcLVI2tC1",
-        "name": "telegram"
-      }
-    ]
+    "tags": []
   }
 ]

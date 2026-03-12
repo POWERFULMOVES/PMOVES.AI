@@ -14,7 +14,10 @@
         "name": "Webhook Trigger",
         "type": "n8n-nodes-base.webhook",
         "typeVersion": 1,
-        "position": [200, 300]
+        "position": [
+          200,
+          300
+        ]
       },
       {
         "parameters": {
@@ -24,7 +27,10 @@
         "name": "Prepare Video Request",
         "type": "n8n-nodes-base.function",
         "typeVersion": 2,
-        "position": [460, 300]
+        "position": [
+          460,
+          300
+        ]
       },
       {
         "parameters": {
@@ -41,7 +47,10 @@
         "name": "Transcribe Audio Track",
         "type": "n8n-nodes-base.httpRequest",
         "typeVersion": 4,
-        "position": [720, 100]
+        "position": [
+          720,
+          100
+        ]
       },
       {
         "parameters": {
@@ -58,7 +67,10 @@
         "name": "Analyze Audio Track",
         "type": "n8n-nodes-base.httpRequest",
         "typeVersion": 4,
-        "position": [720, 300]
+        "position": [
+          720,
+          300
+        ]
       },
       {
         "parameters": {
@@ -75,7 +87,10 @@
         "name": "Analyze Video Frames",
         "type": "n8n-nodes-base.httpRequest",
         "typeVersion": 4,
-        "position": [720, 500]
+        "position": [
+          720,
+          500
+        ]
       },
       {
         "parameters": {
@@ -85,7 +100,10 @@
         "name": "Merge All Results",
         "type": "n8n-nodes-base.function",
         "typeVersion": 2,
-        "position": [1020, 300]
+        "position": [
+          1020,
+          300
+        ]
       },
       {
         "parameters": {
@@ -95,7 +113,10 @@
         "name": "Build CGP Envelope",
         "type": "n8n-nodes-base.function",
         "typeVersion": 2,
-        "position": [1300, 300]
+        "position": [
+          1300,
+          300
+        ]
       },
       {
         "parameters": {
@@ -112,7 +133,10 @@
         "name": "Index to Hi-RAG",
         "type": "n8n-nodes-base.httpRequest",
         "typeVersion": 4,
-        "position": [1560, 200]
+        "position": [
+          1560,
+          200
+        ]
       },
       {
         "parameters": {
@@ -129,7 +153,10 @@
         "name": "Publish NATS Event",
         "type": "n8n-nodes-base.httpRequest",
         "typeVersion": 4,
-        "position": [1560, 400]
+        "position": [
+          1560,
+          400
+        ]
       },
       {
         "parameters": {
@@ -146,7 +173,10 @@
         "name": "Auto Research?",
         "type": "n8n-nodes-base.if",
         "typeVersion": 1,
-        "position": [1820, 300]
+        "position": [
+          1820,
+          300
+        ]
       },
       {
         "parameters": {
@@ -163,46 +193,119 @@
         "name": "Trigger DeepResearch",
         "type": "n8n-nodes-base.httpRequest",
         "typeVersion": 4,
-        "position": [2080, 200]
+        "position": [
+          2080,
+          200
+        ]
       }
     ],
     "connections": {
       "Webhook Trigger": {
-        "main": [[{"node": "Prepare Video Request", "type": "main", "index": 0}]]
+        "main": [
+          [
+            {
+              "node": "Prepare Video Request",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
       },
       "Prepare Video Request": {
         "main": [
           [
-            {"node": "Transcribe Audio Track", "type": "main", "index": 0},
-            {"node": "Analyze Audio Track", "type": "main", "index": 0},
-            {"node": "Analyze Video Frames", "type": "main", "index": 0}
+            {
+              "node": "Transcribe Audio Track",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Analyze Audio Track",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Analyze Video Frames",
+              "type": "main",
+              "index": 0
+            }
           ]
         ]
       },
       "Transcribe Audio Track": {
-        "main": [[{"node": "Merge All Results", "type": "main", "index": 0}]]
+        "main": [
+          [
+            {
+              "node": "Merge All Results",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
       },
       "Analyze Audio Track": {
-        "main": [[{"node": "Merge All Results", "type": "main", "index": 0}]]
+        "main": [
+          [
+            {
+              "node": "Merge All Results",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
       },
       "Analyze Video Frames": {
-        "main": [[{"node": "Merge All Results", "type": "main", "index": 0}]]
+        "main": [
+          [
+            {
+              "node": "Merge All Results",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
       },
       "Merge All Results": {
-        "main": [[{"node": "Build CGP Envelope", "type": "main", "index": 0}]]
+        "main": [
+          [
+            {
+              "node": "Build CGP Envelope",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
       },
       "Build CGP Envelope": {
         "main": [
           [
-            {"node": "Index to Hi-RAG", "type": "main", "index": 0},
-            {"node": "Publish NATS Event", "type": "main", "index": 0},
-            {"node": "Auto Research?", "type": "main", "index": 0}
+            {
+              "node": "Index to Hi-RAG",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Publish NATS Event",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Auto Research?",
+              "type": "main",
+              "index": 0
+            }
           ]
         ]
       },
       "Auto Research?": {
         "main": [
-          [{"node": "Trigger DeepResearch", "type": "main", "index": 0}],
+          [
+            {
+              "node": "Trigger DeepResearch",
+              "type": "main",
+              "index": 0
+            }
+          ],
           []
         ]
       }
@@ -214,9 +317,9 @@
       "description": "Video analysis pipeline: transcription + audio analysis + video frame analysis (YOLO/BLIP) + Hi-RAG indexing"
     },
     "pinData": null,
-    "versionId": "video-analysis-v1",
+    "versionId": "d538835a-9758-4917-b70e-13153a4f1974",
     "versionCounter": 1,
     "triggerCount": 0,
-    "tags": ["pmoves", "video", "analysis", "multimodal"]
+    "tags": []
   }
 ]

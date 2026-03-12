@@ -79,10 +79,10 @@
         "webhookId": "voice-tts"
       },
       {
-	        "parameters": {
-	          "mode": "rules",
-	          "rules": {
-	            "values": [
+        "parameters": {
+          "mode": "rules",
+          "rules": {
+            "values": [
               {
                 "conditions": {
                   "options": {
@@ -505,25 +505,6 @@
     "versionId": "ea1b721c-4be4-40d4-a19a-0a7e4de2e12f",
     "versionCounter": 4,
     "triggerCount": 0,
-    "tags": [
-      {
-        "updatedAt": "2025-12-12T13:18:03.530Z",
-        "createdAt": "2025-12-12T13:18:03.530Z",
-        "id": "0A3B8qR44ylHUdFz",
-        "name": "voice-agent"
-      },
-      {
-        "updatedAt": "2025-12-12T13:18:03.534Z",
-        "createdAt": "2025-12-12T13:18:03.534Z",
-        "id": "pmKflb8eoRUftfSk",
-        "name": "functions"
-      },
-      {
-        "updatedAt": "2025-12-12T13:18:03.533Z",
-        "createdAt": "2025-12-12T13:18:03.533Z",
-        "id": "uWvnDIE0g0A354hz",
-        "name": "shared"
-      }
-    ]
+    "tags": []
   }
 ]

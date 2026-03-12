@@ -7,7 +7,7 @@ x-env-tier-worker: &env-tier-worker
 services:
   n8n:
     build:
-      context: .
+      context: ../PMOVES-n8n
       dockerfile: compose/n8n/Dockerfile
     image: pmoves/n8n:2.1.0-sqlite
     container_name: pmoves-n8n
@@ -49,7 +49,7 @@ services:
       - "host.docker.internal:host-gateway"
     volumes:
       - n8n-data:/home/node/.n8n
-      - ./n8n/flows:/flows:ro
+      - ../PMOVES-n8n/workflows:/flows:ro
   n8n-runners:
     image: n8nio/runners:2.1.0
     container_name: pmoves-n8n-runners
