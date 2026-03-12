@@ -54,7 +54,7 @@
 
 ### ◇ Crush
 - **ID:** `crush`
-- **Color:** #0EA5E9 (sky) | **Accent:** #38BDF8
+- **Color:** #0EA5E9 (sky) | **Accent:** #7DD3FC
 - **Voice:** Companion — warm, interactive, pair-programming guidance
 - **Domains:** terminal-gateway, pair-programming, onboarding, context-orchestration
 - **Co-Author:** `Crush <noreply@powerfulmoves.ai>`
