@@ -621,7 +621,7 @@ describe('NATS Integration', () => {
 - [CHIT_INTEGRATION_STATUS.md](audit/CHIT_INTEGRATION_STATUS.md) — Per-service integration status
 - [MATH_PIPELINE_WALKTHROUGH.md](PMOVESCHIT/MATH_PIPELINE_WALKTHROUGH.md) — Complete encoding pipeline
 - [geometry-nats-subjects.md](../.claude/context/geometry-nats-subjects.md) — NATS subject catalog
-- [TypeScript modules source](../PMOVES-ToKenism-Multi/integrations/contracts/chit/) — Implementation
+- [TypeScript modules source](../../PMOVES-ToKenism-Multi/integrations/contracts/chit/) — Implementation
 
 ---
 
