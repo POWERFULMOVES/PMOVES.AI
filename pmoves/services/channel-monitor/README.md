@@ -43,8 +43,16 @@ The service maintains a JSON config at `CHANNEL_MONITOR_CONFIG_PATH`. If the fil
 ```bash
 curl -X POST http://localhost:8097/api/monitor/channel \
   -H 'content-type: application/json' \
-  -d '{"channel_id":"UCabc123xyz","channel_name":"Example Channel","auto_process":true}'
+  -d '{"channel_id":"UCabc123xyz","channel_name":"Example Channel","source_class":"watched","auto_process":true}'
 ```
+
+`source_class` is the operator-intent class for a source:
+- `owned` — PMOVES-managed channels or playlists
+- `partner` — explicit collaborator or shared-lane sources
+- `watched` — monitored third-party creators
+- `candidate` — scout/review sources that should stay gated by default
+
+If omitted, configured channels default to `watched` and Discord/manual drops default to `candidate`.
 
 `yt_options` blocks (global or per-channel) are forwarded to pmoves-yt, letting you tune yt-dlp behaviour without rebuilding containers. Example knobs:
 
@@ -143,6 +151,123 @@ curl -X POST http://localhost:8097/api/monitor/discord-drop/approve \
   -H 'x-channel-monitor-token: $CHANNEL_MONITOR_SECRET' \
   -d '{"video_ids":["dQw4w9WgXcQ"],"approve":true,"actor":"discord-agent"}'
 ```
+
+Queue/review owned-channel PMOVES.YT control actions:
+
+```bash
+curl -X POST http://localhost:8097/api/monitor/youtube-control \
+  -H 'content-type: application/json' \
+  -H 'x-channel-monitor-token: $CHANNEL_MONITOR_SECRET' \
+  -d '{
+      "action": "playlist_create",
+      "details": {
+        "title": "PMOVES Creator Queue",
+        "description": "Owned-channel playlist for reviewed creator actions",
+        "privacy_status": "private"
+      },
+      "request_source": "discord_agent",
+      "notify_platforms": ["discord"]
+    }'
+
+curl -X POST http://localhost:8097/api/monitor/youtube-control \
+  -H 'content-type: application/json' \
+  -H 'x-channel-monitor-token: $CHANNEL_MONITOR_SECRET' \
+  -d '{
+      "action": "playlist_update",
+      "details": {
+        "playlist_id": "PL123",
+        "title": "PMOVES Creator Queue",
+        "privacy_status": "unlisted"
+      },
+      "request_source": "discord_agent",
+      "notify_platforms": ["discord"]
+    }'
+
+curl -X POST http://localhost:8097/api/monitor/youtube-control \
+  -H 'content-type: application/json' \
+  -H 'x-channel-monitor-token: $CHANNEL_MONITOR_SECRET' \
+  -d '{
+      "action": "playlist_delete",
+      "details": {
+        "playlist_id": "PL123"
+      },
+      "request_source": "discord_agent",
+      "notify_platforms": ["discord"]
+    }'
+
+curl -X POST http://localhost:8097/api/monitor/youtube-control \
+  -H 'content-type: application/json' \
+  -H 'x-channel-monitor-token: $CHANNEL_MONITOR_SECRET' \
+  -d '{
+      "action": "comment_create",
+      "details": {
+        "video_id": "dQw4w9WgXcQ",
+        "policy_template": "creator_attribution_bridge",
+        "topic": "Qwen 3"
+      },
+      "request_source": "discord_agent",
+      "draft": {
+        "channel_name": "Example Creator",
+        "source_class": "owned",
+        "pmoves_application": "creator review automation",
+        "notebook_surface": "Open Notebook"
+      },
+      "notebook": {
+        "title_prefix": "Creator draft"
+      },
+      "notify_platforms": ["discord"]
+    }'
+
+curl -X POST http://localhost:8097/api/monitor/youtube-control \
+  -H 'content-type: application/json' \
+  -H 'x-channel-monitor-token: $CHANNEL_MONITOR_SECRET' \
+  -d '{
+      "action": "comment_create",
+      "details": {
+        "video_id": "dQw4w9WgXcQ",
+        "parent_comment_id": "UgzReplyTarget123",
+        "text": "Following up with a PMOVES creator-network reply."
+      },
+      "request_source": "discord_agent",
+      "notify_platforms": ["discord"]
+    }'
+
+curl -X POST http://localhost:8097/api/monitor/youtube-control \
+  -H 'content-type: application/json' \
+  -H 'x-channel-monitor-token: $CHANNEL_MONITOR_SECRET' \
+  -d '{
+      "action": "comment_delete",
+      "details": {
+        "comment_id": "UgzDeleteThis123",
+        "video_id": "dQw4w9WgXcQ"
+      },
+      "request_source": "discord_agent",
+      "notify_platforms": ["discord"]
+    }'
+
+curl -X GET "http://localhost:8097/api/monitor/youtube-control/pending" \
+  -H 'x-channel-monitor-token: $CHANNEL_MONITOR_SECRET'
+
+curl -X POST http://localhost:8097/api/monitor/youtube-control/review \
+  -H 'content-type: application/json' \
+  -H 'x-channel-monitor-token: $CHANNEL_MONITOR_SECRET' \
+  -d '{"action_ids":["11111111-1111-1111-1111-111111111111"],"approve":true,"actor":"discord-agent"}'
+```
+
+Set `CHANNEL_MONITOR_YT_API_KEY` when PMOVES.YT control endpoints require `X-API-Key`.
+Set `CHANNEL_MONITOR_MESSAGING_URL` to the messaging gateway `/v1/send` endpoint to emit
+Discord-ready approval notifications when requests are queued.
+`messaging-gateway` now intercepts `ytcontrol:approve:<id>` plus structured reject buttons such as
+`ytcontrol:reject:<id>:revise`, `ytcontrol:reject:<id>:scope`, `ytcontrol:reject:<id>:policy`, and
+`ytcontrol:reject:<id>:other`, then maps them back into `POST /api/monitor/youtube-control/review`.
+Set `CHANNEL_MONITOR_YT_NOTEBOOK_ID` together with `OPEN_NOTEBOOK_API_URL` and
+`OPEN_NOTEBOOK_API_TOKEN` to publish notebook-ready review artifacts for queued creator actions.
+Queued requests now carry:
+- rendered comment text when a draft template is supplied
+- named creator policy templates such as `creator_attribution_bridge`, `creator_network_invite`, and `creator_research_receipt`
+- a `request_summary` used for Discord review prompts
+- optional notebook artifact metadata persisted in `details.notebook`
+- structured review metadata (`request_source`, `source_class`, `target_ref`, `reason_code`) so Discord responses can explain why an action was approved or rejected
 
 ### Observability
 
