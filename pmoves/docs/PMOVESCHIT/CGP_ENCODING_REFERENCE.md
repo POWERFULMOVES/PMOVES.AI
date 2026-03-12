@@ -506,6 +506,10 @@ Before publishing a CGP v1.0 packet:
 
 ### Python: Full CGP Construction
 
+> **Note:** This example illustrates the designed pipeline flow. `ConstellationHarvest` and
+> `ZetaSpectralFilter` are planned modules — see the
+> [pipeline walkthrough](MATH_PIPELINE_WALKTHROUGH.md) for current implementation status.
+
 ```python
 import json
 import numpy as np
