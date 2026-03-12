@@ -51,6 +51,11 @@ Core protocol specifications, encoding schemas, transport definitions, and API r
 | Original CHIT Spec (v0.1) | `pmoves/docs/PMOVESCHIT/PMOVESCHIT.md` | Superseded | L1:CGP v1.0 |
 | Decoder v0.1 | `pmoves/docs/PMOVESCHIT/PMOVESCHIT_DECODERv0.1.md` | Current | L1:CGP Spec |
 | Multi-Modal Decoder | `pmoves/docs/PMOVESCHIT/PMOVESCHIT_DECODER_MULTIv0.1.md` | Current | L1:Decoder v0.1 |
+| Math Pipeline Walkthrough | `pmoves/docs/PMOVESCHIT/MATH_PIPELINE_WALKTHROUGH.md` | Current | L1:CGP Spec, L2:Math, L3:Calibration |
+| CGP Encoding Reference | `pmoves/docs/PMOVESCHIT/CGP_ENCODING_REFERENCE.md` | Current | L1:CGP Spec, L1:Math Pipeline |
+| Calibration Guide | `pmoves/docs/PMOVESCHIT/CALIBRATION_GUIDE.md` | Current | L1:CGP Spec, L3:EvoSwarm Ops |
+| Graphiti Protocol Reference | `pmoves/docs/GRAPHITI_PROTOCOL_REFERENCE.md` | Current | L1:NATS, L3:Agent Registry |
+| EvoSwarm Parameter Catalog | `pmoves/docs/EVOSWARM_PARAMETER_CATALOG.md` | Current | L1:CGP Spec, L3:EvoSwarm Ops |
 
 ---
 
@@ -69,6 +74,7 @@ Theoretical foundations explaining *why* CHIT exists and the mathematical princi
 | Constellation-Harvest-Regularization | `pmoves/docs/PMOVESCHIT/Constellation-Harvest-Regularization/` | Current | L2:Math Integration |
 | Asimov Governor for LLMs | `pmoves/docs/PMOVESCHIT/An Asimov Governor for LLMs/` | Research | L2:Three-Body |
 | Latent Geometry Control Knob | `pmoves/docs/PMOVESCHIT/Latent_Geometry_Is_a_Control_Knob/` | Research | L2:Math Integration |
+| ToKenism Economic Model | `pmoves/docs/TOKENISM_ECONOMIC_MODEL.md` | Current | L3:Dev Guide, L4:Cataclysm |
 
 ---
 
@@ -104,6 +110,11 @@ Concrete implementation guides, service catalogs, tool references, and integrati
 | CHIT User Guide | `pmoves/docs/PMOVESCHIT/CHIT_USER_GUIDE.md` | Current | L1:CGP Spec, L3:Secrets |
 | Local Model Setup | `pmoves/docs/PMOVESCHIT/LOCAL_MODEL_SETUP.md` | Current | L3:TensorZero |
 | Service Docs Matrix | `pmoves/docs/SERVICE_DOCS_MATRIX.md` | Current | L3:Services Catalog |
+| ToKenism Developer Guide | `pmoves/docs/TOKENISM_DEVELOPER_GUIDE.md` | Current | L2:Economic Model, L1:CGP Spec |
+| EvoSwarm Operations Guide | `pmoves/docs/EVOSWARM_OPERATIONS_GUIDE.md` | Current | L1:Parameter Catalog, L3:AgentGym |
+| AgentGym-RL Operations | `pmoves/docs/AGENTGYM_RL_OPERATIONS.md` | Current | L3:EvoSwarm Ops, L1:CGP Spec |
+| Graphiti Agent Registry | `pmoves/docs/GRAPHITI_AGENT_REGISTRY.md` | Current | L1:Graphiti Protocol |
+| Graphiti Integration Guide | `pmoves/docs/GRAPHITI_INTEGRATION_GUIDE.md` | Current | L1:Graphiti Protocol, L3:Agent Registry |
 
 ---
 
@@ -118,6 +129,7 @@ Platform vision, brand identity, and user-facing documentation.
 | Personas Framework | `pmoves/docs/PERSONAS.md` | Current | L3:Voice Personas |
 | Roadmap | `pmoves/docs/ROADMAP.md` | Current | All layers |
 | Branch Strategy | `pmoves/docs/BRANCH_STRATEGY.md` | Current | L5:CI |
+| Cataclysm Crosslinks | `pmoves/docs/CATACLYSM_CROSSLINKS.md` | Current | L2:Economic Model, L3:Dev Guide |
 
 ---
 
