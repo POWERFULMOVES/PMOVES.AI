@@ -34,7 +34,6 @@ import logging
 import os
 import re
 from contextlib import asynccontextmanager
-from pathlib import Path
 from datetime import datetime
 from typing import Any, Dict, List
 
@@ -134,6 +133,7 @@ class AddChannelRequest(BaseModel):
     Attributes:
         channel_id: YouTube channel ID to monitor.
         channel_name: Optional friendly name for the channel.
+        source_class: Operator intent class ('owned', 'partner', 'watched', 'candidate').
         auto_process: Whether to automatically process new videos. Default is True.
         check_interval_minutes: Interval in minutes between checks. Must be >= 1. Default is 60.
         priority: Processing priority (higher values = higher priority). Default is 0.
@@ -151,6 +151,10 @@ class AddChannelRequest(BaseModel):
 
     channel_id: str = Field(..., description="YouTube channel ID")
     channel_name: str | None = Field(None, description="Friendly name for the channel")
+    source_class: str | None = Field(
+        None,
+        description="Operator intent class (owned, partner, watched, candidate)",
+    )
     auto_process: bool = True
     check_interval_minutes: int = Field(60, ge=1)
     priority: int = 0
@@ -294,6 +298,10 @@ class DiscordDropRequest(BaseModel):
     namespace: str | None = Field(None, description="Target namespace for ingestion")
     tags: List[str] | None = Field(None, description="Tags to attach to queued payloads")
     source: str = Field("discord_drop", description="Logical source label for tracking")
+    source_class: str | None = Field(
+        None,
+        description="Operator intent class (owned, partner, watched, candidate)",
+    )
     approval_mode: str | None = Field(
         None,
         description="`auto` queues immediately, `ask` stores as pending for explicit approval",
@@ -535,6 +543,8 @@ async def ingest_discord_drop(
     metadata: Dict[str, Any] = {}
     if isinstance(payload.metadata, dict):
         metadata.update(payload.metadata)
+    if payload.source_class:
+        metadata["source_class"] = payload.source_class
     if discord_context:
         metadata["discord"] = discord_context
 

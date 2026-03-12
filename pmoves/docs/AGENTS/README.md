@@ -32,9 +32,10 @@ transcripts, Jellyfin playback, Discord outreach, or model-routing across the PM
 
 1. **[CODEX_OPERATOR_HOME.md](./CODEX_OPERATOR_HOME.md)** — Codex-first operator runbook with creator control plane commands
 2. **[../PMOVES.AI PLANS/CREATOR_NETWORK_CONTROL_PLANE.md](../PMOVES.AI%20PLANS/CREATOR_NETWORK_CONTROL_PLANE.md)** — 2026 creator-network operating model
-3. **[JELLYFIN_CREATOR_WORKTREE_REVIEW.md](./JELLYFIN_CREATOR_WORKTREE_REVIEW.md)** — Jellyfin/creator worktree review and current gaps
-4. **[SUBMODULE_CODEX_HOMES/PMOVES.YT.md](./SUBMODULE_CODEX_HOMES/PMOVES.YT.md)** — authoritative YouTube runtime traversal
-5. **[SUBMODULE_CODEX_HOMES/PMOVES-transcribe-and-fetch.md](./SUBMODULE_CODEX_HOMES/PMOVES-transcribe-and-fetch.md)** — transcript/fetch auxiliary lane
+3. **[PMOVES_YT_CONTROL_WORKTREE_REVIEW.md](./PMOVES_YT_CONTROL_WORKTREE_REVIEW.md)** — PMOVES.YT integration worktree runbook across discovery, transcripts, playback, and model routing
+4. **[JELLYFIN_CREATOR_WORKTREE_REVIEW.md](./JELLYFIN_CREATOR_WORKTREE_REVIEW.md)** — Jellyfin/creator worktree review and current gaps
+5. **[SUBMODULE_CODEX_HOMES/PMOVES.YT.md](./SUBMODULE_CODEX_HOMES/PMOVES.YT.md)** — authoritative YouTube runtime traversal
+6. **[SUBMODULE_CODEX_HOMES/PMOVES-transcribe-and-fetch.md](./SUBMODULE_CODEX_HOMES/PMOVES-transcribe-and-fetch.md)** — transcript/fetch auxiliary lane
 
 The creator-network lane treats Codex as a legendary operator that can traverse:
 - PMOVES.YT for owned/watched channel ingest, playlist control, metadata sync, and downloader fallback
@@ -106,6 +107,7 @@ single-service codebase.
 | File | Purpose |
 |------|---------|
 | [../PMOVES.AI PLANS/CREATOR_NETWORK_CONTROL_PLANE.md](../PMOVES.AI%20PLANS/CREATOR_NETWORK_CONTROL_PLANE.md) | 2026 creator-network map across PMOVES.YT, Channel Monitor, Discord, Jellyfin, and Tokenism |
+| [PMOVES_YT_CONTROL_WORKTREE_REVIEW.md](./PMOVES_YT_CONTROL_WORKTREE_REVIEW.md) | Worktree-first review path for PMOVES.YT, channel-monitor, transcribe-and-fetch, Jellyfin, and model routing |
 | [JELLYFIN_CREATOR_WORKTREE_REVIEW.md](./JELLYFIN_CREATOR_WORKTREE_REVIEW.md) | Current creator/Jellyfin worktree findings and follow-ups |
 | [SUBMODULE_CODEX_HOMES/PMOVES.YT.md](./SUBMODULE_CODEX_HOMES/PMOVES.YT.md) | Codex home for YouTube ingest and creator control |
 | [SUBMODULE_CODEX_HOMES/PMOVES-transcribe-and-fetch.md](./SUBMODULE_CODEX_HOMES/PMOVES-transcribe-and-fetch.md) | Codex home for transcript and fetch support |

@@ -43,8 +43,16 @@ The service maintains a JSON config at `CHANNEL_MONITOR_CONFIG_PATH`. If the fil
 ```bash
 curl -X POST http://localhost:8097/api/monitor/channel \
   -H 'content-type: application/json' \
-  -d '{"channel_id":"UCabc123xyz","channel_name":"Example Channel","auto_process":true}'
+  -d '{"channel_id":"UCabc123xyz","channel_name":"Example Channel","source_class":"watched","auto_process":true}'
 ```
+
+`source_class` is the operator-intent class for a source:
+- `owned` — PMOVES-managed channels or playlists
+- `partner` — explicit collaborator or shared-lane sources
+- `watched` — monitored third-party creators
+- `candidate` — scout/review sources that should stay gated by default
+
+If omitted, configured channels default to `watched` and Discord/manual drops default to `candidate`.
 
 `yt_options` blocks (global or per-channel) are forwarded to pmoves-yt, letting you tune yt-dlp behaviour without rebuilding containers. Example knobs:
 

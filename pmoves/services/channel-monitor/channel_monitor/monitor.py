@@ -6,7 +6,7 @@ import json
 import logging
 from datetime import datetime, timezone, timedelta
 from functools import partial
-from typing import Any, Dict, Iterable, List, Optional, Set
+from typing import Any, Dict, List, Optional, Set
 from uuid import UUID
 from urllib.parse import parse_qs, urlparse
 
@@ -23,6 +23,7 @@ LOGGER = logging.getLogger("channel_monitor")
 
 VALID_STATUSES = {"pending", "processing", "queued", "completed", "failed"}
 TERMINAL_STATUSES = {"completed", "failed"}
+SOURCE_CLASSES = {"owned", "partner", "watched", "candidate"}
 
 
 def utcnow() -> datetime:
@@ -75,6 +76,14 @@ def _best_thumbnail(thumbnails: Any) -> Optional[str]:
     if isinstance(thumbnails, str) and thumbnails:
         return thumbnails
     return None
+
+
+def _normalize_source_class(value: Any, *, default: str) -> str:
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in SOURCE_CLASSES:
+            return normalized
+    return default
 
 
 def _extract_playlist_id_from_url(url: Optional[str]) -> Optional[str]:
@@ -515,6 +524,7 @@ class ChannelMonitor:
             or "unknown"
         )
         channel_identifier = self._resolve_channel_identifier(channel)
+        source_class = _normalize_source_class(channel.get("source_class"), default="watched")
         for video in videos:
             monitor_metadata = self._build_metadata(channel, video)
             channel_context = (
@@ -527,6 +537,7 @@ class ChannelMonitor:
                 {
                     "platform": channel.get("platform", "youtube"),
                     "source_type": channel.get("source_type", "channel"),
+                    "source_class": source_class,
                     "channel_name": channel_label,
                     "channel_id": channel_identifier,
                     "channel_url": channel_context.get("url"),
@@ -1418,6 +1429,10 @@ class ChannelMonitor:
         channel_payload_metadata: Dict[str, Any] = {"ingest_source": normalized_source}
         if context_metadata:
             channel_payload_metadata["source_context"] = context_metadata
+        source_class = _normalize_source_class(
+            context_metadata.get("source_class") if isinstance(context_metadata, dict) else None,
+            default="candidate",
+        )
 
         channel: Dict[str, Any] = {
             "channel_id": synthetic_channel_id,
@@ -1427,6 +1442,7 @@ class ChannelMonitor:
             "priority": 0,
             "platform": "discord" if "discord" in normalized_source else "manual",
             "source_type": normalized_source,
+            "source_class": source_class,
             "ingest_source": normalized_source,
             "media_type": media_type or "video",
             "payload_metadata": channel_payload_metadata,
@@ -1762,6 +1778,7 @@ class ChannelMonitor:
         new_channel = {
             "channel_id": channel_id,
             "channel_name": channel_name or channel_id,
+            "source_class": _normalize_source_class(data.get("source_class"), default="watched"),
             "enabled": data.get("enabled", True),
             "check_interval_minutes": data.get("check_interval_minutes", 60),
             "auto_process": data.get("auto_process", True),

@@ -81,10 +81,11 @@ transcripts, Discord, Jellyfin, or cross-model orchestration.
 ### Primary traversal order
 
 1. `pmoves/docs/PMOVES.AI PLANS/CREATOR_NETWORK_CONTROL_PLANE.md`
-2. `pmoves/docs/AGENTS/SUBMODULE_CODEX_HOMES/PMOVES.YT.md`
-3. `pmoves/docs/AGENTS/SUBMODULE_CODEX_HOMES/PMOVES-transcribe-and-fetch.md`
-4. `pmoves/services/channel-monitor/README.md`
-5. `pmoves/docs/AGENTS/JELLYFIN_CREATOR_WORKTREE_REVIEW.md`
+2. `pmoves/docs/AGENTS/PMOVES_YT_CONTROL_WORKTREE_REVIEW.md`
+3. `pmoves/docs/AGENTS/SUBMODULE_CODEX_HOMES/PMOVES.YT.md`
+4. `pmoves/docs/AGENTS/SUBMODULE_CODEX_HOMES/PMOVES-transcribe-and-fetch.md`
+5. `pmoves/services/channel-monitor/README.md`
+6. `pmoves/docs/AGENTS/JELLYFIN_CREATOR_WORKTREE_REVIEW.md`
 
 ### Service posture
 
@@ -208,6 +209,8 @@ For a comprehensive view of what's implemented vs. what's still planned, see:
   - `pmoves/docs/AGENTS/SUBMODULE_CODEX_HOMES/PMOVES.YT.md`
 - PMOVES-transcribe-and-fetch submodule home:
   - `pmoves/docs/AGENTS/SUBMODULE_CODEX_HOMES/PMOVES-transcribe-and-fetch.md`
+- PMOVES.YT control worktree review:
+  - `pmoves/docs/AGENTS/PMOVES_YT_CONTROL_WORKTREE_REVIEW.md`
 - Jellyfin creator review:
   - `pmoves/docs/AGENTS/JELLYFIN_CREATOR_WORKTREE_REVIEW.md`
 - Codex submodule audit:

@@ -83,7 +83,7 @@ if "yt_dlp" not in sys.modules:
     yt_dlp_stub.YoutubeDL = _YoutubeDL  # type: ignore[attr-defined]
     sys.modules["yt_dlp"] = yt_dlp_stub
 
-from channel_monitor.monitor import ChannelMonitor, _extract_youtube_video_id
+from channel_monitor.monitor import ChannelMonitor, _extract_youtube_video_id  # noqa: E402
 
 
 def _build_monitor(tmp_path, config_name: str = "channel.json") -> ChannelMonitor:
@@ -370,6 +370,7 @@ def test_queue_videos_uses_custom_ingest_source(tmp_path, monkeypatch):
         "ingest_source": "discord_agent",
         "platform": "discord",
         "source_type": "discord_drop",
+        "source_class": "candidate",
     }
     videos = [
         {
@@ -386,6 +387,7 @@ def test_queue_videos_uses_custom_ingest_source(tmp_path, monkeypatch):
     assert payload["source"] == "discord_agent"
     assert payload["metadata"]["platform"] == "discord"
     assert payload["metadata"]["source_type"] == "discord_drop"
+    assert payload["metadata"]["source_class"] == "candidate"
     assert statuses[0][0:3] == ("custom-source-1", "processing", None)
     assert statuses[1][0:3] == ("custom-source-1", "queued", None)
 
@@ -407,7 +409,7 @@ def test_ingest_manual_urls_queues_discord_drop(tmp_path):
             source="discord_agent",
             channel_id="discord:ops",
             channel_name="ops-drops",
-            metadata={"guild_id": "guild-1"},
+            metadata={"guild_id": "guild-1", "source_class": "candidate"},
         )
     )
 
@@ -423,7 +425,11 @@ def test_ingest_manual_urls_queues_discord_drop(tmp_path):
     queued_videos = persist_args[1]
     assert channel_payload["platform"] == "discord"
     assert channel_payload["ingest_source"] == "discord_agent"
-    assert channel_payload["payload_metadata"]["source_context"] == {"guild_id": "guild-1"}
+    assert channel_payload["source_class"] == "candidate"
+    assert channel_payload["payload_metadata"]["source_context"] == {
+        "guild_id": "guild-1",
+        "source_class": "candidate",
+    }
     assert channel_payload["tags"] == ["review", "discord"]
     assert queued_videos[0]["payload_metadata"]["manual_drop_source"] == "discord_agent"
 
