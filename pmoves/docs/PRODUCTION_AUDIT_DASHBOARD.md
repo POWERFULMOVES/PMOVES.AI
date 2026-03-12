@@ -3,15 +3,25 @@
 > **Single source of truth** for PMOVES.AI production readiness.
 > Supersedes all individual audit documents accumulated Feb 7 -- Feb 18, 2026.
 
-**Last Updated:** 2026-03-11 (Post-PR #866 CodeRabbit URL validation follow-up)
+**Last Updated:** 2026-03-11 (Post-PRs #867-#871 port registry + smoke fixes)
 **Branch:** `main`
-**Commit:** `de18437a` (post-PR #865 dashboard + CodeRabbit follow-up)
+**Commit:** `c81b2431` (fix(ui): align PostgREST port registry + widen Jellyfin smoke codes)
 **Consolidated From:** 27 audit documents
 **Evidence:** live runbook execution on 2026-03-05 (`make ghcr-prepublish-inrepo-build`, strict local Trivy sweep logs under `pmoves/docs/logs/ghcr-local-prepublish/`)
 
 ---
 
 ## Latest Changes (Mar 11, 2026)
+
+### PRs #867-#871 — Port Registry, Smoke Test & Security Fixes
+
+- **PR #867** (`fix(security)`): CodeQL #196 — validate service URLs with `URL` constructor (XSS prevention)
+- **PR #868** (`fix(smoke)`): Remap supabase-realtime port 4000→4010 in smoke tests + widen grep window
+- **PR #870** (`fix(ports)`): Complete realtime 4000→4010 migration across PORT_REGISTRY and smoke tests
+- **PR #871** (`fix(ui)`): Align PostgREST port registry (3010→3000) + env template fix + widen Jellyfin smoke HTTP codes (accept 502)
+- **PR #866 closed** — superseded by the individual targeted PRs #867-#871
+- **Branch sync:** main → Hardened synced (`c6bc276f`)
+- **CodeQL status:** 1 open (#195 — false positive, `lgtm` suppression comment at `serviceHealth.ts:71`, pending GitHub dismissal on next scan)
 
 ### Post-PR #866 — CodeRabbit URL Validation Follow-up
 
@@ -492,7 +502,7 @@ Three CI pipelines build Docker images. This matrix is the single cross-referenc
 
 | Metric | Value |
 |--------|-------|
-| Quantitative snapshot timestamp | 2026-03-11 (Post-PR #865 Supabase unification + CodeQL #196 fix) |
+| Quantitative snapshot timestamp | 2026-03-11 (Post-PRs #867-#871 port registry + smoke fixes) |
 | Total tracked items | 24 |
 | Resolved | 24 (+1 since last update) |
 | Active blockers (release-blocking) | 0 |
@@ -500,7 +510,7 @@ Three CI pipelines build Docker images. This matrix is the single cross-referenc
 | High | 0 |
 | Medium | 0 |
 | Low | 0 |
-| CodeQL alerts (open) | **1 open** → **0 after merge** (#194 auto-closed by rescan; #195 suppressed as FP; #196 fixed in this PR via `new URL()` constructor) |
+| CodeQL alerts (open) | **1 open (FP #195)** — suppressed with `lgtm` comment, pending GitHub dismissal on next scan. #194 auto-closed by rescan; #196 fixed via `new URL()` constructor (PR #867) |
 | Dependabot alerts | **0 open** (live GitHub API on 2026-03-09) |
 | Open PRs | **0** |
 | CI queue | **HEALTHY** — 3/4 self-hosted runners online (2 Docker containers via `local_cert_runners.py` + 1 Windows native). Phase policy `local-certification` PASS. Start: `make -C pmoves ci-runners-local-cert-up`. Hotfix runner offline (non-blocking). |
