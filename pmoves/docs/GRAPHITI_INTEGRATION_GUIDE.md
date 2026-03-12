@@ -365,7 +365,7 @@ Hooks are defined in `.claude/hooks/` and execute automatically. No manual setup
 
 ### Disabling Auto-Signing
 
-Set `GRAPHITI_AUTO_SIGN=false` in your environment to disable hook-based signing.
+Auto-signing is controlled by the PostToolUse hook definitions in `.claude/hooks/`, which trigger on file path patterns (`AGENT_TRAIL` or `graphiti`). To disable, remove or comment out the relevant hook entry — there is no environment variable toggle.
 
 ---
 

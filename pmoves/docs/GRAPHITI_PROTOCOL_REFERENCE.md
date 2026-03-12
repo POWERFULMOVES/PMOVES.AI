@@ -211,7 +211,7 @@ Trail entries are published to the NATS message bus after significant work.
 
 | Source | Trigger | Payload |
 |--------|---------|---------|
-| `sign_trail.py` CLI | Manual invocation | Signed/unsigned payload |
+| `sign_trail.py` CLI | Manual invocation | Signed/unsigned payload (produced locally; requires separate NATS publish) |
 | PostToolUse hook | File path contains `AGENT_TRAIL` or `graphiti` | Auto-signed payload |
 | `pr-monitor-graphiti-chit` pipeline | PR review completion | Pipeline-signed payload |
 | Agent Zero MCP | Task completion | MCP-triggered payload |

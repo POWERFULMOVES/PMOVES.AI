@@ -133,7 +133,7 @@ This YAML file is the single source of truth for agent identities. When `sign_tr
 ### Adding a New Agent
 
 ```yaml
-agents:
+signatures:
   new-agent:
     display_name: "New Agent"
     glyph: "▸"              # Pick a unique Unicode character
