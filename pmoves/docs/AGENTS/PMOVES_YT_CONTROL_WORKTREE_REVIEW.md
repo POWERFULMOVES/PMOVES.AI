@@ -130,3 +130,32 @@ If no findings are present, say so explicitly and call out residual risks:
 - Jellyfin linkage drift
 - model-routing env drift
 
+## Current audit snapshot
+
+As of March 12, 2026, use these findings as the starting bias for this worktree lane:
+
+- `channel-monitor` now supports `source_class`, but the checked-in monitor config must also
+  classify sources explicitly so owned vs watched behavior is not inferred at runtime.
+- `PMOVES.YT` is the canonical runtime, but its summary lane still hardcodes provider/model envs
+  (`YT_SUMMARY_PROVIDER`, `YT_GEMMA_MODEL`, `HF_GEMMA_MODEL`) inside
+  `PMOVES.YT/pmoves_yt_service/yt.py`.
+- `PMOVES-transcribe-and-fetch` already exposes a registry-shaped `/api/v1/models` UI path, but
+  its backend still carries a large static `AVAILABLE_MODELS` catalog in
+  `PMOVES-transcribe-and-fetch/backend/app/app_config.py`.
+- This means creator-model posture is only partially modernized:
+  - the UI is closer to registry-driven
+  - PMOVES.YT and transcribe/fetch runtime defaults still need convergence on shared
+    model-role aliases
+- Invidious + companion fallback is present and should remain part of the runtime review path for
+  owned and watched YouTube sources.
+
+## Recommended next implementation steps
+
+1. Keep `channel-monitor` source metadata explicit in config, API payloads, and downstream PMOVES.YT
+   ingest metadata.
+2. Move PMOVES.YT summary selection from model-id envs to model-role aliases documented in
+   `pmoves/docs/MODEL_FABRIC_CONTRACT.md`.
+3. Collapse `PMOVES-transcribe-and-fetch` static model inventory behind the same registry/alias
+   contract its UI already expects.
+4. Review owned-channel playlist control against Google API credentials and Discord approval flow,
+   not only yt-dlp ingest.
