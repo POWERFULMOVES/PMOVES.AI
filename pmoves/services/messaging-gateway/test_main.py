@@ -67,7 +67,11 @@ def test_handle_ytcontrol_interaction_approve(monkeypatch):
             return None
 
         def json(self):
-            return {"processed": 1}
+            return {
+                "processed": 1,
+                "reason": "approved from Discord",
+                "actions": [{"summary": "Playlist add: add vid-123 to playlist PL123", "notebook_entry_id": "nb-1"}],
+            }
 
     class DummyAsyncClient:
         def __init__(self, *args, **kwargs):
@@ -97,6 +101,8 @@ def test_handle_ytcontrol_interaction_approve(monkeypatch):
 
     assert response["type"] == 4
     assert "Approved YouTube control request" in response["data"]["content"]
+    assert "Playlist add" in response["data"]["content"]
+    assert "Notebook: `nb-1`" in response["data"]["content"]
     assert requests_made[0][0] == "http://channel-monitor:8097/api/monitor/youtube-control/review"
     assert requests_made[0][1]["X-Channel-Monitor-Token"] == "secret-token"
     assert requests_made[0][2]["approve"] is True
@@ -111,7 +117,11 @@ def test_handle_ytcontrol_interaction_reject(monkeypatch):
             return None
 
         def json(self):
-            return {"processed": 1}
+            return {
+                "processed": 1,
+                "reason": "rejected from Discord",
+                "actions": [{"summary": "Comment create: reply on vid-123"}],
+            }
 
     class DummyAsyncClient:
         def __init__(self, *args, **kwargs):
@@ -138,3 +148,4 @@ def test_handle_ytcontrol_interaction_reject(monkeypatch):
 
     assert response["type"] == 4
     assert "Rejected YouTube control request" in response["data"]["content"]
+    assert "Comment create" in response["data"]["content"]

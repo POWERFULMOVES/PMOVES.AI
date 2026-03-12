@@ -159,14 +159,25 @@ curl -X POST http://localhost:8097/api/monitor/youtube-control \
   -H 'content-type: application/json' \
   -H 'x-channel-monitor-token: $CHANNEL_MONITOR_SECRET' \
   -d '{
-    "action": "playlist_add",
-    "details": {
-      "playlist_id": "PL123",
-      "video_id": "dQw4w9WgXcQ"
-    },
-    "request_source": "discord_agent",
-    "notify_platforms": ["discord"]
-  }'
+      "action": "comment_create",
+      "details": {
+        "video_id": "dQw4w9WgXcQ",
+        "text_template": "Thanks {creator_name} for the {topic} breakdown. We used it in PMOVES."
+      },
+      "request_source": "discord_agent",
+      "draft": {
+        "variables": {
+          "creator_name": "Example Creator",
+          "topic": "Qwen 3"
+        },
+        "channel_name": "Example Creator",
+        "source_class": "watched"
+      },
+      "notebook": {
+        "title_prefix": "Creator draft"
+      },
+      "notify_platforms": ["discord"]
+    }'
 
 curl -X GET "http://localhost:8097/api/monitor/youtube-control/pending" \
   -H 'x-channel-monitor-token: $CHANNEL_MONITOR_SECRET'
@@ -182,6 +193,12 @@ Set `CHANNEL_MONITOR_MESSAGING_URL` to the messaging gateway `/v1/send` endpoint
 Discord-ready approval notifications when requests are queued.
 `messaging-gateway` now intercepts `ytcontrol:approve:<id>` / `ytcontrol:reject:<id>` button
 interactions and maps them back into `POST /api/monitor/youtube-control/review`.
+Set `CHANNEL_MONITOR_YT_NOTEBOOK_ID` together with `OPEN_NOTEBOOK_API_URL` and
+`OPEN_NOTEBOOK_API_TOKEN` to publish notebook-ready review artifacts for queued creator actions.
+Queued requests now carry:
+- rendered comment text when a draft template is supplied
+- a `request_summary` used for Discord review prompts
+- optional notebook artifact metadata persisted in `details.notebook`
 
 ### Observability
 

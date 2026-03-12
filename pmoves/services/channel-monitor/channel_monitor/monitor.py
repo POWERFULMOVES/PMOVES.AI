@@ -25,6 +25,18 @@ LOGGER = logging.getLogger("channel_monitor")
 VALID_STATUSES = {"pending", "processing", "queued", "completed", "failed"}
 TERMINAL_STATUSES = {"completed", "failed"}
 SOURCE_CLASSES = {"owned", "partner", "watched", "candidate"}
+YOUTUBE_CONTROL_ACTION_LABELS = {
+    "playlist_add": "Playlist add",
+    "playlist_remove": "Playlist remove",
+    "playlist_reorder": "Playlist reorder",
+    "comment_create": "Comment create",
+}
+YOUTUBE_CONTROL_ENDPOINTS = {
+    "playlist_add": "/yt/control/playlist/add",
+    "playlist_remove": "/yt/control/playlist/remove",
+    "playlist_reorder": "/yt/control/playlist/reorder",
+    "comment_create": "/yt/control/comment",
+}
 
 
 def utcnow() -> datetime:
@@ -85,6 +97,118 @@ def _normalize_source_class(value: Any, *, default: str) -> str:
         if normalized in SOURCE_CLASSES:
             return normalized
     return default
+
+
+def _truncate_text(value: Any, *, limit: int = 180) -> Optional[str]:
+    if not isinstance(value, str):
+        return None
+    text = " ".join(value.strip().split())
+    if not text:
+        return None
+    if len(text) <= limit:
+        return text
+    return text[: limit - 3] + "..."
+
+
+class _TemplateVariables(dict[str, str]):
+    def __missing__(self, key: str) -> str:
+        return "{" + key + "}"
+
+
+def _render_template_text(template: str, variables: Dict[str, Any]) -> str:
+    return template.format_map(
+        _TemplateVariables({key: "" if value is None else str(value) for key, value in variables.items()})
+    )
+
+
+def _build_youtube_control_summary(action: str, details: Dict[str, Any], draft: Optional[Dict[str, Any]] = None) -> str:
+    label = YOUTUBE_CONTROL_ACTION_LABELS.get(action, action.replace("_", " "))
+    draft = draft if isinstance(draft, dict) else {}
+    source_class = draft.get("source_class") or details.get("source_class")
+    channel_name = draft.get("channel_name")
+    video_ref = draft.get("video_title") or details.get("video_id") or details.get("playlist_item_id") or "unknown target"
+    if action == "playlist_add":
+        summary = f"{label}: add {video_ref} to playlist {details.get('playlist_id', 'unknown playlist')}"
+    elif action == "playlist_remove":
+        summary = f"{label}: remove item {details.get('playlist_item_id', video_ref)}"
+    elif action == "playlist_reorder":
+        summary = (
+            f"{label}: move item {details.get('playlist_item_id', video_ref)} "
+            f"to position {details.get('position', '?')}"
+        )
+    elif action == "comment_create":
+        comment_target = "reply" if details.get("parent_comment_id") else "comment"
+        summary = f"{label}: {comment_target} on {video_ref} — {_truncate_text(details.get('text'), limit=100) or 'no text'}"
+    else:
+        summary = f"{label}: {video_ref}"
+    context_parts = [part for part in [channel_name, source_class] if isinstance(part, str) and part]
+    if context_parts:
+        summary = f"{summary} ({', '.join(context_parts)})"
+    return summary
+
+
+def _prepare_youtube_control_details(
+    action: str,
+    details: Dict[str, Any],
+    draft: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    normalized = dict(details)
+    draft_dict = dict(draft) if isinstance(draft, dict) else {}
+    if draft_dict.get("source_class") and not normalized.get("source_class"):
+        normalized["source_class"] = draft_dict["source_class"]
+    if action == "comment_create":
+        text_value = normalized.get("text")
+        if not isinstance(text_value, str) or not text_value.strip():
+            template = normalized.get("text_template") or draft_dict.get("text_template") or draft_dict.get("template")
+            template_vars = normalized.get("template_vars") or draft_dict.get("template_vars") or draft_dict.get("variables") or {}
+            if isinstance(template, str) and template.strip():
+                rendered = _render_template_text(template, template_vars if isinstance(template_vars, dict) else {})
+                normalized["text"] = rendered.strip()
+                normalized["template_rendered"] = True
+            else:
+                raise ValueError("comment_create requires text or text_template")
+        normalized["text_preview"] = _truncate_text(normalized.get("text"), limit=160)
+    if draft_dict:
+        normalized["draft"] = draft_dict
+    normalized["request_summary"] = _build_youtube_control_summary(action, normalized, draft_dict)
+    return normalized
+
+
+def _build_youtube_control_execution_payload(action: str, details: Dict[str, Any]) -> Dict[str, Any]:
+    if action == "playlist_add":
+        return _compact(
+            {
+                "playlist_id": details.get("playlist_id"),
+                "video_id": details.get("video_id"),
+                "position": details.get("position"),
+            }
+        ) or {}
+    if action == "playlist_remove":
+        return _compact(
+            {
+                "playlist_item_id": details.get("playlist_item_id"),
+                "playlist_id": details.get("playlist_id"),
+                "video_id": details.get("video_id"),
+            }
+        ) or {}
+    if action == "playlist_reorder":
+        return _compact(
+            {
+                "playlist_item_id": details.get("playlist_item_id"),
+                "playlist_id": details.get("playlist_id"),
+                "video_id": details.get("video_id"),
+                "position": details.get("position"),
+            }
+        ) or {}
+    if action == "comment_create":
+        return _compact(
+            {
+                "video_id": details.get("video_id"),
+                "text": details.get("text"),
+                "parent_comment_id": details.get("parent_comment_id"),
+            }
+        ) or {}
+    raise ValueError(f"Unsupported YouTube control action: {action}")
 
 
 def _extract_playlist_id_from_url(url: Optional[str]) -> Optional[str]:
@@ -1667,16 +1791,28 @@ class ChannelMonitor:
         details: Dict[str, Any],
         request_source: str,
         notify_platforms: Optional[List[str]] = None,
+        draft: Optional[Dict[str, Any]] = None,
+        notebook: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         assert self._pool
         action_id = str(uuid4())
+        normalized_details = _prepare_youtube_control_details(action, details, draft)
+        notebook_meta = await self._publish_youtube_control_notebook_artifact(
+            action_id=action_id,
+            action=action,
+            details=normalized_details,
+            request_source=request_source,
+            notebook=notebook,
+        )
+        if notebook_meta:
+            normalized_details["notebook"] = notebook_meta
         row = {
             "id": action_id,
             "action": action,
             "status": "pending_review",
             "execute_requested": True,
             "request_source": request_source,
-            "details": details,
+            "details": normalized_details,
         }
         async with self._pool.acquire() as conn:
             await conn.execute(
@@ -1690,17 +1826,95 @@ class ChannelMonitor:
                 "pending_review",
                 True,
                 request_source,
-                json.dumps(details),
+                json.dumps(normalized_details),
             )
         notified = await self._notify_youtube_control_request(
             action_id=action_id,
             action=action,
-            details=details,
+            details=normalized_details,
             request_source=request_source,
             platforms=notify_platforms or [],
         )
         row["notified"] = notified
         return row
+
+    async def _publish_youtube_control_notebook_artifact(
+        self,
+        *,
+        action_id: str,
+        action: str,
+        details: Dict[str, Any],
+        request_source: str,
+        notebook: Optional[Dict[str, Any]] = None,
+    ) -> Optional[Dict[str, Any]]:
+        notebook_overrides = dict(notebook) if isinstance(notebook, dict) else {}
+        base_url = (os.getenv("OPEN_NOTEBOOK_API_URL") or "").rstrip("/")
+        api_token = (os.getenv("OPEN_NOTEBOOK_API_TOKEN") or "").strip()
+        notebook_id = (
+            notebook_overrides.get("notebook_id")
+            or os.getenv("CHANNEL_MONITOR_YT_NOTEBOOK_ID")
+            or os.getenv("OPEN_NOTEBOOK_NOTEBOOK_ID")
+            or os.getenv("DEEPRESEARCH_NOTEBOOK_ID")
+            or ""
+        )
+        if not base_url or not api_token or not notebook_id:
+            return None
+
+        title_prefix = (
+            notebook_overrides.get("title_prefix")
+            or os.getenv("CHANNEL_MONITOR_YT_NOTEBOOK_TITLE_PREFIX")
+            or "YouTube control"
+        )
+        title = f"{title_prefix} · {details.get('request_summary') or YOUTUBE_CONTROL_ACTION_LABELS.get(action, action)}"
+        sections = [
+            "## Action",
+            f"- action_id: {action_id}",
+            f"- action: {action}",
+            f"- source: {request_source}",
+            "",
+            "## Summary",
+            str(details.get("request_summary") or _build_youtube_control_summary(action, details, details.get("draft"))),
+            "",
+            "## Details",
+            "```json",
+            json.dumps(_compact(details) or {}, indent=2, sort_keys=True),
+            "```",
+        ]
+        content = "\n".join(sections)
+        payload = {
+            "type": "text",
+            "title": title[:160],
+            "notebooks": [str(notebook_id)],
+            "content": content,
+            "embed": bool(notebook_overrides.get("embed", True)),
+            "async_processing": bool(notebook_overrides.get("async_processing", True)),
+        }
+        headers = {
+            "Authorization": f"Bearer {api_token}",
+            "Accept": "application/json",
+        }
+        try:
+            async with httpx.AsyncClient(base_url=base_url, headers=headers, timeout=30.0) as client:
+                response = await client.post("/api/sources/json", json=payload)
+                response.raise_for_status()
+                body = response.json()
+            entry_id = body.get("id") if isinstance(body, dict) else None
+            return _compact(
+                {
+                    "entry_id": entry_id,
+                    "title": title[:160],
+                    "notebook_id": str(notebook_id),
+                }
+            )
+        except Exception as exc:  # pragma: no cover - best effort
+            LOGGER.warning("Failed to publish YouTube control notebook artifact for %s: %s", action_id, exc)
+            return _compact(
+                {
+                    "error": str(exc),
+                    "title": title[:160],
+                    "notebook_id": str(notebook_id),
+                }
+            )
 
     async def _notify_youtube_control_request(
         self,
@@ -1719,11 +1933,30 @@ class ChannelMonitor:
             LOGGER.info("Skipping YouTube control notification; CHANNEL_MONITOR_MESSAGING_URL is not set")
             return False
 
+        summary = details.get("request_summary") or _build_youtube_control_summary(action, details, details.get("draft"))
+        notebook_meta = details.get("notebook") if isinstance(details.get("notebook"), dict) else {}
+        fields = [
+            {"name": "Action", "value": str(YOUTUBE_CONTROL_ACTION_LABELS.get(action, action)), "inline": True},
+            {"name": "Source", "value": request_source, "inline": True},
+            {"name": "Summary", "value": str(summary)[:1024], "inline": False},
+        ]
+        if details.get("playlist_id"):
+            fields.append({"name": "Playlist", "value": str(details.get("playlist_id")), "inline": True})
+        if details.get("video_id"):
+            fields.append({"name": "Video", "value": str(details.get("video_id")), "inline": True})
+        if details.get("text_preview"):
+            fields.append({"name": "Comment Preview", "value": str(details.get("text_preview"))[:1024], "inline": False})
+        if notebook_meta.get("entry_id"):
+            fields.append({"name": "Notebook Entry", "value": str(notebook_meta.get("entry_id")), "inline": False})
+        elif notebook_meta.get("error"):
+            fields.append({"name": "Notebook Publish", "value": str(notebook_meta.get("error"))[:1024], "inline": False})
+
         content = (
             f"YouTube control request pending review\n"
-            f"- action: {action}\n"
+            f"- action: {YOUTUBE_CONTROL_ACTION_LABELS.get(action, action)}\n"
             f"- source: {request_source}\n"
-            f"- action_id: {action_id}"
+            f"- action_id: {action_id}\n"
+            f"- summary: {summary}"
         )
         buttons = [
             {"id": f"ytcontrol:approve:{action_id}", "label": "Approve", "style": "primary"},
@@ -1732,12 +1965,20 @@ class ChannelMonitor:
         payload = {
             "platforms": active_platforms,
             "content": content,
+            "embeds": [
+                {
+                    "title": "YouTube control request pending review",
+                    "description": str(summary)[:4096],
+                    "fields": fields,
+                }
+            ],
             "buttons": buttons,
             "metadata": {
                 "action_id": action_id,
                 "action": action,
                 "request_source": request_source,
                 "details": details,
+                "summary": summary,
             },
         }
         try:
@@ -1808,15 +2049,11 @@ class ChannelMonitor:
         approved_by: str,
         approval_note: Optional[str],
     ) -> Dict[str, Any]:
-        endpoint_map = {
-            "playlist_add": "/yt/control/playlist/add",
-            "comment_create": "/yt/control/comment",
-        }
-        endpoint = endpoint_map.get(action)
+        endpoint = YOUTUBE_CONTROL_ENDPOINTS.get(action)
         if not endpoint:
             raise ValueError(f"Unsupported YouTube control action: {action}")
 
-        payload = dict(details)
+        payload = _build_youtube_control_execution_payload(action, details)
         payload["execute"] = True
         payload["approved_by"] = approved_by
         if approval_note:
@@ -1867,13 +2104,20 @@ class ChannelMonitor:
             )
 
         processed_ids: List[str] = []
+        action_summaries: List[Dict[str, Any]] = []
         for row in rows:
             action_id = str(row.get("id"))
             action = row.get("action")
             details = row.get("details") if isinstance(row.get("details"), dict) else {}
+            summary = details.get("request_summary") or _build_youtube_control_summary(action, details, details.get("draft"))
+            notebook_meta = details.get("notebook") if isinstance(details.get("notebook"), dict) else {}
             new_status = "rejected"
-            result_payload: Dict[str, Any] | None = None
-            error_text = reason if not approve else None
+            result_payload: Dict[str, Any] | None = {
+                "status": "rejected",
+                "reason": reason or "rejected",
+                "summary": summary,
+            }
+            error_text = reason or "rejected"
             if approve:
                 result_payload = await self._invoke_yt_control_action(
                     action=action,
@@ -1882,6 +2126,7 @@ class ChannelMonitor:
                     approval_note=reason,
                 )
                 new_status = "approved"
+                error_text = None
 
             async with self._pool.acquire() as conn:
                 await conn.execute(
@@ -1902,6 +2147,24 @@ class ChannelMonitor:
                     error_text,
                 )
             processed_ids.append(action_id)
+            action_summaries.append(
+                _compact(
+                    {
+                        "id": action_id,
+                        "action": action,
+                        "status": new_status,
+                        "summary": summary,
+                        "notebook_entry_id": notebook_meta.get("entry_id"),
+                        "reason": reason,
+                    }
+                )
+                or {
+                    "id": action_id,
+                    "action": action,
+                    "status": new_status,
+                    "summary": summary,
+                }
+            )
 
         missing_ids = sorted(set(wanted_ids) - set(processed_ids))
         return {
@@ -1909,6 +2172,8 @@ class ChannelMonitor:
             "processed_ids": processed_ids,
             "missing_ids": missing_ids,
             "approved": approve,
+            "actions": action_summaries,
+            "reason": reason,
         }
 
     async def get_stats(self) -> Dict[str, Any]:

@@ -328,12 +328,23 @@ class DiscordDropApprovalRequest(BaseModel):
 
 
 class YouTubeControlRequest(BaseModel):
-    action: str = Field(..., description="Control action type: playlist_add or comment_create")
+    action: str = Field(
+        ...,
+        description="Control action type: playlist_add, playlist_remove, playlist_reorder, or comment_create",
+    )
     details: Dict[str, Any] = Field(..., description="PMOVES.YT control payload without execute fields")
     request_source: str = Field("channel_monitor", description="Logical request source for audit rows")
     notify_platforms: List[str] | None = Field(
         None,
         description="Optional messaging-gateway platforms to notify (e.g. ['discord'])",
+    )
+    draft: Dict[str, Any] | None = Field(
+        None,
+        description="Optional draft/template metadata used for notebook artifacts and comment rendering",
+    )
+    notebook: Dict[str, Any] | None = Field(
+        None,
+        description="Optional Open Notebook publish overrides (notebook_id, title_prefix, embed, async_processing)",
     )
 
 
@@ -642,6 +653,8 @@ async def queue_youtube_control_action(
             details=payload.details,
             request_source=payload.request_source,
             notify_platforms=payload.notify_platforms,
+            draft=payload.draft,
+            notebook=payload.notebook,
         )
         return {"status": "ok", "queued": True, "approval_state": "pending_review", "request": result}
     except ValueError as exc:

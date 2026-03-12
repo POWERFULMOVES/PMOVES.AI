@@ -517,6 +517,7 @@ def test_create_youtube_control_request_persists_pending_row(tmp_path):
     assert result["status"] == "pending_review"
     assert result["action"] == "playlist_add"
     assert result["notified"] is False
+    assert result["details"]["request_summary"].startswith("Playlist add:")
     conn.execute.assert_awaited_once()
 
 
@@ -559,6 +560,64 @@ def test_create_youtube_control_request_can_notify_messaging_gateway(tmp_path, m
     assert result["notified"] is True
     assert requests_made[0][0] == "http://messaging.test/v1/send"
     assert requests_made[0][1]["platforms"] == ["discord"]
+    assert requests_made[0][1]["embeds"][0]["title"] == "YouTube control request pending review"
+
+
+def test_create_youtube_control_request_renders_template_and_publishes_notebook(tmp_path, monkeypatch):
+    monitor = _build_monitor(tmp_path)
+    conn = SimpleNamespace(execute=AsyncMock())
+    monitor._pool = _FakePool(conn)  # type: ignore[assignment]
+    requests_made = []
+
+    class DummyResponse:
+        def __init__(self, payload):
+            self._payload = payload
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return self._payload
+
+    class DummyAsyncClient:
+        def __init__(self, *args, **kwargs):
+            self.base_url = kwargs.get("base_url")
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        async def post(self, url, json=None):
+            requests_made.append((str(self.base_url or ""), url, json))
+            return DummyResponse({"id": "notebook-entry-1"})
+
+    monkeypatch.setenv("OPEN_NOTEBOOK_API_URL", "http://notebook.test")
+    monkeypatch.setenv("OPEN_NOTEBOOK_API_TOKEN", "nb-token")
+    monkeypatch.setenv("CHANNEL_MONITOR_YT_NOTEBOOK_ID", "nb-123")
+    monkeypatch.setattr("channel_monitor.monitor.httpx.AsyncClient", DummyAsyncClient)
+
+    result = asyncio.run(
+        monitor.create_youtube_control_request(
+            action="comment_create",
+            details={"video_id": "vid-123", "text_template": "Thanks {creator_name} for the {topic} breakdown."},
+            request_source="discord_agent",
+            draft={
+                "variables": {"creator_name": "Alice", "topic": "Qwen"},
+                "channel_name": "Alice AI",
+                "source_class": "watched",
+            },
+            notebook={"title_prefix": "Creator draft"},
+        )
+    )
+
+    assert result["details"]["text"] == "Thanks Alice for the Qwen breakdown."
+    assert result["details"]["template_rendered"] is True
+    assert result["details"]["notebook"]["entry_id"] == "notebook-entry-1"
+    assert requests_made[0][0] == "http://notebook.test"
+    assert requests_made[0][1] == "/api/sources/json"
+    assert requests_made[0][2]["title"].startswith("Creator draft")
 
 
 def test_review_youtube_control_actions_executes_pmoves_yt_call(tmp_path, monkeypatch):
@@ -567,7 +626,7 @@ def test_review_youtube_control_actions_executes_pmoves_yt_call(tmp_path, monkey
         {
             "id": "11111111-1111-1111-1111-111111111111",
             "action": "comment_create",
-            "details": {"video_id": "vid-123", "text": "hello"},
+            "details": {"video_id": "vid-123", "text": "hello", "request_summary": "Comment create: hello"},
         }
     ]
     conn = SimpleNamespace(fetch=AsyncMock(return_value=rows), execute=AsyncMock())
@@ -610,6 +669,7 @@ def test_review_youtube_control_actions_executes_pmoves_yt_call(tmp_path, monkey
 
     assert result["approved"] is True
     assert result["processed"] == 1
+    assert result["actions"][0]["summary"] == "Comment create: hello"
     assert requests_made[0][0] == "http://example.test/yt/control/comment"
     assert requests_made[0][1]["execute"] is True
     assert requests_made[0][1]["approved_by"] == "discord-agent"

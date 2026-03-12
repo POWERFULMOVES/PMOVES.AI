@@ -133,6 +133,24 @@ def _interaction_actor(payload: Dict[str, Any]) -> str:
     return "discord-user"
 
 
+def _format_ytcontrol_response(body: Dict[str, Any], action_id: str, approve: bool) -> str:
+    actions = body.get("actions") if isinstance(body.get("actions"), list) else []
+    first_action = actions[0] if actions and isinstance(actions[0], dict) else {}
+    summary = first_action.get("summary")
+    notebook_entry_id = first_action.get("notebook_entry_id")
+    reason = body.get("reason")
+    state = "Approved" if approve else "Rejected"
+    parts = [f"{state} YouTube control request `{action_id}`."]
+    if summary:
+        parts.append(str(summary))
+    if reason:
+        parts.append(f"Note: {reason}")
+    if notebook_entry_id:
+        parts.append(f"Notebook: `{notebook_entry_id}`")
+    parts.append(f"Processed: {body.get('processed', 0)}.")
+    return " ".join(parts)
+
+
 async def _handle_ytcontrol_interaction(payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     data = payload.get("data") if isinstance(payload.get("data"), dict) else {}
     custom_id = data.get("custom_id")
@@ -179,11 +197,7 @@ async def _handle_ytcontrol_interaction(payload: Dict[str, Any]) -> Optional[Dic
             "data": {"content": f"Review action failed for {action_id}: {exc}", "flags": 64},
         }
 
-    processed = body.get("processed", 0)
-    if approve:
-        content = f"Approved YouTube control request `{action_id}`. Processed: {processed}."
-    else:
-        content = f"Rejected YouTube control request `{action_id}`. Processed: {processed}."
+    content = _format_ytcontrol_response(body, action_id, approve)
     return {
         "type": 4,
         "data": {"content": content, "flags": 64},

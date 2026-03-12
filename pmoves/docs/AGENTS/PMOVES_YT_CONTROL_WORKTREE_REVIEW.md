@@ -189,6 +189,14 @@ As of March 12, 2026, use these findings as the starting bias for this worktree 
   the action surface grows.
 - `CATACLYSM_STUDIOS_INC` should now be treated as the governing context for creator-network
   actions so outreach, automation, and monetization stay aligned with the platform story.
+- `channel-monitor` now publishes notebook-ready creator-control artifacts when Open Notebook
+  credentials plus `CHANNEL_MONITOR_YT_NOTEBOOK_ID` are configured, and it persists the resulting
+  notebook metadata alongside the pending audit row.
+- `comment_create` review requests can now render a draft template into final comment text before
+  approval, and the same rendered summary is surfaced in Discord review messages.
+- the PMOVES.YT control plane now covers `playlist_add`, `playlist_remove`, `playlist_reorder`,
+  and `comment_create`; `channel-monitor` strips draft/notebook metadata before execution so the
+  live YouTube API payload stays narrow.
 
 ## Recommended next implementation steps
 
@@ -201,5 +209,6 @@ As of March 12, 2026, use these findings as the starting bias for this worktree 
 4. Move PMOVES-transcribe-and-fetch runtime call paths fully onto shared alias/role resolution,
    since the fallback catalog and registry compatibility seams are now PMOVES-native but the
    backend still mixes direct model ids and alias-based calls in older modules.
-5. Expand the new PMOVES.YT owned-channel control plane from approval-gated playlist/comment
-   actions into richer YouTube Data API coverage plus first-class Discord interaction wiring.
+5. Expand the PMOVES.YT owned-channel control plane further into broader channel-management
+   actions and richer comment/reply policy templates now that playlist mutation, notebook
+   artifacts, and Discord approval summaries are in place.
