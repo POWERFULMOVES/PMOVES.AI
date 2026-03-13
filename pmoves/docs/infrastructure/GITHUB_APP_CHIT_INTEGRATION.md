@@ -94,7 +94,9 @@ This script will:
 
 **MANUAL SETUP (if automated script fails):**
 
-The credential templates are already in env.shared (lines 176-183):
+The credential templates are in env.shared at lines 176-183:
+- Lines 176-179: Comment block describing each credential
+- Lines 180-183: Commented credential assignments (to be uncommented)
 
 ```bash
 # GH_APP_ID - Numeric App ID from GitHub App settings

@@ -59,6 +59,14 @@ The GitHub App credential flow uses a **multi-tier environment system** to separ
 |------|----------|---------|
 | `secrets_manifest.yaml` | `pmoves/chit/secrets_manifest.yaml` | Defines credential targets and tiers |
 
+**Note:** The CHIT secrets manifest (`pmoves/chit/secrets_manifest.yaml`) defines which
+credentials are synced to GitHub Secrets. The sync-secrets-local workflow
+reads this manifest to determine which secrets to export.
+
+The working copy may be named `secrets_manifest_v2.yaml` during
+development, but the active file synced by the workflow is always
+`secrets_manifest.yaml`.
+
 ### Docker Compose Configuration
 
 | File | Location | Purpose |
@@ -91,7 +99,7 @@ make secrets-funnel
 
 **What happens:**
 1. Reads `env.shared` (source of truth)
-2. Uses `chit/secrets_manifest_v2.yaml` to determine targets
+2. Uses `chit/secrets_manifest.yaml` to determine targets
 3. Generates `env.tier-agent` with `GH_APP_*` variables
 4. Generates other tier files (`env.tier-llm`, `env.tier-data`, etc.)
 
