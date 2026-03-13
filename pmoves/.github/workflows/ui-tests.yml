@@ -159,11 +159,27 @@ jobs:
     steps:
       - name: Check all jobs
         run: |
-          if [[ "${{ needs.lint.result }}" != "success" ]] || \
-             [[ "${{ needs.typecheck.result }}" != "success" ]] || \
-             [[ "${{ needs.unit-tests.result }}" != "success" ]] || \
-             [[ "${{ needs.e2e-tests.result }}" != "success" ]]; then
-            echo "::error::One or more test jobs failed"
+          FAILED_JOBS=""
+
+          if [[ "${{ needs.lint.result }}" != "success" ]]; then
+            FAILED_JOBS="$FAILED_JOBS Lint(ESLint)"
+          fi
+
+          if [[ "${{ needs.typecheck.result }}" != "success" ]]; then
+            FAILED_JOBS="$FAILED_JOBS Typecheck(TypeScript)"
+          fi
+
+          if [[ "${{ needs.unit-tests.result }}" != "success" ]]; then
+            FAILED_JOBS="$FAILED_JOBS Unit-Tests(Jest)"
+          fi
+
+          if [[ "${{ needs.e2e-tests.result }}" != "success" ]]; then
+            FAILED_JOBS="$FAILED_JOBS E2E-Tests(Playwright)"
+          fi
+
+          if [[ -n "$FAILED_JOBS" ]]; then
+            echo "::error::UI Testing failed in:$FAILED_JOBS"
             exit 1
           fi
+
           echo "All UI tests passed!"
