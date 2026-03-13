@@ -2,6 +2,33 @@
 
 This document describes how GitHub App credentials are integrated into the PMOVES.AI CHIT credentials management system.
 
+## Quick Start (Automated Setup)
+
+**For most users, run the automated setup script:**
+
+```bash
+cd pmoves
+make github-app-setup
+```
+
+This handles everything:
+- ✓ Verify GitHub CLI authentication
+- ✓ Check GitHub Secrets for credentials
+- ✓ Uncomment credentials in `env.shared`
+- ✓ Run `secrets-funnel` to generate tier files
+- ✓ Verify credentials in `env.tier-agent`
+
+**Verify the setup:**
+```bash
+make github-app-verify
+```
+
+**See also:**
+- **Quick Start Guide:** `docs/GITHUB_APP_QUICK_START.md` - User-facing guide
+- **Agent Reference:** `docs/AGENTS/GITHUB_APP_CREDENTIALS.md` - Agent integration patterns
+
+---
+
 ## Architecture
 
 GitHub App credentials follow the documented CHIT secrets funnel flow:
@@ -49,7 +76,23 @@ The GitHub App entries have been added to `pmoves/chit/secrets_manifest_v2.yaml`
 
 ### Phase 2: Populate env.shared
 
-**Action Required:** Uncomment and populate GitHub App credentials in `pmoves/env.shared`
+**RECOMMENDED: Use the automated setup script**
+
+Run the automated setup script (handles all remaining phases):
+
+```bash
+cd pmoves
+make github-app-setup
+```
+
+This script will:
+- ✓ Verify GitHub CLI authentication
+- ✓ Check GitHub Secrets for all 4 credentials
+- ✓ Uncomment credentials in `env.shared`
+- ✓ Run `secrets-funnel` to generate tier files
+- ✓ Verify credentials in `env.tier-agent`
+
+**MANUAL SETUP (if automated script fails):**
 
 The credential templates are already in env.shared (lines 176-183):
 
@@ -85,11 +128,6 @@ The credential templates are already in env.shared (lines 176-183):
    ```
 
    **Important:** For `GH_APP_SEC`, preserve the newlines in the PEM key. The multi-line format is required.
-
-3. **Alternative: Use the interactive script:**
-   ```bash
-   bash pmoves/scripts/populate_github_app_secrets.sh
-   ```
 
 ### Phase 3: Export to CHIT Bundle
 

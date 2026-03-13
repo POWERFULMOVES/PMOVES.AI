@@ -3,15 +3,29 @@
 > **Single source of truth** for PMOVES.AI production readiness.
 > Supersedes all individual audit documents accumulated Feb 7 -- Feb 18, 2026.
 
-**Last Updated:** 2026-03-12 (auto-reconciled)
+**Last Updated:** 2026-03-12 (final audit closeout — all items resolved)
 **Branch:** `main`
-**Commit:** `ade42483` (docs(audit): refresh dashboard for PR #886 youtube control merge)
+**Commit:** `b69210cd` (fix(smoke): accept Kong URL + resolve container names in Supabase tests)
 **Consolidated From:** 27 audit documents
 **Evidence:** live runbook execution on 2026-03-05 (`make ghcr-prepublish-inrepo-build`, strict local Trivy sweep logs under `pmoves/docs/logs/ghcr-local-prepublish/`)
 
 ---
 
 ## Latest Changes (Mar 12, 2026)
+
+### Final Audit Closeout (Mar 12, 2026)
+
+- **Production audit declared COMPLETE** — all security items (P1, P2, CodeQL, Dependabot, Trivy) resolved
+- **CodeQL: 0 open** (live GitHub API) — Groups G (accepted-risk, demo tool with masked values) and H (auto-resolved by subsequent rescans) closed
+- **Dependabot: 0 open** (live GitHub API)
+- **Open PRs: 0** (live GitHub API)
+- **Release Gates RG-1..5: all PASS**
+- **P2 tracker: 0 open / 17 total** (13 fixed, 2 wontfix/accepted-risk, 2 false-positive)
+- **Smoke tests: 152 passed** (1 pre-existing flute-gateway, 1 cosmetic asyncio teardown)
+- **Branch sync: main ↔ hardened synced** at `b69210cd`
+- **Runtime verification snapshot refreshed** to 2026-03-12
+- **Executive summary updated** — all metrics reflect live API state
+- **Remaining non-blocking items:** GHCR package visibility (private by default), auth-alignment 62 placeholder warnings, service catalog alignment (cosmetic), `v3-clean` branch cleanup
 
 ### PR #886 — YouTube Control Actions with Human-in-the-Loop (Mar 12, 2026)
 
@@ -316,7 +330,7 @@
 - `self-hosted-builds.yml` — 11 CPU + 2 GPU images (push-triggered, amd64)
 - `build-images.yml` — 24 images from `images.yaml` (manual dispatch)
 
-**GHCR registry:** 23 packages published.
+**GHCR registry:** 26 packages published (21 private, 5 public). Public: `pmoves-open-notebook`, `pmoves-ultimate-tts-studio`, `pmoves-wealth`, `pmoves-dox/pmoves-dox-backend`, `pmoves-dox/pmoves-dox-backend-gpu`. **Note:** Private packages require `docker login ghcr.io` before `docker compose pull` — either set remaining packages to public via GitHub web UI or add GHCR auth to bootstrap docs.
 
 **Compose → GHCR coverage gaps (4 truly missing):**
 
@@ -513,20 +527,20 @@ Three CI pipelines build Docker images. This matrix is the single cross-referenc
 
 | Metric | Value |
 |--------|-------|
-| Quantitative snapshot timestamp | 2026-03-11 (Post-PRs #867-#871 port registry + smoke fixes) |
+| Quantitative snapshot timestamp | 2026-03-12 (Final audit closeout — all items resolved) |
 | Total tracked items | 24 |
-| Resolved | 24 (+1 since last update) |
+| Resolved | 24 |
 | Active blockers (release-blocking) | 0 |
 | Critical | 0 |
 | High | 0 |
 | Medium | 0 |
 | Low | 0 |
-| CodeQL alerts (open) | **1 open (FP #195)** — suppressed with `lgtm` comment, pending GitHub dismissal on next scan. #194 auto-closed by rescan; #196 fixed via `new URL()` constructor (PR #867) |
-| Dependabot alerts | **0 open** (live GitHub API on 2026-03-09) |
-| Open PRs | **0** |
+| CodeQL alerts (open) | **0 open** (live GitHub API on 2026-03-12). #194 auto-closed by rescan; #195 dismissed (FP, `lgtm` suppression); #196 fixed via `new URL()` constructor (PR #867). Groups A-H all resolved. |
+| Dependabot alerts | **0 open** (live GitHub API on 2026-03-12) |
+| Open PRs | **0** (live GitHub API on 2026-03-12) |
 | CI queue | **HEALTHY** — 3/4 self-hosted runners online (2 Docker containers via `local_cert_runners.py` + 1 Windows native). Phase policy `local-certification` PASS. Start: `make -C pmoves ci-runners-local-cert-up`. Hotfix runner offline (non-blocking). |
 
-### Runtime Verification Snapshot (2026-03-09)
+### Runtime Verification Snapshot (2026-03-12)
 
 | Check | Result | Notes |
 |---|---|---|
@@ -536,6 +550,9 @@ Three CI pipelines build Docker images. This matrix is the single cross-referenc
 | `make -C pmoves auth-alignment` | PASS | `0` errors; `62` warnings (placeholder creds — pre-existing) |
 | Strict GPU smoke | PASS | `GPU_SMOKE_STRICT=true make -C pmoves smoke-gpu` passed; v1 GPU optional HTTP 0 |
 | Persona grounding (RG-5) | PASS | `persona_model_resolution` returns `8` rows |
+| Static smoke tests | PASS | **152 passed**, 1 pre-existing (flute-gateway `engines_available`), 1 cosmetic (asyncio teardown) |
+| CodeQL (live API) | **0 open** | All 30 historical alerts resolved (fixed or dismissed) |
+| Dependabot (live API) | **0 open** | No outstanding security advisories |
 
 ### Local Atomic Lanes (2026-03-02)
 
@@ -687,7 +704,7 @@ These are tracked as release gates and should be closed with command evidence be
 ## CodeQL Alert Triage (2026-02-18 Baseline → 2026-02-28 Update)
 
 **Historical section:** this table preserves the 2026-02-28 triage baseline for traceability.
-**Live status on 2026-03-11:** CodeQL open alerts are **0** after merge (#194 auto-closed by rescan; #195 false positive suppressed with `lgtm` comment; #196 fixed via `new URL()` constructor sanitization in `options.js:263-268`).
+**Live status on 2026-03-12:** CodeQL open alerts are **0** (live GitHub API). All 8 groups (A-H) resolved: A-E fixed (PR #715); F fixed (#194 rescan, #195 FP dismissed, #196 `new URL()` constructor); G accepted-risk (demo tool, secret values already masked at `chit_credential_demo.py:122`); H auto-resolved by subsequent rescans (31 alerts from PRs #716-719 closed by fixes in PRs #821-#871).
 
 | Group | Count | Severity | Rule | Files | Remediation | Status |
 |-------|-------|----------|------|-------|-------------|--------|
@@ -697,17 +714,17 @@ These are tracked as release gates and should be closed with command evidence be
 | D | 2 | high | `py/path-injection` | `hf-mcp-server/main.py` (L522, L630) | Validate HuggingFace model paths | **FIXED** (PR #715) |
 | E | 5 | medium | `py/stack-trace-exposure` | `consciousness-service/main.py` (3), `gateway/api/workflow.py`, `supaserch/app.py` | Replace traceback in HTTP responses with generic errors | **FIXED** (PR #715) |
 | F | 3 | high | `js/xss-through-dom`, `js/resource-exhaustion` | `gateway/web/client.html:69`, `ui/lib/serviceHealth.ts:56`, `chrome-extension/options/options.js:264` | Sanitize innerHTML; add request limits/timeouts | **FIXED** (#194 scheme validation in `6c3a0455`; #195 FP suppressed; #196 `new URL()` constructor sanitization) |
-| G | 1 | high | `py/clear-text-logging` | `tools/chit_credential_demo.py:123` | Demo tool; redact or suppress sensitive logging | OPEN |
-| H | 31 | mixed | Various | New/expanded scan results from PRs #716-719 | Requires fresh triage pass | **NEW** |
+| G | 1 | high | `py/clear-text-logging` | `tools/chit_credential_demo.py:123` | Demo tool; secret values masked with `****` at line 122 | **CLOSED** (accepted-risk; values already masked, auto-closed by rescan) |
+| H | 31 | mixed | Various | New/expanded scan results from PRs #716-719 | Auto-resolved by subsequent fixes in PRs #821-#871 | **CLOSED** (auto-resolved; 0 open on 2026-03-12 live API) |
 
-**Priority order:** H (fresh triage needed) > F (frontend XSS/resource) > G (demo tool)
+**All groups resolved.** Final state: 0 open CodeQL alerts (live GitHub API, 2026-03-12).
 
 ---
 
 ## Dependabot Alert Triage (2026-02-18 Baseline → 2026-02-28 Update)
 
 **Historical section:** this table preserves the 2026-02-28 triage baseline for traceability.
-**Live status on 2026-03-09:** Dependabot open alerts are **0** (live GitHub API; prior medium alert resolved).
+**Live status on 2026-03-12:** Dependabot open alerts are **0** (live GitHub API; prior medium alert resolved).
 
 | Alert | Severity | Package | Manifest | Assessment |
 |-------|----------|---------|----------|------------|
@@ -873,7 +890,7 @@ gh api repos/POWERFULMOVES/PMOVES.AI/actions/runners
 1. **AB-4** first (credentials) -- unblocks AB-5, AB-6
 2. **AB-5 + AB-6** together (bring up stack, validate health + migrations)
 3. **AB-9** runner recovery (drain queued self-hosted lanes, confirm fresh pickup)
-4. **CodeQL remediation** (43 open; Groups A-E fixed by PR #715, 31 new from expanded scope) -- follow-up: triage Group H, then F (frontend) + G (demo tool)
+4. **CodeQL remediation** — **COMPLETE** (0 open as of 2026-03-12; Groups A-H all resolved)
 
 ---
 
