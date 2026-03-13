@@ -886,6 +886,84 @@
           }
         }
       ]
+    },
+    {
+      "id": "wger",
+      "name": "Wger Workout Manager",
+      "description": "Self-hosted fitness tracker with workout logging, weight tracking, and nutrition planning. Integration with PMOVES.AI event-driven architecture for health metrics.",
+      "variables": [
+        {
+          "key": "WGER_ADMIN_PASSWORD",
+          "file": "pmoves/env.shared",
+          "prompt": "Wger Django admin password",
+          "help": "Password for the Django superuser account at http://localhost:8000/admin/. Auto-generated as base64-encoded 16-byte random value.",
+          "required": true,
+          "sensitive": true,
+          "generate": {
+            "type": "random_bytes_base64",
+            "length": 16
+          }
+        },
+        {
+          "key": "WGER_API_TOKEN",
+          "file": "pmoves/env.shared",
+          "prompt": "Wger REST API token",
+          "help": "Django REST Framework token for API access. Must be generated from the Wger admin UI at http://localhost:8000/api/v2/token/. Set to GENERATE_FROM_WGER_UI as placeholder.",
+          "required": true,
+          "sensitive": true
+        },
+        {
+          "key": "WGER_DB_PASSWORD",
+          "file": "pmoves/env.shared",
+          "prompt": "Wger PostgreSQL database password",
+          "help": "Password for the wger PostgreSQL user.",
+          "required": true,
+          "sensitive": true,
+          "generate": {
+            "type": "random_urlsafe",
+            "length": 32
+          }
+        },
+        {
+          "key": "WGER_SECRET_KEY",
+          "file": "pmoves/env.shared",
+          "prompt": "Wger Django secret key",
+          "help": "Django SECRET_KEY for cryptographic signing. Generate: openssl rand -base64 48",
+          "required": true,
+          "sensitive": true,
+          "generate": {
+            "type": "random_urlsafe",
+            "length": 64
+          }
+        },
+        {
+          "key": "WGER_ENABLE_REGISTRATION",
+          "file": "pmoves/env.shared",
+          "prompt": "Allow public user registration",
+          "help": "Set to 'true' to allow public user registration, 'false' to disable.",
+          "required": false,
+          "default": "false",
+          "type": "boolean"
+        },
+        {
+          "key": "WGER_ENABLE_NATS",
+          "file": "pmoves/env.shared",
+          "prompt": "Enable NATS event publishing",
+          "help": "Set to 'true' to enable NATS event publishing for health metrics and workouts.",
+          "required": false,
+          "default": "true",
+          "type": "boolean"
+        },
+        {
+          "key": "NATS_URL",
+          "file": "pmoves/env.shared",
+          "prompt": "NATS connection URL",
+          "default": "nats://nats:pmoves@nats:4222",
+          "help": "NATS server URL with authentication for event publishing.",
+          "required": true,
+          "type": "url"
+        }
+      ]
     }
   ]
 }
