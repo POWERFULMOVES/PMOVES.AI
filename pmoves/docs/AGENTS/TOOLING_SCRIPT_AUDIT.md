@@ -1,10 +1,10 @@
 # PMOVES Tooling Overlay Audit
-_Generated: 2026-03-10_
+_Generated: 2026-03-13_
 
 ## Summary
-- PMOVES scripts/tools scanned: **221**
-- PMOVES auth/user/login-focused entries: **35**
-- Submodule keyword-matched scripts/tools: **178**
+- PMOVES scripts/tools scanned: **231**
+- PMOVES auth/user/login-focused entries: **37**
+- Submodule keyword-matched scripts/tools: **179**
 - Potential overlap rows: **124**
 - Keywords with overlap: **auth, bootstrap, credential, profile, secret, token, user**
 - Findings: **0 error(s)**, **0 warning(s)**
@@ -50,6 +50,7 @@ _Generated: 2026-03-10_
 | `bootstrap` | 0.57 | `pmoves/scripts/bootstrap_env.py` | `PMOVES-BoTZ` | `PMOVES-BoTZ/scripts/bootstrap_env.ps1` | bootstrap, env, pmoves, scripts |
 | `bootstrap` | 0.57 | `pmoves/scripts/bootstrap_env.py` | `PMOVES-DoX` | `PMOVES-DoX/scripts/bootstrap_env.ps1` | bootstrap, env, pmoves, scripts |
 | `bootstrap` | 0.57 | `pmoves/scripts/bootstrap_env.py` | `PMOVES-DoX` | `PMOVES-DoX/scripts/bootstrap_env.sh` | bootstrap, env, pmoves, scripts |
+| `bootstrap` | 0.57 | `pmoves/scripts/bootstrap_env.py` | `PMOVES-n8n` | `PMOVES-n8n/scripts/bootstrap_n8n_api.py` | bootstrap, pmoves, py, scripts |
 | `bootstrap` | 0.57 | `pmoves/scripts/bootstrap_env.py` | `pmoves/integrations/archon` | `pmoves/integrations/archon/external/PMOVES-BoTZ/scripts/bootstrap_env.ps1` | bootstrap, env, pmoves, scripts |
 | `bootstrap` | 0.57 | `pmoves/scripts/codex_bootstrap.ps1` | `PMOVES-Archon` | `PMOVES-Archon/external/PMOVES-BoTZ/scripts/bootstrap_env.ps1` | bootstrap, pmoves, ps1, scripts |
 | `bootstrap` | 0.57 | `pmoves/scripts/codex_bootstrap.ps1` | `PMOVES-BoTZ` | `PMOVES-BoTZ/scripts/bootstrap_env.ps1` | bootstrap, pmoves, ps1, scripts |
@@ -65,7 +66,6 @@ _Generated: 2026-03-10_
 | `bootstrap` | 0.57 | `pmoves/tools/auth_bootstrap_check.py` | `PMOVES-transcribe-and-fetch` | `PMOVES-transcribe-and-fetch/pmoves-integrations/auth/bootstrap.py` | auth, bootstrap, pmoves, py |
 | `bootstrap` | 0.50 | `pmoves/scripts/codex_bootstrap.ps1` | `PMOVES-Agent-Zero` | `PMOVES-Agent-Zero/scripts/bootstrap_credentials.ps1` | bootstrap, pmoves, ps1, scripts |
 | `bootstrap` | 0.50 | `pmoves/scripts/codex_bootstrap.ps1` | `PMOVES-Archon` | `PMOVES-Archon/external/PMOVES-Agent-Zero/scripts/bootstrap_credentials.ps1` | bootstrap, pmoves, ps1, scripts |
-| `bootstrap` | 0.50 | `pmoves/scripts/codex_bootstrap.ps1` | `PMOVES-DoX` | `PMOVES-DoX/external/PMOVES-Agent-Zero/scripts/bootstrap_credentials.ps1` | bootstrap, pmoves, ps1, scripts |
 | `credential` | 0.50 | `pmoves/scripts/fetch_credentials.sh` | `PMOVES-Agent-Zero` | `PMOVES-Agent-Zero/scripts/bootstrap_credentials.sh` | credentials, pmoves, scripts, sh |
 | `credential` | 0.50 | `pmoves/scripts/fetch_credentials.sh` | `PMOVES-Archon` | `PMOVES-Archon/external/PMOVES-Agent-Zero/scripts/bootstrap_credentials.sh` | credentials, pmoves, scripts, sh |
 | `credential` | 0.50 | `pmoves/scripts/fetch_credentials.sh` | `PMOVES-DoX` | `PMOVES-DoX/external/PMOVES-Agent-Zero/scripts/bootstrap_credentials.sh` | credentials, pmoves, scripts, sh |
@@ -100,6 +100,9 @@ _Generated: 2026-03-10_
 | `secret` | 0.25 | `pmoves/tools/chit_encode_secrets.py` | `PMOVES-Agent-Zero` | `PMOVES-Agent-Zero/python/helpers/secrets.py` | py, secrets |
 | `secret` | 0.25 | `pmoves/tools/runtime_secrets_hydrate.py` | `PMOVES-Agent-Zero` | `PMOVES-Agent-Zero/python/helpers/secrets.py` | py, secrets |
 | `secret` | 0.25 | `pmoves/tools/secrets_hardening_audit.py` | `PMOVES-Agent-Zero` | `PMOVES-Agent-Zero/python/helpers/secrets.py` | py, secrets |
+| `secret` | 0.25 | `pmoves/tools/secrets_local_hydrate.py` | `PMOVES-Agent-Zero` | `PMOVES-Agent-Zero/python/helpers/secrets.py` | py, secrets |
+| `secret` | 0.20 | `pmoves/scripts/populate_github_app_secrets.sh` | `PMOVES-DoX` | `PMOVES-DoX/external/PMOVES-supabase/scripts/getSecrets.js` | pmoves, scripts |
+| `secret` | 0.20 | `pmoves/scripts/populate_github_app_secrets.sh` | `PMOVES-supabase` | `PMOVES-supabase/scripts/getSecrets.js` | pmoves, scripts |
 | `secret` | 0.18 | `pmoves/tools/secrets_sync.py` | `PMOVES-Agent-Zero` | `PMOVES-Agent-Zero/python/extensions/tool_execute_after/_10_mask_secrets.py` | py, secrets |
 | `secret` | 0.18 | `pmoves/tools/secrets_sync.py` | `PMOVES-Agent-Zero` | `PMOVES-Agent-Zero/python/extensions/tool_execute_before/_10_unmask_secrets.py` | py, secrets |
 | `secret` | 0.18 | `pmoves/tools/secrets_sync.py` | `PMOVES-Archon` | `PMOVES-Archon/external/PMOVES-Agent-Zero/python/extensions/tool_execute_after/_10_mask_secrets.py` | py, secrets |
@@ -111,9 +114,6 @@ _Generated: 2026-03-10_
 | `secret` | 0.17 | `pmoves/tools/check_required_secrets.py` | `PMOVES-Agent-Zero` | `PMOVES-Agent-Zero/python/extensions/tool_execute_after/_10_mask_secrets.py` | py, secrets |
 | `secret` | 0.17 | `pmoves/tools/check_required_secrets.py` | `PMOVES-Agent-Zero` | `PMOVES-Agent-Zero/python/extensions/tool_execute_before/_10_unmask_secrets.py` | py, secrets |
 | `secret` | 0.17 | `pmoves/tools/check_required_secrets.py` | `PMOVES-Archon` | `PMOVES-Archon/external/PMOVES-Agent-Zero/python/extensions/tool_execute_after/_10_mask_secrets.py` | py, secrets |
-| `secret` | 0.17 | `pmoves/tools/check_required_secrets.py` | `PMOVES-Archon` | `PMOVES-Archon/external/PMOVES-Agent-Zero/python/extensions/tool_execute_before/_10_unmask_secrets.py` | py, secrets |
-| `secret` | 0.17 | `pmoves/tools/check_required_secrets.py` | `PMOVES-DoX` | `PMOVES-DoX/external/PMOVES-Agent-Zero/python/extensions/tool_execute_after/_10_mask_secrets.py` | py, secrets |
-| `secret` | 0.17 | `pmoves/tools/check_required_secrets.py` | `PMOVES-DoX` | `PMOVES-DoX/external/PMOVES-Agent-Zero/python/extensions/tool_execute_before/_10_unmask_secrets.py` | py, secrets |
 | `token` | 0.22 | `pmoves/tools/youtube_po_token_capture.py` | `PMOVES-Archon` | `PMOVES-Archon/python/.venv/Lib/site-packages/tokenizers/tools/visualizer.py` | py, tools |
 | `token` | 0.22 | `pmoves/tools/youtube_po_token_capture.py` | `PMOVES-Archon` | `PMOVES-Archon/python/.venv/Lib/site-packages/tokenizers/tools/__init__.py` | py, tools |
 | `token` | 0.22 | `pmoves/tools/youtube_po_token_capture.py` | `PMOVES-Pipecat` | `PMOVES-Pipecat/.venv/Lib/site-packages/tokenizers/tools/visualizer.py` | py, tools |

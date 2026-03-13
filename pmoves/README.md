@@ -10,6 +10,17 @@ make first-run
 
 This aggregates the entire onboarding sequence: env bootstrap, Supabase CLI bring-up, core + agent + external compose profiles, Supabase/Neo4j/Qdrant seeding, and the smoketest harness. A full breakdown lives in [docs/FIRST_RUN.md](docs/FIRST_RUN.md).
 
+### GitHub App Setup
+
+If you're working with GitHub integration features (BoTZ MCP gateway, Archon GitHub tools), set up the GitHub App credentials:
+
+```bash
+cd pmoves
+make github-app-setup
+```
+
+This automatically configures GitHub App credentials for token minting and API access. See [docs/GITHUB_APP_QUICK_START.md](docs/GITHUB_APP_QUICK_START.md) for details.
+
 ### Manual path
 
 #### 1. Prepare environment files
