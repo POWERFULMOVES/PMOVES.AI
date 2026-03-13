@@ -59,6 +59,9 @@ The GitHub App credential flow uses a **multi-tier environment system** to separ
 |------|----------|---------|
 | `secrets_manifest.yaml` | `pmoves/chit/secrets_manifest.yaml` | Defines credential targets and tiers |
 
+**Note:** The CHIT secrets manifest (`pmoves/chit/secrets_manifest_v2.yaml`) defines which
+credentials are synced to GitHub Secrets. The sync-secrets-local workflow
+reads this manifest to determine which secrets to export.
 ### Docker Compose Configuration
 
 | File | Location | Purpose |
