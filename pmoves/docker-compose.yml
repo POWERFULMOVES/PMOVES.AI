@@ -3205,81 +3205,13 @@ services:
     - 8201:8201
 
   # =============================================================================
-  # GitHub Automation Services
+  # GitHub Automation Services (Phase 3)
   # =============================================================================
-  # Automated repository maintenance, issue triage, and PR management
+  # Additional GitHub automation services (branch naming, cross-repo sync, PR automation)
   # Profile: github-automation
   # Networks: pmoves_app, pmoves_api, pmoves_bus, pmoves_monitoring
+  # Note: github-branch-cleanup and github-issue-triage are defined above
   # =============================================================================
-
-  github-branch-cleanup:
-    build:
-      context: ./services/github_branch_cleanup
-      dockerfile: Dockerfile
-    image: ${GITHUB_BRANCH_CLEANUP_IMAGE:-ghcr.io/powerfulmoves/pmoves-github-branch-cleanup:pmoves-latest}
-    restart: unless-stopped
-    environment:
-    - SERVICE_PORT=8100
-    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
-    - AGENTZERO_MCP_URL=${AGENTZERO_MCP_URL:-http://agent-zero:8080/mcp/command}
-    - DRY_RUN=${GITHUB_AUTOMATION_DRY_RUN:-true}
-    - GITHUB_ORG=${GITHUB_ORG:-POWERFULMOVES}
-    - STALE_BRANCH_DAYS=${STALE_BRANCH_DAYS:-30}
-    ports:
-    - 8110:8100
-    profiles:
-    - github-automation
-    networks:
-    - pmoves_app
-    - pmoves_api
-    - pmoves_bus
-    - pmoves_monitoring
-    depends_on:
-      nats:
-        condition: service_healthy
-      agent-zero:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8100/healthz"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 15s
-
-  github-issue-triage:
-    build:
-      context: ./services/github_issue_triage
-      dockerfile: Dockerfile
-    image: ${GITHUB_ISSUE_TRIAGE_IMAGE:-ghcr.io/powerfulmoves/pmoves-github-issue-triage:pmoves-latest}
-    restart: unless-stopped
-    environment:
-    - SERVICE_PORT=8101
-    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
-    - AGENTZERO_MCP_URL=${AGENTZERO_MCP_URL:-http://agent-zero:8080/mcp/command}
-    - HIRAG_V2_URL=${HIRAG_V2_URL:-http://hi-rag-gateway-v2:8086}
-    - GITHUB_ORG=${GITHUB_ORG:-POWERFULMOVES}
-    ports:
-    - 8111:8101
-    profiles:
-    - github-automation
-    networks:
-    - pmoves_app
-    - pmoves_api
-    - pmoves_bus
-    - pmoves_monitoring
-    depends_on:
-      nats:
-        condition: service_healthy
-      agent-zero:
-        condition: service_healthy
-      hi-rag-gateway-v2:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8101/healthz"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 15s
 
   github-branch-naming:
     build:
