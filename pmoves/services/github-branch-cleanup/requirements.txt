@@ -1,0 +1,21 @@
+# GitHub Branch Cleanup Service Dependencies
+# Production-ready pinned versions for reproducibility
+
+# FastAPI Web Framework
+fastapi==0.115.0
+uvicorn[standard]==0.32.0
+
+# NATS Message Bus
+nats-py==2.7.0
+
+# HTTP Client
+httpx==0.27.2
+
+# Data Validation
+pydantic==2.9.2
+
+# Prometheus Metrics
+prometheus-client==0.21.0
+
+# Logging
+structlog==24.4.0

@@ -640,60 +640,6 @@ supabase-clean: ## Stop + remove Supabase containers and volumes
 	@$(DC) --profile supabase-local down -v --remove-orphans >/dev/null 2>&1 || true
 	@echo "✅ Supabase stack cleaned"
 
-.PHONY: neo4j-up neo4j-down neo4j-restart neo4j-logs neo4j-migrate neo4j-seed neo4j-bootstrap neo4j-status
-
-neo4j-up: ## Start Neo4j submodule stack
-	@echo "→ Starting Neo4j from submodule..."
-	@$(MAKE) --no-print-directory -C pmoves/integrations/neo4j up
-
-neo4j-down: ## Stop Neo4j submodule stack
-	@echo "→ Stopping Neo4j from submodule..."
-	@$(MAKE) --no-print-directory -C pmoves/integrations/neo4j down
-
-neo4j-restart: ## Restart Neo4j submodule stack
-	@echo "→ Restarting Neo4j from submodule..."
-	@$(MAKE) --no-print-directory -C pmoves/integrations/neo4j restart
-
-neo4j-logs: ## View Neo4j logs
-	@$(MAKE) --no-print-directory -C pmoves/integrations/neo4j logs
-
-neo4j-migrate: ## Run Neo4j migration (usage: make neo4j-migrate VERSION=003)
-	@if [ -z "$(VERSION)" ]; then \
-		echo "Usage: make neo4j-migrate VERSION=003"; \
-		echo ""; \
-		echo "Available migrations:"; \
-		ls -1 pmoves/integrations/neo4j/db/migrations/*.cypher 2>/dev/null | while read -r f; do \
-			echo "  • $$(basename "$f")"; \
-		done; \
-		exit 1; \
-	fi
-	@$(MAKE) --no-print-directory -C pmoves/integrations/neo4j migrate VERSION=$(VERSION)
-
-neo4j-seed: ## Load Neo4j seed data (usage: make neo4j-seed SEED=001_person_aliases.csv)
-	@if [ -z "$(SEED)" ]; then \
-		echo "Usage: make neo4j-seed SEED=001_person_aliases.csv"; \
-		echo ""; \
-		echo "Available seeds:"; \
-		ls -1 pmoves/integrations/neo4j/db/seeds/*.csv 2>/dev/null | while read -r f; do \
-			echo "  • $$(basename "$f")"; \
-		done; \
-		exit 1; \
-	fi
-	@$(MAKE) --no-print-directory -C pmoves/integrations/neo4j seed SEED=$(SEED)
-
-neo4j-bootstrap: ## Initialize Neo4j (run migrations and seeds)
-	@echo "→ Bootstrapping Neo4j from submodule..."
-	@$(MAKE) --no-print-directory -C pmoves/integrations/neo4j bootstrap
-
-neo4j-status: ## Check Neo4j status from submodule
-	@$(MAKE) --no-print-directory -C pmoves/integrations/neo4j status
-
-# Legacy compatibility (delegates to submodule)
-.PHONY: neo4j-bootstrap-legacy
-neo4j-bootstrap-legacy: ## Legacy bootstrap script (deprecated: use neo4j-bootstrap)
-	@echo "⚠️  This target is deprecated. Use: make neo4j-bootstrap"
-	@$(MAKE) --no-print-directory neo4j-bootstrap
-
 .PHONY: seed-data
 seed-data: ## Seed Qdrant/Meilisearch with demo corpus via Hi-RAG v2
 	@echo "📚 Seeding Qdrant/Meili demo corpus..."
@@ -1917,10 +1863,6 @@ neo4j-reset: ## DANGEROUS: wipe Neo4j volume and recreate with current NEO4J_AUT
 		  "/var/lib/neo4j/bin/cypher-shell -u \"$$user\" -p \"$$pass\" \"RETURN 1\""; \
 	'
 
-neo4j-status: ## Show Neo4j logs and health line
-	@$(DC) ps neo4j || true
-	@$(DC) logs --tail 60 neo4j || true
-
 brand-verify: ## Verify key branded endpoints respond
 	@echo "Presign:" && curl -fsS http://localhost:8088/healthz && echo
 	@echo "Supabase REST:" && curl -fsS -o /dev/null -w '%{http_code}\n' http://host.docker.internal:65421/rest/v1 || true
@@ -2813,3 +2755,153 @@ github-app-verify: ## Verify GitHub App integration (env.shared, env.tier-agent,
 github-app-test: ## Test GitHub App token minting (requires services running)
 	@echo "→ Testing GitHub App token minting..."
 	@cd ../PMOVES-BoTZ && $(PYTHON) features/github/mint_and_exec.py
+
+# Neo4j Integration (PMOVES-Neo4j Submodule at root level)
+# =============================================================================
+.PHONY: neo4j-up neo4j-down neo4j-restart neo4j-logs neo4j-migrate neo4j-seed neo4j-bootstrap neo4j-status
+
+neo4j-up: ## Start Neo4j submodule stack
+	@echo "→ Starting Neo4j from submodule..."
+	@$(MAKE) --no-print-directory -C ../PMOVES-Neo4j up
+
+neo4j-down: ## Stop Neo4j submodule stack
+	@echo "→ Stopping Neo4j from submodule..."
+	@$(MAKE) --no-print-directory -C ../PMOVES-Neo4j down
+
+neo4j-restart: ## Restart Neo4j submodule stack
+	@echo "→ Restarting Neo4j from submodule..."
+	@$(MAKE) --no-print-directory -C ../PMOVES-Neo4j restart
+
+neo4j-logs: ## View Neo4j logs
+	@$(MAKE) --no-print-directory -C ../PMOVES-Neo4j logs
+
+neo4j-migrate: ## Run Neo4j migration (usage: make neo4j-migrate VERSION=003)
+	@if [ -z "$(VERSION)" ]; then \
+		echo "Usage: make neo4j-migrate VERSION=003"; \
+		echo ""; \
+		echo "Available migrations:"; \
+		ls -1 ../PMOVES-Neo4j/db/migrations/*.cypher 2>/dev/null | while read -r f; do \
+			echo "  • $$(basename "$$f")"; \
+		done; \
+		exit 1; \
+	fi
+	@$(MAKE) --no-print-directory -C ../PMOVES-Neo4j migrate VERSION=$(VERSION)
+
+neo4j-seed: ## Load Neo4j seed data (usage: make neo4j-seed SEED=001_person_aliases.csv)
+	@if [ -z "$(SEED)" ]; then \
+		echo "Usage: make neo4j-seed SEED=001_person_aliases.csv"; \
+		echo ""; \
+		echo "Available seeds:"; \
+		ls -1 ../PMOVES-Neo4j/db/seeds/*.csv 2>/dev/null | while read -r f; do \
+			echo "  • $$(basename "$$f")"; \
+		done; \
+		exit 1; \
+	fi
+	@$(MAKE) --no-print-directory -C ../PMOVES-Neo4j seed SEED=$(SEED)
+
+neo4j-bootstrap: ## Initialize Neo4j (run migrations and seeds)
+	@echo "→ Bootstrapping Neo4j from submodule..."
+	@$(MAKE) --no-print-directory -C ../PMOVES-Neo4j bootstrap
+
+neo4j-status: ## Check Neo4j status from submodule
+	@$(MAKE) --no-print-directory -C ../PMOVES-Neo4j status
+
+# Legacy compatibility
+.PHONY: neo4j-bootstrap-legacy
+neo4j-bootstrap-legacy: ## Legacy bootstrap script (deprecated: use neo4j-bootstrap)
+	@echo "⚠️  This target is deprecated. Use: make neo4j-bootstrap"
+	@$(MAKE) --no-print-directory neo4j-bootstrap
+
+# Profile-based Neo4j integration (following PMOVES-supabase pattern)
+.PHONY: neo4j-local-up neo4j-local-down neo4j-local-status
+neo4j-local-up: ## Start Neo4j with profile (make neo4j-local-up)
+	@echo "→ Starting Neo4j with neo4j-local profile..."
+	@$(DC) --profile neo4j-local up -d neo4j
+	@echo "✅ Neo4j started (http://localhost:7474)"
+	@echo "   Username: neo4j"
+	@echo "   Password: Check NEO4J_PASSWORD in env.shared"
+
+neo4j-local-down: ## Stop Neo4j with profile (make neo4j-local-down)
+	@echo "→ Stopping Neo4j with neo4j-local profile..."
+	@$(DC) --profile neo4j-local stop neo4j >/dev/null 2>&1 || true
+	@$(DC) --profile neo4j-local rm -f neo4j >/dev/null 2>&1 || true
+	@echo "✅ Neo4j stopped"
+
+neo4j-local-status: ## Check Neo4j status (make neo4j-local-status)
+	@echo "→ Neo4j service status:"
+	@$(DC) --profile neo4j-local ps neo4j
+
+.PHONY: neo4j-backup neo4j-restore
+
+neo4j-backup: ## Backup Neo4j database to backups/ with timestamp
+	@echo "→ Creating Neo4j backup..."
+	@timestamp=$$(date +%Y%m%d_%H%M%S); \
+	backup_dir="backups"; \
+	mkdir -p "$$backup_dir"; \
+	container_name=$$($(DC) ps -q neo4j 2>/dev/null | head -1); \
+	if [ -z "$$container_name" ]; then \
+		echo "⚠️  Neo4j container not running. Starting neo4j..."; \
+		$(MAKE) --no-print-directory neo4j-local-up; \
+		sleep 10; \
+		container_name=$$($(DC) ps -q neo4j 2>/dev/null | head -1); \
+	fi; \
+	if [ -n "$$container_name" ]; then \
+		if docker exec $$container_name neo4j-admin database dump \
+			--to-path=/backups \
+			--overwrite-destination=true \
+			--username=neo4j \
+			--password="$${NEO4J_PASSWORD:-changeme}" 2>/dev/null; then \
+			docker cp $$container_name:/backups/neo4j.dump "$$backup_dir/neo4j_$${timestamp}.dump" 2>/dev/null && \
+				echo "✅ Backup created: $$backup_dir/neo4j_$${timestamp}.dump" && \
+				ls -lh "$$backup_dir/neo4j_$${timestamp}.dump"; \
+		elif docker exec $$container_name cypher-shell -u neo4j -p "$${NEO4J_PASSWORD:-changeme}" \
+				"CALL apoc.export.cypher.all(null, 'file:///backups/neo4j_$${timestamp}.cypher', {})"; then \
+			docker cp $$container_name:/backups/neo4j_$${timestamp}.cypher "$$backup_dir/neo4j_$${timestamp}.cypher" 2>/dev/null && \
+				echo "✅ Backup created: $$backup_dir/neo4j_$${timestamp}.cypher" && \
+				ls -lh "$$backup_dir/neo4j_$${timestamp}.cypher"; \
+		else \
+			echo "❌ Backup failed - neither dump nor cypher export succeeded"; \
+			exit 1; \
+		fi; \
+	else \
+		echo "❌ Neo4j container not available"; \
+		exit 1; \
+	fi
+
+neo4j-restore: ## Restore Neo4j from backup (usage: make neo4j-restore BACKUP=backups/neo4j_YYYYMMDD_HHMMSS.dump)
+	@if [ -z "$(BACKUP)" ]; then \
+		echo "❌ Error: BACKUP parameter required"; \
+		echo ""; \
+		echo "Usage: make neo4j-restore BACKUP=backups/neo4j_20260313_120000.dump"; \
+		echo ""; \
+		echo "Available backups:"; \
+		ls -lh backups/neo4j_*.dump 2>/dev/null || echo "  No backups found in backups/"; \
+		exit 1; \
+	fi
+	@if [ ! -f "$(BACKUP)" ]; then \
+		echo "❌ Error: Backup file not found: $(BACKUP)"; \
+		exit 1; \
+	fi
+	@echo "→ Restoring Neo4j from $(BACKUP)..."
+	@echo "⚠️  This will STOP Neo4j, DELETE existing data, and restore from backup"
+	@echo "Press Ctrl+C to cancel, or wait 5 seconds to continue..."
+	@sleep 5
+	@$(MAKE) --no-print-directory neo4j-local-down
+	@docker volume rm pmoves_neo4j-data 2>/dev/null || true
+	@echo "→ Starting fresh Neo4j..."
+	@$(MAKE) --no-print-directory neo4j-local-up
+	@sleep 15
+	@container_name=$$($(DC) ps -q neo4j 2>/dev/null | head -1); \
+	if [ -n "$$container_name" ]; then \
+		docker cp "$(BACKUP)" $$container_name:/backups/neo4j.dump; \
+		docker exec $$container_name neo4j-admin database load \
+			--from=/backups/neo4j.dump \
+			--overwrite-destination=true \
+			--username=neo4j \
+			--password="$${NEO4J_PASSWORD:-changeme}"; \
+		echo "✅ Restore complete from $(BACKUP)"; \
+		echo "💡 Run 'make neo4j-local-status' to verify"; \
+	else \
+		echo "❌ Neo4j container not available after restore"; \
+		exit 1; \
+	fi

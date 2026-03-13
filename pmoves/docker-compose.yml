@@ -2165,6 +2165,80 @@ services:
       retries: 12
       start_period: 15s
 
+  # Tier: agent (GitHub Branch Cleanup - automated stale branch removal)
+  github-branch-cleanup:
+    <<: *tier-agent-hardened-ro
+    build: ./services/github-branch-cleanup
+    image: ${GITHUB_BRANCH_CLEANUP_IMAGE:-ghcr.io/powerfulmoves/pmoves-github-branch-cleanup:pmoves-latest}
+    container_name: pmoves-github-branch-cleanup
+    hostname: github-branch-cleanup
+    restart: unless-stopped
+    environment:
+      - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+      - SERVICE_PORT=8100
+      - BRANCH_STALE_DAYS=${BRANCH_STALE_DAYS:-30}
+      - DRY_RUN=${DRY_RUN:-true}
+      - PROTECTED_BRANCHES=${PROTECTED_BRANCHES:-main,PMOVES.AI-Edition-Hardened,release-*}
+      - GITHUB_ORG=${GITHUB_ORG:-POWERFULMOVES}
+      - GH_APP_ID=${GH_APP_ID:-}
+      - GH_APP_INSTALLATION_ID=${GH_APP_INSTALLATION_ID:-}
+      - AGENTZERO_MCP_URL=${AGENTZERO_MCP_URL:-http://agent-zero:8080/mcp}
+    ports:
+      - 8100:8100
+      - 9096:9096
+    depends_on:
+      nats:
+        condition: service_healthy
+      nats-init:
+        condition: service_completed_successfully
+      agent-zero:
+        condition: service_healthy
+    profiles: ["agents", "github-automation"]
+    networks: [pmoves_app, pmoves_bus, pmoves_api, pmoves_monitoring]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8100/healthz', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # Tier: agent (GitHub Issue Triage - intelligent issue classification)
+  github-issue-triage:
+    <<: *tier-agent-hardened-ro
+    build: ./services/github-issue-triage
+    image: ${GITHUB_ISSUE_TRIAGE_IMAGE:-ghcr.io/powerfulmoves/pmoves-github-issue-triage:pmoves-latest}
+    container_name: pmoves-github-issue-triage
+    hostname: github-issue-triage
+    restart: unless-stopped
+    environment:
+      - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+      - SERVICE_PORT=8101
+      - HIRAG_URL=${HIRAG_URL:-http://hi-rag-gateway-v2:8086}
+      - LABEL_CONFIDENCE_THRESHOLD=${LABEL_CONFIDENCE_THRESHOLD:-0.7}
+      - INDEX_HISTORICAL_ISSUES=${INDEX_HISTORICAL_ISSUES:-true}
+      - BOTZ_MCP_URL=${BOTZ_MCP_URL:-http://botz-gateway:8102}
+      - GITHUB_ORG=${GITHUB_ORG:-POWERFULMOVES}
+    ports:
+      - 8101:8101
+      - 9097:9097
+    depends_on:
+      nats:
+        condition: service_healthy
+      nats-init:
+        condition: service_completed_successfully
+      hi-rag-gateway-v2:
+        condition: service_healthy
+      botz-gateway:
+        condition: service_healthy
+    profiles: ["agents", "github-automation"]
+    networks: [pmoves_app, pmoves_bus, pmoves_api, pmoves_monitoring]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8101/healthz', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
   # Tier: agent (A2UI NATS bridge - geometry bus integration)
   a2ui-nats-bridge:
     <<: *tier-agent-hardened-ro
@@ -2795,6 +2869,71 @@ services:
       retries: 3
       start_period: 15s
 
+  # Wger - Fitness tracker with health metrics and workout logging
+  wger:
+    <<: *tier-api-hardened
+    image: ${WGER_IMAGE:-ghcr.io/powerfulmoves/pmoves-health-wger:pmoves-latest}
+    restart: unless-stopped
+    environment:
+      # Database configuration
+      - DATABASE_URL=postgres://wger:${WGER_DB_PASSWORD:-changeme}@wger-db:5432/wger
+      # Django configuration
+      - DJANGO_ALLOWED_HOSTS=*
+      - DJANGO_SECRET_KEY=${WGER_SECRET_KEY:-changeme}
+      - WGER_ENABLE_REGISTRATION=${WGER_ENABLE_REGISTRATION:-true}
+      # NATS configuration for event publishing
+      - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+      - WGER_ENABLE_NATS=${WGER_ENABLE_NATS:-true}
+      # Admin credentials
+      - WGER_ADMIN_PASSWORD=${WGER_ADMIN_PASSWORD:-changeme}
+      # PMOVES integration
+      - ENABLE_OBSERVABILITY=${WGER_OBSERVABILITY:-true}
+      - PROMETHEUS_MULTIPROC_DIR=/tmp/prometheus
+    ports:
+      - "${WGER_PORT:-8000}:8000"
+    profiles: ["health", "wger"]
+    networks:
+      - pmoves_api
+      - pmoves_bus
+      - pmoves_data
+    depends_on:
+      wger-db:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+    volumes:
+      - wger-static:/home/wger/static
+      - wger-media:/home/wger/media
+      - wger-prometheus:/tmp/prometheus
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v2/health/', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+
+  # Wger database - PostgreSQL backend for fitness data
+  wger-db:
+    <<: *tier-data-hardened
+    image: postgres:15-alpine
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=wger
+      - POSTGRES_USER=wger
+      - POSTGRES_PASSWORD=${WGER_DB_PASSWORD:-changeme}
+      - PGDATA=/var/lib/postgresql/data/pgdata
+    volumes:
+      - wger-db:/var/lib/postgresql/data
+    profiles: ["health", "wger"]
+    networks:
+      - pmoves_data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U wger -d wger"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
   # Comfy Watcher - ComfyUI output watcher for NATS integration
   comfy-watcher:
     build:
@@ -3130,6 +3269,117 @@ services:
     ports:
     - 8201:8201
 
+  # =============================================================================
+  # GitHub Automation Services (Phase 3)
+  # =============================================================================
+  # Additional GitHub automation services (branch naming, cross-repo sync, PR automation)
+  # Profile: github-automation
+  # Networks: pmoves_app, pmoves_api, pmoves_bus, pmoves_monitoring
+  # Note: github-branch-cleanup and github-issue-triage are defined above
+  # =============================================================================
+
+  github-branch-naming:
+    build:
+      context: ./services/github-branch-naming
+      dockerfile: Dockerfile
+    image: ${GITHUB_BRANCH_NAMING_IMAGE:-ghcr.io/powerfulmoves/pmoves-github-branch-naming:pmoves-latest}
+    restart: unless-stopped
+    environment:
+    - SERVICE_PORT=8102
+    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - AGENTZERO_MCP_URL=${AGENTZERO_MCP_URL:-http://agent-zero:8080/mcp/command}
+    - DRY_RUN=${GITHUB_AUTOMATION_DRY_RUN:-true}
+    - GITHUB_ORG=${GITHUB_ORG:-POWERFULMOVES}
+    ports:
+    - 8112:8102
+    profiles:
+    - github-automation
+    networks:
+    - pmoves_app
+    - pmoves_api
+    - pmoves_bus
+    - pmoves_monitoring
+    depends_on:
+      nats:
+        condition: service_healthy
+      agent-zero:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8102/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+  github-crossrepo-sync:
+    build:
+      context: ./services/github-crossrepo-sync
+      dockerfile: Dockerfile
+    image: ${GITHUB_CROSSREPO_SYNC_IMAGE:-ghcr.io/powerfulmoves/pmoves-github-crossrepo-sync:pmoves-latest}
+    restart: unless-stopped
+    environment:
+    - SERVICE_PORT=8103
+    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - AGENTZERO_MCP_URL=${AGENTZERO_MCP_URL:-http://agent-zero:8080/mcp/command}
+    - DRY_RUN=${GITHUB_AUTOMATION_DRY_RUN:-true}
+    - GITHUB_ORG=${GITHUB_ORG:-POWERFULMOVES}
+    - MAIN_REPO=${MAIN_REPO:-PMOVES.AI}
+    - WORKDIR=${WORKDIR:-/tmp/github-crossrepo-sync}
+    ports:
+    - 8113:8103
+    profiles:
+    - github-automation
+    networks:
+    - pmoves_app
+    - pmoves_api
+    - pmoves_bus
+    - pmoves_monitoring
+    depends_on:
+      nats:
+        condition: service_healthy
+      agent-zero:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8103/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+  github-crossrepo-pr:
+    build:
+      context: ./services/github-crossrepo-pr
+      dockerfile: Dockerfile
+    image: ${GITHUB_CROSSREPO_PR_IMAGE:-ghcr.io/powerfulmoves/pmoves-github-crossrepo-pr:pmoves-latest}
+    restart: unless-stopped
+    environment:
+    - SERVICE_PORT=8104
+    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - AGENTZERO_MCP_URL=${AGENTZERO_MCP_URL:-http://agent-zero:8080/mcp/command}
+    - DRY_RUN=${GITHUB_AUTOMATION_DRY_RUN:-true}
+    - GITHUB_ORG=${GITHUB_ORG:-POWERFULMOVES}
+    - AUTO_MERGE_REPOS=${AUTO_MERGE_REPOS:-}
+    ports:
+    - 8114:8104
+    profiles:
+    - github-automation
+    networks:
+    - pmoves_app
+    - pmoves_api
+    - pmoves_bus
+    - pmoves_monitoring
+    depends_on:
+      nats:
+        condition: service_healthy
+      agent-zero:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8104/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
 volumes:
   neo4j-data: {}
   qdrant-data: {}
@@ -3150,6 +3400,11 @@ volumes:
   comfy-watcher-output: {}
   comfy-watcher-state: {}
   llama-results: {}
+  # Wger fitness tracker volumes
+  wger-db: {}
+  wger-static: {}
+  wger-media: {}
+  wger-prometheus: {}
 networks:
   pmoves_data:
     name: pmoves_data

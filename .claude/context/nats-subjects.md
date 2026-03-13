@@ -677,6 +677,189 @@ nats server report connections
   ```
 - **Subscribers:** Agent Zero, Discord Publisher
 
+## GitHub Automation Subjects
+
+### Branch Cleanup Service
+
+**`github.branch.stale_detected.v1`**
+- **Direction:** Published by github-branch-cleanup → Consumed by monitoring
+- **Purpose:** Notify when stale branches are detected
+- **Payload:**
+  ```json
+  {
+    "repo": "POWERFULMOVES/PMOVES.AI",
+    "branch": "feature/old-feature",
+    "last_commit_days": 45,
+    "stale_threshold_days": 30,
+    "timestamp": "2026-03-13T12:00:00Z"
+  }
+  ```
+
+**`github.branch.auto_deleted.v1`**
+- **Direction:** Published by github-branch-cleanup → Consumed by monitoring
+- **Purpose:** Notify when branches are auto-deleted after PR merge
+- **Payload:**
+  ```json
+  {
+    "repo": "POWERFULMOVES/PMOVES.AI",
+    "branch": "feature/completed-feature",
+    "pr_number": 1234,
+    "delete_reason": "pr_merged",
+    "timestamp": "2026-03-13T12:00:00Z"
+  }
+  ```
+
+### Issue Triage Service
+
+**`github.issue.triage.completed.v1`**
+- **Direction:** Published by github-issue-triage → Consumed by monitoring
+- **Purpose:** Notify when issue triage is completed
+- **Payload:**
+  ```json
+  {
+    "repo": "POWERFULMOVES/PMOVES.AI",
+    "issue_number": 567,
+    "labels_added": ["bug", "high-priority"],
+    "category": "bug_report",
+    "confidence": 0.95,
+    "timestamp": "2026-03-13T12:00:00Z"
+  }
+  ```
+
+### Branch Naming Service
+
+**`github.branch.created.v1`**
+- **Direction:** Published by GitHub webhooks → Consumed by github-branch-naming
+- **Purpose:** Trigger branch name validation when new branches created
+- **Payload:**
+  ```json
+  {
+    "repo": "POWERFULMOVES/PMOVES.AI",
+    "branch": "feature/new-feature",
+    "action": "created",
+    "timestamp": "2026-03-13T12:00:00Z"
+  }
+  ```
+
+**`github.branch.validation.v1`**
+- **Direction:** Published by github-branch-naming → Consumed by monitoring
+- **Purpose:** Notify of branch name validation results
+- **Payload:**
+  ```json
+  {
+    "repo": "POWERFULMOVES/PMOVES.AI",
+    "branch": "feature/new-feature",
+    "is_valid": true,
+    "category": "feature",
+    "suggested_name": null,
+    "reason": "Valid feature branch name",
+    "timestamp": "2026-03-13T12:00:00Z"
+  }
+  ```
+
+**`github.branch.rename_suggested.v1`**
+- **Direction:** Published by github-branch-naming → Consumed by monitoring
+- **Purpose:** Notify when branch rename is suggested
+- **Payload:**
+  ```json
+  {
+    "repo": "POWERFULMOVES/PMOVES.AI",
+    "original_branch": "feature/bad-name",
+    "suggested_branch": "feat/bad-name",
+    "reason": "Invalid branch name format. Suggested: feat/bad-name",
+    "dry_run": true,
+    "timestamp": "2026-03-13T12:00:00Z"
+  }
+  ```
+
+### Cross-Repository Sync Service
+
+**`github.crossrepo.sync.v1`**
+- **Direction:** Published by github-crossrepo-sync → Consumed by monitoring
+- **Purpose:** Notify when cross-repo sync operation starts
+- **Payload:**
+  ```json
+  {
+    "repo": "POWERFULMOVES/PMOVES.AI",
+    "branch": "main",
+    "status": "started",
+    "timestamp": "2026-03-13T12:00:00Z"
+  }
+  ```
+
+**`github.crossrepo.sync.completed.v1`**
+- **Direction:** Published by github-crossrepo-sync → Consumed by github-crossrepo-pr, monitoring
+- **Purpose:** Notify when cross-repo sync completes successfully
+- **Payload:**
+  ```json
+  {
+    "repo": "POWERFULMOVES/PMOVES.AI",
+    "branch": "main",
+    "submodules_synced": ["PMOVES-Agent-Zero", "PMOVES-Archon"],
+    "submodules_failed": [],
+    "duration_seconds": 5.2,
+    "timestamp": "2026-03-13T12:00:00Z"
+  }
+  ```
+
+**`github.crossrepo.sync.failed.v1`**
+- **Direction:** Published by github-crossrepo-sync → Consumed by monitoring
+- **Purpose:** Notify when cross-repo sync fails
+- **Payload:**
+  ```json
+  {
+    "repo": "POWERFULMOVES/PMOVES.AI",
+    "branch": "main",
+    "error": "Failed to connect to GitHub API",
+    "timestamp": "2026-03-13T12:00:00Z"
+  }
+  ```
+
+### Cross-Repository PR Automation Service
+
+**`github.crossrepo.pr.created.v1`**
+- **Direction:** Published by github-crossrepo-pr → Consumed by monitoring
+- **Purpose:** Notify when cross-repo PR is created
+- **Payload:**
+  ```json
+  {
+    "repo": "POWERFULMOVES/PMOVES.AI",
+    "pr_number": 1234,
+    "pr_url": "https://github.com/POWERFULMOVES/PMOVES.AI/pull/1234",
+    "pr_type": "dependency_update",
+    "base_branch": "main",
+    "timestamp": "2026-03-13T12:00:00Z"
+  }
+  ```
+
+**`github.crossrepo.pr.merged.v1`**
+- **Direction:** Published by github-crossrepo-pr → Consumed by github-branch-cleanup, monitoring
+- **Purpose:** Notify when cross-repo PR is merged
+- **Payload:**
+  ```json
+  {
+    "repo": "POWERFULMOVES/PMOVES.AI",
+    "pr_number": 1234,
+    "pr_type": "dependency_update",
+    "merge_method": "squash",
+    "timestamp": "2026-03-13T12:00:00Z"
+  }
+  ```
+
+**`github.crossrepo.pr.batch_completed.v1`**
+- **Direction:** Published by github-crossrepo-pr → Consumed by monitoring
+- **Purpose:** Notify when batch PR creation completes
+- **Payload:**
+  ```json
+  {
+    "pr_type": "dependency_update",
+    "repos": ["PMOVES.AI", "PMOVES-Agent-Zero", "PMOVES-Archon"],
+    "successful": 3,
+    "failed": 0,
+    "timestamp": "2026-03-13T12:00:00Z"
+  }
+  ```
+
 ## GPU Mesh & Model Lifecycle Subjects
 
 ### GPU Orchestrator → Model Registry
@@ -731,4 +914,94 @@ nats server report connections
 - **Payload:**
   ```json
   {"type": "mesh.gpu.command.result.v1", "success": true, "model_key": "ollama/qwen3:8b", "ts": 1709568000}
+  ```
+
+## GitHub Automation Subjects
+
+**`github.webhook.pr.v1`**
+- **Direction:** Published by n8n → Consumed by github-branch-cleanup
+- **Purpose:** Pull request webhook events (closed/merged)
+- **Payload:**
+  ```json
+  {"repository": {"name": "PMOVES.AI"}, "action": "closed", "pull_request": {"head": {"ref": "feature-branch"}}}
+  ```
+
+**`github.webhook.issue.v1`**
+- **Direction:** Published by n8n → Consumed by github-issue-triage
+- **Purpose:** Issue webhook events (opened/edited)
+- **Payload:**
+  ```json
+  {"repository": {"name": "PMOVES.AI"}, "action": "opened", "issue": {"number": 123, "title": "...", "body": "..."}}
+  ```
+
+**`github.branch.deleted.v1`**
+- **Direction:** Published by github-branch-cleanup → Consumed by monitoring/alerting
+- **Purpose:** Branch cleanup deletion events
+- **Payload:**
+  ```json
+  {"repo": "PMOVES.AI", "deleted_count": 5, "dry_run": false, "duration_seconds": 2.5, "timestamp": "2026-03-13T00:00:00Z"}
+  ```
+
+**`github.branch.stale_detected.v1`**
+- **Direction:** Published by github-branch-cleanup → Consumed by monitoring
+- **Purpose:** Stale branch detection events
+- **Payload:**
+  ```json
+  {"repo": "PMOVES.AI", "stale_count": 12, "stale_days": 30, "timestamp": "2026-03-13T00:00:00Z"}
+  ```
+
+**`github.branch.auto_deleted.v1`**
+- **Direction:** Published by github-branch-cleanup → Consumed by monitoring
+- **Purpose:** Auto-delete after PR closed/merged
+- **Payload:**
+  ```json
+  {"repo": "PMOVES.AI", "branch": "feature-branch", "trigger": "pr_closed", "dry_run": true, "timestamp": "2026-03-13T00:00:00Z"}
+  ```
+
+**`github.issue.triage.v1`**
+- **Direction:** Published by github-issue-triage → Consumed by monitoring
+- **Purpose:** Issue triage results
+- **Payload:**
+  ```json
+  {"repo": "PMOVES.AI", "issue_number": 123, "labels": ["bug", "high-priority"], "confidence": 0.85, "timestamp": "2026-03-13T00:00:00Z"}
+  ```
+
+**`github.issue.labeled.v1`**
+- **Direction:** Published by github-issue-triage → Consumed by monitoring
+- **Purpose:** Label application events after successful triage
+- **Payload:**
+  ```json
+  {"repo": "PMOVES.AI", "issue_number": 123, "labels": ["bug"], "confidence": 0.85, "method": "semantic", "timestamp": "2026-03-13T00:00:00Z"}
+  ```
+
+**`github.issue.labeled.v1`**
+- **Direction:** Published by github-issue-triage → Consumed by monitoring
+- **Purpose:** Label application events
+- **Payload:**
+  ```json
+  {"repo": "PMOVES.AI", "issue_number": 123, "label": "bug", "timestamp": "2026-03-13T00:00:00Z"}
+  ```
+
+**`github.crossrepo.pr_batch.v1`**
+- **Direction:** Published by github-crossrepo-pr → Consumed by monitoring
+- **Purpose:** Cross-repo PR batch events
+- **Payload:**
+  ```json
+  {"workflow_id": "abc-123", "repos": ["PMOVES.AI", "PMOVES-Agent-Zero"], "pr_count": 2, "timestamp": "2026-03-13T00:00:00Z"}
+  ```
+
+**`github.crossrepo.workflow.v1`**
+- **Direction:** Published by github-crossrepo-pr → Consumed by monitoring
+- **Purpose:** Workflow execution events
+- **Payload:**
+  ```json
+  {"workflow_id": "abc-123", "workflow_type": "submodule_update", "status": "completed", "timestamp": "2026-03-13T00:00:00Z"}
+  ```
+
+**`archon.work_order.github.v1`**
+- **Direction:** Published by Archon → Consumed by github-crossrepo-pr
+- **Purpose:** Work order for GitHub cross-repo operations
+- **Payload:**
+  ```json
+  {"work_order_id": "wo-123", "workflow_type": "submodule_update", "repos": ["PMOVES.AI"], "changes": [...], "approved": true}
   ```

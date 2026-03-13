@@ -1,0 +1,6 @@
+fastapi==0.109.2
+uvicorn[standard]==0.27.1
+nats-py==2.7.0
+httpx==0.26.0
+prometheus-client==0.20.0
+pydantic==2.6.1
