@@ -149,6 +149,7 @@ export function TokenismGeometricView({ result, week }: GeometricViewProps) {
   const tokenism = getTokenismClient();
 
   // Load geometry when result changes
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- Only rerun when result or week changes
   useEffect(() => {
     if (!result) {
       setPoints([]);

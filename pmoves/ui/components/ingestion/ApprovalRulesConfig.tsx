@@ -374,7 +374,7 @@ export function ApprovalRulesConfig({
             <div className="text-center py-8 text-sm text-neutral-500">
               <div className="text-2xl mb-2">📋</div>
               <p>No approval rules configured.</p>
-              <p className="text-xs">Click "New Rule" to create one.</p>
+              <p className="text-xs">Click &quot;New Rule&quot; to create one.</p>
             </div>
           )}
         </div>
