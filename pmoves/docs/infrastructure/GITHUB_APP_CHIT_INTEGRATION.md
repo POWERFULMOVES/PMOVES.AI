@@ -94,7 +94,25 @@ This script will:
 
 **MANUAL SETUP (if automated script fails):**
 
-The credential templates are already in env.shared (lines 176-183):
+Run the automated setup script (handles all remaining phases):
+
+```bash
+cd pmoves
+make github-app-setup
+```
+
+This script will:
+- ✓ Verify GitHub CLI authentication
+- ✓ Check GitHub Secrets for all 4 credentials
+- ✓ Uncomment credentials in `env.shared`
+- ✓ Run `secrets-funnel` to generate tier files
+- ✓ Verify credentials in `env.tier-agent`
+
+**MANUAL SETUP (if automated script fails):**
+
+The credential templates are in env.shared at lines 176-183:
+- Lines 176-179: Comment block describing each credential
+- Lines 180-183: Commented credential assignments (to be uncommented)
 
 ```bash
 # GH_APP_ID - Numeric App ID from GitHub App settings
