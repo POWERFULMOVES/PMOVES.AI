@@ -732,3 +732,93 @@ nats server report connections
   ```json
   {"type": "mesh.gpu.command.result.v1", "success": true, "model_key": "ollama/qwen3:8b", "ts": 1709568000}
   ```
+
+## GitHub Automation Subjects
+
+**`github.webhook.pr.v1`**
+- **Direction:** Published by n8n → Consumed by github-branch-cleanup
+- **Purpose:** Pull request webhook events (closed/merged)
+- **Payload:**
+  ```json
+  {"repository": {"name": "PMOVES.AI"}, "action": "closed", "pull_request": {"head": {"ref": "feature-branch"}}}
+  ```
+
+**`github.webhook.issue.v1`**
+- **Direction:** Published by n8n → Consumed by github-issue-triage
+- **Purpose:** Issue webhook events (opened/edited)
+- **Payload:**
+  ```json
+  {"repository": {"name": "PMOVES.AI"}, "action": "opened", "issue": {"number": 123, "title": "...", "body": "..."}}
+  ```
+
+**`github.branch.deleted.v1`**
+- **Direction:** Published by github-branch-cleanup → Consumed by monitoring/alerting
+- **Purpose:** Branch cleanup deletion events
+- **Payload:**
+  ```json
+  {"repo": "PMOVES.AI", "deleted_count": 5, "dry_run": false, "duration_seconds": 2.5, "timestamp": "2026-03-13T00:00:00Z"}
+  ```
+
+**`github.branch.stale_detected.v1`**
+- **Direction:** Published by github-branch-cleanup → Consumed by monitoring
+- **Purpose:** Stale branch detection events
+- **Payload:**
+  ```json
+  {"repo": "PMOVES.AI", "stale_count": 12, "stale_days": 30, "timestamp": "2026-03-13T00:00:00Z"}
+  ```
+
+**`github.branch.auto_deleted.v1`**
+- **Direction:** Published by github-branch-cleanup → Consumed by monitoring
+- **Purpose:** Auto-delete after PR closed/merged
+- **Payload:**
+  ```json
+  {"repo": "PMOVES.AI", "branch": "feature-branch", "trigger": "pr_closed", "dry_run": true, "timestamp": "2026-03-13T00:00:00Z"}
+  ```
+
+**`github.issue.triage.v1`**
+- **Direction:** Published by github-issue-triage → Consumed by monitoring
+- **Purpose:** Issue triage results
+- **Payload:**
+  ```json
+  {"repo": "PMOVES.AI", "issue_number": 123, "labels": ["bug", "high-priority"], "confidence": 0.85, "timestamp": "2026-03-13T00:00:00Z"}
+  ```
+
+**`github.issue.labeled.v1`**
+- **Direction:** Published by github-issue-triage → Consumed by monitoring
+- **Purpose:** Label application events after successful triage
+- **Payload:**
+  ```json
+  {"repo": "PMOVES.AI", "issue_number": 123, "labels": ["bug"], "confidence": 0.85, "method": "semantic", "timestamp": "2026-03-13T00:00:00Z"}
+  ```
+
+**`github.issue.labeled.v1`**
+- **Direction:** Published by github-issue-triage → Consumed by monitoring
+- **Purpose:** Label application events
+- **Payload:**
+  ```json
+  {"repo": "PMOVES.AI", "issue_number": 123, "label": "bug", "timestamp": "2026-03-13T00:00:00Z"}
+  ```
+
+**`github.crossrepo.pr_batch.v1`**
+- **Direction:** Published by github-crossrepo-pr → Consumed by monitoring
+- **Purpose:** Cross-repo PR batch events
+- **Payload:**
+  ```json
+  {"workflow_id": "abc-123", "repos": ["PMOVES.AI", "PMOVES-Agent-Zero"], "pr_count": 2, "timestamp": "2026-03-13T00:00:00Z"}
+  ```
+
+**`github.crossrepo.workflow.v1`**
+- **Direction:** Published by github-crossrepo-pr → Consumed by monitoring
+- **Purpose:** Workflow execution events
+- **Payload:**
+  ```json
+  {"workflow_id": "abc-123", "workflow_type": "submodule_update", "status": "completed", "timestamp": "2026-03-13T00:00:00Z"}
+  ```
+
+**`archon.work_order.github.v1`**
+- **Direction:** Published by Archon → Consumed by github-crossrepo-pr
+- **Purpose:** Work order for GitHub cross-repo operations
+- **Payload:**
+  ```json
+  {"work_order_id": "wo-123", "workflow_type": "submodule_update", "repos": ["PMOVES.AI"], "changes": [...], "approved": true}
+  ```
