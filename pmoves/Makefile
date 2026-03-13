@@ -1851,6 +1851,45 @@ tailscale-status: ## Show tailscale status JSON (best effort)
 tailscale-logout: ## Log out of tailnet on this host
 	@tailscale logout || true
 
+# -------- Tailscale submodule deploy --------
+TAILSCALE_SUBMODULE := $(abspath $(CURDIR)/../PMOVES-Tailscale)
+
+.PHONY: tailscale-deploy tailscale-deploy-docker headscale-up headscale-down headscale-create-user headscale-create-key
+
+tailscale-deploy: ## Deploy Tailscale on this host via PMOVES-Tailscale submodule (auto-detects role)
+	@bash $(TAILSCALE_SUBMODULE)/deploy/deploy.sh
+
+tailscale-deploy-docker: ## Deploy Tailscale as Docker subnet router
+	@bash $(TAILSCALE_SUBMODULE)/deploy/deploy.sh --docker
+
+headscale-up: ## Start Headscale self-hosted control plane
+	@docker compose -f $(TAILSCALE_SUBMODULE)/headscale/docker-compose.headscale.yml up -d
+
+headscale-down: ## Stop Headscale control plane
+	@docker compose -f $(TAILSCALE_SUBMODULE)/headscale/docker-compose.headscale.yml down
+
+headscale-create-user: ## Create Headscale user (USER=name)
+	@docker exec pmoves-headscale headscale users create $(USER)
+
+headscale-create-key: ## Create Headscale preauthkey (USER=name)
+	@docker exec pmoves-headscale headscale preauthkeys create --user $(USER) --reusable --expiration 90d
+
+# -------- Hostinger / Terraform provisioning --------
+.PHONY: hostinger-provision hostinger-plan hostinger-ssh
+
+TERRAFORM_DIR := $(CURDIR)/terraform
+
+hostinger-provision: ## Apply Terraform config to provision Hostinger VPS resources
+	@echo "→ Running terraform apply for Hostinger MCP integration..."
+	@cd $(TERRAFORM_DIR) && terraform init -input=false && terraform apply -auto-approve
+	@echo "✔ Hostinger provisioning complete"
+
+hostinger-plan: ## Preview Terraform changes for Hostinger VPS
+	@cd $(TERRAFORM_DIR) && terraform init -input=false && terraform plan
+
+hostinger-ssh: ## SSH into Hostinger VPS using CHIT-managed credentials
+	@$(LOAD_ENV_SHARED) bash -lc 'ssh -o StrictHostKeyChecking=no -i <(echo "$$HOSTINGER_SSH_PRIVATE_KEY") $$HOSTINGER_SSH_USER@$$HOSTINGER_SSH_HOST'
+
 # -------- Brand defaults (branded env + first-run resources) --------
 .PHONY: brand-defaults brand-verify
 
@@ -2573,6 +2612,39 @@ vibevoice-smoke: ## Check VibeVoice realtime /config (requires VibeVoice running
 	fi; \
 	echo "✔ VibeVoice /config 200"; \
 	curl -sS "http://localhost:$$port/config" | jq .
+
+# ============================================================================
+# Z890 / RTX 3090 Ti GPU NODE
+# ============================================================================
+
+Z890_OVERRIDE := -f docker-compose.z890.override.yml
+Z890_ENV := --env-file env.z890
+
+.PHONY: up-z890
+up-z890: ## Start Z890 GPU node (Ollama + Mesh Agent, data/agents from main PC)
+	@$(LOAD_ENV_SHARED) docker compose -p $(PROJECT) \
+	  -f docker-compose.yml -f docker-compose.gpu.yml \
+	  $(Z890_OVERRIDE) \
+	  $(Z890_ENV) \
+	  --profile agents up -d pmoves-ollama mesh-agent
+	@echo "✔ Z890 node started (Ollama + Mesh Agent). Data services from main PC."
+
+.PHONY: down-z890
+down-z890: ## Stop Z890 GPU node services
+	@$(LOAD_ENV_SHARED) docker compose -p $(PROJECT) \
+	  -f docker-compose.yml -f docker-compose.gpu.yml \
+	  $(Z890_OVERRIDE) \
+	  $(Z890_ENV) \
+	  down
+	@echo "✔ Z890 node stopped."
+
+.PHONY: ps-z890
+ps-z890: ## Show Z890 node service status
+	@$(LOAD_ENV_SHARED) docker compose -p $(PROJECT) \
+	  -f docker-compose.yml -f docker-compose.gpu.yml \
+	  $(Z890_OVERRIDE) \
+	  $(Z890_ENV) \
+	  ps
 
 # Status helper
 ps:
