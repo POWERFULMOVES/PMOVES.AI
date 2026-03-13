@@ -5,7 +5,7 @@
 
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback } from "react";
 import type { JellyfinSyncStatusInfo } from "@/lib/api/jellyfin";
 import { formatTimeAgo } from "@/lib/timeUtils";
 import { AlertBanner } from "@/components/common";
@@ -48,12 +48,6 @@ export function SyncStatus({
   backfilling = false,
   error,
 }: SyncStatusProps) {
-  const [lastRefreshed, setLastRefreshed] = useState<Date>(new Date());
-
-  useEffect(() => {
-    setLastRefreshed(new Date());
-  }, [status]);
-
   const handleSync = useCallback(async () => {
     onSync();
   }, [onSync]);
