@@ -1,0 +1,125 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# PMOVES.AI — Z890 / RTX 3090 Ti GPU Node Override
+# ═══════════════════════════════════════════════════════════════════════════════
+#
+# Only runs GPU-local services on this node. All data, agent, and gateway
+# services are consumed from the main PC (5090) via Tailscale MagicDNS.
+#
+# Usage:
+#   make -C pmoves up-z890
+#   # or manually:
+#   docker compose -f docker-compose.yml -f docker-compose.gpu.yml \
+#     -f docker-compose.z890.override.yml --env-file env.z890 \
+#     --profile agents up -d pmoves-ollama mesh-agent
+
+services:
+  # ═════════════════════════════════════════════════════════════════════════════
+  # LOCAL GPU SERVICES (run on Z890)
+  # ═════════════════════════════════════════════════════════════════════════════
+
+  pmoves-ollama:
+    ports:
+      - "0.0.0.0:11434:11434"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - capabilities: [gpu]
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=0
+      - OLLAMA_HOST=0.0.0.0:11434
+
+  mesh-agent:
+    environment:
+      - NODE_NAME=${NODE_NAME:-pmoves-3090ti}
+      - NODE_TYPE=${NODE_TYPE:-gpu-desktop}
+      - NODE_CAPABILITIES=${NODE_CAPABILITIES:-cuda,rtx3090ti,24gb-vram}
+      - NATS_URL=${NATS_URL}
+      - HIRAG_URL=${HIRAG_URL:-http://hi-rag-gateway-v2-gpu:8086}
+    # Override depends_on: mesh-agent normally depends on nats container,
+    # but NATS runs on main PC — no local container dependency.
+    depends_on: {}
+
+  # ═════════════════════════════════════════════════════════════════════════════
+  # DISABLED SERVICES (consumed from main PC via Tailscale)
+  # ═════════════════════════════════════════════════════════════════════════════
+  # Setting profiles: [disabled] ensures these never start on Z890.
+  # The "disabled" profile is never activated in any Makefile target.
+
+  # --- Data Tier ---
+  nats:
+    profiles: [disabled]
+  qdrant:
+    profiles: [disabled]
+  neo4j:
+    profiles: [disabled]
+  meilisearch:
+    profiles: [disabled]
+  minio:
+    profiles: [disabled]
+
+  # --- Supabase ---
+  supabase-db:
+    profiles: [disabled]
+  supabase-rest:
+    profiles: [disabled]
+
+  # --- LLM Gateway ---
+  tensorzero-clickhouse:
+    profiles: [disabled]
+  tensorzero-gateway:
+    profiles: [disabled]
+
+  # --- Agents (run on main PC) ---
+  agent-zero:
+    profiles: [disabled]
+  archon:
+    profiles: [disabled]
+
+  # --- Workers (run on main PC) ---
+  extract-worker:
+    profiles: [disabled]
+  langextract:
+    profiles: [disabled]
+  notebook-sync:
+    profiles: [disabled]
+  pdf-ingest:
+    profiles: [disabled]
+
+  # --- Media (can optionally enable later) ---
+  channel-monitor:
+    profiles: [disabled]
+  pmoves-yt:
+    profiles: [disabled]
+  publisher-discord:
+    profiles: [disabled]
+  jellyfin-bridge:
+    profiles: [disabled]
+  presign:
+    profiles: [disabled]
+  render-webhook:
+    profiles: [disabled]
+
+  # ═════════════════════════════════════════════════════════════════════════════
+  # PHASE 2 GPU SERVICES (uncomment when ready to expand)
+  # ═════════════════════════════════════════════════════════════════════════════
+  # hi-rag-gateway-v2-gpu:
+  #   deploy:
+  #     resources:
+  #       reservations:
+  #         devices:
+  #           - capabilities: [gpu]
+  #   environment:
+  #     - NVIDIA_VISIBLE_DEVICES=0
+  #     - QDRANT_URL=${QDRANT_URL}
+  #     - NEO4J_URL=${NEO4J_URL}
+  #     - MEILI_URL=${MEILI_URL}
+  #
+  # ffmpeg-whisper:
+  #   deploy:
+  #     resources:
+  #       reservations:
+  #         devices:
+  #           - capabilities: [gpu]
+  #   environment:
+  #     - NVIDIA_VISIBLE_DEVICES=0
