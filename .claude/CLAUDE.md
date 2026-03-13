@@ -213,7 +213,8 @@ PMOVES.AI is a **production-ready multi-agent orchestration platform** featuring
 - Services: DB (Postgres 17.6.1), GoTrue, PostgREST v14.3, Kong 3.7.1, Realtime v2.72.0, Storage v1.37.1, Studio, imgproxy, pg-meta, Edge Functions, Analytics (Logflare), Vector, Supavisor
 - Canonical consumer URL: `http://supabase-kong:8000/rest/v1` (via Kong gateway)
 - Standard variable names: `JWT_SECRET`, `ANON_KEY`, `SERVICE_ROLE_KEY` (SUPABASE_* aliases for compat)
-n**Neo4j** [Port 7474 HTTP, 7687 Bolt, 2004 Metrics]
+
+**Neo4j** [Port 7474 HTTP, 7687 Bolt]
 - Graph database for knowledge management, CHIT consciousness taxonomy, agent memory
 - Profile-based integration: make -C pmoves neo4j-local-up
 - API: POST http://localhost:7474/db/neo4j/tx/commit (Cypher transactions)
@@ -221,21 +222,10 @@ n**Neo4j** [Port 7474 HTTP, 7687 Bolt, 2004 Metrics]
 - **Use for:** Graph queries, relationship traversal, CHIT consciousness taxonomy, agent memory
 - **Submodule:** PMOVES-Neo4j (root-level, follows PMOVES-supabase pattern)
 - **See:** `PMOVES-Neo4j/CLAUDE.md` for submodule context
-- Schema: `pmoves_core`, Archon prompts
-- **Use for:** Metadata storage, content records, agent state, auth, connection pooling
 
 **Qdrant** [Port 6333]
 - Vector embeddings for semantic search
 - Collection: `pmoves_chunks`
-
-**Neo4j** [Port 7474 HTTP, 7687 Bolt, 2004 Metrics]
-- Graph database for knowledge management, CHIT consciousness taxonomy, agent memory
-- Profile-based integration: make -C pmoves neo4j-local-up
-- API: POST http://localhost:7474/db/neo4j/tx/commit (Cypher transactions)
-- Health: GET http://localhost:7474/db/neo4j/health
-- **Use for:** Graph queries, relationship traversal, CHIT consciousness taxonomy, agent memory
-- **Submodule:** PMOVES-Neo4j (root-level, follows PMOVES-supabase pattern)
-- **See:** `PMOVES-Neo4j/CLAUDE.md` for submodule context
 
 **Meilisearch** [Port 7700]
 - Full-text keyword search

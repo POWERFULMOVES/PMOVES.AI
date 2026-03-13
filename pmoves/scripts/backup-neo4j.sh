@@ -2,7 +2,7 @@
 # Neo4j Database Backup Script
 # =============================================================================
 # Automated backup script for Neo4j graph database.
-# Creates timestamped dumps to pmoves/backups/ with rotation.
+# Creates timestamped dumps to backups/ with rotation.
 #
 # Usage: ./pmoves/scripts/backup-neo4j.sh [retention_days]
 # Default retention: 7 days
@@ -13,12 +13,22 @@
 
 set -euo pipefail
 
+# Script directory (for loading env.shared)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+
+# Load credentials if env.shared exists
+if [ -f "$PROJECT_ROOT/env.shared" ]; then
+    source "$PROJECT_ROOT/env.shared"
+fi
+
 # Configuration
-BACKUP_DIR="pmoves/backups"
+BACKUP_DIR="backups"
 CONTAINER_NAME="pmoves-neo4j-1"
 RETENTION_DAYS=${1:-7}
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 BACKUP_FILE="neo4j_${TIMESTAMP}.dump"
+CONTAINER_BACKUP_DIR="/data/backups"
 
 # Colors for output
 RED='\033[0;31m'
@@ -55,21 +65,25 @@ if ! docker ps --format '{{.Names}}' | grep -q "^${CONTAINER_NAME}$"; then
     exit 1
 fi
 
-# Get Neo4j password from environment
+# Get Neo4j password from environment (with fallback)
 NEO4J_PASSWORD=${NEO4J_PASSWORD:-changeme}
+
+# Create backup directory inside container
+log_info "Creating backup directory inside container..."
+docker exec "$CONTAINER_NAME" mkdir -p "$CONTAINER_BACKUP_DIR"
 
 # Create backup using neo4j-admin
 log_info "Creating Neo4j backup: ${BACKUP_FILE}"
 
 if docker exec "$CONTAINER_NAME" neo4j-admin database dump \
-    --to-path=/backups \
+    --to-path="$CONTAINER_BACKUP_DIR" \
     --overwrite-destination=true \
     --username=neo4j \
     --password="$NEO4J_PASSWORD" 2>/dev/null; then
-    
+
     # Copy backup from container
-    docker cp "$CONTAINER_NAME:/backups/neo4j.dump" "$BACKUP_DIR/$BACKUP_FILE"
-    
+    docker cp "$CONTAINER_NAME:$CONTAINER_BACKUP_DIR/neo4j.dump" "$BACKUP_DIR/$BACKUP_FILE"
+
     # Verify backup file exists and is not empty
     if [ -f "$BACKUP_DIR/$BACKUP_FILE" ] && [ -s "$BACKUP_DIR/$BACKUP_FILE" ]; then
         BACKUP_SIZE=$(du -h "$BACKUP_DIR/$BACKUP_FILE" | cut -f1)
