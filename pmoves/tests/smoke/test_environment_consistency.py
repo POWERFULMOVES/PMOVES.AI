@@ -149,8 +149,12 @@ def test_supabase_url_consistency() -> None:
         assert "54321" not in url, (
             f"SUPA_REST_URL should not reference CLI port 54321, got: {url}"
         )
-        assert "supabase-postgrest" in url or "postgrest:" in url, (
-            f"SUPA_REST_URL should reference self-hosted postgrest, got: {url}"
+        assert (
+            "supabase-postgrest" in url
+            or "postgrest:" in url
+            or "supabase-kong" in url
+        ), (
+            f"SUPA_REST_URL should reference self-hosted postgrest or Kong gateway, got: {url}"
         )
 
 
