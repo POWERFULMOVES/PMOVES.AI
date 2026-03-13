@@ -45,6 +45,12 @@ const child = spawn(argv[0], argv.slice(1), {
   shell: process.platform === 'win32',
 });
 
+// Handle spawn errors (e.g., command not found)
+child.on('error', (err) => {
+  console.error(`Failed to start command: ${err.message}`);
+  process.exit(1);
+});
+
 child.on('exit', (code, signal) => {
   if (signal) {
     process.kill(process.pid, signal);
