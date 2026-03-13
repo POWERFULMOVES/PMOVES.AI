@@ -3,7 +3,7 @@
 
 name: "Agent Zero Customization Review"
 version: "1.2.0"
-description: "Comprehensive review of Agent Zero customization to ensure maximum leverage of Agent Zero's capabilities while properly integrating with PMOVES.AI infrastructure"
+description: "Comprehensive review of Agent Zero customization across 9 phases (51 checks) to ensure maximum leverage of Agent Zero's capabilities while properly integrating with PMOVES.AI infrastructure"
 
 root:
   id: agent-zero-customization
@@ -175,7 +175,7 @@ root:
           action:
             type: grep
             target: "PMOVES-Agent-Zero/CLAUDE.md"
-            pattern: "agent\\.task\\.|agent\\.subordinate\\."
+            pattern: "agent\\.task|agent\\.subordinate"
             expect: "NATS subjects used for task coordination and subordinate lifecycle"
           context: "Required NATS subjects: agent.task.request.v1, agent.task.completed.v1, etc."
           agent_hint: codex
