@@ -1,0 +1,169 @@
+# ═══════════════════════════════════════════════════════════════════════════
+# PMOVES UI Testing Pipeline
+# Runs lint, typecheck, Jest unit tests, and Playwright E2E tests
+# ═══════════════════════════════════════════════════════════════════════════
+
+name: pmoves-ui-tests
+
+on:
+  push:
+    branches: [main, dev, 'chore/**', 'feat/**', 'fix/**']
+    paths:
+      - 'pmoves/ui/**'
+      - '.github/workflows/ui-tests.yml'
+  pull_request:
+    paths:
+      - 'pmoves/ui/**'
+      - '.github/workflows/ui-tests.yml'
+
+defaults:
+  run:
+    working-directory: pmoves/ui
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pmoves-ui-tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ─────────────────────────────────────────────────────────────────────────
+  # Lint: ESLint code quality checks
+  # ─────────────────────────────────────────────────────────────────────────
+  lint:
+    name: Lint (ESLint)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: pmoves/ui/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run ESLint
+        run: npm run lint
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # Typecheck: TypeScript type validation
+  # ─────────────────────────────────────────────────────────────────────────
+  typecheck:
+    name: Typecheck (TypeScript)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: pmoves/ui/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run TypeScript compiler
+        run: npm run typecheck
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # Unit Tests: Jest component and utility tests
+  # ─────────────────────────────────────────────────────────────────────────
+  unit-tests:
+    name: Unit Tests (Jest)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: pmoves/ui/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run Jest tests
+        run: npm run test
+
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jest-coverage
+          path: pmoves/ui/coverage/
+          retention-days: 7
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # E2E Tests: Playwright end-to-end browser tests
+  # ─────────────────────────────────────────────────────────────────────────
+  e2e-tests:
+    name: E2E Tests (Playwright)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: pmoves/ui/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps
+
+      - name: Run Playwright tests
+        run: npm run test:e2e
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: pmoves/ui/playwright-report/
+          retention-days: 7
+
+      - name: Upload test screenshots
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-screenshots
+          path: pmoves/ui/test-results/
+          retention-days: 7
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # Summary: Aggregate test results
+  # ─────────────────────────────────────────────────────────────────────────
+  test-summary:
+    name: Test Summary
+    runs-on: ubuntu-latest
+    needs: [lint, typecheck, unit-tests, e2e-tests]
+    if: always()
+    steps:
+      - name: Check all jobs
+        run: |
+          if [[ "${{ needs.lint.result }}" != "success" ]] || \
+             [[ "${{ needs.typecheck.result }}" != "success" ]] || \
+             [[ "${{ needs.unit-tests.result }}" != "success" ]] || \
+             [[ "${{ needs.e2e-tests.result }}" != "success" ]]; then
+            echo "::error::One or more test jobs failed"
+            exit 1
+          fi
+          echo "All UI tests passed!"
