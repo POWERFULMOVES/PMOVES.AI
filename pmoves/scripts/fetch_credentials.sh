@@ -286,6 +286,34 @@ fi
 log ""
 log "═══════════════════════════════════════════════════════════"
 
+# =============================================================================
+# 6. Validate Required Credentials
+# =============================================================================
+ENV_SHARED="$ROOT_DIR/env.shared"
+
+# Check if env.shared exists
+if [ -f "$ENV_SHARED" ]; then
+  # Required credentials that must be present (or generated via env-setup)
+  REQUIRED_KEYS=("SUPABASE_DB_PASSWORD" "JWT_SECRET" "WGER_DB_PASSWORD" "WGER_SECRET_KEY" "WGER_ADMIN_PASSWORD")
+  MISSING_KEYS=()
+
+  for key in "${REQUIRED_KEYS[@]}"; do
+    if ! grep -q "^${key}=" "$ENV_SHARED" 2>/dev/null; then
+      MISSING_KEYS+=("$key")
+    fi
+  done
+
+  if [ ${#MISSING_KEYS[@]} -gt 0 ]; then
+    log ""
+    log "⚠ WARNING: Missing required credentials in env.shared:"
+    for key in "${MISSING_KEYS[@]}"; do
+      log "   ✗ $key"
+    done
+    log ""
+    log "Run 'make -C pmoves env-setup' to generate missing credentials"
+  fi
+fi
+
 # Exit with appropriate code - safely count array elements
 written_ct=${#WRITTEN_FILES[@]}
 # Use pattern expansion to safely get array lengths (defaults to 0 if empty)

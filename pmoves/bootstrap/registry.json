@@ -370,6 +370,51 @@
           "sensitive": true
         },
         {
+          "key": "WGER_ALLOWED_HOSTS",
+          "file": "pmoves/env.shared",
+          "prompt": "Django allowed hosts for Wger",
+          "help": "Comma-separated list of allowed Django hosts (e.g., localhost,127.0.0.1,wger.local,wger.example.com).",
+          "default": "localhost,127.0.0.1,wger.local",
+          "required": false,
+          "sensitive": false
+        },
+        {
+          "key": "WGER_DB_PASSWORD",
+          "file": "pmoves/env.shared",
+          "prompt": "Wger PostgreSQL database password",
+          "help": "Password for the wger PostgreSQL database. Generate: openssl rand -base64 24",
+          "required": true,
+          "sensitive": true,
+          "generate": {
+            "type": "random_urlsafe",
+            "length": 32
+          }
+        },
+        {
+          "key": "WGER_SECRET_KEY",
+          "file": "pmoves/env.shared",
+          "prompt": "Django secret key for Wger",
+          "help": "Django secret key for cryptographic signing. Generate: openssl rand -base64 48",
+          "required": true,
+          "sensitive": true,
+          "generate": {
+            "type": "random_urlsafe",
+            "length": 64
+          }
+        },
+        {
+          "key": "WGER_ADMIN_PASSWORD",
+          "file": "pmoves/env.shared",
+          "prompt": "Wger admin account password",
+          "help": "Password for the wger admin account. Generate: openssl rand -base64 16",
+          "required": true,
+          "sensitive": true,
+          "generate": {
+            "type": "random_urlsafe",
+            "length": 24
+          }
+        },
+        {
           "key": "FIREFLY_APP_KEY",
           "file": "pmoves/env.shared",
           "prompt": "Firefly III Laravel APP_KEY",

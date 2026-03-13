@@ -135,6 +135,39 @@ def _ensure_integration_credentials(text: str) -> str:
     if _is_blank_or_placeholder(n8n_runners):
         text = _set_kv(text, "N8N_RUNNERS_AUTH_TOKEN", _strong_random(24))
 
+    # Wger database password: PostgreSQL password for the wger database
+    wger_db_pass = _get_kv(text, "WGER_DB_PASSWORD")
+    if _is_blank_or_placeholder(wger_db_pass):
+        try:
+            wger_db_pass = base64.b64encode(secrets.token_bytes(24)).decode("utf-8")
+            text = _set_kv(text, "WGER_DB_PASSWORD", wger_db_pass)
+        except Exception as e:
+            print(f"ERROR: Failed to generate WGER_DB_PASSWORD: {e}", file=sys.stderr)
+            print("Generate manually: openssl rand -base64 24", file=sys.stderr)
+            sys.exit(1)
+
+    # Wger Django secret key: Django SECRET_KEY for cryptographic signing
+    wger_secret = _get_kv(text, "WGER_SECRET_KEY")
+    if _is_blank_or_placeholder(wger_secret):
+        try:
+            wger_secret = base64.b64encode(secrets.token_bytes(48)).decode("utf-8")
+            text = _set_kv(text, "WGER_SECRET_KEY", wger_secret)
+        except Exception as e:
+            print(f"ERROR: Failed to generate WGER_SECRET_KEY: {e}", file=sys.stderr)
+            print("Generate manually: openssl rand -base64 48", file=sys.stderr)
+            sys.exit(1)
+
+    # Wger admin password: Admin account password for the wger web interface
+    wger_admin_pass = _get_kv(text, "WGER_ADMIN_PASSWORD")
+    if _is_blank_or_placeholder(wger_admin_pass):
+        try:
+            wger_admin_pass = base64.b64encode(secrets.token_bytes(16)).decode("utf-8")
+            text = _set_kv(text, "WGER_ADMIN_PASSWORD", wger_admin_pass)
+        except Exception as e:
+            print(f"ERROR: Failed to generate WGER_ADMIN_PASSWORD: {e}", file=sys.stderr)
+            print("Generate manually: openssl rand -base64 16", file=sys.stderr)
+            sys.exit(1)
+
     # Wger API token: Django REST Framework tokens must be created via the
     # admin UI — random tokens are rejected.  Set a sentinel so operators
     # know to generate one from http://localhost:8000/api/v2/token.
