@@ -56,7 +56,7 @@ PMOVES-Neo4j/ at root level (follows PMOVES-supabase pattern)
 make -C pmoves neo4j-backup
 
 # Restore
-make -C pmoves neo4j-restore BACKUP=pmoves/backups/neo4j_YYYYMMDD_HHMMSS.dump
+make -C pmoves neo4j-restore BACKUP=backups/neo4j_YYYYMMDD_HHMMSS.dump
 ```
 
 ## Monitoring
@@ -68,7 +68,7 @@ curl http://localhost:7474/db/neo4j/health
 ```
 
 ### Grafana Dashboard
-- URL: http://localhost:3000
+- URL: http://localhost:3002
 - Dashboard: Neo4j Overview
 - Panels: Database size, heap usage, transaction rate, cache performance
 
