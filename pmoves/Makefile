@@ -640,16 +640,59 @@ supabase-clean: ## Stop + remove Supabase containers and volumes
 	@$(DC) --profile supabase-local down -v --remove-orphans >/dev/null 2>&1 || true
 	@echo "✅ Supabase stack cleaned"
 
-.PHONY: neo4j-bootstrap
-neo4j-bootstrap: ## Seed Neo4j with persona aliases + CHIT geometry fixtures
-	@echo "📊 Applying Neo4j seeds..."
-	@if ! docker ps --format '{{.Names}}' | grep -qE '(neo4j|pmoves-neo4j)$$'; then \
-		echo "⚠️  Neo4j not running. Skipping seeds."; \
-		echo "   Start with: make up-data-tier"; \
-	else \
-		bash scripts/neo4j_bootstrap.sh; \
+.PHONY: neo4j-up neo4j-down neo4j-restart neo4j-logs neo4j-migrate neo4j-seed neo4j-bootstrap neo4j-status
+
+neo4j-up: ## Start Neo4j submodule stack
+	@echo "→ Starting Neo4j from submodule..."
+	@$(MAKE) --no-print-directory -C pmoves/integrations/neo4j up
+
+neo4j-down: ## Stop Neo4j submodule stack
+	@echo "→ Stopping Neo4j from submodule..."
+	@$(MAKE) --no-print-directory -C pmoves/integrations/neo4j down
+
+neo4j-restart: ## Restart Neo4j submodule stack
+	@echo "→ Restarting Neo4j from submodule..."
+	@$(MAKE) --no-print-directory -C pmoves/integrations/neo4j restart
+
+neo4j-logs: ## View Neo4j logs
+	@$(MAKE) --no-print-directory -C pmoves/integrations/neo4j logs
+
+neo4j-migrate: ## Run Neo4j migration (usage: make neo4j-migrate VERSION=003)
+	@if [ -z "$(VERSION)" ]; then \
+		echo "Usage: make neo4j-migrate VERSION=003"; \
+		echo ""; \
+		echo "Available migrations:"; \
+		ls -1 pmoves/integrations/neo4j/db/migrations/*.cypher 2>/dev/null | while read -r f; do \
+			echo "  • $$(basename "$f")"; \
+		done; \
+		exit 1; \
 	fi
-	@echo "✅ Neo4j bootstrap complete"
+	@$(MAKE) --no-print-directory -C pmoves/integrations/neo4j migrate VERSION=$(VERSION)
+
+neo4j-seed: ## Load Neo4j seed data (usage: make neo4j-seed SEED=001_person_aliases.csv)
+	@if [ -z "$(SEED)" ]; then \
+		echo "Usage: make neo4j-seed SEED=001_person_aliases.csv"; \
+		echo ""; \
+		echo "Available seeds:"; \
+		ls -1 pmoves/integrations/neo4j/db/seeds/*.csv 2>/dev/null | while read -r f; do \
+			echo "  • $$(basename "$f")"; \
+		done; \
+		exit 1; \
+	fi
+	@$(MAKE) --no-print-directory -C pmoves/integrations/neo4j seed SEED=$(SEED)
+
+neo4j-bootstrap: ## Initialize Neo4j (run migrations and seeds)
+	@echo "→ Bootstrapping Neo4j from submodule..."
+	@$(MAKE) --no-print-directory -C pmoves/integrations/neo4j bootstrap
+
+neo4j-status: ## Check Neo4j status from submodule
+	@$(MAKE) --no-print-directory -C pmoves/integrations/neo4j status
+
+# Legacy compatibility (delegates to submodule)
+.PHONY: neo4j-bootstrap-legacy
+neo4j-bootstrap-legacy: ## Legacy bootstrap script (deprecated: use neo4j-bootstrap)
+	@echo "⚠️  This target is deprecated. Use: make neo4j-bootstrap"
+	@$(MAKE) --no-print-directory neo4j-bootstrap
 
 .PHONY: seed-data
 seed-data: ## Seed Qdrant/Meilisearch with demo corpus via Hi-RAG v2
@@ -1229,19 +1272,12 @@ up-archon-submodule: ## Build Archon from submodule (pmoves/integrations/archon)
 # -------- Consciousness Taxonomy Loaders ----------
 .PHONY: load-consciousness-neo4j harvest-consciousness
 
-load-consciousness-neo4j: ## Load consciousness taxonomy schema into Neo4j
-	@echo "→ Loading consciousness Neo4j schema…"
-	@$(LOAD_ENV_SHARED); \
-	  if ! docker ps --format '{{.Names}}' | grep -qE '(neo4j|pmoves-neo4j)$$'; then \
-	    echo "⚠️  Neo4j not running. Skipping consciousness taxonomy load."; \
-	    echo "   Start with: make up-data-tier"; \
-	  else \
-	    auth="$$(docker exec pmoves-neo4j-1 printenv NEO4J_AUTH 2>/dev/null || echo "neo4j/$${NEO4J_PASSWORD:-neo4j}")"; \
-	    user="$${auth%%/*}"; pass="$${auth#*/}"; \
-	    cat data/consciousness/neo4j-consciousness-schema.cypher | \
-	      docker exec -i pmoves-neo4j-1 cypher-shell -u "$$user" -p "$$pass"; \
-	    echo "✔ Consciousness taxonomy loaded into Neo4j"; \
-	  fi
+load-consciousness-neo4j: ## Load consciousness taxonomy schema into Neo4j (CONCH Phase 4b)
+	@echo "→ Loading consciousness Neo4j schema (CONCH Phase 4b)..."
+	@echo "   This will load migration 003_consciousness_taxonomy.cypher (30KB schema)"
+	@echo ""
+	@$(MAKE) --no-print-directory neo4j-migrate VERSION=003_consciousness_taxonomy
+	@echo "✔ Consciousness taxonomy loaded into Neo4j (CONCH Phase 4b complete)"
 
 harvest-consciousness: ## Run Archon-based consciousness taxonomy harvester
 	@echo "→ Running consciousness harvester…"
