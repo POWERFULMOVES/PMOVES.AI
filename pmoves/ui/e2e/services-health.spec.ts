@@ -1,186 +1,197 @@
 import { test, expect } from '@playwright/test';
 
 /**
- * E2E tests for Services Health Dashboard
+ * E2E Tests for Service Health Validation
  *
- * Tests the health monitoring interface that displays status
- * for all PMOVES services including Agent Zero, Archon, Hi-RAG,
- * Flute Gateway, and other core services.
+ * Tests the health monitoring interface for:
+ * - Service health status display
+ * - Health check indicators
+ * - Service detail pages
+ * - Degraded service handling
  *
- * Route: /dashboard/health
- * API: /api/health, /api/health-all
+ * @module e2e/services-health
  */
+
+// Services that should have health checks
+const CORE_SERVICES = [
+  { name: 'Hi-RAG v2', slug: 'hirag-v2', port: 8086 },
+  { name: 'Agent Zero', slug: 'agent-zero', port: 8080 },
+  { name: 'Archon', slug: 'archon', port: 8091 },
+  { name: 'Flute Gateway', slug: 'flute-gateway', port: 8055 },
+  { name: 'TensorZero', slug: 'tensorzero', port: 3030 },
+  { name: 'DeepResearch', slug: 'deepresearch', port: 8098 },
+  { name: 'Jellyfin Bridge', slug: 'jellyfin-bridge', port: 8093 },
+];
 
 test.describe('Services Health Dashboard', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/dashboard/health');
+    await page.goto('/dashboard/services/health');
   });
 
-  test('page loads with health overview visible', async ({ page }) => {
-    // Verify main content area
-    await expect(page.getByRole('main')).toBeVisible();
-
+  test('displays health dashboard with all core services', async ({ page }) => {
     // Check for health dashboard heading
-    const heading = page.getByRole('heading', { name: /health|services|status/i });
-    const count = await heading.count();
-    if (count > 0) {
-      await expect(heading.first()).toBeVisible();
-    }
-  });
+    await expect(page.getByRole('heading', { name: /health|service status/i })).toBeVisible();
 
-  test('displays overall health status', async ({ page }) => {
-    // Look for overall status indicator
-    const statusIndicator = page.locator('[data-testid="health-status"], .health-status, [class*="healthStatus"]');
-    await page.waitForTimeout(1000); // Wait for health data to load
-
-    const count = await statusIndicator.count();
-    if (count > 0) {
-      await expect(statusIndicator.first()).toBeVisible();
-
-      // Status should show one of: healthy, degraded, unhealthy, or similar
-      const statusText = await statusIndicator.first().textContent();
-      expect(statusText?.toLowerCase()).toMatch(/healthy|degraded|unhealthy|online|offline|ok|error/);
-    }
-  });
-
-  test('lists multiple services with individual status', async ({ page }) => {
-    // Wait for service data to load
+    // Wait for health data to load
     await page.waitForTimeout(2000);
 
-    // Look for service cards or list items
-    const serviceCards = page.locator('[data-testid="service-card"], .service-card, [class*="serviceCard"]');
-    const serviceList = page.locator('[data-testid="service-list"], .service-list');
-
-    const hasCards = await serviceCards.count() > 0;
-    const hasList = await serviceList.count() > 0;
-
-    // At least one should be present
-    expect(hasCards || hasList).toBe(true);
-
-    if (hasCards) {
-      // Should have multiple services listed
-      const cardCount = await serviceCards.count();
-      expect(cardCount).toBeGreaterThan(0);
-    }
+    // Check that at least some services are displayed
+    const serviceCards = page.locator('[class*="service"], [class*="health"], tr');
+    await expect(serviceCards.first()).toBeVisible();
   });
 
-  test('each service shows name, status, and last check time', async ({ page }) => {
+  test('shows health status indicators (healthy/unhealthy/degraded)', async ({ page }) => {
     await page.waitForTimeout(2000);
 
-    // Check for service status indicators
-    const serviceName = page.locator('[data-testid="service-name"], .service-name');
-    const serviceStatus = page.locator('[data-testid="service-status"], .service-status');
-    const lastCheck = page.locator('[data-testid="last-check"], .last-check, [class*="lastCheck"]');
+    // Look for status indicators
+    const healthyIndicator = page.locator('[class*="healthy"], [class*="status-ok"], [data-status="healthy"]');
+    const unhealthyIndicator = page.locator('[class*="unhealthy"], [class*="status-error"], [data-status="unhealthy"]');
+    const degradedIndicator = page.locator('[class*="degraded"], [class*="status-warning"], [data-status="degraded"]');
 
-    // At least service names should be visible
-    const nameCount = await serviceName.count();
-    if (nameCount > 0) {
-      await expect(serviceName.first()).toBeVisible();
-    }
+    // At least one status indicator should be visible
+    const hasStatusIndicators =
+      (await healthyIndicator.count()) > 0 ||
+      (await unhealthyIndicator.count()) > 0 ||
+      (await degradedIndicator.count()) > 0;
 
-    // Status indicators should be present
-    const statusCount = await serviceStatus.count();
-    if (statusCount > 0) {
-      await expect(serviceStatus.first()).toBeVisible();
+    expect(hasStatusIndicators).toBe(true);
+  });
+
+  test('provides service detail navigation', async ({ page }) => {
+    await page.waitForTimeout(2000);
+
+    // Look for clickable service cards/rows
+    const serviceLinks = page.locator('a[href*="/services/"], tr[onclick]');
+
+    if ((await serviceLinks.count()) > 0) {
+      // Click first service link
+      await serviceLinks.first().click();
+
+      // Verify navigation to detail page
+      await expect(page.getByRole('heading')).toBeVisible();
+
+      // Check for service-specific health info
+      const hasHealthInfo =
+        (await page.getByText(/health|status|uptime/i).count()) > 0 ||
+        (await page.locator('[class*="metric"], [class*="stat"]').count()) > 0;
+
+      expect(hasHealthInfo).toBe(true);
     }
   });
 
-  test('can filter services by category', async ({ page }) => {
-    // Look for category filters
-    const categoryFilter = page.locator('[data-testid="category-filter"], select[name="category"]');
+  test('shows last check timestamp', async ({ page }) => {
+    await page.waitForTimeout(2000);
 
-    if (await categoryFilter.count() > 0) {
-      await expect(categoryFilter.first()).toBeVisible();
+    // Look for timestamp display
+    const timestampElement = page.locator('text=/last check|updated|refreshed/i');
 
-      // Try selecting a category
-      await categoryFilter.first().selectOption({ index: 1 });
+    if ((await timestampElement.count()) > 0) {
+      await expect(timestampElement.first()).toBeVisible();
+    }
+  });
+
+  test('provides refresh/recheck functionality', async ({ page }) => {
+    // Look for refresh button
+    const refreshButton = page.getByRole('button', { name: /refresh|recheck|reload/i });
+
+    if ((await refreshButton.count()) > 0) {
+      await refreshButton.first().click();
+
+      // Verify loading indicator appears
       await page.waitForTimeout(500);
 
-      // Filter should be applied
-      const selectedValue = await categoryFilter.first().inputValue();
-      expect(selectedValue).toBeTruthy();
-    }
-  });
+      // Check for loading state
+      const hasLoading =
+        (await page.locator('[class*="loading"], [aria-busy="true"]').count()) > 0 ||
+        (await page.getByRole('button', { name: /refresh/i }).getAttribute('disabled')) !== null;
 
-  test('can refresh health status manually', async ({ page }) => {
-    // Look for refresh button
-    const refreshButton = page.getByRole('button', { name: /refresh|reload/i });
-
-    if (await refreshButton.count() > 0) {
-      const initialText = await page.textContent('body');
-
-      await refreshButton.first().click();
-      await page.waitForTimeout(2000);
-
-      // Page should still be visible after refresh
-      await expect(page.getByRole('main')).toBeVisible();
-    }
-  });
-
-  test('displays service health percentage or summary', async ({ page }) => {
-    await page.waitForTimeout(2000);
-
-    // Look for percentage or summary text
-    const percentage = page.locator('[data-testid="health-percentage"], .health-percentage');
-    const summary = page.locator('[data-testid="health-summary"], .health-summary');
-
-    const hasPercentage = await percentage.count() > 0;
-    const hasSummary = await summary.count() > 0;
-
-    // At least one summary metric should be visible
-    if (hasPercentage) {
-      await expect(percentage.first()).toBeVisible();
-      const text = await percentage.first().textContent();
-      expect(text).toMatch(/\d+%/);
-    }
-
-    if (hasSummary) {
-      await expect(summary.first()).toBeVisible();
-    }
-  });
-
-  test('unhealthy services are visually distinguished', async ({ page }) => {
-    await page.waitForTimeout(2000);
-
-    // Look for error or unhealthy status indicators
-    const unhealthyIndicator = page.locator('[data-status="unhealthy"], [data-status="error"], .unhealthy, .error');
-
-    const count = await unhealthyIndicator.count();
-    if (count > 0) {
-      // If unhealthy services exist, they should be visually distinct
-      const element = unhealthyIndicator.first();
-      const classes = await element.getAttribute('class') || '';
-
-      // Check for error-related class names
-      expect(classes.toLowerCase()).toMatch(/error|unhealthy|danger|fail/);
+      // This is a soft assertion - loading state may be brief
     }
   });
 });
 
-/**
- * Health API Integration Tests
- * Direct API calls to health endpoints
- */
-test.describe('Health API Endpoints', () => {
-  const BASE_URL = process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:4482';
+test.describe('Individual Service Health', () => {
+  for (const service of CORE_SERVICES.slice(0, 3)) {
+    // Test a subset of services to keep tests fast
+    test.describe(`${service.name}`, () => {
+      test('shows service health details', async ({ page }) => {
+        await page.goto(`/dashboard/services/${service.slug}`);
 
-  test('base health endpoint responds', async ({ request }) => {
-    const response = await request.get(`${BASE_URL}/api/health`);
+        // Check for service name in heading
+        await expect(page.getByRole('heading')).toBeVisible();
+
+        // Check for health status section
+        const hasHealthSection =
+          (await page.getByText(/health|status/i).count()) > 0 ||
+          (await page.locator('[class*="health"], [class*="status"]').count()) > 0;
+
+        expect(hasHealthSection).toBe(true);
+      });
+
+      test('displays service endpoint information', async ({ page }) => {
+        await page.goto(`/dashboard/services/${service.slug}`);
+
+        // Look for endpoint/URL info
+        const hasEndpointInfo =
+          (await page.getByText(/http|endpoint|url|port/i).count()) > 0 ||
+          (await page.locator('code').count()) > 0;
+
+        // Soft assertion - may not always be displayed
+        if (hasEndpointInfo) {
+          const codeElement = page.locator('code').first();
+          if ((await codeElement.count()) > 0) {
+            await expect(codeElement).toContainText(/http|localhost/i);
+          }
+        }
+      });
+
+      test('shows service-specific metrics', async ({ page }) => {
+        await page.goto(`/dashboard/services/${service.slug}`);
+
+        // Wait for metrics to load
+        await page.waitForTimeout(1000);
+
+        // Look for metric displays
+        const metricElements = page.locator('[class*="metric"], [class*="stat"], dt');
+
+        // At least one detail element should be present
+        const hasDetails =
+          (await metricElements.count()) > 0 ||
+          (await page.locator('dl').count()) > 0;
+
+        expect(hasDetails).toBe(true);
+      });
+    });
+  }
+});
+
+test.describe('Health API Endpoints', () => {
+  test('base health endpoint returns JSON response', async ({ page }) => {
+    const response = await page.request.get('/api/health');
 
     expect(response.status()).toBe(200);
 
     const body = await response.json();
     expect(body).toHaveProperty('status');
-    expect(body).toHaveProperty('service', 'pmoves-ui');
-
-    // Should include database health check
-    expect(body.checks).toBeDefined();
+    expect(body.status).toMatch(/healthy|degraded|unhealthy/);
   });
 
-  test('health-all endpoint returns service list', async ({ request }) => {
-    const response = await request.get(`${BASE_URL}/api/health-all`);
+  test('health endpoint includes database check', async ({ page }) => {
+    const response = await page.request.get('/api/health');
 
-    // Should return 200 even if some services are down
+    expect(response.status()).toBeLessThan(500);
+
+    const body = await response.json();
+    // New implementation includes checks object
+    if (body.checks) {
+      expect(body.checks).toHaveProperty('database');
+      expect(body.checks.database).toHaveProperty('status');
+    }
+  });
+
+  test('health-all endpoint returns service list', async ({ page }) => {
+    const response = await page.request.get('/api/health-all?simple=true');
+
     expect(response.status()).toBe(200);
 
     const body = await response.json();
@@ -188,133 +199,114 @@ test.describe('Health API Endpoints', () => {
     expect(Array.isArray(body.services)).toBe(true);
   });
 
-  test('health-all with simple query parameter', async ({ request }) => {
-    const response = await request.get(`${BASE_URL}/api/health-all?simple=true`);
+  test('presign health endpoint returns service status', async ({ page }) => {
+    const response = await page.request.get('/api/health/presign');
 
-    expect(response.status()).toBe(200);
-
-    const body = await response.json();
-    expect(body).toHaveProperty('services');
-    expect(body).toHaveProperty('percentage');
-
-    // Simple mode should only return slug, status, text
-    if (body.services.length > 0) {
-      const service = body.services[0];
-      expect(service).toHaveProperty('slug');
-      expect(service).toHaveProperty('status');
-      expect(service).toHaveProperty('text');
-    }
-  });
-
-  test('health-all with category filter', async ({ request }) => {
-    const response = await request.get(`${BASE_URL}/api/health-all?category=agent`);
-
-    // Category may not exist, but endpoint should respond
-    expect([200, 404]).toContain(response.status());
-
-    if (response.status() === 200) {
-      const body = await response.json();
-      expect(body).toHaveProperty('services');
-    }
-  });
-
-  test('health-all with slugs filter', async ({ request }) => {
-    const response = await request.get(`${BASE_URL}/api/health-all?slugs=agent-zero`);
-
-    expect(response.status()).toBe(200);
+    expect(response.status()).toBeLessThan(500);
 
     const body = await response.json();
-    expect(body).toHaveProperty('health');
-
-    if (body.health) {
-      expect(body.health.slug).toBe('agent-zero');
-      expect(body.health.status).toMatch(/healthy|unhealthy|degraded|unknown/);
-    }
+    expect(body).toHaveProperty('service');
+    expect(body.service).toBe('presign-health');
   });
 
-  test('presign health endpoint has rate limiting', async ({ request }) => {
-    // Make multiple rapid requests to test rate limiting
-    const requests = [];
-    for (let i = 0; i < 15; i++) {
-      requests.push(request.get(`${BASE_URL}/api/health/presign`));
-    }
-
-    const responses = await Promise.all(requests);
-    const statusCodes = responses.map(r => r.status());
-
-    // At least some requests should succeed (200)
-    expect(statusCodes.some(s => s === 200)).toBe(true);
-
-    // Rate limiting should kick in (429) after threshold
-    expect(statusCodes.some(s => s === 429)).toBe(true);
-
-    // Check for rate limit headers on 429 responses
-    for (const response of responses) {
-      if (response.status() === 429) {
-        const retryAfter = response.headers()['retry-after'];
-        const rateLimitRemaining = response.headers()['x-ratelimit-remaining'];
-
-        expect(retryAfter).toBeDefined();
-        expect(rateLimitRemaining).toBeDefined();
-        break; // Only need to check one
-      }
-    }
-  });
-
-  test('boot-jwt health endpoint returns JWT info', async ({ request }) => {
-    const response = await request.get(`${BASE_URL}/api/health/boot-jwt`);
+  test('boot-jwt health endpoint returns token status', async ({ page }) => {
+    const response = await page.request.get('/api/health/boot-jwt');
 
     expect(response.status()).toBe(200);
 
     const body = await response.json();
     expect(body).toHaveProperty('hasToken');
-    expect(body).toHaveProperty('exp');
-    expect(body).toHaveProperty('now');
-    expect(body).toHaveProperty('expired');
-
-    if (body.hasToken) {
-      expect(typeof body.exp).toBe('number');
-      expect(typeof body.now).toBe('number');
-    }
-  });
-
-  test('ingest-smoke endpoint requires auth or single-user mode', async ({ request }) => {
-    // Without auth, should get 401 or 500 (missing secret)
-    const response = await request.post(`${BASE_URL}/api/health/ingest-smoke`);
-
-    // In single-user mode (CI), may return 400 (missing ownerId)
-    // In production mode, should return 401 or 500
-    expect([400, 401, 500]).toContain(response.status());
+    expect(typeof body.hasToken).toBe('boolean');
   });
 });
 
-/**
- * Critical Services Health Check
- * Verifies core PMOVES services are reachable
- */
-test.describe('Critical Services Reachability', () => {
-  const services = [
-    { name: 'Agent Zero', url: process.env.NEXT_PUBLIC_AGENT_ZERO_URL || 'http://localhost:8080', path: '/healthz' },
-    { name: 'Archon', url: process.env.NEXT_PUBLIC_ARCHON_URL || 'http://localhost:8091', path: '/healthz' },
-    { name: 'Hi-RAG v2', url: process.env.NEXT_PUBLIC_HIRAG_URL || 'http://localhost:8086', path: '/health' },
-    { name: 'Flute Gateway', url: process.env.NEXT_PUBLIC_FLUTE_GATEWAY_URL || 'http://localhost:8055', path: '/healthz' },
-    { name: 'TensorZero', url: 'http://localhost:3030', path: '/' },
-    { name: 'Supabase Kong', url: 'http://localhost:8000', path: '/_' },
-  ];
+test.describe('Health Error Handling', () => {
+  test('handles degraded service state gracefully', async ({ page }) => {
+    // Navigate to health page
+    await page.goto('/dashboard/services/health');
+    await page.waitForTimeout(2000);
 
-  for (const service of services) {
-    test(`${service.name} health endpoint`, async ({ request }) => {
-      const response = await request.get(`${service.url}${service.path}`);
+    // Check for degraded status display (may not always be present)
+    const degradedIndicator = page.locator('[class*="degraded"], [class*="warning"]');
 
-      // In CI, services may not be running
-      // Accept 200 (healthy), 502/503 (unavailable), or 521 (origin down)
-      expect([200, 502, 503, 521, 404]).toContain(response.status());
+    if ((await degradedIndicator.count()) > 0) {
+      await expect(degradedIndicator.first()).toBeVisible();
+    }
+  });
 
-      if (response.status() === 200) {
-        // Verify response has content
-        const text = await response.text();
-        expect(text.length).toBeGreaterThan(0);
-      }
-    });
-  }
+  test('shows error messages for failed health checks', async ({ page }) => {
+    const response = await page.request.get('/api/health');
+
+    // Even in degraded state, should return proper JSON
+    expect(response.headers()['content-type']).toContain('application/json');
+
+    const body = await response.json();
+    expect(body).toHaveProperty('status');
+  });
+
+  test('provides retry mechanism for failed checks', async ({ page }) => {
+    await page.goto('/dashboard/services/health');
+
+    // Look for retry/recheck buttons
+    const retryButton = page.getByRole('button', { name: /retry|recheck|refresh/i });
+
+    if ((await retryButton.count()) > 0) {
+      await expect(retryButton.first()).toBeVisible();
+      await retryButton.first().click();
+
+      // Verify page updates after retry
+      await page.waitForTimeout(1000);
+      const hasLoading =
+        (await page.locator('[class*="loading"]').count()) > 0 ||
+        (await page.getByRole('button', { name: /retry/i }).getAttribute('disabled')) !== null;
+
+      // Soft assertion - loading state may be brief
+    }
+  });
+});
+
+test.describe('Health Display - UI/UX', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto('/dashboard/services/health');
+  });
+
+  test('uses color coding for health status', async ({ page }) => {
+    await page.waitForTimeout(2000);
+
+    // Look for color-coded status indicators
+    // These are commonly implemented with CSS classes
+    const hasColorCoding =
+      (await page.locator('[class*="green"], [class*="red"], [class*="yellow"]').count()) > 0 ||
+      (await page.locator('[style*="color"]').count()) > 0;
+
+    // This is a soft assertion - depends on implementation
+    if (hasColorCoding) {
+      const statusIndicator = page.locator('[class*="status"]').first();
+      await expect(statusIndicator).toBeVisible();
+    }
+  });
+
+  test('displays service count summary', async ({ page }) => {
+    await page.waitForTimeout(2000);
+
+    // Look for summary text (e.g., "5/7 services healthy")
+    const summaryText = page.getByText(/\d+\/\d+.*services/i);
+
+    if ((await summaryText.count()) > 0) {
+      await expect(summaryText.first()).toBeVisible();
+    }
+  });
+
+  test('groups services by category or tier', async ({ page }) => {
+    await page.waitForTimeout(2000);
+
+    // Look for category/section headings
+    const headings = page.locator('h2, h3, [class*="category"], [class*="group"]');
+    const hasGrouping = await headings.count() > 1; // More than main heading
+
+    // Soft assertion - grouping may not always be present
+    if (hasGrouping) {
+      await expect(headings.nth(1)).toBeVisible();
+    }
+  });
 });

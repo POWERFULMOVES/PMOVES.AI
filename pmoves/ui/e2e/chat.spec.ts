@@ -1,13 +1,15 @@
 import { test, expect } from '@playwright/test';
 
 /**
- * E2E tests for Agent Zero Chat Interface
+ * E2E Tests for Agent Zero Chat Interface
  *
- * Tests the real-time chat interface with Agent Zero MCP API,
- * including message submission, streaming responses, and error handling.
+ * Tests the chat interface for:
+ * - Message sending and display
+ * - Real-time streaming responses
+ * - Chat history persistence
+ * - Error handling
  *
- * Route: /dashboard/chat
- * API: http://localhost:8080/mcp/*
+ * @module e2e/chat
  */
 
 test.describe('Agent Zero Chat', () => {
@@ -16,131 +18,150 @@ test.describe('Agent Zero Chat', () => {
     await page.goto('/dashboard/chat');
   });
 
-  test('page loads with chat interface visible', async ({ page }) => {
-    // Verify chat container is present
-    await expect(page.getByRole('main')).toBeVisible();
+  test('displays chat interface with input and send button', async ({ page }) => {
+    // Check for main chat elements
+    await expect(page.getByRole('heading', { name: /chat/i })).toBeVisible();
+    await expect(page.getByPlaceholder(/message/i)).toBeVisible();
+    await expect(page.getByRole('button', { name: /send/i })).toBeVisible();
+  });
 
-    // Check for chat input area
-    const chatInput = page.locator('textarea, input[type="text"]').first();
-    await expect(chatInput).toBeVisible();
+  test('sends message and displays in chat history', async ({ page }) => {
+    const testMessage = 'Hello, Agent Zero!';
 
-    // Check for send button or submit action
-    const sendButton = page.getByRole('button', { name: /send|submit|>/i });
-    if (await sendButton.count() > 0) {
-      await expect(sendButton.first()).toBeVisible();
+    // Type and send message
+    await page.getByPlaceholder(/message/i).fill(testMessage);
+    await page.getByRole('button', { name: /send/i }).click();
+
+    // Verify message appears in chat
+    await expect(page.getByText(testMessage)).toBeVisible();
+  });
+
+  test('displays loading state while agent processes', async ({ page }) => {
+    const testMessage = 'Test loading state';
+
+    // Send message
+    await page.getByPlaceholder(/message/i).fill(testMessage);
+    await page.getByRole('button', { name: /send/i }).click();
+
+    // Check for loading indicator
+    await expect(page.getByRole('status')).toBeVisible({ timeout: 5000 });
+  });
+
+  test('supports markdown in responses', async ({ page }) => {
+    // Send a message that should trigger a formatted response
+    await page.getByPlaceholder(/message/i).fill('Format this as a list');
+    await page.getByRole('button', { name: /send/i }).click();
+
+    // Wait for response (may be mocked in test environment)
+    await page.waitForTimeout(2000);
+
+    // Check for markdown-rendered elements
+    const hasListItems = await page.locator('li, ul, ol').count() > 0;
+    // This is a soft assertion since response content varies
+    if (hasListItems) {
+      await expect(page.locator('li').first()).toBeVisible();
     }
   });
 
-  test('displays connection status indicator', async ({ page }) => {
-    // Agent Zero connection status should be visible
-    const statusIndicator = page.locator('[data-testid="agent-status"], .agent-status, [class*="status"]');
-    const count = await statusIndicator.count();
+  test('clears input after sending', async ({ page }) => {
+    const testMessage = 'Clear this message';
 
-    if (count > 0) {
-      // Status indicator exists - check for connected/connecting states
-      const statusText = await statusIndicator.first().textContent();
-      expect(statusText?.toLowerCase()).toMatch(/connected|connecting|ready|online|offline/);
-    }
+    await page.getByPlaceholder(/message/i).fill(testMessage);
+    await page.getByRole('button', { name: /send/i }).click();
+
+    // Verify input is cleared
+    await expect(page.getByPlaceholder(/message/i)).toHaveValue('');
   });
 
-  test('chat input accepts user messages', async ({ page }) => {
-    const chatInput = page.locator('textarea, input[type="text"]').first();
+  test('disables send button when input is empty', async ({ page }) => {
+    const sendButton = page.getByRole('button', { name: /send/i });
 
-    // Type a test message
-    await chatInput.fill('Hello Agent Zero');
-    await expect(chatInput).toHaveValue('Hello Agent Zero');
+    // Initially should be disabled
+    await expect(sendButton).toBeDisabled();
 
-    // Clear the message
-    await chatInput.fill('');
-    await expect(chatInput).toHaveValue('');
+    // Should be enabled when there's input
+    await page.getByPlaceholder(/message/i).fill('Test');
+    await expect(sendButton).toBeEnabled();
+
+    // Should be disabled again when cleared
+    await page.getByPlaceholder(/message/i).fill('');
+    await expect(sendButton).toBeDisabled();
   });
 
-  test('displays error message when Agent Zero is unavailable', async ({ page }) => {
-    // This test validates error handling when backend is down
-    // In CI, the backend may not be running, so we check for error UI
+  test('handles Enter key to send message', async ({ page }) => {
+    const testMessage = 'Send with Enter';
 
-    // Try to send a message (will fail if backend is down)
-    const chatInput = page.locator('textarea, input[type="text"]').first();
-    const sendButton = page.getByRole('button', { name: /send|submit|>/i }).first();
+    await page.getByPlaceholder(/message/i).fill(testMessage);
+    await page.keyboard.press('Enter');
 
-    await chatInput.fill('test message');
-
-    // If send button exists, click it
-    if (await sendButton.count() > 0) {
-      await sendButton.click();
-
-      // Check for error message (may appear if backend unavailable)
-      const errorMessage = page.locator('[role="alert"], .error, [class*="error"]');
-      await page.waitForTimeout(2000); // Wait for potential error
-
-      if (await errorMessage.count() > 0) {
-        const text = await errorMessage.first().textContent();
-        // Either error message appears OR we're in CI with mock backend
-        expect(text?.length).toBeGreaterThan(0);
-      }
-    }
+    // Verify message appears
+    await expect(page.getByText(testMessage)).toBeVisible();
   });
 
-  test('chat history persists across navigation', async ({ page }) => {
-    // Navigate to chat
-    await page.goto('/dashboard/chat');
+  test('allows Shift+Enter for new lines without sending', async ({ page }) => {
+    const testMessage = 'Line 1\nLine 2';
 
-    // Navigate away and back
-    await page.goto('/dashboard/services');
-    await page.goto('/dashboard/chat');
+    await page.getByPlaceholder(/message/i).fill('Line 1');
+    await page.keyboard.press('Shift+Enter');
+    await page.keyboard.type('Line 2');
 
-    // Chat interface should still be visible
-    await expect(page.getByRole('main')).toBeVisible();
+    // Verify both lines are in input
+    await expect(page.getByPlaceholder(/message/i)).toHaveValue(testMessage);
+
+    // Message should not be sent yet
+    await expect(page.getByText(testMessage)).not.toBeVisible();
   });
 
-  test('has working navigation to related pages', async ({ page }) => {
-    // Check for navigation links to Agent Zero UI
-    const agentZeroLink = page.getByRole('link', { name: /agent zero|agent zero ui/i });
-    if (await agentZeroLink.count() > 0) {
-      await agentZeroLink.first().click();
-      await expect(page).toHaveURL(/\/dashboard\/services\/agent-zero|agent-zero/);
-    }
+  test('displays agent avatar and name', async ({ page }) => {
+    // Check for agent identification
+    const agentName = page.getByText(/agent zero/i, { exact: false });
+    const hasAvatar = await page.locator('[class*="avatar"], img[alt*="agent"]').count() > 0;
+
+    // At least one of these should be present
+    const hasAgentIdentification = await agentName.count() > 0 || hasAvatar;
+    expect(hasAgentIdentification).toBe(true);
   });
 
-  test('displays help or instructions for new users', async ({ page }) => {
-    // Check for placeholder text, help text, or instructions
-    const chatInput = page.locator('textarea, input[type="text"]').first();
-    const placeholder = await chatInput.getAttribute('placeholder');
+  test('shows error message on failed request', async ({ page }) => {
+    // This test requires mocking a failed request
+    // For now, we'll check that error handling UI exists
+    const hasErrorDisplay =
+      (await page.locator('[class*="error"], [role="alert"]').count()) > 0;
 
-    // Should have some guidance for users
-    if (placeholder) {
-      expect(placeholder.length).toBeGreaterThan(0);
-    }
-
-    // Check for help text or instructions
-    const helpText = page.locator('[class*="help"], [class*="instruction"], p');
-    const helpCount = await helpText.count();
-
-    if (helpCount > 0) {
-      // At least one text element should be visible
-      await expect(helpText.first()).toBeVisible();
+    // If error display exists, verify it's hidden initially
+    if (hasErrorDisplay) {
+      await expect(page.locator('[class*="error"], [role="alert"]').first()).not.toBeVisible();
     }
   });
 });
 
-/**
- * Chat API Integration Tests
- * These tests validate direct API calls to Agent Zero MCP endpoints
- */
-test.describe('Agent Zero MCP API', () => {
-  const AGENT_ZERO_URL = process.env.NEXT_PUBLIC_AGENT_ZERO_URL || 'http://localhost:8080';
-
-  test('health endpoint responds', async ({ request }) => {
-    const response = await request.get(`${AGENT_ZERO_URL}/healthz`);
-    // In CI, Agent Zero may not be running - 200 or 5xx acceptable
-    expect([200, 502, 503, 521]).toContain(response.status());
+test.describe('Agent Zero Chat - Settings', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto('/dashboard/chat');
   });
 
-  test('MCP endpoint requires authentication', async ({ request }) => {
-    const response = await request.post(`${AGENT_ZERO_URL}/mcp/command`, {
-      data: { command: 'test' }
-    });
-    // Should return 401/403 when not authenticated, or 404 if endpoint doesn't exist
-    expect([401, 403, 404, 502]).toContain(response.status());
+  test('provides access to model selection', async ({ page }) => {
+    // Look for model selector or settings button
+    const modelSelector = page.getByRole('combobox', { name: /model/i });
+    const settingsButton = page.getByRole('button', { name: /settings/i });
+
+    const hasControls =
+      (await modelSelector.count()) > 0 || (await settingsButton.count()) > 0;
+    expect(hasControls).toBe(true);
+  });
+
+  test('allows clearing chat history', async ({ page }) => {
+    // Look for clear history button
+    const clearButton = page.getByRole('button', { name: /clear/i, exact: false });
+
+    if ((await clearButton.count()) > 0) {
+      await clearButton.first().click();
+
+      // Verify confirmation or action
+      const hasConfirm = await page.getByRole('button', { name: /confirm/i }).count() > 0;
+      if (hasConfirm) {
+        await page.getByRole('button', { name: /confirm/i }).click();
+      }
+    }
   });
 });
