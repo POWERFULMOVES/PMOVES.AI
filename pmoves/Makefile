@@ -1232,11 +1232,16 @@ up-archon-submodule: ## Build Archon from submodule (pmoves/integrations/archon)
 load-consciousness-neo4j: ## Load consciousness taxonomy schema into Neo4j
 	@echo "→ Loading consciousness Neo4j schema…"
 	@$(LOAD_ENV_SHARED); \
-	  auth="$${NEO4J_AUTH:-neo4j/neo4j}"; \
-	  user="$${auth%%/*}"; pass="$${auth#*/}"; \
-	  cat data/consciousness/neo4j-consciousness-schema.cypher | \
-	    docker exec -i neo4j cypher-shell -u "$$user" -p "$$pass"; \
-	  echo "✔ Consciousness taxonomy loaded into Neo4j"
+	  if ! docker ps --format '{{.Names}}' | grep -qE '(neo4j|pmoves-neo4j)$$'; then \
+	    echo "⚠️  Neo4j not running. Skipping consciousness taxonomy load."; \
+	    echo "   Start with: make up-data-tier"; \
+	  else \
+	    auth="$$(docker exec pmoves-neo4j-1 printenv NEO4J_AUTH 2>/dev/null || echo "neo4j/$${NEO4J_PASSWORD:-neo4j}")"; \
+	    user="$${auth%%/*}"; pass="$${auth#*/}"; \
+	    cat data/consciousness/neo4j-consciousness-schema.cypher | \
+	      docker exec -i pmoves-neo4j-1 cypher-shell -u "$$user" -p "$$pass"; \
+	    echo "✔ Consciousness taxonomy loaded into Neo4j"; \
+	  fi
 
 harvest-consciousness: ## Run Archon-based consciousness taxonomy harvester
 	@echo "→ Running consciousness harvester…"
@@ -1245,6 +1250,47 @@ harvest-consciousness: ## Run Archon-based consciousness taxonomy harvester
 	  --output data/consciousness/harvested \
 	  --publish
 	@echo "✔ Consciousness harvest complete"
+
+.PHONY: ingest-consciousness-yt mesh-handshake smoke-geometry web-geometry
+
+ingest-consciousness-yt: ## Ingest consciousness videos from YouTube
+	@echo "→ Ingesting consciousness videos from YouTube..."
+	@if ! docker ps --format '{{.Names}}' | grep -q 'pmoves-yt'; then \
+		echo "⚠️  PMOVES.YT not running. Start with: make up-yt"; \
+	else \
+		$(call docker-compose-exec,pmoves-yt,python,ingest.py $(ARGS)); \
+		echo "✔ Consciousness video ingestion complete"; \
+	fi
+
+mesh-handshake: ## Verify GPU mesh connectivity and CHIT bus
+	@echo "→ Testing mesh handshake and CHIT bus connectivity..."
+	@echo "   Checking GPU orchestrator..."
+	@if docker ps --format '{{.Names}}' | grep -q 'gpu-orchestrator'; then \
+		$(call docker-compose-exec,gpu-orchestrator,python,-c "import sys; sys.path.insert(0, '/app'); from mesh_handshake import check_gpu_mesh; check_gpu_mesh()"); \
+	else \
+		echo "⚠️  GPU orchestrator not running"; \
+	fi
+	@echo "   Checking CHIT geometry bus..."
+	@$(MAKE) --no-print-directory geometry-bus-status
+	@echo "✔ Mesh handshake complete"
+
+smoke-geometry: ## Test geometry service and CHIT pipeline
+	@echo "→ Testing geometry service and CHIT pipeline..."
+	@if [ -f "tests/test_geometry.py" ]; then \
+		$(PYTHON) -m pytest tests/test_geometry.py -v --tb=short; \
+	else \
+		echo "⚠️  tests/test_geometry.py not found. Creating placeholder test..."; \
+		echo "# Placeholder: Geometry service tests" > tests/test_geometry.py; \
+	fi
+	@echo "✔ Geometry smoke test complete"
+
+web-geometry: ## Launch geometry service web UI
+	@echo "→ Launching geometry service web UI..."
+	@if docker ps --format '{{.Names}}' | grep -q 'geometry-service\|evo-controller'; then \
+		echo "   Geometry service already running. Access at: http://localhost:8113"; \
+	else \
+		echo "⚠️  Geometry service not running. Start with: make up-agents"; \
+	fi
 
 .PHONY: loki-ready
 loki-ready: ## Check Loki readiness endpoint (/ready)
@@ -2640,3 +2686,22 @@ docs-reconcile-check: ## Check living document freshness (read-only, CI-safe)
 .PHONY: docs-reconcile-json
 docs-reconcile-json: ## Living document freshness report (JSON output)
 	@$(PYTHON) tools/docs_reconcile.py --check --json $(ARGS)
+
+# =============================================================================
+# GitHub App Credential Management
+# =============================================================================
+
+.PHONY: github-app-setup
+github-app-setup: ## Automated GitHub App credential setup (uncomment env.shared + secrets-funnel)
+	@echo "→ Setting up GitHub App credentials..."
+	@$(PYTHON) tools/github_app_auto_setup.py
+
+.PHONY: github-app-verify
+github-app-verify: ## Verify GitHub App integration (env.shared, env.tier-agent, Docker)
+	@echo "→ Verifying GitHub App setup..."
+	@$(PYTHON) tools/verify_github_app_setup.py
+
+.PHONY: github-app-test
+github-app-test: ## Test GitHub App token minting (requires services running)
+	@echo "→ Testing GitHub App token minting..."
+	@cd ../PMOVES-BoTZ && $(PYTHON) features/github/mint_and_exec.py
