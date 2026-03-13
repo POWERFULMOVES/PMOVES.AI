@@ -1,6 +1,8 @@
 # PMOVES Network Fabric & Provisioning Blueprint
 
-_Last updated: 2025-11-05_
+_Last updated: 2026-03-12_
+
+> **Canonical deployment scripts**: See the [PMOVES-Tailscale submodule](../../PMOVES-Tailscale/PMOVES-DEPLOY.md) for Tailscale deploy scripts, Headscale control plane, Docker patterns, and Cloudflare integration.
 
 ## Key Findings from Compose & Runbooks Review
 - `pmoves/docker-compose*.yml` attaches nearly every service to the external `pmoves-net` bridge without constraining the subnet, leaving homelab and VPS installs to inherit host-specific defaults.

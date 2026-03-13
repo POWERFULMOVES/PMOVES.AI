@@ -1,6 +1,8 @@
 # Tailnet + Discord Deployment Runbook
 
-_Last updated: 2025-10-07_
+_Last updated: 2026-03-12_
+
+> **New deploy scripts**: The `PMOVES-Tailscale` submodule now contains universal deploy scripts (`deploy.sh` / `deploy.ps1`), Headscale Docker Compose, and Cloudflare tunnel setup. See [PMOVES-Tailscale/PMOVES-DEPLOY.md](../../PMOVES-Tailscale/PMOVES-DEPLOY.md).
 
 This runbook walks through launching PMOVES services on a Tailscale-connected host so they can back Discord automations from both a local workstation and a self-hosted VPS. It also records how to pre-seed RustDesk so you can remote in for maintenance.
 
