@@ -55,9 +55,17 @@ and available for runtime token minting by services (BoTZ MCP gateway, Archon).
 | Purpose | Ephemeral tokens for GHCR, cross-repo ops, MCP GitHub tools |
 | Action | `actions/create-github-app-token@v2` |
 | Workflows | `build-images.yml`, `integrations-ghcr.yml`, `self-hosted-builds.yml` |
-| Local setup | `docs/GITHUB_APP_LOCAL_SETUP.md` |
+| Quick start | `make github-app-setup` (automated) |
+| Docs | `pmoves/docs/GITHUB_APP_QUICK_START.md`, `pmoves/docs/AGENTS/GITHUB_APP_CREDENTIALS.md` |
 | Strategy doc | `pmoves/docs/infrastructure/github-app-strategy.md` |
 | Secrets | `GH_APP_ID`, `GH_APP_SEC` (PEM), `GH_APP_CLIENT_ID`, `GH_APP_INSTALLATION_ID` |
+
+**Automated Setup:**
+```bash
+cd pmoves
+make github-app-setup    # Uncomment credentials + run secrets-funnel
+make github-app-verify  # Verify all components
+```
 
 **Token hierarchy:**
 - **CI:** `actions/create-github-app-token@v2` → ephemeral GitHub App installation token for GHCR

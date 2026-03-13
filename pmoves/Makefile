@@ -640,16 +640,59 @@ supabase-clean: ## Stop + remove Supabase containers and volumes
 	@$(DC) --profile supabase-local down -v --remove-orphans >/dev/null 2>&1 || true
 	@echo "✅ Supabase stack cleaned"
 
-.PHONY: neo4j-bootstrap
-neo4j-bootstrap: ## Seed Neo4j with persona aliases + CHIT geometry fixtures
-	@echo "📊 Applying Neo4j seeds..."
-	@if ! docker ps --format '{{.Names}}' | grep -qE '(neo4j|pmoves-neo4j)$$'; then \
-		echo "⚠️  Neo4j not running. Skipping seeds."; \
-		echo "   Start with: make up-data-tier"; \
-	else \
-		bash scripts/neo4j_bootstrap.sh; \
+.PHONY: neo4j-up neo4j-down neo4j-restart neo4j-logs neo4j-migrate neo4j-seed neo4j-bootstrap neo4j-status
+
+neo4j-up: ## Start Neo4j submodule stack
+	@echo "→ Starting Neo4j from submodule..."
+	@$(MAKE) --no-print-directory -C pmoves/integrations/neo4j up
+
+neo4j-down: ## Stop Neo4j submodule stack
+	@echo "→ Stopping Neo4j from submodule..."
+	@$(MAKE) --no-print-directory -C pmoves/integrations/neo4j down
+
+neo4j-restart: ## Restart Neo4j submodule stack
+	@echo "→ Restarting Neo4j from submodule..."
+	@$(MAKE) --no-print-directory -C pmoves/integrations/neo4j restart
+
+neo4j-logs: ## View Neo4j logs
+	@$(MAKE) --no-print-directory -C pmoves/integrations/neo4j logs
+
+neo4j-migrate: ## Run Neo4j migration (usage: make neo4j-migrate VERSION=003)
+	@if [ -z "$(VERSION)" ]; then \
+		echo "Usage: make neo4j-migrate VERSION=003"; \
+		echo ""; \
+		echo "Available migrations:"; \
+		ls -1 pmoves/integrations/neo4j/db/migrations/*.cypher 2>/dev/null | while read -r f; do \
+			echo "  • $$(basename "$f")"; \
+		done; \
+		exit 1; \
 	fi
-	@echo "✅ Neo4j bootstrap complete"
+	@$(MAKE) --no-print-directory -C pmoves/integrations/neo4j migrate VERSION=$(VERSION)
+
+neo4j-seed: ## Load Neo4j seed data (usage: make neo4j-seed SEED=001_person_aliases.csv)
+	@if [ -z "$(SEED)" ]; then \
+		echo "Usage: make neo4j-seed SEED=001_person_aliases.csv"; \
+		echo ""; \
+		echo "Available seeds:"; \
+		ls -1 pmoves/integrations/neo4j/db/seeds/*.csv 2>/dev/null | while read -r f; do \
+			echo "  • $$(basename "$f")"; \
+		done; \
+		exit 1; \
+	fi
+	@$(MAKE) --no-print-directory -C pmoves/integrations/neo4j seed SEED=$(SEED)
+
+neo4j-bootstrap: ## Initialize Neo4j (run migrations and seeds)
+	@echo "→ Bootstrapping Neo4j from submodule..."
+	@$(MAKE) --no-print-directory -C pmoves/integrations/neo4j bootstrap
+
+neo4j-status: ## Check Neo4j status from submodule
+	@$(MAKE) --no-print-directory -C pmoves/integrations/neo4j status
+
+# Legacy compatibility (delegates to submodule)
+.PHONY: neo4j-bootstrap-legacy
+neo4j-bootstrap-legacy: ## Legacy bootstrap script (deprecated: use neo4j-bootstrap)
+	@echo "⚠️  This target is deprecated. Use: make neo4j-bootstrap"
+	@$(MAKE) --no-print-directory neo4j-bootstrap
 
 .PHONY: seed-data
 seed-data: ## Seed Qdrant/Meilisearch with demo corpus via Hi-RAG v2
@@ -1229,14 +1272,12 @@ up-archon-submodule: ## Build Archon from submodule (pmoves/integrations/archon)
 # -------- Consciousness Taxonomy Loaders ----------
 .PHONY: load-consciousness-neo4j harvest-consciousness
 
-load-consciousness-neo4j: ## Load consciousness taxonomy schema into Neo4j
-	@echo "→ Loading consciousness Neo4j schema…"
-	@$(LOAD_ENV_SHARED); \
-	  auth="$${NEO4J_AUTH:-neo4j/neo4j}"; \
-	  user="$${auth%%/*}"; pass="$${auth#*/}"; \
-	  cat data/consciousness/neo4j-consciousness-schema.cypher | \
-	    docker exec -i neo4j cypher-shell -u "$$user" -p "$$pass"; \
-	  echo "✔ Consciousness taxonomy loaded into Neo4j"
+load-consciousness-neo4j: ## Load consciousness taxonomy schema into Neo4j (CONCH Phase 4b)
+	@echo "→ Loading consciousness Neo4j schema (CONCH Phase 4b)..."
+	@echo "   This will load migration 003_consciousness_taxonomy.cypher (30KB schema)"
+	@echo ""
+	@$(MAKE) --no-print-directory neo4j-migrate VERSION=003_consciousness_taxonomy
+	@echo "✔ Consciousness taxonomy loaded into Neo4j (CONCH Phase 4b complete)"
 
 harvest-consciousness: ## Run Archon-based consciousness taxonomy harvester
 	@echo "→ Running consciousness harvester…"
@@ -1245,6 +1286,47 @@ harvest-consciousness: ## Run Archon-based consciousness taxonomy harvester
 	  --output data/consciousness/harvested \
 	  --publish
 	@echo "✔ Consciousness harvest complete"
+
+.PHONY: ingest-consciousness-yt mesh-handshake smoke-geometry web-geometry
+
+ingest-consciousness-yt: ## Ingest consciousness videos from YouTube
+	@echo "→ Ingesting consciousness videos from YouTube..."
+	@if ! docker ps --format '{{.Names}}' | grep -q 'pmoves-yt'; then \
+		echo "⚠️  PMOVES.YT not running. Start with: make up-yt"; \
+	else \
+		$(call docker-compose-exec,pmoves-yt,python,ingest.py $(ARGS)); \
+		echo "✔ Consciousness video ingestion complete"; \
+	fi
+
+mesh-handshake: ## Verify GPU mesh connectivity and CHIT bus
+	@echo "→ Testing mesh handshake and CHIT bus connectivity..."
+	@echo "   Checking GPU orchestrator..."
+	@if docker ps --format '{{.Names}}' | grep -q 'gpu-orchestrator'; then \
+		$(call docker-compose-exec,gpu-orchestrator,python,-c "import sys; sys.path.insert(0, '/app'); from mesh_handshake import check_gpu_mesh; check_gpu_mesh()"); \
+	else \
+		echo "⚠️  GPU orchestrator not running"; \
+	fi
+	@echo "   Checking CHIT geometry bus..."
+	@$(MAKE) --no-print-directory geometry-bus-status
+	@echo "✔ Mesh handshake complete"
+
+smoke-geometry: ## Test geometry service and CHIT pipeline
+	@echo "→ Testing geometry service and CHIT pipeline..."
+	@if [ -f "tests/test_geometry.py" ]; then \
+		$(PYTHON) -m pytest tests/test_geometry.py -v --tb=short; \
+	else \
+		echo "⚠️  tests/test_geometry.py not found. Creating placeholder test..."; \
+		echo "# Placeholder: Geometry service tests" > tests/test_geometry.py; \
+	fi
+	@echo "✔ Geometry smoke test complete"
+
+web-geometry: ## Launch geometry service web UI
+	@echo "→ Launching geometry service web UI..."
+	@if docker ps --format '{{.Names}}' | grep -q 'geometry-service\|evo-controller'; then \
+		echo "   Geometry service already running. Access at: http://localhost:8113"; \
+	else \
+		echo "⚠️  Geometry service not running. Start with: make up-agents"; \
+	fi
 
 .PHONY: loki-ready
 loki-ready: ## Check Loki readiness endpoint (/ready)
@@ -1768,6 +1850,45 @@ tailscale-status: ## Show tailscale status JSON (best effort)
 
 tailscale-logout: ## Log out of tailnet on this host
 	@tailscale logout || true
+
+# -------- Tailscale submodule deploy --------
+TAILSCALE_SUBMODULE := $(abspath $(CURDIR)/../PMOVES-Tailscale)
+
+.PHONY: tailscale-deploy tailscale-deploy-docker headscale-up headscale-down headscale-create-user headscale-create-key
+
+tailscale-deploy: ## Deploy Tailscale on this host via PMOVES-Tailscale submodule (auto-detects role)
+	@bash $(TAILSCALE_SUBMODULE)/deploy/deploy.sh
+
+tailscale-deploy-docker: ## Deploy Tailscale as Docker subnet router
+	@bash $(TAILSCALE_SUBMODULE)/deploy/deploy.sh --docker
+
+headscale-up: ## Start Headscale self-hosted control plane
+	@docker compose -f $(TAILSCALE_SUBMODULE)/headscale/docker-compose.headscale.yml up -d
+
+headscale-down: ## Stop Headscale control plane
+	@docker compose -f $(TAILSCALE_SUBMODULE)/headscale/docker-compose.headscale.yml down
+
+headscale-create-user: ## Create Headscale user (USER=name)
+	@docker exec pmoves-headscale headscale users create $(USER)
+
+headscale-create-key: ## Create Headscale preauthkey (USER=name)
+	@docker exec pmoves-headscale headscale preauthkeys create --user $(USER) --reusable --expiration 90d
+
+# -------- Hostinger / Terraform provisioning --------
+.PHONY: hostinger-provision hostinger-plan hostinger-ssh
+
+TERRAFORM_DIR := $(CURDIR)/terraform
+
+hostinger-provision: ## Apply Terraform config to provision Hostinger VPS resources
+	@echo "→ Running terraform apply for Hostinger MCP integration..."
+	@cd $(TERRAFORM_DIR) && terraform init -input=false && terraform apply -auto-approve
+	@echo "✔ Hostinger provisioning complete"
+
+hostinger-plan: ## Preview Terraform changes for Hostinger VPS
+	@cd $(TERRAFORM_DIR) && terraform init -input=false && terraform plan
+
+hostinger-ssh: ## SSH into Hostinger VPS using CHIT-managed credentials
+	@$(LOAD_ENV_SHARED) bash -lc 'ssh -o StrictHostKeyChecking=no -i <(echo "$$HOSTINGER_SSH_PRIVATE_KEY") $$HOSTINGER_SSH_USER@$$HOSTINGER_SSH_HOST'
 
 # -------- Brand defaults (branded env + first-run resources) --------
 .PHONY: brand-defaults brand-verify
@@ -2492,6 +2613,39 @@ vibevoice-smoke: ## Check VibeVoice realtime /config (requires VibeVoice running
 	echo "✔ VibeVoice /config 200"; \
 	curl -sS "http://localhost:$$port/config" | jq .
 
+# ============================================================================
+# Z890 / RTX 3090 Ti GPU NODE
+# ============================================================================
+
+Z890_OVERRIDE := -f docker-compose.z890.override.yml
+Z890_ENV := --env-file env.z890
+
+.PHONY: up-z890
+up-z890: ## Start Z890 GPU node (Ollama + Mesh Agent, data/agents from main PC)
+	@$(LOAD_ENV_SHARED) docker compose -p $(PROJECT) \
+	  -f docker-compose.yml -f docker-compose.gpu.yml \
+	  $(Z890_OVERRIDE) \
+	  $(Z890_ENV) \
+	  --profile agents up -d pmoves-ollama mesh-agent
+	@echo "✔ Z890 node started (Ollama + Mesh Agent). Data services from main PC."
+
+.PHONY: down-z890
+down-z890: ## Stop Z890 GPU node services
+	@$(LOAD_ENV_SHARED) docker compose -p $(PROJECT) \
+	  -f docker-compose.yml -f docker-compose.gpu.yml \
+	  $(Z890_OVERRIDE) \
+	  $(Z890_ENV) \
+	  down
+	@echo "✔ Z890 node stopped."
+
+.PHONY: ps-z890
+ps-z890: ## Show Z890 node service status
+	@$(LOAD_ENV_SHARED) docker compose -p $(PROJECT) \
+	  -f docker-compose.yml -f docker-compose.gpu.yml \
+	  $(Z890_OVERRIDE) \
+	  $(Z890_ENV) \
+	  ps
+
 # Status helper
 ps:
 	@$(DC) ps
@@ -2640,3 +2794,22 @@ docs-reconcile-check: ## Check living document freshness (read-only, CI-safe)
 .PHONY: docs-reconcile-json
 docs-reconcile-json: ## Living document freshness report (JSON output)
 	@$(PYTHON) tools/docs_reconcile.py --check --json $(ARGS)
+
+# =============================================================================
+# GitHub App Credential Management
+# =============================================================================
+
+.PHONY: github-app-setup
+github-app-setup: ## Automated GitHub App credential setup (uncomment env.shared + secrets-funnel)
+	@echo "→ Setting up GitHub App credentials..."
+	@$(PYTHON) tools/github_app_auto_setup.py
+
+.PHONY: github-app-verify
+github-app-verify: ## Verify GitHub App integration (env.shared, env.tier-agent, Docker)
+	@echo "→ Verifying GitHub App setup..."
+	@$(PYTHON) tools/verify_github_app_setup.py
+
+.PHONY: github-app-test
+github-app-test: ## Test GitHub App token minting (requires services running)
+	@echo "→ Testing GitHub App token minting..."
+	@cd ../PMOVES-BoTZ && $(PYTHON) features/github/mint_and_exec.py

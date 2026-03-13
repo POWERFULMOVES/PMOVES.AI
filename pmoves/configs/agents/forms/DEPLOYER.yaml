@@ -1,0 +1,16 @@
+name: DEPLOYER
+description: Infrastructure deployment agent for network fabric, VPS provisioning, and node onboarding.
+weights:
+  decode: 0.20
+  retrieve: 0.30
+  generate: 0.50
+band_emphasis:
+  low: 0.20
+  mid: 0.30
+  high: 0.50
+mesh_offload_threshold:
+  gpu_free_mem_gb: 4
+  latency_ms: 100
+sharing:
+  shapes_only_default: true
+  allow_artifacts_on_approve: true

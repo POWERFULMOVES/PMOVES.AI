@@ -1,0 +1,29 @@
+id: hostinger
+name: Hostinger VPS MCP (via Terraform + SSH)
+description: >
+  Hostinger VPS provisioning and management. No native MCP server exists;
+  access is orchestrated via Terraform (hostinger/hostinger ~> 0.1.3) and
+  direct SSH using CHIT-managed credentials.
+provider: terraform+ssh
+terraform_config: pmoves/terraform/mcp-integration.tf
+required_credentials:
+  - HOSTINGER_API_TOKEN
+  - HOSTINGER_SSH_PRIVATE_KEY
+  - HOSTINGER_SSH_HOST
+  - HOSTINGER_SSH_USER
+required_commands:
+  - terraform
+  - ssh
+capabilities:
+  - VPS provisioning and lifecycle management
+  - SSH command execution on Hostinger VPS
+  - Headscale control-plane deployment
+  - DNS record management (via Hostinger API)
+setup_instructions:
+  - Ensure Terraform >= 1.5 is installed.
+  - Run 'make hostinger-provision' to apply Terraform config.
+  - SSH credentials are managed via CHIT secrets manifest (secrets_manifest_v2.yaml).
+  - For manual SSH access, use HOSTINGER_SSH_* env vars from .env.generated.
+health_check:
+  command: ["ssh", "-o", "ConnectTimeout=5", "-o", "StrictHostKeyChecking=no", "echo", "hostinger-ok"]
+makefile_target: hostinger-provision
