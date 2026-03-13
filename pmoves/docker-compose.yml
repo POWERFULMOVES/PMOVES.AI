@@ -3204,6 +3204,185 @@ services:
     ports:
     - 8201:8201
 
+  # =============================================================================
+  # GitHub Automation Services
+  # =============================================================================
+  # Automated repository maintenance, issue triage, and PR management
+  # Profile: github-automation
+  # Networks: pmoves_app, pmoves_api, pmoves_bus, pmoves_monitoring
+  # =============================================================================
+
+  github-branch-cleanup:
+    build:
+      context: ./services/github_branch_cleanup
+      dockerfile: Dockerfile
+    image: ${GITHUB_BRANCH_CLEANUP_IMAGE:-ghcr.io/powerfulmoves/pmoves-github-branch-cleanup:pmoves-latest}
+    restart: unless-stopped
+    environment:
+    - SERVICE_PORT=8100
+    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - AGENTZERO_MCP_URL=${AGENTZERO_MCP_URL:-http://agent-zero:8080/mcp/command}
+    - DRY_RUN=${GITHUB_AUTOMATION_DRY_RUN:-true}
+    - GITHUB_ORG=${GITHUB_ORG:-POWERFULMOVES}
+    - STALE_BRANCH_DAYS=${STALE_BRANCH_DAYS:-30}
+    ports:
+    - 8110:8100
+    profiles:
+    - github-automation
+    networks:
+    - pmoves_app
+    - pmoves_api
+    - pmoves_bus
+    - pmoves_monitoring
+    depends_on:
+      nats:
+        condition: service_healthy
+      agent-zero:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8100/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+  github-issue-triage:
+    build:
+      context: ./services/github_issue_triage
+      dockerfile: Dockerfile
+    image: ${GITHUB_ISSUE_TRIAGE_IMAGE:-ghcr.io/powerfulmoves/pmoves-github-issue-triage:pmoves-latest}
+    restart: unless-stopped
+    environment:
+    - SERVICE_PORT=8101
+    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - AGENTZERO_MCP_URL=${AGENTZERO_MCP_URL:-http://agent-zero:8080/mcp/command}
+    - HIRAG_V2_URL=${HIRAG_V2_URL:-http://hi-rag-gateway-v2:8086}
+    - GITHUB_ORG=${GITHUB_ORG:-POWERFULMOVES}
+    ports:
+    - 8111:8101
+    profiles:
+    - github-automation
+    networks:
+    - pmoves_app
+    - pmoves_api
+    - pmoves_bus
+    - pmoves_monitoring
+    depends_on:
+      nats:
+        condition: service_healthy
+      agent-zero:
+        condition: service_healthy
+      hi-rag-gateway-v2:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8101/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+  github-branch-naming:
+    build:
+      context: ./services/github-branch-naming
+      dockerfile: Dockerfile
+    image: ${GITHUB_BRANCH_NAMING_IMAGE:-ghcr.io/powerfulmoves/pmoves-github-branch-naming:pmoves-latest}
+    restart: unless-stopped
+    environment:
+    - SERVICE_PORT=8102
+    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - AGENTZERO_MCP_URL=${AGENTZERO_MCP_URL:-http://agent-zero:8080/mcp/command}
+    - DRY_RUN=${GITHUB_AUTOMATION_DRY_RUN:-true}
+    - GITHUB_ORG=${GITHUB_ORG:-POWERFULMOVES}
+    ports:
+    - 8112:8102
+    profiles:
+    - github-automation
+    networks:
+    - pmoves_app
+    - pmoves_api
+    - pmoves_bus
+    - pmoves_monitoring
+    depends_on:
+      nats:
+        condition: service_healthy
+      agent-zero:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8102/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+  github-crossrepo-sync:
+    build:
+      context: ./services/github-crossrepo-sync
+      dockerfile: Dockerfile
+    image: ${GITHUB_CROSSREPO_SYNC_IMAGE:-ghcr.io/powerfulmoves/pmoves-github-crossrepo-sync:pmoves-latest}
+    restart: unless-stopped
+    environment:
+    - SERVICE_PORT=8103
+    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - AGENTZERO_MCP_URL=${AGENTZERO_MCP_URL:-http://agent-zero:8080/mcp/command}
+    - DRY_RUN=${GITHUB_AUTOMATION_DRY_RUN:-true}
+    - GITHUB_ORG=${GITHUB_ORG:-POWERFULMOVES}
+    - MAIN_REPO=${MAIN_REPO:-PMOVES.AI}
+    - WORKDIR=${WORKDIR:-/tmp/github-crossrepo-sync}
+    ports:
+    - 8113:8103
+    profiles:
+    - github-automation
+    networks:
+    - pmoves_app
+    - pmoves_api
+    - pmoves_bus
+    - pmoves_monitoring
+    depends_on:
+      nats:
+        condition: service_healthy
+      agent-zero:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8103/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+  github-crossrepo-pr:
+    build:
+      context: ./services/github-crossrepo-pr
+      dockerfile: Dockerfile
+    image: ${GITHUB_CROSSREPO_PR_IMAGE:-ghcr.io/powerfulmoves/pmoves-github-crossrepo-pr:pmoves-latest}
+    restart: unless-stopped
+    environment:
+    - SERVICE_PORT=8104
+    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - AGENTZERO_MCP_URL=${AGENTZERO_MCP_URL:-http://agent-zero:8080/mcp/command}
+    - DRY_RUN=${GITHUB_AUTOMATION_DRY_RUN:-true}
+    - GITHUB_ORG=${GITHUB_ORG:-POWERFULMOVES}
+    - AUTO_MERGE_REPOS=${AUTO_MERGE_REPOS:-}
+    ports:
+    - 8114:8104
+    profiles:
+    - github-automation
+    networks:
+    - pmoves_app
+    - pmoves_api
+    - pmoves_bus
+    - pmoves_monitoring
+    depends_on:
+      nats:
+        condition: service_healthy
+      agent-zero:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8104/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
 volumes:
   neo4j-data: {}
   qdrant-data: {}
