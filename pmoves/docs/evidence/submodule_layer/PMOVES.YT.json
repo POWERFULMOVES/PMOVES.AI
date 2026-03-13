@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-03-10 02:17 UTC",
+  "generated_at": "2026-03-13 02:46 UTC",
   "manifest": "pmoves/configs/submodule_layer_validation_manifest.json",
   "summary": {
     "submodules": 1,
@@ -12,7 +12,7 @@
       "path": "PMOVES.YT",
       "url": "https://github.com/POWERFULMOVES/PMOVES.YT.git",
       "status_prefix": " ",
-      "commit": "0ae7bf1d3f59b29dc45b7b7caa9175b9a5026430",
+      "commit": "b98f2d1ffed2474aaf21101471dc8d358fd2421d",
       "initialized": true,
       "remote_commit_reachable": "local",
       "required_files_any_ok": true,
