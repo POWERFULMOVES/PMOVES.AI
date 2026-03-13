@@ -6,7 +6,9 @@ function decode(token?: string) {
     if (!token) return null;
     const parts = token.split('.');
     if (parts.length !== 3) return null;
-    const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString('utf-8')) as any;
+    // JWT uses base64url encoding: replace - and _ before decoding
+    const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    const payload = JSON.parse(Buffer.from(base64, 'base64').toString('utf-8')) as any;
     return payload;
   } catch {
     return null;
