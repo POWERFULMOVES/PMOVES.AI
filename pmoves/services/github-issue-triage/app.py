@@ -429,4 +429,4 @@ async def accuracy_endpoint(repo: str, days: int = 30):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8101)
+    uvicorn.run(app, host="127.0.0.1", port=8101)
