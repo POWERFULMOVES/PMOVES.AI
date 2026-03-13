@@ -2165,6 +2165,80 @@ services:
       retries: 12
       start_period: 15s
 
+  # Tier: agent (GitHub Branch Cleanup - automated stale branch removal)
+  github-branch-cleanup:
+    <<: *tier-agent-hardened-ro
+    build: ./services/github-branch-cleanup
+    image: ${GITHUB_BRANCH_CLEANUP_IMAGE:-ghcr.io/powerfulmoves/pmoves-github-branch-cleanup:pmoves-latest}
+    container_name: pmoves-github-branch-cleanup
+    hostname: github-branch-cleanup
+    restart: unless-stopped
+    environment:
+      - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+      - SERVICE_PORT=8100
+      - BRANCH_STALE_DAYS=${BRANCH_STALE_DAYS:-30}
+      - DRY_RUN=${DRY_RUN:-true}
+      - PROTECTED_BRANCHES=${PROTECTED_BRANCHES:-main,PMOVES.AI-Edition-Hardened,release-*}
+      - GITHUB_ORG=${GITHUB_ORG:-POWERFULMOVES}
+      - GH_APP_ID=${GH_APP_ID:-}
+      - GH_APP_INSTALLATION_ID=${GH_APP_INSTALLATION_ID:-}
+      - AGENTZERO_MCP_URL=${AGENTZERO_MCP_URL:-http://agent-zero:8080/mcp}
+    ports:
+      - 8100:8100
+      - 9096:9096
+    depends_on:
+      nats:
+        condition: service_healthy
+      nats-init:
+        condition: service_completed_successfully
+      agent-zero:
+        condition: service_healthy
+    profiles: ["agents", "github-automation"]
+    networks: [pmoves_app, pmoves_bus, pmoves_api, pmoves_monitoring]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8100/healthz', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # Tier: agent (GitHub Issue Triage - intelligent issue classification)
+  github-issue-triage:
+    <<: *tier-agent-hardened-ro
+    build: ./services/github-issue-triage
+    image: ${GITHUB_ISSUE_TRIAGE_IMAGE:-ghcr.io/powerfulmoves/pmoves-github-issue-triage:pmoves-latest}
+    container_name: pmoves-github-issue-triage
+    hostname: github-issue-triage
+    restart: unless-stopped
+    environment:
+      - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+      - SERVICE_PORT=8101
+      - HIRAG_URL=${HIRAG_URL:-http://hi-rag-gateway-v2:8086}
+      - LABEL_CONFIDENCE_THRESHOLD=${LABEL_CONFIDENCE_THRESHOLD:-0.7}
+      - INDEX_HISTORICAL_ISSUES=${INDEX_HISTORICAL_ISSUES:-true}
+      - BOTZ_MCP_URL=${BOTZ_MCP_URL:-http://botz-gateway:8102}
+      - GITHUB_ORG=${GITHUB_ORG:-POWERFULMOVES}
+    ports:
+      - 8101:8101
+      - 9097:9097
+    depends_on:
+      nats:
+        condition: service_healthy
+      nats-init:
+        condition: service_completed_successfully
+      hi-rag-gateway-v2:
+        condition: service_healthy
+      botz-gateway:
+        condition: service_healthy
+    profiles: ["agents", "github-automation"]
+    networks: [pmoves_app, pmoves_bus, pmoves_api, pmoves_monitoring]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8101/healthz', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
   # Tier: agent (A2UI NATS bridge - geometry bus integration)
   a2ui-nats-bridge:
     <<: *tier-agent-hardened-ro

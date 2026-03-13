@@ -284,6 +284,7 @@
 	path = pmoves/integrations/archon
 	url = https://github.com/POWERFULMOVES/PMOVES-Archon.git
 	branch = PMOVES.AI-Edition-Hardened
-[submodule "pmoves/integrations/neo4j"]
-	path = pmoves/integrations/neo4j
+[submodule "PMOVES-Neo4j"]
+	path = PMOVES-Neo4j
 	url = https://github.com/POWERFULMOVES/PMOVES-neo4j.git
+	branch = PMOVES.AI-Edition-Hardened
