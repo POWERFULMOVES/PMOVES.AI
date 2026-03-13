@@ -2146,6 +2146,10 @@ services:
       - TENSORZERO_URL=${TENSORZERO_URL:-http://tensorzero-gateway:3000}
       - BOTZ_HEARTBEAT_INTERVAL=${BOTZ_HEARTBEAT_INTERVAL:-30}
       - BOTZ_STALE_THRESHOLD=${BOTZ_STALE_THRESHOLD:-5}
+      # GitHub App credentials — MCP GitHub server token minting
+      - GH_APP_ID=${GH_APP_ID:-}
+      - GH_APP_SEC=${GH_APP_SEC:-}
+      - GH_APP_INSTALLATION_ID=${GH_APP_INSTALLATION_ID:-}
     depends_on:
       nats:
         condition: service_healthy
