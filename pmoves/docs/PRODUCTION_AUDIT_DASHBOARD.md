@@ -5,7 +5,7 @@
 
 **Last Updated:** 2026-03-12 (auto-reconciled)
 **Branch:** `main`
-**Commit:** `a3cf7770` (fix(ui): align PostgREST port registry + widen Jellyfin smoke codes)
+**Commit:** `ade42483` (docs(audit): refresh dashboard for PR #886 youtube control merge)
 **Consolidated From:** 27 audit documents
 **Evidence:** live runbook execution on 2026-03-05 (`make ghcr-prepublish-inrepo-build`, strict local Trivy sweep logs under `pmoves/docs/logs/ghcr-local-prepublish/`)
 
@@ -31,7 +31,7 @@
 - **PR #871** (`fix(ui)`): Align PostgREST port registry (3010→3000) + env template fix + widen Jellyfin smoke HTTP codes (accept 502)
 - **PR #866 closed** — superseded by the individual targeted PRs #867-#871
 - **Branch sync:** main → Hardened synced (`c6bc276f`)
-- **CodeQL status:** 1 open (#195 — false positive, `lgtm` suppression comment at `serviceHealth.ts:71`, pending GitHub dismissal on next scan)
+- **CodeQL status:** 0 open — #195 auto-dismissed by GitHub on 2026-03-12 rescan
 
 ### Post-PR #866 — CodeRabbit URL Validation Follow-up
 

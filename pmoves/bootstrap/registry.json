@@ -131,6 +131,18 @@
             "type": "random_urlsafe",
             "length": 32
           }
+        },
+        {
+          "key": "SUPABASE_REALTIME_ENC_KEY",
+          "file": "pmoves/env.tier-supabase",
+          "prompt": "Supabase Realtime DB encryption key",
+          "help": "Used by supabase-realtime for DB_ENC_KEY. Generate: openssl rand -hex 16",
+          "required": true,
+          "sensitive": true,
+          "generate": {
+            "type": "random_hex",
+            "length": 32
+          }
         }
       ]
     },
