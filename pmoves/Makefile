@@ -2098,6 +2098,30 @@ ui-videos-realtime-clean: ## Delete smoke rows inserted by ui-videos-realtime-sm
 ui-playwright-setup: ## Install Playwright browsers/deps for E2E tests
 	@cd ui && npx --yes playwright install --with-deps || true
 
+# -------- UI Testing Targets (CI/CD ready) --------
+.PHONY: ui-lint
+ui-lint: ## Run ESLint on UI code
+	@cd ui && node scripts/with-env.mjs npm run lint
+
+.PHONY: ui-typecheck
+ui-typecheck: ## Run TypeScript type checking on UI code
+	@cd ui && node scripts/with-env.mjs npm run typecheck
+
+.PHONY: ui-test
+ui-test: ## Run Jest unit tests for UI
+	@cd ui && node scripts/with-env.mjs npm run test
+
+.PHONY: ui-e2e
+ui-e2e: ## Run Playwright E2E tests
+	@cd ui && node scripts/with-env.mjs npm run test:e2e
+
+.PHONY: ui-test-all
+ui-test-all: ## Run all UI tests (lint, typecheck, unit, E2E)
+	@$(MAKE) ui-lint
+	@$(MAKE) ui-typecheck
+	@$(MAKE) ui-test
+	@$(MAKE) ui-e2e
+
 .PHONY: ui-videos-realtime-e2e
 ui-videos-realtime-e2e: ## Run Playwright E2E: inserts row via REST and asserts UI shows it
 	@$(MAKE) ui-dev-start >/dev/null 2>&1 || true
