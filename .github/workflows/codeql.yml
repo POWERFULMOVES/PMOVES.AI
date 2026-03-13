@@ -71,10 +71,9 @@ jobs:
     # Consider using larger runners or machines with greater resources for possible analysis time improvements.
     runs-on: ${{ github.event_name == 'pull_request' && 'ubuntu-latest' || fromJSON('["self-hosted","Linux","X64"]') }}
     timeout-minutes: 45
-    # Allow C/CPP and Python to fail gracefully - this repo has pre-existing alerts
+    # Allow C/CPP to fail gracefully - this repo is primarily Python/TypeScript
     # C/CPP files only exist in submodules (external dependencies)
-    # Python has pre-existing stack-trace-exposure alerts in github-crossrepo-pr/app.py
-    continue-on-error: ${{ matrix.language == 'c-cpp' || matrix.language == 'javascript-typescript' || matrix.language == 'python' }}
+    continue-on-error: ${{ matrix.language == 'c-cpp' || matrix.language == 'javascript-typescript' }}
     permissions:
       # required for all workflows
       security-events: write
