@@ -21,10 +21,12 @@ FLOW:
   5. Verifies credentials in env.tier-agent
 
 Author: PMOVES.AI Automation
-Version: 1.0.0
+Version: 1.2.0
 """
 import json
+import logging
 import os
+import shutil
 import sys
 import subprocess
 from pathlib import Path
@@ -66,16 +68,66 @@ def print_error(text):
     print(f"{Colors.RED}✗ {text}{Colors.RESET}")
 
 
-def run_command(cmd, check=True, capture_output=True):
-    """Run a shell command and return output."""
-    result = subprocess.run(
-        cmd,
-        shell=True,
-        capture_output=capture_output,
-        text=True,
-        check=check
+def setup_logging(script_name):
+    """
+    Set up logging to both file and console.
+
+    Args:
+        script_name: Name of script for log file naming
+
+    Returns:
+        Path: Log file path
+    """
+    log_dir = Path.home() / '.pmoves' / 'logs'
+    log_dir.mkdir(parents=True, exist_ok=True)
+
+    log_file = log_dir / f'{script_name}.log'
+
+    # Configure logging
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(levelname)s - %(message)s',
+        handlers=[
+            logging.FileHandler(log_file),
+            logging.StreamHandler(sys.stdout)
+        ]
     )
-    return result
+
+    logging.info(f"=== Starting {script_name} ===")
+    logging.info(f"Log file: {log_file}")
+    return log_file
+
+
+def run_command(cmd, check=False, capture_output=True, timeout=30):
+    """
+    Run a shell command with timeout.
+
+    Args:
+        cmd: Command string to execute
+        check: Raise CalledProcessError on non-zero exit (default: False)
+        capture_output: Capture stdout/stderr (default: True)
+        timeout: Maximum seconds to wait (default: 30)
+
+    Returns:
+        subprocess.CompletedProcess
+
+    Raises:
+        subprocess.TimeoutExpired: If command exceeds timeout
+        subprocess.CalledProcessError: If check=True and command fails
+    """
+    try:
+        result = subprocess.run(
+            cmd,
+            shell=True,
+            capture_output=capture_output,
+            text=True,
+            check=check,
+            timeout=timeout
+        )
+        return result
+    except subprocess.TimeoutExpired:
+        print_error(f"Command timed out after {timeout}s: {cmd[:50]}...")
+        raise
 
 
 def verify_gh_auth():
@@ -105,27 +157,50 @@ def get_github_secrets():
     """Fetch GitHub App credentials from GitHub Secrets."""
     print_step(2, "Fetching GitHub App credentials from GitHub Secrets...")
 
-    gh_app_keys = ['GH_APP_ID', 'GH_APP_SEC', 'GH_APP_CLIENT_ID', 'GH_APP_INSTALLATION_ID']
+    gh_app_keys = {'GH_APP_ID', 'GH_APP_SEC', 'GH_APP_CLIENT_ID', 'GH_APP_INSTALLATION_ID'}
     credentials = {}
 
-    print("  Checking GitHub Secrets for POWERFULMOVES/PMOVES.AI:")
-    for key in gh_app_keys:
-        try:
-            # Use gh secret list to check if secret exists
-            result = run_command(f"gh secret list --repo POWERFULMOVES/PMOVES.AI | grep '^{key}'")
-            if result.returncode == 0 and key in result.stdout:
-                credentials[key] = "PRESENT_IN_GH_SECRETS"
-                print_success(f"  {key}: Found in GitHub Secrets")
-            else:
-                print_warning(f"  {key}: Not found in GitHub Secrets")
-        except:
-            print_warning(f"  {key}: Could not verify")
+    try:
+        # Get all secrets at once, filter in Python (no shell injection)
+        result = run_command("gh secret list --repo POWERFULMOVES/PMOVES.AI", timeout=30)
+
+        if result.returncode != 0:
+            print_error(f"Failed to list GitHub Secrets: {result.stderr}")
+            return None
+
+        print("  Checking GitHub Secrets for POWERFULMOVES/PMOVES.AI:")
+
+        # Parse output safely in Python
+        for line in result.stdout.split('\n'):
+            if not line.strip():
+                continue
+            # Extract secret name (first word in line)
+            secret_name = line.strip().split()[0]
+            if secret_name in gh_app_keys:
+                credentials[secret_name] = "PRESENT_IN_GH_SECRETS"
+                print_success(f"  {secret_name}: Found in GitHub Secrets")
+
+    except subprocess.TimeoutExpired as e:
+        print_error(f"Timeout after {e.timeout}s - check network connectivity")
+        return None
+    except FileNotFoundError:
+        print_error("GitHub CLI not found - install from https://cli.github.com/")
+        return None
+    except PermissionError:
+        print_error("Permission denied executing GitHub CLI")
+        return None
+    except Exception as e:
+        print_error(f"Failed to fetch GitHub Secrets: {type(e).__name__}: {e}")
+        return None
 
     if len(credentials) == 4:
         print_success("All 4 GitHub App credentials found in GitHub Secrets")
         return credentials
     else:
+        missing = gh_app_keys - set(credentials.keys())
         print_error(f"Only {len(credentials)}/4 credentials found in GitHub Secrets")
+        for key in missing:
+            print_warning(f"  {key}: Not found")
         print("\n  Missing credentials must be added to GitHub Secrets first:")
         print("  https://github.com/organizations/POWERFULMOVES/PMOVES.AI/settings/secrets/actions")
         return None
@@ -249,51 +324,105 @@ def verify_tier_files():
 
 
 def main():
-    """Main execution flow."""
+    """Main execution flow with rollback support."""
+    log_file = setup_logging('github_app_auto_setup')
+
     print_header("GitHub App Credential Auto-Setup")
 
-    # Verify prerequisites
-    if not verify_gh_auth():
-        print_error("\nPlease install and authenticate GitHub CLI first:")
-        print("  1. Install: https://cli.github.com/")
-        print("  2. Authenticate: gh auth login")
-        return 1
+    env_shared_backup = None
 
-    # Check GitHub Secrets
-    credentials = get_github_secrets()
-    if credentials is None:
-        print_error("\nGitHub App credentials not found in GitHub Secrets")
-        print("\nTo add them:")
-        print("  1. Visit: https://github.com/organizations/POWERFULMOVES/settings/apps")
-        print("  2. Select the PMOVES.AI GitHub App")
-        print("  3. Copy credentials to GitHub Secrets")
-        return 1
+    try:
+        logging.info("Starting GitHub App credential auto-setup")
 
-    # Update env.shared
-    if not update_env_shared():
-        print_error("Failed to update env.shared")
-        return 1
+        # Verify prerequisites
+        if not verify_gh_auth():
+            print_error("\nPlease install and authenticate GitHub CLI first:")
+            print("  1. Install: https://cli.github.com/")
+            print("  2. Authenticate: gh auth login")
+            logging.error("GitHub CLI authentication failed")
+            return 1
 
-    # Run secrets-funnel
-    if not run_secrets_funnel():
-        print_error("Failed to run secrets-funnel")
-        return 1
+        # Check GitHub Secrets
+        credentials = get_github_secrets()
+        if credentials is None:
+            print_error("\nGitHub App credentials not found in GitHub Secrets")
+            print("\nTo add them:")
+            print("  1. Visit: https://github.com/organizations/POWERFULMOVES/settings/apps")
+            print("  2. Select the PMOVES.AI GitHub App")
+            print("  3. Copy credentials to GitHub Secrets")
+            logging.error("GitHub App credentials not found in GitHub Secrets")
+            return 1
 
-    # Verify tier files
-    if not verify_tier_files():
-        print_error("Failed to verify tier files")
-        return 1
+        logging.info(f"Found {len(credentials)} GitHub App credentials in GitHub Secrets")
 
-    # Success!
-    print_header("Setup Complete! 🎉")
-    print_success("GitHub App credentials successfully populated")
-    print("\nNext steps:")
-    print("  1. Start services: docker compose up -d archon botz-gateway")
-    print("  2. Verify credentials: docker compose logs archon | grep GH_APP")
-    print("  3. Test token minting: cd PMOVES-BoTZ && python features/github/mint_and_exec.py")
-    print()
+        # Backup env.shared before modification
+        repo_root = Path(__file__).parent.parent
+        env_shared = repo_root / "pmoves" / "env.shared"
 
-    return 0
+        if env_shared.exists():
+            env_shared_backup = env_shared.with_suffix('.bak')
+            shutil.copy(env_shared, env_shared_backup)
+            print(f"  Backed up env.shared to {env_shared_backup.name}")
+            logging.info(f"Created backup: {env_shared_backup}")
+
+        # Update env.shared
+        if not update_env_shared():
+            print_error("Failed to update env.shared")
+            logging.error("Failed to update env.shared")
+            return 1
+
+        logging.info("Updated env.shared with GitHub App credentials")
+
+        # Run secrets-funnel
+        if not run_secrets_funnel():
+            print_error("Rolling back env.shared changes due to secrets-funnel failure")
+            if env_shared_backup and env_shared_backup.exists():
+                shutil.copy(env_shared_backup, env_shared)
+                print_success("Restored env.shared from backup")
+            logging.error("secrets-funnel failed, rolled back changes")
+            return 1
+
+        logging.info("secrets-funnel completed successfully")
+
+        # Verify tier files
+        if not verify_tier_files():
+            print_error("Rolling back env.shared changes due to verification failure")
+            if env_shared_backup and env_shared_backup.exists():
+                shutil.copy(env_shared_backup, env_shared)
+                print_success("Restored env.shared from backup")
+            logging.error("Tier file verification failed, rolled back changes")
+            return 1
+
+        logging.info("Tier file verification passed")
+
+        # Success! Clean up backup
+        if env_shared_backup and env_shared_backup.exists():
+            env_shared_backup.unlink()
+            print_success("Cleaned up backup file")
+            logging.info("Cleaned up backup file")
+
+        print_header("Setup Complete! 🎉")
+        print_success("GitHub App credentials successfully populated")
+        print("\nNext steps:")
+        print("  1. Start services: docker compose up -d archon botz-gateway")
+        print("  2. Verify credentials: docker compose logs archon | grep GH_APP")
+        print("  3. Test token minting: cd PMOVES-BoTZ && python features/github/mint_and_exec.py")
+        print()
+
+        logging.info("GitHub App credential auto-setup completed successfully")
+        return 0
+
+    except Exception as e:
+        logging.error(f"Setup failed with exception: {e}", exc_info=True)
+        print_error(f"Unexpected error: {e}")
+        print(f"  Full log: {log_file}")
+        # Rollback on exception
+        if env_shared_backup and env_shared_backup.exists():
+            repo_root = Path(__file__).parent.parent
+            env_shared = repo_root / "pmoves" / "env.shared"
+            shutil.copy(env_shared_backup, env_shared)
+            print_success("Restored env.shared from backup after error")
+        raise
 
 
 if __name__ == '__main__':
