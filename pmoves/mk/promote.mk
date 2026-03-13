@@ -52,23 +52,7 @@ promote-to-integrations: promote-check
 	pr_number=$$(gh pr create \
 		--base PMOVES.AI-Edition-Hardened-Integrations \
 		--title "$$title" \
-		--body "## Promotion Summary
-
-This PR promotes changes from **$$(git branch --show-current)** to the **Integrations** branch.
-
-### Changes
-$$(git log --oneline @{u}...HEAD | sed 's/^/- /')
-
-### CI Gates
-- [ ] integration-gate workflow must pass
-
-### Promotion Flow
-1. Feature branch (here) → Integrations (CI gate)
-2. Integrations → Hardened (audit gate)
-3. Hardened → main (release)
-
----
-*Automated via make -C pmoves promote-to-integrations*" \
+		--body "$$(printf '## Promotion Summary\n\nThis PR promotes changes from **%s** to the **Integrations** branch.\n\n### Changes\n%s\n\n### CI Gates\n- [ ] integration-gate workflow must pass\n\n### Promotion Flow\n1. Feature branch (here) → Integrations (CI gate)\n2. Integrations → Hardened (audit gate)\n3. Hardened → main (release)\n\n---\n*Automated via make -C pmoves promote-to-integrations*' "$$(git branch --show-current)" "$$(git log --oneline @{u}...HEAD | sed 's/^/- /')")" \
 		--json number --jq '.number'); \
 	$(MAKE) publish-nats-promotion \
 		promote_payload='"action":"feature_to_integrations","branch":"$$(git branch --show-current)","pr_number":"'$$pr_number'","target":"PMOVES.AI-Edition-Hardened-Integrations","timestamp":"$$(date -u +%Y-%m-%dT%H:%M:%SZ)"'
@@ -95,25 +79,7 @@ promote-to-hardened: promote-check
 		--base PMOVES.AI-Edition-Hardened \
 		--head PMOVES.AI-Edition-Hardened-Integrations \
 		--title "$$title" \
-		--body "## Promotion Summary
-
-This PR promotes the **Integrations** branch to **Hardened**.
-
-### Audit Gates
-- [ ] integration-gate workflow
-- [ ] hardening-validation workflow
-- [ ] CodeQL analysis
-- [ ] CHIT contract validation
-- [ ] SQL policy lint
-
-### Review Required
-This promotion requires security review before merging.
-
-### Changes Included
-$$(git log --oneline PMOVES.AI-Edition-Hardened...PMOVES.AI-Edition-Hardened-Integrations | head -20 | sed 's/^/- /')
-
----
-*Automated via make -C pmoves promote-to-hardened*" \
+		--body "$$(printf '## Promotion Summary\n\nThis PR promotes the **Integrations** branch to **Hardened**.\n\n### Audit Gates\n- [ ] integration-gate workflow\n- [ ] hardening-validation workflow\n- [ ] CodeQL analysis\n- [ ] CHIT contract validation\n- [ ] SQL policy lint\n\n### Review Required\nThis promotion requires security review before merging.\n\n### Changes Included\n%s\n\n---\n*Automated via make -C pmoves promote-to-hardened*' "$$(git log --oneline PMOVES.AI-Edition-Hardened...PMOVES.AI-Edition-Hardened-Integrations | head -20 | sed 's/^/- /')")" \
 		--json number --jq '.number'); \
 	$(MAKE) publish-nats-promotion \
 		promote_payload='"action":"integrations_to_hardened","branch":"PMOVES.AI-Edition-Hardened-Integrations","pr_number":"'$$pr_number'","target":"PMOVES.AI-Edition-Hardened","timestamp":"$$(date -u +%Y-%m-%dT%H:%M:%SZ)"'
@@ -144,26 +110,7 @@ promote-to-main: promote-check
 		echo "❌ Aborted"; \
 		exit 1; \
 	fi; \
-	body="## Release $$version
-
-This release promotes **Hardened** changes to **main** production.
-
-### All CI Gates Must Pass
-- [ ] CodeQL (Advanced)
-- [ ] CHIT Contract Check
-- [ ] SQL Policy Lint
-- [ ] integration-gate
-- [ ] hardening-validation
-
-### Post-Merge Actions
-\`\`\`bash
-# Tag the release
-git tag -a $$version -m \"Release $$version\"
-git push origin $$version
-\`\`\`
-
----
-*Automated via make -C pmoves promote-to-main*"; \
+	body=$$(printf '## Release %s\n\nThis release promotes **Hardened** changes to **main** production.\n\n### All CI Gates Must Pass\n- [ ] CodeQL (Advanced)\n- [ ] CHIT Contract Check\n- [ ] SQL Policy Lint\n- [ ] integration-gate\n- [ ] hardening-validation\n\n### Post-Merge Actions\n```bash\n# Tag the release\ngit tag -a %s -m "Release %s"\ngit push origin %s\n```\n\n---\n*Automated via make -C pmoves promote-to-main*' "$$version" "$$version" "$$version" "$$version" "$$version"); \
 	if [ -n "$$notes_file" ] && [ -f "$$notes_file" ]; then \
 		body="$$(cat $$notes_file)"; \
 	fi; \
