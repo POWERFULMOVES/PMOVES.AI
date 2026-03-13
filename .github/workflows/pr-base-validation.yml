@@ -1,0 +1,189 @@
+name: PR Base Branch Validation
+
+# Ensures PRs follow the documented branch promotion flow
+# Strategy: feature/* → Integrations → Hardened → main
+# See: pmoves/docs/BRANCH_STRATEGY.md
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize]
+  pull_request_target:
+    types: [opened, edited, synchronize]
+
+permissions:
+  pull-requests: write
+  contents: read
+
+jobs:
+  validate-promotion-flow:
+    name: Validate PR Base Branch
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check PR target branch
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          IS_MAINTAINER: ${{ contains(github.event.pull_request.author_association, 'MAINTAIN') || contains(github.event.pull_request.author_association, 'OWNER') }}
+        run: |
+          set -x
+
+          echo "=== PR Branch Validation ==="
+          echo "Base branch: $BASE_REF"
+          echo "Head branch: $HEAD_REF"
+          echo "Author association: ${{ github.event.pull_request.author_association }}"
+          echo "Is maintainer/owner: $IS_MAINTAINER"
+          echo ""
+
+          # Skip validation for release PRs from Hardened → main
+          if [[ "$HEAD_REF" == "PMOVES.AI-Edition-Hardened" ]] && [[ "$BASE_REF" == "main" ]]; then
+            echo "✅ Release PR from Hardened → main (allowed)"
+            exit 0
+          fi
+
+          # Skip validation for promotion PRs from Integrations → Hardened
+          if [[ "$HEAD_REF" == "PMOVES.AI-Edition-Hardened-Integrations" ]] && [[ "$BASE_REF" == "PMOVES.AI-Edition-Hardened" ]]; then
+            echo "✅ Promotion PR from Integrations → Hardened (allowed)"
+            exit 0
+          fi
+
+          # Block direct merges to main from feature branches
+          if [[ "$BASE_REF" == "main" ]]; then
+            if [[ ! "$HEAD_REF" =~ ^(PMOVES\.AI-Edition-Hardened|PMOVES\.AI-Edition-Hardened-Integrations)$ ]]; then
+              echo "❌ VALIDATION FAILED"
+              echo ""
+              echo "Direct merges to 'main' are not allowed from feature branches."
+              echo ""
+              echo "Required flow: feature/* → Integrations → Hardened → main"
+              echo ""
+              echo "Please use:"
+              echo "  1. gh pr create --base PMOVES.AI-Edition-Hardened-Integrations"
+              echo "  2. After merge: make -C pmoves promote-to-hardened"
+              echo "  3. After merge: make -C pmoves promote-to-main"
+              echo ""
+              echo "See: pmoves/docs/BRANCH_STRATEGY.md"
+              exit 1
+            fi
+          fi
+
+          # Warn if feature branch targets Hardened directly
+          if [[ "$BASE_REF" == "PMOVES.AI-Edition-Hardened" ]]; then
+            if [[ ! "$HEAD_REF" =~ ^(PMOVES\.AI-Edition-Hardened-Integrations)$ ]]; then
+              echo "⚠️  WARNING: Feature branch should target Integrations first"
+              echo ""
+              echo "Recommended flow: feature/* → Integrations → Hardened → main"
+              echo ""
+              if [[ "$IS_MAINTAINER" == "true" ]]; then
+                echo "⚠️  Maintainer override: PR allowed but consider promotion flow"
+              else
+                echo "❌ Please retarget PR to PMOVES.AI-Edition-Hardened-Integrations"
+                exit 1
+              fi
+            fi
+          fi
+
+          echo "✅ PR branch validation passed"
+          echo ""
+
+  publish-nats-event:
+    name: Publish PR Validation Event
+    runs-on: ubuntu-latest
+    if: always()
+    needs: [validate-promotion-flow, check-branch-ttl]
+    steps:
+      - name: Publish to NATS
+        env:
+          NATS_URL: ${{ secrets.NATS_URL }}
+          NATS_USER: ${{ secrets.NATS_USER }}
+          NATS_PASSWORD: ${{ secrets.NATS_PASSWORD }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          VALIDATION_STATUS: ${{ needs.validate-promotion-flow.result }}
+          TTL_STATUS: ${{ needs.check-branch-ttl.result }}
+        run: |
+          set -x
+
+          # Skip if NATS credentials not available
+          if [[ -z "$NATS_URL" ]] || [[ -z "$NATS_USER" ]] || [[ -z "$NATS_PASSWORD" ]]; then
+            echo "ℹ️  NATS credentials not configured, skipping event publish"
+            exit 0
+          fi
+
+          echo "Publishing PR validation event to NATS..."
+
+          # Build NATS connection string
+          NATS_CONNECT="nats://${NATS_USER}:${NATS_PASSWORD}@${NATS_URL#nats://}"
+
+          # Publish validation event
+          nats pub "$NATS_CONNECT" "github.pr.validation.v1" "$(jq -n \
+            --arg status "$VALIDATION_STATUS" \
+            --arg base "$BASE_REF" \
+            --arg head "$HEAD_REF" \
+            --arg prnum "$PR_NUMBER" \
+            --arg ttl_status "$TTL_STATUS" \
+            '{
+              status: $status,
+              base_ref: $base,
+              head_ref: $head,
+              pr_number: ($prnum | tonumber),
+              ttl_check_status: $ttl_status,
+              timestamp: now | todate,
+              source: "github-workflow"
+            }')"
+
+          echo "✅ PR validation event published to github.pr.validation.v1"
+
+  check-branch-ttl:
+    name: Check Branch TTL
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - name: Calculate branch age
+        env:
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+        run: |
+          echo "=== Branch TTL Check ==="
+          echo "Branch: $HEAD_REF"
+          echo ""
+
+          # Skip for protected branches
+          if [[ "$HEAD_REF" =~ ^(PMOVES\.AI-Edition-Hardened|PMOVES\.AI-Edition-Hardened-Integrations|main)$ ]]; then
+            echo "✅ Protected branch (no TTL check)"
+            exit 0
+          fi
+
+          # Try to fetch branch creation date
+          if git ls-remote --heads origin "$HEAD_REF" | grep -q .; then
+            # Branch exists, check age
+            branch_date=$(git log -1 --format=%ct "origin/$HEAD_REF" 2>/dev/null || echo "0")
+            current_date=$(date +%s)
+            age_days=$(( (current_date - branch_date) / 86400 ))
+
+            echo "Branch age: $age_days days"
+            echo ""
+
+            # TTL thresholds
+            if [[ "$HEAD_REF" =~ ^feature/ ]] || [[ "$HEAD_REF" =~ ^codex/ ]]; then
+              ttl=14
+            elif [[ "$HEAD_REF" =~ ^fix/ ]] || [[ "$HEAD_REF" =~ ^chore/ ]] || [[ "$HEAD_REF" =~ ^docs/ ]]; then
+              ttl=7
+            elif [[ "$HEAD_REF" =~ ^ref/docs/ ]]; then
+              ttl=999  # Manual archival
+            else
+              ttl=14  # Default
+            fi
+
+            if [[ $age_days -gt $ttl ]]; then
+              echo "⚠️  WARNING: Branch exceeds TTL ($ttl days)"
+              echo ""
+              echo "Branch is $age_days days old (TTL: $ttl days)"
+              echo "Consider archival or cleanup."
+              echo ""
+              echo "Run: make -C pmoves branch-audit"
+            else
+              echo "✅ Branch within TTL ($ttl days)"
+            fi
+          else
+            echo "ℹ️  Cannot determine branch age (new or remote)"
+          fi
+          echo ""

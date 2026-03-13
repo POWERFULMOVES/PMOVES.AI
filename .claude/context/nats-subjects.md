@@ -399,6 +399,258 @@ Example: `ingest.transcript.ready.v1`
 - **Subscribers:** ToKenism-Multi (musicMapping.ts), Hyperdimensions (visualization)
 - **Related:** See `/chit:bpm` tool spec, `TAC_TOKENISM.md`, `FLUTE_PROSODIC_ARCHITECTURE.md`
 
+## GitHub Automation & Branch Strategy Subjects
+
+> **Status:** Production — GitHub automation services for branch cleanup, issue triage, naming enforcement, and cross-repo sync
+
+### PR & Promotion Events
+
+**`github.pr.validation.v1`**
+- **Direction:** Published by GitHub Actions (pr-base-validation.yml)
+- **Purpose:** PR base branch validation results
+- **Payload:**
+  ```json
+  {
+    "status": "success|failure",
+    "base_ref": "PMOVES.AI-Edition-Hardened-Integrations",
+    "head_ref": "feat/new-feature",
+    "pr_number": 123,
+    "ttl_check_status": "success|failure|skipped",
+    "timestamp": "2026-03-13T10:00:00Z",
+    "source": "github-workflow"
+  }
+  ```
+- **Subscribers:** Branch Naming Service, Prometheus (via NATS exporter)
+- **See:** `.github/workflows/pr-base-validation.yml`
+
+**`github.promotion.requested.v1`**
+- **Direction:** Published by `make -C pmoves promote-to-*`
+- **Purpose:** Promotion PR creation notification
+- **Payload:**
+  ```json
+  {
+    "action": "feature_to_integrations|integrations_to_hardened|hardened_to_main",
+    "branch": "feat/new-feature",
+    "pr_number": 123,
+    "target": "PMOVES.AI-Edition-Hardened-Integrations",
+    "release_version": "v1.2.3",
+    "timestamp": "2026-03-13T10:00:00Z"
+  }
+  ```
+- **Subscribers:** Cross-Repo Sync Service, Prometheus
+- **See:** `pmoves/mk/promote.mk`
+
+**`github.promotion.completed.v1`**
+- **Direction:** Published by promotion workflow after merge
+- **Purpose:** Promotion merge completed (triggers cross-repo sync)
+- **Payload:**
+  ```json
+  {
+    "action": "hardened_to_main",
+    "branch": "PMOVES.AI-Edition-Hardened",
+    "pr_number": 789,
+    "target": "main",
+    "merged_by": "username",
+    "timestamp": "2026-03-13T12:00:00Z"
+  }
+  ```
+- **Subscribers:** Cross-Repo Sync Service, Branch Cleanup Service
+
+### Branch Lifecycle Events
+
+**`github.branch.created.v1`**
+- **Direction:** Published by n8n webhook → NATS
+- **Purpose:** New branch created (triggers naming validation)
+- **Payload:**
+  ```json
+  {
+    "repo": "PMOVES.AI",
+    "branch": "feat/new-feature",
+    "action": "created",
+    "creator": "username",
+    "timestamp": "2026-03-13T09:00:00Z"
+  }
+  ```
+- **Subscribers:** Branch Naming Service, Prometheus
+
+**`github.branch.validation.v1`**
+- **Direction:** Published by Branch Naming Service
+- **Purpose:** Branch name validation result
+- **Payload:**
+  ```json
+  {
+    "repo": "PMOVES.AI",
+    "branch": "random-branch",
+    "is_valid": false,
+    "category": null,
+    "suggested_name": "feat/random-branch",
+    "reason": "Invalid branch name format. Suggested: feat/random-branch",
+    "timestamp": "2026-03-13T09:05:00Z"
+  }
+  ```
+- **Subscribers:** Prometheus, monitoring dashboards
+
+**`github.branch.rename_suggested.v1`**
+- **Direction:** Published by Branch Naming Service
+- **Purpose:** Branch rename suggested for invalid names
+- **Payload:**
+  ```json
+  {
+    "repo": "PMOVES.AI",
+    "original_branch": "random-branch",
+    "suggested_branch": "feat/random-branch",
+    "reason": "Branch name must start with feat/, fix/, chore/, docs/, codex/, or ref/docs/",
+    "dry_run": true,
+    "timestamp": "2026-03-13T09:05:00Z"
+  }
+  ```
+- **Subscribers:** Prometheus (alerting on high rename suggestion rate)
+
+**`github.branch.deleted.v1`**
+- **Direction:** Published by Branch Cleanup Service
+- **Purpose:** Branch deleted (cleanup operation)
+- **Payload:**
+  ```json
+  {
+    "repo": "PMOVES.AI",
+    "deleted_count": 5,
+    "dry_run": false,
+    "duration_seconds": 2.5,
+    "timestamp": "2026-03-13T11:00:00Z"
+  }
+  ```
+- **Subscribers:** Prometheus, Discord Publisher
+
+**`github.branch.stale_detected.v1`**
+- **Direction:** Published by Branch Cleanup Service
+- **Purpose:** Stale branches detected (TTL exceeded)
+- **Payload:**
+  ```json
+  {
+    "repo": "PMOVES.AI",
+    "stale_count": 12,
+    "stale_days": 30,
+    "timestamp": "2026-03-13T10:00:00Z"
+  }
+  ```
+- **Subscribers:** Branch Cleanup Service (trigger cleanup), Prometheus
+
+**`github.branch.auto_deleted.v1`**
+- **Direction:** Published by Branch Cleanup Service
+- **Purpose:** Branch auto-deleted after PR merge
+- **Payload:**
+  ```json
+  {
+    "repo": "PMOVES.AI",
+    "branch": "feat/completed-feature",
+    "trigger": "pr_closed",
+    "dry_run": false,
+    "timestamp": "2026-03-13T14:00:00Z"
+  }
+  ```
+- **Subscribers:** Prometheus, Discord Publisher
+
+### Cross-Repo Sync Events
+
+**`github.crossrepo.sync.v1`**
+- **Direction:** Published by Cross-Repo Sync Service
+- **Purpose:** Cross-repo sync operation started
+- **Payload:**
+  ```json
+  {
+    "repo": "PMOVES.AI",
+    "branch": "main",
+    "status": "started",
+    "timestamp": "2026-03-13T12:00:00Z"
+  }
+  ```
+- **Subscribers:** Prometheus, monitoring dashboards
+
+**`github.crossrepo.sync.completed.v1`**
+- **Direction:** Published by Cross-Repo Sync Service
+- **Purpose:** Cross-repo sync completed successfully
+- **Payload:**
+  ```json
+  {
+    "repo": "PMOVES.AI",
+    "branch": "main",
+    "submodules_synced": ["PMOVES-Agent-Zero", "PMOVES-Archon"],
+    "submodules_failed": [],
+    "duration_seconds": 15.5,
+    "timestamp": "2026-03-13T12:00:15Z"
+  }
+  ```
+- **Subscribers:** Prometheus, Discord Publisher
+
+**`github.crossrepo.sync.failed.v1`**
+- **Direction:** Published by Cross-Repo Sync Service
+- **Purpose:** Cross-repo sync operation failed
+- **Payload:**
+  ```json
+  {
+    "repo": "PMOVES.AI",
+    "branch": "main",
+    "error": "Failed to update submodule PMOVES-Agent-Zero: git timeout",
+    "timestamp": "2026-03-13T12:00:10Z"
+  }
+  ```
+- **Subscribers:** Prometheus (alerting), Discord Publisher
+
+### Issue Triage Events
+
+**`github.issue.triage.v1`**
+- **Direction:** Published by Issue Triage Service
+- **Purpose:** Issue triage completed (internal event)
+- **Payload:**
+  ```json
+  {
+    "repo": "PMOVES.AI",
+    "issue_number": 123,
+    "labels": ["bug", "high-priority"],
+    "confidence": 0.85,
+    "method": "semantic",
+    "reasoning": "Found 5 similar issues with these labels",
+    "timestamp": "2026-03-13T09:00:00Z"
+  }
+  ```
+- **Subscribers:** Prometheus (accuracy tracking)
+
+**`github.issue.labeled.v1`**
+- **Direction:** Published by Issue Triage Service
+- **Purpose:** Labels applied to issue via GitHub API
+- **Payload:**
+  ```json
+  {
+    "repo": "PMOVES.AI",
+    "issue_number": 123,
+    "labels": ["bug", "high-priority"],
+    "confidence": 0.85,
+    "method": "semantic",
+    "timestamp": "2026-03-13T09:00:05Z"
+  }
+  ```
+- **Subscribers:** Prometheus, Discord Publisher
+
+### Webhook Events (from n8n)
+
+**`github.webhook.pr.v1`**
+- **Direction:** Published by n8n webhook processor
+- **Purpose:** PR webhook event from GitHub
+- **Payload:** GitHub webhook payload (see GitHub docs)
+- **Subscribers:** Branch Cleanup Service (auto-delete after merge)
+
+**`github.webhook.issue.v1`**
+- **Direction:** Published by n8n webhook processor
+- **Purpose:** Issue webhook event from GitHub
+- **Payload:** GitHub webhook payload (see GitHub docs)
+- **Subscribers:** Issue Triage Service
+
+**`github.webhook.branch.v1`**
+- **Direction:** Published by n8n webhook processor
+- **Purpose:** Branch webhook event from GitHub
+- **Payload:** GitHub webhook payload (see GitHub docs)
+- **Subscribers:** Branch Naming Service
+
 ## Health & Fitness Subjects (Planned)
 
 > **Status:** Planned — Health (wger) integration is pre-stage maturity. These subjects define the target contract.

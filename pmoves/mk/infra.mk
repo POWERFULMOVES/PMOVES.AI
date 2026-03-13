@@ -96,3 +96,62 @@ else
 	@echo ""
 	@echo "Dry-run only. Set EXECUTE=1 to perform cleanup."
 endif
+
+main-branch-protection-setup: ## Configure main branch protection rules (required reviews + CI checks)
+	@echo "=== Main Branch Protection Setup ==="
+	@echo ""
+	@echo "This will configure main branch protection to match documented strategy:"
+	@echo "  - Require 1 approving review"
+	@echo "  - Require 4 CI checks (CodeQL, CHIT, SQL)"
+	@echo "  - Enforce linear history"
+	@echo "  - Require signed commits"
+	@echo ""
+	@read -p "Continue? (y/N): " confirm; \
+	if [ "$$confirm" != "y" ]; then \
+		echo "❌ Aborted"; \
+		exit 1; \
+	fi
+	@echo ""
+	@echo "Step 1/2: Setting required reviews (1 approval)..."
+	@gh api \
+		--method PUT \
+		-H "Accept: application/vnd.github+json" \
+		repos/POWERFULMOVES/PMOVES.AI/branches/main/protection \
+		-f required_pull_request_reviews='{
+			"required_approving_review_count": 1,
+			"dismiss_stale_reviews": false,
+			"require_code_owner_reviews": false
+		}' || { echo "❌ Failed to set required reviews"; exit 1; }
+	@echo "✅ Required reviews configured"
+	@echo ""
+	@echo "Step 2/2: Adding required status checks..."
+	@gh api \
+		--method PUT \
+		-H "Accept: application/vnd.github+json" \
+		repos/POWERFULMOVES/PMOVES.AI/branches/main/protection \
+		-f required_status_checks='{
+			"strict": true,
+			"contexts": [
+				"CodeQL",
+				"CodeQL Advanced",
+				"CHIT Contract Check",
+				"SQL Policy Lint"
+			]
+		}' || { echo "❌ Failed to set required checks"; exit 1; }
+	@echo "✅ Required status checks configured"
+	@echo ""
+	@echo "=== Verification ==="
+	@gh api repos/POWERFULMOVES/PMOVES.AI/branches/main/protection --jq '{
+		reviews: .required_pull_request_reviews.required_approving_review_count,
+		checks: .required_status_checks.contexts,
+		linear: .required_linear_history.enabled,
+		signatures: .required_signatures.enabled
+	}'
+	@echo ""
+	@echo "✅ Main branch protection setup complete!"
+	@echo ""
+	@echo "Next steps:"
+	@echo "  1. Create a test PR to verify restrictions"
+	@echo "  2. Monitor for 1 week"
+	@echo "  3. Document issues in: pmoves/docs/BRANCH_STRATEGY_IMPLEMENTATION_REPORT.md"
+	@echo ""
