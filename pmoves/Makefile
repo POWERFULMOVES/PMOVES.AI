@@ -2117,10 +2117,7 @@ ui-e2e: ## Run Playwright E2E tests
 
 .PHONY: ui-test-all
 ui-test-all: ## Run all UI tests (lint, typecheck, unit, E2E)
-	@$(MAKE) ui-lint
-	@$(MAKE) ui-typecheck
-	@$(MAKE) ui-test
-	@$(MAKE) ui-e2e
+	@$(MAKE) ui-lint && 		$(MAKE) ui-typecheck && 		$(MAKE) ui-test && 		$(MAKE) ui-e2e
 
 .PHONY: ui-videos-realtime-e2e
 ui-videos-realtime-e2e: ## Run Playwright E2E: inserts row via REST and asserts UI shows it
