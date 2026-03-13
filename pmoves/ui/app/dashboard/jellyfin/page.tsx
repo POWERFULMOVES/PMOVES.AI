@@ -24,16 +24,16 @@ export default function JellyfinDashboardPage() {
   const [error, setError] = useState<string | null>(null);
   const [backfillProgress, setBackfillProgress] = useState({ queued: 0, processed: 0, progress: 0 });
 
-  useEffect(() => {
-    refreshSyncStatus();
-  }, []);
-
   const refreshSyncStatus = async () => {
     const result = await jellyfinSyncStatus();
     if (result.ok) {
       setSyncStatus(result.data);
     }
   };
+
+  useEffect(() => {
+    refreshSyncStatus();
+  }, []);
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
