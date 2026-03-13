@@ -175,13 +175,6 @@ def _ensure_integration_credentials(text: str) -> str:
     if _is_blank_or_placeholder(wger_token):
         text = _set_kv(text, "WGER_API_TOKEN", "GENERATE_FROM_WGER_UI")
 
-    # Wger admin password: Django superuser password for the wger admin panel.
-    # Base64-encoded 16-byte random value for security.
-    wger_admin_pass = _get_kv(text, "WGER_ADMIN_PASSWORD")
-    if _is_blank_or_placeholder(wger_admin_pass):
-        wger_admin_pass = base64.b64encode(secrets.token_bytes(16)).decode("utf-8")
-        text = _set_kv(text, "WGER_ADMIN_PASSWORD", wger_admin_pass)
-
     return text
 
 
