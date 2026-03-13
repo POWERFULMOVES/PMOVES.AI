@@ -139,11 +139,12 @@ def _ensure_integration_credentials(text: str) -> str:
     wger_db_pass = _get_kv(text, "WGER_DB_PASSWORD")
     if _is_blank_or_placeholder(wger_db_pass):
         try:
-            wger_db_pass = base64.b64encode(secrets.token_bytes(24)).decode("utf-8")
+            # Use URL-safe base64 to avoid '/' characters that break DATABASE_URL DSN parsing
+            wger_db_pass = secrets.token_urlsafe(24)
             text = _set_kv(text, "WGER_DB_PASSWORD", wger_db_pass)
         except Exception as e:
             print(f"ERROR: Failed to generate WGER_DB_PASSWORD: {e}", file=sys.stderr)
-            print("Generate manually: openssl rand -base64 24", file=sys.stderr)
+            print("Generate manually: python -c 'import secrets; print(secrets.token_urlsafe(24))'", file=sys.stderr)
             sys.exit(1)
 
     # Wger Django secret key: Django SECRET_KEY for cryptographic signing
