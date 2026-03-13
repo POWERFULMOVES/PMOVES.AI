@@ -16,10 +16,12 @@ VERIFICATION CHECKS:
   5. Docker Compose configuration references
 
 Author: PMOVES.AI Automation
-Version: 1.0.0
+Version: 1.2.0
 """
 import json
+import logging
 import os
+import re
 import sys
 import subprocess
 from pathlib import Path
@@ -49,16 +51,103 @@ def print_check(category, text, passed):
     return passed
 
 
-def run_command(cmd, check=True, capture_output=True):
-    """Run a shell command and return output."""
-    result = subprocess.run(
-        cmd,
-        shell=True,
-        capture_output=capture_output,
-        text=True,
-        check=check
-    )
-    return result
+def run_command(cmd, check=False, capture_output=True, timeout=30):
+    """
+    Run a shell command with timeout.
+
+    Args:
+        cmd: Command string to execute
+        check: Raise CalledProcessError on non-zero exit (default: False)
+        capture_output: Capture stdout/stderr (default: True)
+        timeout: Maximum seconds to wait (default: 30)
+
+    Returns:
+        subprocess.CompletedProcess
+
+    Raises:
+        subprocess.TimeoutExpired: If command exceeds timeout
+        subprocess.CalledProcessError: If check=True and command fails
+    """
+    try:
+        result = subprocess.run(
+            cmd,
+            shell=True,
+            capture_output=capture_output,
+            text=True,
+            check=check,
+            timeout=timeout
+        )
+        return result
+    except subprocess.TimeoutExpired:
+        print_error(f"Command timed out after {timeout}s: {cmd[:50]}...")
+        raise
+
+
+def read_env_file(file_path):
+    """
+    Read environment file with proper error handling.
+
+    Args:
+        file_path: Path to environment file
+
+    Returns:
+        str: File content
+
+    Raises:
+        SystemExit: If file cannot be read (with helpful message)
+    """
+    try:
+        with open(file_path, encoding='utf-8') as f:
+            return f.read()
+    except FileNotFoundError:
+        print_error(f"File not found: {file_path}")
+        if "env.shared" in str(file_path):
+            print("  Run 'make secrets-funnel' to generate this file")
+        sys.exit(1)
+    except PermissionError:
+        print_error(f"Permission denied reading: {file_path}")
+        print("  Check file permissions and try again")
+        sys.exit(1)
+    except IsADirectoryError:
+        print_error(f"Path is a directory, not a file: {file_path}")
+        sys.exit(1)
+    except UnicodeDecodeError as e:
+        print_error(f"File encoding error in {file_path}: {e}")
+        print("  Ensure file is UTF-8 encoded")
+        sys.exit(1)
+
+
+def validate_credential_value(key, value):
+    """
+    Validate GitHub App credential value format.
+
+    Args:
+        key: Credential name (e.g., 'GH_APP_ID')
+        value: Credential value
+
+    Returns:
+        tuple: (is_valid, error_message)
+    """
+    if not value or value.strip() == "":
+        return False, "empty value"
+
+    if key == 'GH_APP_ID':
+        if not value.isdigit():
+            return False, f"must be numeric, got: {value[:20]}..."
+
+    elif key == 'GH_APP_CLIENT_ID':
+        if not re.match(r'^[A-Za-z0-9_-]+$', value):
+            return False, f"invalid client ID format: {value[:20]}..."
+
+    elif key == 'GH_APP_INSTALLATION_ID':
+        if not value.isdigit():
+            return False, f"must be numeric, got: {value[:20]}..."
+
+    elif key == 'GH_APP_SEC':
+        if not value.startswith('-----BEGIN'):
+            return False, "must be PEM-formatted private key"
+
+    return True, None
 
 
 def verify_gh_cli():
@@ -81,19 +170,48 @@ def verify_gh_cli():
 
 def verify_github_secrets():
     """Verify GitHub App credentials in GitHub Secrets."""
-    gh_app_keys = ['GH_APP_ID', 'GH_APP_SEC', 'GH_APP_CLIENT_ID', 'GH_APP_INSTALLATION_ID']
-    found_count = 0
+    gh_app_keys = {'GH_APP_ID', 'GH_APP_SEC', 'GH_APP_CLIENT_ID', 'GH_APP_INSTALLATION_ID'}
+    found_keys = set()
 
-    for key in gh_app_keys:
-        try:
-            result = run_command(f"gh secret list --repo POWERFULMOVES/PMOVES.AI | grep '^{key}'")
-            if result.returncode == 0 and key in result.stdout:
-                found_count += 1
-        except:
-            pass
+    try:
+        # Get all secrets at once, filter in Python (no shell injection)
+        result = run_command("gh secret list --repo POWERFULMOVES/PMOVES.AI", timeout=30)
 
-    passed = found_count == 4
-    print_check("GitHub Secrets", f"GitHub App credentials ({found_count}/4 found)", passed)
+        if result.returncode != 0:
+            print_check("GitHub Secrets", f"Failed to list: {result.stderr}", False)
+            return False
+
+        print("  Checking GitHub Secrets for POWERFULMOVES/PMOVES.AI:")
+
+        # Parse output safely in Python
+        for line in result.stdout.split('\n'):
+            if not line.strip():
+                continue
+            # Extract secret name (first word in line)
+            secret_name = line.strip().split()[0]
+            if secret_name in gh_app_keys:
+                found_keys.add(secret_name)
+                print_success(f"  {secret_name}: Found in GitHub Secrets")
+
+        # Report missing keys
+        for key in gh_app_keys - found_keys:
+            print_warning(f"  {key}: Not found in GitHub Secrets")
+
+    except subprocess.TimeoutExpired as e:
+        print_check("GitHub Secrets", f"Timeout after {e.timeout}s - check network connectivity", False)
+        return False
+    except FileNotFoundError:
+        print_check("GitHub Secrets", "GitHub CLI not found - install from https://cli.github.com/", False)
+        return False
+    except PermissionError:
+        print_check("GitHub Secrets", "Permission denied executing GitHub CLI", False)
+        return False
+    except Exception as e:
+        print_check("GitHub Secrets", f"Unexpected error: {type(e).__name__}: {e}", False)
+        return False
+
+    passed = len(found_keys) == 4
+    print_check("GitHub Secrets", f"GitHub App credentials ({len(found_keys)}/4 found)", passed)
     return passed
 
 
@@ -106,23 +224,35 @@ def verify_env_shared():
         print_check("env.shared", "File not found", False)
         return False
 
-    with open(env_shared) as f:
-        content = f.read()
+    content = read_env_file(env_shared)
 
     # Check for uncommented credentials (not starting with #)
     gh_app_keys = ['GH_APP_ID', 'GH_APP_CLIENT_ID', 'GH_APP_INSTALLATION_ID', 'GH_APP_SEC']
     found_count = 0
+    found_invalid = 0
 
     for key in gh_app_keys:
         # Look for uncommented lines (key=value, not #key=value)
         lines = content.split('\n')
         for line in lines:
             if line.strip().startswith(f'{key}='):
-                found_count += 1
+                # Extract value and validate
+                value = line.strip().split('=', 1)[1] if '=' in line else ''
+                is_valid, error = validate_credential_value(key, value)
+
+                if is_valid:
+                    found_count += 1
+                    print_success(f"  {key}: Valid ({value[:20]}...)")
+                else:
+                    found_invalid += 1
+                    print_error(f"  {key}: Invalid value - {error}")
                 break
 
-    passed = found_count == 4
-    print_check("env.shared", f"GitHub App credentials uncommented ({found_count}/4)", passed)
+    passed = found_count == 4 and found_invalid == 0
+    if found_invalid > 0:
+        print_check("env.shared", f"GitHub App credentials: {found_count}/4 valid, {found_invalid} invalid", passed)
+    else:
+        print_check("env.shared", f"GitHub App credentials uncommented ({found_count}/4)", passed)
     return passed
 
 
@@ -135,8 +265,7 @@ def verify_env_tier_agent():
         print_check("env.tier-agent", "File not found (run 'make secrets-funnel' first)", False)
         return False
 
-    with open(tier_agent) as f:
-        content = f.read()
+    content = read_env_file(tier_agent)
 
     gh_app_keys = ['GH_APP_ID', 'GH_APP_CLIENT_ID', 'GH_APP_INSTALLATION_ID', 'GH_APP_SEC']
     found_count = 0
@@ -179,78 +308,120 @@ def verify_chit_manifest():
         print_check("CHIT Manifest", "File not found", False)
         return False
 
-    with open(manifest_file) as f:
-        content = f.read()
+    content = read_env_file(manifest_file)
 
-    # Check for gh_app entries
-    has_gh_app = 'gh_app' in content.lower()
+    # Check for specific credential keys, not just "gh_app" string
+    required_keys = ['GH_APP_ID', 'GH_APP_SEC', 'GH_APP_CLIENT_ID', 'GH_APP_INSTALLATION_ID']
+    has_gh_app = all(key in content for key in required_keys)
     passed = has_gh_app
 
     print_check("CHIT Manifest", f"GitHub App entries {'present' if passed else 'NOT found'}", passed)
     return passed
 
 
+def setup_logging(script_name):
+    """
+    Set up logging to both file and console.
+
+    Args:
+        script_name: Name of script for log file naming
+
+    Returns:
+        Path: Log file path
+    """
+    log_dir = Path.home() / '.pmoves' / 'logs'
+    log_dir.mkdir(parents=True, exist_ok=True)
+
+    log_file = log_dir / f'{script_name}.log'
+
+    # Configure logging
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(levelname)s - %(message)s',
+        handlers=[
+            logging.FileHandler(log_file),
+            logging.StreamHandler(sys.stdout)
+        ]
+    )
+
+    logging.info(f"=== Starting {script_name} ===")
+    logging.info(f"Log file: {log_file}")
+    return log_file
+
+
 def main():
     """Main verification flow."""
+    log_file = setup_logging('verify_github_app_setup')
+
     print_header("GitHub App Setup Verification")
 
-    # Run all verifications
-    results = {
-        "gh_cli": verify_gh_cli(),
-        "github_secrets": verify_github_secrets(),
-        "env_shared": verify_env_shared(),
-        "env_tier_agent": verify_env_tier_agent(),
-        "docker_compose": verify_docker_compose(),
-        "chit_manifest": verify_chit_manifest(),
-    }
+    try:
+        # Run all verifications
+        results = {
+            "gh_cli": verify_gh_cli(),
+            "github_secrets": verify_github_secrets(),
+            "env_shared": verify_env_shared(),
+            "env_tier_agent": verify_env_tier_agent(),
+            "docker_compose": verify_docker_compose(),
+            "chit_manifest": verify_chit_manifest(),
+        }
 
-    # Summary
-    print_header("Verification Summary")
-    total = len(results)
-    passed = sum(results.values())
+        # Summary
+        print_header("Verification Summary")
+        total = len(results)
+        passed = sum(results.values())
 
-    print(f"Total checks: {passed}/{total} passed")
-    print()
-
-    # Failure details
-    failures = [k for k, v in results.items() if not v]
-    if failures:
-        print(f"{Colors.YELLOW}Failed checks:{Colors.RESET}")
-        for check in failures:
-            print(f"  - {check}")
+        print(f"Total checks: {passed}/{total} passed")
+        logging.info(f"Verification completed: {passed}/{total} checks passed")
         print()
 
-        # Troubleshooting hints
-        print(f"{Colors.BLUE}Troubleshooting:{Colors.RESET}")
-        if "gh_cli" in failures:
-            print("  • Install GitHub CLI: https://cli.github.com/")
-            print("  • Authenticate: gh auth login")
-        if "github_secrets" in failures:
-            print("  • Add credentials to GitHub Secrets:")
-            print("    https://github.com/organizations/POWERFULMOVES/PMOVES.AI/settings/secrets/actions")
-        if "env_shared" in failures:
-            print("  • Run: make github-app-setup")
-            print("  • Or manually uncomment lines in pmoves/env.shared")
-        if "env_tier_agent" in failures:
-            print("  • Run: make secrets-funnel")
-            print("  • This generates env.tier-agent from env.shared")
-        if "docker_compose" in failures:
-            print("  • Check docker-compose.yml has GH_APP_* env var references")
-        if "chit_manifest" in failures:
-            print("  • Verify pmoves/chit/secrets_manifest.yaml has gh_app entries")
-        print()
+        # Failure details
+        failures = [k for k, v in results.items() if not v]
+        if failures:
+            print(f"{Colors.YELLOW}Failed checks:{Colors.RESET}")
+            for check in failures:
+                print(f"  - {check}")
+            print()
 
-    # Final result
-    if passed == total:
-        print(f"{Colors.GREEN}{Colors.BOLD}All checks passed! 🎉{Colors.RESET}")
-        print("\nGitHub App integration is fully configured.")
-        print("\nNext steps:")
-        print("  • Start services: docker compose up -d archon botz-gateway")
-        print("  • Test token minting: cd PMOVES-BoTZ && python features/github/mint_and_exec.py")
-        return 0
-    else:
-        print(f"{Colors.RED}{Colors.BOLD}Verification failed!{Colors.RESET}")
-        print(f"\nPlease fix the {len(failures)} failed check(s) above.")
+            # Troubleshooting hints
+            print(f"{Colors.BLUE}Troubleshooting:{Colors.RESET}")
+            if "gh_cli" in failures:
+                print("  • Install GitHub CLI: https://cli.github.com/")
+                print("  • Authenticate: gh auth login")
+            if "github_secrets" in failures:
+                print("  • Add credentials to GitHub Secrets:")
+                print("    https://github.com/organizations/POWERFULMOVES/PMOVES.AI/settings/secrets/actions")
+            if "env_shared" in failures:
+                print("  • Run: make github-app-setup")
+                print("  • Or manually uncomment lines in pmoves/env.shared")
+            if "env_tier_agent" in failures:
+                print("  • Run: make secrets-funnel")
+                print("  • This generates env.tier-agent from env.shared")
+            if "docker_compose" in failures:
+                print("  • Check docker-compose.yml has GH_APP_* env var references")
+            if "chit_manifest" in failures:
+                print("  • Verify pmoves/chit/secrets_manifest.yaml has gh_app entries")
+            print()
+
+        # Final result
+        if passed == total:
+            print(f"{Colors.GREEN}{Colors.BOLD}All checks passed! 🎉{Colors.RESET}")
+            print("\nGitHub App integration is fully configured.")
+            print("\nNext steps:")
+            print("  • Start services: docker compose up -d archon botz-gateway")
+            print("  • Test token minting: cd PMOVES-BoTZ && python features/github/mint_and_exec.py")
+            logging.info("All verification checks passed")
+            return 0
+        else:
+            print(f"{Colors.RED}{Colors.BOLD}Verification failed!{Colors.RESET}")
+            print(f"\nPlease fix the {len(failures)} failed check(s) above.")
+            logging.warning(f"Verification failed: {len(failures)} checks failed")
+            return 1
+
+    except Exception as e:
+        logging.error(f"Verification failed with exception: {e}", exc_info=True)
+        print_error(f"Unexpected error: {e}")
+        print(f"  Full log: {log_file}")
         return 1
 
 
