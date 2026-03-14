@@ -518,7 +518,7 @@ services:
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
-      interval: 10s
+      interval: 20s
       timeout: 5s
       retries: 5
       start_period: 30s
@@ -866,7 +866,7 @@ services:
     - CRYPTO_KEY=${PG_META_CRYPTO_KEY:-}
     healthcheck:
       test: ["CMD-SHELL", "node -e \"const h=require('http');h.get('http://localhost:8080/health',r=>{r.resume();process.exit(r.statusCode===200?0:1)}).on('error',()=>process.exit(1))\""]
-      interval: 10s
+      interval: 20s
       timeout: 5s
       retries: 3
       start_period: 10s
@@ -895,7 +895,7 @@ services:
     command: ["start", "--main-service", "/home/deno/functions/main"]
     healthcheck:
       test: ["CMD-SHELL", "curl -sSf http://localhost:9000/health || exit 1"]
-      interval: 10s
+      interval: 20s
       timeout: 5s
       retries: 3
       start_period: 15s
@@ -957,7 +957,7 @@ services:
     - supabase-vector-data:/var/lib/vector
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9001/health"]
-      interval: 10s
+      interval: 20s
       timeout: 5s
       retries: 3
       start_period: 10s
@@ -997,7 +997,7 @@ services:
     command: ["/bin/sh", "-c", "/app/bin/migrate && if [ -f /etc/pooler/pooler.exs ]; then /app/bin/supavisor eval \"$$(cat /etc/pooler/pooler.exs)\"; else echo 'WARN: /etc/pooler/pooler.exs not found, skipping tenant seeding'; fi && /app/bin/server"]
     healthcheck:
       test: ["CMD-SHELL", "curl -sSf http://127.0.0.1:4000/api/health -o /dev/null || exit 1"]
-      interval: 10s
+      interval: 20s
       timeout: 5s
       retries: 5
       start_period: 30s
@@ -1101,7 +1101,7 @@ services:
       test:
       - CMD-SHELL
       - wget -qO- http://localhost:7474 >/dev/null 2>&1 || exit 1
-      interval: 10s
+      interval: 20s
       timeout: 5s
       retries: 12
       start_period: 20s
@@ -1918,7 +1918,7 @@ services:
       test:
       - CMD-SHELL
       - wget --no-verbose --tries=1 --spider http://localhost:8222/varz || exit 1
-      interval: 10s
+      interval: 20s
       timeout: 5s
       retries: 5
       start_period: 10s
@@ -2077,7 +2077,7 @@ services:
       - CMD-SHELL
       - python -c "import urllib.request,sys; sys.exit(0) if urllib.request.urlopen('http://localhost:8091/healthz').getcode()==200
         else sys.exit(1)"
-      interval: 10s
+      interval: 20s
       timeout: 5s
       retries: 12
       start_period: 15s
@@ -2160,7 +2160,7 @@ services:
     networks: [pmoves_app, pmoves_bus, pmoves_api, pmoves_monitoring]
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8054/healthz', timeout=5)"]
-      interval: 10s
+      interval: 20s
       timeout: 5s
       retries: 12
       start_period: 15s
@@ -2836,10 +2836,10 @@ services:
     profiles: [ "ui" ]
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:3000/api/health || exit 1"]
-      interval: 30s
-      timeout: 10s
+      interval: 20s
+      timeout: 5s
       retries: 3
-      start_period: 60s
+      start_period: 30s
 
   # Session Context Worker - Transforms Claude Code session context to Hi-RAG KB entries
   session-context-worker:
@@ -2929,7 +2929,7 @@ services:
       - pmoves_data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U wger -d wger"]
-      interval: 10s
+      interval: 20s
       timeout: 5s
       retries: 5
       start_period: 10s
@@ -3033,7 +3033,7 @@ services:
       test:
       - CMD-SHELL
       - pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB -h 127.0.0.1
-      interval: 10s
+      interval: 20s
       timeout: 5s
       retries: 12
     profiles:
