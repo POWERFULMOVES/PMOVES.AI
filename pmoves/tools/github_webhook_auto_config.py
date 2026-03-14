@@ -36,6 +36,8 @@ Version: 2.0.0
 __version__ = "2.0.0"
 
 import argparse
+import hashlib
+import hmac
 import json
 import os
 import secrets
@@ -121,6 +123,37 @@ def run_command(cmd, check=False, capture_output=True, timeout=60):
         raise
 
 
+def verify_webhook_signature(payload_body, signature_header, secret):
+    """Verify GitHub webhook HMAC-SHA256 signature.
+
+    Implements the verification algorithm specified by GitHub:
+    https://docs.github.com/en/webhooks/using-webhooks/validating-webhook-deliveries
+
+    Args:
+        payload_body: Raw request body bytes
+        signature_header: Value of x-hub-signature-256 header
+        secret: Webhook secret string
+
+    Returns:
+        bool: True if signature is valid, False otherwise
+    """
+    if not signature_header:
+        print_warning("No x-hub-signature-256 header present")
+        return False
+
+    if not signature_header.startswith("sha256="):
+        print_warning("Signature header does not start with 'sha256='")
+        return False
+
+    expected_signature = "sha256=" + hmac.new(
+        secret.encode("utf-8"),
+        msg=payload_body if isinstance(payload_body, bytes) else payload_body.encode("utf-8"),
+        digestmod=hashlib.sha256,
+    ).hexdigest()
+
+    return hmac.compare_digest(expected_signature, signature_header)
+
+
 def generate_webhook_secret():
     """Generate a cryptographically secure webhook secret."""
     print_step(1, "Generating webhook secret...")
@@ -129,8 +162,8 @@ def generate_webhook_secret():
     # This results in ~53 characters, sufficient for HMAC-SHA256
     webhook_secret = secrets.token_urlsafe(40)
 
-    print_success(f"Generated webhook secret: {webhook_secret[:8]}...{webhook_secret[-8:]}")
-    print(f"  Full length: {len(webhook_secret)} characters")
+    print_success(f"Generated webhook secret ({len(webhook_secret)} chars)")
+    print(f"  Secret stored in env.shared (not displayed for security)")
     return webhook_secret
 
 
@@ -258,7 +291,7 @@ def verify_tier_files():
                 if len(parts) > 1:
                     value = parts[1].strip()
                     if value and value != 'changeme-generate-in-github-app-settings':
-                        print_success(f"GH_WEBHOOK_SECRET found in env.tier-worker: {value[:8]}...{value[-8:]}")
+                        print_success("GH_WEBHOOK_SECRET found in env.tier-worker (valid)")
                         return True
 
     print_warning("GH_WEBHOOK_SECRET not properly set in env.tier-worker")
@@ -513,12 +546,11 @@ def configure_github_webhook(webhook_url, webhook_secret):
         return False, f"Unexpected error: {e}", {}
 
 
-def display_webhook_instructions(webhook_url, webhook_secret):
+def display_webhook_instructions(webhook_url):
     """Display instructions for manual webhook configuration if API fails.
 
     Args:
         webhook_url: The webhook URL to configure
-        webhook_secret: The webhook secret to use
     """
     print("\n" + "="*70)
     print("MANUAL WEBHOOK CONFIGURATION REQUIRED")
@@ -533,7 +565,7 @@ def display_webhook_instructions(webhook_url, webhook_secret):
     print(f"   - Active: [CHECKED]")
     print(f"   - URL: {webhook_url}")
     print("   - Content type: application/json")
-    print(f"   - Secret: {webhook_secret}")
+    print("   - Secret: [retrieve from env.shared GH_WEBHOOK_SECRET]")
 
     print("\n3. Ensure these events are subscribed:")
     events = [
@@ -610,7 +642,7 @@ def main():
 
     result = {
         "success": False,
-        "webhook_secret": None,
+        "webhook_secret_set": False,
         "webhook_url": webhook_url,
         "github_configured": False,
         "message": "",
@@ -649,7 +681,8 @@ def main():
             env_shared_backup.unlink()
             print_success("Cleaned up backup file")
 
-        result["webhook_secret"] = webhook_secret
+        # Never include the secret in result output - stored in env.shared
+        result["webhook_secret_set"] = True
         result["success"] = True
         result["message"] = "Webhook secret generated and added to env.shared"
 
@@ -662,7 +695,7 @@ def main():
             if not github_success:
                 result["error"] = message
                 print_warning(f"GitHub API configuration failed: {message}")
-                display_webhook_instructions(webhook_url, webhook_secret)
+                display_webhook_instructions(webhook_url)
             else:
                 result["message"] += " and GitHub webhook configured"
         else:
@@ -676,7 +709,7 @@ def main():
         else:
             print_header("Configuration Complete!")
             print_success("Webhook secret generated and added to env.shared")
-            print(f"\nGenerated secret: {webhook_secret}")
+            print("\nSecret stored in env.shared (retrieve with: grep GH_WEBHOOK_SECRET pmoves/env.shared)")
             if args.configure_github:
                 if result["github_configured"]:
                     print_success("GitHub webhook configured successfully via API")

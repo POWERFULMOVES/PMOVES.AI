@@ -7,6 +7,7 @@
           "httpMethod": "POST",
           "path": "github/webhook/configure",
           "responseMode": "responseNode",
+          "authentication": "headerAuth",
           "options": {}
         },
         "id": "webhook_trigger",
@@ -92,7 +93,7 @@
       },
       {
         "parameters": {
-          "functionCode": "// Parse the result from script execution\nconst data = $input.item.json;\n\n// Determine success based on response\nconst success = data.success === true || data.status === 'success';\nconst webhookSecret = data.webhook_secret || 'Generated locally';\nconst githubConfigured = data.github_configured === true;\n\nreturn {\n  json: {\n    success: success,\n    webhook_secret: webhookSecret.substring(0, 8) + '...', // Partial for security\n    github_configured: githubConfigured,\n    message: data.message || 'Configuration completed',\n    error: data.error || null,\n    timestamp: new Date().toISOString()\n  }\n};"
+          "functionCode": "// Parse the result from script execution\nconst data = $input.item.json;\n\n// Determine success based on response\nconst success = data.success === true || data.status === 'success';\nconst githubConfigured = data.github_configured === true;\n\nreturn {\n  json: {\n    success: success,\n    webhook_secret_set: data.webhook_secret_set === true,\n    github_configured: githubConfigured,\n    message: data.message || 'Configuration completed',\n    error: data.error || null,\n    timestamp: new Date().toISOString()\n  }\n};"
         },
         "id": "parse_result",
         "name": "Parse Result",
@@ -102,7 +103,7 @@
       },
       {
         "parameters": {
-          "functionCode": "// Prepare NATS event for successful configuration\nconst data = $json;\n\nconst natsEvent = {\n  id: $node.id,\n  topic: 'github.webhook.configured.v1',\n  ts: data.timestamp,\n  version: 'v1',\n  source: 'n8n-github-webhook-config',\n  payload: {\n    success: true,\n    github_configured: data.github_configured,\n    webhook_secret_partial: data.webhook_secret,\n    message: data.message\n  },\n  correlation_id: $node.id,\n  parent_id: null\n};\n\nreturn {\n  json: {\n    nats_subject: natsEvent.topic,\n    nats_payload: natsEvent,\n    status: 'configured',\n    message: data.message\n  }\n};"
+          "functionCode": "// Prepare NATS event for successful configuration\nconst data = $json;\n\nconst natsEvent = {\n  id: $node.id,\n  topic: 'github.webhook.configured.v1',\n  ts: data.timestamp,\n  version: 'v1',\n  source: 'n8n-github-webhook-config',\n  payload: {\n    success: true,\n    github_configured: data.github_configured,\n    webhook_secret_set: data.webhook_secret_set,\n    message: data.message\n  },\n  correlation_id: $node.id,\n  parent_id: null\n};\n\nreturn {\n  json: {\n    nats_subject: natsEvent.topic,\n    nats_payload: natsEvent,\n    status: 'configured',\n    message: data.message\n  }\n};"
         },
         "id": "prepare_nats_success",
         "name": "Prepare NATS (Success)",
@@ -122,31 +123,15 @@
       },
       {
         "parameters": {
-          "url": "=http://nats:4222/pub",
-          "authentication": "none",
-          "sendBody": true,
-          "specifyBody": "json",
-          "jsonBody": "={{ JSON.stringify($json.nats_payload) }}",
-          "options": {
-            "headerParametersUi": {
-              "parameter": [
-                {
-                  "name": "subject",
-                  "value": "={{ $json.nats_subject }}"
-                },
-                {
-                  "name": "content-type",
-                  "value": "application/json"
-                }
-              ]
-            }
-          }
+          "functionCode": "// NATS Publishing Stub\n// Port 4222 is the NATS client protocol (TCP), NOT an HTTP API.\n// To publish to NATS from n8n, use one of:\n//   1. Install n8n-nodes-nats community node (recommended)\n//   2. Deploy a NATS-HTTP bridge service\n//   3. Use NATS WebSocket (ws://nats:9222) with a custom node\nconst subject = $json.nats_subject;\nconst payload = $json.nats_payload;\nconsole.log(`[NATS-STUB] Would publish to: ${subject}`);\nreturn { json: { nats_published: false, nats_stub: true, nats_subject: subject, nats_payload: payload, status: $json.status, error: $json.error, message: 'NATS publish requires n8n-nodes-nats community node or HTTP bridge' } };"
         },
         "id": "publish_nats",
-        "name": "Publish to NATS",
-        "type": "n8n-nodes-base.httpRequest",
-        "typeVersion": 4.1,
-        "position": [2420, 200]
+        "name": "Publish to NATS (stub)",
+        "type": "n8n-nodes-base.functionItem",
+        "typeVersion": 1,
+        "position": [2420, 200],
+        "notesInFlow": true,
+        "notes": "NATS port 4222 is TCP client protocol, not HTTP. Install n8n-nodes-nats community node for proper NATS publishing."
       },
       {
         "parameters": {
@@ -302,7 +287,7 @@
         "main": [
           [
             {
-              "node": "Publish to NATS",
+              "node": "Publish to NATS (stub)",
               "type": "main",
               "index": 0
             }
@@ -313,14 +298,14 @@
         "main": [
           [
             {
-              "node": "Publish to NATS",
+              "node": "Publish to NATS (stub)",
               "type": "main",
               "index": 0
             }
           ]
         ]
       },
-      "Publish to NATS": {
+      "Publish to NATS (stub)": {
         "main": [
           [
             {
