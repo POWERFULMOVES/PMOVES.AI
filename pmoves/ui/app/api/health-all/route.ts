@@ -6,7 +6,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { checkAllServices, checkServiceHealth, getHealthPercentage, getStatusText } from '@/lib/serviceHealth';
 
-export const runtime = 'edge';
+// NOTE: Using 'nodejs' runtime instead of 'edge' because Edge runtime
+// doesn't support localhost DNS resolution, which is needed for service
+// health checks within the Docker network.
+export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 /**

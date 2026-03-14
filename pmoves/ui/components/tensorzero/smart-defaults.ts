@@ -2,7 +2,7 @@
    TensorZero Smart Defaults Configuration Templates
    ═══════════════════════════════════════════════════════════════════════════ */
 
-import type { SmartDefaultsTemplate, TensorZeroConfig, VariantTemplate } from './types';
+import type { SmartDefaultsTemplate, VariantTemplate } from './types';
 
 /**
  * Low Latency Configuration - All local models via Ollama

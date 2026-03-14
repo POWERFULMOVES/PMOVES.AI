@@ -93,7 +93,7 @@ function calculateTierStats(
  */
 function getCriticalDownServices(
   healthResult: HealthCheckResult,
-  tierStats: Record<ServiceCategory, TierStats>
+  _tierStats: Record<ServiceCategory, TierStats>
 ): string[] {
   const criticalSlugs = [
     'prometheus',      // Observability foundation

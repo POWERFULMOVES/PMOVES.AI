@@ -19,7 +19,6 @@ export default function ResearchDashboardPage() {
   const [tasks, setTasks] = useState<ResearchTask[]>([]);
   const [selectedTask, setSelectedTask] = useState<ResearchTask | null>(null);
   const [results, setResults] = useState<ResearchResult | null>(null);
-  const [loading, setLoading] = useState(false);
   const [starting, setStarting] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -30,7 +29,50 @@ export default function ResearchDashboardPage() {
 
   // Ref to track current tasks for polling check (prevents stale closure issues)
   const tasksRef = useRef<ResearchTask[]>([]);
-  tasksRef.current = tasks;
+
+  // Keep ref in sync with tasks state
+  useEffect(() => {
+    tasksRef.current = tasks;
+  }, [tasks]);
+
+  // Initial data load and polling for running tasks
+  useEffect(() => {
+    // Initial load
+    const initialLoad = async () => {
+      setRefreshing(true);
+      const taskResult = await listResearchTasks({ limit: 50 });
+      if (taskResult.ok) {
+        setTasks(taskResult.data);
+      } else {
+        setError(taskResult.error);
+        setTimeout(() => setError(null), 5000);
+      }
+      setRefreshing(false);
+
+      const healthResult = await researchHealth();
+      if (healthResult.ok) {
+        setHealthy(healthResult.data.healthy);
+      }
+    };
+
+    initialLoad();
+
+    // Poll for updates on running tasks - uses ref to avoid dependency on tasks state
+    const interval = setInterval(() => {
+      const hasRunning = tasksRef.current.some(t => t.status === "running");
+      if (hasRunning) {
+        setRefreshing(true);
+        listResearchTasks({ limit: 50 })
+          .then(result => {
+            if (result.ok) {
+              setTasks(result.data);
+            }
+          })
+          .finally(() => setRefreshing(false));
+      }
+    }, 5000);
+    return () => clearInterval(interval);
+  }, []); // Empty deps - only run on mount, use ref for polling
 
   const refreshTasks = useCallback(async () => {
     setRefreshing(true);
@@ -43,26 +85,6 @@ export default function ResearchDashboardPage() {
     }
     setRefreshing(false);
   }, []);
-
-  const checkHealth = useCallback(async () => {
-    const result = await researchHealth();
-    if (result.ok) {
-      setHealthy(result.data.healthy);
-    }
-  }, []);
-
-  useEffect(() => {
-    refreshTasks();
-    checkHealth();
-    // Poll for updates on running tasks - uses ref to avoid dependency on tasks state
-    const interval = setInterval(() => {
-      const hasRunning = tasksRef.current.some(t => t.status === "running");
-      if (hasRunning) {
-        refreshTasks();
-      }
-    }, 5000);
-    return () => clearInterval(interval);
-  }, [refreshTasks, checkHealth]);
 
   const handleInitiate = async (query: string, options: ResearchOptions) => {
     setStarting(true);

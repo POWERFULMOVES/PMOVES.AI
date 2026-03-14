@@ -69,7 +69,7 @@ export default function SearchDashboardPage() {
     }
   }, []);
 
-  const handleCopy = useCallback((content: string) => {
+  const handleCopy = useCallback((_content: string) => {
     setCopiedNotification("Copied to clipboard");
     setTimeout(() => setCopiedNotification(null), 2000);
   }, []);

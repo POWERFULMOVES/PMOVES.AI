@@ -1,0 +1,62 @@
+title: "pmoves-google-cast-integration"
+description: "Google Cast/Google Home integration for PMOVES.AI voice agents. Cast TTS to Nest Audio, Nest Mini, Chromecast, and Android TV devices."
+github: "https://github.com/POWERFULMOVES/PMOVES.AI"
+version: "1.0.0"
+license: "MIT"
+tags:
+  - "voice"
+  - "cast"
+  - "google"
+  - "audio"
+  - "tts"
+  - "nest"
+  - "chromecast"
+author: "POWERFULMOVES"
+homepage: "https://pmoves.ai"
+logo: "https://avatars.githubusercontent.com/u/74552248"
+
+# Configuration
+config:
+  requires:
+    - "FLUTE_GATEWAY_URL"  # Flute-Gateway for prosodic TTS
+    - "ULTIMATE_TTS_URL"   # Ultimate-TTS Studio fallback
+    - "NATS_URL"           # NATS message bus
+
+  optional:
+    - "CAST_DEFAULT_DEVICE"  # Default Cast device name
+
+# Tools provided by this plugin
+tools:
+  - name: "cast_discover"
+    description: "Scan LAN for Google Cast devices"
+  - name: "cast_list"
+    description: "List discovered Cast devices"
+  - name: "cast_speech"
+    description: "Synthesize TTS and cast to device"
+  - name: "cast_audio"
+    description: "Cast audio file to device"
+  - name: "cast_status"
+    description: "Get device playback status"
+  - name: "cast_stop"
+    description: "Stop playback on device"
+
+# Events published
+events:
+  - "voice.cast.request.v1"
+  - "voice.cast.completed.v1"
+  - "voice.cast.failed.v1"
+  - "device.cast.discovered.v1"
+  - "device.cast.status.v1"
+
+# Service endpoints
+endpoints:
+  - name: "Cast TTS Gateway"
+    url: "http://localhost:8060"
+    health: "/healthz"
+    metrics: "/metrics"
+
+# Documentation
+docs:
+  setup: "https://github.com/POWERFULMOVES/PMOVES.AI/blob/main/pmoves/docs/voice/cast-integration.md"
+  api: "https://github.com/POWERFULMOVES/PMOVES.AI/blob/main/pmoves/services/cast-tts-gateway/README.md"
+  examples: "https://github.com/POWERFULMOVES/PMOVES.AI/tree/main/pmoves/integrations/agent0-plugins/catalog/pmoves-google-cast/examples"

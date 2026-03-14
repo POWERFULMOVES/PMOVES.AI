@@ -1,0 +1,215 @@
+name: UI Tests
+
+on:
+  push:
+    branches: [main, PMOVES.AI-Edition-Hardened]
+    paths:
+      - 'pmoves/ui/**'
+      - '.github/workflows/ui-tests.yml'
+  pull_request:
+    branches: [main, PMOVES.AI-Edition-Hardened]
+    paths:
+      - 'pmoves/ui/**'
+      - '.github/workflows/ui-tests.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  lint:
+    name: Lint (ESLint)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@v2
+        with:
+          egress-policy: audit
+
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: pmoves/ui/package-lock.json
+
+      - name: Install dependencies
+        working-directory: pmoves/ui
+        run: npm ci
+
+      - name: Run ESLint
+        working-directory: pmoves/ui
+        run: npm run lint
+
+  typecheck:
+    name: Type Check (TypeScript)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@v2
+        with:
+          egress-policy: audit
+
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: pmoves/ui/package-lock.json
+
+      - name: Install dependencies
+        working-directory: pmoves/ui
+        run: npm ci
+
+      - name: Run TypeScript type check
+        working-directory: pmoves/ui
+        run: npm run typecheck
+
+  unit-tests:
+    name: Unit Tests (Jest)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+      checks: write
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@v2
+        with:
+          egress-policy: audit
+
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: pmoves/ui/package-lock.json
+
+      - name: Install dependencies
+        working-directory: pmoves/ui
+        run: npm ci
+
+      - name: Run Jest unit tests
+        working-directory: pmoves/ui
+        env:
+          # Mock Supabase for unit tests
+          NEXT_PUBLIC_SUPABASE_URL: http://localhost:54321
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: mock-anon-key
+          SUPABASE_SERVICE_ROLE_KEY: mock-service-role-key
+        run: npm test -- --ci --coverage --maxWorkers=2
+
+      - name: Upload coverage reports
+        uses: codecov/codecov-action@v4
+        if: always()
+        with:
+          files: pmoves/ui/coverage/coverage-final.json
+          flags: ui-unit
+          name: ui-unit-coverage
+          fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}
+
+  e2e-tests:
+    name: E2E Tests (Playwright)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@v2
+        with:
+          egress-policy: audit
+
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: pmoves/ui/package-lock.json
+
+      - name: Install dependencies
+        working-directory: pmoves/ui
+        run: npm ci
+
+      - name: Install Playwright browsers
+        working-directory: pmoves/ui
+        run: npx playwright install --with-deps
+
+      - name: Run Playwright E2E tests
+        working-directory: pmoves/ui
+        env:
+          # Configure Playwright to use correct port (4482)
+          PLAYWRIGHT_HOST: 127.0.0.1
+          PLAYWRIGHT_PORT: 4482
+          # Mock Supabase for E2E tests
+          NEXT_PUBLIC_SUPABASE_URL: http://localhost:54321
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: playwright-anon-key
+          NEXT_PUBLIC_SUPABASE_BOOT_USER_JWT: playwright-boot-user-jwt
+          SUPABASE_SERVICE_ROLE_KEY: playwright-service-role
+        run: npm run test:e2e
+
+      - name: Upload Playwright report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report
+          path: pmoves/ui/playwright-report/
+          retention-days: 7
+
+      - name: Upload Playwright screenshots
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-screenshots
+          path: pmoves/ui/test-results/
+          retention-days: 7
+
+  integration-tests:
+    name: Integration Tests (API Clients)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+      checks: write
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@v2
+        with:
+          egress-policy: audit
+          allowed-endpoints: >
+            github.com:443
+            api.github.com:443
+            registry.npmjs.org:443
+            localhost:4482
+            localhost:8086
+            localhost:8093
+            localhost:8098
+
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: pmoves/ui/package-lock.json
+
+      - name: Install dependencies
+        working-directory: pmoves/ui
+        run: npm ci
+
+      - name: Run API client integration tests
+        working-directory: pmoves/ui
+        run: npm test -- --testPathPattern="lib/api/.*\.test\.ts$" --ci

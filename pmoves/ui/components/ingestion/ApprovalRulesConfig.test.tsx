@@ -5,7 +5,6 @@
 
 import { render, screen, fireEvent } from '@testing-library/react';
 import { ApprovalRulesConfig, type ApprovalRule } from './ApprovalRulesConfig';
-import type { IngestionSourceType } from '@/lib/realtimeClient';
 
 const mockRules: ApprovalRule[] = [
   {
@@ -200,7 +199,7 @@ describe('ApprovalRulesConfig', () => {
     });
 
     it('should create rule with conditions', () => {
-      const { container } = render(
+      const { container: _container } = render(
         <ApprovalRulesConfig
           rules={mockRules}
           onCreateRule={mockOnCreateRule}

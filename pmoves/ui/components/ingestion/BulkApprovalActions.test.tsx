@@ -298,7 +298,7 @@ describe('BulkApprovalActions', () => {
     });
 
     it('should use default priority of 5', async () => {
-      const { container } = render(
+      render(
         <BulkApprovalActions
           items={mockItems}
           selectedIds={new Set(['1'])}

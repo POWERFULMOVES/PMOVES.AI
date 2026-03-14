@@ -4,7 +4,7 @@
 
 import { ReactElement } from 'react';
 import { render, RenderOptions } from '@testing-library/react';
-import type { ServiceHealth, ServiceHealthStatus } from '../../lib/serviceHealth';
+import type { ServiceHealth } from '../../lib/serviceHealth';
 import type { ServiceDefinition, ServiceCategory, ServiceColor } from '../../lib/serviceCatalog';
 
 // =============================================================================
@@ -102,7 +102,7 @@ export function renderWithAuth(
     };
   } = {}
 ) {
-  const { authOverrides, ...renderOptions } = options;
+  const { authOverrides: _authOverrides, ...renderOptions } = options;
 
   // TODO: Add actual auth context wrapper when available
   return render(ui, renderOptions);
@@ -113,7 +113,7 @@ export function renderWithAuth(
  */
 export function renderWithServiceHealth(
   ui: ReactElement,
-  healthMap: Record<string, ServiceHealth> = {},
+  _healthMap: Record<string, ServiceHealth> = {},
   options: Omit<RenderOptions, 'wrapper'> = {}
 ) {
   // TODO: Add service health context wrapper when available
@@ -218,7 +218,7 @@ export function clearAllMocks() {
 // Export all
 // =============================================================================
 
-export default {
+const testHelpers = {
   mockServiceHealth,
   mockServiceHealthMap,
   mockServiceEndpoint,
@@ -233,3 +233,5 @@ export default {
   mockFetch,
   clearAllMocks,
 };
+
+export default testHelpers;
