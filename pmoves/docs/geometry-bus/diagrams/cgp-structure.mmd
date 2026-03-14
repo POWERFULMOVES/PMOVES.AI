@@ -1,0 +1,68 @@
+%%{init: {'theme':'base', 'themeVariables': {
+  'primaryColor': '#3ecf8e',
+  'primaryBorderColor': '#3ecf8e',
+  'secondaryColor': '#9333ea',
+  'secondaryBorderColor': '#a855f7',
+  'tertiaryColor': '#fbbf24',
+  'tertiaryBorderColor': '#d97706',
+  'background': 'transparent'
+}}}%%
+graph TD
+    classDef root fill:#3ecf8e,stroke:#2db380,color:#000
+    classDef super fill:#9333ea,stroke:#7c2d12,color:#fff
+    classDef const fill:#fbbf24,stroke:#d97706,color:#000
+    classDef point fill:#404040,stroke:#525252,color:#ededed
+    classDef sig fill:#ef4444,stroke:#dc2626,color:#fff
+
+    %% Root CGP Packet
+    CGP["📦 CGP Packet<br/>spec: chit.cgp.v1.0"]:::root
+
+    %% Required Fields
+    SUMMARY["summary: string<br/>Human-readable description<br/>max 200 chars"]:::point
+    CREATED["created_at: string<br/>ISO 8601 timestamp<br/>UTC timezone"]:::point
+    NODES["super_nodes: array<br/>1+ super nodes required"]:::point
+
+    %% Super Node
+    SUP["🔷 Super Node<br/>id: string<br/>label: display name<br/>x, y, r: position/radius"]:::super
+
+    %% Constellation
+    CONSTS["constellations: array<br/>0+ constellations"]:::point
+    CONST["🌟 Constellation<br/>id: string<br/>summary: description<br/>anchor: [x, y, z]<br/>spectrum: [r, g, b]"]:::const
+
+    %% Points
+    PTS["points: array<br/>0+ points"]:::point
+    PT["📍 Point<br/>id: string<br/>modality: text|latent|voice|...<br/>proj: projection 0-1<br/>conf: confidence 0-1<br/>summary: content"]:::point
+
+    %% Optional Signature
+    META["meta: object<br/>source: service.name<br/>tags: string[]"]:::point
+    SIG["🔐 sig: object<br/>alg: HMAC-SHA256<br/>hmac: base64<br/>key_id: CHIT_PROD_PASSPHRASE"]:::sig
+
+    %% Structure
+    CGP --> SUMMARY
+    CGP --> CREATED
+    CGP --> NODES
+    CGP --> META
+
+    NODES --> SUP
+    SUP --> CONSTS
+
+    CONSTS --> CONST
+    CONST --> PTS
+
+    PTS --> PT
+
+    CGP -.->|"optional"| SIG
+
+    %% Legend
+    subgraph Legend["📋 Field Requirements"]
+        L1["✓ Required"]:::point
+        L2["🔐 Optional"]:::sig
+    end
+
+    %% Example Note
+    subgraph Example["💡 Example: Consciousness Theory CGP"]
+        E1["spec: chit.cgp.v1.0"]
+        E2["super_nodes[0].label: 'Materialism'"]
+        E3["constellations[0].anchor: [0.5, 0.3, 0.2]"]
+        E4["points[0].modality: 'text'"]
+    end

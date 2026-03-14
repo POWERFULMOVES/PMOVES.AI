@@ -208,7 +208,7 @@ class AgentZeroMCPClient:
                 success=False,
                 pr_number=None,
                 pr_url=None,
-                error=str(e)
+                error="Internal client error"
             )
 
     async def merge_pull_request(
@@ -262,7 +262,7 @@ class AgentZeroMCPClient:
             return PRMergeResult(
                 success=False,
                 merged=False,
-                error=str(e)
+                error="Internal client error"
             )
 
     async def add_comment(
@@ -310,7 +310,7 @@ class AgentZeroMCPClient:
             return CommentResult(
                 success=False,
                 comment_id=None,
-                error=str(e)
+                error="Internal client error"
             )
 
     async def update_pr_branch(

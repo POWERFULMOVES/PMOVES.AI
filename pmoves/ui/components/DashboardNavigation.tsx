@@ -47,7 +47,10 @@ export type NavKey =
   | 'chat'
   | 'services'
   | 'chit'
-  | 'tokenism';
+  | 'tokenism'
+  | 'agents'
+  | 'github'
+  | 'graphiti';
 
 interface DashboardNavigationProps {
   active?: NavKey;

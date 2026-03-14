@@ -18,7 +18,7 @@ test.describe('Enhanced Video Approval', () => {
     await expect(page.locator('[data-testid="ingestion-queue-table"]')).toBeVisible();
 
     // Check that bulk actions section exists
-    const bulkActions = page.locator('[data-testid="bulk-actions-bar"]');
+    page.locator('[data-testid="bulk-actions-bar"]').isVisible();
     // Might not be visible if no items selected
   });
 
@@ -100,7 +100,7 @@ test.describe('Enhanced Video Approval', () => {
 
     // Only pending items should be selected
     const pendingItems = page.locator('[data-testid="queue-item"][data-status="pending"]');
-    const pendingCount = await pendingItems.count();
+    await pendingItems.count();
 
     // Verify button exists and is clickable
     await expect(page.locator('[data-testid="select-pending"]')).toBeVisible();
@@ -170,9 +170,9 @@ test.describe('Enhanced Video Approval', () => {
 
     // First, find all items (including non-pending)
     const allItems = page.locator('[data-testid="queue-item"]');
-    const allCount = await allItems.count();
+    const _allCount = await allItems.count();
 
-    if (allCount > 0) {
+    if (_allCount > 0) {
       // Select all visible
       await page.click('[data-testid="select-all-visible"]');
 
@@ -285,8 +285,8 @@ test.describe('Enhanced Video Approval', () => {
     await page.click('[data-testid="bulk-reject-button"]');
 
     // Try to enter very long reason
-    const longReason = 'a'.repeat(1000);
-    await page.fill('[data-testid="reject-reason"]', longReason);
+    const _longReason = 'a'.repeat(1000);
+    await page.fill('[data-testid="reject-reason"]', _longReason);
 
     // Should be truncated or have maxLength attribute
     const actualValue = await page.inputValue('[data-testid="reject-reason"]');

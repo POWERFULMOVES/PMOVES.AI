@@ -1,0 +1,50 @@
+%%{init: {'theme':'base', 'themeVariables': {
+  'primaryColor': '#3ecf8e',
+  'primaryBorderColor': '#3ecf8e',
+  'secondaryColor': '#9333ea',
+  'secondaryBorderColor': '#a855f7',
+  'tertiaryColor': '#fbbf24',
+  'tertiaryBorderColor': '#d97706',
+  'background': 'transparent'
+}}}%%
+flowchart TD
+    classDef input fill:#3ecf8e,stroke:#2db380,color:#000
+    classDef process fill:#9333ea,stroke:#7c2d12,color:#fff
+    classDef output fill:#fbbf24,stroke:#d97706,color:#000
+
+    %% Input
+    TXT["📝 Text Units<br/>theory texts,<br/>documents, content"]:::input
+
+    %% Step 1: Embeddings
+    EMB["🔷 sentence-transformers<br/>all-MiniLM-L6-v2<br/>━━━━━━━━━━<br/>Generate 384-dim<br/>embeddings per unit"]:::process
+
+    %% Step 2: CHR Clustering
+    CHR["🔮 CHR Algorithm<br/>━━━━━━━━━━<br/>Initialize K anchors<br/>Assign via softmax<br/>Update positions<br/>Calculate MHEP"]:::process
+
+    %% Step 3: CGP Construction
+    CGP["📦 CGP Packet<br/>spec: chit.cgp.v1.0<br/>━━━━━━━━━━<br/>super_nodes[]<br/>constellations[]<br/>spectrum: RGB<br/>points[]<br/>sig: HMAC"]:::process
+
+    %% Step 4: NATS Publishing
+    NATS["🔀 NATS Publish<br/>geometry.cgp.v1<br/>━━━━━━━━━━<br/>Subscribers:<br/>• Hi-RAG v2<br/>• Hyperdimensions<br/>• BoTZ CHIT tools"]:::process
+
+    %% Step 5: Rendering
+    THREE["🎨 Three.js WebGL<br/>━━━━━━━━━━<br/>Parse CGP packet<br/>Create geometry<br/>Prosodic mapping<br/>Interactive 3D<br/>Export: PNG/GLTF"]:::output
+
+    %% Data Flow
+    TXT -->|"units[]"| EMB
+    EMB -->|"vectors[]"| CHR
+    CHR -->|"clusters"| CGP
+    CGP -->|"signed packet"| NATS
+    NATS -->|"consume"| THREE
+
+    %% Side Outputs
+    CGP -.->|"index"| HIRAG["Hi-RAG v2<br/>Vector + Graph"]
+    CGP -.->|"store"| CIPHER["Cipher Memory<br/>Agent Memory"]
+
+    %% Legend
+    subgraph Legend["💡 CGP → Shapes Mapping"]
+        L1["anchor → sphere position (x, y, z)"]
+        L2["spectrum → color (r, g, b)"]
+        L3["points → orbiting particles"]
+        L4["r → sphere radius"]
+    end

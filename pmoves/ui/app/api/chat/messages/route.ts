@@ -4,7 +4,7 @@ import { ownerFromJwt } from '@/lib/jwtUtils';
 import { logError } from '@/lib/errorUtils';
 import { ErrorIds } from '@/lib/constants/errorIds';
 
-export async function GET(req: NextRequest) {
+export async function GET(_req: NextRequest) {
   const supabase = getServiceSupabaseClient();
   // Security: User identity must come from JWT only, never from query params
   const { ownerId: jwtOwner, error: jwtError } = ownerFromJwt('chat/messages');

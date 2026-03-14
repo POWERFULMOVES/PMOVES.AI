@@ -10,7 +10,6 @@ import { useState } from "react";
 // Tailwind JIT static class lookup objects
 const INPUT_BASE_CLASSES = "w-full rounded border border-neutral-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500";
 const BUTTON_PRIMARY_CLASSES = "rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50";
-const BUTTON_SECONDARY_CLASSES = "rounded border border-neutral-300 px-4 py-2 text-sm font-medium hover:bg-neutral-50 disabled:opacity-50";
 
 interface BackfillControlsProps {
   /** Callback to start backfill */

@@ -1,0 +1,61 @@
+%%{init: {'theme':'base', 'themeVariables': {
+  'primaryColor': '#3ecf8e',
+  'primaryBorderColor': '#3ecf8e',
+  'secondaryColor': '#9333ea',
+  'secondaryBorderColor': '#a855f7',
+  'tertiaryColor': '#fbbf24',
+  'tertiaryBorderColor': '#d97706',
+  'background': 'transparent'
+}}}%%
+flowchart LR
+    classDef ingest fill:#3ecf8e,stroke:#2db380,color:#000
+    classDef process fill:#9333ea,stroke:#7c2d12,color:#fff
+    classDef output fill:#fbbf24,stroke:#d97706,color:#000
+    classDef storage fill:#404040,stroke:#525252,color:#ededed
+
+    %% Input
+    YT["📺 YouTube Channel<br/>New Video Detected"]:::ingest
+
+    %% Ingestion
+    PM["PMOVES.YT<br/>:8077<br/>━━━━━━━━━━<br/>Download Video<br/>Retrieve Transcript"]:::ingest
+
+    %% Storage
+    MIO["📦 MinIO<br/>assets bucket<br/>Video + Transcript"]:::storage
+
+    %% Processing
+    MW["FFmpeg-Whisper<br/>:8078<br/>━━━━━━━━━━<br/>Transcribe Audio<br/>GPU-accelerated"]:::process
+    MV["Media-Video Analyzer<br/>:8079<br/>━━━━━━━━━━<br/>YOLOv8 Frames<br/>Object Detection"]:::process
+    EW["Extract Worker<br/>:8083<br/>━━━━━━━━━━<br/>Text Embeddings<br/>all-MiniLM-L6-v2"]:::process
+
+    %% Indexing
+    HR["Hi-RAG v2<br/>:8086<br/>━━━━━━━━━━<br/>Theory Extraction<br/>Vector + Graph Search"]:::process
+
+    %% Consciousness Processing
+    CS["consciousness-service<br/>:8096<br/>━━━━━━━━━━<br/>CHR Clustering<br/>CGP Generation"]:::process
+
+    %% NATS Bus
+    NATS["🔀 NATS<br/>Geometry Bus<br/>geometry.cgp.v1"]:::output
+
+    %% Final Outputs
+    HD["🎨 Hyperdimensions<br/>3D Constellation<br/>Visualization"]:::output
+    PG["🚪 PersonaGate<br/>Threshold Evaluation<br/>Persona Building"]:::output
+
+    %% Flow
+    YT -->|"channel_monitor trigger"| PM
+    PM -->|"download"| MIO
+    PM -->|"transcript_url"| MW
+    MW -->|"text"| EW
+    MIO -->|"video_path"| MV
+    MV -->|"frame_data"| EW
+    EW -->|"embeddings"| HR
+    HR -->|"theories"| CS
+    CS -->|"CGP packet"| NATS
+    NATS -->|"consume"| HD
+    NATS -->|"attribution"| PG
+
+    %% Side note
+    subgraph Notes["📋 Pipeline Notes"]
+        N1["⏱ Total Duration: ~5-15 min/video"]
+        N2["🔄 Runs on: ingest.file.added.v1"]
+        N3["📊 Output: Persona + CGP shapes"]
+    end

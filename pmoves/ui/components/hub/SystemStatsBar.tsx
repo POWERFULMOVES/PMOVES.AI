@@ -36,8 +36,6 @@ export function SystemStatsBar({
   const statusColor = percentage >= 80 ? 'text-cata-forest' :
                      percentage >= 50 ? 'text-cata-gold' : 'text-cata-ember';
 
-  const statusBg = percentage >= 80 ? 'bg-cata-forest/10' :
-                   percentage >= 50 ? 'bg-cata-gold/10' : 'bg-cata-ember/10';
 
   // Format last update time
   const formatTime = (date: Date | null) => {

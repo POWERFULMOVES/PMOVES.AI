@@ -9,7 +9,6 @@ import { useState } from "react";
 import type { ResearchResult } from "@/lib/api/research";
 
 // Tailwind JIT static class lookup objects
-const SECTION_CLASSES = "border-t pt-4 space-y-4";
 const NOTE_CLASSES = "text-sm bg-neutral-50 rounded p-2";
 const SOURCE_LINK_CLASSES = "text-sm text-blue-600 hover:underline";
 

@@ -1,0 +1,357 @@
+{
+  "spec": "chit.cgp.v0.1",
+  "summary": "PMOVES Consciousness Taxonomy - 325 theories across 10 categories",
+  "meta": {
+    "namespace": "pmoves.consciousness",
+    "source": "Kuhn Landscape of Consciousness (2024)",
+    "generator": "pmoves.consciousness.cgp",
+    "total_theories": 325,
+    "total_categories": 10
+  },
+  "created_at": "2026-03-13T16:10:38.182315+00:00",
+  "super_nodes": [
+    {
+      "id": "super-materialism",
+      "label": "Materialism Theories",
+      "summary": "Consciousness arises from physical brain processes",
+      "x": 1.0,
+      "y": 0.0,
+      "r": 0.3,
+      "meta": {
+        "category": "materialism",
+        "namespace": "pmoves.consciousness"
+      },
+      "constellations": [
+        {
+          "id": "constellation-materialism",
+          "summary": "Materialism Theories constellation",
+          "anchor": [
+            1.0,
+            0.0,
+            0
+          ],
+          "points": []
+        }
+      ]
+    },
+    {
+      "id": "super-dualism",
+      "label": "Dualisms",
+      "summary": "Mind and matter are fundamentally distinct",
+      "x": 0.8090169943749475,
+      "y": 0.5877852522924731,
+      "r": 0.3,
+      "meta": {
+        "category": "dualism",
+        "namespace": "pmoves.consciousness"
+      },
+      "constellations": [
+        {
+          "id": "constellation-dualism",
+          "summary": "Dualisms constellation",
+          "anchor": [
+            0.8090169943749475,
+            0.5877852522924731,
+            0
+          ],
+          "points": []
+        }
+      ]
+    },
+    {
+      "id": "super-idealism",
+      "label": "Idealisms",
+      "summary": "Reality is fundamentally mental",
+      "x": 0.30901699437494745,
+      "y": 0.9510565162951535,
+      "r": 0.3,
+      "meta": {
+        "category": "idealism",
+        "namespace": "pmoves.consciousness"
+      },
+      "constellations": [
+        {
+          "id": "constellation-idealism",
+          "summary": "Idealisms constellation",
+          "anchor": [
+            0.30901699437494745,
+            0.9510565162951535,
+            0
+          ],
+          "points": []
+        }
+      ]
+    },
+    {
+      "id": "super-panpsychism",
+      "label": "Panpsychisms",
+      "summary": "Consciousness is fundamental and ubiquitous",
+      "x": -0.30901699437494734,
+      "y": 0.9510565162951536,
+      "r": 0.3,
+      "meta": {
+        "category": "panpsychism",
+        "namespace": "pmoves.consciousness"
+      },
+      "constellations": [
+        {
+          "id": "constellation-panpsychism",
+          "summary": "Panpsychisms constellation",
+          "anchor": [
+            -0.30901699437494734,
+            0.9510565162951536,
+            0
+          ],
+          "points": []
+        }
+      ]
+    },
+    {
+      "id": "super-monism",
+      "label": "Monisms",
+      "summary": "Reality consists of one fundamental substance",
+      "x": -0.8090169943749473,
+      "y": 0.5877852522924732,
+      "r": 0.3,
+      "meta": {
+        "category": "monism",
+        "namespace": "pmoves.consciousness"
+      },
+      "constellations": [
+        {
+          "id": "constellation-monism",
+          "summary": "Monisms constellation",
+          "anchor": [
+            -0.8090169943749473,
+            0.5877852522924732,
+            0
+          ],
+          "points": []
+        }
+      ]
+    },
+    {
+      "id": "super-non-reductive-physicalism",
+      "label": "Non-Reductive Physicalism",
+      "summary": "Physicalism without reduction to brain states",
+      "x": -1.0,
+      "y": 1.2246467991473532e-16,
+      "r": 0.3,
+      "meta": {
+        "category": "non-reductive-physicalism",
+        "namespace": "pmoves.consciousness"
+      },
+      "constellations": [
+        {
+          "id": "constellation-non-reductive-physicalism",
+          "summary": "Non-Reductive Physicalism constellation",
+          "anchor": [
+            -1.0,
+            1.2246467991473532e-16,
+            0
+          ],
+          "points": []
+        }
+      ]
+    },
+    {
+      "id": "super-quantum",
+      "label": "Quantum Theories",
+      "summary": "Quantum mechanical explanations of consciousness",
+      "x": -0.8090169943749475,
+      "y": -0.587785252292473,
+      "r": 0.3,
+      "meta": {
+        "category": "quantum",
+        "namespace": "pmoves.consciousness"
+      },
+      "constellations": [
+        {
+          "id": "constellation-quantum",
+          "summary": "Quantum Theories constellation",
+          "anchor": [
+            -0.8090169943749475,
+            -0.587785252292473,
+            0
+          ],
+          "points": []
+        }
+      ]
+    },
+    {
+      "id": "super-iit",
+      "label": "Integrated Information Theory",
+      "summary": "Consciousness as integrated information (Phi)",
+      "x": -0.30901699437494756,
+      "y": -0.9510565162951535,
+      "r": 0.3,
+      "meta": {
+        "category": "iit",
+        "namespace": "pmoves.consciousness"
+      },
+      "constellations": [
+        {
+          "id": "constellation-iit",
+          "summary": "Integrated Information Theory constellation",
+          "anchor": [
+            -0.30901699437494756,
+            -0.9510565162951535,
+            0
+          ],
+          "points": []
+        }
+      ]
+    },
+    {
+      "id": "super-anomalous",
+      "label": "Anomalous Altered States",
+      "summary": "Studies informed by altered states",
+      "x": 0.30901699437494723,
+      "y": -0.9510565162951536,
+      "r": 0.3,
+      "meta": {
+        "category": "anomalous",
+        "namespace": "pmoves.consciousness"
+      },
+      "constellations": [
+        {
+          "id": "constellation-anomalous",
+          "summary": "Anomalous Altered States constellation",
+          "anchor": [
+            0.30901699437494723,
+            -0.9510565162951536,
+            0
+          ],
+          "points": []
+        }
+      ]
+    },
+    {
+      "id": "super-challenge",
+      "label": "Challenge Theories",
+      "summary": "Theories challenging standard assumptions",
+      "x": 0.8090169943749473,
+      "y": -0.5877852522924734,
+      "r": 0.3,
+      "meta": {
+        "category": "challenge",
+        "namespace": "pmoves.consciousness"
+      },
+      "constellations": [
+        {
+          "id": "constellation-challenge",
+          "summary": "Challenge Theories constellation",
+          "anchor": [
+            0.8090169943749473,
+            -0.5877852522924734,
+            0
+          ],
+          "points": []
+        }
+      ]
+    }
+  ],
+  "constellations": [
+    {
+      "id": "constellation-materialism",
+      "summary": "Materialism Theories constellation",
+      "anchor": [
+        1.0,
+        0.0,
+        0
+      ],
+      "points": []
+    },
+    {
+      "id": "constellation-dualism",
+      "summary": "Dualisms constellation",
+      "anchor": [
+        0.8090169943749475,
+        0.5877852522924731,
+        0
+      ],
+      "points": []
+    },
+    {
+      "id": "constellation-idealism",
+      "summary": "Idealisms constellation",
+      "anchor": [
+        0.30901699437494745,
+        0.9510565162951535,
+        0
+      ],
+      "points": []
+    },
+    {
+      "id": "constellation-panpsychism",
+      "summary": "Panpsychisms constellation",
+      "anchor": [
+        -0.30901699437494734,
+        0.9510565162951536,
+        0
+      ],
+      "points": []
+    },
+    {
+      "id": "constellation-monism",
+      "summary": "Monisms constellation",
+      "anchor": [
+        -0.8090169943749473,
+        0.5877852522924732,
+        0
+      ],
+      "points": []
+    },
+    {
+      "id": "constellation-non-reductive-physicalism",
+      "summary": "Non-Reductive Physicalism constellation",
+      "anchor": [
+        -1.0,
+        1.2246467991473532e-16,
+        0
+      ],
+      "points": []
+    },
+    {
+      "id": "constellation-quantum",
+      "summary": "Quantum Theories constellation",
+      "anchor": [
+        -0.8090169943749475,
+        -0.587785252292473,
+        0
+      ],
+      "points": []
+    },
+    {
+      "id": "constellation-iit",
+      "summary": "Integrated Information Theory constellation",
+      "anchor": [
+        -0.30901699437494756,
+        -0.9510565162951535,
+        0
+      ],
+      "points": []
+    },
+    {
+      "id": "constellation-anomalous",
+      "summary": "Anomalous Altered States constellation",
+      "anchor": [
+        0.30901699437494723,
+        -0.9510565162951536,
+        0
+      ],
+      "points": []
+    },
+    {
+      "id": "constellation-challenge",
+      "summary": "Challenge Theories constellation",
+      "anchor": [
+        0.8090169943749473,
+        -0.5877852522924734,
+        0
+      ],
+      "points": []
+    }
+  ],
+  "points": []
+}

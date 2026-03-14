@@ -1,0 +1,349 @@
+{
+  "spec": "chit.cgp.v1.0",
+  "summary": "Sample CGP packet for GEOMETRY BUS documentation visualization",
+  "created_at": "2026-03-13T12:00:00Z",
+  "super_nodes": [
+    {
+      "id": "consciousness-super-materialism",
+      "label": "Materialism Theories",
+      "summary": "Physicalist and materialist theories of consciousness",
+      "x": 0.0,
+      "y": 0.0,
+      "z": 0.0,
+      "r": 10.0,
+      "constellations": [
+        {
+          "id": "constellation-reductive-physicalism",
+          "summary": "Reductive Physicalism - mental states reduce to brain states",
+          "anchor": [0.5, 0.3, 0.8],
+          "spectrum": [0.8, 0.6, 0.4, 0.2, 0.1],
+          "points": [
+            {
+              "id": "point-chalmers-materialism",
+              "modality": "text",
+              "proj": 0.95,
+              "conf": 0.9,
+              "summary": "David Chalmers: Materialism posits that everything is physical, including consciousness",
+              "ref_id": "chalmers-1996"
+            },
+            {
+              "id": "point-dennett-intentional",
+              "modality": "text",
+              "proj": 0.88,
+              "conf": 0.85,
+              "summary": "Daniel Dennett: Intentional systems and multiple drafts model",
+              "ref_id": "dennett-1991"
+            },
+            {
+              "id": "point-churchland-eliminative",
+              "modality": "text",
+              "proj": 0.82,
+              "conf": 0.8,
+              "summary": "Paul Churchland: Eliminative materialism - folk psychology will be eliminated",
+              "ref_id": "churchland-1981"
+            }
+          ],
+          "meta": {
+            "namespace": "pmoves.consciousness",
+            "category": "materialism",
+            "mhep": 0.85,
+            "entropy": 0.72
+          }
+        },
+        {
+          "id": "constellation-property-dualism",
+          "summary": "Property Dualism - mental properties are distinct from physical properties",
+          "anchor": [0.3, 0.7, 0.4],
+          "spectrum": [0.4, 0.7, 0.9, 0.6, 0.3],
+          "points": [
+            {
+              "id": "point-jackson-knowledge",
+              "modality": "text",
+              "proj": 0.92,
+              "conf": 0.88,
+              "summary": "Frank Jackson: Knowledge argument (Mary the color scientist)",
+              "ref_id": "jackson-1982"
+            },
+            {
+              "id": "point-chalmers-hard-problem",
+              "modality": "text",
+              "proj": 0.95,
+              "conf": 0.92,
+              "summary": "David Chalmers: The hard problem of consciousness - why does it feel like something?",
+              "ref_id": "chalmers-1995"
+            },
+            {
+              "id": "point-nagel-bat",
+              "modality": "text",
+              "proj": 0.85,
+              "conf": 0.82,
+              "summary": "Thomas Nagel: What is it like to be a bat? Subjective experience",
+              "ref_id": "nagel-1974"
+            }
+          ],
+          "meta": {
+            "namespace": "pmoves.consciousness",
+            "category": "dualism",
+            "mhep": 0.78,
+            "entropy": 0.68
+          }
+        },
+        {
+          "id": "constellation-panpsychism",
+          "summary": "Panpsychism - consciousness is a fundamental property of matter",
+          "anchor": [0.7, 0.5, 0.6],
+          "spectrum": [0.6, 0.4, 0.8, 0.7, 0.5],
+          "points": [
+            {
+              "id": "point-goff-galileo",
+              "modality": "text",
+              "proj": 0.87,
+              "conf": 0.83,
+              "summary": "Philip Goff: Galileo's error - consciousness was excluded from physical science",
+              "ref_id": "goff-2019"
+            },
+            {
+              "id": "point-chalmers-panprotopsychism",
+              "modality": "text",
+              "proj": 0.8,
+              "conf": 0.78,
+              "summary": "David Chalmers: Panprotopsychism - proto-consciousness as fundamental",
+              "ref_id": "chalmers-2015"
+            },
+            {
+              "id": "point-nagels-russell",
+              "modality": "text",
+              "proj": 0.75,
+              "conf": 0.75,
+              "summary": "Russellian monism - consciousness is intrinsic to fundamental physics",
+              "ref_id": "russell-1927"
+            }
+          ],
+          "meta": {
+            "namespace": "pmoves.consciousness",
+            "category": "panpsychism",
+            "mhep": 0.82,
+            "entropy": 0.71
+          }
+        },
+        {
+          "id": "constellation-functionalism",
+          "summary": "Functionalism - mental states are functional roles",
+          "anchor": [0.4, 0.6, 0.3],
+          "spectrum": [0.5, 0.8, 0.6, 0.4, 0.7],
+          "points": [
+            {
+              "id": "point-putnam-machine",
+              "modality": "text",
+              "proj": 0.9,
+              "conf": 0.85,
+              "summary": "Hilary Putnam: Machines can think - functional organization matters",
+              "ref_id": "putnam-1960"
+            },
+            {
+              "id": "point-fodor-modularity",
+              "modality": "text",
+              "proj": 0.82,
+              "conf": 0.8,
+              "summary": "Jerry Fodor: Modularity of mind - cognitive modules with specific functions",
+              "ref_id": "fodor-1983"
+            },
+            {
+              "id": "point-lewis-psychofunctionalism",
+              "modality": "text",
+              "proj": 0.78,
+              "conf": 0.76,
+              "summary": "David Lewis: Psychofunctionalism - mental states defined by causal roles",
+              "ref_id": "lewis-1970"
+            }
+          ],
+          "meta": {
+            "namespace": "pmoves.consciousness",
+            "category": "functionalism",
+            "mhep": 0.79,
+            "entropy": 0.69
+          }
+        },
+        {
+          "id": "constellation-identity-theory",
+          "summary": "Identity Theory - mental states are identical to brain states",
+          "anchor": [0.6, 0.4, 0.7],
+          "spectrum": [0.7, 0.5, 0.3, 0.8, 0.6],
+          "points": [
+            {
+              "id": "point-place-identity",
+              "modality": "text",
+              "proj": 0.85,
+              "conf": 0.81,
+              "summary": "Ullin Place: Consciousness and process in the brain",
+              "ref_id": "place-1956"
+            },
+            {
+              "id": "point-smart-sensations",
+              "modality": "text",
+              "proj": 0.88,
+              "conf": 0.84,
+              "summary": "J.J.C. Smart: Sensations and brain processes",
+              "ref_id": "smart-1959"
+            },
+            {
+              "id": "point-lewis-identity",
+              "modality": "text",
+              "proj": 0.8,
+              "conf": 0.77,
+              "summary": "David Lewis: An argument for the identity theory",
+              "ref_id": "lewis-1966"
+            }
+          ],
+          "meta": {
+            "namespace": "pmoves.consciousness",
+            "category": "identity-theory",
+            "mhep": 0.81,
+            "entropy": 0.67
+          }
+        },
+        {
+          "id": "constellation-epiphenomenalism",
+          "summary": "Epiphenomenalism - mental states are byproducts of physical processes",
+          "anchor": [0.2, 0.8, 0.5],
+          "spectrum": [0.3, 0.6, 0.9, 0.5, 0.4],
+          "points": [
+            {
+              "id": "point-huxley-automaton",
+              "modality": "text",
+              "proj": 0.83,
+              "conf": 0.79,
+              "summary": "T.H. Huxley: Consciousness like steam whistle - no causal efficacy",
+              "ref_id": "huxley-1874"
+            },
+            {
+              "id": "point-jackson-epiphenomenalism",
+              "modality": "text",
+              "proj": 0.78,
+              "conf": 0.74,
+              "summary": "Frank Jackson: Epiphenomenal qualia - conscious experiences don't cause behavior",
+              "ref_id": "jackson-1982"
+            },
+            {
+              "id": "point-robinson-cosmetic",
+              "modality": "text",
+              "proj": 0.72,
+              "conf": 0.7,
+              "summary": "William Robinson: Cosmological epiphenomenalism",
+              "ref_id": "robinson-2019"
+            }
+          ],
+          "meta": {
+            "namespace": "pmoves.consciousness",
+            "category": "epiphenomenalism",
+            "mhep": 0.76,
+            "entropy": 0.64
+          }
+        },
+        {
+          "id": "constellation-biological-naturalism",
+          "summary": "Biological Naturalism - consciousness is a biological phenomenon",
+          "anchor": [0.8, 0.2, 0.4],
+          "spectrum": [0.9, 0.7, 0.5, 0.3, 0.2],
+          "points": [
+            {
+              "id": "point-searle-consciousness",
+              "modality": "text",
+              "proj": 0.91,
+              "conf": 0.87,
+              "summary": "John Searle: Consciousness is a biological feature like digestion",
+              "ref_id": "searle-1992"
+            },
+            {
+              "id": "point-searle-chinese-room",
+              "modality": "text",
+              "proj": 0.94,
+              "conf": 0.9,
+              "summary": "John Searle: Chinese room argument - syntax is not semantics",
+              "ref_id": "searle-1980"
+            },
+            {
+              "id": "point-damasio-feeling",
+              "modality": "text",
+              "proj": 0.86,
+              "conf": 0.82,
+              "summary": "Antonio Damasio: Feeling of What Happens - body and emotion in consciousness",
+              "ref_id": "damasio-1999"
+            }
+          ],
+          "meta": {
+            "namespace": "pmoves.consciousness",
+            "category": "biological-naturalism",
+            "mhep": 0.84,
+            "entropy": 0.73
+          }
+        },
+        {
+          "id": "constellation-higher-order-thoughts",
+          "summary": "Higher-Order Theories - consciousness is representing mental states",
+          "anchor": [0.5, 0.5, 0.5],
+          "spectrum": [0.4, 0.5, 0.6, 0.7, 0.8],
+          "points": [
+            {
+              "id": "point-rosenthal-higher",
+              "modality": "text",
+              "proj": 0.84,
+              "conf": 0.8,
+              "summary": "David Rosenthal: Higher-order thought theory of consciousness",
+              "ref_id": "rosenthal-2005"
+            },
+            {
+              "id": "point-lamme-neural",
+              "modality": "text",
+              "proj": 0.79,
+              "conf": 0.76,
+              "summary": "Victor Lamme: Neural correlates of consciousness as recurrent processing",
+              "ref_id": "lamme-2006"
+            },
+            {
+              "id": "point-carruthers-phenomenal",
+              "modality": "text",
+              "proj": 0.76,
+              "conf": 0.73,
+              "summary": "Peter Carruthers: Phenomenal consciousness is higher-order perception",
+              "ref_id": "carruthers-2000"
+            }
+          ],
+          "meta": {
+            "namespace": "pmoves.consciousness",
+            "category": "higher-order",
+            "mhep": 0.77,
+            "entropy": 0.66
+          }
+        }
+      ],
+      "meta": {
+        "namespace": "pmoves.consciousness",
+        "source": "consciousness-service.chr.run.v1",
+        "chr_params": {
+          "K": 8,
+          "iters": 30,
+          "beta": 12.0,
+          "seed": 42
+        },
+        "quality_metrics": {
+          "mhep": 0.82,
+          "global_entropy": 2.3,
+          "slab_entropies": [0.72, 0.68, 0.71, 0.69, 0.64, 0.67, 0.73, 0.66]
+        }
+      }
+    }
+  ],
+  "sig": {
+    "alg": "HMAC-SHA256",
+    "hmac": "base64-encoded-signature-placeholder",
+    "key_id": "CHIT_PROD_PASSPHRASE"
+  },
+  "meta": {
+    "source": "geometry-bus.documentation.sample.v1",
+    "tags": ["documentation", "sample", "consciousness-theories"],
+    "schema_version": "chit.cgp.v1.0",
+    "generated_by": "consciousness-service",
+    "generated_at": "2026-03-13T12:00:00Z"
+  }
+}
