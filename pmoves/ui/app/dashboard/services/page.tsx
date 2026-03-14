@@ -7,8 +7,7 @@ import { SystemStatsBar } from '../../../components/hub/SystemStatsBar';
 import { TierNavigation } from '../../../components/services/TierNavigation';
 import { ServiceHealthIndicator } from '../../../components/services/ServiceHealthIndicator';
 import { useServiceHealth } from '../../../lib/useServiceHealth';
-import { SERVICE_CATALOG, type ServiceCategory, type ServiceColor } from '../../../lib/serviceCatalog';
-import type { ServiceHealthMap } from '../../../lib/serviceHealth';
+import { SERVICE_CATALOG, type ServiceCategory } from '../../../lib/serviceCatalog';
 
 // Lookup objects for Tailwind JIT - all class names must be statically analyzable
 const TAG_CLASSES: Record<string, string> = {

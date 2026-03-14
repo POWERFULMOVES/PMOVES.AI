@@ -1,0 +1,71 @@
+# Page snapshot
+
+```yaml
+- generic [active] [ref=e1]:
+  - link "Skip to main content" [ref=e2] [cursor=pointer]:
+    - /url: "#main-content"
+  - main [ref=e3]:
+    - navigation "Dashboard navigation" [ref=e4]:
+      - link "Ingestion" [ref=e5] [cursor=pointer]:
+        - /url: /dashboard/ingest
+      - link "Queue" [ref=e6] [cursor=pointer]:
+        - /url: /dashboard/ingestion-queue
+      - link "Videos" [ref=e7] [cursor=pointer]:
+        - /url: /dashboard/videos
+      - link "Search" [ref=e8] [cursor=pointer]:
+        - /url: /dashboard/search
+      - link "Jellyfin" [ref=e9] [cursor=pointer]:
+        - /url: /dashboard/jellyfin
+        - text: Jellyfin
+      - link "Research" [ref=e11] [cursor=pointer]:
+        - /url: /dashboard/research
+      - link "Monitor" [ref=e12] [cursor=pointer]:
+        - /url: /dashboard/monitor
+      - link "Notebook" [ref=e13] [cursor=pointer]:
+        - /url: /dashboard/notebook
+      - link "Runtime" [ref=e14] [cursor=pointer]:
+        - /url: /dashboard/notebook/runtime
+      - link "Workbench" [ref=e15] [cursor=pointer]:
+        - /url: /notebook-workbench
+      - link "Personas" [ref=e16] [cursor=pointer]:
+        - /url: /dashboard/personas
+      - link "Chat" [ref=e17] [cursor=pointer]:
+        - /url: /dashboard/chat
+      - link "Services" [ref=e18] [cursor=pointer]:
+        - /url: /dashboard/services
+      - link "Chit" [ref=e19] [cursor=pointer]:
+        - /url: /dashboard/chit
+      - link "Tokenism" [ref=e20] [cursor=pointer]:
+        - /url: /dashboard/tokenism
+      - generic [ref=e21]: Owner
+    - link "Skip to main content" [ref=e22] [cursor=pointer]:
+      - /url: "#main-content"
+    - generic [ref=e23]:
+      - heading "Jellyfin Integration" [level=1] [ref=e24]
+      - paragraph [ref=e25]: Manage media library synchronization and link YouTube videos to Jellyfin items.
+    - generic [ref=e26]:
+      - generic [ref=e28]:
+        - generic [ref=e29]:
+          - heading "Sync Status" [level=2] [ref=e31]
+          - generic [ref=e32]:
+            - generic [ref=e33]: "Last: Never"
+            - button "Refresh sync status" [ref=e34] [cursor=pointer]: Refresh
+        - generic [ref=e35]: No sync status available. Click Refresh to check.
+      - generic [ref=e37]:
+        - generic [ref=e38]:
+          - heading "Backfill Controls" [level=3] [ref=e39]
+          - button "Expand" [ref=e40] [cursor=pointer]:
+            - img [ref=e41]
+        - button "Start Backfill (50 items)" [ref=e44] [cursor=pointer]
+        - paragraph [ref=e46]: Backfill matches unlinked YouTube videos to Jellyfin library items.
+      - generic [ref=e47]:
+        - heading "Library Search" [level=2] [ref=e48]
+        - generic [ref=e49]:
+          - textbox "Search Jellyfin library..." [ref=e50]
+          - button "Search" [disabled] [ref=e51]
+        - generic [ref=e52]:
+          - generic [ref=e53]: 🎬
+          - paragraph [ref=e54]: No items found
+          - paragraph [ref=e55]: Try a different search term or sync your Jellyfin library.
+  - alert [ref=e56]
+```

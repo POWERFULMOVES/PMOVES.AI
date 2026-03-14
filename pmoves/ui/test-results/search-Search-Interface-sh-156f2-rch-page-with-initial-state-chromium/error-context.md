@@ -1,0 +1,66 @@
+# Page snapshot
+
+```yaml
+- generic [active] [ref=e1]:
+  - link "Skip to main content" [ref=e2] [cursor=pointer]:
+    - /url: "#main-content"
+  - generic [ref=e3]:
+    - navigation "Dashboard navigation" [ref=e4]:
+      - link "Ingestion" [ref=e5] [cursor=pointer]:
+        - /url: /dashboard/ingest
+      - link "Queue" [ref=e6] [cursor=pointer]:
+        - /url: /dashboard/ingestion-queue
+      - link "Videos" [ref=e7] [cursor=pointer]:
+        - /url: /dashboard/videos
+      - link "Search" [ref=e8] [cursor=pointer]:
+        - /url: /dashboard/search
+        - text: Search
+      - link "Jellyfin" [ref=e10] [cursor=pointer]:
+        - /url: /dashboard/jellyfin
+      - link "Research" [ref=e11] [cursor=pointer]:
+        - /url: /dashboard/research
+      - link "Monitor" [ref=e12] [cursor=pointer]:
+        - /url: /dashboard/monitor
+      - link "Notebook" [ref=e13] [cursor=pointer]:
+        - /url: /dashboard/notebook
+      - link "Runtime" [ref=e14] [cursor=pointer]:
+        - /url: /dashboard/notebook/runtime
+      - link "Workbench" [ref=e15] [cursor=pointer]:
+        - /url: /notebook-workbench
+      - link "Personas" [ref=e16] [cursor=pointer]:
+        - /url: /dashboard/personas
+      - link "Chat" [ref=e17] [cursor=pointer]:
+        - /url: /dashboard/chat
+      - link "Services" [ref=e18] [cursor=pointer]:
+        - /url: /dashboard/services
+      - link "Chit" [ref=e19] [cursor=pointer]:
+        - /url: /dashboard/chit
+      - link "Tokenism" [ref=e20] [cursor=pointer]:
+        - /url: /dashboard/tokenism
+      - generic [ref=e21]: Owner
+    - link "Skip to main content" [ref=e22] [cursor=pointer]:
+      - /url: "#main-content"
+    - banner [ref=e23]:
+      - heading "Knowledge Search" [level=1] [ref=e24]
+      - paragraph [ref=e25]: Search across all PMOVES knowledge sources using Hi-RAG hybrid retrieval. Combines vector search (Qdrant), graph traversal (Neo4j), and full-text search (Meilisearch).
+      - generic [ref=e26]:
+        - generic [ref=e27]: "Hi-RAG v2: Disconnected"
+        - generic [ref=e28]:
+          - generic [ref=e29]: ⌘
+          - text: K to focus
+    - generic [ref=e31]:
+      - generic [ref=e32]:
+        - textbox "Search knowledge base..." [ref=e33]
+        - generic:
+          - generic: ⌘
+          - text: K
+      - button "Toggle filters" [ref=e34] [cursor=pointer]:
+        - img [ref=e35]
+      - button "Search" [disabled] [ref=e37]
+    - main [ref=e39]:
+      - generic [ref=e40]:
+        - generic [ref=e41]: 🔍
+        - paragraph [ref=e42]: Search the PMOVES knowledge base
+        - paragraph [ref=e43]: Enter a query above to search across videos, notebooks, PDFs, and more.
+  - alert [ref=e44]
+```

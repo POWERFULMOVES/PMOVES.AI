@@ -3,7 +3,7 @@
    Tests debounced search input with keyboard shortcuts and history
    ═══════════════════════════════════════════════════════════════════════════ */
 
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { SearchBar } from './SearchBar';
 
 // Helper to get form element (forms without names can't use getByRole)

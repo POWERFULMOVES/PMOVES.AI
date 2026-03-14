@@ -1,0 +1,85 @@
+# Page snapshot
+
+```yaml
+- generic [active] [ref=e1]:
+  - link "Skip to main content" [ref=e2] [cursor=pointer]:
+    - /url: "#main-content"
+  - generic [ref=e3]:
+    - navigation "Dashboard navigation" [ref=e4]:
+      - link "Ingestion" [ref=e5] [cursor=pointer]:
+        - /url: /dashboard/ingest
+      - link "Queue" [ref=e6] [cursor=pointer]:
+        - /url: /dashboard/ingestion-queue
+      - link "Videos" [ref=e7] [cursor=pointer]:
+        - /url: /dashboard/videos
+      - link "Search" [ref=e8] [cursor=pointer]:
+        - /url: /dashboard/search
+      - link "Jellyfin" [ref=e9] [cursor=pointer]:
+        - /url: /dashboard/jellyfin
+      - link "Research" [ref=e10] [cursor=pointer]:
+        - /url: /dashboard/research
+      - link "Monitor" [ref=e11] [cursor=pointer]:
+        - /url: /dashboard/monitor
+      - link "Notebook" [ref=e12] [cursor=pointer]:
+        - /url: /dashboard/notebook
+      - link "Runtime" [ref=e13] [cursor=pointer]:
+        - /url: /dashboard/notebook/runtime
+      - link "Workbench" [ref=e14] [cursor=pointer]:
+        - /url: /notebook-workbench
+      - link "Personas" [ref=e15] [cursor=pointer]:
+        - /url: /dashboard/personas
+      - link "Chat" [ref=e16] [cursor=pointer]:
+        - /url: /dashboard/chat
+      - link "Services" [ref=e17] [cursor=pointer]:
+        - /url: /dashboard/services
+        - text: Services
+      - link "Chit" [ref=e19] [cursor=pointer]:
+        - /url: /dashboard/chit
+      - link "Tokenism" [ref=e20] [cursor=pointer]:
+        - /url: /dashboard/tokenism
+      - generic [ref=e21]: Owner
+    - banner [ref=e22]:
+      - generic [ref=e23]:
+        - link "Services" [ref=e24] [cursor=pointer]:
+          - /url: /dashboard/services
+        - generic [ref=e25]: /
+        - generic [ref=e26]: Archon
+      - heading "Archon" [level=1] [ref=e27]
+      - paragraph [ref=e28]: Supabase-driven prompt and persona studio
+    - generic [ref=e29]:
+      - generic [ref=e30]:
+        - heading "Service Overview" [level=2] [ref=e31]
+        - paragraph [ref=e32]: Supabase-driven prompt and persona studio
+        - generic [ref=e33]:
+          - generic [ref=e34]:
+            - term [ref=e35]: Slug
+            - definition [ref=e36]: archon
+          - generic [ref=e37]:
+            - term [ref=e38]: Category
+            - definition [ref=e39]: agents
+          - generic [ref=e40]:
+            - term [ref=e41]: Health Check
+            - definition [ref=e42]: http://localhost:8091/healthz
+      - generic [ref=e43]:
+        - heading "Endpoints" [level=2] [ref=e44]
+        - list [ref=e45]:
+          - listitem [ref=e46]:
+            - text: API
+            - generic [ref=e47]: (api)
+            - generic [ref=e48]: 8091/
+          - listitem [ref=e49]:
+            - text: Health
+            - generic [ref=e50]: (health)
+            - generic [ref=e51]: 8091/healthz
+      - generic [ref=e52]:
+        - heading "Capabilities" [level=2] [ref=e53]
+        - list [ref=e54]:
+          - listitem [ref=e55]: Prompt management
+          - listitem [ref=e56]: Persona studio
+          - listitem [ref=e57]: Form generation
+      - generic [ref=e58]:
+        - heading "Dependencies" [level=2] [ref=e59]
+        - paragraph [ref=e60]: agent-zero, postgres
+      - generic [ref=e61]: No dedicated markdown runbook is mapped for this service slug yet. This fallback view is generated from the live UI service catalog.
+  - alert [ref=e62]
+```

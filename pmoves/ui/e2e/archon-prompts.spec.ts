@@ -37,7 +37,7 @@ test.describe('Archon Prompts - List View', () => {
 
   test('displays prompt cards with key information', async ({ page }) => {
     // Look for prompt cards or table rows
-    const promptCards = page.locator('[class*="prompt"], [class*="card"], tr').first();
+    const _promptCards = page.locator('[class*="prompt"], [class*="card"], tr').first();
 
     // Wait for content to load
     await page.waitForTimeout(1000);
@@ -135,7 +135,7 @@ test.describe('Archon Prompts - Create', () => {
 
         // Check for validation errors
         await page.waitForTimeout(500);
-        const hasError =
+        const _hasError =
           (await page.locator('text=/required/i').count()) > 0 ||
           (await page.locator('[class*="error"]').count()) > 0;
         // This is a soft assertion - depends on validation strategy

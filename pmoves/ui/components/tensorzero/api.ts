@@ -166,7 +166,7 @@ export function exportAsToml(config: TensorZeroConfig): string {
     }
 
     // Variants
-    func.variants.forEach((variant, vIdx) => {
+    func.variants.forEach((variant) => {
       lines.push(`  [[functions.${func.name}.variants]]`);
       lines.push(`    name = "${variant.name}"`);
       lines.push(`    model = "${variant.model}"`);
@@ -217,7 +217,7 @@ export function exportAsJson(config: TensorZeroConfig): string {
 /**
  * Parse TOML configuration
  */
-export async function parseToml(tomlContent: string): Promise<TensorZeroConfig> {
+export async function parseToml(_tomlContent: string): Promise<TensorZeroConfig> {
   // In production, use a proper TOML parser
   // For now, return a basic structure
   throw new Error('TOML parsing not yet implemented. Please use JSON format.');

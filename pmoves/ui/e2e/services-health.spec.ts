@@ -100,11 +100,6 @@ test.describe('Services Health Dashboard', () => {
       // Verify loading indicator appears
       await page.waitForTimeout(500);
 
-      // Check for loading state
-      const hasLoading =
-        (await page.locator('[class*="loading"], [aria-busy="true"]').count()) > 0 ||
-        (await page.getByRole('button', { name: /refresh/i }).getAttribute('disabled')) !== null;
-
       // This is a soft assertion - loading state may be brief
     }
   });
@@ -256,11 +251,6 @@ test.describe('Health Error Handling', () => {
 
       // Verify page updates after retry
       await page.waitForTimeout(1000);
-      const hasLoading =
-        (await page.locator('[class*="loading"]').count()) > 0 ||
-        (await page.getByRole('button', { name: /retry/i }).getAttribute('disabled')) !== null;
-
-      // Soft assertion - loading state may be brief
     }
   });
 });
