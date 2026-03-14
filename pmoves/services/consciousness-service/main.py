@@ -33,7 +33,7 @@ logger = logging.getLogger(__name__)
 
 # Environment configuration
 SERVICE_NAME = os.environ.get("SERVICE_NAME", "consciousness-service")
-SERVICE_PORT = int(os.environ.get("SERVICE_PORT", "8096"))
+SERVICE_PORT = int(os.environ.get("SERVICE_PORT", "8105"))
 NATS_URL = os.environ.get("NATS_URL", "nats://nats:pmoves@nats:4222")
 CHIT_PASSPHRASE = os.environ.get("CHIT_PROD_PASSPHRASE", "pmoves-chit-default")
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "http://supabase-kong:8000")
@@ -346,7 +346,7 @@ async def run_chr_endpoint(request: CHRRequest):
 
     except Exception as e:
         logger.error(f"CHR execution failed: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"CHR execution failed: {str(e)}") from None
+        raise HTTPException(status_code=500, detail="CHR execution failed") from None
 
 
 @app.post("/chr/from-supabase")
@@ -433,10 +433,10 @@ async def run_chr_from_supabase(
 
     except httpx.HTTPError as e:
         logger.error(f"Supabase fetch failed: {e}")
-        raise HTTPException(status_code=502, detail=f"Supabase fetch failed: {str(e)}") from None
+        raise HTTPException(status_code=502, detail="Supabase fetch failed") from None
     except Exception as e:
         logger.error(f"CHR from Supabase failed: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"CHR execution failed: {str(e)}") from None
+        raise HTTPException(status_code=500, detail="CHR execution failed") from None
 
 
 # =============================================================================
