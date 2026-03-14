@@ -16,7 +16,6 @@ function decode(token?: string) {
     if (!token) return null;
     const parts = token.split('.');
     if (parts.length !== 3) return null;
-
     // Convert base64url to base64 by replacing characters
     // base64url: '-' (minus) and '_' (underscore)
     // base64: '+' (plus) and '/' (slash)

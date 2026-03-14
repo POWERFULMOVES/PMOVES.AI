@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { ownerFromJwt } from '@/lib/jwtUtils';
 import { logError } from '@/lib/errorUtils';
 import { ErrorIds } from '@/lib/constants/errorIds';
 
@@ -10,6 +11,11 @@ const NOTEBOOK_SYNC_URL = (
 ).replace(/\/$/, '');
 
 export async function POST(_req: NextRequest) {
+  const { ownerId, error: authError } = ownerFromJwt('notebook/runtime/sync');
+  if (!ownerId) {
+    return NextResponse.json({ ok: false, error: authError || 'Authentication required' }, { status: 401 });
+  }
+
   const syncUrl = `${NOTEBOOK_SYNC_URL}/sync`;
 
   try {

@@ -49,12 +49,9 @@ async def get_user_context(request: web.Request) -> dict:
     jwt_secret = os.getenv("SUPABASE_JWT_SECRET")
 
     if not jwt_secret:
-        # In development mode, allow unauthenticated requests
-        return {
-            "user_id": "dev_user",
-            "role": "admin",
-            "email": "dev@pmoves.ai"
-        }
+        raise web.HTTPInternalServerError(
+            reason="Server misconfiguration: SUPABASE_JWT_SECRET is not set"
+        )
 
     try:
         # Validate JWT signature and extract payload
@@ -70,13 +67,13 @@ async def get_user_context(request: web.Request) -> dict:
             "role": payload.get("role", "authenticated"),
             "email": payload.get("email")
         }
-    except jose.JWTError as e:
+    except jose.JWTError:
         raise web.HTTPUnauthorized(
-            reason=f"Invalid JWT token: {str(e)}"
+            reason="Invalid or expired JWT token"
         )
-    except Exception as e:
+    except Exception:
         raise web.HTTPUnauthorized(
-            reason=f"Authentication error: {str(e)}"
+            reason="Authentication failed"
         )
 
 

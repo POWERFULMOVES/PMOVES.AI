@@ -30,6 +30,9 @@ const NAV_ITEMS: NavItem[] = [
   { href: '/dashboard/services', label: 'Services', key: 'services' },
   { href: '/dashboard/chit', label: 'Chit', key: 'chit', accent: 'cyan' },
   { href: '/dashboard/tokenism', label: 'Tokenism', key: 'tokenism', accent: 'gold' },
+  { href: '/dashboard/agents', label: 'Agents', key: 'agents', accent: 'violet' },
+  { href: '/dashboard/github', label: 'GitHub', key: 'github', accent: 'forest' },
+  { href: '/dashboard/graphiti', label: 'Graphiti', key: 'graphiti', accent: 'gold' },
 ];
 
 export type NavKey =
