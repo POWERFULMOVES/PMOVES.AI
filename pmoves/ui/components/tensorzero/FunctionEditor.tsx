@@ -6,7 +6,7 @@
 'use client';
 
 import { useState } from 'react';
-import type { FunctionConfig, VariantConfig, ToolConfig } from './types';
+import type { FunctionConfig, VariantConfig } from './types';
 
 interface FunctionEditorProps {
   functions: FunctionConfig[];
@@ -17,7 +17,6 @@ interface FunctionEditorProps {
 
 export function FunctionEditor({ functions, availableProviders, onChange, className = '' }: FunctionEditorProps) {
   const [selectedFunction, setSelectedFunction] = useState<number | null>(null);
-  const [editingVariant, setEditingVariant] = useState<number | null>(null);
 
   const selectedFunctionData = selectedFunction !== null ? functions[selectedFunction] : null;
 

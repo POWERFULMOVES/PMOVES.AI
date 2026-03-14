@@ -4,7 +4,6 @@ import { useCallback, useEffect, useState } from "react";
 import DashboardNavigation from "../../../components/DashboardNavigation";
 import { SyncStatus } from "../../../components/jellyfin/SyncStatus";
 import { JellyfinMediaBrowser } from "../../../components/jellyfin/JellyfinMediaBrowser";
-import { BackfillControls } from "../../../components/jellyfin/BackfillControls";
 import {
   jellyfinSyncStatus,
   jellyfinSearch,
@@ -21,7 +20,6 @@ export default function JellyfinDashboardPage() {
   const [syncing, setSyncing] = useState(false);
   const [backfilling, setBackfilling] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [backfillProgress, setBackfillProgress] = useState({ queued: 0, processed: 0, progress: 0 });
 
   const refreshSyncStatus = useCallback(async () => {
     const result = await jellyfinSyncStatus();
