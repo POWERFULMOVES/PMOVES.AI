@@ -77,9 +77,9 @@ export default function JellyfinDashboardPage() {
     setBackfilling(true);
     setError(null);
 
-    const result = await triggerBackfill(limit);
+    const result = await triggerBackfill({ limit });
     if (result.ok) {
-      setBackfillProgress(result.data.progress);
+      // Backfill started successfully - refresh status to see updates
       await refreshSyncStatus();
     } else {
       setError(result.error);
@@ -139,15 +139,15 @@ export default function JellyfinDashboardPage() {
               <h3 className="text-sm font-medium text-neutral-600">Results ({searchResults.length})</h3>
               {searchResults.map((item) => (
                 <div
-                  key={item.Id}
+                  key={item.id}
                   className="flex items-center justify-between rounded border border-neutral-200 p-3 hover:bg-neutral-50 transition"
                 >
                   <div className="flex-1">
-                    <p className="font-medium">{item.Name}</p>
-                    <p className="text-sm text-neutral-500">{item.Type} • {item.ProductionYear}</p>
+                    <p className="font-medium">{item.name}</p>
+                    <p className="text-sm text-neutral-500">{item.type} • {item.productionYear}</p>
                   </div>
                   <button
-                    onClick={() => console.log("Link item:", item.Id)}
+                    onClick={() => console.log("Link item:", item.id)}
                     className="rounded bg-green-600 px-3 py-1 text-sm text-white hover:bg-green-700 transition"
                   >
                     Link

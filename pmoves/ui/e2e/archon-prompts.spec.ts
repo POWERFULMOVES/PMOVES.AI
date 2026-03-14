@@ -55,8 +55,15 @@ test.describe('Archon Prompts - List View', () => {
     const categoryFilter = page.getByRole('combobox', { name: /category/i });
 
     if ((await categoryFilter.count()) > 0) {
-      // Select a category
-      await categoryFilter.first().selectOption({ label: /agent/i });
+      // Select the first non-empty option (typically "all" or a specific category)
+      const selectElement = await categoryFilter.first().elementHandle();
+      if (selectElement) {
+        const options = await selectElement.$$('option');
+        // Skip the first option (usually placeholder/empty) and select second
+        if (options.length > 1) {
+          await categoryFilter.first().selectOption({ index: 1 });
+        }
+      }
 
       // Wait for filtered results
       await page.waitForTimeout(500);
