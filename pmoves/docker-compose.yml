@@ -2826,14 +2826,15 @@ services:
       - FLUTE_GATEWAY_URL=http://flute-gateway:8055
       - ULTIMATE_TTS_URL=http://ultimate-tts-studio:7861
       - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+      - CHIT_REQUIRE_SIGNATURE=${CHIT_REQUIRE_SIGNATURE:-false}
+      - CHIT_DECRYPT_ANCHORS=${CHIT_DECRYPT_ANCHORS:-false}
+      - CHIT_PASSPHRASE=${CHIT_PROD_PASSPHRASE:-changeme}
     ports: ["${CAST_TTS_PORT:-8060}:8060"]
     profiles: ["cast", "media"]
-    networks: [pmoves_app, pmoves_bus, pmoves_api]
-    tmpfs:
-      - /tmp
+    networks: [pmoves_app, pmoves_bus, pmoves_api, pmoves_external]
     user: "65532:65532"
     healthcheck:
-      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8060/healthz || exit 1"]
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8060/healthz', timeout=5)\" || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
