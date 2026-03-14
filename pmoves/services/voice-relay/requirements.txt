@@ -1,0 +1,4 @@
+nats-py>=2.9.0
+fastapi>=0.110.0
+uvicorn>=0.27.0
+prometheus_client>=0.20.0
