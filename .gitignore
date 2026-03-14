@@ -48,6 +48,14 @@ dist/
 downloads/
 eggs/
 .eggs/
+
+# =============================================================================
+# Cast TTS Integration (temp audio files)
+# =============================================================================
+pmoves/services/cast-tts-gateway/logs/
+*.tmp.mp3
+*.temp.mp3
+/tmp/*.mp3
 lib/
 lib64/
 parts/
