@@ -23,7 +23,8 @@ export default async function IngestDashboardPage() {
       const token = getBootJwt();
       if (!token) return '';
       const [, payload] = token.split('.') as [string, string, string];
-      const json = JSON.parse(Buffer.from(payload, 'base64').toString('utf-8')) as { sub?: string };
+      const base64 = payload.replace(/-/g, '+').replace(/_/g, '/');
+      const json = JSON.parse(Buffer.from(base64, 'base64').toString('utf-8')) as { sub?: string };
       return typeof json.sub === 'string' ? json.sub : '';
     } catch {
       return '';
