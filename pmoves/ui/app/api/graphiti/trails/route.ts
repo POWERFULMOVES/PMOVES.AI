@@ -143,7 +143,9 @@ export async function GET(request: NextRequest) {
   const resonanceFilter = searchParams.get('resonance');
   const searchQuery = searchParams.get('search')?.toLowerCase();
   const verifiedOnly = searchParams.get('verifiedOnly') === 'true';
-  const limit = Math.min(parseInt(searchParams.get('limit') || '50', 10), 200);
+  const limitParam = searchParams.get('limit');
+  const limitParsed = parseInt(limitParam || '50', 10);
+  const limit = isNaN(limitParsed) ? 50 : Math.min(limitParsed, 200);
 
   try {
     const trailData = await readTrailLog();

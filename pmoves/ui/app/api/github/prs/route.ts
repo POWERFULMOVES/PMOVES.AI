@@ -122,7 +122,9 @@ export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
   const stateParam = searchParams.get('state')?.toUpperCase().split(',') || ['OPEN', 'DRAFT'];
   const repoFilter = searchParams.get('repo');
-  const limit = Math.min(parseInt(searchParams.get('limit') || '50', 10), 100);
+  const limitParam = searchParams.get('limit');
+  const limitParsed = parseInt(limitParam || '50', 10);
+  const limit = isNaN(limitParsed) ? 50 : Math.min(limitParsed, 100);
 
   const states: PRState[] = stateParam.filter((s): s is PRState =>
     ['OPEN', 'CLOSED', 'MERGED', 'DRAFT'].includes(s)

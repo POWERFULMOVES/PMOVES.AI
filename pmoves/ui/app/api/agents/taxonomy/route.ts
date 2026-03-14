@@ -29,7 +29,11 @@ function parseTypeChart(markdown: string): Map<string, { primaryType: Agent['pri
       const name = match[1].trim();
       const primaryTypeRaw = match[2].trim();
       const secondaryTypeRaw = match[3]?.trim();
-      const tier = parseInt(match[4].trim(), 10);
+      const tierStr = match[4].trim();
+      const tier = parseInt(tierStr, 10);
+
+      // Validate tier is a valid number
+      if (isNaN(tier)) continue;
 
       // Validate and capitalize types to match Agent['primaryType']
       const primaryType = validTypes.find(t => t.toLowerCase() === primaryTypeRaw.toLowerCase()) || 'Worker';
@@ -59,7 +63,13 @@ function parseLayerCoverage(markdown: string): Map<string, string[]> {
     if (match) {
       const name = match[1];
       const layerStr = match[2];
-      const _layerCount = parseInt(match[3], 10); // Parsed but unused; we use layerStr parsing instead
+      const layerCountStr = match[3];
+      const layerCount = parseInt(layerCountStr, 10); // Parsed but unused; we use layerStr parsing instead
+
+      // Validate layerCount is a valid number (defensive programming)
+      if (!isNaN(layerCount)) {
+        const _layerCount = layerCount;
+      }
 
       const layers: string[] = [];
       if (layerStr.includes('*')) {
@@ -346,7 +356,7 @@ export async function GET(request: NextRequest) {
     }
     if (typeFilter) {
       agents = agents.filter((a) =>
-        typeFilter.includes(a.primaryType) || typeFilter.includes(a.secondaryType!)
+        typeFilter.includes(a.primaryType) || (a.secondaryType && typeFilter.includes(a.secondaryType))
       );
     }
     if (searchQuery) {
