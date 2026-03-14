@@ -49,21 +49,20 @@ export function SearchBar({
 }: SearchBarProps) {
   const [query, setQuery] = useState(defaultValue);
   const [showHistory, setShowHistory] = useState(false);
-  const [history, setHistory] = useState<SearchHistoryItem[]>([]);
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  // Load search history from localStorage
-  useEffect(() => {
+  // Lazy initialization: load history from localStorage on mount
+  const [history, setHistory] = useState<SearchHistoryItem[]>(() => {
     try {
       const stored = localStorage.getItem(SEARCH_HISTORY_KEY);
       if (stored) {
         const parsed = JSON.parse(stored) as SearchHistoryItem[];
-        setHistory(parsed.slice(0, MAX_HISTORY_ITEMS));
+        return parsed.slice(0, MAX_HISTORY_ITEMS);
       }
     } catch {
       // Silently fail if localStorage is unavailable
     }
-  }, []);
+    return [];
+  });
+  const inputRef = useRef<HTMLInputElement>(null);
 
   // Save query to history after search
   const saveToHistory = useCallback((searchQuery: string) => {

@@ -6,7 +6,7 @@
 "use client";
 
 import { useState } from "react";
-import type { IngestionQueueItem, IngestionStatus, IngestionSourceType } from "@/lib/realtimeClient";
+import type { IngestionQueueItem } from "@/lib/realtimeClient";
 
 // Tailwind JIT static class lookup objects
 const BUTTON_PRIMARY_CLASSES = "rounded bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition";
@@ -36,10 +36,6 @@ interface BulkApprovalActionsProps {
   onExport?: (ids: string[]) => void;
   /** Whether operations are in progress */
   processing?: boolean;
-  /** Current status filter for "select all visible" behavior */
-  statusFilter?: IngestionStatus | 'all';
-  /** Current source type filter */
-  sourceFilter?: IngestionSourceType | 'all';
 }
 
 /**
@@ -54,8 +50,6 @@ export function BulkApprovalActions({
   onReject,
   onExport,
   processing = false,
-  statusFilter = 'all',
-  sourceFilter = 'all',
 }: BulkApprovalActionsProps) {
   const [showOptions, setShowOptions] = useState<boolean | 'reject'>(false);
   const [priority, setPriority] = useState(5);
@@ -65,11 +59,6 @@ export function BulkApprovalActions({
   const pendingSelected = selectedItems.filter(item => item.status === 'pending');
 
   // Selection handlers
-  const handleSelectAll = () => {
-    const allIds = new Set(items.map(item => item.id));
-    onSelectionChange(allIds);
-  };
-
   const handleSelectVisible = () => {
     // Only select items that match current filters
     const visibleIds = new Set(items.map(item => item.id));
@@ -83,16 +72,6 @@ export function BulkApprovalActions({
 
   const handleDeselectAll = () => {
     onSelectionChange(new Set());
-  };
-
-  const handleToggleItem = (id: string) => {
-    const newSelection = new Set(selectedIds);
-    if (newSelection.has(id)) {
-      newSelection.delete(id);
-    } else {
-      newSelection.add(id);
-    }
-    onSelectionChange(newSelection);
   };
 
   // Action handlers
@@ -111,11 +90,6 @@ export function BulkApprovalActions({
 
     await onReject(idsToReject, rejectionReason || 'Bulk rejected');
     onSelectionChange(new Set()); // Clear selection after action
-    setShowOptions(false);
-    setRejectionReason('');
-  };
-
-  const handleCloseRejectModal = () => {
     setShowOptions(false);
     setRejectionReason('');
   };

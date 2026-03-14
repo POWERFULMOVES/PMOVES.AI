@@ -3,7 +3,7 @@
    Tests Jellyfin sync status with controls and real-time updates
    ═══════════════════════════════════════════════════════════════════════════ */
 
-import { render, screen, fireEvent, act } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { SyncStatus } from './SyncStatus';
 import type { JellyfinSyncStatusInfo } from '@/lib/api/jellyfin';
 

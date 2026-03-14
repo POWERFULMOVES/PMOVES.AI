@@ -142,7 +142,7 @@ export function TokenismGeometricView({ result, week }: GeometricViewProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [cgp, setCgp] = useState<CGPPacket | null>(null);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [_error, setError] = useState<string | null>(null);
   const [points, setPoints] = useState<PoincarePoint[]>([]);
   const [hoveredPoint, setHoveredPoint] = useState<PoincarePoint | null>(null);
 
@@ -151,6 +151,7 @@ export function TokenismGeometricView({ result, week }: GeometricViewProps) {
   // Load geometry when result changes
   useEffect(() => {
     if (!result) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Synchronously clear state when result changes
       setPoints([]);
       setCgp(null);
       return;

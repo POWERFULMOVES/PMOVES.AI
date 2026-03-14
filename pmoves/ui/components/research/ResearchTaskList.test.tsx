@@ -5,7 +5,7 @@
 
 import { render, screen, fireEvent } from '@testing-library/react';
 import { ResearchTaskList } from './ResearchTaskList';
-import type { ResearchTask, ResearchStatus } from '@/lib/api/research';
+import type { ResearchTask } from '@/lib/api/research';
 
 const mockTasks: ResearchTask[] = [
   {

@@ -73,6 +73,27 @@ export const ErrorIds = {
   // === TENSORZERO ERRORS ===
   TENSORZERO_REQUEST_FAILED: 'tensorzero_request_failed',
   TENSORZERO_TIMEOUT: 'tensorzero_timeout',
+
+  // === AGENT ZERO ERRORS ===
+  AGENT_ZERO_MCP_REQUEST_FAILED: 'agent_zero_mcp_request_failed',
+  AGENT_ZERO_MCP_TIMEOUT: 'agent_zero_mcp_timeout',
+  AGENT_ZERO_TASK_SUBMIT_FAILED: 'agent_zero_task_submit_failed',
+  AGENT_ZERO_TASK_STATUS_FAILED: 'agent_zero_task_status_failed',
+  AGENT_ZERO_HEALTH_CHECK_FAILED: 'agent_zero_health_check_failed',
+
+  // === ARCHON ERRORS ===
+  ARCHON_PROMPT_LIST_FAILED: 'archon_prompt_list_failed',
+  ARCHON_PROMPT_CREATE_FAILED: 'archon_prompt_create_failed',
+  ARCHON_PROMPT_UPDATE_FAILED: 'archon_prompt_update_failed',
+  ARCHON_PROMPT_DELETE_FAILED: 'archon_prompt_delete_failed',
+  ARCHON_PROMPT_EXECUTE_FAILED: 'archon_prompt_execute_failed',
+  ARCHON_HEALTH_CHECK_FAILED: 'archon_health_check_failed',
+
+  // === FLUTE ERRORS ===
+  FLUTE_SYNTHESIS_FAILED: 'flute_synthesis_failed',
+  FLUTE_WEBSOCKET_FAILED: 'flute_websocket_failed',
+  FLUTE_VOICE_LIST_FAILED: 'flute_voice_list_failed',
+  FLUTE_HEALTH_CHECK_FAILED: 'flute_health_check_failed',
 } as const;
 
 export type ErrorId = typeof ErrorIds[keyof typeof ErrorIds];
