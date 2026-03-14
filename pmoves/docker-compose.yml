@@ -2784,7 +2784,7 @@ services:
       retries: 3
       start_period: 30s
 
-  # Consciousness Service - CHR Algorithm & CGP Generation (port 8096)
+  # Consciousness Service - CHR Algorithm & CGP Generation (port 8105)
   consciousness-service:
     build:
       context: ./services/consciousness-service
@@ -2794,17 +2794,17 @@ services:
     <<: *tier-agent-hardened-ro
     environment:
       - SERVICE_NAME=consciousness-service
-      - SERVICE_PORT=${CONSCIOUSNESS_HOST_PORT:-8096}
+      - SERVICE_PORT=${CONSCIOUSNESS_HOST_PORT:-8105}
       - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
       - CHIT_PROD_PASSPHRASE=${CHIT_PROD_PASSPHRASE:?set CHIT_PROD_PASSPHRASE in env.shared}
       - SUPABASE_URL=${SUPABASE_URL:-http://supabase-kong:8000}
       - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY:-}
       - PYTHONUNBUFFERED=1
-    ports: ["${CONSCIOUSNESS_HOST_PORT:-8096}:8096"]
+    ports: ["${CONSCIOUSNESS_HOST_PORT:-8105}:8105"]
     profiles: ["agents", "botz"]
     networks: [pmoves_app]
     healthcheck:
-      test: ["CMD-SHELL", "python -c \"import httpx; httpx.get('http://localhost:8096/healthz').raise_for_status()\" || exit 1"]
+      test: ["CMD-SHELL", "python -c \"import httpx; httpx.get('http://localhost:8105/healthz').raise_for_status()\" || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
