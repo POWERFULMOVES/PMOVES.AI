@@ -2,8 +2,8 @@
 # Verifies proper use of Agent Zero's extension system, PMOVES.AI integration, and security hardening
 
 name: "Agent Zero Customization Review"
-version: "1.1.0"
-description: "Comprehensive review of Agent Zero customization to ensure maximum leverage of Agent Zero's capabilities while properly integrating with PMOVES.AI infrastructure (FIXED: Corrected paths for PMOVES.AI service architecture)"
+version: "1.2.0"
+description: "Comprehensive review of Agent Zero customization across 9 phases (51 checks) to ensure maximum leverage of Agent Zero's capabilities while properly integrating with PMOVES.AI infrastructure"
 
 root:
   id: agent-zero-customization

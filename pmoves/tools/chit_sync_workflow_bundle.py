@@ -166,8 +166,8 @@ def main():
         return 0
 
     except Exception as e:
-        logging.error(f"Failed to sync CHIT bundle: {e}", exc_info=True)
-        print(f"ERROR: {e}")
+        logging.error(f"Failed to sync CHIT bundle: {e}")
+        print("ERROR: CHIT bundle sync failed — check logs for details")
         print(f"  Full log: {log_file}")
         return 1
 

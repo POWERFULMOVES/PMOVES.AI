@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { ownerFromJwt } from '@/lib/jwtUtils';
 import { logError } from '@/lib/errorUtils';
 import { ErrorIds } from '@/lib/constants/errorIds';
 
@@ -12,6 +13,11 @@ const NOTEBOOK_API_URL = (
 const NOTEBOOK_API_TOKEN = process.env.OPEN_NOTEBOOK_API_TOKEN || '';
 
 export async function GET(_req: NextRequest) {
+  const { ownerId, error: authError } = ownerFromJwt('notebook/sources');
+  if (!ownerId) {
+    return NextResponse.json({ items: [], error: authError || 'Authentication required' }, { status: 401 });
+  }
+
   // Check configuration
   if (!NOTEBOOK_API_URL) {
     return NextResponse.json(
