@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { ownerFromJwt } from '@/lib/jwtUtils';
 
 import {
   ArchonPromptInput,
@@ -27,6 +28,11 @@ function mapErrorToResponse(error: unknown) {
 }
 
 export async function POST(request: Request) {
+  const { ownerId, error: authError } = ownerFromJwt('archon-prompts');
+  if (!ownerId) {
+    return NextResponse.json({ error: { message: authError || 'Authentication required' } }, { status: 401 });
+  }
+
   try {
     const payload = (await request.json()) as ArchonPromptInput;
     const created = await createArchonPrompt(payload);
