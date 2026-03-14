@@ -133,15 +133,15 @@ def validate_credential_value(key, value):
 
     if key == 'GH_APP_ID':
         if not value.isdigit():
-            return False, f"must be numeric, got: {value[:20]}..."
+            return False, "must be numeric"
 
     elif key == 'GH_APP_CLIENT_ID':
         if not re.match(r'^[A-Za-z0-9_-]+$', value):
-            return False, f"invalid client ID format: {value[:20]}..."
+            return False, "invalid client ID format"
 
     elif key == 'GH_APP_INSTALLATION_ID':
         if not value.isdigit():
-            return False, f"must be numeric, got: {value[:20]}..."
+            return False, "must be numeric"
 
     elif key == 'GH_APP_SEC':
         if not value.startswith('-----BEGIN'):
@@ -191,11 +191,13 @@ def verify_github_secrets():
             secret_name = line.strip().split()[0]
             if secret_name in gh_app_keys:
                 found_keys.add(secret_name)
-                print_success(f"  {secret_name}: Found in GitHub Secrets")
 
-        # Report missing keys
-        for key in gh_app_keys - found_keys:
-            print_warning(f"  {key}: Not found in GitHub Secrets")
+        # Report results using only hardcoded key names (not tainted values)
+        for key in gh_app_keys:
+            if key in found_keys:
+                print_success(f"  {key}: Found in GitHub Secrets")
+            else:
+                print_warning(f"  {key}: Not found in GitHub Secrets")
 
     except subprocess.TimeoutExpired as e:
         print_check("GitHub Secrets", f"Timeout after {e.timeout}s - check network connectivity", False)
@@ -242,10 +244,10 @@ def verify_env_shared():
 
                 if is_valid:
                     found_count += 1
-                    print_success(f"  {key}: Valid ({value[:20]}...)")
+                    print_success(f"  {key}: Valid (set)")
                 else:
                     found_invalid += 1
-                    print_error(f"  {key}: Invalid value - {error}")
+                    print_error(f"  {key}: Invalid format")
                 break
 
     passed = found_count == 4 and found_invalid == 0
@@ -376,7 +378,7 @@ def main():
         print()
 
         # Failure details (only print known check names, never values)
-        known_checks = {"gh_cli", "gh_secrets", "env_shared", "env_tier", "docker_compose", "secrets_funnel"}
+        known_checks = {"gh_cli", "github_secrets", "env_shared", "env_tier_agent", "docker_compose", "chit_manifest"}
         failures = [k for k, v in results.items() if not v]
         if failures:
             print(f"{Colors.YELLOW}Failed checks:{Colors.RESET}")

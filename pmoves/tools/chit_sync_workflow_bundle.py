@@ -147,7 +147,7 @@ def main():
         # Write back to env.shared with restricted permissions
         import stat
         with open(env_shared, 'w') as f:
-            f.writelines(updated_lines)  # nosec: intentional credential file write
+            f.writelines(updated_lines)
         os.chmod(env_shared, stat.S_IRUSR | stat.S_IWUSR)
 
         print(f"\n✓ Successfully updated env.shared with {update_count} credentials")

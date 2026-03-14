@@ -422,7 +422,7 @@ async def accuracy_endpoint(repo: str, days: int = 30):
             status_code=500,
             content={
                 "ok": False,
-                "error": str(e)
+                "error": "Internal server error calculating accuracy"
             }
         )
 

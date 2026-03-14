@@ -145,11 +145,11 @@ def verify_gh_auth():
                     stripped = line.strip()
                     # Validate host is exactly github.com, not a substring match
                     try:
-                        if urlparse(f"https://{stripped}").hostname == "github.com":
+                        parsed = urlparse(f"https://{stripped}")
+                        if parsed.hostname == "github.com":
                             print(f"  {stripped}")
                     except Exception:
-                        if stripped.startswith("github.com"):
-                            print(f"  {stripped}")
+                        pass  # Skip lines that cannot be parsed as URLs
             return True
         else:
             print_error("GitHub CLI not authenticated")
@@ -177,7 +177,8 @@ def get_github_secrets():
 
         print("  Checking GitHub Secrets for POWERFULMOVES/PMOVES.AI:")
 
-        # Parse output safely in Python
+        # Parse output safely in Python - count matches without logging tainted values
+        found_count = 0
         for line in result.stdout.split('\n'):
             if not line.strip():
                 continue
@@ -185,8 +186,12 @@ def get_github_secrets():
             secret_name = line.strip().split()[0]
             if secret_name in gh_app_keys:
                 credentials[secret_name] = "PRESENT_IN_GH_SECRETS"
-                # Log only the key name pattern, not full secret context
-                print_success(f"  {secret_name.split('_')[0]}***: Found in GitHub Secrets")
+                found_count += 1
+
+        # Report results using only hardcoded key names (not tainted output)
+        for key in gh_app_keys:
+            if key in credentials:
+                print_success(f"  {key}: Found in GitHub Secrets")
 
     except subprocess.TimeoutExpired as e:
         print_error(f"Timeout after {e.timeout}s - check network connectivity")
