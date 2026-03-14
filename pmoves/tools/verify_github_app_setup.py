@@ -378,7 +378,7 @@ def main():
         print()
 
         # Failure details (only print known check names, never values)
-        known_checks = {"gh_cli", "github_secrets", "env_shared", "env_tier_agent", "docker_compose", "chit_manifest"}
+        known_checks = {"gh_cli", "github_secrets", "env_shared", "env_tier_agent", "docker_compose", "secrets_funnel", "chit_manifest"}
         failures = [k for k, v in results.items() if not v]
         if failures:
             print(f"{Colors.YELLOW}Failed checks:{Colors.RESET}")

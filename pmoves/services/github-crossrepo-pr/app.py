@@ -296,7 +296,7 @@ async def create_pr_from_template(
             repo=repo,
             pr_number=None,
             pr_url=None,
-            error=str(e),
+            error="Internal error during PR creation",
             duration_seconds=duration
         )
 

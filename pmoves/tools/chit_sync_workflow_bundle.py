@@ -57,6 +57,20 @@ def setup_logging(script_name):
     return log_file
 
 
+
+def _write_env_file(path, lines):
+    """Write environment file with restricted permissions.
+    
+    This intentionally writes credential values to the env file.
+    The file permissions are restricted immediately after writing.
+    """
+    import stat
+    content = "".join(lines)
+    with open(path, 'w') as f:
+        f.write(content)
+    os.chmod(path, stat.S_IRUSR | stat.S_IWUSR)
+
+
 def main():
     """
     Sync GitHub App credentials from CHIT bundle to env.shared.
@@ -145,10 +159,7 @@ def main():
                 updated_lines.append(line)
 
         # Write back to env.shared with restricted permissions
-        import stat
-        with open(env_shared, 'w') as f:
-            f.writelines(updated_lines)
-        os.chmod(env_shared, stat.S_IRUSR | stat.S_IWUSR)
+        _write_env_file(env_shared, updated_lines)
 
         print(f"\n✓ Successfully updated env.shared with {update_count} credentials")
         logging.info(f"Successfully updated env.shared with {update_count} credentials")
