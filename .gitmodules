@@ -288,3 +288,6 @@
 	path = PMOVES-Neo4j
 	url = https://github.com/POWERFULMOVES/PMOVES-neo4j.git
 	branch = PMOVES.AI-Edition-Hardened
+[submodule "pmoves/integrations/neo4j"]
+	path = pmoves/integrations/neo4j
+	url = https://github.com/POWERFULMOVES/PMOVES-neo4j.git

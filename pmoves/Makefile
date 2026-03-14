@@ -640,6 +640,60 @@ supabase-clean: ## Stop + remove Supabase containers and volumes
 	@$(DC) --profile supabase-local down -v --remove-orphans >/dev/null 2>&1 || true
 	@echo "✅ Supabase stack cleaned"
 
+.PHONY: neo4j-up neo4j-down neo4j-restart neo4j-logs neo4j-migrate neo4j-seed neo4j-bootstrap neo4j-status
+
+neo4j-up: ## Start Neo4j submodule stack
+	@echo "→ Starting Neo4j from submodule..."
+	@$(MAKE) --no-print-directory -C pmoves/integrations/neo4j up
+
+neo4j-down: ## Stop Neo4j submodule stack
+	@echo "→ Stopping Neo4j from submodule..."
+	@$(MAKE) --no-print-directory -C pmoves/integrations/neo4j down
+
+neo4j-restart: ## Restart Neo4j submodule stack
+	@echo "→ Restarting Neo4j from submodule..."
+	@$(MAKE) --no-print-directory -C pmoves/integrations/neo4j restart
+
+neo4j-logs: ## View Neo4j logs
+	@$(MAKE) --no-print-directory -C pmoves/integrations/neo4j logs
+
+neo4j-migrate: ## Run Neo4j migration (usage: make neo4j-migrate VERSION=003)
+	@if [ -z "$(VERSION)" ]; then \
+		echo "Usage: make neo4j-migrate VERSION=003"; \
+		echo ""; \
+		echo "Available migrations:"; \
+		ls -1 pmoves/integrations/neo4j/db/migrations/*.cypher 2>/dev/null | while read -r f; do \
+			echo "  • $$(basename "$f")"; \
+		done; \
+		exit 1; \
+	fi
+	@$(MAKE) --no-print-directory -C pmoves/integrations/neo4j migrate VERSION=$(VERSION)
+
+neo4j-seed: ## Load Neo4j seed data (usage: make neo4j-seed SEED=001_person_aliases.csv)
+	@if [ -z "$(SEED)" ]; then \
+		echo "Usage: make neo4j-seed SEED=001_person_aliases.csv"; \
+		echo ""; \
+		echo "Available seeds:"; \
+		ls -1 pmoves/integrations/neo4j/db/seeds/*.csv 2>/dev/null | while read -r f; do \
+			echo "  • $$(basename "$f")"; \
+		done; \
+		exit 1; \
+	fi
+	@$(MAKE) --no-print-directory -C pmoves/integrations/neo4j seed SEED=$(SEED)
+
+neo4j-bootstrap: ## Initialize Neo4j (run migrations and seeds)
+	@echo "→ Bootstrapping Neo4j from submodule..."
+	@$(MAKE) --no-print-directory -C pmoves/integrations/neo4j bootstrap
+
+neo4j-status: ## Check Neo4j status from submodule
+	@$(MAKE) --no-print-directory -C pmoves/integrations/neo4j status
+
+# Legacy compatibility (delegates to submodule)
+.PHONY: neo4j-bootstrap-legacy
+neo4j-bootstrap-legacy: ## Legacy bootstrap script (deprecated: use neo4j-bootstrap)
+	@echo "⚠️  This target is deprecated. Use: make neo4j-bootstrap"
+	@$(MAKE) --no-print-directory neo4j-bootstrap
+
 .PHONY: seed-data
 seed-data: ## Seed Qdrant/Meilisearch with demo corpus via Hi-RAG v2
 	@echo "📚 Seeding Qdrant/Meili demo corpus..."

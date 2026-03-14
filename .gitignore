@@ -48,6 +48,14 @@ dist/
 downloads/
 eggs/
 .eggs/
+
+# =============================================================================
+# Cast TTS Integration (temp audio files)
+# =============================================================================
+pmoves/services/cast-tts-gateway/logs/
+*.tmp.mp3
+*.temp.mp3
+/tmp/*.mp3
 lib/
 lib64/
 parts/
@@ -163,6 +171,13 @@ pmoves/env.supa.runtime.bak.*
 .terraform/
 *.tfstate
 *.tfstate.*
+
+# =============================================================================
+# Local-only directories (not part of the repo)
+# =============================================================================
+pmoves/uv.lock
+PMOVES-Ultimate-TTS-Studio-local/
+United Nations Federal Credit Union-selected-assets/
 
 # Windows
 desktop.ini
