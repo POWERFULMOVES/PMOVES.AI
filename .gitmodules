@@ -288,3 +288,12 @@
 	path = PMOVES-Neo4j
 	url = https://github.com/POWERFULMOVES/PMOVES-neo4j.git
 	branch = PMOVES.AI-Edition-Hardened
+
+# =============================================================================
+# Agent Zero Plugin Ecosystem
+# =============================================================================
+
+[submodule "PMOVES-a0-plugins"]
+	path = PMOVES-a0-plugins
+	url = https://github.com/POWERFULMOVES/PMOVES-a0-plugins.git
+	branch = PMOVES.AI-Edition-Hardened

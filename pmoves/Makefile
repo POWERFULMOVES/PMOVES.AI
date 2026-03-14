@@ -2103,6 +2103,34 @@ ui-videos-realtime-e2e: ## Run Playwright E2E: inserts row via REST and asserts 
 	@$(MAKE) ui-dev-start >/dev/null 2>&1 || true
 	@cd ui && node scripts/with-env.mjs npm run test:e2e -- -g "Videos Realtime"
 
+# UI Testing & CI Targets (Phase 2: Testing & Validation Review)
+.PHONY: ui-lint
+ui-lint: ## Run ESLint on UI code
+	@cd ui && npm run lint
+
+.PHONY: ui-typecheck
+ui-typecheck: ## Run TypeScript type check on UI code
+	@cd ui && npm run typecheck
+
+.PHONY: ui-test
+ui-test: ## Run Jest unit tests for UI
+	@cd ui && npm test -- --ci --maxWorkers=2
+
+.PHONY: ui-test-coverage
+ui-test-coverage: ## Run Jest unit tests with coverage report
+	@cd ui && npm test -- --ci --coverage --maxWorkers=2
+
+.PHONY: ui-e2e
+ui-e2e: ## Run Playwright E2E tests (requires dev server or running UI)
+	@cd ui && npm run test:e2e
+
+.PHONY: ui-test-all
+ui-test-all: ## Run all UI tests (lint, typecheck, unit, E2E)
+	@$(MAKE) ui-lint
+	@$(MAKE) ui-typecheck
+	@$(MAKE) ui-test
+	@echo "All UI tests passed!"
+
 # Jellyfin bridge only
 up-jellyfin:
 	@$(DC) up -d jellyfin-bridge
