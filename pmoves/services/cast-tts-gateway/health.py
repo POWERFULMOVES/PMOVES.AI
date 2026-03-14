@@ -81,22 +81,6 @@ class DeviceHealth:
 
         # Recalculate metrics
         self._recalculate_metrics()
-            success: Whether check was successful
-            latency_ms: Latency in milliseconds
-        """
-        self.total_checks += 1
-        self.last_check = time.time()
-
-        if success:
-            self.successful_checks += 1
-            self.last_success = time.time()
-            self.latency_samples.append(latency_ms)
-        else:
-            self.failed_checks += 1
-            self.last_failure = time.time()
-
-        # Recalculate metrics
-        self._recalculate_metrics()
 
     def _recalculate_metrics(self):
         """

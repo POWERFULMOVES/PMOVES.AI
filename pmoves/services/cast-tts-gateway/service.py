@@ -648,6 +648,14 @@ class CastTTSGateway:
                     status=400
                 )
 
+            # Path traversal protection: reject paths containing ".." or null bytes
+            if ".." in audio_path or "\x00" in audio_path:
+                CAST_REQUESTS.labels(method="audio", status="error").inc()
+                return web.json_response(
+                    {"error": "Invalid audio_path: path traversal not allowed"},
+                    status=400
+                )
+
             with CAST_LATENCY.time():
                 result = await self.device_manager.cast_audio(audio_path, device)
 

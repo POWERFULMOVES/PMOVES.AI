@@ -33,7 +33,7 @@ async def get_user_context(request: web.Request) -> dict:
     auth_header = request.headers.get("Authorization", "")
 
     # Allow unauthenticated requests in development mode
-    if os.getenv("CAST_AUTH_REQUIRED", "false") == "false":
+    if os.getenv("CAST_AUTH_REQUIRED", "true") == "false":
         return {
             "user_id": "dev_user",
             "role": "admin",
@@ -145,7 +145,7 @@ def require_role(*roles: str) -> Callable:
             user = request.get("user", {})
 
             # Skip role check in development mode
-            if os.getenv("CAST_AUTH_REQUIRED", "false") == "false":
+            if os.getenv("CAST_AUTH_REQUIRED", "true") == "false":
                 return await func(request)
 
             user_role = user.get("role", "anonymous")

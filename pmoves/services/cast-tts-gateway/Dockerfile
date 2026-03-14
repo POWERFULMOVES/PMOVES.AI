@@ -17,9 +17,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 RUN pip install --no-cache-dir catt[all]
 
 # Copy application code
-COPY service.py .
-COPY flute_client.py .
-COPY device_manager.py .
+COPY *.py .
 
 # Create non-root user
 RUN useradd -m -u 65532 nonroot && \

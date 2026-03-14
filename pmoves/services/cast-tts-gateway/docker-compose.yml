@@ -1,5 +1,3 @@
-version: '3.8'
-
 networks:
   app_tier:
     external: true
@@ -36,6 +34,8 @@ services:
       - monitoring_tier
     volumes:
       - cast-tts-logs:/app/logs
+    tmpfs:
+      - /tmp
     # Security Hardening
     user: "65532:65532"
     read_only: true
