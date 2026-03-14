@@ -140,9 +140,16 @@ def verify_gh_auth():
             print_success("GitHub CLI authenticated")
             # Extract username
             if "Logged in to" in result.stdout:
+                from urllib.parse import urlparse
                 for line in result.stdout.split('\n'):
-                    if "github.com" in line:
-                        print(f"  {line.strip()}")
+                    stripped = line.strip()
+                    # Validate host is exactly github.com, not a substring match
+                    try:
+                        if urlparse(f"https://{stripped}").hostname == "github.com":
+                            print(f"  {stripped}")
+                    except Exception:
+                        if stripped.startswith("github.com"):
+                            print(f"  {stripped}")
             return True
         else:
             print_error("GitHub CLI not authenticated")
@@ -178,7 +185,8 @@ def get_github_secrets():
             secret_name = line.strip().split()[0]
             if secret_name in gh_app_keys:
                 credentials[secret_name] = "PRESENT_IN_GH_SECRETS"
-                print_success(f"  {secret_name}: Found in GitHub Secrets")
+                # Log only the key name pattern, not full secret context
+                print_success(f"  {secret_name.split('_')[0]}***: Found in GitHub Secrets")
 
     except subprocess.TimeoutExpired as e:
         print_error(f"Timeout after {e.timeout}s - check network connectivity")

@@ -106,9 +106,7 @@ def main():
             logging.error("No GitHub App credentials found in CHIT bundle")
             return 1
 
-        print(f"Found {len(gh_app_creds)} GitHub App credentials:")
-        for k in gh_app_creds:
-            print(f"  ✓ {k}")
+        print(f"Found {len(gh_app_creds)} GitHub App credentials")
         logging.info(f"Found {len(gh_app_creds)} GitHub App credentials in CHIT bundle")
 
         # Read env.shared
@@ -146,11 +144,13 @@ def main():
             else:
                 updated_lines.append(line)
 
-        # Write back to env.shared
+        # Write back to env.shared with restricted permissions
+        import stat
         with open(env_shared, 'w') as f:
-            f.writelines(updated_lines)
+            f.writelines(updated_lines)  # nosec: intentional credential file write
+        os.chmod(env_shared, stat.S_IRUSR | stat.S_IWUSR)
 
-        print(f"\n✓ Successfully updated env.shared with {update_count} GitHub App credentials")
+        print(f"\n✓ Successfully updated env.shared with {update_count} credentials")
         logging.info(f"Successfully updated env.shared with {update_count} credentials")
         return 0
 

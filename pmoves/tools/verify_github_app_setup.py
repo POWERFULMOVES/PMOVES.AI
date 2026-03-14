@@ -375,12 +375,14 @@ def main():
         logging.info(f"Verification completed: {passed}/{total} checks passed")
         print()
 
-        # Failure details
+        # Failure details (only print known check names, never values)
+        known_checks = {"gh_cli", "gh_secrets", "env_shared", "env_tier", "docker_compose", "secrets_funnel"}
         failures = [k for k, v in results.items() if not v]
         if failures:
             print(f"{Colors.YELLOW}Failed checks:{Colors.RESET}")
             for check in failures:
-                print(f"  - {check}")
+                sanitized = check if check in known_checks else "unknown_check"
+                print(f"  - {sanitized}")
             print()
 
             # Troubleshooting hints

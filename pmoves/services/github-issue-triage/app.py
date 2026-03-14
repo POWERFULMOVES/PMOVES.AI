@@ -390,7 +390,7 @@ async def triage_endpoint(repo: str, issue_number: int, background_tasks: Backgr
             status_code=500,
             content={
                 "ok": False,
-                "error": str(e)
+                "error": f"Internal server error triaging {repo}#{issue_number}"
             }
         )
 
