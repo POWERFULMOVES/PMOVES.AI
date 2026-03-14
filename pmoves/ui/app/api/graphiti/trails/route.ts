@@ -4,6 +4,7 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { ownerFromJwt } from '@/lib/jwtUtils';
 import type { GraphitiTrailsResponse, TrailEntry, TrailStats } from '@/lib/types/graphiti';
 
 export const runtime = 'nodejs'; // Needs fs access
@@ -137,6 +138,11 @@ function calculateStats(entries: TrailEntry[]): TrailStats {
  *   - limit: Max results (default: 50)
  */
 export async function GET(request: NextRequest) {
+  const { ownerId, error: authError } = ownerFromJwt('graphiti/trails');
+  if (!ownerId) {
+    return NextResponse.json({ items: [], error: authError || 'Authentication required' }, { status: 401 });
+  }
+
   const searchParams = request.nextUrl.searchParams;
   const agentIdFilter = searchParams.get('agentId');
   const phaseFilter = searchParams.get('phase');
