@@ -76,11 +76,21 @@ class TextUnit(BaseModel):
     metadata: Dict[str, Any] = Field(default_factory=dict)
 
 
+class CHRConfigInput(BaseModel):
+    """Configuration for CHR algorithm with bounds validation."""
+
+    K: int = Field(default=8, ge=2, le=100, description="Number of constellations (2-100)")
+    iters: int = Field(default=30, ge=1, le=1000, description="Optimization iterations (1-1000)")
+    bins: int = Field(default=8, ge=2, le=64, description="Spectrum bins for slab entropy (2-64)")
+    beta: float = Field(default=12.0, ge=0.1, le=100.0, description="Softmax temperature (0.1-100)")
+    seed: int = Field(default=42, ge=0, description="Random seed")
+
+
 class CHRRequest(BaseModel):
     """Request model for CHR algorithm."""
 
-    units: List[TextUnit]
-    config: Optional[Dict[str, Any]] = None
+    units: List[TextUnit] = Field(min_length=1, max_length=10000, description="Text units to cluster (1-10000)")
+    config: Optional[CHRConfigInput] = None
     encrypt_anchors: bool = False
     publish_to_nats: bool = True
 
@@ -286,14 +296,14 @@ async def run_chr_endpoint(request: CHRRequest):
     # Build unit dicts
     units = [u.model_dump() for u in request.units]
 
-    # Parse config
-    config_dict = request.config or {}
+    # Parse config - Pydantic validation ensures bounds
+    config_input = request.config or CHRConfigInput()
     config = CHRConfig(
-        K=config_dict.get("K", 8),
-        iters=config_dict.get("iters", 30),
-        bins=config_dict.get("bins", 8),
-        beta=config_dict.get("beta", 12.0),
-        seed=config_dict.get("seed", 42),
+        K=config_input.K,
+        iters=config_input.iters,
+        bins=config_input.bins,
+        beta=config_input.beta,
+        seed=config_input.seed,
     )
 
     try:
@@ -342,8 +352,8 @@ async def run_chr_endpoint(request: CHRRequest):
 @app.post("/chr/from-supabase")
 async def run_chr_from_supabase(
     namespace: str = "pmoves.consciousness",
-    K: int = 8,
-    limit: int = 500,
+    K: int = Field(default=8, ge=2, le=100, description="Number of constellations (2-100)"),
+    limit: int = Field(default=500, ge=1, le=10000, description="Max theories to fetch (1-10000)"),
     publish: bool = True,
 ):
     """
@@ -356,12 +366,16 @@ async def run_chr_from_supabase(
     global _cgp_packets_generated, _chr_runs_completed
 
     try:
-        # Fetch from Supabase
-        headers = {"apikey": SUPABASE_ANON_KEY, "Authorization": f"Bearer {SUPABASE_ANON_KEY}"}
+        # Fetch from Supabase via PostgREST with Accept-Profile header
+        headers = {
+            "apikey": SUPABASE_ANON_KEY,
+            "Authorization": f"Bearer {SUPABASE_ANON_KEY}",
+            "Accept-Profile": "pmoves_core"
+        }
 
         async with httpx.AsyncClient() as client:
             response = await client.get(
-                f"{SUPABASE_URL}/rest/v1/pmoves_core.consciousness_theories",
+                f"{SUPABASE_URL}/rest/v1/consciousness_theories",
                 headers=headers,
                 params={
                     "namespace": f"eq.{namespace}",

@@ -23,6 +23,13 @@ logger = logging.getLogger(__name__)
 
 
 # =============================================================================
+# Embedding Model Cache
+# =============================================================================
+
+_ST_MODEL: Optional["SentenceTransformer"] = None  # type: ignore
+
+
+# =============================================================================
 # CHIT Security (Inline for standalone service)
 # =============================================================================
 
@@ -132,11 +139,18 @@ def _entropy(arr: np.ndarray, bins: int = 16) -> float:
 
 
 def _maybe_st_model():
-    """Try to load sentence-transformers model."""
+    """Try to load sentence-transformers model (cached)."""
+    global _ST_MODEL
+
+    if _ST_MODEL is not None:
+        return _ST_MODEL
+
     try:
         from sentence_transformers import SentenceTransformer  # type: ignore
 
-        return SentenceTransformer("all-MiniLM-L6-v2")
+        _ST_MODEL = SentenceTransformer("all-MiniLM-L6-v2")
+        logger.info("Loaded and cached sentence-transformers model")
+        return _ST_MODEL
     except Exception as e:
         logger.warning(f"sentence-transformers not available: {e}")
         return None
@@ -364,13 +378,16 @@ def chr_result_to_cgp(
     Args:
         result: CHRResult from run_chr
         passphrase: CHIT passphrase for signing
-        encrypt_anchors: Whether to encrypt anchor vectors (not implemented in standalone mode)
+        encrypt_anchors: Whether to encrypt anchor vectors
 
     Returns:
         CGP packet ready for NATS publication
+
+    Raises:
+        ValueError: If encrypt_anchors is True (not implemented)
     """
     if encrypt_anchors:
-        logger.warning("Anchor encryption not available in standalone mode - using plain anchors")
+        raise ValueError("Anchor encryption not implemented - do not set encrypt_anchors=True")
 
     super_node = {
         "id": f"{result.namespace}-super",

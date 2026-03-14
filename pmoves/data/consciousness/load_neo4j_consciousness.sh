@@ -2,6 +2,8 @@
 # PMOVES Consciousness Neo4j Schema Loader
 # Simplified version for cypher-shell compatibility
 
+set -euo pipefail
+
 NEO4J_PASSWORD="${NEO4J_PASSWORD:-pm_kDhuaogcUc1oOOVeGMNCkQ}"
 NEO4J_USER="neo4j"
 

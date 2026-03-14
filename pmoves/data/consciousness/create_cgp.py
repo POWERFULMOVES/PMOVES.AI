@@ -7,6 +7,7 @@ Creates minimal valid CGP with 10 super-nodes (one per consciousness category).
 
 import json
 import subprocess
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -93,11 +94,13 @@ r = requests.post(
     json={{"data": cgp}},
     timeout=30
 )
+r.raise_for_status()  # Raise exception on HTTP errors
 print(f"Status: {{r.status_code}}")
 print(f"Response: {{r.text[:500]}}")
 '''
 
-    temp_script = Path("C:/temp/publish_cgp.py")
+    temp_dir = tempfile.gettempdir()
+    temp_script = Path(temp_dir) / "publish_cgp.py"
     temp_script.parent.mkdir(parents=True, exist_ok=True)
     temp_script.write_text(publish_script, encoding='utf-8')
 

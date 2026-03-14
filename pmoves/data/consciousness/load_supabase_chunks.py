@@ -3,6 +3,7 @@
 
 import json
 import subprocess
+import tempfile
 from pathlib import Path
 
 
@@ -43,9 +44,10 @@ def main():
                f"category=EXCLUDED.category, content=EXCLUDED.content, namespace=EXCLUDED.namespace;")
         sql_lines.append(sql)
 
-    # Write to temp file
-    temp_sql = "C:/temp/consciousness_seed.sql"
-    Path(temp_sql).parent.mkdir(parents=True, exist_ok=True)
+    # Write to temp file (cross-platform)
+    temp_dir = tempfile.gettempdir()
+    temp_sql = Path(temp_dir) / "consciousness_seed.sql"
+    temp_sql.parent.mkdir(parents=True, exist_ok=True)
     with open(temp_sql, 'w') as f:
         f.write('\n'.join(sql_lines))
 
@@ -57,6 +59,9 @@ def main():
         'bash', '-c',
         'PGPASSWORD=zode0dl7/JgAaNoVqjzHQ0S5Iq1vi7Tt psql -U postgres -d pmoves -h localhost'
     ], stdin=open(temp_sql), capture_output=True, text=True)
+
+    # Check return code
+    result.check_returncode()
 
     print(f"Exit code: {result.returncode}")
     if result.stdout:
@@ -70,6 +75,9 @@ def main():
         'bash', '-c',
         'PGPASSWORD=zode0dl7/JgAaNoVqjzHQ0S5Iq1vi7Tt psql -U postgres -d pmoves -h localhost -t -c "SELECT COUNT(*) FROM pmoves_core.consciousness_theories"'
     ], capture_output=True, text=True)
+
+    # Check return code
+    verify.check_returncode()
     print(f"\nVerified row count: {verify.stdout.strip()}")
 
 

@@ -25,10 +25,18 @@ check_result() {
 # Phase 1.1: Verify MEILI_API_KEY
 # =============================================================================
 echo "[1.1] Checking MEILI_API_KEY in env.shared..."
-if grep -q "MEILI_API_KEY=" pmoves/env.shared; then
-    check_result 0 "MEILI_API_KEY exists in env.shared"
+if grep -q "MEILI_API_KEY=" pmoves/env.shared && grep -q "MEILI_MASTER_KEY=" pmoves/env.shared; then
+    # Check if MEILI_API_KEY matches MEILI_MASTER_KEY (should use master key for admin operations)
+    MEILI_API_KEY=$(grep "^MEILI_API_KEY=" pmoves/env.shared | cut -d'=' -f2)
+    MEILI_MASTER_KEY=$(grep "^MEILI_MASTER_KEY=" pmoves/env.shared | cut -d'=' -f2)
+    if [ "$MEILI_API_KEY" = "$MEILI_MASTER_KEY" ]; then
+        check_result 0 "MEILI_API_KEY matches MEILI_MASTER_KEY (admin access)"
+    else
+        echo "  [WARN] MEILI_API_KEY does not match MEILI_MASTER_KEY (may have limited access)"
+        check_result 0 "MEILI_API_KEY exists (WARNING: using non-master key)"
+    fi
 else
-    check_result 1 "MEILI_API_KEY missing from env.shared"
+    check_result 1 "MEILI_API_KEY or MEILI_MASTER_KEY missing from env.shared"
 fi
 echo ""
 

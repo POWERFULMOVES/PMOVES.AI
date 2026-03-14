@@ -7,6 +7,7 @@ Reads from consciousness-chunks.jsonl and upserts to Qdrant + Meilisearch via Hi
 
 import json
 import subprocess
+import tempfile
 from pathlib import Path
 
 
@@ -73,9 +74,10 @@ for i in range(0, len(items), batch_size):
 print("\\nTotal: {} vectors, {} lexical indexed".format(total_upserted, total_lexical))
 '''
 
-    # Write to temp file
-    temp_script = "C:/temp/ingest_hirag_inner.py"
-    Path(temp_script).parent.mkdir(parents=True, exist_ok=True)
+    # Write to temp file (cross-platform)
+    temp_dir = tempfile.gettempdir()
+    temp_script = Path(temp_dir) / "ingest_hirag_inner.py"
+    temp_script.parent.mkdir(parents=True, exist_ok=True)
     with open(temp_script, 'w', encoding='utf-8') as f:
         f.write(ingest_script)
 
@@ -83,7 +85,7 @@ print("\\nTotal: {} vectors, {} lexical indexed".format(total_upserted, total_le
 
     # Copy and execute inside container
     subprocess.run([
-        'docker', 'cp', temp_script, 'pmoves-hi-rag-gateway-v2-1:/tmp/ingest.py'
+        'docker', 'cp', str(temp_script), 'pmoves-hi-rag-gateway-v2-1:/tmp/ingest.py'
     ], check=True)
 
     result = subprocess.run([
@@ -95,7 +97,12 @@ print("\\nTotal: {} vectors, {} lexical indexed".format(total_upserted, total_le
     if result.stderr:
         print("STDERR:", result.stderr)
 
-    return result.returncode == 0
+    # Track failures and exit non-zero when batches fail
+    if result.returncode != 0:
+        print("ERROR: Ingestion script failed with non-zero exit code")
+        return False
+
+    return True
 
 
 if __name__ == "__main__":
