@@ -1,0 +1,48 @@
+%%{init: {'theme':'base', 'themeVariables': {
+  'primaryColor': '#3ecf8e',
+  'primaryBorderColor': '#3ecf8e',
+  'secondaryColor': '#9333ea',
+  'secondaryBorderColor': '#a855f7',
+  'tertiaryColor': '#fbbf24',
+  'tertiaryBorderColor': '#d97706',
+  'background': 'transparent'
+}}}%%
+graph TD
+    classDef geo fill:#3ecf8e,stroke:#2db380,color:#000,font-weight:bold
+    classDef tok fill:#9333ea,stroke:#7c2d12,color:#fff,font-weight:bold
+    classDef agent fill:#fbbf24,stroke:#d97706,color:#000,font-weight:bold
+    classDef research fill:#404040,stroke:#525252,color:#ededed
+
+    %% GEOMETRY.* subjects
+    subgraph Geometry["🔷 geometry.*"]
+        CGP["geometry.cgp.v1<br/><br/>Direct CGP packets<br/>Publisher: consciousness-service<br/>Subscribers: Hi-RAG v2, Hyperdimensions"]:::geo
+        CAL["geometry.cgp.calibration.v1<br/><br/>CGP calibration events<br/>Publisher: evo-controller<br/>Subscribers: Hi-RAG v2"]:::geo
+        EVT["geometry.event.v1<br/><br/>Raw geometry events<br/>Publisher: All producers<br/>Subscribers: shape-store"]:::geo
+        META["geometry.swarm.meta.v1<br/><br/>Swarm metadata<br/>Publisher: evo-controller<br/>Subscribers: AgentGym"]:::geo
+    end
+
+    %% TOKENISM.* subjects
+    subgraph Tokenism["💜 tokenism.*"]
+        READY["tokenism.cgp.ready.v1<br/><br/>CGP ready signal<br/>Publisher: consciousness-service<br/>Subscribers: Hi-RAG v2, Tokenism"]:::tok
+        WEEKLY["tokenism.cgp.weekly.v1<br/><br/>Weekly CGP aggregation<br/>Publisher: Tokenism Simulator<br/>Subscribers: Hi-RAG v2, Discord"]:::tok
+        POP["tokenism.swarm.population.v1<br/><br/>Population snapshot<br/>Publisher: Tokenism Simulator<br/>Subscribers: evo-controller"]:::tok
+        ATTR["tokenism.attribution.recorded.v1<br/><br/>Attribution records<br/>Publisher: Tokenism services<br/>Subscribers: analytics"]:::tok
+        VOICE["tokenism.geometry.event.v1<br/><br/>Voice synthesis events<br/>Publisher: flute-gateway<br/>Subscribers: Hi-RAG v2"]:::tok
+    end
+
+    %% AGENTGYM.* subjects
+    subgraph AgentGym["🟡 agentgym.*"]
+        TRAIN["agentgym.train.completed.v1<br/><br/>RL training complete<br/>Publisher: AgentGym<br/>Subscribers: evo-controller"]:::agent
+    end
+
+    %% RESEARCH.* subjects (CGP-enhanced)
+    subgraph Research["⚫ research.*"]
+        DR["research.deepresearch.result.v1<br/><br/>Also publishes to<br/>tokenism.cgp.ready.v1<br/>when enabled"]:::research
+        SUPA["supaserch.result.v1<br/><br/>CGP-enhanced results<br/>Also publishes to<br/>tokenism.cgp.ready.v1"]:::research
+    end
+
+    %% Connections
+    Geometry -->|"indexes"| Tokenism
+    Tokenism -->|"calibrates"| Geometry
+    AgentGym -->|"triggers"| Geometry
+    Research -->|"emits"| Tokenism

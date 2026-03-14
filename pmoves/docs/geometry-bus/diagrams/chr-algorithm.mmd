@@ -1,0 +1,55 @@
+%%{init: {'theme':'base', 'themeVariables': {
+  'primaryColor': '#3ecf8e',
+  'primaryBorderColor': '#3ecf8e',
+  'secondaryColor': '#9333ea',
+  'secondaryBorderColor': '#a855f7',
+  'tertiaryColor': '#fbbf24',
+  'tertiaryBorderColor': '#d97706',
+  'background': 'transparent',
+  'sequenceNumberColor': '#ffffff'
+}}}%%
+sequenceDiagram
+    autonumber
+    participant Client as Client App
+    participant CHR as consciousness-service<br/>:8096
+    participant ST as sentence-transformers<br/>all-MiniLM-L6-v2
+    participant CHIT as CHIT Module<br/>pmoves.chit
+    participant NATS as NATS<br/>Geometry Bus
+    participant HIRAG as Hi-RAG v2<br/>:8086
+    participant HD as Hyperdimensions<br/>Three.js
+
+    Client->>CHR: POST /chr/run<br/>units: TextUnit[]
+
+    Note over CHR: Initialize K anchors<br/>K = min(5, len(units))
+
+    CHR->>ST: Generate embeddings<br/>model: all-MiniLM-L6-v2
+    ST-->>CHR: vector[384] per unit
+
+    loop CHR Clustering Iterations
+        Note over CHR: Assign points to nearest anchor<br/>softmax-based probability
+        Note over CHR: Update anchor positions<br/>weighted mean of assigned points
+    end
+
+    CHR->>CHR: Calculate MHEP<br/>Mean Hyperbolic Energy Potential
+
+    Note over CHIT: Construct CGP Packet<br/>spec: chit.cgp.v1.0
+    CHIT->>CHIT: Add constellations[]<br/>with anchors, points, spectrum
+
+    alt CHIT_PASSPHRASE set
+        CHIT->>CHIT: Sign CGP packet<br/>HMAC-SHA256
+    end
+
+    CHR->>NATS: Publish geometry.cgp.v1<br/>{cgp_packet}
+    CHR->>NATS: Publish tokenism.cgp.ready.v1<br/>{cgp_summary}
+
+    par Concurrent Subscribers
+        NATS->>HIRAG: Consume geometry.cgp.v1
+        Note over HIRAG: Index for hybrid RAG<br/>Vector + Graph + Full-text
+    and
+        NATS->>HD: Consume via Portal
+        Note over HD: Render 3D constellation<br/>Three.js WebGL
+    end
+
+    CHR-->>Client: CHRResult<br/>{cgp, mhep, constellations}
+
+    Note over Client,HD: CGP available for<br/>visualization, indexing,<br/>and attribution tracking
