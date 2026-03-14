@@ -527,7 +527,7 @@ See `.claude/context/` for detailed documentation:
 - `PMOVES-ToKenism-Multi/integrations/contracts/chit/` - CHIT TypeScript modules
 - `pmoves/docs/audit/CHIT_INTEGRATION_STATUS.md` - Per-service integration status (5 Full, 8 Partial, 15 None)
 - **CGP Schema Version Naming:** Canonical format is `chit.cgp.v{major}.{minor}` (e.g., `chit.cgp.v1.0`). Legacy aliases: `cgp.v1` → `chit.cgp.v1.0`, `geometry.cgp.v1` → `chit.cgp.v1.0`
-- **CHIT-Aware Services:** Tokenism Simulator (8103), Hi-RAG v2 (8086/8087), Gateway, Consciousness (8096), Evo Controller (8113), A2UI NATS Bridge (9224), AgentGym RL Coordinator
+- **CHIT-Aware Services:** Tokenism Simulator (8103), Hi-RAG v2 (8086/8087), Gateway, Consciousness (8105), Evo Controller (8113), A2UI NATS Bridge (9224), AgentGym RL Coordinator
 - **CHIT NATS Subjects:** `geometry.cgp.v1`, `geometry.swarm.meta.v1`, `geometry.event.v1`, `tokenism.cgp.ready.v1`, `tokenism.simulation.result.v1`
 
 ## Claude Code CLI Context Strategy
