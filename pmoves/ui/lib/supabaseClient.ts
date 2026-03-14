@@ -121,7 +121,8 @@ function decodeJwtExp(token: string | undefined): number | null {
   try {
     if (!token) return null;
     const [, payload] = token.split('.') as [string, string, string];
-    const json = JSON.parse(Buffer.from(payload, 'base64').toString('utf-8')) as { exp?: number };
+    const base64 = payload.replace(/-/g, '+').replace(/_/g, '/');
+    const json = JSON.parse(Buffer.from(base64, 'base64').toString('utf-8')) as { exp?: number };
     return typeof json.exp === 'number' ? json.exp : null;
   } catch {
     return null;
