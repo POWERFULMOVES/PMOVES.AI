@@ -1,0 +1,49 @@
+%%{init: {'theme':'base', 'themeVariables': {
+  'primaryColor': '#3ecf8e',
+  'primaryBorderColor': '#3ecf8e',
+  'secondaryColor': '#9333ea',
+  'secondaryBorderColor': '#a855f7',
+  'tertiaryColor': '#fbbf24',
+  'tertiaryBorderColor': '#d97706',
+  'background': 'transparent',
+  'primaryTextColor': '#1c1c1c',
+  'lineColor': '#525252'
+}}}%%
+flowchart TD
+    classDef publisher fill:#3ecf8e,stroke:#2db380,color:#000,font-weight:bold
+    classDef subscriber fill:#9333ea,stroke:#7c2d12,color:#fff,font-weight:bold
+    classDef bus fill:#fbbf24,stroke:#d97706,color:#000,font-weight:bold
+    classDef service fill:#404040,stroke:#525252,color:#ededed
+
+    subgraph Publishers["📤 CGP Publishers"]
+        CS["consciousness-service<br/>Port: 8096<br/>Subject: geometry.cgp.v1"]:::publisher
+        TS["Tokenism Simulator<br/>Port: 8103<br/>Subject: tokenism.cgp.weekly.v1"]:::publisher
+        EC["Evo Controller<br/>Port: 8113<br/>Subject: geometry.swarm.meta.v1"]:::publisher
+        FG["Flute Gateway<br/>Port: 8055<br/>Subject: geometry.event.v1"]:::publisher
+    end
+
+    subgraph Subscribers["📥 CGP Subscribers"]
+        HR["Hi-RAG v2<br/>Port: 8086/8087<br/>Hybrid RAG + CGP Index"]:::subscriber
+        HD["Hyperdimensions<br/>Three.js WebGL<br/>Shape Rendering"]:::subscriber
+        BS["BoTZ CHIT Tools<br/>CLI: /chit:*<br/>Encode, Visualize"]:::subscriber
+        CM["Cipher Memory<br/>Port: 8096<br/>Agent Memory Storage"]:::subscriber
+    end
+
+    NATS["NATS Geometry Bus<br/>nats://nats:pmoves@nats:4222<br/>JetStream Enabled"]:::bus
+
+    CS -->|"publish"| NATS
+    TS -->|"publish"| NATS
+    EC -->|"publish"| NATS
+    FG -->|"publish"| NATS
+
+    NATS -->|"subscribe"| HR
+    NATS -->|"consume"| HD
+    NATS -->|"tools"| BS
+    NATS -->|"store"| CM
+
+    %% Legend
+    subgraph Legend["📋 Legend"]
+        PUB["Green = Publishers"]:::publisher
+        SUB["Purple = Subscribers"]:::subscriber
+        BUS["Yellow = NATS Bus"]:::bus
+    end
