@@ -6,7 +6,7 @@
 
 "use client";
 
-import { SimulationResult, WeeklyMetrics } from '@/lib/tokenismClient';
+import { SimulationResult } from '@/lib/tokenismClient';
 
 interface ResultsPanelProps {
   result?: SimulationResult | null;

@@ -12,14 +12,12 @@ import { smartDefaultsTemplates, variantTemplates } from './smart-defaults';
 interface SmartDefaultsSelectorProps {
   onSelectTemplate: (config: TensorZeroConfig) => void;
   onApplyVariantTemplate: (template: any) => void;
-  currentConfig: TensorZeroConfig;
   className?: string;
 }
 
 export function SmartDefaultsSelector({
   onSelectTemplate,
   onApplyVariantTemplate,
-  currentConfig,
   className = '',
 }: SmartDefaultsSelectorProps) {
   const [selectedTab, setSelectedTab] = useState<DashboardTab['id']>('configs');

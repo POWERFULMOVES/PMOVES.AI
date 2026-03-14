@@ -6,8 +6,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
   TensorZeroConfig,
   TestRequest,
-  TestResponse,
-  ValidationResult,
 } from './types';
 import {
   fetchConfig,

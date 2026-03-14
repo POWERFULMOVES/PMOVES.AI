@@ -5,7 +5,13 @@ import { getServiceSupabaseClient } from '@/lib/supabaseServer';
 const DEFAULT_BUCKET = process.env.NEXT_PUBLIC_UPLOAD_BUCKET || process.env.PMOVES_UPLOAD_BUCKET || 'assets';
 const DEFAULT_NAMESPACE = process.env.PMOVES_DEFAULT_NAMESPACE || 'pmoves';
 const SMOKE_SECRET = process.env.SMOKE_SHARED_SECRET || process.env.PMOVES_SMOKE_SHARED_SECRET;
-const SINGLE_USER = String(process.env.NEXT_PUBLIC_SINGLE_USER_MODE || process.env.SINGLE_USER_MODE || '1') === '1';
+
+/**
+ * SECURITY: Default to requiring authentication.
+ * Set SINGLE_USER_MODE=1 or NEXT_PUBLIC_SINGLE_USER_MODE=1 explicitly to enable
+ * single-user mode without auth for development.
+ */
+const SINGLE_USER = String(process.env.NEXT_PUBLIC_SINGLE_USER_MODE || process.env.SINGLE_USER_MODE || '0') === '1';
 
 async function getBootUserId(): Promise<string | null> {
   const email = process.env.SUPABASE_BOOT_USER_EMAIL;
@@ -31,11 +37,25 @@ export async function POST(request: NextRequest) {
   // Auth: allow in single-user mode, else require the shared secret
   if (!SINGLE_USER) {
     if (!SMOKE_SECRET) {
-      return NextResponse.json({ error: 'SMOKE_SHARED_SECRET not set' }, { status: 500 });
+      return NextResponse.json(
+        {
+          error: 'SMOKE_SHARED_SECRET not set',
+          message: 'Authentication is required but SMOKE_SHARED_SECRET is not configured. '
+            + 'Set SMOKE_SHARED_SECRET in your environment or enable single-user mode '
+            + 'by setting SINGLE_USER_MODE=1 for development.',
+        },
+        { status: 500 }
+      );
     }
     const auth = request.headers.get('authorization') || '';
     if (auth !== `Bearer ${SMOKE_SECRET}`) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json(
+        {
+          error: 'Unauthorized',
+          message: 'Valid Bearer token required in Authorization header',
+        },
+        { status: 401 }
+      );
     }
   }
 

@@ -450,8 +450,6 @@ export default function IngestionQueuePage() {
         onReject={handleBulkReject}
         onExport={handleExport}
         processing={bulkProcessing}
-        statusFilter={filter}
-        sourceFilter={sourceFilter}
       />
 
       {/* Queue Items */}

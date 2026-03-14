@@ -73,10 +73,13 @@ import {
 function captureSetTimeoutMs(): { get: () => number } {
   const holder = { value: 0 };
   const orig = global.setTimeout;
-  jest.spyOn(global, 'setTimeout').mockImplementation((fn: TimerHandler, ms?: number) => {
-    holder.value = ms ?? 0;
-    return orig(fn, 0); // execute immediately for test speed
-  });
+  jest.spyOn(global, 'setTimeout').mockImplementation(
+    // @ts-expect-error - Mock implementation has different return type
+    (fn: TimerHandler, ms?: number) => {
+      holder.value = ms ?? 0;
+      return orig(fn, 0) as unknown as number;
+    }
+  );
   return { get: () => holder.value };
 }
 

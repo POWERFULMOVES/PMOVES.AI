@@ -8,7 +8,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import type { ServiceCategory } from '@/lib/serviceCatalog';
-import { ServiceHealthIndicator } from './ServiceHealthIndicator';
+import type { ServiceHealthMap } from '@/lib/serviceHealth';
 
 export interface TierStats {
   total: number;
@@ -21,7 +21,6 @@ export interface TierStats {
 export interface TierOverviewProps {
   tier: ServiceCategory;
   stats: TierStats;
-  healthMap?: Record<string, { status: string; responseTime?: number }>;
   isExpanded?: boolean;
   onExpandChange?: (tier: ServiceCategory, expanded: boolean) => void;
   className?: string;
@@ -163,7 +162,6 @@ const COLOR_CLASSES: Record<string, {
 export function TierOverviewCard({
   tier,
   stats,
-  healthMap,
   isExpanded = false,
   onExpandChange,
   className = '',
@@ -180,10 +178,6 @@ export function TierOverviewCard({
       setLocalExpanded(value);
     }
   };
-
-  // Calculate status
-  const status = stats.percentage >= 80 ? 'healthy' :
-                  stats.percentage >= 50 ? 'warning' : 'unhealthy';
 
   return (
     <div
@@ -301,7 +295,7 @@ export interface TierOverviewGridProps {
     tier: ServiceCategory;
     stats: TierStats;
   }[];
-  healthMap?: Record<string, { status: string; responseTime?: number }>;
+  healthMap?: ServiceHealthMap;
   expandedTier?: ServiceCategory | null;
   onTierExpand?: (tier: ServiceCategory) => void;
   className?: string;
@@ -312,7 +306,6 @@ export interface TierOverviewGridProps {
  */
 export function TierOverviewGrid({
   tierStats,
-  healthMap,
   expandedTier,
   onTierExpand,
   className = '',
@@ -324,7 +317,6 @@ export function TierOverviewGrid({
           key={tier}
           tier={tier}
           stats={stats}
-          healthMap={healthMap}
           isExpanded={expandedTier === tier}
           onExpandChange={onTierExpand ? (t, exp) => {
             if (exp) onTierExpand(t);
