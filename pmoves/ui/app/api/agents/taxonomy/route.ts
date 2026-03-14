@@ -5,7 +5,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { SERVICE_CATALOG } from '@/lib/serviceCatalog';
-import type { AgentTaxonomyResponse, Agent, AgentStats } from '@/lib/types/agents';
+import type { AgentTaxonomyResponse, Agent } from '@/lib/types/agents';
 
 export const runtime = 'nodejs'; // Needs fs access for reading local files
 export const dynamic = 'force-dynamic';
@@ -59,7 +59,7 @@ function parseLayerCoverage(markdown: string): Map<string, string[]> {
     if (match) {
       const name = match[1];
       const layerStr = match[2];
-      const layerCount = parseInt(match[3], 10);
+      const _layerCount = parseInt(match[3], 10); // Parsed but unused; we use layerStr parsing instead
 
       const layers: string[] = [];
       if (layerStr.includes('*')) {
@@ -112,13 +112,12 @@ function buildAgentsFromCatalog(
     const layers = layerCoverage.get(service.title) || [];
 
     // Determine evolution stage from layer count
-    const layerCount = layers.length;
     let evolutionStage: Agent['evolutionStage'];
-    if (layerCount >= 7) {
+    if (layers.length >= 7) {
       evolutionStage = 'Mega Evolution';
-    } else if (layerCount >= 5) {
+    } else if (layers.length >= 5) {
       evolutionStage = 'Stage 2';
-    } else if (layerCount >= 3) {
+    } else if (layers.length >= 3) {
       evolutionStage = 'Stage 1';
     } else {
       evolutionStage = 'Base';

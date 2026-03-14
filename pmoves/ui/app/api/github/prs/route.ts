@@ -103,7 +103,7 @@ async function getGitHubToken(): Promise<string | null> {
       const data = await archonResponse.json();
       return data.token;
     }
-  } catch (e) {
+  } catch (_e) {
     // Archon service unavailable - return null to trigger fallback
   }
 

@@ -5,7 +5,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { checkAllServices, type HealthCheckResult } from '@/lib/serviceHealth';
-import { SERVICE_CATALOG, type ServiceDefinition } from '@/lib/serviceCatalog';
+import { SERVICE_CATALOG } from '@/lib/serviceCatalog';
 
 export const runtime = 'edge';
 export const dynamic = 'force-dynamic';

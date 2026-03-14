@@ -4,7 +4,7 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { NextRequest, NextResponse } from 'next/server';
-import type { GraphitiTrailsResponse, TrailEntry, TrailStats, CHITVerificationResult } from '@/lib/types/graphiti';
+import type { GraphitiTrailsResponse, TrailEntry, TrailStats } from '@/lib/types/graphiti';
 
 export const runtime = 'nodejs'; // Needs fs access
 export const dynamic = 'force-dynamic';
@@ -38,9 +38,9 @@ async function readTrailLog(): Promise<any | null> {
 }
 
 /**
- * Load CHIT passphrase for verification
+ * Load CHIT passphrase for verification (unused, reserved for future implementation)
  */
-async function getCHITPassphrase(): Promise<string | null> {
+async function _getCHITPassphrase(): Promise<string | null> {
   try {
     // In production, this would come from a secure environment variable
     // For now, we'll check if the file exists but return null (unsigned trails)
