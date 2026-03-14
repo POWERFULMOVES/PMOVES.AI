@@ -7,6 +7,12 @@
       "publisher": "voice-relay",
       "subscriber": ["voice_follow_agent", "voice_follow_cast_agent"]
     },
+    "voice.cast.completed.v1": {
+      "schema": "schemas/voice/cast.completed.v1.schema.json",
+      "description": "Published when TTS audio has been successfully cast to a Chromecast/Google Home device.",
+      "publisher": "cast-tts-gateway",
+      "subscriber": ["publisher-discord", "cast-notebook-logger"]
+    },
     "agentzero.event.log.v1": {
       "schema": "schemas/agentzero/event.log.v1.schema.json"
     },

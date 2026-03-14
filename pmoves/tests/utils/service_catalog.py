@@ -228,6 +228,17 @@ VOICE_RELAY = ServiceDefinition(
     description="NATS relay: agentzero.task.result.v1 → voice.agent.response.v1",
 )
 
+CAST_TTS_GATEWAY = ServiceDefinition(
+    name="cast-tts-gateway",
+    port=8060,
+    health_path="/healthz",
+    health_type=HealthCheckType.STANDARD,
+    expected_fields=["status"],
+    profile="cast,media",
+    dependencies=["flute-gateway", "nats"],
+    description="Chromecast/Google Home TTS routing with multi-room audio",
+)
+
 GPU_ORCHESTRATOR = ServiceDefinition(
     name="gpu-orchestrator",
     port=0,  # No HTTP interface
@@ -618,6 +629,7 @@ SERVICES = [
     FLUTE_GATEWAY,
     ULTIMATE_TTS_STUDIO,
     VOICE_RELAY,
+    CAST_TTS_GATEWAY,
     # Distributed Compute Services
     NODE_REGISTRY,
     RESOURCE_DETECTOR,
