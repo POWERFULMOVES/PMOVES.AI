@@ -77,6 +77,7 @@ async def _handle_message(msg) -> None:
     output = data.get("output", "")
     response_text = _extract_output_text(output)
     if not response_text:
+        logger.debug("Filtered: empty response_text, task_id=%s", data.get("task_id"))
         FILTERED.inc()
         return
 
@@ -129,6 +130,7 @@ async def _nats_resilience_loop() -> None:
             logger.info("connecting to NATS %s (backoff=%.1fs)", NATS_URL, backoff)
             await nc.connect(
                 servers=[NATS_URL],
+                connect_timeout=5,
                 disconnected_cb=_disconnected_cb,
                 closed_cb=_closed_cb,
             )
