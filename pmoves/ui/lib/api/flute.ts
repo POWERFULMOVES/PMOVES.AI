@@ -505,7 +505,10 @@ export function fluteEstimateDuration(
   rate: number = 1.0
 ): number {
   // Average reading speed: ~150 words per minute
-  const words = text.trim().split(/\s+/).length;
+  const trimmed = text.trim();
+  if (!trimmed) return 0; // Empty or whitespace-only text has no duration
+
+  const words = trimmed.split(/\s+/).length;
   const baseMinutes = words / 150;
   const baseSeconds = baseMinutes * 60;
 
