@@ -1,6 +1,6 @@
 # Architecture: voice.agent.response.v1 NATS Relay
 
-**Status:** Design — not yet implemented
+**Status:** Implemented (Option B — NATS relay)
 **Date:** 2026-03-14
 **Gap:** Two subscribers (`voice_follow_cast_agent.py`, `voice_follow_agent.py`) listen for `voice.agent.response.v1` but nothing publishes to it.
 

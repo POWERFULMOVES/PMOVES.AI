@@ -233,6 +233,25 @@ Comprehensive reference of all production services, ports, APIs, and integration
 - **Compose Profile:** `gpu`, `tts`
 - **CI Pipeline:** `build-images` (amd64, manual dispatch only — GPU-heavy)
 
+### Voice Relay
+- **Ports:** 8121
+- **Purpose:** NATS bridge relaying `agentzero.task.result.v1` → `voice.agent.response.v1` for voice-tagged tasks
+- **Key APIs:**
+  - `GET /healthz` - Service health (includes NATS connection status)
+  - `GET /metrics` - Prometheus metrics
+- **NATS Topics:**
+  - Subscribe: `agentzero.task.result.v1` (configurable via `VOICE_RELAY_INPUT_SUBJECT`)
+  - Publish: `voice.agent.response.v1` (configurable via `VOICE_RELAY_OUTPUT_SUBJECT`)
+- **Filter:** Only relays messages where `meta.voice_mode` is truthy
+- **Metrics:**
+  - `voice_relay_messages_relayed_total` - Successfully relayed messages
+  - `voice_relay_messages_filtered_total` - Messages filtered (no voice_mode)
+  - `voice_relay_errors_total` - Processing errors
+- **Security:** Non-root user (UID 65532), read-only filesystem, tmpfs /tmp
+- **Dependencies:** NATS (required)
+- **Docker Image:** Custom build from `services/voice-relay`
+- **Compose Profile:** `cast`, `media`
+
 ## Media Ingestion & Processing
 
 ### PMOVES.YT

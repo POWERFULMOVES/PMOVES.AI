@@ -399,6 +399,29 @@ Example: `ingest.transcript.ready.v1`
 - **Subscribers:** ToKenism-Multi (musicMapping.ts), Hyperdimensions (visualization)
 - **Related:** See `/chit:bpm` tool spec, `TAC_TOKENISM.md`, `FLUTE_PROSODIC_ARCHITECTURE.md`
 
+## Voice Agent Relay Subjects
+
+**`voice.agent.response.v1`** (relayed)
+- **Direction:** voice-relay subscribes to `agentzero.task.result.v1`, filters `meta.voice_mode`, republishes
+- **Publisher:** voice-relay service (port 8121)
+- **Subscribers:** `voice_follow_agent.py` (local TTS), `voice_follow_cast_agent.py` (Google Cast)
+- **Payload:**
+  ```json
+  {
+    "platform": "agent-zero",
+    "user_id": "user-id-from-meta",
+    "message_id": "task-id",
+    "response_text": "The spoken response text",
+    "model_used": "model-name-or-null",
+    "timestamp": "2026-03-14T12:00:00Z",
+    "sources": [],
+    "meta": {}
+  }
+  ```
+- **Schema:** `pmoves/contracts/schemas/voice/agent.response.v1.schema.json`
+- **Filter:** Only tasks with `meta.voice_mode: true` in the input payload are relayed
+- **Profiles:** `cast`, `media`
+
 ## Cast TTS Subjects
 
 **`voice.cast.completed.v1`**

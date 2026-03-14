@@ -217,6 +217,17 @@ ULTIMATE_TTS_STUDIO = ServiceDefinition(
     description="Multi-engine TTS with 7 engines (Kokoro, F5-TTS, etc.)",
 )
 
+VOICE_RELAY = ServiceDefinition(
+    name="voice-relay",
+    port=8121,
+    health_path="/healthz",
+    health_type=HealthCheckType.STANDARD,
+    expected_fields=["status", "nats_connected"],
+    profile="cast,media",
+    dependencies=["nats"],
+    description="NATS relay: agentzero.task.result.v1 → voice.agent.response.v1",
+)
+
 GPU_ORCHESTRATOR = ServiceDefinition(
     name="gpu-orchestrator",
     port=0,  # No HTTP interface
@@ -606,6 +617,7 @@ SERVICES = [
     HIRAG_V1_GPU,
     FLUTE_GATEWAY,
     ULTIMATE_TTS_STUDIO,
+    VOICE_RELAY,
     # Distributed Compute Services
     NODE_REGISTRY,
     RESOURCE_DETECTOR,
