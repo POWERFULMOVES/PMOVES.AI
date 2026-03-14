@@ -8,6 +8,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import type { ServiceCategory } from '@/lib/serviceCatalog';
+import type { ServiceHealthMap } from '@/lib/serviceHealth';
 
 export interface TierStats {
   total: number;
@@ -294,6 +295,7 @@ export interface TierOverviewGridProps {
     tier: ServiceCategory;
     stats: TierStats;
   }[];
+  healthMap?: ServiceHealthMap;
   expandedTier?: ServiceCategory | null;
   onTierExpand?: (tier: ServiceCategory) => void;
   className?: string;
