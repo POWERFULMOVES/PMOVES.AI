@@ -1,0 +1,52 @@
+version: '3.8'
+
+networks:
+  app_tier:
+    external: true
+    name: pmoves_app
+  bus_tier:
+    external: true
+    name: pmoves_bus
+  api_tier:
+    external: true
+    name: pmoves_api
+  monitoring_tier:
+    external: true
+    name: pmoves_monitoring
+
+volumes:
+  cast-tts-logs:
+
+
+services:
+  cast-tts-gateway:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "8060:8060"
+    environment:
+      - PORT=8060
+      - FLUTE_GATEWAY_URL=http://flute-gateway:8055
+      - ULTIMATE_TTS_URL=http://ultimate-tts-studio:7861
+      - NATS_URL=nats://nats:pmoves@nats:4222
+    networks:
+      - app_tier
+      - bus_tier
+      - api_tier
+      - monitoring_tier
+    volumes:
+      - cast-tts-logs:/app/logs
+    # Security Hardening
+    user: "65532:65532"
+    read_only: true
+    cap_drop:
+      - ALL
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
