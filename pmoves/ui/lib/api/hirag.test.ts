@@ -13,6 +13,8 @@ jest.mock('../errorUtils', () => ({
   logError: jest.fn(),
   logForDebugging: jest.fn(),
   getErrorMessage: (status: number) => `HTTP Error ${status}`,
+  ok: <T,>(data: T) => ({ ok: true, data }),
+  err: (error: string) => ({ ok: false, error }),
 }));
 
 describe('Hi-RAG API', () => {
