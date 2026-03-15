@@ -159,7 +159,7 @@ Target: **Headscale** (self-hosted on KVM2)
 
 ## Open Items
 
-- Register POWERFULMOVES via `make -C pmoves tailscale-up`
+- Register POWERFULMOVES via `make -C pmoves tailscale-docker-up`
 - Onboard 5090 PC (install mode TBD: Docker vs bare-metal)
 - Deploy Headscale on KVM2
 - Configure custom DERP relay via `Dockerfile.derper`

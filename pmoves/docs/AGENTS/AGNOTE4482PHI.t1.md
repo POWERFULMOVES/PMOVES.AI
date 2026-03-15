@@ -69,6 +69,7 @@ Required handoff fields:
 - `2026-03-01T22:45:00Z` CLAIM `CODEX-GPT5` scope: TAC model/persona production readiness review + Graphiti protocol parseable TAC addendum.
 - `2026-03-04T20:50:26-05:00` CLAIM `CLAUDE-OPUS` scope: Graphiti protocol x UI-4482 lane (Notebook Workbench graphiti telemetry + docs + smoke evidence).
 - `2026-03-15T18:00:00Z` CLAIM `CLAUDE-OPUS` scope: Infra TAC trees (infrastructure, tailscale, runners) + Tailscale Docker registration for POWERFULMOVES node + PR skill chain convergence (#947).
+- `2026-03-15T21:00:00Z` CLAIM `CLAUDE-OPUS` scope: Post-Phase E handoff — rebase infra TAC onto main, stale branch cleanup, handoff triage.
 
 ## Graphiti Review Log
 - `2026-02-21T10:35:03.6791631-05:00` REVIEW `CODEX-GPT5`
@@ -141,10 +142,21 @@ Required handoff fields:
 
 - `2026-03-01T22:45:00Z` RELEASE `CODEX-GPT5` scope: TAC tree enhancement + Graphiti protocol update complete; lane ready for implementation commits.
 
+- `2026-03-04T20:50:26-05:00` CLAIM `CODEX-GPT5` scope: Graphiti protocol x UI-4482 lane (delegation to Claude for Notebook Workbench graphiti telemetry + docs + smoke evidence).
+
 - `2026-03-04T20:50:26-05:00` REVIEW `CODEX-GPT5`
   - Delegated focused lane to Claude for Graphiti protocol on UI port `4482` with explicit acceptance criteria and evidence commands.
   - Handoff spec path: `pmoves/docs/AGENTS/HANDOFF_CLAUDE_GRAPHITI_4482_2026-03-04.md`.
   - Scope guard: keep Claude changes constrained to Graphiti + Workbench UX/docs/smoke; no unrelated runtime/service churn.
+
+- `2026-03-15T21:00:00Z` REVIEW `CLAUDE-OPUS`
+  - Rebased infra TAC trees + Tailscale Docker commit (`bb66ba22`) onto main via cherry-pick (new branch `feat/infra-tac-tailscale-docker`).
+  - Fixed `tailscale-status` Make target name collision: host-level targets in main Makefile vs Docker-container targets in `infra.mk`. Renamed Docker targets to `tailscale-docker-*` prefix.
+  - Updated TAC docs (TAC_INFRASTRUCTURE, TAC_TAILSCALE) with corrected Make target references.
+  - Cleaned 4 stale remote branches: `feat/network-fabric-infra`, `feat/network-fabric-docs-v2`, `feat/network-fabric-mcp`, `feat/topology-runner-alignment` (diverged pre-Phase A-E, superseded by TAC trees).
+  - Triaged Z890 Phase E handoff: BoTZ MCP auth (P2), Cipher `/metrics` (Medium), ClawZ CHIT (deferred ~2026-03-29), cipher-mcp submodule (P2), Health/Wealth NATS (Low), Agent Zero task NATS (Low) — 3 deferred, 3 tracked for future sessions.
+
+- `2026-03-15T21:00:00Z` RELEASE `CLAUDE-OPUS` scope: Post-Phase E handoff review + infra convergence. Stale branches pruned, TAC trees landing on main.
 
 ## Agent ACK (Signed)
 - Agent: `CODEX-GPT5`

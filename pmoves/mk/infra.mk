@@ -11,7 +11,7 @@
 VALID_SERVICES := neo4j tensorzero-clickhouse meilisearch qdrant minio supabase-db nats
 
 .PHONY: volume-reset volume-list docker-prune docker-prune-all branch-audit branch-cleanup \
-       tailscale-up tailscale-down tailscale-status tailscale-ip
+       tailscale-docker-up tailscale-docker-down tailscale-docker-status tailscale-docker-ip
 
 volume-reset: ## Reset a service volume: make volume-reset SERVICE=tensorzero-clickhouse
 	@if [ -z "$(SERVICE)" ]; then \
@@ -86,17 +86,19 @@ docker-prune-all: ## Aggressive cleanup: also removes unused images older than 7
 	@echo "Volumes NOT pruned. Use 'make volume-reset SERVICE=...' for targeted resets."
 	@echo "=== Docker prune-all complete ==="
 
-# ── Tailscale ──────────────────────────────────────────────────────────
-tailscale-up: ## Start Tailscale container and join tailnet
+# ── Tailscale Docker Container ────────────────────────────────────────
+# NOTE: Host-level tailscale-* targets are in the main Makefile.
+# These targets manage the Docker-containerized Tailscale node.
+tailscale-docker-up: ## Start Tailscale Docker container and join tailnet
 	docker compose -f docker-compose.tailscale.yml --env-file env.shared up -d
 
-tailscale-down: ## Stop Tailscale container
+tailscale-docker-down: ## Stop Tailscale Docker container
 	docker compose -f docker-compose.tailscale.yml down
 
-tailscale-status: ## Show Tailscale connection status
+tailscale-docker-status: ## Show Tailscale Docker container connection status
 	docker exec pmoves-tailscale tailscale status
 
-tailscale-ip: ## Show this node's Tailscale IP
+tailscale-docker-ip: ## Show Tailscale Docker container's IP
 	docker exec pmoves-tailscale tailscale ip -4
 
 # ── Branch Management ─────────────────────────────────────────────────

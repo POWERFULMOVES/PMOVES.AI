@@ -112,10 +112,10 @@ Runner management: `local_cert_runners.py` with `myoung34/github-runner` image.
 
 | Target | Description |
 |--------|-------------|
-| `make -C pmoves tailscale-up` | Start Tailscale container and join tailnet |
-| `make -C pmoves tailscale-down` | Stop Tailscale container |
-| `make -C pmoves tailscale-status` | Show Tailscale connection status |
-| `make -C pmoves tailscale-ip` | Show this node's Tailscale IP |
+| `make -C pmoves tailscale-docker-up` | Start Tailscale Docker container and join tailnet |
+| `make -C pmoves tailscale-docker-down` | Stop Tailscale Docker container |
+| `make -C pmoves tailscale-docker-status` | Show Tailscale Docker container connection status |
+| `make -C pmoves tailscale-docker-ip` | Show Tailscale Docker container's IP |
 | `make ci-runners-local-cert-up` | Start Docker-containerized CI runners |
 
 ## Cross-Links
