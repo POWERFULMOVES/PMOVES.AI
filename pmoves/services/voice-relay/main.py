@@ -13,6 +13,7 @@ import contextlib
 import json
 import logging
 import os
+import re
 from datetime import datetime, timezone
 
 from fastapi import FastAPI
@@ -23,6 +24,7 @@ from prometheus_client import Counter, generate_latest, CONTENT_TYPE_LATEST
 # Configuration
 # ---------------------------------------------------------------------------
 NATS_URL = os.getenv("NATS_URL", "nats://nats:pmoves@nats:4222")
+NATS_URL_REDACTED = re.sub(r"://[^@]+@", "://***@", NATS_URL)
 INPUT_SUBJECT = os.getenv("VOICE_RELAY_INPUT_SUBJECT", "agentzero.task.result.v1")
 OUTPUT_SUBJECT = os.getenv("VOICE_RELAY_OUTPUT_SUBJECT", "voice.agent.response.v1")
 PORT = int(os.getenv("PORT", "8121"))
@@ -96,7 +98,7 @@ async def _handle_message(msg) -> None:
     if nc and nc.is_connected:
         await nc.publish(OUTPUT_SUBJECT, json.dumps(voice_event).encode("utf-8"))
         RELAYED.inc()
-        logger.info("relayed task_id=%s text=%s", data.get("task_id"), response_text[:80])
+        logger.info("relayed task_id=%s text_len=%d", data.get("task_id"), len(response_text))
     else:
         ERRORS.inc()
         logger.warning("cannot publish — NATS not connected")
@@ -127,7 +129,7 @@ async def _nats_resilience_loop() -> None:
             _mark_lost("closed")
 
         try:
-            logger.info("connecting to NATS %s (backoff=%.1fs)", NATS_URL, backoff)
+            logger.info("connecting to NATS %s (backoff=%.1fs)", NATS_URL_REDACTED, backoff)
             await nc.connect(
                 servers=[NATS_URL],
                 connect_timeout=5,

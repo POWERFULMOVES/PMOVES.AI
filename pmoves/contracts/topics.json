@@ -35,7 +35,8 @@
       "schema": "schemas/agentzero/memory.update.schema.json"
     },
     "agentzero.task.result.v1": {
-      "schema": "schemas/agentzero/task.result.v1.schema.json"
+      "schema": "schemas/agentzero/task.result.v1.schema.json",
+      "subscriber": ["voice-relay"]
     },
     "agentzero.task.status.v1": {
       "schema": "schemas/agentzero/task.status.v1.schema.json"

@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "voice.cast.completed.v1",
+  "description": "Published when TTS audio has been successfully cast to a Chromecast/Google Home device.",
+  "type": "object",
+  "required": ["device_id", "device_name", "audio_url", "text", "timestamp"],
+  "properties": {
+    "device_id": {
+      "type": "string",
+      "description": "Unique identifier for the Chromecast/Google Home device."
+    },
+    "device_name": {
+      "type": "string",
+      "description": "Friendly name of the target device."
+    },
+    "audio_url": {
+      "type": "string",
+      "description": "URL of the synthesized audio that was cast."
+    },
+    "text": {
+      "type": "string",
+      "description": "Original text that was synthesized."
+    },
+    "duration_ms": {
+      "type": ["integer", "null"],
+      "description": "Duration of the audio in milliseconds."
+    },
+    "engine": {
+      "type": ["string", "null"],
+      "description": "TTS engine used for synthesis (kokoro, f5-tts, etc.)."
+    },
+    "timestamp": {
+      "type": "string",
+      "description": "ISO8601 timestamp of cast completion."
+    },
+    "meta": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true
+}
