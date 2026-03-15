@@ -399,6 +399,24 @@ Example: `ingest.transcript.ready.v1`
 - **Subscribers:** ToKenism-Multi (musicMapping.ts), Hyperdimensions (visualization)
 - **Related:** See `/chit:bpm` tool spec, `TAC_TOKENISM.md`, `FLUTE_PROSODIC_ARCHITECTURE.md`
 
+## Cast TTS Subjects
+
+**`voice.cast.completed.v1`**
+- **Direction:** Published by cast-tts-gateway → Consumed by monitoring, Discord Publisher
+- **Purpose:** Notify when TTS audio has been cast to a Chromecast/Google Home device
+- **Payload:**
+  ```json
+  {
+    "device_name": "Living Room Speaker",
+    "device_ip": "192.168.1.x",
+    "text_length": 128,
+    "engine": "kokoro",
+    "duration_ms": 3200,
+    "timestamp": "2026-03-14T12:00:00Z"
+  }
+  ```
+- **Subscribers:** Monitoring dashboards, Discord Publisher
+
 ## Health & Fitness Subjects (Planned)
 
 > **Status:** Planned — Health (wger) integration is pre-stage maturity. These subjects define the target contract.

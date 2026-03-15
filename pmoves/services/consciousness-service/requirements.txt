@@ -10,6 +10,9 @@ httpx==0.28.1
 # NATS messaging
 nats-py==2.12.0
 
+# Prometheus metrics
+prometheus_client>=0.20.0
+
 # CHR Algorithm - embeddings and clustering
 numpy>=1.24.0
 scikit-learn>=1.3.0
