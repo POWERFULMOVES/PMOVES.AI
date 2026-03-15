@@ -21,9 +21,12 @@
 
 | Node | Install Mode | Hostname | Status | Auth |
 |------|-------------|----------|--------|------|
-| Z890 | Bare-metal (OS install) | `100.113.38.37` | Connected | Reusable auth key |
-| POWERFULMOVES | Docker (userspace) | `pmoves-powerfulmoves` | Pending | `TS_AUTHKEY` via env.shared |
-| 5090 PC | TBD | (pending) | Not started | — |
+| Z890 | Bare-metal (OS install) | `pmoves-z890` | Connected | Reusable auth key |
+| POWERFULMOVES (5090 PC) | Docker (userspace) | `pmoves-powerfulmoves` | Connected | Reusable auth key (`tag:pmoves`) |
+| Jetson Nano | Bare-metal | `pmoves-nano` | Offline | Re-auth needed |
+| Laptop | Bare-metal | `pmoves-laptop` | Offline | Re-auth needed |
+| Pixel 9 Pro XL | Mobile | `google-pixel-9-pro-xl` | Offline | Re-auth needed |
+| BoTZ Server | Unknown | `pmoves-botz` | Offline | Re-auth needed |
 | KVM4-1 | Bare-metal (provision script) | `pmoves-kvm4-1` | Connected | Reusable auth key |
 | KVM4-2 | Bare-metal (provision script) | `pmoves-kvm4-2` | Connected | Reusable auth key |
 | KVM2 | Bare-metal (provision script) | `pmoves-kvm2` | Connected | Reusable auth key + exit node |
@@ -159,8 +162,8 @@ Target: **Headscale** (self-hosted on KVM2)
 
 ## Open Items
 
-- Register POWERFULMOVES via `make -C pmoves tailscale-docker-up`
-- Onboard 5090 PC (install mode TBD: Docker vs bare-metal)
+- ~~Register POWERFULMOVES via `make -C pmoves tailscale-docker-up`~~ ✅ Done (2026-03-15)
+- Reconnect offline nodes: pmoves-nano, pmoves-laptop (re-auth with new key)
 - Deploy Headscale on KVM2
 - Configure custom DERP relay via `Dockerfile.derper`
 - ACL policy definition for node-level access control
