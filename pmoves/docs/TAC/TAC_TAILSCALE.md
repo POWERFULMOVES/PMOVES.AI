@@ -22,7 +22,7 @@
 | Node | Install Mode | Hostname | Status | Auth |
 |------|-------------|----------|--------|------|
 | Z890 | Bare-metal (OS install) | `pmoves-z890` | Connected | Reusable auth key |
-| POWERFULMOVES (5090 PC) | Docker (userspace) | `pmoves-powerfulmoves` | Connected | Reusable auth key (`tag:pmoves`) |
+| POWERFULMOVES (RTX 5090) | Docker (userspace) | `pmoves-powerfulmoves` | Connected | Reusable auth key (`tag:pmoves`) |
 | Jetson Nano | Bare-metal | `pmoves-nano` | Offline | Re-auth needed |
 | Laptop | Bare-metal | `pmoves-laptop` | Offline | Re-auth needed |
 | Pixel 9 Pro XL | Mobile | `google-pixel-9-pro-xl` | Offline | Re-auth needed |
@@ -145,7 +145,7 @@ Target: **Headscale** (self-hosted on KVM2)
 
 | Requirement | Status | Notes |
 |-------------|--------|-------|
-| All production nodes on tailnet | Partial | KVM nodes connected; POWERFULMOVES + 5090 pending |
+| All production nodes on tailnet | Partial | KVM nodes + POWERFULMOVES connected; offline: nano, laptop, pixel |
 | Exit node approved | GREEN | KVM2 approved as exit node |
 | Auth key rotation | Partial | Reusable keys don't expire; single-use keys have 90d TTL |
 | Headscale readiness | Pending | Submodule tracked, deployment not started |

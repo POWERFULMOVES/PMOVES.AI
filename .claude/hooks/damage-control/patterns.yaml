@@ -603,7 +603,7 @@ bashToolPatterns:
   # Real Tailscale IPs (100.64-127.x.x) and LAN IPs (192.168.x.x) leak
   # network topology when committed to docs. Use hostnames instead.
   # Example/placeholder IPs (100.64.1.x, 100.100.100.x) are excluded.
-  - pattern: '\b100\.(1[01][0-9]|12[0-7]|[7-9][0-9])\.\d{1,3}\.\d{1,3}\b'
+  - pattern: '\b100\.(?!100\.100\.)(?:1[01][0-9]|12[0-7]|[7-9][0-9])\.\d{1,3}\.\d{1,3}\b'
     reason: >-
       TOPOLOGY LEAKAGE: Possible real Tailscale IP detected. Use hostnames
       (e.g., pmoves-z890, pmoves-powerfulmoves) instead of IPs in committed files.
