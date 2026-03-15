@@ -1,5 +1,5 @@
 {
-  "$schema": "../../contracts/a2ui-animation-schema.json",
+  "$schema": "../../../contracts/a2ui-animation-schema.json",
   "id": "agent-teams-pulse",
   "title": "PMOVES.AI Agent Teams",
   "description": "11 agent teams pulse sequentially with node affinity edges",

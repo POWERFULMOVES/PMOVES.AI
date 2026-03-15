@@ -1,5 +1,5 @@
 {
-  "$schema": "../../contracts/a2ui-animation-schema.json",
+  "$schema": "../../../contracts/a2ui-animation-schema.json",
   "id": "topology-flythrough",
   "title": "PMOVES.AI Infrastructure Topology",
   "description": "Animated flythrough of the 6-node infrastructure topology",
