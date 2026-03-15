@@ -4,8 +4,15 @@ Cipher MCP Tools Definition
 MCP tools exposed to Claude Code CLI for memory operations.
 """
 
+import asyncio
 from typing import Any, Dict, List
 from mcp.types import Tool, TextContent
+
+from cipher_mcp.nats_events import (
+    emit_memory_stored,
+    emit_memory_searched,
+    emit_reasoning_stored,
+)
 
 
 async def pmoves_cipher_store(
@@ -43,6 +50,10 @@ async def pmoves_cipher_store(
             category=category,
             tags=tags or [],
             metadata=metadata or {},
+        )
+
+        asyncio.ensure_future(
+            emit_memory_stored(memory.id, memory.category, memory.tags or [])
         )
 
         return [TextContent(
@@ -85,6 +96,10 @@ async def pmoves_cipher_search(
             category=category,
             tags=tags,
             limit=limit,
+        )
+
+        asyncio.ensure_future(
+            emit_memory_searched(query, len(memories) if memories else 0, category)
         )
 
         if not memories:
@@ -140,6 +155,10 @@ async def pmoves_cipher_store_reasoning(
             reasoning=reasoning,
             result=result,
             metadata=metadata or {},
+        )
+
+        asyncio.ensure_future(
+            emit_reasoning_stored(memory.id, question)
         )
 
         return [TextContent(

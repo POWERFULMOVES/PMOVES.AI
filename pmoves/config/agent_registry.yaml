@@ -777,7 +777,10 @@ agents:
     layers: [L0, L5]
     evolution_stage: base
     nats:
-      publishes: []
+      publishes:
+        - "cipher.memory.stored.v1"
+        - "cipher.memory.searched.v1"
+        - "cipher.reasoning.stored.v1"
       subscribes: []
     chit_toggles:
       delta_sensitive: false
