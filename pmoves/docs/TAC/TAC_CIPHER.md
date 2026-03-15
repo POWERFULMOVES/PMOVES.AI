@@ -87,7 +87,7 @@ Cipher MCP bridge publishes fire-and-forget events after successful memory opera
 | `/metrics` (Prometheus) | MISSING | No metrics endpoint |
 | Auth (JWT/Bearer) | MISSING | No auth on API — relies on network isolation |
 | Docker hardening | Partial | Runs as `cipher-api` in agents profile |
-| NATS auth | N/A | No NATS integration (HTTP-only) |
+| NATS auth | Partial | MCP bridge publishes events; uses authenticated NATS URL from registry/env |
 | `env.shared` format | GREEN | Standard env format |
 
 ## Security Stance

@@ -5,6 +5,7 @@ MCP tools exposed to Claude Code CLI for memory operations.
 """
 
 import asyncio
+import sys
 from typing import Any, Dict, List
 from mcp.types import Tool, TextContent
 
@@ -13,6 +14,19 @@ from cipher_mcp.nats_events import (
     emit_memory_searched,
     emit_reasoning_stored,
 )
+
+
+def _log_task_exception(task):
+    """Log exceptions from background tasks instead of silently dropping them."""
+    if not task.cancelled() and task.exception():
+        print(f"NATS background task failed: {task.exception()}", file=sys.stderr)
+
+
+def _spawn_background(coro):
+    """Spawn a fire-and-forget background task with error logging."""
+    task = asyncio.create_task(coro)
+    task.add_done_callback(_log_task_exception)
+    return task
 
 
 async def pmoves_cipher_store(
@@ -52,7 +66,7 @@ async def pmoves_cipher_store(
             metadata=metadata or {},
         )
 
-        asyncio.ensure_future(
+        _spawn_background(
             emit_memory_stored(memory.id, memory.category, memory.tags or [])
         )
 
@@ -98,7 +112,7 @@ async def pmoves_cipher_search(
             limit=limit,
         )
 
-        asyncio.ensure_future(
+        _spawn_background(
             emit_memory_searched(query, len(memories) if memories else 0, category)
         )
 
@@ -157,7 +171,7 @@ async def pmoves_cipher_store_reasoning(
             metadata=metadata or {},
         )
 
-        asyncio.ensure_future(
+        _spawn_background(
             emit_reasoning_stored(memory.id, question)
         )
 

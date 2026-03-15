@@ -27,6 +27,7 @@ def _get_nats_url() -> str:
 
 async def publish_event(subject: str, payload: dict) -> bool:
     """Fire-and-forget NATS publish. Logs to stderr on failure, never raises."""
+    nc = None
     try:
         from nats.aio.client import Client as NATS
 
@@ -34,11 +35,16 @@ async def publish_event(subject: str, payload: dict) -> bool:
         await nc.connect(_get_nats_url(), connect_timeout=5)
         await nc.publish(subject, json.dumps(payload).encode())
         await nc.flush()
-        await nc.close()
         return True
     except Exception as e:
         print(f"NATS publish failed ({subject}): {e}", file=sys.stderr)
         return False
+    finally:
+        if nc is not None:
+            try:
+                await nc.close()
+            except Exception:
+                pass
 
 
 async def emit_memory_stored(

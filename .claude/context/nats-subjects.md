@@ -132,10 +132,11 @@ Example: `ingest.transcript.ready.v1`
   {
     "query": "search query text",
     "result_count": 5,
-    "category": "architecture",
+    "category": "architecture | null",
     "timestamp": "2026-03-15T12:00:00Z"
   }
   ```
+- **Note:** `category` is `null` when the search is unfiltered (no category specified)
 - **Subscribers:** Observability dashboards
 
 **`cipher.reasoning.stored.v1`**
@@ -149,6 +150,7 @@ Example: `ingest.transcript.ready.v1`
     "timestamp": "2026-03-15T12:00:00Z"
   }
   ```
+- **Note:** `question` is truncated to 200 characters in the event payload
 - **Subscribers:** Observability dashboards, Graphiti trail processors
 
 ## Media Ingestion Subjects
