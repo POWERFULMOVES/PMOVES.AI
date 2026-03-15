@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import argparse
 import base64
+import platform
 import re
 import secrets
 import string
@@ -179,6 +180,36 @@ def _ensure_integration_credentials(text: str) -> str:
     return text
 
 
+def _ensure_tailscale_defaults(text: str) -> str:
+    """Auto-populate Tailscale hostname and tags. Auth key is manual (console-only)."""
+    # Hostname: derive from machine hostname if not set
+    ts_hostname = _get_kv(text, "TAILSCALE_HOSTNAME")
+    if not ts_hostname:
+        node = platform.node().lower().replace(" ", "-")
+        text = _set_kv(text, "TAILSCALE_HOSTNAME", f"pmoves-{node}")
+
+    # Tags: default to tag:pmoves for mesh ACLs
+    ts_tags = _get_kv(text, "TAILSCALE_TAGS")
+    if not ts_tags:
+        text = _set_kv(text, "TAILSCALE_TAGS", "tag:pmoves")
+
+    # SSH: enable by default
+    ts_ssh = _get_kv(text, "TAILSCALE_SSH")
+    if not ts_ssh:
+        text = _set_kv(text, "TAILSCALE_SSH", "true")
+
+    # Validate auth key format if present (warn, don't overwrite)
+    ts_authkey = _get_kv(text, "TAILSCALE_AUTHKEY")
+    if ts_authkey and not ts_authkey.startswith("tskey-auth-"):
+        print(
+            f"WARNING: TAILSCALE_AUTHKEY does not start with 'tskey-auth-' — "
+            f"may be invalid. Get a key from https://login.tailscale.com/admin/settings/keys",
+            file=sys.stderr,
+        )
+
+    return text
+
+
 def upsert_env(path: Path, env_gen_path: Path, pairs: dict[str, str]) -> None:
     text = path.read_text(encoding="utf-8") if path.exists() else ""
     for key, value in pairs.items():
@@ -211,6 +242,9 @@ def upsert_env(path: Path, env_gen_path: Path, pairs: dict[str, str]) -> None:
 
     # Generate integration credentials (Firefly III, n8n, Wger) if missing.
     text = _ensure_integration_credentials(text)
+
+    # Tailscale defaults: auto-populate hostname and tags (auth key is manual).
+    text = _ensure_tailscale_defaults(text)
 
     path.write_text(text, encoding="utf-8")
 
