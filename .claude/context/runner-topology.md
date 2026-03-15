@@ -39,7 +39,7 @@ GitHub event → CF Worker (analyzes files) → ai-lab (GPU) / vps (Docker) / ub
 | infra | kvm4-1, kvm2 | vps | 3 |
 | sandbox | cloud | ubuntu-latest | 7 |
 | life | z890 | ubuntu-latest | 2 |
-| external | N/A (CLI) | N/A | 7 (contributors) |
+| external | N/A (CLI) | N/A | 0 agents (7 human contributors) |
 
 ## DNS Subdomains (pmoves.ai)
 
@@ -48,7 +48,7 @@ GitHub event → CF Worker (analyzes files) → ai-lab (GPU) / vps (Docker) / ub
 | `api.pmoves.ai` | KVM4-1 | Yes |
 | `agent.pmoves.ai` | KVM4-1 | Yes |
 | `rag.pmoves.ai` | KVM4-1 | Yes |
-| `tts.pmoves.ai` | KVM4-1 | Yes |
+| `tts.pmoves.ai` | Z890 (via Tailscale relay) | Yes |
 | `n8n.pmoves.ai` | KVM4-1 | Yes |
 | `grafana.pmoves.ai` | KVM4-2 | Yes |
 | `search.pmoves.ai` | KVM4-2 | Yes |

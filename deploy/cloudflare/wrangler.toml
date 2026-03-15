@@ -6,14 +6,14 @@ main = "worker.js"
 compatibility_date = "2025-12-08"
 workers_dev = true
 
-# Account ID
-account_id = "fe5ef93f1ffc7070b2218b96f8b256f5"
+# Account ID — set via CLOUDFLARE_ACCOUNT_ID env var or wrangler login
+# account_id = "your_account_id_here"
 
 # KV Namespace for build state tracking (create via: wrangler kv:namespace create "CI_STATE")
 [[kv_namespaces]]
 binding = "CI_STATE"
-id = "9f6cdc5ecd6540698c9e2ca7d6376fd4"
-# preview_id = "your_preview_kv_namespace_id"  # Create via: wrangler kv:namespace create "CI_STATE" --preview
+id = "your_kv_namespace_id"
+preview_id = "your_preview_kv_namespace_id"
 
 # R2 Bucket for build artifacts (optional)
 # [[r2_buckets]]

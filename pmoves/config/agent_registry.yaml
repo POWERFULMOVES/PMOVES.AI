@@ -317,9 +317,9 @@ agents:
       swarm_participant: false
       attribution_gated: false
     topology:
-      node_affinity: [5090, z890]
-      team: evolution
-      ci_runner: ai-lab
+      node_affinity: [kvm4-1, z890]
+      team: infra
+      ci_runner: self-hosted
       compose_profile: null
     description: "Centralized LLM gateway for all model providers"
 
@@ -1703,3 +1703,29 @@ agents:
       ci_runner: ai-lab
       compose_profile: null
     description: "AI-enhanced media management with Jellyfin integration"
+
+  pmoves_e2b_mcp_server:
+    name: "E2B MCP Server"
+    class: utility
+    primary_type: agent
+    secondary_type: worker
+    port: null  # stdio transport, no HTTP port
+    health: null
+    layers: [L0]
+    evolution_stage: base
+    nats:
+      publishes: []
+      subscribes: []
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: false
+      attribution_gated: false
+    submodule: "pmoves-e2b-mcp-server"
+    topology:
+      node_affinity: [z890]
+      team: sandbox
+      ci_runner: self-hosted
+      compose_profile: null
+    description: "MCP bridge for E2B sandboxed code execution"

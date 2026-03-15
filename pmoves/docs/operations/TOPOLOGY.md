@@ -43,14 +43,14 @@ Services deployed via `docker-compose.vps.override.yml`:
 | Service | Port | Health | Compose Profile |
 |---------|------|--------|-----------------|
 | Supabase DB (Postgres) | 5432 (int) / 54322 (ext) | — | supabase-local |
-| Supabase PostgREST | 3000 (int) | — | supabase-local |
+| Supabase PostgREST | 3000 (container-internal, via Kong at 8000) | — | supabase-local |
 | Kong Gateway | 8000 / 65421 | — | supabase-local |
 | Qdrant | 6333 | `/healthz` | — |
 | Neo4j | 7474 (HTTP) / 7687 (Bolt) | `/db/neo4j/health` | — |
 | Meilisearch | 7700 | `/health` | — |
 | NATS | 4222 / 9222 (WS) | `http://:8222/varz` | — |
 | Prometheus | 9090 | `/-/healthy` | monitoring |
-| Grafana | 3000 | `/api/health` | monitoring |
+| Grafana | 3002 | `/api/health` | monitoring |
 | Loki | 3100 | `/ready` | monitoring |
 | MinIO | 9000 (API) / 9001 (Console) | `/minio/health/live` | — |
 
@@ -130,7 +130,7 @@ Z890 ←→ KVM4-1 ←→ KVM4-2
 | `rag.pmoves.ai` | A | KVM4-1 IP | Proxied | KVM4-1 | HTTPS |
 | `agent.pmoves.ai` | A | KVM4-1 IP | Proxied | KVM4-1 | HTTPS |
 | `search.pmoves.ai` | A | KVM4-2 IP | Proxied | KVM4-2 | HTTPS |
-| `tts.pmoves.ai` | A | KVM4-1 IP | Proxied | KVM4-1 | HTTPS |
+| `tts.pmoves.ai` | A | Z890 IP | Proxied | Z890 (via Tailscale relay from KVM4-1) | HTTPS |
 
 **Note:** NATS, MinIO, and Headscale use DNS-only (no Cloudflare proxy) because they use non-HTTP protocols or need direct TCP connections.
 
