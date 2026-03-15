@@ -18,6 +18,8 @@ from typing import Any, Dict, List, Optional
 
 import nats
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import Response
+from prometheus_client import Counter, Gauge, generate_latest, CONTENT_TYPE_LATEST
 from pydantic import BaseModel, Field
 
 from cgp_mapper import CGPMapper
@@ -39,10 +41,23 @@ CHIT_PASSPHRASE = os.environ.get("CHIT_PROD_PASSPHRASE", "pmoves-chit-default")
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "http://supabase-kong:8000")
 SUPABASE_ANON_KEY = os.environ.get("SUPABASE_ANON_KEY", "")
 
-# Metrics tracking
-_cgp_packets_generated = 0
-_chr_runs_completed = 0
-_persona_evaluations = 0
+# Prometheus metrics
+cgp_packets_generated = Counter(
+    "consciousness_cgp_packets_generated_total",
+    "Total CGP packets generated and published",
+)
+chr_runs_completed = Counter(
+    "consciousness_chr_runs_completed_total",
+    "Total CHR algorithm runs completed",
+)
+persona_evaluations = Counter(
+    "consciousness_persona_evaluations_total",
+    "Total persona threshold evaluations",
+)
+nats_connected_gauge = Gauge(
+    "consciousness_nats_connected",
+    "Whether the service is connected to NATS (1=yes, 0=no)",
+)
 
 
 # =============================================================================
@@ -266,13 +281,8 @@ async def health_check():
 @app.get("/metrics")
 async def metrics():
     """Prometheus metrics endpoint."""
-    return {
-        "service": SERVICE_NAME,
-        "cgp_packets_generated": _cgp_packets_generated,
-        "chr_runs_completed": _chr_runs_completed,
-        "persona_evaluations": _persona_evaluations,
-        "nats_connected": nats_publisher.is_connected() if nats_publisher else False,
-    }
+    nats_connected_gauge.set(1 if (nats_publisher and nats_publisher.is_connected()) else 0)
+    return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 
 # =============================================================================
@@ -288,8 +298,6 @@ async def run_chr_endpoint(request: CHRRequest):
     Clusters text units into constellations and generates CGP packet.
     Optionally publishes to NATS Geometry Bus.
     """
-    global _cgp_packets_generated, _chr_runs_completed
-
     # Check if we have passphrase
     passphrase = CHIT_PASSPHRASE
 
@@ -323,9 +331,9 @@ async def run_chr_endpoint(request: CHRRequest):
             published = await nats_publisher.publish_cgp(cgp)
 
         # Update metrics
-        _chr_runs_completed += 1
+        chr_runs_completed.inc()
         if published:
-            _cgp_packets_generated += 1
+            cgp_packets_generated.inc()
 
         # Count points
         num_points = sum(len(c.points) for c in result.constellations)
@@ -362,8 +370,6 @@ async def run_chr_from_supabase(
     Fetches chunks from pmoves_core.consciousness_theories and runs CHR.
     """
     import httpx
-
-    global _cgp_packets_generated, _chr_runs_completed
 
     try:
         # Fetch from Supabase via PostgREST with Accept-Profile header
@@ -416,9 +422,9 @@ async def run_chr_from_supabase(
             published = await nats_publisher.publish_cgp(cgp)
 
         # Update metrics
-        _chr_runs_completed += 1
+        chr_runs_completed.inc()
         if published:
-            _cgp_packets_generated += 1
+            cgp_packets_generated.inc()
 
         return {
             "status": "success",
@@ -517,14 +523,12 @@ async def evaluate_persona(input_data: PersonaEvalInput):
 
     Checks metrics against configured thresholds and returns pass/fail.
     """
-    global _persona_evaluations
-
     if not persona_gate:
         raise HTTPException(status_code=503, detail="Persona gate not initialized")
 
     try:
         result = await persona_gate.evaluate(input_data.persona_id, input_data.metrics)
-        _persona_evaluations += 1
+        persona_evaluations.inc()
         return result
     except Exception:
         logger.error("Persona evaluation failed", exc_info=True)

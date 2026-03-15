@@ -112,7 +112,7 @@ def read_env_file(file_path):
         print_error(f"Path is a directory, not a file: {file_path}")
         sys.exit(1)
     except UnicodeDecodeError as e:
-        print_error(f"File encoding error in {file_path}: {e}")
+        print_error(f"File encoding error in {file_path}")
         print("  Ensure file is UTF-8 encoded")
         sys.exit(1)
 
@@ -164,7 +164,7 @@ def verify_gh_cli():
             print_check("GitHub CLI", "Not installed", False)
             return False
     except Exception as e:
-        print_check("GitHub CLI", f"Error: {e}", False)
+        print_check("GitHub CLI", "Error verifying GitHub CLI", False)
         return False
 
 
@@ -178,7 +178,7 @@ def verify_github_secrets():
         result = run_command("gh secret list --repo POWERFULMOVES/PMOVES.AI", timeout=30)
 
         if result.returncode != 0:
-            print_check("GitHub Secrets", f"Failed to list: {result.stderr}", False)
+            print_check("GitHub Secrets", "Failed to list GitHub Secrets — check GitHub CLI auth status", False)
             return False
 
         print("  Checking GitHub Secrets for POWERFULMOVES/PMOVES.AI:")
@@ -209,7 +209,7 @@ def verify_github_secrets():
         print_check("GitHub Secrets", "Permission denied executing GitHub CLI", False)
         return False
     except Exception as e:
-        print_check("GitHub Secrets", f"Unexpected error: {type(e).__name__}: {e}", False)
+        print_check("GitHub Secrets", "Unexpected error checking GitHub Secrets", False)
         return False
 
     passed = len(found_keys) == 4
@@ -423,8 +423,8 @@ def main():
             return 1
 
     except Exception as e:
-        logging.error(f"Verification failed with exception: {e}", exc_info=True)
-        print_error(f"Unexpected error: {e}")
+        logging.error(f"Verification failed with exception: {e}")
+        print_error("Unexpected error during verification — check logs for details")
         print(f"  Full log: {log_file}")
         return 1
 
@@ -436,7 +436,6 @@ if __name__ == '__main__':
         print(f"\n{Colors.YELLOW}Verification cancelled by user{Colors.RESET}")
         sys.exit(130)
     except Exception as e:
-        print(f"{Colors.RED}Unexpected error: {e}{Colors.RESET}")
-        import traceback
-        traceback.print_exc()
+        logging.error(f"Unexpected error: {e}")
+        print(f"{Colors.RED}Unexpected error — check logs for details{Colors.RESET}")
         sys.exit(1)

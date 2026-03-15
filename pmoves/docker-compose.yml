@@ -2784,7 +2784,7 @@ services:
       retries: 3
       start_period: 30s
 
-  # Consciousness Service - CHR Algorithm & CGP Generation (port 8096)
+  # Consciousness Service - CHR Algorithm & CGP Generation (port 8105)
   consciousness-service:
     build:
       context: ./services/consciousness-service
@@ -2794,17 +2794,17 @@ services:
     <<: *tier-agent-hardened-ro
     environment:
       - SERVICE_NAME=consciousness-service
-      - SERVICE_PORT=${CONSCIOUSNESS_HOST_PORT:-8096}
+      - SERVICE_PORT=${CONSCIOUSNESS_HOST_PORT:-8105}
       - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
       - CHIT_PROD_PASSPHRASE=${CHIT_PROD_PASSPHRASE:?set CHIT_PROD_PASSPHRASE in env.shared}
       - SUPABASE_URL=${SUPABASE_URL:-http://supabase-kong:8000}
       - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY:-}
       - PYTHONUNBUFFERED=1
-    ports: ["${CONSCIOUSNESS_HOST_PORT:-8096}:8096"]
+    ports: ["${CONSCIOUSNESS_HOST_PORT:-8105}:8105"]
     profiles: ["agents", "botz"]
     networks: [pmoves_app]
     healthcheck:
-      test: ["CMD-SHELL", "python -c \"import httpx; httpx.get('http://localhost:8096/healthz').raise_for_status()\" || exit 1"]
+      test: ["CMD-SHELL", "python -c \"import httpx; httpx.get('http://localhost:8105/healthz').raise_for_status()\" || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -2812,6 +2812,46 @@ services:
     depends_on:
       nats-init:
         condition: service_healthy
+
+  # Cast TTS Gateway - Chromecast/Google Home TTS routing (port 8060)
+  cast-tts-gateway:
+    build:
+      context: ./services/cast-tts-gateway
+      dockerfile: Dockerfile
+    image: ${CAST_TTS_IMAGE:-ghcr.io/powerfulmoves/pmoves-cast-tts-gateway:pmoves-latest}
+    restart: unless-stopped
+    <<: *tier-agent-hardened-ro
+    environment:
+      - PORT=8060
+      - FLUTE_GATEWAY_URL=http://flute-gateway:8055
+      - ULTIMATE_TTS_URL=http://ultimate-tts-studio:7861
+      - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+      - CHIT_REQUIRE_SIGNATURE=${CHIT_REQUIRE_SIGNATURE:-false}
+      - CHIT_DECRYPT_ANCHORS=${CHIT_DECRYPT_ANCHORS:-false}
+      - CHIT_PASSPHRASE=${CHIT_PROD_PASSPHRASE:-changeme}
+    ports: ["${CAST_TTS_PORT:-8060}:8060"]
+    profiles: ["cast", "media"]
+    networks: [pmoves_app, pmoves_bus, pmoves_api, pmoves_external]
+    user: "65532:65532"
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8060/healthz', timeout=5)\" || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    depends_on:
+      flute-gateway:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
 
   # PMOVES Central UI - Main dashboard (port 4482)
   pmoves-ui:

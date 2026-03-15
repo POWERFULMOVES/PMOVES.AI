@@ -294,7 +294,7 @@ async def handle_webhook_event(msg):
                 logger.error(f"Failed to apply labels to {repo}#{issue_number}")
 
     except Exception as e:
-        logger.error(f"Error handling webhook event: {e}", exc_info=True)
+        logger.error(f"Error handling webhook event: {e}")
         triage_error_total.labels(repo='unknown', error_type='webhook_handler').inc()
 
 
