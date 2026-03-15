@@ -218,6 +218,12 @@
     "shape.distillation.requested.v1": {
       "schema": "schemas/shape/distillation.requested.v1.schema.json",
       "description": "User requested CHIT distillation for their discovered shape"
+    },
+    "ops.pr.trim.completed.v1": {
+      "schema": "schemas/ops/pr.trim.completed.v1.schema.json",
+      "description": "PR Hedge Trim completed — review threads classified, fixed, and resolved",
+      "publisher": ["claude-code-cli"],
+      "subscriber": ["pr-monitor", "publisher-discord"]
     }
   }
 }

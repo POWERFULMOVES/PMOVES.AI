@@ -527,6 +527,33 @@ Example: `ingest.transcript.ready.v1`
   ```
 - **Subscribers:** Agent Zero, SupaSerch, Discord Publisher
 
+## Operations Subjects
+
+**`ops.pr.trim.completed.v1`**
+- **Direction:** Published by claude-code-cli (pr-hedge-trim tool) → Consumed by pr-monitor, Discord Publisher
+- **Purpose:** Notify that a PR hedge trim cycle completed — review threads classified, fixed, and resolved
+- **Payload:**
+  ```json
+  {
+    "pr_number": 934,
+    "repo": "POWERFULMOVES/PMOVES.AI",
+    "agent_id": "claude-opus",
+    "total_threads": 12,
+    "actionable": 5,
+    "design_decision": 2,
+    "false_positive": 3,
+    "nitpick": 2,
+    "resolved": 10,
+    "commit_sha": "abc123",
+    "timestamp": "2026-03-15T12:00:00Z",
+    "trail_signed": true
+  }
+  ```
+- **Schema:** `pmoves/contracts/schemas/ops/pr.trim.completed.v1.schema.json`
+- **Subscribers:** PR Monitor (pipeline chain), Discord Publisher
+- **Delivery:** Publish/subscribe (advisory, no JetStream required)
+- **Related:** Part of `pr-monitor-graphiti-chit` FlOO$ pairing chain
+
 ## Testing & Development Subjects
 
 **`test.smoke.v1`**
