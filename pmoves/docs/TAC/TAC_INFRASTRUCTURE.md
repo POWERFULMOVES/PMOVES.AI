@@ -18,7 +18,7 @@
 
 | Node | Tailscale Hostname | Role | GPU | Runner Labels |
 |------|--------------------|------|-----|---------------|
-| Z890 (Windows 11) | `100.113.38.37` | Dev, GPU | RTX 3090 Ti | `self-hosted, ai-lab, gpu, cuda` |
+| Z890 (Windows 11) | `pmoves-z890` | Dev, GPU | RTX 3090 Ti | `self-hosted, ai-lab, gpu, cuda` |
 | POWERFULMOVES (Windows 11) | `pmoves-powerfulmoves` | Dev, GPU (secondary) | — | — |
 | 5090 PC | (pending onboarding) | Primary GPU | RTX 5090 | (future: `ai-lab`) |
 | KVM4-1 | `pmoves-kvm4-1` | API Gateway | — | `self-hosted, vps, kvm4, production` |
