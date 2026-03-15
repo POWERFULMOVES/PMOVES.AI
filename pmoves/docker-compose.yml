@@ -2853,6 +2853,43 @@ services:
           cpus: '0.25'
           memory: 128M
 
+  # Voice Relay - NATS bridge: agentzero.task.result.v1 → voice.agent.response.v1
+  voice-relay:
+    build:
+      context: .
+      dockerfile: services/voice-relay/Dockerfile
+    image: ${VOICE_RELAY_IMAGE:-ghcr.io/powerfulmoves/pmoves-voice-relay:pmoves-latest}
+    restart: unless-stopped
+    <<: *tier-worker-hardened
+    environment:
+      - PORT=8121
+      - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+      - VOICE_RELAY_INPUT_SUBJECT=${VOICE_RELAY_INPUT_SUBJECT:-agentzero.task.result.v1}
+      - VOICE_RELAY_OUTPUT_SUBJECT=${VOICE_RELAY_OUTPUT_SUBJECT:-voice.agent.response.v1}
+    ports: ["${VOICE_RELAY_PORT:-8121}:8121"]
+    profiles: ["cast", "media"]
+    networks: [pmoves_bus]
+    read_only: true
+    tmpfs:
+      - /tmp:noexec,nosuid,size=64m
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8121/healthz', timeout=5)\" || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    depends_on:
+      nats:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 128M
+        reservations:
+          cpus: '0.1'
+          memory: 32M
+
   # PMOVES Central UI - Main dashboard (port 4482)
   pmoves-ui:
     build:

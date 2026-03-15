@@ -166,6 +166,11 @@ images:
     dockerfile: services/session-context-worker/Dockerfile
     image: ghcr.io/powerfulmoves/pmoves-session-context-worker
 
+  - name: pmoves-voice-relay
+    context: pmoves
+    dockerfile: services/voice-relay/Dockerfile
+    image: ghcr.io/powerfulmoves/pmoves-voice-relay
+
   - name: pmoves-tokenism-ui
     repo: PMOVES-ToKenism-Multi
     ref: heads/PMOVES.AI-Edition-Hardened
