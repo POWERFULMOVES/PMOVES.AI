@@ -1028,6 +1028,45 @@
           }
         }
       ]
+    },
+    {
+      "id": "tailscale",
+      "name": "Tailscale VPN Mesh",
+      "description": "Tailscale mesh VPN for multi-host service discovery and secure inter-node communication.",
+      "variables": [
+        {
+          "key": "TAILSCALE_AUTHKEY",
+          "file": "pmoves/env.shared",
+          "prompt": "Tailscale auth key for unattended node registration",
+          "help": "Reusable auth key from https://login.tailscale.com/admin/settings/keys — use tag:pmoves, no expiry, pre-authorized.",
+          "required": false,
+          "sensitive": true
+        },
+        {
+          "key": "TAILSCALE_HOSTNAME",
+          "file": "pmoves/env.shared",
+          "prompt": "Hostname on Tailnet (auto-generated if empty)",
+          "default": "pmoves-<hostname>",
+          "help": "Branded hostname visible on the tailnet. Auto-populated by brand_defaults.py from platform.node().",
+          "required": false
+        },
+        {
+          "key": "TAILSCALE_TAGS",
+          "file": "pmoves/env.shared",
+          "prompt": "Tailnet ACL tags",
+          "default": "tag:pmoves",
+          "help": "Comma-separated ACL tags for node access control. See pmoves/configs/tailscale-acl-policy.json.",
+          "required": false
+        },
+        {
+          "key": "TAILSCALE_SSH",
+          "file": "pmoves/env.shared",
+          "prompt": "Enable Tailscale SSH",
+          "default": "true",
+          "help": "Enable SSH access over Tailscale (non-root, ACL-gated).",
+          "required": false
+        }
+      ]
     }
   ]
 }

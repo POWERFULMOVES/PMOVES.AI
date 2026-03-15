@@ -1249,3 +1249,86 @@ nats server report connections
   ```json
   {"work_order_id": "wo-123", "workflow_type": "submodule_update", "repos": ["PMOVES.AI"], "changes": [...], "approved": true}
   ```
+
+## Agent Zero Task Coordination Subjects
+
+> **Source:** Z890 gap analysis (2026-03-15). Previously undocumented.
+
+**`agentzero.task.submit.v1`**
+- **Direction:** Published by any agent → Consumed by Agent Zero
+- **Purpose:** Submit task for orchestration
+- **Subscribers:** Agent Zero (task queue)
+
+**`agentzero.task.status.v1`**
+- **Direction:** Published by Agent Zero → Consumed by requesting agent
+- **Purpose:** Task status update (queued, running, blocked, etc.)
+
+**`agentzero.task.complete.v1`**
+- **Direction:** Published by Agent Zero → Consumed by requesting agent
+- **Purpose:** Task completion notification with result payload
+
+## PMOVES Agent Lifecycle & Task Management Subjects
+
+> **Source:** Z890 gap analysis (2026-03-15). Agent-to-agent protocol subjects.
+
+**`pmoves.agent.register.v1`** — Agent self-registration with Agent Zero
+**`pmoves.agent.heartbeat.v1`** — Periodic agent liveness (all agents → Agent Zero)
+**`pmoves.agent.deregister.v1`** — Agent graceful shutdown notification
+**`pmoves.task.assign.v1`** — Task assignment to specific agent (Agent Zero → target)
+**`pmoves.task.progress.v1`** — Task progress update (working agent → Agent Zero, UI)
+**`pmoves.task.error.v1`** — Task error report (working agent → Agent Zero)
+**`pmoves.task.cancel.v1`** — Task cancellation request (Agent Zero → working agent)
+**`pmoves.a2a.request.v1`** — Agent-to-Agent direct request
+**`pmoves.a2a.response.v1`** — Agent-to-Agent direct response
+**`pmoves.skill.invoke.v1`** — Skill invocation request (any agent → skill executor)
+**`pmoves.skill.result.v1`** — Skill execution result (skill executor → requester)
+**`pmoves.config.update.v1`** — Configuration change broadcast (admin/UI → all agents)
+**`pmoves.config.reload.v1`** — Force config reload (admin/UI → specific agent)
+**`pmoves.log.agent.v1`** — Structured agent log entry (all agents → Loki/aggregator)
+**`pmoves.metric.agent.v1`** — Agent-level metric report (all agents → Prometheus push)
+**`pmoves.event.lifecycle.v1`** — Agent lifecycle event: start, stop, error (all agents → observability)
+
+## Content Publishing Pipeline Subjects
+
+**`content.publish.request.v1`** — Content publish request (UI/Agent → publisher services)
+**`content.publish.complete.v1`** — Publish completed notification (publisher → UI/Agent)
+**`content.moderation.v1`** — Content moderation check (content pipeline → moderation service)
+
+## Analysis Subjects
+
+**`analysis.topic.extract.v1`** — Topic extraction request (extract worker → LangExtract)
+**`analysis.topic.result.v1`** — Topic extraction result (LangExtract → extract worker)
+
+## Additional Voice Subjects
+
+**`voice.cast.health_alert.v1`** — Health alert from cast-tts gateway (cast-tts → monitoring)
+
+## Service Coordination Subjects
+
+**`archon.crawl.request.v1`** — Web crawl request (Agent/UI → Archon)
+**`archon.crawl.result.v1`** — Crawl result (Archon → requesting agent)
+**`persona.publish.v1`** — Persona definition publish (Archon → Agent Zero)
+**`persona.update.v1`** — Persona update (Archon → Agent Zero)
+**`mesh.node.announce.v2`** — Node announcement v2 format (Mesh Agent → Agent Zero)
+**`kb.upsert.request.v1`** — Knowledge base upsert (any agent → Hi-RAG)
+**`kb.upsert.result.v1`** — Upsert confirmation (Hi-RAG → requesting agent)
+**`compute.vllm.load.v1`** — Model load command (GPU orchestrator → vLLM worker)
+**`compute.vllm.status.v1`** — vLLM instance status (vLLM worker → GPU orchestrator)
+**`hf.model.download.v1`** — HuggingFace model download (any agent → HF downloader)
+**`hf.model.ready.v1`** — Model download complete (HF downloader → requesting agent)
+**`botz.skill.register.v1`** — Skill registration (BoTZ gateway → Agent Zero)
+**`botz.skill.health.v1`** — Skill health status (BoTZ gateway → monitoring)
+**`a2ui.event.v1`** — UI event for real-time display (any agent → A2UI NATS bridge)
+**`a2ui.command.v1`** — User command from UI (UI → A2UI NATS bridge)
+
+## CGP Version Naming Clarification
+
+> **Note:** The apparent version mismatch between NATS subjects and payload specs is **intentional** — they operate at different layers:
+
+| Context | Format | Example | Purpose |
+|---------|--------|---------|---------|
+| NATS transport subject | `geometry.cgp.v{N}` | `geometry.cgp.v1` | Subject routing (stays as-is) |
+| Payload spec version | `chit.cgp.v{major}.{minor}` | `chit.cgp.v0.1`, `chit.cgp.v0.2` | Schema versioning inside packet |
+| Internal canonical | `chit.cgp.v{major}.{minor}` | `chit.cgp.v1.0` | Documentation reference |
+
+This is analogous to HTTP path versioning (`/api/v1/`) vs content-type versioning (`application/vnd.pmoves.cgp.v2+json`) — both are valid, complementary approaches.
