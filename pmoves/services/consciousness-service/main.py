@@ -37,7 +37,9 @@ logger = logging.getLogger(__name__)
 SERVICE_NAME = os.environ.get("SERVICE_NAME", "consciousness-service")
 SERVICE_PORT = int(os.environ.get("SERVICE_PORT", "8105"))
 NATS_URL = os.environ.get("NATS_URL", "nats://nats:pmoves@nats:4222")
-CHIT_PASSPHRASE = os.environ.get("CHIT_PROD_PASSPHRASE", "pmoves-chit-default")
+CHIT_PASSPHRASE = os.environ.get("CHIT_PROD_PASSPHRASE", "")
+if not CHIT_PASSPHRASE:
+    logger.warning("CHIT_PROD_PASSPHRASE not set — CGP signing disabled")
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "http://supabase-kong:8000")
 SUPABASE_ANON_KEY = os.environ.get("SUPABASE_ANON_KEY", "")
 

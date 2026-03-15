@@ -4,11 +4,14 @@ This module provides JWT-based authentication using Supabase tokens,
 with optional development mode bypass for local testing.
 """
 
+import logging
 import os
 from typing import Callable, Awaitable
 
 from aiohttp import web
 import jose.jwt
+
+logger = logging.getLogger(__name__)
 
 
 async def get_user_context(request: web.Request) -> dict:
@@ -34,9 +37,10 @@ async def get_user_context(request: web.Request) -> dict:
 
     # Allow unauthenticated requests in development mode
     if os.getenv("CAST_AUTH_REQUIRED", "true") == "false":
+        logger.warning("SECURITY: CAST_AUTH_REQUIRED=false — authentication bypassed (dev mode)")
         return {
             "user_id": "dev_user",
-            "role": "admin",
+            "role": "dev",
             "email": "dev@pmoves.ai"
         }
 

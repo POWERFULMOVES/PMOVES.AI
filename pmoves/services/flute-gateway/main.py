@@ -98,6 +98,7 @@ def _build_nats_url() -> str:
         return f"nats://{user}:{password}@{host}:{port}"
     if user:
         return f"nats://{user}@{host}:{port}"
+    logger.warning("NATS connection without credentials — set NATS_URL or NATS_USER/NATS_PASSWORD")
     return f"nats://{host}:{port}"
 
 
