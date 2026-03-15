@@ -85,6 +85,11 @@ agents:
       recovery_strategy: cipher_resumable
       cipher_categories: [agent_plan, agent_checkpoint, agent_completion]
     submodule: "PMOVES-Agent-Zero"
+    topology:
+      node_affinity: [kvm4-1, z890, 5090]
+      team: orchestration
+      ci_runner: ai-lab
+      compose_profile: agents
     description: "Primary L1 orchestrator with embedded agent runtime and MCP API"
 
   archon:
@@ -111,6 +116,11 @@ agents:
       recovery_strategy: cipher_resumable
       cipher_categories: [agent_plan, agent_checkpoint]
     submodule: "PMOVES-Archon"
+    topology:
+      node_affinity: [kvm4-1, z890, 5090]
+      team: orchestration
+      ci_runner: ai-lab
+      compose_profile: agents
     description: "Supabase-driven planning/execution copilot"
 
   supaserch:
@@ -136,6 +146,11 @@ agents:
       checkpoint_frequency: per_submodule
       recovery_strategy: manual_handoff
       cipher_categories: [agent_plan, agent_checkpoint]
+    topology:
+      node_affinity: [kvm4-1, z890, 5090]
+      team: orchestration
+      ci_runner: ai-lab
+      compose_profile: orchestration
     description: "Multimodal holographic deep research orchestrator"
 
   botz_gateway:
@@ -162,6 +177,11 @@ agents:
       recovery_strategy: cipher_resumable
       cipher_categories: [agent_plan, agent_checkpoint]
     submodule: "PMOVES-BotZ-gateway"
+    topology:
+      node_affinity: [kvm4-1, z890, 5090]
+      team: orchestration
+      ci_runner: ai-lab
+      compose_profile: agents
     description: "Work item distribution across BoTZ CLI instances"
 
   gateway_agent:
@@ -183,6 +203,11 @@ agents:
       swarm_participant: false
       attribution_gated: false
     submodule: null
+    topology:
+      node_affinity: [kvm4-1, z890, 5090]
+      team: orchestration
+      ci_runner: ai-lab
+      compose_profile: tier-agent
     description: "MCP tool orchestration service — discovers and executes 100+ tools via Agent Zero"
 
   mesh_agent:
@@ -203,6 +228,11 @@ agents:
       hz_sensitive: false
       swarm_participant: false
       attribution_gated: false
+    topology:
+      node_affinity: [kvm4-1, kvm2]
+      team: infra
+      ci_runner: vps
+      compose_profile: agents
     description: "Distributed node announcer for multi-host orchestration"
 
   hirag_v2:
@@ -230,6 +260,11 @@ agents:
       recovery_strategy: idempotent_replay
       cipher_categories: [agent_plan]
     submodule: "PMOVES-HiRAG"
+    topology:
+      node_affinity: [kvm4-1, kvm4-2, z890]
+      team: research
+      ci_runner: vps
+      compose_profile: workers
     description: "Hybrid RAG gateway combining Qdrant + Neo4j + Meilisearch"
 
   deep_research:
@@ -256,6 +291,11 @@ agents:
       recovery_strategy: manual_handoff
       cipher_categories: [agent_plan, agent_checkpoint]
     submodule: "PMOVES-Deep-Serch"
+    topology:
+      node_affinity: [kvm4-1, kvm4-2, z890]
+      team: research
+      ci_runner: vps
+      compose_profile: orchestration
     description: "LLM-based research planner (Alibaba Tongyi)"
 
   tensorzero:
@@ -276,6 +316,11 @@ agents:
       hz_sensitive: false
       swarm_participant: false
       attribution_gated: false
+    topology:
+      node_affinity: [kvm4-1, z890]
+      team: evolution
+      ci_runner: ai-lab
+      compose_profile: null
     description: "Centralized LLM gateway for all model providers"
 
   flute_gateway:
@@ -300,6 +345,11 @@ agents:
       bpm_capable: true
       geometry_bus_subjects: ["tokenism.prosodic.bpm.v1"]
       tac_tree: "pmoves/docs/TAC/TAC_FLUTE.md"
+    topology:
+      node_affinity: [5090, z890]
+      team: media
+      ci_runner: ai-lab
+      compose_profile: agents
     description: "Multimodal voice communication layer with Pipecat"
 
   pmoves_yt:
@@ -321,6 +371,11 @@ agents:
       swarm_participant: false
       attribution_gated: false
     submodule: "PMOVES.YT"
+    topology:
+      node_affinity: [5090, z890]
+      team: media
+      ci_runner: ai-lab
+      compose_profile: yt
     description: "YouTube ingestion service"
 
   ffmpeg_whisper:
@@ -341,6 +396,11 @@ agents:
       hz_sensitive: false
       swarm_participant: false
       attribution_gated: false
+    topology:
+      node_affinity: [5090, z890]
+      team: media
+      ci_runner: ai-lab
+      compose_profile: gpu
     description: "Media transcription with OpenAI Whisper (GPU)"
 
   media_video:
@@ -361,6 +421,11 @@ agents:
       hz_sensitive: false
       swarm_participant: false
       attribution_gated: false
+    topology:
+      node_affinity: [5090, z890]
+      team: media
+      ci_runner: ai-lab
+      compose_profile: workers
     description: "Object/frame analysis with YOLOv8"
 
   media_audio:
@@ -381,6 +446,11 @@ agents:
       hz_sensitive: false
       swarm_participant: false
       attribution_gated: false
+    topology:
+      node_affinity: [5090, z890]
+      team: media
+      ci_runner: ai-lab
+      compose_profile: workers
     description: "Audio analysis (emotion/speaker detection)"
 
   ultimate_tts:
@@ -401,6 +471,11 @@ agents:
       hz_sensitive: false
       swarm_participant: false
       attribution_gated: false
+    topology:
+      node_affinity: [5090, z890]
+      team: media
+      ci_runner: ai-lab
+      compose_profile: gpu
     description: "Multi-engine TTS with 7 engines (GPU)"
 
   extract_worker:
@@ -426,6 +501,11 @@ agents:
       checkpoint_frequency: per_file
       recovery_strategy: idempotent_replay
       cipher_categories: []
+    topology:
+      node_affinity: [kvm4-1, kvm4-2, z890]
+      team: research
+      ci_runner: vps
+      compose_profile: workers
     description: "Text embedding and indexing to Qdrant + Meilisearch"
 
   channel_monitor:
@@ -446,6 +526,11 @@ agents:
       hz_sensitive: false
       swarm_participant: false
       attribution_gated: false
+    topology:
+      node_affinity: [5090, z890]
+      team: media
+      ci_runner: ai-lab
+      compose_profile: workers
     description: "External content watcher (YouTube channels)"
 
   notebook_sync:
@@ -466,6 +551,11 @@ agents:
       hz_sensitive: false
       swarm_participant: false
       attribution_gated: false
+    topology:
+      node_affinity: [kvm4-1, kvm4-2, z890]
+      team: research
+      ci_runner: vps
+      compose_profile: workers
     description: "SurrealDB Open Notebook synchronizer"
 
   pdf_ingest:
@@ -486,6 +576,11 @@ agents:
       hz_sensitive: true
       swarm_participant: false
       attribution_gated: false
+    topology:
+      node_affinity: [kvm4-1, kvm4-2, z890]
+      team: research
+      ci_runner: vps
+      compose_profile: workers
     description: "Document ingestion orchestrator for PDFs"
 
   publisher_discord:
@@ -506,6 +601,11 @@ agents:
       hz_sensitive: false
       swarm_participant: false
       attribution_gated: false
+    topology:
+      node_affinity: [kvm4-1, z890]
+      team: automation
+      ci_runner: vps
+      compose_profile: workers
     description: "Discord notification bot"
 
   langextract:
@@ -526,6 +626,11 @@ agents:
       hz_sensitive: false
       swarm_participant: false
       attribution_gated: false
+    topology:
+      node_affinity: [kvm4-1, kvm4-2, z890]
+      team: research
+      ci_runner: vps
+      compose_profile: workers
     description: "Language detection and NLP preprocessing"
 
   presign:
@@ -546,6 +651,11 @@ agents:
       hz_sensitive: false
       swarm_participant: false
       attribution_gated: false
+    topology:
+      node_affinity: [kvm4-1, z890]
+      team: automation
+      ci_runner: vps
+      compose_profile: null
     description: "MinIO URL presigner for short-lived download URLs"
 
   render_webhook:
@@ -566,6 +676,11 @@ agents:
       hz_sensitive: false
       swarm_participant: false
       attribution_gated: false
+    topology:
+      node_affinity: [kvm4-1, z890]
+      team: automation
+      ci_runner: vps
+      compose_profile: workers
     description: "ComfyUI render callback handler"
 
   jellyfin_bridge:
@@ -587,6 +702,11 @@ agents:
       swarm_participant: false
       attribution_gated: false
     submodule: "PMOVES-Jellyfin"
+    topology:
+      node_affinity: [5090, z890]
+      team: media
+      ci_runner: ai-lab
+      compose_profile: null
     description: "Jellyfin metadata webhook and helper"
 
   mai_ui:
@@ -608,6 +728,11 @@ agents:
       swarm_participant: false
       attribution_gated: false
     submodule: "PMOVES-MAI-UI"
+    topology:
+      node_affinity: [z890, 5090]
+      team: ui
+      ci_runner: ubuntu-latest
+      compose_profile: null
     description: "Main user interface"
 
   crush:
@@ -635,6 +760,11 @@ agents:
       recovery_strategy: cipher_resumable
       cipher_categories: [agent_plan, agent_checkpoint]
     submodule: "PMOVES-crush"
+    topology:
+      node_affinity: [z890, 5090]
+      team: ui
+      ci_runner: ubuntu-latest
+      compose_profile: null
     description: "Terminal AI coding assistant — the gateway where model and user begin their journey"
 
   cipher_memory:
@@ -661,6 +791,11 @@ agents:
       recovery_strategy: idempotent_replay
       cipher_categories: []
     submodule: "Pmoves-cipher"
+    topology:
+      node_affinity: [kvm4-1, kvm4-2, z890]
+      team: research
+      ci_runner: vps
+      compose_profile: null
     description: "Knowledge-graph memory for agents (Neo4j backend). Also serves as the resilience backbone — stores agent_plan, agent_checkpoint, and agent_completion snapshots for all agents."
 
   hyperdimensions:
@@ -682,6 +817,11 @@ agents:
       swarm_participant: true
       attribution_gated: true
     submodule: "Pmoves-hyperdimensions"
+    topology:
+      node_affinity: [z890, 5090]
+      team: ui
+      ci_runner: ubuntu-latest
+      compose_profile: null
     description: "Geometry visualization surface and control plane (L2.5)"
 
   vps_fleet_manager:
@@ -706,6 +846,11 @@ agents:
       context_budget: small
       checkpoint_frequency: per_wave
       recovery_strategy: manual_handoff
+    topology:
+      node_affinity: [kvm4-1, kvm2]
+      team: infra
+      ci_runner: vps
+      compose_profile: null
     description: "Hostinger KVM fleet orchestration — deploy, status, restart via MCP tools"
 
   # --- Data infrastructure (Utility class) ---
@@ -728,6 +873,11 @@ agents:
       hz_sensitive: false
       swarm_participant: false
       attribution_gated: false
+    topology:
+      node_affinity: [kvm4-2, z890]
+      team: data
+      ci_runner: vps
+      compose_profile: null
     description: "JetStream-enabled event broker — the nervous system"
 
   supabase:
@@ -748,6 +898,11 @@ agents:
       hz_sensitive: false
       swarm_participant: false
       attribution_gated: false
+    topology:
+      node_affinity: [kvm4-2, z890]
+      team: data
+      ci_runner: vps
+      compose_profile: supabase-local
     description: "Postgres with pgvector — metadata and state"
 
   qdrant:
@@ -768,6 +923,11 @@ agents:
       hz_sensitive: false
       swarm_participant: false
       attribution_gated: false
+    topology:
+      node_affinity: [kvm4-2, z890]
+      team: data
+      ci_runner: vps
+      compose_profile: null
     description: "Vector embeddings for semantic search"
 
   neo4j:
@@ -788,6 +948,11 @@ agents:
       hz_sensitive: false
       swarm_participant: false
       attribution_gated: false
+    topology:
+      node_affinity: [kvm4-2, z890]
+      team: data
+      ci_runner: vps
+      compose_profile: null
     description: "Knowledge graph storage"
 
   meilisearch:
@@ -808,6 +973,11 @@ agents:
       hz_sensitive: false
       swarm_participant: false
       attribution_gated: false
+    topology:
+      node_affinity: [kvm4-2, z890]
+      team: data
+      ci_runner: vps
+      compose_profile: null
     description: "Full-text keyword search"
 
   minio:
@@ -828,6 +998,11 @@ agents:
       hz_sensitive: false
       swarm_participant: false
       attribution_gated: false
+    topology:
+      node_affinity: [kvm4-2, z890]
+      team: data
+      ci_runner: vps
+      compose_profile: null
     description: "S3-compatible object storage"
 
   prometheus:
@@ -848,6 +1023,11 @@ agents:
       hz_sensitive: false
       swarm_participant: false
       attribution_gated: false
+    topology:
+      node_affinity: [kvm4-2, z890]
+      team: data
+      ci_runner: vps
+      compose_profile: monitoring
     description: "Metrics scraping from all services"
 
   grafana:
@@ -855,7 +1035,7 @@ agents:
     class: utility
     primary_type: ui
     secondary_type: data
-    port: 3000
+    port: 3002
     health: "/api/health"
     layers: [L0]
     evolution_stage: base
@@ -868,6 +1048,11 @@ agents:
       hz_sensitive: false
       swarm_participant: false
       attribution_gated: false
+    topology:
+      node_affinity: [kvm4-2, z890]
+      team: data
+      ci_runner: vps
+      compose_profile: monitoring
     description: "Dashboard visualization"
 
   loki:
@@ -888,6 +1073,11 @@ agents:
       hz_sensitive: false
       swarm_participant: false
       attribution_gated: false
+    topology:
+      node_affinity: [kvm4-2, z890]
+      team: data
+      ci_runner: vps
+      compose_profile: monitoring
     description: "Centralized log aggregation"
 
   # --- Missing agents added in Phase E (source dual enforcement) ---
@@ -911,6 +1101,11 @@ agents:
       swarm_participant: false
       attribution_gated: false
     submodule: "PMOVES-DoX"
+    topology:
+      node_affinity: [kvm4-1, kvm4-2, z890]
+      team: research
+      ci_runner: vps
+      compose_profile: workers
     description: "Document intelligence — path-safe processing with fail-closed JWT"
 
   open_notebook:
@@ -932,6 +1127,11 @@ agents:
       swarm_participant: false
       attribution_gated: false
     submodule: "PMOVES-Open-Notebook"
+    topology:
+      node_affinity: [kvm4-1, kvm4-2, z890]
+      team: research
+      ci_runner: vps
+      compose_profile: null
     description: "Knowledge base / note-taking integration (SurrealDB)"
 
   consciousness_service:
@@ -952,6 +1152,11 @@ agents:
       hz_sensitive: true
       swarm_participant: false
       attribution_gated: true
+    topology:
+      node_affinity: [kvm4-1, z890, 5090]
+      team: orchestration
+      ci_runner: ai-lab
+      compose_profile: null
     description: "CGP consciousness mapper — geometric cognitive processing"
 
   n8n:
@@ -972,6 +1177,11 @@ agents:
       hz_sensitive: false
       swarm_participant: false
       attribution_gated: false
+    topology:
+      node_affinity: [kvm4-1, z890]
+      team: automation
+      ci_runner: vps
+      compose_profile: null
     description: "Workflow automation — glue for multi-step processes"
 
   headscale:
@@ -992,6 +1202,11 @@ agents:
       hz_sensitive: false
       swarm_participant: false
       attribution_gated: false
+    topology:
+      node_affinity: [kvm4-1, kvm2]
+      team: infra
+      ci_runner: vps
+      compose_profile: null
     description: "Network coordination — mesh VPN overlay"
 
   rustdesk:
@@ -1012,6 +1227,11 @@ agents:
       hz_sensitive: false
       swarm_participant: false
       attribution_gated: false
+    topology:
+      node_affinity: [z890, 5090]
+      team: ui
+      ci_runner: ubuntu-latest
+      compose_profile: null
     description: "Remote desktop — self-hosted remote access"
 
   invidious:
@@ -1032,6 +1252,11 @@ agents:
       hz_sensitive: false
       swarm_participant: false
       attribution_gated: false
+    topology:
+      node_affinity: [z890, 5090]
+      team: ui
+      ci_runner: ubuntu-latest
+      compose_profile: null
     description: "Privacy-focused video frontend"
 
   wealth:
@@ -1060,6 +1285,11 @@ agents:
       geometry_bus_subjects: []
       tac_tree: "pmoves/docs/TAC/TAC_WEALTH.md"
     submodule: "PMOVES-Wealth"
+    topology:
+      node_affinity: [z890]
+      team: life
+      ci_runner: ubuntu-latest
+      compose_profile: null
     description: "Finance management — tongue-in-cheek wealth tracking"
 
   health:
@@ -1088,6 +1318,11 @@ agents:
       geometry_bus_subjects: []
       tac_tree: "pmoves/docs/TAC/TAC_HEALTH.md"
     submodule: "Pmoves-Health-wger"
+    topology:
+      node_affinity: [z890]
+      team: life
+      ci_runner: ubuntu-latest
+      compose_profile: null
     description: "Fitness tracking — the body is a system too"
 
   evoswarm_controller:
@@ -1123,6 +1358,11 @@ agents:
       fitness_function: "reconstruction_fidelity * cost_efficiency"
       population_size: 16
       generations_per_epoch: 5
+    topology:
+      node_affinity: [5090, z890]
+      team: evolution
+      ci_runner: ai-lab
+      compose_profile: gpu
     description: "Evolutionary optimizer for CGP geometry parameters — evolves CG Builder, Decoder, Energy, and Training genomes"
 
   swarm_attribution:
@@ -1143,6 +1383,11 @@ agents:
       hz_sensitive: true
       swarm_participant: true
       attribution_gated: true
+    topology:
+      node_affinity: [5090, z890]
+      team: evolution
+      ci_runner: ai-lab
+      compose_profile: null
     description: "Shape-attribution engine for swarm consensus (CHIT L3)"
 
   # --- Agents added in v1.4.0 (12 new agents) ---
@@ -1166,6 +1411,11 @@ agents:
       swarm_participant: false
       attribution_gated: false
     submodule: "PMOVES-A2UI"
+    topology:
+      node_affinity: [z890, 5090]
+      team: ui
+      ci_runner: ubuntu-latest
+      compose_profile: null
     description: "Research UI surface — artifact-to-UI prototyping"
 
   agentgym:
@@ -1187,6 +1437,11 @@ agents:
       swarm_participant: false
       attribution_gated: false
     submodule: "PMOVES-AgentGym"
+    topology:
+      node_affinity: [cloud]
+      team: sandbox
+      ci_runner: ubuntu-latest
+      compose_profile: null
     description: "Agent training gymnasium — environment suite for RL evaluation"
 
   agentgym_rl:
@@ -1208,6 +1463,11 @@ agents:
       swarm_participant: false
       attribution_gated: false
     submodule: "Pmoves-AgentGym-RL"
+    topology:
+      node_affinity: [cloud]
+      team: sandbox
+      ci_runner: ubuntu-latest
+      compose_profile: null
     description: "Reinforcement learning extension for AgentGym"
 
   creator:
@@ -1229,6 +1489,11 @@ agents:
       swarm_participant: false
       attribution_gated: false
     submodule: "PMOVES-Creator"
+    topology:
+      node_affinity: [5090, z890]
+      team: media
+      ci_runner: ai-lab
+      compose_profile: null
     description: "Media creation pipeline — ComfyUI + render orchestration"
 
   llama_lab:
@@ -1250,6 +1515,11 @@ agents:
       swarm_participant: false
       attribution_gated: false
     submodule: "PMOVES-llama-throughput-lab"
+    topology:
+      node_affinity: [5090, z890]
+      team: evolution
+      ci_runner: ai-lab
+      compose_profile: null
     description: "LLM benchmarking and throughput testing laboratory"
 
   surf:
@@ -1271,6 +1541,11 @@ agents:
       swarm_participant: false
       attribution_gated: false
     submodule: "PMOVES-surf"
+    topology:
+      node_affinity: [cloud]
+      team: sandbox
+      ci_runner: ubuntu-latest
+      compose_profile: null
     description: "E2B browser automation agent — web interaction sandbox"
 
   e2b_danger_room:
@@ -1292,6 +1567,11 @@ agents:
       swarm_participant: false
       attribution_gated: false
     submodule: "PMOVES-E2B-Danger-Room"
+    topology:
+      node_affinity: [cloud]
+      team: sandbox
+      ci_runner: ubuntu-latest
+      compose_profile: null
     description: "Sandboxed code execution environment for untrusted workloads"
 
   e2b_desktop:
@@ -1313,6 +1593,11 @@ agents:
       swarm_participant: false
       attribution_gated: false
     submodule: "PMOVES-E2B-Danger-Room-Desktop"
+    topology:
+      node_affinity: [cloud]
+      team: sandbox
+      ci_runner: ubuntu-latest
+      compose_profile: null
     description: "Desktop sandbox environment for GUI-based agent tasks"
 
   danger_infra:
@@ -1334,6 +1619,11 @@ agents:
       swarm_participant: false
       attribution_gated: false
     submodule: "PMOVES-Danger-infra"
+    topology:
+      node_affinity: [cloud]
+      team: sandbox
+      ci_runner: ubuntu-latest
+      compose_profile: null
     description: "E2B infrastructure provisioning and sandbox orchestration"
 
   e2b_spells:
@@ -1355,6 +1645,11 @@ agents:
       swarm_participant: false
       attribution_gated: false
     submodule: "PMOVES-E2b-Spells"
+    topology:
+      node_affinity: [cloud]
+      team: sandbox
+      ci_runner: ubuntu-latest
+      compose_profile: null
     description: "Pre-built sandbox templates and execution recipes"
 
   transcribe_and_fetch:
@@ -1376,6 +1671,11 @@ agents:
       swarm_participant: false
       attribution_gated: false
     submodule: "PMOVES-transcribe-and-fetch"
+    topology:
+      node_affinity: [5090, z890]
+      team: media
+      ci_runner: ai-lab
+      compose_profile: null
     description: "Standalone transcription and content fetching utility"
 
   jellyfin_ai:
@@ -1397,4 +1697,35 @@ agents:
       swarm_participant: false
       attribution_gated: false
     submodule: "Pmoves-Jellyfin-AI-Media-Stack"
+    topology:
+      node_affinity: [5090, z890]
+      team: media
+      ci_runner: ai-lab
+      compose_profile: null
     description: "AI-enhanced media management with Jellyfin integration"
+
+  pmoves_e2b_mcp_server:
+    name: "E2B MCP Server"
+    class: utility
+    primary_type: agent
+    secondary_type: worker
+    port: null  # stdio transport, no HTTP port
+    health: null
+    layers: [L0]
+    evolution_stage: base
+    nats:
+      publishes: []
+      subscribes: []
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: false
+      attribution_gated: false
+    submodule: "pmoves-e2b-mcp-server"
+    topology:
+      node_affinity: [z890]
+      team: sandbox
+      ci_runner: ubuntu-latest
+      compose_profile: null
+    description: "MCP bridge for E2B sandboxed code execution"
