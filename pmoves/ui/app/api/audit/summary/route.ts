@@ -3,6 +3,7 @@ import { promises as fs } from "fs";
 import path from "path";
 
 import { checkAllServices, getHealthPercentage } from "@/lib/serviceHealth";
+import { ownerFromJwt } from "@/lib/jwtUtils";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -288,6 +289,11 @@ function parsePlanLastUpdated(markdown: string): string | null {
 }
 
 export async function GET(request: NextRequest) {
+  const { ownerId, error: authError } = ownerFromJwt('audit/summary');
+  if (authError || !ownerId) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   const includeHealth = request.nextUrl.searchParams.get("includeHealth") !== "false";
   const rawTimeout = parseInt(request.nextUrl.searchParams.get("timeout") || "3000", 10);
   const timeout = Number.isFinite(rawTimeout) && rawTimeout > 0 ? Math.min(Math.max(rawTimeout, 1000), 30000) : 3000;

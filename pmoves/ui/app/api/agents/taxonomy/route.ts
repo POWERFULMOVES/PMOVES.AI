@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { SERVICE_CATALOG } from '@/lib/serviceCatalog';
 import type { AgentTaxonomyResponse, Agent } from '@/lib/types/agents';
+import { ownerFromJwt } from '@/lib/jwtUtils';
 
 export const runtime = 'nodejs'; // Needs fs access for reading local files
 export const dynamic = 'force-dynamic';
@@ -312,6 +313,11 @@ async function loadTaxonomyMarkdown(): Promise<string> {
  *   - search: Search by name
  */
 export async function GET(request: NextRequest) {
+  const { ownerId, error: authError } = ownerFromJwt('agents/taxonomy');
+  if (authError || !ownerId) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   const searchParams = request.nextUrl.searchParams;
   const classParam = searchParams.get('class');
   const typeParam = searchParams.get('type');
