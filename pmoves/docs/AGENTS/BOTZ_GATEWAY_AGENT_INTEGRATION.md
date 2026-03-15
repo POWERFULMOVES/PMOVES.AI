@@ -279,7 +279,7 @@ services:
       - "8100:8100"
     environment:
       - AGENT_ZERO_URL=http://agent-zero:8080
-      - CIPHER_URL=http://pmoves-botz-cipher:8000
+      - CIPHER_URL=http://cipher-api:8096
       - TENSORZERO_URL=http://tensorzero-gateway:3030
       - SUPABASE_URL=http://supabase-kong:8000
       - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY}

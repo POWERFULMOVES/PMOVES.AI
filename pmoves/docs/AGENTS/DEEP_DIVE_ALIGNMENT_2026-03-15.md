@@ -124,7 +124,7 @@
 | Service | /healthz | /metrics | Auth | NATS | Docker | CHIT | Overall |
 |---------|----------|----------|------|------|--------|------|---------|
 | **Agent Zero** | GREEN | GREEN | Partial | Active (2 subjects) | GREEN | Full (5/5 toggles) | **Mega** |
-| **BoTZ** | Partial | Yes | P1 fail-open | Active (5 subjects) | Yes | Partial | Stage 1 |
+| **BoTZ** | Partial | Yes | P1 **fixed** (fail-closed) | Active (5 subjects) | Yes | Partial | Stage 1 |
 | **Cipher** | GREEN (`/health`) | MISSING | MISSING | MISSING | Partial | None | Base |
 | **ClawZ** | GREEN | Optional (OTEL) | Partial (DM pairing) | MISSING | Partial | None | Pre-Stage |
 | **autoresearch** | N/A (CLI) | N/A | N/A | MISSING | N/A (GPU host) | None | Pre-Stage |
@@ -136,14 +136,14 @@
 2. **Cipher is critical but under-hardened** — serves as resilience backbone for all agents but lacks auth, metrics, and NATS presence
 3. **ClawZ and autoresearch are Pre-Stage** — both need foundational work before PMOVES production integration
 4. **a0-plugins overlap problem** — 4 of 13 plugins duplicate PMOVES native services, needs deduplication strategy
-5. **BoTZ auth vulnerability remains P1** — JWT fail-open in `auth.py:59` is the highest-priority security fix
+5. ~~**BoTZ auth vulnerability remains P1**~~ — **Fixed**: `auth.py:63-67` now raises HTTPException 500 (fail-closed)
 
 ---
 
 ## 5. Recommended Priority Order
 
-1. **P1:** Fix BoTZ JWT fail-open (`auth.py:59`)
-2. **P1:** Fix Cipher `CIPHER_URL` default mismatch
+1. ~~**P1:** Fix BoTZ JWT fail-open (`auth.py:59`)~~ → **Fixed**
+2. ~~**P1:** Fix Cipher `CIPHER_URL` default mismatch~~ → **Fixed** (all compose files + gateway-agent aligned to `cipher-api:8096`)
 3. **P2:** Add Cipher API authentication
 4. **P2:** Add ClawZ Prometheus `/metrics` endpoint
 5. **P2:** Document plugin deduplication strategy (E5)

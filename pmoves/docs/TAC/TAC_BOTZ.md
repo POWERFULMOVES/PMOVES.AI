@@ -69,7 +69,7 @@
 |-------------|--------|-------|
 | `/healthz` endpoint | Partial | Gateway has it; MCP Gateway needs it |
 | `/metrics` (Prometheus) | Yes | Implemented on Gateway |
-| Auth (JWT/Bearer) | **P1 FAIL-OPEN** | `if not JWT_SECRET: return True` in `auth.py:59` |
+| Auth (JWT/Bearer) | **P1 FIXED** | `auth.py:63-67` now raises `HTTPException(500)` when `JWT_SECRET` is unset |
 | Docker hardening | Yes | `patterns.yaml` present |
 | NATS auth | Yes | Uses authenticated NATS |
 | `env.shared` format | **P1** | Uses `export` syntax (Docker-incompatible) |
@@ -79,7 +79,7 @@
 
 | Finding | Severity | Status |
 |---------|----------|--------|
-| JWT fail-open (`if not JWT_SECRET: return True`) | P1 | **Open** — must fail-closed with HTTPException 500 |
+| JWT fail-open (`if not JWT_SECRET: return True`) | P1 | **Fixed** — `auth.py:63-67` now raises `HTTPException(500)` (fail-closed) |
 | `export` syntax in env files | P1 | **Open** — use plain `KEY=VALUE` |
 | MCP Gateway unauthenticated | P2 | **Open** — needs Bearer/API key auth |
 
@@ -110,7 +110,7 @@ The a0-plugins index contains 4 plugins that overlap with PMOVES native services
 
 ### Security Hooks
 
-BoTZ's `auth.py` implements JWT verification with a critical fail-open vulnerability at line 59 (`if not JWT_SECRET: return True`). This remains the highest-priority fix across the entire BoTZ TAC tree.
+BoTZ's `auth.py` implements JWT verification. The original fail-open vulnerability at line 59 has been **fixed** — `auth.py:63-67` now raises `HTTPException(status_code=500)` when `JWT_SECRET` is unset, ensuring fail-closed behavior.
 
 ## Cross-Links
 
@@ -126,7 +126,7 @@ BoTZ's `auth.py` implements JWT verification with a critical fail-open vulnerabi
 
 ## Open Items
 
-- Auth bypass in `auth.py:59` — must fail-closed
+- ~~Auth bypass in `auth.py:59`~~ — **Fixed** (fail-closed via HTTPException 500)
 - `env.shared` uses `export` syntax incompatible with Docker `env_file`
 - MCP Gateway needs authentication layer
 - Tool allowlisting for security-sensitive operations

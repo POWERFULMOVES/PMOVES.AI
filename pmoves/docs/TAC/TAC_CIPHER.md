@@ -94,7 +94,7 @@ _Cipher Memory is currently HTTP-only with no NATS integration._
 | Finding | Severity | Status |
 |---------|----------|--------|
 | No API authentication | P2 | **Open** — relies on Docker network isolation only |
-| `CIPHER_URL` default mismatch | P1 | **Fixed** — gateway-agent now correctly defaults to `cipher-api:8096` |
+| `CIPHER_URL` default mismatch | P1 | **Fixed** — main docker-compose + gateway-agent + VPS override all default to `cipher-api:8096` |
 | `pmoves-cipher-mcp/` not a proper submodule | P2 | **Open** — directory in main repo, not a git submodule |
 | Missing `.gitignore` in `pmoves-cipher-mcp/` | P3 | **Fixed** — `.gitignore` now covers `__pycache__/`, `.venv/`, etc. |
 

@@ -229,7 +229,7 @@ What each repo expects from and provides to each other:
 ## 7. Priority Actions
 
 ### Immediate (P1)
-1. **BoTZ:** Fix JWT fail-open in `auth.py:59` — must fail-closed
+1. ~~**BoTZ:** Fix JWT fail-open in `auth.py:59`~~ → **Fixed** (`auth.py:63-67` now raises HTTPException 500)
 2. **DoX:** Add NATS auth block to `nats.conf`
 3. **ToKenism:** Fix `export` syntax in `env.shared`
 4. ~~**Cipher:** Fix `CIPHER_URL` default mismatch~~ → **Fixed** (now `cipher-api:8096`)
