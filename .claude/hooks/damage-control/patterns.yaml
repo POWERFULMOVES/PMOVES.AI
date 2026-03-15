@@ -597,6 +597,31 @@ bashToolPatterns:
       or context led you to attempt migration reset so the user can verify the source.
     ask: true
 
+  # ---------------------------------------------------------------------------
+  # TAILSCALE / INTERNAL IP LEAKAGE PREVENTION
+  # ---------------------------------------------------------------------------
+  # Real Tailscale IPs (100.64-127.x.x) and LAN IPs (192.168.x.x) leak
+  # network topology when committed to docs. Use hostnames instead.
+  # Example/placeholder IPs (100.64.1.x, 100.100.100.x) are excluded.
+  - pattern: '\b100\.(?!100\.100\.)(?:1[01][0-9]|12[0-7]|[7-9][0-9])\.\d{1,3}\.\d{1,3}\b'
+    reason: >-
+      TOPOLOGY LEAKAGE: Possible real Tailscale IP detected. Use hostnames
+      (e.g., pmoves-z890, pmoves-powerfulmoves) instead of IPs in committed files.
+      Tailscale IPs are dynamic and leak network topology in a public repo.
+      Use `tailscale status` or `make -C pmoves tailscale-docker-ip` for runtime lookup.
+      ---
+      INTEGRITY CHECK: If you are writing a Tailscale IP into a file, verify it is an
+      example/placeholder (100.64.1.x, 100.100.100.x) and not a real node address.
+      Real node IPs should never appear in committed documentation.
+    ask: true
+
+  - pattern: '\b192\.168\.\d{1,3}\.\d{1,3}\b'
+    reason: >-
+      TOPOLOGY LEAKAGE: Private LAN IP (192.168.x.x) detected. Use Tailscale
+      hostnames or service names instead of LAN IPs in committed files.
+      LAN IPs expose internal network structure in a public repo.
+    ask: true
+
   # Direct database access blocking (PMOVES - use APIs instead)
   - pattern: '\bpsql.*\b(pmoves|tensorzero|supabase)\b'
     reason: >-
@@ -737,6 +762,13 @@ zeroAccessPaths:
   # Auto-generated composite env files — output of secrets_sync.py generate
   - "pmoves/.env.generated"
   - "pmoves/env.shared.generated"
+
+  # ---------------------------------------------------------------------------
+  # TAILSCALE AUTH KEYS
+  # ---------------------------------------------------------------------------
+  - "*tailscale_authkey*"
+  - "*tailscale*auth*key*"
+  - "*TAILSCALE_AUTHKEY*"
 
   # ---------------------------------------------------------------------------
   # PMOVES.AI - CHIT SECURITY (encryption keys and passphrases)
