@@ -11,8 +11,9 @@ import {
   getServicesByCategory,
   type ServiceCategory,
 } from '@/lib/serviceCatalog';
+import { ownerFromJwt } from '@/lib/jwtUtils';
 
-export const runtime = 'edge';
+export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 /**
@@ -23,6 +24,11 @@ export const dynamic = 'force-dynamic';
  *   - search: Search in title/summary
  */
 export async function GET(request: NextRequest) {
+  const { ownerId, error: authError } = ownerFromJwt('services');
+  if (authError || !ownerId) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   const searchParams = request.nextUrl.searchParams;
   const category = searchParams.get('category') as ServiceCategory | null;
   const slug = searchParams.get('slug');

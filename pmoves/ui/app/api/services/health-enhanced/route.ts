@@ -6,8 +6,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { checkAllServices, type HealthCheckResult } from '@/lib/serviceHealth';
 import { SERVICE_CATALOG } from '@/lib/serviceCatalog';
+import { ownerFromJwt } from '@/lib/jwtUtils';
 
-export const runtime = 'edge';
+export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 /**
@@ -91,6 +92,11 @@ interface EnhancedHealthResponse {
  *   - agentsOnly: Return only agent services
  */
 export async function GET(request: NextRequest) {
+  const { ownerId, error: authError } = ownerFromJwt('services/health-enhanced');
+  if (authError || !ownerId) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   const searchParams = request.nextUrl.searchParams;
   const rawTimeout = parseInt(searchParams.get('timeout') || '5000', 10);
   const timeout = Number.isFinite(rawTimeout) && rawTimeout > 0
