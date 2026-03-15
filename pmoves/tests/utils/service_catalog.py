@@ -201,7 +201,7 @@ FLUTE_GATEWAY = ServiceDefinition(
     health_path="/healthz",
     health_type=HealthCheckType.STANDARD,
     expected_fields=["status", "engines_available"],
-    profile="tts",
+    profile="orchestration,media",
     dependencies=["tensorzero-gateway"],
     description="Multimodal voice communication with Pipecat integration",
 )

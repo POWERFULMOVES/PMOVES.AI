@@ -13,7 +13,8 @@ RUN groupadd -r pmoves --gid=65532 && \
 
 USER pmoves:pmoves
 
-EXPOSE 8121
+ENV PORT=8121
+EXPOSE ${PORT}
 HEALTHCHECK --interval=30s --timeout=10s --retries=3 --start-period=10s \
-    CMD python3 -c "import urllib.request; urllib.request.urlopen('http://localhost:8121/healthz', timeout=5)" || exit 1
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8121"]
+    CMD python3 -c "import os,urllib.request; urllib.request.urlopen(f'http://localhost:{os.environ.get(\"PORT\",8121)}/healthz', timeout=5)" || exit 1
+CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT}"]

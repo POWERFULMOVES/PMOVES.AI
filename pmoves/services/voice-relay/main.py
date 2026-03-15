@@ -63,7 +63,7 @@ async def _handle_message(msg) -> None:
     global _nc
     try:
         data = json.loads(msg.data.decode("utf-8"))
-    except Exception:
+    except (json.JSONDecodeError, UnicodeDecodeError):
         ERRORS.inc()
         return
 
@@ -138,7 +138,7 @@ async def _nats_resilience_loop() -> None:
             )
         except asyncio.CancelledError:
             raise
-        except Exception as exc:
+        except (OSError, asyncio.TimeoutError) as exc:
             logger.warning("NATS connect failed: %s (retry in %.1fs)", exc, backoff)
             await asyncio.sleep(backoff)
             backoff = min(backoff * 2.0, 30.0)

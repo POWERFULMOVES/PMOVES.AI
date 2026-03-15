@@ -686,6 +686,9 @@ http://localhost:8098/healthz  # DeepResearch
 http://localhost:8055/healthz  # Flute-Gateway
 http://localhost:8055/metrics  # Flute-Gateway (Prometheus)
 http://localhost:7861/gradio_api/info  # Ultimate-TTS-Studio
+http://localhost:8121/healthz  # Voice Relay
+http://localhost:8121/metrics  # Voice Relay (Prometheus)
+http://localhost:8060/healthz  # Cast-TTS-Gateway
 
 # Media Processing
 http://localhost:8077/healthz  # PMOVES.YT

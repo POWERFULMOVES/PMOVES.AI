@@ -4,7 +4,7 @@
     "voice.agent.response.v1": {
       "schema": "schemas/voice/agent.response.v1.schema.json",
       "description": "Voice agent response relayed from agentzero.task.result.v1 when meta.voice_mode is set. Published by voice-relay service.",
-      "publisher": "voice-relay",
+      "publisher": ["voice-relay", "n8n-voice-platform-router"],
       "subscriber": ["voice_follow_agent", "voice_follow_cast_agent"]
     },
     "voice.cast.completed.v1": {
