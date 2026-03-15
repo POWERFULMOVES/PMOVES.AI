@@ -85,7 +85,7 @@ Cipher MCP bridge publishes fire-and-forget events after successful memory opera
 |-------------|--------|-------|
 | `/health` endpoint | GREEN | Implemented (note: `/health` not `/healthz`) |
 | `/metrics` (Prometheus) | MISSING | No metrics endpoint |
-| Auth (JWT/Bearer) | MISSING | No auth on API — relies on network isolation |
+| Auth (JWT/Bearer) | Partial | Bearer token auth via `CIPHER_API_TOKEN`; skips auth if token unset (dev mode) |
 | Docker hardening | Partial | Runs as `cipher-api` in agents profile |
 | NATS auth | Partial | MCP bridge publishes events; uses authenticated NATS URL from registry/env |
 | `env.shared` format | GREEN | Standard env format |
@@ -94,7 +94,7 @@ Cipher MCP bridge publishes fire-and-forget events after successful memory opera
 
 | Finding | Severity | Status |
 |---------|----------|--------|
-| No API authentication | P2 | **Open** — relies on Docker network isolation only |
+| No API authentication | P2 | **Fixed** — Bearer token auth added (`CIPHER_API_TOKEN` env); graceful skip if unset |
 | `CIPHER_URL` default mismatch | P1 | **Fixed** — main docker-compose + gateway-agent + VPS override all default to `cipher-api:8096` |
 | `pmoves-cipher-mcp/` not a proper submodule | P2 | **Open** — directory in main repo, not a git submodule |
 | Missing `.gitignore` in `pmoves-cipher-mcp/` | P3 | **Fixed** — `.gitignore` now covers `__pycache__/`, `.venv/`, etc. |
