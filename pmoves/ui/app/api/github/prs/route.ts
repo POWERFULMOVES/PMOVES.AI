@@ -5,8 +5,9 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import type { PRListResponse, PRStatus, PRState } from '@/lib/types/github';
+import { ownerFromJwt } from '@/lib/jwtUtils';
 
-export const runtime = 'edge';
+export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 /**
@@ -119,6 +120,11 @@ async function getGitHubToken(): Promise<string | null> {
  *   - limit: Max results to return (default: 50)
  */
 export async function GET(request: NextRequest) {
+  const { ownerId, error: authError } = ownerFromJwt('github/prs');
+  if (authError || !ownerId) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   const searchParams = request.nextUrl.searchParams;
   const stateParam = searchParams.get('state')?.toUpperCase().split(',') || ['OPEN', 'DRAFT'];
   const repoFilter = searchParams.get('repo');
