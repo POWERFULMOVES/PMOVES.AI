@@ -1,5 +1,5 @@
 # PMOVES Agent Registry — Single Source of Truth
-# Last updated: 2026-03-01
+# Last updated: 2026-03-15
 #
 # This file encodes every agent's class, type(s), tier, layers,
 # NATS subjects, health endpoint, CHIT toggles, and evolution stage.
@@ -1679,6 +1679,98 @@ agents:
       ci_runner: ubuntu-latest
       compose_profile: null
     description: "Pre-built sandbox templates and execution recipes"
+
+  autoresearch:
+    name: "autoresearch"
+    class: specialized
+    primary_type: llm
+    secondary_type: worker
+    port: null
+    health: null
+    layers: [L0, L4]
+    evolution_stage: pre_stage
+    nats:
+      publishes:
+        - "research.autoresearch.experiment.v1"   # planned
+        - "research.autoresearch.result.v1"        # planned
+      subscribes: []
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: false
+      attribution_gated: false
+    chit_integration:
+      bpm_capable: false
+      geometry_bus_subjects: []
+      tac_tree: "pmoves/docs/TAC/TAC_AUTORESEARCH.md"
+    submodule: "PMOVES-autoresearch"
+    topology:
+      host: "gpu-host (H100/4090/5090)"
+      placement: "local-only CLI"
+      network: "none (standalone)"
+    description: "Autonomous ML training loop — AI agent experiments overnight on single GPU"
+
+  clawz:
+    name: "ClawZ (OpenClaw)"
+    class: standard
+    primary_type: ui
+    secondary_type: agent
+    port: 18789
+    health: "/healthz"
+    layers: [L0, L4, L5]
+    evolution_stage: pre_stage
+    nats:
+      publishes:
+        - "openclaw.message.received.v1"    # planned
+        - "openclaw.message.sent.v1"         # planned
+        - "openclaw.channel.connected.v1"    # planned
+      subscribes: []
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: false
+      attribution_gated: false
+    chit_integration:
+      bpm_capable: false
+      geometry_bus_subjects: []
+      tac_tree: "pmoves/docs/TAC/TAC_CLAWZ.md"
+    submodule: "PMOVES-ClawZ"
+    topology:
+      host: "z890 / any"
+      placement: "local-first, Docker optional"
+      network: "loopback (:18789)"
+    description: "Multi-channel messaging gateway — 25+ platforms via OpenClaw"
+
+  a0_plugins:
+    name: "a0-plugins"
+    class: utility
+    primary_type: agent
+    secondary_type: data
+    port: null
+    health: null
+    layers: [L0]
+    evolution_stage: base
+    nats:
+      publishes: []
+      subscribes: []
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: false
+      attribution_gated: false
+    chit_integration:
+      bpm_capable: false
+      geometry_bus_subjects: []
+      tac_tree: "pmoves/docs/TAC/TAC_A0_PLUGINS.md"
+    submodule: "PMOVES-a0-plugins"
+    topology:
+      host: "N/A (index repository)"
+      placement: "GitHub-hosted, loaded by Agent Zero"
+      network: "none"
+    description: "Community plugin index for Agent Zero — 13 plugins + validation CI"
 
   transcribe_and_fetch:
     name: "Transcribe and Fetch"
