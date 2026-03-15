@@ -2856,8 +2856,8 @@ services:
   # Voice Relay - NATS bridge: agentzero.task.result.v1 → voice.agent.response.v1
   voice-relay:
     build:
-      context: ./services/voice-relay
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: services/voice-relay/Dockerfile
     image: ${VOICE_RELAY_IMAGE:-ghcr.io/powerfulmoves/pmoves-voice-relay:pmoves-latest}
     restart: unless-stopped
     <<: *tier-worker-hardened

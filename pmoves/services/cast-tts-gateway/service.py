@@ -532,10 +532,12 @@ class CastTTSGateway:
 
                     if result.get("success"):
                         await self._publish_event("voice.cast.completed.v1", {
-                            "device": result.get("device"),
+                            "device_id": result.get("device", ""),
+                            "device_name": result.get("device", ""),
+                            "audio_url": "",
                             "text": text,
-                            "voice": voice,
                             "timestamp": datetime.utcnow().isoformat() + "Z",
+                            "meta": {"voice": voice},
                         })
                         CAST_REQUESTS.labels(method="speech", status="success").inc()
                     else:
@@ -585,13 +587,18 @@ class CastTTSGateway:
 
                     # Publish completion event
                     await self._publish_event("voice.cast.completed.v1", {
-                        "group": group if group else ",".join(target_devices),
+                        "device_id": group if group else ",".join(target_devices),
+                        "device_name": group if group else ",".join(target_devices),
+                        "audio_url": "",
                         "text": text,
-                        "voice": voice,
-                        "devices_total": multi_result.total_devices,
-                        "devices_successful": multi_result.successful,
-                        "devices_failed": multi_result.failed,
                         "timestamp": datetime.utcnow().isoformat() + "Z",
+                        "meta": {
+                            "voice": voice,
+                            "group": group if group else None,
+                            "devices_total": multi_result.total_devices,
+                            "devices_successful": multi_result.successful,
+                            "devices_failed": multi_result.failed,
+                        },
                     })
 
                     if multi_result.failed == 0:
@@ -661,8 +668,10 @@ class CastTTSGateway:
 
             if result["success"]:
                 await self._publish_event("voice.cast.completed.v1", {
-                    "device": result.get("device"),
-                    "audio_path": audio_path,
+                    "device_id": result.get("device", ""),
+                    "device_name": result.get("device", ""),
+                    "audio_url": audio_path,
+                    "text": "",
                     "timestamp": datetime.utcnow().isoformat() + "Z",
                 })
                 CAST_REQUESTS.labels(method="audio", status="success").inc()

@@ -20,6 +20,12 @@ from fastapi import FastAPI
 from nats.aio.client import Client as NATS
 from prometheus_client import Counter, generate_latest, CONTENT_TYPE_LATEST
 
+# Schema-validated envelope (available when services/common is on PYTHONPATH)
+try:
+    from services.common.events import envelope
+except ImportError:
+    envelope = None
+
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
@@ -96,12 +102,43 @@ async def _handle_message(msg) -> None:
 
     nc = _nc
     if nc and nc.is_connected:
-        await nc.publish(OUTPUT_SUBJECT, json.dumps(voice_event).encode("utf-8"))
+        if envelope:
+            env = envelope(
+                OUTPUT_SUBJECT, voice_event,
+                correlation_id=data.get("task_id"),
+                source="voice-relay",
+            )
+            await nc.publish(OUTPUT_SUBJECT, json.dumps(env).encode("utf-8"))
+        else:
+            await nc.publish(OUTPUT_SUBJECT, json.dumps(voice_event).encode("utf-8"))
         RELAYED.inc()
         logger.info("relayed task_id=%s text_len=%d", data.get("task_id"), len(response_text))
     else:
         ERRORS.inc()
         logger.warning("cannot publish — NATS not connected")
+
+
+# ---------------------------------------------------------------------------
+# NATS callback factory — avoids Ruff B023 (loop-variable closure capture)
+# ---------------------------------------------------------------------------
+def _make_nats_callbacks(nc_ref: NATS, disconnect_event: asyncio.Event):
+    """Create NATS callbacks bound to a specific connection instance."""
+
+    def _mark_lost(reason: str) -> None:
+        global _nc
+        if _nc is nc_ref:
+            _nc = None
+        if not disconnect_event.is_set():
+            disconnect_event.set()
+        logger.warning("nats connection lost: %s", reason)
+
+    async def _disconnected_cb():
+        _mark_lost("disconnected")
+
+    async def _closed_cb():
+        _mark_lost("closed")
+
+    return _disconnected_cb, _closed_cb
 
 
 # ---------------------------------------------------------------------------
@@ -113,20 +150,7 @@ async def _nats_resilience_loop() -> None:
     while True:
         nc = NATS()
         disconnect_event = asyncio.Event()
-
-        def _mark_lost(reason: str) -> None:
-            global _nc
-            if _nc is nc:
-                _nc = None
-            if not disconnect_event.is_set():
-                disconnect_event.set()
-            logger.warning("nats connection lost: %s", reason)
-
-        async def _disconnected_cb():
-            _mark_lost("disconnected")
-
-        async def _closed_cb():
-            _mark_lost("closed")
+        _disconnected_cb, _closed_cb = _make_nats_callbacks(nc, disconnect_event)
 
         try:
             logger.info("connecting to NATS %s (backoff=%.1fs)", NATS_URL_REDACTED, backoff)
@@ -178,6 +202,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="voice-relay", lifespan=lifespan)
 
 
+# TODO: Adopt shared pmoves_health router when available as pip package
 @app.get("/healthz")
 async def healthz():
     """Health check endpoint."""

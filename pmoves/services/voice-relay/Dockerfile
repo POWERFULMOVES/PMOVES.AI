@@ -2,9 +2,11 @@ FROM python:3.11-slim
 WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 RUN pip install --no-cache-dir --upgrade pip
-COPY requirements.txt ./requirements.txt
+COPY services/voice-relay/requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
-COPY main.py ./main.py
+COPY services/voice-relay/main.py ./main.py
+COPY services/common/ ./services/common/
+COPY contracts/ ./contracts/
 
 # Security: Run as non-root user
 RUN groupadd -r pmoves --gid=65532 && \
