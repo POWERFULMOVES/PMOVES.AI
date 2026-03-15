@@ -1,0 +1,36 @@
+%%{init: {'theme':'base', 'themeVariables': {
+  'primaryColor': '#3ecf8e',
+  'primaryBorderColor': '#3ecf8e',
+  'secondaryColor': '#9333ea',
+  'background': 'transparent',
+  'lineColor': '#94a3b8'
+}}}%%
+flowchart TD
+    GH["🐙 GitHub Event<br/>push / PR / schedule"]
+
+    GH --> Router{"☁️ Cloudflare Worker<br/>runner-router.pmoves.workers.dev"}
+
+    Router -->|"GPU jobs<br/>Docker builds"| AILab["🔧 AI Lab Runner<br/>Z890 · RTX 4090<br/>Labels: self-hosted, gpu, ai-lab"]
+
+    Router -->|"Staging deploys<br/>Integration tests"| CS["☁️ cloudstartup Runner<br/>Staging environment<br/>Labels: self-hosted, staging"]
+
+    Router -->|"Production deploys<br/>Health checks"| KVM4R["🖥️ KVM4 Runner<br/>Production gateway<br/>Labels: self-hosted, production"]
+
+    Router -->|"Backup / DR<br/>Fallback"| KVM2R["🌐 KVM2 Runner<br/>Exit proxy node<br/>Labels: self-hosted, backup"]
+
+    Router -->|"Lint, docs<br/>Lightweight CI"| GHR["⚡ ubuntu-latest<br/>GitHub-hosted<br/>No GPU needed"]
+
+    subgraph KV["KV: CI_STATE"]
+        State["Runner health<br/>Queue depth<br/>Last heartbeat"]
+    end
+
+    Router <-->|"Read/write state"| KV
+
+    style GH fill:#3b82f6,stroke:#3b82f6,color:#fff
+    style Router fill:#f59e0b,stroke:#f59e0b,color:#1e293b
+    style AILab fill:#9333ea,stroke:#9333ea,color:#fff
+    style CS fill:#3ecf8e,stroke:#3ecf8e,color:#1e293b
+    style KVM4R fill:#3ecf8e,stroke:#3ecf8e,color:#1e293b
+    style KVM2R fill:#f59e0b,stroke:#f59e0b,color:#1e293b
+    style GHR fill:#94a3b8,stroke:#94a3b8,color:#1e293b
+    style KV fill:#1e293b,stroke:#3b82f6,color:#e2e8f0

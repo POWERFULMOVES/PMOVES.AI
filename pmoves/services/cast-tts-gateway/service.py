@@ -18,6 +18,12 @@ import nats
 from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
 from prometheus_client.exposition import CONTENT_TYPE_LATEST
 
+# Schema-validated envelope (available when services/common is on PYTHONPATH)
+try:
+    from services.common.events import envelope as _envelope
+except ImportError:
+    _envelope = None
+
 from flute_client import FluteTTSProvider
 from device_manager import CastDeviceManager
 from groups import CastGroupManager
@@ -531,11 +537,17 @@ class CastTTSGateway:
                         result = await self.device_manager.cast_audio(audio_path, target_devices[0])
 
                     if result.get("success"):
+                        # catt identifies devices by friendly name only; use
+                        # device_id/device_name from result when available,
+                        # fall back to "device" (name string) for both fields.
+                        _dev = result.get("device", "")
                         await self._publish_event("voice.cast.completed.v1", {
-                            "device": result.get("device"),
+                            "device_id": result.get("device_id", _dev),
+                            "device_name": result.get("device_name", _dev),
+                            "audio_url": "",
                             "text": text,
-                            "voice": voice,
                             "timestamp": datetime.utcnow().isoformat() + "Z",
+                            "meta": {"voice": voice},
                         })
                         CAST_REQUESTS.labels(method="speech", status="success").inc()
                     else:
@@ -585,13 +597,18 @@ class CastTTSGateway:
 
                     # Publish completion event
                     await self._publish_event("voice.cast.completed.v1", {
-                        "group": group if group else ",".join(target_devices),
+                        "device_id": group if group else ",".join(target_devices),
+                        "device_name": group if group else ",".join(target_devices),
+                        "audio_url": "",
                         "text": text,
-                        "voice": voice,
-                        "devices_total": multi_result.total_devices,
-                        "devices_successful": multi_result.successful,
-                        "devices_failed": multi_result.failed,
                         "timestamp": datetime.utcnow().isoformat() + "Z",
+                        "meta": {
+                            "voice": voice,
+                            "group": group if group else None,
+                            "devices_total": multi_result.total_devices,
+                            "devices_successful": multi_result.successful,
+                            "devices_failed": multi_result.failed,
+                        },
                     })
 
                     if multi_result.failed == 0:
@@ -660,9 +677,12 @@ class CastTTSGateway:
                 result = await self.device_manager.cast_audio(audio_path, device)
 
             if result["success"]:
+                _dev = result.get("device", "")
                 await self._publish_event("voice.cast.completed.v1", {
-                    "device": result.get("device"),
-                    "audio_path": audio_path,
+                    "device_id": result.get("device_id", _dev),
+                    "device_name": result.get("device_name", _dev),
+                    "audio_url": audio_path,
+                    "text": "",
                     "timestamp": datetime.utcnow().isoformat() + "Z",
                 })
                 CAST_REQUESTS.labels(method="audio", status="success").inc()
@@ -1981,10 +2001,12 @@ class CastTTSGateway:
             return
 
         try:
-            await self.nats_client.publish(
-                subject,
-                json.dumps(payload).encode(),
-            )
+            if _envelope:
+                env = _envelope(subject, payload, source="cast-tts-gateway")
+                data = json.dumps(env).encode()
+            else:
+                data = json.dumps(payload).encode()
+            await self.nats_client.publish(subject, data)
             # Success metric
             CAST_REQUESTS.labels(method="publish_nats", status="success").inc()
 
@@ -1998,7 +2020,6 @@ class CastTTSGateway:
 
             # Note: We don't fail the HTTP request if NATS publish fails
             # NATS is used for event notification, not critical path
-            # Log to Loki (if available) - TODO: Add structured logging client
 
     async def connect_nats(self):
         """Connect to NATS message bus."""
