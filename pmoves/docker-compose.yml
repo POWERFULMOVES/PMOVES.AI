@@ -518,7 +518,7 @@ services:
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
-      interval: 10s
+      interval: 20s
       timeout: 5s
       retries: 5
       start_period: 30s
@@ -866,7 +866,7 @@ services:
     - CRYPTO_KEY=${PG_META_CRYPTO_KEY:-}
     healthcheck:
       test: ["CMD-SHELL", "node -e \"const h=require('http');h.get('http://localhost:8080/health',r=>{r.resume();process.exit(r.statusCode===200?0:1)}).on('error',()=>process.exit(1))\""]
-      interval: 10s
+      interval: 20s
       timeout: 5s
       retries: 3
       start_period: 10s
@@ -895,7 +895,7 @@ services:
     command: ["start", "--main-service", "/home/deno/functions/main"]
     healthcheck:
       test: ["CMD-SHELL", "curl -sSf http://localhost:9000/health || exit 1"]
-      interval: 10s
+      interval: 20s
       timeout: 5s
       retries: 3
       start_period: 15s
@@ -957,7 +957,7 @@ services:
     - supabase-vector-data:/var/lib/vector
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9001/health"]
-      interval: 10s
+      interval: 20s
       timeout: 5s
       retries: 3
       start_period: 10s
@@ -997,7 +997,7 @@ services:
     command: ["/bin/sh", "-c", "/app/bin/migrate && if [ -f /etc/pooler/pooler.exs ]; then /app/bin/supavisor eval \"$$(cat /etc/pooler/pooler.exs)\"; else echo 'WARN: /etc/pooler/pooler.exs not found, skipping tenant seeding'; fi && /app/bin/server"]
     healthcheck:
       test: ["CMD-SHELL", "curl -sSf http://127.0.0.1:4000/api/health -o /dev/null || exit 1"]
-      interval: 10s
+      interval: 20s
       timeout: 5s
       retries: 5
       start_period: 30s
@@ -1101,7 +1101,7 @@ services:
       test:
       - CMD-SHELL
       - wget -qO- http://localhost:7474 >/dev/null 2>&1 || exit 1
-      interval: 10s
+      interval: 20s
       timeout: 5s
       retries: 12
       start_period: 20s
@@ -1628,7 +1628,7 @@ services:
     - pmoves_bus
     - pmoves_external  # Required for YouTube processing
     healthcheck:
-      test: ["CMD-SHELL", "pgrep -f 'node|python' || exit 1"]
+      test: ["CMD-SHELL", "kill -0 1 || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -1918,7 +1918,7 @@ services:
       test:
       - CMD-SHELL
       - wget --no-verbose --tries=1 --spider http://localhost:8222/varz || exit 1
-      interval: 10s
+      interval: 20s
       timeout: 5s
       retries: 5
       start_period: 10s
@@ -2077,7 +2077,7 @@ services:
       - CMD-SHELL
       - python -c "import urllib.request,sys; sys.exit(0) if urllib.request.urlopen('http://localhost:8091/healthz').getcode()==200
         else sys.exit(1)"
-      interval: 10s
+      interval: 20s
       timeout: 5s
       retries: 12
       start_period: 15s
@@ -2100,6 +2100,7 @@ services:
       - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
       - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
       - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
+      - CIPHER_API_TOKEN=${CIPHER_API_TOKEN:-}
     command: ["node", "dist/src/app/index.cjs", "--mode", "api", "--port", "3000", "--host", "0.0.0.0", "--agent", "/app/memAgent/cipher.yml", "--mcp-transport-type", "sse"]
     ports:
       - "${CIPHER_PORT:-8096}:3000"
@@ -2160,7 +2161,7 @@ services:
     networks: [pmoves_app, pmoves_bus, pmoves_api, pmoves_monitoring]
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8054/healthz', timeout=5)"]
-      interval: 10s
+      interval: 20s
       timeout: 5s
       retries: 12
       start_period: 15s
@@ -2719,11 +2720,11 @@ services:
     extra_hosts:
     - host.docker.internal:host-gateway
     healthcheck:
-      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8055/healthz', timeout=5)"]
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8055/healthz', timeout=10)"]
       interval: 30s
-      timeout: 10s
+      timeout: 15s
       retries: 3
-      start_period: 15s
+      start_period: 60s
 
   # Tier: agent (Tokenism Simulator - CHIT/geometry bus simulation service)
   tokenism-simulator:
@@ -2784,6 +2785,112 @@ services:
       retries: 3
       start_period: 30s
 
+  # Consciousness Service - CHR Algorithm & CGP Generation (port 8105)
+  consciousness-service:
+    build:
+      context: ./services/consciousness-service
+      dockerfile: Dockerfile
+    image: ${CONSCIOUSNESS_IMAGE:-ghcr.io/powerfulmoves/pmoves-consciousness:pmoves-latest}
+    restart: unless-stopped
+    <<: *tier-agent-hardened-ro
+    environment:
+      - SERVICE_NAME=consciousness-service
+      - SERVICE_PORT=${CONSCIOUSNESS_HOST_PORT:-8105}
+      - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+      - CHIT_PROD_PASSPHRASE=${CHIT_PROD_PASSPHRASE:?set CHIT_PROD_PASSPHRASE in env.shared}
+      - SUPABASE_URL=${SUPABASE_URL:-http://supabase-kong:8000}
+      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY:-}
+      - PYTHONUNBUFFERED=1
+    ports: ["${CONSCIOUSNESS_HOST_PORT:-8105}:8105"]
+    profiles: ["agents", "botz"]
+    networks: [pmoves_app]
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import httpx; httpx.get('http://localhost:8105/healthz').raise_for_status()\" || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    depends_on:
+      nats-init:
+        condition: service_healthy
+
+  # Cast TTS Gateway - Chromecast/Google Home TTS routing (port 8060)
+  cast-tts-gateway:
+    build:
+      context: ./services/cast-tts-gateway
+      dockerfile: Dockerfile
+    image: ${CAST_TTS_IMAGE:-ghcr.io/powerfulmoves/pmoves-cast-tts-gateway:pmoves-latest}
+    restart: unless-stopped
+    <<: *tier-agent-hardened-ro
+    environment:
+      - PORT=8060
+      - FLUTE_GATEWAY_URL=http://flute-gateway:8055
+      - ULTIMATE_TTS_URL=http://ultimate-tts-studio:7861
+      - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+      - CHIT_REQUIRE_SIGNATURE=${CHIT_REQUIRE_SIGNATURE:-false}
+      - CHIT_DECRYPT_ANCHORS=${CHIT_DECRYPT_ANCHORS:-false}
+      - CHIT_PASSPHRASE=${CHIT_PROD_PASSPHRASE:-changeme}
+    ports: ["${CAST_TTS_PORT:-8060}:8060"]
+    profiles: ["cast", "media"]
+    networks: [pmoves_app, pmoves_bus, pmoves_api, pmoves_external]
+    user: "65532:65532"
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8060/healthz', timeout=5)\" || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    depends_on:
+      flute-gateway:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+
+  # Voice Relay - NATS bridge: agentzero.task.result.v1 → voice.agent.response.v1
+  voice-relay:
+    build:
+      context: .
+      dockerfile: services/voice-relay/Dockerfile
+    image: ${VOICE_RELAY_IMAGE:-ghcr.io/powerfulmoves/pmoves-voice-relay:pmoves-latest}
+    restart: unless-stopped
+    <<: *tier-worker-hardened
+    environment:
+      - PORT=8121
+      - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+      - VOICE_RELAY_INPUT_SUBJECT=${VOICE_RELAY_INPUT_SUBJECT:-agentzero.task.result.v1}
+      - VOICE_RELAY_OUTPUT_SUBJECT=${VOICE_RELAY_OUTPUT_SUBJECT:-voice.agent.response.v1}
+    ports: ["${VOICE_RELAY_PORT:-8121}:8121"]
+    profiles: ["cast", "media"]
+    networks: [pmoves_bus]
+    read_only: true
+    tmpfs:
+      - /tmp:noexec,nosuid,size=64m
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8121/healthz', timeout=5)\" || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    depends_on:
+      nats:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 128M
+        reservations:
+          cpus: '0.1'
+          memory: 32M
+
   # PMOVES Central UI - Main dashboard (port 4482)
   pmoves-ui:
     build:
@@ -2836,10 +2943,10 @@ services:
     profiles: [ "ui" ]
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:3000/api/health || exit 1"]
-      interval: 30s
-      timeout: 10s
+      interval: 20s
+      timeout: 5s
       retries: 3
-      start_period: 60s
+      start_period: 30s
 
   # Session Context Worker - Transforms Claude Code session context to Hi-RAG KB entries
   session-context-worker:
@@ -2929,7 +3036,7 @@ services:
       - pmoves_data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U wger -d wger"]
-      interval: 10s
+      interval: 20s
       timeout: 5s
       retries: 5
       start_period: 10s
@@ -3033,7 +3140,7 @@ services:
       test:
       - CMD-SHELL
       - pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB -h 127.0.0.1
-      interval: 10s
+      interval: 20s
       timeout: 5s
       retries: 12
     profiles:

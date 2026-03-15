@@ -5,12 +5,21 @@ RUN groupadd -r pmoves && useradd -r -g pmoves pmoves
 
 WORKDIR /app
 
+# Install system dependencies for sentence-transformers
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    g++ \
+    && rm -rf /var/lib/apt/lists/*
+
 # Install dependencies first (cache layer)
 COPY requirements.txt requirements.lock .
 RUN pip install --no-cache-dir --constraint requirements.lock -r requirements.txt
 
 # Copy application code
 COPY *.py ./
+
+# Copy pmoves tools (chit_security, geometry_decoder) via volume mount or copy
+# These are expected to be available at runtime via /app/pmoves/tools
 
 # Set ownership
 RUN chown -R pmoves:pmoves /app
@@ -20,14 +29,16 @@ USER pmoves
 
 # Environment defaults
 ENV SERVICE_NAME=consciousness-service
-ENV SERVICE_PORT=8096
+ENV SERVICE_PORT=8105
 ENV NATS_URL=nats://nats:pmoves@nats:4222
-ENV HIRAG_V2_URL=http://hi-rag-gateway-v2:8086
+ENV CHIT_PROD_PASSPHRASE=pmoves-chit-default
+ENV SUPABASE_URL=http://supabase-kong:8000
+ENV PYTHONUNBUFFERED=1
 
-EXPOSE 8096
+EXPOSE 8105
 
 # Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD python -c "import httpx; httpx.get('http://localhost:8096/healthz').raise_for_status()"
+HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
+    CMD python -c "import httpx; httpx.get('http://localhost:8105/healthz').raise_for_status()"
 
 CMD ["python", "main.py"]

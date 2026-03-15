@@ -4,6 +4,7 @@ import logging
 import re
 import asyncio
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 from typing import Optional
 from uuid import UUID
 from fastapi import FastAPI, HTTPException
@@ -45,7 +46,16 @@ storage: Optional[SupabaseStorage] = None
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Application lifespan management."""
+    """
+    Manage application startup and shutdown: initialize storage and coordinator components, connect to NATS, and register message handlers for geometry, HuggingFace model downloads, and training completion.
+    
+    On startup, conditionally instantiates Supabase-backed storage and coordinators (trajectory accumulator, training orchestrator, HuggingFace publisher) when a Supabase key is available, establishes a NATS connection, and subscribes to:
+    - geometry.event.v1 and tokenism.geometry.event.v1 to accumulate trajectories,
+    - hf.model.downloaded.v1 to record downloaded HF models,
+    - agentgym.train.completed.v1 to optionally auto-publish training runs to HuggingFace, emit model-published and benchmark pipeline events, and record completion events.
+    
+    On shutdown, closes the NATS connection and gracefully closes any initialized coordinators and storage.
+    """
     global nc, trajectory_accumulator, training_orchestrator, hf_publisher, storage
 
     # Initialize storage and coordinators
@@ -129,6 +139,113 @@ async def lifespan(app: FastAPI):
         await nc.subscribe("hf.model.downloaded.v1", cb=hf_model_handler)
         logger.info("Subscribed to hf.model.downloaded.v1")
 
+        # Subscribe to training completion events from EvoSwarm
+        async def training_completed_handler(msg):
+            """
+            Handle a training completion event by optionally publishing associated trajectories to HuggingFace, emitting related NATS events, and recording the completion in storage.
+
+            Parameters:
+                msg: NATS message whose `data` is a JSON-encoded payload containing at minimum a `training_run_id` and optionally `trajectory_ids` and `model_id`.
+            """
+            try:
+                data = json.loads(msg.data)
+                training_run_id = data.get("training_run_id")
+                trajectory_ids = data.get("trajectory_ids", [])
+                model_id = data.get("model_id", "unknown")
+
+                if not training_run_id:
+                    logger.warning("agentgym.train.completed.v1 missing training_run_id")
+                    return
+
+                if not DATASET_NAME_PATTERN.match(training_run_id):
+                    logger.warning("Invalid training_run_id format: %s", training_run_id[:100])
+                    return
+
+                logger.info(
+                    "Training completed: run=%s, trajectories=%d, model=%s",
+                    training_run_id, len(trajectory_ids), model_id,
+                )
+
+                # Validate trajectory IDs as UUIDs before publishing
+                valid_trajectory_ids = []
+                for tid in trajectory_ids:
+                    try:
+                        UUID(tid)
+                        valid_trajectory_ids.append(tid)
+                    except (ValueError, AttributeError):
+                        logger.warning("Skipping invalid trajectory_id: %s", str(tid)[:100])
+                trajectory_ids = valid_trajectory_ids
+
+                # Auto-publish to HuggingFace if publisher is available
+                if hf_publisher and trajectory_ids:
+                    dataset_name = f"agentgym-{training_run_id}"
+                    try:
+                        result = await hf_publisher.publish_to_huggingface(
+                            dataset_name=dataset_name,
+                            trajectory_ids=trajectory_ids,
+                            private=False,
+                        )
+                        logger.info(
+                            "Auto-published to HuggingFace: %s",
+                            result.get("repo_url"),
+                        )
+
+                        # Publish model published event
+                        if nc and nc.is_connected:
+                            published_event = json.dumps({
+                                "training_run_id": training_run_id,
+                                "model_id": model_id,
+                                "dataset_id": result.get("dataset_id"),
+                                "repo_url": result.get("repo_url"),
+                                "trajectory_count": len(trajectory_ids),
+                                "source": "agentgym-rl-coordinator",
+                                "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                            })
+                            await nc.publish(
+                                "agentgym.model.published.v1",
+                                published_event.encode(),
+                            )
+                            logger.info("Published agentgym.model.published.v1")
+
+                            # Trigger benchmark visualization pipeline
+                            pipeline_event = json.dumps({
+                                "training_run_id": training_run_id,
+                                "model_id": model_id,
+                                "repo_url": result.get("repo_url"),
+                                "source": "agentgym-rl-coordinator",
+                            })
+                            await nc.publish(
+                                "skills.pipeline.model-benchmark-viz.v1",
+                                pipeline_event.encode(),
+                            )
+                            logger.info("Triggered model-benchmark-viz pipeline")
+
+                    except Exception:
+                        logger.exception(
+                            "Failed to auto-publish training run %s to HuggingFace",
+                            training_run_id,
+                        )
+                elif not hf_publisher:
+                    logger.warning(
+                        "HF publisher not available, skipping auto-publish for run %s",
+                        training_run_id,
+                    )
+
+                # Record completion event
+                if storage:
+                    await storage.record_event(
+                        event_type="training_completed",
+                        payload=data,
+                    )
+
+            except json.JSONDecodeError:
+                logger.warning("Invalid JSON in agentgym.train.completed.v1")
+            except Exception:
+                logger.exception("Error handling training completion event")
+
+        await nc.subscribe("agentgym.train.completed.v1", cb=training_completed_handler)
+        logger.info("Subscribed to agentgym.train.completed.v1")
+
     except Exception as e:
         logger.exception("Failed to connect to NATS")
 
@@ -163,9 +280,18 @@ app = FastAPI(
 # Health & Status Endpoints
 # ============================================================================
 
-@app.get("/health")
+@app.get("/healthz")
 async def health_check():
-    """Health check endpoint."""
+    """
+    Report current connectivity/configuration status for core services (NATS, Supabase, HuggingFace).
+    
+    Returns:
+        dict: A mapping with the following keys:
+            - "status": overall service status, set to "ok".
+            - "nats": "connected" if the NATS client is connected, "disconnected" otherwise.
+            - "supabase": "connected" if Supabase storage is configured, "not_configured" otherwise.
+            - "huggingface": "configured" if a HuggingFace token is present, "missing" otherwise.
+    """
     nats_status = "connected" if nc and nc.is_connected else "disconnected"
     supabase_status = "connected" if storage else "not_configured"
     hf_status = "configured" if HF_TOKEN else "missing"
@@ -178,9 +304,53 @@ async def health_check():
     }
 
 
+@app.get("/metrics")
+async def metrics():
+    """
+    Expose Prometheus-formatted service and dependency status metrics.
+    
+    Returns:
+        PlainTextResponse: Prometheus text exposition containing the following gauges with value `1` (connected/configured) or `0` (not):
+            - `agentgym_up`: overall service health (always `1` while running)
+            - `agentgym_nats_connected`: NATS connection status
+            - `agentgym_supabase_connected`: Supabase storage availability
+            - `agentgym_hf_configured`: HuggingFace token configuration status
+    """
+    nats_connected = 1 if nc and nc.is_connected else 0
+    supabase_connected = 1 if storage else 0
+    hf_configured = 1 if HF_TOKEN else 0
+
+    lines = [
+        "# HELP agentgym_up Service health status",
+        "# TYPE agentgym_up gauge",
+        "agentgym_up 1",
+        "# HELP agentgym_nats_connected NATS connection status",
+        "# TYPE agentgym_nats_connected gauge",
+        f"agentgym_nats_connected {nats_connected}",
+        "# HELP agentgym_supabase_connected Supabase connection status",
+        "# TYPE agentgym_supabase_connected gauge",
+        f"agentgym_supabase_connected {supabase_connected}",
+        "# HELP agentgym_hf_configured HuggingFace token configured",
+        "# TYPE agentgym_hf_configured gauge",
+        f"agentgym_hf_configured {hf_configured}",
+    ]
+
+    from fastapi.responses import PlainTextResponse
+    return PlainTextResponse("\n".join(lines) + "\n", media_type="text/plain")
+
+
 @app.get("/agentgym/stats")
 async def get_stats():
-    """Get system statistics."""
+    """
+    Assembles current connectivity and component statistics for the coordinator service.
+    
+    Returns:
+        stats (dict): Dictionary containing:
+            - `nats_connected` (bool): whether the NATS client is connected.
+            - `supabase_connected` (bool): whether Supabase storage is configured.
+            - trajectory-related statistics merged at the top level when available (from the trajectory accumulator).
+            - `storage` (dict, optional): storage-specific statistics when available.
+    """
     stats = {
         "nats_connected": nc is not None and nc.is_connected,
         "supabase_connected": storage is not None,
@@ -349,13 +519,22 @@ async def publish_dataset(
     session_id: Optional[str] = None,
     private: bool = False,
 ):
-    """Publish dataset to HuggingFace.
-
-    Args:
-        dataset_name: Name for the dataset
-        trajectory_ids: List of trajectory IDs to include
-        session_id: Alternative: include all trajectories from a session
-        private: Whether to create a private dataset
+    """
+    Publish trajectories as a dataset to HuggingFace.
+    
+    Validates the dataset name and optional trajectory IDs, requires the HuggingFace publisher to be configured, and delegates publishing to the configured publisher.
+    
+    Parameters:
+        dataset_name (str): Desired dataset name; must match allowed pattern (alphanumeric, dash, underscore) and be at most 100 characters.
+        trajectory_ids (Optional[list[str]]): Optional list of trajectory UUID strings to include in the dataset.
+        session_id (Optional[str]): Optional session identifier; when provided, trajectories from this session may be included.
+        private (bool): If True, create the dataset as private.
+    
+    Returns:
+        dict: The publisher's result containing publication metadata (e.g., dataset/repository information).
+    
+    Raises:
+        HTTPException: 400 for invalid dataset_name or trajectory_id format, 503 if the HuggingFace publisher is unavailable, 500 for other publication failures.
     """
     # Validate dataset_name (HuggingFace naming conventions)
     if not DATASET_NAME_PATTERN.match(dataset_name):
@@ -368,6 +547,17 @@ async def publish_dataset(
             status_code=400,
             detail="Dataset name too long (maximum 100 characters)"
         )
+
+    # Validate trajectory_ids if provided
+    if trajectory_ids:
+        for tid in trajectory_ids:
+            try:
+                UUID(tid)
+            except ValueError as e:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Invalid trajectory_id format: {tid}. Must be a valid UUID.",
+                ) from e
 
     if not hf_publisher:
         raise HTTPException(status_code=503, detail="HuggingFace publisher not available")

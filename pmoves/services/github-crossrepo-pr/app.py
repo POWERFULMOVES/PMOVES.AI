@@ -296,7 +296,7 @@ async def create_pr_from_template(
             repo=repo,
             pr_number=None,
             pr_url=None,
-            error=str(e),
+            error="Internal error during PR creation",
             duration_seconds=duration
         )
 
@@ -441,7 +441,7 @@ async def list_workflow_templates():
             status_code=500,
             content={
                 "ok": False,
-                "error": str(e)
+                "error": "Internal server error listing templates"
             }
         )
 
@@ -508,7 +508,7 @@ async def create_pr_endpoint(request: PRCreationRequest):
             status_code=500,
             content={
                 "ok": False,
-                "error": str(e)
+                "error": "Internal server error creating PR"
             }
         )
 
@@ -586,7 +586,7 @@ async def create_pr_batch_endpoint(
             status_code=500,
             content={
                 "ok": False,
-                "error": str(e)
+                "error": "Internal server error creating batch PRs"
             }
         )
 

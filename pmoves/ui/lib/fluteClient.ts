@@ -367,7 +367,7 @@ export async function playAudio(audioData: ArrayBuffer): Promise<void> {
     source.connect(audioContext.destination);
     source.start(0);
 
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve, _reject) => {
       source.onended = () => {
         audioContext.close();
         resolve();

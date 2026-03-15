@@ -1,4 +1,4 @@
-.PHONY: env-bootstrap-lite env-setup env-check preflight flight-check flight-check-retro preflight-retro showtime bringup-showtime smoke-showtime showtime-links showtime-links-open showtime-links-strict submodule-integrity submodule-layer-validate submodule-layer-validate-one submodule-layer-validate-all submodule-layer-validate-all-strict submodule-layer-validate-strict submodule-branch-policy-check audit-layers audit-layers-static audit-layers-runtime ci-runners-check ci-runners-check-strict ci-runners-map ci-runners-map-strict ci-runners-lockdown ci-runners-lockdown-strict ci-runners-local-cert-up ci-runners-local-cert-down ci-runners-local-cert-status ci-queue-sitrep ci-queue-drain-nonpr ci-queue-drain-nonpr-apply skill-registry-validate auth-alignment auth-alignment-strict topology-chit-gate topology-chit-gate-strict pr-monitor pr-monitor-strict pr-monitor-chit-packet floos-status floos-pr-monitor-validate floos-pr-monitor-resolve floos-pr-monitor-run-dry chit-flow-pr-monitor chit-flow-pr-monitor-strict ports-resolve sign-trail
+.PHONY: env-bootstrap-lite env-setup env-check preflight flight-check flight-check-retro preflight-retro showtime bringup-showtime smoke-showtime showtime-links showtime-links-open showtime-links-strict submodule-integrity submodule-layer-validate submodule-layer-validate-one submodule-layer-validate-all submodule-layer-validate-all-strict submodule-layer-validate-strict submodule-branch-policy-check audit-layers audit-layers-static audit-layers-runtime ci-runners-check ci-runners-check-strict ci-runners-map ci-runners-map-strict ci-runners-lockdown ci-runners-lockdown-strict ci-runners-local-cert-up ci-runners-local-cert-down ci-runners-local-cert-status ci-queue-sitrep ci-queue-drain-nonpr ci-queue-drain-nonpr-apply skill-registry-validate auth-alignment auth-alignment-strict topology-chit-gate topology-chit-gate-strict pr-monitor pr-monitor-strict pr-monitor-chit-packet pr-trim-analyze pr-trim-resolve pr-trim-report pr-trim floos-status floos-pr-monitor-validate floos-pr-monitor-resolve floos-pr-monitor-run-dry chit-flow-pr-monitor chit-flow-pr-monitor-strict ports-resolve sign-trail
 RETRO_THEME_QUICK ?= cb
 RETRO_THEME_FULL ?= galaxy
 RETRO_FLAGS ?=
@@ -232,6 +232,20 @@ pr-monitor-chit-packet: ## Encode PR monitor learnings into CHIT packet artifact
 	@$(MAKE) --no-print-directory pr-monitor
 	@cat docs/logs/pr_monitor_learnings_latest.md | $(PRECHECK_PY) tools/chit_encode_hook.py --pretty > docs/logs/pr_monitor_learnings_latest.cgp.json
 	@echo "Wrote CHIT packet: docs/logs/pr_monitor_learnings_latest.cgp.json"
+
+pr-trim-analyze: ## Fetch and classify unresolved review threads for a PR
+	@$(PRECHECK_PY) tools/pr_hedge_trim.py --repo "$${PR_TRIM_REPO:-}" analyze --pr "$${PR:-0}" $${PR_TRIM_JSON_OUT:+--json-out "$$PR_TRIM_JSON_OUT"} $(ARGS)
+
+pr-trim-resolve: ## Resolve addressed review threads via GraphQL mutation
+	@$(PRECHECK_PY) tools/pr_hedge_trim.py --repo "$${PR_TRIM_REPO:-}" resolve --pr "$${PR:-0}" $${DRY_RUN:+--dry-run} $${RESOLVE_ACTIONABLE:+--include-actionable} $(ARGS)
+
+pr-trim-report: ## Generate trim summary report for a PR
+	@$(PRECHECK_PY) tools/pr_hedge_trim.py --repo "$${PR_TRIM_REPO:-}" report --pr "$${PR:-0}" $(ARGS)
+
+pr-trim: ## Full hedge trim cycle: analyze + resolve + trail sign
+	@$(MAKE) --no-print-directory pr-trim-analyze PR="$${PR:-0}"
+	@$(MAKE) --no-print-directory pr-trim-resolve PR="$${PR:-0}" RESOLVE_ACTIONABLE="$${RESOLVE_ACTIONABLE:-}"
+	@$(MAKE) --no-print-directory sign-trail SUMMARY="PR Hedge Trim: trimmed PR #$${PR:-0}" AGENT="$${AGENT:-claude-opus}"
 
 floos-status: ## Show FlOO$ pairing status
 	@PYTHONPATH="$(CURDIR)/.." $(PRECHECK_PY) -m pmoves.tools.chit.floos_resolver status $(ARGS)

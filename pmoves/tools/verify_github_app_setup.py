@@ -112,7 +112,7 @@ def read_env_file(file_path):
         print_error(f"Path is a directory, not a file: {file_path}")
         sys.exit(1)
     except UnicodeDecodeError as e:
-        print_error(f"File encoding error in {file_path}: {e}")
+        print_error(f"File encoding error in {file_path}")
         print("  Ensure file is UTF-8 encoded")
         sys.exit(1)
 
@@ -133,15 +133,15 @@ def validate_credential_value(key, value):
 
     if key == 'GH_APP_ID':
         if not value.isdigit():
-            return False, f"must be numeric, got: {value[:20]}..."
+            return False, "must be numeric"
 
     elif key == 'GH_APP_CLIENT_ID':
         if not re.match(r'^[A-Za-z0-9_-]+$', value):
-            return False, f"invalid client ID format: {value[:20]}..."
+            return False, "invalid client ID format"
 
     elif key == 'GH_APP_INSTALLATION_ID':
         if not value.isdigit():
-            return False, f"must be numeric, got: {value[:20]}..."
+            return False, "must be numeric"
 
     elif key == 'GH_APP_SEC':
         if not value.startswith('-----BEGIN'):
@@ -164,7 +164,7 @@ def verify_gh_cli():
             print_check("GitHub CLI", "Not installed", False)
             return False
     except Exception as e:
-        print_check("GitHub CLI", f"Error: {e}", False)
+        print_check("GitHub CLI", "Error verifying GitHub CLI", False)
         return False
 
 
@@ -178,7 +178,7 @@ def verify_github_secrets():
         result = run_command("gh secret list --repo POWERFULMOVES/PMOVES.AI", timeout=30)
 
         if result.returncode != 0:
-            print_check("GitHub Secrets", f"Failed to list: {result.stderr}", False)
+            print_check("GitHub Secrets", "Failed to list GitHub Secrets — check GitHub CLI auth status", False)
             return False
 
         print("  Checking GitHub Secrets for POWERFULMOVES/PMOVES.AI:")
@@ -191,11 +191,13 @@ def verify_github_secrets():
             secret_name = line.strip().split()[0]
             if secret_name in gh_app_keys:
                 found_keys.add(secret_name)
-                print_success(f"  {secret_name}: Found in GitHub Secrets")
 
-        # Report missing keys
-        for key in gh_app_keys - found_keys:
-            print_warning(f"  {key}: Not found in GitHub Secrets")
+        # Report results using only hardcoded key names (not tainted values)
+        for key in gh_app_keys:
+            if key in found_keys:
+                print_success(f"  {key}: Found in GitHub Secrets")
+            else:
+                print_warning(f"  {key}: Not found in GitHub Secrets")
 
     except subprocess.TimeoutExpired as e:
         print_check("GitHub Secrets", f"Timeout after {e.timeout}s - check network connectivity", False)
@@ -207,7 +209,7 @@ def verify_github_secrets():
         print_check("GitHub Secrets", "Permission denied executing GitHub CLI", False)
         return False
     except Exception as e:
-        print_check("GitHub Secrets", f"Unexpected error: {type(e).__name__}: {e}", False)
+        print_check("GitHub Secrets", "Unexpected error checking GitHub Secrets", False)
         return False
 
     passed = len(found_keys) == 4
@@ -242,10 +244,10 @@ def verify_env_shared():
 
                 if is_valid:
                     found_count += 1
-                    print_success(f"  {key}: Valid ({value[:20]}...)")
+                    print_success(f"  {key}: Valid (set)")
                 else:
                     found_invalid += 1
-                    print_error(f"  {key}: Invalid value - {error}")
+                    print_error(f"  {key}: Invalid format")
                 break
 
     passed = found_count == 4 and found_invalid == 0
@@ -375,12 +377,14 @@ def main():
         logging.info(f"Verification completed: {passed}/{total} checks passed")
         print()
 
-        # Failure details
+        # Failure details (only print known check names, never values)
+        known_checks = {"gh_cli", "github_secrets", "env_shared", "env_tier_agent", "docker_compose", "secrets_funnel", "chit_manifest"}
         failures = [k for k, v in results.items() if not v]
         if failures:
             print(f"{Colors.YELLOW}Failed checks:{Colors.RESET}")
             for check in failures:
-                print(f"  - {check}")
+                sanitized = check if check in known_checks else "unknown_check"
+                print(f"  - {sanitized}")
             print()
 
             # Troubleshooting hints
@@ -419,8 +423,8 @@ def main():
             return 1
 
     except Exception as e:
-        logging.error(f"Verification failed with exception: {e}", exc_info=True)
-        print_error(f"Unexpected error: {e}")
+        logging.error(f"Verification failed with exception: {e}")
+        print_error("Unexpected error during verification — check logs for details")
         print(f"  Full log: {log_file}")
         return 1
 
@@ -432,7 +436,6 @@ if __name__ == '__main__':
         print(f"\n{Colors.YELLOW}Verification cancelled by user{Colors.RESET}")
         sys.exit(130)
     except Exception as e:
-        print(f"{Colors.RED}Unexpected error: {e}{Colors.RESET}")
-        import traceback
-        traceback.print_exc()
+        logging.error(f"Unexpected error: {e}")
+        print(f"{Colors.RED}Unexpected error — check logs for details{Colors.RESET}")
         sys.exit(1)

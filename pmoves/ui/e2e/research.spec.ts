@@ -21,8 +21,7 @@ test.describe('Deep Research Dashboard', () => {
     await expect(page.locator('[data-testid="task-list"]')).toBeVisible();
 
     // Check that results section exists (might be hidden)
-    const resultsSection = page.locator('[data-testid="research-results"]');
-    const isVisible = await resultsSection.isVisible({ timeout: 2000 }).catch(() => false);
+    page.locator('[data-testid="research-results"]').isVisible().catch(() => false);
     // Results section might not be visible initially
   });
 
@@ -79,7 +78,7 @@ test.describe('Deep Research Dashboard', () => {
   test('should expand/collapse options panel', async ({ page }) => {
     // Options panel should be collapsed by default
     const optionsPanel = page.locator('[data-testid="research-options-panel"]');
-    const initiallyVisible = await optionsPanel.isVisible({ timeout: 1000 }).catch(() => false);
+    const _isInitiallyVisible = await optionsPanel.isVisible().catch(() => false);
 
     // Click expand button
     await page.click('[data-testid="expand-options-button"]');
@@ -91,10 +90,7 @@ test.describe('Deep Research Dashboard', () => {
     await page.click('[data-testid="collapse-options-button"]');
 
     // Panel should be hidden or collapsed
-    const isStillVisible = await optionsPanel.isVisible({ timeout: 1000 }).catch(() => false);
-    if (initiallyVisible) {
-      // If it was visible initially, it should still be toggleable
-    }
+    const _isCollapsed = await optionsPanel.isVisible({ timeout: 1000 }).catch(() => false);
   });
 
   test('should select research mode', async ({ page }) => {
@@ -114,9 +110,6 @@ test.describe('Deep Research Dashboard', () => {
 
     // Find slider
     const slider = page.locator('[data-testid="max-iterations-slider"]');
-
-    // Get initial value
-    const initialValue = await slider.inputValue();
 
     // Update slider value
     await slider.fill('20');
@@ -187,9 +180,9 @@ test.describe('Deep Research Dashboard', () => {
 
     // Check if notebook selector exists
     const notebookSelect = page.locator('[data-testid="notebook-select"]');
-    const exists = await notebookSelect.isVisible({ timeout: 1000 }).catch(() => false);
+    const _exists = await notebookSelect.isVisible({ timeout: 1000 }).catch(() => false);
 
-    if (exists) {
+    if (_exists) {
       // Select a notebook
       await page.selectOption('[data-testid="notebook-select"]', { index: 0 });
 
@@ -243,8 +236,7 @@ test.describe('Deep Research Dashboard', () => {
     await page.click('[data-testid="select-pending"]');
 
     // Only pending tasks should be selected
-    const pendingTasks = page.locator('[data-testid="task-item"][data-status="pending"]');
-    const pendingCount = await pendingTasks.count();
+    page.locator('[data-testid="task-item"][data-status="pending"]');
 
     // At least verify button exists and is clickable
     await expect(page.locator('[data-testid="select-pending"]')).toBeVisible();

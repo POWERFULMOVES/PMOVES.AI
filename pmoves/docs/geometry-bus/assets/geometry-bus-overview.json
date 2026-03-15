@@ -1,0 +1,307 @@
+{
+  "version": "a2ui.animation.v1",
+  "metadata": {
+    "title": "GEOMETRY BUS Overview Animation",
+    "author": "PMOVES.AI",
+    "created_at": "2026-03-13T12:00:00Z",
+    "tags": ["geometry-bus", "chit", "cgp", "nats"],
+    "theme": "pmoves-brand"
+  },
+  "canvas": {
+    "width": 1920,
+    "height": 1080,
+    "fps": 30,
+    "background": "#0a0a0f"
+  },
+  "animation": {
+    "engine": "remotion",
+    "duration_ms": 15000,
+    "bpm": 10,
+    "easing": "ease-in-out",
+    "loop": false
+  },
+  "scenes": [
+    {
+      "id": "intro",
+      "label": "Title Card",
+      "duration_ms": 2000,
+      "transition_in": {
+        "type": "fade",
+        "duration_ms": 500
+      },
+      "elements": [
+        {
+          "type": "text",
+          "id": "title",
+          "content": "GEOMETRY BUS",
+          "position": {"x": 960, "y": 450},
+          "style": {
+            "fontFamily": "ui-monospace, SFMono-Regular, Menlo, monospace",
+            "fontSize": 96,
+            "fontWeight": "bold",
+            "color": "#3ecf8e",
+            "textAlign": "center"
+          },
+          "animation": {
+            "keyframes": [
+              {"at_ms": 0, "properties": {"opacity": 0, "scale": 0.8}},
+              {"at_ms": 500, "properties": {"opacity": 1, "scale": 1}}
+            ]
+          }
+        },
+        {
+          "type": "text",
+          "id": "subtitle",
+          "content": "CHIT Geometry Packet Event Fabric",
+          "position": {"x": 960, "y": 550},
+          "style": {
+            "fontFamily": "ui-monospace, SFMono-Regular, Menlo, monospace",
+            "fontSize": 32,
+            "color": "#9333ea",
+            "textAlign": "center"
+          },
+          "animation": {
+            "keyframes": [
+              {"at_ms": 500, "properties": {"opacity": 0}},
+              {"at_ms": 1000, "properties": {"opacity": 1}}
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "architecture",
+      "label": "Architecture Overview",
+      "duration_ms": 6000,
+      "transition_in": {
+        "type": "slide",
+        "direction": "left",
+        "duration_ms": 500
+      },
+      "elements": [
+        {
+          "type": "text",
+          "id": "arch-title",
+          "content": "Architecture",
+          "position": {"x": 960, "y": 100},
+          "style": {
+            "fontSize": 48,
+            "fontWeight": "bold",
+            "color": "#3ecf8e"
+          },
+          "animation": {
+            "keyframes": [
+              {"at_ms": 0, "properties": {"opacity": 0, "x": 1100}},
+              {"at_ms": 500, "properties": {"opacity": 1, "x": 960}}
+            ]
+          }
+        },
+        {
+          "type": "metric_card",
+          "id": "publishers-card",
+          "content": {
+            "title": "Publishers",
+            "value": "4",
+            "items": [
+              "consciousness-service :8096",
+              "Tokenism Simulator :8103",
+              "EvoController :8113",
+              "Flute Gateway :8055"
+            ]
+          },
+          "position": {"x": 200, "y": 300},
+          "style": {
+            "backgroundColor": "#3ecf8e",
+            "textColor": "#000"
+          },
+          "animation": {
+            "keyframes": [
+              {"at_ms": 500, "properties": {"opacity": 0, "y": 400}},
+              {"at_ms": 1000, "properties": {"opacity": 1, "y": 300}}
+            ]
+          }
+        },
+        {
+          "type": "metric_card",
+          "id": "nats-card",
+          "content": {
+            "title": "NATS Geometry Bus",
+            "value": "nats://nats:pmoves@nats:4222",
+            "items": [
+              "JetStream Enabled",
+              "geometry.cgp.v1",
+              "tokenism.cgp.*",
+              "geometry.swarm.meta.v1"
+            ]
+          },
+          "position": {"x": 660, "y": 300},
+          "style": {
+            "backgroundColor": "#fbbf24",
+            "textColor": "#000"
+          },
+          "animation": {
+            "keyframes": [
+              {"at_ms": 1000, "properties": {"opacity": 0, "y": 400}},
+              {"at_ms": 1500, "properties": {"opacity": 1, "y": 300}}
+            ]
+          }
+        },
+        {
+          "type": "metric_card",
+          "id": "subscribers-card",
+          "content": {
+            "title": "Subscribers",
+            "value": "3+",
+            "items": [
+              "Hi-RAG v2 :8086",
+              "Hyperdimensions (Three.js)",
+              "BoTZ CHIT Tools",
+              "Cipher Memory :8096"
+            ]
+          },
+          "position": {"x": 1120, "y": 300},
+          "style": {
+            "backgroundColor": "#9333ea",
+            "textColor": "#fff"
+          },
+          "animation": {
+            "keyframes": [
+              {"at_ms": 1500, "properties": {"opacity": 0, "y": 400}},
+              {"at_ms": 2000, "properties": {"opacity": 1, "y": 300}}
+            ]
+          }
+        },
+        {
+          "type": "text",
+          "id": "flow-note",
+          "content": "→ CGP Packets flow from Publishers through NATS to Subscribers →",
+          "position": {"x": 960, "y": 700},
+          "style": {
+            "fontSize": 24,
+            "color": "#ededed",
+            "textAlign": "center"
+          },
+          "animation": {
+            "keyframes": [
+              {"at_ms": 2500, "properties": {"opacity": 0}},
+              {"at_ms": 3000, "properties": {"opacity": 1}}
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "data-flow",
+      "label": "CGP Data Flow",
+      "duration_ms": 4000,
+      "transition_in": {
+        "type": "fade",
+        "duration_ms": 500
+      },
+      "elements": [
+        {
+          "type": "text",
+          "id": "flow-title",
+          "content": "CGP Packet Lifecycle",
+          "position": {"x": 960, "y": 100},
+          "style": {
+            "fontSize": 48,
+            "fontWeight": "bold",
+            "color": "#3ecf8e"
+          }
+        },
+        {
+          "type": "timeline",
+          "id": "cgp-timeline",
+          "events": [
+            {
+              "at_ms": 500,
+              "label": "1. Text Input",
+              "description": "Text units from YouTube, documents, or manual input"
+            },
+            {
+              "at_ms": 1200,
+              "label": "2. CHR Clustering",
+              "description": "Constellation Harvest Regularization (K clusters)"
+            },
+            {
+              "at_ms": 1900,
+              "label": "3. CGP Construction",
+              "description": "CHIT Geometry Packet v1.0 with anchors, spectrum, points"
+            },
+            {
+              "at_ms": 2600,
+              "label": "4. NATS Publish",
+              "description": "Publish to geometry.cgp.v1 and tokenism.cgp.ready.v1"
+            },
+            {
+              "at_ms": 3300,
+              "label": "5. 3D Rendering",
+              "description": "Hyperdimensions renders interactive WebGL visualization"
+            }
+          ],
+          "position": {"x": 200, "y": 300},
+          "style": {
+            "lineColor": "#3ecf8e",
+            "markerColor": "#fbbf24",
+            "textColor": "#ededed"
+          }
+        }
+      ]
+    },
+    {
+      "id": "cgp-structure",
+      "label": "CGP Packet Structure",
+      "duration_ms": 3000,
+      "transition_in": {
+        "type": "scale",
+        "duration_ms": 500
+      },
+      "elements": [
+        {
+          "type": "text",
+          "id": "struct-title",
+          "content": "CGP v1.0 Structure",
+          "position": {"x": 960, "y": 100},
+          "style": {
+            "fontSize": 48,
+            "fontWeight": "bold",
+            "color": "#3ecf8e"
+          }
+        },
+        {
+          "type": "code_block",
+          "id": "cgp-json",
+          "content": {
+            "language": "json",
+            "code": "{\n  \"spec\": \"chit.cgp.v1.0\",\n  \"summary\": \"CHR clustering results\",\n  \"super_nodes\": [{\n    \"id\": \"consciousness-super\",\n    \"constellations\": [{\n      \"anchor\": [0.5, 0.3, 0.8],\n      \"spectrum\": [0.8, 0.6, 0.4],\n      \"points\": [{\n        \"modality\": \"text\",\n        \"proj\": 0.95,\n        \"conf\": 0.9\n      }]\n    }]\n  }],\n  \"sig\": {\n    \"alg\": \"HMAC-SHA256\",\n    \"hmac\": \"base64-encoded\"\n  }\n}"
+          },
+          "position": {"x": 200, "y": 250},
+          "style": {
+            "backgroundColor": "#171717",
+            "borderColor": "#404040",
+            "fontSize": 16,
+            "fontFamily": "ui-monospace, monospace"
+          }
+        }
+      ]
+    }
+  ],
+  "data_bindings": {
+    "source": "inline",
+    "inline_data": {
+      "services": [
+        {"name": "consciousness-service", "port": 8096, "type": "publisher"},
+        {"name": "Tokenism Simulator", "port": 8103, "type": "publisher"},
+        {"name": "EvoController", "port": 8113, "type": "publisher"},
+        {"name": "Hi-RAG v2", "port": 8086, "type": "subscriber"},
+        {"name": "Hyperdimensions", "port": null, "type": "subscriber"}
+      ]
+    }
+  },
+  "output": {
+    "format": "mp4",
+    "quality": "high",
+    "codec": "h264"
+  }
+}

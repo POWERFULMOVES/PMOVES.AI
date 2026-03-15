@@ -140,16 +140,23 @@ def verify_gh_auth():
             print_success("GitHub CLI authenticated")
             # Extract username
             if "Logged in to" in result.stdout:
+                from urllib.parse import urlparse
                 for line in result.stdout.split('\n'):
-                    if "github.com" in line:
-                        print(f"  {line.strip()}")
+                    stripped = line.strip()
+                    # Validate host is exactly github.com, not a substring match
+                    try:
+                        parsed = urlparse(f"https://{stripped}")
+                        if parsed.hostname == "github.com":
+                            print(f"  {stripped}")
+                    except Exception:
+                        pass  # Skip lines that cannot be parsed as URLs
             return True
         else:
             print_error("GitHub CLI not authenticated")
             print("  Run: gh auth login")
             return False
     except Exception as e:
-        print_error(f"Failed to verify GitHub CLI: {e}")
+        print_error("Failed to verify GitHub CLI — check logs for details")
         return False
 
 
@@ -165,12 +172,13 @@ def get_github_secrets():
         result = run_command("gh secret list --repo POWERFULMOVES/PMOVES.AI", timeout=30)
 
         if result.returncode != 0:
-            print_error(f"Failed to list GitHub Secrets: {result.stderr}")
+            print_error("Failed to list GitHub Secrets — check GitHub CLI auth status")
             return None
 
         print("  Checking GitHub Secrets for POWERFULMOVES/PMOVES.AI:")
 
-        # Parse output safely in Python
+        # Parse output safely in Python - count matches without logging tainted values
+        found_count = 0
         for line in result.stdout.split('\n'):
             if not line.strip():
                 continue
@@ -178,7 +186,12 @@ def get_github_secrets():
             secret_name = line.strip().split()[0]
             if secret_name in gh_app_keys:
                 credentials[secret_name] = "PRESENT_IN_GH_SECRETS"
-                print_success(f"  {secret_name}: Found in GitHub Secrets")
+                found_count += 1
+
+        # Report results using only hardcoded key names (not tainted output)
+        for key in gh_app_keys:
+            if key in credentials:
+                print_success(f"  {key}: Found in GitHub Secrets")
 
     except subprocess.TimeoutExpired as e:
         print_error(f"Timeout after {e.timeout}s - check network connectivity")
@@ -190,7 +203,7 @@ def get_github_secrets():
         print_error("Permission denied executing GitHub CLI")
         return None
     except Exception as e:
-        print_error(f"Failed to fetch GitHub Secrets: {type(e).__name__}: {e}")
+        print_error("Failed to fetch GitHub Secrets — check logs for details")
         return None
 
     if len(credentials) == 4:
@@ -246,7 +259,9 @@ def update_env_shared():
                 updated_line = line.lstrip('#')
                 output_lines.append(updated_line)
                 updated_count += 1
-                print_success(f"  Uncommented: {updated_line.strip()}")
+                # Only print the key name, not the value (avoid clear-text secret logging)
+                key_name = updated_line.split('=', 1)[0].strip() if '=' in updated_line else "unknown"
+                print_success(f"  Uncommented: {key_name}=***")
             else:
                 # Already uncommented
                 output_lines.append(line)
@@ -284,10 +299,11 @@ def run_secrets_funnel():
         else:
             print_error("secrets-funnel failed")
             if result.stderr:
-                print(f"  Error: {result.stderr}")
+                logging.error(f"secrets-funnel stderr: {result.stderr}")
+                print("  Check logs for error details")
             return False
     except Exception as e:
-        print_error(f"Failed to run secrets-funnel: {e}")
+        print_error("Failed to run secrets-funnel — check logs for details")
         return False
 
 
@@ -413,8 +429,8 @@ def main():
         return 0
 
     except Exception as e:
-        logging.error(f"Setup failed with exception: {e}", exc_info=True)
-        print_error(f"Unexpected error: {e}")
+        logging.error(f"Setup failed with exception: {e}")
+        print_error("Unexpected error during setup — check logs for details")
         print(f"  Full log: {log_file}")
         # Rollback on exception
         if env_shared_backup and env_shared_backup.exists():
@@ -432,7 +448,6 @@ if __name__ == '__main__':
         print_warning("\nSetup cancelled by user")
         sys.exit(130)
     except Exception as e:
-        print_error(f"Unexpected error: {e}")
-        import traceback
-        traceback.print_exc()
+        logging.error(f"Unexpected error: {e}")
+        print_error("Unexpected error — check logs for details")
         sys.exit(1)
