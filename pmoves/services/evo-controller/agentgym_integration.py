@@ -298,7 +298,7 @@ class AgentGymIntegration:
         if not decision.get("should_train"):
             return None
 
-        base_model = os.getenv("AGENTGYM_BASE_MODEL", "Qwen3-8B-Instruct")
+        base_model = os.getenv("AGENTGYM_BASE_MODEL", "Qwen/Qwen3-8B")
         env_namespace = os.getenv("AGENTGYM_ENV_NAMESPACE", "pmoves.consciousness")
 
         # Build training request
@@ -360,16 +360,16 @@ class AgentGymIntegration:
     ) -> None:
         """
         Publish a training completion event to the agent-zero event bus.
-        
+
         Sends an event with training metadata so downstream services (AgentGym-RL coordinator, publishing workflows) can process the completed run. The emitted payload includes training_run_id, trajectory_ids, model_id (resolved from the provided value or environment), population_id, fitness_metrics, epoch, generation, and an ISO-8601 UTC timestamp. On success the method logs the publication; on failure it logs a warning.
-        
+
         Parameters:
             training_run_id (str): Identifier of the completed training run.
             trajectory_ids (List[str]): List of trajectory identifiers produced by the run.
             model_id (Optional[str]): Model identifier used for training; if omitted, the base model is resolved from environment variables or a default.
             fitness_metrics (Optional[Dict[str, float]]): Final fitness metrics collected from the training; an empty dict is sent if omitted.
         """
-        base_model = model_id or os.getenv("AGENTGYM_BASE_MODEL", "Qwen3-8B-Instruct")
+        base_model = model_id or os.getenv("AGENTGYM_BASE_MODEL", "Qwen/Qwen3-8B")
         base = os.getenv("AGENT_ZERO_BASE_URL") or os.getenv("AGENTZERO_BASE_URL") or "http://agent-zero:8080"
         url = f"{base.rstrip('/')}/events/publish"
 

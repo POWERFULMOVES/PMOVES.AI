@@ -4,6 +4,7 @@ import logging
 import re
 import asyncio
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 from typing import Optional
 from uuid import UUID
 from fastapi import FastAPI, HTTPException
@@ -142,7 +143,7 @@ async def lifespan(app: FastAPI):
         async def training_completed_handler(msg):
             """
             Handle a training completion event by optionally publishing associated trajectories to HuggingFace, emitting related NATS events, and recording the completion in storage.
-            
+
             Parameters:
                 msg: NATS message whose `data` is a JSON-encoded payload containing at minimum a `training_run_id` and optionally `trajectory_ids` and `model_id`.
             """
@@ -156,10 +157,24 @@ async def lifespan(app: FastAPI):
                     logger.warning("agentgym.train.completed.v1 missing training_run_id")
                     return
 
+                if not DATASET_NAME_PATTERN.match(training_run_id):
+                    logger.warning("Invalid training_run_id format: %s", training_run_id[:100])
+                    return
+
                 logger.info(
                     "Training completed: run=%s, trajectories=%d, model=%s",
                     training_run_id, len(trajectory_ids), model_id,
                 )
+
+                # Validate trajectory IDs as UUIDs before publishing
+                valid_trajectory_ids = []
+                for tid in trajectory_ids:
+                    try:
+                        UUID(tid)
+                        valid_trajectory_ids.append(tid)
+                    except (ValueError, AttributeError):
+                        logger.warning("Skipping invalid trajectory_id: %s", str(tid)[:100])
+                trajectory_ids = valid_trajectory_ids
 
                 # Auto-publish to HuggingFace if publisher is available
                 if hf_publisher and trajectory_ids:
@@ -184,6 +199,7 @@ async def lifespan(app: FastAPI):
                                 "repo_url": result.get("repo_url"),
                                 "trajectory_count": len(trajectory_ids),
                                 "source": "agentgym-rl-coordinator",
+                                "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
                             })
                             await nc.publish(
                                 "agentgym.model.published.v1",
@@ -537,11 +553,11 @@ async def publish_dataset(
         for tid in trajectory_ids:
             try:
                 UUID(tid)
-            except ValueError:
+            except ValueError as e:
                 raise HTTPException(
                     status_code=400,
-                    detail=f"Invalid trajectory_id format: {tid}. Must be a valid UUID."
-                )
+                    detail=f"Invalid trajectory_id format: {tid}. Must be a valid UUID.",
+                ) from e
 
     if not hf_publisher:
         raise HTTPException(status_code=503, detail="HuggingFace publisher not available")
