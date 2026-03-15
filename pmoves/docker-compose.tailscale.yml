@@ -1,0 +1,33 @@
+# docker-compose.tailscale.yml — Tailscale mesh client for POWERFULMOVES node
+# ============================================================================
+# Userspace networking mode: no TUN device needed, works on Windows Docker
+# Desktop / WSL2. Slightly slower than kernel mode but zero friction.
+#
+# Usage:
+#   make -C pmoves tailscale-up        # Start and join tailnet
+#   make -C pmoves tailscale-status    # Check connection
+#   make -C pmoves tailscale-ip        # Show Tailscale IP
+#
+# Requires: TAILSCALE_AUTHKEY in env.shared (get from https://login.tailscale.com/admin/settings/keys)
+
+services:
+  tailscale:
+    image: tailscale/tailscale:latest
+    container_name: pmoves-tailscale
+    hostname: pmoves-powerfulmoves
+    restart: unless-stopped
+    volumes:
+      - tailscale-state:/var/lib/tailscale
+    environment:
+      - TS_AUTHKEY=${TAILSCALE_AUTHKEY}
+      - TS_USERSPACE=true
+      - TS_HOSTNAME=pmoves-powerfulmoves
+      - TS_STATE_DIR=/var/lib/tailscale
+      - TS_ACCEPT_DNS=true
+      - TS_EXTRA_ARGS=--accept-routes
+    network_mode: host
+    env_file:
+      - env.shared
+
+volumes:
+  tailscale-state:
