@@ -1,0 +1,31 @@
+{
+  "version": "chit.cgp.v1.0",
+  "timestamp": "2026-03-15T12:00:00Z",
+  "source": "claude-review-sweep",
+  "agent_id": "claude-opus",
+  "glyph": "\u25c6",
+  "color": "#7C3AED",
+  "phase": "Phase H",
+  "payload": {
+    "type": "review-learnings",
+    "session": "pr-batch-merge-934-941",
+    "summary": "7 PRs merged (#934-941), 1 closed (#936). 24 CodeRabbit threads manually fixed. 15 remaining threads resolved via GraphQL. PR skill chain (pr-monitor-graphiti-chit) now documented in CLAUDE.md with hooks wired for automatic awareness.",
+    "prs_merged": [934, 935, 937, 938, 940, 941],
+    "prs_closed": [936],
+    "threads_manually_fixed": 24,
+    "threads_graphql_resolved": 15,
+    "integration_changes": [
+      "CLAUDE.md: Added 'PR Review & Merge Workflow' section with full skill chain",
+      "CLAUDE.md: Fixed pr-monitor-graphiti-chit pairing (3-step -> 4-step)",
+      "settings.json: Wired UserPromptSubmit hook for PR skill awareness",
+      "settings.json: Wired post-review-chit.sh to Skill PostToolUse",
+      "hooks/pr-skill-reminder.sh: New lightweight PR context reminder hook"
+    ],
+    "learnings": [
+      "Always use /pr-trim instead of manual thread resolution",
+      "post-review-chit.sh existed but was not wired — hooks must be registered in settings.json",
+      "Skill pairing table in CLAUDE.md was out of date (missing pr-hedge-trim step)",
+      "UserPromptSubmit hooks fire on every prompt — use script-side keyword detection for targeted behavior"
+    ]
+  }
+}
