@@ -11,6 +11,7 @@
 | Node | LAN IP | Tailscale Hostname | Public IP | Role | Runner Labels | vCPU / RAM | Cost |
 |------|--------|--------------------|-----------|------|---------------|------------|------|
 | Z890 (Windows 11) | 192.168.1.92 / .94 | 100.113.38.37 | — | Dev, GPU (RTX 3090 Ti) | `self-hosted, ai-lab, gpu, cuda` | 32C / 128GB | electricity |
+| POWERFULMOVES (Windows 11) | — | pmoves-powerfulmoves | — | Dev, GPU (secondary) | — | — | electricity |
 | 5090 PC | 192.168.1.65 / .66 | (pending onboarding) | — | Primary GPU (RTX 5090) | (future: `ai-lab`) | TBD | electricity |
 | KVM4-1 | — | pmoves-kvm4-1 | Hostinger (TBD) | API Gateway | `self-hosted, vps, kvm4, production` | 8C / 16GB | $10/mo |
 | KVM4-2 | — | pmoves-kvm4-2 | Hostinger (TBD) | Data / Storage | `self-hosted, vps, kvm4, production` | 8C / 16GB | $10/mo |
@@ -110,6 +111,8 @@ NATS URL: nats://nats:pmoves@nats:4222
 Z890 ←→ KVM4-1 ←→ KVM4-2
   ↕         ↕
 5090      KVM2
+  ↕
+POWERFULMOVES
 ```
 
 ---
