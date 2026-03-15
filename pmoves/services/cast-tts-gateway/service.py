@@ -531,9 +531,13 @@ class CastTTSGateway:
                         result = await self.device_manager.cast_audio(audio_path, target_devices[0])
 
                     if result.get("success"):
+                        # catt identifies devices by friendly name only; use
+                        # device_id/device_name from result when available,
+                        # fall back to "device" (name string) for both fields.
+                        _dev = result.get("device", "")
                         await self._publish_event("voice.cast.completed.v1", {
-                            "device_id": result.get("device", ""),
-                            "device_name": result.get("device", ""),
+                            "device_id": result.get("device_id", _dev),
+                            "device_name": result.get("device_name", _dev),
                             "audio_url": "",
                             "text": text,
                             "timestamp": datetime.utcnow().isoformat() + "Z",
@@ -667,9 +671,10 @@ class CastTTSGateway:
                 result = await self.device_manager.cast_audio(audio_path, device)
 
             if result["success"]:
+                _dev = result.get("device", "")
                 await self._publish_event("voice.cast.completed.v1", {
-                    "device_id": result.get("device", ""),
-                    "device_name": result.get("device", ""),
+                    "device_id": result.get("device_id", _dev),
+                    "device_name": result.get("device_name", _dev),
                     "audio_url": audio_path,
                     "text": "",
                     "timestamp": datetime.utcnow().isoformat() + "Z",
