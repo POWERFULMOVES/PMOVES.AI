@@ -10,9 +10,8 @@
 
 | Node | LAN IP | Tailscale Hostname | Public IP | Role | Runner Labels | vCPU / RAM | Cost |
 |------|--------|--------------------|-----------|------|---------------|------------|------|
-| Z890 (Windows 11) | — | pmoves-z890 | — | Dev, GPU (RTX 3090 Ti) | `self-hosted, ai-lab, gpu, cuda` | 32C / 128GB | electricity |
-| POWERFULMOVES (Windows 11) | — | pmoves-powerfulmoves | — | Dev, GPU (secondary) | — | — | electricity |
-| 5090 PC | — | (pending onboarding) | — | Primary GPU (RTX 5090) | (future: `ai-lab`) | TBD | electricity |
+| Z890 (Windows 11) | — | pmoves-z890 | — | Dev, GPU (RTX 3090 Ti) | `self-hosted, ai-lab` (secondary) | 32C / 128GB | electricity |
+| POWERFULMOVES (Windows 11) | — | pmoves-powerfulmoves | — | Dev, Primary GPU (RTX 5090) | `self-hosted, ai-lab, gpu, cuda` | 24C / 64GB | electricity |
 | KVM4-1 | — | pmoves-kvm4-1 | Hostinger (TBD) | API Gateway | `self-hosted, vps, kvm4, production` | 8C / 16GB | $10/mo |
 | KVM4-2 | — | pmoves-kvm4-2 | Hostinger (TBD) | Data / Storage | `self-hosted, vps, kvm4, production` | 8C / 16GB | $10/mo |
 | KVM2 | — | pmoves-kvm2 | Hostinger (TBD) | Exit Node / Proxy | `self-hosted, vps, kvm2, backup` | 4C / 8GB | $10/mo |
@@ -61,13 +60,13 @@ Services deployed via `docker-compose.vps.override.yml`:
 |---------|------|--------|-------|
 | nginx | 80 / 443 | `nginx -t` | SSL termination via Let's Encrypt |
 
+### POWERFULMOVES — Primary GPU + AI Lab Runner
+
+Primary GPU inference node (RTX 5090, 32GB VRAM). Runs containerized `ai-lab` GitHub Actions runner via `myoung34/github-runner`. Connected to tailnet as `pmoves-powerfulmoves`. GPU Docker passthrough pending NVIDIA Container Toolkit update.
+
 ### Z890 — Development (Local)
 
-All services can run locally via Docker Compose profiles. Primary use: development, GPU inference (3090 Ti), self-hosted GitHub Actions runner (`ai-lab`).
-
-### 5090 PC — Primary GPU (Pending)
-
-Future primary inference node. Blocked on: Tailscale onboarding, OpenSSH setup.
+All services can run locally via Docker Compose profiles. Secondary GPU (RTX 3090 Ti). Self-hosted runner available as fallback.
 
 ---
 
@@ -108,11 +107,9 @@ Developer (Z890)
 All nodes interconnected via Tailscale overlay network.
 NATS URL: nats://nats:pmoves@nats:4222
 
-Z890 ←→ KVM4-1 ←→ KVM4-2
-  ↕         ↕
-5090      KVM2
-  ↕
-POWERFULMOVES
+POWERFULMOVES ←→ Z890 ←→ KVM4-1 ←→ KVM4-2
+                            ↕
+                          KVM2
 ```
 
 ---
@@ -143,7 +140,8 @@ POWERFULMOVES
 
 | Runner | Labels | Node | Hardware | Role | Cost |
 |--------|--------|------|----------|------|------|
-| AI Lab | `self-hosted, ai-lab, gpu, cuda` | Z890 (→ 5090) | RTX 3090Ti/5090, 128GB | GPU builds, CUDA, inference | $0 (electricity) |
+| AI Lab (Linux) | `self-hosted, ai-lab, gpu, cuda` | POWERFULMOVES | RTX 5090, 64GB | GPU builds, CUDA, inference | $0 (electricity) |
+| AI Lab (Windows) | `self-hosted, ai-lab, gpu, Windows` | POWERFULMOVES | RTX 5090, 64GB | Native Windows builds | $0 (electricity) |
 | cloudstartup | `self-hosted, vps, cloudstartup, staging` | KVM4-1 | 8C / 16GB | Staging deploys, CPU builds | $10/mo |
 | kvm4 | `self-hosted, vps, kvm4, production` | KVM4-1 | 8C / 16GB | Production deploys | (shared) |
 | kvm2 | `self-hosted, vps, kvm2, backup` | KVM2 | 4C / 8GB | Overflow, backup | $10/mo |
@@ -217,7 +215,8 @@ Key secrets:
 
 | Item | Blocker | Depends On |
 |------|---------|------------|
-| 5090 Tailscale join | OpenSSH not installed on 5090 | User installs OpenSSH |
+| ~~5090 Tailscale join~~ | ~~OpenSSH not installed~~ | **DONE** — POWERFULMOVES connected as `pmoves-powerfulmoves` |
+| GPU Docker passthrough | NVIDIA Container Toolkit segfaults on RTX 5090/WSL2 | Update toolkit to latest version |
 | DNS records creation | pmoves.ai zone not in Cloudflare | User adds zone + updates NS at Hostinger |
 | KVM public IPs | Not retrieved yet | Hostinger MCP or dashboard |
 | Cloudflare Worker deploy | Config ready, needs manual `wrangler deploy` | Zone active |
