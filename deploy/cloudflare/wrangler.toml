@@ -6,14 +6,14 @@ main = "worker.js"
 compatibility_date = "2025-12-08"
 workers_dev = true
 
-# Account ID (override with CLOUDFLARE_ACCOUNT_ID env var)
-# account_id = "your_account_id_here"
+# Account ID
+account_id = "fe5ef93f1ffc7070b2218b96f8b256f5"
 
 # KV Namespace for build state tracking (create via: wrangler kv:namespace create "CI_STATE")
 [[kv_namespaces]]
 binding = "CI_STATE"
-id = "your_kv_namespace_id"
-preview_id = "your_preview_kv_namespace_id"
+id = "9f6cdc5ecd6540698c9e2ca7d6376fd4"
+# preview_id = "your_preview_kv_namespace_id"  # Create via: wrangler kv:namespace create "CI_STATE" --preview
 
 # R2 Bucket for build artifacts (optional)
 # [[r2_buckets]]
@@ -42,10 +42,20 @@ vars = { RUNNER_DISPATCH_MODE = "cloudflare-only" }
 # - CLOUDFLARE_API_TOKEN: For deploying via Workers API
 # - DISCORD_WEBHOOK_URL: Discord notification endpoint
 
-# Routes (configure after deployment)
+# Routes — uncomment after pmoves.ai zone is active in Cloudflare
 # routes = [
-#   { pattern = "ci.pmoves.ai/webhook", zone_name = "pmoves.ai" }
+#   { pattern = "ci.pmoves.ai/webhook/*", zone_name = "pmoves.ai" },
+#   { pattern = "ci.pmoves.ai/health", zone_name = "pmoves.ai" },
+#   { pattern = "ci.pmoves.ai/status", zone_name = "pmoves.ai" },
+#   { pattern = "ci.pmoves.ai/metrics", zone_name = "pmoves.ai" }
 # ]
+#
+# Secrets to set before deploy:
+#   wrangler secret put WEBHOOK_SECRET    # GitHub webhook HMAC secret
+#   wrangler secret put GITHUB_TOKEN      # GitHub PAT for PR file fetching
+#   wrangler secret put DISCORD_WEBHOOK_URL  # Discord notification endpoint
+#
+# Deploy: cd deploy/cloudflare && npm install && npx wrangler deploy
 
 # Limits
 limits = { cpu_ms = 50 }
