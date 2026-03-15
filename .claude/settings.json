@@ -42,6 +42,28 @@
             "timeout": 10
           }
         ]
+      },
+      {
+        "matcher": "Skill",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"%CLAUDE_PROJECT_DIR%\\.claude\\hooks\\post-review-chit.sh\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"%CLAUDE_PROJECT_DIR%\\.claude\\hooks\\pr-skill-reminder.sh\"",
+            "timeout": 3
+          }
+        ]
       }
     ]
   },
