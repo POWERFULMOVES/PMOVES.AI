@@ -1725,9 +1725,9 @@ agents:
     evolution_stage: pre_stage
     nats:
       publishes:
-        - "openclaw.message.received.v1"    # planned
-        - "openclaw.message.sent.v1"         # planned
-        - "openclaw.channel.connected.v1"    # planned
+        - "openclaw.message.received.v1"
+        - "openclaw.message.sent.v1"
+        - "openclaw.channel.connected.v1"
       subscribes: []
     chit_toggles:
       delta_sensitive: false
