@@ -68,6 +68,7 @@ Required handoff fields:
 - `2026-02-24T12:00:00Z` CLAIM `CLAUDE-OPUS` scope: Rail split handoff — runtime PR #708 + PR #707 close-review + KRISS KROSS accord ACK.
 - `2026-03-01T22:45:00Z` CLAIM `CODEX-GPT5` scope: TAC model/persona production readiness review + Graphiti protocol parseable TAC addendum.
 - `2026-03-04T20:50:26-05:00` CLAIM `CLAUDE-OPUS` scope: Graphiti protocol x UI-4482 lane (Notebook Workbench graphiti telemetry + docs + smoke evidence).
+- `2026-03-15T18:00:00Z` CLAIM `CLAUDE-OPUS` scope: Infra TAC trees (infrastructure, tailscale, runners) + Tailscale Docker registration for POWERFULMOVES node + PR skill chain convergence (#947).
 
 ## Graphiti Review Log
 - `2026-02-21T10:35:03.6791631-05:00` REVIEW `CODEX-GPT5`

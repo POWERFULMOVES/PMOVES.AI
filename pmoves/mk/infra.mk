@@ -10,7 +10,8 @@
 # Guard: SERVICE must be set for volume-reset
 VALID_SERVICES := neo4j tensorzero-clickhouse meilisearch qdrant minio supabase-db nats
 
-.PHONY: volume-reset volume-list docker-prune docker-prune-all branch-audit branch-cleanup
+.PHONY: volume-reset volume-list docker-prune docker-prune-all branch-audit branch-cleanup \
+       tailscale-up tailscale-down tailscale-status tailscale-ip
 
 volume-reset: ## Reset a service volume: make volume-reset SERVICE=tensorzero-clickhouse
 	@if [ -z "$(SERVICE)" ]; then \
@@ -85,6 +86,20 @@ docker-prune-all: ## Aggressive cleanup: also removes unused images older than 7
 	@echo "Volumes NOT pruned. Use 'make volume-reset SERVICE=...' for targeted resets."
 	@echo "=== Docker prune-all complete ==="
 
+# ── Tailscale ──────────────────────────────────────────────────────────
+tailscale-up: ## Start Tailscale container and join tailnet
+	docker compose -f docker-compose.tailscale.yml --env-file env.shared up -d
+
+tailscale-down: ## Stop Tailscale container
+	docker compose -f docker-compose.tailscale.yml down
+
+tailscale-status: ## Show Tailscale connection status
+	docker exec pmoves-tailscale tailscale status
+
+tailscale-ip: ## Show this node's Tailscale IP
+	docker exec pmoves-tailscale tailscale ip -4
+
+# ── Branch Management ─────────────────────────────────────────────────
 branch-audit: ## List stale remote branches with age and merge status
 	@$(CODEX_PY) tools/branch_cleanup.py
 
