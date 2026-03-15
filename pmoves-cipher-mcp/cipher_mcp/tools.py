@@ -4,8 +4,29 @@ Cipher MCP Tools Definition
 MCP tools exposed to Claude Code CLI for memory operations.
 """
 
+import asyncio
+import sys
 from typing import Any, Dict, List
 from mcp.types import Tool, TextContent
+
+from cipher_mcp.nats_events import (
+    emit_memory_stored,
+    emit_memory_searched,
+    emit_reasoning_stored,
+)
+
+
+def _log_task_exception(task):
+    """Log exceptions from background tasks instead of silently dropping them."""
+    if not task.cancelled() and task.exception():
+        print(f"NATS background task failed: {task.exception()}", file=sys.stderr)
+
+
+def _spawn_background(coro):
+    """Spawn a fire-and-forget background task with error logging."""
+    task = asyncio.create_task(coro)
+    task.add_done_callback(_log_task_exception)
+    return task
 
 
 async def pmoves_cipher_store(
@@ -43,6 +64,10 @@ async def pmoves_cipher_store(
             category=category,
             tags=tags or [],
             metadata=metadata or {},
+        )
+
+        _spawn_background(
+            emit_memory_stored(memory.id, memory.category, memory.tags or [])
         )
 
         return [TextContent(
@@ -85,6 +110,10 @@ async def pmoves_cipher_search(
             category=category,
             tags=tags,
             limit=limit,
+        )
+
+        _spawn_background(
+            emit_memory_searched(query, len(memories) if memories else 0, category)
         )
 
         if not memories:
@@ -140,6 +169,10 @@ async def pmoves_cipher_store_reasoning(
             reasoning=reasoning,
             result=result,
             metadata=metadata or {},
+        )
+
+        _spawn_background(
+            emit_reasoning_stored(memory.id, question)
         )
 
         return [TextContent(

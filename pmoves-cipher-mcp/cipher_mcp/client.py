@@ -5,6 +5,7 @@ Communicates with the Cipher Memory Node.js service via HTTP.
 """
 
 import asyncio
+import os
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
@@ -65,10 +66,20 @@ class CipherClient:
 
         self.base_url = base_url or get_cipher_url()
         self.timeout = timeout
+        self._token = os.getenv("CIPHER_API_TOKEN", "")
+
+    def _get_headers(self) -> dict:
+        """Get auth headers if token is configured."""
+        if self._token:
+            return {"Authorization": f"Bearer {self._token}"}
+        return {}
 
     def _get_client(self) -> httpx.AsyncClient:
-        """Get HTTP client with configured timeout."""
-        return httpx.AsyncClient(timeout=self.timeout)
+        """Get HTTP client with configured timeout and auth headers."""
+        return httpx.AsyncClient(
+            timeout=self.timeout,
+            headers=self._get_headers(),
+        )
 
     async def health_check(self) -> Dict[str, Any]:
         """
