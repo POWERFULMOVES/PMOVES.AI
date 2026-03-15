@@ -4,7 +4,7 @@
   "title": "PR Hedge Trim Completed",
   "description": "Emitted when a PR hedge trim cycle completes — review threads classified, fixed, and resolved.",
   "type": "object",
-  "required": ["pr_number", "repo", "agent_id", "total_threads", "resolved", "timestamp"],
+  "required": ["pr_number", "repo", "agent_id", "total_threads", "resolved_count", "timestamp"],
   "properties": {
     "pr_number": {
       "type": "integer",
@@ -22,6 +22,10 @@
       "type": "integer",
       "description": "Total review threads on the PR"
     },
+    "unresolved_threads": {
+      "type": "integer",
+      "description": "Threads still unresolved at analysis time"
+    },
     "actionable": {
       "type": "integer",
       "description": "Threads classified as actionable (fix-worthy)"
@@ -38,7 +42,7 @@
       "type": "integer",
       "description": "Threads classified as nitpick/cosmetic"
     },
-    "resolved": {
+    "resolved_count": {
       "type": "integer",
       "description": "Number of threads resolved in this trim"
     },
@@ -54,6 +58,13 @@
     "trail_signed": {
       "type": "boolean",
       "description": "Whether a Graphiti trail entry was signed"
+    },
+    "threads": {
+      "type": "array",
+      "description": "Per-thread classification details",
+      "items": {
+        "type": "object"
+      }
     }
   },
   "additionalProperties": false

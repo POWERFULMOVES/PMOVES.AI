@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import subprocess
 import sys
 from dataclasses import asdict, dataclass, field
@@ -159,7 +160,7 @@ class TrimReport:
 # ---------------------------------------------------------------------------
 
 
-def classify_comment(body: str) -> str:
+def classify_comment(body: str, *, is_bot: bool = True) -> str:
     """Classify a review comment into one of four categories.
 
     Categories:
@@ -167,6 +168,12 @@ def classify_comment(body: str) -> str:
         design-decision — Author's intentional choice, needs documented rationale
         false-positive — Bot misunderstood context
         nitpick — Style/cosmetic, defer
+
+    Args:
+        body: The comment text to classify.
+        is_bot: Whether the comment author is a bot. Unclassified bot
+            comments default to nitpick; unclassified human comments
+            default to actionable.
     """
     text = body.lower()
     if any(token in text for token in FALSE_POSITIVE_TOKENS):
@@ -178,7 +185,7 @@ def classify_comment(body: str) -> str:
     if any(token in text for token in ACTIONABLE_TOKENS):
         return "actionable"
     # Default: unclassified comments from bots are nitpick, from humans are actionable
-    return "nitpick"
+    return "nitpick" if is_bot else "actionable"
 
 
 def classify_thread(thread: ReviewThread) -> str:
@@ -186,7 +193,11 @@ def classify_thread(thread: ReviewThread) -> str:
 
     Priority: actionable > design-decision > false-positive > nitpick.
     """
-    classifications = [classify_comment(c.body) for c in thread.comments if c.body.strip()]
+    classifications = [
+        classify_comment(c.body, is_bot=c.is_bot)
+        for c in thread.comments
+        if c.body.strip()
+    ]
     if "actionable" in classifications:
         return "actionable"
     if "design-decision" in classifications:
@@ -235,19 +246,21 @@ def fetch_threads(repo: str, number: int) -> list[ReviewThread]:
 
         payload = _run_json(cmd)
         if not isinstance(payload, dict):
-            break
+            raise RuntimeError("unexpected GraphQL response: root payload is not an object")
+        if payload.get("errors"):
+            raise RuntimeError(f"GraphQL errors: {json.dumps(payload['errors'], ensure_ascii=False)}")
         data = payload.get("data")
         if not isinstance(data, dict):
-            break
+            raise RuntimeError("unexpected GraphQL response: missing 'data' key")
         repository = data.get("repository")
         if not isinstance(repository, dict):
-            break
+            raise RuntimeError(f"repository not found for {owner}/{name}")
         pr = repository.get("pullRequest")
         if not isinstance(pr, dict):
-            break
+            raise RuntimeError(f"PR #{number} not found in {owner}/{name}")
         review_threads = pr.get("reviewThreads")
         if not isinstance(review_threads, dict):
-            break
+            raise RuntimeError(f"reviewThreads missing from PR #{number}")
 
         nodes = review_threads.get("nodes")
         if isinstance(nodes, list):
@@ -337,7 +350,11 @@ def resolve_thread(thread_id: str, *, dry_run: bool = False) -> bool:
         if isinstance(result, dict):
             data = result.get("data")
             if isinstance(data, dict):
-                thread = data.get("resolveReviewThread", {}).get("thread", {})
+                resolve_data = data.get("resolveReviewThread")
+                if resolve_data is None:
+                    print(f"  [warn] resolveReviewThread returned null for {thread_id}", file=sys.stderr)
+                    return False
+                thread = resolve_data.get("thread") or {}
                 return bool(thread.get("isResolved"))
         return False
     except RuntimeError as exc:
@@ -417,19 +434,24 @@ def cmd_resolve(
     all_threads = fetch_threads(repo, pr_number)
     unresolved = [t for t in all_threads if not t.is_resolved]
     resolved_count = 0
+    failed_count = 0
 
     print(f"\n## PR #{pr_number} — Resolving threads ({', '.join(classifications)})")
     for thread in unresolved:
         if thread.classification not in classifications:
             continue
-        first_comment = thread.comments[0] if thread.comments else None
         path = thread.first_path or "(general)"
         print(f"  [{thread.classification}] {path}:{thread.first_line or '-'}")
         if resolve_thread(thread.thread_id, dry_run=dry_run):
             resolved_count += 1
+        else:
+            failed_count += 1
+            print(f"  [FAILED] could not resolve thread at {path}:{thread.first_line or '-'}", file=sys.stderr)
 
     mode = "dry-run" if dry_run else "resolved"
     print(f"\n{mode}: {resolved_count}/{len(unresolved)} threads")
+    if failed_count:
+        print(f"FAILED: {failed_count} thread(s) could not be resolved", file=sys.stderr)
     return resolved_count
 
 
@@ -490,6 +512,7 @@ def _serialize_report(report: TrimReport) -> dict[str, Any]:
     return {
         "pr_number": report.pr_number,
         "repo": report.repo,
+        "agent_id": os.environ.get("AGENT_ID", "claude-code-cli"),
         "total_threads": report.total_threads,
         "unresolved_threads": report.unresolved_threads,
         "actionable": report.actionable,
@@ -569,8 +592,11 @@ def main(argv: list[str] | None = None) -> int:
         classifications = ["false-positive", "design-decision"]
         if args.include_actionable:
             classifications.append("actionable")
-        cmd_resolve(repo, args.pr, dry_run=args.dry_run, classifications=tuple(classifications))
-        return 0
+        resolved = cmd_resolve(repo, args.pr, dry_run=args.dry_run, classifications=tuple(classifications))
+        # Fetch remaining unresolved to detect failures
+        remaining = [t for t in fetch_threads(repo, args.pr) if not t.is_resolved]
+        target_threads = [t for t in remaining if t.classification in classifications]
+        return 1 if target_threads else 0
 
     if args.command == "report":
         cmd_report(repo, args.pr, md_out=args.md_out)

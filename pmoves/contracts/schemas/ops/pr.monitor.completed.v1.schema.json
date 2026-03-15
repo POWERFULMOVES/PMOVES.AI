@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "ops/pr.monitor.completed.v1.schema.json",
+  "title": "PR Monitor Completed",
+  "description": "Emitted when a PR monitor cycle completes — open PRs scanned and status updated.",
+  "type": "object",
+  "required": ["repo", "timestamp"],
+  "properties": {
+    "repo": {
+      "type": "string",
+      "description": "GitHub repository in owner/name format"
+    },
+    "open_prs": {
+      "type": "integer",
+      "description": "Number of open PRs found"
+    },
+    "prs_with_unresolved": {
+      "type": "integer",
+      "description": "PRs with unresolved review threads"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 completion timestamp"
+    }
+  },
+  "additionalProperties": false
+}
