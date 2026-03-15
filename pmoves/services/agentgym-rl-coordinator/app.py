@@ -166,6 +166,16 @@ async def lifespan(app: FastAPI):
                     training_run_id, len(trajectory_ids), model_id,
                 )
 
+                # Validate trajectory IDs as UUIDs before publishing
+                valid_trajectory_ids = []
+                for tid in trajectory_ids:
+                    try:
+                        UUID(tid)
+                        valid_trajectory_ids.append(tid)
+                    except (ValueError, AttributeError):
+                        logger.warning("Skipping invalid trajectory_id: %s", str(tid)[:100])
+                trajectory_ids = valid_trajectory_ids
+
                 # Auto-publish to HuggingFace if publisher is available
                 if hf_publisher and trajectory_ids:
                     dataset_name = f"agentgym-{training_run_id}"
@@ -543,11 +553,11 @@ async def publish_dataset(
         for tid in trajectory_ids:
             try:
                 UUID(tid)
-            except ValueError:
+            except ValueError as e:
                 raise HTTPException(
                     status_code=400,
-                    detail=f"Invalid trajectory_id format: {tid}. Must be a valid UUID."
-                )
+                    detail=f"Invalid trajectory_id format: {tid}. Must be a valid UUID.",
+                ) from e
 
     if not hf_publisher:
         raise HTTPException(status_code=503, detail="HuggingFace publisher not available")

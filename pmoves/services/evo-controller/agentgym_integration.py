@@ -298,7 +298,7 @@ class AgentGymIntegration:
         if not decision.get("should_train"):
             return None
 
-        base_model = os.getenv("AGENTGYM_BASE_MODEL", "Qwen3-8B-Instruct")
+        base_model = os.getenv("AGENTGYM_BASE_MODEL", "Qwen/Qwen3-8B")
         env_namespace = os.getenv("AGENTGYM_ENV_NAMESPACE", "pmoves.consciousness")
 
         # Build training request
