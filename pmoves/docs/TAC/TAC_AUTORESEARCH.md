@@ -40,14 +40,13 @@ _None — autoresearch is a CLI tool, not a network service._
 
 ## NATS Subjects
 
-_All subjects are **planned** — autoresearch currently has no NATS integration._
+NATS integration via `nats_reporter.py` — a post-experiment wrapper that reads `run.log` and publishes results. Run as an optional step after each experiment; skips gracefully if NATS is unavailable.
 
 | Subject | Direction | Description |
 |---------|-----------|-------------|
-| `research.autoresearch.experiment.v1` | Publishes (planned) | Experiment started/completed events |
-| `research.autoresearch.result.v1` | Publishes (planned) | val_bpb results for each experiment |
+| `research.autoresearch.result.v1` | Publishes | Experiment result (commit, val_bpb, peak_vram_mb, training_seconds) |
 
-> **TODO:** When implemented, register these subjects in `.claude/context/nats-subjects.md` and `pmoves/contracts/topics.json`.
+> **Usage:** After `uv run train.py > run.log 2>&1`, run `python nats_reporter.py` to publish results.
 
 ## CHIT Integration Status
 
@@ -132,7 +131,7 @@ PMOVES-autoresearch/
 
 ## Open Items
 
-- No NATS integration — experiment events are local-only
+- ~~No NATS integration — experiment events are local-only~~ → **Implemented** (`nats_reporter.py` publishes `research.autoresearch.result.v1`)
 - No Supabase/storage for experiment results (results exist only on GPU host)
 - No Agent Zero orchestration path for remote experiment delegation
 - No Docker containerization — manual GPU host setup required

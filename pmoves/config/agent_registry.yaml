@@ -1694,8 +1694,7 @@ agents:
     evolution_stage: pre_stage
     nats:
       publishes:
-        - "research.autoresearch.experiment.v1"   # planned
-        - "research.autoresearch.result.v1"        # planned
+        - "research.autoresearch.result.v1"
       subscribes: []
     chit_toggles:
       delta_sensitive: false
