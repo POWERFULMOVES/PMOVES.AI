@@ -62,12 +62,13 @@
 
 ## NATS Subjects
 
-_Cipher Memory is currently HTTP-only with no NATS integration._
+Cipher MCP bridge publishes fire-and-forget events after successful memory operations. Events are non-blocking — memory operations succeed even if NATS is unavailable.
 
 | Subject | Direction | Description |
 |---------|-----------|-------------|
-| `cipher.memory.stored.v1` | Publishes (planned) | Memory stored event for observability |
-| `cipher.memory.searched.v1` | Publishes (planned) | Memory search event for observability |
+| `cipher.memory.stored.v1` | Publishes | Memory stored event (memory_id, category, tags) |
+| `cipher.memory.searched.v1` | Publishes | Memory search event (query, result_count, category) |
+| `cipher.reasoning.stored.v1` | Publishes | Reasoning trace stored (reasoning_id, question) |
 
 ## CHIT Integration Status
 
@@ -86,7 +87,7 @@ _Cipher Memory is currently HTTP-only with no NATS integration._
 | `/metrics` (Prometheus) | MISSING | No metrics endpoint |
 | Auth (JWT/Bearer) | MISSING | No auth on API — relies on network isolation |
 | Docker hardening | Partial | Runs as `cipher-api` in agents profile |
-| NATS auth | N/A | No NATS integration (HTTP-only) |
+| NATS auth | Partial | MCP bridge publishes events; uses authenticated NATS URL from registry/env |
 | `env.shared` format | GREEN | Standard env format |
 
 ## Security Stance
@@ -146,13 +147,13 @@ Claude Code CLI  ──stdio──►  cipher_mcp (Python)  ──HTTP──► 
 
 ## Open Items
 
-- No NATS integration — HTTP-only, invisible to event-driven services
+- ~~No NATS integration — HTTP-only, invisible to event-driven services~~ → **Implemented** (MCP bridge publishes `cipher.memory.stored.v1`, `cipher.memory.searched.v1`, `cipher.reasoning.stored.v1`)
 - No `/metrics` endpoint — not scraped by Prometheus
 - No API authentication — depends entirely on network isolation
 - ~~`CIPHER_URL` default mismatch between gateway-agent and actual deployment~~ → **Fixed** (aligned to `cipher-api:8096`)
 - `pmoves-cipher-mcp/` not yet converted to proper git submodule
 - ~~Missing `.gitignore` in `pmoves-cipher-mcp/`~~ → **Fixed**
-- Could publish `cipher.memory.stored.v1` to NATS for cross-service observability
+- ~~Could publish `cipher.memory.stored.v1` to NATS for cross-service observability~~ → **Implemented**
 - Verify Neo4j connection pooling under load
 - Check if reasoning patterns are searchable by Graphiti trail entries
 

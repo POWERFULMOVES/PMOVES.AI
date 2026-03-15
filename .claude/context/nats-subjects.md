@@ -108,6 +108,51 @@ Example: `ingest.transcript.ready.v1`
   }
   ```
 
+## Cipher Memory Subjects
+
+**`cipher.memory.stored.v1`**
+- **Direction:** Published by Cipher MCP bridge → Consumed by monitoring, observability
+- **Purpose:** Notify that a memory was stored in Cipher
+- **Payload:**
+  ```json
+  {
+    "memory_id": "mem-abc123",
+    "category": "code_pattern",
+    "tags": ["python", "async"],
+    "timestamp": "2026-03-15T12:00:00Z"
+  }
+  ```
+- **Subscribers:** Observability dashboards, Discord Publisher (optional)
+
+**`cipher.memory.searched.v1`**
+- **Direction:** Published by Cipher MCP bridge → Consumed by monitoring
+- **Purpose:** Notify that a memory search was performed
+- **Payload:**
+  ```json
+  {
+    "query": "search query text",
+    "result_count": 5,
+    "category": "architecture | null",
+    "timestamp": "2026-03-15T12:00:00Z"
+  }
+  ```
+- **Note:** `category` is `null` when the search is unfiltered (no category specified)
+- **Subscribers:** Observability dashboards
+
+**`cipher.reasoning.stored.v1`**
+- **Direction:** Published by Cipher MCP bridge → Consumed by monitoring
+- **Purpose:** Notify that a reasoning trace was stored
+- **Payload:**
+  ```json
+  {
+    "reasoning_id": "reason-abc123",
+    "question": "How to optimize query performance...",
+    "timestamp": "2026-03-15T12:00:00Z"
+  }
+  ```
+- **Note:** `question` is truncated to 200 characters in the event payload
+- **Subscribers:** Observability dashboards, Graphiti trail processors
+
 ## Media Ingestion Subjects
 
 ### File Ingestion
