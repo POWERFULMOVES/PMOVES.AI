@@ -202,8 +202,8 @@ def _ensure_tailscale_defaults(text: str) -> str:
     ts_authkey = _get_kv(text, "TAILSCALE_AUTHKEY")
     if ts_authkey and not ts_authkey.startswith("tskey-auth-"):
         print(
-            f"WARNING: TAILSCALE_AUTHKEY does not start with 'tskey-auth-' — "
-            f"may be invalid. Get a key from https://login.tailscale.com/admin/settings/keys",
+            "WARNING: TAILSCALE_AUTHKEY does not start with 'tskey-auth-' — "
+            "may be invalid. Get a key from https://login.tailscale.com/admin/settings/keys",
             file=sys.stderr,
         )
 
@@ -211,6 +211,7 @@ def _ensure_tailscale_defaults(text: str) -> str:
 
 
 def upsert_env(path: Path, env_gen_path: Path, pairs: dict[str, str]) -> None:
+    """Apply branded defaults to env file, strengthen weak keys, and write back."""
     text = path.read_text(encoding="utf-8") if path.exists() else ""
     for key, value in pairs.items():
         current = _get_kv(text, key)
@@ -256,6 +257,7 @@ def upsert_env(path: Path, env_gen_path: Path, pairs: dict[str, str]) -> None:
 
 
 def parse_args() -> argparse.Namespace:
+    """Parse CLI arguments for env file paths."""
     parser = argparse.ArgumentParser(description="Apply branded env defaults.")
     parser.add_argument("--env-file", type=Path, default=ENV_DEFAULT, help="Path to env file.")
     parser.add_argument(
@@ -268,6 +270,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> int:
+    """Entry point: load env file, apply all branded defaults, write back."""
     args = parse_args()
     env_path = args.env_file
     env_gen_path = args.generated_env_file
