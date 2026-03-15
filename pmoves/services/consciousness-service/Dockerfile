@@ -31,7 +31,7 @@ USER pmoves
 ENV SERVICE_NAME=consciousness-service
 ENV SERVICE_PORT=8105
 ENV NATS_URL=nats://nats:pmoves@nats:4222
-ENV CHIT_PROD_PASSPHRASE=pmoves-chit-default
+# CHIT_PROD_PASSPHRASE injected at runtime via docker-compose
 ENV SUPABASE_URL=http://supabase-kong:8000
 ENV PYTHONUNBUFFERED=1
 
