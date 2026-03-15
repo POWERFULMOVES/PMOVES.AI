@@ -57,10 +57,40 @@ NATS integration via the `nats-bridge` extension (`extensions/nats-bridge/`). Fi
 
 | Capability | Status | Notes |
 |------------|--------|-------|
-| CGP packet generation | None | Not CHIT-enabled |
-| Attribution tracking | Planned | Which channel, which agent responded |
-| Message routing attribution | Planned | Track message provenance across channels |
+| CGP packet generation | Planned (P4) | See [CHIT Attribution Plan](#chit-attribution-plan-e4) below |
+| Attribution tracking | Planned (P4) | Which channel, which agent responded |
+| Message routing attribution | Planned (P4) | Track message provenance across channels |
 | BPM capable | No | Text-based messaging, not prosodic |
+
+### CHIT Attribution Plan (E4)
+
+> **Status:** Plan only — requires NATS bridge (E2) as prerequisite. Target: P4 priority.
+
+**Goal:** Generate CGP packets for message routing attribution so every cross-channel message has provenance tracking.
+
+**Architecture:**
+```
+Message arrives on channel (e.g. Discord)
+  → nats-bridge emits openclaw.message.received.v1
+  → [NEW] CHIT attributor generates CGP packet
+  → openclaw.message.attributed.v1 emitted with CGP envelope
+  → Agent processes message, response routed back
+  → [NEW] Response CGP packet links to inbound attribution
+```
+
+**Implementation steps (when ready):**
+1. Add `@pmoves/chit-sdk` dependency to `nats-bridge` extension
+2. Import `sign_cgp()` or equivalent TypeScript CHIT signer
+3. Wrap inbound/outbound message events in CGP envelopes
+4. New subject: `openclaw.message.attributed.v1` with CGP payload
+5. Update TAC CHIT Integration table from "Planned" to "Active"
+
+**Prerequisites:**
+- NATS bridge extension must be stable (E2 / PR 3)
+- CHIT TypeScript SDK available (`PMOVES-ToKenism-Multi/integrations/contracts/chit/`)
+- CGP schema v1.0 finalized
+
+**Decision:** Defer implementation until NATS adapter has been running in production for at least 2 weeks and event volume/reliability are proven.
 
 ## Production Audit Checklist
 
@@ -153,7 +183,7 @@ PMOVES-ClawZ/
 - ~~No `/healthz` endpoint~~ → **Implemented** (`/healthz` liveness + `/readyz` readiness — see Audit Checklist above)
 - No `/metrics` endpoint — invisible to Prometheus (uses optional OTEL diagnostics instead)
 - ~~No NATS integration — all 47 extensions could emit events to the event bus~~ → **Implemented** (`nats-bridge` extension publishes message and channel events)
-- No CHIT attribution — message routing lacks provenance tracking
+- ~~No CHIT attribution — message routing lacks provenance tracking~~ → **Planned** (see [CHIT Attribution Plan](#chit-attribution-plan-e4), depends on E2 NATS bridge)
 - Integration with Flute Gateway for outbound voice TTS via channels (planned)
 - Integration with BoTZ skills for chat-invoked skill execution (planned)
 - Integration with Cipher Memory for cross-channel conversation persistence
