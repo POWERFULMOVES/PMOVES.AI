@@ -350,7 +350,6 @@ export async function GET(request: NextRequest) {
   return NextResponse.json(
     {
       generatedAt: new Date().toISOString(),
-      docsRoot,
       warnings,
       productionAudit: {
         source: dashboardMarkdown ? dashboardPath : null,
