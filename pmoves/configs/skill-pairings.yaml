@@ -243,13 +243,23 @@ pairings:
         hooks:
           on_complete: "ops.pr.monitor.completed.v1"
           on_error: "ops.pr.monitor.failed.v1"
-      - skill: pr-learnings-encode
+      - skill: pr-hedge-trim
         input: pr_monitor_report
+        output: trim_report
+        agent: claude-opus
+        depends:
+          services: ["nats:4222"]
+          skills: ["pr-monitor"]
+        hooks:
+          on_complete: "ops.pr.trim.completed.v1"
+          on_error: "ops.pr.monitor.failed.v1"
+      - skill: pr-learnings-encode
+        input: [pr_monitor_report, trim_report]
         output: pr_learnings_packet
         agent: tokenism
         depends:
           services: ["nats:4222"]
-          skills: ["pr-monitor"]
+          skills: ["pr-hedge-trim"]
         hooks:
           on_complete: "ops.pr.learnings.encoded.v1"
           on_error: "ops.pr.monitor.failed.v1"
@@ -343,6 +353,7 @@ skill_sources:
   a2ui-chart: "pmoves/services/a2ui-renderer/"
   extract-worker: "pmoves/services/extract-worker/"
   pr-monitor: "pmoves/tools/pr_monitor.py"
+  pr-hedge-trim: "pmoves/tools/pr_hedge_trim.py"
   pr-learnings-encode: "pmoves/tools/chit_encode_hook.py"
   graphiti-trail-sync: "docs/AGENT_TRAIL.md"
   n8n-health-sync: "pmoves/integrations/health-wger/n8n/flows/"

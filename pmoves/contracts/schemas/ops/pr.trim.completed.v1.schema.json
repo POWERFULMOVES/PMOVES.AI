@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "ops/pr.trim.completed.v1.schema.json",
+  "title": "PR Hedge Trim Completed",
+  "description": "Emitted when a PR hedge trim cycle completes — review threads classified, fixed, and resolved.",
+  "type": "object",
+  "required": ["pr_number", "repo", "agent_id", "total_threads", "resolved_count", "timestamp"],
+  "properties": {
+    "pr_number": {
+      "type": "integer",
+      "description": "GitHub PR number"
+    },
+    "repo": {
+      "type": "string",
+      "description": "GitHub repository in owner/name format"
+    },
+    "agent_id": {
+      "type": "string",
+      "description": "Agent that performed the trim"
+    },
+    "total_threads": {
+      "type": "integer",
+      "description": "Total review threads on the PR"
+    },
+    "unresolved_threads": {
+      "type": "integer",
+      "description": "Threads still unresolved at analysis time"
+    },
+    "actionable": {
+      "type": "integer",
+      "description": "Threads classified as actionable (fix-worthy)"
+    },
+    "design_decision": {
+      "type": "integer",
+      "description": "Threads classified as design decisions"
+    },
+    "false_positive": {
+      "type": "integer",
+      "description": "Threads classified as false positives"
+    },
+    "nitpick": {
+      "type": "integer",
+      "description": "Threads classified as nitpick/cosmetic"
+    },
+    "resolved_count": {
+      "type": "integer",
+      "description": "Number of threads resolved in this trim"
+    },
+    "commit_sha": {
+      "type": "string",
+      "description": "HEAD commit SHA after fixes"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 completion timestamp"
+    },
+    "trail_signed": {
+      "type": "boolean",
+      "description": "Whether a Graphiti trail entry was signed"
+    },
+    "threads": {
+      "type": "array",
+      "description": "Per-thread classification details",
+      "items": {
+        "type": "object"
+      }
+    }
+  },
+  "additionalProperties": false
+}

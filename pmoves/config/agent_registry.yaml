@@ -853,6 +853,34 @@ agents:
       compose_profile: null
     description: "Hostinger KVM fleet orchestration — deploy, status, restart via MCP tools"
 
+  pr_hedge_trim:
+    name: "PR Hedge Trim"
+    class: utility
+    primary_type: worker
+    secondary_type: agent
+    port: null
+    health: null
+    layers: [L0, L2, L5]
+    evolution_stage: stage_1
+    nats:
+      publishes: ["ops.pr.trim.completed.v1"]
+      subscribes: ["ops.pr.monitor.completed.v1"]
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: false
+      attribution_gated: true
+    resilience:
+      context_budget: small
+      checkpoint_frequency: per_file
+      recovery_strategy: idempotent_replay
+      cipher_categories: []
+    invocation_policy:
+      explicit_only: true
+      nats_trigger_allowed: true
+    description: "PR review thread classifier and resolver — hedge trims CodeRabbit threads"
+
   # --- Data infrastructure (Utility class) ---
 
   nats:
