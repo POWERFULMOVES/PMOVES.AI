@@ -113,9 +113,49 @@ plugins/<plugin_name>/
 - **Integration Topology:** [`TAC_INTEGRATION_TOPOLOGY.md`](./TAC_INTEGRATION_TOPOLOGY.md)
 - **Tags:** `PMOVES-a0-plugins/TAGS.md` — recommended tag list
 
+## Recommended Deduplication Strategy
+
+> **Policy:** PMOVES native services take priority over a0-plugins when capabilities overlap. Use a0-plugins only for gap-filling — capabilities that no native service provides.
+
+### Decision Matrix
+
+| Plugin | Native Alternative | Verdict | Rationale |
+|--------|-------------------|---------|-----------|
+| `honcho` | Cipher Memory (8096) | **Prefer native** | Cipher provides Neo4j-backed knowledge graphs, MCP integration, reasoning traces, and NATS event publishing (E1). Honcho duplicates session/memory management without PMOVES observability. |
+| `youtube_transcribe` | PMOVES.YT (8077) + FFmpeg-Whisper (8078) | **Prefer native** | PMOVES.YT offers full pipeline: download → MinIO storage → Whisper transcription → NATS events (`ingest.transcript.ready.v1`). Plugin only provides basic transcription without event-driven integration. |
+| `langfuse_observability` | TensorZero (3030) + ClickHouse | **Prefer native** | TensorZero is the canonical LLM observability layer — unified gateway for all model providers with ClickHouse-backed metrics, token tracking, and latency dashboards. Langfuse adds a parallel observability stack with no integration to existing dashboards. |
+| `discord` | Publisher-Discord (8094) | **Prefer native** | Publisher-Discord is NATS-integrated, subscribing to `ingest.file.added.v1`, `ingest.transcript.ready.v1`, and other events. The plugin provides direct Discord bot functionality but lacks event bus integration. |
+
+### Gap-Filling Rule
+
+Plugins that **do not** overlap with any native PMOVES service remain active and are encouraged:
+
+- `agui_provider` — GUI provider (no native equivalent)
+- `codex_provider` — Codex integration (no native equivalent)
+- `linear` — Linear issue tracker (no native equivalent)
+- `tree_sitter` — Code parsing (no native equivalent)
+- `lazys_a0_marketplace` — Plugin marketplace UI (no native equivalent)
+- `guard_system` — Partial overlap with BoTZ auth, but different scope (plugin-level vs gateway-level)
+- `channels_provider` — Partial overlap with ClawZ, but serves Agent Zero's internal channel model
+- `parallel_swarm` — Partial overlap with EvoSwarm, but operates within Agent Zero's runtime
+
+### Review Cadence
+
+- **Quarterly:** Re-evaluate overlap as new PMOVES services come online
+- **On new plugin PR:** Check against `services-catalog.md` for overlap before merging
+- **On new native service:** Review plugin catalog for newly-overlapping entries
+
+### Migration Path
+
+When a native service supersedes a plugin:
+1. Document the overlap in this TAC tree
+2. Update Agent Zero configuration to prefer the native service
+3. Mark the plugin as `deprecated` in the catalog (do not remove — community may fork)
+4. Add migration notes to the plugin's `index.yaml`
+
 ## Open Items
 
-- Plugin deduplication strategy needed — 4 plugins overlap with PMOVES native services
+- ~~Plugin deduplication strategy needed — 4 plugins overlap with PMOVES native services~~ → **Resolved** (see [Recommended Deduplication Strategy](#recommended-deduplication-strategy) above)
 - No runtime security sandboxing for plugins (plugins run in Agent Zero's process)
 - Plugin ecosystem vs BoTZ Skills marketplace — need canonical strategy for which is primary
 - No versioning mechanism for plugin compatibility
