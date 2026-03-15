@@ -504,9 +504,27 @@ Based on CodeRabbit learnings (see `.claude/learnings/ui-error-handling-review-2
 - [ ] Shared utilities extracted (no duplicate functions like `ownerFromJwt`)
 - [ ] Unused imports removed
 
+## Topology & Runner Strategy
+
+**Master topology:** `pmoves/docs/operations/TOPOLOGY.md` — single source of truth for all nodes, services, routes, and DNS.
+
+**Nodes:** Z890 (dev/GPU), 5090 (primary GPU, pending), KVM4-1 (API gateway), KVM4-2 (data/storage), KVM2 (exit proxy), Cloudflare Edge (DNS/Worker).
+
+**Agent Teams (11 teams, 62 agents):** `pmoves/configs/agent-teams.yaml` — orchestration, research, media, data, ui, automation, evolution, infra, sandbox, life, external.
+
+**CI Runners:** `self-hosted, ai-lab` (GPU), `self-hosted, cloudstartup` (staging), `self-hosted, kvm4` (production), `self-hosted, kvm2` (backup), `ubuntu-latest` (lightweight). Routing via Cloudflare Worker (`deploy/cloudflare/worker.js`).
+
+**DNS:** `pmoves.ai` zone (pending Cloudflare migration). Subdomains: api, agent, rag, tts, n8n, grafana, search, nats, minio, headscale, ci.
+
+**Quick references:**
+- `.claude/context/runner-topology.md` — condensed topology for agent context
+- `pmoves/docs/operations/WORKFLOW_RUNNER_MAP.md` — all 19 GitHub Actions workflows mapped to runners
+- `deploy/HYBRID_RUNNER_STRATEGY.md` — runner fleet documentation
+
 ## Additional References
 
 See `.claude/context/` for detailed documentation:
+- `runner-topology.md` - Condensed node/runner/team topology for agent context loading
 - `credentials-workflow.md` - Credential bootstrap, env-setup, secrets-funnel, JWT-from-Supabase flow
 - `services-catalog.md` - Complete service listing with all details
 - `submodules.md` - Complete submodules catalog (20 submodules)
