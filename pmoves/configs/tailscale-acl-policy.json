@@ -1,0 +1,66 @@
+{
+  "$schema": "https://tailscale.com/api/v2/tailnet/-/acl",
+  "_comment": "PMOVES.AI Tailscale ACL policy — production hardening stance. Apply at https://login.tailscale.com/admin/acls",
+
+  "tagOwners": {
+    "tag:pmoves": ["autogroup:admin"],
+    "tag:gpu": ["autogroup:admin"],
+    "tag:vps": ["autogroup:admin"],
+    "tag:lab": ["autogroup:admin"],
+    "tag:exit": ["autogroup:admin"]
+  },
+
+  "acls": [
+    {
+      "action": "accept",
+      "src": ["tag:pmoves"],
+      "dst": ["tag:pmoves:*"],
+      "comment": "Full mesh: all PMOVES nodes can reach each other on all ports"
+    },
+    {
+      "action": "accept",
+      "src": ["tag:lab"],
+      "dst": ["tag:gpu:*"],
+      "comment": "Lab nodes can reach GPU nodes for inference"
+    },
+    {
+      "action": "accept",
+      "src": ["autogroup:admin"],
+      "dst": ["*:*"],
+      "comment": "Admins (DARKXSIDE) have full access"
+    }
+  ],
+
+  "ssh": [
+    {
+      "action": "accept",
+      "src": ["tag:pmoves"],
+      "dst": ["tag:pmoves"],
+      "users": ["autogroup:nonroot"],
+      "comment": "SSH between PMOVES nodes — non-root only for hardening"
+    },
+    {
+      "action": "accept",
+      "src": ["autogroup:admin"],
+      "dst": ["*"],
+      "users": ["root", "autogroup:nonroot"],
+      "comment": "Admin SSH access (root allowed for provisioning)"
+    }
+  ],
+
+  "nodeAttrs": [
+    {
+      "target": ["tag:exit"],
+      "attr": ["funnel"],
+      "comment": "Exit nodes can use Tailscale Funnel for public ingress"
+    }
+  ],
+
+  "autoApprovers": {
+    "exitNode": ["tag:exit"],
+    "routes": {
+      "0.0.0.0/0": ["tag:exit"],
+      "::/0": ["tag:exit"]
+    }
+  }
+}
