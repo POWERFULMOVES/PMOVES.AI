@@ -1,0 +1,186 @@
+{
+  "$schema": "../../contracts/a2ui-animation-schema.json",
+  "id": "topology-flythrough",
+  "title": "PMOVES.AI Infrastructure Topology",
+  "description": "Animated flythrough of the 6-node infrastructure topology",
+  "duration_seconds": 30,
+  "fps": 30,
+  "resolution": {
+    "width": 1920,
+    "height": 1080
+  },
+  "design_system": {
+    "primary": "#3ecf8e",
+    "secondary": "#9333ea",
+    "accent": "#3b82f6",
+    "warning": "#f59e0b",
+    "background": "#0f172a",
+    "text": "#e2e8f0"
+  },
+  "scenes": [
+    {
+      "id": "scene-1-cf-edge",
+      "title": "Cloudflare Edge",
+      "start_frame": 0,
+      "end_frame": 210,
+      "duration_seconds": 7,
+      "camera": {
+        "start": { "x": 0, "y": 0, "zoom": 0.5 },
+        "end": { "x": 200, "y": 0, "zoom": 1.0 },
+        "easing": "easeInOutCubic"
+      },
+      "elements": [
+        {
+          "type": "node",
+          "id": "cloudflare",
+          "label": "Cloudflare Edge",
+          "sublabel": "DNS · Worker · KV",
+          "icon": "cloud",
+          "color": "#3b82f6",
+          "position": { "x": 200, "y": 300 },
+          "animation": "fadeIn",
+          "delay_frames": 15
+        },
+        {
+          "type": "data_flow",
+          "from": "public",
+          "to": "cloudflare",
+          "label": "HTTPS",
+          "particles": true,
+          "color": "#3b82f6"
+        }
+      ]
+    },
+    {
+      "id": "scene-2-kvm-fleet",
+      "title": "KVM Fleet",
+      "start_frame": 210,
+      "end_frame": 450,
+      "duration_seconds": 8,
+      "camera": {
+        "start": { "x": 200, "y": 0, "zoom": 1.0 },
+        "end": { "x": 600, "y": 200, "zoom": 1.2 },
+        "easing": "easeInOutCubic"
+      },
+      "elements": [
+        {
+          "type": "node",
+          "id": "kvm4-1",
+          "label": "KVM4-1",
+          "sublabel": "API Gateway · 172.30.0.101",
+          "icon": "server",
+          "color": "#3ecf8e",
+          "position": { "x": 500, "y": 200 },
+          "animation": "slideInRight"
+        },
+        {
+          "type": "node",
+          "id": "kvm4-2",
+          "label": "KVM4-2",
+          "sublabel": "Data/Storage · 172.30.0.102",
+          "icon": "database",
+          "color": "#3ecf8e",
+          "position": { "x": 500, "y": 400 },
+          "animation": "slideInRight",
+          "delay_frames": 15
+        },
+        {
+          "type": "node",
+          "id": "kvm2",
+          "label": "KVM2",
+          "sublabel": "Exit Proxy · DERP",
+          "icon": "globe",
+          "color": "#f59e0b",
+          "position": { "x": 700, "y": 300 },
+          "animation": "slideInRight",
+          "delay_frames": 30
+        },
+        {
+          "type": "connection",
+          "from": "cloudflare",
+          "to": "kvm4-1",
+          "label": "Tunnel",
+          "animated": true
+        }
+      ]
+    },
+    {
+      "id": "scene-3-z890-dev",
+      "title": "Z890 Development",
+      "start_frame": 450,
+      "end_frame": 690,
+      "duration_seconds": 8,
+      "camera": {
+        "start": { "x": 600, "y": 200, "zoom": 1.2 },
+        "end": { "x": 900, "y": 300, "zoom": 1.5 },
+        "easing": "easeInOutCubic"
+      },
+      "elements": [
+        {
+          "type": "node",
+          "id": "z890",
+          "label": "Z890",
+          "sublabel": "Dev/GPU · RTX 4090 24GB",
+          "icon": "gpu",
+          "color": "#9333ea",
+          "position": { "x": 900, "y": 300 },
+          "animation": "pulseIn",
+          "glow": true
+        },
+        {
+          "type": "service_cluster",
+          "parent": "z890",
+          "services": [
+            "Agent Zero",
+            "Hi-RAG v2",
+            "TTS Studio",
+            "vLLM",
+            "Monitoring"
+          ],
+          "animation": "staggerFadeIn",
+          "delay_frames": 30
+        }
+      ]
+    },
+    {
+      "id": "scene-4-5090-pending",
+      "title": "5090 (Pending)",
+      "start_frame": 690,
+      "end_frame": 900,
+      "duration_seconds": 7,
+      "camera": {
+        "start": { "x": 900, "y": 300, "zoom": 1.5 },
+        "end": { "x": 500, "y": 250, "zoom": 0.8 },
+        "easing": "easeInOutCubic"
+      },
+      "elements": [
+        {
+          "type": "node",
+          "id": "5090",
+          "label": "5090",
+          "sublabel": "Primary GPU · RTX 5090 32GB · Pending",
+          "icon": "gpu",
+          "color": "#f59e0b",
+          "position": { "x": 1100, "y": 300 },
+          "animation": "fadeIn",
+          "opacity": 0.5,
+          "dashed_border": true
+        },
+        {
+          "type": "connection",
+          "from": "z890",
+          "to": "5090",
+          "label": "Future GPU Mesh",
+          "dashed": true,
+          "color": "#f59e0b"
+        },
+        {
+          "type": "overview",
+          "description": "Full topology zoom-out",
+          "animation": "zoomOut",
+          "delay_frames": 60
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,121 @@
+%%{init: {'theme':'base', 'themeVariables': {
+  'primaryColor': '#3ecf8e',
+  'primaryBorderColor': '#3ecf8e',
+  'secondaryColor': '#9333ea',
+  'background': 'transparent',
+  'lineColor': '#94a3b8'
+}}}%%
+graph TD
+    subgraph orchestration["🎯 Orchestration (7)"]
+        AZ["agent-zero"]
+        Archon["archon"]
+        Codex["codex"]
+        Conductor["conductor"]
+        Sentinel["sentinel"]
+        Auditor["auditor"]
+        Guardian["guardian"]
+    end
+
+    subgraph research["🔬 Research (7)"]
+        DR["deep-researcher"]
+        SS["supaserch"]
+        Scholar["scholar"]
+        Analyst["analyst"]
+        Librarian["librarian"]
+        Cartographer["cartographer"]
+        Archivist["archivist"]
+    end
+
+    subgraph media["🎬 Media (6)"]
+        YT["yt-ingestor"]
+        Whisper["whisper"]
+        VidAn["video-analyzer"]
+        AudAn["audio-analyzer"]
+        Extract["extract-worker"]
+        Publisher["publisher"]
+    end
+
+    subgraph data["💾 Data (6)"]
+        HiRAG["hirag"]
+        GraphDB["graph-navigator"]
+        VecDB["vector-indexer"]
+        SearchDB["search-indexer"]
+        Cipher["cipher-memory"]
+        Notebook["notebook-sync"]
+    end
+
+    subgraph ui["🎨 UI (5)"]
+        A2UI["a2ui-renderer"]
+        HyperD["hyperdimensions"]
+        Dashboard["dashboard"]
+        Creator["creator"]
+        Designer["designer"]
+    end
+
+    subgraph automation["⚙️ Automation (6)"]
+        N8N["n8n-orchestrator"]
+        Webhook["webhook-handler"]
+        Cron["cron-scheduler"]
+        Deploy["deployer"]
+        Monitor["monitor"]
+        Cleanup["cleanup"]
+    end
+
+    subgraph evolution["🧬 Evolution (6)"]
+        Evo["evo-controller"]
+        GymRL["agentgym-rl"]
+        Tokenism["tokenism"]
+        Swarm["swarm-optimizer"]
+        Mutator["mutator"]
+        Selector["selector"]
+    end
+
+    subgraph infra["🏗️ Infrastructure (6)"]
+        GPU["gpu-orchestrator"]
+        Model["model-registry"]
+        Mesh["mesh-agent"]
+        VPN["vpn-manager"]
+        Storage["storage-manager"]
+        DNS["dns-manager"]
+    end
+
+    subgraph sandbox["🧪 Sandbox (4)"]
+        Lab["lab-runner"]
+        Tester["tester"]
+        Benchmarker["benchmarker"]
+        Experimenter["experimenter"]
+    end
+
+    subgraph life["🌱 Life (4)"]
+        Health["health-tracker"]
+        Finance["finance-tracker"]
+        Habit["habit-coach"]
+        Journal["journal-writer"]
+    end
+
+    subgraph external["🌐 External (4)"]
+        Discord["discord-bot"]
+        GitHub["github-agent"]
+        HF["hf-publisher"]
+        Jellyfin["jellyfin-bridge"]
+    end
+
+    %% Node affinity edges
+    orchestration ---|"Z890"| Z890N["🔧 Z890"]
+    research ---|"Z890"| Z890N
+    media ---|"Z890 + KVM4-2"| Z890N
+    data ---|"KVM4-2"| KVM42N["💾 KVM4-2"]
+    evolution ---|"Z890 → 5090"| Z890N
+    infra ---|"KVM4-1"| KVM41N["🖥️ KVM4-1"]
+
+    style orchestration fill:#9333ea,stroke:#9333ea,color:#fff
+    style research fill:#3b82f6,stroke:#3b82f6,color:#fff
+    style media fill:#f59e0b,stroke:#f59e0b,color:#1e293b
+    style data fill:#3ecf8e,stroke:#3ecf8e,color:#1e293b
+    style ui fill:#ec4899,stroke:#ec4899,color:#fff
+    style automation fill:#6366f1,stroke:#6366f1,color:#fff
+    style evolution fill:#14b8a6,stroke:#14b8a6,color:#1e293b
+    style infra fill:#64748b,stroke:#64748b,color:#fff
+    style sandbox fill:#a855f7,stroke:#a855f7,color:#fff
+    style life fill:#22c55e,stroke:#22c55e,color:#1e293b
+    style external fill:#f97316,stroke:#f97316,color:#1e293b

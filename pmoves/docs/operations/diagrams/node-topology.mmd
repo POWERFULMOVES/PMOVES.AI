@@ -1,0 +1,49 @@
+%%{init: {'theme':'base', 'themeVariables': {
+  'primaryColor': '#3ecf8e',
+  'primaryBorderColor': '#3ecf8e',
+  'secondaryColor': '#9333ea',
+  'tertiaryColor': '#3b82f6',
+  'background': 'transparent',
+  'lineColor': '#94a3b8'
+}}}%%
+flowchart TD
+    subgraph CF["☁️ Cloudflare Edge"]
+        direction LR
+        DNS["DNS Zone<br/>pmoves.ai"]
+        Worker["CI Router Worker<br/>runner-router.pmoves.workers.dev"]
+        KV["KV: CI_STATE"]
+    end
+
+    subgraph KVM4["🖥️ KVM4 Fleet — 172.30.0.x"]
+        direction TB
+        KVM41["KVM4-1 — API Gateway<br/>172.30.0.101"]
+        KVM42["KVM4-2 — Data/Storage<br/>172.30.0.102"]
+    end
+
+    subgraph KVM2["🌐 KVM2 — Exit Proxy"]
+        direction TB
+        KVM2N["KVM2 Node<br/>Headscale DERP<br/>Exit Node"]
+    end
+
+    subgraph Z890["🔧 Z890 — Dev/GPU"]
+        direction TB
+        Z890N["Z890 Dev Workstation<br/>RTX 4090 24GB<br/>Agent Zero · Hi-RAG · TTS"]
+    end
+
+    subgraph P5090["⏳ 5090 — Primary GPU (Pending)"]
+        direction TB
+        P5090N["5090 Node<br/>RTX 5090 32GB<br/>vLLM · Training"]
+    end
+
+    DNS -->|"A/CNAME"| KVM41
+    Worker -->|"Route CI jobs"| KV
+    KVM41 -->|"Reverse proxy"| Z890N
+    KVM41 -->|"Data queries"| KVM42
+    KVM2N -->|"Tailscale mesh"| KVM41
+    Z890N -.->|"Future GPU mesh"| P5090N
+
+    style CF fill:#3b82f6,stroke:#3b82f6,color:#fff
+    style KVM4 fill:#1e293b,stroke:#3ecf8e,color:#e2e8f0
+    style KVM2 fill:#1e293b,stroke:#f59e0b,color:#e2e8f0
+    style Z890 fill:#1e293b,stroke:#9333ea,color:#e2e8f0
+    style P5090 fill:#1e293b,stroke:#f59e0b,color:#e2e8f0,stroke-dasharray: 5 5
