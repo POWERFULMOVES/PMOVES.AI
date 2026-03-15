@@ -69,7 +69,7 @@ NATS integration via the `nats-bridge` extension (`extensions/nats-bridge/`). Fi
 **Goal:** Generate CGP packets for message routing attribution so every cross-channel message has provenance tracking.
 
 **Architecture:**
-```
+```text
 Message arrives on channel (e.g. Discord)
   → nats-bridge emits openclaw.message.received.v1
   → [NEW] CHIT attributor generates CGP packet
