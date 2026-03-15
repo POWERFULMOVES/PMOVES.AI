@@ -72,7 +72,7 @@
 | Auth (JWT/Bearer) | **P1 FIXED** | `auth.py:63-67` now raises `HTTPException(500)` when `JWT_SECRET` is unset |
 | Docker hardening | Yes | `patterns.yaml` present |
 | NATS auth | Yes | Uses authenticated NATS |
-| `env.shared` format | **P1** | Uses `export` syntax (Docker-incompatible) |
+| `env.shared` format | **P1 FIXED** | Stripped `export` prefix from `env.shared` (53 lines) and `env.tier-api` (21 lines) |
 | MCP Gateway auth | **P2** | Unauthenticated MCP endpoint |
 
 ## Security Stance (Phase C Audit)
@@ -80,7 +80,7 @@
 | Finding | Severity | Status |
 |---------|----------|--------|
 | JWT fail-open (`if not JWT_SECRET: return True`) | P1 | **Fixed** — `auth.py:63-67` now raises `HTTPException(500)` (fail-closed) |
-| `export` syntax in env files | P1 | **Open** — use plain `KEY=VALUE` |
+| `export` syntax in env files | P1 | **Fixed** — stripped `export` prefix from `env.shared` and `env.tier-api` in BotZ-gateway submodule |
 | MCP Gateway unauthenticated | P2 | **Open** — needs Bearer/API key auth |
 
 ## Tool Inventory
