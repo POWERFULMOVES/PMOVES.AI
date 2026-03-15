@@ -121,10 +121,10 @@ plugins/<plugin_name>/
 
 | Plugin | Native Alternative | Verdict | Rationale |
 |--------|-------------------|---------|-----------|
-| `honcho` | Cipher Memory (8096) | **Prefer native** | Cipher provides Neo4j-backed knowledge graphs, MCP integration, reasoning traces, and NATS event publishing (E1). Honcho duplicates session/memory management without PMOVES observability. |
-| `youtube_transcribe` | PMOVES.YT (8077) + FFmpeg-Whisper (8078) | **Prefer native** | PMOVES.YT offers full pipeline: download → MinIO storage → Whisper transcription → NATS events (`ingest.transcript.ready.v1`). Plugin only provides basic transcription without event-driven integration. |
-| `langfuse_observability` | TensorZero (3030) + ClickHouse | **Prefer native** | TensorZero is the canonical LLM observability layer — unified gateway for all model providers with ClickHouse-backed metrics, token tracking, and latency dashboards. Langfuse adds a parallel observability stack with no integration to existing dashboards. |
-| `discord` | Publisher-Discord (8094) | **Prefer native** | Publisher-Discord is NATS-integrated, subscribing to `ingest.file.added.v1`, `ingest.transcript.ready.v1`, and other events. The plugin provides direct Discord bot functionality but lacks event bus integration. |
+| `honcho` | Cipher Memory (8096) | **Prefer native** | Cipher provides Neo4j-backed knowledge graphs, MCP integration, reasoning traces, and NATS event publishing (see [nats-subjects.md](../../.claude/context/nats-subjects.md#cipher-memory-subjects)). Honcho duplicates session/memory management without PMOVES observability. |
+| `youtube_transcribe` | PMOVES.YT (8077) + FFmpeg-Whisper (8078) | **Prefer native** | PMOVES.YT offers full pipeline: download → MinIO storage → Whisper transcription → NATS events (`ingest.transcript.ready.v1`). Plugin only provides basic YouTube transcription without event-driven integration (see [services-catalog.md](../../.claude/context/services-catalog.md)). |
+| `langfuse_observability` | TensorZero (3030) + ClickHouse | **Prefer native** | TensorZero is the canonical LLM observability layer — unified gateway for all model providers with ClickHouse-backed metrics, token tracking, and latency dashboards (see [observability-patterns.md](../../.claude/context/observability-patterns.md)). Langfuse adds a parallel observability stack with no integration to existing dashboards. |
+| `discord` | Publisher-Discord (8094) | **Prefer native** | Publisher-Discord is NATS-integrated, subscribing to `ingest.file.added.v1`, `ingest.transcript.ready.v1`, and other events (see [nats-subjects.md](../../.claude/context/nats-subjects.md#media-ingestion-subjects)). The plugin provides direct Discord bot functionality but lacks event bus integration. |
 
 ### Gap-Filling Rule
 
