@@ -102,7 +102,7 @@ _Cipher Memory is currently HTTP-only with no NATS integration._
 
 Cipher Memory serves as the **universal checkpoint/resume system** for all PMOVES agents:
 
-```
+```text
 ┌──────────────┐     ┌──────────────┐     ┌──────────────┐
 │  Agent Zero   │     │   Archon     │     │  BoTZ        │
 │  (Mega)       │     │  (Stage 2)   │     │  (Stage 1)   │
@@ -126,7 +126,7 @@ Cipher Memory serves as the **universal checkpoint/resume system** for all PMOVE
 
 ### MCP Bridge Architecture
 
-```
+```text
 Claude Code CLI  ──stdio──►  cipher_mcp (Python)  ──HTTP──►  Cipher Memory (Node.js / Neo4j)
                                     │
                               NATS announce
@@ -149,9 +149,9 @@ Claude Code CLI  ──stdio──►  cipher_mcp (Python)  ──HTTP──► 
 - No NATS integration — HTTP-only, invisible to event-driven services
 - No `/metrics` endpoint — not scraped by Prometheus
 - No API authentication — depends entirely on network isolation
-- `CIPHER_URL` default mismatch between gateway-agent and actual deployment
+- ~~`CIPHER_URL` default mismatch between gateway-agent and actual deployment~~ → **Fixed** (aligned to `cipher-api:8096`)
 - `pmoves-cipher-mcp/` not yet converted to proper git submodule
-- Missing `.gitignore` in `pmoves-cipher-mcp/`
+- ~~Missing `.gitignore` in `pmoves-cipher-mcp/`~~ → **Fixed**
 - Could publish `cipher.memory.stored.v1` to NATS for cross-service observability
 - Verify Neo4j connection pooling under load
 - Check if reasoning patterns are searchable by Graphiti trail entries

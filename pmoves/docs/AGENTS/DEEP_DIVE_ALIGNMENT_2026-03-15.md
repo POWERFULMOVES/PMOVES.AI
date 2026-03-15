@@ -17,7 +17,7 @@
 
 ### 1.2 YouTube Transcriber Plugin vs PMOVES.YT
 
-| Dimension | youtube_transcribe (a0-plugin) | PMOVES.YT (8077) |
+| Dimension | `youtube_transcribe` (a0-plugin) | PMOVES.YT (8077) |
 |-----------|-------------------------------|-------------------|
 | Capabilities | Basic transcript fetch | Full pipeline: download → transcribe → index |
 | Storage | In-memory | MinIO object storage |
@@ -29,10 +29,10 @@
 
 | Dimension | ClawZ | BoTZ |
 |-----------|-------|------|
-| Auth model | DM pairing + bootstrap tokens per channel | JWT verification (currently fail-open) |
+| Auth model | DM pairing + bootstrap tokens per channel | JWT verification (fail-closed since `auth.py:63-67` fix) |
 | Scope | Per-channel, per-user | API-wide |
 | Risk | Token lifecycle management across 25+ platforms | P1 fail-open vulnerability |
-| **Alignment need** | Different security domains — need shared auth strategy for when ClawZ delegates to BoTZ skills |
+| **Alignment need** | Different security domains | Need shared auth strategy for when ClawZ delegates to BoTZ skills |
 
 ### 1.4 langfuse_observability Plugin vs TensorZero
 
@@ -53,6 +53,8 @@
 **Impact:** Manual GPU host management required. Experiment results are siloed on the GPU host.
 
 **Proposed solution:** Add NATS publishing to autoresearch (`research.autoresearch.experiment.v1`, `research.autoresearch.result.v1`) and an Agent Zero task handler that can trigger experiments via SSH/NATS.
+
+> **Note:** When implemented, the new subjects (`research.autoresearch.experiment.v1`, `research.autoresearch.result.v1`, `openclaw.message.received.v1`, `openclaw.channel.connected.v1`, `cipher.memory.stored.v1`, `cipher.memory.searched.v1`) must be added to `.claude/context/nats-subjects.md` and `.claude/context/services-catalog.md`.
 
 ### 2.2 ClawZ ↔ NATS: Silent 25+ Channels
 
@@ -115,7 +117,7 @@
 
 **Priority:** P2 (Short-term)
 **Action:** Document in a0-plugins README that PMOVES native services are preferred for overlapping capabilities. Add "PMOVES Alternative" field to plugin index.yaml schema for plugins that overlap.
-**Affected plugins:** `honcho` → Cipher, `youtube_transcribe` → PMOVES.YT, `langfuse_observability` → TensorZero, `discord` → Publisher-Discord.
+**Affected plugins:** `honcho` → Cipher, `youtube_transcribe` → PMOVES.YT (YouTube), `langfuse_observability` → TensorZero, `discord` → Publisher-Discord.
 
 ---
 
@@ -143,7 +145,7 @@
 ## 5. Recommended Priority Order
 
 1. ~~**P1:** Fix BoTZ JWT fail-open (`auth.py:59`)~~ → **Fixed**
-2. ~~**P1:** Fix Cipher `CIPHER_URL` default mismatch~~ → **Fixed** (all compose files + gateway-agent aligned to `cipher-api:8096`)
+2. ~~**P1:** Fix Cipher `CIPHER_URL` default mismatch~~ → **Fixed** (main compose + gateway-agent + VPS override aligned to `cipher-api:8096`; note: library defaults in submodule code may still differ — verify per-service fallback values)
 3. **P2:** Add Cipher API authentication
 4. **P2:** Add ClawZ Prometheus `/metrics` endpoint
 5. **P2:** Document plugin deduplication strategy (E5)

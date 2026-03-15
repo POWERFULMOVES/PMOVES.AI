@@ -2,8 +2,8 @@
 
 Comprehensive catalog of all 34 n8n workflows in the PMOVES.AI ecosystem.
 
-**Source:** `PMOVES-n8n/workflows/` (canonical JSON definitions)
-**Runtime:** n8n 2.1.0 via `compose/n8n/Dockerfile`
+**Source:** [`PMOVES-n8n/workflows/`](../../PMOVES-n8n/workflows/) (canonical JSON definitions)
+**Runtime:** n8n 2.1.0 via Docker Compose (`compose/n8n/`)
 **Port:** 5678 (HTTP), accessible at `n8n.pmoves.ai`
 
 ---
@@ -23,7 +23,7 @@ Comprehensive catalog of all 34 n8n workflows in the PMOVES.AI ecosystem.
 | Social Publishing | 2 | Webhook | Active |
 | Specialized | 3 | Webhook + Cron | Active |
 | Geometry Bus/CGP | 3 | Webhook | Active |
-| **Total** | **34** | | **28 active, 5 inactive, 1 debug** |
+| **Total** | **35** | | **29 active, 5 inactive, 1 debug** |
 
 ---
 
@@ -60,6 +60,7 @@ Comprehensive catalog of all 34 n8n workflows in the PMOVES.AI ecosystem.
 | Health Weekly → CGP | `health_weekly_to_cgp.json` | Manual | Hi-RAG v2 | `health.weekly.summary.v1` |
 | Health Weekly → CGP (wh) | `health_weekly_to_cgp.webhook.json` | Webhook | Hi-RAG v2, Supabase | — |
 | wger Sync → Supabase | `health_wger_sync.json` | Cron | wger API, Supabase | — |
+| wger Sync → Supabase (alt) | `wger_sync_to_supabase.json` | Cron | wger API, Supabase | — |
 
 ## Media Processing & Analysis
 
@@ -129,6 +130,8 @@ Comprehensive catalog of all 34 n8n workflows in the PMOVES.AI ecosystem.
 | `health.weekly.summary.v1` | health_weekly_to_cgp | Weekly health summary CGP |
 | `geometry.cgp.v1` | Multiple (5 workflows) | CGP constellation data via Hi-RAG |
 | `ingest.transcript.ready.v1` | pmoves_audio_analysis | Transcript available |
+| `content.publish.approved.v1` | approval_poller | Content approved for publishing |
+| `channel.new.content.v1` | pmoves_channel_monitor | New external content detected |
 
 ---
 
@@ -136,19 +139,9 @@ Comprehensive catalog of all 34 n8n workflows in the PMOVES.AI ecosystem.
 
 ### Internal (Docker Network)
 
-These endpoints are accessed by n8n workflows via the Docker internal network:
+n8n workflows access internal services via Docker network. For canonical port assignments and health endpoints, see [`.claude/context/services-catalog.md`](../../.claude/context/services-catalog.md).
 
-| Service | Internal Host:Port | Workflow Count | Key Workflows |
-|---------|-------------------|---------------|---------------|
-| Supabase (Kong) | `supabase-kong:8000` | 12 | approval_poller, firefly_sync, qwen_to_cgp |
-| Agent Zero | `agent-zero:8080` | 5 | approval_poller, channel_monitor, deepresearch |
-| Hi-RAG v2 | `hirag-gateway:8086` | 6 | finance_to_cgp, health_to_cgp, vibevoice, wan |
-| ffmpeg-Whisper | `ffmpeg-whisper:8078` | 2 | audio_analysis, video_analysis |
-| Extract Worker | `extract-worker:8083` | 4 | audio/video analysis, echo_ingest, langextract |
-| Flute-Gateway | `flute-gateway:8055` | 3 | discord/telegram voice, voice_router |
-| ComfyUI | `comfyui:8188` | 2 | comfy_gen, comfy_hub |
-| DeepResearch | `deep-research:8098` | 1 | deepresearch_orchestrator |
-| PMOVES.YT | `pmoves-yt:8077` | 2 | channel_monitor, jellyfin_watcher |
+Key services used by n8n workflows: Supabase Kong (:8000), Agent Zero (:8080), Hi-RAG v2 (:8086), ffmpeg-Whisper (:8078), Extract Worker (:8083), Flute-Gateway (:8055), ComfyUI (:8188), DeepResearch (:8098), PMOVES.YT (:8077).
 
 ### Public (Via Cloudflare Tunnel / Tailscale)
 

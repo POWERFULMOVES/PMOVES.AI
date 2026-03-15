@@ -4,7 +4,7 @@
 
 **Version:** 2.0
 **Last Updated:** 2026-03-15
-**Scope:** 11 target submodules + Model-Infra (13 TAC trees total)
+**Scope:** 12 individual TAC trees + this topology map (13 files total)
 
 ---
 
@@ -213,7 +213,7 @@ What each repo expects from and provides to each other:
 | Submodule | Healthz | Metrics | Auth | NATS | Docker Hardening | CHIT | Overall |
 |-----------|---------|---------|------|------|-----------------|------|---------|
 | **Agent Zero** | GREEN | GREEN | Partial | Active | GREEN | **Full** | **Mega** |
-| **BoTZ** | Partial | Yes | P1 fail-open | Active | Yes | Partial | Stage 1 |
+| **BoTZ** | Partial | Yes | Fail-closed (fixed) | Active | Yes | Partial | Stage 1 |
 | **DoX** | Planned | Planned | GREEN | P1 missing | Yes | Partial | Stage 1 |
 | **ToKenism** | N/A (library) | None | Partial | Active | Yes | **Full** | Stage 1 |
 | **Flute** | GREEN | GREEN | Partial | Active | GREEN | Active | Stage 1 |

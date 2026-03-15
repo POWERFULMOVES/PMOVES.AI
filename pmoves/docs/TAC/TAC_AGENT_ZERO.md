@@ -10,7 +10,7 @@
 | **Ports** | 8080 (API), 8081 (UI) |
 | **Health** | `GET /healthz`, `GET /mcp/health` |
 | **Metrics** | `GET /metrics` |
-| **Submodule** | `PMOVES-Agent-Zero` |
+| **Submodule** | [`PMOVES-Agent-Zero`](../../PMOVES-Agent-Zero/) |
 | **Docker Profile** | `agents` |
 | **Tier** | agent |
 | **Class** | Standard |
@@ -116,7 +116,7 @@ Agent Zero operates as the **primary L1 orchestrator** using a hub-and-spoke pat
 
 - MCP API auth model needs hardening — currently relies on shared secret only
 - Subordinate agent isolation is logical, not containerized
-- NATS subject surface is minimal (1 publish, 1 subscribe) — could publish task lifecycle events
+- NATS subject surface is minimal (1 publish, 2 subscribes) — could publish task lifecycle events
 - No dedicated NATS subjects for task assignment/completion (uses HTTP MCP API)
 - Integration with autoresearch for experiment delegation (planned)
 

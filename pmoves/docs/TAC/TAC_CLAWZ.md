@@ -117,7 +117,7 @@ ClawZ supports 25+ messaging platforms through core channels and extensions:
 
 ## Project Structure
 
-```
+```text
 PMOVES-ClawZ/
 ├── src/                    # Core source (CLI, commands, infra, media, routing)
 │   ├── cli/                # CLI wiring
@@ -150,7 +150,8 @@ PMOVES-ClawZ/
 
 ## Open Items
 
-- No `/healthz` or `/metrics` endpoints — invisible to PMOVES monitoring stack
+- ~~No `/healthz` endpoint~~ → **Implemented** (`/healthz` liveness + `/readyz` readiness — see Audit Checklist above)
+- No `/metrics` endpoint — invisible to Prometheus (uses optional OTEL diagnostics instead)
 - No NATS integration — all 47 extensions could emit events to the event bus
 - No CHIT attribution — message routing lacks provenance tracking
 - Integration with Flute Gateway for outbound voice TTS via channels (planned)

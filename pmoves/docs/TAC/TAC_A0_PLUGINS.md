@@ -89,7 +89,7 @@ _None — plugins communicate through Agent Zero's runtime, not NATS directly._
 
 ## Plugin Submission Structure
 
-```
+```text
 plugins/<plugin_name>/
 ├── index.yaml           # title, description, github URL, tags, screenshots
 └── thumbnail.png        # Optional (square, ≤20KB)

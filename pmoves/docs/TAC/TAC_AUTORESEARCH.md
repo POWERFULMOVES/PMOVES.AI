@@ -47,6 +47,8 @@ _All subjects are **planned** — autoresearch currently has no NATS integration
 | `research.autoresearch.experiment.v1` | Publishes (planned) | Experiment started/completed events |
 | `research.autoresearch.result.v1` | Publishes (planned) | val_bpb results for each experiment |
 
+> **TODO:** When implemented, register these subjects in `.claude/context/nats-subjects.md` and `pmoves/contracts/topics.json`.
+
 ## CHIT Integration Status
 
 | Capability | Status | Notes |

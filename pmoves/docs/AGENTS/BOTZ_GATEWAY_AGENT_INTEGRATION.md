@@ -59,7 +59,7 @@ This analysis examines the relationship between two distinct but complementary s
     ┌───▼───┐  ┌───▼───┐  ┌───▼───┐     ┌────▼────┐ ┌──▼───┐ ┌──▼────┐
     │ Supa- │  │ NATS  │  │Tensor-│     │Agent    │ │Cipher│ │100+   │
     │ base  │  │       │  │ Zero │     │ Zero    │ │      │ │MCP    │
-    └───────┘  │ 4222  │  │ 3030 │     │  8080   │ │ 3025 │ │Tools  │
+    └───────┘  │ 4222  │  │ 3030 │     │  8080   │ │ 8096 │ │Tools  │
                └───────┘  └──────┘     └─────────┘ └──────┘ └───────┘
                     │
     ┌───────────────┼───────────────┐
@@ -426,7 +426,7 @@ The BoTZ Gateway and Gateway Agent are **complementary services** that should be
 | Agent Zero UI | 8081 | HTTP | Web interface |
 | NATS | 4222 | TCP | Message bus |
 | NATS Monitoring | 8222 | HTTP | NATS dashboard |
-| Cipher Memory | 8000 | HTTP | Memory API |
+| Cipher Memory | 8096 | HTTP | Memory API |
 | TensorZero | 3030 | HTTP | LLM gateway |
 
 ---
