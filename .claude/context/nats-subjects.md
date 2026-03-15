@@ -153,6 +153,50 @@ Example: `ingest.transcript.ready.v1`
 - **Note:** `question` is truncated to 200 characters in the event payload
 - **Subscribers:** Observability dashboards, Graphiti trail processors
 
+## OpenClaw (ClawZ) Messaging Subjects
+
+**`openclaw.message.received.v1`**
+- **Direction:** Published by ClawZ nats-bridge extension → Consumed by monitoring, Agent Zero
+- **Purpose:** Notify that an inbound message was received on any channel
+- **Payload:**
+  ```json
+  {
+    "channel": "discord",
+    "message_id": "msg-abc123",
+    "author": "user-id",
+    "content_length": 128,
+    "timestamp": "2026-03-15T12:00:00Z"
+  }
+  ```
+- **Subscribers:** Agent Zero, observability dashboards
+
+**`openclaw.message.sent.v1`**
+- **Direction:** Published by ClawZ nats-bridge extension → Consumed by monitoring
+- **Purpose:** Notify that an outbound message was sent on any channel
+- **Payload:**
+  ```json
+  {
+    "channel": "telegram",
+    "message_id": "msg-def456",
+    "content_length": 256,
+    "timestamp": "2026-03-15T12:00:00Z"
+  }
+  ```
+- **Subscribers:** Observability dashboards
+
+**`openclaw.channel.connected.v1`**
+- **Direction:** Published by ClawZ nats-bridge extension → Consumed by monitoring
+- **Purpose:** Notify that a channel adapter connected or disconnected
+- **Payload:**
+  ```json
+  {
+    "channel": "discord",
+    "status": "connected",
+    "timestamp": "2026-03-15T12:00:00Z"
+  }
+  ```
+- **Subscribers:** Observability dashboards, Agent Zero
+
 ## Media Ingestion Subjects
 
 ### File Ingestion

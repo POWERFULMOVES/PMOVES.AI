@@ -45,13 +45,13 @@
 
 ## NATS Subjects
 
-_All subjects are **planned** — ClawZ currently has no NATS integration._
+NATS integration via the `nats-bridge` extension (`extensions/nats-bridge/`). Fire-and-forget publishing — failures are logged but never block message routing.
 
 | Subject | Direction | Description |
 |---------|-----------|-------------|
-| `openclaw.message.received.v1` | Publishes (planned) | Inbound message from any channel |
-| `openclaw.message.sent.v1` | Publishes (planned) | Outbound message to any channel |
-| `openclaw.channel.connected.v1` | Publishes (planned) | Channel adapter connected/disconnected |
+| `openclaw.message.received.v1` | Publishes | Inbound message from any channel (channel, author, content_length) |
+| `openclaw.message.sent.v1` | Publishes | Outbound message to any channel (channel, content_length) |
+| `openclaw.channel.connected.v1` | Publishes | Channel adapter connected/disconnected (channel, status) |
 
 ## CHIT Integration Status
 
@@ -152,7 +152,7 @@ PMOVES-ClawZ/
 
 - ~~No `/healthz` endpoint~~ → **Implemented** (`/healthz` liveness + `/readyz` readiness — see Audit Checklist above)
 - No `/metrics` endpoint — invisible to Prometheus (uses optional OTEL diagnostics instead)
-- No NATS integration — all 47 extensions could emit events to the event bus
+- ~~No NATS integration — all 47 extensions could emit events to the event bus~~ → **Implemented** (`nats-bridge` extension publishes message and channel events)
 - No CHIT attribution — message routing lacks provenance tracking
 - Integration with Flute Gateway for outbound voice TTS via channels (planned)
 - Integration with BoTZ skills for chat-invoked skill execution (planned)
