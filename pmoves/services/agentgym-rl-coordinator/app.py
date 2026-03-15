@@ -4,6 +4,7 @@ import logging
 import re
 import asyncio
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 from typing import Optional
 from uuid import UUID
 from fastapi import FastAPI, HTTPException
@@ -156,6 +157,10 @@ async def lifespan(app: FastAPI):
                     logger.warning("agentgym.train.completed.v1 missing training_run_id")
                     return
 
+                if not DATASET_NAME_PATTERN.match(training_run_id):
+                    logger.warning("Invalid training_run_id format: %s", training_run_id[:100])
+                    return
+
                 logger.info(
                     "Training completed: run=%s, trajectories=%d, model=%s",
                     training_run_id, len(trajectory_ids), model_id,
@@ -184,6 +189,7 @@ async def lifespan(app: FastAPI):
                                 "repo_url": result.get("repo_url"),
                                 "trajectory_count": len(trajectory_ids),
                                 "source": "agentgym-rl-coordinator",
+                                "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
                             })
                             await nc.publish(
                                 "agentgym.model.published.v1",
