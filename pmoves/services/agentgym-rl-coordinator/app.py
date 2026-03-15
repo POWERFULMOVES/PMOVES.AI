@@ -142,7 +142,7 @@ async def lifespan(app: FastAPI):
         async def training_completed_handler(msg):
             """
             Handle a training completion event by optionally publishing associated trajectories to HuggingFace, emitting related NATS events, and recording the completion in storage.
-            
+
             Parameters:
                 msg: NATS message whose `data` is a JSON-encoded payload containing at minimum a `training_run_id` and optionally `trajectory_ids` and `model_id`.
             """

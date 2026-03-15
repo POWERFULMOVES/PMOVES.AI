@@ -646,6 +646,73 @@ nats server report connections
 - `nats_server_messages_in` - Messages received
 - `nats_server_messages_out` - Messages sent
 
+## AgentGym RL Training Subjects
+
+### Training Lifecycle
+
+**`agentgym.train.started.v1`**
+- **Direction:** Published by EvoSwarm (evo-controller) → Consumed by AgentGym-RL coordinator, monitoring
+- **Purpose:** Notify that RL training has been triggered
+- **Payload:**
+  ```json
+  {
+    "training_run_id": "run-abc123",
+    "environment": "pmoves-hirag",
+    "trigger_reason": "fitness_plateau|new_constellation|scheduled|fitness_degradation",
+    "population_id": "pop-5",
+    "algorithm": "ppo|grpo|rloo|reinforce++",
+    "horizon": 10,
+    "num_epochs": 25,
+    "learning_rate": 1e-6,
+    "geometry_config": {
+      "cgp_fitness_weight": 0.2,
+      "retrieval_quality_weight": 0.3,
+      "task_success_weight": 0.4
+    },
+    "timestamp": "2026-03-14T12:00:00Z"
+  }
+  ```
+- **Subscribers:** AgentGym-RL coordinator, observability dashboards
+
+**`agentgym.train.completed.v1`**
+- **Direction:** Published by EvoSwarm (evo-controller) → Consumed by AgentGym-RL coordinator
+- **Purpose:** Training run finished — triggers auto-publish to HuggingFace Hub
+- **Payload:**
+  ```json
+  {
+    "training_run_id": "run-abc123",
+    "trajectory_ids": ["traj-1", "traj-2"],
+    "model_id": "Qwen3-8B-Instruct",
+    "population_id": "pop-5",
+    "fitness_metrics": {
+      "avg_reward": 0.82,
+      "task_success_rate": 0.91,
+      "retrieval_quality": 0.78
+    },
+    "epoch": 50,
+    "generation": 5,
+    "timestamp": "2026-03-14T14:00:00Z"
+  }
+  ```
+- **Subscribers:** AgentGym-RL coordinator (auto-publishes to HF), monitoring
+- **Triggers:** `agentgym.model.published.v1`, `skills.pipeline.model-benchmark-viz.v1`
+
+**`agentgym.model.published.v1`**
+- **Direction:** Published by AgentGym-RL coordinator → Consumed by monitoring, Agent Zero
+- **Purpose:** Model/dataset published to HuggingFace Hub
+- **Payload:**
+  ```json
+  {
+    "training_run_id": "run-abc123",
+    "model_id": "Qwen3-8B-Instruct",
+    "dataset_id": "pmoves/agentgym-run-abc123",
+    "repo_url": "https://huggingface.co/datasets/pmoves/agentgym-run-abc123",
+    "trajectory_count": 15,
+    "source": "agentgym-rl-coordinator"
+  }
+  ```
+- **Subscribers:** Agent Zero, Discord Publisher, observability dashboards
+
 ## BoTZ MCP GitHub Subjects
 
 ### GitHub Tool Execution

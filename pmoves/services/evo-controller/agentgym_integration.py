@@ -360,9 +360,9 @@ class AgentGymIntegration:
     ) -> None:
         """
         Publish a training completion event to the agent-zero event bus.
-        
+
         Sends an event with training metadata so downstream services (AgentGym-RL coordinator, publishing workflows) can process the completed run. The emitted payload includes training_run_id, trajectory_ids, model_id (resolved from the provided value or environment), population_id, fitness_metrics, epoch, generation, and an ISO-8601 UTC timestamp. On success the method logs the publication; on failure it logs a warning.
-        
+
         Parameters:
             training_run_id (str): Identifier of the completed training run.
             trajectory_ids (List[str]): List of trajectory identifiers produced by the run.
