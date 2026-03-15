@@ -24,8 +24,8 @@ Comprehensive catalog of n8n workflows in the PMOVES.AI ecosystem.
 | GitHub Integration | 2 | Cron + Webhook | Active |
 | Social Publishing | 2 | Webhook | Active |
 | Specialized | 3 | Webhook + Cron | Active |
-| Geometry Bus/CGP | 3 | Webhook | Active |
-| **Total** | **35** | | **28 active, 6 inactive, 1 debug** |
+| Geometry Bus/CGP | 4 | Webhook | Active |
+| **Total** | **36** | | **29 active, 6 inactive, 1 debug** |
 
 ---
 
@@ -117,6 +117,7 @@ Comprehensive catalog of n8n workflows in the PMOVES.AI ecosystem.
 |----------|------|---------|-------------|
 | VibeVoice → CGP | `vibevoice_to_cgp.webhook.json` | Webhook | `geometry.cgp.v1` |
 | WAN → CGP | `wan_to_cgp.webhook.json` | Webhook | `geometry.cgp.v1` |
+| Finance Monthly → CGP (wh) | `finance_monthly_to_cgp.webhook.json` | Webhook | `geometry.cgp.v1` |
 | Health Weekly → CGP (wh) | `health_weekly_to_cgp.webhook.json` | Webhook | `geometry.cgp.v1` |
 
 ---
