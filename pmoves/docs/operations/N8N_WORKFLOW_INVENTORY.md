@@ -1,8 +1,10 @@
 # n8n Workflow Inventory
 
-Comprehensive catalog of all 34 n8n workflows in the PMOVES.AI ecosystem.
+Comprehensive catalog of n8n workflows in the PMOVES.AI ecosystem.
 
-**Source:** `PMOVES-n8n/workflows/` (canonical JSON definitions)
+**Source:** `pmoves/n8n/flows/` (35 core workflows) + `pmoves/integrations/*/n8n/flows/` (domain-specific)
+**Submodule:** `PMOVES-n8n` (authoritative runtime config)
+**Voice-only:** `pmoves/n8n-workflows/` (5 voice platform workflows — legacy path)
 **Runtime:** n8n 2.1.0 via `compose/n8n/Dockerfile`
 **Port:** 5678 (HTTP), accessible at `n8n.pmoves.ai`
 
@@ -13,7 +15,7 @@ Comprehensive catalog of all 34 n8n workflows in the PMOVES.AI ecosystem.
 | Category | Count | Triggers | Default Status |
 |----------|-------|----------|----------------|
 | Content Publishing | 3 | Cron + Webhook | Active |
-| Voice Platforms | 4 | Webhook + Native | 2 Inactive |
+| Voice Platforms | 5 | Webhook + Native | 3 Inactive |
 | Finance/Wealth | 4 | Cron + Webhook + Manual | 2 Inactive |
 | Health/Wellness | 3 | Cron + Webhook + Manual | 1 Inactive |
 | Media Processing | 4 | Webhook | Active |
@@ -23,7 +25,7 @@ Comprehensive catalog of all 34 n8n workflows in the PMOVES.AI ecosystem.
 | Social Publishing | 2 | Webhook | Active |
 | Specialized | 3 | Webhook + Cron | Active |
 | Geometry Bus/CGP | 3 | Webhook | Active |
-| **Total** | **34** | | **28 active, 5 inactive, 1 debug** |
+| **Total** | **35** | | **28 active, 6 inactive, 1 debug** |
 
 ---
 
@@ -41,6 +43,7 @@ Comprehensive catalog of all 34 n8n workflows in the PMOVES.AI ecosystem.
 |----------|------|---------|----------|--------|
 | Discord Voice Agent | `discord_voice_agent.json` | Discord trigger | Discord Bot, Flute-Gateway | **Inactive** |
 | Telegram Voice Agent | `telegram_voice_agent.json` | Webhook | Telegram Bot | **Inactive** |
+| WhatsApp Voice Agent | `whatsapp-voice-agent.json` | Webhook | WhatsApp, Flute-Gateway | **Inactive** |
 | Voice Platform Router | `voice_platform_router.json` | Webhook | Telegram, WhatsApp, Discord, Flute | Active |
 | Voice Shared Functions | `voice_shared_functions.json` | (library) | — | Reference |
 
@@ -205,8 +208,11 @@ These workflows require external credentials not available by default:
 |----------|--------|---------------------|
 | `discord_voice_agent.json` | Needs Discord Bot Token | `DISCORD_BOT_TOKEN` |
 | `telegram_voice_agent.json` | Needs Telegram Bot Token | `TELEGRAM_BOT_TOKEN` |
+| `whatsapp-voice-agent.json` | Needs WhatsApp Business API | `WHATSAPP_TOKEN` |
 | `finance_firefly_sync.json` | Needs Firefly III access | `FIREFLY_BASE_URL`, `FIREFLY_ACCESS_TOKEN` |
 | `finance_monthly_to_cgp.json` | Demo data only | (customize for real data) |
 | `health_weekly_to_cgp.json` | Demo data only | (customize for real data) |
 
-Activate with: `python scripts/import_repo_flows.py --container pmoves-n8n --voice-platforms`
+Activate voice workflows: `python scripts/import_repo_flows.py --container pmoves-n8n --voice-platforms`
+Activate finance/health: `python scripts/import_repo_flows.py --container pmoves-n8n --finance --health`
+Activate all inactive: `python scripts/import_repo_flows.py --container pmoves-n8n --all-inactive`
