@@ -297,3 +297,15 @@
 	path = PMOVES-a0-plugins
 	url = https://github.com/POWERFULMOVES/PMOVES-a0-plugins.git
 	branch = PMOVES.AI-Edition-Hardened
+# =============================================================================
+# Research & Messaging Platforms
+# =============================================================================
+
+[submodule "PMOVES-autoresearch"]
+	path = PMOVES-autoresearch
+	url = https://github.com/POWERFULMOVES/PMOVES-autoresearch.git
+	branch = PMOVES.AI-Edition-Hardened
+[submodule "PMOVES-ClawZ"]
+	path = PMOVES-ClawZ
+	url = https://github.com/POWERFULMOVES/PMOVES-ClawZ.git
+	branch = PMOVES.AI-Edition-Hardened
