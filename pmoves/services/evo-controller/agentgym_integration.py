@@ -369,7 +369,7 @@ class AgentGymIntegration:
             model_id (Optional[str]): Model identifier used for training; if omitted, the base model is resolved from environment variables or a default.
             fitness_metrics (Optional[Dict[str, float]]): Final fitness metrics collected from the training; an empty dict is sent if omitted.
         """
-        base_model = model_id or os.getenv("AGENTGYM_BASE_MODEL", "Qwen3-8B-Instruct")
+        base_model = model_id or os.getenv("AGENTGYM_BASE_MODEL", "Qwen/Qwen3-8B")
         base = os.getenv("AGENT_ZERO_BASE_URL") or os.getenv("AGENTZERO_BASE_URL") or "http://agent-zero:8080"
         url = f"{base.rstrip('/')}/events/publish"
 
