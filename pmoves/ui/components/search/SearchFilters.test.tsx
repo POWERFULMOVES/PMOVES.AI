@@ -306,7 +306,7 @@ describe('SearchFilters', () => {
 
   describe('Panel visibility', () => {
     it('should render content when isOpen is true', () => {
-      const { container } = render(
+      render(
         <SearchFilters
           filters={defaultFilters}
           onChange={mockOnChange}
@@ -318,7 +318,7 @@ describe('SearchFilters', () => {
     });
 
     it('should not render content when isOpen is false', () => {
-      const { container } = render(
+      render(
         <SearchFilters
           filters={defaultFilters}
           onChange={mockOnChange}

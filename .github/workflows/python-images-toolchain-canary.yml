@@ -32,6 +32,7 @@ jobs:
     name: Python images toolchain canary
     # Build/scan lane does not require GPU.
     runs-on: [self-hosted, Linux, X64, vps]
+    timeout-minutes: 45
     env:
       TRIVY_IMAGE: aquasec/trivy:0.57.1
     steps:

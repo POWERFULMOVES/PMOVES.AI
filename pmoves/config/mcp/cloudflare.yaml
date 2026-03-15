@@ -1,0 +1,26 @@
+id: cloudflare
+name: Cloudflare Developer Platform MCP
+description: >
+  Cloudflare account management via remote MCP (Claude.ai integration).
+  Provides direct access to Workers, KV, R2, D1, Hyperdrive, and DNS
+  management without local Docker configuration.
+provider: remote-mcp
+mcp_tools_prefix: mcp__claude_ai_Cloudflare_Developer_Platform__
+required_credentials:
+  - CLOUDFLARE_ACCOUNT_ID
+  - CLOUDFLARE_API_TOKEN
+capabilities:
+  - Account listing and selection (accounts_list, set_active_account)
+  - KV namespace CRUD (kv_namespace_*)
+  - R2 bucket management (r2_bucket_*)
+  - D1 database operations (d1_database_*)
+  - Workers deployment and inspection (workers_*)
+  - Hyperdrive config management (hyperdrive_config_*)
+  - Cloudflare documentation search (search_cloudflare_documentation)
+  - Tunnel creation and DNS record management
+setup_instructions:
+  - Available as remote MCP via Claude.ai — no local setup required.
+  - Credentials are managed via CHIT secrets manifest (secrets_manifest_v2.yaml).
+  - Use 'set_active_account' to select the PMOVES Cloudflare account before operations.
+health_check:
+  mcp_tool: mcp__claude_ai_Cloudflare_Developer_Platform__accounts_list

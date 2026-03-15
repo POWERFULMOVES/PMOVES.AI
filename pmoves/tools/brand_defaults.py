@@ -36,6 +36,7 @@ PLACEHOLDER_VALUES = {
     "changeme",
     "change_me",
     "base64:CHANGE_ME",
+    "GENERATE_FROM_WGER_UI",
     "SURREAL_USER_HERE",
     "SURREAL_PASS_HERE",
     "root",
@@ -123,7 +124,8 @@ def _ensure_integration_credentials(text: str) -> str:
         text = _set_kv(text, "FIREFLY_APP_KEY", firefly_key)
 
     # n8n encryption key: 32-byte urlsafe token for workflow credential encryption.
-    # NOTE: N8N_API_KEY cannot be auto-generated — it must be created from the n8n UI.
+    # N8N_API_KEY is still not generated here because it requires a live n8n
+    # instance; use `make -C pmoves n8n-api-bootstrap` after bring-up.
     n8n_enc = _get_kv(text, "N8N_ENCRYPTION_KEY")
     if _is_blank_or_placeholder(n8n_enc):
         text = _set_kv(text, "N8N_ENCRYPTION_KEY", _strong_random(32))
@@ -133,10 +135,46 @@ def _ensure_integration_credentials(text: str) -> str:
     if _is_blank_or_placeholder(n8n_runners):
         text = _set_kv(text, "N8N_RUNNERS_AUTH_TOKEN", _strong_random(24))
 
-    # Wger API token: prefixed with pm_wger_ for easy identification
+    # Wger database password: PostgreSQL password for the wger database
+    wger_db_pass = _get_kv(text, "WGER_DB_PASSWORD")
+    if _is_blank_or_placeholder(wger_db_pass):
+        try:
+            # Use URL-safe base64 to avoid '/' characters that break DATABASE_URL DSN parsing
+            wger_db_pass = secrets.token_urlsafe(24)
+            text = _set_kv(text, "WGER_DB_PASSWORD", wger_db_pass)
+        except Exception as e:
+            print(f"ERROR: Failed to generate WGER_DB_PASSWORD: {e}", file=sys.stderr)
+            print("Generate manually: python -c 'import secrets; print(secrets.token_urlsafe(24))'", file=sys.stderr)
+            sys.exit(1)
+
+    # Wger Django secret key: Django SECRET_KEY for cryptographic signing
+    wger_secret = _get_kv(text, "WGER_SECRET_KEY")
+    if _is_blank_or_placeholder(wger_secret):
+        try:
+            wger_secret = base64.b64encode(secrets.token_bytes(48)).decode("utf-8")
+            text = _set_kv(text, "WGER_SECRET_KEY", wger_secret)
+        except Exception as e:
+            print(f"ERROR: Failed to generate WGER_SECRET_KEY: {e}", file=sys.stderr)
+            print("Generate manually: openssl rand -base64 48", file=sys.stderr)
+            sys.exit(1)
+
+    # Wger admin password: Admin account password for the wger web interface
+    wger_admin_pass = _get_kv(text, "WGER_ADMIN_PASSWORD")
+    if _is_blank_or_placeholder(wger_admin_pass):
+        try:
+            wger_admin_pass = base64.b64encode(secrets.token_bytes(16)).decode("utf-8")
+            text = _set_kv(text, "WGER_ADMIN_PASSWORD", wger_admin_pass)
+        except Exception as e:
+            print(f"ERROR: Failed to generate WGER_ADMIN_PASSWORD: {e}", file=sys.stderr)
+            print("Generate manually: openssl rand -base64 16", file=sys.stderr)
+            sys.exit(1)
+
+    # Wger API token: Django REST Framework tokens must be created via the
+    # admin UI — random tokens are rejected.  Set a sentinel so operators
+    # know to generate one from http://localhost:8000/api/v2/token.
     wger_token = _get_kv(text, "WGER_API_TOKEN")
     if _is_blank_or_placeholder(wger_token):
-        text = _set_kv(text, "WGER_API_TOKEN", "pm_wger_" + _strong_random(24))
+        text = _set_kv(text, "WGER_API_TOKEN", "GENERATE_FROM_WGER_UI")
 
     return text
 
@@ -199,10 +237,14 @@ def main() -> int:
     args = parse_args()
     env_path = args.env_file
     env_gen_path = args.generated_env_file
-    env_path.parent.mkdir(parents=True, exist_ok=True)
-    if not env_path.exists():
-        env_path.write_text("", encoding="utf-8")
-    upsert_env(env_path, env_gen_path, DEFAULTS)
+    try:
+        env_path.parent.mkdir(parents=True, exist_ok=True)
+        if not env_path.exists():
+            env_path.write_text("", encoding="utf-8")
+        upsert_env(env_path, env_gen_path, DEFAULTS)
+    except OSError as e:
+        print(f"Error writing env files: {e}", file=sys.stderr)
+        return 1
     print(f"Branded defaults applied to {env_path}")
     return 0
 

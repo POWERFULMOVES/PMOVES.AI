@@ -4,7 +4,7 @@ Authoritative tracker for P2 security issues in PMOVES.AI submodules that requir
 
 **All P1 issues were fixed in Phase H (2026-02-17).** This tracker covers remaining P2 items.
 
-Last updated: 2026-03-10 (all P2 items resolved — 0 open / 17 total)
+Last updated: 2026-03-15 (0 open / 19 total — 2 new items from Phase E TAC audit, both fixed)
 
 ## Open Issues
 
@@ -86,6 +86,8 @@ Each P2 issue requires:
 | 10 | Pipecat | No Prometheus metrics | 2026-03-10 | CLOSED (wontfix) — library scope; Flute-Gateway exposes metrics at service layer |
 | 13 | tensorzero | RUSTSEC advisories | 2026-03-10 | CLOSED (accepted risk) — transitive deps, upstream vendor scope, documented in `deny.toml` |
 | 14 | tensorzero | Example compose hardcoded secrets | 2026-03-10 | CLOSED (false positive) — examples use `${VAR:?required}` fail-closed pattern |
+| 17 | BotZ-gateway | `export` prefix in env.shared + env.tier-api (Docker-incompatible) | 2026-03-15 | FIXED — stripped 74 `export` prefixes from `env.shared` (53) and `env.tier-api` (21) |
+| 18 | Cipher | No API authentication on memory endpoints | 2026-03-15 | FIXED — Bearer token auth middleware (`CIPHER_API_TOKEN`), graceful skip if unset |
 
 ## Priority Definitions
 

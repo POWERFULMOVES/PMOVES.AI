@@ -1,6 +1,5 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import { createMiddlewareClient, createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
-import type { ReadonlyRequestCookies } from 'next/dist/server/web/spec-extension/adapters/request-cookies';
+import { createServerClient } from '@supabase/ssr';
 import type { NextRequest, NextResponse } from 'next/server';
 import type { Database } from './database.types';
 
@@ -34,17 +33,44 @@ export function getServiceSupabaseClient(options: ServiceClientOptions = {}): Su
   return serviceClient;
 }
 
-type CookieSource = () => ReadonlyRequestCookies | Promise<ReadonlyRequestCookies> | unknown;
-
-export const createSupabaseRouteHandlerClient = (cookies: CookieSource) =>
-  createRouteHandlerClient<Database>({ cookies: cookies as any });
+export const createSupabaseRouteHandlerClient = (
+  cookieStore: { getAll(): { name: string; value: string }[]; set(...args: any[]): any }
+) => {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
+  if (!url || !key) {
+    throw new Error('Supabase URL and anon key required for route handler client');
+  }
+  return createServerClient<Database>(url, key, {
+    cookies: {
+      getAll() { return cookieStore.getAll(); },
+      setAll(cookiesToSet) {
+        cookiesToSet.forEach(({ name, value, options }) => {
+          try { cookieStore.set(name, value, options); } catch { /* read-only in server components */ }
+        });
+      },
+    },
+  });
+};
 
 export const createSupabaseProxyClient = (args: {
   req: NextRequest;
   res: NextResponse;
 }) => {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
-  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
-  // Pass explicit config so middleware works in edge runtime even if env scoping differs
-  return createMiddlewareClient<Database>(args as any, (supabaseUrl && supabaseKey) ? { supabaseUrl, supabaseKey } : undefined);
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
+  if (!url || !key) {
+    throw new Error('Supabase URL and anon key required for proxy client');
+  }
+  return createServerClient<Database>(url, key, {
+    cookies: {
+      getAll() { return args.req.cookies.getAll(); },
+      setAll(cookiesToSet) {
+        cookiesToSet.forEach(({ name, value, options }) => {
+          args.req.cookies.set(name, value);
+          args.res.cookies.set(name, value, options);
+        });
+      },
+    },
+  });
 };

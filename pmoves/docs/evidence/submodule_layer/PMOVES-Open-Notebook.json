@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-03-10 02:16 UTC",
+  "generated_at": "2026-03-13 02:45 UTC",
   "manifest": "pmoves/configs/submodule_layer_validation_manifest.json",
   "summary": {
     "submodules": 1,
@@ -12,7 +12,7 @@
       "path": "PMOVES-Open-Notebook",
       "url": "https://github.com/POWERFULMOVES/PMOVES-Open-Notebook.git",
       "status_prefix": " ",
-      "commit": "e9ccae69e49b7b6dd388c3956202eedc0fb27e4c",
+      "commit": "0533c8aff5e73ee288c0b83ff49beb304df82f29",
       "initialized": true,
       "remote_commit_reachable": "local",
       "required_files_any_ok": true,

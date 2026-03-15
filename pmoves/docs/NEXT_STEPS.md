@@ -1,7 +1,47 @@
 
 # PMOVES v5 • NEXT_STEPS
 Note: Consolidated plan index at pmoves/docs/PMOVES.AI PLANS/README_DOCS_INDEX.md.
-_Last updated: 2026-03-08_
+_Last updated: 2026-03-12_
+
+## Current Status
+
+### Latest changes (Mar 12, 2026) — PMOVES.YT Authoritative Runtime Refresh
+- `PMOVES.YT` is now the authoritative runtime/docs lane for `pmoves-yt`; the root repo now builds the service from the submodule Dockerfile instead of treating `pmoves/services/pmoves-yt` as the source of truth.
+- Added a structured yt-dlp catalog inside the submodule (`/yt/docs/catalog`) so live runtime metadata exposes extractor counts, option inventory, and the active yt-dlp version.
+- Refreshed the Supabase docs sync path (`/yt/docs/sync`) for the current CLI stack: `pmoves_core.tool_docs` writes now use schema-profile headers plus URL-encoded `on_conflict`, and live sync is green again.
+- Kept the root `pmoves/services/pmoves-yt` package as a compatibility shim so existing tests and import paths remain stable during the production transition.
+- Modernized the downloader path around the authoritative runtime: PMOVES.YT now documents current yt-dlp client/token behavior, root compose passes companion URLs explicitly, and Jellyfin/channel-monitor docs are moving off older MCP/future-work framing.
+- Added `pmoves/docs/PMOVES.AI PLANS/CREATOR_NETWORK_CONTROL_PLANE.md` to frame YouTube, Discord agents, transcribe-and-fetch, model routing, and Tokenism as one creator-network lane.
+- Updated the AGENTS creator fast path so `PMOVES-Creator`, `PMOVES-Open-Notebook`, and `CATACLYSM_STUDIOS_INC` are explicit traversal docs for creator strategy, notebook evidence, and brand/governance context.
+- Added the first creator-control production lane now under review:
+  - `PMOVES.YT #4` adds approval-gated YouTube Data API actions, summary model-role routing, and modernized overlay lint/CI coverage.
+  - `PMOVES.AI #884` adds channel-monitor review queue endpoints, Discord approval routing, Supabase audit storage, and notebook-backed creator review artifacts.
+- Next focus: merge `PMOVES.YT #4` then `PMOVES.AI #884`, then expand the creator-control surface instead of doing more compatibility-mirror work.
+
+### Latest changes (Mar 12, 2026) — n8n Production Control Plane Refresh
+- `PMOVES-n8n` is now the authoritative n8n runtime/workflow lane; root `pmoves` consumes it instead of treating `pmoves/n8n/flows` as canon.
+- n8n defaults to the dedicated `n8n-db` Postgres sidecar (`make -C pmoves up-n8n`), with SQLite reduced to a legacy escape hatch only.
+- Added `make -C pmoves n8n-api-bootstrap` to automate owner bootstrap + Public API key rotation for n8n 2.1.
+- Workflow activation/import now targets the n8n Public API path, replacing the failing CLI publish/unpublish fallback for the production lane.
+- Added Supabase tracking schema `pmoves_core.n8n_workflow_registry` plus `make -C pmoves n8n-sync-supabase-registry` so PMOVES can inventory live workflow state.
+- Next focus: validate the full bootstrap against Postgres-backed n8n, refresh PMOVES.YT from demo to production against the same automation lane, and decide which BotZ/MCP workflows join the shared canonical catalog.
+
+## Immediate Actions
+
+1. Close the current hardened merge lane.
+   - merge `PMOVES.YT #4`
+   - merge `PMOVES.AI #884`
+   - verify hardened stays green after the submodule-first merge order
+
+2. Expand the M2 creator-control surface.
+   - add broader playlist and channel-management actions beyond the first owned-channel slice
+   - improve Discord rejection metadata and operator feedback
+   - move comment/reply generation onto policy-driven templates tied to `PMOVES-Creator`, `PMOVES-Open-Notebook`, and CATACLYSM context
+
+3. Keep the n8n control plane aligned with the creator lane.
+   - validate Postgres-backed `PMOVES-n8n` bootstrap end-to-end
+   - decide which BotZ/MCP workflows become canonical shared automation flows
+   - keep Supabase workflow registry sync green as creator automation expands
 
 ### Latest changes (Mar 8, 2026) — CI Runner Migration + RG-3 Automation
 - **AB-9 mitigation:** Migrated 10 lightweight CI jobs from `[self-hosted, Linux, X64]` to `ubuntu-latest`:

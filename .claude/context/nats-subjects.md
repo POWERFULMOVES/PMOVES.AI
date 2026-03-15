@@ -108,6 +108,115 @@ Example: `ingest.transcript.ready.v1`
   }
   ```
 
+## Cipher Memory Subjects
+
+**`cipher.memory.stored.v1`**
+- **Direction:** Published by Cipher MCP bridge → Consumed by monitoring, observability
+- **Purpose:** Notify that a memory was stored in Cipher
+- **Payload:**
+  ```json
+  {
+    "memory_id": "mem-abc123",
+    "category": "code_pattern",
+    "tags": ["python", "async"],
+    "timestamp": "2026-03-15T12:00:00Z"
+  }
+  ```
+- **Subscribers:** Observability dashboards, Discord Publisher (optional)
+
+**`cipher.memory.searched.v1`**
+- **Direction:** Published by Cipher MCP bridge → Consumed by monitoring
+- **Purpose:** Notify that a memory search was performed
+- **Payload:**
+  ```json
+  {
+    "query": "search query text",
+    "result_count": 5,
+    "category": "architecture | null",
+    "timestamp": "2026-03-15T12:00:00Z"
+  }
+  ```
+- **Note:** `category` is `null` when the search is unfiltered (no category specified)
+- **Subscribers:** Observability dashboards
+
+**`cipher.reasoning.stored.v1`**
+- **Direction:** Published by Cipher MCP bridge → Consumed by monitoring
+- **Purpose:** Notify that a reasoning trace was stored
+- **Payload:**
+  ```json
+  {
+    "reasoning_id": "reason-abc123",
+    "question": "How to optimize query performance...",
+    "timestamp": "2026-03-15T12:00:00Z"
+  }
+  ```
+- **Note:** `question` is truncated to 200 characters in the event payload
+- **Subscribers:** Observability dashboards, Graphiti trail processors
+
+## OpenClaw (ClawZ) Messaging Subjects
+
+**`openclaw.message.received.v1`**
+- **Direction:** Published by ClawZ nats-bridge extension → Consumed by monitoring, Agent Zero
+- **Purpose:** Notify that an inbound message was received on any channel
+- **Payload:**
+  ```json
+  {
+    "channel": "discord",
+    "message_id": "msg-abc123",
+    "author": "user-id",
+    "content_length": 128,
+    "timestamp": "2026-03-15T12:00:00Z"
+  }
+  ```
+- **Subscribers:** Agent Zero, observability dashboards
+
+**`openclaw.message.sent.v1`**
+- **Direction:** Published by ClawZ nats-bridge extension → Consumed by monitoring
+- **Purpose:** Notify that an outbound message was sent on any channel
+- **Payload:**
+  ```json
+  {
+    "channel": "telegram",
+    "message_id": "msg-def456",
+    "content_length": 256,
+    "timestamp": "2026-03-15T12:00:00Z"
+  }
+  ```
+- **Subscribers:** Observability dashboards
+
+**`openclaw.channel.connected.v1`**
+- **Direction:** Published by ClawZ nats-bridge extension → Consumed by monitoring
+- **Purpose:** Notify that a channel adapter connected or disconnected
+- **Payload:**
+  ```json
+  {
+    "channel": "discord",
+    "status": "connected",
+    "timestamp": "2026-03-15T12:00:00Z"
+  }
+  ```
+- **Subscribers:** Observability dashboards, Agent Zero
+
+## autoresearch Experiment Subjects
+
+**`research.autoresearch.result.v1`**
+- **Direction:** Published by `nats_reporter.py` → Consumed by Agent Zero, monitoring
+- **Purpose:** Notify that an experiment completed with results
+- **Payload:**
+  ```json
+  {
+    "commit": "a1b2c3d",
+    "branch": "autoresearch/mar15",
+    "val_bpb": 0.997900,
+    "peak_vram_mb": 45060.2,
+    "training_seconds": 300.1,
+    "num_steps": 953,
+    "num_params_M": 50.3,
+    "timestamp": "2026-03-15T12:00:00Z"
+  }
+  ```
+- **Subscribers:** Agent Zero, AgentGym RL coordinator, observability dashboards
+
 ## Media Ingestion Subjects
 
 ### File Ingestion
@@ -399,6 +508,47 @@ Example: `ingest.transcript.ready.v1`
 - **Subscribers:** ToKenism-Multi (musicMapping.ts), Hyperdimensions (visualization)
 - **Related:** See `/chit:bpm` tool spec, `TAC_TOKENISM.md`, `FLUTE_PROSODIC_ARCHITECTURE.md`
 
+## Voice Agent Relay Subjects
+
+**`voice.agent.response.v1`** (relayed)
+- **Direction:** voice-relay subscribes to `agentzero.task.result.v1`, filters `meta.voice_mode`, republishes
+- **Publisher:** voice-relay service (port 8121)
+- **Subscribers:** `voice_follow_agent.py` (local TTS), `voice_follow_cast_agent.py` (Google Cast)
+- **Payload:**
+  ```json
+  {
+    "platform": "agent-zero",
+    "user_id": "user-id-from-meta",
+    "message_id": "task-id",
+    "response_text": "The spoken response text",
+    "model_used": "model-name-or-null",
+    "timestamp": "2026-03-14T12:00:00Z",
+    "sources": [],
+    "meta": {}
+  }
+  ```
+- **Schema:** `pmoves/contracts/schemas/voice/agent.response.v1.schema.json`
+- **Filter:** Only tasks with `meta.voice_mode: true` in the input payload are relayed
+- **Profiles:** `cast`, `media`
+
+## Cast TTS Subjects
+
+**`voice.cast.completed.v1`**
+- **Direction:** Published by cast-tts-gateway → Consumed by monitoring, Discord Publisher
+- **Purpose:** Notify when TTS audio has been cast to a Chromecast/Google Home device
+- **Payload:**
+  ```json
+  {
+    "device_name": "Living Room Speaker",
+    "device_ip": "192.168.1.x",
+    "text_length": 128,
+    "engine": "kokoro",
+    "duration_ms": 3200,
+    "timestamp": "2026-03-14T12:00:00Z"
+  }
+  ```
+- **Subscribers:** Monitoring dashboards, Discord Publisher
+
 ## Health & Fitness Subjects (Planned)
 
 > **Status:** Planned — Health (wger) integration is pre-stage maturity. These subjects define the target contract.
@@ -508,6 +658,33 @@ Example: `ingest.transcript.ready.v1`
   }
   ```
 - **Subscribers:** Agent Zero, SupaSerch, Discord Publisher
+
+## Operations Subjects
+
+**`ops.pr.trim.completed.v1`**
+- **Direction:** Published by claude-code-cli (pr-hedge-trim tool) → Consumed by pr-monitor, Discord Publisher
+- **Purpose:** Notify that a PR hedge trim cycle completed — review threads classified, fixed, and resolved
+- **Payload:**
+  ```json
+  {
+    "pr_number": 934,
+    "repo": "POWERFULMOVES/PMOVES.AI",
+    "agent_id": "claude-opus",
+    "total_threads": 12,
+    "actionable": 5,
+    "design_decision": 2,
+    "false_positive": 3,
+    "nitpick": 2,
+    "resolved": 10,
+    "commit_sha": "abc123",
+    "timestamp": "2026-03-15T12:00:00Z",
+    "trail_signed": true
+  }
+  ```
+- **Schema:** `pmoves/contracts/schemas/ops/pr.trim.completed.v1.schema.json`
+- **Subscribers:** PR Monitor (pipeline chain), Discord Publisher
+- **Delivery:** Publish/subscribe (advisory, no JetStream required)
+- **Related:** Part of `pr-monitor-graphiti-chit` FlOO$ pairing chain
 
 ## Testing & Development Subjects
 
@@ -628,6 +805,73 @@ nats server report connections
 - `nats_server_messages_in` - Messages received
 - `nats_server_messages_out` - Messages sent
 
+## AgentGym RL Training Subjects
+
+### Training Lifecycle
+
+**`agentgym.train.started.v1`**
+- **Direction:** Published by EvoSwarm (evo-controller) → Consumed by AgentGym-RL coordinator, monitoring
+- **Purpose:** Notify that RL training has been triggered
+- **Payload:**
+  ```json
+  {
+    "training_run_id": "run-abc123",
+    "environment": "pmoves-hirag",
+    "trigger_reason": "fitness_plateau|new_constellation|scheduled|fitness_degradation",
+    "population_id": "pop-5",
+    "algorithm": "ppo|grpo|rloo|reinforce++",
+    "horizon": 10,
+    "num_epochs": 25,
+    "learning_rate": 1e-6,
+    "geometry_config": {
+      "cgp_fitness_weight": 0.2,
+      "retrieval_quality_weight": 0.3,
+      "task_success_weight": 0.4
+    },
+    "timestamp": "2026-03-14T12:00:00Z"
+  }
+  ```
+- **Subscribers:** AgentGym-RL coordinator, observability dashboards
+
+**`agentgym.train.completed.v1`**
+- **Direction:** Published by EvoSwarm (evo-controller) → Consumed by AgentGym-RL coordinator
+- **Purpose:** Training run finished — triggers auto-publish to HuggingFace Hub
+- **Payload:**
+  ```json
+  {
+    "training_run_id": "run-abc123",
+    "trajectory_ids": ["traj-1", "traj-2"],
+    "model_id": "Qwen3-8B-Instruct",
+    "population_id": "pop-5",
+    "fitness_metrics": {
+      "avg_reward": 0.82,
+      "task_success_rate": 0.91,
+      "retrieval_quality": 0.78
+    },
+    "epoch": 50,
+    "generation": 5,
+    "timestamp": "2026-03-14T14:00:00Z"
+  }
+  ```
+- **Subscribers:** AgentGym-RL coordinator (auto-publishes to HF), monitoring
+- **Triggers:** `agentgym.model.published.v1`, `skills.pipeline.model-benchmark-viz.v1`
+
+**`agentgym.model.published.v1`**
+- **Direction:** Published by AgentGym-RL coordinator → Consumed by monitoring, Agent Zero
+- **Purpose:** Model/dataset published to HuggingFace Hub
+- **Payload:**
+  ```json
+  {
+    "training_run_id": "run-abc123",
+    "model_id": "Qwen3-8B-Instruct",
+    "dataset_id": "pmoves/agentgym-run-abc123",
+    "repo_url": "https://huggingface.co/datasets/pmoves/agentgym-run-abc123",
+    "trajectory_count": 15,
+    "source": "agentgym-rl-coordinator"
+  }
+  ```
+- **Subscribers:** Agent Zero, Discord Publisher, observability dashboards
+
 ## BoTZ MCP GitHub Subjects
 
 ### GitHub Tool Execution
@@ -676,6 +920,189 @@ nats server report connections
   }
   ```
 - **Subscribers:** Agent Zero, Discord Publisher
+
+## GitHub Automation Subjects
+
+### Branch Cleanup Service
+
+**`github.branch.stale_detected.v1`**
+- **Direction:** Published by github-branch-cleanup → Consumed by monitoring
+- **Purpose:** Notify when stale branches are detected
+- **Payload:**
+  ```json
+  {
+    "repo": "POWERFULMOVES/PMOVES.AI",
+    "branch": "feature/old-feature",
+    "last_commit_days": 45,
+    "stale_threshold_days": 30,
+    "timestamp": "2026-03-13T12:00:00Z"
+  }
+  ```
+
+**`github.branch.auto_deleted.v1`**
+- **Direction:** Published by github-branch-cleanup → Consumed by monitoring
+- **Purpose:** Notify when branches are auto-deleted after PR merge
+- **Payload:**
+  ```json
+  {
+    "repo": "POWERFULMOVES/PMOVES.AI",
+    "branch": "feature/completed-feature",
+    "pr_number": 1234,
+    "delete_reason": "pr_merged",
+    "timestamp": "2026-03-13T12:00:00Z"
+  }
+  ```
+
+### Issue Triage Service
+
+**`github.issue.triage.completed.v1`**
+- **Direction:** Published by github-issue-triage → Consumed by monitoring
+- **Purpose:** Notify when issue triage is completed
+- **Payload:**
+  ```json
+  {
+    "repo": "POWERFULMOVES/PMOVES.AI",
+    "issue_number": 567,
+    "labels_added": ["bug", "high-priority"],
+    "category": "bug_report",
+    "confidence": 0.95,
+    "timestamp": "2026-03-13T12:00:00Z"
+  }
+  ```
+
+### Branch Naming Service
+
+**`github.branch.created.v1`**
+- **Direction:** Published by GitHub webhooks → Consumed by github-branch-naming
+- **Purpose:** Trigger branch name validation when new branches created
+- **Payload:**
+  ```json
+  {
+    "repo": "POWERFULMOVES/PMOVES.AI",
+    "branch": "feature/new-feature",
+    "action": "created",
+    "timestamp": "2026-03-13T12:00:00Z"
+  }
+  ```
+
+**`github.branch.validation.v1`**
+- **Direction:** Published by github-branch-naming → Consumed by monitoring
+- **Purpose:** Notify of branch name validation results
+- **Payload:**
+  ```json
+  {
+    "repo": "POWERFULMOVES/PMOVES.AI",
+    "branch": "feature/new-feature",
+    "is_valid": true,
+    "category": "feature",
+    "suggested_name": null,
+    "reason": "Valid feature branch name",
+    "timestamp": "2026-03-13T12:00:00Z"
+  }
+  ```
+
+**`github.branch.rename_suggested.v1`**
+- **Direction:** Published by github-branch-naming → Consumed by monitoring
+- **Purpose:** Notify when branch rename is suggested
+- **Payload:**
+  ```json
+  {
+    "repo": "POWERFULMOVES/PMOVES.AI",
+    "original_branch": "feature/bad-name",
+    "suggested_branch": "feat/bad-name",
+    "reason": "Invalid branch name format. Suggested: feat/bad-name",
+    "dry_run": true,
+    "timestamp": "2026-03-13T12:00:00Z"
+  }
+  ```
+
+### Cross-Repository Sync Service
+
+**`github.crossrepo.sync.v1`**
+- **Direction:** Published by github-crossrepo-sync → Consumed by monitoring
+- **Purpose:** Notify when cross-repo sync operation starts
+- **Payload:**
+  ```json
+  {
+    "repo": "POWERFULMOVES/PMOVES.AI",
+    "branch": "main",
+    "status": "started",
+    "timestamp": "2026-03-13T12:00:00Z"
+  }
+  ```
+
+**`github.crossrepo.sync.completed.v1`**
+- **Direction:** Published by github-crossrepo-sync → Consumed by github-crossrepo-pr, monitoring
+- **Purpose:** Notify when cross-repo sync completes successfully
+- **Payload:**
+  ```json
+  {
+    "repo": "POWERFULMOVES/PMOVES.AI",
+    "branch": "main",
+    "submodules_synced": ["PMOVES-Agent-Zero", "PMOVES-Archon"],
+    "submodules_failed": [],
+    "duration_seconds": 5.2,
+    "timestamp": "2026-03-13T12:00:00Z"
+  }
+  ```
+
+**`github.crossrepo.sync.failed.v1`**
+- **Direction:** Published by github-crossrepo-sync → Consumed by monitoring
+- **Purpose:** Notify when cross-repo sync fails
+- **Payload:**
+  ```json
+  {
+    "repo": "POWERFULMOVES/PMOVES.AI",
+    "branch": "main",
+    "error": "Failed to connect to GitHub API",
+    "timestamp": "2026-03-13T12:00:00Z"
+  }
+  ```
+
+### Cross-Repository PR Automation Service
+
+**`github.crossrepo.pr.created.v1`**
+- **Direction:** Published by github-crossrepo-pr → Consumed by monitoring
+- **Purpose:** Notify when cross-repo PR is created
+- **Payload:**
+  ```json
+  {
+    "repo": "POWERFULMOVES/PMOVES.AI",
+    "pr_number": 1234,
+    "pr_url": "https://github.com/POWERFULMOVES/PMOVES.AI/pull/1234",
+    "pr_type": "dependency_update",
+    "base_branch": "main",
+    "timestamp": "2026-03-13T12:00:00Z"
+  }
+  ```
+
+**`github.crossrepo.pr.merged.v1`**
+- **Direction:** Published by github-crossrepo-pr → Consumed by github-branch-cleanup, monitoring
+- **Purpose:** Notify when cross-repo PR is merged
+- **Payload:**
+  ```json
+  {
+    "repo": "POWERFULMOVES/PMOVES.AI",
+    "pr_number": 1234,
+    "pr_type": "dependency_update",
+    "merge_method": "squash",
+    "timestamp": "2026-03-13T12:00:00Z"
+  }
+  ```
+
+**`github.crossrepo.pr.batch_completed.v1`**
+- **Direction:** Published by github-crossrepo-pr → Consumed by monitoring
+- **Purpose:** Notify when batch PR creation completes
+- **Payload:**
+  ```json
+  {
+    "pr_type": "dependency_update",
+    "repos": ["PMOVES.AI", "PMOVES-Agent-Zero", "PMOVES-Archon"],
+    "successful": 3,
+    "failed": 0,
+    "timestamp": "2026-03-13T12:00:00Z"
+  }
+  ```
 
 ## GPU Mesh & Model Lifecycle Subjects
 
@@ -731,4 +1158,94 @@ nats server report connections
 - **Payload:**
   ```json
   {"type": "mesh.gpu.command.result.v1", "success": true, "model_key": "ollama/qwen3:8b", "ts": 1709568000}
+  ```
+
+## GitHub Automation Subjects
+
+**`github.webhook.pr.v1`**
+- **Direction:** Published by n8n → Consumed by github-branch-cleanup
+- **Purpose:** Pull request webhook events (closed/merged)
+- **Payload:**
+  ```json
+  {"repository": {"name": "PMOVES.AI"}, "action": "closed", "pull_request": {"head": {"ref": "feature-branch"}}}
+  ```
+
+**`github.webhook.issue.v1`**
+- **Direction:** Published by n8n → Consumed by github-issue-triage
+- **Purpose:** Issue webhook events (opened/edited)
+- **Payload:**
+  ```json
+  {"repository": {"name": "PMOVES.AI"}, "action": "opened", "issue": {"number": 123, "title": "...", "body": "..."}}
+  ```
+
+**`github.branch.deleted.v1`**
+- **Direction:** Published by github-branch-cleanup → Consumed by monitoring/alerting
+- **Purpose:** Branch cleanup deletion events
+- **Payload:**
+  ```json
+  {"repo": "PMOVES.AI", "deleted_count": 5, "dry_run": false, "duration_seconds": 2.5, "timestamp": "2026-03-13T00:00:00Z"}
+  ```
+
+**`github.branch.stale_detected.v1`**
+- **Direction:** Published by github-branch-cleanup → Consumed by monitoring
+- **Purpose:** Stale branch detection events
+- **Payload:**
+  ```json
+  {"repo": "PMOVES.AI", "stale_count": 12, "stale_days": 30, "timestamp": "2026-03-13T00:00:00Z"}
+  ```
+
+**`github.branch.auto_deleted.v1`**
+- **Direction:** Published by github-branch-cleanup → Consumed by monitoring
+- **Purpose:** Auto-delete after PR closed/merged
+- **Payload:**
+  ```json
+  {"repo": "PMOVES.AI", "branch": "feature-branch", "trigger": "pr_closed", "dry_run": true, "timestamp": "2026-03-13T00:00:00Z"}
+  ```
+
+**`github.issue.triage.v1`**
+- **Direction:** Published by github-issue-triage → Consumed by monitoring
+- **Purpose:** Issue triage results
+- **Payload:**
+  ```json
+  {"repo": "PMOVES.AI", "issue_number": 123, "labels": ["bug", "high-priority"], "confidence": 0.85, "timestamp": "2026-03-13T00:00:00Z"}
+  ```
+
+**`github.issue.labeled.v1`**
+- **Direction:** Published by github-issue-triage → Consumed by monitoring
+- **Purpose:** Label application events after successful triage
+- **Payload:**
+  ```json
+  {"repo": "PMOVES.AI", "issue_number": 123, "labels": ["bug"], "confidence": 0.85, "method": "semantic", "timestamp": "2026-03-13T00:00:00Z"}
+  ```
+
+**`github.issue.labeled.v1`**
+- **Direction:** Published by github-issue-triage → Consumed by monitoring
+- **Purpose:** Label application events
+- **Payload:**
+  ```json
+  {"repo": "PMOVES.AI", "issue_number": 123, "label": "bug", "timestamp": "2026-03-13T00:00:00Z"}
+  ```
+
+**`github.crossrepo.pr_batch.v1`**
+- **Direction:** Published by github-crossrepo-pr → Consumed by monitoring
+- **Purpose:** Cross-repo PR batch events
+- **Payload:**
+  ```json
+  {"workflow_id": "abc-123", "repos": ["PMOVES.AI", "PMOVES-Agent-Zero"], "pr_count": 2, "timestamp": "2026-03-13T00:00:00Z"}
+  ```
+
+**`github.crossrepo.workflow.v1`**
+- **Direction:** Published by github-crossrepo-pr → Consumed by monitoring
+- **Purpose:** Workflow execution events
+- **Payload:**
+  ```json
+  {"workflow_id": "abc-123", "workflow_type": "submodule_update", "status": "completed", "timestamp": "2026-03-13T00:00:00Z"}
+  ```
+
+**`archon.work_order.github.v1`**
+- **Direction:** Published by Archon → Consumed by github-crossrepo-pr
+- **Purpose:** Work order for GitHub cross-repo operations
+- **Payload:**
+  ```json
+  {"work_order_id": "wo-123", "workflow_type": "submodule_update", "repos": ["PMOVES.AI"], "changes": [...], "approved": true}
   ```

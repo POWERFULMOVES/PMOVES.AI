@@ -57,15 +57,17 @@ def ensure_builder(builder: str) -> None:
 
 
 def with_github_token(url: str) -> str:
+    from urllib.parse import urlparse
     token = (
         os.getenv("CI_GIT_CLONE_TOKEN")
         or os.getenv("GH_PAT_PUBLISH")
         or os.getenv("GHCR_TOKEN")
     )
-    if not token or not url.startswith("https://github.com/"):
+    parsed = urlparse(url)
+    if not token or parsed.scheme != "https" or parsed.hostname != "github.com":
         return url
-    tail = url[len("https://github.com/") :]
-    return f"https://x-access-token:{token}@github.com/{tail}"
+    # Reconstruct with token authentication
+    return f"https://x-access-token:{token}@github.com{parsed.path}"
 
 
 def clone_repo(url: str, ref: str, checkout_dir: pathlib.Path) -> pathlib.Path:

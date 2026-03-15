@@ -131,6 +131,18 @@
             "type": "random_urlsafe",
             "length": 32
           }
+        },
+        {
+          "key": "SUPABASE_REALTIME_ENC_KEY",
+          "file": "pmoves/env.tier-supabase",
+          "prompt": "Supabase Realtime DB encryption key",
+          "help": "Used by supabase-realtime for DB_ENC_KEY. Generate: openssl rand -hex 16",
+          "required": true,
+          "sensitive": true,
+          "generate": {
+            "type": "random_hex",
+            "length": 32
+          }
         }
       ]
     },
@@ -356,6 +368,51 @@
           "prompt": "Wger API token",
           "required": false,
           "sensitive": true
+        },
+        {
+          "key": "WGER_ALLOWED_HOSTS",
+          "file": "pmoves/env.shared",
+          "prompt": "Django allowed hosts for Wger",
+          "help": "Comma-separated list of allowed Django hosts (e.g., localhost,127.0.0.1,wger.local,wger.example.com).",
+          "default": "localhost,127.0.0.1,wger.local",
+          "required": false,
+          "sensitive": false
+        },
+        {
+          "key": "WGER_DB_PASSWORD",
+          "file": "pmoves/env.shared",
+          "prompt": "Wger PostgreSQL database password",
+          "help": "Password for the wger PostgreSQL database. Generate: openssl rand -base64 24",
+          "required": true,
+          "sensitive": true,
+          "generate": {
+            "type": "random_urlsafe",
+            "length": 32
+          }
+        },
+        {
+          "key": "WGER_SECRET_KEY",
+          "file": "pmoves/env.shared",
+          "prompt": "Django secret key for Wger",
+          "help": "Django secret key for cryptographic signing. Generate: openssl rand -base64 48",
+          "required": true,
+          "sensitive": true,
+          "generate": {
+            "type": "random_urlsafe",
+            "length": 64
+          }
+        },
+        {
+          "key": "WGER_ADMIN_PASSWORD",
+          "file": "pmoves/env.shared",
+          "prompt": "Wger admin account password",
+          "help": "Password for the wger admin account. Generate: openssl rand -base64 16",
+          "required": true,
+          "sensitive": true,
+          "generate": {
+            "type": "random_urlsafe",
+            "length": 24
+          }
         },
         {
           "key": "FIREFLY_APP_KEY",
@@ -871,6 +928,103 @@
           "generate": {
             "type": "random_hex",
             "length": 64
+          }
+        }
+      ]
+    },
+    {
+      "id": "wger",
+      "name": "Wger Workout Manager",
+      "description": "Self-hosted fitness tracker with workout logging, weight tracking, and nutrition planning. Integration with PMOVES.AI event-driven architecture for health metrics.",
+      "variables": [
+        {
+          "key": "WGER_ADMIN_PASSWORD",
+          "file": "pmoves/env.shared",
+          "prompt": "Wger Django admin password",
+          "help": "Password for the Django superuser account at http://localhost:8000/admin/. Auto-generated as base64-encoded 16-byte random value.",
+          "required": true,
+          "sensitive": true,
+          "generate": {
+            "type": "random_bytes_base64",
+            "length": 16
+          }
+        },
+        {
+          "key": "WGER_API_TOKEN",
+          "file": "pmoves/env.shared",
+          "prompt": "Wger REST API token",
+          "help": "Django REST Framework token for API access. Must be generated from the Wger admin UI at http://localhost:8000/api/v2/token/. Set to GENERATE_FROM_WGER_UI as placeholder.",
+          "required": true,
+          "sensitive": true
+        },
+        {
+          "key": "WGER_DB_PASSWORD",
+          "file": "pmoves/env.shared",
+          "prompt": "Wger PostgreSQL database password",
+          "help": "Password for the wger PostgreSQL user.",
+          "required": true,
+          "sensitive": true,
+          "generate": {
+            "type": "random_urlsafe",
+            "length": 32
+          }
+        },
+        {
+          "key": "WGER_SECRET_KEY",
+          "file": "pmoves/env.shared",
+          "prompt": "Wger Django secret key",
+          "help": "Django SECRET_KEY for cryptographic signing. Generate: openssl rand -base64 48",
+          "required": true,
+          "sensitive": true,
+          "generate": {
+            "type": "random_urlsafe",
+            "length": 64
+          }
+        },
+        {
+          "key": "WGER_ENABLE_REGISTRATION",
+          "file": "pmoves/env.shared",
+          "prompt": "Allow public user registration",
+          "help": "Set to 'true' to allow public user registration, 'false' to disable.",
+          "required": false,
+          "default": "false",
+          "type": "boolean"
+        },
+        {
+          "key": "WGER_ENABLE_NATS",
+          "file": "pmoves/env.shared",
+          "prompt": "Enable NATS event publishing",
+          "help": "Set to 'true' to enable NATS event publishing for health metrics and workouts.",
+          "required": false,
+          "default": "true",
+          "type": "boolean"
+        },
+        {
+          "key": "NATS_URL",
+          "file": "pmoves/env.shared",
+          "prompt": "NATS connection URL",
+          "default": "nats://nats:pmoves@nats:4222",
+          "help": "NATS server URL with authentication for event publishing.",
+          "required": true,
+          "type": "url"
+        }
+      ]
+    },
+    {
+      "id": "cipher",
+      "name": "Cipher Memory",
+      "description": "Knowledge-graph memory service for agents. Bearer token auth for API endpoints.",
+      "variables": [
+        {
+          "key": "CIPHER_API_TOKEN",
+          "file": "pmoves/env.shared",
+          "prompt": "Cipher Memory API bearer token",
+          "help": "Shared secret for authenticating HTTP requests to Cipher Memory API. If empty, auth is skipped (dev mode).",
+          "required": false,
+          "sensitive": true,
+          "generate": {
+            "type": "random_urlsafe",
+            "length": 32
           }
         }
       ]

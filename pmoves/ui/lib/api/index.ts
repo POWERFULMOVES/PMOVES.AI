@@ -6,6 +6,16 @@
  * @module api
  */
 
+// Knowledge & Search
 export * from './hirag';
-export * from './jellyfin';
 export * from './research';
+
+// Media & Entertainment
+export * from './jellyfin';
+
+// Agent Services
+export * from './agent-zero';
+export * from './archon';
+
+// Voice & Speech
+export * from './flute';

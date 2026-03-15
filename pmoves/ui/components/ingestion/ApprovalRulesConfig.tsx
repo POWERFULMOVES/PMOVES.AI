@@ -5,17 +5,16 @@
 
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState } from "react";
 import type { IngestionSourceType } from "@/lib/realtimeClient";
 import { ConfirmDialog } from "@/components/common";
 
 // Tailwind JIT static class lookup objects
 const MODAL_OVERLAY_CLASSES = "fixed inset-0 bg-black/50 flex items-center justify-center z-50";
-const MODAL_CONTENT_CLASSES = "bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[80vh] overflow-hidden flex flex-col";
 const RULE_CARD_CLASSES = "border border-neutral-200 rounded-lg p-4 hover:border-neutral-300 transition";
 const BUTTON_PRIMARY_CLASSES = "rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 transition";
 const BUTTON_SECONDARY_CLASSES = "rounded border border-neutral-300 px-4 py-2 text-sm font-medium hover:bg-neutral-50 disabled:opacity-50 transition";
-const BUTTON_DANGER_CLASSES = "rounded border border-red-600 px-4 py-2 text-sm text-medium text-red-600 hover:bg-red-50 disabled:opacity-50 transition";
+const _BUTTON_DANGER_CLASSES = "rounded border border-red-600 px-4 py-2 text-sm text-medium text-red-600 hover:bg-red-50 disabled:opacity-50 transition";
 
 export type ApprovalRuleAction = 'auto_approve' | 'auto_reject' | 'flag';
 
@@ -374,7 +373,7 @@ export function ApprovalRulesConfig({
             <div className="text-center py-8 text-sm text-neutral-500">
               <div className="text-2xl mb-2">📋</div>
               <p>No approval rules configured.</p>
-              <p className="text-xs">Click "New Rule" to create one.</p>
+              <p className="text-xs">Click &quot;New Rule&quot; to create one.</p>
             </div>
           )}
         </div>

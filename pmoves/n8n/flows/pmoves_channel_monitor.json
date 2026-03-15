@@ -14,7 +14,10 @@
         "name": "Channel Monitor Webhook",
         "type": "n8n-nodes-base.webhook",
         "typeVersion": 1,
-        "position": [200, 300]
+        "position": [
+          200,
+          300
+        ]
       },
       {
         "parameters": {
@@ -24,7 +27,10 @@
         "name": "Parse Channel Notification",
         "type": "n8n-nodes-base.function",
         "typeVersion": 2,
-        "position": [460, 300]
+        "position": [
+          460,
+          300
+        ]
       },
       {
         "parameters": {
@@ -41,7 +47,10 @@
         "name": "Publish Channel Event",
         "type": "n8n-nodes-base.httpRequest",
         "typeVersion": 4,
-        "position": [720, 200]
+        "position": [
+          720,
+          200
+        ]
       },
       {
         "parameters": {
@@ -58,7 +67,10 @@
         "name": "Auto Ingest?",
         "type": "n8n-nodes-base.if",
         "typeVersion": 1,
-        "position": [720, 400]
+        "position": [
+          720,
+          400
+        ]
       },
       {
         "parameters": {
@@ -75,7 +87,10 @@
         "name": "Trigger PMOVES.YT Ingest",
         "type": "n8n-nodes-base.httpRequest",
         "typeVersion": 4,
-        "position": [980, 300]
+        "position": [
+          980,
+          300
+        ]
       },
       {
         "parameters": {
@@ -85,7 +100,10 @@
         "name": "Track Ingest Job",
         "type": "n8n-nodes-base.function",
         "typeVersion": 2,
-        "position": [1240, 300]
+        "position": [
+          1240,
+          300
+        ]
       },
       {
         "parameters": {
@@ -95,7 +113,10 @@
         "name": "Build Social Preview",
         "type": "n8n-nodes-base.function",
         "typeVersion": 2,
-        "position": [1500, 300]
+        "position": [
+          1500,
+          300
+        ]
       },
       {
         "parameters": {
@@ -112,7 +133,10 @@
         "name": "Post Preview to Discord",
         "type": "n8n-nodes-base.httpRequest",
         "typeVersion": 4,
-        "position": [1760, 200]
+        "position": [
+          1760,
+          200
+        ]
       },
       {
         "parameters": {
@@ -129,7 +153,10 @@
         "name": "Auto Research?",
         "type": "n8n-nodes-base.if",
         "typeVersion": 1,
-        "position": [1760, 400]
+        "position": [
+          1760,
+          400
+        ]
       },
       {
         "parameters": {
@@ -146,40 +173,99 @@
         "name": "Trigger DeepResearch",
         "type": "n8n-nodes-base.httpRequest",
         "typeVersion": 4,
-        "position": [2020, 400]
+        "position": [
+          2020,
+          400
+        ]
       }
     ],
     "connections": {
       "Channel Monitor Webhook": {
-        "main": [[{"node": "Parse Channel Notification", "type": "main", "index": 0}]]
+        "main": [
+          [
+            {
+              "node": "Parse Channel Notification",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
       },
       "Parse Channel Notification": {
-        "main": [[
-          {"node": "Publish Channel Event", "type": "main", "index": 0},
-          {"node": "Auto Ingest?", "type": "main", "index": 0}
-        ]]
+        "main": [
+          [
+            {
+              "node": "Publish Channel Event",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Auto Ingest?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
       },
       "Auto Ingest?": {
         "main": [
-          [{"node": "Trigger PMOVES.YT Ingest", "type": "main", "index": 0}],
+          [
+            {
+              "node": "Trigger PMOVES.YT Ingest",
+              "type": "main",
+              "index": 0
+            }
+          ],
           []
         ]
       },
       "Trigger PMOVES.YT Ingest": {
-        "main": [[{"node": "Track Ingest Job", "type": "main", "index": 0}]]
+        "main": [
+          [
+            {
+              "node": "Track Ingest Job",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
       },
       "Track Ingest Job": {
-        "main": [[{"node": "Build Social Preview", "type": "main", "index": 0}]]
+        "main": [
+          [
+            {
+              "node": "Build Social Preview",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
       },
       "Build Social Preview": {
-        "main": [[
-          {"node": "Post Preview to Discord", "type": "main", "index": 0},
-          {"node": "Auto Research?", "type": "main", "index": 0}
-        ]]
+        "main": [
+          [
+            {
+              "node": "Post Preview to Discord",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Auto Research?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
       },
       "Auto Research?": {
         "main": [
-          [{"node": "Trigger DeepResearch", "type": "main", "index": 0}],
+          [
+            {
+              "node": "Trigger DeepResearch",
+              "type": "main",
+              "index": 0
+            }
+          ],
           []
         ]
       }
@@ -191,9 +277,9 @@
       "description": "YouTube Channel Monitor integration: receives new content alerts, triggers PMOVES.YT ingestion, posts social preview"
     },
     "pinData": null,
-    "versionId": "channel-monitor-v1",
+    "versionId": "1aa17c99-8ea9-48d7-96ea-9e2094d45a73",
     "versionCounter": 1,
     "triggerCount": 0,
-    "tags": ["pmoves", "youtube", "channel-monitor", "ingestion"]
+    "tags": []
   }
 ]

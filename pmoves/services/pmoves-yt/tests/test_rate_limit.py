@@ -12,6 +12,8 @@ for p in (str(ROOT), str(PM)):
     if p not in sys.path:
         sys.path.insert(0, p)
 
+_SUBMODULE_IMPL = PM / "PMOVES.YT" / "pmoves_yt_service" / "yt.py"
+
 
 def _load_yt_module():
     module_name = "pmoves_yt_service"
@@ -29,6 +31,10 @@ def _load_yt_module():
 ytmod = _load_yt_module()
 
 
+@pytest.mark.skipif(
+    not _SUBMODULE_IMPL.exists(),
+    reason="PMOVES.YT submodule not cloned (private repo, expected in CI)",
+)
 @pytest.mark.asyncio
 async def test_playlist_rate_limit_sleep(monkeypatch: pytest.MonkeyPatch) -> None:
     sleeps: List[float] = []

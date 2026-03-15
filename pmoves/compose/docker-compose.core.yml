@@ -3,7 +3,7 @@ version: "3.9"
 services:
   n8n:
     build:
-      context: ..
+      context: ../../PMOVES-n8n
       dockerfile: compose/n8n/Dockerfile
     image: pmoves/n8n:1.115.3-sqlite
     restart: unless-stopped
@@ -42,8 +42,9 @@ services:
       - "host.docker.internal:host-gateway"
     volumes:
       - n8n-data:/home/node/.n8n
+      - ../../PMOVES-n8n/workflows:/flows:ro
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://localhost:5678/rest/healthz').then(r=>r.ok?process.exit(0):process.exit(1)).catch(()=>process.exit(1))"]
+      test: ["CMD", "node", "-e", "fetch('http://localhost:5678/healthz').then(r=>r.ok?process.exit(0):process.exit(1)).catch(()=>process.exit(1))"]
       interval: 10s
       timeout: 5s
       retries: 12

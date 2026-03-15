@@ -42,7 +42,9 @@ Set `EXTERNAL_NEO4J|MEILI|QDRANT|SUPABASE=true` in `.env.local` to skip local in
 - `make up-yt`
   - Boots the YouTube ingest stack (`bgutil-pot-provider`, `ffmpeg-whisper`, `pmoves-yt`) with the required profiles.
 - `make channel-monitor-up`
-  - Starts Channel Monitor with runtime-aware Supabase DB URL wiring (`.supabase.status.env` -> `CHANNEL_MONITOR_DATABASE_URL`) so CLI/compose port drift does not break production checks.
+    - Starts Channel Monitor via `scripts/channel_monitor_up.sh` with runtime-aware Supabase DB wiring.
+    - Prefers in-network `supabase-db:5432` when the PMOVES Supabase services are running in the local compose project, and only falls back to `.supabase.status.env` host wiring when needed.
+    - Pins Channel Monitor to the Supabase `postgres` database by default (`CHANNEL_MONITOR_DB_NAME` override supported) so the expected `pmoves.*` tables resolve in the CLI stack.
 - `make channel-monitor-smoke`
   - Verifies Channel Monitor health endpoints (`/healthz`, `/api/monitor/status`, `/api/monitor/stats`).
 - `make channel-monitor-discord-drop-smoke`
@@ -70,6 +72,19 @@ Set `EXTERNAL_NEO4J|MEILI|QDRANT|SUPABASE=true` in `.env.local` to skip local in
 - `make up-nats`
   - Starts the NATS broker (`agents` profile) and rewrites `.env.local` so `YT_NATS_ENABLE=true` with `NATS_URL=nats://nats:pmoves@nats:4222`.
   - Use this before opting into the agents profile (Agent Zero, Archon, mesh-agent, Discord publisher).
+- `make up-n8n`
+  - Starts the production/default n8n stack: `n8n`, `n8n-runners`, and the dedicated `n8n-db` Postgres sidecar.
+  - Canonical workflows come from `PMOVES-n8n/workflows`; `pmoves/n8n/flows` is only a compatibility mirror.
+- `make n8n-api-bootstrap`
+  - Creates or logs into the n8n owner account, rotates the bootstrap Public API key, validates it, and writes `N8N_API_KEY` plus owner credentials into `pmoves/.env.local`.
+- `make n8n-import-flows`
+  - Upserts the canonical `PMOVES-n8n` workflow catalog into the live n8n instance.
+- `make n8n-activate-flows`
+  - Activates the default workflow set through the n8n Public API; keeps chat-platform voice flows inactive unless `VOICE_PLATFORMS=1`.
+- `make n8n-sync-supabase-registry`
+  - Mirrors live workflow state into `pmoves_core.n8n_workflow_registry` so PMOVES can track n8n activity in Supabase.
+- `make n8n-bootstrap`
+  - Full production bootstrap: `up-n8n -> n8n-api-bootstrap -> n8n-import-flows -> n8n-activate-flows -> n8n-sync-supabase-registry`.
 - `make mindmap-notebook-sync`
   - Runs `python pmoves/scripts/mindmap_to_notebook.py` to pull `/mindmap/{constellation_id}` entries out of `hi-rag-gateway-v2` and mirror them into Open Notebook via `/api/sources/json`. Requires `MINDMAP_BASE`, `MINDMAP_CONSTELLATION_ID`, `MINDMAP_NOTEBOOK_ID`, and `OPEN_NOTEBOOK_API_TOKEN`.
 - `make hirag-notebook-sync`

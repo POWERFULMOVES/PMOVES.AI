@@ -518,7 +518,7 @@ services:
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
-      interval: 10s
+      interval: 20s
       timeout: 5s
       retries: 5
       start_period: 30s
@@ -526,6 +526,7 @@ services:
     - ${SUPABASE_DB_PORT:-54322}:5432
     volumes:
     - supabase-db-data:/var/lib/postgresql/data
+    - ./supabase/initdb:/docker-entrypoint-initdb.d/pmoves-init:ro
     networks:
     - pmoves_data
 
@@ -679,7 +680,7 @@ services:
     - DB_PASSWORD=${POSTGRES_PASSWORD:-${SUPABASE_DB_PASSWORD:-postgres}}
     - DB_SSL=false
     - DB_AFTER_CONNECT_QUERY=SET search_path TO _realtime
-    - DB_ENC_KEY=${SUPABASE_REALTIME_SECRET:-supabaserealtime}
+    - DB_ENC_KEY=${SUPABASE_REALTIME_ENC_KEY:-supabaserealtime}
     # App configuration
     - APP_NAME=realtime
     - PORT=4000
@@ -709,7 +710,7 @@ services:
       supabase-db:
         condition: service_healthy
     ports:
-    - ${SUPABASE_REALTIME_PORT:-4000}:4000
+    - ${SUPABASE_REALTIME_PORT:-4010}:4000
     networks:
     - pmoves_api
     - pmoves_data
@@ -864,8 +865,8 @@ services:
     - PG_META_DB_PASSWORD=${POSTGRES_PASSWORD:-${SUPABASE_DB_PASSWORD:-postgres}}
     - CRYPTO_KEY=${PG_META_CRYPTO_KEY:-}
     healthcheck:
-      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8080/health || exit 1"]
-      interval: 10s
+      test: ["CMD-SHELL", "node -e \"const h=require('http');h.get('http://localhost:8080/health',r=>{r.resume();process.exit(r.statusCode===200?0:1)}).on('error',()=>process.exit(1))\""]
+      interval: 20s
       timeout: 5s
       retries: 3
       start_period: 10s
@@ -894,7 +895,7 @@ services:
     command: ["start", "--main-service", "/home/deno/functions/main"]
     healthcheck:
       test: ["CMD-SHELL", "curl -sSf http://localhost:9000/health || exit 1"]
-      interval: 10s
+      interval: 20s
       timeout: 5s
       retries: 3
       start_period: 15s
@@ -922,19 +923,19 @@ services:
     - DB_PORT=5432
     - DB_PASSWORD=${POSTGRES_PASSWORD:-${SUPABASE_DB_PASSWORD:-postgres}}
     - DB_SCHEMA=_analytics
-    - LOGFLARE_PUBLIC_ACCESS_TOKEN=${LOGFLARE_PUBLIC_ACCESS_TOKEN:-}
-    - LOGFLARE_PRIVATE_ACCESS_TOKEN=${LOGFLARE_PRIVATE_ACCESS_TOKEN:-}
+    - LOGFLARE_PUBLIC_ACCESS_TOKEN=${LOGFLARE_PUBLIC_ACCESS_TOKEN:?Set LOGFLARE_PUBLIC_ACCESS_TOKEN in env.tier-supabase}
+    - LOGFLARE_PRIVATE_ACCESS_TOKEN=${LOGFLARE_PRIVATE_ACCESS_TOKEN:?Set LOGFLARE_PRIVATE_ACCESS_TOKEN in env.tier-supabase}
     - LOGFLARE_SINGLE_TENANT=true
     - LOGFLARE_SUPABASE_MODE=true
-    - POSTGRES_BACKEND_URL=postgresql://${POSTGRES_USER:-${SUPABASE_DB_USER:-postgres}}:${POSTGRES_PASSWORD:-${SUPABASE_DB_PASSWORD:-postgres}}@supabase-db:5432/_supabase
+    - POSTGRES_BACKEND_URL=postgresql://${POSTGRES_USER:-${SUPABASE_DB_USER:-postgres}}:${POSTGRES_PASSWORD_URLENCODED:-${POSTGRES_PASSWORD:-${SUPABASE_DB_PASSWORD:-postgres}}}@supabase-db:5432/_supabase
     - POSTGRES_BACKEND_SCHEMA=_analytics
     - LOGFLARE_FEATURE_FLAG_OVERRIDE=multibackend=true
     healthcheck:
-      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:4000/health || exit 1"]
-      interval: 10s
+      test: ["CMD-SHELL", "curl -sSf http://localhost:4000/health -o /dev/null || exit 1"]
+      interval: 15s
       timeout: 5s
       retries: 10
-      start_period: 30s
+      start_period: 120s
     depends_on:
       supabase-db:
         condition: service_healthy
@@ -956,7 +957,7 @@ services:
     - supabase-vector-data:/var/lib/vector
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9001/health"]
-      interval: 10s
+      interval: 20s
       timeout: 5s
       retries: 3
       start_period: 10s
@@ -980,7 +981,7 @@ services:
     - POSTGRES_PORT=5432
     - POSTGRES_DB=${POSTGRES_DB:-${SUPABASE_DB_NAME:-postgres}}
     - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-${SUPABASE_DB_PASSWORD:-postgres}}
-    - DATABASE_URL=ecto://${POSTGRES_USER:-${SUPABASE_DB_USER:-postgres}}:${POSTGRES_PASSWORD:-${SUPABASE_DB_PASSWORD:-postgres}}@supabase-db:5432/_supabase
+    - DATABASE_URL=ecto://${POSTGRES_USER:-${SUPABASE_DB_USER:-postgres}}:${POSTGRES_PASSWORD_URLENCODED:-${POSTGRES_PASSWORD:-${SUPABASE_DB_PASSWORD:-postgres}}}@supabase-db:5432/_supabase
     - CLUSTER_POSTGRES=true
     - SECRET_KEY_BASE=${SECRET_KEY_BASE:?Set SECRET_KEY_BASE in env.tier-supabase}
     - VAULT_ENC_KEY=${VAULT_ENC_KEY:?Set VAULT_ENC_KEY in env.tier-supabase}
@@ -995,11 +996,11 @@ services:
     - DB_POOL_SIZE=${POOLER_DB_POOL_SIZE:-5}
     command: ["/bin/sh", "-c", "/app/bin/migrate && if [ -f /etc/pooler/pooler.exs ]; then /app/bin/supavisor eval \"$$(cat /etc/pooler/pooler.exs)\"; else echo 'WARN: /etc/pooler/pooler.exs not found, skipping tenant seeding'; fi && /app/bin/server"]
     healthcheck:
-      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://127.0.0.1:4000/api/health || exit 1"]
-      interval: 10s
+      test: ["CMD-SHELL", "curl -sSf http://127.0.0.1:4000/api/health -o /dev/null || exit 1"]
+      interval: 20s
       timeout: 5s
       retries: 5
-      start_period: 15s
+      start_period: 30s
     depends_on:
       supabase-db:
         condition: service_healthy
@@ -1100,7 +1101,7 @@ services:
       test:
       - CMD-SHELL
       - wget -qO- http://localhost:7474 >/dev/null 2>&1 || exit 1
-      interval: 10s
+      interval: 20s
       timeout: 5s
       retries: 12
       start_period: 20s
@@ -1562,7 +1563,8 @@ services:
     <<: *tier-media-hardened
     image: ${PMOVES_YT_IMAGE:-}
     build:
-      context: ./services/pmoves-yt
+      context: ../PMOVES.YT
+      dockerfile: pmoves_yt_service/Dockerfile
       args:
       - YTDLP_VERSION=${YTDLP_VERSION:-}
     restart: unless-stopped
@@ -1582,6 +1584,8 @@ services:
     - YT_COOKIES=${YT_COOKIES:-/app/config/cookies/darkxside.youtube.cookies.txt}
     - BGUTIL_HTTP_BASE_URL=${BGUTIL_HTTP_BASE_URL:-http://bgutil-pot-provider:4416}
     - BGUTIL_DISABLE_INNERTUBE=${BGUTIL_DISABLE_INNERTUBE:-1}
+    - INVIDIOUS_BASE_URL=${INVIDIOUS_BASE_URL:-http://invidious:3000}
+    - INVIDIOUS_COMPANION_URL=${INVIDIOUS_COMPANION_URL:-http://invidious-companion:8282}
     - CHANNEL_MONITOR_STATUS_URL=${CHANNEL_MONITOR_STATUS_URL:-http://channel-monitor:8097/api/monitor/status}
     - YT_TRANSCRIPT_PROVIDER=${YT_TRANSCRIPT_PROVIDER:-faster-whisper}
     - YT_WHISPER_MODEL=${YT_WHISPER_MODEL:-small}
@@ -1624,7 +1628,7 @@ services:
     - pmoves_bus
     - pmoves_external  # Required for YouTube processing
     healthcheck:
-      test: ["CMD-SHELL", "pgrep -f 'node|python' || exit 1"]
+      test: ["CMD-SHELL", "kill -0 1 || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -1639,7 +1643,7 @@ services:
     - CHANNEL_MONITOR_NAMESPACE=${CHANNEL_MONITOR_NAMESPACE:-pmoves}
     - OPEN_NOTEBOOK_API_URL=${CHANNEL_MONITOR_OPEN_NOTEBOOK_API_URL:-http://open-notebook:5055}
     # Database URL - points to Supabase DB (note: supabase-db runs on pmoves_data network)
-    - CHANNEL_MONITOR_DATABASE_URL=${CHANNEL_MONITOR_DATABASE_URL:-postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD_URLENCODED:-${POSTGRES_PASSWORD:-postgres}}@supabase-db:5432/${POSTGRES_DB:-postgres}}
+    - CHANNEL_MONITOR_DATABASE_URL=${CHANNEL_MONITOR_DATABASE_URL:-postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD_URLENCODED:-${SUPABASE_DB_PASSWORD_URLENCODED:-${POSTGRES_PASSWORD:-${SUPABASE_DB_PASSWORD:-postgres}}}}@supabase-db:5432/${CHANNEL_MONITOR_DB_NAME:-postgres}}
     - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
     - DOCKED_MODE=${DOCKED_MODE:-true}
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
@@ -1914,7 +1918,7 @@ services:
       test:
       - CMD-SHELL
       - wget --no-verbose --tries=1 --spider http://localhost:8222/varz || exit 1
-      interval: 10s
+      interval: 20s
       timeout: 5s
       retries: 5
       start_period: 10s
@@ -2073,7 +2077,7 @@ services:
       - CMD-SHELL
       - python -c "import urllib.request,sys; sys.exit(0) if urllib.request.urlopen('http://localhost:8091/healthz').getcode()==200
         else sys.exit(1)"
-      interval: 10s
+      interval: 20s
       timeout: 5s
       retries: 12
       start_period: 15s
@@ -2096,6 +2100,7 @@ services:
       - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
       - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
       - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
+      - CIPHER_API_TOKEN=${CIPHER_API_TOKEN:-}
     command: ["node", "dist/src/app/index.cjs", "--mode", "api", "--port", "3000", "--host", "0.0.0.0", "--agent", "/app/memAgent/cipher.yml", "--mcp-transport-type", "sse"]
     ports:
       - "${CIPHER_PORT:-8096}:3000"
@@ -2142,6 +2147,10 @@ services:
       - TENSORZERO_URL=${TENSORZERO_URL:-http://tensorzero-gateway:3000}
       - BOTZ_HEARTBEAT_INTERVAL=${BOTZ_HEARTBEAT_INTERVAL:-30}
       - BOTZ_STALE_THRESHOLD=${BOTZ_STALE_THRESHOLD:-5}
+      # GitHub App credentials — MCP GitHub server token minting
+      - GH_APP_ID=${GH_APP_ID:-}
+      - GH_APP_SEC=${GH_APP_SEC:-}
+      - GH_APP_INSTALLATION_ID=${GH_APP_INSTALLATION_ID:-}
     depends_on:
       nats:
         condition: service_healthy
@@ -2152,10 +2161,84 @@ services:
     networks: [pmoves_app, pmoves_bus, pmoves_api, pmoves_monitoring]
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8054/healthz', timeout=5)"]
-      interval: 10s
+      interval: 20s
       timeout: 5s
       retries: 12
       start_period: 15s
+
+  # Tier: agent (GitHub Branch Cleanup - automated stale branch removal)
+  github-branch-cleanup:
+    <<: *tier-agent-hardened-ro
+    build: ./services/github-branch-cleanup
+    image: ${GITHUB_BRANCH_CLEANUP_IMAGE:-ghcr.io/powerfulmoves/pmoves-github-branch-cleanup:pmoves-latest}
+    container_name: pmoves-github-branch-cleanup
+    hostname: github-branch-cleanup
+    restart: unless-stopped
+    environment:
+      - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+      - SERVICE_PORT=8100
+      - BRANCH_STALE_DAYS=${BRANCH_STALE_DAYS:-30}
+      - DRY_RUN=${DRY_RUN:-true}
+      - PROTECTED_BRANCHES=${PROTECTED_BRANCHES:-main,PMOVES.AI-Edition-Hardened,release-*}
+      - GITHUB_ORG=${GITHUB_ORG:-POWERFULMOVES}
+      - GH_APP_ID=${GH_APP_ID:-}
+      - GH_APP_INSTALLATION_ID=${GH_APP_INSTALLATION_ID:-}
+      - AGENTZERO_MCP_URL=${AGENTZERO_MCP_URL:-http://agent-zero:8080/mcp}
+    ports:
+      - 8100:8100
+      - 9096:9096
+    depends_on:
+      nats:
+        condition: service_healthy
+      nats-init:
+        condition: service_completed_successfully
+      agent-zero:
+        condition: service_healthy
+    profiles: ["agents", "github-automation"]
+    networks: [pmoves_app, pmoves_bus, pmoves_api, pmoves_monitoring]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8100/healthz', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # Tier: agent (GitHub Issue Triage - intelligent issue classification)
+  github-issue-triage:
+    <<: *tier-agent-hardened-ro
+    build: ./services/github-issue-triage
+    image: ${GITHUB_ISSUE_TRIAGE_IMAGE:-ghcr.io/powerfulmoves/pmoves-github-issue-triage:pmoves-latest}
+    container_name: pmoves-github-issue-triage
+    hostname: github-issue-triage
+    restart: unless-stopped
+    environment:
+      - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+      - SERVICE_PORT=8101
+      - HIRAG_URL=${HIRAG_URL:-http://hi-rag-gateway-v2:8086}
+      - LABEL_CONFIDENCE_THRESHOLD=${LABEL_CONFIDENCE_THRESHOLD:-0.7}
+      - INDEX_HISTORICAL_ISSUES=${INDEX_HISTORICAL_ISSUES:-true}
+      - BOTZ_MCP_URL=${BOTZ_MCP_URL:-http://botz-gateway:8102}
+      - GITHUB_ORG=${GITHUB_ORG:-POWERFULMOVES}
+    ports:
+      - 8101:8101
+      - 9097:9097
+    depends_on:
+      nats:
+        condition: service_healthy
+      nats-init:
+        condition: service_completed_successfully
+      hi-rag-gateway-v2:
+        condition: service_healthy
+      botz-gateway:
+        condition: service_healthy
+    profiles: ["agents", "github-automation"]
+    networks: [pmoves_app, pmoves_bus, pmoves_api, pmoves_monitoring]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8101/healthz', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
 
   # Tier: agent (A2UI NATS bridge - geometry bus integration)
   a2ui-nats-bridge:
@@ -2563,7 +2646,8 @@ services:
       - CHIT_PASSPHRASE=${CHIT_PROD_PASSPHRASE:?set CHIT_PROD_PASSPHRASE in env.shared}
     ports: ["8113:8113"]
     profiles: ["orchestration"]
-    networks: [pmoves_app, pmoves_api, pmoves_bus]
+    # Docker Desktop does not publish host ports for services attached only to internal networks.
+    networks: [pmoves_app, pmoves_api, pmoves_bus, pmoves_external]
     extra_hosts:
     - host.docker.internal:host-gateway
     healthcheck:
@@ -2631,15 +2715,16 @@ services:
       - CHIT_PASSPHRASE=${CHIT_PROD_PASSPHRASE:?set CHIT_PROD_PASSPHRASE in env.shared}
     ports: ["8055:8055", "8056:8056"]
     profiles: ["orchestration", "media"]
-    networks: [pmoves_app, pmoves_api, pmoves_bus]
+    # Attach a non-internal bridge so published host ports resolve on Docker Desktop.
+    networks: [pmoves_app, pmoves_api, pmoves_bus, pmoves_external]
     extra_hosts:
     - host.docker.internal:host-gateway
     healthcheck:
-      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8055/healthz', timeout=5)"]
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8055/healthz', timeout=10)"]
       interval: 30s
-      timeout: 10s
+      timeout: 15s
       retries: 3
-      start_period: 15s
+      start_period: 60s
 
   # Tier: agent (Tokenism Simulator - CHIT/geometry bus simulation service)
   tokenism-simulator:
@@ -2700,6 +2785,112 @@ services:
       retries: 3
       start_period: 30s
 
+  # Consciousness Service - CHR Algorithm & CGP Generation (port 8105)
+  consciousness-service:
+    build:
+      context: ./services/consciousness-service
+      dockerfile: Dockerfile
+    image: ${CONSCIOUSNESS_IMAGE:-ghcr.io/powerfulmoves/pmoves-consciousness:pmoves-latest}
+    restart: unless-stopped
+    <<: *tier-agent-hardened-ro
+    environment:
+      - SERVICE_NAME=consciousness-service
+      - SERVICE_PORT=${CONSCIOUSNESS_HOST_PORT:-8105}
+      - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+      - CHIT_PROD_PASSPHRASE=${CHIT_PROD_PASSPHRASE:?set CHIT_PROD_PASSPHRASE in env.shared}
+      - SUPABASE_URL=${SUPABASE_URL:-http://supabase-kong:8000}
+      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY:-}
+      - PYTHONUNBUFFERED=1
+    ports: ["${CONSCIOUSNESS_HOST_PORT:-8105}:8105"]
+    profiles: ["agents", "botz"]
+    networks: [pmoves_app]
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import httpx; httpx.get('http://localhost:8105/healthz').raise_for_status()\" || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    depends_on:
+      nats-init:
+        condition: service_healthy
+
+  # Cast TTS Gateway - Chromecast/Google Home TTS routing (port 8060)
+  cast-tts-gateway:
+    build:
+      context: ./services/cast-tts-gateway
+      dockerfile: Dockerfile
+    image: ${CAST_TTS_IMAGE:-ghcr.io/powerfulmoves/pmoves-cast-tts-gateway:pmoves-latest}
+    restart: unless-stopped
+    <<: *tier-agent-hardened-ro
+    environment:
+      - PORT=8060
+      - FLUTE_GATEWAY_URL=http://flute-gateway:8055
+      - ULTIMATE_TTS_URL=http://ultimate-tts-studio:7861
+      - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+      - CHIT_REQUIRE_SIGNATURE=${CHIT_REQUIRE_SIGNATURE:-false}
+      - CHIT_DECRYPT_ANCHORS=${CHIT_DECRYPT_ANCHORS:-false}
+      - CHIT_PASSPHRASE=${CHIT_PROD_PASSPHRASE:-changeme}
+    ports: ["${CAST_TTS_PORT:-8060}:8060"]
+    profiles: ["cast", "media"]
+    networks: [pmoves_app, pmoves_bus, pmoves_api, pmoves_external]
+    user: "65532:65532"
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8060/healthz', timeout=5)\" || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    depends_on:
+      flute-gateway:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+
+  # Voice Relay - NATS bridge: agentzero.task.result.v1 → voice.agent.response.v1
+  voice-relay:
+    build:
+      context: .
+      dockerfile: services/voice-relay/Dockerfile
+    image: ${VOICE_RELAY_IMAGE:-ghcr.io/powerfulmoves/pmoves-voice-relay:pmoves-latest}
+    restart: unless-stopped
+    <<: *tier-worker-hardened
+    environment:
+      - PORT=8121
+      - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+      - VOICE_RELAY_INPUT_SUBJECT=${VOICE_RELAY_INPUT_SUBJECT:-agentzero.task.result.v1}
+      - VOICE_RELAY_OUTPUT_SUBJECT=${VOICE_RELAY_OUTPUT_SUBJECT:-voice.agent.response.v1}
+    ports: ["${VOICE_RELAY_PORT:-8121}:8121"]
+    profiles: ["cast", "media"]
+    networks: [pmoves_bus]
+    read_only: true
+    tmpfs:
+      - /tmp:noexec,nosuid,size=64m
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8121/healthz', timeout=5)\" || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    depends_on:
+      nats:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 128M
+        reservations:
+          cpus: '0.1'
+          memory: 32M
+
   # PMOVES Central UI - Main dashboard (port 4482)
   pmoves-ui:
     build:
@@ -2752,10 +2943,10 @@ services:
     profiles: [ "ui" ]
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:3000/api/health || exit 1"]
-      interval: 30s
-      timeout: 10s
+      interval: 20s
+      timeout: 5s
       retries: 3
-      start_period: 60s
+      start_period: 30s
 
   # Session Context Worker - Transforms Claude Code session context to Hi-RAG KB entries
   session-context-worker:
@@ -2784,6 +2975,71 @@ services:
       timeout: 10s
       retries: 3
       start_period: 15s
+
+  # Wger - Fitness tracker with health metrics and workout logging
+  wger:
+    <<: *tier-api-hardened
+    image: ${WGER_IMAGE:-ghcr.io/powerfulmoves/pmoves-health-wger:pmoves-latest}
+    restart: unless-stopped
+    environment:
+      # Database configuration
+      - DATABASE_URL=postgres://wger:${WGER_DB_PASSWORD:-changeme}@wger-db:5432/wger
+      # Django configuration
+      - DJANGO_ALLOWED_HOSTS=*
+      - DJANGO_SECRET_KEY=${WGER_SECRET_KEY:-changeme}
+      - WGER_ENABLE_REGISTRATION=${WGER_ENABLE_REGISTRATION:-true}
+      # NATS configuration for event publishing
+      - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+      - WGER_ENABLE_NATS=${WGER_ENABLE_NATS:-true}
+      # Admin credentials
+      - WGER_ADMIN_PASSWORD=${WGER_ADMIN_PASSWORD:-changeme}
+      # PMOVES integration
+      - ENABLE_OBSERVABILITY=${WGER_OBSERVABILITY:-true}
+      - PROMETHEUS_MULTIPROC_DIR=/tmp/prometheus
+    ports:
+      - "${WGER_PORT:-8000}:8000"
+    profiles: ["health", "wger"]
+    networks:
+      - pmoves_api
+      - pmoves_bus
+      - pmoves_data
+    depends_on:
+      wger-db:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+    volumes:
+      - wger-static:/home/wger/static
+      - wger-media:/home/wger/media
+      - wger-prometheus:/tmp/prometheus
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v2/health/', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+
+  # Wger database - PostgreSQL backend for fitness data
+  wger-db:
+    <<: *tier-data-hardened
+    image: postgres:15-alpine
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=wger
+      - POSTGRES_USER=wger
+      - POSTGRES_PASSWORD=${WGER_DB_PASSWORD:-changeme}
+      - PGDATA=/var/lib/postgresql/data/pgdata
+    volumes:
+      - wger-db:/var/lib/postgresql/data
+    profiles: ["health", "wger"]
+    networks:
+      - pmoves_data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U wger -d wger"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
   # Comfy Watcher - ComfyUI output watcher for NATS integration
   comfy-watcher:
@@ -2884,7 +3140,7 @@ services:
       test:
       - CMD-SHELL
       - pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB -h 127.0.0.1
-      interval: 10s
+      interval: 20s
       timeout: 5s
       retries: 12
     profiles:
@@ -3120,6 +3376,117 @@ services:
     ports:
     - 8201:8201
 
+  # =============================================================================
+  # GitHub Automation Services (Phase 3)
+  # =============================================================================
+  # Additional GitHub automation services (branch naming, cross-repo sync, PR automation)
+  # Profile: github-automation
+  # Networks: pmoves_app, pmoves_api, pmoves_bus, pmoves_monitoring
+  # Note: github-branch-cleanup and github-issue-triage are defined above
+  # =============================================================================
+
+  github-branch-naming:
+    build:
+      context: ./services/github-branch-naming
+      dockerfile: Dockerfile
+    image: ${GITHUB_BRANCH_NAMING_IMAGE:-ghcr.io/powerfulmoves/pmoves-github-branch-naming:pmoves-latest}
+    restart: unless-stopped
+    environment:
+    - SERVICE_PORT=8102
+    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - AGENTZERO_MCP_URL=${AGENTZERO_MCP_URL:-http://agent-zero:8080/mcp/command}
+    - DRY_RUN=${GITHUB_AUTOMATION_DRY_RUN:-true}
+    - GITHUB_ORG=${GITHUB_ORG:-POWERFULMOVES}
+    ports:
+    - 8112:8102
+    profiles:
+    - github-automation
+    networks:
+    - pmoves_app
+    - pmoves_api
+    - pmoves_bus
+    - pmoves_monitoring
+    depends_on:
+      nats:
+        condition: service_healthy
+      agent-zero:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8102/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+  github-crossrepo-sync:
+    build:
+      context: ./services/github-crossrepo-sync
+      dockerfile: Dockerfile
+    image: ${GITHUB_CROSSREPO_SYNC_IMAGE:-ghcr.io/powerfulmoves/pmoves-github-crossrepo-sync:pmoves-latest}
+    restart: unless-stopped
+    environment:
+    - SERVICE_PORT=8103
+    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - AGENTZERO_MCP_URL=${AGENTZERO_MCP_URL:-http://agent-zero:8080/mcp/command}
+    - DRY_RUN=${GITHUB_AUTOMATION_DRY_RUN:-true}
+    - GITHUB_ORG=${GITHUB_ORG:-POWERFULMOVES}
+    - MAIN_REPO=${MAIN_REPO:-PMOVES.AI}
+    - WORKDIR=${WORKDIR:-/tmp/github-crossrepo-sync}
+    ports:
+    - 8113:8103
+    profiles:
+    - github-automation
+    networks:
+    - pmoves_app
+    - pmoves_api
+    - pmoves_bus
+    - pmoves_monitoring
+    depends_on:
+      nats:
+        condition: service_healthy
+      agent-zero:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8103/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+  github-crossrepo-pr:
+    build:
+      context: ./services/github-crossrepo-pr
+      dockerfile: Dockerfile
+    image: ${GITHUB_CROSSREPO_PR_IMAGE:-ghcr.io/powerfulmoves/pmoves-github-crossrepo-pr:pmoves-latest}
+    restart: unless-stopped
+    environment:
+    - SERVICE_PORT=8104
+    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - AGENTZERO_MCP_URL=${AGENTZERO_MCP_URL:-http://agent-zero:8080/mcp/command}
+    - DRY_RUN=${GITHUB_AUTOMATION_DRY_RUN:-true}
+    - GITHUB_ORG=${GITHUB_ORG:-POWERFULMOVES}
+    - AUTO_MERGE_REPOS=${AUTO_MERGE_REPOS:-}
+    ports:
+    - 8114:8104
+    profiles:
+    - github-automation
+    networks:
+    - pmoves_app
+    - pmoves_api
+    - pmoves_bus
+    - pmoves_monitoring
+    depends_on:
+      nats:
+        condition: service_healthy
+      agent-zero:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8104/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
 volumes:
   neo4j-data: {}
   qdrant-data: {}
@@ -3140,6 +3507,11 @@ volumes:
   comfy-watcher-output: {}
   comfy-watcher-state: {}
   llama-results: {}
+  # Wger fitness tracker volumes
+  wger-db: {}
+  wger-static: {}
+  wger-media: {}
+  wger-prometheus: {}
 networks:
   pmoves_data:
     name: pmoves_data

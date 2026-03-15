@@ -1,12 +1,19 @@
 version: "3.9"
 
+# IMPORTANT: This compose file requires the following credentials to be set in env.shared:
+# - WGER_DB_PASSWORD: PostgreSQL database password
+# - WGER_SECRET_KEY: Django secret key (generate: openssl rand -base64 48)
+#
+# Bootstrap with: make -C pmoves env-setup
+# This will generate these credentials automatically via brand_defaults.py
+
 services:
   wger-db:
     image: postgres:15
     environment:
       POSTGRES_DB: wger
       POSTGRES_USER: wger
-      POSTGRES_PASSWORD: ${WGER_DB_PASSWORD:-wgerpass}
+      POSTGRES_PASSWORD: ${WGER_DB_PASSWORD:?WGER_DB_PASSWORD must be set in env.shared}
     volumes:
       - wger-db:/var/lib/postgresql/data
     networks: [pmoves]
@@ -16,9 +23,9 @@ services:
     image: ${WGER_IMAGE:-ghcr.io/powerfulmoves/pmoves-health-wger:pmoves-latest}
     depends_on: [wger-db]
     environment:
-      - DATABASE_URL=postgres://wger:${WGER_DB_PASSWORD:-wgerpass}@wger-db:5432/wger
-      - DJANGO_ALLOWED_HOSTS=*
-      - DJANGO_SECRET_KEY=${WGER_SECRET_KEY:-changeme}
+      - DATABASE_URL=postgres://wger:${WGER_DB_PASSWORD:?WGER_DB_PASSWORD must be set in env.shared}@wger-db:5432/wger
+      - DJANGO_ALLOWED_HOSTS=${WGER_ALLOWED_HOSTS:-localhost,127.0.0.1,wger.local}
+      - DJANGO_SECRET_KEY=${WGER_SECRET_KEY:?WGER_SECRET_KEY must be set in env.shared}
       - WGER_ENABLE_REGISTRATION=true
     ports:
       - "8000:8000"

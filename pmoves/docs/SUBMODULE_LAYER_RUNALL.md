@@ -1,7 +1,7 @@
 # Submodule Layer Run-All
 
 ## Summary
-- Manifest: `pmoves/configs/submodule_layer_validation_manifest.json`
+- Manifest: `C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\configs\submodule_layer_validation_manifest.json`
 - Modules checked: **40**
 - Total errors: **0**
 - Total warnings: **0**

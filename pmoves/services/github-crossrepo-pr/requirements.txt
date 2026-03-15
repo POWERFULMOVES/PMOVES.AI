@@ -1,0 +1,23 @@
+# GitHub Cross-Repository PR Automation Service Dependencies
+# Python 3.11+
+
+# Web Framework
+fastapi==0.115.0
+uvicorn[standard]==0.32.1
+
+# Async HTTP Client
+httpx==0.28.1
+
+# NATS Messaging
+nats-py==2.9.0
+
+# Metrics & Monitoring
+prometheus-client==0.21.1
+
+# Data Validation
+pydantic==2.10.4
+
+# Development Dependencies (optional)
+pytest==8.3.4
+pytest-asyncio==0.25.1
+httpx==0.28.1  # For testing

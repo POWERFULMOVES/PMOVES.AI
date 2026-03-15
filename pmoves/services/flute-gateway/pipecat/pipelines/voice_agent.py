@@ -51,6 +51,7 @@ except ImportError:
 from ..processors.vibevoice import VibeVoiceTTSProcessor
 from ..processors.whisper import WhisperSTTProcessor
 from ..processors.tensorzero import TensorZeroLLMProcessor
+from ..processors.cast_audio import CastAudioOutputProcessor, CastAudioOnlyProcessor
 from ..transports.fastapi_ws import FluteFastAPIWebsocketTransport
 
 
@@ -66,6 +67,10 @@ class VoiceAgentConfig:
         vad_threshold: Voice Activity Detection threshold.
         enable_interruption: Allow user to interrupt agent speech.
         system_prompt: Optional override for persona system prompt.
+        enable_cast: Enable Google Cast output (default: false).
+        cast_gateway_url: Cast TTS Gateway URL (default: http://localhost:8060).
+        cast_device: Default Cast device name (None for auto-selection).
+        cast_only_mode: Cast-only mode (disable local audio, default: false).
     """
 
     def __init__(
@@ -78,6 +83,10 @@ class VoiceAgentConfig:
         vad_threshold: float = 0.5,
         enable_interruption: bool = True,
         system_prompt: Optional[str] = None,
+        enable_cast: bool = False,
+        cast_gateway_url: str = "http://localhost:8060",
+        cast_device: Optional[str] = None,
+        cast_only_mode: bool = False,
     ):
         """Initialize voice agent configuration."""
         self.persona = persona
@@ -88,6 +97,10 @@ class VoiceAgentConfig:
         self.vad_threshold = vad_threshold
         self.enable_interruption = enable_interruption
         self.system_prompt = system_prompt
+        self.enable_cast = enable_cast
+        self.cast_gateway_url = cast_gateway_url
+        self.cast_device = cast_device
+        self.cast_only_mode = cast_only_mode
 
 
 async def build_voice_agent_pipeline(
@@ -96,11 +109,18 @@ async def build_voice_agent_pipeline(
     vibevoice_provider: Optional[Any] = None,
     whisper_provider: Optional[Any] = None,
     tensorzero_url: str = "http://localhost:3030",
+    enable_cast: bool = False,
+    cast_gateway_url: str = "http://localhost:8060",
+    cast_device: Optional[str] = None,
+    cast_only_mode: bool = False,
 ) -> "Pipeline":
     """Build a complete voice agent pipeline.
 
     Creates a duplex conversation pipeline:
     VAD → STT → LLM → TTS → Audio Output
+
+    With optional Cast output:
+    VAD → STT → LLM → TTS → Cast Audio Output
 
     Args:
         transport: WebSocket transport for audio I/O.
@@ -108,6 +128,10 @@ async def build_voice_agent_pipeline(
         vibevoice_provider: Optional VibeVoice provider instance.
         whisper_provider: Optional Whisper provider instance.
         tensorzero_url: TensorZero gateway URL.
+        enable_cast: Enable Google Cast output (overrides config.enable_cast).
+        cast_gateway_url: Cast TTS Gateway URL (overrides config.cast_gateway_url).
+        cast_device: Default Cast device name (overrides config.cast_device).
+        cast_only_mode: Cast-only mode (disable local audio, overrides config.cast_only_mode).
 
     Returns:
         Pipeline ready for execution.
@@ -121,6 +145,13 @@ async def build_voice_agent_pipeline(
         >>> config = VoiceAgentConfig(persona="assistant", voice="default")
         >>> pipeline = await build_voice_agent_pipeline(transport, config)
         >>> await PipelineRunner().run(pipeline)
+
+        With Cast output:
+        >>> pipeline = await build_voice_agent_pipeline(
+        ...     transport, config,
+        ...     enable_cast=True,
+        ...     cast_device="Brysons Speakers speaker"
+        ... )
     """
     if not PIPECAT_AVAILABLE:
         raise ImportError(
@@ -129,6 +160,12 @@ async def build_voice_agent_pipeline(
         )
 
     config = config or VoiceAgentConfig()
+
+    # Resolve Cast configuration (function params override config)
+    enable_cast = enable_cast or config.enable_cast
+    cast_gateway_url = cast_gateway_url or config.cast_gateway_url
+    cast_device = cast_device or config.cast_device
+    cast_only_mode = cast_only_mode or config.cast_only_mode
 
     # Build processor chain
     processors: List["FrameProcessor"] = []
@@ -175,7 +212,7 @@ async def build_voice_agent_pipeline(
         logger.debug("LLMResponseAggregator not available")
 
     # 6. Text-to-Speech (VibeVoice)
-    if vibevoice_provider:
+    if vibevoice_provider and not cast_only_mode:
         tts = VibeVoiceTTSProcessor(
             provider=vibevoice_provider,
             voice=config.voice,
@@ -183,7 +220,40 @@ async def build_voice_agent_pipeline(
         processors.append(tts)
         logger.info("Added VibeVoice TTS (voice=%s)", config.voice)
     else:
-        logger.warning("No VibeVoice provider - TTS disabled")
+        if cast_only_mode:
+            logger.info("Cast-only mode: Local TTS disabled")
+        else:
+            logger.warning("No VibeVoice provider - TTS disabled")
+
+    # 7. Cast Audio Output (Google Cast)
+    if enable_cast:
+        if cast_only_mode:
+            # Cast-only mode (no local audio)
+            cast = CastAudioOnlyProcessor(
+                cast_gateway_url=cast_gateway_url,
+                default_device=cast_device,
+                voice=config.voice,
+            )
+            processors.append(cast)
+            logger.info(
+                "Added CastAudioOnlyProcessor (device=%s, gateway=%s)",
+                cast_device or "auto",
+                cast_gateway_url
+            )
+        else:
+            # Dual-output mode (local + Cast)
+            cast = CastAudioOutputProcessor(
+                cast_gateway_url=cast_gateway_url,
+                default_device=cast_device,
+                enable_local_audio=True,
+                voice=config.voice,
+            )
+            processors.append(cast)
+            logger.info(
+                "Added CastAudioOutputProcessor (device=%s, gateway=%s, dual-output)",
+                cast_device or "auto",
+                cast_gateway_url
+            )
 
     # Create pipeline
     pipeline = Pipeline(processors)

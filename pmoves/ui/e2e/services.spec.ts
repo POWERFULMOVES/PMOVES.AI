@@ -11,6 +11,12 @@ const SERVICES = [
 
 // Services with markdown documentation pages (legacy INTEGRATION_SERVICES)
 const DOCUMENTED_SERVICES = [
+  { slug: 'agent-zero', title: 'Agent Zero' },
+  { slug: 'archon', title: 'Archon' },
+  { slug: 'botz-gateway', title: 'BotZ Gateway' },
+  { slug: 'channel-monitor', title: 'Channel Monitor' },
+  { slug: 'evo-controller', title: 'Evo Controller' },
+  { slug: 'flute-gateway', title: 'Flute Gateway' },
   { slug: 'pmoves-yt', title: 'PMOVES.YT' },
 ];
 

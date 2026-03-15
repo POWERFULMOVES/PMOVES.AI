@@ -26,9 +26,11 @@ SUPABASE_POSTGREST_URL = os.getenv(
     "SUPABASE_POSTGREST_URL",
     "http://localhost:3010/rest/v1/"
 )
+SUPABASE_REALTIME_PORT = os.getenv("SUPABASE_REALTIME_PORT", "4010")
+
 SUPABASE_REALTIME_URL = os.getenv(
     "SUPABASE_REALTIME_URL",
-    "ws://localhost:4000/socket/websocket"
+    f"ws://localhost:{SUPABASE_REALTIME_PORT}/socket/websocket"
 )
 SUPABASE_DB_HOST = os.getenv("SUPABASE_DB_HOST", "localhost")
 SUPABASE_DB_PORT = os.getenv("SUPABASE_DB_PORT", "5432")
@@ -89,8 +91,15 @@ def test_supabase_pg_isready() -> None:
     if not docker_available() or not container_running("supabase-db"):
         pytest.skip("supabase-db container not running")
 
+    # Resolve actual container name (compose may prefix with project name)
+    name_result = subprocess.run(
+        ["docker", "ps", "--filter", "name=supabase-db", "--format", "{{.Names}}"],
+        capture_output=True, text=True, timeout=10,
+    )
+    container = name_result.stdout.strip().splitlines()[0] if name_result.stdout.strip() else "supabase-db"
+
     result = subprocess.run(
-        ["docker", "exec", "supabase-db", "pg_isready", "-U", "pmoves"],
+        ["docker", "exec", container, "pg_isready", "-U", "pmoves"],
         capture_output=True,
         text=True,
         timeout=10,
@@ -151,14 +160,18 @@ def test_env_uses_selfhosted_urls() -> None:
 
     assert all_matches, "SUPABASE_REST_URL or SUPA_REST_URL not found in env.shared"
 
-    # At least one should point to the self-hosted postgrest container
+    # At least one should point to the self-hosted postgrest or Kong gateway
+    # Post-unification (PR #865), canonical consumer URL is supabase-kong:8000
+    selfhosted_patterns = (
+        "supabase-postgrest", "postgrest:3000", "supabase-kong",
+    )
     has_selfhosted = any(
-        "supabase-postgrest" in m or "postgrest:3000" in m
+        any(pat in m for pat in selfhosted_patterns)
         for m in all_matches
         if not m.strip().startswith("#")
     )
     assert has_selfhosted, (
-        f"SUPABASE_REST_URL/SUPA_REST_URL should use self-hosted postgrest, "
+        f"SUPABASE_REST_URL/SUPA_REST_URL should use self-hosted postgrest or Kong, "
         f"got: {[m.strip() for m in all_matches]}"
     )
 

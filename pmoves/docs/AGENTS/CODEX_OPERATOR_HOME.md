@@ -1,8 +1,17 @@
 # Codex Operator Home (PMOVES)
-_Last updated: 2026-03-02_
+_Last updated: 2026-03-12_
 
 This is the Codex-first operations guide for PMOVES.AI. It mirrors the mature
 Claude setup, but keeps Codex workflows command-first and Makefile-native.
+
+For the full PMOVES traversal map, including skills, memory, personas, voice,
+service selection, and submodule routing, see:
+- `pmoves/docs/AGENTS/CODEX_ECOSYSTEM_TRAVERSAL.md`
+
+For the current sprint, treat PMOVES as a 2026 creator-network control plane as well as a
+service mesh. Codex should be able to traverse the full operator path from creator intent to
+source discovery, ingest, transcript acquisition, model routing, playback, Discord interaction,
+and PMOVES-native value tracking.
 
 ## Runtime signaling
 
@@ -24,6 +33,21 @@ Claude setup, but keeps Codex workflows command-first and Makefile-native.
    - `codex --profile pmoves`
 3. Open this runbook plus parity map:
    - `pmoves/docs/AGENTS/CODEX_CLAUDE_PARITY_MAP.md`
+
+## Ecosystem traversal
+
+Codex should not act like a standalone code assistant in PMOVES.AI. It should
+traverse the existing PMOVES surfaces in this order:
+
+1. Operator lane: this runbook + `CODEX_RUNTIME_PROTOCOL.md`
+2. Service map: `.claude/CLAUDE.md`
+3. Submodule map: `.claude/context/submodules.md`
+4. Skill map: `PmovesSKillZ.md` + `pmoves/configs/skill-pairings.yaml`
+5. Memory path: `CODEX_CIPHER_MEMORY_IMPLEMENTATION_MAP.md`
+6. Persona + voice path: `PERSONAS.md` + `CODEX_PERSONA_STYLE_PLAYBOOK.md`
+
+Use `CODEX_ECOSYSTEM_TRAVERSAL.md` as the canonical quick route across these
+surfaces.
 
 ## Codex Config Parity (Mar 2026)
 
@@ -49,6 +73,61 @@ Claude setup, but keeps Codex workflows command-first and Makefile-native.
 - `make -C pmoves a0-plugins-check`
 - `make -C pmoves a0-plugins-check-remote`
 
+## Creator network control plane
+
+Use this lane when the operator task spans YouTube channels, playlists, creator outreach,
+transcripts, Discord, Jellyfin, or cross-model orchestration.
+
+### Primary traversal order
+
+1. `pmoves/docs/PMOVES.AI PLANS/CREATOR_NETWORK_CONTROL_PLANE.md`
+2. `pmoves/docs/AGENTS/SUBMODULE_CODEX_HOMES/PMOVES-Creator.md`
+3. `pmoves/docs/AGENTS/SUBMODULE_CODEX_HOMES/PMOVES-Open-Notebook.md`
+4. `pmoves/docs/AGENTS/PMOVES_YT_CONTROL_WORKTREE_REVIEW.md`
+5. `pmoves/docs/AGENTS/SUBMODULE_CODEX_HOMES/PMOVES.YT.md`
+6. `pmoves/docs/AGENTS/SUBMODULE_CODEX_HOMES/PMOVES-transcribe-and-fetch.md`
+7. `pmoves/services/channel-monitor/README.md`
+8. `pmoves/docs/AGENTS/JELLYFIN_CREATOR_WORKTREE_REVIEW.md`
+9. `pmoves/docs/PMOVESCHIT/CATACLYSM_STUDIOS_INC.md`
+
+### Service posture
+
+- `PMOVES-Creator` should be treated as the strategy and collaboration lane where creator goals,
+  networking intent, and campaign posture are defined before execution.
+- `PMOVES-Open-Notebook` should be treated as the drafting, evidence, and operator memory lane
+  where notes, approval artifacts, and reusable context are staged.
+- `PMOVES.YT` is the authoritative runtime for YouTube ingest, metadata, docs catalog, and
+  downloader fallback strategy.
+- `Channel Monitor` owns source discovery, polling cadence, and fan-out into PMOVES.YT ingest.
+- `PMOVES-transcribe-and-fetch` remains the auxiliary fetch/transcript lane for parity, repair,
+  and specialized extraction cases.
+- `Jellyfin` is the playback and packaging surface for owned and harvested media.
+- `BoTZ` and Discord are the operator/engagement lane, but public-facing actions should default
+  to human approval unless the workflow explicitly declares autonomous behavior.
+- `Tokenism` should be treated as the value-tracking lane for attribution, monetization, and
+  network effects that result from creator operations.
+- `CATACLYSM_STUDIOS_INC` is the governing business and brand context; use it to decide whether a
+  creator action aligns with the larger platform story, audience, and partnership posture.
+
+### Creator control checks
+
+- `curl -fsS http://localhost:8077/healthz`
+- `curl -fsS http://localhost:8077/yt/docs/catalog | jq .`
+- `curl -fsS http://localhost:8097/api/monitor/status | jq .`
+- `make -C pmoves channel-monitor-smoke`
+- `make -C pmoves yt-jellyfin-smoke`
+- `make -C pmoves transcribe-and-fetch-smoke`
+
+### Model-routing stance
+
+- Prefer local PMOVES model tiers first for extraction, transcript cleanup, rerank, and operator
+  assist when the quality bar is met.
+- Use Qwen-family, NVIDIA/Nemotron, Google multimodal/embedding, HuggingFace, Ollama, and other
+  available backends as routing options selected by task shape rather than by a single hardcoded
+  provider.
+- Geometry-bus, retrieval, and creator workflows should record enough metadata that downstream
+  services can understand which model family produced the artifact.
+
 ## CHIT Geometry Bus
 
 - Service health:
@@ -65,8 +144,8 @@ Claude setup, but keeps Codex workflows command-first and Makefile-native.
 
 - Controller health:
   - `curl -fsS http://localhost:8113/healthz`
-- Swarm status:
-  - `curl -fsS http://localhost:8113/swarm/status | jq .`
+- Controller config:
+  - `curl -fsS http://localhost:8113/config | jq .`
 - Ensure downstream services persist and publish `pack_id` metadata in CGP flow.
 
 ## Flute + Voice stack
@@ -133,8 +212,24 @@ For a comprehensive view of what's implemented vs. what's still planned, see:
 
 ## Priority links
 
+- Creator-network control plane:
+  - `pmoves/docs/PMOVES.AI PLANS/CREATOR_NETWORK_CONTROL_PLANE.md`
+- PMOVES-Creator submodule home:
+  - `pmoves/docs/AGENTS/SUBMODULE_CODEX_HOMES/PMOVES-Creator.md`
+- PMOVES-Open-Notebook submodule home:
+  - `pmoves/docs/AGENTS/SUBMODULE_CODEX_HOMES/PMOVES-Open-Notebook.md`
+- PMOVES.YT submodule home:
+  - `pmoves/docs/AGENTS/SUBMODULE_CODEX_HOMES/PMOVES.YT.md`
+- PMOVES-transcribe-and-fetch submodule home:
+  - `pmoves/docs/AGENTS/SUBMODULE_CODEX_HOMES/PMOVES-transcribe-and-fetch.md`
+- PMOVES.YT control worktree review:
+  - `pmoves/docs/AGENTS/PMOVES_YT_CONTROL_WORKTREE_REVIEW.md`
+- Jellyfin creator review:
+  - `pmoves/docs/AGENTS/JELLYFIN_CREATOR_WORKTREE_REVIEW.md`
 - Codex submodule audit:
   - `pmoves/docs/AGENTS/CODEX_SUBMODULE_INTEGRATION_AUDIT.md`
+- Codex ecosystem traversal:
+  - `pmoves/docs/AGENTS/CODEX_ECOSYSTEM_TRAVERSAL.md`
 - Hyperdimensions control plane taxonomy:
   - `pmoves/docs/AGENTS/PMOVES_HYPERDIMENSIONS_CONTROL_PLANE.md`
 - Claude parity map:
@@ -151,6 +246,8 @@ For a comprehensive view of what's implemented vs. what's still planned, see:
   - `pmoves/docs/AGENTS/CODEX_CIPHER_MEMORY_IMPLEMENTATION_MAP.md`
 - PMOVES skill bundles:
   - `pmoves/docs/AGENTS/PmovesSKillZ.md`
+- Cataclysm Studios context:
+  - `pmoves/docs/PMOVESCHIT/CATACLYSM_STUDIOS_INC.md`
 - Existing Claude context stack:
   - `.claude/CLAUDE.md`
   - `.claude/context/`

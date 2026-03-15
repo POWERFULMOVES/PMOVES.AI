@@ -1,6 +1,6 @@
 {
   "$schema_version": "1.0.0",
-  "$description": "Maps every PMOVES.AI submodule to its relevant skills, context files, AGENTS docs, domain tags, and context tier. Source of truth for Claude Code CLI context orchestration.",
+  "$description": "Maps every PMOVES.AI submodule to its relevant skills, context files, AGENTS docs, domain tags, and context tier. Source of truth for Claude Code CLI and Codex context orchestration.",
   "$domain_tag_skill_map": {
     "orchestration": ["agents/*", "deploy/*", "health/*", "nats/*"],
     "media": ["yt/*", "tts/*", "pipecat/*", "jellyfin/*"],

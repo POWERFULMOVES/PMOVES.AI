@@ -1,0 +1,569 @@
+# TAC Tree: Agent Zero Customization Review
+# Verifies proper use of Agent Zero's extension system, PMOVES.AI integration, and security hardening
+
+name: "Agent Zero Customization Review"
+version: "1.2.0"
+description: "Comprehensive review of Agent Zero customization across 9 phases (51 checks) to ensure maximum leverage of Agent Zero's capabilities while properly integrating with PMOVES.AI infrastructure"
+
+root:
+  id: agent-zero-customization
+  task: "Agent Zero customization review"
+  context: "PMOVES-Agent-Zero/ submodule + PMOVES-a0-plugins/ plugin ecosystem + pmoves/ service integration"
+  agent_hint: codex
+  children:
+
+    # =========================================================================
+    # Phase 1: Configuration & Settings Review
+    # =========================================================================
+    - id: agent-zero.config
+      task: "Configuration & Settings Review"
+      context: "Verify TensorZero integration and proper environment variable configuration"
+      agent_hint: codex
+      children:
+        - id: agent-zero.config.models.tensorzero-format
+          task: "Verify TensorZero model naming format documented"
+          action:
+            type: grep
+            target: "PMOVES-Agent-Zero/CLAUDE.md"
+            pattern: "tensorzero::"
+            expect: "Documentation shows TensorZero format for models"
+          context: "Required for observability and model routing via TensorZero Gateway"
+          agent_hint: codex
+
+        - id: agent-zero.config.env.service-defined
+          task: "Verify agent-zero service defined in main compose"
+          action:
+            type: grep
+            target: "pmoves/docker-compose.yml"
+            pattern: "agent-zero:"
+            expect: "Agent Zero service defined in pmoves/docker-compose.yml"
+          context: "PMOVES.AI integrates Agent Zero as a service in main compose, not submodule compose"
+          agent_hint: codex
+
+        - id: agent-zero.config.env.tensorzero-url
+          task: "Verify TensorZero URL configuration"
+          action:
+            type: grep
+            target: "pmoves/docker-compose.yml"
+            pattern: "TENSORZERO_URL.*tensorzero-gateway:3000"
+            expect: "TensorZero URL points to internal service (port 3000)"
+          context: "Container-to-container URLs use port 3000; host port is 3030"
+          agent_hint: codex
+
+        - id: agent-zero.config.env.nats-auth
+          task: "Verify NATS authentication in compose"
+          action:
+            type: grep
+            target: "pmoves/docker-compose.yml"
+            pattern: "nats://nats:pmoves@"
+            expect: "Authenticated NATS URL (nats://nats:pmoves@nats:4222)"
+          context: "Required for secure NATS communication; never use default credentials"
+          agent_hint: codex
+
+        - id: agent-zero.config.env.chit-config
+          task: "Verify CHIT configuration for signed payloads"
+          action:
+            type: grep
+            target: "pmoves/docker-compose.yml"
+            pattern: "CHIT_REQUIRE_SIGNATURE|CHIT_DECRYPT_ANCHORS|CHIT_PASSPHRASE"
+            expect: "CHIT environment variables configured for signature verification"
+          context: "CHIT integration enables CGP signed payloads for agent coordination"
+          agent_hint: codex
+
+    # =========================================================================
+    # Phase 2: Extension System Review
+    # =========================================================================
+    - id: agent-zero.extensions
+      task: "Extension System Review"
+      context: "Verify proper use of Agent Zero's 23 extension points"
+      agent_hint: codex
+      children:
+        - id: agent-zero.extensions.default-folder
+          task: "Verify default extensions folder exists"
+          action:
+            type: file_exists
+            target: "PMOVES-Agent-Zero/python/extensions"
+            expect: "Default extensions directory with 23 extension point subdirectories"
+          context: "Contains base extensions: agent_init, before_main_llm_call, message_loop_start, etc."
+          agent_hint: codex
+
+        - id: agent-zero.extensions.agent-specific
+          task: "Check for agent-specific extensions"
+          action:
+            type: file_exists
+            target: "PMOVES-Agent-Zero/agents/_example/extensions"
+            expect: "Example agent demonstrates extension override pattern"
+          context: "Agent-specific extensions override defaults based on filename"
+          agent_hint: codex
+
+        - id: agent-zero.extensions.agent-init
+          task: "Verify agent_init extension point usage"
+          action:
+            type: file_exists
+            target: "PMOVES-Agent-Zero/python/extensions/agent_init"
+            expect: "agent_init extension point exists (executed when agent is initialized)"
+          context: "Use for: setting agent name, initializing state, loading config"
+          agent_hint: codex
+
+        - id: agent-zero.extensions.before-main-llm
+          task: "Verify before_main_llm_call extension point"
+          action:
+            type: file_exists
+            target: "PMOVES-Agent-Zero/python/extensions/before_main_llm_call"
+            expect: "Extension point exists (before main LLM call is made)"
+          context: "Use for: prompt injection, context modification, request validation"
+          agent_hint: codex
+
+        - id: agent-zero.extensions.message-loop
+          task: "Verify message loop extension points"
+          action:
+            type: file_exists
+            target: "PMOVES-Agent-Zero/python/extensions/message_loop_start"
+            expect: "Message loop extension points exist for flow customization"
+          context: "Points: message_loop_start, message_loop_prompts_before/after, message_loop_end"
+          agent_hint: codex
+
+        - id: agent-zero.extensions.system-prompt
+          task: "Verify system_prompt extension point"
+          action:
+            type: file_exists
+            target: "PMOVES-Agent-Zero/python/extensions/system_prompt"
+            expect: "Extension point exists (when system prompts are processed)"
+          context: "Use for: customizing agent behavior, adding instructions, setting context"
+          agent_hint: codex
+
+        - id: agent-zero.extensions.override
+          task: "Verify understanding of extension override logic"
+          action:
+            type: grep
+            target: "PMOVES-Agent-Zero/docs/developer/extensions.md"
+            pattern: "override.*filename|agent-specific.*override"
+            expect: "Documentation explains filename-based override pattern"
+          context: "Agent-specific extensions override defaults when filenames match"
+          agent_hint: codex
+
+    # =========================================================================
+    # Phase 3: PMOVES.AI Integration Review
+    # =========================================================================
+    - id: agent-zero.integration
+      task: "PMOVES.AI Integration Review"
+      context: "Verify proper integration with PMOVES.AI services (leverage, don't duplicate)"
+      agent_hint: codex
+      children:
+        - id: agent-zero.integration.hirag
+          task: "Verify Hi-RAG v2 available in PMOVES.AI"
+          action:
+            type: grep
+            target: ".claude/CLAUDE.md"
+            pattern: "Hi-RAG|hirag"
+            expect: "Main PMOVES.AI context references Hi-RAG v2"
+          context: "Hi-RAG v2 (port 8086/8087) available via PMOVES.AI integration"
+          agent_hint: codex
+
+        - id: agent-zero.integration.tensorzero
+          task: "Verify TensorZero Gateway for all LLM calls"
+          action:
+            type: grep
+            target: "PMOVES-Agent-Zero/CLAUDE.md"
+            pattern: "TensorZero|tensorzero"
+            expect: "Documentation references TensorZero Gateway (port 3030)"
+          context: "Use TensorZero for all LLM/embedding calls - never bypass"
+          agent_hint: codex
+
+        - id: agent-zero.integration.nats
+          task: "Verify NATS for event coordination"
+          action:
+            type: grep
+            target: "PMOVES-Agent-Zero/CLAUDE.md"
+            pattern: "agent\\.task\\.|agent\\.subordinate\\."
+            expect: "NATS subjects used for task coordination and subordinate lifecycle"
+          context: "Required NATS subjects: agent.task.request.v1, agent.task.completed.v1, etc."
+          agent_hint: codex
+
+        - id: agent-zero.integration.archon
+          task: "Verify Archon MCP integration"
+          action:
+            type: grep
+            target: "PMOVES-Agent-Zero/CLAUDE.md"
+            pattern: "Archon|archon"
+            expect: "Documentation references Archon (port 8091) for prompt management"
+          context: "Archon connects via MCP API for task delegation and status monitoring"
+          agent_hint: codex
+
+        - id: agent-zero.integration.mcp.endpoints
+          task: "Verify MCP API endpoints are documented"
+          action:
+            type: grep
+            target: "PMOVES-Agent-Zero/CLAUDE.md"
+            pattern: "/mcp/health|/mcp/commands|/mcp/agents|/mcp/execute"
+            expect: "All MCP endpoints documented (health, commands, agents, execute)"
+          context: "Port 8080 - requires Bearer token via MCP_CLIENT_SECRET"
+          agent_hint: codex
+
+        - id: agent-zero.integration.mcp.subordinate
+          task: "Verify subordinate agent creation endpoint"
+          action:
+            type: grep
+            target: "PMOVES-Agent-Zero/CLAUDE.md"
+            pattern: "/mcp/subordinate/create"
+            expect: "Subordinate creation endpoint documented"
+          context: "Used for on-demand specialized agents with focused capabilities"
+          agent_hint: codex
+
+        - id: agent-zero.integration.chit
+          task: "Verify CHIT integration documentation"
+          action:
+            type: grep
+            target: "PMOVES-Agent-Zero/CLAUDE.md"
+            pattern: "CHIT|chit|CGP|cgp"
+            expect: "Documentation references CHIT integration for signed payloads"
+          context: "CHIT enables cryptographically signed agent coordination"
+          agent_hint: codex
+
+    # =========================================================================
+    # Phase 4: Security Hardening Review
+    # =========================================================================
+    - id: agent-zero.security
+      task: "Security Hardening Review"
+      context: "Verify Docker hardening patterns and network security"
+      agent_hint: codex
+      children:
+        - id: agent-zero.security.docker.user-directive
+          task: "Verify non-root USER directive in Dockerfile"
+          action:
+            type: grep
+            target: "pmoves/services/agent-zero/Dockerfile"
+            pattern: "USER pmoves"
+            expect: "Non-root USER directive present (not running as root)"
+          context: "P1 FIXED Phase H - all Dockerfiles have USER directive"
+          agent_hint: codex
+
+        - id: agent-zero.security.docker.healthcheck
+          task: "Verify health check in compose"
+          action:
+            type: grep
+            target: "pmoves/docker-compose.yml"
+            pattern: "agent-zero:|healthcheck:"
+            expect: "Docker compose includes healthcheck for agent-zero"
+          context: "Required for orchestration and service discovery"
+          agent_hint: codex
+
+        - id: agent-zero.security.hardening-tier
+          task: "Verify agent-zero uses hardened tier"
+          action:
+            type: grep
+            target: "pmoves/docker-compose.yml"
+            pattern: "tier-agent-hardened"
+            expect: "Service uses tier-agent-hardened YAML anchor"
+          context: "tier-agent-hardened includes cap_drop, security_opt, read_only"
+          agent_hint: codex
+
+        - id: agent-zero.security.network.bind-address
+          task: "Verify service configuration for API binding"
+          action:
+            type: grep
+            target: "pmoves/docker-compose.yml"
+            pattern: "PORT=8080"
+            expect: "PORT environment variable set to 8080"
+          context: "Agent Zero API runs on port 8080 (accessible via MCP)"
+          agent_hint: codex
+
+        - id: agent-zero.security.network.nats-auth
+          task: "Verify NATS uses authenticated URL"
+          action:
+            type: grep
+            target: "pmoves/docker-compose.yml"
+            pattern: "nats://nats:pmoves@"
+            expect: "NATS URL includes credentials (not nats://nats:4222)"
+          context: "Never use default credentials in production"
+          agent_hint: codex
+
+    # =========================================================================
+    # Phase 5: Observability & Monitoring
+    # =========================================================================
+    - id: agent-zero.observability
+      task: "Observability & Monitoring Review"
+      context: "Verify health/metrics endpoints and NATS heartbeat"
+      agent_hint: codex
+      children:
+        - id: agent-zero.observability.healthz
+          task: "Verify health check implementation exists"
+          action:
+            type: file_exists
+            target: "PMOVES-Agent-Zero/python/api/health.py"
+            expect: "Health check implementation file exists"
+          context: "Standard PMOVES.AI pattern - all services expose /healthz"
+          agent_hint: codex
+
+        - id: agent-zero.observability.metrics
+          task: "Verify metrics endpoint documented"
+          action:
+            type: grep
+            target: "PMOVES-Agent-Zero/CLAUDE.md"
+            pattern: "/metrics"
+            expect: "Prometheus metrics endpoint documented"
+          context: "Required for Prometheus scraping (port 9090)"
+          agent_hint: codex
+
+        - id: agent-zero.observability.compose-healthcheck
+          task: "Verify compose health check configured"
+          action:
+            type: grep
+            target: "pmoves/docker-compose.yml"
+            pattern: "healthz|localhost:8080"
+            expect: "Compose healthcheck tests service endpoint"
+          context: "Docker compose waits for healthcheck before marking service healthy"
+          agent_hint: codex
+
+        - id: agent-zero.observability.nats-heartbeat
+          task: "Verify NATS heartbeat documented"
+          action:
+            type: grep
+            target: "PMOVES-Agent-Zero/CLAUDE.md"
+            pattern: "heartbeat"
+            expect: "NATS heartbeat documented for service mesh monitoring"
+          context: "Required for service mesh monitoring and discovery"
+          agent_hint: codex
+
+    # =========================================================================
+    # Phase 6: Context Loading Strategy
+    # =========================================================================
+    - id: agent-zero.context
+      task: "Context Loading Strategy Review"
+      context: "Verify proper 4-tier context hierarchy usage"
+      agent_hint: codex
+      children:
+        - id: agent-zero.context.tier1
+          task: "Verify Tier 1 (Always Load) context"
+          action:
+            type: file_exists
+            target: ".claude/CLAUDE.md"
+            expect: "Main PMOVES.AI context exists (Tier 1 - Always Load)"
+          context: "Contains service catalog, API integration points, NATS subjects"
+          agent_hint: codex
+
+        - id: agent-zero.context.tier2
+          task: "Verify Tier 2 (On-Demand) context for Agent Zero"
+          action:
+            type: file_exists
+            target: "PMOVES-Agent-Zero/CLAUDE.md"
+            expect: "Agent Zero context exists (Tier 2 - On-Demand Load)"
+          context: "Load only when working directly on Agent Zero subsystem"
+          agent_hint: codex
+
+        - id: agent-zero.context.tier3
+          task: "Verify Tier 3 (Conditional) for integration workspaces"
+          action:
+            type: file_exists
+            target: "pmoves/docs/submodules/CLAUDE_CONTEXT_AUDIT.md"
+            expect: "Context audit documentation exists"
+          context: "Explains how to avoid circular context loading in nested submodules"
+          agent_hint: codex
+
+        - id: agent-zero.context.conflicts
+          task: "Verify context conflict prevention"
+          action:
+            type: grep
+            target: ".claude/CLAUDE.md"
+            pattern: "Context Conflict Resolution|Avoiding Context Loops"
+            expect: "Documentation explains precedence hierarchy and conflict resolution"
+          context: "Main repo context > submodule contexts > nested contexts"
+          agent_hint: codex
+
+    # =========================================================================
+    # Phase 7: PMOVES.AI Plugin Ecosystem
+    # =========================================================================
+    - id: agent-zero.plugins
+      task: "PMOVES.AI Plugin Ecosystem Review"
+      context: "Verify PMOVES-a0-plugins submodule integration and plugin catalog"
+      agent_hint: codex
+      children:
+        - id: agent-zero.plugins.submodule.exists
+          task: "Verify PMOVES-a0-plugins submodule is registered"
+          action:
+            type: grep
+            target: ".gitmodules"
+            pattern: "PMOVES-a0-plugins"
+            expect: "Submodule registered in .gitmodules pointing to PMOVES.AI-Edition-Hardened branch"
+          context: "Submodule: https://github.com/POWERFULMOVES/PMOVES-a0-plugins.git (branch: PMOVES.AI-Edition-Hardened)"
+          agent_hint: codex
+
+        - id: agent-zero.plugins.submodule.checked-out
+          task: "Verify PMOVES-a0-plugins submodule is initialized"
+          action:
+            type: file_exists
+            target: "PMOVES-a0-plugins/.git"
+            expect: "Submodule is checked out (.git directory exists)"
+          context: "Run: git submodule update --init --recursive"
+          agent_hint: codex
+
+        - id: agent-zero.plugins.catalog.structure
+          task: "Verify plugin index structure"
+          action:
+            type: file_exists
+            target: "PMOVES-a0-plugins/plugins/"
+            expect: "Plugins directory exists with plugin subfolders"
+          context: "Each plugin: plugins/{name}/index.yaml pointing to remote plugin.yaml"
+          agent_hint: codex
+
+        - id: agent-zero.plugins.catalog.docs
+          task: "Verify PMOVES.AI plugin documentation"
+          action:
+            type: file_exists
+            target: "PMOVES-a0-plugins/README.md"
+            expect: "README explains PMOVES.AI plugin philosophy and contribution guidelines"
+          context: "Document PMOVES.AI-specific integration patterns and security requirements"
+          agent_hint: codex
+
+        - id: agent-zero.plugins.patterns.tensorzero
+          task: "Verify plugins use TensorZero for LLM calls"
+          action:
+            type: grep
+            target: "PMOVES-a0-plugins/README.md"
+            pattern: "TensorZero|tensorzero"
+            expect: "Documentation requires TensorZero for all LLM/embedding calls"
+          context: "Never use OpenAI/Anthropic APIs directly - always use TensorZero Gateway"
+          agent_hint: codex
+
+        - id: agent-zero.plugins.patterns.nats
+          task: "Verify plugins use NATS for coordination"
+          action:
+            type: grep
+            target: "PMOVES-a0-plugins/README.md"
+            pattern: "NATS|nats"
+            expect: "Documentation requires NATS for event-driven communication"
+          context: "Use authenticated NATS URL: nats://nats:pmoves@nats:4222"
+          agent_hint: codex
+
+        - id: agent-zero.plugins.patterns.hirag
+          task: "Verify plugins can use Hi-RAG v2 for knowledge"
+          action:
+            type: grep
+            target: "PMOVES-a0-plugins/README.md"
+            pattern: "Hi-RAG|hirag"
+            expect: "Documentation mentions Hi-RAG v2 for knowledge retrieval"
+          context: "Use Hi-RAG v2 (port 8086/8087) - never build custom RAG"
+          agent_hint: codex
+
+        - id: agent-zero.plugins.patterns.security
+          task: "Verify plugins follow security hardening"
+          action:
+            type: grep
+            target: "PMOVES-a0-plugins/README.md"
+            pattern: "security|hardening|non-root|USER"
+            expect: "Documentation requires security best practices (non-root, healthchecks, etc.)"
+          context: "All plugins must follow PMOVES.AI security patterns"
+          agent_hint: codex
+
+        - id: agent-zero.plugins.architecture.upstream
+          task: "Document upstream a0-plugins reference"
+          action:
+            type: grep
+            target: "PMOVES-a0-plugins/README.md"
+            pattern: "agent0ai/a0-plugins|github.com/agent0ai"
+            expect: "Documentation references https://github.com/agent0ai/a0-plugins"
+          context: "Upstream community plugin index - we fork and harden for PMOVES.AI"
+          agent_hint: codex
+
+    # =========================================================================
+    # Phase 8: Projects & Subagents
+    # =========================================================================
+    - id: agent-zero.projects
+      task: "Projects & Subordinate Agents Review"
+      context: "Verify understanding of isolated workspaces and subordinate model"
+      agent_hint: codex
+      children:
+        - id: agent-zero.projects.structure
+          task: "Verify understanding of project structure"
+          action:
+            type: grep
+            target: "PMOVES-Agent-Zero/docs/developer/extensions.md"
+            pattern: "/a0/usr/projects/|\\.a0proj/"
+            expect: "Documentation explains project directory structure"
+          context: "Projects: /a0/usr/projects/{name}/.a0proj/ with instructions/, knowledge/, memory/"
+          agent_hint: codex
+
+        - id: agent-zero.projects.isolation
+          task: "Verify understanding of project isolation"
+          action:
+            type: grep
+            target: "PMOVES-Agent-Zero/docs/developer/extensions.md"
+            pattern: "isolated.*workspace|scoped.*use case"
+            expect: "Documentation explains how projects prevent context mixing"
+          context: "Each project has its own agent, context window, memory, secrets"
+          agent_hint: codex
+
+        - id: agent-zero.subordinates.creation
+          task: "Verify subordinate creation endpoint"
+          action:
+            type: grep
+            target: "PMOVES-Agent-Zero/CLAUDE.md"
+            pattern: "/mcp/subordinate/create"
+            expect: "Subordinate creation endpoint documented"
+          context: "Creates specialized agents with limited scope and auto-destruction"
+          agent_hint: codex
+
+        - id: agent-zero.subordinates.lifecycle
+          task: "Verify subordinate lifecycle events"
+          action:
+            type: grep
+            target: "PMOVES-Agent-Zero/CLAUDE.md"
+            pattern: "agent\\.subordinate\\.created\\.v1|agent\\.subordinate\\.result\\.v1"
+            expect: "NATS subject for subordinate lifecycle documented"
+          context: "Subordinates report results via NATS, retrieved via /mcp/task/<id>"
+          agent_hint: codex
+
+    # =========================================================================
+    # Phase 9: Tools & Prompts Customization
+    # =========================================================================
+    - id: agent-zero.tools-prompts
+      task: "Tools & Prompts Customization Review"
+      context: "Verify understanding of tool and prompt customization patterns"
+      agent_hint: codex
+      children:
+        - id: agent-zero.tools.structure
+          task: "Verify tool directory structure"
+          action:
+            type: file_exists
+            target: "PMOVES-Agent-Zero/python/tools"
+            expect: "Default tools directory exists"
+          context: "Default tools in python/tools/, agent-specific in agents/{profile}/tools/"
+          agent_hint: codex
+
+        - id: agent-zero.tools.override
+          task: "Verify tool override example exists"
+          action:
+            type: file_exists
+            target: "PMOVES-Agent-Zero/agents/_example/tools/response.py"
+            expect: "Example shows how to override default response tool"
+          context: "Tool with same name in agent-specific dir overrides default"
+          agent_hint: codex
+
+        - id: agent-zero.prompts.structure
+          task: "Verify prompt directory structure"
+          action:
+            type: file_exists
+            target: "PMOVES-Agent-Zero/prompts"
+            expect: "Default prompts directory exists"
+          context: "Default prompts in prompts/, agent-specific in agents/{profile}/prompts/"
+          agent_hint: codex
+
+        - id: agent-zero.prompts.variables
+          task: "Verify understanding of prompt variables"
+          action:
+            type: grep
+            target: "PMOVES-Agent-Zero/docs/developer/extensions.md"
+            pattern: "\\{\\{var\\}\\}|Variable Placeholders"
+            expect: "Documentation explains {{var}} placeholder syntax"
+          context: "Prompts support {{var}} placeholders and dynamic variable loaders"
+          agent_hint: codex
+
+        - id: agent-zero.prompts.includes
+          task: "Verify understanding of prompt includes"
+          action:
+            type: grep
+            target: "PMOVES-Agent-Zero/docs/developer/extensions.md"
+            pattern: "\\{\\{ include.*\\}\\}"
+            expect: "Documentation explains {{ include \"path\" }} syntax"
+          context: "Prompts can include other prompts for modular design"
+          agent_hint: codex

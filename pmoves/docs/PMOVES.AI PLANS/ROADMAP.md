@@ -1,11 +1,28 @@
 # PMOVES v5 • ROADMAP
-Last updated: 2026-03-07
+Last updated: 2026-03-12
 
 ## Vision
 A production-ready, self-hostable orchestration mesh for creative + agent workloads across GPU boxes and Jetsons: **hybrid Hi‑RAG**, **Supabase Studio**, **n8n orchestration**, **Jellyfin publishing**, and **graph-aware retrieval**.
 
-## Audit Snapshot (2026-03-07)
+## Audit Snapshot (2026-03-12)
 
+- March 12 PMOVES.YT production-path remediation landed locally:
+  - `PMOVES.YT` is now the authoritative runtime/docs lane for the YouTube ingest service; root `pmoves` consumes the submodule Dockerfile directly instead of treating `pmoves/services/pmoves-yt` as canon.
+  - live `pmoves-yt` docs/status endpoints now expose real yt-dlp metadata (`/healthz`, `/yt/docs/catalog`, `/yt/docs/sync`) from the submodule runtime.
+  - the Supabase docs sync contract was refreshed for the current CLI stack: `pmoves_core.tool_docs` writes now use schema-profile headers plus URL-encoded `on_conflict`.
+  - root `pmoves/services/pmoves-yt` remains as a compatibility shim so existing tests/import paths keep working while production moves to the submodule.
+  - downloader defaults are being normalized around the authoritative runtime: PMOVES.YT now documents the modern client/token path, root compose passes explicit companion wiring, and Jellyfin/channel-monitor docs are being moved off older MCP and future-work framing.
+- March 12 creator-control merge lane is active on hardened:
+  - `PMOVES.YT #4` stages the authoritative owned-channel control path with approval-gated YouTube Data API actions, summary model-role routing, and overlay lint/CI modernization.
+  - `PMOVES.AI #884` stages the root integration path with channel-monitor queue/review endpoints, Discord approval routing, Supabase audit persistence, and notebook-backed creator review artifacts.
+  - merge order remains submodule-first (`PMOVES.YT #4` -> `PMOVES.AI #884`) so hardened never points at an unmerged submodule head.
+- March 12 n8n production-path remediation landed locally:
+  - `PMOVES-n8n` is now the authoritative runtime/workflow lane consumed by the root repo.
+  - `make -C pmoves up-n8n` now defaults to the dedicated `n8n-db` Postgres sidecar instead of SQLite.
+  - n8n owner/bootstrap automation is scripted (`n8n-api-bootstrap`) so Public API keys no longer depend on manual UI steps.
+  - workflow activation now targets the n8n 2.1 Public API (`/api/v1/workflows/{id}/activate|deactivate`) instead of the brittle CLI publish fallback.
+  - Supabase tracking contract added: `pmoves_core.n8n_workflow_registry` stores live workflow state synced from n8n.
+  - creator-control traversal now explicitly routes through `PMOVES-Creator`, `PMOVES-Open-Notebook`, and `CATACLYSM_STUDIOS_INC` so strategy, drafting, and platform-governance context are part of the operator path instead of living outside the service runbooks.
 - March 7 merge wave completed on `main`: `#814`, `#815`, `#816`, `#817`, `#818`, `#819`, `#820`, `#821` (8 PRs, 3 batches).
 - Chrome extension security hardening landed in `#821`: 9 CodeRabbit review items addressed (auth storage isolation, XSS remediation, mock server hardening, timeout guards, state management fixes, CSP).
 - Distributed topology documentation + examples landed in `#820`.
@@ -25,7 +42,7 @@ A production-ready, self-hostable orchestration mesh for creative + agent worklo
 - Branch strategy: `PMOVES.AI-Edition-Hardened` is the production release branch; `main` receives promoted merges from hardened.
 - Production Python GHCR image toolchains now use reproducible exact pins with automated weekly canary validation (`.github/workflows/python-images-toolchain-canary.yml`): detect latest PyPI candidate -> patch managed Dockerfiles (`supaserch`, `deepresearch`, `pmoves-yt`, `archon`) -> build -> Trivy HIGH/CRITICAL gate -> auto-PR on pass.
 - PR queue and workflow health are tracked in `pmoves/docs/PRODUCTION_AUDIT_DASHBOARD.md`; use that doc as the live source before merge decisions.
-- Open PR queue (live): `0` open.
+- Open PR queue (live): `1` open in `PMOVES.AI` (`#884` on `PMOVES.AI-Edition-Hardened`).
 - Dependency/code scanning backlog (live): Dependabot open `1` (`1 medium`); Code Scanning open `0`.
 - Active remediation focus: production-mode bring-up parity (no dev-target defaults), dynamic port/namespace hygiene, hardened runtime auth consistency across compose/submodules, and recurring self-hosted queue starvation for CodeQL/GHCR lanes.
 - Queue-governance hardening landed for self-hosted CI pressure: stale push/PR runs now auto-cancel per ref, heavy matrix jobs are throttled (`max-parallel`), and GHCR autobuild triggers are scoped to image-affecting paths.
@@ -136,6 +153,7 @@ A production-ready, self-hostable orchestration mesh for creative + agent worklo
 | ✅ | PDF/MinIO ingestion | `services/pdf-ingest/app.py` pulls PDFs from MinIO, extracts text, forwards chunks, and emits ingest events. |
 | ✅ | DeepResearch agent service | `services/deepresearch/worker.py` routes `research.deepresearch.*` events, calls Tongyi DeepResearch (OpenRouter/local), and mirrors summaries into Open Notebook. |
 | ✅ | PMOVES.YT geometry smoke hardening | `services/pmoves-yt/yt.py` now signs Supabase requests with the service-role key and falls back to direct pack lookups so `make smoke` stays green. |
+| 🚧 | Creator control plane (YouTube + Discord approvals) | `PMOVES.YT #4` and `PMOVES.AI #884` stage the owned-channel action path: approval-gated YouTube Data API calls, Supabase audit rows, channel-monitor review queue, messaging-gateway Discord buttons, and notebook-backed creator review artifacts. |
 | ✅ | Cloudflare remote access profile | `cloudflared` Compose profile + `make up-cloudflare`/`make cloudflare-url` provide one-command WAN exposure for laptops and VPS hosts. |
 | ✅ | n8n flows (Discord/webhooks + Voice Agents) | `pmoves/n8n/flows/*.json` are sanitized, importable exports (no project/user metadata). Use `make -C pmoves n8n-import-flows` then `make -C pmoves n8n-activate-flows`. Includes Voice Agent router + Discord/Telegram flows plus publisher/approval flows. |
 | ✅ | Health/Finance integrations (Wger + Firefly) | Supabase schemas created; event topics added (`health.metrics.updated.v1`, `finance.transactions.ingested.v1`); n8n flow stubs added; import via Public API/UI. |
@@ -155,6 +173,7 @@ A production-ready, self-hostable orchestration mesh for creative + agent worklo
 - CHIT EvoSwarm loop: enable controller, confirm `geometry.swarm.meta.v1` events; ensure pack selection by producers and pack_id persisted in constellation meta (gateway v2)
 - Codex parity for focus submodules is now complete (8/8); continue expanding Codex onboarding across non-focus modules
 - PMOVES.YT SABR handling: prefer Invidious when needed; add Whisper transcript fallback in pipeline; update smokes accordingly.
+- once `PMOVES.YT #4` and `PMOVES.AI #884` merge, expand the creator-control surface with broader playlist/channel-management actions, richer Discord rejection UX, and policy-driven comment/reply templates tied to `PMOVES-Creator`, `PMOVES-Open-Notebook`, and CATACLYSM context.
 - [ ] CI TODO — surface `make lint-packs` as the pack manifest linter prior to publish, blocking `kb.pack.published.v1` unless manifests validate.
 - [ ] CI TODO — retrieval-eval persona gate must succeed (`persona.publish.request.v1` → `persona.published.v1`) with thresholds persisted to `pmoves_core.persona_eval_gates`.
 - [x] v2 realtime DNS fallback (host‑gateway derivation) — 2025‑10‑19

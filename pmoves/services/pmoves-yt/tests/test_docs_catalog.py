@@ -2,7 +2,12 @@ import importlib.util
 from pathlib import Path
 import sys
 
+import pytest
 from fastapi.testclient import TestClient
+
+_SUBMODULE_IMPL = (
+    Path(__file__).resolve().parents[4] / "PMOVES.YT" / "pmoves_yt_service" / "yt.py"
+)
 
 
 def _load_yt_module():
@@ -21,6 +26,10 @@ def _load_yt_module():
 app_module = _load_yt_module()
 
 
+@pytest.mark.skipif(
+    not _SUBMODULE_IMPL.exists(),
+    reason="PMOVES.YT submodule not cloned (private repo, expected in CI)",
+)
 def test_docs_catalog_endpoint_smoke():
     client = TestClient(app_module.app)
     resp = client.get("/yt/docs/catalog")
