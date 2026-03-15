@@ -39,6 +39,7 @@ flowchart TD
     Worker -->|"Route CI jobs"| KV
     KVM41 -->|"Reverse proxy"| Z890N
     KVM41 -->|"Data queries"| KVM42
+    Z890N -->|"Data stores<br/>(Qdrant, Neo4j, Meili)"| KVM42
     KVM2N -->|"Tailscale mesh"| KVM41
     Z890N -.->|"Future GPU mesh"| P5090N
 
