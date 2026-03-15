@@ -105,8 +105,13 @@ graph TD
     research ---|"Z890"| Z890N
     media ---|"Z890 + KVM4-2"| Z890N
     data ---|"KVM4-2"| KVM42N["💾 KVM4-2"]
+    ui ---|"Z890"| Z890N
+    automation ---|"KVM4-1"| KVM41N["🖥️ KVM4-1"]
     evolution ---|"Z890 → 5090"| Z890N
-    infra ---|"KVM4-1"| KVM41N["🖥️ KVM4-1"]
+    infra ---|"KVM4-1"| KVM41N
+    sandbox ---|"5090"| FiveKN["🎮 5090"]
+    life ---|"KVM4-1"| KVM41N
+    external ---|"KVM4-1"| KVM41N
 
     style orchestration fill:#9333ea,stroke:#9333ea,color:#fff
     style research fill:#3b82f6,stroke:#3b82f6,color:#fff

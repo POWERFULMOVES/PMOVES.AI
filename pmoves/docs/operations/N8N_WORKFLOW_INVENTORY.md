@@ -134,17 +134,29 @@ Comprehensive catalog of all 34 n8n workflows in the PMOVES.AI ecosystem.
 
 ## Service Dependencies
 
-| Service | Port | Workflow Count | Key Workflows |
-|---------|------|---------------|---------------|
-| Supabase (Kong) | 8000 | 12 | approval_poller, firefly_sync, qwen_to_cgp |
-| Agent Zero | 8080 | 5 | approval_poller, channel_monitor, deepresearch |
-| Hi-RAG v2 | 8086 | 6 | finance_to_cgp, health_to_cgp, vibevoice, wan |
-| ffmpeg-Whisper | 8078 | 2 | audio_analysis, video_analysis |
-| Extract Worker | 8083 | 4 | audio/video analysis, echo_ingest, langextract |
-| Flute-Gateway | 8055 | 3 | discord/telegram voice, voice_router |
-| ComfyUI | 8188 | 2 | comfy_gen, comfy_hub |
-| DeepResearch | 8098 | 1 | deepresearch_orchestrator |
-| PMOVES.YT | 8077 | 2 | channel_monitor, jellyfin_watcher |
+### Internal (Docker Network)
+
+These endpoints are accessed by n8n workflows via the Docker internal network:
+
+| Service | Internal Host:Port | Workflow Count | Key Workflows |
+|---------|-------------------|---------------|---------------|
+| Supabase (Kong) | `supabase-kong:8000` | 12 | approval_poller, firefly_sync, qwen_to_cgp |
+| Agent Zero | `agent-zero:8080` | 5 | approval_poller, channel_monitor, deepresearch |
+| Hi-RAG v2 | `hirag-gateway:8086` | 6 | finance_to_cgp, health_to_cgp, vibevoice, wan |
+| ffmpeg-Whisper | `ffmpeg-whisper:8078` | 2 | audio_analysis, video_analysis |
+| Extract Worker | `extract-worker:8083` | 4 | audio/video analysis, echo_ingest, langextract |
+| Flute-Gateway | `flute-gateway:8055` | 3 | discord/telegram voice, voice_router |
+| ComfyUI | `comfyui:8188` | 2 | comfy_gen, comfy_hub |
+| DeepResearch | `deep-research:8098` | 1 | deepresearch_orchestrator |
+| PMOVES.YT | `pmoves-yt:8077` | 2 | channel_monitor, jellyfin_watcher |
+
+### Public (Via Cloudflare Tunnel / Tailscale)
+
+| Service | Public URL | Usage |
+|---------|-----------|-------|
+| n8n | `n8n.pmoves.ai` | Webhook triggers from GitHub, Discord, Telegram |
+| Agent Zero | `agent.pmoves.ai` | External agent MCP calls |
+| Grafana | `grafana.pmoves.ai` | Monitoring dashboards |
 
 ---
 
