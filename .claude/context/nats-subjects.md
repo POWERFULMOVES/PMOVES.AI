@@ -197,6 +197,26 @@ Example: `ingest.transcript.ready.v1`
   ```
 - **Subscribers:** Observability dashboards, Agent Zero
 
+## autoresearch Experiment Subjects
+
+**`research.autoresearch.result.v1`**
+- **Direction:** Published by `nats_reporter.py` → Consumed by Agent Zero, monitoring
+- **Purpose:** Notify that an experiment completed with results
+- **Payload:**
+  ```json
+  {
+    "commit": "a1b2c3d",
+    "branch": "autoresearch/mar15",
+    "val_bpb": 0.997900,
+    "peak_vram_mb": 45060.2,
+    "training_seconds": 300.1,
+    "num_steps": 953,
+    "num_params_M": 50.3,
+    "timestamp": "2026-03-15T12:00:00Z"
+  }
+  ```
+- **Subscribers:** Agent Zero, AgentGym RL coordinator, observability dashboards
+
 ## Media Ingestion Subjects
 
 ### File Ingestion
