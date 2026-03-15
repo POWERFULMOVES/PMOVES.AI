@@ -92,6 +92,26 @@ BoTZ exposes **100+ MCP tools** through the Gateway Agent, including:
 - VL Sentinel vision tasks
 - E2B sandboxed execution
 
+## Deep-Dive Findings (2026-03-15)
+
+### Feature Modules
+
+BoTZ Gateway comprises 17 feature modules spanning work distribution, CLI instance management, authentication, and MCP tool orchestration. The Gateway Agent (port 8100) exposes 100+ MCP tools through SSE transport on port 2091.
+
+### Plugin Ecosystem Overlap
+
+The a0-plugins index contains 4 plugins that overlap with PMOVES native services:
+- `honcho` plugin vs Cipher Memory (8096) — Cipher is preferred (Neo4j-backed, MCP-integrated)
+- `youtube_transcribe` vs PMOVES.YT (8077) — PMOVES.YT preferred (full pipeline with NATS)
+- `discord` vs Publisher-Discord (8094) — Publisher preferred (NATS-integrated)
+- `langfuse_observability` vs TensorZero (3030) — TensorZero preferred (unified observability)
+
+**Strategy:** Prefer PMOVES native services for overlapping capabilities; use a0-plugins for gap-filling only.
+
+### Security Hooks
+
+BoTZ's `auth.py` implements JWT verification with a critical fail-open vulnerability at line 59 (`if not JWT_SECRET: return True`). This remains the highest-priority fix across the entire BoTZ TAC tree.
+
 ## Cross-Links
 
 - **Submodule:** `PMOVES-BoTZ/`
@@ -99,6 +119,10 @@ BoTZ exposes **100+ MCP tools** through the Gateway Agent, including:
 - **Integration Topology:** [`TAC_INTEGRATION_TOPOLOGY.md`](./TAC_INTEGRATION_TOPOLOGY.md)
 - **Agent Registry:** `pmoves/config/agent_registry.yaml` → `botz_gateway`, `gateway_agent`
 - **Audit Details:** `docs/submodules-audit-final-summary.md` → BoTZ section
+- **Agent Zero TAC:** [`TAC_AGENT_ZERO.md`](./TAC_AGENT_ZERO.md) — orchestration control plane
+- **ClawZ TAC:** [`TAC_CLAWZ.md`](./TAC_CLAWZ.md) — chat gateway (different auth model)
+- **a0-plugins TAC:** [`TAC_A0_PLUGINS.md`](./TAC_A0_PLUGINS.md) — plugin ecosystem overlap analysis
+- **Cipher TAC:** [`TAC_CIPHER.md`](./TAC_CIPHER.md) — reasoning trace persistence
 
 ## Open Items
 
@@ -106,5 +130,7 @@ BoTZ exposes **100+ MCP tools** through the Gateway Agent, including:
 - `env.shared` uses `export` syntax incompatible with Docker `env_file`
 - MCP Gateway needs authentication layer
 - Tool allowlisting for security-sensitive operations
+- Plugin deduplication strategy with a0-plugins ecosystem
+- ClawZ auth model alignment (DM pairing vs JWT)
 
-<!-- GRAPHITI_MARK: CLAUDE-OPUS::TAC-TOPOLOGY-AUDIT::2026-02-20 -->
+<!-- GRAPHITI_MARK: CLAUDE-OPUS::TAC-DEEP-DIVE::2026-03-15 -->
