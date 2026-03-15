@@ -1,0 +1,163 @@
+# TAC Tree: ClawZ (OpenClaw)
+
+> Technology-Architecture-Context tree for ClawZ — a multi-channel messaging gateway that connects 20+ messaging platforms (47 total extensions) to a unified AI-powered chat interface.
+
+## Service Identity
+
+| Field | Value |
+|-------|-------|
+| **Service** | ClawZ (OpenClaw Gateway) |
+| **Port** | 18789 (Gateway, configurable via `OPENCLAW_GATEWAY_PORT`) |
+| **Health** | `GET /healthz` (liveness), `GET /readyz` (readiness) |
+| **Metrics** | Optional (via `diagnostics-otel` extension) |
+| **Submodule** | `PMOVES-ClawZ` |
+| **Docker Profile** | N/A (local-first app, Docker optional) |
+| **Tier** | ui |
+| **Class** | Standard |
+| **Evolution** | Pre-Stage |
+
+## Upstream Dependencies
+
+| Dependency | Type | Required |
+|------------|------|----------|
+| TensorZero (3030) / Ollama | LLM for chat responses | Yes |
+| Agent Zero (8080) | Agent runtime for complex tasks | Optional |
+| NATS (4222) | Event publishing (planned) | Planned |
+| Node.js 22+ | Runtime | Yes |
+| pnpm / Bun | Package manager | Yes |
+
+## Downstream Consumers
+
+| Consumer | Interface | Description |
+|----------|-----------|-------------|
+| 47 extensions | WebSocket / HTTP | Message routing to/from chat platforms |
+| Canvas host | Web UI | Browser-based chat interface |
+| Mobile apps (iOS, Android) | WebSocket | Native mobile clients |
+| Webhook receivers | HTTP | Inbound messages from platforms |
+
+## Key Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| Gateway `:18789` | WS/HTTP | Primary gateway for all channel communication |
+| Canvas host | HTTP | Web-based chat UI |
+| Webhook receiver | POST | Inbound platform webhooks (Telegram, Discord, etc.) |
+
+## NATS Subjects
+
+_All subjects are **planned** — ClawZ currently has no NATS integration._
+
+| Subject | Direction | Description |
+|---------|-----------|-------------|
+| `openclaw.message.received.v1` | Publishes (planned) | Inbound message from any channel |
+| `openclaw.message.sent.v1` | Publishes (planned) | Outbound message to any channel |
+| `openclaw.channel.connected.v1` | Publishes (planned) | Channel adapter connected/disconnected |
+
+## CHIT Integration Status
+
+| Capability | Status | Notes |
+|------------|--------|-------|
+| CGP packet generation | None | Not CHIT-enabled |
+| Attribution tracking | Planned | Which channel, which agent responded |
+| Message routing attribution | Planned | Track message provenance across channels |
+| BPM capable | No | Text-based messaging, not prosodic |
+
+## Production Audit Checklist
+
+| Requirement | Status | Notes |
+|-------------|--------|-------|
+| `/healthz` endpoint | GREEN | Implemented with `/readyz` alias |
+| `/metrics` (Prometheus) | MISSING | No metrics endpoint |
+| Auth (JWT/Bearer) | Partial | DM pairing model + bootstrap tokens |
+| Docker hardening | Partial | Dockerfile exists but sandbox variants are experimental |
+| NATS auth | N/A | No NATS integration yet |
+| `env.shared` format | N/A | Uses `openclaw.podman.env` |
+
+## Security Stance
+
+| Finding | Severity | Status |
+|---------|----------|--------|
+| No Prometheus `/metrics` | P3 | **Open** — uses optional OTEL diagnostics extension instead |
+| DM pairing model security | P3 | Review needed — verify bootstrap token lifecycle |
+| OAuth fallback paths | P3 | Review per-channel OAuth implementations |
+
+## Channel Adapter Catalog
+
+ClawZ supports 25+ messaging platforms through core channels and extensions:
+
+### Core Channels (built-in)
+
+| Channel | Transport | Status |
+|---------|-----------|--------|
+| Telegram | Bot API + webhook | Active |
+| Discord | Bot + gateway | Active |
+| Slack | Bot + events API | Active |
+| Signal | Signal CLI bridge | Active |
+| iMessage | AppleScript bridge | Active (macOS) |
+| WhatsApp (Web) | Web protocol | Active |
+| Web UI (Canvas) | WebSocket | Active |
+
+### Extension Channels (plugins)
+
+| Channel | Transport | Status |
+|---------|-----------|--------|
+| Microsoft Teams | Bot Framework | Extension |
+| Matrix | Matrix SDK | Extension |
+| Zalo | API | Extension |
+| Voice Call | WebRTC/SIP | Extension |
+| BlueBubbles | HTTP API | Extension |
+| And more... | Various | See `extensions/` |
+
+### Mobile Apps
+
+| Platform | Status |
+|----------|--------|
+| iOS | Active (`apps/ios/`) |
+| Android | Active (`apps/android/`) |
+
+## Project Structure
+
+```text
+PMOVES-ClawZ/
+├── src/                    # Core source (CLI, commands, infra, media, routing)
+│   ├── cli/                # CLI wiring
+│   ├── commands/           # Command handlers
+│   ├── telegram/           # Telegram channel
+│   ├── discord/            # Discord channel
+│   ├── slack/              # Slack channel
+│   ├── signal/             # Signal channel
+│   ├── imessage/           # iMessage channel
+│   ├── web/                # WhatsApp web channel
+│   ├── channels/           # Channel abstractions
+│   ├── routing/            # Message routing
+│   └── media/              # Media pipeline
+├── extensions/             # Plugin/extension channels
+├── apps/                   # Mobile apps (iOS, Android)
+├── packages/               # Shared packages
+├── docs/                   # Documentation
+├── docker-compose.yml      # Docker setup
+└── openclaw.mjs            # Entry point
+```
+
+## Cross-Links
+
+- **Submodule:** `PMOVES-ClawZ/`
+- **Upstream:** [openclaw/openclaw](https://github.com/openclaw/openclaw) (fork origin)
+- **Integration Topology:** [`TAC_INTEGRATION_TOPOLOGY.md`](./TAC_INTEGRATION_TOPOLOGY.md)
+- **Flute Gateway TAC:** [`TAC_FLUTE.md`](./TAC_FLUTE.md) — potential outbound TTS via channels
+- **BoTZ TAC:** [`TAC_BOTZ.md`](./TAC_BOTZ.md) — skills invocable from chat
+- **Cipher TAC:** [`TAC_CIPHER.md`](./TAC_CIPHER.md) — conversation persistence
+
+## Open Items
+
+- ~~No `/healthz` endpoint~~ → **Implemented** (`/healthz` liveness + `/readyz` readiness — see Audit Checklist above)
+- No `/metrics` endpoint — invisible to Prometheus (uses optional OTEL diagnostics instead)
+- No NATS integration — all 47 extensions could emit events to the event bus
+- No CHIT attribution — message routing lacks provenance tracking
+- Integration with Flute Gateway for outbound voice TTS via channels (planned)
+- Integration with BoTZ skills for chat-invoked skill execution (planned)
+- Integration with Cipher Memory for cross-channel conversation persistence
+- DM pairing security model needs production hardening review
+- Docker setup is optional/experimental — primary use is local-first
+
+<!-- GRAPHITI_MARK: CLAUDE-OPUS::TAC-DEEP-DIVE::2026-03-15 -->
