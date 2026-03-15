@@ -1,0 +1,46 @@
+%%{init: {'theme':'base', 'themeVariables': {
+  'primaryColor': '#3ecf8e',
+  'primaryBorderColor': '#3ecf8e',
+  'secondaryColor': '#9333ea',
+  'background': 'transparent',
+  'lineColor': '#94a3b8'
+}}}%%
+flowchart TB
+    subgraph edge["🔋 Edge Tier — CPU / <4GB VRAM"]
+        Q06["Qwen3-0.6B<br/>2GB · Ollama"]
+        Q17["Qwen3-1.7B<br/>4GB · Ollama"]
+    end
+
+    subgraph small["📱 Small Tier — 4-8GB VRAM"]
+        Q4B["Qwen3-4B<br/>8GB · Ollama/vLLM"]
+        Q30A["Qwen3-30B-A3B<br/>MoE · 3B active<br/>8GB · Ollama/vLLM"]
+    end
+
+    subgraph medium["⚡ Medium Tier — 16-24GB VRAM"]
+        Q8B["Qwen3-8B<br/>16GB · Ollama/vLLM<br/>Port 8160"]
+        Q14B["Qwen3-14B<br/>24GB · Ollama/vLLM<br/>Port 8162"]
+    end
+
+    subgraph large["🔥 Large Tier — 48GB+ VRAM (TP=2)"]
+        Q32B["Qwen3-32B<br/>48GB · vLLM TP=2<br/>Port 8166"]
+    end
+
+    subgraph xlarge["🚀 XLarge Tier — 64GB+ VRAM (TP=4)"]
+        Q235["Qwen3-235B-A22B<br/>MoE · 22B active<br/>vLLM TP=4 · Port 8168"]
+    end
+
+    edge --> small --> medium --> large --> xlarge
+
+    %% Hardware mapping
+    medium ---|"RTX 4090<br/>24GB"| GPU1["🔧 Z890"]
+    large ---|"RTX 5090<br/>32GB"| GPU2["⏳ 5090"]
+    xlarge ---|"Multi-GPU<br/>4× A100/H100"| GPU3["☁️ Cloud"]
+
+    style edge fill:#22c55e,stroke:#22c55e,color:#1e293b
+    style small fill:#3ecf8e,stroke:#3ecf8e,color:#1e293b
+    style medium fill:#3b82f6,stroke:#3b82f6,color:#fff
+    style large fill:#9333ea,stroke:#9333ea,color:#fff
+    style xlarge fill:#7c3aed,stroke:#7c3aed,color:#fff
+    style GPU1 fill:#1e293b,stroke:#9333ea,color:#e2e8f0
+    style GPU2 fill:#1e293b,stroke:#f59e0b,color:#e2e8f0,stroke-dasharray: 5 5
+    style GPU3 fill:#1e293b,stroke:#3b82f6,color:#e2e8f0,stroke-dasharray: 5 5
