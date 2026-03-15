@@ -37,8 +37,10 @@ All `.mmd` files render natively on GitHub when viewed in the repository.
 ### CLI Rendering
 ```bash
 npm install -g @mermaid-js/mermaid-cli
-mmdc -i diagrams/node-topology.mmd -o node-topology.png -t dark -b transparent
-mmdc -i diagrams/node-topology.mmd -o node-topology.svg -t dark
+# From repo root:
+mmdc -i pmoves/docs/operations/diagrams/node-topology.mmd -o node-topology.png -t dark -b transparent
+# Or from this directory:
+mmdc -i node-topology.mmd -o node-topology.svg -t dark
 ```
 
 ### PMOVES UI

@@ -27,7 +27,7 @@ flowchart LR
     n8n -->|"KVM4-1:5678"| KVM41
     grafana -->|"KVM4-1:3000"| KVM41
     search -->|"KVM4-2:7700"| KVM42["💾 KVM4-2"]
-    nats -->|"KVM4-1:9222"| KVM41
+    nats -->|"KVM4-1:4222 (client)<br/>9222 (WS)"| KVM41
     minio -->|"KVM4-2:9001"| KVM42
     headscale -->|"KVM2:443"| KVM2["🌐 KVM2"]
     ci -->|"CF Worker"| CFW["☁️ Worker"]
