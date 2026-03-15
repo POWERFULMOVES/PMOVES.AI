@@ -3,15 +3,33 @@
 > **Single source of truth** for PMOVES.AI production readiness.
 > Supersedes all individual audit documents accumulated Feb 7 -- Feb 18, 2026.
 
-**Last Updated:** 2026-03-12 (final audit closeout — all items resolved)
+**Last Updated:** 2026-03-15 (Z890 security remediation + pmovesui auth sweep)
 **Branch:** `main`
-**Commit:** `b69210cd` (fix(smoke): accept Kong URL + resolve container names in Supabase tests)
+**Commit:** `a9ce4931` (Z890 security remediation — 4 fixes squash-merged via PR #950)
 **Consolidated From:** 27 audit documents
 **Evidence:** live runbook execution on 2026-03-05 (`make ghcr-prepublish-inrepo-build`, strict local Trivy sweep logs under `pmoves/docs/logs/ghcr-local-prepublish/`)
 
 ---
 
-## Latest Changes (Mar 12, 2026)
+## Latest Changes (Mar 15, 2026)
+
+### Z890 Security Remediation + pmovesui Auth Sweep (Mar 15, 2026)
+
+- **PR #950 merged** (squash) — Z890 security audit remediation (4 fixes):
+  - Removed docsRoot path leak from audit summary API
+  - Added dev-mode warning for unauthenticated NATS fallback in flute-gateway
+  - Added dev-mode warning and restricted role in cast-tts auth
+  - Removed hardcoded CHIT passphrase from consciousness-service Dockerfile
+- **pmovesui auth sweep** — JWT auth (`ownerFromJwt`) added to 6 unauthenticated API routes:
+  - `/api/audit/summary` (CRITICAL — executive metrics, commit SHAs)
+  - `/api/github/prs` (HIGH — repo structure, PR metadata)
+  - `/api/services` (HIGH — full service catalog with ports)
+  - `/api/services/health-enhanced` (HIGH — tier architecture, response times)
+  - `/api/services-hub` (HIGH — aggregated dashboard data)
+  - `/api/agents/taxonomy` (MEDIUM — agent classification, capabilities)
+- **4 edge routes migrated to nodejs runtime** for `Buffer.from()` JWT compatibility
+- **Cascade sync** main → Hardened → Integrations completed
+- **NATS subject catalog gaps** documented for handoff (30+ undocumented subjects)
 
 ### Final Audit Closeout (Mar 12, 2026)
 
