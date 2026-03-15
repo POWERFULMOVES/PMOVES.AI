@@ -18,6 +18,12 @@ import nats
 from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
 from prometheus_client.exposition import CONTENT_TYPE_LATEST
 
+# Schema-validated envelope (available when services/common is on PYTHONPATH)
+try:
+    from services.common.events import envelope as _envelope
+except ImportError:
+    _envelope = None
+
 from flute_client import FluteTTSProvider
 from device_manager import CastDeviceManager
 from groups import CastGroupManager
@@ -1995,10 +2001,12 @@ class CastTTSGateway:
             return
 
         try:
-            await self.nats_client.publish(
-                subject,
-                json.dumps(payload).encode(),
-            )
+            if _envelope:
+                env = _envelope(subject, payload, source="cast-tts-gateway")
+                data = json.dumps(env).encode()
+            else:
+                data = json.dumps(payload).encode()
+            await self.nats_client.publish(subject, data)
             # Success metric
             CAST_REQUESTS.labels(method="publish_nats", status="success").inc()
 
@@ -2012,7 +2020,6 @@ class CastTTSGateway:
 
             # Note: We don't fail the HTTP request if NATS publish fails
             # NATS is used for event notification, not critical path
-            # Log to Loki (if available) - TODO: Add structured logging client
 
     async def connect_nats(self):
         """Connect to NATS message bus."""

@@ -26,10 +26,17 @@ try:
 except ImportError:
     envelope = None
 
+# Secret-aware env helper (Docker _FILE support)
+try:
+    from services.common.env import get_secret
+except ImportError:
+    def get_secret(key: str, default: str | None = None) -> str | None:
+        return os.environ.get(key, default)
+
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
-NATS_URL = os.getenv("NATS_URL", "nats://nats:pmoves@nats:4222")
+NATS_URL = get_secret("NATS_URL", "nats://nats:pmoves@nats:4222") or "nats://nats:pmoves@nats:4222"
 NATS_URL_REDACTED = re.sub(r"://[^@]+@", "://***@", NATS_URL)
 INPUT_SUBJECT = os.getenv("VOICE_RELAY_INPUT_SUBJECT", "agentzero.task.result.v1")
 OUTPUT_SUBJECT = os.getenv("VOICE_RELAY_OUTPUT_SUBJECT", "voice.agent.response.v1")
@@ -143,6 +150,10 @@ def _make_nats_callbacks(nc_ref: NATS, disconnect_event: asyncio.Event):
 
 # ---------------------------------------------------------------------------
 # NATS resilience loop (mirrors publisher-discord pattern)
+# Design note: uses core NATS (not JetStream) intentionally — voice relay
+# events are ephemeral; a missed response during a reconnect is acceptable
+# for TTS playback, and JetStream adds consumer/stream lifecycle complexity.
+# Revisit if guaranteed delivery becomes a requirement.
 # ---------------------------------------------------------------------------
 async def _nats_resilience_loop() -> None:
     global _nc
@@ -202,7 +213,9 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="voice-relay", lifespan=lifespan)
 
 
-# TODO: Adopt shared pmoves_health router when available as pip package
+# TODO(pmoves_health): Replace with shared pmoves_health.health_check_router
+# once pmoves_health is published as a pip-installable package or added to
+# services/common.  Track: https://github.com/POWERFULMOVES/PMOVES.AI/issues/935
 @app.get("/healthz")
 async def healthz():
     """Health check endpoint."""

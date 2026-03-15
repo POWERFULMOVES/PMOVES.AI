@@ -10,7 +10,7 @@
     "voice.cast.completed.v1": {
       "schema": "schemas/voice/cast.completed.v1.schema.json",
       "description": "Published when TTS audio has been successfully cast to a Chromecast/Google Home device.",
-      "publisher": "cast-tts-gateway",
+      "publisher": ["cast-tts-gateway"],
       "subscriber": ["publisher-discord", "cast-notebook-logger"]
     },
     "agentzero.event.log.v1": {
