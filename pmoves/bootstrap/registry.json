@@ -1009,6 +1009,25 @@
           "type": "url"
         }
       ]
+    },
+    {
+      "id": "cipher",
+      "name": "Cipher Memory",
+      "description": "Knowledge-graph memory service for agents. Bearer token auth for API endpoints.",
+      "variables": [
+        {
+          "key": "CIPHER_API_TOKEN",
+          "file": "pmoves/env.shared",
+          "prompt": "Cipher Memory API bearer token",
+          "help": "Shared secret for authenticating HTTP requests to Cipher Memory API. If empty, auth is skipped (dev mode).",
+          "required": false,
+          "sensitive": true,
+          "generate": {
+            "type": "random_urlsafe",
+            "length": 32
+          }
+        }
+      ]
     }
   ]
 }

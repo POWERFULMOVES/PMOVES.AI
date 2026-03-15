@@ -108,6 +108,115 @@ Example: `ingest.transcript.ready.v1`
   }
   ```
 
+## Cipher Memory Subjects
+
+**`cipher.memory.stored.v1`**
+- **Direction:** Published by Cipher MCP bridge → Consumed by monitoring, observability
+- **Purpose:** Notify that a memory was stored in Cipher
+- **Payload:**
+  ```json
+  {
+    "memory_id": "mem-abc123",
+    "category": "code_pattern",
+    "tags": ["python", "async"],
+    "timestamp": "2026-03-15T12:00:00Z"
+  }
+  ```
+- **Subscribers:** Observability dashboards, Discord Publisher (optional)
+
+**`cipher.memory.searched.v1`**
+- **Direction:** Published by Cipher MCP bridge → Consumed by monitoring
+- **Purpose:** Notify that a memory search was performed
+- **Payload:**
+  ```json
+  {
+    "query": "search query text",
+    "result_count": 5,
+    "category": "architecture | null",
+    "timestamp": "2026-03-15T12:00:00Z"
+  }
+  ```
+- **Note:** `category` is `null` when the search is unfiltered (no category specified)
+- **Subscribers:** Observability dashboards
+
+**`cipher.reasoning.stored.v1`**
+- **Direction:** Published by Cipher MCP bridge → Consumed by monitoring
+- **Purpose:** Notify that a reasoning trace was stored
+- **Payload:**
+  ```json
+  {
+    "reasoning_id": "reason-abc123",
+    "question": "How to optimize query performance...",
+    "timestamp": "2026-03-15T12:00:00Z"
+  }
+  ```
+- **Note:** `question` is truncated to 200 characters in the event payload
+- **Subscribers:** Observability dashboards, Graphiti trail processors
+
+## OpenClaw (ClawZ) Messaging Subjects
+
+**`openclaw.message.received.v1`**
+- **Direction:** Published by ClawZ nats-bridge extension → Consumed by monitoring, Agent Zero
+- **Purpose:** Notify that an inbound message was received on any channel
+- **Payload:**
+  ```json
+  {
+    "channel": "discord",
+    "message_id": "msg-abc123",
+    "author": "user-id",
+    "content_length": 128,
+    "timestamp": "2026-03-15T12:00:00Z"
+  }
+  ```
+- **Subscribers:** Agent Zero, observability dashboards
+
+**`openclaw.message.sent.v1`**
+- **Direction:** Published by ClawZ nats-bridge extension → Consumed by monitoring
+- **Purpose:** Notify that an outbound message was sent on any channel
+- **Payload:**
+  ```json
+  {
+    "channel": "telegram",
+    "message_id": "msg-def456",
+    "content_length": 256,
+    "timestamp": "2026-03-15T12:00:00Z"
+  }
+  ```
+- **Subscribers:** Observability dashboards
+
+**`openclaw.channel.connected.v1`**
+- **Direction:** Published by ClawZ nats-bridge extension → Consumed by monitoring
+- **Purpose:** Notify that a channel adapter connected or disconnected
+- **Payload:**
+  ```json
+  {
+    "channel": "discord",
+    "status": "connected",
+    "timestamp": "2026-03-15T12:00:00Z"
+  }
+  ```
+- **Subscribers:** Observability dashboards, Agent Zero
+
+## autoresearch Experiment Subjects
+
+**`research.autoresearch.result.v1`**
+- **Direction:** Published by `nats_reporter.py` → Consumed by Agent Zero, monitoring
+- **Purpose:** Notify that an experiment completed with results
+- **Payload:**
+  ```json
+  {
+    "commit": "a1b2c3d",
+    "branch": "autoresearch/mar15",
+    "val_bpb": 0.997900,
+    "peak_vram_mb": 45060.2,
+    "training_seconds": 300.1,
+    "num_steps": 953,
+    "num_params_M": 50.3,
+    "timestamp": "2026-03-15T12:00:00Z"
+  }
+  ```
+- **Subscribers:** Agent Zero, AgentGym RL coordinator, observability dashboards
+
 ## Media Ingestion Subjects
 
 ### File Ingestion

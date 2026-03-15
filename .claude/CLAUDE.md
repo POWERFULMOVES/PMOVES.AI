@@ -478,6 +478,66 @@ docker compose --profile agents --profile workers up -d
 
 See `.claude/context/testing-strategy.md` for detailed testing guidelines.
 
+## PR Review & Merge Workflow
+
+### Skill Chain (pr-monitor-graphiti-chit pairing)
+
+PMOVES uses a 4-step FlOO$ skill pairing for PR review lifecycle. Use these skills in order:
+
+| Step | Skill | Purpose | Make Target |
+|------|-------|---------|-------------|
+| 1 | `/pr-monitor` | Collect PR state and review learnings | `make -C pmoves pr-monitor` |
+| 2 | `/pr-trim <PR#>` | Classify and fix CodeRabbit review threads | `make -C pmoves pr-trim PR=<N>` |
+| 3 | `/chit:review-sweep` | Encode learnings as CGP packet for Graphiti | `make -C pmoves pr-monitor-chit-packet` |
+| 4 | `/chit:sign-trail` | Sign trail entry for agent attribution | `make -C pmoves sign-trail` |
+
+### When to Use Each Skill
+
+**Before reviewing PRs:**
+- `/pr-monitor` — Get current state of all open PRs, actionable counts, blockers
+
+**During PR review (for each PR with CodeRabbit threads):**
+- `/pr-trim <PR#>` — Analyze threads, apply fixes, resolve addressed threads
+- `/pr-trim --batch 935,936,937` — Batch mode for multiple PRs
+- `/pr-trim <PR#> --dry-run` — Preview classification without changes
+
+**After reviewing PRs:**
+- `/github:pr-review <PR#>` — Full AI-assisted review with structured output
+- `/chit:review-sweep --trail` — Encode learnings + write Graphiti trail entry
+- `/docs:reconcile --update` — Refresh living documents if audit/security docs changed
+
+**Before merging:**
+- `/pr-monitor --strict` — Gate check (exit 0 = merge ready)
+- `/test:pr` — Run test suite and generate PR Testing section
+
+**After merging:**
+- `/docs:reconcile --update` — Refresh dashboard SHA and date
+- `/chit:review-sweep --trail` — Final learnings handoff
+
+### FlOO$ Pipeline Validation
+
+Validate the full pipeline DAG is healthy:
+```bash
+make -C pmoves floos-pr-monitor-validate
+# Or: /chit:floos validate pr-monitor-graphiti-chit
+```
+
+Full CHIT flow (monitor + validate + resolve + dry-run):
+```bash
+make -C pmoves chit-flow-pr-monitor
+# Strict mode (fails on PR blockers):
+make -C pmoves chit-flow-pr-monitor-strict
+```
+
+### PR Review NATS Subjects
+
+| Subject | Publisher | Description |
+|---------|-----------|-------------|
+| `ops.pr.monitor.completed.v1` | pr-monitor | PR state scan completed |
+| `ops.pr.trim.completed.v1` | pr-hedge-trim | Thread classification/resolution done |
+| `ops.pr.review.completed.v1` | review-sweep | Review learnings encoded to CGP |
+| `agent.graphiti.signed.v1` | sign-trail | Trail entry signed for attribution |
+
 ## UI Development Checklist
 
 Based on CodeRabbit learnings (see `.claude/learnings/ui-error-handling-review-2025.md`):
@@ -668,7 +728,7 @@ When orchestrating multi-step work, consult `pmoves/configs/skill-pairings.yaml`
 | `chit-3d-viz` | chit-encode → threejs-render | tokenism → hyperdimensions | `skills.pipeline.chit-3d-viz.v1` |
 | `voice-synthesis` | text-generate → prosodic → tts | agent-zero → flute → ultimate-tts | `skills.pipeline.voice-synthesis.v1` |
 | `agent-card-gen` | theme → comfyui → card | archon → creator → archon | `skills.pipeline.agent-card-gen.v1` |
-| `pr-monitor-graphiti-chit` | pr-monitor → encode → trail-sync | codex → tokenism → archon | `skills.pipeline.pr-monitor-graphiti-chit.v1` |
+| `pr-monitor-graphiti-chit` | pr-monitor → pr-hedge-trim → encode → trail-sync | codex → claude-opus → tokenism → archon | `skills.pipeline.pr-monitor-graphiti-chit.v1` |
 
 **Commands:**
 - `/chit:floos status` — Show all pairing statuses
