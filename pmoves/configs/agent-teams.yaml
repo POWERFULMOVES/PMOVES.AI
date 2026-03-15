@@ -1,5 +1,5 @@
 # PMOVES.AI Agent Team Definitions
-# Groups 61 agents into functional teams with node affinity and runner assignments.
+# Full agent roster grouped into functional teams with node affinity and runner assignments.
 #
 # Query: python -c "import yaml; t=yaml.safe_load(open('pmoves/configs/agent-teams.yaml')); [print(f'{k}: {len(v[\"agents\"])} agents') for k,v in t['teams'].items()]"
 # Last updated: 2026-03-14
@@ -71,7 +71,7 @@ teams:
       - meilisearch       # Port 7700 — Full-text search
       - minio             # Port 9000 — Object storage
       - prometheus        # Port 9090 — Metrics
-      - grafana           # Port 3000 — Dashboards
+      - grafana           # Port 3002 — Dashboards
       - loki              # Port 3100 — Log aggregation
 
   ui:
@@ -137,6 +137,7 @@ teams:
       - surf              # Browser automation agent
       - agentgym          # Agent training gymnasium
       - agentgym_rl       # RL extension for AgentGym
+      - pmoves_e2b_mcp_server  # MCP bridge for E2B sandboxed execution
 
   external:
     name: "External Contributors"
@@ -158,7 +159,7 @@ teams:
       - wealth            # Firefly III finance tracking
       - health            # wger fitness tracking
 
-# Validation: all 61 agents from agent_registry.yaml must appear in exactly one team
+# Validation: all agents from agent_registry.yaml must appear in exactly one team
 # Run: python -c "
 # import yaml
 # reg = yaml.safe_load(open('pmoves/config/agent_registry.yaml'))

@@ -65,16 +65,16 @@
 
 ## Deployment Pipeline Flow
 
-```
+```text
 Push to main
   → self-hosted-builds.yml
     ├── setup-matrix (ubuntu-latest)
-    ├── build-gpu (ai-lab, gpu) [DISABLED]
+    ├── build-gpu (self-hosted, ai-lab, gpu) [DISABLED]
     ├── build-cpu (self-hosted, X64) — 9 service matrix
     ├── validate-contracts (self-hosted, X64)
-    ├── deploy-staging (cloudstartup) — needs: build-cpu
+    ├── deploy-staging (self-hosted, cloudstartup) — needs: build-cpu
     ├── functional-tests (self-hosted, X64) — needs: deploy-staging
-    └── deploy-production (kvm4) — needs: build-cpu, deploy-staging
+    └── deploy-production (self-hosted, kvm4) — needs: build-cpu, deploy-staging
 ```
 
 ---

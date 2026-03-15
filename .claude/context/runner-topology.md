@@ -6,26 +6,26 @@
 
 | Node | Role | Key Services | Runner |
 |------|------|-------------|--------|
-| **Z890** | Dev + GPU (3090Ti) | All (local Docker Compose) | `ai-lab, gpu, cuda` |
+| **Z890** | Dev + GPU (3090Ti) | All (local Docker Compose) | `self-hosted, ai-lab, gpu, cuda` |
 | **5090** | Primary GPU (pending) | Future inference | (pending) |
-| **KVM4-1** | API Gateway | TensorZero, Agent Zero, Hi-RAG, Archon, Gateway Agent | `kvm4, production` |
-| **KVM4-2** | Data/Storage | Supabase, NATS, Qdrant, Neo4j, Meilisearch, MinIO, monitoring | `kvm4, production` |
-| **KVM2** | Exit Node | nginx (SSL termination) | `kvm2, backup` |
+| **KVM4-1** | API Gateway | TensorZero, Agent Zero, Hi-RAG, Archon, Gateway Agent | `self-hosted, vps, kvm4, production` |
+| **KVM4-2** | Data/Storage | Supabase, NATS, Qdrant, Neo4j, Meilisearch, MinIO, monitoring | `self-hosted, vps, kvm4, production` |
+| **KVM2** | Exit Node | nginx (SSL termination) | `self-hosted, vps, kvm2, backup` |
 | **Cloudflare** | Edge | DNS, CI Worker | — |
 
 ## Route: Public → Services
 
-```
+```text
 Internet → Cloudflare DNS → KVM2 (nginx/SSL) → KVM4-1 (API) or KVM4-2 (data)
 ```
 
 ## Route: CI/CD
 
-```
+```text
 GitHub event → CF Worker (analyzes files) → ai-lab (GPU) / vps (Docker) / ubuntu-latest (light)
 ```
 
-## Agent Teams (11 teams, 61 agents)
+## Agent Teams (11 teams, 62 agents)
 
 | Team | Node Affinity | CI Runner | Count |
 |------|--------------|-----------|-------|
@@ -60,7 +60,7 @@ GitHub event → CF Worker (analyzes files) → ai-lab (GPU) / vps (Docker) / ub
 ## Key Files
 
 - `pmoves/configs/agent-teams.yaml` — Team definitions
-- `pmoves/config/agent_registry.yaml` — Full 61-agent registry
+- `pmoves/config/agent_registry.yaml` — Full agent registry
 - `deploy/cloudflare/worker.js` — CI routing logic
 - `deploy/scripts/deploy-vps.sh` — VPS deployment
 - `pmoves/docs/operations/WORKFLOW_RUNNER_MAP.md` — All 19 workflows mapped

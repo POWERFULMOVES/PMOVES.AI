@@ -318,8 +318,8 @@ agents:
       attribution_gated: false
     topology:
       node_affinity: [kvm4-1, z890]
-      team: infra
-      ci_runner: self-hosted
+      team: evolution
+      ci_runner: ai-lab
       compose_profile: null
     description: "Centralized LLM gateway for all model providers"
 
@@ -1035,7 +1035,7 @@ agents:
     class: utility
     primary_type: ui
     secondary_type: data
-    port: 3000
+    port: 3002
     health: "/api/health"
     layers: [L0]
     evolution_stage: base
@@ -1726,6 +1726,6 @@ agents:
     topology:
       node_affinity: [z890]
       team: sandbox
-      ci_runner: self-hosted
+      ci_runner: ubuntu-latest
       compose_profile: null
     description: "MCP bridge for E2B sandboxed code execution"

@@ -10,7 +10,7 @@
 
 | Node | LAN IP | Tailscale Hostname | Public IP | Role | Runner Labels | vCPU / RAM | Cost |
 |------|--------|--------------------|-----------|------|---------------|------------|------|
-| Z890 (Windows 11) | 192.168.1.92 / .94 | 100.113.38.37 | — | Dev, GPU (RTX 3090 Ti) | `ai-lab, gpu, cuda` | 32C / 128GB | electricity |
+| Z890 (Windows 11) | 192.168.1.92 / .94 | 100.113.38.37 | — | Dev, GPU (RTX 3090 Ti) | `self-hosted, ai-lab, gpu, cuda` | 32C / 128GB | electricity |
 | 5090 PC | 192.168.1.65 / .66 | (pending onboarding) | — | Primary GPU (RTX 5090) | (future: `ai-lab`) | TBD | electricity |
 | KVM4-1 | — | pmoves-kvm4-1 | Hostinger (TBD) | API Gateway | `self-hosted, vps, kvm4, production` | 8C / 16GB | $10/mo |
 | KVM4-2 | — | pmoves-kvm4-2 | Hostinger (TBD) | Data / Storage | `self-hosted, vps, kvm4, production` | 8C / 16GB | $10/mo |
@@ -48,7 +48,7 @@ Services deployed via `docker-compose.vps.override.yml`:
 | Qdrant | 6333 | `/healthz` | — |
 | Neo4j | 7474 (HTTP) / 7687 (Bolt) | `/db/neo4j/health` | — |
 | Meilisearch | 7700 | `/health` | — |
-| NATS | 4222 / 9222 (WS) | `http://:8222/varz` | — |
+| NATS | 4222 / 9222 (WS) | `http://nats:8222/varz` | — |
 | Prometheus | 9090 | `/-/healthy` | monitoring |
 | Grafana | 3002 | `/api/health` | monitoring |
 | Loki | 3100 | `/ready` | monitoring |
@@ -230,6 +230,6 @@ Key secrets:
 - `deploy/scripts/deploy-vps.sh` — VPS deployment script
 - `pmoves/docker-compose.vps.override.yml` — VPS compose overrides
 - `pmoves/docs/operations/PORT_REGISTRY.md` — Port allocations
-- `pmoves/config/agent_registry.yaml` — 61-agent registry
+- `pmoves/config/agent_registry.yaml` — Full agent registry
 - `pmoves/configs/agent-teams.yaml` — Agent team assignments
 - `.claude/context/runner-topology.md` — Condensed topology for agent context

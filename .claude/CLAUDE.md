@@ -510,9 +510,9 @@ Based on CodeRabbit learnings (see `.claude/learnings/ui-error-handling-review-2
 
 **Nodes:** Z890 (dev/GPU), 5090 (primary GPU, pending), KVM4-1 (API gateway), KVM4-2 (data/storage), KVM2 (exit proxy), Cloudflare Edge (DNS/Worker).
 
-**Agent Teams (11 teams, 61 agents):** `pmoves/configs/agent-teams.yaml` — orchestration, research, media, data, ui, automation, evolution, infra, sandbox, life, external.
+**Agent Teams (11 teams, 62 agents):** `pmoves/configs/agent-teams.yaml` — orchestration, research, media, data, ui, automation, evolution, infra, sandbox, life, external.
 
-**CI Runners:** AI Lab (GPU), cloudstartup (staging), kvm4 (production), kvm2 (backup), ubuntu-latest (lightweight). Routing via Cloudflare Worker (`deploy/cloudflare/worker.js`).
+**CI Runners:** `self-hosted, ai-lab` (GPU), `self-hosted, cloudstartup` (staging), `self-hosted, kvm4` (production), `self-hosted, kvm2` (backup), `ubuntu-latest` (lightweight). Routing via Cloudflare Worker (`deploy/cloudflare/worker.js`).
 
 **DNS:** `pmoves.ai` zone (pending Cloudflare migration). Subdomains: api, agent, rag, tts, n8n, grafana, search, nats, minio, headscale, ci.
 
