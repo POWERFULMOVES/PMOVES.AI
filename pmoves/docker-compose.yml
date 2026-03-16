@@ -2476,6 +2476,9 @@ services:
     environment:
     - OLLAMA_HOST=0.0.0.0:11434
     - OLLAMA_MODELS=/root/.ollama/models
+    # Override Windows SSL cert paths leaked via env inheritance (x509 failures)
+    - SSL_CERT_FILE=
+    - SSL_CERT_DIR=
     - DOCKED_MODE=${DOCKED_MODE:-true}
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
