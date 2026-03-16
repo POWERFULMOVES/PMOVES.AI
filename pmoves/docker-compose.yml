@@ -1985,16 +1985,18 @@ services:
     # LLM routing: use TensorZero gateway as OpenAI-compatible provider
     # Agent Zero's get_default_value() reads A0_SET_* from env (dotenv priority)
     - A0_SET_chat_model_provider=openai
-    - A0_SET_chat_model_name=agent_zero
+    # Chat/util/browser wrappers ADD openai/ prefix internally — do NOT double it
+    - A0_SET_chat_model_name=tensorzero::function_name::agent_zero
     - A0_SET_chat_model_api_base=http://tensorzero-gateway:3000/openai/v1
     - A0_SET_util_model_provider=openai
-    - A0_SET_util_model_name=langextract
+    - A0_SET_util_model_name=tensorzero::function_name::agent_zero
     - A0_SET_util_model_api_base=http://tensorzero-gateway:3000/openai/v1
     - A0_SET_embed_model_provider=openai
-    - A0_SET_embed_model_name=gemma_embed_local
+    # Embed wrapper does NOT add openai/ prefix — must include it here
+    - A0_SET_embed_model_name=openai/tensorzero::embedding_model_name::gemma_embed_local
     - A0_SET_embed_model_api_base=http://tensorzero-gateway:3000/openai/v1
     - A0_SET_browser_model_provider=openai
-    - A0_SET_browser_model_name=agent_zero
+    - A0_SET_browser_model_name=tensorzero::function_name::agent_zero
     - A0_SET_browser_model_api_base=http://tensorzero-gateway:3000/openai/v1
     depends_on:
       nats:
