@@ -7,6 +7,8 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { logError } from '@/lib/errorUtils';
+import { ErrorIds } from '@/lib/constants/errorIds';
 import { SystemStatsBar } from './SystemStatsBar';
 import { TierOverviewGrid } from '../services/TierOverview';
 import { useServiceHealth } from '@/lib/useServiceHealth';
@@ -58,7 +60,7 @@ export function SystemHubSection() {
           setHubData(data);
         }
       } catch (err) {
-        console.error('Failed to fetch hub data:', err);
+        logError('Failed to fetch hub data', err, 'error', { errorId: ErrorIds.SYSTEM_HUB_FETCH_FAILED, component: 'SystemHubSection' });
       } finally {
         setIsLoading(false);
       }
@@ -78,7 +80,7 @@ export function SystemHubSection() {
         setHubData(data);
       }
     } catch (err) {
-      console.error('Failed to refresh hub data:', err);
+      logError('Failed to refresh hub data', err, 'error', { errorId: ErrorIds.SYSTEM_HUB_FETCH_FAILED, component: 'SystemHubSection' });
     }
   };
 

@@ -9,6 +9,7 @@ const customJestConfig = {
   testEnvironment: 'jsdom',
   testMatch: [
     '<rootDir>/__tests__/**/*.test.(ts|tsx)',
+    '<rootDir>/lib/__tests__/**/*.test.(ts|tsx)',
     '<rootDir>/lib/api/**/*.test.(ts|tsx)',
     '<rootDir>/components/**/*.test.(ts|tsx)',
   ],

@@ -7,10 +7,10 @@
 | Field | Value |
 |-------|-------|
 | **Service** | Wealth (Firefly III) |
-| **Port** | None assigned |
+| **Port** | 8080 (`FIREFLY_PORT`, compose: `docker-compose.firefly.yml`) |
 | **Health** | **MISSING** — needs `/healthz` endpoint |
 | **Submodule** | `PMOVES-Wealth` |
-| **Docker Profile** | TBD |
+| **Docker Profile** | `firefly` |
 | **Tier** | ui |
 | **Class** | Specialized |
 | **Evolution** | Base |
@@ -160,7 +160,7 @@ CGP packet with real-world grounding
 - ~~Docker hardening incomplete~~ → Done (cap_drop, security_opt, tmpfs, resources)
 - No CHIT integration
 - Auth bridge between Firefly III OAuth and PMOVES JWT needed
-- ~~Port assignment needed~~ → Port 8075 host / 8080 container
+- ~~Port assignment needed~~ → Port 8075 host / 8080 container, profile `firefly`
 - ToKenism correlation pipeline not implemented
 
 <!-- GRAPHITI_MARK: CLAUDE-OPUS::TAC-TOPOLOGY-AUDIT::2026-02-20 -->

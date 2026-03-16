@@ -6,12 +6,12 @@
 'use client';
 
 import { useState } from 'react';
-import type { TensorZeroConfig, DashboardTab } from './types';
+import type { TensorZeroConfig, DashboardTab, VariantTemplate } from './types';
 import { smartDefaultsTemplates, variantTemplates } from './smart-defaults';
 
 interface SmartDefaultsSelectorProps {
   onSelectTemplate: (config: TensorZeroConfig) => void;
-  onApplyVariantTemplate: (template: any) => void;
+  onApplyVariantTemplate: (template: VariantTemplate) => void;
   className?: string;
 }
 

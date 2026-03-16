@@ -1,3 +1,15 @@
+/**
+ * Integration test: Videos Realtime subscription via Supabase.
+ *
+ * Requires live infrastructure:
+ *   - SUPABASE_REST_URL pointing to a running Supabase instance
+ *   - SUPABASE_SERVICE_ROLE_KEY with insert permissions on `videos` table
+ *   - The PMOVES UI dev server running (NEXT_PUBLIC_BASE_URL or localhost:3001)
+ *
+ * This test was moved from tests/videos-realtime.spec.ts to e2e/ so that
+ * Playwright discovers it (playwright.config.ts uses testDir: './e2e').
+ */
+
 import { test, expect } from '@playwright/test';
 
 // Helper: insert a dummy video row via Supabase REST using env
@@ -42,4 +54,3 @@ test.describe('Videos Realtime', () => {
     await expect(page.getByText(title)).toBeVisible({ timeout: 10_000 });
   });
 });
-
