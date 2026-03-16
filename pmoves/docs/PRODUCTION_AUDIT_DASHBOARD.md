@@ -3,15 +3,24 @@
 > **Single source of truth** for PMOVES.AI production readiness.
 > Supersedes all individual audit documents accumulated Feb 7 -- Feb 18, 2026.
 
-**Last Updated:** 2026-03-15 (Z890 security remediation + pmovesui auth sweep)
-**Branch:** `main`
-**Commit:** `a9ce4931` (Z890 security remediation — 4 fixes squash-merged via PR #950)
+**Last Updated:** 2026-03-15 (Platform Activation Session 2 — GPU serving, TAC trees, branded defaults)
+**Branch:** `fix/platform-activation-soundcloud-gpu`
+**Commit:** pending (session 2 work)
 **Consolidated From:** 27 audit documents
 **Evidence:** live runbook execution on 2026-03-05 (`make ghcr-prepublish-inrepo-build`, strict local Trivy sweep logs under `pmoves/docs/logs/ghcr-local-prepublish/`)
 
 ---
 
 ## Latest Changes (Mar 15, 2026)
+
+### Platform Activation Session 2 (Mar 15, 2026)
+
+- **GPU Make targets added** — `make up-ollama`, `up-gpu-orchestrator`, `up-vllm`, `model-pull`, `gpu-status` in `pmoves/mk/infra.mk`
+- **Branded identity defaults** — `OPERATOR_EMAIL` cascade in `brand_defaults.py` propagates to Supabase, n8n, Wger
+- **TAC trees: 8 new** (total: 12) — tensorzero-gpu, soundcloud-ingest, security-posture, botz-mcp, archon-agents, hirag-retrieval, comfyui-pipeline, observability
+- **TOPOLOGY.md updated** — POWERFULMOVES node status: ONLINE (GPU passthrough + toolkit 1.19.0)
+- **agent-teams.yaml** — Node affinity `5090` → `powerfulmoves` across all teams
+- **Bootstrap registry** — Added `identity` service group (OPERATOR_EMAIL, SUPPORT_EMAIL, BRAND_NAME)
 
 ### Z890 Security Remediation + pmovesui Auth Sweep (Mar 15, 2026)
 

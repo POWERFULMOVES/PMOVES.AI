@@ -2,7 +2,7 @@
 # Full agent roster grouped into functional teams with node affinity and runner assignments.
 #
 # Query: python -c "import yaml; t=yaml.safe_load(open('pmoves/configs/agent-teams.yaml')); [print(f'{k}: {len(v[\"agents\"])} agents') for k,v in t['teams'].items()]"
-# Last updated: 2026-03-14
+# Last updated: 2026-03-15
 
 version: "1.0.0"
 
@@ -10,7 +10,7 @@ teams:
   orchestration:
     name: "Orchestration"
     description: "Core agent coordination, MCP routing, task delegation"
-    node_affinity: [kvm4-1, z890, 5090]
+    node_affinity: [kvm4-1, z890, powerfulmoves]
     ci_runner: ai-lab
     compose_profiles: [agents, tier-agent]
     agents:
@@ -41,7 +41,7 @@ teams:
   media:
     name: "Media & Voice"
     description: "Audio/video processing, TTS, transcription, content creation"
-    node_affinity: [5090, z890]
+    node_affinity: [powerfulmoves, z890]
     ci_runner: ai-lab
     compose_profiles: [gpu, yt]
     agents:
@@ -77,7 +77,7 @@ teams:
   ui:
     name: "User Interfaces"
     description: "Frontend surfaces, visualization, remote access"
-    node_affinity: [z890, 5090]
+    node_affinity: [z890, powerfulmoves]
     ci_runner: ubuntu-latest
     compose_profiles: []
     agents:
@@ -103,7 +103,7 @@ teams:
   evolution:
     name: "Evolution & CHIT"
     description: "Evolutionary optimization, CHIT encoding, swarm attribution"
-    node_affinity: [5090, z890]
+    node_affinity: [powerfulmoves, z890]
     ci_runner: ai-lab
     compose_profiles: [gpu]
     agents:

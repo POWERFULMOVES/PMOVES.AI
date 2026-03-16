@@ -1,0 +1,355 @@
+# TAC Tree: TensorZero + GPU Model Serving
+# Audits model routing, Ollama/vLLM readiness, ClickHouse observability, VRAM budget
+
+name: "TensorZero & GPU Model Serving"
+version: "1.0.0"
+description: "Verify TensorZero gateway config, Ollama model inventory, GPU orchestrator health, ClickHouse metrics, and VRAM budget for RTX 5090"
+
+root:
+  id: tensorzero-gpu
+  task: "TensorZero & GPU model serving review"
+  context: "pmoves/tensorzero/config/ + pmoves/config/gpu-models.yaml + pmoves/services/gpu-orchestrator/"
+  agent_hint: codex
+  children:
+
+    # =========================================================================
+    # Phase 1: TensorZero Gateway Configuration
+    # =========================================================================
+    - id: tz.gateway
+      task: "TensorZero gateway configuration"
+      context: "pmoves/tensorzero/config/tensorzero.toml"
+      agent_hint: codex
+      children:
+        - id: tz.gateway.toml-exists
+          task: "tensorzero.toml config file exists"
+          action:
+            type: file_exists
+            target: "pmoves/tensorzero/config/tensorzero.toml"
+            expect: "TensorZero TOML config present"
+          context: "Mounted into gateway container"
+          agent_hint: codex
+
+        - id: tz.gateway.ollama-provider
+          task: "Ollama provider configured with internal URL"
+          action:
+            type: grep
+            target: "pmoves/tensorzero/config/tensorzero.toml"
+            pattern: "pmoves-ollama:11434"
+            expect: "Ollama URL uses container-internal address"
+          context: "Container-to-container: http://pmoves-ollama:11434"
+          agent_hint: codex
+
+        - id: tz.gateway.clickhouse-backend
+          task: "ClickHouse observability backend configured"
+          action:
+            type: grep
+            target: "pmoves/tensorzero/config/tensorzero.toml"
+            pattern: "clickhouse"
+            expect: "ClickHouse backend present in config"
+          context: "Required for request/response logging and metrics"
+          agent_hint: codex
+
+        - id: tz.gateway.chat-functions
+          task: "Chat functions defined for primary agents"
+          action:
+            type: grep
+            target: "pmoves/tensorzero/config/tensorzero.toml"
+            pattern: "\\[functions\\.agent_zero\\]"
+            expect: "agent_zero function defined"
+          context: "Core orchestration function with multiple model variants"
+          agent_hint: codex
+
+        - id: tz.gateway.embedding-functions
+          task: "Embedding functions defined"
+          action:
+            type: grep
+            target: "pmoves/tensorzero/config/tensorzero.toml"
+            pattern: "embedding"
+            expect: "At least one embedding model configured"
+          context: "Required for Hi-RAG and Extract Worker"
+          agent_hint: codex
+
+    # =========================================================================
+    # Phase 2: Ollama Model Inventory
+    # =========================================================================
+    - id: tz.ollama
+      task: "Ollama model readiness"
+      context: "Verify Ollama service and model availability"
+      agent_hint: codex
+      children:
+        - id: tz.ollama.compose-defined
+          task: "Ollama service defined in compose"
+          action:
+            type: grep
+            target: "pmoves/docker-compose.yml"
+            pattern: "pmoves-ollama:"
+            expect: "Ollama service present in main compose"
+          context: "Default profile (always running)"
+          agent_hint: codex
+
+        - id: tz.ollama.healthcheck
+          task: "Ollama healthcheck configured"
+          action:
+            type: grep
+            target: "pmoves/docker-compose.yml"
+            pattern: "ollama list"
+            expect: "Healthcheck runs 'ollama list' to verify service"
+          context: "Other services depend on Ollama health"
+          agent_hint: codex
+
+        - id: tz.ollama.model-registry
+          task: "GPU model registry YAML exists"
+          action:
+            type: file_exists
+            target: "pmoves/config/gpu-models.yaml"
+            expect: "Model registry with VRAM estimates"
+          context: "Defines models, VRAM budgets, hardware profiles"
+          agent_hint: codex
+
+        - id: tz.ollama.make-targets
+          task: "Make targets for model management"
+          action:
+            type: grep
+            target: "pmoves/mk/infra.mk"
+            pattern: "model-pull"
+            expect: "make model-pull target exists"
+          context: "Known road: make model-pull MODEL=qwen3:8b"
+          agent_hint: codex
+
+    # =========================================================================
+    # Phase 3: GPU Orchestrator
+    # =========================================================================
+    - id: tz.gpu-orch
+      task: "GPU orchestrator service"
+      context: "pmoves/services/gpu-orchestrator/"
+      agent_hint: codex
+      children:
+        - id: tz.gpu-orch.main-exists
+          task: "GPU orchestrator main.py exists"
+          action:
+            type: file_exists
+            target: "pmoves/services/gpu-orchestrator/main.py"
+            expect: "FastAPI service entry point present"
+          context: "Port 8200, VRAM tracking, model lifecycle"
+          agent_hint: codex
+
+        - id: tz.gpu-orch.compose-defined
+          task: "GPU orchestrator in compose (gpu profile)"
+          action:
+            type: grep
+            target: "pmoves/docker-compose.yml"
+            pattern: "gpu-orchestrator:"
+            expect: "Service defined under gpu profile"
+          context: "Requires --profile gpu to start"
+          agent_hint: codex
+
+        - id: tz.gpu-orch.nats-subjects
+          task: "NATS subjects for GPU events published"
+          action:
+            type: grep
+            target: "pmoves/services/gpu-orchestrator/main.py"
+            pattern: "mesh\\.gpu\\."
+            expect: "Publishes mesh.gpu.status.v1, mesh.gpu.model.loaded.v1"
+          context: "Event-driven model lifecycle coordination"
+          agent_hint: codex
+
+        - id: tz.gpu-orch.vram-thresholds
+          task: "VRAM thresholds configured"
+          action:
+            type: grep
+            target: "pmoves/config/gpu-models.yaml"
+            pattern: "vram_warning"
+            expect: "Warning (80%) and critical (95%) thresholds defined"
+          context: "Prevents OOM by evicting idle models"
+          agent_hint: codex
+
+    # =========================================================================
+    # Phase 4: ClickHouse Observability
+    # =========================================================================
+    - id: tz.clickhouse
+      task: "ClickHouse metrics storage"
+      context: "TensorZero ClickHouse container"
+      agent_hint: codex
+      children:
+        - id: tz.clickhouse.compose-defined
+          task: "ClickHouse service in compose"
+          action:
+            type: grep
+            target: "pmoves/docker-compose.yml"
+            pattern: "tensorzero-clickhouse:"
+            expect: "ClickHouse service defined"
+          context: "Stores request logs, token usage, latency data"
+          agent_hint: codex
+
+        - id: tz.clickhouse.ui
+          task: "TensorZero UI service defined"
+          action:
+            type: grep
+            target: "pmoves/docker-compose.yml"
+            pattern: "tensorzero-ui:"
+            expect: "Dashboard UI at port 4000"
+          context: "Request/response inspection, usage analytics"
+          agent_hint: codex
+
+    # =========================================================================
+    # Phase 5: VRAM Budget (RTX 5090)
+    # =========================================================================
+    - id: tz.vram
+      task: "VRAM budget planning for RTX 5090 (32GB)"
+      context: "Verify model combinations fit within 32GB"
+      agent_hint: codex
+      children:
+        - id: tz.vram.hardware-profile
+          task: "RTX 5090 hardware profile defined"
+          action:
+            type: grep
+            target: "pmoves/config/gpu-models.yaml"
+            pattern: "RTX 5090|rtx_5090"
+            expect: "32GB VRAM profile with usable capacity"
+          context: "30GB usable (2GB reserved for system)"
+          agent_hint: codex
+
+        - id: tz.vram.default-loadout
+          task: "Default model loadout fits budget"
+          action:
+            type: manual
+            expect: "qwen3:8b (6GB) + nomic-embed (1GB) + whisper-small (2GB) = 9GB < 30GB usable"
+          context: "Verify with: make gpu-status"
+          agent_hint: codex
+
+    # =========================================================================
+    # Phase 6: Model Name Alignment
+    # =========================================================================
+    - id: tz.model-alignment
+      task: "TensorZero model names match Ollama inventory"
+      context: "pmoves/tensorzero/config/tensorzero.toml model_name fields"
+      agent_hint: codex
+      children:
+        - id: tz.model-alignment.qwen3-8b
+          task: "qwen3:8b model referenced in TensorZero"
+          action:
+            type: grep
+            target: "pmoves/tensorzero/config/tensorzero.toml"
+            pattern: 'model_name = "qwen3:8b"'
+            expect: "qwen3:8b model referenced (primary local model)"
+          context: "Must match exactly what's pulled in Ollama"
+          agent_hint: codex
+
+        - id: tz.model-alignment.agent-zero-qwen3
+          task: "agent_zero function has qwen3:8b variant"
+          action:
+            type: grep
+            target: "pmoves/tensorzero/config/tensorzero.toml"
+            pattern: "local_qwen3_8b"
+            expect: "agent_zero function includes local_qwen3_8b variant"
+          context: "Primary local fallback for agent orchestration"
+          agent_hint: codex
+
+        - id: tz.model-alignment.embed-gemma
+          task: "embeddinggemma:300m model referenced"
+          action:
+            type: grep
+            target: "pmoves/tensorzero/config/tensorzero.toml"
+            pattern: 'model_name = "embeddinggemma:300m"'
+            expect: "Embedding model referenced in TensorZero"
+          context: "Default embedding model for gemma_embed_local"
+          agent_hint: codex
+
+        - id: tz.model-alignment.nomic-embed
+          task: "nomic-embed-text model referenced"
+          action:
+            type: grep
+            target: "pmoves/tensorzero/config/tensorzero.toml"
+            pattern: 'model_name = "nomic-embed-text"'
+            expect: "Nomic embedding model referenced"
+          context: "Used by Archon for local embeddings"
+          agent_hint: codex
+
+        - id: tz.model-alignment.ssl-env
+          task: "Ollama compose clears Windows SSL env vars"
+          action:
+            type: grep
+            target: "pmoves/docker-compose.yml"
+            pattern: "SSL_CERT_FILE="
+            expect: "SSL_CERT_FILE cleared in Ollama service"
+          context: "Prevents x509 TLS failures from Windows env leak"
+          agent_hint: codex
+
+        - id: tz.model-alignment.gpu-deploy
+          task: "Ollama compose has GPU deploy block"
+          action:
+            type: grep
+            target: "pmoves/docker-compose.yml"
+            pattern: "pmoves-ollama.*nvidia|ollama.*gpu"
+            expect: "GPU device reservation in Ollama service"
+          context: "Without deploy block: total_vram=0 B (CPU only)"
+          agent_hint: codex
+
+    # =========================================================================
+    # Phase 7: Model Catalog Freshness (March 2026 refresh)
+    # =========================================================================
+    - id: tz.freshness
+      task: "Model catalog freshness verification"
+      context: "Verify Qwen 3.5, LFM2, Nemotron-3-Super added across all configs"
+      agent_hint: codex
+      children:
+        - id: tz.freshness.qwen35-gpu
+          task: "Qwen 3.5 in GPU model registry"
+          action:
+            type: grep
+            target: "pmoves/config/gpu-models.yaml"
+            pattern: "qwen3\\.5"
+            expect: "Qwen 3.5 models present (0.8b through 35b)"
+          context: "gpu-models.yaml defines VRAM budgets"
+          agent_hint: codex
+
+        - id: tz.freshness.lfm2-gpu
+          task: "LFM2 in GPU model registry"
+          action:
+            type: grep
+            target: "pmoves/config/gpu-models.yaml"
+            pattern: "lfm2"
+            expect: "LFM2 24B-A2B model present"
+          context: "Liquid Foundation Model 2 — efficient hybrid MoE"
+          agent_hint: codex
+
+        - id: tz.freshness.hf-qwen35
+          task: "Qwen 3.5 in HF mappings"
+          action:
+            type: grep
+            target: "pmoves/config/hf_mappings.yaml"
+            pattern: "Qwen3\\.5"
+            expect: "Qwen 3.5 HF IDs mapped"
+          context: "HuggingFace model ID to local model mappings"
+          agent_hint: codex
+
+        - id: tz.freshness.no-stale
+          task: "No stale model names in TensorZero"
+          action:
+            type: grep
+            target: "pmoves/tensorzero/config/tensorzero.toml"
+            pattern: 'model_name = "(qwen:14b|mistral:7b-instruct|phi3:3.8b|functiongemma|gemma3:12b|nemotron-3-nano|qwen3-next)"'
+            invert: true
+            expect: "No stale model_name values in TOML"
+          context: "All stale refs replaced with Qwen 3.5/LFM2 (March 2026)"
+          agent_hint: codex
+
+        - id: tz.freshness.strengths-qwen35
+          task: "Qwen 3.5 in strength profiles"
+          action:
+            type: grep
+            target: "pmoves/config/model_strengths_seed.yaml"
+            pattern: "qwen3\\.5"
+            expect: "Strength profiles seeded for Qwen 3.5 family"
+          context: "Seeded profiles for routing decisions"
+          agent_hint: codex
+
+        - id: tz.freshness.tier-updated
+          task: "RTX 5090 tier uses Qwen 3.5"
+          action:
+            type: grep
+            target: "pmoves/config/models_by_tier.yaml"
+            pattern: "qwen3\\.5-27b"
+            expect: "ai_workstation_32gb orchestrator uses qwen3.5-27b"
+          context: "Hardware recommendations updated for new models"
+          agent_hint: codex
