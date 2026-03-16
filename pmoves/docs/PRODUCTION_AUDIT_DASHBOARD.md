@@ -3,15 +3,29 @@
 > **Single source of truth** for PMOVES.AI production readiness.
 > Supersedes all individual audit documents accumulated Feb 7 -- Feb 18, 2026.
 
-**Last Updated:** 2026-03-15 (Platform Activation Session 2 — GPU serving, TAC trees, branded defaults)
-**Branch:** `fix/platform-activation-soundcloud-gpu`
-**Commit:** pending (session 2 work)
+**Last Updated:** 2026-03-15 (TAC model infra verification — all 5 branches complete)
+**Branch:** `main`
+**Commit:** `e7737ad7` (all PRs merged: #950-958, #960)
 **Consolidated From:** 27 audit documents
 **Evidence:** live runbook execution on 2026-03-05 (`make ghcr-prepublish-inrepo-build`, strict local Trivy sweep logs under `pmoves/docs/logs/ghcr-local-prepublish/`)
 
 ---
 
 ## Latest Changes (Mar 15, 2026)
+
+### TAC Model Infra Verification + Agent Zero Bootstrap (Mar 15, 2026)
+
+- **TAC_MODEL_INFRA branches A-F: ALL COMPLETE** on main
+  - Registry seed: 1,511 lines, 30+ service-model mappings
+  - Persona seed: 8 personas, ON CONFLICT idempotent
+  - Resolution view: `persona_model_resolution` + `active_persona_summary`
+  - Readiness check: 652-line script, 10 checks, integrated into `verify-all`
+- **Agent Zero branded defaults** (PR #960):
+  - `MCP_CLIENT_SECRET` auto-generated (32-byte urlsafe)
+  - Model routing via TensorZero defaults (`A0_SET_*`)
+  - `AGENTZERO_JETSTREAM=true` for reliable NATS delivery
+- **PRs #955-958 merged** (all 4 from 5090 session):
+  - SoundCloud ingest + GPU fix, GPU Make targets, Qwen 3.5/LFM2 model refresh, 8 TAC trees
 
 ### Platform Activation Session 2 (Mar 15, 2026)
 
