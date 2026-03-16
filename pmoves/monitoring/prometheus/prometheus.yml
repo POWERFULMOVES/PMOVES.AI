@@ -147,6 +147,13 @@ scrape_configs:
     static_configs:
       - targets: ["github-runner-ctl:8104"]
 
+  # === External Integration metrics ===
+
+  - job_name: wger
+    static_configs:
+      - targets: ["wger:8000"]
+    metrics_path: /metrics
+
   # === Benchmark Lab metrics ===
 
   - job_name: llama-throughput-lab
