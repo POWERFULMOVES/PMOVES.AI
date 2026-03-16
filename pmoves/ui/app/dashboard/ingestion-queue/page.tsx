@@ -28,6 +28,8 @@ import {
 } from "../../../lib/realtimeClient";
 import { formatTimeAgo } from "@/lib/timeUtils";
 import { AlertBanner } from "@/components/common";
+import { logError } from '@/lib/errorUtils';
+import { ErrorIds } from '@/lib/constants/errorIds';
 
 type ConnectionStatus = 'connecting' | 'connected' | 'disconnected' | 'error';
 
@@ -163,7 +165,7 @@ export default function IngestionQueuePage() {
           client.removeChannel(channel);
         };
       } catch (error) {
-        console.error('Failed to setup ingestion queue:', error);
+        logError('Failed to setup ingestion queue', error, 'error', { errorId: ErrorIds.INGESTION_QUEUE_SETUP_FAILED, component: 'IngestionQueuePage' });
         if (isMounted) {
           setStatus('error');
         }

@@ -94,6 +94,37 @@ export const ErrorIds = {
   FLUTE_WEBSOCKET_FAILED: 'flute_websocket_failed',
   FLUTE_VOICE_LIST_FAILED: 'flute_voice_list_failed',
   FLUTE_HEALTH_CHECK_FAILED: 'flute_health_check_failed',
+
+  // === MONITOR ERRORS ===
+  MONITOR_STATS_FETCH_FAILED: 'monitor_stats_fetch_failed',
+
+  // === SERVICES HUB ERRORS ===
+  SERVICES_HUB_FETCH_FAILED: 'services_hub_fetch_failed',
+
+  // === GITHUB ERRORS ===
+  GITHUB_PRS_FETCH_FAILED: 'github_prs_fetch_failed',
+
+  // === AUTH ERRORS ===
+  AUTH_CALLBACK_EXCHANGE_FAILED: 'auth_callback_exchange_failed',
+
+  // === UPLOAD ERRORS ===
+  UPLOAD_PRESIGN_FAILED: 'upload_presign_failed',
+  UPLOAD_PERSIST_FAILED: 'upload_persist_failed',
+
+  // === FLUTE WEBSOCKET ERRORS ===
+  FLUTE_WS_CONNECT_FAILED: 'flute_ws_connect_failed',
+  FLUTE_WS_MESSAGE_FAILED: 'flute_ws_message_failed',
+
+  // === REALTIME ERRORS ===
+  REALTIME_PRESENCE_FAILED: 'realtime_presence_failed',
+  REALTIME_SUBSCRIPTION_FAILED: 'realtime_subscription_failed',
+
+  // === UI COMPONENT ERRORS ===
+  APPROVAL_RULES_FETCH_FAILED: 'approval_rules_fetch_failed',
+  GEOMETRIC_VIEW_LOAD_FAILED: 'geometric_view_load_failed',
+  INGESTION_QUEUE_SETUP_FAILED: 'ingestion_queue_setup_failed',
+  SYSTEM_HUB_FETCH_FAILED: 'system_hub_fetch_failed',
+  SEARCH_BAR_STORAGE_FAILED: 'search_bar_storage_failed',
 } as const;
 
 export type ErrorId = typeof ErrorIds[keyof typeof ErrorIds];

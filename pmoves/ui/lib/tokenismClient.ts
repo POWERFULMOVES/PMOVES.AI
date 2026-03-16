@@ -23,6 +23,9 @@
  * ```
  */
 
+import { logError } from './errorUtils';
+import { ErrorIds } from './constants/errorIds';
+
 export type ContractType =
   | 'GroToken'
   | 'FoodUSD'
@@ -266,7 +269,7 @@ export class TokenismClient {
       });
       return response.ok;
     } catch (error) {
-      console.warn('TokenismClient: Health check failed', error);
+      logError('TokenismClient: Health check failed', error, 'warning', { errorId: ErrorIds.TOKENISM_HEALTH_CHECK_FAILED, component: 'TokenismClient' });
       return false;
     }
   }
