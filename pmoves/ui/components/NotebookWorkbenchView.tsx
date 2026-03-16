@@ -13,6 +13,7 @@ import {
 } from "@/runtime/notebook";
 
 import DashboardNavigation, { type NavKey } from "@/components/DashboardNavigation";
+import { logForDebugging } from '@/lib/errorUtils';
 import { GraphitiStatusBadge } from "@/components/GraphitiStatusBadge";
 import type { Message } from "@/runtime/notebook/useSupabaseViews";
 
@@ -272,7 +273,7 @@ export function NotebookWorkbenchView({
                   availableMessages={availableMessages}
                   onSelectGroupMembers={handleSelectGroupMembers}
                 />
-                <SnapshotBookmarksPro threadId={threadId} onPick={(iso) => console.log("bookmark", iso)} />
+                <SnapshotBookmarksPro threadId={threadId} onPick={(iso) => logForDebugging("bookmark picked", undefined, { component: 'NotebookWorkbenchView', iso })} />
                 <SnapshotScrubber
                   threadId={threadId}
                   onChange={(iso) => {

@@ -8,6 +8,8 @@
 import { useState } from "react";
 import type { IngestionSourceType } from "@/lib/realtimeClient";
 import { ConfirmDialog } from "@/components/common";
+import { logError } from '@/lib/errorUtils';
+import { ErrorIds } from '@/lib/constants/errorIds';
 
 // Tailwind JIT static class lookup objects
 const MODAL_OVERLAY_CLASSES = "fixed inset-0 bg-black/50 flex items-center justify-center z-50";
@@ -211,9 +213,8 @@ export function ApprovalRulesConfig({
         const result = await onTestRule(formData.conditions);
         setTestResult(result);
       } catch (error) {
-        console.error('Failed to test rule:', error);
+        logError('Failed to test rule', error, 'error', { errorId: ErrorIds.APPROVAL_RULES_FETCH_FAILED, component: 'ApprovalRulesConfig' });
         setTestResult(null);
-        // Consider adding user-facing error state
       }
     }
   };
@@ -225,8 +226,7 @@ export function ApprovalRulesConfig({
         setExecutionLog(log);
         setShowLog(true);
       } catch (error) {
-        console.error('Failed to fetch log:', error);
-        // Consider adding user-facing error state
+        logError('Failed to fetch log', error, 'error', { errorId: ErrorIds.APPROVAL_RULES_FETCH_FAILED, component: 'ApprovalRulesConfig' });
       }
     }
   };

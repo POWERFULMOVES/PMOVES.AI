@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import type { Database } from "@/lib/database.types";
+import { logForDebugging } from '@/lib/errorUtils';
 
 export type ViewGroup = { id: string; thread_id: string; name: string; constraints?: any; created_at: string };
 export type ViewGroupAction = {
@@ -67,6 +68,7 @@ export function useGroups(threadId: string): UseGroupsResult {
         .eq("thread_id", threadId)
         .order("created_at", { ascending: true });
       if (groupError) {
+        logForDebugging('Failed to fetch view groups', groupError, { component: 'useGroups' });
         if (alive) setError(groupError.message);
         return;
       }
@@ -76,21 +78,27 @@ export function useGroups(threadId: string): UseGroupsResult {
       const groupIds = mappedGroups.map((group) => group.id);
 
       if (groupIds.length) {
-        const { data: memberData } = await supabase
+        const { data: memberData, error: memberError } = await supabase
           .from("view_group_members")
           .select("group_id,message_id")
           .in("group_id", groupIds);
+        if (memberError) {
+          logForDebugging('Failed to fetch group members', memberError, { component: 'useGroups' });
+        }
         const memberMap: Record<string, string[]> = {};
         (memberData as ViewGroupMemberRow[] | null)?.forEach((row) => {
           (memberMap[row.group_id] ||= []).push(row.message_id);
         });
         setMembers(memberMap);
 
-        const { data: actionData } = await supabase
+        const { data: actionData, error: actionError } = await supabase
           .from("view_group_actions")
           .select("*")
           .in("group_id", groupIds)
           .order("created_at", { ascending: true });
+        if (actionError) {
+          logForDebugging('Failed to fetch group actions', actionError, { component: 'useGroups' });
+        }
 
         const actionMap: Record<string, ViewGroupAction[]> = {};
         (actionData as ViewGroupActionRow[] | null)?.forEach((action) => {
