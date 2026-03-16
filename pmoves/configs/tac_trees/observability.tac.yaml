@@ -1,0 +1,190 @@
+# TAC Tree: Observability Stack
+# Audits Prometheus, Grafana, Loki, TensorZero ClickHouse, service metrics
+
+name: "Observability Stack"
+version: "1.0.0"
+description: "Verify observability infrastructure: Prometheus scraping, Grafana dashboards, Loki log aggregation, TensorZero ClickHouse metrics, and per-service /metrics endpoints"
+
+root:
+  id: observability
+  task: "Observability stack review"
+  context: "pmoves/docker-compose.yml + monitoring profile"
+  agent_hint: codex
+  children:
+
+    # =========================================================================
+    # Phase 1: Prometheus
+    # =========================================================================
+    - id: obs.prometheus
+      task: "Prometheus metrics collection"
+      context: "pmoves/docker-compose.yml (monitoring profile)"
+      agent_hint: codex
+      children:
+        - id: obs.prometheus.compose-defined
+          task: "Prometheus service defined"
+          action:
+            type: grep
+            target: "pmoves/docker-compose.yml"
+            pattern: "prometheus:"
+            expect: "Service on port 9090"
+          context: "Scrapes /metrics from all services"
+          agent_hint: codex
+
+        - id: obs.prometheus.config-exists
+          task: "Prometheus config file exists"
+          action:
+            type: file_exists
+            target: "pmoves/config/prometheus/prometheus.yml"
+            expect: "Prometheus scrape configuration present"
+          context: "Defines scrape targets and intervals"
+          agent_hint: codex
+
+        - id: obs.prometheus.healthcheck
+          task: "Prometheus healthcheck"
+          action:
+            type: grep
+            target: "pmoves/docker-compose.yml"
+            pattern: "prometheus.*healthy|9090.*health"
+            expect: "Health endpoint at /-/healthy"
+          context: "Monitoring of the monitoring system itself"
+          agent_hint: codex
+
+    # =========================================================================
+    # Phase 2: Grafana
+    # =========================================================================
+    - id: obs.grafana
+      task: "Grafana visualization"
+      context: "pmoves/docker-compose.yml"
+      agent_hint: codex
+      children:
+        - id: obs.grafana.compose-defined
+          task: "Grafana service defined"
+          action:
+            type: grep
+            target: "pmoves/docker-compose.yml"
+            pattern: "grafana:"
+            expect: "Service on port 3002"
+          context: "Dashboard visualization"
+          agent_hint: codex
+
+        - id: obs.grafana.datasources
+          task: "Datasources configured (Prometheus + Loki)"
+          action:
+            type: file_exists
+            target: "pmoves/config/grafana/provisioning/datasources"
+            expect: "Datasource provisioning directory present"
+          context: "Auto-provisions Prometheus and Loki connections"
+          agent_hint: codex
+
+        - id: obs.grafana.dashboards
+          task: "Pre-built dashboards provisioned"
+          action:
+            type: file_exists
+            target: "pmoves/config/grafana/provisioning/dashboards"
+            expect: "Dashboard provisioning directory present"
+          context: "Services Overview dashboard pre-configured"
+          agent_hint: codex
+
+    # =========================================================================
+    # Phase 3: Loki + Promtail
+    # =========================================================================
+    - id: obs.loki
+      task: "Loki log aggregation"
+      context: "pmoves/docker-compose.yml"
+      agent_hint: codex
+      children:
+        - id: obs.loki.compose-defined
+          task: "Loki service defined"
+          action:
+            type: grep
+            target: "pmoves/docker-compose.yml"
+            pattern: "loki:"
+            expect: "Service on port 3100"
+          context: "Centralized log aggregation"
+          agent_hint: codex
+
+        - id: obs.loki.promtail
+          task: "Promtail log shipper defined"
+          action:
+            type: grep
+            target: "pmoves/docker-compose.yml"
+            pattern: "promtail:"
+            expect: "Promtail service for Docker log shipping"
+          context: "Ships container logs to Loki"
+          agent_hint: codex
+
+        - id: obs.loki.labels
+          task: "Services configured with Loki logging labels"
+          action:
+            type: grep
+            target: "pmoves/docker-compose.yml"
+            pattern: "loki.*label|logging.*loki"
+            expect: "Docker logging driver or labels for Loki"
+          context: "All services should have Loki-compatible labels"
+          agent_hint: codex
+
+    # =========================================================================
+    # Phase 4: TensorZero ClickHouse
+    # =========================================================================
+    - id: obs.tensorzero
+      task: "TensorZero ClickHouse metrics"
+      context: "pmoves/docker-compose.yml"
+      agent_hint: codex
+      children:
+        - id: obs.tensorzero.clickhouse
+          task: "ClickHouse service defined"
+          action:
+            type: grep
+            target: "pmoves/docker-compose.yml"
+            pattern: "tensorzero-clickhouse:"
+            expect: "Service on port 8123"
+          context: "Stores LLM request/response logs and token metrics"
+          agent_hint: codex
+
+        - id: obs.tensorzero.ui
+          task: "TensorZero UI dashboard"
+          action:
+            type: grep
+            target: "pmoves/docker-compose.yml"
+            pattern: "tensorzero-ui:"
+            expect: "Dashboard at port 4000"
+          context: "Request inspection, usage analytics, model comparison"
+          agent_hint: codex
+
+    # =========================================================================
+    # Phase 5: Service Metrics Endpoints
+    # =========================================================================
+    - id: obs.metrics
+      task: "Per-service /metrics endpoints"
+      context: "Services expose Prometheus-compatible metrics"
+      agent_hint: codex
+      children:
+        - id: obs.metrics.agent-zero
+          task: "Agent Zero exposes /metrics"
+          action:
+            type: grep
+            target: "pmoves/docker-compose.yml"
+            pattern: "agent-zero.*metrics|8080.*metrics"
+            expect: "Metrics endpoint configured"
+          context: "Port 8080 /metrics"
+          agent_hint: codex
+
+        - id: obs.metrics.hirag
+          task: "Hi-RAG v2 exposes /metrics"
+          action:
+            type: grep
+            target: "pmoves/docker-compose.yml"
+            pattern: "hirag.*metrics|8086.*metrics"
+            expect: "Metrics endpoint configured"
+          context: "Query latency, result counts, reranking stats"
+          agent_hint: codex
+
+        - id: obs.metrics.supaserch
+          task: "SupaSerch exposes /metrics"
+          action:
+            type: grep
+            target: "pmoves/docker-compose.yml"
+            pattern: "supaserch.*metrics|8099.*metrics"
+            expect: "Metrics endpoint configured"
+          context: "GET http://localhost:8099/metrics"
+          agent_hint: codex

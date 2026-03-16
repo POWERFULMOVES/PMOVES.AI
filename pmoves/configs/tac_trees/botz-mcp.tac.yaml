@@ -1,0 +1,153 @@
+# TAC Tree: BoTZ MCP Framework
+# Audits BoTZ skills marketplace, MCP tool registry, gateway auth, skill pairings
+
+name: "BoTZ MCP Framework"
+version: "1.0.0"
+description: "Verify BoTZ skills marketplace configuration, MCP tool registry, gateway authentication, and skill pairing wiring"
+
+root:
+  id: botz-mcp
+  task: "BoTZ MCP framework review"
+  context: "PMOVES-BoTZ/ submodule + pmoves/configs/skill-pairings.yaml"
+  agent_hint: codex
+  children:
+
+    # =========================================================================
+    # Phase 1: BoTZ Submodule & Gateway
+    # =========================================================================
+    - id: botz.gateway
+      task: "BoTZ gateway service"
+      context: "PMOVES-BoTZ/ submodule, pmoves/docker-compose.yml"
+      agent_hint: codex
+      children:
+        - id: botz.gateway.submodule-exists
+          task: "BoTZ submodule initialized"
+          action:
+            type: file_exists
+            target: "PMOVES-BoTZ/package.json"
+            expect: "BoTZ submodule present and initialized"
+          context: "Skills marketplace framework"
+          agent_hint: codex
+
+        - id: botz.gateway.compose-defined
+          task: "BoTZ gateway in compose"
+          action:
+            type: grep
+            target: "pmoves/docker-compose.yml"
+            pattern: "botz.*gateway|pmoves-botz"
+            expect: "BoTZ gateway service defined"
+          context: "Port 8054, work item distribution"
+          agent_hint: codex
+
+        - id: botz.gateway.healthcheck
+          task: "BoTZ healthcheck configured"
+          action:
+            type: grep
+            target: "pmoves/docker-compose.yml"
+            pattern: "botz.*health"
+            expect: "Healthcheck defined for BoTZ service"
+          context: "Required for service_healthy dependency"
+          agent_hint: codex
+
+    # =========================================================================
+    # Phase 2: MCP Tool Registry
+    # =========================================================================
+    - id: botz.mcp
+      task: "MCP tool registration"
+      context: "BoTZ MCP bridge and tool catalog"
+      agent_hint: codex
+      children:
+        - id: botz.mcp.bridge-exists
+          task: "MCP bridge module exists"
+          action:
+            type: file_exists
+            target: "PMOVES-BoTZ/features/mcp_bridge"
+            expect: "MCP bridge directory present"
+          context: "Bridges BoTZ skills to MCP protocol"
+          agent_hint: codex
+
+        - id: botz.mcp.auth-jwt
+          task: "JWT authentication in MCP bridge"
+          action:
+            type: grep
+            target: "PMOVES-BoTZ/features/mcp_bridge/"
+            pattern: "JWT_SECRET|jose|jwt"
+            expect: "JWT auth implemented in MCP bridge"
+          context: "P1 finding: HAS_JOSE fail-open path exists"
+          agent_hint: codex
+
+        - id: botz.mcp.auth-no-failopen
+          task: "No fail-open auth bypass"
+          action:
+            type: grep
+            target: "PMOVES-BoTZ/features/mcp_bridge/"
+            pattern: "return True.*HAS_JOSE|if not.*JWT.*return True"
+            invert: true
+            expect: "No fail-open authentication bypass"
+          context: "P1 from Phase C audit: JWT fail-open still present"
+          agent_hint: codex
+
+    # =========================================================================
+    # Phase 3: Skill Pairings
+    # =========================================================================
+    - id: botz.pairings
+      task: "Skill pairing configuration"
+      context: "pmoves/configs/skill-pairings.yaml"
+      agent_hint: codex
+      children:
+        - id: botz.pairings.file-exists
+          task: "Skill pairings YAML exists"
+          action:
+            type: file_exists
+            target: "pmoves/configs/skill-pairings.yaml"
+            expect: "Skill pairings configuration present"
+          context: "7 defined pipelines with dependency graphs"
+          agent_hint: codex
+
+        - id: botz.pairings.model-benchmark
+          task: "model-benchmark-viz pairing defined"
+          action:
+            type: grep
+            target: "pmoves/configs/skill-pairings.yaml"
+            pattern: "model-benchmark-viz"
+            expect: "Model benchmark visualization pipeline"
+          context: "HF Model -> Benchmark -> Chart -> Render"
+          agent_hint: codex
+
+        - id: botz.pairings.voice-synthesis
+          task: "voice-synthesis pairing defined"
+          action:
+            type: grep
+            target: "pmoves/configs/skill-pairings.yaml"
+            pattern: "voice-synthesis"
+            expect: "Voice synthesis pipeline"
+          context: "Text -> Prosodic TTS -> Audio"
+          agent_hint: codex
+
+    # =========================================================================
+    # Phase 4: TensorZero Function Definitions
+    # =========================================================================
+    - id: botz.tensorzero
+      task: "BoTZ functions in TensorZero"
+      context: "pmoves/tensorzero/config/tensorzero.toml"
+      agent_hint: codex
+      children:
+        - id: botz.tensorzero.coding
+          task: "Coding function defined"
+          action:
+            type: grep
+            target: "pmoves/tensorzero/config/tensorzero.toml"
+            pattern: "\\[functions\\.coding\\]"
+            expect: "BoTZ coding function with qwen3-coder variant"
+          context: "Added 2025-12-21 for code generation"
+          agent_hint: codex
+
+        - id: botz.tensorzero.orchestrator
+          task: "Orchestrator function defined"
+          action:
+            type: grep
+            target: "pmoves/tensorzero/config/tensorzero.toml"
+            pattern: "\\[functions\\.orchestrator\\]"
+            expect: "BoTZ orchestrator function"
+          context: "OpenAI primary, qwen3-next local fallback"
+          agent_hint: codex
