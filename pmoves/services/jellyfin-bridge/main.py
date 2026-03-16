@@ -822,23 +822,50 @@ def jellyfin_theme_packs():
 
 
 @app.get("/jellyfin/theme/preview/{agent_key}")
-def jellyfin_theme_preview(agent_key: str, theme_pack: Optional[str] = None):
+def jellyfin_theme_preview(
+    agent_key: str,
+    theme_pack: Optional[str] = None,
+    target: str = Query(default="jellyfin", description="CSS target: jellyfin, grafana, dashboard, vars-only"),
+):
     """Preview TAC tree CSS for an agent without applying it."""
-    css = _tac.generate_tac_css(theme_pack=theme_pack, agent_key=agent_key)
+    css = _tac.generate_tac_css(theme_pack=theme_pack, agent_key=agent_key, target=target)
     mapping = _tac.resolve_agent_mapping(agent_key)
-    return {"ok": True, "agent": agent_key, "css": css, "mapping": mapping}
+    palette = _tac.resolve_palette(agent_key, theme_pack)
+    return {"ok": True, "agent": agent_key, "target": target, "css": css, "palette": palette, "mapping": mapping}
+
+
+@app.get("/jellyfin/theme/manifest/{agent_key}")
+def jellyfin_theme_manifest(agent_key: str, theme_pack: Optional[str] = None):
+    """Return JSON color manifest for programmatic consumption (non-CSS targets)."""
+    manifest = _tac.generate_color_manifest(agent_key=agent_key, theme_pack=theme_pack)
+    return {"ok": True, "manifest": manifest}
+
+
+@app.get("/jellyfin/theme/card/{agent_key}")
+def jellyfin_theme_card(agent_key: str):
+    """Return agent card theming data for the agent-card-gen FlOO$ pairing."""
+    card = _tac.generate_agent_card_theme(agent_key)
+    return {"ok": True, "card": card}
+
+
+@app.get("/jellyfin/theme/agents/{theme_pack}")
+def jellyfin_theme_agents_for_pack(theme_pack: str):
+    """List all agents using characters from a given theme pack."""
+    agents = _tac.list_agents_for_pack(theme_pack)
+    return {"ok": True, "theme_pack": theme_pack, "agents": agents, "count": len(agents)}
 
 
 @app.post("/jellyfin/theme/apply")
 def jellyfin_theme_apply(body: Dict[str, Any] = Body(...)):
     """Generate TAC CSS and push it to Jellyfin's branding configuration.
 
-    Body: {"theme_pack": "transformers-1986", "agent": "jellyfin-ai"}
+    Body: {"theme_pack": "transformers-1986", "agent": "jellyfin-ai", "target": "jellyfin"}
     """
     agent_key = body.get("agent", "jellyfin-ai")
     theme_pack = body.get("theme_pack")
+    target = body.get("target", "jellyfin")
 
-    css = _tac.generate_tac_css(theme_pack=theme_pack, agent_key=agent_key)
+    css = _tac.generate_tac_css(theme_pack=theme_pack, agent_key=agent_key, target=target)
     if not css or css.startswith("/* TAC tree: no mapping"):
         TAC_REQUESTS.labels(endpoint="apply", status="not_found").inc()
         raise HTTPException(404, f"No TAC mapping for agent '{agent_key}'")
