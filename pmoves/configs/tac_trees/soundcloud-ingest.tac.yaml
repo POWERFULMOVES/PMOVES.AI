@@ -1,0 +1,232 @@
+# TAC Tree: SoundCloud Ingestion Pipeline
+# Audits Channel Monitor → PMOVES.YT → MinIO → ffmpeg-whisper → Extract Worker → Hi-RAG
+
+name: "SoundCloud Ingestion Pipeline"
+version: "1.0.0"
+description: "End-to-end verification of SoundCloud content ingestion: discovery, download, transcription, embedding, and RAG indexing"
+
+root:
+  id: soundcloud-ingest
+  task: "SoundCloud ingestion pipeline review"
+  context: "pmoves/config/channel_monitor.json + PMOVES.YT/ + pmoves/docker-compose.yml"
+  agent_hint: codex
+  children:
+
+    # =========================================================================
+    # Phase 1: Channel Monitor Configuration
+    # =========================================================================
+    - id: sc.monitor
+      task: "Channel Monitor service configuration"
+      context: "pmoves/config/channel_monitor.json"
+      agent_hint: codex
+      children:
+        - id: sc.monitor.config-exists
+          task: "channel_monitor.json config exists"
+          action:
+            type: file_exists
+            target: "pmoves/config/channel_monitor.json"
+            expect: "Channel monitor configuration file present"
+          context: "Defines sources, polling intervals, target endpoints"
+          agent_hint: codex
+
+        - id: sc.monitor.soundcloud-sources
+          task: "SoundCloud sources configured"
+          action:
+            type: grep
+            target: "pmoves/config/channel_monitor.json"
+            pattern: "soundcloud"
+            expect: "At least one SoundCloud source defined"
+          context: "SoundCloud artist/playlist URLs for monitoring"
+          agent_hint: codex
+
+        - id: sc.monitor.compose-defined
+          task: "Channel Monitor service in compose"
+          action:
+            type: grep
+            target: "pmoves/docker-compose.yml"
+            pattern: "channel-monitor:"
+            expect: "Service defined on port 8097"
+          context: "Watches configured sources, posts to PMOVES.YT /yt/ingest"
+          agent_hint: codex
+
+        - id: sc.monitor.healthcheck
+          task: "Channel Monitor has healthcheck"
+          action:
+            type: grep
+            target: "pmoves/docker-compose.yml"
+            pattern: "channel-monitor.*health"
+            expect: "Healthcheck configured for channel monitor"
+          context: "Required for depends_on service_healthy pattern"
+          agent_hint: codex
+
+    # =========================================================================
+    # Phase 2: PMOVES.YT Ingestion Service
+    # =========================================================================
+    - id: sc.yt
+      task: "PMOVES.YT ingestion service"
+      context: "PMOVES.YT/ submodule"
+      agent_hint: codex
+      children:
+        - id: sc.yt.compose-defined
+          task: "PMOVES.YT service in compose (yt profile)"
+          action:
+            type: grep
+            target: "pmoves/docker-compose.yml"
+            pattern: "pmoves-yt:"
+            expect: "Service defined on port 8077"
+          context: "Requires --profile yt to start"
+          agent_hint: codex
+
+        - id: sc.yt.ingest-endpoint
+          task: "POST /yt/ingest endpoint exists"
+          action:
+            type: grep
+            target: "PMOVES.YT/"
+            pattern: "/yt/ingest"
+            expect: "Ingest endpoint defined in PMOVES.YT service"
+          context: "Channel Monitor posts discovered URLs here"
+          agent_hint: codex
+
+        - id: sc.yt.minio-integration
+          task: "MinIO upload configured"
+          action:
+            type: grep
+            target: "pmoves/docker-compose.yml"
+            pattern: "MINIO_ACCESS_KEY|MINIO_ENDPOINT"
+            expect: "MinIO credentials passed to PMOVES.YT"
+          context: "Downloads stored in MinIO assets bucket"
+          agent_hint: codex
+
+        - id: sc.yt.nats-events
+          task: "NATS events published on ingest"
+          action:
+            type: grep
+            target: "PMOVES.YT/"
+            pattern: "ingest\\.file\\.added|ingest\\.transcript\\.ready"
+            expect: "NATS subjects for file added and transcript ready"
+          context: "Downstream services subscribe to these events"
+          agent_hint: codex
+
+    # =========================================================================
+    # Phase 3: MinIO Storage
+    # =========================================================================
+    - id: sc.minio
+      task: "MinIO storage for ingested content"
+      context: "pmoves/docker-compose.yml"
+      agent_hint: codex
+      children:
+        - id: sc.minio.compose-defined
+          task: "MinIO service defined in compose"
+          action:
+            type: grep
+            target: "pmoves/docker-compose.yml"
+            pattern: "pmoves-minio:"
+            expect: "MinIO service on ports 9000/9001"
+          context: "API on 9000, Console on 9001"
+          agent_hint: codex
+
+        - id: sc.minio.buckets
+          task: "Required buckets exist (assets, outputs)"
+          action:
+            type: manual
+            expect: "mc ls pmoves/assets && mc ls pmoves/outputs succeed"
+          context: "Created by brand_defaults.py or make brand-defaults"
+          agent_hint: codex
+
+    # =========================================================================
+    # Phase 4: ffmpeg-whisper GPU Transcription
+    # =========================================================================
+    - id: sc.whisper
+      task: "ffmpeg-whisper GPU transcription"
+      context: "pmoves/docker-compose.yml (gpu profile)"
+      agent_hint: codex
+      children:
+        - id: sc.whisper.compose-defined
+          task: "ffmpeg-whisper service in compose"
+          action:
+            type: grep
+            target: "pmoves/docker-compose.yml"
+            pattern: "ffmpeg-whisper:"
+            expect: "Service defined on port 8078"
+          context: "GPU-accelerated Whisper transcription"
+          agent_hint: codex
+
+        - id: sc.whisper.gpu-runtime
+          task: "NVIDIA runtime configured for Whisper"
+          action:
+            type: grep
+            target: "pmoves/docker-compose.yml"
+            pattern: "ffmpeg-whisper.*nvidia"
+            expect: "nvidia runtime or deploy.resources.reservations.devices"
+          context: "Requires GPU for real-time transcription"
+          agent_hint: codex
+
+        - id: sc.whisper.minio-read
+          task: "Whisper reads from MinIO"
+          action:
+            type: grep
+            target: "pmoves/docker-compose.yml"
+            pattern: "MINIO.*ffmpeg-whisper|ffmpeg-whisper.*MINIO"
+            expect: "MinIO credentials configured for audio read"
+          context: "Reads audio from assets bucket, writes transcript"
+          agent_hint: codex
+
+    # =========================================================================
+    # Phase 5: Extract Worker → Hi-RAG Indexing
+    # =========================================================================
+    - id: sc.index
+      task: "Embedding and RAG indexing"
+      context: "Extract Worker (8083) → Qdrant + Meilisearch → Hi-RAG v2"
+      agent_hint: codex
+      children:
+        - id: sc.index.extract-worker
+          task: "Extract Worker service defined"
+          action:
+            type: grep
+            target: "pmoves/docker-compose.yml"
+            pattern: "extract-worker:"
+            expect: "Service on port 8083"
+          context: "Text embedding (all-MiniLM-L6-v2) + indexing"
+          agent_hint: codex
+
+        - id: sc.index.hirag-v2
+          task: "Hi-RAG v2 gateway defined"
+          action:
+            type: grep
+            target: "pmoves/docker-compose.yml"
+            pattern: "hi-rag-gateway-v2:"
+            expect: "Service on port 8086 (CPU) / 8087 (GPU)"
+          context: "Hybrid RAG: Qdrant vectors + Neo4j graph + Meilisearch full-text"
+          agent_hint: codex
+
+        - id: sc.index.query-works
+          task: "Hi-RAG query returns results for ingested content"
+          action:
+            type: manual
+            expect: "curl POST http://localhost:8086/hirag/query with SoundCloud query returns results"
+          context: "End-to-end verification: content discovered → queryable"
+          agent_hint: codex
+
+    # =========================================================================
+    # Phase 6: End-to-End Pipeline Flow
+    # =========================================================================
+    - id: sc.e2e
+      task: "End-to-end pipeline verification"
+      context: "Full flow: Channel Monitor → PMOVES.YT → MinIO → Whisper → Extract → Hi-RAG"
+      agent_hint: codex
+      children:
+        - id: sc.e2e.trigger
+          task: "Manual trigger test"
+          action:
+            type: manual
+            expect: "curl -X POST http://localhost:8077/yt/ingest -d '{\"url\":\"https://soundcloud.com/darkxside/jazz2loud\"}' returns 200"
+          context: "Test with known DARKXSIDE track"
+          agent_hint: codex
+
+        - id: sc.e2e.nats-flow
+          task: "NATS event chain completes"
+          action:
+            type: manual
+            expect: "ingest.file.added.v1 → ingest.transcript.ready.v1 events observed"
+          context: "Subscribe: nats sub 'ingest.>' to watch event flow"
+          agent_hint: codex
