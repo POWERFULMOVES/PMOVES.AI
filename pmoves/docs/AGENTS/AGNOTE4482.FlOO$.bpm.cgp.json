@@ -369,7 +369,25 @@
             },
             "scale": "pentatonicMinor",
             "root_note": "C4",
-            "anchor_bpm": 6
+            "anchor_bpm": 6,
+            "dual_cosmology": {
+              "description": "Le'FFricK & Andromega — dual phase-locked heartbeats, galaxies apart but sharing a KnACK resonance",
+              "le_ffrick": {
+                "role": "left-hand cosmological pulse",
+                "knack": "slice"
+              },
+              "andromega": {
+                "role": "right-hand cosmological pulse",
+                "knack": "dice"
+              },
+              "phase_lock_series": [6, 18, 24, 30],
+              "harmonic_progression": {
+                "3_thrice": {"bpm": 18, "interval": "tritone", "quality": "tension"},
+                "4_bridge": {"bpm": 24, "interval": "perfect_fourth", "quality": "suspension"},
+                "5_alive": {"bpm": 30, "interval": "perfect_fifth", "quality": "resolution"}
+              },
+              "note": "Thrice (3) is the tension, 4 is a bridge too far, 5 is where things truly come alive — the dual heartbeats sync at the perfect fifth"
+            }
           }
         }
       ]
