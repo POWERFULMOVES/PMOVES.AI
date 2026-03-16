@@ -62,7 +62,7 @@ export const createSupabaseBrowserClient = (): TypedSupabaseClient => {
   if (typeof window !== 'undefined') {
     (window as any).__PMOVES_SUPABASE_BOOT = {
       hasBootJwt: Boolean(bootJwt),
-      authorization: bootJwt ? `Bearer ${bootJwt}` : undefined,
+      // Security: never expose the JWT token on the window object
     };
   }
   return client;
