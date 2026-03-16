@@ -153,6 +153,7 @@ export function SearchBar({
             onChange={(e) => setQuery(e.target.value)}
             onFocus={() => setShowHistory(true)}
             placeholder={placeholder}
+            aria-label="Search knowledge base"
             className={`${INPUT_BASE_CLASSES} ${INPUT_DISABLED_CLASSES}`}
             disabled={loading}
             autoComplete="off"
