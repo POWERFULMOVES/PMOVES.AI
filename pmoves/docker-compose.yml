@@ -1323,6 +1323,7 @@ services:
     - pmoves_app
     - pmoves_bus
     - pmoves_api  # reach supabase-kong for REST API
+    - pmoves_data  # reach qdrant + meilisearch + minio
     - pmoves_external  # HuggingFace model downloads at runtime
     extra_hosts:
     - host.docker.internal:host-gateway
