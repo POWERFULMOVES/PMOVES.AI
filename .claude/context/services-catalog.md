@@ -395,23 +395,23 @@ Comprehensive reference of all production services, ports, APIs, and integration
 - **Compose Profile:** `health` (optional)
 - **CI Pipeline:** `local-build-only` (compose `build:` directive)
 
-## Health & Wellness Services (Planned)
+## Health & Wellness Services
 
 ### Health (wger)
-- **Ports:** TBD (default Django 8000)
+- **Ports:** 8000 (`WGER_PORT`, compose: main + external)
 - **Purpose:** Fitness tracking and body metrics (wger self-hosted)
 - **Framework:** Django / wger
-- **Key APIs (planned):**
+- **Key APIs:**
   - `GET /api/v2/workout/` - List workouts
   - `GET /api/v2/weightentry/` - Body weight entries
   - `POST /api/v2/workoutsession/` - Log workout session
-- **NATS Topics (Publish, planned):**
+- **NATS Topics (Publish, subjects defined):**
   - `health.metrics.updated.v1`
   - `health.workout.completed.v1`
   - `health.weekly.summary.v1`
-- **Health Endpoint:** Planned (`/healthz`)
-- **Metrics:** Planned (`/metrics`)
-- **Maturity:** Pre-stage — no healthz, metrics, NATS, CHIT, or Docker hardening yet
+- **Health Endpoint:** `GET /healthz/` (3-tier: healthy/degraded/unhealthy)
+- **Metrics:** `GET /metrics/` (Prometheus, gated by `EXPOSE_PROMETHEUS_METRICS`)
+- **Maturity:** Stage 1 — healthz, metrics, NATS wiring, and Docker hardening complete; CHIT integration pending
 - **TAC Tree:** `pmoves/docs/TAC/TAC_HEALTH.md`
 - **Submodule:** `Pmoves-Health-wger`
 - **Compose Profile:** `health`
