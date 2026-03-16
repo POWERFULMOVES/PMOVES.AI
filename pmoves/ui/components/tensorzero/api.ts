@@ -105,7 +105,16 @@ export async function testRequest(request: TestRequest): Promise<TestResponse> {
 /**
  * Fetch metrics from TensorZero ClickHouse
  */
-export async function fetchMetrics(timeRange: string = '1h'): Promise<any> {
+export interface MetricsResponse {
+  request_count?: number;
+  avg_latency_ms?: number;
+  token_usage?: Record<string, number>;
+  by_model?: Record<string, unknown>;
+  by_function?: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
+export async function fetchMetrics(timeRange: string = '1h'): Promise<MetricsResponse> {
   try {
     const response = await axios.get(`${TENSORZERO_API_URL}/metrics`, {
       params: { range: timeRange },
