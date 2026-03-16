@@ -1,0 +1,426 @@
+# TAC Tree: MCP Topology
+# Audits all MCP servers, transport types, tool catalogs, auth, and healthchecks
+# across internal PMOVES.AI services and external Claude Code connected MCPs
+
+name: "TAC_MCP_TOPOLOGY"
+version: "1.0.0"
+description: "Verify MCP server topology: internal servers (Agent Zero, Cipher Memory, BoTZ), external connected MCPs (Airtable, Cloudflare, Gmail, Hugging Face, Mermaid Chart, context7, web-reader, web-search-prime, zai-mcp-server, zread), transport types, tool counts, auth requirements, and healthcheck availability"
+
+root:
+  id: mcp-topology
+  task: "MCP topology review"
+  context: ".claude/context/mcp-api.md + .claude/mcp.json + .claude/CLAUDE.md"
+  agent_hint: codex
+  children:
+
+    # =========================================================================
+    # Phase 1: Agent Zero MCP Server (HTTP)
+    # =========================================================================
+    - id: mcp.agent-zero
+      task: "Agent Zero MCP server"
+      context: "HTTP transport at :8080/mcp/*, central orchestration MCP"
+      agent_hint: codex
+      children:
+        - id: mcp.agent-zero.transport
+          task: "HTTP transport on port 8080"
+          action:
+            type: grep
+            target: "pmoves/docker-compose.yml"
+            pattern: "agent-zero.*8080|8080.*agent"
+            expect: "Agent Zero exposed on port 8080 with /mcp/* endpoints"
+          context: "Transport: HTTP, Base URL: http://localhost:8080/mcp/"
+          agent_hint: codex
+
+        - id: mcp.agent-zero.healthcheck
+          task: "MCP health endpoint available"
+          action:
+            type: grep
+            target: ".claude/context/mcp-api.md"
+            pattern: "GET /mcp/health"
+            expect: "GET /mcp/health returns {status: healthy, mcp_version, agent_runtime, nats_connected}"
+          context: "Healthcheck: GET http://localhost:8080/mcp/health"
+          agent_hint: codex
+
+        - id: mcp.agent-zero.auth
+          task: "Bearer token authentication required"
+          action:
+            type: grep
+            target: ".claude/context/mcp-api.md"
+            pattern: "MCP_CLIENT_SECRET|Authorization.*Bearer"
+            expect: "All MCP endpoints require Authorization: Bearer $MCP_CLIENT_SECRET"
+          context: "Env vars: MCP_CLIENT_ID, MCP_CLIENT_SECRET, MCP_SERVICE_URL"
+          agent_hint: codex
+
+        - id: mcp.agent-zero.tools
+          task: "Agent Zero MCP tools catalog (9 tools)"
+          context: "execute_task, create_subordinate, query_agent_status, list_agents, query_task_status, create_subordinate_with_persona, list_personas, get_persona, get_persona_enhancements"
+          agent_hint: codex
+          children:
+            - id: mcp.agent-zero.tools.execute-task
+              task: "execute_task tool"
+              action:
+                type: grep
+                target: ".claude/context/mcp-api.md"
+                pattern: "POST /mcp/execute"
+                expect: "Execute task via agent runtime"
+              context: "Params: task, context, priority, timeout_seconds"
+              agent_hint: codex
+
+            - id: mcp.agent-zero.tools.create-subordinate
+              task: "create_subordinate tool"
+              action:
+                type: grep
+                target: ".claude/context/mcp-api.md"
+                pattern: "POST /mcp/subordinate/create"
+                expect: "Create specialized subordinate agent"
+              context: "Params: agent_config (name, specialization, tools, context_allocation, prompts)"
+              agent_hint: codex
+
+            - id: mcp.agent-zero.tools.query-status
+              task: "query_agent_status tool"
+              action:
+                type: grep
+                target: ".claude/context/mcp-api.md"
+                pattern: "GET /mcp/task/"
+                expect: "Query task status by task_id"
+              context: "Returns: task_id, status, result, execution_time, agent_id"
+              agent_hint: codex
+
+            - id: mcp.agent-zero.tools.list-agents
+              task: "list_agents tool"
+              action:
+                type: grep
+                target: ".claude/context/mcp-api.md"
+                pattern: "GET /mcp/agents"
+                expect: "List active agents and subordinates"
+              context: "Returns supervisor + subordinate agent list"
+              agent_hint: codex
+
+            - id: mcp.agent-zero.tools.persona-create
+              task: "create_subordinate_with_persona tool"
+              action:
+                type: grep
+                target: ".claude/context/mcp-api.md"
+                pattern: "POST /mcp/subordinate/create-with-persona"
+                expect: "Create subordinate from Supabase persona"
+              context: "Thread types: base, parallel, chained, fusion, big, zero_touch"
+              agent_hint: codex
+
+            - id: mcp.agent-zero.tools.list-commands
+              task: "list_commands endpoint"
+              action:
+                type: grep
+                target: ".claude/context/mcp-api.md"
+                pattern: "GET /mcp/commands"
+                expect: "List available MCP commands"
+              context: "Returns command names, descriptions, parameters"
+              agent_hint: codex
+
+        - id: mcp.agent-zero.metrics
+          task: "Prometheus MCP metrics exposed"
+          action:
+            type: grep
+            target: ".claude/context/mcp-api.md"
+            pattern: "mcp_requests_total|mcp_tasks_active"
+            expect: "MCP metrics at /metrics: mcp_requests_total, mcp_tasks_active, mcp_tasks_completed, mcp_errors_total"
+          context: "GET http://localhost:8080/metrics | grep mcp"
+          agent_hint: codex
+
+        - id: mcp.agent-zero.nats-integration
+          task: "NATS JetStream integration for reliable delivery"
+          action:
+            type: grep
+            target: ".claude/context/mcp-api.md"
+            pattern: "AGENTZERO_JETSTREAM"
+            expect: "JetStream enabled for task queuing and reliable delivery"
+          context: "Tasks queued in NATS, results published back"
+          agent_hint: codex
+
+    # =========================================================================
+    # Phase 2: Cipher Memory MCP Server (SSE)
+    # =========================================================================
+    - id: mcp.cipher-memory
+      task: "Cipher Memory MCP server"
+      context: "SSE transport at :8096/sse, Neo4j-backed knowledge-graph memory"
+      agent_hint: codex
+      children:
+        - id: mcp.cipher-memory.transport
+          task: "SSE transport configured in mcp.json"
+          action:
+            type: grep
+            target: ".claude/mcp.json"
+            pattern: "pmoves-cipher.*sse|8096/sse"
+            expect: "SSE transport at http://localhost:8096/sse"
+          context: "Configured in .claude/mcp.json as pmoves-cipher server"
+          agent_hint: codex
+
+        - id: mcp.cipher-memory.healthcheck
+          task: "Health endpoint available"
+          action:
+            type: grep
+            target: "pmoves/docker-compose.yml"
+            pattern: "cipher.*health|8096.*health"
+            expect: "GET http://localhost:8096/health"
+          context: "Healthcheck: GET http://localhost:8096/health"
+          agent_hint: codex
+
+        - id: mcp.cipher-memory.submodule
+          task: "Cipher MCP submodule present"
+          action:
+            type: file_exists
+            target: "pmoves-cipher-mcp/cipher_mcp/tools.py"
+            expect: "Cipher MCP tool definitions present"
+          context: "Submodule: pmoves-cipher-mcp/"
+          agent_hint: codex
+
+        - id: mcp.cipher-memory.tools
+          task: "Cipher Memory MCP tools (4 tools)"
+          context: "pmoves_cipher_store, pmoves_cipher_search, pmoves_cipher_store_reasoning, pmoves_cipher_reasoning_patterns"
+          agent_hint: codex
+          children:
+            - id: mcp.cipher-memory.tools.store
+              task: "pmoves_cipher_store tool"
+              action:
+                type: grep
+                target: "pmoves-cipher-mcp/cipher_mcp/tools.py"
+                pattern: "pmoves_cipher_store"
+                expect: "Store knowledge with categories (code_pattern, decision, context, submodule, architecture, reasoning) and tags"
+              context: "Required params: content. Optional: category, tags, metadata"
+              agent_hint: codex
+
+            - id: mcp.cipher-memory.tools.search
+              task: "pmoves_cipher_search tool"
+              action:
+                type: grep
+                target: "pmoves-cipher-mcp/cipher_mcp/tools.py"
+                pattern: "pmoves_cipher_search"
+                expect: "Semantic search across stored memories"
+              context: "Required params: query. Optional: category, tags, limit"
+              agent_hint: codex
+
+            - id: mcp.cipher-memory.tools.store-reasoning
+              task: "pmoves_cipher_store_reasoning tool"
+              action:
+                type: grep
+                target: "pmoves-cipher-mcp/cipher_mcp/tools.py"
+                pattern: "pmoves_cipher_store_reasoning"
+                expect: "Store reasoning traces for complex problem-solving"
+              context: "Required params: question, reasoning, result. Optional: metadata"
+              agent_hint: codex
+
+            - id: mcp.cipher-memory.tools.reasoning-patterns
+              task: "pmoves_cipher_reasoning_patterns tool"
+              action:
+                type: grep
+                target: "pmoves-cipher-mcp/cipher_mcp/tools.py"
+                pattern: "pmoves_cipher_reasoning_patterns"
+                expect: "Search past reasoning traces for similar problems"
+              context: "Required params: query. Optional: limit"
+              agent_hint: codex
+
+        - id: mcp.cipher-memory.nats-events
+          task: "NATS event emission on tool use"
+          action:
+            type: file_exists
+            target: "pmoves-cipher-mcp/cipher_mcp/nats_events.py"
+            expect: "NATS event emitters for memory stored/searched/reasoning"
+          context: "Fire-and-forget NATS events on each tool invocation"
+          agent_hint: codex
+
+    # =========================================================================
+    # Phase 3: BoTZ MCP Gateway (HTTP)
+    # =========================================================================
+    - id: mcp.botz-gateway
+      task: "BoTZ MCP Gateway"
+      context: "HTTP transport, skills marketplace MCP bridge"
+      agent_hint: codex
+      children:
+        - id: mcp.botz-gateway.submodule
+          task: "BoTZ submodule present"
+          action:
+            type: file_exists
+            target: "PMOVES-BoTZ/package.json"
+            expect: "BoTZ submodule initialized"
+          context: "Skills marketplace framework"
+          agent_hint: codex
+
+        - id: mcp.botz-gateway.compose-defined
+          task: "BoTZ gateway service in compose"
+          action:
+            type: grep
+            target: "pmoves/docker-compose.yml"
+            pattern: "botz.*gateway|pmoves-botz"
+            expect: "BoTZ gateway service defined in docker-compose"
+          context: "HTTP transport for skills marketplace"
+          agent_hint: codex
+
+        - id: mcp.botz-gateway.mcp-bridge
+          task: "MCP bridge module exists"
+          action:
+            type: file_exists
+            target: "PMOVES-BoTZ/features/mcp_bridge"
+            expect: "MCP bridge directory present"
+          context: "Bridges BoTZ skills to MCP protocol"
+          agent_hint: codex
+
+        - id: mcp.botz-gateway.auth
+          task: "JWT authentication on MCP bridge"
+          action:
+            type: grep
+            target: "PMOVES-BoTZ/features/mcp_bridge/"
+            pattern: "JWT_SECRET|jose|jwt"
+            expect: "JWT auth implemented in MCP bridge"
+          context: "P1 audit finding: fail-open auth path must be closed"
+          agent_hint: codex
+
+        - id: mcp.botz-gateway.healthcheck
+          task: "BoTZ healthcheck configured"
+          action:
+            type: grep
+            target: "pmoves/docker-compose.yml"
+            pattern: "botz.*health"
+            expect: "Healthcheck defined for BoTZ gateway service"
+          context: "Required for service_healthy dependency"
+          agent_hint: codex
+
+    # =========================================================================
+    # Phase 4: External Connected MCPs (Claude Code Plugins)
+    # =========================================================================
+    - id: mcp.external
+      task: "External connected MCP servers (Claude Code)"
+      context: "10 external MCP servers connected via Claude Code plugins"
+      agent_hint: codex
+      children:
+
+        # --- Airtable ---
+        - id: mcp.external.airtable
+          task: "Airtable MCP"
+          context: "Transport: Claude Plugin (cloud-hosted). Tools: ping, list_bases, search_bases, list_tables_for_base, get_table_schema, list_records_for_table, create_records_for_table, update_records_for_table (8 tools). Auth: OAuth via Claude. Healthcheck: ping tool."
+          agent_hint: codex
+
+        # --- Cloudflare Developer Platform ---
+        - id: mcp.external.cloudflare
+          task: "Cloudflare Developer Platform MCP"
+          context: "Transport: Claude Plugin (cloud-hosted). Tools: accounts_list, set_active_account, workers_list, workers_get_worker, workers_get_worker_code, kv_* (5), r2_* (4), d1_* (5), hyperdrive_* (4), search_cloudflare_documentation, migrate_pages_to_workers_guide (22 tools). Auth: OAuth via Claude. Healthcheck: accounts_list tool."
+          agent_hint: codex
+
+        # --- Gmail ---
+        - id: mcp.external.gmail
+          task: "Gmail MCP"
+          context: "Transport: Claude Plugin (cloud-hosted). Tools: gmail_get_profile, gmail_list_labels, gmail_search_messages, gmail_read_message, gmail_read_thread, gmail_list_drafts, gmail_create_draft (7 tools). Auth: OAuth via Claude. Healthcheck: gmail_get_profile tool."
+          agent_hint: codex
+
+        # --- Hugging Face ---
+        - id: mcp.external.huggingface
+          task: "Hugging Face MCP"
+          context: "Transport: Claude Plugin (cloud-hosted). Tools: hf_whoami, hf_doc_search, hf_doc_fetch, hub_repo_details, paper_search, space_search, use_space (7 tools). Auth: OAuth via Claude. Healthcheck: hf_whoami tool."
+          agent_hint: codex
+
+        # --- Mermaid Chart ---
+        - id: mcp.external.mermaid-chart
+          task: "Mermaid Chart MCP"
+          context: "Transport: Claude Plugin (cloud-hosted). Tools: list_tools, get_mermaid_syntax_document, validate_and_render_mermaid_diagram, search_mermaid_icons, get_diagram_title, get_diagram_summary (6 tools). Auth: OAuth via Claude. Healthcheck: list_tools tool."
+          agent_hint: codex
+
+        # --- context7 ---
+        - id: mcp.external.context7
+          task: "context7 MCP"
+          context: "Transport: Claude Plugin (cloud-hosted). Tools: resolve-library-id, query-docs (2 tools). Auth: Plugin auth. Healthcheck: resolve-library-id tool."
+          agent_hint: codex
+
+        # --- web-reader ---
+        - id: mcp.external.web-reader
+          task: "web-reader MCP"
+          context: "Transport: Claude Plugin (cloud-hosted). Tools: webReader (1 tool). Auth: Plugin auth. Healthcheck: N/A (single-tool, stateless)."
+          agent_hint: codex
+
+        # --- web-search-prime ---
+        - id: mcp.external.web-search-prime
+          task: "web-search-prime MCP"
+          context: "Transport: Claude Plugin (cloud-hosted). Tools: web_search_prime (1 tool). Auth: Plugin auth. Healthcheck: N/A (single-tool, stateless)."
+          agent_hint: codex
+
+        # --- zai-mcp-server ---
+        - id: mcp.external.zai
+          task: "zai-mcp-server MCP"
+          context: "Transport: Claude Plugin (cloud-hosted). Tools: analyze_image, analyze_video, analyze_data_visualization, diagnose_error_screenshot, extract_text_from_screenshot, ui_diff_check, ui_to_artifact, understand_technical_diagram (8 tools). Auth: Plugin auth. Healthcheck: N/A (stateless vision tools)."
+          agent_hint: codex
+
+        # --- zread ---
+        - id: mcp.external.zread
+          task: "zread MCP"
+          context: "Transport: Claude Plugin (cloud-hosted). Tools: get_repo_structure, read_file, search_doc (3 tools). Auth: Plugin auth. Healthcheck: N/A (stateless file reader)."
+          agent_hint: codex
+
+    # =========================================================================
+    # Phase 5: Topology Summary & Audit Rules
+    # =========================================================================
+    - id: mcp.audit
+      task: "MCP topology audit rules"
+      context: "Cross-cutting audit checks for all MCP servers"
+      agent_hint: codex
+      children:
+        - id: mcp.audit.all-servers-listed
+          task: "All MCP servers accounted for"
+          action:
+            type: manual
+            expect: "13 total MCP servers: 3 internal (Agent Zero HTTP, Cipher Memory SSE, BoTZ HTTP) + 10 external (Airtable, Cloudflare, Gmail, Hugging Face, Mermaid Chart, context7, web-reader, web-search-prime, zai-mcp-server, zread)"
+          context: "Complete MCP topology inventory"
+          agent_hint: codex
+
+        - id: mcp.audit.internal-healthchecks
+          task: "Every internal MCP server has a healthcheck"
+          action:
+            type: manual
+            expect: "Agent Zero: GET /mcp/health, Cipher Memory: GET /health, BoTZ: compose healthcheck"
+          context: "Audit rule: every internal MCP server must have a healthcheck or validation method"
+          agent_hint: codex
+
+        - id: mcp.audit.internal-auth
+          task: "Every internal MCP server has authentication"
+          action:
+            type: manual
+            expect: "Agent Zero: Bearer MCP_CLIENT_SECRET, Cipher Memory: Neo4j backend (service-level), BoTZ: JWT (P1 fail-open flagged)"
+          context: "Audit rule: no unauthenticated MCP endpoints in production"
+          agent_hint: codex
+
+        - id: mcp.audit.mcp-json-sync
+          task: "mcp.json reflects active MCP servers"
+          action:
+            type: grep
+            target: ".claude/mcp.json"
+            pattern: "mcpServers"
+            expect: "mcp.json lists all locally-connected MCP servers (currently: pmoves-cipher)"
+          context: "External MCPs are managed by Claude Code plugins, not mcp.json"
+          agent_hint: codex
+
+        - id: mcp.audit.tool-count-summary
+          task: "Total tool count across all MCP servers"
+          action:
+            type: manual
+            expect: "Total: ~74 tools. Internal: ~19 (Agent Zero ~9, Cipher Memory 4, BoTZ ~6). External: ~65 (Airtable 8, Cloudflare 22, Gmail 7, HF 7, Mermaid 6, context7 2, web-reader 1, web-search 1, zai 8, zread 3)."
+          context: "Approximate tool counts based on available tool definitions"
+          agent_hint: codex
+
+    # =========================================================================
+    # Phase 6: Server Inventory Table
+    # =========================================================================
+    - id: mcp.inventory
+      task: "MCP server inventory"
+      context: |
+        Server inventory (transport | port | tool_count | auth | healthcheck):
+        -----------------------------------------------------------------------
+        Agent Zero MCP     | HTTP  | :8080/mcp/*  |  ~9 | Bearer MCP_CLIENT_SECRET | GET /mcp/health
+        Cipher Memory MCP  | SSE   | :8096/sse    |   4 | Service-level (Neo4j)    | GET /health
+        BoTZ MCP Gateway   | HTTP  | compose      |  ~6 | JWT (P1 fail-open audit) | compose healthcheck
+        Airtable           | Cloud | plugin       |   8 | OAuth (Claude)           | ping tool
+        Cloudflare         | Cloud | plugin       |  22 | OAuth (Claude)           | accounts_list
+        Gmail              | Cloud | plugin       |   7 | OAuth (Claude)           | gmail_get_profile
+        Hugging Face       | Cloud | plugin       |   7 | OAuth (Claude)           | hf_whoami
+        Mermaid Chart      | Cloud | plugin       |   6 | OAuth (Claude)           | list_tools
+        context7           | Cloud | plugin       |   2 | Plugin auth              | resolve-library-id
+        web-reader         | Cloud | plugin       |   1 | Plugin auth              | N/A (stateless)
+        web-search-prime   | Cloud | plugin       |   1 | Plugin auth              | N/A (stateless)
+        zai-mcp-server     | Cloud | plugin       |   8 | Plugin auth              | N/A (stateless)
+        zread              | Cloud | plugin       |   3 | Plugin auth              | N/A (stateless)
+      agent_hint: codex

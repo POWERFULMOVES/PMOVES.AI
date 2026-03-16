@@ -1,0 +1,1498 @@
+# TAC Tree: Skills Taxonomy
+# Complete catalog of all PMOVES.AI Claude Code CLI skills grouped by domain.
+# Every skill listed in .claude/commands/ is assigned to exactly one domain.
+# Cross-references: skill-pairings.yaml dependency chains, NATS subjects, agents.
+
+name: TAC_SKILLS_TAXONOMY
+version: "1.0.0"
+description: >
+  Comprehensive taxonomy of all PMOVES.AI skills (slash commands) organized by
+  domain. Maps each skill to its NATS subjects, skill pairing membership, and
+  responsible agent. Audit rule: every skill under .claude/commands/ appears in
+  exactly one domain.
+
+# ---------------------------------------------------------------------------
+# Metadata
+# ---------------------------------------------------------------------------
+metadata:
+  total_skills: 118
+  total_domains: 36
+  source_commands_dir: ".claude/commands/"
+  source_pairings: "pmoves/configs/skill-pairings.yaml"
+  source_context: ".claude/CLAUDE.md"
+  generated: "2026-03-16"
+
+# ===========================================================================
+# Domain Definitions
+# ===========================================================================
+root:
+  id: skills
+  task: "Skills taxonomy audit"
+  context: "All slash commands under .claude/commands/"
+  agent_hint: codex
+  children:
+
+    # =======================================================================
+    # Domain: deploy
+    # =======================================================================
+    - id: skills.deploy
+      task: "Deployment & infrastructure skills"
+      context: "Service lifecycle, env bootstrap, secrets, smoke tests"
+      agent_hint: codex
+      skills:
+        - id: skills.deploy.up
+          command: "/deploy:up"
+          file: "deploy/up.md"
+          description: "Bring services up via Make targets"
+          nats_subjects: []
+          pairing: null
+          make_target: "make -C pmoves up-<service>"
+
+        - id: skills.deploy.services
+          command: "/deploy:services"
+          file: "deploy/services.md"
+          description: "Manage individual services (start/stop/restart)"
+          nats_subjects: []
+          pairing: null
+          make_target: "make -C pmoves volume-reset SERVICE=..."
+
+        - id: skills.deploy.smoke-test
+          command: "/deploy:smoke-test"
+          file: "deploy/smoke-test.md"
+          description: "Run deployment smoke tests"
+          nats_subjects: []
+          pairing: null
+          make_target: null
+
+        - id: skills.deploy.secrets-funnel
+          command: "/deploy:secrets-funnel"
+          file: "deploy/secrets-funnel.md"
+          description: "CHIT export, manifest sync, audit gates"
+          nats_subjects: []
+          pairing: null
+          make_target: "make -C pmoves secrets-funnel"
+
+        - id: skills.deploy.bootstrap-env
+          command: "/deploy:bootstrap-env"
+          file: "deploy/bootstrap-env.md"
+          description: "Brand defaults + registry-driven env population"
+          nats_subjects: []
+          pairing: null
+          make_target: "make -C pmoves env-setup"
+
+        - id: skills.deploy.preflight
+          command: "/deploy:preflight"
+          file: "deploy/preflight.md"
+          description: "Pre-deployment validation checks"
+          nats_subjects: []
+          pairing: null
+          make_target: null
+
+        - id: skills.deploy.audit-layers
+          command: "/deploy:audit-layers"
+          file: "deploy/audit-layers.md"
+          description: "Audit tier architecture and env layers"
+          nats_subjects: []
+          pairing: null
+          make_target: null
+
+    # =======================================================================
+    # Domain: health
+    # =======================================================================
+    - id: skills.health
+      task: "Health monitoring skills"
+      context: "Service health endpoints, metrics, quick checks"
+      agent_hint: codex
+      skills:
+        - id: skills.health.check-all
+          command: "/health:check-all"
+          file: "health/check-all.md"
+          description: "Check all service health endpoints"
+          nats_subjects: []
+          pairing: null
+          make_target: "make verify-all"
+
+        - id: skills.health.metrics
+          command: "/health:metrics"
+          file: "health/metrics.md"
+          description: "Query Prometheus metrics for services"
+          nats_subjects: []
+          pairing: null
+          make_target: null
+
+        - id: skills.health.quick
+          command: "/health:quick"
+          file: "health/quick.md"
+          description: "Quick health check of critical services"
+          nats_subjects: []
+          pairing: null
+          make_target: null
+
+    # =======================================================================
+    # Domain: github
+    # =======================================================================
+    - id: skills.github
+      task: "GitHub integration skills"
+      context: "PRs, issues, actions, security scanning"
+      agent_hint: codex
+      skills:
+        - id: skills.github.actions
+          command: "/github:actions"
+          file: "github/actions.md"
+          description: "Manage GitHub Actions workflows"
+          nats_subjects: []
+          pairing: null
+          make_target: null
+
+        - id: skills.github.issues
+          command: "/github:issues"
+          file: "github/issues.md"
+          description: "Manage GitHub issues"
+          nats_subjects: []
+          pairing: null
+          make_target: null
+
+        - id: skills.github.pr-review
+          command: "/github:pr-review"
+          file: "github/pr-review.md"
+          description: "Full AI-assisted PR review with structured output"
+          nats_subjects:
+            - "ops.pr.review.completed.v1"
+          pairing: "pr-monitor-graphiti-chit"
+          make_target: null
+
+        - id: skills.github.security
+          command: "/github:security"
+          file: "github/security.md"
+          description: "Security scanning and CodeQL triage"
+          nats_subjects: []
+          pairing: null
+          make_target: null
+
+    # =======================================================================
+    # Domain: pr-review
+    # =======================================================================
+    - id: skills.pr-review
+      task: "PR review lifecycle skills"
+      context: "PR monitoring, CodeRabbit thread trimming"
+      agent_hint: codex
+      skills:
+        - id: skills.pr-review.pr-monitor
+          command: "/pr-monitor"
+          file: "pr-monitor.md"
+          description: "Collect PR state and review learnings"
+          nats_subjects:
+            - "ops.pr.monitor.completed.v1"
+          pairing: "pr-monitor-graphiti-chit"
+          pairing_step: 1
+          agent: codex
+          make_target: "make -C pmoves pr-monitor"
+
+        - id: skills.pr-review.pr-trim
+          command: "/pr-trim"
+          file: "pr-trim.md"
+          description: "Classify and fix CodeRabbit review threads"
+          nats_subjects:
+            - "ops.pr.trim.completed.v1"
+          pairing: "pr-monitor-graphiti-chit"
+          pairing_step: 2
+          agent: claude-opus
+          make_target: "make -C pmoves pr-trim PR=<N>"
+
+    # =======================================================================
+    # Domain: chit
+    # =======================================================================
+    - id: skills.chit
+      task: "CHIT geometry & consciousness taxonomy skills"
+      context: "CGP encoding/decoding, FlOO$ pipelines, BPM, trail signing"
+      agent_hint: tokenism
+      skills:
+        - id: skills.chit.encode
+          command: "/chit:encode"
+          file: "chit/encode.md"
+          description: "Encode content into CHIT CGP packets"
+          nats_subjects:
+            - "geometry.packet.encoded.v1"
+            - "geometry.cgp.v1"
+          pairing: "ingest-chit-index"
+          pairing_step: 2
+          agent: tokenism
+
+        - id: skills.chit.decode
+          command: "/chit:decode"
+          file: "chit/decode.md"
+          description: "Decode CHIT CGP packets"
+          nats_subjects:
+            - "geometry.cgp.v1"
+          pairing: null
+          agent: tokenism
+
+        - id: skills.chit.bus
+          command: "/chit:bus"
+          file: "chit/bus.md"
+          description: "Interact with GEOMETRY BUS NATS subjects"
+          nats_subjects:
+            - "geometry.cgp.v1"
+            - "geometry.swarm.meta.v1"
+            - "geometry.event.v1"
+            - "tokenism.cgp.ready.v1"
+            - "tokenism.simulation.result.v1"
+          pairing: null
+          agent: tokenism
+
+        - id: skills.chit.visualize
+          command: "/chit:visualize"
+          file: "chit/visualize.md"
+          description: "Visualize CHIT constellation geometry"
+          nats_subjects: []
+          pairing: "chit-3d-viz"
+          agent: hyperdimensions
+
+        - id: skills.chit.floos
+          command: "/chit:floos"
+          file: "chit/floos.md"
+          description: "FlOO$ pipeline status and validation"
+          nats_subjects:
+            - "skills.pipeline.*.v1"
+          pairing: null
+          make_target: "make -C pmoves floos-status"
+
+        - id: skills.chit.review-sweep
+          command: "/chit:review-sweep"
+          file: "chit/review-sweep.md"
+          description: "Encode PR learnings as CGP packet for Graphiti"
+          nats_subjects:
+            - "ops.pr.review.completed.v1"
+            - "ops.pr.learnings.encoded.v1"
+          pairing: "pr-monitor-graphiti-chit"
+          pairing_step: 3
+          agent: tokenism
+          make_target: "make -C pmoves pr-monitor-chit-packet"
+
+        - id: skills.chit.sign-trail
+          command: "/chit:sign-trail"
+          file: "chit/sign-trail.md"
+          description: "Sign Graphiti trail entry with CHIT HMAC"
+          nats_subjects:
+            - "agent.graphiti.signed.v1"
+          pairing: "pr-monitor-graphiti-chit"
+          pairing_step: 4
+          agent: archon
+          make_target: "make -C pmoves sign-trail"
+
+        - id: skills.chit.bpm
+          command: "/chit:bpm"
+          file: "chit/bpm.md"
+          description: "CHIT BPM (beats per minute) rhythm analysis"
+          nats_subjects: []
+          pairing: null
+          agent: tokenism
+
+    # =======================================================================
+    # Domain: voice
+    # =======================================================================
+    - id: skills.voice
+      task: "Voice synthesis and real-time audio skills"
+      context: "Flute-Gateway prosodic synthesis, Pipecat WebRTC"
+      agent_hint: flute-gateway
+      skills:
+        - id: skills.voice.status
+          command: "/voice:status"
+          file: "voice/status.md"
+          description: "Check Flute-Gateway and voice pipeline status"
+          nats_subjects: []
+          pairing: "voice-synthesis"
+
+        - id: skills.voice.synthesize
+          command: "/voice:synthesize"
+          file: "voice/synthesize.md"
+          description: "Prosodic voice synthesis via Flute-Gateway"
+          nats_subjects:
+            - "skills.step.prosodic-analyze.done.v1"
+            - "skills.pipeline.voice-synthesis.done.v1"
+          pairing: "voice-synthesis"
+          agent: flute-gateway
+
+    # =======================================================================
+    # Domain: tts
+    # =======================================================================
+    - id: skills.tts
+      task: "Text-to-speech engine skills"
+      context: "Ultimate-TTS-Studio multi-engine synthesis"
+      agent_hint: ultimate-tts
+      skills:
+        - id: skills.tts.status
+          command: "/tts:status"
+          file: "tts/status.md"
+          description: "Check TTS engine status"
+          nats_subjects: []
+          pairing: "voice-synthesis"
+
+        - id: skills.tts.synthesize
+          command: "/tts:synthesize"
+          file: "tts/synthesize.md"
+          description: "Synthesize speech via Ultimate-TTS-Studio"
+          nats_subjects:
+            - "skills.pipeline.voice-synthesis.done.v1"
+          pairing: "voice-synthesis"
+          agent: ultimate-tts
+
+        - id: skills.tts.test-all
+          command: "/tts:test-all"
+          file: "tts/test-all.md"
+          description: "Test all TTS engines"
+          nats_subjects: []
+          pairing: null
+
+        - id: skills.tts.voices
+          command: "/tts:voices"
+          file: "tts/voices.md"
+          description: "List available TTS voices"
+          nats_subjects: []
+          pairing: null
+
+    # =======================================================================
+    # Domain: search
+    # =======================================================================
+    - id: skills.search
+      task: "Knowledge retrieval and research skills"
+      context: "Hi-RAG, DeepResearch, SupaSerch"
+      agent_hint: hirag
+      skills:
+        - id: skills.search.hirag
+          command: "/search:hirag"
+          file: "search/hirag.md"
+          description: "Hybrid RAG query (Qdrant + Neo4j + Meilisearch)"
+          nats_subjects: []
+          pairing: "ingest-chit-index"
+          agent: hirag
+
+        - id: skills.search.deepresearch
+          command: "/search:deepresearch"
+          file: "search/deepresearch.md"
+          description: "LLM-based multi-step research planner"
+          nats_subjects:
+            - "research.deepresearch.request.v1"
+            - "research.deepresearch.result.v1"
+          pairing: "research-summarize-render"
+          pairing_step: 1
+          agent: deepresearch
+
+        - id: skills.search.supaserch
+          command: "/search:supaserch"
+          file: "search/supaserch.md"
+          description: "Multimodal holographic deep research orchestrator"
+          nats_subjects:
+            - "supaserch.request.v1"
+            - "supaserch.result.v1"
+          pairing: null
+          agent: supaserch
+
+    # =======================================================================
+    # Domain: agents
+    # =======================================================================
+    - id: skills.agents
+      task: "Agent coordination and orchestration skills"
+      context: "Agent Zero MCP, task execution, subordinate agents"
+      agent_hint: agent-zero
+      skills:
+        - id: skills.agents.status
+          command: "/agents:status"
+          file: "agents/status.md"
+          description: "Check agent service status"
+          nats_subjects: []
+          pairing: null
+
+        - id: skills.agents.execute
+          command: "/agents:execute"
+          file: "agents/execute.md"
+          description: "Execute agent task via MCP"
+          nats_subjects:
+            - "claude.code.tool.executed.v1"
+          pairing: null
+          agent: agent-zero
+
+        - id: skills.agents.mcp-query
+          command: "/agents:mcp-query"
+          file: "agents/mcp-query.md"
+          description: "Query Agent Zero MCP API"
+          nats_subjects: []
+          pairing: null
+          agent: agent-zero
+
+        - id: skills.agents.subordinate
+          command: "/agents:subordinate"
+          file: "agents/subordinate.md"
+          description: "Manage subordinate agent delegation"
+          nats_subjects: []
+          pairing: null
+          agent: agent-zero
+
+        - id: skills.agents.task-status
+          command: "/agents:task-status"
+          file: "agents/task-status.md"
+          description: "Check running agent task status"
+          nats_subjects: []
+          pairing: null
+          agent: agent-zero
+
+    # =======================================================================
+    # Domain: agent-sdk
+    # =======================================================================
+    - id: skills.agent-sdk
+      task: "Agent SDK lifecycle skills"
+      context: "Create, run, handoff, resume agent sessions"
+      agent_hint: agent-zero
+      skills:
+        - id: skills.agent-sdk.create
+          command: "/agent-sdk:create"
+          file: "agent-sdk/create.md"
+          description: "Create a new agent session"
+          nats_subjects: []
+          pairing: null
+
+        - id: skills.agent-sdk.handoff
+          command: "/agent-sdk:handoff"
+          file: "agent-sdk/handoff.md"
+          description: "Hand off work between agents"
+          nats_subjects:
+            - "agent.graphiti.signed.v1"
+          pairing: null
+
+        - id: skills.agent-sdk.resume
+          command: "/agent-sdk:resume"
+          file: "agent-sdk/resume.md"
+          description: "Resume a paused agent session"
+          nats_subjects: []
+          pairing: null
+
+        - id: skills.agent-sdk.run
+          command: "/agent-sdk:run"
+          file: "agent-sdk/run.md"
+          description: "Run an agent with a task"
+          nats_subjects: []
+          pairing: null
+
+    # =======================================================================
+    # Domain: archon
+    # =======================================================================
+    - id: skills.archon
+      task: "Archon agent service skills"
+      context: "Supabase-backed prompts, forms, agent management"
+      agent_hint: archon
+      skills:
+        - id: skills.archon.forms
+          command: "/archon:forms"
+          file: "archon/forms.md"
+          description: "Manage Archon agent forms"
+          nats_subjects: []
+          pairing: null
+          agent: archon
+
+        - id: skills.archon.prompts
+          command: "/archon:prompts"
+          file: "archon/prompts.md"
+          description: "Manage Archon prompts"
+          nats_subjects: []
+          pairing: null
+          agent: archon
+
+        - id: skills.archon.status
+          command: "/archon:status"
+          file: "archon/status.md"
+          description: "Check Archon service status"
+          nats_subjects: []
+          pairing: null
+          agent: archon
+
+    # =======================================================================
+    # Domain: botz
+    # =======================================================================
+    - id: skills.botz
+      task: "BoTZ skills marketplace skills"
+      context: "MCP gateway, skill init, profiles, secrets"
+      agent_hint: botz
+      skills:
+        - id: skills.botz.init
+          command: "/botz:init"
+          file: "botz/init.md"
+          description: "Initialize a new BoTZ skill"
+          nats_subjects: []
+          pairing: null
+
+        - id: skills.botz.mcp
+          command: "/botz:mcp"
+          file: "botz/mcp.md"
+          description: "Interact with BoTZ MCP gateway"
+          nats_subjects: []
+          pairing: null
+
+        - id: skills.botz.profile
+          command: "/botz:profile"
+          file: "botz/profile.md"
+          description: "Manage BoTZ skill profiles"
+          nats_subjects: []
+          pairing: null
+
+        - id: skills.botz.secrets
+          command: "/botz:secrets"
+          file: "botz/secrets.md"
+          description: "Manage BoTZ skill secrets"
+          nats_subjects: []
+          pairing: null
+
+    # =======================================================================
+    # Domain: database
+    # =======================================================================
+    - id: skills.database
+      task: "Database management skills"
+      context: "Supabase, Neo4j, Qdrant, Meilisearch — backup, migrate, query"
+      agent_hint: codex
+      skills:
+        - id: skills.database.backup
+          command: "/db:backup"
+          file: "db/backup.md"
+          description: "Backup databases"
+          nats_subjects: []
+          pairing: null
+
+        - id: skills.database.migrate
+          command: "/db:migrate"
+          file: "db/migrate.md"
+          description: "Run database migrations"
+          nats_subjects: []
+          pairing: null
+
+        - id: skills.database.query
+          command: "/db:query"
+          file: "db/query.md"
+          description: "Execute database queries"
+          nats_subjects: []
+          pairing: null
+
+    # =======================================================================
+    # Domain: observability
+    # =======================================================================
+    - id: skills.observability
+      task: "Observability and monitoring skills"
+      context: "Prometheus, Grafana, Loki alerts/dashboards/queries"
+      agent_hint: codex
+      skills:
+        - id: skills.observability.alerts
+          command: "/observability:alerts"
+          file: "observability/alerts.md"
+          description: "Manage observability alerts"
+          nats_subjects: []
+          pairing: null
+
+        - id: skills.observability.dashboard
+          command: "/observability:dashboard"
+          file: "observability/dashboard.md"
+          description: "Manage Grafana dashboards"
+          nats_subjects: []
+          pairing: null
+
+        - id: skills.observability.query
+          command: "/observability:query"
+          file: "observability/query.md"
+          description: "Query Prometheus/Loki"
+          nats_subjects: []
+          pairing: null
+
+    # =======================================================================
+    # Domain: gpu
+    # =======================================================================
+    - id: skills.gpu
+      task: "GPU management and model lifecycle skills"
+      context: "GPU mesh status, model loading/unloading, optimization"
+      agent_hint: agent-zero
+      skills:
+        - id: skills.gpu.status
+          command: "/gpu:status"
+          file: "gpu/status.md"
+          description: "Check GPU availability and utilization"
+          nats_subjects:
+            - "mesh.gpu.status.v1"
+          pairing: null
+
+        - id: skills.gpu.models
+          command: "/gpu:models"
+          file: "gpu/models.md"
+          description: "List loaded GPU models"
+          nats_subjects:
+            - "mesh.gpu.model.loaded.v1"
+            - "mesh.gpu.model.unloaded.v1"
+            - "model.registry.updated.v1"
+          pairing: null
+
+        - id: skills.gpu.optimize
+          command: "/gpu:optimize"
+          file: "gpu/optimize.md"
+          description: "Optimize GPU model placement"
+          nats_subjects:
+            - "mesh.gpu.command.v1"
+            - "mesh.gpu.command.result.v1"
+          pairing: null
+
+    # =======================================================================
+    # Domain: model
+    # =======================================================================
+    - id: skills.model
+      task: "Model lifecycle management skills"
+      context: "Load/unload models on GPU mesh"
+      agent_hint: agent-zero
+      skills:
+        - id: skills.model.load
+          command: "/model:load"
+          file: "model/load.md"
+          description: "Load a model onto GPU"
+          nats_subjects:
+            - "mesh.gpu.command.v1"
+            - "mesh.gpu.model.loaded.v1"
+          pairing: "model-benchmark-viz"
+          agent: agent-zero
+
+        - id: skills.model.unload
+          command: "/model:unload"
+          file: "model/unload.md"
+          description: "Unload a model from GPU"
+          nats_subjects:
+            - "mesh.gpu.command.v1"
+            - "mesh.gpu.model.unloaded.v1"
+          pairing: null
+
+    # =======================================================================
+    # Domain: media
+    # =======================================================================
+    - id: skills.media
+      task: "Media ingestion and processing skills"
+      context: "YouTube, Whisper transcription, video/audio analysis"
+      agent_hint: codex
+      skills:
+        # -- YouTube sub-domain --
+        - id: skills.media.yt-status
+          command: "/yt:status"
+          file: "yt/status.md"
+          description: "Check PMOVES.YT ingestion service status"
+          nats_subjects: []
+          pairing: null
+
+        - id: skills.media.yt-ingest-video
+          command: "/yt:ingest-video"
+          file: "yt/ingest-video.md"
+          description: "Ingest a YouTube video"
+          nats_subjects:
+            - "ingest.file.added.v1"
+            - "ingest.transcript.ready.v1"
+          pairing: null
+
+        - id: skills.media.yt-add-channel
+          command: "/yt:add-channel"
+          file: "yt/add-channel.md"
+          description: "Add a YouTube channel for monitoring"
+          nats_subjects: []
+          pairing: null
+
+        - id: skills.media.yt-add-playlist
+          command: "/yt:add-playlist"
+          file: "yt/add-playlist.md"
+          description: "Add a YouTube playlist for monitoring"
+          nats_subjects: []
+          pairing: null
+
+        - id: skills.media.yt-check-now
+          command: "/yt:check-now"
+          file: "yt/check-now.md"
+          description: "Force-check YouTube channels for new content"
+          nats_subjects: []
+          pairing: null
+
+        - id: skills.media.yt-help
+          command: "/yt:help"
+          file: "yt/help.md"
+          description: "Show PMOVES.YT help"
+          nats_subjects: []
+          pairing: null
+
+        - id: skills.media.yt-list-channels
+          command: "/yt:list-channels"
+          file: "yt/list-channels.md"
+          description: "List monitored YouTube channels"
+          nats_subjects: []
+          pairing: null
+
+        - id: skills.media.yt-pending
+          command: "/yt:pending"
+          file: "yt/pending.md"
+          description: "Show pending YouTube ingestion jobs"
+          nats_subjects: []
+          pairing: null
+
+        - id: skills.media.yt-remove-channel
+          command: "/yt:remove-channel"
+          file: "yt/remove-channel.md"
+          description: "Remove a YouTube channel from monitoring"
+          nats_subjects: []
+          pairing: null
+
+        - id: skills.media.yt-toggle-channel
+          command: "/yt:toggle-channel"
+          file: "yt/toggle-channel.md"
+          description: "Enable/disable a YouTube channel"
+          nats_subjects: []
+          pairing: null
+
+    # =======================================================================
+    # Domain: worktree
+    # =======================================================================
+    - id: skills.worktree
+      task: "Git worktree management skills"
+      context: "Isolated branch development without full clone"
+      agent_hint: codex
+      skills:
+        - id: skills.worktree.create
+          command: "/worktree:create"
+          file: "worktree/create.md"
+          description: "Create a new git worktree"
+          nats_subjects: []
+          pairing: null
+
+        - id: skills.worktree.list
+          command: "/worktree:list"
+          file: "worktree/list.md"
+          description: "List all git worktrees"
+          nats_subjects: []
+          pairing: null
+
+        - id: skills.worktree.switch
+          command: "/worktree:switch"
+          file: "worktree/switch.md"
+          description: "Switch to a different worktree"
+          nats_subjects: []
+          pairing: null
+
+        - id: skills.worktree.cleanup
+          command: "/worktree:cleanup"
+          file: "worktree/cleanup.md"
+          description: "Prune stale worktrees"
+          nats_subjects: []
+          pairing: null
+
+    # =======================================================================
+    # Domain: test
+    # =======================================================================
+    - id: skills.test
+      task: "Testing and CI validation skills"
+      context: "PR testing, smoke tests, CI requirements"
+      agent_hint: codex
+      skills:
+        - id: skills.test.pr
+          command: "/test:pr"
+          file: "test/pr.md"
+          description: "PR testing workflow with documentation"
+          nats_subjects: []
+          pairing: null
+          make_target: null
+
+        - id: skills.test.smoke
+          command: "/test:smoke"
+          file: "test/smoke.md"
+          description: "Run smoke tests"
+          nats_subjects: []
+          pairing: null
+          make_target: null
+
+    # =======================================================================
+    # Domain: docs
+    # =======================================================================
+    - id: skills.docs
+      task: "Documentation lifecycle skills"
+      context: "Living document reconciliation"
+      agent_hint: codex
+      skills:
+        - id: skills.docs.reconcile
+          command: "/docs:reconcile"
+          file: "docs/reconcile.md"
+          description: "Refresh living documents (audit dashboard, P2 tracker)"
+          nats_subjects: []
+          pairing: null
+          make_target: "make -C pmoves docs-reconcile"
+
+    # =======================================================================
+    # Domain: tensorzero
+    # =======================================================================
+    - id: skills.tensorzero
+      task: "TensorZero LLM gateway skills"
+      context: "Model routing, usage analytics, provider management"
+      agent_hint: codex
+      skills:
+        - id: skills.tensorzero.models
+          command: "/tensorzero:models"
+          file: "tensorzero/models.md"
+          description: "List TensorZero model configurations"
+          nats_subjects: []
+          pairing: null
+
+    # =======================================================================
+    # Domain: cipher
+    # =======================================================================
+    - id: skills.cipher
+      task: "Cipher Memory knowledge-graph skills"
+      context: "Neo4j-backed persistent memory for agents"
+      agent_hint: cipher
+      skills:
+        - id: skills.cipher.store
+          command: "/cipher:store"
+          file: "cipher/store.md"
+          description: "Store knowledge in Cipher Memory"
+          nats_subjects: []
+          pairing: null
+          mcp_tool: "pmoves_cipher_store"
+
+        - id: skills.cipher.search
+          command: "/cipher:search"
+          file: "cipher/search.md"
+          description: "Search Cipher Memory knowledge graph"
+          nats_subjects: []
+          pairing: null
+          mcp_tool: "pmoves_cipher_search"
+
+        - id: skills.cipher.reasoning
+          command: "/cipher:reasoning"
+          file: "cipher/reasoning.md"
+          description: "Store and query reasoning traces/patterns"
+          nats_subjects: []
+          pairing: null
+          mcp_tools:
+            - "pmoves_cipher_store_reasoning"
+            - "pmoves_cipher_reasoning_patterns"
+
+    # =======================================================================
+    # Domain: nats
+    # =======================================================================
+    - id: skills.nats
+      task: "NATS message bus management skills"
+      context: "JetStream event broker — publish, monitor, streams"
+      agent_hint: codex
+      skills:
+        - id: skills.nats.status
+          command: "/nats:status"
+          file: "nats/status.md"
+          description: "Check NATS server status"
+          nats_subjects: []
+          pairing: null
+
+        - id: skills.nats.publish
+          command: "/nats:publish"
+          file: "nats/publish.md"
+          description: "Publish a message to a NATS subject"
+          nats_subjects: []
+          pairing: null
+
+        - id: skills.nats.monitor
+          command: "/nats:monitor"
+          file: "nats/monitor.md"
+          description: "Monitor NATS subjects in real time"
+          nats_subjects: []
+          pairing: null
+
+        - id: skills.nats.streams
+          command: "/nats:streams"
+          file: "nats/streams.md"
+          description: "Manage JetStream streams"
+          nats_subjects: []
+          pairing: null
+
+    # =======================================================================
+    # Domain: notebook
+    # =======================================================================
+    - id: skills.notebook
+      task: "Open Notebook knowledge base skills"
+      context: "SurrealDB note-taking, sync, query"
+      agent_hint: codex
+      skills:
+        - id: skills.notebook.query
+          command: "/notebook:query"
+          file: "notebook/query.md"
+          description: "Query Open Notebook knowledge base"
+          nats_subjects: []
+          pairing: null
+
+        - id: skills.notebook.status
+          command: "/notebook:status"
+          file: "notebook/status.md"
+          description: "Check Open Notebook sync status"
+          nats_subjects: []
+          pairing: null
+
+        - id: skills.notebook.sync
+          command: "/notebook:sync"
+          file: "notebook/sync.md"
+          description: "Trigger Open Notebook synchronization"
+          nats_subjects: []
+          pairing: null
+
+    # =======================================================================
+    # Domain: hyperdim
+    # =======================================================================
+    - id: skills.hyperdim
+      task: "Hyperdimensions 3D visualization skills"
+      context: "Three.js rendering of CHIT geometry and data"
+      agent_hint: hyperdimensions
+      skills:
+        - id: skills.hyperdim.render
+          command: "/hyperdim:render"
+          file: "hyperdim/render.md"
+          description: "Render 3D visualization via Three.js"
+          nats_subjects:
+            - "skills.pipeline.chit-3d-viz.done.v1"
+          pairing: "chit-3d-viz"
+          pairing_step: 2
+          agent: hyperdimensions
+
+        - id: skills.hyperdim.animate
+          command: "/hyperdim:animate"
+          file: "hyperdim/animate.md"
+          description: "Animate 3D constellation geometry"
+          nats_subjects: []
+          pairing: "chit-3d-viz"
+
+        - id: skills.hyperdim.export
+          command: "/hyperdim:export"
+          file: "hyperdim/export.md"
+          description: "Export 3D visualization artifacts"
+          nats_subjects: []
+          pairing: null
+
+    # =======================================================================
+    # Domain: discord
+    # =======================================================================
+    - id: skills.discord
+      task: "Discord integration skills"
+      context: "Notification bot, channel status"
+      agent_hint: codex
+      skills:
+        - id: skills.discord.notify
+          command: "/discord:notify"
+          file: "discord/notify.md"
+          description: "Send Discord notification"
+          nats_subjects:
+            - "ingest.file.added.v1"
+            - "ingest.transcript.ready.v1"
+            - "ingest.summary.ready.v1"
+            - "ingest.chapters.ready.v1"
+          pairing: null
+
+        - id: skills.discord.status
+          command: "/discord:status"
+          file: "discord/status.md"
+          description: "Check Discord bot status"
+          nats_subjects: []
+          pairing: null
+
+    # =======================================================================
+    # Domain: minio
+    # =======================================================================
+    - id: skills.minio
+      task: "MinIO object storage skills"
+      context: "S3-compatible storage — presign, upload, status"
+      agent_hint: codex
+      skills:
+        - id: skills.minio.presign
+          command: "/minio:presign"
+          file: "minio/presign.md"
+          description: "Generate presigned MinIO URLs"
+          nats_subjects: []
+          pairing: null
+
+        - id: skills.minio.status
+          command: "/minio:status"
+          file: "minio/status.md"
+          description: "Check MinIO service status"
+          nats_subjects: []
+          pairing: null
+
+        - id: skills.minio.upload
+          command: "/minio:upload"
+          file: "minio/upload.md"
+          description: "Upload files to MinIO"
+          nats_subjects: []
+          pairing: null
+
+    # =======================================================================
+    # Domain: n8n
+    # =======================================================================
+    - id: skills.n8n
+      task: "n8n workflow automation skills"
+      context: "Workflow execution, node management, suggestions"
+      agent_hint: n8n
+      skills:
+        - id: skills.n8n.execute
+          command: "/n8n:execute"
+          file: "n8n/execute.md"
+          description: "Execute an n8n workflow"
+          nats_subjects:
+            - "health.workouts.synced.v1"
+            - "finance.transactions.synced.v1"
+          pairing: "health-sync"
+
+        - id: skills.n8n.nodes
+          command: "/n8n:nodes"
+          file: "n8n/nodes.md"
+          description: "List available n8n nodes"
+          nats_subjects: []
+          pairing: null
+
+        - id: skills.n8n.suggest
+          command: "/n8n:suggest"
+          file: "n8n/suggest.md"
+          description: "Get n8n workflow suggestions"
+          nats_subjects: []
+          pairing: null
+
+        - id: skills.n8n.workflows
+          command: "/n8n:workflows"
+          file: "n8n/workflows.md"
+          description: "List n8n workflows"
+          nats_subjects: []
+          pairing: null
+
+    # =======================================================================
+    # Domain: langextract
+    # =======================================================================
+    - id: skills.langextract
+      task: "Language extraction and NLP preprocessing skills"
+      context: "Language detection, text extraction, provider management"
+      agent_hint: codex
+      skills:
+        - id: skills.langextract.extract
+          command: "/langextract:extract"
+          file: "langextract/extract.md"
+          description: "Extract text and language metadata"
+          nats_subjects: []
+          pairing: null
+
+        - id: skills.langextract.process
+          command: "/langextract:process"
+          file: "langextract/process.md"
+          description: "Process text through NLP pipeline"
+          nats_subjects: []
+          pairing: null
+
+        - id: skills.langextract.provider
+          command: "/langextract:provider"
+          file: "langextract/provider.md"
+          description: "Manage LangExtract providers"
+          nats_subjects: []
+          pairing: null
+
+        - id: skills.langextract.status
+          command: "/langextract:status"
+          file: "langextract/status.md"
+          description: "Check LangExtract service status"
+          nats_subjects: []
+          pairing: null
+
+    # =======================================================================
+    # Domain: pipecat
+    # =======================================================================
+    - id: skills.pipecat
+      task: "Pipecat real-time voice communication skills"
+      context: "WebRTC voice sessions, connection management"
+      agent_hint: flute-gateway
+      skills:
+        - id: skills.pipecat.connect
+          command: "/pipecat:connect"
+          file: "pipecat/connect.md"
+          description: "Connect to Pipecat voice session"
+          nats_subjects: []
+          pairing: null
+
+        - id: skills.pipecat.status
+          command: "/pipecat:status"
+          file: "pipecat/status.md"
+          description: "Check Pipecat connection status"
+          nats_subjects: []
+          pairing: null
+
+    # =======================================================================
+    # Domain: jellyfin
+    # =======================================================================
+    - id: skills.jellyfin
+      task: "Jellyfin media server integration skills"
+      context: "Metadata sync, bridge status"
+      agent_hint: codex
+      skills:
+        - id: skills.jellyfin.status
+          command: "/jellyfin:status"
+          file: "jellyfin/status.md"
+          description: "Check Jellyfin Bridge status"
+          nats_subjects: []
+          pairing: null
+
+        - id: skills.jellyfin.sync
+          command: "/jellyfin:sync"
+          file: "jellyfin/sync.md"
+          description: "Trigger Jellyfin metadata sync to Supabase"
+          nats_subjects: []
+          pairing: null
+
+    # =======================================================================
+    # Domain: crush
+    # =======================================================================
+    - id: skills.crush
+      task: "Crush service management skills"
+      context: "Crush setup and status"
+      agent_hint: codex
+      skills:
+        - id: skills.crush.setup
+          command: "/crush:setup"
+          file: "crush/setup.md"
+          description: "Set up Crush service"
+          nats_subjects: []
+          pairing: null
+
+        - id: skills.crush.status
+          command: "/crush:status"
+          file: "crush/status.md"
+          description: "Check Crush service status"
+          nats_subjects: []
+          pairing: null
+
+    # =======================================================================
+    # Domain: k8s
+    # =======================================================================
+    - id: skills.k8s
+      task: "Kubernetes deployment skills"
+      context: "K8s deploy, logs, status"
+      agent_hint: codex
+      skills:
+        - id: skills.k8s.deploy
+          command: "/k8s:deploy"
+          file: "k8s/deploy.md"
+          description: "Deploy to Kubernetes"
+          nats_subjects: []
+          pairing: null
+
+        - id: skills.k8s.logs
+          command: "/k8s:logs"
+          file: "k8s/logs.md"
+          description: "View Kubernetes pod logs"
+          nats_subjects: []
+          pairing: null
+
+        - id: skills.k8s.status
+          command: "/k8s:status"
+          file: "k8s/status.md"
+          description: "Check Kubernetes cluster status"
+          nats_subjects: []
+          pairing: null
+
+    # =======================================================================
+    # Domain: workitems
+    # =======================================================================
+    - id: skills.workitems
+      task: "Work item management skills"
+      context: "Claim, complete, list work items"
+      agent_hint: codex
+      skills:
+        - id: skills.workitems.claim
+          command: "/workitems:claim"
+          file: "workitems/claim.md"
+          description: "Claim a work item"
+          nats_subjects: []
+          pairing: null
+
+        - id: skills.workitems.complete
+          command: "/workitems:complete"
+          file: "workitems/complete.md"
+          description: "Mark a work item as complete"
+          nats_subjects: []
+          pairing: null
+
+        - id: skills.workitems.list
+          command: "/workitems:list"
+          file: "workitems/list.md"
+          description: "List available work items"
+          nats_subjects: []
+          pairing: null
+
+    # =======================================================================
+    # Domain: tac
+    # =======================================================================
+    - id: skills.tac
+      task: "TAC tree review and audit skills"
+      context: "Review TAC tree status and completeness"
+      agent_hint: codex
+      skills:
+        - id: skills.tac.review
+          command: "/tac:review"
+          file: "tac/review.md"
+          description: "Review TAC tree audit results"
+          nats_subjects: []
+          pairing: null
+
+    # =======================================================================
+    # Domain: ultrathink
+    # =======================================================================
+    - id: skills.ultrathink
+      task: "Extended thinking and deep reasoning skills"
+      context: "Trigger ultrathink mode for complex tasks"
+      agent_hint: codex
+      skills:
+        - id: skills.ultrathink.ultrathink
+          command: "/ultrathink"
+          file: "ultrathink.md"
+          description: "Enable extended thinking mode for complex reasoning"
+          nats_subjects: []
+          pairing: null
+
+# ===========================================================================
+# Dependency Chains (from skill-pairings.yaml)
+# ===========================================================================
+dependency_chains:
+
+  - id: chain.model-benchmark-viz
+    name: "Model Benchmark Visualization"
+    nats_subject: "skills.pipeline.model-benchmark-viz.v1"
+    ultrathink: true
+    steps:
+      - step: 1
+        skill: "huggingface-skills/model-trainer"
+        agent: agent-zero
+        output: model_id
+        nats_hook: "skills.step.model-trainer.done.v1"
+      - step: 2
+        skill: "hf-benchmark"
+        agent: agent-zero
+        output: benchmark_results
+        nats_hook: "skills.step.hf-benchmark.done.v1"
+      - step: 3
+        skill: "a2ui-chart"
+        agent: archon
+        output: a2ui_spec
+        nats_hook: "skills.step.a2ui-chart.done.v1"
+      - step: 4
+        skill: "remotion-render"
+        agent: creator
+        output: video_url
+        nats_hook: "skills.pipeline.model-benchmark-viz.done.v1"
+
+  - id: chain.ingest-chit-index
+    name: "CHIT-Enhanced Ingestion"
+    nats_subject: "skills.pipeline.ingest-chit-index.v1"
+    steps:
+      - step: 1
+        skill: "extract-worker"
+        agent: extract-worker
+        output: content_chunks
+        nats_hook: "skills.step.extract-worker.done.v1"
+      - step: 2
+        skill: "chit-encode"
+        agent: tokenism
+        output: cgp_packets
+        nats_hook: "geometry.packet.encoded.v1"
+      - step: 3
+        skill: "hirag-index"
+        agent: hirag
+        output: index_result
+        nats_hook: "skills.pipeline.ingest-chit-index.done.v1"
+
+  - id: chain.research-summarize-render
+    name: "Research to Visual"
+    nats_subject: "skills.pipeline.research-render.v1"
+    ultrathink: true
+    steps:
+      - step: 1
+        skill: "deepresearch"
+        agent: deepresearch
+        output: research_results
+        nats_hook: "research.deepresearch.result.v1"
+      - step: 2
+        skill: "a2ui-chart"
+        agent: archon
+        output: a2ui_spec
+        nats_hook: "skills.step.a2ui-chart.done.v1"
+      - step: 3
+        skill: "remotion-render"
+        agent: creator
+        output: video_url
+        nats_hook: "skills.pipeline.research-render.done.v1"
+
+  - id: chain.chit-3d-viz
+    name: "CHIT 3D Visualization"
+    nats_subject: "skills.pipeline.chit-3d-viz.v1"
+    steps:
+      - step: 1
+        skill: "chit-encode"
+        agent: tokenism
+        output: cgp_packets
+        nats_hook: "geometry.packet.encoded.v1"
+      - step: 2
+        skill: "threejs-render"
+        agent: hyperdimensions
+        output: render_url
+        nats_hook: "skills.pipeline.chit-3d-viz.done.v1"
+
+  - id: chain.voice-synthesis
+    name: "Text to Prosodic Voice"
+    nats_subject: "skills.pipeline.voice-synthesis.v1"
+    steps:
+      - step: 1
+        skill: "text-generate"
+        agent: agent-zero
+        output: text_content
+        nats_hook: "skills.step.text-generate.done.v1"
+      - step: 2
+        skill: "prosodic-analyze"
+        agent: flute-gateway
+        output: prosodic_markers
+        nats_hook: "skills.step.prosodic-analyze.done.v1"
+      - step: 3
+        skill: "tts-synthesize"
+        agent: ultimate-tts
+        output: audio_url
+        nats_hook: "skills.pipeline.voice-synthesis.done.v1"
+
+  - id: chain.agent-card-gen
+    name: "Agent Card Art Generation"
+    nats_subject: "skills.pipeline.agent-card-gen.v1"
+    steps:
+      - step: 1
+        skill: "theme-lookup"
+        agent: archon
+        output: character_spec
+        nats_hook: "skills.step.theme-lookup.done.v1"
+      - step: 2
+        skill: "comfyui-generate"
+        agent: creator
+        output: image_url
+        nats_hook: "skills.step.comfyui-generate.done.v1"
+      - step: 3
+        skill: "a2ui-card"
+        agent: archon
+        output: agent_card
+        nats_hook: "skills.pipeline.agent-card-gen.done.v1"
+
+  - id: chain.pr-monitor-graphiti-chit
+    name: "PR Monitor Graphiti CHIT Flow"
+    nats_subject: "skills.pipeline.pr-monitor-graphiti-chit.v1"
+    steps:
+      - step: 1
+        skill: "pr-monitor"
+        command: "/pr-monitor"
+        agent: codex
+        output: pr_monitor_report
+        nats_hook: "ops.pr.monitor.completed.v1"
+        make_target: "make -C pmoves pr-monitor"
+      - step: 2
+        skill: "pr-hedge-trim"
+        command: "/pr-trim"
+        agent: claude-opus
+        output: trim_report
+        nats_hook: "ops.pr.trim.completed.v1"
+        make_target: "make -C pmoves pr-trim PR=<N>"
+      - step: 3
+        skill: "pr-learnings-encode"
+        command: "/chit:review-sweep"
+        agent: tokenism
+        output: pr_learnings_packet
+        nats_hook: "ops.pr.learnings.encoded.v1"
+        make_target: "make -C pmoves pr-monitor-chit-packet"
+      - step: 4
+        skill: "graphiti-trail-sync"
+        command: "/chit:sign-trail"
+        agent: archon
+        output: graphiti_handoff
+        nats_hook: "agent.graphiti.signed.v1"
+        make_target: "make -C pmoves sign-trail"
+
+  - id: chain.health-sync
+    name: "Health Data Sync"
+    nats_subject: "skills.pipeline.health-sync.v1"
+    steps:
+      - step: 1
+        skill: "n8n-health-sync"
+        agent: n8n
+        output: sync_result
+        nats_hook: "health.workouts.synced.v1"
+      - step: 2
+        skill: "health-weekly-cgp"
+        agent: tokenism
+        output: cgp_summary
+        nats_hook: "health.weekly.summary.v1"
+
+  - id: chain.finance-sync
+    name: "Finance Data Sync"
+    nats_subject: "skills.pipeline.finance-sync.v1"
+    steps:
+      - step: 1
+        skill: "n8n-finance-sync"
+        agent: n8n
+        output: sync_result
+        nats_hook: "finance.transactions.synced.v1"
+      - step: 2
+        skill: "finance-monthly-cgp"
+        agent: tokenism
+        output: cgp_summary
+        nats_hook: "finance.monthly.summary.v1"
+
+# ===========================================================================
+# Audit Summary
+# ===========================================================================
+audit:
+  rule: "Every skill in .claude/commands/ appears in exactly one domain"
+  coverage:
+    total_command_files: 118
+    mapped_skills: 118
+    unmapped: 0
+  domains_with_skills:
+    deploy: 7          # up, services, smoke-test, secrets-funnel, bootstrap-env, preflight, audit-layers
+    health: 3          # check-all, metrics, quick
+    github: 4          # actions, issues, pr-review, security
+    pr-review: 2       # pr-monitor, pr-trim
+    chit: 8            # bpm, bus, decode, encode, floos, review-sweep, sign-trail, visualize
+    voice: 2           # status, synthesize
+    tts: 4             # status, synthesize, test-all, voices
+    search: 3          # deepresearch, hirag, supaserch
+    agents: 5          # execute, mcp-query, status, subordinate, task-status
+    agent-sdk: 4       # create, handoff, resume, run
+    archon: 3          # forms, prompts, status
+    botz: 4            # init, mcp, profile, secrets
+    database: 3        # backup, migrate, query
+    observability: 3   # alerts, dashboard, query
+    gpu: 3             # models, optimize, status
+    model: 2           # load, unload
+    media: 10          # yt-status, yt-ingest-video, yt-add-channel, yt-add-playlist, yt-check-now, yt-help, yt-list-channels, yt-pending, yt-remove-channel, yt-toggle-channel
+    worktree: 4        # create, list, switch, cleanup
+    test: 2            # pr, smoke
+    docs: 1            # reconcile
+    tensorzero: 1      # models
+    cipher: 3          # store, search, reasoning
+    nats: 4            # status, publish, monitor, streams
+    notebook: 3        # query, status, sync
+    hyperdim: 3        # animate, export, render
+    discord: 2         # notify, status
+    minio: 3           # presign, status, upload
+    n8n: 4             # execute, nodes, suggest, workflows
+    langextract: 4     # extract, process, provider, status
+    pipecat: 2         # connect, status
+    jellyfin: 2        # status, sync
+    crush: 2           # setup, status
+    k8s: 3             # deploy, logs, status
+    workitems: 3       # claim, complete, list
+    tac: 1             # review
+    ultrathink: 1      # ultrathink
+  pairing_coverage:
+    total_pairings: 9
+    skills_in_pairings: 28
+    # Skills that appear in at least one pairing chain:
+    # model-benchmark-viz: model-trainer, hf-benchmark, a2ui-chart, remotion-render
+    # ingest-chit-index: extract-worker, chit-encode, hirag-index
+    # research-summarize-render: deepresearch, a2ui-chart, remotion-render
+    # chit-3d-viz: chit-encode, threejs-render
+    # voice-synthesis: text-generate, prosodic-analyze, tts-synthesize
+    # agent-card-gen: theme-lookup, comfyui-generate, a2ui-card
+    # pr-monitor-graphiti-chit: pr-monitor, pr-hedge-trim, pr-learnings-encode, graphiti-trail-sync
+    # health-sync: n8n-health-sync, health-weekly-cgp
+    # finance-sync: n8n-finance-sync, finance-monthly-cgp
