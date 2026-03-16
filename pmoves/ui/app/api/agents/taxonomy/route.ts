@@ -64,14 +64,6 @@ function parseLayerCoverage(markdown: string): Map<string, string[]> {
     if (match) {
       const name = match[1];
       const layerStr = match[2];
-      const layerCountStr = match[3];
-      const layerCount = parseInt(layerCountStr, 10); // Parsed but unused; we use layerStr parsing instead
-
-      // Validate layerCount is a valid number (defensive programming)
-      if (!isNaN(layerCount)) {
-        const _layerCount = layerCount;
-      }
-
       const layers: string[] = [];
       if (layerStr.includes('*')) {
         if (layerStr.includes('L0')) layers.push('L0');

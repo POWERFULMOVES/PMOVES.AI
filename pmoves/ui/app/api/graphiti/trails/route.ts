@@ -39,30 +39,6 @@ async function readTrailLog(): Promise<any | null> {
 }
 
 /**
- * Load CHIT passphrase for verification (unused, reserved for future implementation)
- */
-async function _getCHITPassphrase(): Promise<string | null> {
-  try {
-    // In production, this would come from a secure environment variable
-    // For now, we'll check if the file exists but return null (unsigned trails)
-    const fs = await import('fs/promises');
-    const path = await import('path');
-
-    const envPath = path.join(process.cwd(), 'pmoves', 'env.tier-agent');
-    try {
-      await fs.access(envPath);
-      // Passphrase exists but we don't read it directly for security
-      // Verification would happen server-side
-      return 'exists';
-    } catch {
-      return null;
-    }
-  } catch {
-    return null;
-  }
-}
-
-/**
  * Convert raw trail entry to TrailEntry format
  */
 function toTrailEntry(raw: any, idx: number): TrailEntry {
