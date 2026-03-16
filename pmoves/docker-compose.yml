@@ -1473,9 +1473,6 @@ services:
     - USE_CUDA=${USE_CUDA:-true}
     - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
     - FFW_PROVIDER=${FFW_PROVIDER:-faster-whisper}
-    # Clear Windows host SSL paths that leak into containers via Docker env inheritance
-    - SSL_CERT_FILE=
-    - SSL_CERT_DIR=
     - WHISPER_MODEL=${WHISPER_MODEL:-small}
     - WHISPER_LANGUAGE=${WHISPER_LANGUAGE:-en}
     deploy:
@@ -1728,8 +1725,6 @@ services:
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
-    # Prevent Windows SSL_CERT_FILE env leak
-    - SSL_CERT_FILE=
     extra_hosts:
     - host.docker.internal:host-gateway
     ports:
@@ -1874,8 +1869,6 @@ services:
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
-    # Prevent Windows SSL_CERT_FILE env leak
-    - SSL_CERT_FILE=
     gpus: all
     deploy:
       resources:
@@ -1998,8 +1991,6 @@ services:
     - A0_SET_browser_model_provider=openai
     - A0_SET_browser_model_name=agent_zero
     - A0_SET_browser_model_api_base=http://tensorzero-gateway:3000/openai/v1
-    # Prevent Windows SSL_CERT_FILE env leak (Windows path not valid in Linux container)
-    - SSL_CERT_FILE=
     depends_on:
       nats:
         condition: service_healthy
@@ -2069,8 +2060,6 @@ services:
       - GH_APP_ID=${GH_APP_ID:-}
       - GH_APP_SEC=${GH_APP_SEC:-}
       - GH_APP_INSTALLATION_ID=${GH_APP_INSTALLATION_ID:-}
-      # Prevent Windows SSL_CERT_FILE env leak
-      - SSL_CERT_FILE=
     depends_on:
       nats:
         condition: service_healthy
@@ -2467,9 +2456,6 @@ services:
     environment:
     - OLLAMA_HOST=0.0.0.0:11434
     - OLLAMA_MODELS=/root/.ollama/models
-    # Override Windows SSL cert paths leaked via env inheritance (x509 failures)
-    - SSL_CERT_FILE=
-    - SSL_CERT_DIR=
     - DOCKED_MODE=${DOCKED_MODE:-true}
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
