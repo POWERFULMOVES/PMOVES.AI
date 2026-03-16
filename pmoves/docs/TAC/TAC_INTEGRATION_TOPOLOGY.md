@@ -2,9 +2,9 @@
 
 > Master document connecting all TAC-documented submodules with their cross-repo integration points, NATS flows, and CHIT Geometry Bus lifecycle.
 
-**Version:** 2.1
+**Version:** 2.2
 **Last Updated:** 2026-03-15
-**Scope:** 23 markdown TAC trees + 12 YAML TAC trees + this topology map
+**Scope:** 26 markdown TAC trees + 14 YAML TAC trees + this topology map (~55% coverage)
 
 ### TAC Tree Index (v2.1 — 7 new P1 additions)
 
@@ -40,10 +40,22 @@
 - `TAC_RUNNERS.md` — CI/CD runner fleet
 - `TAC_TAILSCALE.md` — VPN mesh
 
+**Pipelines (Umbrella TACs):**
+- `TAC_EMBEDDING_PIPELINE.md` — Extract Worker + LangExtract + PDF Ingest (NEW)
+- `TAC_MEDIA_ANALYSIS.md` — Media-Video + Media-Audio analyzers (NEW)
+- `TAC_E2B_SANDBOX.md` — E2B code execution ecosystem (NEW)
+
 **Integrations:**
 - `TAC_HEALTH.md` — Fitness tracking (wger)
 - `TAC_WEALTH.md` — Finance management (Firefly III)
 - `TAC_INTEGRATION_TOPOLOGY.md` — This file (master map)
+
+**YAML Audit Trees (14):**
+- `agent-zero-customization.tac.yaml`, `archon-agents.tac.yaml`, `botz-mcp.tac.yaml`
+- `comfyui-pipeline.tac.yaml`, `dox-intelligence.tac.yaml` (NEW), `firefly-iii.tac.yaml` (UPDATED)
+- `health-wger.tac.yaml`, `hirag-retrieval.tac.yaml`, `n8n.tac.yaml`
+- `observability.tac.yaml`, `security-posture.tac.yaml`, `soundcloud-ingest.tac.yaml`
+- `tensorzero-gpu.tac.yaml`, `tokenism-chit.tac.yaml` (NEW)
 
 ---
 

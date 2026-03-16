@@ -1,0 +1,108 @@
+# TAC Tree: DoX Document Intelligence
+# Audits DoX backend, geometry visualization, NATS auth, Supabase integration
+
+name: "DoX Document Intelligence"
+version: "1.0.0"
+description: "Verify DoX document processing, geometric visualization, NATS authentication, and Supabase connectivity"
+
+root:
+  id: dox
+  task: "DoX document intelligence review"
+  context: "PMOVES-DoX/ submodule + pmoves/docker-compose.yml"
+  agent_hint: codex
+  children:
+
+    # =========================================================================
+    # Phase 1: Submodule & Service
+    # =========================================================================
+    - id: dox.submodule
+      task: "DoX submodule health"
+      context: "PMOVES-DoX/"
+      agent_hint: codex
+      children:
+        - id: dox.submodule.initialized
+          task: "DoX submodule initialized"
+          action:
+            type: file_exists
+            target: "PMOVES-DoX/package.json"
+            expect: "DoX submodule present with package.json"
+          agent_hint: codex
+
+        - id: dox.submodule.claude-md
+          task: "DoX CLAUDE.md exists"
+          action:
+            type: file_exists
+            target: "PMOVES-DoX/CLAUDE.md"
+            expect: "Developer context document present"
+          agent_hint: codex
+
+    # =========================================================================
+    # Phase 2: NATS Authentication (P1 Finding)
+    # =========================================================================
+    - id: dox.nats
+      task: "NATS auth configuration"
+      context: "DoX NATS is completely unauthenticated (P1 finding from deep-dive alignment)"
+      agent_hint: codex
+      children:
+        - id: dox.nats.auth-block
+          task: "NATS auth block configured"
+          action:
+            type: grep
+            target: "PMOVES-DoX/"
+            pattern: "nats.*auth|NATS_URL.*pmoves@"
+            expect: "Authenticated NATS URL used (nats://nats:pmoves@nats:4222)"
+          context: "Must use authenticated NATS URL, not bare nats://nats:4222"
+          agent_hint: codex
+
+        - id: dox.nats.subjects
+          task: "NATS subjects documented"
+          action:
+            type: grep
+            target: "PMOVES-DoX/"
+            pattern: "dox\\.|document\\."
+            expect: "DoX-specific NATS subjects defined"
+          agent_hint: codex
+
+    # =========================================================================
+    # Phase 3: Backend API
+    # =========================================================================
+    - id: dox.backend
+      task: "DoX backend API"
+      context: "Backend service with geometry visualization"
+      agent_hint: codex
+      children:
+        - id: dox.backend.healthz
+          task: "Health endpoint available"
+          action:
+            type: grep
+            target: "PMOVES-DoX/"
+            pattern: "healthz|health_check|/health"
+            expect: "/healthz endpoint implemented"
+          agent_hint: codex
+
+        - id: dox.backend.geometry
+          task: "Geometry visualization module"
+          action:
+            type: grep
+            target: "PMOVES-DoX/"
+            pattern: "geometry|three.?js|visualization"
+            expect: "Geometry visualization components present"
+          context: "DoX includes geometry bus visualization for CHIT"
+          agent_hint: codex
+
+    # =========================================================================
+    # Phase 4: Supabase Integration
+    # =========================================================================
+    - id: dox.supabase
+      task: "Supabase connectivity"
+      context: "DoX uses Supabase for document storage and metadata"
+      agent_hint: codex
+      children:
+        - id: dox.supabase.env-vars
+          task: "Supabase env vars configured"
+          action:
+            type: grep
+            target: "PMOVES-DoX/"
+            pattern: "SUPABASE_URL|SUPABASE_KEY|SUPA_REST"
+            expect: "Supabase connection variables defined"
+          agent_hint: codex
