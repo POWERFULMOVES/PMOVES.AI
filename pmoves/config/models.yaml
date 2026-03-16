@@ -70,6 +70,42 @@ models:
       vllm_name: Qwen/Qwen2.5-3B-Instruct
       hf_url: https://huggingface.co/Qwen/Qwen2.5-3B-Instruct
 
+    # Qwen 3.5 0.8B: Ultra-lightweight multimodal edge model (Mar 2026)
+    - name: qwen3.5-0.8b
+      hf_id: Qwen/Qwen3.5-0.8B
+      variants: [q4_k_m, q8_0, f16]
+      backends: [ollama]
+      context: 262144
+      uses: [utility, edge]
+      params: 0.8B
+      vram_min: 1GB
+      ollama_name: "qwen3.5:0.8b"
+      hf_url: https://huggingface.co/Qwen/Qwen3.5-0.8B
+
+    # Qwen 3.5 2B: Efficient multimodal utility (Mar 2026)
+    - name: qwen3.5-2b
+      hf_id: Qwen/Qwen3.5-2B
+      variants: [q4_k_m, q8_0, f16]
+      backends: [ollama]
+      context: 262144
+      uses: [utility, edge]
+      params: 2B
+      vram_min: 3GB
+      ollama_name: "qwen3.5:2b"
+      hf_url: https://huggingface.co/Qwen/Qwen3.5-2B
+
+    # Qwen 3.5 4B: Balanced utility/coding with vision (Mar 2026)
+    - name: qwen3.5-4b
+      hf_id: Qwen/Qwen3.5-4B
+      variants: [q4_k_m, q8_0, f16]
+      backends: [ollama]
+      context: 262144
+      uses: [utility, coding, edge]
+      params: 4B
+      vram_min: 4GB
+      ollama_name: "qwen3.5:4b"
+      hf_url: https://huggingface.co/Qwen/Qwen3.5-4B
+
   # ===========================================================================
   # Medium Models (7B-14B) - Single GPU
   # ===========================================================================
@@ -191,10 +227,80 @@ models:
       vllm_name: Qwen/Qwen3-8B-Instruct
       hf_url: https://huggingface.co/Qwen/Qwen3-8B-Instruct
 
+    # Qwen 3.5 9B: Primary workhorse — multimodal, vision, tools, thinking (Mar 2026)
+    - name: qwen3.5-9b
+      hf_id: Qwen/Qwen3.5-9B
+      variants: [q4_k_m, q8_0, f16]
+      backends: [ollama, vllm]
+      context: 262144
+      uses: [orchestrator, coding, utility, research]
+      params: 9B
+      vram_min: 7GB
+      vram_recommended: 10GB
+      tp_size: 1
+      ollama_name: "qwen3.5:9b"
+      vllm_name: Qwen/Qwen3.5-9B
+      hf_url: https://huggingface.co/Qwen/Qwen3.5-9B
+
+    # LFM2 24B-A2B: Liquid hybrid MoE — 24B total, 2B active (Dec 2025)
+    - name: lfm2-24b-a2b
+      hf_id: LiquidAI/LFM2-24B-A2B
+      variants: [q4_k_m, q8_0]
+      backends: [ollama]
+      context: 32768
+      uses: [utility, orchestrator]
+      params: 24B  # MoE: 2B active params
+      vram_min: 14GB
+      tp_size: 1
+      ollama_name: "lfm2:24b"
+      hf_url: https://huggingface.co/LiquidAI/LFM2-24B-A2B
+
   # ===========================================================================
   # Large Models (30B-70B) - Multi-GPU
   # ===========================================================================
   large:
+    # Qwen 3.5 27B Dense: Flagship reasoning (Mar 2026)
+    - name: qwen3.5-27b
+      hf_id: Qwen/Qwen3.5-27B
+      variants: [q4_k_m, q8_0]
+      backends: [ollama, vllm]
+      context: 262144
+      uses: [orchestrator, research, coding]
+      params: 27B
+      vram_min: 17GB
+      vram_recommended: 24GB
+      tp_size: 1
+      ollama_name: "qwen3.5:27b"
+      vllm_name: Qwen/Qwen3.5-27B
+      hf_url: https://huggingface.co/Qwen/Qwen3.5-27B
+
+    # Qwen 3.5 35B-A3B MoE: Fast flagship — 35B total, 3B active (Mar 2026)
+    - name: qwen3.5-35b-a3b
+      hf_id: Qwen/Qwen3.5-35B-A3B
+      variants: [q4_k_m, q8_0]
+      backends: [ollama, vllm]
+      context: 262144
+      uses: [orchestrator, research]
+      params: 35B  # MoE: 3B active params
+      vram_min: 22GB
+      tp_size: 1
+      ollama_name: "qwen3.5:35b"
+      vllm_name: Qwen/Qwen3.5-35B-A3B
+      hf_url: https://huggingface.co/Qwen/Qwen3.5-35B-A3B
+
+    # Nemotron-3-Super: NVIDIA agentic MoE — 120B total, 12B active
+    - name: nemotron-3-super
+      hf_id: nvidia/Nemotron-3-Super-49B-v1
+      variants: [q4_k_m]
+      backends: [ollama, vllm]
+      context: 262144
+      uses: [orchestrator, research]
+      params: 120B  # MoE: 12B active params
+      vram_min: 70GB
+      tp_size: 2
+      ollama_name: nemotron-3-super
+      hf_url: https://huggingface.co/nvidia/Nemotron-3-Super-49B-v1
+
     # Qwen 2.5 32B: High quality reasoning
     - name: qwen2.5-32b
       hf_id: Qwen/Qwen2.5-32B-Instruct

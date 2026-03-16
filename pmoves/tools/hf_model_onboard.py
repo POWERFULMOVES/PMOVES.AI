@@ -135,6 +135,11 @@ def estimate_params(model_id: str, tags: List[str]) -> Optional[int]:
     """Estimate parameter count from model name or tags."""
     # Try extracting from model name
     name_lower = model_id.lower()
+    # Handle MoE naming: "35B-A3B" means 35B total, 3B active
+    moe_match = re.search(r"(\d+\.?\d*)b-a(\d+\.?\d*)b", name_lower)
+    if moe_match:
+        return int(float(moe_match.group(1)) * 1_000_000_000)
+
     patterns = [
         (r"(\d+\.?\d*)b", 1_000_000_000),
         (r"(\d+\.?\d*)m", 1_000_000),

@@ -13,6 +13,30 @@
 
 ## Latest Changes (Mar 15, 2026)
 
+### TAC YAML Audit Trees + Umbrella Coverage (Mar 15, 2026)
+
+- **2 new YAML audit trees** — `dox-intelligence.tac.yaml`, `tokenism-chit.tac.yaml`
+- **1 YAML TAC updated** — `firefly-iii.tac.yaml` (fixed broken submodule reference)
+- **3 umbrella markdown TACs** for service groups:
+  - `TAC_EMBEDDING_PIPELINE.md` — Extract Worker (8083) + LangExtract (8084) + PDF Ingest (8092)
+  - `TAC_MEDIA_ANALYSIS.md` — Media-Video (8079) + Media-Audio (8082)
+  - `TAC_E2B_SANDBOX.md` — 5 E2B submodules (cloud execution)
+- **Coverage:** 26 markdown + 14 YAML = 40 TAC files (~55% of 62 agents)
+- Integration Topology updated to v2.2
+
+### TAC P1 Coverage Expansion (Mar 15, 2026)
+
+- **7 new P1 TAC trees** created for previously undocumented integration services:
+  - `TAC_SUPASERCH.md` — Multimodal holographic research orchestrator (8099)
+  - `TAC_DEEPRESEARCH.md` — LLM-based research planner (8098)
+  - `TAC_PMOVES_YT.md` — YouTube ingestion pipeline (8077)
+  - `TAC_EVOSWARM.md` — Evolutionary optimization controller (8113)
+  - `TAC_GPU_ORCHESTRATOR.md` — GPU mesh management (8200)
+  - `TAC_CONSCIOUSNESS.md` — CGP consciousness mapping (8105)
+  - `TAC_GATEWAY_AGENT.md` — MCP tool orchestration gateway (8100)
+- **TAC Integration Topology** updated to v2.1 with complete index
+- **Coverage:** 23 markdown TACs + 12 YAML TACs = 35 total (up from 28)
+
 ### Platform Activation Session 2 (Mar 15, 2026)
 
 - **GPU Make targets added** — `make up-ollama`, `up-gpu-orchestrator`, `up-vllm`, `model-pull`, `gpu-status` in `pmoves/mk/infra.mk`
