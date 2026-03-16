@@ -15,6 +15,7 @@ extensions.json
 # Data directories (generated)
 data/chit/
 data/jellyfin/
+rustdesk-data/
 data/open-notebook/
 notebook_data/
 surreal_data/
