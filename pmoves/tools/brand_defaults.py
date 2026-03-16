@@ -321,6 +321,11 @@ def upsert_env(path: Path, env_gen_path: Path, pairs: dict[str, str]) -> None:
     # Agent Zero defaults: MCP secret, JetStream, model routing.
     text = _ensure_agent_zero_defaults(text)
 
+    # CHIT passphrase: auto-generate if blank (HMAC signing + anchor encryption key).
+    chit_pass = _get_kv(text, "CHIT_PASSPHRASE")
+    if _is_blank_or_placeholder(chit_pass):
+        text = _set_kv(text, "CHIT_PASSPHRASE", _strong_random(48))
+
     path.write_text(text, encoding="utf-8")
 
     # Mirror NEO4J_AUTH into .env.generated for compose-only consumers.
