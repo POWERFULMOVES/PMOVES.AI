@@ -13,6 +13,19 @@
 
 ## Latest Changes (Mar 15, 2026)
 
+### TAC P1 Coverage Expansion (Mar 15, 2026)
+
+- **7 new P1 TAC trees** created for previously undocumented integration services:
+  - `TAC_SUPASERCH.md` — Multimodal holographic research orchestrator (8099)
+  - `TAC_DEEPRESEARCH.md` — LLM-based research planner (8098)
+  - `TAC_PMOVES_YT.md` — YouTube ingestion pipeline (8077)
+  - `TAC_EVOSWARM.md` — Evolutionary optimization controller (8113)
+  - `TAC_GPU_ORCHESTRATOR.md` — GPU mesh management (8200)
+  - `TAC_CONSCIOUSNESS.md` — CGP consciousness mapping (8105)
+  - `TAC_GATEWAY_AGENT.md` — MCP tool orchestration gateway (8100)
+- **TAC Integration Topology** updated to v2.1 with complete index
+- **Coverage:** 23 markdown TACs + 12 YAML TACs = 35 total (up from 28)
+
 ### Platform Activation Session 2 (Mar 15, 2026)
 
 - **GPU Make targets added** — `make up-ollama`, `up-gpu-orchestrator`, `up-vllm`, `model-pull`, `gpu-status` in `pmoves/mk/infra.mk`
