@@ -111,12 +111,12 @@ CGP packet with real-world grounding
 
 | Requirement | Status | Notes |
 |-------------|--------|-------|
-| `/healthz` endpoint | **MISSING** | Needs implementation |
-| `/metrics` (Prometheus) | **MISSING** | Needs implementation |
+| `/healthz` endpoint | **Partial** | `/api/v1/about` used as healthcheck probe; custom `/healthz` still needed |
+| `/metrics` (Prometheus) | **MISSING** | Needs laravel-prometheus |
 | Auth (JWT/Bearer) | Partial | Firefly III has its own OAuth; needs PMOVES bridge |
-| Docker hardening | Partial | Base Firefly III Docker; needs PMOVES hardening |
+| Docker hardening | **GREEN** | cap_drop ALL, no-new-privileges, tmpfs, resource limits in external compose |
 | NATS auth | **MISSING** | No NATS integration yet |
-| `env.shared` format | **Unknown** | Needs audit |
+| `env.shared` format | **GREEN** | Uses env var substitution from env files |
 | Default credentials | **P2** | MinIO default creds risk (if connected) |
 
 ## Hardening Roadmap
@@ -131,10 +131,12 @@ CGP packet with real-world grounding
 2. Publish `finance.transactions.ingested.v1` on import webhook
 3. Publish `finance.monthly.summary.v1` via scheduled task
 
-### Phase 3: Docker Hardening
-1. Add `cap_drop: [ALL]`, `cap_add: [NET_BIND_SERVICE]`
-2. Non-root user directive
-3. Secure environment variable handling (no `export` syntax)
+### Phase 3: Docker Hardening — **DONE**
+1. ~~Add `cap_drop: [ALL]`~~ → Applied in `docker-compose.external.yml`
+2. ~~security_opt~~ → `no-new-privileges:true`
+3. ~~tmpfs~~ → Laravel framework cache/sessions/views + /tmp
+4. ~~Resource limits~~ → 2 CPU / 1G memory
+5. ~~Healthcheck~~ → `/api/v1/about` probe (30s interval)
 
 ### Phase 4: CHIT Integration
 1. Bridge real transactions to ToKenism FoodUSD simulation
@@ -152,12 +154,14 @@ CGP packet with real-world grounding
 
 ## Open Items
 
-- No `/healthz` or `/metrics` endpoints
+- Custom `/healthz` endpoint needed (currently using `/api/v1/about` as probe)
+- No `/metrics` endpoint — needs laravel-prometheus
 - No NATS integration — finance events not published
-- Docker hardening incomplete
+- ~~Docker hardening incomplete~~ → Done (cap_drop, security_opt, tmpfs, resources)
 - No CHIT integration
 - Auth bridge between Firefly III OAuth and PMOVES JWT needed
-- Port assignment needed
+- ~~Port assignment needed~~ → Port 8075 host / 8080 container
 - ToKenism correlation pipeline not implemented
 
 <!-- GRAPHITI_MARK: CLAUDE-OPUS::TAC-TOPOLOGY-AUDIT::2026-02-20 -->
+<!-- GRAPHITI_MARK: CLAUDE-OPUS::TAC-HARDENING-UPDATE::2026-03-16 -->
