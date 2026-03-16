@@ -193,6 +193,16 @@ _BRANDING_FIELD_METADATA: Dict[str, Dict[str, str]] = {
         "default": "",
         "description": "External link for help / support surfaced in the admin footer.",
     },
+    "theme_pack": {
+        "env": "JELLYFIN_BRAND_THEME_PACK",
+        "default": "transformers-1986",
+        "description": "Active TAC theme pack from agent-themes.yaml.",
+    },
+    "custom_css": {
+        "env": "JELLYFIN_BRAND_CUSTOM_CSS",
+        "default": "",
+        "description": "Generated CSS from TAC tree (auto-populated on theme apply).",
+    },
 }
 
 BRANDING_DEFAULTS: Dict[str, str] = {
@@ -776,6 +786,95 @@ def update_jellyfin_branding(body: Dict[str, Any] = Body(...)):
         raise HTTPException(400, "no branding fields supplied")
     branding = _update_branding_state(updates)
     return {"ok": True, "branding": branding, "updated": list(updates.keys())}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# TAC Tree — Theme-Agent-Character Theming
+# ─────────────────────────────────────────────────────────────────────────────
+try:
+    from . import tac_tree as _tac
+except ImportError:
+    import tac_tree as _tac  # type: ignore[no-redef]
+
+TAC_REQUESTS = Counter(
+    "jellyfin_bridge_tac_requests_total",
+    "Total TAC tree theme requests",
+    ["endpoint", "status"],
+)
+
+
+@app.get("/jellyfin/theme/tac-tree")
+def jellyfin_tac_tree():
+    """Return the full TAC tree structure (theme packs + agent mappings)."""
+    try:
+        tree = _tac.get_tac_tree()
+        TAC_REQUESTS.labels(endpoint="tac_tree", status="ok").inc()
+        return {"ok": True, "tac_tree": tree}
+    except Exception as exc:
+        TAC_REQUESTS.labels(endpoint="tac_tree", status="error").inc()
+        raise HTTPException(500, f"TAC tree load failed: {exc}")
+
+
+@app.get("/jellyfin/theme/packs")
+def jellyfin_theme_packs():
+    """List available theme packs."""
+    return {"ok": True, "packs": _tac.list_theme_packs()}
+
+
+@app.get("/jellyfin/theme/preview/{agent_key}")
+def jellyfin_theme_preview(agent_key: str, theme_pack: Optional[str] = None):
+    """Preview TAC tree CSS for an agent without applying it."""
+    css = _tac.generate_tac_css(theme_pack=theme_pack, agent_key=agent_key)
+    mapping = _tac.resolve_agent_mapping(agent_key)
+    return {"ok": True, "agent": agent_key, "css": css, "mapping": mapping}
+
+
+@app.post("/jellyfin/theme/apply")
+def jellyfin_theme_apply(body: Dict[str, Any] = Body(...)):
+    """Generate TAC CSS and push it to Jellyfin's branding configuration.
+
+    Body: {"theme_pack": "transformers-1986", "agent": "jellyfin-ai"}
+    """
+    agent_key = body.get("agent", "jellyfin-ai")
+    theme_pack = body.get("theme_pack")
+
+    css = _tac.generate_tac_css(theme_pack=theme_pack, agent_key=agent_key)
+    if not css or css.startswith("/* TAC tree: no mapping"):
+        TAC_REQUESTS.labels(endpoint="apply", status="not_found").inc()
+        raise HTTPException(404, f"No TAC mapping for agent '{agent_key}'")
+
+    # Push CSS to Jellyfin branding API
+    applied_to_jellyfin = False
+    if JELLYFIN_URL and JELLYFIN_API_KEY:
+        try:
+            branding_url = f"{JELLYFIN_URL}/System/Configuration/branding"
+            headers = {"X-Emby-Token": JELLYFIN_API_KEY, "Content-Type": "application/json"}
+            # Fetch current branding config
+            current = httpx.get(branding_url, headers=headers, timeout=8)
+            current.raise_for_status()
+            branding_config = current.json()
+            branding_config["CustomCss"] = css
+            # Push updated config
+            resp = httpx.post(branding_url, json=branding_config, headers=headers, timeout=8)
+            resp.raise_for_status()
+            applied_to_jellyfin = True
+        except Exception as exc:
+            LOGGER.warning("Failed to push TAC CSS to Jellyfin: %s", exc)
+
+    # Update branding state
+    _update_branding_state({
+        "theme_pack": theme_pack or "default",
+        "custom_css": css[:500],  # Truncate for state storage
+    })
+
+    TAC_REQUESTS.labels(endpoint="apply", status="ok").inc()
+    return {
+        "ok": True,
+        "agent": agent_key,
+        "theme_pack": theme_pack,
+        "applied_to_jellyfin": applied_to_jellyfin,
+        "css_length": len(css),
+    }
 
 
 @app.get("/jellyfin/config")
