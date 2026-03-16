@@ -1478,6 +1478,9 @@ services:
     - USE_CUDA=${USE_CUDA:-true}
     - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
     - FFW_PROVIDER=${FFW_PROVIDER:-faster-whisper}
+    # Clear Windows host SSL paths that leak into containers via Docker env inheritance
+    - SSL_CERT_FILE=
+    - SSL_CERT_DIR=
     - WHISPER_MODEL=${WHISPER_MODEL:-small}
     - WHISPER_LANGUAGE=${WHISPER_LANGUAGE:-en}
     deploy:
