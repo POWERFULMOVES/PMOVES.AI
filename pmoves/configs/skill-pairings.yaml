@@ -293,6 +293,46 @@ skill_sources:
   pr-monitor: "pmoves/tools/pr_monitor.py"
   pr-learnings-encode: "pmoves/tools/chit_encode_hook.py"
   graphiti-trail-sync: "docs/AGENT_TRAIL.md"
+  gh-secrets-sync: ".github/workflows/sync-secrets-local.yml"
+  secrets-funnel: "pmoves/tools/secrets_sync.py"
+  deploy-services: "deploy/scripts/deploy-compose.sh"
+
+  # Fleet Secrets Sync → Bootstrap → Deploy
+  fleet-secrets-bootstrap:
+    name: "Fleet Secrets Bootstrap"
+    description: "Sync CHIT secrets from GitHub to local host, run funnel, bootstrap services"
+    nats_subject: "skills.pipeline.fleet-secrets-bootstrap.v1"
+    chain:
+      - skill: gh-secrets-sync
+        output: cgp_bundle_path
+        agent: codex
+        depends:
+          services: []
+          health: null
+        hooks:
+          on_complete: "skills.step.gh-secrets-sync.done.v1"
+          on_error: "skills.error.v1"
+        notes: "gh workflow run sync-secrets-local.yml --ref feat/distributed-submodules -f output_format=cgp -f target_os=<os>"
+      - skill: secrets-funnel
+        input: cgp_bundle_path
+        output: env_populated
+        agent: codex
+        depends:
+          skills: ["gh-secrets-sync"]
+        hooks:
+          on_complete: "skills.step.secrets-funnel.done.v1"
+          on_error: "skills.error.v1"
+        notes: "make -C pmoves env-setup && make -C pmoves secrets-funnel"
+      - skill: deploy-services
+        input: env_populated
+        output: services_up
+        agent: codex
+        depends:
+          skills: ["secrets-funnel"]
+        hooks:
+          on_complete: "skills.step.deploy-services.done.v1"
+          on_error: "skills.error.v1"
+        notes: "make -C pmoves up-jellyfin-ai-nvenc (or profile-specific target)"
 
 # FlOO$ configuration
 floos:
