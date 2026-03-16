@@ -5,6 +5,15 @@ services:
     # the docker network (see pmoves_comfy_gen flow).
     image: ${COMFYUI_IMAGE:-runpod/comfyui:latest}
     restart: unless-stopped
+    # RunPod image clones ComfyUI from GitHub on first start — needs external
+    # network access. Services on only internal: true networks (pmoves_api,
+    # pmoves_data) cannot resolve external DNS because iptables drops forwarding
+    # packets. Adding pmoves_external (non-internal) provides the route.
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
       # Most ComfyUI images honor CLI_ARGS; if not, the image default should still bind :8188.
       - CLI_ARGS=--listen 0.0.0.0 --port 8188
@@ -21,7 +30,7 @@ services:
             - driver: nvidia
               capabilities: [compute,utility]
               count: ${GPU_COUNT:-all}
-    networks: [api_tier, data_tier]
+    networks: [api_tier, data_tier, external_tier]
 
 networks:
   api_tier:
@@ -30,7 +39,9 @@ networks:
   data_tier:
     external: true
     name: pmoves_data
+  external_tier:
+    external: true
+    name: pmoves_external
 
 volumes:
   comfyui-data: {}
-
