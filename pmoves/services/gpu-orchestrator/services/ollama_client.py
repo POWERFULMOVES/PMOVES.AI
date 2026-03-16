@@ -113,7 +113,7 @@ class OllamaClient:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
                 response = await client.post(
                     f"{self.base_url}/api/show",
-                    json={"name": model_name},
+                    json={"model": model_name},
                 )
                 if response.status_code == 200:
                     return response.json()
