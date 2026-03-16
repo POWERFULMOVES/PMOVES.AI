@@ -152,6 +152,24 @@
       "description": "Secrets reused across PMOVES services (Supabase, providers, integrations).",
       "variables": [
         {
+          "key": "SSL_CERT_FILE",
+          "file": "pmoves/env.shared",
+          "prompt": null,
+          "default": "",
+          "help": "Clear Windows SSL cert path leak in Docker containers. Always empty.",
+          "required": false,
+          "sensitive": false
+        },
+        {
+          "key": "SSL_CERT_DIR",
+          "file": "pmoves/env.shared",
+          "prompt": null,
+          "default": "",
+          "help": "Clear Windows SSL cert dir leak in Docker containers. Always empty.",
+          "required": false,
+          "sensitive": false
+        },
+        {
           "key": "SUPABASE_URL",
           "file": "pmoves/env.shared",
           "prompt": "Remote Supabase base URL",
