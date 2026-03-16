@@ -549,9 +549,9 @@ Example: `ingest.transcript.ready.v1`
   ```
 - **Subscribers:** Monitoring dashboards, Discord Publisher
 
-## Health & Fitness Subjects (Planned)
+## Health & Fitness Subjects
 
-> **Status:** Planned — Health (wger) integration is pre-stage maturity. These subjects define the target contract.
+> **Status:** Subjects defined and NATS wiring active in main compose (`NATS_URL` + `WGER_ENABLE_NATS`). n8n workflows defined but require activation and smoke testing before production use.
 
 **`health.metrics.updated.v1`**
 - **Direction:** Published by Health (wger) service
