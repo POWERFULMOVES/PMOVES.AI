@@ -196,11 +196,11 @@ def generate_function_variants(catalog: Dict) -> str:
 
     # Component model mappings
     component_mapping = {
-        "orchestrator": ["qwen2.5-32b", "qwen2.5-14b", "qwen2.5-7b", "phi3-mini"],
-        "builder": ["qwen2.5-14b", "qwen2.5-7b", "llama3.1-8b", "qwen2.5-3b"],
-        "auditor": ["qwen2.5-7b", "qwen2.5-3b", "gemma-2-2b", "phi3-mini"],
-        "coding": ["qwen2.5-coder-7b", "deepseek-coder-6.7b", "qwen2.5-7b"],
-        "utility": ["qwen2.5-3b", "phi3-mini", "gemma-2-2b"],
+        "orchestrator": ["qwen3.5-27b", "qwen3.5-9b", "lfm2-24b-a2b", "qwen2.5-14b", "qwen3.5-4b"],
+        "builder": ["qwen3.5-9b", "qwen2.5-7b", "lfm2-24b-a2b", "qwen3.5-4b"],
+        "auditor": ["qwen3.5-4b", "qwen2.5-3b", "qwen3.5-2b", "qwen3.5-0.8b"],
+        "coding": ["qwen3.5-9b", "qwen2.5-coder-7b", "qwen3.5-4b", "deepseek-coder-6.7b"],
+        "utility": ["qwen3.5-4b", "qwen3.5-2b", "lfm2-24b-a2b", "qwen2.5-3b"],
         "vl_sentinel": ["qwen3-vl-8b", "qwen2-vl-7b"],
     }
 
