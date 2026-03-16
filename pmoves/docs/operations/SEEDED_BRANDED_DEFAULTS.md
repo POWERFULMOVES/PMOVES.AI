@@ -5,6 +5,26 @@ This note summarizes the default logins, URLs, and branded settings that
 for initial credentials; rotate everything after first bring-up and update
 `pmoves/env.shared` accordingly.
 
+## Operator Identity & Branding
+
+Set `OPERATOR_EMAIL` once in `pmoves/env.shared` and `brand_defaults.py` cascades
+it to downstream services that still have placeholder emails:
+
+| Variable | Cascades To | Default (New Deployers) |
+|----------|-------------|------------------------|
+| `OPERATOR_EMAIL` | SUPABASE_BOOT_USER_EMAIL, N8N_OWNER_EMAIL, WGER_BRAND_ADMIN_EMAIL | _(empty)_ |
+| `SUPPORT_EMAIL` | _(standalone)_ | _(empty)_ |
+| `BRAND_NAME` | UI surfaces, notifications | `PMOVES.AI` |
+
+**Cascade logic:** If `OPERATOR_EMAIL` is set and non-placeholder, any downstream
+service email that is still a placeholder (`you@example.com`, `admin@example.com`,
+`${...}` template reference) is replaced with the operator email value.
+
+**DARKXSIDE values** (set in `env.shared`, not hardcoded):
+- `OPERATOR_EMAIL=POWERFULMOVES@pmoves.ai`
+- `SUPPORT_EMAIL=pmoves@pmoves.ai`
+- `BRAND_NAME=PMOVES.AI by Cataclysm Studios`
+
 ## Core Data Plane
 
 - **Supabase CLI**
