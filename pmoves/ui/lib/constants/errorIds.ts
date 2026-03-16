@@ -89,6 +89,9 @@ export const ErrorIds = {
   ARCHON_PROMPT_EXECUTE_FAILED: 'archon_prompt_execute_failed',
   ARCHON_HEALTH_CHECK_FAILED: 'archon_health_check_failed',
 
+  // === MONITOR ERRORS ===
+  MONITOR_STATS_FETCH_FAILED: 'monitor_stats_fetch_failed',
+
   // === FLUTE ERRORS ===
   FLUTE_SYNTHESIS_FAILED: 'flute_synthesis_failed',
   FLUTE_WEBSOCKET_FAILED: 'flute_websocket_failed',
