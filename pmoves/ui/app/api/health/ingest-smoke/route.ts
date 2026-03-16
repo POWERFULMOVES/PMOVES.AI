@@ -59,7 +59,8 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  const ownerId = (await getBootUserId()) || request.headers.get('x-owner-id') || '';
+  // Security: identity from boot user only, never from request headers
+  const ownerId = (await getBootUserId()) || '';
   if (!ownerId) {
     return NextResponse.json({ error: 'ownerId not resolvable' }, { status: 400 });
   }
@@ -70,11 +71,11 @@ export async function POST(request: NextRequest) {
   try {
     await fetch(`${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3001'}/api/uploads/presign`, { method: 'OPTIONS' });
     // OPTIONS noop to warm middleware; ignored
-  } catch {}
+  } catch { /* presign warmup is best-effort */ }
   try {
     // storage.buckets is only available via PostgREST; use RPC via SQL if needed.
     // Here we rely on UI upload flow to create buckets; if missing, we proceed anyway.
-  } catch {}
+  } catch { /* bucket check is best-effort */ }
   const uploadId = randomUUID();
   const key = `${DEFAULT_NAMESPACE}/users/${ownerId}/uploads/${uploadId}/smoke.txt`;
 
