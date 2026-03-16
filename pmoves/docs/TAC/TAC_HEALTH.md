@@ -7,13 +7,14 @@
 | Field | Value |
 |-------|-------|
 | **Service** | Health (wger) |
-| **Port** | None assigned |
-| **Health** | **MISSING** — needs `/healthz` endpoint |
+| **Port** | 8000 (`WGER_PORT`, compose: main + external) |
+| **Health** | `GET /healthz/` (3-tier: healthy/degraded/unhealthy) |
+| **Metrics** | `GET /metrics/` (Prometheus, gated by `EXPOSE_PROMETHEUS_METRICS`) |
 | **Submodule** | `Pmoves-Health-wger` |
-| **Docker Profile** | TBD |
-| **Tier** | ui |
+| **Docker Profile** | `health`, `wger` |
+| **Tier** | api |
 | **Class** | Specialized |
-| **Evolution** | Base |
+| **Evolution** | Stage 1 |
 
 ## Architecture
 
@@ -22,13 +23,13 @@ Health is a **Django/wger** fitness tracking application integrated into the PMO
 1. **Workout tracking** — Exercise logs, routines, progress
 2. **Nutrition logging** — Calorie and macro tracking
 3. **Health metrics** — Body measurements, weight history
-4. **NATS integration** (planned) — Health event publishing
+4. **NATS integration** — Health event publishing (wired in main compose)
 
 ## Upstream Dependencies
 
 | Dependency | Type | Required |
 |------------|------|----------|
-| NATS (4222) | Health event publishing | Planned |
+| NATS (4222) | Health event publishing | Yes (main compose) |
 | Supabase (3010) | Cross-platform user data | Planned |
 | PostgreSQL | wger database backend | Yes |
 
@@ -92,31 +93,32 @@ Health is a **Django/wger** fitness tracking application integrated into the PMO
 
 | Requirement | Status | Notes |
 |-------------|--------|-------|
-| `/healthz` endpoint | **MISSING** | Needs implementation |
-| `/metrics` (Prometheus) | **MISSING** | Needs implementation |
-| Auth (JWT/Bearer) | **MISSING** | wger has its own auth; needs PMOVES JWT bridge |
-| Docker hardening | **Template only** | Needs cap_drop, read_only, tmpfs patterns |
-| NATS auth | **MISSING** | No NATS integration yet |
-| `env.shared` format | **Unknown** | Needs audit |
+| `/healthz` endpoint | **GREEN** | 3-tier model (healthy/degraded/unhealthy) at `wger/observability/views.py` |
+| `/metrics` (Prometheus) | **GREEN** | Prometheus format at `/metrics/`, gated by `EXPOSE_PROMETHEUS_METRICS` |
+| Auth (JWT/Bearer) | **Partial** | Token auth via `WGER_API_TOKEN`; PMOVES JWT bridge still needed |
+| Docker hardening | **GREEN** | `*tier-api-hardened` in main compose (cap_drop ALL, security_opt) |
+| NATS integration | **GREEN** | `NATS_URL` + `WGER_ENABLE_NATS` in main compose |
+| `env.shared` format | **GREEN** | Main compose uses `env.shared` + `env.tier-api` via anchor |
+| Prometheus scrape | **MISSING** | Not yet in `prometheus.yml` — wger exposes metrics but isn't scraped |
 
 ## Hardening Roadmap
 
-This is the **least mature** integration. TAC tree serves as the hardening roadmap:
+Wger has progressed significantly since initial audit. Phases 1-3 are largely complete:
 
-### Phase 1: Health Check & Metrics
-1. Add `/healthz` endpoint (Django health check middleware)
-2. Add `/metrics` endpoint (django-prometheus)
-3. Register in Prometheus scrape config
+### Phase 1: Health Check & Metrics — **DONE**
+1. ~~Add `/healthz` endpoint~~ → Implemented: 3-tier model in `wger/observability/views.py`
+2. ~~Add `/metrics` endpoint~~ → Implemented: Prometheus export in `wger/observability/views.py`
+3. Register in Prometheus scrape config → **PENDING** (wger not yet in `prometheus.yml`)
 
-### Phase 2: NATS Integration
-1. Add `nats-py` client to wger
-2. Publish `health.metrics.updated.v1` on metric save
-3. Publish `health.weekly.summary.v1` via cron/celery
+### Phase 2: NATS Integration — **DONE**
+1. ~~Add `nats-py` client to wger~~ → Wired via compose `NATS_URL` + `WGER_ENABLE_NATS`
+2. Publish `health.metrics.updated.v1` on metric save → Subjects defined, n8n sync active
+3. Publish `health.weekly.summary.v1` via cron/celery → n8n workflow `health_weekly_to_cgp.json`
 
-### Phase 3: Docker Hardening
-1. Add `cap_drop: [ALL]`, `cap_add: [NET_BIND_SERVICE]`
-2. Add `read_only: true` with tmpfs for `/tmp`, `/var/run`
-3. Non-root user directive
+### Phase 3: Docker Hardening — **DONE**
+1. ~~Add `cap_drop: [ALL]`~~ → `*tier-api-hardened` in main compose (line 3009)
+2. ~~Add security_opt~~ → `no-new-privileges:true` via anchor
+3. ~~Healthcheck~~ → Python urllib probe at `/api/v2/health/` (line 3043)
 
 ### Phase 4: CHIT Integration
 1. Enable `delta_sensitive` and `hz_sensitive` toggles
@@ -133,11 +135,14 @@ This is the **least mature** integration. TAC tree serves as the hardening roadm
 
 ## Open Items
 
-- No `/healthz` or `/metrics` endpoints
-- No NATS integration — health events not published
-- No Docker hardening beyond template
+- ~~No `/healthz` or `/metrics` endpoints~~ → Implemented in `wger/observability/`
+- ~~No NATS integration~~ → Wired in main compose + n8n workflows
+- ~~No Docker hardening~~ → `*tier-api-hardened` in main compose
+- ~~Port assignment needed~~ → Port 8000, profiles `health`/`wger`
+- Prometheus scrape job not yet configured (wger exposes metrics but isn't scraped)
 - No CHIT integration
 - Auth bridge between wger and PMOVES JWT system needed
-- Port assignment needed
+- Mobile app integration docs needed in TAC (Flutter Android/iOS official apps)
 
 <!-- GRAPHITI_MARK: CLAUDE-OPUS::TAC-TOPOLOGY-AUDIT::2026-02-20 -->
+<!-- GRAPHITI_MARK: CLAUDE-OPUS::TAC-STATUS-UPDATE::2026-03-16 -->
