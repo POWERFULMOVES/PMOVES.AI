@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json(body, { status: res.status });
   } catch (e) {
     logError('Failed to fetch monitor stats', e, 'error', {
-      errorId: ErrorIds.NOTEBOOK_RUNTIME_FETCH_FAILED,
+      errorId: ErrorIds.MONITOR_STATS_FETCH_FAILED,
       component: 'monitor/stats',
     });
     return NextResponse.json({ error: 'Service temporarily unavailable' }, { status: 502 });

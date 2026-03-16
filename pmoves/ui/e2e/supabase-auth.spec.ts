@@ -9,6 +9,7 @@ test.describe('Supabase boot session', () => {
     await page.waitForFunction(() => Boolean((window as any).__PMOVES_SUPABASE_BOOT));
     const bootInfo = await page.evaluate(() => (window as any).__PMOVES_SUPABASE_BOOT);
     expect(bootInfo.hasBootJwt).toBe(true);
-    expect(bootInfo.authorization).toBe(`Bearer ${EXPECTED_BOOT_JWT}`);
+    // Security: authorization field removed from window object to prevent XSS token theft
+    expect(bootInfo.authorization).toBeUndefined();
   });
 });

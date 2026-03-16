@@ -5,6 +5,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { ownerFromJwt } from '@/lib/jwtUtils';
+import { logError } from '@/lib/errorUtils';
 import type { GraphitiTrailsResponse, TrailEntry, TrailStats } from '@/lib/types/graphiti';
 
 export const runtime = 'nodejs'; // Needs fs access
@@ -209,10 +210,12 @@ export async function GET(request: NextRequest) {
     });
 
   } catch (error) {
+    logError('Failed to load trail entries', error, 'error', {
+      component: 'graphiti/trails',
+    });
     return NextResponse.json(
       {
         error: 'Failed to load trail entries',
-        message: error instanceof Error ? error.message : String(error),
         items: [],
         stats: {
           total: 0,

@@ -13,16 +13,20 @@ export interface OwnerResult {
  * Handles base64url encoding (RFC 4648).
  */
 function decodeJwtSub(token: string): string | null {
-  const parts = token.split('.');
-  if (parts.length !== 3) return null;
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return null;
 
-  let payload = parts[1];
-  payload = payload.replace(/-/g, '+').replace(/_/g, '/');
-  const padding = payload.length % 4;
-  if (padding) payload += '='.repeat(4 - padding);
+    let payload = parts[1];
+    payload = payload.replace(/-/g, '+').replace(/_/g, '/');
+    const padding = payload.length % 4;
+    if (padding) payload += '='.repeat(4 - padding);
 
-  const json = JSON.parse(Buffer.from(payload, 'base64').toString('utf-8')) as { sub?: string };
-  return typeof json.sub === 'string' ? json.sub : null;
+    const json = JSON.parse(Buffer.from(payload, 'base64').toString('utf-8')) as { sub?: string };
+    return typeof json.sub === 'string' ? json.sub : null;
+  } catch {
+    return null;
+  }
 }
 
 /**
