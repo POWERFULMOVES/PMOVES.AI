@@ -160,8 +160,9 @@ export async function GET(request: NextRequest) {
     // Handle both single entry and array formats
     const entries = Array.isArray(trailData) ? trailData : [trailData];
 
-    // Convert to TrailEntry format
+    // Convert to TrailEntry format, filtering out malformed entries
     let trailEntries: TrailEntry[] = entries
+      .filter((item): item is Record<string, unknown> => item != null && typeof item === 'object' && !Array.isArray(item))
       .map((raw, idx) => toTrailEntry(raw, idx))
       .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 
