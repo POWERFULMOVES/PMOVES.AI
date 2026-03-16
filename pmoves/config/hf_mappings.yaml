@@ -153,6 +153,72 @@ text_generation:
       recommended_for: [vl_sentinel]
       release_date: 2025-01
 
+    # Qwen 3.5 Family (March 2026 — multimodal, vision, tools, thinking)
+    - hf_id: Qwen/Qwen3.5-0.8B
+      pmoves_name: qwen3.5-0.8b
+      tier: small
+      params: 0.8B
+      context: 262144
+      ollama_variant: "qwen3.5:0.8b"
+      recommended_for: [utility, edge]
+      release_date: 2026-03
+
+    - hf_id: Qwen/Qwen3.5-2B
+      pmoves_name: qwen3.5-2b
+      tier: small
+      params: 2B
+      context: 262144
+      ollama_variant: "qwen3.5:2b"
+      recommended_for: [utility, edge]
+      release_date: 2026-03
+
+    - hf_id: Qwen/Qwen3.5-4B
+      pmoves_name: qwen3.5-4b
+      tier: small
+      params: 4B
+      context: 262144
+      ollama_variant: "qwen3.5:4b"
+      recommended_for: [utility, coding]
+      release_date: 2026-03
+
+    - hf_id: Qwen/Qwen3.5-9B
+      pmoves_name: qwen3.5-9b
+      tier: medium
+      params: 9B
+      context: 262144
+      ollama_variant: "qwen3.5:9b"
+      recommended_for: [orchestrator, coding, utility, research]
+      release_date: 2026-03
+
+    - hf_id: Qwen/Qwen3.5-27B
+      pmoves_name: qwen3.5-27b
+      tier: large
+      params: 27B
+      context: 262144
+      ollama_variant: "qwen3.5:27b"
+      recommended_for: [orchestrator, research, coding]
+      release_date: 2026-03
+
+    - hf_id: Qwen/Qwen3.5-35B-A3B
+      pmoves_name: qwen3.5-35b-a3b
+      tier: large
+      params: 35B  # MoE: 3B active
+      context: 262144
+      ollama_variant: "qwen3.5:35b"
+      recommended_for: [orchestrator, research]
+      release_date: 2026-03
+
+  # Liquid AI Models
+  LiquidAI:
+    - hf_id: LiquidAI/LFM2-24B-A2B
+      pmoves_name: lfm2-24b-a2b
+      tier: medium  # MoE: only 2B active
+      params: 24B
+      context: 32768
+      ollama_variant: "lfm2:24b"
+      recommended_for: [utility, orchestrator]
+      release_date: 2025-12
+
   # Meta Llama Models
   meta-llama:
     - hf_id: meta-llama/Llama-3.1-8B-Instruct
@@ -223,6 +289,15 @@ text_generation:
       ollama_variant: nemotron-mini
       recommended_for: [utility, research]
       release_date: 2024-09
+
+    - hf_id: nvidia/Nemotron-3-Super-49B-v1
+      pmoves_name: nemotron-3-super
+      tier: large
+      params: 120B  # MoE: 12B active
+      context: 262144
+      ollama_variant: nemotron-3-super
+      recommended_for: [orchestrator, research]
+      release_date: 2025-06
 
 # =============================================================================
 # Coding Models
@@ -478,15 +553,23 @@ download_priority:
     3. qwen2-vl-7b:q4_k_m
     4. qwen3-embedding-8b:f16
 
-  # High-end single GPU (24GB+)
+  # High-end single GPU (24-32GB) — RTX 4090 / RTX 5090
   highend_single_gpu:
-    1. qwen2.5-14b:q4_k_m
-    2. qwen2.5-coder-7b:q8_0
-    3. qwen3-vl-8b:q4_k_m
-    4. qwen3-reranker-4b:f16
+    1. qwen3.5-9b:q4_k_m
+    2. qwen3.5-4b:q4_k_m
+    3. lfm2-24b-a2b:q4_k_m
+    4. qwen3-embedding-8b:f16
+    5. qwen3-reranker-4b:f16
+
+  # RTX 5090 (32GB) — Flagship loadout
+  rtx5090_32gb:
+    1. qwen3.5-27b:q4_k_m
+    2. qwen3.5-9b:q4_k_m
+    3. qwen3-embedding-4b:f16
+    4. nomic-embed-text:f16
 
   # Multi-GPU
   multi_gpu:
     1. qwen2.5-32b:q4_0
     2. qwen2.5-72b:q4_0
-    3. mixtral-8x22b:q4_0
+    3. qwen3.5-35b:q4_k_m

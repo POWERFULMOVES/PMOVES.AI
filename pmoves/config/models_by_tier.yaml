@@ -101,22 +101,26 @@ midrange_gpu_24gb:
 ai_workstation_32gb:
   tier: large
   max_vram: 32GB
-  max_params: 32B
+  max_params: 35B
   recommended:
     primary:
-      name: qwen2.5-32b
-      variant: q4_0
-      reason: "High quality 32B model with TP=2"
+      name: qwen3.5-27b
+      variant: q4_k_m
+      reason: "Qwen 3.5 flagship dense — 262K context, vision, tools, thinking"
     fallback:
-      name: qwen2.5-14b
-      variant: f16
-      reason: "Full precision 14B for speed"
+      name: qwen3.5-9b
+      variant: q8_0
+      reason: "Qwen 3.5 9B high-quality — multimodal workhorse"
+    efficient_moe:
+      name: lfm2-24b-a2b
+      variant: q4_k_m
+      reason: "Liquid hybrid MoE — 24B total, 2B active, fast inference"
   use_cases:
-    orchestrator: qwen2.5-32b:q4_0
-    builder: qwen2.5-14b:f16
-    auditor: qwen2.5-7b:q5_k_m
-    coding: qwen2.5-coder-7b:f16
-    utility: qwen2.5-7b:q4_k_m
+    orchestrator: qwen3.5-27b:q4_k_m
+    builder: qwen3.5-9b:q4_k_m
+    auditor: qwen3.5-4b:q4_k_m
+    coding: qwen3.5-9b:q4_k_m
+    utility: qwen3.5-4b:q4_k_m
     embeddings: qwen3-embedding-8b:f16
     vl_sentinel: qwen3-vl-8b:q4_k_m
     hirag_rerank: qwen3-reranker-4b:f16
@@ -212,7 +216,7 @@ botz_components:
     cpu_only: phi3-mini:q4_0
     consumer_8gb: qwen2.5-7b:q4_k_m
     midrange_16gb: qwen2.5-14b:q4_k_m
-    ai_workstation_32gb: qwen2.5-32b:q4_0
+    ai_workstation_32gb: qwen3.5-27b:q4_k_m
     multi_gpu_2x40gb: qwen2.5-72b:q4_0
 
   # Builder (Sonnet execution - balanced speed/quality)
@@ -220,7 +224,7 @@ botz_components:
     cpu_only: phi3-mini:q4_0
     consumer_8gb: qwen2.5-7b:q4_k_m
     midrange_16gb: qwen2.5-7b:q5_k_m
-    ai_workstation_32gb: qwen2.5-14b:f16
+    ai_workstation_32gb: qwen3.5-9b:q4_k_m
     multi_gpu_2x40gb: qwen2.5-32b:f16
 
   # Auditor (Haiku review - fast, cost-effective)
@@ -228,7 +232,7 @@ botz_components:
     cpu_only: gemma-2-2b:q4_0
     consumer_8gb: qwen2.5-3b:q4_0
     midrange_16gb: qwen2.5-3b:q4_0
-    ai_workstation_32gb: qwen2.5-7b:q4_k_m
+    ai_workstation_32gb: qwen3.5-4b:q4_k_m
     multi_gpu_2x40gb: qwen2.5-14b:q4_k_m
 
   # Coding (specialized code generation)
@@ -236,7 +240,7 @@ botz_components:
     cpu_only: phi3-mini:q4_0
     consumer_8gb: qwen2.5-coder-7b:q4_k_m
     midrange_16gb: qwen2.5-coder-7b:q5_k_m
-    ai_workstation_32gb: deepseek-coder-6.7b:f16
+    ai_workstation_32gb: qwen3.5-9b:q4_k_m
     multi_gpu_2x40gb: qwen2.5-coder-7b:f16
 
   # VL Sentinel (vision-language processing)
@@ -252,7 +256,7 @@ botz_components:
     cpu_only: phi3-mini:q4_0
     consumer_8gb: qwen2.5-7b:q4_k_m
     midrange_16gb: qwen2.5-14b:q4_k_m
-    ai_workstation_32gb: qwen2.5-32b:q4_0
+    ai_workstation_32gb: qwen3.5-27b:q4_k_m
     multi_gpu_2x40gb: qwen2.5-72b:q4_0
 
   # Docling (document understanding)
@@ -260,7 +264,7 @@ botz_components:
     cpu_only: phi3-mini:q4_0
     consumer_8gb: qwen2.5-7b:q4_k_m
     midrange_16gb: qwen2.5-7b:q5_k_m
-    ai_workstation_32gb: qwen2.5-14b:f16
+    ai_workstation_32gb: qwen3.5-9b:q4_k_m
     multi_gpu_2x40gb: qwen2.5-32b:f16
 
   # Hi-RAG Reranker (cross-encoder reranking)
