@@ -11,7 +11,8 @@
 VALID_SERVICES := neo4j tensorzero-clickhouse meilisearch qdrant minio supabase-db nats
 
 .PHONY: volume-reset volume-list docker-prune docker-prune-all branch-audit branch-cleanup \
-       tailscale-docker-up tailscale-docker-down tailscale-docker-status tailscale-docker-ip
+       tailscale-docker-up tailscale-docker-down tailscale-docker-status tailscale-docker-ip \
+       up-ollama up-gpu-orchestrator up-vllm model-pull gpu-status
 
 volume-reset: ## Reset a service volume: make volume-reset SERVICE=tensorzero-clickhouse
 	@if [ -z "$(SERVICE)" ]; then \
@@ -100,6 +101,58 @@ tailscale-docker-status: ## Show Tailscale Docker container connection status
 
 tailscale-docker-ip: ## Show Tailscale Docker container's IP
 	docker exec pmoves-tailscale tailscale ip -4
+
+# ── GPU & Model Serving ──────────────────────────────────────────────
+.PHONY: up-ollama up-gpu-orchestrator up-vllm model-pull gpu-status
+
+up-ollama: ## Start Ollama service (default profile, always available)
+	@echo "=== Starting Ollama ==="
+	@$(DC) up -d pmoves-ollama
+	@sleep 3
+	@$(DC) ps pmoves-ollama
+	@echo ""
+	@echo "Ollama API: http://localhost:11434"
+	@echo "Pull models: make model-pull MODEL=qwen3:8b"
+
+up-gpu-orchestrator: ## Start GPU orchestrator (gpu profile)
+	@echo "=== Starting GPU Orchestrator ==="
+	@$(DC) --profile gpu up -d gpu-orchestrator
+	@sleep 3
+	@$(DC) ps gpu-orchestrator
+	@echo ""
+	@echo "GPU Orchestrator API: http://localhost:8200"
+	@echo "Health: http://localhost:8200/healthz"
+
+up-vllm: ## Start vLLM model servers (medium profile by default, PROFILE=large for bigger models)
+	@echo "=== Starting vLLM Model Servers ==="
+	@docker compose -f docker-compose/vllm-models.yml --env-file env.shared \
+		--profile $(if $(PROFILE),$(PROFILE),medium) up -d
+	@sleep 5
+	@docker compose -f docker-compose/vllm-models.yml ps
+	@echo ""
+	@echo "Available profiles: medium, large, specialized, all"
+
+model-pull: ## Pull an Ollama model: make model-pull MODEL=qwen3:8b
+	@if [ -z "$(MODEL)" ]; then \
+	  echo "ERROR: MODEL is required."; \
+	  echo "Usage:  make model-pull MODEL=<name>"; \
+	  echo "Common: qwen3:8b, nomic-embed-text, qwen2.5:14b, embeddinggemma:300m"; \
+	  exit 1; \
+	fi
+	@echo "=== Pulling model: $(MODEL) ==="
+	@$(DC) exec pmoves-ollama ollama pull $(MODEL)
+	@echo "=== Pull complete ==="
+	@$(DC) exec pmoves-ollama ollama list
+
+gpu-status: ## Show GPU VRAM usage and loaded models
+	@echo "=== GPU Status ==="
+	@$(DC) exec pmoves-ollama ollama ps 2>/dev/null || echo "Ollama not running"
+	@echo ""
+	@echo "=== Loaded Models ==="
+	@$(DC) exec pmoves-ollama ollama list 2>/dev/null || echo "Ollama not running"
+	@echo ""
+	@echo "=== NVIDIA GPU ==="
+	@nvidia-smi --query-gpu=name,memory.used,memory.total,utilization.gpu --format=csv,noheader 2>/dev/null || echo "nvidia-smi not available"
 
 # ── Branch Management ─────────────────────────────────────────────────
 branch-audit: ## List stale remote branches with age and merge status

@@ -180,6 +180,44 @@ def _ensure_integration_credentials(text: str) -> str:
     return text
 
 
+def _ensure_identity_defaults(text: str) -> str:
+    """Seed operator identity and branding. Safe defaults for new deployers;
+    DARKXSIDE values are set via env.shared, not hardcoded here."""
+    # OPERATOR_EMAIL: top-level identity cascading to Supabase + n8n
+    op_email = _get_kv(text, "OPERATOR_EMAIL")
+    if not op_email:
+        text = _set_kv(text, "OPERATOR_EMAIL", "")
+
+    # BRAND_NAME: display name for UI surfaces and notifications
+    brand = _get_kv(text, "BRAND_NAME")
+    if not brand:
+        text = _set_kv(text, "BRAND_NAME", "PMOVES.AI")
+
+    # SUPPORT_EMAIL: user-facing support contact (optional)
+    support = _get_kv(text, "SUPPORT_EMAIL")
+    if not support:
+        text = _set_kv(text, "SUPPORT_EMAIL", "")
+
+    # Cascade: if OPERATOR_EMAIL is set, seed downstream services that still
+    # have placeholder emails.  This avoids requiring the operator to set each
+    # service email individually.
+    op_email = _get_kv(text, "OPERATOR_EMAIL")
+    if op_email and op_email not in PLACEHOLDER_VALUES:
+        boot_email = _get_kv(text, "SUPABASE_BOOT_USER_EMAIL")
+        if not boot_email or boot_email in PLACEHOLDER_VALUES or boot_email == "you@example.com":
+            text = _set_kv(text, "SUPABASE_BOOT_USER_EMAIL", op_email)
+
+        n8n_email = _get_kv(text, "N8N_OWNER_EMAIL")
+        if not n8n_email or n8n_email in PLACEHOLDER_VALUES or "${" in n8n_email:
+            text = _set_kv(text, "N8N_OWNER_EMAIL", op_email)
+
+        wger_email = _get_kv(text, "WGER_BRAND_ADMIN_EMAIL")
+        if not wger_email or wger_email in PLACEHOLDER_VALUES or wger_email == "admin@example.com":
+            text = _set_kv(text, "WGER_BRAND_ADMIN_EMAIL", op_email)
+
+    return text
+
+
 def _ensure_tailscale_defaults(text: str) -> str:
     """Auto-populate Tailscale hostname and tags. Auth key is manual (console-only)."""
     # Hostname: derive from machine hostname if not set
@@ -243,6 +281,9 @@ def upsert_env(path: Path, env_gen_path: Path, pairs: dict[str, str]) -> None:
 
     # Generate integration credentials (Firefly III, n8n, Wger) if missing.
     text = _ensure_integration_credentials(text)
+
+    # Identity defaults: operator email cascades to Supabase, n8n, Wger.
+    text = _ensure_identity_defaults(text)
 
     # Tailscale defaults: auto-populate hostname and tags (auth key is manual).
     text = _ensure_tailscale_defaults(text)
