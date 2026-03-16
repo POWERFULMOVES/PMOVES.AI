@@ -141,6 +141,22 @@ your own before or after `make first-run`.
   - See `pmoves/docs/services/agent-zero/README.md` and
     `pmoves/docs/services/archon/README.md` for detailed env contracts.
 
+- **Agent Zero Model Routing & MCP Auth** (auto-seeded by `brand_defaults.py`)
+  - `A0_SET_chat_model`: Primary chat model routed via TensorZero
+    (default: `tensorzero::model_name::chat_default`).
+  - `A0_SET_utility_model`: Utility model for tool calls
+    (default: `tensorzero::model_name::util_default`).
+  - `A0_SET_embedding_model`: Embedding model for RAG
+    (default: `tensorzero::embedding_model_name::embed_default`).
+  - `MCP_CLIENT_SECRET`: Auto-generated 32-byte urlsafe secret for external
+    MCP API clients. Required by any service calling Agent Zero's `/mcp/*`
+    endpoints. Regenerate with `make env-setup` after rotation.
+  - `AGENTZERO_JETSTREAM`: Defaults to `true` for reliable NATS delivery.
+  - **One-line bootstrap:** After running `irm https://ps.agent-zero.ai | iex`
+    (Windows) or `docker run -p 80:80 agent0ai/agent-zero` (Docker), run
+    `make -C pmoves env-setup` to inject PMOVES branded defaults into the
+    Agent Zero instance.
+
 ## After Rotating Credentials
 
 Whenever you rotate any of the branded credentials above:

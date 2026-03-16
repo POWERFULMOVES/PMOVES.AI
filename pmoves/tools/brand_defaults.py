@@ -248,6 +248,36 @@ def _ensure_tailscale_defaults(text: str) -> str:
     return text
 
 
+def _ensure_agent_zero_defaults(text: str) -> str:
+    """Seed Agent Zero orchestrator defaults: MCP secret, JetStream, model routing."""
+    # MCP_CLIENT_SECRET: auto-generate if missing (32-byte urlsafe)
+    mcp_secret = _get_kv(text, "MCP_CLIENT_SECRET")
+    if _is_blank_or_placeholder(mcp_secret):
+        text = _set_kv(text, "MCP_CLIENT_SECRET", _strong_random(32))
+
+    # AGENTZERO_JETSTREAM: default to true for reliable NATS delivery
+    jetstream = _get_kv(text, "AGENTZERO_JETSTREAM")
+    if not jetstream:
+        text = _set_kv(text, "AGENTZERO_JETSTREAM", "true")
+
+    # A0_SET_chat_model: default to TensorZero chat route
+    chat_model = _get_kv(text, "A0_SET_chat_model")
+    if not chat_model:
+        text = _set_kv(text, "A0_SET_chat_model", "tensorzero::model_name::chat_default")
+
+    # A0_SET_utility_model: default to TensorZero utility route
+    util_model = _get_kv(text, "A0_SET_utility_model")
+    if not util_model:
+        text = _set_kv(text, "A0_SET_utility_model", "tensorzero::model_name::util_default")
+
+    # A0_SET_embedding_model: default to TensorZero embedding route
+    embed_model = _get_kv(text, "A0_SET_embedding_model")
+    if not embed_model:
+        text = _set_kv(text, "A0_SET_embedding_model", "tensorzero::embedding_model_name::embed_default")
+
+    return text
+
+
 def upsert_env(path: Path, env_gen_path: Path, pairs: dict[str, str]) -> None:
     """Apply branded defaults to env file, strengthen weak keys, and write back."""
     text = path.read_text(encoding="utf-8") if path.exists() else ""
@@ -287,6 +317,9 @@ def upsert_env(path: Path, env_gen_path: Path, pairs: dict[str, str]) -> None:
 
     # Tailscale defaults: auto-populate hostname and tags (auth key is manual).
     text = _ensure_tailscale_defaults(text)
+
+    # Agent Zero defaults: MCP secret, JetStream, model routing.
+    text = _ensure_agent_zero_defaults(text)
 
     path.write_text(text, encoding="utf-8")
 
