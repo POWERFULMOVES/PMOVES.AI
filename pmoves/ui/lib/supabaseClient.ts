@@ -131,7 +131,8 @@ function decodeJwtExp(token: string | undefined): number | null {
 
 export const isBootJwtExpired = (graceSeconds = 0): boolean => {
   const exp = decodeJwtExp(resolveBootJwt());
-  if (!exp) return false;
+  // Security: treat missing exp claim as expired (fail-closed)
+  if (!exp) return true;
   const now = Math.floor(Date.now() / 1000);
   return now + graceSeconds >= exp;
 };
