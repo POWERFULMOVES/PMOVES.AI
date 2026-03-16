@@ -1040,7 +1040,7 @@
           "prompt": "Operator email (cascades to Supabase, n8n, Wger)",
           "help": "Primary operator identity. Set once — brand_defaults.py propagates to SUPABASE_BOOT_USER_EMAIL, N8N_OWNER_EMAIL, WGER_BRAND_ADMIN_EMAIL if those are blank.",
           "required": false,
-          "type": "email"
+          "type": "string"
         },
         {
           "key": "SUPPORT_EMAIL",
@@ -1048,7 +1048,7 @@
           "prompt": "Support contact email (user-facing)",
           "help": "Displayed in error pages and notification footers. Optional.",
           "required": false,
-          "type": "email"
+          "type": "string"
         },
         {
           "key": "BRAND_NAME",

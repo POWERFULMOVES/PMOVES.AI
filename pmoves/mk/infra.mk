@@ -103,7 +103,6 @@ tailscale-docker-ip: ## Show Tailscale Docker container's IP
 	docker exec pmoves-tailscale tailscale ip -4
 
 # ── GPU & Model Serving ──────────────────────────────────────────────
-.PHONY: up-ollama up-gpu-orchestrator up-vllm model-pull gpu-status
 
 up-ollama: ## Start Ollama service (default profile, always available)
 	@echo "=== Starting Ollama ==="

@@ -202,9 +202,9 @@ def _ensure_identity_defaults(text: str) -> str:
     # have placeholder emails.  This avoids requiring the operator to set each
     # service email individually.
     op_email = _get_kv(text, "OPERATOR_EMAIL")
-    if op_email and op_email not in PLACEHOLDER_VALUES:
+    if op_email and op_email not in PLACEHOLDER_VALUES and "${" not in op_email:
         boot_email = _get_kv(text, "SUPABASE_BOOT_USER_EMAIL")
-        if not boot_email or boot_email in PLACEHOLDER_VALUES or boot_email == "you@example.com":
+        if not boot_email or boot_email in PLACEHOLDER_VALUES or boot_email == "you@example.com" or "${" in boot_email:
             text = _set_kv(text, "SUPABASE_BOOT_USER_EMAIL", op_email)
 
         n8n_email = _get_kv(text, "N8N_OWNER_EMAIL")
@@ -212,7 +212,7 @@ def _ensure_identity_defaults(text: str) -> str:
             text = _set_kv(text, "N8N_OWNER_EMAIL", op_email)
 
         wger_email = _get_kv(text, "WGER_BRAND_ADMIN_EMAIL")
-        if not wger_email or wger_email in PLACEHOLDER_VALUES or wger_email == "admin@example.com":
+        if not wger_email or wger_email in PLACEHOLDER_VALUES or wger_email == "admin@example.com" or "${" in wger_email:
             text = _set_kv(text, "WGER_BRAND_ADMIN_EMAIL", op_email)
 
     return text
