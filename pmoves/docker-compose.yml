@@ -2454,11 +2454,14 @@ services:
       start_period: 15s
   pmoves-ollama:
     <<: *tier-llm-hardened
-    image: ${PMOVES_OLLAMA_IMAGE:-ollama/ollama:0.12.6@sha256:ea37dcbf693248c80796654500fccf1e12f55da20ec7c78c30870a9a227c4cdd}
+    image: ${PMOVES_OLLAMA_IMAGE:-ollama/ollama:0.18.0@sha256:e23e6499890325d31f3454cdc83f7a613a2423c8a9e167bbafea0b0e3c27d7c6}
     restart: unless-stopped
     environment:
     - OLLAMA_HOST=0.0.0.0:11434
     - OLLAMA_MODELS=/root/.ollama/models
+    # Override Windows SSL cert paths leaked via env inheritance (x509 failures)
+    - SSL_CERT_FILE=
+    - SSL_CERT_DIR=
     - DOCKED_MODE=${DOCKED_MODE:-true}
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
@@ -2469,6 +2472,16 @@ services:
     dns:
     - ${OLLAMA_DNS_PRIMARY:-1.1.1.1}
     - ${OLLAMA_DNS_SECONDARY:-8.8.8.8}
+    deploy:
+      resources:
+        reservations:
+          devices:
+          - driver: nvidia
+            count: all
+            capabilities:
+            - gpu
+    ports:
+    - ${OLLAMA_HOST_PORT:-11435}:11434
     networks:
     - pmoves_api
     - pmoves_external
