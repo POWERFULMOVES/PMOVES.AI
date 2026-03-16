@@ -1,0 +1,26 @@
+# RTX 4090 Laptop GPU resource overlay
+# Applies NVENC hardware transcoding + GPU memory limits for 16GB VRAM budget.
+# Usage: docker compose -f docker-compose.jellyfin-ai.yml -f docker-compose.laptop-4090.override.yml up -d
+
+services:
+  jellyfin-nvenc:
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu, video]
+        limits:
+          memory: 4G
+
+  jellyfin-qwen-audio:
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+        limits:
+          memory: 8G
