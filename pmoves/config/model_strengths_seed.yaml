@@ -168,9 +168,101 @@ models:
     cost_efficiency_score: 8.3
     notes: "The heir apparent — next-gen Qwen, sharper edges, deeper thoughts."
 
+  # Qwen 3.5 Family (March 2026 — multimodal, vision, tools, thinking)
+  qwen3.5-0.8b:
+    primary_strength: speed
+    strength_scores:
+      reasoning: 0.30
+      speed: 0.98
+      coding: 0.25
+      multilingual: 0.65
+      creativity: 0.30
+      context_handling: 0.70
+    preferred_functions: [utility, edge]
+    cost_efficiency_score: 9.8
+    notes: "The spark — 0.8B with 262K context. Tiniest Qwen that still understands vision."
+
+  qwen3.5-4b:
+    primary_strength: speed
+    strength_scores:
+      reasoning: 0.58
+      speed: 0.90
+      coding: 0.52
+      multilingual: 0.78
+      creativity: 0.50
+      context_handling: 0.75
+    preferred_functions: [utility, coding, langextract]
+    cost_efficiency_score: 9.0
+    notes: "The apprentice — small enough for edge, sharp enough to surprise you. Vision + tools."
+
+  qwen3.5-9b:
+    primary_strength: reasoning
+    strength_scores:
+      reasoning: 0.78
+      speed: 0.82
+      coding: 0.75
+      multilingual: 0.88
+      creativity: 0.72
+      context_handling: 0.85
+    preferred_functions: [agent_zero, orchestrator, coding, deepresearch]
+    cost_efficiency_score: 8.5
+    notes: "The polymath — 9B params, 262K context, vision, tools, thinking. Does everything the 27B does, just a bit less."
+
+  lfm2-24b-a2b:
+    primary_strength: speed
+    strength_scores:
+      reasoning: 0.68
+      speed: 0.90
+      coding: 0.55
+      multilingual: 0.50
+      creativity: 0.58
+      context_handling: 0.55
+    preferred_functions: [orchestrator, utility]
+    cost_efficiency_score: 9.2
+    notes: "The hybrid — Liquid architecture, 24B total, 2B active. Faster than transformers on CPU."
+
   # ===========================================================================
   # Large Models (30B-70B) — Multi-GPU
   # ===========================================================================
+
+  qwen3.5-27b:
+    primary_strength: reasoning
+    strength_scores:
+      reasoning: 0.92
+      speed: 0.55
+      coding: 0.88
+      multilingual: 0.92
+      creativity: 0.85
+      context_handling: 0.90
+    preferred_functions: [agent_zero, orchestrator, research, coding]
+    cost_efficiency_score: 6.5
+    notes: "The sage — dense 27B with 262K context. When quality is non-negotiable."
+
+  qwen3.5-35b-a3b:
+    primary_strength: reasoning
+    strength_scores:
+      reasoning: 0.85
+      speed: 0.88
+      coding: 0.78
+      multilingual: 0.90
+      creativity: 0.75
+      context_handling: 0.88
+    preferred_functions: [orchestrator, research]
+    cost_efficiency_score: 8.0
+    notes: "The shapeshifter — 35B brain, 3B energy bill. MoE efficiency at its finest."
+
+  nemotron-3-super:
+    primary_strength: reasoning
+    strength_scores:
+      reasoning: 0.90
+      speed: 0.50
+      coding: 0.82
+      multilingual: 0.70
+      creativity: 0.72
+      context_handling: 0.88
+    preferred_functions: [orchestrator, research]
+    cost_efficiency_score: 4.0
+    notes: "The agentic titan — 120B MoE, 12B active. Built for multi-agent orchestration. Multi-GPU only."
 
   qwen2.5-32b:
     primary_strength: reasoning
