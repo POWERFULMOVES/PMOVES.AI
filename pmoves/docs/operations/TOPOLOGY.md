@@ -2,7 +2,7 @@
 
 > Single source of truth for all physical/virtual nodes, service assignments, agent teams, route flows, and runner strategy.
 >
-> Last updated: 2026-03-14
+> Last updated: 2026-03-15
 
 ---
 
@@ -62,7 +62,18 @@ Services deployed via `docker-compose.vps.override.yml`:
 
 ### POWERFULMOVES — Primary GPU + AI Lab Runner
 
-Primary GPU inference node (RTX 5090, 32GB VRAM). Runs containerized `ai-lab` GitHub Actions runner via `myoung34/github-runner`. Connected to tailnet as `pmoves-powerfulmoves`. GPU Docker passthrough pending NVIDIA Container Toolkit update.
+Primary GPU inference node (RTX 5090, 32GB VRAM). Runs containerized `ai-lab` GitHub Actions runner via `myoung34/github-runner`. Connected to tailnet as `pmoves-powerfulmoves`.
+
+**Status (2026-03-15):** ONLINE — GPU passthrough operational (NVIDIA Container Toolkit 1.19.0). SoundCloud ingestion pipeline verified end-to-end. ffmpeg-whisper GPU transcription active.
+
+| Service | Port | Status | Profile |
+|---------|------|--------|---------|
+| Ollama | 11434 | Ready | default |
+| ffmpeg-whisper (GPU) | 8078 | Active | gpu |
+| GPU Orchestrator | 8200 | Defined | gpu |
+| Ultimate-TTS-Studio | 7861 | Defined | gpu |
+| Channel Monitor | 8097 | Active | — |
+| PMOVES.YT | 8077 | Active | yt |
 
 ### Z890 — Development (Local)
 
