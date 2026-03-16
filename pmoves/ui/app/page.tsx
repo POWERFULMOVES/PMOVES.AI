@@ -361,7 +361,7 @@ function Footer() {
 
 export default function HomePage() {
   return (
-    <main className="bg-void text-ink-primary">
+    <main id="main-content" tabIndex={-1} className="bg-void text-ink-primary">
       <div className="noise-overlay" />
       <HeroSection />
       <SystemHubSection />

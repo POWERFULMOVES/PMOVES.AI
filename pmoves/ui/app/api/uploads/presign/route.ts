@@ -34,8 +34,6 @@ export async function POST(request: NextRequest) {
     const {
       data: { session },
     } = await supabase.auth.getSession();
-    const _bootJwt = process.env.NEXT_PUBLIC_SUPABASE_BOOT_USER_JWT || process.env.SUPABASE_BOOT_USER_JWT;
-
     // When running with a boot JWT (no browser cookie session), switch to service-role client
     const readClient = (session ? supabase : getServiceSupabaseClient()) as ReturnType<typeof getServiceSupabaseClient>;
     const userId = session?.user?.id;

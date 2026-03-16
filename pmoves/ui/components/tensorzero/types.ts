@@ -15,7 +15,7 @@ export interface ProviderConfig {
   /** API key (optional) */
   api_key?: string;
   /** Additional provider-specific configuration */
-  [key: string]: any;
+  extra?: Record<string, unknown>;
 }
 
 /**
@@ -47,7 +47,7 @@ export interface VariantConfig {
   /** Top-p sampling parameter */
   top_p?: number;
   /** Additional model-specific parameters */
-  parameters?: Record<string, any>;
+  parameters?: Record<string, unknown>;
 }
 
 /**
@@ -61,7 +61,7 @@ export interface ToolSchema {
   /** Property definitions */
   properties?: Record<string, SchemaProperty>;
   /** Additional schema properties */
-  [key: string]: any;
+  extra?: Record<string, unknown>;
 }
 
 /**
@@ -73,7 +73,7 @@ export interface SchemaProperty {
   /** Property description */
   description?: string;
   /** Enum values for constrained properties */
-  enum?: any[];
+  enum?: unknown[];
   /** Array item schema (for array types) */
   items?: SchemaProperty;
   /** Nested properties (for object types) */
@@ -91,7 +91,7 @@ export interface ToolConfig {
   /** Tool description (seen by LLM) */
   description: string;
   /** MCP parameters (for MCP-connected tools) */
-  parameters?: Record<string, any>;
+  parameters?: Record<string, unknown>;
   /** JSON schema for input validation */
   input_schema: ToolSchema;
 }
@@ -113,7 +113,7 @@ export interface FunctionConfig {
   /** Tools available to this function (optional) */
   tools?: ToolConfig[];
   /** Additional function-specific configuration */
-  [key: string]: any;
+  extra?: Record<string, unknown>;
 }
 
 /**
@@ -127,7 +127,7 @@ export interface TensorZeroConfig {
   /** Functions configuration */
   functions: FunctionConfig[];
   /** Additional configuration */
-  [key: string]: any;
+  extra?: Record<string, unknown>;
 }
 
 /**
@@ -205,7 +205,7 @@ export interface TestRequest {
   /** Stream response flag */
   stream?: boolean;
   /** Additional test parameters */
-  [key: string]: any;
+  extra?: Record<string, unknown>;
 }
 
 /**
@@ -227,7 +227,7 @@ export interface TestResponse {
   /** Error message (if failed) */
   error?: string;
   /** Additional response metadata */
-  [key: string]: any;
+  extra?: Record<string, unknown>;
 }
 
 /**

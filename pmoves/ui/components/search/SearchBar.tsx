@@ -7,6 +7,7 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import type { HiragFilters } from "@/lib/api/hirag";
+import { logForDebugging } from '@/lib/errorUtils';
 
 // Tailwind JIT static classes
 const INPUT_BASE_CLASSES = "flex-1 rounded border border-neutral-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition";
@@ -57,8 +58,8 @@ export function SearchBar({
         const parsed = JSON.parse(stored) as SearchHistoryItem[];
         return parsed.slice(0, MAX_HISTORY_ITEMS);
       }
-    } catch {
-      // Silently fail if localStorage is unavailable
+    } catch (e) {
+      logForDebugging('localStorage unavailable', e, { component: 'SearchBar' });
     }
     return [];
   });
@@ -79,8 +80,8 @@ export function SearchBar({
 
       try {
         localStorage.setItem(SEARCH_HISTORY_KEY, JSON.stringify(updated));
-      } catch {
-        // Silently fail if localStorage is unavailable
+      } catch (e) {
+        logForDebugging('localStorage unavailable', e, { component: 'SearchBar' });
       }
 
       return updated;
@@ -137,8 +138,8 @@ export function SearchBar({
     setHistory([]);
     try {
       localStorage.removeItem(SEARCH_HISTORY_KEY);
-    } catch {
-      // Silently fail
+    } catch (e) {
+      logForDebugging('localStorage unavailable', e, { component: 'SearchBar' });
     }
   };
 
@@ -153,6 +154,7 @@ export function SearchBar({
             onChange={(e) => setQuery(e.target.value)}
             onFocus={() => setShowHistory(true)}
             placeholder={placeholder}
+            aria-label="Search knowledge base"
             className={`${INPUT_BASE_CLASSES} ${INPUT_DISABLED_CLASSES}`}
             disabled={loading}
             autoComplete="off"
