@@ -1030,6 +1030,38 @@
       ]
     },
     {
+      "id": "identity",
+      "name": "Operator Identity & Branding",
+      "description": "Operator email and brand name. OPERATOR_EMAIL cascades to Supabase, n8n, and Wger if their emails are still placeholders.",
+      "variables": [
+        {
+          "key": "OPERATOR_EMAIL",
+          "file": "pmoves/env.shared",
+          "prompt": "Operator email (cascades to Supabase, n8n, Wger)",
+          "help": "Primary operator identity. Set once — brand_defaults.py propagates to SUPABASE_BOOT_USER_EMAIL, N8N_OWNER_EMAIL, WGER_BRAND_ADMIN_EMAIL if those are blank.",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "key": "SUPPORT_EMAIL",
+          "file": "pmoves/env.shared",
+          "prompt": "Support contact email (user-facing)",
+          "help": "Displayed in error pages and notification footers. Optional.",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "key": "BRAND_NAME",
+          "file": "pmoves/env.shared",
+          "prompt": "Brand display name",
+          "default": "PMOVES.AI",
+          "help": "Shown in UI chrome, notification subjects, and agent signatures.",
+          "required": false,
+          "type": "string"
+        }
+      ]
+    },
+    {
       "id": "tailscale",
       "name": "Tailscale VPN Mesh",
       "description": "Tailscale mesh VPN for multi-host service discovery and secure inter-node communication.",
