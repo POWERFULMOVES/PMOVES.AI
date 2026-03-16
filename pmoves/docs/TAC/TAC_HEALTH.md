@@ -8,7 +8,7 @@
 |-------|-------|
 | **Service** | Health (wger) |
 | **Port** | 8000 (`WGER_PORT`, compose: main + external) |
-| **Health** | `GET /healthz/` (3-tier: healthy/degraded/unhealthy) |
+| **Health** | `GET /healthz/` (app-level, 3-tier: healthy/degraded/unhealthy); compose readiness uses `GET /api/v2/health/` |
 | **Metrics** | `GET /metrics/` (Prometheus, gated by `EXPOSE_PROMETHEUS_METRICS`) |
 | **Submodule** | `Pmoves-Health-wger` |
 | **Docker Profile** | `health`, `wger` |
@@ -112,8 +112,8 @@ Wger has progressed significantly since initial audit. Phases 1-3 are largely co
 
 ### Phase 2: NATS Integration — **DONE**
 1. ~~Add `nats-py` client to wger~~ → Wired via compose `NATS_URL` + `WGER_ENABLE_NATS`
-2. Publish `health.metrics.updated.v1` on metric save → Subjects defined, n8n sync active
-3. Publish `health.weekly.summary.v1` via cron/celery → n8n workflow `health_weekly_to_cgp.json`
+2. Publish `health.metrics.updated.v1` on metric save → Subjects defined; n8n workflow defined, requires activation and smoke test
+3. Publish `health.weekly.summary.v1` via cron/celery → n8n workflow `health_weekly_to_cgp.json` defined, requires activation and smoke test
 
 ### Phase 3: Docker Hardening — **DONE**
 1. ~~Add `cap_drop: [ALL]`~~ → `*tier-api-hardened` in main compose (line 3009)
