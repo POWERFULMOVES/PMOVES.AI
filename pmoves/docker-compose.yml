@@ -1468,9 +1468,14 @@ services:
     environment:
     - MINIO_ENDPOINT=${MINIO_ENDPOINT:-minio:9000}
     - MINIO_SECURE=${MINIO_SECURE:-false}
+    - MINIO_ACCESS_KEY=${MINIO_USER:-minioadmin}
+    - MINIO_SECRET_KEY=${MINIO_PASSWORD:-minioadmin}
     - USE_CUDA=${USE_CUDA:-true}
     - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
     - FFW_PROVIDER=${FFW_PROVIDER:-faster-whisper}
+    # Clear Windows host SSL paths that leak into containers via Docker env inheritance
+    - SSL_CERT_FILE=
+    - SSL_CERT_DIR=
     - WHISPER_MODEL=${WHISPER_MODEL:-small}
     - WHISPER_LANGUAGE=${WHISPER_LANGUAGE:-en}
     deploy:
@@ -1491,6 +1496,8 @@ services:
     networks:
     - pmoves_app
     - pmoves_bus
+    - pmoves_data  # Required for Supabase segment storage
+    - pmoves_external  # Required for HuggingFace model downloads (faster-whisper)
     healthcheck:
       test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8078/healthz', timeout=5)"]
       interval: 30s
@@ -1504,6 +1511,8 @@ services:
     environment:
     - MINIO_ENDPOINT=${MINIO_ENDPOINT:-minio:9000}
     - MINIO_SECURE=${MINIO_SECURE:-false}
+    - MINIO_ACCESS_KEY=${MINIO_USER:-minioadmin}
+    - MINIO_SECRET_KEY=${MINIO_PASSWORD:-minioadmin}
     - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
     - YOLO_MODEL=${YOLO_MODEL:-yolov8n.pt}
     - YOLO_CONFIDENCE=${YOLO_CONFIDENCE:-0.25}
@@ -1536,6 +1545,8 @@ services:
     environment:
     - MINIO_ENDPOINT=${MINIO_ENDPOINT:-minio:9000}
     - MINIO_SECURE=${MINIO_SECURE:-false}
+    - MINIO_ACCESS_KEY=${MINIO_USER:-minioadmin}
+    - MINIO_SECRET_KEY=${MINIO_PASSWORD:-minioadmin}
     - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
     - EMOTION_MODEL=${EMOTION_MODEL:-superb/hubert-large-superb-er}
     deploy:
@@ -1572,6 +1583,8 @@ services:
     # NATS_URL from env.tier-media has credentials: nats://nats:pmoves@nats:4222
     - MINIO_ENDPOINT=${MINIO_ENDPOINT:-minio:9000}
     - MINIO_SECURE=${MINIO_SECURE:-false}
+    - MINIO_ACCESS_KEY=${MINIO_USER:-minioadmin}
+    - MINIO_SECRET_KEY=${MINIO_PASSWORD:-minioadmin}
     - YT_BUCKET=${YT_BUCKET:-assets}
     - YT_OUTPUT_BUCKET=${YT_OUTPUT_BUCKET:-outputs}
     - INDEXER_NAMESPACE=${INDEXER_NAMESPACE:-pmoves}
@@ -1597,6 +1610,7 @@ services:
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
     volumes:
     - ./config:/app/config
+    - pmoves-yt-data:/data
     depends_on:
       minio:
         condition: service_healthy
@@ -3512,6 +3526,7 @@ volumes:
   wger-static: {}
   wger-media: {}
   wger-prometheus: {}
+  pmoves-yt-data: {}
 networks:
   pmoves_data:
     name: pmoves_data
