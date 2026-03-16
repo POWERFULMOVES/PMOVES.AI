@@ -8,6 +8,28 @@
 import { retry, CircuitBreaker, resilientFetch } from '../resilience';
 
 // ---------------------------------------------------------------------------
+// Polyfills for jsdom (lacks fetch API Response class)
+// ---------------------------------------------------------------------------
+if (typeof globalThis.Response === 'undefined') {
+  globalThis.Response = class Response {
+    readonly ok: boolean;
+    readonly status: number;
+    readonly statusText: string;
+    readonly headers: Headers;
+    private _body: string;
+    constructor(body?: string | null, init?: { status?: number; statusText?: string }) {
+      this._body = body ?? '';
+      this.status = init?.status ?? 200;
+      this.statusText = init?.statusText ?? 'OK';
+      this.ok = this.status >= 200 && this.status < 300;
+      this.headers = new Headers();
+    }
+    async text() { return this._body; }
+    async json() { return JSON.parse(this._body); }
+  } as unknown as typeof Response;
+}
+
+// ---------------------------------------------------------------------------
 // Mocks
 // ---------------------------------------------------------------------------
 
