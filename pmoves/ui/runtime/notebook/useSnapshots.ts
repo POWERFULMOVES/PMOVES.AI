@@ -2,6 +2,7 @@
 
 import { startTransition, useCallback, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { logForDebugging } from '@/lib/errorUtils';
 
 export type SnapshotTick = { tick: string; source: string; id: string };
 export type SnapshotView = {
@@ -41,6 +42,7 @@ export function useSnapshots(threadId: string): UseSnapshotsResult {
         p_limit: limit,
       });
       if (rpcError) {
+        logForDebugging('Failed to fetch snapshot ticks', rpcError, { component: 'useSnapshots' });
         setError(rpcError.message);
         setLoading(false);
         return;

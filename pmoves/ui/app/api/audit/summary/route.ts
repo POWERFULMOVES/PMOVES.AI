@@ -358,7 +358,7 @@ export async function GET(request: NextRequest) {
       generatedAt: new Date().toISOString(),
       warnings,
       productionAudit: {
-        source: dashboardMarkdown ? dashboardPath : null,
+        source: dashboardMarkdown ? path.basename(dashboardPath) : null,
         lastUpdated: dashboardMarkdown ? parseLabelValue(dashboardMarkdown, "Last Updated") : null,
         branch: dashboardMarkdown ? parseLabelValue(dashboardMarkdown, "Branch") : null,
         commit: dashboardMarkdown ? parseLabelValue(dashboardMarkdown, "Commit") : null,
@@ -366,16 +366,16 @@ export async function GET(request: NextRequest) {
         activeBlockers: dashboardMarkdown ? parseActiveBlockers(dashboardMarkdown) : [],
       },
       releaseGates: {
-        source: releaseGateMarkdown ? releaseGatePath : null,
+        source: releaseGateMarkdown && releaseGatePath ? path.basename(releaseGatePath) : null,
         items: releaseGateMarkdown ? parseReleaseGateRows(releaseGateMarkdown) : [],
       },
       planning: {
         roadmap: {
-          source: roadmapMarkdown ? roadmapPath : null,
+          source: roadmapMarkdown ? path.basename(roadmapPath) : null,
           lastUpdated: roadmapMarkdown ? parsePlanLastUpdated(roadmapMarkdown) : null,
         },
         nextSteps: {
-          source: nextStepsMarkdown ? nextStepsPath : null,
+          source: nextStepsMarkdown ? path.basename(nextStepsPath) : null,
           lastUpdated: nextStepsMarkdown ? parsePlanLastUpdated(nextStepsMarkdown) : null,
         },
       },

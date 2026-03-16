@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import type { Database } from "@/lib/database.types";
+import { logForDebugging } from '@/lib/errorUtils';
 
 export type Message = { id: string; thread_id: string | null; text: string; cgp?: any; created_at: string };
 export type ContentBlock = { id: string; message_id: string; kind: string; uri: string; meta?: any };
@@ -87,6 +88,7 @@ export function useSupabaseViews(threadId: string): UseSupabaseViewsResult {
         .eq("thread_id", threadId)
         .order("created_at", { ascending: true });
       if (msgError) {
+        logForDebugging('Failed to fetch messages', msgError, { component: 'useSupabaseViews' });
         if (alive) setError(msgError.message);
         return;
       }
@@ -101,10 +103,13 @@ export function useSupabaseViews(threadId: string): UseSupabaseViewsResult {
         return;
       }
 
-      const { data: blockData } = await supabase
+      const { data: blockData, error: blockError } = await supabase
         .from("content_blocks")
         .select("*")
         .in("message_id", ids);
+      if (blockError) {
+        logForDebugging('Failed to fetch content blocks', blockError, { component: 'useSupabaseViews' });
+      }
 
       const blockMap: Record<string, ContentBlock[]> = {};
       (blockData as ContentBlockRow[] | null)?.forEach((block) => {
@@ -113,11 +118,14 @@ export function useSupabaseViews(threadId: string): UseSupabaseViewsResult {
       });
       setBlocks(blockMap);
 
-      const { data: viewData } = await supabase
+      const { data: viewData, error: viewError } = await supabase
         .from("message_views")
         .select("*")
         .in("message_id", ids)
         .order("created_at", { ascending: true });
+      if (viewError) {
+        logForDebugging('Failed to fetch message views', viewError, { component: 'useSupabaseViews' });
+      }
 
       const viewMap: Record<string, MessageView[]> = {};
       (viewData as MessageViewRow[] | null)?.forEach((view) => {
