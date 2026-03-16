@@ -1175,6 +1175,7 @@ services:
     - pmoves_api
     - pmoves_data
     - pmoves_bus
+    - pmoves_external  # HuggingFace model downloads at runtime
     healthcheck:
       test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8086/hirag/admin/stats', timeout=5)"]
       interval: 30s
@@ -1322,6 +1323,7 @@ services:
     - pmoves_app
     - pmoves_bus
     - pmoves_api  # reach supabase-kong for REST API
+    - pmoves_external  # HuggingFace model downloads at runtime
     extra_hosts:
     - host.docker.internal:host-gateway
     depends_on:
@@ -1529,6 +1531,7 @@ services:
     networks:
     - pmoves_app
     - pmoves_bus
+    - pmoves_external  # Ultralytics YOLO model downloads at runtime
     healthcheck:
       test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8079/healthz', timeout=5)"]
       interval: 30s
@@ -1561,6 +1564,7 @@ services:
     networks:
     - pmoves_app
     - pmoves_bus
+    - pmoves_external  # HuggingFace model downloads at runtime
     healthcheck:
       test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8082/healthz', timeout=5)"]
       interval: 30s
@@ -1803,6 +1807,7 @@ services:
     - pmoves_api
     - pmoves_data
     - pmoves_bus
+    - pmoves_external  # HuggingFace reranker model downloads at runtime
     healthcheck:
       test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8086/hirag/admin/stats', timeout=5)"]
       interval: 30s
@@ -2169,7 +2174,7 @@ services:
         condition: service_completed_successfully
     ports: ["8054:8054"]
     profiles: ["agents", "botz"]
-    networks: [pmoves_app, pmoves_bus, pmoves_api, pmoves_monitoring]
+    networks: [pmoves_app, pmoves_bus, pmoves_api, pmoves_monitoring, pmoves_external]  # GitHub API
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8054/healthz', timeout=5)"]
       interval: 20s
@@ -2206,7 +2211,7 @@ services:
       agent-zero:
         condition: service_healthy
     profiles: ["agents", "github-automation"]
-    networks: [pmoves_app, pmoves_bus, pmoves_api, pmoves_monitoring]
+    networks: [pmoves_app, pmoves_bus, pmoves_api, pmoves_monitoring, pmoves_external]  # GitHub API
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8100/healthz', timeout=5)"]
       interval: 30s
@@ -2243,7 +2248,7 @@ services:
       botz-gateway:
         condition: service_healthy
     profiles: ["agents", "github-automation"]
-    networks: [pmoves_app, pmoves_bus, pmoves_api, pmoves_monitoring]
+    networks: [pmoves_app, pmoves_bus, pmoves_api, pmoves_monitoring, pmoves_external]  # GitHub API
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8101/healthz', timeout=5)"]
       interval: 30s
@@ -2323,6 +2328,7 @@ services:
     networks:
     - pmoves_app
     - pmoves_bus
+    - pmoves_external  # OpenRouter API fallback mode
     healthcheck:
       test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8098/healthz', timeout=5)"]
       interval: 30s
@@ -2422,6 +2428,7 @@ services:
     networks:
     - pmoves_app
     - pmoves_bus
+    - pmoves_external  # Discord webhook API
     healthcheck:
       test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8092/healthz', timeout=5)"]
       interval: 30s
@@ -2698,7 +2705,7 @@ services:
       - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
     ports: ["7861:7861"]
     profiles: ["gpu", "tts"]
-    networks: [pmoves_app, pmoves_monitoring]
+    networks: [pmoves_app, pmoves_monitoring, pmoves_external]  # HuggingFace TTS model downloads
     deploy:
       resources:
         reservations:
@@ -3138,7 +3145,7 @@ services:
       - ./services/github-runner-ctl/config:/app/config:ro
       - ./secrets/github_pat:/run/secrets/github_pat:ro
     profiles: ["orchestration", "workers"]
-    networks: [pmoves_api, pmoves_bus, pmoves_monitoring]
+    networks: [pmoves_api, pmoves_bus, pmoves_monitoring, pmoves_external]  # GitHub API for runner mgmt
     healthcheck:
       test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8104/healthz', timeout=5)"]
       interval: 30s
@@ -3193,6 +3200,7 @@ services:
     networks:
     - pmoves_app
     - pmoves_bus
+    - pmoves_external  # YouTube innertube API
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8282/ >/dev/null 2>&1 || exit 1"]
       interval: 30s
@@ -3237,6 +3245,7 @@ services:
     networks:
     - pmoves_app
     - pmoves_bus
+    - pmoves_external  # YouTube + Invidious redirect API
   grayjay-plugin-host:
     build: ./services/grayjay-plugin-host
     restart: unless-stopped
@@ -3328,6 +3337,7 @@ services:
     - cloudflare
     networks:
     - pmoves_app
+    - pmoves_external  # Cloudflare edge tunnel (mandatory)
     healthcheck:
       test: ["CMD-SHELL", "pgrep -f 'cloudflared' || exit 1"]
       interval: 30s
@@ -3427,6 +3437,7 @@ services:
     - pmoves_api
     - pmoves_bus
     - pmoves_monitoring
+    - pmoves_external  # GitHub API
     depends_on:
       nats:
         condition: service_healthy
@@ -3462,6 +3473,7 @@ services:
     - pmoves_api
     - pmoves_bus
     - pmoves_monitoring
+    - pmoves_external  # GitHub API + git clone
     depends_on:
       nats:
         condition: service_healthy
@@ -3496,6 +3508,7 @@ services:
     - pmoves_api
     - pmoves_bus
     - pmoves_monitoring
+    - pmoves_external  # GitHub API for PR management
     depends_on:
       nats:
         condition: service_healthy
