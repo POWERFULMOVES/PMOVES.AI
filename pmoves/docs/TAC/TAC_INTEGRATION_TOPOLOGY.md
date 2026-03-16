@@ -2,9 +2,48 @@
 
 > Master document connecting all TAC-documented submodules with their cross-repo integration points, NATS flows, and CHIT Geometry Bus lifecycle.
 
-**Version:** 2.0
+**Version:** 2.1
 **Last Updated:** 2026-03-15
-**Scope:** 12 individual TAC trees + this topology map (13 files total)
+**Scope:** 23 markdown TAC trees + 12 YAML TAC trees + this topology map
+
+### TAC Tree Index (v2.1 — 7 new P1 additions)
+
+**Orchestration & Research:**
+- `TAC_AGENT_ZERO.md` — Control-plane orchestrator (Mega evolution)
+- `TAC_BOTZ.md` — Skills marketplace framework (Stage 1)
+- `TAC_SUPASERCH.md` — Multimodal holographic research (NEW)
+- `TAC_DEEPRESEARCH.md` — LLM-based research planner (NEW)
+- `TAC_GATEWAY_AGENT.md` — MCP tool orchestration gateway (NEW)
+
+**Media & Ingestion:**
+- `TAC_PMOVES_YT.md` — YouTube ingestion pipeline (NEW)
+- `TAC_FLUTE.md` — Prosodic voice mesh gateway
+
+**CHIT & Evolution:**
+- `TAC_TOKENISM.md` — CHIT attribution engine
+- `TAC_CONSCIOUSNESS.md` — CGP consciousness mapping (NEW)
+- `TAC_EVOSWARM.md` — Evolutionary optimization controller (NEW)
+
+**GPU & Model Infrastructure:**
+- `TAC_GPU_ORCHESTRATOR.md` — GPU mesh management (NEW)
+- `TAC_MODEL_INFRA_PERSONA_PROD_READINESS.md` — Model registry, personas, readiness
+
+**Agent Ecosystem:**
+- `TAC_CIPHER.md` — Knowledge-graph memory
+- `TAC_CLAWZ.md` — Multi-channel messaging
+- `TAC_A0_PLUGINS.md` — Community plugin index
+- `TAC_AUTORESEARCH.md` — Autonomous ML training
+- `TAC_DOX.md` — Document intelligence
+
+**Infrastructure:**
+- `TAC_INFRASTRUCTURE.md` — Node topology, networking
+- `TAC_RUNNERS.md` — CI/CD runner fleet
+- `TAC_TAILSCALE.md` — VPN mesh
+
+**Integrations:**
+- `TAC_HEALTH.md` — Fitness tracking (wger)
+- `TAC_WEALTH.md` — Finance management (Firefly III)
+- `TAC_INTEGRATION_TOPOLOGY.md` — This file (master map)
 
 ---
 
