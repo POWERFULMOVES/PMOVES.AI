@@ -9,6 +9,8 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { SimulationResult, getTokenismClient, CGPPacket } from '@/lib/tokenismClient';
+import { logError } from '@/lib/errorUtils';
+import { ErrorIds } from '@/lib/constants/errorIds';
 
 interface GeometricViewProps {
   result?: SimulationResult | null;
@@ -180,7 +182,7 @@ export function TokenismGeometricView({ result, week }: GeometricViewProps) {
       })
       .catch((err) => {
         const errorMessage = err instanceof Error ? err.message : 'Failed to load geometry';
-        console.error('Failed to load geometry:', err);
+        logError('Failed to load geometry', err, 'error', { errorId: ErrorIds.GEOMETRIC_VIEW_LOAD_FAILED, component: 'TokenismGeometricView' });
         setError(errorMessage);
         setPoints([]);  // Clear points on error - don't show synthetic/fake data
       })

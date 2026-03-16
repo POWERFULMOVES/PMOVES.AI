@@ -106,7 +106,7 @@ export function SearchResults({
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4" aria-live="polite" aria-atomic="false">
       {/* Results summary */}
       <div className="flex items-center justify-between text-sm text-neutral-600">
         <div>

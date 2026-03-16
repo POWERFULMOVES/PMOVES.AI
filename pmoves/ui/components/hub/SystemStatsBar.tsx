@@ -48,11 +48,15 @@ export function SystemStatsBar({
   };
 
   return (
-    <div className={`
+    <div
+      className={`
       flex flex-wrap items-center justify-between gap-4
       p-4 rounded-lg border border-brand-border bg-void-soft
       ${className}
-    `}>
+    `}
+      aria-live="polite"
+      aria-label="System health status"
+    >
       {/* Left: Overall Health */}
       <div className="flex items-center gap-4">
         <div className="flex items-center gap-3">

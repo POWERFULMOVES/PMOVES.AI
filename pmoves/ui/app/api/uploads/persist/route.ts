@@ -55,8 +55,6 @@ export async function POST(request: NextRequest) {
     const {
       data: { session },
     } = await supabaseAuth.auth.getSession();
-    const _bootJwt = process.env.NEXT_PUBLIC_SUPABASE_BOOT_USER_JWT || process.env.SUPABASE_BOOT_USER_JWT;
-
     const body = await request.json();
     const uploadId = body.uploadId as string | undefined;
     const bucket = body.bucket as string | undefined;

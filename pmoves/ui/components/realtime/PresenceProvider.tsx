@@ -8,6 +8,8 @@ import React, {
   useState,
 } from 'react';
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { logError } from '../../lib/errorUtils';
+import { ErrorIds } from '../../lib/constants/errorIds';
 import {
   CursorPosition,
   MessageRecord,
@@ -200,7 +202,7 @@ export const PresenceProvider: React.FC<PresenceProviderProps> = ({
 
     return () => {
       subscription.unsubscribe().catch((error) => {
-        console.warn('Failed to unsubscribe from presence channel', error);
+        logError('Failed to unsubscribe from presence channel', error, 'warning', { errorId: ErrorIds.REALTIME_PRESENCE_FAILED, component: 'PresenceProvider' });
       });
     };
   }, [client, boardId, selfAgentId, initialCursor, sessionId]);
@@ -215,7 +217,7 @@ export const PresenceProvider: React.FC<PresenceProviderProps> = ({
           setMessages(data);
         }
       } catch (error) {
-        console.warn('Unable to load session messages', error);
+        logError('Unable to load session messages', error, 'warning', { errorId: ErrorIds.REALTIME_PRESENCE_FAILED, component: 'PresenceProvider' });
       }
     };
 
@@ -261,7 +263,7 @@ export const PresenceProvider: React.FC<PresenceProviderProps> = ({
         .in('id', missing);
 
       if (error) {
-        console.warn('Failed to load agent profiles', error);
+        logError('Failed to load agent profiles', error, 'warning', { errorId: ErrorIds.REALTIME_PRESENCE_FAILED, component: 'PresenceProvider' });
         return;
       }
 
@@ -305,7 +307,7 @@ export const PresenceProvider: React.FC<PresenceProviderProps> = ({
         },
       })
       .catch((error) => {
-        console.warn('Failed to broadcast agent metadata', error);
+        logError('Failed to broadcast agent metadata', error, 'warning', { errorId: ErrorIds.REALTIME_PRESENCE_FAILED, component: 'PresenceProvider' });
       });
   }, [agents, selfAgentId]);
 
@@ -318,7 +320,7 @@ export const PresenceProvider: React.FC<PresenceProviderProps> = ({
       try {
         await presenceSubscriptionRef.current.updatePresence({ cursor });
       } catch (error) {
-        console.warn('Failed to update cursor presence', error);
+        logError('Failed to update cursor presence', error, 'warning', { errorId: ErrorIds.REALTIME_PRESENCE_FAILED, component: 'PresenceProvider' });
       }
     },
     []
@@ -361,9 +363,11 @@ export const PresenceProvider: React.FC<PresenceProviderProps> = ({
           error instanceof Error ? error : new Error('Unable to send message');
         setLastError(err);
         if (!serviceClient && !messageWriter) {
-          console.error(
+          logError(
             'Message insert failed. Provide a service role key or messageWriter to bypass RLS.',
-            error
+            error,
+            'error',
+            { errorId: ErrorIds.REALTIME_PRESENCE_FAILED, component: 'PresenceProvider' }
           );
         }
         throw err;
