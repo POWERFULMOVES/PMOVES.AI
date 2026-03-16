@@ -1,0 +1,74 @@
+name: TAC_NETWORK_DNS_TOPOLOGY
+description: Docker network → DNS resolution capability map
+version: 1.0
+
+networks:
+  internal_only:  # iptables blocks external DNS forwarding
+    - pmoves_api (172.30.1.0/24)
+    - pmoves_data (172.30.4.0/24)
+    - pmoves_app (172.30.2.0/24)
+    - pmoves_bus (172.30.3.0/24)
+    - pmoves_monitoring (172.30.5.0/24)
+
+  external_capable:  # Can resolve github.com, huggingface.co, etc.
+    - pmoves_external (172.30.6.0/24)
+    - pmoves-net (bridge, cross-profile)
+    - cataclysm (bridge, external compat)
+
+services:
+  external_dns_required:  # MUST have pmoves_external
+    github_api:
+      - cloudflared          # Cloudflare edge tunnel
+      - botz-gateway         # GitHub App token minting
+      - github-branch-cleanup
+      - github-issue-triage
+      - github-branch-naming
+      - github-crossrepo-sync
+      - github-crossrepo-pr
+      - github-runner-ctl
+
+    model_downloads:  # HuggingFace / Ultralytics at runtime
+      - hi-rag-gateway       # all-MiniLM-L6-v2
+      - hi-rag-gateway-gpu   # + reranker
+      - extract-worker       # all-MiniLM-L6-v2
+      - media-video          # YOLOv8
+      - media-audio          # HuBERT
+      - ultimate-tts-studio  # Kokoro, F5-TTS
+      - ffmpeg-whisper       # faster-whisper
+
+    external_api:
+      - publisher-discord    # discord.com webhooks
+      - invidious            # youtube.com
+      - invidious-companion  # youtube.com innertube
+      - deepresearch         # openrouter.ai (fallback)
+      - tensorzero-gateway   # OpenAI, Anthropic, Groq, Venice
+      - agent-zero           # LLM provider APIs
+      - archon               # GitHub + Supabase
+      - pmoves-ollama        # ollama.com model registry
+      - pmoves-yt            # YouTube API
+      - channel-monitor      # YouTube API
+      - cast-tts-gateway     # Chromecast/Google Home LAN
+      - evo-controller       # Evolution API
+      - flute-gateway        # Voice synthesis external
+      - jellyfin-bridge      # External media metadata
+      - pmoves-ui            # External asset CDN
+      - presign              # MinIO presigned URLs
+      - render-webhook       # ComfyUI callback + MinIO
+      - bgutil-pot-provider  # YouTube processing
+
+  internal_only_ok:  # No external DNS needed
+    databases: [qdrant, meilisearch, neo4j, minio, supabase-db, tensorzero-clickhouse, wger-db, invidious-db]
+    message_bus: [nats, nats-init, nats-echo-req, nats-echo-res]
+    supabase: [supabase-gotrue, supabase-postgrest, supabase-kong, supabase-realtime, supabase-storage, supabase-studio, supabase-imgproxy, supabase-meta, supabase-edge-functions, supabase-analytics, supabase-vector, supabase-pooler]
+    workers: [langextract, pdf-ingest, notebook-sync, comfy-watcher, session-context-worker, transcribe-backend, retrieval-eval, voice-relay]
+    agents_internal: [cipher-api, mesh-agent, a2ui-nats-bridge, supaserch, tokenism-simulator, tokenism-ui, consciousness-service, gateway-agent, gpu-orchestrator, model-registry, llama-throughput-lab, wger]
+    media_internal: [grayjay-plugin-host, grayjay-server, invidious-companion-proxy]
+
+audit:
+  rule: "Every service in external_dns_required MUST have pmoves_external in its networks list"
+  tool: "python3 pmoves/tools/audit_dns_networks.py"
+  ci_check: "make -C pmoves audit-dns-networks"
+  root_cause: >
+    Docker internal:true networks explicitly firewall all external traffic via iptables.
+    The embedded DNS resolver (127.0.0.11) needs network-level access to upstream resolvers,
+    which internal networks block. Services requiring external DNS must be on pmoves_external.
