@@ -7,10 +7,10 @@
 | Field | Value |
 |-------|-------|
 | **Service** | Health (wger) |
-| **Port** | None assigned |
+| **Port** | 8000 (`WGER_PORT`, compose: `docker-compose.wger.yml`) |
 | **Health** | **MISSING** — needs `/healthz` endpoint |
 | **Submodule** | `Pmoves-Health-wger` |
-| **Docker Profile** | TBD |
+| **Docker Profile** | `wger` |
 | **Tier** | ui |
 | **Class** | Specialized |
 | **Evolution** | Base |
@@ -138,6 +138,6 @@ This is the **least mature** integration. TAC tree serves as the hardening roadm
 - No Docker hardening beyond template
 - No CHIT integration
 - Auth bridge between wger and PMOVES JWT system needed
-- Port assignment needed
+- ~~Port assignment needed~~ → Port 8000, profile `wger`
 
 <!-- GRAPHITI_MARK: CLAUDE-OPUS::TAC-TOPOLOGY-AUDIT::2026-02-20 -->
