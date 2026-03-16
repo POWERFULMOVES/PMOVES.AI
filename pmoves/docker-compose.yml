@@ -1468,9 +1468,14 @@ services:
     environment:
     - MINIO_ENDPOINT=${MINIO_ENDPOINT:-minio:9000}
     - MINIO_SECURE=${MINIO_SECURE:-false}
+    - MINIO_ACCESS_KEY=${MINIO_USER:-minioadmin}
+    - MINIO_SECRET_KEY=${MINIO_PASSWORD:-minioadmin}
     - USE_CUDA=${USE_CUDA:-true}
     - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
     - FFW_PROVIDER=${FFW_PROVIDER:-faster-whisper}
+    # Clear Windows host SSL paths that leak into containers via Docker env inheritance
+    - SSL_CERT_FILE=
+    - SSL_CERT_DIR=
     - WHISPER_MODEL=${WHISPER_MODEL:-small}
     - WHISPER_LANGUAGE=${WHISPER_LANGUAGE:-en}
     deploy:
@@ -1491,6 +1496,8 @@ services:
     networks:
     - pmoves_app
     - pmoves_bus
+    - pmoves_data  # Required for Supabase segment storage
+    - pmoves_external  # Required for HuggingFace model downloads (faster-whisper)
     healthcheck:
       test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8078/healthz', timeout=5)"]
       interval: 30s
@@ -1504,6 +1511,8 @@ services:
     environment:
     - MINIO_ENDPOINT=${MINIO_ENDPOINT:-minio:9000}
     - MINIO_SECURE=${MINIO_SECURE:-false}
+    - MINIO_ACCESS_KEY=${MINIO_USER:-minioadmin}
+    - MINIO_SECRET_KEY=${MINIO_PASSWORD:-minioadmin}
     - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
     - YOLO_MODEL=${YOLO_MODEL:-yolov8n.pt}
     - YOLO_CONFIDENCE=${YOLO_CONFIDENCE:-0.25}
@@ -1536,6 +1545,8 @@ services:
     environment:
     - MINIO_ENDPOINT=${MINIO_ENDPOINT:-minio:9000}
     - MINIO_SECURE=${MINIO_SECURE:-false}
+    - MINIO_ACCESS_KEY=${MINIO_USER:-minioadmin}
+    - MINIO_SECRET_KEY=${MINIO_PASSWORD:-minioadmin}
     - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
     - EMOTION_MODEL=${EMOTION_MODEL:-superb/hubert-large-superb-er}
     deploy:
@@ -1572,6 +1583,8 @@ services:
     # NATS_URL from env.tier-media has credentials: nats://nats:pmoves@nats:4222
     - MINIO_ENDPOINT=${MINIO_ENDPOINT:-minio:9000}
     - MINIO_SECURE=${MINIO_SECURE:-false}
+    - MINIO_ACCESS_KEY=${MINIO_USER:-minioadmin}
+    - MINIO_SECRET_KEY=${MINIO_PASSWORD:-minioadmin}
     - YT_BUCKET=${YT_BUCKET:-assets}
     - YT_OUTPUT_BUCKET=${YT_OUTPUT_BUCKET:-outputs}
     - INDEXER_NAMESPACE=${INDEXER_NAMESPACE:-pmoves}
@@ -1597,6 +1610,7 @@ services:
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
     volumes:
     - ./config:/app/config
+    - pmoves-yt-data:/data
     depends_on:
       minio:
         condition: service_healthy
@@ -1714,6 +1728,8 @@ services:
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
+    # Prevent Windows SSL_CERT_FILE env leak
+    - SSL_CERT_FILE=
     extra_hosts:
     - host.docker.internal:host-gateway
     ports:
@@ -1858,6 +1874,8 @@ services:
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
+    # Prevent Windows SSL_CERT_FILE env leak
+    - SSL_CERT_FILE=
     gpus: all
     deploy:
       resources:
@@ -1980,6 +1998,8 @@ services:
     - A0_SET_browser_model_provider=openai
     - A0_SET_browser_model_name=agent_zero
     - A0_SET_browser_model_api_base=http://tensorzero-gateway:3000/openai/v1
+    # Prevent Windows SSL_CERT_FILE env leak (Windows path not valid in Linux container)
+    - SSL_CERT_FILE=
     depends_on:
       nats:
         condition: service_healthy
@@ -2049,6 +2069,8 @@ services:
       - GH_APP_ID=${GH_APP_ID:-}
       - GH_APP_SEC=${GH_APP_SEC:-}
       - GH_APP_INSTALLATION_ID=${GH_APP_INSTALLATION_ID:-}
+      # Prevent Windows SSL_CERT_FILE env leak
+      - SSL_CERT_FILE=
     depends_on:
       nats:
         condition: service_healthy
@@ -2440,11 +2462,14 @@ services:
       start_period: 15s
   pmoves-ollama:
     <<: *tier-llm-hardened
-    image: ${PMOVES_OLLAMA_IMAGE:-ollama/ollama:0.12.6@sha256:ea37dcbf693248c80796654500fccf1e12f55da20ec7c78c30870a9a227c4cdd}
+    image: ${PMOVES_OLLAMA_IMAGE:-ollama/ollama:0.18.0@sha256:e23e6499890325d31f3454cdc83f7a613a2423c8a9e167bbafea0b0e3c27d7c6}
     restart: unless-stopped
     environment:
     - OLLAMA_HOST=0.0.0.0:11434
     - OLLAMA_MODELS=/root/.ollama/models
+    # Override Windows SSL cert paths leaked via env inheritance (x509 failures)
+    - SSL_CERT_FILE=
+    - SSL_CERT_DIR=
     - DOCKED_MODE=${DOCKED_MODE:-true}
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
@@ -2455,6 +2480,16 @@ services:
     dns:
     - ${OLLAMA_DNS_PRIMARY:-1.1.1.1}
     - ${OLLAMA_DNS_SECONDARY:-8.8.8.8}
+    deploy:
+      resources:
+        reservations:
+          devices:
+          - driver: nvidia
+            count: all
+            capabilities:
+            - gpu
+    ports:
+    - ${OLLAMA_HOST_PORT:-11435}:11434
     networks:
     - pmoves_api
     - pmoves_external
@@ -2510,7 +2545,7 @@ services:
     - ALIBABA_PRO_CODING_PLAN=${ALIBABA_PRO_CODING_PLAN:-local-disabled}
     - TOGETHER_AI_API_KEY=${TOGETHER_AI_API_KEY:-local-disabled}
     - CLOUDFLARE_API_TOKEN=${CLOUDFLARE_API_TOKEN:-local-disabled}
-    - OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=${OTEL_EXPORTER_OTLP_TRACES_ENDPOINT:-http://host.docker.internal:4317}
+    - OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=${OTEL_EXPORTER_OTLP_TRACES_ENDPOINT:-}
     - DOCKED_MODE=${DOCKED_MODE:-true}
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
@@ -3512,6 +3547,7 @@ volumes:
   wger-static: {}
   wger-media: {}
   wger-prometheus: {}
+  pmoves-yt-data: {}
 networks:
   pmoves_data:
     name: pmoves_data

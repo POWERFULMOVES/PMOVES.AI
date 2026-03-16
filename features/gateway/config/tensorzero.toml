@@ -85,7 +85,6 @@ model = "glm-4-flash"
 # General Chat: Local -> Free -> Cloud Fallback Chain
 [functions.chat]
 type = "chat"
-variants = ["local", "free_tier", "cloud_gemini", "cloud_anthropic", "cloud_openai"]
 
 [functions.chat.variants.local]
 model = "models.qwen-local"
@@ -112,7 +111,6 @@ weight = 0.1
 # Embedding: Local First
 [functions.embed]
 type = "embedding"
-variants = ["local_embed"]
 
 [functions.embed.variants.local_embed]
 model = "models.qwen-embedding-local"

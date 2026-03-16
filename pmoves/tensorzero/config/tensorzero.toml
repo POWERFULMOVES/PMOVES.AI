@@ -9,9 +9,10 @@
 enabled = true
 async_writes = true
 
-[gateway.export.otlp.traces]
-enabled = true
-format = "opentelemetry"
+# OTLP export disabled — re-enable when OTel collector is running
+# [gateway.export.otlp.traces]
+# enabled = true
+# format = "opentelemetry"
 
 # --- Chat models: Agent Zero orchestration (local GPU and edge) ------------
 
