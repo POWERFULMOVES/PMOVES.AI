@@ -1,0 +1,125 @@
+# TAC Tree: ComfyUI Render Pipeline
+# Audits ComfyUI → Render Webhook → MinIO → Social Publisher
+
+name: "ComfyUI Render Pipeline"
+version: "1.0.0"
+description: "Verify ComfyUI image generation pipeline: GPU service, render webhook callback, MinIO storage, and social publishing"
+
+root:
+  id: comfyui-pipeline
+  task: "ComfyUI render pipeline review"
+  context: "pmoves/docker-compose.yml + ComfyUI GPU service"
+  agent_hint: codex
+  children:
+
+    # =========================================================================
+    # Phase 1: ComfyUI Service
+    # =========================================================================
+    - id: comfyui.service
+      task: "ComfyUI GPU service"
+      context: "pmoves/docker-compose.yml (gpu profile)"
+      agent_hint: codex
+      children:
+        - id: comfyui.service.compose-defined
+          task: "ComfyUI service defined in compose"
+          action:
+            type: grep
+            target: "pmoves/docker-compose.yml"
+            pattern: "comfyui:"
+            expect: "Service on port 8188 under gpu profile"
+          context: "GPU-accelerated image generation"
+          agent_hint: codex
+
+        - id: comfyui.service.gpu-runtime
+          task: "NVIDIA GPU runtime configured"
+          action:
+            type: grep
+            target: "pmoves/docker-compose.yml"
+            pattern: "comfyui.*nvidia|comfyui.*gpu"
+            expect: "GPU runtime or device reservation"
+          context: "Requires VRAM for model inference"
+          agent_hint: codex
+
+    # =========================================================================
+    # Phase 2: Render Webhook
+    # =========================================================================
+    - id: comfyui.webhook
+      task: "Render webhook handler"
+      context: "pmoves/docker-compose.yml"
+      agent_hint: codex
+      children:
+        - id: comfyui.webhook.compose-defined
+          task: "Render webhook service defined"
+          action:
+            type: grep
+            target: "pmoves/docker-compose.yml"
+            pattern: "render-webhook:"
+            expect: "Service on port 8085"
+          context: "Handles ComfyUI render callbacks"
+          agent_hint: codex
+
+        - id: comfyui.webhook.auth
+          task: "Webhook shared secret configured"
+          action:
+            type: grep
+            target: "pmoves/docker-compose.yml"
+            pattern: "RENDER_WEBHOOK_SHARED_SECRET"
+            expect: "Auth secret passed to render webhook"
+          context: "Prevents unauthorized callback injection"
+          agent_hint: codex
+
+        - id: comfyui.webhook.minio
+          task: "Render outputs stored in MinIO"
+          action:
+            type: grep
+            target: "pmoves/docker-compose.yml"
+            pattern: "render-webhook.*MINIO|MINIO.*render"
+            expect: "MinIO credentials for output storage"
+          context: "Generated images stored in outputs bucket"
+          agent_hint: codex
+
+    # =========================================================================
+    # Phase 3: Social Publishing
+    # =========================================================================
+    - id: comfyui.publish
+      task: "Social publisher services"
+      context: "pmoves/docker-compose.yml"
+      agent_hint: codex
+      children:
+        - id: comfyui.publish.discord
+          task: "Publisher-Discord service defined"
+          action:
+            type: grep
+            target: "pmoves/docker-compose.yml"
+            pattern: "publisher-discord:"
+            expect: "Service on port 8094"
+          context: "Listens on NATS for publish events"
+          agent_hint: codex
+
+        - id: comfyui.publish.nats-subjects
+          task: "Publish NATS subjects configured"
+          action:
+            type: grep
+            target: "pmoves/docker-compose.yml"
+            pattern: "ingest\\.summary\\.ready|ingest\\.chapters\\.ready"
+            expect: "Discord publisher subscribes to content events"
+          context: "Summary and chapter ready events trigger notifications"
+          agent_hint: codex
+
+    # =========================================================================
+    # Phase 4: n8n Integration
+    # =========================================================================
+    - id: comfyui.n8n
+      task: "n8n content pipeline workflows"
+      context: "PMOVES-n8n/workflows/"
+      agent_hint: codex
+      children:
+        - id: comfyui.n8n.agent-card
+          task: "agent-card-gen skill pairing defined"
+          action:
+            type: grep
+            target: "pmoves/configs/skill-pairings.yaml"
+            pattern: "agent-card-gen"
+            expect: "Theme -> ComfyUI -> Card pipeline"
+          context: "Automated agent card generation"
+          agent_hint: codex
