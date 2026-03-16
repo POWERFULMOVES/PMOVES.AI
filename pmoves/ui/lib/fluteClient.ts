@@ -29,6 +29,8 @@
  */
 
 import { getServiceUrl } from './serviceDiscovery';
+import { logError, logForDebugging } from './errorUtils';
+import { ErrorIds } from './constants/errorIds';
 
 export interface SynthesizeOptions {
   voice?: string;
@@ -215,7 +217,7 @@ export class FluteClient {
       });
       return response.ok;
     } catch (error) {
-      console.warn('FluteClient: Health check failed', error);
+      logError('FluteClient: Health check failed', error, 'warning', { errorId: ErrorIds.FLUTE_HEALTH_CHECK_FAILED, component: 'FluteClient' });
       return false;
     }
   }
@@ -271,7 +273,7 @@ export class FluteClient {
     onReconnectExhausted?: () => void,
   ): void {
     if (this.ws?.readyState === WebSocket.OPEN) {
-      console.warn('FluteClient: Already connected');
+      logForDebugging('FluteClient: Already connected', undefined, { component: 'FluteClient' });
       return;
     }
 
@@ -282,7 +284,7 @@ export class FluteClient {
     this.ws.binaryType = 'arraybuffer';
 
     this.ws.onopen = () => {
-      console.log('FluteClient: WebSocket connected');
+      logForDebugging('FluteClient: WebSocket connected', undefined, { component: 'FluteClient' });
       this.reconnectAttempts = 0;
     };
 
@@ -293,24 +295,24 @@ export class FluteClient {
     };
 
     this.ws.onerror = (error) => {
-      console.error('FluteClient: WebSocket error', error);
+      logError('FluteClient: WebSocket error', error, 'error', { errorId: ErrorIds.FLUTE_WS_CONNECT_FAILED, component: 'FluteClient' });
       onError?.(error);
     };
 
     this.ws.onclose = (event) => {
-      console.log('FluteClient: WebSocket closed', event.code, event.reason);
+      logForDebugging('FluteClient: WebSocket closed', undefined, { component: 'FluteClient', code: event.code, reason: event.reason });
       onClose?.(event);
 
       // Auto-reconnect on unexpected close
       if (!event.wasClean && this.reconnectAttempts < this.maxReconnectAttempts) {
         this.reconnectAttempts++;
-        console.log(`FluteClient: Reconnecting (attempt ${this.reconnectAttempts})`);
+        logForDebugging(`FluteClient: Reconnecting (attempt ${this.reconnectAttempts})`, undefined, { component: 'FluteClient' });
         setTimeout(
           () => this.connectToUrl(url, onMessage, onError, onClose, onReconnectExhausted),
           1000 * this.reconnectAttempts,
         );
       } else if (!event.wasClean && this.reconnectAttempts >= this.maxReconnectAttempts) {
-        console.error('FluteClient: Max reconnection attempts exhausted');
+        logError('FluteClient: Max reconnection attempts exhausted', new Error('WebSocket reconnect exhausted'), 'error', { errorId: ErrorIds.FLUTE_WS_CONNECT_FAILED, component: 'FluteClient' });
         onReconnectExhausted?.();
       }
     };

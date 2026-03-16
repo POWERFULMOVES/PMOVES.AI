@@ -11,6 +11,7 @@ import {
   triggerBackfill,
 } from "../../../lib/api/jellyfin";
 import type { JellyfinItem, JellyfinSyncStatusInfo } from "../../../lib/api/jellyfin";
+import { logForDebugging } from '@/lib/errorUtils';
 
 export default function JellyfinDashboardPage() {
   const [syncStatus, setSyncStatus] = useState<JellyfinSyncStatusInfo | null>(null);
@@ -145,7 +146,7 @@ export default function JellyfinDashboardPage() {
                     <p className="text-sm text-neutral-500">{item.type} • {item.productionYear}</p>
                   </div>
                   <button
-                    onClick={() => console.log("Link item:", item.id)}
+                    onClick={() => logForDebugging("Link item", undefined, { component: 'JellyfinDashboard', itemId: item.id })}
                     className="rounded bg-green-600 px-3 py-1 text-sm text-white hover:bg-green-700 transition"
                   >
                     Link

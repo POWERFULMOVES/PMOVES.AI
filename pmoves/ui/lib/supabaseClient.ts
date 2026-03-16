@@ -1,5 +1,7 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from './database.types';
+import { logError } from './errorUtils';
+import { ErrorIds } from './constants/errorIds';
 
 type SupabaseClientOptions = {
   serviceRole?: boolean;
@@ -148,12 +150,12 @@ export const getBootUser = async (client: TypedSupabaseClient) => {
   try {
     const { data, error } = await client.auth.getUser(bootJwt);
     if (error) {
-      console.warn('[supabaseClient] Failed to fetch boot user via JWT', error);
+      logError('Failed to fetch boot user via JWT', error, 'warning', { errorId: ErrorIds.SUPABASE_AUTH_FAILED, component: 'supabaseClient' });
       return null;
     }
     return data.user ?? null;
   } catch (err) {
-    console.warn('[supabaseClient] Unexpected error when fetching boot user', err);
+    logError('Unexpected error when fetching boot user', err, 'warning', { errorId: ErrorIds.SUPABASE_AUTH_FAILED, component: 'supabaseClient' });
     return null;
   }
 };
