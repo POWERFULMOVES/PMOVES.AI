@@ -2,9 +2,60 @@
 
 > Master document connecting all TAC-documented submodules with their cross-repo integration points, NATS flows, and CHIT Geometry Bus lifecycle.
 
-**Version:** 2.0
+**Version:** 2.2
 **Last Updated:** 2026-03-15
-**Scope:** 12 individual TAC trees + this topology map (13 files total)
+**Scope:** 26 markdown TAC trees + 14 YAML TAC trees + this topology map (~55% coverage)
+
+### TAC Tree Index (v2.1 — 7 new P1 additions)
+
+**Orchestration & Research:**
+- `TAC_AGENT_ZERO.md` — Control-plane orchestrator (Mega evolution)
+- `TAC_BOTZ.md` — Skills marketplace framework (Stage 1)
+- `TAC_SUPASERCH.md` — Multimodal holographic research (NEW)
+- `TAC_DEEPRESEARCH.md` — LLM-based research planner (NEW)
+- `TAC_GATEWAY_AGENT.md` — MCP tool orchestration gateway (NEW)
+
+**Media & Ingestion:**
+- `TAC_PMOVES_YT.md` — YouTube ingestion pipeline (NEW)
+- `TAC_FLUTE.md` — Prosodic voice mesh gateway
+
+**CHIT & Evolution:**
+- `TAC_TOKENISM.md` — CHIT attribution engine
+- `TAC_CONSCIOUSNESS.md` — CGP consciousness mapping (NEW)
+- `TAC_EVOSWARM.md` — Evolutionary optimization controller (NEW)
+
+**GPU & Model Infrastructure:**
+- `TAC_GPU_ORCHESTRATOR.md` — GPU mesh management (NEW)
+- `TAC_MODEL_INFRA_PERSONA_PROD_READINESS.md` — Model registry, personas, readiness
+
+**Agent Ecosystem:**
+- `TAC_CIPHER.md` — Knowledge-graph memory
+- `TAC_CLAWZ.md` — Multi-channel messaging
+- `TAC_A0_PLUGINS.md` — Community plugin index
+- `TAC_AUTORESEARCH.md` — Autonomous ML training
+- `TAC_DOX.md` — Document intelligence
+
+**Infrastructure:**
+- `TAC_INFRASTRUCTURE.md` — Node topology, networking
+- `TAC_RUNNERS.md` — CI/CD runner fleet
+- `TAC_TAILSCALE.md` — VPN mesh
+
+**Pipelines (Umbrella TACs):**
+- `TAC_EMBEDDING_PIPELINE.md` — Extract Worker + LangExtract + PDF Ingest (NEW)
+- `TAC_MEDIA_ANALYSIS.md` — Media-Video + Media-Audio analyzers (NEW)
+- `TAC_E2B_SANDBOX.md` — E2B code execution ecosystem (NEW)
+
+**Integrations:**
+- `TAC_HEALTH.md` — Fitness tracking (wger)
+- `TAC_WEALTH.md` — Finance management (Firefly III)
+- `TAC_INTEGRATION_TOPOLOGY.md` — This file (master map)
+
+**YAML Audit Trees (14):**
+- `agent-zero-customization.tac.yaml`, `archon-agents.tac.yaml`, `botz-mcp.tac.yaml`
+- `comfyui-pipeline.tac.yaml`, `dox-intelligence.tac.yaml` (NEW), `firefly-iii.tac.yaml` (UPDATED)
+- `health-wger.tac.yaml`, `hirag-retrieval.tac.yaml`, `n8n.tac.yaml`
+- `observability.tac.yaml`, `security-posture.tac.yaml`, `soundcloud-ingest.tac.yaml`
+- `tensorzero-gpu.tac.yaml`, `tokenism-chit.tac.yaml` (NEW)
 
 ---
 

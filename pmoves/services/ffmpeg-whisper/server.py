@@ -485,9 +485,15 @@ def transcribe(body: Dict[str, Any] = Body(...)):
             }
             forwarded = _forward_to_audio_service(forward_payload)
             if not forwarded:
-                insert_segments(rows)
+                try:
+                    insert_segments(rows)
+                except Exception as seg_err:
+                    logger.warning("Segment storage failed (non-fatal): %s", seg_err)
         else:
-            insert_segments(rows)
+            try:
+                insert_segments(rows)
+            except Exception as seg_err:
+                logger.warning("Segment storage failed (non-fatal): %s", seg_err)
 
         return {
             "ok": True,
