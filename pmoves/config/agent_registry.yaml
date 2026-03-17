@@ -376,7 +376,7 @@ agents:
       kappa_sensitive: false
       hz_sensitive: false
       swarm_participant: false
-      attribution_gated: false
+      attribution_gated: true
     chit_integration:
       tac_tree: "pmoves/configs/tac_trees/cast-gateway.tac.yaml"
     topology:
