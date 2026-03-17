@@ -1368,6 +1368,7 @@ services:
     networks:
     - pmoves_app
     - pmoves_bus
+    - pmoves_data  # MinIO access (minio:9000)
     healthcheck:
       test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8092/healthz', timeout=5)"]
       interval: 30s
@@ -1455,6 +1456,7 @@ services:
     - pmoves_app
     - pmoves_bus
     - pmoves_api
+    - pmoves_data  # MinIO access (minio:9000)
     healthcheck:
       test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthz', timeout=5)"]
       interval: 30s
@@ -1622,6 +1624,7 @@ services:
     - pmoves_app
     - pmoves_api
     - pmoves_bus
+    - pmoves_data      # MinIO access (minio:9000)
     - pmoves_external  # Required for YouTube API access
     healthcheck:
       test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8077/healthz', timeout=5)"]
