@@ -295,6 +295,8 @@ class UltimateTTSProvider(VoiceProvider):
                     audio_url = audio_info["url"]
                 elif isinstance(audio_info, str) and audio_info.startswith("http"):
                     audio_url = audio_info
+                elif isinstance(audio_info, str) and audio_info.startswith("/"):
+                    audio_url = f"{self.base_url}{audio_info}"
 
                 if not audio_url:
                     raise UltimateTTSError(
