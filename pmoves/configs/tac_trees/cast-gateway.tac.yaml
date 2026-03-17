@@ -1,0 +1,460 @@
+# TAC Tree: Cast TTS Gateway
+# Audits the Cast TTS Gateway service (port 8060) — TTS synthesis, Google Cast
+# devices, voice profiles, scheduling, fallback providers, observability.
+#
+# Key files:
+#   pmoves/services/cast-tts-gateway/service.py    (2,095 lines — main service)
+#   pmoves/services/cast-tts-gateway/voices.py     (290 lines — VoiceProfileManager)
+#   pmoves/services/cast-tts-gateway/device_manager.py  — device discovery
+#   pmoves/services/cast-tts-gateway/fallback.py   — TTS provider chain
+#   pmoves/services/cast-tts-gateway/scheduler.py  — cron scheduling
+#   pmoves/services/cast-tts-gateway/concurrent.py — concurrent casting
+#   pmoves/services/cast-tts-gateway/security.py   — audit logging, rate limiting
+#   pmoves/services/cast-tts-gateway/auth.py       — JWT auth middleware
+
+name: "Cast TTS Gateway"
+version: "1.0.0"
+description: "Verify Cast TTS Gateway: health, TTS fallback chain, device management, voice profiles, scheduling, queue, observability, security, and NATS events"
+
+root:
+  id: cast-gateway
+  task: "Cast TTS Gateway review"
+  context: "pmoves/services/cast-tts-gateway/ + pmoves/docker-compose.yml"
+  agent_hint: 4090-claude
+  children:
+
+    # =========================================================================
+    # Phase 1: Service Health
+    # =========================================================================
+    - id: cg.health
+      task: "Service health and container configuration"
+      context: "Dockerfile + docker-compose.yml"
+      agent_hint: 4090-claude
+      children:
+        - id: cg.health.endpoint
+          task: "/healthz endpoint responds on port 8060"
+          action:
+            type: grep
+            target: "pmoves/services/cast-tts-gateway/service.py"
+            pattern: "healthz"
+            expect: "Health endpoint registered in aiohttp routes"
+          context: "PORT=8060 from env, default in service.py"
+          agent_hint: 4090-claude
+
+        - id: cg.health.compose
+          task: "Compose service defined with correct profiles"
+          action:
+            type: grep
+            target: "pmoves/docker-compose.yml"
+            pattern: "cast-tts-gateway:"
+            expect: "profiles: [cast, media], depends_on flute-gateway + nats (service_healthy)"
+          context: "Networks: pmoves_app, pmoves_bus, pmoves_api, pmoves_external"
+          agent_hint: 4090-claude
+
+        - id: cg.health.dockerfile
+          task: "Dockerfile uses non-root user"
+          action:
+            type: grep
+            target: "pmoves/services/cast-tts-gateway/Dockerfile"
+            pattern: "USER nonroot"
+            expect: "python:3.12-slim, useradd -m -u 65532, USER nonroot"
+          context: "Also installs catt[all] for Cast device control"
+          agent_hint: 4090-claude
+
+        - id: cg.health.hardening
+          task: "Compose hardening anchor applied"
+          action:
+            type: grep
+            target: "pmoves/docker-compose.yml"
+            pattern: "cast-tts-gateway.*tier-agent-hardened-ro"
+            expect: "<<: *tier-agent-hardened-ro, user: 65532:65532"
+          context: "Resource limits: 1 CPU, 512M memory"
+          agent_hint: 4090-claude
+
+    # =========================================================================
+    # Phase 2: TTS Provider Chain
+    # =========================================================================
+    - id: cg.tts
+      task: "TTS provider fallback chain"
+      context: "pmoves/services/cast-tts-gateway/fallback.py + flute_client.py"
+      agent_hint: 4090-claude
+      children:
+        - id: cg.tts.flute
+          task: "Primary provider: Flute Gateway (prosodic TTS)"
+          action:
+            type: grep
+            target: "pmoves/services/cast-tts-gateway/service.py"
+            pattern: "FLUTE_GATEWAY_URL"
+            expect: "http://flute-gateway:8055 via env"
+          context: "FluteTTSProvider in flute_client.py, prosodic synthesis"
+          agent_hint: 4090-claude
+
+        - id: cg.tts.ultimate
+          task: "Fallback provider: Ultimate TTS Studio"
+          action:
+            type: grep
+            target: "pmoves/services/cast-tts-gateway/service.py"
+            pattern: "ULTIMATE_TTS_URL"
+            expect: "http://ultimate-tts-studio:7861 via env"
+          context: "UltimateTTSProvider in fallback.py"
+          agent_hint: 4090-claude
+
+        - id: cg.tts.google
+          task: "Final fallback: Google TTS"
+          action:
+            type: grep
+            target: "pmoves/services/cast-tts-gateway/fallback.py"
+            pattern: "GoogleTTSProvider"
+            expect: "GoogleTTSProvider class defined"
+          context: "Last resort — uses gTTS for basic synthesis"
+          agent_hint: 4090-claude
+
+        - id: cg.tts.fallback-manager
+          task: "FallbackManager with circuit breaker + retry"
+          action:
+            type: grep
+            target: "pmoves/services/cast-tts-gateway/fallback.py"
+            pattern: "FallbackManager"
+            expect: "Orchestrates provider chain with FallbackResult"
+          context: "Circuit breaker tracks from_state → to_state transitions"
+          agent_hint: 4090-claude
+
+    # =========================================================================
+    # Phase 3: Device Management
+    # =========================================================================
+    - id: cg.devices
+      task: "Google Cast device discovery and management"
+      context: "pmoves/services/cast-tts-gateway/device_manager.py + groups.py"
+      agent_hint: 4090-claude
+      children:
+        - id: cg.devices.discovery
+          task: "POST /cast/discover — mDNS device scanning"
+          action:
+            type: grep
+            target: "pmoves/services/cast-tts-gateway/service.py"
+            pattern: "cast/discover"
+            expect: "Route registered for device discovery"
+          context: "Uses catt library for Chromecast/Google Cast mDNS"
+          agent_hint: 4090-claude
+
+        - id: cg.devices.groups
+          task: "Cast group CRUD at /cast/groups"
+          action:
+            type: grep
+            target: "pmoves/services/cast-tts-gateway/groups.py"
+            pattern: "CastGroupManager"
+            expect: "Group creation, listing, modification, deletion"
+          context: "Group-based casting to multiple devices"
+          agent_hint: 4090-claude
+
+        - id: cg.devices.concurrent
+          task: "Concurrent casting with limits"
+          action:
+            type: grep
+            target: "pmoves/services/cast-tts-gateway/concurrent.py"
+            pattern: "ConcurrentCaster"
+            expect: "Max simultaneous casts limited (default 4, recommended 2)"
+          context: "Prevents network saturation from too many simultaneous casts"
+          agent_hint: 4090-claude
+
+    # =========================================================================
+    # Phase 4: Voice Profiles (VoiceProfileManager)
+    # =========================================================================
+    - id: cg.voices
+      task: "Voice profile management"
+      context: "pmoves/services/cast-tts-gateway/voices.py"
+      agent_hint: 4090-claude
+      children:
+        - id: cg.voices.crud
+          task: "CRUD endpoints at /cast/voices"
+          action:
+            type: grep
+            target: "pmoves/services/cast-tts-gateway/service.py"
+            pattern: "cast/voices"
+            expect: "POST, GET, PUT, DELETE routes for voice profiles"
+          context: "5 endpoints: create, list, get, update, delete"
+          agent_hint: 4090-claude
+
+        - id: cg.voices.model
+          task: "VoiceProfile dataclass fields"
+          action:
+            type: grep
+            target: "pmoves/services/cast-tts-gateway/voices.py"
+            pattern: "class VoiceProfile"
+            expect: "name, voice, speed (0.5-2.0), pitch (0.5-2.0), device, group, context_tags"
+          context: "speed/pitch range validation needed"
+          agent_hint: 4090-claude
+
+        - id: cg.voices.device-binding
+          task: "Profile-to-device and profile-to-group binding"
+          action:
+            type: grep
+            target: "pmoves/services/cast-tts-gateway/voices.py"
+            pattern: "find_profile_for_device|find_profile_for_group"
+            expect: "Lookup methods for device and group binding"
+          context: "Profiles can target specific devices or groups"
+          agent_hint: 4090-claude
+
+        - id: cg.voices.context-tags
+          task: "Context-tag based profile lookup"
+          action:
+            type: grep
+            target: "pmoves/services/cast-tts-gateway/voices.py"
+            pattern: "find_profile_by_context|context_tags"
+            expect: "Semantic matching via context_tags field"
+          context: "Allows context-aware voice switching"
+          agent_hint: 4090-claude
+
+    # =========================================================================
+    # Phase 5: Scheduling & Queue
+    # =========================================================================
+    - id: cg.scheduler
+      task: "Scheduled announcements and priority queue"
+      context: "pmoves/services/cast-tts-gateway/scheduler.py + queue.py + audio_queue.py"
+      agent_hint: 4090-claude
+      children:
+        - id: cg.scheduler.recurring
+          task: "POST /cast/schedule — cron-like recurring announcements"
+          action:
+            type: grep
+            target: "pmoves/services/cast-tts-gateway/scheduler.py"
+            pattern: "RECURRING|ScheduleType"
+            expect: "ScheduleType.RECURRING with cron expression parsing"
+          context: "CastScheduler manages recurring timers"
+          agent_hint: 4090-claude
+
+        - id: cg.scheduler.one-time
+          task: "POST /cast/schedule/once — one-shot announcements"
+          action:
+            type: grep
+            target: "pmoves/services/cast-tts-gateway/scheduler.py"
+            pattern: "ONE_SHOT"
+            expect: "ScheduleType.ONE_SHOT for single-fire announcements"
+          context: "Fire-and-forget scheduling"
+          agent_hint: 4090-claude
+
+        - id: cg.scheduler.templates
+          task: "Announcement templates with variable substitution"
+          action:
+            type: grep
+            target: "pmoves/services/cast-tts-gateway/scheduler.py"
+            pattern: "AnnouncementTemplate"
+            expect: "Template class with render(variables) method"
+          context: "CRUD at /cast/templates, {variable} substitution"
+          agent_hint: 4090-claude
+
+        - id: cg.queue.priority
+          task: "Priority queue at /cast/queue"
+          action:
+            type: grep
+            target: "pmoves/services/cast-tts-gateway/queue.py"
+            pattern: "CastPriorityQueue"
+            expect: "Priority-based announcement queue"
+          context: "Enqueue, dequeue, skip operations tracked by QUEUE_OPERATIONS counter"
+          agent_hint: 4090-claude
+
+        - id: cg.queue.session
+          task: "Audio queue session management"
+          action:
+            type: grep
+            target: "pmoves/services/cast-tts-gateway/audio_queue.py"
+            pattern: "AudioQueueManager"
+            expect: "Session controls: start, pause, resume, skip, stop"
+          context: "Manages sequential playback with session state"
+          agent_hint: 4090-claude
+
+    # =========================================================================
+    # Phase 6: Observability
+    # =========================================================================
+    - id: cg.metrics
+      task: "Prometheus metrics"
+      context: "pmoves/services/cast-tts-gateway/service.py lines 72-123"
+      agent_hint: 4090-claude
+      children:
+        - id: cg.metrics.requests
+          task: "cast_tts_requests_total counter"
+          action:
+            type: grep
+            target: "pmoves/services/cast-tts-gateway/service.py"
+            pattern: "cast_tts_requests_total"
+            expect: "Counter with labels [method, status]"
+          context: "Tracks all HTTP methods + NATS publish results"
+          agent_hint: 4090-claude
+
+        - id: cg.metrics.latency
+          task: "cast_tts_latency_seconds histogram"
+          action:
+            type: grep
+            target: "pmoves/services/cast-tts-gateway/service.py"
+            pattern: "cast_tts_latency_seconds"
+            expect: "Histogram for request latency"
+          context: "End-to-end latency including TTS synthesis"
+          agent_hint: 4090-claude
+
+        - id: cg.metrics.profiles
+          task: "cast_voice_profile_usage_total counter"
+          action:
+            type: grep
+            target: "pmoves/services/cast-tts-gateway/service.py"
+            pattern: "cast_voice_profile_usage_total"
+            expect: "Counter with labels [profile, status]"
+          context: "Tracks which voice profiles are used"
+          agent_hint: 4090-claude
+
+        - id: cg.metrics.fallback
+          task: "cast_fallback_provider_usage_total counter"
+          action:
+            type: grep
+            target: "pmoves/services/cast-tts-gateway/service.py"
+            pattern: "cast_fallback_provider_usage_total"
+            expect: "Counter with labels [provider, status]"
+          context: "Providers: flute, ultimate_tts, google_tts"
+          agent_hint: 4090-claude
+
+        - id: cg.metrics.circuit
+          task: "cast_circuit_breaker_transitions_total counter"
+          action:
+            type: grep
+            target: "pmoves/services/cast-tts-gateway/service.py"
+            pattern: "cast_circuit_breaker_transitions_total"
+            expect: "Counter with labels [from_state, to_state, service]"
+          context: "Tracks circuit breaker open/close/half-open transitions"
+          agent_hint: 4090-claude
+
+        - id: cg.metrics.scheduler
+          task: "cast_scheduler_executions_total counter"
+          action:
+            type: grep
+            target: "pmoves/services/cast-tts-gateway/service.py"
+            pattern: "cast_scheduler_executions_total"
+            expect: "Counter with labels [status]"
+          context: "Statuses: success, failure, skipped"
+          agent_hint: 4090-claude
+
+        - id: cg.metrics.queue
+          task: "cast_queue_operations_total counter"
+          action:
+            type: grep
+            target: "pmoves/services/cast-tts-gateway/service.py"
+            pattern: "cast_queue_operations_total"
+            expect: "Counter with labels [operation, status]"
+          context: "Operations: enqueue, dequeue, skip, pause, resume, clear"
+          agent_hint: 4090-claude
+
+        - id: cg.metrics.cache
+          task: "cast_cache_operations_total counter"
+          action:
+            type: grep
+            target: "pmoves/services/cast-tts-gateway/service.py"
+            pattern: "cast_cache_operations_total"
+            expect: "Counter with labels [operation, status]"
+          context: "Operations: hit, miss, evict, clear"
+          agent_hint: 4090-claude
+
+    # =========================================================================
+    # Phase 7: Security
+    # =========================================================================
+    - id: cg.security
+      task: "Authentication, authorization, and audit"
+      context: "pmoves/services/cast-tts-gateway/auth.py + security.py"
+      agent_hint: 4090-claude
+      children:
+        - id: cg.security.jwt
+          task: "JWT auth middleware on all routes"
+          action:
+            type: grep
+            target: "pmoves/services/cast-tts-gateway/auth.py"
+            pattern: "auth_middleware"
+            expect: "aiohttp middleware with Supabase JWT validation via jose.jwt"
+          context: "CAST_AUTH_REQUIRED=false bypasses auth (dev mode) — P2 risk"
+          agent_hint: 4090-claude
+
+        - id: cg.security.rate-limiting
+          task: "Token bucket rate limiter"
+          action:
+            type: grep
+            target: "pmoves/services/cast-tts-gateway/security.py"
+            pattern: "RateLimiter"
+            expect: "Token bucket implementation"
+          context: "Prevents abuse of TTS synthesis endpoints"
+          agent_hint: 4090-claude
+
+        - id: cg.security.audit-log
+          task: "Audit logging for security events"
+          action:
+            type: grep
+            target: "pmoves/services/cast-tts-gateway/security.py"
+            pattern: "AuditLogEntry"
+            expect: "Structured audit log with action, user, device, ip_address"
+          context: "Tracks all mutations for compliance"
+          agent_hint: 4090-claude
+
+        - id: cg.security.container
+          task: "Container hardening"
+          action:
+            type: grep
+            target: "pmoves/docker-compose.yml"
+            pattern: "cast-tts-gateway.*65532"
+            expect: "Non-root uid 65532, read_only FS, cap_drop ALL"
+          context: "tier-agent-hardened-ro anchor applied"
+          agent_hint: 4090-claude
+
+    # =========================================================================
+    # Phase 8: NATS Events
+    # =========================================================================
+    - id: cg.nats
+      task: "NATS event publishing"
+      context: "pmoves/services/cast-tts-gateway/service.py — _publish_event()"
+      agent_hint: 4090-claude
+      children:
+        - id: cg.nats.cast-completed
+          task: "voice.cast.completed.v1 published on successful cast"
+          action:
+            type: grep
+            target: "pmoves/services/cast-tts-gateway/service.py"
+            pattern: "voice.cast.completed.v1"
+            expect: "Published from 3 call sites (speak, speak_file, queue cast)"
+          context: "Payload includes device, text, provider, duration"
+          agent_hint: 4090-claude
+
+        - id: cg.nats.health-alert
+          task: "voice.cast.health_alert.v1 published on health degradation"
+          action:
+            type: grep
+            target: "pmoves/services/cast-tts-gateway/service.py"
+            pattern: "voice.cast.health_alert.v1"
+            expect: "Published by HealthMonitor when alerts trigger"
+          context: "health.py monitors device/provider health"
+          agent_hint: 4090-claude
+
+        - id: cg.nats.missing-failed
+          task: "GAP: voice.cast.failed.v1 not yet published"
+          action:
+            type: grep
+            target: "pmoves/services/cast-tts-gateway/service.py"
+            pattern: "voice.cast.failed.v1"
+            invert: true
+            expect: "NOT YET IMPLEMENTED — failure events not published to NATS"
+          context: "Should publish on TTS synthesis failure or cast failure"
+          agent_hint: 4090-claude
+
+        - id: cg.nats.missing-discovered
+          task: "GAP: device.cast.discovered.v1 not yet published"
+          action:
+            type: grep
+            target: "pmoves/services/cast-tts-gateway/service.py"
+            pattern: "device.cast.discovered.v1"
+            invert: true
+            expect: "NOT YET IMPLEMENTED — device discovery not announced via NATS"
+          context: "Should publish when /cast/discover finds new devices"
+          agent_hint: 4090-claude
+
+        - id: cg.nats.authenticated-url
+          task: "NATS_URL uses authenticated format"
+          action:
+            type: grep
+            target: "pmoves/services/cast-tts-gateway/service.py"
+            pattern: "nats://nats:pmoves@"
+            expect: "Authenticated NATS URL with credentials"
+          context: "Default in service.py: nats://nats:pmoves@nats:4222"
+          agent_hint: 4090-claude
