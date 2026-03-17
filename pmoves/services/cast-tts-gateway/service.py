@@ -129,7 +129,9 @@ class CastTTSGateway:
     def __init__(self):
         """Initialize gateway."""
         self.flute_provider = FluteTTSProvider(FLUTE_URL)
-        self.device_manager = CastDeviceManager()
+        self.device_manager = CastDeviceManager(
+            on_discovery=self._on_device_discovery,
+        )
         self.group_manager = CastGroupManager()
         self.concurrent_caster = ConcurrentCaster()
         self.priority_queue = CastPriorityQueue()
@@ -2034,6 +2036,21 @@ class CastTTSGateway:
                 text=text,
             )
             return multi_result.to_dict()
+
+    async def _on_device_discovery(self, devices, new_names, lost_names, forced):
+        """Callback invoked after device discovery completes."""
+        await self._publish_event("device.cast.discovered.v1", {
+            "devices": [
+                {"name": d.name, "ip": d.ip, "address": d.address}
+                for d in devices
+            ],
+            "count": len(devices),
+            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "new_devices": sorted(new_names),
+            "lost_devices": sorted(lost_names),
+            "forced": forced,
+        })
+        DEVICE_DISCOVERIES.inc()
 
     async def _publish_event(self, subject: str, payload: dict):
         """
