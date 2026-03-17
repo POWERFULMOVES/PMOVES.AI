@@ -82,7 +82,13 @@ services:
     <<: *jellyfin-base
     container_name: ${JELLYFIN_CONTAINER_NAME:-pmoves-jellyfin-ai}
     profiles: ["jellyfin-ai-nvenc"]
-    gpus: ${JELLYFIN_NVIDIA_GPUS:-all}
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu, video]
     environment:
       <<: *jellyfin-env
       JELLYFIN_HWACCEL_MODE: nvenc
@@ -133,14 +139,13 @@ services:
         aliases:
           - jellyfin-qwen-audio
     restart: unless-stopped
-    # Uncomment for GPU support
-    # deploy:
-    #   resources:
-    #     reservations:
-    #       devices:
-    #         - driver: nvidia
-    #           count: 1
-    #           capabilities: [gpu]
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
 
   jellyfin-audio-processor:
     build:
