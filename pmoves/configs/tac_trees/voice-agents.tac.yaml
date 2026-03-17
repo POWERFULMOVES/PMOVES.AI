@@ -1,0 +1,365 @@
+# TAC Tree: Voice Agents & TTS Pipeline
+# Audits TTS engine availability, Flute-Gateway integration, Pipecat pipeline, prosodic bridge
+
+name: "Voice Agents & TTS Pipeline"
+version: "1.0.0"
+description: "Verify TTS Studio engines (native Pinokio), Flute-Gateway bridge, Pipecat voice pipeline, and prosodic BPM integration"
+
+root:
+  id: voice-agents
+  task: "Voice agent pipeline review"
+  context: "pmoves/services/flute-gateway/ + PMOVES-Pipecat/ + TTS Studio (Pinokio native)"
+  agent_hint: codex
+  children:
+
+    # =========================================================================
+    # Phase 1: TTS Studio (Native Pinokio)
+    # =========================================================================
+    - id: va.tts-studio
+      task: "TTS Studio native availability"
+      context: "Runs natively via Pinokio at http://127.0.0.1:7860 (NOT Docker)"
+      agent_hint: codex
+      children:
+        - id: va.tts-studio.health
+          task: "TTS Studio Gradio API reachable"
+          action:
+            type: http
+            target: "http://127.0.0.1:7860/gradio_api/info"
+            expect: "200 OK with named_endpoints"
+          context: "Native Pinokio app, CUDA-enabled, conda tts_env"
+          agent_hint: codex
+
+        - id: va.tts-studio.https-proxy
+          task: "Pinokio HTTPS proxy accessible"
+          action:
+            type: http
+            target: "https://7860.localhost/gradio_api/info"
+            expect: "200 OK via Caddy auto-HTTPS"
+          context: "Pinokio built-in Caddy proxy"
+          agent_hint: codex
+
+        - id: va.tts-studio.tailscale
+          task: "Tailscale LAN share accessible"
+          action:
+            type: http
+            target: "http://100.73.74.3:7860/gradio_api/info"
+            expect: "200 OK from Tailscale mesh"
+          context: "Z890 LAN share via PINOKIO_SHARE_LOCAL=true"
+          agent_hint: codex
+
+        - id: va.tts-studio.start-js
+          task: "start.js uses correct URL capture pattern"
+          action:
+            type: grep
+            target: "D:/pinokio/api/Ultimate-TTS-Studio.git/start.js"
+            pattern: 'input\.event\[1\]'
+            expect: "URL captured via capture group [1], not [0]"
+          context: "CLAUDE.md Critical Pattern Lock compliance"
+          agent_hint: codex
+
+    # =========================================================================
+    # Phase 2: TTS Engines Inventory
+    # =========================================================================
+    - id: va.engines
+      task: "TTS engine inventory (10 engines)"
+      context: "All engines loaded in TTS Studio via Pinokio"
+      agent_hint: codex
+      children:
+        - id: va.engines.kitten-tts
+          task: "KittenTTS available"
+          action:
+            type: manual
+            expect: "Ultra-fast, 8 pre-trained voices (expr-voice-2-f, etc.)"
+          context: "Default engine for low-latency synthesis"
+          agent_hint: codex
+
+        - id: va.engines.f5-tts
+          task: "F5-TTS available"
+          action:
+            type: manual
+            expect: "High-quality voice cloning with natural prosody"
+          context: "Best for GRAMS story narration, beat-sync"
+          agent_hint: codex
+
+        - id: va.engines.fish-s2-pro
+          task: "Fish Speech S2 Pro available"
+          action:
+            type: manual
+            expect: "Zero-shot cloning, 13 languages"
+          context: "Best for agent card voice profiles"
+          agent_hint: codex
+
+        - id: va.engines.indextts2
+          task: "IndexTTS2 available"
+          action:
+            type: manual
+            expect: "Emotion vector control: happy/angry/sad/calm"
+          context: "Best for ClawZ reveals (emotion-driven)"
+          agent_hint: codex
+
+        - id: va.engines.voxcpm
+          task: "VoxCPM available"
+          action:
+            type: manual
+            expect: "Voice cloning + transcription"
+          context: "Dual-purpose: synthesis and recognition"
+          agent_hint: codex
+
+        - id: va.engines.chatterbox-turbo
+          task: "Chatterbox Turbo available"
+          action:
+            type: manual
+            expect: "Multilingual with exaggeration/temperature control"
+          context: "Freshly added upstream engine"
+          agent_hint: codex
+
+        - id: va.engines.higgs-audio
+          task: "Higgs Audio S1 Mini available"
+          action:
+            type: manual
+            expect: "Pre-downloaded model, streaming capable"
+          context: "Higgs S1 Mini weights pre-cached"
+          agent_hint: codex
+
+        - id: va.engines.kokoro
+          task: "Kokoro available"
+          action:
+            type: manual
+            expect: "Multilingual ONNX runtime"
+          context: "Lightweight, CPU-friendly fallback"
+          agent_hint: codex
+
+        - id: va.engines.qwen3-tts
+          task: "Qwen3 TTS available"
+          action:
+            type: manual
+            expect: "Needs sox for full support"
+          context: "May need conda install sox for audio processing"
+          agent_hint: codex
+
+        - id: va.engines.vibevoice
+          task: "VibeVoice available"
+          action:
+            type: manual
+            expect: "Style transfer synthesis"
+          context: "Transfers vocal style from reference audio"
+          agent_hint: codex
+
+    # =========================================================================
+    # Phase 3: Flute-Gateway Integration
+    # =========================================================================
+    - id: va.flute
+      task: "Flute-Gateway voice provider"
+      context: "pmoves/services/flute-gateway/"
+      agent_hint: codex
+      children:
+        - id: va.flute.health
+          task: "Flute-Gateway healthy with ultimate_tts provider"
+          action:
+            type: http
+            target: "http://localhost:8055/healthz"
+            expect: "ultimate_tts: true in providers"
+          context: "Docker service at port 8055/8056"
+          agent_hint: codex
+
+        - id: va.flute.predict-api
+          task: "UltimateTTSProvider uses predict API (not event API)"
+          action:
+            type: grep
+            target: "pmoves/services/flute-gateway/providers/ultimate_tts.py"
+            pattern: "predict_api_url"
+            expect: "Uses /api/ predict endpoint, not /gradio_api/call/ event endpoint"
+          context: "Event API SSE/WebSocket breaks with newer Gradio versions"
+          agent_hint: codex
+
+        - id: va.flute.host-url
+          task: "ULTIMATE_TTS_URL points to host"
+          action:
+            type: grep
+            target: "pmoves/docker-compose.yml"
+            pattern: "ULTIMATE_TTS_URL.*host.docker.internal:7860"
+            expect: "Flute container reaches native Pinokio app via Docker host"
+          context: "Native app not in Docker — use host.docker.internal"
+          agent_hint: codex
+
+        - id: va.flute.synthesize-endpoint
+          task: "REST synthesis endpoint works"
+          action:
+            type: http
+            method: POST
+            target: "http://localhost:8055/v1/voice/synthesize/audio"
+            body: '{"text": "test", "engine": "kitten_tts"}'
+            expect: "Returns WAV audio bytes"
+          context: "End-to-end: Flute -> TTS Studio -> audio"
+          agent_hint: codex
+
+    # =========================================================================
+    # Phase 4: Pipecat Voice Pipeline
+    # =========================================================================
+    - id: va.pipecat
+      task: "Pipecat voice agent pipeline"
+      context: "PMOVES-Pipecat/examples/pmoves/"
+      agent_hint: codex
+      children:
+        - id: va.pipecat.agent-script
+          task: "Agent Zero voice agent script exists"
+          action:
+            type: file_exists
+            target: "PMOVES-Pipecat/examples/pmoves/agent_zero_voice.py"
+            expect: "Full voice agent with STT + LLM + TTS pipeline"
+          context: "Mic -> Whisper -> TensorZero -> TTS Studio -> Speaker"
+          agent_hint: codex
+
+        - id: va.pipecat.tts-service
+          task: "Custom UltimateTTSService exists"
+          action:
+            type: file_exists
+            target: "PMOVES-Pipecat/examples/pmoves/ultimate_tts_service.py"
+            expect: "Pipecat TTSService wrapping Gradio predict API"
+          context: "Custom service for TTS Studio integration"
+          agent_hint: codex
+
+        - id: va.pipecat.tensorzero-llm
+          task: "Pipeline uses TensorZero for LLM"
+          action:
+            type: grep
+            target: "PMOVES-Pipecat/examples/pmoves/agent_zero_voice.py"
+            pattern: "localhost:3030"
+            expect: "LLM routed through TensorZero gateway"
+          context: "OpenAI-compatible endpoint at TensorZero"
+          agent_hint: codex
+
+        - id: va.pipecat.vad
+          task: "Pipeline includes VAD for voice detection"
+          action:
+            type: grep
+            target: "PMOVES-Pipecat/examples/pmoves/agent_zero_voice.py"
+            pattern: "SileroVAD\\|VAD"
+            expect: "Voice activity detection before STT"
+          context: "Prevents sending silence to Whisper"
+          agent_hint: codex
+
+    # =========================================================================
+    # Phase 5: Prosodic Bridge
+    # =========================================================================
+    - id: va.prosodic
+      task: "Prosodic BPM bridge"
+      context: "BEATS.md + FLUTE_PROSODIC_ARCHITECTURE.md"
+      agent_hint: codex
+      children:
+        - id: va.prosodic.nats-subject
+          task: "Prosodic NATS subject defined"
+          action:
+            type: manual
+            expect: "tokenism.prosodic.bpm.v1 for BPM-synced synthesis"
+          context: "Bridges CHIT geometry to voice timing"
+          agent_hint: codex
+          metadata:
+            nats_subject: "tokenism.prosodic.bpm.v1"
+
+        - id: va.prosodic.bpm-mapping
+          task: "BPM pause type mapping defined"
+          action:
+            type: manual
+            expect: "SENTENCE=60 CLAUSE=90 PHRASE=120 BREATH=80 NONE=150"
+          context: "Maps linguistic pause types to musical BPM for prosodic timing"
+          agent_hint: codex
+          metadata:
+            mapping:
+              SENTENCE: {bpm: 60, tempo: "Largo", note: "C4"}
+              CLAUSE: {bpm: 90, tempo: "Andante", note: "E4"}
+              PHRASE: {bpm: 120, tempo: "Allegro", note: "G4"}
+              BREATH: {bpm: 80, tempo: "Adagio", note: "D4"}
+              NONE: {bpm: 150, tempo: "Presto", note: "C5"}
+
+    # =========================================================================
+    # Phase 6: Use Cases
+    # =========================================================================
+    - id: va.use-cases
+      task: "Voice pipeline use cases"
+      context: "Concrete applications of the voice pipeline"
+      agent_hint: codex
+      children:
+        - id: va.use-cases.clawz-reveals
+          task: "ClawZ reveals — emotion-driven voice"
+          action:
+            type: manual
+            expect: "IndexTTS2 emotion vectors for agent identity reveals"
+          context: "Agent identity -> emotion vector -> voice synthesis -> reveal"
+          agent_hint: codex
+          metadata:
+            engine: "IndexTTS2"
+            flow: "Agent identity -> emotion vector -> voice synthesis -> reveal"
+
+        - id: va.use-cases.grams-stories
+          task: "GRAMS story generator — cloned narrator voice"
+          action:
+            type: manual
+            expect: "F5-TTS or VoxCPM for voice-cloned narration"
+          context: "Story text -> reference voice -> narration -> ebook output"
+          agent_hint: codex
+          metadata:
+            engine: "F5-TTS or VoxCPM"
+            flow: "Story text -> reference voice -> narration -> ebook output"
+
+        - id: va.use-cases.beat-sync
+          task: "Beat-synced narration — BPM prosodic chunks"
+          action:
+            type: manual
+            expect: "F5-TTS + musicMapping.ts for beat-aligned TTS"
+          context: "Beats -> BPM prosodic chunks -> TTS -> synced audio"
+          agent_hint: codex
+          metadata:
+            engine: "F5-TTS"
+            flow: "Beats -> BPM prosodic chunks -> TTS -> synced audio"
+
+        - id: va.use-cases.agent-cards
+          task: "Agent card voice profiles — zero-shot clone"
+          action:
+            type: manual
+            expect: "Fish Speech S2 Pro for agent persona voice profiles"
+          context: "Agent persona -> zero-shot clone -> voice profile -> card audio"
+          agent_hint: codex
+          metadata:
+            engine: "Fish Speech S2 Pro"
+            flow: "Agent persona -> zero-shot clone -> voice profile -> card audio"
+
+    # =========================================================================
+    # Phase 7: Networking
+    # =========================================================================
+    - id: va.networking
+      task: "Voice pipeline networking paths"
+      context: "Multiple access paths to TTS Studio"
+      agent_hint: codex
+      children:
+        - id: va.networking.direct
+          task: "Direct localhost access"
+          action:
+            type: manual
+            expect: "http://127.0.0.1:7860 — native Pinokio app"
+          context: "Fastest path for local development"
+          agent_hint: codex
+
+        - id: va.networking.https-proxy
+          task: "Pinokio HTTPS proxy"
+          action:
+            type: manual
+            expect: "https://7860.localhost — Caddy auto-HTTPS"
+          context: "For browser-based clients needing HTTPS"
+          agent_hint: codex
+
+        - id: va.networking.docker-bridge
+          task: "Docker bridge access"
+          action:
+            type: manual
+            expect: "http://host.docker.internal:7860 — Docker containers"
+          context: "PINOKIO_NETWORK_NAME=pmoves-net connects Pinokio to Docker"
+          agent_hint: codex
+
+        - id: va.networking.tailscale
+          task: "Tailscale mesh access"
+          action:
+            type: manual
+            expect: "http://100.73.74.3:7860 — LAN + mesh"
+          context: "PINOKIO_SHARE_LOCAL=true enables LAN sharing"
+          agent_hint: codex
