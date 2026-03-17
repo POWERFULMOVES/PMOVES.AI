@@ -1,2 +1,6 @@
+google-api-python-client>=2.0.0
+google-auth>=2.0.0
+google-auth-httpx>=0.2.0
+
 -r requirements.lock
 nats-py==2.7.2
