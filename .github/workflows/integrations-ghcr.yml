@@ -32,9 +32,14 @@ on:
         type: string
   push:
     branches: [main, PMOVES.AI-Edition-Hardened]
-  pull_request:
-    branches: [main, PMOVES.AI-Edition-Hardened]
     paths:
+      - 'pmoves/services/agent-zero/**'
+      - 'pmoves/services/archon/**'
+      - 'pmoves/services/pmoves-yt/**'
+      - 'pmoves/services/deepresearch/**'
+      - 'pmoves/services/supaserch/**'
+      - 'pmoves/images/firefly-iii/**'
+      - 'pmoves/images/jellyfin/**'
       - 'PMOVES-Open-Notebook'
       - 'PMOVES-Agent-Zero'
       - 'PMOVES-Archon'
@@ -42,12 +47,34 @@ on:
       - 'PMOVES-Jellyfin'
       - 'PMOVES-Supaserch'
       - '.github/workflows/integrations-ghcr.yml'
+      - '.github/workflows/integrations-ghcr.matrix.json'
+      - '.github/trivy/**'
+  pull_request:
+    branches: [main, PMOVES.AI-Edition-Hardened]
+    paths:
+      - 'pmoves/services/agent-zero/**'
+      - 'pmoves/services/archon/**'
+      - 'pmoves/services/pmoves-yt/**'
+      - 'pmoves/services/deepresearch/**'
+      - 'pmoves/services/supaserch/**'
+      - 'pmoves/images/firefly-iii/**'
+      - 'pmoves/images/jellyfin/**'
+      - 'PMOVES-Open-Notebook'
+      - 'PMOVES-Agent-Zero'
+      - 'PMOVES-Archon'
+      - 'PMOVES.YT'
+      - 'PMOVES-Jellyfin'
+      - 'PMOVES-Supaserch'
+      - '.github/workflows/integrations-ghcr.yml'
+      - '.github/workflows/integrations-ghcr.matrix.json'
+      - '.github/trivy/**'
   # schedule:
   #   - cron: '17 7 * * *'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+  # Keep manual reruns intact, but cancel stale push/PR runs on the same ref.
+  cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}
 
 env:
   REGISTRY: ghcr.io
@@ -63,6 +90,8 @@ env:
 jobs:
   resolve-matrix:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     outputs:
       names: ${{ steps.resolve.outputs.names }}
     steps:
@@ -105,13 +134,17 @@ jobs:
   build-publish:
     name: Build ${{ matrix.name }}
     needs: resolve-matrix
+    # Distribute across all available self-hosted Linux runners for parallel builds.
     runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 60
     permissions:
       contents: read
       packages: write
       id-token: write
     strategy:
       fail-fast: false
+      # Allow all self-hosted runners (ai-lab, vps, hotfix) to build in parallel.
+      max-parallel: 4
       matrix:
         name: ${{ fromJSON(needs.resolve-matrix.outputs.names) }}
 
@@ -176,6 +209,14 @@ jobs:
         env:
           MATRIX_NAME: ${{ matrix.name }}
 
+      - name: Generate GitHub App token (for clone + GHCR)
+        id: app_token
+        continue-on-error: true
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.GH_APP_ID }}
+          private-key: ${{ secrets.GH_APP_SEC }}
+
       - name: Prepare integration source
         run: |
           set -euo pipefail
@@ -200,15 +241,19 @@ jobs:
             git archive --format=tar HEAD | tar -x -C integration-src
           else
             url="$cfg_url"
-            if [ -n "${CI_GIT_CLONE_TOKEN:-}" ]; then
+            # Prefer App token over PAT for clone authentication
+            clone_token="${APP_TOKEN:-${CI_GIT_CLONE_TOKEN:-}}"
+            if [ -n "${clone_token}" ]; then
               trimmed="${url#https://github.com/}"
-              url="https://x-access-token:${CI_GIT_CLONE_TOKEN}@github.com/${trimmed}"
+              url="https://x-access-token:${clone_token}@github.com/${trimmed}"
             fi
             if ! git clone --depth=1 --branch "$cfg_ref" "$url" integration-src; then
-              echo "::error::Failed to clone ${cfg_url} (ref=${cfg_ref}). If this is a private integration repo, set secrets.CI_GIT_CLONE_TOKEN (PAT with repo read) or reuse GH_PAT_PUBLISH with repo access."
+              echo "::error::Failed to clone ${cfg_url} (ref=${cfg_ref}). If this is a private integration repo, ensure GH_APP_ID/GH_APP_SEC secrets are set, or set CI_GIT_CLONE_TOKEN (PAT with repo read)."
               exit 1
             fi
           fi
+        env:
+          APP_TOKEN: ${{ steps.app_token.outputs.token }}
 
       - name: Free disk space (runner)
         run: |
@@ -218,27 +263,19 @@ jobs:
           df -h
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+        uses: docker/setup-qemu-action@v4
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Install Cosign
-        uses: sigstore/cosign-installer@v4.0.0
-
-      - name: Generate GitHub App token
-        id: app_token
-        continue-on-error: true
-        uses: actions/create-github-app-token@v2
-        with:
-          app-id: ${{ secrets.GH_APP_ID }}
-          private-key: ${{ secrets.GH_APP_SEC }}
+        uses: sigstore/cosign-installer@v4.1.0
 
       - name: Log in to GHCR (App token preferred)
         id: login_ghcr_app
         if: ${{ steps.app_token.outputs.token != '' }}
         continue-on-error: true
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ${{ env.REGISTRY }}
           username: x-access-token
@@ -248,7 +285,7 @@ jobs:
         id: login_ghcr_pat
         if: ${{ steps.login_ghcr_app.outcome != 'success' && env.GHCR_USERNAME != '' && env.GHCR_PAT != '' }}
         continue-on-error: true
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ env.GHCR_USERNAME }}
@@ -258,7 +295,7 @@ jobs:
         id: login_ghcr_actions
         if: ${{ steps.login_ghcr_app.outcome != 'success' && steps.login_ghcr_pat.outcome != 'success' }}
         continue-on-error: true
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -272,7 +309,7 @@ jobs:
 
       - name: Optional login to Docker Hub
         if: ${{ github.event_name != 'pull_request' && env.DOCKERHUB_USERNAME && env.DOCKERHUB_PASSWORD }}
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: docker.io
           username: ${{ env.DOCKERHUB_USERNAME }}
@@ -346,9 +383,10 @@ jobs:
           echo "EOF" >> $GITHUB_OUTPUT
 
       # PRs validate Dockerfile/build correctness without publishing artifacts.
+      # Build native amd64 only — skip arm64 QEMU emulation to cut PR time ~50%.
       - name: Build (PR validation, no push)
         if: ${{ github.event_name == 'pull_request' }}
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: integration-src/${{ steps.cfg.outputs.context }}
           file: integration-src/${{ steps.cfg.outputs.dockerfile }}
@@ -356,14 +394,14 @@ jobs:
           build-args: |
             PIP_CONSTRAINT=requirements.lock
             ${{ steps.cfg.outputs.build_args }}
-          platforms: ${{ steps.cfg.outputs.platforms }}
+          platforms: linux/amd64
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
       - name: Build and push (multi-arch)
         if: ${{ github.event_name != 'pull_request' && steps.meta.outputs.has_tags == 'true' }}
         id: build
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: integration-src/${{ steps.cfg.outputs.context }}
           file: integration-src/${{ steps.cfg.outputs.dockerfile }}
@@ -387,7 +425,7 @@ jobs:
 
       - name: Install Syft (SBOM)
         if: ${{ github.event_name != 'pull_request' && steps.cfg.outputs.generate_sbom == 'true' && steps.meta.outputs.has_tags == 'true' }}
-        uses: anchore/sbom-action/download-syft@v0.23.0
+        uses: anchore/sbom-action/download-syft@v0.23.1
 
       - name: Generate SBOMs (CycloneDX)
         id: sbom
@@ -404,13 +442,14 @@ jobs:
           name: ${{ matrix.name }}-sbom
           path: ${{ steps.sbom.outputs.sbom_path }}
 
-      - name: Free disk space (docker prune)
+      - name: Free disk space (keep BuildKit cache)
         run: |
           set -euxo pipefail
           docker system df || true
-          docker buildx prune -af || true
-          docker builder prune -af || true
-          docker system prune -af --volumes || true
+          # Remove dangling images and stopped containers but preserve BuildKit
+          # layer cache and volumes for faster subsequent builds.
+          docker image prune -f || true
+          docker container prune -f || true
           df -h
 
       - name: Pull image for Trivy (private GHCR)
@@ -421,7 +460,7 @@ jobs:
 
       - name: Trivy vulnerability scan (HIGH/CRITICAL)
         if: ${{ github.event_name != 'pull_request' && steps.meta.outputs.has_tags == 'true' }}
-        uses: aquasecurity/trivy-action@0.34.1
+        uses: aquasecurity/trivy-action@0.35.0
         with:
           # Gate on HIGH/CRITICAL with fixes available (vendor/unfixed CVEs are still surfaced by the next step).
           # This avoids blocking nightly builds on upstream issues we can't remediate immediately, while keeping
@@ -434,10 +473,11 @@ jobs:
           vuln-type: 'os,library'
           severity: 'HIGH,CRITICAL'
           scanners: 'vuln'
+          timeout: '10m0s'
 
       - name: Trivy vulnerability scan report (includes unfixed)
         if: ${{ github.event_name != 'pull_request' && steps.meta.outputs.has_tags == 'true' }}
-        uses: aquasecurity/trivy-action@0.34.1
+        uses: aquasecurity/trivy-action@0.35.0
         with:
           image-ref: ${{ steps.meta.outputs.primary_tag }}
           format: table
@@ -449,6 +489,7 @@ jobs:
           vuln-type: 'os,library'
           severity: 'HIGH,CRITICAL'
           scanners: 'vuln'
+          timeout: '10m0s'
 
       - name: Upload Trivy report artifact
         if: ${{ github.event_name != 'pull_request' && steps.meta.outputs.has_tags == 'true' }}

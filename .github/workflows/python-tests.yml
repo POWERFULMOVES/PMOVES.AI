@@ -29,8 +29,7 @@ concurrency:
 
 jobs:
   tests:
-    # PMOVES.AI: Use self-hosted runners for production CI
-    runs-on: [self-hosted, Linux, X64]
+    runs-on: ubuntu-latest
     permissions:
       contents: read
       actions: read
@@ -53,6 +52,11 @@ jobs:
             files.pythonhosted.org:443
 
       - uses: actions/checkout@v4
+      - name: Fetch PMOVES.YT submodule for shim tests
+        shell: bash
+        run: |
+          git submodule sync -- PMOVES.YT
+          git -c protocol.version=2 submodule update --init --depth=1 PMOVES.YT
       - name: Free Disk Space (Ubuntu)
         uses: jlumbroso/free-disk-space@main
         continue-on-error: true          # Self-hosted runner: bash arithmetic fails on large disks (scientific notation)

@@ -3,7 +3,7 @@
   "phases": {
     "local-certification": {
       "description": "Both runners on local Docker containers for development/CI",
-      "required_online": ["self-hosted,Linux,X64", "self-hosted,ai-lab,gpu"],
+      "required_online": ["self-hosted,Linux,X64", "self-hosted,Linux,X64,ai-lab,gpu"],
       "required_offline": [],
       "min_runners": 2
     },
@@ -13,9 +13,25 @@
       "required_offline": [],
       "min_runners": 1
     },
+    "vps-deployment": {
+      "description": "All 3 Hostinger KVM runners online for VPS fleet deployment",
+      "required_online": [
+        "self-hosted,vps,kvm4-1",
+        "self-hosted,vps,kvm4-2",
+        "self-hosted,vps,kvm2"
+      ],
+      "required_offline": [],
+      "min_runners": 3
+    },
     "production": {
-      "description": "Production deployment on kvm4 host",
-      "required_online": ["self-hosted,kvm4,production", "self-hosted,kvm4"],
+      "description": "Production deployment on KVM4 hosts with KVM2 backup",
+      "required_online": [
+        "self-hosted,kvm4,production",
+        "self-hosted,kvm4"
+      ],
+      "optional_online": [
+        "self-hosted,vps,kvm2"
+      ],
       "required_offline": [],
       "min_runners": 1
     }

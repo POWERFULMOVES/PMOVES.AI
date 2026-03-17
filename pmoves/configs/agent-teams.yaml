@@ -1,0 +1,177 @@
+# PMOVES.AI Agent Team Definitions
+# Full agent roster grouped into functional teams with node affinity and runner assignments.
+#
+# Query: python -c "import yaml; t=yaml.safe_load(open('pmoves/configs/agent-teams.yaml')); [print(f'{k}: {len(v[\"agents\"])} agents') for k,v in t['teams'].items()]"
+# Last updated: 2026-03-15
+
+version: "1.0.0"
+
+teams:
+  orchestration:
+    name: "Orchestration"
+    description: "Core agent coordination, MCP routing, task delegation"
+    node_affinity: [kvm4-1, z890, powerfulmoves]
+    ci_runner: ai-lab
+    compose_profiles: [agents, tier-agent]
+    agents:
+      - agent_zero        # Port 8080 — Primary orchestrator
+      - archon            # Port 8091 — Planning/execution copilot
+      - supaserch         # Port 8099 — Holographic deep research
+      - botz_gateway      # Port 8054 — Work item distribution
+      - gateway_agent     # Port 8100 — MCP tool orchestration
+      - consciousness_service  # CGP consciousness mapper
+
+  research:
+    name: "Research & Knowledge"
+    description: "RAG, search, embedding, document processing"
+    node_affinity: [kvm4-1, kvm4-2, z890]
+    ci_runner: vps
+    compose_profiles: [workers]
+    agents:
+      - hirag_v2          # Port 8086/8087 — Hybrid RAG
+      - deep_research     # Port 8098 — Research planner
+      - extract_worker    # Port 8083 — Text embedding + indexing
+      - langextract       # Port 8084 — Language detection/NLP
+      - pdf_ingest        # Port 8092 — Document ingestion
+      - notebook_sync     # Port 8095 — Open Notebook sync
+      - dox               # Document intelligence
+      - open_notebook     # Knowledge base (SurrealDB)
+      - cipher_memory     # Port 8096 — Knowledge graph memory
+
+  media:
+    name: "Media & Voice"
+    description: "Audio/video processing, TTS, transcription, content creation"
+    node_affinity: [powerfulmoves, z890]
+    ci_runner: ai-lab
+    compose_profiles: [gpu, yt]
+    agents:
+      - pmoves_yt         # Port 8077 — YouTube ingestion
+      - ffmpeg_whisper    # Port 8078 — Whisper transcription (GPU)
+      - media_video       # Port 8079 — YOLOv8 video analysis
+      - media_audio       # Port 8082 — Emotion/speaker detection
+      - ultimate_tts      # Port 7861 — Multi-engine TTS (GPU)
+      - flute_gateway     # Port 8055 — Prosodic voice synthesis
+      - channel_monitor   # Port 8097 — Content watcher
+      - jellyfin_bridge   # Port 8093 — Jellyfin metadata
+      - jellyfin_ai       # AI-enhanced media management
+      - creator           # ComfyUI render pipeline
+      - transcribe_and_fetch  # Standalone transcription
+
+  data:
+    name: "Data & Storage"
+    description: "Databases, message bus, object storage, monitoring"
+    node_affinity: [kvm4-2, z890]
+    ci_runner: vps
+    compose_profiles: [monitoring, supabase-local]
+    agents:
+      - nats              # Port 4222 — Event broker
+      - supabase          # Port 3010 — Postgres + pgvector
+      - qdrant            # Port 6333 — Vector embeddings
+      - neo4j             # Port 7474 — Knowledge graph
+      - meilisearch       # Port 7700 — Full-text search
+      - minio             # Port 9000 — Object storage
+      - prometheus        # Port 9090 — Metrics
+      - grafana           # Port 3002 — Dashboards
+      - loki              # Port 3100 — Log aggregation
+
+  ui:
+    name: "User Interfaces"
+    description: "Frontend surfaces, visualization, remote access"
+    node_affinity: [z890, powerfulmoves]
+    ci_runner: ubuntu-latest
+    compose_profiles: []
+    agents:
+      - mai_ui            # Main user interface
+      - crush             # Terminal AI coding assistant
+      - a2ui              # Research UI / artifact-to-UI
+      - hyperdimensions   # CHIT geometry visualization
+      - invidious         # Port 3333 — Privacy video frontend
+      - rustdesk          # Port 21115 — Remote desktop
+
+  automation:
+    name: "Automation & Notifications"
+    description: "Workflow automation, notifications, webhook handling"
+    node_affinity: [kvm4-1, z890]
+    ci_runner: vps
+    compose_profiles: [workers]
+    agents:
+      - n8n               # Port 5678 — Workflow automation
+      - publisher_discord  # Port 8094 — Discord notifications
+      - render_webhook    # Port 8085 — ComfyUI callback handler
+      - presign           # Port 8088 — MinIO URL presigner
+
+  evolution:
+    name: "Evolution & CHIT"
+    description: "Evolutionary optimization, CHIT encoding, swarm attribution"
+    node_affinity: [powerfulmoves, z890]
+    ci_runner: ai-lab
+    compose_profiles: [gpu]
+    agents:
+      - evoswarm_controller  # Port 8113 — Evolutionary optimizer
+      - swarm_attribution    # Shape-attribution engine
+      - tensorzero        # Port 3030 — LLM gateway (all model calls)
+      - llama_lab         # LLM benchmarking
+
+  infra:
+    name: "Infrastructure & Networking"
+    description: "VPN, fleet management, node coordination"
+    node_affinity: [kvm4-1, kvm2]
+    ci_runner: vps
+    compose_profiles: []
+    agents:
+      - mesh_agent        # Node announcer
+      - headscale         # Port 8181 — Mesh VPN
+      - vps_fleet_manager # Hostinger KVM orchestration
+
+  sandbox:
+    name: "Sandbox & Execution"
+    description: "Isolated code execution environments (E2B)"
+    node_affinity: [cloud]
+    ci_runner: ubuntu-latest
+    compose_profiles: []
+    agents:
+      - e2b_danger_room   # Sandboxed code execution
+      - e2b_desktop       # Desktop sandbox (GUI)
+      - e2b_spells        # Sandbox templates/recipes
+      - danger_infra      # E2B infrastructure provisioning
+      - surf              # Browser automation agent
+      - agentgym          # Agent training gymnasium
+      - agentgym_rl       # RL extension for AgentGym
+      - pmoves_e2b_mcp_server  # MCP bridge for E2B sandboxed execution
+
+  external:
+    name: "External Contributors"
+    description: "AI agents and humans who contribute via git (no node affinity)"
+    node_affinity: []
+    ci_runner: null
+    compose_profiles: []
+    agents: []
+    # External contributors are tracked in agent_registry.yaml under external_contributors:
+    # claude-opus, kilocode, codex, gemini, cline, powerfulmoves, crush
+
+  life:
+    name: "Life Integration"
+    description: "Health, wealth, and personal data integrations"
+    node_affinity: [z890]
+    ci_runner: ubuntu-latest
+    compose_profiles: []
+    agents:
+      - wealth            # Firefly III finance tracking
+      - health            # wger fitness tracking
+
+# Validation: all agents from agent_registry.yaml must appear in exactly one team
+# Run: python -c "
+# import yaml
+# reg = yaml.safe_load(open('pmoves/config/agent_registry.yaml'))
+# teams = yaml.safe_load(open('pmoves/configs/agent-teams.yaml'))
+# reg_agents = set(reg['agents'].keys())
+# team_agents = set()
+# for t in teams['teams'].values():
+#     team_agents.update(t.get('agents', []))
+# missing = reg_agents - team_agents
+# extra = team_agents - reg_agents
+# print(f'Registry: {len(reg_agents)}, Teams: {len(team_agents)}')
+# if missing: print(f'Missing from teams: {missing}')
+# if extra: print(f'Extra in teams: {extra}')
+# if not missing and not extra: print('All agents assigned!')
+# "

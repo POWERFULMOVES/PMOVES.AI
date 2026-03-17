@@ -13,6 +13,8 @@ import {
 } from "@/runtime/notebook";
 
 import DashboardNavigation, { type NavKey } from "@/components/DashboardNavigation";
+import { logForDebugging } from '@/lib/errorUtils';
+import { GraphitiStatusBadge } from "@/components/GraphitiStatusBadge";
 import type { Message } from "@/runtime/notebook/useSupabaseViews";
 
 const SKIN_URL = "/skins/comic-pop/1.1.0/skin.json";
@@ -199,6 +201,7 @@ export function NotebookWorkbenchView({
             <p style={{ margin: 0, opacity: 0.75 }}>
               Explore chat message views, manage layout, and persist new variants directly into Supabase.
             </p>
+            <GraphitiStatusBadge />
             <label style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
               <span>Thread ID</span>
               <input
@@ -270,7 +273,7 @@ export function NotebookWorkbenchView({
                   availableMessages={availableMessages}
                   onSelectGroupMembers={handleSelectGroupMembers}
                 />
-                <SnapshotBookmarksPro threadId={threadId} onPick={(iso) => console.log("bookmark", iso)} />
+                <SnapshotBookmarksPro threadId={threadId} onPick={(iso) => logForDebugging("bookmark picked", undefined, { component: 'NotebookWorkbenchView', iso })} />
                 <SnapshotScrubber
                   threadId={threadId}
                   onChange={(iso) => {

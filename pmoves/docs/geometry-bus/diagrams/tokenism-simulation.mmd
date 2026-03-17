@@ -1,0 +1,67 @@
+%%{init: {'theme':'base', 'themeVariables': {
+  'primaryColor': '#3ecf8e',
+  'primaryBorderColor': '#3ecf8e',
+  'secondaryColor': '#9333ea',
+  'secondaryBorderColor': '#a855f7',
+  'tertiaryColor': '#fbbf24',
+  'tertiaryBorderColor': '#d97706',
+  'background': 'transparent'
+}}}%%
+flowchart TD
+    classDef init fill:#3ecf8e,stroke:#2db380,color:#000
+    classDef swarm fill:#9333ea,stroke:#7c2d12,color:#fff
+    classDef econ fill:#fbbf24,stroke:#d97706,color:#000
+    classDef output fill:#404040,stroke:#525252,color:#ededed
+
+    %% Initialization
+    START["🚀 Week Start<br/>New Simulation Epoch"]:::init
+
+    %% Population Setup
+    POP["👥 Swarm Population<br/>━━━━━━━━━━<br/>Initialize agents<br/>Random strategies<br/>Initial wealth distribution"]:::swarm
+
+    %% Economic Simulation
+    SIM["💰 Economic Simulation<br/>━━━━━━━━━━<br/>GroToken spending<br/>GroupPurchase events<br/>GroVault staking<br/>LoyaltyPoints activity<br/>CoopGovernor votes"]:::econ
+
+    %% Attribution Tracking
+    ATTR["📊 Attribution System<br/>━━━━━━━━━━<br/>Track contributions<br/>Dirichlet-weighted<br/>Merkle tree proofs<br/>CHIT signatures"]:::swarm
+
+    %% Optimization
+    OPT["⚡ EvoSwarm RL<br/>━━━━━━━━━━<br/>Population evolves<br/>Fitness evaluation<br/>Strategy mutation<br/>Parameter optimization"]:::swarm
+
+    %% NATS Publishing
+    NATS1["🔀 NATS: tokenism.swarm.population.v1<br/>Population snapshot<br/>Generation: N<br/>Best fitness"]:::output
+    NATS2["🔀 NATS: geometry.swarm.meta.v1<br/>Decoder pack metadata<br/>Optimization results"]:::output
+    NATS3["🔀 NATS: tokenism.cgp.weekly.v1<br/>Weekly CGP export<br/>Attribution data"]:::output
+
+    %% Consumers
+    EVO["🎯 Evo Controller<br/>:8113<br/>Receives meta for<br/>CGP calibration"]:::swarm
+    HIRAG["🔍 Hi-RAG v2<br/>:8086<br/>Indexes weekly<br/>CGP for retrieval"]:::output
+    DISC["💬 Publisher Discord<br/>:8094<br/>Formats CGP for<br/>Discord embeds"]:::output
+
+    %% Flow
+    START --> POP
+    POP --> SIM
+    SIM --> ATTR
+    ATTR --> OPT
+    OPT -->|"week complete"| NATS1
+    OPT --> NATS2
+    ATTR -->|"aggregate"| NATS3
+
+    %% Consumption
+    NATS1 --> EVO
+    NATS2 --> EVO
+    NATS3 --> HIRAG
+    NATS3 --> DISC
+
+    %% Feedback loop
+    EVO -.->|"calibrated params"| OPT
+
+    %% Metrics Display
+    subgraph Metrics["📈 Weekly Metrics"]
+        M1["Gini coefficient"]
+        M2["Poverty rate"]
+        M3["Total wealth"]
+        M4["Attribution count"]
+    end
+
+    SIM -.->|"compute"| Metrics

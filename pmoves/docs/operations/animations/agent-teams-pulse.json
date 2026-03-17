@@ -1,0 +1,168 @@
+{
+  "$schema": "../../../contracts/a2ui-animation-schema.json",
+  "id": "agent-teams-pulse",
+  "title": "PMOVES.AI Agent Teams",
+  "description": "11 agent teams pulse sequentially with node affinity edges",
+  "duration_seconds": 20,
+  "fps": 30,
+  "resolution": {
+    "width": 1920,
+    "height": 1080
+  },
+  "design_system": {
+    "primary": "#3ecf8e",
+    "secondary": "#9333ea",
+    "accent": "#3b82f6",
+    "background": "#0f172a",
+    "text": "#e2e8f0"
+  },
+  "scenes": [
+    {
+      "id": "teams-sequential",
+      "title": "Agent Teams Pulse",
+      "start_frame": 0,
+      "end_frame": 600,
+      "duration_seconds": 20,
+      "layout": "radial",
+      "center": { "x": 960, "y": 540 },
+      "radius": 380,
+      "teams": [
+        {
+          "id": "orchestration",
+          "label": "Orchestration",
+          "icon": "🎯",
+          "color": "#9333ea",
+          "agent_count": 7,
+          "pulse_start_frame": 0,
+          "pulse_duration_frames": 45,
+          "node_affinity": "Z890",
+          "key_agents": ["agent-zero", "archon", "codex"]
+        },
+        {
+          "id": "research",
+          "label": "Research",
+          "icon": "🔬",
+          "color": "#3b82f6",
+          "agent_count": 7,
+          "pulse_start_frame": 45,
+          "pulse_duration_frames": 45,
+          "node_affinity": "Z890",
+          "key_agents": ["deep-researcher", "supaserch", "scholar"]
+        },
+        {
+          "id": "media",
+          "label": "Media",
+          "icon": "🎬",
+          "color": "#f59e0b",
+          "agent_count": 6,
+          "pulse_start_frame": 90,
+          "pulse_duration_frames": 45,
+          "node_affinity": "Z890 + KVM4-2",
+          "key_agents": ["yt-ingestor", "whisper", "extract-worker"]
+        },
+        {
+          "id": "data",
+          "label": "Data",
+          "icon": "💾",
+          "color": "#3ecf8e",
+          "agent_count": 6,
+          "pulse_start_frame": 135,
+          "pulse_duration_frames": 45,
+          "node_affinity": "KVM4-2",
+          "key_agents": ["hirag", "graph-navigator", "cipher-memory"]
+        },
+        {
+          "id": "ui",
+          "label": "UI",
+          "icon": "🎨",
+          "color": "#ec4899",
+          "agent_count": 5,
+          "pulse_start_frame": 180,
+          "pulse_duration_frames": 45,
+          "node_affinity": "Z890",
+          "key_agents": ["a2ui-renderer", "hyperdimensions", "creator"]
+        },
+        {
+          "id": "automation",
+          "label": "Automation",
+          "icon": "⚙️",
+          "color": "#6366f1",
+          "agent_count": 6,
+          "pulse_start_frame": 225,
+          "pulse_duration_frames": 45,
+          "node_affinity": "KVM4-1",
+          "key_agents": ["n8n-orchestrator", "deployer", "monitor"]
+        },
+        {
+          "id": "evolution",
+          "label": "Evolution",
+          "icon": "🧬",
+          "color": "#14b8a6",
+          "agent_count": 6,
+          "pulse_start_frame": 270,
+          "pulse_duration_frames": 45,
+          "node_affinity": "Z890 → 5090",
+          "key_agents": ["evo-controller", "agentgym-rl", "tokenism"]
+        },
+        {
+          "id": "infra",
+          "label": "Infrastructure",
+          "icon": "🏗️",
+          "color": "#64748b",
+          "agent_count": 6,
+          "pulse_start_frame": 315,
+          "pulse_duration_frames": 45,
+          "node_affinity": "KVM4-1",
+          "key_agents": ["gpu-orchestrator", "model-registry", "mesh-agent"]
+        },
+        {
+          "id": "sandbox",
+          "label": "Sandbox",
+          "icon": "🧪",
+          "color": "#a855f7",
+          "agent_count": 4,
+          "pulse_start_frame": 360,
+          "pulse_duration_frames": 45,
+          "node_affinity": "Z890",
+          "key_agents": ["lab-runner", "benchmarker"]
+        },
+        {
+          "id": "life",
+          "label": "Life",
+          "icon": "🌱",
+          "color": "#22c55e",
+          "agent_count": 4,
+          "pulse_start_frame": 405,
+          "pulse_duration_frames": 45,
+          "node_affinity": "KVM4-1",
+          "key_agents": ["health-tracker", "finance-tracker"]
+        },
+        {
+          "id": "external",
+          "label": "External",
+          "icon": "🌐",
+          "color": "#f97316",
+          "agent_count": 4,
+          "pulse_start_frame": 450,
+          "pulse_duration_frames": 45,
+          "node_affinity": "KVM4-1",
+          "key_agents": ["discord-bot", "github-agent", "hf-publisher"]
+        }
+      ],
+      "node_affinity_edges": {
+        "animation": "drawIn",
+        "start_frame": 500,
+        "color": "#94a3b8",
+        "opacity": 0.4
+      },
+      "total_counter": {
+        "label": "61 Agents · 11 Teams",
+        "position": { "x": 960, "y": 540 },
+        "animation": "countUp",
+        "start_frame": 540,
+        "font_size": 32,
+        "color": "#e2e8f0"
+      }
+    }
+  ]
+}

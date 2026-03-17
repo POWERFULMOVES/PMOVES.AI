@@ -50,7 +50,7 @@ Deploy TensorZero and NATS as the central hub:
 
 ```bash
 cd PMOVES.AI
-docker compose -f pmoves/docker-compose/docker-compose.yml up -d tensorzero nats
+docker compose -f pmoves/docker-compose.yml up -d tensorzero nats
 ```
 
 ### 2. Workstation - DoX (192.168.1.20)
@@ -102,7 +102,7 @@ Ensure these ports are open between machines:
 | Port | Service | Direction |
 |------|---------|-----------|
 | 4222 | NATS Core | All → Primary |
-| 9222 | NATS WS | Frontend → DoX |
+| 9223 | NATS WS | Frontend → DoX |
 | 3030 | TensorZero | All → Primary |
 | 8484 | DoX Backend | All → Workstation |
 | 2091 | BoTZ Gateway | All → GPU Server |

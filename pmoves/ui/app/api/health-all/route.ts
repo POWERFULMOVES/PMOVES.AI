@@ -5,8 +5,13 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { checkAllServices, checkServiceHealth, getHealthPercentage, getStatusText } from '@/lib/serviceHealth';
+import { authenticateRequest } from '@/lib/jwtUtils';
+import { logError } from '@/lib/errorUtils';
 
-export const runtime = 'edge';
+// NOTE: Using 'nodejs' runtime instead of 'edge' because Edge runtime
+// doesn't support localhost DNS resolution, which is needed for service
+// health checks within the Docker network.
+export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 /**
@@ -18,6 +23,11 @@ export const dynamic = 'force-dynamic';
  *   - simple: Return simplified status (for quick checks)
  */
 export async function GET(request: NextRequest) {
+  const { ownerId, error: authError } = authenticateRequest(request, 'health-all');
+  if (!ownerId) {
+    return NextResponse.json({ error: authError || 'Authentication required' }, { status: 401 });
+  }
+
   const searchParams = request.nextUrl.searchParams;
   const rawTimeout = parseInt(searchParams.get('timeout') || '5000', 10);
   const timeout = Number.isFinite(rawTimeout) && rawTimeout > 0
@@ -83,11 +93,11 @@ export async function GET(request: NextRequest) {
       { headers }
     );
   } catch (error) {
+    logError('Health check aggregation failed', error, 'error', {
+      component: 'health-all',
+    });
     return NextResponse.json(
-      {
-        error: 'Health check failed',
-        message: error instanceof Error ? error.message : String(error),
-      },
+      { error: 'Health check failed' },
       { status: 500, headers }
     );
   }

@@ -146,6 +146,11 @@ pmoves/jellyfin-ai/config/data/
 pmoves/pmoves/PR_EVIDENCE/
 pmoves/docs/logs/pr_monitor_*.json
 pmoves/docs/logs/pr_monitor_*.md
+pmoves/docs/logs/pr_trim_*.json
+pmoves/docs/logs/ci_queue_guard_latest.json
+pmoves/docs/logs/branch_divergence_*.txt
+pmoves/docs/logs/graphiti_signed_latest.json
+pmoves/docs/logs/claude_review_latest.cgp.json
 
 # =============================================================================
 # DAO Documentation (managed separately)
@@ -158,6 +163,16 @@ CATACLYSM_STUDIOS_INC/PMOVES DAO/
 pmoves/env.jellyfin-ai
 pmoves/env.supa.runtime.bak.*
 
+
+# =============================================================================
+# Terraform
+# =============================================================================
+*.tfvars
+*.tfvars.json
+!*.tfvars.example
+.terraform/
+*.tfstate
+*.tfstate.*
 
 # Windows
 desktop.ini

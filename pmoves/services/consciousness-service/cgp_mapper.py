@@ -137,7 +137,7 @@ class CGPMapper:
                 logger.debug(f"Applied zeta filtering to {theory_id}: entropy={zeta_analysis['entropy']:.4f}")
             except Exception as e:
                 logger.warning(f"Zeta filtering failed for {theory_id}: {e}")
-                zeta_meta = {"zeta_filter_enabled": False, "error": str(e)}
+                zeta_meta = {"zeta_filter_enabled": False, "error": "processing failed"}
         else:
             zeta_meta = {"zeta_filter_enabled": False}
 
@@ -311,7 +311,7 @@ class CGPMapper:
                     {
                         "theory_id": theory.get("name"),
                         "status": "error",
-                        "error": str(e),
+                        "error": "processing failed",
                     }
                 )
         success_count = sum(1 for r in results if r["status"] == "success")

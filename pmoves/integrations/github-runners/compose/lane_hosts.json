@@ -1,29 +1,40 @@
 {
   "lane_hosts": {
     "self-hosted,Linux,X64": {
-      "host": "vps / ai-lab",
+      "host": "ai-lab (Docker container)",
       "runner_name": "pmoves-vps-runner",
-      "registration_script": "integrations/github-runners/compose/register-runner.sh"
+      "registration_script": "make -C pmoves ci-runners-local-cert-up --lane vps",
+      "notes": "Containerized Linux runner via Docker Desktop — managed by local_cert_runners.py"
+    },
+    "self-hosted,Linux,X64,ai-lab,gpu": {
+      "host": "ai-lab (Docker container)",
+      "runner_name": "pmoves-ai-lab-runner",
+      "registration_script": "make -C pmoves ci-runners-local-cert-up --lane ai-lab",
+      "notes": "Containerized Linux GPU runner via Docker Desktop + NVIDIA Container Toolkit"
     },
     "self-hosted,ai-lab,gpu": {
-      "host": "ai-lab",
+      "host": "ai-lab (Docker container)",
       "runner_name": "pmoves-ai-lab-runner",
-      "registration_script": "integrations/github-runners/compose/register-runner.sh"
+      "registration_script": "make -C pmoves ci-runners-local-cert-up --lane ai-lab",
+      "notes": "Alias for ai-lab GPU runner container"
     },
     "self-hosted,ai-lab": {
-      "host": "ai-lab",
+      "host": "ai-lab (Docker container)",
       "runner_name": "pmoves-ai-lab-runner",
-      "registration_script": "integrations/github-runners/compose/register-runner.sh"
+      "registration_script": "make -C pmoves ci-runners-local-cert-up --lane ai-lab",
+      "notes": "Routes to ai-lab GPU runner container"
     },
     "self-hosted,vps,Linux,X64": {
-      "host": "vps",
+      "host": "ai-lab (Docker container)",
       "runner_name": "pmoves-vps-runner",
-      "registration_script": "integrations/github-runners/compose/register-runner.sh"
+      "registration_script": "make -C pmoves ci-runners-local-cert-up --lane vps",
+      "notes": "VPS-labelled runner, containerized locally for local-certification phase"
     },
     "self-hosted,gpu": {
-      "host": "ai-lab",
+      "host": "ai-lab (Docker container)",
       "runner_name": "pmoves-ai-lab-runner",
-      "registration_script": "integrations/github-runners/compose/register-runner.sh"
+      "registration_script": "make -C pmoves ci-runners-local-cert-up --lane ai-lab",
+      "notes": "Alias for ai-lab GPU runner container"
     },
     "self-hosted,cloudstartup,staging": {
       "host": "cloudstartup",
@@ -32,19 +43,43 @@
       "status": "planned",
       "notes": "Staging deploy runner — not yet provisioned"
     },
+    "self-hosted,vps,kvm4-1": {
+      "host": "kvm4-1",
+      "runner_name": "pmoves-kvm4-1-runner",
+      "registration_script": "deploy/runners/vps/install-hardened.sh",
+      "status": "provisioning",
+      "role": "api-gateway",
+      "notes": "KVM4-1: API Gateway node — TensorZero, Agent Zero, Hi-RAG CPU"
+    },
+    "self-hosted,vps,kvm4-2": {
+      "host": "kvm4-2",
+      "runner_name": "pmoves-kvm4-2-runner",
+      "registration_script": "deploy/runners/vps/install-hardened.sh",
+      "status": "provisioning",
+      "role": "data-storage",
+      "notes": "KVM4-2: Data node — Supabase, Qdrant, Neo4j, Meilisearch, NATS"
+    },
+    "self-hosted,vps,kvm2": {
+      "host": "kvm2",
+      "runner_name": "pmoves-kvm2-runner",
+      "registration_script": "deploy/runners/vps/install-hardened.sh",
+      "status": "provisioning",
+      "role": "exit-proxy",
+      "notes": "KVM2: Exit node — Tailscale exit, Nginx reverse proxy, SSL termination"
+    },
     "self-hosted,kvm4,production": {
-      "host": "kvm4",
-      "runner_name": "pmoves-kvm4-production",
-      "registration_script": "integrations/github-runners/compose/register-runner.sh",
-      "status": "planned",
-      "notes": "Production deploy runner — not yet provisioned"
+      "host": "kvm4-1",
+      "runner_name": "pmoves-kvm4-1-runner",
+      "registration_script": "deploy/runners/vps/install-hardened.sh",
+      "status": "provisioning",
+      "notes": "Production deploy runner — routes to kvm4-1 by default"
     },
     "self-hosted,kvm4": {
-      "host": "kvm4",
-      "runner_name": "pmoves-kvm4-runner",
-      "registration_script": "integrations/github-runners/compose/register-runner.sh",
-      "status": "planned",
-      "notes": "Gateway deploy runner — not yet provisioned"
+      "host": "kvm4-1",
+      "runner_name": "pmoves-kvm4-1-runner",
+      "registration_script": "deploy/runners/vps/install-hardened.sh",
+      "status": "provisioning",
+      "notes": "Gateway deploy runner — routes to kvm4-1 by default"
     }
   }
 }

@@ -32,14 +32,14 @@ switch ($Cmd) {
       Compose --profile data up -d qdrant neo4j minio meilisearch presign
       Compose --profile workers up -d hi-rag-gateway-v2 retrieval-eval render-webhook langextract extract-worker
     } else {
-      Write-Host "Supabase CLI not found. Falling back to compose-based full Supabase."
-      Compose -f docker-compose.yml -f docker-compose.supabase.yml --profile data --profile workers up -d
+      Write-Host "Supabase CLI not found. Using unified compose Supabase stack."
+      Compose --profile supabase-local --profile data --profile workers up -d
     }
   }
   "down" { Compose down }
-  "down-fullsupabase" { Compose -f docker-compose.yml -f docker-compose.supabase.yml down }
+  "down-fullsupabase" { Compose --profile supabase-local down }
   "clean" { Compose down -v }
-  "clean-fullsupabase" { Compose -f docker-compose.yml -f docker-compose.supabase.yml down -v }
+  "clean-fullsupabase" { Compose --profile supabase-local down -v }
   "up-legacy" {
     Compose --profile data up -d qdrant neo4j minio meilisearch presign
     Compose --profile workers up -d hi-rag-gateway retrieval-eval render-webhook

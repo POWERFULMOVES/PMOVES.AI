@@ -18,8 +18,8 @@ from pathlib import Path
 
 
 DEFAULT_GROUPS = (
-    "self-hosted,vps",
-    "self-hosted,ai-lab,gpu",
+    "self-hosted,Linux,X64,vps",
+    "self-hosted,Linux,X64,ai-lab,gpu",
 )
 RUNS_ON_LIST_RE = re.compile(r"runs-on:\s*\[([^\]]+)\]", re.IGNORECASE)
 RUNS_ON_SINGLE_RE = re.compile(r"runs-on:\s*([A-Za-z0-9_-]+)", re.IGNORECASE)

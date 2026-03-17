@@ -14,42 +14,63 @@ name: "CodeQL Advanced"
 on:
   push:
     branches: [ "main", "PMOVES.AI-Edition-Hardened" ]
-    # Skip analyzing gitignored directories (integrations-workspace, vendor, venv, node_modules)
-    paths-ignore:
-      - 'integrations-workspace/**'
-      - '**/.venv/**'
-      - '**/venv/**'
-      - '**/vendor/**'
-      - '**/node_modules/**'
-      - '**/site-packages/**'
-      - '**/.eggs/**'
+    # Only run on source code changes — skip docs, configs, media
+    paths:
+      - '**/*.py'
+      - '**/*.js'
+      - '**/*.ts'
+      - '**/*.tsx'
+      - '**/*.jsx'
+      - '**/*.yml'
+      - '**/*.yaml'
+      - '.github/**'
+      # Exclude vendored/generated directories via negated patterns.
+      - '!integrations-workspace/**'
+      - '!**/.venv/**'
+      - '!**/venv/**'
+      - '!**/vendor/**'
+      - '!**/node_modules/**'
+      - '!**/site-packages/**'
+      - '!**/.eggs/**'
   pull_request:
     branches: [ "main", "PMOVES.AI-Edition-Hardened" ]
-    paths-ignore:
-      - 'integrations-workspace/**'
-      - '**/.venv/**'
-      - '**/venv/**'
-      - '**/vendor/**'
-      - '**/node_modules/**'
-      - '**/site-packages/**'
-      - '**/.eggs/**'
+    paths:
+      - '**/*.py'
+      - '**/*.js'
+      - '**/*.ts'
+      - '**/*.tsx'
+      - '**/*.jsx'
+      - '**/*.yml'
+      - '**/*.yaml'
+      - '.github/**'
+      - '!integrations-workspace/**'
+      - '!**/.venv/**'
+      - '!**/venv/**'
+      - '!**/vendor/**'
+      - '!**/node_modules/**'
+      - '!**/site-packages/**'
+      - '!**/.eggs/**'
   workflow_dispatch:
   schedule:
     - cron: '16 20 * * 5'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+  # Keep manual/scheduled audits intact, but cancel stale push/PR runs on the same ref.
+  cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' && github.event_name != 'schedule' }}
 
 jobs:
   analyze:
     name: Analyze (${{ matrix.language }})
-    # PMOVES.AI: Use self-hosted runners for production CI
+    # PMOVES.AI: Use self-hosted Linux for protected branch/scheduled scans.
+    # For PRs, fall back to GitHub-hosted Linux so scans do not deadlock when
+    # self-hosted Linux runners are offline.
     # Runner size impacts CodeQL analysis time. To learn more, please see:
     #   - https://gh.io/recommended-hardware-resources-for-running-codeql
     #   - https://gh.io/supported-runners-and-hardware-resources
     # Consider using larger runners or machines with greater resources for possible analysis time improvements.
-    runs-on: [self-hosted, Linux, X64]
+    runs-on: ${{ github.event_name == 'pull_request' && 'ubuntu-latest' || fromJSON('["self-hosted","Linux","X64"]') }}
+    timeout-minutes: 45
     # Allow C/CPP to fail gracefully - this repo is primarily Python/TypeScript
     # C/CPP files only exist in submodules (external dependencies)
     continue-on-error: ${{ matrix.language == 'c-cpp' || matrix.language == 'javascript-typescript' }}
@@ -66,6 +87,8 @@ jobs:
 
     strategy:
       fail-fast: false
+      # Avoid self-hosted queue spikes by serializing CodeQL language lanes.
+      max-parallel: 1
       matrix:
         include:
         - language: actions

@@ -6,20 +6,18 @@
 'use client';
 
 import { useState } from 'react';
-import type { TensorZeroConfig, DashboardTab } from './types';
+import type { TensorZeroConfig, DashboardTab, VariantTemplate } from './types';
 import { smartDefaultsTemplates, variantTemplates } from './smart-defaults';
 
 interface SmartDefaultsSelectorProps {
   onSelectTemplate: (config: TensorZeroConfig) => void;
-  onApplyVariantTemplate: (template: any) => void;
-  currentConfig: TensorZeroConfig;
+  onApplyVariantTemplate: (template: VariantTemplate) => void;
   className?: string;
 }
 
 export function SmartDefaultsSelector({
   onSelectTemplate,
   onApplyVariantTemplate,
-  currentConfig,
   className = '',
 }: SmartDefaultsSelectorProps) {
   const [selectedTab, setSelectedTab] = useState<DashboardTab['id']>('configs');

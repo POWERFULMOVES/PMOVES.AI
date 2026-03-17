@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-03-03 03:55 UTC",
+  "generated_at": "2026-03-13 02:44 UTC",
   "manifest": "pmoves/configs/submodule_layer_validation_manifest.json",
   "summary": {
     "submodules": 1,
@@ -12,7 +12,7 @@
       "path": "PMOVES-n8n",
       "url": "https://github.com/POWERFULMOVES/PMOVES-n8n.git",
       "status_prefix": " ",
-      "commit": "48a147dfd2dc35ea2c3015194c5d42b8baa53918",
+      "commit": "06134cf134c5a372a27c31e67dcd6b6d2d23dea5",
       "initialized": true,
       "remote_commit_reachable": "local",
       "required_files_any_ok": true,

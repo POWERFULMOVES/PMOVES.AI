@@ -3,6 +3,7 @@ import { promises as fs } from "fs";
 import path from "path";
 
 import { checkAllServices, getHealthPercentage } from "@/lib/serviceHealth";
+import { ownerFromJwt } from "@/lib/jwtUtils";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -288,6 +289,11 @@ function parsePlanLastUpdated(markdown: string): string | null {
 }
 
 export async function GET(request: NextRequest) {
+  const { ownerId, error: authError } = ownerFromJwt('audit/summary');
+  if (authError || !ownerId) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   const includeHealth = request.nextUrl.searchParams.get("includeHealth") !== "false";
   const rawTimeout = parseInt(request.nextUrl.searchParams.get("timeout") || "3000", 10);
   const timeout = Number.isFinite(rawTimeout) && rawTimeout > 0 ? Math.min(Math.max(rawTimeout, 1000), 30000) : 3000;
@@ -350,10 +356,9 @@ export async function GET(request: NextRequest) {
   return NextResponse.json(
     {
       generatedAt: new Date().toISOString(),
-      docsRoot,
       warnings,
       productionAudit: {
-        source: dashboardMarkdown ? dashboardPath : null,
+        source: dashboardMarkdown ? path.basename(dashboardPath) : null,
         lastUpdated: dashboardMarkdown ? parseLabelValue(dashboardMarkdown, "Last Updated") : null,
         branch: dashboardMarkdown ? parseLabelValue(dashboardMarkdown, "Branch") : null,
         commit: dashboardMarkdown ? parseLabelValue(dashboardMarkdown, "Commit") : null,
@@ -361,16 +366,16 @@ export async function GET(request: NextRequest) {
         activeBlockers: dashboardMarkdown ? parseActiveBlockers(dashboardMarkdown) : [],
       },
       releaseGates: {
-        source: releaseGateMarkdown ? releaseGatePath : null,
+        source: releaseGateMarkdown && releaseGatePath ? path.basename(releaseGatePath) : null,
         items: releaseGateMarkdown ? parseReleaseGateRows(releaseGateMarkdown) : [],
       },
       planning: {
         roadmap: {
-          source: roadmapMarkdown ? roadmapPath : null,
+          source: roadmapMarkdown ? path.basename(roadmapPath) : null,
           lastUpdated: roadmapMarkdown ? parsePlanLastUpdated(roadmapMarkdown) : null,
         },
         nextSteps: {
-          source: nextStepsMarkdown ? nextStepsPath : null,
+          source: nextStepsMarkdown ? path.basename(nextStepsPath) : null,
           lastUpdated: nextStepsMarkdown ? parsePlanLastUpdated(nextStepsMarkdown) : null,
         },
       },

@@ -9,55 +9,75 @@
 enabled = true
 async_writes = true
 
-[gateway.export.otlp.traces]
-enabled = true
-format = "opentelemetry"
+# OTLP export disabled — re-enable when OTel collector is running
+# [gateway.export.otlp.traces]
+# enabled = true
+# format = "opentelemetry"
 
 # --- Chat models: Agent Zero orchestration (local GPU and edge) ------------
+# Updated 2026-03-15: Replaced stale models with Qwen 3.5 + LFM2 family
 
-[models.agent_zero_qwen14b_local]
+[models.qwen35_9b]
 routing = ["ollama_local"]
 
-[models.agent_zero_qwen14b_local.providers.ollama_local]
+[models.qwen35_9b.providers.ollama_local]
 type = "openai"
 api_base = "http://pmoves-ollama:11434/v1"
-model_name = "qwen:14b"
+model_name = "qwen3.5:9b"
 api_key_location = "none"
 
-[models.agent_zero_mistral7b_local]
+[models.qwen35_4b]
 routing = ["ollama_local"]
 
-[models.agent_zero_mistral7b_local.providers.ollama_local]
+[models.qwen35_4b.providers.ollama_local]
 type = "openai"
 api_base = "http://pmoves-ollama:11434/v1"
-model_name = "mistral:7b-instruct"
+model_name = "qwen3.5:4b"
 api_key_location = "none"
 
-[models.agent_zero_phi3_mini_local]
+[models.qwen35_27b]
 routing = ["ollama_local"]
 
-[models.agent_zero_phi3_mini_local.providers.ollama_local]
+[models.qwen35_27b.providers.ollama_local]
 type = "openai"
 api_base = "http://pmoves-ollama:11434/v1"
-model_name = "phi3:3.8b-mini-128k-instruct"
+model_name = "qwen3.5:27b"
 api_key_location = "none"
 
-[models.agent_zero_mistral7b_edge]
+[models.qwen35_0_8b]
+routing = ["ollama_local"]
+
+[models.qwen35_0_8b.providers.ollama_local]
+type = "openai"
+api_base = "http://pmoves-ollama:11434/v1"
+model_name = "qwen3.5:0.8b"
+api_key_location = "none"
+
+[models.lfm2_24b_a2b]
+routing = ["ollama_local"]
+
+[models.lfm2_24b_a2b.providers.ollama_local]
+type = "openai"
+api_base = "http://pmoves-ollama:11434/v1"
+model_name = "lfm2:24b"
+api_key_location = "none"
+
+[models.qwen35_4b_edge]
 routing = ["ollama_edge"]
 
-[models.agent_zero_mistral7b_edge.providers.ollama_edge]
+[models.qwen35_4b_edge.providers.ollama_edge]
 type = "openai"
 api_base = "http://jetson-ollama:11434/v1"
-model_name = "mistral:7b-instruct"
+model_name = "qwen3.5:4b"
 api_key_location = "none"
 
-[models.agent_zero_phi3_mini_edge]
+[models.qwen35_0_8b_edge]
 routing = ["ollama_edge"]
 
-[models.agent_zero_phi3_mini_edge.providers.ollama_edge]
+[models.qwen35_0_8b_edge.providers.ollama_edge]
 type = "openai"
 api_base = "http://jetson-ollama:11434/v1"
-model_name = "phi3:3.8b-mini-128k-instruct"
+model_name = "qwen3.5:0.8b"
 api_key_location = "none"
 
 # Using qwen3:8b which is available in Ollama
@@ -178,6 +198,15 @@ api_base = "https://openrouter.ai/api/v1"
 # Keep this set to a broadly available model for production defaults.
 model_name = "openai/gpt-4o-mini"
 api_key_location = "env::OPENROUTER_API_KEY"
+
+[models.chat_alibaba_qwen]
+routing = ["alibaba_qwen_primary"]
+
+[models.chat_alibaba_qwen.providers.alibaba_qwen_primary]
+type = "openai"
+api_base = "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"
+model_name = "qwen3-coder-plus"
+api_key_location = "env::ALIBABA_PRO_CODING_PLAN"
 
 [models.chat_venice]
 routing = ["venice_primary"]
@@ -328,25 +357,33 @@ api_key_location = "env::TOGETHER_AI_API_KEY"
 [functions.agent_zero]
 type = "chat"
 
-[functions.agent_zero.variants.local_qwen14b]
+[functions.agent_zero.variants.local_qwen35_9b]
 type = "chat_completion"
-model = "agent_zero_qwen14b_local"
+model = "qwen35_9b"
 
-[functions.agent_zero.variants.local_mistral7b]
+[functions.agent_zero.variants.local_qwen3_8b]
 type = "chat_completion"
-model = "agent_zero_mistral7b_local"
+model = "qwen3_8b"
 
-[functions.agent_zero.variants.local_phi3_mini]
+[functions.agent_zero.variants.local_qwen35_27b]
 type = "chat_completion"
-model = "agent_zero_phi3_mini_local"
+model = "qwen35_27b"
 
-[functions.agent_zero.variants.edge_mistral7b]
+[functions.agent_zero.variants.local_qwen35_4b]
 type = "chat_completion"
-model = "agent_zero_mistral7b_edge"
+model = "qwen35_4b"
 
-[functions.agent_zero.variants.edge_phi3_mini]
+[functions.agent_zero.variants.local_lfm2_24b]
 type = "chat_completion"
-model = "agent_zero_phi3_mini_edge"
+model = "lfm2_24b_a2b"
+
+[functions.agent_zero.variants.edge_qwen35_4b]
+type = "chat_completion"
+model = "qwen35_4b_edge"
+
+[functions.agent_zero.variants.edge_qwen35_0_8b]
+type = "chat_completion"
+model = "qwen35_0_8b_edge"
 
 [functions.agent_zero.variants.hosted_openai]
 type = "chat_completion"
@@ -359,6 +396,10 @@ model = "chat_moonshot"
 [functions.agent_zero.variants.hosted_openrouter]
 type = "chat_completion"
 model = "chat_openrouter"
+
+[functions.agent_zero.variants.hosted_alibaba_qwen]
+type = "chat_completion"
+model = "chat_alibaba_qwen"
 
 [functions.agent_zero.variants.hosted_venice]
 type = "chat_completion"
@@ -379,17 +420,17 @@ type = "chat"
 type = "chat_completion"
 model = "langextract_qwen7b_local"
 
-[functions.langextract.variants.langextract_local_phi3]
+[functions.langextract.variants.langextract_local_qwen35_4b]
 type = "chat_completion"
-model = "agent_zero_phi3_mini_local"
+model = "qwen35_4b"
 
-[functions.langextract.variants.langextract_edge_mistral7b]
+[functions.langextract.variants.langextract_edge_qwen35_4b]
 type = "chat_completion"
-model = "agent_zero_mistral7b_edge"
+model = "qwen35_4b_edge"
 
-[functions.langextract.variants.langextract_edge_phi3]
+[functions.langextract.variants.langextract_edge_qwen35_0_8b]
 type = "chat_completion"
-model = "agent_zero_phi3_mini_edge"
+model = "qwen35_0_8b_edge"
 
 [functions.langextract.variants.langextract_openai]
 type = "chat_completion"
@@ -402,6 +443,10 @@ model = "chat_moonshot"
 [functions.langextract.variants.langextract_openrouter]
 type = "chat_completion"
 model = "chat_openrouter"
+
+[functions.langextract.variants.langextract_alibaba_qwen]
+type = "chat_completion"
+model = "chat_alibaba_qwen"
 
 [functions.langextract.variants.langextract_venice]
 type = "chat_completion"
@@ -427,13 +472,17 @@ type = "chat"
 type = "chat_completion"
 model = "qwen2_5_14b"
 
-[functions.agent_zero_subordinate.variants.local_mistral7b]
+[functions.agent_zero_subordinate.variants.local_qwen35_4b]
 type = "chat_completion"
-model = "agent_zero_mistral7b_local"
+model = "qwen35_4b"
 
 [functions.agent_zero_subordinate.variants.hosted_openrouter]
 type = "chat_completion"
 model = "chat_openrouter"
+
+[functions.agent_zero_subordinate.variants.hosted_alibaba_qwen]
+type = "chat_completion"
+model = "chat_alibaba_qwen"
 
 [functions.agent_zero_subordinate.variants.hosted_together]
 type = "chat_completion"
@@ -449,7 +498,7 @@ model = "qwen2_5_14b"
 
 [functions.pmoves_media_processor.variants.local_mistral7b]
 type = "chat_completion"
-model = "agent_zero_mistral7b_local"
+model = "qwen35_4b"
 
 [functions.pmoves_media_processor.variants.hosted_together]
 type = "chat_completion"
@@ -465,7 +514,7 @@ model = "qwen2_5_14b"
 
 [functions.pmoves_log_analyzer.variants.local_mistral7b]
 type = "chat_completion"
-model = "agent_zero_mistral7b_local"
+model = "qwen35_4b"
 
 [functions.pmoves_log_analyzer.variants.hosted_together]
 type = "chat_completion"
@@ -487,6 +536,10 @@ model = "qwen2_5_14b"
 type = "chat_completion"
 model = "chat_openrouter"
 
+[functions.pmoves_research_coordinator.variants.hosted_alibaba_qwen]
+type = "chat_completion"
+model = "chat_alibaba_qwen"
+
 [functions.pmoves_research_coordinator.variants.hosted_together]
 type = "chat_completion"
 model = "chat_together"
@@ -501,7 +554,7 @@ model = "qwen2_5_14b"
 
 [functions.pmoves_knowledge_manager.variants.local_mistral7b]
 type = "chat_completion"
-model = "agent_zero_mistral7b_local"
+model = "qwen35_4b"
 
 [functions.pmoves_knowledge_manager.variants.hosted_together]
 type = "chat_completion"
@@ -525,6 +578,10 @@ model = "qwen2_5_14b"
 type = "chat_completion"
 model = "chat_openrouter"
 
+[functions.archon_work_orders.variants.hosted_alibaba_qwen]
+type = "chat_completion"
+model = "chat_alibaba_qwen"
+
 [functions.archon_work_orders.variants.hosted_together]
 type = "chat_completion"
 model = "chat_together"
@@ -540,6 +597,10 @@ model = "qwen2_5_32b"
 [functions.archon_code_review.variants.hosted_openrouter]
 type = "chat_completion"
 model = "chat_openrouter"
+
+[functions.archon_code_review.variants.hosted_alibaba_qwen]
+type = "chat_completion"
+model = "chat_alibaba_qwen"
 
 # --- Hi-RAG Reranking Function -----------------------------------------------
 [functions.hirag_rerank]
@@ -562,23 +623,21 @@ type = "chat"
 type = "chat_completion"
 model = "nemotron_mini"
 
+[functions.deepresearch.variants.local_qwen35_9b]
+type = "chat_completion"
+model = "qwen35_9b"
+
+[functions.deepresearch.variants.local_lfm2_24b]
+type = "chat_completion"
+model = "lfm2_24b_a2b"
+
+[functions.deepresearch.variants.hosted_alibaba_qwen]
+type = "chat_completion"
+model = "chat_alibaba_qwen"
+
 # --- New BoTZ Models (Added 2025-12-21) ---
 
-[models.coding_qwen3_local]
-routing = ["ollama_local"]
-[models.coding_qwen3_local.providers.ollama_local]
-type = "openai"
-api_base = "http://pmoves-ollama:11434/v1"
-model_name = "qwen3-coder:latest"
-api_key_location = "none"
-
-[models.coding_functiongemma_local]
-routing = ["ollama_local"]
-[models.coding_functiongemma_local.providers.ollama_local]
-type = "openai"
-api_base = "http://pmoves-ollama:11434/v1"
-model_name = "functiongemma:latest"
-api_key_location = "none"
+# BoTZ coding models now use Qwen 3.5 (qwen3-coder/functiongemma don't exist in Ollama)
 
 [models.coding_llama3_cloud]
 routing = ["cloudflare_workers"]
@@ -588,29 +647,7 @@ api_base = "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_I
 model_name = "@cf/meta/llama-3.1-8b-instruct"
 api_key_location = "env::CLOUDFLARE_API_TOKEN"
 
-[models.orchestrator_gemma3_local]
-routing = ["ollama_local"]
-[models.orchestrator_gemma3_local.providers.ollama_local]
-type = "openai"
-api_base = "http://pmoves-ollama:11434/v1"
-model_name = "gemma3:12b"
-api_key_location = "none"
-
-[models.orchestrator_nemotron_local]
-routing = ["ollama_local"]
-[models.orchestrator_nemotron_local.providers.ollama_local]
-type = "openai"
-api_base = "http://pmoves-ollama:11434/v1"
-model_name = "nemotron-3-nano:latest"
-api_key_location = "none"
-
-[models.orchestrator_qwen3next_local]
-routing = ["ollama_local"]
-[models.orchestrator_qwen3next_local.providers.ollama_local]
-type = "openai"
-api_base = "http://pmoves-ollama:11434/v1"
-model_name = "qwen3-next:latest"
-api_key_location = "none"
+# BoTZ orchestrator models now use Qwen 3.5 + LFM2 (gemma3/nemotron-3-nano/qwen3-next don't exist)
 
 [models.vl_sentinel_qwen3vl_local]
 routing = ["ollama_local"]
@@ -636,15 +673,20 @@ parameters = "tools/web_search.json"
 type = "chat"
 [functions.coding.variants.primary_local]
 type = "chat_completion"
-model = "coding_qwen3_local"
+model = "qwen35_9b"
 weight = 1.0
-[functions.coding.variants.specialized_local]
+[functions.coding.variants.lightweight_local]
 type = "chat_completion"
-model = "coding_functiongemma_local"
+model = "qwen35_4b"
 weight = 0.0
 [functions.coding.variants.fallback_cloud]
 type = "chat_completion"
 model = "coding_llama3_cloud"
+weight = 0.0
+
+[functions.coding.variants.fallback_alibaba_qwen]
+type = "chat_completion"
+model = "chat_alibaba_qwen"
 weight = 0.0
 
 # Function: Orchestrator
@@ -663,7 +705,7 @@ model = "chat_openai_platform"
 
 [functions.orchestrator.variants.local_fallback]
 type = "chat_completion"
-model = "orchestrator_qwen3next_local"
+model = "qwen35_9b"
 
 # Function: Vision Sentinel
 [functions.vl_sentinel]

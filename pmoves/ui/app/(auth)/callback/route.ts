@@ -1,6 +1,8 @@
 import { cookies } from 'next/headers';
 import { NextResponse, type NextRequest } from 'next/server';
 import { createSupabaseRouteHandlerClient } from '@/lib/supabaseServer';
+import { logError } from '@/lib/errorUtils';
+import { ErrorIds } from '@/lib/constants/errorIds';
 
 const sanitizeRedirect = (value: string | null, origin: string): string => {
   if (!value) return origin;
@@ -28,11 +30,11 @@ export async function GET(request: NextRequest) {
 
   if (code) {
     const cookieStore = await cookies();
-    const supabase = createSupabaseRouteHandlerClient(() => cookieStore);
+    const supabase = createSupabaseRouteHandlerClient(cookieStore);
     try {
       await supabase.auth.exchangeCodeForSession(code);
     } catch (exchangeError) {
-      console.error('Failed to exchange code for session', exchangeError);
+      logError('Failed to exchange code for session', exchangeError, 'error', { errorId: ErrorIds.AUTH_CALLBACK_EXCHANGE_FAILED, component: 'AuthCallback' });
       const redirectUrl = new URL('/login', origin);
       if (next && next.startsWith('/')) {
         redirectUrl.searchParams.set('next', next);

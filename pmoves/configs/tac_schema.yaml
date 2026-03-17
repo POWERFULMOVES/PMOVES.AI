@@ -1,0 +1,38 @@
+# TAC (Task-Action-Context) Tree Schema
+# Version 1.0.0
+#
+# Each TAC tree is a YAML document describing an audit/review checklist
+# that can be traversed by tac_runner.py or the /tac:review skill.
+#
+# Schema:
+#   name: string          - Tree display name
+#   version: string       - Schema version (semver)
+#   description: string   - What this tree audits
+#   root: node            - Root node of the tree
+#
+# Node schema:
+#   id: string            - Unique node identifier (dot-separated path)
+#   task: string          - Human-readable task description
+#   action: object        - Verification action
+#     type: string        - One of: file_exists, grep, command, manual
+#     target: string      - File path or command (relative to repo root)
+#     pattern: string     - Regex pattern (for grep type)
+#     invert: boolean     - If true, finding the pattern means FAIL (negative grep). Default: false
+#     expect: string      - Expected result description
+#   context: string       - Where to look / additional guidance
+#   agent_hint: string    - Suggested agent for this task (e.g., "codex", "archon")
+#   status: string        - One of: pending, pass, fail, skip (default: pending)
+#   children: list[node]  - Sub-tasks (depth-first traversal)
+
+schema:
+  version: "1.0.0"
+  node_types:
+    - file_exists    # Check if a file or directory exists
+    - grep           # Search for a pattern in a file
+    - command        # Run a shell command and check exit code
+    - manual         # Requires human review (always pending)
+  statuses:
+    - pending        # Not yet evaluated
+    - pass           # Verification succeeded
+    - fail           # Verification failed
+    - skip           # Intentionally skipped

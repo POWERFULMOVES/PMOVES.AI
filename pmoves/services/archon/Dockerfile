@@ -1,4 +1,5 @@
-FROM python:3.12-slim
+# Base image pinned 2026-03-05 — refresh monthly or via Dependabot
+FROM python:3.12-slim@sha256:ccc7089399c8bb65dd1fb3ed6d55efa538a3f5e7fca3f5988ac3b5b87e593bf0
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -70,7 +71,7 @@ ENV ARCHON_FORM=POWERFULMOVES \
     AGENT_FORMS_DIR=/app/configs/agents/forms \
     ARCHON_UI_STATIC_DIR=/app/static/archon-ui \
     ARCHON_VENDOR_ROOT=/app/vendor/archon \
-    MCP_CREDENTIALS_PATH=/app/config/mcp/credentials.json
+    MCP_CONFIG_PATH=/app/config/mcp/credentials.json
 
 # Local vendor seed (submodule) for USE_LOCAL_VENDOR=1 builds.
 # NOTE: This requires the submodule to be present in the build context.
@@ -149,8 +150,12 @@ print("→ Patched Archon check_migrations_table_exists (removed /rpc/sql probe)
 PY
 
 COPY services/archon/requirements.txt services/archon/requirements.lock ./
-RUN pip install --upgrade pip \
-    && pip install -r requirements.txt
+# CVE overrides: Crawl4AI RCE (CVE-2026-26216), langchain-core RCE (CVE-2025-68664)
+RUN pip install --upgrade pip "setuptools==82.0.0" "wheel==0.46.3" \
+    && pip install -r requirements.txt \
+    && pip install --no-cache-dir \
+       "crawl4ai==0.8.0" \
+       "langchain-core==1.2.5"
 
 # Pre-install Playwright browsers (Chromium) so crawl workflows succeed out of the box.
 RUN python -m playwright install chromium

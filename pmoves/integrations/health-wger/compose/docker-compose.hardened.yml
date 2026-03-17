@@ -1,0 +1,53 @@
+# =============================================================================
+# PMOVES-Health-wger - Hardened Security Overlay
+# =============================================================================
+#
+# This compose file applies additional hardening on top of the base wger service
+# defined in pmoves/docker-compose.yml. It implements read-only root filesystem
+# and tmpfs mounts for maximum security.
+#
+# Usage:
+#   docker compose -f pmoves/docker-compose.yml -f pmoves/integrations/health-wger/compose/docker-compose.hardened.yml --profile wger up -d
+#
+# Security Features:
+# - read_only: true - Prevents modification of container rootfs
+# - tmpfs mounts - Isolates writable directories to RAM
+# - No privileged operations - All capabilities dropped except NET_BIND_SERVICE
+#
+# =============================================================================
+
+version: '3.8'
+
+services:
+  wger:
+    # Read-only root filesystem (prevents modification of container image)
+    read_only: true
+
+    # Tmpfs mounts for directories that require write access
+    tmpfs:
+      # Django cache and session data
+      - /tmp:rw,noexec,nosuid,size=100m
+      # Python multiprocessing directory for Prometheus metrics
+      - /var/run:rw,noexec,nosuid,size=50m
+      # Django static files (served from here in production)
+      - /home/wger/static:rw,noexec,nosuid,size=200m
+      # Django uploaded media files
+      - /home/wger/media:rw,noexec,nosuid,size=500m
+      # Prometheus multiprocess metrics directory
+      - /tmp/prometheus:rw,noexec,nosuid,size=50m
+
+    # Override entrypoint to ensure tmpfs directories exist
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        # Create necessary directories in tmpfs
+        mkdir -p /tmp/prometheus
+        chmod 755 /tmp/prometheus
+
+        # Start the application
+        exec /home/wger/entrypoint.sh
+
+  wger-db:
+    # PostgreSQL requires read-write access to data directory
+    # No additional hardening applied - database service needs write access
+    # Security is handled by tier-data-hardened anchor in main compose

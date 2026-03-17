@@ -1,6 +1,6 @@
 {
   "$schema_version": "1.0.0",
-  "$description": "Maps every PMOVES.AI submodule to its relevant skills, context files, AGENTS docs, domain tags, and context tier. Source of truth for Claude Code CLI context orchestration.",
+  "$description": "Maps every PMOVES.AI submodule to its relevant skills, context files, AGENTS docs, domain tags, and context tier. Source of truth for Claude Code CLI and Codex context orchestration.",
   "$domain_tag_skill_map": {
     "orchestration": ["agents/*", "deploy/*", "health/*", "nats/*"],
     "media": ["yt/*", "tts/*", "pipecat/*", "jellyfin/*"],
@@ -15,8 +15,8 @@
     "sandbox": ["botz/*"],
     "workflows": ["n8n/*"],
     "ui": [],
-    "finance": ["chit/floos"],
-    "health": [],
+    "finance": ["chit/floos", "n8n/execute", "deploy/up"],
+    "health": ["n8n/execute", "deploy/up"],
     "networking": [],
     "research": ["search/*"],
     "training": [],
@@ -430,18 +430,27 @@
     },
     "PMOVES-n8n": {
       "context_tier": 2,
-      "domain_tags": ["workflows"],
+      "domain_tags": ["workflows", "health", "finance"],
       "skills": [
         "n8n/execute",
         "n8n/nodes",
         "n8n/suggest",
         "n8n/workflows",
-        "deploy/up"
+        "deploy/up",
+        "health/quick"
       ],
       "context_files": [
-        "services-catalog.md"
+        "services-catalog.md",
+        "nats-subjects.md"
       ],
-      "agents_docs": []
+      "agents_docs": [
+        "FIREFLY_WGER_INTEGRATIONS_STATUS.md"
+      ],
+      "floos_hooks": {
+        "publishes": ["health.workouts.synced.v1", "finance.transactions.synced.v1"],
+        "subscribes": ["skills.pipeline.health-sync.v1", "skills.pipeline.finance-sync.v1"],
+        "depends_on": ["nats", "Pmoves-Health-wger", "PMOVES-Wealth"]
+      }
     },
     "PMOVES-crush": {
       "context_tier": 3,
@@ -475,19 +484,41 @@
       "context_tier": 3,
       "domain_tags": ["finance"],
       "skills": [
-        "deploy/up"
+        "deploy/up",
+        "health/quick",
+        "n8n/execute"
       ],
-      "context_files": [],
-      "agents_docs": []
+      "context_files": [
+        "services-catalog.md"
+      ],
+      "agents_docs": [
+        "FIREFLY_WGER_INTEGRATIONS_STATUS.md"
+      ],
+      "floos_hooks": {
+        "publishes": ["finance.transactions.ingested.v1", "finance.monthly.summary.v1"],
+        "subscribes": ["skills.pipeline.finance-sync.v1"],
+        "depends_on": ["nats", "n8n", "supabase"]
+      }
     },
     "Pmoves-Health-wger": {
       "context_tier": 3,
       "domain_tags": ["health"],
       "skills": [
-        "deploy/up"
+        "deploy/up",
+        "health/quick",
+        "n8n/execute"
       ],
-      "context_files": [],
-      "agents_docs": []
+      "context_files": [
+        "services-catalog.md"
+      ],
+      "agents_docs": [
+        "FIREFLY_WGER_INTEGRATIONS_STATUS.md"
+      ],
+      "floos_hooks": {
+        "publishes": ["health.metrics.updated.v1", "health.weekly.summary.v1"],
+        "subscribes": ["skills.pipeline.health-sync.v1"],
+        "depends_on": ["nats", "n8n", "supabase"]
+      }
     },
     "PMOVES-ToKenism-Multi": {
       "context_tier": 2,

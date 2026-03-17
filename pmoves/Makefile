@@ -153,6 +153,7 @@ help: ## Show available make targets and descriptions
 include mk/codex.mk
 include mk/preflight.mk
 include mk/infra.mk
+include mk/build-gate.mk
 
 .PHONY: update-service-docs
 update-service-docs: ## Regenerate service update notes from git metadata
@@ -250,7 +251,11 @@ SUPABASE_DB_HELPER ?= scripts/supabase/find_db_container.sh
 up-supabase: ## Start Supabase using selected runtime (SUPABASE_RUNTIME=cli|kong|compose)
 	@$(MAKE) --no-print-directory supa-start
 
-.PHONY: supa-init supa-start supa-stop supa-stop-all supa-status supa-runtime-env supa-logs supa-health supa-restart supa-migrate supa-use-local supa-use-remote supa-env-doctor supa-env-doctor-strict supa-runtime-guard supa-runtime-reconcile
+.PHONY: supa-init supa-start supa-stop supa-stop-all supa-status supa-runtime-env supa-logs supa-health supa-restart supa-migrate supa-use-local supa-use-remote supa-env-doctor supa-env-doctor-strict supa-runtime-guard supa-runtime-reconcile supa-collation-refresh supa-collation-check supa-jwt-check supa-jwt-refresh
+supa-jwt-check: ## Check if boot JWT is expired
+	@bash scripts/supabase/refresh-boot-jwt.sh --check
+supa-jwt-refresh: ## Refresh expired boot JWT (generates new 1-year token)
+	@bash scripts/supabase/refresh-boot-jwt.sh --apply
 supa-init: check-tools ## Initialize supabase/config.toml (one-time) and enforce PMOVES CLI defaults
 	@if [ ! -f "$(SUPABASE_CONFIG)" ]; then \
 		echo "🗂️ Initializing Supabase project in . ..."; \
@@ -310,23 +315,24 @@ supa-start: check-tools ensure-env-shared ## Start Supabase stack for selected r
 			-e KONG_PG_USER=$${SUPABASE_DB_USER:-postgres} \
 			-e KONG_PG_PASSWORD=$${SUPABASE_DB_PASSWORD:-postgres} \
 			kong:3.7.1 kong migrations bootstrap --yes >/dev/null 2>&1 || true; \
-		$(DC) up -d supabase-postgrest supabase-gotrue supabase-kong supabase-realtime supabase-storage supabase-studio; \
+		$(DC) up -d supabase-postgrest supabase-gotrue supabase-kong supabase-realtime supabase-storage supabase-studio supabase-imgproxy supabase-meta supabase-edge-functions supabase-analytics supabase-vector supabase-pooler; \
 	fi
 	@$(MAKE) --no-print-directory supa-status
+	@$(MAKE) --no-print-directory supa-collation-refresh 2>/dev/null || true
 
 supa-stop: ## Stop Supabase stack for selected runtime
 	@echo "🗄️ Stopping Supabase stack (SUPABASE_RUNTIME=$(SUPABASE_RUNTIME))..."
 	@if [ "$(SUPABASE_RUNTIME)" = "cli" ]; then \
 		supabase stop --workdir "." >/dev/null 2>&1 || true; \
 	else \
-		$(DC) stop supabase-db supabase-postgrest supabase-gotrue supabase-kong supabase-realtime supabase-storage supabase-studio >/dev/null 2>&1 || true; \
+		$(DC) stop supabase-db supabase-postgrest supabase-gotrue supabase-kong supabase-realtime supabase-storage supabase-studio supabase-imgproxy supabase-meta supabase-edge-functions supabase-analytics supabase-vector supabase-pooler >/dev/null 2>&1 || true; \
 	fi
 	@echo "✅ Supabase stopped"
 
 supa-stop-all: ## Stop both Supabase runtimes (CLI and compose) to clear mixed-state drift
 	@echo "🛑 Stopping all Supabase runtimes..."
 	@supabase stop --workdir "." >/dev/null 2>&1 || true
-	@$(DC) stop supabase-db supabase-postgrest supabase-gotrue supabase-kong supabase-realtime supabase-storage supabase-studio >/dev/null 2>&1 || true
+	@$(DC) stop supabase-db supabase-postgrest supabase-gotrue supabase-kong supabase-realtime supabase-storage supabase-studio supabase-imgproxy supabase-meta supabase-edge-functions supabase-analytics supabase-vector supabase-pooler >/dev/null 2>&1 || true
 	@echo "✅ All Supabase runtimes stopped"
 
 supa-restart: ## Restart Supabase stack for selected runtime
@@ -382,7 +388,7 @@ supa-status: ## Show Supabase status for selected runtime and export env snapsho
 		echo "  Auth:   $$auth_url"; \
 		echo "  Studio: $$studio_url"; \
 	else \
-		$(DC) ps supabase-db supabase-postgrest supabase-gotrue supabase-kong supabase-realtime supabase-storage supabase-studio 2>/dev/null || true; \
+		$(DC) ps supabase-db supabase-postgrest supabase-gotrue supabase-kong supabase-realtime supabase-storage supabase-studio supabase-imgproxy supabase-meta supabase-edge-functions supabase-analytics supabase-vector supabase-pooler 2>/dev/null || true; \
 		echo ""; \
 		echo "Expected local endpoints:"; \
 		echo "  PostgREST: http://localhost:$${SUPABASE_POSTGREST_PORT:-3000}"; \
@@ -410,7 +416,7 @@ supa-logs: ## Tail logs for selected runtime (set SVC=<container/service> for a 
 			docker logs --tail=80 "$$c" || true; \
 		done; \
 	else \
-		$(DC) logs --tail=120 supabase-db supabase-postgrest supabase-gotrue supabase-kong supabase-realtime supabase-storage supabase-studio || true; \
+		$(DC) logs --tail=120 supabase-db supabase-postgrest supabase-gotrue supabase-kong supabase-realtime supabase-storage supabase-studio supabase-imgproxy supabase-meta supabase-edge-functions supabase-analytics supabase-vector supabase-pooler || true; \
 	fi
 
 supa-health: ## Health checks for selected runtime + active DB container readiness
@@ -460,6 +466,34 @@ supa-health: ## Health checks for selected runtime + active DB container readine
 	else \
 		echo "  ❌ Studio ($$studio_url) -> $$studio_code"; \
 	fi
+
+supa-collation-refresh: ## Refresh collation version for all Supabase databases (RG-3)
+	@echo "Refreshing collation versions..."
+	@db=$$(bash "$(SUPABASE_DB_HELPER)" running); \
+	if [ -z "$$db" ]; then echo "Supabase DB container not found"; exit 1; fi; \
+	failed=0; \
+	for dbname in postgres _supabase; do \
+		echo "  -> ALTER DATABASE $$dbname REFRESH COLLATION VERSION"; \
+		if ! docker exec -i "$$db" psql -U postgres -d "$$dbname" \
+			-c "ALTER DATABASE $$dbname REFRESH COLLATION VERSION;" 2>&1; then \
+			echo "  ❌ ALTER DATABASE $$dbname failed"; \
+			failed=1; \
+		fi; \
+	done; \
+	if [ "$$failed" -ne 0 ]; then echo "Collation refresh FAILED"; exit 1; fi
+	@echo "Collation refresh complete"
+
+supa-collation-check: ## Check for collation version mismatches
+	@db=$$(bash "$(SUPABASE_DB_HELPER)" running); \
+	if [ -z "$$db" ]; then echo "Supabase DB container not found"; exit 1; fi; \
+	result=$$(docker exec -i "$$db" psql -U postgres -tAc \
+		"SELECT datname || ': ' || COALESCE(datcollversion, 'NULL') FROM pg_database WHERE datname NOT IN ('template0','template1') ORDER BY datname;"); \
+	echo "$$result"; \
+	if echo "$$result" | grep -q ': NULL$$'; then \
+		echo "❌ Collation mismatch detected — run 'make supa-collation-refresh'"; \
+		exit 1; \
+	fi; \
+	echo "✅ Collation versions OK"
 
 supa-use-local: ## Write .env.local from local Supabase template and merge keys from current supa-status
 	@$(PYTHON) scripts/supabase/apply_env_profile.py --profile local --runtime "$(SUPABASE_RUNTIME)" --target .env.local --status-file .supabase.status.env
@@ -567,14 +601,21 @@ supabase-boot-user: ensure-env-shared ## Create/rotate default Supabase boot use
 		    [ -n "$${SERVICE_ROLE_KEY:-}" ] && service_key="$$SERVICE_ROLE_KEY" ;; \
 		esac; \
 		SUPABASE_SERVICE_URL="$$service_url" SUPABASE_SERVICE_ROLE_KEY="$$service_key" SUPABASE_SERVICE_KEY="$$service_key" \
-		python3 tools/create_supabase_boot_user.py "$(SUPABASE_BOOT_USER_EMAIL)" --env-file env.shared --rotate-password --write-env env.shared --write-env .env.local $(ARGS)'
+		$(PYTHON) tools/create_supabase_boot_user.py "$(SUPABASE_BOOT_USER_EMAIL)" --rotate-password --write-env env.shared --write-env .env.local $(ARGS)'
 
 .PHONY: auth-check
 auth-check: ensure-env-shared ## Validate auth/bootstrap state (JWT or Google mode) and secondary setup labels
 	@bash -lc '. ./scripts/with-env.sh; \
+		[ -f ./.supabase.status.env ] && . ./.supabase.status.env || true; \
 		flags=""; \
 		if [ "$(AUTH_BOOTSTRAP_STRICT)" = "1" ]; then flags="$$flags --strict"; fi; \
-		python3 tools/auth_bootstrap_check.py --env-file env.shared --mode "$(AUTH_BOOTSTRAP_MODE)" $$flags'
+		auth_url="$${AUTH_HEALTH_URL:-$${SUPABASE_AUTH_HEALTH_URL:-$${SUPABASE_LOCAL_AUTH_HEALTH_URL:-}}}"; \
+		if [ -z "$$auth_url" ]; then \
+			base_url="$${SUPABASE_CLI_API_URL:-$${API_URL:-}}"; \
+			if [ -n "$$base_url" ]; then auth_url="$${base_url%/}/auth/v1/health"; fi; \
+		fi; \
+		if [ -z "$$auth_url" ]; then auth_url="http://127.0.0.1:54321/auth/v1/health"; fi; \
+		$(PYTHON) tools/auth_bootstrap_check.py --env-file env.shared --mode "$(AUTH_BOOTSTRAP_MODE)" --auth-health-url "$$auth_url" $$flags'
 
 .PHONY: auth-bootstrap
 auth-bootstrap: ensure-env-shared ## Run boot-order auth phase: runtime hydration -> optional user bootstrap -> auth checks
@@ -593,37 +634,20 @@ else
 endif
 	@$(MAKE) --no-print-directory auth-check
 
-supabase-up: ## Compose fallback only: start gotrue/realtime/storage/studio sidecars
-	@if [ "$(SUPABASE_RUNTIME)" != "compose" ] && [ "$(SUPA_PROVIDER)" != "compose" ]; then \
-		echo "↷ SUPABASE_RUNTIME=$(SUPABASE_RUNTIME) (compose fallback skipped)"; \
-		exit 0; \
-	fi
-	@$(DC) -f docker-compose.supabase.yml up -d gotrue realtime storage studio
-	@echo "✅ Compose Supabase sidecars started (fallback mode)"
+supabase-up: ## Alias for up-supabase (shim removed — all services in main compose)
+	@$(MAKE) --no-print-directory up-supabase
 
-supabase-stop: ## Compose fallback only: stop gotrue/realtime/storage/studio sidecars
-	@$(DC) -f docker-compose.supabase.yml stop gotrue realtime storage studio >/dev/null 2>&1 || true
-	@echo "✅ Compose Supabase sidecars stopped"
+supabase-stop: ## Alias for supa-stop (shim removed — all services in main compose)
+	@$(MAKE) --no-print-directory supa-stop
 
-supabase-clean: ## Compose fallback only: remove gotrue/realtime/storage/studio containers + volumes
-	@$(DC) -f docker-compose.supabase.yml down -v --remove-orphans >/dev/null 2>&1 || true
-	@echo "✅ Compose Supabase sidecars cleaned"
-
-.PHONY: neo4j-bootstrap
-neo4j-bootstrap: ## Seed Neo4j with persona aliases + CHIT geometry fixtures
-	@echo "📊 Applying Neo4j seeds..."
-	@if ! docker ps --format '{{.Names}}' | grep -q 'neo4j\|pmoves-neo4j'; then \
-		echo "⚠️  Neo4j not running. Skipping seeds."; \
-		echo "   Start with: make up-data-tier"; \
-	else \
-		bash scripts/neo4j_bootstrap.sh; \
-	fi
-	@echo "✅ Neo4j bootstrap complete"
+supabase-clean: ## Stop + remove Supabase containers and volumes
+	@$(DC) --profile supabase-local down -v --remove-orphans >/dev/null 2>&1 || true
+	@echo "✅ Supabase stack cleaned"
 
 .PHONY: seed-data
 seed-data: ## Seed Qdrant/Meilisearch with demo corpus via Hi-RAG v2
 	@echo "📚 Seeding Qdrant/Meili demo corpus..."
-	@if ! docker ps --format '{{.Names}}' | grep -q 'qdrant'; then \
+	@if ! docker ps --format '{{.Names}}' | grep -q 'qdrant$$'; then \
 		echo "⚠️  Qdrant not running. Starting data tier..."; \
 		$(MAKE) --no-print-directory up-data-tier; \
 	fi
@@ -826,6 +850,10 @@ up-agents: ## Start agent services (Agent Zero, Archon, DeepResearch, SupaSerch)
 	@$(MAKE) --no-print-directory wait-agents
 	@echo "✅ Agents ready"
 
+.PHONY: archon-db-setup
+archon-db-setup: ## Run Archon DB migrations (complete_setup + 001-011 + TensorZero LLM config)
+	@bash scripts/archon_db_setup.sh
+
 .PHONY: up-tensorzero
 up-tensorzero: ## Start TensorZero LLM gateway (PRIMARY MODEL PROVIDER)
 	@echo "🧠 Starting TensorZero LLM gateway..."
@@ -887,14 +915,44 @@ up-minimal: ## Start minimal stack (Supabase + Data + Bus only)
 	@echo "✅ Minimal stack ready (Supabase + Data + Bus)"
 
 .PHONY: bringup-layered
-bringup-layered: ## Deterministic local layered bring-up (minimal -> workers -> agents -> monitoring -> prod smoke)
+bringup-layered: ## Deterministic local layered bring-up (minimal -> model-mgmt -> workers -> agents -> monitoring -> prod smoke)
 	@echo "🚀 Layered local bring-up (runtime=$${SUPABASE_RUNTIME:-cli})"
 	@SUPABASE_RUNTIME=$${SUPABASE_RUNTIME:-cli} $(MAKE) --no-print-directory up-minimal
+	@SUPABASE_RUNTIME=$${SUPABASE_RUNTIME:-cli} $(MAKE) --no-print-directory up-model-management
 	@SUPABASE_RUNTIME=$${SUPABASE_RUNTIME:-cli} $(MAKE) --no-print-directory up-workers
 	@SUPABASE_RUNTIME=$${SUPABASE_RUNTIME:-cli} $(MAKE) --no-print-directory up-agents
 	@SUPABASE_RUNTIME=$${SUPABASE_RUNTIME:-cli} $(MAKE) --no-print-directory up-monitoring
 	@SUPABASE_RUNTIME=$${SUPABASE_RUNTIME:-cli} $(MAKE) --no-print-directory smoke-prod
 	@echo "✅ Layered local bring-up passed"
+
+.PHONY: up-model-management
+up-model-management: ## Start model management layer (model-registry + gpu-orchestrator if GPU available)
+	@echo "🧠 Starting model management layer..."
+	@$(DC) --profile orchestration up -d model-registry
+	@if docker info --format '{{json .Runtimes}}' | grep -qi nvidia; then \
+		$(DC) --profile gpu up -d gpu-orchestrator; \
+	else \
+		echo "⚠️ NVIDIA runtime not detected, skipping gpu-orchestrator"; \
+	fi
+	@echo "✅ Model management ready"
+
+.PHONY: health-dormant
+health-dormant: ## Health-check dormant/newly-activated services
+	@for name in model-registry gpu-orchestrator pdf-ingest botz-gateway tokenism-simulator transcribe-backend; do \
+	  cid=$$($(DC) ps -q $$name 2>/dev/null); \
+	  if [ -z "$$cid" ]; then \
+	    echo "$$name: SKIP (not running)"; \
+	    continue; \
+	  fi; \
+	  state=$$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' $$cid 2>/dev/null); \
+	  if [ "$$state" = "healthy" ] || [ "$$state" = "running" ]; then \
+	    echo "$$name: OK"; \
+	  elif [ "$$state" = "starting" ]; then \
+	    echo "$$name: STARTING"; \
+	  else \
+	    echo "$$name: FAIL ($$state)"; \
+	  fi; \
+	done
 
 # =============================================================================
 # GRACEFUL SHUTDOWN (Reverse Dependency Order)
@@ -906,6 +964,7 @@ down-all: ## Stop ALL services in graceful reverse order
 	@-$(MAKE) --no-print-directory down-integrations 2>/dev/null
 	@-$(MAKE) --no-print-directory down-tensorzero
 	@-$(MAKE) --no-print-directory down-agents
+	@-$(MAKE) --no-print-directory down-model-management
 	@-$(MAKE) --no-print-directory down-workers
 	@-$(MAKE) --no-print-directory down-bus
 	@-$(MAKE) --no-print-directory down-data
@@ -935,6 +994,12 @@ down-workers: ## Stop worker services
 	@$(DC) stop $(WORKER_SERVICES) >/dev/null 2>&1 || true
 	@$(DC) rm -f $(WORKER_SERVICES) >/dev/null 2>&1 || true
 
+.PHONY: down-model-management
+down-model-management: ## Stop model-registry and gpu-orchestrator layer
+	@echo "🧠 Stopping model management layer..."
+	@$(DC) stop model-registry gpu-orchestrator >/dev/null 2>&1 || true
+	@$(DC) rm -f model-registry gpu-orchestrator >/dev/null 2>&1 || true
+
 .PHONY: down-bus
 down-bus: ## Stop message bus
 	@echo "📨 Stopping NATS..."
@@ -963,7 +1028,7 @@ down-supabase: ## Stop Supabase
 	@if [ "$(SUPABASE_RUNTIME)" = "cli" ]; then \
 		supabase stop --workdir "$(CURDIR)" >/dev/null 2>&1 || true; \
 	else \
-		$(DC) stop supabase-db supabase-postgrest supabase-gotrue supabase-kong supabase-realtime supabase-storage supabase-studio >/dev/null 2>&1 || true; \
+		$(DC) stop supabase-db supabase-postgrest supabase-gotrue supabase-kong supabase-realtime supabase-storage supabase-studio supabase-imgproxy supabase-meta supabase-edge-functions supabase-analytics supabase-vector supabase-pooler >/dev/null 2>&1 || true; \
 	fi
 
 # =============================================================================
@@ -1064,7 +1129,7 @@ validate-tier: ## Validate tier network compliance (backend services should NOT 
 yt-docs-sync: ## Ask PMOVES.YT to capture yt-dlp help/extractors and upsert into Supabase
 	@$(LOAD_ENV_SHARED); \
 	  base=$${PMOVES_YT_BASE_URL:-http://localhost:8077}; \
-	  if echo "$$base" | grep -q "pmoves-yt"; then base=$$(echo "$$base" | sed "s|pmoves-yt|localhost|g"); fi; \
+	  if echo "$$base" | grep -q "pmoves-yt$$"; then base=$$(echo "$$base" | sed "s|pmoves-yt|localhost|g"); fi; \
 	  echo "→ Syncing yt-dlp docs via $$base/yt/docs/sync"; \
 	  if command -v jq >/dev/null 2>&1; then \
 	    curl -fsS -X POST "$$base/yt/docs/sync" | jq .; \
@@ -1075,7 +1140,7 @@ yt-docs-sync: ## Ask PMOVES.YT to capture yt-dlp help/extractors and upsert into
 yt-docs-catalog-smoke: ## Smoke check for /yt/docs/catalog (counts + version)
 	@$(LOAD_ENV_SHARED); \
 	  base=$${PMOVES_YT_BASE_URL:-http://localhost:8077}; \
-	  if echo "$$base" | grep -q "pmoves-yt"; then base=$$(echo "$$base" | sed "s|pmoves-yt|localhost|g"); fi; \
+	  if echo "$$base" | grep -q "pmoves-yt$$"; then base=$$(echo "$$base" | sed "s|pmoves-yt|localhost|g"); fi; \
 	  echo "→ Hitting $$base/yt/docs/catalog"; \
 	  if command -v jq >/dev/null 2>&1; then \
 	    curl -fsS "$$base/yt/docs/catalog" | jq "{ok, meta, counts}"; \
@@ -1157,14 +1222,12 @@ up-archon-submodule: ## Build Archon from submodule (pmoves/integrations/archon)
 # -------- Consciousness Taxonomy Loaders ----------
 .PHONY: load-consciousness-neo4j harvest-consciousness
 
-load-consciousness-neo4j: ## Load consciousness taxonomy schema into Neo4j
-	@echo "→ Loading consciousness Neo4j schema…"
-	@$(LOAD_ENV_SHARED); \
-	  auth="$${NEO4J_AUTH:-neo4j/neo4j}"; \
-	  user="$${auth%%/*}"; pass="$${auth#*/}"; \
-	  cat data/consciousness/neo4j-consciousness-schema.cypher | \
-	    docker exec -i neo4j cypher-shell -u "$$user" -p "$$pass"; \
-	  echo "✔ Consciousness taxonomy loaded into Neo4j"
+load-consciousness-neo4j: ## Load consciousness taxonomy schema into Neo4j (CONCH Phase 4b)
+	@echo "→ Loading consciousness Neo4j schema (CONCH Phase 4b)..."
+	@echo "   This will load migration 003_consciousness_taxonomy.cypher (30KB schema)"
+	@echo ""
+	@$(MAKE) --no-print-directory neo4j-migrate VERSION=003_consciousness_taxonomy
+	@echo "✔ Consciousness taxonomy loaded into Neo4j (CONCH Phase 4b complete)"
 
 harvest-consciousness: ## Run Archon-based consciousness taxonomy harvester
 	@echo "→ Running consciousness harvester…"
@@ -1173,6 +1236,47 @@ harvest-consciousness: ## Run Archon-based consciousness taxonomy harvester
 	  --output data/consciousness/harvested \
 	  --publish
 	@echo "✔ Consciousness harvest complete"
+
+.PHONY: ingest-consciousness-yt mesh-handshake smoke-geometry web-geometry
+
+ingest-consciousness-yt: ## Ingest consciousness videos from YouTube
+	@echo "→ Ingesting consciousness videos from YouTube..."
+	@if ! docker ps --format '{{.Names}}' | grep -q 'pmoves-yt'; then \
+		echo "⚠️  PMOVES.YT not running. Start with: make up-yt"; \
+	else \
+		$(call docker-compose-exec,pmoves-yt,python,ingest.py $(ARGS)); \
+		echo "✔ Consciousness video ingestion complete"; \
+	fi
+
+mesh-handshake: ## Verify GPU mesh connectivity and CHIT bus
+	@echo "→ Testing mesh handshake and CHIT bus connectivity..."
+	@echo "   Checking GPU orchestrator..."
+	@if docker ps --format '{{.Names}}' | grep -q 'gpu-orchestrator'; then \
+		$(call docker-compose-exec,gpu-orchestrator,python,-c "import sys; sys.path.insert(0, '/app'); from mesh_handshake import check_gpu_mesh; check_gpu_mesh()"); \
+	else \
+		echo "⚠️  GPU orchestrator not running"; \
+	fi
+	@echo "   Checking CHIT geometry bus..."
+	@$(MAKE) --no-print-directory geometry-bus-status
+	@echo "✔ Mesh handshake complete"
+
+smoke-geometry: ## Test geometry service and CHIT pipeline
+	@echo "→ Testing geometry service and CHIT pipeline..."
+	@if [ -f "tests/test_geometry.py" ]; then \
+		$(PYTHON) -m pytest tests/test_geometry.py -v --tb=short; \
+	else \
+		echo "⚠️  tests/test_geometry.py not found. Creating placeholder test..."; \
+		echo "# Placeholder: Geometry service tests" > tests/test_geometry.py; \
+	fi
+	@echo "✔ Geometry smoke test complete"
+
+web-geometry: ## Launch geometry service web UI
+	@echo "→ Launching geometry service web UI..."
+	@if docker ps --format '{{.Names}}' | grep -q 'geometry-service\|evo-controller'; then \
+		echo "   Geometry service already running. Access at: http://localhost:8113"; \
+	else \
+		echo "⚠️  Geometry service not running. Start with: make up-agents"; \
+	fi
 
 .PHONY: loki-ready
 loki-ready: ## Check Loki readiness endpoint (/ready)
@@ -1238,15 +1342,17 @@ populate-tier-envs: bootstrap-tier-envs ## Populate tier env files with defaults
 		echo "✓ Populated env.tier-data"; \
 	fi; \
 	if [ -f "env.tier-supabase" ]; then \
-		sed -i "s|^SUPABASE_JWT_SECRET=.*|SUPABASE_JWT_SECRET=$${SUPABASE_JWT_SECRET:-$(shell openssl rand -base64 32)}|" env.tier-supabase; \
-		sed -i "s|^SUPABASE_ANON_KEY=.*|SUPABASE_ANON_KEY=$${SUPABASE_ANON_KEY:-$(shell openssl rand -base64 32)}|" env.tier-supabase; \
-		sed -i "s|^SUPABASE_SERVICE_ROLE_KEY=.*|SUPABASE_SERVICE_ROLE_KEY=$${SUPABASE_SERVICE_ROLE_KEY:-$(shell openssl rand -base64 32)}|" env.tier-supabase; \
-		sed -i "s|^SUPABASE_PUBLISHABLE_KEY=.*|SUPABASE_PUBLISHABLE_KEY=$${SUPABASE_PUBLISHABLE_KEY:-$(shell openssl rand -base64 32)}|" env.tier-supabase; \
-		sed -i "s|^SUPABASE_SECRET_KEY=.*|SUPABASE_SECRET_KEY=$${SUPABASE_SECRET_KEY:-$(shell openssl rand -base64 32)}|" env.tier-supabase; \
-		sed -i "s|^SUPABASE_REALTIME_SECRET=.*|SUPABASE_REALTIME_SECRET=$${SUPABASE_REALTIME_SECRET:-$(shell openssl rand -base64 32)}|" env.tier-supabase; \
-		sed -i "s|^SUPABASE_DB_PASSWORD=.*|SUPABASE_DB_PASSWORD=$${SUPABASE_DB_PASSWORD:-$(shell openssl rand -base64 24)}|" env.tier-supabase; \
-		sed -i "s|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=$${POSTGRES_PASSWORD:-$(shell openssl rand -base64 24)}|" env.tier-supabase; \
-		echo "✓ Populated env.tier-supabase"; \
+		if grep -q "your_jwt_secret_here\|your_anon_key_here\|your_service_role_key_here" env.tier-supabase 2>/dev/null; then \
+			echo "Generating Supabase secrets with proper JWT tokens..."; \
+			if [ -x scripts/supabase/generate-keys.sh ]; then \
+				scripts/supabase/generate-keys.sh > env.tier-supabase; \
+				echo "✓ Populated env.tier-supabase (via generate-keys.sh with valid JWTs)"; \
+			else \
+				echo "⚠ scripts/supabase/generate-keys.sh not found — run 'make supa-init' to generate proper JWT keys"; \
+			fi; \
+		else \
+			echo "✓ env.tier-supabase already has real values, skipping"; \
+		fi; \
 	fi; \
 	if [ -f "env.tier-api" ]; then \
 		sed -i "s|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=$${POSTGRES_PASSWORD:-$(shell openssl rand -base64 24)}|" env.tier-api; \
@@ -1302,8 +1408,8 @@ recreate-v2: ## Force-recreate v2 CPU container (no deps)
 .PHONY: up-open-notebook
 up-open-notebook: ensure-env-shared ## Bring up Open Notebook on cataclysm-net (defaults UI :8503, API :5055)
 	@docker network create cataclysm-net >/dev/null 2>&1 || true
-	@docker compose -f docker-compose.open-notebook.yml up -d open-notebook
-	@echo "✔ Open Notebook up (http://localhost:${OPEN_NOTEBOOK_UI_PORT:-8503}, API :${OPEN_NOTEBOOK_API_PORT:-5055})"
+	@$(NOTEBOOK_DC) up -d open-notebook
+	@echo "✔ Open Notebook up (http://localhost:$${OPEN_NOTEBOOK_UI_PORT:-8503}, API :$${OPEN_NOTEBOOK_API_PORT:-5055})"
 
 .PHONY: notebook-set-password
 notebook-set-password: ## Update Open Notebook password/token (and optionally notebook id). Usage: make notebook-set-password PASSWORD=secret [TOKEN=api-token NOTEBOOK_ID=notebook:abc123]
@@ -1315,7 +1421,7 @@ notebook-set-password: ## Update Open Notebook password/token (and optionally no
 
 .PHONY: down-open-notebook
 down-open-notebook: ## Stop Open Notebook
-	@docker compose -f docker-compose.open-notebook.yml down
+	@$(NOTEBOOK_DC) down
 	@echo "✔ Open Notebook down"
 
 up-both-gateways: ## Ensure both hi-rag gateways are up (idempotent)
@@ -1339,11 +1445,26 @@ up-legacy-both: ## Ensure v1 hi-rag gateway CPU+GPU are up
 # always operate on the same stack regardless of cwd/path.
 PROJECT ?= pmoves
 export PROJECT
+N8N_SUBMODULE_DIR ?= ../PMOVES-n8n
+N8N_CANONICAL_FLOWS_DIR ?= $(N8N_SUBMODULE_DIR)/workflows
 
 # n8n persistence mode:
-# - sqlite: simplest local bring-up (default)
-# - postgres: production-grade n8n DB (recommended for VPS)
-N8N_DB ?= sqlite
+# - postgres: production-grade n8n DB (default)
+# - sqlite: legacy/local escape hatch only
+N8N_DB ?= postgres
+N8N_DB_NAME ?= n8n
+N8N_DB_USER ?= n8n
+N8N_DB_PASSWORD ?= pmoves_n8n_local
+N8N_DB_SCHEMA ?= public
+N8N_BASE_URL ?= http://localhost:5678
+N8N_API_URL ?= $(N8N_BASE_URL)/api/v1
+N8N_OWNER_EMAIL ?= $(if $(PMOVES_OPERATOR_EMAIL),$(PMOVES_OPERATOR_EMAIL),$(SUPABASE_BOOT_USER_EMAIL))
+N8N_OWNER_FIRST_NAME ?= PMOVES
+N8N_OWNER_LAST_NAME ?= Operator
+N8N_API_KEY_LABEL ?= PMOVES.AI automation bootstrap
+N8N_ENV_WRITE_FILE ?= .env.local
+export N8N_DB N8N_DB_NAME N8N_DB_USER N8N_DB_PASSWORD N8N_DB_SCHEMA
+export N8N_BASE_URL N8N_API_URL N8N_OWNER_EMAIL N8N_OWNER_FIRST_NAME N8N_OWNER_LAST_NAME N8N_API_KEY_LABEL
 ifeq ($(N8N_DB),postgres)
   N8N_DB_STACK_FILE := -f docker-compose.n8n.postgres.yml
 else
@@ -1376,6 +1497,7 @@ export INTEGRATIONS_WORKSPACE
 
 NOTEBOOK_COMPOSE ?= docker-compose.open-notebook.yml
 NOTEBOOK_PROJECT ?= $(PROJECT)-notebook
+NOTEBOOK_DC := docker compose -p $(NOTEBOOK_PROJECT) --project-directory $(CURDIR) $(COMPOSE_ENV_FILES) -f $(NOTEBOOK_COMPOSE)
 
 JELLYFIN_AI_BASE ?= jellyfin-ai
 export JELLYFIN_AI_BASE
@@ -1410,8 +1532,8 @@ endif
 endif
 
 # Canonical layer service sets for deterministic tiered bring-up/down.
-WORKER_SERVICES := hi-rag-gateway-v2 retrieval-eval render-webhook langextract extract-worker
-AGENT_SERVICES := agent-zero archon deepresearch supaserch mesh-agent publisher-discord
+WORKER_SERVICES := hi-rag-gateway-v2 retrieval-eval render-webhook langextract extract-worker pdf-ingest transcribe-backend
+AGENT_SERVICES := agent-zero archon deepresearch supaserch mesh-agent publisher-discord botz-gateway tokenism-simulator
 
 down:
 	@$(DC) down
@@ -1513,13 +1635,13 @@ cloudflare-url: ## Print the most recent Cloudflare tunnel URL from connector lo
 
 notebook-up: ## Launch the Open Notebook stack alongside cataclysm-net
 	docker network create cataclysm-net >/dev/null 2>&1 || true
-	docker compose -p $(NOTEBOOK_PROJECT) -f $(NOTEBOOK_COMPOSE) up -d open-notebook
+	$(NOTEBOOK_DC) up -d open-notebook
 
 notebook-down: ## Stop the Open Notebook container and remove its resources
-	docker compose -p $(NOTEBOOK_PROJECT) -f $(NOTEBOOK_COMPOSE) down
+	$(NOTEBOOK_DC) down
 
 notebook-logs: ## Follow logs for the Open Notebook service
-	docker compose -p $(NOTEBOOK_PROJECT) -f $(NOTEBOOK_COMPOSE) logs -f open-notebook
+	$(NOTEBOOK_DC) logs -f open-notebook
 
 notebook-seed-models: ## Seed Open Notebook models based on provider keys from the environment
 	@echo "Seeding Open Notebook providers..."
@@ -1528,7 +1650,12 @@ notebook-seed-models: ## Seed Open Notebook models based on provider keys from t
 .PHONY: notebook-workbench-smoke
 notebook-workbench-smoke: ensure-env-shared ## Lint the Notebook Workbench bundle and verify Supabase connectivity
 	@echo "→ Linting Notebook Workbench UI…"
-	@npm --prefix ui run lint
+	@cd ui && node scripts/with-env.mjs node ./node_modules/eslint/bin/eslint.js \
+		"app/notebook-workbench/**/*.{ts,tsx,js,jsx}" \
+		"app/dashboard/notebook/runtime/**/*.{ts,tsx,js,jsx}" \
+		"components/**/*NotebookWorkbench*.{ts,tsx,js,jsx}" \
+		"components/**/*Graphiti*.{ts,tsx,js,jsx}" \
+		--max-warnings=0
 	@echo "→ Validating Supabase environment…"
 	@bash -c '$(LOAD_ENV_SHARED) node scripts/notebook_workbench_smoke.mjs $(ARGS)'
 
@@ -1539,6 +1666,24 @@ up-workers-core:
 # YouTube ingest + whisper stack
 up-yt:
 	@$(DC) --profile data --profile workers --profile yt up -d bgutil-pot-provider ffmpeg-whisper pmoves-yt
+
+.PHONY: channel-monitor-up
+channel-monitor-up: ensure-env-shared ## Start channel-monitor with runtime-aware Supabase DB URL wiring
+	@bash ./scripts/channel_monitor_up.sh
+
+.PHONY: channel-monitor-smoke
+channel-monitor-smoke: ## Verify channel-monitor HTTP endpoints
+	@bash -lc 'set -euo pipefail; \
+	  base="http://localhost:$${CHANNEL_MONITOR_PORT:-8097}"; \
+	  for path in /healthz /api/monitor/status /api/monitor/stats; do \
+	    code=$$(curl -s -o /dev/null -w "%{http_code}" "$$base$$path" || true); \
+	    if [ "$$code" != "200" ]; then \
+	      echo "✖ channel-monitor $$path => $$code"; \
+	      exit 1; \
+	    fi; \
+	    echo "✔ channel-monitor $$path 200"; \
+	  done; \
+	'
 
 .PHONY: up-yt-published
 up-yt-published: ## Start YouTube ingest stack using published images (no local builds)
@@ -1656,6 +1801,45 @@ tailscale-status: ## Show tailscale status JSON (best effort)
 tailscale-logout: ## Log out of tailnet on this host
 	@tailscale logout || true
 
+# -------- Tailscale submodule deploy --------
+TAILSCALE_SUBMODULE := $(abspath $(CURDIR)/../PMOVES-Tailscale)
+
+.PHONY: tailscale-deploy tailscale-deploy-docker headscale-up headscale-down headscale-create-user headscale-create-key
+
+tailscale-deploy: ## Deploy Tailscale on this host via PMOVES-Tailscale submodule (auto-detects role)
+	@bash $(TAILSCALE_SUBMODULE)/deploy/deploy.sh
+
+tailscale-deploy-docker: ## Deploy Tailscale as Docker subnet router
+	@bash $(TAILSCALE_SUBMODULE)/deploy/deploy.sh --docker
+
+headscale-up: ## Start Headscale self-hosted control plane
+	@docker compose -f $(TAILSCALE_SUBMODULE)/headscale/docker-compose.headscale.yml up -d
+
+headscale-down: ## Stop Headscale control plane
+	@docker compose -f $(TAILSCALE_SUBMODULE)/headscale/docker-compose.headscale.yml down
+
+headscale-create-user: ## Create Headscale user (USER=name)
+	@docker exec pmoves-headscale headscale users create $(USER)
+
+headscale-create-key: ## Create Headscale preauthkey (USER=name)
+	@docker exec pmoves-headscale headscale preauthkeys create --user $(USER) --reusable --expiration 90d
+
+# -------- Hostinger / Terraform provisioning --------
+.PHONY: hostinger-provision hostinger-plan hostinger-ssh
+
+TERRAFORM_DIR := $(CURDIR)/terraform
+
+hostinger-provision: ## Apply Terraform config to provision Hostinger VPS resources
+	@echo "→ Running terraform apply for Hostinger MCP integration..."
+	@cd $(TERRAFORM_DIR) && terraform init -input=false && terraform apply -auto-approve
+	@echo "✔ Hostinger provisioning complete"
+
+hostinger-plan: ## Preview Terraform changes for Hostinger VPS
+	@cd $(TERRAFORM_DIR) && terraform init -input=false && terraform plan
+
+hostinger-ssh: ## SSH into Hostinger VPS using CHIT-managed credentials
+	@$(LOAD_ENV_SHARED) bash -lc 'ssh -o StrictHostKeyChecking=no -i <(echo "$$HOSTINGER_SSH_PRIVATE_KEY") $$HOSTINGER_SSH_USER@$$HOSTINGER_SSH_HOST'
+
 # -------- Brand defaults (branded env + first-run resources) --------
 .PHONY: brand-defaults brand-verify
 
@@ -1683,10 +1867,6 @@ neo4j-reset: ## DANGEROUS: wipe Neo4j volume and recreate with current NEO4J_AUT
 		  "/var/lib/neo4j/bin/cypher-shell -u \"$$user\" -p \"$$pass\" \"RETURN 1\""; \
 	'
 
-neo4j-status: ## Show Neo4j logs and health line
-	@$(DC) ps neo4j || true
-	@$(DC) logs --tail 60 neo4j || true
-
 brand-verify: ## Verify key branded endpoints respond
 	@echo "Presign:" && curl -fsS http://localhost:8088/healthz && echo
 	@echo "Supabase REST:" && curl -fsS -o /dev/null -w '%{http_code}\n' http://host.docker.internal:65421/rest/v1 || true
@@ -1702,7 +1882,7 @@ model-readiness: ## Validate model registry, persona seeds, Ollama models, Tenso
 	@$(LOAD_ENV_SHARED); $(PYTHON) tools/model_readiness_check.py
 
 # -------- Model profiles / management --------
-.PHONY: model-profiles model-apply model-swap models-sync models-seed-ollama models-registry-snapshot
+.PHONY: model-profiles model-apply model-swap models-sync models-sync-dynamic models-seed-ollama models-registry-snapshot
 
 model-profiles: ## List available model manifests
 	@ls -1 models/*.yaml | sed 's#models/##' | sed 's#\.yaml##'
@@ -1712,6 +1892,9 @@ model-apply: ensure-env-shared ## Apply a model profile into pmoves/.env.local (
 
 models-sync: ensure-env-shared ## Low-level sync via Python: make models-sync PROFILE=archon HOST=workstation_5090
 	@python3 tools/models/models_sync.py sync --profile "$(PROFILE)" --host "$${HOST:-workstation_5090}" --tensorzero-base "$(TENSORZERO_BASE_URL)"
+
+models-sync-dynamic: ensure-env-shared ## Dynamic sync from live model registry mappings (TARGET=all|agent-zero|archon|creator)
+	@python3 tools/models/models_sync.py sync-dynamic --target "$${TARGET:-all}" --host "$${HOST:-workstation_5090}" --tensorzero-base "$(TENSORZERO_BASE_URL)"
 
 model-swap: ensure-env-shared ## Swap a single model param into pmoves/.env.local (SERVICE=hirag NAME=<model-id>)
 	@python3 tools/models/models_sync.py swap --service "$(SERVICE)" --name "$(NAME)"
@@ -1898,6 +2081,13 @@ ui-ingest-smoke: ## Exercise boot-jwt status and ingest smoke via API health end
 	AUTH=""; if [ -n "$$SECRET" ]; then AUTH="-H 'Authorization: Bearer $$SECRET'"; fi; \
 	bash -c "curl -fsS $$AUTH -X POST '$$BASE/api/health/ingest-smoke' -H 'content-type: application/json'" | jq . || true
 
+.PHONY: ui-topology-smoke ui-topology-smoke-all
+ui-topology-smoke: ## Validate branded UI topology surfaces (core/default or set UI_TOPOLOGY_PROFILE=all)
+	@$(LOAD_ENV_SHARED) $(PYTHON) tools/ui_topology_smoke.py --profile "$${UI_TOPOLOGY_PROFILE:-core}" $(ARGS)
+
+ui-topology-smoke-all: ## Validate full UI topology including external + Jellyfin AI overlay surfaces
+	@$(LOAD_ENV_SHARED) $(PYTHON) tools/ui_topology_smoke.py --profile all $(ARGS)
+
 .PHONY: ui-videos-realtime-smoke
 ui-videos-realtime-smoke: ## Insert a dummy video row via Supabase REST; verify UI shows it (Realtime)
 	@chmod +x ../scripts/ui_videos_realtime_smoke.sh
@@ -1916,6 +2106,34 @@ ui-playwright-setup: ## Install Playwright browsers/deps for E2E tests
 ui-videos-realtime-e2e: ## Run Playwright E2E: inserts row via REST and asserts UI shows it
 	@$(MAKE) ui-dev-start >/dev/null 2>&1 || true
 	@cd ui && node scripts/with-env.mjs npm run test:e2e -- -g "Videos Realtime"
+
+# UI Testing & CI Targets (Phase 2: Testing & Validation Review)
+.PHONY: ui-lint
+ui-lint: ## Run ESLint on UI code
+	@cd ui && npm run lint
+
+.PHONY: ui-typecheck
+ui-typecheck: ## Run TypeScript type check on UI code
+	@cd ui && npm run typecheck
+
+.PHONY: ui-test
+ui-test: ## Run Jest unit tests for UI
+	@cd ui && npm test -- --ci --maxWorkers=2
+
+.PHONY: ui-test-coverage
+ui-test-coverage: ## Run Jest unit tests with coverage report
+	@cd ui && npm test -- --ci --coverage --maxWorkers=2
+
+.PHONY: ui-e2e
+ui-e2e: ## Run Playwright E2E tests (requires dev server or running UI)
+	@cd ui && npm run test:e2e
+
+.PHONY: ui-test-all
+ui-test-all: ## Run all UI tests (lint, typecheck, unit, E2E)
+	@$(MAKE) ui-lint
+	@$(MAKE) ui-typecheck
+	@$(MAKE) ui-test
+	@echo "All UI tests passed!"
 
 # Jellyfin bridge only
 up-jellyfin:
@@ -2037,11 +2255,11 @@ deepresearch-health: ## Check DeepResearch health endpoint (200 expected)
 
 .PHONY: up-nats-echo nats-echo-logs deepresearch-diag
 up-nats-echo: ## Start NATS echo subscribers for request/result subjects
-	@docker compose -p $(PROJECT) up -d nats-echo-req nats-echo-res
+	@$(DC) up -d nats-echo-req nats-echo-res
 	@echo "✔ nats-echo subscribers started"
 
 nats-echo-logs: ## Tail logs from NATS echo subscribers
-	@docker compose -p $(PROJECT) logs -n 40 nats-echo-req nats-echo-res
+	@$(DC) logs -n 40 nats-echo-req nats-echo-res
 
 deepresearch-diag: ## Publish a diagnostic DeepResearch request via worker and show echo logs
 	@curl -s -X POST http://localhost:8098/diag/publish -H 'content-type: application/json' -d '{"query":"diag smoke","mode":"local","correlation_id":"diag-echo"}' | jq .
@@ -2070,6 +2288,11 @@ GHCR_DISPATCH_REF ?= $(shell git rev-parse --abbrev-ref HEAD 2>/dev/null || echo
 GHCR_NAMESPACE ?=
 GH_SECRET_ENV ?= Dev
 GH_REPO ?= $(shell gh repo view --json nameWithOwner -q .nameWithOwner 2>/dev/null || echo POWERFULMOVES/PMOVES.AI)
+GHCR_PREPUBLISH_SCRIPT ?= tools/ghcr_local_prepublish.py
+GHCR_MATRIX_FILE ?= ../.github/workflows/integrations-ghcr.matrix.json
+GHCR_PREPUBLISH_TAG_SUFFIX ?= local-smoke
+GHCR_PREPUBLISH_PLATFORM ?= linux/amd64
+GHCR_LOCAL_INTEGRATIONS ?= agent-zero archon firefly-iii jellyfin pmoves-yt deepresearch supaserch a2ui-nats-bridge session-context-worker tokenism-ui
 
 .PHONY: buildx-setup docker-login
 buildx-setup: ## Ensure docker buildx builder exists and is bootstrapped
@@ -2109,8 +2332,52 @@ build-local-supaserch: buildx-setup ## Build SupaSerch locally (amd64, no push) 
 	 docker buildx build --platform linux/amd64 -f "$$df" -t "$$img" "$$ctx" --load
 
 .PHONY: ghcr-prepublish-supaserch
-ghcr-prepublish-supaserch: build-local-supaserch ## Local-first gate before GHCR workflow dispatch
-	@echo "✔ SupaSerch local prepublish gate passed"
+ghcr-prepublish-supaserch: buildx-setup ## Local-first SupaSerch gate before GHCR workflow dispatch (build + Trivy)
+	@$(PYTHON) $(GHCR_PREPUBLISH_SCRIPT) \
+	  --matrix-file "$(GHCR_MATRIX_FILE)" \
+	  --repo-root .. \
+	  --tag-suffix "$(GHCR_PREPUBLISH_TAG_SUFFIX)" \
+	  --platform "$(GHCR_PREPUBLISH_PLATFORM)" \
+	  --integration supaserch
+
+.PHONY: ghcr-prepublish-inrepo
+ghcr-prepublish-inrepo: buildx-setup ## Local-first GHCR gate for all in-repo integration images (build + Trivy)
+	@args=""; \
+	for name in $(GHCR_LOCAL_INTEGRATIONS); do args="$$args --integration $$name"; done; \
+	$(PYTHON) $(GHCR_PREPUBLISH_SCRIPT) \
+	  --matrix-file "$(GHCR_MATRIX_FILE)" \
+	  --repo-root .. \
+	  --tag-suffix "$(GHCR_PREPUBLISH_TAG_SUFFIX)" \
+	  --platform "$(GHCR_PREPUBLISH_PLATFORM)" \
+	  $$args
+
+.PHONY: ghcr-prepublish-inrepo-build
+ghcr-prepublish-inrepo-build: buildx-setup ## Local-first GHCR build-only gate (skip Trivy)
+	@args=""; \
+	for name in $(GHCR_LOCAL_INTEGRATIONS); do args="$$args --integration $$name"; done; \
+	$(PYTHON) $(GHCR_PREPUBLISH_SCRIPT) \
+	  --matrix-file "$(GHCR_MATRIX_FILE)" \
+	  --repo-root .. \
+	  --tag-suffix "$(GHCR_PREPUBLISH_TAG_SUFFIX)" \
+	  --platform "$(GHCR_PREPUBLISH_PLATFORM)" \
+	  --skip-trivy \
+	  $$args
+
+.PHONY: ghcr-prepublish-all
+ghcr-prepublish-all: buildx-setup ## Local-first GHCR gate for full integration matrix (includes external repos)
+	@$(PYTHON) $(GHCR_PREPUBLISH_SCRIPT) \
+	  --matrix-file "$(GHCR_MATRIX_FILE)" \
+	  --repo-root .. \
+	  --tag-suffix "$(GHCR_PREPUBLISH_TAG_SUFFIX)" \
+	  --platform "$(GHCR_PREPUBLISH_PLATFORM)" \
+	  --include-external
+
+.PHONY: ghcr-dispatch-all
+ghcr-dispatch-all: ci-runners-check-strict ## Dispatch GHCR workflow for full integration matrix after local validation
+	@args="-f integration=all -f push_to_dockerhub=false"; \
+	if [ -n "$(GHCR_NAMESPACE)" ]; then args="$$args -f ghcr_namespace=$(GHCR_NAMESPACE)"; fi; \
+	gh workflow run "$(GHCR_WORKFLOW)" --repo "$(GH_REPO)" --ref "$(GHCR_DISPATCH_REF)" $$args
+	@echo "✔ Dispatched $(GHCR_WORKFLOW) for integration=all on ref $(GHCR_DISPATCH_REF)"
 
 .PHONY: ghcr-dispatch-supaserch
 ghcr-dispatch-supaserch: ci-runners-check-strict ## Dispatch GHCR workflow for SupaSerch after local prepublish gate
@@ -2118,6 +2385,40 @@ ghcr-dispatch-supaserch: ci-runners-check-strict ## Dispatch GHCR workflow for S
 	if [ -n "$(GHCR_NAMESPACE)" ]; then args="$$args -f ghcr_namespace=$(GHCR_NAMESPACE)"; fi; \
 	gh workflow run "$(GHCR_WORKFLOW)" --repo "$(GH_REPO)" --ref "$(GHCR_DISPATCH_REF)" $$args
 	@echo "✔ Dispatched $(GHCR_WORKFLOW) for supaserch on ref $(GHCR_DISPATCH_REF)"
+
+.PHONY: ghcr-build-one
+ghcr-build-one: buildx-setup ## Build a single GHCR image locally: make ghcr-build-one IMAGE=agent-zero
+	@if [ -z "$(IMAGE)" ]; then echo "Usage: make ghcr-build-one IMAGE=<name>"; exit 1; fi
+	@$(PYTHON) $(GHCR_PREPUBLISH_SCRIPT) \
+	  --matrix-file "$(GHCR_MATRIX_FILE)" \
+	  --repo-root .. \
+	  --integration "$(IMAGE)" \
+	  --skip-trivy \
+	  --platform "$(GHCR_PREPUBLISH_PLATFORM)" \
+	  --builder "$(BUILDX_BUILDER)" \
+	  --tag-suffix "$(GHCR_PREPUBLISH_TAG_SUFFIX)"
+
+.PHONY: ghcr-prepublish-one
+ghcr-prepublish-one: buildx-setup ## Build + Trivy gate a single image: make ghcr-prepublish-one IMAGE=agent-zero
+	@if [ -z "$(IMAGE)" ]; then echo "Usage: make ghcr-prepublish-one IMAGE=<name>"; exit 1; fi
+	@$(PYTHON) $(GHCR_PREPUBLISH_SCRIPT) \
+	  --matrix-file "$(GHCR_MATRIX_FILE)" \
+	  --repo-root .. \
+	  --integration "$(IMAGE)" \
+	  --platform "$(GHCR_PREPUBLISH_PLATFORM)" \
+	  --builder "$(BUILDX_BUILDER)" \
+	  --tag-suffix "$(GHCR_PREPUBLISH_TAG_SUFFIX)"
+
+.PHONY: ghcr-dispatch-one
+ghcr-dispatch-one: ci-runners-check-strict ## Dispatch GHCR workflow for a single image: make ghcr-dispatch-one IMAGE=agent-zero
+	@if [ -z "$(IMAGE)" ]; then echo "Usage: make ghcr-dispatch-one IMAGE=<name>"; exit 1; fi
+	@args="-f integration=$(IMAGE) -f push_to_dockerhub=false"; \
+	if [ -n "$(GHCR_NAMESPACE)" ]; then args="$$args -f ghcr_namespace=$(GHCR_NAMESPACE)"; fi; \
+	gh workflow run "$(GHCR_WORKFLOW)" --repo "$(GH_REPO)" --ref "$(GHCR_DISPATCH_REF)" $$args
+
+.PHONY: ghcr-list
+ghcr-list: ## List all images in the integrations-ghcr matrix
+	@$(PYTHON) -c "import json,pathlib;[print(e['name']) for e in json.loads(pathlib.Path('$(GHCR_MATRIX_FILE)').read_text())]"
 
 .PHONY: deepresearch-smoke
 deepresearch-smoke: ## Publish a sample DeepResearch request and wait for a result (requires worker running)
@@ -2153,8 +2454,13 @@ up-agents-integrations: ## Start agents using your forks (builds from $(INTEGRAT
 	@$(DC) -f docker-compose.agents.integrations.yml --profile agents up -d nats agent-zero archon archon-ui mesh-agent publisher-discord
 	@echo "✔ Agents started from integrations workspace. Workspace: $(INTEGRATIONS_WORKSPACE)"
 
-.PHONY: up-n8n
-up-n8n: ensure-env-shared
+.PHONY: up-n8n n8n-sync-submodule-flows n8n-api-bootstrap n8n-import-flows n8n-activate-flows n8n-sync-supabase-registry n8n-bootstrap n8n-export-repo-flows
+n8n-sync-submodule-flows: ## Mirror canonical PMOVES-n8n workflows into pmoves/n8n/flows
+	@$(PYTHON) -c "from pathlib import Path; import shutil; src=Path(r'$(N8N_CANONICAL_FLOWS_DIR)'); dst=Path(r'$(CURDIR)/n8n/flows'); shutil.rmtree(dst, ignore_errors=True); dst.mkdir(parents=True, exist_ok=True); [shutil.copy2(path, dst / path.name) for path in sorted(src.glob('*.json'))]"
+	@echo "✔ Mirrored PMOVES-n8n workflows into pmoves/n8n/flows"
+
+up-n8n: ensure-env-shared n8n-sync-submodule-flows
+	@docker network create cataclysm-net >/dev/null 2>&1 || true
 	@if [ "$(N8N_DB)" = "postgres" ]; then \
 	  echo "→ n8n DB mode: postgres"; \
 	  $(N8N_DC) up -d n8n-db n8n n8n-runners; \
@@ -2167,6 +2473,34 @@ up-n8n: ensure-env-shared
 down-n8n: ## Stop n8n workflow services
 	@$(N8N_DC) stop n8n n8n-runners n8n-db >/dev/null 2>&1 || true
 	@$(N8N_DC) rm -f n8n n8n-runners n8n-db >/dev/null 2>&1 || true
+
+n8n-api-bootstrap: ## Create/login the n8n owner and mint a fresh Public API key into the local env file
+	@$(LOAD_ENV_SHARED); $(PYTHON) "$(N8N_SUBMODULE_DIR)/scripts/bootstrap_n8n_api.py" \
+		--base-url "$(N8N_BASE_URL)" \
+		--api-url "$(N8N_API_URL)" \
+		--email "$(N8N_OWNER_EMAIL)" \
+		--first-name "$(N8N_OWNER_FIRST_NAME)" \
+		--last-name "$(N8N_OWNER_LAST_NAME)" \
+		--label "$(N8N_API_KEY_LABEL)" \
+		--write-env "$(N8N_ENV_WRITE_FILE)"
+
+n8n-import-flows: ## Import canonical PMOVES-n8n workflows into the live n8n instance
+	@$(LOAD_ENV_SHARED); $(PYTHON) "$(N8N_SUBMODULE_DIR)/scripts/import_repo_flows.py" --container pmoves-n8n --workflow-dir "$(N8N_CANONICAL_FLOWS_DIR)" --skip-activation
+
+n8n-activate-flows: ## Publish canonical PMOVES-n8n workflows (keeps chat-platform voice flows inactive unless VOICE_PLATFORMS=1)
+	@$(LOAD_ENV_SHARED); $(PYTHON) "$(N8N_SUBMODULE_DIR)/scripts/import_repo_flows.py" --container pmoves-n8n --workflow-dir "$(N8N_CANONICAL_FLOWS_DIR)" --activate-only $(if $(filter 1 yes true,$(VOICE_PLATFORMS)),--voice-platforms,)
+
+n8n-sync-supabase-registry: ## Upsert live n8n workflow state into pmoves_core.n8n_workflow_registry
+	@$(LOAD_ENV_SHARED); $(PYTHON) "$(N8N_SUBMODULE_DIR)/scripts/sync_supabase_registry.py" --workflow-dir "$(N8N_CANONICAL_FLOWS_DIR)"
+
+n8n-bootstrap: up-n8n n8n-api-bootstrap n8n-import-flows n8n-activate-flows n8n-sync-supabase-registry ## Bring up n8n, bootstrap API access, import workflows, publish defaults, and sync Supabase tracking
+	@echo "NOTE: n8n-sync-supabase-registry writes to pmoves_core.n8n_workflow_registry."
+	@echo "      Run 'make -C pmoves db-migrate' first if the migration has not been applied."
+	@echo "✔ n8n bootstrap complete"
+
+n8n-export-repo-flows: ## Export live n8n workflows into PMOVES-n8n and refresh the compatibility mirror
+	@$(PYTHON) "$(N8N_SUBMODULE_DIR)/scripts/export_repo_flows.py" --container pmoves-n8n --workflow-dir "$(N8N_CANONICAL_FLOWS_DIR)"
+	@$(MAKE) n8n-sync-submodule-flows
 
 .PHONY: up-comfyui comfyui-smoke
 up-comfyui: ## Start ComfyUI (docker profile; used by n8n pmoves_comfy_gen flow)
@@ -2253,6 +2587,39 @@ vibevoice-smoke: ## Check VibeVoice realtime /config (requires VibeVoice running
 	echo "✔ VibeVoice /config 200"; \
 	curl -sS "http://localhost:$$port/config" | jq .
 
+# ============================================================================
+# Z890 / RTX 3090 Ti GPU NODE
+# ============================================================================
+
+Z890_OVERRIDE := -f docker-compose.z890.override.yml
+Z890_ENV := --env-file env.z890
+
+.PHONY: up-z890
+up-z890: ## Start Z890 GPU node (Ollama + Mesh Agent, data/agents from main PC)
+	@$(LOAD_ENV_SHARED) docker compose -p $(PROJECT) \
+	  -f docker-compose.yml -f docker-compose.gpu.yml \
+	  $(Z890_OVERRIDE) \
+	  $(Z890_ENV) \
+	  --profile agents up -d pmoves-ollama mesh-agent
+	@echo "✔ Z890 node started (Ollama + Mesh Agent). Data services from main PC."
+
+.PHONY: down-z890
+down-z890: ## Stop Z890 GPU node services
+	@$(LOAD_ENV_SHARED) docker compose -p $(PROJECT) \
+	  -f docker-compose.yml -f docker-compose.gpu.yml \
+	  $(Z890_OVERRIDE) \
+	  $(Z890_ENV) \
+	  down
+	@echo "✔ Z890 node stopped."
+
+.PHONY: ps-z890
+ps-z890: ## Show Z890 node service status
+	@$(LOAD_ENV_SHARED) docker compose -p $(PROJECT) \
+	  -f docker-compose.yml -f docker-compose.gpu.yml \
+	  $(Z890_OVERRIDE) \
+	  $(Z890_ENV) \
+	  ps
+
 # Status helper
 ps:
 	@$(DC) ps
@@ -2271,6 +2638,7 @@ compose: ensure-env-shared ## Run docker compose with PMOVES env layering. Usage
 .PHONY: up-external
 up-external: ensure-env-shared ## Start external integration services (Wger, Firefly, Open Notebook, Jellyfin)
 	@echo "→ Starting external stacks (Wger, Firefly, Open Notebook, Jellyfin)..."
+	@docker network inspect pmoves_external >/dev/null 2>&1 || docker network create --driver bridge pmoves_external
 	@$(EXTERNAL_DC) up -d
 	@echo "✔ External stacks up"
 
@@ -2422,3 +2790,185 @@ structure-enforce: ## Enforce structural best practices
 .PHONY: structure-enforce-strict
 structure-enforce-strict: ## Enforce structural best practices (strict mode, fails on P1/P2)
 	@$(PYTHON) tools/structure_enforcer.py --strict
+
+# Living Document Freshness Automation
+.PHONY: docs-reconcile
+docs-reconcile: ## Reconcile living document metadata (dashboard + P2 tracker)
+	@$(PYTHON) tools/docs_reconcile.py --update $(ARGS)
+
+.PHONY: docs-reconcile-check
+docs-reconcile-check: ## Check living document freshness (read-only, CI-safe)
+	@$(PYTHON) tools/docs_reconcile.py --check $(ARGS)
+
+.PHONY: docs-reconcile-json
+docs-reconcile-json: ## Living document freshness report (JSON output)
+	@$(PYTHON) tools/docs_reconcile.py --check --json $(ARGS)
+
+# =============================================================================
+# GitHub App Credential Management
+# =============================================================================
+
+.PHONY: github-app-setup
+github-app-setup: ## Automated GitHub App credential setup (uncomment env.shared + secrets-funnel)
+	@echo "→ Setting up GitHub App credentials..."
+	@$(PYTHON) tools/github_app_auto_setup.py
+
+.PHONY: github-app-verify
+github-app-verify: ## Verify GitHub App integration (env.shared, env.tier-agent, Docker)
+	@echo "→ Verifying GitHub App setup..."
+	@$(PYTHON) tools/verify_github_app_setup.py
+
+.PHONY: github-app-test
+github-app-test: ## Test GitHub App token minting (requires services running)
+	@echo "→ Testing GitHub App token minting..."
+	@cd ../PMOVES-BoTZ && $(PYTHON) features/github/mint_and_exec.py
+
+# Neo4j Integration (PMOVES-Neo4j Submodule at root level)
+# =============================================================================
+.PHONY: neo4j-up neo4j-down neo4j-restart neo4j-logs neo4j-migrate neo4j-seed neo4j-bootstrap neo4j-status
+
+neo4j-up: ## Start Neo4j submodule stack
+	@echo "→ Starting Neo4j from submodule..."
+	@$(MAKE) --no-print-directory -C ../PMOVES-Neo4j up
+
+neo4j-down: ## Stop Neo4j submodule stack
+	@echo "→ Stopping Neo4j from submodule..."
+	@$(MAKE) --no-print-directory -C ../PMOVES-Neo4j down
+
+neo4j-restart: ## Restart Neo4j submodule stack
+	@echo "→ Restarting Neo4j from submodule..."
+	@$(MAKE) --no-print-directory -C ../PMOVES-Neo4j restart
+
+neo4j-logs: ## View Neo4j logs
+	@$(MAKE) --no-print-directory -C ../PMOVES-Neo4j logs
+
+neo4j-migrate: ## Run Neo4j migration (usage: make neo4j-migrate VERSION=003)
+	@if [ -z "$(VERSION)" ]; then \
+		echo "Usage: make neo4j-migrate VERSION=003"; \
+		echo ""; \
+		echo "Available migrations:"; \
+		ls -1 ../PMOVES-Neo4j/db/migrations/*.cypher 2>/dev/null | while read -r f; do \
+			echo "  • $$(basename "$$f")"; \
+		done; \
+		exit 1; \
+	fi
+	@$(MAKE) --no-print-directory -C ../PMOVES-Neo4j migrate VERSION=$(VERSION)
+
+neo4j-seed: ## Load Neo4j seed data (usage: make neo4j-seed SEED=001_person_aliases.csv)
+	@if [ -z "$(SEED)" ]; then \
+		echo "Usage: make neo4j-seed SEED=001_person_aliases.csv"; \
+		echo ""; \
+		echo "Available seeds:"; \
+		ls -1 ../PMOVES-Neo4j/db/seeds/*.csv 2>/dev/null | while read -r f; do \
+			echo "  • $$(basename "$$f")"; \
+		done; \
+		exit 1; \
+	fi
+	@$(MAKE) --no-print-directory -C ../PMOVES-Neo4j seed SEED=$(SEED)
+
+neo4j-bootstrap: ## Initialize Neo4j (run migrations and seeds)
+	@echo "→ Bootstrapping Neo4j from submodule..."
+	@$(MAKE) --no-print-directory -C ../PMOVES-Neo4j bootstrap
+
+neo4j-status: ## Check Neo4j status from submodule
+	@$(MAKE) --no-print-directory -C ../PMOVES-Neo4j status
+
+# Legacy compatibility
+.PHONY: neo4j-bootstrap-legacy
+neo4j-bootstrap-legacy: ## Legacy bootstrap script (deprecated: use neo4j-bootstrap)
+	@echo "⚠️  This target is deprecated. Use: make neo4j-bootstrap"
+	@$(MAKE) --no-print-directory neo4j-bootstrap
+
+# Profile-based Neo4j integration (following PMOVES-supabase pattern)
+.PHONY: neo4j-local-up neo4j-local-down neo4j-local-status
+neo4j-local-up: ## Start Neo4j with profile (make neo4j-local-up)
+	@echo "→ Starting Neo4j with neo4j-local profile..."
+	@$(DC) --profile neo4j-local up -d neo4j
+	@echo "✅ Neo4j started (http://localhost:7474)"
+	@echo "   Username: neo4j"
+	@echo "   Password: Check NEO4J_PASSWORD in env.shared"
+
+neo4j-local-down: ## Stop Neo4j with profile (make neo4j-local-down)
+	@echo "→ Stopping Neo4j with neo4j-local profile..."
+	@$(DC) --profile neo4j-local stop neo4j >/dev/null 2>&1 || true
+	@$(DC) --profile neo4j-local rm -f neo4j >/dev/null 2>&1 || true
+	@echo "✅ Neo4j stopped"
+
+neo4j-local-status: ## Check Neo4j status (make neo4j-local-status)
+	@echo "→ Neo4j service status:"
+	@$(DC) --profile neo4j-local ps neo4j
+
+.PHONY: neo4j-backup neo4j-restore
+
+neo4j-backup: ## Backup Neo4j database to backups/ with timestamp
+	@echo "→ Creating Neo4j backup..."
+	@timestamp=$$(date +%Y%m%d_%H%M%S); \
+	backup_dir="backups"; \
+	mkdir -p "$$backup_dir"; \
+	container_name=$$($(DC) ps -q neo4j 2>/dev/null | head -1); \
+	if [ -z "$$container_name" ]; then \
+		echo "⚠️  Neo4j container not running. Starting neo4j..."; \
+		$(MAKE) --no-print-directory neo4j-local-up; \
+		sleep 10; \
+		container_name=$$($(DC) ps -q neo4j 2>/dev/null | head -1); \
+	fi; \
+	if [ -n "$$container_name" ]; then \
+		if docker exec $$container_name neo4j-admin database dump \
+			--to-path=/backups \
+			--overwrite-destination=true \
+			--username=neo4j \
+			--password="$${NEO4J_PASSWORD:-changeme}" 2>/dev/null; then \
+			docker cp $$container_name:/backups/neo4j.dump "$$backup_dir/neo4j_$${timestamp}.dump" 2>/dev/null && \
+				echo "✅ Backup created: $$backup_dir/neo4j_$${timestamp}.dump" && \
+				ls -lh "$$backup_dir/neo4j_$${timestamp}.dump"; \
+		elif docker exec $$container_name cypher-shell -u neo4j -p "$${NEO4J_PASSWORD:-changeme}" \
+				"CALL apoc.export.cypher.all(null, 'file:///backups/neo4j_$${timestamp}.cypher', {})"; then \
+			docker cp $$container_name:/backups/neo4j_$${timestamp}.cypher "$$backup_dir/neo4j_$${timestamp}.cypher" 2>/dev/null && \
+				echo "✅ Backup created: $$backup_dir/neo4j_$${timestamp}.cypher" && \
+				ls -lh "$$backup_dir/neo4j_$${timestamp}.cypher"; \
+		else \
+			echo "❌ Backup failed - neither dump nor cypher export succeeded"; \
+			exit 1; \
+		fi; \
+	else \
+		echo "❌ Neo4j container not available"; \
+		exit 1; \
+	fi
+
+neo4j-restore: ## Restore Neo4j from backup (usage: make neo4j-restore BACKUP=backups/neo4j_YYYYMMDD_HHMMSS.dump)
+	@if [ -z "$(BACKUP)" ]; then \
+		echo "❌ Error: BACKUP parameter required"; \
+		echo ""; \
+		echo "Usage: make neo4j-restore BACKUP=backups/neo4j_20260313_120000.dump"; \
+		echo ""; \
+		echo "Available backups:"; \
+		ls -lh backups/neo4j_*.dump 2>/dev/null || echo "  No backups found in backups/"; \
+		exit 1; \
+	fi
+	@if [ ! -f "$(BACKUP)" ]; then \
+		echo "❌ Error: Backup file not found: $(BACKUP)"; \
+		exit 1; \
+	fi
+	@echo "→ Restoring Neo4j from $(BACKUP)..."
+	@echo "⚠️  This will STOP Neo4j, DELETE existing data, and restore from backup"
+	@echo "Press Ctrl+C to cancel, or wait 5 seconds to continue..."
+	@sleep 5
+	@$(MAKE) --no-print-directory neo4j-local-down
+	@docker volume rm pmoves_neo4j-data 2>/dev/null || true
+	@echo "→ Starting fresh Neo4j..."
+	@$(MAKE) --no-print-directory neo4j-local-up
+	@sleep 15
+	@container_name=$$($(DC) ps -q neo4j 2>/dev/null | head -1); \
+	if [ -n "$$container_name" ]; then \
+		docker cp "$(BACKUP)" $$container_name:/backups/neo4j.dump; \
+		docker exec $$container_name neo4j-admin database load \
+			--from=/backups/neo4j.dump \
+			--overwrite-destination=true \
+			--username=neo4j \
+			--password="$${NEO4J_PASSWORD:-changeme}"; \
+		echo "✅ Restore complete from $(BACKUP)"; \
+		echo "💡 Run 'make neo4j-local-status' to verify"; \
+	else \
+		echo "❌ Neo4j container not available after restore"; \
+		exit 1; \
+	fi

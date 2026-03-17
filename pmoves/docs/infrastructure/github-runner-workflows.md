@@ -209,6 +209,44 @@ curl http://localhost:9090/api/v1/query?query=sum(rate(github_runner_jobs_total[
 1. Check runner machine is running
 2. Verify GitHub Actions runner service is active
 3. Check NATS connectivity for status events
+4. For Docker local-cert lanes (`gha-runner-ai-lab`, `gha-runner-vps`), re-register instead of restart:
+   - `make -C pmoves ci-runners-local-cert-down`
+   - `make -C pmoves ci-runners-local-cert-up`
+   - `make -C pmoves ci-runners-local-cert-status`
+5. If runners fail to register after a reboot, ensure `RUNNER_PAT` is set in `env.shared` (or exported in your shell). The Make target sources `env.shared` automatically. Without a PAT, the tool falls back to short-lived `RUNNER_TOKEN` via `gh api`, which does not survive container restarts.
+
+### Token Strategy
+
+The `local_cert_runners.py` tool supports two authentication modes for the `myoung34/github-runner` container:
+
+| Mode | Env Var | Behavior | Reboot-safe? |
+|------|---------|----------|--------------|
+| **PAT (preferred)** | `ACCESS_TOKEN` | Container auto-fetches registration tokens from the PAT on every start | Yes |
+| **Registration token** | `RUNNER_TOKEN` | One-time-use token, expires ~1 hour | No |
+
+**Env var cascade** (first match wins):
+1. `RUNNER_PAT_{LANE}` (e.g., `RUNNER_PAT_AI_LAB`) — lane-specific PAT
+2. `RUNNER_PAT` — shared PAT for all lanes
+3. `GH_TOKEN` / `GITHUB_TOKEN` — GitHub CLI token (works if it has `repo` scope)
+4. Short-lived `RUNNER_TOKEN` via `gh api .../registration-token` — fallback with a deprecation warning
+
+**Setup for persistent runners:**
+```bash
+# Add to pmoves/env.shared (gitignored, survives reboots):
+RUNNER_PAT=ghp_your_personal_access_token_here
+
+# Required PAT scope: repo (full control of private repositories)
+# The Make target sources env.shared automatically:
+make -C pmoves ci-runners-local-cert-up
+```
+
+**Why PAT over registration tokens?**
+Registration tokens are single-use and expire in ~1 hour. If a container restarts (reboot, crash, Docker update), it cannot re-register with the expired token and enters a 404 loop. A PAT with `repo` scope lets the container call the GitHub API to mint fresh registration tokens on every start.
+
+**Security notes (from upstream `myoung34/github-runner`):**
+- The container un-exports `ACCESS_TOKEN` after setup so workflows cannot read it.
+- Consider setting `DISABLE_AUTO_UPDATE=true` in the container env to pin the runner binary version.
+- On container stop (SIGTERM), the entrypoint auto-deregisters the runner using the PAT, preventing ghost runner entries.
 
 ---
 

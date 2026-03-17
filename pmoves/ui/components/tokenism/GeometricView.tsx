@@ -9,6 +9,8 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { SimulationResult, getTokenismClient, CGPPacket } from '@/lib/tokenismClient';
+import { logError } from '@/lib/errorUtils';
+import { ErrorIds } from '@/lib/constants/errorIds';
 
 interface GeometricViewProps {
   result?: SimulationResult | null;
@@ -142,7 +144,7 @@ export function TokenismGeometricView({ result, week }: GeometricViewProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [cgp, setCgp] = useState<CGPPacket | null>(null);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [_error, setError] = useState<string | null>(null);
   const [points, setPoints] = useState<PoincarePoint[]>([]);
   const [hoveredPoint, setHoveredPoint] = useState<PoincarePoint | null>(null);
 
@@ -151,6 +153,7 @@ export function TokenismGeometricView({ result, week }: GeometricViewProps) {
   // Load geometry when result changes
   useEffect(() => {
     if (!result) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Synchronously clear state when result changes
       setPoints([]);
       setCgp(null);
       return;
@@ -179,7 +182,7 @@ export function TokenismGeometricView({ result, week }: GeometricViewProps) {
       })
       .catch((err) => {
         const errorMessage = err instanceof Error ? err.message : 'Failed to load geometry';
-        console.error('Failed to load geometry:', err);
+        logError('Failed to load geometry', err, 'error', { errorId: ErrorIds.GEOMETRIC_VIEW_LOAD_FAILED, component: 'TokenismGeometricView' });
         setError(errorMessage);
         setPoints([]);  // Clear points on error - don't show synthetic/fake data
       })
@@ -207,7 +210,15 @@ export function TokenismGeometricView({ result, week }: GeometricViewProps) {
     };
     const radius = Math.min(canvas.width, canvas.height) / 2 - 20;
 
-    const edges = cgp?.geometry.edges || [];
+    const edges: [number, number][] = (cgp?.geometry.edges || [])
+      .filter(
+        (edge): edge is number[] =>
+          Array.isArray(edge)
+          && edge.length >= 2
+          && Number.isFinite(edge[0])
+          && Number.isFinite(edge[1]),
+      )
+      .map((edge) => [edge[0], edge[1]]);
 
     drawPoincareDisk(ctx, points, edges, canvas.width, canvas.height, center, radius);
   }, [points, cgp]);

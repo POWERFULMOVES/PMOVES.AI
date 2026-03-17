@@ -13,24 +13,32 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
-from dotenv import load_dotenv
 
 logger = logging.getLogger(__name__)
 
-# Resolve env.shared path relative to this config file
-# Config file is at: .../tokenism-simulator/config/__init__.py
-# env.shared is at: pmoves/env.shared (3 levels up from config file)
-_env_path = Path(__file__).resolve().parents[3] / "env.shared"
-if _env_path.exists():
-    load_dotenv(_env_path)
-else:
-    logger.warning(f"Environment file not found: {_env_path}, using system environment")
+# In Docker, environment variables are injected via docker-compose.
+# For local development, optionally load from env.shared via dotenv.
+if not os.getenv("DOCKER_CONTAINER") and not os.getenv("DOCKER_ENV"):
+    try:
+        from dotenv import load_dotenv
+        # Walk up from config/__init__.py looking for env.shared
+        _config_dir = Path(__file__).resolve().parent
+        for _ancestor in _config_dir.parents:
+            _env_path = _ancestor / "env.shared"
+            if _env_path.exists():
+                load_dotenv(_env_path)
+                logger.info("Loaded environment from %s", _env_path)
+                break
+        else:
+            logger.debug("No env.shared found in parent directories, using system environment")
+    except ImportError:
+        logger.debug("python-dotenv not installed, using system environment")
 
 
 @dataclass(frozen=True)
 class NATSConfig:
     """NATS message bus configuration."""
-    url: str = os.getenv('NATS_URL', 'nats://localhost:4222')
+    url: str = os.getenv('NATS_URL', 'nats://nats:pmoves@nats:4222')
     client_name: str = os.getenv('NATS_CLIENT_NAME', 'tokenism-simulator')
     jetstream_enabled: bool = os.getenv('NATS_JETSTREAM', 'true').lower() == 'true'
 
@@ -74,7 +82,7 @@ class AgentZeroConfig:
 class CHITConfig:
     """CHIT/Geometry Bus configuration."""
     enabled: bool = os.getenv('CHIT_ENABLED', 'true').lower() == 'true'
-    geometry_bus_url: str = os.getenv('GEOMETRY_BUS_URL', 'nats://localhost:4222')
+    geometry_bus_url: str = os.getenv('GEOMETRY_BUS_URL', 'nats://nats:pmoves@nats:4222')
     cgp_version: str = os.getenv('CGP_VERSION', '1.0')
 
 

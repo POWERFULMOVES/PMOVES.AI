@@ -30,12 +30,10 @@ export async function POST(request: NextRequest) {
     }
 
     const cookieStore = request.cookies;
-    const supabase = createSupabaseRouteHandlerClient(() => cookieStore);
+    const supabase = createSupabaseRouteHandlerClient(cookieStore);
     const {
       data: { session },
     } = await supabase.auth.getSession();
-    const bootJwt = process.env.NEXT_PUBLIC_SUPABASE_BOOT_USER_JWT || process.env.SUPABASE_BOOT_USER_JWT;
-
     // When running with a boot JWT (no browser cookie session), switch to service-role client
     const readClient = (session ? supabase : getServiceSupabaseClient()) as ReturnType<typeof getServiceSupabaseClient>;
     const userId = session?.user?.id;

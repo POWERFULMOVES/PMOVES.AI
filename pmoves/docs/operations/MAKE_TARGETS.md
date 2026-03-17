@@ -22,6 +22,20 @@ This file summarizes the most-used targets and maps them to what they do under d
 - `make recreate-v2-gpu`
   - Force-recreate v2‑GPU container without dependencies.
 
+## Model Management
+- `make up-model-management`
+  - Starts model-registry (`orchestration` profile), then gpu-orchestrator (`gpu` profile) if NVIDIA runtime is detected.
+  - GPU detection: `docker info --format '{{json .Runtimes}}' | grep -qi nvidia`.
+  - Idempotent — safe to re-run without stopping first.
+- `make down-model-management`
+  - Stops model-registry and gpu-orchestrator; removes containers.
+  - Included in the `down-all` cascade (after `down-agents`, before `down-workers`).
+- `make health-dormant`
+  - Container-state-aware health check for dormant/newly-activated services.
+  - Checks: model-registry, gpu-orchestrator, pdf-ingest, botz-gateway, tokenism-simulator, transcribe-backend.
+  - Reports per-service: `OK` (state is `healthy` or `running`), `STARTING`, `FAIL`, or `SKIP` (not running).
+  - Uses `docker inspect` instead of HTTP probes, avoiding false negatives for Docker-network-only services.
+
 ## Model Profiles & Registry
 - `make model-profiles`
   - Lists local fallback profiles under `pmoves/models/*.yaml`.
@@ -29,12 +43,17 @@ This file summarizes the most-used targets and maps them to what they do under d
   - Applies model settings into `.env.local` via `pmoves/tools/models/apply_profile.sh`.
 - `make models-sync PROFILE=<profile> HOST=<host>`
   - Low-level sync command (`pmoves/tools/models/models_sync.py`) for profile/registry operations.
+- `make models-sync-dynamic TARGET=<all|agent-zero|archon|creator> HOST=<host>`
+  - Resolves model picks from live Supabase registry mappings (`pmoves_core.v_service_models`) and writes dynamic overrides.
+  - Policy order is local-first with cloud fallbacks from `MODEL_CLOUD_FALLBACK_ORDER` (default `ollama_cloud,cloudflare_free,coding_plan`).
 - `make model-swap SERVICE=<service> NAME=<model-id-or-alias>`
   - Swaps one service model quickly without full profile rewrite.
 - `make models-registry-snapshot`
   - Captures Supabase model-registry state to `pmoves/models/registry.snapshot.json`.
 - `make models-seed-ollama HOST=<host>`
   - Pulls local Ollama models derived from profile + registry mappings.
+  - To include weekly registry-driven changes, use dynamic source directly:
+    - `python pmoves/tools/models/models_sync.py seed-list --source dynamic --host <host>`
 
 ## Open Notebook
 - `make up-open-notebook`
@@ -215,7 +234,17 @@ This file summarizes the most-used targets and maps them to what they do under d
   - Builds `pmoves-supaserch:local-smoke` locally (`linux/amd64`, no push) using the same Dockerfile/context contract as CI.
   - Use as the first gate before publishing.
 - `make ghcr-prepublish-supaserch`
-  - Local-first wrapper around `build-local-supaserch`; fail here before spending self-hosted runner/GHCR cycles.
+  - Local-first targeted SupaSerch gate (build + Trivy) using the integrations matrix contract.
+- `make ghcr-prepublish-inrepo`
+  - Local-first production gate for all in-repo GHCR integrations (`agent-zero`, `archon`, `firefly-iii`, `jellyfin`, `pmoves-yt`, `deepresearch`, `supaserch`).
+  - Uses `pmoves/tools/ghcr_local_prepublish.py` to run deterministic build + Trivy validation aligned to `.github/workflows/integrations-ghcr.matrix.json`.
+- `make ghcr-prepublish-inrepo-build`
+  - Same matrix as `ghcr-prepublish-inrepo` but build-only (`--skip-trivy`) for rapid local triage.
+- `make ghcr-prepublish-all`
+  - Extends local prepublish validation to the full integrations matrix, including external repos (requires clone access/token where needed).
+- `make ghcr-dispatch-all`
+  - Dispatches `.github/workflows/integrations-ghcr.yml` with `integration=all` after local validation.
+  - Respects `GHCR_DISPATCH_REF` (defaults current branch) and optional `GHCR_NAMESPACE=<org>`.
 - `make ghcr-dispatch-supaserch`
   - Dispatches `.github/workflows/integrations-ghcr.yml` for `integration=supaserch` after local validation.
   - Respects `GHCR_DISPATCH_REF` (defaults to current branch), optional `GHCR_NAMESPACE=<org>`, and requires runner lane checks to pass.
@@ -232,7 +261,10 @@ This file summarizes the most-used targets and maps them to what they do under d
   - Override phase with `RUNNER_PHASE=lab-expansion` or `RUNNER_PHASE=production`.
 - `make ci-runners-local-cert-up`
   - Starts Docker-hosted local-cert runner containers for `ai-lab` and `vps` lanes on the current machine.
-  - Uses `gh` to mint registration tokens unless `RUNNER_TOKEN` (or lane-specific `RUNNER_TOKEN_AI_LAB` / `RUNNER_TOKEN_VPS`) is preset.
+  - **Token cascade** (first match wins): `RUNNER_PAT_{LANE}` → `RUNNER_PAT` → `GH_TOKEN` → short-lived `RUNNER_TOKEN` via `gh api`.
+  - When a PAT is found, it is passed as `ACCESS_TOKEN` to the container, enabling automatic re-registration on reboot without token expiry issues.
+  - Set `RUNNER_PAT` in `env.shared` for reboot-survivable authentication (the Make target sources `env.shared` automatically).
+  - Recovery best practice: prefer `make -C pmoves ci-runners-local-cert-down && make -C pmoves ci-runners-local-cert-up` over `docker restart` on runner containers. This forces fresh registration and avoids stale token/config loops.
 - `make ci-runners-local-cert-down`
   - Stops/removes the Docker-hosted local-cert runner containers (`gha-runner-ai-lab`, `gha-runner-vps`).
 - `make ci-runners-local-cert-status`
@@ -248,6 +280,10 @@ This file summarizes the most-used targets and maps them to what they do under d
 - `make ci-queue-drain-nonpr-apply`
   - Executes queued-run cancellations immediately (still threshold-guarded).
   - Intended for deadlock recovery when self-hosted lanes are starved by stale runs.
+- `make bringup-layered`
+  - Deterministic local layered bring-up: minimal → model-management → workers → agents → monitoring → prod smoke.
+  - Model-management layer sits between minimal and workers, starting model-registry and (optionally) gpu-orchestrator before dependent workers (no explicit readiness gate).
+  - Respects `SUPABASE_RUNTIME` (default `cli`).
 - `make bringup-showtime`
   - Bring-up orchestration + retro diagnostics + Codex quick health in one sequence.
   - Starts a live readiness watcher by default (`SHOWTIME_WATCH=1`) so service transitions are visible while bring-up runs.
@@ -341,6 +377,23 @@ This file summarizes the most-used targets and maps them to what they do under d
   - Pre-pulls Ollama models derived from model profiles and/or Supabase registry mappings.
   - Override with `OLLAMA_SEED_MODELS` when you need explicit pull lists.
 
+## Docker Build
+
+For the full Docker image lifecycle (local validation, CI pipelines, compose profiles, model runners), see the consolidated **[Docker Build Operator Guide](DOCKER_BUILD_GUIDE.md)**.
+
+Key targets summary:
+
+| Target | Description |
+|--------|-------------|
+| `make ghcr-prepublish-inrepo` | Full gate (build + Trivy) for all in-repo images |
+| `make ghcr-prepublish-inrepo-build` | Build-only (skip Trivy) for rapid triage |
+| `make ghcr-prepublish-one IMAGE=<name>` | Single image with Trivy |
+| `make ghcr-build-one IMAGE=<name>` | Single image build-only |
+| `make ghcr-prepublish-all` | Full matrix including external repos |
+| `make ghcr-dispatch-all` | Dispatch integrations-ghcr workflow after local validation |
+| `make buildx-setup` | Bootstrap Docker buildx builder |
+| `make docker-login` | Login to GHCR |
+
 ## CHIT Demo Mappers
 - `make demo-health-cgp`
   - Converts `contracts/samples/health.weekly.summary.v1.sample.json` to a CGP and posts it to `HIRAG_URL/geometry/event`.
@@ -367,7 +420,7 @@ This file summarizes the most-used targets and maps them to what they do under d
 - `make up-external` – start Wger, PMOVES-Wealth (Firefly III), Open Notebook, and Jellyfin from published images.
 - `make up-external-wger` / `up-external-firefly` / `up-external-on` / `up-external-jellyfin` – bring up individually.
 - `make wger-brand-defaults` – idempotently updates the Django `Site`, default admin profile, and seed gym name using `WGER_BRAND_*` env vars (this runs automatically after `up-external-wger`; run it again if you wipe the SQLite volume).
-- Images are configurable via env: `WGER_IMAGE`, `FIREFLY_IMAGE`, `OPEN_NOTEBOOK_IMAGE` (default `ghcr.io/lfnovo/open-notebook:v1-latest`), `JELLYFIN_IMAGE`.
+- Images are configurable via env: `WGER_IMAGE`, `FIREFLY_IMAGE`, `OPEN_NOTEBOOK_IMAGE` (default `ghcr.io/lfnovo/open-notebook:1.8.0`), `JELLYFIN_IMAGE`.
 - See `pmoves/docs/EXTERNAL_INTEGRATIONS_BRINGUP.md` for linking your forks and publishing to GHCR.
 
 ## Integrations Compose (local dev)

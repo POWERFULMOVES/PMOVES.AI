@@ -12,7 +12,7 @@ Central registry of all service ports to prevent conflicts and ensure consistenc
 | 6000-6999 | Vector/Search | Qdrant 6333, Meilisearch 7700† |
 | 7000-7999 | Core Services | Agent Zero 8080‡ |
 | 8000-8199 | Agent/Worker Services | session-context-worker 8100, gateway-agent 8100, github-runner-ctl 8104 |
-| 8200-8999 | Orchestration Services | Archon 8181 |
+| 8200-8999 | Orchestration Services | GPU Orchestrator 8200, Jellyfin AI Gateway 8300 |
 | 9000-9999 | Infrastructure | Prometheus 9090, NATS 4222‡ |
 
 *Postgres uses standard 5432
@@ -70,7 +70,9 @@ Central registry of all service ports to prevent conflicts and ensure consistenc
 | 8097 | Channel Monitor | External content watcher |
 | 8098 | DeepResearch | Research planner |
 | 8099 | SupaSerch | Multimodal search orchestrator |
+| 8074 | Transcribe Backend | Text transcription (PMOVES-transcribe-and-fetch) |
 | 8110 | Model Registry | Dynamic model configuration service |
+| 8200 | GPU Orchestrator | Dynamic GPU resource management & model lifecycle |
 
 ### Agent/Worker Services (Tier 3)
 
@@ -88,9 +90,9 @@ Central registry of all service ports to prevent conflicts and ensure consistenc
 | Port | Service | Description | Network |
 |------|---------|-------------|---------|
 | 5432 | Supabase DB | PostgreSQL 17 (internal only) | pmoves_data |
-| 3010 | PostgREST | Supabase REST API | pmoves_api, pmoves_data |
+| 3000 | PostgREST | Supabase REST API (container-internal) | pmoves_api, pmoves_data |
 | 9999 | GoTrue | JWT authentication service | pmoves_api, pmoves_data |
-| 4000 | Realtime | WebSocket for real-time subscriptions | pmoves_api, pmoves_data |
+| 4010 | Realtime | WebSocket for real-time subscriptions (remapped from 4000) | pmoves_api, pmoves_data |
 | 5000 | Storage | S3-compatible file storage | pmoves_api, pmoves_data |
 | 8000 | Kong Gateway | API Gateway (proxy/routing) | pmoves_api |
 | 8001 | Kong Admin | Kong administration interface | pmoves_api |
@@ -99,16 +101,16 @@ Central registry of all service ports to prevent conflicts and ensure consistenc
 
 **Notes:**
 - **PostgreSQL (5432):** Internal-only, accessible via pmoves_data network
-- **PostgREST (3010):** NOT 3000 (avoids Grafana conflict on port 3000)
+- **PostgREST (3000):** Container port 3000 (Grafana on 3002 — no conflict)
 - **Kong (8000):** Primary external access point for all Supabase APIs
 - **Services on pmoves_api + pmoves_data:** Need database access for queries
 
 **Environment Variables:**
 ```bash
 # env.tier-supabase
-SUPABASE_POSTGREST_PORT=3010    # NOT 3000 (Grafana conflict)
+SUPABASE_POSTGREST_PORT=3000    # Container-internal (Grafana on 3002)
 SUPABASE_GOTRUE_PORT=9999
-SUPABASE_REALTIME_PORT=4000     # Conflicts with TensorZero UI (use profile separation)
+SUPABASE_REALTIME_PORT=4010     # Remapped from 4000 to avoid TensorZero UI collision
 SUPABASE_STORAGE_PORT=5000
 SUPABASE_KONG_PROXY_PORT=8000
 SUPABASE_KONG_ADMIN_PORT=8001
@@ -134,12 +136,12 @@ SUPABASE_DB_PORT=54322           # External access (if needed)
 
 ## Conflict Resolution
 
-### Port 4000 Conflict (Identified 2026-02-04)
+### Port 4000 Conflict (Identified 2026-02-04, Resolved 2026-03-11)
 
 - **TensorZero UI:** Uses 4000 (always runs)
-- **Supabase Realtime:** Uses 4000 (optional, profile: `supabase`)
+- **Supabase Realtime:** Was 4000 → **Changed to 4010** (PRs #868, #869)
 
-**Resolution:** Realtime should be configured to use a different port or run in a separate profile when TensorZero UI is active.
+**Resolution:** Realtime remapped to port 4010 via `SUPABASE_REALTIME_PORT` env var. Internal container port unchanged (4000) — only host mapping affected.
 
 ### Port 8100 Conflict (Resolved 2025-12-30)
 

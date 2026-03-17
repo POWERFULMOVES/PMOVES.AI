@@ -5,13 +5,30 @@ on:
     branches: [main, develop]
     paths:
       - 'services/**'
-      - 'pmoves/**'
+      - 'pmoves/services/**'
+      # Exclude services already built multi-arch by integrations-ghcr.yml
+      - '!pmoves/services/agent-zero/**'
+      - '!pmoves/services/archon/**'
+      - '!pmoves/services/pmoves-yt/**'
+      - 'pmoves/docker/**'
       - 'Dockerfile*'
       - 'docker-compose*.yml'
-  # NOTE: PR trigger disabled until self-hosted runners are deployed
-  # Re-enable when AI Lab + VPS runners are operational
-  # pull_request:
-  #   branches: [main]
+      - '**/docker-compose*.yml'
+      - '.github/workflows/self-hosted-builds*.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'services/**'
+      - 'pmoves/services/**'
+      # Exclude services already built multi-arch by integrations-ghcr.yml
+      - '!pmoves/services/agent-zero/**'
+      - '!pmoves/services/archon/**'
+      - '!pmoves/services/pmoves-yt/**'
+      - 'pmoves/docker/**'
+      - 'Dockerfile*'
+      - 'docker-compose*.yml'
+      - '**/docker-compose*.yml'
+      - '.github/workflows/self-hosted-builds*.yml'
   workflow_dispatch:
     inputs:
       deploy_target:
@@ -44,14 +61,15 @@ jobs:
   # ============================================================================
   build-gpu:
     name: GPU Services
-    runs-on: [self-hosted, ai-lab, gpu]
+    runs-on: [self-hosted, Linux, X64, ai-lab, gpu]
+    timeout-minutes: 90
     permissions:
       contents: read
       packages: write
-    if: |
-      github.event_name == 'push' ||
-      github.event_name == 'workflow_dispatch' ||
-      contains(github.event.pull_request.labels.*.name, 'gpu-build')
+    # TODO: Re-enable when in-tree GPU Dockerfiles are created for ollama and hirag-gateway
+    # Currently both ./services/ollama and ./services/hirag-gateway don't exist;
+    # hirag-gateway is built via build-images.yml (manual dispatch) from pmoves/images.yaml.
+    if: ${{ false }}
 
     steps:
       - name: Checkout
@@ -65,7 +83,7 @@ jobs:
           docker run --rm --gpus all nvidia/cuda:12.0-base nvidia-smi
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Generate GitHub App token
         id: app_token
@@ -76,14 +94,14 @@ jobs:
           private-key: ${{ secrets.GH_APP_SEC }}
 
       - name: Login to GHCR
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ steps.app_token.outputs.token && 'x-access-token' || env.GHCR_USERNAME }}
           password: ${{ steps.app_token.outputs.token || env.GHCR_PASSWORD }}
 
       - name: Build Ollama CUDA
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: ./services/ollama
           file: ./services/ollama/Dockerfile.cuda
@@ -95,7 +113,7 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Build Hi-RAG GPU
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: ./services/hirag-gateway
           file: ./services/hirag-gateway/Dockerfile.gpu
@@ -127,20 +145,32 @@ jobs:
   build-cpu:
     name: CPU Services
     runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 60
     permissions:
       contents: read
       packages: write
     strategy:
+      max-parallel: 2
       matrix:
         service:
           - name: agent-zero
-            context: ./services/agent-zero
-          - name: hirag-gateway
-            context: ./services/hirag-gateway
+            context: ./pmoves/services/agent-zero
           - name: extract-worker
-            context: ./services/extract-worker
+            context: ./pmoves/services/extract-worker
           - name: publisher-discord
             context: ./pmoves/services/publisher-discord
+          - name: pmoves-yt
+            context: ./pmoves/services/pmoves-yt
+          - name: channel-monitor
+            context: ./pmoves/services/channel-monitor
+          - name: archon
+            context: ./pmoves/services/archon
+          - name: ffmpeg-whisper
+            context: ./pmoves/services/ffmpeg-whisper
+          - name: model-registry
+            context: ./pmoves/services/model-registry
+          - name: gpu-orchestrator
+            context: ./pmoves/services/gpu-orchestrator
 
     steps:
       - name: Checkout
@@ -149,7 +179,7 @@ jobs:
           submodules: recursive
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Generate GitHub App token
         id: app_token
@@ -160,14 +190,14 @@ jobs:
           private-key: ${{ secrets.GH_APP_SEC }}
 
       - name: Login to GHCR
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ steps.app_token.outputs.token && 'x-access-token' || env.GHCR_USERNAME }}
           password: ${{ steps.app_token.outputs.token || env.GHCR_PASSWORD }}
 
       - name: Build ${{ matrix.service.name }}
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: ${{ matrix.service.context }}
           push: ${{ github.event_name != 'pull_request' }}
@@ -184,6 +214,7 @@ jobs:
   validate-contracts:
     name: Validate NATS Contracts
     runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 15
     permissions:
       contents: read
 
@@ -225,6 +256,7 @@ jobs:
   deploy-staging:
     name: Deploy Staging
     runs-on: [self-hosted, cloudstartup, staging]
+    timeout-minutes: 30
     permissions:
       contents: read
     needs: [build-cpu, validate-contracts]
@@ -264,9 +296,10 @@ jobs:
   deploy-production:
     name: Deploy Production
     runs-on: [self-hosted, kvm4, production]
+    timeout-minutes: 30
     permissions:
       contents: read
-    needs: [build-cpu, build-gpu, validate-contracts, deploy-staging]
+    needs: [build-cpu, validate-contracts, deploy-staging]
     if: |
       github.ref == 'refs/heads/main' ||
       github.event.inputs.deploy_target == 'production'
@@ -279,7 +312,6 @@ jobs:
       - name: Pull latest images
         run: |
           docker pull ${{ env.IMAGE_PREFIX }}/pmoves-agent-zero:${{ github.sha }}
-          docker pull ${{ env.IMAGE_PREFIX }}/pmoves-hirag-gateway:${{ github.sha }}
 
       - name: Deploy to production
         run: |
@@ -290,7 +322,9 @@ jobs:
         run: |
           sleep 60
           curl -sf http://localhost:8080/healthz || exit 1
-          curl -sf http://localhost:8086/hirag/health || exit 1
+          # hirag-gateway is built by build-images.yml (manual dispatch), not this workflow.
+          # Best-effort check — non-fatal if hirag-gateway is not deployed.
+          curl -sf http://localhost:8086/hirag/health || true
           echo "Production deployment healthy"
 
       - name: Notify Discord
@@ -306,6 +340,7 @@ jobs:
   functional-tests:
     name: Functional Tests
     runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 30
     permissions:
       contents: read
     needs: [deploy-staging]

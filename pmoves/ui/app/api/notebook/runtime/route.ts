@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { authenticateRequest } from '@/lib/jwtUtils';
 import { logError } from '@/lib/errorUtils';
 import { ErrorIds } from '@/lib/constants/errorIds';
 
@@ -6,10 +7,15 @@ import { ErrorIds } from '@/lib/constants/errorIds';
 const NOTEBOOK_SYNC_URL = (
   process.env.NOTEBOOK_SYNC_URL ||
   process.env.NEXT_PUBLIC_NOTEBOOK_SYNC_URL ||
-  'http://localhost:8095'
+  'http://notebook-sync:8095'
 ).replace(/\/$/, '');
 
-export async function GET(_req: NextRequest) {
+export async function GET(req: NextRequest) {
+  const { ownerId, error: authError } = authenticateRequest(req, 'notebook/runtime');
+  if (!ownerId) {
+    return NextResponse.json({ error: authError || 'Authentication required' }, { status: 401 });
+  }
+
   const healthUrl = `${NOTEBOOK_SYNC_URL}/healthz`;
   const metricsUrl = `${NOTEBOOK_SYNC_URL}/metrics`;
 
@@ -37,7 +43,6 @@ export async function GET(_req: NextRequest) {
 
     return NextResponse.json({
       service: 'notebook-sync',
-      endpoint: NOTEBOOK_SYNC_URL,
       health: health.status || 'unknown',
       metrics,
     });
@@ -48,7 +53,7 @@ export async function GET(_req: NextRequest) {
       endpoint: NOTEBOOK_SYNC_URL,
     });
     return NextResponse.json(
-      { service: 'notebook-sync', endpoint: NOTEBOOK_SYNC_URL, health: 'error', metrics: null, error: 'Service unavailable' },
+      { service: 'notebook-sync', health: 'error', metrics: null, error: 'Service unavailable' },
       { status: 503 }
     );
   }

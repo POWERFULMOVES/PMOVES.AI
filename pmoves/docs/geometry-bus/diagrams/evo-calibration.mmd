@@ -1,0 +1,56 @@
+%%{init: {'theme':'base', 'themeVariables': {
+  'primaryColor': '#3ecf8e',
+  'primaryBorderColor': '#3ecf8e',
+  'secondaryColor': '#9333ea',
+  'secondaryBorderColor': '#a855f7',
+  'tertiaryColor': '#fbbf24',
+  'tertiaryBorderColor': '#d97706',
+  'background': 'transparent',
+  'sequenceNumberColor': '#ffffff'
+}}}%%
+sequenceDiagram
+    autonumber
+    participant AG as AgentGym<br/>RL Coordinator
+    participant EVO as Evo Controller<br/>:8113
+    participant SWARM as EvoSwarm<br/>Optimization Engine
+    participant CHIT as CHIT Module<br/>pmoves.chit
+    participant NATS as NATS<br/>Geometry Bus
+    participant HIRAG as Hi-RAG v2<br/>:8086
+
+    %% Training Complete
+    AG->>NATS: Publish agentgym.train.completed.v1<br/>{agent_id, metrics}
+
+    %% Evo Controller receives notification
+    NATS->>EVO: agentgym.train.completed.v1
+
+    EVO->>SWARM: Fetch latest population state<br/>{population_id, generation}
+
+    SWARM-->>EVO: PopulationSnapshot<br/>{best_fitness, metrics, pack_id}
+
+    %% Create CGP calibration packet
+    EVO->>CHIT: Create calibration CGP<br/>spec: chit.cgp.v1.0
+
+    Note over CHIT: Calibration Packet Structure:<br/>- super_node: "evo-calibration"<br/>- constellations: param_clusters<br/>- spectrum: optimized_weights<br/>- points: parameter_values
+
+    CHIT-->>EVO: calibration_cgp
+
+    %% Publish calibration
+    EVO->>NATS: Publish geometry.cgp.calibration.v1<br/>{calibration_cgp}
+    EVO->>NATS: Publish geometry.swarm.meta.v1<br/>{pack_id, best_fitness}
+
+    %% Consumers
+    par Calibration Consumers
+        NATS->>HIRAG: geometry.cgp.calibration.v1
+        Note over HIRAG: Update CGP parameters<br/>for improved clustering
+    and
+        NATS->>AG: geometry.swarm.meta.v1
+        Note over AG: Update RL environment<br/>with optimized params
+    end
+
+    %% Feedback loop
+    HIRAG->>EVO: Report clustering quality<br/>{mhep, silhouette_score}
+
+    EVO->>SWARM: Update fitness function<br/>with clustering feedback
+
+    %% Loop indicator
+    Note over EVO,SWARM: 🔄 Continuous optimization loop<br/>Each training cycle improves CGP parameters

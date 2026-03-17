@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "cmd /c uv run \"%CLAUDE_PROJECT_DIR%\\.claude\\hooks\\damage-control\\bash-tool-damage-control.py\"",
+            "command": "uv run \"$CLAUDE_PROJECT_DIR/.claude/hooks/damage-control/bash-tool-damage-control.py\"",
             "timeout": 5
           }
         ]
@@ -16,7 +16,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "cmd /c uv run \"%CLAUDE_PROJECT_DIR%\\.claude\\hooks\\damage-control\\edit-tool-damage-control.py\"",
+            "command": "uv run \"$CLAUDE_PROJECT_DIR/.claude/hooks/damage-control/edit-tool-damage-control.py\"",
             "timeout": 5
           }
         ]
@@ -26,7 +26,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "cmd /c uv run \"%CLAUDE_PROJECT_DIR%\\.claude\\hooks\\damage-control\\write-tool-damage-control.py\"",
+            "command": "uv run \"$CLAUDE_PROJECT_DIR/.claude/hooks/damage-control/write-tool-damage-control.py\"",
             "timeout": 5
           }
         ]
@@ -38,8 +38,30 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"%CLAUDE_PROJECT_DIR%\\.claude\\hooks\\post-tool-sign-trail.sh\"",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/post-tool-sign-trail.sh\"",
             "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "Skill",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/post-review-chit.sh\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/pr-skill-reminder.sh\"",
+            "timeout": 3
           }
         ]
       }

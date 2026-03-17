@@ -76,7 +76,7 @@ PMOVES.AI is a **production-ready multi-agent orchestration platform** featuring
 - Request: `{"query": "...", "top_k": 10, "rerank": true}`
 - **Use for:** Knowledge retrieval, semantic search, RAG queries
 
-**Hi-RAG Gateway v1** [Port 8089 CPU, 8090 GPU] **[LEGACY]**
+**Hi-RAG Gateway v1** [Port 8089 CPU, 8187 GPU] **[LEGACY]**
 - Original hybrid RAG implementation
 - Use v2 instead for new features
 
@@ -208,18 +208,24 @@ PMOVES.AI is a **production-ready multi-agent orchestration platform** featuring
 - Auth: `nats://nats:pmoves@nats:4222` (always use authenticated URL)
 - **Critical subjects:** See `.claude/context/nats-subjects.md`
 
-**Supabase** [PostgREST Port 3010]
-- Postgres with pgvector extension
-- Schema: `pmoves_core`, Archon prompts
-- **Use for:** Metadata storage, content records, agent state
+**Supabase** [Kong Port 8000, PostgREST Port 3000, Studio Port 54323]
+- Unified 13-service self-hosted stack (profile: `supabase-local`)
+- Services: DB (Postgres 17.6.1), GoTrue, PostgREST v14.3, Kong 3.7.1, Realtime v2.72.0, Storage v1.37.1, Studio, imgproxy, pg-meta, Edge Functions, Analytics (Logflare), Vector, Supavisor
+- Canonical consumer URL: `http://supabase-kong:8000/rest/v1` (via Kong gateway)
+- Standard variable names: `JWT_SECRET`, `ANON_KEY`, `SERVICE_ROLE_KEY` (SUPABASE_* aliases for compat)
+
+**Neo4j** [Port 7474 HTTP, 7687 Bolt]
+- Graph database for knowledge management, CHIT consciousness taxonomy, agent memory
+- Profile-based integration: make -C pmoves neo4j-local-up
+- API: POST http://localhost:7474/db/neo4j/tx/commit (Cypher transactions)
+- Health: GET http://localhost:7474/db/neo4j/health
+- **Use for:** Graph queries, relationship traversal, CHIT consciousness taxonomy, agent memory
+- **Submodule:** PMOVES-Neo4j (root-level, follows PMOVES-supabase pattern)
+- **See:** `PMOVES-Neo4j/CLAUDE.md` for submodule context
 
 **Qdrant** [Port 6333]
 - Vector embeddings for semantic search
 - Collection: `pmoves_chunks`
-
-**Neo4j** [Port 7474 HTTP, 7687 Bolt]
-- Knowledge graph storage
-- Entity relationships, graph traversal
 
 **Meilisearch** [Port 7700]
 - Full-text keyword search
@@ -263,6 +269,13 @@ make -C pmoves auth-alignment     # Cross-tier credential consistency check
 - `ingest.transcript.ready.v1` - Transcript completed
 - `ingest.summary.ready.v1` - Summary generated
 - `ingest.chapters.ready.v1` - Chapter markers created
+
+**GPU Mesh & Model Lifecycle:**
+- `mesh.gpu.status.v1` - Periodic GPU status (every 5s from gpu-orchestrator)
+- `mesh.gpu.model.loaded.v1` / `mesh.gpu.model.unloaded.v1` - Model load/unload events → model-registry syncs deployments
+- `mesh.gpu.command.v1` - Command model load/unload/optimize via NATS
+- `mesh.gpu.command.result.v1` - Command execution result
+- `model.registry.updated.v1` - Catalog mutation notifications
 
 **Agent Observability (for Claude Code CLI hooks):**
 - `claude.code.tool.executed.v1` - Claude CLI tool execution events
@@ -374,6 +387,19 @@ encapsulate the correct stop/restart/env-injection flow.
 
 **When raw commands are appropriate:** Only when the user explicitly directs it. The `ask` prompt will surface to the user who can approve or deny.
 
+### Living Document Maintenance
+
+Two living documents require freshness maintenance:
+- `pmoves/docs/PRODUCTION_AUDIT_DASHBOARD.md` — production readiness dashboard (commit SHA, date)
+- `pmoves/docs/security/P2_SUBMODULE_TRACKER.md` — P2 issue tracker (open/fixed status)
+
+**Rules:**
+- After audit/security work, run `make -C pmoves docs-reconcile` or `/docs:reconcile --update`
+- Review flagged stale tracker items — manually verify before closing entries
+- If you edited `pmoves/docs/security/`, `pmoves/docs/audit/`, or updated submodule gitlinks → run docs-reconcile before committing
+- Automated check (CI-safe, read-only): `make -C pmoves docs-reconcile-check`
+- JSON output for tooling: `make -C pmoves docs-reconcile-json`
+
 ### Service Discovery Pattern
 All services expose:
 - `/healthz` - Health check endpoint
@@ -452,6 +478,66 @@ docker compose --profile agents --profile workers up -d
 
 See `.claude/context/testing-strategy.md` for detailed testing guidelines.
 
+## PR Review & Merge Workflow
+
+### Skill Chain (pr-monitor-graphiti-chit pairing)
+
+PMOVES uses a 4-step FlOO$ skill pairing for PR review lifecycle. Use these skills in order:
+
+| Step | Skill | Purpose | Make Target |
+|------|-------|---------|-------------|
+| 1 | `/pr-monitor` | Collect PR state and review learnings | `make -C pmoves pr-monitor` |
+| 2 | `/pr-trim <PR#>` | Classify and fix CodeRabbit review threads | `make -C pmoves pr-trim PR=<N>` |
+| 3 | `/chit:review-sweep` | Encode learnings as CGP packet for Graphiti | `make -C pmoves pr-monitor-chit-packet` |
+| 4 | `/chit:sign-trail` | Sign trail entry for agent attribution | `make -C pmoves sign-trail` |
+
+### When to Use Each Skill
+
+**Before reviewing PRs:**
+- `/pr-monitor` — Get current state of all open PRs, actionable counts, blockers
+
+**During PR review (for each PR with CodeRabbit threads):**
+- `/pr-trim <PR#>` — Analyze threads, apply fixes, resolve addressed threads
+- `/pr-trim --batch 935,936,937` — Batch mode for multiple PRs
+- `/pr-trim <PR#> --dry-run` — Preview classification without changes
+
+**After reviewing PRs:**
+- `/github:pr-review <PR#>` — Full AI-assisted review with structured output
+- `/chit:review-sweep --trail` — Encode learnings + write Graphiti trail entry
+- `/docs:reconcile --update` — Refresh living documents if audit/security docs changed
+
+**Before merging:**
+- `/pr-monitor --strict` — Gate check (exit 0 = merge ready)
+- `/test:pr` — Run test suite and generate PR Testing section
+
+**After merging:**
+- `/docs:reconcile --update` — Refresh dashboard SHA and date
+- `/chit:review-sweep --trail` — Final learnings handoff
+
+### FlOO$ Pipeline Validation
+
+Validate the full pipeline DAG is healthy:
+```bash
+make -C pmoves floos-pr-monitor-validate
+# Or: /chit:floos validate pr-monitor-graphiti-chit
+```
+
+Full CHIT flow (monitor + validate + resolve + dry-run):
+```bash
+make -C pmoves chit-flow-pr-monitor
+# Strict mode (fails on PR blockers):
+make -C pmoves chit-flow-pr-monitor-strict
+```
+
+### PR Review NATS Subjects
+
+| Subject | Publisher | Description |
+|---------|-----------|-------------|
+| `ops.pr.monitor.completed.v1` | pr-monitor | PR state scan completed |
+| `ops.pr.trim.completed.v1` | pr-hedge-trim | Thread classification/resolution done |
+| `ops.pr.review.completed.v1` | review-sweep | Review learnings encoded to CGP |
+| `agent.graphiti.signed.v1` | sign-trail | Trail entry signed for attribution |
+
 ## UI Development Checklist
 
 Based on CodeRabbit learnings (see `.claude/learnings/ui-error-handling-review-2025.md`):
@@ -478,9 +564,27 @@ Based on CodeRabbit learnings (see `.claude/learnings/ui-error-handling-review-2
 - [ ] Shared utilities extracted (no duplicate functions like `ownerFromJwt`)
 - [ ] Unused imports removed
 
+## Topology & Runner Strategy
+
+**Master topology:** `pmoves/docs/operations/TOPOLOGY.md` — single source of truth for all nodes, services, routes, and DNS.
+
+**Nodes:** Z890 (dev/GPU), 5090 (primary GPU, pending), KVM4-1 (API gateway), KVM4-2 (data/storage), KVM2 (exit proxy), Cloudflare Edge (DNS/Worker).
+
+**Agent Teams (11 teams, 62 agents):** `pmoves/configs/agent-teams.yaml` — orchestration, research, media, data, ui, automation, evolution, infra, sandbox, life, external.
+
+**CI Runners:** `self-hosted, ai-lab` (GPU), `self-hosted, cloudstartup` (staging), `self-hosted, kvm4` (production), `self-hosted, kvm2` (backup), `ubuntu-latest` (lightweight). Routing via Cloudflare Worker (`deploy/cloudflare/worker.js`).
+
+**DNS:** `pmoves.ai` zone (pending Cloudflare migration). Subdomains: api, agent, rag, tts, n8n, grafana, search, nats, minio, headscale, ci.
+
+**Quick references:**
+- `.claude/context/runner-topology.md` — condensed topology for agent context
+- `pmoves/docs/operations/WORKFLOW_RUNNER_MAP.md` — all 19 GitHub Actions workflows mapped to runners
+- `deploy/HYBRID_RUNNER_STRATEGY.md` — runner fleet documentation
+
 ## Additional References
 
 See `.claude/context/` for detailed documentation:
+- `runner-topology.md` - Condensed node/runner/team topology for agent context loading
 - `credentials-workflow.md` - Credential bootstrap, env-setup, secrets-funnel, JWT-from-Supabase flow
 - `services-catalog.md` - Complete service listing with all details
 - `submodules.md` - Complete submodules catalog (20 submodules)
@@ -492,6 +596,7 @@ See `.claude/context/` for detailed documentation:
 - `observability-patterns.md` - Prometheus, Grafana, Loki, TensorZero metrics
 - `agent-zero-orchestration.md` - MCP API reference, task flow, subordinate model
 - `tier-architecture.md` - 7-tier env security model, network segmentation
+- `chrome-extension.md` - Chrome Extension integration (8 services, message protocol, auth)
 
 **GEOMETRY BUS & CHIT Integration:**
 - `pmoves/docs/PMOVESCHIT/GEOMETRY_BUS_INTEGRATION.md` - CGP integration guide
@@ -500,7 +605,7 @@ See `.claude/context/` for detailed documentation:
 - `PMOVES-ToKenism-Multi/integrations/contracts/chit/` - CHIT TypeScript modules
 - `pmoves/docs/audit/CHIT_INTEGRATION_STATUS.md` - Per-service integration status (5 Full, 8 Partial, 15 None)
 - **CGP Schema Version Naming:** Canonical format is `chit.cgp.v{major}.{minor}` (e.g., `chit.cgp.v1.0`). Legacy aliases: `cgp.v1` → `chit.cgp.v1.0`, `geometry.cgp.v1` → `chit.cgp.v1.0`
-- **CHIT-Aware Services:** Tokenism Simulator (8103), Hi-RAG v2 (8086/8087), Gateway, Consciousness (8096), Evo Controller (8113), A2UI NATS Bridge (9224), AgentGym RL Coordinator
+- **CHIT-Aware Services:** Tokenism Simulator (8103), Hi-RAG v2 (8086/8087), Gateway, Consciousness (8105), Evo Controller (8113), A2UI NATS Bridge (9224), AgentGym RL Coordinator
 - **CHIT NATS Subjects:** `geometry.cgp.v1`, `geometry.swarm.meta.v1`, `geometry.event.v1`, `tokenism.cgp.ready.v1`, `tokenism.simulation.result.v1`
 
 ## Claude Code CLI Context Strategy
@@ -623,7 +728,7 @@ When orchestrating multi-step work, consult `pmoves/configs/skill-pairings.yaml`
 | `chit-3d-viz` | chit-encode → threejs-render | tokenism → hyperdimensions | `skills.pipeline.chit-3d-viz.v1` |
 | `voice-synthesis` | text-generate → prosodic → tts | agent-zero → flute → ultimate-tts | `skills.pipeline.voice-synthesis.v1` |
 | `agent-card-gen` | theme → comfyui → card | archon → creator → archon | `skills.pipeline.agent-card-gen.v1` |
-| `pr-monitor-graphiti-chit` | pr-monitor → encode → trail-sync | codex → tokenism → archon | `skills.pipeline.pr-monitor-graphiti-chit.v1` |
+| `pr-monitor-graphiti-chit` | pr-monitor → pr-hedge-trim → encode → trail-sync | codex → claude-opus → tokenism → archon | `skills.pipeline.pr-monitor-graphiti-chit.v1` |
 
 **Commands:**
 - `/chit:floos status` — Show all pairing statuses

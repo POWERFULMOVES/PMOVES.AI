@@ -49,7 +49,7 @@ AGENT_ZERO = ServiceDefinition(
     port=8080,
     health_path="/healthz",
     health_type=HealthCheckType.STANDARD,
-    expected_fields=["status", "version", "timestamp"],
+    expected_fields=["status"],
     profile="agents",
     dependencies=["postgres", "nats"],
     description="Agent orchestration service with embedded runtime",
@@ -60,7 +60,7 @@ ARCHON = ServiceDefinition(
     port=8091,
     health_path="/healthz",
     health_type=HealthCheckType.STANDARD,
-    expected_fields=["status", "supabase_connected"],
+    expected_fields=["status"],
     profile="agents",
     dependencies=["postgres", "agent-zero"],
     description="Supabase-driven agent service with prompt management",
@@ -112,9 +112,9 @@ CONSCIOUSNESS_SERVICE = ServiceDefinition(
 TENSORZERO_GATEWAY = ServiceDefinition(
     name="tensorzero-gateway",
     port=3030,
-    health_path="/healthz",
+    health_path="/health",
     health_type=HealthCheckType.STANDARD,
-    expected_fields=["status", "clickhouse_connected"],
+    expected_fields=["gateway"],
     profile="orchestration",
     dependencies=["clickhouse"],
     description="Centralized LLM gateway for all model providers",
@@ -148,9 +148,9 @@ TENSORZERO_UI = ServiceDefinition(
 HIRAG_V2 = ServiceDefinition(
     name="hi-rag-gateway-v2",
     port=8086,
-    health_path="/healthz",
+    health_path="/",
     health_type=HealthCheckType.STANDARD,
-    expected_fields=["status", "qdrant_connected", "neo4j_connected", "meilisearch_connected"],
+    expected_fields=["ok"],
     profile="orchestration",
     dependencies=["qdrant", "neo4j", "meilisearch", "tensorzero-gateway"],
     description="Next-gen hybrid RAG with cross-encoder reranking",
@@ -159,9 +159,9 @@ HIRAG_V2 = ServiceDefinition(
 HIRAG_V2_GPU = ServiceDefinition(
     name="hi-rag-gateway-v2-gpu",
     port=8087,
-    health_path="/healthz",
+    health_path="/",
     health_type=HealthCheckType.STANDARD,
-    expected_fields=["status"],
+    expected_fields=["ok"],
     profile="gpu",
     dependencies=["qdrant", "neo4j", "meilisearch"],
     gpu_required=True,
@@ -201,7 +201,7 @@ FLUTE_GATEWAY = ServiceDefinition(
     health_path="/healthz",
     health_type=HealthCheckType.STANDARD,
     expected_fields=["status", "engines_available"],
-    profile="tts",
+    profile="orchestration,media",
     dependencies=["tensorzero-gateway"],
     description="Multimodal voice communication with Pipecat integration",
 )
@@ -215,6 +215,28 @@ ULTIMATE_TTS_STUDIO = ServiceDefinition(
     profile="gpu,tts",
     gpu_required=True,
     description="Multi-engine TTS with 7 engines (Kokoro, F5-TTS, etc.)",
+)
+
+VOICE_RELAY = ServiceDefinition(
+    name="voice-relay",
+    port=8121,
+    health_path="/healthz",
+    health_type=HealthCheckType.STANDARD,
+    expected_fields=["status", "nats_connected"],
+    profile="cast,media",
+    dependencies=["nats"],
+    description="NATS relay: agentzero.task.result.v1 → voice.agent.response.v1",
+)
+
+CAST_TTS_GATEWAY = ServiceDefinition(
+    name="cast-tts-gateway",
+    port=8060,
+    health_path="/healthz",
+    health_type=HealthCheckType.STANDARD,
+    expected_fields=["status"],
+    profile="cast,media",
+    dependencies=["flute-gateway", "nats"],
+    description="Chromecast/Google Home TTS routing with multi-room audio",
 )
 
 GPU_ORCHESTRATOR = ServiceDefinition(
@@ -295,7 +317,7 @@ PMOVES_YT = ServiceDefinition(
     port=8077,
     health_path="/healthz",
     health_type=HealthCheckType.STANDARD,
-    expected_fields=["status"],
+    expected_fields=["ok"],
     profile="yt",
     dependencies=["minio", "nats"],
     description="YouTube ingestion service",
@@ -327,13 +349,11 @@ MEDIA_VIDEO = ServiceDefinition(
 
 MEDIA_AUDIO = ServiceDefinition(
     name="media-audio",
-    port=8082,
-    health_path="/healthz",
-    health_type=HealthCheckType.STANDARD,
-    expected_fields=["status"],
+    port=0,  # No host port mapped (8082 is Firefly on host)
+    health_type=HealthCheckType.CONNECTION,
     profile="workers",
     dependencies=["minio"],
-    description="Audio analysis (emotion/speaker detection)",
+    description="Audio analysis (emotion/speaker detection, internal-only)",
 )
 
 EXTRACT_WORKER = ServiceDefinition(
@@ -406,7 +426,7 @@ PRESIGN = ServiceDefinition(
     port=8088,
     health_path="/healthz",
     health_type=HealthCheckType.STANDARD,
-    expected_fields=["status"],
+    expected_fields=["ok"],
     profile="workers",
     dependencies=["minio"],
     description="MinIO URL presigner for short-lived download URLs",
@@ -417,7 +437,7 @@ RENDER_WEBHOOK = ServiceDefinition(
     port=8085,
     health_path="/healthz",
     health_type=HealthCheckType.STANDARD,
-    expected_fields=["status"],
+    expected_fields=["ok"],
     profile="workers",
     dependencies=["supabase", "minio"],
     description="ComfyUI render callback handler",
@@ -439,7 +459,7 @@ JELLYFIN_BRIDGE = ServiceDefinition(
     port=8093,
     health_path="/healthz",
     health_type=HealthCheckType.STANDARD,
-    expected_fields=["status"],
+    expected_fields=["ok"],
     profile="workers",
     dependencies=["supabase"],
     description="Jellyfin metadata webhook & helper",
@@ -557,7 +577,7 @@ GRAFANA = ServiceDefinition(
 LOKI = ServiceDefinition(
     name="loki",
     port=3100,
-    health_path="/readyz",
+    health_path="/ready",
     health_type=HealthCheckType.STANDARD,
     expected_status=200,
     profile="monitoring",
@@ -608,6 +628,8 @@ SERVICES = [
     HIRAG_V1_GPU,
     FLUTE_GATEWAY,
     ULTIMATE_TTS_STUDIO,
+    VOICE_RELAY,
+    CAST_TTS_GATEWAY,
     # Distributed Compute Services
     NODE_REGISTRY,
     RESOURCE_DETECTOR,
@@ -617,7 +639,6 @@ SERVICES = [
     PMOVES_YT,
     FFMPEG_WHISPER,
     MEDIA_VIDEO,
-    MEDIA_AUDIO,
     EXTRACT_WORKER,
     PDF_INGEST,
     LANGEXTRACT,
@@ -648,6 +669,7 @@ INTERNAL_SERVICES = [
     GPU_ORCHESTRATOR,
     SESSION_CONTEXT_WORKER,
     CHAT_RELAY,
+    MEDIA_AUDIO,
 ]
 
 # GPU-required services

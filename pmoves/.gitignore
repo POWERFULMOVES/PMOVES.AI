@@ -42,3 +42,4 @@ env.tier-ui
 env.tier-vpn
 env.tier-worker
 env.tier-supabase.urlencoded
+env.z890

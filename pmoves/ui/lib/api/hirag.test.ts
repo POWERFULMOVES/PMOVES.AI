@@ -3,8 +3,7 @@
    Tests hybrid RAG search with Qdrant, Neo4j, and Meilisearch
    ═══════════════════════════════════════════════════════════════════════════ */
 
-import { hiragQuery, hiragHealth, exportToNotebook } from './hirag';
-import { ok, type Result } from '../errorUtils';
+import { hiragQuery, hiragHealth, exportToNotebook, clearHiragCache } from './hirag';
 
 // Mock fetch
 global.fetch = jest.fn();
@@ -12,14 +11,16 @@ global.fetch = jest.fn();
 // Mock errorUtils
 jest.mock('../errorUtils', () => ({
   logError: jest.fn(),
-  ok: (value: unknown) => ({ ok: true, data: value }),
-  err: (error: string) => ({ ok: false, error }),
+  logForDebugging: jest.fn(),
   getErrorMessage: (status: number) => `HTTP Error ${status}`,
+  ok: <T,>(data: T) => ({ ok: true, data }),
+  err: (error: string) => ({ ok: false, error }),
 }));
 
 describe('Hi-RAG API', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    clearHiragCache(); // Clear cached URL between tests
     process.env.NEXT_PUBLIC_HIRAG_URL = undefined;
   });
 

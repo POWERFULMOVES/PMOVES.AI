@@ -1,5 +1,7 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from './database.types';
+import { logError } from './errorUtils';
+import { ErrorIds } from './constants/errorIds';
 
 type SupabaseClientOptions = {
   serviceRole?: boolean;
@@ -62,7 +64,7 @@ export const createSupabaseBrowserClient = (): TypedSupabaseClient => {
   if (typeof window !== 'undefined') {
     (window as any).__PMOVES_SUPABASE_BOOT = {
       hasBootJwt: Boolean(bootJwt),
-      authorization: bootJwt ? `Bearer ${bootJwt}` : undefined,
+      // Security: never expose the JWT token on the window object
     };
   }
   return client;
@@ -121,7 +123,8 @@ function decodeJwtExp(token: string | undefined): number | null {
   try {
     if (!token) return null;
     const [, payload] = token.split('.') as [string, string, string];
-    const json = JSON.parse(Buffer.from(payload, 'base64').toString('utf-8')) as { exp?: number };
+    const base64 = payload.replace(/-/g, '+').replace(/_/g, '/');
+    const json = JSON.parse(Buffer.from(base64, 'base64').toString('utf-8')) as { exp?: number };
     return typeof json.exp === 'number' ? json.exp : null;
   } catch {
     return null;
@@ -130,7 +133,8 @@ function decodeJwtExp(token: string | undefined): number | null {
 
 export const isBootJwtExpired = (graceSeconds = 0): boolean => {
   const exp = decodeJwtExp(resolveBootJwt());
-  if (!exp) return false;
+  // Security: treat missing exp claim as expired (fail-closed)
+  if (!exp) return true;
   const now = Math.floor(Date.now() / 1000);
   return now + graceSeconds >= exp;
 };
@@ -147,12 +151,12 @@ export const getBootUser = async (client: TypedSupabaseClient) => {
   try {
     const { data, error } = await client.auth.getUser(bootJwt);
     if (error) {
-      console.warn('[supabaseClient] Failed to fetch boot user via JWT', error);
+      logError('Failed to fetch boot user via JWT', error, 'warning', { errorId: ErrorIds.SUPABASE_AUTH_FAILED, component: 'supabaseClient' });
       return null;
     }
     return data.user ?? null;
   } catch (err) {
-    console.warn('[supabaseClient] Unexpected error when fetching boot user', err);
+    logError('Unexpected error when fetching boot user', err, 'warning', { errorId: ErrorIds.SUPABASE_AUTH_FAILED, component: 'supabaseClient' });
     return null;
   }
 };

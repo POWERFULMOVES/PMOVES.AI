@@ -19,7 +19,7 @@ env:
 
 jobs:
   setup-matrix:
-    runs-on: [self-hosted, Linux, X64]
+    runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
     steps:
@@ -37,16 +37,19 @@ jobs:
         id: set-matrix
         run: |
           python3 - <<'EOF'
-          import yaml, json, pathlib
+          import yaml, json, pathlib, os
           data = yaml.safe_load(pathlib.Path("pmoves/images.yaml").read_text())
-          print(f"matrix={json.dumps(data['images'])}")
+          with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+              f.write(f"matrix={json.dumps(data['images'])}\n")
           EOF
 
   build:
     needs: setup-matrix
     runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 60
     strategy:
       fail-fast: false
+      max-parallel: 4
       matrix: ${{ fromJson(needs.setup-matrix.outputs.matrix) }}
     defaults:
       run:
@@ -73,7 +76,7 @@ jobs:
           submodules: recursive
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Generate GitHub App token
         id: app_token
@@ -84,21 +87,21 @@ jobs:
           private-key: ${{ secrets.GH_APP_SEC }}
 
       - name: Login GHCR
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ steps.app_token.outputs.token && 'x-access-token' || env.GHCR_USERNAME }}
           password: ${{ steps.app_token.outputs.token || env.GHCR_PASSWORD }}
 
       - name: Login DockerHub (optional)
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
         continue-on-error: true
 
       - name: Build & push
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v7
         with:
           context: ${{ matrix.context || format('{0}/{1}', github.workspace, matrix.repo) }}
           file: ${{ matrix.dockerfile || format('{0}/{1}/Dockerfile', github.workspace, matrix.repo) }}

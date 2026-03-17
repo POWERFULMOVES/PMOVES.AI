@@ -1,0 +1,39 @@
+%%{init: {'theme':'base', 'themeVariables': {
+  'primaryColor': '#3ecf8e',
+  'secondaryColor': '#9333ea',
+  'tertiaryColor': '#3b82f6',
+  'actorLineColor': '#94a3b8',
+  'signalColor': '#3ecf8e'
+}}}%%
+sequenceDiagram
+    participant User as 🌍 Public User
+    participant CF as ☁️ Cloudflare
+    participant KVM41 as 🖥️ KVM4-1<br/>API Gateway
+    participant KVM42 as 💾 KVM4-2<br/>Data/Storage
+    participant Z890 as 🔧 Z890<br/>Dev/GPU
+    participant KVM2 as 🌐 KVM2<br/>Exit Proxy
+
+    Note over CF: DNS: *.pmoves.ai
+
+    User->>CF: HTTPS api.pmoves.ai
+    CF->>KVM41: Proxy (Cloudflare Tunnel)
+    KVM41->>Z890: Reverse proxy to service
+    Z890-->>KVM41: Response
+    KVM41-->>CF: Response
+    CF-->>User: Response
+
+    Note over KVM41,KVM42: Internal data flow
+
+    KVM41->>KVM42: Query Supabase/Neo4j/Qdrant
+    KVM42-->>KVM41: Data response
+
+    Note over Z890,KVM2: Tailscale mesh
+
+    Z890->>KVM2: Outbound via exit node
+    KVM2-->>Z890: Return traffic
+
+    Note over User,KVM2: NATS pub/sub (port 4222)
+
+    Z890->>KVM41: NATS publish event
+    KVM41->>KVM42: NATS forward to workers
+    KVM42-->>Z890: NATS response

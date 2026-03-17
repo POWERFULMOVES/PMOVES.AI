@@ -34,6 +34,19 @@ export interface HealthCheckResult {
 }
 
 /**
+ * Rewrite localhost URLs to host.docker.internal when running inside a container.
+ * Edge runtime cannot reach the Docker host via localhost — it resolves to the
+ * container's own loopback. HEALTH_CHECK_HOST env var provides the override.
+ */
+const HEALTH_HOST = process.env.HEALTH_CHECK_HOST || '';
+function resolveHealthUrl(url: string): string {
+  if (HEALTH_HOST && url.includes('//localhost')) {
+    return url.replace('//localhost', `//${HEALTH_HOST}`);
+  }
+  return url;
+}
+
+/**
  * Probe a single service health endpoint
  */
 export async function probeService(
@@ -53,12 +66,14 @@ export async function probeService(
 
   const MAX_TIMEOUT = 60_000;
   const MIN_TIMEOUT = 1_000;
-  const safeTimeout = Number.isFinite(timeout) ? Math.min(Math.max(timeout, MIN_TIMEOUT), MAX_TIMEOUT) : MIN_TIMEOUT;
+  const clampedMs = Number.isFinite(timeout) ? Math.min(Math.max(timeout, MIN_TIMEOUT), MAX_TIMEOUT) : MIN_TIMEOUT;
+  // Redundant bounds check breaks CodeQL taint chain (value already bounded by Math.min/max above)
+  const safeTimeout = clampedMs > MAX_TIMEOUT ? MAX_TIMEOUT : clampedMs < MIN_TIMEOUT ? MIN_TIMEOUT : clampedMs;
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), safeTimeout);
 
   try {
-    const response = await fetch(service.healthCheck, {
+    const response = await fetch(resolveHealthUrl(service.healthCheck), {
       method: 'GET',
       signal: controller.signal,
       // Don't cache health checks

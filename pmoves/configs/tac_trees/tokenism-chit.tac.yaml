@@ -1,0 +1,122 @@
+# TAC Tree: ToKenism CHIT Attribution Engine
+# Audits CGP encoding, simulation, NATS geometry bus, TypeScript modules
+
+name: "ToKenism CHIT Attribution Engine"
+version: "1.0.0"
+description: "Verify ToKenism CGP encoding, simulation pipeline, NATS geometry bus integration, and TypeScript module health"
+
+root:
+  id: tokenism
+  task: "ToKenism CHIT engine review"
+  context: "PMOVES-ToKenism-Multi/ submodule + pmoves/docker-compose.yml"
+  agent_hint: codex
+  children:
+
+    # =========================================================================
+    # Phase 1: Submodule & Modules
+    # =========================================================================
+    - id: tokenism.submodule
+      task: "ToKenism submodule health"
+      context: "PMOVES-ToKenism-Multi/"
+      agent_hint: codex
+      children:
+        - id: tokenism.submodule.initialized
+          task: "Submodule initialized (not shallow)"
+          action:
+            type: file_exists
+            target: "PMOVES-ToKenism-Multi/package.json"
+            expect: "ToKenism submodule present with package.json"
+          agent_hint: codex
+
+        - id: tokenism.submodule.chit-contracts
+          task: "CHIT contract modules present"
+          action:
+            type: file_exists
+            target: "PMOVES-ToKenism-Multi/integrations/contracts/chit/"
+            expect: "CHIT TypeScript contract modules directory exists"
+          context: "9 TypeScript modules for CGP encoding/decoding/attribution"
+          agent_hint: codex
+
+    # =========================================================================
+    # Phase 2: NATS Geometry Bus
+    # =========================================================================
+    - id: tokenism.nats
+      task: "NATS geometry bus integration"
+      context: "Tokenism is a primary CHIT-aware service on the geometry bus"
+      agent_hint: codex
+      children:
+        - id: tokenism.nats.cgp-subject
+          task: "CGP subject publishing"
+          action:
+            type: grep
+            target: "PMOVES-ToKenism-Multi/"
+            pattern: "geometry\\.cgp|tokenism\\.cgp"
+            expect: "Geometry CGP subjects referenced"
+          context: "geometry.cgp.v1 (transport), tokenism.cgp.ready.v1 (readiness)"
+          agent_hint: codex
+
+        - id: tokenism.nats.simulation
+          task: "Simulation result subjects"
+          action:
+            type: grep
+            target: "PMOVES-ToKenism-Multi/"
+            pattern: "tokenism\\.simulation"
+            expect: "tokenism.simulation.result.v1 subject present"
+          agent_hint: codex
+
+    # =========================================================================
+    # Phase 3: Environment & Docker
+    # =========================================================================
+    - id: tokenism.env
+      task: "Environment configuration"
+      context: "P1 finding: env.shared uses export syntax (Docker incompatible)"
+      agent_hint: codex
+      children:
+        - id: tokenism.env.no-export
+          task: "No export syntax in env files"
+          action:
+            type: grep
+            target: "PMOVES-ToKenism-Multi/"
+            pattern: "^export "
+            invert: true
+            expect: "No export statements in env files — pattern should NOT match"
+          context: "Docker env_file cannot parse export VAR=val, only VAR=val"
+          agent_hint: codex
+
+        - id: tokenism.env.compose
+          task: "Docker Compose service defined"
+          action:
+            type: grep
+            target: "pmoves/docker-compose.yml"
+            pattern: "tokenism-simulator|tokenism-ui"
+            expect: "Tokenism services defined in compose"
+          context: "Port 8103 (simulator), Next.js UI"
+          agent_hint: codex
+
+    # =========================================================================
+    # Phase 4: Skill Pairing Integration
+    # =========================================================================
+    - id: tokenism.skills
+      task: "Skill pairing wiring"
+      context: "ToKenism is referenced in 5 skill pairings"
+      agent_hint: codex
+      children:
+        - id: tokenism.skills.pairings
+          task: "Skill pairing references"
+          action:
+            type: grep
+            target: "pmoves/configs/skill-pairings.yaml"
+            pattern: "tokenism"
+            expect: "At least 3 skill pairing references"
+          context: "ingest-chit-index, chit-3d-viz, pr-monitor-graphiti-chit, etc."
+          agent_hint: codex
+
+        - id: tokenism.skills.cgp-schema
+          task: "CGP schema version alignment"
+          action:
+            type: grep
+            target: "PMOVES-ToKenism-Multi/"
+            pattern: "chit\\.cgp\\.v|cgp.*version"
+            expect: "CGP schema version referenced (chit.cgp.v1.0 canonical)"
+          context: "Transport: geometry.cgp.v1, Payload: chit.cgp.v0.2, Canonical: chit.cgp.v1.0"
+          agent_hint: codex

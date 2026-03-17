@@ -134,9 +134,6 @@ fi
 # =============================================================================
 log "   Scanning environment for credential variables..."
 
-ENV_VAR_PATTERNS=("_API_KEY$|_TOKEN$|_SECRET$|_PASSWORD$|_PRIVATE_KEY$|OPENAI_API_KEY|ANTHROPIC_API_KEY|GROQ_API_KEY|GEMINI_API_KEY|GOOGLE_API_KEY|MISTRAL_API_KEY|DEEPSEEK_API_KEY|OPENROUTER_API_KEY|XAI_API_KEY|ELEVENLABS_API_KEY|VOYAGE_API_KEY|COHERE_API_KEY|FIREWORKS_AI_API_KEY|PERPLEXITYAI_API_KEY|TOGETHER_AI_API_KEY|Z_AI_API_KEY|VENICE_API_KEY|CLOUDFLARE_API_TOKEN|CLOUDFLARE_ACCOUNT_ID|OLLAMA_BASE_URL")
-
-# Export functions for use with env
 # Scan environment for credential-like variables
 # Use temp file to avoid subshell issue with associative arrays
 TEMP_ENV_CREDS=$(mktemp)
@@ -145,7 +142,7 @@ TEMP_ENV_CREDS=$(mktemp)
 printenv | while IFS='=' read -r var value; do
   # Check if it looks like a credential
   case "$var" in
-    *_API_KEY|*_TOKEN|*_SECRET|*_PASSWORD|*_PRIVATE_KEY|OPENAI_API_KEY|ANTHROPIC_API_KEY|GROQ_API_KEY|GEMINI_API_KEY|GOOGLE_API_KEY|MISTRAL_API_KEY|DEEPSEEK_API_KEY|OPENROUTER_API_KEY|XAI_API_KEY|ELEVENLABS_API_KEY|VOYAGE_API_KEY|COHERE_API_KEY|FIREWORKS_AI_API_KEY|PERPLEXITYAI_API_KEY|TOGETHER_AI_API_KEY|Z_AI_API_KEY|VENICE_API_KEY|CLOUDFLARE_API_TOKEN|CLOUDFLARE_ACCOUNT_ID|OLLAMA_BASE_URL)
+    *_API_KEY|*_TOKEN|*_SECRET|*_PASSWORD|*_PRIVATE_KEY|OPENAI_API_KEY|ANTHROPIC_API_KEY|GROQ_API_KEY|GEMINI_API_KEY|GOOGLE_API_KEY|MISTRAL_API_KEY|DEEPSEEK_API_KEY|OPENROUTER_API_KEY|XAI_API_KEY|ELEVENLABS_API_KEY|VOYAGE_API_KEY|COHERE_API_KEY|FIREWORKS_AI_API_KEY|PERPLEXITYAI_API_KEY|TOGETHER_AI_API_KEY|Z_AI_API_KEY|ALIBABA_PRO_CODING_PLAN|VENICE_API_KEY|CLOUDFLARE_API_TOKEN|CLOUDFLARE_ACCOUNT_ID|OLLAMA_BASE_URL|GH_APP_ID|GH_APP_CLIENT_ID|GH_APP_SEC|GH_APP_INSTALLATION_ID)
       if [ -n "$value" ]; then
         echo "$var=$value" >> "$TEMP_ENV_CREDS"
       fi
@@ -221,7 +218,7 @@ write_to_env() {
 
 # Write GitHub-sourced credentials to .env.generated
 for secret in "${!GITHUB_SECRETS[@]}"; do
-  write_to_env "$ROOT_DIR/.env.generated" "$secret" "${GITHUB_SECREDS[$secret]}"
+  write_to_env "$ROOT_DIR/.env.generated" "$secret" "${GITHUB_SECRETS[$secret]}"
 done
 
 # Write Docker-sourced credentials to env.shared
@@ -231,7 +228,7 @@ done
 
 # Write environment-sourced credentials to env.shared
 # These are the main API keys for LLM providers
-TARGET_KEYS=("OPENAI_API_KEY" "ANTHROPIC_API_KEY" "GROQ_API_KEY" "GEMINI_API_KEY" "GOOGLE_API_KEY" "MISTRAL_API_KEY" "DEEPSEEK_API_KEY" "OPENROUTER_API_KEY" "XAI_API_KEY" "ELEVENLABS_API_KEY" "VOYAGE_API_KEY" "COHERE_API_KEY" "FIREWORKS_AI_API_KEY" "PERPLEXITYAI_API_KEY" "TOGETHER_AI_API_KEY" "Z_AI_API_KEY" "VENICE_API_KEY" "CLOUDFLARE_API_TOKEN" "CLOUDFLARE_ACCOUNT_ID")
+TARGET_KEYS=("OPENAI_API_KEY" "ANTHROPIC_API_KEY" "GROQ_API_KEY" "GEMINI_API_KEY" "GOOGLE_API_KEY" "MISTRAL_API_KEY" "DEEPSEEK_API_KEY" "OPENROUTER_API_KEY" "XAI_API_KEY" "ELEVENLABS_API_KEY" "VOYAGE_API_KEY" "COHERE_API_KEY" "FIREWORKS_AI_API_KEY" "PERPLEXITYAI_API_KEY" "TOGETHER_AI_API_KEY" "Z_AI_API_KEY" "ALIBABA_PRO_CODING_PLAN" "VENICE_API_KEY" "CLOUDFLARE_API_TOKEN" "CLOUDFLARE_ACCOUNT_ID" "OLLAMA_CLOUD_API_KEY" "WGER_ADMIN_PASSWORD")
 
 # Check env.tier-llm for LLM provider keys
 for key in "${TARGET_KEYS[@]}"; do
@@ -254,7 +251,7 @@ log "═════════════════════════
 if [[ "${!GITHUB_SECRETS[*]}" ]]; then
   log ""
   log "GitHub Secrets (from environment):"
-  for secret in "${!GITHUB_SECREDS[@]}"; do
+  for secret in "${!GITHUB_SECRETS[@]}"; do
     log "   ✓ $secret"
   done
 fi
@@ -288,6 +285,34 @@ fi
 
 log ""
 log "═══════════════════════════════════════════════════════════"
+
+# =============================================================================
+# 6. Validate Required Credentials
+# =============================================================================
+ENV_SHARED="$ROOT_DIR/env.shared"
+
+# Check if env.shared exists
+if [ -f "$ENV_SHARED" ]; then
+  # Required credentials that must be present (or generated via env-setup)
+  REQUIRED_KEYS=("SUPABASE_DB_PASSWORD" "JWT_SECRET" "WGER_DB_PASSWORD" "WGER_SECRET_KEY" "WGER_ADMIN_PASSWORD")
+  MISSING_KEYS=()
+
+  for key in "${REQUIRED_KEYS[@]}"; do
+    if ! grep -q "^${key}=" "$ENV_SHARED" 2>/dev/null; then
+      MISSING_KEYS+=("$key")
+    fi
+  done
+
+  if [ ${#MISSING_KEYS[@]} -gt 0 ]; then
+    log ""
+    log "⚠ WARNING: Missing required credentials in env.shared:"
+    for key in "${MISSING_KEYS[@]}"; do
+      log "   ✗ $key"
+    done
+    log ""
+    log "Run 'make -C pmoves env-setup' to generate missing credentials"
+  fi
+fi
 
 # Exit with appropriate code - safely count array elements
 written_ct=${#WRITTEN_FILES[@]}

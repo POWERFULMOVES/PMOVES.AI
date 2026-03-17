@@ -118,5 +118,53 @@
     "platforms": "linux/amd64,linux/arm64",
     "generate_sbom": true,
     "trivy_ignorefile": ""
+  },
+  {
+    "name": "a2ui-nats-bridge",
+    "git_url": "https://github.com/POWERFULMOVES/PMOVES.AI.git",
+    "ref": "main",
+    "context": "pmoves/services/a2ui-nats-bridge",
+    "dockerfile": "pmoves/services/a2ui-nats-bridge/Dockerfile",
+    "image_name": "pmoves-a2ui-nats-bridge",
+    "build_args": "",
+    "platforms": "linux/amd64,linux/arm64",
+    "generate_sbom": false,
+    "trivy_ignorefile": ""
+  },
+  {
+    "name": "session-context-worker",
+    "git_url": "https://github.com/POWERFULMOVES/PMOVES.AI.git",
+    "ref": "main",
+    "context": "pmoves",
+    "dockerfile": "pmoves/services/session-context-worker/Dockerfile",
+    "image_name": "pmoves-session-context-worker",
+    "build_args": "",
+    "platforms": "linux/amd64,linux/arm64",
+    "generate_sbom": false,
+    "trivy_ignorefile": ""
+  },
+  {
+    "name": "tokenism-ui",
+    "git_url": "https://github.com/POWERFULMOVES/PMOVES-ToKenism-Multi.git",
+    "ref": "PMOVES.AI-Edition-Hardened",
+    "context": "pmoves-nextjs",
+    "dockerfile": "pmoves-nextjs/Dockerfile",
+    "image_name": "pmoves-tokenism-ui",
+    "build_args": "",
+    "platforms": "linux/amd64,linux/arm64",
+    "generate_sbom": true,
+    "trivy_ignorefile": ""
+  },
+  {
+    "name": "llama-throughput-lab",
+    "git_url": "https://github.com/POWERFULMOVES/PMOVES-llama-throughput-lab.git",
+    "ref": "PMOVES.AI-Edition-Hardened",
+    "context": ".",
+    "dockerfile": "Dockerfile",
+    "image_name": "pmoves-llama-throughput-lab",
+    "build_args": "",
+    "platforms": "linux/amd64",
+    "generate_sbom": false,
+    "trivy_ignorefile": ""
   }
 ]

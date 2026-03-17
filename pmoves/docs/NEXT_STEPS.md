@@ -1,29 +1,176 @@
 
 # PMOVES v5 • NEXT_STEPS
 Note: Consolidated plan index at pmoves/docs/PMOVES.AI PLANS/README_DOCS_INDEX.md.
-_Last updated: 2026-03-04_
+_Last updated: 2026-03-12_
+
+## Current Status
+
+### Latest changes (Mar 12, 2026) — PMOVES.YT Authoritative Runtime Refresh
+- `PMOVES.YT` is now the authoritative runtime/docs lane for `pmoves-yt`; the root repo now builds the service from the submodule Dockerfile instead of treating `pmoves/services/pmoves-yt` as the source of truth.
+- Added a structured yt-dlp catalog inside the submodule (`/yt/docs/catalog`) so live runtime metadata exposes extractor counts, option inventory, and the active yt-dlp version.
+- Refreshed the Supabase docs sync path (`/yt/docs/sync`) for the current CLI stack: `pmoves_core.tool_docs` writes now use schema-profile headers plus URL-encoded `on_conflict`, and live sync is green again.
+- Kept the root `pmoves/services/pmoves-yt` package as a compatibility shim so existing tests and import paths remain stable during the production transition.
+- Modernized the downloader path around the authoritative runtime: PMOVES.YT now documents current yt-dlp client/token behavior, root compose passes companion URLs explicitly, and Jellyfin/channel-monitor docs are moving off older MCP/future-work framing.
+- Added `pmoves/docs/PMOVES.AI PLANS/CREATOR_NETWORK_CONTROL_PLANE.md` to frame YouTube, Discord agents, transcribe-and-fetch, model routing, and Tokenism as one creator-network lane.
+- Updated the AGENTS creator fast path so `PMOVES-Creator`, `PMOVES-Open-Notebook`, and `CATACLYSM_STUDIOS_INC` are explicit traversal docs for creator strategy, notebook evidence, and brand/governance context.
+- Added the first creator-control production lane now under review:
+  - `PMOVES.YT #4` adds approval-gated YouTube Data API actions, summary model-role routing, and modernized overlay lint/CI coverage.
+  - `PMOVES.AI #884` adds channel-monitor review queue endpoints, Discord approval routing, Supabase audit storage, and notebook-backed creator review artifacts.
+- Next focus: merge `PMOVES.YT #4` then `PMOVES.AI #884`, then expand the creator-control surface instead of doing more compatibility-mirror work.
+
+### Latest changes (Mar 12, 2026) — n8n Production Control Plane Refresh
+- `PMOVES-n8n` is now the authoritative n8n runtime/workflow lane; root `pmoves` consumes it instead of treating `pmoves/n8n/flows` as canon.
+- n8n defaults to the dedicated `n8n-db` Postgres sidecar (`make -C pmoves up-n8n`), with SQLite reduced to a legacy escape hatch only.
+- Added `make -C pmoves n8n-api-bootstrap` to automate owner bootstrap + Public API key rotation for n8n 2.1.
+- Workflow activation/import now targets the n8n Public API path, replacing the failing CLI publish/unpublish fallback for the production lane.
+- Added Supabase tracking schema `pmoves_core.n8n_workflow_registry` plus `make -C pmoves n8n-sync-supabase-registry` so PMOVES can inventory live workflow state.
+- Next focus: validate the full bootstrap against Postgres-backed n8n, refresh PMOVES.YT from demo to production against the same automation lane, and decide which BotZ/MCP workflows join the shared canonical catalog.
+
+## Immediate Actions
+
+1. Close the current hardened merge lane.
+   - merge `PMOVES.YT #4`
+   - merge `PMOVES.AI #884`
+   - verify hardened stays green after the submodule-first merge order
+
+2. Expand the M2 creator-control surface.
+   - add broader playlist and channel-management actions beyond the first owned-channel slice
+   - improve Discord rejection metadata and operator feedback
+   - move comment/reply generation onto policy-driven templates tied to `PMOVES-Creator`, `PMOVES-Open-Notebook`, and CATACLYSM context
+
+3. Keep the n8n control plane aligned with the creator lane.
+   - validate Postgres-backed `PMOVES-n8n` bootstrap end-to-end
+   - decide which BotZ/MCP workflows become canonical shared automation flows
+   - keep Supabase workflow registry sync green as creator automation expands
+
+### Latest changes (Mar 8, 2026) — CI Runner Migration + RG-3 Automation
+- **AB-9 mitigation:** Migrated 10 lightweight CI jobs from `[self-hosted, Linux, X64]` to `ubuntu-latest`:
+  - `sql-policy-lint`, `python-tests`, `webhook-smoke`, `yt-dlp-bump`, `deploy-gateway-agent` (validate only)
+  - `hardening-validation` (4/5 jobs; docker-bench kept on self-hosted with `vps` label)
+  - `build-images` (setup-matrix job only)
+- Added `max-parallel` throttling: `build-images` matrix (4), `self-hosted-builds-hardened` CPU matrix (3)
+- Added missing concurrency blocks: `codex-parity-advisory`, `webhook-smoke`
+- Added QEMU/Buildx setup to `yt-dlp-bump` for multi-arch builds on GitHub-hosted runners
+- **RG-3 automated:** New `supa-collation-refresh` and `supa-collation-check` Make targets; collation refresh runs automatically in `supa-start` bootstrap
+- Recommendation: consolidate `self-hosted-builds.yml` (subset of hardened version) by disabling its push trigger
+
+### Latest changes (Mar 8, 2026) — Post-Merge Audit Sweep
+- Post-merge production audit sweep completed after PRs `#823` and `#824` merged:
+  - `#823`: post-cleanup sitrep refresh (branch/stash/worktree hygiene + stale doc archival)
+  - `#824`: fix 8 broken links + 3 path mismatches in docs index (CodeRabbit review addressed)
+- Static gate sweep: 6/7 PASS (secrets-audit timed out — auth-alignment confirms 0 errors)
+  - Submodule integrity: 40 gitlinks, 0 drifted, 0 conflicts
+  - Branch policy: 40 checked, DoX override acknowledged
+  - Tooling audit: 0 errors, 0 warnings
+- Runtime verification snapshot:
+  - `smoke`: PASS (10/12 OK; Meilisearch + Neo4j pre-existing WARN)
+  - `model-readiness`: PASS (17/17, 0 failed, 1 TZ catalog warning)
+  - `monitoring-smoke`: PASS (Prometheus 36 active/28 healthy, 20 Grafana dashboards)
+  - `auth-alignment`: PASS (0 errors, 62 placeholder warnings)
+  - `GPU smoke (strict)`: PASS (v1 GPU optional warning only)
+- Release gate spot-checks:
+  - RG-1 PASS, RG-2 PASS, RG-3 KNOWN (collation mismatch pre-existing), RG-4 PASS, RG-5 PASS (8 personas)
+- CI/AB-9 status: all 4 runners offline, 4 queued runs identified as cancel candidates
+- Live backlog snapshot:
+  - Open PRs: `0`
+  - Dependabot alerts: `1` (`1 medium`)
+  - Code scanning alerts: `0`
+- Next focus: drain 4 stale queued CI runs, bring runners online for fresh CodeQL/GHCR verification
+
+### Latest changes (Mar 7, 2026)
+- Merge wave completed on `main`: 8 PRs merged in 3 batches
+  - Batch 1: `#814` (UI build fix), `#815` (smoke Supabase discovery), `#816` (healthcheck stability), `#817` (CI runner alignment), `#819` (DoX submodule bump)
+  - Batch 2: `#818` (model fabric + coding-plan wiring — rebased after 8 CodeRabbit comments)
+  - Batch 3: `#820` (distributed topology docs/examples), `#821` (chrome extension + 9 security fixes)
+- Chrome extension security hardening (`#821`):
+  - auth credentials moved from `chrome.storage.sync` to `session` (memory-only)
+  - XSS eliminated in options page (innerHTML → createElement)
+  - mock server hardened (method allowlist, pathname parsing)
+  - `synthesizeAudio` timeout added (AbortController)
+  - processing status auto-cleanup (5min TTL)
+  - config race condition fixed (configReady promise)
+  - storage write serialization (promise queue)
+  - CSP added to manifest.json
+- Distributed deployment documentation landed (`#820`):
+  - topology visualization with ASCII architecture diagrams
+  - example configs for local-network, Tailscale, and VPS deployments
+  - env.shared.example expanded with distributed config vars
+- GHCR matrix gap analysis completed:
+  - 4 compose-referenced images lack CI build definitions: `a2ui-nats-bridge`, `llama-throughput-lab`, `session-context-worker`, `tokenism-ui`
+  - `ultimate-tts-studio` is in GHCR (manually pushed) but has no automated CI build
+  - `integrations-ghcr.matrix.json` covers 10 of 24 `images.yaml` entries
+- Live backlog snapshot:
+  - Open PRs: `0`
+  - Dependabot alerts: `1` (`1 medium`)
+  - Code scanning alerts: `0`
+- Repo hygiene sweep completed:
+  - `make -C pmoves branch-cleanup EXECUTE=1` — remote branches: 553 → 62 (275 merged-deleted, 216 archived as `archive/*` tags)
+  - Local cleanup: 93 → 2 branches, 1 worktree removed, 5 stashes cleared
+  - Doc branch audit: 6 branches verified (content on main) and deleted
+  - Post-cleanup validation: all cross-linked docs intact
+
+### Latest changes (Mar 6, 2026)
+- Merge queue closeout completed on `main`:
+  - merged: `#797`, `#798`, `#799`, `#800`, `#802`, `#803`, `#804`, `#805`, `#806`, `#807`
+  - closed as superseded: `#801` (changes incorporated into `#802`)
+- CI blocker remediation merged in `#802`:
+  - fixed invalid CodeQL path filter syntax causing startup failures
+  - restored auth/bootstrap runtime compatibility (`auth-check`, `supabase-boot-user`)
+  - addressed outstanding CodeRabbit operational blockers (self-hosted trigger coverage, Open Notebook env/docs alignment, channel-monitor fallback)
+- Runtime production validation rerun:
+  - `make -C pmoves smoke` PASS
+  - `make -C pmoves model-readiness` PASS (`14/14`)
+  - `GPU_SMOKE_STRICT=true make -C pmoves smoke-gpu` PASS (v1 GPU optional warning only)
+- Remaining ops focus: keep non-main queued self-hosted runs drained to preserve throughput for `main` audits and release checks.
+- Published a canonical cross-integration model abstraction policy: `pmoves/docs/MODEL_FABRIC_CONTRACT.md`.
+  - codifies model/provider contract across Agent Zero, Archon, Open Notebook overlays, TensorZero routing, GPU orchestration, creator media lanes, and AgentGym-RL dataset/model loops.
+  - establishes upstream-first overlay rules and readiness gates for model-routing changes.
+  - enforces local-first cloud-hybrid fallback order:
+    - `local -> Ollama Cloud -> Cloudflare free tier -> coding-plan lanes (GLM coding plan, Claude Code, Codex CLI)`
+  - requires topology/agent PR review through Graphiti + CHIT rails (`pr-monitor-strict`, `chit-flow-pr-monitor-strict`) before merge.
+
+### Latest changes (Mar 5, 2026)
+- Production Python GHCR image reproducibility lane hardened:
+  - pinned Dockerfile build toolchain versions (`setuptools==82.0.0`, `wheel==0.46.3`) for `supaserch`, `deepresearch`, `pmoves-yt`, and `archon`
+  - added weekly canary workflow `.github/workflows/python-images-toolchain-canary.yml` (plus manual dispatch)
+  - canary gate behavior: candidate pin patch -> per-image local build -> per-image Trivy HIGH/CRITICAL gate -> auto-PR on pass
+- GHCR production release local-first validation broadened beyond SupaSerch:
+  - added matrix-driven local prepublish validator (`pmoves/tools/ghcr_local_prepublish.py`)
+  - added Make targets `ghcr-prepublish-inrepo`, `ghcr-prepublish-inrepo-build`, `ghcr-prepublish-all`, and `ghcr-dispatch-all`
+  - release default now validates all in-repo GHCR integrations locally before self-hosted dispatch
+- Notebook Workbench smoke lint updated to path-glob coverage so new/renamed workbench files are included automatically.
+- GHCR integration builds now target `vps` runner lane to avoid consuming GPU runner capacity for non-GPU build/scan jobs.
 
 ### Latest changes (Mar 4, 2026)
 - Divergence remediation + merge wave closeout completed:
   - hardened fixes merged: `#776`, `#777`, `#778`, `#779`, `#780`
   - promotion sync merged: `#781` (`PMOVES.AI-Edition-Hardened` -> `main`)
+- Admin merge closeout completed for review-blocked lanes:
+  - `PMOVES.AI`: `#782`, `#792`, `#793`, `#794`, `#795` merged
+  - submodules: `PMOVES-Agent-Zero #9`, `PMOVES-BoTZ #75`, `PMOVES-DoX #117/#118/#119` merged
 - Current branch parity:
   - file-content parity between `main` and hardened is clean (`git diff` empty)
   - commit-history divergence remains expected due squash promotion + explicit back-sync merge commits
 - Runtime verification status:
   - `make -C pmoves smoke` PASS
   - `make -C pmoves model-readiness` PASS (`14/14`, `0 warnings`)
+  - `GPU_SMOKE_STRICT=true make -C pmoves smoke-gpu` PASS (v1 GPU endpoint optional warning observed)
+  - local operator evidence logs captured for smoke/model-readiness/strict-GPU runs during this pass
   - unhealthy/restarting running containers: `0`
 - Supabase local reliability follow-up landed:
   - `make -C pmoves supa-start` now supports `SUPABASE_CLI_EXCLUDE`
   - `SUPABASE_CLI_EXCLUDE=vector` is now deterministic (stale `supabase_vector_*` container is removed when excluded)
 - Live backlog snapshot:
-  - Open PRs: `1` (`#782` Dependabot, low)
-  - Dependabot alerts: `1` (`1 low`)
-  - Code scanning alerts: `34` (`31 error`, `3 warning`)
+  - Open PRs: `0`
+  - Dependabot alerts: `1` (`1 medium`)
+  - Code scanning alerts: `0`
 - CI queue status:
   - self-hosted CodeQL/GHCR queue starvation remains active
   - stale queued runs from merged fix branches were drained during this pass to reduce lane pressure
+  - workflow controls were tightened using GitHub Actions best-practice levers:
+    - stale push/PR runs now auto-cancel per ref in `codeql.yml`, `hardening-validation.yml`, and `integrations-ghcr.yml` (manual dispatch remains non-canceling)
+    - matrix fan-out now throttled (`CodeQL max-parallel=1`, hardening Dockerfile checks `=2`, GHCR build matrix `=2`)
+    - GHCR push/PR triggers are now scoped to integration image source paths + workflow/matrix/trivy files to avoid docs-only queue churn
 
 ### Latest changes (Mar 3, 2026)
 - Production audit lane re-run completed on `main` with fresh evidence (`pmoves/PR_EVIDENCE/2026-03-03_11-27-10`).

@@ -1,0 +1,134 @@
+# TAC Tree: Archon Agent Service
+# Audits Archon forms, Supabase prompts, Agent Zero MCP integration
+
+name: "Archon Agent Service"
+version: "1.0.0"
+description: "Verify Archon service configuration, Supabase-backed prompts, Agent Zero MCP integration, and agent form management"
+
+root:
+  id: archon-agents
+  task: "Archon agent service review"
+  context: "PMOVES-Archon/ submodule + pmoves/docker-compose.yml"
+  agent_hint: codex
+  children:
+
+    # =========================================================================
+    # Phase 1: Archon Service Definition
+    # =========================================================================
+    - id: archon.service
+      task: "Archon service configuration"
+      context: "pmoves/docker-compose.yml"
+      agent_hint: codex
+      children:
+        - id: archon.service.submodule
+          task: "Archon submodule initialized"
+          action:
+            type: file_exists
+            target: "PMOVES-Archon/pyproject.toml"
+            expect: "Archon submodule present"
+          context: "Supabase-driven agent service"
+          agent_hint: codex
+
+        - id: archon.service.compose-defined
+          task: "Archon service in compose"
+          action:
+            type: grep
+            target: "pmoves/docker-compose.yml"
+            pattern: "archon:"
+            expect: "Service on port 8091 (API), 3737 (UI)"
+          context: "Part of agents compose profile"
+          agent_hint: codex
+
+        - id: archon.service.healthcheck
+          task: "Archon healthcheck"
+          action:
+            type: grep
+            target: "pmoves/docker-compose.yml"
+            pattern: "archon.*healthz|8091.*health"
+            expect: "Health endpoint at /healthz"
+          context: "GET http://localhost:8091/healthz"
+          agent_hint: codex
+
+    # =========================================================================
+    # Phase 2: Supabase Integration
+    # =========================================================================
+    - id: archon.supabase
+      task: "Supabase integration for prompts/forms"
+      context: "Archon uses Supabase for agent form storage"
+      agent_hint: codex
+      children:
+        - id: archon.supabase.url-config
+          task: "Supabase URL configured"
+          action:
+            type: grep
+            target: "pmoves/docker-compose.yml"
+            pattern: "SUPABASE_URL.*archon|archon.*SUPABASE"
+            expect: "Supabase connection configured for Archon"
+          context: "Reads prompts and agent forms from Supabase tables"
+          agent_hint: codex
+
+        - id: archon.supabase.service-key
+          task: "Service role key passed to Archon"
+          action:
+            type: grep
+            target: "pmoves/docker-compose.yml"
+            pattern: "SERVICE_ROLE_KEY.*archon|archon.*SERVICE_KEY"
+            expect: "Archon has service role key for Supabase access"
+          context: "Required for writing agent state to Supabase"
+          agent_hint: codex
+
+    # =========================================================================
+    # Phase 3: Agent Zero MCP Integration
+    # =========================================================================
+    - id: archon.mcp
+      task: "Agent Zero MCP integration"
+      context: "Archon connects to Agent Zero's MCP API"
+      agent_hint: codex
+      children:
+        - id: archon.mcp.url-config
+          task: "MCP service URL configured"
+          action:
+            type: grep
+            target: "pmoves/docker-compose.yml"
+            pattern: "MCP_SERVICE_URL|AGENTZERO.*URL"
+            expect: "Agent Zero MCP endpoint configured"
+          context: "Archon calls Agent Zero via MCP protocol"
+          agent_hint: codex
+
+        - id: archon.mcp.client-auth
+          task: "MCP client credentials configured"
+          action:
+            type: grep
+            target: "pmoves/docker-compose.yml"
+            pattern: "MCP_CLIENT_ID|MCP_CLIENT_SECRET"
+            expect: "MCP auth credentials passed to Archon"
+          context: "Client ID + secret for MCP API authentication"
+          agent_hint: codex
+
+    # =========================================================================
+    # Phase 4: TensorZero Integration
+    # =========================================================================
+    - id: archon.tensorzero
+      task: "TensorZero model routing"
+      context: "pmoves/tensorzero/config/tensorzero.toml"
+      agent_hint: codex
+      children:
+        - id: archon.tensorzero.work-orders
+          task: "archon_work_orders function defined"
+          action:
+            type: grep
+            target: "pmoves/tensorzero/config/tensorzero.toml"
+            pattern: "archon_work_orders"
+            expect: "Work orders function for autonomous workflow execution"
+          context: "Archon uses TensorZero for LLM calls"
+          agent_hint: codex
+
+        - id: archon.tensorzero.code-review
+          task: "archon_code_review function defined"
+          action:
+            type: grep
+            target: "pmoves/tensorzero/config/tensorzero.toml"
+            pattern: "archon_code_review"
+            expect: "Code review function for PR review"
+          context: "Used in pr-monitor-graphiti-chit skill pairing"
+          agent_hint: codex

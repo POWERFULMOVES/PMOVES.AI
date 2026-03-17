@@ -153,6 +153,13 @@ geometry.<type>.<event>.v1      # Core geometry events
   ```
 - **Subscribers:** publisher-discord, optimization dashboards
 
+### Credential Rotated
+
+**`tokenism.credential.rotated.v1`**
+- **Direction:** Published by ToKenism credential manager → Consumed by analytics, security
+- **Purpose:** Notification when a ToKenism credential (API key, signing key) is rotated
+- **Subscribers:** security dashboards, audit logs
+
 ### Geometry Event (Voice)
 
 **`tokenism.geometry.event.v1`**
@@ -205,6 +212,14 @@ geometry.<type>.<event>.v1      # Core geometry events
 - **Purpose:** CGP packets via Supabase Realtime channel
 - **Note:** Used for real-time geometry updates to connected clients
 - **Subscribers:** Hi-RAG v2 WebSocket consumers
+
+### CGP Calibration
+
+**`geometry.cgp.calibration.v1`**
+- **Direction:** Published by evo-controller → Consumed by Hi-RAG v2, analytics
+- **Purpose:** CGP calibration events from EvoSwarm RL parameter optimization
+- **Payload:** Calibration results with updated CGP parameters
+- **Subscribers:** Hi-RAG v2, parameter dashboards
 
 ### Geometry Event Raw
 

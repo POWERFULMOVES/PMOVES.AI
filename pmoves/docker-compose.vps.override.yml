@@ -31,8 +31,8 @@ services:
   tensorzero:
     <<: [*cpu-only, *vps-healthcheck]
     environment:
-      # Route GPU-intensive requests to home network via WireGuard
-      - OLLAMA_BASE_URL=${HOME_OLLAMA_URL:-http://10.0.0.1:11434}
+      # Route GPU-intensive requests to home network via Tailscale mesh
+      - OLLAMA_BASE_URL=${HOME_OLLAMA_URL:-http://pmoves-home:11434}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       # Default to cloud models on VPS
@@ -44,7 +44,7 @@ services:
       dockerfile: Dockerfile  # CPU-only version
     environment:
       - AGENTZERO_MODE=api
-      - TENSORZERO_URL=http://tensorzero:3030
+      - TENSORZERO_URL=http://tensorzero:3000
 
   hi-rag-gateway-v2:
     <<: [*cpu-only, *vps-healthcheck]
@@ -74,9 +74,9 @@ services:
     environment:
       - PORT=8100
       - AGENT_ZERO_URL=http://agent-zero:8080
-      - CIPHER_URL=http://pmoves-botz-cipher:8000
-      - TENSORZERO_URL=http://tensorzero-gateway:3000
-      - SUPABASE_URL=${SUPABASE_URL:-http://supabase-rest:3010}
+      - CIPHER_URL=http://cipher-api:8096
+      - TENSORZERO_URL=http://tensorzero:3000
+      - SUPABASE_URL=${SUPABASE_URL:-http://supabase-kong:8000}
       - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY}
       - TOOL_CACHE_TTL=300
       # API Keys (from GitHub Secrets or VPS env)
@@ -109,9 +109,41 @@ services:
           cpus: '2'
           memory: 4G
     volumes:
-      - supabase-data:/var/lib/postgresql/data
+      - supabase-db-data:/var/lib/postgresql/data
 
-  supabase-rest:
+  supabase-postgrest:
+    <<: [*cpu-only, *vps-healthcheck]
+
+  supabase-kong:
+    <<: [*cpu-only, *vps-healthcheck]
+
+  supabase-gotrue:
+    <<: [*cpu-only, *vps-healthcheck]
+
+  supabase-realtime:
+    <<: [*cpu-only, *vps-healthcheck]
+
+  supabase-storage:
+    <<: [*cpu-only, *vps-healthcheck]
+
+  supabase-imgproxy:
+    <<: [*cpu-only, *vps-healthcheck]
+
+  supabase-meta:
+    <<: [*cpu-only, *vps-healthcheck]
+
+  supabase-analytics:
+    <<: [*cpu-only, *vps-healthcheck]
+
+  supabase-edge-functions:
+    <<: [*cpu-only, *vps-healthcheck]
+
+  supabase-vector:
+    <<: [*cpu-only, *vps-healthcheck]
+    volumes:
+      - supabase-vector-data:/var/lib/vector
+
+  supabase-pooler:
     <<: [*cpu-only, *vps-healthcheck]
 
   qdrant:
@@ -168,64 +200,46 @@ services:
       timeout: 5s
       retries: 3
 
-  # WireGuard for home network tunnel
-  wireguard:
-    image: linuxserver/wireguard
-    cap_add:
-      - NET_ADMIN
-      - SYS_MODULE
-    environment:
-      - PUID=1000
-      - PGID=1000
-    volumes:
-      - ./wireguard:/config
-      - /lib/modules:/lib/modules:ro
-    sysctls:
-      - net.ipv4.conf.all.src_valid_mark=1
-    deploy:
-      resources:
-        limits:
-          cpus: '0.5'
-          memory: 256M
 
   # ============================================================================
-  # GPU Services - DISABLED on VPS
+  # GPU Services - Moved to 'gpu' profile (effectively disabled on CPU-only VPS)
   # ============================================================================
 
   hi-rag-gateway-v2-gpu:
     profiles:
-      - gpu-only
+      - gpu
 
   ffmpeg-whisper:
     profiles:
-      - gpu-only
+      - gpu
 
   ultimate-tts-studio:
     profiles:
-      - gpu-only
+      - gpu
 
   ollama:
     profiles:
-      - gpu-only
+      - gpu
 
   vllm:
     profiles:
-      - gpu-only
+      - gpu
 
   comfyui:
     profiles:
-      - gpu-only
+      - gpu
 
   media-video:
     profiles:
-      - gpu-only
+      - gpu
 
   media-audio:
     profiles:
-      - gpu-only
+      - gpu
 
 volumes:
-  supabase-data:
+  supabase-db-data:
+  supabase-vector-data:
   qdrant-data:
   neo4j-data:
   meili-data:
@@ -235,11 +249,6 @@ volumes:
 networks:
   pmoves-net:
     driver: bridge
-  wireguard-net:
-    driver: bridge
-    ipam:
-      config:
-        - subnet: 10.0.0.0/24
   # API Tier network (same name as base docker-compose.yml)
   pmoves_api:
     name: pmoves_api

@@ -1,10 +1,16 @@
 #!/usr/bin/env python3
-import os, re, sys
+import argparse
+import base64
+import platform
+import re
+import secrets
+import string
+import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-ENV = ROOT / "env.shared"
-ENV_GEN = ROOT / ".env.generated"
+ENV_DEFAULT = ROOT / "env.shared"
+ENV_GEN_DEFAULT = ROOT / ".env.generated"
 
 DEFAULTS = {
     # Storage / presign
@@ -21,98 +27,343 @@ DEFAULTS = {
     # REST bases
     "SUPA_REST_URL": "http://host.docker.internal:54321/rest/v1",
     "SUPA_REST_INTERNAL_URL": "http://host.docker.internal:54321/rest/v1",
-    # Presign/Render webhook secrets (demo defaults – replace for production)
+    # Presign/Render webhook secrets (demo defaults; replace in production)
     "PRESIGN_SHARED_SECRET": "change_me",
     "RENDER_WEBHOOK_SHARED_SECRET": "change_me",
 }
 
+PLACEHOLDER_VALUES = {
+    "",
+    "changeme",
+    "change_me",
+    "base64:CHANGE_ME",
+    "GENERATE_FROM_WGER_UI",
+    "SURREAL_USER_HERE",
+    "SURREAL_PASS_HERE",
+    "root",
+    "pmoves4482",
+}
+
+
+def _normalize_env_value(value: str) -> str:
+    value = value.strip()
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+        return value[1:-1].strip()
+    return value
+
+
 def _strong_random(n_bytes: int) -> str:
-    try:
-        import secrets
-        return secrets.token_urlsafe(n_bytes)
-    except Exception:
-        # Fallback to a simple hex string of requested bytes
-        import os
-        return os.urandom(n_bytes).hex()
+    return secrets.token_urlsafe(n_bytes)
 
 
 def _rand_exact_len(n_chars: int) -> str:
-    # URL-safe base64 may overshoot; trim/pad deterministically
     s = _strong_random(max(12, n_chars))
     if len(s) < n_chars:
         s = (s * ((n_chars // len(s)) + 1))[:n_chars]
     return s[:n_chars]
 
 
+def _rand_alnum(n_chars: int) -> str:
+    alphabet = string.ascii_lowercase + string.digits
+    return "".join(secrets.choice(alphabet) for _ in range(n_chars))
+
+
+def _get_kv(text: str, key: str) -> str:
+    m = re.search(rf"^\s*{re.escape(key)}\s*=(.*)$", text, re.M)
+    raw = (m.group(1).strip() if m else "").strip()
+    return _normalize_env_value(raw)
+
+
 def _set_kv(text: str, key: str, value: str) -> str:
     pat = rf"^(\s*{re.escape(key)}\s*=).*$"
     if re.search(pat, text, re.M):
         return re.sub(pat, lambda m: m.group(1) + value, text, flags=re.M)
-    else:
-        return text + f"\n{key}={value}\n"
+    return text + f"\n{key}={value}\n"
 
 
-def upsert_env(path: Path, pairs: dict) -> None:
+def _is_blank_or_placeholder(value: str) -> bool:
+    normalized = _normalize_env_value(value)
+    return not normalized or normalized in PLACEHOLDER_VALUES
+
+
+def _first_real(text: str, keys: list[str]) -> str:
+    for key in keys:
+        value = _get_kv(text, key)
+        if not _is_blank_or_placeholder(value):
+            return value
+    return ""
+
+
+def _ensure_notebook_and_surreal_credentials(text: str) -> str:
+    notebook_secret = _first_real(text, ["OPEN_NOTEBOOK_PASSWORD", "OPEN_NOTEBOOK_API_TOKEN"])
+    if not notebook_secret:
+        notebook_secret = "pm_nb_" + _strong_random(16)
+    text = _set_kv(text, "OPEN_NOTEBOOK_PASSWORD", notebook_secret)
+    text = _set_kv(text, "OPEN_NOTEBOOK_API_TOKEN", notebook_secret)
+
+    surreal_user = _first_real(text, ["OPEN_NOTEBOOK_SURREAL_USER", "SURREAL_USER"])
+    if not surreal_user:
+        surreal_user = "pm_surreal_" + _rand_alnum(8)
+    surreal_pass = _first_real(text, ["OPEN_NOTEBOOK_SURREAL_PASS", "SURREAL_PASS"])
+    if not surreal_pass:
+        surreal_pass = "pm_sr_" + _strong_random(16)
+
+    text = _set_kv(text, "SURREAL_USER", surreal_user)
+    text = _set_kv(text, "SURREAL_PASS", surreal_pass)
+    text = _set_kv(text, "OPEN_NOTEBOOK_SURREAL_USER", surreal_user)
+    text = _set_kv(text, "OPEN_NOTEBOOK_SURREAL_PASS", surreal_pass)
+    return text
+
+
+def _ensure_integration_credentials(text: str) -> str:
+    """Auto-generate credentials for Firefly III, n8n, and Wger if missing."""
+    # Firefly III APP_KEY: Laravel requires 'base64:' + 32 random bytes base64-encoded
+    firefly_key = _get_kv(text, "FIREFLY_APP_KEY")
+    if _is_blank_or_placeholder(firefly_key) or firefly_key == "base64:CHANGE_ME":
+        raw = secrets.token_bytes(32)
+        firefly_key = "base64:" + base64.b64encode(raw).decode("ascii")
+        text = _set_kv(text, "FIREFLY_APP_KEY", firefly_key)
+
+    # n8n encryption key: 32-byte urlsafe token for workflow credential encryption.
+    # N8N_API_KEY is still not generated here because it requires a live n8n
+    # instance; use `make -C pmoves n8n-api-bootstrap` after bring-up.
+    n8n_enc = _get_kv(text, "N8N_ENCRYPTION_KEY")
+    if _is_blank_or_placeholder(n8n_enc):
+        text = _set_kv(text, "N8N_ENCRYPTION_KEY", _strong_random(32))
+
+    # n8n runners auth token: shared secret for the runners container
+    n8n_runners = _get_kv(text, "N8N_RUNNERS_AUTH_TOKEN")
+    if _is_blank_or_placeholder(n8n_runners):
+        text = _set_kv(text, "N8N_RUNNERS_AUTH_TOKEN", _strong_random(24))
+
+    # Wger database password: PostgreSQL password for the wger database
+    wger_db_pass = _get_kv(text, "WGER_DB_PASSWORD")
+    if _is_blank_or_placeholder(wger_db_pass):
+        try:
+            # Use URL-safe base64 to avoid '/' characters that break DATABASE_URL DSN parsing
+            wger_db_pass = secrets.token_urlsafe(24)
+            text = _set_kv(text, "WGER_DB_PASSWORD", wger_db_pass)
+        except Exception as e:
+            print(f"ERROR: Failed to generate WGER_DB_PASSWORD: {e}", file=sys.stderr)
+            print("Generate manually: python -c 'import secrets; print(secrets.token_urlsafe(24))'", file=sys.stderr)
+            sys.exit(1)
+
+    # Wger Django secret key: Django SECRET_KEY for cryptographic signing
+    wger_secret = _get_kv(text, "WGER_SECRET_KEY")
+    if _is_blank_or_placeholder(wger_secret):
+        try:
+            wger_secret = base64.b64encode(secrets.token_bytes(48)).decode("utf-8")
+            text = _set_kv(text, "WGER_SECRET_KEY", wger_secret)
+        except Exception as e:
+            print(f"ERROR: Failed to generate WGER_SECRET_KEY: {e}", file=sys.stderr)
+            print("Generate manually: openssl rand -base64 48", file=sys.stderr)
+            sys.exit(1)
+
+    # Wger admin password: Admin account password for the wger web interface
+    wger_admin_pass = _get_kv(text, "WGER_ADMIN_PASSWORD")
+    if _is_blank_or_placeholder(wger_admin_pass):
+        try:
+            wger_admin_pass = base64.b64encode(secrets.token_bytes(16)).decode("utf-8")
+            text = _set_kv(text, "WGER_ADMIN_PASSWORD", wger_admin_pass)
+        except Exception as e:
+            print(f"ERROR: Failed to generate WGER_ADMIN_PASSWORD: {e}", file=sys.stderr)
+            print("Generate manually: openssl rand -base64 16", file=sys.stderr)
+            sys.exit(1)
+
+    # Wger API token: Django REST Framework tokens must be created via the
+    # admin UI — random tokens are rejected.  Set a sentinel so operators
+    # know to generate one from http://localhost:8000/api/v2/token.
+    wger_token = _get_kv(text, "WGER_API_TOKEN")
+    if _is_blank_or_placeholder(wger_token):
+        text = _set_kv(text, "WGER_API_TOKEN", "GENERATE_FROM_WGER_UI")
+
+    return text
+
+
+def _ensure_identity_defaults(text: str) -> str:
+    """Seed operator identity and branding. Safe defaults for new deployers;
+    DARKXSIDE values are set via env.shared, not hardcoded here."""
+    # OPERATOR_EMAIL: top-level identity cascading to Supabase + n8n
+    op_email = _get_kv(text, "OPERATOR_EMAIL")
+    if not op_email:
+        text = _set_kv(text, "OPERATOR_EMAIL", "")
+
+    # BRAND_NAME: display name for UI surfaces and notifications
+    brand = _get_kv(text, "BRAND_NAME")
+    if not brand:
+        text = _set_kv(text, "BRAND_NAME", "PMOVES.AI")
+
+    # SUPPORT_EMAIL: user-facing support contact (optional)
+    support = _get_kv(text, "SUPPORT_EMAIL")
+    if not support:
+        text = _set_kv(text, "SUPPORT_EMAIL", "")
+
+    # Cascade: if OPERATOR_EMAIL is set, seed downstream services that still
+    # have placeholder emails.  This avoids requiring the operator to set each
+    # service email individually.
+    op_email = _get_kv(text, "OPERATOR_EMAIL")
+    if op_email and op_email not in PLACEHOLDER_VALUES and "${" not in op_email:
+        boot_email = _get_kv(text, "SUPABASE_BOOT_USER_EMAIL")
+        if not boot_email or boot_email in PLACEHOLDER_VALUES or boot_email == "you@example.com" or "${" in boot_email:
+            text = _set_kv(text, "SUPABASE_BOOT_USER_EMAIL", op_email)
+
+        n8n_email = _get_kv(text, "N8N_OWNER_EMAIL")
+        if not n8n_email or n8n_email in PLACEHOLDER_VALUES or "${" in n8n_email:
+            text = _set_kv(text, "N8N_OWNER_EMAIL", op_email)
+
+        wger_email = _get_kv(text, "WGER_BRAND_ADMIN_EMAIL")
+        if not wger_email or wger_email in PLACEHOLDER_VALUES or wger_email == "admin@example.com" or "${" in wger_email:
+            text = _set_kv(text, "WGER_BRAND_ADMIN_EMAIL", op_email)
+
+    return text
+
+
+def _ensure_tailscale_defaults(text: str) -> str:
+    """Auto-populate Tailscale hostname and tags. Auth key is manual (console-only)."""
+    # Hostname: derive from machine hostname if not set
+    ts_hostname = _get_kv(text, "TAILSCALE_HOSTNAME")
+    if not ts_hostname:
+        node = platform.node().lower().replace(" ", "-")
+        text = _set_kv(text, "TAILSCALE_HOSTNAME", f"pmoves-{node}")
+
+    # Tags: default to tag:pmoves for mesh ACLs
+    ts_tags = _get_kv(text, "TAILSCALE_TAGS")
+    if not ts_tags:
+        text = _set_kv(text, "TAILSCALE_TAGS", "tag:pmoves")
+
+    # SSH: enable by default
+    ts_ssh = _get_kv(text, "TAILSCALE_SSH")
+    if not ts_ssh:
+        text = _set_kv(text, "TAILSCALE_SSH", "true")
+
+    # Validate auth key format if present (warn, don't overwrite)
+    ts_authkey = _get_kv(text, "TAILSCALE_AUTHKEY")
+    if ts_authkey and not ts_authkey.startswith("tskey-auth-"):
+        print(
+            "WARNING: TAILSCALE_AUTHKEY does not start with 'tskey-auth-' — "
+            "may be invalid. Get a key from https://login.tailscale.com/admin/settings/keys",
+            file=sys.stderr,
+        )
+
+    return text
+
+
+def _ensure_agent_zero_defaults(text: str) -> str:
+    """Seed Agent Zero orchestrator defaults: MCP secret, JetStream, model routing."""
+    # MCP_CLIENT_SECRET: auto-generate if missing (32-byte urlsafe)
+    mcp_secret = _get_kv(text, "MCP_CLIENT_SECRET")
+    if _is_blank_or_placeholder(mcp_secret):
+        text = _set_kv(text, "MCP_CLIENT_SECRET", _strong_random(32))
+
+    # AGENTZERO_JETSTREAM: default to true for reliable NATS delivery
+    jetstream = _get_kv(text, "AGENTZERO_JETSTREAM")
+    if not jetstream:
+        text = _set_kv(text, "AGENTZERO_JETSTREAM", "true")
+
+    # A0_SET_chat_model: default to TensorZero chat route
+    chat_model = _get_kv(text, "A0_SET_chat_model")
+    if not chat_model:
+        text = _set_kv(text, "A0_SET_chat_model", "tensorzero::model_name::chat_default")
+
+    # A0_SET_utility_model: default to TensorZero utility route
+    util_model = _get_kv(text, "A0_SET_utility_model")
+    if not util_model:
+        text = _set_kv(text, "A0_SET_utility_model", "tensorzero::model_name::util_default")
+
+    # A0_SET_embedding_model: default to TensorZero embedding route
+    embed_model = _get_kv(text, "A0_SET_embedding_model")
+    if not embed_model:
+        text = _set_kv(text, "A0_SET_embedding_model", "tensorzero::embedding_model_name::embed_default")
+
+    return text
+
+
+def upsert_env(path: Path, env_gen_path: Path, pairs: dict[str, str]) -> None:
+    """Apply branded defaults to env file, strengthen weak keys, and write back."""
     text = path.read_text(encoding="utf-8") if path.exists() else ""
-    for k, v in pairs.items():
-        if re.search(rf"^\s*{re.escape(k)}\s*=.*$", text, re.M):
-            # keep existing non-empty values
-            m = re.search(rf"^\s*{re.escape(k)}\s*=(.*)$", text, re.M)
-            current = (m.group(1).strip() if m else "").strip()
-            if current:
-                continue
-            text = _set_kv(text, k, v)
-        else:
-            text += f"\n{k}={v}\n"
+    for key, value in pairs.items():
+        current = _get_kv(text, key)
+        if current and current not in PLACEHOLDER_VALUES:
+            continue
+        text = _set_kv(text, key, value)
 
     # Strengthen keys if weak/short
-    # Meilisearch requires >= 16 bytes; use a 32+ char token when short
-    m = re.search(r"^\s*MEILI_MASTER_KEY\s*=(.*)$", text, re.M)
-    if not m or len(m.group(1).strip()) < 16:
+    meili_key = _get_kv(text, "MEILI_MASTER_KEY")
+    if len(meili_key) < 16:
         text = _set_kv(text, "MEILI_MASTER_KEY", _strong_random(24))
 
-    # Invidious companion requires exactly 16 chars for SERVER_SECRET_KEY
-    m = re.search(r"^\s*INVIDIOUS_COMPANION_KEY\s*=(.*)$", text, re.M)
-    if not m or len(m.group(1).strip()) != 16:
-        key16 = _rand_exact_len(16)
-        text = _set_kv(text, "INVIDIOUS_COMPANION_KEY", key16)
+    companion_key = _get_kv(text, "INVIDIOUS_COMPANION_KEY")
+    if len(companion_key) != 16:
+        text = _set_kv(text, "INVIDIOUS_COMPANION_KEY", _rand_exact_len(16))
 
-    # Prefer longer HMAC key for Invidious proper
-    m = re.search(r"^\s*INVIDIOUS_HMAC_KEY\s*=(.*)$", text, re.M)
-    if not m or len(m.group(1).strip()) < 32:
+    hmac_key = _get_kv(text, "INVIDIOUS_HMAC_KEY")
+    if len(hmac_key) < 32:
         text = _set_kv(text, "INVIDIOUS_HMAC_KEY", _strong_random(24))
-    # Ensure NEO4J_PASSWORD exists; generate if missing/empty
-    pwdm = re.search(r"^\s*NEO4J_PASSWORD\s*=(.*)$", text, re.M)
-    needs_pw = True
-    if pwdm:
-        current = pwdm.group(1).strip()
-        if current:
-            needs_pw = False
-    if needs_pw:
-        try:
-            import secrets
-            neo_pw = "pm_" + secrets.token_urlsafe(16)
-        except Exception:
-            neo_pw = "pmovesLocal!"  # fallback
-        if pwdm:
-            text = re.sub(r"^(\s*NEO4J_PASSWORD\s*=).*$", rf"\1 {neo_pw}", text, flags=re.M)
-        else:
-            text += f"\nNEO4J_PASSWORD={neo_pw}\n"
-    neo4j_pw = re.search(r"^\s*NEO4J_PASSWORD\s*=(.*)$", text, re.M).group(1).strip()
-    text = _set_kv(text, "NEO4J_AUTH", f"neo4j/{neo4j_pw}")
+
+    neo4j_password = _get_kv(text, "NEO4J_PASSWORD")
+    if _is_blank_or_placeholder(neo4j_password):
+        neo4j_password = "pm_" + _strong_random(16)
+        text = _set_kv(text, "NEO4J_PASSWORD", neo4j_password)
+    text = _set_kv(text, "NEO4J_AUTH", f"neo4j/{neo4j_password}")
+
+    # Generate Open Notebook + Surreal credentials per install if missing.
+    text = _ensure_notebook_and_surreal_credentials(text)
+
+    # Generate integration credentials (Firefly III, n8n, Wger) if missing.
+    text = _ensure_integration_credentials(text)
+
+    # Identity defaults: operator email cascades to Supabase, n8n, Wger.
+    text = _ensure_identity_defaults(text)
+
+    # Tailscale defaults: auto-populate hostname and tags (auth key is manual).
+    text = _ensure_tailscale_defaults(text)
+
+    # Agent Zero defaults: MCP secret, JetStream, model routing.
+    text = _ensure_agent_zero_defaults(text)
+
+    # CHIT passphrase: auto-generate if blank (HMAC signing + anchor encryption key).
+    chit_pass = _get_kv(text, "CHIT_PASSPHRASE")
+    if _is_blank_or_placeholder(chit_pass):
+        text = _set_kv(text, "CHIT_PASSPHRASE", _strong_random(48))
+
     path.write_text(text, encoding="utf-8")
-    # Mirror NEO4J_AUTH into .env.generated for compose-only consumers
-    gen = ENV_GEN.read_text(encoding="utf-8") if ENV_GEN.exists() else ""
-    gen = _set_kv(gen, "NEO4J_AUTH", f"neo4j/{neo4j_pw}")
-    ENV_GEN.write_text(gen, encoding="utf-8")
+
+    # Mirror NEO4J_AUTH into .env.generated for compose-only consumers.
+    env_gen_path.parent.mkdir(parents=True, exist_ok=True)
+    gen = env_gen_path.read_text(encoding="utf-8") if env_gen_path.exists() else ""
+    gen = _set_kv(gen, "NEO4J_AUTH", f"neo4j/{neo4j_password}")
+    env_gen_path.write_text(gen, encoding="utf-8")
+
+
+def parse_args() -> argparse.Namespace:
+    """Parse CLI arguments for env file paths."""
+    parser = argparse.ArgumentParser(description="Apply branded env defaults.")
+    parser.add_argument("--env-file", type=Path, default=ENV_DEFAULT, help="Path to env file.")
+    parser.add_argument(
+        "--generated-env-file",
+        type=Path,
+        default=ENV_GEN_DEFAULT,
+        help="Path to generated env file for compose mirrors.",
+    )
+    return parser.parse_args()
+
 
 def main() -> int:
-    ENV.parent.mkdir(parents=True, exist_ok=True)
-    if not ENV.exists():
-        ENV.write_text("", encoding="utf-8")
-    upsert_env(ENV, DEFAULTS)
-    print(f"✔ Branded defaults applied to {ENV}")
+    """Entry point: load env file, apply all branded defaults, write back."""
+    args = parse_args()
+    env_path = args.env_file
+    env_gen_path = args.generated_env_file
+    try:
+        env_path.parent.mkdir(parents=True, exist_ok=True)
+        if not env_path.exists():
+            env_path.write_text("", encoding="utf-8")
+        upsert_env(env_path, env_gen_path, DEFAULTS)
+    except OSError as e:
+        print(f"Error writing env files: {e}", file=sys.stderr)
+        return 1
+    print(f"Branded defaults applied to {env_path}")
     return 0
+
 
 if __name__ == "__main__":
     sys.exit(main())

@@ -36,8 +36,6 @@ export function SystemStatsBar({
   const statusColor = percentage >= 80 ? 'text-cata-forest' :
                      percentage >= 50 ? 'text-cata-gold' : 'text-cata-ember';
 
-  const statusBg = percentage >= 80 ? 'bg-cata-forest/10' :
-                   percentage >= 50 ? 'bg-cata-gold/10' : 'bg-cata-ember/10';
 
   // Format last update time
   const formatTime = (date: Date | null) => {
@@ -50,11 +48,15 @@ export function SystemStatsBar({
   };
 
   return (
-    <div className={`
+    <div
+      className={`
       flex flex-wrap items-center justify-between gap-4
       p-4 rounded-lg border border-brand-border bg-void-soft
       ${className}
-    `}>
+    `}
+      aria-live="polite"
+      aria-label="System health status"
+    >
       {/* Left: Overall Health */}
       <div className="flex items-center gap-4">
         <div className="flex items-center gap-3">

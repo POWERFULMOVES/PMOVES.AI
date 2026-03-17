@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import logging
 import os
-import time
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 import httpx
@@ -283,19 +283,22 @@ class AgentGymIntegration:
         parameter_pack: Optional[Dict[str, Any]] = None
     ) -> Optional[Dict[str, Any]]:
         """
-        Launch AgentGym-RL training via coordinator API.
-
-        Args:
-            decision: Training decision from evaluate_training_trigger()
-            parameter_pack: Latest geometry parameter pack (optional)
-
+        Start an AgentGym-RL training run via the coordinator API when the provided decision requests training.
+        
+        Parameters:
+            decision (Dict[str, Any]): Decision produced by evaluate_training_trigger(). Expected keys:
+                - "should_train" (bool): whether training should be launched.
+                - "config" (dict): training configuration to send to the coordinator (e.g., horizon, num_epochs, learning_rate, focus_namespace).
+                - "reason" (str): human-readable trigger reason used for logging.
+            parameter_pack (Optional[Dict[str, Any]]): Optional geometry parameter pack; if present its "pack_id" will be included in the geometry_config.
+        
         Returns:
-            Training run result dict, or None if launch failed
+            Optional[Dict[str, Any]]: The coordinator's training run response (contains keys such as "training_run_id") on success, or `None` if no training was requested or the launch failed.
         """
         if not decision.get("should_train"):
             return None
 
-        base_model = os.getenv("AGENTGYM_BASE_MODEL", "Qwen2.5-7B-Instruct")
+        base_model = os.getenv("AGENTGYM_BASE_MODEL", "Qwen/Qwen3-8B")
         env_namespace = os.getenv("AGENTGYM_ENV_NAMESPACE", "pmoves.consciousness")
 
         # Build training request
@@ -348,17 +351,70 @@ class AgentGymIntegration:
             logger.error("Failed to launch AgentGym training: %s", e, exc_info=True)
             return None
 
+    async def on_training_completed(
+        self,
+        training_run_id: str,
+        trajectory_ids: List[str],
+        model_id: Optional[str] = None,
+        fitness_metrics: Optional[Dict[str, float]] = None,
+    ) -> None:
+        """
+        Publish a training completion event to the agent-zero event bus.
+
+        Sends an event with training metadata so downstream services (AgentGym-RL coordinator, publishing workflows) can process the completed run. The emitted payload includes training_run_id, trajectory_ids, model_id (resolved from the provided value or environment), population_id, fitness_metrics, epoch, generation, and an ISO-8601 UTC timestamp. On success the method logs the publication; on failure it logs a warning.
+
+        Parameters:
+            training_run_id (str): Identifier of the completed training run.
+            trajectory_ids (List[str]): List of trajectory identifiers produced by the run.
+            model_id (Optional[str]): Model identifier used for training; if omitted, the base model is resolved from environment variables or a default.
+            fitness_metrics (Optional[Dict[str, float]]): Final fitness metrics collected from the training; an empty dict is sent if omitted.
+        """
+        base_model = model_id or os.getenv("AGENTGYM_BASE_MODEL", "Qwen/Qwen3-8B")
+        base = os.getenv("AGENT_ZERO_BASE_URL") or os.getenv("AGENTZERO_BASE_URL") or "http://agent-zero:8080"
+        url = f"{base.rstrip('/')}/events/publish"
+
+        body = {
+            "topic": "agentgym.train.completed.v1",
+            "source": "evo-controller",
+            "payload": {
+                "training_run_id": training_run_id,
+                "trajectory_ids": trajectory_ids,
+                "model_id": base_model,
+                "population_id": f"pop-{self._current_generation}",
+                "fitness_metrics": fitness_metrics or {},
+                "epoch": self._current_epoch,
+                "generation": self._current_generation,
+                "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            }
+        }
+
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                r = await client.post(url, json=body)
+                r.raise_for_status()
+                logger.info(
+                    "Published agentgym.train.completed.v1: run=%s, trajectories=%d",
+                    training_run_id, len(trajectory_ids),
+                )
+        except Exception as e:
+            logger.warning(
+                "Failed to publish agentgym.train.completed.v1: %s (agent-zero not reachable?)",
+                e,
+            )
+
     async def publish_training_event(
         self,
         training_result: Dict[str, Any],
         decision: Dict[str, Any]
     ) -> None:
         """
-        Publish training event to NATS: agentgym.train.started.v1
-
-        Args:
-            training_result: Response from coordinator /train/start endpoint
-            decision: Training decision that triggered launch
+        Publish a training-started event to the Agent-Zero event bus.
+        
+        Sends an HTTP POST to the Agent-Zero /events/publish endpoint with a payload that includes training_run_id, environment, trigger_reason, population_id, algorithm, horizon, num_epochs, learning_rate, geometry_config (reward weights), and a UTC timestamp.
+        
+        Parameters:
+            training_result (Dict[str, Any]): Response returned by the coordinator's /train/start endpoint; used to extract fields such as `training_run_id`, `environment`, and `population_id`.
+            decision (Dict[str, Any]): The decision object that triggered training; used to extract the trigger `reason` and training `config` values like `algorithm`, `horizon`, `num_epochs`, and `learning_rate`.
         """
         base = os.getenv("AGENT_ZERO_BASE_URL") or os.getenv("AGENTZERO_BASE_URL") or "http://agent-zero:8080"
         url = f"{base.rstrip('/')}/events/publish"
@@ -380,7 +436,7 @@ class AgentGymIntegration:
                     "retrieval_quality_weight": self.retrieval_quality_weight,
                     "task_success_weight": self.task_success_weight
                 },
-                "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ")
+                "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
             }
         }
 
@@ -413,7 +469,7 @@ class AgentGymIntegration:
         """
         Return current AgentGym training status for observability.
 
-        Exposed via /config or /swarm/status endpoint.
+        Exposed via /config endpoint.
         """
         return {
             "enabled": self.enable_training,

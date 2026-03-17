@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import { logForDebugging } from '@/lib/errorUtils';
 
 type Catalog = {
   ok: boolean;
@@ -46,8 +47,8 @@ export default function YtDlpStatus() {
             if (rows.length) setLastSync(rows[0].created_at);
           }
         }
-      } catch {
-        /* ignore */
+      } catch (e) {
+        logForDebugging('Failed to fetch yt-dlp sync status', e, { component: 'YtDlpStatus' });
       }
     })();
   }, []);

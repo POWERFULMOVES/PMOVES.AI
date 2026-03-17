@@ -60,13 +60,13 @@ def main() -> int:
             os.getenv("CODEX_HEALTH_HIRAG_URL", "http://localhost:8086/hirag/admin/stats"),
         ],
         "flute-gateway": [
-            os.getenv("CODEX_HEALTH_FLUTE_URL", "http://localhost:8092/healthz"),
+            os.getenv("CODEX_HEALTH_FLUTE_URL", "http://localhost:8055/healthz"),
         ],
         "evo-controller": [
-            os.getenv("CODEX_HEALTH_EVO_URL", "http://localhost:8090/healthz"),
+            os.getenv("CODEX_HEALTH_EVO_URL", "http://localhost:8113/healthz"),
         ],
         "botz-gateway": [
-            os.getenv("CODEX_HEALTH_BOTZ_URL", "http://localhost:8097/healthz"),
+            os.getenv("CODEX_HEALTH_BOTZ_URL", "http://localhost:8054/healthz"),
         ],
     }
 

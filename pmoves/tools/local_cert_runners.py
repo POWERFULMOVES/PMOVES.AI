@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Manage local-certification GitHub runners via Docker containers.
 
-This keeps the local-cert lanes (`ai-lab` and `vps`) reproducible across
-Windows/WSL/Linux without manual shell sequences.
+This keeps the local-cert lanes (`ai-lab`, `vps`, and `hotfix`) reproducible
+across Windows/WSL/Linux without manual shell sequences.
 """
 
 from __future__ import annotations
@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import platform
 import shutil
 import subprocess
 import sys
@@ -37,16 +38,37 @@ LANES: tuple[RunnerLane, ...] = (
         runner_name="pmoves-vps-runner",
         labels="self-hosted,vps,Linux,X64",
     ),
+    RunnerLane(
+        lane="hotfix",
+        container_name="gha-runner-hotfix",
+        runner_name="pmoves-hotfix-runner",
+        labels="self-hosted,hotfix,Linux,X64",
+    ),
 )
 
 
-def run_cmd(args: list[str], check: bool = True) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
-        args,
-        check=check,
-        text=True,
-        capture_output=True,
-    )
+def run_cmd(args: list[str], check: bool = True,
+            timeout: int = 120) -> subprocess.CompletedProcess[str]:
+    """Run a subprocess command with timeout handling.
+
+    TimeoutExpired is re-raised when check=True but returns a synthetic
+    CompletedProcess(returncode=-1) when check=False so callers like
+    docker_rm and _runner_log_args degrade gracefully.
+    """
+    try:
+        return subprocess.run(
+            args,
+            check=check,
+            text=True,
+            capture_output=True,
+            timeout=timeout,
+        )
+    except subprocess.TimeoutExpired:
+        if check:
+            raise
+        return subprocess.CompletedProcess(
+            args, returncode=-1, stdout="", stderr="timed out",
+        )
 
 
 def require_tool(name: str) -> None:
@@ -55,6 +77,7 @@ def require_tool(name: str) -> None:
 
 
 def registration_token(repo: str, lane: str) -> str:
+    """Fetch a short-lived GitHub runner registration token (~1h validity)."""
     env_name = f"RUNNER_TOKEN_{lane.replace('-', '_').upper()}"
     lane_token = os.getenv(env_name)
     if lane_token:
@@ -80,6 +103,37 @@ def registration_token(repo: str, lane: str) -> str:
     return token
 
 
+def access_token(repo: str, lane: str) -> tuple[str, bool]:
+    """Get a GitHub PAT for persistent runner auto-registration.
+
+    With ACCESS_TOKEN, the myoung34/github-runner container auto-fetches
+    fresh registration tokens on each restart, preventing the perpetual
+    404 loop caused by expired RUNNER_TOKENs.
+
+    Returns (token, is_pat) — is_pat=True means use ACCESS_TOKEN env var,
+    is_pat=False means fall back to short-lived RUNNER_TOKEN.
+    """
+    env_name = f"RUNNER_PAT_{lane.replace('-', '_').upper()}"
+    lane_pat = os.getenv(env_name)
+    if lane_pat:
+        return lane_pat, True
+    shared_pat = (
+        os.getenv("RUNNER_PAT")
+        or os.getenv("GH_TOKEN")
+        or os.getenv("GITHUB_TOKEN")
+    )
+    if shared_pat:
+        return shared_pat, True
+    # Fallback: short-lived registration token (expires in ~1h)
+    print(
+        f"WARNING: No PAT found (set RUNNER_PAT or GH_TOKEN). "
+        f"Using short-lived registration token for lane '{lane}' — "
+        f"container will fail to re-register after ~1 hour.",
+        file=sys.stderr,
+    )
+    return registration_token(repo, lane), False
+
+
 def docker_rm(container_name: str) -> None:
     run_cmd(["docker", "rm", "-f", container_name], check=False)
 
@@ -98,10 +152,28 @@ LANE_RESOURCES: dict[str, dict[str, str]] = {
         "memory": os.getenv("RUNNER_VPS_MEMORY", "4g"),
         "gpus": "",
     },
+    "hotfix": {
+        "cpus": os.getenv("RUNNER_HOTFIX_CPUS", "2"),
+        "memory": os.getenv("RUNNER_HOTFIX_MEMORY", "4g"),
+        "gpus": "",
+    },
 }
 
 
-def docker_run(repo: str, image: str, lane: RunnerLane, token: str) -> None:
+def _docker_socket_mount() -> str:
+    """Return the correct Docker socket bind-mount for the current platform.
+
+    On Windows (Docker Desktop via WSL), the socket path needs a leading
+    double-slash. On Linux/macOS it's the standard /var/run path.
+    """
+    if platform.system() == "Windows":
+        return "//var/run/docker.sock:/var/run/docker.sock"
+    return "/var/run/docker.sock:/var/run/docker.sock"
+
+
+def docker_run(
+    repo: str, image: str, lane: RunnerLane, token: str, *, is_pat: bool = True,
+) -> None:
     resources = LANE_RESOURCES.get(lane.lane, {"cpus": "4", "memory": "8g"})
     cmd = [
         "docker",
@@ -117,25 +189,33 @@ def docker_run(repo: str, image: str, lane: RunnerLane, token: str) -> None:
         resources["memory"],
     ]
     cmd.extend(_runner_log_args(lane))
-    # GPU passthrough for ai-lab lane only
+    # GPU passthrough for ai-lab lane only (Linux with nvidia-container-toolkit)
     gpus = resources.get("gpus", "")
-    if gpus:
+    if gpus and platform.system() != "Windows":
         cmd.extend(["--gpus", gpus])
         cmd.extend(["-e", "NVIDIA_VISIBLE_DEVICES=all"])
         cmd.extend(["-e", "NVIDIA_DRIVER_CAPABILITIES=compute,utility"])
+
+    # Use ACCESS_TOKEN (PAT) for persistent auto-registration, or fall back
+    # to short-lived RUNNER_TOKEN when no PAT is available.
+    if is_pat:
+        token_env = f"ACCESS_TOKEN={token}"
+    else:
+        token_env = f"RUNNER_TOKEN={token}"
+
     cmd.extend([
         "-e",
         f"REPO_URL=https://github.com/{repo}",
         "-e",
         f"RUNNER_NAME={lane.runner_name}",
         "-e",
-        f"RUNNER_TOKEN={token}",
+        token_env,
         "-e",
         f"LABELS={lane.labels}",
         "-e",
         "RUNNER_WORKDIR=/tmp/runner/_work",
         "-v",
-        "/var/run/docker.sock:/var/run/docker.sock",
+        _docker_socket_mount(),
         image,
     ])
     run_cmd(cmd)
@@ -144,6 +224,7 @@ def _runner_log_args(lane: RunnerLane) -> list[str]:
     info = run_cmd(
         ["docker", "info", "--format", "{{json .Plugins.Log}}"],
         check=False,
+        timeout=15,
     )
     if info.returncode == 0:
         payload = (info.stdout or "").strip()
@@ -177,10 +258,11 @@ def cmd_up(repo: str, image: str, lanes: tuple[RunnerLane, ...]) -> int:
     require_tool("docker")
     require_tool("gh")
     for lane in lanes:
-        token = registration_token(repo, lane.lane)
+        token, is_pat = access_token(repo, lane.lane)
         docker_rm(lane.container_name)
-        docker_run(repo, image, lane, token)
-        print(f"started {lane.container_name} ({lane.runner_name})")
+        docker_run(repo, image, lane, token, is_pat=is_pat)
+        mode = "ACCESS_TOKEN (PAT)" if is_pat else "RUNNER_TOKEN (short-lived)"
+        print(f"started {lane.container_name} ({lane.runner_name}) [{mode}]")
     return 0
 
 

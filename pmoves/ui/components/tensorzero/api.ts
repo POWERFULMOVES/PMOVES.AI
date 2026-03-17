@@ -9,6 +9,8 @@ import type {
   TestResponse,
   ValidationResult,
 } from './types';
+import { logError } from '@/lib/errorUtils';
+import { ErrorIds } from '@/lib/constants/errorIds';
 
 /**
  * TensorZero API client configuration
@@ -39,7 +41,7 @@ export async function fetchConfig(): Promise<TensorZeroConfig> {
     const response = await apiClient.get('/config');
     return response.data;
   } catch (error) {
-    console.error('Failed to fetch TensorZero config:', error);
+    logError('Failed to fetch TensorZero config', error, 'error', { errorId: ErrorIds.TENSORZERO_REQUEST_FAILED, component: 'TensorZeroApi' });
     throw new Error('Unable to fetch TensorZero configuration. Is the gateway running?');
   }
 }
@@ -51,7 +53,7 @@ export async function updateConfig(config: TensorZeroConfig): Promise<void> {
   try {
     await apiClient.put('/config', config);
   } catch (error) {
-    console.error('Failed to update TensorZero config:', error);
+    logError('Failed to update TensorZero config', error, 'error', { errorId: ErrorIds.TENSORZERO_REQUEST_FAILED, component: 'TensorZeroApi' });
     throw new Error('Failed to update configuration. Please try again.');
   }
 }
@@ -64,7 +66,7 @@ export async function validateConfig(config: TensorZeroConfig): Promise<Validati
     const response = await apiClient.post('/config/validate', config);
     return response.data;
   } catch (error) {
-    console.error('Failed to validate config:', error);
+    logError('Failed to validate config', error, 'error', { errorId: ErrorIds.TENSORZERO_REQUEST_FAILED, component: 'TensorZeroApi' });
     return {
       valid: false,
       errors: [{ severity: 'error', field: 'config', message: 'Validation service unavailable' }],
@@ -95,7 +97,7 @@ export async function testRequest(request: TestRequest): Promise<TestResponse> {
       latency_ms: latency,
     };
   } catch (error: any) {
-    console.error('Test request failed:', error);
+    logError('Test request failed', error, 'error', { errorId: ErrorIds.TENSORZERO_REQUEST_FAILED, component: 'TensorZeroApi' });
     return {
       error: error.response?.data?.message || error.message || 'Test request failed',
     };
@@ -105,14 +107,23 @@ export async function testRequest(request: TestRequest): Promise<TestResponse> {
 /**
  * Fetch metrics from TensorZero ClickHouse
  */
-export async function fetchMetrics(timeRange: string = '1h'): Promise<any> {
+export interface MetricsResponse {
+  request_count?: number;
+  avg_latency_ms?: number;
+  token_usage?: Record<string, number>;
+  by_model?: Record<string, unknown>;
+  by_function?: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
+export async function fetchMetrics(timeRange: string = '1h'): Promise<MetricsResponse> {
   try {
     const response = await axios.get(`${TENSORZERO_API_URL}/metrics`, {
       params: { range: timeRange },
     });
     return response.data;
   } catch (error) {
-    console.error('Failed to fetch metrics:', error);
+    logError('Failed to fetch metrics', error, 'error', { errorId: ErrorIds.TENSORZERO_REQUEST_FAILED, component: 'TensorZeroApi' });
     throw new Error('Unable to fetch metrics. Is ClickHouse running?');
   }
 }
@@ -166,7 +177,7 @@ export function exportAsToml(config: TensorZeroConfig): string {
     }
 
     // Variants
-    func.variants.forEach((variant, vIdx) => {
+    func.variants.forEach((variant) => {
       lines.push(`  [[functions.${func.name}.variants]]`);
       lines.push(`    name = "${variant.name}"`);
       lines.push(`    model = "${variant.model}"`);
@@ -217,7 +228,7 @@ export function exportAsJson(config: TensorZeroConfig): string {
 /**
  * Parse TOML configuration
  */
-export async function parseToml(tomlContent: string): Promise<TensorZeroConfig> {
+export async function parseToml(_tomlContent: string): Promise<TensorZeroConfig> {
   // In production, use a proper TOML parser
   // For now, return a basic structure
   throw new Error('TOML parsing not yet implemented. Please use JSON format.');

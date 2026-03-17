@@ -19,6 +19,8 @@
 - Use descriptive names, include environment suffix (e.g., `SUPABASE_SERVICE_ROLE_KEY_DEV`).
 - Avoid putting real values in `env.shared.example`; keep placeholders.
 - For local runs, use `.env.local` and never commit it.
+- Coding-plan lanes:
+  - Use only `ALIBABA_PRO_CODING_PLAN` for Alibaba/Qwen coding-plan credentials.
 - GHCR publishing:
   - Prefer `github.token` in workflows.
   - If a PAT is required, include `write:packages` + `read:packages` (and `repo` for private repos).

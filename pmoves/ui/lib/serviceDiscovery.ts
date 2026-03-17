@@ -138,35 +138,29 @@ function clearCache(slug?: string): void {
  * @returns URL from environment or null
  */
 export function getUrlFromEnv(config: ServiceConfig): string | null {
-  if (typeof window === 'undefined') {
-    // Server-side: check process.env
-    const patterns = [
-      config.envVar,
-      `NEXT_PUBLIC_${config.envVar}`,
-      config.slug.toUpperCase().replace(/-/g, '_') + '_URL',
-      `NEXT_PUBLIC_${config.slug.toUpperCase().replace(/-/g, '_')}_URL`,
-    ];
+  const patterns = [
+    config.envVar,
+    `NEXT_PUBLIC_${config.envVar}`,
+    config.slug.toUpperCase().replace(/-/g, '_') + '_URL',
+    `NEXT_PUBLIC_${config.slug.toUpperCase().replace(/-/g, '_')}_URL`,
+  ];
 
+  // Check server-side (Node/Jest)
+  if (typeof process !== 'undefined' && process.env) {
     for (const pattern of patterns) {
       if (pattern && process.env[pattern]) {
-        return process.env[pattern];
+        return process.env[pattern] ?? null;
       }
     }
-  } else {
-    // Client-side: check import.meta.env
-    const patterns = [
-      config.envVar,
-      `NEXT_PUBLIC_${config.envVar}`,
-      config.slug.toUpperCase().replace(/-/g, '_') + '_URL',
-      `NEXT_PUBLIC_${config.slug.toUpperCase().replace(/-/g, '_')}_URL`,
-    ];
+  }
 
+  // Check client-side (browser) - dynamic access to avoid syntax errors in Jest
+  // Vite replaces process.env with import.meta.env at build time
+  if (typeof window !== 'undefined') {
     for (const pattern of patterns) {
-      // @ts-expect-error - dynamic env access
-      if (pattern && import.meta.env[pattern]) {
-        // @ts-expect-error - dynamic env access
-        return import.meta.env[pattern];
-      }
+      // @ts-expect-error - dynamic env access (Vite replaces process.env in browser builds)
+      const value = typeof process !== 'undefined' ? process.env?.[pattern] : undefined;
+      if (value) return value;
     }
   }
 
@@ -181,19 +175,17 @@ async function fetchFromSupabase(
   slug: string,
   options?: ServiceDiscoveryOptions
 ): Promise<ServiceInfo | null> {
-  const supabaseUrl =
-    options?.supabaseUrl ||
-    (typeof process !== 'undefined'
-      ? process.env.NEXT_PUBLIC_SUPABASE_URL
-      : // @ts-expect-error - dynamic env access
-        import.meta.env.NEXT_PUBLIC_SUPABASE_URL);
+  // Helper to get env variable safely across Node/Jest/Browser
+  // Vite replaces process.env with import.meta.env at build time for browser builds
+  const getEnv = (key: string): string | undefined => {
+    if (typeof process !== 'undefined' && process.env) {
+      return process.env[key];
+    }
+    return undefined;
+  };
 
-  const supabaseAnonKey =
-    options?.supabaseAnonKey ||
-    (typeof process !== 'undefined'
-      ? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-      : // @ts-expect-error - dynamic env access
-        import.meta.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
+  const supabaseUrl = options?.supabaseUrl || getEnv('NEXT_PUBLIC_SUPABASE_URL');
+  const supabaseAnonKey = options?.supabaseAnonKey || getEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY');
 
   if (!supabaseUrl || !supabaseAnonKey) {
     return null;
@@ -207,7 +199,7 @@ async function fetchFromSupabase(
       .select('*')
       .eq('slug', slug)
       .eq('active', true)
-      .maybe_single();
+      .maybeSingle();
 
     if (error || !data) {
       return null;
@@ -372,17 +364,8 @@ export async function getServicesByTier(
   tier: ServiceTier,
   options?: ServiceDiscoveryOptions
 ): Promise<ServiceInfo[]> {
-  const supabaseUrl =
-    options?.supabaseUrl ||
-    (typeof process !== 'undefined'
-      ? process.env.NEXT_PUBLIC_SUPABASE_URL
-      : import.meta.env?.NEXT_PUBLIC_SUPABASE_URL);
-
-  const supabaseAnonKey =
-    options?.supabaseAnonKey ||
-    (typeof process !== 'undefined'
-      ? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-      : import.meta.env?.NEXT_PUBLIC_SUPABASE_ANON_KEY);
+  const supabaseUrl = options?.supabaseUrl ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseAnonKey = options?.supabaseAnonKey ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
   if (!supabaseUrl || !supabaseAnonKey) {
     return [];
@@ -548,26 +531,3 @@ export function createServiceUrlResolver(
   return () => getServiceUrl(config, options);
 }
 
-/* ═══════════════════════════════════════════════════════════════════════════
-   Module Exports
-   ═══════════════════════════════════════════════════════════════════════════ */
-
-export {
-  // Main functions
-  getServiceUrl,
-  getServiceInfo,
-  getServicesByTier,
-  checkServiceHealth,
-  resolveMultipleServiceUrls,
-  createServiceUrlResolver,
-
-  // Utility functions
-  clearServiceCache,
-  getUrlFromEnv,
-
-  // Types
-  type ServiceConfig,
-  type ServiceInfo,
-  type ServiceDiscoveryOptions,
-  type ServiceTier,
-};

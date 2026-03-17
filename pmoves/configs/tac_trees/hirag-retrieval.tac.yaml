@@ -1,0 +1,163 @@
+# TAC Tree: Hi-RAG Retrieval System
+# Audits Qdrant + Neo4j + Meilisearch backends, reranking, embedding models
+
+name: "Hi-RAG Retrieval System"
+version: "1.0.0"
+description: "Verify Hi-RAG v2 hybrid retrieval: Qdrant vectors, Neo4j graph, Meilisearch full-text, cross-encoder reranking, and embedding pipeline"
+
+root:
+  id: hirag-retrieval
+  task: "Hi-RAG retrieval system review"
+  context: "PMOVES-HiRAG/ submodule + pmoves/docker-compose.yml"
+  agent_hint: codex
+  children:
+
+    # =========================================================================
+    # Phase 1: Hi-RAG v2 Gateway
+    # =========================================================================
+    - id: hirag.gateway
+      task: "Hi-RAG v2 gateway service"
+      context: "pmoves/docker-compose.yml"
+      agent_hint: codex
+      children:
+        - id: hirag.gateway.compose-v2
+          task: "Hi-RAG v2 defined in compose"
+          action:
+            type: grep
+            target: "pmoves/docker-compose.yml"
+            pattern: "hi-rag-gateway-v2:"
+            expect: "Service on port 8086 (CPU) / 8087 (GPU)"
+          context: "Preferred over v1 for new features"
+          agent_hint: codex
+
+        - id: hirag.gateway.healthcheck
+          task: "Healthcheck configured"
+          action:
+            type: grep
+            target: "pmoves/docker-compose.yml"
+            pattern: "hi-rag.*health"
+            expect: "Health endpoint at /healthz"
+          context: "GET http://localhost:8086/healthz"
+          agent_hint: codex
+
+        - id: hirag.gateway.port-separation
+          task: "v1 and v2 on different ports"
+          action:
+            type: grep
+            target: "pmoves/docker-compose.yml"
+            pattern: "HIRAG_V2_HOST_PORT|8086"
+            expect: "v2 on 8086, v1 on 8089 (separate ports)"
+          context: "Previously shared same var causing port conflict"
+          agent_hint: codex
+
+    # =========================================================================
+    # Phase 2: Vector Store (Qdrant)
+    # =========================================================================
+    - id: hirag.qdrant
+      task: "Qdrant vector database"
+      context: "pmoves/docker-compose.yml"
+      agent_hint: codex
+      children:
+        - id: hirag.qdrant.compose-defined
+          task: "Qdrant service defined"
+          action:
+            type: grep
+            target: "pmoves/docker-compose.yml"
+            pattern: "qdrant:"
+            expect: "Service on port 6333"
+          context: "Collection: pmoves_chunks"
+          agent_hint: codex
+
+        - id: hirag.qdrant.embedding-model
+          task: "Embedding model configured"
+          action:
+            type: grep
+            target: "pmoves/docker-compose.yml"
+            pattern: "SENTENCE_MODEL|all-MiniLM"
+            expect: "Default: all-MiniLM-L6-v2"
+          context: "Used by Extract Worker for text embeddings"
+          agent_hint: codex
+
+    # =========================================================================
+    # Phase 3: Graph Store (Neo4j)
+    # =========================================================================
+    - id: hirag.neo4j
+      task: "Neo4j graph database"
+      context: "pmoves/docker-compose.yml"
+      agent_hint: codex
+      children:
+        - id: hirag.neo4j.compose-defined
+          task: "Neo4j service defined"
+          action:
+            type: grep
+            target: "pmoves/docker-compose.yml"
+            pattern: "neo4j:"
+            expect: "Service on ports 7474 (HTTP) / 7687 (Bolt)"
+          context: "Knowledge graph for entity relationships"
+          agent_hint: codex
+
+        - id: hirag.neo4j.auth-generated
+          task: "Neo4j credentials auto-generated"
+          action:
+            type: grep
+            target: "pmoves/tools/brand_defaults.py"
+            pattern: "NEO4J_AUTH"
+            expect: "NEO4J_AUTH set to neo4j/<generated_password>"
+          context: "P1 fix: default credentials replaced"
+          agent_hint: codex
+
+    # =========================================================================
+    # Phase 4: Full-Text Search (Meilisearch)
+    # =========================================================================
+    - id: hirag.meili
+      task: "Meilisearch full-text search"
+      context: "pmoves/docker-compose.yml"
+      agent_hint: codex
+      children:
+        - id: hirag.meili.compose-defined
+          task: "Meilisearch service defined"
+          action:
+            type: grep
+            target: "pmoves/docker-compose.yml"
+            pattern: "meilisearch:"
+            expect: "Service on port 7700"
+          context: "Typo-tolerant, substring search"
+          agent_hint: codex
+
+        - id: hirag.meili.key-strengthened
+          task: "Master key strengthened"
+          action:
+            type: grep
+            target: "pmoves/tools/brand_defaults.py"
+            pattern: "MEILI_MASTER_KEY.*16"
+            expect: "Key regenerated if < 16 chars"
+          context: "Default 'master_key' is too short"
+          agent_hint: codex
+
+    # =========================================================================
+    # Phase 5: Reranking & Query Pipeline
+    # =========================================================================
+    - id: hirag.rerank
+      task: "Cross-encoder reranking"
+      context: "pmoves/tensorzero/config/tensorzero.toml"
+      agent_hint: codex
+      children:
+        - id: hirag.rerank.model
+          task: "Rerank model configured"
+          action:
+            type: grep
+            target: "pmoves/docker-compose.yml"
+            pattern: "RERANK_MODEL|bge-reranker"
+            expect: "Reranking model defined (default: BAAI/bge-reranker-base)"
+          context: "Cross-encoder reranking improves retrieval precision"
+          agent_hint: codex
+
+        - id: hirag.rerank.tensorzero
+          task: "hirag_rerank TensorZero function defined"
+          action:
+            type: grep
+            target: "pmoves/tensorzero/config/tensorzero.toml"
+            pattern: "hirag_rerank"
+            expect: "Reranking function in TensorZero config"
+          context: "Uses qwen3-reranker:4b for local reranking"
+          agent_hint: codex
