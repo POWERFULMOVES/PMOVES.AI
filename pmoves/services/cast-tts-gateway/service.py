@@ -508,6 +508,15 @@ class CastTTSGateway:
 
                     except Exception as e:
                         CAST_REQUESTS.labels(method="speech", status="error").inc()
+                        await self._publish_event("voice.cast.failed.v1", {
+                            "stage": "tts_synthesis",
+                            "reason": str(e),
+                            "retryable": True,
+                            "outcome": "fatal",
+                            "timestamp": datetime.utcnow().isoformat() + "Z",
+                            "text": text,
+                            "provider_attempted": "ultimate_tts",
+                        })
                         return web.json_response(
                             {"error": f"Failed to synthesize TTS: {str(e)}"},
                             status=500
@@ -515,6 +524,14 @@ class CastTTSGateway:
 
                 if not audio_data and not audio_path:
                     CAST_REQUESTS.labels(method="speech", status="error").inc()
+                    await self._publish_event("voice.cast.failed.v1", {
+                        "stage": "fallback_exhausted",
+                        "reason": "No TTS provider returned audio",
+                        "retryable": False,
+                        "outcome": "fatal",
+                        "timestamp": datetime.utcnow().isoformat() + "Z",
+                        "text": text,
+                    })
                     return web.json_response(
                         {"error": "Failed to synthesize TTS"},
                         status=500
@@ -552,6 +569,15 @@ class CastTTSGateway:
                         CAST_REQUESTS.labels(method="speech", status="success").inc()
                     else:
                         CAST_REQUESTS.labels(method="speech", status="error").inc()
+                        await self._publish_event("voice.cast.failed.v1", {
+                            "stage": "device_cast",
+                            "reason": result.get("error", "Cast failed"),
+                            "retryable": True,
+                            "outcome": "fatal",
+                            "timestamp": datetime.utcnow().isoformat() + "Z",
+                            "device_name": result.get("device", ""),
+                            "text": text,
+                        })
 
                     return web.json_response(result)
                 else:
@@ -615,6 +641,19 @@ class CastTTSGateway:
                         CAST_REQUESTS.labels(method="speech", status="success").inc()
                     else:
                         CAST_REQUESTS.labels(method="speech", status="partial").inc()
+                        failed_devices = [r.device for r in multi_result.results if not r.success]
+                        await self._publish_event("voice.cast.failed.v1", {
+                            "stage": "device_cast",
+                            "reason": f"{multi_result.failed}/{multi_result.total_devices} devices failed",
+                            "retryable": True,
+                            "outcome": "partial",
+                            "timestamp": datetime.utcnow().isoformat() + "Z",
+                            "text": text,
+                            "meta": {
+                                "failed_devices": failed_devices,
+                                "group": group if group else None,
+                            },
+                        })
 
                     return web.json_response(multi_result.to_dict())
 
@@ -688,11 +727,26 @@ class CastTTSGateway:
                 CAST_REQUESTS.labels(method="audio", status="success").inc()
             else:
                 CAST_REQUESTS.labels(method="audio", status="error").inc()
+                await self._publish_event("voice.cast.failed.v1", {
+                    "stage": "device_cast",
+                    "reason": result.get("error", "Cast audio failed"),
+                    "retryable": True,
+                    "outcome": "fatal",
+                    "timestamp": datetime.utcnow().isoformat() + "Z",
+                    "device_name": device,
+                })
 
             return web.json_response(result)
 
         except Exception as e:
             CAST_REQUESTS.labels(method="audio", status="error").inc()
+            await self._publish_event("voice.cast.failed.v1", {
+                "stage": "device_cast",
+                "reason": str(e),
+                "retryable": True,
+                "outcome": "fatal",
+                "timestamp": datetime.utcnow().isoformat() + "Z",
+            })
             return web.json_response(
                 {"error": str(e)},
                 status=500
