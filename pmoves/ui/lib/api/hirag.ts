@@ -271,8 +271,9 @@ export async function exportToNotebook(
   notebookId: string
 ): Promise<Result<{ exported: number }, string>> {
   try {
-    // This would call the Open Notebook API to create notes from results
-    // For now, return success with count
+    // TODO: Implement Open Notebook API integration to create notes from results.
+    // This is a stub — it returns success without making any API call.
+    // See: OPEN_NOTEBOOK_API_URL env var and Open Notebook service docs.
     const exported = results.length;
 
     logForDebugging(

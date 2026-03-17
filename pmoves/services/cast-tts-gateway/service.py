@@ -41,6 +41,7 @@ from fallback import (
     GoogleTTSProvider,
 )
 from optimize import OptimizationManager
+from persistence import SupabasePersistence
 from security import SecurityManager
 from auth import auth_middleware
 from types import (
@@ -129,7 +130,9 @@ class CastTTSGateway:
     def __init__(self):
         """Initialize gateway."""
         self.flute_provider = FluteTTSProvider(FLUTE_URL)
-        self.device_manager = CastDeviceManager()
+        self.device_manager = CastDeviceManager(
+            on_discovery=self._on_device_discovery,
+        )
         self.group_manager = CastGroupManager()
         self.concurrent_caster = ConcurrentCaster()
         self.priority_queue = CastPriorityQueue()
@@ -138,8 +141,12 @@ class CastTTSGateway:
         self.scheduler: Optional[CastScheduler] = None
         self.health_monitor = HealthMonitor(alert_callback=self._health_alert_callback)
         self.recovery_manager = RecoveryManager()
-        self.fallback_manager = FallbackManager()
+        self.fallback_manager = FallbackManager(
+            recovery_manager=self.recovery_manager,
+            on_transition=self._on_circuit_breaker_transition,
+        )
         self.optimization_manager = OptimizationManager()
+        self.persistence = SupabasePersistence()
         self.security_manager = SecurityManager()
         self.nats_client: Optional[nats.aio.client.Client] = None
         # Initialize app with auth middleware
@@ -508,6 +515,15 @@ class CastTTSGateway:
 
                     except Exception as e:
                         CAST_REQUESTS.labels(method="speech", status="error").inc()
+                        await self._publish_event("voice.cast.failed.v1", {
+                            "stage": "tts_synthesis",
+                            "reason": str(e),
+                            "retryable": True,
+                            "outcome": "fatal",
+                            "timestamp": datetime.utcnow().isoformat() + "Z",
+                            "text": text,
+                            "provider_attempted": "ultimate_tts",
+                        })
                         return web.json_response(
                             {"error": f"Failed to synthesize TTS: {str(e)}"},
                             status=500
@@ -515,6 +531,14 @@ class CastTTSGateway:
 
                 if not audio_data and not audio_path:
                     CAST_REQUESTS.labels(method="speech", status="error").inc()
+                    await self._publish_event("voice.cast.failed.v1", {
+                        "stage": "fallback_exhausted",
+                        "reason": "No TTS provider returned audio",
+                        "retryable": False,
+                        "outcome": "fatal",
+                        "timestamp": datetime.utcnow().isoformat() + "Z",
+                        "text": text,
+                    })
                     return web.json_response(
                         {"error": "Failed to synthesize TTS"},
                         status=500
@@ -552,6 +576,15 @@ class CastTTSGateway:
                         CAST_REQUESTS.labels(method="speech", status="success").inc()
                     else:
                         CAST_REQUESTS.labels(method="speech", status="error").inc()
+                        await self._publish_event("voice.cast.failed.v1", {
+                            "stage": "device_cast",
+                            "reason": result.get("error", "Cast failed"),
+                            "retryable": True,
+                            "outcome": "fatal",
+                            "timestamp": datetime.utcnow().isoformat() + "Z",
+                            "device_name": result.get("device", ""),
+                            "text": text,
+                        })
 
                     return web.json_response(result)
                 else:
@@ -595,31 +628,51 @@ class CastTTSGateway:
                         text=text,
                     )
 
-                    # Publish completion event
-                    await self._publish_event("voice.cast.completed.v1", {
-                        "device_id": group if group else ",".join(target_devices),
-                        "device_name": group if group else ",".join(target_devices),
-                        "audio_url": "",
-                        "text": text,
-                        "timestamp": datetime.utcnow().isoformat() + "Z",
-                        "meta": {
-                            "voice": voice,
-                            "group": group if group else None,
-                            "devices_total": multi_result.total_devices,
-                            "devices_successful": multi_result.successful,
-                            "devices_failed": multi_result.failed,
-                        },
-                    })
+                    if multi_result.failed == 0:
+                        # Only publish completed when ALL devices succeed
+                        await self._publish_event("voice.cast.completed.v1", {
+                            "device_id": group if group else ",".join(target_devices),
+                            "device_name": group if group else ",".join(target_devices),
+                            "audio_url": "",
+                            "text": text,
+                            "timestamp": datetime.utcnow().isoformat() + "Z",
+                            "meta": {
+                                "voice": voice,
+                                "group": group if group else None,
+                                "devices_total": multi_result.total_devices,
+                                "devices_successful": multi_result.successful,
+                            },
+                        })
 
                     if multi_result.failed == 0:
                         CAST_REQUESTS.labels(method="speech", status="success").inc()
                     else:
                         CAST_REQUESTS.labels(method="speech", status="partial").inc()
+                        failed_devices = [r.device for r in multi_result.results if not r.success]
+                        await self._publish_event("voice.cast.failed.v1", {
+                            "stage": "device_cast",
+                            "reason": f"{multi_result.failed}/{multi_result.total_devices} devices failed",
+                            "retryable": True,
+                            "outcome": "partial",
+                            "timestamp": datetime.utcnow().isoformat() + "Z",
+                            "text": text,
+                            "meta": {
+                                "failed_devices": failed_devices,
+                                "group": group if group else None,
+                            },
+                        })
 
                     return web.json_response(multi_result.to_dict())
 
         except Exception as e:
             CAST_REQUESTS.labels(method="speech", status="error").inc()
+            await self._publish_event("voice.cast.failed.v1", {
+                "stage": "tts_synthesis",
+                "reason": str(e),
+                "retryable": False,
+                "outcome": "fatal",
+                "timestamp": datetime.utcnow().isoformat() + "Z",
+            })
             return web.json_response(
                 {"error": str(e)},
                 status=500
@@ -688,11 +741,26 @@ class CastTTSGateway:
                 CAST_REQUESTS.labels(method="audio", status="success").inc()
             else:
                 CAST_REQUESTS.labels(method="audio", status="error").inc()
+                await self._publish_event("voice.cast.failed.v1", {
+                    "stage": "device_cast",
+                    "reason": result.get("error", "Cast audio failed"),
+                    "retryable": True,
+                    "outcome": "fatal",
+                    "timestamp": datetime.utcnow().isoformat() + "Z",
+                    "device_name": device,
+                })
 
             return web.json_response(result)
 
         except Exception as e:
             CAST_REQUESTS.labels(method="audio", status="error").inc()
+            await self._publish_event("voice.cast.failed.v1", {
+                "stage": "device_cast",
+                "reason": str(e),
+                "retryable": True,
+                "outcome": "fatal",
+                "timestamp": datetime.utcnow().isoformat() + "Z",
+            })
             return web.json_response(
                 {"error": str(e)},
                 status=500
@@ -1981,6 +2049,28 @@ class CastTTSGateway:
             )
             return multi_result.to_dict()
 
+    @staticmethod
+    def _on_circuit_breaker_transition(from_state: str, to_state: str, service: str):
+        """Record circuit breaker state transition in Prometheus."""
+        CIRCUIT_BREAKER_TRANSITIONS.labels(
+            from_state=from_state, to_state=to_state, service=service,
+        ).inc()
+
+    async def _on_device_discovery(self, devices, new_names, lost_names, forced):
+        """Callback invoked after device discovery completes."""
+        await self._publish_event("device.cast.discovered.v1", {
+            "devices": [
+                {"name": d.name, "ip": d.ip, "address": d.address}
+                for d in devices
+            ],
+            "count": len(devices),
+            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "new_devices": sorted(new_names),
+            "lost_devices": sorted(lost_names),
+            "forced": forced,
+        })
+        DEVICE_DISCOVERIES.inc()
+
     async def _publish_event(self, subject: str, payload: dict):
         """
         Publish event to NATS with enhanced error handling and metrics.
@@ -2034,6 +2124,32 @@ class CastTTSGateway:
         # Connect to NATS
         await self.connect_nats()
 
+        # Load persisted voice profiles from Supabase
+        try:
+            saved_profiles = await self.persistence.load_profiles()
+            for p in saved_profiles:
+                if "name" in p:
+                    self.voice_profile_manager.profiles[p["name"]] = p
+            print(f"Loaded {len(saved_profiles)} voice profile(s) from Supabase")
+        except Exception as e:
+            print(f"Persistence load_profiles skipped: {e}")
+
+        # Load persisted schedules from Supabase and register with scheduler
+        try:
+            saved_schedules = await self.persistence.load_schedules()
+            for s in saved_schedules:
+                if s.get("text") and s.get("cron"):
+                    await self.scheduler.schedule(
+                        text=s["text"],
+                        cron=s["cron"],
+                        device=s.get("device"),
+                        group=s.get("group"),
+                        voice=s.get("voice", "default"),
+                    )
+            print(f"Loaded {len(saved_schedules)} schedule(s) from Supabase")
+        except Exception as e:
+            print(f"Persistence load_schedules skipped: {e}")
+
         # Initialize scheduler
         self.scheduler = CastScheduler(self._scheduler_cast_fn)
         await self.scheduler.start()
@@ -2081,6 +2197,7 @@ class CastTTSGateway:
             if self.scheduler:
                 await self.scheduler.stop()
             await self.security_manager.stop()
+            await self.persistence.close()
             if self.nats_client:
                 await self.nats_client.close()
 

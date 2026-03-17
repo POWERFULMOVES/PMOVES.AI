@@ -40,9 +40,6 @@ export const viewport: Viewport = {
   colorScheme: 'dark',
 };
 
-export const dynamic = 'force-dynamic';
-export const fetchCache = 'force-no-store';
-
 export default function RootLayout({
   children,
 }: Readonly<{

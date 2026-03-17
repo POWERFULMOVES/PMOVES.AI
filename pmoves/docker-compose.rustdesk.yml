@@ -1,0 +1,45 @@
+# RustDesk Self-Hosted Relay/ID Server
+# Deploy on VPS (KVM2) for always-on remote desktop access via Tailscale mesh.
+# Docs: CATACLYSM_STUDIOS_INC/L4-PLATFORM/provisions/docs/rustdesk-self-hosted.md
+
+services:
+  hbbs:
+    image: rustdesk/rustdesk-server:latest
+    container_name: pmoves-rustdesk-hbbs
+    command: hbbs -r ${RUSTDESK_RELAY_HOST:-exit.pmoves.io}
+    restart: unless-stopped
+    volumes:
+      - ./rustdesk-data:/data
+    environment:
+      - TZ=${TZ:-UTC}
+    ports:
+      - "${RUSTDESK_HBBS_PORT_1:-21115}:21115"
+      - "${RUSTDESK_HBBS_PORT_2:-21116}:21116"
+      - "${RUSTDESK_HBBS_WS_PORT:-21118}:21118"
+    networks:
+      pmoves:
+        aliases:
+          - rustdesk-hbbs
+
+  hbbr:
+    image: rustdesk/rustdesk-server:latest
+    container_name: pmoves-rustdesk-hbbr
+    command: hbbr
+    restart: unless-stopped
+    volumes:
+      - ./rustdesk-data:/data
+    environment:
+      - TZ=${TZ:-UTC}
+    ports:
+      - "${RUSTDESK_HBBR_PORT:-21117}:21117"
+      - "${RUSTDESK_HBBR_PORT:-21117}:21117/udp"
+      - "${RUSTDESK_HBBR_WS_PORT:-21119}:21119"
+    networks:
+      pmoves:
+        aliases:
+          - rustdesk-hbbr
+
+networks:
+  pmoves:
+    external: true
+    name: pmoves-net

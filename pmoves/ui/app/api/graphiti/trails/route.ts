@@ -5,6 +5,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { ownerFromJwt } from '@/lib/jwtUtils';
+import { logError } from '@/lib/errorUtils';
 import type { GraphitiTrailsResponse, TrailEntry, TrailStats } from '@/lib/types/graphiti';
 
 export const runtime = 'nodejs'; // Needs fs access
@@ -13,7 +14,7 @@ export const dynamic = 'force-dynamic';
 /**
  * Read trail log file
  */
-async function readTrailLog(): Promise<any | null> {
+async function readTrailLog(): Promise<unknown> {
   try {
     const fs = await import('fs/promises');
     const path = await import('path');
@@ -39,49 +40,28 @@ async function readTrailLog(): Promise<any | null> {
 }
 
 /**
- * Load CHIT passphrase for verification (unused, reserved for future implementation)
+ * Convert raw trail entry to TrailEntry format.
+ * Note: `isSigned` means a `sig` field was present, NOT that it was cryptographically verified.
+ * HMAC verification requires CHIT passphrase and is not yet implemented in the UI layer.
  */
-async function _getCHITPassphrase(): Promise<string | null> {
-  try {
-    // In production, this would come from a secure environment variable
-    // For now, we'll check if the file exists but return null (unsigned trails)
-    const fs = await import('fs/promises');
-    const path = await import('path');
-
-    const envPath = path.join(process.cwd(), 'pmoves', 'env.tier-agent');
-    try {
-      await fs.access(envPath);
-      // Passphrase exists but we don't read it directly for security
-      // Verification would happen server-side
-      return 'exists';
-    } catch {
-      return null;
-    }
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Convert raw trail entry to TrailEntry format
- */
-function toTrailEntry(raw: any, idx: number): TrailEntry {
-  const isVerified = !!raw.sig;
+function toTrailEntry(raw: Record<string, unknown>, idx: number): TrailEntry {
+  const isSigned = !!raw.sig;
 
   return {
     id: `trail-${idx}-${raw.timestamp}`,
-    agentId: raw.agent_id,
-    displayName: raw.display_name,
-    glyph: raw.glyph,
-    color: raw.color,
-    accent: raw.accent,
-    voice: raw.voice,
-    phase: raw.phase,
-    timestamp: raw.timestamp,
-    resonance: raw.resonance || [],
-    summary: raw.summary,
-    isVerified,
-    signatureValid: isVerified ? true : undefined,
+    agentId: String(raw.agent_id || 'unknown'),
+    displayName: String(raw.display_name || 'Unknown Agent'),
+    glyph: String(raw.glyph || ''),
+    color: String(raw.color || '#888'),
+    accent: raw.accent ? String(raw.accent) : undefined,
+    voice: String(raw.voice || ''),
+    phase: String(raw.phase || ''),
+    timestamp: String(raw.timestamp || new Date().toISOString()),
+    resonance: Array.isArray(raw.resonance) ? (raw.resonance as string[]) : [],
+    summary: String(raw.summary || ''),
+    isVerified: isSigned,
+    // Security: signatureValid is undefined until real HMAC verification is implemented
+    signatureValid: undefined,
   };
 }
 
@@ -180,8 +160,9 @@ export async function GET(request: NextRequest) {
     // Handle both single entry and array formats
     const entries = Array.isArray(trailData) ? trailData : [trailData];
 
-    // Convert to TrailEntry format
+    // Convert to TrailEntry format, filtering out malformed entries
     let trailEntries: TrailEntry[] = entries
+      .filter((item): item is Record<string, unknown> => item != null && typeof item === 'object' && !Array.isArray(item))
       .map((raw, idx) => toTrailEntry(raw, idx))
       .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 
@@ -230,10 +211,12 @@ export async function GET(request: NextRequest) {
     });
 
   } catch (error) {
+    logError('Failed to load trail entries', error, 'error', {
+      component: 'graphiti/trails',
+    });
     return NextResponse.json(
       {
         error: 'Failed to load trail entries',
-        message: error instanceof Error ? error.message : String(error),
         items: [],
         stats: {
           total: 0,

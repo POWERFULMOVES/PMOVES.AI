@@ -19,6 +19,9 @@ external_contributors:
   - cline
   - powerfulmoves
   - crush
+  - z890-claude
+  - 5090-claude
+  - 4090-claude
 
 # Resilience attribute definitions
 # See: pmoves/docs/AGENTS/AGENT_RESILIENCE_PATTERNS.md
@@ -351,6 +354,37 @@ agents:
       ci_runner: ai-lab
       compose_profile: agents
     description: "Multimodal voice communication layer with Pipecat"
+
+  cast_tts_gateway:
+    name: "Cast TTS Gateway"
+    class: standard
+    primary_type: media
+    secondary_type: api
+    port: 8060
+    health: "/healthz"
+    layers: [L0, L2, L4]
+    evolution_stage: stage_1
+    nats:
+      publishes:
+        - "voice.cast.completed.v1"
+        - "voice.cast.failed.v1"
+        - "voice.cast.health_alert.v1"
+        - "device.cast.discovered.v1"
+      subscribes: []
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: false
+      attribution_gated: true
+    chit_integration:
+      tac_tree: "pmoves/configs/tac_trees/cast-gateway.tac.yaml"
+    topology:
+      node_affinity: [5090, z890]
+      team: media
+      ci_runner: ai-lab
+      compose_profile: cast
+    description: "Chromecast/Google Home TTS routing with fallback chain and circuit breaker"
 
   pmoves_yt:
     name: "PMOVES.YT"
