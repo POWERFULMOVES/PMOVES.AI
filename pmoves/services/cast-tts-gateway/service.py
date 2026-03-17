@@ -41,6 +41,7 @@ from fallback import (
     GoogleTTSProvider,
 )
 from optimize import OptimizationManager
+from persistence import SupabasePersistence
 from security import SecurityManager
 from auth import auth_middleware
 from types import (
@@ -145,6 +146,7 @@ class CastTTSGateway:
             on_transition=self._on_circuit_breaker_transition,
         )
         self.optimization_manager = OptimizationManager()
+        self.persistence = SupabasePersistence()
         self.security_manager = SecurityManager()
         self.nats_client: Optional[nats.aio.client.Client] = None
         # Initialize app with auth middleware
@@ -2115,6 +2117,18 @@ class CastTTSGateway:
         # Connect to NATS
         await self.connect_nats()
 
+        # Load persisted voice profiles and schedules from Supabase
+        try:
+            saved_profiles = await self.persistence.load_profiles()
+            for p in saved_profiles:
+                self.voice_profile_manager.profiles[p["name"]] = p
+            print(f"Loaded {len(saved_profiles)} voice profile(s) from Supabase")
+
+            saved_schedules = await self.persistence.load_schedules()
+            print(f"Loaded {len(saved_schedules)} schedule(s) from Supabase")
+        except Exception as e:
+            print(f"Persistence load skipped: {e}")
+
         # Initialize scheduler
         self.scheduler = CastScheduler(self._scheduler_cast_fn)
         await self.scheduler.start()
@@ -2162,6 +2176,7 @@ class CastTTSGateway:
             if self.scheduler:
                 await self.scheduler.stop()
             await self.security_manager.stop()
+            await self.persistence.close()
             if self.nats_client:
                 await self.nats_client.close()
 
