@@ -13,9 +13,11 @@ Processors:
 from .vibevoice import VibeVoiceTTSProcessor
 from .whisper import WhisperSTTProcessor
 from .tensorzero import TensorZeroLLMProcessor
+from .gemini_voice import GeminiVoiceProcessor
 
 __all__ = [
     "VibeVoiceTTSProcessor",
     "WhisperSTTProcessor",
     "TensorZeroLLMProcessor",
+    "GeminiVoiceProcessor",
 ]
