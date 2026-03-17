@@ -1015,7 +1015,7 @@ services:
   # =============================================================================
 
   qdrant:
-    image: qdrant/qdrant:v1.10.0
+    image: qdrant/qdrant:v1.14.1
     restart: unless-stopped
     cap_drop:
       - ALL
