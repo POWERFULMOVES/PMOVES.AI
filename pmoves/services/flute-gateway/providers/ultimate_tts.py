@@ -65,6 +65,10 @@ class UltimateTTSProvider(VoiceProvider):
             base_url: Gradio server URL (e.g., 'http://localhost:7861')
         """
         super().__init__(base_url)
+        # Use Gradio's synchronous predict API (/api/) instead of the async
+        # event API (/gradio_api/call/) which requires SSE/WebSocket polling
+        # and breaks with newer Gradio versions.
+        self.predict_api_url = f"{base_url}/api"
         self.gradio_api_url = f"{base_url}/gradio_api"
         self._health_last_log_ts: float = 0.0
         self._health_log_interval_sec: float = float(
@@ -75,6 +79,9 @@ class UltimateTTSProvider(VoiceProvider):
 
     async def _load_model(self, client: httpx.AsyncClient, engine: str) -> bool:
         """Load a TTS model if not already loaded.
+
+        Uses Gradio's synchronous predict API (/api/) which returns results
+        directly without SSE/WebSocket polling.
 
         Args:
             client: HTTP client
@@ -88,6 +95,9 @@ class UltimateTTSProvider(VoiceProvider):
             "f5_tts": "/handle_f5_load",
             "kokoro": "/handle_load_kokoro",
             "indextts2": "/handle_load_indextts2",
+            "fish": "/handle_load_fish",
+            "chatterbox": "/handle_load_chatterbox",
+            "voxcpm": "/handle_load_voxcpm",
         }
         endpoint = endpoint_map.get(engine)
         if not endpoint:
@@ -95,9 +105,8 @@ class UltimateTTSProvider(VoiceProvider):
             return True
 
         try:
-            # Call the load endpoint
             resp = await client.post(
-                f"{self.gradio_api_url}/call{endpoint}",
+                f"{self.predict_api_url}{endpoint}",
                 json={"data": []},
                 timeout=60.0,
             )
@@ -106,24 +115,12 @@ class UltimateTTSProvider(VoiceProvider):
                 return False
 
             result = resp.json()
-            event_id = result.get("event_id")
-            if not event_id:
-                return False
-
-            # Get result
-            result_resp = await client.get(
-                f"{self.gradio_api_url}/call{endpoint}/{event_id}",
-                timeout=60.0,
-            )
-            # Check for success in SSE response
-            for line in result_resp.iter_lines():
-                if line.startswith("data:"):
-                    data = json.loads(line[5:])
-                    if isinstance(data, list) and len(data) > 0:
-                        status = str(data[0]) if data[0] else ""
-                        if "✅" in status or "Loaded" in status:
-                            logger.info("Ultimate-TTS %s model loaded", engine)
-                            return True
+            data = result.get("data", [])
+            if isinstance(data, list) and len(data) > 0:
+                status = str(data[0]) if data[0] else ""
+                if "✅" in status or "Loaded" in status or "already" in status.lower():
+                    logger.info("Ultimate-TTS %s model loaded", engine)
+                    return True
             return True  # Assume loaded if no error
         except Exception as exc:
             logger.warning("Failed to load %s model: %s", engine, exc)
@@ -266,57 +263,52 @@ class UltimateTTSProvider(VoiceProvider):
             payload = {"data": data}
 
             try:
-                # Start generation
+                # Use Gradio's synchronous predict API — returns results
+                # directly without SSE/WebSocket event polling.
                 resp = await client.post(
-                    f"{self.gradio_api_url}/call/generate_unified_tts",
+                    f"{self.predict_api_url}/generate_unified_tts",
                     json=payload,
-                    timeout=30.0,
-                )
-                if resp.status_code != 200:
-                    raise UltimateTTSError(f"API call failed: {resp.status_code}")
-
-                result = resp.json()
-                event_id = result.get("event_id")
-                if not event_id:
-                    raise UltimateTTSError("No event_id in response")
-
-                # Poll for result (SSE stream)
-                result_resp = await client.get(
-                    f"{self.gradio_api_url}/call/generate_unified_tts/{event_id}",
                     timeout=self._timeout,
                 )
+                if resp.status_code != 200:
+                    raise UltimateTTSError(
+                        f"API call failed: {resp.status_code} — {resp.text[:200]}"
+                    )
 
+                result = resp.json()
+                result_data = result.get("data", [])
+
+                if not isinstance(result_data, list) or len(result_data) < 2:
+                    raise UltimateTTSError(
+                        f"Unexpected response shape: {str(result)[:200]}"
+                    )
+
+                # Check for error status (second element)
+                status = result_data[1] if len(result_data) > 1 else ""
+                if isinstance(status, str) and "❌" in status:
+                    raise UltimateTTSError(status)
+
+                # First element contains audio info with a URL
+                audio_info = result_data[0]
                 audio_url = None
-                error_msg = None
-                for line in result_resp.iter_lines():
-                    if line.startswith("data:"):
-                        try:
-                            data = json.loads(line[5:])
-                            if isinstance(data, list) and len(data) >= 2:
-                                # First element is audio info
-                                audio_info = data[0]
-                                status = data[1] if len(data) > 1 else ""
-
-                                if isinstance(status, str) and "❌" in status:
-                                    error_msg = status
-                                    break
-
-                                if isinstance(audio_info, dict) and "url" in audio_info:
-                                    audio_url = audio_info["url"]
-                                    break
-                        except json.JSONDecodeError:
-                            continue
-
-                if error_msg:
-                    raise UltimateTTSError(error_msg)
+                if isinstance(audio_info, dict) and "url" in audio_info:
+                    audio_url = audio_info["url"]
+                elif isinstance(audio_info, str) and audio_info.startswith("http"):
+                    audio_url = audio_info
+                elif isinstance(audio_info, str) and audio_info.startswith("/"):
+                    audio_url = f"{self.base_url}{audio_info}"
 
                 if not audio_url:
-                    raise UltimateTTSError("No audio URL in response")
+                    raise UltimateTTSError(
+                        f"No audio URL in response: {str(audio_info)[:200]}"
+                    )
 
                 # Download the audio file
                 audio_resp = await client.get(audio_url, timeout=30.0)
                 if audio_resp.status_code != 200:
-                    raise UltimateTTSError(f"Failed to download audio: {audio_resp.status_code}")
+                    raise UltimateTTSError(
+                        f"Failed to download audio: {audio_resp.status_code}"
+                    )
 
                 wav_bytes = audio_resp.content
                 logger.info(
@@ -374,6 +366,9 @@ class UltimateTTSProvider(VoiceProvider):
                         "f5_tts": "/handle_f5_load" in endpoints,
                         "kokoro": "/handle_load_kokoro" in endpoints,
                         "indextts2": "/handle_load_indextts2" in endpoints,
+                        "fish": "/handle_load_fish" in endpoints,
+                        "chatterbox": "/handle_load_chatterbox" in endpoints,
+                        "voxcpm": "/handle_load_voxcpm" in endpoints,
                     }
         except Exception as exc:
             logger.warning("Failed to get Ultimate-TTS engines: %s", exc)

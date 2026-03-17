@@ -47,12 +47,14 @@ class TestUltimateTTSProviderInit:
         """Test provider initializes with correct defaults."""
         provider = UltimateTTSProvider()
         assert provider.base_url == "http://localhost:7861"
+        assert provider.predict_api_url == "http://localhost:7861/api"
         assert provider.gradio_api_url == "http://localhost:7861/gradio_api"
 
     def test_init_custom_url(self):
         """Test provider accepts custom base_url."""
         provider = UltimateTTSProvider(base_url="http://custom:8080")
         assert provider.base_url == "http://custom:8080"
+        assert provider.predict_api_url == "http://custom:8080/api"
         assert provider.gradio_api_url == "http://custom:8080/gradio_api"
 
     def test_engine_names_mapping(self):
@@ -188,45 +190,37 @@ class TestUltimateTTSProviderSynthesize:
         """Create provider instance."""
         return UltimateTTSProvider(base_url="http://localhost:7861")
 
-    def _create_mock_client(self, audio_url: str = "/file=test.wav"):
-        """Create a mock httpx client for synthesis tests."""
+    def _create_mock_client(self, audio_url: str = "http://localhost:7861/file=test.wav"):
+        """Create a mock httpx client for synthesis tests.
+
+        Mocks the Gradio synchronous predict API (/api/) which returns
+        results directly without SSE/WebSocket event polling.
+        """
         mock_client = AsyncMock()
 
-        # Mock model load response
+        # Mock model load response (predict API — direct result)
         mock_load_response = MagicMock()
         mock_load_response.status_code = 200
-        mock_load_response.json.return_value = {"event_id": "load-123"}
+        mock_load_response.json.return_value = {"data": ["\u2705 Loaded"]}
 
-        # Mock model load result (SSE)
-        mock_load_result = MagicMock()
-        mock_load_result.iter_lines.return_value = ['data: ["\\u2705 Loaded"]']
-
-        # Mock synthesis call response
+        # Mock synthesis response (predict API — direct result)
         mock_synth_response = MagicMock()
         mock_synth_response.status_code = 200
-        mock_synth_response.json.return_value = {"event_id": "synth-456"}
-
-        # Mock synthesis result (SSE with audio URL)
-        mock_synth_result = MagicMock()
-        audio_data = json.dumps([{"url": audio_url}, "Success"])
-        mock_synth_result.iter_lines.return_value = [f'data: {audio_data}']
+        mock_synth_response.json.return_value = {
+            "data": [{"url": audio_url}, "Success"]
+        }
 
         # Mock audio download
         mock_audio_response = MagicMock()
         mock_audio_response.status_code = 200
         mock_audio_response.content = create_mock_wav_bytes()
 
-        # Setup side effects for different URLs
         async def mock_post(url, **kwargs):
-            if "handle_load" in url:
+            if "handle_load" in url or "handle_f5" in url:
                 return mock_load_response
             return mock_synth_response
 
         async def mock_get(url, **kwargs):
-            if "handle_load" in url:
-                return mock_load_result
-            if "generate_unified_tts" in url:
-                return mock_synth_result
             return mock_audio_response
 
         mock_client.post = AsyncMock(side_effect=mock_post)
@@ -277,27 +271,23 @@ class TestUltimateTTSProviderSynthesize:
         """Test synthesize raises error on API failure."""
         mock_client = AsyncMock()
 
+        # Model load succeeds (predict API)
         mock_load_response = MagicMock()
         mock_load_response.status_code = 200
-        mock_load_response.json.return_value = {"event_id": "load-123"}
+        mock_load_response.json.return_value = {"data": ["Loaded"]}
 
-        mock_load_result = MagicMock()
-        mock_load_result.iter_lines.return_value = ['data: ["Loaded"]']
-
-        # Synthesis fails
+        # Synthesis fails with 500
         mock_synth_response = MagicMock()
         mock_synth_response.status_code = 500
+        mock_synth_response.text = "Internal Server Error"
 
         async def mock_post(url, **kwargs):
             if "handle_load" in url:
                 return mock_load_response
             return mock_synth_response
 
-        async def mock_get(url, **kwargs):
-            return mock_load_result
-
         mock_client.post = AsyncMock(side_effect=mock_post)
-        mock_client.get = AsyncMock(side_effect=mock_get)
+        mock_client.get = AsyncMock()
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=None)
 
