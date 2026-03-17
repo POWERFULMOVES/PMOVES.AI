@@ -244,27 +244,11 @@
 
 ---
 
-### 14. Cast TTS Gateway
-**Port:** 8060
-**Role:** Chromecast/Google Home TTS routing with fallback chain
-**Key Files:** `pmoves/services/cast-tts-gateway/service.py`
-
-**NATS Subjects:**
-- `voice.cast.completed.v1` (publish)
-- `voice.cast.failed.v1` (publish)
-- `voice.cast.health_alert.v1` (publish)
-- `device.cast.discovered.v1` (publish)
-
-**CHIT Env Vars:** `CHIT_REQUIRE_SIGNATURE`, `CHIT_DECRYPT_ANCHORS`, `CHIT_PASSPHRASE` present.
-
-**Gap:** CHIT env vars configured but no CGP publishing yet. TAC tree defined at `pmoves/configs/tac_trees/cast-gateway.tac.yaml`.
-
----
-
 ## No CHIT Integration Services
 
 | Service | Port | Purpose | Priority |
 |---------|------|---------|----------|
+| **Cast TTS Gateway**¹ | 8060 | Chromecast TTS casting | LOW |
 | **Extract Worker** | 8083 | Text embedding & indexing | MEDIUM |
 | **PDF Ingest** | 8092 | Document processing | LOW |
 | **FFmpeg Whisper** | 8078 | Media transcription | MEDIUM |
@@ -280,6 +264,8 @@
 | **N8N** | - | Workflow automation | LOW |
 | **GPU Orchestrator** | - | GPU management | LOW |
 | **MCP YouTube Adapter** | - | YouTube adapter | LOW |
+
+¹ Cast TTS Gateway has CHIT env vars pre-configured (`CHIT_REQUIRE_SIGNATURE`, `CHIT_DECRYPT_ANCHORS`, `CHIT_PASSPHRASE`) for future CGP consumption but does not currently publish or consume geometry data. TAC tree: `pmoves/configs/tac_trees/cast-gateway.tac.yaml`.
 
 ---
 
