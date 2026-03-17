@@ -10,6 +10,13 @@ module.exports = {
       }
     },
     {
+      method: "fs.link",
+      params: {
+        src: "{{cwd}}",
+        dest: "{{path.resolve(cwd, '..', '..', '..', '..', 'pinokio', 'api', 'pmoves-services')}}"
+      }
+    },
+    {
       method: "notify",
       params: {
         html: "PMOVES environment bootstrapped. Ready to start services.",
