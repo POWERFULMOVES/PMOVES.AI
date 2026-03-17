@@ -244,6 +244,23 @@
 
 ---
 
+### 14. Cast TTS Gateway
+**Port:** 8060
+**Role:** Chromecast/Google Home TTS routing with voice attribution
+**Key Files:** `pmoves/services/cast-tts-gateway/service.py`
+
+**NATS Subjects:**
+- `voice.cast.completed.v1` (publish)
+- `voice.cast.failed.v1` (publish)
+- `voice.cast.health_alert.v1` (publish)
+- `device.cast.discovered.v1` (publish)
+
+**Attribution Chain:** voice profile → TTS provider (Flute/Ultimate-TTS/Google) → Cast device. CHIT env vars present (`CHIT_REQUIRE_SIGNATURE`, `CHIT_DECRYPT_ANCHORS`, `CHIT_PASSPHRASE`); `attribution_gated: true`.
+
+**Gap:** Attribution decisions are made but not yet encoded as CGP packets. Next step: encode voice→provider→device provenance as CGP points with Dirichlet weights across providers. TAC tree: `pmoves/configs/tac_trees/cast-gateway.tac.yaml`.
+
+---
+
 ## No CHIT Integration Services
 
 | Service | Port | Purpose | Priority |

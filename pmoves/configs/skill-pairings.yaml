@@ -189,6 +189,17 @@ pairings:
           skills: ["prosodic-analyze"]
           health: "http://localhost:7861/gradio_api/info"
         hooks:
+          on_complete: "skills.step.tts-synthesize.done.v1"
+          on_error: "skills.error.v1"
+      - skill: cast-to-device
+        input: audio_url
+        output: cast_result
+        agent: cast-tts-gateway
+        depends:
+          services: ["nats:4222"]
+          skills: ["tts-synthesize"]
+          health: "http://localhost:8060/healthz"
+        hooks:
           on_complete: "skills.pipeline.voice-synthesis.done.v1"
           on_error: "skills.error.v1"
     nats_subject: "skills.pipeline.voice-synthesis.v1"
