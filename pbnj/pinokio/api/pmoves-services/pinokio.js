@@ -6,6 +6,7 @@ module.exports = {
     let installed = info.exists("../../pmoves/env.shared")
     let running = {
       core: info.running("start-core.js"),
+      voice: info.running("start-voice.js"),
       monitoring: info.running("start-monitoring.js"),
       external: info.running("start-external.js"),
       status: info.running("status.js"),
@@ -53,7 +54,7 @@ module.exports = {
     }
 
     // Services running — show active terminals and dashboards
-    if (running.core || running.monitoring || running.external) {
+    if (running.core || running.voice || running.monitoring || running.external) {
       let items = []
 
       if (running.core) {
@@ -84,6 +85,22 @@ module.exports = {
           icon: "fa-solid fa-terminal",
           text: "Monitoring (Running)",
           href: "start-monitoring.js",
+        })
+      }
+
+      if (running.voice) {
+        let voiceLocal = info.local("start-voice.js")
+        if (voiceLocal && voiceLocal.url) {
+          items.push({
+            icon: "fa-solid fa-microphone",
+            text: "Open Flute Gateway",
+            href: voiceLocal.url,
+          })
+        }
+        items.push({
+          icon: "fa-solid fa-terminal",
+          text: "Voice Pipeline (Running)",
+          href: "start-voice.js",
         })
       }
 
@@ -119,6 +136,10 @@ module.exports = {
       icon: "fa-solid fa-chart-line",
       text: "Start Monitoring",
       href: "start-monitoring.js",
+    }, {
+      icon: "fa-solid fa-microphone",
+      text: "Start Voice (TTS + Flute + Cast)",
+      href: "start-voice.js",
     }, {
       icon: "fa-solid fa-puzzle-piece",
       text: "Start External (Wger/Firefly/Jellyfin)",
