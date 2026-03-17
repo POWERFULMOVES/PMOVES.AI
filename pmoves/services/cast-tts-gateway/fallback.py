@@ -234,14 +234,17 @@ class TTSGatewayFallback:
                 if audio_data:
                     duration_ms = (time.time() - start_time) * 1000
 
-                    # Record success with circuit breaker
-                    if self.recovery_manager:
-                        breaker = self.recovery_manager.get_circuit_breaker(cb_key)
-                        prev = breaker.get_state().state
-                        breaker.record_success()
-                        curr = breaker.get_state().state
-                        if prev != curr and self._on_transition:
-                            self._on_transition(prev.value, curr.value, cb_key)
+                    # Record success with circuit breaker (isolated from result)
+                    try:
+                        if self.recovery_manager:
+                            breaker = self.recovery_manager.get_circuit_breaker(cb_key)
+                            prev = breaker.get_state().state
+                            breaker.record_success()
+                            curr = breaker.get_state().state
+                            if prev != curr and self._on_transition:
+                                self._on_transition(prev.value, curr.value, cb_key)
+                    except Exception:
+                        pass  # CB bookkeeping must not mask a successful synthesis
 
                     return FallbackResult(
                         success=True,
@@ -251,14 +254,17 @@ class TTSGatewayFallback:
                     )
 
             except Exception as e:
-                # Record failure with circuit breaker
-                if self.recovery_manager:
-                    breaker = self.recovery_manager.get_circuit_breaker(cb_key)
-                    prev = breaker.get_state().state
-                    breaker.record_failure()
-                    curr = breaker.get_state().state
-                    if prev != curr and self._on_transition:
-                        self._on_transition(prev.value, curr.value, cb_key)
+                # Record failure with circuit breaker (isolated)
+                try:
+                    if self.recovery_manager:
+                        breaker = self.recovery_manager.get_circuit_breaker(cb_key)
+                        prev = breaker.get_state().state
+                        breaker.record_failure()
+                        curr = breaker.get_state().state
+                        if prev != curr and self._on_transition:
+                            self._on_transition(prev.value, curr.value, cb_key)
+                except Exception:
+                    pass  # CB bookkeeping must not prevent fallback to next provider
                 # Try next provider
                 continue
 

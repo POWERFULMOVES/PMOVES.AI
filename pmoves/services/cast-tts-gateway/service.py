@@ -628,21 +628,21 @@ class CastTTSGateway:
                         text=text,
                     )
 
-                    # Publish completion event
-                    await self._publish_event("voice.cast.completed.v1", {
-                        "device_id": group if group else ",".join(target_devices),
-                        "device_name": group if group else ",".join(target_devices),
-                        "audio_url": "",
-                        "text": text,
-                        "timestamp": datetime.utcnow().isoformat() + "Z",
-                        "meta": {
-                            "voice": voice,
-                            "group": group if group else None,
-                            "devices_total": multi_result.total_devices,
-                            "devices_successful": multi_result.successful,
-                            "devices_failed": multi_result.failed,
-                        },
-                    })
+                    if multi_result.failed == 0:
+                        # Only publish completed when ALL devices succeed
+                        await self._publish_event("voice.cast.completed.v1", {
+                            "device_id": group if group else ",".join(target_devices),
+                            "device_name": group if group else ",".join(target_devices),
+                            "audio_url": "",
+                            "text": text,
+                            "timestamp": datetime.utcnow().isoformat() + "Z",
+                            "meta": {
+                                "voice": voice,
+                                "group": group if group else None,
+                                "devices_total": multi_result.total_devices,
+                                "devices_successful": multi_result.successful,
+                            },
+                        })
 
                     if multi_result.failed == 0:
                         CAST_REQUESTS.labels(method="speech", status="success").inc()
@@ -666,6 +666,13 @@ class CastTTSGateway:
 
         except Exception as e:
             CAST_REQUESTS.labels(method="speech", status="error").inc()
+            await self._publish_event("voice.cast.failed.v1", {
+                "stage": "tts_synthesis",
+                "reason": str(e),
+                "retryable": False,
+                "outcome": "fatal",
+                "timestamp": datetime.utcnow().isoformat() + "Z",
+            })
             return web.json_response(
                 {"error": str(e)},
                 status=500
@@ -2117,17 +2124,22 @@ class CastTTSGateway:
         # Connect to NATS
         await self.connect_nats()
 
-        # Load persisted voice profiles and schedules from Supabase
+        # Load persisted voice profiles from Supabase
         try:
             saved_profiles = await self.persistence.load_profiles()
             for p in saved_profiles:
-                self.voice_profile_manager.profiles[p["name"]] = p
+                if "name" in p:
+                    self.voice_profile_manager.profiles[p["name"]] = p
             print(f"Loaded {len(saved_profiles)} voice profile(s) from Supabase")
+        except Exception as e:
+            print(f"Persistence load_profiles skipped: {e}")
 
+        # Load persisted schedules from Supabase (independent of profiles)
+        try:
             saved_schedules = await self.persistence.load_schedules()
             print(f"Loaded {len(saved_schedules)} schedule(s) from Supabase")
         except Exception as e:
-            print(f"Persistence load skipped: {e}")
+            print(f"Persistence load_schedules skipped: {e}")
 
         # Initialize scheduler
         self.scheduler = CastScheduler(self._scheduler_cast_fn)

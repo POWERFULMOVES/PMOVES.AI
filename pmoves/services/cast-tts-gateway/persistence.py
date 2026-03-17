@@ -4,11 +4,15 @@ Supabase Persistence for Cast TTS Gateway
 Persists voice profiles and scheduled announcements to Supabase PostgREST.
 """
 
+import asyncio
+import logging
 import os
 from typing import Optional
 
 import aiohttp
 
+
+log = logging.getLogger(__name__)
 
 SUPABASE_URL = os.getenv("SUPABASE_URL", "http://supabase-rest:3010")
 SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
@@ -21,6 +25,11 @@ class SupabasePersistence:
         self._base = base_url.rstrip("/")
         self._key = key
         self._session: Optional[aiohttp.ClientSession] = None
+        if not self._key:
+            log.warning(
+                "SUPABASE_SERVICE_ROLE_KEY is not set; persistence is DISABLED. "
+                "Profiles and schedules will not survive restarts."
+            )
 
     def _headers(self) -> dict:
         return {
@@ -32,7 +41,20 @@ class SupabasePersistence:
 
     async def _ensure_session(self):
         if self._session is None or self._session.closed:
-            self._session = aiohttp.ClientSession()
+            self._session = aiohttp.ClientSession(
+                timeout=aiohttp.ClientTimeout(total=30),
+            )
+
+    async def _check_response(self, resp: aiohttp.ClientResponse, operation: str) -> bool:
+        """Log non-2xx responses. Returns True if response is OK."""
+        if 200 <= resp.status < 300:
+            return True
+        body = await resp.text()
+        log.error(
+            "Persistence %s failed: HTTP %d from %s: %s",
+            operation, resp.status, resp.url, body[:500],
+        )
+        return False
 
     # ── Voice Profiles ──────────────────────────────────────────────
 
@@ -44,10 +66,12 @@ class SupabasePersistence:
         url = f"{self._base}/rest/v1/cast_voice_profiles?select=*"
         try:
             async with self._session.get(url, headers=self._headers()) as resp:
-                if resp.status == 200:
+                if await self._check_response(resp, "load_profiles"):
                     return await resp.json()
+        except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+            log.error("Persistence load_profiles error: %s", e)
         except Exception as e:
-            print(f"Persistence load_profiles error: {e}")
+            log.exception("Persistence load_profiles unexpected error: %s", e)
         return []
 
     async def save_profile(self, profile: dict) -> bool:
@@ -59,9 +83,12 @@ class SupabasePersistence:
         headers = {**self._headers(), "Prefer": "resolution=merge-duplicates,return=representation"}
         try:
             async with self._session.post(url, json=profile, headers=headers) as resp:
-                return resp.status in (200, 201)
+                return await self._check_response(resp, "save_profile")
+        except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+            log.error("Persistence save_profile error: %s", e)
+            return False
         except Exception as e:
-            print(f"Persistence save_profile error: {e}")
+            log.exception("Persistence save_profile unexpected error: %s", e)
             return False
 
     async def delete_profile(self, name: str) -> bool:
@@ -72,9 +99,12 @@ class SupabasePersistence:
         url = f"{self._base}/rest/v1/cast_voice_profiles?name=eq.{name}"
         try:
             async with self._session.delete(url, headers=self._headers()) as resp:
-                return resp.status in (200, 204)
+                return await self._check_response(resp, "delete_profile")
+        except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+            log.error("Persistence delete_profile error: %s", e)
+            return False
         except Exception as e:
-            print(f"Persistence delete_profile error: {e}")
+            log.exception("Persistence delete_profile unexpected error: %s", e)
             return False
 
     # ── Schedules ───────────────────────────────────────────────────
@@ -87,10 +117,12 @@ class SupabasePersistence:
         url = f"{self._base}/rest/v1/cast_scheduled_announcements?select=*&enabled=eq.true"
         try:
             async with self._session.get(url, headers=self._headers()) as resp:
-                if resp.status == 200:
+                if await self._check_response(resp, "load_schedules"):
                     return await resp.json()
+        except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+            log.error("Persistence load_schedules error: %s", e)
         except Exception as e:
-            print(f"Persistence load_schedules error: {e}")
+            log.exception("Persistence load_schedules unexpected error: %s", e)
         return []
 
     async def save_schedule(self, schedule: dict) -> bool:
@@ -102,9 +134,12 @@ class SupabasePersistence:
         headers = {**self._headers(), "Prefer": "resolution=merge-duplicates,return=representation"}
         try:
             async with self._session.post(url, json=schedule, headers=headers) as resp:
-                return resp.status in (200, 201)
+                return await self._check_response(resp, "save_schedule")
+        except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+            log.error("Persistence save_schedule error: %s", e)
+            return False
         except Exception as e:
-            print(f"Persistence save_schedule error: {e}")
+            log.exception("Persistence save_schedule unexpected error: %s", e)
             return False
 
     async def delete_schedule(self, schedule_id: str) -> bool:
@@ -115,9 +150,12 @@ class SupabasePersistence:
         url = f"{self._base}/rest/v1/cast_scheduled_announcements?id=eq.{schedule_id}"
         try:
             async with self._session.delete(url, headers=self._headers()) as resp:
-                return resp.status in (200, 204)
+                return await self._check_response(resp, "delete_schedule")
+        except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+            log.error("Persistence delete_schedule error: %s", e)
+            return False
         except Exception as e:
-            print(f"Persistence delete_schedule error: {e}")
+            log.exception("Persistence delete_schedule unexpected error: %s", e)
             return False
 
     # ── Lifecycle ───────────────────────────────────────────────────
@@ -125,4 +163,7 @@ class SupabasePersistence:
     async def close(self):
         """Close the HTTP session."""
         if self._session and not self._session.closed:
-            await self._session.close()
+            try:
+                await self._session.close()
+            except Exception as e:
+                log.warning("Error closing persistence session: %s", e)
