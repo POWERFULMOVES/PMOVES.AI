@@ -4,9 +4,9 @@ module.exports = {
     {
       method: "shell.run",
       params: {
-        path: "../../../../pmoves",
+        path: "../../pmoves",
         message: [
-          "make up-gpu"
+          "docker compose --profile orchestration --profile media --profile cast --profile gpu up -d"
         ],
         on: [{
           event: "/Started|running|Attaching|Container.*Started/i",
