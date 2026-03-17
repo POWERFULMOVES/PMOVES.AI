@@ -194,6 +194,79 @@ signatures:
 # and tts-engine-capabilities.yaml → service_runners, NOT here.
 # This file is for external contributors (AI agents + humans) only.
 
+  4090-claude:
+    agent_id: "4090-claude"
+    display_name: "4090 Claude"
+    glyph: "\u2316"              # ⌖ Position Indicator
+    color: "#0891B2"             # Cyan
+    accent: "#06B6D4"
+    voice: conversational         # interactive, app-oriented, exploratory
+    co_author: "4090 Claude (pmoves-4090) <4090@pmoves.ai>"
+    resonance:
+      - control-plane
+      - open-notebook
+      - living-documents
+      - edge-orchestration
+    description: "Control-plane agent on laptop (4090 GPU) — Open Notebook viewer, living documents, interactive apps, edge device orchestration"
+
+  # BoTZ Gateway Agent Taxonomy
+  # Model preference is a deployment hint, not identity.
+  # The agent's resonance domains define what it does, not which model backs it.
+
+  botz-architect:
+    agent_id: "botz-architect"
+    display_name: "BoTZ Architect"
+    glyph: "\u2302"              # ⌂ House (blueprint/structure)
+    color: "#6D28D9"             # Violet
+    accent: "#8B5CF6"
+    voice: architectural          # blueprint, system-design, deep reasoning
+    co_author: "BoTZ Architect <botz-architect@pmoves.ai>"
+    model_preference: opus        # deployment hint — needs deep context/reasoning
+    node_affinity: [z890, 4090]   # most context window available
+    resonance:
+      - planning
+      - architecture
+      - system-design
+      - skill-composition
+      - context-loading
+    description: "BoTZ planning agent — decomposes tasks into skill chains, designs system architecture, selects agent assignments"
+
+  botz-builder:
+    agent_id: "botz-builder"
+    display_name: "BoTZ Builder"
+    glyph: "\u2692"              # ⚒ Hammer and Pick
+    color: "#EA580C"             # Deep Orange
+    accent: "#FB923C"
+    voice: terse                  # implementation-first, code-gen, minimal prose
+    co_author: "BoTZ Builder <botz-builder@pmoves.ai>"
+    model_preference: sonnet      # deployment hint — fast execution, good code-gen
+    node_affinity: [5090, z890]   # heavy compute preferred
+    resonance:
+      - execution
+      - implementation
+      - code-gen
+      - skill-execution
+      - file-operations
+    description: "BoTZ execution agent — implements plans from Architect, generates code, runs skill chains, writes files"
+
+  botz-auditor:
+    agent_id: "botz-auditor"
+    display_name: "BoTZ Auditor"
+    glyph: "\u2696"              # ⚖ Scales (balance/judgment)
+    color: "#0D9488"             # Teal
+    accent: "#2DD4BF"
+    voice: analytical             # precise, compliance-focused, gate-keeping
+    co_author: "BoTZ Auditor <botz-auditor@pmoves.ai>"
+    model_preference: haiku       # deployment hint — fast validation, low latency
+    node_affinity: [any]          # runs anywhere, speed matters more than compute
+    resonance:
+      - security-review
+      - compliance
+      - testing
+      - code-review
+      - quality-gates
+    description: "BoTZ validation agent — reviews Architect plans and Builder output for security, compliance, and quality before merge"
+
 # Voice guide for trail entries:
 #   analytical:     Thorough reasoning, cross-references, structured lists
 #   architectural:  Blueprint format, mode/state descriptions, integration maps
