@@ -13,6 +13,18 @@
       "publisher": ["cast-tts-gateway"],
       "subscriber": ["publisher-discord", "cast-notebook-logger"]
     },
+    "voice.cast.failed.v1": {
+      "schema": "schemas/voice/cast.failed.v1.schema.json",
+      "description": "Published when a TTS synthesis or cast-to-device operation fails.",
+      "publisher": ["cast-tts-gateway"],
+      "subscriber": ["publisher-discord"]
+    },
+    "device.cast.discovered.v1": {
+      "schema": "schemas/device/cast.discovered.v1.schema.json",
+      "description": "Published when Cast device discovery completes with current inventory.",
+      "publisher": ["cast-tts-gateway"],
+      "subscriber": ["publisher-discord", "agent-zero"]
+    },
     "agentzero.event.log.v1": {
       "schema": "schemas/agentzero/event.log.v1.schema.json"
     },
