@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "voice.cast.failed.v1",
+  "description": "Published when a TTS synthesis or cast-to-device operation fails.",
+  "type": "object",
+  "required": ["stage", "reason", "retryable", "outcome", "timestamp"],
+  "properties": {
+    "stage": {
+      "type": "string",
+      "enum": ["tts_synthesis", "device_cast", "fallback_exhausted", "queue_timeout"],
+      "description": "Pipeline stage where the failure occurred."
+    },
+    "reason": {
+      "type": "string",
+      "description": "Human-readable failure reason."
+    },
+    "retryable": {
+      "type": "boolean",
+      "description": "Whether the operation can be retried."
+    },
+    "outcome": {
+      "type": "string",
+      "enum": ["fatal", "partial"],
+      "description": "Fatal = total failure; partial = some devices succeeded."
+    },
+    "timestamp": {
+      "type": "string",
+      "description": "ISO8601 timestamp of the failure."
+    },
+    "device_name": {
+      "type": ["string", "null"],
+      "description": "Friendly name of the target device (if applicable)."
+    },
+    "text": {
+      "type": ["string", "null"],
+      "description": "Original text that was being synthesized."
+    },
+    "provider_attempted": {
+      "type": ["string", "null"],
+      "description": "TTS provider that was attempted (flute, ultimate_tts, google_tts)."
+    },
+    "meta": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true
+}

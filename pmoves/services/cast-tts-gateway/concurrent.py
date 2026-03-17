@@ -5,6 +5,7 @@ Parallel audio casting to multiple Google Cast devices.
 """
 
 import asyncio
+import os
 from dataclasses import dataclass, field
 from typing import Optional, Callable
 from datetime import datetime
@@ -50,14 +51,14 @@ class ConcurrentCaster:
 
     def __init__(
         self,
-        max_concurrent: int = 10,
+        max_concurrent: int = int(os.getenv("MAX_CONCURRENT_CASTS", "4")),
         timeout_per_device: float = 30.0,
     ):
         """
         Initialize concurrent caster.
 
         Args:
-            max_concurrent: Maximum parallel cast operations
+            max_concurrent: Maximum parallel cast operations (env: MAX_CONCURRENT_CASTS, default: 4)
             timeout_per_device: Timeout per device (seconds)
         """
         self.max_concurrent = max_concurrent

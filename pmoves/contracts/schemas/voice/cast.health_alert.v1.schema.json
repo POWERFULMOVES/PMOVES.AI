@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "voice.cast.health_alert.v1",
+  "description": "Published when a Cast device health check detects degradation or failure.",
+  "type": "object",
+  "required": ["device", "timestamp"],
+  "properties": {
+    "device": {
+      "type": "string",
+      "description": "Device name that triggered the alert."
+    },
+    "status": {
+      "type": "string",
+      "description": "Health status (healthy, degraded, unreachable)."
+    },
+    "latency_ms": {
+      "type": ["number", "null"],
+      "description": "Last measured latency in milliseconds."
+    },
+    "consecutive_failures": {
+      "type": ["integer", "null"],
+      "description": "Number of consecutive health check failures."
+    },
+    "timestamp": {
+      "type": "string",
+      "description": "ISO8601 timestamp of the alert."
+    },
+    "meta": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true
+}

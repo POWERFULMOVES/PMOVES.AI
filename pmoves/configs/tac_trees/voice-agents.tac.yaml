@@ -2,8 +2,8 @@
 # Audits TTS engine availability, Flute-Gateway integration, Pipecat pipeline, prosodic bridge
 
 name: "Voice Agents & TTS Pipeline"
-version: "1.0.0"
-description: "Verify TTS Studio engines (native Pinokio), Flute-Gateway bridge, Pipecat voice pipeline, and prosodic BPM integration"
+version: "1.1.0"
+description: "Verify TTS Studio engines (native Pinokio), Flute-Gateway bridge, Pipecat voice pipeline, prosodic BPM integration, and Pinokio 7 Agent Interpreter routing"
 
 root:
   id: voice-agents
@@ -668,6 +668,51 @@ root:
           agent_hint: codex
 
     # =========================================================================
+    # Phase 15: Pinokio 7 Agent Interpreter → TTS
+    # =========================================================================
+    - id: va.p7
+      task: "P7 Agent Interpreter voice routing"
+      context: "Pinokio 7 Agent Interpreter auto-discovers TTS apps via SKILL.md"
+      agent_hint: 5090-claude
+      children:
+        - id: va.p7.discovery
+          task: "P7 discovers Ultimate-TTS-Studio as voice app"
+          action:
+            type: manual
+            expect: "Agent Interpreter lists TTS Studio in available apps"
+          context: "P7 'pinokio' skill scans installed apps for TTS capability"
+          agent_hint: 5090-claude
+          status: pending
+
+        - id: va.p7.speak-flow
+          task: "'speak [text]' routes through P7 → TTS"
+          action:
+            type: manual
+            expect: "Claude Code 'speak hello world' → Pinokio → TTS Studio → audio"
+          context: "End-to-end: agent → P7 interpreter → app launch → API call → result"
+          agent_hint: 5090-claude
+          status: pending
+
+        - id: va.p7.remote-speak
+          task: "Remote agent speaks via Tailscale mesh"
+          action:
+            type: manual
+            expect: "4090 laptop agent routes TTS to 5090 via P7 + Tailscale"
+          context: "Cross-machine: 4090 agent → Tailscale → 5090 P7 → TTS"
+          agent_hint: 4090-claude
+          status: pending
+          depends_on: [va.p7.discovery, va.p7.speak-flow]
+
+        - id: va.p7.mobile-agent
+          task: "Mobile agent (Discord/Openclaw) triggers TTS"
+          action:
+            type: manual
+            expect: "Discord message from phone → 5090 P7 → TTS → audio response"
+          context: "Openclaw/Hermes Agent pattern from P7 announcement"
+          agent_hint: 4090-claude
+          status: pending
+
+    # =========================================================================
     # Cross-References
     # =========================================================================
     # - TAC_SUPABASE.md: Phase 6 (storage distribution) + Phase 7 (CHIT) relate to voice
@@ -675,3 +720,4 @@ root:
     # - NATS subject: skills.pipeline.voice-synthesis.v1
     # - Agent teams: Media & Voice (node_affinity: [powerfulmoves, z890])
     # - Agent identity: 5090-claude (voice-synthesis resonance)
+    # - TAC cross-ref: pinokio-p7.tac.yaml (Phase 2: Agent Interpreter discovery)
