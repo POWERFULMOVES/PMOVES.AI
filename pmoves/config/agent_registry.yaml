@@ -19,6 +19,8 @@ external_contributors:
   - cline
   - powerfulmoves
   - crush
+  - z890-claude
+  - 5090-claude
 
 # Resilience attribute definitions
 # See: pmoves/docs/AGENTS/AGENT_RESILIENCE_PATTERNS.md

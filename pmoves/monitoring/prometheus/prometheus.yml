@@ -154,6 +154,16 @@ scrape_configs:
       - targets: ["wger:8000"]
     metrics_path: /metrics
 
+  # === Voice & TTS Pipeline metrics ===
+
+  - job_name: cast-tts-gateway
+    static_configs:
+      - targets: ["cast-tts-gateway:8060"]
+
+  - job_name: voice-relay
+    static_configs:
+      - targets: ["voice-relay:8121"]
+
   # === Benchmark Lab metrics ===
 
   - job_name: llama-throughput-lab
@@ -177,6 +187,7 @@ scrape_configs:
           - http://host.docker.internal:8097/healthz        # channel monitor
           - http://host.docker.internal:4000                # tensorzero playground
           - http://host.docker.internal:8055/healthz        # flute-gateway
+          - http://ultimate-tts-studio:7861/gradio_api/info  # ultimate-tts-studio
     relabel_configs:
       - source_labels: [__address__]
         target_label: __param_target
