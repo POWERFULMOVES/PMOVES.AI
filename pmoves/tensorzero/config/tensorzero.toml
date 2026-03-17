@@ -141,6 +141,14 @@ api_key_location = "none"
 
 # --- Chat models: Cloud and hosted backbones -------------------------------
 
+[models.chat_gemini_pro]
+routing = ["google_primary"]
+
+[models.chat_gemini_pro.providers.google_primary]
+type = "google_genai"
+model_name = "gemini-1.5-pro"
+api_key_location = "env::GEMINI_API_KEY"
+
 [models.chat_openai_platform]
 routing = ["openai_platform"]
 
@@ -372,6 +380,10 @@ model = "chat_together"
 type = "chat_completion"
 model = "chat_cloudflare_gpt_oss"
 
+[functions.agent_zero.variants.hosted_gemini]
+type = "chat_completion"
+model = "chat_gemini_pro"
+
 [functions.langextract]
 type = "chat"
 
@@ -528,6 +540,10 @@ model = "chat_openrouter"
 [functions.archon_work_orders.variants.hosted_together]
 type = "chat_completion"
 model = "chat_together"
+
+[functions.archon_work_orders.variants.hosted_gemini]
+type = "chat_completion"
+model = "chat_gemini_pro"
 
 # Archon Code Review (for PR review step)
 [functions.archon_code_review]

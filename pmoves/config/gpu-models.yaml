@@ -7,8 +7,8 @@ models:
   - id: "qwen3:8b"
     provider: ollama
     vram_mb: 6144
-    description: "Qwen3 8B - Fast reasoning and code"
-    priority_default: 5
+    description: "[Reflexive Loadout] Qwen3 8B - Fast reasoning and code"
+    priority_default: 10
     quantization: "Q4_K_M"
     context_length: 8192
 
@@ -31,8 +31,8 @@ models:
   - id: "nomic-embed-text"
     provider: ollama
     vram_mb: 512
-    description: "Nomic Embed Text - Embeddings"
-    priority_default: 3
+    description: "[Reflexive Loadout] Nomic Embed Text - Embeddings"
+    priority_default: 10
     context_length: 8192
 
   - id: "llama3.2:3b"
@@ -76,8 +76,8 @@ models:
   - id: "qwen2-vl:7b"
     provider: ollama
     vram_mb: 6000
-    description: "Qwen2-VL 7B - Vision-language"
-    priority_default: 5
+    description: "[Reflexive Loadout] Qwen2-VL 7B - Vision-language"
+    priority_default: 10
     context_length: 32768
 
   - id: "qwen3-reranker:4b"
