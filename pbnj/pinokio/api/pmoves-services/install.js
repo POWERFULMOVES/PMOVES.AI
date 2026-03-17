@@ -3,18 +3,9 @@ module.exports = {
     {
       method: "shell.run",
       params: {
-        path: "../../../../pmoves",
+        path: "../../pmoves",
         message: [
-          "make env-setup"
-        ]
-      }
-    },
-    {
-      method: "shell.run",
-      params: {
-        path: "../../../../pmoves",
-        message: [
-          "make brand-defaults"
+          "py -3 tools/env_setup_unified.py"
         ]
       }
     },

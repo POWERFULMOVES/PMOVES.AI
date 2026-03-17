@@ -71,6 +71,10 @@ module.exports = {
         icon: "fa-solid fa-file-lines",
         text: "Logs",
         href: "local-logs.json",
+      }, {
+        icon: "fa-solid fa-circle-info",
+        text: "Cluster Status",
+        href: "status.json",
       })
     } else if (running.labUp) {
       items.push({
@@ -81,6 +85,10 @@ module.exports = {
         icon: "fa-solid fa-stop",
         text: "Stop AI Lab",
         href: "lab-down.json",
+      }, {
+        icon: "fa-solid fa-circle-info",
+        text: "Cluster Status",
+        href: "status.json",
       })
     } else if (running.kvm4Up) {
       items.push({
@@ -91,6 +99,10 @@ module.exports = {
         icon: "fa-solid fa-stop",
         text: "Stop KVM4 Stack",
         href: "kvm4-down.json",
+      }, {
+        icon: "fa-solid fa-circle-info",
+        text: "Cluster Status",
+        href: "status.json",
       })
     } else {
       items.push({

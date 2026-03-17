@@ -4,12 +4,15 @@ module.exports = {
     {
       method: "shell.run",
       params: {
-        path: "../../../../pmoves",
+        path: "../../pmoves",
         message: [
-          "make up-agents"
+          "docker compose --profile agents --profile workers up -d"
         ],
         on: [{
-          event: "/Started|running|Attaching|Container.*Started/i",
+          event: "/(http:\\/\\/[0-9.:]+)/",
+          done: true
+        }, {
+          event: "/Started|running|Attaching/i",
           done: true
         }]
       }

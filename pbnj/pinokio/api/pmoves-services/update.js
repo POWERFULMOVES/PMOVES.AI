@@ -3,19 +3,19 @@ module.exports = {
     {
       method: "shell.run",
       params: {
-        path: "../../../..",
+        path: "../..",
         message: [
-          "git pull --ff-only origin main",
-          "git submodule update --init"
+          "git pull origin main",
+          "git submodule update --init --recursive"
         ]
       }
     },
     {
       method: "shell.run",
       params: {
-        path: "../../../../pmoves",
+        path: "../../pmoves",
         message: [
-          "make env-setup"
+          "py -3 tools/env_setup_unified.py"
         ]
       }
     },
