@@ -5,6 +5,8 @@ from typing import Any, Dict, List, Optional, Sequence
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field, ConfigDict, model_validator
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM  # type: ignore
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC  # type: ignore
+from cryptography.hazmat.primitives import hashes as _hashes  # type: ignore
 
 from pmoves.chit import CGP_SPEC_VERSION
 from services.common.env import get_secret
@@ -68,7 +70,8 @@ def decrypt_anchor(const: Dict[str, Any]) -> None:
     if not CHIT_DECRYPT_ANCHORS:
         raise HTTPException(status_code=400, detail="Encrypted anchor but CHIT_DECRYPT_ANCHORS=false")
     iv = base64.b64decode(enc["iv"]); salt = base64.b64decode(enc["salt"]); ct = base64.b64decode(enc["ct"])
-    key = hashlib.scrypt(CHIT_PASSPHRASE.encode(), salt=salt, n=2**14, r=8, p=1, dklen=32)
+    kdf = PBKDF2HMAC(algorithm=_hashes.SHA256(), length=32, salt=salt, iterations=600_000)
+    key = kdf.derive(CHIT_PASSPHRASE.encode("utf-8"))
     aead = AESGCM(key); aad = canon({"id": const.get("id","")})
     try:
         pt = aead.decrypt(iv, ct, aad)

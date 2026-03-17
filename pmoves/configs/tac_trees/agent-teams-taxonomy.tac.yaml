@@ -1,0 +1,741 @@
+# TAC Tree: Agent Teams Taxonomy
+# Cross-references 11 teams (62 agents) with NATS subjects, skill pairings,
+# node affinities, and compute requirements.
+# Sources: agent-teams.yaml, skill-pairings.yaml, .claude/context/nats-subjects.md
+
+name: TAC_AGENT_TEAMS_TAXONOMY
+version: "1.0.0"
+description: >
+  Comprehensive taxonomy of all 11 PMOVES.AI agent teams: agent roster,
+  node affinity, NATS subject ownership, skill pairing participation,
+  and GPU/CPU requirements. Audit rules enforce single-team membership
+  per agent and at least one NATS subject per team.
+
+root:
+  id: agent-teams
+  task: "Agent teams taxonomy review"
+  context: "pmoves/configs/agent-teams.yaml + skill-pairings.yaml + .claude/context/nats-subjects.md"
+  agent_hint: codex
+  children:
+
+    # =========================================================================
+    # Team 1: Orchestration (6 agents)
+    # =========================================================================
+    - id: team.orchestration
+      task: "Orchestration team — core agent coordination, MCP routing, task delegation"
+      context: "6 agents: agent_zero, archon, supaserch, botz_gateway, gateway_agent, consciousness_service"
+      agent_hint: codex
+      children:
+        - id: team.orchestration.agents
+          task: "Agent roster"
+          context: |
+            agent_zero         — Port 8080 — Primary orchestrator, MCP endpoint
+            archon             — Port 8091 — Planning/execution copilot, Supabase-driven
+            supaserch          — Port 8099 — Holographic deep research orchestrator
+            botz_gateway       — Port 8054 — Work item distribution, skill marketplace
+            gateway_agent      — Port 8100 — MCP tool orchestration
+            consciousness_service — CGP consciousness mapper
+          agent_hint: codex
+
+        - id: team.orchestration.node_affinity
+          task: "Node affinity: kvm4-1, z890, powerfulmoves"
+          context: "CI runner: ai-lab | Compose profiles: agents, tier-agent"
+          agent_hint: codex
+
+        - id: team.orchestration.nats_subjects
+          task: "NATS subjects owned"
+          context: |
+            supaserch.request.v1          — SupaSerch request intake
+            supaserch.result.v1           — SupaSerch result output
+            agent.tool.executed.v1        — Agent tool execution tracking
+            agent.graphiti.signed.v1      — Graphiti trail attribution (BoTZ gateway)
+            botz.mcp.github.tool.executed.v1 — GitHub MCP tool observability
+            botz.mcp.github.pr.created.v1    — PR creation via MCP
+            tokenism.cgp.ready.v1         — CGP readiness (consciousness_service publisher)
+          agent_hint: codex
+
+        - id: team.orchestration.skill_pairings
+          task: "Skill pairing participation"
+          context: |
+            model-benchmark-viz          — agent_zero (model-trainer, benchmark), archon (a2ui-chart)
+            research-summarize-render    — archon (a2ui-chart)
+            voice-synthesis              — agent_zero (text-generate)
+            agent-card-gen               — archon (theme-lookup, a2ui-card)
+            pr-monitor-graphiti-chit     — archon (graphiti-trail-sync)
+          agent_hint: codex
+
+        - id: team.orchestration.compute
+          task: "Compute requirements: CPU primary, GPU optional for LLM inference"
+          context: "agent_zero/archon CPU-bound; supaserch may use GPU for embedding reranking"
+          agent_hint: codex
+
+    # =========================================================================
+    # Team 2: Research & Knowledge (9 agents)
+    # =========================================================================
+    - id: team.research
+      task: "Research & Knowledge team — RAG, search, embedding, document processing"
+      context: "9 agents: hirag_v2, deep_research, extract_worker, langextract, pdf_ingest, notebook_sync, dox, open_notebook, cipher_memory"
+      agent_hint: codex
+      children:
+        - id: team.research.agents
+          task: "Agent roster"
+          context: |
+            hirag_v2        — Port 8086 (CPU) / 8087 (GPU) — Hybrid RAG v2
+            deep_research   — Port 8098 — LLM research planner
+            extract_worker  — Port 8083 — Text embedding + indexing
+            langextract     — Port 8084 — Language detection / NLP
+            pdf_ingest      — Port 8092 — Document ingestion orchestrator
+            notebook_sync   — Port 8095 — Open Notebook sync
+            dox             — Document intelligence
+            open_notebook   — Knowledge base (SurrealDB)
+            cipher_memory   — Port 8096 — Knowledge graph memory (Neo4j)
+          agent_hint: codex
+
+        - id: team.research.node_affinity
+          task: "Node affinity: kvm4-1, kvm4-2, z890"
+          context: "CI runner: vps | Compose profiles: workers"
+          agent_hint: codex
+
+        - id: team.research.nats_subjects
+          task: "NATS subjects owned"
+          context: |
+            research.deepresearch.request.v1   — DeepResearch intake
+            research.deepresearch.result.v1    — DeepResearch results (CGP-enhanced)
+            research.autoresearch.result.v1    — autoresearch experiment results
+            cipher.memory.stored.v1            — Cipher memory stored
+            cipher.memory.searched.v1          — Cipher memory searched
+            cipher.reasoning.stored.v1         — Cipher reasoning trace stored
+            ingest.file.added.v1               — File ingestion (pdf_ingest publisher)
+          agent_hint: codex
+
+        - id: team.research.skill_pairings
+          task: "Skill pairing participation"
+          context: |
+            ingest-chit-index              — extract_worker (extract), hirag_v2 (hirag-index)
+            research-summarize-render      — deep_research (deepresearch step)
+          agent_hint: codex
+
+        - id: team.research.compute
+          task: "Compute requirements: CPU + GPU (hirag_v2 GPU variant, extract_worker embedding)"
+          context: "hirag_v2 uses GPU for cross-encoder reranking (port 8087); extract_worker uses all-MiniLM-L6-v2"
+          agent_hint: codex
+
+    # =========================================================================
+    # Team 3: Media & Voice (11 agents)
+    # =========================================================================
+    - id: team.media
+      task: "Media & Voice team — audio/video processing, TTS, transcription"
+      context: "11 agents: pmoves_yt, ffmpeg_whisper, media_video, media_audio, ultimate_tts, flute_gateway, channel_monitor, jellyfin_bridge, jellyfin_ai, creator, transcribe_and_fetch"
+      agent_hint: codex
+      children:
+        - id: team.media.agents
+          task: "Agent roster"
+          context: |
+            pmoves_yt            — Port 8077 — YouTube ingestion
+            ffmpeg_whisper       — Port 8078 — Whisper transcription (GPU)
+            media_video          — Port 8079 — YOLOv8 video analysis (GPU)
+            media_audio          — Port 8082 — Emotion/speaker detection
+            ultimate_tts         — Port 7861 — Multi-engine TTS (GPU)
+            flute_gateway        — Port 8055 — Prosodic voice synthesis
+            channel_monitor      — Port 8097 — Content watcher
+            jellyfin_bridge      — Port 8093 — Jellyfin metadata webhook
+            jellyfin_ai          — AI-enhanced media management
+            creator              — ComfyUI render pipeline
+            transcribe_and_fetch — Standalone transcription
+          agent_hint: codex
+
+        - id: team.media.node_affinity
+          task: "Node affinity: powerfulmoves, z890"
+          context: "CI runner: ai-lab | Compose profiles: gpu, yt"
+          agent_hint: codex
+
+        - id: team.media.nats_subjects
+          task: "NATS subjects owned"
+          context: |
+            ingest.transcript.ready.v1      — Transcript completion (pmoves_yt, ffmpeg_whisper)
+            ingest.summary.ready.v1         — Summary generation
+            ingest.chapters.ready.v1        — Chapter markers
+            tokenism.geometry.event.v1      — Voice attribution (flute_gateway)
+            tokenism.prosodic.bpm.v1        — BPM prosodic timeline (flute_gateway)
+            voice.agent.response.v1         — Voice agent relay
+            voice.cast.completed.v1         — Cast TTS completion
+          agent_hint: codex
+
+        - id: team.media.skill_pairings
+          task: "Skill pairing participation"
+          context: |
+            voice-synthesis                — flute_gateway (prosodic-analyze), ultimate_tts (tts-synthesize)
+            model-benchmark-viz            — creator (remotion-render)
+            research-summarize-render      — creator (remotion-render)
+            agent-card-gen                 — creator (comfyui-generate)
+          agent_hint: codex
+
+        - id: team.media.compute
+          task: "Compute requirements: GPU-heavy (Whisper, YOLO, TTS, ComfyUI)"
+          context: "ffmpeg_whisper (Faster-Whisper GPU), media_video (YOLOv8 GPU), ultimate_tts (CUDA 12.4), creator (ComfyUI GPU)"
+          agent_hint: codex
+
+    # =========================================================================
+    # Team 4: Data & Storage (9 agents)
+    # =========================================================================
+    - id: team.data
+      task: "Data & Storage team — databases, message bus, object storage, monitoring"
+      context: "9 agents: nats, supabase, qdrant, neo4j, meilisearch, minio, prometheus, grafana, loki"
+      agent_hint: codex
+      children:
+        - id: team.data.agents
+          task: "Agent roster"
+          context: |
+            nats          — Port 4222 — JetStream event broker
+            supabase      — Port 8000 (Kong) — 13-service Postgres stack
+            qdrant        — Port 6333 — Vector embeddings
+            neo4j         — Port 7474 (HTTP) / 7687 (Bolt) — Knowledge graph
+            meilisearch   — Port 7700 — Full-text search
+            minio         — Port 9000 (API) / 9001 (Console) — S3-compatible storage
+            prometheus    — Port 9090 — Metrics scraping
+            grafana       — Port 3002 — Dashboard visualization
+            loki          — Port 3100 — Log aggregation
+          agent_hint: codex
+
+        - id: team.data.node_affinity
+          task: "Node affinity: kvm4-2, z890"
+          context: "CI runner: vps | Compose profiles: monitoring, supabase-local"
+          agent_hint: codex
+
+        - id: team.data.nats_subjects
+          task: "NATS subjects owned"
+          context: |
+            mesh.node.announce.v1             — Node presence announcements (via NATS)
+            test.smoke.v1                     — Smoke testing pub/sub
+            dev.debug.v1                      — Development debugging
+            (nats is the transport layer for ALL subjects)
+          note: "NATS itself is the transport — owns the bus infrastructure, not domain subjects"
+          agent_hint: codex
+
+        - id: team.data.skill_pairings
+          task: "Skill pairing participation"
+          context: |
+            All pairings depend on nats (service dep: nats:4222)
+            ingest-chit-index depends on qdrant:6333, neo4j:7687, meilisearch:7700
+          note: "Data team is a dependency tier, not a direct skill-step participant"
+          agent_hint: codex
+
+        - id: team.data.compute
+          task: "Compute requirements: CPU + high memory/storage (databases, indexing)"
+          context: "Neo4j and Qdrant are memory-intensive; MinIO is storage-intensive; Prometheus disk-intensive"
+          agent_hint: codex
+
+    # =========================================================================
+    # Team 5: User Interfaces (6 agents)
+    # =========================================================================
+    - id: team.ui
+      task: "User Interfaces team — frontend surfaces, visualization, remote access"
+      context: "6 agents: mai_ui, crush, a2ui, hyperdimensions, invidious, rustdesk"
+      agent_hint: codex
+      children:
+        - id: team.ui.agents
+          task: "Agent roster"
+          context: |
+            mai_ui            — Main user interface
+            crush             — Terminal AI coding assistant
+            a2ui              — Research UI / artifact-to-UI
+            hyperdimensions   — CHIT geometry 3D visualization
+            invidious         — Port 3333 — Privacy video frontend
+            rustdesk          — Port 21115 — Remote desktop
+          agent_hint: codex
+
+        - id: team.ui.node_affinity
+          task: "Node affinity: z890, powerfulmoves"
+          context: "CI runner: ubuntu-latest | Compose profiles: (none — typically standalone)"
+          agent_hint: codex
+
+        - id: team.ui.nats_subjects
+          task: "NATS subjects owned"
+          context: |
+            remote.session.started.v1       — Remote desktop session started (rustdesk)
+            remote.session.ended.v1         — Remote desktop session ended (rustdesk)
+            openclaw.message.received.v1    — Inbound messaging (ClawZ/UI surface)
+            openclaw.message.sent.v1        — Outbound messaging (ClawZ/UI surface)
+            openclaw.channel.connected.v1   — Channel adapter status (ClawZ/UI surface)
+          agent_hint: codex
+
+        - id: team.ui.skill_pairings
+          task: "Skill pairing participation"
+          context: |
+            chit-3d-viz — hyperdimensions (threejs-render step)
+          agent_hint: codex
+
+        - id: team.ui.compute
+          task: "Compute requirements: CPU primary (static frontends, WebSocket servers)"
+          context: "hyperdimensions may use WebGL for 3D rendering (client-side GPU)"
+          agent_hint: codex
+
+    # =========================================================================
+    # Team 6: Automation & Notifications (4 agents)
+    # =========================================================================
+    - id: team.automation
+      task: "Automation & Notifications team — workflow automation, webhooks"
+      context: "4 agents: n8n, publisher_discord, render_webhook, presign"
+      agent_hint: codex
+      children:
+        - id: team.automation.agents
+          task: "Agent roster"
+          context: |
+            n8n                — Port 5678 — Workflow automation
+            publisher_discord  — Port 8094 — Discord notifications
+            render_webhook     — Port 8085 — ComfyUI callback handler
+            presign            — Port 8088 — MinIO URL presigner
+          agent_hint: codex
+
+        - id: team.automation.node_affinity
+          task: "Node affinity: kvm4-1, z890"
+          context: "CI runner: vps | Compose profiles: workers"
+          agent_hint: codex
+
+        - id: team.automation.nats_subjects
+          task: "NATS subjects owned"
+          context: |
+            publisher_discord subscribes to:
+              ingest.file.added.v1          — File added notifications
+              ingest.transcript.ready.v1    — Transcript ready notifications
+              ingest.summary.ready.v1       — Summary ready notifications
+              ingest.chapters.ready.v1      — Chapter ready notifications
+              tokenism.cgp.weekly.v1        — Weekly CGP embed
+              tokenism.attribution.recorded.v1 — Attribution notifications
+            health.workouts.synced.v1       — n8n health sync completion
+            finance.transactions.synced.v1  — n8n finance sync completion
+          agent_hint: codex
+
+        - id: team.automation.skill_pairings
+          task: "Skill pairing participation"
+          context: |
+            health-sync   — n8n (n8n-health-sync step)
+            finance-sync  — n8n (n8n-finance-sync step)
+          agent_hint: codex
+
+        - id: team.automation.compute
+          task: "Compute requirements: CPU-only (lightweight webhook and notification services)"
+          context: "All services are CPU-bound; minimal memory requirements"
+          agent_hint: codex
+
+    # =========================================================================
+    # Team 7: Evolution & CHIT (4 agents)
+    # =========================================================================
+    - id: team.evolution
+      task: "Evolution & CHIT team — evolutionary optimization, CHIT encoding, swarm attribution"
+      context: "4 agents: evoswarm_controller, swarm_attribution, tensorzero, llama_lab"
+      agent_hint: codex
+      children:
+        - id: team.evolution.agents
+          task: "Agent roster"
+          context: |
+            evoswarm_controller  — Port 8113 — Evolutionary optimizer
+            swarm_attribution    — Shape-attribution engine
+            tensorzero           — Port 3030 — Centralized LLM gateway (all model calls)
+            llama_lab            — LLM benchmarking
+          agent_hint: codex
+
+        - id: team.evolution.node_affinity
+          task: "Node affinity: powerfulmoves, z890"
+          context: "CI runner: ai-lab | Compose profiles: gpu"
+          agent_hint: codex
+
+        - id: team.evolution.nats_subjects
+          task: "NATS subjects owned"
+          context: |
+            mesh.gpu.status.v1             — GPU status (every 5s)
+            mesh.gpu.model.loaded.v1       — Model load events
+            mesh.gpu.model.unloaded.v1     — Model unload events
+            mesh.gpu.command.v1            — Model command dispatch
+            mesh.gpu.command.result.v1     — Command execution result
+            model.registry.updated.v1      — Catalog mutation
+            geometry.cgp.calibration.v1    — CGP calibration (evo-controller)
+            geometry.swarm.meta.v1         — Swarm metadata
+            geometry.event.v1              — Raw geometry events
+            geometry.cgp.v1                — CGP via Supabase Realtime
+            tokenism.swarm.population.v1   — Swarm population updates
+            tokenism.attribution.recorded.v1 — Attribution recording
+            tokenism.cgp.weekly.v1         — Weekly CGP export
+            tokenism.cgp.ready.v1          — CGP packet readiness
+            tokenism.credential.rotated.v1 — Credential rotation audit
+            tokenism.simulation.result.v1  — Simulation results
+            agentgym.train.started.v1      — RL training started (evo-controller pub)
+            agentgym.train.completed.v1    — RL training completed (evo-controller pub)
+          agent_hint: codex
+
+        - id: team.evolution.skill_pairings
+          task: "Skill pairing participation"
+          context: |
+            ingest-chit-index          — tokenism (chit-encode step via swarm_attribution)
+            chit-3d-viz                — tokenism (chit-encode step)
+            pr-monitor-graphiti-chit   — tokenism (pr-learnings-encode step)
+            health-sync                — tokenism (health-weekly-cgp step)
+            finance-sync               — tokenism (finance-monthly-cgp step)
+          note: "tensorzero is a dependency for all pairings that call LLMs"
+          agent_hint: codex
+
+        - id: team.evolution.compute
+          task: "Compute requirements: GPU-heavy (LLM inference, RL training, embedding)"
+          context: "tensorzero routes to Ollama GPU; evoswarm_controller runs on CUDA; llama_lab benchmarks GPU models"
+          agent_hint: codex
+
+    # =========================================================================
+    # Team 8: Infrastructure & Networking (3 agents)
+    # =========================================================================
+    - id: team.infra
+      task: "Infrastructure & Networking team — VPN, fleet management, node coordination"
+      context: "3 agents: mesh_agent, headscale, vps_fleet_manager"
+      agent_hint: codex
+      children:
+        - id: team.infra.agents
+          task: "Agent roster"
+          context: |
+            mesh_agent        — No HTTP port — Node announcer (NATS every 15s)
+            headscale         — Port 8181 — Mesh VPN coordination
+            vps_fleet_manager — Hostinger KVM orchestration
+          agent_hint: codex
+
+        - id: team.infra.node_affinity
+          task: "Node affinity: kvm4-1, kvm2"
+          context: "CI runner: vps | Compose profiles: (none — infrastructure-level)"
+          agent_hint: codex
+
+        - id: team.infra.nats_subjects
+          task: "NATS subjects owned"
+          context: |
+            mesh.node.announce.v1        — Node presence announcement (mesh_agent)
+            vpn.node.connected.v1        — VPN device connected (headscale)
+            vpn.node.disconnected.v1     — VPN device disconnected (headscale)
+            vpn.auth_key.created.v1      — VPN auth key created (headscale)
+            vpn.route.advertised.v1      — VPN route advertisement (headscale)
+          agent_hint: codex
+
+        - id: team.infra.skill_pairings
+          task: "No direct skill pairing participation"
+          context: "Infrastructure team provides the network fabric but does not participate in skill chains"
+          agent_hint: codex
+
+        - id: team.infra.compute
+          task: "Compute requirements: CPU-only (lightweight networking daemons)"
+          context: "mesh_agent is a sidecar; headscale is a lightweight Go binary"
+          agent_hint: codex
+
+    # =========================================================================
+    # Team 9: Sandbox & Execution (8 agents)
+    # =========================================================================
+    - id: team.sandbox
+      task: "Sandbox & Execution team — isolated code execution environments (E2B)"
+      context: "8 agents: e2b_danger_room, e2b_desktop, e2b_spells, danger_infra, surf, agentgym, agentgym_rl, pmoves_e2b_mcp_server"
+      agent_hint: codex
+      children:
+        - id: team.sandbox.agents
+          task: "Agent roster"
+          context: |
+            e2b_danger_room      — Sandboxed code execution
+            e2b_desktop          — Desktop sandbox (GUI)
+            e2b_spells           — Sandbox templates/recipes
+            danger_infra         — E2B infrastructure provisioning
+            surf                 — Browser automation agent
+            agentgym             — Agent training gymnasium
+            agentgym_rl          — RL extension for AgentGym
+            pmoves_e2b_mcp_server — MCP bridge for E2B sandboxed execution
+          agent_hint: codex
+
+        - id: team.sandbox.node_affinity
+          task: "Node affinity: cloud"
+          context: "CI runner: ubuntu-latest | Compose profiles: (none — cloud-hosted E2B)"
+          agent_hint: codex
+
+        - id: team.sandbox.nats_subjects
+          task: "NATS subjects owned"
+          context: |
+            agentgym.train.started.v1     — RL training started (consumed by agentgym_rl)
+            agentgym.train.completed.v1   — RL training completed (consumed by agentgym_rl)
+            agentgym.model.published.v1   — Model published to HF (agentgym_rl publisher)
+          note: "agentgym.train.* are published by evo-controller but consumed/driven by sandbox agents"
+          agent_hint: codex
+
+        - id: team.sandbox.skill_pairings
+          task: "No direct skill pairing participation currently"
+          context: "Sandbox team provides execution environments; future pairings may chain E2B sandbox steps"
+          agent_hint: codex
+
+        - id: team.sandbox.compute
+          task: "Compute requirements: cloud-hosted (E2B cloud VMs, browser automation)"
+          context: "E2B runs on cloud infrastructure; agentgym_rl may require GPU for RL training"
+          agent_hint: codex
+
+    # =========================================================================
+    # Team 10: External Contributors (0 in-house agents)
+    # =========================================================================
+    - id: team.external
+      task: "External Contributors team — AI agents and humans who contribute via git"
+      context: "No in-house agents; tracked in agent_registry.yaml: claude-opus, kilocode, codex, gemini, cline, powerfulmoves, crush"
+      agent_hint: codex
+      children:
+        - id: team.external.agents
+          task: "External contributor roster (no node affinity)"
+          context: |
+            claude-opus      — Anthropic Claude Opus (AI contributor)
+            kilocode         — AI coding assistant
+            codex            — OpenAI Codex (AI contributor)
+            gemini           — Google Gemini (AI contributor)
+            cline            — AI coding assistant
+            powerfulmoves    — Human founder/operator
+            crush            — Terminal AI coding assistant (also in UI team)
+          note: "These are not deployed services — they contribute via git PRs and CLI sessions"
+          agent_hint: codex
+
+        - id: team.external.nats_subjects
+          task: "NATS subjects owned"
+          context: |
+            claude.code.tool.executed.v1    — Claude CLI tool execution events
+            ops.pr.monitor.completed.v1     — PR monitor scan completed
+            ops.pr.trim.completed.v1        — PR hedge trim completed
+            ops.pr.review.completed.v1      — Review learnings encoded
+            ops.pr.learnings.encoded.v1     — PR learnings encoded to CGP
+            ops.pr.monitor.failed.v1        — PR monitor failure
+            agent.graphiti.signed.v1        — Trail entry signing (shared with orchestration)
+          agent_hint: codex
+
+        - id: team.external.skill_pairings
+          task: "Skill pairing participation"
+          context: |
+            pr-monitor-graphiti-chit — codex (pr-monitor), claude-opus (pr-hedge-trim)
+          agent_hint: codex
+
+        - id: team.external.compute
+          task: "Compute requirements: none (external — uses client-side compute)"
+          context: "External contributors use their own compute; CI runners handle validation"
+          agent_hint: codex
+
+    # =========================================================================
+    # Team 11: Life Integration (2 agents)
+    # =========================================================================
+    - id: team.life
+      task: "Life Integration team — health, wealth, and personal data"
+      context: "2 agents: wealth, health"
+      agent_hint: codex
+      children:
+        - id: team.life.agents
+          task: "Agent roster"
+          context: |
+            wealth  — Firefly III finance tracking
+            health  — wger fitness tracking
+          agent_hint: codex
+
+        - id: team.life.node_affinity
+          task: "Node affinity: z890"
+          context: "CI runner: ubuntu-latest | Compose profiles: (none — standalone)"
+          agent_hint: codex
+
+        - id: team.life.nats_subjects
+          task: "NATS subjects owned"
+          context: |
+            health.metrics.updated.v1       — Body metrics updated (planned)
+            health.workout.completed.v1     — Workout completed (planned)
+            health.weekly.summary.v1        — Weekly fitness summary (planned)
+            health.workouts.synced.v1       — Wger sync completion
+            finance.transactions.ingested.v1 — Transactions imported (planned)
+            finance.budget.alert.v1         — Budget threshold alert (planned)
+            finance.monthly.summary.v1      — Monthly finance summary (planned)
+            finance.transactions.synced.v1  — Finance sync completion
+          note: "Most subjects are planned status — wger and Firefly III integrations are pre-stage maturity"
+          agent_hint: codex
+
+        - id: team.life.skill_pairings
+          task: "Skill pairing participation"
+          context: |
+            health-sync  — health agent is the data source (n8n drives the sync)
+            finance-sync — wealth agent is the data source (n8n drives the sync)
+          agent_hint: codex
+
+        - id: team.life.compute
+          task: "Compute requirements: CPU-only (lightweight HTTP services)"
+          context: "Both are standard web applications with minimal compute needs"
+          agent_hint: codex
+
+    # =========================================================================
+    # Cross-References: Agent-to-Skill-Pairing Map
+    # =========================================================================
+    - id: cross_references
+      task: "Cross-reference: agents participating in skill pairings"
+      context: "Maps each agent to the skill pairings they participate in"
+      agent_hint: codex
+      children:
+        - id: cross_references.model_benchmark_viz
+          task: "model-benchmark-viz participants"
+          context: |
+            Pipeline: model-trainer -> benchmark -> chart -> render
+            NATS: skills.pipeline.model-benchmark-viz.v1
+            Agents:
+              agent_zero     (orchestration) — model-trainer, hf-benchmark steps
+              archon         (orchestration) — a2ui-chart step
+              creator        (media)         — remotion-render step
+          agent_hint: codex
+
+        - id: cross_references.ingest_chit_index
+          task: "ingest-chit-index participants"
+          context: |
+            Pipeline: extract -> chit-encode -> hirag-index
+            NATS: skills.pipeline.ingest-chit-index.v1
+            Agents:
+              extract_worker (research)  — extract-worker step
+              tokenism       (evolution) — chit-encode step (via swarm_attribution)
+              hirag_v2       (research)  — hirag-index step
+          agent_hint: codex
+
+        - id: cross_references.research_summarize_render
+          task: "research-summarize-render participants"
+          context: |
+            Pipeline: deepresearch -> chart -> render
+            NATS: skills.pipeline.research-render.v1
+            Agents:
+              deep_research  (research)      — deepresearch step
+              archon         (orchestration) — a2ui-chart step
+              creator        (media)         — remotion-render step
+          agent_hint: codex
+
+        - id: cross_references.chit_3d_viz
+          task: "chit-3d-viz participants"
+          context: |
+            Pipeline: chit-encode -> threejs-render
+            NATS: skills.pipeline.chit-3d-viz.v1
+            Agents:
+              tokenism         (evolution) — chit-encode step
+              hyperdimensions  (ui)        — threejs-render step
+          agent_hint: codex
+
+        - id: cross_references.voice_synthesis
+          task: "voice-synthesis participants"
+          context: |
+            Pipeline: text-generate -> prosodic-analyze -> tts-synthesize
+            NATS: skills.pipeline.voice-synthesis.v1
+            Agents:
+              agent_zero     (orchestration) — text-generate step
+              flute_gateway  (media)         — prosodic-analyze step
+              ultimate_tts   (media)         — tts-synthesize step
+          agent_hint: codex
+
+        - id: cross_references.agent_card_gen
+          task: "agent-card-gen participants"
+          context: |
+            Pipeline: theme-lookup -> comfyui-generate -> a2ui-card
+            NATS: skills.pipeline.agent-card-gen.v1
+            Agents:
+              archon   (orchestration) — theme-lookup step, a2ui-card step
+              creator  (media)         — comfyui-generate step
+          agent_hint: codex
+
+        - id: cross_references.pr_monitor_graphiti_chit
+          task: "pr-monitor-graphiti-chit participants"
+          context: |
+            Pipeline: pr-monitor -> pr-hedge-trim -> pr-learnings-encode -> graphiti-trail-sync
+            NATS: skills.pipeline.pr-monitor-graphiti-chit.v1
+            Agents:
+              codex        (external)       — pr-monitor step
+              claude-opus  (external)       — pr-hedge-trim step
+              tokenism     (evolution)      — pr-learnings-encode step
+              archon       (orchestration)  — graphiti-trail-sync step
+          agent_hint: codex
+
+        - id: cross_references.health_sync
+          task: "health-sync participants"
+          context: |
+            Pipeline: n8n-health-sync -> health-weekly-cgp
+            NATS: skills.pipeline.health-sync.v1
+            Agents:
+              n8n      (automation) — n8n-health-sync step
+              tokenism (evolution)  — health-weekly-cgp step
+          agent_hint: codex
+
+        - id: cross_references.finance_sync
+          task: "finance-sync participants"
+          context: |
+            Pipeline: n8n-finance-sync -> finance-monthly-cgp
+            NATS: skills.pipeline.finance-sync.v1
+            Agents:
+              n8n      (automation) — n8n-finance-sync step
+              tokenism (evolution)  — finance-monthly-cgp step
+          agent_hint: codex
+
+    # =========================================================================
+    # Audit Rules
+    # =========================================================================
+    - id: audit
+      task: "Taxonomy audit rules"
+      context: "Invariants that must hold for a valid agent teams taxonomy"
+      agent_hint: codex
+      children:
+        - id: audit.single_team_membership
+          task: "Every agent belongs to exactly one team"
+          action:
+            type: script
+            command: |
+              python -c "
+              import yaml
+              t = yaml.safe_load(open('pmoves/configs/agent-teams.yaml'))
+              seen = {}
+              for team, cfg in t['teams'].items():
+                for agent in cfg.get('agents', []):
+                  if agent in seen:
+                    print(f'FAIL: {agent} in both {seen[agent]} and {team}')
+                  seen[agent] = team
+              print(f'Total agents: {len(seen)}, all unique: {len(seen) == sum(len(c.get(\"agents\",[])) for c in t[\"teams\"].values())}')
+              "
+            expect: "All agents assigned to exactly one team, no duplicates"
+          agent_hint: codex
+
+        - id: audit.team_has_nats_subject
+          task: "Every team has at least one NATS subject"
+          action:
+            type: manual
+            description: "Verify each team section in this TAC tree has a non-empty nats_subjects child"
+            expect: "All 11 teams (including external) have NATS subject ownership documented"
+          note: |
+            orchestration: 7 subjects (supaserch.*, agent.*, botz.mcp.*)
+            research: 7 subjects (research.*, cipher.*, ingest.file.*)
+            media: 7 subjects (ingest.transcript.*, tokenism.geometry.*, voice.*)
+            data: 3 subjects (mesh.node.*, test.*, dev.*)
+            ui: 5 subjects (remote.session.*, openclaw.*)
+            automation: 8 subjects (publisher_discord subscriptions, health/finance sync)
+            evolution: 18 subjects (mesh.gpu.*, model.*, geometry.*, tokenism.*, agentgym.*)
+            infra: 5 subjects (mesh.node.*, vpn.*)
+            sandbox: 3 subjects (agentgym.*)
+            external: 7 subjects (claude.code.*, ops.pr.*, agent.graphiti.*)
+            life: 8 subjects (health.*, finance.*)
+          agent_hint: codex
+
+        - id: audit.agent_count
+          task: "Total agent count matches expected (62 in-house)"
+          action:
+            type: script
+            command: |
+              python -c "
+              import yaml
+              t = yaml.safe_load(open('pmoves/configs/agent-teams.yaml'))
+              total = sum(len(c.get('agents', [])) for c in t['teams'].values())
+              print(f'Total agents across all teams: {total}')
+              assert total == 62, f'Expected 62, got {total}'
+              print('PASS')
+              "
+            expect: "62 agents across 11 teams"
+          agent_hint: codex
+
+        - id: audit.skill_pairing_coverage
+          task: "All 9 skill pairings have agents mapped in cross_references"
+          action:
+            type: manual
+            description: "Verify cross_references section covers all pairings from skill-pairings.yaml"
+            expect: |
+              9 pairings covered:
+              1. model-benchmark-viz
+              2. ingest-chit-index
+              3. research-summarize-render
+              4. chit-3d-viz
+              5. voice-synthesis
+              6. agent-card-gen
+              7. pr-monitor-graphiti-chit
+              8. health-sync
+              9. finance-sync
+          agent_hint: codex

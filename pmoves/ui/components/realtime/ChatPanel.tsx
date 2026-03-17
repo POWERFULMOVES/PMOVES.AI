@@ -106,6 +106,8 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
       <div
         ref={scrollContainerRef}
         className="pmoves-chat-messages"
+        aria-live="polite"
+        aria-label="Chat messages"
         style={{
           flex: 1,
           overflowY: 'auto',
@@ -173,6 +175,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
           }}
         >
           <textarea
+            aria-label="Chat message"
             style={{
               width: '100%',
               height: 96,

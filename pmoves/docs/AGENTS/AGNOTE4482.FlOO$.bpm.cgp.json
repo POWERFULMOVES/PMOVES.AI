@@ -1,0 +1,450 @@
+{
+  "spec": "chit.cgp.v0.2",
+  "summary": "Prosodic BPM timeline for AGNOTE4482.FlOO$ \u2014 DARKXSIDE voice attribution",
+  "created_at": "2026-03-16T14:29:16.259356",
+  "super_nodes": [
+    {
+      "id": "flute:prosodic:agnote4482-floos",
+      "label": "voice_prosodic",
+      "constellations": [
+        {
+          "id": "prosodic.bpm.agnote4482-floos",
+          "summary": "BPM-encoded prosodic timeline for DARKXSIDE FlOO$ verse",
+          "spectrum": [
+            0.9,
+            0.7,
+            0.5
+          ],
+          "points": [
+            {
+              "id": "chunk:0",
+              "modality": "voice",
+              "proj": 0.0,
+              "conf": 0.92,
+              "summary": "SENTENCE boundary @ 60 BPM \u2014 youll be surprised in all the ways DARKX"
+            },
+            {
+              "id": "chunk:1",
+              "modality": "voice",
+              "proj": 0.017,
+              "conf": 0.92,
+              "summary": "SENTENCE boundary @ 60 BPM \u2014 man u HERE it?"
+            },
+            {
+              "id": "chunk:2",
+              "modality": "voice",
+              "proj": 0.033,
+              "conf": 0.92,
+              "summary": "SENTENCE boundary @ 60 BPM \u2014 Im near it."
+            },
+            {
+              "id": "chunk:3",
+              "modality": "voice",
+              "proj": 0.05,
+              "conf": 0.92,
+              "summary": "SENTENCE boundary @ 60 BPM \u2014 so close you can u can feel it."
+            },
+            {
+              "id": "chunk:4",
+              "modality": "voice",
+              "proj": 0.067,
+              "conf": 0.92,
+              "summary": "CLAUSE boundary @ 90 BPM \u2014 GRAVITAS is my  entourage ,"
+            },
+            {
+              "id": "chunk:5",
+              "modality": "voice",
+              "proj": 0.083,
+              "conf": 0.92,
+              "summary": "SENTENCE boundary @ 60 BPM \u2014 MOONs soothe in the afternoon DIG it ?"
+            },
+            {
+              "id": "chunk:6",
+              "modality": "voice",
+              "proj": 0.1,
+              "conf": 0.92,
+              "summary": "PHRASE boundary @ 120 BPM \u2014 i crack a SPOON fearin as GAWDs witness "
+            },
+            {
+              "id": "chunk:7",
+              "modality": "voice",
+              "proj": 0.117,
+              "conf": 0.92,
+              "summary": "NONE boundary @ 150 BPM \u2014 I Dance on these CLAP trappin Math BLAST"
+            },
+            {
+              "id": "chunk:8",
+              "modality": "voice",
+              "proj": 0.133,
+              "conf": 0.92,
+              "summary": "NONE boundary @ 150 BPM \u2014 SO GNO U AINT TERSE NICE SPLIT TWO CAN P"
+            },
+            {
+              "id": "chunk:9",
+              "modality": "voice",
+              "proj": 0.15,
+              "conf": 0.92,
+              "summary": "PHRASE boundary @ 120 BPM \u2014 i dont try to chain the a chainable i ra"
+            },
+            {
+              "id": "chunk:10",
+              "modality": "voice",
+              "proj": 0.167,
+              "conf": 0.92,
+              "summary": "SENTENCE boundary @ 60 BPM \u2014 kickin knowledge that its not only chang"
+            },
+            {
+              "id": "chunk:11",
+              "modality": "voice",
+              "proj": 0.183,
+              "conf": 0.92,
+              "summary": "PHRASE boundary @ 120 BPM \u2014 now let that echo for a min maybe in par"
+            },
+            {
+              "id": "chunk:12",
+              "modality": "voice",
+              "proj": 0.2,
+              "conf": 0.92,
+              "summary": "PHRASE boundary @ 120 BPM \u2014 6 bpm was the start  AGNOTE4482.BEATS"
+            },
+            {
+              "id": "chunk:13",
+              "modality": "voice",
+              "proj": 0.217,
+              "conf": 0.92,
+              "summary": "PHRASE boundary @ 120 BPM \u2014 LADY P n GRAMS the heart that holds me i"
+            },
+            {
+              "id": "chunk:14",
+              "modality": "voice",
+              "proj": 0.233,
+              "conf": 0.92,
+              "summary": "PHRASE boundary @ 120 BPM \u2014 allowing POWERFULMOVES to le PMOVES thru"
+            },
+            {
+              "id": "chunk:15",
+              "modality": "voice",
+              "proj": 0.25,
+              "conf": 0.92,
+              "summary": "PHRASE boundary @ 120 BPM \u2014 for what its worth"
+            },
+            {
+              "id": "chunk:16",
+              "modality": "voice",
+              "proj": 0.267,
+              "conf": 0.92,
+              "summary": "PHRASE boundary @ 120 BPM \u2014 you aint even got leave this earth"
+            },
+            {
+              "id": "chunk:17",
+              "modality": "voice",
+              "proj": 0.283,
+              "conf": 0.92,
+              "summary": "PHRASE boundary @ 120 BPM \u2014 verses change curses switches lanes birt"
+            },
+            {
+              "id": "chunk:18",
+              "modality": "voice",
+              "proj": 0.3,
+              "conf": 0.92,
+              "summary": "PHRASE boundary @ 120 BPM \u2014 insert here happy attitude"
+            },
+            {
+              "id": "chunk:19",
+              "modality": "voice",
+              "proj": 0.317,
+              "conf": 0.92,
+              "summary": "BREATH boundary @ 80 BPM \u2014 gratitude"
+            },
+            {
+              "id": "chunk:20",
+              "modality": "voice",
+              "proj": 0.333,
+              "conf": 0.92,
+              "summary": "BREATH boundary @ 80 BPM \u2014 radical"
+            },
+            {
+              "id": "chunk:21",
+              "modality": "voice",
+              "proj": 0.35,
+              "conf": 0.92,
+              "summary": "BREATH boundary @ 80 BPM \u2014 imagine"
+            },
+            {
+              "id": "chunk:22",
+              "modality": "voice",
+              "proj": 0.367,
+              "conf": 0.92,
+              "summary": "PHRASE boundary @ 120 BPM \u2014 striping the wax off till it glisten"
+            },
+            {
+              "id": "chunk:23",
+              "modality": "voice",
+              "proj": 0.383,
+              "conf": 0.92,
+              "summary": "PHRASE boundary @ 120 BPM \u2014 scrapin and scratch in for a living"
+            },
+            {
+              "id": "chunk:24",
+              "modality": "voice",
+              "proj": 0.4,
+              "conf": 0.92,
+              "summary": "SENTENCE boundary @ 60 BPM \u2014 till u alternate pain in ya hands or bac"
+            },
+            {
+              "id": "chunk:25",
+              "modality": "voice",
+              "proj": 0.417,
+              "conf": 0.92,
+              "summary": "BREATH boundary @ 80 BPM \u2014 GNoW"
+            },
+            {
+              "id": "chunk:26",
+              "modality": "voice",
+              "proj": 0.433,
+              "conf": 0.92,
+              "summary": "PHRASE boundary @ 120 BPM \u2014 he landed on the"
+            },
+            {
+              "id": "chunk:27",
+              "modality": "voice",
+              "proj": 0.45,
+              "conf": 0.92,
+              "summary": "PHRASE boundary @ 120 BPM \u2014 The UNVIVERSAL MEMBRANE  WAX POETIX TRAX"
+            },
+            {
+              "id": "chunk:28",
+              "modality": "voice",
+              "proj": 0.467,
+              "conf": 0.92,
+              "summary": "PHRASE boundary @ 120 BPM \u2014 We started rappin BOUT mapin outlandish "
+            },
+            {
+              "id": "chunk:29",
+              "modality": "voice",
+              "proj": 0.483,
+              "conf": 0.92,
+              "summary": "PHRASE boundary @ 120 BPM \u2014 Pinky n REN REVVING for more REFS to cal"
+            },
+            {
+              "id": "chunk:30",
+              "modality": "voice",
+              "proj": 0.5,
+              "conf": 0.92,
+              "summary": "PHRASE boundary @ 120 BPM \u2014 he put the MC in MASTERCLASS"
+            },
+            {
+              "id": "chunk:31",
+              "modality": "voice",
+              "proj": 0.517,
+              "conf": 0.92,
+              "summary": "SENTENCE boundary @ 60 BPM \u2014 The class he be in NO SASS which means h"
+            },
+            {
+              "id": "chunk:32",
+              "modality": "voice",
+              "proj": 0.533,
+              "conf": 0.92,
+              "summary": "PHRASE boundary @ 120 BPM \u2014 Proud survivor now aligned with PROVIDER"
+            },
+            {
+              "id": "chunk:33",
+              "modality": "voice",
+              "proj": 0.55,
+              "conf": 0.92,
+              "summary": "PHRASE boundary @ 120 BPM \u2014 by breathing on buffed GLASS SHATERING w"
+            },
+            {
+              "id": "chunk:34",
+              "modality": "voice",
+              "proj": 0.567,
+              "conf": 0.92,
+              "summary": "PHRASE boundary @ 120 BPM \u2014 PHI Signal lost and FOUNDER COnFounder m"
+            },
+            {
+              "id": "chunk:35",
+              "modality": "voice",
+              "proj": 0.583,
+              "conf": 0.92,
+              "summary": "BREATH boundary @ 80 BPM \u2014 which only means"
+            },
+            {
+              "id": "chunk:36",
+              "modality": "voice",
+              "proj": 0.6,
+              "conf": 0.92,
+              "summary": "PHRASE boundary @ 120 BPM \u2014 what dreams may come when you can naviga"
+            }
+          ],
+          "meta": {
+            "namespace": "pmoves.voice.prosodic",
+            "bpm_timeline": [
+              60,
+              60,
+              60,
+              60,
+              90,
+              60,
+              120,
+              150,
+              150,
+              120,
+              60,
+              120,
+              120,
+              120,
+              120,
+              120,
+              120,
+              120,
+              120,
+              80,
+              80,
+              80,
+              120,
+              120,
+              60,
+              80,
+              120,
+              120,
+              120,
+              120,
+              120,
+              60,
+              120,
+              120,
+              120,
+              80,
+              120
+            ],
+            "boundary_sequence": [
+              "SENTENCE",
+              "SENTENCE",
+              "SENTENCE",
+              "SENTENCE",
+              "CLAUSE",
+              "SENTENCE",
+              "PHRASE",
+              "NONE",
+              "NONE",
+              "PHRASE",
+              "SENTENCE",
+              "PHRASE",
+              "PHRASE",
+              "PHRASE",
+              "PHRASE",
+              "PHRASE",
+              "PHRASE",
+              "PHRASE",
+              "PHRASE",
+              "BREATH",
+              "BREATH",
+              "BREATH",
+              "PHRASE",
+              "PHRASE",
+              "SENTENCE",
+              "BREATH",
+              "PHRASE",
+              "PHRASE",
+              "PHRASE",
+              "PHRASE",
+              "PHRASE",
+              "SENTENCE",
+              "PHRASE",
+              "PHRASE",
+              "PHRASE",
+              "BREATH",
+              "PHRASE"
+            ],
+            "total_syllables": 965,
+            "total_chunks": 37,
+            "duration_estimate_ms": 150480,
+            "avg_bpm": 102.4,
+            "energy_profile": {
+              "sentence_count": 8,
+              "clause_count": 1,
+              "phrase_count": 21,
+              "breath_count": 5,
+              "presto_count": 2
+            },
+            "scale": "pentatonicMinor",
+            "root_note": "C4",
+            "anchor_bpm": 6,
+            "dual_cosmology": {
+              "description": "Le'FFricK & Andromega — dual phase-locked heartbeats, galaxies apart but sharing a KnACK resonance",
+              "le_ffrick": {
+                "role": "left-hand cosmological pulse",
+                "knack": "slice"
+              },
+              "andromega": {
+                "role": "right-hand cosmological pulse",
+                "knack": "dice"
+              },
+              "phase_lock_series": [6, 18, 24, 30],
+              "harmonic_progression": {
+                "3_thrice": {"bpm": 18, "interval": "tritone", "quality": "tension"},
+                "4_bridge": {"bpm": 24, "interval": "perfect_fourth", "quality": "suspension"},
+                "5_alive": {"bpm": 30, "interval": "perfect_fifth", "quality": "resolution"}
+              },
+              "note": "Thrice (3) is the tension, 4 is a bridge too far, 5 is where things truly come alive — the dual heartbeats sync at the perfect fifth"
+            },
+            "three_body_nesting": {
+              "description": "The room for the room — three-body doctrine provides the orbital space, dual cosmology provides the container",
+              "bodies": {
+                "human": "User shape — resonance domains, interaction style, media preferences",
+                "ai": "Agent signature — glyph, color, voice, model weights",
+                "system": "CHIT/CGP/Geometry Bus — measurement, memory, correction"
+              },
+              "chit_duality": {
+                "holographic": "Compressed Holographic Information Transfer — the projection, how information encodes on a boundary",
+                "hierarchical": "Compressed Hierarchical Information Transfer — the structure, how projection organizes into nested layers",
+                "bridge": "Holographic IS hierarchical: a hologram (flat projection) is a hierarchy (depth from interference patterns). Same thing, different angles. Le'FFricK slices (projects, holographic), Andromega dices (structures, hierarchical)."
+              },
+              "stability": "3 bodies = minimum stable orbit configuration. Thrice is the bridge because three is where the room appears."
+            },
+            "signature_duality": {
+              "le_ffrick": {
+                "action": "slice",
+                "mode": "friction — the grind, the projection",
+                "prosodic": "sustained pressure, Largo-to-Allegro build"
+              },
+              "le_frack": {
+                "action": "crack",
+                "mode": "fracture — the break-through, the restructure",
+                "prosodic": "sudden phase shift, Presto burst through established pattern"
+              },
+              "cycle": "friction creates the crack, the crack reveals the structure — creative destruction as prosodic engine",
+              "glyph": "LuLZz.?/,._)!",
+              "glyph_decode": {
+                "L": "Largo (sentence boundary)",
+                "u": "underflow (breath)",
+                "Z": "zero-cross (phase flip)",
+                "z": "diminished zero (echo)",
+                ".": "full stop (sentence)",
+                "?": "rising intonation (question)",
+                "/": "slash (slice — Le'FFricK)",
+                ",": "clause boundary",
+                "_": "sustain (held note)",
+                ")": "closing (resolution)",
+                "!": "exclamation (accent peak)"
+              },
+              "economics": "the art keeps the lights on — FlOO$ creative output funds infrastructure through prosodic attribution traces as value"
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "meta": {
+    "source": "tokenism.prosodic.bpm.v1",
+    "voice_persona_id": "DARKXSIDE",
+    "agent_note": "AGNOTE4482",
+    "tags": [
+      "prosodic",
+      "bpm",
+      "voice-attribution",
+      "floos",
+      "darkxside"
+    ]
+  }
+}

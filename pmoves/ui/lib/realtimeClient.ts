@@ -16,6 +16,8 @@ import {
   RealtimeChannel,
   RealtimePresenceState,
 } from '@supabase/supabase-js';
+import { logError, logForDebugging } from './errorUtils';
+import { ErrorIds } from './constants/errorIds';
 
 /**
  * Represents a cursor position on the studio board.
@@ -360,7 +362,7 @@ export function subscribeToBoardPresence(
   channel.subscribe((status) => {
     if (status === 'SUBSCRIBED') {
       channel.track(currentPayload).catch((error) => {
-        console.error('Failed to register presence', error);
+        logError('Failed to register presence', error, 'error', { errorId: ErrorIds.REALTIME_PRESENCE_FAILED, component: 'realtimeClient' });
       });
     }
   });
@@ -455,7 +457,7 @@ export function subscribeToSessionMessages(
   try {
     channel.subscribe();
   } catch (error) {
-    console.error('Failed to subscribe to session messages', error);
+    logError('Failed to subscribe to session messages', error, 'error', { errorId: ErrorIds.REALTIME_SUBSCRIPTION_FAILED, component: 'realtimeClient' });
   }
 
   return channel;
@@ -635,7 +637,7 @@ export function subscribeToChatMessages(
 
   channel.subscribe((status) => {
     if (status === 'SUBSCRIBED') {
-      console.log(`[Realtime] Subscribed to chat_messages: ${channelName}`);
+      logForDebugging(`Subscribed to chat_messages: ${channelName}`, undefined, { component: 'realtimeClient' });
     }
   });
 
@@ -891,7 +893,7 @@ export function subscribeToIngestionQueue(
 
   channel.subscribe((status) => {
     if (status === 'SUBSCRIBED') {
-      console.log(`[Realtime] Subscribed to ingestion_queue: ${channelName}`);
+      logForDebugging(`Subscribed to ingestion_queue: ${channelName}`, undefined, { component: 'realtimeClient' });
     }
   });
 

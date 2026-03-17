@@ -549,9 +549,48 @@ Example: `ingest.transcript.ready.v1`
   ```
 - **Subscribers:** Monitoring dashboards, Discord Publisher
 
-## Health & Fitness Subjects (Planned)
+**`voice.cast.failed.v1`**
+- **Direction:** Published by cast-tts-gateway → Consumed by Discord Publisher
+- **Purpose:** Notify when a TTS synthesis or device cast operation fails
+- **Payload:**
+  ```json
+  {
+    "stage": "tts_synthesis|device_cast|fallback_exhausted|queue_timeout",
+    "reason": "httpx timeout on Ultimate-TTS",
+    "retryable": true,
+    "outcome": "fatal|partial",
+    "timestamp": "2026-03-17T12:00:00Z",
+    "device_name": "Living Room Speaker",
+    "text": "Hello world",
+    "provider_attempted": "ultimate_tts"
+  }
+  ```
+- **Subscribers:** Discord Publisher, monitoring dashboards
 
-> **Status:** Planned — Health (wger) integration is pre-stage maturity. These subjects define the target contract.
+**`voice.cast.health_alert.v1`**
+- **Direction:** Published by cast-tts-gateway → Consumed by monitoring
+- **Purpose:** Health alert when device or provider is degraded
+- **Subscribers:** Monitoring dashboards, Agent Zero
+
+**`device.cast.discovered.v1`**
+- **Direction:** Published by cast-tts-gateway → Consumed by Agent Zero, Discord Publisher
+- **Purpose:** Report device inventory changes after discovery scan
+- **Payload:**
+  ```json
+  {
+    "devices": [{"name": "Living Room Speaker", "ip": "192.168.1.50", "address": "192.168.1.50:8009"}],
+    "count": 3,
+    "timestamp": "2026-03-17T12:00:00Z",
+    "new_devices": ["Office Speaker"],
+    "lost_devices": [],
+    "forced": true
+  }
+  ```
+- **Subscribers:** Agent Zero, Discord Publisher
+
+## Health & Fitness Subjects
+
+> **Status:** Subjects defined and NATS wiring active in main compose (`NATS_URL` + `WGER_ENABLE_NATS`). n8n workflows defined but require activation and smoke testing before production use.
 
 **`health.metrics.updated.v1`**
 - **Direction:** Published by Health (wger) service

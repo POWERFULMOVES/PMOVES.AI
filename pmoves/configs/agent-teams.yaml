@@ -56,6 +56,7 @@ teams:
       - jellyfin_ai       # AI-enhanced media management
       - creator           # ComfyUI render pipeline
       - transcribe_and_fetch  # Standalone transcription
+      - cast_tts_gateway  # Port 8060 — Chromecast/Google Home TTS casting
 
   data:
     name: "Data & Storage"

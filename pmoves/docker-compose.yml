@@ -1015,7 +1015,7 @@ services:
   # =============================================================================
 
   qdrant:
-    image: qdrant/qdrant:v1.10.0
+    image: qdrant/qdrant:v1.14.1
     restart: unless-stopped
     cap_drop:
       - ALL
@@ -1323,6 +1323,7 @@ services:
     - pmoves_app
     - pmoves_bus
     - pmoves_api  # reach supabase-kong for REST API
+    - pmoves_data  # reach qdrant + meilisearch + minio
     - pmoves_external  # HuggingFace model downloads at runtime
     extra_hosts:
     - host.docker.internal:host-gateway
@@ -1367,6 +1368,7 @@ services:
     networks:
     - pmoves_app
     - pmoves_bus
+    - pmoves_data  # MinIO access (minio:9000)
     healthcheck:
       test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8092/healthz', timeout=5)"]
       interval: 30s
@@ -1454,6 +1456,7 @@ services:
     - pmoves_app
     - pmoves_bus
     - pmoves_api
+    - pmoves_data  # MinIO access (minio:9000)
     healthcheck:
       test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthz', timeout=5)"]
       interval: 30s
@@ -1592,7 +1595,7 @@ services:
     - SUPA_REST_URL=${PMOVES_YT_SUPA_REST_URL:-${SUPABASE_REST_URL:-http://supabase-kong:8000/rest/v1}}
     - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
     - HIRAG_URL=${HIRAG_URL:-http://hi-rag-gateway-v2:8086}
-    - YT_PLAYER_CLIENT=${YT_PLAYER_CLIENT:-web_safari}
+    - YT_PLAYER_CLIENT=${YT_PLAYER_CLIENT:-android}
     - YT_USER_AGENT=${YT_USER_AGENT:-Mozilla/5.0 (Macintosh; Intel Mac OS X 14_6)
       AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.6 Safari/605.1.15}
     - YT_COOKIES=${YT_COOKIES:-/app/config/cookies/darkxside.youtube.cookies.txt}
@@ -1621,6 +1624,7 @@ services:
     - pmoves_app
     - pmoves_api
     - pmoves_bus
+    - pmoves_data      # MinIO access (minio:9000)
     - pmoves_external  # Required for YouTube API access
     healthcheck:
       test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8077/healthz', timeout=5)"]
@@ -1985,16 +1989,18 @@ services:
     # LLM routing: use TensorZero gateway as OpenAI-compatible provider
     # Agent Zero's get_default_value() reads A0_SET_* from env (dotenv priority)
     - A0_SET_chat_model_provider=openai
-    - A0_SET_chat_model_name=agent_zero
+    # Chat/util/browser wrappers ADD openai/ prefix internally — do NOT double it
+    - A0_SET_chat_model_name=tensorzero::function_name::agent_zero
     - A0_SET_chat_model_api_base=http://tensorzero-gateway:3000/openai/v1
     - A0_SET_util_model_provider=openai
-    - A0_SET_util_model_name=langextract
+    - A0_SET_util_model_name=tensorzero::function_name::agent_zero
     - A0_SET_util_model_api_base=http://tensorzero-gateway:3000/openai/v1
     - A0_SET_embed_model_provider=openai
-    - A0_SET_embed_model_name=gemma_embed_local
+    # Embed wrapper does NOT add openai/ prefix — must include it here
+    - A0_SET_embed_model_name=openai/tensorzero::embedding_model_name::gemma_embed_local
     - A0_SET_embed_model_api_base=http://tensorzero-gateway:3000/openai/v1
     - A0_SET_browser_model_provider=openai
-    - A0_SET_browser_model_name=agent_zero
+    - A0_SET_browser_model_name=tensorzero::function_name::agent_zero
     - A0_SET_browser_model_api_base=http://tensorzero-gateway:3000/openai/v1
     depends_on:
       nats:
@@ -2696,7 +2702,7 @@ services:
     environment:
       - GRADIO_SERVER_NAME=0.0.0.0
       - GRADIO_SERVER_PORT=7861
-      - GRADIO_MCP_SERVER=true
+      - GRADIO_MCP_SERVER=false  # Requires gradio[mcp] extra - enable after image rebuild
       # WSL2/CUDA compatibility settings
       - CUDA_FORCE_PTX_JIT=1
       - CUDA_DEVICE_ORDER=PCI_BUS_ID
@@ -2858,6 +2864,9 @@ services:
       - CHIT_REQUIRE_SIGNATURE=${CHIT_REQUIRE_SIGNATURE:-false}
       - CHIT_DECRYPT_ANCHORS=${CHIT_DECRYPT_ANCHORS:-false}
       - CHIT_PASSPHRASE=${CHIT_PROD_PASSPHRASE:-changeme}
+      - SUPABASE_URL=http://supabase-kong:8000
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-}
+      - MAX_CONCURRENT_CASTS=${MAX_CONCURRENT_CASTS:-4}
     ports: ["${CAST_TTS_PORT:-8060}:8060"]
     profiles: ["cast", "media"]
     networks: [pmoves_app, pmoves_bus, pmoves_api, pmoves_external]
@@ -2873,6 +2882,8 @@ services:
         condition: service_healthy
       nats:
         condition: service_healthy
+      supabase-kong:
+        condition: service_started
     deploy:
       resources:
         limits:
