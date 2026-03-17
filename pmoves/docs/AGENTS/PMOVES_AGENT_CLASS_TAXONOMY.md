@@ -105,6 +105,7 @@ Types are derived from the 7 canonical service tiers defined in `services-catalo
 | Media-Audio Analyzer | Standard | Media | Worker | 5 |
 | Extract Worker | Standard | Worker | Data | 4 |
 | Flute-Gateway | Standard | API | Media | 2 |
+| Cast TTS Gateway | Standard | Media | API | 5 |
 | Ultimate-TTS-Studio | Standard | Media | LLM | 5 |
 | TensorZero Gateway | Standard | API | LLM | 2 |
 | BoTZ Gateway | Standard | Agent | Worker | 6 |
@@ -199,6 +200,7 @@ SupaSerch           *   -   *   *    *   *   -     5     Stage 2
 Hi-RAG v2           *   -   *   *    -   *   *     5     Stage 2
 DeepResearch        *   -   *   -    -   *   *     4     Stage 1
 Flute-Gateway       *   -   *   *    -   *   -     4     Stage 1
+Cast TTS Gateway    *   -   *   -    -   *   -     3     Stage 1
 BoTZ Gateway        *   -   *   -    *   *   -     4     Stage 1
 PMOVES.YT           *   -   *   -    -   *   *     4     Stage 1
 Extract Worker      *   -   *   -    -   *   *     4     Stage 1

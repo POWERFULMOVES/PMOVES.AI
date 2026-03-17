@@ -2864,6 +2864,9 @@ services:
       - CHIT_REQUIRE_SIGNATURE=${CHIT_REQUIRE_SIGNATURE:-false}
       - CHIT_DECRYPT_ANCHORS=${CHIT_DECRYPT_ANCHORS:-false}
       - CHIT_PASSPHRASE=${CHIT_PROD_PASSPHRASE:-changeme}
+      - SUPABASE_URL=http://supabase-kong:8000
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-}
+      - MAX_CONCURRENT_CASTS=${MAX_CONCURRENT_CASTS:-4}
     ports: ["${CAST_TTS_PORT:-8060}:8060"]
     profiles: ["cast", "media"]
     networks: [pmoves_app, pmoves_bus, pmoves_api, pmoves_external]
@@ -2879,6 +2882,8 @@ services:
         condition: service_healthy
       nats:
         condition: service_healthy
+      supabase-kong:
+        condition: service_started
     deploy:
       resources:
         limits:
