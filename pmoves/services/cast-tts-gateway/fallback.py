@@ -172,16 +172,33 @@ class GoogleTTSProvider(FallbackProvider):
 
 
 class TTSGatewayFallback:
-    """Multi-level TTS provider fallback."""
+    """Multi-level TTS provider fallback with circuit breaker integration."""
 
-    def __init__(self, providers: list[FallbackProvider]):
+    # Canonical circuit breaker keys per provider
+    PROVIDER_CB_KEYS = {
+        "flute": "tts.flute",
+        "ultimate_tts": "tts.ultimate_tts",
+        "google_tts": "tts.google_tts",
+    }
+
+    def __init__(self, providers: list[FallbackProvider], recovery_manager=None, on_transition=None):
         """
         Initialize TTS fallback chain.
 
         Args:
             providers: Ordered list of TTS providers (primary first)
+            recovery_manager: Optional RecoveryManager for circuit breaker integration
+            on_transition: Optional callback(from_state, to_state, service_key) for metrics
         """
         self.providers = providers
+        self.recovery_manager = recovery_manager
+        self._on_transition = on_transition
+
+    def _cb_key(self, provider: FallbackProvider) -> str:
+        """Get circuit breaker key for a provider."""
+        return self.PROVIDER_CB_KEYS.get(
+            provider.provider_name(), f"tts.{provider.provider_name()}"
+        )
 
     async def synthesize_with_fallback(
         self,
@@ -203,11 +220,28 @@ class TTSGatewayFallback:
         start_time = time.time()
 
         for provider in self.providers:
+            cb_key = self._cb_key(provider)
+
+            # Check circuit breaker before attempting provider
+            if self.recovery_manager:
+                breaker = self.recovery_manager.get_circuit_breaker(cb_key)
+                if not breaker.allow_request():
+                    continue
+
             try:
                 audio_data = await provider.synthesize(text, voice)
 
                 if audio_data:
                     duration_ms = (time.time() - start_time) * 1000
+
+                    # Record success with circuit breaker
+                    if self.recovery_manager:
+                        breaker = self.recovery_manager.get_circuit_breaker(cb_key)
+                        prev = breaker.get_state().state
+                        breaker.record_success()
+                        curr = breaker.get_state().state
+                        if prev != curr and self._on_transition:
+                            self._on_transition(prev.value, curr.value, cb_key)
 
                     return FallbackResult(
                         success=True,
@@ -217,6 +251,14 @@ class TTSGatewayFallback:
                     )
 
             except Exception as e:
+                # Record failure with circuit breaker
+                if self.recovery_manager:
+                    breaker = self.recovery_manager.get_circuit_breaker(cb_key)
+                    prev = breaker.get_state().state
+                    breaker.record_failure()
+                    curr = breaker.get_state().state
+                    if prev != curr and self._on_transition:
+                        self._on_transition(prev.value, curr.value, cb_key)
                 # Try next provider
                 continue
 
@@ -371,10 +413,12 @@ class DeviceFallback:
 class FallbackManager:
     """Manage all fallback strategies."""
 
-    def __init__(self):
+    def __init__(self, recovery_manager=None, on_transition=None):
         """Initialize fallback manager."""
         self.tts_fallback: Optional[TTSGatewayFallback] = None
         self.device_fallbacks: dict[str, DeviceFallback] = {}
+        self.recovery_manager = recovery_manager
+        self._on_transition = on_transition
 
     def configure_tts_fallback(
         self,
@@ -389,7 +433,9 @@ class FallbackManager:
         Returns:
             Result dict
         """
-        self.tts_fallback = TTSGatewayFallback(providers)
+        self.tts_fallback = TTSGatewayFallback(
+            providers, self.recovery_manager, self._on_transition,
+        )
 
         return {
             "success": True,

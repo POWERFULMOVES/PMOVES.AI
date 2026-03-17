@@ -140,7 +140,10 @@ class CastTTSGateway:
         self.scheduler: Optional[CastScheduler] = None
         self.health_monitor = HealthMonitor(alert_callback=self._health_alert_callback)
         self.recovery_manager = RecoveryManager()
-        self.fallback_manager = FallbackManager()
+        self.fallback_manager = FallbackManager(
+            recovery_manager=self.recovery_manager,
+            on_transition=self._on_circuit_breaker_transition,
+        )
         self.optimization_manager = OptimizationManager()
         self.security_manager = SecurityManager()
         self.nats_client: Optional[nats.aio.client.Client] = None
@@ -2036,6 +2039,13 @@ class CastTTSGateway:
                 text=text,
             )
             return multi_result.to_dict()
+
+    @staticmethod
+    def _on_circuit_breaker_transition(from_state: str, to_state: str, service: str):
+        """Record circuit breaker state transition in Prometheus."""
+        CIRCUIT_BREAKER_TRANSITIONS.labels(
+            from_state=from_state, to_state=to_state, service=service,
+        ).inc()
 
     async def _on_device_discovery(self, devices, new_names, lost_names, forced):
         """Callback invoked after device discovery completes."""
