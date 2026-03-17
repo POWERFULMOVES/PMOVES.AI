@@ -100,8 +100,23 @@
     <div class="action-row">
       <input type="text" id="tts-input" placeholder="Text to speak (Flute)...">
       <button id="tts-btn" class="action-btn">Speak</button>
+      <label class="checkbox-label" title="Cast directly to Google Home / Pixel edge" style="margin-left:8px; display:flex; align-items:center; font-size:12px; gap:4px; cursor:pointer;">
+        <input type="checkbox" id="cast-to-edge">
+        Cast
+      </label>
     </div>
     <div id="action-result" class="action-result" style="display:none;"></div>
+  </section>
+
+  <!-- Creator Pipeline -->
+  <section class="creator-pipeline">
+    <h3>Creator Pipeline</h3>
+    <div class="action-row" style="justify-content: flex-start; gap: 8px; flex-wrap: wrap;">
+      <button id="creator-wan-btn" class="action-btn small" title="Trigger WAN Animate Flow">WAN Animate</button>
+      <button id="creator-qwen-btn" class="action-btn small" title="Trigger Qwen Image Edit+ Flow">Qwen Edit+</button>
+      <button id="creator-vibe-btn" class="action-btn small" title="Trigger VibeVoice TTS Flow">VibeVoice</button>
+    </div>
+    <div id="creator-result" class="action-result" style="display:none;"></div>
   </section>
 
   <!-- Agent Tasks -->
