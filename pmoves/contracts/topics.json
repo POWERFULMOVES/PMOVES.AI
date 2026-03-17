@@ -19,6 +19,12 @@
       "publisher": ["cast-tts-gateway"],
       "subscriber": ["publisher-discord"]
     },
+    "voice.cast.health_alert.v1": {
+      "schema": "schemas/voice/cast.health_alert.v1.schema.json",
+      "description": "Published when a Cast device health check detects degradation.",
+      "publisher": ["cast-tts-gateway"],
+      "subscriber": ["monitoring"]
+    },
     "device.cast.discovered.v1": {
       "schema": "schemas/device/cast.discovered.v1.schema.json",
       "description": "Published when Cast device discovery completes with current inventory.",

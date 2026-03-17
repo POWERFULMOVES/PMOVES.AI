@@ -14,7 +14,7 @@ import aiohttp
 
 log = logging.getLogger(__name__)
 
-SUPABASE_URL = os.getenv("SUPABASE_URL", "http://supabase-rest:3010")
+SUPABASE_URL = os.getenv("SUPABASE_URL", "http://supabase-kong:8000")
 SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
 
 

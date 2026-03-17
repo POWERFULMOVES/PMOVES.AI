@@ -2864,7 +2864,7 @@ services:
       - CHIT_REQUIRE_SIGNATURE=${CHIT_REQUIRE_SIGNATURE:-false}
       - CHIT_DECRYPT_ANCHORS=${CHIT_DECRYPT_ANCHORS:-false}
       - CHIT_PASSPHRASE=${CHIT_PROD_PASSPHRASE:-changeme}
-      - SUPABASE_URL=http://supabase-rest:3010
+      - SUPABASE_URL=http://supabase-kong:8000
       - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-}
       - MAX_CONCURRENT_CASTS=${MAX_CONCURRENT_CASTS:-4}
     ports: ["${CAST_TTS_PORT:-8060}:8060"]
@@ -2882,7 +2882,7 @@ services:
         condition: service_healthy
       nats:
         condition: service_healthy
-      supabase-rest:
+      supabase-kong:
         condition: service_started
     deploy:
       resources:

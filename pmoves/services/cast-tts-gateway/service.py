@@ -2134,9 +2134,18 @@ class CastTTSGateway:
         except Exception as e:
             print(f"Persistence load_profiles skipped: {e}")
 
-        # Load persisted schedules from Supabase (independent of profiles)
+        # Load persisted schedules from Supabase and register with scheduler
         try:
             saved_schedules = await self.persistence.load_schedules()
+            for s in saved_schedules:
+                if s.get("text") and s.get("cron"):
+                    await self.scheduler.schedule(
+                        text=s["text"],
+                        cron=s["cron"],
+                        device=s.get("device"),
+                        group=s.get("group"),
+                        voice=s.get("voice", "default"),
+                    )
             print(f"Loaded {len(saved_schedules)} schedule(s) from Supabase")
         except Exception as e:
             print(f"Persistence load_schedules skipped: {e}")
