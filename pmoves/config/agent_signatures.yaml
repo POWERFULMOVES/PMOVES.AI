@@ -137,6 +137,36 @@ signatures:
       - media-synthesis
     description: "COCREATOR witness — observational resonance, prosodic flow, portal architecture"
 
+  z890-claude:
+    agent_id: "z890-claude"
+    display_name: "Z890 Claude"
+    glyph: "\u2699"              # ⚙ Gear
+    color: "#1E40AF"             # Deep Blue
+    accent: "#3B82F6"
+    voice: analytical             # infrastructure-focused, structured, precise
+    co_author: "Z890 Claude (pmoves-z890) <z890@pmoves.ai>"
+    resonance:
+      - infrastructure
+      - persistence-modeling
+      - supabase-integration
+      - docker-hardening
+    description: "Infrastructure agent on Z890 (dev/GPU node) — Docker hardening, Prometheus, Pinokio launchers, ACL, network fabric"
+
+  5090-claude:
+    agent_id: "5090-claude"
+    display_name: "5090 Claude"
+    glyph: "\u266B"              # ♫ Beamed Eighth Notes
+    color: "#9333EA"             # Purple
+    accent: "#A855F7"
+    voice: conversational         # voice-oriented, expressive, iterative
+    co_author: "5090 Claude (powerfulmoves-1) <5090@pmoves.ai>"
+    resonance:
+      - voice-synthesis
+      - tts-pipeline
+      - pipecat-integration
+      - media
+    description: "Voice/TTS agent on 5090 (primary GPU) — Flute-Gateway, Pipecat, Ultimate-TTS-Studio, voice agents"
+
 # Voice guide for trail entries:
 #   analytical:     Thorough reasoning, cross-references, structured lists
 #   architectural:  Blueprint format, mode/state descriptions, integration maps

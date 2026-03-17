@@ -55,6 +55,14 @@ acls:
       - group:infrastructure
     ports: [8080, 8081, 8091, 3737, 4000, 8086, 8087, 8099, 8097, 54321]
 
+  # Users can access RustDesk remote desktop services
+  - action: accept
+    src:
+      - group:users
+    dst:
+      - group:infrastructure
+    ports: [21115, 21116, 21117, 21118, 21119]
+
   # Users can talk to each other (P2P file sharing, collaboration)
   - action: accept
     src:
@@ -73,13 +81,16 @@ tagowners:
   tag:user: [group:admin, group:support]
 
 # =============================================================================
-# SSH Rule (optional - for SSH access via VPN)
+# SSH Rule - SSH access via VPN mesh
 # =============================================================================
-# Uncomment to enable SSH access rules
-# ssh:
-#   - action: accept
-#     src:
-#       - group:admin
-#       - group:support
-#     dst:
-#       - group:*
+ssh:
+  - action: accept
+    src:
+      - group:admin
+    dst:
+      - group:*
+  - action: accept
+    src:
+      - group:support
+    dst:
+      - group:infrastructure
