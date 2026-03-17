@@ -8,6 +8,7 @@ import asyncio
 import logging
 import os
 from typing import Optional
+from urllib.parse import quote
 
 import aiohttp
 
@@ -96,7 +97,7 @@ class SupabasePersistence:
         if not self._key:
             return False
         await self._ensure_session()
-        url = f"{self._base}/rest/v1/cast_voice_profiles?name=eq.{name}"
+        url = f"{self._base}/rest/v1/cast_voice_profiles?name=eq.{quote(name, safe='')}"
         try:
             async with self._session.delete(url, headers=self._headers()) as resp:
                 return await self._check_response(resp, "delete_profile")
@@ -147,7 +148,7 @@ class SupabasePersistence:
         if not self._key:
             return False
         await self._ensure_session()
-        url = f"{self._base}/rest/v1/cast_scheduled_announcements?id=eq.{schedule_id}"
+        url = f"{self._base}/rest/v1/cast_scheduled_announcements?id=eq.{quote(schedule_id, safe='')}"
         try:
             async with self._session.delete(url, headers=self._headers()) as resp:
                 return await self._check_response(resp, "delete_schedule")
