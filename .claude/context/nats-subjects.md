@@ -508,6 +508,28 @@ Example: `ingest.transcript.ready.v1`
 - **Subscribers:** ToKenism-Multi (musicMapping.ts), Hyperdimensions (visualization)
 - **Related:** See `/chit:bpm` tool spec, `TAC_TOKENISM.md`, `FLUTE_PROSODIC_ARCHITECTURE.md`
 
+### CHIT Voice Attribution (via `tokenism.geometry.event.v1`)
+
+Flute-Gateway publishes voice synthesis events to the CHIT geometry bus when `CHIT_VOICE_ATTRIBUTION=true`. These are not a dedicated subject — they use the existing `tokenism.geometry.event.v1` with `modality: "voice_synthesis"`.
+
+**Supported providers:**
+- `"vibevoice"` — VibeVoice TTS (main.py HTTP endpoints)
+- `"ultimate_tts"` — Ultimate-TTS Studio (main.py HTTP endpoints)
+- `"gemini"` — GeminiVoiceProcessor (Pipecat pipeline, via `event_callback`)
+
+**Payload shape:**
+```json
+{
+  "namespace": "pmoves.voice",
+  "modality": "voice_synthesis",
+  "provider": "gemini",
+  "text_length": 128,
+  "audio_duration_seconds": 3.2,
+  "voice": "Puck",
+  "ts": "2026-03-18T12:00:00Z"
+}
+```
+
 ## Voice Agent Relay Subjects
 
 **`voice.agent.response.v1`** (relayed)
