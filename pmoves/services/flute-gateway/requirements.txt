@@ -2,3 +2,6 @@
 
 # Note: Pipecat deps are installed separately via requirements-pipecat.txt
 # to avoid hash verification conflicts
+
+# Gemini Omni Integration
+google-genai>=1.0.0,<2.0.0

@@ -70,17 +70,32 @@ class OpenAIChatProvider(BaseProvider):
 class GeminiProvider(BaseProvider):
     def __init__(self):
         self.key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
-        self.model = os.environ.get("GEMINI_MODEL", "gemini-1.5-flash")
+        self.model = os.environ.get("GEMINI_MODEL", "gemini-1.5-pro")
         if not self.key:
             raise RuntimeError("Gemini provider selected but no API key configured")
+        
+        # Lazy load to avoid failing completely if not installed (though it should be)
+        try:
+            from google import genai
+            from google.genai import types
+            self.genai = genai
+            self.types = types
+        except ImportError as e:
+            raise ImportError("google-genai SDK not installed. Please run `pip install google-genai`.") from e
+        
+        self.client = self.genai.Client(api_key=self.key)
 
     def _call(self, content: str) -> Dict[str, Any]:
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model}:generateContent?key={self.key}"
-        payload = {"contents": [{"parts": [{"text": SYS_PROMPT + "\n\n" + content}]}]}
-        r = requests.post(url, headers={"content-type":"application/json"}, json=payload, timeout=60)
-        r.raise_for_status()
-        txt = (r.json().get("candidates") or [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "{}")
-        return _parse_json_from_text(txt)
+        prompt = SYS_PROMPT + "\n\n" + content
+        response = self.client.models.generate_content(
+            model=self.model,
+            contents=prompt,
+            config=self.types.GenerateContentConfig(
+                response_mime_type="application/json",
+                temperature=0.1
+            ),
+        )
+        return _parse_json_from_text(response.text)
 
     def extract_text(
         self,
