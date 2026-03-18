@@ -5,7 +5,7 @@ module.exports = {
       params: {
         path: "../..",
         message: [
-          "git pull origin main",
+          "git pull --verify-signatures origin main",
           "git submodule update --init --recursive"
         ]
       }
