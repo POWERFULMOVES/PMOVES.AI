@@ -89,8 +89,13 @@ ssh:
       - group:admin
     dst:
       - group:*
+    users:
+      - autogroup:nonroot
+      - root
   - action: accept
     src:
       - group:support
     dst:
       - group:infrastructure
+    users:
+      - autogroup:nonroot

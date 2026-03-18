@@ -39,11 +39,11 @@ Supabase is a **self-hosted 13-service platform** providing the unified data lay
 | PostgREST | 3000 | Auto-generated REST API |
 | GoTrue | 9999 | Auth (JWT issuance, user management) |
 | Studio | 54323 | Admin UI |
-| Realtime | 4000 | WebSocket channels |
+| Realtime | 4000 (container) | WebSocket channels — host-mapped to avoid clash with TensorZero UI (also 4000) |
 | Storage | 5000 | S3-compatible file storage |
 | PostgreSQL DB | 5432 | Primary database |
 | pg-meta | 8080 | Database metadata API |
-| Analytics (Logflare) | 4000 | Log analytics |
+| Analytics (Logflare) | 4000 (container) | Log analytics — shares container port with Realtime; not host-exposed by default |
 | Vector | 9001 | Log collection agent |
 | Supavisor (Pooler) | 6543 | Connection pooling |
 | Edge Functions | 54321 | Deno serverless runtime |

@@ -92,6 +92,7 @@ module.exports = {
         let voiceLocal = info.local("start-voice.js")
         if (voiceLocal && voiceLocal.url) {
           items.push({
+            default: true,
             icon: "fa-solid fa-microphone",
             text: "Open Flute Gateway",
             href: voiceLocal.url,

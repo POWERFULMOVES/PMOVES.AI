@@ -22,6 +22,9 @@ external_contributors:
   - z890-claude
   - 5090-claude
   - 4090-claude
+  - botz-architect
+  - botz-builder
+  - botz-auditor
 
 # Resilience attribute definitions
 # See: pmoves/docs/AGENTS/AGENT_RESILIENCE_PATTERNS.md
