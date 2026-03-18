@@ -92,7 +92,7 @@ $('#chat-btn').addEventListener('click', async () => {
   showResult('Thinking...');
   const r = await msg({
     action: 'tensorZeroChat',
-    model: 'gemini-1.5-pro',
+    model: 'chat_gemini_pro',
     messages: [{ role: 'user', content }],
   });
   const reply = r?.choices?.[0]?.message?.content || r?.error || JSON.stringify(r);

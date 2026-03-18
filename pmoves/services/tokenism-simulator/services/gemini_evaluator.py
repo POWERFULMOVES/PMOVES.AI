@@ -19,7 +19,7 @@ class GeminiEvoSwarmEvaluator:
         self.nc = nc
         self.config = config
         self.tensorzero_url = os.environ.get("TENSORZERO_URL", "http://localhost:3030")
-        self.model = os.environ.get("GEMINI_MODEL", "gemini-1.5-pro")
+        self.model = os.environ.get("GEMINI_MODEL", "chat_gemini_pro")
         self.enabled = True
 
     async def start(self):

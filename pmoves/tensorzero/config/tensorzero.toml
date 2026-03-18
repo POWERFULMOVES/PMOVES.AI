@@ -165,7 +165,7 @@ api_key_location = "none"
 routing = ["google_primary"]
 
 [models.chat_gemini_pro.providers.google_primary]
-type = "google_genai"
+type = "google_ai_studio_gemini"
 model_name = "gemini-1.5-pro"
 api_key_location = "env::GEMINI_API_KEY"
 

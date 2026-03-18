@@ -3,7 +3,7 @@
 
 import { DEFAULT_SERVICES, HEALTH_ENDPOINTS } from './constants.js';
 
-let _services = { ...DEFAULT_SERVICES, n8n: 'http://localhost:5678' };
+let _services = { ...DEFAULT_SERVICES };
 
 /** Update service URLs (call after loading config from storage). */
 export function setServiceUrls(urls) {
