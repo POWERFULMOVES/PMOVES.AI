@@ -93,6 +93,20 @@ curl http://100.x.x.x:8080  # Should OK (Agent Zero, mesh)
 
 The Pinokio Caddy reverse proxy runs **on the host** and reaches services via `localhost:PORT`. Binding to `127.0.0.1` does NOT break Caddy — it still accesses the same `127.0.0.1` address. The proxy ports (42000+) are independently managed by Pinokio and bind to `0.0.0.0` for LAN/VPN sharing.
 
+## env.shared and Damage-Control Hook
+
+The `_BIND` variables exist in env.shared but the damage-control hook blocks
+direct git operations on this file. This is by design — env.shared contains
+credentials. The workaround:
+
+1. docker-compose.yml has inline defaults: `${*_BIND:-127.0.0.1}` — works without env.shared
+2. `make -C pmoves brand-defaults` programmatically updates env.shared
+3. To manually commit env.shared changes, use `make -C pmoves secrets-funnel`
+
+The inline defaults ensure port binding security works out-of-the-box on a
+fresh clone without any env.shared file present. The damage-control hook
+protects against accidentally committing credentials bundled in the same file.
+
 ## Docker Inter-Container Communication
 
 Container-to-container traffic uses Docker networks (`pmoves_api`, `pmoves_data`, `pmoves_bus`), never host ports. Changing host port bindings has zero impact on inter-service communication.

@@ -52,7 +52,8 @@ root:
             type: manual
             expect: "Pinokio UI shows 'Agents' tab on 4090 laptop"
           agent_hint: 4090-claude
-          status: pending
+          status: done
+          notes: "P7 installed, Agents tab visible, pmoves-net configured"
 
     # =========================================================================
     # Phase 2: Agent Interpreter — SKILL.md Discovery
@@ -155,7 +156,8 @@ root:
             expect: "From 4090: 'speak hello' routes via Tailscale to 5090 Ultimate-TTS-Studio"
           context: "Requires P7 on both machines + Tailscale mesh + TTS running on 5090"
           agent_hint: 4090-claude
-          status: pending
+          status: blocked
+          blocked_reason: "TTS on 5090 Windows binds localhost:7861 — needs --server-name 0.0.0.0 or Caddy proxy route; Flute reports ultimate_tts: false"
           depends_on: [p7.upgrade.5090, p7.upgrade.4090, p7.interpreter.tts]
 
         - id: p7.mesh.mobile
