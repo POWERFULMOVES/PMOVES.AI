@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="utf-8"?>
+<BrandingOptions xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+  <LoginDisclaimer>PMOVES.AI — GNoWsis at your BPM</LoginDisclaimer>
+  <CustomCss>/* TAC Tree — jellyfin-ai */
+/* Primary: transformers-1986/soundwave */
+/* Secondary: megaman/bass */
+:root {
+  --pmoves-pri-primary: #00008B;
+  --pmoves-pri-accent: #FFD700;
+  --pmoves-pri-tertiary: #C0C0C0;
+  --pmoves-pri-name: "Soundwave";
+  --pmoves-pri-icon: "cassette";
+  --pmoves-sec-primary: #000000;
+  --pmoves-sec-accent: #800080;
+  --pmoves-sec-tertiary: #FFD700;
+  --pmoves-sec-name: "Bass";
+  --pmoves-primary: #00008B;
+  --pmoves-accent: #FFD700;
+  --pmoves-tertiary: #C0C0C0;
+  --pmoves-secondary: #800080;
+}
+
+
+/* ── Jellyfin Header ── */
+.skinHeader {
+  background: var(--pmoves-primary, #00008B) !important;
+}
+.skinHeader .headerButton {
+  color: var(--pmoves-accent, #FFD700) !important;
+}
+.skinHeader .headerButton:hover {
+  background: rgba(255, 215, 0, 0.15) !important;
+}
+.headerTabs .emby-tab-button-active {
+  border-bottom-color: var(--pmoves-accent, #FFD700) !important;
+  color: var(--pmoves-accent, #FFD700) !important;
+}
+
+/* ── Jellyfin Sidebar ── */
+.mainDrawer {
+  background: var(--pmoves-primary, #00008B) !important;
+}
+.navMenuOption:hover, .navMenuOption-selected {
+  background: rgba(255, 215, 0, 0.12) !important;
+  color: var(--pmoves-accent, #FFD700) !important;
+}
+
+/* ── Jellyfin Buttons ── */
+.emby-button-foreground {
+  color: var(--pmoves-accent, #FFD700) !important;
+}
+.button-submit {
+  background: var(--pmoves-primary, #00008B) !important;
+  color: var(--pmoves-accent, #FFD700) !important;
+}
+.button-submit:hover {
+  background: var(--pmoves-secondary, #800080) !important;
+}
+
+/* ── Jellyfin Cards ── */
+.card:hover .cardOverlayButton {
+  color: var(--pmoves-accent, #FFD700) !important;
+}
+.cardOverlayButton-br {
+  background: var(--pmoves-primary, #00008B) !important;
+}
+
+/* ── Jellyfin Progress ── */
+.itemProgressBar .itemProgressBarForeground {
+  background: var(--pmoves-accent, #FFD700) !important;
+}
+
+/* ── Jellyfin Login ── */
+.loginPage .padded-left.padded-right {
+  background: var(--pmoves-primary, #00008B) !important;
+  border-radius: 12px;
+}
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar-thumb {
+  background: var(--pmoves-accent, #FFD700) !important;
+  border-radius: 4px;
+}
+</CustomCss>
+  <SplashscreenEnabled>false</SplashscreenEnabled>
+</BrandingOptions>
