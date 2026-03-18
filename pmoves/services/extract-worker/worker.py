@@ -43,6 +43,7 @@ MEILI_URL = os.environ.get("MEILI_URL","http://meilisearch:7700")
 MEILI_API_KEY = os.environ.get("MEILI_API_KEY","")
 SUPA = os.environ.get("SUPA_REST_URL","http://postgrest:3000")
 EMBEDDING_BACKEND = os.environ.get("EMBEDDING_BACKEND", "sentence-transformers").lower()
+USE_NAMED_VECTORS = os.environ.get("QDRANT_USE_NAMED_VECTORS", "false").lower() in ("1", "true", "yes")
 
 app = FastAPI(title="PMOVES Extract Worker", version="1.0.0")
 
@@ -62,29 +63,47 @@ def _meili(method: str, path: str, **kwargs):
     headers.setdefault('content-type','application/json')
     return requests.request(method, f"{MEILI_URL}{path}", headers=headers, timeout=30, **kwargs)
 
-def _ensure_qdrant(client: QdrantClient, dim: int):
-    try:
-        info = client.get_collection(COLL)
-    except Exception:
-        client.recreate_collection(COLL, vectors_config=VectorParams(size=dim, distance=Distance.COSINE))
-        return
+def _build_vectors_config(dim: int):
+    """Build vectors_config for Qdrant — named or unnamed based on feature flag."""
+    if USE_NAMED_VECTORS:
+        return {"semantic": VectorParams(size=dim, distance=Distance.COSINE)}
+    return VectorParams(size=dim, distance=Distance.COSINE)
 
-    # Validate dimension compatibility (avoid opaque 400s later).
+
+def _get_collection_dim(info) -> int | None:
+    """Extract current vector dimension from collection info, handling named and unnamed."""
     try:
         params = getattr(getattr(info, "config", None), "params", None)
         if isinstance(params, dict):
             vectors = params.get("vectors") or {}
-            current_dim = vectors.get("size")
+            # Named vectors: {"semantic": {"size": N, ...}}
+            if isinstance(vectors, dict) and "semantic" in vectors:
+                sem = vectors["semantic"]
+                return sem.get("size") if isinstance(sem, dict) else getattr(sem, "size", None)
+            return vectors.get("size")
         else:
             vectors = getattr(params, "vectors", None)
-            current_dim = getattr(vectors, "size", None)
+            # Named vectors object
+            if hasattr(vectors, "semantic"):
+                return getattr(vectors.semantic, "size", None)
+            return getattr(vectors, "size", None)
     except Exception:
-        current_dim = None
+        return None
+
+
+def _ensure_qdrant(client: QdrantClient, dim: int):
+    try:
+        info = client.get_collection(COLL)
+    except Exception:
+        client.recreate_collection(COLL, vectors_config=_build_vectors_config(dim))
+        return
+
+    current_dim = _get_collection_dim(info)
 
     if current_dim and int(current_dim) != int(dim):
         allow_recreate = os.environ.get("QDRANT_RECREATE_ON_DIM_MISMATCH", "false").lower() in ("1", "true", "yes")
         if allow_recreate:
-            client.recreate_collection(COLL, vectors_config=VectorParams(size=dim, distance=Distance.COSINE))
+            client.recreate_collection(COLL, vectors_config=_build_vectors_config(dim))
             return
         raise HTTPException(
             status_code=500,
@@ -165,7 +184,8 @@ def ingest(body: Dict[str, Any] = Body(...)):
                     else:
                         ns = (chunk.get("namespace") or "pmoves").strip()
                         point_id = str(uuid.uuid5(uuid.NAMESPACE_URL, f"{ns}:{chunk_id}"))
-                    points.append(PointStruct(id=point_id, vector=v.tolist(), payload=chunk))
+                    vec_data = {"semantic": v.tolist()} if USE_NAMED_VECTORS else v.tolist()
+                    points.append(PointStruct(id=point_id, vector=vec_data, payload=chunk))
 
                 qc.upsert(collection_name=COLL, points=points)
                 qdrant_operations_total.labels(operation='upsert').inc()
