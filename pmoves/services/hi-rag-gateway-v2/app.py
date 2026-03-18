@@ -26,6 +26,8 @@ QDRANT_URL = os.environ.get("QDRANT_URL","http://qdrant:6333")
 COLL = os.environ.get("QDRANT_COLLECTION","pmoves_chunks")
 MODEL = os.environ.get("SENTENCE_MODEL","all-MiniLM-L6-v2")
 ALPHA = float(os.environ.get("ALPHA", "0.7"))
+USE_NAMED_VECTORS = os.environ.get("QDRANT_USE_NAMED_VECTORS", "false").lower() in ("1", "true", "yes")
+SEMANTIC_VECTOR_NAME = "semantic"  # named vector key for text embeddings
 
 # Collect rerank validation notes so startup logs and admin routes can expose them.
 _RERANK_CONFIG_ERRORS: List[str] = []
@@ -368,13 +370,23 @@ def _qdrant_search(
     query_filter: Optional[Filter],
     with_payload: bool = True,
     with_vectors: bool = False,
+    vector_name: Optional[str] = None,
 ):
-    """Handle qdrant-client API drift (`search` vs `query_points`)."""
+    """Handle qdrant-client API drift (`search` vs `query_points`).
+
+    When USE_NAMED_VECTORS is True and vector_name is provided (or defaults to
+    SEMANTIC_VECTOR_NAME), the query_vector is wrapped as a (name, vector) tuple
+    for Qdrant's named vector search API.
+    """
+    # Wrap vector for named vector collections
+    effective_name = vector_name or (SEMANTIC_VECTOR_NAME if USE_NAMED_VECTORS else None)
+    qv = (effective_name, query_vector) if effective_name else query_vector
+
     if hasattr(qdrant, "search"):
         try:
             return qdrant.search(
                 collection_name=collection_name,
-                query_vector=query_vector,
+                query_vector=qv,
                 limit=limit,
                 query_filter=query_filter,
                 with_payload=with_payload,
@@ -393,10 +405,10 @@ def _qdrant_search(
             "with_vectors": with_vectors,
         }
         try:
-            resp = qdrant.query_points(query=query_vector, **kwargs)
+            resp = qdrant.query_points(query=qv, **kwargs)
         except TypeError:
             # Older signatures may still use `vector=...`.
-            resp = qdrant.query_points(vector=query_vector, **kwargs)
+            resp = qdrant.query_points(vector=qv, **kwargs)
         except AttributeError:
             resp = None
         if resp is None:
@@ -422,7 +434,7 @@ def _qdrant_search(
         try:
             resp = qdrant.search_points(
                 collection_name=collection_name,
-                query_vector=query_vector,
+                query_vector=qv,
                 limit=limit,
                 query_filter=query_filter,
                 with_payload=with_payload,
@@ -476,11 +488,17 @@ def ensure_qdrant_collection(vector_dim: int):
 
     try:
         if info is None or needs_recreate:
+            vconfig = (
+                {SEMANTIC_VECTOR_NAME: VectorParams(size=vector_dim, distance=Distance.COSINE)}
+                if USE_NAMED_VECTORS
+                else VectorParams(size=vector_dim, distance=Distance.COSINE)
+            )
             qdrant.recreate_collection(
                 collection_name=COLL,
-                vectors_config=VectorParams(size=vector_dim, distance=Distance.COSINE)
+                vectors_config=vconfig,
             )
-            logger.info("(re)created Qdrant collection %s [dim=%d, metric=cosine]", COLL, vector_dim)
+            mode = "named" if USE_NAMED_VECTORS else "unnamed"
+            logger.info("(re)created Qdrant collection %s [dim=%d, metric=cosine, mode=%s]", COLL, vector_dim, mode)
     except Exception as e:
         logger.exception("ensure_qdrant_collection failed")
         raise HTTPException(500, f"Qdrant collection error: {e}")
