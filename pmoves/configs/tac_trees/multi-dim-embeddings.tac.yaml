@@ -1,0 +1,241 @@
+# TAC Tree: Multi-Dimensional Embedding Architecture
+# Named Vectors + GEOMETRY Bus + Model Registry Rollup
+# "Visible fences, not walled gardens"
+
+name: "Multi-Dimensional Embedding Architecture"
+version: "1.0.0"
+description: "Qdrant named vectors, model-registry rollup, prosodic embeddings, GEOMETRY bus integration"
+
+root:
+  id: multi-dim-embeddings
+  task: "Multi-dimensional embedding system with named vectors and GEOMETRY bus"
+  context: "Convergence of Hi-RAG, model-registry, CHIT, and BoTZ gateway patterns"
+  agent_hint: codex
+  children:
+
+    # =========================================================================
+    # Phase 1: Model String Rollup (pearl string)
+    # =========================================================================
+    - id: model-string
+      task: "All services resolve models from model-registry"
+      context: "pmoves/libs/model_registry_client.py is the shared client"
+      agent_hint: codex
+      children:
+        - id: model-string.client-lib
+          task: "model_registry_client.py exists with caching and NATS invalidation"
+          action:
+            type: file_exists
+            target: "pmoves/libs/model_registry_client.py"
+          status: pass
+
+        - id: model-string.embedding-provider
+          task: "embedding.py uses _resolve_model() chain"
+          action:
+            type: grep
+            target: "pmoves/libs/providers/embedding.py"
+            pattern: "_resolve_model"
+          status: pass
+
+        - id: model-string.hirag-v1
+          task: "Hi-RAG v1 gateway resolves SENTENCE_MODEL and RERANK_MODEL from registry"
+          action:
+            type: grep
+            target: "pmoves/services/hi-rag-gateway/gateway.py"
+            pattern: "_resolve_hirag_model"
+          status: pass
+
+        - id: model-string.hirag-v2
+          task: "Hi-RAG v2 app resolves MODEL and RERANK_MODEL from registry"
+          action:
+            type: grep
+            target: "pmoves/services/hi-rag-gateway-v2/app.py"
+            pattern: "model_registry_client"
+          status: pass
+
+        - id: model-string.extract-worker
+          task: "Extract-worker resolves SENTENCE_MODEL from registry"
+          action:
+            type: grep
+            target: "pmoves/services/extract-worker/worker.py"
+            pattern: "model_registry_client"
+          status: pass
+
+        - id: model-string.consciousness
+          task: "Consciousness service resolves embedding model from registry"
+          action:
+            type: grep
+            target: "pmoves/services/consciousness-service/chr_algorithm.py"
+            pattern: "model_registry_client"
+          status: pass
+
+        - id: model-string.archon-reranker
+          task: "Archon reranking strategy resolves model from registry"
+          action:
+            type: grep
+            target: "pmoves/integrations/archon/python/src/server/services/search/reranking_strategy.py"
+            pattern: "model_registry_client"
+          status: pass
+
+        - id: model-string.mcp-youtube
+          task: "MCP YouTube adapter resolves embedding model from registry"
+          action:
+            type: grep
+            target: "pmoves/services/mcp_youtube_adapter.py"
+            pattern: "model_registry_client"
+          status: pass
+
+        - id: model-string.models-sync
+          task: "models_sync.py aligned with registry-first pattern"
+          action:
+            type: manual
+          context: "Verify fallback chains in models_sync use same defaults as registry"
+          status: pending
+
+    # =========================================================================
+    # Phase 2: Qdrant Named Vectors
+    # =========================================================================
+    - id: qdrant-named-vectors
+      task: "Qdrant collection uses named vectors for multi-dimensional storage"
+      context: "pmoves/services/extract-worker/worker.py + hi-rag-gateway-v2/app.py"
+      agent_hint: codex
+      children:
+        - id: qdrant-named-vectors.schema
+          task: "Extract-worker creates collection with named vectors_config dict"
+          action:
+            type: grep
+            target: "pmoves/services/extract-worker/worker.py"
+            pattern: '"semantic".*VectorParams'
+          status: pending
+
+        - id: qdrant-named-vectors.upsert
+          task: "Extract-worker upserts with vector={'semantic': ...} dict"
+          action:
+            type: grep
+            target: "pmoves/services/extract-worker/worker.py"
+            pattern: '"semantic".*tolist'
+          status: pending
+
+        - id: qdrant-named-vectors.query
+          task: "Hi-RAG v2 queries with named vector tuple"
+          action:
+            type: grep
+            target: "pmoves/services/hi-rag-gateway-v2/app.py"
+            pattern: '"semantic".*query_vector'
+          status: pending
+
+        - id: qdrant-named-vectors.dim-guard
+          task: "Dimension mismatch guard updated for named vectors"
+          action:
+            type: grep
+            target: "pmoves/services/extract-worker/worker.py"
+            pattern: "named.*vector|vectors_config.*dict"
+          status: pending
+
+    # =========================================================================
+    # Phase 3: Prosodic Embedding Pipeline
+    # =========================================================================
+    - id: prosodic-pipeline
+      task: "Second embedding dimension for prosodic/acoustic signal"
+      context: "Feature-flagged via PROSODIC_EMBED_ENABLED"
+      agent_hint: codex
+      children:
+        - id: prosodic-pipeline.model-selection
+          task: "Prosodic model selected (CLAP for audio, CHIT BPM for text)"
+          action:
+            type: manual
+          context: "Start with CLAP (already loaded in Hi-RAG), evolve to CHIT BPM"
+          status: pending
+
+        - id: prosodic-pipeline.extract-dual
+          task: "Extract-worker optionally computes prosodic embedding"
+          action:
+            type: grep
+            target: "pmoves/services/extract-worker/worker.py"
+            pattern: "PROSODIC_EMBED_ENABLED"
+          status: pending
+
+        - id: prosodic-pipeline.cross-dim-query
+          task: "Hi-RAG cross-dimensional query endpoint exists"
+          action:
+            type: grep
+            target: "pmoves/services/hi-rag-gateway-v2/app.py"
+            pattern: "cross.dimensional"
+          status: pending
+
+    # =========================================================================
+    # Phase 4: GEOMETRY Bus Integration
+    # =========================================================================
+    - id: geometry-bus
+      task: "Model identity and embedding metadata flow through CGP packets"
+      context: "NATS subjects: embedding.model.resolved.v1, embedding.dimension.indexed.v1"
+      agent_hint: codex
+      children:
+        - id: geometry-bus.cgp-metadata
+          task: "CGP points carry embedding_meta with model provenance"
+          action:
+            type: manual
+          context: "Extend CGP v0.2 point schema with embedding_meta field"
+          status: pending
+
+        - id: geometry-bus.nats-events
+          task: "Embedding NATS subjects documented and published"
+          action:
+            type: grep
+            target: ".claude/context/nats-subjects.md"
+            pattern: "embedding\\."
+          status: pending
+
+        - id: geometry-bus.spectrum-alignment
+          task: "CGP spectrum array maps to embedding dimensions"
+          action:
+            type: manual
+          context: "spectrum[0]=semantic, spectrum[1]=prosodic, spectrum[2]=divergence"
+          status: pending
+
+    # =========================================================================
+    # Phase 5: Security Hardening
+    # =========================================================================
+    - id: security
+      task: "Integration surface hardened"
+      context: "From security audit — Pinokio + LWW exposure"
+      agent_hint: codex
+      children:
+        - id: security.pinokio-url-validation
+          task: "pinokio.js validates all URLs via safeUrl()"
+          action:
+            type: grep
+            target: "pbnj/pinokio/api/pmoves-services/pinokio.js"
+            pattern: "safeUrl"
+          status: pass
+
+        - id: security.pinokio-name-validation
+          task: "pinokio.js validates service names via safeName()"
+          action:
+            type: grep
+            target: "pbnj/pinokio/api/pmoves-services/pinokio.js"
+            pattern: "safeName"
+          status: pass
+
+        - id: security.lan-safe-classification
+          task: "service-registry.js has lanSafe field on all entries"
+          action:
+            type: grep
+            target: "pbnj/pinokio/api/pmoves-services/service-registry.js"
+            pattern: "lanSafe"
+          status: pass
+
+        - id: security.admin-port-binding
+          task: "Admin ports bound to 127.0.0.1"
+          action:
+            type: grep
+            target: "pmoves/docker-compose.yml"
+            pattern: "127\\.0\\.0\\.1.*9001|127\\.0\\.0\\.1.*8001"
+          status: pending
+
+        - id: security.kong-admin
+          task: "Kong admin API locked down"
+          action:
+            type: grep
+            target: "pmoves/docker-compose.yml"
+            pattern: "KONG_ADMIN_LISTEN.*127"
+          status: pending
