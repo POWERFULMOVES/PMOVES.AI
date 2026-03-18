@@ -363,6 +363,61 @@
         "subtitle_langs": ["en"],
         "write_info_json": true
       }
+    },
+    {
+      "channel_id": "sc:user:darkxside",
+      "channel_name": "DARKXSIDE SoundCloud — All Tracks",
+      "platform": "soundcloud",
+      "source_type": "user",
+      "source_class": "owned",
+      "source_url": "https://soundcloud.com/darkxside",
+      "enabled": true,
+      "check_interval_minutes": 360,
+      "auto_process": true,
+      "filters": {
+        "min_duration_seconds": 30,
+        "max_age_days": 3650,
+        "exclude_keywords": [],
+        "title_keywords": []
+      },
+      "priority": 1,
+      "namespace": "pmoves.darkxside.beats",
+      "tags": ["darkxside", "beats", "music", "audio", "holographic"],
+      "format": "bestaudio/best",
+      "media_type": "audio",
+      "cookies_path": null,
+      "yt_options": {
+        "download_archive": "/data/yt-dlp/darkxside/soundcloud.archive",
+        "write_info_json": true,
+        "postprocessors": [{"key": "FFmpegExtractAudio", "preferredcodec": "wav"}]
+      }
+    },
+    {
+      "channel_id": "sc:likes:darkxside",
+      "channel_name": "DARKXSIDE SoundCloud — Likes",
+      "platform": "soundcloud",
+      "source_type": "likes",
+      "source_class": "owned",
+      "source_url": "https://soundcloud.com/darkxside/likes",
+      "enabled": false,
+      "check_interval_minutes": 720,
+      "auto_process": false,
+      "filters": {
+        "min_duration_seconds": 30,
+        "max_age_days": 3650,
+        "exclude_keywords": [],
+        "title_keywords": []
+      },
+      "priority": 3,
+      "namespace": "pmoves.darkxside.liked",
+      "tags": ["darkxside", "liked", "music", "audio"],
+      "format": "bestaudio/best",
+      "media_type": "audio",
+      "cookies_path": null,
+      "yt_options": {
+        "download_archive": "/data/yt-dlp/darkxside/soundcloud-likes.archive",
+        "write_info_json": true
+      }
     }
   ],
   "global_settings": {
