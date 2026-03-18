@@ -414,6 +414,18 @@
           "type": ["object", "null"],
           "additionalProperties": true
         },
+        "embedding_meta": {
+          "type": ["object", "null"],
+          "description": "Embedding model provenance — which model produced which vector for this point",
+          "properties": {
+            "model_id": { "type": "string", "description": "HuggingFace or provider model identifier" },
+            "model_registry_id": { "type": "string", "description": "UUID from model-registry service" },
+            "vector_name": { "type": "string", "description": "Named vector key in Qdrant (e.g. semantic, prosodic)" },
+            "dimensions": { "type": "integer", "minimum": 1, "description": "Embedding vector dimensionality" },
+            "provider": { "type": "string", "description": "Serving provider (tensorzero, ollama, sentence-transformers)" }
+          },
+          "additionalProperties": true
+        },
         "contributor": {
           "$ref": "#/$defs/contributor",
           "description": "Point-level attribution for individual economic events"

@@ -1183,6 +1183,16 @@ nats server report connections
   }
   ```
 
+## Embedding Provenance Subjects
+
+> **See also:** Full definitions in [geometry-nats-subjects.md](./geometry-nats-subjects.md#embedding-provenance-events)
+
+| Subject | Publisher | Consumer | Purpose |
+|---------|-----------|----------|---------|
+| `embedding.model.resolved.v1` | Any embedding service | model-registry, observability | Model resolution announcement at startup |
+| `embedding.dimension.indexed.v1` | extract-worker | Hi-RAG v2, evo-controller | New named vector dimension indexed to Qdrant |
+| `embedding.divergence.signal.v1` | Hi-RAG v2 | evo-controller, analytics | Cross-dimensional divergence exceeds threshold |
+
 ## GPU Mesh & Model Lifecycle Subjects
 
 ### GPU Orchestrator → Model Registry

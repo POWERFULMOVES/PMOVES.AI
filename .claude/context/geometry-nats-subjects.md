@@ -231,6 +231,61 @@ geometry.<type>.<event>.v1      # Core geometry events
 
 ---
 
+## Embedding Provenance Events
+
+### Model Resolution
+
+**`embedding.model.resolved.v1`**
+- **Direction:** Published by any embedding service at startup → Consumed by model-registry, observability
+- **Purpose:** Announce which embedding model a service resolved from the registry
+- **Payload:**
+  ```json
+  {
+    "service": "hi-rag-v2",
+    "model_type": "embedding",
+    "model_id": "qwen3-embedding-4b",
+    "resolution_source": "model-registry",
+    "timestamp": "2026-03-18T12:00:00Z"
+  }
+  ```
+
+### Dimension Indexed
+
+**`embedding.dimension.indexed.v1`**
+- **Direction:** Published by extract-worker → Consumed by Hi-RAG v2, evo-controller
+- **Purpose:** Announce a new named vector dimension has been indexed to Qdrant
+- **Payload:**
+  ```json
+  {
+    "collection": "pmoves_chunks_v2",
+    "vector_name": "prosodic",
+    "dimensions": 512,
+    "model_id": "laion-clap",
+    "chunks_indexed": 150,
+    "timestamp": "2026-03-18T12:00:00Z"
+  }
+  ```
+
+### Cross-Dimensional Divergence Signal
+
+**`embedding.divergence.signal.v1`**
+- **Direction:** Published by Hi-RAG v2 cross-dimensional query → Consumed by evo-controller, analytics
+- **Purpose:** Signal when semantic and prosodic rankings diverge significantly for a query
+- **Payload:**
+  ```json
+  {
+    "query": "agent orchestration patterns",
+    "divergence": 0.72,
+    "semantic_top_ids": ["chunk-abc", "chunk-def"],
+    "prosodic_top_ids": ["chunk-xyz", "chunk-ghi"],
+    "namespace": "pmoves-docs",
+    "timestamp": "2026-03-18T12:00:00Z"
+  }
+  ```
+- **Threshold:** Only published when divergence > 0.3 (configurable via `DIVERGENCE_SIGNAL_THRESHOLD`)
+
+---
+
 ## Research Events (CGP-Enhanced)
 
 ### DeepResearch Result with CGP
