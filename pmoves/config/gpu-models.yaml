@@ -7,32 +7,32 @@ models:
   - id: "qwen3:8b"
     provider: ollama
     vram_mb: 6144
-    description: "[Reflexive Loadout] Qwen3 8B - Fast reasoning and code"
-    priority_default: 10
+    description: "Qwen3 8B - Legacy, superseded by qwen3.5:9b"
+    priority_default: 3
     quantization: "Q4_K_M"
     context_length: 8192
 
   - id: "qwen3:32b"
     provider: ollama
     vram_mb: 20480
-    description: "Qwen3 32B - Advanced reasoning"
-    priority_default: 7
+    description: "Qwen3 32B - Legacy, superseded by qwen3.5:27b"
+    priority_default: 3
     quantization: "Q4_K_M"
     context_length: 8192
 
   - id: "qwen3:1.7b"
     provider: ollama
     vram_mb: 1536
-    description: "Qwen3 1.7B - Lightweight tasks"
-    priority_default: 3
+    description: "Qwen3 1.7B - Legacy, superseded by qwen3.5:2b"
+    priority_default: 1
     quantization: "Q4_K_M"
     context_length: 4096
 
   - id: "nomic-embed-text"
     provider: ollama
     vram_mb: 512
-    description: "[Reflexive Loadout] Nomic Embed Text - Embeddings"
-    priority_default: 10
+    description: "Nomic Embed Text - Legacy fallback only"
+    priority_default: 1
     context_length: 8192
 
   - id: "llama3.2:3b"
@@ -76,8 +76,8 @@ models:
   - id: "qwen2-vl:7b"
     provider: ollama
     vram_mb: 6000
-    description: "[Reflexive Loadout] Qwen2-VL 7B - Vision-language"
-    priority_default: 10
+    description: "Qwen2-VL 7B - Legacy vision-language, keep as fallback"
+    priority_default: 4
     context_length: 32768
 
   - id: "qwen3-reranker:4b"
@@ -102,6 +102,8 @@ models:
     context_length: 128000
 
   # Qwen 3.5 Family (March 2026 — multimodal, vision, tools, thinking)
+  # Native multimodal: vision + tools + thinking built-in, replaces qwen2-vl for vision tasks
+  # 262K context window across all sizes
   - id: "qwen3.5:0.8b"
     provider: ollama
     vram_mb: 1024
@@ -129,8 +131,8 @@ models:
   - id: "qwen3.5:9b"
     provider: ollama
     vram_mb: 6600
-    description: "Qwen 3.5 9B - Primary workhorse"
-    priority_default: 6
+    description: "[Reflexive Loadout] Qwen 3.5 9B - Primary workhorse (replaces qwen3:8b)"
+    priority_default: 10
     quantization: "Q4_K_M"
     context_length: 262144
 
@@ -145,7 +147,7 @@ models:
   - id: "qwen3.5:35b"
     provider: ollama
     vram_mb: 22000
-    description: "Qwen 3.5 35B-A3B MoE - Fast flagship"
+    description: "Qwen 3.5 35B-A3B MoE - Fast flagship (fits 3090 Ti tight)"
     priority_default: 7
     quantization: "Q4_K_M"
     context_length: 262144
@@ -179,8 +181,8 @@ models:
   - id: "qwen3-embedding:8b"
     provider: ollama
     vram_mb: 6000
-    description: "Qwen3 Embedding 8B - High quality"
-    priority_default: 4
+    description: "[Reflexive Loadout] Qwen3 Embedding 8B - Dark matter grade, cipher+gateway primary"
+    priority_default: 10
     context_length: 32768
 
   - id: "embeddinggemma:300m"
