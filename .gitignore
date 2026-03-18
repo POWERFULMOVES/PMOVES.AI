@@ -184,3 +184,9 @@ pmoves/env.supa.runtime.bak.*
 # Windows
 desktop.ini
 Thumbs.db
+
+# =============================================================================
+# Pinokio Integration (runtime-generated)
+# =============================================================================
+pmoves/tools/.pinokio-docs-hash
+pbnj/pinokio/api/*.pmoves/
