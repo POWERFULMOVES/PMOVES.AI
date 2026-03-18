@@ -374,7 +374,11 @@ async def lifespan(app: FastAPI):
                     health_check=health_check,
                     tier=ServiceTier.MEDIA,
                     port=port,
-                    metadata={"version": "0.1.0", "publishes": ["tokenism.geometry.event.v1"]},
+                    metadata={
+                        "version": "0.1.0",
+                        "publishes": ["tokenism.geometry.event.v1"],
+                        # GeminiVoiceProcessor publishes via event_callback with provider="gemini"
+                    },
                     retry=True,
                 )
                 logger.info("NATS service announcement published: %s at %s", slug, url)

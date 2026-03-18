@@ -11,9 +11,32 @@ import asyncio
 import base64
 import logging
 import os
-from typing import AsyncGenerator, Optional
+import time
+from typing import AsyncGenerator, Callable, Optional
 
 logger = logging.getLogger(__name__)
+
+# Prometheus metrics — gracefully handle if not installed
+try:
+    from prometheus_client import Counter, Histogram
+
+    GEMINI_TTS_DURATION = Histogram(
+        "flute_gemini_tts_duration_seconds",
+        "Gemini voice synthesis duration in seconds",
+    )
+    GEMINI_TTS_REQUESTS = Counter(
+        "flute_gemini_tts_requests_total",
+        "Total Gemini voice synthesis requests",
+        ["status"],
+    )
+    GEMINI_CAST_REQUESTS = Counter(
+        "flute_gemini_cast_requests_total",
+        "Total Gemini cast-to-edge requests",
+        ["status"],
+    )
+    _METRICS_AVAILABLE = True
+except ImportError:
+    _METRICS_AVAILABLE = False
 
 # Pipecat imports - gracefully handle if not installed
 try:
@@ -49,6 +72,12 @@ class GeminiVoiceProcessor(FrameProcessor):
     Compatible with Gemini 1.5 Pro and Gemini 2.0 Flash audio modalities.
     Automatically supports Google Home and Pixel edge casting via the
     PMOVES NATS Event bus or direct API requests to Cast TTS Gateway.
+
+    Args:
+        event_callback: Optional async callable matching the signature of
+            ``_publish_chit_voice_event(provider, text_length, audio_duration, voice)``.
+            When provided, CHIT voice attribution events are published after
+            each successful synthesis (best-effort, non-blocking).
     """
 
     def __init__(
@@ -58,7 +87,8 @@ class GeminiVoiceProcessor(FrameProcessor):
         voice_name: str = "Puck",  # Gemini voice options: Puck, Aoede, Charon, Fenrir, Kore
         sample_rate: int = 24000,
         cast_gateway_url: Optional[str] = None,
-        default_cast_device: Optional[str] = None, # e.g., "Google Home" or "Pixel 10 Pro"
+        default_cast_device: Optional[str] = None,  # e.g., "Google Home" or "Pixel 10 Pro"
+        event_callback: Optional[Callable] = None,
     ):
         if not PIPECAT_AVAILABLE:
             raise ImportError(
@@ -92,6 +122,7 @@ class GeminiVoiceProcessor(FrameProcessor):
             or os.environ.get("CAST_GATEWAY_URL", "http://localhost:8060")
         ).rstrip("/")
         self._default_cast_device = default_cast_device
+        self._event_callback = event_callback
 
         # Initialize the GenAI client
         self.client = self._genai.Client(api_key=self.api_key) if self.api_key else None
@@ -110,10 +141,16 @@ class GeminiVoiceProcessor(FrameProcessor):
             yield TTSStartedFrame()
 
             try:
-                # 1. Generate Audio via Gemini
+                # 1. Generate Audio via Gemini (timed for metrics)
+                start = time.monotonic()
                 audio_bytes = await asyncio.to_thread(self._generate_audio, text)
+                duration = time.monotonic() - start
 
                 if audio_bytes:
+                    if _METRICS_AVAILABLE:
+                        GEMINI_TTS_DURATION.observe(duration)
+                        GEMINI_TTS_REQUESTS.labels(status="success").inc()
+
                     # 2. Yield local playback frame
                     yield TTSAudioRawFrame(
                         audio=audio_bytes,
@@ -121,11 +158,26 @@ class GeminiVoiceProcessor(FrameProcessor):
                         num_channels=1
                     )
 
-                    # 3. Cast to Google Home / Edge Devices (if configured)
+                    # 3. Publish CHIT voice attribution event (best-effort)
+                    if self._event_callback:
+                        try:
+                            audio_duration = len(audio_bytes) / (self.sample_rate * 2)
+                            await self._event_callback(
+                                provider="gemini",
+                                text_length=len(text),
+                                audio_duration=audio_duration,
+                                voice=self.voice_name,
+                            )
+                        except Exception:
+                            logger.debug("CHIT voice event callback failed (non-fatal)")
+
+                    # 4. Cast to Google Home / Edge Devices (if configured)
                     if self._default_cast_device:
                         await self._cast_audio_bytes(audio_bytes)
 
             except Exception as e:
+                if _METRICS_AVAILABLE:
+                    GEMINI_TTS_REQUESTS.labels(status="error").inc()
                 logger.error(f"Gemini Voice generation error: {e}")
                 yield ErrorFrame(error=str(e))
 
@@ -187,7 +239,11 @@ class GeminiVoiceProcessor(FrameProcessor):
             async with httpx.AsyncClient(timeout=15.0) as client:
                 resp = await client.post(url, json=payload)
                 resp.raise_for_status()
+                if _METRICS_AVAILABLE:
+                    GEMINI_CAST_REQUESTS.labels(status="success").inc()
                 logger.debug(f"Casted Gemini Voice to edge device: {self._default_cast_device}")
 
         except Exception as e:
+            if _METRICS_AVAILABLE:
+                GEMINI_CAST_REQUESTS.labels(status="error").inc()
             logger.warning(f"Failed to cast Gemini audio to edge device: {e}")
