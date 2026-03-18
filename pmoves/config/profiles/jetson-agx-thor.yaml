@@ -1,0 +1,55 @@
+id: jetson-agx-thor
+name: "Jetson AGX Thor"
+description: >
+  NVIDIA Jetson AGX Thor with NemoClaw native support. Full kernel-level
+  sandboxing (Landlock, seccomp, netns). Runs Nemotron-3-Super locally
+  on 128GB shared memory. Primary edge node for enterprise deployments.
+hardware:
+  cpu:
+    vendor: NVIDIA
+    model: Jetson AGX Thor
+    cores: 12
+    threads: 12
+  gpu:
+    type: nvidia-jetson
+    models: ["Jetson AGX Thor"]
+    memory_gb: 128
+  ram_gb: 128
+  tags: [edge, jetson, arm64, nemoclaw-native, enterprise]
+compose_overrides:
+  - docker-compose.edge.jetson-agx-thor.yaml
+model_bundles:
+  - nemotron-3-super
+  - nemotron-3-nano
+  - whisper-large-v3
+  - yolov8m
+  - nomic-embed-text
+mcp:
+  - docker
+  - host
+  - agent-zero
+  - cipher-memory
+messaging:
+  telegram: true
+  discord: true
+  whatsapp: optional
+  webrtc: true
+nemoclaw:
+  compatible: true
+  support_level: native
+  sandboxing:
+    landlock: true
+    seccomp: true
+    netns: true
+  inference:
+    local: true
+    cloud_fallback: false
+  notes:
+    - "NemoClaw plugin auto-detected on AGX Thor with JetPack 7.x"
+    - "Full Nemotron-3-Super (120B) runs locally on 128GB shared memory"
+    - "Policy proxy enforces network ACLs for regulated environments"
+notes:
+  - Jetson AGX Thor specs based on NVIDIA announced hardware — verify on delivery.
+  - Full Nemotron-3-Super (120B MoE) fits in 128GB shared memory.
+  - NemoClaw sandboxing provides defense-in-depth for UNFCU/enterprise deployments.
+  - DoX Jetson Dockerfiles remain separate — NemoClaw operates at the OpenClaw layer.

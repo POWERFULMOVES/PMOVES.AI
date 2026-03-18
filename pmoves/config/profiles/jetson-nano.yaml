@@ -1,33 +1,51 @@
-id: jetson-nano
-name: "Jetson Nano Super"
+id: jetson-orin-nano-super
+name: "Jetson Orin Nano Super"
 description: >
-  Jetson Nano configured with CSI cameras. Targets lightweight edge inference and
-  acts as a sensor gateway for PMOVES.
+  NVIDIA Jetson Orin Nano Super — 8GB unified memory, 67 TOPS AI performance,
+  Ampere GPU (1024 CUDA cores), 6-core Arm Cortex-A78AE. Runs edge inference
+  for PMOVES with CSI cameras, NemoClaw sandboxing, and local model serving.
 hardware:
   cpu:
     vendor: NVIDIA
-    model: Jetson Nano
-    cores: 4
-    threads: 4
+    model: Jetson Orin Nano Super
+    arch: arm64
+    cores: 6
+    threads: 6
   gpu:
-    type: nvidia-tegra
-    models: ["Jetson Nano"]
-    memory_gb: 4
-  ram_gb: 4
-  tags: [edge, jetson, arm64]
+    type: nvidia-ampere
+    models: ["Jetson Orin Nano Super"]
+    cuda_cores: 1024
+    memory_gb: 8
+    tops: 67
+  ram_gb: 8
+  storage: nvme
+  tags: [edge, jetson, arm64, orin, ampere]
 compose_overrides:
-  - docker-compose.edge.jetson.yaml
+  - docker-compose.edge.jetson-orin.yaml
 model_bundles:
   - jetson-yolov8n
   - whisper-small-int8
+  - nemotron-3-nano
+  - nomic-embed-text
 mcp:
   - docker
   - host
 messaging:
   telegram: optional
-  discord: false
+  discord: optional
   whatsapp: false
   webrtc: true
+nemoclaw:
+  compatible: true
+  support_level: experimental
+  notes:
+    - "NemoClaw Landlock sandboxing requires kernel >=5.13 (JetPack 6.x)"
+    - "Nemotron-3-nano (4B quantized) fits within 8GB unified memory"
+    - "OpenShell policy proxy adds ~200MB RAM overhead"
+    - "67 TOPS enables local inference without cloud dependency"
 notes:
+  - Jetson Orin Nano Super (not legacy Jetson Nano — different SoC entirely).
+  - 8GB unified memory shared between CPU and GPU.
   - Enable CSI camera with `sudo systemctl restart nvargus-daemon` prior to capture.
   - Use JetPack 6.x; ensure docker runtime = nvidia.
+  - NemoClaw support is experimental per NVIDIA — verify kernel version before enabling.

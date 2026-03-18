@@ -12,7 +12,8 @@ NVIDIA_5090_DC := docker compose -p $(PROJECT) --project-directory $(CURDIR) \
 	$(NVIDIA_5090_OVERRIDE)
 
 .PHONY: nvidia-5090-up nvidia-5090-down nvidia-5090-status nvidia-5090-models \
-        nvidia-5090-verify nvidia-5090-preload nvidia-5090-openclaw-up nvidia-5090-openclaw-down
+        nvidia-5090-verify nvidia-5090-preload nvidia-5090-preload-nemotron \
+        nvidia-5090-openclaw-up nvidia-5090-openclaw-down
 
 nvidia-5090-up: ensure-env-shared ## Start 5090 GPU stack (Ollama, GPU Orchestrator, Hi-RAG GPU, Whisper)
 	@echo "=== Starting NVIDIA RTX 5090 GPU Stack ==="
@@ -71,6 +72,16 @@ nvidia-5090-preload: ## Pull priority models for 32GB VRAM budget (qwen3:8b, nom
 	@curl -sf http://localhost:11434/api/tags 2>/dev/null \
 	  | python3 -c "import sys,json; tags=json.load(sys.stdin); [print(f'  {m[\"name\"]:30s} {m.get(\"size\",0)//1024//1024:>6d} MB') for m in tags.get('models',[])]" \
 	  2>/dev/null || true
+
+nvidia-5090-preload-nemotron: ## Pull Nemotron models for NemoClaw compatibility (nemotron-mini:4b)
+	@echo "=== Preloading Nemotron Models for NemoClaw Compatibility ==="
+	@echo ""
+	@echo "[1/1] Pulling nemotron-mini:4b (~2.5GB, fits alongside other models)..."
+	@curl -sf http://localhost:11434/api/pull -d '{"name":"nemotron-mini:4b"}' \
+	  || echo "FAILED: Could not pull nemotron-mini:4b (check Ollama library availability)"
+	@echo ""
+	@echo "=== Nemotron Preload Complete ==="
+	@echo "See: pmoves/docs/architecture/openclaw-vs-nemoclaw-analysis.md"
 
 nvidia-5090-openclaw-up: ensure-env-shared ## Start OpenClaw gateway (Docker-hardened, loopback)
 	@echo "=== Starting OpenClaw Gateway (Docker-hardened) ==="
