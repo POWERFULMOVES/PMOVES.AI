@@ -12,7 +12,7 @@ VALID_SERVICES := neo4j tensorzero-clickhouse meilisearch qdrant minio supabase-
 
 .PHONY: volume-reset volume-list docker-prune docker-prune-all branch-audit branch-cleanup \
        tailscale-docker-up tailscale-docker-down tailscale-docker-status tailscale-docker-ip \
-       up-ollama up-gpu-orchestrator up-vllm model-pull gpu-status
+       up-ollama up-gpu-orchestrator up-vllm model-pull gpu-status port-audit
 
 volume-reset: ## Reset a service volume: make volume-reset SERVICE=tensorzero-clickhouse
 	@if [ -z "$(SERVICE)" ]; then \
@@ -152,6 +152,12 @@ gpu-status: ## Show GPU VRAM usage and loaded models
 	@echo ""
 	@echo "=== NVIDIA GPU ==="
 	@nvidia-smi --query-gpu=name,memory.used,memory.total,utilization.gpu --format=csv,noheader 2>/dev/null || echo "nvidia-smi not available"
+
+# ── Port Binding Security ────────────────────────────────────────────
+port-audit: ## Audit Docker port bindings for unexpected 0.0.0.0 exposure
+	@echo "=== Port Binding Security Audit ==="
+	@$(PYTHON) tools/port_audit.py
+	@echo "=== Port audit complete ==="
 
 # ── Branch Management ─────────────────────────────────────────────────
 branch-audit: ## List stale remote branches with age and merge status
