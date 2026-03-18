@@ -11,10 +11,20 @@ module.exports = {
       kvm4Up: info.running("kvm4-up.json"),
     }
 
-    // If a script is currently running, show its terminal as default
+    // If a script is currently running, show web UI (if available) as default
     if (running.localUp) {
-      return [{
-        default: true,
+      let localInfo = info.local("local-up.json")
+      let items = []
+      if (localInfo && localInfo.url) {
+        items.push({
+          default: true,
+          icon: "fa-solid fa-globe",
+          text: "Open Web UI",
+          href: localInfo.url,
+        })
+      }
+      items.push({
+        default: !(localInfo && localInfo.url),
         icon: "fa-solid fa-terminal",
         text: "Local Dev (Running)",
         href: "local-up.json",
@@ -30,12 +40,23 @@ module.exports = {
         icon: "fa-solid fa-circle-info",
         text: "Cluster Status",
         href: "status.json",
-      }]
+      })
+      return items
     }
 
     if (running.labUp) {
-      return [{
-        default: true,
+      let labInfo = info.local("lab-up.json")
+      let items = []
+      if (labInfo && labInfo.url) {
+        items.push({
+          default: true,
+          icon: "fa-solid fa-globe",
+          text: "Open Web UI",
+          href: labInfo.url,
+        })
+      }
+      items.push({
+        default: !(labInfo && labInfo.url),
         icon: "fa-solid fa-terminal",
         text: "AI Lab (Running)",
         href: "lab-up.json",
@@ -47,12 +68,23 @@ module.exports = {
         icon: "fa-solid fa-circle-info",
         text: "Cluster Status",
         href: "status.json",
-      }]
+      })
+      return items
     }
 
     if (running.kvm4Up) {
-      return [{
-        default: true,
+      let kvm4Info = info.local("kvm4-up.json")
+      let items = []
+      if (kvm4Info && kvm4Info.url) {
+        items.push({
+          default: true,
+          icon: "fa-solid fa-globe",
+          text: "Open Web UI",
+          href: kvm4Info.url,
+        })
+      }
+      items.push({
+        default: !(kvm4Info && kvm4Info.url),
         icon: "fa-solid fa-terminal",
         text: "KVM4 Stack (Running)",
         href: "kvm4-up.json",
@@ -64,7 +96,8 @@ module.exports = {
         icon: "fa-solid fa-circle-info",
         text: "Cluster Status",
         href: "status.json",
-      }]
+      })
+      return items
     }
 
     // Nothing running — show full menu with Local Dev as default

@@ -725,6 +725,24 @@ Example: `ingest.transcript.ready.v1`
 - **Delivery:** Publish/subscribe (advisory, no JetStream required)
 - **Related:** Part of `pr-monitor-graphiti-chit` FlOO$ pairing chain
 
+**`ops.service.catalog.updated.v1`**
+- **Direction:** Published by Gateway → Consumed by monitoring, Agent Zero, UI
+- **Purpose:** Notify that the Supabase service catalog has been mutated (insert, update, or delete)
+- **Payload:**
+  ```json
+  {
+    "action": "insert|update|delete",
+    "service_name": "flute-gateway",
+    "service_id": "svc-abc123",
+    "changed_fields": ["port", "health_endpoint"],
+    "actor": "gateway|admin|migration",
+    "timestamp": "2026-03-17T12:00:00Z"
+  }
+  ```
+- **Subscribers:** Agent Zero (service discovery refresh), monitoring dashboards, A2UI
+- **Delivery:** Publish/subscribe (advisory, no JetStream required)
+- **Related:** Referenced in `TAC_SUPABASE.md` NATS Subjects table
+
 ## Testing & Development Subjects
 
 **`test.smoke.v1`**

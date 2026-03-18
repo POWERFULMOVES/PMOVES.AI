@@ -21,7 +21,7 @@ module.exports = {
     {
       method: "notify",
       params: {
-        html: "All PMOVES services and volumes reset. Run Install to bootstrap again.",
+        html: "Core, worker, monitoring, and external services reset. Run Install to bootstrap again.",
         type: "warning"
       }
     }
