@@ -1,0 +1,190 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# PMOVES.AI — NVIDIA RTX 5090 (POWERFULMOVES) GPU Node Overlay
+# ═══════════════════════════════════════════════════════════════════════════════
+#
+# Layers onto the main compose with 5090-specific GPU settings:
+#   - Single GPU device pinning (device 0)
+#   - Per-service VRAM budget limits for 32GB VRAM
+#   - CUDA 12.4 runtime
+#   - Host-specific env: NODE_NAME=pmoves-powerfulmoves
+#
+# VRAM Budget (32GB total, 2GB system reserve = 30GB usable):
+#   Ollama:           24GB (shared across loaded models)
+#   Hi-RAG v2 GPU:     2GB (reranker + CLIP)
+#   GPU Orchestrator: 256MB (management overhead)
+#   ffmpeg-whisper:    2GB (Whisper transcription)
+#   Ultimate-TTS:      4GB (via Pinokio native, not Docker)
+#
+# Usage:
+#   make -C pmoves nvidia-5090-up
+#   # or manually:
+#   docker compose -f docker-compose.yml -f docker-compose.nvidia-5090.yml \
+#     --profile gpu up -d
+
+services:
+  # ═════════════════════════════════════════════════════════════════════════════
+  # P0 — Model Serving (Ollama)
+  # ═════════════════════════════════════════════════════════════════════════════
+  pmoves-ollama:
+    ports:
+      - "${OLLAMA_HOST_PORT:-11434}:11434"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ["0"]
+              capabilities: [gpu, compute, utility]
+        limits:
+          memory: 28G
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=0
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+      - CUDA_VISIBLE_DEVICES=0
+      - OLLAMA_HOST=0.0.0.0:11434
+      - NODE_NAME=${NODE_NAME:-pmoves-powerfulmoves}
+      - GPU_TYPE=rtx-5090
+      # Preload priority models on startup (Ollama loads on first request,
+      # but keep_alive ensures they stay warm)
+      - OLLAMA_KEEP_ALIVE=${OLLAMA_KEEP_ALIVE:-24h}
+      - OLLAMA_NUM_PARALLEL=${OLLAMA_NUM_PARALLEL:-4}
+      - OLLAMA_MAX_LOADED_MODELS=${OLLAMA_MAX_LOADED_MODELS:-3}
+
+  # ═════════════════════════════════════════════════════════════════════════════
+  # P1 — GPU Orchestrator
+  # ═════════════════════════════════════════════════════════════════════════════
+  gpu-orchestrator:
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ["0"]
+              capabilities: [gpu, compute, utility]
+        limits:
+          memory: 1G
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=0
+      - NODE_NAME=${NODE_NAME:-pmoves-powerfulmoves}
+      - GPU_TYPE=rtx-5090
+      - GPU_VRAM_TOTAL_MB=32768
+      - GPU_VRAM_SYSTEM_RESERVE_MB=2048
+
+  # ═════════════════════════════════════════════════════════════════════════════
+  # P1 — Hi-RAG v2 GPU (reranker + CLIP on CUDA)
+  # ═════════════════════════════════════════════════════════════════════════════
+  hi-rag-gateway-v2-gpu:
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ["0"]
+              capabilities: [gpu, compute]
+        limits:
+          memory: 4G
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=0
+      - CUDA_VISIBLE_DEVICES=0
+      - NODE_NAME=${NODE_NAME:-pmoves-powerfulmoves}
+
+  # ═════════════════════════════════════════════════════════════════════════════
+  # P2 — ffmpeg-whisper (GPU transcription)
+  # ═════════════════════════════════════════════════════════════════════════════
+  ffmpeg-whisper:
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ["0"]
+              capabilities: [gpu, compute]
+        limits:
+          memory: 4G
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=0
+      - CUDA_VISIBLE_DEVICES=0
+      - USE_CUDA=true
+      - NODE_NAME=${NODE_NAME:-pmoves-powerfulmoves}
+
+  # ═════════════════════════════════════════════════════════════════════════════
+  # OpenClaw Gateway — Multi-channel AI assistant (Docker-hardened)
+  # ═════════════════════════════════════════════════════════════════════════════
+  openclaw-gateway:
+    build:
+      context: ../PMOVES-ClawZ
+      dockerfile: Dockerfile
+    image: ${OPENCLAW_IMAGE:-ghcr.io/pmoves/openclaw-gateway:local}
+    container_name: openclaw-gateway
+    restart: unless-stopped
+    init: true
+    user: "1000:1000"
+    read_only: true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:noexec,nosuid,size=128m
+      - /home/node/.cache:noexec,nosuid,size=256m
+    ports:
+      - "${OPENCLAW_GATEWAY_PORT:-18789}:18789"
+      - "${OPENCLAW_BRIDGE_PORT:-18790}:18790"
+    environment:
+      - HOME=/home/node
+      - TERM=xterm-256color
+      - NODE_ENV=production
+      - NODE_NAME=${NODE_NAME:-pmoves-powerfulmoves}
+      - OPENCLAW_GATEWAY_TOKEN=${OPENCLAW_GATEWAY_TOKEN:?OPENCLAW_GATEWAY_TOKEN required}
+      - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+      - TENSORZERO_URL=${TENSORZERO_URL:-http://tensorzero-gateway:3000}
+      - OLLAMA_URL=${OLLAMA_URL:-http://pmoves-ollama:11434}
+    volumes:
+      - openclaw-config:/home/node/.openclaw
+    command:
+      - "node"
+      - "openclaw.mjs"
+      - "gateway"
+      - "--bind"
+      - "${OPENCLAW_GATEWAY_BIND:-loopback}"
+      - "--port"
+      - "18789"
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: "2.0"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:18789/healthz').then(r=>{if(!r.ok)throw 1}).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    profiles: ["agents"]
+    networks:
+      - pmoves_app
+      - pmoves_bus
+    depends_on:
+      nats:
+        condition: service_healthy
+
+  # ═════════════════════════════════════════════════════════════════════════════
+  # Mesh Agent — announce 5090 capabilities
+  # ═════════════════════════════════════════════════════════════════════════════
+  mesh-agent:
+    environment:
+      - NODE_NAME=${NODE_NAME:-pmoves-powerfulmoves}
+      - NODE_TYPE=${NODE_TYPE:-gpu-desktop}
+      - NODE_CAPABILITIES=${NODE_CAPABILITIES:-cuda,rtx5090,32gb-vram,cuda12.4}
+
+volumes:
+  openclaw-config:
+    driver: local
+
+networks:
+  pmoves_app:
+    external: true
+  pmoves_bus:
+    external: true

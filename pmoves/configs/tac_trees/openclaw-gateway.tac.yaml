@@ -1,0 +1,577 @@
+# TAC Tree: OpenClaw Gateway
+# Audits PMOVES-ClawZ multi-channel AI gateway: submodule, build, config,
+# model provider wiring, channel connectivity, MCP system, NATS events, health,
+# and Danger Room bridge integration.
+#
+# Key files:
+#   PMOVES-ClawZ/package.json           (version, deps, scripts)
+#   PMOVES-ClawZ/openclaw.mjs           (CLI entry)
+#   PMOVES-ClawZ/src/infra/             (30+ infra modules, 30K lines)
+#   PMOVES-ClawZ/src/provider-web.ts    (OpenAI-compatible provider)
+#   PMOVES-ClawZ/extensions/            (plugin system)
+#   ~/.openclaw/openclaw.json           (runtime config)
+
+name: "TAC_OPENCLAW_GATEWAY"
+version: "1.0.0"
+description: >
+  Verify OpenClaw (PMOVES-ClawZ) multi-channel AI gateway: submodule presence
+  and build, gateway configuration (mode, port, auth, bind), model provider
+  wiring (Ollama RTX 5090, TensorZero), channel connectivity, MCP tool system,
+  NATS event integration, health endpoints, and Danger Room E2B bridge.
+
+root:
+  id: openclaw-gateway
+  task: "OpenClaw gateway review"
+  context: "PMOVES-ClawZ/ submodule + ~/.openclaw/openclaw.json"
+  agent_hint: codex
+  children:
+
+    # =========================================================================
+    # Phase 1: Submodule & Build
+    # =========================================================================
+    - id: oc.submodule
+      task: "Submodule presence and build status"
+      context: "PMOVES-ClawZ/ submodule, pnpm build, Node 22+"
+      agent_hint: codex
+      children:
+        - id: oc.submodule.package-json
+          task: "PMOVES-ClawZ/package.json exists"
+          action:
+            type: file_exists
+            target: "PMOVES-ClawZ/package.json"
+            expect: "OpenClaw submodule initialized with package.json"
+          context: "Version: 2026.2.15, ESM, pnpm@10.23.0"
+          agent_hint: codex
+
+        - id: oc.submodule.version
+          task: "OpenClaw version is 2026.2.15+"
+          action:
+            type: grep
+            target: "PMOVES-ClawZ/package.json"
+            pattern: '"version":\\s*"2026'
+            expect: "Version 2026.x confirmed"
+          context: "Semantic version tracks year-based releases"
+          agent_hint: codex
+
+        - id: oc.submodule.node-engine
+          task: "Node.js >=22.12.0 engine requirement"
+          action:
+            type: grep
+            target: "PMOVES-ClawZ/package.json"
+            pattern: '"node":\\s*">=22'
+            expect: "Node 22+ required for ESM and native fetch"
+          context: "Uses native fetch, ESM modules, structuredClone"
+          agent_hint: codex
+
+        - id: oc.submodule.dist-built
+          task: "dist/ directory present (pnpm build completed)"
+          action:
+            type: file_exists
+            target: "PMOVES-ClawZ/dist/index.js"
+            expect: "Build output present — 222+ dist files"
+          context: "pnpm install && pnpm build produces dist/"
+          agent_hint: codex
+
+        - id: oc.submodule.cli-entry
+          task: "CLI entry point exists"
+          action:
+            type: file_exists
+            target: "PMOVES-ClawZ/openclaw.mjs"
+            expect: "openclaw.mjs CLI entrypoint present"
+          context: "bin.openclaw -> openclaw.mjs in package.json"
+          agent_hint: codex
+
+    # =========================================================================
+    # Phase 2: Gateway Configuration
+    # =========================================================================
+    - id: oc.config
+      task: "Gateway runtime configuration"
+      context: "~/.openclaw/openclaw.json — mode, port, auth, bind"
+      agent_hint: codex
+      children:
+        - id: oc.config.file-exists
+          task: "openclaw.json config file present"
+          action:
+            type: script
+            command: |
+              python -c "
+              import os, json
+              path = os.path.expanduser('~/.openclaw/openclaw.json')
+              assert os.path.exists(path), f'Config not found at {path}'
+              data = json.load(open(path))
+              print(f'Config found: {json.dumps(data, indent=2)[:500]}')
+              "
+            expect: "~/.openclaw/openclaw.json exists with valid JSON"
+          context: "Created by openclaw configure wizard or manual edit"
+          agent_hint: codex
+
+        - id: oc.config.mode-local
+          task: "Gateway mode set to 'local'"
+          action:
+            type: script
+            command: |
+              python -c "
+              import os, json
+              data = json.load(open(os.path.expanduser('~/.openclaw/openclaw.json')))
+              mode = data.get('gateway', {}).get('mode')
+              assert mode == 'local', f'Expected mode=local, got {mode}'
+              print(f'Mode: {mode}')
+              "
+            expect: "gateway.mode = local (no cloud relay)"
+          context: "PMOVES runs fully local — no cloud gateway relay"
+          agent_hint: codex
+
+        - id: oc.config.port
+          task: "Gateway port configured (18789)"
+          action:
+            type: script
+            command: |
+              python -c "
+              import os, json
+              data = json.load(open(os.path.expanduser('~/.openclaw/openclaw.json')))
+              port = data.get('gateway', {}).get('port')
+              assert port == 18789, f'Expected port=18789, got {port}'
+              print(f'Port: {port}')
+              "
+            expect: "gateway.port = 18789"
+          context: "Non-standard port avoids conflicts with PMOVES services"
+          agent_hint: codex
+
+        - id: oc.config.bind-loopback
+          task: "Gateway bound to loopback only"
+          action:
+            type: script
+            command: |
+              python -c "
+              import os, json
+              data = json.load(open(os.path.expanduser('~/.openclaw/openclaw.json')))
+              bind = data.get('gateway', {}).get('bind')
+              assert bind == 'loopback', f'Expected bind=loopback, got {bind}'
+              print(f'Bind: {bind}')
+              "
+            expect: "gateway.bind = loopback (127.0.0.1 only)"
+          context: "Security: gateway must not bind to 0.0.0.0"
+          agent_hint: codex
+
+        - id: oc.config.auth-token
+          task: "Auth token set (non-empty)"
+          action:
+            type: script
+            command: |
+              python -c "
+              import os, json
+              data = json.load(open(os.path.expanduser('~/.openclaw/openclaw.json')))
+              token = data.get('gateway', {}).get('auth', {}).get('token', '')
+              assert len(token) >= 24, f'Auth token too short ({len(token)} chars)'
+              print(f'Auth token: {token[:8]}...{token[-4:]} ({len(token)} chars)')
+              "
+            expect: "gateway.auth.token is set (>=24 chars)"
+          context: "Prevents unauthorized local gateway access"
+          agent_hint: codex
+
+    # =========================================================================
+    # Phase 3: Model Provider Wiring
+    # =========================================================================
+    - id: oc.providers
+      task: "Model provider configuration"
+      context: "OpenClaw uses OpenAI-compatible provider API — can route through Ollama or TensorZero"
+      agent_hint: codex
+      children:
+        - id: oc.providers.ollama-reachable
+          task: "Ollama API reachable at localhost:11435"
+          action:
+            type: script
+            command: |
+              python -c "
+              import urllib.request, json
+              try:
+                  resp = urllib.request.urlopen('http://localhost:11435/api/tags', timeout=5)
+                  data = json.loads(resp.read())
+                  models = [m['name'] for m in data.get('models', [])]
+                  print(f'Ollama models: {models[:10]}')
+              except Exception as e:
+                  print(f'WARN: Ollama not reachable: {e}')
+              "
+            expect: "Ollama responds with model list"
+          context: "Ollama on 11435 (PMOVES convention, not default 11434)"
+          agent_hint: codex
+
+        - id: oc.providers.tensorzero-reachable
+          task: "TensorZero gateway reachable at localhost:3030"
+          action:
+            type: script
+            command: |
+              python -c "
+              import urllib.request
+              try:
+                  resp = urllib.request.urlopen('http://localhost:3030/health', timeout=5)
+                  print(f'TensorZero: {resp.status}')
+              except Exception as e:
+                  print(f'WARN: TensorZero not reachable: {e}')
+              "
+            expect: "TensorZero gateway responds"
+          context: "Can use TensorZero as OpenAI-compatible endpoint for OpenClaw"
+          agent_hint: codex
+
+        - id: oc.providers.openai-compat
+          task: "OpenAI-compatible provider module exists"
+          action:
+            type: file_exists
+            target: "PMOVES-ClawZ/src/provider-web.ts"
+            expect: "provider-web.ts handles OpenAI-compatible API calls"
+          context: "Ollama and TensorZero both expose /v1/chat/completions"
+          agent_hint: codex
+
+        - id: oc.providers.configure-wizard
+          task: "openclaw configure wizard available"
+          action:
+            type: grep
+            target: "PMOVES-ClawZ/package.json"
+            pattern: "configure|setup"
+            expect: "CLI configure command exists for provider setup"
+          context: "Interactive wizard sets provider in ~/.openclaw/openclaw.json"
+          agent_hint: codex
+
+    # =========================================================================
+    # Phase 4: Channel Connectivity
+    # =========================================================================
+    - id: oc.channels
+      task: "Multi-channel support"
+      context: "15+ channels: WhatsApp, Telegram, Slack, Discord, Signal, iMessage, Teams, Matrix, etc."
+      agent_hint: codex
+      children:
+        - id: oc.channels.deps-whatsapp
+          task: "WhatsApp channel dependency"
+          action:
+            type: grep
+            target: "PMOVES-ClawZ/package.json"
+            pattern: "whiskeysockets/baileys"
+            expect: "@whiskeysockets/baileys for WhatsApp Web integration"
+          context: "WhatsApp via Baileys library (no Business API needed)"
+          agent_hint: codex
+
+        - id: oc.channels.deps-telegram
+          task: "Telegram channel dependency"
+          action:
+            type: grep
+            target: "PMOVES-ClawZ/package.json"
+            pattern: "grammy"
+            expect: "@grammyjs for Telegram bot framework"
+          context: "Grammy (modern Telegram framework, successor to Telegraf)"
+          agent_hint: codex
+
+        - id: oc.channels.deps-slack
+          task: "Slack channel dependency"
+          action:
+            type: grep
+            target: "PMOVES-ClawZ/package.json"
+            pattern: "slack/bolt"
+            expect: "@slack/bolt for Slack app framework"
+          context: "Slack Bolt (event-driven Slack integration)"
+          agent_hint: codex
+
+        - id: oc.channels.deps-discord
+          task: "Discord channel dependency"
+          action:
+            type: grep
+            target: "PMOVES-ClawZ/package.json"
+            pattern: "discord-api-types"
+            expect: "discord-api-types for Discord bot integration"
+          context: "Discord via REST API + Gateway"
+          agent_hint: codex
+
+        - id: oc.channels.local-terminal
+          task: "Local terminal channel (default, always available)"
+          action:
+            type: manual
+            expect: "openclaw chat command provides local terminal channel"
+          context: "Minimum viable channel — no external config required"
+          agent_hint: codex
+
+    # =========================================================================
+    # Phase 5: MCP Tool System
+    # =========================================================================
+    - id: oc.mcp
+      task: "OpenClaw MCP tool system"
+      context: "OpenClaw has its own MCP client for tool execution"
+      agent_hint: codex
+      children:
+        - id: oc.mcp.acp-sdk
+          task: "Agent Client Protocol SDK dependency"
+          action:
+            type: grep
+            target: "PMOVES-ClawZ/package.json"
+            pattern: "agentclientprotocol"
+            expect: "@agentclientprotocol/sdk dependency present"
+          context: "ACP for IDE integration (Zed, VS Code) and MCP bridging"
+          agent_hint: codex
+
+        - id: oc.mcp.plugin-sdk
+          task: "Plugin SDK export for extensibility"
+          action:
+            type: grep
+            target: "PMOVES-ClawZ/package.json"
+            pattern: "plugin-sdk"
+            expect: "./dist/plugin-sdk/index.js export"
+          context: "Third-party plugins can extend OpenClaw via plugin SDK"
+          agent_hint: codex
+
+        - id: oc.mcp.extensions-dir
+          task: "Extensions directory present"
+          action:
+            type: file_exists
+            target: "PMOVES-ClawZ/extensions"
+            expect: "extensions/ directory for plugins"
+          context: "Plugin system for custom tool registrations"
+          agent_hint: codex
+
+        - id: oc.mcp.pmoves-integration
+          task: "PMOVES MCP servers accessible from OpenClaw"
+          action:
+            type: manual
+            expect: "OpenClaw can connect to Cipher Memory (SSE :8096), Agent Zero (HTTP :8080), BoTZ MCP (HTTP)"
+            description: "Verify that OpenClaw's MCP client can reach PMOVES internal MCP servers. May require extension or config entry for each."
+          context: "Bridge OpenClaw to PMOVES agent ecosystem via MCP"
+          agent_hint: codex
+
+    # =========================================================================
+    # Phase 6: Infrastructure Modules
+    # =========================================================================
+    - id: oc.infra
+      task: "Infrastructure code audit"
+      context: "PMOVES-ClawZ/src/infra/ — 30+ modules, 30K+ lines"
+      agent_hint: codex
+      children:
+        - id: oc.infra.bonjour
+          task: "Bonjour/mDNS discovery (8,500+ lines)"
+          action:
+            type: file_exists
+            target: "PMOVES-ClawZ/src/infra/bonjour.ts"
+            expect: "Bonjour service discovery module present"
+          context: "LAN device/agent discovery for local network coordination"
+          agent_hint: codex
+
+        - id: oc.infra.device-auth
+          task: "Device authentication store"
+          action:
+            type: file_exists
+            target: "PMOVES-ClawZ/src/infra/device-auth-store.ts"
+            expect: "Device auth store for channel pairing"
+          context: "DM pairing security model — devices must authenticate"
+          agent_hint: codex
+
+        - id: oc.infra.agent-events
+          task: "Agent event system (2,300+ lines)"
+          action:
+            type: file_exists
+            target: "PMOVES-ClawZ/src/infra/agent-events.ts"
+            expect: "Agent event system for lifecycle management"
+          context: "Internal event bus for agent runtime coordination"
+          agent_hint: codex
+
+        - id: oc.infra.update-system
+          task: "Auto-update system"
+          action:
+            type: file_exists
+            target: "PMOVES-ClawZ/src/infra/update-check.ts"
+            expect: "Update check module present"
+          context: "update-check.ts, update-runner.ts, update-channels.ts — self-updating gateway"
+          agent_hint: codex
+
+    # =========================================================================
+    # Phase 7: Docker Hardening
+    # =========================================================================
+    - id: oc.docker
+      task: "Docker container hardening"
+      context: "PMOVES-ClawZ/Dockerfile + pmoves/docker-compose.nvidia-5090.yml"
+      agent_hint: codex
+      children:
+        - id: oc.docker.non-root
+          task: "Container runs as non-root user"
+          action:
+            type: grep
+            target: "PMOVES-ClawZ/Dockerfile"
+            pattern: "USER node"
+            expect: "USER node (uid 1000) — non-root runtime"
+          context: "node:22-bookworm includes 'node' user (uid 1000)"
+          agent_hint: codex
+
+        - id: oc.docker.compose-hardened
+          task: "Compose service uses hardening flags"
+          action:
+            type: grep
+            target: "pmoves/docker-compose.nvidia-5090.yml"
+            pattern: "openclaw.*cap_drop|cap_drop.*ALL"
+            expect: "cap_drop ALL, cap_add NET_BIND_SERVICE, read_only, no-new-privileges"
+          context: "Docker-hardened per PMOVES convention"
+          agent_hint: codex
+
+        - id: oc.docker.read-only-fs
+          task: "Read-only filesystem with tmpfs"
+          action:
+            type: grep
+            target: "pmoves/docker-compose.nvidia-5090.yml"
+            pattern: "read_only.*true|tmpfs"
+            expect: "read_only: true with tmpfs for /tmp and /home/node/.cache"
+          context: "Prevents filesystem modification inside container"
+          agent_hint: codex
+
+        - id: oc.docker.resource-limits
+          task: "Memory and CPU limits set"
+          action:
+            type: grep
+            target: "pmoves/docker-compose.nvidia-5090.yml"
+            pattern: "memory.*1G|cpus.*2"
+            expect: "memory: 1G, cpus: 2.0"
+          context: "Prevents resource exhaustion from OpenClaw gateway"
+          agent_hint: codex
+
+        - id: oc.docker.healthcheck
+          task: "Container healthcheck configured"
+          action:
+            type: grep
+            target: "pmoves/docker-compose.nvidia-5090.yml"
+            pattern: "openclaw.*healthz|healthcheck"
+            expect: "HTTP healthcheck on /healthz with 30s interval"
+          context: "Required for service_healthy dependency chain"
+          agent_hint: codex
+
+        - id: oc.docker.loopback-bind
+          task: "Gateway binds to loopback inside container"
+          action:
+            type: grep
+            target: "pmoves/docker-compose.nvidia-5090.yml"
+            pattern: "loopback"
+            expect: "OPENCLAW_GATEWAY_BIND defaults to loopback"
+          context: "Security: gateway only reachable via Docker network, not host 0.0.0.0"
+          agent_hint: codex
+
+        - id: oc.docker.secret-required
+          task: "Gateway token uses fail-hard pattern"
+          action:
+            type: grep
+            target: "pmoves/docker-compose.nvidia-5090.yml"
+            pattern: "OPENCLAW_GATEWAY_TOKEN.*:?"
+            expect: "OPENCLAW_GATEWAY_TOKEN:?required — fails if not set"
+          context: "${VAR:?msg} pattern prevents starting without auth token"
+          agent_hint: codex
+
+    # =========================================================================
+    # Phase 8: NATS Integration (Future)
+    # =========================================================================
+    - id: oc.nats
+      task: "NATS event integration"
+      context: "OpenClaw does not currently publish to NATS — this is a gap for PMOVES integration"
+      agent_hint: codex
+      children:
+        - id: oc.nats.gap-no-nats
+          task: "GAP: No NATS client in OpenClaw"
+          action:
+            type: grep
+            target: "PMOVES-ClawZ/package.json"
+            pattern: "nats"
+            invert: true
+            expect: "No NATS dependency — OpenClaw does not publish events to NATS bus"
+          context: "Future: add nats.ws or nats transport for openclaw.channel.message.v1, openclaw.tool.executed.v1"
+          agent_hint: codex
+
+        - id: oc.nats.proposed-subjects
+          task: "Proposed NATS subjects for OpenClaw"
+          action:
+            type: manual
+            expect: |
+              openclaw.channel.message.v1 — incoming message from any channel
+              openclaw.channel.response.v1 — outgoing response to channel
+              openclaw.tool.executed.v1 — MCP tool execution event
+              openclaw.session.started.v1 — new chat session
+              openclaw.session.ended.v1 — session terminated
+            description: "Future NATS subjects when OpenClaw NATS integration is implemented"
+          context: "Aligns with PMOVES agent observability pattern (claude.code.tool.executed.v1)"
+          agent_hint: codex
+
+    # =========================================================================
+    # Phase 9: Danger Room Bridge
+    # =========================================================================
+    - id: oc.danger-room
+      task: "E2B Danger Room integration"
+      context: "OpenClaw dispatching to E2B sandbox via MCP bridge"
+      agent_hint: codex
+      children:
+        - id: oc.danger-room.e2b-submodule
+          task: "E2B MCP server submodule present"
+          action:
+            type: file_exists
+            target: "pmoves-e2b-mcp-server/package.json"
+            expect: "E2B MCP server submodule initialized"
+          context: "MCP bridge to E2B sandbox for isolated code execution"
+          agent_hint: codex
+
+        - id: oc.danger-room.desktop-submodule
+          task: "E2B Danger Room Desktop submodule present"
+          action:
+            type: file_exists
+            target: "PMOVES-E2B-Danger-Room-Desktop/package.json"
+            expect: "E2B Danger Room Desktop submodule initialized"
+          context: "VNC/API sandbox environment"
+          agent_hint: codex
+
+        - id: oc.danger-room.mcp-bridge
+          task: "E2B MCP tools available for sandboxed execution"
+          action:
+            type: manual
+            expect: "e2b_execute, e2b_sandbox_create, e2b_sandbox_destroy tools available"
+            description: "Verify E2B MCP server exposes sandbox execution tools that OpenClaw can invoke"
+          context: "OpenClaw → MCP → E2B → sandboxed code execution"
+          agent_hint: codex
+
+        - id: oc.danger-room.webrtc
+          task: "WebRTC portal for live terminal streaming"
+          action:
+            type: manual
+            expect: "Pipecat/Flute-Gateway can stream Danger Room terminal output via WebRTC"
+            description: "Future: WebRTC session showing real-time Crush CLI execution inside Danger Room"
+          context: "Flute-Gateway port 8056 (WebSocket), Pipecat integration"
+          agent_hint: codex
+
+    # =========================================================================
+    # Phase 10: Audit Rules
+    # =========================================================================
+    - id: oc.audit
+      task: "OpenClaw gateway audit rules"
+      context: "Cross-cutting verification"
+      agent_hint: codex
+      children:
+        - id: oc.audit.loopback-only
+          task: "Gateway MUST bind to loopback (127.0.0.1)"
+          action:
+            type: manual
+            expect: "gateway.bind = loopback in ~/.openclaw/openclaw.json — never 0.0.0.0"
+          context: "Security invariant: local gateway must not be network-accessible"
+          agent_hint: codex
+
+        - id: oc.audit.auth-required
+          task: "Auth token MUST be set and non-trivial"
+          action:
+            type: manual
+            expect: "gateway.auth.token is >=24 chars, cryptographically random"
+          context: "Prevents local privilege escalation via unauthenticated gateway"
+          agent_hint: codex
+
+        - id: oc.audit.provider-configured
+          task: "At least one model provider must be configured"
+          action:
+            type: manual
+            expect: "Either Ollama (local) or TensorZero (gateway) configured as OpenClaw provider"
+          context: "Without a provider, OpenClaw cannot respond to any channel"
+          agent_hint: codex
+
+        - id: oc.audit.channels-inventory
+          task: "Channel inventory"
+          action:
+            type: manual
+            expect: >
+              15+ supported channels: WhatsApp, Telegram, Slack, Discord,
+              Signal, iMessage, Teams, Matrix, Zalo, WebChat, Line, local terminal,
+              voice (macOS/iOS/Android), Canvas, A2UI
+          context: "OpenClaw multi-channel support matrix"
+          agent_hint: codex

@@ -20,17 +20,19 @@
     if (!extensionConfig?.features?.showFloatingButton) return;
     if (document.getElementById('pmoves-float-button')) return;
 
-    const btn = document.createElement('div');
+    const btn = document.createElement('button');
     btn.id = 'pmoves-float-button';
     btn.className = 'pmoves-float-button';
-    btn.title = 'PMOVES.AI Actions';
+    btn.setAttribute('aria-label', 'PMOVES.AI Actions');
+    btn.setAttribute('aria-haspopup', 'menu');
+    btn.setAttribute('aria-expanded', 'false');
     btn.innerHTML = `
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
         <path d="M12 2L2 7L12 12L22 7L12 2Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
         <path d="M2 17L12 22L22 17" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
         <path d="M2 12L12 17L22 12" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
       </svg>
-      <span class="pmoves-gpu-badge" id="pmoves-gpu-badge" style="display:none;"></span>
+      <span class="pmoves-gpu-badge" id="pmoves-gpu-badge" style="display:none;" aria-label="GPU usage"></span>
     `;
     btn.addEventListener('click', toggleActionMenu);
     document.body.appendChild(btn);
@@ -70,6 +72,12 @@
     const menu = document.createElement('div');
     menu.id = 'pmoves-action-menu';
     menu.className = 'pmoves-action-menu';
+    menu.setAttribute('role', 'menu');
+    menu.setAttribute('aria-label', 'PMOVES.AI Actions');
+
+    // Update floating button aria-expanded
+    const floatBtn = document.getElementById('pmoves-float-button');
+    if (floatBtn) floatBtn.setAttribute('aria-expanded', 'true');
 
     const actions = [
       { icon: '&#9654;', label: 'Process Current Video', fn: processCurrentVideo },
@@ -82,13 +90,37 @@
       { icon: '&#9881;', label: 'Settings', fn: openSettings },
     ];
 
-    actions.forEach(({ icon, label, fn }) => {
-      const item = document.createElement('div');
+    actions.forEach(({ icon, label, fn }, index) => {
+      const item = document.createElement('button');
       item.className = 'pmoves-menu-item';
-      item.innerHTML = `<span class="pmoves-menu-icon">${icon}</span>${label}`;
-      item.addEventListener('click', (ev) => { ev.stopPropagation(); menu.remove(); fn(); });
+      item.setAttribute('role', 'menuitem');
+      item.setAttribute('tabindex', index === 0 ? '0' : '-1');
+      item.innerHTML = `<span class="pmoves-menu-icon" aria-hidden="true">${icon}</span>${label}`;
+      item.addEventListener('click', (ev) => { ev.stopPropagation(); closeMenu(); fn(); });
       menu.appendChild(item);
     });
+
+    // Keyboard navigation for menu
+    menu.addEventListener('keydown', (ev) => {
+      const items = menu.querySelectorAll('[role="menuitem"]');
+      const current = [...items].indexOf(document.activeElement);
+      if (ev.key === 'ArrowDown') {
+        ev.preventDefault();
+        items[(current + 1) % items.length].focus();
+      } else if (ev.key === 'ArrowUp') {
+        ev.preventDefault();
+        items[(current - 1 + items.length) % items.length].focus();
+      } else if (ev.key === 'Escape') {
+        ev.preventDefault();
+        closeMenu();
+        if (floatBtn) floatBtn.focus();
+      }
+    });
+
+    function closeMenu() {
+      menu.remove();
+      if (floatBtn) floatBtn.setAttribute('aria-expanded', 'false');
+    }
 
     // Position near button
     const btnRect = document.getElementById('pmoves-float-button').getBoundingClientRect();
@@ -100,21 +132,27 @@
     setTimeout(() => {
       document.addEventListener('click', function close(ev) {
         if (!menu.contains(ev.target)) {
-          menu.remove();
+          closeMenu();
           document.removeEventListener('click', close);
         }
       });
     }, 50);
+
+    // Focus first menu item
+    requestAnimationFrame(() => {
+      const firstItem = menu.querySelector('[role="menuitem"]');
+      if (firstItem) firstItem.focus();
+    });
   }
 
   // ─── Thumbnail Buttons ─────────────────────────
 
   function attachThumbnailButton(container, href) {
     const videoUrl = `https://www.youtube.com${href}`;
-    const btn = document.createElement('div');
+    const btn = document.createElement('button');
     btn.className = 'pmoves-thumbnail-button';
-    btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 2L2 7L12 12L22 7L12 2Z" stroke="white" stroke-width="2.5"/></svg>`;
-    btn.title = 'Process with PMOVES.AI';
+    btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 2L2 7L12 12L22 7L12 2Z" stroke="white" stroke-width="2.5"/></svg>`;
+    btn.setAttribute('aria-label', 'Process with PMOVES.AI');
     btn.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
@@ -230,9 +268,12 @@
     const overlay = document.createElement('div');
     overlay.id = 'pmoves-search-overlay';
     overlay.className = 'pmoves-modal';
+    overlay.setAttribute('role', 'dialog');
+    overlay.setAttribute('aria-modal', 'true');
+    overlay.setAttribute('aria-labelledby', 'pmoves-search-title');
     overlay.innerHTML = `
       <div class="pmoves-modal-content pmoves-search-modal">
-        <h2>Search Knowledge Base</h2>
+        <h2 id="pmoves-search-title">Search Knowledge Base</h2>
         <div class="pmoves-search-input-row">
           <input type="text" id="pmoves-search-input" placeholder="Ask anything..." autofocus />
           <button id="pmoves-search-btn" class="pmoves-close-button">Search</button>
@@ -294,9 +335,12 @@
   function showHistoryModal(history) {
     const modal = document.createElement('div');
     modal.className = 'pmoves-modal';
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-modal', 'true');
+    modal.setAttribute('aria-labelledby', 'pmoves-history-title');
     modal.innerHTML = `
       <div class="pmoves-modal-content">
-        <h2>Processing History</h2>
+        <h2 id="pmoves-history-title">Processing History</h2>
         <div class="pmoves-history-list">
           ${history.length ? history.map(item => `
             <div class="pmoves-history-item">
@@ -319,6 +363,9 @@
   function showResultModal(title, content) {
     const modal = document.createElement('div');
     modal.className = 'pmoves-modal';
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-modal', 'true');
+    modal.setAttribute('aria-label', title);
     modal.innerHTML = `
       <div class="pmoves-modal-content">
         <h2>${escapeHtml(title)}</h2>
@@ -353,6 +400,8 @@
     if (existing.length >= 3) existing[0].remove();
     const toast = document.createElement('div');
     toast.className = 'pmoves-toast';
+    toast.setAttribute('role', 'status');
+    toast.setAttribute('aria-live', 'polite');
     toast.textContent = message;
     document.body.appendChild(toast);
     requestAnimationFrame(() => toast.classList.add('pmoves-toast-show'));

@@ -1,0 +1,505 @@
+# TAC Tree: Crush CLI
+# Audits Crush AI coding assistant: binary, config, dual provider model,
+# MCP servers, LSP configuration, permissions, attribution, and PMOVES integration.
+#
+# Key files:
+#   ~/.config/crush/crush.json          (global config — providers, MCPs, models)
+#   PMOVES-crush/schema.json            (config schema reference, 564 lines)
+#   PMOVES-crush/crush.json             (LSP config — gopls)
+#   PMOVES-crush/CRUSH.md               (dev guide)
+#   PMOVES-crush/docker-compose.pmoves.yml (tier anchors)
+
+name: "TAC_CRUSH_CLI"
+version: "1.0.0"
+description: >
+  Verify Crush CLI configuration: binary on PATH, dual provider model
+  (ZAI cloud + Ollama RTX 5090 local), MCP server wiring (ZAI, web-search,
+  web-reader, zread, Cipher Memory, Agent Zero), LSP configuration,
+  tool permissions, attribution settings, and PMOVES ecosystem integration.
+
+root:
+  id: crush-cli
+  task: "Crush CLI review"
+  context: "PMOVES-crush/ submodule + ~/.config/crush/crush.json"
+  agent_hint: codex
+  children:
+
+    # =========================================================================
+    # Phase 1: Binary & Version
+    # =========================================================================
+    - id: crush.binary
+      task: "Crush binary and submodule"
+      context: "Go-based TUI, PMOVES-crush/ submodule"
+      agent_hint: codex
+      children:
+        - id: crush.binary.on-path
+          task: "crush command available on PATH"
+          action:
+            type: script
+            command: |
+              python -c "
+              import shutil
+              path = shutil.which('crush')
+              assert path is not None, 'crush not found on PATH'
+              print(f'crush binary: {path}')
+              "
+            expect: "crush is on PATH and executable"
+          context: "Installed via GoReleaser or go install"
+          agent_hint: codex
+
+        - id: crush.binary.submodule-exists
+          task: "PMOVES-crush submodule present"
+          action:
+            type: file_exists
+            target: "PMOVES-crush/go.mod"
+            expect: "Crush Go module initialized"
+          context: "Go-based AI coding assistant framework"
+          agent_hint: codex
+
+        - id: crush.binary.schema
+          task: "Config schema reference present"
+          action:
+            type: file_exists
+            target: "PMOVES-crush/schema.json"
+            expect: "JSON Schema for crush.json config (564 lines)"
+          context: "Defines providers, MCPs, LSPs, options, permissions"
+          agent_hint: codex
+
+        - id: crush.binary.dev-guide
+          task: "Development guide present"
+          action:
+            type: file_exists
+            target: "PMOVES-crush/CRUSH.md"
+            expect: "CRUSH.md development guide present"
+          context: "Build, test, lint, code style, semantic commits"
+          agent_hint: codex
+
+    # =========================================================================
+    # Phase 2: Global Configuration
+    # =========================================================================
+    - id: crush.config
+      task: "Global configuration"
+      context: "~/.config/crush/crush.json — providers, models, MCPs"
+      agent_hint: codex
+      children:
+        - id: crush.config.file-exists
+          task: "crush.json config file present"
+          action:
+            type: script
+            command: |
+              python -c "
+              import os, json
+              path = os.path.expanduser('~/.config/crush/crush.json')
+              assert os.path.exists(path), f'Config not found at {path}'
+              data = json.load(open(path))
+              keys = list(data.keys())
+              print(f'Config keys: {keys}')
+              "
+            expect: "~/.config/crush/crush.json with providers, models, mcp sections"
+          context: "Global config for all Crush sessions"
+          agent_hint: codex
+
+        - id: crush.config.providers-section
+          task: "Providers section has both ZAI and Ollama"
+          action:
+            type: script
+            command: |
+              python -c "
+              import os, json
+              data = json.load(open(os.path.expanduser('~/.config/crush/crush.json')))
+              providers = list(data.get('providers', {}).keys())
+              assert 'zai' in providers, f'Missing zai provider, got: {providers}'
+              assert 'ollama' in providers, f'Missing ollama provider, got: {providers}'
+              print(f'Providers: {providers}')
+              "
+            expect: "Both 'zai' and 'ollama' providers configured"
+          context: "Dual provider model: ZAI for cloud/edge, Ollama for local GPU"
+          agent_hint: codex
+
+        - id: crush.config.models-section
+          task: "Models section maps large/small to providers"
+          action:
+            type: script
+            command: |
+              python -c "
+              import os, json
+              data = json.load(open(os.path.expanduser('~/.config/crush/crush.json')))
+              models = data.get('models', {})
+              for name, cfg in models.items():
+                  print(f'{name}: model={cfg.get(\"model\")}, provider={cfg.get(\"provider\")}, max_tokens={cfg.get(\"max_tokens\")}')
+              "
+            expect: "large -> qwen3.5:9b (ollama), small -> qwen3:8b (ollama)"
+          context: "Model tiers route to appropriate provider and model size"
+          agent_hint: codex
+
+    # =========================================================================
+    # Phase 3: Provider Verification
+    # =========================================================================
+    - id: crush.providers
+      task: "Provider connectivity and health"
+      context: "ZAI (GLM edge/hybrid cloud) + Ollama (RTX 5090 local)"
+      agent_hint: codex
+      children:
+        - id: crush.providers.zai-base-url
+          task: "ZAI provider base_url configured"
+          action:
+            type: script
+            command: |
+              python -c "
+              import os, json
+              data = json.load(open(os.path.expanduser('~/.config/crush/crush.json')))
+              zai = data.get('providers', {}).get('zai', {})
+              url = zai.get('base_url', '')
+              assert 'z.ai' in url, f'Expected z.ai URL, got: {url}'
+              assert zai.get('api_key'), 'ZAI api_key not set'
+              print(f'ZAI URL: {url}')
+              "
+            expect: "ZAI base_url points to z.ai API with valid api_key"
+          context: "GLM coding plans provider for cloud/edge workloads"
+          agent_hint: codex
+
+        - id: crush.providers.ollama-base-url
+          task: "Ollama provider base_url points to localhost:11435"
+          action:
+            type: script
+            command: |
+              python -c "
+              import os, json
+              data = json.load(open(os.path.expanduser('~/.config/crush/crush.json')))
+              ollama = data.get('providers', {}).get('ollama', {})
+              url = ollama.get('base_url', '')
+              assert '11435' in url, f'Expected port 11435, got: {url}'
+              print(f'Ollama URL: {url}')
+              "
+            expect: "Ollama at localhost:11435/v1 (PMOVES port convention)"
+          context: "RTX 5090 local inference — 32GB VRAM, qwen3.5:9b loaded"
+          agent_hint: codex
+
+        - id: crush.providers.ollama-reachable
+          task: "Ollama API responds"
+          action:
+            type: script
+            command: |
+              python -c "
+              import urllib.request, json
+              try:
+                  resp = urllib.request.urlopen('http://localhost:11435/api/tags', timeout=5)
+                  data = json.loads(resp.read())
+                  models = [m['name'] for m in data.get('models', [])]
+                  print(f'Models: {models[:8]}')
+              except Exception as e:
+                  print(f'WARN: Ollama not reachable: {e}')
+              "
+            expect: "Ollama returns model list including qwen3.5:9b"
+          context: "Verify RTX 5090 Ollama is running and serving models"
+          agent_hint: codex
+
+    # =========================================================================
+    # Phase 4: MCP Server Configuration
+    # =========================================================================
+    - id: crush.mcp
+      task: "MCP server configuration"
+      context: "~/.config/crush/crush.json mcp section"
+      agent_hint: codex
+      children:
+        - id: crush.mcp.zai-server
+          task: "ZAI MCP server configured (stdio)"
+          action:
+            type: script
+            command: |
+              python -c "
+              import os, json
+              data = json.load(open(os.path.expanduser('~/.config/crush/crush.json')))
+              zai = data.get('mcp', {}).get('zai-mcp-server', {})
+              assert zai.get('type') == 'stdio', f'Expected stdio, got: {zai.get(\"type\")}'
+              print(f'ZAI MCP: type={zai[\"type\"]}, command={zai.get(\"command\")}')
+              "
+            expect: "zai-mcp-server: stdio transport, npx @z_ai/mcp-server"
+          context: "Vision analysis, image/video understanding tools"
+          agent_hint: codex
+
+        - id: crush.mcp.web-search
+          task: "web-search-prime MCP configured (HTTP)"
+          action:
+            type: script
+            command: |
+              python -c "
+              import os, json
+              data = json.load(open(os.path.expanduser('~/.config/crush/crush.json')))
+              ws = data.get('mcp', {}).get('web-search-prime', {})
+              assert ws.get('type') == 'http', f'Expected http, got: {ws.get(\"type\")}'
+              print(f'web-search-prime: type={ws[\"type\"]}, url={ws.get(\"url\", \"\")[:60]}')
+              "
+            expect: "web-search-prime: HTTP transport to z.ai API"
+          context: "Web search via ZAI MCP"
+          agent_hint: codex
+
+        - id: crush.mcp.web-reader
+          task: "web-reader MCP configured (HTTP)"
+          action:
+            type: script
+            command: |
+              python -c "
+              import os, json
+              data = json.load(open(os.path.expanduser('~/.config/crush/crush.json')))
+              wr = data.get('mcp', {}).get('web-reader', {})
+              assert wr.get('type') == 'http', f'Expected http, got: {wr.get(\"type\")}'
+              print(f'web-reader: type={wr[\"type\"]}, url={wr.get(\"url\", \"\")[:60]}')
+              "
+            expect: "web-reader: HTTP transport to z.ai API"
+          context: "Web page reading and content extraction"
+          agent_hint: codex
+
+        - id: crush.mcp.zread
+          task: "zread MCP configured (HTTP)"
+          action:
+            type: script
+            command: |
+              python -c "
+              import os, json
+              data = json.load(open(os.path.expanduser('~/.config/crush/crush.json')))
+              zr = data.get('mcp', {}).get('zread', {})
+              assert zr.get('type') == 'http', f'Expected http, got: {zr.get(\"type\")}'
+              print(f'zread: type={zr[\"type\"]}, url={zr.get(\"url\", \"\")[:60]}')
+              "
+            expect: "zread: HTTP transport to z.ai API"
+          context: "Repository structure reading and file content"
+          agent_hint: codex
+
+        - id: crush.mcp.gap-cipher-memory
+          task: "GAP: Cipher Memory MCP not yet configured"
+          action:
+            type: script
+            command: |
+              python -c "
+              import os, json
+              data = json.load(open(os.path.expanduser('~/.config/crush/crush.json')))
+              mcps = list(data.get('mcp', {}).keys())
+              has_cipher = any('cipher' in k.lower() for k in mcps)
+              if has_cipher:
+                  print('Cipher Memory MCP configured')
+              else:
+                  print(f'GAP: No Cipher Memory MCP in config. MCPs: {mcps}')
+              "
+            expect: "Cipher Memory MCP should be added (SSE http://localhost:8096/sse)"
+          context: "Cross-session memory for Crush — same as Claude Code cipher"
+          agent_hint: codex
+
+        - id: crush.mcp.gap-agent-zero
+          task: "GAP: Agent Zero MCP not yet configured"
+          action:
+            type: script
+            command: |
+              python -c "
+              import os, json
+              data = json.load(open(os.path.expanduser('~/.config/crush/crush.json')))
+              mcps = list(data.get('mcp', {}).keys())
+              has_a0 = any('agent' in k.lower() or 'a0' in k.lower() for k in mcps)
+              if has_a0:
+                  print('Agent Zero MCP configured')
+              else:
+                  print(f'GAP: No Agent Zero MCP in config. MCPs: {mcps}')
+              "
+            expect: "Agent Zero MCP should be added (HTTP http://localhost:8080/mcp/)"
+          context: "Agent orchestration from Crush — delegate tasks to agent ecosystem"
+          agent_hint: codex
+
+    # =========================================================================
+    # Phase 5: LSP Configuration
+    # =========================================================================
+    - id: crush.lsp
+      task: "Language Server Protocol configuration"
+      context: "PMOVES-crush/crush.json (project-level LSP config)"
+      agent_hint: codex
+      children:
+        - id: crush.lsp.gopls
+          task: "gopls configured with PMOVES analysis settings"
+          action:
+            type: grep
+            target: "PMOVES-crush/crush.json"
+            pattern: "gopls"
+            expect: "gopls LSP configured in project crush.json"
+          context: "gofumpt=true, staticcheck=true, full analysis suite"
+          agent_hint: codex
+
+        - id: crush.lsp.codelenses
+          task: "gopls codelenses enabled"
+          action:
+            type: grep
+            target: "PMOVES-crush/crush.json"
+            pattern: "codelenses"
+            expect: "Code lenses for generate, tidy, test, etc."
+          context: "gc_details, generate, regenerate_cgo, test, tidy, upgrade_dependency, vulncheck"
+          agent_hint: codex
+
+        - id: crush.lsp.analyses
+          task: "gopls static analysis rules"
+          action:
+            type: grep
+            target: "PMOVES-crush/crush.json"
+            pattern: "analyses"
+            expect: "Full analysis suite enabled in gopls"
+          context: "fieldalignment, nilness, shadow, unusedparams, unusedwrite"
+          agent_hint: codex
+
+    # =========================================================================
+    # Phase 6: Tool Permissions
+    # =========================================================================
+    - id: crush.permissions
+      task: "Tool permission configuration"
+      context: "schema.json: allowed_tools, permissions"
+      agent_hint: codex
+      children:
+        - id: crush.permissions.schema-defined
+          task: "Permissions schema defined"
+          action:
+            type: grep
+            target: "PMOVES-crush/schema.json"
+            pattern: "allowed_tools"
+            expect: "allowed_tools field in schema for no-prompt tool execution"
+          context: "Tools in allowed_tools list execute without permission prompt"
+          agent_hint: codex
+
+        - id: crush.permissions.global-config
+          task: "Global permissions configured"
+          action:
+            type: script
+            command: |
+              python -c "
+              import os, json
+              data = json.load(open(os.path.expanduser('~/.config/crush/crush.json')))
+              perms = data.get('permissions', {})
+              allowed = perms.get('allowed_tools', [])
+              print(f'Allowed tools: {allowed if allowed else \"(none configured)\"}')
+              "
+            expect: "Tool allowlist configured for common safe operations"
+          context: "bash, view, ls, glob, grep, read — safe tools for auto-approval"
+          agent_hint: codex
+
+    # =========================================================================
+    # Phase 7: Attribution Settings
+    # =========================================================================
+    - id: crush.attribution
+      task: "Co-authored-by and generated-with attribution"
+      context: "schema.json: co_authored_by, generated_with"
+      agent_hint: codex
+      children:
+        - id: crush.attribution.schema
+          task: "Attribution fields in schema"
+          action:
+            type: grep
+            target: "PMOVES-crush/schema.json"
+            pattern: "co_authored_by|generated_with"
+            expect: "co_authored_by and generated_with attribution fields defined"
+          context: "Automatically adds Co-Authored-By to commits, Generated-With to PRs"
+          agent_hint: codex
+
+        - id: crush.attribution.config
+          task: "Attribution configured in global config"
+          action:
+            type: script
+            command: |
+              python -c "
+              import os, json
+              path = os.path.expanduser('~/.config/crush/crush.json')
+              data = json.load(open(path))
+              coauthor = data.get('co_authored_by')
+              generated = data.get('generated_with')
+              print(f'co_authored_by: {coauthor or \"(not set)\"}')
+              print(f'generated_with: {generated or \"(not set)\"}')
+              "
+            expect: "Attribution fields set for PMOVES agent trail"
+          context: "Supports CHIT-signed Graphiti trail attribution"
+          agent_hint: codex
+
+    # =========================================================================
+    # Phase 8: PMOVES Docker Integration
+    # =========================================================================
+    - id: crush.pmoves
+      task: "PMOVES ecosystem integration"
+      context: "PMOVES-crush/docker-compose.pmoves.yml + env.shared"
+      agent_hint: codex
+      children:
+        - id: crush.pmoves.compose
+          task: "PMOVES compose overlay exists"
+          action:
+            type: file_exists
+            target: "PMOVES-crush/docker-compose.pmoves.yml"
+            expect: "Docker compose overlay with tier anchors"
+          context: "Tier-based env templates: api, agent, worker, data, llm, media"
+          agent_hint: codex
+
+        - id: crush.pmoves.env-shared
+          task: "env.shared template exists"
+          action:
+            type: file_exists
+            target: "PMOVES-crush/env.shared"
+            expect: "Base environment variables template"
+          context: "NATS_URL, TENSORZERO_URL, QDRANT_URL, etc."
+          agent_hint: codex
+
+        - id: crush.pmoves.data-dir
+          task: ".crush/ project-local data directory"
+          action:
+            type: manual
+            expect: ".crush/ directory used for project-local state (conversations, cache)"
+          context: "Equivalent to .claude/ for Claude Code"
+          agent_hint: codex
+
+    # =========================================================================
+    # Phase 9: Audit Rules
+    # =========================================================================
+    - id: crush.audit
+      task: "Crush CLI audit rules"
+      context: "Cross-cutting verification"
+      agent_hint: codex
+      children:
+        - id: crush.audit.dual-provider
+          task: "Dual provider model must be maintained"
+          action:
+            type: manual
+            expect: "Both ZAI (cloud/edge) and Ollama (local GPU) providers must be configured"
+          context: "ZAI for GLM coding plans + cloud fallback, Ollama for RTX 5090 local inference"
+          agent_hint: codex
+
+        - id: crush.audit.mcp-count
+          task: "MCP server inventory"
+          action:
+            type: script
+            command: |
+              python -c "
+              import os, json
+              data = json.load(open(os.path.expanduser('~/.config/crush/crush.json')))
+              mcps = data.get('mcp', {})
+              print(f'Total MCPs: {len(mcps)}')
+              for name, cfg in mcps.items():
+                  print(f'  {name}: type={cfg.get(\"type\")}, url={cfg.get(\"url\", cfg.get(\"command\", \"\"))[:50]}')
+              "
+            expect: "4 MCPs configured (zai-mcp-server, web-search-prime, web-reader, zread) + 2 GAPs (cipher-memory, agent-zero)"
+          context: "Future: 6 MCPs total after adding Cipher Memory + Agent Zero"
+          agent_hint: codex
+
+        - id: crush.audit.api-key-not-committed
+          task: "API keys must NOT be in committed files"
+          action:
+            type: grep
+            target: "PMOVES-crush/"
+            pattern: "api_key.*[a-zA-Z0-9]{20}"
+            invert: true
+            expect: "No hardcoded API keys in committed source files"
+          context: "Keys live in ~/.config/crush/crush.json (user home, not repo)"
+          agent_hint: codex
+
+        - id: crush.audit.inventory
+          task: "Crush configuration inventory"
+          action:
+            type: manual
+            expect: |
+              Providers: 2 (ZAI cloud, Ollama local)
+              Models: 2 tiers (large: qwen3.5:9b, small: qwen3:8b)
+              MCPs: 4 active + 2 planned (Cipher Memory, Agent Zero)
+              LSPs: 1 (gopls with full analysis)
+              Permissions: allowed_tools list
+              Attribution: co_authored_by + generated_with
+          context: "Complete Crush configuration state"
+          agent_hint: codex

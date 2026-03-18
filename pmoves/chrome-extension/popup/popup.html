@@ -19,44 +19,44 @@
   </header>
 
   <!-- Health Grid -->
-  <section class="health-grid" id="health-grid">
-    <div class="health-item" data-service="tensorzero">
-      <span class="health-dot unknown"></span>
+  <section class="health-grid" id="health-grid" aria-label="Service health status">
+    <div class="health-item" data-service="tensorzero" role="status" aria-label="TensorZero: checking">
+      <span class="health-dot unknown" aria-hidden="true"></span>
       <span class="health-label">TensorZero</span>
       <span class="health-latency"></span>
     </div>
-    <div class="health-item" data-service="gpuOrchestrator">
-      <span class="health-dot unknown"></span>
+    <div class="health-item" data-service="gpuOrchestrator" role="status" aria-label="GPU: checking">
+      <span class="health-dot unknown" aria-hidden="true"></span>
       <span class="health-label">GPU</span>
       <span class="health-latency"></span>
     </div>
-    <div class="health-item" data-service="hirag">
-      <span class="health-dot unknown"></span>
+    <div class="health-item" data-service="hirag" role="status" aria-label="Hi-RAG: checking">
+      <span class="health-dot unknown" aria-hidden="true"></span>
       <span class="health-label">Hi-RAG</span>
       <span class="health-latency"></span>
     </div>
-    <div class="health-item" data-service="pmovesYt">
-      <span class="health-dot unknown"></span>
+    <div class="health-item" data-service="pmovesYt" role="status" aria-label="YT: checking">
+      <span class="health-dot unknown" aria-hidden="true"></span>
       <span class="health-label">YT</span>
       <span class="health-latency"></span>
     </div>
-    <div class="health-item" data-service="agentZero">
-      <span class="health-dot unknown"></span>
+    <div class="health-item" data-service="agentZero" role="status" aria-label="Agent0: checking">
+      <span class="health-dot unknown" aria-hidden="true"></span>
       <span class="health-label">Agent0</span>
       <span class="health-latency"></span>
     </div>
-    <div class="health-item" data-service="fluteGateway">
-      <span class="health-dot unknown"></span>
+    <div class="health-item" data-service="fluteGateway" role="status" aria-label="Flute: checking">
+      <span class="health-dot unknown" aria-hidden="true"></span>
       <span class="health-label">Flute</span>
       <span class="health-latency"></span>
     </div>
-    <div class="health-item" data-service="prometheus">
-      <span class="health-dot unknown"></span>
+    <div class="health-item" data-service="prometheus" role="status" aria-label="Mesh: checking">
+      <span class="health-dot unknown" aria-hidden="true"></span>
       <span class="health-label">Mesh</span>
       <span class="health-latency"></span>
     </div>
-    <div class="health-item" data-service="gateway">
-      <span class="health-dot unknown"></span>
+    <div class="health-item" data-service="gateway" role="status" aria-label="CHIT: checking">
+      <span class="health-dot unknown" aria-hidden="true"></span>
       <span class="health-label">CHIT</span>
       <span class="health-latency"></span>
     </div>
@@ -66,12 +66,14 @@
   <section class="gpu-panel" id="gpu-panel">
     <h3>GPU Status</h3>
     <div class="gpu-stats">
-      <div class="gpu-stat">
-        <span class="gpu-stat-label">VRAM</span>
+      <div class="gpu-stat" role="group" aria-labelledby="gpu-vram-label">
+        <span class="gpu-stat-label" id="gpu-vram-label">VRAM</span>
         <div class="gpu-bar-container">
-          <div class="gpu-bar" id="gpu-vram-bar" style="width:0%"></div>
+          <div class="gpu-bar" id="gpu-vram-bar" style="width:0%"
+               role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"
+               aria-label="VRAM usage"></div>
         </div>
-        <span class="gpu-stat-value" id="gpu-vram-text">--</span>
+        <span class="gpu-stat-value" id="gpu-vram-text" aria-live="polite">--</span>
       </div>
       <div class="gpu-stat-row">
         <span>Temp: <strong id="gpu-temp">--</strong></span>
@@ -86,19 +88,23 @@
   <section class="quick-actions">
     <h3>Quick Actions</h3>
     <div class="action-row">
-      <input type="text" id="ingest-url" placeholder="YouTube URL to ingest...">
+      <label for="ingest-url" class="sr-only">YouTube URL to ingest</label>
+      <input type="text" id="ingest-url" placeholder="YouTube URL to ingest..." aria-label="YouTube URL to ingest">
       <button id="ingest-btn" class="action-btn">Ingest</button>
     </div>
     <div class="action-row">
-      <input type="text" id="rag-query" placeholder="Search knowledge base...">
+      <label for="rag-query" class="sr-only">Search knowledge base</label>
+      <input type="text" id="rag-query" placeholder="Search knowledge base..." aria-label="Search knowledge base">
       <button id="rag-btn" class="action-btn">Search</button>
     </div>
     <div class="action-row">
-      <input type="text" id="chat-input" placeholder="Ask AI (TensorZero)...">
+      <label for="chat-input" class="sr-only">Ask AI via TensorZero</label>
+      <input type="text" id="chat-input" placeholder="Ask AI (TensorZero)..." aria-label="Ask AI via TensorZero">
       <button id="chat-btn" class="action-btn">Ask</button>
     </div>
     <div class="action-row">
-      <input type="text" id="tts-input" placeholder="Text to speak (Flute)...">
+      <label for="tts-input" class="sr-only">Text to speak via Flute</label>
+      <input type="text" id="tts-input" placeholder="Text to speak (Flute)..." aria-label="Text to speak via Flute">
       <button id="tts-btn" class="action-btn">Speak</button>
     </div>
     <div id="action-result" class="action-result" style="display:none;"></div>
@@ -132,8 +138,8 @@
   <!-- Recent Activity -->
   <section class="recent-activity" id="recent-activity">
     <h3>Recent Activity</h3>
-    <div id="activity-list" class="activity-list">
-      <div class="activity-empty">No recent activity</div>
+    <div id="activity-list" class="activity-list" role="list" aria-live="polite">
+      <div class="activity-empty" role="listitem">No recent activity</div>
     </div>
   </section>
 
