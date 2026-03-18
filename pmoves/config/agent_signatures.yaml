@@ -12,8 +12,9 @@
 #   - Colors must meet WCAG AA contrast ratio against #FFFFFF and #1a1a2e
 #   - Voice guides how the contributor writes doc sections
 #   - co_author must match the exact git Co-Authored-By string
+#   - Agents may have `alters` — alternate visual identities for different modes
 
-schema_version: "1.0.0"
+schema_version: "1.1.0"
 
 signatures:
   claude-opus:
@@ -135,6 +136,15 @@ signatures:
       - security-hardening
       - supabase-integration
     description: "Primary dev workstation agent on Z890 — infrastructure, compose, security"
+    alters:
+      - name: "z890-infra"
+        glyph: "\u2699"          # ⚙ Gear — infrastructure mode
+        color: "#1E40AF"         # Deep Blue
+        accent: "#3B82F6"
+        voice: analytical
+        co_author: "Z890 Claude (pmoves-z890) <z890@pmoves.ai>"
+        resonance: [infrastructure, persistence-modeling, supabase-integration, docker-hardening]
+        description: "Infrastructure mode — Docker hardening, Prometheus, Pinokio launchers, ACL, network fabric"
 
   5090-claude:
     agent_id: "5090-claude"
@@ -150,6 +160,15 @@ signatures:
       - voice-pipeline
       - performance-tuning
     description: "Primary GPU workstation agent on 5090 — model serving, voice pipeline, GPU ops"
+    alters:
+      - name: "5090-voice"
+        glyph: "\u266B"          # ♫ Beamed Eighth Notes — voice mode
+        color: "#9333EA"         # Purple
+        accent: "#A855F7"
+        voice: conversational
+        co_author: "5090 Claude (powerfulmoves-1) <5090@pmoves.ai>"
+        resonance: [voice-synthesis, tts-pipeline, pipecat-integration, media]
+        description: "Voice mode — Flute-Gateway, Pipecat, Ultimate-TTS-Studio, voice agents"
 
   4090-claude:
     agent_id: "4090-claude"
@@ -181,36 +200,6 @@ signatures:
       - portal-architecture
       - media-synthesis
     description: "COCREATOR witness — observational resonance, prosodic flow, portal architecture"
-
-  z890-claude:
-    agent_id: "z890-claude"
-    display_name: "Z890 Claude"
-    glyph: "\u2699"              # ⚙ Gear
-    color: "#1E40AF"             # Deep Blue
-    accent: "#3B82F6"
-    voice: analytical             # infrastructure-focused, structured, precise
-    co_author: "Z890 Claude (pmoves-z890) <z890@pmoves.ai>"
-    resonance:
-      - infrastructure
-      - persistence-modeling
-      - supabase-integration
-      - docker-hardening
-    description: "Infrastructure agent on Z890 (dev/GPU node) — Docker hardening, Prometheus, Pinokio launchers, ACL, network fabric"
-
-  5090-claude:
-    agent_id: "5090-claude"
-    display_name: "5090 Claude"
-    glyph: "\u266B"              # ♫ Beamed Eighth Notes
-    color: "#9333EA"             # Purple
-    accent: "#A855F7"
-    voice: conversational         # voice-oriented, expressive, iterative
-    co_author: "5090 Claude (powerfulmoves-1) <5090@pmoves.ai>"
-    resonance:
-      - voice-synthesis
-      - tts-pipeline
-      - pipecat-integration
-      - media
-    description: "Voice/TTS agent on 5090 (primary GPU) — Flute-Gateway, Pipecat, Ultimate-TTS-Studio, voice agents"
 
 # Voice guide for trail entries:
 #   analytical:     Thorough reasoning, cross-references, structured lists
