@@ -27,7 +27,23 @@ from neo4j import GraphDatabase
 
 QDRANT_URL = os.environ.get("QDRANT_URL","http://qdrant:6333")
 QDRANT_COLLECTION = os.environ.get("QDRANT_COLLECTION","pmoves_chunks")
-SENTENCE_MODEL = os.environ.get("SENTENCE_MODEL","all-MiniLM-L6-v2")
+
+# ── Model resolution: registry → env var → hardcoded default ──
+def _resolve_hirag_model(model_type, env_var, default):
+    """Resolve model from model-registry, env var, or hardcoded default."""
+    env_val = os.environ.get(env_var)
+    if env_val:
+        return env_val
+    try:
+        from libs.model_registry_client import get_model_for_service
+        reg_val = get_model_for_service("hi-rag", model_type, timeout=3.0)
+        if reg_val:
+            return reg_val
+    except Exception:
+        pass  # registry unavailable — fall through to default
+    return default
+
+SENTENCE_MODEL = _resolve_hirag_model("embedding", "SENTENCE_MODEL", "all-MiniLM-L6-v2")
 USE_OLLAMA_EMBED = os.environ.get("USE_OLLAMA_EMBED","false").lower()=="true"
 _raw_ollama_url = os.environ.get("OLLAMA_URL","http://ollama:11434")
 if not urlparse(_raw_ollama_url).scheme in ("http", "https"):
@@ -53,7 +69,7 @@ NAMESPACE_DEFAULT = os.environ.get("INDEXER_NAMESPACE", "pmoves")
 
 # --- Optional Reranking (GPU preferred, CPU fallback) ---
 RERANK_ENABLE = os.environ.get("RERANK_ENABLE", "false").lower() == "true"
-RERANK_MODEL = os.environ.get("RERANK_MODEL", "BAAI/bge-reranker-base")
+RERANK_MODEL = _resolve_hirag_model("reranker", "RERANK_MODEL", "BAAI/bge-reranker-base")
 RERANK_TOPN = int(os.environ.get("RERANK_TOPN", "50"))
 RERANK_K = int(os.environ.get("RERANK_K", "10"))
 

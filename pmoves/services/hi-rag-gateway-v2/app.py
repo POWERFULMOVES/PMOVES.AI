@@ -24,7 +24,22 @@ import psycopg
 
 QDRANT_URL = os.environ.get("QDRANT_URL","http://qdrant:6333")
 COLL = os.environ.get("QDRANT_COLLECTION","pmoves_chunks")
-MODEL = os.environ.get("SENTENCE_MODEL","all-MiniLM-L6-v2")
+
+# ── Model resolution: registry → env var → hardcoded default ──
+def _resolve_model_v2(model_type, env_var, default):
+    env_val = os.environ.get(env_var)
+    if env_val:
+        return env_val
+    try:
+        from libs.model_registry_client import get_model_for_service
+        reg_val = get_model_for_service("hi-rag-v2", model_type, timeout=3.0)
+        if reg_val:
+            return reg_val
+    except Exception:
+        pass
+    return default
+
+MODEL = _resolve_model_v2("embedding", "SENTENCE_MODEL", "all-MiniLM-L6-v2")
 ALPHA = float(os.environ.get("ALPHA", "0.7"))
 
 # Collect rerank validation notes so startup logs and admin routes can expose them.
@@ -81,7 +96,7 @@ def _parse_optional_bool(name: str) -> Optional[bool]:
 
 RERANK_ENABLE = _parse_bool("RERANK_ENABLE", True)
 _default_rerank_model = "Qwen/Qwen3-Reranker-4B"
-RERANK_MODEL = (os.environ.get("RERANK_MODEL", _default_rerank_model) or _default_rerank_model).strip()
+RERANK_MODEL = (_resolve_model_v2("reranker", "RERANK_MODEL", _default_rerank_model) or _default_rerank_model).strip()
 # Optional local model snapshot path (bind-mounted inside the GPU container).
 _rerank_model_path_raw = (os.environ.get("RERANK_MODEL_PATH") or "").strip()
 if _rerank_model_path_raw:

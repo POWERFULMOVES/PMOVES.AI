@@ -52,7 +52,21 @@ except ImportError:
 # Environment configuration
 SUPABASE_URL = os.environ.get("SUPA_REST_URL", "http://localhost:54321")
 SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
-EMBEDDING_MODEL = os.environ.get("YOUTUBE_EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
+_yt_embed_default = "sentence-transformers/all-MiniLM-L6-v2"
+_yt_embed_env = os.environ.get("YOUTUBE_EMBEDDING_MODEL")
+if _yt_embed_env:
+    EMBEDDING_MODEL = _yt_embed_env
+else:
+    try:
+        import sys as _sys
+        from pathlib import Path as _Path
+        _root = _Path(__file__).resolve().parents[1]
+        if str(_root) not in _sys.path:
+            _sys.path.append(str(_root))
+        from libs.model_registry_client import get_model_for_service
+        EMBEDDING_MODEL = get_model_for_service("pmoves-yt", "embedding", timeout=3.0) or _yt_embed_default
+    except Exception:
+        EMBEDDING_MODEL = _yt_embed_default
 EMBEDDING_API_URL = os.environ.get("YOUTUBE_EMBEDDING_API_URL")
 
 

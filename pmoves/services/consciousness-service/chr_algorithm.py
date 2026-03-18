@@ -148,7 +148,20 @@ def _maybe_st_model():
     try:
         from sentence_transformers import SentenceTransformer  # type: ignore
 
-        _ST_MODEL = SentenceTransformer("all-MiniLM-L6-v2")
+        _chr_model_name = os.environ.get("SENTENCE_MODEL", "all-MiniLM-L6-v2")
+        try:
+            import sys as _sys
+            from pathlib import Path as _Path
+            _root = _Path(__file__).resolve().parents[2]
+            if str(_root) not in _sys.path:
+                _sys.path.append(str(_root))
+            from libs.model_registry_client import get_model_for_service
+            _reg = get_model_for_service("consciousness", "embedding", timeout=3.0)
+            if _reg:
+                _chr_model_name = _reg
+        except Exception:
+            pass
+        _ST_MODEL = SentenceTransformer(_chr_model_name)
         logger.info("Loaded and cached sentence-transformers model")
         return _ST_MODEL
     except Exception as e:
