@@ -1603,6 +1603,91 @@ def hirag_query(req: QueryReq = Body(...), request: Request = None, _=Depends(re
         "hits": base,
     }
 
+@app.post("/hirag/query/cross-dimensional")
+def hirag_cross_dimensional(body: Dict[str, Any] = Body(...), request: Request = None, _=Depends(require_tailscale)):
+    """Query both semantic and prosodic vector spaces, return divergence signal.
+
+    When QDRANT_USE_NAMED_VECTORS is enabled and the collection has a "prosodic"
+    named vector, this endpoint searches both spaces independently and computes
+    rank divergence — a measure of how differently the two embedding lenses
+    see the same content.
+
+    High divergence = content where meaning and sound disagree (interesting signal).
+    """
+    query = body.get("query", "")
+    k = int(body.get("k", 10))
+    namespace = body.get("namespace", "pmoves")
+    if not query:
+        raise HTTPException(400, "query is required")
+    if not USE_NAMED_VECTORS:
+        raise HTTPException(501, "Cross-dimensional query requires QDRANT_USE_NAMED_VECTORS=true")
+
+    # Embed in semantic space
+    semantic_vec = embed_query(query)
+    must = [FieldCondition(key="namespace", match=MatchValue(value=namespace))]
+    qfilter = Filter(must=must)
+
+    # Search semantic space
+    semantic_hits = _qdrant_search(
+        collection_name=COLL, query_vector=semantic_vec,
+        limit=k * 3, query_filter=qfilter,
+        with_payload=True, with_vectors=False,
+        vector_name=SEMANTIC_VECTOR_NAME,
+    )
+
+    # Try prosodic space (may not exist or have data)
+    prosodic_hits = []
+    has_prosodic = False
+    try:
+        prosodic_hits = _qdrant_search(
+            collection_name=COLL, query_vector=semantic_vec,
+            limit=k * 3, query_filter=qfilter,
+            with_payload=True, with_vectors=False,
+            vector_name="prosodic",
+        )
+        has_prosodic = True
+    except Exception:
+        pass  # prosodic vector may not exist in collection
+
+    # Compute rank divergence: Kendall tau-like distance between rankings
+    def _extract_ids(hits):
+        return [getattr(h, "id", None) or (h.payload or {}).get("chunk_id") for h in hits]
+
+    sem_ids = _extract_ids(semantic_hits)
+    pro_ids = _extract_ids(prosodic_hits) if has_prosodic else []
+
+    divergence = 0.0
+    if sem_ids and pro_ids:
+        # Jaccard distance of top-k sets
+        sem_set = set(sem_ids[:k])
+        pro_set = set(pro_ids[:k])
+        intersection = sem_set & pro_set
+        union = sem_set | pro_set
+        divergence = 1.0 - (len(intersection) / len(union)) if union else 0.0
+
+    # Format results
+    def _format_hits(hits, limit):
+        out = []
+        for h in hits[:limit]:
+            payload = h.payload or {}
+            out.append({
+                "chunk_id": payload.get("chunk_id") or h.id,
+                "text": payload.get("text", "")[:500],
+                "score": float(h.score),
+                "source": payload.get("source", ""),
+            })
+        return out
+
+    return {
+        "query": query,
+        "semantic_results": _format_hits(semantic_hits, k),
+        "prosodic_results": _format_hits(prosodic_hits, k) if has_prosodic else [],
+        "has_prosodic": has_prosodic,
+        "divergence": round(divergence, 4),
+        "k": k,
+    }
+
+
 @app.post("/hirag/admin/refresh")
 def hirag_admin_refresh(_=Depends(require_admin_tailscale)):
     refresh_warm_dictionary()
