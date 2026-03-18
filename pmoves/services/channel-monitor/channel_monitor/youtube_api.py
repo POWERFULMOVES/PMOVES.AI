@@ -59,8 +59,10 @@ def _parse_duration(duration: Optional[str]) -> Optional[float]:
         return None
 
 
+from google.oauth2.credentials import Credentials
+from googleapiclient.discovery import build
+
 class YouTubeAPIClient:
-    API_BASE = "https://www.googleapis.com/youtube/v3"
     TOKEN_URL = "https://oauth2.googleapis.com/token"
 
     def __init__(
@@ -83,6 +85,10 @@ class YouTubeAPIClient:
 
     async def aclose(self) -> None:
         await self._client.aclose()
+
+    def _get_service(self, access_token: str):
+        creds = Credentials(token=access_token)
+        return build("youtube", "v3", credentials=creds, cache_discovery=False)
 
     async def exchange_authorization_code(
         self,
@@ -135,6 +141,12 @@ class YouTubeAPIClient:
             token_type=data.get("token_type"),
         )
 
+    async def _execute_request(self, request: Any):
+        try:
+            return await asyncio.to_thread(request.execute)
+        except Exception as e:
+            raise YouTubeAPIError(str(e)) from e
+
     async def fetch_playlist_videos(
         self,
         access_token: str,
@@ -142,19 +154,19 @@ class YouTubeAPIClient:
         *,
         max_items: Optional[int] = None,
     ) -> List[Dict[str, Any]]:
+        service = await asyncio.to_thread(self._get_service, access_token)
         results: List[Dict[str, Any]] = []
         page_token: Optional[str] = None
         remaining = max_items or 50
         while remaining > 0:
             batch_size = min(remaining, 50)
-            params = {
-                "part": "snippet,contentDetails",
-                "playlistId": playlist_id,
-                "maxResults": batch_size,
-            }
-            if page_token:
-                params["pageToken"] = page_token
-            data = await self._get("playlistItems", params, access_token)
+            request = service.playlistItems().list(
+                part="snippet,contentDetails",
+                playlistId=playlist_id,
+                maxResults=batch_size,
+                pageToken=page_token
+            )
+            data = await self._execute_request(request)
             entries = data.get("items", [])
             if not entries:
                 break
@@ -164,7 +176,7 @@ class YouTubeAPIClient:
             page_token = data.get("nextPageToken")
             if not page_token:
                 break
-        return await self._hydrate_video_details(access_token, results)
+        return await self._hydrate_video_details(access_token, results, service=service)
 
     async def fetch_channel_recent_videos(
         self,
@@ -173,21 +185,21 @@ class YouTubeAPIClient:
         *,
         max_items: Optional[int] = None,
     ) -> List[Dict[str, Any]]:
+        service = await asyncio.to_thread(self._get_service, access_token)
         results: List[Dict[str, Any]] = []
         page_token: Optional[str] = None
         remaining = max_items or 50
         while remaining > 0:
             batch_size = min(remaining, 50)
-            params = {
-                "part": "snippet",
-                "channelId": channel_id,
-                "order": "date",
-                "type": "video",
-                "maxResults": batch_size,
-            }
-            if page_token:
-                params["pageToken"] = page_token
-            data = await self._get("search", params, access_token)
+            request = service.search().list(
+                part="snippet",
+                channelId=channel_id,
+                order="date",
+                type="video",
+                maxResults=batch_size,
+                pageToken=page_token
+            )
+            data = await self._execute_request(request)
             items = data.get("items", [])
             if not items:
                 break
@@ -197,17 +209,19 @@ class YouTubeAPIClient:
             page_token = data.get("nextPageToken")
             if not page_token:
                 break
-        return await self._hydrate_video_details(access_token, results)
+        return await self._hydrate_video_details(access_token, results, service=service)
 
     async def resolve_channel_handle(self, access_token: str, handle: str) -> Optional[str]:
+        service = await asyncio.to_thread(self._get_service, access_token)
         normalized = handle.lstrip("@")
+        
         # Attempt direct channel lookup using forHandle when supported
-        params = {
-            "part": "id",
-            "forHandle": normalized,
-        }
+        request = service.channels().list(
+            part="id",
+            forHandle=normalized
+        )
         try:
-            data = await self._get("channels", params, access_token)
+            data = await self._execute_request(request)
         except YouTubeAPIError:
             data = {}
         items = data.get("items") if isinstance(data, dict) else None
@@ -216,15 +230,16 @@ class YouTubeAPIClient:
             channel_id = first.get("id") if isinstance(first, dict) else None
             if channel_id:
                 return channel_id
+                
         # Fallback to search when direct lookup fails or unsupported
-        search_params = {
-            "part": "snippet",
-            "q": f"@{normalized}",
-            "type": "channel",
-            "maxResults": 5,
-        }
+        search_req = service.search().list(
+            part="snippet",
+            q=f"@{normalized}",
+            type="channel",
+            maxResults=5
+        )
         try:
-            search = await self._get("search", search_params, access_token)
+            search = await self._execute_request(search_req)
         except YouTubeAPIError:
             return None
         for item in search.get("items", []):
@@ -241,7 +256,11 @@ class YouTubeAPIClient:
         self,
         access_token: str,
         videos: List[Dict[str, Any]],
+        *,
+        service=None,
     ) -> List[Dict[str, Any]]:
+        if service is None:
+            service = await asyncio.to_thread(self._get_service, access_token)
         enriched: List[Dict[str, Any]] = []
         for i in range(0, len(videos), 50):
             batch = videos[i : i + 50]
@@ -249,11 +268,11 @@ class YouTubeAPIClient:
             if not ids:
                 enriched.extend(batch)
                 continue
-            params = {
-                "part": "snippet,contentDetails,statistics",
-                "id": ids,
-            }
-            details = await self._get("videos", params, access_token)
+            request = service.videos().list(
+                part="snippet,contentDetails,statistics",
+                id=ids
+            )
+            details = await self._execute_request(request)
             detail_map = {
                 item.get("id"): item for item in details.get("items", []) if item.get("id")
             }
@@ -264,16 +283,6 @@ class YouTubeAPIClient:
                 else:
                     enriched.append(video)
         return enriched
-
-    async def _get(self, path: str, params: Dict[str, Any], access_token: str) -> Dict[str, Any]:
-        headers = {"Authorization": f"Bearer {access_token}"}
-        url = f"{self.API_BASE}/{path}"
-        async with self._client_lock:
-            response = await self._client.get(url, params=params, headers=headers)
-        data = response.json()
-        if response.status_code >= 400 or "error" in data:
-            raise YouTubeAPIError(str(data))
-        return data
 
     @staticmethod
     def _map_playlist_items(items: Iterable[Dict[str, Any]]) -> List[Dict[str, Any]]:
