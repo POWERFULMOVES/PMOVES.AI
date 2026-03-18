@@ -10,6 +10,7 @@ export const DEFAULT_SERVICES = {
   fluteGateway:    'http://localhost:8055',
   prometheus:      'http://localhost:9090',
   gateway:         'http://localhost:8085',
+  n8n:             'http://localhost:5678',
 };
 
 export const DEFAULT_CONFIG = {
@@ -36,6 +37,7 @@ export const HEALTH_ENDPOINTS = {
   fluteGateway:    { path: '/healthz',       method: 'GET' },
   prometheus:      { path: '/-/healthy',     method: 'GET' },
   gateway:         { path: '/',              method: 'GET' },
+  n8n:             { path: '/healthz',       method: 'GET' },
 };
 
 // Badge colors for health status
