@@ -251,7 +251,11 @@ SUPABASE_DB_HELPER ?= scripts/supabase/find_db_container.sh
 up-supabase: ## Start Supabase using selected runtime (SUPABASE_RUNTIME=cli|kong|compose)
 	@$(MAKE) --no-print-directory supa-start
 
-.PHONY: supa-init supa-start supa-stop supa-stop-all supa-status supa-runtime-env supa-logs supa-health supa-restart supa-migrate supa-use-local supa-use-remote supa-env-doctor supa-env-doctor-strict supa-runtime-guard supa-runtime-reconcile supa-collation-refresh supa-collation-check
+.PHONY: supa-init supa-start supa-stop supa-stop-all supa-status supa-runtime-env supa-logs supa-health supa-restart supa-migrate supa-use-local supa-use-remote supa-env-doctor supa-env-doctor-strict supa-runtime-guard supa-runtime-reconcile supa-collation-refresh supa-collation-check supa-jwt-check supa-jwt-refresh
+supa-jwt-check: ## Check if boot JWT is expired
+	@bash scripts/supabase/refresh-boot-jwt.sh --check
+supa-jwt-refresh: ## Refresh expired boot JWT (generates new 1-year token)
+	@bash scripts/supabase/refresh-boot-jwt.sh --apply
 supa-init: check-tools ## Initialize supabase/config.toml (one-time) and enforce PMOVES CLI defaults
 	@if [ ! -f "$(SUPABASE_CONFIG)" ]; then \
 		echo "🗂️ Initializing Supabase project in . ..."; \
@@ -1432,7 +1436,7 @@ up-legacy-both: ## Ensure v1 hi-rag gateway CPU+GPU are up
 	@echo "✔ hi-rag-gateway v1: CPU(:8089) + GPU(:8090 if GPUs present)."
 
 .PHONY: up down clean smoke smoke-prod smoke-gpu smoke-qwen-rerank llama-throughput-smoke manifest-audit
-.PHONY: up down clean up-workers up-yt channel-monitor-up channel-monitor-smoke up-media up-jellyfin up-nats ps supabase-up supabase-stop supabase-clean supa-extract-remote env-setup env-check
+.PHONY: up down clean up-workers up-yt channel-monitor-up channel-monitor-smoke up-media up-jellyfin up-nats ps supabase-up supabase-stop supabase-clean supa-extract-remote env-setup env-check up-jellyfin-ai-nvenc down-jellyfin-ai-nvenc up-rustdesk down-rustdesk
 .PHONY: up down clean up-cloudflare down-cloudflare logs-cloudflare cloudflare-url restart-cloudflare up-workers up-yt up-media up-jellyfin up-nats ps supabase-up supabase-stop supabase-clean supa-extract-remote env-setup env-check manifest-audit
 .PHONY: discord-ping discord-ping-ps demo-content-published health-publisher-discord up-agents health-agent-zero health-jellyfin-bridge seed-approval seed-approval-ps m2-preflight evidence-stamp evidence-stamp-ps evidence-log evidence-log-ps m2-seed-demo n8n-webhook-demo
 .PHONY: notebook-up notebook-down notebook-logs notebook-seed-models
@@ -2661,6 +2665,41 @@ up-jellyfin-ai: ensure-env-shared ## Start Jellyfin AI overlay (Jellyfin + Neo4j
 down-jellyfin-ai: ## Stop Jellyfin AI overlay
 	@$(JELLYFIN_AI_DC) --profile jellyfin-ai down
 	@echo "✔ Jellyfin AI overlay down"
+
+.PHONY: up-jellyfin-ai-nvenc
+up-jellyfin-ai-nvenc: ensure-env-shared ## Start Jellyfin AI with NVENC hardware transcoding (RTX 4090)
+	@echo "→ Starting Jellyfin AI overlay with NVENC..."
+	@docker network create pmoves-net >/dev/null 2>&1 || true
+	@docker network create pmoves_api >/dev/null 2>&1 || true
+	@docker network create pmoves_app >/dev/null 2>&1 || true
+	@docker network create pmoves_data >/dev/null 2>&1 || true
+	@if [ ! -f "env.jellyfin-ai" ]; then \
+	  echo "  Creating env.jellyfin-ai from example..."; \
+	  cp env.jellyfin-ai.example env.jellyfin-ai; \
+	fi
+	@$(JELLYFIN_AI_DC) --profile jellyfin-ai-nvenc up -d jellyfin-nvenc jellyfin-neo4j jellyfin-qwen-audio jellyfin-audio-processor jellyfin-redis jellyfin-api-gateway jellyfin-dashboard
+	@echo "✔ Jellyfin AI NVENC up (Jellyfin: http://localhost:$${JELLYFIN_HTTP_PORT:-9096}, API: http://localhost:$${JELLYFIN_API_PORT:-8300})"
+
+.PHONY: down-jellyfin-ai-nvenc
+down-jellyfin-ai-nvenc: ## Stop Jellyfin AI NVENC overlay
+	@$(JELLYFIN_AI_DC) --profile jellyfin-ai-nvenc down
+	@echo "✔ Jellyfin AI NVENC overlay down"
+
+# -------- RustDesk Self-Hosted --------
+RUSTDESK_DC := $(DC) -p $(PROJECT)-rustdesk --project-directory $(CURDIR) $(COMPOSE_ENV_FILES) -f docker-compose.rustdesk.yml
+
+.PHONY: up-rustdesk
+up-rustdesk: ## Start self-hosted RustDesk (hbbs + hbbr)
+	@docker network create pmoves-net >/dev/null 2>&1 || true
+	@mkdir -p rustdesk-data
+	@$(RUSTDESK_DC) up -d
+	@echo "✔ RustDesk up (ID: localhost:21116, Relay: localhost:21117)"
+	@echo "  Export public key: cat rustdesk-data/id_ed25519.pub"
+
+.PHONY: down-rustdesk
+down-rustdesk: ## Stop RustDesk
+	@$(RUSTDESK_DC) down
+	@echo "✔ RustDesk down"
 
 .PHONY: jellyfin-stack-prod
 jellyfin-stack-prod: ensure-env-shared ## Start production Jellyfin stack (TensorZero + GPU Orchestrator + Jellyfin overlay + bridge)

@@ -189,6 +189,17 @@ pairings:
           skills: ["prosodic-analyze"]
           health: "http://localhost:7861/gradio_api/info"
         hooks:
+          on_complete: "skills.step.tts-synthesize.done.v1"
+          on_error: "skills.error.v1"
+      - skill: cast-to-device
+        input: audio_url
+        output: cast_result
+        agent: cast-tts-gateway
+        depends:
+          services: ["nats:4222"]
+          skills: ["tts-synthesize"]
+          health: "http://localhost:8060/healthz"
+        hooks:
           on_complete: "skills.pipeline.voice-synthesis.done.v1"
           on_error: "skills.error.v1"
     nats_subject: "skills.pipeline.voice-synthesis.v1"
@@ -356,10 +367,50 @@ skill_sources:
   pr-hedge-trim: "pmoves/tools/pr_hedge_trim.py"
   pr-learnings-encode: "pmoves/tools/chit_encode_hook.py"
   graphiti-trail-sync: "docs/AGENT_TRAIL.md"
+  gh-secrets-sync: ".github/workflows/sync-secrets-local.yml"
+  secrets-funnel: "pmoves/tools/secrets_sync.py"
+  deploy-services: "deploy/scripts/deploy-compose.sh"
   n8n-health-sync: "pmoves/integrations/health-wger/n8n/flows/"
   n8n-finance-sync: "pmoves/integrations/firefly-iii/n8n/flows/"
   health-weekly-cgp: "pmoves/integrations/health-wger/n8n/flows/health_weekly_to_cgp.json"
   finance-monthly-cgp: "pmoves/integrations/firefly-iii/n8n/flows/finance_monthly_to_cgp.json"
+
+  # Fleet Secrets Sync → Bootstrap → Deploy
+  fleet-secrets-bootstrap:
+    name: "Fleet Secrets Bootstrap"
+    description: "Sync CHIT secrets from GitHub to local host, run funnel, bootstrap services"
+    nats_subject: "skills.pipeline.fleet-secrets-bootstrap.v1"
+    chain:
+      - skill: gh-secrets-sync
+        output: cgp_bundle_path
+        agent: codex
+        depends:
+          services: []
+          health: null
+        hooks:
+          on_complete: "skills.step.gh-secrets-sync.done.v1"
+          on_error: "skills.error.v1"
+        notes: "gh workflow run sync-secrets-local.yml --ref feat/distributed-submodules -f output_format=cgp -f target_os=<os>"
+      - skill: secrets-funnel
+        input: cgp_bundle_path
+        output: env_populated
+        agent: codex
+        depends:
+          skills: ["gh-secrets-sync"]
+        hooks:
+          on_complete: "skills.step.secrets-funnel.done.v1"
+          on_error: "skills.error.v1"
+        notes: "make -C pmoves env-setup && make -C pmoves secrets-funnel"
+      - skill: deploy-services
+        input: env_populated
+        output: services_up
+        agent: codex
+        depends:
+          skills: ["secrets-funnel"]
+        hooks:
+          on_complete: "skills.step.deploy-services.done.v1"
+          on_error: "skills.error.v1"
+        notes: "make -C pmoves up-jellyfin-ai-nvenc (or profile-specific target)"
 
 # FlOO$ configuration
 floos:

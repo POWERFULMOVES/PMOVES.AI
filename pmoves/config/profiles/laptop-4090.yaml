@@ -17,6 +17,12 @@ hardware:
   tags: [laptop, cuda, mobile]
 compose_overrides:
   - docker-compose.gpu.yml
+  - docker-compose.laptop-4090.override.yml
+  - docker-compose.rustdesk.yml
+services:
+  jellyfin: jellyfin-ai-nvenc
+  rustdesk: true
+  tac_theme: transformers-1986
 model_bundles:
   - ollama-medium
   - whisper-large

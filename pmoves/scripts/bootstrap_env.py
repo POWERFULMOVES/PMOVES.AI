@@ -163,6 +163,41 @@ class EnvFile:
             else:
                 self.comments.append(line)
 
+    def _build_preserve_allowlist(self) -> set:
+        """Build allowlist of keys that may be preserved from the existing file.
+
+        Keys from env.shared.example and bootstrap/registry.json are allowed.
+        This prevents leaked host environment variables (Windows PATH, CUDA_PATH,
+        VSCODE_*, etc.) from surviving rewrites.
+        """
+        allowed: set = set()
+        pmoves_dir = self.path.parent
+
+        # Keys from template (env.shared.example)
+        template = pmoves_dir / (self.path.name + ".example")
+        if template.exists():
+            for line in template.read_text(encoding="utf-8").splitlines():
+                s = line.strip()
+                if s and not s.startswith("#") and "=" in s:
+                    allowed.add(s.split("=", 1)[0].strip())
+
+        # Keys from bootstrap registry
+        registry_path = pmoves_dir / "bootstrap" / "registry.json"
+        if registry_path.exists():
+            try:
+                data = json.loads(registry_path.read_text(encoding="utf-8"))
+                for svc in data.get("services", []):
+                    for var in svc.get("variables", []):
+                        if k := var.get("key"):
+                            allowed.add(k)
+            except (json.JSONDecodeError, KeyError):
+                pass
+
+        # Also allow all currently managed keys (from this run)
+        allowed.update(self.managed_order)
+
+        return allowed
+
     def get(self, key: str) -> Optional[str]:
         raw: Optional[str] = None
         if key in self.managed_values:
@@ -217,8 +252,14 @@ class EnvFile:
             lines.append(f"{key}={value}")
 
         preserved: List[str] = []
+        allowlist = self._build_preserve_allowlist()
         for key in self.original_order:
             if key not in self.managed_order:
+                # Only preserve keys that appear in the canonical allowlist.
+                # This prevents leaked host environment variables (e.g., Windows
+                # PATH, CUDA_PATH, VSCODE_*) from persisting across rewrites.
+                if allowlist and key not in allowlist:
+                    continue
                 preserved.append(f"{key}={self.original_values[key]}")
 
         if preserved or self.comments:

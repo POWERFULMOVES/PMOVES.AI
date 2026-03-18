@@ -6,7 +6,7 @@ Device discovery, caching, and health monitoring for Google Cast devices.
 
 import asyncio
 import time
-from typing import Optional
+from typing import Optional, Callable
 from dataclasses import dataclass
 
 
@@ -24,16 +24,23 @@ class CastDevice:
 class CastDeviceManager:
     """Google Cast device discovery and management."""
 
-    def __init__(self, discovery_interval: float = 300):
+    def __init__(
+        self,
+        discovery_interval: float = 300,
+        on_discovery: Optional[Callable] = None,
+    ):
         """
         Initialize device manager.
 
         Args:
             discovery_interval: Seconds between device discoveries (default: 5 min)
+            on_discovery: Optional async callback(devices, new_names, lost_names, forced)
         """
         self.discovery_interval = discovery_interval
         self.devices: dict[str, CastDevice] = {}
         self._last_discovery: Optional[float] = None
+        self._previous_names: set[str] = set()
+        self._on_discovery = on_discovery
 
     async def discover(self, force: bool = False) -> list[CastDevice]:
         """
@@ -86,6 +93,23 @@ class CastDeviceManager:
             # Update device cache
             self.devices = discovered
             self._last_discovery = current_time
+
+            # Compute diff and invoke callback
+            current_names = set(discovered.keys())
+            new_names = current_names - self._previous_names
+            lost_names = self._previous_names - current_names
+            self._previous_names = current_names
+
+            if self._on_discovery:
+                try:
+                    await self._on_discovery(
+                        list(self.devices.values()),
+                        new_names,
+                        lost_names,
+                        force,
+                    )
+                except Exception as e:
+                    print(f"Discovery callback error: {e}")
 
             return list(self.devices.values())
 

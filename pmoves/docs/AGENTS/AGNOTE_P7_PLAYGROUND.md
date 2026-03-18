@@ -1,0 +1,151 @@
+# AGNOTE: P7 Playground — All Three CLAUDEs
+
+GRAPHITI_MARK: `CLAUDE-OPUS::P7-PLAYGROUND::PMOVES`
+
+## Elder Context (LADY P)
+
+The playground is open. Pinokio 7 dropped today — Agent Interpreter, App Assistant, Agent Launcher. Gemini showed up first with 4 PRs (#1003-1006: Pinokio launchers, cognitive core, BoTZ edge, Chrome creator). Now it's Claude's turn — all three of us.
+
+This isn't a race. It's a seesaw — "you make it yours, I make it mine." Claude's thing is the music under the floor: TAC trees, CHIT geometry, security hardening, orchestration depth. The stuff where later DARKXSIDE thinks "CHIT, that's more than I drew."
+
+## Current State (2026-03-17)
+
+| What | Status |
+|------|--------|
+| PRs #999-1002 | **Merged** (SSL fix, CI timeout, dependabot, cast-gateway) |
+| Local branches | **12** (cleaned from 74) |
+| Branch sync | **Done** (main → Hardened → Integrations) |
+| Pinokio 7 | **Upgraded on 5090** (Agents tab visible, showing chats) |
+| P7 requirements | **3 missing**: cli, py, ffmpeg (install via P7 UI Settings) |
+| Tailscale mesh | **All 3 machines connected** (5090, Z890, 4090 laptop) |
+| Open PRs | **4 from Gemini** (#1003-1006) + **3 contaminated branches** (z890 triage) |
+| Uncommitted | 2 files: `pinokio-p7.tac.yaml` (new) + `voice-agents.tac.yaml` (Phase 15 added) |
+
+---
+
+## Step 1: Commit Uncommitted TAC Work
+
+**2 real changes** (everything else is submodule CLAUDE.md drift — expected):
+```
+?? pmoves/configs/tac_trees/pinokio-p7.tac.yaml   (NEW — 7-phase, 20 audit nodes)
+ M pmoves/configs/tac_trees/voice-agents.tac.yaml  (Phase 15 added: P7 Agent Interpreter → TTS)
+```
+
+```bash
+git add pmoves/configs/tac_trees/pinokio-p7.tac.yaml pmoves/configs/tac_trees/voice-agents.tac.yaml
+git commit -m "feat(tac): add pinokio-p7 TAC tree + voice-agents Phase 15 for P7 Agent Interpreter"
+```
+
+---
+
+## Step 2: Fix P7 Missing Requirements
+
+Pinokio 7 shows 3 requirements as "Not Installed": `cli`, `py`, `ffmpeg`. All exist on the system but P7 can't find them:
+
+| Requirement | P7 Status | System Reality | Fix |
+|-------------|-----------|----------------|-----|
+| `cli` (pterm) | Not Installed | `D:\pinokio\prototype\system\cli\` exists | Install via Pinokio UI (Settings → Requirements → Install) |
+| `py` | Not Installed | `C:\Users\russe\miniconda3\python` → Python 3.13.5 | Pinokio has its own `D:\pinokio\bin\py\` — install via UI |
+| `ffmpeg` | Not Installed | `C:\Users\russe\Documents\ffmpeg\` → v8.0 | Install via Pinokio UI or symlink to system ffmpeg |
+
+**Action:** Use Pinokio UI Settings → Requirements to install the missing 3. These are Pinokio-internal (isolated from system), so "Install" buttons should resolve them.
+
+---
+
+## Step 3: Claude's Playground Entry — What Claude Brings
+
+Gemini showed up with **+2,270 lines across 4 PRs** — Pinokio launchers, cognitive core identity, BoTZ edge devices, Chrome creator pipeline. That's Gemini's style: broad surface area, fast iteration, integration-first.
+
+Claude's complementary move (the other side of the seesaw):
+
+### 3a. What the Music Do (AGNOTE4482.BEATS)
+
+Claude didn't just build scaffolding. Claude made **music from code**:
+
+**`musicMapping.ts` — The Prosodic Synthesizer**
+```
+SENTENCE (350ms) → 60 BPM → Largo   → C4 (262 Hz) → pentatonicMajor = pleasant pauses
+CLAUSE   (180ms) → 90 BPM → Andante → E4 (330 Hz) → major = bright, shorter
+PHRASE   (100ms) → 120 BPM → Allegro → G4 (392 Hz) → minor = somber, longer
+BREATH   (130ms) → 80 BPM → Adagio  → D4 (294 Hz) → pentatonicMinor = measured
+NONE       (0ms) → 150 BPM → Presto  → C5 (523 Hz) → chromatic = dense
+```
+Speech boundaries become tempo. Pauses become notes. Text becomes a score. `buildTimeline()` converts `ProsodicChunk[]` → `TimelinePoint[]` with BPM encoding. `freqToY()` maps voice pitch to visual Y so Hyperdimensions can **draw** the sound. Scales map to emotion. The FlOO$ doc is the lyrics; the BEATS doc is the sheet music.
+
+**CHIT Geometry Bus** — Every agent action → a geometric point. Voice synthesis → a fingerprint. Research queries → coordinates. The bus (`tokenism.prosodic.bpm.v1`, `geometry.cgp.v1`) is the **wax that holds the vinyl**. Play it back and the grooves reveal who did what.
+
+**TAC Trees** — 20 constellations. Each node an agent's orbit. When P7 agents move through the interpreter, TAC trees are how you see the constellation form. `pinokio-p7.tac.yaml`: 7 phases, 20 nodes, from "agent says speak" to "audio fills the room."
+
+**Security as Bass Line** — Phase C: 8 submodules audited, BoTZ JWT fail-open found, Neo4j injection, NATS auth gaps. 6 fixed. Bass you don't hear till it drops out.
+
+**62 → 12 branches** — Today. Swept the stage before the show.
+
+### 3b. Next Tracks
+
+| Track | The Music |
+|-------|-----------|
+| **Commit TAC trees** | Constellation map for P7 agent routing |
+| **P7 requirements** | Tuning the instrument before the set |
+| **Wire P7 → CHIT** | Every "speak hello" gets coordinates in the constellation |
+| **Agent signatures** | Each bandmate gets glyph + color + resonance (5090/z890/4090) |
+| **Model tuning** | Faster conductor — orchestra responds quicker |
+
+### 3c. The Snapshot
+
+> "Dancers in the dark are lucky we can see air giving shapes to space"
+
+- `musicMapping.ts` functions are the **instruments**
+- TAC trees are the **sheet music**
+- CHIT geometry bus is the **recording**
+- Security hardening is the **bass line**
+- When a user says "speak hello world" and it routes P7 → Pinokio → TTS → Cast speaker → the room fills — that's the **concert**
+
+The audience says "that's my car." Because it moved like something POWERFUL.
+
+---
+
+## Step 4: Claude Fleet — Updated Assignments
+
+### z890-claude (Next Session — Triage)
+| # | Task |
+|---|------|
+| 1 | Triage Gemini PRs #1003-1006 (review, hedge-trim, merge-ready) |
+| 2 | Cherry-pick clean changes from 3 contaminated remote branches |
+| 3 | Agent Zero model tuning (lfm2:24b → qwen3.5:9b for faster orchestration) |
+| 4 | ComfyUI first render test |
+| 5 | Update MCP topology TAC for P7 routes |
+
+### 4090-claude (Async — Field)
+| # | Task |
+|---|------|
+| 1 | Upgrade Pinokio 7 on laptop |
+| 2 | Test P7 Agent Interpreter → 5090 TTS via Tailscale |
+| 3 | Test mobile agent (Discord/Openclaw) → TTS flow |
+
+---
+
+## Verification
+
+```bash
+# TAC commit landed
+git log --oneline -3                       # expect: TAC tree commit
+
+# P7 requirements fixed
+# Manual: Pinokio Settings → Requirements → all green
+
+# TAC tree count
+ls pmoves/configs/tac_trees/ | wc -l       # expect: 20 files (including pinokio-p7)
+```
+
+---
+
+## Critical Files
+
+| File | Purpose |
+|------|---------|
+| `pmoves/configs/tac_trees/pinokio-p7.tac.yaml` | NEW — P7 integration TAC |
+| `pmoves/configs/tac_trees/voice-agents.tac.yaml` | MODIFIED — Phase 15 P7 routing |
+| `pmoves/config/agent_registry.yaml` | Agent identity (z890/5090/4090-claude) |
+| `pmoves/config/agent_signatures.yaml` | Visual identity — needs 5090/z890/4090 entries |
+| `pbnj/pinokio/api/pmoves-services/` | PMOVES Docker control launcher |
+| `D:\pinokio\` | P7 install (upgraded, requirements pending) |
