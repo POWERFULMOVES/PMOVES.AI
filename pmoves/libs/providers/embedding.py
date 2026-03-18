@@ -1,26 +1,61 @@
-import os, requests
-from typing import List
+import os, logging, requests
+from typing import List, Optional
+
+logger = logging.getLogger(__name__)
+
+# ── Model Registry integration ──
+# Priority: model-registry → env var → hardcoded default
+# Registry query is cached (5 min TTL) and fails open.
+def _resolve_model(service: str, model_type: str, env_var: str, default: str) -> str:
+    """Resolve model ID: registry → env var → hardcoded default."""
+    # 1. Explicit env var override always wins
+    env_val = os.environ.get(env_var)
+    if env_val:
+        return env_val
+    # 2. Try model-registry (graceful failure)
+    try:
+        from pmoves.libs.model_registry_client import get_model_for_service
+        registry_val = get_model_for_service(service, model_type, timeout=3.0)
+        if registry_val:
+            return registry_val
+    except Exception as e:
+        logger.debug("model-registry unavailable, using default: %s", e)
+    # 3. Hardcoded default
+    return default
 
 # Priority (local-first): ollama -> openai-compatible (LM Studio, vLLM, NVIDIA NIM) -> HuggingFace -> sentence-transformers
 
 TENSORZERO_BASE = os.environ.get("TENSORZERO_BASE_URL", "")
 TENSORZERO_API_KEY = os.environ.get("TENSORZERO_API_KEY", "")
-TENSORZERO_EMBED_MODEL = os.environ.get(
+TENSORZERO_EMBED_MODEL = _resolve_model(
+    "embedding-provider", "embedding",
     "TENSORZERO_EMBED_MODEL",
     "tensorzero::embedding_model_name::gemma_embed_local",
 )
 
 OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://pmoves-ollama:11434")
-OLLAMA_EMBED_MODEL = os.environ.get("OLLAMA_EMBED_MODEL", "embeddinggemma:300m")
+OLLAMA_EMBED_MODEL = _resolve_model(
+    "embedding-provider", "embedding",
+    "OLLAMA_EMBED_MODEL", "embeddinggemma:300m",
+)
 
 OA_BASE = os.environ.get("OPENAI_COMPAT_BASE_URL")  # e.g., http://localhost:1234/v1 for LM Studio; http://vllm:8000/v1
 OA_KEY = os.environ.get("OPENAI_COMPAT_API_KEY", "")
-OA_EMBED_MODEL = os.environ.get("OPENAI_COMPAT_EMBED_MODEL", "text-embedding-3-small")
+OA_EMBED_MODEL = _resolve_model(
+    "embedding-provider", "embedding",
+    "OPENAI_COMPAT_EMBED_MODEL", "text-embedding-3-small",
+)
 
 HF_API_KEY = os.environ.get("HF_API_KEY", "")
-HF_EMBED_MODEL = os.environ.get("HF_EMBED_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
+HF_EMBED_MODEL = _resolve_model(
+    "embedding-provider", "embedding",
+    "HF_EMBED_MODEL", "sentence-transformers/all-MiniLM-L6-v2",
+)
 
-ST_MODEL = os.environ.get("SENTENCE_MODEL", "all-MiniLM-L6-v2")
+ST_MODEL = _resolve_model(
+    "embedding-provider", "embedding",
+    "SENTENCE_MODEL", "all-MiniLM-L6-v2",
+)
 
 _st_model = None
 

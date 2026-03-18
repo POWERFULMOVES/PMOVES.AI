@@ -18,7 +18,27 @@ embeddings_processed_total = Counter('extract_worker_embeddings_processed_total'
 
 QDRANT_URL = os.environ.get("QDRANT_URL","http://qdrant:6333")
 COLL = os.environ.get("QDRANT_COLLECTION","pmoves_chunks_qwen3")
-MODEL = os.environ.get("SENTENCE_MODEL","all-MiniLM-L6-v2")
+
+# ── Model resolution: registry → env var → hardcoded default ──
+def _resolve_worker_model(model_type, env_var, default):
+    env_val = os.environ.get(env_var)
+    if env_val:
+        return env_val
+    try:
+        import sys
+        from pathlib import Path
+        _root = Path(__file__).resolve().parents[2]
+        if str(_root) not in sys.path:
+            sys.path.append(str(_root))
+        from libs.model_registry_client import get_model_for_service
+        reg_val = get_model_for_service("extract-worker", model_type, timeout=3.0)
+        if reg_val:
+            return reg_val
+    except Exception:
+        pass
+    return default
+
+MODEL = _resolve_worker_model("embedding", "SENTENCE_MODEL", "all-MiniLM-L6-v2")
 MEILI_URL = os.environ.get("MEILI_URL","http://meilisearch:7700")
 MEILI_API_KEY = os.environ.get("MEILI_API_KEY","")
 SUPA = os.environ.get("SUPA_REST_URL","http://postgrest:3000")
