@@ -339,6 +339,132 @@ pairings:
           on_error: "skills.error.v1"
     nats_subject: "skills.pipeline.finance-sync.v1"
 
+  # Podcast Production Pipeline
+  # Story → Script → TTS → Audio Mix → RSS Feed
+  podcast-production:
+    name: "Podcast Production"
+    description: >
+      Generate podcast episodes from architecture stories, research results,
+      or topic prompts. Script → prosodic TTS → audio mix → RSS feed publish.
+      Many stories within the architecture — make concepts appealing through design.
+    chain:
+      - skill: text-generate
+        output: episode_script
+        agent: agent-zero
+        depends:
+          services: ["nats:4222", "tensorzero:3030"]
+          health: "http://localhost:8080/healthz"
+        hooks:
+          on_complete: "skills.step.podcast-script.done.v1"
+          on_error: "skills.error.v1"
+      - skill: prosodic-analyze
+        input: episode_script
+        output: prosodic_markers
+        agent: flute-gateway
+        depends:
+          services: ["nats:4222"]
+          skills: ["text-generate"]
+          health: "http://localhost:8055/healthz"
+        hooks:
+          on_complete: "skills.step.podcast-prosodic.done.v1"
+          on_error: "skills.error.v1"
+      - skill: tts-synthesize
+        input: prosodic_markers
+        output: audio_url
+        agent: ultimate-tts
+        depends:
+          services: ["nats:4222"]
+          skills: ["prosodic-analyze"]
+          health: "http://localhost:7861/gradio_api/info"
+        hooks:
+          on_complete: "skills.step.podcast-audio.done.v1"
+          on_error: "skills.error.v1"
+      - skill: podcast-publish
+        input: [episode_script, audio_url]
+        output: rss_entry
+        agent: podcast-producer
+        depends:
+          services: ["nats:4222"]
+          skills: ["tts-synthesize"]
+        hooks:
+          on_complete: "skills.pipeline.podcast-production.done.v1"
+          on_error: "skills.error.v1"
+    nats_subject: "skills.pipeline.podcast-production.v1"
+
+  # YouTube Storytelling Pipeline
+  # Research → Script → Remotion Video → Thumbnail → Upload
+  youtube-storytelling:
+    name: "YouTube Architecture Storytelling"
+    description: >
+      Transform architecture concepts into YouTube videos. Research the topic,
+      generate a visual script, render via Remotion, create thumbnail via ComfyUI,
+      upload with metadata. The architecture has many stories — this pipeline
+      makes them concrete and appealing.
+    chain:
+      - skill: deepresearch
+        output: research_results
+        agent: deepresearch
+        depends:
+          services: ["nats:4222"]
+          health: "http://localhost:8098/healthz"
+        hooks:
+          on_complete: "research.deepresearch.result.v1"
+          on_error: "skills.error.v1"
+      - skill: text-generate
+        input: research_results
+        output: video_script
+        agent: agent-zero
+        depends:
+          services: ["nats:4222", "tensorzero:3030"]
+          skills: ["deepresearch"]
+          health: "http://localhost:8080/healthz"
+        hooks:
+          on_complete: "skills.step.yt-script.done.v1"
+          on_error: "skills.error.v1"
+      - skill: a2ui-chart
+        input: video_script
+        output: a2ui_spec
+        agent: archon
+        depends:
+          services: ["nats:4222"]
+          skills: ["text-generate"]
+          health: "http://localhost:8091/healthz"
+        hooks:
+          on_complete: "skills.step.yt-a2ui.done.v1"
+          on_error: "skills.error.v1"
+      - skill: remotion-render
+        input: a2ui_spec
+        output: video_url
+        agent: creator
+        depends:
+          services: ["nats:4222"]
+          skills: ["a2ui-chart"]
+        hooks:
+          on_complete: "skills.step.yt-render.done.v1"
+          on_error: "skills.error.v1"
+      - skill: comfyui-generate
+        input: video_script
+        output: thumbnail_url
+        agent: creator
+        depends:
+          services: ["nats:4222"]
+          skills: ["text-generate"]
+        hooks:
+          on_complete: "skills.step.yt-thumbnail.done.v1"
+          on_error: "skills.error.v1"
+      - skill: youtube-upload
+        input: [video_url, thumbnail_url, video_script]
+        output: youtube_video_id
+        agent: youtube-publisher
+        depends:
+          services: ["nats:4222"]
+          skills: ["remotion-render", "comfyui-generate"]
+        hooks:
+          on_complete: "skills.pipeline.youtube-storytelling.done.v1"
+          on_error: "skills.error.v1"
+    ultrathink: true
+    nats_subject: "skills.pipeline.youtube-storytelling.v1"
+
 # Handoff protocol configuration
 handoff:
   # How agents pass work between each other
@@ -370,6 +496,8 @@ skill_sources:
   gh-secrets-sync: ".github/workflows/sync-secrets-local.yml"
   secrets-funnel: "pmoves/tools/secrets_sync.py"
   deploy-services: "deploy/scripts/deploy-compose.sh"
+  podcast-publish: "pmoves/skills/podcast-publish/"
+  youtube-upload: "pmoves/skills/youtube-upload/"
   n8n-health-sync: "pmoves/integrations/health-wger/n8n/flows/"
   n8n-finance-sync: "pmoves/integrations/firefly-iii/n8n/flows/"
   health-weekly-cgp: "pmoves/integrations/health-wger/n8n/flows/health_weekly_to_cgp.json"

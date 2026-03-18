@@ -57,6 +57,9 @@ teams:
       - creator           # ComfyUI render pipeline
       - transcribe_and_fetch  # Standalone transcription
       - cast_tts_gateway  # Port 8060 — Chromecast/Google Home TTS casting
+      - remotion_renderer # Port 8105 — A2UI Remotion video rendering
+      - podcast_producer  # Podcast RSS feed generation + multi-episode TTS
+      - youtube_publisher # YouTube upload + metadata + thumbnail generation
 
   data:
     name: "Data & Storage"
