@@ -4,36 +4,31 @@ import asyncio
 import logging
 from typing import Dict, Any
 
-from google import genai
-from google.genai import types
+import requests
 
 logger = logging.getLogger(__name__)
 
 class GeminiEvoSwarmEvaluator:
     """
     Integrates Gemini 1.5 Pro as the "EvoSwarm" fitness evaluator for economic simulations.
+    Routes through TensorZero gateway for centralized observability.
     Analyzes the geometric distribution on the Poincare disk (Dirichlet weights, Gini coefficient)
     and suggests optimization parameters.
     """
     def __init__(self, nc, config: Dict[str, Any]):
         self.nc = nc
         self.config = config
-        self.api_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
+        self.tensorzero_url = os.environ.get("TENSORZERO_URL", "http://localhost:3030")
         self.model = os.environ.get("GEMINI_MODEL", "gemini-1.5-pro")
-        
-        if not self.api_key:
-            logger.warning("GEMINI_API_KEY not set. GeminiEvoSwarmEvaluator will not function.")
-            self.client = None
-        else:
-            self.client = genai.Client(api_key=self.key)
+        self.enabled = True
 
     async def start(self):
-        if not self.client:
+        if not self.enabled:
             return
         
         # Subscribe to the weekly CGP geometry payload
-        await self.nc.subscribe("tokenism.cgp.weekly.v1", cb=self.handle_weekly_cgp)
-        logger.info(f"GeminiEvoSwarmEvaluator subscribed to tokenism.cgp.weekly.v1 using {self.model}")
+        await self.nc.subscribe("tokenism.cgp.ready.v1", cb=self.handle_weekly_cgp)
+        logger.info(f"GeminiEvoSwarmEvaluator subscribed to tokenism.cgp.ready.v1 using {self.model}")
 
     async def handle_weekly_cgp(self, msg):
         try:
@@ -64,18 +59,23 @@ class GeminiEvoSwarmEvaluator:
             f"Payload:\n{json.dumps(payload, indent=2)}\n\n"
             "Return a JSON object containing the suggested 'alpha_i' float, 'halfLife' float, and a 'reasoning' string."
         )
-        
-        response = self.client.models.generate_content(
-            model=self.model,
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                response_mime_type="application/json",
-                temperature=0.2
-            )
-        )
-        
+
+        body = {
+            "model": self.model,
+            "response_format": {"type": "json_object"},
+            "messages": [
+                {"role": "user", "content": prompt}
+            ],
+        }
         try:
-            return json.loads(response.text)
-        except json.JSONDecodeError:
-            logger.error("Failed to parse Gemini JSON response.")
-            return {"error": "Invalid response from Gemini", "alpha_i": 1.0, "halfLife": 1.0, "reasoning": "Fallback"}
+            r = requests.post(
+                f"{self.tensorzero_url.rstrip('/')}/openai/v1/chat/completions",
+                json=body,
+                timeout=120,
+            )
+            r.raise_for_status()
+            content = r.json()["choices"][0]["message"]["content"]
+            return json.loads(content)
+        except (requests.exceptions.RequestException, json.JSONDecodeError, KeyError) as e:
+            logger.error("Failed to evaluate CGP via TensorZero: %s", e)
+            return {"error": str(e), "alpha_i": 1.0, "halfLife": 1.0, "reasoning": "Fallback"}

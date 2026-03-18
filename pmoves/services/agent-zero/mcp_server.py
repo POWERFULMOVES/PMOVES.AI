@@ -537,8 +537,10 @@ def a2a_strategic_handoff(payload: Dict[str, Any]) -> Dict[str, Any]:
         except json.JSONDecodeError:
             plan = {"raw_text": content}
         return {"ok": True, "plan": plan}
-    except Exception as e:
-        return {"ok": False, "error": str(e)}
+    except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
+        return {"ok": False, "error": f"TensorZero connection failed: {e}"}
+    except (json.JSONDecodeError, KeyError, ValueError) as e:
+        return {"ok": False, "error": f"Response parsing failed: {e}"}
 
 COMMAND_REGISTRY: Dict[str, str] = {
     "geometry.publish_cgp": "Publish a constellation graph program to the geometry gateway",

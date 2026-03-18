@@ -22,7 +22,7 @@ prometheus-client>=0.19.0
 structlog>=24.1.0
 
 # LLM Core
-google-genai>=0.1.0
+google-genai>=1.0.0,<2.0.0
 
 # Database (Supabase/Postgres)
 asyncpg>=0.29.0

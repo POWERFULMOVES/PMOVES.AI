@@ -80,8 +80,8 @@ class GeminiProvider(BaseProvider):
             from google.genai import types
             self.genai = genai
             self.types = types
-        except ImportError:
-            raise RuntimeError("google-genai SDK not installed. Please run `pip install google-genai`.")
+        except ImportError as e:
+            raise ImportError("google-genai SDK not installed. Please run `pip install google-genai`.") from e
         
         self.client = self.genai.Client(api_key=self.key)
 

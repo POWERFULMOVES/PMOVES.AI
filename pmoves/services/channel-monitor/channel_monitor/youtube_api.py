@@ -176,7 +176,7 @@ class YouTubeAPIClient:
             page_token = data.get("nextPageToken")
             if not page_token:
                 break
-        return await self._hydrate_video_details(access_token, results)
+        return await self._hydrate_video_details(access_token, results, service=service)
 
     async def fetch_channel_recent_videos(
         self,
@@ -209,7 +209,7 @@ class YouTubeAPIClient:
             page_token = data.get("nextPageToken")
             if not page_token:
                 break
-        return await self._hydrate_video_details(access_token, results)
+        return await self._hydrate_video_details(access_token, results, service=service)
 
     async def resolve_channel_handle(self, access_token: str, handle: str) -> Optional[str]:
         service = await asyncio.to_thread(self._get_service, access_token)
@@ -256,8 +256,11 @@ class YouTubeAPIClient:
         self,
         access_token: str,
         videos: List[Dict[str, Any]],
+        *,
+        service=None,
     ) -> List[Dict[str, Any]]:
-        service = await asyncio.to_thread(self._get_service, access_token)
+        if service is None:
+            service = await asyncio.to_thread(self._get_service, access_token)
         enriched: List[Dict[str, Any]] = []
         for i in range(0, len(videos), 50):
             batch = videos[i : i + 50]

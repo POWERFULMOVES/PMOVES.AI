@@ -4,4 +4,4 @@
 # to avoid hash verification conflicts
 
 # Gemini Omni Integration
-google-genai>=0.1.0
+google-genai>=1.0.0,<2.0.0
