@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 """
-PMOVES E2B DANGER ROOM & X-MEN PERSONA MAPPING
-----------------------------------------------
-This script demonstrates the multimodal interaction for the Genie LTX Desktop when
-the PMOVES E2B Danger Room (Firecracker VMs) initializes.
+PMOVES E2B DANGER ROOM, X-MEN PERSONA MAPPING & HYPERDIMENSIONS
+---------------------------------------------------------------
+This script demonstrates the multimodal interaction bridging the PMOVES E2B
+Danger Room (Firecracker VMs) to the Hyperdimensions Geometry visualizer.
 
-It natively routes the X-Men Theme through the Flute Gateway, syncs the visual BPM,
-and projects match percentages between PMOVES Agents and X-Men Personas to the desktop.
+It dynamically maps PMOVES Agents to X-Men Personas based on skill profiles
+and generates a 'geometry.visualization.request.v1' (CGP) packet for
+Pmoves-hyperdimensions to render mathematically.
 """
 
 import asyncio
@@ -14,26 +15,63 @@ import aiohttp
 import nats
 import json
 import random
+import time
 
 FLUTE_GATEWAY_URL = "http://localhost:8055"
 NATS_URL = "nats://nats:pmoves@localhost:4222"
 
-# Example mapping of PMOVES agents to X-Men Personas
-PERSONA_MAP = {
-    "Agent Zero": {"persona": "Professor X", "base_match": 95},
-    "Archon": {"persona": "Beast", "base_match": 88},
-    "Gateway Agent": {"persona": "Cyclops", "base_match": 92},
-    "Supaserch": {"persona": "Jean Grey", "base_match": 85},
-    "Crush": {"persona": "Wolverine", "base_match": 90}
+# Agent Skill Profiles (0-100)
+AGENTS = {
+    "Agent Zero": {"logic": 95, "combat": 70, "empathy": 80, "leadership": 95},
+    "Archon": {"logic": 90, "combat": 40, "empathy": 50, "leadership": 60},
+    "Gateway Agent": {"logic": 85, "combat": 85, "empathy": 60, "leadership": 90},
+    "Supaserch": {"logic": 88, "combat": 60, "empathy": 95, "leadership": 70},
+    "Crush": {"logic": 80, "combat": 98, "empathy": 40, "leadership": 50}
 }
+
+# X-Men Persona Archetypes (0-100)
+XMEN = {
+    "Professor X": {"logic": 98, "combat": 10, "empathy": 95, "leadership": 98},
+    "Beast": {"logic": 95, "combat": 80, "empathy": 70, "leadership": 50},
+    "Cyclops": {"logic": 80, "combat": 90, "empathy": 60, "leadership": 95},
+    "Jean Grey": {"logic": 85, "combat": 95, "empathy": 100, "leadership": 75},
+    "Wolverine": {"logic": 60, "combat": 100, "empathy": 30, "leadership": 60}
+}
+
+def calculate_match(agent_skills, xmen_skills):
+    """Dynamically calculates the match percentage based on trait differences."""
+    total_diff = 0
+    max_diff = len(agent_skills) * 100
+    
+    for trait in agent_skills:
+        diff = abs(agent_skills[trait] - xmen_skills[trait])
+        total_diff += diff
+        
+    match_score = ((max_diff - total_diff) / max_diff) * 100
+    
+    # Add a slight temporal fluctuation simulating current "workload"
+    fluctuation = random.uniform(-3.0, 3.0)
+    return round(max(0, min(100, match_score + fluctuation)), 1)
+
+def find_best_xmen_match(agent_name):
+    """Finds the X-Men persona that mathematically aligns best with the agent."""
+    best_match = None
+    best_score = -1
+    agent_data = AGENTS[agent_name]
+
+    for xmen_name, xmen_data in XMEN.items():
+        score = calculate_match(agent_data, xmen_data)
+        if score > best_score:
+            best_score = score
+            best_match = xmen_name
+            
+    return best_match, best_score
 
 async def trigger_xmen_theme(session):
     """Route the X-Men Danger Room theme through Flute Gateway."""
     print("[*] Firecracker VM starting. Dispatching X-Men Theme to Flute Gateway...")
     
-    # In a full flow, pmoves.yt acquires the audio stream; kitten_tts provides playback.
-    payload = {"text": "Playing X-Men Animated Series Theme.", "engine": "kitten_tts"}
-    
+    payload = {"text": "Playing X-Men Animated Series Theme. Danger Room Active.", "engine": "kitten_tts"}
     try:
         async with session.post(f"{FLUTE_GATEWAY_URL}/v1/voice/synthesize/audio", json=payload) as resp:
             if resp.status == 200:
@@ -43,55 +81,39 @@ async def trigger_xmen_theme(session):
     except Exception as e:
         print(f"[!] Flute Gateway unreachable: {e}. (Is Port 8055 open?)")
 
-async def publish_desktop_sync(nc):
-    """Publish geometry and BPM sync events for LTX Studio desktop visualizers."""
-    print("[*] Publishing Genie LTX visual sync events to NATS...")
+async def publish_hyperdimensions_geometry(nc, agent_name, xmen_match, match_score):
+    """Publish a CGP packet to Hyperdimensions for geometric mapping of the persona logic."""
+    print(f"[*] Publishing CHIT Geometry to Hyperdimensions UI...")
     
-    # 1. Prosodic BPM Event (Syncs the X-Men theme beat with the visual environment)
-    bpm_payload = json.dumps({
-        "theme": "X-Men Danger Room",
-        "bpm": 130, # Upbeat action tempo for the theme
-        "action": "start_visuals",
-        "target": "genie_ltx_desktop"
+    # 1. Provide the structural visualization command (consumed by Pmoves-hyperdimensions)
+    cgp_payload = json.dumps({
+        "type": "cgp_v0.2",
+        "timestamp": int(time.time()),
+        "source": "danger_room_evaluator",
+        "geometry": {
+            "manifold": "poincare_disk", # The Hyperdimensions math canvas
+            "nodes": [
+                {"id": agent_name, "type": "agent", "radius": 1.0, "color": "blue"},
+                {"id": xmen_match, "type": "persona", "radius": 1.0, "color": "gold"}
+            ],
+            "edges": [
+                {"source": agent_name, "target": xmen_match, "weight": match_score / 100.0, "label": f"{match_score}% Match"}
+            ],
+            "render_flags": {
+                "theme": "x-men",
+                "pulse_bpm": 130 # tied to the prosodic audio theme
+            }
+        }
     }).encode()
     
-    await nc.publish("tokenism.prosodic.bpm.v1", bpm_payload)
-    print("  -> Published: tokenism.prosodic.bpm.v1 (Action cadence sync)")
-
-    # 2. Geometry Event (Initializes the Danger Room grid overlay)
-    geometry_payload = json.dumps({
-        "namespace": "pmoves.desktop.genie",
-        "modality": "audiovisual",
-        "provider": "e2b_danger_room",
-        "scene_geometry": "danger_room_grid",
-        "status": "active"
-    }).encode()
-
-    await nc.publish("tokenism.geometry.event.v1", geometry_payload)
-    print("  -> Published: tokenism.geometry.event.v1 (Danger Room projection initialized)")
-
-async def publish_persona_match(nc, agent_name):
-    """Publish the fluctuating match percentage between the Agent and its X-Men Persona."""
-    mapping = PERSONA_MAP.get(agent_name)
-    if not mapping:
-        return
-
-    # Simulate fluctuating match based on current "workload alignment"
-    current_match = min(100, max(0, mapping["base_match"] + random.uniform(-5.0, 5.0)))
-    
-    match_payload = json.dumps({
-        "agent": agent_name,
-        "xmen_persona": mapping["persona"],
-        "match_percentage": round(current_match, 1),
-        "ui_element": "hud_overlay"
-    }).encode()
-    
-    await nc.publish("tokenism.persona.match.v1", match_payload)
-    print(f"  -> Published: tokenism.persona.match.v1 ({agent_name} aligns {round(current_match,1)}% with {mapping['persona']})")
+    # Publish to the established PMOVES Geometry Bus
+    await nc.publish("geometry.visualization.request.v1", cgp_payload)
+    print("  -> Published: geometry.visualization.request.v1")
+    print(f"     [Geometry Nodes]: {agent_name} <== {match_score}% ==> {xmen_match}")
 
 async def main():
     print("==========================================================")
-    print("   GENIE LTX DESKTOP: DANGER ROOM & X-MEN PERSONA MAPPING")
+    print("   GENIE LTX DESKTOP: DANGER ROOM & HYPERDIMENSIONS")
     print("==========================================================")
     
     try:
@@ -102,22 +124,20 @@ async def main():
         nc = None
 
     async with aiohttp.ClientSession() as session:
-        # Step 1: Simulate Firecracker VM Boot triggering the Audio
+        # Step 1: Simulate Firecracker VM Boot triggering Audio
         await trigger_xmen_theme(session)
         
-        # Step 2: Trigger the visualizer sync and Danger Room grid
+        # Step 2: Dynamically calculate and publish geometric mappings
         if nc:
-            await publish_desktop_sync(nc)
-            
             print("\n[*] Initializing Agent Workloads in the Danger Room...")
-            # Simulate agents entering the sandbox and finding their persona match
-            for agent in ["Agent Zero", "Archon", "Gateway Agent"]:
-                await asyncio.sleep(1) # Dramatic pause
-                await publish_persona_match(nc, agent)
+            for agent in AGENTS.keys():
+                await asyncio.sleep(1.5) # Dramatic mapping pause
+                best_match, score = find_best_xmen_match(agent)
+                await publish_hyperdimensions_geometry(nc, agent, best_match, score)
             
             await nc.close()
             
-    print("\n[+] Protocol Complete. The LTX Desktop is now projecting the Danger Room and Persona HUD.")
+    print("\n[+] Protocol Complete. Hyperdimensions UI is now rendering the Persona mappings.")
 
 if __name__ == "__main__":
     asyncio.run(main())
