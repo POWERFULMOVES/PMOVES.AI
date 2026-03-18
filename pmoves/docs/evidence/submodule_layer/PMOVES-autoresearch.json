@@ -1,0 +1,31 @@
+{
+  "generated_at": "2026-03-16 05:22 UTC",
+  "manifest": "pmoves/configs/submodule_layer_validation_manifest.json",
+  "summary": {
+    "submodules": 1,
+    "errors": 1,
+    "warnings": 0
+  },
+  "results": [
+    {
+      "name": "PMOVES-autoresearch",
+      "path": "PMOVES-autoresearch",
+      "url": "https://github.com/POWERFULMOVES/PMOVES-autoresearch.git",
+      "status_prefix": "-",
+      "commit": "948619514bf58965a17a30afa6ff372297b64184",
+      "initialized": false,
+      "remote_commit_reachable": "skip-uninitialized",
+      "required_files_any_ok": false,
+      "top_level_files_ok": false,
+      "nested_gitmodules_ok": true,
+      "python_compile_ok": "skip",
+      "findings": [
+        {
+          "level": "ERROR",
+          "code": "UNINITIALIZED",
+          "message": "Submodule is not initialized."
+        }
+      ]
+    }
+  ]
+}
