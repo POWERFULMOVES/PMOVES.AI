@@ -24,6 +24,8 @@ MEILI_API_KEY = os.environ.get("MEILI_API_KEY","")
 SUPA = os.environ.get("SUPA_REST_URL","http://postgrest:3000")
 EMBEDDING_BACKEND = os.environ.get("EMBEDDING_BACKEND", "sentence-transformers").lower()
 USE_NAMED_VECTORS = os.environ.get("QDRANT_USE_NAMED_VECTORS", "false").lower() in ("1", "true", "yes")
+PROSODIC_EMBED_ENABLED = os.environ.get("PROSODIC_EMBED_ENABLED", "false").lower() in ("1", "true", "yes")
+PROSODIC_EMBED_DIM = int(os.environ.get("PROSODIC_EMBED_DIM", "512"))  # CLAP default
 
 app = FastAPI(title="PMOVES Extract Worker", version="1.0.0")
 
@@ -46,8 +48,37 @@ def _meili(method: str, path: str, **kwargs):
 def _build_vectors_config(dim: int):
     """Build vectors_config for Qdrant — named or unnamed based on feature flag."""
     if USE_NAMED_VECTORS:
-        return {"semantic": VectorParams(size=dim, distance=Distance.COSINE)}
+        cfg = {"semantic": VectorParams(size=dim, distance=Distance.COSINE)}
+        if PROSODIC_EMBED_ENABLED:
+            cfg["prosodic"] = VectorParams(size=PROSODIC_EMBED_DIM, distance=Distance.COSINE)
+        return cfg
     return VectorParams(size=dim, distance=Distance.COSINE)
+
+
+# ── Prosodic embedding (CLAP text-to-audio alignment) ──
+_clap_model = None
+
+def _embed_prosodic(texts: List[str]):
+    """Compute prosodic embeddings via CLAP text encoder.
+
+    Returns numpy array of shape (len(texts), PROSODIC_EMBED_DIM) or None
+    if CLAP is unavailable. CLAP maps text into the same space as audio,
+    capturing prosodic/acoustic character rather than semantic meaning.
+    """
+    if not PROSODIC_EMBED_ENABLED:
+        return None
+    global _clap_model
+    try:
+        if _clap_model is None:
+            from laion_clap import CLAP_Module  # type: ignore
+            _clap_model = CLAP_Module(enable_fusion=True)
+            _clap_model.load_ckpt()
+        emb = _clap_model.get_text_embedding(texts, use_tensor=False)
+        return np.asarray(emb, dtype=float)
+    except ImportError:
+        return None
+    except Exception:
+        return None
 
 
 def _get_collection_dim(info) -> int | None:
@@ -150,6 +181,7 @@ def ingest(body: Dict[str, Any] = Body(...)):
             if chunks:
                 texts = [c.get('text','') for c in chunks]
                 vecs = _embed(texts)
+                prosodic_vecs = _embed_prosodic(texts) if USE_NAMED_VECTORS else None
                 embeddings_processed_total.inc(len(texts))
 
                 qc = QdrantClient(url=QDRANT_URL, timeout=30.0)
@@ -164,7 +196,12 @@ def ingest(body: Dict[str, Any] = Body(...)):
                     else:
                         ns = (chunk.get("namespace") or "pmoves").strip()
                         point_id = str(uuid.uuid5(uuid.NAMESPACE_URL, f"{ns}:{chunk_id}"))
-                    vec_data = {"semantic": v.tolist()} if USE_NAMED_VECTORS else v.tolist()
+                    if USE_NAMED_VECTORS:
+                        vec_data = {"semantic": v.tolist()}
+                        if prosodic_vecs is not None:
+                            vec_data["prosodic"] = prosodic_vecs[i].tolist()
+                    else:
+                        vec_data = v.tolist()
                     points.append(PointStruct(id=point_id, vector=vec_data, payload=chunk))
 
                 qc.upsert(collection_name=COLL, points=points)
