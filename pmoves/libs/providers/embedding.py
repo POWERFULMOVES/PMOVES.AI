@@ -36,7 +36,7 @@ TENSORZERO_EMBED_MODEL = _resolve_model(
 OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://pmoves-ollama:11434")
 OLLAMA_EMBED_MODEL = _resolve_model(
     "embedding-provider", "embedding",
-    "OLLAMA_EMBED_MODEL", "embeddinggemma:300m",
+    "OLLAMA_EMBED_MODEL", "qwen3-embedding:8b",
 )
 
 OA_BASE = os.environ.get("OPENAI_COMPAT_BASE_URL")  # e.g., http://localhost:1234/v1 for LM Studio; http://vllm:8000/v1
