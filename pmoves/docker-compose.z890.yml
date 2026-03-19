@@ -14,12 +14,38 @@
 #   docker compose -f docker-compose.z890.yml --env-file env.z890 up -d
 
 services:
+  # ── NATS Leaf Node ──────────────────────────────────────────────────────────
+  # Local NATS instance bridging Docker containers to 5090 hub via leafnodes.
+  # Containers connect here (nats-leaf:4222) instead of crossing the Docker
+  # bridge → LAN boundary which Docker Desktop WSL2 can't route.
+  nats-leaf:
+    image: nats:2.11.8-alpine
+    restart: unless-stopped
+    command: ["-c", "/etc/nats/leaf.conf"]
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./configs/nats-leaf-z890.conf:/etc/nats/leaf.conf:ro
+      - nats-leaf-data:/data
+    ports:
+      - "127.0.0.1:4222:4222"
+      - "127.0.0.1:8222:8222"
+    networks:
+      - z890_net
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8222/varz || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
   pmoves-ollama:
     image: ${PMOVES_OLLAMA_IMAGE:-ollama/ollama:0.18.0}
     restart: unless-stopped
     env_file:
       - env.shared
       - env.tier-llm
+      - env.z890
     cap_drop: [ALL]
     cap_add: [NET_BIND_SERVICE, CHOWN, SETGID, SETUID]
     security_opt: [no-new-privileges:true]
@@ -60,6 +86,7 @@ services:
     env_file:
       - env.shared
       - env.tier-agent
+      - env.z890
     cap_drop: [ALL]
     cap_add: [NET_BIND_SERVICE]
     read_only: true
@@ -71,10 +98,11 @@ services:
       - NODE_NAME=${NODE_NAME:-pmoves-3090ti}
       - NODE_TYPE=${NODE_TYPE:-gpu-desktop}
       - NODE_CAPABILITIES=${NODE_CAPABILITIES:-cuda,rtx3090ti,24gb-vram}
-      - NATS_URL=${NATS_URL}
-      - HIRAG_URL=${HIRAG_URL:-http://hi-rag-gateway-v2-gpu:8086}
+      # NATS_URL comes from env.z890 → nats://nats:pmoves@nats-leaf:4222
       - ANNOUNCE_SEC=${ANNOUNCE_SEC:-15}
-    # No depends_on — NATS runs on main PC, not this node
+    depends_on:
+      nats-leaf:
+        condition: service_healthy
     networks:
       - z890_net
     healthcheck:
@@ -86,6 +114,7 @@ services:
 
 volumes:
   pmoves-ollama-models: {}
+  nats-leaf-data: {}
 
 networks:
   z890_net:
