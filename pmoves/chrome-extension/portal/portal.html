@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PMOVES Hyperdimensions Portal</title>
+  <link rel="stylesheet" href="portal.css">
+</head>
+<body>
+  <h1>
+    <img src="../icons/icon32.png" width="28" height="28" alt="logo">
+    Hyperdimensions Portal
+  </h1>
+  <p class="hint">Live WebRTC rendering of CGP (Consciousness Geometry Protocol) packets from the PMOVES network.</p>
+
+  <div class="grid">
+    <!-- Control Panel -->
+    <div class="panel">
+      <h3>Connection</h3>
+      
+      <div class="controls-group">
+        <label class="hint" for="gateway-url">Gateway URL</label>
+        <input id="gateway-url" value="localhost:8085" />
+      </div>
+
+      <div class="controls-group">
+        <label class="hint">Room & Peer</label>
+        <div class="controls-row">
+          <input id="room" value="demo-room" placeholder="Room ID" />
+          <input id="peer" placeholder="Peer ID (Optional)" />
+        </div>
+      </div>
+
+      <div class="controls-row">
+        <button id="join-btn">Join Signaling</button>
+        <button id="connect-btn" disabled>Connect WebRTC</button>
+      </div>
+
+      <div class="status-pills">
+        <span class="pill">WS: <span id="wsState" class="down">disconnected</span></span>
+        <span class="pill">WebRTC: <span id="rtcState" class="warn">idle</span></span>
+        <span class="pill">Data: <span id="dcState" class="down">closed</span></span>
+      </div>
+
+      <h3 style="margin-top: 24px;">Connection Log</h3>
+      <pre id="log-output"></pre>
+    </div>
+
+    <!-- Viewer Panel -->
+    <div class="panel">
+      <h3>Control Plane Vectors</h3>
+      
+      <!-- Geometry Stats vector -->
+      <div class="geometry-stats">
+        <div class="stat-box">
+          <span class="label" title="Tree-likeness proxy (delta_proxy)">&delta; (Delta)</span>
+          <span class="value" id="stat-delta">--</span>
+        </div>
+        <div class="stat-box">
+          <span class="label" title="Hyperbolic Curvature (curvature_k)">&kappa; (Kappa)</span>
+          <span class="value" id="stat-kappa">--</span>
+        </div>
+        <div class="stat-box">
+          <span class="label" title="Zeta-filtered spectral entropy">Hz</span>
+          <span class="value" id="stat-hz">--</span>
+        </div>
+        <div class="stat-box">
+          <span class="label" title="EvoSwarm fitness (swarm_fitness)">F</span>
+          <span class="value" id="stat-f">--</span>
+        </div>
+        <div class="stat-box">
+          <span class="label" title="CHIT confidence (attribution_confidence)">A</span>
+          <span class="value" id="stat-a">--</span>
+        </div>
+      </div>
+
+      <h3>Visualizer Canvas</h3>
+      <div class="canvas-container" id="canvas-container">
+        <div id="empty-state" class="empty-state">Waiting for geometry packets...</div>
+        <img id="shapeviz" alt="Shape visualization" style="display:none;" />
+      </div>
+      
+      <h3 style="margin-top: 16px;">Raw Payload</h3>
+      <!-- Using generic span to avoid XSS issues, textContent set via JS -->
+      <pre id="payload-viewer" style="flex: 0 0 150px; min-height: 150px;">(no payload)</pre>
+    </div>
+  </div>
+
+  <script src="portal.js" type="module"></script>
+</body>
+</html>
