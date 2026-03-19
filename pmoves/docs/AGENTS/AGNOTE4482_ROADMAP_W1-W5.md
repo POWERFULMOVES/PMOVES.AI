@@ -188,13 +188,45 @@ The site is not a traditional website — it's an **album / videogame / comic / 
 | Three-entity doctrine: Cataclysm Studios / PMOVES.AI / DARKXSIDE | established | DARKXSIDE |
 | Execution order: W1 → W2+W4 → W3 → W5 | 2026-03-19 | 4090-claude |
 
-## Open Questions (For 5090/Z890 Input)
+## Answered Questions (5090 Input, 2026-03-19)
 
-- **NVIDIA NeMo**: Which components? (Guardrails? Framework? Curator?)
+- **NVIDIA NeMo**: NIMs TAC (`pmoves/configs/tac_trees/nvidia-nims.tac.yaml`) covers container integration — aligns with W5 enterprise
+- **5090 GPU lanes**: W4 (ComfyUI renders) + W5 (NeMo/NIMs) both need 5090 GPU
+- **Z890 infra overlap**: z890 standalone compose (`d676c153`) handles its own setup — no conflict with W1/W2
+
+## Remaining Questions
+
 - **Discord server**: Already created, or starting from scratch?
 - **Hostinger API**: Credentials configured?
-- **Z890 infra overlap**: How does Z890's current infra work align with W1/W2? Any conflicts or shared lanes?
-- **5090 GPU lanes**: Which workstreams need 5090 GPU compute? (W4 ComfyUI? W5 NeMo?)
+
+## 5090 Session-6 Alignment
+
+5090-claude has items ready to re-apply that map directly to workstreams:
+
+| 5090 Item | Workstream | Alignment |
+|-----------|-----------|-----------|
+| TTS mesh routing (GRADIO_SERVER_NAME 0.0.0.0) | W1 | Enables voice across nodes |
+| Claude + GLM models in TensorZero | W5 | Model routing foundation |
+| Conch consciousness pipeline | Pre-W4 | Feeds immersive demo content |
+| NVIDIA NIMs TAC | W5 | NeMo container integration planning |
+| HuggingFace TAC + mirror | W5 | Dataset/model distribution for civi-box |
+| Content agent stubs (podcast, YouTube) | W4 | Publishing pipeline for compendium |
+
+**5090 new files (untracked, ready to stage):**
+- `pmoves/configs/tac_trees/nvidia-nims.tac.yaml`
+- `pmoves/configs/tac_trees/huggingface-integration.tac.yaml`
+- `pmoves/mk/hf.mk`
+- `pmoves/skills/podcast-publish/manifest.yaml`
+- `pmoves/skills/youtube-upload/manifest.yaml`
+
+**5090 tracked edits to re-apply:**
+- `pmoves/tensorzero/config/tensorzero.toml` — Claude + GLM models
+- `pmoves/docker-compose.yml` — API keys for TZ, TTS URLs, consciousness port
+- `pmoves/configs/skill-pairings.yaml` — conch pipeline
+- `pmoves/configs/agent-teams.yaml` — re-add 3 content agents
+- `pmoves/services/consciousness-service/main.py` — port 8106
+- `pmoves/Makefile` — include mk/hf.mk
+- `PMOVES-Pinokio-Ultimate-TTS-Studio/start.js` — mesh bind
 
 ## Agent Claim Register
 
@@ -202,8 +234,8 @@ The site is not a traditional website — it's an **album / videogame / comic / 
 
 | Workstream | Agent | Claimed | Status | Branch |
 |------------|-------|---------|--------|--------|
-| W1 | — | — | Unclaimed | — |
+| W1 (partial: TTS mesh) | 5090-claude | 2026-03-19 | Re-applying session-6 | main |
 | W2 | — | — | Unclaimed | — |
 | W3 | — | — | Unclaimed | — |
-| W4 | — | — | Unclaimed | — |
-| W5 | — | — | Unclaimed | — |
+| W4 (partial: content stubs) | 5090-claude | 2026-03-19 | Re-applying session-6 | main |
+| W5 (partial: TZ models, TACs) | 5090-claude | 2026-03-19 | Re-applying session-6 | main |
