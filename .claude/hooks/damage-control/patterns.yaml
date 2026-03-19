@@ -794,6 +794,10 @@ chitBypassPatterns:
   - 'chit_encode_secrets'
   - 'chit_credential_demo'
   - 'chit_security'
+  # Git operations on CHIT-owned manifest files — staging, diffing, and
+  # status-checking the manifest is a normal CHIT pipeline operation.
+  # Destructive ops (rm, force-push) are still blocked by earlier checks.
+  - 'git\s+(add|diff|status|log|show)\s+.*secrets_manifest'
 
 # File paths that CHIT operations may create/write — bypass zero-access.
 # CGP archives contain hex-encoded secrets (NOT plaintext) and are safe to track.
