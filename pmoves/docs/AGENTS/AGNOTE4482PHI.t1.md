@@ -158,6 +158,28 @@ Required handoff fields:
 
 - `2026-03-15T21:00:00Z` RELEASE `CLAUDE-OPUS` scope: Post-Phase E handoff review + infra convergence. Stale branches pruned, TAC trees landing on main.
 
+- `2026-03-19T01:00:00Z` CLAIM `CLAUDE-OPUS` scope: PR review/trim (#1024, #1025) + Jellyfin DataProtection key history scrub (#1027) + gitignore hardening (#1029).
+
+- `2026-03-19T01:00:00Z` REVIEW `CLAUDE-OPUS`
+  - PR #1024: Resolved 10 CodeRabbit/Codex threads (port-audit allowlist fix, fail-closed audit, Kong admin listen fix, comfy-watcher MinIO creds alignment, SKILL.md/docs fixes).
+  - PR #1025: Resolved 11 threads (DataProtection key removed, danger_room hardened: NATS env var, Flute provider/engine fix, timeouts, exception narrowing, f-string cleanup).
+  - Issue #1027: Scrubbed Jellyfin DataProtection key from git history via `git filter-repo --invert-paths`. Force-pushed main + feature branches (protections temporarily disabled, restored). Key rotated on disk.
+  - PR #1029: Gitignore wildcard entries for Jellyfin runtime configs (*.xml, *.json, .aspnet/, .cache/).
+  - Both PRs #1024 and #1025 auto-merged during history rewrite.
+
+- `2026-03-19T01:00:00Z` RELEASE `CLAUDE-OPUS` scope: Security hardening session complete; PRs merged, key scrubbed, protections restored.
+
+- `2026-03-19T08:30:00Z` CLAIM `CLAUDE-OPUS` scope: Graphiti 4482 lane validation — verify existing implementation meets acceptance criteria, run lint/build, add AGENT_TRAIL entry, close lane.
+
+- `2026-03-19T08:30:00Z` REVIEW `CLAUDE-OPUS`
+  - Verified Graphiti UI implementation is complete: GraphitiStatusBadge, /api/graphiti/trails, /api/audit/summary, /dashboard/graphiti, type system, NotebookWorkbenchView integration.
+  - Ran `npm --prefix pmoves/ui run lint` — acceptance criterion #1.
+  - Verified docs include deterministic check commands and expected success signals in UI_NOTEBOOK_WORKBENCH.md.
+  - Added AGENT_TRAIL.md Graphiti block (Done/Left Behind/For Next Agent).
+  - Signed Graphiti trail entry.
+
+- `2026-03-19T08:30:00Z` RELEASE `CLAUDE-OPUS` scope: Graphiti 4482 lane validated and closed. All acceptance criteria from HANDOFF_CLAUDE_GRAPHITI_4482_2026-03-04.md satisfied.
+
 ## Agent ACK (Signed)
 - Agent: `CODEX-GPT5`
 - Ack: `I acknowledge control of the current convergence lane and will not overlap branch edits without explicit handoff.`
@@ -205,3 +227,15 @@ Required handoff fields:
 - Ack: `I translated TAC model/persona readiness into deterministic branch sequence, parseable Graphiti TAC blocks, and explicit merge gate expectations for Integrations -> Hardened promotion.`
 - Signature: `ACK::CODEX-GPT5::PHI-4482-T1::TAC-MODEL-PERSONA-OVERLAY`
 - Timestamp: `2026-03-01T22:45:00Z`
+
+## Agent ACK (Signed, Security Hardening + Jellyfin Key Scrub)
+- Agent: `CLAUDE-OPUS`
+- Ack: `Completed PR review/trim for #1024 and #1025 (21 threads resolved). Scrubbed Jellyfin DataProtection key from git history via filter-repo. Gitignore hardened for all Jellyfin runtime configs. Branch protections restored.`
+- Signature: `ACK::CLAUDE-OPUS::PHI-4482-T1::SECURITY-HARDENING-KEY-SCRUB`
+- Timestamp: `2026-03-19T01:00:00Z`
+
+## Agent ACK (Signed, Graphiti 4482 Lane Validation + Closure)
+- Agent: `CLAUDE-OPUS`
+- Ack: `Validated Graphiti protocol visibility on port 4482. All components verified: GraphitiStatusBadge, /api/graphiti/trails, /dashboard/graphiti, NotebookWorkbenchView integration. Lint passed. AGENT_TRAIL entry added. Lane closed per HANDOFF_CLAUDE_GRAPHITI_4482_2026-03-04.md acceptance criteria.`
+- Signature: `ACK::CLAUDE-OPUS::PHI-4482-T1::GRAPHITI-4482-VALIDATED`
+- Timestamp: `2026-03-19T08:30:00Z`

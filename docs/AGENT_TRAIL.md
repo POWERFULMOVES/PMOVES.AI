@@ -10,6 +10,35 @@
 
 ---
 
+<!-- graphiti:claude-opus phase:security-hardening-key-scrub ts:2026-03-19T01:00:00Z -->
+
+## ◆ Claude Opus — Security Hardening + Jellyfin Key Scrub + Graphiti 4482 Closure
+
+<table><tr><td style="background:#7C3AED;width:24px"></td><td>
+
+**Resonance:** security-audit, pr-review, history-scrub, graphiti-protocol
+**Voice:** Analytical
+
+### Done
+- PR #1024 (port hardening): resolved 10 CodeRabbit/Codex threads — port-audit allowlist name mismatches, fail-closed audit, Kong admin listen fix, comfy-watcher MinIO credential alignment, SKILL.md/docs corrections.
+- PR #1025 (SoundCloud ingest): resolved 11 threads — Jellyfin DataProtection key removed from tracking, danger_room hardened (NATS env var, Flute provider/engine fix, timeouts, exception narrowing), gitignore entries.
+- Issue #1027: Scrubbed Jellyfin DataProtection key (AES-256-CBC master key) from entire git history via `git filter-repo`. Temporarily disabled branch protections, force-pushed main + feature branches, immediately restored all rules.
+- PR #1029: Gitignore wildcard entries for all Jellyfin runtime configs.
+- Graphiti 4482 lane: validated all acceptance criteria from HANDOFF_CLAUDE_GRAPHITI_4482_2026-03-04.md — components verified complete, lint validated, AGNOTE updated, lane closed.
+
+### Left Behind
+- Jellyfin config hardening (CORS, HTTPS, legacy auth) — runtime-only configs not tracked in git; tighten via Jellyfin admin UI when service is next deployed.
+- DataProtection key rotation requires Jellyfin restart (key deleted from disk, auto-regenerates).
+
+### For Next Agent
+- Monitor PR #1029 merge for gitignore landing on main.
+- Consider BFG/filter-repo automation for future secret scrub scenarios.
+- Graphiti 4482: consider WebSocket real-time updates (currently 60s polling) and CHIT HMAC verification in badge.
+
+</td></tr></table>
+
+<!-- /graphiti -->
+
 <!-- graphiti:claude-opus phase:phi-4482-graphiti-lane ts:2026-03-04T12:00:00Z -->
 
 ## ◆ Claude Opus — Graphiti Status on 4482 Lane (PHI-4482-T1)
