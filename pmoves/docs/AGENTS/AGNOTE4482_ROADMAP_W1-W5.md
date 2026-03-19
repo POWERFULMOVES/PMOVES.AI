@@ -212,21 +212,14 @@ The site is not a traditional website — it's an **album / videogame / comic / 
 | HuggingFace TAC + mirror | W5 | Dataset/model distribution for civi-box |
 | Content agent stubs (podcast, YouTube) | W4 | Publishing pipeline for compendium |
 
-**5090 new files (untracked, ready to stage):**
-- `pmoves/configs/tac_trees/nvidia-nims.tac.yaml`
-- `pmoves/configs/tac_trees/huggingface-integration.tac.yaml`
-- `pmoves/mk/hf.mk`
-- `pmoves/skills/podcast-publish/manifest.yaml`
-- `pmoves/skills/youtube-upload/manifest.yaml`
-
-**5090 tracked edits to re-apply:**
-- `pmoves/tensorzero/config/tensorzero.toml` — Claude + GLM models
-- `pmoves/docker-compose.yml` — API keys for TZ, TTS URLs, consciousness port
-- `pmoves/configs/skill-pairings.yaml` — conch pipeline
-- `pmoves/configs/agent-teams.yaml` — re-add 3 content agents
-- `pmoves/services/consciousness-service/main.py` — port 8106
-- `pmoves/Makefile` — include mk/hf.mk
-- `PMOVES-Pinokio-Ultimate-TTS-Studio/start.js` — mesh bind
+**SHIPPED** in commit `2a681471` — 11 files, 640 insertions:
+- Claude Sonnet 4 + GLM-4 full family (Flash/Plus/Long) in TensorZero
+- TTS mesh routing (0.0.0.0 + host.docker.internal)
+- CONCH consciousness pipeline (6-step skill pairing)
+- NVIDIA NIMs TAC tree (5 phases)
+- HuggingFace TAC tree + hf.mk Make targets
+- Podcast-publish + YouTube-upload skill manifests
+- Consciousness service port 8105→8106 (remotion_renderer conflict fix)
 
 ## Agent Claim Register
 
@@ -234,8 +227,8 @@ The site is not a traditional website — it's an **album / videogame / comic / 
 
 | Workstream | Agent | Claimed | Status | Branch |
 |------------|-------|---------|--------|--------|
-| W1 (partial: TTS mesh) | 5090-claude | 2026-03-19 | Re-applying session-6 | main |
+| W1 (partial: TTS mesh) | 5090-claude | 2026-03-19 | SHIPPED `2a681471` | main |
 | W2 | — | — | Unclaimed | — |
 | W3 | — | — | Unclaimed | — |
-| W4 (partial: content stubs) | 5090-claude | 2026-03-19 | Re-applying session-6 | main |
-| W5 (partial: TZ models, TACs) | 5090-claude | 2026-03-19 | Re-applying session-6 | main |
+| W4 (partial: content stubs) | 5090-claude | 2026-03-19 | SHIPPED `2a681471` | main |
+| W5 (partial: TZ models, TACs) | 5090-claude | 2026-03-19 | SHIPPED `2a681471` | main |
