@@ -2591,25 +2591,41 @@ vibevoice-smoke: ## Check VibeVoice realtime /config (requires VibeVoice running
 # Z890 / RTX 3090 Ti GPU NODE
 # ============================================================================
 
+# Z890: env.z890 is sourced AFTER with-env.sh so node-specific values
+# (NATS_URL, QDRANT_URL, etc.) override the defaults from env.shared.
+# Shell env beats docker compose env_file, so both must agree.
 Z890_COMPOSE := -f docker-compose.z890.yml --env-file env.z890
+LOAD_ENV_Z890 = $(LOAD_ENV_SHARED) set -a && . ./env.z890 && set +a &&
+
+.PHONY: z890-host-setup
+z890-host-setup: ## [Admin] Configure z890 host netsh port proxies for NATS leafnode
+	@powershell -ExecutionPolicy Bypass -File scripts/z890_host_setup.ps1
+
+.PHONY: z890-host-verify
+z890-host-verify: ## Verify z890 host port proxies are configured
+	@powershell -ExecutionPolicy Bypass -File scripts/z890_host_setup.ps1 -Verify
+
+.PHONY: z890-host-remove
+z890-host-remove: ## [Admin] Remove z890 host port proxies
+	@powershell -ExecutionPolicy Bypass -File scripts/z890_host_setup.ps1 -Remove
 
 .PHONY: up-z890
-up-z890: ## Start Z890 GPU node (Ollama + Mesh Agent, data/agents from main PC)
-	@$(LOAD_ENV_SHARED) docker compose -p $(PROJECT)-z890 $(Z890_COMPOSE) up -d
-	@echo "✔ Z890 node started (Ollama + Mesh Agent). Data services from main PC."
+up-z890: ## Start Z890 GPU node (Ollama + NATS Leaf + Mesh Agent + Container Agent)
+	@$(LOAD_ENV_Z890) docker compose -p $(PROJECT)-z890 $(Z890_COMPOSE) up -d --force-recreate
+	@echo "✔ Z890 node started (NATS Leaf + Ollama + Mesh Agent + Container Agent)."
 
 .PHONY: down-z890
 down-z890: ## Stop Z890 GPU node services
-	@$(LOAD_ENV_SHARED) docker compose -p $(PROJECT)-z890 $(Z890_COMPOSE) down
+	@$(LOAD_ENV_Z890) docker compose -p $(PROJECT)-z890 $(Z890_COMPOSE) down
 	@echo "✔ Z890 node stopped."
 
 .PHONY: ps-z890
 ps-z890: ## Show Z890 node service status
-	@$(LOAD_ENV_SHARED) docker compose -p $(PROJECT)-z890 $(Z890_COMPOSE) ps
+	@$(LOAD_ENV_Z890) docker compose -p $(PROJECT)-z890 $(Z890_COMPOSE) ps
 
 .PHONY: logs-z890
 logs-z890: ## Tail Z890 GPU node logs
-	@$(LOAD_ENV_SHARED) docker compose -p $(PROJECT)-z890 $(Z890_COMPOSE) logs -f --tail=50
+	@$(LOAD_ENV_Z890) docker compose -p $(PROJECT)-z890 $(Z890_COMPOSE) logs -f --tail=50
 
 # Status helper
 ps:
