@@ -26,16 +26,16 @@ MESH_ALLOWED_SERVICES = {
     "tensorzero-gateway",
     "hi-rag-gateway-v2",
     "hi-rag-gateway-v2-gpu",
-    "hi-rag-gateway-v2-gpu-alt",
-    "hi-rag-gateway-v1",
+    "hi-rag-gateway",          # v1 service name in docker-compose.yml
+    "hi-rag-gateway-gpu",      # v1 GPU variant
     "grafana",
     "deepresearch",
     "supaserch",
     "pmoves-yt",
     "channel-monitor",
     "ffmpeg-whisper",
-    "media-video-analyzer",
-    "media-audio-analyzer",
+    "media-video",             # compose service name (not media-video-analyzer)
+    "media-audio",             # compose service name (not media-audio-analyzer)
     "gpu-orchestrator",
     "evo-controller",
     "ultimate-tts-studio",
@@ -142,23 +142,12 @@ def print_report(findings: list[dict]) -> int:
 def main() -> int:
     config = parse_compose_config()
     if config is None:
-        print("Falling back to static analysis of docker-compose.yml...")
-        # Static fallback: grep for port lines without _BIND
-        compose_file = ROOT / "docker-compose.yml"
-        if not compose_file.exists():
-            print("ERROR: docker-compose.yml not found", file=sys.stderr)
-            return 1
-
-        text = compose_file.read_text(encoding="utf-8")
-        # Find port lines that are just "NUMBER:NUMBER" without a bind prefix
-        bare_ports = re.findall(r'^\s*-\s*"?(\d+:\d+)"?\s*$', text, re.M)
-        if bare_ports:
-            print(f"VIOLATION: {len(bare_ports)} port(s) without explicit bind address:")
-            for bp in bare_ports:
-                print(f"  - {bp}")
-            return 1
-        print("Static analysis: no bare port bindings found.")
-        return 0
+        print("ERROR: dynamic compose parsing failed — failing closed.", file=sys.stderr)
+        print("Run 'docker compose config' manually to diagnose.", file=sys.stderr)
+        return 1
+    if not config.get("services"):
+        print("ERROR: compose config returned no services — failing closed.", file=sys.stderr)
+        return 1
 
     findings = audit_ports(config)
     return print_report(findings)

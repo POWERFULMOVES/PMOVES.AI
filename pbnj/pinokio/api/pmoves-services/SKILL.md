@@ -65,7 +65,7 @@ PMOVES.YT, Channel Monitor, Jellyfin Bridge, Publisher-Discord
 ## Cross-Machine Access
 
 Services bound to `0.0.0.0` (mesh-accessible tier) are reachable from any Tailscale node:
-```
+```text
 http://100.x.x.x:8080   # Agent Zero from remote machine
 http://100.x.x.x:3030   # TensorZero from remote machine
 ```

@@ -86,7 +86,7 @@ curl http://localhost:7861/gradio_api/info
 Via Tailscale mesh: `http://100.x.x.x:7861`
 Via Pinokio Caddy proxy: `https://7861.localhost` or `http://localhost:42XXX`
 
-**Note:** TTS binds to `${TTS_BIND:-0.0.0.0}:7861` (mesh-accessible tier) — reachable from any Tailscale node without Caddy.
+**Note:** TTS bind address is controlled by `${TTS_BIND:-0.0.0.0}:7861`. Verify active bind mode before assuming mesh reachability — current TAC status may record remote access as blocked when TTS is localhost-bound. Use Caddy proxy or confirm `TTS_BIND=0.0.0.0` in env.shared for mesh access.
 
 ## Integration Points
 
