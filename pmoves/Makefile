@@ -2629,6 +2629,10 @@ ps-z890: ## Show Z890 node service status
 logs-z890: ## Tail Z890 GPU node logs
 	@$(LOAD_ENV_Z890) docker compose -p $(PROJECT)-z890 $(Z890_COMPOSE) logs -f --tail=50
 
+.PHONY: diag-z890
+diag-z890: ## Run Container Agent diagnostic on z890
+	@curl -sf http://127.0.0.1:8111/diagnostic | python -m json.tool
+
 # Status helper
 ps:
 	@$(DC) ps
