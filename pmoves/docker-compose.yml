@@ -639,7 +639,7 @@ services:
     - KONG_PROXY_ERROR_LOG=/dev/stderr
     - KONG_ADMIN_ERROR_LOG=/dev/stderr
     - KONG_PROXY_LISTEN=0.0.0.0:8000
-    - KONG_ADMIN_LISTEN=${KONG_ADMIN_BIND:-127.0.0.1}:8001
+    - KONG_ADMIN_LISTEN=0.0.0.0:8001  # container-internal; host restriction via Docker port mapping line below
     # JWT plugin
     - KONG_PLUGINS=bundled,jwt
     - KONG_NGINX_PROXY_PROXY_BUFFERS=8 16k
@@ -3090,8 +3090,8 @@ services:
     environment:
       # NATS_URL from env.shared/env.tier-worker has credentials: nats://nats:pmoves@nats:4222
       - MINIO_ENDPOINT=${MINIO_ENDPOINT:-minio:9000}
-      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY:?Run make brand-defaults}
-      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY:?Run make brand-defaults}
+      - MINIO_ACCESS_KEY=${MINIO_USER:?Run make brand-defaults}
+      - MINIO_SECRET_KEY=${MINIO_PASSWORD:?Run make brand-defaults}
       - MINIO_BUCKET=${MINIO_BUCKET:-pmoves-comfyui}
       - PUBLIC_BASE_URL=${PUBLIC_BASE_URL:-http://minio:9000}
       - PRESIGN_EXPIRES_HOURS=${PRESIGN_EXPIRES_HOURS:-24}
