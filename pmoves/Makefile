@@ -2591,34 +2591,25 @@ vibevoice-smoke: ## Check VibeVoice realtime /config (requires VibeVoice running
 # Z890 / RTX 3090 Ti GPU NODE
 # ============================================================================
 
-Z890_OVERRIDE := -f docker-compose.z890.override.yml
-Z890_ENV := --env-file env.z890
+Z890_COMPOSE := -f docker-compose.z890.yml --env-file env.z890
 
 .PHONY: up-z890
 up-z890: ## Start Z890 GPU node (Ollama + Mesh Agent, data/agents from main PC)
-	@$(LOAD_ENV_SHARED) docker compose -p $(PROJECT) \
-	  -f docker-compose.yml -f docker-compose.gpu.yml \
-	  $(Z890_OVERRIDE) \
-	  $(Z890_ENV) \
-	  --profile agents up -d pmoves-ollama mesh-agent
+	@$(LOAD_ENV_SHARED) docker compose -p $(PROJECT)-z890 $(Z890_COMPOSE) up -d
 	@echo "✔ Z890 node started (Ollama + Mesh Agent). Data services from main PC."
 
 .PHONY: down-z890
 down-z890: ## Stop Z890 GPU node services
-	@$(LOAD_ENV_SHARED) docker compose -p $(PROJECT) \
-	  -f docker-compose.yml -f docker-compose.gpu.yml \
-	  $(Z890_OVERRIDE) \
-	  $(Z890_ENV) \
-	  down
+	@$(LOAD_ENV_SHARED) docker compose -p $(PROJECT)-z890 $(Z890_COMPOSE) down
 	@echo "✔ Z890 node stopped."
 
 .PHONY: ps-z890
 ps-z890: ## Show Z890 node service status
-	@$(LOAD_ENV_SHARED) docker compose -p $(PROJECT) \
-	  -f docker-compose.yml -f docker-compose.gpu.yml \
-	  $(Z890_OVERRIDE) \
-	  $(Z890_ENV) \
-	  ps
+	@$(LOAD_ENV_SHARED) docker compose -p $(PROJECT)-z890 $(Z890_COMPOSE) ps
+
+.PHONY: logs-z890
+logs-z890: ## Tail Z890 GPU node logs
+	@$(LOAD_ENV_SHARED) docker compose -p $(PROJECT)-z890 $(Z890_COMPOSE) logs -f --tail=50
 
 # Status helper
 ps:

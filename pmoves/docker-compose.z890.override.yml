@@ -38,16 +38,20 @@ services:
       - HIRAG_URL=${HIRAG_URL:-http://hi-rag-gateway-v2-gpu:8086}
     # Override depends_on: mesh-agent normally depends on nats container,
     # but NATS runs on main PC — no local container dependency.
-    depends_on: {}
+    depends_on: !reset {}
 
   # ═════════════════════════════════════════════════════════════════════════════
   # DISABLED SERVICES (consumed from main PC via Tailscale)
   # ═════════════════════════════════════════════════════════════════════════════
   # Setting profiles: [disabled] ensures these never start on Z890.
   # The "disabled" profile is never activated in any Makefile target.
+  # IMPORTANT: Every service NOT explicitly run on Z890 must be listed here,
+  # including transitive dependents — compose validates the full graph.
 
   # --- Data Tier ---
   nats:
+    profiles: [disabled]
+  nats-init:
     profiles: [disabled]
   qdrant:
     profiles: [disabled]
@@ -58,10 +62,32 @@ services:
   minio:
     profiles: [disabled]
 
-  # --- Supabase ---
+  # --- Supabase (full stack) ---
   supabase-db:
     profiles: [disabled]
   supabase-rest:
+    profiles: [disabled]
+  supabase-analytics:
+    profiles: [disabled]
+  supabase-gotrue:
+    profiles: [disabled]
+  supabase-kong:
+    profiles: [disabled]
+  supabase-meta:
+    profiles: [disabled]
+  supabase-pooler:
+    profiles: [disabled]
+  supabase-postgrest:
+    profiles: [disabled]
+  supabase-realtime:
+    profiles: [disabled]
+  supabase-storage:
+    profiles: [disabled]
+  supabase-imgproxy:
+    profiles: [disabled]
+  supabase-edge-functions:
+    profiles: [disabled]
+  supabase-vector:
     profiles: [disabled]
 
   # --- LLM Gateway ---
@@ -69,11 +95,63 @@ services:
     profiles: [disabled]
   tensorzero-gateway:
     profiles: [disabled]
+  tensorzero-ui:
+    profiles: [disabled]
 
   # --- Agents (run on main PC) ---
   agent-zero:
     profiles: [disabled]
   archon:
+    profiles: [disabled]
+
+  # --- NATS-dependent services ---
+  nats-echo-req:
+    profiles: [disabled]
+  a2ui-nats-bridge:
+    profiles: [disabled]
+  botz-gateway:
+    profiles: [disabled]
+  cast-tts-gateway:
+    profiles: [disabled]
+  cipher-api:
+    profiles: [disabled]
+  comfy-watcher:
+    profiles: [disabled]
+  deepresearch:
+    profiles: [disabled]
+  gpu-orchestrator:
+    profiles: [disabled]
+  llama-throughput-lab:
+    profiles: [disabled]
+  model-registry:
+    profiles: [disabled]
+  supaserch:
+    profiles: [disabled]
+  transcribe-backend:
+    profiles: [disabled]
+  voice-relay:
+    profiles: [disabled]
+
+  # --- Hi-RAG ---
+  hi-rag-gateway:
+    profiles: [disabled]
+  hi-rag-gateway-v2:
+    profiles: [disabled]
+  hi-rag-gateway-gpu:
+    profiles: [disabled]
+  hi-rag-gateway-v2-gpu:
+    profiles: [disabled]
+
+  # --- GitHub automation ---
+  github-branch-cleanup:
+    profiles: [disabled]
+  github-branch-naming:
+    profiles: [disabled]
+  github-crossrepo-pr:
+    profiles: [disabled]
+  github-crossrepo-sync:
+    profiles: [disabled]
+  github-issue-triage:
     profiles: [disabled]
 
   # --- Workers (run on main PC) ---
@@ -86,7 +164,7 @@ services:
   pdf-ingest:
     profiles: [disabled]
 
-  # --- Media (can optionally enable later) ---
+  # --- Media (run on main PC) ---
   channel-monitor:
     profiles: [disabled]
   pmoves-yt:
