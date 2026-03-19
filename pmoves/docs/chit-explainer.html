@@ -1,0 +1,834 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CHIT — What Is It? | DARKXSIDE × PMOVES.AI</title>
+<meta name="description" content="An interactive visual guide to the Consciousness Geometry Protocol (CHIT) and how DARKXSIDE's beats become holographic geometry.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700;900&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:        #060610;
+    --surface:   #0d0d22;
+    --border:    rgba(100,100,200,0.18);
+    --accent1:   #7b3fe4;   /* purple */
+    --accent2:   #00e5ff;   /* cyan */
+    --accent3:   #ff00aa;   /* magenta/DARKXSIDE */
+    --accent4:   #44ff88;   /* green */
+    --text:      #e8e8ff;
+    --muted:     #7878a0;
+    --glow1:     rgba(123,63,228,0.35);
+    --glow2:     rgba(0,229,255,0.25);
+    --glow3:     rgba(255,0,170,0.35);
+  }
+
+  html, body {
+    height: 100%; width: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Outfit', sans-serif;
+    overflow-x: hidden;
+  }
+
+  /* ── Hero ─────────────────────────────────────────────────────────────── */
+  .hero {
+    text-align: center;
+    padding: 80px 24px 40px;
+    position: relative;
+    overflow: hidden;
+  }
+  .hero::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(ellipse 60% 60% at 50% -10%, var(--glow1), transparent),
+      radial-gradient(ellipse 40% 40% at 80% 80%, var(--glow3), transparent);
+    pointer-events: none;
+  }
+  .hero-label {
+    font-size: 0.75rem;
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    color: var(--accent3);
+    margin-bottom: 12px;
+    font-weight: 600;
+  }
+  .hero h1 {
+    font-size: clamp(2.5rem, 6vw, 5rem);
+    font-weight: 900;
+    background: linear-gradient(135deg, var(--accent2), var(--accent1), var(--accent3));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    line-height: 1.1;
+    margin-bottom: 20px;
+  }
+  .hero-sub {
+    font-size: 1.15rem;
+    color: var(--muted);
+    max-width: 600px;
+    margin: 0 auto 40px;
+    line-height: 1.7;
+  }
+  .hero-chips {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 10px;
+    margin-bottom: 48px;
+  }
+  .chip {
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 6px 16px;
+    font-size: 0.82rem;
+    color: var(--muted);
+    cursor: default;
+    transition: all 0.2s;
+  }
+  .chip:hover { border-color: var(--accent2); color: var(--accent2); }
+
+  /* ── Section ──────────────────────────────────────────────────────────── */
+  section {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 0 24px 80px;
+  }
+  .section-title {
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .section-title .dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--accent2);
+    flex-shrink: 0;
+  }
+  .section-sub {
+    color: var(--muted);
+    font-size: 0.95rem;
+    margin-bottom: 32px;
+    padding-left: 18px;
+  }
+
+  /* ── Mind map nodes ───────────────────────────────────────────────────── */
+  .mindmap {
+    position: relative;
+    width: 100%;
+    min-height: 560px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .mm-svg {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .mm-center {
+    position: relative;
+    z-index: 2;
+    text-align: center;
+    width: 150px;
+  }
+  .mm-center .node-core {
+    width: 130px; height: 130px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--accent1), var(--accent2));
+    box-shadow: 0 0 40px var(--glow1), 0 0 80px var(--glow2);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto;
+    cursor: pointer;
+    transition: transform 0.3s;
+    animation: pulse-core 3s ease-in-out infinite;
+  }
+  .mm-center .node-core:hover { transform: scale(1.08); }
+  @keyframes pulse-core {
+    0%,100% { box-shadow: 0 0 40px var(--glow1), 0 0 80px var(--glow2); }
+    50%      { box-shadow: 0 0 60px var(--glow1), 0 0 120px var(--glow2); }
+  }
+  .mm-center .node-core .icon { font-size: 2.2rem; }
+  .mm-center .node-core .label { font-size: 0.78rem; font-weight: 700; letter-spacing: 0.1em; color: #fff; margin-top: 2px; }
+
+  .mm-branches {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+  }
+
+  .mm-node {
+    position: absolute;
+    transform: translate(-50%, -50%);
+    width: 170px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 14px 16px;
+    cursor: pointer;
+    transition: all 0.28s cubic-bezier(0.34,1.56,0.64,1);
+    animation: fadeIn 0.6s ease both;
+  }
+  .mm-node:hover {
+    transform: translate(-50%, -50%) scale(1.07);
+    border-color: var(--clr, var(--accent2));
+    box-shadow: 0 0 24px var(--glow, var(--glow2));
+  }
+  .mm-node .n-icon { font-size: 1.5rem; margin-bottom: 6px; }
+  .mm-node .n-title { font-size: 0.88rem; font-weight: 700; margin-bottom: 4px; color: var(--clr, var(--accent2)); }
+  .mm-node .n-desc { font-size: 0.72rem; color: var(--muted); line-height: 1.5; }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translate(-50%, -50%) scale(0.6); }
+    to   { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  }
+
+  /* ── Explainer cards ──────────────────────────────────────────────────── */
+  .cards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 20px;
+    margin-top: 8px;
+  }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 28px;
+    position: relative;
+    overflow: hidden;
+    transition: transform 0.25s, box-shadow 0.25s;
+  }
+  .card::before {
+    content: '';
+    position: absolute;
+    top: -40px; right: -40px;
+    width: 120px; height: 120px;
+    border-radius: 50%;
+    background: var(--gcard, var(--glow1));
+    pointer-events: none;
+  }
+  .card:hover { transform: translateY(-4px); box-shadow: 0 12px 40px rgba(0,0,0,0.4); }
+  .card .c-icon { font-size: 2rem; margin-bottom: 14px; }
+  .card .c-title { font-size: 1.05rem; font-weight: 700; margin-bottom: 8px; }
+  .card .c-body { font-size: 0.875rem; color: var(--muted); line-height: 1.7; }
+  .card .c-formula {
+    margin-top: 14px;
+    background: rgba(0,0,0,0.35);
+    border-radius: 10px;
+    padding: 10px 14px;
+    font-family: 'Courier New', monospace;
+    font-size: 0.78rem;
+    color: var(--accent2);
+    border: 1px solid rgba(0,229,255,0.12);
+  }
+
+  /* ── State vector table ───────────────────────────────────────────────── */
+  .sv-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0 8px;
+    margin-top: 8px;
+  }
+  .sv-table thead th {
+    text-align: left;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--muted);
+    padding: 6px 16px;
+  }
+  .sv-table tbody tr {
+    background: var(--surface);
+    border-radius: 12px;
+    transition: background 0.2s;
+  }
+  .sv-table tbody tr:hover { background: rgba(123,63,228,0.12); }
+  .sv-table td {
+    padding: 14px 16px;
+    font-size: 0.875rem;
+    border: none;
+  }
+  .sv-table td:first-child { border-radius: 12px 0 0 12px; }
+  .sv-table td:last-child  { border-radius: 0 12px 12px 0; }
+  .sv-table .glyph {
+    font-size: 1.2rem;
+    font-weight: 700;
+    width: 36px; height: 36px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(123,63,228,0.15);
+  }
+  .sv-table .tag {
+    background: rgba(0,229,255,0.1);
+    color: var(--accent2);
+    border-radius: 6px;
+    padding: 2px 8px;
+    font-size: 0.72rem;
+    display: inline-block;
+  }
+
+  /* ── Visibility guide ────────────────────────────────────────────────── */
+  .vis-timeline {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    position: relative;
+    padding-left: 32px;
+  }
+  .vis-timeline::before {
+    content: '';
+    position: absolute;
+    left: 11px; top: 8px; bottom: 8px;
+    width: 2px;
+    background: linear-gradient(to bottom, var(--accent1), var(--accent3));
+    border-radius: 2px;
+  }
+  .vis-step {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+    padding: 20px 0;
+    position: relative;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .vis-step::before {
+    content: '';
+    position: absolute;
+    left: -24px; top: 26px;
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    background: var(--clr, var(--accent2));
+    box-shadow: 0 0 10px var(--clr, var(--accent2));
+    border: 2px solid var(--bg);
+  }
+  .vis-step:hover .vis-box { border-color: var(--clr, var(--accent2)); }
+  .vis-box {
+    flex: 1;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 16px 20px;
+    transition: border-color 0.2s;
+  }
+  .vis-box .v-label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.12em; color: var(--muted); margin-bottom: 4px; }
+  .vis-box .v-title { font-size: 0.95rem; font-weight: 700; margin-bottom: 4px; }
+  .vis-box .v-desc  { font-size: 0.8rem; color: var(--muted); line-height: 1.6; }
+  .vis-box .v-url   { margin-top: 8px; font-size: 0.75rem; font-family: monospace; color: var(--accent2); }
+
+  /* ── DARKXSIDE showcase ──────────────────────────────────────────────── */
+  .darkxside-hero {
+    background: linear-gradient(135deg, rgba(255,0,170,0.08), rgba(123,63,228,0.08));
+    border: 1px solid rgba(255,0,170,0.2);
+    border-radius: 24px;
+    padding: 48px;
+    margin-bottom: 32px;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+  }
+  .darkxside-hero::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse 70% 70% at 50% 50%, rgba(255,0,170,0.06), transparent);
+  }
+  .darkxside-name {
+    font-size: clamp(2rem, 5vw, 4rem);
+    font-weight: 900;
+    background: linear-gradient(90deg, var(--accent3), var(--accent1), var(--accent3));
+    background-size: 200%;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    animation: shimmer 3s linear infinite;
+    letter-spacing: 0.05em;
+  }
+  @keyframes shimmer {
+    0%   { background-position: 0%; }
+    100% { background-position: 200%; }
+  }
+  .darkxside-tagline {
+    font-size: 0.95rem;
+    color: var(--muted);
+    margin-top: 10px;
+    font-style: italic;
+  }
+  .beats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 14px;
+    margin-top: 24px;
+  }
+  .beat-card {
+    background: rgba(0,0,0,0.3);
+    border: 1px solid rgba(255,0,170,0.12);
+    border-radius: 14px;
+    padding: 18px 20px;
+    text-align: left;
+    transition: all 0.25s;
+  }
+  .beat-card:hover { border-color: var(--accent3); transform: translateY(-2px); }
+  .beat-card .bc-group { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.12em; color: var(--accent3); margin-bottom: 6px; }
+  .beat-card .bc-name  { font-size: 0.9rem; font-weight: 600; margin-bottom: 6px; }
+  .beat-card .bc-meta  { font-size: 0.75rem; color: var(--muted); }
+  .beat-card .bc-bar   { height: 3px; border-radius: 2px; background: rgba(255,255,255,0.08); margin-top: 12px; position: relative; overflow: hidden; }
+  .beat-card .bc-bar span {
+    position: absolute; left: 0; top: 0; height: 100%;
+    border-radius: 2px;
+    background: linear-gradient(90deg, var(--accent3), var(--accent1));
+    animation: bar-anim 2s ease-in-out infinite alternate;
+  }
+  @keyframes bar-anim { from { opacity: 0.5; } to { opacity: 1; } }
+
+  /* ── Footer ───────────────────────────────────────────────────────────── */
+  footer {
+    text-align: center;
+    padding: 32px 24px 48px;
+    font-size: 0.78rem;
+    color: var(--muted);
+    border-top: 1px solid var(--border);
+  }
+  footer a { color: var(--accent2); text-decoration: none; }
+</style>
+</head>
+<body>
+
+<!-- ── HERO ──────────────────────────────────────────────────────────────── -->
+<div class="hero">
+  <div class="hero-label">PMOVES.AI × DARKXSIDE</div>
+  <h1>What Is CHIT<br>and Why Does It Matter?</h1>
+  <p class="hero-sub">
+    CHIT stands for <strong>Consciousness Geometry Protocol</strong>. 
+    Instead of storing information as flat text, PMOVES.AI encodes knowledge, music, and agent state as 
+    <em>mathematically rigorous 3D geometry</em> — shapes that carry meaning.
+  </p>
+  <div class="hero-chips">
+    <span class="chip">Consciousness Geometry Protocol</span>
+    <span class="chip">Holographic Blocks</span>
+    <span class="chip">NATS Geometry Bus</span>
+    <span class="chip">Hyperdimensions</span>
+    <span class="chip">DARKXSIDE Beats</span>
+    <span class="chip">Three.js WebGL</span>
+    <span class="chip">Remotion 4.0.436</span>
+  </div>
+</div>
+
+<!-- ── MIND MAP ──────────────────────────────────────────────────────────── -->
+<section>
+  <div class="section-title"><div class="dot"></div> The CHIT Mind Map</div>
+  <p class="section-sub">Click any node to learn more. Hover to glow. CHIT is the connective tissue between all of these.</p>
+
+  <div class="mindmap" id="mindmap" style="height:580px;">
+    <svg class="mm-svg" id="mm-svg"></svg>
+
+    <!-- Center node -->
+    <div class="mm-center" id="mm-center" style="left:50%;top:50%;position:absolute;transform:translate(-50%,-50%);">
+      <div class="node-core" onclick="showInfo('chit')">
+        <div class="icon">⬡</div>
+        <div class="label">C H I T</div>
+      </div>
+    </div>
+
+    <!-- Branch nodes -->
+    <div class="mm-node" id="n-beats" style="--clr:var(--accent3);--glow:var(--glow3);top:12%;left:75%;"
+      onclick="showInfo('beats')">
+      <div class="n-icon">🎵</div>
+      <div class="n-title">DARKXSIDE Beats</div>
+      <div class="n-desc">82 tracks. 15 years of harmonic engineering. Each beat is a dimensional object.</div>
+    </div>
+
+    <div class="mm-node" id="n-ffmpeg" style="--clr:#ffcc00;--glow:rgba(255,200,0,0.25);top:32%;left:88%;"
+      onclick="showInfo('ffmpeg')">
+      <div class="n-icon">🔬</div>
+      <div class="n-title">Sonic Fingerprint</div>
+      <div class="n-desc">ffmpeg lavfi. ebur128 R128 loudness. Spectral centroid, flatness, tempo.</div>
+    </div>
+
+    <div class="mm-node" id="n-hyper" style="--clr:var(--accent2);--glow:var(--glow2);top:65%;left:82%;"
+      onclick="showInfo('hyper')">
+      <div class="n-icon">🌐</div>
+      <div class="n-title">Hyperdimensions</div>
+      <div class="n-desc">Three.js WebGL renderer. See sonic groups as 3D constellations in real-time.</div>
+    </div>
+
+    <div class="mm-node" id="n-cipher" style="--clr:var(--accent1);--glow:var(--glow1);top:85%;left:55%;"
+      onclick="showInfo('cipher')">
+      <div class="n-icon">🔐</div>
+      <div class="n-title">Cipher Memory</div>
+      <div class="n-desc">Neo4j-backed knowledge graph. Every analysis is checkpointed and resumable.</div>
+    </div>
+
+    <div class="mm-node" id="n-nats" style="--clr:var(--accent4);--glow:rgba(68,255,136,0.25);top:78%;left:22%;"
+      onclick="showInfo('nats')">
+      <div class="n-icon">⚡</div>
+      <div class="n-title">NATS Geometry Bus</div>
+      <div class="n-desc">geometry.cgp.v1 — the nervous system that distributes geometry packets in real-time.</div>
+    </div>
+
+    <div class="mm-node" id="n-remotion" style="--clr:#ff8c00;--glow:rgba(255,140,0,0.25);top:32%;left:12%;"
+      onclick="showInfo('remotion')">
+      <div class="n-icon">🎬</div>
+      <div class="n-title">Remotion 4</div>
+      <div class="n-desc">Renders CHIT geometry blocks to video/WebM. Beat-synced via @remotion/sfx.</div>
+    </div>
+
+    <div class="mm-node" id="n-portal" style="--clr:var(--accent2);--glow:var(--glow2);top:12%;left:25%;"
+      onclick="showInfo('portal')">
+      <div class="n-icon">🔭</div>
+      <div class="n-title">Chrome Portal</div>
+      <div class="n-desc">WebRTC portal inside the Chrome extension. See δ κ Hz F A live from any page.</div>
+    </div>
+  </div>
+
+  <!-- Info panel -->
+  <div id="info-panel" style="
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 24px 28px;
+    margin-top: 24px;
+    min-height: 80px;
+    transition: all 0.3s;
+  ">
+    <p style="color:var(--muted);font-size:0.9rem;">Click any node above to learn about that part of the system.</p>
+  </div>
+</section>
+
+<!-- ── THE 5 DIMENSIONS ──────────────────────────────────────────────────── -->
+<section>
+  <div class="section-title"><div class="dot" style="background:var(--accent3)"></div> The 5 Dimensions of a CHIT Packet</div>
+  <p class="section-sub">Every piece of music, every agent state, every thought gets encoded as five numbers. These five numbers can represent anything.</p>
+
+  <table class="sv-table">
+    <thead>
+      <tr>
+        <th>Symbol</th>
+        <th>Name</th>
+        <th>What it measures</th>
+        <th>In DARKXSIDE Beats</th>
+        <th>Effect when high</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><div class="glyph" style="color:var(--accent2);">δ</div></td>
+        <td><strong>Delta</strong></td>
+        <td>Phase velocity / tree-likeness</td>
+        <td>Tempo BPM (normalized 60–180)</td>
+        <td>More grounding, less generative freedom</td>
+      </tr>
+      <tr>
+        <td><div class="glyph" style="color:var(--accent1);">κ</div></td>
+        <td><strong>Kappa</strong></td>
+        <td>Hyperbolic curvature</td>
+        <td>Dynamic range (LRA — how much the track breathes)</td>
+        <td>Prefers hierarchical retrieval chains</td>
+      </tr>
+      <tr>
+        <td><div class="glyph" style="color:var(--accent4);">Hz</div></td>
+        <td><strong>Hertz</strong></td>
+        <td>Spectral entropy / signal character</td>
+        <td>Spectral centroid (bass-heavy → airy)</td>
+        <td>More filtering passes before output</td>
+      </tr>
+      <tr>
+        <td><div class="glyph" style="color:#ffcc00;">F</div></td>
+        <td><strong>Fitness</strong></td>
+        <td>Swarm / cluster quality</td>
+        <td>Silhouette coherence score of the sonic group</td>
+        <td>Strong group separation → trust the clustering</td>
+      </tr>
+      <tr>
+        <td><div class="glyph" style="color:var(--accent3);">A</div></td>
+        <td><strong>Attribution</strong></td>
+        <td>Confidence / tonal clarity</td>
+        <td>Spectral flatness inverted (tonal = 1.0, noisy = 0.0)</td>
+        <td>Low A → hold in review before publishing</td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ── WHERE IS THIS VISIBLE ────────────────────────────────────────────── -->
+<section>
+  <div class="section-title"><div class="dot" style="background:var(--accent4)"></div> Where Can You See It?</div>
+  <p class="section-sub">CHIT geometry flows through the whole PMOVES mesh. Here's the full visibility chain — from beats folder to 3D constellation.</p>
+
+  <div class="vis-timeline">
+    <div class="vis-step" style="--clr:var(--accent3)">
+      <div class="vis-box">
+        <div class="v-label">Step 1 — Audio Source</div>
+        <div class="v-title">🎵 DARKXSIDE SoundCloud + Google Drive</div>
+        <div class="v-desc">82 tracks downloaded to <code>pmoves/data/beats/soundcloud/darkxside/</code>. Drive tracks via rclone sync. No files deleted — organized by sound, not overwritten.</div>
+      </div>
+    </div>
+    <div class="vis-step" style="--clr:#ffcc00">
+      <div class="vis-box">
+        <div class="v-label">Step 2 — Analysis (Cipher Beats Analyst)</div>
+        <div class="v-title">🔬 uv run pmoves/tools/analyze_beats.py analyze</div>
+        <div class="v-desc">ffmpeg lavfi fingerprinting. Auto-escalates from glaze → gaze if signal is ambiguous. Groups outputs M3U8 playlists + fingerprint cache.</div>
+        <div class="v-url">pmoves/data/beats/playlists/groups_summary.json</div>
+      </div>
+    </div>
+    <div class="vis-step" style="--clr:var(--accent1)">
+      <div class="vis-box">
+        <div class="v-label">Step 3 — CHIT Translation</div>
+        <div class="v-title">⬡ uv run pmoves/tools/beats_to_cgp.py render</div>
+        <div class="v-desc">Sonic groups → geometry.cgp.v1 NATS events. Each group is a constellation placed on a 3D sphere using tempo + spectral character as coordinates.</div>
+        <div class="v-url">NATS: geometry.cgp.v1 | geometry.beats.control.v1</div>
+      </div>
+    </div>
+    <div class="vis-step" style="--clr:var(--accent2)">
+      <div class="vis-box">
+        <div class="v-label">Step 4 — Visualization</div>
+        <div class="v-title">🌐 Hyperdimensions — Three.js WebGL</div>
+        <div class="v-desc">Subscribes to geometry.cgp.v1 via NATS WebSocket. Renders each track as a ConeGeometry (audio modality). Groups orbit different radii based on coherence quality. Auto-rotate, labels, click-to-inspect.</div>
+        <div class="v-url">http://localhost:YOUR_HYPERDIMENSIONS_PORT</div>
+      </div>
+    </div>
+    <div class="vis-step" style="--clr:var(--accent4)">
+      <div class="vis-box">
+        <div class="v-label">Step 5 — Live Portal</div>
+        <div class="v-title">🔭 Chrome Extension → Hyperdimensions Portal</div>
+        <div class="v-desc">Open the PMOVES Chrome extension. Click "Hyperdimensions Portal". See δ κ Hz F A live as WebRTC streams CGP packets. The state vector updates live as beats are analyzed.</div>
+        <div class="v-url">chrome-extension://[id]/portal/portal.html</div>
+      </div>
+    </div>
+    <div class="vis-step" style="--clr:#ff8c00">
+      <div class="vis-box">
+        <div class="v-label">Step 6 — Video Export (Coming)</div>
+        <div class="v-title">🎬 A2UI Renderer → Remotion 4.0.436</div>
+        <div class="v-desc">CHIT geometry → Remotion composition → MP4/WebM. Beat-synced using @remotion/sfx. Each sonic group becomes an animated holographic block for video content, Jellyfin playlists, or streaming overlays.</div>
+        <div class="v-url">pmoves/services/a2ui-renderer/</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── DARKXSIDE SHOWCASE ─────────────────────────────────────────────────── -->
+<section>
+  <div class="section-title"><div class="dot" style="background:var(--accent3)"></div> DARKXSIDE Creative Archive</div>
+  <p class="section-sub">82 tracks. Engineered for holographic listening. Every beat is a frequency object — compressed and EQ'd to sound different depending on your energy state.</p>
+
+  <div class="darkxside-hero">
+    <div class="darkxside-name">D A R K X S I D E</div>
+    <div class="darkxside-tagline">
+      "Sad songs that sound happy when you're sad to cheer up. Beats that sound better when you're calm.<br>
+      Timbre so distinct it follows you — but you can't quite place why."
+    </div>
+    <div style="margin-top:24px;display:flex;flex-wrap:wrap;gap:10px;justify-content:center;">
+      <a href="https://soundcloud.com/darkxside" target="_blank" style="
+        background: rgba(255,0,170,0.15);
+        border: 1px solid var(--accent3);
+        border-radius: 999px;
+        padding: 10px 24px;
+        font-size:0.85rem;
+        font-weight:600;
+        color:var(--accent3);
+        text-decoration:none;
+        transition:all 0.2s;
+      " onmouseover="this.style.background='rgba(255,0,170,0.3)'" onmouseout="this.style.background='rgba(255,0,170,0.15)'">
+        🎵 SoundCloud
+      </a>
+    </div>
+  </div>
+
+  <!-- Sonic Groups from analysis -->
+  <div id="beats-grid" class="beats-grid">
+    <!-- Populated by JS from groups_summary.json if available, fallback static -->
+    <div class="beat-card">
+      <div class="bc-group">Allegro · balanced · Bright</div>
+      <div class="bc-name">High-Energy Constellation</div>
+      <div class="bc-meta">21 tracks · ~121 BPM avg · Spectral: balanced · Bright energy</div>
+      <div class="bc-bar"><span style="width:85%"></span></div>
+    </div>
+    <div class="beat-card">
+      <div class="bc-group">Allegro · balanced · Bright</div>
+      <div class="bc-name">Drive Cluster A</div>
+      <div class="bc-meta">17 tracks · ~119 BPM avg · Spectral: balanced · Bright energy</div>
+      <div class="bc-bar"><span style="width:72%"></span></div>
+    </div>
+    <div class="beat-card">
+      <div class="bc-group">Allegro · balanced · Bright</div>
+      <div class="bc-name">Drive Cluster B</div>
+      <div class="bc-meta">14 tracks · ~120 BPM avg · Spectral: balanced · Bright energy</div>
+      <div class="bc-bar"><span style="width:65%"></span></div>
+    </div>
+    <div class="beat-card">
+      <div class="bc-group">Moderato · balanced · Bright</div>
+      <div class="bc-name">Mid-Tempo Groove</div>
+      <div class="bc-meta">6 tracks · ~105 BPM avg · Spectral: balanced · Bright energy</div>
+      <div class="bc-bar"><span style="width:45%"></span></div>
+    </div>
+    <div class="beat-card">
+      <div class="bc-group">Allegro · balanced · Deep</div>
+      <div class="bc-name">Dark Signature</div>
+      <div class="bc-meta">1 track · ~119 BPM · Spectral: balanced · Deep/quiet intensity</div>
+      <div class="bc-bar"><span style="width:30%"></span></div>
+    </div>
+    <div class="beat-card" style="border-style:dashed;opacity:0.6;">
+      <div class="bc-group" style="color:var(--muted)">Gaze Mode Pending</div>
+      <div class="bc-name" style="color:var(--muted)">Hidden Constellations</div>
+      <div class="bc-meta">The 82 tracks cluster more precisely once Qwen2-Audio / Hi-RAG GPU listens deeply. Run: analyze --sense-mode gaze</div>
+      <div class="bc-bar"><span style="width:0%;animation:none;opacity:0.2;"></span></div>
+    </div>
+  </div>
+
+  <p style="margin-top:24px;font-size:0.8rem;color:var(--muted);text-align:center;">
+    Groups above from <code>groups_summary.json</code>. Run gaze mode to unlock semantic clustering.
+  </p>
+</section>
+
+<!-- ── FOOTER ─────────────────────────────────────────────────────────────── -->
+<footer>
+  <p>PMOVES.AI × <a href="https://soundcloud.com/darkxside">DARKXSIDE</a> · Cataclysm Studios Inc.</p>
+  <p style="margin-top:6px;opacity:0.5;">CHIT Geometry · cgp.v0.2 · Remotion 4.0.436 · Hyperdimensions · Cipher Memory</p>
+</footer>
+
+<!-- ── SVG CONNECTOR LINES ───────────────────────────────────────────────── -->
+<script>
+// Draw lines from center to each branch node
+function drawConnectors() {
+  const svg = document.getElementById('mm-svg');
+  const map = document.getElementById('mindmap');
+  const center = document.getElementById('mm-center');
+  const mapRect = map.getBoundingClientRect();
+  const cx = map.offsetWidth / 2;
+  const cy = map.offsetHeight / 2;
+
+  svg.innerHTML = '';
+  svg.setAttribute('viewBox', `0 0 ${map.offsetWidth} ${map.offsetHeight}`);
+
+  const nodes = map.querySelectorAll('.mm-node');
+  const colors = {
+    'n-beats':    '#ff00aa',
+    'n-ffmpeg':   '#ffcc00',
+    'n-hyper':    '#00e5ff',
+    'n-cipher':   '#7b3fe4',
+    'n-nats':     '#44ff88',
+    'n-remotion': '#ff8c00',
+    'n-portal':   '#00e5ff',
+  };
+
+  nodes.forEach(node => {
+    const nRect = node.getBoundingClientRect();
+    const nx = node.offsetLeft;
+    const ny = node.offsetTop;
+    const nw = node.offsetWidth;
+    const nh = node.offsetHeight;
+
+    const x1 = cx, y1 = cy;
+    const x2 = nx + nw/2, y2 = ny + nh/2;
+
+    const color = colors[node.id] || '#7878a0';
+
+    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    line.setAttribute('x1', x1); line.setAttribute('y1', y1);
+    line.setAttribute('x2', x2); line.setAttribute('y2', y2);
+    line.setAttribute('stroke', color);
+    line.setAttribute('stroke-width', '1.5');
+    line.setAttribute('stroke-opacity', '0.35');
+    line.setAttribute('stroke-dasharray', '4 4');
+    svg.appendChild(line);
+  });
+}
+drawConnectors();
+window.addEventListener('resize', drawConnectors);
+
+// Info panel content
+const infos = {
+  chit: {
+    title: '⬡ CHIT — Consciousness Geometry Protocol',
+    body: `CHIT doesn't store "facts" — it stores the <em>geometry of relationships</em>. 
+    Imagine instead of writing "BPM: 120" you encode that into a position in 3D space, 
+    where nearby positions mean "similar energy" and distant ones mean "different world." 
+    This lets AI agents move through knowledge the way you move through space — they can 
+    feel how close two ideas are, not just search for keywords.`
+  },
+  beats: {
+    title: '🎵 DARKXSIDE Beats as Dimensional Objects',
+    body: `Every beat was engineered with a specific emotional geometry in mind. Sad songs that sound 
+    happy when you're sad. Tracks that reveal hidden layers at different volumes and speaker setups. 
+    The EQ and compression choices aren't arbitrary — they're tuned to <em>resonate differently based 
+    on the listener's state</em>. CHIT captures this: each track gets a unique position in 5D space 
+    based on its sonic signature.`
+  },
+  ffmpeg: {
+    title: '🔬 Sonic Fingerprinting via ffmpeg lavfi',
+    body: `No heavy AI libraries needed. ffmpeg 8.x has native audio analysis filters: <br>
+    <strong>ebur128</strong> — R128 loudness standard (how loud it feels over time)<br>
+    <strong>aspectralstats</strong> — Centroid (timbre colour) + Flatness (tonal vs. noisy)<br>
+    The "glaze" mode runs these filters on each track in ~30s sample windows. If the signal 
+    is still ambiguous, the agent auto-escalates to "gaze" mode — loading a local AI model to 
+    actually <em>listen</em> and describe the track semantically.`
+  },
+  hyper: {
+    title: '🌐 Hyperdimensions — The Visual Portal',
+    body: `A Three.js WebGL application that subscribes to the NATS Geometry Bus on 
+    <code>geometry.cgp.v1</code>. Each sonic group appears as a cluster of glowing cones (audio modality)
+    arranged in a 3D constellation. Tempo maps to sphere elevation, spectral character maps to azimuth.
+    Click any point to see the raw fingerprint data. Auto-rotates like a living star map of your music.`
+  },
+  cipher: {
+    title: '🔐 Cipher Memory — The Knowledge Graph',
+    body: `Every analysis run checkpoints to Cipher Memory (port 8096), backed by Neo4j. 
+    This means if your analysis is interrupted, it resumes exactly where it left off. 
+    It also means the system can <em>remember</em> across sessions — asking "what did the agent 
+    think about track X last time?" becomes a graph query, not a re-computation.`
+  },
+  nats: {
+    title: '⚡ NATS Geometry Bus — The Nervous System',
+    body: `NATS JetStream carries geometry packets between every service in real-time. When 
+    <code>beats_to_cgp.py</code> publishes a sonic group, Hyperdimensions renders it immediately. 
+    The Chrome portal sees it instantly. The A2UI renderer can begin building a video frame. 
+    All of this happens in milliseconds across the Tailscale mesh — your 5090, Z890, 4090, and Jetson nodes.`
+  },
+  remotion: {
+    title: '🎬 Remotion 4.0.436 — Holographic Video Blocks',
+    body: `Remotion renders CHIT geometry as actual video. The new <code>@remotion/sfx</code> package 
+    links visual pulses directly to audio frames — so the glyph pulsing "◈" in the video is 
+    <em>actually synced to the beat's waveform</em>, not a timer. Each sonic group can become 
+    a downloadable holographic block: a video file that carries the geometry of that music in its frames.`
+  },
+  portal: {
+    title: '🔭 Chrome Extension Portal — Live State Vector',
+    body: `Open the PMOVES Chrome extension and click Hyperdimensions Portal. You see δ κ Hz F A 
+    updating live via WebRTC as the NATS bus carries new geometry. This is the operator view — 
+    you can watch the "shape" of the system change in real time as beats are analyzed, agents act, 
+    or voices are processed through the TTS/CHIT pipeline.`
+  }
+};
+
+function showInfo(key) {
+  const panel = document.getElementById('info-panel');
+  const info = infos[key];
+  if (!info) return;
+  panel.style.borderColor = 'rgba(0,229,255,0.3)';
+  panel.innerHTML = `
+    <h3 style="font-size:1.05rem;margin-bottom:10px;">${info.title}</h3>
+    <p style="font-size:0.875rem;color:var(--muted);line-height:1.75;">${info.body}</p>
+  `;
+  setTimeout(() => panel.style.borderColor = 'var(--border)', 1200);
+}
+</script>
+</body>
+</html>
