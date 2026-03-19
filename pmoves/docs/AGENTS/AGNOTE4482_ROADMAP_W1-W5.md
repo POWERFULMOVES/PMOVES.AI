@@ -196,8 +196,11 @@ The site is not a traditional website — it's an **album / videogame / comic / 
 
 ## Remaining Questions
 
-- **Discord server**: Already created, or starting from scratch?
-- **Hostinger API**: Credentials configured?
+All resolved. No blockers.
+
+### Resolved (DARKXSIDE, 2026-03-19)
+- **Discord server**: Exists but needs restructure — W3 Worker will rebuild channels/roles per classroom/office/company spec
+- **Hostinger API**: Credentials ready — agents can deploy via API immediately
 
 ## 5090 Session-6 Alignment
 
