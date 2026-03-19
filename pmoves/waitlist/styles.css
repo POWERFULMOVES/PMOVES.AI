@@ -1,0 +1,407 @@
+/* PMOVES.AI Waitlist — Dark Theme */
+
+:root {
+  --bg-deep: #0a0a1a;
+  --bg: #0f0f1a;
+  --surface: #1a1a2e;
+  --surface2: #222240;
+  --border: rgba(102, 126, 234, 0.2);
+  --text: #e8e8f0;
+  --text-dim: #aaa;
+  --accent: #667eea;
+  --accent2: #764ba2;
+  --green: #4CAF50;
+  --radius: 12px;
+}
+
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  background: var(--bg-deep);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+  line-height: 1.6;
+  min-height: 100vh;
+}
+
+/* ─── Skip Link ──────────────────────────── */
+
+.skip-link {
+  position: absolute;
+  top: -100%;
+  left: 16px;
+  background: var(--accent);
+  color: white;
+  padding: 8px 16px;
+  border-radius: 0 0 8px 8px;
+  z-index: 1000;
+  text-decoration: none;
+  font-weight: 600;
+}
+.skip-link:focus {
+  top: 0;
+}
+
+/* ─── Screen Reader Only ─────────────────── */
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+/* ─── Hero ───────────────────────────────── */
+
+.hero {
+  position: relative;
+  min-height: 80vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 24px;
+  overflow: hidden;
+  background: linear-gradient(170deg, var(--bg-deep) 0%, var(--bg) 40%, var(--surface) 100%);
+}
+
+.hero-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(102, 126, 234, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(102, 126, 234, 0.06) 1px, transparent 1px);
+  background-size: 60px 60px;
+  mask-image: radial-gradient(ellipse 70% 60% at 50% 40%, black 30%, transparent 80%);
+  -webkit-mask-image: radial-gradient(ellipse 70% 60% at 50% 40%, black 30%, transparent 80%);
+}
+
+.hero-content {
+  position: relative;
+  text-align: center;
+  max-width: 700px;
+}
+
+.hero-logo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  margin-bottom: 16px;
+  color: white;
+}
+
+.hero-logo svg { color: var(--accent); }
+
+.hero-logo h1 {
+  font-size: 3rem;
+  font-weight: 800;
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.hero-tagline {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: white;
+  margin-bottom: 8px;
+}
+
+.hero-sub {
+  font-size: 1.1rem;
+  color: var(--text-dim);
+  margin-bottom: 40px;
+  max-width: 500px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* ─── Signup Form ────────────────────────── */
+
+.signup-form { max-width: 560px; margin: 0 auto; }
+
+.form-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.form-row input,
+.form-row select {
+  flex: 1;
+  min-width: 180px;
+  padding: 14px 16px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 15px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.form-row input:focus,
+.form-row select:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.15);
+}
+
+.form-row select { min-width: 140px; flex: 0.6; }
+
+.cta-btn {
+  padding: 14px 28px;
+  min-height: 48px;
+  border: none;
+  border-radius: var(--radius);
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  color: white;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s;
+  white-space: nowrap;
+}
+
+.cta-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+}
+
+.cta-btn:focus-visible {
+  outline: 3px solid white;
+  outline-offset: 3px;
+}
+
+.cta-btn:disabled {
+  opacity: 0.6;
+  cursor: wait;
+  transform: none;
+}
+
+.form-feedback {
+  margin-top: 12px;
+  font-size: 14px;
+  min-height: 24px;
+}
+
+.form-feedback.success { color: var(--green); }
+.form-feedback.error { color: #f44336; }
+
+/* ─── Value Props ────────────────────────── */
+
+.value-props {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 24px;
+  padding: 80px 24px;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 32px 24px;
+  transition: transform 0.2s, border-color 0.2s;
+}
+
+.card:hover {
+  transform: translateY(-4px);
+  border-color: var(--accent);
+}
+
+.card-icon { font-size: 2rem; margin-bottom: 12px; }
+
+.card h2 {
+  font-size: 1.2rem;
+  margin-bottom: 8px;
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.card p { color: var(--text-dim); font-size: 0.95rem; line-height: 1.7; }
+
+/* ─── Tech Stack ─────────────────────────── */
+
+.tech-stack {
+  padding: 60px 24px 80px;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.tech-stack h2 {
+  text-align: center;
+  font-size: 1.5rem;
+  margin-bottom: 32px;
+  color: white;
+}
+
+.stack-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 16px;
+}
+
+.stack-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 20px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.stack-item strong {
+  color: var(--accent);
+  font-size: 0.95rem;
+}
+
+.stack-item span {
+  color: var(--text-dim);
+  font-size: 0.88rem;
+}
+
+/* ─── Philosophy ─────────────────────────── */
+
+.philosophy {
+  padding: 80px 24px;
+  max-width: 1100px;
+  margin: 0 auto;
+  border-top: 1px solid var(--border);
+}
+
+.philosophy h2 {
+  text-align: center;
+  font-size: 1.8rem;
+  margin-bottom: 12px;
+  color: white;
+  font-style: italic;
+}
+
+.philosophy-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 24px;
+  margin-top: 32px;
+}
+
+.philosophy-card {
+  padding: 28px 24px;
+  background: linear-gradient(170deg, var(--surface) 0%, rgba(102, 126, 234, 0.04) 100%);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+}
+
+.philosophy-card h3 {
+  font-size: 1rem;
+  color: var(--accent);
+  margin-bottom: 12px;
+  font-weight: 700;
+}
+
+.philosophy-card p {
+  color: var(--text-dim);
+  font-size: 0.95rem;
+  line-height: 1.8;
+}
+
+/* ─── Tiers ──────────────────────────────── */
+
+.tiers {
+  padding: 60px 24px 80px;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.tiers h2 {
+  text-align: center;
+  font-size: 1.5rem;
+  margin-bottom: 32px;
+  color: white;
+}
+
+.tier-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 16px;
+}
+
+.tier-card {
+  padding: 24px 20px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  text-align: center;
+}
+
+.tier-card h3 {
+  font-size: 1rem;
+  margin-bottom: 8px;
+  color: white;
+}
+
+.tier-card p { color: var(--text-dim); font-size: 0.85rem; }
+
+.tier-card-accent {
+  border-color: var(--accent);
+  background: linear-gradient(170deg, var(--surface) 0%, rgba(102, 126, 234, 0.08) 100%);
+}
+
+.tier-note {
+  text-align: center;
+  color: var(--text-dim);
+  margin-top: 24px;
+  font-size: 0.9rem;
+}
+
+/* ─── Footer ─────────────────────────────── */
+
+footer {
+  text-align: center;
+  padding: 40px 24px;
+  border-top: 1px solid var(--border);
+  color: var(--text-dim);
+  font-size: 0.9rem;
+}
+
+footer strong { color: var(--accent); }
+
+.footer-sub {
+  margin-top: 8px;
+  font-size: 0.8rem;
+  opacity: 0.7;
+}
+
+/* ─── Focus Outlines ─────────────────────── */
+
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* ─── Mobile ─────────────────────────────── */
+
+@media (max-width: 600px) {
+  .hero-logo h1 { font-size: 2rem; }
+  .hero-tagline { font-size: 1.2rem; }
+  .hero { min-height: 70vh; padding: 40px 16px; }
+  .form-row { flex-direction: column; }
+  .form-row input, .form-row select, .cta-btn { width: 100%; min-width: auto; }
+  .value-props { padding: 40px 16px; }
+  .tier-grid { grid-template-columns: 1fr 1fr; }
+}

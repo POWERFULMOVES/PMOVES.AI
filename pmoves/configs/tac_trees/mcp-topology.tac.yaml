@@ -353,7 +353,102 @@ root:
           agent_hint: codex
 
     # =========================================================================
-    # Phase 5: Topology Summary & Audit Rules
+    # Phase 5: MCP Consumers (OpenClaw + Crush)
+    # =========================================================================
+    - id: mcp.consumers
+      task: "MCP consumer applications"
+      context: "Tools that consume MCP services from the PMOVES ecosystem"
+      agent_hint: codex
+      children:
+
+        # --- OpenClaw (MCP consumer + own MCP system) ---
+        - id: mcp.consumers.openclaw
+          task: "OpenClaw gateway as MCP consumer"
+          context: "PMOVES-ClawZ/ — multi-channel AI gateway, has ACP SDK + plugin system, can connect to internal MCP servers"
+          agent_hint: codex
+          children:
+            - id: mcp.consumers.openclaw.acp-sdk
+              task: "Agent Client Protocol SDK for MCP bridging"
+              action:
+                type: grep
+                target: "PMOVES-ClawZ/package.json"
+                pattern: "agentclientprotocol"
+                expect: "@agentclientprotocol/sdk dependency for MCP/ACP integration"
+              context: "ACP bridges OpenClaw to external MCP servers"
+              agent_hint: codex
+
+            - id: mcp.consumers.openclaw.plugin-sdk
+              task: "Plugin SDK for custom MCP tool registration"
+              action:
+                type: grep
+                target: "PMOVES-ClawZ/package.json"
+                pattern: "plugin-sdk"
+                expect: "Plugin SDK export enables custom MCP tool registration"
+              context: "Third-party extensions can register new MCP tools"
+              agent_hint: codex
+
+            - id: mcp.consumers.openclaw.pmoves-mcps
+              task: "GAP: OpenClaw not yet wired to PMOVES internal MCPs"
+              action:
+                type: manual
+                expect: "OpenClaw should connect to: Cipher Memory (SSE :8096), Agent Zero (HTTP :8080), BoTZ (HTTP)"
+                description: "Configure OpenClaw extensions or config to connect to PMOVES MCP servers"
+              context: "Requires extension or gateway-level MCP client config"
+              agent_hint: codex
+
+        # --- Crush CLI (MCP consumer) ---
+        - id: mcp.consumers.crush
+          task: "Crush CLI as MCP consumer"
+          context: "PMOVES-crush/ — Go-based AI coding assistant with MCP client"
+          agent_hint: codex
+          children:
+            - id: mcp.consumers.crush.current-mcps
+              task: "4 MCP servers currently configured"
+              action:
+                type: script
+                command: |
+                  python -c "
+                  import os, json
+                  data = json.load(open(os.path.expanduser('~/.config/crush/crush.json')))
+                  mcps = list(data.get('mcp', {}).keys())
+                  print(f'Crush MCPs ({len(mcps)}): {mcps}')
+                  "
+                expect: "4 MCPs: zai-mcp-server (stdio), web-search-prime (http), web-reader (http), zread (http)"
+              context: "All via ZAI cloud provider"
+              agent_hint: codex
+
+            - id: mcp.consumers.crush.gap-cipher
+              task: "GAP: Cipher Memory MCP not configured in Crush"
+              action:
+                type: script
+                command: |
+                  python -c "
+                  import os, json
+                  data = json.load(open(os.path.expanduser('~/.config/crush/crush.json')))
+                  has = any('cipher' in k.lower() for k in data.get('mcp', {}).keys())
+                  print('CONFIGURED' if has else 'GAP: Cipher Memory MCP missing from Crush')
+                  "
+                expect: "Should add: cipher-memory (SSE http://localhost:8096/sse)"
+              context: "Cross-session memory for Crush coding sessions"
+              agent_hint: codex
+
+            - id: mcp.consumers.crush.gap-agent-zero
+              task: "GAP: Agent Zero MCP not configured in Crush"
+              action:
+                type: script
+                command: |
+                  python -c "
+                  import os, json
+                  data = json.load(open(os.path.expanduser('~/.config/crush/crush.json')))
+                  has = any('agent' in k.lower() for k in data.get('mcp', {}).keys())
+                  print('CONFIGURED' if has else 'GAP: Agent Zero MCP missing from Crush')
+                  "
+                expect: "Should add: agent-zero (HTTP http://localhost:8080/mcp/)"
+              context: "Task delegation to agent ecosystem from Crush"
+              agent_hint: codex
+
+    # =========================================================================
+    # Phase 6: Topology Summary & Audit Rules
     # =========================================================================
     - id: mcp.audit
       task: "MCP topology audit rules"
@@ -364,7 +459,7 @@ root:
           task: "All MCP servers accounted for"
           action:
             type: manual
-            expect: "13 total MCP servers: 3 internal (Agent Zero HTTP, Cipher Memory SSE, BoTZ HTTP) + 10 external (Airtable, Cloudflare, Gmail, Hugging Face, Mermaid Chart, context7, web-reader, web-search-prime, zai-mcp-server, zread)"
+            expect: "13 total MCP servers: 3 internal (Agent Zero HTTP, Cipher Memory SSE, BoTZ HTTP) + 10 external (Airtable, Cloudflare, Gmail, Hugging Face, Mermaid Chart, context7, web-reader, web-search-prime, zai-mcp-server, zread). 2 consumers: OpenClaw (ACP+plugins), Crush (4 MCPs + 2 planned)"
           context: "Complete MCP topology inventory"
           agent_hint: codex
 
@@ -398,12 +493,12 @@ root:
           task: "Total tool count across all MCP servers"
           action:
             type: manual
-            expect: "Total: ~74 tools. Internal: ~19 (Agent Zero ~9, Cipher Memory 4, BoTZ ~6). External: ~65 (Airtable 8, Cloudflare 22, Gmail 7, HF 7, Mermaid 6, context7 2, web-reader 1, web-search 1, zai 8, zread 3)."
+            expect: "Total: ~74 tools. Internal: ~19 (Agent Zero ~9, Cipher Memory 4, BoTZ ~6). External: ~65 (Airtable 8, Cloudflare 22, Gmail 7, HF 7, Mermaid 6, context7 2, web-reader 1, web-search 1, zai 8, zread 3). Consumer MCPs: Crush 4 active + 2 planned."
           context: "Approximate tool counts based on available tool definitions"
           agent_hint: codex
 
     # =========================================================================
-    # Phase 6: Server Inventory Table
+    # Phase 7: Server Inventory Table
     # =========================================================================
     - id: mcp.inventory
       task: "MCP server inventory"
@@ -423,4 +518,9 @@ root:
         web-search-prime   | Cloud | plugin       |   1 | Plugin auth              | N/A (stateless)
         zai-mcp-server     | Cloud | plugin       |   8 | Plugin auth              | N/A (stateless)
         zread              | Cloud | plugin       |   3 | Plugin auth              | N/A (stateless)
+
+        MCP consumers (transport | endpoint | MCPs consumed):
+        -----------------------------------------------------------------------
+        OpenClaw Gateway   | ACP   | :18789       | Planned: Cipher Memory, Agent Zero, BoTZ
+        Crush CLI          | Local | ~/.config/   | Active: zai, web-search, web-reader, zread | Planned: Cipher Memory, Agent Zero
       agent_hint: codex

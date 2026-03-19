@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PMOVES.AI — Your AI, Your Terms</title>
+  <meta name="description" content="Community-first AI infrastructure. Private compute. No data leaves your network. Join the waitlist.">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <a href="#main" class="skip-link">Skip to main content</a>
+
+  <!-- Hero -->
+  <header class="hero" id="main" tabindex="-1">
+    <div class="hero-grid" aria-hidden="true"></div>
+    <div class="hero-content">
+      <div class="hero-logo">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M12 2L2 7L12 12L22 7L12 2Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+          <path d="M2 17L12 22L22 17" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+          <path d="M2 12L12 17L22 12" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+        </svg>
+        <h1>PMOVES.AI</h1>
+      </div>
+      <p class="hero-tagline">Your AI, Your Terms</p>
+      <p class="hero-sub">We solve SaaS so you can touch grass. Go find.</p>
+
+      <form id="waitlist-form" class="signup-form" aria-label="Join the waitlist">
+        <div class="form-row">
+          <label for="email-input" class="sr-only">Email address</label>
+          <input type="email" id="email-input" name="email" placeholder="your@email.com" required
+                 aria-label="Email address" autocomplete="email">
+          <select id="tier-select" name="tier_interest" aria-label="Which tier interests you?">
+            <option value="community">Community</option>
+            <option value="creator">Creator</option>
+            <option value="enterprise">Enterprise</option>
+            <option value="developer">Developer</option>
+          </select>
+          <button type="submit" class="cta-btn">Join the Waitlist</button>
+        </div>
+        <div id="form-feedback" class="form-feedback" role="status" aria-live="polite"></div>
+      </form>
+    </div>
+  </header>
+
+  <!-- Value Props -->
+  <main>
+    <section class="value-props" aria-label="Who we serve">
+      <div class="card">
+        <div class="card-icon" aria-hidden="true">&#127968;</div>
+        <h2>For Communities</h2>
+        <p>AI that serves your neighborhood. Processing your data on your terms. Multilingual. Privacy-first. Built on the Fordham Hill model — replicable in any community.</p>
+      </div>
+      <div class="card">
+        <div class="card-icon" aria-hidden="true">&#127970;</div>
+        <h2>For Enterprise</h2>
+        <p>Agent Zero + DoX + Claw processes document workloads with enterprise-grade security. 84 services. Docker-hardened. NVIDIA-sandboxed. Zero-retention. Fully auditable.</p>
+      </div>
+      <div class="card">
+        <div class="card-icon" aria-hidden="true">&#128187;</div>
+        <h2>For Developers</h2>
+        <p>65+ MCP tools. 63 agents. 13 MCP servers. 44 submodules. Full observability. Build on a production multi-agent platform with Prometheus, Grafana, NATS, and hybrid RAG.</p>
+      </div>
+    </section>
+
+    <!-- Tech Stack -->
+    <section class="tech-stack" aria-label="Technology stack">
+      <h2>The Stack</h2>
+      <div class="stack-grid">
+        <div class="stack-item">
+          <strong>Agent Zero</strong>
+          <span>63 agents, 11 teams. Beat Manus head-to-head.</span>
+        </div>
+        <div class="stack-item">
+          <strong>OpenClaw</strong>
+          <span>20 channels. WhatsApp, Telegram, Slack, Discord, Signal, Matrix, and more.</span>
+        </div>
+        <div class="stack-item">
+          <strong>Hi-RAG v2</strong>
+          <span>Hybrid RAG: vector + graph + full-text with cross-encoder reranking.</span>
+        </div>
+        <div class="stack-item">
+          <strong>TensorZero</strong>
+          <span>Centralized LLM gateway. Multi-provider. ClickHouse observability.</span>
+        </div>
+        <div class="stack-item">
+          <strong>Flute-Gateway</strong>
+          <span>Prosodic TTS. WebRTC streaming. Real-time voice.</span>
+        </div>
+        <div class="stack-item">
+          <strong>DoX</strong>
+          <span>Document intelligence. PDFs, spreadsheets, APIs. Geometric visualization.</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Philosophy -->
+    <section class="philosophy" aria-label="Our philosophy">
+      <h2>There's Always a There There</h2>
+      <div class="philosophy-grid">
+        <div class="philosophy-card">
+          <h3>Positive what-if, stepped into concrete</h3>
+          <p>Other platforms sell you possibilities. We ship receipts. 84 services. 44 submodules. 63 agents. Every number validated from code, not a pitch deck.</p>
+        </div>
+        <div class="philosophy-card">
+          <h3>Self-funded. Itching to create.</h3>
+          <p>No VC runway. No growth-at-all-costs. Built by someone who needed it, for people who need it. Efficiency and innovation aren't opposites — they're the same thing when you care enough.</p>
+        </div>
+        <div class="philosophy-card">
+          <h3>Priceless, yeah, for a price</h3>
+          <p>Good bread to break when more are free to care. The platform is the provision. The community is the return.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Tiers -->
+    <section class="tiers" aria-label="Tier preview">
+      <h2>Tiers</h2>
+      <div class="tier-grid">
+        <div class="tier-card">
+          <h3>Community</h3>
+          <p>Free for neighborhoods and cooperatives.</p>
+        </div>
+        <div class="tier-card">
+          <h3>Creator</h3>
+          <p>For independent creators and small teams.</p>
+        </div>
+        <div class="tier-card">
+          <h3>Pro</h3>
+          <p>Full stack access with priority GPU allocation.</p>
+        </div>
+        <div class="tier-card">
+          <h3>Studio</h3>
+          <p>Multi-agent orchestration and custom pipelines.</p>
+        </div>
+        <div class="tier-card tier-card-accent">
+          <h3>Enterprise</h3>
+          <p>Zero-retention. NVIDIA-sandboxed. UN-compliant. Dedicated infrastructure.</p>
+        </div>
+      </div>
+      <p class="tier-note">Pricing TBD — join the waitlist for early access and founding rates.</p>
+    </section>
+  </main>
+
+  <footer>
+    <p>Built by <strong>DARKXSIDE</strong> / Cataclysm Studios Inc.</p>
+    <p class="footer-sub">The holodeck is real. See it through.</p>
+  </footer>
+
+  <script src="app.js" type="module"></script>
+</body>
+</html>
