@@ -1,0 +1,145 @@
+name: "NVIDIA NIMs Integration"
+version: "1.0.0"
+description: "Plan and track NVIDIA NIM container integration for optimized GPU inference alongside Ollama/vLLM/TensorZero"
+
+root:
+  id: nvidia-nims
+  task: "NVIDIA NIMs integration review"
+  context: "NVIDIA NIMs + TensorZero routing + GPU orchestrator"
+  agent_hint: codex
+  children:
+
+    # Phase 1: NIM Container Assessment
+    - id: nims.assess
+      task: "NIM container readiness"
+      children:
+        - id: nims.assess.ngc-account
+          task: "NGC account and API key configured"
+          action:
+            type: manual
+            expect: "NGC_API_KEY set in env.shared, nvcr.io registry accessible"
+        - id: nims.assess.vram-budget
+          task: "VRAM budget for NIM + existing models"
+          action:
+            type: manual
+            expect: "RTX 5090 32GB — NIM ~10-16GB depending on model, coexists with Ollama"
+        - id: nims.assess.model-selection
+          task: "NIM model selected (nemotron, llama3, or mistral)"
+          action:
+            type: manual
+            expect: "NIM catalog model compatible with RTX 5090 VRAM budget"
+        - id: nims.assess.license-check
+          task: "NIM license and EULA accepted"
+          action:
+            type: manual
+            expect: "NGC EULA accepted for selected NIM model"
+
+    # Phase 2: Docker Compose Integration
+    - id: nims.compose
+      task: "NIM container in Docker Compose"
+      children:
+        - id: nims.compose.service
+          task: "NIM service definition added to docker-compose.yml"
+          action:
+            type: grep
+            target: "pmoves/docker-compose.yml"
+            pattern: "nvidia-nim:"
+            expect: "NIM service defined under gpu profile"
+        - id: nims.compose.gpu-deploy
+          task: "GPU deploy block with NVIDIA runtime"
+          action:
+            type: manual
+            expect: "deploy.resources.reservations.devices[0].capabilities: [gpu]"
+        - id: nims.compose.healthcheck
+          task: "NIM healthcheck configured"
+          action:
+            type: manual
+            expect: "curl -f http://localhost:8000/v1/health/ready"
+        - id: nims.compose.network
+          task: "NIM on pmoves_app network"
+          action:
+            type: manual
+            expect: "networks: [pmoves_app, pmoves_external]"
+        - id: nims.compose.hardening
+          task: "Security hardening applied (read_only, cap_drop)"
+          action:
+            type: manual
+            expect: "tier-llm-hardened anchor applied"
+
+    # Phase 3: TensorZero Routing
+    - id: nims.tensorzero
+      task: "TensorZero routes to NIM"
+      children:
+        - id: nims.tensorzero.provider
+          task: "NIM as OpenAI-compatible provider in tensorzero.toml"
+          action:
+            type: grep
+            target: "pmoves/tensorzero/config/tensorzero.toml"
+            pattern: "nvidia.nim"
+            expect: "NIM provider with api_base http://nvidia-nim:8000/v1"
+        - id: nims.tensorzero.model
+          task: "NIM model entry in tensorzero.toml"
+          action:
+            type: grep
+            target: "pmoves/tensorzero/config/tensorzero.toml"
+            pattern: "models.nim_"
+            expect: "NIM model with routing to nvidia-nim provider"
+        - id: nims.tensorzero.agent-zero-variant
+          task: "agent_zero function has NIM variant"
+          action:
+            type: grep
+            target: "pmoves/tensorzero/config/tensorzero.toml"
+            pattern: "hosted_nim"
+            expect: "NIM variant in agent_zero function"
+        - id: nims.tensorzero.metrics
+          task: "NIM requests tracked in ClickHouse"
+          action:
+            type: manual
+            expect: "NIM model visible in TensorZero UI at :4000"
+
+    # Phase 4: GPU Orchestrator Awareness
+    - id: nims.gpu-orch
+      task: "GPU orchestrator tracks NIM VRAM"
+      children:
+        - id: nims.gpu-orch.model-registry
+          task: "NIM model in gpu-models.yaml"
+          action:
+            type: grep
+            target: "pmoves/config/gpu-models.yaml"
+            pattern: "nim"
+            expect: "NIM model with VRAM estimate in model registry"
+        - id: nims.gpu-orch.lifecycle
+          task: "NIM model lifecycle events on NATS"
+          action:
+            type: manual
+            expect: "mesh.gpu.model.loaded.v1 emitted for NIM container start"
+        - id: nims.gpu-orch.coexistence
+          task: "NIM and Ollama coexistence validated"
+          action:
+            type: manual
+            expect: "Both NIM and Ollama running on same GPU without OOM"
+
+    # Phase 5: Benchmarking
+    - id: nims.benchmark
+      task: "NIM vs Ollama/vLLM performance comparison"
+      children:
+        - id: nims.benchmark.ttft
+          task: "Time-to-first-token comparison"
+          action:
+            type: manual
+            expect: "NIM TTFT measured vs Ollama for same model family"
+        - id: nims.benchmark.throughput
+          task: "Tokens/sec throughput comparison"
+          action:
+            type: manual
+            expect: "NIM throughput vs Ollama/vLLM at batch size 1 and 4"
+        - id: nims.benchmark.tz-metrics
+          task: "TensorZero ClickHouse captures NIM metrics"
+          action:
+            type: manual
+            expect: "NIM latency/throughput visible in TZ ClickHouse dashboards"
+        - id: nims.benchmark.report
+          task: "Benchmark report published"
+          action:
+            type: manual
+            expect: "Results in pmoves/docs/benchmarks/nvidia-nims-vs-ollama.md"

@@ -35,7 +35,7 @@ logger = logging.getLogger(__name__)
 
 # Environment configuration
 SERVICE_NAME = os.environ.get("SERVICE_NAME", "consciousness-service")
-SERVICE_PORT = int(os.environ.get("SERVICE_PORT", "8105"))
+SERVICE_PORT = int(os.environ.get("SERVICE_PORT", "8106"))
 NATS_URL = os.environ.get("NATS_URL", "nats://nats:pmoves@nats:4222")
 CHIT_PASSPHRASE = os.environ.get("CHIT_PROD_PASSPHRASE", "")
 if not CHIT_PASSPHRASE:

@@ -1,0 +1,161 @@
+name: "HuggingFace Integration & Dataset Strategy"
+version: "1.0.0"
+description: "Audit HF MCP server health, dataset catalog publishing, model collection freshness, and local mirroring for DARKXSIDE org"
+
+root:
+  id: hf-integration
+  task: "HuggingFace integration review"
+  context: "pmoves/services/hf-mcp-server/ + pmoves/config/datasets.yaml + DARKXSIDE HF org"
+  agent_hint: codex
+  children:
+
+    # Phase 1: HF MCP Server Health
+    - id: hf.mcp
+      task: "HF MCP server operational"
+      children:
+        - id: hf.mcp.health
+          task: "HF MCP server healthy at :8096"
+          action:
+            type: http
+            target: "http://localhost:8096/healthz"
+            expect: "200 OK"
+        - id: hf.mcp.token
+          task: "HUGGINGFACE_HUB_TOKEN configured in env.shared"
+          action:
+            type: manual
+            expect: "HF_TOKEN or HUGGINGFACE_HUB_TOKEN set, gated model access working"
+        - id: hf.mcp.metrics
+          task: "HF MCP Prometheus metrics exposed"
+          action:
+            type: http
+            target: "http://localhost:8096/metrics"
+            expect: "Prometheus metrics for model downloads, search queries"
+        - id: hf.mcp.tools
+          task: "MCP tools responding (search, info, download, convert)"
+          action:
+            type: manual
+            expect: "hf.model.search, hf.model.info, hf.model.download, hf.model.convert_gguf all callable"
+
+    # Phase 2: Dataset Publishing Pipeline
+    - id: hf.datasets
+      task: "Dataset publishing pipeline"
+      children:
+        - id: hf.datasets.catalog
+          task: "datasets.yaml catalog defines all PMOVES datasets"
+          action:
+            type: grep
+            target: "pmoves/config/datasets.yaml"
+            pattern: "hf_id"
+            expect: "pmoves-chit-text, pmoves-chit-multimodal, pmoves-agent-traces"
+        - id: hf.datasets.publish-script
+          task: "publish_dataset.py functional"
+          action:
+            type: file_exists
+            target: "pmoves/scripts/publish_dataset.py"
+            expect: "Script reads datasets.yaml and pushes Parquet to HF Hub"
+        - id: hf.datasets.chit-text
+          task: "DARKXSIDE/pmoves-chit-text published on HF Hub"
+          action:
+            type: manual
+            expect: "Dataset card visible with schema, splits, size metrics"
+        - id: hf.datasets.chit-multimodal
+          task: "DARKXSIDE/pmoves-chit-multimodal published"
+          action:
+            type: manual
+            expect: "Multimodal dataset with image/audio/text columns"
+        - id: hf.datasets.agent-traces
+          task: "DARKXSIDE/pmoves-agent-traces published"
+          action:
+            type: manual
+            expect: "Agent trace dataset with DPO pairs for RLHF"
+
+    # Phase 3: Model Collection
+    - id: hf.models
+      task: "DARKXSIDE model collection"
+      children:
+        - id: hf.models.onboard-tool
+          task: "hf_model_onboard.py exists and works"
+          action:
+            type: file_exists
+            target: "pmoves/tools/hf_model_onboard.py"
+            expect: "Model onboarding with model card generation"
+        - id: hf.models.collection
+          task: "DARKXSIDE HF collection page exists"
+          action:
+            type: manual
+            expect: "huggingface.co/DARKXSIDE shows PMOVES models and datasets"
+        - id: hf.models.agentgym
+          task: "AgentGym RL trained models published to HF"
+          action:
+            type: manual
+            expect: "RL-trained models pushed via HfApi to DARKXSIDE org"
+        - id: hf.models.sentence-transformers
+          task: "sentence-transformers cached and verified"
+          action:
+            type: manual
+            expect: "all-MiniLM-L6-v2 cached at HF_HOME, used by 5+ services"
+
+    # Phase 4: Local Mirroring
+    - id: hf.mirror
+      task: "Local dataset and model mirroring strategy"
+      children:
+        - id: hf.mirror.cache-dir
+          task: "HF_HOME and HF_HUB_CACHE paths configured"
+          action:
+            type: grep
+            target: "pmoves/env.hf-models.example"
+            pattern: "HF_HOME"
+            expect: "HF_HOME=/mnt/models/hf with sufficient disk space"
+        - id: hf.mirror.transfer-accel
+          task: "HF_HUB_ENABLE_HF_TRANSFER enabled for fast downloads"
+          action:
+            type: grep
+            target: "pmoves/env.hf-models.example"
+            pattern: "HF_HUB_ENABLE_HF_TRANSFER=1"
+            expect: "Transfer acceleration enabled via hf-transfer package"
+        - id: hf.mirror.make-target
+          task: "make hf-mirror-datasets target exists"
+          action:
+            type: grep
+            target: "pmoves/mk/hf.mk"
+            pattern: "hf-mirror-datasets"
+            expect: "Makefile target downloads all datasets.yaml entries locally"
+        - id: hf.mirror.disk-budget
+          task: "Disk budget for mirrored datasets"
+          action:
+            type: manual
+            expect: "Sufficient disk for all 3 datasets + model checkpoints"
+
+    # Phase 5: Integration Freshness
+    - id: hf.freshness
+      task: "HF integration freshness across services"
+      children:
+        - id: hf.freshness.extract-worker
+          task: "extract-worker uses HF sentence-transformers"
+          action:
+            type: grep
+            target: "pmoves/services/extract-worker/worker.py"
+            pattern: "sentence.transformers"
+            expect: "EMBEDDING_BACKEND=sentence-transformers"
+        - id: hf.freshness.hirag
+          task: "Hi-RAG v2 uses HF cross-encoder for reranking"
+          action:
+            type: manual
+            expect: "CrossEncoder loaded from HF cache for reranking"
+        - id: hf.freshness.consciousness
+          task: "consciousness-service uses cached HF embeddings"
+          action:
+            type: manual
+            expect: "all-MiniLM-L6-v2 cached, fallback to tfidf if unavailable"
+        - id: hf.freshness.skill-sources
+          task: "huggingface-skills registered in skill-pairings"
+          action:
+            type: grep
+            target: "pmoves/configs/skill-pairings.yaml"
+            pattern: "huggingface-skills"
+            expect: "Skill source path defined under skill_sources"
+        - id: hf.freshness.tts
+          task: "TTS engines use HF model cache"
+          action:
+            type: manual
+            expect: "F5-TTS, Kokoro, KittenTTS, Fish Speech all load from HF_HOME"

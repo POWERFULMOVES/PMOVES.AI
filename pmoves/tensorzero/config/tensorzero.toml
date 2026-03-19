@@ -231,7 +231,8 @@ api_base = "https://api.z.ai/api/coding/paas/v4"
 model_name = "gpt-4o-mini"
 api_key_location = "env::Z_AI_API_KEY"
 
-# Z.ai GLM models (for Chinese LLM capabilities)
+# Z.ai GLM Flash — CODING endpoint (code gen scenarios only, not general API)
+# See: https://api.z.ai/api/coding/paas/v4 vs https://api.z.ai/api/paas/v4
 [models.chat_zai_glm]
 routing = ["zai_glm"]
 
@@ -258,6 +259,49 @@ type = "openai"
 api_base = "https://api.cloudflare.com/client/v4/accounts/fe5ef93f1ffc7070b2218b96f8b256f5/ai/run/openai"
 model_name = "@cf/openai/gpt-oss-20b"
 api_key_location = "env::CLOUDFLARE_API_TOKEN"
+
+# --- Claude (Anthropic native provider) ---
+[models.claude_sonnet_4]
+routing = ["anthropic_direct"]
+
+[models.claude_sonnet_4.providers.anthropic_direct]
+type = "anthropic"
+model_name = "claude-sonnet-4-20250514"
+api_key_location = "env::ANTHROPIC_API_KEY"
+
+# --- GLM-4 Model Family (Zhipu AI) ------------------------------------------
+#
+# Two endpoint classes — use them accordingly:
+#   CODING: https://api.z.ai/api/coding/paas/v4  (Z.ai Coding Plan — code gen only)
+#   GENERAL: https://open.bigmodel.cn/api/paas/v4 (BigModel.cn — all capabilities)
+#
+# The Coding endpoint is restricted to coding scenarios. General endpoint
+# supports reasoning, multilingual, long-context, and all other use cases.
+# chat_zai_glm (above, line ~237) uses the Coding endpoint for glm-4-flash.
+#
+# Three tiers: Flash (speed via Z.ai Coding), Plus (quality), Long (128k context)
+# HiRAG already uses glm-4-plus + embedding-3 (2048d) — see hi_Search_glm.py
+# TensorZero variant weights let you A/B test across tiers via ClickHouse metrics
+
+# GLM-4 Plus: quality tier for complex reasoning (direct BigModel.cn — general endpoint)
+[models.glm_4_plus]
+routing = ["bigmodel_direct"]
+
+[models.glm_4_plus.providers.bigmodel_direct]
+type = "openai"
+api_base = "https://open.bigmodel.cn/api/paas/v4"
+model_name = "glm-4-plus"
+api_key_location = "env::GLM_API_KEY"
+
+# GLM-4 Long: 128k context for large document analysis (direct BigModel.cn — general endpoint)
+[models.glm_4_long]
+routing = ["bigmodel_long"]
+
+[models.glm_4_long.providers.bigmodel_long]
+type = "openai"
+api_base = "https://open.bigmodel.cn/api/paas/v4"
+model_name = "glm-4-long"
+api_key_location = "env::GLM_API_KEY"
 
 # --- Embedding models ------------------------------------------------------
 
@@ -412,6 +456,30 @@ model = "chat_together"
 [functions.agent_zero.variants.hosted_gpt_oss]
 type = "chat_completion"
 model = "chat_cloudflare_gpt_oss"
+
+[functions.agent_zero.variants.hosted_gemini]
+type = "chat_completion"
+model = "chat_gemini_pro"
+
+# Claude — native Anthropic provider for orchestration quality
+[functions.agent_zero.variants.hosted_claude_sonnet]
+type = "chat_completion"
+model = "claude_sonnet_4"
+
+# GLM Flash — fast multilingual utility (Z.ai Coding endpoint)
+[functions.agent_zero.variants.hosted_glm_flash]
+type = "chat_completion"
+model = "chat_zai_glm"
+
+# GLM Plus — quality tier for complex reasoning (BigModel.cn general endpoint)
+[functions.agent_zero.variants.hosted_glm_plus]
+type = "chat_completion"
+model = "glm_4_plus"
+
+# GLM Long — 128k context for large documents (BigModel.cn general endpoint)
+[functions.agent_zero.variants.hosted_glm_long]
+type = "chat_completion"
+model = "glm_4_long"
 
 [functions.langextract]
 type = "chat"

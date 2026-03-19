@@ -2535,6 +2535,8 @@ services:
     environment:
     - TENSORZERO_CLICKHOUSE_URL=${TENSORZERO_CLICKHOUSE_GATEWAY_URL:-${TENSORZERO_CLICKHOUSE_URL:-http://tensorzero:tensorzero@tensorzero-clickhouse:8123/default}}
     # Keep gateway bootable in local-first mode when cloud provider keys are absent.
+    - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-local-disabled}
+    - GLM_API_KEY=${GLM_API_KEY:-local-disabled}
     - OPENAI_API_KEY=${OPENAI_API_KEY:-local-disabled}
     - GROQ_API_KEY=${GROQ_API_KEY:-local-disabled}
     - MOONSHOT_API_KEY=${MOONSHOT_API_KEY:-local-disabled}
@@ -2743,6 +2745,7 @@ services:
       - SUPABASE_URL=${SUPABASE_INTERNAL_URL:-${SUPABASE_URL:-http://supabase-kong:8000}}
       - TENSORZERO_URL=${TENSORZERO_URL:-http://tensorzero-gateway:3000}
       - DEFAULT_VOICE_PROVIDER=${DEFAULT_VOICE_PROVIDER:-vibevoice}
+      - ULTIMATE_TTS_URL=${ULTIMATE_TTS_URL:-http://host.docker.internal:7861}
       - FLUTE_API_KEY=${FLUTE_API_KEY:-}
       - CHIT_REQUIRE_SIGNATURE=${CHIT_PROD_REQUIRE_SIGNATURE:-true}
       - CHIT_DECRYPT_ANCHORS=${CHIT_PROD_DECRYPT_ANCHORS:-true}
@@ -2829,17 +2832,17 @@ services:
     <<: *tier-agent-hardened-ro
     environment:
       - SERVICE_NAME=consciousness-service
-      - SERVICE_PORT=${CONSCIOUSNESS_HOST_PORT:-8105}
+      - SERVICE_PORT=${CONSCIOUSNESS_HOST_PORT:-8106}
       - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
       - CHIT_PROD_PASSPHRASE=${CHIT_PROD_PASSPHRASE:?set CHIT_PROD_PASSPHRASE in env.shared}
       - SUPABASE_URL=${SUPABASE_URL:-http://supabase-kong:8000}
       - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY:-}
       - PYTHONUNBUFFERED=1
-    ports: ["${CONSCIOUSNESS_HOST_PORT:-8105}:8105"]
+    ports: ["${CONSCIOUSNESS_BIND:-127.0.0.1}:${CONSCIOUSNESS_HOST_PORT:-8106}:8106"]
     profiles: ["agents", "botz"]
     networks: [pmoves_app]
     healthcheck:
-      test: ["CMD-SHELL", "python -c \"import httpx; httpx.get('http://localhost:8105/healthz').raise_for_status()\" || exit 1"]
+      test: ["CMD-SHELL", "python -c \"import httpx; httpx.get('http://localhost:8106/healthz').raise_for_status()\" || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -2859,7 +2862,7 @@ services:
     environment:
       - PORT=8060
       - FLUTE_GATEWAY_URL=http://flute-gateway:8055
-      - ULTIMATE_TTS_URL=http://ultimate-tts-studio:7861
+      - ULTIMATE_TTS_URL=${ULTIMATE_TTS_URL:-http://host.docker.internal:7861}
       - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
       - CHIT_REQUIRE_SIGNATURE=${CHIT_REQUIRE_SIGNATURE:-false}
       - CHIT_DECRYPT_ANCHORS=${CHIT_DECRYPT_ANCHORS:-false}

@@ -339,6 +339,83 @@ pairings:
           on_error: "skills.error.v1"
     nats_subject: "skills.pipeline.finance-sync.v1"
 
+  # Conch Consciousness Analysis Pipeline
+  # YouTube → Transcribe → CHR Theory Decomposition → Hi-RAG Index → DeepResearch → Visualize
+  conch-consciousness-analysis:
+    name: "CONCH Consciousness Analysis Pipeline"
+    description: >
+      Ingest YouTube content (Discover AI series), transcribe, analyze through
+      325-theory Kuhn consciousness framework via CHR algorithm, generate CGP
+      packets, index to Hi-RAG v2, research all perspectives, render visual
+      constellation via Remotion. The conch = logarithmic spiral = consciousness
+      geometry. The "C" in CHIT consciousness.
+    chain:
+      - skill: pmoves-yt-ingest
+        output: transcript
+        agent: pmoves-yt
+        depends:
+          services: ["nats:4222"]
+          health: "http://localhost:8077/healthz"
+        hooks:
+          on_complete: "ingest.transcript.ready.v1"
+          on_error: "skills.error.v1"
+      - skill: whisper-transcribe
+        input: transcript
+        output: full_text
+        agent: ffmpeg-whisper
+        depends:
+          services: ["nats:4222"]
+          skills: ["pmoves-yt-ingest"]
+          health: "http://localhost:8078/healthz"
+        hooks:
+          on_complete: "skills.step.whisper-transcribe.done.v1"
+          on_error: "skills.error.v1"
+      - skill: consciousness-chr
+        input: full_text
+        output: cgp_packets
+        agent: consciousness_service
+        depends:
+          services: ["nats:4222"]
+          skills: ["whisper-transcribe"]
+          health: "http://localhost:8106/healthz"
+        hooks:
+          on_complete: "geometry.cgp.v1"
+          on_error: "skills.error.v1"
+      - skill: hirag-index
+        input: cgp_packets
+        output: index_result
+        agent: hirag
+        depends:
+          services: ["nats:4222", "qdrant:6333", "neo4j:7687", "meilisearch:7700"]
+          skills: ["consciousness-chr"]
+          health: "http://localhost:8086/healthz"
+        hooks:
+          on_complete: "skills.step.hirag-index.done.v1"
+          on_error: "skills.error.v1"
+      - skill: deepresearch
+        input: [cgp_packets, index_result]
+        output: research_results
+        agent: deepresearch
+        depends:
+          services: ["nats:4222"]
+          skills: ["hirag-index"]
+          health: "http://localhost:8098/healthz"
+        hooks:
+          on_complete: "research.deepresearch.result.v1"
+          on_error: "skills.error.v1"
+      - skill: remotion-render
+        input: research_results
+        output: video_url
+        agent: creator
+        depends:
+          services: ["nats:4222"]
+          skills: ["deepresearch"]
+        hooks:
+          on_complete: "skills.pipeline.conch-consciousness.done.v1"
+          on_error: "skills.error.v1"
+    ultrathink: true
+    nats_subject: "skills.pipeline.conch-consciousness-analysis.v1"
+
 # Handoff protocol configuration
 handoff:
   # How agents pass work between each other
