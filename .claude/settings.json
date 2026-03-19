@@ -1,4 +1,21 @@
 {
+  "permissions": {
+    "allow": [
+      "Bash(make -C pmoves z890-host-setup:*)",
+      "Bash(make -C pmoves z890-host-verify:*)",
+      "Bash(make -C pmoves z890-host-remove:*)",
+      "Bash(make -C pmoves diag-z890:*)",
+      "Bash(make -C pmoves up-z890:*)",
+      "Bash(make -C pmoves down-z890:*)",
+      "Bash(make -C pmoves ps-z890:*)",
+      "Bash(make -C pmoves logs-z890:*)",
+      "Bash(curl -sf http://127.0.0.1:8111:*)",
+      "Bash(curl -sf http://localhost:8111:*)",
+      "Bash(docker exec pmoves-nats-leaf-1:*)",
+      "Bash(docker exec pmoves-container-agent-1:*)",
+      "Bash(netsh interface portproxy show:*)"
+    ]
+  },
   "hooks": {
     "PreToolUse": [
       {
