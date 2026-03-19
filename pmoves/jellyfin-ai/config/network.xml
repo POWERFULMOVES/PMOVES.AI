@@ -7,7 +7,7 @@
   <CertificatePassword />
   <InternalHttpPort>8096</InternalHttpPort>
   <InternalHttpsPort>8920</InternalHttpsPort>
-  <PublicHttpPort>8096</PublicHttpPort>
+  <PublicHttpPort>9096</PublicHttpPort>
   <PublicHttpsPort>8920</PublicHttpsPort>
   <AutoDiscovery>true</AutoDiscovery>
   <EnableIPv4>true</EnableIPv4>
