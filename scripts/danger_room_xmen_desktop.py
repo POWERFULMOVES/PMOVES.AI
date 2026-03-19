@@ -76,8 +76,8 @@ async def trigger_xmen_theme(session):
     
     payload = {
         "text": "Playing X-Men Animated Series Theme. Danger Room Active.",
-        "provider": "kitten_tts",
-        "voice": None,
+        "provider": "ultimate_tts",
+        "engine": "kitten_tts",
         "output_format": "wav",
     }
     try:
