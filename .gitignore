@@ -147,6 +147,9 @@ pmoves/jellyfin-ai/config/.aspnet/
 pmoves/jellyfin-ai/config/.cache/
 pmoves/jellyfin-ai/config/.jellyfin-config
 pmoves/jellyfin-ai/config/log/
+pmoves/jellyfin-ai/config/*.xml
+pmoves/jellyfin-ai/config/*.json
+!pmoves/jellyfin-ai/config/www/
 pmoves/pmoves/PR_EVIDENCE/
 pmoves/docs/logs/pr_monitor_*.json
 pmoves/docs/logs/pr_monitor_*.md
