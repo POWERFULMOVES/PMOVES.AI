@@ -1,0 +1,257 @@
+# TAC Tree: Cipher Memory — Knowledge Graph Memory for Agents
+# Audits Neo4j backend, MCP bridge, embedding pipeline, NATS integration, gateway routing
+
+name: "Cipher Memory"
+version: "1.0.0"
+description: "Verify Cipher Memory (port 8096): Neo4j-backed knowledge graph, MCP bridge, embedding-first storage, gateway integration, and BoTZ agent memory patterns"
+
+root:
+  id: cipher-memory
+  task: "Cipher Memory system review"
+  context: "pmoves/services/cipher-api/ + pmoves-cipher-mcp/"
+  agent_hint: codex
+  children:
+
+    # =========================================================================
+    # Phase 1: Core Service
+    # =========================================================================
+    - id: cipher.service
+      task: "Cipher API service"
+      context: "pmoves/docker-compose.yml"
+      agent_hint: codex
+      children:
+        - id: cipher.service.compose
+          task: "Cipher API defined in compose"
+          action:
+            type: grep
+            target: "pmoves/docker-compose.yml"
+            pattern: "cipher-api:"
+            expect: "Service on port 8096"
+          context: "Knowledge-graph memory for Claude Code and agents"
+          agent_hint: codex
+
+        - id: cipher.service.healthcheck
+          task: "Health endpoint configured"
+          action:
+            type: http
+            target: "http://localhost:8096/health"
+            expect: "HTTP 200"
+          context: "GET /health"
+          agent_hint: codex
+
+        - id: cipher.service.neo4j-dep
+          task: "Neo4j dependency declared"
+          action:
+            type: grep
+            target: "pmoves/docker-compose.yml"
+            pattern: "cipher.*neo4j|depends_on.*neo4j"
+            expect: "cipher-api depends on neo4j service_healthy"
+          context: "Neo4j (7474/7687) is the persistence backend"
+          agent_hint: codex
+
+    # =========================================================================
+    # Phase 2: Embedding Pipeline — Dark Matter Grade
+    # =========================================================================
+    - id: cipher.embeddings
+      task: "Embedding pipeline quality"
+      context: "pmoves/libs/providers/embedding.py"
+      agent_hint: codex
+      children:
+        - id: cipher.embeddings.model
+          task: "Embedding model is production-grade"
+          action:
+            type: grep
+            target: "pmoves/libs/providers/embedding.py"
+            pattern: "qwen3-embedding"
+            expect: "Default Ollama embed model is qwen3-embedding:8b, not nomic-embed-text or all-MiniLM"
+          context: "Embeddings are dark matter gold — drives Hi-RAG, Cipher, prosodic cross-dimensional"
+          agent_hint: codex
+
+        - id: cipher.embeddings.tensorzero-route
+          task: "Embeddings route through TensorZero gateway"
+          action:
+            type: grep
+            target: "pmoves/libs/providers/embedding.py"
+            pattern: "TENSORZERO_BASE"
+            expect: "TensorZero is first provider in fallback chain"
+          context: "Gateway routing ensures observability on all embedding calls"
+          agent_hint: codex
+
+        - id: cipher.embeddings.named-vectors
+          task: "Named vectors enabled for multi-dimensional"
+          action:
+            type: grep
+            target: "pmoves/services/extract-worker/worker.py"
+            pattern: "QDRANT_USE_NAMED_VECTORS"
+            expect: "Feature flag exists for semantic + prosodic named vectors"
+          context: "PR #1010 (named vectors) + #1011 (prosodic) now merged"
+          agent_hint: codex
+
+        - id: cipher.embeddings.reflexive-loadout
+          task: "GPU model registry has embedding in reflexive loadout"
+          action:
+            type: grep
+            target: "pmoves/config/gpu-models.yaml"
+            pattern: "Reflexive Loadout.*Qwen3 Embedding"
+            expect: "qwen3-embedding:8b at priority 10"
+          context: "Must auto-load at GPU orchestrator startup"
+          agent_hint: codex
+
+    # =========================================================================
+    # Phase 3: MCP Bridge
+    # =========================================================================
+    - id: cipher.mcp
+      task: "MCP bridge for Claude Code and agents"
+      context: "pmoves-cipher-mcp/"
+      agent_hint: codex
+      children:
+        - id: cipher.mcp.transport
+          task: "MCP bridge uses stdio transport"
+          action:
+            type: grep
+            target: "pmoves-cipher-mcp/"
+            pattern: "stdio"
+            expect: "stdio transport for Claude Code integration"
+          context: "Runs as sidecar process, not HTTP"
+          agent_hint: codex
+
+        - id: cipher.mcp.tools
+          task: "MCP tools registered"
+          action:
+            type: grep
+            target: "pmoves-cipher-mcp/"
+            pattern: "pmoves_cipher_store|pmoves_cipher_search|pmoves_cipher_store_reasoning|pmoves_cipher_reasoning_patterns"
+            expect: "4 MCP tools: store, search, store_reasoning, reasoning_patterns"
+          context: "Tools callable by Claude Code CLI and Agent Zero"
+          agent_hint: codex
+
+    # =========================================================================
+    # Phase 4: Gateway Integration
+    # =========================================================================
+    - id: cipher.gateway
+      task: "Gateway and TensorZero integration"
+      context: "pmoves/services/gateway/"
+      agent_hint: codex
+      children:
+        - id: cipher.gateway.chit-route
+          task: "CHIT endpoints route through gateway"
+          action:
+            type: grep
+            target: "pmoves/services/gateway/gateway/api/chit.py"
+            pattern: "cipher|memory"
+            expect: "Gateway CHIT API can delegate to Cipher for storage"
+          context: "Always cipher with gateway — embeddings flow through both"
+          agent_hint: codex
+
+        - id: cipher.gateway.tensorzero-obs
+          task: "Embedding calls logged in TensorZero"
+          action:
+            type: grep
+            target: "pmoves/tensorzero/config/tensorzero.toml"
+            pattern: "embed"
+            expect: "Embedding model configured in TensorZero for observability"
+          context: "Every embedding call tracked: tokens, latency, provider"
+          agent_hint: codex
+
+    # =========================================================================
+    # Phase 5: NATS Event Integration
+    # =========================================================================
+    - id: cipher.nats
+      task: "NATS event bus integration"
+      context: "pmoves/services/cipher-api/"
+      agent_hint: codex
+      children:
+        - id: cipher.nats.publish
+          task: "Cipher publishes memory events"
+          action:
+            type: grep
+            target: "pmoves/services/cipher-api/"
+            pattern: "nats.*publish|NATS"
+            expect: "Publishes memory store/search events for agent coordination"
+          context: "BoTZ agents subscribe to cipher events for knowledge sync"
+          agent_hint: codex
+
+        - id: cipher.nats.subscribe
+          task: "Cipher subscribes to agent trail events"
+          action:
+            type: grep
+            target: "pmoves/services/cipher-api/"
+            pattern: "agent.graphiti.signed"
+            expect: "Subscribes to Graphiti trail for automatic memory ingestion"
+          context: "Agent trail entries auto-stored in Cipher knowledge graph"
+          agent_hint: codex
+
+    # =========================================================================
+    # Phase 6: BoTZ Agent Memory Patterns
+    # =========================================================================
+    - id: cipher.botz
+      task: "BoTZ agent memory integration"
+      context: "pmoves/config/agent_registry.yaml"
+      agent_hint: codex
+      children:
+        - id: cipher.botz.agent-registry
+          task: "Cipher registered as agent capability"
+          action:
+            type: grep
+            target: "pmoves/config/agent_registry.yaml"
+            pattern: "cipher"
+            expect: "cipher_api agent in registry with memory capabilities"
+          context: "All BoTZ agents should use Cipher for persistent memory"
+          agent_hint: codex
+
+        - id: cipher.botz.reasoning-traces
+          task: "Reasoning trace storage via MCP"
+          action:
+            type: grep
+            target: "pmoves-cipher-mcp/"
+            pattern: "store_reasoning|reasoning_patterns"
+            expect: "Reasoning traces stored in Neo4j with CHIT attribution"
+          context: "Enables pattern discovery across agent sessions"
+          agent_hint: codex
+
+        - id: cipher.botz.knowledge-graph
+          task: "Neo4j graph supports relationship traversal"
+          action:
+            type: http
+            target: "http://localhost:7474/db/neo4j/health"
+            expect: "HTTP 200 — Neo4j operational"
+          context: "Graph queries power Cipher search: entities, relationships, patterns"
+          agent_hint: codex
+
+    # =========================================================================
+    # Phase 7: Advanced Features (Post-Integration)
+    # =========================================================================
+    - id: cipher.advanced
+      task: "Advanced Cipher features roadmap"
+      context: "Future integration targets"
+      agent_hint: codex
+      children:
+        - id: cipher.advanced.cross-dimensional
+          task: "Cross-dimensional embedding queries"
+          action:
+            type: grep
+            target: "pmoves/services/hi-rag-gateway-v2/app.py"
+            pattern: "cross-dimensional|cross_dimensional"
+            expect: "Endpoint exists at /hirag/query/cross-dimensional"
+          context: "Cipher memories queryable in both semantic and prosodic spaces"
+          agent_hint: codex
+
+        - id: cipher.advanced.chit-encoding
+          task: "CHIT CGP encoding for memory provenance"
+          action:
+            type: grep
+            target: "pmoves/services/gateway/gateway/api/chit.py"
+            pattern: "cgp|CGP"
+            expect: "CGP packets encode memory provenance and attribution"
+          context: "Every Cipher memory entry traceable via CHIT trail"
+          agent_hint: codex
+
+        - id: cipher.advanced.multi-agent-sync
+          task: "Multi-agent memory synchronization"
+          action:
+            type: grep
+            target: "pmoves/config/agent_registry.yaml"
+            pattern: "cipher.*nats|memory.*sync"
+            expect: "Agents coordinate memory via NATS pub/sub"
+          context: "ClawZ, Crush, Agent Zero all share Cipher memory layer"
+          agent_hint: codex
