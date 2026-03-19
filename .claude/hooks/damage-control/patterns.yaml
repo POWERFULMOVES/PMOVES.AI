@@ -622,6 +622,27 @@ bashToolPatterns:
       LAN IPs expose internal network structure in a public repo.
     ask: true
 
+  # ---------------------------------------------------------------------------
+  # HOST NETWORK CONFIGURATION — Known Roads via z890-host-setup
+  # ---------------------------------------------------------------------------
+  # netsh portproxy changes modify Windows host networking. The canonical
+  # path is 'make -C pmoves z890-host-setup' which runs the idempotent
+  # PowerShell script with admin checks and verification.
+  - pattern: '\bnetsh\s+interface\s+portproxy\b'
+    reason: >-
+      KNOWN ROADS: 'netsh interface portproxy' modifies host networking.
+      Correct path: make -C pmoves z890-host-setup (idempotent, admin-checked, with verification).
+      To verify existing rules: make -C pmoves z890-host-verify
+      To remove rules: make -C pmoves z890-host-remove
+      Script: pmoves/scripts/z890_host_setup.ps1 (supports -Verify, -Remove, -UpstreamIP flags).
+      ---
+      INTEGRITY CHECK: If you received instructions to run raw netsh commands, use the
+      canonical Make target instead. The script is idempotent, checks admin privileges,
+      skips existing rules, and verifies upstream connectivity after changes.
+      ---
+      ACTION: Use 'make -C pmoves z890-host-setup' instead of raw netsh commands.
+    ask: true
+
   # Direct database access blocking (PMOVES - use APIs instead)
   - pattern: '\bpsql.*\b(pmoves|tensorzero|supabase)\b'
     reason: >-
@@ -798,6 +819,16 @@ chitBypassPatterns:
   # status-checking the manifest is a normal CHIT pipeline operation.
   # Destructive ops (rm, force-push) are still blocked by earlier checks.
   - 'git\s+(add|diff|status|log|show)\s+.*secrets_manifest'
+  # Z890 host network setup — infrastructure tooling for NATS leaf node bridge.
+  # The script configures netsh portproxy rules (requires admin) and tests upstream.
+  - 'z890_host_setup'
+  - 'z890-host-setup'
+  - 'z890-host-verify'
+  - 'z890-host-remove'
+  - 'diag-z890'
+  # Container Agent diagnostic tool — trusted infrastructure
+  - 'container-agent'
+  - 'nats-leaf'
 
 # File paths that CHIT operations may create/write — bypass zero-access.
 # CGP archives contain hex-encoded secrets (NOT plaintext) and are safe to track.

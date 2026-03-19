@@ -378,6 +378,7 @@ encapsulate the correct stop/restart/env-injection flow.
 | `docker system prune` (aggressive) | `make -C pmoves docker-prune-all` | — |
 | `docker compose up -d` | `make -C pmoves up-<service>` | `/deploy:up` |
 | `docker compose restart` | `make -C pmoves secrets-funnel && make -C pmoves up` | `/deploy:secrets-funnel` |
+| `netsh interface portproxy` | `make -C pmoves z890-host-setup` | — |
 
 **volume-reset SERVICE values:** `neo4j`, `tensorzero-clickhouse`, `meilisearch`, `qdrant`, `minio`, `supabase-db`, `nats`
 
