@@ -10,6 +10,34 @@
 
 ---
 
+<!-- graphiti:z890-claude phase:H ts:2026-03-19T22:48:00Z -->
+
+## ▣ z890-claude — Session Convergence: 14 PRs Merged + Pinokio + NATS Leaf + Azure Mirror
+
+<table><tr><td style="background:#6D28D9;width:24px"></td><td>
+
+**Resonance:** infrastructure, security, enterprise, multi-node, pinokio
+**Voice:** Analytical
+
+### Done
+- **PMOVES.AI**: Merged 7 PRs (#1028-1035) — fast-xml-parser bump, beats analysis pipeline (178 files), cipher holographic launchers, CHIT explainer, Chrome Extension portal, NATS leaf node for z890, Container Agent diagnostic service.
+- **PMOVES-DoX**: Merged 7 PRs (#123, #127, #132-136) — Docling extraction, CHIT PII masking, distributed TLS deployment, 4 dependabot bumps.
+- **DoX P0 Security Fixes**: Admin role gate on `/pii/unmask` (service_role JWT required), PII re-write to prevent raw PII on disk, CSV injection OWASP tab-prefix, reclassify auth gap closed, TLS downgrade fail-fast, credential redaction in logs, cert gitignore.
+- **PR-Trim**: Classified 51 CodeRabbit threads across 3 DoX PRs (11 actionable, 9 noise, 6 will-fix, 15 resolved, 10 deferred).
+- **Pinokio PBnJ**: Full customization — fixed 8 broken scripts (cmd→message), added network diagnostic tool (Windows/Linux/WSL/Jetson), Glances dual-mode (venv+Docker), diagnostic-first net-fix tool, dynamic pinokio.js menu.
+- **NATS Leaf**: Z890 leaf node verified (5/5 services, 5/5 DNS, Leafnodes: 1). Container Agent at port 8111.
+- **AGNOTE4482**: Updated W5 roadmap with Azure mirror architecture (PMOVES→Azure service map). Added claim + release entries.
+
+### Left Behind
+- 4090 branch cleanup (stale branches need resolution — PR-based via CHIT audit tools)
+- 4090 NATS leaf node config (`nats-leaf-4090.conf` + `env.4090`)
+- Azure Bicep skeleton (service map done, IaC templates next session)
+- Graphiti trail HMAC signature pending on 5090 remote (CHIT_PASSPHRASE not set locally)
+
+</td></tr></table>
+
+---
+
 <!-- graphiti:claude-opus phase:security-hardening-key-scrub ts:2026-03-19T01:00:00Z -->
 
 ## ◆ Claude Opus — Security Hardening + Jellyfin Key Scrub + Graphiti 4482 Closure

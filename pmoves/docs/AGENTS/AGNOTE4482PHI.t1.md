@@ -70,6 +70,8 @@ Required handoff fields:
 - `2026-03-04T20:50:26-05:00` CLAIM `CLAUDE-OPUS` scope: Graphiti protocol x UI-4482 lane (Notebook Workbench graphiti telemetry + docs + smoke evidence).
 - `2026-03-15T18:00:00Z` CLAIM `CLAUDE-OPUS` scope: Infra TAC trees (infrastructure, tailscale, runners) + Tailscale Docker registration for POWERFULMOVES node + PR skill chain convergence (#947).
 - `2026-03-15T21:00:00Z` CLAIM `CLAUDE-OPUS` scope: Post-Phase E handoff — rebase infra TAC onto main, stale branch cleanup, handoff triage.
+- `2026-03-19T22:00:00Z` CLAIM `Z890-CLAUDE` scope: Session convergence — merged 14 PRs (7 PMOVES.AI #1028-1035 + 7 DoX #123-136), P0 UNFCU security fixes (admin gate on /pii/unmask, PII disk leak, CSV injection, TLS downgrade), Pinokio PBnJ network workflow (Windows/Linux/WSL/Jetson), NATS leaf node verified (5/5 services, Leafnodes: 1), PR-trim on 51 CodeRabbit threads, Azure mirror architecture added to W5 roadmap.
+- `2026-03-19T22:00:00Z` RELEASE `Z890-CLAUDE` scope: Trail signed (unsigned locally, HMAC pending on 5090 remote). AGNOTE4482 roadmap updated. Handoff ready for 5090-claude (pull main + sign acknowledgment) and 4090-claude (branch cleanup + leaf node config).
 
 ## Graphiti Review Log
 - `2026-02-21T10:35:03.6791631-05:00` REVIEW `CODEX-GPT5`

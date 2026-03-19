@@ -176,6 +176,45 @@ The site is not a traditional website — it's an **album / videogame / comic / 
 2. **Civi-Box** — `make civi-box` single-command setup. Pinokio or CLI wizard. Tiered: Lite (CPU) → Full (GPU). Evidence playbook per capability.
 3. **Safe Reproduction Model** — each capability has evidence doc (what/how/expected/resources). CHIT-signed provenance. Community verification via Discord showcase.
 
+### Azure Mirror Architecture (UNFCU Alignment) — Added 2026-03-19
+
+**Premise:** UNFCU operates in Azure (MS certification shop). PMOVES provides a mirror architecture mapping 1:1 to Azure services — bidirectional, so PMOVES also supports Azure-native clients (GRAMS, UnK G) connecting into the ecosystem.
+
+**PMOVES → Azure Service Map:**
+
+| PMOVES Service | Azure Equivalent | Migration Path |
+|---------------|-----------------|---------------|
+| NATS JetStream | Azure Service Bus + Event Grid | Protocol bridge or native SDK |
+| Supabase (Postgres) | Azure Database for PostgreSQL | pg_dump → Azure migration |
+| Qdrant | Azure AI Search (vector index) | Embedding adapter layer |
+| Meilisearch | Azure Cognitive Search | Full-text search compat |
+| Neo4j | Azure Cosmos DB (Gremlin API) | Graph query translation |
+| MinIO | Azure Blob Storage | S3-compatible → Az Blob |
+| TensorZero | Azure OpenAI Service | Model routing adapter |
+| Prometheus+Grafana | Azure Monitor + App Insights | Metrics exporter |
+| Docker Compose | Azure Container Apps / AKS | ARM/Bicep templates |
+| Tailscale mesh | Azure VPN Gateway / Private Link | Network overlay compat |
+| Agent Zero (MCP) | Azure AI Agent Service | MCP → Azure SDK bridge |
+| GitHub Actions CI | Azure DevOps Pipelines | Workflow translation |
+| CHIT provenance | Azure DevOps Artifacts | Pipeline artifact signing |
+
+**Bidirectional Integration:**
+- Azure Event Grid → NATS bridge for Azure-native clients
+- Azure AD (Entra ID) JWT validation alongside Supabase JWT
+- ARM/Bicep templates generated from PMOVES compose files
+- Clients replicate PMOVES PRs atomically in their Azure DevOps — same atomic/logical/targeted model
+
+**Status:** Service map defined. Bicep skeleton recommended next (5090-claude or follow-up session).
+
+### DoX Enterprise PRs — SHIPPED 2026-03-19
+
+| PR | Title | Status |
+|----|-------|--------|
+| #132 | fix(docling): extraction + model warmup | Merged — P0 fixes applied |
+| #134 | feat(unfcu): CHIT PII masking + implementation gap closure | Merged — admin gate, PII disk leak, CSV injection fixed |
+| #123 | feat(deploy): distributed TLS + health checks | Merged — TLS downgrade fix, cert isolation, credential redaction |
+| #136, #135, #133, #127 | Dependabot security bumps | Merged |
+
 ---
 
 ## Cross-Workstream Decisions
