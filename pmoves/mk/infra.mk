@@ -156,6 +156,10 @@ gpu-status: ## Show GPU VRAM usage and loaded models
 # ── Port Binding Security ────────────────────────────────────────────
 port-audit: ## Audit Docker port bindings for unexpected 0.0.0.0 exposure
 	@echo "=== Port Binding Security Audit ==="
+	@docker compose config --format json >/dev/null 2>&1 || { \
+	  echo "ERROR: docker compose config failed; aborting port audit."; \
+	  exit 1; \
+	}
 	@$(PYTHON) tools/port_audit.py
 	@echo "=== Port audit complete ==="
 

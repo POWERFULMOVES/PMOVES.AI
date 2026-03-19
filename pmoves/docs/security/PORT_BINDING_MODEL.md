@@ -36,7 +36,7 @@ Set overrides in `env.shared` or pass via environment.
 | BoTZ Gateway | `BOTZ_BIND` | 8054 |
 | Supabase DB | `SUPABASE_DB_BIND` | 54322 |
 | Supabase Auth | `SUPABASE_AUTH_BIND` | 9999 |
-| Supabase REST | `SUPABASE_REST_BIND` | 3000 |
+| Supabase REST | `SUPABASE_REST_BIND` | 3000 (PostgREST — distinct from Grafana 3000 below; runs in `supabase-local` profile only) |
 | Supabase Realtime | `SUPABASE_REALTIME_BIND` | 4010 |
 | Supabase Storage | `SUPABASE_STORAGE_BIND` | 5000 |
 | Supabase Studio | `SUPABASE_STUDIO_BIND` | 54323 |
@@ -69,7 +69,7 @@ Set overrides in `env.shared` or pass via environment.
 | TensorZero Gateway | `TENSORZERO_BIND` | 3030 |
 | Hi-RAG v2 | `HIRAG_BIND` | 8086/8087/8187 |
 | Hi-RAG v1 | `HIRAG_V1_BIND` | 8089 |
-| Grafana | `GRAFANA_BIND` | 3000 |
+| Grafana | `GRAFANA_BIND` | 3000 (shares port with Supabase REST above — profiles are mutually exclusive or use `GRAFANA_PORT` override) |
 | DeepResearch | `DEEPRESEARCH_BIND` | 8098 |
 | SupaSerch | `SUPASERCH_BIND` | 8099 |
 | PMOVES.YT | `PMOVES_YT_BIND` | 8077 |
