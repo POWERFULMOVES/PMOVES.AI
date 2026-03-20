@@ -166,9 +166,10 @@ def run(
     for cgp_file in cgp_files:
         stem = cgp_file.stem.replace(".cgp", "")
         a2ui_out = a2ui_dir / f"{stem}.a2ui.json"
-        # chit_a2ui_bridge uses argparse, not typer — call via python directly
-        bridge_path = TOOLS_DIR / "chit_a2ui_bridge.py"
-        cmd = [sys.executable, str(bridge_path), "-i", str(cgp_file), "-o", str(a2ui_out)]
+        # chit_a2ui_bridge uses argparse — call via python directly
+        # Use the same python that's running this script (consistent environment)
+        bridge_path = str(TOOLS_DIR / "chit_a2ui_bridge.py")
+        cmd = [sys.executable, bridge_path, "-i", str(cgp_file), "-o", str(a2ui_out)]
         console.print(f"  [dim]→ chit_a2ui_bridge → {stem}[/]")
         result = subprocess.run(cmd, capture_output=True, text=True)
         if result.returncode != 0:
@@ -204,7 +205,11 @@ def run(
                     render_results.append({"group": stem, "error": resp.text[:100], "ok": False})
                     console.print(f"  [yellow]⚠[/] {stem} → HTTP {resp.status_code}")
             except httpx.ConnectError:
-                console.print(f"  [yellow]⚠[/] Renderer at {renderer} not reachable — skipping renders")
+                console.print(f"  [yellow]⚠[/] Renderer at {renderer} not reachable — skipping remaining renders")
+                # Record all remaining as skipped so summary is accurate
+                remaining = a2ui_files[a2ui_files.index(a2ui_file):]
+                for skip in remaining:
+                    render_results.append({"group": skip.stem.replace(".a2ui", ""), "error": "renderer unreachable", "ok": False})
                 break
             except Exception as e:
                 render_results.append({"group": stem, "error": str(e)[:100], "ok": False})
