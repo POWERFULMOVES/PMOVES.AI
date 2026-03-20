@@ -177,7 +177,7 @@ def _load_agent_signature(agent_id: str) -> Optional[Dict]:
         return None
     with open(SIGNATURES_PATH, encoding="utf-8") as f:
         data = yaml.safe_load(f) or {}
-    agents = data.get("agents", data)
+    agents = data.get("signatures", data)
     return agents.get(agent_id) or agents.get(agent_id.replace("_", "-"))
 
 

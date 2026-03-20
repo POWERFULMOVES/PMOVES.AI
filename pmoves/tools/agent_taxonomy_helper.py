@@ -502,7 +502,7 @@ def _load_signatures():
         return {}
     with open(SIGNATURES_PATH, encoding="utf-8") as f:
         data = yaml.safe_load(f) or {}
-    return data.get("agents", data)
+    return data.get("signatures", data)
 
 
 def _load_themes():

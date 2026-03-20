@@ -552,7 +552,7 @@ def _load_yaml(path: str) -> dict:
 async def list_themes():
     """List all agent themes (signatures + character mappings)."""
     sigs = _load_yaml(SIGNATURES_PATH)
-    agents = sigs.get("agents", sigs)
+    agents = sigs.get("signatures", sigs)
     result = {}
     for agent_id, sig in agents.items():
         result[agent_id] = {
@@ -570,7 +570,7 @@ async def list_themes():
 async def get_theme(agent_id: str):
     """Get a specific agent's theme (signature + character mapping)."""
     sigs = _load_yaml(SIGNATURES_PATH)
-    agents = sigs.get("agents", sigs)
+    agents = sigs.get("signatures", sigs)
     sig = agents.get(agent_id) or agents.get(agent_id.replace("_", "-"))
     if not sig:
         raise HTTPException(status_code=404, detail=f"Agent '{agent_id}' not found in signatures")
