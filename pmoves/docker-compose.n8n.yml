@@ -53,6 +53,8 @@ services:
       - FLUTE_GATEWAY_URL=${FLUTE_GATEWAY_URL:-http://flute-gateway:8055}
       # Hi-RAG v2 for knowledge retrieval
       - HIRAG_URL=${HIRAG_URL:-http://hi-rag-gateway-v2-cpu:8086}
+      # ComfyUI native API (runs on host, not Docker)
+      - COMFYUI_URL=${COMFYUI_URL:-http://host.docker.internal:8188}
       - N8N_LOG_LEVEL=debug
       - N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=true
     ports: ["5678:5678"]
