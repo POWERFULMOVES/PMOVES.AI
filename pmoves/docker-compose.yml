@@ -1915,21 +1915,21 @@ services:
     <<: *tier-data-hardened
     # Pinned 2025-02-04: Latest stable 2.11.x alpine version
     image: nats:2.11.8-alpine
-    command:
-    - -js
-    - -m
-    - '8222'
-    - --user
-    - ${NATS_USER:-nats}
-    - --pass
-    - ${NATS_PASSWORD:-pmoves}
+    command: ["-c", "/etc/nats/nats-hub.conf"]
     restart: unless-stopped
+    volumes:
+    - ./configs/nats-hub.conf:/etc/nats/nats-hub.conf:ro
+    - nats-jetstream-data:/data/jetstream
     ports:
     - ${NATS_PORT:-4222}:4222
     - ${NATS_MONITORING_PORT:-9223}:8222
+    - ${NATS_LEAFNODE_PORT:-7422}:7422
     networks:
     - pmoves_bus
+    - pmoves_external  # Required for host port binding (leafnode + client access from LAN/Tailscale)
     environment:
+    - NATS_USER=${NATS_USER:-nats}
+    - NATS_PASSWORD=${NATS_PASSWORD:-pmoves}
     - DOCKED_MODE=${DOCKED_MODE:-true}
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
@@ -3549,6 +3549,7 @@ volumes:
   supabase-vector-data: {}
   notebook-sync-data: {}
   tensorzero-clickhouse-data: {}
+  nats-jetstream-data: {}
   invidious-postgres-data: {}
   invidious-companion-cache: {}
   pmoves-ollama-models: {}
