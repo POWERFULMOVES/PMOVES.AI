@@ -1,0 +1,60 @@
+{
+  "name": "PMOVES.AI",
+  "image": "mcr.microsoft.com/devcontainers/python:3.12-bookworm",
+  "features": {
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "22"
+    },
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {},
+    "ghcr.io/devcontainers/features/github-cli:1": {},
+    "ghcr.io/devcontainers-extra/features/bash-command:1": {
+      "command": "pip install uv && uv --version"
+    }
+  },
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "python.defaultInterpreterPath": "/usr/local/bin/python",
+        "editor.formatOnSave": true,
+        "yaml.schemas": {
+          "https://json.schemastore.org/github-workflow.json": ".github/workflows/*.yml"
+        }
+      },
+      "extensions": [
+        "anthropics.claude-code",
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "ms-azuretools.vscode-docker",
+        "redhat.vscode-yaml",
+        "ms-vscode.makefile-tools",
+        "christian-kohler.path-intellisense",
+        "timonwong.shellcheck",
+        "ms-toolsai.jupyter"
+      ]
+    }
+  },
+  "forwardPorts": [
+    3000,
+    4222,
+    8054,
+    8080,
+    8086,
+    8096,
+    9090
+  ],
+  "portsAttributes": {
+    "3000": { "label": "Grafana", "onAutoForward": "silent" },
+    "4222": { "label": "NATS", "onAutoForward": "silent" },
+    "8054": { "label": "BoTZ Gateway", "onAutoForward": "silent" },
+    "8080": { "label": "Agent Zero", "onAutoForward": "notify" },
+    "8086": { "label": "Hi-RAG v2", "onAutoForward": "silent" },
+    "8096": { "label": "Cipher Memory", "onAutoForward": "silent" },
+    "9090": { "label": "Prometheus", "onAutoForward": "silent" }
+  },
+  "postCreateCommand": "make -C pmoves env-setup && make -C pmoves brand-defaults",
+  "containerEnv": {
+    "PMOVES_PROFILE": "student",
+    "PYTHONIOENCODING": "utf-8"
+  },
+  "remoteUser": "vscode"
+}
