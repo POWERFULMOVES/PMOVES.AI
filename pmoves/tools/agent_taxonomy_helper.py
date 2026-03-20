@@ -262,9 +262,12 @@ def _load_signatures():
         data = yaml.safe_load(f) or {}
     # Index by agent_id for fast lookup
     sigs = {}
-    for entry in data.get("signatures", data.get("agents", [])):
-        if isinstance(entry, dict) and "agent_id" in entry:
-            sigs[entry["agent_id"]] = entry
+    sigs_data = data.get("signatures", data.get("agents", {}))
+    if isinstance(sigs_data, dict):
+        for agent_id, entry in sigs_data.items():
+            if isinstance(entry, dict):
+                entry.setdefault("agent_id", agent_id)
+                sigs[agent_id] = entry
     return sigs
 
 

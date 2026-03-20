@@ -38,8 +38,12 @@ def _load_agent_sig(agent_id: str) -> Optional[Dict]:
         return None
     with open(SIGNATURES_PATH, encoding="utf-8") as f:
         data = yaml.safe_load(f) or {}
-    for entry in data.get("signatures", data.get("agents", [])):
-        if isinstance(entry, dict) and entry.get("agent_id") == agent_id:
+    sigs = data.get("signatures", data.get("agents", {}))
+    if isinstance(sigs, dict):
+        # Dict keyed by agent_id (canonical format)
+        if agent_id in sigs:
+            entry = sigs[agent_id]
+            entry.setdefault("agent_id", agent_id)
             return entry
     return None
 
@@ -208,7 +212,9 @@ def render_cgp_summary(cgp: Dict, agent_sig: Optional[Dict] = None) -> str:
         color = agent_sig.get("color", "#FFFFFF")
         aid = agent_sig.get("agent_id", "unknown")
         voice = agent_sig.get("voice", "")
-        attr_line = f"  {_ansi_fg(color, glyph)} {aid} | {color} | {voice}"
+        # Truncate to box width (38 inner chars minus 2 padding = 36 visible)
+        attr_text = f"{aid} | {color} | {voice}"[:34]
+        attr_line = f"  {_ansi_fg(color, glyph)} {attr_text}"
         lines.append(attr_line)
 
     payload = cgp.get("payload", {})
