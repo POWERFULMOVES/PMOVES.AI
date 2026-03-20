@@ -15,7 +15,7 @@ from typing import Dict, Iterable, List, Sequence
 
 DEFAULT_ENV_FILE = Path(__file__).resolve().parents[1] / "env.shared"
 DEFAULT_AUTH_HEALTH_URL = "http://127.0.0.1:65421/auth/v1/health"
-DEFAULT_BOOT_EMAIL = "operator@pmoves.local"
+DEFAULT_BOOT_EMAIL = "powerfulmoves@pmoves.ai"
 
 
 @dataclass

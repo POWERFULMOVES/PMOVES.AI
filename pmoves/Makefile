@@ -154,7 +154,7 @@ include mk/codex.mk
 include mk/preflight.mk
 include mk/infra.mk
 include mk/build-gate.mk
-include mk/nvidia-5090.mk
+-include mk/nvidia-5090.mk
 include mk/hf.mk
 
 .PHONY: update-service-docs
@@ -587,7 +587,7 @@ supabase-bootstrap-mark-applied: ## Mark all migration/seed files as applied in 
 	@echo "✅ Bootstrap history updated"
 
 .PHONY: supabase-boot-user
-SUPABASE_BOOT_USER_EMAIL ?= $(if $(PMOVES_OPERATOR_EMAIL),$(PMOVES_OPERATOR_EMAIL),operator@pmoves.local)
+SUPABASE_BOOT_USER_EMAIL ?= $(if $(PMOVES_OPERATOR_EMAIL),$(PMOVES_OPERATOR_EMAIL),powerfulmoves@pmoves.ai)
 AUTH_BOOTSTRAP_MODE ?= jwt
 AUTH_BOOTSTRAP_MODE := $(if $(strip $(AUTH_BOOTSTRAP_MODE)),$(strip $(AUTH_BOOTSTRAP_MODE)),jwt)
 AUTH_BOOTSTRAP_STRICT ?= 0
@@ -2523,6 +2523,25 @@ comfyui-smoke: ## Smoke check ComfyUI / (expects 200/302)
 	    exit 1; \
 	  fi; \
 	  echo "✔ ComfyUI reachable (HTTP $$code)"
+
+.PHONY: comfyui-validate
+comfyui-validate: ## Validate native ComfyUI API + installed workflow nodes
+	@port=$${COMFYUI_HOST_PORT:-8188}; \
+	  echo "→ Checking ComfyUI at http://localhost:$$port ..."; \
+	  stats=$$(curl -sf "http://localhost:$$port/system_stats" 2>/dev/null) || \
+	    { echo "✖ ComfyUI not reachable on port $$port"; exit 1; }; \
+	  gpu=$$(echo "$$stats" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['devices'][0]['name'])" 2>/dev/null || echo "unknown"); \
+	  echo "  GPU: $$gpu"; \
+	  total=$$(curl -sf "http://localhost:$$port/object_info" | python3 -c "import sys,json; print(len(json.load(sys.stdin)))" 2>/dev/null || echo "0"); \
+	  echo "  Node types: $$total"; \
+	  for node in TextEncodeZImageOmni TextEncodeQwenImageEdit WanImageToVideo LTXVImgToVideo; do \
+	    if curl -sf "http://localhost:$$port/object_info/$$node" >/dev/null 2>&1; then \
+	      echo "  ✔ $$node"; \
+	    else \
+	      echo "  ✖ $$node (missing — run the corresponding installer from docs/ARTSTUFF/)"; \
+	    fi; \
+	  done; \
+	  echo "✔ ComfyUI validation complete"
 
 .PHONY: up-tts-studio tts-studio-smoke
 up-tts-studio: ## Start Ultimate TTS Studio UI (Gradio) from hardened GHCR image

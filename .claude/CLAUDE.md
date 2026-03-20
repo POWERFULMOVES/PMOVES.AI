@@ -379,8 +379,11 @@ encapsulate the correct stop/restart/env-injection flow.
 | `docker compose up -d` | `make -C pmoves up-<service>` | `/deploy:up` |
 | `docker compose restart` | `make -C pmoves secrets-funnel && make -C pmoves up` | `/deploy:secrets-funnel` |
 | `netsh interface portproxy` | `make -C pmoves z890-host-setup` | — |
+| `gh workflow run sync-secrets-local` | `make -C pmoves secrets-sync-trigger` | `/deploy:secrets-funnel` |
 
 **volume-reset SERVICE values:** `neo4j`, `tensorzero-clickhouse`, `meilisearch`, `qdrant`, `minio`, `supabase-db`, `nats`
+
+**secrets-sync-trigger**: Triggers the `sync-secrets-local.yml` GitHub Actions workflow (runs on `self-hosted, ai-lab`), waits for completion, then hydrates `local.env` → `env.shared` and runs `brand-defaults`. The containerized runner mounts `$APPDATA/pmoves` (Windows) or `~/.config/pmoves` (Linux) so secrets persist to the host. If `GOOGLE_CLIENT_ID` or other creds are missing after sync, check that the runner container has the volume mount (see `local_cert_runners.py`).
 
 **docker-prune variants:**
 - `docker-prune` — safe: stopped containers + dangling images only, volumes untouched

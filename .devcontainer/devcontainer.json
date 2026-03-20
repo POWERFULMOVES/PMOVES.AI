@@ -1,57 +1,66 @@
 {
-  "name": "PMOVES.AI",
-  "image": "mcr.microsoft.com/devcontainers/python:3.12-bookworm",
+  "name": "PMOVES.AI — P7 Student Workspace",
+  "image": "mcr.microsoft.com/devcontainers/base:ubuntu-22.04",
   "features": {
     "ghcr.io/devcontainers/features/node:1": {
-      "version": "22"
+      "version": "20"
     },
-    "ghcr.io/devcontainers/features/docker-in-docker:2": {},
-    "ghcr.io/devcontainers/features/github-cli:1": {},
-    "ghcr.io/devcontainers-extra/features/bash-command:1": {
-      "command": "pip install uv && uv --version"
-    }
+    "ghcr.io/devcontainers/features/python:1": {
+      "version": "3.11",
+      "installTools": true
+    },
+    "ghcr.io/devcontainers/features/docker-outside-of-docker:1": {},
+    "ghcr.io/devcontainers/features/git:1": {},
+    "ghcr.io/devcontainers/features/github-cli:1": {}
   },
   "customizations": {
     "vscode": {
+      "extensions": [
+        "anthropics.claude-code",
+        "ms-azuretools.vscode-docker",
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "redhat.vscode-yaml",
+        "foxundermoon.shell-format",
+        "ms-vscode.makefile-tools",
+        "mhutchie.git-graph",
+        "timonwong.shellcheck",
+        "christian-kohler.path-intellisense",
+        "ms-toolsai.jupyter"
+      ],
       "settings": {
+        "terminal.integrated.defaultProfile.linux": "bash",
         "python.defaultInterpreterPath": "/usr/local/bin/python",
         "editor.formatOnSave": true,
         "yaml.schemas": {
           "https://json.schemastore.org/github-workflow.json": ".github/workflows/*.yml"
         }
-      },
-      "extensions": [
-        "anthropics.claude-code",
-        "ms-python.python",
-        "ms-python.vscode-pylance",
-        "ms-azuretools.vscode-docker",
-        "redhat.vscode-yaml",
-        "ms-vscode.makefile-tools",
-        "christian-kohler.path-intellisense",
-        "timonwong.shellcheck",
-        "ms-toolsai.jupyter"
-      ]
+      }
     }
   },
   "forwardPorts": [
     3000,
+    3030,
     4222,
-    8054,
+    7861,
+    8055,
     8080,
     8086,
     8096,
     9090
   ],
   "portsAttributes": {
-    "3000": { "label": "Grafana", "onAutoForward": "silent" },
-    "4222": { "label": "NATS", "onAutoForward": "silent" },
-    "8054": { "label": "BoTZ Gateway", "onAutoForward": "silent" },
-    "8080": { "label": "Agent Zero", "onAutoForward": "notify" },
-    "8086": { "label": "Hi-RAG v2", "onAutoForward": "silent" },
+    "3000": { "label": "Grafana Dashboard", "onAutoForward": "notify" },
+    "3030": { "label": "TensorZero LLM Gateway", "onAutoForward": "silent" },
+    "4222": { "label": "NATS Message Bus", "onAutoForward": "silent" },
+    "7861": { "label": "TTS Studio (Pinokio)", "onAutoForward": "notify" },
+    "8055": { "label": "Flute Voice Gateway", "onAutoForward": "silent" },
+    "8080": { "label": "Agent Zero Orchestrator", "onAutoForward": "silent" },
+    "8086": { "label": "Hi-RAG v2 Knowledge Search", "onAutoForward": "notify" },
     "8096": { "label": "Cipher Memory", "onAutoForward": "silent" },
-    "9090": { "label": "Prometheus", "onAutoForward": "silent" }
+    "9090": { "label": "Prometheus Metrics", "onAutoForward": "silent" }
   },
-  "postCreateCommand": "make -C pmoves env-setup && make -C pmoves brand-defaults",
+  "postCreateCommand": "bash .devcontainer/post-create.sh",
   "containerEnv": {
     "PMOVES_PROFILE": "student",
     "PYTHONIOENCODING": "utf-8"
