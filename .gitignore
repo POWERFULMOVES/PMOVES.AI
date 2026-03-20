@@ -28,6 +28,13 @@ secrets/
 pmoves/data/chit/env.cgp.json
 
 # =============================================================================
+# Beats Pipeline — Generated outputs and state
+# =============================================================================
+pmoves/data/beats/.pipeline_state.json
+pmoves/data/beats/playlists/cgp/
+pmoves/data/beats/playlists/a2ui/
+
+# =============================================================================
 # Temporary check directories (moved to /tmp/pmoves-check-backup-*)
 # =============================================================================
 PMOVES-BoTZ-check/
