@@ -136,6 +136,20 @@ def _ensure_integration_credentials(text: str) -> str:
     if _is_blank_or_placeholder(n8n_runners):
         text = _set_kv(text, "N8N_RUNNERS_AUTH_TOKEN", _strong_random(24))
 
+    # n8n database: ensure postgres mode is set (not SQLite)
+    n8n_db = _get_kv(text, "N8N_DB")
+    if _is_blank_or_placeholder(n8n_db):
+        text = _set_kv(text, "N8N_DB", "postgres")
+    n8n_db_name = _get_kv(text, "N8N_DB_NAME")
+    if _is_blank_or_placeholder(n8n_db_name):
+        text = _set_kv(text, "N8N_DB_NAME", "n8n")
+    n8n_db_user = _get_kv(text, "N8N_DB_USER")
+    if _is_blank_or_placeholder(n8n_db_user):
+        text = _set_kv(text, "N8N_DB_USER", "n8n")
+    n8n_db_pass = _get_kv(text, "N8N_DB_PASSWORD")
+    if _is_blank_or_placeholder(n8n_db_pass):
+        text = _set_kv(text, "N8N_DB_PASSWORD", secrets.token_urlsafe(24))
+
     # Wger database password: PostgreSQL password for the wger database
     wger_db_pass = _get_kv(text, "WGER_DB_PASSWORD")
     if _is_blank_or_placeholder(wger_db_pass):
