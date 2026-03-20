@@ -15,9 +15,9 @@ const log = (msg) => {
 // Security Phase 8: Prevent SSRF / Protocol smuggling
 const validateGatewayUrl = (urlStr) => {
   try {
-    const u = new URL(urlStr.includes('://') ? urlStr : `ws://${urlStr}`);
+    const u = new URL(urlStr.includes('://') ? urlStr : `http://${urlStr}`);
     if (u.hostname === '') throw new Error('Invalid hostname');
-    return u.host;
+    return { host: u.host, protocol: u.protocol };
   } catch (e) {
     throw new Error('Invalid Gateway URL format. Expected host:port (e.g. localhost:8085)');
   }
@@ -50,11 +50,12 @@ const updateStats = (shape) => {
   const vectors = shape?.meta?.control_vectors || shape?.geometry?.vectors || {};
   
   // XSS protection: Force values to numbers/fixed strings via textContent
-  $("#stat-delta").textContent = vectors.delta !== undefined ? Number(vectors.delta).toFixed(2) : (Math.random() * 0.5 + 0.5).toFixed(2);
-  $("#stat-kappa").textContent = vectors.kappa !== undefined ? Number(vectors.kappa).toFixed(2) : (Math.random() * -0.5 - 0.5).toFixed(2);
-  $("#stat-hz").textContent = vectors.hz !== undefined ? Number(vectors.hz).toFixed(2) : (Math.random() * 2.0).toFixed(2);
-  $("#stat-f").textContent = vectors.f !== undefined ? Number(vectors.f).toFixed(2) : (Math.random() * 0.4 + 0.6).toFixed(2);
-  $("#stat-a").textContent = vectors.a !== undefined ? Number(vectors.a).toFixed(2) : (Math.random() * 0.3 + 0.7).toFixed(2);
+  // Show actual data or "—" (no fabricated random values)
+  $("#stat-delta").textContent = vectors.delta !== undefined ? Number(vectors.delta).toFixed(2) : "—";
+  $("#stat-kappa").textContent = vectors.kappa !== undefined ? Number(vectors.kappa).toFixed(2) : "—";
+  $("#stat-hz").textContent = vectors.hz !== undefined ? Number(vectors.hz).toFixed(2) : "—";
+  $("#stat-f").textContent = vectors.f !== undefined ? Number(vectors.f).toFixed(2) : "—";
+  $("#stat-a").textContent = vectors.a !== undefined ? Number(vectors.a).toFixed(2) : "—";
 };
 
 const renderShape = async (shape) => {
@@ -62,12 +63,13 @@ const renderShape = async (shape) => {
   updateStats(shape);
 
   try {
-    const gatewayHost = validateGatewayUrl($("#gateway-url").value);
+    const gw = validateGatewayUrl($("#gateway-url").value);
+    const httpScheme = gw.protocol === 'https:' ? 'https' : 'http';
     const s = shape?.super_nodes?.[0]?.constellations?.[0];
-    
+
     if (s) {
       // Phase 8: Timeout guard applied
-      const r = await fetchWithTimeout(`http://${gatewayHost}/viz/constellation.svg`, {
+      const r = await fetchWithTimeout(`${httpScheme}://${gw.host}/viz/constellation.svg`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(s),
@@ -171,21 +173,22 @@ const setDataChannel = (channel) => {
 // Event Listeners
 $("#join-btn").addEventListener('click', () => {
   const rawUrl = $("#gateway-url").value;
-  let host;
+  let gw;
   try {
-    host = validateGatewayUrl(rawUrl);
+    gw = validateGatewayUrl(rawUrl);
   } catch (e) {
     log(`Security Error: ${e.message}`);
     return;
   }
-  
+
   const room = $("#room").value;
   const peer = $("#peer").value;
-  
+
   const q = new URLSearchParams({ room });
   if (peer) q.append('peer', peer);
-  
-  const wsUrl = `ws://${host}/ws/signaling?${q}`;
+
+  const wsScheme = gw.protocol === 'https:' ? 'wss' : 'ws';
+  const wsUrl = `${wsScheme}://${gw.host}/ws/signaling?${q}`;
   log(`Connecting to ${wsUrl}...`);
   
   try {

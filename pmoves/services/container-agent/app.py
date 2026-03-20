@@ -181,6 +181,16 @@ async def run_full_diagnostic() -> Dict[str, Any]:
     _metrics["services_total"] = len(svc_results)
     _metrics["nats_connected"] = 1 if nats_result["ok"] else 0
 
+    # Check upstream services separately for health assessment
+    upstream_ok = sum(
+        1 for name, s in svc_results.items()
+        if s.get("tier") == "upstream" and s["ok"]
+    )
+    upstream_total = sum(
+        1 for name, s in svc_results.items()
+        if s.get("tier") == "upstream"
+    )
+
     report = {
         "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "node": NODE_NAME,
@@ -191,8 +201,9 @@ async def run_full_diagnostic() -> Dict[str, Any]:
         "summary": {
             "dns": f"{dns_ok}/{len(dns_results)} resolved",
             "services": f"{svc_ok}/{len(svc_results)} reachable",
+            "upstream": f"{upstream_ok}/{upstream_total} reachable",
             "nats": "connected" if nats_result["ok"] else "disconnected",
-            "healthy": dns_ok > 0 and nats_result["ok"],
+            "healthy": dns_ok > 0 and nats_result["ok"] and upstream_ok > 0,
         },
     }
     return report

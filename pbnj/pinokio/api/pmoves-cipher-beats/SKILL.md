@@ -45,7 +45,7 @@ Output: named sonic constellations → **M3U8 playlists + CHIT geometry events**
 
 | Command | What It Does |
 |---------|-------------|
-| `analyze` | Full ffmeg lavfi fingerprint → cluster → playlists → Cipher checkpoint |
+| `analyze` | Full ffmpeg lavfi fingerprint → cluster → playlists → Cipher checkpoint |
 | `groups` | Display existing sonic groups from last run |
 | `status` | Probe Cipher Memory at `:8096` + Glances at `:61208` |
 
@@ -68,7 +68,7 @@ Output: named sonic constellations → **M3U8 playlists + CHIT geometry events**
 Instead of bloated Python audio ML libraries, this agent uses **ffmpeg 8.x lavfi** directly.
 This means it runs natively alongside every PMOVES service that already depends on ffmpeg.
 
-```
+```text
 Audio File (.wav / .opus / .mp3 / .flac / .m4a)
   │
   ├── ffprobe → duration, bit_rate, sample_rate, channels, title tags
@@ -104,7 +104,7 @@ Example: `Andante_warm_Deep` — slow, rich-toned, quiet-intensity track group.
 
 ## Output Files
 
-```
+```text
 pmoves/data/beats/playlists/
   ├── Andante_warm_Deep.m3u8        ← sorted by BPM ascending within group
   ├── Allegro_electric_Bright.m3u8
@@ -121,7 +121,7 @@ pmoves/data/beats/soundcloud/darkxside/
 
 ### Cipher Memory (port 8096)
 Checkpoints are written at two stages:
-1. `fingerprint_complete` — all files analysed, before clustering
+1. `fingerprint_complete` — all files analyzed, before clustering
 2. `grouping_complete` — full group manifest (resumable if interrupted)
 
 ```bash
@@ -132,7 +132,7 @@ curl http://localhost:8096/api/memory/search?q=analyze_beats&category=agent_chec
 ### NATS Geometry Bus
 After grouping, each constellation is published to the Geometry Bus:
 
-```
+```json
 Subject: pmoves.darkxside.beats.group.v1
 Payload: { "group": "Andante_warm_Deep", "count": 12, "tracks": [...] }
 ```

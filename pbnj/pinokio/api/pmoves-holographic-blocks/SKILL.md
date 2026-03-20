@@ -24,7 +24,7 @@ from the DARKXSIDE archive into reusable **Holographic CHIT Geometric Blocks** s
 the Neo4j/Supabase ShapeStore.
 
 The pipeline is:
-```
+```text
 Audio File (.wav/.mp3)
   → Gemini Multimodal Embedding (Hi-RAG)
   → geometry.cgp.v1 NATS event (Holographic Block)
@@ -40,7 +40,7 @@ proposal scaffolding.
 
 ## Capabilities
 
-- Ingest a single `.wav` or `.mp3` file and emit a `cgp.v1` Holographic Block to NATS
+- Ingest a single `.wav` or `.mp3` file and emit a `geometry.cgp.v1` Holographic Block to NATS
 - Batch-ingest a folder of beats (e.g., Google Drive archive)
 - Transpile an existing CGP block into an `a2ui.animation.v1` spec via `chit_a2ui_bridge.py`
 - Push CGP constellations into Unsloth for audio-geometry model fine-tuning
@@ -97,7 +97,7 @@ CHIT_PROD_PASSPHRASE=<required for CGP signing>
 ## Cross-Machine Access (Tailscale Mesh)
 
 The Gemini CLI Pinokio instance on any machine in the mesh can run this skill:
-```
+```text
 5090 (GPU embed):   http://100.x.x.x:8087/hirag/ingest/audio
 z890 (Neo4j):       bolt://100.x.x.x:7687
 4090 (orchestrate): Runs Gemini CLI → invokes skill via P7 Interpreter

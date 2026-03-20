@@ -826,9 +826,10 @@ chitBypassPatterns:
   - 'z890-host-verify'
   - 'z890-host-remove'
   - 'diag-z890'
-  # Container Agent diagnostic tool — trusted infrastructure
-  - 'container-agent'
-  - 'nats-leaf'
+  # Container Agent diagnostic tool — trusted infrastructure (scoped to make targets / scripts)
+  - 'make\s+.*(?:diag-z890|container-agent|up-z890)'
+  - 'container-agent/app\.py'
+  - 'nats-leaf.*(?:\.ya?ml|\.conf|health)'
 
 # File paths that CHIT operations may create/write — bypass zero-access.
 # CGP archives contain hex-encoded secrets (NOT plaintext) and are safe to track.
