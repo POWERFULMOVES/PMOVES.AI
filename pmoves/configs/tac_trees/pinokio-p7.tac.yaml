@@ -199,9 +199,32 @@ root:
             type: manual
             expect: "SKILL.md in pmoves-services describes Docker profile start/stop"
           context: "pbnj/pinokio/api/pmoves-services/"
-          agent_hint: z890-claude
-          status: pending
+          agent_hint: 4090-claude
+          status: done
+          completed: "2026-03-20"
           depends_on: [p7.skillmd.format]
+
+        - id: p7.skillmd.cipher-beats
+          task: "Cipher Beats SKILL.md created"
+          action:
+            type: grep
+            target: "pbnj/pinokio/api/pmoves-cipher-beats/SKILL.md"
+            pattern: "cipher-beats"
+          context: "pbnj/pinokio/api/pmoves-cipher-beats/"
+          agent_hint: 4090-claude
+          status: done
+          completed: "2026-03-19"
+
+        - id: p7.skillmd.holographic-blocks
+          task: "Holographic Blocks SKILL.md created"
+          action:
+            type: grep
+            target: "pbnj/pinokio/api/pmoves-holographic-blocks/SKILL.md"
+            pattern: "holographic-blocks"
+          context: "pbnj/pinokio/api/pmoves-holographic-blocks/"
+          agent_hint: 4090-claude
+          status: done
+          completed: "2026-03-19"
 
     # =========================================================================
     # Phase 7: NATS Integration (Future)

@@ -1,0 +1,66 @@
+{
+  "name": "PMOVES.AI Development",
+  "image": "mcr.microsoft.com/devcontainers/python:3.12-bookworm",
+
+  "features": {
+    "ghcr.io/devcontainers/features/node:1": { "version": "22" },
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {},
+    "ghcr.io/devcontainers/features/github-cli:1": {},
+    "ghcr.io/devcontainers/features/go:1": { "version": "1.23" }
+  },
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "ms-azuretools.vscode-docker",
+        "redhat.vscode-yaml",
+        "tamasfe.even-better-toml",
+        "saoudrizwan.claude-dev",
+        "ms-python.debugpy"
+      ],
+      "settings": {
+        "python.defaultInterpreterPath": "/usr/local/bin/python",
+        "editor.formatOnSave": true
+      }
+    }
+  },
+
+  "postCreateCommand": "pip install uv && uv pip install pyyaml rich typer httpx && make -C pmoves env-setup 2>/dev/null || true && make -C pmoves brand-defaults 2>/dev/null || true",
+
+  "forwardPorts": [
+    3000,
+    3030,
+    4222,
+    6333,
+    7474,
+    7700,
+    8054,
+    8080,
+    8086,
+    8105,
+    9000,
+    9090
+  ],
+
+  "portsAttributes": {
+    "3000": { "label": "Grafana" },
+    "3030": { "label": "TensorZero Gateway" },
+    "4222": { "label": "NATS" },
+    "6333": { "label": "Qdrant" },
+    "7474": { "label": "Neo4j" },
+    "7700": { "label": "Meilisearch" },
+    "8054": { "label": "BoTZ Gateway" },
+    "8080": { "label": "Agent Zero" },
+    "8086": { "label": "Hi-RAG v2" },
+    "8105": { "label": "A2UI Renderer" },
+    "9000": { "label": "MinIO" },
+    "9090": { "label": "Prometheus" }
+  },
+
+  "containerEnv": {
+    "PMOVES_PROFILE": "student"
+  },
+
+  "remoteUser": "vscode"
+}
