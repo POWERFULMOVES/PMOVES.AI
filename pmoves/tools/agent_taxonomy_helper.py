@@ -32,6 +32,8 @@ except ImportError:
 
 
 REGISTRY_PATH = Path(__file__).parent.parent / "config" / "agent_registry.yaml"
+SIGNATURES_PATH = Path(__file__).parent.parent / "config" / "agent_signatures.yaml"
+THEMES_PATH = Path(__file__).parent.parent / "configs" / "agent-themes.yaml"
 
 # Type effectiveness matrix (attacker → target → effectiveness)
 TYPE_EFFECTIVENESS = {
@@ -494,6 +496,166 @@ def _mermaid_nats(agents):
     print("\n".join(lines))
 
 
+def _load_signatures():
+    """Load agent signatures YAML."""
+    if yaml is None or not SIGNATURES_PATH.exists():
+        return {}
+    with open(SIGNATURES_PATH, encoding="utf-8") as f:
+        data = yaml.safe_load(f) or {}
+    return data.get("agents", data)
+
+
+def _load_themes():
+    """Load agent themes YAML."""
+    if yaml is None or not THEMES_PATH.exists():
+        return {}
+    with open(THEMES_PATH, encoding="utf-8") as f:
+        return yaml.safe_load(f) or {}
+
+
+def _hex_to_ansi(hex_color: str) -> str:
+    """Convert #RRGGBB to ANSI 24-bit color escape."""
+    hex_color = hex_color.lstrip("#")
+    if len(hex_color) != 6:
+        return ""
+    r, g, b = int(hex_color[0:2], 16), int(hex_color[2:4], 16), int(hex_color[4:6], 16)
+    return f"\033[38;2;{r};{g};{b}m"
+
+
+def _reset() -> str:
+    return "\033[0m"
+
+
+def _bold() -> str:
+    return "\033[1m"
+
+
+def _dim() -> str:
+    return "\033[2m"
+
+
+def _find_character_mapping(themes: dict, agent_id: str) -> dict:
+    """Find character mapping for an agent across all theme packs."""
+    mappings = themes.get("service_character_mappings", {})
+    for service_key, mapping in mappings.items():
+        # Match by agent_id or service name
+        sid = service_key.lower().replace("-", "_").replace(" ", "_")
+        if agent_id in sid or sid in agent_id:
+            return mapping
+    return {}
+
+
+def cmd_render_card(registry, args):
+    """Render a themed agent card with signature colors and character mapping."""
+    agents = registry.get("agents", {})
+    signatures = _load_signatures()
+    themes = _load_themes()
+
+    agent_id = args.name.lower().replace("-", "_").replace(" ", "_")
+    agent = agents.get(agent_id)
+
+    # Try signature lookup by agent_id or with hyphens
+    sig_id = agent_id.replace("_", "-")
+    sig = signatures.get(sig_id) or signatures.get(agent_id)
+
+    if not agent and not sig:
+        # Fuzzy match
+        all_keys = set(agents.keys()) | set(signatures.keys())
+        matches = [k for k in all_keys if agent_id in k]
+        if matches:
+            key = matches[0]
+            agent = agents.get(key) or agents.get(key.replace("-", "_"))
+            sig = signatures.get(key) or signatures.get(key.replace("_", "-"))
+            agent_id = key
+        else:
+            print(f"Agent '{args.name}' not found.", file=sys.stderr)
+            print(f"Registry agents: {', '.join(sorted(agents.keys()))}", file=sys.stderr)
+            print(f"Signature agents: {', '.join(sorted(signatures.keys()))}", file=sys.stderr)
+            sys.exit(1)
+
+    fmt = args.format
+
+    if fmt == "json":
+        card = {"agent_id": agent_id}
+        if sig:
+            card.update(sig)
+        if agent:
+            card["registry"] = agent
+        char_map = _find_character_mapping(themes, agent_id)
+        if char_map:
+            card["character_mapping"] = char_map
+        print(json.dumps(card, indent=2))
+        return
+
+    # Terminal (ANSI) rendering
+    glyph = (sig or {}).get("glyph", "?")
+    color = (sig or {}).get("color", "#FFFFFF")
+    accent = (sig or {}).get("accent", "#CCCCCC")
+    voice = (sig or {}).get("voice", "unknown")
+    resonance = (sig or {}).get("resonance", [])
+    co_author = (sig or {}).get("co_author", "")
+    description = (sig or agent or {}).get("description", "")
+    display_name = (sig or {}).get("display_name", "") or (agent or {}).get("name", agent_id)
+
+    c = _hex_to_ansi(color)
+    a = _hex_to_ansi(accent)
+    b = _bold()
+    d = _dim()
+    r = _reset()
+
+    char_map = _find_character_mapping(themes, agent_id)
+    primary_char = char_map.get("primary", "")
+    secondary_char = char_map.get("secondary", "")
+    rationale = char_map.get("rationale", "")
+
+    width = 46
+    border = f"{c}{'═' * width}{r}"
+    line = f"{c}{'─' * width}{r}"
+
+    print(f"{c}╔{border}╗{r}")
+    print(f"{c}║{r}  {c}{b}{glyph}  {display_name}{r}{' ' * (width - len(display_name) - 5)}{c}║{r}")
+    print(f"{c}║{r}  {d}{color}{r}{' ' * (width - len(color) - 2)}{c}║{r}")
+    print(f"{c}╠{line}╣{r}")
+    print(f"{c}║{r}  {a}Voice:{r}      {voice}{' ' * (width - len(voice) - 14)}{c}║{r}")
+
+    if resonance:
+        res_str = ", ".join(resonance[:4])
+        print(f"{c}║{r}  {a}Resonance:{r}  {res_str}{' ' * max(0, width - len(res_str) - 14)}{c}║{r}")
+
+    if agent:
+        port = agent.get("port", "—")
+        cls = agent.get("class", "—")
+        stage = agent.get("evolution_stage", "base")
+        print(f"{c}║{r}  {a}Class:{r}      {cls}{' ' * (width - len(str(cls)) - 14)}{c}║{r}")
+        print(f"{c}║{r}  {a}Port:{r}       {port}{' ' * (width - len(str(port)) - 14)}{c}║{r}")
+        print(f"{c}║{r}  {a}Stage:{r}      {stage}{' ' * (width - len(str(stage)) - 14)}{c}║{r}")
+
+    if primary_char or secondary_char:
+        print(f"{c}╠{line}╣{r}")
+        if primary_char:
+            print(f"{c}║{r}  {b}Primary:{r}    {primary_char}{' ' * max(0, width - len(primary_char) - 14)}{c}║{r}")
+        if secondary_char:
+            print(f"{c}║{r}  {b}Secondary:{r}  {secondary_char}{' ' * max(0, width - len(secondary_char) - 14)}{c}║{r}")
+
+    if description:
+        print(f"{c}╠{line}╣{r}")
+        words = description.split()
+        lines = []
+        current = ""
+        for w in words:
+            if len(current) + len(w) + 1 <= width - 4:
+                current = f"{current} {w}" if current else w
+            else:
+                lines.append(current)
+                current = w
+        if current:
+            lines.append(current)
+        for ln in lines:
+            print(f"{c}║{r}  {d}{ln}{r}{' ' * max(0, width - len(ln) - 2)}{c}║{r}")
+
+    print(f"{c}╚{border}╝{r}")
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="PMOVES Agent Taxonomy Helper",
@@ -518,6 +680,9 @@ def main():
     mermaid_parser.add_argument("--style", choices=["topology", "tac", "nats"],
                                 default="topology", help="Diagram style (default: topology)")
 
+    card_parser = subparsers.add_parser("render-card", help="Render themed agent card (ANSI/JSON)")
+    card_parser.add_argument("name", help="Agent ID or name (fuzzy match)")
+
     args = parser.parse_args()
 
     if not args.command:
@@ -532,6 +697,7 @@ def main():
         "connections": cmd_connections,
         "types": cmd_types,
         "mermaid": cmd_mermaid,
+        "render-card": cmd_render_card,
     }
 
     commands[args.command](registry, args)

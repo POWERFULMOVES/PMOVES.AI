@@ -15,7 +15,9 @@ Usage:
 import argparse
 import json
 import math
+import os
 import sys
+from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 
@@ -162,11 +164,44 @@ def constellation_map(
     return "\n".join(lines)
 
 
-def render_cgp_summary(cgp: Dict) -> str:
+SIGNATURES_PATH = Path(__file__).parent.parent / "config" / "agent_signatures.yaml"
+
+
+def _load_agent_signature(agent_id: str) -> Optional[Dict]:
+    """Load a single agent's signature from agent_signatures.yaml."""
+    if not SIGNATURES_PATH.exists():
+        return None
+    try:
+        import yaml
+    except ImportError:
+        return None
+    with open(SIGNATURES_PATH, encoding="utf-8") as f:
+        data = yaml.safe_load(f) or {}
+    agents = data.get("agents", data)
+    return agents.get(agent_id) or agents.get(agent_id.replace("_", "-"))
+
+
+def _agent_attribution_line(sig: Dict) -> str:
+    """Format agent attribution line: ◆ Claude Opus | #7C3AED | analytical"""
+    glyph = sig.get("glyph", "?")
+    name = sig.get("display_name", "Unknown")
+    color = sig.get("color", "#FFFFFF")
+    voice = sig.get("voice", "")
+    return f"{glyph} {name} | {color} | {voice}"
+
+
+def render_cgp_summary(cgp: Dict, agent_id: Optional[str] = None) -> str:
     """Render a CGP packet summary in terminal."""
+    attribution = ""
+    if agent_id:
+        sig = _load_agent_signature(agent_id)
+        if sig:
+            attribution = _agent_attribution_line(sig)
+
+    header_line = attribution if attribution else "CGP v2 Packet Summary"
     lines = [
         "╔══════════════════════════════════════╗",
-        "║     CGP v2 Packet Summary            ║",
+        f"║  {header_line:<36}  ║",
         "╚══════════════════════════════════════╝",
     ]
 
@@ -213,6 +248,7 @@ def main() -> int:
         help="Visualization mode",
     )
     parser.add_argument("--input", "-i", help="Input JSON file")
+    parser.add_argument("--agent", "-a", help="Agent ID for attribution (reads agent_signatures.yaml)")
 
     args = parser.parse_args()
 
@@ -238,7 +274,7 @@ def main() -> int:
         }
 
     if args.mode == "cgp":
-        print(render_cgp_summary(data))
+        print(render_cgp_summary(data, agent_id=args.agent))
     elif args.mode == "sparkline":
         values = data if isinstance(data, list) else data.get("values", [])
         print(sparkline(values))
