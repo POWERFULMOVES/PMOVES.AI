@@ -17,8 +17,8 @@ npm install -g @anthropic-ai/claude-code 2>/dev/null || echo "Claude Code CLI in
 # Bootstrap environment
 echo "[3/5] Bootstrapping PMOVES environment..."
 if [ -f pmoves/Makefile ]; then
-  make -C pmoves env-setup 2>/dev/null || echo "env-setup skipped (credentials may be needed)"
-  make -C pmoves brand-defaults 2>/dev/null || echo "brand-defaults skipped"
+  make -C pmoves env-setup || echo "WARNING: env-setup failed (credentials may be needed)"
+  make -C pmoves brand-defaults || echo "WARNING: brand-defaults failed (check pmoves/Makefile)"
 fi
 
 # Git submodule init (non-recursive, top-level only)

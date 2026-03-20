@@ -35,9 +35,14 @@ discord() {
 
 create_category() {
   local name="$1"
-  local id
-  id=$(discord POST "/guilds/${GUILD_ID}/channels" \
-    -d "{\"name\": \"$name\", \"type\": 4}" | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])")
+  local resp id
+  resp=$(discord POST "/guilds/${GUILD_ID}/channels" \
+    -d "{\"name\": \"$name\", \"type\": 4}")
+  id=$(echo "$resp" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('id',''))" 2>/dev/null)
+  if [ -z "$id" ]; then
+    echo "ERROR: Failed to create category '$name': $resp" >&2
+    return 1
+  fi
   echo "$id"
 }
 
@@ -48,17 +53,26 @@ create_channel() {
     payload="${payload}, \"topic\": \"$topic\""
   fi
   payload="${payload}}"
-  local id
-  id=$(discord POST "/guilds/${GUILD_ID}/channels" \
-    -d "$payload" | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])")
+  local resp id
+  resp=$(discord POST "/guilds/${GUILD_ID}/channels" -d "$payload")
+  id=$(echo "$resp" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('id',''))" 2>/dev/null)
+  if [ -z "$id" ]; then
+    echo "ERROR: Failed to create channel '$name': $resp" >&2
+    return 1
+  fi
   echo "$id"
 }
 
 create_voice_channel() {
   local name="$1" parent_id="$2"
-  local id
-  id=$(discord POST "/guilds/${GUILD_ID}/channels" \
-    -d "{\"name\": \"$name\", \"type\": 2, \"parent_id\": \"$parent_id\"}" | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])")
+  local resp id
+  resp=$(discord POST "/guilds/${GUILD_ID}/channels" \
+    -d "{\"name\": \"$name\", \"type\": 2, \"parent_id\": \"$parent_id\"}")
+  id=$(echo "$resp" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('id',''))" 2>/dev/null)
+  if [ -z "$id" ]; then
+    echo "ERROR: Failed to create voice channel '$name': $resp" >&2
+    return 1
+  fi
   echo "$id"
 }
 
@@ -169,7 +183,10 @@ echo ""
 echo "═══════════════════════════════════════════════════════════"
 echo "  Server setup complete!"
 echo ""
-echo "  Add these webhook URLs to publisher-discord config:"
+echo "  Add these to env.shared (docker-compose expects DISCORD_WEBHOOK_URL):"
+echo "    DISCORD_WEBHOOK_URL=$WH_TRAILS"
+echo ""
+echo "  Per-channel webhooks for publisher-discord config:"
 echo "    DISCORD_WEBHOOK_TRAILS=$WH_TRAILS"
 echo "    DISCORD_WEBHOOK_ANNOUNCE=$WH_ANNOUNCE"
 echo "    DISCORD_WEBHOOK_RESEARCH=$WH_DEEP"

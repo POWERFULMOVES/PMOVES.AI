@@ -340,6 +340,6 @@ if not exist "%~1" (
 goto :eof
 
 :timestamp
-for /f "tokens=2 delims==." %%t in ('wmic os get LocalDateTime /value') do set ldt=%%t
+for /f "tokens=2 delims==." %%t in ('powershell -noprofile -c "Get-CimInstance Win32_OperatingSystem | Select -ExpandProperty LocalDateTime"') do set ldt=%%t
 set "%~1=%ldt:~0,8%_%ldt:~8,6%"
 goto :eof

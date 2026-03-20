@@ -1931,6 +1931,7 @@ services:
     - pmoves_bus
     - pmoves_external  # Required for host port binding (leafnode + client access from LAN/Tailscale)
     environment:
+    # SECURITY: Override NATS_USER/NATS_PASSWORD in env.shared for production
     - NATS_USER=${NATS_USER:-nats}
     - NATS_PASSWORD=${NATS_PASSWORD:-pmoves}
     - DOCKED_MODE=${DOCKED_MODE:-true}

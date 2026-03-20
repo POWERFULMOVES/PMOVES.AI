@@ -2,7 +2,7 @@
 
 You can check out the video right here: https://youtu.be/N7j3lvenDcU
 
-LOCAL INSTALL!!! RECOMMENDED TO START FROM SCRATCH
+LOCAL INSTALL!!! RECOMMENDED TO START FROM SCRATCH (fresh ComfyUI install — delete any existing ComfyUI folder before running)
 
 Download the KLEIN_EDIT_ULTRA-COMFYUI-MANAGER_AUTO_INSTALL.bat
 
