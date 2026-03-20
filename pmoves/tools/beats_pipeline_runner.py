@@ -101,20 +101,18 @@ def run(
     # ── Step 1: Fingerprint + Cluster ────────────────────────────────────
     console.print("\n[bold]Step 1/3:[/] Sonic Fingerprinting + Clustering")
 
-    if cache and fp_path.exists() and summary_path.exists():
-        console.print("  [green]✓[/] Using cached fingerprints + groups")
-    else:
-        analyze_args = [
-            "analyze",
-            "--input", str(input_dir),
-            "--output", str(output_dir),
-            "--groups", str(n_groups),
-            "--sense-mode", sense_mode,
-        ]
-        if cache and fp_path.exists():
-            analyze_args.append("--cache")
-        _run_tool("analyze_beats.py", analyze_args, "analyze_beats.py analyze")
-        console.print("  [green]✓[/] Fingerprinting complete")
+    analyze_args = [
+        "analyze",
+        "--input", str(input_dir),
+        "--output", str(output_dir),
+        "--groups", str(n_groups),
+        "--sense-mode", sense_mode,
+    ]
+    if cache and fp_path.exists():
+        analyze_args.append("--cache")
+        console.print("  [green]✓[/] Reusing cached fingerprints where possible")
+    _run_tool("analyze_beats.py", analyze_args, "analyze_beats.py analyze")
+    console.print("  [green]✓[/] Fingerprinting complete")
 
     # Load groups
     if not summary_path.exists():
@@ -168,10 +166,10 @@ def run(
         a2ui_out = a2ui_dir / f"{stem}.a2ui.json"
         # chit_a2ui_bridge uses argparse — call via python directly
         # Use the same python that's running this script (consistent environment)
-        bridge_path = str(TOOLS_DIR / "chit_a2ui_bridge.py")
+        bridge_path = str((TOOLS_DIR / "chit_a2ui_bridge.py").resolve())
         cmd = [sys.executable, bridge_path, "-i", str(cgp_file), "-o", str(a2ui_out)]
         console.print(f"  [dim]→ chit_a2ui_bridge → {stem}[/]")
-        result = subprocess.run(cmd, capture_output=True, text=True)
+        result = subprocess.run(cmd, capture_output=True, text=True, cwd=str(TOOLS_DIR.parent.parent))
         if result.returncode != 0:
             console.print(f"  [red]✗ Bridge failed for {stem}: {result.stderr.strip()}[/]")
             continue
