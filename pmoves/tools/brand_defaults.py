@@ -197,10 +197,11 @@ def _ensure_integration_credentials(text: str) -> str:
 def _ensure_identity_defaults(text: str) -> str:
     """Seed operator identity and branding. Safe defaults for new deployers;
     DARKXSIDE values are set via env.shared, not hardcoded here."""
-    # OPERATOR_EMAIL: top-level identity cascading to Supabase + n8n
+    # OPERATOR_EMAIL: top-level identity cascading to Supabase + n8n.
+    # Canonical default for PMOVES.AI deployments; override in env.shared.
     op_email = _get_kv(text, "OPERATOR_EMAIL")
-    if not op_email:
-        text = _set_kv(text, "OPERATOR_EMAIL", "")
+    if _is_blank_or_placeholder(op_email):
+        text = _set_kv(text, "OPERATOR_EMAIL", "powerfulmoves@pmoves.ai")
 
     # BRAND_NAME: display name for UI surfaces and notifications
     brand = _get_kv(text, "BRAND_NAME")
@@ -228,6 +229,51 @@ def _ensure_identity_defaults(text: str) -> str:
         wger_email = _get_kv(text, "WGER_BRAND_ADMIN_EMAIL")
         if not wger_email or wger_email in PLACEHOLDER_VALUES or wger_email == "admin@example.com" or "${" in wger_email:
             text = _set_kv(text, "WGER_BRAND_ADMIN_EMAIL", op_email)
+
+    return text
+
+
+def _ensure_google_oauth_defaults(text: str) -> str:
+    """Auto-enable Google OAuth via Supabase GoTrue when Client ID is configured.
+
+    n8n 2.x open-source has no native SSO; authentication flows through
+    Supabase GoTrue as an OAuth proxy. This enables the feature automatically
+    when the operator has provided Google Cloud Console credentials.
+
+    Key aliasing: the sync-secrets-local workflow writes ``GOOGLE_CLIENT_ID``
+    and ``GOOGLE_CLIENT_SECRET`` but env.shared expects the longer
+    ``SUPABASE_AUTH_EXTERNAL_GOOGLE_*`` names.  We copy the short names into
+    the long names so the rest of the pipeline just works.
+    """
+    # Alias: GOOGLE_CLIENT_ID → SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID
+    client_id = _get_kv(text, "SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID")
+    if not client_id or _is_blank_or_placeholder(client_id):
+        client_id = _get_kv(text, "GOOGLE_CLIENT_ID")
+        if client_id and not _is_blank_or_placeholder(client_id):
+            text = _set_kv(text, "SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID", client_id)
+
+    # Alias: GOOGLE_CLIENT_SECRET → SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET
+    client_secret = _get_kv(text, "SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET")
+    if not client_secret or _is_blank_or_placeholder(client_secret):
+        client_secret = _get_kv(text, "GOOGLE_CLIENT_SECRET")
+        if client_secret and not _is_blank_or_placeholder(client_secret):
+            text = _set_kv(text, "SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET", client_secret)
+
+    # Re-read after aliasing
+    client_id = _get_kv(text, "SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID")
+    if client_id and not _is_blank_or_placeholder(client_id):
+        # Client ID present — auto-enable Google OAuth
+        text = _set_kv(text, "SUPABASE_AUTH_EXTERNAL_GOOGLE_ENABLED", "true")
+
+        # Auto-derive redirect URI from API_EXTERNAL_URL if not set
+        redirect_uri = _get_kv(text, "SUPABASE_AUTH_EXTERNAL_GOOGLE_REDIRECT_URI")
+        if not redirect_uri or _is_blank_or_placeholder(redirect_uri):
+            api_url = _get_kv(text, "API_EXTERNAL_URL") or "http://localhost:8000"
+            text = _set_kv(
+                text,
+                "SUPABASE_AUTH_EXTERNAL_GOOGLE_REDIRECT_URI",
+                f"{api_url}/auth/v1/callback",
+            )
 
     return text
 
@@ -328,6 +374,9 @@ def upsert_env(path: Path, env_gen_path: Path, pairs: dict[str, str]) -> None:
 
     # Identity defaults: operator email cascades to Supabase, n8n, Wger.
     text = _ensure_identity_defaults(text)
+
+    # Google OAuth: auto-enable when Client ID is configured (Supabase GoTrue proxy).
+    text = _ensure_google_oauth_defaults(text)
 
     # Tailscale defaults: auto-populate hostname and tags (auth key is manual).
     text = _ensure_tailscale_defaults(text)

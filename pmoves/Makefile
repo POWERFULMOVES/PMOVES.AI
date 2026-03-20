@@ -587,7 +587,7 @@ supabase-bootstrap-mark-applied: ## Mark all migration/seed files as applied in 
 	@echo "✅ Bootstrap history updated"
 
 .PHONY: supabase-boot-user
-SUPABASE_BOOT_USER_EMAIL ?= $(if $(PMOVES_OPERATOR_EMAIL),$(PMOVES_OPERATOR_EMAIL),operator@pmoves.local)
+SUPABASE_BOOT_USER_EMAIL ?= $(if $(PMOVES_OPERATOR_EMAIL),$(PMOVES_OPERATOR_EMAIL),powerfulmoves@pmoves.ai)
 AUTH_BOOTSTRAP_MODE ?= jwt
 AUTH_BOOTSTRAP_MODE := $(if $(strip $(AUTH_BOOTSTRAP_MODE)),$(strip $(AUTH_BOOTSTRAP_MODE)),jwt)
 AUTH_BOOTSTRAP_STRICT ?= 0
