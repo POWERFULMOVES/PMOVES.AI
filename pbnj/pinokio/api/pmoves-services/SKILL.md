@@ -1,46 +1,61 @@
 ---
-name: pmoves-services
-description: Docker Compose profile controller for PMOVES.AI production services
-category: infrastructure
-version: "1.0"
+name: PMOVES Services Launcher
+description: Docker Compose profile controller for PMOVES.AI services via Pinokio
+keywords: docker, compose, services, launcher, profiles
+version: 1.0.0
+category: Infrastructure/Launcher
 ---
 
 # PMOVES Services Launcher
 
+**Category**: Infrastructure/Launcher
+**Version**: 1.0.0
+**Status**: Active
+
 ## Overview
 
-Pinokio launcher for PMOVES.AI Docker Compose service profiles. Provides one-click install, start, stop, and monitoring for the full PMOVES.AI stack.
+Pinokio launcher for the PMOVES.AI Docker Compose service stack. Provides one-click install, start, stop, reset, and update for core services, monitoring, voice, and external integrations.
 
 ## Capabilities
 
-- **Install**: Bootstrap environment (env-setup, brand-defaults, Docker pull)
-- **Start Core**: Agent Zero, Archon, BoTZ Gateway, data stores (Qdrant, Neo4j, Meilisearch, MinIO)
-- **Start Voice**: Ultimate-TTS-Studio, Flute-Gateway
-- **Start External**: Hi-RAG, DeepResearch, SupaSerch
-- **Start Monitoring**: Prometheus, Grafana, Loki
-- **Status**: Health check all running services
-- **Reset**: Remove virtual environments and cached data
+- Start/stop Docker Compose profiles (core, monitoring, voice, external)
+- Install prerequisites (Docker, env setup, brand defaults)
+- Reset service state and volumes
+- Update launcher scripts and service images
+- Real-time service status display
 
-## Service Profiles
+## Scripts
 
-| Profile | Services | GPU Required |
-|---------|----------|-------------|
-| `core` | Agent Zero, Archon, BoTZ, NATS, data stores | No |
-| `voice` | Ultimate-TTS-Studio, Flute-Gateway | Yes (CUDA) |
-| `external` | Hi-RAG v2, DeepResearch, SupaSerch | Optional |
-| `monitoring` | Prometheus, Grafana, Loki, cAdvisor | No |
+| Script | Purpose |
+|--------|---------|
+| `install.js` | Bootstrap Docker, env-setup, brand-defaults |
+| `start-core.js` | Start core services (Agent Zero, NATS, Supabase, Hi-RAG) |
+| `start-monitoring.js` | Start Prometheus, Grafana, Loki stack |
+| `start-voice.js` | Start Flute-Gateway, Ultimate-TTS-Studio |
+| `start-external.js` | Start external integrations (Discord, Jellyfin, etc.) |
+| `status.js` | Display service health status |
+| `stop.js` | Stop all running services |
+| `reset.js` | Reset dependencies and volumes |
+| `update.js` | Pull latest images and scripts |
+| `pinokio.js` | Dynamic UI generator (sidebar menu) |
 
-## Agent Interpreter Integration
+## Docker Compose Profiles
 
-This launcher is discoverable by Pinokio 7 Agent Interpreter. Use the sidebar to select which profile to start, or let the AI assistant recommend profiles based on your task.
+| Profile | Services | Ports |
+|---------|----------|-------|
+| `agents` | Agent Zero, Archon, Mesh Agent | 8080, 8091 |
+| `workers` | Extract, LangExtract, media analyzers | 8083, 8084 |
+| `monitoring` | Prometheus, Grafana, Loki | 9090, 3000, 3100 |
+| `gpu` | GPU-enabled services | varies |
+| `yt` | PMOVES.YT ingestion | 8077 |
 
-## Ports
+## Integration Points
 
-| Port | Service |
-|------|---------|
-| 8080 | Agent Zero API |
-| 8054 | BoTZ Gateway |
-| 8086 | Hi-RAG v2 |
-| 3030 | TensorZero |
-| 3000 | Grafana |
-| 9090 | Prometheus |
+- **Make targets**: `make -C pmoves up`, `make -C pmoves verify-all`
+- **Health checks**: All services expose `/healthz`
+- **NATS**: Event bus at port 4222
+
+## See Also
+
+- [pmoves-remote](../pmoves-remote/SKILL.md) — Remote service discovery
+- [PMOVES.AI CLAUDE.md](../../../../.claude/CLAUDE.md) — Full architecture context
