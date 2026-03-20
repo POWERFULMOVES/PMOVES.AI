@@ -254,6 +254,192 @@ def cmd_types(registry, args):
     print("★★ = Super effective  ★  = Effective  ·  = Neutral")
 
 
+def _load_signatures():
+    """Load agent signatures YAML."""
+    if yaml is None or not SIGNATURES_PATH.exists():
+        return {}
+    with open(SIGNATURES_PATH, encoding="utf-8") as f:
+        data = yaml.safe_load(f) or {}
+    # Index by agent_id for fast lookup
+    sigs = {}
+    for entry in data.get("signatures", data.get("agents", [])):
+        if isinstance(entry, dict) and "agent_id" in entry:
+            sigs[entry["agent_id"]] = entry
+    return sigs
+
+
+def _load_themes():
+    """Load agent themes YAML."""
+    if yaml is None or not THEMES_PATH.exists():
+        return {}, {}
+    with open(THEMES_PATH, encoding="utf-8") as f:
+        data = yaml.safe_load(f) or {}
+    packs = data.get("theme_packs", {})
+    mappings = data.get("agent_character_mappings", data.get("mappings", {}))
+    return packs, mappings
+
+
+# ANSI 24-bit color helpers
+def _fg(hex_color: str, text: str) -> str:
+    """Wrap text in 24-bit ANSI foreground color from hex (#RRGGBB)."""
+    h = hex_color.lstrip("#")
+    if len(h) != 6:
+        return text
+    r, g, b = int(h[:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+    return f"\033[38;2;{r};{g};{b}m{text}\033[0m"
+
+
+def _bg(hex_color: str, text: str) -> str:
+    """Wrap text in 24-bit ANSI background color from hex (#RRGGBB)."""
+    h = hex_color.lstrip("#")
+    if len(h) != 6:
+        return text
+    r, g, b = int(h[:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+    return f"\033[48;2;{r};{g};{b}m{text}\033[0m"
+
+
+def _color_swatch(hex_color: str, width: int = 4) -> str:
+    """Render a colored swatch block."""
+    return _bg(hex_color, " " * width)
+
+
+def cmd_render_card(registry, args):
+    """Render a themed agent identity card with ANSI colors."""
+    sigs = _load_signatures()
+    packs, mappings = _load_themes()
+    agents = registry.get("agents", {})
+
+    agent_id = args.name.lower().replace("-", "_").replace(" ", "_")
+
+    # Try exact match, then fuzzy
+    sig = sigs.get(agent_id) or sigs.get(args.name)
+    if not sig:
+        # Fuzzy match on agent_id
+        matches = [k for k in sigs if agent_id in k]
+        if matches:
+            sig = sigs[matches[0]]
+            agent_id = matches[0]
+        else:
+            print(f"Agent '{args.name}' not found in signatures. Available: {', '.join(sorted(sigs.keys()))}", file=sys.stderr)
+            sys.exit(1)
+
+    glyph = sig.get("glyph", "?")
+    color = sig.get("color", "#FFFFFF")
+    accent = sig.get("accent", color)
+    voice = sig.get("voice", "unknown")
+    resonance = sig.get("resonance", [])
+    co_author = sig.get("co_author", "")
+    description = sig.get("description", "")
+
+    fmt = args.format
+
+    if fmt == "json":
+        card = {
+            "agent_id": agent_id,
+            "glyph": glyph,
+            "color": color,
+            "accent": accent,
+            "voice": voice,
+            "resonance": resonance,
+            "description": description,
+        }
+        # Merge theme mapping if available
+        mapping = mappings.get(agent_id.replace("_", "-"), {})
+        if mapping:
+            card["theme"] = mapping
+        print(json.dumps(card, indent=2))
+        return
+
+    if fmt == "markdown":
+        print(f"## {glyph} {agent_id}")
+        print(f"- **Color:** `{color}` / `{accent}`")
+        print(f"- **Voice:** {voice}")
+        print(f"- **Resonance:** {', '.join(resonance)}")
+        if description:
+            print(f"- **Description:** {description}")
+        mapping = mappings.get(agent_id.replace("_", "-"), {})
+        if mapping:
+            primary = mapping.get("primary", {})
+            secondary = mapping.get("secondary", {})
+            if primary:
+                print(f"- **Primary character:** {primary.get('name', '?')} ({primary.get('pack', '?')})")
+            if secondary:
+                print(f"- **Secondary character:** {secondary.get('name', '?')} ({secondary.get('pack', '?')})")
+        return
+
+    # Terminal (ANSI) format — default
+    W = 46
+    border_color = color
+
+    def line(content="", pad_char=" "):
+        """Render a bordered line."""
+        visible_len = len(content.encode("ascii", errors="ignore"))  # rough
+        # For accurate length, strip ANSI codes
+        import re
+        clean = re.sub(r'\033\[[0-9;]*m', '', content)
+        padding = W - 2 - len(clean)
+        if padding < 0:
+            padding = 0
+        return _fg(border_color, "║") + " " + content + pad_char * padding + " " + _fg(border_color, "║")
+
+    print(_fg(border_color, "╔" + "═" * (W) + "╗"))
+    # Title line with glyph
+    title = f"{_fg(color, glyph)}  {_fg(accent, agent_id)}"
+    print(line(title))
+    print(_fg(border_color, "╠" + "═" * (W) + "╣"))
+
+    # Color swatches
+    swatch_line = f"Color: {_color_swatch(color)}  {color}   Accent: {_color_swatch(accent)}  {accent}"
+    print(line(swatch_line))
+    print(line(f"Voice:     {voice}"))
+    print(line(f"Resonance: {', '.join(resonance[:4])}"))
+
+    # Theme character mapping
+    mapping = mappings.get(agent_id.replace("_", "-"), {})
+    if mapping:
+        print(_fg(border_color, "╠" + "─" * (W) + "╣"))
+        primary = mapping.get("primary", {})
+        secondary = mapping.get("secondary", {})
+        if primary:
+            print(line(f"Primary:   {primary.get('name', '?')} ({primary.get('pack', '?')})"))
+        if secondary:
+            print(line(f"Secondary: {secondary.get('name', '?')} ({secondary.get('pack', '?')})"))
+        rationale = mapping.get("rationale", "")
+        if rationale:
+            # Word-wrap rationale
+            words = rationale.split()
+            current = ""
+            for w in words:
+                if len(current) + len(w) + 1 <= W - 4:
+                    current = f"{current} {w}" if current else w
+                else:
+                    print(line(f"  {current}"))
+                    current = w
+            if current:
+                print(line(f"  {current}"))
+
+    # Description
+    if description:
+        print(_fg(border_color, "╠" + "─" * (W) + "╣"))
+        words = description.split()
+        current = ""
+        for w in words:
+            if len(current) + len(w) + 1 <= W - 4:
+                current = f"{current} {w}" if current else w
+            else:
+                print(line(f"{current}"))
+                current = w
+        if current:
+            print(line(f"{current}"))
+
+    # Attribution line
+    if co_author:
+        print(_fg(border_color, "╠" + "─" * (W) + "╣"))
+        print(line(f"Co-Author: {co_author[:W-14]}"))
+
+    print(_fg(border_color, "╚" + "═" * (W) + "╝"))
+
+
 SUBSYSTEM_MAP = {
     "AGENT_ZERO_CORE": {
         "label": "Agent Zero Core — The Matrix",
@@ -496,166 +682,6 @@ def _mermaid_nats(agents):
     print("\n".join(lines))
 
 
-def _load_signatures():
-    """Load agent signatures YAML."""
-    if yaml is None or not SIGNATURES_PATH.exists():
-        return {}
-    with open(SIGNATURES_PATH, encoding="utf-8") as f:
-        data = yaml.safe_load(f) or {}
-    return data.get("signatures", data)
-
-
-def _load_themes():
-    """Load agent themes YAML."""
-    if yaml is None or not THEMES_PATH.exists():
-        return {}
-    with open(THEMES_PATH, encoding="utf-8") as f:
-        return yaml.safe_load(f) or {}
-
-
-def _hex_to_ansi(hex_color: str) -> str:
-    """Convert #RRGGBB to ANSI 24-bit color escape."""
-    hex_color = hex_color.lstrip("#")
-    if len(hex_color) != 6:
-        return ""
-    r, g, b = int(hex_color[0:2], 16), int(hex_color[2:4], 16), int(hex_color[4:6], 16)
-    return f"\033[38;2;{r};{g};{b}m"
-
-
-def _reset() -> str:
-    return "\033[0m"
-
-
-def _bold() -> str:
-    return "\033[1m"
-
-
-def _dim() -> str:
-    return "\033[2m"
-
-
-def _find_character_mapping(themes: dict, agent_id: str) -> dict:
-    """Find character mapping for an agent across all theme packs."""
-    mappings = themes.get("service_character_mappings", {})
-    for service_key, mapping in mappings.items():
-        # Match by agent_id or service name
-        sid = service_key.lower().replace("-", "_").replace(" ", "_")
-        if agent_id in sid or sid in agent_id:
-            return mapping
-    return {}
-
-
-def cmd_render_card(registry, args):
-    """Render a themed agent card with signature colors and character mapping."""
-    agents = registry.get("agents", {})
-    signatures = _load_signatures()
-    themes = _load_themes()
-
-    agent_id = args.name.lower().replace("-", "_").replace(" ", "_")
-    agent = agents.get(agent_id)
-
-    # Try signature lookup by agent_id or with hyphens
-    sig_id = agent_id.replace("_", "-")
-    sig = signatures.get(sig_id) or signatures.get(agent_id)
-
-    if not agent and not sig:
-        # Fuzzy match
-        all_keys = set(agents.keys()) | set(signatures.keys())
-        matches = [k for k in all_keys if agent_id in k]
-        if matches:
-            key = matches[0]
-            agent = agents.get(key) or agents.get(key.replace("-", "_"))
-            sig = signatures.get(key) or signatures.get(key.replace("_", "-"))
-            agent_id = key
-        else:
-            print(f"Agent '{args.name}' not found.", file=sys.stderr)
-            print(f"Registry agents: {', '.join(sorted(agents.keys()))}", file=sys.stderr)
-            print(f"Signature agents: {', '.join(sorted(signatures.keys()))}", file=sys.stderr)
-            sys.exit(1)
-
-    fmt = args.format
-
-    if fmt == "json":
-        card = {"agent_id": agent_id}
-        if sig:
-            card.update(sig)
-        if agent:
-            card["registry"] = agent
-        char_map = _find_character_mapping(themes, agent_id)
-        if char_map:
-            card["character_mapping"] = char_map
-        print(json.dumps(card, indent=2))
-        return
-
-    # Terminal (ANSI) rendering
-    glyph = (sig or {}).get("glyph", "?")
-    color = (sig or {}).get("color", "#FFFFFF")
-    accent = (sig or {}).get("accent", "#CCCCCC")
-    voice = (sig or {}).get("voice", "unknown")
-    resonance = (sig or {}).get("resonance", [])
-    co_author = (sig or {}).get("co_author", "")
-    description = (sig or agent or {}).get("description", "")
-    display_name = (sig or {}).get("display_name", "") or (agent or {}).get("name", agent_id)
-
-    c = _hex_to_ansi(color)
-    a = _hex_to_ansi(accent)
-    b = _bold()
-    d = _dim()
-    r = _reset()
-
-    char_map = _find_character_mapping(themes, agent_id)
-    primary_char = char_map.get("primary", "")
-    secondary_char = char_map.get("secondary", "")
-    rationale = char_map.get("rationale", "")
-
-    width = 46
-    border = f"{c}{'═' * width}{r}"
-    line = f"{c}{'─' * width}{r}"
-
-    print(f"{c}╔{border}╗{r}")
-    print(f"{c}║{r}  {c}{b}{glyph}  {display_name}{r}{' ' * (width - len(display_name) - 5)}{c}║{r}")
-    print(f"{c}║{r}  {d}{color}{r}{' ' * (width - len(color) - 2)}{c}║{r}")
-    print(f"{c}╠{line}╣{r}")
-    print(f"{c}║{r}  {a}Voice:{r}      {voice}{' ' * (width - len(voice) - 14)}{c}║{r}")
-
-    if resonance:
-        res_str = ", ".join(resonance[:4])
-        print(f"{c}║{r}  {a}Resonance:{r}  {res_str}{' ' * max(0, width - len(res_str) - 14)}{c}║{r}")
-
-    if agent:
-        port = agent.get("port", "—")
-        cls = agent.get("class", "—")
-        stage = agent.get("evolution_stage", "base")
-        print(f"{c}║{r}  {a}Class:{r}      {cls}{' ' * (width - len(str(cls)) - 14)}{c}║{r}")
-        print(f"{c}║{r}  {a}Port:{r}       {port}{' ' * (width - len(str(port)) - 14)}{c}║{r}")
-        print(f"{c}║{r}  {a}Stage:{r}      {stage}{' ' * (width - len(str(stage)) - 14)}{c}║{r}")
-
-    if primary_char or secondary_char:
-        print(f"{c}╠{line}╣{r}")
-        if primary_char:
-            print(f"{c}║{r}  {b}Primary:{r}    {primary_char}{' ' * max(0, width - len(primary_char) - 14)}{c}║{r}")
-        if secondary_char:
-            print(f"{c}║{r}  {b}Secondary:{r}  {secondary_char}{' ' * max(0, width - len(secondary_char) - 14)}{c}║{r}")
-
-    if description:
-        print(f"{c}╠{line}╣{r}")
-        words = description.split()
-        lines = []
-        current = ""
-        for w in words:
-            if len(current) + len(w) + 1 <= width - 4:
-                current = f"{current} {w}" if current else w
-            else:
-                lines.append(current)
-                current = w
-        if current:
-            lines.append(current)
-        for ln in lines:
-            print(f"{c}║{r}  {d}{ln}{r}{' ' * max(0, width - len(ln) - 2)}{c}║{r}")
-
-    print(f"{c}╚{border}╝{r}")
-
-
 def main():
     parser = argparse.ArgumentParser(
         description="PMOVES Agent Taxonomy Helper",
@@ -680,8 +706,8 @@ def main():
     mermaid_parser.add_argument("--style", choices=["topology", "tac", "nats"],
                                 default="topology", help="Diagram style (default: topology)")
 
-    card_parser = subparsers.add_parser("render-card", help="Render themed agent card (ANSI/JSON)")
-    card_parser.add_argument("name", help="Agent ID or name (fuzzy match)")
+    card_parser = subparsers.add_parser("render-card", help="Render themed agent identity card")
+    card_parser.add_argument("name", help="Agent ID (e.g., claude-opus, 4090-claude)")
 
     args = parser.parse_args()
 

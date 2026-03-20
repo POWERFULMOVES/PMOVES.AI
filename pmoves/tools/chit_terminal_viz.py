@@ -25,6 +25,33 @@ from typing import Dict, List, Optional, Tuple
 SPARK_CHARS = " ▁▂▃▄▅▆▇█"
 BRAILLE_BASE = 0x2800  # Unicode braille pattern base
 
+SIGNATURES_PATH = Path(__file__).parent.parent / "config" / "agent_signatures.yaml"
+
+
+def _load_agent_sig(agent_id: str) -> Optional[Dict]:
+    """Load a single agent signature by ID from agent_signatures.yaml."""
+    try:
+        import yaml
+    except ImportError:
+        return None
+    if not SIGNATURES_PATH.exists():
+        return None
+    with open(SIGNATURES_PATH, encoding="utf-8") as f:
+        data = yaml.safe_load(f) or {}
+    for entry in data.get("signatures", data.get("agents", [])):
+        if isinstance(entry, dict) and entry.get("agent_id") == agent_id:
+            return entry
+    return None
+
+
+def _ansi_fg(hex_color: str, text: str) -> str:
+    """24-bit ANSI foreground color."""
+    h = hex_color.lstrip("#")
+    if len(h) != 6:
+        return text
+    r, g, b = int(h[:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+    return f"\033[38;2;{r};{g};{b}m{text}\033[0m"
+
 
 def sparkline(values: List[float], width: Optional[int] = None) -> str:
     """Render values as a sparkline string."""
@@ -164,46 +191,25 @@ def constellation_map(
     return "\n".join(lines)
 
 
-SIGNATURES_PATH = Path(__file__).parent.parent / "config" / "agent_signatures.yaml"
+def render_cgp_summary(cgp: Dict, agent_sig: Optional[Dict] = None) -> str:
+    """Render a CGP packet summary in terminal.
 
-
-def _load_agent_signature(agent_id: str) -> Optional[Dict]:
-    """Load a single agent's signature from agent_signatures.yaml."""
-    if not SIGNATURES_PATH.exists():
-        return None
-    try:
-        import yaml
-    except ImportError:
-        return None
-    with open(SIGNATURES_PATH, encoding="utf-8") as f:
-        data = yaml.safe_load(f) or {}
-    agents = data.get("signatures", data)
-    return agents.get(agent_id) or agents.get(agent_id.replace("_", "-"))
-
-
-def _agent_attribution_line(sig: Dict) -> str:
-    """Format agent attribution line: ◆ Claude Opus | #7C3AED | analytical"""
-    glyph = sig.get("glyph", "?")
-    name = sig.get("display_name", "Unknown")
-    color = sig.get("color", "#FFFFFF")
-    voice = sig.get("voice", "")
-    return f"{glyph} {name} | {color} | {voice}"
-
-
-def render_cgp_summary(cgp: Dict, agent_id: Optional[str] = None) -> str:
-    """Render a CGP packet summary in terminal."""
-    attribution = ""
-    if agent_id:
-        sig = _load_agent_signature(agent_id)
-        if sig:
-            attribution = _agent_attribution_line(sig)
-
-    header_line = attribution if attribution else "CGP v2 Packet Summary"
+    If agent_sig is provided, shows agent attribution with glyph and color.
+    """
     lines = [
         "╔══════════════════════════════════════╗",
-        f"║  {header_line:<36}  ║",
+        "║     CGP v2 Packet Summary            ║",
         "╚══════════════════════════════════════╝",
     ]
+
+    # Agent attribution line
+    if agent_sig:
+        glyph = agent_sig.get("glyph", "?")
+        color = agent_sig.get("color", "#FFFFFF")
+        aid = agent_sig.get("agent_id", "unknown")
+        voice = agent_sig.get("voice", "")
+        attr_line = f"  {_ansi_fg(color, glyph)} {aid} | {color} | {voice}"
+        lines.append(attr_line)
 
     payload = cgp.get("payload", {})
 
@@ -248,9 +254,16 @@ def main() -> int:
         help="Visualization mode",
     )
     parser.add_argument("--input", "-i", help="Input JSON file")
-    parser.add_argument("--agent", "-a", help="Agent ID for attribution (reads agent_signatures.yaml)")
+    parser.add_argument("--agent", help="Agent ID for themed rendering (e.g., claude-opus)")
 
     args = parser.parse_args()
+
+    # Load agent signature if requested
+    agent_sig = None
+    if args.agent:
+        agent_sig = _load_agent_sig(args.agent)
+        if not agent_sig:
+            print(f"Warning: Agent '{args.agent}' not found in signatures", file=sys.stderr)
 
     # Read input
     if args.input:
@@ -273,11 +286,20 @@ def main() -> int:
             "checksum": "abc123def456789",
         }
 
+    # Use agent glyph as point marker when available
+    point_marker = None
+    if agent_sig:
+        point_marker = agent_sig.get("glyph")
+
     if args.mode == "cgp":
-        print(render_cgp_summary(data, agent_id=args.agent))
+        print(render_cgp_summary(data, agent_sig=agent_sig))
     elif args.mode == "sparkline":
         values = data if isinstance(data, list) else data.get("values", [])
-        print(sparkline(values))
+        result = sparkline(values)
+        if agent_sig:
+            color = agent_sig.get("color", "#FFFFFF")
+            result = _ansi_fg(color, result)
+        print(result)
     elif args.mode == "poincare":
         points = data.get("points", [(0.3, -0.4)])
         labels = data.get("labels", [])

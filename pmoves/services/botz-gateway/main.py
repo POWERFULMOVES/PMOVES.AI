@@ -13,6 +13,7 @@ import os
 import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import Optional, List, Dict, Any
 from contextlib import asynccontextmanager
 from uuid import UUID, uuid4
@@ -36,9 +37,15 @@ TENSORZERO_URL = os.getenv("TENSORZERO_URL", "http://tensorzero:3030")
 HEARTBEAT_INTERVAL = int(os.getenv("BOTZ_HEARTBEAT_INTERVAL", "30"))
 STALE_THRESHOLD_MINUTES = int(os.getenv("BOTZ_STALE_THRESHOLD", "5"))
 
+# Theme data paths (relative to service or repo root)
+_REPO_ROOT = Path(__file__).parent.parent.parent  # pmoves/services/botz-gateway -> pmoves
+SIGNATURES_PATH = _REPO_ROOT / "config" / "agent_signatures.yaml"
+THEMES_PATH = _REPO_ROOT / "configs" / "agent-themes.yaml"
+
 # Global state
 nc: Optional[NATS] = None
 supabase_headers: Dict[str, str] = {}
+_theme_cache: Dict[str, Any] = {}  # Lazy-loaded theme data
 
 
 # Pydantic models
@@ -597,6 +604,158 @@ async def get_stats():
             logger.error(f"Error fetching stats: {e}")
 
         return stats
+
+
+# ── Agent Theme Endpoints ────────────────────────────────────────────────────
+
+
+def _load_theme_data() -> Dict[str, Any]:
+    """Lazy-load and cache agent signatures + themes from YAML files."""
+    if _theme_cache:
+        return _theme_cache
+
+    try:
+        import yaml
+    except ImportError:
+        logger.warning("PyYAML not installed — theme endpoints unavailable")
+        return {}
+
+    signatures = {}
+    if SIGNATURES_PATH.exists():
+        with open(SIGNATURES_PATH, encoding="utf-8") as f:
+            sig_data = yaml.safe_load(f) or {}
+        for entry in sig_data.get("signatures", sig_data.get("agents", [])):
+            if isinstance(entry, dict) and "agent_id" in entry:
+                signatures[entry["agent_id"]] = entry
+
+    packs = {}
+    mappings = {}
+    if THEMES_PATH.exists():
+        with open(THEMES_PATH, encoding="utf-8") as f:
+            theme_data = yaml.safe_load(f) or {}
+        packs = theme_data.get("theme_packs", {})
+        mappings = theme_data.get("agent_character_mappings", theme_data.get("mappings", {}))
+
+    _theme_cache["signatures"] = signatures
+    _theme_cache["packs"] = packs
+    _theme_cache["mappings"] = mappings
+    return _theme_cache
+
+
+@app.get("/v1/botz/themes")
+async def list_themes():
+    """List all agent themes (signatures + character mappings)."""
+    data = _load_theme_data()
+    sigs = data.get("signatures", {})
+
+    themes = []
+    mappings = data.get("mappings", {})
+    for agent_id, sig in sigs.items():
+        entry = {
+            "agent_id": agent_id,
+            "glyph": sig.get("glyph"),
+            "color": sig.get("color"),
+            "accent": sig.get("accent"),
+            "voice": sig.get("voice"),
+            "resonance": sig.get("resonance", []),
+        }
+        mapping = mappings.get(agent_id.replace("_", "-"), {})
+        if mapping:
+            entry["characters"] = {
+                "primary": mapping.get("primary", {}).get("name"),
+                "secondary": mapping.get("secondary", {}).get("name"),
+            }
+        themes.append(entry)
+
+    return {"themes": themes, "theme_packs": list(data.get("packs", {}).keys())}
+
+
+@app.get("/v1/botz/themes/{agent_id}")
+async def get_agent_theme(agent_id: str):
+    """Get specific agent theme (glyph, color, voice, character mapping)."""
+    data = _load_theme_data()
+    sigs = data.get("signatures", {})
+
+    # Normalize: try as-is, then underscore variant
+    sig = sigs.get(agent_id) or sigs.get(agent_id.replace("-", "_"))
+    if not sig:
+        raise HTTPException(status_code=404, detail=f"Agent '{agent_id}' not found in signatures")
+
+    theme = {
+        "agent_id": sig.get("agent_id", agent_id),
+        "glyph": sig.get("glyph"),
+        "color": sig.get("color"),
+        "accent": sig.get("accent"),
+        "voice": sig.get("voice"),
+        "resonance": sig.get("resonance", []),
+        "description": sig.get("description"),
+        "co_author": sig.get("co_author"),
+    }
+
+    mappings = data.get("mappings", {})
+    mapping = mappings.get(agent_id.replace("_", "-"), mappings.get(agent_id, {}))
+    if mapping:
+        theme["characters"] = mapping
+
+    return theme
+
+
+class WhoamiRequest(BaseModel):
+    instance_id: Optional[str] = None
+    runner_host: Optional[str] = None
+
+
+@app.post("/v1/botz/themes/whoami")
+async def whoami(req: WhoamiRequest):
+    """Return current agent identity based on instance registration."""
+    data = _load_theme_data()
+    sigs = data.get("signatures", {})
+
+    # Try to match by instance_id or runner_host in Supabase
+    agent_id = None
+    if req.instance_id or req.runner_host:
+        try:
+            async with httpx.AsyncClient() as client:
+                params = {}
+                if req.instance_id:
+                    params["instance_id"] = f"eq.{req.instance_id}"
+                elif req.runner_host:
+                    params["runner_host"] = f"eq.{req.runner_host}"
+
+                response = await client.get(
+                    f"{SUPABASE_URL}/rest/v1/botz_instances",
+                    headers=supabase_headers,
+                    params=params,
+                )
+                if response.status_code == 200:
+                    instances = response.json()
+                    if instances:
+                        botz_name = instances[0].get("botz_name", "")
+                        # Map botz_name to agent_id pattern
+                        agent_id = botz_name.replace("-", "_")
+        except Exception as e:
+            logger.warning(f"Supabase lookup failed for whoami: {e}")
+
+    if not agent_id:
+        # Fallback: return default agent based on hostname
+        hostname = os.environ.get("HOSTNAME", os.environ.get("COMPUTERNAME", "unknown"))
+        # Try to match hostname patterns to known agents
+        for aid in sigs:
+            if hostname.lower() in aid:
+                agent_id = aid
+                break
+
+    if agent_id and agent_id in sigs:
+        sig = sigs[agent_id]
+        return {
+            "agent_id": agent_id,
+            "glyph": sig.get("glyph"),
+            "color": sig.get("color"),
+            "voice": sig.get("voice"),
+            "resonance": sig.get("resonance", []),
+        }
+
+    return {"agent_id": None, "message": "No agent identity matched"}
 
 
 if __name__ == "__main__":
