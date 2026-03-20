@@ -353,6 +353,73 @@ async def list_botz_instances(available_only: bool = False):
             raise HTTPException(status_code=response.status_code, detail=response.text)
 
 
+# ── Agent Theming Endpoints (MUST be before /v1/botz/{botz_id} dynamic route) ──
+
+SIGNATURES_PATH = os.path.join(os.path.dirname(__file__), "..", "..", "config", "agent_signatures.yaml")
+THEMES_PATH = os.path.join(os.path.dirname(__file__), "..", "..", "configs", "agent-themes.yaml")
+
+
+def _load_yaml(path: str) -> dict:
+    """Load YAML file, return empty dict on failure."""
+    try:
+        import yaml
+        with open(path, encoding="utf-8") as f:
+            return yaml.safe_load(f) or {}
+    except Exception:
+        return {}
+
+
+@app.get("/v1/botz/themes")
+async def list_themes():
+    """List all agent themes (signatures + character mappings)."""
+    sigs = _load_yaml(SIGNATURES_PATH)
+    agents = sigs.get("signatures", sigs)
+    result = {}
+    for agent_id, sig in agents.items():
+        result[agent_id] = {
+            "glyph": sig.get("glyph"),
+            "color": sig.get("color"),
+            "accent": sig.get("accent"),
+            "voice": sig.get("voice"),
+            "display_name": sig.get("display_name"),
+            "resonance": sig.get("resonance", []),
+        }
+    return {"agents": result, "count": len(result)}
+
+
+@app.get("/v1/botz/themes/{agent_id}")
+async def get_theme(agent_id: str):
+    """Get a specific agent's theme (signature + character mapping)."""
+    sigs = _load_yaml(SIGNATURES_PATH)
+    agents = sigs.get("signatures", sigs)
+    sig = agents.get(agent_id) or agents.get(agent_id.replace("_", "-"))
+    if not sig:
+        raise HTTPException(status_code=404, detail=f"Agent '{agent_id}' not found in signatures")
+
+    themes = _load_yaml(THEMES_PATH)
+    mappings = themes.get("service_character_mappings", {})
+    character = {}
+    normalized_id = agent_id.lower().replace("-", "_").replace(" ", "_")
+    for service_key, mapping in mappings.items():
+        sid = service_key.lower().replace("-", "_").replace(" ", "_")
+        if normalized_id in sid or sid in normalized_id:
+            character = mapping
+            break
+
+    return {
+        "agent_id": agent_id,
+        "glyph": sig.get("glyph"),
+        "color": sig.get("color"),
+        "accent": sig.get("accent"),
+        "voice": sig.get("voice"),
+        "display_name": sig.get("display_name"),
+        "resonance": sig.get("resonance", []),
+        "description": sig.get("description"),
+        "co_author": sig.get("co_author"),
+        "character_mapping": character if character else None,
+    }
+
+
 @app.get("/v1/botz/{botz_id}")
 async def get_botz_instance(botz_id: str):
     """Get details of a specific BoTZ instance."""
@@ -530,72 +597,6 @@ async def get_stats():
             logger.error(f"Error fetching stats: {e}")
 
         return stats
-
-
-# ── Agent Theming Endpoints ─────────────────────────────────────────────
-
-SIGNATURES_PATH = os.path.join(os.path.dirname(__file__), "..", "..", "config", "agent_signatures.yaml")
-THEMES_PATH = os.path.join(os.path.dirname(__file__), "..", "..", "configs", "agent-themes.yaml")
-
-
-def _load_yaml(path: str) -> dict:
-    """Load YAML file, return empty dict on failure."""
-    try:
-        import yaml
-        with open(path, encoding="utf-8") as f:
-            return yaml.safe_load(f) or {}
-    except Exception:
-        return {}
-
-
-@app.get("/v1/botz/themes")
-async def list_themes():
-    """List all agent themes (signatures + character mappings)."""
-    sigs = _load_yaml(SIGNATURES_PATH)
-    agents = sigs.get("signatures", sigs)
-    result = {}
-    for agent_id, sig in agents.items():
-        result[agent_id] = {
-            "glyph": sig.get("glyph"),
-            "color": sig.get("color"),
-            "accent": sig.get("accent"),
-            "voice": sig.get("voice"),
-            "display_name": sig.get("display_name"),
-            "resonance": sig.get("resonance", []),
-        }
-    return {"agents": result, "count": len(result)}
-
-
-@app.get("/v1/botz/themes/{agent_id}")
-async def get_theme(agent_id: str):
-    """Get a specific agent's theme (signature + character mapping)."""
-    sigs = _load_yaml(SIGNATURES_PATH)
-    agents = sigs.get("signatures", sigs)
-    sig = agents.get(agent_id) or agents.get(agent_id.replace("_", "-"))
-    if not sig:
-        raise HTTPException(status_code=404, detail=f"Agent '{agent_id}' not found in signatures")
-
-    themes = _load_yaml(THEMES_PATH)
-    mappings = themes.get("service_character_mappings", {})
-    character = {}
-    for service_key, mapping in mappings.items():
-        sid = service_key.lower().replace("-", "_").replace(" ", "_")
-        if agent_id in sid or sid in agent_id:
-            character = mapping
-            break
-
-    return {
-        "agent_id": agent_id,
-        "glyph": sig.get("glyph"),
-        "color": sig.get("color"),
-        "accent": sig.get("accent"),
-        "voice": sig.get("voice"),
-        "display_name": sig.get("display_name"),
-        "resonance": sig.get("resonance", []),
-        "description": sig.get("description"),
-        "co_author": sig.get("co_author"),
-        "character_mapping": character if character else None,
-    }
 
 
 if __name__ == "__main__":
