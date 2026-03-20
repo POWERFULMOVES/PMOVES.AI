@@ -21,9 +21,27 @@ Trim a single PR: analyze threads, apply fixes interactively, resolve addressed 
    - Read the file and line referenced
    - Apply the fix
    - Explain the change to the user
-5. After all actionable threads are addressed, commit + push
-6. Run `make -C pmoves pr-trim-resolve PR=<number> RESOLVE_ACTIONABLE=1`
-7. Unless `--no-trail`: `make -C pmoves sign-trail SUMMARY="PR Hedge Trim: resolved K threads on PR #N"`
+5. For each **nitpick** thread:
+   - Read the suggestion carefully
+   - Evaluate: is it a valid improvement or purely stylistic preference?
+   - If valid improvement: apply the fix and note what was changed
+   - If stylistic only: skip but log the learning for `/chit:review-sweep`
+   - Record all nitpick learnings (applied or skipped) for the trail entry
+6. After all actionable + nitpick threads are addressed, commit + push
+7. Run `make -C pmoves pr-trim-resolve PR=<number> RESOLVE_ACTIONABLE=1`
+8. Unless `--no-trail`: `make -C pmoves sign-trail SUMMARY="PR Hedge Trim: resolved K threads on PR #N"`
+
+### Comment coverage
+
+The default `pr-trim-analyze` fetches review comments (inline threads). Some CodeRabbit
+feedback appears as **issue-level comments** or **review body comments** instead. To
+ensure full coverage:
+
+1. After step 2 (read classification JSON), also fetch:
+   - `gh api repos/{owner}/{repo}/issues/{PR}/comments` — issue-level comments
+   - `gh api repos/{owner}/{repo}/pulls/{PR}/reviews` — review events (summary body)
+2. Scan these for CodeRabbit-authored entries not already in the classification
+3. Classify any new threads found and merge them into the working set
 
 ### Batch mode (`--batch`)
 
