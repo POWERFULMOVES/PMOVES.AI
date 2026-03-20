@@ -19,8 +19,8 @@ echo 1) Q4_K_S  GPUs less than 12 GB VRAM RECOMMENDED
 echo 2) Q5_K_S  GPUs 12-16 GB
 echo 3) Q8_0    Best quality, GPUs 24 GB and more
 set /p "MODEL_CHOICE=Enter 1, 2 or 3: "
-if "!MODEL_CHOICE!"=="1" (set "MODEL_VERSION=Q5_K_S") ^
-else if "!MODEL_CHOICE!"=="2" (set "MODEL_VERSION=Q6_K") ^
+if "!MODEL_CHOICE!"=="1" (set "MODEL_VERSION=Q4_K_S") ^
+else if "!MODEL_CHOICE!"=="2" (set "MODEL_VERSION=Q5_K_S") ^
 else if "!MODEL_CHOICE!"=="3" (set "MODEL_VERSION=Q8_0") ^
 else (echo Invalid choice.&timeout /t 2 >nul&goto CHOOSE_MODEL)
 
