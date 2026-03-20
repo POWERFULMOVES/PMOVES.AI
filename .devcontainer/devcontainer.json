@@ -16,8 +16,10 @@
   "customizations": {
     "vscode": {
       "extensions": [
+        "anthropics.claude-code",
         "ms-azuretools.vscode-docker",
         "ms-python.python",
+        "ms-python.vscode-pylance",
         "redhat.vscode-yaml",
         "foxundermoon.shell-format",
         "ms-vscode.makefile-tools",
@@ -28,7 +30,11 @@
       ],
       "settings": {
         "terminal.integrated.defaultProfile.linux": "bash",
-        "python.defaultInterpreterPath": "/usr/local/bin/python"
+        "python.defaultInterpreterPath": "/usr/local/bin/python",
+        "editor.formatOnSave": true,
+        "yaml.schemas": {
+          "https://json.schemastore.org/github-workflow.json": ".github/workflows/*.yml"
+        }
       }
     }
   },
@@ -55,5 +61,9 @@
     "9090": { "label": "Prometheus Metrics", "onAutoForward": "silent" }
   },
   "postCreateCommand": "bash .devcontainer/post-create.sh",
+  "containerEnv": {
+    "PMOVES_PROFILE": "student",
+    "PYTHONIOENCODING": "utf-8"
+  },
   "remoteUser": "vscode"
 }
