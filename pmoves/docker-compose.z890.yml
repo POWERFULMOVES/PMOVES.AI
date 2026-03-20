@@ -33,11 +33,12 @@ services:
     networks:
       - z890_net
     healthcheck:
-      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8222/varz || exit 1"]
+      # Verify NATS is running AND has at least one upstream leaf connection
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8222/leafz 2>/dev/null | grep -q '\"num_remotes\":[^0]' || exit 1"]
       interval: 20s
       timeout: 5s
       retries: 5
-      start_period: 10s
+      start_period: 15s
 
   # ── Container Agent (CA) ────────────────────────────────────────────────────
   # Network diagnostics + sidecar. Exposes /healthz, /diagnostic, /metrics.

@@ -21,8 +21,36 @@
 Param(
   [switch]$Remove,
   [switch]$Verify,
-  [string]$UpstreamIP = "192.168.1.65"
+  [string]$UpstreamIP
 )
+
+# ── Upstream IP detection ─────────────────────────────────────────────────
+# Priority: 1) Explicit -UpstreamIP param  2) Env var  3) Tailscale DNS  4) Hardcoded default
+
+if (-not $UpstreamIP) {
+  $UpstreamIP = $env:PMOVES_5090_IP
+}
+
+if (-not $UpstreamIP) {
+  # Try Tailscale DNS resolution (if Tailscale is installed)
+  try {
+    $resolved = [System.Net.Dns]::GetHostAddresses("pmoves-5090") |
+      Where-Object { $_.AddressFamily -eq 'InterNetwork' } |
+      Select-Object -First 1
+    if ($resolved) {
+      $UpstreamIP = $resolved.IPAddressToString
+      Write-Host "[AUTO] Resolved upstream from Tailscale DNS: $UpstreamIP" -ForegroundColor Cyan
+    }
+  } catch {
+    # Tailscale DNS not available, fall through
+  }
+}
+
+if (-not $UpstreamIP) {
+  $UpstreamIP = "192.168.1.65"
+  Write-Host "[WARN] Using hardcoded default upstream IP: $UpstreamIP" -ForegroundColor Yellow
+  Write-Host "       Set PMOVES_5090_IP env var or pass -UpstreamIP to override." -ForegroundColor Yellow
+}
 
 $ErrorActionPreference = 'Stop'
 

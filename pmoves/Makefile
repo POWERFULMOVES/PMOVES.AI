@@ -2599,17 +2599,20 @@ vibevoice-smoke: ## Check VibeVoice realtime /config (requires VibeVoice running
 Z890_COMPOSE := -f docker-compose.z890.yml --env-file env.z890
 LOAD_ENV_Z890 = $(LOAD_ENV_SHARED) set -a && . ./env.z890 && set +a &&
 
+# Accept optional UPSTREAM_IP: make z890-host-setup UPSTREAM_IP=100.73.74.3
+UPSTREAM_IP ?=
+
 .PHONY: z890-host-setup
 z890-host-setup: ## [Admin] Configure z890 host netsh port proxies for NATS leafnode
-	@powershell -ExecutionPolicy Bypass -File scripts/z890_host_setup.ps1
+	@powershell -ExecutionPolicy Bypass -File scripts/z890_host_setup.ps1 $(if $(UPSTREAM_IP),-UpstreamIP $(UPSTREAM_IP))
 
 .PHONY: z890-host-verify
 z890-host-verify: ## Verify z890 host port proxies are configured
-	@powershell -ExecutionPolicy Bypass -File scripts/z890_host_setup.ps1 -Verify
+	@powershell -ExecutionPolicy Bypass -File scripts/z890_host_setup.ps1 -Verify $(if $(UPSTREAM_IP),-UpstreamIP $(UPSTREAM_IP))
 
 .PHONY: z890-host-remove
 z890-host-remove: ## [Admin] Remove z890 host port proxies
-	@powershell -ExecutionPolicy Bypass -File scripts/z890_host_setup.ps1 -Remove
+	@powershell -ExecutionPolicy Bypass -File scripts/z890_host_setup.ps1 -Remove $(if $(UPSTREAM_IP),-UpstreamIP $(UPSTREAM_IP))
 
 .PHONY: up-z890
 up-z890: ## Start Z890 GPU node (Ollama + NATS Leaf + Mesh Agent + Container Agent)
