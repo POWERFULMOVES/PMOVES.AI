@@ -570,7 +570,7 @@ def analyze(
     table = Table("Group", "Tracks", "Avg BPM", "Energy", "Timbre", title="Sonic Groups")
 
     for gid, members in sorted(grp_map.items(), key=lambda kv: -len(kv[1])):
-        gname = name_group(members)
+        gname = f"{name_group(members)}_c{gid}"
         m3u = write_playlist(gname, members, output)
         avg_bpm = round(float(np.mean([r["tempo_bpm"] for r in members])), 1)
         table.add_row(gname, str(len(members)), str(avg_bpm),

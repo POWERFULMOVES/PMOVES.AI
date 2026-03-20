@@ -184,13 +184,13 @@ def group_to_cgp(group: dict, fingerprints: dict[str, dict], coherence: float = 
             "y":           group_sv["Hz"],
             "r":           r,
             "state_vector": group_sv,
-        }],
-        "constellations": [{
-            "id":      _stable_id(f"c_{group_name}"),
-            "label":   group_name,
-            "anchor":  anchor,
-            "spectrum": [group_sv["Hz"], group_sv["delta"], 1.0 - abs(group_sv["kappa"])],
-            "points":  points,
+            "constellations": [{
+                "id":      _stable_id(f"c_{group_name}"),
+                "label":   group_name,
+                "anchor":  anchor,
+                "spectrum": [group_sv["Hz"], group_sv["delta"], 1.0 - abs(group_sv["kappa"])],
+                "points":  points,
+            }],
         }],
         # Control plane metadata — Hyperdimensions can update these as knobs
         "control_plane": {

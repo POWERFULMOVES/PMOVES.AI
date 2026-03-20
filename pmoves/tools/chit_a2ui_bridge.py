@@ -89,72 +89,100 @@ def transpile_cgp_to_a2ui(cgp_data: Dict[str, Any]) -> Dict[str, Any]:
 
     elements = a2ui_spec["scenes"][0]["elements"]
 
-    # 1. Map Anchors to Text/Glyph Elements
-    anchors = cgp_data.get("anchors", [])
-    for idx, anchor in enumerate(anchors):
-        agent_id = anchor.get("agent_id", f"agent_{idx}")
-        coords   = anchor.get("coordinates", [0, 0, 0])
+    # 1-2. Traverse canonical CGP nested path: super_nodes[*].constellations[*]
+    #      Each constellation has anchor (3D coords), spectrum, and points (tracks).
+    element_idx = 0
+    for sn in cgp_data.get("super_nodes", []):
+        for constellation in sn.get("constellations", []):
+            # Map constellation anchor → Text/Glyph Element
+            anchor_coords = constellation.get("anchor", [0, 0, 0])
+            c_label = constellation.get("label", f"constellation_{element_idx}")
 
-        x = int((coords[0] + 1) / 2 * 1920) if len(coords) > 0 else 960
-        y = int((coords[1] + 1) / 2 * 1080) if len(coords) > 1 else 540
+            x = int((anchor_coords[0] + 1) / 2 * 1920) if len(anchor_coords) > 0 else 960
+            y = int((anchor_coords[1] + 1) / 2 * 1080) if len(anchor_coords) > 1 else 540
 
-        elements.append({
-            "id":      f"anchor_{agent_id}",
-            "type":    "text",
-            "content": agent_id,
-            "style": {
-                "x": x, "y": y,
-                "fontSize": 48,
-                "color": "#00FFCC",
-                "fontFamily": "Inter, sans-serif"
-            },
-            "animations": [{
-                "property":        "opacity",
-                "from":            0,
-                "to":              1,
-                "startFrame":      idx * 10,
-                "durationInFrames": 15,
-                "easing":         "easeInOut",  # Remotion 4 spring easing
-            }]
-        })
+            elements.append({
+                "id":      f"anchor_{c_label}",
+                "type":    "text",
+                "content": c_label,
+                "style": {
+                    "x": x, "y": y,
+                    "fontSize": 48,
+                    "color": "#00FFCC",
+                    "fontFamily": "Inter, sans-serif"
+                },
+                "animations": [{
+                    "property":        "opacity",
+                    "from":            0,
+                    "to":              1,
+                    "startFrame":      element_idx * 10,
+                    "durationInFrames": 15,
+                    "easing":         "easeInOut",
+                }]
+            })
 
-    # 2. Map Spectral Signatures → Visual Pulses (with @remotion/sfx sync)
-    signatures = cgp_data.get("spectral_signatures", [])
-    for idx, sig in enumerate(signatures):
-        freq = sig.get("frequency_hz", 60)
-        amp  = sig.get("amplitude", 1.0)
+            # Map constellation spectrum → Visual Pulse (with @remotion/sfx sync)
+            spectrum = constellation.get("spectrum", [])
+            freq = spectrum[0] * 8000 if len(spectrum) > 0 else 60  # Hz back from normalized
+            amp  = spectrum[1] if len(spectrum) > 1 else 1.0
 
-        pulse_duration = max(5, int(30 * (60 / max(1, freq))))
+            pulse_duration = max(5, int(30 * (60 / max(1, freq))))
 
-        # Register as sfx anchor for beat-sync (useAudioData hook in renderer)
-        a2ui_spec["sfx_anchors"].append({
-            "id":        f"sfx_{idx}",
-            "freq_hz":   freq,
-            "amplitude": amp,
-            "frame_hint": idx * pulse_duration,
-            "sfx_type":  "beat_pulse",   # maps to @remotion/sfx useAudioData visualizer
-        })
+            a2ui_spec["sfx_anchors"].append({
+                "id":        f"sfx_{element_idx}",
+                "freq_hz":   freq,
+                "amplitude": amp,
+                "frame_hint": element_idx * pulse_duration,
+                "sfx_type":  "beat_pulse",
+            })
 
-        elements.append({
-            "id":     f"spectral_pulse_{idx}",
-            "type":   "glyph",
-            "symbol": "◈",
-            "style":  {
-                "x": 960, "y": 540,
-                "fontSize": int(100 * amp),
-                "color":    "#FF00FF"
-            },
-            "sfx_anchor_id": f"sfx_{idx}",   # link to audio frame for beat-synced scaling
-            "animations": [{
-                "property":        "scale",
-                "from":            1.0,
-                "to":              1.5 + (amp * 0.5),
-                "startFrame":      0,
-                "durationInFrames": pulse_duration,
-                "loop":            True,
-                "easing":          "spring",   # Remotion 4 spring()
-            }]
-        })
+            elements.append({
+                "id":     f"spectral_pulse_{element_idx}",
+                "type":   "glyph",
+                "symbol": "◈",
+                "style":  {
+                    "x": 960, "y": 540,
+                    "fontSize": int(100 * max(amp, 0.1)),
+                    "color":    "#FF00FF"
+                },
+                "sfx_anchor_id": f"sfx_{element_idx}",
+                "animations": [{
+                    "property":        "scale",
+                    "from":            1.0,
+                    "to":              1.5 + (amp * 0.5),
+                    "startFrame":      0,
+                    "durationInFrames": pulse_duration,
+                    "loop":            True,
+                    "easing":          "spring",
+                }]
+            })
+
+            # Map each point (track) → sub-element
+            for pt in constellation.get("points", []):
+                pt_label = pt.get("label", f"point_{element_idx}")
+                proj = pt.get("proj", [0.5, 0.5, 0.5])
+                conf = pt.get("conf", 1.0)
+                elements.append({
+                    "id":      f"point_{pt['id']}" if "id" in pt else f"point_{element_idx}",
+                    "type":    "glyph",
+                    "symbol":  "●",
+                    "style": {
+                        "x": int(proj[0] * 1920) if len(proj) > 0 else 960,
+                        "y": int(proj[1] * 1080) if len(proj) > 1 else 540,
+                        "fontSize": 24,
+                        "color": f"rgba(0, 255, 204, {conf:.2f})",
+                    },
+                    "animations": [{
+                        "property":        "opacity",
+                        "from":            0,
+                        "to":              conf,
+                        "startFrame":      element_idx * 5,
+                        "durationInFrames": 10,
+                        "easing":          "easeInOut",
+                    }]
+                })
+
+            element_idx += 1
 
     # 3. Topology Edges → geometry_mesh element
     geometry = cgp_data.get("geometry", {})
