@@ -11,7 +11,9 @@ PRECHECK_VENV_WIN ?= .venv-pmoves/Scripts/python.exe
 PRECHECK_VENV_UNIX ?= .venv-pmoves/bin/python
 
 ifeq ($(OS),Windows_NT)
-PRECHECK_PY ?= py -3
+# Detect Python: py -3 (Windows launcher) > conda/system python > python3
+# `py` may not exist in Git Bash; `python3` may be a Windows Store stub.
+PRECHECK_PY ?= $(shell py -3 --version >NUL 2>&1 && echo "py -3" || (python --version 2>/dev/null | grep -q Python && echo "python" || echo "python3"))
 else
 PRECHECK_PY ?= $(PYTHON)
 endif
