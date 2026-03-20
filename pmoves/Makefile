@@ -2524,6 +2524,21 @@ comfyui-smoke: ## Smoke check ComfyUI / (expects 200/302)
 	  fi; \
 	  echo "✔ ComfyUI reachable (HTTP $$code)"
 
+.PHONY: comfyui-models
+comfyui-models: ## Download SDXL checkpoint into ComfyUI volume (requires comfyui running)
+	@echo "→ Downloading SDXL Turbo checkpoint into ComfyUI volume..."
+	@docker exec -it $$(docker ps -qf name=comfyui) bash -c '\
+	  mkdir -p /workspace/ComfyUI/models/checkpoints && \
+	  cd /workspace/ComfyUI/models/checkpoints && \
+	  if [ ! -f sd_xl_turbo_1.0_fp16.safetensors ]; then \
+	    echo "Downloading stabilityai/sdxl-turbo (fp16)..." && \
+	    curl -L -o sd_xl_turbo_1.0_fp16.safetensors \
+	      "https://huggingface.co/stabilityai/sdxl-turbo/resolve/main/sd_xl_turbo_1.0_fp16.safetensors"; \
+	  else \
+	    echo "✔ SDXL Turbo already present"; \
+	  fi'
+	@echo "✔ ComfyUI checkpoint ready"
+
 .PHONY: up-tts-studio tts-studio-smoke
 up-tts-studio: ## Start Ultimate TTS Studio UI (Gradio) from hardened GHCR image
 	@$(DC) --profile creator up -d ultimate-tts-studio

@@ -1552,6 +1552,9 @@ services:
     - MINIO_SECRET_KEY=${MINIO_PASSWORD:-minioadmin}
     - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
     - EMOTION_MODEL=${EMOTION_MODEL:-superb/hubert-large-superb-er}
+    - MUSIC_MODEL=${MUSIC_MODEL:-m-a-p/MERT-v1-330M}
+    - DIARIZATION_MODEL=${DIARIZATION_MODEL:-pyannote/speaker-diarization-3.1}
+    - AUDIO_CLAP_MODEL=${AUDIO_CLAP_MODEL:-laion/larger_clap_general}
     deploy:
       resources:
         reservations:

@@ -43,6 +43,16 @@ services:
       - AGENT_ZERO_BASE_URL=${AGENT_ZERO_BASE_URL:-http://agent-zero:8080}
       # Discord webhook for echo publisher
       - DISCORD_WEBHOOK_USERNAME=${DISCORD_WEBHOOK_USERNAME:-PMOVES Publisher}
+      - DISCORD_WEBHOOK_URL=${DISCORD_WEBHOOK_URL:-}
+      - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN:-}
+      # Voice agent model routing (cascades: VOICE_AGENT_MODEL → OPENAI_MODEL → TensorZero → gpt-4o-mini)
+      - VOICE_AGENT_MODEL=${VOICE_AGENT_MODEL:-}
+      - TENSORZERO_BASE_URL=${TENSORZERO_BASE_URL:-http://tensorzero-gateway:3000}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      # Flute Gateway for Whisper STT + TTS
+      - FLUTE_GATEWAY_URL=${FLUTE_GATEWAY_URL:-http://flute-gateway:8055}
+      # Hi-RAG v2 for knowledge retrieval
+      - HIRAG_URL=${HIRAG_URL:-http://hi-rag-gateway-v2-cpu:8086}
       - N8N_LOG_LEVEL=debug
       - N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=true
     ports: ["5678:5678"]
