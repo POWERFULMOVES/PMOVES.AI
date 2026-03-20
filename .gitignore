@@ -26,6 +26,8 @@ secrets/
 # CHIT Geometry Packets
 # =============================================================================
 pmoves/data/chit/env.cgp.json
+pmoves/data/beats/playlists/cgp/
+pmoves/data/beats/playlists/a2ui/
 
 # =============================================================================
 # Temporary check directories (moved to /tmp/pmoves-check-backup-*)
