@@ -1138,6 +1138,9 @@ services:
       dockerfile: services/hi-rag-gateway/Dockerfile
     restart: unless-stopped
     environment:
+    # Neutralise Windows SSL_CERT_FILE leak (host env > env_file precedence)
+    - SSL_CERT_FILE=
+    - SSL_CERT_DIR=
     - QDRANT_URL=${QDRANT_URL:-http://qdrant:6333}
     - QDRANT_COLLECTION=${QDRANT_COLLECTION:-pmoves_chunks}
     - SENTENCE_MODEL=${SENTENCE_MODEL:-all-MiniLM-L6-v2}
@@ -1771,6 +1774,9 @@ services:
       - TORCH_SKIP_CUDA=0
     restart: unless-stopped
     environment:
+    # Neutralise Windows SSL_CERT_FILE leak (host env > env_file precedence)
+    - SSL_CERT_FILE=
+    - SSL_CERT_DIR=
     - QDRANT_URL=${QDRANT_URL:-http://qdrant:6333}
     - QDRANT_COLLECTION=${QDRANT_COLLECTION:-pmoves_chunks}
     - SENTENCE_MODEL=${SENTENCE_MODEL:-all-MiniLM-L6-v2}
