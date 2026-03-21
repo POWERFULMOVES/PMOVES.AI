@@ -270,7 +270,10 @@ All resolved. No blockers.
 | Workstream | Agent | Claimed | Status | Branch |
 |------------|-------|---------|--------|--------|
 | W1 (partial: TTS mesh) | 5090-claude | 2026-03-19 | SHIPPED `2a681471` | main |
-| W2 | — | — | Unclaimed | — |
-| W3 | — | — | Unclaimed | — |
+| W1 (theming: render-card, theme API, alt sigs) | claude-opus | 2026-03-20 | SHIPPED #1040, #1042 | main |
+| W1 (remaining: BoTZ CLI bridge) | 5090-claude | 2026-03-20 | CLAIMED — pending 5090 session | — |
+| W2 (devcontainer + SKILL.md) | claude-opus | 2026-03-20 | SHIPPED #1041 | main |
+| W3 (Discord classrooms) | 5090-claude | 2026-03-20 | CLAIMED — pending 5090 session | — |
 | W4 (partial: content stubs) | 5090-claude | 2026-03-19 | SHIPPED `2a681471` | main |
+| W4 (beats pipeline runner) | claude-opus | 2026-03-20 | SHIPPED #1039 | main |
 | W5 (partial: TZ models, TACs) | 5090-claude | 2026-03-19 | SHIPPED `2a681471` | main |

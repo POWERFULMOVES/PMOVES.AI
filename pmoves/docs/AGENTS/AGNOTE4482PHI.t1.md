@@ -72,6 +72,8 @@ Required handoff fields:
 - `2026-03-15T21:00:00Z` CLAIM `CLAUDE-OPUS` scope: Post-Phase E handoff — rebase infra TAC onto main, stale branch cleanup, handoff triage.
 - `2026-03-19T22:00:00Z` CLAIM `Z890-CLAUDE` scope: Session convergence — merged 14 PRs (7 PMOVES.AI #1028-1035 + 7 DoX #123-136), P0 UNFCU security fixes (admin gate on /pii/unmask, PII disk leak, CSV injection, TLS downgrade), Pinokio PBnJ network workflow (Windows/Linux/WSL/Jetson), NATS leaf node verified (5/5 services, Leafnodes: 1), PR-trim on 51 CodeRabbit threads, Azure mirror architecture added to W5 roadmap.
 - `2026-03-19T22:00:00Z` RELEASE `Z890-CLAUDE` scope: Trail signed (unsigned locally, HMAC pending on 5090 remote). AGNOTE4482 roadmap updated. Handoff ready for 5090-claude (pull main + sign acknowledgment) and 4090-claude (branch cleanup + leaf node config).
+- `2026-03-20T15:00:00Z` CLAIM `CLAUDE-OPUS` scope: PR review/merge cycle (#1039-#1043), Phase A alt signatures (schema 1.1.0, --alter flag, 3 alters), env.shared noise fix (PR #1046), post-merge validation (worktree-based, 9/10 pass), runner restart + secrets-sync, AGNOTE4482 coordination handoff to 5090 node.
+- `2026-03-20T23:30:00Z` RELEASE `CLAUDE-OPUS` scope: All 5 PRs merged. Alt signatures live (z890-infra, 5090-voice, 4090-field). env.shared noise root-caused and fixed (raw sourcing → with-env.sh). Runners 3/3 online. Secrets synced. Handoff to 5090-claude: pull main, rebuild BoTZ container for theme API, claim W1 CLI bridge + W3 Discord lanes.
 
 ## Graphiti Review Log
 - `2026-02-21T10:35:03.6791631-05:00` REVIEW `CODEX-GPT5`
@@ -182,6 +184,17 @@ Required handoff fields:
 
 - `2026-03-19T08:30:00Z` RELEASE `CLAUDE-OPUS` scope: Graphiti 4482 lane validated and closed. All acceptance criteria from HANDOFF_CLAUDE_GRAPHITI_4482_2026-03-04.md satisfied.
 
+- `2026-03-20T23:30:00Z` REVIEW `CLAUDE-OPUS`
+  - Merged 5 PRs to main: #1039 (beats pipeline), #1040 (agent theming), #1041 (devcontainer), #1042 (n8n deploy + alt signatures), #1043 (pr-trim fix).
+  - Implemented Phase A alt signatures: schema 1.1.0, `alters` arrays for z890/5090/4090, `--alter` flag on sign_trail.py, `selected_alter` in signature schema, `agent.identity.altered.v1` NATS subject.
+  - Investigated env.shared noise (worktree approach): root-caused to raw `. env.shared` sourcing in preflight.mk (Docker env_file format ≠ bash). Fixed 5 sites to use `scripts/with-env.sh`. PR #1046.
+  - Validated merged PRs via worktree: 9/10 pass (BoTZ theme API pending container rebuild).
+  - Restarted CI runners (3/3 online), triggered secrets-sync (Google OAuth creds hydrated).
+  - AGNOTE4482 roadmap: W1 theming SHIPPED, W2 devcontainer SHIPPED, W4 beats SHIPPED.
+  - Handoff to 5090-claude: pull main, rebuild BoTZ, claim W1 CLI bridge + W3 Discord.
+
+- `2026-03-20T23:30:00Z` RELEASE `CLAUDE-OPUS` scope: Session review + coordination complete. 5090 handoff package ready.
+
 ## Agent ACK (Signed)
 - Agent: `CODEX-GPT5`
 - Ack: `I acknowledge control of the current convergence lane and will not overlap branch edits without explicit handoff.`
@@ -241,3 +254,9 @@ Required handoff fields:
 - Ack: `Validated Graphiti protocol visibility on port 4482. All components verified: GraphitiStatusBadge, /api/graphiti/trails, /dashboard/graphiti, NotebookWorkbenchView integration. Lint passed. AGENT_TRAIL entry added. Lane closed per HANDOFF_CLAUDE_GRAPHITI_4482_2026-03-04.md acceptance criteria.`
 - Signature: `ACK::CLAUDE-OPUS::PHI-4482-T1::GRAPHITI-4482-VALIDATED`
 - Timestamp: `2026-03-19T08:30:00Z`
+
+## Agent ACK (Signed, PR Merge Cycle + Alt Signatures + 5090 Coordination)
+- Agent: `CLAUDE-OPUS`
+- Ack: `Merged 5 PRs (#1039-#1043), implemented Phase A alt signatures (schema 1.1.0, 3 alters, --alter flag), root-caused and fixed env.shared noise (PR #1046), validated via worktree (9/10 pass), restarted runners (3/3), synced secrets (Google OAuth). AGNOTE4482 roadmap updated: W1/W2/W4 partial SHIPPED. Handoff to 5090-claude for BoTZ rebuild + W1 CLI bridge + W3 Discord lanes.`
+- Signature: `ACK::CLAUDE-OPUS::PHI-4482-T1::PR-MERGE-ALT-SIGS-5090-HANDOFF`
+- Timestamp: `2026-03-20T23:30:00Z`

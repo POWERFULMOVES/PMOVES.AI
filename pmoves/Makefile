@@ -1334,8 +1334,7 @@ bootstrap-tier-envs: ## Create missing tier env files from examples (Hardened br
 .PHONY: populate-tier-envs
 populate-tier-envs: bootstrap-tier-envs ## Populate tier env files with defaults from env.shared and .env.local
 	@echo "Populating tier env files with defaults..."
-	@. ./env.shared 2>/dev/null || true; \
-	. ./.env.local 2>/dev/null || true; \
+	@. ./scripts/with-env.sh 2>/dev/null || true; \
 	if [ -f "env.tier-data" ]; then \
 		sed -i "s|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=$${POSTGRES_PASSWORD:-$(shell openssl rand -base64 24)}|" env.tier-data; \
 		sed -i "s|^NEO4J_AUTH=neo4j/.*|NEO4J_AUTH=neo4j/$${NEO4J_PASSWORD:-$(shell openssl rand -base64 24)}|" env.tier-data; \
@@ -2073,7 +2072,7 @@ ui-single-user-off:
 
 .PHONY: ui-ingest-smoke
 ui-ingest-smoke: ## Exercise boot-jwt status and ingest smoke via API health endpoints
-	@set -a; if [ -f ./env.shared ]; then . ./env.shared; fi; set +a; \
+	@. ./scripts/with-env.sh 2>/dev/null || true; \
 	BOOT=$${NEXT_PUBLIC_SUPABASE_BOOT_USER_JWT:-$${SUPABASE_BOOT_USER_JWT}}; \
 	BASE=$${NEXT_PUBLIC_BASE_URL:-http://localhost:3001}; \
 	SECRET=$${SMOKE_SHARED_SECRET:-$${PMOVES_SMOKE_SHARED_SECRET}}; \
