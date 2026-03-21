@@ -363,26 +363,6 @@ Example: `ingest.transcript.ready.v1`
 - **Subscribers:** Agent trail processors, observability dashboards, handoff automation
 - **Delivery:** Publish/subscribe (JetStream optional depending on deployment policy)
 
-**`agent.identity.altered.v1`**
-- **Direction:** Published by sign_trail.py (or any agent) when an alter identity is selected
-- **Purpose:** Signal that an agent adopted an alternate identity during or after a session
-- **Payload:**
-  ```json
-  {
-    "agent_id": "z890-claude",
-    "selected_alter": "z890-infra",
-    "glyph": "\u2699",
-    "color": "#1E40AF",
-    "voice": "analytical",
-    "resonance": ["infrastructure", "docker-hardening"],
-    "timestamp": "2026-03-20T18:00:00Z",
-    "summary": "Session ended — infrastructure work shaped identity"
-  }
-  ```
-- **Schema:** `pmoves/contracts/schemas/agent-graphiti/signature.v1.schema.json` (with `selected_alter` field)
-- **Subscribers:** Agent trail processors, observability dashboards, identity tracking UI
-- **Delivery:** Publish/subscribe
-
 ## Mesh Coordination Subjects
 
 ### Node Announcements

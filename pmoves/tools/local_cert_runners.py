@@ -171,34 +171,6 @@ def _docker_socket_mount() -> str:
     return "/var/run/docker.sock:/var/run/docker.sock"
 
 
-def _host_secrets_mount() -> str:
-    """Return a volume mount that maps the host's PMOVES secrets/chit dirs
-    into the runner container so ``sync-secrets-local.yml`` writes persist.
-
-    On Windows (Docker Desktop), the host path is ``%APPDATA%/pmoves``.
-    On Linux/macOS it's ``$XDG_CONFIG_HOME/pmoves`` (or ``~/.config/pmoves``).
-    Inside the Linux container the target is always ``/root/.config/pmoves``
-    since the runner runs as root.
-    """
-    if platform.system() == "Windows":
-        appdata = os.environ.get("APPDATA", "")
-        if appdata:
-            host_dir = os.path.join(appdata, "pmoves")
-        else:
-            host_dir = os.path.join(os.path.expanduser("~"), "AppData", "Roaming", "pmoves")
-    else:
-        xdg = os.environ.get("XDG_CONFIG_HOME", "")
-        if xdg:
-            host_dir = os.path.join(xdg, "pmoves")
-        else:
-            host_dir = os.path.join(os.path.expanduser("~"), ".config", "pmoves")
-
-    os.makedirs(host_dir, exist_ok=True)
-    # Container target: the runner image runs as root on Linux
-    container_dir = "/root/.config/pmoves"
-    return f"{host_dir}:{container_dir}"
-
-
 def docker_run(
     repo: str, image: str, lane: RunnerLane, token: str, *, is_pat: bool = True,
 ) -> None:
@@ -244,15 +216,8 @@ def docker_run(
         "RUNNER_WORKDIR=/tmp/runner/_work",
         "-v",
         _docker_socket_mount(),
+        image,
     ])
-
-    # Mount host secrets directory so sync-secrets-local.yml writes persist
-    # to the host filesystem instead of the ephemeral container.
-    secrets_mount = _host_secrets_mount()
-    if secrets_mount:
-        cmd.extend(["-v", secrets_mount])
-
-    cmd.append(image)
     run_cmd(cmd)
 
 def _runner_log_args(lane: RunnerLane) -> list[str]:
