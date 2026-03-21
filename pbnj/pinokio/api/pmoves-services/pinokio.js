@@ -2,8 +2,9 @@ module.exports = {
   version: "5.0",
   title: "PMOVES Services",
   description: "One-click control center for all PMOVES.AI Docker Compose services.",
+  icon: "icon.png",
   menu: async (kernel, info) => {
-    let installed = info.exists("../../pmoves/env.shared")
+    let installed = info.exists("../../../../pmoves/env.shared")
     let running = {
       core: info.running("start-core.js"),
       voice: info.running("start-voice.js"),
@@ -119,8 +120,8 @@ module.exports = {
       })
       items.push({
         icon: "fa-solid fa-stop",
-        text: "Stop All",
-        href: "stop.js",
+        text: "Reset (Stop All)",
+        href: "reset.js",
       })
 
       return items

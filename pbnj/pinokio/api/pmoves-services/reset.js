@@ -3,25 +3,16 @@ module.exports = {
     {
       method: "shell.run",
       params: {
-        path: "../../pmoves",
+        path: "../../../../pmoves",
         message: [
-          "docker compose --profile agents --profile workers --profile monitoring down -v"
-        ]
-      }
-    },
-    {
-      method: "shell.run",
-      params: {
-        path: "../../pmoves",
-        message: [
-          "docker compose -f docker-compose.external.yml down -v"
+          "make down"
         ]
       }
     },
     {
       method: "notify",
       params: {
-        html: "All PMOVES services and volumes reset. Run Install to bootstrap again.",
+        html: "All PMOVES services stopped. Run Install to bootstrap again.",
         type: "warning"
       }
     }

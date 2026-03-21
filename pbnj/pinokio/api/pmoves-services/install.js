@@ -3,17 +3,19 @@ module.exports = {
     {
       method: "shell.run",
       params: {
-        path: "../../pmoves",
+        path: "../../../../pmoves",
         message: [
-          "py -3 tools/env_setup_unified.py"
+          "make env-setup"
         ]
       }
     },
     {
-      method: "fs.link",
+      method: "shell.run",
       params: {
-        src: "{{cwd}}",
-        dest: "{{path.resolve(cwd, '..', '..', '..', '..', 'pinokio', 'api', 'pmoves-services')}}"
+        path: "../../../../pmoves",
+        message: [
+          "make brand-defaults"
+        ]
       }
     },
     {
