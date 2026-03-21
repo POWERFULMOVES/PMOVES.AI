@@ -139,13 +139,74 @@ ls pmoves/configs/tac_trees/ | wc -l       # expect: 20 files (including pinokio
 
 ---
 
+## Step 5: P7 Strategy Pivot — Pinokio as Mesh Transport Layer (2026-03-18)
+
+### The Discovery
+
+Security hardening (PR #1014) revealed the real architecture: **P7's Caddy proxy (pmoves-net) is the mesh transport layer**, not raw Tailscale IPs. P7 at `100.73.74.3:42000` serves the full Pinokio UI across the Tailscale mesh, with each app getting a proxied `42XXX` port.
+
+Instead of fighting raw port access, P7 becomes the **agent orchestration layer**.
+
+### Why P7 > Raw IDE
+
+1. **Isolation:** Each agent instance has its own P7 session — no git contamination (Gemini committed chrome-ext + security changes in one commit — never again)
+2. **Discovery:** P7 VPN scan finds apps across mesh automatically
+3. **Customization:** SKILL.md composition lets each instance specialize
+4. **Resumption:** Agent Launcher tracks sessions — pick up where you left off
+5. **Mobile:** Pixel 10 Pro XL (100.103.111.121) can access any P7 instance via Tailscale
+
+### Per-Instance Architecture
+
+| Instance | Machine | Focus | SKILL.md Stack |
+|----------|---------|-------|----------------|
+| **4090-claude** | Laptop | Cast, mobile, field testing | TTS, Cast, Cipher Memory |
+| **5090-claude** | 5090 Win | GPU voice, Hi-RAG | TTS (all 10 engines), Hi-RAG, Flute, Pipecat |
+| **z890-claude** | Z890 | Infrastructure, Docker | PMOVES Services, Model Registry, ComfyUI |
+| **gemini** | P7 instance | Broad integration, Chrome | Chrome Extension, BoTZ, Agent Cards |
+
+### Cross-Machine Flow Example
+
+```
+4090 P7 → "speak hello"
+  → Agent Interpreter discovers TTS SKILL.md on 5090 P7
+  → Routes via Tailscale to 100.73.74.3:42XXX (Caddy proxy)
+  → 5090 P7 → TTS Studio → audio
+  → Cast to Google Home (if on same LAN)
+```
+
+### env.shared _BIND Workaround
+
+The `_BIND` variables are in the working tree but the damage-control hook blocks git ops on env.shared. This is documented in `PORT_BINDING_MODEL.md`. The docker-compose.yml inline defaults (`${*_BIND:-127.0.0.1}`) work without env.shared. Agents running `make brand-defaults` populate env.shared programmatically.
+
+### Agent Signature Alters (schema 1.1.0)
+
+Restructured z890-claude and 5090-claude dual entries as `alters` array (schema 1.1.0). Both glyphs preserved as intentional persona variants — ▣/⚙ for z890, ◈/♫ for 5090. Primary identity unchanged; alters available for future persona-switching.
+
+### SKILL.md Files Created
+
+| File | Discovery Target |
+|------|-----------------|
+| `pbnj/pinokio/api/pmoves-services/SKILL.md` | Docker Compose profile controls |
+| `pmoves/docs/ARTSTUFF/Ultimate-TTS-Studio.git/SKILL.md` | Multi-engine TTS (10 engines) |
+
+### 4090-claude Test Results
+
+- P7 installed on 4090 laptop — Agents tab visible, pmoves-net named
+- Tailscale mesh: all 3 machines connected
+- TTS on 5090: binds `localhost:7861` — needs `--server-name 0.0.0.0` or Caddy proxy route for mesh access
+- Flute-Gateway reports `ultimate_tts: false` — TTS service not yet reachable from Flute
+
+---
+
 ## Critical Files
 
 | File | Purpose |
 |------|---------|
-| `pmoves/configs/tac_trees/pinokio-p7.tac.yaml` | NEW — P7 integration TAC |
-| `pmoves/configs/tac_trees/voice-agents.tac.yaml` | MODIFIED — Phase 15 P7 routing |
+| `pmoves/configs/tac_trees/pinokio-p7.tac.yaml` | P7 integration TAC tree |
+| `pmoves/configs/tac_trees/voice-agents.tac.yaml` | Voice pipeline TAC (Phase 15: P7 routing) |
 | `pmoves/config/agent_registry.yaml` | Agent identity (z890/5090/4090-claude) |
-| `pmoves/config/agent_signatures.yaml` | Visual identity — needs 5090/z890/4090 entries |
-| `pbnj/pinokio/api/pmoves-services/` | PMOVES Docker control launcher |
+| `pmoves/config/agent_signatures.yaml` | Visual identity — deduplicated |
+| `pmoves/docs/security/PORT_BINDING_MODEL.md` | Port binding model + env.shared workaround |
+| `pbnj/pinokio/api/pmoves-services/SKILL.md` | PMOVES Services skill for P7 |
+| `pmoves/docs/ARTSTUFF/Ultimate-TTS-Studio.git/SKILL.md` | TTS skill for P7 |
 | `D:\pinokio\` | P7 install (upgraded, requirements pending) |
