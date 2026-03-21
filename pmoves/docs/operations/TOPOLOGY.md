@@ -22,6 +22,26 @@
 
 ---
 
+## Node Agent Cognitive Specialization
+
+Each GPU node runs a Claude Code CLI agent with a declared cognitive specialization.
+Config: `pmoves/configs/node-agent-specialization.yaml`
+
+| Node Agent | Specialization | Strength | Default Work | NATS Subject |
+|------------|---------------|----------|-------------|-------------|
+| z890-claude | Infrastructure Coordinator | Docker, NATS, secrets, compose | Commit hygiene, service wiring | `mesh.agent.z890.capabilities.v1` |
+| 5090-claude | GPU Inference Specialist | Voice, TTS, models, media | Pipeline design, model evaluation | `mesh.agent.5090.capabilities.v1` |
+| 4090-claude | Noise Reducer (Jewel Finder) | PR triage, patterns, docs | Review threads, submodule audit | `mesh.agent.4090.capabilities.v1` |
+
+**Routing:** PR review threads are keyword-scored and routed to the best-fit agent.
+The 4090 is the default handler — its "noise reducer" role catches anything unmatched.
+See `suggest_reviewer()` in `pmoves/tools/pr_hedge_trim.py`.
+
+**Insight Sharing:** Agents publish `ops.pr.insight.shared.v1` to share cross-PR
+patterns, blockers, and learnings for validation by peer agents.
+
+---
+
 ## Service-to-Node Assignments
 
 ### KVM4-1 — API Gateway Node

@@ -363,25 +363,29 @@ Example: `ingest.transcript.ready.v1`
 - **Subscribers:** Agent trail processors, observability dashboards, handoff automation
 - **Delivery:** Publish/subscribe (JetStream optional depending on deployment policy)
 
-**`agent.identity.altered.v1`**
-- **Direction:** Published by sign_trail.py (or any agent) when an alter identity is selected
-- **Purpose:** Signal that an agent adopted an alternate identity during or after a session
+**`ops.pr.insight.shared.v1`**
+- **Direction:** Published by any node agent during PR review or commit work
+- **Purpose:** Share cross-PR insights between node agents (z890, 5090, 4090) for validation
 - **Payload:**
   ```json
   {
-    "agent_id": "z890-claude",
-    "selected_alter": "z890-infra",
-    "glyph": "\u2699",
-    "color": "#1E40AF",
-    "voice": "analytical",
-    "resonance": ["infrastructure", "docker-hardening"],
-    "timestamp": "2026-03-20T18:00:00Z",
-    "summary": "Session ended — infrastructure work shaped identity"
+    "pr_number": 1048,
+    "source_agent": "z890-claude",
+    "target_agents": ["4090-claude", "5090-claude"],
+    "insight_type": "pattern|blocker|dependency|learning",
+    "summary": "SSL_CERT_FILE leak affects both v1 and v2 Hi-RAG variants",
+    "files_affected": ["pmoves/docker-compose.yml"],
+    "action_required": "Apply SSL env neutralization to v1 services"
   }
   ```
-- **Schema:** `pmoves/contracts/schemas/agent-graphiti/signature.v1.schema.json` (with `selected_alter` field)
-- **Subscribers:** Agent trail processors, observability dashboards, identity tracking UI
-- **Delivery:** Publish/subscribe
+- **Subscribers:** Node agents, PR monitor, Graphiti trail processors
+- **Delivery:** Publish/subscribe (JetStream for persistence across agent sessions)
+
+**`mesh.agent.<node>.capabilities.v1`**
+- **Direction:** Published by node agents on session start
+- **Purpose:** Announce cognitive specialization (mirrors `mesh.gpu.status.v1` for compute)
+- **Config:** `pmoves/configs/node-agent-specialization.yaml`
+- **Subscribers:** PR routing, task assignment coordinator
 
 ## Mesh Coordination Subjects
 

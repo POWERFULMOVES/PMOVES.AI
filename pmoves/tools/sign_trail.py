@@ -7,7 +7,6 @@ chit_security is the single source of truth.
 
 Usage:
     python tools/sign_trail.py --agent-id claude-opus --summary "Completed X"
-    python tools/sign_trail.py --agent-id z890-claude --alter z890-infra --summary "Infra work"
     python tools/sign_trail.py --stdin < payload.json
     echo '{"agent_id":"claude-opus","summary":"test"}' | python tools/sign_trail.py --stdin
 """
@@ -61,18 +60,6 @@ def _load_signature(agent_id: str) -> Dict[str, Any]:
     return {"agent_id": agent_id, **_FALLBACK}
 
 
-def _resolve_alter(sig: Dict[str, Any], alter_name: str) -> Optional[Dict[str, Any]]:
-    """Find an alter by name within an agent's signature entry.
-
-    Returns the alter dict if found, or None.
-    """
-    alters = sig.get("alters", [])
-    for alter in alters:
-        if alter.get("name") == alter_name:
-            return alter
-    return None
-
-
 def _validate_schema(payload: Dict[str, Any]) -> Optional[str]:
     """Validate payload against signature.v1.schema.json.  Returns error or None."""
     try:
@@ -93,49 +80,21 @@ def build_payload(
     summary: str,
     phase: str = "Phase H",
     resonance: Optional[list] = None,
-    alter: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Build an unsigned Graphiti signature payload.
-
-    If *alter* is provided, override visual identity fields (glyph, color,
-    accent, voice, resonance) with the named alter from the agent's ``alters``
-    array.  The ``agent_id`` stays the same — ``selected_alter`` records which
-    persona was active.
-    """
+    """Build an unsigned Graphiti signature payload."""
     sig = _load_signature(agent_id)
-
-    # Resolve alter overlay if requested
-    alter_data: Optional[Dict[str, Any]] = None
-    if alter:
-        alter_data = _resolve_alter(sig, alter)
-        if alter_data is None:
-            available = [a.get("name") for a in sig.get("alters", [])]
-            print(
-                f"[warn] alter '{alter}' not found for {agent_id}; "
-                f"available: {available or 'none'}",
-                file=sys.stderr,
-            )
-
-    # Build identity — alter fields override primary when present
-    identity = alter_data if alter_data else sig
-
     payload: Dict[str, Any] = {
         "agent_id": agent_id,
         "display_name": sig.get("display_name", agent_id),
-        "glyph": identity.get("glyph", _FALLBACK["glyph"]),
-        "color": identity.get("color", _FALLBACK["color"]),
-        "accent": identity.get("accent", _FALLBACK.get("accent")),
-        "voice": identity.get("voice", _FALLBACK["voice"]),
+        "glyph": sig.get("glyph", _FALLBACK["glyph"]),
+        "color": sig.get("color", _FALLBACK["color"]),
+        "accent": sig.get("accent", _FALLBACK.get("accent")),
+        "voice": sig.get("voice", _FALLBACK["voice"]),
         "phase": phase,
         "timestamp": datetime.now(timezone.utc).isoformat(),
-        "resonance": resonance or identity.get("resonance", sig.get("resonance", [])),
+        "resonance": resonance or sig.get("resonance", []),
         "summary": summary[:200],
     }
-
-    # Record which alter was selected (agent_id stays primary)
-    if alter_data:
-        payload["selected_alter"] = alter
-
     return payload
 
 
@@ -145,7 +104,6 @@ def sign_trail(
     phase: str = "Phase H",
     resonance: Optional[list] = None,
     passphrase: Optional[str] = None,
-    alter: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Build and optionally HMAC-sign a Graphiti trail payload.
 
@@ -155,12 +113,11 @@ def sign_trail(
         phase: Project phase label.
         resonance: Optional list of resonance domains.
         passphrase: CHIT_PASSPHRASE.  If None, returns unsigned payload.
-        alter: Optional alter name to override visual identity.
 
     Returns:
         Signed (or unsigned) payload dict.
     """
-    payload = build_payload(agent_id, summary, phase, resonance, alter=alter)
+    payload = build_payload(agent_id, summary, phase, resonance)
 
     # Schema validation (advisory)
     err = _validate_schema(payload)
@@ -207,11 +164,6 @@ def main() -> None:
         help="Resonance domains (space-separated)",
     )
     parser.add_argument(
-        "--alter",
-        default=None,
-        help="Select an alternate identity from the agent's alters array",
-    )
-    parser.add_argument(
         "--stdin",
         action="store_true",
         help="Read JSON payload from stdin (overrides --agent-id/--summary/--phase)",
@@ -235,15 +187,13 @@ def main() -> None:
         summary = data.get("summary", args.summary)
         phase = data.get("phase", args.phase)
         resonance = data.get("resonance", args.resonance)
-        alter = data.get("alter", args.alter)
     else:
         agent_id = args.agent_id
         summary = args.summary
         phase = args.phase
         resonance = args.resonance
-        alter = args.alter
 
-    payload = sign_trail(agent_id, summary, phase, resonance, passphrase, alter=alter)
+    payload = sign_trail(agent_id, summary, phase, resonance, passphrase)
 
     # Write log artifact
     if not args.no_log:

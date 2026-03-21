@@ -88,11 +88,6 @@
       },
       "additionalProperties": false
     },
-    "selected_alter": {
-      "type": "string",
-      "description": "Name of the alter identity selected for this trail entry. When set, glyph/color/accent/voice/resonance reflect the alter rather than primary identity. Agents may choose an alter at session end to reflect their experience.",
-      "examples": ["z890-infra", "5090-voice", "4090-field"]
-    },
     "cgp_attribution": {
       "type": "object",
       "description": "Optional CGP v2 attribution extension",

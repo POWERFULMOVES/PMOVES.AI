@@ -28,7 +28,7 @@ Trim a single PR: analyze threads, apply fixes interactively, resolve addressed 
    - If stylistic only: skip but log the learning for `/chit:review-sweep`
    - Record all nitpick learnings (applied or skipped) for the trail entry
 6. After all actionable + nitpick threads are addressed, commit + push
-7. Run `make -C pmoves pr-trim-resolve PR=<number> RESOLVE_ACTIONABLE=1 RESOLVE_NITPICK=1`
+7. Run `make -C pmoves pr-trim-resolve PR=<number> RESOLVE_ACTIONABLE=1`
 8. Unless `--no-trail`: `make -C pmoves sign-trail SUMMARY="PR Hedge Trim: resolved K threads on PR #N"`
 
 ### Comment coverage

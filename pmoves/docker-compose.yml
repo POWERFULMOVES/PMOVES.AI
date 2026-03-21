@@ -1138,6 +1138,9 @@ services:
       dockerfile: services/hi-rag-gateway/Dockerfile
     restart: unless-stopped
     environment:
+    # Neutralise Windows SSL_CERT_FILE leak (host env > env_file precedence)
+    - SSL_CERT_FILE=
+    - SSL_CERT_DIR=
     - QDRANT_URL=${QDRANT_URL:-http://qdrant:6333}
     - QDRANT_COLLECTION=${QDRANT_COLLECTION:-pmoves_chunks}
     - SENTENCE_MODEL=${SENTENCE_MODEL:-all-MiniLM-L6-v2}
@@ -1555,9 +1558,6 @@ services:
     - MINIO_SECRET_KEY=${MINIO_PASSWORD:?Run make brand-defaults}
     - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
     - EMOTION_MODEL=${EMOTION_MODEL:-superb/hubert-large-superb-er}
-    - MUSIC_MODEL=${MUSIC_MODEL:-m-a-p/MERT-v1-330M}
-    - DIARIZATION_MODEL=${DIARIZATION_MODEL:-pyannote/speaker-diarization-3.1}
-    - AUDIO_CLAP_MODEL=${AUDIO_CLAP_MODEL:-laion/larger_clap_general}
     deploy:
       resources:
         reservations:
@@ -1703,6 +1703,9 @@ services:
       dockerfile: services/hi-rag-gateway-v2/Dockerfile
     restart: unless-stopped
     environment:
+    # Neutralise Windows SSL_CERT_FILE leak (host env > env_file precedence)
+    - SSL_CERT_FILE=
+    - SSL_CERT_DIR=
     - QDRANT_URL=${QDRANT_URL:-http://qdrant:6333}
     - QDRANT_COLLECTION=${QDRANT_COLLECTION:-pmoves_chunks}
     - SENTENCE_MODEL=${SENTENCE_MODEL:-all-MiniLM-L6-v2}
@@ -1771,6 +1774,9 @@ services:
       - TORCH_SKIP_CUDA=0
     restart: unless-stopped
     environment:
+    # Neutralise Windows SSL_CERT_FILE leak (host env > env_file precedence)
+    - SSL_CERT_FILE=
+    - SSL_CERT_DIR=
     - QDRANT_URL=${QDRANT_URL:-http://qdrant:6333}
     - QDRANT_COLLECTION=${QDRANT_COLLECTION:-pmoves_chunks}
     - SENTENCE_MODEL=${SENTENCE_MODEL:-all-MiniLM-L6-v2}
@@ -1845,6 +1851,9 @@ services:
     - --port
     - '8086'
     environment:
+    # Neutralise Windows SSL_CERT_FILE leak (host env > env_file precedence)
+    - SSL_CERT_FILE=
+    - SSL_CERT_DIR=
     - QDRANT_URL=${QDRANT_URL:-http://qdrant:6333}
     - QDRANT_COLLECTION=${QDRANT_COLLECTION:-pmoves_chunks}
     - SENTENCE_MODEL=${SENTENCE_MODEL:-all-MiniLM-L6-v2}
@@ -1925,22 +1934,21 @@ services:
     <<: *tier-data-hardened
     # Pinned 2025-02-04: Latest stable 2.11.x alpine version
     image: nats:2.11.8-alpine
-    command: ["-c", "/etc/nats/nats-hub.conf"]
+    command:
+    - -js
+    - -m
+    - '8222'
+    - --user
+    - ${NATS_USER:-nats}
+    - --pass
+    - ${NATS_PASSWORD:-pmoves}
     restart: unless-stopped
-    volumes:
-    - ./configs/nats-hub.conf:/etc/nats/nats-hub.conf:ro
-    - nats-jetstream-data:/data/jetstream
     ports:
     - ${NATS_BIND:-0.0.0.0}:${NATS_PORT:-4222}:4222
     - ${NATS_BIND:-0.0.0.0}:${NATS_MONITORING_PORT:-9223}:8222
-    - ${NATS_BIND:-0.0.0.0}:${NATS_LEAFNODE_PORT:-7422}:7422
     networks:
     - pmoves_bus
-    - pmoves_external  # Required for host port binding (leafnode + client access from LAN/Tailscale)
     environment:
-    # SECURITY: Override NATS_USER/NATS_PASSWORD in env.shared for production
-    - NATS_USER=${NATS_USER:-nats}
-    - NATS_PASSWORD=${NATS_PASSWORD:-pmoves}
     - DOCKED_MODE=${DOCKED_MODE:-true}
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
@@ -3567,7 +3575,6 @@ volumes:
   supabase-vector-data: {}
   notebook-sync-data: {}
   tensorzero-clickhouse-data: {}
-  nats-jetstream-data: {}
   invidious-postgres-data: {}
   invidious-companion-cache: {}
   pmoves-ollama-models: {}

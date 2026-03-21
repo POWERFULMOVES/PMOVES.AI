@@ -63,6 +63,54 @@ DEFAULT_REPO = "POWERFULMOVES/PMOVES.AI"
 DEFAULT_BASE = "PMOVES.AI-Edition-Hardened"
 LOGS_DIR = Path(__file__).resolve().parent.parent / "docs" / "logs"
 
+# ---------------------------------------------------------------------------
+# Node Agent Review Routing (mirrors mesh.gpu.status.v1 pattern)
+# ---------------------------------------------------------------------------
+# Maps content keywords to the best-fit node agent for review.
+# 4090-claude is the default — the "noise reducer" catches everything else.
+
+_NODE_REVIEW_KEYWORDS: dict[str, str] = {
+    "docker": "z890-claude",
+    "compose": "z890-claude",
+    "dockerfile": "z890-claude",
+    "secrets": "z890-claude",
+    "nats": "z890-claude",
+    "makefile": "z890-claude",
+    "env.shared": "z890-claude",
+    "env.tier": "z890-claude",
+    "tts": "5090-claude",
+    "voice": "5090-claude",
+    "pipecat": "5090-claude",
+    "gpu": "5090-claude",
+    "model": "5090-claude",
+    "whisper": "5090-claude",
+    "ollama": "5090-claude",
+    "vram": "5090-claude",
+    "nitpick": "4090-claude",
+    "pattern": "4090-claude",
+    "submodule": "4090-claude",
+    "docs": "4090-claude",
+    "audit": "4090-claude",
+    "readme": "4090-claude",
+}
+
+_DEFAULT_REVIEWER = "4090-claude"
+
+
+def suggest_reviewer(thread_body: str) -> str:
+    """Route a PR thread to the best-fit node agent based on content keywords.
+
+    Scoring: each keyword match adds +1 to the matching agent's score.
+    Ties and zero-score threads default to 4090-claude (noise reducer).
+    """
+    body_lower = thread_body.lower()
+    scores: dict[str, int] = {"z890-claude": 0, "5090-claude": 0, "4090-claude": 0}
+    for keyword, agent in _NODE_REVIEW_KEYWORDS.items():
+        if keyword in body_lower:
+            scores[agent] += 1
+    best = max(scores, key=scores.get)  # type: ignore[arg-type]
+    return best if scores[best] > 0 else _DEFAULT_REVIEWER
+
 
 # ---------------------------------------------------------------------------
 # Helpers (reused from pr_monitor.py patterns)
@@ -429,9 +477,7 @@ def cmd_resolve(
 
     By default resolves false-positive and design-decision threads.
     Actionable threads are resolved only when explicitly included
-    (after fixes have been pushed). Nitpick threads are resolved only
-    when explicitly included via --include-nitpick (after valid nitpick
-    fixes have been applied).
+    (after fixes have been pushed). Nitpick threads are never auto-resolved.
     """
     all_threads = fetch_threads(repo, pr_number)
     unresolved = [t for t in all_threads if not t.is_resolved]
@@ -577,11 +623,6 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Also resolve actionable threads (after fixes pushed)",
     )
-    p_resolve.add_argument(
-        "--include-nitpick",
-        action="store_true",
-        help="Also resolve nitpick threads (after valid fixes applied)",
-    )
 
     # report
     p_report = sub.add_parser("report", help="Generate trim summary report")
@@ -599,8 +640,6 @@ def main(argv: list[str] | None = None) -> int:
         classifications = ["false-positive", "design-decision"]
         if args.include_actionable:
             classifications.append("actionable")
-        if args.include_nitpick:
-            classifications.append("nitpick")
         resolved = cmd_resolve(repo, args.pr, dry_run=args.dry_run, classifications=tuple(classifications))
         # Fetch remaining unresolved to detect failures
         remaining = [t for t in fetch_threads(repo, args.pr) if not t.is_resolved]
