@@ -3,14 +3,8 @@
     {
       "method": "shell.run",
       "params": {
-        "path": "{{local.root}}",
-        "cmd": [
-          "bash",
-          "deploy/scripts/deploy-k8s.sh",
-          "delete",
-          "--target",
-          "ai-lab"
-        ]
+        "path": "{{envs.PMOVES_ROOT}}",
+        "message": "bash deploy/scripts/deploy-k8s.sh delete --target ai-lab"
       }
     }
   ]

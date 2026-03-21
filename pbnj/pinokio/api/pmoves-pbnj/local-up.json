@@ -3,12 +3,8 @@
     {
       "method": "shell.run",
       "params": {
-        "path": "{{local.root}}",
-        "cmd": [
-          "bash",
-          "deploy/scripts/deploy-compose.sh",
-          "up"
-        ]
+        "path": "{{envs.PMOVES_ROOT}}",
+        "message": "bash deploy/scripts/deploy-compose.sh up"
       }
     }
   ]
