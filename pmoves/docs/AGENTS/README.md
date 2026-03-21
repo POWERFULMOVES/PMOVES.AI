@@ -132,6 +132,7 @@ Cultural anchors, aspirational notes, and vision documents.
 | [AGNOTE4482.BEATS.md](./AGNOTE4482.BEATS.md) | Aspirational/cultural anchor (4 lines) |
 | [AGNOTE4482.FlOO$.md](./AGNOTE4482.FlOO%24.md) | FlOO$ lyrical/cultural anchor |
 | [AGNOTE4482FLUTE.md](./AGNOTE4482FLUTE.md) | Flute voice stack aspirational (4 lines) |
+| [AGNOTE4482DnB.PHI.Orchestra.md](./AGNOTE4482DnB.PHI.Orchestra.md) | Z890 DnB convergence score — dual jewels, topology, handoff to 4090+5090 |
 | [agent_vision_notes.md](./agent_vision_notes.md) | Prosodic bridge spec (BPM encoder — actionable, implementation pending) |
 | [agnotes2.md](./agnotes2.md) | Shell output snapshot (historical) |
 | [agnotes3.md](./agnotes3.md) | 4-line vision note (historical) |
