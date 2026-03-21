@@ -37,7 +37,7 @@ else
 SECRETS_FUNNEL_BOOT_USER_TARGET :=
 endif
 
-.PHONY: codex-config codex-audit codex-parity-check codex-parity-check-strict codex-home codex-health-quick secrets-audit tooling-audit tooling-audit-strict chit-export chit-manifest-sync chit-manifest-check secrets-sync-trigger secrets-local-hydrate secrets-runtime-hydrate secrets-funnel-sync secrets-funnel a0-plugins-check a0-plugins-check-remote
+.PHONY: codex-config codex-audit codex-parity-check codex-parity-check-strict codex-home codex-health-quick secrets-audit tooling-audit tooling-audit-strict chit-export chit-manifest-sync chit-manifest-check secrets-local-hydrate secrets-runtime-hydrate secrets-funnel-sync secrets-funnel a0-plugins-check a0-plugins-check-remote
 codex-config: ## Install repo-pinned Codex config into ~/.codex/config.toml
 	@pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/codex_apply_config.ps1
 
@@ -89,18 +89,6 @@ chit-manifest-check: ## Verify v1 CHIT manifest is in sync with v2 source
 	if [ -x "$(CODEX_VENV_WIN)" ]; then runner="$(CODEX_VENV_WIN)"; \
 	elif [ -x "$(CODEX_VENV_UNIX)" ]; then runner="$(CODEX_VENV_UNIX)"; fi; \
 	$$runner tools/chit_manifest_sync.py --check --source "$(CHIT_MANIFEST_SOURCE)" --dest "$(CHIT_MANIFEST_DEST)"
-
-secrets-sync-trigger: ## Trigger GH secrets sync workflow, wait for completion, hydrate into env.shared
-	@echo "→ Triggering sync-secrets-local.yml (output_format=env)..."
-	@gh workflow run "sync-secrets-local.yml" --field output_format=env --field target_os=any
-	@sleep 3
-	@RUN_ID=$$(gh run list --workflow=sync-secrets-local.yml --limit 1 --json databaseId -q '.[0].databaseId'); \
-	 echo "→ Watching run $$RUN_ID..."; \
-	 gh run watch "$$RUN_ID" --exit-status
-	@echo "→ Hydrating into env.shared..."
-	@$(MAKE) --no-print-directory secrets-local-hydrate
-	@$(MAKE) --no-print-directory brand-defaults
-	@echo "✔ Secrets synced and hydrated"
 
 secrets-local-hydrate: ensure-env-shared ## Overlay real API keys from local.env into env.shared
 	@$(CODEX_PY) tools/secrets_local_hydrate.py --env-shared env.shared
