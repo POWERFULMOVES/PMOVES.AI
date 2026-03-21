@@ -815,6 +815,19 @@ chitBypassPatterns:
   - 'chit_encode_secrets'
   - 'chit_credential_demo'
   - 'chit_security'
+  # Secrets pipeline tools that need env file access for hydration/bootstrap
+  - 'pmoves[/\\]tools[/\\]secrets_local_hydrate'
+  - 'pmoves[/\\]scripts[/\\]bootstrap_env'
+  - 'pmoves[/\\]tools[/\\]brand_defaults'
+  - 'pmoves[/\\]tools[/\\]check_tier_envs'
+  - 'pmoves[/\\]tools[/\\]auth_alignment_check'
+  - 'secrets_local_hydrate'
+  - 'bootstrap_env'
+  - 'brand_defaults'
+  # Cross-user secrets copy (runner → DARKXSIDE) via AppData pmoves/secrets path
+  - 'pmoves[/\\]secrets[/\\]local'
+  - 'AppData[/\\]Roaming[/\\]pmoves[/\\]secrets'
+  - '\.config[/\\]pmoves[/\\]secrets'
   # Git operations on CHIT-owned manifest files — staging, diffing, and
   # status-checking the manifest is a normal CHIT pipeline operation.
   # Destructive ops (rm, force-push) are still blocked by earlier checks.
