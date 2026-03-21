@@ -53,7 +53,7 @@ root:
             expect: "Pinokio UI shows 'Agents' tab on 4090 laptop"
           agent_hint: 4090-claude
           status: done
-          notes: "P7 installed, Agents tab visible, pmoves-net configured"
+          notes: "Upgraded 2026-03-21 — user confirmed manual Pinokio desktop upgrade complete"
 
     # =========================================================================
     # Phase 2: Agent Interpreter — SKILL.md Discovery
