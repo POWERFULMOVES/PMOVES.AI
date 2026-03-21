@@ -11,14 +11,17 @@ Pmoves-hyperdimensions to render mathematically.
 """
 
 import asyncio
+import os
+
 import aiohttp
+from aiohttp import ClientError, ClientTimeout
 import nats
 import json
 import random
 import time
 
-FLUTE_GATEWAY_URL = "http://localhost:8055"
-NATS_URL = "nats://nats:pmoves@localhost:4222"
+FLUTE_GATEWAY_URL = os.getenv("FLUTE_GATEWAY_URL", "http://localhost:8055")
+NATS_URL = os.getenv("NATS_URL", "nats://localhost:4222")
 
 # Agent Skill Profiles (0-100)
 AGENTS = {
@@ -71,19 +74,29 @@ async def trigger_xmen_theme(session):
     """Route the X-Men Danger Room theme through Flute Gateway."""
     print("[*] Firecracker VM starting. Dispatching X-Men Theme to Flute Gateway...")
     
-    payload = {"text": "Playing X-Men Animated Series Theme. Danger Room Active.", "engine": "kitten_tts"}
+    payload = {
+        "text": "Playing X-Men Animated Series Theme. Danger Room Active.",
+        "provider": "ultimate_tts",
+        "engine": "kitten_tts",
+        "output_format": "wav",
+    }
     try:
-        async with session.post(f"{FLUTE_GATEWAY_URL}/v1/voice/synthesize/audio", json=payload) as resp:
+        timeout = ClientTimeout(total=10)
+        async with session.post(
+            f"{FLUTE_GATEWAY_URL}/v1/voice/synthesize/audio",
+            json=payload,
+            timeout=timeout,
+        ) as resp:
             if resp.status == 200:
                 print("[+] Flute Gateway acknowledged Danger Room audio stream.")
             else:
                 print(f"[!] Flute Gateway Warning: {resp.status} - Ensure Flute is running.")
-    except Exception as e:
+    except (ClientError, asyncio.TimeoutError) as e:
         print(f"[!] Flute Gateway unreachable: {e}. (Is Port 8055 open?)")
 
 async def publish_hyperdimensions_geometry(nc, agent_name, xmen_match, match_score):
     """Publish a CGP packet to Hyperdimensions for geometric mapping of the persona logic."""
-    print(f"[*] Publishing CHIT Geometry to Hyperdimensions UI...")
+    print("[*] Publishing CHIT Geometry to Hyperdimensions UI...")
     
     # 1. Provide the structural visualization command (consumed by Pmoves-hyperdimensions)
     cgp_payload = json.dumps({
@@ -119,7 +132,7 @@ async def main():
     try:
         nc = await nats.connect(NATS_URL)
         print("[+] Connected to PMOVES NATS Nervous System.")
-    except Exception as e:
+    except OSError as e:
         print(f"[!] Could not connect to NATS: {e}. Running in dry-run mode.")
         nc = None
 
