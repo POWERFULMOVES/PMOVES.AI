@@ -53,7 +53,7 @@ root:
             expect: "Pinokio UI shows 'Agents' tab on 4090 laptop"
           agent_hint: 4090-claude
           status: done
-          notes: "P7 installed, Agents tab visible, pmoves-net configured"
+          notes: "Upgraded 2026-03-21 — user confirmed manual Pinokio desktop upgrade complete"
 
     # =========================================================================
     # Phase 2: Agent Interpreter — SKILL.md Discovery
@@ -139,6 +139,7 @@ root:
       task: "Cross-machine P7 agent routing via Tailscale"
       context: "Tailscale mesh connects 5090, Z890, 4090 laptop — P7 agents should discover remote apps"
       agent_hint: 4090-claude
+      notes: "BLOCKED: requires P7 upgrade on 4090 + 5090 (manual desktop app update) before agent routing tests"
       children:
         - id: p7.mesh.tailscale
           task: "All 3 dev machines on Tailscale mesh"
@@ -159,6 +160,7 @@ root:
           status: blocked
           blocked_reason: "TTS on 5090 Windows binds localhost:7861 — needs --server-name 0.0.0.0 or Caddy proxy route; Flute reports ultimate_tts: false"
           depends_on: [p7.upgrade.5090, p7.upgrade.4090, p7.interpreter.tts]
+          notes: "BLOCKED: depends on p7.upgrade.4090 + p7.upgrade.5090 (manual P7 desktop upgrade)"
 
         - id: p7.mesh.mobile
           task: "Mobile agent (Discord/Openclaw) reaches 5090 via mesh"
@@ -168,6 +170,7 @@ root:
           context: "Openclaw/Hermes Agent pattern from P7 announcement"
           agent_hint: 4090-claude
           status: pending
+          notes: "BLOCKED: depends on P7 upgrade + remote TTS routing working first"
 
     # =========================================================================
     # Phase 6: PMOVES Service SKILL.md Registration
