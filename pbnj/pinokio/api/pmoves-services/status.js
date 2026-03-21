@@ -3,27 +3,9 @@ module.exports = {
     {
       method: "shell.run",
       params: {
-        path: "../../pmoves",
+        path: "../../../../pmoves",
         message: [
-          "docker compose ps --format 'table {{.Name}}\t{{.Status}}\t{{.Ports}}'"
-        ]
-      }
-    },
-    {
-      method: "shell.run",
-      params: {
-        path: "../../pmoves",
-        message: [
-          "docker compose -f docker-compose.external.yml ps --format 'table {{.Name}}\t{{.Status}}\t{{.Ports}}'"
-        ]
-      }
-    },
-    {
-      method: "shell.run",
-      params: {
-        path: "../../pmoves",
-        message: [
-          "docker compose -f docker-compose.remote.yml ps --format 'table {{.Name}}\t{{.Status}}\t{{.Ports}}'"
+          "make verify-all"
         ]
       }
     }
