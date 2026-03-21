@@ -379,11 +379,11 @@ encapsulate the correct stop/restart/env-injection flow.
 | `docker compose up -d` | `make -C pmoves up-<service>` | `/deploy:up` |
 | `docker compose restart` | `make -C pmoves secrets-funnel && make -C pmoves up` | `/deploy:secrets-funnel` |
 | `netsh interface portproxy` | `make -C pmoves z890-host-setup` | — |
-| Missing `requirements.lock` | `uv pip compile <svc>/requirements.txt --generate-hashes -o <svc>/requirements.lock` | — |
+| `gh workflow run sync-secrets-local` | `make -C pmoves secrets-sync-trigger` | `/deploy:secrets-funnel` |
 
 **volume-reset SERVICE values:** `neo4j`, `tensorzero-clickhouse`, `meilisearch`, `qdrant`, `minio`, `supabase-db`, `nats`
 
-**requirements.lock generation:** Every service under `pmoves/services/` that uses `-r requirements.lock` in its `requirements.txt` must have a hash-verified lock file generated with `uv pip compile --generate-hashes`. Pattern matches `grayjay-plugin-host`, `graph-linker`, `consciousness-service`, `comfy-watcher`.
+**secrets-sync-trigger**: Triggers the `sync-secrets-local.yml` GitHub Actions workflow (runs on `self-hosted, ai-lab`), waits for completion, then hydrates `local.env` → `env.shared` and runs `brand-defaults`. The containerized runner mounts `$APPDATA/pmoves` (Windows) or `~/.config/pmoves` (Linux) so secrets persist to the host. If `GOOGLE_CLIENT_ID` or other creds are missing after sync, check that the runner container has the volume mount (see `local_cert_runners.py`).
 
 **docker-prune variants:**
 - `docker-prune` — safe: stopped containers + dangling images only, volumes untouched
