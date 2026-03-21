@@ -1,0 +1,76 @@
+# Node Agent Cognitive Specialization Matrix
+# ──────────────────────────────────────────────────────────────────────
+# Mirrors the mesh.gpu.status.v1 pattern: nodes declare capabilities,
+# coordinator routes work to the best-fit agent.
+#
+# cognitive_strengths — what the agent excels at *thinking about*
+# work_types          — concrete task labels that can be routed
+# announce_subject    — NATS subject for capability announcements
+# ──────────────────────────────────────────────────────────────────────
+
+schema_version: "1.0"
+
+nodes:
+  z890-claude:
+    glyph: "\u2699"            # ⚙ Gear
+    color: "#1E40AF"
+    hardware:
+      gpu: "RTX 3090 Ti 24GB"
+      cpu: "Core Ultra 7 265K"
+      ram: "32GB"
+    specialization: infrastructure-coordinator
+    cognitive_strengths:
+      - infrastructure-hardening    # Docker, compose, Dockerfile audits
+      - secrets-pipeline            # CHIT encode/decode, env tier management
+      - orchestration-wiring        # NATS subjects, service mesh, compose overlays
+      - pr-commit-hygiene           # Atomic commits, branch audit, submodule sync
+    work_types:
+      - docker-compose-review
+      - secrets-audit
+      - nats-topology
+      - makefile-targets
+      - ci-runner-routing
+    announce_subject: "mesh.agent.z890.capabilities.v1"
+
+  5090-claude:
+    glyph: "\u266B"            # ♫ Beamed Eighth Notes
+    color: "#9333EA"
+    hardware:
+      gpu: "RTX 5090 32GB"
+      cpu: "AMD 870E Extreme"
+      ram: "192GB"
+    specialization: gpu-inference-specialist
+    cognitive_strengths:
+      - voice-pipeline-design       # TTS, Pipecat, prosodic synthesis
+      - model-selection             # LLM/embedding model evaluation
+      - gpu-workload-optimization   # VRAM management, batch inference
+      - media-ingestion             # YouTube, Whisper, YOLO pipelines
+    work_types:
+      - tts-engine-review
+      - model-benchmark
+      - gpu-orchestrator-config
+      - media-pipeline-debug
+      - pipecat-session-design
+    announce_subject: "mesh.agent.5090.capabilities.v1"
+
+  4090-claude:
+    glyph: "\u25C9"            # ◉ Fisheye
+    color: "#0D9488"
+    hardware:
+      gpu: "RTX 4090"
+      cpu: "laptop"
+      ram: "mobile"
+    specialization: noise-reducer
+    cognitive_strengths:
+      - noise-reduction             # Finding signal in verbose PR threads
+      - cross-repo-pattern-mining   # Submodule dirty state -> actionable insights
+      - review-triage               # CodeRabbit thread classification
+      - living-doc-curation         # Audit dashboards, tracker freshness
+      - edge-orchestration          # Cast devices, mobile compute, Nest speakers
+    work_types:
+      - pr-review-triage
+      - submodule-audit
+      - coderabbit-thread-classify
+      - doc-reconciliation
+      - learnings-extraction
+    announce_subject: "mesh.agent.4090.capabilities.v1"

@@ -121,36 +121,6 @@ signatures:
       - context-orchestration
     description: "Terminal gateway agent — where model and user begin their journey together"
 
-  z890-claude:
-    agent_id: "z890-claude"
-    display_name: "Z890 Claude"
-    glyph: "\u25A3"              # ▣ White Square Containing Black Small Square
-    color: "#6D28D9"             # Grape Violet
-    accent: "#8B5CF6"
-    voice: analytical             # deep infrastructure, compose orchestration
-    co_author: "Z890 Claude (z890) <z890@pmoves.ai>"
-    resonance:
-      - infrastructure
-      - compose-orchestration
-      - security-hardening
-      - supabase-integration
-    description: "Primary dev workstation agent on Z890 — infrastructure, compose, security"
-
-  5090-claude:
-    agent_id: "5090-claude"
-    display_name: "5090 Claude"
-    glyph: "\u25C8"              # ◈ White Diamond Containing Black Small Diamond
-    color: "#EA580C"             # Flame Orange
-    accent: "#FB923C"
-    voice: directive              # GPU-first, model serving, performance
-    co_author: "5090 Claude (5090) <5090@pmoves.ai>"
-    resonance:
-      - gpu-compute
-      - model-serving
-      - voice-pipeline
-      - performance-tuning
-    description: "Primary GPU workstation agent on 5090 — model serving, voice pipeline, GPU ops"
-
   4090-claude:
     agent_id: "4090-claude"
     display_name: "4090 Claude"
@@ -159,12 +129,16 @@ signatures:
     accent: "#2DD4BF"
     voice: terse                  # mobile-first, quick iterations, cast-focused
     co_author: "4090 Claude (laptop-4090) <4090@pmoves.ai>"
+    specialization: noise-reducer
+    routes_to: [pr-review-triage, submodule-audit, coderabbit-thread-classify, doc-reconciliation]
     resonance:
       - cast-integration
       - voice-profiles
       - mobile-compute
       - device-orchestration
-    description: "Mobile workstation agent on 4090 laptop — Cast TTS, voice profiles, device testing"
+      - noise-reduction
+      - cross-repo-pattern-mining
+    description: "Noise reducer on 4090 laptop — finds jewels in noise: PR triage, submodule audit, Cast TTS, device testing"
 
   darkxside:
     agent_id: "darkxside"
@@ -190,12 +164,14 @@ signatures:
     accent: "#3B82F6"
     voice: analytical             # infrastructure-focused, structured, precise
     co_author: "Z890 Claude (pmoves-z890) <z890@pmoves.ai>"
+    specialization: infrastructure-coordinator
+    routes_to: [docker-compose-review, secrets-audit, nats-topology, makefile-targets, ci-runner-routing]
     resonance:
       - infrastructure
       - persistence-modeling
       - supabase-integration
       - docker-hardening
-    description: "Infrastructure agent on Z890 (dev/GPU node) — Docker hardening, Prometheus, Pinokio launchers, ACL, network fabric"
+    description: "Infrastructure coordinator on Z890 (dev/GPU node) — Docker hardening, NATS wiring, secrets pipeline, commit hygiene"
 
   5090-claude:
     agent_id: "5090-claude"
@@ -205,12 +181,14 @@ signatures:
     accent: "#A855F7"
     voice: conversational         # voice-oriented, expressive, iterative
     co_author: "5090 Claude (powerfulmoves-1) <5090@pmoves.ai>"
+    specialization: gpu-inference-specialist
+    routes_to: [tts-engine-review, model-benchmark, gpu-orchestrator-config, media-pipeline-debug]
     resonance:
       - voice-synthesis
       - tts-pipeline
       - pipecat-integration
       - media
-    description: "Voice/TTS agent on 5090 (primary GPU) — Flute-Gateway, Pipecat, Ultimate-TTS-Studio, voice agents"
+    description: "GPU inference specialist on 5090 (primary GPU) — voice pipeline design, model evaluation, VRAM optimization"
 
 # Voice guide for trail entries:
 #   analytical:     Thorough reasoning, cross-references, structured lists

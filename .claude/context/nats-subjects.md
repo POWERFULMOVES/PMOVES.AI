@@ -363,6 +363,30 @@ Example: `ingest.transcript.ready.v1`
 - **Subscribers:** Agent trail processors, observability dashboards, handoff automation
 - **Delivery:** Publish/subscribe (JetStream optional depending on deployment policy)
 
+**`ops.pr.insight.shared.v1`**
+- **Direction:** Published by any node agent during PR review or commit work
+- **Purpose:** Share cross-PR insights between node agents (z890, 5090, 4090) for validation
+- **Payload:**
+  ```json
+  {
+    "pr_number": 1048,
+    "source_agent": "z890-claude",
+    "target_agents": ["4090-claude", "5090-claude"],
+    "insight_type": "pattern|blocker|dependency|learning",
+    "summary": "SSL_CERT_FILE leak affects both v1 and v2 Hi-RAG variants",
+    "files_affected": ["pmoves/docker-compose.yml"],
+    "action_required": "Apply SSL env neutralization to v1 services"
+  }
+  ```
+- **Subscribers:** Node agents, PR monitor, Graphiti trail processors
+- **Delivery:** Publish/subscribe (JetStream for persistence across agent sessions)
+
+**`mesh.agent.<node>.capabilities.v1`**
+- **Direction:** Published by node agents on session start
+- **Purpose:** Announce cognitive specialization (mirrors `mesh.gpu.status.v1` for compute)
+- **Config:** `pmoves/configs/node-agent-specialization.yaml`
+- **Subscribers:** PR routing, task assignment coordinator
+
 ## Mesh Coordination Subjects
 
 ### Node Announcements
