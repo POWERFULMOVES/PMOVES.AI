@@ -29,7 +29,19 @@ PLACEHOLDER_VALUES = frozenset({
 
 
 def _default_local_env() -> Path:
-    """Resolve the platform-appropriate local.env path."""
+    """Resolve the local.env path, preferring project-local over per-user.
+
+    Search order:
+      1. pmoves/secrets/local.env (project-local, written by CI runner)
+      2. $APPDATA/pmoves/secrets/local.env (Windows per-user)
+      3. $XDG_CONFIG_HOME/pmoves/secrets/local.env (Unix per-user)
+    """
+    # 1. Project-local path (reproducible across users/runners)
+    project_path = PROJECT_ROOT / "secrets" / "local.env"
+    if project_path.exists():
+        return project_path
+
+    # 2. Per-user config path (backward compat)
     if sys.platform == "win32":
         base = os.environ.get("APPDATA", "")
         if not base:
