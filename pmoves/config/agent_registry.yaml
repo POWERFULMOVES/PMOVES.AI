@@ -1885,3 +1885,44 @@ agents:
       ci_runner: ubuntu-latest
       compose_profile: null
     description: "MCP bridge for E2B sandboxed code execution"
+
+  cipher_beats_analyst:
+    name: "Cipher Beats Analyst"
+    class: specialized
+    primary_type: media
+    secondary_type: agent
+    port: null                         # CLI tool — no HTTP server
+    health: null
+    layers: [L5, L6]
+    evolution_stage: active
+    signature: "gemini"                # Pinokio 7 / Gemini CLI driven
+    nats:
+      publishes:
+        - "pmoves.darkxside.beats.group.v1"
+        - "media.ingest.request.v1"
+      subscribes: []
+    chit_toggles:
+      delta_sensitive: true            # tempo / BPM drives geometry.delta
+      kappa_sensitive: true            # spectral curvature → kappa
+      hz_sensitive: true               # spectral centroid → Hz
+      swarm_participant: false
+      attribution_gated: false
+    resilience:
+      context_budget: medium
+      checkpoint_frequency: per_batch
+      recovery_strategy: cipher_resumable
+      cipher_categories: [agent_checkpoint, beats_fingerprint]
+    topology:
+      node_affinity: [z890, 5090]      # CPU/IO bound — run on either node
+      team: media
+      ci_runner: ubuntu-latest
+      compose_profile: null
+    tool_path: "pmoves/tools/analyze_beats.py"
+    runtime: "uv run"
+    pinokio_skill: "pbnj/pinokio/api/pmoves-cipher-beats/SKILL.md"
+    description: |
+      Level 11 Cipher Gateway Specialist. Extracts sonic fingerprints via ffprobe/ffmpeg
+      lavfi (ebur128 R128 loudness, aspectralstats spectral analysis). Clusters DARKXSIDE
+      beats into named sonic constellations, writes M3U8 playlists, checkpoints to Cipher
+      Memory at :8096, emits geometry events to the NATS Geometry Bus for Holographic
+      CHIT Block generation. Monitored live via Glances REST API.
