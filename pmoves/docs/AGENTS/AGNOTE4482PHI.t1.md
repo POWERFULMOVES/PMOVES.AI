@@ -76,6 +76,7 @@ Required handoff fields:
 - `2026-03-20T23:30:00Z` RELEASE `CLAUDE-OPUS` scope: All 5 PRs merged. Alt signatures live (z890-infra, 5090-voice, 4090-field). env.shared noise root-caused and fixed (raw sourcing → with-env.sh). Runners 3/3 online. Secrets synced. Handoff to 5090-claude: pull main, rebuild BoTZ container for theme API, claim W1 CLI bridge + W3 Discord lanes.
 - `2026-03-21T14:00:00Z` CLAIM `Z890-CLAUDE` scope: SSL v1 fix (Hi-RAG v1+v1-gpu), rebase PR #1048 onto main (25 commits behind, 1 conflict resolved), merge PR #1048 with --admin, post-merge validation, DnB Orchestra AGNOTE.
 - `2026-03-21T17:33:45Z` RELEASE `Z890-CLAUDE` scope: PR #1048 merged (0ed43185). SSL v1+v2 complete (8 services). Trail signed. 19 containers healthy. 10 FlOO$ pairings [OK]. Docs reconciled (0 drift). AGNOTE4482DnB.PHI.Orchestra published. Handoff to 4090 (converge on topology, test suggest_reviewer) and 5090 (GPU validation, TTS benchmark, claim W1+W3).
+- `2026-03-21T20:00:00Z` CLAIM `5090-CLAUDE` scope: 5090 submodule drift audit — classified 28 drifted submodules (16 docs/stubs, 5 functional on Hardened, 4 WIP branches, 2 large upstream, 1 diverged). Synced 21 gitlinks. Deferred 7. Audit doc: AGNOTE4482PHI.5090-SUBMODULE-AUDIT.md.
 
 ## Graphiti Review Log
 - `2026-02-21T10:35:03.6791631-05:00` REVIEW `CODEX-GPT5`
