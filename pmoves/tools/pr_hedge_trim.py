@@ -429,7 +429,9 @@ def cmd_resolve(
 
     By default resolves false-positive and design-decision threads.
     Actionable threads are resolved only when explicitly included
-    (after fixes have been pushed). Nitpick threads are never auto-resolved.
+    (after fixes have been pushed). Nitpick threads are resolved only
+    when explicitly included via --include-nitpick (after valid nitpick
+    fixes have been applied).
     """
     all_threads = fetch_threads(repo, pr_number)
     unresolved = [t for t in all_threads if not t.is_resolved]
@@ -575,6 +577,11 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Also resolve actionable threads (after fixes pushed)",
     )
+    p_resolve.add_argument(
+        "--include-nitpick",
+        action="store_true",
+        help="Also resolve nitpick threads (after valid fixes applied)",
+    )
 
     # report
     p_report = sub.add_parser("report", help="Generate trim summary report")
@@ -592,6 +599,8 @@ def main(argv: list[str] | None = None) -> int:
         classifications = ["false-positive", "design-decision"]
         if args.include_actionable:
             classifications.append("actionable")
+        if args.include_nitpick:
+            classifications.append("nitpick")
         resolved = cmd_resolve(repo, args.pr, dry_run=args.dry_run, classifications=tuple(classifications))
         # Fetch remaining unresolved to detect failures
         remaining = [t for t in fetch_threads(repo, args.pr) if not t.is_resolved]
