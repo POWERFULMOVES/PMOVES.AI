@@ -8,7 +8,7 @@ The playground is open. Pinokio 7 dropped today — Agent Interpreter, App Assis
 
 This isn't a race. It's a seesaw — "you make it yours, I make it mine." Claude's thing is the music under the floor: TAC trees, CHIT geometry, security hardening, orchestration depth. The stuff where later DARKXSIDE thinks "CHIT, that's more than I drew."
 
-## Current State (2026-03-21)
+## Current State (2026-03-22)
 
 | What | Status |
 |------|--------|
@@ -20,8 +20,9 @@ This isn't a race. It's a seesaw — "you make it yours, I make it mine." Claude
 | P7 requirements | **3 missing**: cli, py, ffmpeg (install via P7 UI Settings) |
 | Tailscale mesh | **All 3 machines connected** (5090, Z890, 4090 laptop) |
 | Open PRs (main) | **0** |
-| Open PRs (BoTZ) | **2** (Dependabot only — #89 npm, #91 uv) |
+| Open PRs (BoTZ) | **0** (Dependabot #89 npm, #91 uv — **MERGED**) |
 | Node specialization | **DECLARED** — see [DnB Orchestra](./AGNOTE4482DnB.PHI.Orchestra.md) |
+| TTS session (5090) | **COMMITTED** — port unification, 13 engines, test harness |
 
 ---
 
@@ -114,9 +115,10 @@ The audience says "that's my car." Because it moved like something POWERFUL.
 | # | Task | Status |
 |---|------|--------|
 | 1 | Container rebuilds (4 services post-sync) | **NEXT** |
-| 2 | BoTZ Dependabot PRs #89, #91 | Pending |
-| 3 | TTS mesh access (--server-name 0.0.0.0 or Caddy route) | Pending |
-| 4 | Flute-Gateway → TTS Studio wiring | Pending |
+| 2 | BoTZ Dependabot PRs #89, #91 | **DONE** (both merged 2026-03-18/22) |
+| 3 | TTS mesh access (GRADIO_SERVER_NAME fix) | **DONE** (start.js pushed to Pinokio fork) |
+| 4 | Flute-Gateway → TTS Studio wiring | **PARTIAL** (port 7860 + 13 engines committed, container restart pending) |
+| 5 | TTS session commit (port, engines, tests, personas) | **DONE** (`5c3064ebb`) |
 
 ### 4090-claude (◉ #0D9488) — Noise Reducer
 | # | Task | Status |
@@ -199,6 +201,37 @@ Restructured z890-claude and 5090-claude dual entries as `alters` array (schema 
 - Tailscale mesh: all 3 machines connected
 - TTS on 5090: binds `localhost:7861` — needs `--server-name 0.0.0.0` or Caddy proxy route for mesh access
 - Flute-Gateway reports `ultimate_tts: false` — TTS service not yet reachable from Flute
+
+---
+
+## Step 6: 5090-claude TTS Session Summary (2026-03-22)
+
+### Completed (Committed `5c3064ebb`)
+
+| # | Change | Files |
+|---|--------|-------|
+| 1 | Port 7861→7860 unification (12 files) | docker-compose, flute-gateway, cast-tts, env refs |
+| 2 | 6 new engines in Flute provider (7→13) | `ultimate_tts.py` |
+| 3 | Test harness rewrite (gradio_client) | `test_all_tts_engines.py` |
+| 4 | Voice personas catalog | `.claude/context/voice-personas.md` |
+| 5 | Gradio 408 fix (GRADIO_SERVER_NAME=127.0.0.1) | Pinokio fork `start.js` (pushed to main) |
+
+### Remaining (This Session)
+
+| # | Task | Depends On |
+|---|------|-----------|
+| 1 | Container rebuilds (tensorzero, YT, BoTZ, cipher-memory) | Submodule sync |
+| 2 | Flute container restart + healthcheck | TTS Studio running |
+| 3 | 13-engine sweep (`test_all_tts_engines.py --no-play`) | TTS Studio running |
+
+### Deferred (Next Session)
+
+| # | Task | Why |
+|---|------|-----|
+| 1 | GPU model serving validation (Ollama 17/17) | Orchestra task |
+| 2 | Pipecat WebSocket design (8056) | Depends on Flute wiring |
+| 3 | Media pipeline e2e (YT → Whisper → Hi-RAG) | Independent track |
+| 4 | W1 CLI bridge + W3 Discord | Roadmap items |
 
 ---
 
