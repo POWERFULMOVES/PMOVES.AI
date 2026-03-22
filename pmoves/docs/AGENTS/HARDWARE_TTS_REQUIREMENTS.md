@@ -18,6 +18,16 @@ Actionable specifications extracted from the PMOVES.AI Agentic Architecture docu
    - [Fish Speech](#2-fish-speech-the-architect)
    - [IndexTTS2](#3-indextts2-the-opsengineer)
    - [VibeVoice](#4-vibevoice-the-podcast-mode)
+   - [KittenTTS](#5-kittentts-the-reflex)
+   - [F5-TTS](#6-f5-tts-the-narrator)
+   - [Fish Speech S2 Pro](#7-fish-speech-s2-pro-the-polyglot)
+   - [ChatterboxTTS](#8-chatterboxtts-the-performer)
+   - [Chatterbox Turbo](#9-chatterbox-turbo-the-sprinter)
+   - [Chatterbox Multilingual](#10-chatterbox-multilingual-the-diplomat)
+   - [Higgs Audio](#11-higgs-audio-the-streamer)
+   - [Qwen3 TTS](#12-qwen3-tts-the-designer)
+   - [IndexTTS](#13-indextts-the-workhorse)
+   - [VoxCPM](#14-voxcpm-the-verifier)
 4. [Punctuation Engineering Patterns](#punctuation-engineering-patterns)
 5. [Reference Audio Requirements](#reference-audio-requirements)
 
@@ -270,6 +280,261 @@ It creates a self-improving loop. We even run a full smoke-test harness--make ve
 
 ---
 
+### 5. KittenTTS (The "Reflex")
+
+**Best For:** Ultra-fast response, minimal latency, CLI agent output
+
+**Technique:** Voice Preset Selection (no tunable prosodic knobs)
+
+**VRAM:** ~500 MB | **Latency Tier:** Ultra-fast
+
+**Voice Presets:**
+
+| Preset | Gender | Character |
+|--------|--------|-----------|
+| `expr-voice-2-f` | Female | Expressive, warm |
+| `expr-voice-2-m` | Male | Expressive, warm |
+| `expr-voice-3-f` | Female | Balanced |
+| `expr-voice-3-m` | Male | Balanced |
+| `expr-voice-4-f` | Female | Clear, professional |
+| `expr-voice-4-m` | Male | Clear, professional |
+| `expr-voice-5-f` | Female | Soft, friendly |
+| `expr-voice-5-m` | Male | Soft, friendly |
+
+**Usage Note:** KittenTTS has no expressive dimensions beyond voice selection. Expressiveness is baked into each preset. Choose the voice that matches the agent personality. Best for agents needing sub-second response (PMOVES Crush, CLI tools).
+
+---
+
+### 6. F5-TTS (The "Narrator")
+
+**Best For:** High-quality voice cloning, GRAMS story narration, beat-sync
+
+**Technique:** Reference Audio Cloning + Speed Control
+
+**VRAM:** ~2,000 MB | **Latency Tier:** Medium
+
+**Expressive Dimensions:**
+
+| Parameter | Range | Default | Effect |
+|-----------|-------|---------|--------|
+| `f5_speed` | 0.5–2.0 | 1.0 | Speech speed multiplier |
+| `f5_cross_fade` | 0.0–1.0 | 0.15 | Cross-fade between chunks |
+| `f5_remove_silence` | bool | false | Strip silence from output |
+
+**Models:** F5-TTS Base, F5-TTS v1 Base, F5-TTS French, F5-TTS German, F5-TTS Japanese, F5-TTS Spanish
+
+**Multi-Language Support:** English, French, German, Japanese, Spanish (via model selection)
+
+**Reference Audio:** Required. 10-15s, clear, WAV/MP3 44.1kHz. Matching reference text improves quality.
+
+**Example — Beat-Synced Narration:**
+```
+Speed: 0.9 (slightly slower for dramatic delivery)
+Cross-fade: 0.2 (smooth transitions between BPM-aligned chunks)
+Reference: 10s of narrator reading at target pace
+```
+
+---
+
+### 7. Fish Speech S2 Pro (The "Polyglot")
+
+**Best For:** Zero-shot cloning across 13 languages, agent card voice profiles
+
+**Technique:** Temperature + Nucleus Sampling
+
+**VRAM:** ~2,000 MB | **Latency Tier:** Medium
+
+**Expressive Dimensions:**
+
+| Parameter | Range | Default | Effect |
+|-----------|-------|---------|--------|
+| `fish_s2_temperature` | 0.1–2.0 | 0.8 | Higher = more expressive/varied |
+| `fish_s2_top_p` | 0.0–1.0 | 0.8 | Nucleus sampling threshold |
+| `fish_s2_repetition_penalty` | 1.0–2.0 | 1.1 | Prevents repetitive patterns |
+| `fish_s2_max_tokens` | 128–4096 | 1024 | Max generation length |
+
+**Supported Languages:** English, Chinese, Japanese, Korean, French, German, Arabic, Spanish, Portuguese, Italian, Thai, Vietnamese, Russian
+
+**Usage Tip:** For clean agent card voices, use temperature 0.7 and top_p 0.9 for consistent, clear output. For more expressive delivery, raise temperature to 1.0+.
+
+---
+
+### 8. ChatterboxTTS (The "Performer")
+
+**Best For:** Theatrical narration with controllable expression
+
+**Technique:** Exaggeration Control
+
+**VRAM:** ~2,000 MB | **Latency Tier:** Medium
+
+**Expressive Dimensions:**
+
+| Parameter | Range | Default | Effect |
+|-----------|-------|---------|--------|
+| `chatterbox_exaggeration` | 0.0–1.0 | 0.5 | 0=flat monotone, 1=theatrical |
+| `chatterbox_temperature` | 0.1–2.0 | 0.8 | Sampling temperature |
+| `chatterbox_cfg_weight` | 0.0–1.0 | 0.5 | Classifier-free guidance |
+| `chatterbox_chunk_size` | 50–500 | 300 | Text chunk size for streaming |
+
+**Expression Guide:**
+
+| Scenario | Exaggeration | Temperature | Effect |
+|----------|-------------|-------------|--------|
+| News anchor | 0.2 | 0.6 | Professional, measured |
+| Storyteller | 0.6 | 0.8 | Engaging, varied |
+| Dramatic reveal | 0.9 | 1.0 | Theatrical, intense |
+
+---
+
+### 9. Chatterbox Turbo (The "Sprinter")
+
+**Best For:** Fast expressive synthesis with exaggeration control
+
+**Technique:** Exaggeration Control (speed-optimized)
+
+**VRAM:** ~1,500 MB | **Latency Tier:** Fast
+
+**Expressive Dimensions:**
+
+| Parameter | Range | Default | Effect |
+|-----------|-------|---------|--------|
+| `chatterbox_turbo_exaggeration` | 0.0–1.0 | 0.5 | Expression intensity |
+| `chatterbox_turbo_temperature` | 0.1–2.0 | 0.8 | Sampling temperature |
+| `chatterbox_turbo_cfg_weight` | 0.0–1.0 | 0.5 | Classifier-free guidance |
+
+**Usage Note:** Same exaggeration model as ChatterboxTTS but optimized for speed. Use when you need expressive output but with lower latency. Default persona: `multilingual-agent`.
+
+---
+
+### 10. Chatterbox Multilingual (The "Diplomat")
+
+**Best For:** 17-language synthesis with expression control
+
+**Technique:** Language Selection + Exaggeration Control
+
+**VRAM:** ~2,500 MB | **Latency Tier:** Medium
+
+**Expressive Dimensions:**
+
+| Parameter | Range | Default | Effect |
+|-----------|-------|---------|--------|
+| `chatterbox_mtl_language` | enum | en | Target synthesis language |
+| `chatterbox_mtl_exaggeration` | 0.0–1.0 | 0.5 | Expression intensity |
+| `chatterbox_mtl_temperature` | 0.1–2.0 | 0.8 | Sampling temperature |
+| `chatterbox_mtl_cfg_weight` | 0.0–1.0 | 0.5 | Classifier-free guidance |
+
+**Supported Languages (17):** English, Spanish, French, German, Italian, Portuguese, Polish, Turkish, Russian, Dutch, Czech, Arabic, Chinese, Japanese, Hungarian, Korean, Hindi
+
+**Cross-Language Voice Cloning:** Provide reference audio in any language, synthesize in another. The model transfers voice characteristics across languages.
+
+---
+
+### 11. Higgs Audio (The "Streamer")
+
+**Best For:** Low-latency streaming synthesis with pre-cached model
+
+**Technique:** Temperature + Nucleus Sampling
+
+**VRAM:** ~1,500 MB | **Latency Tier:** Fast
+
+**Expressive Dimensions:**
+
+| Parameter | Range | Default | Effect |
+|-----------|-------|---------|--------|
+| `higgs_voice_preset` | enum | EMPTY | Voice preset selector |
+| `higgs_temperature` | 0.1–2.0 | 1.0 | Higher = more varied |
+| `higgs_top_p` | 0.0–1.0 | 0.95 | Nucleus sampling |
+| `higgs_top_k` | 1–200 | 50 | Top-k token selection |
+| `higgs_max_tokens` | 128–4096 | 1024 | Max generation length |
+
+**Usage Note:** Pre-cached model weights mean faster initial load. Best for real-time streaming use cases where consistent latency matters more than maximum expressiveness.
+
+---
+
+### 12. Qwen3 TTS (The "Designer")
+
+**Best For:** Voice design from text description OR voice cloning
+
+**Technique:** Speaker Design + Voice Cloning (dual mode)
+
+**VRAM:** ~2,500 MB | **Latency Tier:** Medium
+
+**Modes:**
+
+| Mode | Description | Reference Audio |
+|------|-------------|-----------------|
+| `voice_design` | Design voice from speaker preset | Not needed |
+| `voice_clone` | Clone voice from reference audio | Required |
+
+**Expressive Dimensions:**
+
+| Parameter | Range | Default | Effect |
+|-----------|-------|---------|--------|
+| `qwen_mode` | voice_design / voice_clone | voice_design | Operation mode |
+| `qwen_speaker` | Ryan/Ethan/Anna/Sarah/Emily | Ryan | Speaker preset (design mode) |
+| `qwen_language` | Auto/Chinese/English/Japanese/Korean | Auto | Target language |
+| `qwen_clone_model_size` | 0.5B / 1.7B | 1.7B | Model size for cloning |
+| `qwen_chunk_size` | 50–500 | 200 | Streaming chunk size |
+
+**Speaker Presets (voice_design mode):**
+
+| Speaker | Character |
+|---------|-----------|
+| Ryan | Male, professional |
+| Ethan | Male, casual |
+| Anna | Female, warm |
+| Sarah | Female, clear |
+| Emily | Female, expressive |
+
+---
+
+### 13. IndexTTS (The "Workhorse")
+
+**Best For:** Lightweight batch synthesis, fast turnaround
+
+**Technique:** Temperature Control (minimal knobs)
+
+**VRAM:** ~1,200 MB | **Latency Tier:** Fast
+
+**Expressive Dimensions:**
+
+| Parameter | Range | Default | Effect |
+|-----------|-------|---------|--------|
+| `indextts_temperature` | 0.1–2.0 | 0.8 | Sampling temperature |
+
+**Usage Note:** IndexTTS is the lightest voice-cloning engine in the stack. With only one tunable dimension (temperature), it's ideal for high-throughput batch jobs where fine expressiveness control isn't needed. Reference audio is optional — without it, uses a default voice.
+
+---
+
+### 14. VoxCPM (The "Verifier")
+
+**Best For:** Voice cloning with built-in quality verification
+
+**Technique:** Diffusion-Based Guidance
+
+**VRAM:** ~2,000 MB | **Latency Tier:** Medium
+
+**Expressive Dimensions:**
+
+| Parameter | Range | Default | Effect |
+|-----------|-------|---------|--------|
+| `voxcpm_cfg_value` | 0.5–5.0 | 2.0 | Classifier-free guidance scale |
+| `voxcpm_inference_timesteps` | 1–50 | 10 | Diffusion steps (more = better quality, slower) |
+| `voxcpm_normalize` | bool | true | Normalize output audio levels |
+| `voxcpm_denoise` | bool | true | Apply denoising to output |
+
+**Quality vs. Speed Presets:**
+
+| Preset | cfg_value | timesteps | Use Case |
+|--------|-----------|-----------|----------|
+| Draft | 1.5 | 5 | Quick preview |
+| Standard | 2.0 | 10 | Production quality |
+| High | 3.0 | 25 | Maximum quality |
+
+**Unique Feature:** VoxCPM can also transcribe audio, making it useful for clone-then-verify workflows: clone a voice, synthesize text, then verify the output by transcribing it back.
+
+---
+
 ## Punctuation Engineering Patterns
 
 ### Universal Pause Markers
@@ -372,6 +637,10 @@ It creates a self-improving loop. We even run a full smoke-test harness--make ve
 
 ## Related Documentation
 
+- **Engine Capability Registry:** `pmoves/configs/tts-engine-capabilities.yaml` — Machine-readable per-engine expressive dimensions
+- **Voice Personas:** `.claude/context/voice-personas.md` — Persona-to-engine default mapping (15 personas)
+- **TAC Tree:** `pmoves/configs/tac_trees/voice-agents.tac.yaml` — Voice pipeline audit phases
+- **Per-Engine Test:** `/tts:test-engine <id> --metrics` — Test single engine with GPU VRAM tracking
 - [PMOVES.AI Agentic Architecture Deep Dive](./PMOVES.AI%20Agentic%20Architecture%20Deep%20Dive.md)
 - [PMOVES Engine Templates](./PMOVES_Engine_Templates.md)
 - [CLAUDE.md](../../.claude/CLAUDE.md) - Developer context for PMOVES-BoTZ

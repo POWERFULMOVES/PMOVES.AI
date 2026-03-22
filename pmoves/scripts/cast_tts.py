@@ -18,7 +18,7 @@ import urllib.request
 import json
 import os
 
-ULTIMATE_TTS_URL = os.environ.get("ULTIMATE_TTS_URL", "http://localhost:7861")
+ULTIMATE_TTS_URL = os.environ.get("ULTIMATE_TTS_URL", "http://localhost:7860")
 DEFAULT_DEVICE = os.environ.get("CAST_DEFAULT_DEVICE", "Den speaker")
 
 

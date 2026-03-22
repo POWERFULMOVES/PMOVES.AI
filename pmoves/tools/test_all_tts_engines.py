@@ -1,491 +1,860 @@
 #!/usr/bin/env python3
-"""Test all 7 TTS engines with audio playback.
+"""Test all 14 TTS engines via gradio_client.
 
-This script:
-1. Loads all 7 TTS engine models via Gradio API
-2. Tests synthesis for each loaded engine
-3. Saves audio files to /tmp/pmoves-tts-test/
-4. Plays audio via ffplay and PowerShell (WSL2)
+Uses the Gradio Python client with named kwargs — Gradio auto-fills defaults
+for all 121 unified synthesis parameters. No positional array indexing needed.
+
+Aligned with PMOVES-Ultimate-TTS-Studio fork (tools/test_engines.py pattern).
+
+Supports 14 engines: KittenTTS, Kokoro, F5-TTS, IndexTTS, IndexTTS2,
+Fish Speech, Fish Speech S2 Pro, ChatterboxTTS, Chatterbox Turbo,
+Chatterbox Multilingual, VoxCPM, Higgs Audio, Qwen3 TTS, VibeVoice.
+
+Per-engine client isolation: each engine load/synth reconnects the Gradio
+client on connection errors, preventing cascade failures when one engine
+OOM-crashes the server.
 
 Usage:
-    python3 pmoves/tools/test_all_tts_engines.py [--no-play] [--engine ENGINE]
+    python pmoves/tools/test_all_tts_engines.py [--no-play] [--engine ENGINE] [--load-only]
 
 Options:
     --no-play       Skip audio playback, only save files
     --engine NAME   Test only specified engine (e.g., kitten_tts)
+    --load-only     Only test model loading, skip synthesis
+    --url URL       Override TTS Studio URL (default: http://127.0.0.1:7860/)
+    --no-pterm      Skip pterm pre-flight (auto-start via Pinokio)
+    --metrics       Capture GPU VRAM via GPU Orchestrator (port 8200)
 """
 
 import argparse
-import asyncio
 import json
 import os
+import platform
+import shutil
 import subprocess
 import sys
 import time
+import urllib.request
+import wave
 from pathlib import Path
-from typing import Optional
 
 try:
-    import httpx
+    from gradio_client import Client
 except ImportError:
-    print("ERROR: httpx required. Install with: pip install httpx")
+    print("ERROR: gradio_client required. Install with: pip install gradio_client")
     sys.exit(1)
 
 
 # Configuration
-ULTIMATE_TTS_URL = os.getenv("ULTIMATE_TTS_URL", "http://localhost:7861")
-GRADIO_API = f"{ULTIMATE_TTS_URL}/gradio_api"
-OUTPUT_DIR = Path("/tmp/pmoves-tts-test")
+DEFAULT_URL = os.getenv("ULTIMATE_TTS_URL", "http://127.0.0.1:7860")
+_default_output = (
+    Path(os.environ["TEMP"]) / "pmoves-tts-test"
+    if platform.system() == "Windows" and "TEMP" in os.environ
+    else Path("/tmp/pmoves-tts-test")
+)
+OUTPUT_DIR = Path(os.getenv("TTS_TEST_OUTPUT", str(_default_output)))
 TEST_TEXT = "Hello! This is a test of the text to speech engine. Can you hear me clearly?"
 
-# Engine definitions: (id, display_name, load_endpoint, default_voice)
+# ---------------------------------------------------------------------------
+# Engine definitions — source truth from launch.py (lines 9145–10880)
+#
+# Each engine dict contains:
+#   id:           Internal identifier
+#   name:         Display name (matches Gradio dropdown)
+#   load_api:     Gradio API name for loading the model
+#   load_kwargs:  Named kwargs for loading (empty dict = no params)
+#                 "skip" = skip loading entirely
+#   synth_kwargs: Named kwargs for synthesis (merged with common params)
+#                 None = skip synthesis (e.g., VibeVoice uses separate endpoint)
+# ---------------------------------------------------------------------------
 ENGINES = [
-    ("kitten_tts", "KittenTTS", "handle_load_kitten", "expr-voice-2-f"),
-    ("kokoro", "Kokoro TTS", "handle_load_kokoro", "af_heart"),
-    ("f5_tts", "F5-TTS", "handle_f5_load", None),
-    ("indextts2", "IndexTTS2", "handle_load_indextts2", None),
-    ("fish", "Fish Speech", "handle_fish_load", None),
-    ("chatterbox", "ChatterboxTTS", "handle_chatterbox_load", None),
-    ("voxcpm", "VoxCPM", "handle_load_voxcpm", None),
+    {
+        "id": "kitten_tts",
+        "name": "KittenTTS",
+        "load_api": "/handle_load_kitten",
+        "load_kwargs": {},
+        "synth_kwargs": {"kitten_voice": "expr-voice-2-f"},
+    },
+    {
+        "id": "kokoro",
+        "name": "Kokoro TTS",
+        "load_api": "/handle_load_kokoro",
+        "load_kwargs": {},
+        "synth_kwargs": {"kokoro_voice": "af_heart", "kokoro_speed": 1.0},
+    },
+    {
+        "id": "f5_tts",
+        "name": "F5-TTS",
+        "load_api": "/handle_f5_load",
+        "load_kwargs": {"model_name": "F5-TTS Base"},
+        "synth_kwargs": {"f5_speed": 1.0},
+    },
+    {
+        "id": "indextts2",
+        "name": "IndexTTS2",
+        "load_api": "/handle_load_indextts2",
+        "load_kwargs": {},
+        "synth_kwargs": {
+            "indextts2_emotion_mode": "audio_reference",
+            "indextts2_calm": 1.0,
+            "indextts2_temperature": 0.8,
+        },
+    },
+    {
+        "id": "fish",
+        "name": "Fish Speech",
+        "load_api": "/handle_load_fish",
+        "load_kwargs": {},
+        "synth_kwargs": {
+            "fish_temperature": 0.8,
+            "fish_top_p": 0.8,
+            "fish_repetition_penalty": 1.1,
+            "fish_max_tokens": 1024,
+        },
+    },
+    {
+        "id": "chatterbox",
+        "name": "ChatterboxTTS",
+        "load_api": "/handle_load_chatterbox",
+        "load_kwargs": {},
+        "synth_kwargs": {
+            "chatterbox_exaggeration": 0.5,
+            "chatterbox_temperature": 0.8,
+            "chatterbox_cfg_weight": 0.5,
+            "chatterbox_chunk_size": 300,
+        },
+    },
+    {
+        "id": "voxcpm",
+        "name": "VoxCPM",
+        "load_api": "/handle_load_voxcpm",
+        "load_kwargs": {},
+        "synth_kwargs": {
+            "voxcpm_cfg_value": 2.0,
+            "voxcpm_inference_timesteps": 10,
+            "voxcpm_normalize": True,
+            "voxcpm_denoise": True,
+        },
+    },
+    {
+        "id": "higgs",
+        "name": "Higgs Audio",
+        "load_api": "/handle_load_higgs",
+        "load_kwargs": {},
+        "synth_kwargs": {
+            "higgs_voice_preset": "EMPTY",
+            "higgs_temperature": 1.0,
+            "higgs_top_p": 0.95,
+            "higgs_top_k": 50,
+            "higgs_max_tokens": 1024,
+        },
+    },
+    {
+        "id": "qwen",
+        "name": "Qwen3 TTS",
+        "load_api": "/handle_load_qwen",
+        "load_kwargs": {"model_type": "Base", "model_size": "1.7B"},
+        "synth_kwargs": {
+            "qwen_mode": "voice_design",
+            "qwen_clone_model_size": "1.7B",
+            "qwen_chunk_size": 200,
+            "qwen_speaker": "Ryan",
+            "qwen_language": "Auto",
+        },
+    },
+    {
+        "id": "indextts",
+        "name": "IndexTTS",
+        "load_api": "/handle_load_indextts",
+        "load_kwargs": {},
+        "synth_kwargs": {"indextts_temperature": 0.8},
+    },
+    {
+        "id": "fish_s2",
+        "name": "Fish Speech S2 Pro",
+        "load_api": "/handle_load_fish_s2",
+        "load_kwargs": {},
+        "synth_kwargs": {
+            "fish_s2_temperature": 0.8,
+            "fish_s2_top_p": 0.8,
+            "fish_s2_repetition_penalty": 1.1,
+            "fish_s2_max_tokens": 1024,
+        },
+    },
+    {
+        "id": "chatterbox_turbo",
+        "name": "Chatterbox Turbo",
+        "load_api": "/handle_load_chatterbox_turbo",
+        "load_kwargs": {},
+        "synth_kwargs": {
+            "chatterbox_turbo_exaggeration": 0.5,
+            "chatterbox_turbo_temperature": 0.8,
+            "chatterbox_turbo_cfg_weight": 0.5,
+        },
+    },
+    {
+        "id": "chatterbox_multilingual",
+        "name": "Chatterbox Multilingual",
+        "load_api": "/handle_load_chatterbox_multilingual",
+        "load_kwargs": {},
+        "synth_kwargs": {
+            "chatterbox_mtl_language": "en",
+            "chatterbox_mtl_exaggeration": 0.5,
+            "chatterbox_mtl_temperature": 0.8,
+            "chatterbox_mtl_cfg_weight": 0.5,
+        },
+    },
+    {
+        # VibeVoice uses a separate panel (generate_vibevoice_podcast),
+        # NOT the unified generate_unified_tts endpoint.
+        "id": "vibevoice",
+        "name": "VibeVoice",
+        "load_api": "/handle_vibevoice_load",
+        "load_kwargs": {
+            "selected_model_path": "",
+            "path": "models/VibeVoice-1.5B",
+            "use_flash_attention": False,
+        },
+        "synth_kwargs": None,  # Separate endpoint — skip unified synth
+    },
 ]
 
-# Engine display names for Gradio API
-ENGINE_DISPLAY_NAMES = {
-    "kitten_tts": "KittenTTS",
-    "kokoro": "Kokoro TTS",
-    "f5_tts": "F5-TTS",
-    "indextts2": "IndexTTS2",
-    "fish": "Fish Speech",
-    "chatterbox": "ChatterboxTTS",
-    "voxcpm": "VoxCPM",
-}
+ENGINE_IDS = [e["id"] for e in ENGINES]
+
+# ---------------------------------------------------------------------------
+# GPU Metrics via GPU Orchestrator (port 8200)
+# ---------------------------------------------------------------------------
+GPU_ORCHESTRATOR_URL = os.getenv("GPU_ORCHESTRATOR_URL", "http://127.0.0.1:8200")
+
+
+def capture_gpu_metrics() -> dict | None:
+    """Snapshot VRAM via GPU Orchestrator API (total + per-process).
+
+    Returns dict with total_vram_mb, used_vram_mb, free_vram_mb,
+    utilization_pct, temperature_c, and processes list.
+    Returns None if orchestrator is offline.
+    """
+    try:
+        req = urllib.request.Request(
+            f"{GPU_ORCHESTRATOR_URL}/api/gpu/status",
+            headers={"Accept": "application/json"},
+        )
+        resp = urllib.request.urlopen(req, timeout=5)
+        data = json.loads(resp.read())
+        metrics = data.get("data", {}).get("metrics", {})
+        processes = data.get("data", {}).get("processes", [])
+        return {
+            "total_vram_mb": metrics.get("total_vram_mb"),
+            "used_vram_mb": metrics.get("used_vram_mb"),
+            "free_vram_mb": metrics.get("free_vram_mb"),
+            "utilization_pct": metrics.get("utilization_percent"),
+            "temperature_c": metrics.get("temperature_c"),
+            "processes": processes,
+        }
+    except Exception:
+        return None  # Orchestrator offline, skip metrics
+
+
+def print_gpu_delta(
+    label: str, before: dict | None, after: dict | None,
+) -> None:
+    """Print a VRAM delta report between two GPU snapshots."""
+    if before is None or after is None:
+        print(f"  {label} metrics: GPU orchestrator unavailable")
+        return
+
+    used_b = before.get("used_vram_mb") or 0
+    used_a = after.get("used_vram_mb") or 0
+    total = before.get("total_vram_mb") or 0
+    delta = used_a - used_b
+
+    util_b = before.get("utilization_pct") or 0
+    util_a = after.get("utilization_pct") or 0
+
+    temp_b = before.get("temperature_c") or 0
+    temp_a = after.get("temperature_c") or 0
+
+    pct_b = (used_b / total * 100) if total else 0
+    pct_a = (used_a / total * 100) if total else 0
+
+    print(f"  {label} metrics:")
+    print(f"    VRAM before:  {used_b:,.0f} MB used / {total:,.0f} MB total ({pct_b:.0f}%)")
+    print(f"    VRAM after:   {used_a:,.0f} MB used / {total:,.0f} MB total ({pct_a:.0f}%)")
+    sign = "+" if delta >= 0 else ""
+    print(f"    VRAM delta:   {sign}{delta:,.0f} MB")
+    if util_b or util_a:
+        print(f"    GPU util:     {util_b:.0f}% \u2192 {util_a:.0f}%")
+    if temp_b or temp_a:
+        print(f"    Temperature:  {temp_b:.0f}\u00b0C \u2192 {temp_a:.0f}\u00b0C")
+
+    # Per-process breakdown from after snapshot
+    procs = after.get("processes", [])
+    if procs:
+        print(f"    Processes:")
+        for p in procs[:5]:  # Show top 5
+            pid = p.get("pid", "?")
+            name = p.get("name", p.get("container", "unknown"))
+            mem = p.get("vram_mb", p.get("gpu_memory_mb", 0))
+            print(f"      {name} (PID {pid}): {mem:,.0f} MB")
 
 
 def print_header(text: str) -> None:
     """Print a section header."""
-    print(f"\n{'=' * 50}")
-    print(f" {text}")
-    print('=' * 50)
+    print(f"\n{'=' * 60}")
+    print(f"  {text}")
+    print("=" * 60)
 
 
-def print_status(name: str, success: bool, message: str = "") -> None:
-    """Print status with emoji."""
-    icon = "✓" if success else "❌"
-    msg = f" ({message})" if message else ""
-    print(f"  {icon} {name}{msg}")
+def validate_wav(filepath: str) -> dict:
+    """Validate WAV file and return metadata."""
+    result = {"valid": False, "size": 0, "duration": 0.0, "sample_rate": 0, "errors": []}
 
+    if not os.path.exists(filepath):
+        result["errors"].append("File does not exist")
+        return result
 
-async def check_service_health() -> bool:
-    """Check if Ultimate-TTS service is healthy."""
+    result["size"] = os.path.getsize(filepath)
+    if result["size"] < 100:
+        result["errors"].append(f"File too small ({result['size']} bytes)")
+        return result
+
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.get(f"{GRADIO_API}/info")
-            return resp.status_code == 200
+        with wave.open(filepath, "rb") as wf:
+            result["sample_rate"] = wf.getframerate()
+            frames = wf.getnframes()
+            result["duration"] = frames / result["sample_rate"] if result["sample_rate"] else 0
+            if result["duration"] < 0.1:
+                result["errors"].append(f"Duration too short ({result['duration']:.2f}s)")
+            else:
+                result["valid"] = True
+    except wave.Error as e:
+        result["errors"].append(f"Invalid WAV: {e}")
     except Exception as e:
-        print(f"ERROR: Cannot connect to Ultimate-TTS at {ULTIMATE_TTS_URL}: {e}")
-        return False
+        result["errors"].append(f"Error: {e}")
+
+    return result
 
 
-async def load_model(client: httpx.AsyncClient, load_endpoint: str) -> tuple[bool, str]:
-    """Load a TTS model via Gradio API.
+def _is_connection_error(error: Exception) -> bool:
+    """Check if an exception indicates a broken Gradio client connection.
+
+    Also returns True for empty/very-short messages — when the gradio_client
+    SSE thread handles the real error internally, predict() often raises with
+    an empty or opaque message.
+    """
+    msg = str(error).lower()
+    if len(msg.strip()) < 5:
+        # Empty or near-empty error — server likely crashed
+        return True
+    return any(kw in msg for kw in (
+        "connection", "timeout", "timed out", "closed", "eof",
+        "broken pipe", "reset by peer", "httpx", "stream",
+        "disconnect", "forcibly", "winerror", "readerror",
+    ))
+
+
+def _reconnect_client(url: str, verbose: bool = False) -> Client | None:
+    """Attempt to create a fresh Gradio client connection."""
+    try:
+        return Client(url, verbose=verbose)
+    except Exception:
+        return None
+
+
+def load_engine(
+    client: Client, engine: dict, url: str,
+) -> tuple[bool, str, Client]:
+    """Load a TTS engine model via gradio_client.
+
+    Reconnects the Gradio client on connection errors to prevent cascade
+    failures when an engine OOM-crashes the server.
 
     Returns:
-        Tuple of (success, message)
+        (success, message, client) — client may be a new instance after reconnection.
     """
+    load_kwargs = engine["load_kwargs"]
+
+    if load_kwargs == "skip":
+        return False, "skipped (requires setup)", client
+
     try:
-        # POST to initiate model loading
-        resp = await client.post(
-            f"{GRADIO_API}/call/{load_endpoint}",
-            json={"data": []},
-            timeout=30.0
-        )
+        result = client.predict(**load_kwargs, api_name=engine["load_api"])
 
-        if resp.status_code != 200:
-            return False, f"HTTP {resp.status_code}"
+        # Result is a tuple — first element is status string
+        status = str(result[0]) if result else ""
 
-        event_id = resp.json().get("event_id")
-        if not event_id:
-            return False, "No event_id"
+        if "\u2705" in status or "loaded" in status.lower() or "ready" in status.lower():
+            return True, "loaded", client
+        if "download" in status.lower():
+            return False, "needs download", client
+        if "\u274c" in status or "failed" in status.lower() or "not available" in status.lower():
+            error = status.replace("\u2705", "").replace("\u274c", "").strip()[:60]
+            return False, error or "failed", client
 
-        # Poll for result via SSE
-        result_resp = await client.get(
-            f"{GRADIO_API}/call/{load_endpoint}/{event_id}",
-            timeout=120.0  # Models can take time to load
-        )
+        # Unknown status — treat as success if non-empty
+        if status:
+            return True, f"status: {status[:40]}", client
+        return False, "empty response", client
 
-        # Parse SSE response
-        for line in result_resp.iter_lines():
-            if not line:
-                continue
-            if line.startswith("data:"):
-                try:
-                    data = json.loads(line[5:])
-                    if isinstance(data, list) and len(data) > 0:
-                        status = str(data[0]) if data[0] else ""
-                        if "✅" in status or "Loaded" in status.lower():
-                            return True, "loaded"
-                        if "❌" in status or "Failed" in status or "not available" in status.lower():
-                            # Extract error message
-                            error = status.replace("❌", "").strip()
-                            return False, error or "failed"
-                except json.JSONDecodeError:
-                    continue
-
-        return False, "no response"
-
-    except httpx.TimeoutException:
-        return False, "timeout"
     except Exception as e:
-        return False, str(e)[:50]
+        msg = str(e)[:60]
+        # Always reconnect after failure — a fresh Client() is cheap,
+        # and the old one may be silently broken (SSE stream dead).
+        new_client = _reconnect_client(url)
+        if new_client is not None:
+            conn_tag = "conn-err" if _is_connection_error(e) else "err"
+            return False, f"{msg} ({conn_tag}, reconnected)", new_client
+        return False, f"{msg} (reconnect failed)", client
 
 
-def build_synthesis_params(text: str, engine_id: str, voice: Optional[str] = None) -> list:
-    """Build the 92-parameter list for unified TTS synthesis.
+def synthesize_engine(
+    client: Client, engine: dict, text: str, url: str,
+) -> tuple[bool, str, str, Client]:
+    """Synthesize speech via gradio_client using named kwargs.
 
-    The Gradio API expects parameters in a specific order.
-    """
-    params = [None] * 92
-
-    # Core parameters
-    params[0] = text  # text_input
-    params[1] = ENGINE_DISPLAY_NAMES.get(engine_id, engine_id)  # tts_engine
-    params[2] = "wav"  # audio_format
-
-    # ChatterboxTTS params (indices 3-18)
-    params[4] = 0.5   # chatterbox_exaggeration
-    params[5] = 0.8   # chatterbox_temperature
-    params[6] = 0.5   # chatterbox_cfg_weight
-    params[7] = 300   # chatterbox_chunk_size
-    params[8] = 0     # chatterbox_seed
-    params[10] = "en"  # chatterbox_mtl_language
-
-    # Kokoro params (indices 19-20)
-    if engine_id == "kokoro":
-        params[19] = voice or "af_heart"  # kokoro_voice
-    else:
-        params[19] = "af_heart"
-    params[20] = 1.0  # kokoro_speed
-
-    # Fish Speech params (indices 21-27)
-    params[23] = 0.8   # fish_temperature
-    params[24] = 0.8   # fish_top_p
-    params[25] = 1.1   # fish_repetition_penalty
-    params[26] = 1024  # fish_max_tokens
-
-    # IndexTTS params (indices 28-30)
-    params[29] = 0.8  # indextts_temperature
-
-    # IndexTTS2 params (indices 31-50)
-    params[32] = "audio_reference"  # indextts2_emotion_mode
-    params[34] = ""    # indextts2_emotion_description (required, can be empty)
-    params[35] = 1.0   # indextts2_emo_alpha
-    params[43] = 1.0   # indextts2_calm
-    params[44] = 0.8   # indextts2_temperature
-    params[45] = 0.9   # indextts2_top_p
-    params[46] = 50    # indextts2_top_k
-    params[47] = 1.1   # indextts2_repetition_penalty
-    params[48] = 1500  # indextts2_max_mel_tokens
-    params[50] = False  # indextts2_use_random
-
-    # F5-TTS params (indices 51-56)
-    params[53] = 1.0   # f5_speed
-    params[54] = 0.15  # f5_cross_fade
-    params[55] = False  # f5_remove_silence
-    params[56] = 0     # f5_seed
-
-    # Higgs Audio params (indices 57-66)
-    params[59] = "EMPTY"  # higgs_voice_preset
-    params[61] = 1.0   # higgs_temperature
-    params[62] = 0.95  # higgs_top_p
-    params[63] = 50    # higgs_top_k
-    params[64] = 1024  # higgs_max_tokens
-
-    # KittenTTS params (index 67)
-    if engine_id == "kitten_tts":
-        params[67] = voice or "expr-voice-2-f"  # kitten_voice
-    else:
-        params[67] = "expr-voice-2-f"
-
-    # VoxCPM params (indices 68-77)
-    params[70] = 2.0   # voxcpm_cfg_value
-    params[71] = 10    # voxcpm_inference_timesteps
-    params[72] = True  # voxcpm_normalize
-    params[73] = True  # voxcpm_denoise
-    params[74] = True  # voxcpm_retry_badcase
-    params[75] = 3     # voxcpm_retry_badcase_max_times
-    params[76] = 6.0   # voxcpm_retry_badcase_ratio_threshold
-
-    # Audio effects params (indices 78-91) - all disabled
-    params[78] = 0     # gain_db
-    params[79] = False  # enable_eq
-    params[83] = False  # enable_reverb
-    params[87] = False  # enable_echo
-    params[90] = False  # enable_pitch
-
-    return params
-
-
-async def synthesize(client: httpx.AsyncClient, text: str, engine_id: str,
-                     voice: Optional[str] = None) -> tuple[bool, bytes, str]:
-    """Synthesize speech via Gradio API.
+    Reconnects the Gradio client on connection errors.
 
     Returns:
-        Tuple of (success, audio_bytes, message)
+        (success, audio_path_or_empty, message, client)
     """
+    if engine["synth_kwargs"] is None:
+        return False, "", "separate endpoint (skip)", client
+
+    # Build kwargs: common + engine-specific
+    kwargs = {
+        "text_input": text,
+        "tts_engine": engine["name"],
+        "audio_format": "wav",
+        **engine["synth_kwargs"],
+    }
+
     try:
-        params = build_synthesis_params(text, engine_id, voice)
+        result = client.predict(**kwargs, api_name="/generate_unified_tts")
 
-        # POST to initiate synthesis
-        resp = await client.post(
-            f"{GRADIO_API}/call/generate_unified_tts",
-            json={"data": params},
-            timeout=30.0
-        )
+        if not result:
+            return False, "", "no result", client
 
-        if resp.status_code != 200:
-            return False, b"", f"HTTP {resp.status_code}"
+        # Result is (audio_path, status_message)
+        audio_path = result[0] if isinstance(result, (tuple, list)) else result
+        status_msg = result[1] if isinstance(result, (tuple, list)) and len(result) > 1 else ""
 
-        event_id = resp.json().get("event_id")
-        if not event_id:
-            return False, b"", "No event_id"
+        if isinstance(status_msg, str) and "\u274c" in status_msg:
+            return False, "", status_msg.replace("\u274c", "").strip()[:60], client
 
-        # Poll for result via SSE
-        result_resp = await client.get(
-            f"{GRADIO_API}/call/generate_unified_tts/{event_id}",
-            timeout=180.0  # Synthesis can take time
-        )
+        if not audio_path:
+            return False, "", "no audio path", client
 
-        audio_url = None
-        error_msg = None
+        # Handle dict result (Gradio file info)
+        if isinstance(audio_path, dict):
+            audio_path = audio_path.get("path", audio_path.get("url", ""))
 
-        for line in result_resp.iter_lines():
-            if not line:
-                continue
-            if line.startswith("data:"):
-                try:
-                    data = json.loads(line[5:])
-                    if isinstance(data, list) and len(data) >= 1:
-                        audio_info = data[0]
-                        status = data[1] if len(data) > 1 else ""
+        if not audio_path or not os.path.exists(str(audio_path)):
+            return False, "", f"audio file not found: {audio_path}", client
 
-                        # Check for error
-                        if isinstance(status, str) and "❌" in status:
-                            error_msg = status.replace("❌", "").strip()
-                            break
+        return True, str(audio_path), "ok", client
 
-                        # Get audio URL
-                        if isinstance(audio_info, dict) and "url" in audio_info:
-                            audio_url = audio_info["url"]
-                            break
-                except json.JSONDecodeError:
-                    continue
-
-        if error_msg:
-            return False, b"", error_msg
-
-        if not audio_url:
-            return False, b"", "No audio URL in response"
-
-        # Download audio file
-        audio_resp = await client.get(audio_url, timeout=30.0)
-        if audio_resp.status_code != 200:
-            return False, b"", f"Download failed: HTTP {audio_resp.status_code}"
-
-        audio_bytes = audio_resp.content
-
-        # Validate WAV format
-        if not audio_bytes or audio_bytes[:4] != b'RIFF':
-            return False, b"", "Invalid WAV format"
-
-        return True, audio_bytes, f"{len(audio_bytes):,} bytes"
-
-    except httpx.TimeoutException:
-        return False, b"", "timeout"
     except Exception as e:
-        return False, b"", str(e)[:50]
-
-
-def play_audio_ffplay(filepath: Path) -> bool:
-    """Play audio via ffplay (terminal audio)."""
-    try:
-        result = subprocess.run(
-            ["ffplay", "-nodisp", "-autoexit", "-loglevel", "quiet", str(filepath)],
-            timeout=15,
-            capture_output=True
-        )
-        return result.returncode == 0
-    except subprocess.TimeoutExpired:
-        return True  # Audio played (timeout is expected for long audio)
-    except FileNotFoundError:
-        return False  # ffplay not installed
-    except Exception:
-        return False
-
-
-def play_audio_powershell(filepath: Path) -> bool:
-    """Play audio via PowerShell (WSL2 host speakers)."""
-    try:
-        # Convert WSL path to Windows path
-        result = subprocess.run(
-            ["wslpath", "-w", str(filepath)],
-            capture_output=True,
-            text=True,
-            timeout=5
-        )
-        if result.returncode != 0:
-            return False
-
-        win_path = result.stdout.strip()
-
-        # Play via PowerShell
-        ps_cmd = f"(New-Object Media.SoundPlayer '{win_path}').PlaySync()"
-        result = subprocess.run(
-            ["powershell.exe", "-c", ps_cmd],
-            timeout=30,
-            capture_output=True
-        )
-        return result.returncode == 0
-
-    except subprocess.TimeoutExpired:
-        return True  # Audio played
-    except FileNotFoundError:
-        return False  # Not in WSL2 or PowerShell unavailable
-    except Exception:
-        return False
+        msg = str(e)[:60]
+        # Always reconnect after failure — cheap insurance against dead SSE streams.
+        new_client = _reconnect_client(url)
+        if new_client is not None:
+            conn_tag = "conn-err" if _is_connection_error(e) else "err"
+            return False, "", f"{msg} ({conn_tag}, reconnected)", new_client
+        return False, "", f"{msg} (reconnect failed)", client
 
 
 def play_audio(filepath: Path, skip_play: bool = False) -> None:
-    """Play audio using all available methods."""
+    """Play audio via ffplay or PowerShell."""
     if skip_play:
         print("      (playback skipped)")
         return
 
-    print("      🔊 Playing audio...")
+    # Try ffplay
+    try:
+        subprocess.run(
+            ["ffplay", "-nodisp", "-autoexit", "-loglevel", "quiet", str(filepath)],
+            timeout=15, capture_output=True,
+        )
+        print("      ✓ Playback complete")
+        return
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        pass
 
-    # Try ffplay first
-    if play_audio_ffplay(filepath):
-        print("      ✓ ffplay playback complete")
-    else:
-        print("      ⚠ ffplay not available")
-
-    # Try PowerShell (WSL2)
-    if play_audio_powershell(filepath):
+    # Try PowerShell (Windows native)
+    try:
+        ps_cmd = f"(New-Object Media.SoundPlayer '{filepath}').PlaySync()"
+        subprocess.run(["powershell.exe", "-c", ps_cmd], timeout=30, capture_output=True)
         print("      ✓ PowerShell playback complete")
-    else:
-        print("      ⚠ PowerShell not available (not in WSL2?)")
+        return
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        pass
+
+    print("      (no audio player available)")
 
 
-async def main():
+def _resolve_pterm() -> str | None:
+    """Resolve the pterm binary path.
+
+    Per Pinokio-SKILL.md Control Plane: check PATH first, then
+    platform-specific fallback locations.
+    """
+    # 1. Check if pterm is already on PATH
+    found = shutil.which("pterm")
+    if found:
+        return found
+
+    # 2. Windows: check Pinokio install locations
+    if platform.system() == "Windows":
+        candidates = [
+            Path("D:/pinokio/bin/npm/pterm.cmd"),
+            Path(os.environ.get("LOCALAPPDATA", ""), "pinokio/bin/npm/pterm.cmd"),
+            Path(os.environ.get("APPDATA", ""), "pinokio/bin/npm/pterm.cmd"),
+        ]
+        for p in candidates:
+            if p.exists():
+                return str(p)
+
+    # 3. Linux/macOS: common locations
+    for p in [Path.home() / ".pinokio" / "bin" / "pterm", Path("/usr/local/bin/pterm")]:
+        if p.exists():
+            return str(p)
+
+    return None
+
+
+def _run_pterm(pterm: str, args: list[str], timeout: int = 30) -> subprocess.CompletedProcess | None:
+    """Run a pterm command and return the result, or None on failure."""
+    try:
+        return subprocess.run(
+            [pterm, *args],
+            capture_output=True, text=True, timeout=timeout,
+        )
+    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+        return None
+
+
+def _parse_pterm_status(output: str) -> dict:
+    """Parse key=value fields from pterm status output.
+
+    Handles both JSON and plain-text output formats.
+    """
+    # Try JSON first
+    try:
+        data = json.loads(output)
+        if isinstance(data, dict):
+            return data
+        if isinstance(data, list) and data:
+            return data[0] if isinstance(data[0], dict) else {}
+    except (json.JSONDecodeError, ValueError):
+        pass
+
+    # Fall back to key=value parsing
+    result = {}
+    for line in output.splitlines():
+        line = line.strip()
+        if "=" in line:
+            key, _, value = line.partition("=")
+            result[key.strip()] = value.strip()
+        elif ":" in line:
+            key, _, value = line.partition(":")
+            result[key.strip()] = value.strip()
+    return result
+
+
+def pterm_preflight(skip: bool = False) -> str | None:
+    """Use pterm to check/start TTS Studio per Pinokio-SKILL.md lifecycle.
+
+    Returns the ready_url if TTS Studio is running, or None to fall back
+    to direct connection.
+    """
+    if skip:
+        return None
+
+    pterm = _resolve_pterm()
+    if not pterm:
+        print("  Pterm: not found (will connect directly)")
+        return None
+
+    print(f"  Pterm: {pterm}")
+
+    # 1. Search for TTS Studio app
+    result = _run_pterm(pterm, ["search", "ultimate tts"])
+    if not result or result.returncode != 0:
+        print("  Pterm: search failed (will connect directly)")
+        return None
+
+    # Parse app_id from search results — look for first line with an app path/id
+    app_id = None
+    app_path = None
+    for line in result.stdout.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        # Try JSON
+        try:
+            items = json.loads(result.stdout)
+            if isinstance(items, list) and items:
+                item = items[0]
+                app_id = item.get("app_id") or item.get("id")
+                app_path = item.get("path")
+                break
+        except (json.JSONDecodeError, ValueError):
+            pass
+        # Plain text: look for path-like lines containing "tts" or "ultimate"
+        lower = line.lower()
+        if "ultimate" in lower or "tts" in lower:
+            # Could be "app_id: xxx" or just a path
+            if ":" in line and not line.startswith("/") and not line[1:2] == ":":
+                _, _, val = line.partition(":")
+                app_id = val.strip()
+            else:
+                app_path = line
+            break
+
+    if not app_id and not app_path:
+        print("  Pterm: TTS Studio not found in local apps")
+        return None
+
+    identifier = app_id or app_path
+    print(f"  Pterm: found app → {identifier}")
+
+    # 2. Check status
+    status_arg = app_id or app_path
+    result = _run_pterm(pterm, ["status", status_arg])
+    if not result or result.returncode != 0:
+        print("  Pterm: status check failed")
+        return None
+
+    status = _parse_pterm_status(result.stdout)
+    ready = str(status.get("ready", "")).lower() == "true"
+    ready_url = status.get("ready_url", "")
+    state = status.get("state", "offline")
+    path_val = status.get("path", app_path or "")
+
+    if ready and ready_url:
+        print(f"  Pterm: already running at {ready_url}")
+        return ready_url
+
+    # 3. If offline, start it
+    if state == "offline" or not ready:
+        run_target = path_val or status_arg
+        print(f"  Pterm: app is {state}, starting via pterm run...")
+        run_result = _run_pterm(pterm, ["run", run_target], timeout=60)
+        if not run_result or run_result.returncode != 0:
+            stderr = (run_result.stderr[:100] if run_result else "timeout").strip()
+            print(f"  Pterm: run failed — {stderr}")
+            return None
+
+        # 4. Poll status until ready (180s timeout per SKILL.md)
+        deadline = time.time() + 180
+        poll_interval = 2
+        while time.time() < deadline:
+            time.sleep(poll_interval)
+            result = _run_pterm(pterm, ["status", status_arg])
+            if not result:
+                continue
+            status = _parse_pterm_status(result.stdout)
+            ready = str(status.get("ready", "")).lower() == "true"
+            ready_url = status.get("ready_url", "")
+            state = status.get("state", "")
+
+            if ready and ready_url:
+                print(f"  Pterm: started successfully at {ready_url}")
+                return ready_url
+
+            if state == "offline":
+                print("  Pterm: app dropped back to offline during startup")
+                return None
+
+            # Ramp up poll interval slightly
+            poll_interval = min(poll_interval + 1, 5)
+
+        print("  Pterm: startup timed out (180s)")
+        return None
+
+    return None
+
+
+def main():
     """Main test runner."""
-    parser = argparse.ArgumentParser(description="Test all TTS engines")
+    parser = argparse.ArgumentParser(description="Test all 14 TTS engines")
     parser.add_argument("--no-play", action="store_true", help="Skip audio playback")
-    parser.add_argument("--engine", type=str, help="Test only specified engine")
+    parser.add_argument("--engine", type=str, help="Test only specified engine (e.g., kitten_tts)")
+    parser.add_argument("--load-only", action="store_true", help="Only test model loading")
+    parser.add_argument("--url", type=str, default=DEFAULT_URL, help="TTS Studio URL")
+    parser.add_argument("--no-pterm", action="store_true", help="Skip pterm pre-flight")
+    parser.add_argument("--metrics", action="store_true",
+                        help="Capture GPU VRAM via GPU Orchestrator (port 8200)")
     args = parser.parse_args()
 
-    # Create output directory
+    url = args.url.rstrip("/") + "/"
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-    print_header("TTS Engine Test Suite")
-    print(f"Target: {ULTIMATE_TTS_URL}")
-    print(f"Output: {OUTPUT_DIR}")
+    print_header("TTS Engine Test Suite (gradio_client)")
+    print(f"  Target: {url}")
+    print(f"  Output: {OUTPUT_DIR}")
 
-    # Check service health
-    print("\nChecking service health...")
-    if not await check_service_health():
-        print("ERROR: Ultimate-TTS service not available")
+    # Pterm pre-flight: auto-start TTS Studio if possible
+    # Skip pterm if user explicitly provided --url (they know where the service is)
+    skip_pterm = args.no_pterm or (args.url != DEFAULT_URL)
+    print("\n  Pterm pre-flight...")
+    ready_url = pterm_preflight(skip=skip_pterm)
+    if ready_url:
+        url = ready_url.rstrip("/") + "/"
+        print(f"  Using pterm-resolved URL: {url}")
+
+    # Connect to Gradio
+    print("\n  Connecting to Gradio...")
+    try:
+        client = Client(url, verbose=False)
+        print("  ✓ Connected")
+    except Exception as e:
+        print(f"  ERROR: Cannot connect to {url}: {e}")
         return 1
 
-    print("✓ Service is healthy")
-
-    # Filter engines if specified
+    # Filter engines
     engines_to_test = ENGINES
     if args.engine:
-        engines_to_test = [(e, n, l, v) for e, n, l, v in ENGINES if e == args.engine]
+        engines_to_test = [e for e in ENGINES if e["id"] == args.engine]
         if not engines_to_test:
-            print(f"ERROR: Unknown engine '{args.engine}'")
-            print(f"Available: {', '.join(e[0] for e in ENGINES)}")
+            print(f"  ERROR: Unknown engine '{args.engine}'")
+            print(f"  Available: {', '.join(ENGINE_IDS)}")
             return 1
 
-    # Phase 1: Load all models
-    print_header("Loading TTS Models")
+    # GPU metrics pre-check
+    if args.metrics:
+        print("\n  GPU Orchestrator: ", end="", flush=True)
+        probe = capture_gpu_metrics()
+        if probe:
+            total = probe.get("total_vram_mb", 0)
+            used = probe.get("used_vram_mb", 0)
+            print(f"connected ({used:,.0f}/{total:,.0f} MB used)")
+        else:
+            print(f"unavailable at {GPU_ORCHESTRATOR_URL} (metrics will be skipped)")
 
-    loaded_engines = {}
-    async with httpx.AsyncClient(timeout=180.0) as client:
-        for engine_id, name, load_endpoint, default_voice in engines_to_test:
-            print(f"  Loading {name}...", end=" ", flush=True)
-            start = time.time()
-            success, message = await load_model(client, load_endpoint)
-            elapsed = time.time() - start
+    # ── Phase 1: Load Models ──────────────────────────────────────────
+    print_header("Phase 1: Loading Models")
 
-            loaded_engines[engine_id] = success
-            if success:
-                print(f"✓ ({elapsed:.1f}s)")
-            else:
-                print(f"❌ {message}")
+    load_results = {}
+    for engine in engines_to_test:
+        print(f"  {engine['name']}...", end=" ", flush=True)
 
-    loaded_count = sum(1 for v in loaded_engines.values() if v)
-    print(f"\nModels loaded: {loaded_count}/{len(engines_to_test)}")
+        gpu_before = capture_gpu_metrics() if args.metrics else None
 
-    if loaded_count == 0:
-        print("\nERROR: No models loaded. Cannot proceed with synthesis tests.")
+        start = time.time()
+        success, message, client = load_engine(client, engine, url)
+        elapsed = time.time() - start
+
+        load_results[engine["id"]] = success
+        if success:
+            print(f"✓ ({elapsed:.1f}s)")
+        elif message.startswith("skipped"):
+            print(f"⏭ {message}")
+        elif "reconnected" in message:
+            print(f"❌ {message} — client refreshed for next engine")
+        else:
+            print(f"❌ {message}")
+
+        # GPU metrics delta after load
+        if args.metrics and success:
+            gpu_after = capture_gpu_metrics()
+            print_gpu_delta(engine["name"], gpu_before, gpu_after)
+
+    loaded = sum(1 for v in load_results.values() if v)
+    print(f"\n  Models loaded: {loaded}/{len(engines_to_test)}")
+
+    if args.load_only:
+        print("\n  (--load-only mode, skipping synthesis)")
+        return 0 if loaded > 0 else 1
+
+    if loaded == 0:
+        print("\n  ERROR: No models loaded. Cannot test synthesis.")
         return 1
 
-    # Phase 2: Test synthesis
-    print_header("Testing Synthesis")
+    # ── Phase 2: Test Synthesis ───────────────────────────────────────
+    print_header("Phase 2: Synthesis Tests")
 
-    results = {}
-    async with httpx.AsyncClient(timeout=180.0) as client:
-        for i, (engine_id, name, load_endpoint, default_voice) in enumerate(engines_to_test, 1):
-            print(f"\n[{i}/{len(engines_to_test)}] {name}")
+    synth_results = {}
+    for i, engine in enumerate(engines_to_test, 1):
+        eid = engine["id"]
+        print(f"\n  [{i}/{len(engines_to_test)}] {engine['name']}")
 
-            if not loaded_engines.get(engine_id):
-                print("      ⏭️  SKIP (model not loaded)")
-                results[engine_id] = False
-                continue
+        if not load_results.get(eid):
+            print("      ⏭ SKIP (not loaded)")
+            synth_results[eid] = "skip"
+            continue
 
-            # Synthesize
-            print(f"      Synthesizing: \"{TEST_TEXT[:40]}...\"")
-            start = time.time()
-            success, audio_bytes, message = await synthesize(
-                client, TEST_TEXT, engine_id, default_voice
-            )
-            elapsed = time.time() - start
+        if engine["synth_kwargs"] is None:
+            print("      ⏭ SKIP (separate endpoint)")
+            synth_results[eid] = "skip"
+            continue
 
-            if not success:
-                print(f"      ❌ FAIL: {message}")
-                results[engine_id] = False
-                continue
+        print(f"      Synthesizing: \"{TEST_TEXT[:40]}...\"")
+        gpu_before_synth = capture_gpu_metrics() if args.metrics else None
 
-            # Save to file
-            filepath = OUTPUT_DIR / f"{engine_id}.wav"
-            filepath.write_bytes(audio_bytes)
-            print(f"      ✓ Generated {message} in {elapsed:.1f}s")
-            print(f"      📁 Saved: {filepath}")
+        start = time.time()
+        success, audio_path, message, client = synthesize_engine(
+            client, engine, TEST_TEXT, url,
+        )
+        elapsed = time.time() - start
 
-            # Play audio
-            play_audio(filepath, skip_play=args.no_play)
+        if not success:
+            extra = " — client refreshed" if "reconnected" in message else ""
+            print(f"      ❌ FAIL: {message}{extra}")
+            synth_results[eid] = False
+            continue
 
-            results[engine_id] = True
+        # Validate WAV
+        validation = validate_wav(audio_path)
+        if not validation["valid"]:
+            print(f"      ❌ Invalid WAV: {', '.join(validation['errors'])}")
+            synth_results[eid] = False
+            continue
 
-    # Summary
+        # Copy to output directory
+        output_path = OUTPUT_DIR / f"{eid}.wav"
+        shutil.copy(audio_path, output_path)
+
+        size_kb = validation["size"] / 1024
+        print(f"      ✓ {size_kb:.0f}KB, {validation['duration']:.1f}s @ {validation['sample_rate']}Hz ({elapsed:.1f}s)")
+        print(f"      Saved: {output_path}")
+
+        # GPU metrics delta after synthesis
+        if args.metrics:
+            gpu_after_synth = capture_gpu_metrics()
+            print_gpu_delta(f"{engine['name']} synth", gpu_before_synth, gpu_after_synth)
+
+        play_audio(output_path, skip_play=args.no_play)
+        synth_results[eid] = True
+
+    # ── Summary ───────────────────────────────────────────────────────
     print_header("Summary")
-    passed = sum(1 for v in results.values() if v)
-    total = len(results)
-    print(f"Engines working: {passed}/{total}")
 
-    print("\nAudio files saved:")
-    for engine_id, success in results.items():
-        if success:
-            print(f"  ✓ {OUTPUT_DIR}/{engine_id}.wav")
+    synth_pass = sum(1 for v in synth_results.values() if v is True)
+    synth_fail = sum(1 for v in synth_results.values() if v is False)
+    synth_skip = sum(1 for v in synth_results.values() if v == "skip")
 
-    if passed < total:
-        print("\nFailed engines:")
-        for engine_id, success in results.items():
-            if not success:
-                print(f"  ❌ {engine_id}")
+    print(f"  Load:  {loaded}/{len(engines_to_test)} engines")
+    print(f"  Synth: {synth_pass} pass / {synth_fail} fail / {synth_skip} skip")
 
-    return 0 if passed > 0 else 1
+    if synth_pass > 0:
+        print("\n  Working engines:")
+        for eid, status in synth_results.items():
+            if status is True:
+                name = next(e["name"] for e in ENGINES if e["id"] == eid)
+                print(f"    ✓ {name}")
+
+    if synth_fail > 0:
+        print("\n  Failed engines:")
+        for eid, status in synth_results.items():
+            if status is False:
+                name = next(e["name"] for e in ENGINES if e["id"] == eid)
+                loaded_str = "loaded" if load_results.get(eid) else "not loaded"
+                print(f"    ❌ {name} ({loaded_str})")
+
+    print(f"\n  Audio files: {OUTPUT_DIR}")
+    return 0 if synth_pass > 0 else 1
 
 
 if __name__ == "__main__":
-    sys.exit(asyncio.run(main()))
+    sys.exit(main())

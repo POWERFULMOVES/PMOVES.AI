@@ -25,7 +25,7 @@ services:
     environment:
       - PORT=8060
       - FLUTE_GATEWAY_URL=http://flute-gateway:8055
-      - ULTIMATE_TTS_URL=http://ultimate-tts-studio:7861
+      - ULTIMATE_TTS_URL=http://host.docker.internal:7860
       - NATS_URL=nats://nats:pmoves@nats:4222
     networks:
       - app_tier

@@ -2192,10 +2192,13 @@ services:
       - TENSORZERO_URL=${TENSORZERO_URL:-http://tensorzero-gateway:3000}
       - BOTZ_HEARTBEAT_INTERVAL=${BOTZ_HEARTBEAT_INTERVAL:-30}
       - BOTZ_STALE_THRESHOLD=${BOTZ_STALE_THRESHOLD:-5}
+      - AGENT_SIGNATURES_PATH=/app/config/agent_signatures.yaml
       # GitHub App credentials — MCP GitHub server token minting
       - GH_APP_ID=${GH_APP_ID:-}
       - GH_APP_SEC=${GH_APP_SEC:-}
       - GH_APP_INSTALLATION_ID=${GH_APP_INSTALLATION_ID:-}
+    volumes:
+      - ./config/agent_signatures.yaml:/app/config/agent_signatures.yaml:ro
     depends_on:
       nats:
         condition: service_healthy
@@ -2572,6 +2575,7 @@ services:
     - ALIBABA_PRO_CODING_PLAN=${ALIBABA_PRO_CODING_PLAN:-local-disabled}
     - TOGETHER_AI_API_KEY=${TOGETHER_AI_API_KEY:-local-disabled}
     - CLOUDFLARE_API_TOKEN=${CLOUDFLARE_API_TOKEN:-local-disabled}
+    - GEMINI_API_KEY=${GEMINI_API_KEY:-local-disabled}
     - OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=${OTEL_EXPORTER_OTLP_TRACES_ENDPOINT:-}
     - DOCKED_MODE=${DOCKED_MODE:-true}
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
@@ -2771,7 +2775,7 @@ services:
       - SUPABASE_URL=${SUPABASE_INTERNAL_URL:-${SUPABASE_URL:-http://supabase-kong:8000}}
       - TENSORZERO_URL=${TENSORZERO_URL:-http://tensorzero-gateway:3000}
       - DEFAULT_VOICE_PROVIDER=${DEFAULT_VOICE_PROVIDER:-vibevoice}
-      - ULTIMATE_TTS_URL=${ULTIMATE_TTS_URL:-http://host.docker.internal:7861}
+      - ULTIMATE_TTS_URL=${ULTIMATE_TTS_URL:-http://host.docker.internal:7860}
       - FLUTE_API_KEY=${FLUTE_API_KEY:-}
       - CHIT_REQUIRE_SIGNATURE=${CHIT_PROD_REQUIRE_SIGNATURE:-true}
       - CHIT_DECRYPT_ANCHORS=${CHIT_PROD_DECRYPT_ANCHORS:-true}
@@ -2888,7 +2892,7 @@ services:
     environment:
       - PORT=8060
       - FLUTE_GATEWAY_URL=http://flute-gateway:8055
-      - ULTIMATE_TTS_URL=${ULTIMATE_TTS_URL:-http://host.docker.internal:7861}
+      - ULTIMATE_TTS_URL=${ULTIMATE_TTS_URL:-http://host.docker.internal:7860}
       - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
       - CHIT_REQUIRE_SIGNATURE=${CHIT_REQUIRE_SIGNATURE:-false}
       - CHIT_DECRYPT_ANCHORS=${CHIT_DECRYPT_ANCHORS:-false}

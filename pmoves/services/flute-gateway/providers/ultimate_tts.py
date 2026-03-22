@@ -22,11 +22,20 @@ class UltimateTTSError(RuntimeError):
 class UltimateTTSProvider(VoiceProvider):
     """Ultimate-TTS-Studio provider via Gradio API.
 
-    Supports multiple TTS engines:
+    Supports 13 TTS engines:
       - kitten_tts (KittenTTS) - Ultra-lightweight, fast
-      - f5_tts (F5-TTS) - High quality
-      - kokoro (Kokoro TTS) - Multilingual
-      - indextts2 (IndexTTS2) - Modular system
+      - kokoro (Kokoro TTS) - Multilingual ONNX
+      - f5_tts (F5-TTS) - High quality voice cloning
+      - indextts2 (IndexTTS2) - Emotion vector control
+      - indextts (IndexTTS) - Index-based synthesis
+      - fish (Fish Speech) - Zero-shot cloning
+      - fish_s2 (Fish Speech S2 Pro) - 13-language zero-shot
+      - chatterbox (ChatterboxTTS) - Multilingual with controls
+      - chatterbox_turbo (Chatterbox Turbo) - Fast multilingual
+      - voxcpm (VoxCPM) - Voice cloning + transcription
+      - higgs (Higgs Audio) - Streaming capable
+      - qwen (Qwen3 TTS) - Alibaba multilingual
+      - vibevoice (VibeVoice) - Style transfer synthesis
 
     Audio format: WAV, 24kHz sample rate (varies by engine).
     """
@@ -37,9 +46,15 @@ class UltimateTTSProvider(VoiceProvider):
         "kokoro": "Kokoro TTS",
         "f5_tts": "F5-TTS",
         "indextts2": "IndexTTS2",
+        "indextts": "IndexTTS",
         "fish": "Fish Speech",
+        "fish_s2": "Fish Speech S2 Pro",
         "chatterbox": "ChatterboxTTS",
+        "chatterbox_turbo": "Chatterbox Turbo",
         "voxcpm": "VoxCPM",
+        "higgs": "Higgs Audio",
+        "qwen": "Qwen3 TTS",
+        "vibevoice": "VibeVoice",
     }
 
     # Default voices per engine
@@ -58,11 +73,11 @@ class UltimateTTSProvider(VoiceProvider):
         "expr-voice-5-m", "expr-voice-5-f",
     ]
 
-    def __init__(self, base_url: str = "http://localhost:7861"):
+    def __init__(self, base_url: str = "http://localhost:7860"):
         """Initialize Ultimate-TTS provider.
 
         Args:
-            base_url: Gradio server URL (e.g., 'http://localhost:7861')
+            base_url: Gradio server URL (e.g., 'http://localhost:7860')
         """
         super().__init__(base_url)
         # Use Gradio's synchronous predict API (/api/) instead of the async
@@ -95,9 +110,20 @@ class UltimateTTSProvider(VoiceProvider):
             "f5_tts": "/handle_f5_load",
             "kokoro": "/handle_load_kokoro",
             "indextts2": "/handle_load_indextts2",
+            "indextts": "/handle_load_indextts",
             "fish": "/handle_load_fish",
+            "fish_s2": "/handle_load_fish_s2",
             "chatterbox": "/handle_load_chatterbox",
+            "chatterbox_turbo": "/handle_load_chatterbox_turbo",
             "voxcpm": "/handle_load_voxcpm",
+            "higgs": "/handle_load_higgs",
+            "qwen": "/handle_load_qwen",
+            "vibevoice": "/handle_vibevoice_load",
+        }
+        # Some engines require load parameters
+        load_data_map = {
+            "qwen": ["Base", "Small"],
+            "vibevoice": ["", "", False],
         }
         endpoint = endpoint_map.get(engine)
         if not endpoint:
@@ -105,9 +131,10 @@ class UltimateTTSProvider(VoiceProvider):
             return True
 
         try:
+            load_data = load_data_map.get(engine, [])
             resp = await client.post(
                 f"{self.predict_api_url}{endpoint}",
-                json={"data": []},
+                json={"data": load_data},
                 timeout=60.0,
             )
             if resp.status_code != 200:
@@ -366,9 +393,15 @@ class UltimateTTSProvider(VoiceProvider):
                         "f5_tts": "/handle_f5_load" in endpoints,
                         "kokoro": "/handle_load_kokoro" in endpoints,
                         "indextts2": "/handle_load_indextts2" in endpoints,
+                        "indextts": "/handle_load_indextts" in endpoints,
                         "fish": "/handle_load_fish" in endpoints,
+                        "fish_s2": "/handle_load_fish_s2" in endpoints,
                         "chatterbox": "/handle_load_chatterbox" in endpoints,
+                        "chatterbox_turbo": "/handle_load_chatterbox_turbo" in endpoints,
                         "voxcpm": "/handle_load_voxcpm" in endpoints,
+                        "higgs": "/handle_load_higgs" in endpoints,
+                        "qwen": "/handle_load_qwen" in endpoints,
+                        "vibevoice": "/handle_vibevoice_load" in endpoints,
                     }
         except Exception as exc:
             logger.warning("Failed to get Ultimate-TTS engines: %s", exc)

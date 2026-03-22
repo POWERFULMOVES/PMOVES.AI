@@ -23,6 +23,7 @@ from pydantic import BaseModel, Field
 import nats
 from nats.aio.client import Client as NATS
 import httpx
+import yaml
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -35,10 +36,12 @@ SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
 TENSORZERO_URL = os.getenv("TENSORZERO_URL", "http://tensorzero:3030")
 HEARTBEAT_INTERVAL = int(os.getenv("BOTZ_HEARTBEAT_INTERVAL", "30"))
 STALE_THRESHOLD_MINUTES = int(os.getenv("BOTZ_STALE_THRESHOLD", "5"))
+AGENT_SIGNATURES_PATH = os.getenv("AGENT_SIGNATURES_PATH", "/app/config/agent_signatures.yaml")
 
 # Global state
 nc: Optional[NATS] = None
 supabase_headers: Dict[str, str] = {}
+agent_signatures: Dict[str, Any] = {}
 
 
 # Pydantic models
@@ -81,10 +84,27 @@ class WorkItemFilter(BaseModel):
     limit: int = 20
 
 
+def load_agent_signatures():
+    """Load agent signatures from YAML config."""
+    global agent_signatures
+    try:
+        with open(AGENT_SIGNATURES_PATH, "r") as f:
+            data = yaml.safe_load(f)
+            agent_signatures = data.get("signatures", {})
+            logger.info(f"Loaded {len(agent_signatures)} agent signatures from {AGENT_SIGNATURES_PATH}")
+    except FileNotFoundError:
+        logger.warning(f"Agent signatures file not found: {AGENT_SIGNATURES_PATH}")
+    except Exception as e:
+        logger.error(f"Error loading agent signatures: {e}")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Manage application lifecycle."""
     global nc, supabase_headers
+
+    # Load agent signatures
+    load_agent_signatures()
 
     # Setup Supabase headers
     supabase_headers = {
@@ -530,6 +550,74 @@ async def get_stats():
             logger.error(f"Error fetching stats: {e}")
 
         return stats
+
+
+# --- W1 CLI Bridge: Agent Identity & Theming ---
+
+@app.get("/v1/agent/signatures")
+async def list_agent_signatures():
+    """List all agent signatures with glyph, color, and voice."""
+    if not agent_signatures:
+        raise HTTPException(status_code=503, detail="Agent signatures not loaded")
+    return {"signatures": agent_signatures, "count": len(agent_signatures)}
+
+
+@app.get("/v1/agent/theme/{agent_id}")
+async def get_agent_theme(agent_id: str):
+    """Get theme (glyph, color, accent, voice) for a specific agent."""
+    sig = agent_signatures.get(agent_id)
+    if not sig:
+        raise HTTPException(status_code=404, detail=f"Agent '{agent_id}' not found")
+    return {
+        "agent_id": agent_id,
+        "display_name": sig.get("display_name"),
+        "glyph": sig.get("glyph"),
+        "color": sig.get("color"),
+        "accent": sig.get("accent"),
+        "voice": sig.get("voice"),
+        "resonance": sig.get("resonance", []),
+        "description": sig.get("description"),
+    }
+
+
+@app.get("/v1/agent/whoami")
+async def whoami(instance_id: Optional[str] = None):
+    """Identify the calling agent based on instance_id or hostname."""
+    # Try to match by instance_id → registered BoTZ → agent signature
+    if instance_id:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                f"{SUPABASE_URL}/rest/v1/botz_instances",
+                headers=supabase_headers,
+                params={"instance_id": f"eq.{instance_id}"}
+            )
+            if response.status_code == 200:
+                instances = response.json()
+                if instances:
+                    botz = instances[0]
+                    agent_id = botz.get("metadata", {}).get("agent_id", botz.get("botz_name"))
+                    sig = agent_signatures.get(agent_id, {})
+                    return {
+                        "agent_id": agent_id,
+                        "botz_name": botz.get("botz_name"),
+                        "instance_id": instance_id,
+                        "theme": {
+                            "glyph": sig.get("glyph", "?"),
+                            "color": sig.get("color", "#888888"),
+                            "voice": sig.get("voice", "unknown"),
+                        },
+                        "skill_level": botz.get("skill_level"),
+                        "is_available": botz.get("is_available"),
+                    }
+
+    # Fallback: return hostname-based identity
+    hostname = os.getenv("HOSTNAME", "unknown")
+    return {
+        "agent_id": "unknown",
+        "hostname": hostname,
+        "theme": {"glyph": "?", "color": "#888888", "voice": "unknown"},
+        "hint": "Pass ?instance_id=<id> for full identity lookup",
+    }
 
 
 if __name__ == "__main__":
