@@ -97,7 +97,7 @@ docker compose -f docker-compose.yml up -d
 |----------|---------|-------------|
 | `PORT` | 8060 | HTTP port |
 | `FLUTE_GATEWAY_URL` | http://localhost:8055 | Flute-Gateway URL |
-| `ULTIMATE_TTS_URL` | http://localhost:7861 | Ultimate-TTS URL |
+| `ULTIMATE_TTS_URL` | http://localhost:7860 | Ultimate-TTS URL (native Pinokio) |
 | `NATS_URL` | nats://nats:pmoves@nats:4222 | NATS message bus |
 
 ## Usage Examples
@@ -161,7 +161,7 @@ pip install -r requirements.txt
 ```bash
 # Set environment variables
 export FLUTE_GATEWAY_URL=http://localhost:8055
-export ULTIMATE_TTS_URL=http://localhost:7861
+export ULTIMATE_TTS_URL=http://localhost:7860
 export NATS_URL=nats://nats:pmoves@localhost:4222
 
 # Run service
@@ -177,7 +177,7 @@ python service.py
 
 ### TTS synthesis fails
 - Check Flute-Gateway health: `curl http://localhost:8055/healthz`
-- Check Ultimate-TTS health: `curl http://localhost:7861/gradio_api/info`
+- Check Ultimate-TTS health: `curl http://localhost:7860/gradio_api/info`
 
 ### Audio casting fails
 - Verify device is online: `catt status -d "Device Name"`

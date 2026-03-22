@@ -1,7 +1,7 @@
 # Voice Persona System
 
-**Last Updated:** December 2025
-**Service:** Flute-Gateway
+**Last Updated:** March 2026
+**Service:** Flute-Gateway + Ultimate-TTS-Studio (13 engines)
 
 ---
 
@@ -91,7 +91,25 @@ Provider-specific settings stored in `voice_config`:
 }
 ```
 
-### Ultimate-TTS-Studio
+### Ultimate-TTS-Studio (13 Engines)
+
+All engines run natively via Pinokio at `http://127.0.0.1:7860` (CUDA, conda tts_env).
+
+| engine_id | Engine Name | Strengths | Best For |
+|-----------|-------------|-----------|----------|
+| `kitten_tts` | KittenTTS | Ultra-fast, 8 pre-trained voices | Low-latency synthesis, real-time |
+| `kokoro` | Kokoro TTS | Multilingual ONNX, CPU-friendly | Lightweight fallback, multi-language |
+| `f5_tts` | F5-TTS | High-quality voice cloning, natural prosody | GRAMS narration, beat-sync |
+| `fish` | Fish Speech | Zero-shot voice cloning | Quick cloning demos |
+| `fish_s2` | Fish Speech S2 Pro | Zero-shot clone, 13 languages | Agent card voice profiles |
+| `indextts` | IndexTTS | Fast indexing-based synthesis | Batch synthesis |
+| `indextts2` | IndexTTS2 | Emotion vector control (happy/angry/sad/calm) | ClawZ reveals, emotion-driven |
+| `chatterbox` | ChatterboxTTS | Exaggeration/temperature control | Expressive narration |
+| `chatterbox_turbo` | Chatterbox Turbo | Multilingual, fast | Production multilingual TTS |
+| `voxcpm` | VoxCPM | Voice cloning + transcription (dual-purpose) | Clone + verify |
+| `higgs` | Higgs Audio S1 Mini | Pre-cached model, streaming-capable | Streaming synthesis |
+| `qwen` | Qwen3 TTS | Base/Small model variants | Chinese + multilingual |
+| `vibevoice` | VibeVoice | Style transfer from reference audio | Voice style matching |
 
 ```json
 {
@@ -106,18 +124,23 @@ Provider-specific settings stored in `voice_config`:
 }
 ```
 
-### ElevenLabs
+Engine-specific voice_config examples:
 
 ```json
-{
-    "elevenlabs": {
-        "voice_id": "EXAVITQu4vr4xnSDxMaL",
-        "stability": 0.5,
-        "similarity_boost": 0.75,
-        "style": 0.0,
-        "use_speaker_boost": true
-    }
-}
+// KittenTTS — uses voice preset
+{"ultimate_tts": {"engine": "kitten_tts", "voice": "expr-voice-2-f"}}
+
+// IndexTTS2 — emotion vector
+{"ultimate_tts": {"engine": "indextts2", "emotion": "happy", "temperature": 0.8}}
+
+// Chatterbox Turbo — exaggeration control
+{"ultimate_tts": {"engine": "chatterbox_turbo", "exaggeration": 0.5, "temperature": 0.8}}
+
+// Fish Speech S2 Pro — zero-shot clone
+{"ultimate_tts": {"engine": "fish_s2"}}
+
+// Higgs Audio — voice preset + streaming
+{"ultimate_tts": {"engine": "higgs", "voice_preset": "EMPTY", "temperature": 1.0}}
 ```
 
 ---
@@ -205,12 +228,16 @@ Personality traits influence prosodic behavior:
 
 Pre-configured personas available out-of-box:
 
-| Slug | Name | Provider | Use Case |
-|------|------|----------|----------|
-| `agent-zero-default` | Agent Zero | Ultimate-TTS | Main orchestrator |
-| `archon-narrator` | Archon Narrator | VibeVoice | Knowledge delivery |
-| `assistant-friendly` | Friendly Assistant | ElevenLabs | Customer-facing |
-| `pmoves-crush` | PMOVES Crush | Ultimate-TTS | CLI agent |
+| Slug | Name | Provider | Engine | Use Case |
+|------|------|----------|--------|----------|
+| `agent-zero-default` | Agent Zero | Ultimate-TTS | kokoro | Main orchestrator |
+| `archon-narrator` | Archon Narrator | Ultimate-TTS | f5_tts | Knowledge delivery (cloned voice) |
+| `clawz-reveal` | ClawZ Reveal | Ultimate-TTS | indextts2 | Agent identity reveals (emotion-driven) |
+| `pmoves-crush` | PMOVES Crush | Ultimate-TTS | kitten_tts | CLI agent (ultra-fast) |
+| `grams-narrator` | GRAMS Narrator | Ultimate-TTS | f5_tts | Story narration, beat-sync |
+| `agent-card-voice` | Agent Card Voice | Ultimate-TTS | fish_s2 | Zero-shot persona profiles |
+| `multilingual-agent` | Multilingual Agent | Ultimate-TTS | chatterbox_turbo | Multi-language synthesis |
+| `streaming-agent` | Streaming Agent | Ultimate-TTS | higgs | Real-time streaming TTS |
 
 ---
 

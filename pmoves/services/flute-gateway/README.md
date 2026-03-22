@@ -42,8 +42,8 @@ Flute Gateway serves as the unified voice interface for PMOVES.AI, aggregating m
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `VIBEVOICE_URL` | `http://host.docker.internal:3000` | VibeVoice endpoint |
-| `ULTIMATE_TTS_URL` | `http://ultimate-tts-studio:7861` | Ultimate TTS endpoint |
+| `VIBEVOICE_URL` | `http://host.docker.internal:7860` | VibeVoice endpoint (served by TTS Studio) |
+| `ULTIMATE_TTS_URL` | `http://ultimate-tts-studio:7860` | Ultimate TTS endpoint (native: 7860) |
 | `WHISPER_URL` | `http://ffmpeg-whisper:8078` | Whisper STT endpoint |
 
 ### CHIT Integration
@@ -145,7 +145,7 @@ flute-gateway:
     - NATS_USER=${NATS_USER}
     - NATS_PASSWORD=${NATS_PASSWORD}
     - VIBEVOICE_URL=${VIBEVOICE_URL}
-    - ULTIMATE_TTS_URL=http://ultimate-tts-studio:7861
+    - ULTIMATE_TTS_URL=http://ultimate-tts-studio:7860
     - WHISPER_URL=http://ffmpeg-whisper:8078
     - SUPABASE_URL=${SUPABASE_URL}
     - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
@@ -184,7 +184,7 @@ python -m uvicorn main:app --host 0.0.0.0 --port 8055
 ## Related Services
 
 - **VibeVoice** - Real-time TTS (host-run via Pinokio)
-- **Ultimate-TTS-Studio** - Multi-engine TTS (port 7861)
+- **Ultimate-TTS-Studio** - Multi-engine TTS (port 7860 native, 7861 Docker)
 - **ffmpeg-whisper** - GPU-accelerated Whisper STT
 - **TensorZero** - LLM gateway for voice agent responses
 - **NATS** - Event bus for CHIT geometry events
