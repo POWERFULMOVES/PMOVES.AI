@@ -260,6 +260,16 @@ api_base = "https://api.cloudflare.com/client/v4/accounts/fe5ef93f1ffc7070b2218b
 model_name = "@cf/openai/gpt-oss-20b"
 api_key_location = "env::CLOUDFLARE_API_TOKEN"
 
+# --- Gemini (Google AI via OpenAI-compatible endpoint) ---
+[models.chat_gemini_pro]
+routing = ["google_ai"]
+
+[models.chat_gemini_pro.providers.google_ai]
+type = "openai"
+api_base = "https://generativelanguage.googleapis.com/v1beta/openai"
+model_name = "gemini-2.5-flash"
+api_key_location = "env::GEMINI_API_KEY"
+
 # --- Claude (Anthropic native provider) ---
 [models.claude_sonnet_4]
 routing = ["anthropic_direct"]
@@ -457,10 +467,9 @@ model = "chat_together"
 type = "chat_completion"
 model = "chat_cloudflare_gpt_oss"
 
-# [functions.agent_zero.variants.hosted_gemini]
-# type = "chat_completion"
-# model = "chat_gemini_pro"
-# TODO: Add [models.chat_gemini_pro] when Gemini provider is configured
+[functions.agent_zero.variants.hosted_gemini]
+type = "chat_completion"
+model = "chat_gemini_pro"
 
 # Claude — native Anthropic provider for orchestration quality
 [functions.agent_zero.variants.hosted_claude_sonnet]
