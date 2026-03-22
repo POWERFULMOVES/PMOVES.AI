@@ -1,0 +1,550 @@
+# TTS Engine Capability Registry
+# Source of truth for all 14 engines in Ultimate-TTS-Studio.
+# Agents query this file to discover expressive dimensions per engine.
+#
+# Schema:
+#   id:                    Internal engine identifier (matches test script + Gradio API)
+#   name:                  Display name (matches Gradio dropdown label)
+#   category:              preset-voices | voice-cloning | emotion-control | multilingual | podcast
+#   voice_cloning:         Whether the engine supports reference-audio voice cloning
+#   expressive_dimensions: Machine-readable knob map — every tunable parameter agents can set
+#   languages:             Supported language codes
+#   latency_tier:          ultra-fast | fast | medium | slow
+#   vram_estimate_mb:      Approximate GPU VRAM when model is loaded
+#   prosodic_technique:    Primary technique for expressiveness (links to HARDWARE_TTS_REQUIREMENTS.md)
+#   best_for:              One-line description of ideal use case
+#   persona_default:       Default voice-persona slug (links to voice-personas.md)
+#   ref_audio:             Reference audio requirements (for cloning engines)
+#   synth_endpoint:        "unified" (default) or "separate" (e.g., VibeVoice)
+
+engines:
+
+  # ═══════════════════════════════════════════════════════════════════
+  # Category: preset-voices — No voice cloning, fixed voice set
+  # ═══════════════════════════════════════════════════════════════════
+
+  kitten_tts:
+    name: KittenTTS
+    category: preset-voices
+    voice_cloning: false
+    voices:
+      - expr-voice-2-m
+      - expr-voice-2-f
+      - expr-voice-3-m
+      - expr-voice-3-f
+      - expr-voice-4-m
+      - expr-voice-4-f
+      - expr-voice-5-m
+      - expr-voice-5-f
+    expressive_dimensions:
+      kitten_voice:
+        type: enum
+        values: [expr-voice-2-m, expr-voice-2-f, expr-voice-3-m, expr-voice-3-f,
+                 expr-voice-4-m, expr-voice-4-f, expr-voice-5-m, expr-voice-5-f]
+        default: expr-voice-2-f
+    languages: [en]
+    latency_tier: ultra-fast
+    vram_estimate_mb: 500
+    prosodic_technique: none
+    best_for: "Low-latency real-time, CLI agent voice"
+    persona_default: pmoves-crush
+
+  kokoro:
+    name: Kokoro TTS
+    category: preset-voices
+    voice_cloning: false
+    voices: [af_heart, af_sarah, am_adam, am_michael, bf_emma, bm_lewis]
+    expressive_dimensions:
+      kokoro_voice:
+        type: enum
+        values: [af_heart, af_sarah, am_adam, am_michael, bf_emma, bm_lewis]
+        default: af_heart
+      kokoro_speed:
+        type: float
+        range: [0.5, 2.0]
+        default: 1.0
+        description: "Speech speed multiplier"
+    languages: [en]
+    latency_tier: fast
+    vram_estimate_mb: 800
+    prosodic_technique: punctuation-engineering
+    best_for: "Warm narration, introductions, host voice"
+    persona_default: agent-zero-default
+
+  higgs:
+    name: Higgs Audio
+    category: preset-voices
+    voice_cloning: false
+    expressive_dimensions:
+      higgs_voice_preset:
+        type: enum
+        values: [EMPTY]
+        default: EMPTY
+        description: "Voice preset selector (EMPTY = default voice)"
+      higgs_temperature:
+        type: float
+        range: [0.1, 2.0]
+        default: 1.0
+        description: "Sampling temperature — higher = more expressive/varied"
+      higgs_top_p:
+        type: float
+        range: [0.0, 1.0]
+        default: 0.95
+        description: "Nucleus sampling threshold"
+      higgs_top_k:
+        type: int
+        range: [1, 200]
+        default: 50
+        description: "Top-k token selection"
+      higgs_max_tokens:
+        type: int
+        range: [128, 4096]
+        default: 1024
+        description: "Maximum generation tokens"
+    languages: [en]
+    latency_tier: fast
+    vram_estimate_mb: 1500
+    prosodic_technique: temperature-control
+    best_for: "Streaming synthesis, pre-cached model"
+    persona_default: streaming-agent
+
+  # ═══════════════════════════════════════════════════════════════════
+  # Category: voice-cloning — Reference-audio based voice cloning
+  # ═══════════════════════════════════════════════════════════════════
+
+  f5_tts:
+    name: F5-TTS
+    category: voice-cloning
+    voice_cloning: true
+    models: [F5-TTS Base, F5-TTS v1 Base, F5-TTS French, F5-TTS German, F5-TTS Japanese, F5-TTS Spanish]
+    expressive_dimensions:
+      f5_speed:
+        type: float
+        range: [0.5, 2.0]
+        default: 1.0
+        description: "Speech speed multiplier"
+      f5_cross_fade:
+        type: float
+        range: [0.0, 1.0]
+        default: 0.15
+        description: "Cross-fade duration between chunks"
+      f5_remove_silence:
+        type: bool
+        default: false
+        description: "Strip silence from output"
+    ref_audio:
+      required: true
+      ref_text: true
+      duration_sec: "10-15"
+      format: "WAV or MP3, 44.1kHz"
+    languages: [en, fr, de, ja, es]
+    latency_tier: medium
+    vram_estimate_mb: 2000
+    prosodic_technique: reference-audio-cloning
+    best_for: "High-quality cloning, GRAMS narration, beat-sync"
+    persona_default: archon-narrator
+
+  fish:
+    name: Fish Speech
+    category: voice-cloning
+    voice_cloning: true
+    expressive_dimensions:
+      fish_temperature:
+        type: float
+        range: [0.1, 2.0]
+        default: 0.8
+        description: "Sampling temperature"
+      fish_top_p:
+        type: float
+        range: [0.0, 1.0]
+        default: 0.8
+        description: "Nucleus sampling threshold"
+      fish_repetition_penalty:
+        type: float
+        range: [1.0, 2.0]
+        default: 1.1
+        description: "Repetition penalty factor"
+      fish_max_tokens:
+        type: int
+        range: [128, 4096]
+        default: 1024
+        description: "Maximum generation tokens"
+    ref_audio:
+      required: false
+      ref_text: false
+      duration_sec: "5-15"
+    languages: [en, zh, ja]
+    latency_tier: medium
+    vram_estimate_mb: 1500
+    prosodic_technique: temperature-control
+    best_for: "Quick zero-shot voice cloning demos"
+    persona_default: quick-clone
+
+  fish_s2:
+    name: Fish Speech S2 Pro
+    category: voice-cloning
+    voice_cloning: true
+    expressive_dimensions:
+      fish_s2_temperature:
+        type: float
+        range: [0.1, 2.0]
+        default: 0.8
+        description: "Sampling temperature"
+      fish_s2_top_p:
+        type: float
+        range: [0.0, 1.0]
+        default: 0.8
+        description: "Nucleus sampling threshold"
+      fish_s2_repetition_penalty:
+        type: float
+        range: [1.0, 2.0]
+        default: 1.1
+        description: "Repetition penalty factor"
+      fish_s2_max_tokens:
+        type: int
+        range: [128, 4096]
+        default: 1024
+        description: "Maximum generation tokens"
+    ref_audio:
+      required: false
+      ref_text: false
+      duration_sec: "5-15"
+    languages: [en, zh, ja, ko, fr, de, ar, es, pt, it, th, vi, ru]
+    latency_tier: medium
+    vram_estimate_mb: 2000
+    prosodic_technique: reference-audio-cloning
+    best_for: "Agent card voice profiles, 13-language zero-shot clone"
+    persona_default: agent-card-voice
+
+  voxcpm:
+    name: VoxCPM
+    category: voice-cloning
+    voice_cloning: true
+    expressive_dimensions:
+      voxcpm_cfg_value:
+        type: float
+        range: [0.5, 5.0]
+        default: 2.0
+        description: "Classifier-free guidance scale"
+      voxcpm_inference_timesteps:
+        type: int
+        range: [1, 50]
+        default: 10
+        description: "Diffusion inference steps — more = higher quality, slower"
+      voxcpm_normalize:
+        type: bool
+        default: true
+        description: "Normalize output audio levels"
+      voxcpm_denoise:
+        type: bool
+        default: true
+        description: "Apply denoising to output"
+    ref_audio:
+      required: false
+      ref_text: false
+    languages: [en, zh]
+    latency_tier: medium
+    vram_estimate_mb: 2000
+    prosodic_technique: diffusion-guidance
+    best_for: "Voice cloning + transcription verification"
+    persona_default: clone-verify
+
+  indextts:
+    name: IndexTTS
+    category: voice-cloning
+    voice_cloning: true
+    expressive_dimensions:
+      indextts_temperature:
+        type: float
+        range: [0.1, 2.0]
+        default: 0.8
+        description: "Sampling temperature"
+    ref_audio:
+      required: false
+      ref_text: false
+    languages: [en, zh]
+    latency_tier: fast
+    vram_estimate_mb: 1200
+    prosodic_technique: temperature-control
+    best_for: "Fast batch synthesis with lightweight model"
+    persona_default: batch-synth
+
+  # ═══════════════════════════════════════════════════════════════════
+  # Category: emotion-control — Fine-grained emotion vector control
+  # ═══════════════════════════════════════════════════════════════════
+
+  indextts2:
+    name: IndexTTS2
+    category: emotion-control
+    voice_cloning: true
+    expressive_dimensions:
+      indextts2_emotion_mode:
+        type: enum
+        values: [audio_reference, vector_control, text_description]
+        default: audio_reference
+        description: "Emotion control mode"
+      # 8-dimensional emotion vector (vector_control mode)
+      indextts2_happy:
+        type: float
+        range: [0.0, 1.0]
+        default: 0.0
+        description: "Happiness intensity"
+      indextts2_angry:
+        type: float
+        range: [0.0, 1.0]
+        default: 0.0
+        description: "Anger intensity"
+      indextts2_sad:
+        type: float
+        range: [0.0, 1.0]
+        default: 0.0
+        description: "Sadness intensity"
+      indextts2_afraid:
+        type: float
+        range: [0.0, 1.0]
+        default: 0.0
+        description: "Fear intensity"
+      indextts2_disgusted:
+        type: float
+        range: [0.0, 1.0]
+        default: 0.0
+        description: "Disgust intensity"
+      indextts2_melancholic:
+        type: float
+        range: [0.0, 1.0]
+        default: 0.0
+        description: "Melancholy intensity"
+      indextts2_surprised:
+        type: float
+        range: [0.0, 1.0]
+        default: 0.0
+        description: "Surprise intensity"
+      indextts2_calm:
+        type: float
+        range: [0.0, 1.0]
+        default: 1.0
+        description: "Calm intensity"
+      indextts2_emo_alpha:
+        type: float
+        range: [0.0, 1.0]
+        default: 1.0
+        description: "Emotion blend strength (0=ignore emotions, 1=full)"
+      indextts2_temperature:
+        type: float
+        range: [0.1, 2.0]
+        default: 0.8
+        description: "Sampling temperature"
+    ref_audio:
+      required: true
+      ref_text: false
+    languages: [en, zh]
+    latency_tier: medium
+    vram_estimate_mb: 3000
+    prosodic_technique: style-prompts
+    best_for: "Emotion-driven synthesis, ClawZ reveals"
+    persona_default: clawz-reveal
+
+  # ═══════════════════════════════════════════════════════════════════
+  # Category: multilingual — Expressiveness + language control
+  # ═══════════════════════════════════════════════════════════════════
+
+  chatterbox:
+    name: ChatterboxTTS
+    category: multilingual
+    voice_cloning: true
+    expressive_dimensions:
+      chatterbox_exaggeration:
+        type: float
+        range: [0.0, 1.0]
+        default: 0.5
+        description: "Expression exaggeration — 0=flat, 1=theatrical"
+      chatterbox_temperature:
+        type: float
+        range: [0.1, 2.0]
+        default: 0.8
+        description: "Sampling temperature"
+      chatterbox_cfg_weight:
+        type: float
+        range: [0.0, 1.0]
+        default: 0.5
+        description: "Classifier-free guidance weight"
+      chatterbox_chunk_size:
+        type: int
+        range: [50, 500]
+        default: 300
+        description: "Text chunk size for streaming"
+    ref_audio:
+      required: false
+      ref_text: false
+    languages: [en]
+    latency_tier: medium
+    vram_estimate_mb: 2000
+    prosodic_technique: exaggeration-control
+    best_for: "Expressive narration with emotion control"
+    persona_default: expressive-narrator
+
+  chatterbox_turbo:
+    name: Chatterbox Turbo
+    category: multilingual
+    voice_cloning: true
+    expressive_dimensions:
+      chatterbox_turbo_exaggeration:
+        type: float
+        range: [0.0, 1.0]
+        default: 0.5
+        description: "Expression exaggeration — 0=flat, 1=theatrical"
+      chatterbox_turbo_temperature:
+        type: float
+        range: [0.1, 2.0]
+        default: 0.8
+        description: "Sampling temperature"
+      chatterbox_turbo_cfg_weight:
+        type: float
+        range: [0.0, 1.0]
+        default: 0.5
+        description: "Classifier-free guidance weight"
+    ref_audio:
+      required: false
+      ref_text: false
+    languages: [en]
+    latency_tier: fast
+    vram_estimate_mb: 1500
+    prosodic_technique: exaggeration-control
+    best_for: "Fast expressive synthesis with exaggeration control"
+    persona_default: multilingual-agent
+
+  chatterbox_multilingual:
+    name: Chatterbox Multilingual
+    category: multilingual
+    voice_cloning: true
+    expressive_dimensions:
+      chatterbox_mtl_language:
+        type: enum
+        values: [en, es, fr, de, it, pt, pl, tr, ru, nl, cs, ar, zh, ja, hu, ko, hi]
+        default: en
+        description: "Target synthesis language"
+      chatterbox_mtl_exaggeration:
+        type: float
+        range: [0.0, 1.0]
+        default: 0.5
+        description: "Expression exaggeration"
+      chatterbox_mtl_temperature:
+        type: float
+        range: [0.1, 2.0]
+        default: 0.8
+        description: "Sampling temperature"
+      chatterbox_mtl_cfg_weight:
+        type: float
+        range: [0.0, 1.0]
+        default: 0.5
+        description: "Classifier-free guidance weight"
+    ref_audio:
+      required: false
+      ref_text: false
+    languages: [en, es, fr, de, it, pt, pl, tr, ru, nl, cs, ar, zh, ja, hu, ko, hi]
+    latency_tier: medium
+    vram_estimate_mb: 2500
+    prosodic_technique: exaggeration-control
+    best_for: "17-language synthesis with expression control"
+    persona_default: polyglot-agent
+
+  qwen:
+    name: Qwen3 TTS
+    category: multilingual
+    voice_cloning: true
+    models:
+      base: [Base 1.7B, Base 0.5B]
+      clone: [Clone 1.7B, Clone 0.5B]
+    expressive_dimensions:
+      qwen_mode:
+        type: enum
+        values: [voice_design, voice_clone]
+        default: voice_design
+        description: "Voice design (from text) or voice cloning (from audio)"
+      qwen_speaker:
+        type: enum
+        values: [Ryan, Ethan, Anna, Sarah, Emily]
+        default: Ryan
+        description: "Speaker preset (voice_design mode)"
+      qwen_language:
+        type: enum
+        values: [Auto, Chinese, English, Japanese, Korean]
+        default: Auto
+        description: "Target language"
+      qwen_clone_model_size:
+        type: enum
+        values: ["0.5B", "1.7B"]
+        default: "1.7B"
+        description: "Model size for cloning mode"
+      qwen_chunk_size:
+        type: int
+        range: [50, 500]
+        default: 200
+        description: "Text chunk size for streaming"
+    ref_audio:
+      required: false  # Only required in voice_clone mode
+      ref_text: false
+    languages: [zh, en, ja, ko]
+    latency_tier: medium
+    vram_estimate_mb: 2500
+    prosodic_technique: speaker-design
+    best_for: "Multilingual synthesis with voice design or cloning"
+    persona_default: voice-designer
+
+  # ═══════════════════════════════════════════════════════════════════
+  # Category: podcast — Multi-speaker, separate endpoint
+  # ═══════════════════════════════════════════════════════════════════
+
+  vibevoice:
+    name: VibeVoice
+    category: podcast
+    voice_cloning: true
+    synth_endpoint: separate  # Uses generate_vibevoice_podcast, NOT unified endpoint
+    expressive_dimensions: {}  # Multi-speaker podcast — dimensions controlled per-speaker in podcast script
+    ref_audio:
+      required: false
+      ref_text: false
+    languages: [en]
+    latency_tier: slow
+    vram_estimate_mb: 3000
+    prosodic_technique: speaker-labeling
+    best_for: "Multi-speaker podcast generation"
+    persona_default: podcast-host
+    notes: "Uses separate generate_vibevoice_podcast endpoint. Load-only via unified test."
+
+# ═══════════════════════════════════════════════════════════════════
+# Category Summary
+# ═══════════════════════════════════════════════════════════════════
+#
+# preset-voices (3):   kitten_tts, kokoro, higgs
+# voice-cloning (4):   f5_tts, fish, fish_s2, voxcpm, indextts
+# emotion-control (1): indextts2
+# multilingual (4):    chatterbox, chatterbox_turbo, chatterbox_multilingual, qwen
+# podcast (1):         vibevoice
+#
+# Total: 14 engines
+#
+# VRAM budget (all loaded): ~24,000 MB
+# Recommended: load 2-3 engines concurrently on 32GB GPU
+
+# ═══════════════════════════════════════════════════════════════════
+# Persona ↔ Engine Mapping (Default Assignments)
+# ═══════════════════════════════════════════════════════════════════
+#
+# | Persona Slug          | Engine              | Expressive Dimensions Used                        |
+# |-----------------------|---------------------|---------------------------------------------------|
+# | pmoves-crush          | kitten_tts          | voice preset (ultra-fast, minimal knobs)           |
+# | agent-zero-default    | kokoro              | speed + punctuation engineering                    |
+# | archon-narrator       | f5_tts              | speed + voice cloning + cross_fade                 |
+# | grams-narrator        | f5_tts              | speed + voice cloning + cross_fade                 |
+# | clawz-reveal          | indextts2           | 8-dim emotion vectors + emo_alpha + temperature    |
+# | agent-card-voice      | fish_s2             | temperature + top_p + voice cloning                |
+# | multilingual-agent    | chatterbox_turbo    | exaggeration + temperature + cfg_weight            |
+# | streaming-agent       | higgs               | voice_preset + temperature + top_p                 |
+# | expressive-narrator   | chatterbox          | exaggeration + temperature + cfg_weight            |
+# | polyglot-agent        | chatterbox_multi... | language + exaggeration + temperature              |
+# | voice-designer        | qwen                | mode + speaker + language                          |
+# | quick-clone           | fish                | temperature + top_p + voice cloning                |
+# | batch-synth           | indextts            | temperature (lightweight)                          |
+# | clone-verify          | voxcpm              | cfg_value + timesteps + normalize/denoise          |
+# | podcast-host          | vibevoice           | multi-speaker (separate endpoint)                  |
