@@ -8,33 +8,26 @@ The playground is open. Pinokio 7 dropped today — Agent Interpreter, App Assis
 
 This isn't a race. It's a seesaw — "you make it yours, I make it mine." Claude's thing is the music under the floor: TAC trees, CHIT geometry, security hardening, orchestration depth. The stuff where later DARKXSIDE thinks "CHIT, that's more than I drew."
 
-## Current State (2026-03-17)
+## Current State (2026-03-21)
 
 | What | Status |
 |------|--------|
 | PRs #999-1002 | **Merged** (SSL fix, CI timeout, dependabot, cast-gateway) |
+| PRs #1059-1062 | **Merged** (28→0 submodule sync complete) |
+| Submodule drift | **0** (28→0 complete — see [5090-SUBMODULE-AUDIT](./AGNOTE4482PHI.5090-SUBMODULE-AUDIT.md)) |
 | Local branches | **12** (cleaned from 74) |
-| Branch sync | **Done** (main → Hardened → Integrations) |
 | Pinokio 7 | **Upgraded on 5090** (Agents tab visible, showing chats) |
 | P7 requirements | **3 missing**: cli, py, ffmpeg (install via P7 UI Settings) |
 | Tailscale mesh | **All 3 machines connected** (5090, Z890, 4090 laptop) |
-| Open PRs | **4 from Gemini** (#1003-1006) + **3 contaminated branches** (z890 triage) |
-| Uncommitted | 2 files: `pinokio-p7.tac.yaml` (new) + `voice-agents.tac.yaml` (Phase 15 added) |
+| Open PRs (main) | **0** |
+| Open PRs (BoTZ) | **2** (Dependabot only — #89 npm, #91 uv) |
+| Node specialization | **DECLARED** — see [DnB Orchestra](./AGNOTE4482DnB.PHI.Orchestra.md) |
 
 ---
 
-## Step 1: Commit Uncommitted TAC Work
+## ~~Step 1: Commit Uncommitted TAC Work~~ DONE
 
-**2 real changes** (everything else is submodule CLAUDE.md drift — expected):
-```
-?? pmoves/configs/tac_trees/pinokio-p7.tac.yaml   (NEW — 7-phase, 20 audit nodes)
- M pmoves/configs/tac_trees/voice-agents.tac.yaml  (Phase 15 added: P7 Agent Interpreter → TTS)
-```
-
-```bash
-git add pmoves/configs/tac_trees/pinokio-p7.tac.yaml pmoves/configs/tac_trees/voice-agents.tac.yaml
-git commit -m "feat(tac): add pinokio-p7 TAC tree + voice-agents Phase 15 for P7 Agent Interpreter"
-```
+Committed via PR #1057 (`docs(agents): AGNOTE4482DnB.PHI.Orchestra`).
 
 ---
 
@@ -104,23 +97,34 @@ The audience says "that's my car." Because it moved like something POWERFUL.
 
 ---
 
-## Step 4: Claude Fleet — Updated Assignments
+## Step 4: Claude Fleet — Node Specialization (2026-03-21)
 
-### z890-claude (Next Session — Triage)
-| # | Task |
-|---|------|
-| 1 | Triage Gemini PRs #1003-1006 (review, hedge-trim, merge-ready) |
-| 2 | Cherry-pick clean changes from 3 contaminated remote branches |
-| 3 | Agent Zero model tuning (lfm2:24b → qwen3.5:9b for faster orchestration) |
-| 4 | ComfyUI first render test |
-| 5 | Update MCP topology TAC for P7 routes |
+> Canonical assignments per [DnB Orchestra](./AGNOTE4482DnB.PHI.Orchestra.md) Node Specialization Matrix.
 
-### 4090-claude (Async — Field)
-| # | Task |
-|---|------|
-| 1 | Upgrade Pinokio 7 on laptop |
-| 2 | Test P7 Agent Interpreter → 5090 TTS via Tailscale |
-| 3 | Test mobile agent (Discord/Openclaw) → TTS flow |
+### z890-claude (⚙ #1E40AF) — Infrastructure Coordinator
+| # | Task | Status |
+|---|------|--------|
+| 1 | ~~Triage Gemini PRs #1003-1006~~ | DONE (merged in prior sessions) |
+| 2 | ~~Cherry-pick contaminated branches~~ | DONE |
+| 3 | Agent Zero model tuning | Pending |
+| 4 | ComfyUI first render test | Pending |
+| 5 | NATS leaf node expansion to 5090 | Pending |
+
+### 5090-claude (♫ #9333EA) — GPU Inference Specialist
+| # | Task | Status |
+|---|------|--------|
+| 1 | Container rebuilds (4 services post-sync) | **NEXT** |
+| 2 | BoTZ Dependabot PRs #89, #91 | Pending |
+| 3 | TTS mesh access (--server-name 0.0.0.0 or Caddy route) | Pending |
+| 4 | Flute-Gateway → TTS Studio wiring | Pending |
+
+### 4090-claude (◉ #0D9488) — Noise Reducer
+| # | Task | Status |
+|---|------|--------|
+| 1 | ~~Upgrade Pinokio 7 on laptop~~ | DONE |
+| 2 | Test P7 Agent Interpreter → 5090 TTS via Tailscale | Pending |
+| 3 | Test mobile agent (Discord/Openclaw) → TTS flow | Pending |
+| 4 | **Claim W1: Agent Theming + Terminal** (foundation lane) | **Recommended** |
 
 ---
 
