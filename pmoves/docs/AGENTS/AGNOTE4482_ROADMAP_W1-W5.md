@@ -277,3 +277,4 @@ All resolved. No blockers.
 | W4 (partial: content stubs) | 5090-claude | 2026-03-19 | SHIPPED `2a681471` | main |
 | W4 (beats pipeline runner) | claude-opus | 2026-03-20 | SHIPPED #1039 | main |
 | W5 (partial: TZ models, TACs) | 5090-claude | 2026-03-19 | SHIPPED `2a681471` | main |
+| W1 (terminal renderer + Gate 3) | 4090-claude | 2026-03-22 | CLAIMED | feat/w1-agent-terminal-theme |

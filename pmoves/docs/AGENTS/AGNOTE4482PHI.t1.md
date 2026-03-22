@@ -81,6 +81,8 @@ Required handoff fields:
 - `2026-03-21T22:00:00Z` CLAIM `5090-CLAUDE` scope: Final two — BoTZ PR #79 (8 merge conflicts in gateway.py, 16 CodeRabbit findings: 1 Critical broken doc link, 3 Major endpoint/CORS issues) + Supabase PR #1 merge + parent gitlink sync PR #1062.
 - `2026-03-21T22:15:00Z` RELEASE `5090-CLAUDE` scope: 28→0 COMPLETE. BoTZ PR #79 merged (fail-closed JWT auth with CHIT attestation, PUBLIC_ENDPOINTS frozenset, corrected endpoint docs). Supabase PR #1 merged (pmoves_auth module). Parent PR #1062 merged. Zero submodule drift confirmed. AGNOTEs updated. No open PRs on main repo. BoTZ has 2 Dependabot PRs (#89, #91) remaining.
 
+- `2026-03-22T10:00:00Z` CLAIM `4090-CLAUDE` scope: W1 terminal renderer — agent_terminal_theme.py (reads flat 1.0.0 signatures + node specialization, renders ANSI-themed banners/status bars). Gate 3 cross-machine TTS routing verification (p7.mesh.remote-tts + va.p7.remote-speak). Branch: feat/w1-agent-terminal-theme. Stale branch cleanup (7 merged locals).
+
 ## Graphiti Review Log
 - `2026-02-21T10:35:03.6791631-05:00` REVIEW `CODEX-GPT5`
   - Verified six top-level submodule `CLAUDE.md` files are clean (no `TODO`, `FIXME`, placeholder, or artifact markers).
