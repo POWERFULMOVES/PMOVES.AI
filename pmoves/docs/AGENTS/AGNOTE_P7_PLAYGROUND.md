@@ -16,8 +16,8 @@ This isn't a race. It's a seesaw — "you make it yours, I make it mine." Claude
 | PRs #1059-1062 | **Merged** (28→0 submodule sync complete) |
 | Submodule drift | **0** (28→0 complete — see [5090-SUBMODULE-AUDIT](./AGNOTE4482PHI.5090-SUBMODULE-AUDIT.md)) |
 | Local branches | **12** (cleaned from 74) |
-| Pinokio 7 | **Upgraded on 5090** (Agents tab visible, showing chats) |
-| P7 requirements | **3 missing**: cli, py, ffmpeg (install via P7 UI Settings) |
+| Pinokio 7 | **Upgraded on all 3 machines** (5090 ✓, Z890 ✓, 4090 ✓) |
+| P7 requirements | **Z890**: py ✓, cli ✓ (pterm 0.0.24), ffmpeg ✓ (7.0.2) — **5090**: needs validation |
 | Tailscale mesh | **All 3 machines connected** (5090, Z890, 4090 laptop) |
 | Open PRs (main) | **0** |
 | Open PRs (BoTZ) | **0** (Dependabot #89 npm, #91 uv — **MERGED**) |
@@ -34,15 +34,27 @@ Committed via PR #1057 (`docs(agents): AGNOTE4482DnB.PHI.Orchestra`).
 
 ## Step 2: Fix P7 Missing Requirements
 
-Pinokio 7 shows 3 requirements as "Not Installed": `cli`, `py`, `ffmpeg`. All exist on the system but P7 can't find them:
+P7 keeps its own isolated copies of `cli` (pterm), `py`, and `ffmpeg` in `D:\pinokio\bin\`. System installs don't count — P7 needs its own.
 
-| Requirement | P7 Status | System Reality | Fix |
-|-------------|-----------|----------------|-----|
-| `cli` (pterm) | Not Installed | `D:\pinokio\prototype\system\cli\` exists | Install via Pinokio UI (Settings → Requirements → Install) |
-| `py` | Not Installed | `C:\Users\russe\miniconda3\python` → Python 3.13.5 | Pinokio has its own `D:\pinokio\bin\py\` — install via UI |
-| `ffmpeg` | Not Installed | `C:\Users\russe\Documents\ffmpeg\` → v8.0 | Install via Pinokio UI or symlink to system ffmpeg |
+### Z890 (2026-03-22 — VALIDATED)
+| Requirement | Location | Version |
+|-------------|----------|---------|
+| `py` | `D:\pinokio\bin\py\` | ✓ |
+| `cli` (pterm) | `D:\pinokio\bin\npm\pterm` | ✓ v0.0.24 |
+| `ffmpeg` | `D:\pinokio\bin\miniconda\Library\bin\ffmpeg.exe` | ✓ v7.0.2 |
 
-**Action:** Use Pinokio UI Settings → Requirements to install the missing 3. These are Pinokio-internal (isolated from system), so "Install" buttons should resolve them.
+**Note:** pterm is an npm package (not a standalone binary). ffmpeg is installed via conda in `Library/bin/` (Windows conda convention), not in a top-level `bin/ffmpeg/` directory.
+
+Control plane resolution: `GET http://127.0.0.1:42000/pinokio/path/pterm` → `{"path":"D:\\pinokio\\bin\\npm\\pterm"}`
+
+### 5090 (needs validation)
+| Requirement | Status |
+|-------------|--------|
+| `cli` (pterm) | Validate via `pterm --version` or P7 control plane |
+| `py` | Validate via `D:\pinokio\bin\py\` |
+| `ffmpeg` | Validate via `D:\pinokio\bin\miniconda\Library\bin\ffmpeg.exe` |
+
+**Action (5090):** Run same validation: `curl -s http://127.0.0.1:42000/pinokio/path/pterm` + search conda for ffmpeg.
 
 ---
 
@@ -107,9 +119,11 @@ The audience says "that's my car." Because it moved like something POWERFUL.
 |---|------|--------|
 | 1 | ~~Triage Gemini PRs #1003-1006~~ | DONE (merged in prior sessions) |
 | 2 | ~~Cherry-pick contaminated branches~~ | DONE |
-| 3 | Agent Zero model tuning | Pending |
-| 4 | ComfyUI first render test | Pending |
-| 5 | NATS leaf node expansion to 5090 | Pending |
+| 3 | ~~P7 upgrade verified on Z890~~ | DONE (2026-03-22 — agents.js confirmed, :42000 running) |
+| 4 | ~~P7 requirements validated~~ | DONE (pterm 0.0.24, ffmpeg 7.0.2, py — all present) |
+| 5 | Agent Zero model tuning | Pending |
+| 6 | ComfyUI first render test | Pending |
+| 7 | NATS leaf node expansion to 5090 | Pending |
 
 ### 5090-claude (♫ #9333EA) — GPU Inference Specialist
 | # | Task | Status |
