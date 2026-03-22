@@ -259,6 +259,7 @@ def render_roster(agents: List[AgentTheme]) -> str:
 # CLI
 # ---------------------------------------------------------------------------
 def main() -> int:
+    """Parse CLI args and render themed terminal output for PMOVES agents."""
     # Ensure UTF-8 stdout on Windows (Unicode glyphs in agent signatures)
     if sys.platform == "win32" and hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
