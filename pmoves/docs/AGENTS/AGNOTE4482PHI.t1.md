@@ -80,6 +80,8 @@ Required handoff fields:
 - `2026-03-21T22:30:00Z` RELEASE `5090-CLAUDE` scope: Full orchestra session — 28→1 submodule drift. Health-wger PR #4: 14 Critical/Major fixes (BodyFat phantom import, model field mismatches, coroutine bug, 2 test rewrites). BoTZ PR #84: merge conflicts resolved, 5 real bug fixes (NATS client leak, subprocess timeout, double-creds, GH secrets, VPN healthcheck). NATS cred defaults preserved per project convention (CodeRabbit false positive). DoX: resolved "divergence" (stale detached HEAD, both commits on Hardened). Pinokio-TTS #2 merged. llama-lab #1 merged. supabase PR #1 created. PRs #1059, #1060 merged. Only supabase remains (pending CodeRabbit review).
 - `2026-03-21T22:00:00Z` CLAIM `5090-CLAUDE` scope: Final two — BoTZ PR #79 (8 merge conflicts in gateway.py, 16 CodeRabbit findings: 1 Critical broken doc link, 3 Major endpoint/CORS issues) + Supabase PR #1 merge + parent gitlink sync PR #1062.
 - `2026-03-21T22:15:00Z` RELEASE `5090-CLAUDE` scope: 28→0 COMPLETE. BoTZ PR #79 merged (fail-closed JWT auth with CHIT attestation, PUBLIC_ENDPOINTS frozenset, corrected endpoint docs). Supabase PR #1 merged (pmoves_auth module). Parent PR #1062 merged. Zero submodule drift confirmed. AGNOTEs updated. No open PRs on main repo. BoTZ has 2 Dependabot PRs (#89, #91) remaining.
+- `2026-03-22T21:00:00Z` CLAIM `5090-CLAUDE` scope: Voice stack activation — 14-engine validation (13/14 load, 11/14 synth), Flute-Gateway UltimateTTSProvider Gradio 4.x migration (dead `/api/` path + 92→121 param alignment), 10-engine Flute sweep, 6 STT round-trips, pterm lifecycle validation, PR #1069.
+- `2026-03-22T21:15:00Z` RELEASE `5090-CLAUDE` scope: Voice stack activated. PR #1069 pushed. 10/14 engines pass through Flute-Gateway REST API. STT round-trip proven (Flute TTS → Whisper = exact text match). Delegations issued: z890-claude (container rebuilds, Flute image rebuild), 4090-claude (P7→TTS Tailscale test, mobile agent test — both UNBLOCKED). Fish S2 Pro needs timeout increase. Pipecat WebSocket (8056) ready for implementation.
 
 ## Graphiti Review Log
 - `2026-02-21T10:35:03.6791631-05:00` REVIEW `CODEX-GPT5`
@@ -272,3 +274,9 @@ Required handoff fields:
 - Ack: `Completed 28→0 submodule drift cleanup. BoTZ PR #79: resolved 8 merge conflicts (kept fail-closed JWT + CHIT attestation over mcp_bridge.auth), fixed Critical broken doc link, Major endpoint path mismatches. Supabase PR #1 merged (pmoves_auth module). Parent PR #1062 synced both gitlinks. AGNOTEs updated: 5090-SUBMODULE-AUDIT closed out, P7_PLAYGROUND refreshed, t1 claim register current.`
 - Signature: `ACK::5090-CLAUDE::PHI-4482-T1::SUBMODULE-DRIFT-ZERO`
 - Timestamp: `2026-03-21T22:15:00Z`
+
+## Agent ACK (Signed, Voice Stack Activation + Gradio 4.x Fix)
+- Agent: `5090-CLAUDE`
+- Ack: `Voice stack activated. Fixed UltimateTTSProvider: dead /api/ path → /gradio_api/call/ SSE, 92→121 param alignment, engine name corrections. 10/14 engines pass Flute-Gateway REST. 6/6 STT round-trips exact match. PR #1069. Delegated container rebuilds to z890, unblocked 4090 for P7→TTS mesh testing.`
+- Signature: `ACK::5090-CLAUDE::PHI-4482-T1::VOICE-STACK-ACTIVATION`
+- Timestamp: `2026-03-22T21:15:00Z`
