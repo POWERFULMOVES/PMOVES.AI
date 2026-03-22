@@ -47,13 +47,14 @@ class UltimateTTSProvider(VoiceProvider):
         "f5_tts": "F5-TTS",
         "indextts2": "IndexTTS2",
         "indextts": "IndexTTS",
-        "fish": "Fish Speech",
+        "fish": "Fish Speech S1",
         "fish_s2": "Fish Speech S2 Pro",
         "chatterbox": "ChatterboxTTS",
         "chatterbox_turbo": "Chatterbox Turbo",
+        "chatterbox_multilingual": "Chatterbox Multilingual",
         "voxcpm": "VoxCPM",
         "higgs": "Higgs Audio",
-        "qwen": "Qwen3 TTS",
+        "qwen": "Qwen Voice Design",
         "vibevoice": "VibeVoice",
     }
 
@@ -80,10 +81,9 @@ class UltimateTTSProvider(VoiceProvider):
             base_url: Gradio server URL (e.g., 'http://localhost:7860')
         """
         super().__init__(base_url)
-        # Use Gradio's synchronous predict API (/api/) instead of the async
-        # event API (/gradio_api/call/) which requires SSE/WebSocket polling
-        # and breaks with newer Gradio versions.
-        self.predict_api_url = f"{base_url}/api"
+        # Gradio 4.x+ uses event-based API at /gradio_api/call/.
+        # The old /api/ synchronous predict endpoint is removed (404).
+        self.call_api_url = f"{base_url}/gradio_api/call"
         self.gradio_api_url = f"{base_url}/gradio_api"
         self._health_last_log_ts: float = 0.0
         self._health_log_interval_sec: float = float(
@@ -92,11 +92,69 @@ class UltimateTTSProvider(VoiceProvider):
         self._default_engine = os.getenv("ULTIMATE_TTS_DEFAULT_ENGINE", "kitten_tts")
         self._timeout = float(os.getenv("ULTIMATE_TTS_TIMEOUT_SEC", "120"))
 
+    async def _call_gradio(
+        self,
+        client: httpx.AsyncClient,
+        endpoint: str,
+        data: list,
+        timeout: float = 120.0,
+    ) -> list:
+        """Call a Gradio endpoint via the event-based API.
+
+        1. POST /gradio_api/call/<endpoint> with {"data": [...]} -> {"event_id": "..."}
+        2. GET  /gradio_api/call/<endpoint>/<event_id> -> SSE stream
+        3. Parse the SSE stream for the "complete" event containing results.
+
+        Returns the result data list.
+        """
+        # Step 1: Submit the call
+        resp = await client.post(
+            f"{self.call_api_url}{endpoint}",
+            json={"data": data},
+            timeout=30.0,
+        )
+        if resp.status_code != 200:
+            raise UltimateTTSError(
+                f"Gradio call submit failed: {resp.status_code} — {resp.text[:200]}"
+            )
+        event_id = resp.json().get("event_id")
+        if not event_id:
+            raise UltimateTTSError("No event_id in Gradio call response")
+
+        # Step 2: Poll the SSE stream for results
+        result_data = []
+        async with client.stream(
+            "GET",
+            f"{self.call_api_url}{endpoint}/{event_id}",
+            timeout=timeout,
+        ) as stream:
+            current_event = ""
+            current_data_lines = []
+            async for line in stream.aiter_lines():
+                if line.startswith("event:"):
+                    current_event = line[6:].strip()
+                    current_data_lines = []
+                elif line.startswith("data:"):
+                    current_data_lines.append(line[5:].strip())
+                elif line == "":
+                    # End of SSE message
+                    if current_event == "complete" and current_data_lines:
+                        raw = "\n".join(current_data_lines)
+                        parsed = json.loads(raw)
+                        result_data = parsed if isinstance(parsed, list) else parsed.get("data", parsed)
+                        break
+                    elif current_event == "error" and current_data_lines:
+                        raw = "\n".join(current_data_lines)
+                        raise UltimateTTSError(f"Gradio error: {raw[:200]}")
+                    current_event = ""
+                    current_data_lines = []
+
+        return result_data
+
     async def _load_model(self, client: httpx.AsyncClient, engine: str) -> bool:
         """Load a TTS model if not already loaded.
 
-        Uses Gradio's synchronous predict API (/api/) which returns results
-        directly without SSE/WebSocket polling.
+        Uses Gradio's event-based API (/gradio_api/call/).
 
         Args:
             client: HTTP client
@@ -115,15 +173,17 @@ class UltimateTTSProvider(VoiceProvider):
             "fish_s2": "/handle_load_fish_s2",
             "chatterbox": "/handle_load_chatterbox",
             "chatterbox_turbo": "/handle_load_chatterbox_turbo",
+            "chatterbox_multilingual": "/handle_load_chatterbox_multilingual",
             "voxcpm": "/handle_load_voxcpm",
             "higgs": "/handle_load_higgs",
             "qwen": "/handle_load_qwen",
             "vibevoice": "/handle_vibevoice_load",
         }
-        # Some engines require load parameters
+        # Some engines require load parameters (positional)
         load_data_map = {
-            "qwen": ["Base", "Small"],
-            "vibevoice": ["", "", False],
+            "f5_tts": ["F5-TTS Base"],        # model_name
+            "qwen": ["Base", "1.7B"],          # model_type, model_size
+            "vibevoice": ["", "models/VibeVoice-1.5B", False],  # selected_model_path, path, use_flash_attention
         }
         endpoint = endpoint_map.get(engine)
         if not endpoint:
@@ -132,17 +192,8 @@ class UltimateTTSProvider(VoiceProvider):
 
         try:
             load_data = load_data_map.get(engine, [])
-            resp = await client.post(
-                f"{self.predict_api_url}{endpoint}",
-                json={"data": load_data},
-                timeout=60.0,
-            )
-            if resp.status_code != 200:
-                logger.warning("Model load call returned %s", resp.status_code)
-                return False
+            data = await self._call_gradio(client, endpoint, load_data, timeout=60.0)
 
-            result = resp.json()
-            data = result.get("data", [])
             if isinstance(data, list) and len(data) > 0:
                 status = str(data[0]) if data[0] else ""
                 if "✅" in status or "Loaded" in status or "already" in status.lower():
@@ -159,25 +210,28 @@ class UltimateTTSProvider(VoiceProvider):
         engine: str,
         voice: Optional[str] = None
     ) -> list:
-        """Build the full 92-parameter list for generate_unified_tts."""
+        """Build the full 121-parameter list for generate_unified_tts.
+
+        Parameter positions are derived from the Gradio API info endpoint.
+        """
         api_engine = self.ENGINE_NAMES.get(engine, engine)
 
-        # Total 92 parameters
-        data: list = [None] * 92
+        # Total 121 parameters (Gradio 4.x API)
+        data: list = [None] * 121
 
-        # Core params
+        # [0-2] Core params
         data[0] = text          # text_input
         data[1] = api_engine    # tts_engine
         data[2] = "wav"         # audio_format
 
-        # Chatterbox params (3-8)
+        # [3-8] Chatterbox
         data[4] = 0.5    # exaggeration
         data[5] = 0.8    # temperature
         data[6] = 0.5    # cfg_weight
         data[7] = 300    # chunk_size
         data[8] = 0      # seed
 
-        # Chatterbox MTL params (9-18)
+        # [9-18] Chatterbox MTL
         data[10] = "en"
         data[11] = 0.5
         data[12] = 0.8
@@ -188,77 +242,110 @@ class UltimateTTSProvider(VoiceProvider):
         data[17] = 300
         data[18] = 0
 
-        # Kokoro (19-20)
-        data[19] = voice if engine == "kokoro" else "af_heart"
-        data[20] = 1.0
+        # [19-27] Chatterbox Turbo
+        data[20] = 0.5   # turbo_exaggeration
+        data[21] = 0.8   # turbo_temperature
+        data[22] = 0.5   # turbo_cfg_weight
+        data[23] = 1.2   # turbo_repetition_penalty
+        data[24] = 0.05  # turbo_min_p
+        data[25] = 0.95  # turbo_top_p
+        data[26] = 300   # turbo_chunk_size
+        data[27] = 0     # turbo_seed
 
-        # Fish (21-27)
-        data[22] = ""
-        data[23] = 0.8
-        data[24] = 0.8
-        data[25] = 1.1
-        data[26] = 1024
+        # [28-29] Kokoro
+        data[28] = voice if engine == "kokoro" else "af_heart"
+        data[29] = 1.0   # speed
 
-        # IndexTTS (28-30)
-        data[29] = 0.8
+        # [30-36] Fish Speech S1
+        data[31] = ""     # ref_text
+        data[32] = 0.8   # temperature
+        data[33] = 0.8   # top_p
+        data[34] = 1.1   # repetition_penalty
+        data[35] = 1024  # max_tokens
+        data[36] = 0     # seed
 
-        # IndexTTS2 (31-50)
-        data[32] = "audio_reference"
-        data[34] = ""     # indextts2_emotion_description (REQUIRED)
-        data[35] = 1.0
-        data[43] = 1      # calm
-        data[44] = 0.8
-        data[45] = 0.9
-        data[46] = 50
-        data[47] = 1.1
-        data[48] = 1500
-        data[50] = False
+        # [37-43] Fish Speech S2 Pro
+        data[38] = ""     # ref_text
+        data[39] = 0.8   # temperature
+        data[40] = 0.8   # top_p
+        data[41] = 1.1   # repetition_penalty
+        data[42] = 2048  # max_tokens
+        data[43] = 0     # seed
 
-        # F5 (51-56)
-        data[53] = 1.0
-        data[54] = 0.15
-        data[55] = False
-        data[56] = 0
+        # [44-46] IndexTTS
+        data[45] = 0.8   # temperature
+        data[46] = 0     # seed
 
-        # Higgs (57-66)
-        data[58] = ""
-        data[59] = "EMPTY"
-        data[60] = ""
-        data[61] = 1.0
-        data[62] = 0.95
-        data[63] = 50
-        data[64] = 1024
-        data[65] = 7
-        data[66] = 2
+        # [47-66] IndexTTS2
+        data[48] = "audio_reference"  # emotion_mode
+        data[50] = ""     # emotion_description (REQUIRED)
+        data[51] = 1.0   # emo_alpha
+        data[59] = 1.0   # calm
+        data[60] = 0.8   # temperature
+        data[61] = 0.9   # top_p
+        data[62] = 50    # top_k
+        data[63] = 1.1   # repetition_penalty
+        data[64] = 1500  # max_mel_tokens
+        data[65] = 0     # seed
+        data[66] = False  # use_random
 
-        # KittenTTS voice (67)
-        data[67] = voice if engine == "kitten_tts" else "expr-voice-2-f"
+        # [67-72] F5-TTS
+        data[69] = 1.0   # speed
+        data[70] = 0.15  # cross_fade
+        data[71] = False  # remove_silence
+        data[72] = 0     # seed
 
-        # VoxCPM (68-77)
-        data[70] = 2.0
-        data[71] = 10
-        data[72] = True
-        data[73] = True
-        data[74] = True
-        data[75] = 3
-        data[76] = 6.0
-        data[77] = -1
+        # [73-82] Higgs Audio
+        data[75] = "EMPTY"  # voice_preset
+        data[76] = ""     # system_prompt (REQUIRED)
+        data[77] = 1.0   # temperature
+        data[78] = 0.95  # top_p
+        data[79] = 50    # top_k
+        data[80] = 1024  # max_tokens
+        data[81] = 7     # ras_win_len
+        data[82] = 2     # ras_win_max_num_repeat
 
-        # Audio effects (78-91)
-        data[78] = 0      # gain_db
-        data[79] = False  # enable_eq
-        data[80] = 0
-        data[81] = 0
-        data[82] = 0
-        data[83] = False  # enable_reverb
-        data[84] = 0.3
-        data[85] = 0.5
-        data[86] = 0.3
-        data[87] = False  # enable_echo
-        data[88] = 0.3
-        data[89] = 0.5
-        data[90] = False  # enable_pitch
-        data[91] = 0
+        # [83] KittenTTS voice
+        data[83] = voice if engine == "kitten_tts" else "expr-voice-2-f"
+
+        # [84-93] VoxCPM
+        data[86] = 2.0   # cfg_value
+        data[87] = 10    # inference_timesteps
+        data[88] = True   # normalize
+        data[89] = True   # denoise
+        data[90] = True   # retry_badcase
+        data[91] = 3     # retry_badcase_max_times
+        data[92] = 6.0   # retry_badcase_ratio_threshold
+        data[93] = -1    # seed
+
+        # [94-106] Qwen TTS
+        data[94] = "voice_design"  # mode
+        data[95] = "A warm, clear, professional English-speaking voice"  # voice_description (REQUIRED)
+        data[97] = ""     # ref_text (REQUIRED)
+        data[99] = "1.7B"  # clone_model_size
+        data[100] = 200   # chunk_size
+        data[101] = 10    # chunk_gap
+        data[102] = "Ryan"  # speaker
+        data[103] = "1.7B"  # custom_model_size
+        data[104] = ""     # style_instruct (REQUIRED)
+        data[105] = "Auto"  # language
+        data[106] = 0     # seed
+
+        # [107-120] Audio effects
+        data[107] = 0      # gain_db
+        data[108] = False  # enable_eq
+        data[109] = 0      # eq_bass
+        data[110] = 0      # eq_mid
+        data[111] = 0      # eq_treble
+        data[112] = False  # enable_reverb
+        data[113] = 0.3   # reverb_room
+        data[114] = 0.5   # reverb_damping
+        data[115] = 0.3   # reverb_wet
+        data[116] = False  # enable_echo
+        data[117] = 0.3   # echo_delay
+        data[118] = 0.5   # echo_decay
+        data[119] = False  # enable_pitch
+        data[120] = 0     # pitch_semitones
 
         return data
 
@@ -287,27 +374,16 @@ class UltimateTTSProvider(VoiceProvider):
 
             # Build full parameter list
             data = self._build_params(text, engine, voice)
-            payload = {"data": data}
 
             try:
-                # Use Gradio's synchronous predict API — returns results
-                # directly without SSE/WebSocket event polling.
-                resp = await client.post(
-                    f"{self.predict_api_url}/generate_unified_tts",
-                    json=payload,
-                    timeout=self._timeout,
+                # Use Gradio's event-based API (/gradio_api/call/).
+                result_data = await self._call_gradio(
+                    client, "/generate_unified_tts", data, timeout=self._timeout,
                 )
-                if resp.status_code != 200:
-                    raise UltimateTTSError(
-                        f"API call failed: {resp.status_code} — {resp.text[:200]}"
-                    )
-
-                result = resp.json()
-                result_data = result.get("data", [])
 
                 if not isinstance(result_data, list) or len(result_data) < 2:
                     raise UltimateTTSError(
-                        f"Unexpected response shape: {str(result)[:200]}"
+                        f"Unexpected response shape: {str(result_data)[:200]}"
                     )
 
                 # Check for error status (second element)
