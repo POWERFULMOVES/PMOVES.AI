@@ -61,8 +61,8 @@ root:
     # Phase 2: TTS Engines Inventory
     # =========================================================================
     - id: va.engines
-      task: "TTS engine inventory (10 engines)"
-      context: "All engines loaded in TTS Studio via Pinokio"
+      task: "TTS engine inventory (14 engines)"
+      context: "All engines loaded in TTS Studio via Pinokio. Registry: pmoves/configs/tts-engine-capabilities.yaml"
       agent_hint: codex
       children:
         - id: va.engines.kitten-tts
@@ -137,12 +137,44 @@ root:
           context: "May need conda install sox for audio processing"
           agent_hint: codex
 
+        - id: va.engines.indextts
+          task: "IndexTTS available"
+          action:
+            type: manual
+            expect: "Fast indexing-based synthesis, lightweight model"
+          context: "Best for batch synthesis, ~1200MB VRAM"
+          agent_hint: codex
+
+        - id: va.engines.fish
+          task: "Fish Speech available"
+          action:
+            type: manual
+            expect: "Zero-shot voice cloning with temperature control"
+          context: "Quick cloning demos, ~1500MB VRAM"
+          agent_hint: codex
+
+        - id: va.engines.chatterbox
+          task: "ChatterboxTTS available"
+          action:
+            type: manual
+            expect: "Exaggeration + temperature + cfg_weight control"
+          context: "Expressive narration with emotion control"
+          agent_hint: codex
+
+        - id: va.engines.chatterbox-multilingual
+          task: "Chatterbox Multilingual available"
+          action:
+            type: manual
+            expect: "17-language synthesis with exaggeration control"
+          context: "Languages: en, es, fr, de, it, pt, pl, tr, ru, nl, cs, ar, zh, ja, hu, ko, hi"
+          agent_hint: codex
+
         - id: va.engines.vibevoice
           task: "VibeVoice available"
           action:
             type: manual
-            expect: "Style transfer synthesis"
-          context: "Transfers vocal style from reference audio"
+            expect: "Multi-speaker podcast generation (separate endpoint)"
+          context: "Uses generate_vibevoice_podcast, NOT unified endpoint"
           agent_hint: codex
 
     # =========================================================================

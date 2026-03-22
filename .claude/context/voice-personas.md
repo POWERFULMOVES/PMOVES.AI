@@ -1,7 +1,8 @@
 # Voice Persona System
 
 **Last Updated:** March 2026
-**Service:** Flute-Gateway + Ultimate-TTS-Studio (13 engines)
+**Service:** Flute-Gateway + Ultimate-TTS-Studio (14 engines)
+**Capability Registry:** `pmoves/configs/tts-engine-capabilities.yaml`
 
 ---
 
@@ -91,25 +92,27 @@ Provider-specific settings stored in `voice_config`:
 }
 ```
 
-### Ultimate-TTS-Studio (13 Engines)
+### Ultimate-TTS-Studio (14 Engines)
 
 All engines run natively via Pinokio at `http://127.0.0.1:7860` (CUDA, conda tts_env).
+See `pmoves/configs/tts-engine-capabilities.yaml` for machine-readable expressive dimensions.
 
-| engine_id | Engine Name | Strengths | Best For |
-|-----------|-------------|-----------|----------|
-| `kitten_tts` | KittenTTS | Ultra-fast, 8 pre-trained voices | Low-latency synthesis, real-time |
-| `kokoro` | Kokoro TTS | Multilingual ONNX, CPU-friendly | Lightweight fallback, multi-language |
-| `f5_tts` | F5-TTS | High-quality voice cloning, natural prosody | GRAMS narration, beat-sync |
-| `fish` | Fish Speech | Zero-shot voice cloning | Quick cloning demos |
-| `fish_s2` | Fish Speech S2 Pro | Zero-shot clone, 13 languages | Agent card voice profiles |
-| `indextts` | IndexTTS | Fast indexing-based synthesis | Batch synthesis |
-| `indextts2` | IndexTTS2 | Emotion vector control (happy/angry/sad/calm) | ClawZ reveals, emotion-driven |
-| `chatterbox` | ChatterboxTTS | Exaggeration/temperature control | Expressive narration |
-| `chatterbox_turbo` | Chatterbox Turbo | Multilingual, fast | Production multilingual TTS |
-| `voxcpm` | VoxCPM | Voice cloning + transcription (dual-purpose) | Clone + verify |
-| `higgs` | Higgs Audio S1 Mini | Pre-cached model, streaming-capable | Streaming synthesis |
-| `qwen` | Qwen3 TTS | Base/Small model variants | Chinese + multilingual |
-| `vibevoice` | VibeVoice | Style transfer from reference audio | Voice style matching |
+| engine_id | Engine Name | Category | Strengths | Best For |
+|-----------|-------------|----------|-----------|----------|
+| `kitten_tts` | KittenTTS | preset-voices | Ultra-fast, 8 pre-trained voices | Low-latency synthesis, real-time |
+| `kokoro` | Kokoro TTS | preset-voices | Multilingual ONNX, CPU-friendly | Warm narration, host voice |
+| `higgs` | Higgs Audio | preset-voices | Pre-cached model, streaming-capable | Streaming synthesis |
+| `f5_tts` | F5-TTS | voice-cloning | High-quality voice cloning, natural prosody | GRAMS narration, beat-sync |
+| `fish` | Fish Speech | voice-cloning | Zero-shot voice cloning | Quick cloning demos |
+| `fish_s2` | Fish Speech S2 Pro | voice-cloning | Zero-shot clone, 13 languages | Agent card voice profiles |
+| `voxcpm` | VoxCPM | voice-cloning | Voice cloning + transcription (dual-purpose) | Clone + verify |
+| `indextts` | IndexTTS | voice-cloning | Fast indexing-based synthesis | Batch synthesis |
+| `indextts2` | IndexTTS2 | emotion-control | 8-dim emotion vectors (happy/angry/sad/calm/...) | ClawZ reveals, emotion-driven |
+| `chatterbox` | ChatterboxTTS | multilingual | Exaggeration/temperature control | Expressive narration |
+| `chatterbox_turbo` | Chatterbox Turbo | multilingual | Fast exaggeration control | Fast expressive synthesis |
+| `chatterbox_multilingual` | Chatterbox Multilingual | multilingual | 17 languages + exaggeration control | Multi-language synthesis |
+| `qwen` | Qwen3 TTS | multilingual | Voice design + clone modes, Base/Small variants | Chinese + multilingual |
+| `vibevoice` | VibeVoice | podcast | Multi-speaker podcast generation | Podcast-style content |
 
 ```json
 {
@@ -226,18 +229,25 @@ Personality traits influence prosodic behavior:
 
 ## Default Personas
 
-Pre-configured personas available out-of-box:
+Pre-configured personas available out-of-box (see `pmoves/configs/tts-engine-capabilities.yaml` for full dimension map):
 
-| Slug | Name | Provider | Engine | Use Case |
-|------|------|----------|--------|----------|
-| `agent-zero-default` | Agent Zero | Ultimate-TTS | kokoro | Main orchestrator |
-| `archon-narrator` | Archon Narrator | Ultimate-TTS | f5_tts | Knowledge delivery (cloned voice) |
-| `clawz-reveal` | ClawZ Reveal | Ultimate-TTS | indextts2 | Agent identity reveals (emotion-driven) |
-| `pmoves-crush` | PMOVES Crush | Ultimate-TTS | kitten_tts | CLI agent (ultra-fast) |
-| `grams-narrator` | GRAMS Narrator | Ultimate-TTS | f5_tts | Story narration, beat-sync |
-| `agent-card-voice` | Agent Card Voice | Ultimate-TTS | fish_s2 | Zero-shot persona profiles |
-| `multilingual-agent` | Multilingual Agent | Ultimate-TTS | chatterbox_turbo | Multi-language synthesis |
-| `streaming-agent` | Streaming Agent | Ultimate-TTS | higgs | Real-time streaming TTS |
+| Slug | Name | Provider | Engine | Expressive Dimensions Used | Use Case |
+|------|------|----------|--------|---------------------------|----------|
+| `agent-zero-default` | Agent Zero | Ultimate-TTS | kokoro | speed + punctuation engineering | Main orchestrator |
+| `archon-narrator` | Archon Narrator | Ultimate-TTS | f5_tts | speed + voice cloning + cross_fade | Knowledge delivery |
+| `clawz-reveal` | ClawZ Reveal | Ultimate-TTS | indextts2 | 8-dim emotion vectors + emo_alpha | Agent identity reveals |
+| `pmoves-crush` | PMOVES Crush | Ultimate-TTS | kitten_tts | voice preset (ultra-fast) | CLI agent |
+| `grams-narrator` | GRAMS Narrator | Ultimate-TTS | f5_tts | speed + voice cloning + cross_fade | Story narration, beat-sync |
+| `agent-card-voice` | Agent Card Voice | Ultimate-TTS | fish_s2 | temperature + top_p + cloning | Zero-shot persona profiles |
+| `multilingual-agent` | Multilingual Agent | Ultimate-TTS | chatterbox_turbo | exaggeration + temperature + cfg | Fast expressive synthesis |
+| `streaming-agent` | Streaming Agent | Ultimate-TTS | higgs | voice_preset + temperature + top_p | Real-time streaming TTS |
+| `expressive-narrator` | Expressive Narrator | Ultimate-TTS | chatterbox | exaggeration + temperature + cfg | Theatrical narration |
+| `polyglot-agent` | Polyglot Agent | Ultimate-TTS | chatterbox_multilingual | language + exaggeration + temp | 17-language synthesis |
+| `voice-designer` | Voice Designer | Ultimate-TTS | qwen | mode + speaker + language | Voice design/cloning |
+| `quick-clone` | Quick Clone | Ultimate-TTS | fish | temperature + top_p + cloning | Fast cloning demos |
+| `batch-synth` | Batch Synth | Ultimate-TTS | indextts | temperature (lightweight) | Bulk synthesis |
+| `clone-verify` | Clone Verify | Ultimate-TTS | voxcpm | cfg_value + timesteps + denoise | Clone + transcription |
+| `podcast-host` | Podcast Host | Ultimate-TTS | vibevoice | multi-speaker (separate endpoint) | Podcast generation |
 
 ---
 
@@ -377,6 +387,9 @@ Each synthesis can be attributed:
 
 ## Related Documentation
 
+- **Engine Capability Registry:** `pmoves/configs/tts-engine-capabilities.yaml` — Machine-readable per-engine expressive dimensions
+- **Per-Engine Test:** `/tts:test-engine <id> --metrics` — Test single engine with GPU VRAM tracking
+- **Hardware Templates:** `pmoves/docs/AGENTS/HARDWARE_TTS_REQUIREMENTS.md` — All 14 engine prosodic templates
 - `pmoves/docs/FLUTE_PROSODIC_ARCHITECTURE.md` - Prosodic sidecar details
 - `.claude/context/flute-gateway.md` - Flute API reference
 - `pmoves/docs/PERSONAS.md` - Full persona framework (325+ personas)
