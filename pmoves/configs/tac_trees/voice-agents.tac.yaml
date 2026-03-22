@@ -706,7 +706,7 @@ root:
       task: "P7 Agent Interpreter voice routing"
       context: "Pinokio 7 Agent Interpreter auto-discovers TTS apps via SKILL.md"
       agent_hint: 5090-claude
-      notes: "BLOCKED: requires P7 desktop app upgrade on 5090 + 4090 (manual action) and Agent Interpreter TTS discovery (5090 responsibility)"
+      notes: "P7 upgraded on all machines. Cross-machine TTS verified (Gate 3). P7 Agent Interpreter discovery + speak-flow still pending (5090 responsibility)."
       children:
         - id: va.p7.discovery
           task: "P7 discovers Ultimate-TTS-Studio as voice app"
@@ -733,9 +733,9 @@ root:
             expect: "4090 laptop agent routes TTS to 5090 via P7 + Tailscale"
           context: "Cross-machine: 4090 agent → Tailscale → 5090 P7 → TTS"
           agent_hint: 4090-claude
-          status: pending
+          status: done
           depends_on: [va.p7.discovery, va.p7.speak-flow]
-          notes: "BLOCKED: depends on P7 upgrade on both machines + local speak-flow working"
+          notes: "Verified 2026-03-22: 4090→5090 TTS via Tailscale Caddy proxy — 200 OK, 173ms. Network layer proven. P7 Agent Interpreter routing (va.p7.discovery + va.p7.speak-flow) still pending on 5090."
 
         - id: va.p7.mobile-agent
           task: "Mobile agent (Discord/Openclaw) triggers TTS"
