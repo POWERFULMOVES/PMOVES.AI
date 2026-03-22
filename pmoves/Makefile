@@ -181,9 +181,9 @@ up-all: ## Start core, agents+UIs, n8n, and monitoring (single env)
 	@echo "✔ Full stack up (core + agents UI + n8n + monitoring)."
 
 .PHONY: up-bots
-up-bots: ## Start bot services (BotZ + messaging gateway)
-	@$(DC) --profile data --profile workers --profile botz up -d botz-gateway messaging-gateway
-	@echo "✔ Bots up (botz-gateway + messaging-gateway)."
+up-bots: ## Start bot services (BotZ gateway)
+	@$(DC) --profile data --profile workers --profile botz up -d botz-gateway
+	@echo "✔ Bots up (botz-gateway)."
 
 # =============================================================================
 # OBSERVABILITY-FIRST STARTUP (Tier-based, dependency-ordered)

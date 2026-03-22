@@ -457,9 +457,10 @@ model = "chat_together"
 type = "chat_completion"
 model = "chat_cloudflare_gpt_oss"
 
-[functions.agent_zero.variants.hosted_gemini]
-type = "chat_completion"
-model = "chat_gemini_pro"
+# [functions.agent_zero.variants.hosted_gemini]
+# type = "chat_completion"
+# model = "chat_gemini_pro"
+# TODO: Add [models.chat_gemini_pro] when Gemini provider is configured
 
 # Claude — native Anthropic provider for orchestration quality
 [functions.agent_zero.variants.hosted_claude_sonnet]
