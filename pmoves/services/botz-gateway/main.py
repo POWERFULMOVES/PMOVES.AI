@@ -592,11 +592,11 @@ async def whoami(instance_id: Optional[str] = None):
                     headers=supabase_headers,
                     params={"instance_id": f"eq.{instance_id}"}
                 )
-            except Exception as exc:
+            except httpx.RequestError as exc:
                 raise HTTPException(
                     status_code=502,
                     detail=f"Supabase lookup failed: {exc}",
-                )
+                ) from exc
             if response.status_code != 200:
                 raise HTTPException(
                     status_code=502,

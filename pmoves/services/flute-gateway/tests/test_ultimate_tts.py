@@ -238,8 +238,7 @@ class TestUltimateTTSProviderSynthesize:
             "",
         ]
 
-        def mock_stream(*args, **kwargs):
-            url = args[1] if len(args) > 1 else ""
+        def mock_stream(method, url, **kwargs):
             if "generate_unified_tts" in url:
                 return _MockSSEStream(synth_sse)
             return _MockSSEStream(load_sse)
@@ -319,7 +318,7 @@ class TestUltimateTTSProviderSynthesize:
         # SSE stream for model load
         load_sse = ["event: complete", "data: " + json.dumps(["Loaded"]), ""]
         mock_client.stream = MagicMock(
-            side_effect=lambda *a, **kw: _MockSSEStream(load_sse)
+            side_effect=lambda method, url, **kw: _MockSSEStream(load_sse)
         )
         mock_client.get = AsyncMock()
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
