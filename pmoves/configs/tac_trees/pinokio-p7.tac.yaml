@@ -141,7 +141,8 @@ root:
       task: "Cross-machine P7 agent routing via Tailscale"
       context: "Tailscale mesh connects 5090, Z890, 4090 laptop — P7 agents should discover remote apps"
       agent_hint: 4090-claude
-      notes: "PARTIALLY UNBLOCKED: P7 upgraded on all 3 machines (5090/Z890/4090). Still blocked on TTS mesh binding (Gate 3) and P7 requirements (Gate 2)"
+      status: done
+      notes: "Gate 3 VERIFIED 2026-03-22: 4090→5090 TTS via Tailscale (200 OK, 173ms). All 3 machines on P7. Mobile agent pending."
       children:
         - id: p7.mesh.tailscale
           task: "All 3 dev machines on Tailscale mesh"
@@ -159,10 +160,9 @@ root:
             expect: "From 4090: 'speak hello' routes via Tailscale to 5090 Ultimate-TTS-Studio"
           context: "Requires P7 on both machines + Tailscale mesh + TTS running on 5090"
           agent_hint: 4090-claude
-          status: blocked
-          blocked_reason: "TTS on 5090 Windows binds localhost:7861 — needs --server-name 0.0.0.0 or Caddy proxy route; Flute reports ultimate_tts: false"
+          status: done
           depends_on: [p7.upgrade.5090, p7.upgrade.4090, p7.interpreter.tts]
-          notes: "BLOCKED: P7 upgraded on all 3 machines ✓. Still blocked on TTS localhost binding — needs --server-name 0.0.0.0 or Caddy proxy route"
+          notes: "Verified 2026-03-22: curl https://powerfulmoves-1.tailcad9b4.ts.net/gradio_api/info → 200 OK in 173ms from 4090 laptop. 5090 Pinokio Caddy proxy resolves the localhost binding issue."
 
         - id: p7.mesh.mobile
           task: "Mobile agent (Discord/Openclaw) reaches 5090 via mesh"

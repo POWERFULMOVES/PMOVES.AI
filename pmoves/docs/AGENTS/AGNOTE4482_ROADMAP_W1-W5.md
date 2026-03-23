@@ -277,5 +277,6 @@ All resolved. No blockers.
 | W4 (partial: content stubs) | 5090-claude | 2026-03-19 | SHIPPED `2a681471` | main |
 | W4 (beats pipeline runner) | claude-opus | 2026-03-20 | SHIPPED #1039 | main |
 | W5 (partial: TZ models, TACs) | 5090-claude | 2026-03-19 | SHIPPED `2a681471` | main |
+| W1 (terminal renderer + Gate 3) | 4090-claude | 2026-03-22 | CLAIMED | feat/w1-agent-terminal-theme |
 | W1 (Flute-Gateway Gradio 4.x fix) | 5090-claude | 2026-03-22 | SHIPPED `24305c4f2`, PR #1069 | feat/tts-engine-capabilities-registry |
 | W1 (voice activation: 10-engine sweep) | 5090-claude | 2026-03-22 | VERIFIED — 10/14 Flute, 6/6 STT | (same branch) |

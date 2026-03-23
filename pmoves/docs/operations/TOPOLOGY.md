@@ -2,21 +2,41 @@
 
 > Single source of truth for all physical/virtual nodes, service assignments, agent teams, route flows, and runner strategy.
 >
-> Last updated: 2026-03-15
+> Last updated: 2026-03-22
 
 ---
 
 ## Node Inventory
 
-| Node | LAN IP | Tailscale Hostname | Public IP | Role | Runner Labels | vCPU / RAM | Cost |
-|------|--------|--------------------|-----------|------|---------------|------------|------|
-| Z890 (Windows 11) | — | pmoves-z890 | — | Dev, GPU (RTX 3090 Ti) | `self-hosted, ai-lab` (secondary) | 32C / 128GB | electricity |
-| POWERFULMOVES (Windows 11) | — | pmoves-powerfulmoves | — | Dev, Primary GPU (RTX 5090) | `self-hosted, ai-lab, gpu, cuda` | 24C / 64GB | electricity |
-| KVM4-1 | — | pmoves-kvm4-1 | Hostinger (TBD) | API Gateway | `self-hosted, vps, kvm4, production` | 8C / 16GB | $10/mo |
-| KVM4-2 | — | pmoves-kvm4-2 | Hostinger (TBD) | Data / Storage | `self-hosted, vps, kvm4, production` | 8C / 16GB | $10/mo |
-| KVM2 | — | pmoves-kvm2 | Hostinger (TBD) | Exit Node / Proxy | `self-hosted, vps, kvm2, backup` | 4C / 8GB | $10/mo |
-| Cloudflare Edge | — | — | Anycast | DNS, Worker routing | — | Edge | Free plan |
+| Node | LAN IP | Tailscale IP | Tailscale Hostname | Role | Runner Labels | vCPU / RAM | Cost |
+|------|--------|-------------|--------------------|----- |---------------|------------|------|
+| Z890 (Windows 11) | LAN (dual NIC) | `ts:<z890>` | pmoves-z890 | Dev, GPU (RTX 3090 Ti) | `self-hosted, ai-lab` (secondary) | 32C / 128GB | electricity |
+| POWERFULMOVES (5090) | LAN (dual NIC) | `ts:<5090-linux>`, `ts:<5090-win>` | pmoves-powerfulmoves, powerfulmoves-1 | Primary GPU (RTX 5090) | `self-hosted, ai-lab, gpu, cuda` | 24C / 64GB | electricity |
+| 4090 Laptop (Windows) | — | `ts:<laptop>` | pmoves-laptop | Control Plane, Edge Orchestration | — | RTX 4090 | electricity |
+| Jetson Orin #1 | LAN (RustDesk + SSH) | `ts:<nano>` (dormant) | pmoves-nano | Edge Inference (Nemotron/NemoClaw) | — | Orin (sm_87) | electricity |
+| Jetson Orin #2 | LAN (RustDesk + SSH) | TBD | TBD | Edge Inference (Nemotron/NemoClaw) | — | Orin (sm_87) | electricity |
+| KVM4-1 | — | — | pmoves-kvm4-1 | API Gateway | `self-hosted, vps, kvm4, production` | 8C / 16GB | $10/mo |
+| KVM4-2 | — | — | pmoves-kvm4-2 | Data / Storage | `self-hosted, vps, kvm4, production` | 8C / 16GB | $10/mo |
+| KVM2 | — | — | pmoves-kvm2 | Exit Node / Proxy | `self-hosted, vps, kvm2, backup` | 4C / 8GB | $10/mo |
+| Cloudflare Edge | — | — | — | DNS, Worker routing | — | Edge | Free plan |
 | GitHub Cloud | — | — | — | Lightweight CI | `ubuntu-latest` | 2C / 7GB | $0.008/min |
+
+### Mobile & IoT Devices
+
+| Device | LAN IP | Tailscale IP | Notes |
+|--------|--------|-------------|-------|
+| Pixel 10 Pro XL | — | `ts:<pixel>` | Mobile agent (Discord/Openclaw) |
+| Nest Audio (x2) | LAN | — | Cast speakers, voice output |
+| Nest Mini | LAN | — | Den speaker near 5090 |
+| TCL 75QM850G TV | LAN | — | Chromecast built-in |
+| Creality 3DMax | LAN | — | 3D printer — future Danger Room fabrication |
+
+### Jetson Orin Status
+
+Both Jetson Orin Nanos have SSH configured and are accessible via **RustDesk** on the local network. `pmoves-nano` was previously on the Tailscale mesh (dormant, offline 108d). Both need:
+1. Fresh Tailscale install via `PMOVES-Tailscale/deploy/deploy.sh --role edge`
+2. JetPack version check and potential update
+3. Registration in `agent-teams.yaml` and `node-agent-specialization.yaml`
 
 **Total VPS cost:** $30/mo + electricity for local nodes.
 
@@ -246,12 +266,15 @@ Key secrets:
 
 | Item | Blocker | Depends On |
 |------|---------|------------|
-| ~~5090 Tailscale join~~ | ~~OpenSSH not installed~~ | **DONE** — POWERFULMOVES connected as `pmoves-powerfulmoves` |
-| GPU Docker passthrough | NVIDIA Container Toolkit segfaults on RTX 5090/WSL2 | Update toolkit to latest version |
+| ~~5090 Tailscale join~~ | — | **DONE** — dual entry: pmoves-powerfulmoves (Linux) + powerfulmoves-1 (Windows) |
+| ~~4090 Laptop Tailscale~~ | — | **DONE** — pmoves-laptop connected |
+| Jetson #1 Tailscale reinstall | RustDesk access needed to open terminal | User connects via RustDesk, runs `deploy.sh --role edge` |
+| Jetson #2 Tailscale install | Same as #1 | User connects via RustDesk |
+| JetPack update (both Jetsons) | Need to check current version first | `cat /etc/nv_tegra_release` via RustDesk terminal |
+| GPU Docker passthrough | NVIDIA Container Toolkit on RTX 5090/WSL2 | Update toolkit to latest version |
 | DNS records creation | pmoves.ai zone not in Cloudflare | User adds zone + updates NS at Hostinger |
 | KVM public IPs | Not retrieved yet | Hostinger MCP or dashboard |
 | Cloudflare Worker deploy | Config ready, needs manual `wrangler deploy` | Zone active |
-| Hostinger MCP | `HOSTINGER_API_KEY` not local | Run `sync-secrets-local.yml` or copy manually |
 
 ---
 

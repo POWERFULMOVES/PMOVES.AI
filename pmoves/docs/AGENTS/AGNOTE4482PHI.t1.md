@@ -83,6 +83,8 @@ Required handoff fields:
 - `2026-03-22T21:00:00Z` CLAIM `5090-CLAUDE` scope: Voice stack activation — 14-engine validation (13/14 load, 11/14 synth), Flute-Gateway UltimateTTSProvider Gradio 4.x migration (dead `/api/` path + 92→121 param alignment), 10-engine Flute sweep, 6 STT round-trips, pterm lifecycle validation, PR #1069.
 - `2026-03-22T21:15:00Z` RELEASE `5090-CLAUDE` scope: Voice stack activated. PR #1069 pushed. 10/14 engines pass through Flute-Gateway REST API. STT round-trip proven (Flute TTS → Whisper = exact text match). Delegations issued: z890-claude (container rebuilds, Flute image rebuild), 4090-claude (P7→TTS Tailscale test, mobile agent test — both UNBLOCKED). Fish S2 Pro needs timeout increase. Pipecat WebSocket (8056) ready for implementation.
 
+- `2026-03-22T10:00:00Z` CLAIM `4090-CLAUDE` scope: W1 terminal renderer — agent_terminal_theme.py (reads flat 1.0.0 signatures + node specialization, renders ANSI-themed banners/status bars). Gate 3 cross-machine TTS routing verification (p7.mesh.remote-tts + va.p7.remote-speak). Branch: feat/w1-agent-terminal-theme. Stale branch cleanup (7 merged locals).
+
 ## Graphiti Review Log
 - `2026-02-21T10:35:03.6791631-05:00` REVIEW `CODEX-GPT5`
   - Verified six top-level submodule `CLAUDE.md` files are clean (no `TODO`, `FIXME`, placeholder, or artifact markers).
