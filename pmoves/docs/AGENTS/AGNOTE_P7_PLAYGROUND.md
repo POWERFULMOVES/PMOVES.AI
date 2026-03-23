@@ -230,22 +230,91 @@ Restructured z890-claude and 5090-claude dual entries as `alters` array (schema 
 | 4 | Voice personas catalog | `.claude/context/voice-personas.md` |
 | 5 | Gradio 408 fix (GRADIO_SERVER_NAME=127.0.0.1) | Pinokio fork `start.js` (pushed to main) |
 
-### Remaining (This Session)
+### Remaining (This Session) — RESOLVED 2026-03-22
 
-| # | Task | Depends On |
-|---|------|-----------|
-| 1 | Container rebuilds (tensorzero, YT, BoTZ, cipher-memory) | Submodule sync |
-| 2 | Flute container restart + healthcheck | TTS Studio running |
-| 3 | 13-engine sweep (`test_all_tts_engines.py --no-play`) | TTS Studio running |
+| # | Task | Status |
+|---|------|--------|
+| 1 | Container rebuilds (tensorzero, YT, BoTZ, cipher-memory) | **DELEGATED** → z890-claude (has full env vars) |
+| 2 | ~~Flute container restart + healthcheck~~ | **DONE** — fixed Gradio 4.x API migration + 121-param alignment |
+| 3 | ~~13-engine sweep~~ | **DONE** — 10/14 via Flute-Gateway, 11/14 direct synthesis |
 
 ### Deferred (Next Session)
 
 | # | Task | Why |
 |---|------|-----|
 | 1 | GPU model serving validation (Ollama 17/17) | Orchestra task |
-| 2 | Pipecat WebSocket design (8056) | Depends on Flute wiring |
+| 2 | Pipecat WebSocket design (8056) | Flute wiring done — ready to implement |
 | 3 | Media pipeline e2e (YT → Whisper → Hi-RAG) | Independent track |
 | 4 | W1 CLI bridge + W3 Discord | Roadmap items |
+| 5 | Fish S2 Pro via Flute (timeout) | Raise `ULTIMATE_TTS_TIMEOUT_SEC` to 300 |
+| 6 | Flute-Gateway Docker image rebuild | z890 has Supabase env vars needed for compose build |
+
+---
+
+## Step 7: Voice Stack Activation Results (2026-03-22)
+
+### Bug Fixed: UltimateTTSProvider Gradio 4.x Migration
+
+**PR #1069** — `fix(flute-gateway): migrate UltimateTTSProvider to Gradio 4.x event API`
+**Commit:** `24305c4f2`
+**File:** `pmoves/services/flute-gateway/providers/ultimate_tts.py`
+
+Two critical issues found and fixed:
+1. Dead Gradio `/api/` predict endpoint (404) → migrated to `/gradio_api/call/` event-based SSE
+2. 92-param array → 121-param array (TTS Studio API grew since provider was written)
+
+Also fixed: engine names (`Fish Speech S1`, `Qwen Voice Design`, `Chatterbox Multilingual`), load params (`F5-TTS Base`, Qwen `model_type`/`model_size`).
+
+### Flute-Gateway Engine Sweep (10/14 pass)
+
+| Engine | Size | Time | Status |
+|--------|------|------|--------|
+| KittenTTS | 434KB | 1.2s | **PASS** |
+| Kokoro | 425KB | 7.3s | **PASS** |
+| ChatterboxTTS | 250KB | 12.2s | **PASS** |
+| F5-TTS | 249KB | 10.7s | **PASS** |
+| Fish Speech S1 | 344KB | 27.5s | **PASS** |
+| VoxCPM | 522KB | 25.8s | **PASS** |
+| Qwen Voice Design | 206KB | 17.8s | **PASS** |
+| IndexTTS | 225KB | 13.6s | **PASS** |
+| Chatterbox Turbo | 198KB | 40.8s | **PASS** |
+| Chatterbox MTL | 182KB | 117.9s | **PASS** |
+| Fish S2 Pro | — | >120s | **TIMEOUT** (4B model, needs higher timeout) |
+| IndexTTS2 | — | — | **SKIP** (requires emotion ref_audio) |
+| Higgs Audio | — | — | **SKIP** (load timeout) |
+| VibeVoice | — | — | **SKIP** (separate endpoint, not unified API) |
+
+### STT Round-Trip Verification (6/6 perfect)
+
+| Source | Engine | Result |
+|--------|--------|--------|
+| Direct WAV | Kokoro | Exact match |
+| Direct WAV | KittenTTS | Exact match |
+| Direct WAV | Chatterbox | Exact match (2 segments) |
+| Flute REST | F5-TTS | "fourteen" → "14" (semantic match) |
+| Flute REST | Qwen | "fourteen" → "14" (semantic match) |
+| Flute REST | VoxCPM | "fourteen" → "14" (semantic match) |
+
+### Unblocks for Other Nodes
+
+| Unblock | Beneficiary | How |
+|---------|------------|-----|
+| Flute→TTS chain works | **All nodes** | `POST http://100.73.74.3:8055/v1/voice/synthesize/audio` |
+| Pterm lifecycle validated | **4090-claude** | Can start/stop TTS Studio remotely via Tailscale mesh |
+| `127.0.0.1` not `localhost` | **z890-claude** | Docker containers must use `host.docker.internal` for host services |
+
+### Delegations
+
+**z890-claude:**
+- Container rebuilds (tensorzero, YT, BoTZ, cipher-memory) — z890 has full env chain
+- Flute-Gateway Docker image rebuild (compose build needs Supabase env vars)
+- Agent Zero model tuning (pending)
+- ComfyUI first render test (pending)
+
+**4090-claude:**
+- Test P7 Agent Interpreter → 5090 TTS via Tailscale — **UNBLOCKED**
+- Test mobile agent (Discord/Openclaw) → TTS flow — **UNBLOCKED**
+- Claim W1: Agent Theming + Terminal (recommended per roadmap)
 
 ---
 
