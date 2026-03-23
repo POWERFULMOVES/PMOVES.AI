@@ -190,22 +190,9 @@ signatures:
       - media
     description: "GPU inference specialist on 5090 (primary GPU) — voice pipeline design, model evaluation, VRAM optimization"
 
-  announcer:
-    agent_id: "announcer"
-    display_name: "Broadcast Announcer"
-    glyph: "\u25B6"              # ▶ Play Button
-    color: "#F97316"             # Orange
-    accent: "#FB923C"
-    voice: broadcast              # professional, clear, deliberate pacing
-    tts_engine: kokoro
-    tts_voice: am_adam
-    tts_speaking_rate: 0.9
-    resonance:
-      - system-events
-      - deploy-notifications
-      - pr-merge-alerts
-      - cast-announcements
-    description: "Broadcast voice — system announcements, PR completions, deploy events over Cast speakers"
+# NOTE: System voices (announcer, narrator) live in voice-personas.md
+# and tts-engine-capabilities.yaml → service_runners, NOT here.
+# This file is for external contributors (AI agents + humans) only.
 
 # Voice guide for trail entries:
 #   analytical:     Thorough reasoning, cross-references, structured lists

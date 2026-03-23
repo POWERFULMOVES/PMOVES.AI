@@ -532,6 +532,38 @@ Example: `ingest.transcript.ready.v1`
 - **Subscribers:** ToKenism-Multi (musicMapping.ts), Hyperdimensions (visualization)
 - **Related:** See `/chit:bpm` tool spec, `TAC_TOKENISM.md`, `FLUTE_PROSODIC_ARCHITECTURE.md`
 
+**`voice.ear.analysis.v1`**
+- **Direction:** Published by Flute-Gateway prosodic ear (Phase A+)
+- **Purpose:** Full prosodic analysis of incoming speech (pitch, energy, tempo, pauses)
+- **Payload:**
+  ```json
+  {
+    "f0_mean": 185.3,
+    "energy_mean": 0.045,
+    "estimated_bpm": 72.5,
+    "boundaries": [{"type": "SENTENCE", "position_sec": 1.2}],
+    "emotion": "calm",
+    "duration_sec": 2.3
+  }
+  ```
+- **Subscribers:** CHIT BPM encoder, Hyperdimensions (ear visualization)
+- **Related:** See `PROSODIC_EAR_SPEC.md`
+
+**`voice.ear.emotion.v1`**
+- **Direction:** Published by Flute-Gateway prosodic ear (via media-audio-analyzer at :8082)
+- **Purpose:** Emotion detection from incoming speech audio
+- **Payload:**
+  ```json
+  {
+    "emotion": "happy",
+    "confidence": 0.87,
+    "speaker_id": null,
+    "duration_sec": 2.3
+  }
+  ```
+- **Subscribers:** Agent persona selector (emotion-aware engine routing)
+- **Related:** See `PROSODIC_EAR_SPEC.md`, media-audio-analyzer (HuBERT model)
+
 ## Voice Agent Relay Subjects
 
 **`voice.agent.response.v1`** (relayed)
