@@ -586,31 +586,48 @@ async def whoami(instance_id: Optional[str] = None):
     # Try to match by instance_id → registered BoTZ → agent signature
     if instance_id:
         async with httpx.AsyncClient() as client:
-            response = await client.get(
-                f"{SUPABASE_URL}/rest/v1/botz_instances",
-                headers=supabase_headers,
-                params={"instance_id": f"eq.{instance_id}"}
+            try:
+                response = await client.get(
+                    f"{SUPABASE_URL}/rest/v1/botz_instances",
+                    headers=supabase_headers,
+                    params={"instance_id": f"eq.{instance_id}"}
+                )
+            except httpx.RequestError as exc:
+                logger.warning("Supabase lookup failed: %s", exc)
+                raise HTTPException(
+                    status_code=502,
+                    detail="Upstream service unavailable",
+                ) from exc
+            if response.status_code != 200:
+                logger.warning("Supabase returned %d for instance lookup", response.status_code)
+                raise HTTPException(
+                    status_code=502,
+                    detail="Upstream service error",
+                )
+            instances = response.json()
+            if instances:
+                botz = instances[0]
+                agent_id = botz.get("metadata", {}).get("agent_id", botz.get("botz_name"))
+                sig = agent_signatures.get(agent_id, {})
+                return {
+                    "agent_id": agent_id,
+                    "botz_name": botz.get("botz_name"),
+                    "instance_id": instance_id,
+                    "theme": {
+                        "glyph": sig.get("glyph", "?"),
+                        "color": sig.get("color", "#888888"),
+                        "voice": sig.get("voice", "unknown"),
+                    },
+                    "skill_level": botz.get("skill_level"),
+                    "is_available": botz.get("is_available"),
+                }
+            # instance_id provided but not found in Supabase — 404, not a fake identity
+            raise HTTPException(
+                status_code=404,
+                detail=f"No BoTZ instance found for instance_id={instance_id}",
             )
-            if response.status_code == 200:
-                instances = response.json()
-                if instances:
-                    botz = instances[0]
-                    agent_id = botz.get("metadata", {}).get("agent_id", botz.get("botz_name"))
-                    sig = agent_signatures.get(agent_id, {})
-                    return {
-                        "agent_id": agent_id,
-                        "botz_name": botz.get("botz_name"),
-                        "instance_id": instance_id,
-                        "theme": {
-                            "glyph": sig.get("glyph", "?"),
-                            "color": sig.get("color", "#888888"),
-                            "voice": sig.get("voice", "unknown"),
-                        },
-                        "skill_level": botz.get("skill_level"),
-                        "is_available": botz.get("is_available"),
-                    }
 
-    # Fallback: return hostname-based identity
+    # Fallback: no instance_id provided — return hostname-based identity
     hostname = os.getenv("HOSTNAME", "unknown")
     return {
         "agent_id": "unknown",

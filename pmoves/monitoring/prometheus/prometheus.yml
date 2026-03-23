@@ -137,9 +137,7 @@ scrape_configs:
     static_configs:
       - targets: ["session-context-worker:8100"]
 
-  - job_name: messaging-gateway
-    static_configs:
-      - targets: ["messaging-gateway:8101"]
+  # messaging-gateway removed — service no longer exists in docker-compose.yml
 
   # === GitHub Runner Controller metrics ===
   # Exposes github_runner_* metrics matching the github-runners Grafana dashboard

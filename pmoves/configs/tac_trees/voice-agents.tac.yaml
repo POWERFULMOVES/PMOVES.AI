@@ -195,13 +195,13 @@ root:
           agent_hint: codex
 
         - id: va.flute.predict-api
-          task: "UltimateTTSProvider uses predict API (not event API)"
+          task: "UltimateTTSProvider uses Gradio 4.x call API"
           action:
             type: grep
             target: "pmoves/services/flute-gateway/providers/ultimate_tts.py"
-            pattern: "predict_api_url"
-            expect: "Uses /api/ predict endpoint, not /gradio_api/call/ event endpoint"
-          context: "Event API SSE/WebSocket breaks with newer Gradio versions"
+            pattern: "gradio_api/call"
+            expect: "Uses /gradio_api/call/ endpoint (Gradio 4.x), not legacy /api/ predict endpoint"
+          context: "Gradio 4.x migrated from /api/ to /gradio_api/call/ event API"
           agent_hint: codex
 
         - id: va.flute.host-url

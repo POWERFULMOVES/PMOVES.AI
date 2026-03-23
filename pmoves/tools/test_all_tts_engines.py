@@ -6,9 +6,9 @@ for all 121 unified synthesis parameters. No positional array indexing needed.
 
 Aligned with PMOVES-Ultimate-TTS-Studio fork (tools/test_engines.py pattern).
 
-Supports 14 engines: KittenTTS, Kokoro, F5-TTS, IndexTTS, IndexTTS2,
-Fish Speech, Fish Speech S2 Pro, ChatterboxTTS, Chatterbox Turbo,
-Chatterbox Multilingual, VoxCPM, Higgs Audio, Qwen3 TTS, VibeVoice.
+Supports 14 engines: KittenTTS, Kokoro TTS, F5-TTS, IndexTTS, IndexTTS2,
+Fish Speech S1, Fish Speech S2 Pro, ChatterboxTTS, Chatterbox Turbo,
+Chatterbox Multilingual, VoxCPM, Higgs Audio, Qwen Voice Design, VibeVoice.
 
 Per-engine client isolation: each engine load/synth reconnects the Gradio
 client on connection errors, preventing cascade failures when one engine
@@ -102,7 +102,7 @@ ENGINES = [
     },
     {
         "id": "fish",
-        "name": "Fish Speech",
+        "name": "Fish Speech S1",
         "load_api": "/handle_load_fish",
         "load_kwargs": {},
         "synth_kwargs": {
@@ -151,7 +151,7 @@ ENGINES = [
     },
     {
         "id": "qwen",
-        "name": "Qwen3 TTS",
+        "name": "Qwen Voice Design",
         "load_api": "/handle_load_qwen",
         "load_kwargs": {"model_type": "Base", "model_size": "1.7B"},
         "synth_kwargs": {
@@ -695,8 +695,9 @@ def main():
     print(f"  Output: {OUTPUT_DIR}")
 
     # Pterm pre-flight: auto-start TTS Studio if possible
-    # Skip pterm if user explicitly provided --url (they know where the service is)
-    skip_pterm = args.no_pterm or (args.url != DEFAULT_URL)
+    # Skip pterm if user explicitly provided --url or set ULTIMATE_TTS_URL env var
+    env_url_set = "ULTIMATE_TTS_URL" in os.environ
+    skip_pterm = args.no_pterm or (args.url != DEFAULT_URL) or env_url_set
     print("\n  Pterm pre-flight...")
     ready_url = pterm_preflight(skip=skip_pterm)
     if ready_url:
@@ -765,7 +766,13 @@ def main():
 
     if args.load_only:
         print("\n  (--load-only mode, skipping synthesis)")
-        return 0 if loaded > 0 else 1
+        # Fail if fewer than half the tested engines loaded
+        if loaded == 0:
+            return 1
+        if loaded < len(engines_to_test) / 2:
+            print(f"\n  WARNING: Only {loaded}/{len(engines_to_test)} engines loaded — failing.")
+            return 1
+        return 0
 
     if loaded == 0:
         print("\n  ERROR: No models loaded. Cannot test synthesis.")
@@ -853,7 +860,14 @@ def main():
                 print(f"    ❌ {name} ({loaded_str})")
 
     print(f"\n  Audio files: {OUTPUT_DIR}")
-    return 0 if synth_pass > 0 else 1
+    # Fail if fewer than half the testable engines (excluding skips) synthesized
+    testable = synth_pass + synth_fail
+    if testable == 0:
+        return 1
+    if synth_pass < testable / 2:
+        print(f"\n  WARNING: Only {synth_pass}/{testable} testable engines passed — failing.")
+        return 1
+    return 0
 
 
 if __name__ == "__main__":

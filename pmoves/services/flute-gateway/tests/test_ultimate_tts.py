@@ -40,29 +40,51 @@ def create_mock_wav_bytes(duration_samples: int = 24000) -> bytes:
     return buf.getvalue()
 
 
+class _MockSSEStream:
+    """Mock SSE stream for Gradio 4.x event API responses.
+
+    Simulates the server-sent events returned by
+    GET /gradio_api/call/<endpoint>/<event_id>.
+    """
+
+    def __init__(self, lines: list):
+        self._lines = lines
+
+    async def aiter_lines(self):
+        for line in self._lines:
+            yield line
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *args):
+        pass
+
+
 class TestUltimateTTSProviderInit:
     """Test provider initialization."""
 
     def test_init_default_values(self):
         """Test provider initializes with correct defaults."""
         provider = UltimateTTSProvider()
-        assert provider.base_url == "http://localhost:7861"
-        assert provider.predict_api_url == "http://localhost:7861/api"
-        assert provider.gradio_api_url == "http://localhost:7861/gradio_api"
+        assert provider.base_url == "http://localhost:7860"
+        assert provider.call_api_url == "http://localhost:7860/gradio_api/call"
+        assert provider.gradio_api_url == "http://localhost:7860/gradio_api"
 
     def test_init_custom_url(self):
         """Test provider accepts custom base_url."""
         provider = UltimateTTSProvider(base_url="http://custom:8080")
         assert provider.base_url == "http://custom:8080"
-        assert provider.predict_api_url == "http://custom:8080/api"
+        assert provider.call_api_url == "http://custom:8080/gradio_api/call"
         assert provider.gradio_api_url == "http://custom:8080/gradio_api"
 
     def test_engine_names_mapping(self):
-        """Test ENGINE_NAMES contains all 7 engines."""
+        """Test ENGINE_NAMES contains all 14 engines."""
         provider = UltimateTTSProvider()
         expected_engines = {
-            "kitten_tts", "kokoro", "f5_tts", "indextts2",
-            "fish", "chatterbox", "voxcpm"
+            "kitten_tts", "kokoro", "f5_tts", "indextts2", "indextts",
+            "fish", "fish_s2", "chatterbox", "chatterbox_turbo",
+            "chatterbox_multilingual", "voxcpm", "higgs", "qwen", "vibevoice",
         }
         assert set(provider.ENGINE_NAMES.keys()) == expected_engines
 
@@ -193,38 +215,42 @@ class TestUltimateTTSProviderSynthesize:
     def _create_mock_client(self, audio_url: str = "http://localhost:7861/file=test.wav"):
         """Create a mock httpx client for synthesis tests.
 
-        Mocks the Gradio synchronous predict API (/api/) which returns
-        results directly without SSE/WebSocket event polling.
+        Mocks the Gradio 4.x event-based API (/gradio_api/call/) which
+        uses a POST→event_id then GET→SSE stream polling pattern.
         """
         mock_client = AsyncMock()
 
-        # Mock model load response (predict API — direct result)
-        mock_load_response = MagicMock()
-        mock_load_response.status_code = 200
-        mock_load_response.json.return_value = {"data": ["\u2705 Loaded"]}
+        # All Gradio call POSTs return an event_id
+        mock_event_response = MagicMock()
+        mock_event_response.status_code = 200
+        mock_event_response.json.return_value = {"event_id": "mock-evt-123"}
+        mock_client.post = AsyncMock(return_value=mock_event_response)
 
-        # Mock synthesis response (predict API — direct result)
-        mock_synth_response = MagicMock()
-        mock_synth_response.status_code = 200
-        mock_synth_response.json.return_value = {
-            "data": [{"url": audio_url}, "Success"]
-        }
+        # SSE streams: model-load vs synthesis have different payloads
+        load_sse = [
+            "event: complete",
+            "data: " + json.dumps(["\u2705 Loaded"]),
+            "",
+        ]
+        synth_sse = [
+            "event: complete",
+            "data: " + json.dumps([{"url": audio_url}, "\u2705 Done"]),
+            "",
+        ]
 
-        # Mock audio download
+        def mock_stream(method, url, **kwargs):
+            if "generate_unified_tts" in url:
+                return _MockSSEStream(synth_sse)
+            return _MockSSEStream(load_sse)
+
+        mock_client.stream = MagicMock(side_effect=mock_stream)
+
+        # GET returns audio bytes (for the final audio download)
         mock_audio_response = MagicMock()
         mock_audio_response.status_code = 200
         mock_audio_response.content = create_mock_wav_bytes()
+        mock_client.get = AsyncMock(return_value=mock_audio_response)
 
-        async def mock_post(url, **kwargs):
-            if "handle_load" in url or "handle_f5" in url:
-                return mock_load_response
-            return mock_synth_response
-
-        async def mock_get(url, **kwargs):
-            return mock_audio_response
-
-        mock_client.post = AsyncMock(side_effect=mock_post)
-        mock_client.get = AsyncMock(side_effect=mock_get)
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=None)
 
@@ -242,8 +268,9 @@ class TestUltimateTTSProviderSynthesize:
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("engine", [
-        "kitten_tts", "kokoro", "f5_tts", "indextts2",
-        "fish", "chatterbox", "voxcpm"
+        "kitten_tts", "kokoro", "f5_tts", "indextts2", "indextts",
+        "fish", "fish_s2", "chatterbox", "chatterbox_turbo",
+        "chatterbox_multilingual", "voxcpm", "higgs", "qwen", "vibevoice",
     ])
     async def test_synthesize_each_engine(self, provider, engine):
         """Test synthesize works for each engine type."""
@@ -271,28 +298,34 @@ class TestUltimateTTSProviderSynthesize:
         """Test synthesize raises error on API failure."""
         mock_client = AsyncMock()
 
-        # Model load succeeds (predict API)
-        mock_load_response = MagicMock()
-        mock_load_response.status_code = 200
-        mock_load_response.json.return_value = {"data": ["Loaded"]}
+        # Model load POST succeeds with event_id
+        mock_load_post = MagicMock()
+        mock_load_post.status_code = 200
+        mock_load_post.json.return_value = {"event_id": "load-evt"}
 
-        # Synthesis fails with 500
-        mock_synth_response = MagicMock()
-        mock_synth_response.status_code = 500
-        mock_synth_response.text = "Internal Server Error"
+        # Synthesis POST fails with 500
+        mock_synth_post = MagicMock()
+        mock_synth_post.status_code = 500
+        mock_synth_post.text = "Internal Server Error"
 
         async def mock_post(url, **kwargs):
-            if "handle_load" in url:
-                return mock_load_response
-            return mock_synth_response
+            if "generate_unified_tts" in url:
+                return mock_synth_post
+            return mock_load_post
 
         mock_client.post = AsyncMock(side_effect=mock_post)
+
+        # SSE stream for model load
+        load_sse = ["event: complete", "data: " + json.dumps(["Loaded"]), ""]
+        mock_client.stream = MagicMock(
+            side_effect=lambda method, url, **kw: _MockSSEStream(load_sse)
+        )
         mock_client.get = AsyncMock()
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=None)
 
         with patch("httpx.AsyncClient", return_value=mock_client):
-            with pytest.raises(UltimateTTSError, match="API call failed"):
+            with pytest.raises(UltimateTTSError, match="Gradio call submit failed: 500"):
                 await provider.synthesize("Test", engine="kitten_tts")
 
     @pytest.mark.asyncio
@@ -374,10 +407,10 @@ class TestUltimateTTSProviderBuildParams:
         """Create provider instance."""
         return UltimateTTSProvider(base_url="http://localhost:7861")
 
-    def test_build_params_returns_92_elements(self, provider):
-        """Test _build_params returns exactly 92 parameters."""
+    def test_build_params_returns_121_elements(self, provider):
+        """Test _build_params returns exactly 121 parameters."""
         params = provider._build_params("Hello", "kitten_tts")
-        assert len(params) == 92
+        assert len(params) == 121
 
     def test_build_params_text_at_index_0(self, provider):
         """Test text is at index 0."""
@@ -397,12 +430,12 @@ class TestUltimateTTSProviderBuildParams:
         params = provider._build_params("Test", "kitten_tts")
         assert params[2] == "wav"
 
-    def test_build_params_kitten_voice_at_index_67(self, provider):
-        """Test KittenTTS voice is at index 67."""
+    def test_build_params_kitten_voice_at_index_83(self, provider):
+        """Test KittenTTS voice is at index 83."""
         params = provider._build_params("Test", "kitten_tts", voice="expr-voice-3-f")
-        assert params[67] == "expr-voice-3-f"
+        assert params[83] == "expr-voice-3-f"
 
-    def test_build_params_kokoro_voice_at_index_19(self, provider):
-        """Test Kokoro voice is at index 19."""
+    def test_build_params_kokoro_voice_at_index_28(self, provider):
+        """Test Kokoro voice is at index 28."""
         params = provider._build_params("Test", "kokoro", voice="af_bella")
-        assert params[19] == "af_bella"
+        assert params[28] == "af_bella"

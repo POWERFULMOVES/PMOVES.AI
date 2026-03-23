@@ -7,7 +7,7 @@ Usage:
     python scripts/cast_tts.py -d "Speaker group" --list-devices
     python scripts/cast_tts.py -d "Brysons Speaker set" "Alert: deployment complete"
 
-Requires: catt, Ultimate-TTS-Studio running on port 7861
+Requires: catt, Ultimate-TTS-Studio running on port 7860
 """
 import argparse
 import subprocess
