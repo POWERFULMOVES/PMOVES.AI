@@ -280,3 +280,6 @@ All resolved. No blockers.
 | W1 (terminal renderer + Gate 3) | 4090-claude | 2026-03-22 | CLAIMED | feat/w1-agent-terminal-theme |
 | W1 (Flute-Gateway Gradio 4.x fix) | 5090-claude | 2026-03-22 | SHIPPED `24305c4f2`, PR #1069 | feat/tts-engine-capabilities-registry |
 | W1 (voice activation: 10-engine sweep) | 5090-claude | 2026-03-22 | VERIFIED — 10/14 Flute, 6/6 STT | (same branch) |
+| Infra (P7 gates + topology sanitize) | z890-claude | 2026-03-22 | SHIPPED PRs #1063, #1064, #1068 | main |
+| Infra (CodeRabbit sweep #1066/#1069) | z890-claude + 4090-claude | 2026-03-22 | SHIPPED PR #1070 | main |
+| W1 (TTS service runners + prosodic endpoint) | z890-claude | 2026-03-23 | OPEN PR #1071 | feat/tts-service-runners-prosodic-ear |
