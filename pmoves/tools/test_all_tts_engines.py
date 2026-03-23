@@ -6,9 +6,9 @@ for all 121 unified synthesis parameters. No positional array indexing needed.
 
 Aligned with PMOVES-Ultimate-TTS-Studio fork (tools/test_engines.py pattern).
 
-Supports 14 engines: KittenTTS, Kokoro, F5-TTS, IndexTTS, IndexTTS2,
-Fish Speech, Fish Speech S2 Pro, ChatterboxTTS, Chatterbox Turbo,
-Chatterbox Multilingual, VoxCPM, Higgs Audio, Qwen3 TTS, VibeVoice.
+Supports 14 engines: KittenTTS, Kokoro TTS, F5-TTS, IndexTTS, IndexTTS2,
+Fish Speech S1, Fish Speech S2 Pro, ChatterboxTTS, Chatterbox Turbo,
+Chatterbox Multilingual, VoxCPM, Higgs Audio, Qwen Voice Design, VibeVoice.
 
 Per-engine client isolation: each engine load/synth reconnects the Gradio
 client on connection errors, preventing cascade failures when one engine

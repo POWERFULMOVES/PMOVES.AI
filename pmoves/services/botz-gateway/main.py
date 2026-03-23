@@ -593,14 +593,16 @@ async def whoami(instance_id: Optional[str] = None):
                     params={"instance_id": f"eq.{instance_id}"}
                 )
             except httpx.RequestError as exc:
+                logger.warning("Supabase lookup failed: %s", exc)
                 raise HTTPException(
                     status_code=502,
-                    detail=f"Supabase lookup failed: {exc}",
+                    detail="Upstream service unavailable",
                 ) from exc
             if response.status_code != 200:
+                logger.warning("Supabase returned %d for instance lookup", response.status_code)
                 raise HTTPException(
                     status_code=502,
-                    detail=f"Supabase returned {response.status_code} for instance lookup",
+                    detail="Upstream service error",
                 )
             instances = response.json()
             if instances:

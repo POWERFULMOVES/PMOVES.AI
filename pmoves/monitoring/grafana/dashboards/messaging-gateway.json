@@ -64,7 +64,7 @@
       "type": "stat",
       "title": "Cache Hit Rate",
       "gridPos": { "x": 20, "y": 1, "w": 4, "h": 4 },
-      "targets": [{ "expr": "sum(cast_cache_operations_total{operation=\"hit\"}) / (sum(cast_cache_operations_total{operation=\"hit\"}) + sum(cast_cache_operations_total{operation=\"miss\"})) * 100", "legendFormat": "Hit %" }],
+      "targets": [{ "expr": "(sum(rate(cast_cache_operations_total{operation=\"hit\"}[$__rate_interval])) / (sum(rate(cast_cache_operations_total{operation=\"hit\"}[$__rate_interval])) + sum(rate(cast_cache_operations_total{operation=\"miss\"}[$__rate_interval])))) * 100 > 0", "legendFormat": "Hit %" }],
       "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value" },
       "fieldConfig": { "defaults": { "unit": "percent", "decimals": 1, "thresholds": { "steps": [{ "color": "red", "value": 0 }, { "color": "yellow", "value": 50 }, { "color": "green", "value": 80 }] } } }
     },
