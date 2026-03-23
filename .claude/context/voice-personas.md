@@ -248,6 +248,20 @@ Pre-configured personas available out-of-box (see `pmoves/configs/tts-engine-cap
 | `batch-synth` | Batch Synth | Ultimate-TTS | indextts | temperature (lightweight) | Bulk synthesis |
 | `clone-verify` | Clone Verify | Ultimate-TTS | voxcpm | cfg_value + timesteps + denoise | Clone + transcription |
 | `podcast-host` | Podcast Host | Ultimate-TTS | vibevoice | multi-speaker (separate endpoint) | Podcast generation |
+| `announcer-broadcast` | Broadcast Announcer | Ultimate-TTS | kokoro | speed 0.9 + am_adam voice | System announcements, PR events, Cast speakers |
+
+### Service Runner Personas
+
+These personas are mapped to always-on or on-demand TTS service runners (see `pmoves/configs/tts-engine-capabilities.yaml` → `service_runners`):
+
+| Role | Persona | Engine | Latency | Use Case |
+|------|---------|--------|---------|----------|
+| `cli-voice` | pmoves-crush | KittenTTS | <100ms | CLI notifications, terminal gateway |
+| `announcer` | announcer-broadcast | Kokoro | <500ms | System events, Cast speakers, deploy alerts |
+| `narrator` | grams-narrator | F5-TTS | ~1-3s | Story narration, documentation read-aloud |
+| `streaming` | streaming-agent | Higgs | <500ms | Real-time WebSocket streaming |
+| `podcast` | podcast-host | VibeVoice | ~3-5s | Multi-speaker podcast (separate endpoint) |
+| `expressive` | clawz-reveal | IndexTTS2 | ~1-3s | Emotion-driven reveals, dramatic narration |
 
 ---
 
