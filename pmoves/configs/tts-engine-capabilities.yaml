@@ -145,7 +145,7 @@ engines:
     persona_default: archon-narrator
 
   fish:
-    name: Fish Speech
+    name: Fish Speech S1
     category: voice-cloning
     voice_cloning: true
     expressive_dimensions:
@@ -449,7 +449,7 @@ engines:
     persona_default: polyglot-agent
 
   qwen:
-    name: Qwen3 TTS
+    name: Qwen Voice Design
     category: multilingual
     voice_cloning: true
     models:

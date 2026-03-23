@@ -110,7 +110,7 @@ PMOVES.AI is a **production-ready multi-agent orchestration platform** featuring
 - **See:** `.claude/context/flute-gateway.md` for API reference
 
 **Ultimate-TTS-Studio** [Port 7860 native, 7861 Docker]
-- Multi-engine TTS with 13 engines (Kokoro, F5-TTS, KittenTTS, VoxCPM, Higgs Audio, Fish Speech S2 Pro, Chatterbox Turbo, Qwen3 TTS, IndexTTS, IndexTTS2, VibeVoice, Fish Speech, ChatterboxTTS)
+- Multi-engine TTS with 14 engines (KittenTTS, Kokoro TTS, F5-TTS, IndexTTS, IndexTTS2, Fish Speech S1, Fish Speech S2 Pro, VoxCPM, Higgs Audio, ChatterboxTTS, Chatterbox Turbo, Chatterbox Multilingual, Qwen Voice Design, VibeVoice)
 - Gradio web interface for interactive synthesis
 - GPU-accelerated (CUDA 12.4), runs natively via Pinokio (NOT Docker)
 - Health: `GET http://localhost:7860/gradio_api/info`

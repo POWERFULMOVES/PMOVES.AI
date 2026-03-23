@@ -27,6 +27,8 @@ services:
       - FLUTE_GATEWAY_URL=http://flute-gateway:8055
       - ULTIMATE_TTS_URL=http://host.docker.internal:7860
       - NATS_URL=nats://nats:pmoves@nats:4222
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     networks:
       - app_tier
       - bus_tier

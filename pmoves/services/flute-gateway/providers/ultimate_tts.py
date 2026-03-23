@@ -22,19 +22,20 @@ class UltimateTTSError(RuntimeError):
 class UltimateTTSProvider(VoiceProvider):
     """Ultimate-TTS-Studio provider via Gradio API.
 
-    Supports 13 TTS engines:
+    Supports 14 TTS engines:
       - kitten_tts (KittenTTS) - Ultra-lightweight, fast
       - kokoro (Kokoro TTS) - Multilingual ONNX
       - f5_tts (F5-TTS) - High quality voice cloning
-      - indextts2 (IndexTTS2) - Emotion vector control
       - indextts (IndexTTS) - Index-based synthesis
-      - fish (Fish Speech) - Zero-shot cloning
+      - indextts2 (IndexTTS2) - Emotion vector control
+      - fish (Fish Speech S1) - Zero-shot cloning
       - fish_s2 (Fish Speech S2 Pro) - 13-language zero-shot
-      - chatterbox (ChatterboxTTS) - Multilingual with controls
+      - chatterbox (ChatterboxTTS) - Expressive narration
       - chatterbox_turbo (Chatterbox Turbo) - Fast multilingual
+      - chatterbox_multilingual (Chatterbox Multilingual) - 17-language synthesis
       - voxcpm (VoxCPM) - Voice cloning + transcription
       - higgs (Higgs Audio) - Streaming capable
-      - qwen (Qwen3 TTS) - Alibaba multilingual
+      - qwen (Qwen Voice Design) - Alibaba multilingual
       - vibevoice (VibeVoice) - Style transfer synthesis
 
     Audio format: WAV, 24kHz sample rate (varies by engine).

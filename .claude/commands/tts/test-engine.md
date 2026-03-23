@@ -3,12 +3,12 @@ Test a single TTS engine with optional GPU metrics tracking via GPU Orchestrator
 ## Usage
 
 ```
-/tts:test-engine <engine_id> [--synth] [--metrics]
+/tts:test-engine <engine_id> [--load-only] [--metrics]
 ```
 
 **Arguments:**
 - `engine_id` — Engine to test (e.g., `kitten_tts`, `indextts2`, `kokoro`)
-- `--synth` — Also run synthesis (default: load-only)
+- `--load-only` — Only test model loading, skip synthesis
 - `--metrics` — Capture GPU VRAM before/after via GPU Orchestrator (port 8200)
 
 ## Implementation
@@ -18,7 +18,7 @@ Test a single TTS engine with optional GPU metrics tracking via GPU Orchestrator
 python -X utf8 pmoves/tools/test_all_tts_engines.py --engine {{args.engine_id}} --load-only {{#if args.metrics}}--metrics{{/if}}
 ```
 
-### Load + synthesize test
+### Load + synthesize test (default when --load-only is omitted)
 ```bash
 python -X utf8 pmoves/tools/test_all_tts_engines.py --engine {{args.engine_id}} {{#if args.metrics}}--metrics{{/if}}
 ```
@@ -37,7 +37,7 @@ python -c "import yaml; d=yaml.safe_load(open('pmoves/configs/tts-engine-capabil
 | `kokoro` | Kokoro TTS | preset-voices | ~800MB |
 | `higgs` | Higgs Audio | preset-voices | ~1500MB |
 | `f5_tts` | F5-TTS | voice-cloning | ~2000MB |
-| `fish` | Fish Speech | voice-cloning | ~1500MB |
+| `fish` | Fish Speech S1 | voice-cloning | ~1500MB |
 | `fish_s2` | Fish Speech S2 Pro | voice-cloning | ~2000MB |
 | `voxcpm` | VoxCPM | voice-cloning | ~2000MB |
 | `indextts` | IndexTTS | voice-cloning | ~1200MB |
@@ -45,7 +45,7 @@ python -c "import yaml; d=yaml.safe_load(open('pmoves/configs/tts-engine-capabil
 | `chatterbox` | ChatterboxTTS | multilingual | ~2000MB |
 | `chatterbox_turbo` | Chatterbox Turbo | multilingual | ~1500MB |
 | `chatterbox_multilingual` | Chatterbox Multilingual | multilingual | ~2500MB |
-| `qwen` | Qwen3 TTS | multilingual | ~2500MB |
+| `qwen` | Qwen Voice Design | multilingual | ~2500MB |
 | `vibevoice` | VibeVoice | podcast | ~3000MB |
 
 ## GPU Metrics Output (--metrics)
@@ -70,7 +70,7 @@ Falls back gracefully if GPU Orchestrator is offline.
 /tts:test-engine kitten_tts --metrics
 
 # Full load + synthesis test with metrics
-/tts:test-engine indextts2 --synth --metrics
+/tts:test-engine indextts2 --metrics
 
 # Sequential sweep to gauge cumulative GPU load
 /tts:test-engine kitten_tts --metrics

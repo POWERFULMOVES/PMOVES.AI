@@ -127,7 +127,7 @@ SUPABASE_KEY = get_secret("SUPABASE_SERVICE_ROLE_KEY", "")
 # Default to the host-gateway URL so the Flute stack is voice-ready by default.
 VIBEVOICE_URL = (os.getenv("VIBEVOICE_URL") or "http://host.docker.internal:7860").strip()
 WHISPER_URL = os.getenv("WHISPER_URL", "http://ffmpeg-whisper:8078")
-ULTIMATE_TTS_URL = os.getenv("ULTIMATE_TTS_URL", "http://ultimate-tts-studio:7860")
+ULTIMATE_TTS_URL = os.getenv("ULTIMATE_TTS_URL", "http://ultimate-tts-studio:7861")
 DEFAULT_PROVIDER = os.getenv("DEFAULT_VOICE_PROVIDER", "vibevoice")
 FLUTE_API_KEY = get_secret("FLUTE_API_KEY", "")
 
