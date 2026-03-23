@@ -28,6 +28,7 @@ from urllib.parse import urlsplit, urlunsplit
 from uuid import UUID, uuid4
 
 import httpx
+import numpy as np
 from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, UploadFile, WebSocket
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
@@ -665,6 +666,135 @@ async def synthesize_speech_audio(request: SynthesizeRequest):
         REQUESTS_TOTAL.labels(endpoint="/v1/voice/synthesize/audio", status="500").inc()
         logger.exception("TTS synthesis (audio) failed")
         raise HTTPException(status_code=500, detail="TTS synthesis failed")
+
+
+# Prosodic synthesis endpoint — boundary-aware chunked TTS
+@app.post("/v1/voice/synthesize/prosodic", dependencies=[Depends(verify_api_key)])
+async def synthesize_prosodic_speech(request: SynthesizeRequest):
+    """
+    Synthesize speech with prosodic awareness.
+
+    Parses text into boundary-aware chunks (sentence, clause, phrase, breath),
+    synthesizes each chunk independently, then stitches with natural pauses
+    and crossfades. Returns WAV audio + prosodic timeline metadata.
+
+    The prosodic timeline includes BPM encoding compatible with CHIT CGP events.
+    """
+    provider_name = request.provider or DEFAULT_PROVIDER
+    engine = request.engine or "kokoro"
+
+    if provider_name != "ultimate_tts" or not ultimate_tts_provider:
+        raise HTTPException(
+            status_code=400,
+            detail="Prosodic synthesis requires ultimate_tts provider",
+        )
+
+    try:
+        # 1. Parse text into prosodic chunks
+        chunks = parse_prosodic(request.text)
+        if not chunks:
+            raise HTTPException(status_code=400, detail="No parseable text")
+
+        # 2. Synthesize each chunk, tracking successful ones
+        chunk_audio: list[bytes] = []
+        successful_chunks: list[ProsodicChunk] = []
+        for chunk in chunks:
+            try:
+                wav_bytes = await ultimate_tts_provider.synthesize(
+                    text=chunk.text,
+                    voice=request.voice,
+                    engine=engine,
+                )
+            except Exception as chunk_exc:
+                logger.warning("Chunk synthesis failed for %r: %s", chunk.text[:40], chunk_exc)
+                continue
+            if wav_bytes:
+                chunk_audio.append(wav_bytes)
+                successful_chunks.append(chunk)
+
+        if not chunk_audio:
+            raise HTTPException(status_code=502, detail="All chunks failed synthesis")
+
+        # 3. Convert WAV bytes to numpy arrays for stitching
+        audio_arrays = []
+        for wav_data in chunk_audio:
+            with io.BytesIO(wav_data) as buf:
+                with wave.open(buf, "rb") as wf:
+                    frames = wf.readframes(wf.getnframes())
+                    audio_arrays.append(
+                        np.frombuffer(frames, dtype=np.int16).astype(np.float32) / 32768.0
+                    )
+
+        # Extract boundaries between chunks (stitch_chunks expects len == len(arrays) - 1)
+        boundaries = [c.boundary_after for c in successful_chunks[:-1]]
+
+        # 4. Stitch with prosodic pauses
+        stitched = stitch_chunks(audio_arrays, boundaries)
+
+        # 5. Convert stitched float32 numpy array to WAV bytes
+        int16_data = (stitched * 32767).clip(-32768, 32767).astype(np.int16)
+        wav_buf = io.BytesIO()
+        with wave.open(wav_buf, "wb") as wf:
+            wf.setnchannels(1)
+            wf.setsampwidth(2)
+            wf.setframerate(22050)
+            wf.writeframes(int16_data.tobytes())
+        wav_bytes_out = wav_buf.getvalue()
+
+        # 6. Build prosodic timeline for response
+        timeline = []
+        position = 0.0
+        for chunk in successful_chunks:
+            entry = {
+                "text": chunk.text,
+                "boundary_before": chunk.boundary_before.name,
+                "boundary_after": chunk.boundary_after.name,
+                "pause_after_ms": chunk.pause_after,
+                "position_ratio": round(chunk.position_ratio, 3),
+                "estimated_syllables": chunk.estimated_syllables,
+                "offset_sec": round(position, 3),
+            }
+            timeline.append(entry)
+            # Rough duration estimate: 150ms per syllable + pause
+            position += (chunk.estimated_syllables * 0.15) + (chunk.pause_after / 1000.0)
+
+        # 7. Build BPM metadata from boundaries
+        boundary_bpm_map = {
+            "SENTENCE": 60,
+            "CLAUSE": 90,
+            "PHRASE": 120,
+            "BREATH": 80,
+            "NONE": 150,
+        }
+        avg_bpm = sum(
+            boundary_bpm_map.get(c.boundary_after.name, 120) for c in successful_chunks
+        ) / max(len(successful_chunks), 1)
+
+        REQUESTS_TOTAL.labels(endpoint="/v1/voice/synthesize/prosodic", status="200").inc()
+
+        # Return WAV bytes with compact metadata in headers.
+        # Full timeline available via X-Prosodic-Timeline-URL (future) or
+        # by POST-ing to /v1/voice/synthesize/prosodic with Accept: application/json.
+        timeline_compact = json.dumps(
+            [{"t": e["text"][:30], "b": e["boundary_after"][0], "o": e["offset_sec"]} for e in timeline]
+        )
+        return Response(
+            content=wav_bytes_out,
+            media_type="audio/wav",
+            headers={
+                "Content-Disposition": 'attachment; filename="prosodic_tts.wav"',
+                "X-Prosodic-Chunks": str(len(successful_chunks)),
+                "X-Prosodic-BPM": str(round(avg_bpm, 1)),
+                "X-Prosodic-Timeline": timeline_compact,
+            },
+        )
+
+    except HTTPException:
+        raise
+    except Exception as exc:
+        REQUESTS_TOTAL.labels(endpoint="/v1/voice/synthesize/prosodic", status="500").inc()
+        logger.exception("Prosodic synthesis failed")
+        raise HTTPException(status_code=500, detail="Prosodic synthesis failed") from exc
 
 
 # STT recognition endpoint

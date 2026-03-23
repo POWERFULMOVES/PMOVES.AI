@@ -548,3 +548,53 @@ engines:
 # | batch-synth           | indextts            | temperature (lightweight)                          |
 # | clone-verify          | voxcpm              | cfg_value + timesteps + normalize/denoise          |
 # | podcast-host          | vibevoice           | multi-speaker (separate endpoint)                  |
+# | announcer-broadcast   | kokoro              | speed 0.9 + am_adam for authority                   |
+
+# =============================================================================
+# Service Runners — Always-On and On-Demand Engine Assignments
+# =============================================================================
+# Agents/runners can reference these roles without specifying engine details.
+# "always_on" engines stay warm (preloaded) for sub-second response.
+# "on_demand" engines load when first requested, unload after idle timeout.
+#
+# VRAM budget: always_on should fit within ~1.5GB total.
+# On 5090 (32GB): leaves 30GB+ for on-demand and inference models.
+# On Z890 (24GB): leaves 22GB+ for ComfyUI, Ollama, etc.
+
+service_runners:
+  always_on:
+    - engine: kitten_tts
+      role: cli-voice
+      persona: pmoves-crush
+      preload: true
+      use_case: "CLI notifications, quick alerts, terminal gateway voice"
+      latency_target_ms: 100
+
+    - engine: kokoro
+      role: announcer
+      persona: announcer-broadcast
+      preload: true
+      use_case: "System announcements, PR completions, deploy events, Cast speakers"
+      latency_target_ms: 500
+
+  on_demand:
+    - engine: f5_tts
+      role: narrator
+      persona: grams-narrator
+      use_case: "Story narration, documentation read-aloud, beat-sync"
+
+    - engine: higgs
+      role: streaming
+      persona: streaming-agent
+      use_case: "Real-time WebSocket streaming, live commentary"
+
+    - engine: vibevoice
+      role: podcast
+      persona: podcast-host
+      use_case: "Multi-speaker podcast generation, panel discussions"
+      endpoint: separate  # Uses VIBEVOICE_URL, not unified TTS API
+
+    - engine: indextts2
+      role: expressive
+      persona: clawz-reveal
+      use_case: "Emotion-driven reveals, dramatic narration with 8-dim vectors"

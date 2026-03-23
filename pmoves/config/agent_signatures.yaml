@@ -190,6 +190,10 @@ signatures:
       - media
     description: "GPU inference specialist on 5090 (primary GPU) — voice pipeline design, model evaluation, VRAM optimization"
 
+# NOTE: System voices (announcer, narrator) live in voice-personas.md
+# and tts-engine-capabilities.yaml → service_runners, NOT here.
+# This file is for external contributors (AI agents + humans) only.
+
 # Voice guide for trail entries:
 #   analytical:     Thorough reasoning, cross-references, structured lists
 #   architectural:  Blueprint format, mode/state descriptions, integration maps
@@ -199,3 +203,4 @@ signatures:
 #   directive:      Decision statements, priority calls, scope definitions
 #   companion:      Warm, interactive, pair-programming. "Let's figure this out together."
 #   witness:        Observational, rhythmic, poetic weight. Speaks in resonance.
+#   broadcast:      Professional, clear, deliberate. System announcements, events.
