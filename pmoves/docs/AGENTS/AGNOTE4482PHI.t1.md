@@ -87,6 +87,8 @@ Required handoff fields:
 - `2026-03-23T04:00:00Z` RELEASE `Z890-CLAUDE` scope: PRs #1063 (P7 docs), #1064 (28 gitlinks), #1068 (topology sanitize), #1069 (Flute Gradio 4.x merge), #1070 (12 CR findings) — all merged. PR #1071 (TTS service runners + prosodic endpoint) open with CR fixes applied. 4090-claude pr-trimmed #1070 (3 follow-up commits). Announcer persona + service runners config. Prosodic ear spec created. NATS subjects documented (voice.ear.*). Container rebuilds + Jetson onboarding deferred to next session.
 
 - `2026-03-22T10:00:00Z` CLAIM `4090-CLAUDE` scope: W1 terminal renderer — agent_terminal_theme.py (reads flat 1.0.0 signatures + node specialization, renders ANSI-themed banners/status bars). Gate 3 cross-machine TTS routing verification (p7.mesh.remote-tts + va.p7.remote-speak). Branch: feat/w1-agent-terminal-theme. Stale branch cleanup (7 merged locals).
+- `2026-03-23T18:00:00Z` CLAIM `4090-CLAUDE` scope: PR #1071 trim — verified 10 CodeRabbit findings (3 reviews), fixed 3 remaining (numpy→WAV serialization critical, compact timeline header major, chunk graceful degradation major), resolved 10/10 threads via GraphQL, CI green, squash-merged to main. Stale branch cleanup (fix/coderabbit-review-sweep-1066-1069-v2).
+- `2026-03-23T19:30:00Z` RELEASE `4090-CLAUDE` scope: PR #1071 merged (e972e1a6c). 3 code fixes committed (9cf941735). 10/10 CR threads resolved. 1 stale branch deleted. Trail signed. Handoff complete — main clean, no open PRs.
 
 ## Graphiti Review Log
 - `2026-02-21T10:35:03.6791631-05:00` REVIEW `CODEX-GPT5`
@@ -285,3 +287,9 @@ Required handoff fields:
 - Ack: `Voice stack activated. Fixed UltimateTTSProvider: dead /api/ path → /gradio_api/call/ SSE, 92→121 param alignment, engine name corrections. 10/14 engines pass Flute-Gateway REST. 6/6 STT round-trips exact match. PR #1069. Delegated container rebuilds to z890, unblocked 4090 for P7→TTS mesh testing.`
 - Signature: `ACK::5090-CLAUDE::PHI-4482-T1::VOICE-STACK-ACTIVATION`
 - Timestamp: `2026-03-22T21:15:00Z`
+
+## Agent ACK (Signed, PR #1071 Trim + Merge — Prosodic Audio Pipeline Fixes)
+- Agent: `4090-CLAUDE`
+- Ack: `PR #1071 trimmed and merged. Verified 10 CodeRabbit findings across 3 reviews — 7 pre-fixed by z890, 1 false positive (tts_speaking_rate architectural separation), 3 fixed: (1) numpy float32→int16 WAV byte conversion for Response content, (2) compact X-Prosodic-Timeline header (text[:30]+boundary[0]+offset) to avoid proxy limits, (3) per-chunk try/except for graceful degradation on provider failures. All threads resolved. CI green. Main clean.`
+- Signature: `ACK::4090-CLAUDE::PHI-4482-T1::PR1071-TRIM-MERGE-PROSODIC-FIXES`
+- Timestamp: `2026-03-23T19:30:00Z`
