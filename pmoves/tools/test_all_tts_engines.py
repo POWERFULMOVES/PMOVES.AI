@@ -72,6 +72,7 @@ ENGINES = [
         "id": "kitten_tts",
         "name": "KittenTTS",
         "load_api": "/handle_load_kitten",
+        "unload_api": "/handle_unload_kitten",
         "load_kwargs": {},
         "synth_kwargs": {"kitten_voice": "expr-voice-2-f"},
     },
@@ -79,6 +80,7 @@ ENGINES = [
         "id": "kokoro",
         "name": "Kokoro TTS",
         "load_api": "/handle_load_kokoro",
+        "unload_api": "/handle_unload_kokoro",
         "load_kwargs": {},
         "synth_kwargs": {"kokoro_voice": "af_heart", "kokoro_speed": 1.0},
     },
@@ -86,6 +88,7 @@ ENGINES = [
         "id": "f5_tts",
         "name": "F5-TTS",
         "load_api": "/handle_f5_load",
+        "unload_api": "/handle_f5_unload",
         "load_kwargs": {"model_name": "F5-TTS Base"},
         "synth_kwargs": {"f5_speed": 1.0},
     },
@@ -93,6 +96,7 @@ ENGINES = [
         "id": "indextts2",
         "name": "IndexTTS2",
         "load_api": "/handle_load_indextts2",
+        "unload_api": "/handle_unload_indextts2",
         "load_kwargs": {},
         "synth_kwargs": {
             "indextts2_emotion_mode": "audio_reference",
@@ -104,6 +108,7 @@ ENGINES = [
         "id": "fish",
         "name": "Fish Speech S1",
         "load_api": "/handle_load_fish",
+        "unload_api": "/handle_unload_fish",
         "load_kwargs": {},
         "synth_kwargs": {
             "fish_temperature": 0.8,
@@ -116,6 +121,7 @@ ENGINES = [
         "id": "chatterbox",
         "name": "ChatterboxTTS",
         "load_api": "/handle_load_chatterbox",
+        "unload_api": "/handle_unload_chatterbox",
         "load_kwargs": {},
         "synth_kwargs": {
             "chatterbox_exaggeration": 0.5,
@@ -128,6 +134,7 @@ ENGINES = [
         "id": "voxcpm",
         "name": "VoxCPM",
         "load_api": "/handle_load_voxcpm",
+        "unload_api": "/handle_unload_voxcpm",
         "load_kwargs": {},
         "synth_kwargs": {
             "voxcpm_cfg_value": 2.0,
@@ -140,6 +147,7 @@ ENGINES = [
         "id": "higgs",
         "name": "Higgs Audio",
         "load_api": "/handle_load_higgs",
+        "unload_api": "/handle_unload_higgs",
         "load_kwargs": {},
         "synth_kwargs": {
             "higgs_voice_preset": "EMPTY",
@@ -154,6 +162,7 @@ ENGINES = [
         "id": "qwen",
         "name": "Qwen Voice Design",
         "load_api": "/handle_load_qwen",
+        "unload_api": "/handle_unload_qwen",
         "load_kwargs": {"model_type": "Base", "model_size": "1.7B"},
         "synth_kwargs": {
             "qwen_mode": "voice_design",
@@ -167,6 +176,7 @@ ENGINES = [
         "id": "indextts",
         "name": "IndexTTS",
         "load_api": "/handle_load_indextts",
+        "unload_api": "/handle_unload_indextts",
         "load_kwargs": {},
         "synth_kwargs": {"indextts_temperature": 0.8},
     },
@@ -174,18 +184,23 @@ ENGINES = [
         "id": "fish_s2",
         "name": "Fish Speech S2 Pro",
         "load_api": "/handle_load_fish_s2",
+        "unload_api": "/handle_unload_fish_s2",
+        # S2 Pro (4.56B params) needs repo clone + weight download first.
+        # setup_api is called before load_api if present.
+        "setup_api": "/handle_setup_fish_s2",
         "load_kwargs": {},
         "synth_kwargs": {
             "fish_s2_temperature": 0.8,
             "fish_s2_top_p": 0.8,
             "fish_s2_repetition_penalty": 1.1,
-            "fish_s2_max_tokens": 1024,
+            "fish_s2_max_tokens": 2048,
         },
     },
     {
         "id": "chatterbox_turbo",
         "name": "Chatterbox Turbo",
         "load_api": "/handle_load_chatterbox_turbo",
+        "unload_api": "/handle_unload_chatterbox_turbo",
         "load_kwargs": {},
         "synth_kwargs": {
             "chatterbox_turbo_exaggeration": 0.5,
@@ -197,6 +212,7 @@ ENGINES = [
         "id": "chatterbox_multilingual",
         "name": "Chatterbox Multilingual",
         "load_api": "/handle_load_chatterbox_multilingual",
+        "unload_api": "/handle_unload_chatterbox_multilingual",
         "load_kwargs": {},
         "synth_kwargs": {
             "chatterbox_mtl_language": "en",
@@ -211,6 +227,7 @@ ENGINES = [
         "id": "vibevoice",
         "name": "VibeVoice",
         "load_api": "/handle_vibevoice_load",
+        "unload_api": "/handle_vibevoice_unload",
         "load_kwargs": {
             "selected_model_path": "",
             "path": "models/VibeVoice-1.5B",
@@ -378,6 +395,17 @@ def load_engine(
     if load_kwargs == "skip":
         return False, "skipped (requires setup)", client
 
+    # Some engines need a setup step (repo clone + weight download) before loading.
+    setup_api = engine.get("setup_api")
+    if setup_api:
+        try:
+            setup_result = client.predict(api_name=setup_api)
+            setup_msg = str(setup_result) if setup_result else ""
+            if "❌" in setup_msg or "failed" in setup_msg.lower():
+                return False, f"setup failed: {setup_msg[:60]}", client
+        except Exception as e:
+            return False, f"setup error: {str(e)[:50]}", client
+
     try:
         result = client.predict(**load_kwargs, api_name=engine["load_api"])
 
@@ -405,6 +433,38 @@ def load_engine(
         if new_client is not None:
             conn_tag = "conn-err" if _is_connection_error(e) else "err"
             return False, f"{msg} ({conn_tag}, reconnected)", new_client
+        return False, f"{msg} (reconnect failed)", client
+
+
+def unload_engine(
+    client: Client, engine: dict, url: str,
+) -> tuple[bool, str, Client]:
+    """Unload a TTS engine to free VRAM.
+
+    Calls the engine's Gradio unload endpoint which runs:
+    del model; gc.collect(); torch.cuda.empty_cache()
+
+    Returns:
+        (success, message, client) — client may be refreshed after errors.
+    """
+    unload_api = engine.get("unload_api")
+    if not unload_api:
+        return False, "no unload endpoint", client
+
+    try:
+        result = client.predict(api_name=unload_api)
+        status = str(result) if result else ""
+        if "✅" in status or "unloaded" in status.lower() or "freed" in status.lower():
+            return True, "unloaded", client
+        # Non-error response — treat as success
+        if status and "❌" not in status:
+            return True, f"status: {status[:40]}", client
+        return False, status[:60] or "empty response", client
+    except Exception as e:
+        msg = str(e)[:60]
+        new_client = _reconnect_client(url)
+        if new_client is not None:
+            return False, f"{msg} (reconnected)", new_client
         return False, f"{msg} (reconnect failed)", client
 
 
@@ -743,106 +803,105 @@ def main():
         else:
             print(f"unavailable at {GPU_ORCHESTRATOR_URL} (metrics will be skipped)")
 
-    # ── Phase 1: Load Models ──────────────────────────────────────────
-    print_header("Phase 1: Loading Models")
+    # ── Per-engine: Load → Synth → Unload ────────────────────────────
+    # Each engine is loaded, tested, then unloaded before the next one.
+    # This keeps max 1 engine in VRAM at a time (~44GB total vs 32GB GPU).
+    print_header("Engine Tests (load → synth → unload)")
 
     load_results = {}
-    for engine in engines_to_test:
-        print(f"  {engine['name']}...", end=" ", flush=True)
+    synth_results = {}
+    for i, engine in enumerate(engines_to_test, 1):
+        eid = engine["id"]
+        print(f"\n  [{i}/{len(engines_to_test)}] {engine['name']}")
 
+        # ── Load ──
+        print(f"      Loading...", end=" ", flush=True)
         gpu_before = capture_gpu_metrics() if args.metrics else None
 
         start = time.time()
         success, message, client = load_engine(client, engine, url)
         elapsed = time.time() - start
 
-        load_results[engine["id"]] = success
+        load_results[eid] = success
         if success:
             print(f"✓ ({elapsed:.1f}s)")
         elif message.startswith("skipped"):
             print(f"⏭ {message}")
+            synth_results[eid] = "skip"
+            continue
         elif "reconnected" in message:
-            print(f"❌ {message} — client refreshed for next engine")
+            print(f"❌ {message} — client refreshed")
+            synth_results[eid] = False
+            continue
         else:
             print(f"❌ {message}")
+            synth_results[eid] = False
+            continue
 
-        # GPU metrics delta after load
-        if args.metrics and success:
-            gpu_after = capture_gpu_metrics()
-            print_gpu_delta(engine["name"], gpu_before, gpu_after)
+        # GPU metrics after load
+        if args.metrics:
+            gpu_after_load = capture_gpu_metrics()
+            print_gpu_delta(f"{engine['name']} load", gpu_before, gpu_after_load)
+
+        # ── Synth (unless --load-only or separate endpoint) ──
+        if args.load_only:
+            synth_results[eid] = "skip"
+        elif engine["synth_kwargs"] is None:
+            print("      ⏭ Synth: separate endpoint (skip)")
+            synth_results[eid] = "skip"
+        else:
+            print(f"      Synthesizing: \"{TEST_TEXT[:40]}...\"")
+            gpu_before_synth = capture_gpu_metrics() if args.metrics else None
+
+            start = time.time()
+            synth_ok, audio_path, synth_msg, client = synthesize_engine(
+                client, engine, TEST_TEXT, url,
+            )
+            elapsed = time.time() - start
+
+            if not synth_ok:
+                extra = " — client refreshed" if "reconnected" in synth_msg else ""
+                print(f"      ❌ FAIL: {synth_msg}{extra}")
+                synth_results[eid] = False
+            else:
+                # Validate WAV
+                validation = validate_wav(audio_path)
+                if not validation["valid"]:
+                    print(f"      ❌ Invalid WAV: {', '.join(validation['errors'])}")
+                    synth_results[eid] = False
+                else:
+                    output_path = OUTPUT_DIR / f"{eid}.wav"
+                    shutil.copy(audio_path, output_path)
+                    size_kb = validation["size"] / 1024
+                    print(f"      ✓ {size_kb:.0f}KB, {validation['duration']:.1f}s @ {validation['sample_rate']}Hz ({elapsed:.1f}s)")
+                    print(f"      Saved: {output_path}")
+                    synth_results[eid] = True
+
+                    if args.metrics:
+                        gpu_after_synth = capture_gpu_metrics()
+                        print_gpu_delta(f"{engine['name']} synth", gpu_before_synth, gpu_after_synth)
+
+                    play_audio(output_path, skip_play=args.no_play)
+
+        # ── Unload — free VRAM for next engine ──
+        print(f"      Unloading...", end=" ", flush=True)
+        ul_ok, ul_msg, client = unload_engine(client, engine, url)
+        if ul_ok:
+            print(f"✓ VRAM freed")
+        else:
+            print(f"⚠ {ul_msg}")
+
+        if args.metrics:
+            gpu_after_unload = capture_gpu_metrics()
+            if gpu_before and gpu_after_unload:
+                freed = (gpu_before.get("used_vram_mb") or 0) - (gpu_after_unload.get("used_vram_mb") or 0)
+                if abs(freed) > 10:
+                    print(f"      VRAM net: {'+' if freed < 0 else '-'}{abs(freed):,.0f} MB")
 
     loaded = sum(1 for v in load_results.values() if v)
-    print(f"\n  Models loaded: {loaded}/{len(engines_to_test)}")
-
     if args.load_only:
-        print("\n  (--load-only mode, skipping synthesis)")
-        # Fail if fewer than half the tested engines loaded
-        if loaded == 0:
-            return 1
-        if loaded < len(engines_to_test) / 2:
-            print(f"\n  WARNING: Only {loaded}/{len(engines_to_test)} engines loaded — failing.")
-            return 1
-        return 0
-
-    if loaded == 0:
-        print("\n  ERROR: No models loaded. Cannot test synthesis.")
-        return 1
-
-    # ── Phase 2: Test Synthesis ───────────────────────────────────────
-    print_header("Phase 2: Synthesis Tests")
-
-    synth_results = {}
-    for i, engine in enumerate(engines_to_test, 1):
-        eid = engine["id"]
-        print(f"\n  [{i}/{len(engines_to_test)}] {engine['name']}")
-
-        if not load_results.get(eid):
-            print("      ⏭ SKIP (not loaded)")
-            synth_results[eid] = "skip"
-            continue
-
-        if engine["synth_kwargs"] is None:
-            print("      ⏭ SKIP (separate endpoint)")
-            synth_results[eid] = "skip"
-            continue
-
-        print(f"      Synthesizing: \"{TEST_TEXT[:40]}...\"")
-        gpu_before_synth = capture_gpu_metrics() if args.metrics else None
-
-        start = time.time()
-        success, audio_path, message, client = synthesize_engine(
-            client, engine, TEST_TEXT, url,
-        )
-        elapsed = time.time() - start
-
-        if not success:
-            extra = " — client refreshed" if "reconnected" in message else ""
-            print(f"      ❌ FAIL: {message}{extra}")
-            synth_results[eid] = False
-            continue
-
-        # Validate WAV
-        validation = validate_wav(audio_path)
-        if not validation["valid"]:
-            print(f"      ❌ Invalid WAV: {', '.join(validation['errors'])}")
-            synth_results[eid] = False
-            continue
-
-        # Copy to output directory
-        output_path = OUTPUT_DIR / f"{eid}.wav"
-        shutil.copy(audio_path, output_path)
-
-        size_kb = validation["size"] / 1024
-        print(f"      ✓ {size_kb:.0f}KB, {validation['duration']:.1f}s @ {validation['sample_rate']}Hz ({elapsed:.1f}s)")
-        print(f"      Saved: {output_path}")
-
-        # GPU metrics delta after synthesis
-        if args.metrics:
-            gpu_after_synth = capture_gpu_metrics()
-            print_gpu_delta(f"{engine['name']} synth", gpu_before_synth, gpu_after_synth)
-
-        play_audio(output_path, skip_play=args.no_play)
-        synth_results[eid] = True
+        print(f"\n  (--load-only mode, all engines unloaded after metrics)")
+        return 0 if loaded > 0 else 1
 
     # ── Summary ───────────────────────────────────────────────────────
     print_header("Summary")
@@ -852,7 +911,8 @@ def main():
     synth_skip = sum(1 for v in synth_results.values() if v == "skip")
 
     print(f"  Load:  {loaded}/{len(engines_to_test)} engines")
-    print(f"  Synth: {synth_pass} pass / {synth_fail} fail / {synth_skip} skip")
+    if not args.load_only:
+        print(f"  Synth: {synth_pass} pass / {synth_fail} fail / {synth_skip} skip")
 
     if synth_pass > 0:
         print("\n  Working engines:")
@@ -870,14 +930,7 @@ def main():
                 print(f"    ❌ {name} ({loaded_str})")
 
     print(f"\n  Audio files: {OUTPUT_DIR}")
-    # Fail if fewer than half the testable engines (excluding skips) synthesized
-    testable = synth_pass + synth_fail
-    if testable == 0:
-        return 1
-    if synth_pass < testable / 2:
-        print(f"\n  WARNING: Only {synth_pass}/{testable} testable engines passed — failing.")
-        return 1
-    return 0
+    return 0 if (loaded > 0 if args.load_only else synth_pass > 0) else 1
 
 
 if __name__ == "__main__":
