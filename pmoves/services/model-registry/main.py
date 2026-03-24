@@ -713,7 +713,7 @@ async def enrich_from_huggingface(model_id: str):
             enrichment["dimensions"] = dims
 
     # 4. Merge into existing metadata and update Supabase
-    merged = {**metadata, **enrichment}
+    merged = {**enrichment, **metadata}
     await supabase._request(
         "PUT",
         f"models?id=eq.{model_id}",
@@ -763,7 +763,7 @@ async def enrich_all_from_huggingface(
                 if dims:
                     enrichment["dimensions"] = dims
 
-            merged = {**metadata, **enrichment}
+            merged = {**enrichment, **metadata}
             await supabase._request(
                 "PUT",
                 f"models?id=eq.{model_id}",

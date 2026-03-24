@@ -33,6 +33,7 @@ models:
     vram_mb: 512
     dimensions: 768
     hf_id: "nomic-ai/nomic-embed-text-v1.5"
+    cuda_supported: true
     description: "Nomic Embed Text - Embeddings"
     priority_default: 3
     context_length: 8192
@@ -176,6 +177,7 @@ models:
     vram_mb: 3000
     dimensions: 3072
     hf_id: "Alibaba-NLP/gte-Qwen2-4B-instruct"
+    cuda_supported: true
     description: "Qwen3 Embedding 4B - Primary CUDA embedding"
     priority_default: 3
     context_length: 32768
@@ -185,6 +187,7 @@ models:
     vram_mb: 6000
     dimensions: 4096
     hf_id: "Alibaba-NLP/gte-Qwen2-8B-instruct"
+    cuda_supported: true
     description: "Qwen3 Embedding 8B - High quality"
     priority_default: 4
     context_length: 32768
@@ -194,6 +197,7 @@ models:
     vram_mb: 1500
     dimensions: 768
     hf_id: "google/gemma-embedding-300m"
+    cuda_supported: true
     description: "Gemma Embedding 300M - Lightweight"
     priority_default: 2
     context_length: 32768
