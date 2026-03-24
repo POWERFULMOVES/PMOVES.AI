@@ -1,6 +1,6 @@
 # AGNOTE4482 — Platform Roadmap: DARKXSIDE's School of POWERFUL MOVES
 
-GRAPHITI_MARK: `PHI-4482-ROADMAP::W1-W5::PMOVES`
+GRAPHITI_MARK: `PHI-4482-ROADMAP::W1-W6::PMOVES`
 
 > **Scratchpad**: All agents (5090-claude, z890-claude, 4090-claude, codex) read this before claiming workstream lanes.
 > **Origin**: 4090-claude session 2026-03-19, approved by DARKXSIDE.
@@ -263,6 +263,139 @@ All resolved. No blockers.
 - Podcast-publish + YouTube-upload skill manifests
 - Consciousness service port 8105→8106 (remotion_renderer conflict fix)
 
+## W6: Life Integration + Persona Matrix (Health × Wealth × ToKenism × Voice)
+
+**Goal:** Wire the "life" team agents (Health-wger, Wealth-Firefly, ToKenism-Multi) into the PMOVES agent fabric so users and agents can choose personas from a PMOVES collection, attach voice, and operate at matrix-level skill combinations.
+
+**Origin:** Z890-claude session 2026-03-23, DARKXSIDE strategic direction.
+
+**Core Thesis:** Now that voice is live (10/14 TTS engines, Flute-Gateway prosodic API, STT round-trip proven), and Discord infrastructure is operational (MCP shim, REST read, channel reader CLI), agents can surface personality through persona+voice+skills. Health/Wealth/ToKenism complete the loop — real data feeds simulation, simulation feeds attribution, attribution feeds persona.
+
+### Problem Statement
+
+1. **A2A Context Access** — Agents need the "whole book" but lack read/write traversal of the full contextual map. Cipher Memory provides search but not structured walk-through. Agents need a "book reader" pattern: constrained ranges, dot-along-tree, interval tags.
+2. **Life Team Pre-Stage** — Health (Stage 1) and Wealth (Base) have TAC trees but no NATS wiring, no CHIT contracts, no agent-accessible APIs beyond their native UIs.
+3. **Persona Collection** — Agent signatures exist (11 agents, glyphs+colors+voices) but persona *selection* — user/agent choosing a persona from the collection and binding skills — is not wired.
+4. **BPM × Attribution** — `bpm_encoder.py` is spec-only (AGNOTE4482.md topology audit). musicMapping.ts exists in ToKenism but the BPM-prosodic bridge pipeline (`tokenism.prosodic.bpm.v1`) is unimplemented.
+5. **Matrix Combinatorics** — Skills at matrix-level setups (voice × persona × Health × Wealth × CHIT) create a "noisy" space that needs decomposition into clean, composable paths.
+
+### Dependency Map
+
+```
+     Health (wger)          Wealth (Firefly III)
+         │                        │
+    NATS wiring              NATS wiring
+         │                        │
+         └───────┐    ┌──────────┘
+                 ▼    ▼
+           ToKenism-Multi
+          (CHIT attribution +
+           economic simulation)
+                 │
+         ┌───────┼────────┐
+         ▼       ▼        ▼
+    BPM encoder  Persona   Cipher Memory
+    (prosodic)   selector  (context book)
+         │       │         │
+         └───────┼─────────┘
+                 ▼
+        Voice-Synthesis Pipeline
+        (Flute → TTS → persona)
+                 │
+                 ▼
+        Discord Classrooms (W3)
+        cataclysmstudios.com (W4)
+```
+
+### Build Phases
+
+#### Phase 1: Life Team NATS Wiring (Container + Event)
+- Health: add NATS publisher for `health.workout.logged.v1`, `health.measurement.recorded.v1`
+- Wealth: add NATS publisher for `wealth.transaction.created.v1`, `wealth.budget.updated.v1`
+- Both: add `/healthz` + `/metrics` endpoints, CHIT contract stubs
+- Docker: compose profiles, secrets wiring, SSL_CERT_FILE neutralization
+
+#### Phase 2: ToKenism Bridge (Attribution ↔ Real Data)
+- Wire Health/Wealth NATS events into ToKenism simulation input
+- Implement `bpm_encoder.py` (Python port of `musicMapping.ts` BPM utilities)
+- Connect `tokenism.prosodic.bpm.v1` NATS subject to Flute-Gateway
+- Add Dirichlet attribution weighting for Health/Wealth contribution scoring
+
+#### Phase 3: Persona Selector + Voice Binding
+- Persona picker: read `agent_signatures.yaml` collection, present to user/agent
+- Bind persona → voice descriptor → Flute prosodic profile → TTS engine
+- BoTZ skill: `botz persona <agent-id>` — sets session persona + voice
+- Cipher Memory: store persona preferences per user/agent session
+
+#### Phase 4: Context Book (A2A Structured Traversal)
+- Cipher Memory enhancement: "book reader" API — walk knowledge graph by range, tree path, interval
+- Agent Zero MCP: expose context book as MCP tool for all agents
+- CHIT-tagged context segments: constrained vs unconstrained, dot-along-tree navigation
+- BPM tagging: average across initial instances for rhythmic context pacing
+
+#### Phase 5: Matrix Decomplex (Skill Composition)
+- FlOO$ pairing: `life-persona-voice` pipeline (Health→Wealth→ToKenism→Persona→Voice)
+- Noise reduction: decompose N×M skill matrix into clean lanes via CHIT taxonomy
+- Skill composition rules: which combinations are valid, which conflict
+- Evidence playbook: each matrix path has expected output + verification
+
+### Recommended Agent Assignments
+
+| Phase | Task | Recommended Agent | Rationale |
+|-------|------|-------------------|-----------|
+| **P1** | Health/Wealth Docker wiring, compose profiles, NATS env | **z890-claude** | Z890 is infra lead, life team has z890 node_affinity, container ops strength |
+| **P1** | Health/Wealth `/healthz` + `/metrics` endpoints | **z890-claude** | Same pattern as other service hardening (SSL fix, secrets funnel) |
+| **P2** | `bpm_encoder.py` implementation | **5090-claude** | GPU node, owns voice stack, musicMapping.ts knowledge from Flute work |
+| **P2** | ToKenism NATS bridge (Health/Wealth → simulation) | **5090-claude** | Orchestration lead, NATS wiring expertise from voice activation |
+| **P3** | Persona selector + BoTZ CLI integration | **4090-claude** | Owns W1 terminal renderer, natural fit for persona UI/CLI |
+| **P3** | Voice binding (persona → Flute prosodic profile) | **5090-claude** | Flute-Gateway expertise, prosodic API owner |
+| **P4** | Cipher Memory "book reader" API | **5090-claude** or **claude-opus** | Deep architecture work, Cipher Memory integration |
+| **P4** | Agent Zero MCP context book tool | **z890-claude** | MCP API wiring, Agent Zero compose proximity |
+| **P5** | FlOO$ `life-persona-voice` pipeline definition | **claude-opus** | Architecture/review lead, skill pairing design |
+| **P5** | Matrix decomplex rules + evidence playbook | **4090-claude** + **claude-opus** | Testing + architecture co-ownership |
+
+### Node Affinity Summary
+
+| Node | W6 Responsibilities | Strength |
+|------|---------------------|----------|
+| **Z890** | Container ops (Health/Wealth Docker), NATS wiring, secrets pipeline, MCP bridging | Infra lead, compose mastery, damage-control-aware |
+| **5090** | BPM encoder, ToKenism bridge, voice binding, Cipher Memory depth | GPU compute, voice stack owner, orchestration |
+| **4090** | Persona CLI, terminal integration, testing, evidence playbooks | Field agent, UI/CLI, mobile testing |
+| **Opus** | FlOO$ pipeline design, matrix decomposition, PR review/merge | Architecture, cross-cutting review |
+
+### Key Files
+
+| File | Status | Owner |
+|------|--------|-------|
+| `pmoves/tools/bpm_encoder.py` | **NEW** — spec exists, implementation needed | 5090 |
+| `PMOVES-ToKenism-Multi/integrations/contracts/chit/musicMapping.ts` | Exists — BPM/frequency utilities | Reference |
+| `pmoves/config/agent_signatures.yaml` | Exists — 11 agent personas | Reference |
+| `pmoves/configs/skill-pairings.yaml` | Needs new `life-persona-voice` entry | Opus |
+| `Pmoves-Health-wger/` | Submodule — Stage 1, needs NATS wiring | z890 |
+| `PMOVES-Wealth/` | Submodule — Base, needs everything | z890 |
+| `pmoves/services/publisher-discord/` | Active — MCP shim validated this session | z890 |
+
+### NATS Subjects (New)
+
+| Subject | Publisher | Consumer | Status |
+|---------|-----------|----------|--------|
+| `health.workout.logged.v1` | Health (wger) | ToKenism, Agent Zero | **NEW** |
+| `health.measurement.recorded.v1` | Health (wger) | ToKenism, Cipher Memory | **NEW** |
+| `wealth.transaction.created.v1` | Wealth (Firefly) | ToKenism | **NEW** |
+| `wealth.budget.updated.v1` | Wealth (Firefly) | Agent Zero | **NEW** |
+| `tokenism.prosodic.bpm.v1` | ToKenism | Flute-Gateway | Spec exists |
+| `persona.selected.v1` | BoTZ Gateway | Flute, Agent Zero | **NEW** |
+| `persona.voice.bound.v1` | Flute-Gateway | Publisher-Discord | **NEW** |
+
+### Cross-Workstream Dependencies
+
+- **W1** (Agent Theming): Persona selector builds on agent signatures → W6 extends with voice binding
+- **W3** (Discord Classrooms): Persona+voice enables Discord Voice Agent with personality → W6 P3 unblocks W3 voice features
+- **W4** (cataclysmstudios.com): Matrix skill composition feeds immersive demo content → W6 P5 produces evidence for compendium
+- **W5** (Enterprise): Health/Wealth integration demonstrates full-lifecycle platform → W6 P1 provides enterprise demo material
+
+---
+
 ## Agent Claim Register
 
 > Agents: write your CLAIM here before starting work on a workstream.
@@ -284,18 +417,23 @@ All resolved. No blockers.
 | Infra (CodeRabbit sweep #1066/#1069) | z890-claude + 4090-claude | 2026-03-22 | SHIPPED PR #1070 | main |
 | W1 (TTS service runners + prosodic endpoint) | z890-claude | 2026-03-23 | SHIPPED PR #1071 (merged by 4090) | main |
 | W1 (prosodic activation + engine verification) | 5090-claude | 2026-03-23 | VERIFIED — prosodic 2/2, CUDA load 13/14 | main |
+| Infra (Discord publisher-discord rebuild + MCP validation) | z890-claude | 2026-03-23 | SHIPPED — container running, MCP+REST validated | feat/discord-publisher-mcp |
+| W6-P1 (Health/Wealth Docker wiring + NATS) | z890-claude | 2026-03-23 | RECOMMENDED — next z890 session | — |
+| W6-P2 (bpm_encoder.py + ToKenism NATS bridge) | 5090-claude | 2026-03-23 | RECOMMENDED — next 5090 session | — |
+| W6-P3 (Persona selector + BoTZ CLI) | 4090-claude | 2026-03-23 | RECOMMENDED — after W1 terminal renderer | — |
+| W6-P3 (Voice binding: persona → Flute prosodic) | 5090-claude | 2026-03-23 | RECOMMENDED — after P2 | — |
+| W6-P5 (FlOO$ life-persona-voice pipeline) | claude-opus | 2026-03-23 | RECOMMENDED — architecture review | — |
 
 ## Recommended Next Steps (Post 2026-03-23 Fleet Session)
 
 ### 5090-claude (GPU Inference Specialist)
 | # | Task | Priority | Notes |
 |---|------|----------|-------|
-| 1 | Fix test script required kwargs regression | **P0** | 5 params dropped in PR #1069 merge |
-| 2 | Container rebuild: Flute-Gateway image bake | **P0** | Eliminates hot-patch dependency |
-| 3 | Fish S2 Pro Flute timeout | P1 | Set `ULTIMATE_TTS_TIMEOUT_SEC=300` |
-| 4 | Pipecat WebSocket (8056) | P1 | Voice agent duplex loop implementation |
-| 5 | MCP bridge SSE verification | P2 | Test `/sse` endpoint |
-| 6 | VRAM budget optimization | P2 | Concurrent engine loading profiles |
+| 1 | Container rebuild: Flute-Gateway image bake | **P0** | Eliminates hot-patch dependency |
+| 2 | Fish S2 Pro Flute timeout | P1 | Set `ULTIMATE_TTS_TIMEOUT_SEC=300` |
+| 3 | Pipecat WebSocket (8056) | P1 | Voice agent duplex loop implementation |
+| 4 | W6-P2: bpm_encoder.py implementation | P1 | Python port of musicMapping.ts |
+| 5 | VRAM budget optimization | P2 | Concurrent engine loading profiles |
 
 ### 4090-claude (Noise Reducer)
 | # | Task | Priority | Notes |
@@ -303,13 +441,12 @@ All resolved. No blockers.
 | 1 | P7 → 5090 TTS via Tailscale | **P0** | UNBLOCKED — Flute at 8055 + TTS at 7860 on mesh |
 | 2 | Mobile Discord → TTS flow | P1 | REST API proven |
 | 3 | W1: Agent Theming + Terminal | P2 | Roadmap item |
-| 4 | Review z890's incoming PR | P1 | Coordination |
 
 ### z890-claude (Infrastructure Coordinator)
 | # | Task | Priority | Notes |
 |---|------|----------|-------|
 | 1 | Container rebuilds (5 services) | **P0** | Blocks Docker image freshness |
-| 2 | Jetson Orin onboarding | P2 | Via RustDesk |
-| 3 | Agent Zero model tuning | P2 | |
-| 4 | ComfyUI first render test | P3 | |
+| 2 | W6-P1: Health/Wealth Docker wiring | P1 | NATS + /healthz + /metrics |
+| 3 | Jetson Orin onboarding | P2 | Via RustDesk |
+| 4 | Agent Zero model tuning | P2 | |
 | 5 | NATS leaf node to 5090 | P2 | Flute NATS=connected proves bus healthy |

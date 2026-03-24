@@ -1186,6 +1186,197 @@ async def _handle_claude_session_end(payload: Dict[str, Any]) -> None:
         _nats_loop_task = asyncio.create_task(_nats_resilience_loop())
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Discord Channel Read Endpoints
+# ─────────────────────────────────────────────────────────────────────────────
+
+@app.get("/channels/{channel_id}/messages")
+async def read_channel_messages(
+    channel_id: str,
+    limit: int = 50,
+    before: Optional[str] = None,
+    after: Optional[str] = None,
+):
+    """Fetch messages from a Discord channel via Bot API.
+
+    Query params:
+        limit:  Number of messages (1-100, default 50)
+        before: Fetch messages before this message ID (for pagination)
+        after:  Fetch messages after this message ID
+    """
+    if not DISCORD_BOT_TOKEN:
+        raise HTTPException(503, "DISCORD_BOT_TOKEN not configured")
+
+    limit = max(1, min(limit, 100))
+    params: Dict[str, Any] = {"limit": limit}
+    if before:
+        params["before"] = before
+    if after:
+        params["after"] = after
+
+    headers = {
+        "Authorization": f"Bot {DISCORD_BOT_TOKEN}",
+    }
+
+    async with httpx.AsyncClient(timeout=15) as client:
+        try:
+            r = await client.get(
+                f"https://discord.com/api/v10/channels/{channel_id}/messages",
+                headers=headers,
+                params=params,
+            )
+        except Exception as exc:
+            logger.warning(
+                "discord_read_exception",
+                extra={"event": "discord_read_exception", "channel_id": channel_id, "error": str(exc)},
+            )
+            raise HTTPException(502, f"Discord API error: {exc}")
+
+        if r.status_code == 401:
+            raise HTTPException(401, "Invalid or expired bot token")
+        if r.status_code == 403:
+            raise HTTPException(403, f"Bot lacks access to channel {channel_id}")
+        if r.status_code != 200:
+            raise HTTPException(r.status_code, f"Discord API returned {r.status_code}")
+
+    _webhook_counters["discord_messages_read"] += 1
+    messages = r.json()
+    logger.info(
+        "discord_messages_read",
+        extra={
+            "event": "discord_messages_read",
+            "channel_id": channel_id,
+            "count": len(messages),
+        },
+    )
+    return {"ok": True, "channel_id": channel_id, "count": len(messages), "messages": messages}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# MCP JSON-RPC 2.0 Shim (for BoTZ Gateway integration)
+# ─────────────────────────────────────────────────────────────────────────────
+
+_MCP_TOOLS = [
+    {
+        "name": "read_messages",
+        "description": "Fetch messages from a Discord channel. Returns up to 100 messages per call. Use 'before' param for pagination.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "channel_id": {"type": "string", "description": "Discord channel ID"},
+                "limit": {"type": "integer", "description": "Number of messages (1-100)", "default": 50},
+                "before": {"type": "string", "description": "Fetch messages before this message ID (pagination cursor)"},
+                "after": {"type": "string", "description": "Fetch messages after this message ID"},
+            },
+            "required": ["channel_id"],
+        },
+    },
+]
+
+
+async def _mcp_call_read_messages(arguments: Dict[str, Any]) -> Dict[str, Any]:
+    """Handle read_messages tool call."""
+    if not isinstance(arguments, dict):
+        return {"error": "arguments must be an object"}
+
+    channel_id = arguments.get("channel_id")
+    if not channel_id:
+        return {"error": "channel_id is required"}
+
+    if not DISCORD_BOT_TOKEN:
+        return {"error": "DISCORD_BOT_TOKEN not configured"}
+
+    try:
+        limit = max(1, min(int(arguments.get("limit", 50)), 100))
+    except (TypeError, ValueError):
+        return {"error": "limit must be an integer between 1 and 100"}
+    params: Dict[str, Any] = {"limit": limit}
+    if arguments.get("before"):
+        params["before"] = arguments["before"]
+    if arguments.get("after"):
+        params["after"] = arguments["after"]
+
+    headers = {"Authorization": f"Bot {DISCORD_BOT_TOKEN}"}
+
+    async with httpx.AsyncClient(timeout=15) as client:
+        try:
+            r = await client.get(
+                f"https://discord.com/api/v10/channels/{channel_id}/messages",
+                headers=headers,
+                params=params,
+            )
+        except Exception as exc:
+            return {"error": f"Discord API error: {exc}"}
+
+        if r.status_code != 200:
+            return {"error": f"Discord API returned {r.status_code}: {r.text[:256]}"}
+
+    messages = r.json()
+    _webhook_counters["discord_messages_read"] += 1
+    return {"messages": messages, "count": len(messages), "channel_id": channel_id}
+
+
+@app.post("/mcp")
+async def mcp_endpoint(body: Dict[str, Any] = Body(...)):
+    """JSON-RPC 2.0 MCP endpoint for BoTZ Gateway integration.
+
+    Supports:
+        tools/list — enumerate available Discord tools
+        tools/call — execute a Discord tool
+    """
+    jsonrpc = body.get("jsonrpc", "2.0")
+    req_id = body.get("id", 1)
+    method = body.get("method", "")
+    params = body.get("params") or {}
+    if not isinstance(params, dict):
+        return {
+            "jsonrpc": jsonrpc,
+            "id": req_id,
+            "error": {"code": -32000, "message": "params must be an object"},
+        }
+
+    if method == "tools/list":
+        return {"jsonrpc": jsonrpc, "id": req_id, "result": {"tools": _MCP_TOOLS}}
+
+    if method == "tools/call":
+        tool_name = params.get("name", "")
+        arguments = params.get("arguments") or {}
+        if not isinstance(arguments, dict):
+            return {
+                "jsonrpc": jsonrpc,
+                "id": req_id,
+                "error": {"code": -32000, "message": "arguments must be an object"},
+            }
+
+        if tool_name == "read_messages":
+            result = await _mcp_call_read_messages(arguments)
+        else:
+            return {
+                "jsonrpc": jsonrpc,
+                "id": req_id,
+                "error": {"code": -32601, "message": f"Unknown tool: {tool_name}"},
+            }
+
+        if "error" in result:
+            return {
+                "jsonrpc": jsonrpc,
+                "id": req_id,
+                "error": {"code": -32000, "message": result["error"]},
+            }
+
+        return {
+            "jsonrpc": jsonrpc,
+            "id": req_id,
+            "result": {"content": [{"type": "text", "text": json.dumps(result)}]},
+        }
+
+    return {
+        "jsonrpc": jsonrpc,
+        "id": req_id,
+        "error": {"code": -32601, "message": f"Unsupported method: {method}"},
+    }
+
+
 @app.post("/publish")
 async def publish_test(body: Dict[str, Any] = Body(...)):
     """Test endpoint for publishing messages to Discord webhook."""

@@ -54,6 +54,8 @@ services:
       DB_DATABASE: ${FIREFLY_DB_DATABASE:-/var/www/html/storage/database/database.sqlite}
       TRUSTED_PROXIES: ${FIREFLY_TRUSTED_PROXIES:-**}
       TZ: ${FIREFLY_TZ:-America/New_York}
+      # Neutralise Windows SSL_CERT_FILE leak
+      SSL_CERT_FILE: ""
     ports:
       - "${FIREFLY_PORT:-8075}:8080"  # Default 8075; 8082 reserved for media-audio in docker-compose.yml
     volumes:
