@@ -67,6 +67,19 @@ class UltimateTTSProvider(VoiceProvider):
         "indextts2": None,
     }
 
+    # Per-engine synthesis timeout overrides (seconds).
+    # Heavier models (large vocab, zero-shot cloning, streaming decode) need
+    # more headroom than the global default.
+    ENGINE_TIMEOUTS: Dict[str, float] = {
+        "fish_s2": 300.0,              # 13-lang zero-shot, 2048 max tokens
+        "higgs": 240.0,                # streaming-capable, large context
+        "qwen": 240.0,                 # Alibaba multilingual, voice design mode
+        "voxcpm": 240.0,               # voice cloning + transcription pipeline
+        "chatterbox_multilingual": 180.0,  # 17-language synthesis
+        "f5_tts": 180.0,               # high-quality voice cloning
+        "indextts2": 180.0,            # emotion vector control
+    }
+
     # Available KittenTTS voices
     KITTEN_VOICES = [
         "expr-voice-2-m", "expr-voice-2-f",
@@ -369,7 +382,9 @@ class UltimateTTSProvider(VoiceProvider):
         engine = kwargs.get("engine", self._default_engine)
         voice = voice or self.DEFAULT_VOICES.get(engine)
 
-        async with httpx.AsyncClient(timeout=self._timeout) as client:
+        engine_timeout = self.ENGINE_TIMEOUTS.get(engine, self._timeout)
+
+        async with httpx.AsyncClient(timeout=engine_timeout) as client:
             # Ensure model is loaded
             await self._load_model(client, engine)
 
@@ -379,7 +394,7 @@ class UltimateTTSProvider(VoiceProvider):
             try:
                 # Use Gradio's event-based API (/gradio_api/call/).
                 result_data = await self._call_gradio(
-                    client, "/generate_unified_tts", data, timeout=self._timeout,
+                    client, "/generate_unified_tts", data, timeout=engine_timeout,
                 )
 
                 if not isinstance(result_data, list) or len(result_data) < 2:
@@ -422,7 +437,9 @@ class UltimateTTSProvider(VoiceProvider):
                 return wav_bytes
 
             except httpx.TimeoutException as exc:
-                raise UltimateTTSError(f"Timeout during synthesis: {exc}") from exc
+                raise UltimateTTSError(
+                    f"Timeout during {engine} synthesis ({engine_timeout}s): {exc}"
+                ) from exc
             except httpx.HTTPError as exc:
                 raise UltimateTTSError(f"HTTP error: {exc}") from exc
 
