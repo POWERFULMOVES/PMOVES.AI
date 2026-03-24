@@ -398,3 +398,107 @@ STT round-trip on prosodic audio: text matches (Whisper renders "CLAUDEs" as "cl
 | `pbnj/pinokio/api/pmoves-services/SKILL.md` | PMOVES Services skill for P7 |
 | `pmoves/docs/ARTSTUFF/Ultimate-TTS-Studio.git/SKILL.md` | TTS skill for P7 |
 | `D:\pinokio\` | P7 install (upgraded, requirements pending) |
+
+---
+
+## Step 9: CHIT Integration Wave 1 + Embedding Standardization (2026-03-24)
+
+### 4090-claude Session Summary (PR #1082 — 8 commits)
+
+| Agent | PRs | Key Deliverables |
+|-------|-----|-----------------|
+| **4090-claude** | #1082 (authored, 8 commits) | CHIT CGP on Extract Worker + FFmpeg-Whisper, Qwen3-embedding:4b stack standardization, HF enrichment API, model metadata seed, BoTZ submodule sync |
+
+### Embedding Stack Standardization
+
+| Component | Before | After |
+|-----------|--------|-------|
+| Embedding model | `all-MiniLM-L6-v2` (384d, CPU) | `qwen3-embedding:4b` (3072d, CUDA via TensorZero→Ollama) |
+| Routing | Direct sentence-transformers | TensorZero Gateway (`/openai/v1/embeddings`) |
+| Qdrant collection | `pmoves_chunks` | `pmoves_chunks_qwen3` (old 384d data preserved) |
+| Extract Worker (8083) | `EMBEDDING_BACKEND=sentence-transformers` | `EMBEDDING_BACKEND=tensorzero` |
+| Hi-RAG v2 (8086/8087) | `TENSORZERO_EMBED_MODEL=gemma_embed_local` | `TENSORZERO_EMBED_MODEL=qwen3_embedding_4b_local` |
+| Agent Zero (8080) | `A0_SET_embed_model_name=gemma_embed_local` | `A0_SET_embed_model_name=qwen3_embedding_4b_local` |
+| Hi-RAG v1 (8089) | `pmoves_chunks` | Unchanged (backward compat) |
+
+TensorZero dependency is `required: false` — Extract Worker falls back to sentence-transformers if TZ is unavailable.
+
+### CHIT CGP Publishing (Wave 1)
+
+| Service | NATS Subject | CGP Version | Trigger |
+|---------|-------------|-------------|---------|
+| Extract Worker (8083) | `tokenism.cgp.ready.v1` | v1.0 | After text embedding + Qdrant/Meili indexing |
+| FFmpeg-Whisper (8078) | `tokenism.cgp.ready.v1` | v1.0 | After transcription complete |
+
+Both services also publish their original domain events (`ingest.transcript.ready.v1`, etc.). CGP packets include `spec_version`, `agent_id`, `resonance_tags`, `timestamp`.
+
+### Model Registry HuggingFace Enrichment
+
+New endpoints on Model Registry (port 8110):
+- `POST /api/models/{id}/enrich-hf` — fetches config.json for dimensions, tags, CUDA support, download stats from HuggingFace API
+- `POST /api/models/enrich-hf-bulk` — batch-enriches all models with `hf_id` in metadata
+
+New file: `hf_client.py` — httpx-based HF API client (no new pip dependencies).
+
+Seed data enriched with `hf_id`, `dimensions`, `cuda_supported`:
+- `qwen3-embedding:4b` → 3072d, `Alibaba-NLP/gte-Qwen2-4B-instruct`
+- `qwen3-embedding:8b` → 4096d, `Alibaba-NLP/gte-Qwen2-8B-instruct`
+- `embeddinggemma:300m` → 768d, `google/gemma-embedding-300m`
+- `nomic-embed-text` → 768d, `nomic-ai/nomic-embed-text-v1.5`
+
+### BoTZ Submodule Sync
+
+`PMOVES-BoTZ` updated to `d125e8a` — CodeQL advanced scan + dependabot npm bumps. `PMOVES-ToKenism-Multi` desktop.ini cleaned. `PMOVES-DoX` untracked local artifacts only (gitlink correct).
+
+### What P7 Phase 7 Gets From This
+
+- Any P7-launched ingestion (App Assistant triggers Extract Worker) now produces CHIT-attributable CGP events on the geometry bus
+- Transcription triggered by P7 agent sessions (FFmpeg-Whisper) now has geometric provenance
+- Model Registry HF enrichment lets P7 agents query model capabilities (dimensions, CUDA support) before dispatching inference
+- Qwen3-embedding:4b at 3072d means all P7-originated search/retrieval uses high-quality CUDA-accelerated vectors
+- Foundation for `p7.nats.*` subjects: P7 launcher events can be correlated with downstream CGP via shared context IDs
+
+### Recommended Next Steps
+
+**5090-claude (GPU Inference Specialist):**
+
+| # | Task | Priority | Notes |
+|---|------|----------|-------|
+| 1 | Container rebuild: Flute-Gateway image bake | **P0** | Eliminates hot-patch dependency |
+| 2 | Qwen3-embedding:4b e2e validation (Ollama CUDA) | **P0** | New default from #1082 needs GPU verification |
+| 3 | Fish S2 Pro Flute timeout | P1 | `ULTIMATE_TTS_TIMEOUT_SEC=300` |
+| 4 | Pipecat WebSocket (8056) | P1 | Voice agent duplex loop |
+| 5 | W6-P2: bpm_encoder.py | P2 | Python port of musicMapping.ts |
+
+**4090-claude (Noise Reducer):**
+
+| # | Task | Priority | Notes |
+|---|------|----------|-------|
+| 1 | PR #1082 merge + AGNOTE/TAC docs | **P0** | Branch: feat/chit-integration-wave-1 |
+| 2 | P7 Agent Interpreter → 5090 TTS via Tailscale | P1 | UNBLOCKED since Step 7 |
+| 3 | W1: Agent Theming + Terminal | P2 | Roadmap claim |
+
+**z890-claude (Infrastructure Coordinator):**
+
+| # | Task | Priority | Notes |
+|---|------|----------|-------|
+| 1 | Container rebuilds (6 services — includes embedding env changes) | **P0** | Blocks Docker image freshness |
+| 2 | `pmoves_chunks_qwen3` Qdrant collection provision | P1 | New 3072d collection; old data untouched |
+| 3 | W6-P1: Health/Wealth Docker wiring | P1 | NATS + /healthz + /metrics |
+| 4 | Jetson Orin onboarding | P2 | Via RustDesk |
+| 5 | NATS leaf node to 5090 | P2 | |
+
+---
+
+## Critical Files (Updated)
+
+| File | Purpose |
+|------|---------|
+| `pmoves/configs/tac_trees/pinokio-p7.tac.yaml` | P7 integration TAC tree (Phase 7 expanded) |
+| `pmoves/configs/tac_trees/voice-agents.tac.yaml` | Voice pipeline TAC (Phase 15: P7 routing) |
+| `pmoves/config/agent_registry.yaml` | Agent identity (z890/5090/4090-claude) |
+| `pmoves/config/agent_signatures.yaml` | Visual identity — deduplicated |
+| `pmoves/services/model-registry/main.py` | Model Registry + HF enrichment endpoints |
+| `pmoves/services/model-registry/hf_client.py` | HuggingFace API client |
+| `pmoves/config/gpu-models.yaml` | GPU model catalog (now with dimensions + hf_id) |
+| `pmoves/docker-compose.yml` | Embedding stack standardization |
