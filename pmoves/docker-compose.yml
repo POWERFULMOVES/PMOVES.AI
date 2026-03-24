@@ -3072,6 +3072,8 @@ services:
       # PMOVES integration
       - ENABLE_OBSERVABILITY=${WGER_OBSERVABILITY:-true}
       - PROMETHEUS_MULTIPROC_DIR=/tmp/prometheus
+      # Neutralise Windows SSL_CERT_FILE leak (host env > env_file precedence)
+      - SSL_CERT_FILE=
     ports:
       - "${WGER_BIND:-127.0.0.1}:${WGER_PORT:-8000}:8000"
     profiles: ["health", "wger"]
