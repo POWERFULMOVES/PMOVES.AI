@@ -22,13 +22,15 @@ RUN apt-get update \
        libvpx-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Python dependencies into --user prefix so we can COPY them
+# Install Python dependencies into a known prefix so we can COPY them.
+# Using --prefix (not --user) avoids HOME-dependent site-packages resolution
+# which breaks when compose/env overrides HOME=/app.
 COPY services/flute-gateway/requirements.txt .
 COPY services/flute-gateway/requirements.lock .
-RUN pip install --no-cache-dir --user -r requirements.txt
+RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
 
 COPY services/flute-gateway/requirements-pipecat.txt .
-RUN pip install --no-cache-dir --user -r requirements-pipecat.txt
+RUN pip install --no-cache-dir --prefix=/install -r requirements-pipecat.txt
 
 # ── Stage 2: Runtime ─────────────────────────────────────────────
 # Clean image with only runtime shared libs — no gcc, no -dev headers.
@@ -62,8 +64,11 @@ RUN apt-get update \
 # Non-root user for security
 RUN useradd --create-home --shell /bin/bash pmoves
 
-# Copy pre-compiled Python packages from builder
-COPY --from=builder /root/.local /home/pmoves/.local
+# Copy pre-compiled Python packages into system site-packages.
+# This avoids HOME-dependent user site-packages which breaks when
+# Docker Compose env files override HOME.
+COPY --from=builder /install/lib/python3.11/site-packages/ /usr/local/lib/python3.11/site-packages/
+COPY --from=builder /install/bin/ /usr/local/bin/
 
 # Copy shared common module (flute-gateway imports services.common.env)
 COPY services/common/ services/common/
@@ -77,9 +82,7 @@ RUN chown -R pmoves:pmoves /app
 # Switch to non-root user
 USER pmoves
 
-# Ensure user-installed packages are on PATH
-ENV PATH="/home/pmoves/.local/bin:${PATH}" \
-    FLUTE_HTTP_PORT=8055 \
+ENV FLUTE_HTTP_PORT=8055 \
     FLUTE_WS_PORT=8056
 
 # Health check
