@@ -204,9 +204,29 @@ class UltimateTTSProvider(VoiceProvider):
             logger.warning("Unknown engine %s, skipping model load", engine)
             return True
 
+        # Some engines require a setup step before loading (repo clone, weight download)
+        setup_map = {
+            "fish_s2": "/handle_setup_fish_s2",
+        }
+        setup_endpoint = setup_map.get(engine)
+        if setup_endpoint:
+            try:
+                await self._call_gradio(client, setup_endpoint, [], timeout=600.0)
+                logger.info("Ultimate-TTS %s setup complete", engine)
+            except Exception as exc:
+                logger.warning("Setup for %s failed (continuing to load): %s", engine, exc)
+
+        # Heavy models need more than 60s to load
+        load_timeout_map = {
+            "fish_s2": 120.0,
+            "higgs": 120.0,
+            "qwen": 90.0,
+        }
+
         try:
             load_data = load_data_map.get(engine, [])
-            data = await self._call_gradio(client, endpoint, load_data, timeout=60.0)
+            load_timeout = load_timeout_map.get(engine, 60.0)
+            data = await self._call_gradio(client, endpoint, load_data, timeout=load_timeout)
 
             if isinstance(data, list) and len(data) > 0:
                 status = str(data[0]) if data[0] else ""
