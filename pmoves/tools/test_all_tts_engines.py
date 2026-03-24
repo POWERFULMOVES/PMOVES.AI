@@ -420,11 +420,20 @@ def synthesize_engine(
     if engine["synth_kwargs"] is None:
         return False, "", "separate endpoint (skip)", client
 
-    # Build kwargs: common + engine-specific
+    # Build kwargs: common + required-but-unused + engine-specific.
+    # Gradio marks several Textbox params as "required" (no Python default)
+    # even though they are only used by their respective engine. We must
+    # provide them in every call to satisfy the gradio_client validator.
     kwargs = {
         "text_input": text,
         "tts_engine": engine["name"],
         "audio_format": "wav",
+        # Required params with no Gradio defaults (used by specific engines only)
+        "indextts2_emotion_description": "",
+        "higgs_system_prompt": "",
+        "qwen_voice_description": "A warm, clear, professional English-speaking voice",
+        "qwen_ref_text": "",
+        "qwen_style_instruct": "",
         **engine["synth_kwargs"],
     }
 
