@@ -94,6 +94,17 @@ class TestUltimateTTSProviderInit:
         assert "kitten_tts" in provider.DEFAULT_VOICES
         assert "kokoro" in provider.DEFAULT_VOICES
 
+    def test_engine_timeouts_keys_are_valid_engines(self):
+        """Test ENGINE_TIMEOUTS only references known engines."""
+        provider = UltimateTTSProvider()
+        for engine in provider.ENGINE_TIMEOUTS:
+            assert engine in provider.ENGINE_NAMES, f"Unknown engine in ENGINE_TIMEOUTS: {engine}"
+
+    def test_engine_timeouts_fish_s2_is_elevated(self):
+        """Test Fish S2 Pro has a higher timeout than the default."""
+        provider = UltimateTTSProvider()
+        assert provider.ENGINE_TIMEOUTS["fish_s2"] > provider._timeout
+
 
 class TestUltimateTTSProviderHealthCheck:
     """Test health check functionality."""
