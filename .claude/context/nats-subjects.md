@@ -1427,3 +1427,81 @@ nats server report connections
 | Internal canonical | `chit.cgp.v{major}.{minor}` | `chit.cgp.v1.0` | Documentation reference |
 
 This is analogous to HTTP path versioning (`/api/v1/`) vs content-type versioning (`application/vnd.pmoves.cgp.v2+json`) — both are valid, complementary approaches.
+
+## Agent Zero Task Coordination Subjects
+
+> **Source:** Z890 gap analysis (2026-03-15). Previously undocumented.
+
+**`agentzero.task.submit.v1`**
+- **Direction:** Published by any agent -> Consumed by Agent Zero
+- **Purpose:** Submit task for orchestration
+- **Payload:**
+  ```json
+  {"task_id": "t-abc123", "type": "research|ingest|render", "priority": 5, "payload": {...}}
+  ```
+
+**`agentzero.task.status.v1`**
+- **Direction:** Published by Agent Zero -> Consumed by requesting agent
+- **Purpose:** Task status updates (queued, running, completed, failed)
+
+**`agentzero.task.result.v1`**
+- **Direction:** Published by Agent Zero -> Consumed by requesting agent
+- **Purpose:** Task completion with result payload
+
+## Tailscale Mesh Networking Subjects
+
+> **Source:** Tailscale infra bootstrap (2026-03-15). Multi-host mesh networking.
+
+### Node Lifecycle
+
+**`mesh.node.announce.v1`**
+- **Direction:** Published by mesh-agent on each node -> Consumed by all nodes
+- **Purpose:** Periodic node presence announcement (every 15s)
+- **Payload:**
+  ```json
+  {"node_id": "z890", "hostname": "pmoves-z890", "tailscale_ip": "100.x.y.z", "capabilities": ["gpu", "tts"], "ts": 1709568000}
+  ```
+
+**`mesh.node.health.v1`**
+- **Direction:** Published by mesh-agent -> Consumed by monitoring
+- **Purpose:** Node health metrics (CPU, memory, disk, GPU utilization)
+
+**`mesh.node.capability.v1`**
+- **Direction:** Published by mesh-agent -> Consumed by orchestrator
+- **Purpose:** Capability registration/update (available services, GPU models loaded)
+
+**`mesh.node.deregister.v1`**
+- **Direction:** Published by mesh-agent on shutdown -> Consumed by all nodes
+- **Purpose:** Graceful node departure from mesh
+
+### Tailscale VPN Status
+
+**`mesh.tailscale.status.v1`**
+- **Direction:** Published by mesh-agent -> Consumed by monitoring
+- **Purpose:** Tailscale connection status (connected, needs-login, stopped)
+
+**`mesh.tailscale.acl.v1`**
+- **Direction:** Published by admin tooling -> Consumed by mesh-agent
+- **Purpose:** ACL policy update notification
+
+**`mesh.tailscale.dns.v1`**
+- **Direction:** Published by mesh-agent -> Consumed by service discovery
+- **Purpose:** MagicDNS hostname resolution updates
+
+**`mesh.tailscale.route.v1`**
+- **Direction:** Published by mesh-agent -> Consumed by routing layer
+- **Purpose:** Subnet route advertisement changes
+
+**`mesh.tailscale.key.expiry.v1`**
+- **Direction:** Published by mesh-agent -> Consumed by ops alerting
+- **Purpose:** Auth key expiry warning (7-day, 1-day, expired)
+
+### Operations Monitoring
+
+**`ops.tailscale.node.v1`**
+- **Direction:** Published by ops tooling -> Consumed by dashboard
+- **Purpose:** Node inventory changes (added, removed, renamed)
+
+**`ops.tailscale.health.v1`**
+- **Direction:** Published by health-check cron -> Consumed by alerting
+- **Purpose:** Fleet-wide Tailscale health summary
