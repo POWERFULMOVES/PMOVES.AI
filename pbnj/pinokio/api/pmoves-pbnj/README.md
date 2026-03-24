@@ -56,7 +56,7 @@ Cluster orchestration bridge for PMOVES.AI — manage local dev, AI Lab (Kuberne
 
 All deployment scripts use shell wrappers under `deploy/scripts/`:
 
-**Curl (via deployment scripts)**
+**Bash/CLI (deployment scripts)**
 
 ```bash
 # Local Docker Compose

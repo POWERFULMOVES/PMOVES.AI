@@ -6,7 +6,7 @@ module.exports = {
       params: {
         path: "../../pmoves",
         message: [
-          "docker compose --profile monitoring up -d"
+          "docker compose -f docker-compose.yml -f monitoring/docker-compose.monitoring.yml up -d"
         ],
         on: [{
           event: "/Started|running|Attaching/i",

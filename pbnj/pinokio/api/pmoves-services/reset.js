@@ -5,7 +5,16 @@ module.exports = {
       params: {
         path: "../../pmoves",
         message: [
-          "docker compose --profile agents --profile workers --profile monitoring down -v"
+          "docker compose --profile agents --profile workers --profile orchestration --profile gpu --profile tts --profile cast --profile media --profile botz --profile ui down -v"
+        ]
+      }
+    },
+    {
+      method: "shell.run",
+      params: {
+        path: "../../pmoves",
+        message: [
+          "docker compose -f docker-compose.yml -f monitoring/docker-compose.monitoring.yml down -v"
         ]
       }
     },
