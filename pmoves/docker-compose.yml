@@ -2784,6 +2784,10 @@ services:
       - CHIT_REQUIRE_SIGNATURE=${CHIT_PROD_REQUIRE_SIGNATURE:-true}
       - CHIT_DECRYPT_ANCHORS=${CHIT_PROD_DECRYPT_ANCHORS:-true}
       - CHIT_PASSPHRASE=${CHIT_PROD_PASSPHRASE:?set CHIT_PROD_PASSPHRASE in env.shared}
+      # Clear Windows SSL env leak — host miniconda paths don't exist in container
+      - SSL_CERT_FILE=
+      - SSL_CERT_DIR=
+      - REQUESTS_CA_BUNDLE=
     ports: ["${FLUTE_BIND:-0.0.0.0}:8055:8055", "${FLUTE_BIND:-0.0.0.0}:8056:8056"]
     profiles: ["orchestration", "media"]
     # Attach a non-internal bridge so published host ports resolve on Docker Desktop.
