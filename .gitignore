@@ -186,3 +186,6 @@ pmoves/env.supa.runtime.bak.*
 desktop.ini
 Thumbs.db
 NUL
+
+# Git worktrees
+.worktrees/

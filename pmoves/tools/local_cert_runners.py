@@ -103,35 +103,58 @@ def registration_token(repo: str, lane: str) -> str:
     return token
 
 
-def access_token(repo: str, lane: str) -> tuple[str, bool]:
-    """Get a GitHub PAT for persistent runner auto-registration.
+def github_app_credentials() -> tuple[str, str] | None:
+    """Check for GitHub App credentials (APP_ID + private key).
 
-    With ACCESS_TOKEN, the myoung34/github-runner container auto-fetches
-    fresh registration tokens on each restart, preventing the perpetual
-    404 loop caused by expired RUNNER_TOKENs.
+    The myoung34/github-runner image natively supports APP_ID + APP_PRIVATE_KEY
+    for auto-renewing runner tokens — no PAT needed, no expiry.
 
-    Returns (token, is_pat) — is_pat=True means use ACCESS_TOKEN env var,
-    is_pat=False means fall back to short-lived RUNNER_TOKEN.
+    Returns (app_id, app_private_key) or None if not configured.
     """
+    app_id = os.getenv("GH_APP_ID", "").strip()
+    app_key = os.getenv("GH_APP_SEC", "").strip()
+    if app_id and app_key:
+        return app_id, app_key
+    return None
+
+
+def access_token(repo: str, lane: str) -> tuple[str | tuple[str, str], str]:
+    """Get credentials for runner registration.
+
+    Priority:
+    1. GitHub App (APP_ID + APP_PRIVATE_KEY) — persistent, auto-renewing
+    2. PAT (ACCESS_TOKEN) — persistent but requires manual rotation
+    3. Short-lived RUNNER_TOKEN — expires in ~1h, testing/one-off only
+
+    Returns (credential, mode) where mode is 'app', 'pat', or 'token'.
+    """
+    # Priority 1: GitHub App — persistent, auto-renewing tokens
+    app_creds = github_app_credentials()
+    if app_creds:
+        return app_creds, "app"
+
+    # Priority 2: Per-lane or shared PAT
     env_name = f"RUNNER_PAT_{lane.replace('-', '_').upper()}"
     lane_pat = os.getenv(env_name)
     if lane_pat:
-        return lane_pat, True
+        return lane_pat, "pat"
     shared_pat = (
         os.getenv("RUNNER_PAT")
         or os.getenv("GH_TOKEN")
         or os.getenv("GITHUB_TOKEN")
     )
     if shared_pat:
-        return shared_pat, True
-    # Fallback: short-lived registration token (expires in ~1h)
+        return shared_pat, "pat"
+
+    # Priority 3: Short-lived registration token (expires in ~1h)
     print(
-        f"WARNING: No PAT found (set RUNNER_PAT or GH_TOKEN). "
+        f"WARNING: No GitHub App or PAT found. "
         f"Using short-lived registration token for lane '{lane}' — "
-        f"container will fail to re-register after ~1 hour.",
+        f"container will fail to re-register after ~1 hour. "
+        f"Set GH_APP_ID + GH_APP_SEC for persistent auth.",
         file=sys.stderr,
     )
-    return registration_token(repo, lane), False
+    return registration_token(repo, lane), "token"
 
 
 def docker_rm(container_name: str) -> None:
@@ -172,7 +195,8 @@ def _docker_socket_mount() -> str:
 
 
 def docker_run(
-    repo: str, image: str, lane: RunnerLane, token: str, *, is_pat: bool = True,
+    repo: str, image: str, lane: RunnerLane,
+    credential: str | tuple[str, str], *, mode: str = "pat",
 ) -> None:
     resources = LANE_RESOURCES.get(lane.lane, {"cpus": "4", "memory": "8g"})
     cmd = [
@@ -196,20 +220,20 @@ def docker_run(
         cmd.extend(["-e", "NVIDIA_VISIBLE_DEVICES=all"])
         cmd.extend(["-e", "NVIDIA_DRIVER_CAPABILITIES=compute,utility"])
 
-    # Use ACCESS_TOKEN (PAT) for persistent auto-registration, or fall back
-    # to short-lived RUNNER_TOKEN when no PAT is available.
-    if is_pat:
-        token_env = f"ACCESS_TOKEN={token}"
+    # Auth mode: app (persistent, auto-renewing), pat (persistent), token (1h)
+    if mode == "app":
+        app_id, app_key = credential
+        cmd.extend(["-e", f"APP_ID={app_id}", "-e", f"APP_PRIVATE_KEY={app_key}"])
+    elif mode == "pat":
+        cmd.extend(["-e", f"ACCESS_TOKEN={credential}"])
     else:
-        token_env = f"RUNNER_TOKEN={token}"
+        cmd.extend(["-e", f"RUNNER_TOKEN={credential}"])
 
     cmd.extend([
         "-e",
         f"REPO_URL=https://github.com/{repo}",
         "-e",
         f"RUNNER_NAME={lane.runner_name}",
-        "-e",
-        token_env,
         "-e",
         f"LABELS={lane.labels}",
         "-e",
@@ -254,15 +278,21 @@ def _selected_lanes(names: list[str] | None) -> tuple[RunnerLane, ...]:
     return selected
 
 
+_MODE_LABELS = {
+    "app": "APP_ID + APP_PRIVATE_KEY (GitHub App, auto-renewing)",
+    "pat": "ACCESS_TOKEN (PAT, persistent)",
+    "token": "RUNNER_TOKEN (short-lived, ~1h)",
+}
+
+
 def cmd_up(repo: str, image: str, lanes: tuple[RunnerLane, ...]) -> int:
     require_tool("docker")
     require_tool("gh")
     for lane in lanes:
-        token, is_pat = access_token(repo, lane.lane)
+        credential, mode = access_token(repo, lane.lane)
         docker_rm(lane.container_name)
-        docker_run(repo, image, lane, token, is_pat=is_pat)
-        mode = "ACCESS_TOKEN (PAT)" if is_pat else "RUNNER_TOKEN (short-lived)"
-        print(f"started {lane.container_name} ({lane.runner_name}) [{mode}]")
+        docker_run(repo, image, lane, credential, mode=mode)
+        print(f"started {lane.container_name} ({lane.runner_name}) [{_MODE_LABELS.get(mode, mode)}]")
     return 0
 
 

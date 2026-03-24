@@ -1,0 +1,209 @@
+# TAC Tree: Jetson Orin Onboarding
+# Two Jetson Orin Nanos on LAN — edge AI inference nodes for PMOVES mesh
+# pmoves-nano already on tailnet (100.101.124.78, dormant 108d)
+
+name: "Jetson Orin Onboarding"
+version: "1.0.0"
+description: "Onboard 2 Jetson Orin Nanos into PMOVES mesh: Tailscale, Docker NVIDIA, NATS leaf, edge inference"
+
+root:
+  id: jetson-orin
+  task: "Jetson Orin fleet onboarding"
+  context: "pmoves/docs/operations/TOPOLOGY.md + memory/project_jetson_lan_topology.md"
+  agent_hint: z890-claude
+  children:
+
+    # =========================================================================
+    # Phase 1: Pre-flight (on-device)
+    # =========================================================================
+    - id: jetson.preflight
+      task: "Pre-flight checks on each Jetson"
+      context: "Requires RustDesk or SSH access to the device"
+      agent_hint: z890-claude
+      children:
+        - id: jetson.preflight.access
+          task: "Establish RustDesk or SSH connection"
+          action:
+            type: manual
+            expect: "Shell prompt on the Jetson via RustDesk remote desktop or SSH"
+          context: "Both Jetsons on 192.168.1.x LAN, RustDesk configured"
+
+        - id: jetson.preflight.jetpack
+          task: "Check JetPack version"
+          action:
+            type: shell
+            command: "cat /etc/nv_tegra_release && dpkg -l nvidia-jetpack 2>/dev/null | grep nvidia"
+            expect: "L4T 36.x (JetPack 6.x). If L4T 35.x, needs upgrade."
+          context: "Target: JetPack 6.2.1+ (L4T 36.4.4)"
+
+        - id: jetson.preflight.docker
+          task: "Verify Docker with NVIDIA runtime"
+          action:
+            type: shell
+            command: "docker info 2>/dev/null | grep -i runtime && docker run --rm --runtime nvidia --gpus all nvcr.io/nvidia/l4t-base:r36.4.0 nvidia-smi"
+            expect: "NVIDIA runtime listed, nvidia-smi shows Orin GPU"
+          context: "If Docker not installed, run jetson-postinstall.sh --mode full"
+
+        - id: jetson.preflight.network
+          task: "Verify LAN connectivity to Z890 + 5090"
+          action:
+            type: shell
+            command: "ping -c 2 192.168.1.92 && ping -c 2 192.168.1.65"
+            expect: "Both Z890 and 5090 reachable on LAN"
+
+    # =========================================================================
+    # Phase 2: Tailscale Mesh Registration
+    # =========================================================================
+    - id: jetson.tailscale
+      task: "Register/reconnect Jetsons to Tailscale mesh"
+      context: "pmoves-nano (100.101.124.78) dormant 108d — may just need service restart"
+      agent_hint: z890-claude
+      children:
+        - id: jetson.tailscale.nano1-restart
+          task: "Jetson #1: Restart Tailscale (existing registration)"
+          action:
+            type: shell
+            command: "sudo systemctl restart tailscaled && sleep 5 && tailscale status"
+            expect: "pmoves-nano shows as online in tailscale status"
+          context: "Already registered as pmoves-nano at 100.101.124.78. If expired, re-auth with tailscale up --auth-key=..."
+
+        - id: jetson.tailscale.nano2-register
+          task: "Jetson #2: Fresh Tailscale registration"
+          action:
+            type: shell
+            command: "bash PMOVES-Tailscale/deploy/deploy.sh --role edge --hostname pmoves-nano-2"
+            expect: "New node appears in tailscale admin as pmoves-nano-2"
+          context: "Uses PMOVES-Tailscale/deploy/deploy.sh with edge role"
+
+        - id: jetson.tailscale.verify-mesh
+          task: "Verify both Jetsons visible from Z890"
+          action:
+            type: shell
+            command: "tailscale ping pmoves-nano && tailscale ping pmoves-nano-2"
+            expect: "Both respond via DERP or direct WireGuard"
+          context: "Run from Z890 host"
+
+    # =========================================================================
+    # Phase 3: PMOVES Stack Deployment
+    # =========================================================================
+    - id: jetson.stack
+      task: "Deploy PMOVES stack on Jetsons"
+      context: "CATACLYSM_STUDIOS_INC/L4-PLATFORM/provisions/jetson/jetson-postinstall.sh"
+      agent_hint: z890-claude
+      children:
+        - id: jetson.stack.provision
+          task: "Run jetson-postinstall.sh --mode full"
+          action:
+            type: shell
+            command: "bash /path/to/jetson-postinstall.sh --mode full"
+            expect: "Docker + NVIDIA runtime + Tailscale + RustDesk + repo clone + Python deps + jetson-containers"
+          context: "425-line script handles everything. Clones PMOVES.AI to /opt/pmoves."
+
+        - id: jetson.stack.compose
+          task: "Start edge services via ARM64 compose"
+          action:
+            type: shell
+            command: "cd /opt/pmoves/pmoves && docker compose -f docker-compose.yml -f docker-compose.arm64.override.yml up -d mesh-agent"
+            expect: "mesh-agent container running, announcing to NATS"
+          context: "ARM64 override sets platform: linux/arm64 for compatible services"
+
+        - id: jetson.stack.ollama
+          task: "Start Ollama with small models"
+          action:
+            type: shell
+            command: "docker run -d --name ollama --runtime nvidia --gpus all -p 11434:11434 -v ollama:/root/.ollama ollama/ollama:latest && docker exec ollama ollama pull phi3:mini"
+            expect: "Ollama running with phi3:mini loaded"
+          context: "Small models only (1-8B). Orin Nano has 8GB shared GPU/CPU memory."
+
+    # =========================================================================
+    # Phase 4: Agent Enrollment
+    # =========================================================================
+    - id: jetson.enrollment
+      task: "Register Jetsons in agent team configs"
+      context: "pmoves/configs/agent-teams.yaml + pmoves/configs/node-agent-specialization.yaml"
+      agent_hint: z890-claude
+      children:
+        - id: jetson.enrollment.teams
+          task: "Add jetson nodes to agent-teams.yaml"
+          action:
+            type: edit
+            target: "pmoves/configs/agent-teams.yaml"
+            expect: "jetson-1, jetson-2 added to infra team with edge node_affinity"
+
+        - id: jetson.enrollment.specialization
+          task: "Add jetson specialization to node-agent-specialization.yaml"
+          action:
+            type: edit
+            target: "pmoves/configs/node-agent-specialization.yaml"
+            expect: "jetson nodes: whisper-local, ollama-edge, tensorrt, yolov8"
+
+        - id: jetson.enrollment.signatures
+          task: "Add jetson agent signatures"
+          action:
+            type: edit
+            target: "pmoves/config/agent_signatures.yaml"
+            expect: "jetson-1 and jetson-2 entries with Nemotron/NemoClaw theme"
+          context: "NVIDIA Nemotron theme per memory/project_jetson_nemotron_unfcu.md"
+
+    # =========================================================================
+    # Phase 5: Service Activation
+    # =========================================================================
+    - id: jetson.services
+      task: "Activate edge inference services"
+      context: "Target services from hardware-profiles.md"
+      agent_hint: z890-claude
+      children:
+        - id: jetson.services.whisper
+          task: "Start local Whisper transcription"
+          action:
+            type: shell
+            command: "docker compose up -d ffmpeg-whisper"
+            expect: "Faster-Whisper running on Orin GPU with small model"
+          context: "Model: whisper-small-int8 (from hardware profile model_bundles)"
+
+        - id: jetson.services.yolo
+          task: "Start YOLOv8 object detection"
+          action:
+            type: shell
+            command: "docker compose up -d media-video"
+            expect: "YOLOv8n running with TensorRT optimization"
+          context: "Nano-sized model for Orin memory constraints"
+
+        - id: jetson.services.tensorrt
+          task: "Validate TensorRT optimization"
+          action:
+            type: shell
+            command: "python3 -c 'import tensorrt; print(tensorrt.__version__)'"
+            expect: "TensorRT 10.x+ installed and functional"
+
+    # =========================================================================
+    # Phase 6: NATS Integration
+    # =========================================================================
+    - id: jetson.nats
+      task: "Connect Jetsons to NATS mesh"
+      context: "NATS leaf node pattern from Z890 setup"
+      agent_hint: z890-claude
+      children:
+        - id: jetson.nats.leaf
+          task: "Configure NATS leaf node on Jetson"
+          action:
+            type: shell
+            command: "docker compose up -d nats-leaf"
+            expect: "NATS leaf node connected to upstream (5090 or Z890)"
+          context: "Upstream NATS at ts:powerfulmoves:4222 via Tailscale mesh"
+
+        - id: jetson.nats.announce
+          task: "Verify mesh node announcement"
+          action:
+            type: shell
+            command: "nats sub mesh.node.announce.v1 --count 1 --timeout 20s"
+            expect: "JSON announcement with gpu:orin, services: [ollama, whisper-local]"
+          context: "Mesh agent publishes every 15s"
+
+        - id: jetson.nats.healthz
+          task: "Verify services reachable from mesh"
+          action:
+            type: shell
+            command: "curl http://pmoves-nano:11434/api/tags"
+            expect: "Ollama API responds with model list"
+          context: "Via Tailscale DNS (MagicDNS) — pmoves-nano resolves to 100.101.124.78"
