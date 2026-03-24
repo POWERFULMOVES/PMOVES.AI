@@ -31,10 +31,10 @@ root:
         - id: jetson.preflight.jetpack
           task: "Check JetPack version"
           action:
-            type: shell
+            type: manual
             command: "cat /etc/nv_tegra_release && dpkg -l nvidia-jetpack 2>/dev/null | grep nvidia"
             expect: "L4T 36.x (JetPack 6.x). If L4T 35.x, needs upgrade."
-          context: "Target: JetPack 6.2.1+ (L4T 36.4.4)"
+          context: "Run on device — cat/dpkg not in TAC runner allowlist. Target: JetPack 6.2.1+ (L4T 36.4.4)"
 
         - id: jetson.preflight.docker
           task: "Verify Docker with NVIDIA runtime"
@@ -47,9 +47,10 @@ root:
         - id: jetson.preflight.network
           task: "Verify LAN connectivity to Z890 + 5090"
           action:
-            type: shell
+            type: manual
             command: "ping -c 2 192.168.1.92 && ping -c 2 192.168.1.65"
             expect: "Both Z890 and 5090 reachable on LAN"
+          context: "Run on device — ping not in TAC runner allowlist"
 
     # =========================================================================
     # Phase 2: Tailscale Mesh Registration
@@ -62,26 +63,26 @@ root:
         - id: jetson.tailscale.nano1-restart
           task: "Jetson #1: Restart Tailscale (existing registration)"
           action:
-            type: shell
+            type: manual
             command: "sudo systemctl restart tailscaled && sleep 5 && tailscale status"
             expect: "pmoves-nano shows as online in tailscale status"
-          context: "Already registered as pmoves-nano at 100.101.124.78. If expired, re-auth with tailscale up --auth-key=..."
+          context: "Run on device — sudo/systemctl/tailscale not in TAC runner allowlist. Already registered as pmoves-nano at 100.101.124.78."
 
         - id: jetson.tailscale.nano2-register
           task: "Jetson #2: Fresh Tailscale registration"
           action:
-            type: shell
+            type: manual
             command: "bash PMOVES-Tailscale/deploy/deploy.sh --role edge --hostname pmoves-nano-2"
             expect: "New node appears in tailscale admin as pmoves-nano-2"
-          context: "Uses PMOVES-Tailscale/deploy/deploy.sh with edge role"
+          context: "Run on device — bash not in TAC runner allowlist. Uses PMOVES-Tailscale/deploy/deploy.sh with edge role"
 
         - id: jetson.tailscale.verify-mesh
           task: "Verify both Jetsons visible from Z890"
           action:
-            type: shell
+            type: manual
             command: "tailscale ping pmoves-nano && tailscale ping pmoves-nano-2"
             expect: "Both respond via DERP or direct WireGuard"
-          context: "Run from Z890 host"
+          context: "Run from Z890 host — tailscale not in TAC runner allowlist"
 
     # =========================================================================
     # Phase 3: PMOVES Stack Deployment
@@ -95,7 +96,7 @@ root:
           task: "Run jetson-postinstall.sh --mode full"
           action:
             type: shell
-            command: "bash /path/to/jetson-postinstall.sh --mode full"
+            command: "bash CATACLYSM_STUDIOS_INC/L4-PLATFORM/provisions/jetson/jetson-postinstall.sh --mode full"
             expect: "Docker + NVIDIA runtime + Tailscale + RustDesk + repo clone + Python deps + jetson-containers"
           context: "425-line script handles everything. Clones PMOVES.AI to /opt/pmoves."
 
@@ -173,8 +174,9 @@ root:
           task: "Validate TensorRT optimization"
           action:
             type: shell
-            command: "python3 -c 'import tensorrt; print(tensorrt.__version__)'"
+            command: "docker run --rm --runtime nvidia nvcr.io/nvidia/l4t-base:r36.4.0 python3 -c 'import tensorrt; print(tensorrt.__version__)'"
             expect: "TensorRT 10.x+ installed and functional"
+          context: "TensorRT bindings available inside JetPack container, not always on host"
 
     # =========================================================================
     # Phase 6: NATS Integration
