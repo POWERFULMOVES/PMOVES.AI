@@ -44,21 +44,33 @@ async function main() {
     let role = guild.roles.cache.find(r => r.name === roleDef.name);
     if (role) {
       console.log(`  [exists] ${roleDef.name} (${role.id})`);
-    } else {
-      const perms = (roleDef.permissions || []).reduce((acc, p) => {
-        if (PERMISSION_MAP[p]) acc |= PERMISSION_MAP[p];
-        return acc;
-      }, 0n);
+      createdRoles[roleDef.name] = role;
+      continue;
+    }
+    // Skip roles with Administrator — bot can't create roles above its own
+    const perms = (roleDef.permissions || []).reduce((acc, p) => {
+      if (PERMISSION_MAP[p]) acc |= PERMISSION_MAP[p];
+      return acc;
+    }, 0n);
+    if (perms & PermissionFlagsBits.Administrator) {
+      console.log(`  [skip] ${roleDef.name} (requires Administrator — create manually)`);
+      continue;
+    }
+    try {
+      // Parse hex color to integer
+      const colorInt = roleDef.color ? parseInt(roleDef.color.replace('#', ''), 16) : null;
       role = await guild.roles.create({
         name: roleDef.name,
-        color: roleDef.color || null,
+        color: colorInt,
         hoist: roleDef.hoist || false,
         permissions: perms,
         reason: 'PMOVES Discord Bot setup',
       });
       console.log(`  [created] ${roleDef.name} (${role.id})`);
+      createdRoles[roleDef.name] = role;
+    } catch (err) {
+      console.log(`  [error] ${roleDef.name}: ${err.message}`);
     }
-    createdRoles[roleDef.name] = role;
   }
 
   // --- Categories + Channels ---
@@ -88,13 +100,17 @@ async function main() {
         c => c.name === chDef.name && c.parentId === category.id
       );
       if (!channel) {
-        channel = await guild.channels.create({
+        const createOpts = {
           name: chDef.name,
           type: channelType,
           parent: category.id,
-          topic: chDef.topic || null,
           reason: 'PMOVES Discord Bot setup',
-        });
+        };
+        // Voice channels don't support topic
+        if (channelType !== ChannelType.GuildVoice && chDef.topic) {
+          createOpts.topic = chDef.topic;
+        }
+        channel = await guild.channels.create(createOpts);
         console.log(`    [created] #${chDef.name} (${channelType === ChannelType.GuildVoice ? 'voice' : 'text'})`);
       } else {
         console.log(`    [exists] #${chDef.name}`);
