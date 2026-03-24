@@ -365,13 +365,21 @@ def cluster(records: list[dict], n_groups: int) -> list[int]:
     from sklearn.cluster import KMeans
     from sklearn.preprocessing import StandardScaler
 
-    X = np.array([[
-        r["tempo_bpm"],
-        r["loudness_I"] * -1,
-        r["loudness_LRA"],
-        r["spectral_centroid"] / 100,
-        r["spectral_flatness"] * 10,
-    ] for r in records])
+    features = []
+    for r in records:
+        f = [
+            r["tempo_bpm"] / 10.0,
+            r["loudness_I"] * -1.0,
+            r["loudness_LRA"],
+            r["spectral_centroid"] / 1000.0,
+            r["spectral_flatness"] * 10.0,
+        ]
+        # Give the semantic multimodal embedding 5x weight to dominate acoustic features
+        if "_emb_reduced" in r:
+            f.extend([v * 5.0 for v in r["_emb_reduced"]])
+        features.append(f)
+
+    X = np.array(features)
 
     labels = KMeans(n_clusters=n_groups, random_state=42, n_init="auto").fit_predict(
         StandardScaler().fit_transform(X)
@@ -384,11 +392,18 @@ def name_group(members: list[dict]) -> str:
     avg_lufs  = np.mean([r["loudness_I"] for r in members])
     avg_cent  = np.mean([r["spectral_centroid"] for r in members])
 
-    return (
-        f"{_tempo_label(avg_bpm)}"
-        f"_{_timbre_label(avg_cent)}"
-        f"_{_energy_label(avg_lufs)}"
-    )
+    base_name = f"{_tempo_label(avg_bpm)}_{_timbre_label(avg_cent)}_{_energy_label(avg_lufs)}"
+    
+    # Inject semantic inference if available
+    all_tags = []
+    for r in members:
+        all_tags.extend(r.get("model_tags", []))
+    if all_tags:
+        from collections import Counter
+        top_tag = Counter(all_tags).most_common(1)[0][0]
+        base_name += f"_{top_tag}"
+
+    return base_name
 
 
 # ── M3U8 writer ───────────────────────────────────────────────────────────────

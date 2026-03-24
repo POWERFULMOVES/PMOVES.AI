@@ -215,7 +215,7 @@ def main():
         a2ui_spec = transpile_cgp_to_a2ui(cgp_data)
         
         with open(args.output, "w") as f:
-            json.dump(a2ui_spec, f, indent=2)
+            json.dump({"spec": a2ui_spec}, f, indent=2)
             
         print(f"Successfully transpiled {args.input} -> {args.output}")
         

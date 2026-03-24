@@ -82,15 +82,41 @@ const A2UIScene: React.FC<{
         }
 
         if (el.type === 'text') {
+          const style = (el as any).style || {};
           return (
-            <div key={i} style={{ opacity, color: '#fff', fontSize: 36, padding: 40 }}>
+            <div key={i} style={{ 
+              position: style.x !== undefined ? 'absolute' : 'relative',
+              left: style.x, top: style.y,
+              opacity, color: style.color || '#fff', 
+              fontSize: style.fontSize || 36,
+              fontFamily: style.fontFamily || 'inherit'
+            }}>
               {String(el.content || '')}
+            </div>
+          );
+        }
+
+        if (el.type === 'glyph') {
+          const style = (el as any).style || {};
+          return (
+            <div key={i} style={{ 
+              position: style.x !== undefined ? 'absolute' : 'relative',
+              left: style.x, top: style.y,
+              opacity, color: style.color || '#00FFCC', 
+              fontSize: style.fontSize || 24,
+              transform: 'translate(-50%, -50%)' // Center the glyph on the coordinate
+            }}>
+              {(el as any).symbol || '●'}
             </div>
           );
         }
 
         if (el.type === 'glyph_pulse') {
           return <DarkxsidePortal key={i} opacity={opacity} />;
+        }
+
+        if (el.type === 'geometry_mesh') {
+           return <div key={i} style={{ opacity, position: 'absolute', bottom: 20, right: 20, color: '#666' }}>[Geometry Mesh: {(el as any).edges_count} edges]</div>;
         }
 
         return (
