@@ -1,0 +1,14 @@
+{
+  "name": "pmoves-discord-bot",
+  "version": "1.0.0",
+  "description": "CATACLYSM STUDIOS INC community playground bot",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "setup": "node src/setup.js"
+  },
+  "dependencies": {
+    "discord.js": "^14.16.0",
+    "js-yaml": "^4.1.0"
+  }
+}

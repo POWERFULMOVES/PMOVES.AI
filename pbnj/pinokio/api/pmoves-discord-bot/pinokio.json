@@ -1,0 +1,6 @@
+{
+  "title": "PMOVES Discord Bot",
+  "description": "CATACLYSM STUDIOS INC community playground bot — org setup, agent routing, NATS event wiring",
+  "icon": "icon.png",
+  "gpu": false
+}
