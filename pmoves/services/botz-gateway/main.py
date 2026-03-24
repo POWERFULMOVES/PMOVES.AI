@@ -568,7 +568,7 @@ async def get_agent_theme(agent_id: str):
     sig = agent_signatures.get(agent_id)
     if not sig:
         raise HTTPException(status_code=404, detail=f"Agent '{agent_id}' not found")
-    return {
+    response = {
         "agent_id": agent_id,
         "display_name": sig.get("display_name"),
         "glyph": sig.get("glyph"),
@@ -578,6 +578,36 @@ async def get_agent_theme(agent_id: str):
         "resonance": sig.get("resonance", []),
         "description": sig.get("description"),
     }
+    alters = sig.get("alters")
+    if alters:
+        response["alters"] = alters
+    return response
+
+
+@app.get("/v1/agent/theme/{agent_id}/alter/{alter_name}")
+async def get_agent_alter_theme(agent_id: str, alter_name: str):
+    """Get theme for a specific alter of an agent."""
+    sig = agent_signatures.get(agent_id)
+    if not sig:
+        raise HTTPException(status_code=404, detail=f"Agent '{agent_id}' not found")
+    alters = sig.get("alters", [])
+    for alter in alters:
+        if alter.get("name") == alter_name:
+            return {
+                "agent_id": agent_id,
+                "alter_name": alter_name,
+                "glyph": alter.get("glyph"),
+                "color": alter.get("color"),
+                "accent": alter.get("accent"),
+                "voice": alter.get("voice"),
+                "resonance": alter.get("resonance", []),
+                "description": alter.get("description"),
+            }
+    available = [a.get("name") for a in alters]
+    raise HTTPException(
+        status_code=404,
+        detail=f"Alter '{alter_name}' not found for {agent_id}. Available: {available}",
+    )
 
 
 @app.get("/v1/agent/whoami")
@@ -618,6 +648,7 @@ async def whoami(instance_id: Optional[str] = None):
                         "color": sig.get("color", "#888888"),
                         "voice": sig.get("voice", "unknown"),
                     },
+                    "available_alters": [a.get("name") for a in sig.get("alters", [])],
                     "skill_level": botz.get("skill_level"),
                     "is_available": botz.get("is_available"),
                 }
