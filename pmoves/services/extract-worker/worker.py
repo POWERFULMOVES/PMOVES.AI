@@ -1,6 +1,12 @@
-import os, json
+import asyncio
+import json
+import logging
+import os
+import threading
 import uuid
+from datetime import datetime, timezone
 from typing import Dict, Any, List
+
 from fastapi import FastAPI, Body, HTTPException, Response
 import requests
 from qdrant_client import QdrantClient
@@ -23,6 +29,91 @@ MEILI_URL = os.environ.get("MEILI_URL","http://meilisearch:7700")
 MEILI_API_KEY = os.environ.get("MEILI_API_KEY","")
 SUPA = os.environ.get("SUPA_REST_URL","http://postgrest:3000")
 EMBEDDING_BACKEND = os.environ.get("EMBEDDING_BACKEND", "sentence-transformers").lower()
+
+# ── CHIT / NATS CGP publishing ───────────────────────────────────────────────
+logger = logging.getLogger("pmoves.extract-worker")
+
+NATS_URL = os.environ.get("NATS_URL", "nats://nats:pmoves@nats:4222")
+CGP_PUBLISH_ENABLED = os.environ.get(
+    "EXTRACT_WORKER_CGP_PUBLISH", "true"
+).lower() in ("1", "true", "yes")
+CGP_SPEC_VERSION = "chit.cgp.v1.0"
+CGP_SUBJECT = "tokenism.cgp.ready.v1"
+SKILL_HOOK_SUBJECT = "skills.step.extract-worker.done.v1"
+
+cgp_publishes_total = Counter(
+    "extract_worker_cgp_publishes_total",
+    "CGP packets published to NATS",
+    ["subject", "status"],
+)
+
+
+def _build_cgp_packet(
+    chunks: List[Dict[str, Any]], collection: str, request_id: str
+) -> Dict[str, Any]:
+    """Build a CGP v1.0 packet from ingested chunks."""
+    points = []
+    for i, chunk in enumerate(chunks[:50]):
+        text = chunk.get("text", "")
+        points.append({
+            "id": f"chunk:{chunk.get('chunk_id', chunk.get('id', i))}",
+            "modality": "text",
+            "proj": round(min(len(text) / 500.0, 1.0), 3),
+            "conf": 0.9,
+            "summary": text[:200],
+        })
+
+    volume = min(len(chunks) / 100.0, 1.0)
+    success = 1.0
+    richness = min(
+        sum(len(c.get("text", "")) for c in chunks) / 10000.0, 1.0
+    )
+    spectrum = [round(v, 3) for v in (volume, success, richness)]
+
+    return {
+        "spec": CGP_SPEC_VERSION,
+        "summary": f"extract-worker: indexed {len(chunks)} chunks into {collection}",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "super_nodes": [{
+            "id": f"extract:{request_id}",
+            "label": "extract-worker",
+            "x": 0.0, "y": 0.0, "r": 0.3,
+            "constellations": [{
+                "id": f"extract.ingest.{request_id}",
+                "anchor": [0.5, 0.5, 0.5],
+                "spectrum": spectrum,
+                "points": points,
+            }],
+        }],
+        "meta": {
+            "source": CGP_SUBJECT,
+            "tags": ["extract", "indexing", "qdrant", "meilisearch"],
+            "collection": collection,
+            "chunk_count": len(chunks),
+        },
+    }
+
+
+def _publish_nats_fire_and_forget(subject: str, payload: Dict[str, Any]) -> None:
+    """Publish to NATS in a daemon thread (sync endpoint can't await)."""
+
+    async def _do_publish():
+        try:
+            import nats as nats_pkg
+
+            nc = await nats_pkg.connect(NATS_URL)
+            await nc.publish(subject, json.dumps(payload).encode("utf-8"))
+            await nc.flush()
+            await nc.close()
+            cgp_publishes_total.labels(subject=subject, status="ok").inc()
+            logger.info("Published CGP to %s", subject)
+        except Exception as exc:
+            cgp_publishes_total.labels(subject=subject, status="error").inc()
+            logger.warning("NATS publish to %s failed (non-fatal): %s", subject, exc)
+
+    t = threading.Thread(target=lambda: asyncio.run(_do_publish()), daemon=True)
+    t.start()
+# ── end CHIT ──────────────────────────────────────────────────────────────────
 
 app = FastAPI(title="PMOVES Extract Worker", version="1.0.0")
 
@@ -160,6 +251,22 @@ def ingest(body: Dict[str, Any] = Body(...)):
                     qdrant_operations_total.labels(operation='meili_docs_add').inc()
                 except Exception:
                     pass
+
+                # Publish CGP packet to GEOMETRY BUS
+                if CGP_PUBLISH_ENABLED:
+                    try:
+                        req_id = str(uuid.uuid4())
+                        cgp = _build_cgp_packet(chunks, COLL, req_id)
+                        _publish_nats_fire_and_forget(CGP_SUBJECT, cgp)
+                        _publish_nats_fire_and_forget(SKILL_HOOK_SUBJECT, {
+                            "service": "extract-worker",
+                            "request_id": req_id,
+                            "chunk_count": len(chunks),
+                            "collection": COLL,
+                            "ts": datetime.now(timezone.utc).isoformat(),
+                        })
+                    except Exception as cgp_exc:
+                        logger.warning("CGP build/publish failed (non-fatal): %s", cgp_exc)
 
             # Insert errors to Supabase
             inserted = 0
