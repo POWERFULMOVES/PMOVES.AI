@@ -364,7 +364,7 @@ Example: `ingest.transcript.ready.v1`
 - **Delivery:** Publish/subscribe (JetStream optional depending on deployment policy)
 
 **`agent.identity.altered.v1`**
-- **Direction:** Published by sign_trail.py when an alter is selected → Consumed by monitoring, Graphiti trail
+- **Direction:** Built by `sign_trail.py --alter` (payload only, no NATS client) → Published by BoTZ gateway or trail ingestor on behalf of CLI → Consumed by monitoring, Graphiti trail
 - **Purpose:** Notify that an agent selected an alter identity for a trail entry
 - **Payload:**
   ```json

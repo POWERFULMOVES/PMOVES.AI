@@ -462,7 +462,7 @@ def cmd_render_card(registry, args):
         secondary = mapping.get("secondary", "")
         rationale = mapping.get("rationale", "")
         print(f"╠{'═' * (w - 2)}╣")
-        print(box_line(f"Theme:"))
+        print(box_line("Theme:"))
         if primary:
             # Resolve character name from theme pack
             parts = primary.split("/")
