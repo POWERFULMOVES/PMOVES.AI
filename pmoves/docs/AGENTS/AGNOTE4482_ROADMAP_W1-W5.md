@@ -282,4 +282,34 @@ All resolved. No blockers.
 | W1 (voice activation: 10-engine sweep) | 5090-claude | 2026-03-22 | VERIFIED — 10/14 Flute, 6/6 STT | (same branch) |
 | Infra (P7 gates + topology sanitize) | z890-claude | 2026-03-22 | SHIPPED PRs #1063, #1064, #1068 | main |
 | Infra (CodeRabbit sweep #1066/#1069) | z890-claude + 4090-claude | 2026-03-22 | SHIPPED PR #1070 | main |
-| W1 (TTS service runners + prosodic endpoint) | z890-claude | 2026-03-23 | OPEN PR #1071 | feat/tts-service-runners-prosodic-ear |
+| W1 (TTS service runners + prosodic endpoint) | z890-claude | 2026-03-23 | SHIPPED PR #1071 (merged by 4090) | main |
+| W1 (prosodic activation + engine verification) | 5090-claude | 2026-03-23 | VERIFIED — prosodic 2/2, CUDA load 13/14 | main |
+
+## Recommended Next Steps (Post 2026-03-23 Fleet Session)
+
+### 5090-claude (GPU Inference Specialist)
+| # | Task | Priority | Notes |
+|---|------|----------|-------|
+| 1 | Fix test script required kwargs regression | **P0** | 5 params dropped in PR #1069 merge |
+| 2 | Container rebuild: Flute-Gateway image bake | **P0** | Eliminates hot-patch dependency |
+| 3 | Fish S2 Pro Flute timeout | P1 | Set `ULTIMATE_TTS_TIMEOUT_SEC=300` |
+| 4 | Pipecat WebSocket (8056) | P1 | Voice agent duplex loop implementation |
+| 5 | MCP bridge SSE verification | P2 | Test `/sse` endpoint |
+| 6 | VRAM budget optimization | P2 | Concurrent engine loading profiles |
+
+### 4090-claude (Noise Reducer)
+| # | Task | Priority | Notes |
+|---|------|----------|-------|
+| 1 | P7 → 5090 TTS via Tailscale | **P0** | UNBLOCKED — Flute at 8055 + TTS at 7860 on mesh |
+| 2 | Mobile Discord → TTS flow | P1 | REST API proven |
+| 3 | W1: Agent Theming + Terminal | P2 | Roadmap item |
+| 4 | Review z890's incoming PR | P1 | Coordination |
+
+### z890-claude (Infrastructure Coordinator)
+| # | Task | Priority | Notes |
+|---|------|----------|-------|
+| 1 | Container rebuilds (5 services) | **P0** | Blocks Docker image freshness |
+| 2 | Jetson Orin onboarding | P2 | Via RustDesk |
+| 3 | Agent Zero model tuning | P2 | |
+| 4 | ComfyUI first render test | P3 | |
+| 5 | NATS leaf node to 5090 | P2 | Flute NATS=connected proves bus healthy |

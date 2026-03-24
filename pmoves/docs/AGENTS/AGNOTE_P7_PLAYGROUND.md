@@ -318,6 +318,74 @@ Also fixed: engine names (`Fish Speech S1`, `Qwen Voice Design`, `Chatterbox Mul
 
 ---
 
+## Step 8: Session Wrap — Fleet Convergence + Prosodic Activation (2026-03-23)
+
+### Fleet Session Summary (3 CLAUDEs, 6 PRs, zero open)
+
+| Agent | PRs | Key Deliverables |
+|-------|-----|-----------------|
+| **5090-claude** | #1069 (authored) | Gradio 4.x fix, 10-engine Flute sweep, 6 STT round-trips |
+| **z890-claude** | #1063-#1071 (authored) | P7 gates, 28 gitlinks, topology sanitize, prosodic endpoint, TTS runners |
+| **4090-claude** | #1070-#1071 (trimmed) | 10 CodeRabbit threads resolved, session trail + split-trust docs |
+
+Main: `4d85ba0f` — all merged, zero open PRs.
+
+### Prosodic Endpoint Activated (z890 built, 5090 tested)
+
+`POST /v1/voice/synthesize/prosodic` — hot-patched into running Flute-Gateway container.
+
+| Engine | Chunks | BPM | Size | Time | Status |
+|--------|--------|-----|------|------|--------|
+| Kokoro | 5 | 90.0 | 539KB | 17.4s | **PASS** |
+| KittenTTS | — | — | 523KB | 4.1s | **PASS** |
+
+STT round-trip on prosodic audio: text matches (Whisper renders "CLAUDEs" as "clods" — proper noun variance).
+
+### Remaining Engine Verification (2026-03-23)
+
+| Engine | Load | Synth | Notes |
+|--------|------|-------|-------|
+| Fish S2 Pro | ✅ (0.2s) | ❌ | Test script regression — missing required kwargs |
+| IndexTTS2 | ✅ | ❌ | Same regression (loads fine on CUDA) |
+| Higgs Audio | ✅ | ❌ | Same regression (loads fine on CUDA) |
+| VibeVoice | ❌ | N/A | Gradio choice validator rejects empty `selected_model_path` |
+
+**Root cause**: z890's merge of PR #1069 dropped 5 required placeholder kwargs from `synthesize_engine()` — `indextts2_emotion_description`, `higgs_system_prompt`, `qwen_voice_description`, `qwen_ref_text`, `qwen_style_instruct`. These were in the original 5090 version but lost during conflict resolution. **Fix: restore required kwargs to test script.**
+
+### Final Engine Scorecard (14 engines)
+
+| Category | Count | Engines |
+|----------|-------|---------|
+| **Flute-Gateway verified** | 10 | KittenTTS, Kokoro, Chatterbox, F5, Fish S1, VoxCPM, Qwen, IndexTTS, CB Turbo, CB MTL |
+| **CUDA load verified** | 13 | Above 10 + Fish S2 Pro, IndexTTS2, Higgs Audio |
+| **Load failed** | 1 | VibeVoice (choice validator, needs model path fix) |
+| **Synth blocked (script bug)** | 3 | Fish S2 Pro, IndexTTS2, Higgs Audio |
+| **Prosodic verified** | 2 | Kokoro (17.4s), KittenTTS (4.1s) |
+
+### Recommended Next Steps
+
+**5090-claude (GPU specialist):**
+1. Fix test script required kwargs regression (5 params)
+2. Container rebuild: bake Flute-Gateway hot-patch into Docker image
+3. Fish S2 Pro Flute timeout: `ULTIMATE_TTS_TIMEOUT_SEC=300`
+4. Pipecat WebSocket (8056): voice agent duplex loop
+5. VRAM budget optimization: concurrent engine loading profiles
+
+**4090-claude (noise reducer):**
+1. P7 Agent Interpreter → 5090 TTS via Tailscale — **UNBLOCKED**
+2. Mobile Discord → TTS flow test
+3. W1: Agent Theming + Terminal claim
+4. Review z890's incoming PR
+
+**z890-claude (infra coordinator):**
+1. PR up for review (current)
+2. Container rebuilds (5 services — P0)
+3. Jetson Orin onboarding (via RustDesk)
+4. Agent Zero model tuning
+5. ComfyUI first render test
+
+---
+
 ## Critical Files
 
 | File | Purpose |
