@@ -4,7 +4,7 @@
 >
 > **See also:** [CHIT Documentation Suite](../PMOVESCHIT/README.md) for the complete documentation index with reading paths and glossary. | [CHIT Tools Catalog](../CHIT_TOOLS_CATALOG.md) for all Python tools.
 
-**Last Updated:** March 7, 2026
+**Last Updated:** March 24, 2026
 **CHIT Protocol Version:** v0.1 (legacy), v0.2 (stable), v1.0 (current)
 **Geometry Bus:** NATS-based event bus for geometric intelligence
 
@@ -12,11 +12,14 @@
 
 ## Overview
 
-> **Mar 1 review wave completed.** Mar 4 promotion sync merged fix PRs across 5 submodules.
+> **Mar 24 CHIT integration wave 1.** Extract Worker + FFmpeg-Whisper now publish CGP v1.0 packets.
+> DeepResearch doc corrected (was listed as v0.1, actually publishes v1.0 via `pmoves.chit.CGP_SPEC_VERSION`).
 > Key status changes:
-> - **Agent Zero**: Phase C P1s fixed (non-root USER, NATS auth hardened)
-> - **BoTZ**: JWT `HAS_JOSE` fail-open (fixed in PR #70, merged via #75 on Mar 4)
-> - **DoX**: NATS auth fixed in `nats.conf`
+> - **Extract Worker**: None → Partial (CGP v1.0 producer, fire-and-forget NATS)
+> - **FFmpeg-Whisper**: None → Partial (CGP v1.0 producer, persistent NATS client)
+> - **DeepResearch**: Audit doc corrected to reflect v1.0 CGP + dual NATS publishing
+>
+> Previous: Mar 1 review wave, Mar 4 promotion sync (Agent Zero, BoTZ, DoX fixes)
 
 ### What is CHIT?
 
@@ -174,11 +177,13 @@
 **Port:** 8098
 **Role:** LLM-based research planning
 **Key Files:** `pmoves/services/deepresearch/worker.py`
+**CGP Version:** v1.0
 
 **NATS Subjects:**
 - `tokenism.cgp.ready.v1` (publish)
+- `research.deepresearch.result.v1` (publish)
 
-**Gap:** v0.1 packets only, no geometry consumption
+**Gap:** Producer only, no geometry consumption
 
 ---
 
@@ -261,13 +266,39 @@
 
 ---
 
+### 15. Extract Worker
+**Port:** 8083
+**Role:** Text embedding & indexing to Qdrant + Meilisearch
+**Key Files:** `pmoves/services/extract-worker/worker.py`
+**CGP Version:** v1.0
+
+**NATS Subjects:**
+- `tokenism.cgp.ready.v1` (publish)
+- `skills.step.extract-worker.done.v1` (publish)
+
+**Gap:** Producer only, no geometry consumption
+
+---
+
+### 16. FFmpeg-Whisper
+**Port:** 8078
+**Role:** Media transcription (Whisper, Qwen2-Audio)
+**Key Files:** `pmoves/services/ffmpeg-whisper/server.py`
+**CGP Version:** v1.0
+
+**NATS Subjects:**
+- `tokenism.cgp.ready.v1` (publish)
+- `ingest.transcript.ready.v1` (publish)
+
+**Gap:** Producer only, no geometry consumption
+
+---
+
 ## No CHIT Integration Services
 
 | Service | Port | Purpose | Priority |
 |---------|------|---------|----------|
-| **Extract Worker** | 8083 | Text embedding & indexing | MEDIUM |
 | **PDF Ingest** | 8092 | Document processing | LOW |
-| **FFmpeg Whisper** | 8078 | Media transcription | MEDIUM |
 | **Media Video Analyzer** | 8079 | YOLO object detection | MEDIUM |
 | **Media Audio Analyzer** | 8082 | Emotion detection | MEDIUM |
 | **Channel Monitor** | 8097 | Content watching | LOW |
@@ -442,4 +473,4 @@ Three naming schemes exist across the codebase:
 ---
 
 **Document Owner:** PMOVES.AI Infrastructure Team
-**Last Updated:** 2026-03-07
+**Last Updated:** 2026-03-24
