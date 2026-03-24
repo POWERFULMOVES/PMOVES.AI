@@ -488,6 +488,31 @@ Seed data enriched with `hf_id`, `dimensions`, `cuda_supported`:
 | 4 | Jetson Orin onboarding | P2 | Via RustDesk |
 | 5 | NATS leaf node to 5090 | P2 | |
 
+### CGP Context ID Correlation (p7.nats.cgp-correlation → DONE)
+
+Extract Worker `/ingest` and FFmpeg-Whisper `/transcribe` + `/transcribe_file` now accept an optional `context_id` (JSON body field or `X-Context-ID` HTTP header). Propagated to CGP `meta.context_id` and NATS hook payloads. Backward compatible — omitting the field produces identical behavior to before. TAC node status: done.
+
+### CodeRabbit PR Trim (12 threads → 3 fixed, 9 dismissed)
+
+| Action | Count | Details |
+|--------|-------|---------|
+| **Fixed** | 3 | `cuda_supported` in gpu-models.yaml; merge-order in HF enrichment (seed takes precedence) |
+| **By design** | 1 | TZ embedding default intentional, 502 on failure is correct contract |
+| **Schema wrong** | 2 | `"spec"` is the CGP v1 schema field, not `"version"` — CodeRabbit hallucinated guideline |
+| **Pre-existing** | 4 | NATS URL redaction, event-loop affinity, fire-and-forget pattern — all existed before this PR |
+| **Deferred** | 2 | Schema validation on NATS publish — aspirational, not this PR's scope |
+
+### Remaining P7 Phase 7 Nodes
+
+| Node | Status | Owner | What's Needed |
+|------|--------|-------|---------------|
+| `p7.nats.cgp-correlation` | **done** | 4090 | Shipped — context_id in Extract Worker + FFmpeg-Whisper |
+| `p7.nats.model-discovery` | pending | z890 | Create SKILL.md for Model Registry (port 8110) so P7 Agent Interpreter discovers it |
+| `p7.nats.embedding-quality` | pending | 5090 | Provision `pmoves_chunks_qwen3` Qdrant collection + validate Qwen3 e2e on GPU |
+| `p7.nats.session` | future | z890 | P7 Agent Launcher hooks or pterm event bridge |
+| `p7.nats.launch` | future | z890 | Pinokio `on` event handler → NATS publish |
+| `p7.nats.telemetry` | future | z890 | Pterm observer or custom pinokio.js metrics |
+
 ---
 
 ## Critical Files (Updated)
