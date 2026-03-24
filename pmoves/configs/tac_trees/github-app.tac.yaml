@@ -1,0 +1,230 @@
+# TAC Tree: GitHub App Integration
+# PMOVES.AI GitHub App — org-wide installation on POWERFULMOVES
+# Unifying auth for CI, runtime MCP, webhooks, and runner registration
+
+name: "GitHub App Integration"
+version: "1.0.0"
+description: "GitHub App surface area: CI GHCR auth, BoTZ MCP tools, runner registration, n8n webhooks, branch automation"
+
+root:
+  id: github-app
+  task: "GitHub App integration audit"
+  context: "pmoves/docs/infrastructure/github-app-strategy.md"
+  agent_hint: z890-claude
+  children:
+
+    # =========================================================================
+    # Phase 1: Credentials & Registry
+    # =========================================================================
+    - id: gh-app.creds
+      task: "App credentials in secrets pipeline"
+      context: "pmoves/bootstrap/registry.json (github-app service)"
+      agent_hint: z890-claude
+      children:
+        - id: gh-app.creds.app-id
+          task: "GH_APP_ID populated in env.shared"
+          action:
+            type: env_check
+            target: "pmoves/env.shared"
+            pattern: "GH_APP_ID"
+            expect: "Non-empty numeric App ID"
+          context: "Registry key: github-app.GH_APP_ID"
+
+        - id: gh-app.creds.app-sec
+          task: "GH_APP_SEC (PEM private key) in env.shared"
+          action:
+            type: env_check
+            target: "pmoves/env.shared"
+            pattern: "GH_APP_SEC"
+            expect: "PEM key contents (sensitive)"
+          context: "Deployed via: gh secret set GH_APP_SEC < key.pem"
+
+        - id: gh-app.creds.installation-id
+          task: "GH_APP_INSTALLATION_ID populated"
+          action:
+            type: env_check
+            target: "pmoves/env.shared"
+            pattern: "GH_APP_INSTALLATION_ID"
+            expect: "Non-empty installation ID"
+          context: "Retrieve via: gh api /user/installations --jq '.installations[].id'"
+
+        - id: gh-app.creds.manifest
+          task: "Credentials in CHIT secrets manifest"
+          action:
+            type: grep
+            target: "pmoves/chit/secrets_manifest.yaml"
+            pattern: "GH_APP_ID"
+            expect: "All 4 GH_APP keys in manifest"
+          context: "pmoves/chit/secrets_manifest.yaml + secrets_manifest_v2.yaml"
+
+    # =========================================================================
+    # Phase 2: CI Workflows (GHCR Auth)
+    # =========================================================================
+    - id: gh-app.ci
+      task: "CI workflows use App token for GHCR"
+      context: ".github/workflows/"
+      agent_hint: z890-claude
+      children:
+        - id: gh-app.ci.integrations
+          task: "integrations-ghcr.yml uses create-github-app-token"
+          action:
+            type: grep
+            target: ".github/workflows/integrations-ghcr.yml"
+            pattern: "create-github-app-token"
+            expect: "App token step present"
+
+        - id: gh-app.ci.self-hosted
+          task: "self-hosted-builds.yml uses App token"
+          action:
+            type: grep
+            target: ".github/workflows/self-hosted-builds.yml"
+            pattern: "create-github-app-token"
+            expect: "App token step present"
+
+        - id: gh-app.ci.build-images
+          task: "build-images.yml uses App token"
+          action:
+            type: grep
+            target: ".github/workflows/build-images.yml"
+            pattern: "create-github-app-token"
+            expect: "App token step present"
+
+        - id: gh-app.ci.hardened
+          task: "self-hosted-builds-hardened.yml uses App token"
+          action:
+            type: grep
+            target: ".github/workflows/self-hosted-builds-hardened.yml"
+            pattern: "create-github-app-token"
+            expect: "App token step present"
+
+    # =========================================================================
+    # Phase 3: Runtime Services (MCP + Automation)
+    # =========================================================================
+    - id: gh-app.runtime
+      task: "Runtime services consume App credentials"
+      context: "pmoves/docker-compose.yml"
+      agent_hint: z890-claude
+      children:
+        - id: gh-app.runtime.botz
+          task: "BoTZ Gateway: MCP GitHub server token minting"
+          action:
+            type: grep
+            target: "pmoves/docker-compose.yml"
+            pattern: "GH_APP_ID.*botz\\|botz.*GH_APP"
+            expect: "BoTZ Gateway receives GH_APP_ID, GH_APP_SEC, GH_APP_INSTALLATION_ID"
+          context: "MCP tools: create_pr, search_code, push_files, create_issue, list_pull_requests"
+
+        - id: gh-app.runtime.archon
+          task: "Archon: cross-repo cloning (planned)"
+          action:
+            type: grep
+            target: "pmoves/docker-compose.yml"
+            pattern: "GH_APP.*archon"
+            expect: "Archon receives App credentials"
+          context: "Status: planned — MCP cross-repo cloning"
+
+        - id: gh-app.runtime.branch-cleanup
+          task: "Branch Cleanup: stale branch detection + deletion"
+          action:
+            type: grep
+            target: "pmoves/docker-compose.yml"
+            pattern: "github-branch-cleanup"
+            expect: "Service defined with GH_APP_ID"
+          context: "NATS: github.branch.stale_detected.v1, subscribes: github.webhook.pr.v1"
+
+        - id: gh-app.runtime.crossrepo-pr
+          task: "Cross-Repo PR: submodule PR orchestration"
+          action:
+            type: file_exists
+            target: "pmoves/services/github-crossrepo-pr/"
+            expect: "Service directory exists with MCP client"
+
+    # =========================================================================
+    # Phase 4: Runner Registration (GAP — needs wiring)
+    # =========================================================================
+    - id: gh-app.runners
+      task: "Self-hosted runners use App auth"
+      context: "pmoves/tools/local_cert_runners.py"
+      agent_hint: z890-claude
+      children:
+        - id: gh-app.runners.app-auth
+          task: "local_cert_runners.py supports APP_ID + APP_PRIVATE_KEY"
+          action:
+            type: grep
+            target: "pmoves/tools/local_cert_runners.py"
+            pattern: "APP_ID\\|APP_PRIVATE_KEY\\|GH_APP"
+            expect: "App auth path exists as priority 1"
+          context: "myoung34/github-runner natively supports APP_ID + APP_PRIVATE_KEY"
+
+        - id: gh-app.runners.persistent
+          task: "Runner survives restart with App auth"
+          action:
+            type: manual
+            expect: "docker restart gha-runner-ai-lab → re-registers without token expiry"
+          context: "App auth auto-renews tokens on each restart — no 1h expiry"
+
+        - id: gh-app.runners.lanes
+          task: "All 3 lanes (ai-lab, vps, hotfix) support App auth"
+          action:
+            type: manual
+            expect: "Each lane can use App credentials when available"
+
+    # =========================================================================
+    # Phase 5: Webhooks & NATS Integration
+    # =========================================================================
+    - id: gh-app.webhooks
+      task: "GitHub webhooks → n8n → NATS event routing"
+      context: "pmoves/n8n/flows/"
+      agent_hint: z890-claude
+      children:
+        - id: gh-app.webhooks.pr
+          task: "pull_request events → github.webhook.pr.v1"
+          action:
+            type: file_exists
+            target: "pmoves/n8n/flows/"
+            expect: "PR router workflow exists"
+          context: "Consumed by: branch-cleanup, pr-monitor"
+
+        - id: gh-app.webhooks.push
+          task: "push events → github.webhook.push.v1"
+          action:
+            type: file_exists
+            target: "pmoves/n8n/flows/"
+            expect: "Push handler workflow exists"
+
+        - id: gh-app.webhooks.ci
+          task: "workflow_run events → github.webhook.ci.v1"
+          action:
+            type: file_exists
+            target: "pmoves/n8n/flows/"
+            expect: "CI monitor workflow exists"
+          context: "Fleet watcher context — stale image awareness"
+
+    # =========================================================================
+    # Phase 6: Setup & Verification Tooling
+    # =========================================================================
+    - id: gh-app.tooling
+      task: "Setup scripts and verification tools"
+      context: "pmoves/scripts/ + pmoves/tools/"
+      agent_hint: z890-claude
+      children:
+        - id: gh-app.tooling.setup
+          task: "First-time setup scripts exist"
+          action:
+            type: file_exists
+            target: "pmoves/scripts/github_app_first_time_setup.sh"
+            expect: "Unix + Windows setup scripts"
+
+        - id: gh-app.tooling.verify
+          task: "Verification tool exists"
+          action:
+            type: file_exists
+            target: "pmoves/tools/verify_github_app_setup.py"
+            expect: "Automated verification script"
+
+        - id: gh-app.tooling.tests
+          task: "Integration tests exist"
+          action:
+            type: file_exists
+            target: "pmoves/tests/test_github_app_integration.py"
+            expect: "E2E + setup + failure tests"

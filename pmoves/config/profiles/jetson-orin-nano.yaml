@@ -1,0 +1,57 @@
+id: jetson-orin-nano
+name: "Jetson Orin Nano"
+description: >
+  NVIDIA Jetson Orin Nano — edge AI inference node for PMOVES mesh.
+  Ampere GPU (sm_87), 8GB unified memory, CUDA 12.6+, TensorRT.
+  Nemotron/NemoClaw NVIDIA theme for UNFCU enterprise demo.
+hardware:
+  cpu:
+    vendor: NVIDIA
+    model: Jetson Orin Nano
+    cores: 6
+    threads: 6
+    arch: arm64
+  gpu:
+    type: nvidia-orin
+    models: ["Orin Nano"]
+    memory_gb: 8  # Shared GPU/CPU unified memory
+    compute_capability: "8.7"  # sm_87 Ampere
+    cuda_version: "12.6"
+  ram_gb: 8  # Unified memory shared with GPU
+  storage: "NVMe SSD (recommended)"
+  tags: [edge, jetson, arm64, orin, sm_87]
+jetpack:
+  target: "6.2.1"  # L4T 36.4.4
+  base_image: "nvcr.io/nvidia/l4t-jetpack:r36.4.4"
+  dustynv_image: "dustynv/pytorch:2.8-r36.4-cu128-24.04"
+compose_overrides:
+  - docker-compose.arm64.override.yml
+model_bundles:
+  - whisper-small-int8      # Faster-Whisper with INT8 quantization
+  - yolov8n-tensorrt        # Nano YOLO with TensorRT
+  - phi3-mini               # Small LLM for Ollama (3.8B)
+  - nemotron-mini           # NVIDIA Nemotron for edge (when available)
+services:
+  - mesh-agent              # Node announcer (NATS every 15s)
+  - ollama                  # Small model inference (1-8B only)
+  - ffmpeg-whisper          # On-device transcription
+  - media-video             # YOLOv8 object detection
+mcp:
+  - docker
+  - host
+messaging:
+  telegram: optional
+  discord: false
+  whatsapp: false
+  webrtc: true
+tailscale:
+  role: edge
+  hostname_pattern: "pmoves-nano-{N}"
+  existing_registration: "pmoves-nano @ 100.101.124.78 (dormant 108d)"
+notes:
+  - "Orin Nano has 8GB unified memory — GPU and CPU share the pool. Keep total model VRAM under 6GB."
+  - "Use JetPack 6.2.1+ (L4T 36.4.4). JetPack 7.0 (L4T 37.x) planned for future."
+  - "TensorRT optimization critical — convert models to TRT for 2-5x inference speedup."
+  - "CSI camera: `sudo systemctl restart nvargus-daemon` prior to capture."
+  - "Docker must use --runtime nvidia. Set in /etc/docker/daemon.json."
+  - "Nemotron/NemoClaw NVIDIA branding theme for UNFCU enterprise demo."
