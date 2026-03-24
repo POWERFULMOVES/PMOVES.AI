@@ -12,11 +12,12 @@
 
 ## Overview
 
-> **Mar 24 CHIT integration wave 1.** Extract Worker + FFmpeg-Whisper now publish CGP v1.0 packets.
-> DeepResearch doc corrected (was listed as v0.1, actually publishes v1.0 via `pmoves.chit.CGP_SPEC_VERSION`).
+> **Mar 24 CHIT integration wave 1 + context_id correlation.**
+> Extract Worker + FFmpeg-Whisper publish CGP v1.0 packets with optional `context_id`
+> correlation (body field or `X-Context-ID` header). Enables P7/upstream session tracing.
 > Key status changes:
-> - **Extract Worker**: None → Partial (CGP v1.0 producer, fire-and-forget NATS)
-> - **FFmpeg-Whisper**: None → Partial (CGP v1.0 producer, persistent NATS client)
+> - **Extract Worker**: None → Partial (CGP v1.0 producer, fire-and-forget NATS, context_id correlation)
+> - **FFmpeg-Whisper**: None → Partial (CGP v1.0 producer, persistent NATS client, context_id correlation)
 > - **DeepResearch**: Audit doc corrected to reflect v1.0 CGP + dual NATS publishing
 >
 > Previous: Mar 1 review wave, Mar 4 promotion sync (Agent Zero, BoTZ, DoX fixes)
@@ -276,6 +277,8 @@
 - `tokenism.cgp.ready.v1` (publish)
 - `skills.step.extract-worker.done.v1` (publish)
 
+**Correlation:** Accepts optional `context_id` via request body or `X-Context-ID` header. Propagated to CGP `meta.context_id` and NATS hook payload.
+
 **Gap:** Producer only, no geometry consumption
 
 ---
@@ -289,6 +292,8 @@
 **NATS Subjects:**
 - `tokenism.cgp.ready.v1` (publish)
 - `ingest.transcript.ready.v1` (publish)
+
+**Correlation:** Accepts optional `context_id` via request body or `X-Context-ID` header (both `/transcribe` and `/transcribe_file`). Propagated to CGP `meta.context_id` and NATS hook payload.
 
 **Gap:** Producer only, no geometry consumption
 

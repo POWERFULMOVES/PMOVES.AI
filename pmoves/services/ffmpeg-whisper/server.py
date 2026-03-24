@@ -16,7 +16,7 @@ from datetime import datetime, timezone as tz
 from functools import lru_cache
 from typing import Any, Dict, Iterable, List, Literal, Optional, Tuple
 
-from fastapi import Body, FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import Body, FastAPI, File, Form, HTTPException, Request, UploadFile
 
 # NATS service announcement integration
 try:
@@ -75,6 +75,7 @@ def _build_transcription_cgp(
     video_id: Optional[str],
     audio_uri: Optional[str],
     request_id: str,
+    context_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Build a CGP v1.0 packet from transcription results."""
     segments = transcript.get("segments") or []
@@ -124,6 +125,7 @@ def _build_transcription_cgp(
             "video_id": video_id,
             "audio_uri": audio_uri,
             "speaker_count": len(speakers),
+            **({"context_id": context_id} if context_id else {}),
         },
     }
 
@@ -557,7 +559,7 @@ def _transcribe_with_provider(
 
 
 @app.post("/transcribe")
-def transcribe(body: Dict[str, Any] = Body(...)):
+def transcribe(request: Request, body: Dict[str, Any] = Body(...)):
     bucket = body.get("bucket")
     key = body.get("key")
     video_id = body.get("video_id")
@@ -574,6 +576,7 @@ def transcribe(body: Dict[str, Any] = Body(...)):
     model_name = body.get("whisper_model") or DEFAULT_WHISPER_MODEL
     diarize = bool(body.get("diarize", True))
     out_audio_key = body.get("out_audio_key")
+    context_id = body.get("context_id") or request.headers.get("x-context-id")
 
     tmpdir = tempfile.mkdtemp(prefix="ffw-")
     client = s3_client()
@@ -629,9 +632,9 @@ def transcribe(body: Dict[str, Any] = Body(...)):
         if CGP_PUBLISH_ENABLED and NATS_CGP_AVAILABLE:
             try:
                 req_id = str(uuid.uuid4())
-                cgp = _build_transcription_cgp(transcript, video_id, audio_uri, req_id)
+                cgp = _build_transcription_cgp(transcript, video_id, audio_uri, req_id, context_id=context_id)
                 _publish_cgp(CGP_SUBJECT, cgp)
-                _publish_cgp(TRANSCRIPT_READY_SUBJECT, {
+                hook = {
                     "service": "ffmpeg-whisper",
                     "request_id": req_id,
                     "video_id": video_id,
@@ -639,11 +642,14 @@ def transcribe(body: Dict[str, Any] = Body(...)):
                     "language": transcript.get("language") or language,
                     "segment_count": len(transcript.get("segments") or []),
                     "ts": datetime.now(tz.utc).isoformat(),
-                })
+                }
+                if context_id:
+                    hook["context_id"] = context_id
+                _publish_cgp(TRANSCRIPT_READY_SUBJECT, hook)
             except Exception as cgp_exc:
                 logger.warning("CGP publish failed (non-fatal): %s", cgp_exc)
 
-        return {
+        result = {
             "ok": True,
             "text": transcript.get("text"),
             "language": transcript.get("language") or language,
@@ -657,6 +663,9 @@ def transcribe(body: Dict[str, Any] = Body(...)):
             "provider": provider,
             "forwarded": forwarded,
         }
+        if context_id:
+            result["context_id"] = context_id
+        return result
     except subprocess.CalledProcessError as exc:
         raise HTTPException(500, f"ffmpeg error: {exc}") from exc
     except HTTPException:
@@ -670,12 +679,14 @@ def transcribe(body: Dict[str, Any] = Body(...)):
 
 @app.post("/transcribe_file")
 async def transcribe_file(
+    request: Request,
     audio: UploadFile = File(...),
     language: Optional[str] = Form(None),
     provider: Optional[str] = Form(None),
     model: Optional[str] = Form(None),
     whisper_model: Optional[str] = Form(None),
     diarize: bool = Form(True),
+    context_id: Optional[str] = Form(None),
 ) -> Dict[str, Any]:
     """
     Transcribe an uploaded audio file directly (multipart/form-data).
@@ -689,6 +700,7 @@ async def transcribe_file(
         raise HTTPException(400, f"provider must be one of {', '.join(SUPPORTED_PROVIDERS)}")
 
     model_name = whisper_model or model or DEFAULT_WHISPER_MODEL
+    resolved_context_id = context_id or request.headers.get("x-context-id")
 
     tmpdir = tempfile.mkdtemp(prefix="ffw-upload-")
     try:
@@ -712,12 +724,12 @@ async def transcribe_file(
         if CGP_PUBLISH_ENABLED and NATS_CGP_AVAILABLE:
             try:
                 req_id = str(uuid.uuid4())
-                cgp = _build_transcription_cgp(transcript, None, None, req_id)
+                cgp = _build_transcription_cgp(transcript, None, None, req_id, context_id=resolved_context_id)
                 await _publish_cgp_async(CGP_SUBJECT, cgp)
             except Exception as cgp_exc:
                 logger.warning("CGP publish failed (non-fatal): %s", cgp_exc)
 
-        return {
+        result = {
             "ok": True,
             "text": transcript.get("text"),
             "language": transcript.get("language") or language,
@@ -728,6 +740,9 @@ async def transcribe_file(
             "device": transcript.get("device"),
             "provider": chosen_provider,
         }
+        if resolved_context_id:
+            result["context_id"] = resolved_context_id
+        return result
     except subprocess.CalledProcessError as exc:
         raise HTTPException(500, f"ffmpeg error: {exc}") from exc
     except HTTPException:

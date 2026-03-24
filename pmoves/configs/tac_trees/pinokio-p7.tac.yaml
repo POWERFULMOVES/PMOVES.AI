@@ -245,11 +245,11 @@ root:
           action:
             type: manual
             expect: "P7 launch → ingestion → Extract Worker CGP → traceable to P7 session ID"
-          context: "Extract Worker + FFmpeg-Whisper publish CGP v1.0 (PR #1082). Need context_id passthrough from P7 session to downstream services."
+          context: "Extract Worker + FFmpeg-Whisper accept context_id (body or X-Context-ID header), propagate to CGP meta and NATS hooks."
           agent_hint: 4090-claude
-          status: pending
+          status: done
           depends_on: [p7.nats.launch]
-          notes: "Foundation shipped: CGP producers live. Missing: session context_id propagation."
+          notes: "Shipped: context_id in Extract Worker /ingest + FFmpeg-Whisper /transcribe + /transcribe_file. Callers opt-in."
 
         - id: p7.nats.model-discovery
           task: "P7 agents query Model Registry for available models"

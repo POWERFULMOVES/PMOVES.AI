@@ -5,9 +5,9 @@ import os
 import threading
 import uuid
 from datetime import datetime, timezone
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 
-from fastapi import FastAPI, Body, HTTPException, Response
+from fastapi import FastAPI, Body, HTTPException, Request, Response
 import requests
 from qdrant_client import QdrantClient
 from qdrant_client.http.models import Distance, VectorParams, PointStruct
@@ -49,7 +49,8 @@ cgp_publishes_total = Counter(
 
 
 def _build_cgp_packet(
-    chunks: List[Dict[str, Any]], collection: str, request_id: str
+    chunks: List[Dict[str, Any]], collection: str, request_id: str,
+    context_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Build a CGP v1.0 packet from ingested chunks."""
     points = []
@@ -90,6 +91,7 @@ def _build_cgp_packet(
             "tags": ["extract", "indexing", "qdrant", "meilisearch"],
             "collection": collection,
             "chunk_count": len(chunks),
+            **({"context_id": context_id} if context_id else {}),
         },
     }
 
@@ -210,13 +212,14 @@ def metrics():
     return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 @app.post("/ingest")
-def ingest(body: Dict[str, Any] = Body(...)):
+def ingest(request: Request, body: Dict[str, Any] = Body(...)):
     """Ingest text chunks for embedding and indexing to Qdrant + Meilisearch."""
     with http_request_duration.time():
         status = "200"
         try:
             chunks = body.get('chunks') or []
             errors = body.get('errors') or []
+            context_id = body.get("context_id") or request.headers.get("x-context-id")
 
             # Upsert chunks to Qdrant + Meili
             if chunks:
@@ -256,15 +259,18 @@ def ingest(body: Dict[str, Any] = Body(...)):
                 if CGP_PUBLISH_ENABLED:
                     try:
                         req_id = str(uuid.uuid4())
-                        cgp = _build_cgp_packet(chunks, COLL, req_id)
+                        cgp = _build_cgp_packet(chunks, COLL, req_id, context_id=context_id)
                         _publish_nats_fire_and_forget(CGP_SUBJECT, cgp)
-                        _publish_nats_fire_and_forget(SKILL_HOOK_SUBJECT, {
+                        hook = {
                             "service": "extract-worker",
                             "request_id": req_id,
                             "chunk_count": len(chunks),
                             "collection": COLL,
                             "ts": datetime.now(timezone.utc).isoformat(),
-                        })
+                        }
+                        if context_id:
+                            hook["context_id"] = context_id
+                        _publish_nats_fire_and_forget(SKILL_HOOK_SUBJECT, hook)
                     except Exception as cgp_exc:
                         logger.warning("CGP build/publish failed (non-fatal): %s", cgp_exc)
 
@@ -279,7 +285,10 @@ def ingest(body: Dict[str, Any] = Body(...)):
                     continue
 
             http_requests_total.labels(method='POST', endpoint='/ingest', status=status).inc()
-            return {"ok": True, "chunks": len(chunks), "errors_inserted": inserted}
+            result = {"ok": True, "chunks": len(chunks), "errors_inserted": inserted}
+            if context_id:
+                result["context_id"] = context_id
+            return result
 
         except HTTPException as e:
             status = str(e.status_code)
