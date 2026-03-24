@@ -763,7 +763,10 @@ zeroAccessPaths:
   # ---------------------------------------------------------------------------
   - "dump.sql"
   - "backup.sql"
-  - "*.dump"
+  - "*database.dump"
+  - "*db.dump"
+  - "*.sql.dump"
+  - "*backup.dump"
 
   # ---------------------------------------------------------------------------
   # PMOVES.AI - ENVIRONMENT FILES (CRITICAL - contain ALL secrets)
@@ -843,6 +846,14 @@ chitBypassPatterns:
   - 'make\s+.*(?:diag-z890|container-agent|up-z890)'
   - 'container-agent/app\.py'
   - 'nats-leaf.*(?:\.ya?ml|\.conf|health)'
+  # Cipher Memory MCP tools — trusted CHIT/Cipher operations for cross-session
+  # knowledge management. Cipher stores to Neo4j, not filesystem secrets.
+  - 'pmoves_cipher'
+  - 'cipher_memory'
+  - 'pmoves.*cipher'
+  - 'cipher:store'
+  - 'cipher:search'
+  - 'cipher:reasoning'
 
 # File paths that CHIT operations may create/write — bypass zero-access.
 # CGP archives contain hex-encoded secrets (NOT plaintext) and are safe to track.
@@ -858,6 +869,9 @@ chitSafePaths:
   - "*nats*credential*"
   - "*nats*admin*"
   - "*gpu*orchestrator*secret*"
+  # Cipher Memory data paths — Neo4j-backed, no plaintext secrets
+  - "data/cipher/"
+  - "data\\cipher\\"
 
 # ---------------------------------------------------------------------------
 # PMOVES.AI - GIT SUBMODULES

@@ -598,6 +598,7 @@ def _run_pterm(pterm: str, args: list[str], timeout: int = 30) -> subprocess.Com
         return subprocess.run(
             [pterm, *args],
             capture_output=True, text=True, timeout=timeout,
+            encoding="utf-8", errors="replace",
         )
     except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
         return None
@@ -686,7 +687,7 @@ def pterm_preflight(skip: bool = False) -> str | None:
         return None
 
     identifier = app_id or app_path
-    print(f"  Pterm: found app → {identifier}")
+    print(f"  Pterm: found app -> {identifier}")
 
     # 2. Check status
     status_arg = app_id or app_path

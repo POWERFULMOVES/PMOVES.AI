@@ -274,6 +274,7 @@ class SynthesizeRequest(BaseModel):
     provider: Optional[str] = Field(None, description="Provider override (vibevoice, ultimate_tts, elevenlabs)")
     voice: Optional[str] = Field(None, description="Voice preset for provider")
     engine: Optional[str] = Field(None, description="TTS engine for ultimate_tts (kitten_tts, f5_tts, kokoro)")
+    intent: Optional[str] = Field(None, description="Expression intent (narrate, emote, dramatic, clone, multilingual, podcast, persona, agent, bpm_sync)")
     output_format: str = Field("wav", description="Output format: wav, mp3, pcm")
 
 
@@ -491,6 +492,18 @@ async def synthesize_speech(request: SynthesizeRequest):
     import time
     start_time = time.time()
 
+    # Resolve persona/intent to engine if not explicitly set
+    if (request.persona_id or request.intent) and not request.engine:
+        from persona_selector import resolve_persona_engine
+        resolved_engine, extra_kwargs = await resolve_persona_engine(
+            request.persona_id, request.intent,
+        )
+        request.engine = resolved_engine
+        if not request.provider:
+            request.provider = "ultimate_tts"
+        if not request.voice and "voice" in extra_kwargs:
+            request.voice = extra_kwargs.pop("voice")
+
     provider_name = request.provider or DEFAULT_PROVIDER
 
     try:
@@ -680,6 +693,18 @@ async def synthesize_prosodic_speech(request: SynthesizeRequest):
 
     The prosodic timeline includes BPM encoding compatible with CHIT CGP events.
     """
+    # Resolve persona/intent to engine if not explicitly set
+    if (request.persona_id or request.intent) and not request.engine:
+        from persona_selector import resolve_persona_engine
+        resolved_engine, extra_kwargs = await resolve_persona_engine(
+            request.persona_id, request.intent,
+        )
+        request.engine = resolved_engine
+        if not request.provider:
+            request.provider = "ultimate_tts"
+        if not request.voice and "voice" in extra_kwargs:
+            request.voice = extra_kwargs.pop("voice")
+
     provider_name = request.provider or DEFAULT_PROVIDER
     engine = request.engine or "kokoro"
 
@@ -758,16 +783,10 @@ async def synthesize_prosodic_speech(request: SynthesizeRequest):
             # Rough duration estimate: 150ms per syllable + pause
             position += (chunk.estimated_syllables * 0.15) + (chunk.pause_after / 1000.0)
 
-        # 7. Build BPM metadata from boundaries
-        boundary_bpm_map = {
-            "SENTENCE": 60,
-            "CLAUSE": 90,
-            "PHRASE": 120,
-            "BREATH": 80,
-            "NONE": 150,
-        }
+        # 7. Build BPM metadata from boundaries (uses prosodic.bpm_encoder constants)
+        from prosodic.bpm_encoder import BPM_MAP
         avg_bpm = sum(
-            boundary_bpm_map.get(c.boundary_after.name, 120) for c in successful_chunks
+            BPM_MAP.get(c.boundary_after, 120) for c in successful_chunks
         ) / max(len(successful_chunks), 1)
 
         REQUESTS_TOTAL.labels(endpoint="/v1/voice/synthesize/prosodic", status="200").inc()

@@ -304,12 +304,14 @@ class UltimateTTSProvider(VoiceProvider):
         data[66] = False  # use_random
 
         # [67-72] F5-TTS
+        data[68] = ""     # ref_text
         data[69] = 1.0   # speed
         data[70] = 0.15  # cross_fade
         data[71] = False  # remove_silence
         data[72] = 0     # seed
 
         # [73-82] Higgs Audio
+        data[74] = ""     # ref_text
         data[75] = "EMPTY"  # voice_preset
         data[76] = ""     # system_prompt (REQUIRED)
         data[77] = 1.0   # temperature
@@ -323,6 +325,7 @@ class UltimateTTSProvider(VoiceProvider):
         data[83] = voice if engine == "kitten_tts" else "expr-voice-2-f"
 
         # [84-93] VoxCPM
+        data[85] = ""     # ref_text
         data[86] = 2.0   # cfg_value
         data[87] = 10    # inference_timesteps
         data[88] = True   # normalize
