@@ -485,6 +485,19 @@
           "type": "url_optional"
         },
         {
+          "key": "DISCORD_BOT_TOKEN",
+          "file": "pmoves/env.shared",
+          "prompt": "Discord bot token (for reading channels and thread management)",
+          "required": false,
+          "sensitive": true
+        },
+        {
+          "key": "DISCORD_GUILD_ID",
+          "file": "pmoves/env.shared",
+          "prompt": "Discord guild (server) ID for search and guild-scoped operations",
+          "required": false
+        },
+        {
           "key": "MINIO_USER",
           "file": "pmoves/env.shared",
           "prompt": "MinIO user",
