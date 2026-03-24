@@ -216,6 +216,10 @@ jobs:
         with:
           app-id: ${{ secrets.GH_APP_ID }}
           private-key: ${{ secrets.GH_APP_SEC }}
+          # Explicit permissions: packages:write required for GHCR push (403 without it)
+          permissions: >-
+            contents:read,
+            packages:write
 
       - name: Prepare integration source
         run: |
