@@ -2588,6 +2588,32 @@ vibevoice-smoke: ## Check VibeVoice realtime /config (requires VibeVoice running
 	echo "✔ VibeVoice /config 200"; \
 	curl -sS "http://localhost:$$port/config" | jq .
 
+# ────────────────────────────────────────────────────────────────────────────
+# FLUTE-GATEWAY VOICE SERVICE
+# ────────────────────────────────────────────────────────────────────────────
+
+.PHONY: up-flute-gateway flute-gateway-rebuild flute-gateway-smoke
+up-flute-gateway: ## Start Flute-Gateway voice communication service
+	@echo "Starting Flute-Gateway..."
+	@$(DC) --profile orchestration up -d --build flute-gateway
+	@sleep 5
+	@curl -sf http://localhost:8055/healthz > /dev/null 2>&1 \
+	  && echo "Flute-Gateway ready at http://localhost:8055" \
+	  || echo "Flute-Gateway may still be starting (check: curl http://localhost:8055/healthz)"
+
+flute-gateway-rebuild: ## Rebuild Flute-Gateway image from scratch (no cache)
+	@echo "Rebuilding Flute-Gateway (no cache)..."
+	@$(DC) --profile orchestration build --no-cache flute-gateway
+	@$(DC) --profile orchestration up -d --no-deps --force-recreate flute-gateway
+	@sleep 5
+	@curl -sf http://localhost:8055/healthz > /dev/null 2>&1 \
+	  && echo "Flute-Gateway rebuilt and ready" \
+	  || echo "Flute-Gateway may still be starting"
+
+flute-gateway-smoke: ## Smoke test Flute-Gateway health + provider status
+	@echo "Flute-Gateway smoke test..."
+	@curl -sf http://localhost:8055/healthz || { echo "Flute-Gateway not responding at http://localhost:8055/healthz"; exit 1; }
+
 # ============================================================================
 # Z890 / RTX 3090 Ti GPU NODE
 # ============================================================================
