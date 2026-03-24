@@ -143,6 +143,7 @@ ENGINES = [
         "load_kwargs": {},
         "synth_kwargs": {
             "higgs_voice_preset": "EMPTY",
+            "higgs_system_prompt": "Read the following text naturally and clearly.",
             "higgs_temperature": 1.0,
             "higgs_top_p": 0.95,
             "higgs_top_k": 50,
