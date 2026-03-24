@@ -1276,6 +1276,9 @@ _MCP_TOOLS = [
 
 async def _mcp_call_read_messages(arguments: Dict[str, Any]) -> Dict[str, Any]:
     """Handle read_messages tool call."""
+    if not isinstance(arguments, dict):
+        return {"error": "arguments must be an object"}
+
     channel_id = arguments.get("channel_id")
     if not channel_id:
         return {"error": "channel_id is required"}
@@ -1283,7 +1286,10 @@ async def _mcp_call_read_messages(arguments: Dict[str, Any]) -> Dict[str, Any]:
     if not DISCORD_BOT_TOKEN:
         return {"error": "DISCORD_BOT_TOKEN not configured"}
 
-    limit = max(1, min(arguments.get("limit", 50), 100))
+    try:
+        limit = max(1, min(int(arguments.get("limit", 50)), 100))
+    except (TypeError, ValueError):
+        return {"error": "limit must be an integer between 1 and 100"}
     params: Dict[str, Any] = {"limit": limit}
     if arguments.get("before"):
         params["before"] = arguments["before"]
@@ -1321,14 +1327,26 @@ async def mcp_endpoint(body: Dict[str, Any] = Body(...)):
     jsonrpc = body.get("jsonrpc", "2.0")
     req_id = body.get("id", 1)
     method = body.get("method", "")
-    params = body.get("params", {})
+    params = body.get("params") or {}
+    if not isinstance(params, dict):
+        return {
+            "jsonrpc": jsonrpc,
+            "id": req_id,
+            "error": {"code": -32000, "message": "params must be an object"},
+        }
 
     if method == "tools/list":
         return {"jsonrpc": jsonrpc, "id": req_id, "result": {"tools": _MCP_TOOLS}}
 
     if method == "tools/call":
         tool_name = params.get("name", "")
-        arguments = params.get("arguments", {})
+        arguments = params.get("arguments") or {}
+        if not isinstance(arguments, dict):
+            return {
+                "jsonrpc": jsonrpc,
+                "id": req_id,
+                "error": {"code": -32000, "message": "arguments must be an object"},
+            }
 
         if tool_name == "read_messages":
             result = await _mcp_call_read_messages(arguments)
