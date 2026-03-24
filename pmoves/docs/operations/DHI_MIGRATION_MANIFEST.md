@@ -159,12 +159,24 @@ DHI images strip non-essential binaries. Healthchecks using `wget` or `curl` may
 ### Recommended Healthcheck Pattern for DHI
 
 ```yaml
-# Instead of wget/curl, prefer native tools or TCP probes:
+# Instead of wget/curl, prefer native tools or TCP probes.
+# Each service gets its own healthcheck block:
+
+# NATS
 healthcheck:
-  test: ["CMD-SHELL", "nats-server --health || exit 1"]  # NATS
-  test: ["CMD-SHELL", "pg_isready -U postgres"]           # Postgres
-  test: ["CMD-SHELL", "redis-cli ping"]                    # Redis
-  test: ["CMD-SHELL", "clickhouse-client --query 'SELECT 1'"]  # ClickHouse
+  test: ["CMD-SHELL", "nats-server --health || exit 1"]
+
+# Postgres
+healthcheck:
+  test: ["CMD-SHELL", "pg_isready -U postgres"]
+
+# Redis
+healthcheck:
+  test: ["CMD-SHELL", "redis-cli ping"]
+
+# ClickHouse
+healthcheck:
+  test: ["CMD-SHELL", "clickhouse-client --query 'SELECT 1'"]
 ```
 
 ---
@@ -206,7 +218,7 @@ To make DHI migration reversible, use environment variable overrides:
 # docker-compose.yml
 services:
   nats:
-    image: ${NATS_IMAGE:-dhi.io/nats:2.11}
+    image: ${NATS_IMAGE:-dhi.io/nats:2.12}
 
   # In .env or env.shared for fallback:
   # NATS_IMAGE=nats:2.11.8-alpine
@@ -261,12 +273,12 @@ DHI does **not** use variant suffixes. Map as follows:
 | Official Tag Pattern | DHI Tag Pattern | Example |
 |---|---|---|
 | `image:X.Y-slim` | `dhi.io/image:X.Y` | `python:3.11-slim` → `dhi.io/python:3.11` |
-| `image:X.Y-alpine` | `dhi.io/image:X.Y` | `nats:2.11.8-alpine` → `dhi.io/nats:2.11` |
+| `image:X.Y-alpine` | `dhi.io/image:X.Y` | `nats:2.11.8-alpine` → `dhi.io/nats:2.12` |
 | `image:X.Y-bullseye` | `dhi.io/image:X.Y` | `python:3.11-slim-bullseye` → `dhi.io/python:3.11` |
 | `image:X.Y-bookworm` | `dhi.io/image:X.Y` | `rust:1.84-bookworm` → `dhi.io/rust:1.84` |
 | `image:vX.Y.Z` | `dhi.io/image:X.Y` | `prom/prometheus:v2.55.1` → `dhi.io/prometheus:2.55` |
 | `vendor/image:X.Y.Z` | `dhi.io/image:X.Y` | `grafana/grafana:11.2.0` → `dhi.io/grafana:11.2` |
-| `image:latest` | `dhi.io/image` (pin!) | `nats:latest` → `dhi.io/nats:2.11` |
+| `image:latest` | `dhi.io/image` (pin!) | `nats:latest` → `dhi.io/nats:2.12` |
 
 **Important:** Always verify exact tag availability with `docker dhi catalog get <image>` before migrating.
 
