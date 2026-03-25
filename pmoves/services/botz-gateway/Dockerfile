@@ -1,5 +1,5 @@
-# DHI base image — zero-CVE, SLSA Level 3 provenance, Cosign signed
-FROM dhi.io/python:3.11
+# Digest-pinned base — refreshed 2026-03-25
+FROM python:3.11-slim@sha256:9358444059ed78e2975ada2c189f1c1a3144a5dab6f35bff8c981afb38946634
 
 LABEL org.opencontainers.image.source="https://github.com/POWERFULMOVES/PMOVES.AI"
 LABEL org.opencontainers.image.description="PMOVES-BoTZ Gateway - Work item coordination service"
