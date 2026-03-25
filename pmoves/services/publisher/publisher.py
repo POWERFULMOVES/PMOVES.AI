@@ -123,6 +123,8 @@ MEDIA_LIBRARY_PATH = os.environ.get("MEDIA_LIBRARY_PATH", "/library/images")
 MEDIA_LIBRARY_PUBLIC_BASE_URL = os.environ.get("MEDIA_LIBRARY_PUBLIC_BASE_URL")
 DOWNLOAD_RETRIES = int(os.environ.get("PUBLISHER_DOWNLOAD_RETRIES", "3"))
 DOWNLOAD_RETRY_BACKOFF_SEC = float(os.environ.get("PUBLISHER_DOWNLOAD_RETRY_BACKOFF", "1.5"))
+STUDIO_BOARD_SYNC_RETRIES = max(1, int(os.environ.get("PUBLISHER_STUDIO_BOARD_SYNC_RETRIES", "3")))
+STUDIO_BOARD_SYNC_BACKOFF_SEC = max(0.0, float(os.environ.get("PUBLISHER_STUDIO_BOARD_SYNC_BACKOFF_SEC", "1.0")))
 METRICS_HOST = os.environ.get("PUBLISHER_METRICS_HOST", "0.0.0.0")
 METRICS_PORT = int(os.environ.get("PUBLISHER_METRICS_PORT", "9095"))
 METRICS_ROLLUP_TABLE = os.environ.get("PUBLISHER_METRICS_TABLE", "publisher_metrics_rollup")
@@ -406,6 +408,7 @@ def build_published_payload(
     *,
     artifact_uri: str,
     studio_board_id: Optional[int],
+    publish_request_id: Optional[str],
     published_path: str,
     namespace: str,
     title: str,
@@ -430,6 +433,8 @@ def build_published_payload(
     }
     if studio_board_id is not None:
         payload["studio_board_id"] = studio_board_id
+    if publish_request_id:
+        payload["publish_request_id"] = publish_request_id
     if title:
         payload["title"] = title
     if description:
@@ -455,6 +460,7 @@ def build_published_payload(
                 jellyfin_meta,
                 {
                     "studio_board_id": studio_board_id,
+                    "publish_request_id": publish_request_id,
                     "thumbnail_url": thumbnail_url,
                     "duration": duration,
                     "jellyfin_public_url": jellyfin_public_url,
@@ -480,6 +486,7 @@ def build_failure_payload(
     outcome: str,
     artifact_uri: Optional[str],
     studio_board_id: Optional[int],
+    publish_request_id: Optional[str],
     namespace: Optional[str],
     publish_event_id: Optional[str],
     public_url: Optional[str],
@@ -498,6 +505,8 @@ def build_failure_payload(
         payload["artifact_uri"] = artifact_uri
     if studio_board_id is not None:
         payload["studio_board_id"] = studio_board_id
+    if publish_request_id:
+        payload["publish_request_id"] = publish_request_id
     if namespace:
         payload["namespace"] = namespace
     if publish_event_id:
@@ -525,6 +534,7 @@ async def emit_publish_failure(
     outcome: str = "fatal",
     artifact_uri: Optional[str],
     studio_board_id: Optional[int],
+    publish_request_id: Optional[str],
     namespace: Optional[str],
     public_url: Optional[str],
     jellyfin_public_url: Optional[str],
@@ -541,6 +551,7 @@ async def emit_publish_failure(
         outcome=outcome,
         artifact_uri=artifact_uri,
         studio_board_id=studio_board_id,
+        publish_request_id=publish_request_id,
         namespace=namespace,
         publish_event_id=publish_event_id,
         public_url=public_url,
@@ -569,6 +580,109 @@ async def emit_publish_failure(
                 "publish_event_id": publish_event_id,
             },
         )
+
+
+async def _sync_studio_board_publish_completion(
+    *,
+    studio_board_id: int,
+    publish_request_id: str,
+    published_event_id: Optional[str],
+    published_at: Optional[str],
+    completion_meta: Dict[str, Any],
+) -> Optional[str]:
+    attempts = max(1, STUDIO_BOARD_SYNC_RETRIES)
+    last_error: Optional[str] = None
+
+    if supabase_client is None:
+        return "studio_board completion sync unavailable"
+
+    for attempt in range(1, attempts + 1):
+        if not hasattr(supabase_client, "complete_studio_board_publish"):
+            last_error = "studio_board completion sync unavailable"
+            break
+        try:
+            synced = await asyncio.to_thread(
+                supabase_client.complete_studio_board_publish,
+                studio_board_id,
+                publish_request_id,
+                published_event_id,
+                published_at,
+                completion_meta,
+            )
+            if synced:
+                return None
+            last_error = "studio_board row was not updated after publish"
+            logger.warning(
+                "Studio board publish completion returned no update",
+                extra={
+                    "studio_board_id": studio_board_id,
+                    "publish_request_id": publish_request_id,
+                    "attempt": attempt,
+                },
+            )
+        except RuntimeError as exc:  # pragma: no cover - supabase config missing
+            last_error = _describe_exception(exc)
+            logger.warning(
+                "Supabase not configured for studio_board publish completion",
+                extra={
+                    "studio_board_id": studio_board_id,
+                    "publish_request_id": publish_request_id,
+                    "attempt": attempt,
+                },
+                exc_info=exc,
+            )
+        except Exception as exc:
+            last_error = _describe_exception(exc)
+            logger.warning(
+                "Failed to sync studio_board published state",
+                extra={
+                    "studio_board_id": studio_board_id,
+                    "publish_request_id": publish_request_id,
+                    "attempt": attempt,
+                },
+                exc_info=exc,
+            )
+        if attempt < attempts and STUDIO_BOARD_SYNC_BACKOFF_SEC > 0:
+            await asyncio.sleep(STUDIO_BOARD_SYNC_BACKOFF_SEC * attempt)
+
+    if hasattr(supabase_client, "reconcile_studio_board_publish_completion"):
+        try:
+            reconciled = await asyncio.to_thread(
+                supabase_client.reconcile_studio_board_publish_completion,
+                studio_board_id,
+                publish_request_id,
+                published_event_id,
+                published_at,
+                completion_meta,
+            )
+            if reconciled:
+                logger.warning(
+                    "Recovered studio_board publish completion via direct update fallback",
+                    extra={
+                        "studio_board_id": studio_board_id,
+                        "publish_request_id": publish_request_id,
+                    },
+                )
+                return None
+            last_error = last_error or "studio_board completion sync unavailable"
+        except RuntimeError as exc:  # pragma: no cover - supabase config missing
+            last_error = _describe_exception(exc)
+            logger.error(
+                "Supabase not configured for studio_board completion recovery",
+                extra={"studio_board_id": studio_board_id, "publish_request_id": publish_request_id},
+                exc_info=exc,
+            )
+        except Exception as exc:
+            last_error = _describe_exception(exc)
+            logger.error(
+                "Failed to recover studio_board published state",
+                extra={"studio_board_id": studio_board_id, "publish_request_id": publish_request_id},
+                exc_info=exc,
+            )
+
+    return last_error or "studio_board completion sync unavailable"
+
+
 async def download_with_retries(minio: MinioClientType, bucket: str, key: str, dest: str) -> None:
     last_error: Optional[Exception] = None
     for attempt in range(1, DOWNLOAD_RETRIES + 1):
@@ -877,6 +991,8 @@ async def main() -> None:
         base_meta: Dict[str, Any] = {}
         if studio_board_id is not None:
             base_meta["studio_board_id"] = studio_board_id
+        if publish_request_id:
+            base_meta["publish_request_id"] = publish_request_id
         if isinstance(payload.get("meta"), dict):
             base_meta["source_meta"] = payload["meta"]
 
@@ -904,6 +1020,7 @@ async def main() -> None:
                 outcome=outcome,
                 artifact_uri=artifact_uri,
                 studio_board_id=studio_board_id,
+                publish_request_id=publish_request_id,
                 namespace=namespace,
                 public_url=public_url_value,
                 jellyfin_public_url=jellyfin_public_url_value,
@@ -925,7 +1042,13 @@ async def main() -> None:
                 failure_reason=reason,
                 meta=combined_meta,
             )
-            if studio_board_id is not None and publish_request_id and supabase_client is not None and hasattr(supabase_client, "fail_studio_board_publish"):
+            if (
+                outcome != "partial"
+                and studio_board_id is not None
+                and publish_request_id
+                and supabase_client is not None
+                and hasattr(supabase_client, "fail_studio_board_publish")
+            ):
                 try:
                     await asyncio.to_thread(
                         supabase_client.fail_studio_board_publish,
@@ -1152,6 +1275,7 @@ async def main() -> None:
             published_payload = build_published_payload(
                 artifact_uri=artifact_uri,
                 studio_board_id=studio_board_id,
+                publish_request_id=publish_request_id,
                 published_path=out_path,
                 namespace=namespace,
                 title=title,
@@ -1204,50 +1328,22 @@ async def main() -> None:
             await nc.publish("content.published.v1", json.dumps(evt).encode())
 
             if studio_board_id is not None and publish_request_id:
-                if supabase_client is None or not hasattr(supabase_client, "complete_studio_board_publish"):
-                    studio_board_sync_error = "studio_board completion sync unavailable"
-                    logger.error(
-                        "Studio board publish completion sync unavailable",
-                        extra={"studio_board_id": studio_board_id, "publish_request_id": publish_request_id},
-                    )
-                else:
-                    completion_meta = {
-                        "public_url": published_payload.get("public_url"),
-                        "jellyfin_public_url": published_payload.get("jellyfin_public_url"),
-                        "jellyfin_item_id": published_payload.get("jellyfin_item_id"),
-                        "published_path": published_payload.get("published_path"),
-                        "thumbnail_url": published_payload.get("thumbnail_url"),
-                        "duration": published_payload.get("duration"),
-                    }
-                    try:
-                        synced = await asyncio.to_thread(
-                            supabase_client.complete_studio_board_publish,
-                            studio_board_id,
-                            publish_request_id,
-                            _coerce_text(evt.get("id")),
-                            _coerce_text(evt.get("ts")),
-                            completion_meta,
-                        )
-                        if not synced:
-                            studio_board_sync_error = "studio_board row was not updated after publish"
-                            logger.error(
-                                "Studio board publish completion returned no update",
-                                extra={"studio_board_id": studio_board_id, "publish_request_id": publish_request_id},
-                            )
-                    except RuntimeError as exc:  # pragma: no cover - supabase config missing
-                        studio_board_sync_error = _describe_exception(exc)
-                        logger.error(
-                            "Supabase not configured for studio_board publish completion",
-                            extra={"studio_board_id": studio_board_id, "publish_request_id": publish_request_id},
-                            exc_info=exc,
-                        )
-                    except Exception as exc:
-                        studio_board_sync_error = _describe_exception(exc)
-                        logger.error(
-                            "Failed to sync studio_board published state",
-                            extra={"studio_board_id": studio_board_id, "publish_request_id": publish_request_id},
-                            exc_info=exc,
-                        )
+                completion_meta = {
+                    "public_url": published_payload.get("public_url"),
+                    "jellyfin_public_url": published_payload.get("jellyfin_public_url"),
+                    "jellyfin_item_id": published_payload.get("jellyfin_item_id"),
+                    "published_path": published_payload.get("published_path"),
+                    "thumbnail_url": published_payload.get("thumbnail_url"),
+                    "duration": published_payload.get("duration"),
+                    "publish_request_id": publish_request_id,
+                }
+                studio_board_sync_error = await _sync_studio_board_publish_completion(
+                    studio_board_id=studio_board_id,
+                    publish_request_id=publish_request_id,
+                    published_event_id=_coerce_text(evt.get("id")),
+                    published_at=_coerce_text(evt.get("ts")),
+                    completion_meta=completion_meta,
+                )
         except Exception as exc:
             logger.exception(
                 "Failed to finalize publish pipeline",
@@ -1286,6 +1382,8 @@ async def main() -> None:
             success_context["jellyfin_item_id"] = jellyfin_item_id
         if studio_board_id is not None:
             success_context["studio_board_id"] = studio_board_id
+        if publish_request_id:
+            success_context["publish_request_id"] = publish_request_id
         if studio_board_sync_error:
             success_context["studio_board_sync_error"] = studio_board_sync_error
         success_context.update(jellyfin_meta)
