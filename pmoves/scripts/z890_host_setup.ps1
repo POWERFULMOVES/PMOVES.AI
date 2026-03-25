@@ -73,6 +73,11 @@ if (-not $Verify -and -not (Is-Admin)) {
 
 $rules = @(
   ,@(7422, 7422, $UpstreamIP, "NATS leafnode (z890 leaf -> 5090 hub)")
+  ,@(7474, 7474, "127.0.0.1", "Neo4j HTTP (graph queries from tailnet)")
+  ,@(7687, 7687, "127.0.0.1", "Neo4j Bolt (driver connections from tailnet)")
+  ,@(4222, 4222, "127.0.0.1", "NATS (event bus from tailnet)")
+  ,@(8083, 8083, "127.0.0.1", "Extract-worker (doc ingestion from tailnet)")
+  ,@(8086, 8086, "127.0.0.1", "Hi-RAG v2 CPU (queries from tailnet)")
 )
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
