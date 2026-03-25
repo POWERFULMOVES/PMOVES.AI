@@ -64,7 +64,7 @@ client.on(Events.MessageCreate, async (message) => {
       const resp = await fetch('http://host.docker.internal:8055/v1/voice/synthesize/audio', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text, intent: 'narrate' }),
+        body: JSON.stringify({ text, provider: 'ultimate_tts', engine: 'kokoro' }),
       });
       if (!resp.ok) {
         await message.reply(`TTS error: ${resp.status}`);
