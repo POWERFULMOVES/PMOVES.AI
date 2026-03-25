@@ -1,0 +1,47 @@
+{
+  "identity": {
+    "node": "z890",
+    "role": "full-infra",
+    "description": "Primary development workstation — full infrastructure access",
+    "hostname": "z890"
+  },
+  "openclaw_overrides": {
+    "agents.defaults.model.primary": "claude-opus-4",
+    "tools.profile": "full",
+    "tools.exec.ask": "off",
+    "channels": {
+      "telegram": { "enabled": true },
+      "discord": { "enabled": true }
+    },
+    "hooks.presets": ["gmail"]
+  },
+  "exec_approvals": {
+    "main": {
+      "allowlist": [
+        { "pattern": "/usr/bin/docker", "note": "Full Docker access" },
+        { "pattern": "/usr/bin/make", "note": "All make targets" },
+        { "pattern": "/usr/bin/ssh", "note": "SSH to all nodes" },
+        { "pattern": "/usr/bin/git", "note": "Full git access" },
+        { "pattern": "/usr/bin/gh", "note": "GitHub CLI" },
+        { "pattern": "/usr/bin/curl", "note": "HTTP requests" },
+        { "pattern": "/usr/bin/nats", "note": "NATS CLI" },
+        { "pattern": "/usr/bin/python3", "note": "Python runtime" },
+        { "pattern": "/usr/bin/node", "note": "Node.js runtime" },
+        { "pattern": "/usr/bin/tailscale", "note": "Tailscale management" },
+        { "pattern": "/usr/bin/nvidia-smi", "note": "GPU monitoring" }
+      ]
+    }
+  },
+  "mcp_servers": {
+    "pmoves-cipher": {
+      "type": "sse",
+      "url": "http://localhost:8096/sse"
+    },
+    "docker": {
+      "command": "docker",
+      "args": ["run", "--rm", "-i", "--mount", "type=bind,src=//var/run/docker.sock,dst=/var/run/docker.sock", "mcp/docker"]
+    }
+  },
+  "damage_control_hooks": true,
+  "sign_trail": true
+}

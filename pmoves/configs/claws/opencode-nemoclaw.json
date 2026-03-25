@@ -1,0 +1,31 @@
+{
+  "$schema": "KiloCode opencode.json — NemoClaw Edge GPU Node (Jetson)",
+  "mcpServers": {},
+  "modes": {
+    "default": "pmoves-code",
+    "available": [
+      "pmoves-code",
+      "pmoves-debug"
+    ]
+  },
+  "modelOverrides": {
+    "primary": "nemotron",
+    "provider": "ollama",
+    "endpoint": "http://localhost:11434"
+  },
+  "node": {
+    "identity": "nemoclaw",
+    "role": "edge-gpu",
+    "services": [
+      "ollama:11434"
+    ]
+  },
+  "nats": {
+    "subscribe": ["mesh.gpu.command.v1"],
+    "publish": [
+      "mesh.gpu.status.v1",
+      "mesh.gpu.model.loaded.v1",
+      "mesh.gpu.model.unloaded.v1"
+    ]
+  }
+}

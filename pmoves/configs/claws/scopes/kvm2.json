@@ -1,0 +1,31 @@
+{
+  "identity": {
+    "node": "kvm2",
+    "role": "exit-proxy",
+    "description": "Exit proxy node — network edge, Cloudflare, headscale, VPN",
+    "hostname": "kvm2"
+  },
+  "openclaw_overrides": {
+    "agents.defaults.model.primary": "claude-haiku-4-5",
+    "tools.profile": "restricted",
+    "tools.exec.ask": "confirm",
+    "channels": {}
+  },
+  "exec_approvals": {
+    "main": {
+      "allowlist": [
+        { "pattern": "/usr/bin/tailscale", "note": "Tailscale management" },
+        { "pattern": "/usr/bin/wg", "note": "WireGuard diagnostics" },
+        { "pattern": "/usr/bin/cloudflared", "note": "Cloudflare tunnel management" },
+        { "pattern": "/usr/bin/dig", "note": "DNS lookups" },
+        { "pattern": "/usr/bin/traceroute", "note": "Network path diagnostics" },
+        { "pattern": "/usr/bin/curl", "note": "HTTP probes and health checks" },
+        { "pattern": "/usr/bin/ss", "note": "Socket statistics" },
+        { "pattern": "/usr/bin/ip", "note": "Network interface inspection" }
+      ]
+    }
+  },
+  "mcp_servers": {},
+  "damage_control_hooks": true,
+  "sign_trail": false
+}

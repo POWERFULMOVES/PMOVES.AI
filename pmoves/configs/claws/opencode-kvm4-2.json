@@ -1,0 +1,33 @@
+{
+  "$schema": "KiloCode opencode.json — Data/Storage Node (KVM4-2)",
+  "mcpServers": {
+    "pmoves-cipher": {
+      "type": "sse",
+      "url": "http://cipher-memory:8096/sse",
+      "description": "Agent memory (Neo4j knowledge graph)"
+    }
+  },
+  "modes": {
+    "default": "pmoves-code",
+    "available": [
+      "pmoves-code",
+      "pmoves-ask",
+      "pmoves-debug"
+    ]
+  },
+  "modelOverrides": {
+    "primary": "claude-sonnet-4",
+    "fallback": "claude-haiku-4-5"
+  },
+  "node": {
+    "identity": "kvm4-2",
+    "role": "data-storage",
+    "services": [
+      "supabase-kong:8000",
+      "minio:9000",
+      "qdrant:6333",
+      "meilisearch:7700",
+      "neo4j:7474"
+    ]
+  }
+}
