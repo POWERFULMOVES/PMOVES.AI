@@ -1314,9 +1314,16 @@ services:
     - QDRANT_URL=${QDRANT_URL:-http://qdrant:6333}
     - QDRANT_COLLECTION=${QDRANT_COLLECTION:-pmoves_chunks}
     - SENTENCE_MODEL=${SENTENCE_MODEL:-all-MiniLM-L6-v2}
+    - EMBEDDING_BACKEND=${EMBEDDING_BACKEND:-tensorzero}
+    - TENSORZERO_BASE_URL=${TENSORZERO_BASE_URL:-http://tensorzero-gateway:3000}
+    - TENSORZERO_EMBED_MODEL=${TENSORZERO_EMBED_MODEL:-tensorzero::embedding_model_name::gemma_embed_local}
     - MEILI_URL=${MEILI_URL:-http://meilisearch:7700}
     - SUPA_REST_URL=${SUPA_REST_URL:-http://supabase-kong:8000/rest/v1}
     - SUPA_REST_INTERNAL_URL=${SUPA_REST_INTERNAL_URL:-http://supabase-kong:8000/rest/v1}
+    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - EXTRACT_WORKER_CGP_PUBLISH=${EXTRACT_WORKER_CGP_PUBLISH:-true}
+    # Neutralise Windows SSL_CERT_FILE leak (host env > env_file precedence)
+    - SSL_CERT_FILE=
     ports:
     - ${EXTRACT_WORKER_BIND:-127.0.0.1}:${EXTRACT_WORKER_PORT:-8083}:8083
     profiles:
@@ -1331,11 +1338,16 @@ services:
     extra_hosts:
     - host.docker.internal:host-gateway
     depends_on:
+      tensorzero-gateway:
+        condition: service_healthy
+        required: false
       qdrant:
         condition: service_healthy
       meilisearch:
         condition: service_healthy
       minio:
+        condition: service_healthy
+      nats:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8083/healthz', timeout=5)"]
@@ -2449,6 +2461,10 @@ services:
     - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
     # NATS_URL from env.shared/env.tier-agent has credentials: nats://nats:pmoves@nats:4222
     - DISCORD_SUBJECTS=${DISCORD_SUBJECTS:-ingest.file.added.v1,ingest.transcript.ready.v1,ingest.summary.ready.v1,ingest.chapters.ready.v1}
+    - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN:-}
+    - DISCORD_WEBHOOK_URL=${DISCORD_WEBHOOK_URL:-}
+    # Neutralise Windows SSL_CERT_FILE leak (host env > env_file precedence)
+    - SSL_CERT_FILE=
     depends_on:
       nats:
         condition: service_healthy
@@ -3068,6 +3084,8 @@ services:
       # PMOVES integration
       - ENABLE_OBSERVABILITY=${WGER_OBSERVABILITY:-true}
       - PROMETHEUS_MULTIPROC_DIR=/tmp/prometheus
+      # Neutralise Windows SSL_CERT_FILE leak (host env > env_file precedence)
+      - SSL_CERT_FILE=
     ports:
       - "${WGER_BIND:-127.0.0.1}:${WGER_PORT:-8000}:8000"
     profiles: ["health", "wger"]
