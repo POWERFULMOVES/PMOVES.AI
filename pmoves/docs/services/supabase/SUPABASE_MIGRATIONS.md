@@ -79,8 +79,11 @@ cd pmoves
 make supabase-bootstrap
 ```
 
-This applies all migrations in:
-1. `supabase/migrations/*.sql` (PMOVES custom)
+This is the canonical PMOVES bootstrap path. It applies:
+1. `supabase/migrations/*.sql`
+2. `supabase/initdb/*.sql` as tracked seeds in `public.pmoves_bootstrap_history`
+
+Do not treat individual `supabase/initdb/*.sql` files as standalone entrypoints for an empty database unless the required migrations have already landed.
 
 ### Individual Migration
 
@@ -190,6 +193,8 @@ Located in `pmoves/supabase/initdb/`:
 | `10_archon_prompts_seed.sql` | Archon prompts | Pre-configured agent prompts |
 | `12_model_registry_seed.sql` | Model registry | LLM provider configurations |
 
+These files are bootstrap seeds, not independent schema sources. Some of them depend on tables created by `supabase/migrations/*.sql`.
+
 ### db/ Version Seeds
 
 Located in `pmoves/db/` (v5.x versioned seeds):
@@ -202,6 +207,8 @@ Located in `pmoves/db/` (v5.x versioned seeds):
 | `v5_13_persona_enhancements.sql` | Persona extensions | 100 lines |
 | `v5_13_pmoves_core_rest_grants.sql` | REST API grants | 20 lines |
 | `v5_14_seed_standard_personas.sql` | **Standard personas catalog** | 1515 lines |
+
+These `pmoves/db/` files are legacy source material and references. They are not replayed automatically by the current Supabase bootstrap targets.
 
 **v5_14 Standard Personas** (Most Important):
 - Seeds 8 production-ready personas for agent orchestration
