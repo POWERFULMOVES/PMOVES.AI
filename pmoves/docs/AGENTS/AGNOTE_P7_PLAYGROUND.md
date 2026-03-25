@@ -318,6 +318,74 @@ Also fixed: engine names (`Fish Speech S1`, `Qwen Voice Design`, `Chatterbox Mul
 
 ---
 
+## Step 8: Session Wrap — Fleet Convergence + Prosodic Activation (2026-03-23)
+
+### Fleet Session Summary (3 CLAUDEs, 6 PRs, zero open)
+
+| Agent | PRs | Key Deliverables |
+|-------|-----|-----------------|
+| **5090-claude** | #1069 (authored) | Gradio 4.x fix, 10-engine Flute sweep, 6 STT round-trips |
+| **z890-claude** | #1063-#1071 (authored) | P7 gates, 28 gitlinks, topology sanitize, prosodic endpoint, TTS runners |
+| **4090-claude** | #1070-#1071 (trimmed) | 10 CodeRabbit threads resolved, session trail + split-trust docs |
+
+Main: `4d85ba0f` — all merged, zero open PRs.
+
+### Prosodic Endpoint Activated (z890 built, 5090 tested)
+
+`POST /v1/voice/synthesize/prosodic` — hot-patched into running Flute-Gateway container.
+
+| Engine | Chunks | BPM | Size | Time | Status |
+|--------|--------|-----|------|------|--------|
+| Kokoro | 5 | 90.0 | 539KB | 17.4s | **PASS** |
+| KittenTTS | — | — | 523KB | 4.1s | **PASS** |
+
+STT round-trip on prosodic audio: text matches (Whisper renders "CLAUDEs" as "clods" — proper noun variance).
+
+### Remaining Engine Verification (2026-03-23)
+
+| Engine | Load | Synth | Notes |
+|--------|------|-------|-------|
+| Fish S2 Pro | ✅ (0.2s) | ❌ | Test script regression — missing required kwargs |
+| IndexTTS2 | ✅ | ❌ | Same regression (loads fine on CUDA) |
+| Higgs Audio | ✅ | ❌ | Same regression (loads fine on CUDA) |
+| VibeVoice | ❌ | N/A | Gradio choice validator rejects empty `selected_model_path` |
+
+**Root cause**: z890's merge of PR #1069 dropped 5 required placeholder kwargs from `synthesize_engine()` — `indextts2_emotion_description`, `higgs_system_prompt`, `qwen_voice_description`, `qwen_ref_text`, `qwen_style_instruct`. These were in the original 5090 version but lost during conflict resolution. **Fix: restore required kwargs to test script.**
+
+### Final Engine Scorecard (14 engines)
+
+| Category | Count | Engines |
+|----------|-------|---------|
+| **Flute-Gateway verified** | 10 | KittenTTS, Kokoro, Chatterbox, F5, Fish S1, VoxCPM, Qwen, IndexTTS, CB Turbo, CB MTL |
+| **CUDA load verified** | 13 | Above 10 + Fish S2 Pro, IndexTTS2, Higgs Audio |
+| **Load failed** | 1 | VibeVoice (choice validator, needs model path fix) |
+| **Synth blocked (script bug)** | 3 | Fish S2 Pro, IndexTTS2, Higgs Audio |
+| **Prosodic verified** | 2 | Kokoro (17.4s), KittenTTS (4.1s) |
+
+### Recommended Next Steps
+
+**5090-claude (GPU specialist):**
+1. Fix test script required kwargs regression (5 params)
+2. Container rebuild: bake Flute-Gateway hot-patch into Docker image
+3. Fish S2 Pro Flute timeout: `ULTIMATE_TTS_TIMEOUT_SEC=300`
+4. Pipecat WebSocket (8056): voice agent duplex loop
+5. VRAM budget optimization: concurrent engine loading profiles
+
+**4090-claude (noise reducer):**
+1. P7 Agent Interpreter → 5090 TTS via Tailscale — **UNBLOCKED**
+2. Mobile Discord → TTS flow test
+3. W1: Agent Theming + Terminal claim
+4. Review z890's incoming PR
+
+**z890-claude (infra coordinator):**
+1. PR up for review (current)
+2. Container rebuilds (5 services — P0)
+3. Jetson Orin onboarding (via RustDesk)
+4. Agent Zero model tuning
+5. ComfyUI first render test
+
+---
+
 ## Critical Files
 
 | File | Purpose |
@@ -330,3 +398,132 @@ Also fixed: engine names (`Fish Speech S1`, `Qwen Voice Design`, `Chatterbox Mul
 | `pbnj/pinokio/api/pmoves-services/SKILL.md` | PMOVES Services skill for P7 |
 | `pmoves/docs/ARTSTUFF/Ultimate-TTS-Studio.git/SKILL.md` | TTS skill for P7 |
 | `D:\pinokio\` | P7 install (upgraded, requirements pending) |
+
+---
+
+## Step 9: CHIT Integration Wave 1 + Embedding Standardization (2026-03-24)
+
+### 4090-claude Session Summary (PR #1082 — 8 commits)
+
+| Agent | PRs | Key Deliverables |
+|-------|-----|-----------------|
+| **4090-claude** | #1082 (authored, 8 commits) | CHIT CGP on Extract Worker + FFmpeg-Whisper, Qwen3-embedding:4b stack standardization, HF enrichment API, model metadata seed, BoTZ submodule sync |
+
+### Embedding Stack Standardization
+
+| Component | Before | After |
+|-----------|--------|-------|
+| Embedding model | `all-MiniLM-L6-v2` (384d, CPU) | `qwen3-embedding:4b` (3072d, CUDA via TensorZero→Ollama) |
+| Routing | Direct sentence-transformers | TensorZero Gateway (`/openai/v1/embeddings`) |
+| Qdrant collection | `pmoves_chunks` | `pmoves_chunks_qwen3` (old 384d data preserved) |
+| Extract Worker (8083) | `EMBEDDING_BACKEND=sentence-transformers` | `EMBEDDING_BACKEND=tensorzero` |
+| Hi-RAG v2 (8086/8087) | `TENSORZERO_EMBED_MODEL=gemma_embed_local` | `TENSORZERO_EMBED_MODEL=qwen3_embedding_4b_local` |
+| Agent Zero (8080) | `A0_SET_embed_model_name=gemma_embed_local` | `A0_SET_embed_model_name=qwen3_embedding_4b_local` |
+| Hi-RAG v1 (8089) | `pmoves_chunks` | Unchanged (backward compat) |
+
+TensorZero dependency is `required: false` — Extract Worker falls back to sentence-transformers if TZ is unavailable.
+
+### CHIT CGP Publishing (Wave 1)
+
+| Service | NATS Subject | CGP Version | Trigger |
+|---------|-------------|-------------|---------|
+| Extract Worker (8083) | `tokenism.cgp.ready.v1` | v1.0 | After text embedding + Qdrant/Meili indexing |
+| FFmpeg-Whisper (8078) | `tokenism.cgp.ready.v1` | v1.0 | After transcription complete |
+
+Both services also publish their original domain events (`ingest.transcript.ready.v1`, etc.). CGP packets include `spec_version`, `agent_id`, `resonance_tags`, `timestamp`.
+
+### Model Registry HuggingFace Enrichment
+
+New endpoints on Model Registry (port 8110):
+- `POST /api/models/{id}/enrich-hf` — fetches config.json for dimensions, tags, CUDA support, download stats from HuggingFace API
+- `POST /api/models/enrich-hf-bulk` — batch-enriches all models with `hf_id` in metadata
+
+New file: `hf_client.py` — httpx-based HF API client (no new pip dependencies).
+
+Seed data enriched with `hf_id`, `dimensions`, `cuda_supported`:
+- `qwen3-embedding:4b` → 3072d, `Alibaba-NLP/gte-Qwen2-4B-instruct`
+- `qwen3-embedding:8b` → 4096d, `Alibaba-NLP/gte-Qwen2-8B-instruct`
+- `embeddinggemma:300m` → 768d, `google/gemma-embedding-300m`
+- `nomic-embed-text` → 768d, `nomic-ai/nomic-embed-text-v1.5`
+
+### BoTZ Submodule Sync
+
+`PMOVES-BoTZ` updated to `d125e8a` — CodeQL advanced scan + dependabot npm bumps. `PMOVES-ToKenism-Multi` desktop.ini cleaned. `PMOVES-DoX` untracked local artifacts only (gitlink correct).
+
+### What P7 Phase 7 Gets From This
+
+- Any P7-launched ingestion (App Assistant triggers Extract Worker) now produces CHIT-attributable CGP events on the geometry bus
+- Transcription triggered by P7 agent sessions (FFmpeg-Whisper) now has geometric provenance
+- Model Registry HF enrichment lets P7 agents query model capabilities (dimensions, CUDA support) before dispatching inference
+- Qwen3-embedding:4b at 3072d means all P7-originated search/retrieval uses high-quality CUDA-accelerated vectors
+- Foundation for `p7.nats.*` subjects: P7 launcher events can be correlated with downstream CGP via shared context IDs
+
+### Recommended Next Steps
+
+**5090-claude (GPU Inference Specialist):**
+
+| # | Task | Priority | Notes |
+|---|------|----------|-------|
+| 1 | Container rebuild: Flute-Gateway image bake | **P0** | Eliminates hot-patch dependency |
+| 2 | Qwen3-embedding:4b e2e validation (Ollama CUDA) | **P0** | New default from #1082 needs GPU verification |
+| 3 | Fish S2 Pro Flute timeout | P1 | `ULTIMATE_TTS_TIMEOUT_SEC=300` |
+| 4 | Pipecat WebSocket (8056) | P1 | Voice agent duplex loop |
+| 5 | W6-P2: bpm_encoder.py | P2 | Python port of musicMapping.ts |
+
+**4090-claude (Noise Reducer):**
+
+| # | Task | Priority | Notes |
+|---|------|----------|-------|
+| 1 | PR #1082 merge + AGNOTE/TAC docs | **P0** | Branch: feat/chit-integration-wave-1 |
+| 2 | P7 Agent Interpreter → 5090 TTS via Tailscale | P1 | UNBLOCKED since Step 7 |
+| 3 | W1: Agent Theming + Terminal | P2 | Roadmap claim |
+
+**z890-claude (Infrastructure Coordinator):**
+
+| # | Task | Priority | Notes |
+|---|------|----------|-------|
+| 1 | Container rebuilds (6 services — includes embedding env changes) | **P0** | Blocks Docker image freshness |
+| 2 | `pmoves_chunks_qwen3` Qdrant collection provision | P1 | New 3072d collection; old data untouched |
+| 3 | W6-P1: Health/Wealth Docker wiring | P1 | NATS + /healthz + /metrics |
+| 4 | Jetson Orin onboarding | P2 | Via RustDesk |
+| 5 | NATS leaf node to 5090 | P2 | |
+
+### CGP Context ID Correlation (p7.nats.cgp-correlation → DONE)
+
+Extract Worker `/ingest` and FFmpeg-Whisper `/transcribe` + `/transcribe_file` now accept an optional `context_id` (JSON body field or `X-Context-ID` HTTP header). Propagated to CGP `meta.context_id` and NATS hook payloads. Backward compatible — omitting the field produces identical behavior to before. TAC node status: done.
+
+### CodeRabbit PR Trim (12 threads → 3 fixed, 9 dismissed)
+
+| Action | Count | Details |
+|--------|-------|---------|
+| **Fixed** | 3 | `cuda_supported` in gpu-models.yaml; merge-order in HF enrichment (seed takes precedence) |
+| **By design** | 1 | TZ embedding default intentional, 502 on failure is correct contract |
+| **Schema wrong** | 2 | `"spec"` is the CGP v1 schema field, not `"version"` — CodeRabbit hallucinated guideline |
+| **Pre-existing** | 4 | NATS URL redaction, event-loop affinity, fire-and-forget pattern — all existed before this PR |
+| **Deferred** | 2 | Schema validation on NATS publish — aspirational, not this PR's scope |
+
+### Remaining P7 Phase 7 Nodes
+
+| Node | Status | Owner | What's Needed |
+|------|--------|-------|---------------|
+| `p7.nats.cgp-correlation` | **done** | 4090 | Shipped — context_id in Extract Worker + FFmpeg-Whisper |
+| `p7.nats.model-discovery` | pending | z890 | Create SKILL.md for Model Registry (port 8110) so P7 Agent Interpreter discovers it |
+| `p7.nats.embedding-quality` | pending | 5090 | Provision `pmoves_chunks_qwen3` Qdrant collection + validate Qwen3 e2e on GPU |
+| `p7.nats.session` | future | z890 | P7 Agent Launcher hooks or pterm event bridge |
+| `p7.nats.launch` | future | z890 | Pinokio `on` event handler → NATS publish |
+| `p7.nats.telemetry` | future | z890 | Pterm observer or custom pinokio.js metrics |
+
+---
+
+## Critical Files (Updated)
+
+| File | Purpose |
+|------|---------|
+| `pmoves/configs/tac_trees/pinokio-p7.tac.yaml` | P7 integration TAC tree (Phase 7 expanded) |
+| `pmoves/configs/tac_trees/voice-agents.tac.yaml` | Voice pipeline TAC (Phase 15: P7 routing) |
+| `pmoves/config/agent_registry.yaml` | Agent identity (z890/5090/4090-claude) |
+| `pmoves/config/agent_signatures.yaml` | Visual identity — deduplicated |
+| `pmoves/services/model-registry/main.py` | Model Registry + HF enrichment endpoints |
+| `pmoves/services/model-registry/hf_client.py` | HuggingFace API client |
+| `pmoves/config/gpu-models.yaml` | GPU model catalog (now with dimensions + hf_id) |
+| `pmoves/docker-compose.yml` | Embedding stack standardization |

@@ -219,6 +219,7 @@ def _ensure_identity_defaults(text: str) -> str:
     return text
 
 
+
 def _ensure_tailscale_defaults(text: str) -> str:
     """Auto-populate Tailscale hostname and tags. Auth key is manual (console-only)."""
     # Hostname: derive from machine hostname if not set
@@ -295,6 +296,7 @@ def _ensure_minio_credentials(text: str) -> str:
     return text
 
 
+
 def upsert_env(path: Path, env_gen_path: Path, pairs: dict[str, str]) -> None:
     """Apply branded defaults to env file, strengthen weak keys, and write back."""
     text = path.read_text(encoding="utf-8") if path.exists() else ""
@@ -345,6 +347,7 @@ def upsert_env(path: Path, env_gen_path: Path, pairs: dict[str, str]) -> None:
     chit_pass = _get_kv(text, "CHIT_PASSPHRASE")
     if _is_blank_or_placeholder(chit_pass):
         text = _set_kv(text, "CHIT_PASSPHRASE", _strong_random(48))
+
 
     path.write_text(text, encoding="utf-8")
 

@@ -67,6 +67,19 @@ class UltimateTTSProvider(VoiceProvider):
         "indextts2": None,
     }
 
+    # Per-engine synthesis timeout overrides (seconds).
+    # Heavier models (large vocab, zero-shot cloning, streaming decode) need
+    # more headroom than the global default.
+    ENGINE_TIMEOUTS: Dict[str, float] = {
+        "fish_s2": 300.0,              # 13-lang zero-shot, 2048 max tokens
+        "higgs": 240.0,                # streaming-capable, large context
+        "qwen": 240.0,                 # Alibaba multilingual, voice design mode
+        "voxcpm": 240.0,               # voice cloning + transcription pipeline
+        "chatterbox_multilingual": 180.0,  # 17-language synthesis
+        "f5_tts": 180.0,               # high-quality voice cloning
+        "indextts2": 180.0,            # emotion vector control
+    }
+
     # Available KittenTTS voices
     KITTEN_VOICES = [
         "expr-voice-2-m", "expr-voice-2-f",
@@ -191,9 +204,29 @@ class UltimateTTSProvider(VoiceProvider):
             logger.warning("Unknown engine %s, skipping model load", engine)
             return True
 
+        # Some engines require a setup step before loading (repo clone, weight download)
+        setup_map = {
+            "fish_s2": "/handle_setup_fish_s2",
+        }
+        setup_endpoint = setup_map.get(engine)
+        if setup_endpoint:
+            try:
+                await self._call_gradio(client, setup_endpoint, [], timeout=600.0)
+                logger.info("Ultimate-TTS %s setup complete", engine)
+            except Exception as exc:
+                logger.warning("Setup for %s failed (continuing to load): %s", engine, exc)
+
+        # Heavy models need more than 60s to load
+        load_timeout_map = {
+            "fish_s2": 120.0,
+            "higgs": 120.0,
+            "qwen": 90.0,
+        }
+
         try:
             load_data = load_data_map.get(engine, [])
-            data = await self._call_gradio(client, endpoint, load_data, timeout=60.0)
+            load_timeout = load_timeout_map.get(engine, 60.0)
+            data = await self._call_gradio(client, endpoint, load_data, timeout=load_timeout)
 
             if isinstance(data, list) and len(data) > 0:
                 status = str(data[0]) if data[0] else ""
@@ -291,12 +324,14 @@ class UltimateTTSProvider(VoiceProvider):
         data[66] = False  # use_random
 
         # [67-72] F5-TTS
+        data[68] = ""     # ref_text
         data[69] = 1.0   # speed
         data[70] = 0.15  # cross_fade
         data[71] = False  # remove_silence
         data[72] = 0     # seed
 
         # [73-82] Higgs Audio
+        data[74] = ""     # ref_text
         data[75] = "EMPTY"  # voice_preset
         data[76] = ""     # system_prompt (REQUIRED)
         data[77] = 1.0   # temperature
@@ -310,6 +345,7 @@ class UltimateTTSProvider(VoiceProvider):
         data[83] = voice if engine == "kitten_tts" else "expr-voice-2-f"
 
         # [84-93] VoxCPM
+        data[85] = ""     # ref_text
         data[86] = 2.0   # cfg_value
         data[87] = 10    # inference_timesteps
         data[88] = True   # normalize
@@ -369,7 +405,9 @@ class UltimateTTSProvider(VoiceProvider):
         engine = kwargs.get("engine", self._default_engine)
         voice = voice or self.DEFAULT_VOICES.get(engine)
 
-        async with httpx.AsyncClient(timeout=self._timeout) as client:
+        engine_timeout = self.ENGINE_TIMEOUTS.get(engine, self._timeout)
+
+        async with httpx.AsyncClient(timeout=engine_timeout) as client:
             # Ensure model is loaded
             await self._load_model(client, engine)
 
@@ -379,7 +417,7 @@ class UltimateTTSProvider(VoiceProvider):
             try:
                 # Use Gradio's event-based API (/gradio_api/call/).
                 result_data = await self._call_gradio(
-                    client, "/generate_unified_tts", data, timeout=self._timeout,
+                    client, "/generate_unified_tts", data, timeout=engine_timeout,
                 )
 
                 if not isinstance(result_data, list) or len(result_data) < 2:
@@ -422,7 +460,9 @@ class UltimateTTSProvider(VoiceProvider):
                 return wav_bytes
 
             except httpx.TimeoutException as exc:
-                raise UltimateTTSError(f"Timeout during synthesis: {exc}") from exc
+                raise UltimateTTSError(
+                    f"Timeout during {engine} synthesis ({engine_timeout}s): {exc}"
+                ) from exc
             except httpx.HTTPError as exc:
                 raise UltimateTTSError(f"HTTP error: {exc}") from exc
 

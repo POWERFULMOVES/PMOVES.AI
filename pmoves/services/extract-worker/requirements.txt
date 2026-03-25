@@ -23,3 +23,5 @@ numpy==2.2.6 \
 # Metrics
 prometheus-client==0.20.0 \
     --hash=sha256:cde524a85bce83ca359cc837f28b8c0db5cac7aa653a588fd7e84ba061c329e7
+# NATS (CHIT CGP publishing)
+nats-py>=2.9.0

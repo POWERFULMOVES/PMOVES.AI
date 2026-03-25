@@ -1,4 +1,5 @@
 {
   "title": "PMOVES Services",
-  "description": "One-click control center for all PMOVES.AI Docker Compose services — agents, workers, monitoring, and external integrations."
+  "description": "One-click control center for all PMOVES.AI Docker Compose services — agents, workers, monitoring, voice, and external integrations. 40+ microservices orchestrated via Docker Compose profiles.",
+  "icon": "icon.png"
 }

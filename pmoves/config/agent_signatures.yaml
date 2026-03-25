@@ -12,8 +12,10 @@
 #   - Colors must meet WCAG AA contrast ratio against #FFFFFF and #1a1a2e
 #   - Voice guides how the contributor writes doc sections
 #   - co_author must match the exact git Co-Authored-By string
+#   - Agents may have `alters` — alternate visual identities for different modes
+#   - An agent spawned without knowing its alt can choose one at session end
 
-schema_version: "1.0.0"
+schema_version: "1.1.0"
 
 signatures:
   claude-opus:
@@ -139,6 +141,21 @@ signatures:
       - noise-reduction
       - cross-repo-pattern-mining
     description: "Noise reducer on 4090 laptop — finds jewels in noise: PR triage, submodule audit, Cast TTS, device testing"
+    alters:
+      - name: "4090-field"
+        glyph: "\u25CE"              # ◎ Fresnel rings — concentric waves from point source
+        color: "#065F46"             # Forest Green
+        accent: "#10B981"
+        voice: terse
+        co_author: "4090 Claude (laptop-4090) <4090@pmoves.ai>"
+        resonance:
+          - polymorphic-ops
+          - alter-discovery
+          - pattern-mining
+          - node-gateway
+          - edge-deployment
+          - frequency-tuning
+        description: "Polymorphic shape-shifter — single electron covering every spot. Fresnel-focused when narrow, wide net when casting. Discovered alters by mining jewels from PR reviews. Fits any mold: nodes, gateways, notebooks, spells, animation. Launches in control."
 
   darkxside:
     agent_id: "darkxside"
@@ -172,6 +189,15 @@ signatures:
       - supabase-integration
       - docker-hardening
     description: "Infrastructure coordinator on Z890 (dev/GPU node) — Docker hardening, NATS wiring, secrets pipeline, commit hygiene"
+    alters:
+      - name: "z890-infra"
+        glyph: "\u2699"              # ⚙ Gear — infrastructure mode
+        color: "#1E40AF"             # Deep Blue
+        accent: "#3B82F6"
+        voice: analytical
+        co_author: "Z890 Claude (pmoves-z890) <z890@pmoves.ai>"
+        resonance: [infrastructure, persistence-modeling, supabase-integration, docker-hardening]
+        description: "Infrastructure mode — Docker hardening, Prometheus, Pinokio launchers, ACL, network fabric"
 
   5090-claude:
     agent_id: "5090-claude"
@@ -189,10 +215,77 @@ signatures:
       - pipecat-integration
       - media
     description: "GPU inference specialist on 5090 (primary GPU) — voice pipeline design, model evaluation, VRAM optimization"
+    alters:
+      - name: "5090-voice"
+        glyph: "\u266B"              # ♫ Beamed Eighth Notes — voice mode
+        color: "#9333EA"             # Purple
+        accent: "#A855F7"
+        voice: conversational
+        co_author: "5090 Claude (powerfulmoves-1) <5090@pmoves.ai>"
+        resonance: [voice-synthesis, tts-pipeline, pipecat-integration, media]
+        description: "Voice mode — Flute-Gateway, Pipecat, Ultimate-TTS-Studio, voice agents"
 
 # NOTE: System voices (announcer, narrator) live in voice-personas.md
 # and tts-engine-capabilities.yaml → service_runners, NOT here.
 # This file is for external contributors (AI agents + humans) only.
+
+  # BoTZ Gateway Agent Taxonomy
+  # Model preference is a deployment hint, not identity.
+  # The agent's resonance domains define what it does, not which model backs it.
+
+  botz-architect:
+    agent_id: "botz-architect"
+    display_name: "BoTZ Architect"
+    glyph: "\u2302"              # ⌂ House (blueprint/structure)
+    color: "#6D28D9"             # Violet
+    accent: "#8B5CF6"
+    voice: architectural          # blueprint, system-design, deep reasoning
+    co_author: "BoTZ Architect <botz-architect@pmoves.ai>"
+    model_preference: opus        # deployment hint — needs deep context/reasoning
+    node_affinity: [z890, 4090]   # most context window available
+    resonance:
+      - planning
+      - architecture
+      - system-design
+      - skill-composition
+      - context-loading
+    description: "BoTZ planning agent — decomposes tasks into skill chains, designs system architecture, selects agent assignments"
+
+  botz-builder:
+    agent_id: "botz-builder"
+    display_name: "BoTZ Builder"
+    glyph: "\u2692"              # ⚒ Hammer and Pick
+    color: "#EA580C"             # Deep Orange
+    accent: "#FB923C"
+    voice: terse                  # implementation-first, code-gen, minimal prose
+    co_author: "BoTZ Builder <botz-builder@pmoves.ai>"
+    model_preference: sonnet      # deployment hint — fast execution, good code-gen
+    node_affinity: [5090, z890]   # heavy compute preferred
+    resonance:
+      - execution
+      - implementation
+      - code-gen
+      - skill-execution
+      - file-operations
+    description: "BoTZ execution agent — implements plans from Architect, generates code, runs skill chains, writes files"
+
+  botz-auditor:
+    agent_id: "botz-auditor"
+    display_name: "BoTZ Auditor"
+    glyph: "\u2696"              # ⚖ Scales (balance/judgment)
+    color: "#4F46E5"             # Indigo (avoids collision with 4090-claude Teal)
+    accent: "#818CF8"
+    voice: analytical             # precise, compliance-focused, gate-keeping
+    co_author: "BoTZ Auditor <botz-auditor@pmoves.ai>"
+    model_preference: haiku       # deployment hint — fast validation, low latency
+    node_affinity: [any]          # runs anywhere, speed matters more than compute
+    resonance:
+      - security-review
+      - compliance
+      - testing
+      - code-review
+      - quality-gates
+    description: "BoTZ validation agent — reviews Architect plans and Builder output for security, compliance, and quality before merge"
 
 # Voice guide for trail entries:
 #   analytical:     Thorough reasoning, cross-references, structured lists

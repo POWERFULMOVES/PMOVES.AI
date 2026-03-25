@@ -28,9 +28,16 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 import httpx
-from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi import FastAPI, HTTPException, BackgroundTasks, Query
 from pydantic import BaseModel, Field
 import uvicorn
+
+from hf_client import (
+    fetch_model_info,
+    fetch_model_config,
+    parse_embedding_dimensions,
+    parse_model_summary,
+)
 
 try:
     from nats.aio.client import Client as NATS
@@ -583,6 +590,8 @@ async def root():
             "healthz": "Health check",
             "models": "List all active models",
             "models/{id}": "Get model details",
+            "models/{id}/enrich-hf": "Enrich model from HuggingFace metadata",
+            "models/enrich-hf-bulk": "Batch-enrich all models with hf_id",
             "services/{service}/models": "Get models for a service",
             "tensorzero/config": "Export TensorZero TOML configuration",
             "deployments": "List active GPU deployments"
@@ -661,6 +670,116 @@ async def register_deployment(deployment: ModelDeployment):
             "updated", "deployment", deployment.model_id
         )
     return result
+
+
+# ============================================================================
+# HuggingFace Enrichment Endpoints
+# ============================================================================
+
+@app.post("/api/models/{model_id}/enrich-hf")
+async def enrich_from_huggingface(model_id: str):
+    """Fetch model card metadata from HuggingFace and update registry.
+
+    Looks up the model in Supabase, resolves its hf_id from metadata,
+    fetches HF API data, and merges enrichment back into the record.
+    """
+    # 1. Get model from Supabase
+    model = await supabase.get_model_by_id(model_id)
+    metadata = model.get("metadata") or {}
+    hf_id = metadata.get("hf_id")
+
+    if not hf_id:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Model {model_id} has no hf_id in metadata. Set metadata.hf_id first.",
+        )
+
+    # 2. Fetch from HuggingFace
+    try:
+        hf_info = await fetch_model_info(hf_id)
+    except httpx.HTTPStatusError as e:
+        raise HTTPException(
+            status_code=502,
+            detail=f"HuggingFace API error for {hf_id}: {e.response.status_code}",
+        )
+
+    enrichment = parse_model_summary(hf_info)
+
+    # 3. Try to get config.json for dimensions
+    hf_config = await fetch_model_config(hf_id)
+    if hf_config:
+        dims = parse_embedding_dimensions(hf_config)
+        if dims:
+            enrichment["dimensions"] = dims
+
+    # 4. Merge into existing metadata and update Supabase
+    merged = {**enrichment, **metadata}
+    await supabase._request(
+        "PUT",
+        f"models?id=eq.{model_id}",
+        data={"metadata": merged},
+    )
+
+    # 5. Publish catalog change
+    if nats_client:
+        await nats_client.publish_catalog_change("enriched", "model", model_id)
+
+    logger.info(f"Enriched model {model_id} from HuggingFace ({hf_id})")
+    return {
+        "model_id": model_id,
+        "hf_id": hf_id,
+        "enrichment": enrichment,
+    }
+
+
+@app.post("/api/models/enrich-hf-bulk")
+async def enrich_all_from_huggingface(
+    model_type: Optional[str] = Query(default="embedding", description="Filter by model type"),
+):
+    """Batch-enrich all models that have hf_id in metadata."""
+    models = await supabase.get_active_models()
+
+    if model_type:
+        models = [m for m in models if m.get("model_type") == model_type]
+
+    results = {"enriched": [], "skipped": [], "failed": []}
+
+    for model in models:
+        model_id = model.get("id")
+        metadata = model.get("metadata") or {}
+        hf_id = metadata.get("hf_id")
+
+        if not hf_id:
+            results["skipped"].append({"id": model_id, "name": model.get("name"), "reason": "no hf_id"})
+            continue
+
+        try:
+            hf_info = await fetch_model_info(hf_id)
+            enrichment = parse_model_summary(hf_info)
+
+            hf_config = await fetch_model_config(hf_id)
+            if hf_config:
+                dims = parse_embedding_dimensions(hf_config)
+                if dims:
+                    enrichment["dimensions"] = dims
+
+            merged = {**enrichment, **metadata}
+            await supabase._request(
+                "PUT",
+                f"models?id=eq.{model_id}",
+                data={"metadata": merged},
+            )
+
+            results["enriched"].append({"id": model_id, "hf_id": hf_id, "dimensions": enrichment.get("dimensions")})
+            logger.info(f"Enriched {model.get('name')} from HF ({hf_id})")
+        except Exception as e:
+            results["failed"].append({"id": model_id, "hf_id": hf_id, "error": str(e)})
+            logger.warning(f"Failed to enrich {model.get('name')}: {e}")
+
+    if nats_client and results["enriched"]:
+        await nats_client.publish_catalog_change("bulk_enriched", "models", str(len(results["enriched"])))
+
+    return results
 
 
 # ============================================================================

@@ -60,6 +60,12 @@ from .prosodic_parser import (
     format_prosodic_analysis,
 )
 
+from .bpm_encoder import (
+    encode_bpm_timeline,
+    BPM_MAP,
+    MIDI_OFFSET,
+)
+
 from .audio_processor import (
     silence,
     breath_sound,
@@ -90,6 +96,10 @@ __all__ = [
     # Prosodic parsing
     "parse_prosodic",
     "format_prosodic_analysis",
+    # BPM encoding
+    "encode_bpm_timeline",
+    "BPM_MAP",
+    "MIDI_OFFSET",
     # Audio processing
     "silence",
     "breath_sound",

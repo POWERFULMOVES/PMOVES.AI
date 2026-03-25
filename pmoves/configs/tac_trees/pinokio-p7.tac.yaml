@@ -211,11 +211,13 @@ root:
           depends_on: [p7.skillmd.format]
 
     # =========================================================================
-    # Phase 7: NATS Integration (Future)
+    # Phase 7: NATS Integration
+    # Foundation: PR #1082 shipped CGP producers, embedding standardization,
+    #   and HF enrichment (2026-03-24). Some nodes now PENDING.
     # =========================================================================
     - id: p7.nats
-      task: "P7 events published to NATS (future)"
-      context: "Agent sessions, app launches, cross-machine routing events"
+      task: "P7 events published to NATS"
+      context: "Agent sessions, app launches, CGP correlation, model discovery"
       agent_hint: z890-claude
       children:
         - id: p7.nats.session
@@ -223,11 +225,60 @@ root:
           action:
             type: manual
             expect: "P7 agent sessions emit NATS events for observability"
+          context: "P7 Agent Launcher tracks sessions — emit start/stop/resume events"
+          agent_hint: z890-claude
           status: future
+          notes: "Requires P7 Launcher hooks or pterm event bridge"
 
         - id: p7.nats.launch
           task: "App launch events on pinokio.app.launched.v1"
           action:
             type: manual
-            expect: "P7 app launches emit NATS events"
+            expect: "P7 app launches emit NATS events with app name, port, machine"
+          context: "shell.run start → NATS publish; shell.run stop → NATS publish"
+          agent_hint: z890-claude
           status: future
+          notes: "Can piggyback on pinokio.js on event handlers"
+
+        - id: p7.nats.cgp-correlation
+          task: "P7-originated actions produce CGP-correlated events"
+          action:
+            type: manual
+            expect: "P7 launch → ingestion → Extract Worker CGP → traceable to P7 session ID"
+          context: "Extract Worker + FFmpeg-Whisper accept context_id (body or X-Context-ID header), propagate to CGP meta and NATS hooks."
+          agent_hint: 4090-claude
+          status: done
+          depends_on: [p7.nats.launch]
+          notes: "Shipped: context_id in Extract Worker /ingest + FFmpeg-Whisper /transcribe + /transcribe_file. Callers opt-in."
+
+        - id: p7.nats.model-discovery
+          task: "P7 agents query Model Registry for available models"
+          action:
+            type: shell
+            command: "curl -s http://localhost:8110/api/models?model_type=embedding"
+            expect: "JSON array of models with dimensions, hf_id, cuda_supported fields"
+          context: "Model Registry HF enrichment endpoints live (PR #1082). P7 agents can discover model capabilities before dispatching inference."
+          agent_hint: z890-claude
+          status: pending
+          notes: "Endpoints exist. Need SKILL.md for Model Registry so P7 Agent Interpreter can discover it."
+
+        - id: p7.nats.embedding-quality
+          task: "P7-triggered ingestion uses 3072d Qwen3 embeddings"
+          action:
+            type: manual
+            expect: "Extract Worker processes P7-originated content with EMBEDDING_BACKEND=tensorzero"
+          context: "Stack standardized to TensorZero/Qwen3-embedding:4b (PR #1082). Any P7 app that triggers ingestion gets high-quality vectors."
+          agent_hint: 5090-claude
+          status: pending
+          depends_on: [p7.nats.launch]
+          notes: "Config shipped. Needs Qdrant pmoves_chunks_qwen3 collection created on prod (z890 task)."
+
+        - id: p7.nats.telemetry
+          task: "P7 session telemetry on pinokio.telemetry.v1"
+          action:
+            type: manual
+            expect: "Agent Interpreter activity (tool calls, SKILL.md invocations) emits NATS metrics"
+          context: "Enables Prometheus scraping of P7 agent activity across mesh"
+          agent_hint: z890-claude
+          status: future
+          notes: "Depends on pterm event hooks or custom pinokio.js observer"
