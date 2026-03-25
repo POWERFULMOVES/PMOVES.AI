@@ -61,15 +61,15 @@ root:
     # Phase 2: Agent Interpreter — SKILL.md Discovery
     # =========================================================================
     - id: p7.interpreter
-      task: "P7 Agent Interpreter discovers PMOVES services"
-      context: "P7 'pinokio' skill auto-discovers installed apps via SKILL.md"
+      task: "P7 Agent Interpreter discovers and launches PMOVES apps"
+      context: "Official docs: built-in `pinokio` skill auto-discovers installed apps, auto-launches them when needed, waits for readiness, and can generate reusable clients"
       agent_hint: 5090-claude
       children:
         - id: p7.interpreter.tts
           task: "Ultimate-TTS-Studio discoverable via Agent Interpreter"
           action:
             type: manual
-            expect: "Claude Code 'speak hello' routes through Pinokio to TTS at :7861"
+            expect: "Claude Code 'speak hello' routes through Pinokio to TTS at :7860 or a fixed HTTPS domain"
           context: "D:\\pinokio\\api\\Ultimate-TTS-Studio.git\\ — Gradio API at /gradio_api"
           agent_hint: 5090-claude
           status: pending
@@ -139,7 +139,7 @@ root:
     # =========================================================================
     - id: p7.mesh
       task: "Cross-machine P7 agent routing via Tailscale"
-      context: "Tailscale mesh connects 5090, Z890, 4090 laptop — P7 agents should discover remote apps"
+      context: "Tailscale provides the cross-machine path; Pinokio provides the HTTPS/runtime surface that remote agents consume"
       agent_hint: 4090-claude
       status: done
       notes: "Gate 3 VERIFIED 2026-03-22: 4090→5090 TTS via Tailscale (200 OK, 173ms). All 3 machines on P7. Mobile agent pending."
@@ -154,15 +154,14 @@ root:
           status: done
 
         - id: p7.mesh.remote-tts
-          task: "4090 laptop agent can reach 5090 TTS via Tailscale"
+          task: "4090 laptop can reach 5090 Pinokio/TTS surface via Tailscale"
           action:
             type: manual
-            expect: "From 4090: 'speak hello' routes via Tailscale to 5090 Ultimate-TTS-Studio"
-          context: "Requires P7 on both machines + Tailscale mesh + TTS running on 5090"
+            expect: "From 4090: 5090 Pinokio HTTPS proxy and Ultimate-TTS-Studio endpoints are reachable over Tailscale"
+          context: "Tailscale provides the WAN path; Pinokio provides the HTTPS/runtime surface on the 5090 node"
           agent_hint: 4090-claude
           status: done
-          depends_on: [p7.upgrade.5090, p7.upgrade.4090, p7.interpreter.tts]
-          notes: "Verified 2026-03-22: curl https://powerfulmoves-1.tailcad9b4.ts.net/gradio_api/info → 200 OK in 173ms from 4090 laptop. 5090 Pinokio Caddy proxy resolves the localhost binding issue."
+          notes: "Verified 2026-03-22: curl https://powerfulmoves-1.tailcad9b4.ts.net/gradio_api/info → 200 OK in 173ms from 4090 laptop. Network path is proven; full Agent Interpreter UX remains tracked separately under p7.interpreter.tts."
 
         - id: p7.mesh.mobile
           task: "Mobile agent (Discord/Openclaw) reaches 5090 via mesh"
@@ -172,17 +171,17 @@ root:
           context: "Openclaw/Hermes Agent pattern from P7 announcement"
           agent_hint: 4090-claude
           status: pending
-          notes: "BLOCKED: P7 upgrade done ✓. Depends on remote TTS routing (p7.mesh.remote-tts) working first"
+          notes: "UNBLOCKED by p7.mesh.remote-tts. Pending full Discord/Openclaw/Hermes end-to-end validation."
 
     # =========================================================================
     # Phase 6: PMOVES Service SKILL.md Registration
     # =========================================================================
     - id: p7.skillmd
-      task: "PMOVES services registered with P7 via SKILL.md"
-      context: "Each service with an API needs SKILL.md for P7 discovery"
+      task: "PMOVES launchers expose Pinokio metadata, with optional SKILL.md hints"
+      context: "Official Pinokio docs say Agent Interpreter baseline does not require per-app SKILL.md; PMOVES SKILL.md files remain additive hints/docs"
       agent_hint: z890-claude
       status: done
-      notes: "All 3 children done: format (5 examples), services (PR #1085), TTS (ARTSTUFF). Phase 6 complete."
+      notes: "All 3 children done: format (5 examples), services (PR #1085), TTS (ARTSTUFF). These hints are additive on top of Pinokio's built-in pinokio/gepeto skills."
       children:
         - id: p7.skillmd.format
           task: "SKILL.md format spec understood"
@@ -194,7 +193,7 @@ root:
           notes: "Format self-evident from 5 shipped SKILL.md files: cipher-beats, holographic-blocks, pmoves-services, pmoves-remote, model-registry (all in pbnj/pinokio/api/*/SKILL.md)"
 
         - id: p7.skillmd.tts
-          task: "Ultimate-TTS-Studio SKILL.md created"
+          task: "Ultimate-TTS-Studio optional SKILL.md hint created"
           action:
             type: manual
             expect: "SKILL.md in TTS app folder describes Gradio API endpoints"
@@ -205,7 +204,7 @@ root:
           notes: "Shipped at pmoves/docs/ARTSTUFF/Ultimate-TTS-Studio.git/SKILL.md"
 
         - id: p7.skillmd.services
-          task: "PMOVES Services launcher SKILL.md created"
+          task: "PMOVES Services launcher optional SKILL.md hint created"
           action:
             type: manual
             expect: "SKILL.md in pmoves-services describes Docker profile start/stop"

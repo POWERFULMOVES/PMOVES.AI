@@ -115,6 +115,7 @@ teams:
       - swarm_attribution    # Shape-attribution engine
       - tensorzero        # Port 3030 — LLM gateway (all model calls)
       - llama_lab         # LLM benchmarking
+      - nemotron_claw    # Beefy NVIDIA GPU claw (Nemotron/NIM local reasoning)
 
   infra:
     name: "Infrastructure & Networking"
