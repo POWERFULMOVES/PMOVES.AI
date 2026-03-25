@@ -600,6 +600,18 @@ async def synthesize_speech_audio(request: SynthesizeRequest):
     - `output_format=wav` returns `audio/wav` (PCM16 mono, 24kHz)
     - `output_format=pcm` returns raw PCM16 bytes (`application/octet-stream`)
     """
+    # Resolve persona/intent to engine if not explicitly set
+    if (request.persona_id or request.intent) and not request.engine:
+        from persona_selector import resolve_persona_engine
+        resolved_engine, extra_kwargs = await resolve_persona_engine(
+            request.persona_id, request.intent,
+        )
+        request.engine = resolved_engine
+        if not request.provider:
+            request.provider = "ultimate_tts"
+        if not request.voice and "voice" in extra_kwargs:
+            request.voice = extra_kwargs.pop("voice")
+
     provider_name = request.provider or DEFAULT_PROVIDER
     output_format = (request.output_format or "wav").lower().strip()
 
