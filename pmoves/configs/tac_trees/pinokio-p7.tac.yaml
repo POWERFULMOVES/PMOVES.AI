@@ -181,6 +181,8 @@ root:
       task: "PMOVES services registered with P7 via SKILL.md"
       context: "Each service with an API needs SKILL.md for P7 discovery"
       agent_hint: z890-claude
+      status: done
+      notes: "All 3 children done: format (5 examples), services (PR #1085), TTS (ARTSTUFF). Phase 6 complete."
       children:
         - id: p7.skillmd.format
           task: "SKILL.md format spec understood"
@@ -188,7 +190,8 @@ root:
             type: manual
             expect: "P7 SKILL.md format documented (after upgrade, check P7 source)"
           agent_hint: 5090-claude
-          status: pending
+          status: done
+          notes: "Format self-evident from 5 shipped SKILL.md files: cipher-beats, holographic-blocks, pmoves-services, pmoves-remote, model-registry (all in pbnj/pinokio/api/*/SKILL.md)"
 
         - id: p7.skillmd.tts
           task: "Ultimate-TTS-Studio SKILL.md created"
@@ -197,8 +200,9 @@ root:
             expect: "SKILL.md in TTS app folder describes Gradio API endpoints"
           context: "D:\\pinokio\\api\\Ultimate-TTS-Studio.git\\"
           agent_hint: 5090-claude
-          status: pending
+          status: done
           depends_on: [p7.skillmd.format]
+          notes: "Shipped at pmoves/docs/ARTSTUFF/Ultimate-TTS-Studio.git/SKILL.md"
 
         - id: p7.skillmd.services
           task: "PMOVES Services launcher SKILL.md created"
@@ -207,8 +211,9 @@ root:
             expect: "SKILL.md in pmoves-services describes Docker profile start/stop"
           context: "pbnj/pinokio/api/pmoves-services/"
           agent_hint: z890-claude
-          status: pending
+          status: done
           depends_on: [p7.skillmd.format]
+          notes: "Shipped at pbnj/pinokio/api/pmoves-services/SKILL.md (PR #1085)"
 
     # =========================================================================
     # Phase 7: NATS Integration
@@ -258,9 +263,9 @@ root:
             command: "curl -s http://localhost:8110/api/models?model_type=embedding"
             expect: "JSON array of models with dimensions, hf_id, cuda_supported fields"
           context: "Model Registry HF enrichment endpoints live (PR #1082). P7 agents can discover model capabilities before dispatching inference."
-          agent_hint: z890-claude
-          status: pending
-          notes: "Endpoints exist. Need SKILL.md for Model Registry so P7 Agent Interpreter can discover it."
+          agent_hint: 4090-claude
+          status: done
+          notes: "SKILL.md created at pbnj/pinokio/api/pmoves-model-registry/SKILL.md. P7 Agent Interpreter can now discover Model Registry (port 8110) for model catalog queries, HF enrichment, TensorZero config export, and GPU deployment tracking."
 
         - id: p7.nats.embedding-quality
           task: "P7-triggered ingestion uses 3072d Qwen3 embeddings"
