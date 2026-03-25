@@ -1,4 +1,4 @@
-FROM python:3.11-slim
+FROM dhi.io/python:3.11
 
 LABEL org.opencontainers.image.source="https://github.com/POWERFULMOVES/PMOVES.AI"
 LABEL org.opencontainers.image.description="Chat Relay - NATS to Supabase Realtime bridge"

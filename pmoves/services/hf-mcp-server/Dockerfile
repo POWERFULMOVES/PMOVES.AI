@@ -5,7 +5,7 @@
 # from Hugging Face Hub with local caching and GGUF conversion support.
 # =============================================================================
 
-FROM python:3.12-slim
+FROM dhi.io/python:3.12
 
 LABEL maintainer="PMOVES.AI <local-models@pmoves.ai>"
 LABEL description="Hugging Face MCP Server for model management"

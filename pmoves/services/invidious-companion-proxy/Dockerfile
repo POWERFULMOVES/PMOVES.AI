@@ -1,4 +1,4 @@
-FROM nginx:alpine
+FROM dhi.io/nginx:latest
 
 # Security: Run as non-root user
 RUN addgroup -g 65532 -S pmoves && \

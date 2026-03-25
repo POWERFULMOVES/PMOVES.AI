@@ -1,4 +1,4 @@
-FROM node:20-slim AS builder
+FROM dhi.io/node:20 AS builder
 
 WORKDIR /app
 COPY package.json package-lock.json* ./
@@ -6,7 +6,7 @@ RUN npm ci --ignore-scripts
 COPY . .
 RUN npm run build
 
-FROM node:20-slim
+FROM dhi.io/node:20
 
 # Security: non-root user
 RUN groupadd -r pmoves && useradd -r -g pmoves -d /app -s /sbin/nologin pmoves
