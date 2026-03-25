@@ -1,5 +1,5 @@
-# Base image pinned 2026-03-05 — refresh monthly or via Dependabot
-FROM python:3.10-slim
+# Needs apt-get for system libs (git, build-essential) — cannot use DHI; pinned digest
+FROM python:3.10-slim@sha256:4b0a8ebf16cf4563f3d3732bd4f4a464abb2f671b3b9d00aab281d705d224457
 WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 RUN apt-get update \
