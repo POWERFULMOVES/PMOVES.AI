@@ -1,0 +1,78 @@
+{
+  "meta": {
+    "lastTouchedVersion": "2026.3.13",
+    "template": true,
+    "description": "PMOVES Multi-Claw base config — derived from Fly.io reference instance"
+  },
+  "browser": {
+    "enabled": true,
+    "headless": true,
+    "noSandbox": true
+  },
+  "auth": {
+    "profiles": {
+      "kilocode:default": {
+        "provider": "kilocode",
+        "mode": "api_key"
+      }
+    }
+  },
+  "models": {
+    "mode": "merge"
+  },
+  "agents": {
+    "defaults": {
+      "model": {
+        "primary": "${CLAW_DEFAULT_MODEL}"
+      },
+      "workspace": "/root/.openclaw/workspace"
+    }
+  },
+  "tools": {
+    "profile": "${CLAW_TOOLS_PROFILE}",
+    "exec": {
+      "host": "gateway",
+      "security": "full",
+      "ask": "${CLAW_ASK_MODE}"
+    }
+  },
+  "commands": {
+    "native": "auto",
+    "nativeSkills": "auto",
+    "restart": true,
+    "ownerDisplay": "raw"
+  },
+  "session": {
+    "dmScope": "per-channel-peer"
+  },
+  "hooks": {
+    "enabled": true,
+    "token": "${CLAW_HOOKS_TOKEN}",
+    "presets": []
+  },
+  "channels": {},
+  "gateway": {
+    "port": 3001,
+    "mode": "local",
+    "bind": "loopback",
+    "controlUi": {
+      "allowedOrigins": [
+        "https://claw.kilosessions.ai",
+        "https://kilo.ai",
+        "https://www.kilo.ai"
+      ],
+      "allowInsecureAuth": false
+    },
+    "auth": {
+      "mode": "token",
+      "token": "${CLAW_GATEWAY_TOKEN}"
+    },
+    "tailscale": {
+      "mode": "serve",
+      "resetOnExit": false
+    }
+  },
+  "plugins": {
+    "entries": {}
+  }
+}

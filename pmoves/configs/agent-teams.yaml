@@ -118,8 +118,8 @@ teams:
 
   infra:
     name: "Infrastructure & Networking"
-    description: "VPN, fleet management, node coordination"
-    node_affinity: [kvm4-1, kvm2]
+    description: "VPN, fleet management, node coordination, edge GPU agents"
+    node_affinity: [kvm4-1, kvm2, jetson]
     ci_runner: vps
     compose_profiles: []
     agents:
@@ -127,6 +127,7 @@ teams:
       - container_agent   # Port 8111 — Docker networking diagnostics + sidecar bridge
       - headscale         # Port 8181 — Mesh VPN
       - vps_fleet_manager # Hostinger KVM orchestration
+      - nemoclaw          # Jetson edge GPU agent (hybrid: Kilo Code + Agent Zero subordinate)
 
   sandbox:
     name: "Sandbox & Execution"

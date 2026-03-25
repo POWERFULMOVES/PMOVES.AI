@@ -1,0 +1,34 @@
+{
+  "identity": {
+    "node": "kvm4-2",
+    "role": "data-storage",
+    "description": "Data and storage node — Supabase, MinIO, Qdrant, Meilisearch, Neo4j",
+    "hostname": "kvm4-2"
+  },
+  "openclaw_overrides": {
+    "agents.defaults.model.primary": "claude-sonnet-4",
+    "tools.profile": "restricted",
+    "tools.exec.ask": "auto",
+    "channels": {}
+  },
+  "exec_approvals": {
+    "main": {
+      "allowlist": [
+        { "pattern": "/usr/bin/psql", "note": "PostgreSQL client — Supabase queries" },
+        { "pattern": "/usr/bin/mc", "note": "MinIO client — object storage ops" },
+        { "pattern": "/usr/bin/curl", "note": "API calls to data services" },
+        { "pattern": "/usr/bin/python3", "note": "Python scripts for data ops" },
+        { "pattern": "/usr/bin/git", "note": "Git operations" },
+        { "pattern": "/usr/bin/tailscale", "note": "Tailscale status (read-only)" }
+      ]
+    }
+  },
+  "mcp_servers": {
+    "pmoves-cipher": {
+      "type": "sse",
+      "url": "http://cipher-memory:8096/sse"
+    }
+  },
+  "damage_control_hooks": true,
+  "sign_trail": true
+}

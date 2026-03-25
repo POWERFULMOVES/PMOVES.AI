@@ -1841,6 +1841,56 @@ hostinger-plan: ## Preview Terraform changes for Hostinger VPS
 hostinger-ssh: ## SSH into Hostinger VPS using CHIT-managed credentials
 	@$(LOAD_ENV_SHARED) bash -lc 'ssh -o StrictHostKeyChecking=no -i <(echo "$$HOSTINGER_SSH_PRIVATE_KEY") $$HOSTINGER_SSH_USER@$$HOSTINGER_SSH_HOST'
 
+# -------- Multi-Claw Fleet (Kilo Code / OpenClaw) --------
+.PHONY: claw-deploy claw-verify claws-status claw-rotate
+
+CLAW_SCRIPTS := $(CURDIR)/scripts/claws
+CLAW_SCOPES  := $(CURDIR)/configs/claws/scopes
+
+# Target mapping: scope name → SSH target (override via env or GH secrets)
+CLAW_TARGET_z890     ?= root@localhost
+CLAW_TARGET_kvm4-1   ?= root@$${HOSTINGER_KVM4_1_IP}
+CLAW_TARGET_kvm4-2   ?= root@$${HOSTINGER_KVM4_2_IP}
+CLAW_TARGET_kvm2     ?= root@$${HOSTINGER_KVM2_IP}
+CLAW_TARGET_nemoclaw ?= root@nemoclaw
+
+claw-deploy: ## Deploy claw to node: make claw-deploy SCOPE=kvm4-1 [DRY_RUN=1]
+	@if [ -z "$(SCOPE)" ]; then echo "Usage: make claw-deploy SCOPE=<name>"; echo "Scopes: $$(ls $(CLAW_SCOPES) | sed 's/.json//')"; exit 1; fi
+	@TARGET_VAR="CLAW_TARGET_$(SCOPE)"; \
+	TARGET="$${!TARGET_VAR:-}"; \
+	if [ -z "$$TARGET" ]; then echo "ERROR: No target for scope $(SCOPE). Set CLAW_TARGET_$(SCOPE)"; exit 1; fi; \
+	$(CLAW_SCRIPTS)/deploy-claw.sh --scope $(SCOPE) --target "$$TARGET" $(if $(DRY_RUN),--dry-run)
+
+claw-verify: ## Verify claw on node: make claw-verify SCOPE=kvm4-1
+	@if [ -z "$(SCOPE)" ]; then echo "Usage: make claw-verify SCOPE=<name>"; exit 1; fi
+	@TARGET_VAR="CLAW_TARGET_$(SCOPE)"; \
+	TARGET="$${!TARGET_VAR:-}"; \
+	if [ -z "$$TARGET" ]; then echo "ERROR: No target for scope $(SCOPE)"; exit 1; fi; \
+	$(CLAW_SCRIPTS)/verify-claw.sh --scope $(SCOPE) --target "$$TARGET"
+
+claws-status: ## Health check all claw instances
+	@echo "=== PMOVES Claw Fleet Status ==="
+	@for scope in $$(ls $(CLAW_SCOPES) | sed 's/.json//'); do \
+		TARGET_VAR="CLAW_TARGET_$$scope"; \
+		TARGET="$${!TARGET_VAR:-}"; \
+		if [ -n "$$TARGET" ]; then \
+			echo ""; \
+			echo "--- $$scope ($$TARGET) ---"; \
+			ssh -o ConnectTimeout=3 "$$TARGET" \
+				"echo 'SSH: OK'; kilo --version 2>/dev/null || echo 'Kilo: not installed'; tailscale status --self 2>/dev/null | head -1 || echo 'Tailscale: not found'" \
+				2>/dev/null || echo "  UNREACHABLE"; \
+		else \
+			echo "--- $$scope: no target configured ---"; \
+		fi; \
+	done
+
+claw-rotate: ## Rotate tokens on claw: make claw-rotate SCOPE=kvm4-1 [DRY_RUN=1]
+	@if [ -z "$(SCOPE)" ]; then echo "Usage: make claw-rotate SCOPE=<name>"; exit 1; fi
+	@TARGET_VAR="CLAW_TARGET_$(SCOPE)"; \
+	TARGET="$${!TARGET_VAR:-}"; \
+	if [ -z "$$TARGET" ]; then echo "ERROR: No target for scope $(SCOPE)"; exit 1; fi; \
+	$(CLAW_SCRIPTS)/rotate-tokens.sh --target "$$TARGET" $(if $(DRY_RUN),--dry-run)
+
 # -------- Brand defaults (branded env + first-run resources) --------
 .PHONY: brand-defaults brand-verify
 

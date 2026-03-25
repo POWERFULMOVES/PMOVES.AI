@@ -1,0 +1,23 @@
+{
+  "$schema": "KiloCode opencode.json — Exit Proxy Node (KVM2)",
+  "mcpServers": {},
+  "modes": {
+    "default": "pmoves-debug",
+    "available": [
+      "pmoves-code",
+      "pmoves-debug"
+    ]
+  },
+  "modelOverrides": {
+    "primary": "claude-haiku-4-5"
+  },
+  "node": {
+    "identity": "kvm2",
+    "role": "exit-proxy",
+    "services": [
+      "headscale",
+      "cloudflared",
+      "tailscale"
+    ]
+  }
+}

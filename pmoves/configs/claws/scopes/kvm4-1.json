@@ -1,0 +1,38 @@
+{
+  "identity": {
+    "node": "kvm4-1",
+    "role": "api-gateway",
+    "description": "API gateway node — orchestration, health checks, NATS routing",
+    "hostname": "kvm4-1"
+  },
+  "openclaw_overrides": {
+    "agents.defaults.model.primary": "claude-sonnet-4",
+    "tools.profile": "restricted",
+    "tools.exec.ask": "auto",
+    "channels": {
+      "discord": { "enabled": true }
+    }
+  },
+  "exec_approvals": {
+    "main": {
+      "allowlist": [
+        { "pattern": "/usr/bin/curl", "note": "Health checks and API calls" },
+        { "pattern": "/usr/bin/gh", "note": "GitHub CLI — PR and issue management" },
+        { "pattern": "/usr/bin/nats", "note": "NATS CLI — message bus operations" },
+        { "pattern": "/usr/bin/dig", "note": "DNS diagnostics" },
+        { "pattern": "/usr/bin/systemctl", "note": "Service management" },
+        { "pattern": "/usr/bin/journalctl", "note": "Log inspection" },
+        { "pattern": "/usr/bin/git", "note": "Git operations" },
+        { "pattern": "/usr/bin/tailscale", "note": "Tailscale status (read-only)" }
+      ]
+    }
+  },
+  "mcp_servers": {
+    "pmoves-cipher": {
+      "type": "sse",
+      "url": "http://cipher-memory:8096/sse"
+    }
+  },
+  "damage_control_hooks": true,
+  "sign_trail": true
+}

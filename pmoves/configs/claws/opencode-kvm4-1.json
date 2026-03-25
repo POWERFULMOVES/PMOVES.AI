@@ -1,0 +1,34 @@
+{
+  "$schema": "KiloCode opencode.json — API Gateway Node (KVM4-1)",
+  "mcpServers": {
+    "pmoves-cipher": {
+      "type": "sse",
+      "url": "http://cipher-memory:8096/sse",
+      "description": "Agent memory (Neo4j knowledge graph)"
+    }
+  },
+  "modes": {
+    "default": "pmoves-code",
+    "available": [
+      "pmoves-code",
+      "pmoves-architect",
+      "pmoves-ask",
+      "pmoves-debug",
+      "pmoves-review"
+    ]
+  },
+  "modelOverrides": {
+    "primary": "claude-sonnet-4",
+    "fallback": "claude-haiku-4-5"
+  },
+  "node": {
+    "identity": "kvm4-1",
+    "role": "api-gateway",
+    "services": [
+      "agent-zero:8080",
+      "archon:8091",
+      "tensorzero:3030",
+      "nats:4222"
+    ]
+  }
+}

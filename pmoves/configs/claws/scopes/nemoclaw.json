@@ -1,0 +1,46 @@
+{
+  "identity": {
+    "node": "jetson",
+    "role": "edge-gpu",
+    "description": "NemoClaw — NVIDIA Jetson edge GPU node for local inference and model ops",
+    "hostname": "nemoclaw"
+  },
+  "openclaw_overrides": {
+    "agents.defaults.model.primary": "nemotron",
+    "auth.profiles": {
+      "ollama:local": {
+        "provider": "ollama",
+        "mode": "local",
+        "baseUrl": "http://localhost:11434"
+      }
+    },
+    "tools.profile": "restricted",
+    "tools.exec.ask": "auto",
+    "channels": {}
+  },
+  "exec_approvals": {
+    "main": {
+      "allowlist": [
+        { "pattern": "/usr/bin/nvidia-smi", "note": "GPU status and monitoring" },
+        { "pattern": "/usr/bin/tegrastats", "note": "Jetson system telemetry" },
+        { "pattern": "/usr/bin/jetson_clocks", "note": "Jetson clock management" },
+        { "pattern": "/usr/bin/python3", "note": "Python runtime for model ops" },
+        { "pattern": "/usr/bin/trtexec", "note": "TensorRT engine builder" },
+        { "pattern": "/usr/local/bin/ollama", "note": "Ollama local model server" },
+        { "pattern": "/usr/bin/curl", "note": "Health checks to local services" },
+        { "pattern": "/usr/bin/git", "note": "Git operations (model repos)" }
+      ]
+    }
+  },
+  "mcp_servers": {},
+  "nats_subjects": {
+    "subscribe": ["mesh.gpu.command.v1"],
+    "publish": [
+      "mesh.gpu.status.v1",
+      "mesh.gpu.model.loaded.v1",
+      "mesh.gpu.model.unloaded.v1"
+    ]
+  },
+  "damage_control_hooks": true,
+  "sign_trail": true
+}
