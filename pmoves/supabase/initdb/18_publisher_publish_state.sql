@@ -157,7 +157,7 @@ as $$
 declare
   updated_rows integer := 0;
 begin
-  if p_row_id is null then
+  if p_row_id is null or p_publish_event_id is null or btrim(p_publish_event_id) = '' then
     return false;
   end if;
 
@@ -210,7 +210,7 @@ as $$
 declare
   updated_rows integer := 0;
 begin
-  if p_row_id is null then
+  if p_row_id is null or p_publish_event_id is null or btrim(p_publish_event_id) = '' then
     return false;
   end if;
 
