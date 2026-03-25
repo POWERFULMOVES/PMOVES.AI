@@ -428,7 +428,7 @@ jobs:
 
       - name: Install Syft (SBOM)
         if: ${{ github.event_name != 'pull_request' && steps.cfg.outputs.generate_sbom == 'true' && steps.meta.outputs.has_tags == 'true' }}
-        uses: anchore/sbom-action/download-syft@v0.23.1
+        uses: anchore/sbom-action/download-syft@v0.24.0
 
       - name: Generate SBOMs (CycloneDX)
         id: sbom
