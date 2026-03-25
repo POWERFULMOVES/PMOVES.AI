@@ -47,8 +47,12 @@ LANES: tuple[RunnerLane, ...] = (
 )
 
 
-def run_cmd(args: list[str], check: bool = True,
-            timeout: int = 120) -> subprocess.CompletedProcess[str]:
+def run_cmd(
+    args: list[str],
+    check: bool = True,
+    timeout: int = 120,
+    env: dict[str, str] | None = None,
+) -> subprocess.CompletedProcess[str]:
     """Run a subprocess command with timeout handling.
 
     TimeoutExpired is re-raised when check=True but returns a synthetic
@@ -62,6 +66,7 @@ def run_cmd(args: list[str], check: bool = True,
             text=True,
             capture_output=True,
             timeout=timeout,
+            env=env,
         )
     except subprocess.TimeoutExpired:
         if check:
@@ -78,6 +83,7 @@ def require_tool(name: str) -> None:
 
 def registration_token(repo: str, lane: str) -> str:
     """Fetch a short-lived GitHub runner registration token (~1h validity)."""
+    require_tool("gh")
     env_name = f"RUNNER_TOKEN_{lane.replace('-', '_').upper()}"
     lane_token = os.getenv(env_name)
     if lane_token:
@@ -196,29 +202,32 @@ def docker_run(
         cmd.extend(["-e", "NVIDIA_VISIBLE_DEVICES=all"])
         cmd.extend(["-e", "NVIDIA_DRIVER_CAPABILITIES=compute,utility"])
 
-    # Use ACCESS_TOKEN (PAT) for persistent auto-registration, or fall back
-    # to short-lived RUNNER_TOKEN when no PAT is available.
+    # Security: pass secrets via bare -e KEY (inherits from parent env)
+    # instead of -e KEY=VALUE which leaks into /proc/<pid>/cmdline.
+    env = os.environ.copy()
     if is_pat:
-        token_env = f"ACCESS_TOKEN={token}"
+        env["ACCESS_TOKEN"] = token
+        token_env_flag = "ACCESS_TOKEN"
     else:
-        token_env = f"RUNNER_TOKEN={token}"
+        env["RUNNER_TOKEN"] = token
+        token_env_flag = "RUNNER_TOKEN"
+
+    env["REPO_URL"] = f"https://github.com/{repo}"
+    env["RUNNER_NAME"] = lane.runner_name
+    env["LABELS"] = lane.labels
+    env["RUNNER_WORKDIR"] = "/tmp/runner/_work"
 
     cmd.extend([
-        "-e",
-        f"REPO_URL=https://github.com/{repo}",
-        "-e",
-        f"RUNNER_NAME={lane.runner_name}",
-        "-e",
-        token_env,
-        "-e",
-        f"LABELS={lane.labels}",
-        "-e",
-        "RUNNER_WORKDIR=/tmp/runner/_work",
+        "-e", "REPO_URL",
+        "-e", "RUNNER_NAME",
+        "-e", token_env_flag,
+        "-e", "LABELS",
+        "-e", "RUNNER_WORKDIR",
         "-v",
         _docker_socket_mount(),
         image,
     ])
-    run_cmd(cmd)
+    run_cmd(cmd, env=env)
 
 def _runner_log_args(lane: RunnerLane) -> list[str]:
     info = run_cmd(
@@ -256,7 +265,6 @@ def _selected_lanes(names: list[str] | None) -> tuple[RunnerLane, ...]:
 
 def cmd_up(repo: str, image: str, lanes: tuple[RunnerLane, ...]) -> int:
     require_tool("docker")
-    require_tool("gh")
     for lane in lanes:
         token, is_pat = access_token(repo, lane.lane)
         docker_rm(lane.container_name)

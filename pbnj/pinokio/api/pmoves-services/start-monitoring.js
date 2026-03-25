@@ -4,12 +4,12 @@ module.exports = {
     {
       method: "shell.run",
       params: {
-        path: "../../../../pmoves",
+        path: "../../pmoves",
         message: [
-          "make up-monitoring"
+          "docker compose -f docker-compose.yml -f monitoring/docker-compose.monitoring.yml up -d"
         ],
         on: [{
-          event: "/Started|running|Attaching|Container.*Started/i",
+          event: "/Started|running|Attaching/i",
           done: true
         }]
       }

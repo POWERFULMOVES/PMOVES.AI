@@ -856,8 +856,8 @@ BEGIN
   SELECT id INTO v_openrouter_id FROM pmoves_core.model_providers WHERE name = 'openrouter_primary';
   SELECT id INTO v_venice_id FROM pmoves_core.model_providers WHERE name = 'venice_primary';
 
-  -- Qwen3 Embedding 4B (local)
-  INSERT INTO pmoves_core.models (provider_id, name, model_id, model_type, capabilities, vram_mb, context_length, description, active)
+  -- Qwen3 Embedding 4B (local) — primary CUDA embedding model
+  INSERT INTO pmoves_core.models (provider_id, name, model_id, model_type, capabilities, vram_mb, context_length, description, metadata, active)
   VALUES (
     v_ollama_local_id,
     'qwen3_embedding_4b_local',
@@ -866,7 +866,8 @@ BEGIN
     '["embeddings"]'::jsonb,
     3000,
     32768,
-    'Qwen3 Embedding 4B - Local embedding model',
+    'Qwen3 Embedding 4B - Primary CUDA embedding model (3072d)',
+    '{"hf_id": "Alibaba-NLP/gte-Qwen2-4B-instruct", "dimensions": 3072, "cuda_supported": true}'::jsonb,
     true
   )
   ON CONFLICT (provider_id, model_id) DO UPDATE SET
@@ -875,6 +876,7 @@ BEGIN
     vram_mb = EXCLUDED.vram_mb,
     context_length = EXCLUDED.context_length,
     description = EXCLUDED.description,
+    metadata = EXCLUDED.metadata,
     updated_at = NOW()
   RETURNING id INTO v_model_id;
 
@@ -884,7 +886,7 @@ BEGIN
   ON CONFLICT (model_id, context) DO NOTHING;
 
   -- Qwen3 Embedding 8B (local, high-quality)
-  INSERT INTO pmoves_core.models (provider_id, name, model_id, model_type, capabilities, vram_mb, context_length, description, active)
+  INSERT INTO pmoves_core.models (provider_id, name, model_id, model_type, capabilities, vram_mb, context_length, description, metadata, active)
   VALUES (
     v_ollama_local_id,
     'qwen3_embedding_8b_local',
@@ -893,7 +895,8 @@ BEGIN
     '["embeddings"]'::jsonb,
     6000,
     32768,
-    'Qwen3 Embedding 8B - High-quality local embedding (4096-dim, RTX 5090)',
+    'Qwen3 Embedding 8B - High-quality local embedding (4096d, RTX 5090)',
+    '{"hf_id": "Alibaba-NLP/gte-Qwen2-8B-instruct", "dimensions": 4096, "cuda_supported": true}'::jsonb,
     true
   )
   ON CONFLICT (provider_id, model_id) DO UPDATE SET
@@ -902,10 +905,11 @@ BEGIN
     vram_mb = EXCLUDED.vram_mb,
     context_length = EXCLUDED.context_length,
     description = EXCLUDED.description,
+    metadata = EXCLUDED.metadata,
     updated_at = NOW();
 
   -- Gemma Embedding (local, lightweight)
-  INSERT INTO pmoves_core.models (provider_id, name, model_id, model_type, capabilities, vram_mb, context_length, description, active)
+  INSERT INTO pmoves_core.models (provider_id, name, model_id, model_type, capabilities, vram_mb, context_length, description, metadata, active)
   VALUES (
     v_ollama_local_id,
     'gemma_embed_local',
@@ -915,6 +919,7 @@ BEGIN
     1500,
     32768,
     'Gemma Embedding 300M - Lightweight local embedding model',
+    '{"hf_id": "google/gemma-embedding-300m", "dimensions": 768, "cuda_supported": true}'::jsonb,
     true
   )
   ON CONFLICT (provider_id, model_id) DO UPDATE SET
@@ -923,10 +928,11 @@ BEGIN
     vram_mb = EXCLUDED.vram_mb,
     context_length = EXCLUDED.context_length,
     description = EXCLUDED.description,
+    metadata = EXCLUDED.metadata,
     updated_at = NOW();
 
   -- Nomic Embed Text (local, popular)
-  INSERT INTO pmoves_core.models (provider_id, name, model_id, model_type, capabilities, vram_mb, context_length, description, active)
+  INSERT INTO pmoves_core.models (provider_id, name, model_id, model_type, capabilities, vram_mb, context_length, description, metadata, active)
   VALUES (
     v_ollama_local_id,
     'archon_nomic_embed_local',
@@ -936,6 +942,7 @@ BEGIN
     512,
     8192,
     'Nomic Embed Text - Popular local embedding model',
+    '{"hf_id": "nomic-ai/nomic-embed-text-v1.5", "dimensions": 768, "cuda_supported": true}'::jsonb,
     true
   )
   ON CONFLICT (provider_id, model_id) DO UPDATE SET
@@ -944,10 +951,11 @@ BEGIN
     vram_mb = EXCLUDED.vram_mb,
     context_length = EXCLUDED.context_length,
     description = EXCLUDED.description,
+    metadata = EXCLUDED.metadata,
     updated_at = NOW();
 
   -- BGE Large (Together)
-  INSERT INTO pmoves_core.models (provider_id, name, model_id, model_type, capabilities, vram_mb, context_length, description, active)
+  INSERT INTO pmoves_core.models (provider_id, name, model_id, model_type, capabilities, vram_mb, context_length, description, metadata, active)
   VALUES (
     v_together_id,
     'archon_bge_large_together',
@@ -957,6 +965,7 @@ BEGIN
     0,
     512,
     'BGE Large v1.5 - High-quality English embedding via Together',
+    '{"hf_id": "BAAI/bge-large-en-v1.5", "dimensions": 1024}'::jsonb,
     true
   )
   ON CONFLICT (provider_id, model_id) DO UPDATE SET
@@ -964,6 +973,7 @@ BEGIN
     capabilities = EXCLUDED.capabilities,
     context_length = EXCLUDED.context_length,
     description = EXCLUDED.description,
+    metadata = EXCLUDED.metadata,
     updated_at = NOW();
 
   -- E5 Large (Together)
@@ -987,7 +997,7 @@ BEGIN
     updated_at = NOW();
 
   -- OpenAI text-embedding-3-small
-  INSERT INTO pmoves_core.models (provider_id, name, model_id, model_type, capabilities, vram_mb, context_length, description, active)
+  INSERT INTO pmoves_core.models (provider_id, name, model_id, model_type, capabilities, vram_mb, context_length, description, metadata, active)
   VALUES (
     v_openai_id,
     'openai_text_embedding_small',
@@ -997,6 +1007,7 @@ BEGIN
     0,
     8191,
     'OpenAI text-embedding-3-small - Official OpenAI embedding',
+    '{"dimensions": 1536}'::jsonb,
     true
   )
   ON CONFLICT (provider_id, model_id) DO UPDATE SET
@@ -1004,6 +1015,7 @@ BEGIN
     capabilities = EXCLUDED.capabilities,
     context_length = EXCLUDED.context_length,
     description = EXCLUDED.description,
+    metadata = EXCLUDED.metadata,
     updated_at = NOW();
 
   -- OpenRouter multilingual embedding

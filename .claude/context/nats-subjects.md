@@ -363,6 +363,22 @@ Example: `ingest.transcript.ready.v1`
 - **Subscribers:** Agent trail processors, observability dashboards, handoff automation
 - **Delivery:** Publish/subscribe (JetStream optional depending on deployment policy)
 
+**`agent.identity.altered.v1`**
+- **Direction:** Built by `sign_trail.py --alter` (payload only, no NATS client) → Published by BoTZ gateway or trail ingestor on behalf of CLI → Consumed by monitoring, Graphiti trail
+- **Purpose:** Notify that an agent selected an alter identity for a trail entry
+- **Payload:**
+  ```json
+  {
+    "agent_id": "4090-claude",
+    "selected_alter": "4090-field",
+    "alter_glyph": "◎",
+    "alter_color": "#065F46",
+    "timestamp": "2026-03-24T12:00:00Z"
+  }
+  ```
+- **Subscribers:** Agent trail processors, observability dashboards, identity analytics
+- **Delivery:** Publish/subscribe (advisory, no JetStream required)
+
 **`ops.pr.insight.shared.v1`**
 - **Direction:** Published by any node agent during PR review or commit work
 - **Purpose:** Share cross-PR insights between node agents (z890, 5090, 4090) for validation

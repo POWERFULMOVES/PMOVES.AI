@@ -2,17 +2,21 @@
 
 from __future__ import annotations
 
+import asyncio
+import json
 import logging
 import os
 import shutil
 import socket
 import subprocess
 import tempfile
+import uuid
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone as tz
 from functools import lru_cache
 from typing import Any, Dict, Iterable, List, Literal, Optional, Tuple
 
-from fastapi import Body, FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import Body, FastAPI, File, Form, HTTPException, Request, UploadFile
 
 # NATS service announcement integration
 try:
@@ -20,6 +24,14 @@ try:
     NATS_ANNOUNCE_AVAILABLE = True
 except ImportError:
     NATS_ANNOUNCE_AVAILABLE = False
+
+# NATS CGP publishing
+try:
+    import nats as nats_pkg
+    NATS_CGP_AVAILABLE = True
+except ImportError:
+    nats_pkg = None  # type: ignore
+    NATS_CGP_AVAILABLE = False
 
 try:  # pragma: no cover - exercised in production
     import boto3
@@ -45,6 +57,109 @@ ProviderLiteral = Literal["faster-whisper", "whisper", "qwen2-audio"]
 
 
 logger = logging.getLogger(__name__)
+
+# ── CHIT / NATS CGP publishing ───────────────────────────────────────────────
+NATS_URL = os.environ.get("NATS_URL", "nats://nats:pmoves@nats:4222")
+CGP_PUBLISH_ENABLED = os.environ.get(
+    "FFW_CGP_PUBLISH", "true"
+).lower() in ("1", "true", "yes")
+CGP_SPEC_VERSION = "chit.cgp.v1.0"
+CGP_SUBJECT = "tokenism.cgp.ready.v1"
+TRANSCRIPT_READY_SUBJECT = "ingest.transcript.ready.v1"
+
+_nats_client = None  # persistent NATS connection, set in lifespan
+
+
+def _build_transcription_cgp(
+    transcript: Dict[str, Any],
+    video_id: Optional[str],
+    audio_uri: Optional[str],
+    request_id: str,
+    context_id: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Build a CGP v1.0 packet from transcription results."""
+    segments = transcript.get("segments") or []
+    points = []
+    for i, seg in enumerate(segments[:50]):
+        text = (seg.get("text") or "").strip()
+        duration = max(seg.get("end", 0.0) - seg.get("start", 0.0), 0.0)
+        points.append({
+            "id": f"seg:{i}",
+            "modality": "audio",
+            "proj": round(min(duration / 30.0, 1.0), 3),
+            "conf": 0.9,
+            "summary": text[:200],
+        })
+
+    speakers = transcript.get("speakers") or {}
+    total_duration = max(
+        (seg.get("end", 0.0) for seg in segments), default=0.0
+    )
+    spectrum = [
+        round(min(len(segments) / 100.0, 1.0), 3),      # segment density
+        round(min(total_duration / 3600.0, 1.0), 3),     # duration (norm to 1h)
+        round(min(len(speakers) / 5.0, 1.0), 3),         # speaker diversity
+    ]
+
+    return {
+        "spec": CGP_SPEC_VERSION,
+        "summary": f"ffmpeg-whisper: transcribed {len(segments)} segments",
+        "created_at": datetime.now(tz.utc).isoformat(),
+        "super_nodes": [{
+            "id": f"transcription:{request_id}",
+            "label": "ffmpeg-whisper",
+            "x": 0.0, "y": 0.0, "r": 0.3,
+            "constellations": [{
+                "id": f"transcription.segments.{request_id}",
+                "anchor": [0.5, 0.5, 0.5],
+                "spectrum": spectrum,
+                "points": points,
+            }],
+        }],
+        "meta": {
+            "source": CGP_SUBJECT,
+            "tags": ["transcription", "audio", "whisper"],
+            "language": transcript.get("language"),
+            "model": transcript.get("model"),
+            "provider": transcript.get("provider"),
+            "video_id": video_id,
+            "audio_uri": audio_uri,
+            "speaker_count": len(speakers),
+            **({"context_id": context_id} if context_id else {}),
+        },
+    }
+
+
+async def _publish_cgp_async(subject: str, payload: Dict[str, Any]) -> None:
+    """Publish to NATS via persistent client (best-effort, async)."""
+    global _nats_client
+    if _nats_client is None or _nats_client.is_closed:
+        logger.warning("NATS client not connected, skipping publish to %s", subject)
+        return
+    try:
+        await _nats_client.publish(subject, json.dumps(payload).encode("utf-8"))
+        await _nats_client.flush()
+        logger.info("Published CGP to %s", subject)
+    except Exception as exc:
+        logger.warning("NATS publish to %s failed (non-fatal): %s", subject, exc)
+
+
+def _publish_cgp(subject: str, payload: Dict[str, Any]) -> None:
+    """Publish to NATS, works from both sync and async contexts."""
+    import threading
+
+    async def _do():
+        await _publish_cgp_async(subject, payload)
+
+    # If called from a sync FastAPI endpoint (threadpool), schedule on the main loop
+    try:
+        loop = asyncio.get_running_loop()
+        asyncio.run_coroutine_threadsafe(_do(), loop)
+    except RuntimeError:
+        # No running loop — fallback to fire-and-forget thread
+        t = threading.Thread(target=lambda: asyncio.run(_do()), daemon=True)
+        t.start()
+# ── end CHIT ──────────────────────────────────────────────────────────────────
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -80,7 +195,24 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.warning("Failed to publish NATS service announcement: %s", e)
 
+    # Connect persistent NATS client for CGP publishing
+    global _nats_client
+    if NATS_CGP_AVAILABLE and CGP_PUBLISH_ENABLED:
+        try:
+            _nats_client = await nats_pkg.connect(NATS_URL)
+            logger.info("NATS CGP client connected to %s", NATS_URL)
+        except Exception as e:
+            logger.warning("NATS CGP client connection failed (non-fatal): %s", e)
+
     yield
+
+    # Shutdown: close persistent NATS client
+    if _nats_client and not _nats_client.is_closed:
+        try:
+            await _nats_client.close()
+            logger.info("NATS CGP client closed")
+        except Exception:
+            pass
 
 
 app = FastAPI(title="FFmpeg+Whisper", version="4.0.0", lifespan=lifespan)
@@ -427,7 +559,7 @@ def _transcribe_with_provider(
 
 
 @app.post("/transcribe")
-def transcribe(body: Dict[str, Any] = Body(...)):
+def transcribe(request: Request, body: Dict[str, Any] = Body(...)):
     bucket = body.get("bucket")
     key = body.get("key")
     video_id = body.get("video_id")
@@ -444,6 +576,7 @@ def transcribe(body: Dict[str, Any] = Body(...)):
     model_name = body.get("whisper_model") or DEFAULT_WHISPER_MODEL
     diarize = bool(body.get("diarize", True))
     out_audio_key = body.get("out_audio_key")
+    context_id = body.get("context_id") or request.headers.get("x-context-id")
 
     tmpdir = tempfile.mkdtemp(prefix="ffw-")
     client = s3_client()
@@ -495,7 +628,28 @@ def transcribe(body: Dict[str, Any] = Body(...)):
             except Exception as seg_err:
                 logger.warning("Segment storage failed (non-fatal): %s", seg_err)
 
-        return {
+        # Publish CGP to GEOMETRY BUS
+        if CGP_PUBLISH_ENABLED and NATS_CGP_AVAILABLE:
+            try:
+                req_id = str(uuid.uuid4())
+                cgp = _build_transcription_cgp(transcript, video_id, audio_uri, req_id, context_id=context_id)
+                _publish_cgp(CGP_SUBJECT, cgp)
+                hook = {
+                    "service": "ffmpeg-whisper",
+                    "request_id": req_id,
+                    "video_id": video_id,
+                    "audio_uri": audio_uri,
+                    "language": transcript.get("language") or language,
+                    "segment_count": len(transcript.get("segments") or []),
+                    "ts": datetime.now(tz.utc).isoformat(),
+                }
+                if context_id:
+                    hook["context_id"] = context_id
+                _publish_cgp(TRANSCRIPT_READY_SUBJECT, hook)
+            except Exception as cgp_exc:
+                logger.warning("CGP publish failed (non-fatal): %s", cgp_exc)
+
+        result = {
             "ok": True,
             "text": transcript.get("text"),
             "language": transcript.get("language") or language,
@@ -509,6 +663,9 @@ def transcribe(body: Dict[str, Any] = Body(...)):
             "provider": provider,
             "forwarded": forwarded,
         }
+        if context_id:
+            result["context_id"] = context_id
+        return result
     except subprocess.CalledProcessError as exc:
         raise HTTPException(500, f"ffmpeg error: {exc}") from exc
     except HTTPException:
@@ -522,12 +679,14 @@ def transcribe(body: Dict[str, Any] = Body(...)):
 
 @app.post("/transcribe_file")
 async def transcribe_file(
+    request: Request,
     audio: UploadFile = File(...),
     language: Optional[str] = Form(None),
     provider: Optional[str] = Form(None),
     model: Optional[str] = Form(None),
     whisper_model: Optional[str] = Form(None),
     diarize: bool = Form(True),
+    context_id: Optional[str] = Form(None),
 ) -> Dict[str, Any]:
     """
     Transcribe an uploaded audio file directly (multipart/form-data).
@@ -541,6 +700,7 @@ async def transcribe_file(
         raise HTTPException(400, f"provider must be one of {', '.join(SUPPORTED_PROVIDERS)}")
 
     model_name = whisper_model or model or DEFAULT_WHISPER_MODEL
+    resolved_context_id = context_id or request.headers.get("x-context-id")
 
     tmpdir = tempfile.mkdtemp(prefix="ffw-upload-")
     try:
@@ -560,7 +720,16 @@ async def transcribe_file(
             diarize=diarize,
         )
 
-        return {
+        # Publish CGP to GEOMETRY BUS
+        if CGP_PUBLISH_ENABLED and NATS_CGP_AVAILABLE:
+            try:
+                req_id = str(uuid.uuid4())
+                cgp = _build_transcription_cgp(transcript, None, None, req_id, context_id=resolved_context_id)
+                await _publish_cgp_async(CGP_SUBJECT, cgp)
+            except Exception as cgp_exc:
+                logger.warning("CGP publish failed (non-fatal): %s", cgp_exc)
+
+        result = {
             "ok": True,
             "text": transcript.get("text"),
             "language": transcript.get("language") or language,
@@ -571,6 +740,9 @@ async def transcribe_file(
             "device": transcript.get("device"),
             "provider": chosen_provider,
         }
+        if resolved_context_id:
+            result["context_id"] = resolved_context_id
+        return result
     except subprocess.CalledProcessError as exc:
         raise HTTPException(500, f"ffmpeg error: {exc}") from exc
     except HTTPException:

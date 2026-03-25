@@ -22,6 +22,9 @@ external_contributors:
   - z890-claude
   - 5090-claude
   - 4090-claude
+  - botz-architect
+  - botz-builder
+  - botz-auditor
 
 # Resilience attribute definitions
 # See: pmoves/docs/AGENTS/AGENT_RESILIENCE_PATTERNS.md
@@ -186,6 +189,84 @@ agents:
       ci_runner: ai-lab
       compose_profile: agents
     description: "Work item distribution across BoTZ CLI instances"
+
+  botz_architect:
+    name: "BoTZ Architect"
+    class: standard
+    primary_type: agent
+    secondary_type: worker
+    port: null
+    health: null
+    layers: [L0, L2, L4]
+    evolution_stage: stage_1
+    signature: "botz-architect"
+    nats:
+      publishes: ["botz.plan.created.v1"]
+      subscribes: ["botz.workitem.assigned.v1"]
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: false
+      attribution_gated: true
+    topology:
+      node_affinity: [z890, 4090]
+      team: orchestration
+      ci_runner: ai-lab
+      compose_profile: botz
+    description: "BoTZ planning agent — decomposes tasks into skill chains, designs system architecture"
+
+  botz_builder:
+    name: "BoTZ Builder"
+    class: standard
+    primary_type: agent
+    secondary_type: worker
+    port: null
+    health: null
+    layers: [L0, L2, L4]
+    evolution_stage: stage_1
+    signature: "botz-builder"
+    nats:
+      publishes: ["botz.build.completed.v1"]
+      subscribes: ["botz.plan.created.v1"]
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: false
+      attribution_gated: true
+    topology:
+      node_affinity: [5090, z890]
+      team: orchestration
+      ci_runner: ai-lab
+      compose_profile: botz
+    description: "BoTZ execution agent — implements plans from Architect, generates code, runs skill chains"
+
+  botz_auditor:
+    name: "BoTZ Auditor"
+    class: standard
+    primary_type: agent
+    secondary_type: worker
+    port: null
+    health: null
+    layers: [L0, L2, L4]
+    evolution_stage: stage_1
+    signature: "botz-auditor"
+    nats:
+      publishes: ["botz.audit.completed.v1"]
+      subscribes: ["botz.build.completed.v1"]
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: false
+      attribution_gated: true
+    topology:
+      node_affinity: [any]
+      team: orchestration
+      ci_runner: ai-lab
+      compose_profile: botz
+    description: "BoTZ validation agent — reviews plans and output for security, compliance, and quality"
 
   gateway_agent:
     name: "Gateway Agent"
