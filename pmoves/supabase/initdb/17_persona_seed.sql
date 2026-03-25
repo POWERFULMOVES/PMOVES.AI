@@ -32,6 +32,24 @@
 
 DO $$
 BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.tables
+    WHERE table_schema = 'pmoves_core' AND table_name = 'personas'
+  ) OR NOT EXISTS (
+    SELECT 1 FROM information_schema.tables
+    WHERE table_schema = 'pmoves_core' AND table_name = 'model_providers'
+  ) OR NOT EXISTS (
+    SELECT 1 FROM information_schema.tables
+    WHERE table_schema = 'pmoves_core' AND table_name = 'models'
+  ) THEN
+    RAISE EXCEPTION USING
+      MESSAGE = '17_persona_seed.sql requires personas plus model registry tables to exist first.',
+      HINT = 'Run make -C pmoves supabase-bootstrap so migrations land before persona seeds, or apply 20250115_persona_agent_creation.sql and 20260115_model_registry.sql before replaying this file manually.';
+  END IF;
+END $$;
+
+DO $$
+BEGIN
   IF EXISTS (
     SELECT 1 FROM information_schema.tables
     WHERE table_schema = 'pmoves_core' AND table_name = 'personas'

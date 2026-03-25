@@ -33,6 +33,8 @@ def test_slugify_and_output_path(tmp_path):
 def test_build_published_payload_merges_metadata():
     payload = publisher.build_published_payload(
         artifact_uri="s3://bucket/key",
+        studio_board_id=42,
+        publish_request_id="req-42",
         published_path="/library/creative-works/summer-gala-2024.png",
         namespace="Creative Works",
         title="Summer Gala 2024",
@@ -52,6 +54,8 @@ def test_build_published_payload_merges_metadata():
     )
 
     assert payload["artifact_uri"] == "s3://bucket/key"
+    assert payload["studio_board_id"] == 42
+    assert payload["publish_request_id"] == "req-42"
     assert payload["published_path"].endswith("summer-gala-2024.png")
     assert payload["namespace"] == "Creative Works"
     assert payload["public_url"].endswith("summer-gala-2024.png")
@@ -65,6 +69,8 @@ def test_build_published_payload_merges_metadata():
 
     meta = payload["meta"]
     assert meta["title"] == "Custom Title"
+    assert meta["studio_board_id"] == 42
+    assert meta["publish_request_id"] == "req-42"
     assert meta["description"] == "A highlight reel"
     assert meta["tags"] == ["events", "summer"]
     assert meta["camera"] == "FX3"
@@ -104,6 +110,8 @@ def test_build_failure_payload_includes_details():
         retryable=True,
         outcome="fatal",
         artifact_uri="s3://bucket/key",
+        studio_board_id=42,
+        publish_request_id="req-42",
         namespace="demo",
         publish_event_id="evt-1",
         public_url="http://public",
@@ -114,6 +122,8 @@ def test_build_failure_payload_includes_details():
     )
 
     assert payload["stage"] == "download"
+    assert payload["studio_board_id"] == 42
+    assert payload["publish_request_id"] == "req-42"
     assert payload["retryable"] is True
     assert payload["outcome"] == "fatal"
     assert payload["artifact_uri"] == "s3://bucket/key"
@@ -293,6 +303,19 @@ def test_lookup_jellyfin_item_handles_http_error(monkeypatch):
     assert url is None and item_id is None and meta == {}
 
 
+def test_extract_studio_board_id_from_payload_and_meta():
+    assert publisher._extract_studio_board_id({"studio_board_id": "42"}) == 42
+    assert publisher._extract_studio_board_id({"meta": {"studio_board_id": 7}}) == 7
+    assert publisher._extract_studio_board_id({"meta": {"row_id": "11"}}) == 11
+    assert publisher._extract_studio_board_id({"studio_board_id": "bad"}) is None
+
+
+def test_extract_publish_request_id_from_payload_and_meta():
+    assert publisher._extract_publish_request_id({"publish_request_id": "req-42"}, "evt-1") == "req-42"
+    assert publisher._extract_publish_request_id({"meta": {"publish_request_id": "req-7"}}, "evt-1") == "req-7"
+    assert publisher._extract_publish_request_id({}, "evt-1") == "evt-1"
+
+
 def test_compute_publish_telemetry_and_metrics_summary():
     published_at = datetime.datetime(2024, 1, 1, 12, 0, tzinfo=datetime.timezone.utc)
     incoming_meta = {
@@ -398,6 +421,7 @@ def test_handle_download_failed_emits_failure_envelope(monkeypatch, tmp_path):
 
     assert payload["stage"] == "download"
     assert payload["outcome"] == "fatal"
+    assert payload["publish_request_id"] == "evt-123"
     assert payload["namespace"] == "Creative Works"
     assert payload["artifact_uri"] == "s3://assets/demo/video.mp4"
     details = payload.get("details")
@@ -408,7 +432,7 @@ def test_handle_download_failed_emits_failure_envelope(monkeypatch, tmp_path):
     assert meta["stage"] == "download"
     assert meta["bucket"] == "assets"
     assert meta["key"] == "demo/video.mp4"
-    assert meta["output_path"].endswith("creative-works/creative-works--demo-video.mp4")
+    assert Path(meta["output_path"]).as_posix().endswith("creative-works/creative-works--demo-video.mp4")
     assert meta["source_meta"]["camera"] == "FX3"
 
     audit_kwargs = audit_calls["kwargs"]
@@ -416,3 +440,333 @@ def test_handle_download_failed_emits_failure_envelope(monkeypatch, tmp_path):
     assert audit_kwargs["publish_event_id"] == "evt-123"
     assert audit_kwargs["failure_reason"].startswith("Failed to download")
     assert audit_kwargs["meta"] == meta
+
+
+def test_successful_publish_claims_and_completes_studio_board(monkeypatch, tmp_path):
+    published_messages: list[tuple[str, bytes]] = []
+    audit_calls: Dict[str, Any] = {}
+    state_calls: Dict[str, Any] = {}
+
+    async def exercise() -> None:
+        subscription_ready: asyncio.Future = asyncio.get_running_loop().create_future()
+
+        class StubNATS:
+            def __init__(self) -> None:
+                self.published = published_messages
+
+            async def connect(self, servers=None):
+                return None
+
+            async def publish(self, subject, data):
+                self.published.append((subject, data))
+
+            async def subscribe(self, subject, cb):
+                if not subscription_ready.done():
+                    subscription_ready.set_result(cb)
+
+        class StubMinio:
+            def __init__(self, *args, **kwargs) -> None:
+                pass
+
+        async def fake_start_metrics_server():
+            return SimpleNamespace()
+
+        async def fake_download_with_retries(_minio, _bucket, _key, dest):
+            Path(dest).parent.mkdir(parents=True, exist_ok=True)
+            Path(dest).write_bytes(b"demo")
+
+        async def fake_request_jellyfin_refresh(_title, _namespace):
+            return None, None, {}
+
+        async def fake_persist_publish_rollup(_row):
+            return None
+
+        def fake_record_audit(**kwargs):
+            audit_calls["kwargs"] = kwargs
+
+        def fake_claim(row_id, publish_event_id, requested_at=None):
+            state_calls["claim"] = (row_id, publish_event_id, requested_at)
+            return True
+
+        def fake_complete(row_id, publish_event_id, published_event_id, published_at=None, publish_meta=None):
+            state_calls["complete"] = (row_id, publish_event_id, published_event_id, published_at, publish_meta)
+            return True
+
+        def fake_fail(*args, **kwargs):
+            state_calls["fail"] = (args, kwargs)
+            return True
+
+        monkeypatch.setattr(publisher, "MEDIA_LIBRARY_PATH", str(tmp_path))
+        monkeypatch.setattr(publisher, "_NATSClient", lambda: StubNATS())
+        monkeypatch.setattr(publisher, "_MinioClient", lambda *args, **kwargs: StubMinio())
+        monkeypatch.setattr(publisher, "start_metrics_server", fake_start_metrics_server)
+        monkeypatch.setattr(publisher, "download_with_retries", fake_download_with_retries)
+        monkeypatch.setattr(publisher, "request_jellyfin_refresh", fake_request_jellyfin_refresh)
+        monkeypatch.setattr(publisher, "persist_publish_rollup", fake_persist_publish_rollup)
+        monkeypatch.setattr(publisher, "_record_audit", fake_record_audit)
+        monkeypatch.setattr(
+            publisher,
+            "supabase_client",
+            SimpleNamespace(
+                claim_studio_board_publish=fake_claim,
+                complete_studio_board_publish=fake_complete,
+                fail_studio_board_publish=fake_fail,
+                reconcile_studio_board_publish_completion=lambda *args, **kwargs: True,
+                upsert_publisher_audit=lambda row: None,
+            ),
+        )
+
+        main_task = asyncio.create_task(publisher.main())
+        handle = await asyncio.wait_for(subscription_ready, timeout=1)
+        main_task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await main_task
+
+        env = {
+            "id": "evt-200",
+            "ts": "2024-01-01T12:00:00Z",
+            "correlation_id": "corr-200",
+            "payload": {
+                "studio_board_id": 91,
+                "publish_request_id": "req-200",
+                "artifact_uri": "s3://assets/demo/video.mp4",
+                "namespace": "Creative Works",
+                "title": "Demo Video",
+                "meta": {"camera": "FX3", "approved_at": "2024-01-01T11:30:00Z"},
+            },
+        }
+
+        msg = SimpleNamespace(data=json.dumps(env).encode("utf-8"))
+        await handle(msg)
+
+    asyncio.run(exercise())
+
+    assert published_messages, "expected published envelope to be emitted"
+    assert published_messages[0][0] == "content.published.v1"
+    emitted = json.loads(published_messages[0][1].decode("utf-8"))
+    assert emitted["payload"]["studio_board_id"] == 91
+    assert emitted["payload"]["publish_request_id"] == "req-200"
+
+    claim_row_id, claim_event_id, claim_requested_at = state_calls["claim"]
+    assert claim_row_id == 91
+    assert claim_event_id == "req-200"
+    assert claim_requested_at == "2024-01-01T12:00:00Z"
+
+    complete_row_id, complete_event_id, published_event_id, published_at, publish_meta = state_calls["complete"]
+    assert complete_row_id == 91
+    assert complete_event_id == "req-200"
+    assert published_event_id == emitted["id"]
+    assert published_at == emitted["ts"]
+    assert publish_meta["published_path"].endswith("creative-works--demo-video.mp4")
+    assert publish_meta["publish_request_id"] == "req-200"
+
+    assert "fail" not in state_calls
+    audit_kwargs = audit_calls["kwargs"]
+    assert audit_kwargs["status"] == "published"
+    assert audit_kwargs["studio_board_id"] == 91
+    assert audit_kwargs["published_event_id"] == emitted["id"]
+
+
+def test_partial_publish_warning_does_not_fail_studio_board(monkeypatch, tmp_path):
+    published_messages: list[tuple[str, bytes]] = []
+    state_calls: Dict[str, Any] = {}
+
+    async def exercise() -> None:
+        subscription_ready: asyncio.Future = asyncio.get_running_loop().create_future()
+
+        class StubNATS:
+            def __init__(self) -> None:
+                self.published = published_messages
+
+            async def connect(self, servers=None):
+                return None
+
+            async def publish(self, subject, data):
+                self.published.append((subject, data))
+
+            async def subscribe(self, subject, cb):
+                if not subscription_ready.done():
+                    subscription_ready.set_result(cb)
+
+        class StubMinio:
+            def __init__(self, *args, **kwargs) -> None:
+                pass
+
+        async def fake_start_metrics_server():
+            return SimpleNamespace()
+
+        async def fake_download_with_retries(_minio, _bucket, _key, dest):
+            Path(dest).parent.mkdir(parents=True, exist_ok=True)
+            Path(dest).write_bytes(b"demo")
+
+        async def fake_request_jellyfin_refresh(_title, _namespace):
+            raise publisher.JellyfinRefreshError("refresh timeout", details={"status_code": 504})
+
+        async def fake_persist_publish_rollup(_row):
+            return None
+
+        def fake_claim(row_id, publish_event_id, requested_at=None):
+            state_calls["claim"] = (row_id, publish_event_id, requested_at)
+            return True
+
+        def fake_complete(row_id, publish_event_id, published_event_id, published_at=None, publish_meta=None):
+            state_calls["complete"] = (row_id, publish_event_id, published_event_id, published_at, publish_meta)
+            return True
+
+        def fake_fail(*args, **kwargs):
+            state_calls["fail"] = (args, kwargs)
+            return True
+
+        monkeypatch.setattr(publisher, "MEDIA_LIBRARY_PATH", str(tmp_path))
+        monkeypatch.setattr(publisher, "_NATSClient", lambda: StubNATS())
+        monkeypatch.setattr(publisher, "_MinioClient", lambda *args, **kwargs: StubMinio())
+        monkeypatch.setattr(publisher, "start_metrics_server", fake_start_metrics_server)
+        monkeypatch.setattr(publisher, "download_with_retries", fake_download_with_retries)
+        monkeypatch.setattr(publisher, "request_jellyfin_refresh", fake_request_jellyfin_refresh)
+        monkeypatch.setattr(publisher, "persist_publish_rollup", fake_persist_publish_rollup)
+        monkeypatch.setattr(publisher, "_record_audit", lambda **kwargs: None)
+        monkeypatch.setattr(
+            publisher,
+            "supabase_client",
+            SimpleNamespace(
+                claim_studio_board_publish=fake_claim,
+                complete_studio_board_publish=fake_complete,
+                fail_studio_board_publish=fake_fail,
+                reconcile_studio_board_publish_completion=lambda *args, **kwargs: True,
+                upsert_publisher_audit=lambda row: None,
+            ),
+        )
+
+        main_task = asyncio.create_task(publisher.main())
+        handle = await asyncio.wait_for(subscription_ready, timeout=1)
+        main_task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await main_task
+
+        env = {
+            "id": "evt-300",
+            "ts": "2024-01-01T12:00:00Z",
+            "correlation_id": "corr-300",
+            "payload": {
+                "studio_board_id": 93,
+                "publish_request_id": "req-300",
+                "artifact_uri": "s3://assets/demo/video.mp4",
+                "namespace": "Creative Works",
+                "title": "Demo Video",
+                "meta": {"camera": "FX3", "approved_at": "2024-01-01T11:30:00Z"},
+            },
+        }
+
+        msg = SimpleNamespace(data=json.dumps(env).encode("utf-8"))
+        await handle(msg)
+
+    asyncio.run(exercise())
+
+    subjects = [subject for subject, _ in published_messages]
+    assert subjects == ["content.publish.failed.v1", "content.published.v1"]
+    partial_evt = json.loads(published_messages[0][1].decode("utf-8"))
+    success_evt = json.loads(published_messages[1][1].decode("utf-8"))
+    assert partial_evt["payload"]["outcome"] == "partial"
+    assert partial_evt["payload"]["publish_request_id"] == "req-300"
+    assert success_evt["payload"]["publish_request_id"] == "req-300"
+    assert "fail" not in state_calls
+    assert state_calls["complete"][1] == "req-300"
+
+
+def test_completion_sync_falls_back_to_direct_reconcile(monkeypatch, tmp_path):
+    published_messages: list[tuple[str, bytes]] = []
+    state_calls: Dict[str, Any] = {"complete": [], "reconcile": []}
+
+    async def exercise() -> None:
+        subscription_ready: asyncio.Future = asyncio.get_running_loop().create_future()
+
+        class StubNATS:
+            def __init__(self) -> None:
+                self.published = published_messages
+
+            async def connect(self, servers=None):
+                return None
+
+            async def publish(self, subject, data):
+                self.published.append((subject, data))
+
+            async def subscribe(self, subject, cb):
+                if not subscription_ready.done():
+                    subscription_ready.set_result(cb)
+
+        class StubMinio:
+            def __init__(self, *args, **kwargs) -> None:
+                pass
+
+        async def fake_start_metrics_server():
+            return SimpleNamespace()
+
+        async def fake_download_with_retries(_minio, _bucket, _key, dest):
+            Path(dest).parent.mkdir(parents=True, exist_ok=True)
+            Path(dest).write_bytes(b"demo")
+
+        async def fake_request_jellyfin_refresh(_title, _namespace):
+            return None, None, {}
+
+        async def fake_persist_publish_rollup(_row):
+            return None
+
+        def fake_complete(*args, **kwargs):
+            state_calls["complete"].append((args, kwargs))
+            raise RuntimeError("rpc unavailable")
+
+        def fake_reconcile(*args, **kwargs):
+            state_calls["reconcile"].append((args, kwargs))
+            return True
+
+        monkeypatch.setattr(publisher, "MEDIA_LIBRARY_PATH", str(tmp_path))
+        monkeypatch.setattr(publisher, "STUDIO_BOARD_SYNC_RETRIES", 1)
+        monkeypatch.setattr(publisher, "STUDIO_BOARD_SYNC_BACKOFF_SEC", 0)
+        monkeypatch.setattr(publisher, "_NATSClient", lambda: StubNATS())
+        monkeypatch.setattr(publisher, "_MinioClient", lambda *args, **kwargs: StubMinio())
+        monkeypatch.setattr(publisher, "start_metrics_server", fake_start_metrics_server)
+        monkeypatch.setattr(publisher, "download_with_retries", fake_download_with_retries)
+        monkeypatch.setattr(publisher, "request_jellyfin_refresh", fake_request_jellyfin_refresh)
+        monkeypatch.setattr(publisher, "persist_publish_rollup", fake_persist_publish_rollup)
+        monkeypatch.setattr(publisher, "_record_audit", lambda **kwargs: None)
+        monkeypatch.setattr(
+            publisher,
+            "supabase_client",
+            SimpleNamespace(
+                claim_studio_board_publish=lambda *args, **kwargs: True,
+                complete_studio_board_publish=fake_complete,
+                reconcile_studio_board_publish_completion=fake_reconcile,
+                fail_studio_board_publish=lambda *args, **kwargs: True,
+                upsert_publisher_audit=lambda row: None,
+            ),
+        )
+
+        main_task = asyncio.create_task(publisher.main())
+        handle = await asyncio.wait_for(subscription_ready, timeout=1)
+        main_task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await main_task
+
+        env = {
+            "id": "evt-400",
+            "ts": "2024-01-01T12:00:00Z",
+            "correlation_id": "corr-400",
+            "payload": {
+                "studio_board_id": 94,
+                "publish_request_id": "req-400",
+                "artifact_uri": "s3://assets/demo/video.mp4",
+                "namespace": "Creative Works",
+                "title": "Demo Video",
+                "meta": {"camera": "FX3", "approved_at": "2024-01-01T11:30:00Z"},
+            },
+        }
+
+        msg = SimpleNamespace(data=json.dumps(env).encode("utf-8"))
+        await handle(msg)
+
+    asyncio.run(exercise())
+
+    assert published_messages
+    assert published_messages[0][0] == "content.published.v1"
+    assert len(state_calls["complete"]) == 1
+    assert len(state_calls["reconcile"]) == 1

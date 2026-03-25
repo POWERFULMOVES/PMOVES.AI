@@ -19,6 +19,9 @@ interface StudioBoardRowMeta {
   reviewed_at?: string | null;
   reviewed_by?: string | null;
   publish_event_sent_at?: string | null;
+  publish_requested_at?: string | null;
+  publish_failed_at?: string | null;
+  publish_failure_reason?: string | null;
   tags?: string[];
   persona?: string;
   workflow?: string;
@@ -36,7 +39,7 @@ interface StudioBoardRow {
 
 type ReviewAction = "approve" | "reject";
 
-const STATUS_OPTIONS = ["all", "submitted", "approved", "rejected", "published"];
+const STATUS_OPTIONS = ["all", "submitted", "approved", "publishing", "publish_failed", "rejected", "published"];
 
 const formatDate = (value?: string | null) => {
   if (!value) return "—";
@@ -168,6 +171,11 @@ export default function StudioBoardDashboardPage() {
           reviewed_at: now,
           reviewed_by: reviewer || null,
           rejection_reason: rejectionReason,
+          publish_state: action === "approve" ? null : meta.publish_state,
+          publish_failed_at: action === "approve" ? null : meta.publish_failed_at,
+          publish_failure_reason: action === "approve" ? null : meta.publish_failure_reason,
+          publish_failure_stage: action === "approve" ? null : meta.publish_failure_stage,
+          publish_failure_meta: action === "approve" ? null : meta.publish_failure_meta,
         });
 
         const payload: Partial<StudioBoardRow> = {
@@ -385,6 +393,16 @@ export default function StudioBoardDashboardPage() {
                     {meta.publish_event_sent_at ? (
                       <div className="text-xs text-brand-subtle">
                         published @ {formatDate(meta.publish_event_sent_at)}
+                      </div>
+                    ) : null}
+                    {meta.publish_requested_at && !meta.publish_event_sent_at ? (
+                      <div className="text-xs text-brand-subtle">
+                        publish requested @ {formatDate(meta.publish_requested_at)}
+                      </div>
+                    ) : null}
+                    {meta.publish_failure_reason ? (
+                      <div className="text-xs text-brand-crimson">
+                        publish failed: {meta.publish_failure_reason}
                       </div>
                     ) : null}
                     {meta.rejection_reason ? (
