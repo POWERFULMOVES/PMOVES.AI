@@ -1,5 +1,5 @@
 # Multi-stage build for GitHub Issue Triage Service
-FROM python:3.11-slim AS builder
+FROM dhi.io/python:3.11 AS builder
 
 # Set working directory
 WORKDIR /app
@@ -17,7 +17,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir --user -r requirements.txt
 
 # Final stage - minimal runtime image
-FROM python:3.11-slim
+FROM dhi.io/python:3.11
 
 # Create non-root user
 RUN groupadd -r appuser && useradd -r -g appuser appuser

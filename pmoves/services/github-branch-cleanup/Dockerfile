@@ -1,7 +1,7 @@
 # GitHub Branch Cleanup Service Dockerfile
 # Python 3.11-slim base with non-root user for security
 
-FROM python:3.11-slim AS builder
+FROM dhi.io/python:3.11 AS builder
 
 # Set working directory
 WORKDIR /app
@@ -18,7 +18,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir --user -r requirements.txt
 
 # Final stage
-FROM python:3.11-slim
+FROM dhi.io/python:3.11
 
 # Create non-root user
 RUN groupadd -r pmoves && useradd -r -g pmoves pmoves

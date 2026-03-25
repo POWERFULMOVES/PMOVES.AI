@@ -1,4 +1,4 @@
-FROM python:3.11-slim
+FROM dhi.io/python:3.11
 WORKDIR /app
 COPY requirements.txt requirements.lock ./
 RUN pip install --no-cache-dir --constraint requirements.lock -r requirements.txt
