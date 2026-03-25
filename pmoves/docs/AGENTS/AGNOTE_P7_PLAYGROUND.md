@@ -138,8 +138,8 @@ The audience says "that's my car." Because it moved like something POWERFUL.
 | # | Task | Status |
 |---|------|--------|
 | 1 | ~~Upgrade Pinokio 7 on laptop~~ | DONE |
-| 2 | Test P7 Agent Interpreter → 5090 TTS via Tailscale | Pending |
-| 3 | Test mobile agent (Discord/Openclaw) → TTS flow | Pending |
+| 2 | Test 4090 → 5090 P7/TTS network path via Tailscale | DONE (Gate 3 verified 2026-03-22 via Pinokio HTTPS proxy) |
+| 3 | Test mobile agent (Discord/Openclaw) → TTS flow | NEXT |
 | 4 | **Claim W1: Agent Theming + Terminal** (foundation lane) | **Recommended** |
 
 ---
@@ -159,21 +159,27 @@ ls pmoves/configs/tac_trees/ | wc -l       # expect: 20 files (including pinokio
 
 ---
 
-## Step 5: P7 Strategy Pivot — Pinokio as Mesh Transport Layer (2026-03-18)
+## Step 5: P7 Strategy Pivot — Pinokio as Agent Runtime Layer (2026-03-18, docs sync 2026-03-25)
 
 ### The Discovery
 
-Security hardening (PR #1014) revealed the real architecture: **P7's Caddy proxy (pmoves-net) is the mesh transport layer**, not raw Tailscale IPs. P7 at `100.73.74.3:42000` serves the full Pinokio UI across the Tailscale mesh, with each app getting a proxied `42XXX` port.
+Official Pinokio docs describe P7 as a **Localhost Cloud** with a CLI server, Agent Interpreter, Agent Launcher, LWW discovery, instant HTTPS domains, and remote control from other devices.
 
-Instead of fighting raw port access, P7 becomes the **agent orchestration layer**.
+For PMOVES, that means Pinokio is the **agent/runtime surface** and remote operator entry point, while **Tailscale remains the WAN overlay** and **NATS + Supabase + Agent Zero** remain the actual mesh control plane.
+
+Instead of treating P7's Caddy proxy as the mesh itself, we should treat Pinokio as the edge/runtime layer that:
+
+1. Exposes stable HTTPS entrypoints for local apps
+2. Lets agents discover, start, and wait on installed apps through the built-in `pinokio` skill
+3. Persists workspaces, sessions, and selected skills through Agent Launcher sandboxes
 
 ### Why P7 > Raw IDE
 
-1. **Isolation:** Each agent instance has its own P7 session — no git contamination (Gemini committed chrome-ext + security changes in one commit — never again)
-2. **Discovery:** P7 VPN scan finds apps across mesh automatically
-3. **Customization:** SKILL.md composition lets each instance specialize
-4. **Resumption:** Agent Launcher tracks sessions — pick up where you left off
-5. **Mobile:** Pixel 10 Pro XL (100.103.111.121) can access any P7 instance via Tailscale
+1. **Isolation:** Agent Launcher sandboxes let each workspace carry its own provider-native instructions and selected skills.
+2. **Discovery:** The built-in `pinokio` skill can search installed apps, rank them, auto-launch them, and wait for readiness.
+3. **Customization:** Pinokio launchers (`pinokio.js`, `pinokio.json`, `ENVIRONMENT`, scripts) give us a standard packaging surface for PMOVES tools.
+4. **Resumption:** Agent Launcher tracks workspaces and sessions so agents can reopen the same lane later.
+5. **Remote control:** Pinokio provides HTTPS surfaces for localhost apps, and we extend that across machines with Tailscale.
 
 ### Per-Instance Architecture
 
@@ -202,7 +208,11 @@ The `_BIND` variables are in the working tree but the damage-control hook blocks
 
 Restructured z890-claude and 5090-claude dual entries as `alters` array (schema 1.1.0). Both glyphs preserved as intentional persona variants — ▣/⚙ for z890, ◈/♫ for 5090. Primary identity unchanged; alters available for future persona-switching.
 
-### SKILL.md Files Created
+### PMOVES App Hints (Additive, Not Required)
+
+Official Pinokio docs say baseline Agent Interpreter support does **not** require per-app `SKILL.md`; Pinokio ships the built-in `pinokio` and `gepeto` skills under `~/.agents/skills`.
+
+Our app-local `SKILL.md` files are still useful as PMOVES-specific hints and docs, but they are **additive**, not the primary mechanism that makes Pinokio apps discoverable.
 
 | File | Discovery Target |
 |------|-----------------|
@@ -213,8 +223,8 @@ Restructured z890-claude and 5090-claude dual entries as `alters` array (schema 
 
 - P7 installed on 4090 laptop — Agents tab visible, pmoves-net named
 - Tailscale mesh: all 3 machines connected
-- TTS on 5090: binds `localhost:7861` — needs `--server-name 0.0.0.0` or Caddy proxy route for mesh access
-- Flute-Gateway reports `ultimate_tts: false` — TTS service not yet reachable from Flute
+- 5090 TTS reachable from 4090 through Pinokio HTTPS/Caddy surface (`/gradio_api/info` → 200 OK, 173ms)
+- Remaining gap is full Agent Interpreter UX validation plus mobile-triggered end-to-end flow
 
 ---
 

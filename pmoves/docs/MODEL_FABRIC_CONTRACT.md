@@ -28,14 +28,16 @@ This is the execution policy for:
 - All service routing decisions resolve through this plane.
 
 ### 2) Routing Plane (execution)
-- TensorZero is the default routing gateway for OpenAI-compatible execution.
-- Runtime model calls from agents/workers route through TensorZero unless a lane has explicit exemption.
-- TensorZero runs must be visible in observability (ClickHouse + Prometheus/Grafana + model-readiness evidence).
+- Nexus is the provider abstraction boundary; TensorZero remains the default execution gateway.
+- Runtime model calls from agents/workers route through TensorZero unless a lane has an explicit Nexus exemption.
+- Native provider SDKs are allowed only through additive Nexus adapters that preserve PMOVES request/response parity.
+- TensorZero runs remain the authoritative observability path (ClickHouse + Prometheus/Grafana + model-readiness evidence); native SDK lanes must mirror equivalent telemetry.
 - Open Notebook in PMOVES uses provider mode overlay (`tensorzero`, `hybrid`, `native`).
 - Agent Zero and Archon consume aliases and endpoint contracts, not provider-specific schemas.
+- Canonical adapter policy lives in `pmoves/config/model_nexus.yaml`.
 
 ### 3) Runtime Plane (inference providers)
-- Local providers (default): Ollama local, vLLM, LM Studio/OpenAI-compatible, HuggingFace local endpoints, TTS engines.
+- Local providers (default): Ollama local, vLLM, NVIDIA NIM, LM Studio/OpenAI-compatible, HuggingFace local endpoints, TTS engines.
 - Cloud fallback order (explicit):
   1. Ollama Cloud
   2. Cloudflare Workers AI free-tier lanes (through TensorZero/OpenAI-compatible bridge)
@@ -55,6 +57,7 @@ This is the execution policy for:
 - `mapping`: service/function -> alias/model selection policy.
 - `deployment`: where a model is currently loaded and usable.
 - `persona binding`: persona/model preference + fallback chain.
+- `nexus adapter`: additive wrapper that maps provider-native SDK calls onto PMOVES request/response parity.
 
 ## Integration Contract (all repos/submodules)
 1. Must resolve models via alias/registry mapping.
@@ -64,6 +67,8 @@ This is the execution policy for:
 5. Must implement fallback priority: local -> Ollama Cloud -> Cloudflare free tier -> coding-plan lanes.
 6. Must keep secrets in approved channels (`*_FILE`, GH secrets, vault), never static defaults.
 7. Must preserve Graphiti + CHIT rail compliance for agent/worker PRs (`chit-flow-pr-monitor-strict` in merge lane).
+8. Provider-native SDK usage must flow through a Nexus adapter or be explicitly exempted with parity evidence.
+9. Native SDK lanes must preserve tool, streaming, structured-output, trace, and usage parity with TensorZero-backed lanes.
 
 ## Open Notebook Overlay Policy
 - Keep upstream credential system and provider UX intact.
@@ -103,10 +108,11 @@ This is the execution policy for:
 ## PR Review Lens (Topology + Agents)
 Every PR touching networking, agents, or model routing should be reviewed for:
 1. Local-first fallback ordering is preserved.
-2. TensorZero remains primary route and call telemetry is observable.
-3. Graphiti/CHIT rails remain intact for worker handoffs.
-4. Compose/network namespace/port changes do not break deterministic topology.
-5. Evidence includes model-readiness + relevant smokes.
+2. TensorZero remains primary route unless a Nexus exemption is explicitly documented.
+3. Native SDK adapters preserve request/response parity and mirrored telemetry.
+4. Graphiti/CHIT rails remain intact for worker handoffs.
+5. Compose/network namespace/port changes do not break deterministic topology.
+6. Evidence includes model-readiness + relevant smokes.
 
 ## Operator and Coding-Agent Roles
 - Agent Zero / Archon: runtime orchestration + policy execution.
@@ -118,3 +124,6 @@ Every PR touching networking, agents, or model routing should be reviewed for:
 2. Normalize model type taxonomy across registry, GPU orchestrator, and creator services.
 3. Add one compatibility matrix doc per integration lane (agents, creator, voice, notebook, RL).
 4. Gate PRs that alter model routing with mandatory readiness + observability evidence attachments.
+5. Add Nexus adapter shims for OpenAI, Anthropic, and Gemini native SDK lanes.
+6. Add NVIDIA NIM-backed Nemotron routing for beefy GPU claw lanes.
+7. Add parity tests that compare TensorZero-backed responses against native SDK adapter envelopes.

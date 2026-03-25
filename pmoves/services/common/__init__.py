@@ -13,10 +13,29 @@ CHIT/Geometry modules:
 """
 
 from .telemetry import *  # noqa: F401,F403
+from .model_nexus import (  # noqa: F401
+    NexusConfigError,
+    get_nexus_lane,
+    get_nexus_provider,
+    load_model_nexus,
+    model_nexus_path,
+    provider_allowed_for_lane,
+    provider_requires_nexus_adapter,
+)
 
 # Ensure __all__ exists before extending (telemetry may not define it)
 if '__all__' not in globals():
     __all__ = []
+
+__all__ += [
+    "NexusConfigError",
+    "get_nexus_lane",
+    "get_nexus_provider",
+    "load_model_nexus",
+    "model_nexus_path",
+    "provider_allowed_for_lane",
+    "provider_requires_nexus_adapter",
+]
 
 # CHIT Geometry exports (optional - graceful import)
 try:

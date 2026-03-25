@@ -1,0 +1,218 @@
+# =============================================================================
+# PMOVES.AI Model Nexus Provider Parity Registry
+# =============================================================================
+# Additive contract layer over the existing TensorZero-first model fabric.
+# TensorZero remains the default execution gateway; Nexus defines how provider-
+# native SDKs, OpenAI-compatible adapters, and local runtimes line up so each
+# provider can bring native strengths without fragmenting runtime parity.
+# =============================================================================
+
+contract_version: 1
+last_updated: 2026-03-25
+
+nexus:
+  canonical_request_shape: nexus.chat.v1
+  canonical_embedding_shape: nexus.embed.v1
+  default_execution_lane: tensorzero
+  observability_owner: tensorzero
+  registry_owner: supabase_model_registry
+  goals:
+    - provider parity before provider sprawl
+    - native strengths stay available behind one PMOVES contract
+    - TensorZero remains the default route unless a lane is explicitly exempted
+    - every exemption keeps CHIT, Graphiti, and observability parity
+  execution_order:
+    - tensorzero
+    - native_sdk
+    - openai_compatible
+  exemption_rules:
+    - Native SDK lanes require an explicit owner and validation evidence.
+    - Native SDK lanes must emit the same logical event and metrics fields as TensorZero-backed lanes.
+    - If a native SDK lane cannot preserve parity, it must route back through TensorZero.
+
+adapter_contract:
+  required_fields:
+    - provider
+    - sdk_family
+    - request_shape
+    - response_shape
+    - auth_source
+    - observability_mode
+    - fallback_lane
+  parity_requirements:
+    - tool_call_shape
+    - structured_output_shape
+    - streaming_events
+    - retry_policy
+    - trace_context
+    - cost_usage_capture
+    - health_readiness
+
+providers:
+  tensorzero:
+    role: default_gateway
+    sdk_family: openai_compatible
+    transport: http
+    request_shape: openai_compatible
+    response_shape: openai_compatible
+    observability_mode: authoritative
+    strengths:
+      - centralized routing
+      - unified telemetry
+      - experiment and evaluation hooks
+      - shared secrets fence
+    use_when:
+      - default for agent and worker traffic
+      - shared routing for local and cloud providers
+      - parity fallback for native SDK adapters
+
+  openai:
+    role: native_provider
+    sdk_family: openai
+    transport: responses_api
+    request_shape: nexus.chat.v1
+    response_shape: nexus.chat.v1
+    auth_source: OPENAI_API_KEY
+    observability_mode: mirrored_to_tensorzero
+    native_strengths:
+      - reasoning-native APIs
+      - structured outputs
+      - tools and multimodal primitives
+    adapter_strategy: native_sdk_first
+    fallback_lane: tensorzero
+
+  anthropic:
+    role: native_provider
+    sdk_family: anthropic
+    transport: messages_api
+    request_shape: nexus.chat.v1
+    response_shape: nexus.chat.v1
+    auth_source: ANTHROPIC_API_KEY
+    observability_mode: mirrored_to_tensorzero
+    native_strengths:
+      - long-context reasoning
+      - tool use
+      - prompt cache and contextual workflows
+    adapter_strategy: native_sdk_first
+    fallback_lane: tensorzero
+
+  gemini:
+    role: native_provider
+    sdk_family: google_genai
+    transport: native_generate_content
+    request_shape: nexus.chat.v1
+    response_shape: nexus.chat.v1
+    auth_source: GEMINI_API_KEY
+    observability_mode: mirrored_to_tensorzero
+    native_strengths:
+      - multimodal inputs
+      - long-context and retrieval workflows
+      - provider-native media flows
+    adapter_strategy: native_sdk_first
+    fallback_lane: tensorzero
+
+  nvidia_nim:
+    role: local_provider
+    sdk_family: openai_compatible
+    transport: local_http
+    request_shape: nexus.chat.v1
+    response_shape: nexus.chat.v1
+    auth_source: NGC_API_KEY_or_local_assets
+    observability_mode: mirrored_to_tensorzero
+    native_strengths:
+      - nemotron on beefy nvidia gpus
+      - optimized local throughput and tensor cores
+      - model-specific or multi-llm nim containers
+    adapter_strategy: tensorzero_or_direct
+    fallback_lane: tensorzero
+    served_models:
+      - nvidia/llama-3_1-nemotron-nano-8b-v1
+      - nvidia/nemotron-3-nano-30b-a3b
+      - nvidia/llama-3_3-nemotron-super-49b-v1
+
+  ollama:
+    role: local_provider
+    sdk_family: openai_compatible_or_native
+    transport: local_http
+    request_shape: nexus.chat.v1
+    response_shape: nexus.chat.v1
+    auth_source: none
+    observability_mode: via_tensorzero_preferred
+    native_strengths:
+      - local-first inference
+      - offline development lanes
+      - low-cost iteration
+    adapter_strategy: tensorzero_first
+    fallback_lane: vllm
+
+  vllm:
+    role: local_provider
+    sdk_family: openai_compatible
+    transport: local_http
+    request_shape: nexus.chat.v1
+    response_shape: nexus.chat.v1
+    auth_source: none
+    observability_mode: via_tensorzero_preferred
+    native_strengths:
+      - high-throughput serving
+      - larger local checkpoints
+      - OpenAI-compatible bridge
+    adapter_strategy: tensorzero_first
+    fallback_lane: ollama
+
+lanes:
+  agent_mesh:
+    default_provider: tensorzero
+    allowed_native_overrides:
+      - openai
+      - anthropic
+      - gemini
+      - nvidia_nim
+    requirements:
+      - deterministic fallback
+      - NATS-visible traces
+      - CHIT-safe metadata
+
+  p7_and_skills:
+    default_provider: tensorzero
+    allowed_native_overrides:
+      - openai
+      - gemini
+      - nvidia_nim
+    requirements:
+      - skill-level capability declaration
+      - portable request envelope
+      - mobile-safe timeout policy
+
+  coding_agents:
+    default_provider: tensorzero
+    allowed_native_overrides:
+      - openai
+      - anthropic
+      - nvidia_nim
+    requirements:
+      - tool parity
+      - reasoning trace capture
+      - provider-specific client wrappers stay additive
+
+  nemotron_claw:
+    default_provider: nvidia_nim
+    allowed_native_overrides:
+      - tensorzero
+      - ollama
+    requirements:
+      - nemotron-backed coding and agentic reasoning
+      - gpu health and nim readiness checks
+      - nats-visible trace metadata
+
+review_split:
+  codex:
+    owns:
+      - nexus contract docs and config
+      - provider adapter scaffolding
+      - parity tests for request and response envelopes
+  claude_4090:
+    owns:
+      - P7 and remote skill validation
+      - local model parity on mesh nodes
+      - multimodal and voice lane validation
