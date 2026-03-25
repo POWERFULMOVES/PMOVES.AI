@@ -1,0 +1,280 @@
+# TAC Tree: P7 Agent-Skills Lifecycle
+# Full lifecycle: agent registration, SKILL.md discovery, model assignment,
+# VRAM budgeting, node placement, and skill pairing validation.
+#
+# Cross-refs:
+#   - agent-teams-taxonomy.tac.yaml (62 agents across 11 teams)
+#   - skills-taxonomy.tac.yaml (119 skills across 36 domains)
+#   - pinokio-p7.tac.yaml (P7 platform phases)
+#   - pmoves/config/agent_signatures.yaml (11 CLI agent personas)
+#   - POWERFULMOVES/PMOVES-agents.md (AGENTS.md format spec)
+
+name: TAC_P7_AGENTS_SKILLS_LIFECYCLE
+version: "1.0.0"
+description: >
+  P7 agent-skills lifecycle: how agents discover skills via SKILL.md,
+  get assigned models, manage VRAM budgets per node, and validate
+  skill pairings. Covers onboarding → discovery → assignment → execution.
+
+metadata:
+  total_agents: 62
+  total_skills: 119
+  total_skill_md_files: 6
+  p7_apps_with_skill_md:
+    - pmoves-services (infrastructure)
+    - pmoves-remote (mesh access)
+    - pmoves-cipher-beats (audio)
+    - pmoves-holographic-blocks (3D viz)
+    - pmoves-discord-bot (community)
+    - ultimate-tts-studio (voice)
+  nodes:
+    - id: powerfulmoves-5090
+      gpu: "RTX 5090 32GB"
+      role: "GPU primary — TTS, inference, training"
+    - id: z890
+      gpu: "RTX 3090 Ti 24GB"
+      role: "Data services, ComfyUI render, CI runner"
+    - id: laptop-4090
+      gpu: "RTX 4090 Mobile 16GB"
+      role: "Mobile agent, cast, UI prototyping"
+    - id: kvm4-1
+      gpu: none
+      role: "API gateway, reverse proxy"
+    - id: kvm4-2
+      gpu: none
+      role: "Data storage, Supabase, Qdrant"
+
+root:
+  id: p7.lifecycle
+  task: "P7 Agent-Skills Lifecycle management"
+  context: "Full lifecycle from agent registration to skill execution"
+  agent_hint: codex
+  children:
+
+    # =========================================================================
+    # Phase 1: Agent Registration
+    # =========================================================================
+    - id: p7.lifecycle.registration
+      task: "Agent registration and identity"
+      context: "Agent signatures, personas, AGENTS.md format"
+      agent_hint: codex
+      children:
+
+        - id: p7.lifecycle.registration.signatures
+          task: "Agent signature registry"
+          context: |
+            11 CLI agents in pmoves/config/agent_signatures.yaml:
+            claude-opus (◆), kilocode (▲), codex (■), gemini (★),
+            cline (●), powerfulmoves (⚡), crush (◇), z890-claude (⚙),
+            5090-claude (♫), 4090-claude (◉), darkxside (✦)
+            Each has: glyph, color, voice descriptor, resonance domains
+          status: done
+
+        - id: p7.lifecycle.registration.agents_md
+          task: "AGENTS.md format standardization"
+          context: |
+            POWERFULMOVES/PMOVES-agents.md — open format for coding agents.
+            Each Pinokio app can include AGENTS.md with agent-specific
+            instructions, capabilities, and tool access definitions.
+          status: done
+          owner: darkxside
+
+        - id: p7.lifecycle.registration.personas
+          task: "Voice persona binding"
+          context: |
+            15 voice personas in Supabase voice_persona table.
+            persona_selector.py resolves persona_id → engine + kwargs.
+            Agent signatures map to default personas via tts-engine-capabilities.yaml.
+          status: done
+          owner: 5090-claude
+
+    # =========================================================================
+    # Phase 2: SKILL.md Discovery
+    # =========================================================================
+    - id: p7.lifecycle.discovery
+      task: "P7 SKILL.md discovery and indexing"
+      context: "How P7 Agent Interpreter finds and catalogs available skills"
+      agent_hint: codex
+      children:
+
+        - id: p7.lifecycle.discovery.format
+          task: "SKILL.md format spec"
+          context: |
+            YAML frontmatter: name, description, keywords, version,
+            category, tier, agent_class, agent_id.
+            Body: capabilities table, trigger phrases, integration endpoints.
+            Self-evident from existing examples (cipher-beats, services, tts).
+          status: done
+
+        - id: p7.lifecycle.discovery.catalog
+          task: "Current SKILL.md catalog"
+          context: |
+            6 SKILL.md files deployed:
+            - pmoves-services: Docker Compose orchestrator (40+ services)
+            - pmoves-remote: Headscale VPN + RustDesk fleet
+            - pmoves-cipher-beats: Audio CHIT analysis
+            - pmoves-holographic-blocks: 3D visualization
+            - pmoves-discord-bot: Community playground bot
+            - ultimate-tts-studio: 14-engine TTS synthesis
+          status: done
+
+        - id: p7.lifecycle.discovery.pterm_search
+          task: "pterm search integration"
+          context: |
+            pterm search indexes SKILL.md keywords for natural language discovery.
+            P7 Agent Interpreter uses pterm search to find relevant apps.
+            Trigger phrases in SKILL.md improve search relevance.
+          status: done
+
+    # =========================================================================
+    # Phase 3: Model Assignment
+    # =========================================================================
+    - id: p7.lifecycle.models
+      task: "Model assignment per agent and skill"
+      context: "Which models each agent uses, routing via TensorZero"
+      agent_hint: codex
+      children:
+
+        - id: p7.lifecycle.models.tensorzero
+          task: "TensorZero model routing"
+          context: |
+            TensorZero Gateway (port 3030) routes LLM/embedding requests.
+            Models: claude-sonnet-4-5, claude-opus-4, glm-4.7, qwen3,
+            ollama local models, venice private models.
+            Embeddings: qwen3-embedding:4b (3072d) via Ollama.
+          status: active
+          owner: 4090-claude
+
+        - id: p7.lifecycle.models.assignment
+          task: "Agent → model preference mapping"
+          context: |
+            Each agent signature can specify preferred models.
+            Default: route through TensorZero, which selects based on
+            function/capability. Override: agent_signatures.yaml can
+            include model_preference field.
+          status: planned
+          owner: 4090-claude
+
+        - id: p7.lifecycle.models.local_mesh
+          task: "Local model mesh via Ollama + Tailscale"
+          context: |
+            Ollama on 5090 (32GB VRAM) serves local models.
+            TensorZero routes to Ollama when local is preferred.
+            Tailscale mesh makes models available across nodes.
+            Eagle3 speculator + prover pattern for fast inference.
+            Unsloth for fine-tuning on 5090.
+          status: planned
+          owner: 5090-claude
+
+    # =========================================================================
+    # Phase 4: VRAM Budget
+    # =========================================================================
+    - id: p7.lifecycle.vram
+      task: "VRAM budget management per node"
+      context: "Track and enforce GPU memory allocation across engines/models"
+      agent_hint: 5090-claude
+      children:
+
+        - id: p7.lifecycle.vram.5090
+          task: "5090 VRAM budget (32GB)"
+          context: |
+            Primary: TTS engines (2-3 concurrent, ~6-8GB each)
+            Secondary: Ollama local models (7B = ~5GB, 13B = ~10GB)
+            Training: Unsloth LoRA fine-tuning (~16-24GB)
+            Rule: load/unload on demand, never all engines at once.
+            GPU Orchestrator (port 8200) tracks allocations.
+          status: active
+          owner: 5090-claude
+
+        - id: p7.lifecycle.vram.z890
+          task: "z890 VRAM budget (24GB)"
+          context: |
+            Primary: ComfyUI renders (~8-12GB)
+            Secondary: Whisper transcription (~2GB)
+            Tertiary: Media analysis (YOLO, HuBERT)
+          status: active
+          owner: z890-claude
+
+        - id: p7.lifecycle.vram.4090
+          task: "4090 laptop VRAM budget (16GB)"
+          context: |
+            Primary: Mobile inference (7B models via Ollama)
+            Secondary: Cast/voice testing
+            Constraint: 16GB limits to single large model
+          status: active
+          owner: 4090-claude
+
+    # =========================================================================
+    # Phase 5: Skill Pairing Validation
+    # =========================================================================
+    - id: p7.lifecycle.pairings
+      task: "Skill pairing validation and FlOO$ pipelines"
+      context: "Validate multi-step skill chains have healthy dependencies"
+      agent_hint: codex
+      children:
+
+        - id: p7.lifecycle.pairings.catalog
+          task: "7 defined skill pairings"
+          context: |
+            model-benchmark-viz, ingest-chit-index, research-summarize-render,
+            chit-3d-viz, voice-synthesis, agent-card-gen, pr-monitor-graphiti-chit.
+            Defined in pmoves/configs/skill-pairings.yaml.
+            Validate: make -C pmoves floos-status
+          status: done
+
+        - id: p7.lifecycle.pairings.voice_synthesis
+          task: "Voice synthesis pairing (agent-zero → flute → ultimate-tts)"
+          context: |
+            text-generate → prosodic → tts
+            Agent Zero generates text, Flute-Gateway chunks prosodically,
+            Ultimate-TTS-Studio synthesizes audio.
+            Persona selector resolves intent → engine.
+            BPM encoder publishes CGP timeline to NATS.
+          status: done
+          owner: 5090-claude
+
+    # =========================================================================
+    # Phase 6: Onboarding Flow
+    # =========================================================================
+    - id: p7.lifecycle.onboarding
+      task: "Agent onboarding — new agent registration flow"
+      context: "How to add a new agent to the PMOVES ecosystem"
+      agent_hint: codex
+      children:
+
+        - id: p7.lifecycle.onboarding.steps
+          task: "Onboarding checklist"
+          context: |
+            1. Add entry to agent_signatures.yaml (glyph, color, voice)
+            2. Register in agent-teams.yaml (team, node affinity)
+            3. Create SKILL.md in Pinokio app (if app-specific)
+            4. Configure model preferences in TensorZero
+            5. Set VRAM budget constraints
+            6. Add to Discord roles (if community-facing)
+            7. Sign Graphiti trail entry for attribution
+          status: planned
+
+    # =========================================================================
+    # Phase 7: Platform Migration (Future)
+    # =========================================================================
+    - id: p7.lifecycle.migration
+      task: "Platform migration readiness"
+      context: "Discord → open-source alternative, Pinokio → standalone"
+      agent_hint: codex
+      children:
+
+        - id: p7.lifecycle.migration.chat_adapter
+          task: "Chat platform abstraction"
+          context: |
+            NATS events + MCP tools are platform-agnostic.
+            Discord adapter is first. Research pending on Matrix/Revolt.
+            Migration = new adapter, same NATS subjects.
+          status: planned
+
+        - id: p7.lifecycle.migration.standalone
+          task: "Standalone agent runtime"
+          context: |
+            Agents should run without Pinokio for KVM/VPS deployment.
+            Docker containers with NATS + MCP are the portable unit.
+            Pinokio is the dev/desktop experience.
+          status: planned
