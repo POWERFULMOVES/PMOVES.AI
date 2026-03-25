@@ -28,7 +28,12 @@ from neo4j import GraphDatabase
 QDRANT_URL = os.environ.get("QDRANT_URL","http://qdrant:6333")
 QDRANT_COLLECTION = os.environ.get("QDRANT_COLLECTION","pmoves_chunks")
 SENTENCE_MODEL = os.environ.get("SENTENCE_MODEL","all-MiniLM-L6-v2")
-USE_OLLAMA_EMBED = os.environ.get("USE_OLLAMA_EMBED","false").lower()=="true"
+EMBEDDING_BACKEND = os.environ.get("EMBEDDING_BACKEND", os.environ.get("EXTRACT_WORKER_EMBEDDING_BACKEND", "sentence-transformers")).lower()
+USE_OLLAMA_EMBED = EMBEDDING_BACKEND == "ollama" or os.environ.get("USE_OLLAMA_EMBED","false").lower()=="true"
+USE_TENSORZERO_EMBED = EMBEDDING_BACKEND == "tensorzero"
+OLLAMA_EMBED_MODEL = os.environ.get("OLLAMA_EMBED_MODEL", "qwen3-embedding:4b")
+TENSORZERO_BASE_URL = os.environ.get("TENSORZERO_BASE_URL", "http://tensorzero-gateway:3000")
+TENSORZERO_EMBED_MODEL = os.environ.get("TENSORZERO_EMBED_MODEL", "tensorzero::embedding_model_name::qwen3_embedding_4b_local")
 _raw_ollama_url = os.environ.get("OLLAMA_URL","http://ollama:11434")
 if not urlparse(_raw_ollama_url).scheme in ("http", "https"):
     raise ValueError(f"OLLAMA_URL must use http/https scheme")
@@ -208,9 +213,23 @@ def _load_codebook(path: str):
 _model = None
 def embed_query(text: str):
     global _model
+    if USE_TENSORZERO_EMBED:
+        try:
+            r = requests.post(
+                f"{TENSORZERO_BASE_URL}/openai/v1/embeddings",
+                json={"model": TENSORZERO_EMBED_MODEL, "input": text},
+                timeout=30,
+            )
+            if not r.ok:
+                logger.error("TensorZero embed error: %s", r.text[:300])
+                raise HTTPException(502, f"TensorZero embed error: {r.status_code}")
+            return r.json()["data"][0]["embedding"]
+        except requests.RequestException as e:
+            logger.exception("TensorZero embed request failed")
+            raise HTTPException(502, f"TensorZero embed request failed: {e}")
     if USE_OLLAMA_EMBED:
         try:
-            r = requests.post(f"{OLLAMA_URL}/api/embeddings", json={"model":"nomic-embed-text","prompt":text}, timeout=30)
+            r = requests.post(f"{OLLAMA_URL}/api/embeddings", json={"model": OLLAMA_EMBED_MODEL, "prompt": text}, timeout=30)
             if not r.ok:
                 logger.error("Ollama embed bad response: %s", r.text[:300])
                 raise HTTPException(502, f"Ollama embed error: {r.status_code}")
@@ -271,7 +290,8 @@ def _get_cross_encoder():
     if not RERANK_ENABLE:
         return None
     if CrossEncoder is None:
-        raise HTTPException(500, "Rerank requested but CrossEncoder not available; check sentence-transformers install")
+        logger.warning("CrossEncoder not available; disabling rerank")
+        return None
     if _cross_encoder is None:
         with _cross_lock:
             if _cross_encoder is None:
@@ -285,8 +305,8 @@ def _get_cross_encoder():
                         device = "cpu"
                     _cross_encoder = CrossEncoder(RERANK_MODEL, device=device)
                 except Exception as e:
-                    logger.exception("Failed to load CrossEncoder %s", RERANK_MODEL)
-                    raise HTTPException(500, f"Reranker load error: {e}")
+                    logger.warning("Failed to load CrossEncoder %s; disabling rerank: %s", RERANK_MODEL, e)
+                    return None
     return _cross_encoder
 
 def hybrid_score(vec_score: float, lex_score: float, alpha: float=0.7) -> float:
@@ -647,6 +667,10 @@ def run_query(query, namespace, k=8, alpha=0.7, graph_boost=GRAPH_BOOST, entity_
     # Optional rerank using cross-encoder
     if RERANK_ENABLE and prelim:
         ce = _get_cross_encoder()
+        if ce is None:
+            logger.info("Reranker unavailable; returning preliminary scores")
+            prelim.sort(key=lambda x: x["score"], reverse=True)
+            return prelim[:k]
         try:
             pairs = [(query, r["text"] or "") for r in prelim]
             rr = ce.predict(pairs)
@@ -699,7 +723,7 @@ def hirag_admin_stats(_=Depends(require_admin_tailscale)):
     return {
         "entity_cache": {"keys": len(_cache_entities), "ttl": ENTITY_CACHE_TTL, "max": ENTITY_CACHE_MAX},
         "warm_dictionary": {"types": len(_warm_entities), "entries": int(sum(len(s) for s in _warm_entities.values())), "last_refresh": _warm_last},
-        "config": {"USE_MEILI": USE_MEILI, "GRAPH_BOOST": GRAPH_BOOST, "NEO4J_DICT_REFRESH_SEC": NEO4J_DICT_REFRESH_SEC, "NEO4J_DICT_LIMIT": NEO4J_DICT_LIMIT, "USE_OLLAMA_EMBED": USE_OLLAMA_EMBED}
+        "config": {"EMBEDDING_BACKEND": EMBEDDING_BACKEND, "USE_MEILI": USE_MEILI, "GRAPH_BOOST": GRAPH_BOOST, "NEO4J_DICT_REFRESH_SEC": NEO4J_DICT_REFRESH_SEC, "NEO4J_DICT_LIMIT": NEO4J_DICT_LIMIT, "USE_OLLAMA_EMBED": USE_OLLAMA_EMBED, "USE_TENSORZERO_EMBED": USE_TENSORZERO_EMBED}
     }
 
 @app.post("/hirag/admin/refresh")
