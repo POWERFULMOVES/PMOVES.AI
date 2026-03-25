@@ -1,5 +1,5 @@
 # Multi-stage build for GitHub Issue Triage Service
-FROM dhi.io/python:3.11 AS builder
+FROM python:3.11-slim AS builder
 
 # Set working directory
 WORKDIR /app

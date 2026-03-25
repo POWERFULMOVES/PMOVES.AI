@@ -1,8 +1,8 @@
 # ── Stage 1: Builder ─────────────────────────────────────────────
 # Install build deps and compile Python wheels.  This stage is
 # discarded — only the pip-installed packages survive into runtime.
-# DHI base image — zero-CVE, SLSA Level 3 provenance, Cosign signed
-FROM dhi.io/python:3.11 AS builder
+# Builder uses python:3.11-slim (needs apt-get + gcc for wheel compilation)
+FROM python:3.11-slim AS builder
 
 WORKDIR /build
 

@@ -1,4 +1,4 @@
-FROM dhi.io/python:3.11
+FROM python:3.11-slim
 
 LABEL org.opencontainers.image.source="https://github.com/POWERFULMOVES/PMOVES.AI"
 LABEL org.opencontainers.image.description="GitHub Runner Controller - PMOVES CI/CD Orchestration"

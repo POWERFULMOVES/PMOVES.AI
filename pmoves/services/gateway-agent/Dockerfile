@@ -1,5 +1,5 @@
 # PMOVES Gateway Agent Dockerfile
-FROM dhi.io/python:3.11
+FROM python:3.11-slim
 
 WORKDIR /app
 

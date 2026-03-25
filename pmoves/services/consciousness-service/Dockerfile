@@ -1,4 +1,4 @@
-FROM dhi.io/python:3.12
+FROM python:3.12-slim
 
 # Security: Run as non-root user
 RUN groupadd -r pmoves && useradd -r -g pmoves pmoves

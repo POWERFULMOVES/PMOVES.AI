@@ -2,7 +2,7 @@
 # Hardened service following PMOVES.AI patterns
 
 # Base image pinned 2026-03-05 — refresh weekly via Dependabot
-FROM dhi.io/python:3.11
+FROM python:3.11-slim
 
 # Set metadata
 LABEL maintainer="PMOVES.AI <hello@powerfulmoves.com>"

@@ -1,5 +1,5 @@
 # DHI base image — zero-CVE, SLSA Level 3 provenance, Cosign signed
-FROM dhi.io/python:3.12
+FROM python:3.12-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \

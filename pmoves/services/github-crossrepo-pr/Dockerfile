@@ -1,7 +1,7 @@
 # GitHub Cross-Repository PR Automation Service Dockerfile
 # Platform: linux/amd64, linux/arm64
 
-FROM dhi.io/python:3.11
+FROM python:3.11-slim
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1 \

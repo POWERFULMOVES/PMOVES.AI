@@ -1,7 +1,7 @@
 # GitHub Branch Cleanup Service Dockerfile
 # Python 3.11-slim base with non-root user for security
 
-FROM dhi.io/python:3.11 AS builder
+FROM python:3.11-slim AS builder
 
 # Set working directory
 WORKDIR /app
