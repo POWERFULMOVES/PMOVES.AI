@@ -3,8 +3,13 @@
   "mcpServers": {
     "pmoves-cipher": {
       "type": "sse",
-      "url": "http://cipher-memory:8096/sse",
-      "description": "Agent memory (Neo4j knowledge graph)"
+      "url": "http://${TS_Z890}:8096/sse",
+      "description": "Agent memory (Neo4j knowledge graph) via Tailscale"
+    },
+    "agent-zero": {
+      "type": "http",
+      "url": "http://${TS_Z890}:8080/mcp",
+      "description": "Agent Zero orchestrator via Tailscale"
     }
   },
   "modes": {
