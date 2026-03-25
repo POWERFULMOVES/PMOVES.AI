@@ -2328,8 +2328,8 @@ services:
   deepresearch:
     <<: *tier-agent-hardened-rw
     build:
-      context: ./services
-      dockerfile: deepresearch/Dockerfile
+      context: .
+      dockerfile: services/deepresearch/Dockerfile
     image: ${DEEPRESEARCH_IMAGE:-}
     restart: unless-stopped
     environment:
@@ -2370,8 +2370,8 @@ services:
   supaserch:
     <<: *tier-agent-hardened-ro
     build:
-      context: ./services
-      dockerfile: supaserch/Dockerfile
+      context: .
+      dockerfile: services/supaserch/Dockerfile
     image: ${SUPASERCH_IMAGE:-}
     restart: unless-stopped
     environment:
