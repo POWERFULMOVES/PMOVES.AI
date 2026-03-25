@@ -110,7 +110,7 @@ jobs:
         run: npm test -- --ci --coverage --maxWorkers=2
 
       - name: Upload coverage reports
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v5
         if: always()
         with:
           files: pmoves/ui/coverage/coverage-final.json
