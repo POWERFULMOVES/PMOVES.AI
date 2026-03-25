@@ -146,7 +146,31 @@ def reconcile_studio_board_publish_completion(
         .execute()
     )
     updated_rows = getattr(response, "data", None) or []
-    return len(updated_rows) > 0
+    if updated_rows:
+        return True
+
+    # Re-check: another worker may have already published this row
+    recheck = (
+        client()
+        .table("studio_board")
+        .select("status,meta")
+        .eq("id", row_id)
+        .limit(1)
+        .execute()
+    )
+    recheck_rows = getattr(recheck, "data", None) or []
+    if recheck_rows:
+        r = recheck_rows[0] if isinstance(recheck_rows[0], dict) else {}
+        if r.get("status") == "published":
+            r_meta = _studio_board_meta(r.get("meta"))
+            r_req = (
+                str(r_meta.get("publish_request_id", ""))
+                if r_meta.get("publish_request_id") is not None
+                else ""
+            )
+            if not r_req or r_req == publish_event_id:
+                return True
+    return False
 
 
 def claim_studio_board_publish(
