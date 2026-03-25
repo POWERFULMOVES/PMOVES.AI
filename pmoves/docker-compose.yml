@@ -1322,6 +1322,8 @@ services:
     - SUPA_REST_INTERNAL_URL=${SUPA_REST_INTERNAL_URL:-http://supabase-kong:8000/rest/v1}
     - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
     - EXTRACT_WORKER_CGP_PUBLISH=${EXTRACT_WORKER_CGP_PUBLISH:-true}
+    # Neutralise Windows SSL_CERT_FILE leak (host env > env_file precedence)
+    - SSL_CERT_FILE=
     ports:
     - ${EXTRACT_WORKER_BIND:-127.0.0.1}:${EXTRACT_WORKER_PORT:-8083}:8083
     profiles:
