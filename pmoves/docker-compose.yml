@@ -1180,7 +1180,7 @@ services:
     - pmoves_bus
     - pmoves_external  # HuggingFace model downloads at runtime
     healthcheck:
-      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8086/hirag/admin/stats', timeout=5)"]
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8086/', timeout=5)"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -1771,7 +1771,7 @@ services:
     - pmoves_bus
     - pmoves_external  # Required for reranker API calls
     healthcheck:
-      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8086/hirag/admin/stats', timeout=5)"]
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8086/', timeout=5)"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -1839,7 +1839,7 @@ services:
     - pmoves_bus
     - pmoves_external  # HuggingFace reranker model downloads at runtime
     healthcheck:
-      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8086/hirag/admin/stats', timeout=5)"]
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8086/', timeout=5)"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -1934,7 +1934,7 @@ services:
     extra_hosts:
     - host.docker.internal:host-gateway
     healthcheck:
-      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8086/hirag/admin/stats', timeout=5)"]
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8086/', timeout=5)"]
       interval: 30s
       timeout: 10s
       retries: 5
