@@ -20,7 +20,10 @@
     },
     "outcome": {
       "type": "string",
-      "enum": ["fatal", "partial"]
+      "enum": [
+        "fatal",
+        "partial"
+      ]
     },
     "artifact_uri": {
       "type": "string"
@@ -45,6 +48,13 @@
     },
     "meta": {
       "type": "object"
+    },
+    "studio_board_id": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "publish_request_id": {
+      "type": "string"
     }
   }
 }
