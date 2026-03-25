@@ -27,6 +27,7 @@ metadata:
   nats_subjects:
     - "training.job.started.v1"
     - "training.job.completed.v1"
+    - "training.job.failed.v1"
     - "training.eval.result.v1"
     - "training.model.published.v1"
     - "training.model.deployed.v1"
@@ -95,7 +96,7 @@ root:
             Compare: base Qwen3-4b vs fine-tuned.
             Publish: training.eval.result.v1 to NATS
           status: planned
-          owner: vps-agent
+          owner: 5090-claude
 
         - id: training.embed.publish
           task: "Push to HuggingFace"
@@ -167,7 +168,7 @@ root:
             Metrics: tool selection accuracy, parameter correctness
             Benchmark: 50 curated PMOVES task scenarios
           status: planned
-          owner: vps-agent
+          owner: 5090-claude
 
         - id: training.agent.publish
           task: "Push to HuggingFace"
@@ -269,7 +270,7 @@ root:
             PMOVES-E2B-Danger-Room-Desktop submodule
             VPS runs eval benchmarks without affecting production
           status: planned
-          owner: vps-agent
+          owner: 5090-claude
 
         - id: training.infra.nats_events
           task: "Training lifecycle NATS events"
@@ -292,6 +293,6 @@ root:
         New skill pairing for the training pipeline:
         data-prep → unsloth-train → e2b-eval → hf-publish → tz-register
         NATS subject: skills.pipeline.training-eval-deploy.v1
-        Agents: 5090-claude → vps-agent → 5090-claude → z890-claude
+        Agents: 5090-claude → 5090-claude → 5090-claude → z890-claude
       status: planned
       owner: 5090-claude

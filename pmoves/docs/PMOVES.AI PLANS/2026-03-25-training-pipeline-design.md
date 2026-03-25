@@ -10,7 +10,7 @@ Fine-tune models on PMOVES-specific content using Unsloth Studio (already runnin
 
 ## Architecture
 
-```
+```text
 PMOVES Content (MinIO/Supabase)
   → Data Prep (JSONL formatting)
   → Unsloth Studio (LoRA/QLoRA on 5090 GPU)
