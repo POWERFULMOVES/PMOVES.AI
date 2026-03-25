@@ -258,9 +258,9 @@ root:
             command: "curl -s http://localhost:8110/api/models?model_type=embedding"
             expect: "JSON array of models with dimensions, hf_id, cuda_supported fields"
           context: "Model Registry HF enrichment endpoints live (PR #1082). P7 agents can discover model capabilities before dispatching inference."
-          agent_hint: z890-claude
-          status: pending
-          notes: "Endpoints exist. Need SKILL.md for Model Registry so P7 Agent Interpreter can discover it."
+          agent_hint: 4090-claude
+          status: done
+          notes: "SKILL.md created at pbnj/pinokio/api/pmoves-model-registry/SKILL.md. P7 Agent Interpreter can now discover Model Registry (port 8110) for model catalog queries, HF enrichment, TensorZero config export, and GPU deployment tracking."
 
         - id: p7.nats.embedding-quality
           task: "P7-triggered ingestion uses 3072d Qwen3 embeddings"
