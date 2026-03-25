@@ -6,12 +6,14 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends curl \
     && rm -rf /var/lib/apt/lists/*
 
-COPY supaserch/requirements.txt /tmp/requirements.txt
+COPY services/supaserch/requirements.txt /tmp/requirements.txt
 RUN pip install --no-cache-dir --upgrade pip \
     "setuptools==82.0.0" "wheel==0.46.3" \
     && pip install --no-cache-dir -r /tmp/requirements.txt
 
-COPY . /app/services
+COPY services/supaserch /app/services/supaserch
+COPY services/common /app/services/common
+COPY services/__init__.py /app/services/__init__.py
 ENV PYTHONPATH=/app
 ENV SUPASERCH_PORT=8099
 
