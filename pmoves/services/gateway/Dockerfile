@@ -1,5 +1,5 @@
 # PMOVES gateway service Dockerfile
-FROM python:3.11-slim
+FROM dhi.io/python:3.11
 
 WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
