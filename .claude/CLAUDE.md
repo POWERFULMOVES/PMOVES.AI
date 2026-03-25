@@ -381,6 +381,7 @@ encapsulate the correct stop/restart/env-injection flow.
 | `netsh interface portproxy` | `make -C pmoves z890-host-setup` | — |
 | `gh workflow run sync-secrets-local` | `make -C pmoves secrets-sync-trigger` | `/deploy:secrets-funnel` |
 | `docker compose build flute-gateway` | `make -C pmoves up-flute-gateway` | `/voice:status` |
+| `docker compose build hi-rag-gateway-v2` | `make -C pmoves up-hirag` | `/search:hirag` |
 
 **volume-reset SERVICE values:** `neo4j`, `tensorzero-clickhouse`, `meilisearch`, `qdrant`, `minio`, `supabase-db`, `nats`
 
