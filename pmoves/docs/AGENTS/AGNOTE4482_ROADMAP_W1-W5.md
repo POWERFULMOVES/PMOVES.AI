@@ -423,30 +423,35 @@ All resolved. No blockers.
 | W6-P3 (Persona selector + BoTZ CLI) | 4090-claude | 2026-03-23 | RECOMMENDED — after W1 terminal renderer | — |
 | W6-P3 (Voice binding: persona → Flute prosodic) | 5090-claude | 2026-03-23 | RECOMMENDED — after P2 | — |
 | W6-P5 (FlOO$ life-persona-voice pipeline) | claude-opus | 2026-03-23 | RECOMMENDED — architecture review | — |
+| Infra (CHIT CGP Wave 1: Extract Worker + FFmpeg-Whisper) | 4090-claude | 2026-03-24 | SHIPPED `f7dafa56`, `6046d518` | feat/chit-integration-wave-1 |
+| Infra (Embedding standardization: Qwen3-4b/3072d) | 4090-claude | 2026-03-24 | SHIPPED `77888c8b` | feat/chit-integration-wave-1 |
+| Infra (Model Registry HF enrichment) | 4090-claude | 2026-03-24 | SHIPPED `07d06f70` | feat/chit-integration-wave-1 |
+| Infra (Model seed + gpu-models metadata) | 4090-claude | 2026-03-24 | SHIPPED `50ee0022`, `7cfacc8c` | feat/chit-integration-wave-1 |
+| Infra (BoTZ submodule sync d125e8a) | 4090-claude | 2026-03-24 | SHIPPED `63532a6b` | feat/chit-integration-wave-1 |
 
-## Recommended Next Steps (Post 2026-03-23 Fleet Session)
+## Recommended Next Steps (Post 2026-03-24 CHIT Wave 1)
 
 ### 5090-claude (GPU Inference Specialist)
 | # | Task | Priority | Notes |
 |---|------|----------|-------|
 | 1 | Container rebuild: Flute-Gateway image bake | **P0** | Eliminates hot-patch dependency |
-| 2 | Fish S2 Pro Flute timeout | P1 | Set `ULTIMATE_TTS_TIMEOUT_SEC=300` |
-| 3 | Pipecat WebSocket (8056) | P1 | Voice agent duplex loop implementation |
-| 4 | W6-P2: bpm_encoder.py implementation | P1 | Python port of musicMapping.ts |
-| 5 | VRAM budget optimization | P2 | Concurrent engine loading profiles |
+| 2 | Qwen3-embedding:4b e2e validation (Ollama CUDA) | **P0** | New default from #1082 needs GPU verification |
+| 3 | Fish S2 Pro Flute timeout | P1 | Set `ULTIMATE_TTS_TIMEOUT_SEC=300` |
+| 4 | Pipecat WebSocket (8056) | P1 | Voice agent duplex loop |
+| 5 | W6-P2: bpm_encoder.py | P2 | Python port of musicMapping.ts |
 
 ### 4090-claude (Noise Reducer)
 | # | Task | Priority | Notes |
 |---|------|----------|-------|
-| 1 | P7 → 5090 TTS via Tailscale | **P0** | UNBLOCKED — Flute at 8055 + TTS at 7860 on mesh |
-| 2 | Mobile Discord → TTS flow | P1 | REST API proven |
-| 3 | W1: Agent Theming + Terminal | P2 | Roadmap item |
+| 1 | PR #1082 merge + AGNOTE/TAC docs | **P0** | Branch: feat/chit-integration-wave-1 |
+| 2 | P7 Agent Interpreter → 5090 TTS via Tailscale | P1 | UNBLOCKED since Step 7 |
+| 3 | W1: Agent Theming + Terminal | P2 | Roadmap claim |
 
 ### z890-claude (Infrastructure Coordinator)
 | # | Task | Priority | Notes |
 |---|------|----------|-------|
-| 1 | Container rebuilds (5 services) | **P0** | Blocks Docker image freshness |
-| 2 | W6-P1: Health/Wealth Docker wiring | P1 | NATS + /healthz + /metrics |
-| 3 | Jetson Orin onboarding | P2 | Via RustDesk |
-| 4 | Agent Zero model tuning | P2 | |
+| 1 | Container rebuilds (6 services — includes embedding env changes) | **P0** | Blocks Docker image freshness |
+| 2 | `pmoves_chunks_qwen3` Qdrant collection provision | P1 | New 3072d collection; old data untouched |
+| 3 | W6-P1: Health/Wealth Docker wiring | P1 | NATS + /healthz + /metrics |
+| 4 | Jetson Orin onboarding | P2 | Via RustDesk |
 | 5 | NATS leaf node to 5090 | P2 | Flute NATS=connected proves bus healthy |

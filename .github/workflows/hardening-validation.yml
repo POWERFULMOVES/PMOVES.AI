@@ -362,6 +362,8 @@ jobs:
           VAULT_ENC_KEY: ci-validation-placeholder
           LOGFLARE_PUBLIC_ACCESS_TOKEN: ci-validation-placeholder
           LOGFLARE_PRIVATE_ACCESS_TOKEN: ci-validation-placeholder
+          MINIO_USER: ci-validation-placeholder
+          MINIO_PASSWORD: ci-validation-placeholder
         run: |
           echo "Validating docker-compose files..."
 
