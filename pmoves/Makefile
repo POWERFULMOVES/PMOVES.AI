@@ -2664,6 +2664,32 @@ flute-gateway-smoke: ## Smoke test Flute-Gateway health + provider status
 	@echo "Flute-Gateway smoke test..."
 	@curl -sf http://localhost:8055/healthz || { echo "Flute-Gateway not responding at http://localhost:8055/healthz"; exit 1; }
 
+# ────────────────────────────────────────────────────────────────────────────
+# HI-RAG GATEWAY (Hybrid RAG v2)
+# ────────────────────────────────────────────────────────────────────────────
+
+.PHONY: up-hirag hirag-rebuild hirag-smoke
+up-hirag: ## Start Hi-RAG v2 gateway (CPU mode, port 8086)
+	@echo "Starting Hi-RAG v2..."
+	@$(DC) --profile orchestration up -d --build hi-rag-gateway-v2
+	@sleep 5
+	@curl -sf http://localhost:8086/ > /dev/null 2>&1 \
+	  && echo "Hi-RAG v2 ready at http://localhost:8086" \
+	  || echo "Hi-RAG v2 may still be starting (check: curl http://localhost:8086/)"
+
+hirag-rebuild: ## Rebuild Hi-RAG v2 image from scratch (no cache)
+	@echo "Rebuilding Hi-RAG v2 (no cache)..."
+	@$(DC) --profile orchestration build --no-cache hi-rag-gateway-v2
+	@$(DC) --profile orchestration up -d --no-deps --force-recreate hi-rag-gateway-v2
+	@sleep 5
+	@curl -sf http://localhost:8086/ > /dev/null 2>&1 \
+	  && echo "Hi-RAG v2 rebuilt and ready" \
+	  || echo "Hi-RAG v2 may still be starting"
+
+hirag-smoke: ## Smoke test Hi-RAG v2 health + query
+	@echo "Hi-RAG v2 smoke test..."
+	@curl -sf http://localhost:8086/ || { echo "Hi-RAG v2 not responding at http://localhost:8086"; exit 1; }
+
 # ============================================================================
 # Z890 / RTX 3090 Ti GPU NODE
 # ============================================================================
