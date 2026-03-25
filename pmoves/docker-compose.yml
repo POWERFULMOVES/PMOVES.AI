@@ -1312,18 +1312,11 @@ services:
     restart: unless-stopped
     environment:
     - QDRANT_URL=${QDRANT_URL:-http://qdrant:6333}
-    - QDRANT_COLLECTION=${QDRANT_COLLECTION:-pmoves_chunks_qwen3}
+    - QDRANT_COLLECTION=${QDRANT_COLLECTION:-pmoves_chunks}
     - SENTENCE_MODEL=${SENTENCE_MODEL:-all-MiniLM-L6-v2}
-    - EMBEDDING_BACKEND=${EMBEDDING_BACKEND:-tensorzero}
-    - TENSORZERO_BASE_URL=${TENSORZERO_BASE_URL:-http://tensorzero-gateway:3000}
-    - TENSORZERO_EMBED_MODEL=${TENSORZERO_EMBED_MODEL:-tensorzero::embedding_model_name::qwen3_embedding_4b_local}
     - MEILI_URL=${MEILI_URL:-http://meilisearch:7700}
     - SUPA_REST_URL=${SUPA_REST_URL:-http://supabase-kong:8000/rest/v1}
     - SUPA_REST_INTERNAL_URL=${SUPA_REST_INTERNAL_URL:-http://supabase-kong:8000/rest/v1}
-    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
-    - EXTRACT_WORKER_CGP_PUBLISH=${EXTRACT_WORKER_CGP_PUBLISH:-true}
-    # Neutralise Windows SSL_CERT_FILE leak (host env > env_file precedence)
-    - SSL_CERT_FILE=
     ports:
     - ${EXTRACT_WORKER_BIND:-127.0.0.1}:${EXTRACT_WORKER_PORT:-8083}:8083
     profiles:
@@ -1338,16 +1331,11 @@ services:
     extra_hosts:
     - host.docker.internal:host-gateway
     depends_on:
-      tensorzero-gateway:
-        condition: service_healthy
-        required: false
       qdrant:
         condition: service_healthy
       meilisearch:
         condition: service_healthy
       minio:
-        condition: service_healthy
-      nats:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8083/healthz', timeout=5)"]
@@ -1719,7 +1707,7 @@ services:
     - SSL_CERT_FILE=
     - SSL_CERT_DIR=
     - QDRANT_URL=${QDRANT_URL:-http://qdrant:6333}
-    - QDRANT_COLLECTION=${QDRANT_COLLECTION:-pmoves_chunks_qwen3}
+    - QDRANT_COLLECTION=${QDRANT_COLLECTION:-pmoves_chunks}
     - SENTENCE_MODEL=${SENTENCE_MODEL:-all-MiniLM-L6-v2}
     - INDEXER_NAMESPACE=${INDEXER_NAMESPACE:-pmoves}
     - ALPHA=${ALPHA:-0.7}
@@ -1737,7 +1725,7 @@ services:
     - OLLAMA_URL=${OLLAMA_URL:-http://pmoves-ollama:11434}
     - OLLAMA_EMBED_MODEL=${OLLAMA_EMBED_MODEL:-embeddinggemma:300m}
     - TENSORZERO_BASE_URL=${TENSORZERO_BASE_URL:-http://tensorzero-gateway:3000}
-    - TENSORZERO_EMBED_MODEL=${TENSORZERO_EMBED_MODEL:-tensorzero::embedding_model_name::qwen3_embedding_4b_local}
+    - TENSORZERO_EMBED_MODEL=${TENSORZERO_EMBED_MODEL:-tensorzero::embedding_model_name::gemma_embed_local}
     - GRAPH_BOOST=${GRAPH_BOOST:-0.15}
     - ENTITY_CACHE_TTL=${ENTITY_CACHE_TTL:-60}
     - ENTITY_CACHE_MAX=${ENTITY_CACHE_MAX:-1000}
@@ -1790,7 +1778,7 @@ services:
     - SSL_CERT_FILE=
     - SSL_CERT_DIR=
     - QDRANT_URL=${QDRANT_URL:-http://qdrant:6333}
-    - QDRANT_COLLECTION=${QDRANT_COLLECTION:-pmoves_chunks_qwen3}
+    - QDRANT_COLLECTION=${QDRANT_COLLECTION:-pmoves_chunks}
     - SENTENCE_MODEL=${SENTENCE_MODEL:-all-MiniLM-L6-v2}
     - HIRAG_HTTP_PORT=${HIRAG_HTTP_PORT:-8086}
     - GRAPH_BOOST=${GRAPH_BOOST:-0.15}
@@ -1867,7 +1855,7 @@ services:
     - SSL_CERT_FILE=
     - SSL_CERT_DIR=
     - QDRANT_URL=${QDRANT_URL:-http://qdrant:6333}
-    - QDRANT_COLLECTION=${QDRANT_COLLECTION:-pmoves_chunks_qwen3}
+    - QDRANT_COLLECTION=${QDRANT_COLLECTION:-pmoves_chunks}
     - SENTENCE_MODEL=${SENTENCE_MODEL:-all-MiniLM-L6-v2}
     - INDEXER_NAMESPACE=${INDEXER_NAMESPACE:-pmoves}
     - ALPHA=${ALPHA:-0.7}
@@ -1898,7 +1886,7 @@ services:
     - OLLAMA_EMBED_MODEL=${OLLAMA_EMBED_MODEL:-embeddinggemma:300m}
     - TENSORZERO_BASE_URL=${TENSORZERO_BASE_URL:-http://tensorzero-gateway:3000}
     - TENSORZERO_API_KEY=${TENSORZERO_API_KEY:-}
-    - TENSORZERO_EMBED_MODEL=${TENSORZERO_EMBED_MODEL:-tensorzero::embedding_model_name::qwen3_embedding_4b_local}
+    - TENSORZERO_EMBED_MODEL=${TENSORZERO_EMBED_MODEL:-tensorzero::embedding_model_name::gemma_embed_local}
     - CHIT_REQUIRE_SIGNATURE=${CHIT_PROD_REQUIRE_SIGNATURE:-true}
     - CHIT_DECRYPT_ANCHORS=${CHIT_PROD_DECRYPT_ANCHORS:-true}
     - CHIT_PASSPHRASE=${CHIT_PROD_PASSPHRASE:?set CHIT_PROD_PASSPHRASE in env.shared}
@@ -2028,7 +2016,7 @@ services:
     - A0_SET_util_model_api_base=http://tensorzero-gateway:3000/openai/v1
     - A0_SET_embed_model_provider=openai
     # Embed wrapper does NOT add openai/ prefix — must include it here
-    - A0_SET_embed_model_name=openai/tensorzero::embedding_model_name::qwen3_embedding_4b_local
+    - A0_SET_embed_model_name=openai/tensorzero::embedding_model_name::gemma_embed_local
     - A0_SET_embed_model_api_base=http://tensorzero-gateway:3000/openai/v1
     - A0_SET_browser_model_provider=openai
     - A0_SET_browser_model_name=tensorzero::function_name::agent_zero
@@ -2461,10 +2449,6 @@ services:
     - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
     # NATS_URL from env.shared/env.tier-agent has credentials: nats://nats:pmoves@nats:4222
     - DISCORD_SUBJECTS=${DISCORD_SUBJECTS:-ingest.file.added.v1,ingest.transcript.ready.v1,ingest.summary.ready.v1,ingest.chapters.ready.v1}
-    - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN:-}
-    - DISCORD_WEBHOOK_URL=${DISCORD_WEBHOOK_URL:-}
-    # Neutralise Windows SSL_CERT_FILE leak (host env > env_file precedence)
-    - SSL_CERT_FILE=
     depends_on:
       nats:
         condition: service_healthy
@@ -3088,8 +3072,6 @@ services:
       # PMOVES integration
       - ENABLE_OBSERVABILITY=${WGER_OBSERVABILITY:-true}
       - PROMETHEUS_MULTIPROC_DIR=/tmp/prometheus
-      # Neutralise Windows SSL_CERT_FILE leak (host env > env_file precedence)
-      - SSL_CERT_FILE=
     ports:
       - "${WGER_BIND:-127.0.0.1}:${WGER_PORT:-8000}:8000"
     profiles: ["health", "wger"]
