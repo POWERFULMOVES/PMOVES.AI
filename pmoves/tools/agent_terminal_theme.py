@@ -11,13 +11,18 @@ Usage:
     python pmoves/tools/agent_terminal_theme.py --agent 4090-claude
     python pmoves/tools/agent_terminal_theme.py --agent claude-opus --banner
     python pmoves/tools/agent_terminal_theme.py --agent z890-claude --status "19 containers healthy"
+    python pmoves/tools/agent_terminal_theme.py --whoami
+    python pmoves/tools/agent_terminal_theme.py --agent 4090-claude --json
+    python pmoves/tools/agent_terminal_theme.py --agent z890-claude --remote --banner
 """
 from __future__ import annotations
 
 import argparse
+import json as json_mod
 import os
+import socket
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -186,6 +191,72 @@ def load_node(node_id: str) -> Optional[NodeSpec]:
 
 
 # ---------------------------------------------------------------------------
+# Remote loader (BoTZ Gateway at :8054)
+# ---------------------------------------------------------------------------
+_BOTZ_GATEWAY_URL = os.getenv("BOTZ_GATEWAY_URL", "http://localhost:8054")
+
+
+def _fetch_remote_theme(agent_id: str) -> Optional[AgentTheme]:
+    """Fetch agent theme from BoTZ Gateway API. Returns None on failure."""
+    try:
+        from urllib.request import urlopen, Request
+        from urllib.error import URLError
+    except ImportError:
+        return None
+    try:
+        req = Request(f"{_BOTZ_GATEWAY_URL}/v1/agent/theme/{agent_id}")
+        req.add_header("Accept", "application/json")
+        with urlopen(req, timeout=3) as resp:
+            data = json_mod.loads(resp.read())
+        return AgentTheme(
+            agent_id=data.get("agent_id", agent_id),
+            display_name=data.get("display_name", agent_id),
+            glyph=data.get("glyph", "?"),
+            color=data.get("color", "#FFFFFF"),
+            accent=data.get("accent", "#CCCCCC"),
+            voice=data.get("voice", "analytical"),
+            resonance=data.get("resonance", []),
+            description=data.get("description", ""),
+        )
+    except (URLError, OSError, json_mod.JSONDecodeError, KeyError):
+        return None
+
+
+def _resolve_whoami() -> str:
+    """Resolve current agent identity from environment, hostname, or gateway."""
+    # 1. Explicit env var (set by BoTZ session or Claude Code hook)
+    agent_id = os.environ.get("PMOVES_AGENT_ID")
+    if agent_id:
+        return agent_id
+
+    # 2. Hostname heuristic — match against known node patterns
+    hostname = socket.gethostname().lower()
+    _HOST_MAP = {
+        "z890": "z890-claude",
+        "pmoves-z890": "z890-claude",
+        "powerfulmoves": "5090-claude",
+        "pmoves-powerfulmoves": "5090-claude",
+        "laptop": "4090-claude",
+        "pmoves-laptop": "4090-claude",
+    }
+    for pattern, aid in _HOST_MAP.items():
+        if pattern in hostname:
+            return aid
+
+    # 3. Gateway fallback
+    try:
+        from urllib.request import urlopen, Request
+        from urllib.error import URLError
+        req = Request(f"{_BOTZ_GATEWAY_URL}/v1/agent/whoami")
+        req.add_header("Accept", "application/json")
+        with urlopen(req, timeout=3) as resp:
+            data = json_mod.loads(resp.read())
+        return data.get("agent_id", "unknown")
+    except Exception:
+        return "unknown"
+
+
+# ---------------------------------------------------------------------------
 # Renderers
 # ---------------------------------------------------------------------------
 def colorize(text: str, hex_color: str) -> str:
@@ -272,14 +343,45 @@ def main() -> int:
     parser.add_argument("--session", action="store_true", help="Render session header")
     parser.add_argument("--roster", action="store_true", help="Render all agents roster")
     parser.add_argument("--demo", action="store_true", help="Render demo of all agents")
+    parser.add_argument("--json", action="store_true", dest="json_out", help="Output as JSON (for BoTZ CLI / P7 integration)")
+    parser.add_argument("--remote", action="store_true", help="Fetch theme from BoTZ Gateway instead of local YAML")
+    parser.add_argument("--whoami", action="store_true", help="Resolve and display current agent identity")
 
     args = parser.parse_args()
+
+    # --- whoami: resolve identity and display ---
+    if args.whoami:
+        agent_id = _resolve_whoami()
+        agent = load_agent(agent_id)
+        node = load_node(agent_id)
+        if args.json_out:
+            result = {"agent_id": agent_id, "source": "env" if os.environ.get("PMOVES_AGENT_ID") else "heuristic"}
+            if agent:
+                result["theme"] = {"glyph": agent.glyph, "color": agent.color, "accent": agent.accent, "voice": agent.voice}
+                result["display_name"] = agent.display_name
+                result["specialization"] = agent.specialization
+                result["resonance"] = agent.resonance
+            if node:
+                result["node"] = {"hardware": node.hardware, "specialization": node.specialization}
+            print(json_mod.dumps(result, indent=2))
+        else:
+            if agent:
+                print(render_banner(agent))
+                if node:
+                    print()
+                    print(session_header(agent, node))
+            else:
+                print(f"Resolved agent: {agent_id} (not in signatures)")
+        return 0
 
     if args.demo:
         agents = load_all_agents()
         if not agents:
             print("ERROR: Could not load agent_signatures.yaml", file=sys.stderr)
             return 1
+        if args.json_out:
+            print(json_mod.dumps([asdict(a) for a in agents], indent=2))
+            return 0
         for agent in agents:
             print(render_banner(agent))
             print()
@@ -288,6 +390,9 @@ def main() -> int:
 
     if args.roster:
         agents = load_all_agents()
+        if args.json_out:
+            print(json_mod.dumps([{"agent_id": a.agent_id, "glyph": a.glyph, "color": a.color, "specialization": a.specialization} for a in agents], indent=2))
+            return 0
         print(render_roster(agents))
         return 0
 
@@ -295,11 +400,31 @@ def main() -> int:
         parser.print_help()
         return 1
 
-    agent = load_agent(args.agent)
+    # --- Load agent (local or remote) ---
+    agent = None
+    if args.remote:
+        agent = _fetch_remote_theme(args.agent)
+        if agent:
+            print(f"{_DIM}(remote: {_BOTZ_GATEWAY_URL}){_RESET}", file=sys.stderr)
+        else:
+            print(f"WARNING: Gateway unreachable, falling back to local YAML", file=sys.stderr)
+    if not agent:
+        agent = load_agent(args.agent)
     if not agent:
         print(f"ERROR: Agent '{args.agent}' not found in {_SIGNATURES_PATH}", file=sys.stderr)
         return 1
 
+    # --- JSON output mode ---
+    if args.json_out:
+        result = asdict(agent)
+        if args.session:
+            node = load_node(args.node or args.agent)
+            if node:
+                result["node"] = asdict(node)
+        print(json_mod.dumps(result, indent=2))
+        return 0
+
+    # --- ANSI render modes ---
     if args.session:
         node = load_node(args.node or args.agent)
         print(session_header(agent, node))
