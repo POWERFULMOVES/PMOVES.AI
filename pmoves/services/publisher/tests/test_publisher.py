@@ -770,3 +770,59 @@ def test_completion_sync_falls_back_to_direct_reconcile(monkeypatch, tmp_path):
     assert published_messages[0][0] == "content.published.v1"
     assert len(state_calls["complete"]) == 1
     assert len(state_calls["reconcile"]) == 1
+
+
+def test_reconcile_state_guard_rejects_concurrent_state_change(monkeypatch):
+    """Reconcile fallback must not overwrite a status changed concurrently."""
+    select_calls = []
+    update_calls = []
+
+    class FakeResponse:
+        def __init__(self, data):
+            self.data = data
+
+    class FakeQuery:
+        def __init__(self, data=None):
+            self._data = data or []
+
+        def eq(self, *args):
+            return self
+
+        def in_(self, *args):
+            return self
+
+        def limit(self, *args):
+            return self
+
+        def select(self, *args):
+            return self
+
+        def update(self, payload):
+            update_calls.append(payload)
+            return self
+
+        def execute(self):
+            return FakeResponse(self._data)
+
+    call_count = {"n": 0}
+
+    def fake_table(name):
+        call_count["n"] += 1
+        if call_count["n"] == 1:
+            # SELECT returns row in "publishing" state
+            return FakeQuery(data=[{"id": 1, "status": "publishing", "meta": {"publish_request_id": "evt-1"}}])
+        else:
+            # UPDATE returns empty (concurrent change moved status away)
+            return FakeQuery(data=[])
+
+    from services.common import supabase as sb_mod
+    monkeypatch.setattr(sb_mod, "_client", SimpleNamespace(table=fake_table))
+
+    result = sb_mod.reconcile_studio_board_publish_completion(
+        row_id=1,
+        publish_event_id="evt-1",
+        published_event_id="pub-1",
+        published_at="2024-01-01T12:00:00Z",
+    )
+    assert result is False, "reconcile should return False when concurrent state change prevents update"
+    assert len(update_calls) == 1, "update should have been attempted once"

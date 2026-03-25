@@ -132,13 +132,21 @@ def reconcile_studio_board_publish_completion(
             if value is not None:
                 updated_meta[key] = value
 
-    client().table("studio_board").update(
-        {
-            "status": "published",
-            "meta": updated_meta,
-        }
-    ).eq("id", row_id).execute()
-    return True
+    response = (
+        client()
+        .table("studio_board")
+        .update(
+            {
+                "status": "published",
+                "meta": updated_meta,
+            }
+        )
+        .eq("id", row_id)
+        .in_("status", ["approved", "publishing"])
+        .execute()
+    )
+    updated_rows = getattr(response, "data", None) or []
+    return len(updated_rows) > 0
 
 
 def claim_studio_board_publish(
