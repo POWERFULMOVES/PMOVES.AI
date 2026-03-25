@@ -607,7 +607,7 @@ Next 48 hours
 - **Manual verification checklist**
   1. Insert a `studio_board` row with `status='approved'`, `content_url='s3://...'`, and confirm `meta.publish_event_sent_at` is null.
   2. Trigger the approval poller (activate or execute once) and confirm Agent Zero logs a `content.publish.approved.v1` event.
-  3. Verify Supabase row updates to `status='published'` with `meta.publish_event_sent_at` timestamp.
+  3. Verify Supabase row first moves to `status='publishing'` with `meta.publish_request_id` / `meta.publish_requested_at`, then finalizes to `status='published'` with `meta.publish_event_sent_at`.
   4. POST a `content.published.v1` envelope to the webhook (`/webhook/pmoves/content-published`) and confirm Discord receives an embed (title, path, artifact, optional thumbnail).
   5. Deactivate flows after testing or leave active with schedules confirmed.
 
