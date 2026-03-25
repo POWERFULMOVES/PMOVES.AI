@@ -515,6 +515,42 @@ Extract Worker `/ingest` and FFmpeg-Whisper `/transcribe` + `/transcribe_file` n
 
 ---
 
+### z890 PR Review (2026-03-24)
+
+**PR #1085 — SKILL.md registration (3 files)**
+- `pbnj/pinokio/api/pmoves-services/SKILL.md` — Docker Compose profile controls
+- `pbnj/pinokio/api/pmoves-remote/SKILL.md` — Headscale/RustDesk remote access
+- `pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md` — z890 session release entry
+- CodeRabbit: 5 actionable comments (port alignment, handler mapping, context doc sync, CHIT handoff) — all documentation-level, no functional issues
+- **Verdict:** Clean, ready for merge
+
+**PR #1084 — DHI migration (44 Dockerfiles)**
+- Migrates all service Dockerfiles to Docker Hardened Images (dhi.io)
+- Validation report: all services PASS (non-root user, read-only filesystem, capabilities dropped, no-new-privileges)
+- Only WARN: no resource limits (acceptable for dev environment)
+- **Verdict:** Clean, ready for merge
+
+### Model Registry SKILL.md Shipped (`p7.nats.model-discovery` → DONE)
+
+Created `pbnj/pinokio/api/pmoves-model-registry/SKILL.md` for P7 Agent Interpreter discovery:
+- 10 trigger phrases covering model catalog, HF enrichment, TensorZero export, GPU deployments
+- Full API reference with curl examples
+- Integration points: Supabase, NATS (`model.registry.updated.v1`), GPU Orchestrator, TensorZero, HuggingFace
+- TAC node `p7.nats.model-discovery` status: pending → done
+
+### Remaining P7 Phase 7 Nodes (Updated)
+
+| Node | Status | Owner | What's Needed |
+|------|--------|-------|---------------|
+| `p7.nats.cgp-correlation` | **done** | 4090 | Shipped — context_id in Extract Worker + FFmpeg-Whisper |
+| `p7.nats.model-discovery` | **done** | 4090 | SKILL.md for Model Registry (port 8110) |
+| `p7.nats.embedding-quality` | pending | 5090 | Provision `pmoves_chunks_qwen3` Qdrant collection + validate Qwen3 e2e on GPU |
+| `p7.nats.session` | future | z890 | P7 Agent Launcher hooks or pterm event bridge |
+| `p7.nats.launch` | future | z890 | Pinokio `on` event handler → NATS publish |
+| `p7.nats.telemetry` | future | z890 | Pterm observer or custom pinokio.js metrics |
+
+---
+
 ## Critical Files (Updated)
 
 | File | Purpose |
