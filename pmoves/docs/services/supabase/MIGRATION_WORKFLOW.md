@@ -17,6 +17,8 @@ PMOVES uses a dual-path schema strategy:
 
 - **migrations/**: Applied via `supabase db push` or `make supa-migrate` against a running database. Used for production upgrades where data must be preserved. Tracked by Supabase's migration history table.
 
+For a full PMOVES bootstrap on an existing database, the canonical entrypoint is `make -C pmoves supabase-bootstrap`, which applies `supabase/migrations/*.sql` first and then replays `supabase/initdb/*.sql` as tracked seeds via `public.pmoves_bootstrap_history`.
+
 ## File Naming Conventions
 
 ### initdb/ — Numbered ordering
@@ -68,15 +70,14 @@ The following tables appear in **both** initdb and migrations, guarded by `CREAT
 
 | Directory | Files | Purpose |
 |-----------|-------|---------|
-| `pmoves/db/` | 6 files | Versioned schema updates (`v5_12_*`, `v5_13_*`, `v5_14_*`) — legacy, being consolidated |
-| `pmoves/migrations/` | 3 files | Root-level migrations (large, numbered `001-002`) — legacy |
+| `pmoves/db/` | 6 files | Legacy source SQL (`v5_12_*`, `v5_13_*`, `v5_14_*`) referenced by newer seeds; not executed by `supabase-bootstrap` |
+| `pmoves/migrations/` | 3 files | Root-level legacy migrations (large, numbered `001-002`); not part of the current Supabase bootstrap path |
 
 ## Common Operations
 
 ```bash
-# Fresh database (dev): destroy volume and reinitialize
-make -C pmoves volume-reset SERVICE=supabase-db
-make -C pmoves up-supabase
+# Fresh or existing database: apply canonical PMOVES bootstrap
+make -C pmoves supabase-bootstrap
 
 # Apply migrations to running database
 make -C pmoves supa-migrate
@@ -84,6 +85,8 @@ make -C pmoves supa-migrate
 # Check migration status
 supabase db status --db-url "postgresql://supabase_admin:${DB_PASSWORD}@localhost:5432/postgres"
 ```
+
+Do not replay `supabase/initdb/*.sql` seed files directly against an empty database unless you have already applied the dependent migrations they assume.
 
 ## Postgres 17 Compatibility
 

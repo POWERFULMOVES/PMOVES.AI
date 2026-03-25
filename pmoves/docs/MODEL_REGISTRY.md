@@ -276,8 +276,9 @@ The parser extracts:
 
 ### Empty models list
 1. Check migration ran: `SELECT COUNT(*) FROM pmoves_core.models`
-2. Verify seed data: `psql -f pmoves/supabase/initdb/12_model_registry_seed.sql`
-3. Confirm RLS policies allow access
+2. Run the canonical bootstrap path: `make -C pmoves supabase-bootstrap`
+3. If you are debugging by hand, apply `pmoves/supabase/migrations/20260115_model_registry.sql` before replaying `pmoves/supabase/initdb/12_model_registry_seed.sql`
+4. Confirm RLS policies allow access
 
 ### TOML generation errors
 1. Verify all models have valid providers
@@ -293,5 +294,6 @@ The parser extracts:
 
 - Migration: `pmoves/supabase/migrations/20260115_model_registry.sql`
 - Seed: `pmoves/supabase/initdb/12_model_registry_seed.sql`
+- Canonical bootstrap: `make -C pmoves supabase-bootstrap`
 - Service: `pmoves/services/model-registry/`
 - Docker: `pmoves/docker-compose.yml` (model-registry service)

@@ -11,6 +11,27 @@
 -- Version: 2.0 (reconciled with gpu-models.yaml + tensorzero.toml)
 -- Idempotent: Uses ON CONFLICT to allow safe re-seeding
 
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.tables
+    WHERE table_schema = 'pmoves_core' AND table_name = 'model_providers'
+  ) OR NOT EXISTS (
+    SELECT 1 FROM information_schema.tables
+    WHERE table_schema = 'pmoves_core' AND table_name = 'models'
+  ) OR NOT EXISTS (
+    SELECT 1 FROM information_schema.tables
+    WHERE table_schema = 'pmoves_core' AND table_name = 'model_aliases'
+  ) OR NOT EXISTS (
+    SELECT 1 FROM information_schema.tables
+    WHERE table_schema = 'pmoves_core' AND table_name = 'service_model_mappings'
+  ) THEN
+    RAISE EXCEPTION USING
+      MESSAGE = '12_model_registry_seed.sql requires the model registry schema to exist first.',
+      HINT = 'Run make -C pmoves supabase-bootstrap, or apply 20260115_model_registry.sql before replaying this seed manually.';
+  END IF;
+END $$;
+
 -- =============================================================================
 -- Providers
 -- =============================================================================
