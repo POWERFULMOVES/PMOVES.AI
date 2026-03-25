@@ -3,6 +3,10 @@
     "pmoves-cipher": {
       "type": "sse",
       "url": "http://localhost:8096/sse"
+    },
+    "docker": {
+      "command": "docker",
+      "args": ["run", "--rm", "-i", "--mount", "type=bind,src=//var/run/docker.sock,dst=/var/run/docker.sock", "mcp/docker"]
     }
   }
 }
