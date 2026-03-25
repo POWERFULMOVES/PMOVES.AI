@@ -770,3 +770,205 @@ def test_completion_sync_falls_back_to_direct_reconcile(monkeypatch, tmp_path):
     assert published_messages[0][0] == "content.published.v1"
     assert len(state_calls["complete"]) == 1
     assert len(state_calls["reconcile"]) == 1
+
+
+def test_reconcile_state_guard_rejects_concurrent_state_change(monkeypatch, tmp_path):
+    """When reconcile returns False (state guard), publisher must not claim success."""
+    published_messages: list[tuple[str, bytes]] = []
+    state_calls: Dict[str, Any] = {"complete": [], "reconcile": []}
+
+    async def exercise() -> None:
+        subscription_ready: asyncio.Future = asyncio.get_running_loop().create_future()
+
+        class StubNATS:
+            def __init__(self) -> None:
+                self.published = published_messages
+
+            async def connect(self, servers=None):
+                return None
+
+            async def publish(self, subject, data):
+                self.published.append((subject, data))
+
+            async def subscribe(self, subject, cb):
+                if not subscription_ready.done():
+                    subscription_ready.set_result(cb)
+
+        class StubMinio:
+            def __init__(self, *args, **kwargs) -> None:
+                pass
+
+        async def fake_start_metrics_server():
+            return SimpleNamespace()
+
+        async def fake_download_with_retries(_minio, _bucket, _key, dest):
+            Path(dest).parent.mkdir(parents=True, exist_ok=True)
+            Path(dest).write_bytes(b"demo")
+
+        async def fake_request_jellyfin_refresh(_title, _namespace):
+            return None, None, {}
+
+        async def fake_persist_publish_rollup(_row):
+            return None
+
+        def fake_complete(*args, **kwargs):
+            state_calls["complete"].append((args, kwargs))
+            raise RuntimeError("rpc unavailable")
+
+        def fake_reconcile(*args, **kwargs):
+            state_calls["reconcile"].append((args, kwargs))
+            return False  # state guard rejects
+
+        monkeypatch.setattr(publisher, "MEDIA_LIBRARY_PATH", str(tmp_path))
+        monkeypatch.setattr(publisher, "STUDIO_BOARD_SYNC_RETRIES", 1)
+        monkeypatch.setattr(publisher, "STUDIO_BOARD_SYNC_BACKOFF_SEC", 0)
+        monkeypatch.setattr(publisher, "_NATSClient", lambda: StubNATS())
+        monkeypatch.setattr(publisher, "_MinioClient", lambda *args, **kwargs: StubMinio())
+        monkeypatch.setattr(publisher, "start_metrics_server", fake_start_metrics_server)
+        monkeypatch.setattr(publisher, "download_with_retries", fake_download_with_retries)
+        monkeypatch.setattr(publisher, "request_jellyfin_refresh", fake_request_jellyfin_refresh)
+        monkeypatch.setattr(publisher, "persist_publish_rollup", fake_persist_publish_rollup)
+        monkeypatch.setattr(publisher, "_record_audit", lambda **kwargs: None)
+        monkeypatch.setattr(
+            publisher,
+            "supabase_client",
+            SimpleNamespace(
+                claim_studio_board_publish=lambda *args, **kwargs: True,
+                complete_studio_board_publish=fake_complete,
+                reconcile_studio_board_publish_completion=fake_reconcile,
+                fail_studio_board_publish=lambda *args, **kwargs: True,
+                upsert_publisher_audit=lambda row: None,
+            ),
+        )
+
+        main_task = asyncio.create_task(publisher.main())
+        handle = await asyncio.wait_for(subscription_ready, timeout=1)
+        main_task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await main_task
+
+        env = {
+            "id": "evt-500",
+            "ts": "2024-01-01T12:00:00Z",
+            "correlation_id": "corr-500",
+            "payload": {
+                "studio_board_id": 95,
+                "publish_request_id": "req-500",
+                "artifact_uri": "s3://assets/demo/video.mp4",
+                "namespace": "Creative Works",
+                "title": "Demo Video",
+                "meta": {"camera": "FX3", "approved_at": "2024-01-01T11:30:00Z"},
+            },
+        }
+
+        msg = SimpleNamespace(data=json.dumps(env).encode("utf-8"))
+        await handle(msg)
+
+    asyncio.run(exercise())
+
+    assert len(state_calls["complete"]) == 1, "complete should have been attempted"
+    assert len(state_calls["reconcile"]) == 1, "reconcile fallback should have been called"
+    # Publish succeeds regardless — reconcile result only affects audit metadata
+    assert published_messages, "expected published envelope"
+    assert published_messages[0][0] == "content.published.v1"
+
+
+def test_reconcile_already_published_returns_success(monkeypatch, tmp_path):
+    """When reconcile returns True (already published by another worker), publisher succeeds."""
+    published_messages: list[tuple[str, bytes]] = []
+    state_calls: Dict[str, Any] = {"complete": [], "reconcile": []}
+
+    async def exercise() -> None:
+        subscription_ready: asyncio.Future = asyncio.get_running_loop().create_future()
+
+        class StubNATS:
+            def __init__(self) -> None:
+                self.published = published_messages
+
+            async def connect(self, servers=None):
+                return None
+
+            async def publish(self, subject, data):
+                self.published.append((subject, data))
+
+            async def subscribe(self, subject, cb):
+                if not subscription_ready.done():
+                    subscription_ready.set_result(cb)
+
+        class StubMinio:
+            def __init__(self, *args, **kwargs) -> None:
+                pass
+
+        async def fake_start_metrics_server():
+            return SimpleNamespace()
+
+        async def fake_download_with_retries(_minio, _bucket, _key, dest):
+            Path(dest).parent.mkdir(parents=True, exist_ok=True)
+            Path(dest).write_bytes(b"demo")
+
+        async def fake_request_jellyfin_refresh(_title, _namespace):
+            return None, None, {}
+
+        async def fake_persist_publish_rollup(_row):
+            return None
+
+        def fake_complete(*args, **kwargs):
+            state_calls["complete"].append((args, kwargs))
+            raise RuntimeError("rpc unavailable")
+
+        def fake_reconcile(*args, **kwargs):
+            state_calls["reconcile"].append((args, kwargs))
+            return True  # already published by another worker
+
+        monkeypatch.setattr(publisher, "MEDIA_LIBRARY_PATH", str(tmp_path))
+        monkeypatch.setattr(publisher, "STUDIO_BOARD_SYNC_RETRIES", 1)
+        monkeypatch.setattr(publisher, "STUDIO_BOARD_SYNC_BACKOFF_SEC", 0)
+        monkeypatch.setattr(publisher, "_NATSClient", lambda: StubNATS())
+        monkeypatch.setattr(publisher, "_MinioClient", lambda *args, **kwargs: StubMinio())
+        monkeypatch.setattr(publisher, "start_metrics_server", fake_start_metrics_server)
+        monkeypatch.setattr(publisher, "download_with_retries", fake_download_with_retries)
+        monkeypatch.setattr(publisher, "request_jellyfin_refresh", fake_request_jellyfin_refresh)
+        monkeypatch.setattr(publisher, "persist_publish_rollup", fake_persist_publish_rollup)
+        monkeypatch.setattr(publisher, "_record_audit", lambda **kwargs: None)
+        monkeypatch.setattr(
+            publisher,
+            "supabase_client",
+            SimpleNamespace(
+                claim_studio_board_publish=lambda *args, **kwargs: True,
+                complete_studio_board_publish=fake_complete,
+                reconcile_studio_board_publish_completion=fake_reconcile,
+                fail_studio_board_publish=lambda *args, **kwargs: True,
+                upsert_publisher_audit=lambda row: None,
+            ),
+        )
+
+        main_task = asyncio.create_task(publisher.main())
+        handle = await asyncio.wait_for(subscription_ready, timeout=1)
+        main_task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await main_task
+
+        env = {
+            "id": "evt-600",
+            "ts": "2024-01-01T12:00:00Z",
+            "correlation_id": "corr-600",
+            "payload": {
+                "studio_board_id": 96,
+                "publish_request_id": "req-600",
+                "artifact_uri": "s3://assets/demo/video.mp4",
+                "namespace": "Creative Works",
+                "title": "Demo Video",
+                "meta": {"camera": "FX3", "approved_at": "2024-01-01T11:30:00Z"},
+            },
+        }
+
+        msg = SimpleNamespace(data=json.dumps(env).encode("utf-8"))
+        await handle(msg)
+
+    asyncio.run(exercise())
+
+    assert len(state_calls["complete"]) == 1, "complete should have been attempted"
+    assert len(state_calls["reconcile"]) == 1, "reconcile fallback should have been called"
+    # Reconcile returned True → publisher should emit success
+    assert published_messages, "expected published envelope"
+    assert published_messages[0][0] == "content.published.v1"
