@@ -6,7 +6,7 @@ RUN npm ci --ignore-scripts
 COPY . .
 RUN npm run build
 
-FROM dhi.io/node:20
+FROM node:20-slim
 
 # Security: non-root user
 RUN groupadd -r pmoves && useradd -r -g pmoves -d /app -s /sbin/nologin pmoves
