@@ -3,7 +3,10 @@
 -- Date: 2025-10-18
 
 DO $$ BEGIN
-  IF NOT EXISTS (
+  IF EXISTS (
+    SELECT 1 FROM information_schema.tables
+    WHERE table_schema='public' AND table_name='geometry_parameter_packs'
+  ) AND NOT EXISTS (
     SELECT 1 FROM information_schema.columns
     WHERE table_schema='public' AND table_name='geometry_parameter_packs' AND column_name='pack_type'
   ) THEN
@@ -13,7 +16,10 @@ DO $$ BEGIN
 END $$;
 
 DO $$ BEGIN
-  IF NOT EXISTS (
+  IF EXISTS (
+    SELECT 1 FROM information_schema.tables
+    WHERE table_schema='public' AND table_name='geometry_parameter_packs'
+  ) AND NOT EXISTS (
     SELECT 1 FROM information_schema.columns
     WHERE table_schema='public' AND table_name='geometry_parameter_packs' AND column_name='params'
   ) THEN
@@ -23,7 +29,10 @@ DO $$ BEGIN
 END $$;
 
 DO $$ BEGIN
-  IF NOT EXISTS (
+  IF EXISTS (
+    SELECT 1 FROM information_schema.tables
+    WHERE table_schema='public' AND table_name='geometry_parameter_packs'
+  ) AND NOT EXISTS (
     SELECT 1 FROM information_schema.columns
     WHERE table_schema='public' AND table_name='geometry_parameter_packs' AND column_name='version'
   ) THEN
@@ -33,7 +42,10 @@ DO $$ BEGIN
 END $$;
 
 DO $$ BEGIN
-  IF NOT EXISTS (
+  IF EXISTS (
+    SELECT 1 FROM information_schema.tables
+    WHERE table_schema='public' AND table_name='geometry_parameter_packs'
+  ) AND NOT EXISTS (
     SELECT 1 FROM information_schema.columns
     WHERE table_schema='public' AND table_name='geometry_parameter_packs' AND column_name='population_id'
   ) THEN
@@ -43,7 +55,10 @@ DO $$ BEGIN
 END $$;
 
 DO $$ BEGIN
-  IF NOT EXISTS (
+  IF EXISTS (
+    SELECT 1 FROM information_schema.tables
+    WHERE table_schema='public' AND table_name='geometry_parameter_packs'
+  ) AND NOT EXISTS (
     SELECT 1 FROM information_schema.columns
     WHERE table_schema='public' AND table_name='geometry_parameter_packs' AND column_name='generation'
   ) THEN
@@ -53,7 +68,10 @@ DO $$ BEGIN
 END $$;
 
 DO $$ BEGIN
-  IF NOT EXISTS (
+  IF EXISTS (
+    SELECT 1 FROM information_schema.tables
+    WHERE table_schema='public' AND table_name='geometry_parameter_packs'
+  ) AND NOT EXISTS (
     SELECT 1 FROM information_schema.columns
     WHERE table_schema='public' AND table_name='geometry_parameter_packs' AND column_name='fitness'
   ) THEN
@@ -63,12 +81,24 @@ DO $$ BEGIN
 END $$;
 
 -- Index to aid latest-active lookups by pack_type
-CREATE INDEX IF NOT EXISTS idx_geom_param_packs_packtype_status_created
-  ON public.geometry_parameter_packs (pack_type, status, created_at DESC);
+DO $$ BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.tables
+    WHERE table_schema='public' AND table_name='geometry_parameter_packs'
+  ) THEN
+    CREATE INDEX IF NOT EXISTS idx_geom_param_packs_packtype_status_created
+      ON public.geometry_parameter_packs (pack_type, status, created_at DESC);
+  ELSE
+    RAISE NOTICE 'Skipping geometry_parameter_packs compatibility indexes because the base table is absent.';
+  END IF;
+END $$;
 
 -- geometry_swarm_runs compatibility
 DO $$ BEGIN
-  IF NOT EXISTS (
+  IF EXISTS (
+    SELECT 1 FROM information_schema.tables
+    WHERE table_schema='public' AND table_name='geometry_swarm_runs'
+  ) AND NOT EXISTS (
     SELECT 1 FROM information_schema.columns
     WHERE table_schema='public' AND table_name='geometry_swarm_runs' AND column_name='pack_id'
   ) THEN
@@ -78,7 +108,10 @@ DO $$ BEGIN
 END $$;
 
 DO $$ BEGIN
-  IF NOT EXISTS (
+  IF EXISTS (
+    SELECT 1 FROM information_schema.tables
+    WHERE table_schema='public' AND table_name='geometry_swarm_runs'
+  ) AND NOT EXISTS (
     SELECT 1 FROM information_schema.columns
     WHERE table_schema='public' AND table_name='geometry_swarm_runs' AND column_name='best_fitness'
   ) THEN
@@ -88,7 +121,10 @@ DO $$ BEGIN
 END $$;
 
 DO $$ BEGIN
-  IF NOT EXISTS (
+  IF EXISTS (
+    SELECT 1 FROM information_schema.tables
+    WHERE table_schema='public' AND table_name='geometry_swarm_runs'
+  ) AND NOT EXISTS (
     SELECT 1 FROM information_schema.columns
     WHERE table_schema='public' AND table_name='geometry_swarm_runs' AND column_name='metrics'
   ) THEN
@@ -98,7 +134,10 @@ DO $$ BEGIN
 END $$;
 
 DO $$ BEGIN
-  IF NOT EXISTS (
+  IF EXISTS (
+    SELECT 1 FROM information_schema.tables
+    WHERE table_schema='public' AND table_name='geometry_swarm_runs'
+  ) AND NOT EXISTS (
     SELECT 1 FROM information_schema.columns
     WHERE table_schema='public' AND table_name='geometry_swarm_runs' AND column_name='created_by'
   ) THEN
@@ -108,7 +147,10 @@ DO $$ BEGIN
 END $$;
 
 DO $$ BEGIN
-  IF NOT EXISTS (
+  IF EXISTS (
+    SELECT 1 FROM information_schema.tables
+    WHERE table_schema='public' AND table_name='geometry_swarm_runs'
+  ) AND NOT EXISTS (
     SELECT 1 FROM information_schema.columns
     WHERE table_schema='public' AND table_name='geometry_swarm_runs' AND column_name='created_at'
   ) THEN
@@ -117,5 +159,14 @@ DO $$ BEGIN
   END IF;
 END $$;
 
-CREATE INDEX IF NOT EXISTS idx_geom_swarm_runs_pack ON public.geometry_swarm_runs (pack_id);
-CREATE INDEX IF NOT EXISTS idx_geom_swarm_runs_population_created ON public.geometry_swarm_runs (population_id, created_at DESC);
+DO $$ BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.tables
+    WHERE table_schema='public' AND table_name='geometry_swarm_runs'
+  ) THEN
+    CREATE INDEX IF NOT EXISTS idx_geom_swarm_runs_pack ON public.geometry_swarm_runs (pack_id);
+    CREATE INDEX IF NOT EXISTS idx_geom_swarm_runs_population_created ON public.geometry_swarm_runs (population_id, created_at DESC);
+  ELSE
+    RAISE NOTICE 'Skipping geometry_swarm_runs compatibility indexes because the base table is absent.';
+  END IF;
+END $$;
