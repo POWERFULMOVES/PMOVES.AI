@@ -37,7 +37,7 @@ DO $$ BEGIN
     WHERE table_schema='public' AND table_name='geometry_parameter_packs' AND column_name='version'
   ) THEN
     ALTER TABLE public.geometry_parameter_packs
-      ADD COLUMN version text NULL;
+      ADD COLUMN version text NOT NULL DEFAULT 'v1';
   END IF;
 END $$;
 
