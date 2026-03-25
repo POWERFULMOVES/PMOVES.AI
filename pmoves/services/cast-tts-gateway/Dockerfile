@@ -1,4 +1,4 @@
-FROM python:3.12-slim
+FROM dhi.io/python:3.12
 
 WORKDIR /app
 
