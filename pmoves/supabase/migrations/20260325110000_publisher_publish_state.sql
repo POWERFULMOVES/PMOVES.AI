@@ -214,7 +214,7 @@ begin
   end if;
 
   update public.studio_board
-  set status = 'approved',
+  set status = 'publish_failed',
       meta = (
         (
           coalesce(meta, '{}'::jsonb)
@@ -234,7 +234,13 @@ begin
       )
   where id = p_row_id
     and coalesce(meta->>'publish_event_sent_at', '') = ''
-    and status in ('approved', 'publishing');
+    and (
+      status in ('approved', 'publishing')
+      or (
+        status = 'publish_failed'
+        and coalesce(meta->>'last_publish_request_id', '') = coalesce(p_publish_event_id, '')
+      )
+    );
 
   get diagnostics updated_rows = row_count;
   return updated_rows > 0;

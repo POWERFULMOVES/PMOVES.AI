@@ -20,6 +20,7 @@ interface StudioBoardRowMeta {
   reviewed_by?: string | null;
   publish_event_sent_at?: string | null;
   publish_requested_at?: string | null;
+  publish_failed_at?: string | null;
   publish_failure_reason?: string | null;
   tags?: string[];
   persona?: string;
@@ -38,7 +39,7 @@ interface StudioBoardRow {
 
 type ReviewAction = "approve" | "reject";
 
-const STATUS_OPTIONS = ["all", "submitted", "approved", "publishing", "rejected", "published"];
+const STATUS_OPTIONS = ["all", "submitted", "approved", "publishing", "publish_failed", "rejected", "published"];
 
 const formatDate = (value?: string | null) => {
   if (!value) return "—";
@@ -170,6 +171,11 @@ export default function StudioBoardDashboardPage() {
           reviewed_at: now,
           reviewed_by: reviewer || null,
           rejection_reason: rejectionReason,
+          publish_state: action === "approve" ? null : meta.publish_state,
+          publish_failed_at: action === "approve" ? null : meta.publish_failed_at,
+          publish_failure_reason: action === "approve" ? null : meta.publish_failure_reason,
+          publish_failure_stage: action === "approve" ? null : meta.publish_failure_stage,
+          publish_failure_meta: action === "approve" ? null : meta.publish_failure_meta,
         });
 
         const payload: Partial<StudioBoardRow> = {
