@@ -47,6 +47,7 @@ create index if not exists idx_publisher_audit_namespace on public.publisher_aud
 create index if not exists idx_publisher_audit_reviewer on public.publisher_audit(reviewer);
 create index if not exists idx_publisher_audit_processed_at on public.publisher_audit(processed_at desc);
 create index if not exists idx_publisher_audit_studio_board_id on public.publisher_audit(studio_board_id);
+create index if not exists idx_publisher_audit_published_at on public.publisher_audit(published_at desc);
 
 create or replace function public.set_publisher_audit_updated_at()
 returns trigger
