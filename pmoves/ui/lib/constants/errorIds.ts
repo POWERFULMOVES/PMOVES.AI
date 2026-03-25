@@ -98,9 +98,6 @@ export const ErrorIds = {
   FLUTE_VOICE_LIST_FAILED: 'flute_voice_list_failed',
   FLUTE_HEALTH_CHECK_FAILED: 'flute_health_check_failed',
 
-  // === MONITOR ERRORS ===
-  MONITOR_STATS_FETCH_FAILED: 'monitor_stats_fetch_failed',
-
   // === SERVICES HUB ERRORS ===
   SERVICES_HUB_FETCH_FAILED: 'services_hub_fetch_failed',
 
