@@ -1,9 +1,16 @@
 alter table if exists public.studio_board
   add column if not exists updated_at timestamptz default now();
 
-update public.studio_board
-set updated_at = coalesce(updated_at, created_at, now())
-where updated_at is null;
+DO $$ BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.tables
+    WHERE table_schema = 'public' AND table_name = 'studio_board'
+  ) THEN
+    UPDATE public.studio_board
+    SET updated_at = coalesce(updated_at, created_at, now())
+    WHERE updated_at IS NULL;
+  END IF;
+END $$;
 
 create or replace function public.set_studio_board_updated_at()
 returns trigger
@@ -110,6 +117,16 @@ begin
     return false;
   end if;
 
+  -- Idempotency: already claimed with this request_id → no-op success
+  if exists (
+    select 1 from public.studio_board
+    where id = p_row_id
+      and status = 'publishing'
+      and coalesce(meta->>'publish_request_id', '') = p_publish_event_id
+  ) then
+    return true;
+  end if;
+
   update public.studio_board
   set status = 'publishing',
       meta = (
@@ -130,13 +147,7 @@ begin
       )
   where id = p_row_id
     and coalesce(meta->>'publish_event_sent_at', '') = ''
-    and (
-      status = 'approved'
-      or (
-        status = 'publishing'
-        and coalesce(meta->>'publish_request_id', '') = p_publish_event_id
-      )
-    );
+    and status = 'approved';
 
   get diagnostics updated_rows = row_count;
   return updated_rows > 0;
