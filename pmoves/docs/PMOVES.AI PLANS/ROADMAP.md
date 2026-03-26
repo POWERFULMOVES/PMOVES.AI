@@ -27,6 +27,9 @@ A production-ready, self-hostable orchestration mesh for creative + agent worklo
   - operator docs are being normalized around one modular provisioning contract: Supabase system-of-record first, then Neo4j/Qdrant/Meilisearch, then optional n8n automation/control-plane overlays.
   - the runtime choice is now treated as explicit operator intent instead of an implicit default: `SUPABASE_RUNTIME=cli` for bootstrap/data repair, `SUPABASE_RUNTIME=compose` for release-mode parity and guard rails.
   - release-note/CVE intake is being funneled through the existing weekly/scheduled lanes (`codeql.yml`, `yt-dlp-bump.yml`, `python-images-toolchain-canary.yml`) plus local GHCR/Trivy gates, with outcomes tracked in the production audit dashboard and hardening tracker.
+- March 26 creator/publishing follow-through is the active Codex lane:
+  - bootstrap edge-case hardening landed in PR #1126 (superseded #1114) so the remaining creator-control work can move independently of the publisher review lane.
+  - next implementation focus is operational, not scaffolding: activate the Supabase -> Agent Zero -> Publisher -> Discord loop, choose the canonical Discord publish path, and make `approved` vs `publishing` vs `published` vs `publish_failed` obvious in operator UX.
 - March 7 merge wave completed on `main`: `#814`, `#815`, `#816`, `#817`, `#818`, `#819`, `#820`, `#821` (8 PRs, 3 batches).
 - Chrome extension security hardening landed in `#821`: 9 CodeRabbit review items addressed (auth storage isolation, XSS remediation, mock server hardening, timeout guards, state management fixes, CSP).
 - Distributed topology documentation + examples landed in `#820`.

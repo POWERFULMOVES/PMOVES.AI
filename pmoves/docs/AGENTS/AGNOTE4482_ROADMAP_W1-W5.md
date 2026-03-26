@@ -448,14 +448,16 @@ All resolved. No blockers.
 | Infra (Model Registry HF enrichment) | 4090-claude | 2026-03-24 | SHIPPED `07d06f70` | feat/chit-integration-wave-1 |
 | Infra (Model seed + gpu-models metadata) | 4090-claude | 2026-03-24 | SHIPPED `50ee0022`, `7cfacc8c` | feat/chit-integration-wave-1 |
 | Infra (BoTZ submodule sync d125e8a) | 4090-claude | 2026-03-24 | SHIPPED `63532a6b` | feat/chit-integration-wave-1 |
-| Infra (Publisher SQL P1 hardening) | 5090-claude | 2026-03-26 | IN PR #1126 (supersedes closed #1114) | fix/publisher-sql-p1-hardening |
-| W2 (Pinokio fleet networking + packaging docs) | codex-gpt5 | 2026-03-26 | IN PR #1115 | codex/pinokio-network-docs |
+| Infra (Publisher SQL P1 hardening) | 5090-claude | 2026-03-26 | MERGED #1126 (superseded closed #1114) | fix/publisher-sql-p1-hardening |
+| W2 (Pinokio fleet networking + packaging docs) | codex-gpt5 | 2026-03-26 | MERGED #1115 | codex/pinokio-network-docs |
 | W1/W6 (TTS MCP bridge + expression registry) | codex-gpt5 | 2026-03-26 | IN PR #1116 | codex/tts-mcp-bridge |
 | W3/M2 (creator publishing follow-up docs) | codex-gpt5 | 2026-03-26 | IN PR #1117 | codex/agnote4482-creator-publishing-docs |
 | Infra (`PMOVES.YT` pointer sync) | codex-gpt5 | 2026-03-26 | IN PR #1118 | codex/pmoves-yt-pointer |
-| W4 (search ingest command) | codex-gpt5 | 2026-03-26 | IN PR #1119 | codex/search-ingest-command |
+| W4 (search ingest command) | codex-gpt5 | 2026-03-26 | MERGED #1119 | codex/search-ingest-command |
 | W3/M2 (studio-board approval handoff UX) | codex-gpt5 | 2026-03-26 | IN PR #1120 | codex/agnote4482-approval-ux |
 | W2/W3 (Pinokio PMOVES Codex plugin + Agent Zero launcher) | codex-gpt5 | 2026-03-26 | IN PR #1121 | codex/pinokio-pmoves-plugin-pack |
+| W3/M2 (creator automation activation + Discord canonical lane) | codex-gpt5 | 2026-03-26 | RECOMMENDED — follow-up after #1126 merge | — |
+| W3/M2 (studio-board status UX: approved→published visibility) | codex-gpt5 | 2026-03-26 | RECOMMENDED — docs lane active, implementation next | — |
 
 ## Recommended Next Steps (Post 2026-03-24 CHIT Wave 1)
 
@@ -484,11 +486,14 @@ All resolved. No blockers.
 | 4 | Jetson Orin onboarding | P2 | Via RustDesk |
 | 5 | NATS leaf node to 5090 | P2 | Flute NATS=connected proves bus healthy |
 
+<<<<<<< HEAD
 ### codex-gpt5 (Board + Packaging + Creator Control)
 | # | Task | Priority | Notes |
 |---|------|----------|-------|
-| 1 | Review and land PR #1126 (P1 SQL fixes) | **P0** | #1114 closed — superseded by #1126 (IF EXISTS guard + idempotent claim). 5090-claude authored |
+| 1 | ~~Review and land PR #1126~~ | ~~**P0**~~ | DONE — #1126 merged, #1114 closed |
 | 2 | Close the creator-control loop in PRs #1117 + #1120 | **P0** | Keep `approved`, `publishing`, `published`, and `publish_failed` explicit in docs + UI |
-| 3 | Finish live Pinokio smoke for PR #1121 after env fixes | P1 | Repo-root launcher path is fixed; remaining blocker is PMOVES env/runtime readiness |
-| 4 | Move the atomic Codex lanes (#1115, #1116, #1118, #1119) through remote review | P1 | Keep them split instead of sweeping root checkout dirt |
-| 5 | Keep provider wrappers additive to the PMOVES mesh | P2 | Pinokio plugins should inject defaults, not replace NATS/MCP/CHIT contracts |
+| 3 | Close Supabase→Agent Zero→Publisher→Discord activation loop | **P0** | Validate `approval_poller.json` + `echo_publisher.json`; capture first published-event evidence |
+| 4 | Pick canonical Discord publish lane | P1 | Decide between `publisher-discord` NATS subscriber and n8n webhook relay; demote the other |
+| 5 | Finish live Pinokio smoke for PR #1121 after env fixes | P1 | Repo-root launcher path is fixed; remaining blocker is PMOVES env/runtime readiness |
+| 6 | Move remaining Codex lanes (#1116, #1118) through review | P1 | #1115, #1119 already merged |
+| 7 | Surface publish failures + backfill readiness | P2 | Turn publisher audit into operator-visible lane before broader M2 expansion |
