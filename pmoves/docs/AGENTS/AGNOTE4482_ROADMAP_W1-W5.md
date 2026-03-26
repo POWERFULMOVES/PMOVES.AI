@@ -396,6 +396,26 @@ All resolved. No blockers.
 
 ---
 
+## Remote Queue Snapshot (2026-03-26)
+
+| PR | Lane | Status | Notes |
+|----|------|--------|-------|
+| #1114 | Supabase bootstrap hardening | OPEN — `DIRTY` | Land before more bootstrap/env churn; this is the main blocker in the current queue |
+| #1115 | Pinokio fleet networking docs | OPEN | Atomic Codex docs lane for P7 packaging + TAC/networking parity |
+| #1116 | TTS MCP bridge + expression registry | OPEN | Codex voice lane; review alongside live TTS/Flute work |
+| #1117 | Creator publishing follow-up docs | OPEN | AGNOTE/NEXT_STEPS planning lane for creator-control follow-through |
+| #1118 | `PMOVES.YT` pointer bump | OPEN | Atomic submodule lane |
+| #1119 | Search ingest command | OPEN | Atomic docs lane |
+| #1120 | Studio-board approval handoff UX | OPEN | Creator-control implementation lane; pairs with publisher-state changes |
+| #1121 | PMOVES Codex plugin + Agent Zero launcher | OPEN | Live Pinokio wrapper lane; repo-root path fix validated locally |
+| #1122 | 4090 localhost hardening | OPEN | Security lane for field node |
+| #1123 | Damage-control hooks Windows compatibility | OPEN | Hook/runtime parity lane |
+| #1124 | Data services provisioning docs | OPEN | Ops/doc parity for release cadence + data services |
+
+**Recommended review order:** #1114 first, then #1118 + #1119, then #1115, then #1116 + #1121, then #1122 + #1123 + #1124.
+
+---
+
 ## Agent Claim Register
 
 > Agents: write your CLAIM here before starting work on a workstream.
@@ -428,6 +448,14 @@ All resolved. No blockers.
 | Infra (Model Registry HF enrichment) | 4090-claude | 2026-03-24 | SHIPPED `07d06f70` | feat/chit-integration-wave-1 |
 | Infra (Model seed + gpu-models metadata) | 4090-claude | 2026-03-24 | SHIPPED `50ee0022`, `7cfacc8c` | feat/chit-integration-wave-1 |
 | Infra (BoTZ submodule sync d125e8a) | 4090-claude | 2026-03-24 | SHIPPED `63532a6b` | feat/chit-integration-wave-1 |
+| Infra (Supabase bootstrap hardening) | codex-gpt5 | 2026-03-26 | IN REVIEW — PR #1114 is `DIRTY` | codex/pr1100-review-fixes |
+| W2 (Pinokio fleet networking + packaging docs) | codex-gpt5 | 2026-03-26 | IN PR #1115 | codex/pinokio-network-docs |
+| W1/W6 (TTS MCP bridge + expression registry) | codex-gpt5 | 2026-03-26 | IN PR #1116 | codex/tts-mcp-bridge |
+| W3/M2 (creator publishing follow-up docs) | codex-gpt5 | 2026-03-26 | IN PR #1117 | codex/agnote4482-creator-publishing-docs |
+| Infra (`PMOVES.YT` pointer sync) | codex-gpt5 | 2026-03-26 | IN PR #1118 | codex/pmoves-yt-pointer |
+| W4 (search ingest command) | codex-gpt5 | 2026-03-26 | IN PR #1119 | codex/search-ingest-command |
+| W3/M2 (studio-board approval handoff UX) | codex-gpt5 | 2026-03-26 | IN PR #1120 | codex/agnote4482-approval-ux |
+| W2/W3 (Pinokio PMOVES Codex plugin + Agent Zero launcher) | codex-gpt5 | 2026-03-26 | IN PR #1121 | codex/pinokio-pmoves-plugin-pack |
 
 ## Recommended Next Steps (Post 2026-03-24 CHIT Wave 1)
 
@@ -455,3 +483,12 @@ All resolved. No blockers.
 | 3 | W6-P1: Health/Wealth Docker wiring | P1 | NATS + /healthz + /metrics |
 | 4 | Jetson Orin onboarding | P2 | Via RustDesk |
 | 5 | NATS leaf node to 5090 | P2 | Flute NATS=connected proves bus healthy |
+
+### codex-gpt5 (Board + Packaging + Creator Control)
+| # | Task | Priority | Notes |
+|---|------|----------|-------|
+| 1 | Review and land PR #1114 before more bootstrap churn | **P0** | Supabase/bootstrap hardening is the only current `DIRTY` lane |
+| 2 | Close the creator-control loop in PRs #1117 + #1120 | **P0** | Keep `approved`, `publishing`, `published`, and `publish_failed` explicit in docs + UI |
+| 3 | Finish live Pinokio smoke for PR #1121 after env fixes | P1 | Repo-root launcher path is fixed; remaining blocker is PMOVES env/runtime readiness |
+| 4 | Move the atomic Codex lanes (#1115, #1116, #1118, #1119) through remote review | P1 | Keep them split instead of sweeping root checkout dirt |
+| 5 | Keep provider wrappers additive to the PMOVES mesh | P2 | Pinokio plugins should inject defaults, not replace NATS/MCP/CHIT contracts |
