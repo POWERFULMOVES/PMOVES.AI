@@ -1,0 +1,479 @@
+# TAC Tree: Defense-in-Depth Networking
+# Validates the full 7-layer networking stack from app binding through production edge.
+# Every layer must be correct — no workarounds (especially not tailscale serve).
+
+name: "Defense-in-Depth Networking"
+version: "1.0.0"
+description: >
+  7-layer networking audit: app binding, Docker network isolation, service health chain,
+  NATS leaf nodes (cross-machine), Tailscale mesh, Headscale coordination, and production
+  VPS edge. Ensures cross-machine access works through correct configuration at every layer,
+  not through workarounds like tailscale serve.
+
+root:
+  id: net
+  task: "Defense-in-depth networking stack review"
+  context: "pmoves/docker-compose.yml + configs/ + Pinokio launcher"
+  agent_hint: codex
+  children:
+
+    # =========================================================================
+    # Phase 1: App Binding Correctness (Pinokio Native)
+    # =========================================================================
+    - id: net.binding
+      task: "App binding correctness"
+      context: "Pinokio Caddy proxy + Gradio binding. Caddy on 0.0.0.0, Gradio on 127.0.0.1"
+      agent_hint: codex
+      children:
+        - id: net.binding.start-js-capture
+          task: "start.js uses correct regex capture group"
+          action:
+            type: grep
+            target: "D:/pinokio/api/Ultimate-TTS-Studio.git/start.js"
+            pattern: "input\\.event\\[1\\]"
+            expect: "URL extracted from capture group [1], not [0]"
+          context: >
+            Pinokio event regex: /(http:\\/\\/\\S+)/ — parentheses create capture group.
+            input.event[0] = full match, input.event[1] = captured URL.
+            Using [0] works accidentally but breaks URL for local.set.
+          agent_hint: codex
+
+        - id: net.binding.gradio-server-name
+          task: "GRADIO_SERVER_NAME not hardcoded to 127.0.0.1"
+          action:
+            type: grep
+            target: "D:/pinokio/api/Ultimate-TTS-Studio.git/start.js"
+            pattern: "GRADIO_SERVER_NAME"
+            expect: "Not hardcoded to 127.0.0.1 — let Pinokio LWW control binding"
+          context: >
+            Pinokio LWW sets GRADIO_SERVER_NAME=0.0.0.0 automatically.
+            Hardcoding 127.0.0.1 in start.js overrides this and blocks
+            cross-machine access. The correct approach: let Pinokio manage it.
+          agent_hint: codex
+
+        - id: net.binding.lww-active
+          task: "Pinokio LWW (LAN-Wide-Web) active for mesh access"
+          action:
+            type: manual
+            instruction: "Verify Pinokio Network tab shows discovered services from other LAN nodes"
+            expect: "LWW is always-on in Pinokio 7 — no toggle needed"
+          context: >
+            LWW (PINOKIO.md Section 8) automatically discovers all localhost TCP
+            listeners and exposes them to other Pinokio instances on the LAN.
+            There is no SHARE_LOCAL toggle — the feature is always active in P7.
+            Cross-machine access goes through Pinokio UI on port 42000.
+          agent_hint: codex
+
+        - id: net.binding.port-assignment
+          task: "Port 7860 (native) vs 7861 (Docker) documented"
+          action:
+            type: manual
+            instruction: "Verify port 7860 is Pinokio native, 7861 is Docker (if used)"
+            expect: "No port conflict between native and containerized TTS"
+          context: "Pinokio native uses Caddy on 7860, Docker compose may use 7861"
+          agent_hint: codex
+
+        - id: net.binding.caddy-https
+          task: "Caddy HTTPS proxy responds"
+          action:
+            type: http
+            url: "https://7860.localhost"
+            expect: "200 OK or Gradio redirect"
+          context: "Pinokio auto-provisions HTTPS via Caddy for all HTTP servers"
+          agent_hint: codex
+
+        - id: net.binding.no-tailscale-serve
+          task: "No tailscale serve workaround active"
+          action:
+            type: shell
+            command: "tailscale serve status"
+            expect: "No active serve proxies (empty output or error)"
+          context: >
+            tailscale serve masks broken networking by proxying through localhost.
+            Direct access must work: curl http://<tailscale-ip>:7860/gradio_api/info
+          agent_hint: codex
+
+    # =========================================================================
+    # Phase 1b: Pinokio Auto-Discovery Audit
+    # =========================================================================
+    - id: net.pinokio-autodiscovery
+      task: "Pinokio LWW auto-discovery audit"
+      context: "LWW (LAN-Wide-Web) exposes ALL localhost TCP listeners via Caddy. Classify intentional vs noise."
+      agent_hint: codex
+      children:
+        - id: net.pinokio-autodiscovery.inventory
+          task: "All auto-discovered services classified"
+          action:
+            type: file_exists
+            target: "pmoves/configs/pinokio-network-inventory.yaml"
+            expect: "Inventory file exists with per-node service classification"
+          context: >
+            LWW auto-discovers Steam, Chrome DevTools, Razer,
+            Logitech, Docker, Surfshark, etc. These are noise, not risk.
+            The inventory file classifies each as intentional/noise/system.
+          agent_hint: codex
+
+        - id: net.pinokio-autodiscovery.lww-port-range
+          task: "LWW share proxy port range documented (42003+)"
+          action:
+            type: manual
+            instruction: >
+              Query Caddy admin API: curl -s http://127.0.0.1:2019/config/apps/http/servers
+              Count share proxy servers, document port range.
+            expect: "42003-420xx ports auto-assigned by Pinokio LWW, one per discovered localhost listener"
+          context: >
+            Pinokio 7 LWW (LAN-Wide-Web) has no user-configurable port setting.
+            Caddy auto-assigns share proxy ports starting at 42003, one per
+            discovered localhost TCP listener. Port 42000 is Pinokio's own UI.
+            Firewall rules should allow TCP 42000-42100 range for cross-machine access.
+            Reference: PINOKIO.md Section 8 (LWW) and Section 9 (HTTPS domains).
+          agent_hint: codex
+
+        - id: net.pinokio-autodiscovery.noise-count
+          task: "Noise service count documented per node"
+          action:
+            type: manual
+            instruction: >
+              Count non-PMOVES auto-discovered services on each node.
+              Cross-reference pmoves/configs/pinokio-network-inventory.yaml.
+            expect: >
+              5090: ~7 noise services (Steam, Chrome, Razer, Logitech, Docker, Surfshark, NVIDIA).
+              Z890: ~1 noise service (Docker Desktop).
+              4090: consumer node, accesses 5090/Z890 via Pinokio LWW network view.
+          context: >
+            Noise count helps track drift. If it grows significantly,
+            investigate whether new intentional services were installed
+            without being classified.
+          agent_hint: codex
+
+        - id: net.pinokio-autodiscovery.no-filtering-fork
+          task: "Accepted: no Pinokio Caddy filtering (too costly)"
+          action:
+            type: manual
+            instruction: "Document decision: filtering requires forking Pinokio core Caddy logic"
+            expect: "Decision documented — accept noise, classify and monitor"
+          context: >
+            Filtering auto-discovered services would require modifying
+            Pinokio's core reverse proxy logic (Caddy). This is high
+            maintenance and fragile across Pinokio upgrades. The
+            accept-and-document approach is the correct trade-off.
+          agent_hint: codex
+          status: accepted_risk
+
+    # =========================================================================
+    # Phase 2: Docker Network Isolation
+    # =========================================================================
+    - id: net.docker
+      task: "Docker network isolation"
+      context: "5-tier network segmentation in docker-compose.yml"
+      agent_hint: codex
+      children:
+        - id: net.docker.networks-exist
+          task: "All 5 internal networks defined with correct CIDRs"
+          action:
+            type: grep
+            target: "pmoves/docker-compose.yml"
+            pattern: "pmoves_(data|api|app|bus|monitoring)"
+            expect: "5 networks: pmoves_data, pmoves_api, pmoves_app, pmoves_bus, pmoves_monitoring"
+          context: "Each network uses internal: true with CIDR blocks 172.30.x.0/24"
+          agent_hint: codex
+
+        - id: net.docker.data-tier-binding
+          task: "Data-tier services bind 127.0.0.1 not 0.0.0.0"
+          action:
+            type: grep
+            target: "pmoves/docker-compose.yml"
+            pattern: "127\\.0\\.0\\.1:.*(6333|7700|7474|9000)"
+            expect: "Qdrant(6333), Meilisearch(7700), Neo4j(7474), MinIO(9000) bind localhost"
+          context: "Data services should never be directly accessible from the network"
+          agent_hint: codex
+
+        - id: net.docker.api-binding-documented
+          task: "API gateways intentionally bind 0.0.0.0 — documented exception"
+          action:
+            type: manual
+            instruction: "Verify Agent Zero (8080), TensorZero (3030) bind 0.0.0.0 intentionally"
+            expect: "Documented in CLAUDE.md or compose comments as intentional"
+          context: "These need external access; all other 0.0.0.0 bindings are suspect"
+          agent_hint: codex
+
+        - id: net.docker.worker-audit
+          task: "Worker services audit — which need 0.0.0.0"
+          action:
+            type: manual
+            instruction: >
+              Audit these 9 services for 0.0.0.0 binding:
+              media workers, DeepResearch, SupaSerch, TensorZero,
+              ffmpeg-whisper, media-video, media-audio, extract-worker, langextract
+            expect: "Each either bound to 127.0.0.1 or documented exception"
+          context: "Workers that only communicate via NATS should not bind 0.0.0.0"
+          agent_hint: codex
+
+        - id: net.docker.host-internal
+          task: "host.docker.internal resolves correctly"
+          action:
+            type: grep
+            target: "pmoves/docker-compose.yml"
+            pattern: "host.docker.internal"
+            expect: "extra_hosts entries consistent across all services needing host access"
+          context: "11+ services use host.docker.internal for Windows host access"
+          agent_hint: codex
+
+    # =========================================================================
+    # Phase 3: Service Health Chain
+    # =========================================================================
+    - id: net.health
+      task: "Service health chain"
+      context: "NATS healthcheck → dependent services → application readiness"
+      agent_hint: codex
+      children:
+        - id: net.health.nats-healthcheck
+          task: "NATS healthcheck at :8222/varz returns 200"
+          action:
+            type: http
+            url: "http://localhost:8222/varz"
+            expect: "200 OK with JSON server info"
+          context: "10+ services depend on NATS being healthy"
+          agent_hint: codex
+
+        - id: net.health.service-healthy-deps
+          task: "All service_healthy dependencies resolve"
+          action:
+            type: grep
+            target: "pmoves/docker-compose.yml"
+            pattern: "service_healthy"
+            expect: "No circular dependency chains"
+          context: "Dependencies must form a DAG — circular deps cause deadlock"
+          agent_hint: codex
+
+        - id: net.health.start-period-gpu
+          task: "start_period adequate for GPU-heavy services"
+          action:
+            type: grep
+            target: "pmoves/docker-compose.yml"
+            pattern: "start_period"
+            expect: "GPU services have 30s+ start_period"
+          context: "GPU model loading can take 30-60s — short start_period causes false failures"
+          agent_hint: codex
+
+    # =========================================================================
+    # Phase 4: NATS Leaf Node (Cross-Machine)
+    # =========================================================================
+    - id: net.nats-leaf
+      task: "NATS leaf node cross-machine connectivity"
+      context: "Z890 leaf → 5090 hub via leafnodes protocol"
+      agent_hint: codex
+      children:
+        - id: net.nats-leaf.config-exists
+          task: "Leaf node config exists"
+          action:
+            type: file_exists
+            target: "pmoves/configs/nats-leaf-z890.conf"
+            expect: "Z890 leaf node configuration present"
+          context: "Connects to hub via host.docker.internal:7422"
+          agent_hint: codex
+
+        - id: net.nats-leaf.auth-not-hardcoded
+          task: "Leaf node credentials use env vars, not hardcoded"
+          action:
+            type: grep
+            target: "pmoves/configs/nats-leaf-z890.conf"
+            pattern: "nats:pmoves@"
+            expect: "WARN: credentials hardcoded — should use include or env var"
+          context: >
+            Current: nats://nats:pmoves@host.docker.internal:7422
+            Ideal: use NATS include directive or env var substitution.
+            Acceptable for now (internal Tailscale network) but noted for hardening.
+          agent_hint: codex
+          status: known_issue
+
+        - id: net.nats-leaf.portproxy
+          task: "Windows netsh portproxy forwards port 7422"
+          action:
+            type: shell
+            command: "netsh interface portproxy show v4tov4"
+            expect: "listenport=7422 → connectaddress=<5090-ip>"
+          context: "Routes Docker container traffic through Windows host to 5090 hub"
+          agent_hint: codex
+
+        - id: net.nats-leaf.jetstream-replication
+          task: "JetStream replication across leaf"
+          action:
+            type: manual
+            instruction: "Publish on Z890, verify receipt on 5090"
+            expect: "Messages replicate bidirectionally"
+          context: "Leaf has local JetStream store (256MB mem, 1GB disk) for disconnect survival"
+          agent_hint: codex
+
+        - id: net.nats-leaf.tls-status
+          task: "TLS status documented"
+          action:
+            type: grep
+            target: "pmoves/configs/nats-leaf-z890.conf"
+            pattern: "tls"
+            expect: "No TLS configured — acceptable on Tailscale (encrypted tunnel)"
+          context: >
+            Plaintext NATS over Tailscale is acceptable since Tailscale provides
+            WireGuard encryption. TLS would be defense-in-depth but not critical.
+          agent_hint: codex
+          status: accepted_risk
+
+    # =========================================================================
+    # Phase 5: Tailscale Mesh Connectivity
+    # =========================================================================
+    - id: net.tailscale
+      task: "Tailscale mesh connectivity"
+      context: "3-node mesh: 5090, 4090 laptop, Z890"
+      agent_hint: codex
+      children:
+        - id: net.tailscale.nodes-online
+          task: "All nodes online with correct hostnames"
+          action:
+            type: shell
+            command: "tailscale status"
+            expect: >
+              powerfulmoves-1 (powerfulmoves-1.ts),
+              pmoves-laptop (pmoves-laptop.ts),
+              pmoves-z890 (pmoves-z890.ts)
+          context: "All three nodes should show as online"
+          agent_hint: codex
+
+        - id: net.tailscale.acl-tags
+          task: "ACL policy permits tag-based access"
+          action:
+            type: grep
+            target: "pmoves/configs/tailscale-acl-policy.json"
+            pattern: "tag:pmoves"
+            expect: "Full mesh: tag:pmoves → tag:pmoves:* on all ports"
+          context: "All PMOVES nodes can reach each other on all ports"
+          agent_hint: codex
+
+        - id: net.tailscale.subnet-routes
+          task: "Subnet routes advertised for Docker networks"
+          action:
+            type: shell
+            command: "tailscale status --json | jq '.Self.AllowedIPs'"
+            expect: "172.30.x.0/24 routes advertised (Docker internal networks)"
+          context: >
+            Without subnet routes, cross-machine containers can't reach each other.
+            Route advertisement must cover all Docker CIDR blocks.
+          agent_hint: codex
+          status: not_yet_configured
+
+        - id: net.tailscale.lww-reachable
+          task: "Cross-machine Pinokio LWW reachable (port 42000)"
+          action:
+            type: http
+            url: "http://powerfulmoves-1.ts:42000/"
+            expect: "200 OK — Pinokio UI accessible, Network tab shows remote apps"
+          context: >
+            Cross-machine app access goes through Pinokio LWW on port 42000,
+            NOT direct HTTP to app ports. Caddy HTTPS proxy on 0.0.0.0:PORT
+            requires TLS SNI (hostname), so raw IP access to app ports fails.
+            Validation: open http://<tailscale-ip>:42000 → Network tab → app.
+            Reference: PINOKIO.md Section 8 (LWW) and Section 9 (HTTPS domains).
+          agent_hint: codex
+
+        - id: net.tailscale.magicdns
+          task: "MagicDNS resolution works"
+          action:
+            type: shell
+            command: "nslookup pmoves-z890.tailcad9b4.ts.net"
+            expect: "Resolves to pmoves-z890.ts"
+          context: "MagicDNS provides human-readable names for Tailscale IPs"
+          agent_hint: codex
+
+    # =========================================================================
+    # Phase 6: Headscale Coordination
+    # =========================================================================
+    - id: net.headscale
+      task: "Headscale self-hosted coordination"
+      context: "PMOVES-Headscale submodule — replaces Tailscale cloud control plane"
+      agent_hint: codex
+      children:
+        - id: net.headscale.service-healthy
+          task: "Headscale service healthy on designated node"
+          action:
+            type: http
+            url: "https://headscale.pmoves.ai/health"
+            expect: "200 OK"
+          context: "Self-hosted control plane for the mesh"
+          agent_hint: codex
+          status: pending_deployment
+
+        - id: net.headscale.tls-cert
+          task: "TLS certificate valid for headscale.pmoves.ai"
+          action:
+            type: manual
+            instruction: "Check TLS cert expiry and issuer for headscale.pmoves.ai"
+            expect: "Valid cert, auto-renewing (Let's Encrypt or Cloudflare Origin)"
+          context: "Control plane must be HTTPS — handles auth tokens and node registration"
+          agent_hint: codex
+          status: pending_deployment
+
+        - id: net.headscale.nodes-registered
+          task: "All nodes registered and synced"
+          action:
+            type: manual
+            instruction: "headscale nodes list — verify 5090, Z890, 4090 registered"
+            expect: "All 3 nodes online with matching IPs"
+          context: "Headscale maintains the node registry and distributes WireGuard keys"
+          agent_hint: codex
+          status: pending_deployment
+
+        - id: net.headscale.auth-tokens
+          task: "Auth tokens not expired"
+          action:
+            type: manual
+            instruction: "headscale apikeys list — check expiry dates"
+            expect: "No expired tokens; rotation schedule documented"
+          context: "Expired tokens cause silent node disconnection"
+          agent_hint: codex
+          status: pending_deployment
+
+    # =========================================================================
+    # Phase 7: Production Edge (VPS + Cloudflare)
+    # =========================================================================
+    - id: net.edge
+      task: "Production VPS and Cloudflare edge"
+      context: "Cloudflare Worker → KVM nodes → services"
+      agent_hint: codex
+      children:
+        - id: net.edge.worker-routes
+          task: "Cloudflare Worker routing rules match TOPOLOGY.md"
+          action:
+            type: manual
+            instruction: "Compare deploy/cloudflare/worker.js routes with pmoves/docs/operations/TOPOLOGY.md"
+            expect: "All documented routes present in Worker config"
+          context: "Worker routes requests to correct KVM backend based on subdomain"
+          agent_hint: codex
+
+        - id: net.edge.kvm-reachable
+          task: "KVM node services reachable via Cloudflare proxy"
+          action:
+            type: manual
+            instruction: "curl https://api.pmoves.ai/healthz via Cloudflare"
+            expect: "200 OK through full proxy chain"
+          context: "Traffic path: client → Cloudflare → Worker → KVM → service"
+          agent_hint: codex
+
+        - id: net.edge.dns-subdomains
+          task: "DNS subdomains resolve to correct backends"
+          action:
+            type: manual
+            instruction: >
+              Verify DNS for: tts.pmoves.ai, api.pmoves.ai, agent.pmoves.ai,
+              rag.pmoves.ai, grafana.pmoves.ai, search.pmoves.ai
+            expect: "All resolve through Cloudflare proxy (orange cloud)"
+          context: "pmoves.ai zone pending Cloudflare migration per TOPOLOGY.md"
+          agent_hint: codex
+          status: pending_dns_migration
+
+        - id: net.edge.no-direct-exposure
+          task: "No direct public IP exposure for internal services"
+          action:
+            type: manual
+            instruction: "Verify KVM public IPs not directly accessible on service ports"
+            expect: "All traffic flows through Cloudflare — no IP:port direct access"
+          context: "Direct exposure bypasses WAF, DDoS protection, and rate limiting"
+          agent_hint: codex

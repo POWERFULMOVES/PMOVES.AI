@@ -1,0 +1,342 @@
+# TAC Tree: Node 5090 (POWERFULMOVES)
+# Per-node capability tree for the primary GPU workstation.
+# RTX 5090 32GB — canonical TTS host, Pinokio native, 18 apps installed.
+#
+# Key paths:
+#   D:\pinokio\api\                                  (Pinokio app root)
+#   D:\pinokio\api\Ultimate-TTS-Studio.git\          (14-engine TTS hub)
+#   D:\pinokio\api\Qwen3-TTS-Pinokio.git\           (Qwen3 standalone)
+#   D:\pinokio\api\vibevoice-realtime.git\           (WebSocket streaming TTS)
+#   D:\pinokio\api\VoxForge-Pro.git\                 (PDF-to-audiobook pipeline)
+# Cross-refs:
+#   pmoves/configs/tac_trees/networking-defense-in-depth.tac.yaml
+#   pmoves/configs/tac_trees/pinokio-p7.tac.yaml
+#   pmoves/configs/tts-engine-capabilities.yaml
+
+name: "Node 5090 POWERFULMOVES"
+version: "1.0.0"
+description: >
+  Per-node TAC tree for the 5090 (POWERFULMOVES) GPU workstation.
+  RTX 5090 32GB VRAM. Primary TTS host, Pinokio native runtime.
+  18 Pinokio apps installed (5 TTS-related, 13 non-TTS).
+  Hostname: POWERFULMOVES | Tailscale: powerfulmoves-1.ts | Role: Primary GPU / TTS
+
+root:
+  id: n5090
+  task: "5090 POWERFULMOVES node health and capability review"
+  context: "D:\\pinokio\\api\\ — 18 apps, RTX 5090 32GB"
+  agent_hint: 5090-claude
+  children:
+
+    # =========================================================================
+    # Phase 1: Pinokio App Inventory
+    # =========================================================================
+    - id: n5090.inventory
+      task: "Pinokio app inventory — 18 apps enumerated"
+      context: "D:\\pinokio\\api\\ — all installed Pinokio apps"
+      agent_hint: 5090-claude
+      children:
+        - id: n5090.inventory.tts-apps
+          task: "TTS apps classified (5 total, 4 kept, 1 removed)"
+          action:
+            type: manual
+            instruction: "Verify 5 TTS-related apps in D:\\pinokio\\api\\"
+            expect: >
+              KEEP: Ultimate-TTS-Studio.git (14 engines, primary hub),
+              Qwen3-TTS-Pinokio.git (VoiceDesign mode, 9 presets),
+              vibevoice-realtime.git (WebSocket streaming),
+              VoxForge-Pro.git (PDF-to-audiobook pipeline).
+              REMOVED: vibevoice-realtime2.git (exact duplicate of v1)
+          context: >
+            Overlap audit completed 2026-03-22. Each kept app has unique value:
+            Ultimate-TTS = hub, Qwen3 = VoiceDesign, VibeVoice-RT = streaming,
+            VoxForge = audiobook pipeline. vibevoice-realtime2 is byte-for-byte
+            duplicate of v1 with only a pinokio.json version difference.
+          agent_hint: 5090-claude
+
+        - id: n5090.inventory.non-tts-apps
+          task: "Non-TTS apps enumerated (13 apps)"
+          action:
+            type: manual
+            instruction: "Verify non-TTS apps are functional"
+            expect: >
+              ace-step.pinokio.git, ace-step-ui.pinokio.git (music gen),
+              clawdbot.git (Claude agent), cropper.git (image crop),
+              discord-id-bypass-tool.pinokio.git, heartmula-studio.git,
+              hermes-agent.pinokio.git, LightOnOCR-2-1B-Pinokio.git,
+              N8N-Pinokio.git, sillytavern.git, SongGeneration-Studio.git,
+              unsloth.git (fine-tuning), wan.git (video gen)
+          agent_hint: 5090-claude
+
+        - id: n5090.inventory.duplicate-removed
+          task: "vibevoice-realtime2.git removed (duplicate)"
+          action:
+            type: file_exists
+            target: "D:/pinokio/api/vibevoice-realtime2.git"
+            expect: "Directory removed — saves ~2-3 GB disk and eliminates confusion"
+          context: >
+            vibevoice-realtime2 is an exact duplicate of vibevoice-realtime with
+            only a pinokio.json version difference. No unique features.
+          agent_hint: 5090-claude
+          status: pending
+
+    # =========================================================================
+    # Phase 2: TTS Engine Health
+    # =========================================================================
+    - id: n5090.tts-health
+      task: "TTS engine health verification"
+      context: "All TTS apps on 5090 — verify startup, port, and API response"
+      agent_hint: 5090-claude
+      children:
+        - id: n5090.tts-health.ultimate
+          task: "Ultimate-TTS-Studio healthy at :7860"
+          action:
+            type: http
+            url: "http://localhost:7860/gradio_api/info"
+            expect: "200 OK with JSON describing 14 engine tabs"
+          context: >
+            Primary TTS hub. 14 engines: Kokoro, F5-TTS, KittenTTS, VoxCPM,
+            Higgs Audio, Fish Speech S2 Pro, Chatterbox Turbo, Chatterbox
+            Multilingual, Qwen3 TTS, IndexTTS, IndexTTS2, VibeVoice,
+            Fish Speech, ChatterboxTTS. Port 7860 (native Pinokio).
+          agent_hint: 5090-claude
+
+        - id: n5090.tts-health.qwen3
+          task: "Qwen3-TTS-Pinokio healthy at dynamic port"
+          action:
+            type: manual
+            instruction: "Start Qwen3-TTS via Pinokio, verify Gradio UI loads"
+            expect: "Gradio UI at dynamic port, 3 modes: text-to-speech, VoiceDesign, voice-to-voice"
+          context: >
+            Uses Gradio's auto-port assignment. start.json capture group
+            extracts URL. Unique value: VoiceDesign mode (text→voice persona)
+            + 9 speaker presets + fine-grained Qwen3 model management.
+          agent_hint: 5090-claude
+
+        - id: n5090.tts-health.vibevoice-rt
+          task: "VibeVoice Realtime healthy at dynamic port"
+          action:
+            type: manual
+            instruction: "Start vibevoice-realtime via Pinokio, verify WebSocket endpoint"
+            expect: "Uvicorn WebSocket server running (NOT Gradio)"
+          context: >
+            Different architecture from Ultimate-TTS VibeVoice tab.
+            Streams audio via WebSocket, uses uvicorn not Gradio.
+            Unique value: real-time streaming synthesis.
+          agent_hint: 5090-claude
+
+        - id: n5090.tts-health.voxforge
+          task: "VoxForge Pro healthy at dynamic port"
+          action:
+            type: manual
+            instruction: "Start VoxForge via Pinokio, verify audiobook pipeline UI"
+            expect: "Gradio UI with PDF upload, chapter detection, voice selection"
+          context: >
+            PDF-to-audiobook pipeline. Uses Kokoro + Chatterbox as backend.
+            Engines overlap with Ultimate-TTS but use case is distinct:
+            long-form audiobook generation with chapter detection and OCR.
+          agent_hint: 5090-claude
+
+    # =========================================================================
+    # Phase 3: Network Security
+    # =========================================================================
+    - id: n5090.network
+      task: "Pinokio network security on 5090"
+      context: "LWW (LAN-Wide-Web) exposes all localhost TCP listeners via Caddy"
+      agent_hint: 5090-claude
+      children:
+        - id: n5090.network.autodiscovery
+          task: "Auto-discovery audit — intentional vs noise services"
+          action:
+            type: manual
+            instruction: >
+              Check Pinokio network view. Cross-reference with
+              pmoves/configs/pinokio-network-inventory.yaml.
+              Classify each discovered service.
+            expect: "All services classified as intentional or noise"
+          context: >
+            LWW auto-discovers ALL localhost TCP listeners.
+            Steam, Chrome DevTools, Razer, Docker, etc. get exposed.
+            These are noise (no API response) not risk. Cross-ref:
+            networking-defense-in-depth.tac.yaml Phase 1b.
+          agent_hint: 5090-claude
+
+        - id: n5090.network.gradio-binding
+          task: "GRADIO_SERVER_NAME not hardcoded to 127.0.0.1"
+          action:
+            type: grep
+            target: "D:/pinokio/api/Ultimate-TTS-Studio.git/start.js"
+            pattern: "GRADIO_SERVER_NAME"
+            expect: "Not present OR set dynamically — Pinokio manages via LWW"
+          context: >
+            Cross-ref: networking-defense-in-depth.tac.yaml → net.binding.gradio-server-name.
+            Pinokio LWW sets GRADIO_SERVER_NAME=0.0.0.0 automatically.
+          agent_hint: 5090-claude
+
+        - id: n5090.network.start-js-pattern
+          task: "All TTS start scripts use correct capture group pattern"
+          action:
+            type: shell
+            command: "grep -r 'input.event\\[0\\]' D:/pinokio/api/*/start.* 2>/dev/null"
+            expect: "No matches — all apps use input.event[1] with capture group"
+          context: >
+            Critical Pattern Lock: regex must have capture parentheses,
+            local.set must use input.event[1] not [0].
+            Fixed in this session: Qwen3-TTS-Pinokio, VoxForge-Pro.
+            Already correct: Ultimate-TTS-Studio.
+          agent_hint: 5090-claude
+
+    # =========================================================================
+    # Phase 4: Docker Services on 5090
+    # =========================================================================
+    - id: n5090.docker
+      task: "Docker services running on 5090"
+      context: "Ollama, ffmpeg-whisper, and other GPU-dependent containers"
+      agent_hint: 5090-claude
+      children:
+        - id: n5090.docker.ollama
+          task: "Ollama container healthy at :11434"
+          action:
+            type: http
+            url: "http://localhost:11434/api/tags"
+            expect: "200 OK with model list"
+          context: >
+            GOTCHA: TLS x509 errors from Windows SSL env leak. GPU needs
+            deploy block in compose. Host port 11434 to avoid collision.
+            See memory: feedback_ollama_container_gotchas.md
+          agent_hint: 5090-claude
+
+        - id: n5090.docker.whisper
+          task: "ffmpeg-whisper transcription service"
+          action:
+            type: http
+            url: "http://localhost:8078/healthz"
+            expect: "200 OK — Faster-Whisper with GPU acceleration"
+          context: "Media transcription service, Whisper small model"
+          agent_hint: 5090-claude
+
+        - id: n5090.docker.yt
+          task: "PMOVES.YT ingestion at :8077"
+          action:
+            type: http
+            url: "http://localhost:8077/healthz"
+            expect: "200 OK"
+          context: "YouTube ingestion, downloads to MinIO, publishes NATS events"
+          agent_hint: 5090-claude
+
+    # =========================================================================
+    # Phase 5: GPU VRAM Budget
+    # =========================================================================
+    - id: n5090.vram
+      task: "RTX 5090 32GB VRAM allocation"
+      context: "Multiple TTS engines and Docker GPU services compete for VRAM"
+      agent_hint: 5090-claude
+      children:
+        - id: n5090.vram.baseline
+          task: "Baseline VRAM usage with no TTS running"
+          action:
+            type: shell
+            command: "nvidia-smi --query-gpu=memory.used,memory.total --format=csv,noheader"
+            expect: "Baseline < 4GB (system + Ollama idle)"
+          context: "RTX 5090 = 32768 MB total. Baseline includes driver overhead."
+          agent_hint: 5090-claude
+
+        - id: n5090.vram.concurrent-limit
+          task: "Max concurrent TTS engines documented"
+          action:
+            type: manual
+            instruction: >
+              Cross-reference pmoves/configs/tts-engine-capabilities.yaml
+              VRAM requirements per engine. Document which combos fit in 32GB.
+            expect: >
+              Kokoro (2GB) + Fish S2 (4GB) + IndexTTS (6GB) = 12GB → fits.
+              All 14 engines simultaneously: does NOT fit.
+              Document safe concurrent loading combos.
+          context: >
+            VRAM is the primary constraint for multi-engine TTS.
+            The GPU orchestrator should enforce limits based on
+            tts-engine-capabilities.yaml data.
+          agent_hint: 5090-claude
+
+    # =========================================================================
+    # Phase 6: Cross-Machine Connectivity
+    # =========================================================================
+    - id: n5090.cross-machine
+      task: "5090 cross-machine connectivity"
+      context: "Consumes NATS from Z890, serves TTS to mesh, Tailscale link"
+      agent_hint: 5090-claude
+      children:
+        - id: n5090.cross-machine.nats
+          task: "NATS connectivity to Z890 hub"
+          action:
+            type: manual
+            instruction: "Verify NATS messages from Z890 are received on 5090"
+            expect: "Bidirectional NATS messaging across Tailscale mesh"
+          context: >
+            Z890 runs the NATS hub. 5090 connects as leaf node or direct client.
+            Cross-ref: networking-defense-in-depth.tac.yaml → net.nats-leaf
+          agent_hint: 5090-claude
+
+        - id: n5090.cross-machine.tensorzero
+          task: "TensorZero on Z890 reachable from 5090"
+          action:
+            type: http
+            url: "http://pmoves-z890.ts:3030/v1/models"
+            expect: "200 OK — TensorZero model list from Z890"
+          context: "5090 uses Z890's TensorZero for LLM routing. Port 3030 = host port."
+          agent_hint: 5090-claude
+
+        - id: n5090.cross-machine.tts-served
+          task: "5090 TTS reachable from Z890 and 4090 via Pinokio LWW"
+          action:
+            type: manual
+            instruction: >
+              Verify cross-machine TTS access via Pinokio LWW:
+              1. HTTPS proxy (local): curl -sk https://7860.localhost/gradio_api/info
+              2. Pinokio network view: open http://powerfulmoves-1.ts:42000 from remote node,
+                 navigate to Network tab, click Ultimate-TTS-Studio
+              3. pterm (local): pterm status Ultimate-TTS-Studio.git — check ready_url
+            expect: "All paths confirm TTS accessible with 71 named endpoints"
+          context: >
+            Direct HTTP to Tailscale IP on app ports does NOT work — Pinokio's
+            Caddy HTTPS proxy on 0.0.0.0:PORT requires TLS SNI (hostname, not IP).
+            Cross-machine access works through Pinokio LWW network view (port 42000)
+            or HTTPS proxy with hostname (https://7860.localhost).
+            Reference: PINOKIO.md Section 8 (LWW) and Section 9 (HTTPS domains).
+          agent_hint: 5090-claude
+
+    # =========================================================================
+    # Phase 7: NATS Announcement
+    # =========================================================================
+    - id: n5090.announce
+      task: "5090 NATS capability announcement"
+      context: "Mesh agent announces node presence and capabilities"
+      agent_hint: 5090-claude
+      children:
+        - id: n5090.announce.subject
+          task: "Publishes mesh.agent.5090.capabilities.v1"
+          action:
+            type: manual
+            instruction: >
+              Verify mesh agent publishes capability announcement to NATS.
+              Payload should include: hostname, GPU (RTX 5090), VRAM (32GB),
+              TTS engines available, Pinokio app count.
+            expect: "NATS message received on Z890 with 5090 capabilities"
+          context: >
+            Mesh Agent announces every 15s. The announcement should include
+            node-specific capabilities so the orchestrator can route
+            TTS requests to the correct machine.
+          agent_hint: 5090-claude
+          status: future
+
+        - id: n5090.announce.tts-registration
+          task: "TTS endpoint registered in service mesh"
+          action:
+            type: manual
+            instruction: "Verify TTS endpoint URL appears in mesh registry"
+            expect: "powerfulmoves-1.ts:7860 registered as canonical TTS endpoint"
+          context: >
+            Flute Gateway and Agent Zero should discover 5090's TTS
+            endpoint via NATS announcements, not hardcoded URLs.
+          agent_hint: 5090-claude
+          status: future
