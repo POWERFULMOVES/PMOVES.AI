@@ -17,12 +17,22 @@ This isn't a race. It's a seesaw — "you make it yours, I make it mine." Claude
 | Submodule drift | **0** (28→0 complete — see [5090-SUBMODULE-AUDIT](./AGNOTE4482PHI.5090-SUBMODULE-AUDIT.md)) |
 | Local branches | **12** (cleaned from 74) |
 | Pinokio 7 | **Upgraded on all 3 machines** (5090 ✓, Z890 ✓, 4090 ✓) |
-| P7 requirements | **Z890**: py ✓, cli ✓ (pterm 0.0.24), ffmpeg ✓ (7.0.2) — **5090**: needs validation |
+| P7 requirements | **Z890**: py ✓, cli ✓ (pterm 0.0.24), ffmpeg ✓ (7.0.2) — **5090**: live Pinokio/Codex launcher smoke complete, full py+ffmpeg parity check still pending |
 | Tailscale mesh | **All 3 machines connected** (5090, Z890, 4090 laptop) |
-| Open PRs (main) | **0** |
+| Open PRs (main) | **14 OPEN** (2026-03-26 queue — see [AGNOTE4482 roadmap](./AGNOTE4482_ROADMAP_W1-W5.md)) |
 | Open PRs (BoTZ) | **0** (Dependabot #89 npm, #91 uv — **MERGED**) |
+| Codex P7 lanes | **OPEN** — #1115 (Pinokio fleet docs) + #1121 (PMOVES Codex plugin + Agent Zero launcher) |
 | Node specialization | **DECLARED** — see [DnB Orchestra](./AGNOTE4482DnB.PHI.Orchestra.md) |
 | TTS session (5090) | **COMMITTED** — port unification, 13 engines, test harness |
+
+---
+
+## Step 0.5: Codex Follow-Through (2026-03-26)
+
+- PR #1115 keeps the P7/networking/package guidance isolated as a docs lane.
+- PR #1121 adds the PMOVES Codex Pinokio plugin and a real `pmoves-agent-zero` launcher instead of the old orphan README-only folder.
+- Live Pinokio validation on this node confirmed the launcher path bug is fixed: startup now enters the selected `PMOVES.AI` checkout instead of the broken `D:\pmoves` path.
+- Remaining blocker is not Pinokio pathing anymore; it is PMOVES env/runtime readiness during `make up-agents-ui`.
 
 ---
 
