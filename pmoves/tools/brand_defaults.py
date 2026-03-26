@@ -24,6 +24,8 @@ DEFAULTS = {
     # Invidious companion (keys will be strengthened below)
     "INVIDIOUS_HMAC_KEY": "localhack",
     "INVIDIOUS_COMPANION_KEY": "localhack",
+    # Vector search (Qwen3-4b 3072d embeddings)
+    "QDRANT_COLLECTION": "pmoves_chunks_qwen3",
     # REST bases
     "SUPA_REST_URL": "http://host.docker.internal:54321/rest/v1",
     "SUPA_REST_INTERNAL_URL": "http://host.docker.internal:54321/rest/v1",
@@ -43,6 +45,17 @@ PLACEHOLDER_VALUES = {
     "root",
     "pmoves4482",
     "minioadmin",
+}
+
+# Values that have been superseded by newer defaults.
+# When brand-defaults sees an existing value matching a superseded entry,
+# it replaces it with the new default from DEFAULTS or the registry.
+# This enables config migrations without manual env file edits.
+SUPERSEDED_VALUES: dict[str, str] = {
+    # Qwen3-4b embedding migration: 384d → 3072d collection
+    "pmoves_chunks": "pmoves_chunks_qwen3",
+    # Legacy sentence-transformer model (replaced by TensorZero routing)
+    "all-MiniLM-L6-v2": "all-MiniLM-L6-v2",  # keep as-is, TZ overrides at runtime
 }
 
 
@@ -303,6 +316,11 @@ def upsert_env(path: Path, env_gen_path: Path, pairs: dict[str, str]) -> None:
     for key, value in pairs.items():
         current = _get_kv(text, key)
         if current and current not in PLACEHOLDER_VALUES:
+            # Check if current value has been superseded by a migration
+            if current in SUPERSEDED_VALUES:
+                new_val = SUPERSEDED_VALUES[current]
+                if new_val != current:
+                    text = _set_kv(text, key, new_val)
             continue
         text = _set_kv(text, key, value)
 
