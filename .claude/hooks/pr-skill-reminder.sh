@@ -7,7 +7,7 @@
 # Environment:
 #   CLAUDE_USER_PROMPT — the user's input text (set by Claude Code)
 
-set -euo pipefail
+set -eo pipefail
 
 PROMPT="${CLAUDE_USER_PROMPT:-}"
 

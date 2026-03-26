@@ -842,6 +842,9 @@ chitBypassPatterns:
   - 'z890-host-verify'
   - 'z890-host-remove'
   - 'diag-z890'
+  # 4090 Laptop host hardening — trusted infrastructure script (SMB/NetBIOS/WSDAPI disable)
+  - 'laptop_4090_host_harden'
+  - 'laptop-harden'
   # Container Agent diagnostic tool — trusted infrastructure (scoped to make targets / scripts)
   - 'make\s+.*(?:diag-z890|container-agent|up-z890)'
   - 'container-agent/app\.py'
