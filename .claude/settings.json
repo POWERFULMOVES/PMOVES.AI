@@ -13,7 +13,10 @@
       "Bash(curl -sf http://localhost:8111:*)",
       "Bash(docker exec pmoves-nats-leaf-1:*)",
       "Bash(docker exec pmoves-container-agent-1:*)",
-      "Bash(netsh interface portproxy show:*)"
+      "Bash(netsh interface portproxy show:*)",
+      "Bash(make -C pmoves laptop-harden:*)",
+      "Bash(make -C pmoves laptop-harden-verify:*)",
+      "Bash(make -C pmoves laptop-harden-remove:*)"
     ]
   },
   "hooks": {
@@ -23,7 +26,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "uv run \"$CLAUDE_PROJECT_DIR/.claude/hooks/damage-control/bash-tool-damage-control.py\"",
+            "command": "uv run --quiet \"$CLAUDE_PROJECT_DIR/.claude/hooks/damage-control/bash-tool-damage-control.py\"",
             "timeout": 5
           }
         ]
@@ -33,7 +36,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "uv run \"$CLAUDE_PROJECT_DIR/.claude/hooks/damage-control/edit-tool-damage-control.py\"",
+            "command": "uv run --quiet \"$CLAUDE_PROJECT_DIR/.claude/hooks/damage-control/edit-tool-damage-control.py\"",
             "timeout": 5
           }
         ]
@@ -43,7 +46,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "uv run \"$CLAUDE_PROJECT_DIR/.claude/hooks/damage-control/write-tool-damage-control.py\"",
+            "command": "uv run --quiet \"$CLAUDE_PROJECT_DIR/.claude/hooks/damage-control/write-tool-damage-control.py\"",
             "timeout": 5
           }
         ]

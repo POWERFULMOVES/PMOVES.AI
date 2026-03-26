@@ -46,8 +46,8 @@ tailscale status
 | `pmoves-nano` | Jetson Nano |
 | `pmoves-powerfulmoves` | WSL2 on laptop |
 | `powerfulmoves-1` | Windows host (laptop alt) |
-| `russells-tab-s8-ultra` | Samsung Tab S8 Ultra |
-| `pixel-10-pro-xl` | Pixel 10 Pro XL |
+| `pmoves-tablet` | Android tablet (mobile) |
+| `pmoves-phone` | Android phone (mobile) |
 
 ## Schedule
 

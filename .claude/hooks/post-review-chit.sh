@@ -11,8 +11,11 @@
 #   PMOVES_ROOT     — repo root (default: auto-detect via git)
 #   SKIP_NATS       — set to "1" to skip NATS publish
 #   DRY_RUN         — set to "1" to preview without writing
+#
+# NOTE: PostToolUse hooks MUST NOT write to stderr — Claude Code treats
+# any stderr output as "hook error". All logging goes to /dev/null.
 
-set -euo pipefail
+set -eo pipefail
 
 PMOVES_ROOT="${PMOVES_ROOT:-$(git rev-parse --show-toplevel 2>/dev/null || echo ".")}"
 PMOVES_DIR="${PMOVES_ROOT}/pmoves"
@@ -22,12 +25,11 @@ REVIEW_SUMMARY="${1:-Claude review sweep completed}"
 TIMESTAMP="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
 # Ensure logs directory exists
-mkdir -p "${LOGS_DIR}"
+mkdir -p "${LOGS_DIR}" 2>/dev/null || true
 
 # Check if chit_encode_hook.py exists
 ENCODE_HOOK="${PMOVES_DIR}/tools/chit_encode_hook.py"
 if [ ! -f "${ENCODE_HOOK}" ]; then
-    echo "[post-review-chit] WARN: ${ENCODE_HOOK} not found, writing minimal CGP stub"
     cat > "${OUTPUT_FILE}" <<EOJSON
 {
   "version": "chit.cgp.v1.0",
@@ -44,8 +46,6 @@ if [ ! -f "${ENCODE_HOOK}" ]; then
 EOJSON
 else
     if [ "${DRY_RUN:-0}" = "1" ]; then
-        echo "[post-review-chit] DRY_RUN: would run chit_encode_hook.py"
-        echo "[post-review-chit] DRY_RUN: would write to ${OUTPUT_FILE}"
         exit 0
     fi
 
@@ -55,7 +55,6 @@ else
         --agent-id "claude-opus" \
         --summary "${REVIEW_SUMMARY}" \
         --output "${OUTPUT_FILE}" 2>/dev/null || {
-        echo "[post-review-chit] WARN: chit_encode_hook.py failed, writing minimal CGP stub"
         cat > "${OUTPUT_FILE}" <<EOJSON
 {
   "version": "chit.cgp.v1.0",
@@ -73,9 +72,7 @@ EOJSON
     }
 fi
 
-echo "[post-review-chit] CGP packet written to ${OUTPUT_FILE}"
-
-# Best-effort NATS publish
+# Best-effort NATS publish (all output suppressed for hook compatibility)
 if [ "${SKIP_NATS:-0}" != "1" ] && [ "${DRY_RUN:-0}" != "1" ]; then
     NATS_PAYLOAD=$(cat <<EOJSON
 {
@@ -88,11 +85,7 @@ if [ "${SKIP_NATS:-0}" != "1" ] && [ "${DRY_RUN:-0}" != "1" ]; then
 }
 EOJSON
 )
-    if command -v nats &>/dev/null; then
-        echo "${NATS_PAYLOAD}" | nats pub "ops.pr.review.completed.v1" 2>/dev/null && \
-            echo "[post-review-chit] Published ops.pr.review.completed.v1" || \
-            echo "[post-review-chit] WARN: NATS publish failed (server may be offline)"
-    else
-        echo "[post-review-chit] SKIP: nats CLI not available, skipping publish"
+    if command -v nats >/dev/null 2>&1; then
+        echo "${NATS_PAYLOAD}" | nats pub "ops.pr.review.completed.v1" >/dev/null 2>&1 || true
     fi
 fi
