@@ -60,6 +60,11 @@ _Last updated: 2026-03-26_
    - funnel release-note/CVE signals into the existing dashboard + hardening tracker at weekly and pre-release intervals
    - update the canonical operator docs whenever runtime defaults, service ownership, or bootstrap order changes
 
+5. Codex follow-through for the active creator/publishing sprint.
+   - close the real Supabase -> Agent Zero -> Publisher -> Discord activation loop and log evidence in `pmoves/docs/PMOVES.AI PLANS/SUPABASE_DISCORD_AUTOMATION.md`
+   - choose one canonical published-event Discord path (`services/publisher-discord` subscriber vs `pmoves/n8n/flows/echo_publisher.json`) and mark the other as fallback/test-only
+   - tighten dashboard/operator visibility so `approved`, `waiting for poller`, `published`, and `publish_failed` states are explicit in the `studio-board` / `videos` UI lanes
+
 ### Latest changes (Mar 8, 2026) — CI Runner Migration + RG-3 Automation
 - **AB-9 mitigation:** Migrated 10 lightweight CI jobs from `[self-hosted, Linux, X64]` to `ubuntu-latest`:
   - `sql-policy-lint`, `python-tests`, `webhook-smoke`, `yt-dlp-bump`, `deploy-gateway-agent` (validate only)
@@ -505,6 +510,9 @@ Next 48 hours
 ### 1. Finish the M2 Automation Loop
 **Status note:** Infrastructure is complete, but end-to-end validation remains blocked until the n8n approval poller is activated and runs successfully.
 - [ ] Execute the Supabase → Agent Zero → Discord activation checklist (`pmoves/docs/SUPABASE_DISCORD_AUTOMATION.md`) and log validation timestamps in the runbook.
+- [ ] Choose and document the canonical Discord publish lane now that both `services/publisher-discord` and `pmoves/n8n/flows/echo_publisher.json` can carry `content.published.v1`; keep only one production-default path.
+- [ ] Add one deterministic smoke/integration path proving a real `content.published.v1` payload reaches Discord with cover art, duration, and Jellyfin deep link.
+- [ ] Update dashboard/operator UX so approvals no longer look complete before the background publish handoff finishes; show `approved`, `waiting for poller`, `published`, and `publish_failed` distinctly.
 - [ ] Populate `.env` with Discord webhook credentials, perform a manual webhook ping, and capture the confirmation screenshot/log.
 - [ ] Activate the n8n approval poller and echo publisher workflows once secrets are loaded; document the activation + first successful run.
 - [x] Confirm Jellyfin credentials (API key and optional user id) allow library enumeration; use `make jellyfin-verify` before publisher smokes (2025-10-13). Re-ran on 2025-10-14 after populating `JELLYFIN_USER_ID=c26d57363bad4318a37c0bf8673c389c`.
