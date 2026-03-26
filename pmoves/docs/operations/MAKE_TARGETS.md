@@ -11,6 +11,23 @@ This file summarizes the most-used targets and maps them to what they do under d
 - `make down`
   - Stops the compose project containers.
 
+## Data Services Provisioning
+- `make first-run`
+  - Guided umbrella path for a fresh checkout: env prep, Supabase bootstrap, data seeding, core services, agent mesh.
+- `make bringup-layered`
+  - Deterministic operator path when you want each layer explicit: minimal -> model-management -> workers -> agents -> monitoring -> prod smoke.
+  - Layered helpers default to `SUPABASE_RUNTIME=cli` unless you override it, which is useful for schema/bootstrap parity.
+- `make bootstrap-data`
+  - Canonical cross-store seed path: Supabase SQL first, then Neo4j aliases/geometry, then Qdrant + Meilisearch corpus.
+- `make neo4j-bootstrap`
+  - Rebuilds only the graph/alias layer.
+- `make seed-data`
+  - Rebuilds only the vector + lexical retrieval layer (Qdrant / Meilisearch).
+- `make up-n8n`
+  - Starts the optional workflow/control-plane layer after the base data plane is healthy.
+- `make n8n-api-bootstrap`
+  - Bootstraps n8n owner/API state so workflow registry sync and creator automation do not depend on manual UI setup.
+
 ## GPU / Gateways
 - `make up-gpu-gateways`
   - Soft-starts qdrant + neo4j, then brings up `hi-rag-gateway-v2-gpu` (and v1-gpu if profile enabled).
@@ -71,7 +88,7 @@ This file summarizes the most-used targets and maps them to what they do under d
     - `SUPABASE_RUNTIME=cli` → Supabase CLI stack (`supabase start --network-id pmoves-net`)
     - `SUPABASE_RUNTIME=kong|compose` → Compose-backed Supabase + Kong path
   - Runtime guard is enforced before startup (prevents mixed CLI+compose state). Set `SUPABASE_RUNTIME_RECONCILE=1` to auto-stop the conflicting runtime.
-  - Branch default is `SUPABASE_RUNTIME=compose` (CLI is backup/bootstrap only).
+  - `pmoves/Makefile` currently defaults to `SUPABASE_RUNTIME=compose`, but operators should set the runtime explicitly so bootstrap/data repair (`cli`) and release-mode parity (`compose`) do not silently diverge.
   - Uses the port overrides from `supabase/config.toml` for CLI mode (65421/65432/etc.).
 - `make supa-runtime-guard SUPABASE_RUNTIME=cli|compose`
   - Verifies only the selected Supabase runtime is active.
@@ -158,6 +175,31 @@ This file summarizes the most-used targets and maps them to what they do under d
   - Hits the nginx proxy on `http://localhost:8000` (override via `WGER_ROOT_URL`) plus `/static/images/logos/logo-font.svg` to ensure collectstatic artifacts and the Django backend are available.
 - `make smoke-firefly`
   - Pings the Firefly III login landing page and `/api/v1/about` (using `FIREFLY_ACCESS_TOKEN` from your shell or `env.shared`) to confirm the finance stack and API token are wired up. Override `FIREFLY_ROOT_URL` / `FIREFLY_PORT` when testing remote hosts.
+
+## Release Notes / CVE Intake
+- Scheduled workflow signals
+  - `.github/workflows/codeql.yml`
+    - Continuous code scanning on push/PR plus scheduled sweeps.
+  - `.github/workflows/yt-dlp-bump.yml`
+    - Weekly dependency freshness lane for the PMOVES.YT extractor/tooling surface.
+  - `.github/workflows/python-images-toolchain-canary.yml`
+    - Weekly pinned Python image canary: candidate bump -> build -> Trivy gate -> PR on pass.
+- Operator gates before release or promotion
+  - `make ghcr-prepublish-inrepo`
+    - Local-first build + Trivy validation for in-repo integration images.
+  - `make ghcr-prepublish-all`
+    - Same idea, expanded across the full matrix including external integrations.
+  - `make smoke-prod`
+    - Runtime + observability confirmation before a release decision.
+  - `make audit-layers-static` / `make audit-layers-runtime`
+    - Full certification gates when submodule, runtime, or hardening drift needs to be closed out.
+  - `make ci-runners-check-strict`
+    - Fails early when the runner lanes needed for CodeQL/GHCR release work are offline.
+- Documentation sinks
+  - `pmoves/docs/PRODUCTION_AUDIT_DASHBOARD.md`
+    - Live counters, release evidence, and current blocker view.
+  - `docs/hardening/PMOVES-hardening-tracker.md`
+    - Recurring cadence, unresolved issue classes, and how release-note/CVE signals are funneled.
 
 ## Preflight & Bring-up UX
 - `make env-setup`

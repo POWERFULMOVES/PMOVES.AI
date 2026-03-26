@@ -2,7 +2,7 @@
 
 Comprehensive hardening posture, CI/CD build infrastructure, and service runtime status for the PMOVES.AI platform.
 
-Last updated: 2026-03-05
+Last updated: 2026-03-26
 
 Live snapshot (2026-03-04): `PMOVES.AI` open PRs `0`, CodeQL open alerts `0`, Dependabot open alerts `1` (`medium`). Use `pmoves/docs/PRODUCTION_AUDIT_DASHBOARD.md` as the source-of-truth for live counters.
 
@@ -142,6 +142,42 @@ Exception: `deepresearch` is amd64-only.
 - GHCR: `ghcr.io/powerfulmoves/*`
 - Docker Hub: `powerfulmoves/*`
 - Multi-arch: amd64 + arm64 (with `docker-compose.arm64.override.yml`)
+
+---
+
+## Release Notes / CVE Funnel
+
+Use two documentation sinks on purpose:
+- `pmoves/docs/PRODUCTION_AUDIT_DASHBOARD.md`
+  - live counters, open-alert snapshots, release evidence, and current blockers
+- `docs/hardening/PMOVES-hardening-tracker.md`
+  - recurring cadence, unresolved issue classes, and the operator policy for how signals are reviewed
+
+### Cadence
+
+| Cadence | Signal source | Operator action | Documentation sink |
+|----------|---------------|-----------------|--------------------|
+| Daily / active merge lane | Production Audit Dashboard, open PR checks, current CodeQL / Dependabot counts | Re-triage blockers, keep release lane clean, update ownership if a service group drifts | Audit dashboard first; `pmoves/docs/NEXT_STEPS.md` if priorities change |
+| Weekly | `.github/workflows/codeql.yml`, `.github/workflows/yt-dlp-bump.yml`, `.github/workflows/python-images-toolchain-canary.yml`, Dependabot queue | Review new alerts/PRs, confirm image/toolchain bumps still pass the intended gates, merge or re-scope follow-ups | Hardening tracker + audit dashboard |
+| Pre-release / infra touch | `make -C pmoves smoke-prod`, `make -C pmoves ghcr-prepublish-inrepo`, `make -C pmoves audit-layers-static` / `audit-layers-runtime`, `make -C pmoves ci-runners-check-strict` | Capture evidence, confirm runner capacity, close Trivy/hardening drift before promotion | Audit dashboard, plus `pmoves/docs/operations/FIRST_RUN.md` / `pmoves/docs/operations/MAKE_TARGETS.md` / `pmoves/docs/services/supabase/README.md` when command paths change |
+
+### Current funnel components
+
+- Code scanning:
+  - `codeql.yml` provides recurring code-level CVE/security signal.
+- Dependency freshness:
+  - `yt-dlp-bump.yml` keeps the extractor lane current on a weekly cadence.
+  - `python-images-toolchain-canary.yml` tests pinned Python image candidates weekly with a Trivy gate before opening a PR.
+- Image / runtime release gates:
+  - `make -C pmoves ghcr-prepublish-inrepo`
+  - `make -C pmoves ghcr-prepublish-all`
+  - `make -C pmoves smoke-prod`
+- Data-plane operator checks:
+  - `make -C pmoves supa-status`
+  - `make -C pmoves bootstrap-data`
+  - `make -C pmoves monitoring-smoke-prod`
+
+The goal is to keep release-note and CVE awareness on a predictable interval instead of waiting for a feature PR to stumble into stale dependencies or hidden infra drift.
 
 ---
 
