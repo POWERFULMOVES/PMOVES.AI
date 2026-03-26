@@ -1,5 +1,5 @@
 # PMOVES v5 • ROADMAP
-Last updated: 2026-03-12
+Last updated: 2026-03-26
 
 ## Vision
 A production-ready, self-hostable orchestration mesh for creative + agent workloads across GPU boxes and Jetsons: **hybrid Hi‑RAG**, **Supabase Studio**, **n8n orchestration**, **Jellyfin publishing**, and **graph-aware retrieval**.
@@ -23,6 +23,10 @@ A production-ready, self-hostable orchestration mesh for creative + agent worklo
   - workflow activation now targets the n8n 2.1 Public API (`/api/v1/workflows/{id}/activate|deactivate`) instead of the brittle CLI publish fallback.
   - Supabase tracking contract added: `pmoves_core.n8n_workflow_registry` stores live workflow state synced from n8n.
   - creator-control traversal now explicitly routes through `PMOVES-Creator`, `PMOVES-Open-Notebook`, and `CATACLYSM_STUDIOS_INC` so strategy, drafting, and platform-governance context are part of the operator path instead of living outside the service runbooks.
+- March 26 data-plane ops cleanup is active:
+  - operator docs are being normalized around one modular provisioning contract: Supabase system-of-record first, then Neo4j/Qdrant/Meilisearch, then optional n8n automation/control-plane overlays.
+  - the runtime choice is now treated as explicit operator intent instead of an implicit default: `SUPABASE_RUNTIME=cli` for bootstrap/data repair, `SUPABASE_RUNTIME=compose` for release-mode parity and guard rails.
+  - release-note/CVE intake is being funneled through the existing weekly/scheduled lanes (`codeql.yml`, `yt-dlp-bump.yml`, `python-images-toolchain-canary.yml`) plus local GHCR/Trivy gates, with outcomes tracked in the production audit dashboard and hardening tracker.
 - March 7 merge wave completed on `main`: `#814`, `#815`, `#816`, `#817`, `#818`, `#819`, `#820`, `#821` (8 PRs, 3 batches).
 - Chrome extension security hardening landed in `#821`: 9 CodeRabbit review items addressed (auth storage isolation, XSS remediation, mock server hardening, timeout guards, state management fixes, CSP).
 - Distributed topology documentation + examples landed in `#820`.

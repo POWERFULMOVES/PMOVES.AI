@@ -1,5 +1,5 @@
 # PMOVES v5 • Documentation Index
-_Last updated: 2026-03-12 — add PMOVES.YT authoritative runtime path_
+_Last updated: 2026-03-26 — data services provisioning + release cadence refresh_
 
 ## Directory Map
 
@@ -47,8 +47,11 @@ After the 2026-02-18 reorganization, `pmoves/docs/` is organized as:
 - **Submodule Production Release Checklist (deterministic gates + merge order)** — `../integrations/SUBMODULE_PRODUCTION_RELEASE_CHECKLIST.md`
 - **Docker Build Operator Guide** — `../operations/DOCKER_BUILD_GUIDE.md`
 - **First-Run Bootstrap** — `../operations/FIRST_RUN.md`
+- **Data Services Provisioning** — `../operations/FIRST_RUN.md` + `../services/supabase/README.md`
+- **Data Services Commands** — `../operations/MAKE_TARGETS.md`
 - **Archon Updates + Supabase wiring** — `archonupdateforpmoves.md`
 - **Supabase Service Guide** — `../services/supabase/README.md`
+- **Hardening Tracker** — `../../../docs/hardening/PMOVES-hardening-tracker.md`
 - **Archon Service README** — `../services/archon/README.md`
 - **Monitoring Stack (Prometheus, Grafana, Loki)** — `../services/monitoring/README.md`
 - **n8n Setup (Supabase→Agent Zero→Discord)** — `N8N_SETUP.md`
@@ -63,6 +66,22 @@ After the 2026-02-18 reorganization, `pmoves/docs/` is organized as:
 - Quickstart: [`LOCAL_DEV.md` – Web UI quick links](../operations/LOCAL_DEV.md#web-ui-quick-links)
   - Supabase CLI prerequisites: run `make supa-start` then `make supa-status` to refresh Supabase keys. `npm run dev` now layers `env.shared` + `.env.local` automatically, so keep those root files current.
 - Notebook Workbench: [`UI_NOTEBOOK_WORKBENCH.md`](../infrastructure/UI_NOTEBOOK_WORKBENCH.md) — Supabase prerequisites, smoketest target, and troubleshooting tips for the `/notebook-workbench` page.
+
+## Data Plane & Release Ops
+
+- Bootstrap / repair path:
+  - `../operations/FIRST_RUN.md`
+  - `../operations/MAKE_TARGETS.md`
+  - `../services/supabase/README.md`
+- Core data-store service docs:
+  - `../services/qdrant/README.md`
+  - `../services/meilisearch/README.md`
+  - `../services/neo4j/README.md`
+  - `../services/n8n/README.md`
+- Release-note / CVE cadence and evidence:
+  - `../PRODUCTION_AUDIT_DASHBOARD.md`
+  - `../../../docs/hardening/PMOVES-hardening-tracker.md`
+  - `../../../docs/hardening/PYTHON_IMAGES_TOOLCHAIN_CANARY.md`
 
 ## Creative Tutorials (Automation Inputs)
 - Qwen Image Edit Plus — `pmoves/creator/tutorials/qwen_image_edit_plus_tutorial.md`

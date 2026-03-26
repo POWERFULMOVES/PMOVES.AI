@@ -2,6 +2,13 @@
 
 This index groups service docs by role. Each service page follows a common structure: Overview, Compose/Ports, Dependencies, Env, API/Contracts, Runbook, Smoke Tests, Next Steps, and Roadmap alignment.
 
+Core data plane
+- [supabase](supabase/README.md) — system-of-record, auth, REST/realtime, storage runtime choices
+- [qdrant](qdrant/README.md) — vector retrieval store
+- [meilisearch](meilisearch/README.md) — lexical retrieval store
+- [neo4j](neo4j/README.md) — graph aliases, mind-map, geometry support
+- [n8n](n8n/README.md) — optional automation/control plane layered on top of Supabase
+
 Implemented (compose-managed)
 - [agent-zero](agent-zero/README.md)
 - [archon](archon/README.md)

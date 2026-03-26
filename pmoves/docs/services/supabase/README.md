@@ -16,9 +16,21 @@ Docs
 | **Lightweight fallback** — use PMOVES’ compose shim | `SUPABASE_RUNTIME=compose make up` (or `SUPA_PROVIDER=compose make up`) | Spins up Postgres + PostgREST and optional GoTrue/Storage/Realtime via `docker-compose.supabase.yml`. Good for quick smokes or when the CLI is unavailable. |
 | **Remote Supabase** — point at an existing hosted project | Populate `.env.supa.remote`, then `make supa-use-remote` → `make up` | Keeps local services lean while targeting shared data. |
 
-The Makefile picks the CLI path by default. Override with `SUPABASE_RUNTIME=compose` if you intentionally want the lightweight compose stack.
+The service guide prefers the CLI path for bootstrap parity, but `pmoves/Makefile` currently defaults to `SUPABASE_RUNTIME=compose`. Set the runtime explicitly so bootstrap/data repair (`cli`) and release-mode parity (`compose`) do not silently drift apart.
 
-## 2. Wiring the Supabase CLI stack
+## 2. Data services provisioning contract
+
+| Plane | Canonical owner | Bring-up / seed path | Main consumers |
+| --- | --- | --- | --- |
+| System of record | Supabase | `make supa-start` + `make supabase-bootstrap` or `SUPABASE_RUNTIME=compose make up` when intentionally validating the compose lane | UI, Agent Zero, publisher, channel-monitor, model registry, n8n registry |
+| Vector retrieval | Qdrant | `make seed-data` or `make bootstrap-data` | Hi-RAG v1/v2, extract-worker, pdf-ingest, PMOVES.YT |
+| Lexical retrieval | Meilisearch | `make seed-data` or `make bootstrap-data` | Hi-RAG v2, extract-worker |
+| Graph/mind-map | Neo4j | `make neo4j-bootstrap` or `make bootstrap-data` | Hi-RAG entity warmup, CHIT geometry, mind-map overlays |
+| Automation/control plane | n8n | `make up-n8n` + `make n8n-api-bootstrap` | Creator/publishing workflows, workflow registry sync, approval automation |
+
+The intended order is Supabase first, then graph/vector/lexical stores, then optional automation. `make bootstrap-data` is the canonical shortcut because it keeps those boundaries intact without forcing everything to be rebuilt every time.
+
+## 3. Wiring the Supabase CLI stack
 
 1. **Install the CLI** (one-time): `winget install supabase.supabase` on Windows or `npm i -g supabase` on macOS/Linux.  
 2. **Initialise the project** (one-time): `make supa-init` → creates `supabase/config.toml`.
@@ -54,7 +66,11 @@ The Makefile picks the CLI path by default. Override with `SUPABASE_RUNTIME=comp
 | `make supabase-stop` / `make supabase-clean` | Stop or clear the compose-based Supabase services (no-op under CLI runtime) |
 | `SUPABASE_RUNTIME=compose make up` | Run PMOVES with compose-backed Postgres/PostgREST |
 
-## 3. Avoiding “service missing” errors
+For modular operator work, prefer explicit commands instead of relying on whichever runtime default happens to be active:
+- `SUPABASE_RUNTIME=cli make up` when you are repairing bootstrap, keys, migrations, or cross-store data seeding.
+- `SUPABASE_RUNTIME=compose make up` plus `make supa-runtime-guard` when you are certifying release-mode topology or Kong-facing behavior.
+
+## 4. Avoiding “service missing” errors
 
 **Neo4j / Qdrant / MinIO**  
 The hi-rag gateways and geometry smokes expect the data profile to be running. `make up` already brings the `data` profile online; if you start services manually, ensure you include it:
@@ -71,7 +87,7 @@ Realtime must be running when you mirror the production stack. Start the CLI wit
 **CLI vs Compose PostgREST**  
 When the CLI stack is active, the Makefile detects `supabase_db_<project>` containers and applies migrations there. If you stop the CLI stack and flip to compose, run `SUPABASE_RUNTIME=compose make up` followed by `make supabase-up` to ensure PostgREST and the ancillary services are reachable at `http://postgrest:3000`.
 
-## 4. Health checklist
+## 5. Health checklist
 
 | Check | Command | Expected |
 | --- | --- | --- |
@@ -80,7 +96,7 @@ When the CLI stack is active, the Makefile detects `supabase_db_<project>` conta
 | Supabase status | `make supa-status` | Lists service ports + anon/service keys |
 | Geometry warmup | `docker logs pmoves-hi-rag-gateway-v2-gpu-1 | grep 'Supabase realtime geometry listener started'` | Confirms the gateway subscribed to `geometry.cgp.v1` over WebSocket |
 
-## 5. Troubleshooting
+## 6. Troubleshooting
 
 | Symptom | Resolution |
 | --- | --- |
@@ -90,7 +106,7 @@ When the CLI stack is active, the Makefile detects `supabase_db_<project>` conta
 | Need to reset CLI data | `make supa-stop` → delete the `.supabase` Docker volumes → `make supa-start` → `make supabase-bootstrap`. |
 | Supabase CLI fails to start with `no space left on device` | Stop the stack (`make supa-stop`), inspect disk usage (`docker system df`, `df -h`), free space by pruning unused images/volumes (`docker system prune -a`) or expanding the storage pool, then restart (`make supa-start`) and rerun `make supabase-bootstrap`. |
 
-## 6. Upgrade & maintenance
+## 7. Upgrade & maintenance
 
 Keep the CLI aligned with upstream releases so Postgres extensions, GoTrue, and Storage stay compatible.
 
@@ -120,7 +136,19 @@ Keep the CLI aligned with upstream releases so Postgres extensions, GoTrue, and 
 - Snapshot your `.supabase` Docker volumes (`docker run --rm -v supabase_db:/data busybox tar -czf /backups/supabase_db.tgz /data`) before a major upgrade when you need a rollback option.
 - After large upgrades, verify Supabase Studio loads and PostgREST returns `200` before resuming feature work.
 
-## 7. References
+## 8. Release notes, CVEs, and docs touchpoints
+
+- Use `pmoves/docs/PRODUCTION_AUDIT_DASHBOARD.md` for live CodeQL/Dependabot/open-PR counters.
+- Use `docs/hardening/PMOVES-hardening-tracker.md` for the recurring cadence around release notes, Trivy gates, and weekly update lanes.
+- When the Supabase command path or data-service ownership changes, update these docs in the same PR:
+  - `pmoves/docs/operations/FIRST_RUN.md`
+  - `pmoves/docs/operations/MAKE_TARGETS.md`
+  - `pmoves/docs/PMOVES.AI PLANS/README_DOCS_INDEX.md`
+  - `pmoves/docs/NEXT_STEPS.md`
+  - `pmoves/docs/PMOVES.AI PLANS/ROADMAP.md`
+- Treat scheduled CodeQL, `yt-dlp-bump`, and the Python toolchain canary as the routine release-note/CVE intake funnel; use `make ghcr-prepublish-inrepo` and `make smoke-prod` before promotion when a data-plane dependency changes.
+
+## 9. References
 
 - [Supabase CLI configuration (`config.toml` service toggles)](https://supabase.com/docs/reference/cli/config#service-options)
 - [Supabase CLI `start` command options (`-x/--exclude`)](https://supabase.com/docs/reference/cli/start#options)

@@ -1,9 +1,21 @@
 
 # PMOVES v5 • NEXT_STEPS
 Note: Consolidated plan index at pmoves/docs/PMOVES.AI PLANS/README_DOCS_INDEX.md.
-_Last updated: 2026-03-12_
+_Last updated: 2026-03-26_
 
 ## Current Status
+
+### Latest changes (Mar 26, 2026) — Data Services Provisioning + Release Cadence Alignment
+- Operator docs are being tightened around one modular data-plane story instead of multiple overlapping setup paths:
+  - Supabase remains the system of record and runtime control plane.
+  - Qdrant + Meilisearch are the retrieval indexes seeded after Supabase.
+  - Neo4j is the graph/mind-map layer seeded alongside geometry aliases.
+  - n8n stays optional for base bring-up but is the preferred automation/control-plane add-on once the base data services are healthy.
+- Release-note/CVE intake is being funneled through the existing signals instead of ad-hoc checks:
+  - scheduled `codeql.yml`, `yt-dlp-bump.yml`, and `python-images-toolchain-canary.yml`
+  - local GHCR/Trivy gates via `make -C pmoves ghcr-prepublish-inrepo`
+  - runtime/release evidence via `pmoves/docs/PRODUCTION_AUDIT_DASHBOARD.md` and `docs/hardening/PMOVES-hardening-tracker.md`
+- Next focus: finish Supabase runtime alignment, validate the modular bring-up against the live node stack, and keep the docs in sync whenever the data-plane command path changes.
 
 ### Latest changes (Mar 12, 2026) — PMOVES.YT Authoritative Runtime Refresh
 - `PMOVES.YT` is now the authoritative runtime/docs lane for `pmoves-yt`; the root repo now builds the service from the submodule Dockerfile instead of treating `pmoves/services/pmoves-yt` as the source of truth.
@@ -42,6 +54,11 @@ _Last updated: 2026-03-12_
    - validate Postgres-backed `PMOVES-n8n` bootstrap end-to-end
    - decide which BotZ/MCP workflows become canonical shared automation flows
    - keep Supabase workflow registry sync green as creator automation expands
+
+4. Button up modular data services provisioning and release/CVE cadence.
+   - keep one explicit provisioning contract for Supabase, Neo4j, Qdrant, Meilisearch, and optional n8n instead of letting setup drift across docs
+   - funnel release-note/CVE signals into the existing dashboard + hardening tracker at weekly and pre-release intervals
+   - update the canonical operator docs whenever runtime defaults, service ownership, or bootstrap order changes
 
 ### Latest changes (Mar 8, 2026) — CI Runner Migration + RG-3 Automation
 - **AB-9 mitigation:** Migrated 10 lightweight CI jobs from `[self-hosted, Linux, X64]` to `ubuntu-latest`:
