@@ -17,33 +17,13 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
-# Ports that are allowed to bind to 0.0.0.0 (mesh-accessible)
-MESH_ALLOWED_SERVICES = {
-    "supabase-kong",        # proxy port 8000 only (admin port should be 127.0.0.1)
-    "agent-zero",
-    "flute-gateway",
-    "nats",
-    "tensorzero-gateway",
-    "hi-rag-gateway-v2",
-    "hi-rag-gateway-v2-gpu",
-    "hi-rag-gateway",          # v1 service name in docker-compose.yml
-    "hi-rag-gateway-gpu",      # v1 GPU variant
-    "grafana",
-    "deepresearch",
-    "supaserch",
-    "pmoves-yt",
-    "channel-monitor",
-    "ffmpeg-whisper",
-    "media-video",             # compose service name (not media-video-analyzer)
-    "media-audio",             # compose service name (not media-audio-analyzer)
-    "gpu-orchestrator",
-    "evo-controller",
-    "ultimate-tts-studio",
-    "invidious",
-    "invidious-companion",
-    "grayjay-plugin-host",
-    "grayjay-server",
-}
+# Services allowed to bind to 0.0.0.0 (mesh-accessible).
+# Since all docker-compose.yml port bindings now default to 127.0.0.1,
+# this set should be empty for single-host (laptop) deployments.
+# Multi-host nodes (Z890, KVM) override via env vars (*_BIND=0.0.0.0)
+# which makes them appear as 0.0.0.0 in `docker compose config` output —
+# add those services here only on nodes where mesh exposure is intentional.
+MESH_ALLOWED_SERVICES = set()
 
 # Kong admin port is explicitly excluded from mesh
 KONG_ADMIN_PORTS = {"8001"}
