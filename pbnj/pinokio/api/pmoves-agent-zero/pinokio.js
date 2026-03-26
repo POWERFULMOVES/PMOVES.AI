@@ -4,7 +4,7 @@ module.exports = {
   description: "Launch Agent Zero from the PMOVES mesh and seed its MCP runtime.",
   icon: "icon.svg",
   menu: async (kernel, info) => {
-    let configured = info.exists("../../../../pmoves/env.shared")
+    let configured = info.exists("repo-root.txt")
     let running = {
       install: info.running("install.js"),
       start: info.running("start.js"),
@@ -44,7 +44,7 @@ module.exports = {
       return [{
         default: true,
         icon: "fa-solid fa-plug",
-        text: "Install (Bootstrap PMOVES env)",
+        text: "Install (Select PMOVES Repo)",
         href: "install.js"
       }]
     }
@@ -74,6 +74,10 @@ module.exports = {
       text: "MCP Commands",
       href: "http://localhost:8080/mcp/commands"
     }, {
+      icon: "fa-solid fa-folder-tree",
+      text: "Re-select PMOVES Repo",
+      href: "install.js"
+    }, {
       icon: "fa-solid fa-circle-info",
       text: "Status",
       href: "status.js"
@@ -90,4 +94,3 @@ module.exports = {
     return items
   }
 }
-

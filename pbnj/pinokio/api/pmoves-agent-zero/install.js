@@ -1,10 +1,28 @@
 module.exports = {
   run: [{
+    method: "filepicker.open",
+    params: {
+      title: "Select PMOVES.AI repository root",
+      type: "folder"
+    }
+  }, {
+    method: "local.set",
+    params: {
+      repo_root: "{{input.paths[0]}}"
+    }
+  }, {
+    method: "fs.write",
+    params: {
+      path: "repo-root.txt",
+      text: "{{local.repo_root}}"
+    }
+  }, {
     method: "shell.run",
     params: {
-      path: "../../../../pmoves",
+      path: "{{path.resolve(local.repo_root, 'pmoves')}}",
       message: [
-        "python tools/env_setup_unified.py",
+        "if not exist Makefile ( echo Expected pmoves/Makefile under the selected PMOVES.AI repo root & exit /b 1 )",
+        "py -3 tools/env_setup_unified.py",
         "make a0-mcp-seed"
       ]
     }
@@ -16,5 +34,3 @@ module.exports = {
     }
   }]
 }
-
-

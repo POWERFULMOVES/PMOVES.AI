@@ -2,20 +2,22 @@
 
 Pinokio launcher for the PMOVES Agent Zero mesh entrypoint.
 
-This launcher is a thin wrapper over the repo-supported PMOVES startup flow. It does not fork Agent Zero application logic into a separate Pinokio app folder. Instead, it launches the current PMOVES stack from `../../pmoves`, seeds the runtime MCP map, and exposes the Agent Zero UI and API endpoints through Pinokio.
+This launcher is a thin wrapper over the repo-supported PMOVES startup flow. It does not fork Agent Zero application logic into a separate Pinokio app folder. Instead, it targets a user-selected local `PMOVES.AI` checkout, launches the current PMOVES stack from `<repo-root>/pmoves`, seeds the runtime MCP map, and exposes the Agent Zero UI and API endpoints through Pinokio.
 
 ## Quick Start
 
-1. Click **Install** to bootstrap `pmoves/env.shared` and seed Agent Zero MCP defaults.
-2. Click **Start Agent Tier** to launch Agent Zero plus the supported PMOVES agent stack.
-3. Open the **Agent Zero UI** at `http://localhost:8081`.
-4. Use **Status** to inspect health and current MCP commands.
+1. Click **Install** and select the local `PMOVES.AI` repo root.
+2. The launcher stores that selection in `repo-root.txt`.
+3. Pinokio bootstraps `pmoves/env.shared` and seeds Agent Zero MCP defaults from that selected checkout.
+4. Click **Start Agent Tier** to launch Agent Zero plus the supported PMOVES agent stack.
+5. Open the **Agent Zero UI** at `http://localhost:8081`.
+6. Use **Status** to inspect health and current MCP commands.
 
 ## Scripts
 
 | Script | Purpose |
 |--------|---------|
-| `install.js` | Bootstrap PMOVES env files and seed `data/agent-zero/runtime/mcp/servers.env` |
+| `install.js` | Select a PMOVES checkout, bootstrap env files, and seed `data/agent-zero/runtime/mcp/servers.env` |
 | `start.js` | Start the supported PMOVES agent tier and tail Agent Zero logs |
 | `status.js` | Show container status, `/healthz`, and `/mcp/commands` |
 | `update.js` | Pull latest PMOVES changes, refresh submodules, and reseed MCP runtime |
@@ -87,5 +89,6 @@ const result = await fetch("http://localhost:8080/mcp/execute", {
 ## Notes
 
 - MCP defaults are seeded into `pmoves/data/agent-zero/runtime/mcp/servers.env`.
-- This launcher intentionally tracks the PMOVES repo layout instead of a separate `app/` clone.
+- This launcher intentionally tracks a selected PMOVES repo checkout instead of a separate `app/` clone.
+- Re-run **Install** any time you want to point Pinokio at a different PMOVES checkout.
 - Provider-specific agent customization belongs in Pinokio plugins such as `pmoves-codex`, not inside this launcher.
