@@ -2715,6 +2715,19 @@ z890-host-verify: ## Verify z890 host port proxies are configured
 z890-host-remove: ## [Admin] Remove z890 host port proxies
 	@powershell -ExecutionPolicy Bypass -File scripts/z890_host_setup.ps1 -Remove $(if $(UPSTREAM_IP),-UpstreamIP $(UPSTREAM_IP))
 
+# ── 4090 Laptop Host Hardening ─────────────────────────────────────────────
+.PHONY: laptop-harden
+laptop-harden: ## [Admin] Disable SMB/NetBIOS/WSDAPI on 4090 laptop (mesh-only policy)
+	@powershell -ExecutionPolicy Bypass -File scripts/laptop_4090_host_harden.ps1
+
+.PHONY: laptop-harden-verify
+laptop-harden-verify: ## Verify 4090 laptop host hardening state
+	@powershell -ExecutionPolicy Bypass -File scripts/laptop_4090_host_harden.ps1 -Verify
+
+.PHONY: laptop-harden-remove
+laptop-harden-remove: ## [Admin] Reverse 4090 laptop hardening (re-enable SMB/NetBIOS/WSDAPI)
+	@powershell -ExecutionPolicy Bypass -File scripts/laptop_4090_host_harden.ps1 -Remove
+
 .PHONY: up-z890
 up-z890: ## Start Z890 GPU node (Ollama + NATS Leaf + Mesh Agent + Container Agent)
 	@$(LOAD_ENV_Z890) docker compose -p $(PROJECT)-z890 $(Z890_COMPOSE) up -d --force-recreate
