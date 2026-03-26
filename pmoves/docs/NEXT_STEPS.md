@@ -1,7 +1,7 @@
 
 # PMOVES v5 • NEXT_STEPS
 Note: Consolidated plan index at pmoves/docs/PMOVES.AI PLANS/README_DOCS_INDEX.md.
-_Last updated: 2026-03-12_
+_Last updated: 2026-03-26_
 
 ## Current Status
 
