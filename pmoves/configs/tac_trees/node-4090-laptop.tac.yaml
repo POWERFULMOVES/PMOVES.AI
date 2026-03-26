@@ -1,0 +1,215 @@
+# TAC Tree: Node 4090 (Laptop)
+# Per-node capability tree for the mobile relay / PR triage machine.
+# 4090 laptop — consumer node, not a producer. Reaches 5090/Z890 via mesh.
+#
+# Cross-refs:
+#   pmoves/configs/tac_trees/networking-defense-in-depth.tac.yaml
+#   pmoves/configs/tac_trees/node-5090-powerfulmoves.tac.yaml
+#   pmoves/configs/tac_trees/node-z890-coordinator.tac.yaml
+#   pmoves/configs/tac_trees/pinokio-p7.tac.yaml
+
+name: "Node 4090 Laptop"
+version: "1.0.0"
+description: >
+  Per-node TAC tree for the 4090 laptop (pmoves-laptop).
+  Mobile relay node — consumer of 5090 TTS and Z890 infrastructure.
+  PR triage, code review, and lightweight agent work.
+  Hostname: pmoves-laptop | Tailscale: pmoves-laptop.ts | Role: Mobile Relay
+
+root:
+  id: n4090
+  task: "4090 laptop node health and connectivity review"
+  context: "Consumer node — depends on 5090 (GPU) and Z890 (infra)"
+  agent_hint: 4090-claude
+  children:
+
+    # =========================================================================
+    # Phase 1: Pinokio P7 Status
+    # =========================================================================
+    - id: n4090.pinokio
+      task: "Pinokio P7 status on 4090 laptop"
+      context: "Upgraded to P7, consumer not producer"
+      agent_hint: 4090-claude
+      children:
+        - id: n4090.pinokio.version
+          task: "Pinokio 7.x installed and functional"
+          action:
+            type: manual
+            instruction: "Verify Pinokio UI shows Agents tab, version >= 7.0.0"
+            expect: "P7 running, Agents tab visible"
+          context: >
+            Confirmed upgraded 2026-03-21.
+            Cross-ref: pinokio-p7.tac.yaml → p7.upgrade.4090
+          agent_hint: 4090-claude
+          status: done
+          notes: "Upgraded 2026-03-21 — user confirmed manual Pinokio desktop upgrade"
+
+        - id: n4090.pinokio.network-view
+          task: "Pinokio network view shows 5090 apps"
+          action:
+            type: manual
+            instruction: "Open Pinokio > Network tab, verify 5090 apps visible"
+            expect: >
+              Ultimate-TTS-Studio, Qwen3-TTS, and other 5090 apps
+              discoverable via Pinokio LWW
+          context: >
+            4090 should discover 5090's Pinokio apps via the network.
+            Requires both machines on same LAN or Tailscale mesh with
+            Pinokio LWW on 5090.
+          agent_hint: 4090-claude
+
+    # =========================================================================
+    # Phase 2: Remote TTS Access
+    # =========================================================================
+    - id: n4090.tts
+      task: "Remote TTS access to 5090"
+      context: "4090 consumes TTS from 5090 — no local TTS engines"
+      agent_hint: 4090-claude
+      children:
+        - id: n4090.tts.lww-access
+          task: "TTS reachable via Pinokio LWW network view"
+          action:
+            type: manual
+            instruction: >
+              Verify cross-machine TTS access via Pinokio LWW:
+              1. Open http://powerfulmoves-1.ts:42000 from 4090 browser
+              2. Navigate to Network tab, verify Ultimate-TTS-Studio appears
+              3. Click to open — Gradio UI should load with 14 engine tabs
+            expect: "TTS accessible via Pinokio LWW network view on port 42000"
+          context: >
+            Direct HTTP to Tailscale IP on app ports does NOT work — Pinokio's
+            Caddy HTTPS proxy on 0.0.0.0:PORT requires TLS SNI (hostname, not IP).
+            Cross-machine access works through Pinokio LWW network view (port 42000).
+            Reference: PINOKIO.md Section 8 (LWW) and Section 9 (HTTPS domains).
+          agent_hint: 4090-claude
+
+        - id: n4090.tts.pinokio-network
+          task: "TTS accessible via Pinokio network proxy"
+          action:
+            type: manual
+            instruction: >
+              Open Ultimate-TTS-Studio from Pinokio network view on 4090.
+              Verify Gradio UI loads and synthesis works.
+            expect: "Full TTS functionality via Pinokio network proxy from 4090"
+          context: >
+            Pinokio network view proxies remote apps via Caddy.
+            The URL will be something like
+            Ultimate-TTS-Studio.git.pmoves-net.localhost
+          agent_hint: 4090-claude
+
+        - id: n4090.tts.no-tailscale-serve
+          task: "No tailscale serve workaround active"
+          action:
+            type: shell
+            command: "tailscale serve status"
+            expect: "No active serve proxies — direct access only"
+          context: >
+            tailscale serve is a workaround that masks broken networking.
+            Cross-ref: networking-defense-in-depth.tac.yaml → net.binding.no-tailscale-serve
+          agent_hint: 4090-claude
+
+    # =========================================================================
+    # Phase 3: PR Triage Role
+    # =========================================================================
+    - id: n4090.pr-triage
+      task: "PR triage and code review capability"
+      context: "4090 laptop is the primary PR triage machine"
+      agent_hint: 4090-claude
+      children:
+        - id: n4090.pr-triage.gh-cli
+          task: "GitHub CLI (gh) authenticated and functional"
+          action:
+            type: shell
+            command: "gh auth status"
+            expect: "Logged in to github.com as POWERFULMOVES"
+          agent_hint: 4090-claude
+
+        - id: n4090.pr-triage.skills
+          task: "/pr-trim and /pr-monitor skills available"
+          action:
+            type: manual
+            instruction: "Run /pr-monitor in Claude Code to verify PR state collection"
+            expect: "PR state report generated with actionable counts"
+          context: >
+            PR review workflow: /pr-monitor → /pr-trim <PR#> → /chit:review-sweep.
+            See CLAUDE.md PR Review & Merge Workflow section.
+          agent_hint: 4090-claude
+
+        - id: n4090.pr-triage.worktrees
+          task: "Git worktrees functional for parallel PR review"
+          action:
+            type: shell
+            command: "git worktree list"
+            expect: "Main worktree listed, ability to create feature worktrees"
+          context: "Worktrees enable parallel branch work without full clone"
+          agent_hint: 4090-claude
+
+    # =========================================================================
+    # Phase 4: Tailscale Mesh Connectivity
+    # =========================================================================
+    - id: n4090.mesh
+      task: "Tailscale mesh connectivity to 5090 and Z890"
+      context: "All 3 nodes must be reachable for full fleet operation"
+      agent_hint: 4090-claude
+      children:
+        - id: n4090.mesh.status
+          task: "pmoves-laptop online in Tailscale"
+          action:
+            type: shell
+            command: "tailscale status"
+            expect: "pmoves-laptop online at pmoves-laptop.ts"
+          agent_hint: 4090-claude
+
+        - id: n4090.mesh.reach-5090
+          task: "Can reach 5090 (POWERFULMOVES)"
+          action:
+            type: shell
+            command: "tailscale ping powerfulmoves-1.ts --timeout 5s --c 1"
+            expect: "Pong from powerfulmoves-1.ts via direct connection"
+          context: "Direct connection preferred over DERP relay"
+          agent_hint: 4090-claude
+
+        - id: n4090.mesh.reach-z890
+          task: "Can reach Z890 (pmoves-z890)"
+          action:
+            type: shell
+            command: "tailscale ping pmoves-z890.ts --timeout 5s --c 1"
+            expect: "Pong from pmoves-z890.ts via direct connection"
+          agent_hint: 4090-claude
+
+        - id: n4090.mesh.z890-services
+          task: "Z890 key services reachable"
+          action:
+            type: manual
+            instruction: >
+              Verify these Z890 services reachable from 4090:
+              - NATS: pmoves-z890.ts:4222
+              - Grafana: pmoves-z890.ts:3000
+              - Agent Zero: pmoves-z890.ts:8080
+            expect: "All Z890 services accessible via Tailscale IP"
+          agent_hint: 4090-claude
+
+    # =========================================================================
+    # Phase 5: NATS Announcement
+    # =========================================================================
+    - id: n4090.announce
+      task: "4090 NATS capability announcement"
+      context: "Lightweight node — PR triage, code review, mobile access"
+      agent_hint: 4090-claude
+      children:
+        - id: n4090.announce.subject
+          task: "Publishes mesh.agent.4090.capabilities.v1"
+          action:
+            type: manual
+            instruction: >
+              Verify mesh agent publishes capability announcement.
+              Payload should include: hostname (pmoves-laptop),
+              role (mobile-relay), capabilities (pr-triage, code-review),
+              no GPU, no TTS, consumer-only.
+            expect: "NATS message received with 4090 relay capabilities"
+          context: >
+            4090 is a noise-reducer and PR triage node. Its announcement
+            should NOT claim GPU or TTS capabilities. It consumes from
+            5090 (TTS/GPU) and Z890 (infra/NATS/monitoring).
+          agent_hint: 4090-claude
+          status: future
