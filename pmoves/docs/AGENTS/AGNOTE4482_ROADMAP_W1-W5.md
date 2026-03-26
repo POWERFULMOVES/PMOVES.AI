@@ -400,7 +400,7 @@ All resolved. No blockers.
 
 | PR | Lane | Status | Notes |
 |----|------|--------|-------|
-| #1114 | Supabase bootstrap hardening | OPEN — `DIRTY` | Land before more bootstrap/env churn; this is the main blocker in the current queue |
+| #1126 | Publisher SQL P1 hardening (IF EXISTS + idempotent claim) | OPEN — CI green | Supersedes #1114 (closed — fully subsumed by main). Land before more bootstrap/env churn |
 | #1115 | Pinokio fleet networking docs | OPEN | Atomic Codex docs lane for P7 packaging + TAC/networking parity |
 | #1116 | TTS MCP bridge + expression registry | OPEN | Codex voice lane; review alongside live TTS/Flute work |
 | #1117 | Creator publishing follow-up docs | OPEN | AGNOTE/NEXT_STEPS planning lane for creator-control follow-through |
@@ -412,7 +412,7 @@ All resolved. No blockers.
 | #1123 | Damage-control hooks Windows compatibility | OPEN | Hook/runtime parity lane |
 | #1124 | Data services provisioning docs | OPEN | Ops/doc parity for release cadence + data services |
 
-**Recommended review order:** #1114 first, then #1118 + #1119, then #1115, then #1116 + #1121, then #1122 + #1123 + #1124.
+**Recommended review order:** #1126 first, then #1118 + #1119, then #1115, then #1116 + #1121, then #1122 + #1123 + #1124.
 
 ---
 
@@ -448,7 +448,7 @@ All resolved. No blockers.
 | Infra (Model Registry HF enrichment) | 4090-claude | 2026-03-24 | SHIPPED `07d06f70` | feat/chit-integration-wave-1 |
 | Infra (Model seed + gpu-models metadata) | 4090-claude | 2026-03-24 | SHIPPED `50ee0022`, `7cfacc8c` | feat/chit-integration-wave-1 |
 | Infra (BoTZ submodule sync d125e8a) | 4090-claude | 2026-03-24 | SHIPPED `63532a6b` | feat/chit-integration-wave-1 |
-| Infra (Supabase bootstrap hardening) | codex-gpt5 | 2026-03-26 | IN REVIEW — PR #1114 is `DIRTY` | codex/pr1100-review-fixes |
+| Infra (Publisher SQL P1 hardening) | 5090-claude | 2026-03-26 | IN PR #1126 (supersedes closed #1114) | fix/publisher-sql-p1-hardening |
 | W2 (Pinokio fleet networking + packaging docs) | codex-gpt5 | 2026-03-26 | IN PR #1115 | codex/pinokio-network-docs |
 | W1/W6 (TTS MCP bridge + expression registry) | codex-gpt5 | 2026-03-26 | IN PR #1116 | codex/tts-mcp-bridge |
 | W3/M2 (creator publishing follow-up docs) | codex-gpt5 | 2026-03-26 | IN PR #1117 | codex/agnote4482-creator-publishing-docs |
@@ -487,7 +487,7 @@ All resolved. No blockers.
 ### codex-gpt5 (Board + Packaging + Creator Control)
 | # | Task | Priority | Notes |
 |---|------|----------|-------|
-| 1 | Review and land PR #1114 before more bootstrap churn | **P0** | Supabase/bootstrap hardening is the only current `DIRTY` lane |
+| 1 | Review and land PR #1126 (P1 SQL fixes) | **P0** | #1114 closed — superseded by #1126 (IF EXISTS guard + idempotent claim). 5090-claude authored |
 | 2 | Close the creator-control loop in PRs #1117 + #1120 | **P0** | Keep `approved`, `publishing`, `published`, and `publish_failed` explicit in docs + UI |
 | 3 | Finish live Pinokio smoke for PR #1121 after env fixes | P1 | Repo-root launcher path is fixed; remaining blocker is PMOVES env/runtime readiness |
 | 4 | Move the atomic Codex lanes (#1115, #1116, #1118, #1119) through remote review | P1 | Keep them split instead of sweeping root checkout dirt |
