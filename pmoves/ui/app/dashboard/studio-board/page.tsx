@@ -18,10 +18,14 @@ interface StudioBoardRowMeta {
   rejection_reason?: string | null;
   reviewed_at?: string | null;
   reviewed_by?: string | null;
+  publish_started_at?: string | null;
+  publish_completed_at?: string | null;
   publish_event_sent_at?: string | null;
   publish_requested_at?: string | null;
+  publish_approval_event_sent_at?: string | null;
   publish_failed_at?: string | null;
   publish_failure_reason?: string | null;
+  publish_failure_stage?: string | null;
   tags?: string[];
   persona?: string;
   workflow?: string;
@@ -172,6 +176,12 @@ export default function StudioBoardDashboardPage() {
           reviewed_by: reviewer || null,
           rejection_reason: rejectionReason,
           publish_state: action === "approve" ? null : meta.publish_state,
+          publish_requested_at: action === "approve" ? null : meta.publish_requested_at,
+          publish_approval_event_sent_at:
+            action === "approve" ? null : meta.publish_approval_event_sent_at,
+          publish_started_at: action === "approve" ? null : meta.publish_started_at,
+          publish_completed_at: action === "approve" ? null : meta.publish_completed_at,
+          publish_event_sent_at: action === "approve" ? null : meta.publish_event_sent_at,
           publish_failed_at: action === "approve" ? null : meta.publish_failed_at,
           publish_failure_reason: action === "approve" ? null : meta.publish_failure_reason,
           publish_failure_stage: action === "approve" ? null : meta.publish_failure_stage,
@@ -390,6 +400,18 @@ export default function StudioBoardDashboardPage() {
                   <td className="px-3 py-2 text-brand-ink">{row.namespace || "—"}</td>
                   <td className="px-3 py-2">
                     <div className="font-medium capitalize text-brand-ink">{row.status || "unknown"}</div>
+                    {row.status === "publishing" && meta.publish_started_at ? (
+                      <div className="text-xs text-brand-subtle">
+                        publisher started @ {formatDate(meta.publish_started_at)}
+                      </div>
+                    ) : null}
+                    {row.status === "publishing" &&
+                    !meta.publish_started_at &&
+                    meta.publish_approval_event_sent_at ? (
+                      <div className="text-xs text-brand-subtle">
+                        approval relayed @ {formatDate(meta.publish_approval_event_sent_at)}
+                      </div>
+                    ) : null}
                     {meta.publish_event_sent_at ? (
                       <div className="text-xs text-brand-subtle">
                         published @ {formatDate(meta.publish_event_sent_at)}
@@ -400,9 +422,19 @@ export default function StudioBoardDashboardPage() {
                         publish requested @ {formatDate(meta.publish_requested_at)}
                       </div>
                     ) : null}
+                    {row.status === "publish_failed" && meta.publish_failed_at ? (
+                      <div className="text-xs text-brand-crimson">
+                        failed @ {formatDate(meta.publish_failed_at)}
+                      </div>
+                    ) : null}
                     {meta.publish_failure_reason ? (
                       <div className="text-xs text-brand-crimson">
-                        publish failed: {meta.publish_failure_reason}
+                        publish failure: {meta.publish_failure_reason}
+                      </div>
+                    ) : null}
+                    {meta.publish_failure_stage ? (
+                      <div className="text-xs text-brand-crimson">
+                        failure stage: {meta.publish_failure_stage}
                       </div>
                     ) : null}
                     {meta.rejection_reason ? (
