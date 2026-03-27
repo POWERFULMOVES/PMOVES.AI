@@ -49,7 +49,8 @@
       "provider": "pmoves-ui",
       "action_namespace": "voice",
       "capabilities": ["tts", "engine-status", "audition", "prosody"],
-      "pinned": true
+      "pinned": true,
+      "status": "planned"
     },
     {
       "app_id": "notebook-workbench",
@@ -67,7 +68,8 @@
       "provider": "pmoves-ui",
       "action_namespace": "media",
       "capabilities": ["pipeline-health", "artifact-preview", "render-status"],
-      "pinned": false
+      "pinned": false,
+      "status": "planned"
     }
   ],
   "notebook": {
@@ -206,7 +208,7 @@
   "telemetry": {
     "graphiti_phase": "Voice Studio",
     "room_events_subject": "room.session.updated.v1",
-    "healthcheck_route": "/api/voice/health"
+    "healthcheck_route": "/api/health"
   },
   "provenance": {
     "source": "pmoves/config/rooms/catalog.json",

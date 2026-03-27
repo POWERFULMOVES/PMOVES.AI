@@ -123,15 +123,26 @@ export default async function RoomsPage() {
                 <div className="space-y-2">
                   <div className="font-pixel text-[7px] uppercase tracking-[0.18em] text-ink-muted">Pinned apps</div>
                   <div className="flex flex-wrap gap-2">
-                    {pinnedApps.map((app) => (
-                      <Link
-                        key={app.app_id}
-                        href={app.route}
-                        className="border border-border-subtle bg-void-soft px-2.5 py-1 font-mono text-2xs uppercase tracking-wider text-ink-secondary transition-colors hover:border-ink-primary hover:text-ink-primary"
-                      >
-                        {app.app_id}
-                      </Link>
-                    ))}
+                    {pinnedApps.map((app) => {
+                      const isPlanned = app.status === 'planned';
+                      return isPlanned ? (
+                        <span
+                          key={app.app_id}
+                          className="border border-border-subtle bg-void-soft px-2.5 py-1 font-mono text-2xs uppercase tracking-wider text-ink-muted opacity-50"
+                          title="Route not yet implemented"
+                        >
+                          {app.app_id}
+                        </span>
+                      ) : (
+                        <Link
+                          key={app.app_id}
+                          href={app.route}
+                          className="border border-border-subtle bg-void-soft px-2.5 py-1 font-mono text-2xs uppercase tracking-wider text-ink-secondary transition-colors hover:border-ink-primary hover:text-ink-primary"
+                        >
+                          {app.app_id}
+                        </Link>
+                      );
+                    })}
                     {pinnedApps.length === 0 && (
                       <span className="font-mono text-2xs uppercase tracking-wider text-ink-muted">No pinned apps</span>
                     )}
@@ -144,12 +155,12 @@ export default async function RoomsPage() {
                     {activeSkills.slice(0, 2).map((binding) => (
                       <div key={binding.binding_id} className="border border-border-subtle bg-void-soft px-3 py-2">
                         <div className="flex items-center justify-between gap-3">
-                          <span className="font-medium text-ink-primary">{binding.display_name}</span>
+                          <span className="font-medium text-ink-primary">{binding.display_name ?? binding.binding_id}</span>
                           <span className="font-mono text-2xs uppercase tracking-wider text-ink-muted">
                             {binding.execution?.mode ?? 'direct'}
                           </span>
                         </div>
-                        <p className="mt-1 text-xs text-ink-secondary">{binding.intent.join(', ')}</p>
+                        <p className="mt-1 text-xs text-ink-secondary">{Array.isArray(binding.intent) ? binding.intent.join(', ') : ''}</p>
                       </div>
                     ))}
                     {activeSkills.length === 0 && (

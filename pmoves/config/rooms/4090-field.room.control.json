@@ -67,7 +67,8 @@
       "provider": "pmoves-ui",
       "action_namespace": "review",
       "capabilities": ["pr-triage", "thread-classify", "risk-notes"],
-      "pinned": false
+      "pinned": false,
+      "status": "planned"
     }
   ],
   "notebook": {

@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
 
   const roomId = request.nextUrl.searchParams.get('room_id');
   const headers = {
-    'Cache-Control': 'public, s-maxage=30, stale-while-revalidate=60',
+    'Cache-Control': 'private, max-age=30, stale-while-revalidate=60',
     'Content-Type': 'application/json',
   };
 
@@ -43,11 +43,9 @@ export async function GET(request: NextRequest) {
       { headers }
     );
   } catch (error) {
+    console.error('Failed to load rooms:', error);
     return NextResponse.json(
-      {
-        error: 'Failed to load rooms',
-        message: error instanceof Error ? error.message : String(error),
-      },
+      { error: 'Failed to load rooms' },
       { status: 500, headers }
     );
   }
