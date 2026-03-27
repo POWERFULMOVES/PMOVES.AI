@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="PMOVES Agent Zero icon">
+  <rect width="256" height="256" rx="48" fill="#0b132b"/>
+  <path d="M128 48l56 32v64c0 34-20 52-56 64-36-12-56-30-56-64V80l56-32z" fill="#1c2541" stroke="#5bc0be" stroke-width="10"/>
+  <circle cx="128" cy="112" r="22" fill="#ffffff"/>
+  <path d="M92 176c12-18 28-27 36-27s24 9 36 27" fill="none" stroke="#ffffff" stroke-width="14" stroke-linecap="round"/>
+</svg>
