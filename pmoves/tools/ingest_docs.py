@@ -36,6 +36,7 @@ PRIORITY_PATTERNS = [
     "pmoves/docs/PMOVESCHIT/*.md",
     "pmoves/docs/services/README.md",
     "pmoves/docs/services/*/README.md",
+    "pmoves/configs/tac_trees/*.yaml",
     "docs/*.md",
     "docs/architecture/*.md",
     "docs/testing/*.md",
@@ -86,6 +87,46 @@ def chunk_markdown(content: str, max_chunk_size: int = 2000) -> List[str]:
     return [c for c in chunks if c.strip()]
 
 
+def chunk_yaml(content: str, max_chunk_size: int = 2000) -> List[str]:
+    """Split YAML content into chunks at top-level keys."""
+    lines = content.split("\n")
+    chunks = []
+    current_chunk = []
+    current_size = 0
+
+    for line in lines:
+        line_size = len(line) + 1
+        # Top-level key (non-indented, non-comment, non-empty)
+        is_top_key = line and not line[0].isspace() and not line.startswith("#") and not line.startswith("---")
+
+        if is_top_key and current_size > max_chunk_size // 3:
+            if current_chunk:
+                chunks.append("\n".join(current_chunk))
+            current_chunk = [line]
+            current_size = line_size
+        elif current_size + line_size > max_chunk_size:
+            if current_chunk:
+                chunks.append("\n".join(current_chunk))
+            current_chunk = [line]
+            current_size = line_size
+        else:
+            current_chunk.append(line)
+            current_size += line_size
+
+    if current_chunk:
+        chunks.append("\n".join(current_chunk))
+
+    return [c for c in chunks if c.strip()]
+
+
+def chunk_file(file_path: Path, content: str, max_chunk_size: int = 2000) -> List[str]:
+    """Chunk a file based on its extension."""
+    suffix = file_path.suffix.lower()
+    if suffix in (".yaml", ".yml"):
+        return chunk_yaml(content, max_chunk_size)
+    return chunk_markdown(content, max_chunk_size)
+
+
 def generate_chunk_id(file_path: str, chunk_index: int) -> str:
     """Generate a deterministic chunk ID from file path and index."""
     combined = f"{file_path}:{chunk_index}"
@@ -101,15 +142,15 @@ def find_priority_files(repo_root: Path) -> List[Path]:
     return sorted(set(files))
 
 
-def find_all_markdown_files(repo_root: Path) -> List[Path]:
-    """Find all markdown files, excluding dependency directories."""
+def find_all_ingestable_files(repo_root: Path) -> List[Path]:
+    """Find all markdown and YAML files, excluding dependency directories."""
     files = []
-    for md_file in repo_root.rglob("*.md"):
-        # Skip excluded directories
-        if any(excl in md_file.parts for excl in EXCLUDE_DIRS):
-            continue
-        files.append(md_file)
-    return sorted(files)
+    for pattern in ("*.md", "*.yaml", "*.yml"):
+        for f in repo_root.rglob(pattern):
+            if any(excl in f.parts for excl in EXCLUDE_DIRS):
+                continue
+            files.append(f)
+    return sorted(set(files))
 
 
 def ingest_file(file_path: Path, repo_root: Path, dry_run: bool = False) -> Dict[str, Any]:
@@ -125,9 +166,10 @@ def ingest_file(file_path: Path, repo_root: Path, dry_run: bool = False) -> Dict
         return {"file": str(relative_path), "skipped": "empty", "chunks_sent": 0}
 
     # Chunk the content
-    text_chunks = chunk_markdown(content)
+    text_chunks = chunk_file(file_path, content)
 
     # Prepare chunks for Extract-Worker
+    source_type = "yaml" if file_path.suffix.lower() in (".yaml", ".yml") else "markdown"
     chunks = []
     for i, text in enumerate(text_chunks):
         chunk_id = generate_chunk_id(str(relative_path), i)
@@ -136,7 +178,7 @@ def ingest_file(file_path: Path, repo_root: Path, dry_run: bool = False) -> Dict
             "text": text,
             "namespace": "pmoves-docs",
             "source": str(relative_path),
-            "source_type": "markdown",
+            "source_type": source_type,
             "chunk_index": i,
             "total_chunks": len(text_chunks),
         })
@@ -179,8 +221,8 @@ def main():
         files = find_priority_files(repo_root)
         print(f"Found {len(files)} priority files")
     else:
-        files = find_all_markdown_files(repo_root)
-        print(f"Found {len(files)} markdown files")
+        files = find_all_ingestable_files(repo_root)
+        print(f"Found {len(files)} files (markdown + YAML)")
 
     if not files:
         print("No files to ingest")
