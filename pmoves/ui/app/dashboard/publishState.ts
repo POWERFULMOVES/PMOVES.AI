@@ -26,6 +26,32 @@ interface DescribePublishStateInput {
 
 const normalize = (value?: string | null) => (value || "").trim().toLowerCase();
 
+const describeQueuedPublishState = ({
+  approvalRelayedAt,
+  publishRequestedAt,
+}: {
+  approvalRelayedAt?: string | null;
+  publishRequestedAt?: string | null;
+}): PublishStateSummary | null => {
+  if (approvalRelayedAt) {
+    return {
+      label: "approval relayed",
+      detailLabel: "approval relayed @",
+      detailValue: approvalRelayedAt,
+      tone: "default",
+    };
+  }
+  if (publishRequestedAt) {
+    return {
+      label: "publish requested",
+      detailLabel: "publish requested @",
+      detailValue: publishRequestedAt,
+      tone: "default",
+    };
+  }
+  return null;
+};
+
 /**
  * Collapse publish metadata from the studio-board and videos dashboards into
  * one operator-facing state summary.
@@ -66,7 +92,8 @@ export function describePublishState({
     status === "publish_failed" ||
     approval === "publish_failed" ||
     publishFailedAt ||
-    publishFailureReason
+    publishFailureReason ||
+    publishFailureStage
   ) {
     if (publishFailedAt) {
       return {
@@ -104,22 +131,11 @@ export function describePublishState({
         tone: "default",
       };
     }
-    if (approvalRelayedAt) {
-      return {
-        label: "approval relayed",
-        detailLabel: "approval relayed @",
-        detailValue: approvalRelayedAt,
-        tone: "default",
-      };
-    }
-    if (publishRequestedAt) {
-      return {
-        label: "publish requested",
-        detailLabel: "publish requested @",
-        detailValue: publishRequestedAt,
-        tone: "default",
-      };
-    }
+    const queuedState = describeQueuedPublishState({
+      approvalRelayedAt,
+      publishRequestedAt,
+    });
+    if (queuedState) return queuedState;
     return { label: "publishing", tone: "default" };
   }
 
@@ -130,22 +146,11 @@ export function describePublishState({
     publishRequestedAt ||
     reviewed
   ) {
-    if (approvalRelayedAt) {
-      return {
-        label: "approval relayed",
-        detailLabel: "approval relayed @",
-        detailValue: approvalRelayedAt,
-        tone: "default",
-      };
-    }
-    if (publishRequestedAt) {
-      return {
-        label: "publish requested",
-        detailLabel: "publish requested @",
-        detailValue: publishRequestedAt,
-        tone: "default",
-      };
-    }
+    const queuedState = describeQueuedPublishState({
+      approvalRelayedAt,
+      publishRequestedAt,
+    });
+    if (queuedState) return queuedState;
     if (reviewed) {
       return {
         label: "waiting for poller",

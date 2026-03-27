@@ -109,4 +109,19 @@ describe("describePublishState", () => {
       tone: "danger",
     });
   });
+
+  it("treats failure stage metadata alone as a retry signal", () => {
+    expect(
+      describePublishState({
+        meta: {
+          publish_failure_stage: "discord_webhook",
+        },
+      })
+    ).toEqual({
+      label: "needs retry",
+      detailLabel: "failure stage:",
+      detailValue: "discord_webhook",
+      tone: "danger",
+    });
+  });
 });
