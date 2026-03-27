@@ -441,8 +441,16 @@ def _qdrant_search(
 
     raise AttributeError("qdrant client has no compatible search/query API")
 
+RECREATE_ON_MISMATCH = os.environ.get(
+    "QDRANT_RECREATE_ON_DIM_MISMATCH", "false"
+).lower() in ("true", "1", "yes")
+
 def ensure_qdrant_collection(vector_dim: int):
-    """Create or resync the Qdrant collection when the embed dimension changes."""
+    """Create or resync the Qdrant collection when the embed dimension changes.
+
+    When QDRANT_RECREATE_ON_DIM_MISMATCH=false (default), a dimension mismatch
+    returns HTTP 409 instead of silently destroying indexed vectors.
+    """
     try:
         info = qdrant.get_collection(COLL)
     except Exception:
@@ -464,8 +472,20 @@ def ensure_qdrant_collection(vector_dim: int):
             logger.info("Qdrant collection %s dimension unknown; recreating", COLL)
             needs_recreate = True
         elif current_dim != vector_dim:
-            logger.info(
-                "Qdrant collection %s dimension changed (%s → %s); recreating",
+            if not RECREATE_ON_MISMATCH:
+                logger.error(
+                    "Qdrant collection %s dimension mismatch (%s stored vs %s requested). "
+                    "Set QDRANT_RECREATE_ON_DIM_MISMATCH=true to auto-recreate (data loss!).",
+                    COLL, current_dim, vector_dim,
+                )
+                raise HTTPException(
+                    409,
+                    f"Qdrant dimension mismatch: collection has {current_dim}d, "
+                    f"embedding returned {vector_dim}d. Refusing to auto-recreate "
+                    f"(QDRANT_RECREATE_ON_DIM_MISMATCH=false)."
+                )
+            logger.warning(
+                "Qdrant collection %s dimension changed (%s -> %s); recreating (DATA LOSS)",
                 COLL,
                 current_dim,
                 vector_dim,
@@ -481,6 +501,8 @@ def ensure_qdrant_collection(vector_dim: int):
                 vectors_config=VectorParams(size=vector_dim, distance=Distance.COSINE)
             )
             logger.info("(re)created Qdrant collection %s [dim=%d, metric=cosine]", COLL, vector_dim)
+    except HTTPException:
+        raise
     except Exception as e:
         logger.exception("ensure_qdrant_collection failed")
         raise HTTPException(500, f"Qdrant collection error: {e}")

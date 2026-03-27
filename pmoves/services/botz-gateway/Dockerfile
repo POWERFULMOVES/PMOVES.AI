@@ -6,9 +6,12 @@ LABEL org.opencontainers.image.description="PMOVES-BoTZ Gateway - Work item coor
 
 WORKDIR /app
 
+# Install uv for fast, reliable dependency resolution
+RUN pip install --no-cache-dir uv
+
 # Install dependencies
 COPY requirements.txt requirements.lock .
-RUN pip install --no-cache-dir --constraint requirements.lock -r requirements.txt
+RUN uv pip install --system --no-cache --constraint requirements.lock -r requirements.txt
 
 # Copy application
 COPY main.py .
