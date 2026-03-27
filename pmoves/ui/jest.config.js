@@ -10,10 +10,10 @@ const customJestConfig = {
   testMatch: [
     '**/__tests__/**/*.test.ts',
     '**/__tests__/**/*.test.tsx',
-    'lib/api/**/*.test.ts',
-    'lib/api/**/*.test.tsx',
-    'components/**/*.test.ts',
-    'components/**/*.test.tsx',
+    '**/lib/api/**/*.test.ts',
+    '**/lib/api/**/*.test.tsx',
+    '**/components/**/*.test.ts',
+    '**/components/**/*.test.tsx',
   ],
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/$1',
