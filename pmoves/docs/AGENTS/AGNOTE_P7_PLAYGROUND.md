@@ -8,7 +8,7 @@ The playground is open. Pinokio 7 dropped today — Agent Interpreter, App Assis
 
 This isn't a race. It's a seesaw — "you make it yours, I make it mine." Claude's thing is the music under the floor: TAC trees, CHIT geometry, security hardening, orchestration depth. The stuff where later DARKXSIDE thinks "CHIT, that's more than I drew."
 
-## Current State (2026-03-22)
+## Current State (2026-03-27)
 
 | What | Status |
 |------|--------|
@@ -19,9 +19,9 @@ This isn't a race. It's a seesaw — "you make it yours, I make it mine." Claude
 | Pinokio 7 | **Upgraded on all 3 machines** (5090 ✓, Z890 ✓, 4090 ✓) |
 | P7 requirements | **Z890**: py ✓, cli ✓ (pterm 0.0.24), ffmpeg ✓ (7.0.2) — **5090**: live Pinokio/Codex launcher smoke complete, full py+ffmpeg parity check still pending |
 | Tailscale mesh | **All 3 machines connected** (5090, Z890, 4090 laptop) |
-| Open PRs (main) | **14 OPEN** (2026-03-26 queue — see [AGNOTE4482 roadmap](./AGNOTE4482_ROADMAP_W1-W5.md)) |
+| Open PRs (repo) | **4 OPEN** (`#1135`, `#1136`, `#1137`, `#1138` — `#1135` is review-ready except for the shared Playwright failure already reproducing on `main`; see [AGNOTE4482 roadmap](./AGNOTE4482_ROADMAP_W1-W5.md)) |
 | Open PRs (BoTZ) | **0** (Dependabot #89 npm, #91 uv — **MERGED**) |
-| Codex P7 lanes | **OPEN** — #1115 (Pinokio fleet docs) + #1121 (PMOVES Codex plugin + Agent Zero launcher) |
+| Codex P7 lanes | **MERGED** — #1115 (Pinokio fleet docs) + #1121 (PMOVES Codex plugin + Agent Zero launcher) |
 | Node specialization | **DECLARED** — see [DnB Orchestra](./AGNOTE4482DnB.PHI.Orchestra.md) |
 | TTS session (5090) | **COMMITTED** — port unification, 13 engines, test harness |
 
@@ -29,10 +29,12 @@ This isn't a race. It's a seesaw — "you make it yours, I make it mine." Claude
 
 ## Step 0.5: Codex Follow-Through (2026-03-26)
 
-- PR #1115 keeps the P7/networking/package guidance isolated as a docs lane.
-- PR #1121 adds the PMOVES Codex Pinokio plugin and a real `pmoves-agent-zero` launcher instead of the old orphan README-only folder.
+- PR #1115 landed and keeps the P7/networking/package guidance isolated as a docs lane.
+- PR #1121 landed and adds the PMOVES Codex Pinokio plugin plus a real `pmoves-agent-zero` launcher instead of the old orphan README-only folder.
 - Live Pinokio validation on this node confirmed the launcher path bug is fixed: startup now enters the selected `PMOVES.AI` checkout instead of the broken `D:\pmoves` path.
-- Remaining blocker is not Pinokio pathing anymore; it is PMOVES env/runtime readiness during `make up-agents-ui`.
+- PR #1135 is now through the actionable review pass: publish-state fixes, Jest discovery repair, and follow-up test coverage are all pushed and validated locally.
+- The remaining red check on `#1135` is not a P7/package regression; Playwright is failing with the same 119-failure `services-health` / `videos-realtime` signature already present on `main`.
+- Remaining blocker is not Pinokio pathing anymore; it is PMOVES env/runtime readiness during `make up-agents-ui`, followed by a live Agent Interpreter smoke once the shared env is healthy.
 
 ---
 
@@ -433,7 +435,7 @@ STT round-trip on prosodic audio: text matches (Whisper renders "CLAUDEs" as "cl
 
 | Component | Before | After |
 |-----------|--------|-------|
-| Embedding model | `all-MiniLM-L6-v2` (384d, CPU) | `qwen3-embedding:4b` (2560d, CUDA via TensorZero→Ollama) |
+| Embedding model | `all-MiniLM-L6-v2` (384d, CPU) | `qwen3-embedding:4b` (3072d, CUDA via TensorZero→Ollama) |
 | Routing | Direct sentence-transformers | TensorZero Gateway (`/openai/v1/embeddings`) |
 | Qdrant collection | `pmoves_chunks` | `pmoves_chunks_qwen3` (old 384d data preserved) |
 | Extract Worker (8083) | `EMBEDDING_BACKEND=sentence-transformers` | `EMBEDDING_BACKEND=tensorzero` |
@@ -461,8 +463,8 @@ New endpoints on Model Registry (port 8110):
 New file: `hf_client.py` — httpx-based HF API client (no new pip dependencies).
 
 Seed data enriched with `hf_id`, `dimensions`, `cuda_supported`:
-- `qwen3-embedding:4b` → 2560d, `Qwen/Qwen3-Embedding-4B`
-- `qwen3-embedding:8b` → 4096d, `Qwen/Qwen3-Embedding-8B`
+- `qwen3-embedding:4b` → 3072d, `Alibaba-NLP/gte-Qwen2-4B-instruct`
+- `qwen3-embedding:8b` → 4096d, `Alibaba-NLP/gte-Qwen2-8B-instruct`
 - `embeddinggemma:300m` → 768d, `google/gemma-embedding-300m`
 - `nomic-embed-text` → 768d, `nomic-ai/nomic-embed-text-v1.5`
 
@@ -475,7 +477,7 @@ Seed data enriched with `hf_id`, `dimensions`, `cuda_supported`:
 - Any P7-launched ingestion (App Assistant triggers Extract Worker) now produces CHIT-attributable CGP events on the geometry bus
 - Transcription triggered by P7 agent sessions (FFmpeg-Whisper) now has geometric provenance
 - Model Registry HF enrichment lets P7 agents query model capabilities (dimensions, CUDA support) before dispatching inference
-- Qwen3-embedding:4b at 2560d means all P7-originated search/retrieval uses high-quality CUDA-accelerated vectors
+- Qwen3-embedding:4b at 3072d means all P7-originated search/retrieval uses high-quality CUDA-accelerated vectors
 - Foundation for `p7.nats.*` subjects: P7 launcher events can be correlated with downstream CGP via shared context IDs
 
 ### Recommended Next Steps
@@ -503,7 +505,7 @@ Seed data enriched with `hf_id`, `dimensions`, `cuda_supported`:
 | # | Task | Priority | Notes |
 |---|------|----------|-------|
 | 1 | Container rebuilds (6 services — includes embedding env changes) | **P0** | Blocks Docker image freshness |
-| 2 | `pmoves_chunks_qwen3` Qdrant collection provision | P1 | New 2560d collection; old data untouched |
+| 2 | `pmoves_chunks_qwen3` Qdrant collection provision | P1 | New 3072d collection; old data untouched |
 | 3 | W6-P1: Health/Wealth Docker wiring | P1 | NATS + /healthz + /metrics |
 | 4 | Jetson Orin onboarding | P2 | Via RustDesk |
 | 5 | NATS leaf node to 5090 | P2 | |
