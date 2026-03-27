@@ -45,7 +45,7 @@ services:
       - DISCORD_WEBHOOK_USERNAME=${DISCORD_WEBHOOK_USERNAME:-PMOVES Publisher}
       - N8N_LOG_LEVEL=debug
       - N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=true
-    ports: ["5678:5678"]
+    ports: ["${N8N_BIND:-127.0.0.1}:${N8N_PORT:-5678}:5678"]
     networks: [cataclysm]
     extra_hosts:
       - "host.docker.internal:host-gateway"
