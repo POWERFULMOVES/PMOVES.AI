@@ -2,7 +2,7 @@
 
 > Single source of truth for all physical/virtual nodes, service assignments, agent teams, route flows, and runner strategy.
 >
-> Last updated: 2026-03-22
+> Last updated: 2026-03-27
 
 ---
 
@@ -12,9 +12,9 @@
 |------|--------|-------------|--------------------|----- |---------------|------------|------|
 | Z890 (Windows 11) | LAN (dual NIC) | `ts:<z890>` | pmoves-z890 | Dev, GPU (RTX 3090 Ti) | `self-hosted, ai-lab` (secondary) | 32C / 128GB | electricity |
 | POWERFULMOVES (5090) | LAN (dual NIC) | `ts:<5090-linux>`, `ts:<5090-win>` | pmoves-powerfulmoves, powerfulmoves-1 | Primary GPU (RTX 5090) | `self-hosted, ai-lab, gpu, cuda` | 24C / 64GB | electricity |
-| 4090 Laptop (Windows) | — | `ts:<laptop>` | pmoves-laptop | Control Plane, Edge Orchestration | — | RTX 4090 | electricity |
-| Jetson Orin #1 | LAN (RustDesk + SSH) | `ts:<nano>` (dormant) | pmoves-nano | Edge Inference (Nemotron/NemoClaw) | — | Orin (sm_87) | electricity |
-| Jetson Orin #2 | LAN (RustDesk + SSH) | TBD | TBD | Edge Inference (Nemotron/NemoClaw) | — | Orin (sm_87) | electricity |
+| 4090 Laptop (Windows) | LAN | `ts:<laptop>` | pmoves-4090 | Control Plane, Edge Orchestration, Agent Zero + Claws | — | RTX 4090 | electricity |
+| Jetson Orin #1 | LAN (RustDesk + SSH) | `ts:<nano>` | pmoves-nano (rename to pmoves-nano-1 pending) | Edge Inference (Nemotron/NemoClaw), Claws | — | Orin (sm_87) | electricity |
+| Jetson Orin #2 | LAN (RustDesk + SSH) | TBD | TBD | Edge Inference (Nemotron/NemoClaw), Claws | — | Orin (sm_87) | electricity |
 | KVM4-1 | — | — | pmoves-kvm4-1 | API Gateway | `self-hosted, vps, kvm4, production` | 8C / 16GB | $10/mo |
 | KVM4-2 | — | — | pmoves-kvm4-2 | Data / Storage | `self-hosted, vps, kvm4, production` | 8C / 16GB | $10/mo |
 | KVM2 | — | — | pmoves-kvm2 | Exit Node / Proxy | `self-hosted, vps, kvm2, backup` | 4C / 8GB | $10/mo |
@@ -33,10 +33,19 @@
 
 ### Jetson Orin Status
 
-Both Jetson Orin Nanos have SSH configured and are accessible via **RustDesk** on the local network. `pmoves-nano` was previously on the Tailscale mesh (dormant, offline 108d). Both need:
-1. Fresh Tailscale install via `PMOVES-Tailscale/deploy/deploy.sh --role edge`
-2. JetPack version check and potential update
-3. Registration in `agent-teams.yaml` and `node-agent-specialization.yaml`
+Both Jetson Orin Nanos have SSH configured (`pmovesnvme@.110`, `pmovesnvme@.144`) and are accessible via **RustDesk** relay through KVM2. Both registered on KVM2 RustDesk server with root + user config deployed via `restart-jetson-rustdesk.sh`.
+
+**Completed:**
+- SSH key-only auth (password disabled)
+- RustDesk config: KVM2 relay, both root and user paths
+- pmoves-claw SSH key injected to root
+
+**Remaining:**
+1. Jetson #1: Tailscale active (pmoves-nano, 100.x), pending rename to pmoves-nano-1
+2. Jetson #2: Fresh Tailscale install needed
+3. JetPack version check and potential update
+4. Registration in `agent-teams.yaml` and `node-agent-specialization.yaml`
+5. Agent Zero + Claws deployment
 
 **Total VPS cost:** $30/mo + electricity for local nodes.
 
@@ -94,11 +103,15 @@ Services deployed via `docker-compose.vps.override.yml`:
 | Loki | 3100 | `/ready` | monitoring |
 | MinIO | 9000 (API) / 9001 (Console) | `/minio/health/live` | — |
 
-### KVM2 — Exit Node / Reverse Proxy
+### KVM2 — Exit Node / Reverse Proxy / RustDesk Relay
 
 | Service | Port | Health | Notes |
 |---------|------|--------|-------|
 | nginx | 80 / 443 | `nginx -t` | SSL termination via Let's Encrypt |
+| RustDesk hbbs | 21115-21116 | `journalctl -u hbbs` | Rendezvous server with `-r` relay flag |
+| RustDesk hbbr | 21117-21119 | `journalctl -u hbbr` | Relay server |
+
+**RustDesk Fleet:** Self-hosted relay on KVM2. All LAN nodes (Z890, 5090, 4090, Jetson #1, Jetson #2) registered. Mobile devices pending QR enrollment. See `docs/operations/RUSTDESK_SELF_HOSTED.md` for details.
 
 ### POWERFULMOVES — Primary GPU + AI Lab Runner
 

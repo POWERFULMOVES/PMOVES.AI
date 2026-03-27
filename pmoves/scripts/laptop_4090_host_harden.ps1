@@ -246,7 +246,7 @@ if ($tailscaleSvc -and $tailscaleSvc.Status -eq 'Running') {
   try {
     $tsStatus = & tailscale status 2>&1 | Select-Object -First 1
     Write-Host "       $tsStatus" -ForegroundColor Gray
-  } catch {}
+  } catch { Write-Host "       (tailscale status unavailable: $_)" -ForegroundColor Gray }
 } else {
   Write-Host "[WARN] Tailscale service not running -- mesh connectivity unavailable" -ForegroundColor Yellow
 }

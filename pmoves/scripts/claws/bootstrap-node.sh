@@ -37,7 +37,7 @@ if [[ -z "$SCOPE" || -z "$TARGET" ]]; then
     echo ""
     echo "Example:"
     echo "  bootstrap-node.sh --scope 5090 --target root@pmoves-5090"
-    echo "  bootstrap-node.sh --scope kvm4-1 --target root@31.97.42.207"
+    echo "  bootstrap-node.sh --scope kvm4-1 --target root@\$HOSTINGER_KVM4_1_IP"
     exit 1
 fi
 

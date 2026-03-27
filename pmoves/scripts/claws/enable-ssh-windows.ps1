@@ -43,8 +43,11 @@ New-ItemProperty -Path "HKLM:\SOFTWARE\OpenSSH" -Name DefaultShell `
 # 4. Inject authorized key
 Write-Host "[4/5] Injecting authorized key..."
 $authKeysPath = "$env:ProgramData\ssh\administrators_authorized_keys"
-New-Item -Path "$env:ProgramData\ssh" -Name "administrators_authorized_keys" -ItemType File -Force | Out-Null
-Set-Content -Path $authKeysPath -Value $PubKey
+New-Item -Path "$env:ProgramData\ssh" -ItemType Directory -Force | Out-Null
+$existing = if (Test-Path $authKeysPath) { Get-Content $authKeysPath -Raw } else { "" }
+if ($existing -notmatch [regex]::Escape("pmoves-claw@pmoves.ai")) {
+    Add-Content -Path $authKeysPath -Value $PubKey
+}
 icacls $authKeysPath /inheritance:r /grant "Administrators:F" /grant "SYSTEM:F" | Out-Null
 Write-Host "  Key written to: $authKeysPath"
 
