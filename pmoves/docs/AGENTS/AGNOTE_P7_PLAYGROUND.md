@@ -433,7 +433,7 @@ STT round-trip on prosodic audio: text matches (Whisper renders "CLAUDEs" as "cl
 
 | Component | Before | After |
 |-----------|--------|-------|
-| Embedding model | `all-MiniLM-L6-v2` (384d, CPU) | `qwen3-embedding:4b` (3072d, CUDA via TensorZero→Ollama) |
+| Embedding model | `all-MiniLM-L6-v2` (384d, CPU) | `qwen3-embedding:4b` (2560d, CUDA via TensorZero→Ollama) |
 | Routing | Direct sentence-transformers | TensorZero Gateway (`/openai/v1/embeddings`) |
 | Qdrant collection | `pmoves_chunks` | `pmoves_chunks_qwen3` (old 384d data preserved) |
 | Extract Worker (8083) | `EMBEDDING_BACKEND=sentence-transformers` | `EMBEDDING_BACKEND=tensorzero` |
@@ -461,8 +461,8 @@ New endpoints on Model Registry (port 8110):
 New file: `hf_client.py` — httpx-based HF API client (no new pip dependencies).
 
 Seed data enriched with `hf_id`, `dimensions`, `cuda_supported`:
-- `qwen3-embedding:4b` → 3072d, `Alibaba-NLP/gte-Qwen2-4B-instruct`
-- `qwen3-embedding:8b` → 4096d, `Alibaba-NLP/gte-Qwen2-8B-instruct`
+- `qwen3-embedding:4b` → 2560d, `Qwen/Qwen3-Embedding-4B`
+- `qwen3-embedding:8b` → 4096d, `Qwen/Qwen3-Embedding-8B`
 - `embeddinggemma:300m` → 768d, `google/gemma-embedding-300m`
 - `nomic-embed-text` → 768d, `nomic-ai/nomic-embed-text-v1.5`
 
@@ -475,7 +475,7 @@ Seed data enriched with `hf_id`, `dimensions`, `cuda_supported`:
 - Any P7-launched ingestion (App Assistant triggers Extract Worker) now produces CHIT-attributable CGP events on the geometry bus
 - Transcription triggered by P7 agent sessions (FFmpeg-Whisper) now has geometric provenance
 - Model Registry HF enrichment lets P7 agents query model capabilities (dimensions, CUDA support) before dispatching inference
-- Qwen3-embedding:4b at 3072d means all P7-originated search/retrieval uses high-quality CUDA-accelerated vectors
+- Qwen3-embedding:4b at 2560d means all P7-originated search/retrieval uses high-quality CUDA-accelerated vectors
 - Foundation for `p7.nats.*` subjects: P7 launcher events can be correlated with downstream CGP via shared context IDs
 
 ### Recommended Next Steps
@@ -503,7 +503,7 @@ Seed data enriched with `hf_id`, `dimensions`, `cuda_supported`:
 | # | Task | Priority | Notes |
 |---|------|----------|-------|
 | 1 | Container rebuilds (6 services — includes embedding env changes) | **P0** | Blocks Docker image freshness |
-| 2 | `pmoves_chunks_qwen3` Qdrant collection provision | P1 | New 3072d collection; old data untouched |
+| 2 | `pmoves_chunks_qwen3` Qdrant collection provision | P1 | New 2560d collection; old data untouched |
 | 3 | W6-P1: Health/Wealth Docker wiring | P1 | NATS + /healthz + /metrics |
 | 4 | Jetson Orin onboarding | P2 | Via RustDesk |
 | 5 | NATS leaf node to 5090 | P2 | |

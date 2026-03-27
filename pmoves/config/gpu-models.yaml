@@ -175,8 +175,8 @@ models:
   - id: "qwen3-embedding:4b"
     provider: ollama
     vram_mb: 3000
-    dimensions: 3072
-    hf_id: "Alibaba-NLP/gte-Qwen2-4B-instruct"
+    dimensions: 2560
+    hf_id: "Qwen/Qwen3-Embedding-4B"
     cuda_supported: true
     description: "Qwen3 Embedding 4B - Primary CUDA embedding"
     priority_default: 3
@@ -186,7 +186,7 @@ models:
     provider: ollama
     vram_mb: 6000
     dimensions: 4096
-    hf_id: "Alibaba-NLP/gte-Qwen2-8B-instruct"
+    hf_id: "Qwen/Qwen3-Embedding-8B"
     cuda_supported: true
     description: "Qwen3 Embedding 8B - High quality"
     priority_default: 4

@@ -119,7 +119,7 @@ cd PMOVES-BoTZ-check && ./scripts/pmoves_botz_ctl.sh start
 | qwen2-vl-7b | VL | Qwen/Qwen2-VL-7B-Instruct | - | vl_sentinel |
 | qwen3-vl-8b | VL | Qwen/Qwen3-VL-8B-Instruct | - | vl_sentinel |
 | qwen3-embedding-8b | Embedding | Qwen/Qwen3-Embedding-8B | 4096 | embeddings, hirag |
-| qwen3-embedding-4b | Embedding | Qwen/Qwen3-Embedding-4B | 3072 | embeddings |
+| qwen3-embedding-4b | Embedding | Qwen/Qwen3-Embedding-4B | 2560 | embeddings |
 | bge-large-en-v1.5 | Embedding | BAAI/bge-large-en-v1.5 | 1024 | embeddings |
 | qwen3-reranker-4b | Reranker | Qwen/Qwen3-Reranker-4B | - | hirag_rerank |
 

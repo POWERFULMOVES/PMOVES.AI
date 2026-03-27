@@ -887,8 +887,8 @@ BEGIN
     '["embeddings"]'::jsonb,
     3000,
     32768,
-    'Qwen3 Embedding 4B - Primary CUDA embedding model (3072d)',
-    '{"hf_id": "Alibaba-NLP/gte-Qwen2-4B-instruct", "dimensions": 3072, "cuda_supported": true}'::jsonb,
+    'Qwen3 Embedding 4B - Primary CUDA embedding model (2560d)',
+    '{"hf_id": "Qwen/Qwen3-Embedding-4B", "dimensions": 2560, "cuda_supported": true}'::jsonb,
     true
   )
   ON CONFLICT (provider_id, model_id) DO UPDATE SET
@@ -917,7 +917,7 @@ BEGIN
     6000,
     32768,
     'Qwen3 Embedding 8B - High-quality local embedding (4096d, RTX 5090)',
-    '{"hf_id": "Alibaba-NLP/gte-Qwen2-8B-instruct", "dimensions": 4096, "cuda_supported": true}'::jsonb,
+    '{"hf_id": "Qwen/Qwen3-Embedding-8B", "dimensions": 4096, "cuda_supported": true}'::jsonb,
     true
   )
   ON CONFLICT (provider_id, model_id) DO UPDATE SET
