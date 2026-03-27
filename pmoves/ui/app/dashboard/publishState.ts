@@ -26,6 +26,10 @@ interface DescribePublishStateInput {
 
 const normalize = (value?: string | null) => (value || "").trim().toLowerCase();
 
+/**
+ * Collapse publish metadata from the studio-board and videos dashboards into
+ * one operator-facing state summary.
+ */
 export function describePublishState({
   rowStatus,
   approvalStatus,
@@ -44,7 +48,12 @@ export function describePublishState({
   const publishFailureReason = meta?.publish_failure_reason || null;
   const publishFailureStage = meta?.publish_failure_stage || null;
 
-  if (publishedAt || status === "published" || approval === "published") {
+  if (
+    publishedAt ||
+    publishCompletedAt ||
+    status === "published" ||
+    approval === "published"
+  ) {
     return {
       label: "publish complete",
       detailLabel: publishedAt || publishCompletedAt ? "published @" : undefined,
@@ -86,7 +95,7 @@ export function describePublishState({
     return { label: "needs retry", tone: "danger" };
   }
 
-  if (status === "publishing") {
+  if (status === "publishing" || publishStartedAt) {
     if (publishStartedAt) {
       return {
         label: "publisher active",
@@ -114,7 +123,13 @@ export function describePublishState({
     return { label: "publishing", tone: "default" };
   }
 
-  if (status === "approved" || approval === "approved") {
+  if (
+    status === "approved" ||
+    approval === "approved" ||
+    approvalRelayedAt ||
+    publishRequestedAt ||
+    reviewed
+  ) {
     if (approvalRelayedAt) {
       return {
         label: "approval relayed",

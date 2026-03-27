@@ -4,7 +4,7 @@ GRAPHITI_MARK: `PHI-4482-ROADMAP::W1-W6::PMOVES`
 
 > **Scratchpad**: All agents (5090-claude, z890-claude, 4090-claude, codex) read this before claiming workstream lanes.
 > **Origin**: 4090-claude session 2026-03-19, approved by DARKXSIDE.
-> **Status**: ACTIVE — refreshed 2026-03-28 after room/stage merge wave and upstream Agent Zero / ClaWz validation.
+> **Status**: ACTIVE scratchpad — refreshed 2026-03-27 after the Codex merge wave; z890 infra still needs rebase/splitting before release.
 
 ---
 
@@ -17,20 +17,6 @@ PMOVES.AI is expanding from dev-centric multi-agent orchestration into a **full 
 - An **enterprise + open platform** (NVIDIA NeMo enterprise tier + open-source "civi-box")
 
 The site is not a traditional website — it's an **album / videogame / comic / music video / anthology / compendium**. Consciousness mindmaps for study and examination, visible and revealed — humans and models alike able to probe and discover their shape.
-
----
-
-## Current Convergence Update (2026-03-28)
-
-- **Agent Zero release reality**: upstream [`agent0ai/agent-zero`](https://github.com/agent0ai/agent-zero) published `v1.3` on **March 27, 2026**. PMOVES is still pinned to the hardened fork commit from **March 7, 2026** (`PMOVES-Agent-Zero` `2e000aa`), so "the suits" have advanced upstream faster than the PMOVES fork/gitlink.
-- **Gap report is now published**: use [AGNOTE4482_AGENT_ZERO_V1_3_GAP_REPORT](./AGNOTE4482_AGENT_ZERO_V1_3_GAP_REPORT.md) as the canonical comparison before anyone proposes a blind Agent Zero bump.
-- **ClaWz/provider alignment is now explicit**: use [AGNOTE4482_CLAWZ_CODING_PLAN_ALIGNMENT](./AGNOTE4482_CLAWZ_CODING_PLAN_ALIGNMENT.md) for the approved coding-plan inventory and the local-first hybrid-cloud rules suits should obey.
-- **ClaWz repo reality is now explicit**: use [AGNOTE4482_CLAWZ_GAP_REPORT](./AGNOTE4482_CLAWZ_GAP_REPORT.md) before anyone assumes the PMOVES fork is already a curated hardened suit. Upstream `openclaw/openclaw` is current, but the PMOVES root gitlink is still pinned to an orphaned SHA and the old hardened branch is only a February upstream ancestor.
-- **Signoff gate is now explicit**: use [AGNOTE4482_SIGNOFF_CHECKLIST](./AGNOTE4482_SIGNOFF_CHECKLIST.md) so each participating agent signs the same merge/readiness surface instead of improvising parallel checklists.
-- **Rooms + stage layer is now real**: the PMOVES.AI room wave landed on **March 27-28, 2026** (`#1136`, `#1137`, `#1142`, `#1143`) with room catalog loading, home-room entry routing, review/voice/media routes, and runtime taxonomy in the room manifest schema.
-- **Prospectus implication**: the school/company/site should now be described as **rooms on a stage**, not just services in a stack. Rooms are the audience-facing surfaces; stage is the live state (`rehearsal`, `live`, `review`, `archive`) and suit/persona selection tells each room who is speaking.
-- **P7 implication**: P7 should not stop at "launcher + IDE." It should become the **room-aware stage manager** that opens the correct room, loads the correct suit, and hands off into the right runtime.
-- **Release/CVE intake implication**: Agent Zero and ClaWz suit updates should now follow a simple cadence: weekly upstream release/security intake, sprint-level sync decision, and release-gate verification before any gitlink change.
 
 ---
 
@@ -100,25 +86,13 @@ The site is not a traditional website — it's an **album / videogame / comic / 
 |-------|----------|--------|
 | P7 TAC tree | `pmoves/configs/tac_trees/pinokio-p7.tac.yaml` | Active — 7 phases |
 | P7 SKILL.md files | `pbnj/pinokio/api/*/SKILL.md` | 4 services |
-| Devcontainer baseline | `.devcontainer/devcontainer.json` | SHIPPED via `#1041`; needs refresh against current room/stage posture |
-| Room catalog + runtime taxonomy | `pmoves/ui` + room manifest contracts | Active — merged Mar 27-28, 2026 |
+| No devcontainer | — | Missing |
 
 ### Build Spec
 
 1. **`.devcontainer/devcontainer.json`** — PMOVES Docker Compose, Node.js, Python (uv), git, gh CLI, Claude Code CLI. VS Code extensions. Post-create: `make -C pmoves env-setup && make -C pmoves brand-defaults`.
 2. **P7 Student Workspace** — curated app list (TTS Studio, Cipher Beats, Holographic Blocks). `install.js` bootstrap. Agent-themed launcher.
 3. **P7 Phase Completion** — Phase 1 (upgrade tracking), Phase 2 (SKILL.md discovery), Phase 5 (Tailscale routing), Phase 6 (service registration).
-4. **Room-aware entry** — P7 launcher should open into a room/stage model, not a flat services grid:
-   - `home` / `foyer`
-   - `review`
-   - `voice`
-   - `media`
-   - `war-room`
-5. **Agent Zero suit baseline** — before more P7 polish, reconcile the PMOVES hardened Agent Zero suit against upstream `v1.3`, then re-apply PMOVES hardening/persona/MCP deltas as a deliberate overlay.
-6. **Release-note + CVE discipline** — funnel Agent Zero release/security intake into the hardening tracker and planning docs at weekly/sprint intervals so suit drift stays visible.
-7. **Coding-plan aligned suit configs** — bind ClaWz/Agent Zero suits to approved profile lanes so seat/token-aware cloud fallback stays explicit and local-first remains primary.
-8. **ClaWz profile baseline repair** — normalize ClaWz-oriented suit config onto the real profile ids in `pmoves/config/profiles/*.yaml` and stop relying on legacy `workstation_5090` host placeholders.
-9. **ClaWz branch/pin repair** — choose a real PMOVES-ClawZ base branch and replace the orphaned root gitlink before more room-aware ClaW suits are presented as production-ready.
 
 ### Key Files
 - `pmoves/configs/tac_trees/pinokio-p7.tac.yaml`
@@ -141,7 +115,6 @@ The site is not a traditional website — it's an **album / videogame / comic / 
 | Discord Publisher | `pmoves/services/publisher-discord/` (port 8094) | Active |
 | Discord Voice Agent | `pmoves/n8n/flows/discord_voice_agent.json` | n8n workflow |
 | Messaging Gateway | Port 8101 | Multi-platform |
-| Room routes + runtime taxonomy | `pmoves/ui` room manifest flow | Active — should drive Discord channel topology decisions |
 
 ### Build Spec
 
@@ -152,13 +125,6 @@ The site is not a traditional website — it's an **album / videogame / comic / 
    - Roles: Student → Contributor → Builder → Faculty → DARKXSIDE
 2. **Digital School** — onboarding flow, curriculum via n8n, BoTZ work item tracking, graduation = CHIT-signed portfolio.
 3. **Digital AI Company** — participants bring ideas, PMOVES provides infra, n8n branding templates, waitlist→intake→workspace→showcase.
-4. **Room-to-Discord parity** — Discord should mirror the room model instead of inventing a separate topology:
-   - `review-room`
-   - `voice-room`
-   - `media-room`
-   - `builder-room`
-   - `investor-room`
-5. **Stage discipline** — channel status should reflect whether a room is in `rehearsal`, `live`, `review`, or `archive` so the school/company metaphor stays legible.
 
 ---
 
@@ -186,12 +152,6 @@ The site is not a traditional website — it's an **album / videogame / comic / 
 2. **Waitlist** — email → Supabase `waitlist` table → n8n confirmation + Discord invite. Segments: Student/Builder/Enterprise/Investor.
 3. **Agent-Built Pipeline** — BoTZ coordinates content generation, n8n templates produce assets, ComfyUI renders visuals, A2UI animates geometry proofs, auto-deploy to KVMs.
 4. **Compendium Sections** — Album (beats+sonic constellations), Videogame (Danger Room), Comic (agent personalities), Anthology (research outputs), Mindmap (CHIT taxonomy graph).
-5. **Prospectus frame** — the site should read like a stage with rooms:
-   - `Foyer`: waitlist + orientation + suit selection
-   - `Review Room`: proofs, notebooks, Graphiti trails, agent work orders
-   - `Voice Room`: Flute, Pipecat, TTS personas, spoken demos
-   - `Media Room`: beats, Jellyfin, creator publishing, compendium assets
-   - `War Room`: enterprise posture, fleet, compliance, investor narrative
 
 ---
 
@@ -266,8 +226,6 @@ The site is not a traditional website — it's an **album / videogame / comic / 
 | Site = immersive compendium (album/videogame/comic/anthology/mindmap) | 2026-03-19 | DARKXSIDE |
 | Three-entity doctrine: Cataclysm Studios / PMOVES.AI / DARKXSIDE | established | DARKXSIDE |
 | Execution order: W1 → W2+W4 → W3 → W5 | 2026-03-19 | 4090-claude |
-| Rooms are the public-facing topology; stage is the live state model | 2026-03-28 | codex synthesis, pending consensus |
-| PMOVES should treat Agent Zero upstream `v1.3` as the new external baseline before further suit/theming work | 2026-03-28 | codex validation, pending claim |
 
 ## Answered Questions (5090 Input, 2026-03-19)
 
@@ -442,14 +400,14 @@ All resolved. No blockers.
 
 | PR | Lane | Status | Notes |
 |----|------|--------|-------|
-| #1135 | Publish-state visibility (`studio-board` + `videos`) | OPEN — blocked by shared Playwright gate | Fast checks are green, review fixes are pushed, and the only remaining failure matches the same 119-failure Playwright signature already reproducing on `main` |
+| #1135 | Publish-state visibility (`studio-board` + `videos`) | OPEN — merge-prep | CodeRabbit findings fixed locally; remaining failing UI checks are reproducing on `main` |
 | #1136 | Room catalog contracts + dashboard loader | OPEN | Base lane for the stacked room-entry flow |
 | #1137 | Home launcher room-entry routing | OPEN — stacked on #1136 | Review after the room-catalog base lane lands |
 | #1138 | z890 fleet networking + RustDesk relay + hardening | OPEN — CONFLICTING | Needs rebase/splitting; CodeRabbit flagged TAC/compose/Flute issues that still need follow-through |
 
 **March 26/27 merge wave already landed:** #1115, #1116, #1117, #1118, #1119, #1120, #1121, #1122, #1123, #1124, #1126.
 
-**Recommended review order:** decide the branch-protection path for #1135 first, then #1136, then #1137, then rebase/split #1138 before another serious review pass.
+**Recommended review order:** #1135 first, then #1136, then #1137, then rebase/split #1138 before another serious review pass.
 
 ---
 
@@ -485,10 +443,17 @@ All resolved. No blockers.
 | Infra (Model Registry HF enrichment) | 4090-claude | 2026-03-24 | SHIPPED `07d06f70` | feat/chit-integration-wave-1 |
 | Infra (Model seed + gpu-models metadata) | 4090-claude | 2026-03-24 | SHIPPED `50ee0022`, `7cfacc8c` | feat/chit-integration-wave-1 |
 | Infra (BoTZ submodule sync d125e8a) | 4090-claude | 2026-03-24 | SHIPPED `63532a6b` | feat/chit-integration-wave-1 |
-| W3/M2 (creator automation activation + Discord canonical lane audit) | codex-gpt5 | 2026-03-25 | RECOMMENDED — scan complete, pending implementation claim | — |
-| W3/M2 (studio-board status UX: approved -> published visibility) | codex-gpt5 | 2026-03-25 | RECOMMENDED — UI follow-through after canonical lane decision | — |
-| W2/W4 (rooms + stage prospectus alignment) | codex-gpt5 | 2026-03-28 | RECOMMENDED — docs update required after room manifest merge wave | — |
-| W2/W5 (Agent Zero upstream `v1.3` baseline vs PMOVES hardened suit gap report) | codex-gpt5 | 2026-03-28 | VERIFIED — upstream at `v1.3`, PMOVES pin still Mar 7 hardened commit | — |
+| Infra (Publisher SQL P1 hardening) | 5090-claude | 2026-03-26 | MERGED #1126 (superseded closed #1114) | fix/publisher-sql-p1-hardening |
+| W2 (Pinokio fleet networking + packaging docs) | codex-gpt5 | 2026-03-26 | MERGED #1115 | codex/pinokio-network-docs |
+| W1/W6 (TTS MCP bridge + expression registry) | codex-gpt5 | 2026-03-26 | MERGED #1116 | codex/tts-mcp-bridge |
+| W3/M2 (creator publishing follow-up docs) | codex-gpt5 | 2026-03-26 | MERGED #1117 | codex/agnote4482-creator-publishing-docs |
+| Infra (`PMOVES.YT` pointer sync) | codex-gpt5 | 2026-03-26 | MERGED #1118 | codex/pmoves-yt-pointer |
+| W4 (search ingest command) | codex-gpt5 | 2026-03-26 | MERGED #1119 | codex/search-ingest-command |
+| W3/M2 (studio-board approval handoff UX) | codex-gpt5 | 2026-03-26 | MERGED #1120 | codex/agnote4482-approval-ux |
+| W2/W3 (Pinokio PMOVES Codex plugin + Agent Zero launcher) | codex-gpt5 | 2026-03-26 | MERGED #1121 | codex/pinokio-pmoves-plugin-pack |
+| W3/M2 (shared publish-state visibility across dashboards) | codex-gpt5 | 2026-03-27 | IN PR #1135 — review fixes applied locally | codex/agnote4482-publish-state-visibility |
+| W3/M2 (creator automation activation + Discord canonical lane) | codex-gpt5 | 2026-03-26 | RECOMMENDED — follow-up after #1126 merge | — |
+| W3/M2 (studio-board status UX: approved→published visibility) | codex-gpt5 | 2026-03-26 | ACTIVE — #1120 merged, #1135 in review | — |
 
 ## Recommended Next Steps (Post 2026-03-24 CHIT Wave 1)
 
@@ -516,19 +481,14 @@ All resolved. No blockers.
 | 3 | W6-P1: Health/Wealth Docker wiring | P1 | NATS + /healthz + /metrics |
 | 4 | Jetson Orin onboarding | P2 | Via RustDesk |
 | 5 | NATS leaf node to 5090 | P2 | Flute NATS=connected proves bus healthy |
-| 6 | ClaWz branch/pin repair plan | P2 | Replace orphaned root gitlink with a real reviewable PMOVES-ClawZ base |
-| 7 | ClaWz profile-id normalization | P2 | Align `workstation_5090`-style host placeholders with `pmoves/config/profiles/*.yaml` ids |
 
-### codex-gpt5 (Creator/Publishing + Prospectus Convergence)
+### codex-gpt5 (Board + Packaging + Creator Control)
 | # | Task | Priority | Notes |
 |---|------|----------|-------|
-| 1 | Publish the Agent Zero `v1.3` gap report for PMOVES hardened fork | **P0** | Use upstream `v1.3` as the baseline, then classify PMOVES-only overlays that must survive a sync |
-| 2 | Publish the PMOVES-ClawZ gap report | **P0** | Capture upstream/fork/orphaned-gitlink reality before more ClaW suit positioning |
-| 3 | Align AGNOTE/P7/website language around rooms + stage | **P0** | Make the prospectus consistent across school/company/site docs |
-| 4 | Keep ClaWz/Agent Zero suit config coding-plan aligned | **P0** | Tie the room-aware suit story back to real profile ids and approved remote coding lanes |
-| 5 | Close Supabase -> Agent Zero -> Publisher -> Discord activation loop | **P0** | Validate `approval_poller.json` + `echo_publisher.json`; capture first real published-event evidence |
-| 6 | Pick canonical Discord publish lane | **P0** | Decide between `publisher-discord` NATS subscriber and n8n webhook relay; demote the other to fallback/test-only |
-| 7 | Add creator dashboard state clarity | P1 | Make `studio-board` and `videos` distinguish `approved, waiting for poller` vs `published` |
-| 8 | Validate Discord approval workflow for creator-control | P1 | Exercise channel-monitor queue/review endpoints with messaging-gateway callbacks and record rejection UX gaps |
-| 9 | Surface publish failures + backfill readiness | P2 | Turn publisher audit/backfill work into an operator-visible lane before broader M2 expansion |
-| 7 | Surface publish failures + backfill readiness | P2 | Turn publisher audit/backfill work into an operator-visible lane before broader M2 expansion |
+| 1 | Merge PR #1135 after the review-fix push | **P0** | CodeRabbit findings are addressed locally; UI integration/E2E red is currently reproducing on `main` |
+| 2 | Close Supabase→Agent Zero→Publisher→Discord activation loop | **P0** | Validate `approval_poller.json` + `echo_publisher.json`; capture first published-event evidence |
+| 3 | Pick canonical Discord publish lane | **P0** | Decide between `publisher-discord` NATS subscriber and n8n webhook relay; demote the other |
+| 4 | Finish live Pinokio smoke after merged PR #1121 | P1 | Repo-root launcher path is fixed; remaining blocker is PMOVES env/runtime readiness during `make up-agents-ui` |
+| 5 | Keep the room-entry stack split (`#1136` -> `#1137`) | P1 | Review the base loader before the routing layer |
+| 6 | Rebase/split z890 lane #1138 before merge review | P1 | It is conflicting with `main` and mixes valid infra work with unresolved TAC/compose/Flute findings |
+| 7 | Surface publish failures + backfill readiness after activation evidence | P2 | Turn publisher audit into an operator-visible lane only after the real loop is proven end-to-end |
