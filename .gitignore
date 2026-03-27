@@ -1,6 +1,14 @@
 # PMOVES.AI gitignore
 
 # =============================================================================
+# Infrastructure Secrets (relay keys, QR configs, audits — NEVER COMMIT)
+# =============================================================================
+rustdesk-*-qr.png
+**/rustdesk-*-qr.png
+pmoves/docs/security/FLEET_AUDIT_*.md
+pmoves/scripts/fleet/.enrollment-ledger.jsonl
+
+# =============================================================================
 # Environment & Secrets (NEVER COMMIT)
 # =============================================================================
 .env

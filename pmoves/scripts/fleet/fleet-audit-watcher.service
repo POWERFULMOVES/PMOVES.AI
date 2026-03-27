@@ -1,0 +1,25 @@
+[Unit]
+Description=PMOVES Fleet Audit Watcher
+Documentation=https://github.com/POWERFULMOVES/PMOVES.AI
+After=network.target hbbs.service hbbr.service
+Wants=hbbs.service hbbr.service
+
+[Service]
+Type=simple
+ExecStart=/opt/pmoves/fleet-audit-watcher.sh
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=fleet-audit-watcher
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/var/log/pmoves
+
+# Environment
+Environment=NATS_URL=nats://nats:pmoves@nats:4222
+
+[Install]
+WantedBy=multi-user.target
