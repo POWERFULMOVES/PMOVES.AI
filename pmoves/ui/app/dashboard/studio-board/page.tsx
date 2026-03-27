@@ -2,6 +2,7 @@
 
 import { useCallback, useMemo, useState } from "react";
 import useInfiniteSupabaseQuery from "../../../hooks/useInfiniteSupabaseQuery";
+import { describePublishState } from "../publishState";
 import {
   getSupabaseBrowserClient,
   getSupabaseRestUrl,
@@ -66,6 +67,18 @@ const mergeMeta = (
   return Object.fromEntries(
     Object.entries(merged).filter(([, v]) => v !== undefined)
   ) as StudioBoardRowMeta;
+};
+
+const PUBLISH_TONE_CLASS: Record<"default" | "success" | "danger", string> = {
+  default: "text-brand-sky",
+  success: "text-brand-forest",
+  danger: "text-brand-crimson",
+};
+
+const PUBLISH_DETAIL_CLASS: Record<"default" | "success" | "danger", string> = {
+  default: "text-brand-subtle",
+  success: "text-brand-forest",
+  danger: "text-brand-crimson",
 };
 
 export default function StudioBoardDashboardPage() {
@@ -377,6 +390,11 @@ export default function StudioBoardDashboardPage() {
                 ? meta.review_history
                 : [];
               const lastReview = history.length > 0 ? history[history.length - 1] : null;
+              const publishState = describePublishState({
+                rowStatus: row.status,
+                reviewedAt: meta.reviewed_at,
+                meta,
+              });
               return (
                 <tr key={row.id} className="align-top">
                   <td className="px-3 py-2 text-brand-subtle">
@@ -400,39 +418,25 @@ export default function StudioBoardDashboardPage() {
                   <td className="px-3 py-2 text-brand-ink">{row.namespace || "—"}</td>
                   <td className="px-3 py-2">
                     <div className="font-medium capitalize text-brand-ink">{row.status || "unknown"}</div>
-                    {row.status === "publishing" && meta.publish_started_at ? (
-                      <div className="text-xs text-brand-subtle">
-                        publisher started @ {formatDate(meta.publish_started_at)}
+                    {publishState ? (
+                      <div className={`text-xs font-semibold uppercase tracking-wide ${PUBLISH_TONE_CLASS[publishState.tone]}`}>
+                        {publishState.label}
                       </div>
                     ) : null}
-                    {row.status === "publishing" &&
-                    !meta.publish_started_at &&
-                    meta.publish_approval_event_sent_at ? (
-                      <div className="text-xs text-brand-subtle">
-                        approval relayed @ {formatDate(meta.publish_approval_event_sent_at)}
+                    {publishState?.detailLabel && publishState.detailValue ? (
+                      <div className={`text-xs ${PUBLISH_DETAIL_CLASS[publishState.tone]}`}>
+                        {publishState.detailLabel}{" "}
+                        {publishState.detailLabel.endsWith("@")
+                          ? formatDate(publishState.detailValue)
+                          : publishState.detailValue}
                       </div>
                     ) : null}
-                    {meta.publish_event_sent_at ? (
-                      <div className="text-xs text-brand-subtle">
-                        published @ {formatDate(meta.publish_event_sent_at)}
-                      </div>
-                    ) : null}
-                    {meta.publish_requested_at && !meta.publish_event_sent_at ? (
-                      <div className="text-xs text-brand-subtle">
-                        publish requested @ {formatDate(meta.publish_requested_at)}
-                      </div>
-                    ) : null}
-                    {row.status === "publish_failed" && meta.publish_failed_at ? (
-                      <div className="text-xs text-brand-crimson">
-                        failed @ {formatDate(meta.publish_failed_at)}
-                      </div>
-                    ) : null}
-                    {meta.publish_failure_reason ? (
+                    {publishState?.tone !== "danger" && meta.publish_failure_reason ? (
                       <div className="text-xs text-brand-crimson">
                         publish failure: {meta.publish_failure_reason}
                       </div>
                     ) : null}
-                    {meta.publish_failure_stage ? (
+                    {publishState?.tone !== "danger" && meta.publish_failure_stage ? (
                       <div className="text-xs text-brand-crimson">
                         failure stage: {meta.publish_failure_stage}
                       </div>
