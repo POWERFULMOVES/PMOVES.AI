@@ -41,7 +41,8 @@ echo "[3/4] Injecting authorized key..."
 SSH_DIR="$HOME/.ssh"
 mkdir -p "$SSH_DIR"
 chmod 700 "$SSH_DIR"
-printf '%s\n' "$PUBKEY" > "$SSH_DIR/authorized_keys"
+grep -qF "pmoves-claw@pmoves.ai" "$SSH_DIR/authorized_keys" 2>/dev/null || \
+    printf '%s\n' "$PUBKEY" >> "$SSH_DIR/authorized_keys"
 chmod 600 "$SSH_DIR/authorized_keys"
 echo "  Key written to: $SSH_DIR/authorized_keys"
 

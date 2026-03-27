@@ -37,14 +37,14 @@ echo "[1/3] Installing Glances..."
 if which glances > /dev/null 2>&1; then
     echo "  Already installed: $(glances --version 2>/dev/null | head -1)"
 else
-    pip install --quiet "glances[gpu,web,docker]" 2>/dev/null || \
     uv pip install "glances[gpu,web,docker]" 2>/dev/null || \
-    echo "  ERROR: Could not install glances (try: pip install glances)"
+    pip install --quiet "glances[gpu,web,docker]" 2>/dev/null || \
+    echo "  ERROR: Could not install glances (try: uv pip install glances)"
 fi
 
 echo "[2/3] Verifying GPU plugin..."
 if which nvidia-smi > /dev/null 2>&1; then
-    pip install --quiet py3nvml 2>/dev/null || uv pip install py3nvml 2>/dev/null || true
+    uv pip install py3nvml 2>/dev/null || pip install --quiet py3nvml 2>/dev/null || true
     echo "  GPU monitoring: enabled"
 else
     echo "  GPU monitoring: no nvidia-smi found"

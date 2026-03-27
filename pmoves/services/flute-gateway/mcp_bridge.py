@@ -41,9 +41,16 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Config paths — resolve relative to repo root
 # ---------------------------------------------------------------------------
-_REPO_ROOT = Path(__file__).resolve().parents[3]  # pmoves/services/flute-gateway → repo root
-_CAPABILITIES_PATH = _REPO_ROOT / "pmoves" / "configs" / "tts-engine-capabilities.yaml"
-_EXPRESSIONS_PATH = _REPO_ROOT / "pmoves" / "configs" / "tts-engine-expressions.yaml"
+# Dev: pmoves/services/flute-gateway → repo root.  Docker: /app/mcp_bridge.py (flat).
+_REPO_ROOT = Path(__file__).resolve().parents[3] if len(Path(__file__).resolve().parents) > 3 else Path("/app")
+_CAPABILITIES_PATH = Path(os.environ.get(
+    "TTS_CAPABILITIES_YAML",
+    _REPO_ROOT / "pmoves" / "configs" / "tts-engine-capabilities.yaml",
+))
+_EXPRESSIONS_PATH = Path(os.environ.get(
+    "TTS_EXPRESSIONS_YAML",
+    _REPO_ROOT / "pmoves" / "configs" / "tts-engine-expressions.yaml",
+))
 
 # Engine endpoints — same as gpu-orchestrator/services/tts_client.py
 ENGINE_ENDPOINTS: dict[str, tuple[str, str]] = {
@@ -190,8 +197,8 @@ async def _tool_list_engines(
         summary[eid] = {
             "name": spec.get("name", eid),
             "category": spec.get("category", "unknown"),
-            "vram_mb": spec.get("vram_mb", 0),
-            "latency": spec.get("latency", "unknown"),
+            "vram_mb": spec.get("vram_estimate_mb", 0),
+            "latency": spec.get("latency_tier", "unknown"),
             "voice_cloning": spec.get("voice_cloning", False),
             "languages": spec.get("languages", []),
         }
@@ -272,6 +279,7 @@ async def _tool_synthesize(
             "status": "ok",
         }
     except Exception as e:
+        logger.exception("tts_synthesize failed for engine=%s", engine)
         return {"error": str(e), "engine": engine}
 
 
@@ -287,6 +295,7 @@ async def _tool_engine_status(
         engines = await provider.get_engines()
         return {"engines": engines, "provider_healthy": True}
     except Exception as e:
+        logger.exception("tts_engine_status failed")
         return {"error": str(e), "provider_healthy": False}
 
 
@@ -310,9 +319,11 @@ async def _tool_load_engine(
                 f"{provider.base_url}/api{load_ep}",
                 json={"data": []},
             )
+            resp.raise_for_status()
             result = resp.json()
             return {"engine": engine, "endpoint": load_ep, "result": result, "status": "loaded"}
     except Exception as e:
+        logger.exception("tts_load_engine failed for engine=%s", engine)
         return {"error": str(e), "engine": engine}
 
 
@@ -336,9 +347,11 @@ async def _tool_unload_engine(
                 f"{provider.base_url}/api{unload_ep}",
                 json={"data": []},
             )
+            resp.raise_for_status()
             result = resp.json()
             return {"engine": engine, "endpoint": unload_ep, "result": result, "status": "unloaded"}
     except Exception as e:
+        logger.exception("tts_unload_engine failed for engine=%s", engine)
         return {"error": str(e), "engine": engine}
 
 
