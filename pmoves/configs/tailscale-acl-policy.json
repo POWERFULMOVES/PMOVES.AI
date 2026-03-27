@@ -7,7 +7,9 @@
     "tag:gpu": ["autogroup:admin"],
     "tag:vps": ["autogroup:admin"],
     "tag:lab": ["autogroup:admin"],
-    "tag:exit": ["autogroup:admin"]
+    "tag:exit": ["autogroup:admin"],
+    "tag:unfcu": ["autogroup:admin"],
+    "tag:guest": ["autogroup:admin"]
   },
 
   "acls": [
@@ -22,6 +24,22 @@
       "src": ["tag:lab"],
       "dst": ["tag:gpu:*"],
       "comment": "Lab nodes can reach GPU nodes for inference"
+    },
+    {
+      "action": "accept",
+      "src": ["tag:unfcu"],
+      "dst": [
+        "tag:gpu:3030",
+        "tag:gpu:8080",
+        "tag:gpu:8081"
+      ],
+      "comment": "UNFCU partner: Agent Zero API + UI, TensorZero Gateway only"
+    },
+    {
+      "action": "accept",
+      "src": ["tag:guest"],
+      "dst": ["tag:gpu:8081"],
+      "comment": "Guest demo: Agent Zero UI only"
     },
     {
       "action": "accept",
