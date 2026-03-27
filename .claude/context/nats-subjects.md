@@ -527,6 +527,77 @@ Example: `ingest.transcript.ready.v1`
   ```
 - **Subscribers:** Agent Zero, Monitoring
 
+### Fleet Enrollment & RustDesk Audit
+
+> **Source:** z890 fleet enrollment rollout (2026-03-27). RustDesk enrollment + KVM2 audit watcher.
+
+**`fleet.enrollment.created.v1`**
+- **Direction:** Published by `generate-enrollment.py` -> Consumed by audit/notification subscribers
+- **Purpose:** Record that a time-limited RustDesk/Tailscale enrollment token was generated
+- **Payload:**
+  ```json
+  {
+    "token_id": "tok-abc123",
+    "role": "owner|unfcu|guest",
+    "device_name": "Pixel 10",
+    "issued_at": "2026-03-27T18:00:00Z",
+    "expires_at": 1774638000,
+    "signed": true
+  }
+  ```
+- **Subscribers:** Discord Publisher, observability dashboards, future fleet admin UI
+
+**`fleet.device.registered.v1`**
+- **Direction:** Published by `fleet-audit-watcher.sh` on KVM2 -> Consumed by monitoring/admin flows
+- **Purpose:** Notify that RustDesk `hbbs` observed a new client registration (`update_pk`)
+- **Payload:**
+  ```json
+  {
+    "event": "device.registered",
+    "ts": "2026-03-27T18:05:00Z",
+    "client_id": "123456789",
+    "raw": "hbbs update_pk 123456789 ..."
+  }
+  ```
+- **Subscribers:** Discord Publisher, monitoring dashboards, future approval workflow
+
+**`fleet.audit.connection.v1`**
+- **Direction:** Published by `fleet-audit-watcher.sh` on KVM2 -> Consumed by monitoring
+- **Purpose:** Stream relay connection, disconnect, and timeout activity from `hbbs` / `hbbr`
+- **Payload:**
+  ```json
+  {
+    "event": "relay.connection|connection.closed",
+    "ts": "2026-03-27T18:06:00Z",
+    "raw": "2026-03-27T18:06:00Z hbbr relay connection ..."
+  }
+  ```
+- **Subscribers:** Monitoring dashboards, Discord Publisher
+
+**`fleet.audit.heartbeat.v1`**
+- **Direction:** Published by `fleet-audit-watcher.sh` every 5 minutes -> Consumed by monitoring
+- **Purpose:** Liveness signal for the KVM2 fleet watcher
+- **Payload:**
+  ```json
+  {
+    "event": "heartbeat",
+    "ts": "2026-03-27T18:10:00Z",
+    "service": "fleet-audit-watcher",
+    "node": "kvm2"
+  }
+  ```
+- **Subscribers:** Monitoring dashboards, ops alerts
+
+**`fleet.device.approved.v1`**
+- **Direction:** Reserved for admin workflow / approval tooling
+- **Purpose:** Record that a newly registered device was approved for continued fleet access
+- **Subscribers:** Discord Publisher, audit trails, future fleet admin UI
+
+**`fleet.device.blocked.v1`**
+- **Direction:** Reserved for admin workflow / approval tooling
+- **Purpose:** Record that a device was denied or revoked from fleet access
+- **Subscribers:** Discord Publisher, audit trails, future fleet admin UI
+
 ## Voice & Prosodic Subjects
 
 **`tokenism.prosodic.bpm.v1`**
