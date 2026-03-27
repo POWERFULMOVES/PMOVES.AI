@@ -253,7 +253,9 @@ SUPABASE_DB_HELPER ?= scripts/supabase/find_db_container.sh
 up-supabase: ## Start Supabase using selected runtime (SUPABASE_RUNTIME=cli|kong|compose)
 	@$(MAKE) --no-print-directory supa-start
 
-.PHONY: supa-init supa-start supa-stop supa-stop-all supa-status supa-runtime-env supa-logs supa-health supa-restart supa-migrate supa-use-local supa-use-remote supa-env-doctor supa-env-doctor-strict supa-runtime-guard supa-runtime-reconcile supa-collation-refresh supa-collation-check supa-jwt-check supa-jwt-refresh
+.PHONY: supa-init supa-start supa-stop supa-stop-all supa-status supa-runtime-env supa-logs supa-health supa-restart supa-migrate supa-use-local supa-use-remote supa-env-doctor supa-env-doctor-strict supa-runtime-guard supa-runtime-reconcile supa-collation-refresh supa-collation-check supa-jwt-check supa-jwt-refresh supa-bootstrap-db
+supa-bootstrap-db: ensure-env-shared ## Bootstrap Supabase DB roles, schemas, and passwords from env
+	@bash scripts/supabase/bootstrap_db.sh
 supa-jwt-check: ## Check if boot JWT is expired
 	@bash scripts/supabase/refresh-boot-jwt.sh --check
 supa-jwt-refresh: ## Refresh expired boot JWT (generates new 1-year token)
@@ -278,7 +280,7 @@ supa-runtime-guard: ## Fail when conflicting Supabase runtime (CLI vs compose) i
 supa-runtime-reconcile: ## Stop conflicting runtime so only SUPABASE_RUNTIME is active
 	@$(PYTHON) tools/supabase_runtime_guard.py --runtime "$(SUPABASE_RUNTIME)" --reconcile
 
-supa-start: check-tools ensure-env-shared ## Start Supabase stack for selected runtime (cli or kong/compose)
+supa-start: ensure-env-shared ## Start Supabase stack for selected runtime (cli or kong/compose)
 	@$(MAKE) --no-print-directory supa-env-doctor
 	@flags=""; if [ "$${SUPABASE_RUNTIME_RECONCILE:-0}" = "1" ]; then flags="--reconcile"; fi; \
 		$(PYTHON) tools/supabase_runtime_guard.py --runtime "$(SUPABASE_RUNTIME)" $$flags
@@ -317,7 +319,8 @@ supa-start: check-tools ensure-env-shared ## Start Supabase stack for selected r
 			-e KONG_PG_USER=$${SUPABASE_DB_USER:-postgres} \
 			-e KONG_PG_PASSWORD=$${SUPABASE_DB_PASSWORD:-postgres} \
 			kong:3.7.1 kong migrations bootstrap --yes >/dev/null 2>&1 || true; \
-		$(DC) up -d supabase-postgrest supabase-gotrue supabase-kong supabase-realtime supabase-storage supabase-studio supabase-imgproxy supabase-meta supabase-edge-functions supabase-analytics supabase-vector supabase-pooler; \
+		$(MAKE) --no-print-directory supa-bootstrap-db; \
+		$(DC) up -d --force-recreate supabase-postgrest supabase-gotrue supabase-kong supabase-realtime supabase-storage supabase-studio supabase-imgproxy supabase-meta supabase-edge-functions supabase-analytics supabase-vector supabase-pooler; \
 	fi
 	@$(MAKE) --no-print-directory supa-status
 	@$(MAKE) --no-print-directory supa-collation-refresh 2>/dev/null || true
