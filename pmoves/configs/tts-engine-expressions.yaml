@@ -1,0 +1,310 @@
+# TTS Engine Expressions Registry
+# Maps expressive synthesis intents to engine parameters.
+# Consumed by /tts:express and /tts:synthesize skills.
+#
+# Each intent selects a primary engine + default params,
+# with modifiers that overlay additional param values.
+#
+# Cross-refs:
+#   pmoves/configs/tts-engine-capabilities.yaml  (engine specs, VRAM, latency)
+#   pmoves/configs/tts-prosodic-templates.yaml   (prosodic text patterns)
+#   .claude/commands/tts/express.md              (skill definition)
+#   .claude/commands/chit/bpm.md                 (BPM encoding for beat-sync)
+
+version: "1.0.0"
+last_updated: "2026-03-22"
+description: >
+  Maps 9 expressive synthesis intents to 14 TTS engines.
+  Each intent has a primary engine, default params, optional modifiers,
+  and fallback engines. The /tts:express skill reads this file to
+  auto-select the right engine based on user intent.
+
+# ─────────────────────────────────────────────────────────────────────
+# Gradio API: all engines except VibeVoice use /generate_unified_tts
+# VibeVoice uses /handle_vibevoice_generation (separate endpoint)
+# ─────────────────────────────────────────────────────────────────────
+
+intents:
+
+  # ───────────────────────────────────────────────────────────────────
+  # NARRATE: Clear narration with pace control
+  # ───────────────────────────────────────────────────────────────────
+  narrate:
+    description: "Clear narration with pace control"
+    primary: kokoro
+    gradio_endpoint: /generate_unified_tts
+    params:
+      kokoro_voice: af_heart
+      kokoro_speed: 1.0
+    modifiers:
+      fast:
+        kokoro_speed: 1.4
+      slow:
+        kokoro_speed: 0.7
+      warm:
+        kokoro_voice: af_sarah
+      male:
+        kokoro_voice: am_adam
+    fallback: kitten_tts
+    fallback_params:
+      kitten_voice: expr-voice-2-f
+
+  # ───────────────────────────────────────────────────────────────────
+  # EMOTE: Emotion-driven synthesis (8-dimensional vector)
+  # ───────────────────────────────────────────────────────────────────
+  emote:
+    description: "Emotion-driven synthesis via 8-dimensional vector"
+    primary: indextts2
+    gradio_endpoint: /generate_unified_tts
+    params:
+      indextts2_emotion_mode: vector_control
+      indextts2_calm: 1.0
+      indextts2_happy: 0.0
+      indextts2_angry: 0.0
+      indextts2_sad: 0.0
+      indextts2_afraid: 0.0
+      indextts2_disgusted: 0.0
+      indextts2_melancholic: 0.0
+      indextts2_surprised: 0.0
+      indextts2_emo_alpha: 1.0
+      indextts2_temperature: 0.8
+    modifiers:
+      happy:
+        indextts2_happy: 0.8
+        indextts2_calm: 0.2
+      angry:
+        indextts2_angry: 0.8
+        indextts2_calm: 0.0
+      sad:
+        indextts2_sad: 0.7
+        indextts2_melancholic: 0.5
+        indextts2_calm: 0.1
+      afraid:
+        indextts2_afraid: 0.7
+        indextts2_calm: 0.1
+      surprised:
+        indextts2_surprised: 0.9
+        indextts2_calm: 0.1
+      melancholic:
+        indextts2_melancholic: 0.8
+        indextts2_sad: 0.3
+        indextts2_calm: 0.1
+      disgusted:
+        indextts2_disgusted: 0.7
+        indextts2_calm: 0.1
+      intense:
+        indextts2_emo_alpha: 1.0
+        indextts2_temperature: 1.2
+      subtle:
+        indextts2_emo_alpha: 0.4
+        indextts2_temperature: 0.6
+    requires: [ref_audio]
+    fallback: chatterbox
+    fallback_params:
+      chatterbox_exaggeration: 0.7
+      chatterbox_temperature: 0.9
+
+  # ───────────────────────────────────────────────────────────────────
+  # DRAMATIC: Theatrical/expressive delivery via exaggeration
+  # ───────────────────────────────────────────────────────────────────
+  dramatic:
+    description: "Theatrical delivery with exaggeration control"
+    primary: chatterbox
+    gradio_endpoint: /generate_unified_tts
+    params:
+      chatterbox_exaggeration: 0.7
+      chatterbox_temperature: 0.9
+      chatterbox_cfg_weight: 0.5
+    modifiers:
+      subtle:
+        chatterbox_exaggeration: 0.3
+        chatterbox_temperature: 0.7
+      theatrical:
+        chatterbox_exaggeration: 0.9
+        chatterbox_temperature: 1.0
+      over_the_top:
+        chatterbox_exaggeration: 1.0
+        chatterbox_temperature: 1.2
+      flat:
+        chatterbox_exaggeration: 0.0
+        chatterbox_temperature: 0.5
+    fallback: chatterbox_turbo
+    fallback_params:
+      chatterbox_turbo_exaggeration: 0.7
+      chatterbox_turbo_temperature: 0.9
+
+  # ───────────────────────────────────────────────────────────────────
+  # CLONE: Voice cloning from reference audio
+  # ───────────────────────────────────────────────────────────────────
+  clone:
+    description: "Voice cloning from reference audio"
+    primary: f5_tts
+    gradio_endpoint: /generate_unified_tts
+    params:
+      f5_speed: 1.0
+      f5_cross_fade: 0.15
+      f5_remove_silence: false
+    modifiers:
+      fast:
+        f5_speed: 1.3
+      slow:
+        f5_speed: 0.8
+      tight:
+        f5_cross_fade: 0.05
+        f5_remove_silence: true
+    requires: [ref_audio]
+    fallback: fish_s2
+    fallback_params:
+      fish_s2_temperature: 0.8
+      fish_s2_top_p: 0.8
+      fish_s2_repetition_penalty: 1.1
+
+  # ───────────────────────────────────────────────────────────────────
+  # MULTILINGUAL: Multi-language synthesis (17 languages max)
+  # ───────────────────────────────────────────────────────────────────
+  multilingual:
+    description: "Multi-language synthesis (up to 17 languages)"
+    primary: chatterbox_multilingual
+    gradio_endpoint: /generate_unified_tts
+    params:
+      chatterbox_mtl_language: en
+      chatterbox_mtl_exaggeration: 0.5
+      chatterbox_mtl_temperature: 0.8
+      chatterbox_mtl_cfg_weight: 0.5
+    modifiers:
+      expressive:
+        chatterbox_mtl_exaggeration: 0.8
+        chatterbox_mtl_temperature: 1.0
+      neutral:
+        chatterbox_mtl_exaggeration: 0.2
+        chatterbox_mtl_temperature: 0.6
+    requires: [language]
+    supported_languages:
+      - en
+      - es
+      - fr
+      - de
+      - it
+      - pt
+      - pl
+      - tr
+      - ru
+      - nl
+      - cs
+      - ar
+      - zh
+      - ja
+      - hu
+      - ko
+      - hi
+    fallback: fish_s2
+    fallback_languages: [en, zh, ja, ko, fr, de, ar, es, pt, it, th, vi, ru]
+
+  # ───────────────────────────────────────────────────────────────────
+  # PODCAST: Multi-speaker dialogue generation
+  # ───────────────────────────────────────────────────────────────────
+  podcast:
+    description: "Multi-speaker dialogue/podcast generation"
+    primary: vibevoice
+    gradio_endpoint: /handle_vibevoice_generation
+    params: {}
+    requires: [speakers_config, podcast_script]
+    notes: >
+      VibeVoice uses a separate endpoint, not /generate_unified_tts.
+      Each speaker is configured independently with ref audio.
+      Also available as standalone vibevoice-realtime.git (WebSocket streaming).
+
+  # ───────────────────────────────────────────────────────────────────
+  # PERSONA: Design a voice from text description
+  # ───────────────────────────────────────────────────────────────────
+  persona:
+    description: "Design a voice persona from text or preset"
+    primary: qwen
+    gradio_endpoint: /generate_unified_tts
+    params:
+      qwen_mode: voice_design
+      qwen_speaker: Ryan
+      qwen_language: Auto
+      qwen_chunk_size: 200
+    modifiers:
+      female:
+        qwen_speaker: Anna
+      mature_female:
+        qwen_speaker: Sarah
+      young_female:
+        qwen_speaker: Emily
+      male:
+        qwen_speaker: Ryan
+      deep_male:
+        qwen_speaker: Ethan
+    notes: >
+      Qwen3 also supports voice_clone mode (requires ref_audio).
+      Standalone Qwen3-TTS-Pinokio.git has VoiceDesign mode with
+      text-to-voice-persona creation (not available in Ultimate-TTS).
+
+  # ───────────────────────────────────────────────────────────────────
+  # AGENT: Low-latency agent/CLI voice
+  # ───────────────────────────────────────────────────────────────────
+  agent:
+    description: "Ultra-fast synthesis for agent/CLI voice responses"
+    primary: kitten_tts
+    gradio_endpoint: /generate_unified_tts
+    params:
+      kitten_voice: expr-voice-2-f
+    modifiers:
+      male:
+        kitten_voice: expr-voice-2-m
+      deep:
+        kitten_voice: expr-voice-4-m
+      bright:
+        kitten_voice: expr-voice-3-f
+    fallback: kokoro
+    fallback_params:
+      kokoro_voice: af_heart
+      kokoro_speed: 1.1
+    notes: >
+      KittenTTS has ~500MB VRAM and ultra-fast latency.
+      Ideal for real-time agent responses where speed > quality.
+
+  # ───────────────────────────────────────────────────────────────────
+  # BPM_SYNC: Beat-synchronized synthesis for music/DJ
+  # ───────────────────────────────────────────────────────────────────
+  bpm_sync:
+    description: "Beat-synchronized synthesis for music/DJ workflows"
+    primary: f5_tts
+    gradio_endpoint: /generate_unified_tts
+    params:
+      f5_speed: 1.0
+      f5_cross_fade: 0.1
+      f5_remove_silence: true
+    modifiers:
+      fast_tempo:
+        f5_speed: 1.4
+        f5_cross_fade: 0.05
+      slow_groove:
+        f5_speed: 0.75
+        f5_cross_fade: 0.2
+    cross_ref: "chit:bpm"
+    fallback: kokoro
+    fallback_params:
+      kokoro_speed: 1.0
+    notes: >
+      Use /chit:bpm to encode prosodic BPM markers into text first,
+      then synthesize with this intent. F5-TTS speed + cross_fade
+      control enables precise beat alignment.
+
+# ─────────────────────────────────────────────────────────────────────
+# Engine Coverage Summary
+# ─────────────────────────────────────────────────────────────────────
+# Primary engines used:  9 of 14
+# Fallback engines used: 4 of 14
+# Total coverage:       11 of 14
+#
+# Engines NOT directly mapped (accessible via manual engine selection):
+#   - higgs:     Use temperature-control intent or select manually
+#   - fish:      Superseded by fish_s2 (more languages, same params)
+#   - indextts:  Superseded by indextts2 (adds emotion vectors)
+#
+# These 3 remain available in Ultimate-TTS-Studio UI for manual use.
+# They're not mapped to intents because their successors cover all
+# use cases with strictly more capabilities.
