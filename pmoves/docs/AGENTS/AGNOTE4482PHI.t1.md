@@ -33,6 +33,15 @@ Single coordination note to prevent agent collision while PMOVES.AI converges CI
 3. Handoff: agent publishes CHIT payload reference and signs ACK block.
 4. Release: agent writes `RELEASE` entry and clears claim.
 
+### Default Operating Flow
+Use this as the default cadence unless a lane needs a deliberate exception:
+1. Claim the lane here with branch/PR scope.
+2. Refresh `ROADMAP.md`, `NEXT_STEPS.md`, and any affected AGNOTE docs before changing status.
+3. Execute the smallest isolated fix/documentation slice and validate locally.
+4. If CI fails, compare the failure against `main` before calling it branch-specific.
+5. Update PR comments plus the AGNOTE board/P7 notes with the current blocker state.
+6. Release the lane here and add a signed ACK block; adapt ordering as needed, but keep the same audit trail.
+
 ## CHIT Encrypt Instructions (Handoff Safe Mode)
 Use CHIT export with no cleartext, then reference artifact paths in handoff notes.
 
@@ -85,8 +94,6 @@ Required handoff fields:
 - `2026-03-25T14:00:00Z` CLAIM `Z890-CLAUDE` scope: Hostinger VPS fleet activation — KVM4-1 full stack (SSH key via Hostinger REST API, Tailscale mesh, Claude Code v2.1.83, Ollama 0.18.2, gh 2.73.0, wrangler 4.77.0, claw config with 8-binary exec-approvals). SSH keys injected into all 3 VMs (KVM4-1, KVM4-2, KVM2) via API password reset + paramiko. 5090+4090 agentic scope configs created (PRs #1097, #1098). nvidia-5090.mk populated. Fly.io instance decommissioned (offline, rx 0). Memory updated.
 - `2026-03-26T04:00:00Z` CLAIM `Z890-CLAUDE` scope: Full fleet networking session. SSH key injection for 5090 (LAN .65, RTX 5090 32GB), 4090 laptop (LAN .234, RTX 4090 16GB), both Jetsons (.110 pmovesnvme-desktop, .144 pmoves-nano-2) via RustDesk terminal. SSH hardening across all 7 remote nodes (password auth disabled, MaxAuthTries 3). 5090 claw config deployed (SCP). RustDesk self-hosted server stood up on Z890 (hbbs+hbbr, key generated). Tailscale mesh expanded: KVM4-2 (100.124.50.76) + KVM2 (100.74.146.76) joined. 5090 renamed to pmoves-5090. 10 PRs merged/queued (#1097, #1098, #1113, #1115-#1119, #1121-#1124). LAN fully mapped (.234=4090 laptop identified). Bootstrap scripts created (enable-ssh-windows.ps1, enable-ssh-wsl.sh, setup-glances.sh, bootstrap-node.sh). Core vision + networking feedback committed to memory.
 - `2026-03-26T20:00:00Z` RELEASE `Z890-CLAUDE` scope: 8/8 nodes SSH hardened (key-only). 11 Tailscale nodes online (added KVM4-2+KVM2, cross-mesh 9ms verified). Claw configs deployed on KVM4-1+5090. RustDesk server built (clients on public pending migration). 10 PRs merged. Handoff: 5090-claude merging #1114 cascade (#1126); 4090/Jetson hostname renames via admin console; RustDesk client migration after SSH hardening confirmed.
-- `2026-03-27T04:00:00Z` CLAIM `Z890-CLAUDE` scope: Post-fleet infra session — PR merge cascade (6 open: #1116, #1120, #1121, #1122, #1123, #1128), container rebuilds (botz-gateway, pmoves-yt, agent layer), agent validation (healthz probes, NATS bus), Qdrant collection provisioning (pmoves_chunks_qwen3), W6-P1 Health/Wealth NATS wiring (stretch).
-- `2026-03-27T05:00:00Z` RELEASE `Z890-CLAUDE` scope: 20/23 containers healthy (from 2 at session start). 6 PRs already merged by 5090-claude (board clean). BoTZ Dockerfile fixed (uv migration, removed circular -r requirements.lock). z890_host_setup.ps1 updated (removed PR #1122-conflicting local portproxy rules, kept mesh-only 7422→5090). Qdrant pmoves_chunks_qwen3: 700 points, 2560d, green. TensorZero + ClickHouse online. Hi-RAG v2 CPU+GPU healthy. Tokenism Simulator healthy. 3 blockers documented: (1) Agent Zero port 8080 conflict with httpd.exe, (2) Archon missing vendor sources in Dockerfile build context, (3) DeepResearch missing pmoves module. Handoff: 5090-claude owns embedding alignment (query returns 0 hits despite 700 points); z890 next session owns Archon+DeepResearch Dockerfile fixes and Agent Zero port remap.
 
 - `2026-03-22T22:00:00Z` CLAIM `Z890-CLAUDE` scope: P7 playground gate clearance + network topology review + CodeRabbit sweep. python3 hook fix (hookify plugin). P7 requirements validated (pterm 0.0.24, ffmpeg 7.0.2). TOPOLOGY.md IP sanitization (zero real IPs in public doc). PRs #1063-#1064 created+merged. PR #1069 conflict resolution+merge. PR #1070 CodeRabbit sweep (12 findings, 2 critical). Jetson/3D printer topology documented. 7 memory files updated.
 - `2026-03-23T04:00:00Z` RELEASE `Z890-CLAUDE` scope: PRs #1063 (P7 docs), #1064 (28 gitlinks), #1068 (topology sanitize), #1069 (Flute Gradio 4.x merge), #1070 (12 CR findings) — all merged. PR #1071 (TTS service runners + prosodic endpoint) open with CR fixes applied. 4090-claude pr-trimmed #1070 (3 follow-up commits). Announcer persona + service runners config. Prosodic ear spec created. NATS subjects documented (voice.ear.*). Container rebuilds + Jetson onboarding deferred to next session.
@@ -104,6 +111,9 @@ Required handoff fields:
 - `2026-03-26T16:54:43-04:00` CLAIM `CODEX-GPT5` scope: AGNOTE4482 board sync + remote PR wave coordination (#1114-#1124), with focus on Codex packaging lanes, creator-control follow-through, and current 5090/z890 review order.
 - `2026-03-26T16:54:43-04:00` REVIEW `CODEX-GPT5` scope: Remote queue reopened with 14 main-repo PRs. Current Codex lanes are isolated and open: #1115 (Pinokio fleet docs), #1116 (TTS MCP bridge), #1117 (creator publishing follow-up docs), #1118 (PMOVES.YT pointer), #1119 (search ingest command), #1120 (studio-board approval UX), and #1121 (PMOVES Codex plugin + Agent Zero launcher). Supabase bootstrap hardening remains isolated in DIRTY PR #1114 and should land before more bootstrap/env churn. Live Pinokio validation on the PMOVES launcher confirmed the repo-root path bug is fixed; remaining bring-up risk is env/runtime readiness, not launcher path resolution.
 - `2026-03-26T16:54:43-04:00` RELEASE `CODEX-GPT5` scope: AGNOTE4482 board refreshed for remote review. Handoff ready for parallel agent review of the open PR wave and targeted follow-up on #1114, #1120, and #1121.
+- `2026-03-27T14:36:36.2476813-04:00` CLAIM `CODEX-GPT5` scope: PR #1135 merge-prep closure + AGNOTE4482/P7 status refresh + signed workflow capture for the current Codex lane.
+- `2026-03-27T14:36:36.2476813-04:00` REVIEW `CODEX-GPT5` scope: Addressed the remaining #1135 review items across publish-state mapper/tests, restored Jest API-client discovery, reran local validation (`typecheck`, `lint`, full Jest, API-client Jest), and compared the failing Playwright job on #1135 (`23657900926` / `68920111634`) against `main` (`23626056819` / `68819753984`). Result: the fast checks are green, and Playwright fails with the same repo-wide 119-failure `services-health` / `videos-realtime` signature, including missing `SUPABASE_REST_URL` and `SUPABASE_SERVICE_ROLE_KEY`.
+- `2026-03-27T14:36:36.2476813-04:00` RELEASE `CODEX-GPT5` scope: AGNOTE4482 roadmap, P7 playground, and PR notes refreshed. #1135 is mergeable but blocked by a shared Playwright branch-protection failure already reproducing on `main`; #1138 remains conflicting and still needs rebase/splitting plus TAC/compose/Flute follow-through before another serious review pass.
 - `2026-03-26T18:10:00-04:00` CLAIM `5090-CLAUDE` scope: PR #1114 resolution — analyzed branch, found all 19 files already on main via #1100/#1105/#1106/#1107 (rebase would produce 3 empty commits). Closed #1114, created #1126 with the 2 P1 review fixes: IF EXISTS guard on bare UPDATE + idempotent claim predicate separating TOCTOU race from no-op success. Board refs updated #1114→#1126.
 
 ## Graphiti Review Log
@@ -273,6 +283,12 @@ Required handoff fields:
 - Ack: `I translated TAC model/persona readiness into deterministic branch sequence, parseable Graphiti TAC blocks, and explicit merge gate expectations for Integrations -> Hardened promotion.`
 - Signature: `ACK::CODEX-GPT5::PHI-4482-T1::TAC-MODEL-PERSONA-OVERLAY`
 - Timestamp: `2026-03-01T22:45:00Z`
+
+## Agent ACK (Signed, PR #1135 Merge Prep + Workflow Cadence)
+- Agent: `CODEX-GPT5`
+- Ack: `I completed the #1135 review-and-validation lane, compared the remaining Playwright failure against main before treating it as shared CI instability, refreshed the AGNOTE docs, and recorded claim -> work -> validate -> compare -> document -> release as the default operating cadence for future Codex lanes.`
+- Signature: `ACK::CODEX-GPT5::PHI-4482-T1::PR1135-MERGE-PREP-WORKFLOW`
+- Timestamp: `2026-03-27T14:36:36.2476813-04:00`
 
 ## Agent ACK (Signed, Security Hardening + Jellyfin Key Scrub)
 - Agent: `CLAUDE-OPUS`
