@@ -358,7 +358,7 @@ embeddings:
       pmoves_name: qwen3-embedding-4b
       tier: small
       params: 4B
-      dimensions: 3072
+      dimensions: 2560
       ollama_variant: qwen3-embedding:4b
 
   BAAI:

@@ -24,7 +24,7 @@ DEFAULTS = {
     # Invidious companion (keys will be strengthened below)
     "INVIDIOUS_HMAC_KEY": "localhack",
     "INVIDIOUS_COMPANION_KEY": "localhack",
-    # Vector search (Qwen3-4b 3072d embeddings)
+    # Vector search (Qwen3-4b 2560d embeddings)
     "QDRANT_COLLECTION": "pmoves_chunks_qwen3",
     # REST bases
     "SUPA_REST_URL": "http://host.docker.internal:54321/rest/v1",
@@ -52,7 +52,7 @@ PLACEHOLDER_VALUES = {
 # it replaces it with the new default from DEFAULTS or the registry.
 # This enables config migrations without manual env file edits.
 SUPERSEDED_VALUES: dict[str, str] = {
-    # Qwen3-4b embedding migration: 384d → 3072d collection
+    # Qwen3-4b embedding migration: 384d → 2560d collection
     "pmoves_chunks": "pmoves_chunks_qwen3",
     # Legacy sentence-transformer model (replaced by TensorZero routing)
     "all-MiniLM-L6-v2": "all-MiniLM-L6-v2",  # keep as-is, TZ overrides at runtime

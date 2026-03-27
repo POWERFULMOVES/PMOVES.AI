@@ -22,7 +22,7 @@ async def fetch_model_info(hf_id: str) -> Dict[str, Any]:
     """Fetch model card metadata from HuggingFace API.
 
     Args:
-        hf_id: HuggingFace model identifier (e.g. "Alibaba-NLP/gte-Qwen2-4B-instruct")
+        hf_id: HuggingFace model identifier (e.g. "Qwen/Qwen3-Embedding-4B")
 
     Returns:
         Dict with model metadata (tags, downloads, license, etc.)

@@ -593,14 +593,14 @@
     {
       "id": "qdrant",
       "name": "Qdrant Vector Database",
-      "description": "Vector embeddings for semantic search. Collection pmoves_chunks_qwen3 stores Qwen3-4b 3072d embeddings.",
+      "description": "Vector embeddings for semantic search. Collection pmoves_chunks_qwen3 stores Qwen3-4b 2560d embeddings.",
       "variables": [
         {
           "key": "QDRANT_COLLECTION",
           "file": "pmoves/env.shared",
           "prompt": "Qdrant collection name for embeddings",
           "default": "pmoves_chunks_qwen3",
-          "help": "Default collection for Qwen3-4b embeddings (3072d). Legacy: pmoves_chunks (384d).",
+          "help": "Default collection for Qwen3-4b embeddings (2560d). Legacy: pmoves_chunks (384d).",
           "required": false
         },
         {
