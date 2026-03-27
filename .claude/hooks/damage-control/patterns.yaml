@@ -876,6 +876,11 @@ chitSafePaths:
   - "data/cipher/"
   - "data\\cipher\\"
 
+  # Infrastructure compose — z890-claude infra coordinator edits (env vars, ports, profiles)
+  # NOT a blanket bypass: damage-control still blocks raw "docker compose up" commands.
+  # This allows Edit tool to modify compose env vars for service configuration fixes.
+  - "docker-compose.yml"
+
 # ---------------------------------------------------------------------------
 # PMOVES.AI - GIT SUBMODULES
 # ---------------------------------------------------------------------------

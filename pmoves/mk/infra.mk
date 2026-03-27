@@ -12,7 +12,7 @@ VALID_SERVICES := neo4j tensorzero-clickhouse meilisearch qdrant minio supabase-
 
 .PHONY: volume-reset volume-list docker-prune docker-prune-all branch-audit branch-cleanup \
        tailscale-docker-up tailscale-docker-down tailscale-docker-status tailscale-docker-ip \
-       up-ollama up-gpu-orchestrator up-vllm model-pull gpu-status port-audit
+       up-ollama up-gpu-orchestrator up-vllm model-pull gpu-status port-audit \
 
 volume-reset: ## Reset a service volume: make volume-reset SERVICE=tensorzero-clickhouse
 	@if [ -z "$(SERVICE)" ]; then \
