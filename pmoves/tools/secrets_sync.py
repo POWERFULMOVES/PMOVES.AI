@@ -192,6 +192,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         default=False,
         help="warn on missing required secrets instead of failing",
     )
+    parser.add_argument(
+        "--merge",
+        action="store_true",
+        default=False,
+        help="merge into existing tier files instead of overwriting",
+    )
     args = parser.parse_args(argv)
 
     manifest_path = (REPO_ROOT / args.manifest).resolve()
@@ -221,7 +227,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(report(outputs))
         return 0
 
-    write_env_files(outputs, merge=bool(args.keys))
+    write_env_files(outputs, merge=args.merge or bool(args.keys))
     print(report(outputs))
     return 0
 
