@@ -191,6 +191,19 @@ def _ensure_integration_credentials(text: str) -> str:
     if _is_blank_or_placeholder(wger_token):
         text = _set_kv(text, "WGER_API_TOKEN", "GENERATE_FROM_WGER_UI")
 
+    # Supabase DB password alignment: POSTGRES_PASSWORD and SUPABASE_DB_PASSWORD
+    # must always match — the DB container reads SUPABASE_DB_PASSWORD, but GoTrue
+    # falls back through POSTGRES_PASSWORD. Divergence causes auth failures.
+    supa_db_pass = _get_kv(text, "SUPABASE_DB_PASSWORD")
+    pg_pass = _get_kv(text, "POSTGRES_PASSWORD")
+    if supa_db_pass and not pg_pass:
+        text = _set_kv(text, "POSTGRES_PASSWORD", supa_db_pass)
+    elif pg_pass and not supa_db_pass:
+        text = _set_kv(text, "SUPABASE_DB_PASSWORD", pg_pass)
+    elif supa_db_pass and pg_pass and supa_db_pass != pg_pass:
+        # SUPABASE_DB_PASSWORD is canonical (DB container reads it directly)
+        text = _set_kv(text, "POSTGRES_PASSWORD", supa_db_pass)
+
     return text
 
 

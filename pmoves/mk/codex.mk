@@ -26,9 +26,9 @@ CHIT_ENCODE_FLAGS :=
 endif
 
 ifeq ($(SECRETS_ALLOW_MISSING),1)
-SECRETS_SYNC_FLAGS := --allow-missing
+SECRETS_SYNC_FLAGS := --allow-missing --merge
 else
-SECRETS_SYNC_FLAGS :=
+SECRETS_SYNC_FLAGS := --merge
 endif
 
 ifeq ($(SECRETS_FUNNEL_BOOT_USER),1)
