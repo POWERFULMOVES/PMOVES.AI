@@ -21,7 +21,10 @@ PMOVES.AI is a **production-ready multi-agent orchestration platform** featuring
 - ClickHouse-backed observability and metrics collection
 - Request/response logging, token tracking, latency metrics
 - UI dashboard at port 4000
-- API: `http://localhost:3030/v1/chat/completions` or `/v1/embeddings`
+- Chat API: `http://localhost:3030/v1/chat/completions`
+- Embedding API: `http://localhost:3030/openai/v1/embeddings` (**NOT** `/v1/embeddings` — returns 404)
+- Embedding model format: `tensorzero::embedding_model_name::<model_name>` (e.g., `qwen3_embedding_4b_local`)
+- Qwen3-Embedding-4B = **2560d** (not 3072). Qwen3-Embedding-8B = 4096d.
 - **Use for:** All LLM calls, embeddings, model provider routing, usage analytics
 - **See:** `.claude/context/tensorzero.md` for detailed documentation
 
@@ -225,7 +228,10 @@ PMOVES.AI is a **production-ready multi-agent orchestration platform** featuring
 
 **Qdrant** [Port 6333]
 - Vector embeddings for semantic search
-- Collection: `pmoves_chunks`
+- Primary collection: `pmoves_chunks_qwen3` (2560d, Qwen3-Embedding-4B)
+- Legacy collection: `pmoves_chunks` (384d, MiniLM — do not use for new data)
+- **CRITICAL:** `QDRANT_RECREATE_ON_DIM_MISMATCH` defaults to true — **will delete all data** if embedding dimensions change. Always set to `false` in production.
+- Hi-RAG v2 requires `EMBEDDING_BACKEND=tensorzero` in compose env (defaults to sentence-transformers otherwise)
 
 **Meilisearch** [Port 7700]
 - Full-text keyword search
@@ -338,6 +344,18 @@ curl -X POST http://localhost:8080/mcp/command \
 ```
 
 ## Development Patterns
+
+### Config Migration via brand-defaults
+- `brand_defaults.py` skips keys with existing non-placeholder values
+- Use `SUPERSEDED_VALUES` dict to auto-migrate old defaults to new ones
+- Example: `pmoves_chunks` → `pmoves_chunks_qwen3` (embedding collection migration)
+
+### Pinokio pterm (Windows)
+- Resolve path: `GET http://127.0.0.1:42000/pinokio/path/pterm`
+- Windows binary: `D:/pinokio/bin/npm/pterm.cmd` (use `.cmd` shim, not bare `pterm`)
+- P7 Ask AI: drawer on app Run page (not a separate tab on dashboard)
+- Agent Interpreter: auto-discovers apps via `pterm search` + SKILL.md files
+- subprocess encoding: always use `encoding="utf-8", errors="replace"` for pterm output on Windows
 
 ### Integration Pattern: Leverage, Don't Duplicate
 - **DO:** Use Hi-RAG v2 for knowledge retrieval
