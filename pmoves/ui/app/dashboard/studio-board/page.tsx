@@ -431,12 +431,16 @@ export default function StudioBoardDashboardPage() {
                           : publishState.detailValue}
                       </div>
                     ) : null}
-                    {publishState?.tone !== "danger" && meta.publish_failure_reason ? (
+                    {meta.publish_failure_reason &&
+                    (!publishState || publishState.tone === "danger") &&
+                    publishState?.detailLabel !== "publish failure:" ? (
                       <div className="text-xs text-brand-crimson">
                         publish failure: {meta.publish_failure_reason}
                       </div>
                     ) : null}
-                    {publishState?.tone !== "danger" && meta.publish_failure_stage ? (
+                    {meta.publish_failure_stage &&
+                    (!publishState || publishState.tone === "danger") &&
+                    publishState?.detailLabel !== "failure stage:" ? (
                       <div className="text-xs text-brand-crimson">
                         failure stage: {meta.publish_failure_stage}
                       </div>

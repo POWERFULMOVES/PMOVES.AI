@@ -4,7 +4,7 @@ GRAPHITI_MARK: `PHI-4482-ROADMAP::W1-W6::PMOVES`
 
 > **Scratchpad**: All agents (5090-claude, z890-claude, 4090-claude, codex) read this before claiming workstream lanes.
 > **Origin**: 4090-claude session 2026-03-19, approved by DARKXSIDE.
-> **Status**: ACTIVE — refreshed 2026-03-28 after room/stage merge wave and upstream Agent Zero / ClaWz validation.
+> **Status**: ACTIVE — refreshed 2026-03-28 after room/stage merge wave, publish-state visibility (#1135), and upstream Agent Zero / ClaWz validation.
 
 ---
 
@@ -442,14 +442,14 @@ All resolved. No blockers.
 
 | PR | Lane | Status | Notes |
 |----|------|--------|-------|
-| #1135 | Publish-state visibility (`studio-board` + `videos`) | OPEN — blocked by shared Playwright gate | Fast checks are green, review fixes are pushed, and the only remaining failure matches the same 119-failure Playwright signature already reproducing on `main` |
+| #1135 | Publish-state visibility (`studio-board` + `videos`) | OPEN — merge-prep | CodeRabbit findings fixed locally; remaining failing UI checks are reproducing on `main` |
 | #1136 | Room catalog contracts + dashboard loader | OPEN | Base lane for the stacked room-entry flow |
 | #1137 | Home launcher room-entry routing | OPEN — stacked on #1136 | Review after the room-catalog base lane lands |
 | #1138 | z890 fleet networking + RustDesk relay + hardening | OPEN — CONFLICTING | Needs rebase/splitting; CodeRabbit flagged TAC/compose/Flute issues that still need follow-through |
 
 **March 26/27 merge wave already landed:** #1115, #1116, #1117, #1118, #1119, #1120, #1121, #1122, #1123, #1124, #1126.
 
-**Recommended review order:** decide the branch-protection path for #1135 first, then #1136, then #1137, then rebase/split #1138 before another serious review pass.
+**Recommended review order:** #1135 first, then #1136, then #1137, then rebase/split #1138 before another serious review pass.
 
 ---
 
@@ -485,8 +485,9 @@ All resolved. No blockers.
 | Infra (Model Registry HF enrichment) | 4090-claude | 2026-03-24 | SHIPPED `07d06f70` | feat/chit-integration-wave-1 |
 | Infra (Model seed + gpu-models metadata) | 4090-claude | 2026-03-24 | SHIPPED `50ee0022`, `7cfacc8c` | feat/chit-integration-wave-1 |
 | Infra (BoTZ submodule sync d125e8a) | 4090-claude | 2026-03-24 | SHIPPED `63532a6b` | feat/chit-integration-wave-1 |
+| W3/M2 (shared publish-state visibility across dashboards) | codex-gpt5 | 2026-03-27 | IN PR #1135 — review fixes applied locally | codex/agnote4482-publish-state-visibility |
 | W3/M2 (creator automation activation + Discord canonical lane audit) | codex-gpt5 | 2026-03-25 | RECOMMENDED — scan complete, pending implementation claim | — |
-| W3/M2 (studio-board status UX: approved -> published visibility) | codex-gpt5 | 2026-03-25 | RECOMMENDED — UI follow-through after canonical lane decision | — |
+| W3/M2 (studio-board status UX: approved→published visibility) | codex-gpt5 | 2026-03-26 | ACTIVE — #1120 merged, #1135 in review | — |
 | W2/W4 (rooms + stage prospectus alignment) | codex-gpt5 | 2026-03-28 | RECOMMENDED — docs update required after room manifest merge wave | — |
 | W2/W5 (Agent Zero upstream `v1.3` baseline vs PMOVES hardened suit gap report) | codex-gpt5 | 2026-03-28 | VERIFIED — upstream at `v1.3`, PMOVES pin still Mar 7 hardened commit | — |
 
@@ -525,10 +526,7 @@ All resolved. No blockers.
 | 1 | Publish the Agent Zero `v1.3` gap report for PMOVES hardened fork | **P0** | Use upstream `v1.3` as the baseline, then classify PMOVES-only overlays that must survive a sync |
 | 2 | Publish the PMOVES-ClawZ gap report | **P0** | Capture upstream/fork/orphaned-gitlink reality before more ClaW suit positioning |
 | 3 | Align AGNOTE/P7/website language around rooms + stage | **P0** | Make the prospectus consistent across school/company/site docs |
-| 4 | Keep ClaWz/Agent Zero suit config coding-plan aligned | **P0** | Tie the room-aware suit story back to real profile ids and approved remote coding lanes |
-| 5 | Close Supabase -> Agent Zero -> Publisher -> Discord activation loop | **P0** | Validate `approval_poller.json` + `echo_publisher.json`; capture first real published-event evidence |
-| 6 | Pick canonical Discord publish lane | **P0** | Decide between `publisher-discord` NATS subscriber and n8n webhook relay; demote the other to fallback/test-only |
-| 7 | Add creator dashboard state clarity | P1 | Make `studio-board` and `videos` distinguish `approved, waiting for poller` vs `published` |
-| 8 | Validate Discord approval workflow for creator-control | P1 | Exercise channel-monitor queue/review endpoints with messaging-gateway callbacks and record rejection UX gaps |
-| 9 | Surface publish failures + backfill readiness | P2 | Turn publisher audit/backfill work into an operator-visible lane before broader M2 expansion |
-| 7 | Surface publish failures + backfill readiness | P2 | Turn publisher audit/backfill work into an operator-visible lane before broader M2 expansion |
+| 4 | Close Supabase→Agent Zero→Publisher→Discord activation loop | **P0** | Validate `approval_poller.json` + `echo_publisher.json`; capture first published-event evidence |
+| 5 | Pick canonical Discord publish lane | **P0** | Decide between `publisher-discord` NATS subscriber and n8n webhook relay; demote the other |
+| 6 | Merge PR #1135 (publish-state visibility) | **P0** | CodeRabbit findings addressed; E2E red is reproducing on `main` |
+| 7 | Surface publish failures + backfill readiness | P2 | Turn publisher audit into an operator-visible lane after the real loop is proven end-to-end |
