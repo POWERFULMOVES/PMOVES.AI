@@ -444,7 +444,7 @@ All resolved. No blockers.
 | W6-P3 (Voice binding: persona → Flute prosodic) | 5090-claude | 2026-03-23 | RECOMMENDED — after P2 | — |
 | W6-P5 (FlOO$ life-persona-voice pipeline) | claude-opus | 2026-03-23 | RECOMMENDED — architecture review | — |
 | Infra (CHIT CGP Wave 1: Extract Worker + FFmpeg-Whisper) | 4090-claude | 2026-03-24 | SHIPPED `f7dafa56`, `6046d518` | feat/chit-integration-wave-1 |
-| Infra (Embedding standardization: Qwen3-4b/3072d) | 4090-claude | 2026-03-24 | SHIPPED `77888c8b` | feat/chit-integration-wave-1 |
+| Infra (Embedding standardization: Qwen3-4b/2560d) | 4090-claude | 2026-03-24 | SHIPPED `77888c8b` | feat/chit-integration-wave-1 |
 | Infra (Model Registry HF enrichment) | 4090-claude | 2026-03-24 | SHIPPED `07d06f70` | feat/chit-integration-wave-1 |
 | Infra (Model seed + gpu-models metadata) | 4090-claude | 2026-03-24 | SHIPPED `50ee0022`, `7cfacc8c` | feat/chit-integration-wave-1 |
 | Infra (BoTZ submodule sync d125e8a) | 4090-claude | 2026-03-24 | SHIPPED `63532a6b` | feat/chit-integration-wave-1 |
@@ -481,7 +481,7 @@ All resolved. No blockers.
 | # | Task | Priority | Notes |
 |---|------|----------|-------|
 | 1 | Container rebuilds (6 services — includes embedding env changes) | **P0** | Blocks Docker image freshness |
-| 2 | `pmoves_chunks_qwen3` Qdrant collection provision | P1 | New 3072d collection; old data untouched |
+| 2 | `pmoves_chunks_qwen3` Qdrant collection provision | P1 | New 2560d collection; old data untouched |
 | 3 | W6-P1: Health/Wealth Docker wiring | P1 | NATS + /healthz + /metrics |
 | 4 | Jetson Orin onboarding | P2 | Via RustDesk |
 | 5 | NATS leaf node to 5090 | P2 | Flute NATS=connected proves bus healthy |

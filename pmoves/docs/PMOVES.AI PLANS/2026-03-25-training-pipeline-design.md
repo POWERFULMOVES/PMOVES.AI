@@ -32,7 +32,7 @@ VRAM swap protocol: stop TTS on 5090 → train → restart TTS. z890 covers TTS 
 ## Three Phases
 
 ### Phase 1: Embeddings (Crawl)
-- Base: Qwen3-4b (3072d)
+- Base: Qwen3-4b (2560d)
 - Data: PMOVES transcripts, docs, CHIT packets, agent trails
 - Output: `POWERFULMOVES/pmoves-qwen3-4b-embed`
 - Impact: Hi-RAG retrieval quality jumps from generic to domain-aware

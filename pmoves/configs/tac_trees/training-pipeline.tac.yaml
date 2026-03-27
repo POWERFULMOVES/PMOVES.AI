@@ -46,7 +46,7 @@ root:
       task: "Phase 1: Embedding fine-tuning for Hi-RAG retrieval"
       context: >
         Fine-tune Qwen3-4b on PMOVES content for domain-specific retrieval.
-        Base model: qwen3-embedding:4b (3072d). Training: contrastive learning
+        Base model: qwen3-embedding:4b (2560d). Training: contrastive learning
         on (query, passage) pairs from PMOVES docs/transcripts.
       agent_hint: 5090-claude
       children:

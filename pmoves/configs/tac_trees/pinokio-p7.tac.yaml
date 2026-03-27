@@ -267,7 +267,7 @@ root:
           notes: "SKILL.md created at pbnj/pinokio/api/pmoves-model-registry/SKILL.md. P7 Agent Interpreter can now discover Model Registry (port 8110) for model catalog queries, HF enrichment, TensorZero config export, and GPU deployment tracking."
 
         - id: p7.nats.embedding-quality
-          task: "P7-triggered ingestion uses 3072d Qwen3 embeddings"
+          task: "P7-triggered ingestion uses 2560d Qwen3 embeddings"
           action:
             type: manual
             expect: "Extract Worker processes P7-originated content with EMBEDDING_BACKEND=tensorzero"
