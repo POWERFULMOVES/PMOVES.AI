@@ -49,6 +49,10 @@ downloads/
 eggs/
 .eggs/
 lib/
+!pmoves/ui/lib/
+!pmoves/ui/lib/rooms.ts
+!pmoves/ui/lib/__tests__/
+!pmoves/ui/lib/__tests__/rooms.test.ts
 lib64/
 parts/
 sdist/
@@ -189,3 +193,4 @@ NUL
 
 # Git worktrees
 .worktrees/
+

@@ -26,6 +26,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: '/dashboard/notebook/runtime', label: 'Runtime', key: 'notebook-runtime' },
   { href: '/notebook-workbench', label: 'Workbench', key: 'notebook-workbench' },
   { href: '/dashboard/personas', label: 'Personas', key: 'personas', accent: 'gold' },
+  { href: '/dashboard/rooms', label: 'Rooms', key: 'rooms', accent: 'cyan' },
   { href: '/dashboard/chat', label: 'Chat', key: 'chat' },
   { href: '/dashboard/services', label: 'Services', key: 'services' },
   { href: '/dashboard/chit', label: 'Chit', key: 'chit', accent: 'cyan' },
@@ -47,6 +48,7 @@ export type NavKey =
   | 'notebook-runtime'
   | 'notebook-workbench'
   | 'personas'
+  | 'rooms'
   | 'chat'
   | 'services'
   | 'chit'

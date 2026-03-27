@@ -1,0 +1,220 @@
+{
+  "room_id": "5090-voice.room.studio",
+  "version": "1.0.0",
+  "display_name": "5090 Voice Studio",
+  "description": "Voice-first room for TTS, media pipelines, audition loops, and notebook-backed iteration.",
+  "agent_id": "5090-claude",
+  "alter": "5090-voice",
+  "room_type": "creator",
+  "owner_mode": "alter",
+  "shell": {
+    "theme": {
+      "theme_id": "voice-studio",
+      "accent_color": "#9333EA",
+      "skin": "waveform-stage",
+      "icon": "beamed-notes"
+    },
+    "layout": {
+      "default_route": "/dashboard/notebook/runtime",
+      "panels": [
+        {
+          "panel_id": "voice-chat",
+          "kind": "chat",
+          "position": "left",
+          "size": 24,
+          "pinned": true
+        },
+        {
+          "panel_id": "media-stage",
+          "kind": "media",
+          "position": "center",
+          "size": 50,
+          "pinned": true
+        },
+        {
+          "panel_id": "notebook-takes",
+          "kind": "notebook",
+          "position": "right",
+          "size": 26,
+          "pinned": true
+        }
+      ]
+    }
+  },
+  "apps": [
+    {
+      "app_id": "voice-console",
+      "kind": "media",
+      "route": "/dashboard/voice",
+      "provider": "pmoves-ui",
+      "action_namespace": "voice",
+      "capabilities": ["tts", "engine-status", "audition", "prosody"],
+      "pinned": true
+    },
+    {
+      "app_id": "notebook-workbench",
+      "kind": "notebook",
+      "route": "/notebook-workbench",
+      "provider": "pmoves-notebook-workbench",
+      "action_namespace": "notebook",
+      "capabilities": ["threads", "entries", "snapshots", "takes"],
+      "pinned": true
+    },
+    {
+      "app_id": "media-pipeline",
+      "kind": "dashboard",
+      "route": "/dashboard/media",
+      "provider": "pmoves-ui",
+      "action_namespace": "media",
+      "capabilities": ["pipeline-health", "artifact-preview", "render-status"],
+      "pinned": false
+    }
+  ],
+  "notebook": {
+    "provider": "open-notebook",
+    "workspace_ref": "voice-lab",
+    "thread_ref": "session-takes",
+    "default_page": "voice-iterations",
+    "sync": {
+      "mode": "authoritative",
+      "writeback_targets": ["entries", "pages", "snapshots"],
+      "artifact_prefix": "rooms/5090-voice"
+    }
+  },
+  "persona": {
+    "signature_ref": "5090-claude",
+    "voice": "conversational",
+    "glyph": "♫",
+    "resonance": ["voice-synthesis", "tts-pipeline", "pipecat-integration", "media"]
+  },
+  "skill_bindings": [
+    {
+      "binding_id": "voice-audition",
+      "skill_id": "multimodal-verifier",
+      "room_id": "5090-voice.room.studio",
+      "display_name": "Voice Audition",
+      "intent": ["voice", "audition", "verification"],
+      "activation": {
+        "invocation_mode": "suggested",
+        "trigger_phrases": ["audition this voice", "verify this take", "compare these outputs"],
+        "requires_selection": true
+      },
+      "surface": {
+        "app_id": "voice-console",
+        "target": "composer",
+        "route": "/dashboard/voice"
+      },
+      "execution": {
+        "mode": "inline",
+        "run_as": "agent",
+        "stream": "status",
+        "max_steps": 4
+      },
+      "context": {
+        "sources": ["notebook-selection", "persona", "room-state", "user-intent"],
+        "include_last_turns": 6,
+        "notebook_writeback": true,
+        "artifact_types": ["audio", "text", "json"]
+      },
+      "outputs": [
+        {
+          "target": "artifact-store",
+          "delivery": "append",
+          "path": "voice/takes",
+          "artifact_type": "audio"
+        },
+        {
+          "target": "notebook-entry",
+          "delivery": "append",
+          "path": "threads/session-takes",
+          "artifact_type": "text"
+        }
+      ],
+      "guardrails": {
+        "require_approval": false,
+        "max_runtime_sec": 420,
+        "fail_open": false,
+        "one_active_run": true
+      },
+      "enabled": true,
+      "tags": ["voice", "takes", "validation"]
+    },
+    {
+      "binding_id": "voice-publish-preflight",
+      "skill_id": "bringup-audit",
+      "room_id": "5090-voice.room.studio",
+      "display_name": "Voice Publish Preflight",
+      "intent": ["preflight", "media", "pipeline-health"],
+      "activation": {
+        "invocation_mode": "workflow",
+        "trigger_phrases": ["run voice preflight", "check the voice pipeline"],
+        "requires_selection": false
+      },
+      "surface": {
+        "app_id": "media-pipeline",
+        "target": "toolbar",
+        "route": "/dashboard/media"
+      },
+      "execution": {
+        "mode": "workflow",
+        "run_as": "worker",
+        "stream": "events",
+        "max_steps": 7
+      },
+      "context": {
+        "sources": ["open-apps", "persona", "graphiti-trail", "user-intent"],
+        "include_last_turns": 2,
+        "notebook_writeback": true,
+        "artifact_types": ["text", "json"]
+      },
+      "outputs": [
+        {
+          "target": "room-state",
+          "delivery": "replace",
+          "path": "preflight/voice",
+          "artifact_type": "json"
+        },
+        {
+          "target": "chat-response",
+          "delivery": "notify",
+          "artifact_type": "text"
+        }
+      ],
+      "guardrails": {
+        "require_approval": false,
+        "max_runtime_sec": 300,
+        "fail_open": true,
+        "one_active_run": true
+      },
+      "enabled": true,
+      "tags": ["preflight", "voice", "pipeline"]
+    }
+  ],
+  "policies": {
+    "model_routing": "hybrid",
+    "publish": {
+      "allow_nats_emit": true,
+      "allow_external_publish": false,
+      "allowed_subjects": ["voice.cast.completed.v1", "agent.graphiti.signed.v1"]
+    },
+    "memory": {
+      "graphiti": true,
+      "notebook_writeback": true,
+      "chit_handoff": true
+    }
+  },
+  "telemetry": {
+    "graphiti_phase": "Voice Studio",
+    "room_events_subject": "room.session.updated.v1",
+    "healthcheck_route": "/api/voice/health"
+  },
+  "provenance": {
+    "source": "pmoves/config/rooms/catalog.json",
+    "updated_at": "2026-03-27T12:30:00Z",
+    "related_docs": [
+      "pmoves/docs/ROOM_MANIFEST_CONTRACT.md",
+      "pmoves/docs/MODEL_FABRIC_CONTRACT.md",
+      "pmoves/docs/AGENTS/AGNOTE4482_ROADMAP_W1-W5.md"
+    ]
+  }
+}
