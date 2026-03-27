@@ -30,30 +30,48 @@ def is_glob_pattern(pattern: str) -> bool:
 
 
 def match_path(file_path: str, pattern: str) -> bool:
-    """Match file path against pattern, supporting both prefix and glob matching."""
-    expanded_pattern = os.path.expanduser(pattern)
+    """Match file path against pattern, supporting both prefix and glob matching.
+
+    Handles Windows absolute paths vs relative patterns by resolving against
+    CLAUDE_PROJECT_DIR and normalizing path separators.
+    """
+    # Resolve relative patterns against project dir for Windows absolute path matching
+    project_dir = os.environ.get("CLAUDE_PROJECT_DIR", "")
+    if project_dir and not os.path.isabs(pattern) and not pattern.startswith("~"):
+        abs_pattern = os.path.join(project_dir, pattern)
+    else:
+        abs_pattern = pattern
+
+    expanded_pattern = os.path.expanduser(abs_pattern)
     normalized = os.path.normpath(file_path)
     expanded_normalized = os.path.expanduser(normalized)
 
-    if is_glob_pattern(pattern):
-        # Glob pattern matching (case-insensitive for security)
-        basename = os.path.basename(expanded_normalized)
-        basename_lower = basename.lower()
-        pattern_lower = pattern.lower()
-        expanded_pattern_lower = expanded_pattern.lower()
+    # Normalize separators for cross-platform comparison
+    norm_fwd = expanded_normalized.replace("\\", "/").lower()
+    pat_fwd = expanded_pattern.replace("\\", "/").lower()
+    raw_pat_fwd = pattern.replace("\\", "/").lower()
 
-        # Match against basename for patterns like *.pem, .env*
-        if fnmatch.fnmatch(basename_lower, expanded_pattern_lower):
-            return True
-        if fnmatch.fnmatch(basename_lower, pattern_lower):
-            return True
-        # Also try full path match for patterns like /path/*.pem
-        if fnmatch.fnmatch(expanded_normalized.lower(), expanded_pattern_lower):
+    if is_glob_pattern(pattern):
+        basename_lower = os.path.basename(expanded_normalized).lower()
+        pattern_basename = os.path.basename(pattern).lower()
+
+        # Match basename against filename portion (e.g., *.pem, .env*, docker-compose*.yml)
+        if fnmatch.fnmatch(basename_lower, pattern_basename):
+            # If pattern has a directory prefix, verify the directory matches too
+            pattern_dir = os.path.dirname(raw_pat_fwd)
+            if not pattern_dir or pattern_dir in norm_fwd:
+                return True
+
+        # Full path glob match (resolved against project dir)
+        if fnmatch.fnmatch(norm_fwd, pat_fwd):
             return True
         return False
     else:
-        # Prefix matching (original behavior for directories)
-        if expanded_normalized.startswith(expanded_pattern) or expanded_normalized == expanded_pattern.rstrip('/'):
+        # Prefix matching with normalized separators (resolved path)
+        if norm_fwd.startswith(pat_fwd) or norm_fwd == pat_fwd.rstrip("/"):
+            return True
+        # Suffix matching for relative patterns (e.g., "pmoves/env.shared" in "/full/path/pmoves/env.shared")
+        if not os.path.isabs(pattern) and not pattern.startswith("~") and raw_pat_fwd in norm_fwd:
             return True
         return False
 
