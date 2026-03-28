@@ -454,6 +454,10 @@ All resolved. No blockers.
 | W3/M2 (shared publish-state visibility across dashboards) | codex-gpt5 | 2026-03-27 | REVIEWED — fast checks green; remaining Playwright blocker matches `main` | codex/agnote4482-publish-state-visibility |
 | W3/M2 (creator automation activation + Discord canonical lane) | codex-gpt5 | 2026-03-26 | RECOMMENDED — follow-up after #1126 merge | — |
 | W3/M2 (studio-board status UX: approved→published visibility) | codex-gpt5 | 2026-03-26 | ACTIVE — #1120 merged, #1135 branch-ready except shared E2E gate | — |
+| Room Catalog (contracts + loader + schema) | 4090-claude | 2026-03-27 | SHIPPED PR #1136 (merged) | main |
+| Room Catalog (home room entry launcher) | codex-gpt5 | 2026-03-27 | IN REVIEW PR #1137 | codex/home-room-entry |
+| Room Catalog (dashboard routes: review/voice/media) | 4090-claude | 2026-03-28 | IN REVIEW PR #1142 | feat/room-planned-routes |
+| Room Catalog (runtime taxonomy: team/service/launcher refs) | 4090-claude | 2026-03-28 | IN REVIEW PR #1143 | feat/room-runtime-taxonomy |
 
 ## Recommended Next Steps (Post 2026-03-24 CHIT Wave 1)
 

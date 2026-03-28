@@ -50,7 +50,7 @@
       "action_namespace": "voice",
       "capabilities": ["tts", "engine-status", "audition", "prosody"],
       "pinned": true,
-      "status": "planned"
+      "status": "active"
     },
     {
       "app_id": "notebook-workbench",
@@ -69,7 +69,7 @@
       "action_namespace": "media",
       "capabilities": ["pipeline-health", "artifact-preview", "render-status"],
       "pinned": false,
-      "status": "planned"
+      "status": "active"
     }
   ],
   "notebook": {

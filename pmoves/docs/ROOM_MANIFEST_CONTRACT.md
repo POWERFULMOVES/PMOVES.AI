@@ -299,12 +299,41 @@ Bind them into rooms locally through `skill.binding.v1`.
 
 This prevents one marketplace skill from assuming every agent needs the same panel, model lane, or notebook target.
 
+## App Status Lifecycle
+_Added 2026-03-28_
+
+Each app declared in a room manifest has an optional `status` field:
+- `active` — route exists and is functional (default if omitted)
+- `planned` — route declared but not yet implemented; renders as inactive in UI
+- `deprecated` — route exists but scheduled for removal
+
+This lets rooms declare future surfaces without breaking validation.
+
+## Runtime Taxonomy
+_Added 2026-03-28_
+
+Three optional array fields bridge room contracts to the operational topology:
+- `team_refs` — agent team identifiers from `pmoves/configs/agent-teams.yaml`
+- `service_refs` — Docker Compose service names the room depends on
+- `launcher_refs` — make targets or Pinokio launcher identifiers for room bringup
+
+Example:
+```json
+{
+  "team_refs": ["orchestration", "data", "infra"],
+  "service_refs": ["agent-zero", "supabase", "nats", "prometheus"],
+  "launcher_refs": ["up-agents", "up-monitoring"]
+}
+```
+
 ## Recommended Next Implementation Steps
 1. Add a `room_events_subject` consumer in the UI/launcher layer so room changes become observable.
 2. Map existing Notebook Workbench surfaces onto declared `action_namespace` values.
-3. Add room defaults for `5090-voice`, `4090-field`, and `z890-infra` as first manifest examples. DONE — seeded under `pmoves/config/rooms/`.
+3. ~~Add room defaults for `5090-voice`, `4090-field`, and `z890-infra` as first manifest examples.~~ DONE — seeded under `pmoves/config/rooms/`.
 4. Mirror room manifests into Supabase or another runtime store only after a loader exists; keep git as canonical seed.
-5. Add one smoke path that loads a manifest and verifies app routes, notebook refs, and skill bindings resolve.
+5. ~~Add one smoke path that loads a manifest and verifies app routes, notebook refs, and skill bindings resolve.~~ DONE — `validate_room_manifests.py`.
+6. Add `/dashboard/review`, `/dashboard/voice`, `/dashboard/media` route implementations. DONE — PR #1142.
+7. Populate `team_refs`/`service_refs`/`launcher_refs` in all room manifests. DONE — PR #1143.
 
 ## Related References
 - `pmoves/docs/MODEL_FABRIC_CONTRACT.md`

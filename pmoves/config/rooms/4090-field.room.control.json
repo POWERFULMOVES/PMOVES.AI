@@ -68,7 +68,7 @@
       "action_namespace": "review",
       "capabilities": ["pr-triage", "thread-classify", "risk-notes"],
       "pinned": false,
-      "status": "planned"
+      "status": "active"
     }
   ],
   "notebook": {

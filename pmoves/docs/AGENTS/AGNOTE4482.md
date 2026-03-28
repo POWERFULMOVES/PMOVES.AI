@@ -68,3 +68,29 @@ Elder-context support is always available to reduce drift and collision across p
 - Timestamp: `2026-02-20`
 
 <!-- GRAPHITI_MARK: CLAUDE-OPUS::TAC-TOPOLOGY-AUDIT::2026-02-20 -->
+
+## Room Catalog Audit Record (2026-03-28)
+
+### Work Performed
+- Created typed room manifest contract schema (`room.manifest.v1.schema.json`)
+- Defined 3 seed rooms: z890-infra (operator), 4090-field (scout), 5090-voice (creator)
+- Built room catalog loader with parity validation (`rooms.ts`)
+- Added `status` lifecycle field to app schema (active/planned/deprecated)
+- Added dashboard routes: `/review`, `/voice`, `/media`
+- Added runtime taxonomy (`team_refs`, `service_refs`, `launcher_refs`) bridging rooms to operational topology
+- Updated `ROOM_MANIFEST_CONTRACT.md` with status lifecycle and taxonomy docs
+
+### PRs
+| PR | Title | Status |
+|----|-------|--------|
+| #1136 | Room catalog contracts + dashboard loader | MERGED |
+| #1137 | Home launcher room entry paths | IN REVIEW |
+| #1142 | Dashboard routes (review, voice, media) | IN REVIEW |
+| #1143 | Runtime taxonomy fields | IN REVIEW |
+
+### Agent ACK
+- Agent: `4090-CLAUDE`
+- Signature: `ACK::4090-CLAUDE::ROOM-CATALOG-AUDIT`
+- Timestamp: `2026-03-28`
+
+<!-- GRAPHITI_MARK: 4090-CLAUDE::ROOM-CATALOG-AUDIT::2026-03-28 -->
