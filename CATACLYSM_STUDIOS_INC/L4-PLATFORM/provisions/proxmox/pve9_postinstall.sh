@@ -143,17 +143,17 @@ Restart=always
 TimeoutStopSec=30
 ExecStartPre=/usr/bin/docker rm -f gpu-orchestrator >/dev/null 2>&1 || true
 ExecStart=/bin/sh -c "/usr/bin/docker run --name gpu-orchestrator --rm \\
-  --gpus device=\${GPU_INDEX:-0} \\
+  --gpus device=\${GPU_ORCHESTRATOR_GPU_INDEX:-0} \\
   --network pmoves-net \\
   -p 8200:8200 \\
   -v /var/run/docker.sock:/var/run/docker.sock:ro \\
   -v ${data_root}:/app/data \\
   -e GPU_ORCHESTRATOR_HOST=0.0.0.0 \\
   -e GPU_ORCHESTRATOR_PORT=8200 \\
-  -e NATS_URL=\${NATS_URL:-nats://nats:4222} \\
-  -e GPU_INDEX=\${GPU_INDEX:-0} \\
-  -e VLLM_URL=\${VLLM_URL:-http://host.docker.internal:8100} \\
-  -e OLLAMA_URL=\${OLLAMA_URL:-http://pmoves-ollama:11434} \\
+  -e GPU_ORCHESTRATOR_NATS_URL=\${GPU_ORCHESTRATOR_NATS_URL:-nats://nats:4222} \\
+  -e GPU_ORCHESTRATOR_GPU_INDEX=\${GPU_ORCHESTRATOR_GPU_INDEX:-0} \\
+  -e GPU_ORCHESTRATOR_VLLM_URL=\${GPU_ORCHESTRATOR_VLLM_URL:-http://host.docker.internal:8100} \\
+  -e GPU_ORCHESTRATOR_OLLAMA_URL=\${GPU_ORCHESTRATOR_OLLAMA_URL:-http://pmoves-ollama:11434} \\
   ${image}"
 ExecStop=/usr/bin/docker stop gpu-orchestrator
 
@@ -162,11 +162,11 @@ WantedBy=multi-user.target
 EOF
 
   cat <<'EOF' | tee /etc/default/gpu-orchestrator > /dev/null
-# GPU Orchestrator configuration
-GPU_INDEX=0
-NATS_URL=nats://nats:4222
-VLLM_URL=http://host.docker.internal:8100
-OLLAMA_URL=http://pmoves-ollama:11434
+# GPU Orchestrator configuration (env_prefix = GPU_ORCHESTRATOR_)
+GPU_ORCHESTRATOR_GPU_INDEX=0
+GPU_ORCHESTRATOR_NATS_URL=nats://nats:4222
+GPU_ORCHESTRATOR_VLLM_URL=http://host.docker.internal:8100
+GPU_ORCHESTRATOR_OLLAMA_URL=http://pmoves-ollama:11434
 EOF
 
   systemctl daemon-reload

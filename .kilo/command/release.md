@@ -8,7 +8,7 @@ Release a workstream claim in AGNOTE4482PHI.t1 and sign the handoff trail.
 
 1. Append RELEASE entry to AGNOTE4482PHI.t1:
 
-```
+```text
 `<ISO8601>` RELEASE `KILOCODE-GLM` scope: <matched claim scope>
 ```
 

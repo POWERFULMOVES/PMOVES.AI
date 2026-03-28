@@ -11,7 +11,7 @@ make -C pmoves sign-trail SUMMARY="$ARGUMENTS" AGENT=kilocode-glm PHASE="Phase K
 ```
 
 Trail entry format:
-```
+```text
 ▲ KiloCode GLM | #059669 | Phase K | <timestamp>
 Summary: <summary>
 Source: DARKXSIDE x POWERFULMOVES on 5090

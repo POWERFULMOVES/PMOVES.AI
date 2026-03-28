@@ -13,9 +13,19 @@ Pull a model via Ollama:
 ollama pull $ARGUMENTS
 ```
 
-Register in PMOVES.Flare namespace:
+Register via sync profile (per `models_sync.py` CLI):
 ```bash
-python3 pmoves/tools/models/models_sync.py --register --model $ARGUMENTS --namespace pmoves
+python3 pmoves/tools/models/models_sync.py sync --profile agent-zero --host workstation_5090
+```
+
+Swap a single service model:
+```bash
+python3 pmoves/tools/models/models_sync.py swap --service agent-zero --name $ARGUMENTS
+```
+
+List seed models:
+```bash
+python3 pmoves/tools/models/models_sync.py seed-list --host workstation_5090 --source auto
 ```
 
 Verify readiness:

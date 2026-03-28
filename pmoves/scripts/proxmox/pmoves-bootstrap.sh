@@ -96,6 +96,8 @@ setup_ollama() {
     local ollama_data="${OLLAMA_DATA_DIR:-/opt/pmoves/data/ollama}"
     mkdir -p "$ollama_data"
 
+    docker rm -f pmoves-ollama >/dev/null 2>&1 || true
+
     docker run -d --name pmoves-ollama \
         --gpus all \
         --restart unless-stopped \
@@ -139,6 +141,8 @@ setup_gpu_orchestrator() {
     log "Building and starting GPU orchestrator..."
     docker build -t pmoves/gpu-orchestrator:latest "$orch_dir"
 
+    docker rm -f gpu-orchestrator >/dev/null 2>&1 || true
+
     docker run -d --name gpu-orchestrator \
         --gpus "device=${GPU_INDEX:-0}" \
         --restart unless-stopped \
@@ -147,10 +151,10 @@ setup_gpu_orchestrator() {
         -v /var/run/docker.sock:/var/run/docker.sock:ro \
         -e GPU_ORCHESTRATOR_HOST=0.0.0.0 \
         -e GPU_ORCHESTRATOR_PORT=8200 \
-        -e NATS_URL=nats://nats:4222 \
-        -e GPU_INDEX="${GPU_INDEX:-0}" \
-        -e VLLM_URL=http://host.docker.internal:8100 \
-        -e OLLAMA_URL=http://pmoves-ollama:11434 \
+        -e GPU_ORCHESTRATOR_NATS_URL="${NATS_URL:-nats://nats:4222}" \
+        -e GPU_ORCHESTRATOR_GPU_INDEX="${GPU_INDEX:-0}" \
+        -e GPU_ORCHESTRATOR_VLLM_URL="${VLLM_URL:-http://host.docker.internal:8100}" \
+        -e GPU_ORCHESTRATOR_OLLAMA_URL="${OLLAMA_URL:-http://pmoves-ollama:11434}" \
         pmoves/gpu-orchestrator:latest
 
     log "GPU orchestrator started on :8200"

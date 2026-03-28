@@ -10,7 +10,7 @@ Claim a workstream in AGNOTE4482PHI.t1 to prevent agent collision.
 2. Verify no conflicting active claims on same scope
 3. Append CLAIM entry:
 
-```
+```text
 `<ISO8601>` CLAIM `KILOCODE-GLM` scope: $ARGUMENTS
 ```
 

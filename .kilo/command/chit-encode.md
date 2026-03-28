@@ -8,7 +8,7 @@ Encode data as a CGP packet for the GEOMETRY BUS.
 
 1. Parse the input data
 2. Apply CHIT encoding — hierarchical compression, hyperbolic embedding, spectral signature
-3. Generate CGP v2 packet:
+3. Generate CGP packet (schema `chit.cgp.v1.0`):
    ```json
    {
      "version": "chit.cgp.v1.0",

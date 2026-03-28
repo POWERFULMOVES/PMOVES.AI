@@ -30,7 +30,7 @@ Per AGNOTE4482PHI.t1 collision-avoidance:
 ## References
 
 - `pmoves/config/agent_signatures.yaml` — all agent glyph/color/voice definitions
-- `pmoves/config/agent_registry.yaml` — 46 agent canonical definitions
+- `pmoves/config/agent_registry.yaml` — agent canonical definitions (count varies; check file for current total)
 - `pmoves/docs/AGENTS/PMOVES_AGENT_CLASS_TAXONOMY.md` — 4 classes, 7 types
 - `pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md` — collision-avoidance claim register
 - `pmoves/docs/AGENTS/KRISS_KROSS_ACCORD.md` — Claude/Codex parity protocol

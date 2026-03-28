@@ -387,6 +387,7 @@ EOF
 
 # vLLM remote GPU endpoint (routed via Tailscale)
 VLLM_ENDPOINT=http://pmoves-gpu-5090:8100
+VLLM_ENDPOINT_LARGE=http://pmoves-gpu-5090:8130
 
 # Coding plan lane
 GLM_CODING_PLAN_ENABLED=true

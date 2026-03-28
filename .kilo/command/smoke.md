@@ -14,13 +14,19 @@ For GPU strict validation (rerank assertions):
 GPU_SMOKE_STRICT=true make -C pmoves smoke-gpu
 ```
 
+For health check:
+
+```bash
+make -C pmoves verify-all
+```
+
 For model readiness check:
 
 ```bash
 make -C pmoves model-readiness
 ```
 
-Full verification (smoke + health + GPU):
+Full verification (smoke + health + GPU + model readiness):
 
 ```bash
 make -C pmoves smoke && GPU_SMOKE_STRICT=true make -C pmoves smoke-gpu && make -C pmoves model-readiness

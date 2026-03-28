@@ -113,7 +113,7 @@ All three agents share the 5090 node and coordinate through AGNOTE4482PHI.t1. Cl
 
 ### Configuration Artifacts
 
-- `.kilo/` directory: 3 agents, 8 commands
+- `.kilo/` directory: 3 agents, 10 commands
 - `kilo.json`: project config
 - `.kilocodemodes`: `pmoves-glm` + `pmoves-cocreate` modes
 - `agent_signatures.yaml`: `kilocode-glm` alter entry
