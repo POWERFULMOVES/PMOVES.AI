@@ -17,6 +17,8 @@ export interface PublishStateSummary {
   tone: "default" | "success" | "danger";
 }
 
+export type PublishTone = PublishStateSummary["tone"];
+
 interface DescribePublishStateInput {
   rowStatus?: string | null;
   approvalStatus?: string | null;
@@ -51,6 +53,31 @@ const describeQueuedPublishState = ({
   }
   return null;
 };
+
+export const PUBLISH_TONE_CLASS: Record<PublishTone, string> = {
+  default: "text-brand-sky",
+  success: "text-brand-forest",
+  danger: "text-brand-crimson",
+};
+
+export const PUBLISH_DETAIL_CLASS: Record<PublishTone, string> = {
+  default: "text-brand-subtle",
+  success: "text-brand-forest",
+  danger: "text-brand-crimson",
+};
+
+export function shouldRenderSupplementalPublishFailureDetail(
+  publishState: PublishStateSummary | null | undefined,
+  detailLabel: "publish failure:" | "failure stage:"
+): boolean {
+  if (publishState && publishState.tone !== "danger") {
+    return false;
+  }
+  return (
+    publishState?.detailLabel !== detailLabel &&
+    publishState?.detailLabel !== "failed @"
+  );
+}
 
 /**
  * Collapse publish metadata from the studio-board and videos dashboards into

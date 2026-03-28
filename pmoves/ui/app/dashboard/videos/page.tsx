@@ -3,7 +3,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import DashboardNavigation from "../../../components/DashboardNavigation";
 import useInfiniteSupabaseQuery from "../../../hooks/useInfiniteSupabaseQuery";
-import { describePublishState } from "../publishState";
+import {
+  describePublishState,
+  PUBLISH_DETAIL_CLASS,
+  PUBLISH_TONE_CLASS,
+  shouldRenderSupplementalPublishFailureDetail,
+} from "../publishState";
 import {
   getSupabaseBrowserClient,
   getSupabaseRestUrl,
@@ -78,18 +83,6 @@ const mergeMeta = (
   return Object.fromEntries(
     Object.entries(merged).filter(([, v]) => v !== undefined)
   ) as VideoRowMeta;
-};
-
-const PUBLISH_TONE_CLASS: Record<"default" | "success" | "danger", string> = {
-  default: "text-brand-sky",
-  success: "text-brand-forest",
-  danger: "text-brand-crimson",
-};
-
-const PUBLISH_DETAIL_CLASS: Record<"default" | "success" | "danger", string> = {
-  default: "text-brand-subtle",
-  success: "text-brand-forest",
-  danger: "text-brand-crimson",
 };
 
 export default function VideosDashboardPage() {
@@ -559,6 +552,24 @@ export default function VideosDashboardPage() {
                         {publishState.detailLabel.endsWith("@")
                           ? formatDate(publishState.detailValue)
                           : publishState.detailValue}
+                      </div>
+                    ) : null}
+                    {meta.publish_failure_reason &&
+                    shouldRenderSupplementalPublishFailureDetail(
+                      publishState,
+                      "publish failure:"
+                    ) ? (
+                      <div className="text-xs text-brand-crimson">
+                        publish failure: {meta.publish_failure_reason}
+                      </div>
+                    ) : null}
+                    {meta.publish_failure_stage &&
+                    shouldRenderSupplementalPublishFailureDetail(
+                      publishState,
+                      "failure stage:"
+                    ) ? (
+                      <div className="text-xs text-brand-crimson">
+                        failure stage: {meta.publish_failure_stage}
                       </div>
                     ) : null}
                     {meta.rejection_reason ? (

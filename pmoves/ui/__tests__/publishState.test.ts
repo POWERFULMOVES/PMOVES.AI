@@ -1,4 +1,7 @@
-import { describePublishState } from "../app/dashboard/publishState";
+import {
+  describePublishState,
+  shouldRenderSupplementalPublishFailureDetail,
+} from "../app/dashboard/publishState";
 
 describe("describePublishState", () => {
   it("returns waiting for poller after approval before publisher metadata arrives", () => {
@@ -123,5 +126,45 @@ describe("describePublishState", () => {
       detailValue: "discord_webhook",
       tone: "danger",
     });
+  });
+
+  it("returns null when no approval or publish signals are present", () => {
+    expect(describePublishState({ meta: {} })).toBeNull();
+  });
+});
+
+describe("shouldRenderSupplementalPublishFailureDetail", () => {
+  it("hides duplicate failure text when the summary already shows a failure timestamp", () => {
+    expect(
+      shouldRenderSupplementalPublishFailureDetail(
+        {
+          label: "needs retry",
+          detailLabel: "failed @",
+          detailValue: "2026-03-27T09:21:00Z",
+          tone: "danger",
+        },
+        "publish failure:"
+      )
+    ).toBe(false);
+  });
+
+  it("shows supplemental failure text when the summary is empty", () => {
+    expect(
+      shouldRenderSupplementalPublishFailureDetail(null, "failure stage:")
+    ).toBe(true);
+  });
+
+  it("hides supplemental failure text when the current summary is not a failure", () => {
+    expect(
+      shouldRenderSupplementalPublishFailureDetail(
+        {
+          label: "publish complete",
+          detailLabel: "published @",
+          detailValue: "2026-03-27T09:20:00Z",
+          tone: "success",
+        },
+        "publish failure:"
+      )
+    ).toBe(false);
   });
 });
