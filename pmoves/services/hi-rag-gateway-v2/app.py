@@ -23,7 +23,7 @@ import nats
 import psycopg
 
 QDRANT_URL = os.environ.get("QDRANT_URL","http://qdrant:6333")
-COLL = os.environ.get("QDRANT_COLLECTION","pmoves_chunks")
+COLL = os.environ.get("QDRANT_COLLECTION","pmoves_chunks_qwen3")
 MODEL = os.environ.get("SENTENCE_MODEL","all-MiniLM-L6-v2")
 ALPHA = float(os.environ.get("ALPHA", "0.7"))
 
@@ -1499,8 +1499,10 @@ def hirag_query(req: QueryReq = Body(...), request: Request = None, _=Depends(re
         try:
             dim = len(vec)
             ensure_qdrant_collection(dim)
-        except Exception:
-            pass
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.warning("ensure_qdrant_collection non-fatal: %s", e)
         must = [FieldCondition(key="namespace", match=MatchValue(value=req.namespace))]
         hits = _qdrant_search(
             collection_name=COLL,
@@ -2394,8 +2396,10 @@ def hirag_upsert_batch(req: UpsertReq = Body(...), _=Depends(require_admin_tails
     if req.ensure_collection and vectors:
         try:
             ensure_qdrant_collection(len(vectors[0]))
-        except Exception:
-            pass
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.warning("ensure_qdrant_collection non-fatal: %s", e)
 
     points = []
     for it, vec in zip(items, vectors):
