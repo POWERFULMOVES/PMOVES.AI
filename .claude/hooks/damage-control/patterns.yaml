@@ -880,6 +880,10 @@ chitSafePaths:
   # NOT a blanket bypass: damage-control still blocks raw "docker compose up" commands.
   # This allows Edit tool to modify compose env vars for service configuration fixes.
   - "docker-compose.yml"
+  # Integration compose overrides — registry reference fixes (GHCR org consolidation)
+  - "docker-compose.integrations"
+  # PR-kit compose files — integration starter templates
+  - "pr-kits"
 
 # ---------------------------------------------------------------------------
 # PMOVES.AI - GIT SUBMODULES
