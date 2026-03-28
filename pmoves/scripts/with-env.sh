@@ -66,6 +66,9 @@ load_env_file "$ROOT_DIR/env.tier-agent"
 load_env_file "$ROOT_DIR/env.tier-worker"
 load_env_file "$ROOT_DIR/env.tier-ui"
 
+# URL-encoded credential overlay (passwords with @/:  for asyncpg/DSN-safe URLs)
+load_env_file "$ROOT_DIR/env.tier-supabase.urlencoded"
+
 # Local/runtime overlays last.
 load_env_file "$ROOT_DIR/.env.generated"
 load_env_file "$ROOT_DIR/.env.local"
