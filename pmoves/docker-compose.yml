@@ -2166,6 +2166,7 @@ services:
       - NEO4J_USER=${NEO4J_USER:-neo4j}
       - NEO4J_PASSWORD=${NEO4J_PASSWORD:-neo4j}
       - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+      - OLLAMA_BASE_URL=http://pmoves-ollama:11434
       - DOCKED_MODE=${DOCKED_MODE:-true}
       - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
       - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
@@ -2182,7 +2183,7 @@ services:
     profiles: ["agents"]
     networks: [pmoves_app, pmoves_data, pmoves_bus]
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/health"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:3000/health"]
       interval: 30s
       timeout: 10s
       retries: 3
