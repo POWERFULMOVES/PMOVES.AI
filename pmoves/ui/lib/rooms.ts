@@ -116,6 +116,9 @@ export interface RoomManifest {
     updated_at: string;
     related_docs?: string[];
   };
+  team_refs?: string[];
+  service_refs?: string[];
+  launcher_refs?: string[];
 }
 
 export interface RoomDefinition extends Omit<RoomCatalogEntry, 'manifest'> {
@@ -186,5 +189,4 @@ export async function loadRoom(roomId: string, roomConfigDir = DEFAULT_ROOM_CONF
   const rooms = await loadRooms(roomConfigDir);
   return rooms.find((room) => room.room_id === roomId) ?? null;
 }
-
 

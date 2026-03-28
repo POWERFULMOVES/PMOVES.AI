@@ -197,6 +197,9 @@
       "tags": ["secrets", "chit", "graphiti"]
     }
   ],
+  "team_refs": ["orchestration", "data", "infra"],
+  "service_refs": ["agent-zero", "supabase", "nats", "prometheus", "grafana"],
+  "launcher_refs": ["up-agents", "up-monitoring", "secrets-funnel"],
   "policies": {
     "model_routing": "tensorzero",
     "publish": {

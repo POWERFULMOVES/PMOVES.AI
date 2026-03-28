@@ -191,6 +191,9 @@
       "tags": ["identity", "review", "discovery"]
     }
   ],
+  "team_refs": ["orchestration", "research"],
+  "service_refs": ["agent-zero", "archon", "hirag-v2", "cipher-memory"],
+  "launcher_refs": ["up-agents", "up-hirag"],
   "policies": {
     "model_routing": "hybrid",
     "publish": {
