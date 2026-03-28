@@ -1,5 +1,5 @@
 # Codex Operator Home (PMOVES)
-_Last updated: 2026-03-12_
+_Last updated: 2026-03-28_
 
 This is the Codex-first operations guide for PMOVES.AI. It mirrors the mature
 Claude setup, but keeps Codex workflows command-first and Makefile-native.
@@ -72,6 +72,37 @@ surfaces.
 - `make -C pmoves codex-parity-check`
 - `make -C pmoves a0-plugins-check`
 - `make -C pmoves a0-plugins-check-remote`
+
+## Fleet remote access control plane
+
+Use this lane when the operator task touches Tailscale, RustDesk, Hostinger VPS access,
+remote rebuilds, stale-node cleanup, or z890 fleet ownership.
+
+### Primary traversal order
+
+1. `pmoves/docs/operations/FLEET_REMOTE_ACCESS_RUNBOOK.md`
+2. `pmoves/docs/operations/RUSTDESK_SELF_HOSTED.md`
+3. `pmoves/docs/TAILSCALE_NODE_HYGIENE.md`
+4. `.claude/CLAUDE.md`
+5. `pmoves/docs/AGENTS/CODEX_CLAUDE_PARITY_MAP.md`
+6. `pmoves/docs/AGENTS/CODEX_CIPHER_MEMORY_IMPLEMENTATION_MAP.md`
+7. `pmoves/docs/CHIT_TOOLS_CATALOG.md`
+8. `pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md`
+
+### Lane rules
+
+- z890 Codex and z890 Claude are dual-responsible for this infra lane.
+- Tailscale ACLs are the enforcement layer; RustDesk is the transport/operator UX layer.
+- Run `make -C pmoves secrets-funnel` before restarts, rebuilds, or infra bring-up.
+- Prefer Known Roads make targets over raw `docker compose` manifests.
+- Store non-trivial infra handoffs in Cipher and sign the lane in AGNOTE4482.
+
+### Fleet checks
+
+- `tailscale status --json`
+- `curl -fsS http://localhost:8096/health | jq .`
+- `curl -fsS http://localhost:8094/healthz | jq .`
+- `curl -fsS http://localhost:8055/healthz | jq .`
 
 ## Creator network control plane
 

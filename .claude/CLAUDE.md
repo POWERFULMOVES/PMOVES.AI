@@ -264,6 +264,19 @@ make -C pmoves auth-alignment     # Cross-tier credential consistency check
 **See:** `.claude/context/credentials-workflow.md` for complete bootstrap sequence and
 `pmoves/docs/operations/SEEDED_BRANDED_DEFAULTS.md` for full credential catalog.
 
+## Fleet Remote Access (Tailscale + RustDesk)
+
+- Canonical runbook: `pmoves/docs/operations/FLEET_REMOTE_ACCESS_RUNBOOK.md`
+- RustDesk relay details: `pmoves/docs/operations/RUSTDESK_SELF_HOSTED.md`
+- Stale-node cleanup: `pmoves/docs/TAILSCALE_NODE_HYGIENE.md`
+- Tailscale ACLs are the enforcement layer. RustDesk is the relay/operator-experience layer.
+- z890 Claude and z890 Codex are dual-responsible for this infra lane. Before changing tailnet, relay, or VPS state, load `AGNOTE4482PHI.t1.md`, `CODEX_OPERATOR_HOME.md`, and `CODEX_CIPHER_MEMORY_IMPLEMENTATION_MAP.md`.
+- Credential split:
+  - `TAILSCALE_AUTHKEY` joins new devices.
+  - `TAILSCALE_API_KEY` is the admin API credential for device cleanup, tag updates, and ACL operations.
+  - `CHIT_PASSPHRASE` signs enrollment payloads.
+- KVM2 watcher note: `fleet-audit-watcher` needs `nats` CLI, `/var/log/pmoves`, and a NATS broker reachable from KVM2. The repo default NATS bind is localhost-only on port `4222`, so remote publishing stays blocked until one broker is exposed on a Tailscale-reachable interface.
+
 ## NATS Event Subjects (Event-Driven Architecture)
 
 **Research & Search:**
@@ -402,6 +415,8 @@ encapsulate the correct stop/restart/env-injection flow.
 | `docker compose build hi-rag-gateway-v2` | `make -C pmoves up-hirag` | `/search:hirag` |
 
 **volume-reset SERVICE values:** `neo4j`, `tensorzero-clickhouse`, `meilisearch`, `qdrant`, `minio`, `supabase-db`, `nats`
+
+If a rebuild manifest arrives as raw `docker compose build ...`, translate it to the nearest Known Road whenever possible. Use the raw build only when there is no dedicated make target yet, and still return to the make-target bring-up path for the actual service start.
 
 **secrets-sync-trigger**: Triggers the `sync-secrets-local.yml` GitHub Actions workflow (runs on `self-hosted, ai-lab`), waits for completion, then hydrates `local.env` → `env.shared` and runs `brand-defaults`. The containerized runner mounts `$APPDATA/pmoves` (Windows) or `~/.config/pmoves` (Linux) so secrets persist to the host. If `GOOGLE_CLIENT_ID` or other creds are missing after sync, check that the runner container has the volume mount (see `local_cert_runners.py`).
 

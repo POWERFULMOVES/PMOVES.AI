@@ -42,6 +42,24 @@ Use this as the default cadence unless a lane needs a deliberate exception:
 5. Update PR comments plus the AGNOTE board/P7 notes with the current blocker state.
 6. Release the lane here and add a signed ACK block; adapt ordering as needed, but keep the same audit trail.
 
+### z890 Infra Context Pack
+Required context for shared z890 Codex/Claude infra lanes:
+1. `pmoves/docs/operations/FLEET_REMOTE_ACCESS_RUNBOOK.md`
+2. `pmoves/docs/operations/RUSTDESK_SELF_HOSTED.md`
+3. `pmoves/docs/TAILSCALE_NODE_HYGIENE.md`
+4. `.claude/CLAUDE.md`
+5. `pmoves/docs/AGENTS/CODEX_OPERATOR_HOME.md`
+6. `pmoves/docs/AGENTS/CODEX_CLAUDE_PARITY_MAP.md`
+7. `pmoves/docs/AGENTS/CODEX_CIPHER_MEMORY_IMPLEMENTATION_MAP.md`
+8. `pmoves/docs/CHIT_TOOLS_CATALOG.md`
+9. `pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md`
+
+Lane rules:
+- Tailscale ACL is enforcement; RustDesk is transport and operator UX.
+- `TAILSCALE_API_KEY` is admin-only and must stay in secrets-funnel, GitHub environment secrets, or local ignored files.
+- Prefer Known Roads make targets over raw compose manifests; if raw targeted builds are unavoidable, record the translation in AGNOTE / PR notes.
+- Store non-trivial infra handoffs in Cipher plus this note.
+
 ## CHIT Encrypt Instructions (Handoff Safe Mode)
 Use CHIT export with no cleartext, then reference artifact paths in handoff notes.
 
@@ -116,6 +134,9 @@ Required handoff fields:
 - `2026-03-27T14:36:36.2476813-04:00` CLAIM `CODEX-GPT5` scope: PR #1135 merge-prep closure + AGNOTE4482/P7 status refresh + signed workflow capture for the current Codex lane.
 - `2026-03-27T14:36:36.2476813-04:00` REVIEW `CODEX-GPT5` scope: Addressed the remaining #1135 review items across publish-state mapper/tests, restored Jest API-client discovery, reran local validation (`typecheck`, `lint`, full Jest, API-client Jest), and compared the failing Playwright job on #1135 (`23657900926` / `68920111634`) against `main` (`23626056819` / `68819753984`). Result: the fast checks are green, and Playwright fails with the same repo-wide 119-failure `services-health` / `videos-realtime` signature, including missing `SUPABASE_REST_URL` and `SUPABASE_SERVICE_ROLE_KEY`.
 - `2026-03-27T14:36:36.2476813-04:00` RELEASE `CODEX-GPT5` scope: AGNOTE4482 roadmap, P7 playground, and PR notes refreshed. #1135 is mergeable but blocked by a shared Playwright branch-protection failure already reproducing on `main`; #1138 remains conflicting and still needs rebase/splitting plus TAC/compose/Flute follow-through before another serious review pass.
+- `2026-03-28T16:00:00-04:00` CLAIM `CODEX-GPT5` scope: Fleet remote-access documentation pass — Tailscale admin API guidance, RustDesk/Tailscale combo runbook, z890 Codex+Claude shared ownership context, and AGNOTE context-pack refresh.
+- `2026-03-28T16:00:00-04:00` REVIEW `CODEX-GPT5` scope: Verified and documented live fleet follow-through: `nats` CLI + `fleet-audit-watcher` installed on KVM2, `PermitRootLogin` tightened to `prohibit-password` on KVM2/KVM4-1/KVM4-2, and the current blocker recorded precisely — KVM2 cannot publish watcher events until one NATS broker is exposed beyond the repo-default localhost-only port `4222` bind. Added a canonical runbook for Tailscale ACL + RustDesk + CHIT enrollment + Cipher/AGNOTE continuity, plus the `TAILSCALE_API_KEY` secret contract for admin API operations.
+- `2026-03-28T16:00:00-04:00` RELEASE `CODEX-GPT5` scope: z890 shared-infra docs synced. Next fleet steps are explicit: prune stale Tailscale devices with the admin API key or admin console, expose a Tailscale-reachable NATS broker for KVM2 watcher publish, and keep rebuild manifests translated onto Known Roads make targets before execution.
 - `2026-03-26T18:10:00-04:00` CLAIM `5090-CLAUDE` scope: PR #1114 resolution — analyzed branch, found all 19 files already on main via #1100/#1105/#1106/#1107 (rebase would produce 3 empty commits). Closed #1114, created #1126 with the 2 P1 review fixes: IF EXISTS guard on bare UPDATE + idempotent claim predicate separating TOCTOU race from no-op success. Board refs updated #1114→#1126.
 
 ## Graphiti Review Log

@@ -58,6 +58,8 @@ After the 2026-02-18 reorganization, `pmoves/docs/` is organized as:
 - **PMOVES.YT Service Guide** — `../services/pmoves-yt/README.md`
 - **Supabase→Discord Playbook** — `SUPABASE_DISCORD_AUTOMATION.md`
 - **Tailnet + Discord Deployment** — `TAILSCALE_DISCORD_RUNBOOK.md`
+- **Fleet Remote Access (Tailscale + RustDesk + KVM2 watcher)** — `../operations/FLEET_REMOTE_ACCESS_RUNBOOK.md`
+- **RustDesk Self-Hosted Relay** — `../operations/RUSTDESK_SELF_HOSTED.md`
 - **M2 Validation Guide** — `M2_VALIDATION_GUIDE.md`
 - **n8n Quick Checklist (wiki)** — `N8N_CHECKLIST.md`
 - **PMOVES v5.12 Task Backlog** — `context/pmoves_v_5.12_tasks.md`

@@ -1,5 +1,5 @@
 # Codex Ecosystem Traversal (PMOVES)
-_Last updated: 2026-03-12_
+_Last updated: 2026-03-28_
 
 This document defines how Codex should traverse the PMOVES.AI ecosystem in
 final-stage production. It is the shortest path from "open the repo" to
@@ -60,6 +60,7 @@ When requirements are unclear, traverse in this order:
 | Knowledge retrieval | `PMOVES-HiRAG` | `PMOVES-Deep-Serch` |
 | Tool and MCP access | `PMOVES-BoTZ` | `PMOVES-BotZ-gateway` |
 | Persistent memory | `Pmoves-cipher` | `Supabase` |
+| Fleet remote access | `Tailscale ACL + RustDesk runbooks` | `Cipher + AGNOTE4482` |
 | Persona selection | `PERSONAS.md` + persona seeds | `Agent Zero` / `Archon` |
 | Voice and narration | `Flute-Gateway` | `PMOVES-Ultimate-TTS-Studio`, `PMOVES-Pipecat` |
 | Workflow automation | `PMOVES-n8n` | `PMOVES-BoTZ` |
@@ -163,6 +164,8 @@ Use these defaults unless repo evidence says otherwise:
 - If the task is prompt, form, or persona heavy, bring in `Archon`.
 - If the task needs retrieval, ask `Hi-RAG` before adding new data paths.
 - If the task needs long-lived continuity, use `Cipher Memory`.
+- If the task touches VPN mesh, remote desktop, stale-node cleanup, or VPS onboarding, start with `pmoves/docs/operations/FLEET_REMOTE_ACCESS_RUNBOOK.md`, then `pmoves/docs/operations/RUSTDESK_SELF_HOSTED.md`.
+- Finish that lane by signing the session in `pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md`.
 - If the task touches audio, narration, or persona voice, route through `Flute`.
 - If the task touches workflow glue, prefer `n8n` over bespoke orchestration.
 - If the task touches YouTube/media ingestion, start at `PMOVES.YT`.

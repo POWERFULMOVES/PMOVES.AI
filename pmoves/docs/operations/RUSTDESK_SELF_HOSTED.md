@@ -2,7 +2,9 @@
 
 > Remote desktop access for the PMOVES fleet via self-hosted RustDesk server.
 >
-> Last updated: 2026-03-27
+> Last updated: 2026-03-28
+
+Canonical operator runbook: `pmoves/docs/operations/FLEET_REMOTE_ACCESS_RUNBOOK.md`
 
 ---
 
@@ -177,13 +179,23 @@ CHIT_PASSPHRASE=<secret> python pmoves/scripts/fleet/generate-enrollment.py veri
 ### Installing the Audit Watcher on KVM2
 
 ```bash
+ssh root@<KVM2_IP> "curl -fsSL -o /tmp/nats-amd64.deb \
+  https://github.com/nats-io/natscli/releases/download/v0.3.2/nats-0.3.2-amd64.deb && \
+  dpkg -i /tmp/nats-amd64.deb"
 scp pmoves/scripts/fleet/fleet-audit-watcher.sh root@<KVM2_IP>:/opt/pmoves/
 scp pmoves/scripts/fleet/fleet-audit-watcher.service root@<KVM2_IP>:/etc/systemd/system/
-ssh root@<KVM2_IP> "chmod +x /opt/pmoves/fleet-audit-watcher.sh && \
+ssh root@<KVM2_IP> "mkdir -p /opt/pmoves /var/log/pmoves && \
+  chmod +x /opt/pmoves/fleet-audit-watcher.sh && \
   systemctl daemon-reload && systemctl enable --now fleet-audit-watcher"
 ```
 
 Requires: `nats` CLI installed on KVM2 for NATS publishing.
+
+Operational notes:
+- Create `/var/log/pmoves` before starting the service. The systemd unit uses `ReadWritePaths=/var/log/pmoves`, and the service will fail early if the directory does not exist.
+- The service defaults to `Environment=NATS_URL=nats://nats:pmoves@nats:4222`. Override that in `fleet-audit-watcher.service` only if your NATS broker is at a different reachable address from KVM2.
+- The repo default NATS config binds port `4222` to localhost only, so the watcher cannot publish remotely until one PMOVES node exposes NATS on a Tailscale-reachable interface.
+- Local audit logging still works even when NATS is not reachable; inspect `/var/log/pmoves/fleet-audit.jsonl`.
 
 ---
 
