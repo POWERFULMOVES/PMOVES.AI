@@ -152,7 +152,7 @@ KVM2 watcher requirements:
 
 Important current runtime note:
 
-- The repo default NATS posture binds `4222` to `127.0.0.1`.
+- The repo default NATS posture binds port `4222` to localhost only.
 - That means a watcher running on KVM2 cannot publish to the default broker until one PMOVES node exposes NATS on a Tailscale-reachable interface.
 - Even when remote publish is blocked, the watcher still gives useful local evidence in `/var/log/pmoves/fleet-audit.jsonl`.
 

@@ -194,7 +194,7 @@ Requires: `nats` CLI installed on KVM2 for NATS publishing.
 Operational notes:
 - Create `/var/log/pmoves` before starting the service. The systemd unit uses `ReadWritePaths=/var/log/pmoves`, and the service will fail early if the directory does not exist.
 - Set `Environment=NATS_URL=...` in `fleet-audit-watcher.service` to a broker reachable from KVM2.
-- The repo default NATS config binds port `4222` to `127.0.0.1`, so the watcher cannot publish remotely until one PMOVES node exposes NATS on a Tailscale-reachable interface.
+- The repo default NATS config binds port `4222` to localhost only, so the watcher cannot publish remotely until one PMOVES node exposes NATS on a Tailscale-reachable interface.
 - Local audit logging still works even when NATS is not reachable; inspect `/var/log/pmoves/fleet-audit.jsonl`.
 
 ---

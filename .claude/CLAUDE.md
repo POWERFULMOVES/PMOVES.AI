@@ -275,7 +275,7 @@ make -C pmoves auth-alignment     # Cross-tier credential consistency check
   - `TAILSCALE_AUTHKEY` joins new devices.
   - `TAILSCALE_API_KEY` is the admin API credential for device cleanup, tag updates, and ACL operations.
   - `CHIT_PASSPHRASE` signs enrollment payloads.
-- KVM2 watcher note: `fleet-audit-watcher` needs `nats` CLI, `/var/log/pmoves`, and a NATS broker reachable from KVM2. The repo default NATS bind is `127.0.0.1:4222`, so remote publishing stays blocked until one broker is exposed on a Tailscale-reachable interface.
+- KVM2 watcher note: `fleet-audit-watcher` needs `nats` CLI, `/var/log/pmoves`, and a NATS broker reachable from KVM2. The repo default NATS bind is localhost-only on port `4222`, so remote publishing stays blocked until one broker is exposed on a Tailscale-reachable interface.
 
 ## NATS Event Subjects (Event-Driven Architecture)
 
