@@ -99,8 +99,29 @@ else
     echo "  Database '$DB_NAME' exists"
 fi
 
+# Step 3b: Create _supabase database (required by Logflare/analytics)
+log_step "Step 3b: Ensuring internal Supabase databases exist..."
+
+SUPA_DB_EXISTS=$(run_sql "SELECT 1 FROM pg_database WHERE datname = '_supabase';" | grep -c "1" || true)
+if [ "$SUPA_DB_EXISTS" -eq 0 ]; then
+    run_sql "CREATE DATABASE _supabase;" > /dev/null
+    log_info "Database '_supabase' created"
+else
+    echo "  Database '_supabase' exists"
+fi
+# Ensure supabase_admin owns _supabase (Logflare Ecto migrations require it)
+run_sql "ALTER DATABASE _supabase OWNER TO supabase_admin;" > /dev/null 2>&1 || true
+
+# Ensure schema ownership for realtime/pooler Ecto migrations
+log_step "Step 3c: Ensuring schema ownership for Supabase services..."
+for schema in _realtime realtime _supabase _supavisor supavisor; do
+    run_sql "CREATE SCHEMA IF NOT EXISTS $schema;" "$DB_NAME" > /dev/null 2>&1 || true
+    run_sql "ALTER SCHEMA $schema OWNER TO supabase_admin;" "$DB_NAME" > /dev/null 2>&1 || true
+done
+log_info "Schema ownership set for supabase_admin"
+
 # Step 4: Run Supabase init scripts (idempotent)
-log_step "Step 4/5: Running Supabase init scripts..."
+log_step "Step 4: Running Supabase init scripts..."
 
 INIT_DIR="//docker-entrypoint-initdb.d"
 
