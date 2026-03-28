@@ -15,7 +15,11 @@
 # NOTE: PostToolUse hooks MUST NOT write to stderr — Claude Code treats
 # any stderr output as "hook error". All logging goes to /dev/null.
 
-set -eo pipefail
+set -o pipefail 2>/dev/null || true
+
+# Resolve Python via shared resolver (test-then-trust, uv-first)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "$SCRIPT_DIR/resolve-python.sh"
 
 PMOVES_ROOT="${PMOVES_ROOT:-$(git rev-parse --show-toplevel 2>/dev/null || echo ".")}"
 PMOVES_DIR="${PMOVES_ROOT}/pmoves"
@@ -50,7 +54,7 @@ else
     fi
 
     # Run the encoding hook
-    python "${ENCODE_HOOK}" \
+    run_python_script "${ENCODE_HOOK}" \
         --source "claude-review-sweep" \
         --agent-id "claude-opus" \
         --summary "${REVIEW_SUMMARY}" \
