@@ -1,5 +1,7 @@
 import Link from 'next/link';
+import { HomeRoomLauncher, type HomeRoomOption } from '@/components/home/HomeRoomLauncher';
 import { SystemHubSection } from '@/components/hub/SystemHubSection';
+import { loadRooms } from '@/lib/rooms';
 
 /* ═══════════════════════════════════════════════════════════════════════════
    POWERFULMOVES Landing Page — Megaman × Transformers
@@ -37,7 +39,7 @@ const personas: Persona[] = [
    Hero Section — Megaman × Transformers Style
    ───────────────────────────────────────────────────────────────────────────── */
 
-function HeroSection() {
+function HeroSection({ roomOptions }: { roomOptions: HomeRoomOption[] }) {
   return (
     <section className="relative min-h-screen overflow-hidden scanline">
       {/* Background layers */}
@@ -62,7 +64,7 @@ function HeroSection() {
             <Link href="https://github.com/POWERFULMOVES/PMOVES.AI" className="font-display text-xs uppercase tracking-wider text-ink-secondary hover:text-cata-cyan transition-colors">GitHub</Link>
           </div>
           <Link
-            href="/login?next=%2Fdashboard%2Fingest"
+            href="/login?next=%2Fdashboard%2Frooms"
             className="btn-primary"
           >
             Launch Console
@@ -113,8 +115,12 @@ function HeroSection() {
             </Link>
           </div>
 
+          <div className="opacity-0 animate-fade-in-up delay-500">
+            <HomeRoomLauncher rooms={roomOptions} />
+          </div>
+
           {/* Stats strip - mech style */}
-          <div className="mt-16 flex flex-wrap gap-8 lg:gap-16 opacity-0 animate-fade-in-up delay-500">
+          <div className="mt-16 flex flex-wrap gap-8 lg:gap-16 opacity-0 animate-fade-in-up delay-[600ms]">
             <div className="card-mech p-4 min-w-[120px]">
               <div className="font-display text-3xl font-bold text-cata-cyan">60+</div>
               <div className="font-pixel text-[6px] text-ink-muted uppercase mt-2">Microservices</div>
@@ -359,11 +365,39 @@ function Footer() {
    Main Page
    ───────────────────────────────────────────────────────────────────────────── */
 
-export default function HomePage() {
+async function loadHomeRoomOptions(): Promise<HomeRoomOption[]> {
+  try {
+    const rooms = await loadRooms();
+    return rooms.map((room) => ({
+      roomId: room.room_id,
+      displayName: room.display_name,
+      agentId: room.agent_id,
+      alter: room.alter,
+      summary: room.summary ?? room.manifest.description,
+      defaultRoute: room.manifest.shell.layout.default_route,
+      accentColor: room.manifest.shell.theme.accent_color,
+      glyph: room.manifest.persona?.glyph,
+      pinnedApps: room.manifest.apps
+        .filter((app) => app.pinned)
+        .slice(0, 3)
+        .map((app) => ({
+          appId: app.app_id,
+          route: app.route,
+        })),
+    }));
+  } catch (error) {
+    console.error('Failed to load home room options', error);
+    return [];
+  }
+}
+
+export default async function HomePage() {
+  const roomOptions = await loadHomeRoomOptions();
+
   return (
     <main id="main-content" tabIndex={-1} className="bg-void text-ink-primary">
       <div className="noise-overlay" />
-      <HeroSection />
+      <HeroSection roomOptions={roomOptions} />
       <SystemHubSection />
       <PipelineSection />
       <PersonasSection />
