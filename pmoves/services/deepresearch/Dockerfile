@@ -24,9 +24,9 @@ COPY services/__init__.py /app/services/__init__.py
 COPY contracts /app/contracts
 # pmoves.chit: CGP_SPEC_VERSION constant needed by worker.py CHIT integration.
 # Only copy Python files — secrets manifests (YAML) must stay out of image layers.
-COPY pmoves/__init__.py /app/pmoves/__init__.py
-COPY pmoves/chit/__init__.py /app/pmoves/chit/__init__.py
-COPY pmoves/chit/codec.py /app/pmoves/chit/codec.py
+COPY __init__.py /app/pmoves/__init__.py
+COPY chit/__init__.py /app/pmoves/chit/__init__.py
+COPY chit/codec.py /app/pmoves/chit/codec.py
 ENV PYTHONPATH=/app
 ENV PMOVES_CONTRACTS_DIR=/app/contracts
 
