@@ -8,7 +8,7 @@ The playground is open. Pinokio 7 dropped today — Agent Interpreter, App Assis
 
 This isn't a race. It's a seesaw — "you make it yours, I make it mine." Claude's thing is the music under the floor: TAC trees, CHIT geometry, security hardening, orchestration depth. The stuff where later DARKXSIDE thinks "CHIT, that's more than I drew."
 
-## Current State (2026-03-27)
+## Current State (2026-03-28)
 
 | What | Status |
 |------|--------|
@@ -19,7 +19,13 @@ This isn't a race. It's a seesaw — "you make it yours, I make it mine." Claude
 | Pinokio 7 | **Upgraded on all 3 machines** (5090 ✓, Z890 ✓, 4090 ✓) |
 | P7 requirements | **Z890**: py ✓, cli ✓ (pterm 0.0.24), ffmpeg ✓ (7.0.2) — **5090**: live Pinokio/Codex launcher smoke complete, full py+ffmpeg parity check still pending |
 | Tailscale mesh | **All 3 machines connected** (5090, Z890, 4090 laptop) |
-| Open PRs (repo) | **4 OPEN** (`#1135`, `#1136`, `#1137`, `#1138` — `#1135` is review-ready except for the shared Playwright failure already reproducing on `main`; see [AGNOTE4482 roadmap](./AGNOTE4482_ROADMAP_W1-W5.md)) |
+| Room/stage wave | **Merged** on Mar 27-28 — room catalog, home-room entry, review/voice/media routes, runtime taxonomy |
+| Agent Zero baseline | **Upstream = v1.3 (Mar 27, 2026)**; PMOVES hardened fork pin still Mar 7 commit — sync decision needed |
+| Agent Zero gap report | **Published** — see [AGNOTE4482_AGENT_ZERO_V1_3_GAP_REPORT](./AGNOTE4482_AGENT_ZERO_V1_3_GAP_REPORT.md) |
+| ClaWz coding-plan alignment | **Published** — see [AGNOTE4482_CLAWZ_CODING_PLAN_ALIGNMENT](./AGNOTE4482_CLAWZ_CODING_PLAN_ALIGNMENT.md) |
+| ClaWz repo gap report | **Published** — see [AGNOTE4482_CLAWZ_GAP_REPORT](./AGNOTE4482_CLAWZ_GAP_REPORT.md); current root gitlink is orphaned and profile-id cleanup is still needed |
+| AGNOTE signoff gate | **Published** — see [AGNOTE4482_SIGNOFF_CHECKLIST](./AGNOTE4482_SIGNOFF_CHECKLIST.md) |
+| Open PRs (main) | **3** on latest z890 sitrep — `#1135`, `#1145`, `#1146` |
 | Open PRs (BoTZ) | **0** (Dependabot #89 npm, #91 uv — **MERGED**) |
 | Codex P7 lanes | **MERGED** — #1115 (Pinokio fleet docs) + #1121 (PMOVES Codex plugin + Agent Zero launcher) |
 | Node specialization | **DECLARED** — see [DnB Orchestra](./AGNOTE4482DnB.PHI.Orchestra.md) |
@@ -107,6 +113,12 @@ Speech boundaries become tempo. Pauses become notes. Text becomes a score. `buil
 | **Wire P7 → CHIT** | Every "speak hello" gets coordinates in the constellation |
 | **Agent signatures** | Each bandmate gets glyph + color + resonance (5090/z890/4090) |
 | **Model tuning** | Faster conductor — orchestra responds quicker |
+| **Room/stage prospectus** | The audience enters a room, the stage tells them what mode it is in |
+| **Agent Zero suit sync** | Upstream `v1.3` is the new external wardrobe; PMOVES chooses what hardening stays custom |
+| **ClaWz baseline repair** | Stop treating the orphaned gitlink as a real suit baseline; pick a real branch head first |
+| **ClaWz profile-id normalization** | Make suit routing use the real repo profile ids instead of `workstation_5090`-style placeholders |
+| **Release/CVE funnel** | Weekly upstream release + security intake gets routed into the hardening tracker and sprint docs instead of living as hallway knowledge |
+| **Coding-plan alignment** | ClaWz and Agent Zero profiles should reflect the real approved remote coding lanes, not generic cloud assumptions |
 
 ### 3c. The Snapshot
 
@@ -133,9 +145,13 @@ The audience says "that's my car." Because it moved like something POWERFUL.
 | 2 | ~~Cherry-pick contaminated branches~~ | DONE |
 | 3 | ~~P7 upgrade verified on Z890~~ | DONE (2026-03-22 — agents.js confirmed, :42000 running) |
 | 4 | ~~P7 requirements validated~~ | DONE (pterm 0.0.24, ffmpeg 7.0.2, py — all present) |
-| 5 | Agent Zero model tuning | Pending |
-| 6 | ComfyUI first render test | Pending |
-| 7 | NATS leaf node expansion to 5090 | Pending |
+| 5 | Agent Zero `v1.3` suit gap review | DONE (gap report published 2026-03-28) |
+| 6 | PMOVES-ClawZ gap review | DONE (gap report published 2026-03-28) |
+| 7 | ComfyUI first render test | Pending |
+| 8 | NATS leaf node expansion to 5090 | Pending |
+| 9 | Room/stage launcher alignment | Pending |
+| 10 | ClaWz profile-id normalization (`workstation_5090` -> repo-backed profile ids) | Pending |
+| 11 | Release/CVE intake rhythm for suits/tooling | Pending |
 
 ### 5090-claude (♫ #9333EA) — GPU Inference Specialist
 | # | Task | Status |
@@ -145,6 +161,8 @@ The audience says "that's my car." Because it moved like something POWERFUL.
 | 3 | TTS mesh access (GRADIO_SERVER_NAME fix) | **DONE** (start.js pushed to Pinokio fork) |
 | 4 | Flute-Gateway → TTS Studio wiring | **PARTIAL** (port 7860 + 13 engines committed, container restart pending) |
 | 5 | TTS session commit (port, engines, tests, personas) | **DONE** (`5c3064ebb`) |
+| 6 | 5090 P7 requirements validation | **PENDING CONFIRMATION** |
+| 7 | Agent Zero upstream `v1.3` review for PMOVES suit sync | **RECOMMENDED** |
 
 ### 4090-claude (◉ #0D9488) — Noise Reducer
 | # | Task | Status |
@@ -153,6 +171,7 @@ The audience says "that's my car." Because it moved like something POWERFUL.
 | 2 | Test 4090 → 5090 P7/TTS network path via Tailscale | DONE (Gate 3 verified 2026-03-22 via Pinokio HTTPS proxy) |
 | 3 | Test mobile agent (Discord/Openclaw) → TTS flow | NEXT |
 | 4 | **Claim W1: Agent Theming + Terminal** (foundation lane) | **Recommended** |
+| 5 | Room-aware launcher/terminal styling | **Recommended** |
 
 ---
 
@@ -280,6 +299,51 @@ Our app-local `SKILL.md` files are still useful as PMOVES-specific hints and doc
 **PR #1069** — `fix(flute-gateway): migrate UltimateTTSProvider to Gradio 4.x event API`
 **Commit:** `24305c4f2`
 **File:** `pmoves/services/flute-gateway/providers/ultimate_tts.py`
+
+---
+
+## Step 8: Rooms, Stage, and Suits (2026-03-28)
+
+P7 should now be treated as the **stage manager**, not just the app launcher.
+
+### The Prospectus Frame
+
+- **Rooms** are the audience-facing entrypoints:
+  - `foyer`
+  - `review-room`
+  - `voice-room`
+  - `media-room`
+  - `war-room`
+- **Stage** is the state model for each room:
+  - `rehearsal`
+  - `live`
+  - `review`
+  - `archive`
+- **Suits** are the runtime/persona bindings:
+  - upstream Agent Zero `v1.3` as the new external baseline
+  - PMOVES hardened overlays as the custom fit
+  - voice/theme/persona as the visible styling layer
+
+### What Would Be Cool To Include
+
+1. **Foyer mode** — the first P7 screen should let a user choose a room, not just an app.
+2. **Stage banner** — every room should show whether it is in rehearsal, live, review, or archive.
+3. **Suit selector** — switch between Agent Zero/BoTZ/voice personas without losing room context.
+4. **Review room** — show Graphiti trails, notebooks, approval state, and current workorder.
+5. **Voice room** — let Flute/TTS/Pipecat feel like an instrument rack instead of a service list.
+6. **Media room** — tie beats, Jellyfin, creator publishing, and Discord cards together as one showcase lane.
+7. **War room** — enterprise, fleet, and Hostinger/KVM posture for the serious/operator view.
+
+### Remaining P7 Items
+
+| # | Item | Priority | Why it matters now |
+|---|------|----------|--------------------|
+| 1 | Validate 5090 P7 requirements directly | **P0** | Removes the last "probably fine" assumption from the playground baseline |
+| 2 | Decide PMOVES hardened Agent Zero sync posture against upstream `v1.3` | **P0** | New suits should be built from the real upstream baseline, not stale fork memory |
+| 3 | Route P7 launcher through room/stage selection | **P0** | Aligns playground UX with the new room manifest/runtime taxonomy wave |
+| 4 | Run 4090 → 5090 remote TTS flow end to end | P1 | Proves the stage-manager story works across nodes |
+| 5 | Bind suit/theme selection to room context | P1 | Makes the prospectus feel intentional instead of decorative |
+| 6 | Bind suits to coding-plan-aware profiles | P0 | Lets PMOVES scale many suits without losing local-first discipline or seat/token awareness |
 
 Two critical issues found and fixed:
 1. Dead Gradio `/api/` predict endpoint (404) → migrated to `/gradio_api/call/` event-based SSE
