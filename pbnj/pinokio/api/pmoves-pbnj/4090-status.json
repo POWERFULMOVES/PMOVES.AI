@@ -1,0 +1,25 @@
+{
+  "run": [
+    {
+      "method": "shell.run",
+      "params": {
+        "message": [
+          "echo '═══ 4090 Coding Workstation Status ═══'",
+          "echo ''",
+          "echo '── Services ──'",
+          "ssh root@pmoves-4090 'curl -sf http://localhost:11434/api/tags | python3 -c \"import sys,json; models=json.load(sys.stdin).get(\\\"models\\\",[]); print(f\\\" Ollama: {len(models)} models loaded\\\"); [print(f\\\"   - {m[\\\"name\\\"]}\\\") for m in models]\" 2>/dev/null || echo \" Ollama: OFFLINE\"'",
+          "ssh root@pmoves-4090 'curl -sf http://localhost:3030/healthz > /dev/null && echo \" TensorZero: OK\" || echo \" TensorZero: OFFLINE\"'",
+          "ssh root@pmoves-4090 'curl -sf http://localhost:8200/healthz > /dev/null && echo \" GPU Orchestrator: OK\" || echo \" GPU Orchestrator: OFFLINE\"'",
+          "echo ''",
+          "echo '── GPU ──'",
+          "ssh root@pmoves-4090 'nvidia-smi --query-gpu=name,memory.used,memory.total,temperature.gpu,utilization.gpu --format=csv,noheader 2>/dev/null || echo \" nvidia-smi: unavailable\"'",
+          "echo ''",
+          "echo '── NATS Mesh ──'",
+          "ssh root@pmoves-4090 'nats sub mesh.node.announce.v2 --count=1 --timeout=3s 2>/dev/null | head -5 || echo \" NATS: no announcement within 3s\"'",
+          "echo ''",
+          "echo '═══ End Status ═══'"
+        ]
+      }
+    }
+  ]
+}

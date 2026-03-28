@@ -1,0 +1,26 @@
+{
+  "run": [
+    {
+      "method": "shell.run",
+      "params": {
+        "message": [
+          "echo '═══ Deploying 4090 Coding Workstation ═══'",
+          "echo 'Target: pmoves-4090 (RTX 4090 Laptop, 16GB VRAM)'",
+          "echo ''",
+          "echo 'Step 1: Pull latest code...'",
+          "ssh root@pmoves-4090 'cd /opt/pmoves && git pull --ff-only origin main'",
+          "echo ''",
+          "echo 'Step 2: Start services with 4090 GPU overrides...'",
+          "ssh root@pmoves-4090 'cd /opt/pmoves/pmoves && docker compose -f docker-compose.yml -f docker-compose.gpu.yml -f docker-compose.gpu-4090.yml pull pmoves-ollama gpu-orchestrator tensorzero-gateway mesh-agent && docker compose -f docker-compose.yml -f docker-compose.gpu.yml -f docker-compose.gpu-4090.yml up -d pmoves-ollama gpu-orchestrator tensorzero-gateway mesh-agent'",
+          "echo ''",
+          "echo 'Step 3: Verify health...'",
+          "ssh root@pmoves-4090 'curl -sf http://localhost:11434/api/tags && echo \" Ollama: OK\" || echo \" Ollama: FAIL\"'",
+          "ssh root@pmoves-4090 'curl -sf http://localhost:3030/healthz && echo \" TensorZero: OK\" || echo \" TensorZero: FAIL\"'",
+          "ssh root@pmoves-4090 'curl -sf http://localhost:8200/healthz && echo \" GPU Orchestrator: OK\" || echo \" GPU Orchestrator: FAIL\"'",
+          "echo ''",
+          "echo '═══ 4090 Coding Workstation deployed ═══'"
+        ]
+      }
+    }
+  ]
+}
