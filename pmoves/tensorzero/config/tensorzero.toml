@@ -242,6 +242,46 @@ api_base = "https://api.z.ai/api/coding/paas/v4"
 model_name = "glm-4-flash"
 api_key_location = "env::Z_AI_API_KEY"
 
+# --- MiniMax (Token Plan Provider) ---
+[models.chat_minimax]
+routing = ["minimax_primary"]
+
+[models.chat_minimax.providers.minimax_primary]
+type = "openai"
+api_base = "https://api.minimaxi.chat/v1"
+model_name = "MiniMax-Text-01"
+api_key_location = "env::MINIMAX_API_KEY"
+
+# --- GLM 5.1 (Upgraded per Z.AI coding plan docs — PR #1151) ---
+[models.chat_zai_glm51]
+routing = ["zai_glm51"]
+
+[models.chat_zai_glm51.providers.zai_glm51]
+type = "openai"
+api_base = "https://api.z.ai/api/coding/paas/v4"
+model_name = "glm-5.1"
+api_key_location = "env::Z_AI_API_KEY"
+
+# --- Qwen3-Coder 30B MoE (3.3B active — SWE-Bench SOTA, fits 16GB) ---
+[models.coding_qwen3_coder_30b_local]
+routing = ["ollama_local"]
+
+[models.coding_qwen3_coder_30b_local.providers.ollama_local]
+type = "openai"
+api_base = "http://pmoves-ollama:11434/v1"
+model_name = "qwen3-coder:30b"
+api_key_location = "none"
+
+# --- DeepSeek-R1 14B (Chain-of-thought reasoning) ---
+[models.reasoning_deepseek_r1_14b_local]
+routing = ["ollama_local"]
+
+[models.reasoning_deepseek_r1_14b_local.providers.ollama_local]
+type = "openai"
+api_base = "http://pmoves-ollama:11434/v1"
+model_name = "deepseek-r1:14b"
+api_key_location = "none"
+
 [models.chat_together]
 routing = ["together_primary"]
 
@@ -796,5 +836,89 @@ type = "chat"
 type = "chat_completion"
 model = "vl_sentinel_qwen3vl_local"
 weight = 1.0
+
+# --- Per-Stack Coding Functions (4090 Coding Workstation) ---
+# Each coding plan gets its own function for independent observability,
+# failover policies, and A/B testing between providers.
+
+# Claude Code local fallback (when Anthropic API unavailable)
+[functions.coding_claude_fallback]
+type = "chat"
+
+[functions.coding_claude_fallback.variants.local_qwen3_coder]
+type = "chat_completion"
+model = "coding_qwen3_coder_30b_local"
+
+[functions.coding_claude_fallback.variants.local_qwen35_9b]
+type = "chat_completion"
+model = "qwen35_9b"
+
+[functions.coding_claude_fallback.variants.cloud_alibaba]
+type = "chat_completion"
+model = "chat_alibaba_qwen"
+
+# Codex / OpenAI (cloud primary, local fallback)
+[functions.coding_codex]
+type = "chat"
+
+[functions.coding_codex.variants.cloud_openai]
+type = "chat_completion"
+model = "chat_openai_platform"
+
+[functions.coding_codex.variants.local_qwen3_coder]
+type = "chat_completion"
+model = "coding_qwen3_coder_30b_local"
+
+[functions.coding_codex.variants.cloud_openrouter]
+type = "chat_completion"
+model = "chat_openrouter"
+
+# GLM Coding Plan (Z.ai GLM-5.1 primary, local fallback)
+[functions.coding_glm]
+type = "chat"
+
+[functions.coding_glm.variants.cloud_zai_glm51]
+type = "chat_completion"
+model = "chat_zai_glm51"
+
+[functions.coding_glm.variants.cloud_zai_glm_flash]
+type = "chat_completion"
+model = "chat_zai_glm"
+
+[functions.coding_glm.variants.local_qwen35_9b]
+type = "chat_completion"
+model = "qwen35_9b"
+
+# MiniMax Token Plan (cloud primary, local fallback)
+[functions.coding_minimax]
+type = "chat"
+
+[functions.coding_minimax.variants.cloud_minimax]
+type = "chat_completion"
+model = "chat_minimax"
+
+[functions.coding_minimax.variants.local_qwen35_9b]
+type = "chat_completion"
+model = "qwen35_9b"
+
+[functions.coding_minimax.variants.cloud_together]
+type = "chat_completion"
+model = "chat_together"
+
+# Alibaba Coding Plan (cloud primary, local fallback)
+[functions.coding_alibaba]
+type = "chat"
+
+[functions.coding_alibaba.variants.cloud_alibaba]
+type = "chat_completion"
+model = "chat_alibaba_qwen"
+
+[functions.coding_alibaba.variants.local_qwen3_coder]
+type = "chat_completion"
+model = "coding_qwen3_coder_30b_local"
+
+[functions.coding_alibaba.variants.cloud_openrouter]
+type = "chat_completion"
+model = "chat_openrouter"
 
 

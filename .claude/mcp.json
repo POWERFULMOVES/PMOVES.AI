@@ -14,6 +14,13 @@
       "env": {
         "API_TOKEN": "${HOSTINGER_API_KEY}"
       }
+    },
+    "huggingface": {
+      "command": "npx",
+      "args": ["-y", "@anthropic-ai/claude-code-mcp-huggingface"],
+      "env": {
+        "HF_TOKEN": "${HF_TOKEN}"
+      }
     }
   }
 }

@@ -1,8 +1,8 @@
 id: laptop-4090
 name: "Laptop – i9 + RTX 4090"
 description: >
-  Mobile workstation with RTX 4090 laptop GPU and 64GB RAM. Suitable for Ollama
-  medium models, Whisper-large, and selective service bring-up.
+  Mobile coding workstation with RTX 4090 laptop GPU (16GB VRAM) and 64GB RAM.
+  Supports 5 cloud coding plans with local GPU fallback, VRAM-managed model swapping.
 hardware:
   cpu:
     vendor: Intel
@@ -13,22 +13,172 @@ hardware:
     type: nvidia
     models: ["RTX 4090 Laptop"]
     memory_gb: 16
+    sm_arch: sm_89
+    cuda_gen: Ada Lovelace
   ram_gb: 64
-  tags: [laptop, cuda, mobile]
+  tags: [laptop, cuda, mobile, coding-workstation]
+
 compose_overrides:
   - docker-compose.gpu.yml
   - docker-compose.laptop-4090.override.yml
   - docker-compose.rustdesk.yml
+  - docker-compose.gpu-4090.yml
+
 services:
   jellyfin: jellyfin-ai-nvenc
   rustdesk: true
   tac_theme: transformers-1986
+
 model_bundles:
+  - coding-workstation-4090
   - ollama-medium
-  - whisper-large
+  - whisper-small
+
+# Which coding agent stacks this node supports
+# Model names aligned with Qwen 3.5 (March 2026) + GLM 5.1 (per PR #1151)
+coding_stacks:
+  claude_code:
+    cloud_primary: anthropic
+    local_fallback: qwen3-coder:30b
+    tz_function: coding_claude_fallback
+  codex_openai:
+    cloud_primary: openai
+    local_fallback: qwen3-coder:30b
+    tz_function: coding_codex
+  glm_coding_plan:
+    cloud_primary: zai
+    cloud_model: glm-5.1            # Updated per PR #1151 Z.AI docs
+    local_fallback: qwen3.5:9b
+    tz_function: coding_glm
+  minimax_token_plan:
+    cloud_primary: minimax
+    local_fallback: qwen3.5:9b
+    tz_function: coding_minimax
+  alibaba_coding_plan:
+    cloud_primary: alibaba
+    local_fallback: qwen3-coder:30b
+    tz_function: coding_alibaba
+
+# VRAM budget (16GB total, 2GB system reserve = 14GB usable)
+vram_budget:
+  total_mb: 16384
+  system_reserve_mb: 2048
+  usable_mb: 14336
+  max_concurrent_models: 2
+  idle_timeout_seconds: 180
+  always_resident:
+    - model: qwen3-embedding:4b
+      vram_mb: 3000
+      reason: "HiRAG, extract-worker, cipher-memory need constant embeddings"
+  co_residency_groups:
+    coding_focus:
+      models: [qwen3-coder:30b, qwen3-embedding:4b]
+      total_mb: 9500
+    general_focus:
+      models: [qwen3.5:9b, qwen3-embedding:4b]
+      total_mb: 9600
+    research_focus:
+      models: [lfm2:24b, qwen3-embedding:4b]
+      total_mb: 17000                # Tight — evict embeddings if needed
+    multimodal_minimal:
+      models: [qwen3.5:4b, qwen3-embedding:4b, qwen3-vl:4b]
+      total_mb: 9000
+
 mcp:
   - docker
   - compose
+  - pmoves-cipher
+  - huggingface
+
+# ═══════════════════════════════════════════════════════════════
+# Cross-Node Awareness — 4090 as Kinetic Claw Host
+# ═══════════════════════════════════════════════════════════════
+
+claws:
+  max_concurrent: 4
+  scoping: per_coding_stack
+  mediation: nats
+  nats_subjects:
+    announce: "claw.node.announce.v1"
+    request: "claw.task.request.v1"
+    result: "claw.task.result.v1"
+    handoff: "claw.task.handoff.v1"
+
+cross_node:
+  peers:
+    pmoves-5090:
+      role: primary_gpu
+      tailscale_host: pmoves-5090
+      services:
+        - ollama:11434
+        - tts-studio:7861
+        - vllm:8000
+      access_via: [tailscale, nats]
+    pmoves-3090ti:
+      role: secondary_gpu
+      tailscale_host: pmoves-3090ti
+      services:
+        - ollama:11434
+        - comfyui:8188
+        - whisper:8078
+      access_via: [tailscale, nats]
+    pmoves-vps-kvm4-1:
+      role: api_gateway
+      tailscale_host: pmoves-kvm4-1
+      services:
+        - agent-zero:8080
+        - tensorzero:3030
+        - hi-rag:8086
+        - archon:8091
+      access_via: [tailscale, nats]
+    pmoves-vps-kvm4-2:
+      role: data_services
+      tailscale_host: pmoves-kvm4-2
+      services:
+        - supabase:3010
+        - qdrant:6333
+        - neo4j:7687
+        - meilisearch:7700
+        - nats:4222
+        - minio:9000
+      access_via: [tailscale]
+
+  channels:
+    nats:
+      url: "nats://nats:pmoves@nats:4222"
+      role: primary
+      subjects: ["claw.*", "mesh.node.announce.*", "mesh.gpu.status.v1", "tokenism.cgp.ready.v1", "geometry.*"]
+    discord:
+      role: notification
+      via: publisher-discord
+    voice:
+      role: synthesis
+      via: flute-gateway
+      endpoint: "http://pmoves-5090:8055/v1/voice/synthesize/prosodic"
+    pinokio:
+      role: launcher
+      via: pbnj
+
+geometry_bus:
+  producer: true
+  consumer: true
+  publish_subjects: ["tokenism.cgp.ready.v1", "claw.task.result.v1", "mesh.gpu.status.v1"]
+  subscribe_subjects: ["tokenism.cgp.ready.v1", "geometry.swarm.meta.v1", "mesh.node.announce.v2", "claw.task.request.v1"]
+
+nats_announce:
+  node_id: pmoves-4090
+  tier: coding-workstation
+  caps:
+    gpu: rtx4090-laptop
+    vram: 16gb
+    cuda: sm_89
+    coding: [qwen3-coder-30b, qwen3.5-9b]
+    embeddings: qwen3-embed-4b
+    stacks: [claude, codex, glm, minimax, alibaba]
+    claws: 4
+    geometry_bus: true
+    pinokio: true
+
 messaging:
   telegram: true
   discord: true
@@ -37,3 +187,7 @@ messaging:
 notes:
   - Enable NVIDIA Optimus/Hybrid mode; ensure driver exposes CUDA.
   - Favor lower-power Ollama models when on battery.
+  - qwen3-coder:30b is ~18GB on disk; first pull takes 10+ minutes.
+  - GPU orchestrator evicts idle models after 180s (vs 300s default).
+  - Max 4 claws — RAM-bound (~2GB each), GPU shared via orchestrator.
+  - Cross-node access via Tailscale mesh; NATS for async coordination.

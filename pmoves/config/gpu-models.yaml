@@ -202,6 +202,23 @@ models:
     priority_default: 2
     context_length: 32768
 
+  # 4090 Coding Workstation additions
+  - id: "qwen3-coder:30b"
+    provider: ollama
+    vram_mb: 6500
+    description: "Qwen3-Coder 30B MoE - SWE-Bench SOTA, 3.3B active params"
+    priority_default: 8
+    quantization: "MoE"
+    context_length: 262144
+
+  - id: "deepseek-r1:14b"
+    provider: ollama
+    vram_mb: 9000
+    description: "DeepSeek-R1 14B - Chain-of-thought reasoning specialist"
+    priority_default: 6
+    quantization: "Q4_K_M"
+    context_length: 131072
+
   # TTS Models (Ultimate TTS Studio)
   - id: "kokoro"
     provider: tts
@@ -265,6 +282,12 @@ rtx5090:
 rtx4090:
   name: "NVIDIA GeForce RTX 4090"
   total_vram_mb: 24576
+  system_reserve_mb: 2048
+  compute_capability: "8.9"
+
+rtx4090_laptop:
+  name: "NVIDIA GeForce RTX 4090 Laptop"
+  total_vram_mb: 16384
   system_reserve_mb: 2048
   compute_capability: "8.9"
 
