@@ -529,5 +529,6 @@ All resolved. No blockers.
 | 5 | Close Supabase -> Agent Zero -> Publisher -> Discord activation loop | **P0** | Validate `approval_poller.json` + `echo_publisher.json`; capture first real published-event evidence |
 | 6 | Pick canonical Discord publish lane | **P0** | Decide between `publisher-discord` NATS subscriber and n8n webhook relay; demote the other to fallback/test-only |
 | 7 | Add creator dashboard state clarity | P1 | Make `studio-board` and `videos` distinguish `approved, waiting for poller` vs `published` |
-| 6 | Validate Discord approval workflow for creator-control | P1 | Exercise channel-monitor queue/review endpoints with messaging-gateway callbacks and record rejection UX gaps |
+| 8 | Validate Discord approval workflow for creator-control | P1 | Exercise channel-monitor queue/review endpoints with messaging-gateway callbacks and record rejection UX gaps |
+| 9 | Surface publish failures + backfill readiness | P2 | Turn publisher audit/backfill work into an operator-visible lane before broader M2 expansion |
 | 7 | Surface publish failures + backfill readiness | P2 | Turn publisher audit/backfill work into an operator-visible lane before broader M2 expansion |
