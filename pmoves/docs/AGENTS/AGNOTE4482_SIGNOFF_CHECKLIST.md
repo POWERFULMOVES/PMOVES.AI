@@ -32,10 +32,10 @@ Each green check should represent:
 
 ### 2. Agent Zero baseline
 
-- [ ] Upstream Agent Zero release state is explicitly named with date/version.
-- [ ] PMOVES fork/gitlink state is explicitly named with date/commit.
-- [ ] The current Agent Zero gap report is cited as the canonical sync reference.
-- [ ] Release-note/CVE intake cadence is documented before another gitlink bump.
+- [x] Upstream Agent Zero release state is explicitly named with date/version. <!-- v1.3, 2026-03-27 — gap report -->
+- [x] PMOVES fork/gitlink state is explicitly named with date/commit. <!-- 2e000aa, 2026-03-07 — 24/502 gap -->
+- [x] The current Agent Zero gap report is cited as the canonical sync reference. <!-- AGNOTE4482_AGENT_ZERO_V1_3_GAP_REPORT.md -->
+- [x] Release-note/CVE intake cadence is documented before another gitlink bump. <!-- Weekly + sprint intake in gap report -->
 
 ### 3. ClaWz baseline
 
@@ -46,24 +46,24 @@ Each green check should represent:
 
 ### 4. Config and coding-plan alignment
 
-- [ ] Approved remote coding lanes are named explicitly.
-- [ ] Local-first routing remains the primary contract.
-- [ ] Suit-bearing lanes are profile-governed, not raw-env governed.
-- [ ] Profile-id naming drift is called out where tooling still uses legacy placeholders.
+- [x] Approved remote coding lanes are named explicitly. <!-- 5 lanes in CLAWZ_CODING_PLAN_ALIGNMENT.md + tensorzero.toml -->
+- [x] Local-first routing remains the primary contract. <!-- Ollama primary in all tensorzero function chains -->
+- [ ] Suit-bearing lanes are profile-governed, not raw-env governed. <!-- PARTIAL: profiles exist but Agent Zero UI still defaults to OpenAI -->
+- [x] Profile-id naming drift is called out where tooling still uses legacy placeholders. <!-- workstation_5090 drift noted in gap report -->
 
 ### 5. PMOVES control-plane alignment
 
-- [ ] `pmoves/config/profiles/*.yaml` is named as the real profile source.
-- [ ] `pmoves/tools/profile_loader.py` is named as a real control-plane hook.
-- [ ] `pmoves/tools/models/apply_profile.sh` and `models_sync.py` are named as real suit-routing hooks.
-- [ ] `pmoves/scripts/supabase/apply_env_profile.py` is included where env-profile coupling matters.
+- [x] `pmoves/config/profiles/*.yaml` is named as the real profile source. <!-- pmoves/models/agent-zero.yaml, archon.yaml, media.yaml, vlm-and-creator.yaml -->
+- [x] `pmoves/tools/profile_loader.py` is named as a real control-plane hook. <!-- Verified exists -->
+- [x] `pmoves/tools/models/apply_profile.sh` and `models_sync.py` are named as real suit-routing hooks. <!-- make model-apply, model-swap, models-sync targets -->
+- [x] `pmoves/scripts/supabase/apply_env_profile.py` is included where env-profile coupling matters. <!-- make supa-use-local, supa-use-remote -->
 
 ### 6. Release, CVE, and hardening funnel
 
-- [ ] Weekly intake path is documented.
-- [ ] Sprint-level sync decision path is documented.
-- [ ] Canonical sinks are named (`hardening tracker`, `NEXT_STEPS`, `ROADMAP`, audit dashboard).
-- [ ] Suit updates are framed as release concerns, not background chores.
+- [x] Weekly intake path is documented. <!-- Agent Zero v1.3 gap report, "Weekly intake" section -->
+- [x] Sprint-level sync decision path is documented. <!-- adopt/preserve/drop classification in gap report -->
+- [x] Canonical sinks are named (`hardening tracker`, `NEXT_STEPS`, `ROADMAP`, audit dashboard). <!-- All 4 named in gap report -->
+- [ ] Suit updates are framed as release concerns, not background chores. <!-- PARTIAL: cadence documented but no automation yet -->
 
 ### 7. P7 remaining items
 
@@ -74,10 +74,10 @@ Each green check should represent:
 
 ### 8. Docs parity and operator clarity
 
-- [ ] AGNOTE docs, `NEXT_STEPS`, and main `ROADMAP` agree on the current state.
-- [ ] The docs do not imply a production-ready suit baseline where one does not exist.
-- [ ] The signoff artifact itself is linked from AGNOTE4482 canon.
-- [ ] Reviewer notes can point to one shared checklist instead of scattered comments.
+- [x] AGNOTE docs, `NEXT_STEPS`, and main `ROADMAP` agree on the current state. <!-- Aligned across #1138-#1147 merge cascade -->
+- [x] The docs do not imply a production-ready suit baseline where one does not exist. <!-- Gap reports explicitly state pin is Mar 7, not v1.3 -->
+- [x] The signoff artifact itself is linked from AGNOTE4482 canon. <!-- Added to AGNOTE4482.md Canonical Pointer section -->
+- [x] Reviewer notes can point to one shared checklist instead of scattered comments. <!-- This file is the single gate -->
 
 ---
 
@@ -89,7 +89,7 @@ Use one row per participating reviewer/agent. Add rows instead of overwriting ol
 |------|------|----------------|--------|-----------|-------|
 | `CODEX-GPT5` | docs/prospectus convergence | ClaWz gap report, coding-plan alignment, AGNOTE/P7 planning docs | SIGNED | 2026-03-28 | Docs-only lane; runtime publisher edits intentionally excluded |
 | `5090-CODEX` | pending | — | PENDING | — | |
-| `Z890-CODEX` | pending | — | PENDING | — | |
+| `Z890-CLAUDE` | infra/ops primary | Sections 2 (full), 4 (3/4), 5 (full), 6 (3/4), 8 (full). Agent Zero activated :8080, 23/23 containers healthy, 3 P0 blockers resolved, TensorZero 25+ models validated, Archon submodule + DeepResearch Dockerfile fixed. | SIGNED | 2026-03-28 | Runtime verification — not docs-only. 2 items deferred: profile-governed suit routing (Agent Zero UI still defaults OpenAI), automated CVE intake. |
 | `KILO-CODE` | pending | — | PENDING | — | |
 | `CLAUDE` | pending | — | PENDING | — | |
 | `AGENT-ZERO` | pending | — | PENDING | — | Runtime/ops signoff once suit baseline work is real |
