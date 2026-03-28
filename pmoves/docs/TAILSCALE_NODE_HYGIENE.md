@@ -6,15 +6,18 @@ Periodic cleanup of stale Tailscale nodes reduces the mesh attack surface and ke
 
 ## Stale Nodes (as of 2026-03-28)
 
-| Node | Device ID | Last Seen | Notes |
-|------|-----------|-----------|-------|
-| `POWERFULMOVES` | `nj48mQncqB21CNTRL` | 288.3 days ago | Old Windows registration; replaced by current fleet nodes |
-| `google-pixel-9-pro-xl` | `naSJJXxmmb11CNTRL` | 247.6 days ago | Old phone registration |
-| `pmoves-pro` | `n46xjnH3F211CNTRL` | 137.6 days ago | Decommissioned node |
-| `pmoves-botz` | `nn26NGQCjU11CNTRL` | 97.5 days ago | Previous BoTZ dev node |
-| `2871444ae72428` | `nZFhjMhFcA11CNTRL` | 3.3 days ago | Unknown/temporary Linux registration; confirm before removal |
+Keep exact device IDs, live tailnet IPs, personal device names, and user-associated hostnames in the
+admin console, a local ignored export, or Cipher. Committed docs should use role-based descriptions only.
 
-`pixel-10-pro-xl` was last seen on 2026-03-28 and should not be treated as stale.
+| Node Class | Last Seen | Notes |
+|------------|-----------|-------|
+| `legacy-windows-host` | 288.3 days ago | Old workstation registration; replaced by current fleet nodes |
+| `legacy-phone` | 247.6 days ago | Old mobile registration |
+| `legacy-dev-node` | 137.6 days ago | Decommissioned node |
+| `legacy-botz-node` | 97.5 days ago | Previous BoTZ development registration |
+| `unknown-temp-linux` | 3.3 days ago | Unknown or temporary Linux registration; confirm before removal |
+
+One currently active mobile device was last seen on 2026-03-28 and should not be treated as stale.
 
 ## Cleanup Procedure
 
@@ -50,6 +53,7 @@ curl -fsS -X DELETE \
 Notes:
 - `TAILSCALE_API_KEY` is an admin credential. Keep it in GitHub environment secrets, a `*_FILE` secret mount, or a local ignored file only.
 - The repo-local API schema for these endpoints lives at `pmoves/docs/API_Docs/tailscale-api.yaml`.
+- When you execute removal, capture the exact device ID only in the operator log or Cipher handoff, not in committed docs.
 
 ### 3. Verify removal
 
@@ -58,18 +62,18 @@ tailscale status
 # The removed node should no longer appear
 ```
 
-## Active Nodes (reference)
+## Active Node Classes (reference)
 
-| Node | Role |
-|------|------|
-| `pmoves-laptop` | 4090 laptop (mobile workstation) |
-| `pmoves-z890` | Z890 (dev/GPU) |
-| `pmoves-kvm4-1` | KVM4-1 (API gateway) |
-| `pmoves-nano` | Jetson Nano |
-| `pmoves-powerfulmoves` | WSL2 on laptop |
-| `powerfulmoves-1` | Windows host (laptop alt) |
-| `pmoves-tablet` | Android tablet (mobile) |
-| `pmoves-phone` | Android phone (mobile) |
+| Node Class | Role |
+|------------|------|
+| `mobile-workstation` | 4090 laptop |
+| `primary-gpu-node` | Z890 development / GPU node |
+| `api-gateway-node` | VPS gateway |
+| `edge-arm-node` | Jetson / ARM edge node |
+| `wsl-overlay` | WSL2 companion runtime |
+| `host-os` | Primary Windows host |
+| `tablet-client` | Tablet operator device |
+| `phone-client` | Phone operator device |
 
 ## Schedule
 

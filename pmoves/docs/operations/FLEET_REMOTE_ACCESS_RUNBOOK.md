@@ -55,6 +55,7 @@ Shared-lane rules:
 - Store non-trivial handoffs in Cipher using `agent_checkpoint` or `agent_completion`.
 - Run `make -C pmoves secrets-funnel` before service starts, restarts, or rebuild-led bring-up.
 - Prefer Known Roads make targets over raw `docker compose` manifests.
+- Keep live tailnet IPs, public IPs, device IDs, email addresses, and user-associated hostnames out of committed docs and PR notes. Use placeholders in git and keep exact inventories in the admin console, a local ignored export, or Cipher.
 
 ---
 
