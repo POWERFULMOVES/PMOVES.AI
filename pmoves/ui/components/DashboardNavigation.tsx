@@ -34,6 +34,9 @@ const NAV_ITEMS: NavItem[] = [
   { href: '/dashboard/agents', label: 'Agents', key: 'agents', accent: 'violet' },
   { href: '/dashboard/github', label: 'GitHub', key: 'github', accent: 'forest' },
   { href: '/dashboard/graphiti', label: 'Graphiti', key: 'graphiti', accent: 'gold' },
+  { href: '/dashboard/review', label: 'Review', key: 'review', accent: 'forest' },
+  { href: '/dashboard/voice', label: 'Voice', key: 'voice', accent: 'violet' },
+  { href: '/dashboard/media', label: 'Media', key: 'media', accent: 'ember' },
 ];
 
 export type NavKey =
@@ -55,7 +58,10 @@ export type NavKey =
   | 'tokenism'
   | 'agents'
   | 'github'
-  | 'graphiti';
+  | 'graphiti'
+  | 'review'
+  | 'voice'
+  | 'media';
 
 interface DashboardNavigationProps {
   active?: NavKey;
