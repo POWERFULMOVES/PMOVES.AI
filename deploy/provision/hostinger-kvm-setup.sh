@@ -7,9 +7,11 @@
 #   3. Tailscale mesh join
 #   4. GitHub Actions runner (via install-hardened.sh)
 #   5. /opt/pmoves work directory
+#   6. PMOVES.Flare model namespace configuration
+#   7. vLLM remote GPU endpoint wiring
 #
 # Usage:
-#   GITHUB_PAT=ghp_xxx TAILSCALE_AUTHKEY=tskey-xxx ./hostinger-kvm-setup.sh <kvm4-1|kvm4-2|kvm2>
+#   GITHUB_PAT=ghp_xxx TAILSCALE_AUTHKEY=tskey-xxx ./hostinger-kvm-setup.sh <kvm4-1|kvm4-2|kvm2|gpu-5090>
 #
 # Prerequisites:
 #   - Fresh Ubuntu 22.04+ on Hostinger KVM
@@ -37,15 +39,16 @@ log_section() { echo -e "${BLUE}[====]${NC} $1"; }
 # Validate node type
 validate_node_type() {
     case "$NODE_TYPE" in
-        kvm4-1|kvm4-2|kvm2) ;;
+        kvm4-1|kvm4-2|kvm2|gpu-5090) ;;
         *)
             log_error "Invalid node type: '$NODE_TYPE'"
-            echo "Usage: $0 <kvm4-1|kvm4-2|kvm2>"
+            echo "Usage: $0 <kvm4-1|kvm4-2|kvm2|gpu-5090>"
             echo ""
             echo "Node types:"
-            echo "  kvm4-1  API Gateway (TensorZero, Agent Zero, Hi-RAG CPU)"
-            echo "  kvm4-2  Data/Storage (Supabase, Qdrant, Neo4j, Meilisearch)"
-            echo "  kvm2    Exit Node (Tailscale exit, Nginx, SSL termination)"
+            echo "  kvm4-1    API Gateway (TensorZero, Agent Zero, Hi-RAG CPU)"
+            echo "  kvm4-2    Data/Storage (Supabase, Qdrant, Neo4j, Meilisearch)"
+            echo "  kvm2      Exit Node (Tailscale exit, Nginx, SSL termination)"
+            echo "  gpu-5090  GPU Node (vLLM, Ollama, GPU Orchestrator)"
             exit 1
             ;;
     esac
@@ -122,6 +125,12 @@ harden_system() {
             # Exit node / proxy
             ufw allow 80/tcp comment "HTTP"
             ufw allow 443/tcp comment "HTTPS"
+            ;;
+        gpu-5090)
+            # GPU inference node
+            ufw allow 8200/tcp comment "GPU Orchestrator"
+            ufw allow 11434/tcp comment "Ollama"
+            ufw allow 8100:8160/tcp comment "vLLM model ports"
             ;;
     esac
 
@@ -219,6 +228,11 @@ net.ipv4.ip_forward = 1
 net.ipv6.conf.all.forwarding = 1
 EOF
         ts_args+=(--advertise-exit-node)
+        ts_args+=(--tag=tag:pmoves --tag=tag:kvm --tag=tag:exit-node)
+    elif [ "$NODE_TYPE" = "gpu-5090" ]; then
+        ts_args+=(--tag=tag:pmoves --tag=tag:gpu --tag=tag:gpu-5090 --tag=tag:production)
+    else
+        ts_args+=(--tag=tag:pmoves --tag=tag:kvm --tag=tag:production)
     fi
 
     tailscale up "${ts_args[@]}"
@@ -270,6 +284,7 @@ install_runner() {
             kvm4-1) labels="self-hosted,vps,kvm4,kvm4-1,production,Linux,X64" ;;
             kvm4-2) labels="self-hosted,vps,kvm4,kvm4-2,production,Linux,X64" ;;
             kvm2)   labels="self-hosted,vps,kvm2,backup,Linux,X64" ;;
+            gpu-5090) labels="self-hosted,vps,gpu,gpu-5090,production,Linux,X64" ;;
         esac
 
         sudo -u runner mkdir -p "$runner_dir"
@@ -333,9 +348,53 @@ NODE_TYPE=$NODE_TYPE
 PROVISIONED_AT=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 HOSTNAME=$(hostname)
 TAILSCALE_HOSTNAME=pmoves-${NODE_TYPE}
+MODEL_NAMESPACE=pmoves
 EOF
 
     log_info "Work directory ready at /opt/pmoves"
+}
+
+# Step 6: PMOVES.Flare model namespace & vLLM endpoint
+setup_flare_config() {
+    log_section "Step 6: Configuring PMOVES.Flare model namespace..."
+
+    local env_file="/opt/pmoves/.env.local"
+    touch "$env_file"
+
+    if ! grep -q '^MODEL_NAMESPACE=' "$env_file" 2>/dev/null; then
+        cat >> "$env_file" <<'EOF'
+
+# PMOVES.Flare model namespace
+MODEL_NAMESPACE=pmoves
+EOF
+    fi
+
+    if [ "$NODE_TYPE" = "gpu-5090" ]; then
+        if ! grep -q '^VLLM_ENDPOINT=' "$env_file" 2>/dev/null; then
+            cat >> "$env_file" <<'EOF'
+
+# vLLM remote GPU endpoint
+VLLM_ENDPOINT=http://localhost:8100
+VLLM_ENDPOINT_LARGE=http://localhost:8130
+
+# Coding plan lane
+GLM_CODING_PLAN_ENABLED=true
+EOF
+        fi
+    else
+        if ! grep -q '^VLLM_ENDPOINT=' "$env_file" 2>/dev/null; then
+            cat >> "$env_file" <<'EOF'
+
+# vLLM remote GPU endpoint (routed via Tailscale)
+VLLM_ENDPOINT=http://pmoves-gpu-5090:8100
+
+# Coding plan lane
+GLM_CODING_PLAN_ENABLED=true
+EOF
+        fi
+    fi
+
+    log_info "PMOVES.Flare model namespace configured (MODEL_NAMESPACE=pmoves)"
 }
 
 # Show summary
@@ -369,6 +428,12 @@ show_summary() {
             echo "  2. Deploy proxy: cd /opt/pmoves/pmoves && docker compose -f docker-compose.yml -f docker-compose.vps.override.yml up -d nginx"
             echo "  3. Use from home: tailscale up --exit-node=pmoves-kvm2"
             ;;
+        gpu-5090)
+            echo "  1. Install NVIDIA drivers: apt-get install -y nvidia-driver-550"
+            echo "  2. Start GPU stack: cd /opt/pmoves/pmoves && make -C pmoves up-gpu"
+            echo "  3. Verify orchestrator: curl http://localhost:8200/healthz"
+            echo "  4. Pull a model:  curl http://localhost:11434/api/pull -d '{\"name\":\"qwen3-coder:32b\"}'"
+            ;;
     esac
     echo ""
     echo "  Runner status: sudo systemctl status github-runner-pmoves-${NODE_TYPE}"
@@ -390,6 +455,7 @@ main() {
     install_tailscale
     install_runner
     setup_workdir
+    setup_flare_config
     show_summary
 }
 

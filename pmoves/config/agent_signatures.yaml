@@ -47,6 +47,18 @@ signatures:
       - vs-code
       - agent-framework
     description: "VS Code-native agent — blueprint-first feature implementation"
+    alters:
+      - name: "kilocode-glm"
+        id: "kilocode-glm"
+        display_name: "KiloCode GLM"
+        glyph: "\u25B2"          # ▲ Triangle (same)
+        color: "#059669"         # Emerald (same)
+        accent: "#A7F3D0"
+        voice: architectural
+        description: "KiloCode on GLM coding plan — 5090 GPU node, DARKXSIDE co-creation"
+        model: "zai/glm-5-turbo"
+        node: "5090"
+        cocreator: "darkxside"
 
   codex:
     agent_id: "codex"
