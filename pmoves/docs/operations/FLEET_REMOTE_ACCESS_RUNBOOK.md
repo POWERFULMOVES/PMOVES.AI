@@ -112,6 +112,7 @@ Useful endpoints from that schema:
 
 `-` can be used as a shorthand tailnet ID when the API key belongs to the active tailnet.
 Tailscale API access tokens authenticate with HTTP Basic auth using the key as the username and an empty password.
+The current Tailscale trust-credentials reference documents `GET /api/v2/tailnet/{tailnet}/acl` under `policy_file:read` and `POST /api/v2/tailnet/{tailnet}/acl` under `policy_file`.
 
 Examples:
 

@@ -164,7 +164,8 @@ Use these defaults unless repo evidence says otherwise:
 - If the task is prompt, form, or persona heavy, bring in `Archon`.
 - If the task needs retrieval, ask `Hi-RAG` before adding new data paths.
 - If the task needs long-lived continuity, use `Cipher Memory`.
-- If the task touches VPN mesh, remote desktop, stale-node cleanup, or VPS onboarding, start with `pmoves/docs/operations/FLEET_REMOTE_ACCESS_RUNBOOK.md`, then `pmoves/docs/operations/RUSTDESK_SELF_HOSTED.md`, and finish by signing the lane in `pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md`.
+- If the task touches VPN mesh, remote desktop, stale-node cleanup, or VPS onboarding, start with `pmoves/docs/operations/FLEET_REMOTE_ACCESS_RUNBOOK.md`, then `pmoves/docs/operations/RUSTDESK_SELF_HOSTED.md`.
+- Finish that lane by signing the session in `pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md`.
 - If the task touches audio, narration, or persona voice, route through `Flute`.
 - If the task touches workflow glue, prefer `n8n` over bespoke orchestration.
 - If the task touches YouTube/media ingestion, start at `PMOVES.YT`.
