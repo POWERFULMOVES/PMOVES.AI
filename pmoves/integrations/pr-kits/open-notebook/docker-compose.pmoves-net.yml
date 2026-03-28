@@ -1,7 +1,7 @@
 version: "3.9"
 services:
   open-notebook:
-    image: ghcr.io/POWERFULMOVES/Pmoves-open-notebook:main
+    image: ghcr.io/powerfulmoves/pmoves-open-notebook:main
     restart: unless-stopped
     networks: [pmoves-net]
     ports:

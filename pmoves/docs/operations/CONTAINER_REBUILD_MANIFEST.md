@@ -16,7 +16,7 @@ Six service images have accumulated Dockerfile, dependency, or submodule changes
 | 3 | **publisher-discord** | `docker-compose.yml` | `pmoves/` | `services/publisher-discord/Dockerfile` | — (local build) |
 | 4 | **botz-gateway** | `docker-compose.yml` | `pmoves/services/botz-gateway` | `Dockerfile` | — (local build) |
 | 5 | **cipher-memory** | `docker-compose.yml` | `../Pmoves-cipher` | `Dockerfile` | — (local build) |
-| 6 | **pmoves-yt** | `docker-compose.integrations.images.yml` | — (GHCR image) | — | `ghcr.io/cataclysm-studios-inc/pmoves-yt:pmoves-latest` |
+| 6 | **pmoves-yt** | `docker-compose.integrations.images.yml` | — (GHCR image) | — | `ghcr.io/powerfulmoves/pmoves-yt:pmoves-latest` |
 
 ## What Each Rebuild Unblocks
 
@@ -67,9 +67,17 @@ curl http://localhost:3030/health    # tensorzero
 curl http://localhost:8096/health    # cipher-memory
 ```
 
+## Registry Consolidation (2026-03-28, z890-claude)
+
+**FIXED:** `docker-compose.integrations.images.yml` was pointing to `ghcr.io/cataclysm-studios-inc/pmoves-yt` — an image that does not exist. Corrected to `ghcr.io/powerfulmoves/pmoves-yt:pmoves-latest` (verified via `docker manifest inspect`).
+
+**Also fixed:** 4 PR-kit compose files normalized from uppercase `POWERFULMOVES` to lowercase `powerfulmoves` for consistency.
+
+**Runner status:** All 4 self-hosted runners are offline. CI-based builds (`integrations-ghcr.yml`) cannot publish until a runner comes online. 4 stuck queued runs were cancelled.
+
 ## Notes
 
 - **TensorZero** uses the upstream `tensorzero/gateway:2026.1.8` image — no custom build needed unless PMOVES adds a custom Dockerfile. The OPENAI_API_KEY placeholder was added in `f385c21fe` but that's an env var, not an image change.
-- **PMOVES.YT** is published via CI to GHCR. Check the latest tag before pulling.
+- **PMOVES.YT** is published via CI to GHCR at `ghcr.io/powerfulmoves/pmoves-yt:pmoves-latest`. Image exists and pulls correctly after registry fix.
 - **Cipher-memory** builds from the `Pmoves-cipher` submodule (note: lowercase `P` in path). Ensure the submodule is initialized.
 - Run `make -C pmoves secrets-funnel` before starting services to ensure env tiers are hydrated.
