@@ -1,21 +1,25 @@
 
 # PMOVES v5 • NEXT_STEPS
 Note: Consolidated plan index at pmoves/docs/PMOVES.AI PLANS/README_DOCS_INDEX.md.
-_Last updated: 2026-03-26_
+_Last updated: 2026-03-28_
 
 ## Current Status
 
-### Latest changes (Mar 26, 2026) — Data Services Provisioning + Release Cadence Alignment
-- Operator docs are being tightened around one modular data-plane story instead of multiple overlapping setup paths:
-  - Supabase remains the system of record and runtime control plane.
-  - Qdrant + Meilisearch are the retrieval indexes seeded after Supabase.
-  - Neo4j is the graph/mind-map layer seeded alongside geometry aliases.
-  - n8n stays optional for base bring-up but is the preferred automation/control-plane add-on once the base data services are healthy.
-- Release-note/CVE intake is being funneled through the existing signals instead of ad-hoc checks:
-  - scheduled `codeql.yml`, `yt-dlp-bump.yml`, and `python-images-toolchain-canary.yml`
-  - local GHCR/Trivy gates via `make -C pmoves ghcr-prepublish-inrepo`
-  - runtime/release evidence via `pmoves/docs/PRODUCTION_AUDIT_DASHBOARD.md` and `docs/hardening/PMOVES-hardening-tracker.md`
-- Next focus: finish Supabase runtime alignment, validate the modular bring-up against the live node stack, and keep the docs in sync whenever the data-plane command path changes.
+### Latest changes (Mar 28, 2026) — Agent Zero v1.3 + Rooms/Stage Prospectus
+- Verified the upstream Agent Zero source of truth has moved to `v1.3` on **March 27, 2026** (`agent0ai/agent-zero`), while the PMOVES hardened fork and current gitlink pin still reflect the **March 7, 2026** hardened state.
+- Published `pmoves/docs/AGENTS/AGNOTE4482_AGENT_ZERO_V1_3_GAP_REPORT.md` so the sync discussion now has exact commit math and a preserve/re-apply checklist instead of a generic "fork is behind" warning.
+- Published `pmoves/docs/AGENTS/AGNOTE4482_CLAWZ_CODING_PLAN_ALIGNMENT.md` so the remote coding lanes and safe suit-scaling posture are explicit: local-first stays primary, coding plans are profile-governed, and seat/token-aware fallback is part of the contract.
+- Published `pmoves/docs/AGENTS/AGNOTE4482_CLAWZ_GAP_REPORT.md` so the ClaWz conversation now reflects the real repo state too: upstream `openclaw/openclaw` is current, the PMOVES fork has no fork-specific releases/tags yet, `PMOVES.AI-Edition-Hardened` is an old upstream ancestor, and the root PMOVES gitlink is pinned to an orphaned SHA.
+- Published `pmoves/docs/AGENTS/AGNOTE4482_SIGNOFF_CHECKLIST.md` so AGNOTE4482 merge readiness now has a shared multi-agent signoff surface instead of scattered reviewer memory.
+- Confirmed the new room/stage wave is now part of live PMOVES shape, not just concept:
+  - `#1136` room catalog contracts + dashboard loader
+  - `#1137` home launcher selection through room entry paths
+  - `#1142` review/voice/media dashboard routes
+  - `#1143` runtime taxonomy in the room manifest schema
+- Prospectus implication: P7, Discord, and cataclysmstudios.com should all describe the platform as **rooms on a stage with selectable suits/personas**, not just a collection of services.
+- Release/CVE intake implication: keep Agent Zero and ClaWz release-note/security awareness on a weekly/sprint funnel through the hardening tracker and planning docs, instead of treating it as ad hoc repo memory.
+- Config implication: the PMOVES profile system is real, but it still needs naming cleanup for suit lanes because `pmoves/config/profiles/*.yaml` uses repo-backed ids like `desktop-9950xd` while model-profile tooling still defaults `HOST=workstation_5090`.
+- Next focus: use the new gap reports to decide the PMOVES Agent Zero sync posture against upstream `v1.3`, repair the ClaWz branch/pin baseline, normalize suit profile ids, and keep P7/AGNOTE/docs aligned around the room/stage model before more surface polish.
 
 ### Latest changes (Mar 12, 2026) — PMOVES.YT Authoritative Runtime Refresh
 - `PMOVES.YT` is now the authoritative runtime/docs lane for `pmoves-yt`; the root repo now builds the service from the submodule Dockerfile instead of treating `pmoves/services/pmoves-yt` as the source of truth.
@@ -55,15 +59,20 @@ _Last updated: 2026-03-26_
    - decide which BotZ/MCP workflows become canonical shared automation flows
    - keep Supabase workflow registry sync green as creator automation expands
 
-4. Button up modular data services provisioning and release/CVE cadence.
-   - keep one explicit provisioning contract for Supabase, Neo4j, Qdrant, Meilisearch, and optional n8n instead of letting setup drift across docs
-   - funnel release-note/CVE signals into the existing dashboard + hardening tracker at weekly and pre-release intervals
-   - update the canonical operator docs whenever runtime defaults, service ownership, or bootstrap order changes
-
-5. Codex follow-through for the active creator/publishing sprint.
+4. Codex follow-through for the active creator/publishing sprint.
    - close the real Supabase -> Agent Zero -> Publisher -> Discord activation loop and log evidence in `pmoves/docs/PMOVES.AI PLANS/SUPABASE_DISCORD_AUTOMATION.md`
    - choose one canonical published-event Discord path (`services/publisher-discord` subscriber vs `pmoves/n8n/flows/echo_publisher.json`) and mark the other as fallback/test-only
-   - tighten dashboard/operator visibility so `approved`, `waiting for poller`, `published`, and `publish_failed` states are explicit in the `studio-board` / `videos` UI lanes
+   - tighten dashboard/operator visibility so `approved`, `waiting for poller`, `published`, and publish-failed states are explicit in the `studio-board` / `videos` UI lanes
+
+5. Refresh the prospectus around rooms, stage, and Agent Zero suits.
+   - classify the PMOVES-specific Agent Zero hardening/persona/MCP overlays that must survive an upstream `v1.3` sync
+   - use `pmoves/docs/AGENTS/AGNOTE4482_AGENT_ZERO_V1_3_GAP_REPORT.md` as the canonical comparison instead of ad hoc recollection
+   - use `pmoves/docs/AGENTS/AGNOTE4482_CLAWZ_CODING_PLAN_ALIGNMENT.md` as the canonical remote coding inventory + safe-density note for ClaWz and other suit-bearing lanes
+   - use `pmoves/docs/AGENTS/AGNOTE4482_CLAWZ_GAP_REPORT.md` as the canonical ClaWz branch/pin reality check before more suit claims
+   - align AGNOTE4482, P7 playground, and main planning docs so rooms are the entry topology and stage is the live state model
+   - decide which P7 entry path becomes canonical: raw launcher grid, room selector, or home-room-first
+   - formalize the weekly/sprint release-note + CVE funnel for Agent Zero, ClaWz, and other suit-defining submodules
+   - normalize suit-routing config onto the real profile ids in `pmoves/config/profiles/*.yaml` instead of legacy `workstation_5090` placeholders
 
 ### Latest changes (Mar 8, 2026) — CI Runner Migration + RG-3 Automation
 - **AB-9 mitigation:** Migrated 10 lightweight CI jobs from `[self-hosted, Linux, X64]` to `ubuntu-latest`:

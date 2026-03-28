@@ -1,5 +1,5 @@
 # PMOVES Model Fabric Contract
-_Last updated: 2026-03-06_
+_Last updated: 2026-03-28_
 
 ## Purpose
 Define one abstraction contract for model/provider selection across PMOVES.AI so integrations can evolve independently while runtime behavior stays consistent.
@@ -15,7 +15,7 @@ This is the execution policy for:
 ## Architecture Principles
 1. Model-agnostic runtime: services route by alias/role, not hardcoded model IDs.
 2. Upstream-first overlays: PMOVES additions remain additive modules and ImportError-guarded.
-3. Local-first cloud-hybrid: always prefer local providers, then low-cost cloud fallbacks only.
+3. Local-first cloud-hybrid: always prefer local providers, then approved low-cost cloud and coding-plan fallbacks only.
 4. Idempotent bootstrap: provider/model seed flows must be safe to rerun.
 5. Single control plane: Supabase model registry + persona mappings are authoritative.
 6. Measurable rollout: every model change requires readiness checks and smoke evidence.
@@ -41,9 +41,19 @@ This is the execution policy for:
 - Cloud fallback order (explicit):
   1. Ollama Cloud
   2. Cloudflare Workers AI free-tier lanes (through TensorZero/OpenAI-compatible bridge)
-  3. Coding-plan lanes (`GLM coding plan`, `Claude Code`, `Codex CLI`) for coding workflows
+  3. Approved coding-plan lanes (`OpenAI ChatGPT Business` / Codex, `Claude Code Max`, `GLM coding plan Max`, `MiniMax token plan`, `Alibaba coding plan`) for coding workflows
 - Direct high-cost API fallback providers are disabled by default in production lanes and require explicit opt-in with cost/risk justification.
+- Coding-plan-backed lanes must be profile-governed so seat/token limits and node capacity remain explicit instead of being hidden in ad hoc env vars.
 - GPU Orchestrator manages load/unload/eviction and publishes lifecycle events.
+
+### Approved coding-plan inventory (2026-03-28)
+- OpenAI: `ChatGPT Business` with 4 seats
+- Anthropic: `Claude Code Max`
+- GLM: `coding plan Max`
+- MiniMax: `token plan`
+- Alibaba: `coding plan`
+
+These are approved remote coding lanes, not permission to hardcode provider assumptions into services. Route them by registry alias, profile, and policy.
 
 ### 4) Training Plane (feedback + model production)
 - AgentGym-RL emits trajectory/reward signals and training artifacts.
@@ -64,7 +74,7 @@ This is the execution policy for:
 2. Must not hardcode concrete model IDs in runtime request paths.
 3. Must expose health/readiness including model provider connectivity where relevant.
 4. Must publish/consume model lifecycle events when loading/unloading on GPU nodes.
-5. Must implement fallback priority: local -> Ollama Cloud -> Cloudflare free tier -> coding-plan lanes.
+5. Must implement fallback priority: local -> Ollama Cloud -> Cloudflare free tier -> approved coding-plan lanes.
 6. Must keep secrets in approved channels (`*_FILE`, GH secrets, vault), never static defaults.
 7. Must preserve Graphiti + CHIT rail compliance for agent/worker PRs (`chit-flow-pr-monitor-strict` in merge lane).
 8. Provider-native SDK usage must flow through a Nexus adapter or be explicitly exempted with parity evidence.
@@ -113,6 +123,11 @@ Every PR touching networking, agents, or model routing should be reviewed for:
 4. Graphiti/CHIT rails remain intact for worker handoffs.
 5. Compose/network namespace/port changes do not break deterministic topology.
 6. Evidence includes model-readiness + relevant smokes.
+2. TensorZero remains primary route and call telemetry is observable.
+3. Graphiti/CHIT rails remain intact for worker handoffs.
+4. Compose/network namespace/port changes do not break deterministic topology.
+5. Evidence includes model-readiness + relevant smokes.
+6. Coding-plan-backed suits remain profile-aligned with approved seat/token inventory.
 
 ## Operator and Coding-Agent Roles
 - Agent Zero / Archon: runtime orchestration + policy execution.
@@ -127,3 +142,5 @@ Every PR touching networking, agents, or model routing should be reviewed for:
 5. Add Nexus adapter shims for OpenAI, Anthropic, and Gemini native SDK lanes.
 6. Add NVIDIA NIM-backed Nemotron routing for beefy GPU claw lanes.
 7. Add parity tests that compare TensorZero-backed responses against native SDK adapter envelopes.
+5. Keep ClaWz / Agent Zero suit profiles aligned with the approved coding-plan inventory in `pmoves/docs/AGENTS/AGNOTE4482_CLAWZ_CODING_PLAN_ALIGNMENT.md`.
+6. Normalize suit-routing host/profile identifiers onto the real repo-backed ids in `pmoves/config/profiles/*.yaml` instead of legacy placeholders such as `workstation_5090`.

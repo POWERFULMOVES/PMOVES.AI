@@ -5,11 +5,20 @@ GRAPHITI_MARK: `PHI-4482-GATEWAY::PMOVES`
 ## Canonical Pointer
 Primary convergence record lives at:
 - `pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md`
+- `pmoves/docs/AGENTS/AGNOTE4482_SIGNOFF_CHECKLIST.md` (shared merge-signoff gate for AGNOTE4482 lanes)
 - `pmoves/docs/AGENTS/GRAPHITI_SIG_REVIEW_2026-02-21.md` (Phase 5 signature and traversal review snapshot)
 - `pmoves/docs/AGENTS/KRISS_KROSS_ACCORD.md` (Codex-led collision overlay and weave protocol)
 - `pmoves/docs/TAC/TAC_MODEL_INFRA_PERSONA_PROD_READINESS.md` (model infrastructure + persona production readiness execution overlay)
 
 All agents entering PMOVES lanes should read that file first, then claim work before edits.
+
+## Signoff Rule
+
+AGNOTE4482 prospectus updates should now use one shared signoff gate:
+
+- `pmoves/docs/AGENTS/AGNOTE4482_SIGNOFF_CHECKLIST.md`
+
+Each participating agent signs only for the sections they actually reviewed or executed. Merge readiness is a multi-agent decision, not a single-agent vibe check.
 
 ## Elder-Context Pattern
 `LADY P` is the connector persona for pre-flight context:
