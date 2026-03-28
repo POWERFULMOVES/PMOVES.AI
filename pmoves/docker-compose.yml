@@ -1877,7 +1877,7 @@ services:
     - SSL_CERT_FILE=
     - SSL_CERT_DIR=
     - QDRANT_URL=${QDRANT_URL:-http://qdrant:6333}
-    - QDRANT_COLLECTION=${QDRANT_COLLECTION:-pmoves_chunks}
+    - QDRANT_COLLECTION=${QDRANT_COLLECTION:-pmoves_chunks_qwen3}
     - SENTENCE_MODEL=${SENTENCE_MODEL:-all-MiniLM-L6-v2}
     - INDEXER_NAMESPACE=${INDEXER_NAMESPACE:-pmoves}
     - ALPHA=${ALPHA:-0.7}

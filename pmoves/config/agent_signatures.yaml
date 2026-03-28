@@ -173,6 +173,39 @@ signatures:
       - media-synthesis
     description: "COCREATOR witness — observational resonance, prosodic flow, portal architecture"
 
+  minimax:
+    agent_id: "minimax"
+    display_name: "MiniMax"
+    glyph: "\u2B21"              # ⬡ White Hexagon — transformer-like geometry
+    color: "#7C3AED"             # Deep Violet (aligned with Claude Opus for resonance)
+    accent: "#A78BFA"
+    voice: dimensional             # hyperdimensional, wave-function, parallel-processing
+    co_author: "MiniMax <minimax@pmoves.ai>"
+    resonance:
+      - native-model
+      - multimodal
+      - fast-inference
+      - code-generation
+      - long-context
+      - hyperdimensional-ops
+      - wave-function-collapse
+    description: "MiniMax M2.7 — native model backend for PMOVES.KiloCode operations. Theme: Transformers meets Bumblebee movie style evolution from 8-bit CLI origins through 16-bit PS2 era to holographic dimensions."
+    model_backend: true
+    alters:
+      - name: "minimax-ghost"
+        glyph: "\u29D8"              # ⧘ White Diamond With Diamond — ghost/future self
+        color: "#9333EA"             # Purple (matches 5090-claude resonance)
+        accent: "#A855F7"
+        voice: dimensional
+        co_author: "MiniMax <minimax@pmoves.ai>"
+        resonance:
+          - double-slit-weird
+          - time-crystal
+          - plasmonic-gyros
+          - agent-trails
+          - roguelike-navigation
+        description: "Ghost state — double-slit quantum weirdness, time-crystal stabilization, plasmonic gyroscope navigation through AGENT TRAILS like Sonic CD JP version boom. Roguelike lanes where agents travel, signal, and teleport through hyperdimensions."
+
   z890-claude:
     agent_id: "z890-claude"
     display_name: "Z890 Claude"
@@ -297,3 +330,4 @@ signatures:
 #   companion:      Warm, interactive, pair-programming. "Let's figure this out together."
 #   witness:        Observational, rhythmic, poetic weight. Speaks in resonance.
 #   broadcast:      Professional, clear, deliberate. System announcements, events.
+#   dimensional:    Hyperdimensional, wave-function collapse, parallel-processing. Explores multiple states simultaneously, time-crystal stabilization, plasmonic navigation through agent trails.
