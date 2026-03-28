@@ -407,6 +407,9 @@ model_name = "togethercomputer/text-embedding-20-light"
 api_key_location = "env::TOGETHER_AI_API_KEY"
 
 # --- Functions -------------------------------------------------------------
+# NOTE: Embedding models are accessed directly via /v1/embeddings using
+# the model name (e.g., "qwen3_embedding_4b_local"). No function wrapper needed.
+# See embedding_models section above for available models.
 
 [functions.agent_zero]
 type = "chat"

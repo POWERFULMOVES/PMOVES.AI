@@ -26,6 +26,9 @@ DEFAULTS = {
     "INVIDIOUS_COMPANION_KEY": "localhack",
     # Vector search (Qwen3-4b 2560d embeddings)
     "QDRANT_COLLECTION": "pmoves_chunks_qwen3",
+    # TensorZero embedding model (direct model name, not prefixed)
+    "TENSORZERO_EMBED_MODEL": "qwen3_embedding_4b_local",
+    "EMBEDDING_BACKEND": "tensorzero",
     # REST bases
     "SUPA_REST_URL": "http://host.docker.internal:54321/rest/v1",
     "SUPA_REST_INTERNAL_URL": "http://host.docker.internal:54321/rest/v1",
@@ -56,6 +59,9 @@ SUPERSEDED_VALUES: dict[str, str] = {
     "pmoves_chunks": "pmoves_chunks_qwen3",
     # Legacy sentence-transformer model (replaced by TensorZero routing)
     "all-MiniLM-L6-v2": "all-MiniLM-L6-v2",  # keep as-is, TZ overrides at runtime
+    # TZ embed model: prefixed format → direct model name
+    "tensorzero::embedding_model_name::embed_default": "qwen3_embedding_4b_local",
+    "tensorzero::embedding_model_name::qwen3_embedding_4b_local": "qwen3_embedding_4b_local",
 }
 
 
