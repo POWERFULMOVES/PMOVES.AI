@@ -88,7 +88,8 @@ configured and the system morphs to incorporate it.
   "functions_updated": ["coding_minimax"],
   "coding_stacks_activated": ["minimax_token_plan"],
   "vram_warnings": [],
-  "ts": "2026-03-28T16:00:00Z"
+  "timestamp": "2026-03-28T16:00:00Z",
+  "success": true
 }
 ```
 
@@ -103,12 +104,13 @@ update their catalogs or take over workloads.
   "provider": "minimax",
   "env_var": "MINIMAX_API_KEY",
   "models_removed": ["chat_minimax"],
-  "ts": "2026-03-28T18:00:00Z"
+  "timestamp": "2026-03-28T18:00:00Z",
+  "success": true
 }
 ```
 
 ## See Also
 
-- `.claude/context/geometry-nats-subjects.md` — Full GEOMETRY BUS catalog
+- `.claude/context/nats-subjects.md` — Canonical NATS topology index
 - `pmoves/docs/CLAW_TAXONOMY.md` — Claw taxonomy (PR #1151)
 - `pmoves/config/profiles/laptop-4090.yaml` — 4090 node config with claw section

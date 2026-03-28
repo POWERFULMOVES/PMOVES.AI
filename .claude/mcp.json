@@ -6,20 +6,22 @@
     },
     "docker": {
       "command": "docker",
-      "args": ["run", "--rm", "-i", "--mount", "type=bind,src=//var/run/docker.sock,dst=/var/run/docker.sock", "mcp/docker"]
+      "args": [
+        "run",
+        "--rm",
+        "-i",
+        "--mount",
+        "type=bind,src=//var/run/docker.sock,dst=/var/run/docker.sock",
+        "mcp/docker"
+      ]
     },
     "hostinger-mcp": {
       "command": "npx",
-      "args": ["hostinger-api-mcp@latest"],
+      "args": [
+        "hostinger-api-mcp@latest"
+      ],
       "env": {
         "API_TOKEN": "${HOSTINGER_API_KEY}"
-      }
-    },
-    "huggingface": {
-      "command": "npx",
-      "args": ["-y", "@anthropic-ai/claude-code-mcp-huggingface"],
-      "env": {
-        "HF_TOKEN": "${HF_TOKEN}"
       }
     }
   }

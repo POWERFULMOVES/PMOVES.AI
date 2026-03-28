@@ -24,11 +24,19 @@ import os
 import re
 import subprocess
 import sys
+import tomllib
+from datetime import datetime, timezone
+from getpass import getpass
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import yaml
+
+try:
+    import toml  # type: ignore[import-not-found]
+except ModuleNotFoundError:
+    toml = None
 
 logger = logging.getLogger(__name__)
 
@@ -154,6 +162,64 @@ def _write_env_key(env_var: str, value: str) -> bool:
     return True
 
 
+def _remove_env_key(env_var: str) -> bool:
+    """Remove a key from env.shared if it exists."""
+    env_path = PMOVES_DIR / "env.shared"
+    if not env_path.exists():
+        return True
+
+    lines = env_path.read_text(encoding="utf-8").splitlines(keepends=True)
+    kept = []
+    for line in lines:
+        stripped = line.strip()
+        if stripped and not stripped.startswith("#") and "=" in stripped:
+            key, _, _ = stripped.partition("=")
+            if key.strip() == env_var:
+                continue
+        kept.append(line)
+
+    env_path.write_text("".join(kept), encoding="utf-8")
+    return True
+
+
+def _save_tz_config(config: Dict[str, Any]) -> None:
+    """Persist the TensorZero config atomically."""
+    if toml is None:
+        raise RuntimeError("python package 'toml' is required for provider activation writes")
+
+    temp_path = TZ_CONFIG.with_suffix(".toml.tmp")
+    with open(temp_path, "w", encoding="utf-8") as handle:
+        toml.dump(config, handle)
+    temp_path.replace(TZ_CONFIG)
+
+
+def _load_tz_config() -> Dict[str, Any]:
+    """Load the TensorZero config using stdlib TOML support when possible."""
+    if toml is not None:
+        return toml.load(TZ_CONFIG)
+
+    with open(TZ_CONFIG, "rb") as handle:
+        return tomllib.load(handle)
+
+
+def _utc_timestamp() -> str:
+    return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+def _publish_nats_event(subject: str, payload: Dict[str, Any]) -> bool:
+    """Best-effort lifecycle publish helper."""
+    try:
+        payload_json = json.dumps(payload)
+        proc = subprocess.run(
+            ["nats", "pub", subject, payload_json],
+            capture_output=True, text=True, timeout=10,
+        )
+        return proc.returncode == 0
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        logger.warning("NATS not available; skipping %s", subject)
+        return False
+
+
 # =============================================================================
 # Stage 1: Secrets Ingestion
 # =============================================================================
@@ -168,16 +234,15 @@ def _stage_1_secrets(
     env_var = provider_config["env_var"]
     key_pattern = provider_config.get("key_pattern", ".*")
 
-    # Validate key format
-    if not re.match(key_pattern, api_key):
+    if not dry_run and not re.match(key_pattern, api_key):
         return StageResult(
             stage=1, name="Secrets Ingestion", success=False,
             message=f"Key format invalid for {provider_slug} (expected pattern: {key_pattern})",
         )
 
-    # Check if already set with non-placeholder value
     current_env = _read_env_shared()
     current_val = current_env.get(env_var, "")
+    previous_present = env_var in current_env
     if current_val and not _is_placeholder(current_val) and current_val == api_key:
         return StageResult(
             stage=1, name="Secrets Ingestion", success=True,
@@ -192,40 +257,42 @@ def _stage_1_secrets(
             details={"env_var": env_var, "action": "dry-run"},
         )
 
-    # Write key to env.shared
-    _write_env_key(env_var, api_key)
+    def _restore_previous_value() -> None:
+        if previous_present:
+            _write_env_key(env_var, current_val)
+        else:
+            _remove_env_key(env_var)
+
+    _write_env_key(env_var, api_key)  # noqa: CodeQL [py/clear-text-storage-sensitive-data] -- local secrets funnel staging file by design
     logger.info(f"Wrote {env_var} to env.shared")
 
-    # Run secrets-funnel
     try:
         result = subprocess.run(
             ["make", "-C", str(PMOVES_DIR), "secrets-funnel"],
             capture_output=True, text=True, timeout=120,
         )
         if result.returncode != 0:
+            _restore_previous_value()
             return StageResult(
                 stage=1, name="Secrets Ingestion", success=False,
                 message=f"secrets-funnel failed: {result.stderr[:200]}",
                 details={"env_var": env_var, "returncode": result.returncode},
             )
     except subprocess.TimeoutExpired:
+        _restore_previous_value()
         return StageResult(
             stage=1, name="Secrets Ingestion", success=False,
             message="secrets-funnel timed out (120s)",
         )
     except FileNotFoundError:
-        logger.warning("make not found — skipping secrets-funnel (dev mode)")
+        logger.warning("make not found; skipping secrets-funnel in dev mode")
 
     return StageResult(
         stage=1, name="Secrets Ingestion", success=True,
-        message=f"{env_var} → env.tier-{provider_config.get('tier', 'llm')}",
+        message=f"{env_var} -> env.tier-{provider_config.get('tier', 'llm')}",
         details={"env_var": env_var, "tier": provider_config.get("tier", "llm")},
     )
 
-
-# =============================================================================
-# Stage 2: TensorZero Config Update
-# =============================================================================
 
 def _stage_2_tz_config(
     provider_slug: str,
@@ -255,42 +322,40 @@ def _stage_2_tz_config(
         )
 
     try:
-        from pmoves.libs.tz_config.parser import TensorZeroConfig
-
-        tz = TensorZeroConfig(str(TZ_CONFIG))
-        tz.load()
+        tz = _load_tz_config()
+        tz_models = tz.setdefault("models", {})
 
         added = []
         existing = []
         for model_slug, model_info in models.items():
             tz_key = model_info.get("tz_model_key", model_slug)
-            if tz_key in tz.config.get("models", {}):
+            if tz_key in tz_models:
                 existing.append(tz_key)
-            else:
-                # Build model config from catalog
-                env_var = provider_config["env_var"]
-                api_base = provider_config.get("api_base")
-                tz_type = provider_config.get("tz_type", "openai")
-                provider_name = f"{provider_slug}_primary"
+                continue
 
-                model_config = {
-                    "routing": [provider_name],
-                    "providers": {
-                        provider_name: {
-                            "type": tz_type,
-                            "model_name": model_info["model_name"],
-                            "api_key_location": f"env::{env_var}",
-                        }
+            env_var = provider_config["env_var"]
+            api_base = provider_config.get("api_base")
+            tz_type = provider_config.get("tz_type", "openai")
+            provider_name = f"{provider_slug}_primary"
+
+            model_config = {
+                "routing": [provider_name],
+                "providers": {
+                    provider_name: {
+                        "type": tz_type,
+                        "model_name": model_info["model_name"],
+                        "api_key_location": f"env::{env_var}",
                     }
-                }
-                if api_base:
-                    model_config["providers"][provider_name]["api_base"] = api_base
+                },
+            }
+            if api_base:
+                model_config["providers"][provider_name]["api_base"] = api_base
 
-                tz.update_model(tz_key, model_config)
-                added.append(tz_key)
+            tz_models[tz_key] = model_config
+            added.append(tz_key)
 
         if added:
-            tz.save(create_backup=True)
+            _save_tz_config(tz)
             logger.info(f"TZ config updated: added {added}, existing {existing}")
 
         return StageResult(
@@ -299,23 +364,12 @@ def _stage_2_tz_config(
             details={"added": added, "existing": existing},
         )
 
-    except ImportError:
-        logger.warning("TensorZeroConfig not importable — recording models for manual setup")
-        return StageResult(
-            stage=2, name="TZ Config", success=True,
-            message=f"TZ lib not available — {len(models)} model(s) need manual TOML setup",
-            details={"models": list(models.keys()), "manual": True},
-        )
     except Exception as e:
         return StageResult(
             stage=2, name="TZ Config", success=False,
             message=f"TZ config update failed: {e}",
         )
 
-
-# =============================================================================
-# Stage 3: Model Lane Assignment (Hybrid)
-# =============================================================================
 
 def _compute_fit_score(
     model_strengths: Dict[str, float],
@@ -333,25 +387,68 @@ def _stage_3_lane_assignment(
     provider_config: Dict[str, Any],
     dry_run: bool = False,
 ) -> StageResult:
-    """Assign models to functions — catalog for known, fit-score for unknown."""
+    """Assign models to functions and persist deterministic routing changes."""
     models = provider_config.get("models", {})
     functions_updated = []
     suggestions = []
+    assignments = []
+    changed = False
+
+    tz = _load_tz_config() if TZ_CONFIG.exists() else {"functions": {}}
+    functions_cfg = tz.setdefault("functions", {})
 
     for model_slug, model_info in models.items():
         serves = model_info.get("serves", [])
 
         if serves:
-            # Known model — catalog-declared assignments (deterministic)
             for assignment in serves:
                 fn_name = assignment["function"]
+                variant_name = assignment["variant_name"]
+                role = assignment.get("role", "secondary")
+                weight = float(assignment.get("weight", 0.0))
+                fn_cfg = functions_cfg.get(fn_name)
+                if not fn_cfg or variant_name not in (fn_cfg.get("variants") or {}):
+                    suggestions.append({
+                        "model": model_slug,
+                        "function": fn_name,
+                        "variant_name": variant_name,
+                        "reason": "variant missing from tensorzero config",
+                    })
+                    continue
+
                 functions_updated.append(fn_name)
-                logger.info(
-                    f"  Catalog lane: {model_slug} → {fn_name} "
-                    f"({assignment.get('role', 'secondary')}, w={assignment.get('weight', 0.0)})"
-                )
+                logger.info(f"  Catalog lane: {model_slug} -> {fn_name} ({role}, w={weight})")
+
+                if dry_run:
+                    assignments.append({
+                        "function": fn_name,
+                        "variant_name": variant_name,
+                        "role": role,
+                        "weight": weight,
+                        "action": "dry-run",
+                    })
+                    continue
+
+                if role == "fallback":
+                    fallbacks = list(fn_cfg.get("fallback_variants", []))
+                    if variant_name not in fallbacks:
+                        fallbacks.append(variant_name)
+                        fn_cfg["fallback_variants"] = fallbacks
+                        changed = True
+                else:
+                    candidates = dict(fn_cfg.get("candidate_variants", {}))
+                    if candidates.get(variant_name) != weight:
+                        candidates[variant_name] = weight
+                        fn_cfg["candidate_variants"] = candidates
+                        changed = True
+
+                assignments.append({
+                    "function": fn_name,
+                    "variant_name": variant_name,
+                    "role": role,
+                    "weight": weight,
+                })
         else:
-            # Unknown model — check strength profile for suggestions
             strength_ref = model_info.get("strength_ref")
             if strength_ref:
                 model_strengths = _load_model_strengths().get(strength_ref, {})
@@ -368,26 +465,27 @@ def _stage_3_lane_assignment(
                                 "fit_score": round(fit, 3),
                             })
 
+    if changed:
+        _save_tz_config(tz)
+
+    unique_fns = sorted(set(functions_updated))
     msg_parts = []
-    if functions_updated:
-        unique_fns = sorted(set(functions_updated))
-        msg_parts.append(f"{len(unique_fns)} function(s): {', '.join(unique_fns)}")
+    if unique_fns:
+        prefix = "Would update" if dry_run else "Updated"
+        msg_parts.append(f"{prefix} {len(unique_fns)} function(s): {', '.join(unique_fns)}")
     if suggestions:
-        msg_parts.append(f"{len(suggestions)} suggestion(s) for unknown models (needs approval)")
+        msg_parts.append(f"{len(suggestions)} suggestion(s) / missing variants")
 
     return StageResult(
         stage=3, name="Lane Assignment", success=True,
         message=" | ".join(msg_parts) if msg_parts else "No assignments",
         details={
-            "functions_updated": sorted(set(functions_updated)),
+            "functions_updated": unique_fns,
+            "assignments": assignments,
             "suggestions": suggestions,
         },
     )
 
-
-# =============================================================================
-# Stage 4: Coding Stack Activation
-# =============================================================================
 
 def _stage_4_coding_stacks(
     provider_slug: str,
@@ -450,16 +548,20 @@ def _stage_5_nats(
     provider_slug: str,
     result: CascadeResult,
     node_id: str,
+    env_var: str,
     dry_run: bool = False,
 ) -> StageResult:
     """Publish claw.provider.activated.v1 to NATS mesh."""
     payload = {
         "node_id": node_id,
         "provider": provider_slug,
+        "env_var": env_var,
         "models_added": result.models_added,
         "functions_updated": result.functions_updated,
         "coding_stacks_activated": result.coding_stacks_activated,
         "vram_warnings": result.vram_warnings,
+        "timestamp": _utc_timestamp(),
+        "success": result.success,
     }
 
     if dry_run:
@@ -469,16 +571,7 @@ def _stage_5_nats(
             details=payload,
         )
 
-    try:
-        payload_json = json.dumps(payload)
-        proc = subprocess.run(
-            ["nats", "pub", "claw.provider.activated.v1", payload_json],
-            capture_output=True, text=True, timeout=10,
-        )
-        published = proc.returncode == 0
-    except (FileNotFoundError, subprocess.TimeoutExpired):
-        published = False
-        logger.warning("NATS not available — skipping announcement (non-blocking)")
+    published = _publish_nats_event("claw.provider.activated.v1", payload)
 
     return StageResult(
         stage=5, name="NATS Announce", success=True,  # Non-blocking
@@ -613,7 +706,7 @@ def activate_provider(
     result.vram_warnings = s4.details.get("vram_warnings", [])
 
     # Stage 5: NATS
-    s5 = _stage_5_nats(provider, result, node_id, dry_run)
+    s5 = _stage_5_nats(provider, result, node_id, provider_config["env_var"], dry_run)
     result.stages.append(s5)
     result.nats_published = s5.details.get("published", False)
 
@@ -688,20 +781,24 @@ def deactivate_provider(
 
     provider_config = providers[provider]
     env_var = provider_config["env_var"]
+    models_removed = list(provider_config.get("models", {}).keys())
+
+    if node_id == "auto":
+        import platform
+        node_id = f"pmoves-{platform.node().lower().replace(' ', '-')}"
 
     if dry_run:
         result = CascadeResult(provider=provider, success=True)
         result.stages.append(StageResult(
             stage=1, name="Deactivate", success=True,
             message=f"Would remove {env_var} from env.shared and run secrets-funnel",
+            details={"env_var": env_var, "models_removed": models_removed},
         ))
         return result
 
-    # Clear the key (write empty placeholder)
-    _write_env_key(env_var, "")
+    _remove_env_key(env_var)
     logger.info(f"Cleared {env_var} from env.shared")
 
-    # Re-run secrets-funnel
     try:
         subprocess.run(
             ["make", "-C", str(PMOVES_DIR), "secrets-funnel"],
@@ -710,17 +807,25 @@ def deactivate_provider(
     except Exception as e:
         logger.warning(f"secrets-funnel after deactivation: {e}")
 
+    payload = {
+        "node_id": node_id,
+        "provider": provider,
+        "env_var": env_var,
+        "models_removed": models_removed,
+        "timestamp": _utc_timestamp(),
+        "success": True,
+    }
+    published = _publish_nats_event("claw.provider.deactivated.v1", payload)
+
     result = CascadeResult(provider=provider, success=True)
+    result.nats_published = published
     result.stages.append(StageResult(
         stage=1, name="Deactivate", success=True,
         message=f"{env_var} cleared, secrets-funnel re-run",
+        details={**payload, "published": published},
     ))
     return result
 
-
-# =============================================================================
-# CLI Entry Point
-# =============================================================================
 
 def main():
     # Force UTF-8 output on Windows
@@ -764,7 +869,7 @@ def main():
     if args.command == "activate":
         api_key = args.key
         if not api_key:
-            api_key = input(f"Enter API key for {args.provider}: ").strip()
+            api_key = getpass(f"Enter API key for {args.provider}: ").strip()
             if not api_key:
                 print("No key provided. Aborting.")
                 sys.exit(1)
@@ -778,7 +883,8 @@ def main():
         sys.exit(0 if result.success else 1)
 
     elif args.command == "check":
-        check_provider(provider=args.provider, node_profile=args.node_profile)
+        result = check_provider(provider=args.provider, node_profile=args.node_profile)
+        sys.exit(0 if result.success else 1)
 
     elif args.command == "list":
         providers = list_providers(node_profile=args.node_profile)

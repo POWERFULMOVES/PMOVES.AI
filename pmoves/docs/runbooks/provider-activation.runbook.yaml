@@ -145,8 +145,8 @@ runbook:
           prerequisite: deactivate
 
         - id: verify
-          human: "Verify the provider is working with the new key"
-          machine: "make -C pmoves provider-check PROVIDER=$PROVIDER"
+          human: "Verify the provider is working live with the new key"
+          machine: "make -C pmoves provider-list && curl -s http://localhost:3030/v1/models | python -m json.tool"
           prerequisite: reactivate
 
   # ===========================================================================

@@ -19,7 +19,7 @@ provider-activate: ## Activate a provider: make provider-activate PROVIDER=minim
 ifndef PROVIDER
 	$(error PROVIDER is required. Usage: make provider-activate PROVIDER=minimax KEY=...)
 endif
-	@$(PYTHON) tools/provider_cascade.py activate \
+	@cd .. && $(PYTHON) -m pmoves.tools.provider_cascade activate \
 		--provider "$(PROVIDER)" \
 		$(if $(KEY),--key "$(KEY)",) \
 		--node-profile "$(NODE_PROFILE)" \
@@ -29,21 +29,21 @@ provider-check: ## Dry-run: show what provider-activate would do
 ifndef PROVIDER
 	$(error PROVIDER is required. Usage: make provider-check PROVIDER=minimax)
 endif
-	@$(PYTHON) tools/provider_cascade.py check \
+	@cd .. && $(PYTHON) -m pmoves.tools.provider_cascade check \
 		--provider "$(PROVIDER)" \
 		--node-profile "$(NODE_PROFILE)"
 
 provider-list: ## List all known providers and activation status
-	@$(PYTHON) tools/provider_cascade.py list \
+	@cd .. && $(PYTHON) -m pmoves.tools.provider_cascade list \
 		--node-profile "$(NODE_PROFILE)"
 
 provider-list-json: ## List providers as JSON (for programmatic use)
-	@$(PYTHON) tools/provider_cascade.py list \
+	@cd .. && $(PYTHON) -m pmoves.tools.provider_cascade list \
 		--node-profile "$(NODE_PROFILE)" --json
 
 provider-deactivate: ## Deactivate a provider: make provider-deactivate PROVIDER=minimax
 ifndef PROVIDER
 	$(error PROVIDER is required. Usage: make provider-deactivate PROVIDER=minimax)
 endif
-	@$(PYTHON) tools/provider_cascade.py deactivate \
+	@cd .. && $(PYTHON) -m pmoves.tools.provider_cascade deactivate \
 		--provider "$(PROVIDER)"

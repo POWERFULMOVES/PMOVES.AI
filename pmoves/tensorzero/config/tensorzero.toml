@@ -519,6 +519,10 @@ model = "chat_gemini_pro"
 type = "chat_completion"
 model = "claude_sonnet_4"
 
+[functions.agent_zero.variants.hosted_zai]
+type = "chat_completion"
+model = "chat_zai"
+
 # GLM Flash — fast multilingual utility (Z.ai Coding endpoint)
 [functions.agent_zero.variants.hosted_glm_flash]
 type = "chat_completion"
@@ -852,6 +856,10 @@ model = "coding_qwen3_coder_30b_local"
 [functions.coding_claude_fallback.variants.local_qwen35_9b]
 type = "chat_completion"
 model = "qwen35_9b"
+
+[functions.coding_claude_fallback.variants.cloud_claude]
+type = "chat_completion"
+model = "claude_sonnet_4"
 
 [functions.coding_claude_fallback.variants.cloud_alibaba]
 type = "chat_completion"

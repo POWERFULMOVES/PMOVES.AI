@@ -145,7 +145,7 @@ cross_node:
 
   channels:
     nats:
-      url: "nats://nats:pmoves@nats:4222"
+      url: "${NATS_URL}"      # Resolve from env.shared / secrets-funnel
       role: primary
       subjects: ["claw.*", "mesh.node.announce.*", "mesh.gpu.status.v1", "tokenism.cgp.ready.v1", "geometry.*"]
     discord:

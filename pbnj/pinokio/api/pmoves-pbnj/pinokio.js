@@ -121,19 +121,28 @@ module.exports = {
 
     // ============ Deploy Section (idle only) ============
     if (!running.localUp && !running.labUp && !running.kvm4Up) {
+      if (info.exists("4090-deploy.json")) {
+        items.push({
+          icon: "fa-solid fa-laptop-code",
+          text: "Deploy 4090 Coding Workstation",
+          href: "4090-deploy.json",
+        })
+      }
+      if (info.exists("4090-models.json")) {
+        items.push({
+          icon: "fa-solid fa-download",
+          text: "Pull 4090 Models (~50GB)",
+          href: "4090-models.json",
+        })
+      }
+      if (info.exists("4090-status.json")) {
+        items.push({
+          icon: "fa-solid fa-microchip",
+          text: "4090 Status",
+          href: "4090-status.json",
+        })
+      }
       items.push({
-        icon: "fa-solid fa-laptop-code",
-        text: "Deploy 4090 Coding Workstation",
-        href: "4090-deploy.json",
-      }, {
-        icon: "fa-solid fa-download",
-        text: "Pull 4090 Models (~50GB)",
-        href: "4090-models.json",
-      }, {
-        icon: "fa-solid fa-microchip",
-        text: "4090 Status",
-        href: "4090-status.json",
-      }, {
         icon: "fa-solid fa-cloud-arrow-up",
         text: "Deploy KVM4-1 (API)",
         href: "kvm4-1-deploy.json",
