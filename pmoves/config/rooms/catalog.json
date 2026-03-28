@@ -1,0 +1,29 @@
+{
+  "schema_version": "1.0.0",
+  "rooms": [
+    {
+      "room_id": "4090-field.room.control",
+      "agent_id": "4090-claude",
+      "alter": "4090-field",
+      "display_name": "4090 Field Control Room",
+      "manifest": "4090-field.room.control.json",
+      "summary": "Scout/control room for review, topology, handoff, and notebook-backed triage."
+    },
+    {
+      "room_id": "5090-voice.room.studio",
+      "agent_id": "5090-claude",
+      "alter": "5090-voice",
+      "display_name": "5090 Voice Studio",
+      "manifest": "5090-voice.room.studio.json",
+      "summary": "Voice-first room for TTS, media pipelines, notebook-backed iteration, and audition workflows."
+    },
+    {
+      "room_id": "z890-infra.room.fabric",
+      "agent_id": "z890-claude",
+      "alter": "z890-infra",
+      "display_name": "Z890 Infra Fabric Room",
+      "manifest": "z890-infra.room.fabric.json",
+      "summary": "Infrastructure room for topology, service health, secrets discipline, and operator bring-up."
+    }
+  ]
+}

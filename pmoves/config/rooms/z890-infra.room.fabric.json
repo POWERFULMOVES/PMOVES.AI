@@ -1,0 +1,227 @@
+{
+  "room_id": "z890-infra.room.fabric",
+  "version": "1.0.0",
+  "display_name": "Z890 Infra Fabric Room",
+  "description": "Infrastructure room for topology, service health, secrets discipline, and operator bring-up.",
+  "agent_id": "z890-claude",
+  "alter": "z890-infra",
+  "room_type": "operator",
+  "owner_mode": "alter",
+  "shell": {
+    "theme": {
+      "theme_id": "infra-fabric",
+      "accent_color": "#1E40AF",
+      "skin": "mesh-control",
+      "icon": "gear"
+    },
+    "layout": {
+      "default_route": "/dashboard/services",
+      "panels": [
+        {
+          "panel_id": "ops-chat",
+          "kind": "chat",
+          "position": "left",
+          "size": 22,
+          "pinned": true
+        },
+        {
+          "panel_id": "service-grid",
+          "kind": "controls",
+          "position": "center",
+          "size": 46,
+          "pinned": true
+        },
+        {
+          "panel_id": "ops-notebook",
+          "kind": "notebook",
+          "position": "right",
+          "size": 18,
+          "pinned": true
+        },
+        {
+          "panel_id": "ops-logs",
+          "kind": "logs",
+          "position": "bottom",
+          "size": 14,
+          "pinned": false
+        }
+      ]
+    }
+  },
+  "apps": [
+    {
+      "app_id": "services-dashboard",
+      "kind": "dashboard",
+      "route": "/dashboard/services",
+      "provider": "pmoves-ui",
+      "action_namespace": "ops",
+      "capabilities": ["service-health", "compose-topology", "alerts", "rebuild-status"],
+      "pinned": true
+    },
+    {
+      "app_id": "notebook-workbench",
+      "kind": "notebook",
+      "route": "/notebook-workbench",
+      "provider": "pmoves-notebook-workbench",
+      "action_namespace": "notebook",
+      "capabilities": ["threads", "entries", "snapshots", "runbooks"],
+      "pinned": true
+    },
+    {
+      "app_id": "graphiti-status",
+      "kind": "graph",
+      "route": "/dashboard/graphiti",
+      "provider": "pmoves-ui",
+      "action_namespace": "graphiti",
+      "capabilities": ["trail", "audit", "release-state"],
+      "pinned": false
+    }
+  ],
+  "notebook": {
+    "provider": "open-notebook",
+    "workspace_ref": "infra-ops",
+    "thread_ref": "service-runbooks",
+    "default_page": "bringup",
+    "sync": {
+      "mode": "authoritative",
+      "writeback_targets": ["entries", "pages", "threads"],
+      "artifact_prefix": "rooms/z890-infra"
+    }
+  },
+  "persona": {
+    "signature_ref": "z890-claude",
+    "voice": "analytical",
+    "glyph": "⚙",
+    "resonance": ["infrastructure", "persistence-modeling", "supabase-integration", "docker-hardening"]
+  },
+  "skill_bindings": [
+    {
+      "binding_id": "infra-bringup-audit",
+      "skill_id": "bringup-audit",
+      "room_id": "z890-infra.room.fabric",
+      "display_name": "Infra Bring-up Audit",
+      "intent": ["bringup", "health", "ops"],
+      "activation": {
+        "invocation_mode": "workflow",
+        "trigger_phrases": ["audit the bringup", "check the stack", "verify infra health"],
+        "requires_selection": false
+      },
+      "surface": {
+        "app_id": "services-dashboard",
+        "target": "toolbar",
+        "route": "/dashboard/services"
+      },
+      "execution": {
+        "mode": "workflow",
+        "run_as": "worker",
+        "stream": "events",
+        "max_steps": 8
+      },
+      "context": {
+        "sources": ["room-state", "open-apps", "graphiti-trail", "user-intent"],
+        "include_last_turns": 3,
+        "notebook_writeback": true,
+        "artifact_types": ["text", "json"]
+      },
+      "outputs": [
+        {
+          "target": "room-state",
+          "delivery": "replace",
+          "path": "ops/bringup-audit",
+          "artifact_type": "json"
+        },
+        {
+          "target": "notebook-page",
+          "delivery": "append",
+          "path": "pages/bringup-audits",
+          "artifact_type": "text"
+        }
+      ],
+      "guardrails": {
+        "require_approval": false,
+        "max_runtime_sec": 360,
+        "fail_open": true,
+        "one_active_run": true
+      },
+      "enabled": true,
+      "tags": ["ops", "health", "bringup"]
+    },
+    {
+      "binding_id": "secrets-funnel",
+      "skill_id": "secrets-chit-funnel",
+      "room_id": "z890-infra.room.fabric",
+      "display_name": "Secrets Funnel",
+      "intent": ["secrets", "handoff", "compliance"],
+      "activation": {
+        "invocation_mode": "explicit",
+        "trigger_phrases": ["run the secrets funnel", "prepare secure handoff"],
+        "requires_selection": false
+      },
+      "surface": {
+        "app_id": "graphiti-status",
+        "target": "sidebar",
+        "route": "/dashboard/graphiti"
+      },
+      "execution": {
+        "mode": "panel",
+        "run_as": "agent",
+        "stream": "status",
+        "max_steps": 5
+      },
+      "context": {
+        "sources": ["graphiti-trail", "notebook-thread", "persona", "room-state"],
+        "include_last_turns": 5,
+        "notebook_writeback": true,
+        "artifact_types": ["text", "json"]
+      },
+      "outputs": [
+        {
+          "target": "nats-event",
+          "delivery": "emit",
+          "subject": "agent.graphiti.signed.v1",
+          "artifact_type": "json"
+        },
+        {
+          "target": "chat-response",
+          "delivery": "notify",
+          "artifact_type": "text"
+        }
+      ],
+      "guardrails": {
+        "require_approval": true,
+        "max_runtime_sec": 240,
+        "fail_open": false,
+        "one_active_run": true
+      },
+      "enabled": true,
+      "tags": ["secrets", "chit", "graphiti"]
+    }
+  ],
+  "policies": {
+    "model_routing": "tensorzero",
+    "publish": {
+      "allow_nats_emit": true,
+      "allow_external_publish": false,
+      "allowed_subjects": ["agent.graphiti.signed.v1", "ops.pr.monitor.completed.v1"]
+    },
+    "memory": {
+      "graphiti": true,
+      "notebook_writeback": true,
+      "chit_handoff": true
+    }
+  },
+  "telemetry": {
+    "graphiti_phase": "Infra Fabric",
+    "room_events_subject": "room.session.updated.v1",
+    "healthcheck_route": "/api/audit/summary"
+  },
+  "provenance": {
+    "source": "pmoves/config/rooms/catalog.json",
+    "updated_at": "2026-03-27T12:30:00Z",
+    "related_docs": [
+      "pmoves/docs/ROOM_MANIFEST_CONTRACT.md",
+      "pmoves/docs/MODEL_FABRIC_CONTRACT.md",
+      "pmoves/docs/BOTZ_SKILLS_MARKETPLACE.md"
+    ]
+  }
+}

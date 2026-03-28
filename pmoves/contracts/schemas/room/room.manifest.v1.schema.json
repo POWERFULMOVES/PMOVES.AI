@@ -1,0 +1,319 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Room Manifest",
+  "description": "Declarative contract for an agent-owned room that binds persona, shell layout, notebook state, apps, and reusable skills.",
+  "type": "object",
+  "required": [
+    "room_id",
+    "version",
+    "display_name",
+    "agent_id",
+    "shell",
+    "apps",
+    "notebook",
+    "skill_bindings",
+    "policies"
+  ],
+  "properties": {
+    "room_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]*$",
+      "description": "Stable room identifier"
+    },
+    "version": {
+      "type": "string",
+      "description": "Semantic or dated manifest version"
+    },
+    "display_name": {
+      "type": "string",
+      "description": "Human-readable room title"
+    },
+    "description": {
+      "type": "string",
+      "description": "Short statement of the room's purpose"
+    },
+    "agent_id": {
+      "type": "string",
+      "description": "Primary PMOVES agent identity owning this room"
+    },
+    "alter": {
+      "type": "string",
+      "description": "Optional alter or room profile chosen for this manifestation"
+    },
+    "room_type": {
+      "type": "string",
+      "enum": ["operator", "builder", "scout", "creator", "viewer", "hybrid"],
+      "description": "Primary operating pattern for the room"
+    },
+    "owner_mode": {
+      "type": "string",
+      "enum": ["primary", "alter", "shared", "ephemeral"],
+      "description": "Identity mode for the room session"
+    },
+    "shell": {
+      "type": "object",
+      "required": ["theme", "layout"],
+      "properties": {
+        "theme": {
+          "type": "object",
+          "required": ["theme_id"],
+          "properties": {
+            "theme_id": {
+              "type": "string"
+            },
+            "accent_color": {
+              "type": "string",
+              "pattern": "^#[0-9A-Fa-f]{6}$"
+            },
+            "skin": {
+              "type": "string"
+            },
+            "icon": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        "layout": {
+          "type": "object",
+          "required": ["default_route", "panels"],
+          "properties": {
+            "default_route": {
+              "type": "string"
+            },
+            "panels": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "object",
+                "required": ["panel_id", "kind", "position"],
+                "properties": {
+                  "panel_id": {
+                    "type": "string"
+                  },
+                  "kind": {
+                    "type": "string",
+                    "enum": ["chat", "notebook", "graph", "media", "controls", "tasks", "logs", "custom"]
+                  },
+                  "position": {
+                    "type": "string",
+                    "enum": ["left", "right", "top", "bottom", "center", "floating"]
+                  },
+                  "size": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 100
+                  },
+                  "pinned": {
+                    "type": "boolean"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "apps": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["app_id", "kind", "route", "capabilities"],
+        "properties": {
+          "app_id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": ["notebook", "chat", "media", "graph", "editor", "browser", "dashboard", "custom"]
+          },
+          "route": {
+            "type": "string"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "action_namespace": {
+            "type": "string",
+            "description": "Structured action namespace the room can call into"
+          },
+          "capabilities": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "pinned": {
+            "type": "boolean"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["active", "planned", "deprecated"],
+            "description": "Lifecycle status of the app surface. Planned apps render as inactive in the room UI."
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "notebook": {
+      "type": "object",
+      "required": ["provider", "workspace_ref", "sync"],
+      "properties": {
+        "provider": {
+          "type": "string",
+          "enum": ["open-notebook", "pmoves-notebook-workbench", "external"]
+        },
+        "workspace_ref": {
+          "type": "string",
+          "description": "Notebook or workspace identifier"
+        },
+        "thread_ref": {
+          "type": "string",
+          "description": "Optional default conversation thread or page identifier"
+        },
+        "default_page": {
+          "type": "string"
+        },
+        "sync": {
+          "type": "object",
+          "required": ["mode", "writeback_targets"],
+          "properties": {
+            "mode": {
+              "type": "string",
+              "enum": ["authoritative", "mirrored", "read-only"]
+            },
+            "writeback_targets": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": ["sources", "entries", "pages", "threads", "snapshots"]
+              }
+            },
+            "artifact_prefix": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "persona": {
+      "type": "object",
+      "properties": {
+        "signature_ref": {
+          "type": "string",
+          "description": "Reference into agent_signatures.yaml"
+        },
+        "voice": {
+          "type": "string"
+        },
+        "glyph": {
+          "type": "string",
+          "maxLength": 2
+        },
+        "resonance": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "skill_bindings": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "skill.binding.v1.schema.json"
+      }
+    },
+    "policies": {
+      "type": "object",
+      "required": ["model_routing", "publish", "memory"],
+      "properties": {
+        "model_routing": {
+          "type": "string",
+          "enum": ["tensorzero", "hybrid", "native"],
+          "description": "Model routing plane for this room"
+        },
+        "publish": {
+          "type": "object",
+          "required": ["allow_nats_emit", "allow_external_publish"],
+          "properties": {
+            "allow_nats_emit": {
+              "type": "boolean"
+            },
+            "allow_external_publish": {
+              "type": "boolean"
+            },
+            "allowed_subjects": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        "memory": {
+          "type": "object",
+          "required": ["graphiti", "notebook_writeback", "chit_handoff"],
+          "properties": {
+            "graphiti": {
+              "type": "boolean"
+            },
+            "notebook_writeback": {
+              "type": "boolean"
+            },
+            "chit_handoff": {
+              "type": "boolean"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "telemetry": {
+      "type": "object",
+      "properties": {
+        "graphiti_phase": {
+          "type": "string"
+        },
+        "room_events_subject": {
+          "type": "string"
+        },
+        "healthcheck_route": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "provenance": {
+      "type": "object",
+      "required": ["source", "updated_at"],
+      "properties": {
+        "source": {
+          "type": "string"
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "related_docs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}
