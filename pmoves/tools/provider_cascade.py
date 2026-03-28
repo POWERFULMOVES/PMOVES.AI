@@ -234,11 +234,12 @@ def _stage_1_secrets(
     env_var = provider_config["env_var"]
     key_pattern = provider_config.get("key_pattern", ".*")
 
-    if not dry_run and not re.match(key_pattern, api_key):
-        return StageResult(
-            stage=1, name="Secrets Ingestion", success=False,
-            message=f"Key format invalid for {provider_slug} (expected pattern: {key_pattern})",
-        )
+    if not dry_run:
+        if not re.match(key_pattern, api_key):
+            return StageResult(
+                stage=1, name="Secrets Ingestion", success=False,
+                message=f"Key format invalid for {provider_slug} (expected pattern: {key_pattern})",
+            )
 
     current_env = _read_env_shared()
     current_val = current_env.get(env_var, "")
@@ -263,8 +264,10 @@ def _stage_1_secrets(
         else:
             _remove_env_key(env_var)
 
-    _write_env_key(env_var, api_key)  # noqa: CodeQL [py/clear-text-storage-sensitive-data] -- local secrets funnel staging file by design
-    logger.info(f"Wrote {env_var} to env.shared")
+    # Security: env.shared is a local gitignored staging file processed by secrets-funnel.
+    # The funnel encrypts and distributes to tier-specific env files. This is NOT a secret store.
+    _write_env_key(env_var, api_key)  # nosec B105 — local staging, encrypted downstream by secrets-funnel
+    logger.info("Wrote %s to env.shared", env_var)
 
     try:
         result = subprocess.run(
