@@ -149,6 +149,11 @@
           },
           "pinned": {
             "type": "boolean"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["active", "planned", "deprecated"],
+            "description": "Lifecycle status of the app surface. Planned apps render as inactive in the room UI."
           }
         },
         "additionalProperties": false

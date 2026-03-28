@@ -31,6 +31,7 @@ export interface RoomApp {
   action_namespace?: string;
   capabilities: string[];
   pinned?: boolean;
+  status?: 'active' | 'planned' | 'deprecated';
 }
 
 export interface RoomSkillBinding {
