@@ -313,6 +313,21 @@
         }
       },
       "additionalProperties": false
+    },
+    "team_refs": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Agent team identifiers from agent-teams.yaml that this room coordinates"
+    },
+    "service_refs": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Docker Compose service names or service catalog slugs this room depends on"
+    },
+    "launcher_refs": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Pinokio launcher or make target identifiers for room bringup"
     }
   },
   "additionalProperties": false

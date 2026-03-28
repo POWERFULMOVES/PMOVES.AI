@@ -192,6 +192,9 @@
       "tags": ["preflight", "voice", "pipeline"]
     }
   ],
+  "team_refs": ["media", "evolution"],
+  "service_refs": ["flute-gateway", "ultimate-tts", "pmoves-yt", "ffmpeg-whisper"],
+  "launcher_refs": ["up-voice", "up-media"],
   "policies": {
     "model_routing": "hybrid",
     "publish": {

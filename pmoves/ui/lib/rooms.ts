@@ -116,6 +116,9 @@ export interface RoomManifest {
     updated_at: string;
     related_docs?: string[];
   };
+  team_refs?: string[];
+  service_refs?: string[];
+  launcher_refs?: string[];
 }
 
 export interface RoomDefinition extends Omit<RoomCatalogEntry, 'manifest'> {
