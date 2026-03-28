@@ -1,0 +1,186 @@
+# Provider Activation Cascade — Runbook
+# ======================================
+# Human-readable AND machine-executable operational procedures.
+# Skills and agents can parse the `machine:` fields directly.
+#
+# Run the full cascade: make -C pmoves provider-activate PROVIDER=<slug> KEY=<key>
+# Dry-run check:        make -C pmoves provider-check PROVIDER=<slug>
+# List all providers:   make -C pmoves provider-list
+
+runbook:
+  name: provider-activation
+  version: 1
+  description: "Activate, verify, and manage LLM providers on a PMOVES Claw node"
+  reference_node: laptop-4090
+
+  # ===========================================================================
+  # Scenario 1: First-Run 4090 Onboarding
+  # ===========================================================================
+  scenarios:
+    first_run_4090:
+      description: "First-time onboarding for the 4090 reference coding workstation"
+      prerequisites:
+        - "Docker and docker-compose installed"
+        - "Ollama accessible at pmoves-ollama:11434"
+        - "NATS bus running (make -C pmoves up-nats)"
+        - "env.shared exists (make -C pmoves env-setup)"
+      steps:
+        - id: bootstrap
+          human: "Run first-time environment setup"
+          machine: "make -C pmoves env-setup"
+          prerequisite: null
+          notes: "Creates env.shared from template if missing, runs brand_defaults"
+
+        - id: pull_models
+          human: "Pull local models for the 4090 (~50GB download)"
+          machine: "make -C pmoves provider-list && echo 'Pull models via PBnJ 4090 Models launcher or: ollama pull qwen3-coder:30b && ollama pull qwen3.5:9b && ollama pull qwen3-embedding:4b'"
+          prerequisite: bootstrap
+          notes: "Always-resident: qwen3-embedding:4b. Coding focus: qwen3-coder:30b."
+
+        - id: activate_anthropic
+          human: "Activate Anthropic (Claude) provider — enter your API key when prompted"
+          machine: "make -C pmoves provider-activate PROVIDER=anthropic"
+          prerequisite: bootstrap
+          notes: "Unlocks coding_claude_fallback stack and agent_zero Claude variant"
+
+        - id: activate_openai
+          human: "Activate OpenAI provider"
+          machine: "make -C pmoves provider-activate PROVIDER=openai"
+          prerequisite: bootstrap
+          notes: "Unlocks coding_codex stack and orchestrator primary"
+
+        - id: activate_minimax
+          human: "Activate MiniMax (Token Plan) provider"
+          machine: "make -C pmoves provider-activate PROVIDER=minimax"
+          prerequisite: bootstrap
+          notes: "Unlocks coding_minimax stack"
+
+        - id: activate_zai
+          human: "Activate Z.AI (GLM Coding Plan) provider"
+          machine: "make -C pmoves provider-activate PROVIDER=zai"
+          prerequisite: bootstrap
+          notes: "Unlocks coding_glm stack with GLM-5.1"
+
+        - id: activate_alibaba
+          human: "Activate Alibaba (DashScope) provider"
+          machine: "make -C pmoves provider-activate PROVIDER=alibaba"
+          prerequisite: bootstrap
+          notes: "Unlocks coding_alibaba stack with qwen3-coder-plus"
+
+        - id: verify
+          human: "Verify all providers are active"
+          machine: "make -C pmoves provider-list"
+          prerequisite: [activate_anthropic, activate_openai, activate_minimax, activate_zai, activate_alibaba]
+
+        - id: health_check
+          human: "Run full health check"
+          machine: "make -C pmoves verify-all"
+          prerequisite: verify
+
+    # ===========================================================================
+    # Scenario 2: Day-2 — Add a New Provider
+    # ===========================================================================
+    add_provider:
+      description: "Add a new LLM provider to an existing node"
+      steps:
+        - id: check
+          human: "Preview what the activation will do"
+          machine: "make -C pmoves provider-check PROVIDER=$PROVIDER"
+          notes: "Shows all 6 stages in dry-run mode"
+
+        - id: activate
+          human: "Activate the provider with your API key"
+          machine: "make -C pmoves provider-activate PROVIDER=$PROVIDER KEY=$KEY"
+          prerequisite: check
+
+        - id: verify
+          human: "Verify the model is available in TensorZero"
+          machine: "curl -s http://localhost:3030/v1/models | python -m json.tool"
+          prerequisite: activate
+
+        - id: readiness
+          human: "Run model readiness check"
+          machine: "make -C pmoves model-readiness-check"
+          prerequisite: verify
+
+    # ===========================================================================
+    # Scenario 3: Day-2 — Swap Models / VRAM Rebalancing
+    # ===========================================================================
+    vram_rebalance:
+      description: "Rebalance VRAM when models conflict on the 4090"
+      steps:
+        - id: check_vram
+          human: "Check current GPU VRAM usage"
+          machine: "curl -s http://localhost:8090/gpu/status | python -m json.tool"
+          notes: "4090 has 14.3GB usable. Max 2 concurrent models."
+
+        - id: check_models
+          human: "Check which models are loaded"
+          machine: "curl -s http://pmoves-ollama:11434/api/ps"
+
+        - id: unload
+          human: "Unload idle model to free VRAM"
+          machine: "curl -X POST http://pmoves-ollama:11434/api/generate -d '{\"model\": \"$MODEL\", \"keep_alive\": 0}'"
+          prerequisite: check_models
+          notes: "keep_alive: 0 tells Ollama to unload immediately"
+
+        - id: load
+          human: "Load desired model"
+          machine: "curl -X POST http://pmoves-ollama:11434/api/generate -d '{\"model\": \"$MODEL\", \"keep_alive\": \"3m\"}'"
+          prerequisite: unload
+
+    # ===========================================================================
+    # Scenario 4: Day-2 — Remove / Rotate a Provider Key
+    # ===========================================================================
+    rotate_key:
+      description: "Rotate an API key for an existing provider"
+      steps:
+        - id: deactivate
+          human: "Deactivate the old key"
+          machine: "make -C pmoves provider-deactivate PROVIDER=$PROVIDER"
+
+        - id: reactivate
+          human: "Activate with the new key"
+          machine: "make -C pmoves provider-activate PROVIDER=$PROVIDER KEY=$NEW_KEY"
+          prerequisite: deactivate
+
+        - id: verify
+          human: "Verify the provider is working with the new key"
+          machine: "make -C pmoves provider-check PROVIDER=$PROVIDER"
+          prerequisite: reactivate
+
+  # ===========================================================================
+  # Reference: All Provider Slugs
+  # ===========================================================================
+  providers:
+    - slug: anthropic
+      env_var: ANTHROPIC_API_KEY
+      coding_stack: claude_code
+    - slug: openai
+      env_var: OPENAI_API_KEY
+      coding_stack: codex_openai
+    - slug: minimax
+      env_var: MINIMAX_API_KEY
+      coding_stack: minimax_token_plan
+    - slug: zai
+      env_var: Z_AI_API_KEY
+      coding_stack: glm_coding_plan
+    - slug: alibaba
+      env_var: ALIBABA_PRO_CODING_PLAN
+      coding_stack: alibaba_coding_plan
+    - slug: glm_bigmodel
+      env_var: GLM_API_KEY
+    - slug: groq
+      env_var: GROQ_API_KEY
+    - slug: moonshot
+      env_var: MOONSHOT_API_KEY
+    - slug: openrouter
+      env_var: OPENROUTER_API_KEY
+    - slug: venice
+      env_var: VENICE_API_KEY
+    - slug: together
+      env_var: TOGETHER_AI_API_KEY
+    - slug: cloudflare
+      env_var: CLOUDFLARE_API_TOKEN
+    - slug: gemini
+      env_var: GEMINI_API_KEY
