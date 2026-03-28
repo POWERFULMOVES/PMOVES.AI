@@ -2195,8 +2195,17 @@ up-jellyfin:
 
 # Bring up agents stack (NATS, Agent Zero, Archon, Mesh Agent) and publisher-discord
 .PHONY: up-agents up-agents-stack
-up-agents-stack: ## Start Agents (NATS, Agent Zero, Archon, etc.) preferring Archon submodule build
-	@$(DC) --profile agents up -d nats agent-zero archon mesh-agent deepresearch publisher-discord
+up-agents-stack: ## Start Agents (NATS, Agent Zero, Archon, Cipher Memory, etc.) preferring submodule builds
+	@$(DC) --profile agents up -d nats agent-zero archon mesh-agent deepresearch publisher-discord cipher-api
+
+.PHONY: up-cipher
+up-cipher: ## Start Cipher Memory (knowledge-graph memory for Claude Code / agents)
+	@$(DC) --profile agents up -d --build cipher-api
+	@echo "✔ Cipher Memory ready at http://localhost:$${CIPHER_PORT:-8096}"
+
+.PHONY: cipher-health
+cipher-health: ## Check Cipher Memory health
+	@curl -sf http://localhost:$${CIPHER_PORT:-8096}/health && echo " ✔ cipher-api healthy" || (echo "✗ cipher-api unhealthy" && exit 1)
 
 .PHONY: agents-headless-smoke
 agents-headless-smoke: ## Check Agent Zero and Archon headless services
