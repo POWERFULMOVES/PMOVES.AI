@@ -1,4 +1,4 @@
 services:
   pmoves-yt:
-    image: ${PMOVES_YT_IMAGE:-ghcr.io/cataclysm-studios-inc/pmoves-yt:pmoves-latest}
+    image: ${PMOVES_YT_IMAGE:-ghcr.io/powerfulmoves/pmoves-yt:pmoves-latest}
 
