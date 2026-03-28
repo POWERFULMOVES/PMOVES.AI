@@ -42,16 +42,17 @@ API alternative:
 
 ```bash
 curl -fsS \
-  -H "Authorization: Bearer $TAILSCALE_API_KEY" \
+  -u "${TAILSCALE_API_KEY}:" \
   "https://api.tailscale.com/api/v2/tailnet/-/devices"
 
 curl -fsS -X DELETE \
-  -H "Authorization: Bearer $TAILSCALE_API_KEY" \
+  -u "${TAILSCALE_API_KEY}:" \
   "https://api.tailscale.com/api/v2/device/<deviceId>"
 ```
 
 Notes:
 - `TAILSCALE_API_KEY` is an admin credential. Keep it in GitHub environment secrets, a `*_FILE` secret mount, or a local ignored file only.
+- Tailscale API access tokens authenticate with HTTP Basic auth: API key as username, empty password.
 - The repo-local API schema for these endpoints lives at `pmoves/docs/API_Docs/tailscale-api.yaml`.
 - When you execute removal, capture the exact device ID only in the operator log or Cipher handoff, not in committed docs.
 

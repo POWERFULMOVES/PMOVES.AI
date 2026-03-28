@@ -1592,3 +1592,29 @@ This is analogous to HTTP path versioning (`/api/v1/`) vs content-type versionin
 **`ops.tailscale.health.v1`**
 - **Direction:** Published by health-check cron -> Consumed by alerting
 - **Purpose:** Fleet-wide Tailscale health summary
+
+## Fleet Audit Watcher Subjects
+
+> **Source:** `pmoves/scripts/fleet/fleet-audit-watcher.sh` on the z890/KVM2 fleet lane.
+
+**`fleet.device.registered.v1`**
+- **Direction:** Published by `fleet-audit-watcher` on KVM2 -> Consumed by observability, enrollment follow-through, or Discord publisher lanes
+- **Purpose:** New RustDesk client registration detected from `hbbs` journal `update_pk` events
+- **Reliability:** Fire-and-forget NATS publish; every event is also appended to `/var/log/pmoves/fleet-audit.jsonl` on KVM2
+
+**`fleet.audit.connection.v1`**
+- **Direction:** Published by `fleet-audit-watcher` on KVM2 -> Consumed by observability or alerting
+- **Purpose:** Relay connection and disconnect events detected from `hbbs` / `hbbr` journals
+- **Reliability:** Fire-and-forget NATS publish with local JSONL fallback on KVM2
+
+**`fleet.audit.heartbeat.v1`**
+- **Direction:** Published by `fleet-audit-watcher` on KVM2 -> Consumed by observability or alerting
+- **Purpose:** Watcher liveness heartbeat emitted every 5 minutes
+- **Reliability:** Fire-and-forget NATS publish with local JSONL fallback on KVM2
+
+### Fleet Audit Watcher Notes
+
+- Publisher runtime: `pmoves/scripts/fleet/fleet-audit-watcher.sh`
+- Runtime dependencies: `nats` CLI, `hbbs` / `hbbr` systemd journals, `/var/log/pmoves`, and a NATS broker reachable from KVM2
+- Auth split: `TAILSCALE_AUTHKEY` joins nodes; `TAILSCALE_API_KEY` is for admin API operations and is not used to publish watcher events
+- Reachability caveat: the repo-default NATS broker is localhost-only on port `4222`, so remote watcher publishes stay blocked until one broker is exposed on a Tailscale-reachable interface

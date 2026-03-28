@@ -51,6 +51,21 @@ Comprehensive reference of all production services, ports, APIs, and integration
 - **Compose Profile:** `orchestration`
 - **CI Pipeline:** `self-hosted-builds` (amd64)
 
+### Fleet Audit Watcher
+- **Ports:** None (NATS client + local JSONL log only)
+- **Purpose:** KVM2-side journal watcher for RustDesk registration, relay connection, and watcher heartbeat events
+- **Runtime Form:** Host systemd service on KVM2 (`fleet-audit-watcher.service`), not a Docker service
+- **Publish Path:**
+  - `fleet.device.registered.v1`
+  - `fleet.audit.connection.v1`
+  - `fleet.audit.heartbeat.v1`
+- **Health / Startup Probe:** Validate with `systemctl status fleet-audit-watcher` on KVM2 and confirm new lines in `/var/log/pmoves/fleet-audit.jsonl`
+- **Dependencies:** `nats` CLI, `/var/log/pmoves`, `hbbs` + `hbbr` journals, and a NATS broker reachable from KVM2
+- **Operational Notes:**
+  - The repo-default NATS bind is localhost-only on port `4222`; remote publishes require one broker exposed on a Tailscale-reachable interface
+  - NATS publish is fire-and-forget; local JSONL logging is the fallback evidence path when broker reachability is not available
+  - Tailscale admin credentials (`TAILSCALE_API_KEY`) are for device/ACL operations only and are separate from watcher publish configuration
+
 ### BoTZ MCP Gateway
 - **Ports:** 2091
 - **Purpose:** Multi-server MCP gateway + A2A task bridge for BoTZ orchestration

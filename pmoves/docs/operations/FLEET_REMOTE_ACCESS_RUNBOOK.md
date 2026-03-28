@@ -111,20 +111,21 @@ Useful endpoints from that schema:
 - `POST /api/v2/tailnet/{tailnet}/acl` — update policy file (`policy_file`)
 
 `-` can be used as a shorthand tailnet ID when the API key belongs to the active tailnet.
+Tailscale API access tokens authenticate with HTTP Basic auth using the key as the username and an empty password.
 
 Examples:
 
 ```bash
 curl -fsS \
-  -H "Authorization: Bearer $TAILSCALE_API_KEY" \
+  -u "${TAILSCALE_API_KEY}:" \
   "https://api.tailscale.com/api/v2/tailnet/-/devices"
 
 curl -fsS -X DELETE \
-  -H "Authorization: Bearer $TAILSCALE_API_KEY" \
+  -u "${TAILSCALE_API_KEY}:" \
   "https://api.tailscale.com/api/v2/device/<deviceId>"
 
 curl -fsS \
-  -H "Authorization: Bearer $TAILSCALE_API_KEY" \
+  -u "${TAILSCALE_API_KEY}:" \
   -H "Accept: application/hujson" \
   "https://api.tailscale.com/api/v2/tailnet/-/acl"
 ```
@@ -178,6 +179,8 @@ Important current runtime note:
 - `pmoves/configs/tailscale-acl-policy.json`
 - `pmoves/scripts/fleet/generate-enrollment.py`
 - `pmoves/scripts/fleet/fleet-audit-watcher.sh`
+- `.claude/context/nats-subjects.md`
+- `.claude/context/services-catalog.md`
 - `pmoves/docs/AGENTS/CODEX_OPERATOR_HOME.md`
 - `pmoves/docs/AGENTS/CODEX_CLAUDE_PARITY_MAP.md`
 - `pmoves/docs/AGENTS/CODEX_CIPHER_MEMORY_IMPLEMENTATION_MAP.md`
