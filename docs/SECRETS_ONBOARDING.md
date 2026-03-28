@@ -19,6 +19,10 @@
 - Use descriptive names, include environment suffix (e.g., `SUPABASE_SERVICE_ROLE_KEY_DEV`).
 - Avoid putting real values in `env.shared.example`; keep placeholders.
 - For local runs, use `.env.local` and never commit it.
+- Fleet remote access:
+  - `TAILSCALE_AUTHKEY` is the node join/bootstrap credential.
+  - `TAILSCALE_API_KEY` is the admin API credential for stale-device cleanup, tag updates, and ACL automation.
+  - Treat `TAILSCALE_API_KEY` as high-privilege and store it only in GitHub environment secrets, `*_FILE` mounts, or local ignored files.
 - Coding-plan lanes:
   - Use only `ALIBABA_PRO_CODING_PLAN` for Alibaba/Qwen coding-plan credentials.
 - GHCR publishing:

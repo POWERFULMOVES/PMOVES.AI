@@ -1,5 +1,5 @@
 # Claude -> Codex Parity Map (PMOVES)
-_Last updated: 2026-03-01_
+_Last updated: 2026-03-28_
 
 This map translates common `.claude/commands/*` workflows into Codex-native
 operations (`make`, `curl`, and existing PMOVES scripts).
@@ -197,6 +197,17 @@ operations (`make`, `curl`, and existing PMOVES scripts).
 | docker prune (aggressive) | `make -C pmoves docker-prune-all` |
 | branch audit | `make -C pmoves branch-audit` |
 | branch cleanup | `make -C pmoves branch-cleanup EXECUTE=1` |
+
+Fleet remote access parity:
+
+| Claude practice | Codex equivalent |
+| --- | --- |
+| tailnet device inventory | `tailscale status --json` or `curl -H "Authorization: Bearer $TAILSCALE_API_KEY" https://api.tailscale.com/api/v2/tailnet/-/devices` |
+| stale node delete | `curl -X DELETE -H "Authorization: Bearer $TAILSCALE_API_KEY" https://api.tailscale.com/api/v2/device/<deviceId>` |
+| RustDesk relay audit | `pmoves/docs/operations/RUSTDESK_SELF_HOSTED.md` plus remote `systemctl status hbbs hbbr fleet-audit-watcher` on KVM2 |
+| fleet policy audit | `curl -H "Authorization: Bearer $TAILSCALE_API_KEY" -H "Accept: application/hujson" https://api.tailscale.com/api/v2/tailnet/-/acl` and compare to `pmoves/configs/tailscale-acl-policy.json` |
+
+For z890 rebuild manifests, translate raw `docker compose build` steps to the nearest Known Road whenever one exists. Raw targeted builds are fallback preparation only; the final bring-up should still go through the make target path.
 
 ## Guidance
 
