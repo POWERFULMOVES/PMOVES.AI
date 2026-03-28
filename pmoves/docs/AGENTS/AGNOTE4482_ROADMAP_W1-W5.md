@@ -504,9 +504,12 @@ All resolved. No blockers.
 ### 4090-claude (Noise Reducer)
 | # | Task | Priority | Notes |
 |---|------|----------|-------|
-| 1 | PR #1082 merge + AGNOTE/TAC docs | **P0** | Branch: feat/chit-integration-wave-1 |
-| 2 | P7 Agent Interpreter → 5090 TTS via Tailscale | P1 | UNBLOCKED since Step 7 |
-| 3 | W1: Agent Theming + Terminal | P2 | Roadmap claim |
+| 1 | ~~PR #1082 merge + AGNOTE/TAC docs~~ | ~~P0~~ | RESOLVED — merged in CHIT Wave 1 |
+| 2 | Room catalog shipped (#1136, #1137, #1142, #1143) | **DONE** | Schema, home entry, dashboard routes, runtime taxonomy — all merged |
+| 3 | Profile ID normalization (`workstation_5090` alias) | **P1** | 16 files use `workstation_5090`, profile config is `desktop-9950xd` — alias file created |
+| 4 | Roadmap P0 cleanup + container rebuild manifest | **P1** | Clear stale blockers so z890/5090/codex sessions are productive |
+| 5 | P7 Agent Interpreter → 5090 TTS via Tailscale | P2 | UNBLOCKED since Step 7 |
+| 6 | W1: Agent Theming + Terminal | P2 | Roadmap claim |
 
 ### z890-claude (Infrastructure Coordinator)
 | # | Task | Priority | Notes |
@@ -516,19 +519,18 @@ All resolved. No blockers.
 | 3 | W6-P1: Health/Wealth Docker wiring | P1 | NATS + /healthz + /metrics |
 | 4 | Jetson Orin onboarding | P2 | Via RustDesk |
 | 5 | NATS leaf node to 5090 | P2 | Flute NATS=connected proves bus healthy |
-| 6 | ClaWz branch/pin repair plan | P2 | Replace orphaned root gitlink with a real reviewable PMOVES-ClawZ base |
-| 7 | ClaWz profile-id normalization | P2 | Align `workstation_5090`-style host placeholders with `pmoves/config/profiles/*.yaml` ids |
+| 6 | ~~ClaWz branch/pin repair plan~~ | ~~P2~~ | RESOLVED — synced at `c050805cc`, not orphaned. ClawZ is Pre-Stage, not broken. |
+| 7 | ~~ClaWz profile-id normalization~~ | ~~P2~~ | RESOLVED — `workstation_5090` alias created by 4090-claude (see `pmoves/config/profiles/workstation_5090.yaml`) |
+| 8 | n8n runner investigation | P1 | `N8N_RUNNERS_ENABLED` already defaults to `true` in docker-compose — check n8n UI workflow activation, auth token, version |
 
 ### codex-gpt5 (Creator/Publishing + Prospectus Convergence)
 | # | Task | Priority | Notes |
 |---|------|----------|-------|
-| 1 | Publish the Agent Zero `v1.3` gap report for PMOVES hardened fork | **P0** | Use upstream `v1.3` as the baseline, then classify PMOVES-only overlays that must survive a sync |
-| 2 | Publish the PMOVES-ClawZ gap report | **P0** | Capture upstream/fork/orphaned-gitlink reality before more ClaW suit positioning |
-| 3 | Align AGNOTE/P7/website language around rooms + stage | **P0** | Make the prospectus consistent across school/company/site docs |
-| 4 | Keep ClaWz/Agent Zero suit config coding-plan aligned | **P0** | Tie the room-aware suit story back to real profile ids and approved remote coding lanes |
-| 5 | Close Supabase -> Agent Zero -> Publisher -> Discord activation loop | **P0** | Validate `approval_poller.json` + `echo_publisher.json`; capture first real published-event evidence |
-| 6 | Pick canonical Discord publish lane | **P0** | Decide between `publisher-discord` NATS subscriber and n8n webhook relay; demote the other to fallback/test-only |
-| 7 | Add creator dashboard state clarity | P1 | Make `studio-board` and `videos` distinguish `approved, waiting for poller` vs `published` |
-| 8 | Validate Discord approval workflow for creator-control | P1 | Exercise channel-monitor queue/review endpoints with messaging-gateway callbacks and record rejection UX gaps |
-| 9 | Surface publish failures + backfill readiness | P2 | Turn publisher audit/backfill work into an operator-visible lane before broader M2 expansion |
-| 7 | Surface publish failures + backfill readiness | P2 | Turn publisher audit/backfill work into an operator-visible lane before broader M2 expansion |
+| 1 | ~~Publish the Agent Zero `v1.3` gap report~~ | ~~P0~~ | DONE — gap report published. Sync decision (accept pin vs pull v1.3) is a planning call, not a code blocker. |
+| 2 | ~~Publish the PMOVES-ClawZ gap report~~ | ~~P0~~ | DONE — gap report published. ClawZ synced at `c050805cc`, Pre-Stage, not orphaned. |
+| 3 | Align AGNOTE/P7/website language around rooms + stage | **P0** | Make the prospectus consistent — rooms are now shipped (#1136-#1143) |
+| 4 | Close Supabase → Agent Zero → Publisher → Discord activation loop | **P0** | Validate `approval_poller.json` + `echo_publisher.json`; n8n runners already enabled — investigate UI activation state |
+| 5 | Pick canonical Discord publish lane | **P0** | Decide between `publisher-discord` NATS subscriber and n8n webhook relay; demote the other |
+| 6 | ~~Add creator dashboard state clarity~~ | ~~P1~~ | DONE — PR #1135 ships shared `publishState.ts` mapper across `studio-board` and `videos` |
+| 7 | Validate Discord approval workflow for creator-control | P1 | Exercise channel-monitor queue/review endpoints with messaging-gateway callbacks |
+| 8 | Surface publish failures + backfill readiness | P2 | Turn publisher audit into operator-visible lane after real loop is proven |
