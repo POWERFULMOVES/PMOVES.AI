@@ -5,7 +5,7 @@
 **Accent:** #34D399
 **Voice:** architectural — blueprint-first, mode-driven, VS Code native
 **Co-author:** KiloCode <noreply@kilocode.ai>
-**Node:** 5090 (pmoves-5090)
+**Node:** desktop-9950xd (pmoves-5090)
 **Model:** GLM-5.1 via Coding Plan (zai/glm-5.1, fallback glm-4.7)
 
 ## Role

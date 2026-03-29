@@ -5,8 +5,8 @@ This folder complements the docs starter and provides project commands to set an
 Profiles and commands
 - List available manifests: `make -C pmoves model-profiles`
 - Apply a profile (writes into `pmoves/.env.local`):
-  - Archon/Hi‑RAG defaults: `make -C pmoves model-apply PROFILE=archon HOST=workstation_5090`
-  - Agent Zero defaults: `make -C pmoves model-apply PROFILE=agent-zero HOST=workstation_5090`
+  - Archon/Hi‑RAG defaults: `make -C pmoves model-apply PROFILE=archon HOST=desktop-9950xd`
+  - Agent Zero defaults: `make -C pmoves model-apply PROFILE=agent-zero HOST=desktop-9950xd`
 - Swap a single model on the fly:
   - `make -C pmoves model-swap SERVICE=hirag NAME=Qwen/Qwen3-Reranker-4B`
 

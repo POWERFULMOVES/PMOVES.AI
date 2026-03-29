@@ -3,10 +3,10 @@
 # This script pulls all required models into Ollama for local inference
 #
 # Hardware Profiles (set PMOVES_PROFILE):
-#   workstation_5090  - RTX 5090 32GB (largest models, FP16)
-#   laptop_4090       - RTX 4090 16GB (14B quantized)
-#   desktop_3090ti    - RTX 3090 Ti 24GB (32B Q4/Q5)
-#   jetson_orin       - Jetson Orin Nano Super 8GB (7B Q4)
+#   desktop-9950xd    - RTX 5090 32GB (largest models, FP16)
+#   laptop-4090       - RTX 4090 16GB (14B quantized)
+#   intel-265kf-3090ti - RTX 3090 Ti 24GB (32B Q4/Q5)
+#   jetson-orin-nano  - Jetson Orin Nano Super 8GB (7B Q4)
 #   minimal           - CPU fallback (tiny models only)
 #
 # Updated: December 2025 - Qwen3, DeepSeek-R1 distills, Qwen3-Embedding
@@ -15,7 +15,7 @@
 set -e
 
 OLLAMA_CONTAINER="${OLLAMA_CONTAINER:-pmoves-pmoves-ollama-1}"
-PMOVES_PROFILE="${PMOVES_PROFILE:-desktop_3090ti}"
+PMOVES_PROFILE="${PMOVES_PROFILE:-intel-265kf-3090ti}"
 
 # Color codes for output
 RED='\033[0;31m'
@@ -71,11 +71,11 @@ if docker exec "$OLLAMA_CONTAINER" nvidia-smi --query-gpu=name,memory.total --fo
     # Auto-detect profile based on GPU if not explicitly set
     if [ "$PMOVES_PROFILE" = "auto" ]; then
         case "$GPU_NAME" in
-            *5090*) PMOVES_PROFILE="workstation_5090" ;;
-            *4090*) PMOVES_PROFILE="laptop_4090" ;;
-            *3090*) PMOVES_PROFILE="desktop_3090ti" ;;
-            *Orin*) PMOVES_PROFILE="jetson_orin" ;;
-            *) PMOVES_PROFILE="desktop_3090ti" ;;
+            *5090*) PMOVES_PROFILE="desktop-9950xd" ;;
+            *4090*) PMOVES_PROFILE="laptop-4090" ;;
+            *3090*) PMOVES_PROFILE="intel-265kf-3090ti" ;;
+            *Orin*) PMOVES_PROFILE="jetson-orin-nano" ;;
+            *) PMOVES_PROFILE="intel-265kf-3090ti" ;;
         esac
         log_info "Auto-detected profile: $PMOVES_PROFILE"
     fi
@@ -96,16 +96,16 @@ log_section "========================================="
 log_section "Embedding Models"
 
 case "$PMOVES_PROFILE" in
-    workstation_5090|desktop_3090ti)
+    desktop-9950xd|intel-265kf-3090ti)
         # Best quality - Qwen3-Embedding (MTEB #1)
         pull_model "qwen3-embedding:4b" "Hi-RAG primary, MTEB #1, 32K ctx"
         pull_model "snowflake-arctic-embed2:568m" "Extract Worker, fast, 1024d"
         ;;
-    laptop_4090)
+    laptop-4090)
         pull_model "qwen3-embedding:4b" "Hi-RAG primary, 32K ctx"
         pull_model "snowflake-arctic-embed2:568m" "Extract Worker, fast"
         ;;
-    jetson_orin)
+    jetson-orin-nano)
         pull_model "qwen3-embedding:0.6b" "Edge embedding, 32K ctx"
         pull_model "all-minilm:l6-v2" "Ultra-fast fallback, 384d"
         ;;
@@ -125,9 +125,9 @@ pull_model "nomic-embed-text" "768d, good quality/speed balance"
 log_section "Chat/Reasoning Models"
 
 case "$PMOVES_PROFILE" in
-    workstation_5090)
+    desktop-9950xd)
         # RTX 5090 32GB - Qwen3 flagship + DeepSeek-R1-32B
-        log_info "Workstation 5090 profile - pulling full-size models..."
+        log_info "Desktop 9950XD profile - pulling full-size models..."
         pull_model "qwen3:32b" "Agent Zero primary, 128K ctx"
         pull_model "qwen3:14b" "Fast fallback, FP16"
         pull_model "qwen3-coder:30b" "Code generation, 256K ctx, MoE 3.3B active"
@@ -144,7 +144,7 @@ case "$PMOVES_PROFILE" in
         pull_model "deepseek-r1:14b" "DeepSeek R1 distill, reasoning"
         ;;
 
-    desktop_3090ti)
+    intel-265kf-3090ti)
         # RTX 3090 Ti 24GB - Qwen3 30B MoE or 14B dense
         log_info "Desktop 3090Ti profile - pulling balanced models..."
         pull_model "qwen3:30b" "Agent Zero primary, MoE 3.3B active"
@@ -154,7 +154,7 @@ case "$PMOVES_PROFILE" in
         pull_model "qwen3-vl:8b" "Vision-language"
         ;;
 
-    jetson_orin)
+    jetson-orin-nano)
         # Jetson Orin Nano Super 8GB - Qwen3 4B/8B Q4
         log_info "Jetson Orin profile - pulling edge-optimized models..."
         pull_model "qwen3:4b" "Agent Zero edge, 256K ctx"
@@ -177,7 +177,7 @@ esac
 log_section "Summarization & Analysis Models"
 
 case "$PMOVES_PROFILE" in
-    workstation_5090|desktop_3090ti)
+    desktop-9950xd|intel-265kf-3090ti)
         pull_model "qwen3:8b" "PMOVES.YT summarization, fast"
         pull_model "gemma2:9b-instruct" "Alternative summarization"
         ;;

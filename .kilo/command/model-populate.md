@@ -15,7 +15,7 @@ ollama pull $ARGUMENTS
 
 Register via sync profile (per `models_sync.py` CLI):
 ```bash
-python3 pmoves/tools/models/models_sync.py sync --profile agent-zero --host workstation_5090
+python3 pmoves/tools/models/models_sync.py sync --profile agent-zero --host desktop-9950xd
 ```
 
 Swap a single service model:
@@ -25,7 +25,7 @@ python3 pmoves/tools/models/models_sync.py swap --service agent-zero --name $ARG
 
 List seed models:
 ```bash
-python3 pmoves/tools/models/models_sync.py seed-list --host workstation_5090 --source auto
+python3 pmoves/tools/models/models_sync.py seed-list --host desktop-9950xd --source auto
 ```
 
 Verify readiness:
