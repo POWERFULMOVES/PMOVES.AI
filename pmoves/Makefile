@@ -1355,7 +1355,18 @@ populate-tier-envs: bootstrap-tier-envs ## Populate tier env files with defaults
 				echo "⚠ scripts/supabase/generate-keys.sh not found — run 'make supa-init' to generate proper JWT keys"; \
 			fi; \
 		else \
-			echo "✓ env.tier-supabase already has real values, skipping"; \
+			if grep -q "your_.*_here" env.tier-supabase 2>/dev/null; then \
+				echo "Filling intermediate-layer Supabase secrets (JWT preserved)..."; \
+				sed -i "s|^SECRET_KEY_BASE=your_secret_key_base_here|SECRET_KEY_BASE=$$(openssl rand -base64 48 | tr -d '\n=' | cut -c1-64)|" env.tier-supabase; \
+				sed -i "s|^VAULT_ENC_KEY=your_vault_enc_key_here|VAULT_ENC_KEY=$$(openssl rand -hex 16)|" env.tier-supabase; \
+				sed -i "s|^PG_META_CRYPTO_KEY=your_pg_meta_crypto_key_here|PG_META_CRYPTO_KEY=$$(openssl rand -hex 16)|" env.tier-supabase; \
+				sed -i "s|^LOGFLARE_PUBLIC_ACCESS_TOKEN=your_logflare_public_token_here|LOGFLARE_PUBLIC_ACCESS_TOKEN=$$(openssl rand -base64 48 | tr -d '\n=' | cut -c1-32)|" env.tier-supabase; \
+				sed -i "s|^LOGFLARE_PRIVATE_ACCESS_TOKEN=your_logflare_private_token_here|LOGFLARE_PRIVATE_ACCESS_TOKEN=$$(openssl rand -base64 48 | tr -d '\n=' | cut -c1-32)|" env.tier-supabase; \
+				sed -i "s|^SUPABASE_REALTIME_SECRET=your_realtime_secret_here|SUPABASE_REALTIME_SECRET=$$(openssl rand -base64 48 | tr -d '\n=' | cut -c1-64)|" env.tier-supabase; \
+				echo "✓ Populated intermediate-layer secrets in env.tier-supabase"; \
+			else \
+				echo "✓ env.tier-supabase already has real values, skipping"; \
+			fi; \
 		fi; \
 	fi; \
 	if [ -f "env.tier-api" ]; then \
