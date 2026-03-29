@@ -118,6 +118,11 @@ for schema in _realtime realtime _supabase _supavisor supavisor; do
     run_sql "CREATE SCHEMA IF NOT EXISTS $schema;" "$DB_NAME" > /dev/null 2>&1 || true
     run_sql "ALTER SCHEMA $schema OWNER TO supabase_admin;" "$DB_NAME" > /dev/null 2>&1 || true
 done
+
+# Create _analytics schema in _supabase DB (Logflare Ecto migrations require it)
+run_sql "CREATE SCHEMA IF NOT EXISTS _analytics;" "_supabase" > /dev/null 2>&1 || true
+run_sql "ALTER SCHEMA _analytics OWNER TO supabase_admin;" "_supabase" > /dev/null 2>&1 || true
+
 log_info "Schema ownership set for supabase_admin"
 
 # Step 4: Run Supabase init scripts (idempotent)

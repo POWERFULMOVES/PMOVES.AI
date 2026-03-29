@@ -16,12 +16,17 @@ SELECT 'ALTER DATABASE _supabase OWNER TO supabase_admin'
 WHERE EXISTS (SELECT FROM pg_roles WHERE rolname = 'supabase_admin')
   AND EXISTS (SELECT FROM pg_database WHERE datname = '_supabase')\gexec
 
--- 2. Schemas needed by Supabase services
+-- 2. Schemas needed by Supabase services (in the current/main database)
 CREATE SCHEMA IF NOT EXISTS _realtime;
 CREATE SCHEMA IF NOT EXISTS realtime;
 CREATE SCHEMA IF NOT EXISTS _supabase;
 CREATE SCHEMA IF NOT EXISTS _supavisor;
 CREATE SCHEMA IF NOT EXISTS supavisor;
+
+-- NOTE: _analytics schema must be created in the _supabase database, not here.
+-- See bootstrap_db.sh Step 3c which runs:
+--   CREATE SCHEMA IF NOT EXISTS _analytics in _supabase DB
+-- Logflare connects to _supabase DB and runs Ecto migrations there.
 
 -- 3. Schema ownership for Ecto migrations (realtime, pooler)
 DO $$ BEGIN
