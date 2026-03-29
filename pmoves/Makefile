@@ -2232,10 +2232,16 @@ a0-mcp-show: ## Print Agent Zero runtime MCP server map
 	echo "→ $$file"; \
 	sed -E 's/(password=)[^&"]+/\1***REDACTED***/g; s/(key=)[^&"]+/\1***REDACTED***/g' "$$file"
 
-.PHONY: archon-mcp-smoke
+.PHONY: archon-mcp-smoke knowledge-ingest knowledge-ingest-dry
 archon-mcp-smoke: ## Quick MCP bridge smoke: assert port is open and returns HTTP (404 is acceptable)
 	@code=$$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8051/ || true); \
 	if [ "$$code" = "000" ]; then echo "✖ archon-mcp not reachable on :8051" && exit 1; else echo "✔ archon-mcp HTTP $$code"; fi
+
+knowledge-ingest-dry: ## Dry-run knowledge ingestion (list files, no copy)
+	@bash pmoves/tools/knowledge_ingest.sh --dry-run
+
+knowledge-ingest: ## Ingest pmoves/knowledge/ into Agent Zero knowledge base
+	@bash pmoves/tools/knowledge_ingest.sh
 
 .PHONY: archon-ui-smoke
 archon-ui-smoke: ## Verify Archon API and UI endpoints are reachable (200)

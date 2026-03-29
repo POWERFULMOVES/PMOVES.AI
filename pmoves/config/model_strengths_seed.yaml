@@ -514,6 +514,45 @@ models:
     cost_efficiency_score: 8.0
     notes: "The dragon — Zhipu's flash model. Chinese NLP with lightning speed."
 
+  glm-4.5-air:
+    primary_strength: speed
+    strength_scores:
+      reasoning: 0.70
+      speed: 0.90
+      coding: 0.75
+      multilingual: 0.88
+      creativity: 0.65
+      context_handling: 0.70
+    preferred_functions: [coding, agent_zero, langextract]
+    cost_efficiency_score: 8.5
+    notes: "The courier — lightweight GLM that delivers code and context fast. MCP-ready."
+
+  glm-4.7:
+    primary_strength: coding
+    strength_scores:
+      reasoning: 0.82
+      speed: 0.65
+      coding: 0.85
+      multilingual: 0.85
+      creativity: 0.72
+      context_handling: 0.75
+    preferred_functions: [coding, coding_glm, coding_zai_glm, agent_zero]
+    cost_efficiency_score: 7.0
+    notes: "The sentinel — Z.AI GLM-4.7. Solid fallback with strong multilingual coding chops."
+
+  glm-5.1:
+    primary_strength: reasoning
+    strength_scores:
+      reasoning: 0.92
+      speed: 0.55
+      coding: 0.90
+      multilingual: 0.90
+      creativity: 0.82
+      context_handling: 0.85
+    preferred_functions: [coding, coding_glm, coding_zai_glm, orchestrator, deepresearch]
+    cost_efficiency_score: 6.0
+    notes: "The architect — Z.AI GLM-5.1. Primary coding plan engine. Vision-capable, MCP-wired, built to scale."
+
   meta-llama-3.1-70b-instruct:
     primary_strength: reasoning
     strength_scores:
