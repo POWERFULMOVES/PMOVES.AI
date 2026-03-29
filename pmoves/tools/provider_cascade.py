@@ -338,6 +338,15 @@ def _stage_2_tz_config(
 
             env_var = provider_config["env_var"]
             api_base = provider_config.get("api_base")
+            # Resolve templated api_base (e.g., Cloudflare requires account ID)
+            if not api_base and provider_config.get("api_base_template"):
+                tmpl = provider_config["api_base_template"]
+                env_key = provider_config.get("api_base_env", "")
+                env_val = os.environ.get(env_key, "") or _read_env_shared().get(env_key, "")
+                if env_val:
+                    api_base = tmpl.replace("{account_id}", env_val)
+                else:
+                    logger.warning("Skipping api_base: %s not set", env_key)
             tz_type = provider_config.get("tz_type", "openai")
             provider_name = f"{provider_slug}_primary"
 
@@ -800,7 +809,25 @@ def deactivate_provider(
         return result
 
     _remove_env_key(env_var)
-    logger.info(f"Cleared {env_var} from env.shared")
+    logger.info("Cleared %s from env.shared", env_var)
+
+    # Clean TZ config — remove models added by this provider to prevent zombie entries
+    tz_models_cleaned = []
+    if TZ_CONFIG.exists() and models_removed:
+        try:
+            tz = _load_tz_config()
+            tz_models = tz.get("models", {})
+            for model_key in models_removed:
+                model_info = provider_config.get("models", {}).get(model_key, {})
+                tz_key = model_info.get("tz_model_key", model_key)
+                if tz_key in tz_models:
+                    del tz_models[tz_key]
+                    tz_models_cleaned.append(tz_key)
+            if tz_models_cleaned:
+                _save_tz_config(tz)
+                logger.info("Removed %d model(s) from TZ config: %s", len(tz_models_cleaned), tz_models_cleaned)
+        except Exception as e:
+            logger.warning("TZ config cleanup skipped: %s", e)
 
     try:
         subprocess.run(
@@ -808,13 +835,14 @@ def deactivate_provider(
             capture_output=True, text=True, timeout=120,
         )
     except Exception as e:
-        logger.warning(f"secrets-funnel after deactivation: {e}")
+        logger.warning("secrets-funnel after deactivation: %s", e)
 
     payload = {
         "node_id": node_id,
         "provider": provider,
         "env_var": env_var,
         "models_removed": models_removed,
+        "tz_models_cleaned": tz_models_cleaned,
         "timestamp": _utc_timestamp(),
         "success": True,
     }

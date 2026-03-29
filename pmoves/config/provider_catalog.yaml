@@ -204,7 +204,7 @@ providers:
   # ---------------------------------------------------------------------------
   alibaba:
     env_var: ALIBABA_PRO_CODING_PLAN
-    key_pattern: "^sk-"
+    key_pattern: "^sk-[a-f0-9]{32}"   # DashScope keys: sk- + 32 hex (disambiguates from OpenAI sk-proj-)
     api_base: "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"
     tz_type: openai
     tier: llm
@@ -450,7 +450,9 @@ providers:
   cloudflare:
     env_var: CLOUDFLARE_API_TOKEN
     key_pattern: ".*"
-    api_base: "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/ai"
+    api_base: null                     # Requires CLOUDFLARE_ACCOUNT_ID — resolved at Stage 2 via env lookup
+    api_base_template: "https://api.cloudflare.com/client/v4/accounts/{account_id}/ai"
+    api_base_env: CLOUDFLARE_ACCOUNT_ID
     tz_type: openai
     tier: llm
     models:
