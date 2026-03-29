@@ -31,10 +31,31 @@
     "agentDefinitions": ".kilo/agent"
   },
   "mcpServers": {
-    "zai-vision": "https://docs.z.ai/devpack/mcp/vision-mcp-server",
-    "zai-web-search": "https://docs.z.ai/devpack/mcp/search-mcp-server",
-    "zai-web-reader": "https://docs.z.ai/devpack/mcp/reader-mcp-server",
-    "zai-zread": "https://docs.z.ai/devpack/mcp/zread-mcp-server"
+    "zai-vision": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@z_ai/mcp-server"],
+      "env": {
+        "Z_AI_API_KEY": "${Z_AI_API_KEY}",
+        "Z_AI_MODE": "ZAI"
+      },
+      "description": "GLM-4.6V vision analysis, OCR, UI-to-code"
+    },
+    "zai-web-search": {
+      "type": "streamable-http",
+      "url": "https://api.z.ai/api/mcp/web_search_prime/mcp",
+      "description": "LLM-optimized web search"
+    },
+    "zai-web-reader": {
+      "type": "streamable-http",
+      "url": "https://api.z.ai/api/mcp/web_reader/mcp",
+      "description": "Full webpage content extraction"
+    },
+    "zai-zread": {
+      "type": "streamable-http",
+      "url": "https://api.z.ai/api/mcp/zread/mcp",
+      "description": "GitHub repo search and file reading"
+    }
   },
   "references": {
     "agentRegistry": "pmoves/config/agent_registry.yaml",
