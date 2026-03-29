@@ -308,4 +308,4 @@
 [submodule "PMOVES-ClawZ"]
 	path = PMOVES-ClawZ
 	url = https://github.com/POWERFULMOVES/PMOVES-ClawZ.git
-	branch = PMOVES.AI-Edition-Hardened
+	branch = main
