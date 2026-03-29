@@ -190,6 +190,7 @@ def _write_log(payload: Dict[str, Any]) -> None:
 
 
 def main() -> None:
+    """CLI entry point for signing a Graphiti trail entry."""
     parser = argparse.ArgumentParser(
         description="Sign a Graphiti trail entry with CHIT HMAC"
     )

@@ -37,6 +37,7 @@ _BOTZ_GATEWAY_URL = os.getenv("BOTZ_GATEWAY_URL", "http://localhost:8054")
 # ANSI helpers (minimal — full rendering delegates to agent_terminal_theme)
 # ---------------------------------------------------------------------------
 def _supports_color() -> bool:
+    """Return whether the terminal supports ANSI color output."""
     if os.environ.get("NO_COLOR"):
         return False
     if os.environ.get("FORCE_COLOR"):
@@ -47,6 +48,7 @@ def _supports_color() -> bool:
 
 
 def _fg(hex_color: str) -> str:
+    """Return ANSI escape sequence for the given hex foreground color."""
     if not _supports_color():
         return ""
     h = hex_color.lstrip("#")
