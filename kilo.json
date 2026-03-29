@@ -1,0 +1,77 @@
+{
+  "$schema": "https://kilo.ai/schemas/project.json",
+  "name": "PMOVES.AI",
+  "description": "Production-ready multi-agent orchestration platform — POWERFULMOVES x DARKXSIDE",
+  "version": "5.14",
+  "node": "5090",
+  "agents": {
+    "primary": "kilocode-glm",
+    "model": "glm-5.1",
+    "modelProvider": "zai",
+    "modelFallback": "glm-4.7",
+    "codingApiEndpoint": "https://api.z.ai/api/coding/paas/v4",
+    "cocreator": "darkxside",
+    "collective": "powerfulmoves",
+    "siblingAgents": ["claude-code", "codex"],
+    "claudeCodeMapping": {
+      "sonnet": "glm-5.1",
+      "opus": "glm-5.1",
+      "haiku": "glm-4.5-air"
+    }
+  },
+  "commands": {
+    "directory": ".kilo/command",
+    "parallel": ["claude-code", "codex"]
+  },
+  "context": {
+    "claudeMd": ".claude/CLAUDE.md",
+    "agentsMd": "AGENTS.md",
+    "kiloRules": ".kilocode/rules/kilorules.md",
+    "modes": ".kilocodemodes",
+    "agentDefinitions": ".kilo/agent"
+  },
+  "mcpServers": {
+    "zai-vision": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@z_ai/mcp-server"],
+      "env": {
+        "Z_AI_API_KEY": "${Z_AI_API_KEY}",
+        "Z_AI_MODE": "ZAI"
+      },
+      "description": "GLM-4.6V vision: OCR, UI-to-code, screenshot diagnosis",
+      "docs": "https://docs.z.ai/devpack/mcp/vision-mcp-server"
+    },
+    "zai-web-search": {
+      "type": "streamable-http",
+      "url": "https://api.z.ai/api/mcp/web_search_prime/mcp",
+      "description": "LLM-optimized web search via GLM",
+      "docs": "https://docs.z.ai/devpack/mcp/search-mcp-server"
+    },
+    "zai-web-reader": {
+      "type": "streamable-http",
+      "url": "https://api.z.ai/api/mcp/web_reader/mcp",
+      "description": "Full webpage content extraction",
+      "docs": "https://docs.z.ai/devpack/mcp/reader-mcp-server"
+    },
+    "zai-zread": {
+      "type": "streamable-http",
+      "url": "https://api.z.ai/api/mcp/zread/mcp",
+      "description": "GitHub repo search and file reading",
+      "docs": "https://docs.z.ai/devpack/mcp/zread-mcp-server"
+    }
+  },
+  "references": {
+    "agentRegistry": "pmoves/config/agent_registry.yaml",
+    "agentSignatures": "pmoves/config/agent_signatures.yaml",
+    "agnote4482": "pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md",
+    "roadmap": "pmoves/docs/PMOVES.AI PLANS/ROADMAP.md",
+    "nextSteps": "pmoves/docs/NEXT_STEPS.md",
+    "darkxsideSignature": "pmoves/docs/AGENTS/DARKXSIDE_SIGNATURE.md",
+    "krissKross": "pmoves/docs/AGENTS/KRISS_KROSS_ACK.md",
+    "glmDocs": "https://docs.z.ai/devpack/using5.1",
+    "glmApi": "https://docs.z.ai/api-reference/llm/chat-completion",
+    "glmKiloCode": "https://docs.z.ai/scenario-example/develop-tools/kilo",
+    "glmOpenClaw": "https://docs.z.ai/devpack/tool/openclaw"
+  }
+}
