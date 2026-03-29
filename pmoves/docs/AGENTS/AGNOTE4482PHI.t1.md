@@ -173,7 +173,7 @@ The pipeline reports success because its validation scope is too narrow. Neither
 |-----|-------------|-------------|
 | Makefile env placeholder detection | ✓ (regex + sed) | — |
 | brand_defaults placeholder expansion | ✓ (regex in `_is_blank_or_placeholder`) | — |
-| Supabase schema provisioning | ✓ (_analytics in _supabase DB) | — |
+| Supabase schema provisioning | ✓ (`_analytics` in `_supabase` DB) | — |
 | Pydantic env_prefix validation | — | ✓ (prefix-aware checks) |
 | Provider activation dry-run | — | ✓ (regex inside dry_run guard) |
 | TensorZero model routing config | — | ✓ (MiniMax, GLM-5.1 per-stack) |

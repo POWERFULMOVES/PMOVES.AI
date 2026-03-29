@@ -1357,6 +1357,9 @@ populate-tier-envs: bootstrap-tier-envs ## Populate tier env files with defaults
 		else \
 			if grep -q "your_.*_here" env.tier-supabase 2>/dev/null; then \
 				echo "Filling intermediate-layer Supabase secrets (JWT preserved)..."; \
+				_db_pass=$$(openssl rand -base64 48 | tr -d '\n=' | cut -c1-48); \
+				sed -i "s|^POSTGRES_PASSWORD=your_secure_password_here|POSTGRES_PASSWORD=$$_db_pass|" env.tier-supabase; \
+				sed -i "s|^SUPABASE_DB_PASSWORD=your_secure_password_here|SUPABASE_DB_PASSWORD=$$_db_pass|" env.tier-supabase; \
 				sed -i "s|^SECRET_KEY_BASE=your_secret_key_base_here|SECRET_KEY_BASE=$$(openssl rand -base64 48 | tr -d '\n=' | cut -c1-64)|" env.tier-supabase; \
 				sed -i "s|^VAULT_ENC_KEY=your_vault_enc_key_here|VAULT_ENC_KEY=$$(openssl rand -hex 16)|" env.tier-supabase; \
 				sed -i "s|^PG_META_CRYPTO_KEY=your_pg_meta_crypto_key_here|PG_META_CRYPTO_KEY=$$(openssl rand -hex 16)|" env.tier-supabase; \
