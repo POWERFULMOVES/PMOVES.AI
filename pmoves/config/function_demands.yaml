@@ -1,0 +1,249 @@
+# =============================================================================
+# Function Demand Profiles
+# =============================================================================
+# Defines what each TensorZero function needs from a model.
+# Used ONLY by the discovery algorithm for unknown models (not in provider_catalog).
+# Known models use deterministic `serves` declarations in provider_catalog.yaml.
+#
+# Each function declares weighted demands across 6 strength dimensions.
+# Weights must sum to 1.0. min_fit is the threshold for eligibility.
+#
+# Fit score = SUM(demand_weight[dim] × model_strength[dim])
+# If fit >= min_fit, the model is suggested for that function.
+# Operator approval required before assignment.
+# =============================================================================
+
+function_demands:
+
+  # ---------------------------------------------------------------------------
+  # Core Orchestration
+  # ---------------------------------------------------------------------------
+
+  agent_zero:
+    description: "Primary L1 orchestrator — needs broad reasoning, code awareness, and multilingual support"
+    weights:
+      reasoning: 0.30
+      coding: 0.20
+      multilingual: 0.15
+      creativity: 0.10
+      context_handling: 0.15
+      speed: 0.10
+    min_fit: 0.65
+
+  agent_zero_subordinate:
+    description: "Subordinate agents — lighter models, cost-efficient, fast response"
+    weights:
+      reasoning: 0.20
+      coding: 0.15
+      multilingual: 0.10
+      creativity: 0.10
+      context_handling: 0.15
+      speed: 0.30
+    min_fit: 0.55
+
+  orchestrator:
+    description: "BoTZ orchestrator with tool use — needs speed and reasoning balance"
+    weights:
+      reasoning: 0.30
+      speed: 0.30
+      coding: 0.15
+      creativity: 0.15
+      context_handling: 0.10
+      multilingual: 0.00
+    min_fit: 0.60
+
+  # ---------------------------------------------------------------------------
+  # Coding Functions
+  # ---------------------------------------------------------------------------
+
+  coding:
+    description: "General coding function — code generation, analysis, debugging"
+    weights:
+      coding: 0.50
+      reasoning: 0.25
+      speed: 0.15
+      context_handling: 0.10
+      multilingual: 0.00
+      creativity: 0.00
+    min_fit: 0.70
+
+  coding_claude_fallback:
+    description: "Claude Code local fallback — strong coding when Anthropic API unavailable"
+    weights:
+      coding: 0.45
+      reasoning: 0.25
+      context_handling: 0.15
+      speed: 0.10
+      multilingual: 0.05
+      creativity: 0.00
+    min_fit: 0.70
+
+  coding_codex:
+    description: "OpenAI Codex stack — cloud primary with local fallback"
+    weights:
+      coding: 0.45
+      reasoning: 0.25
+      speed: 0.15
+      context_handling: 0.15
+      multilingual: 0.00
+      creativity: 0.00
+    min_fit: 0.70
+
+  coding_glm:
+    description: "GLM coding plan — Z.AI GLM-5.1 primary, multilingual coding"
+    weights:
+      coding: 0.35
+      reasoning: 0.20
+      multilingual: 0.25
+      speed: 0.10
+      context_handling: 0.10
+      creativity: 0.00
+    min_fit: 0.60
+
+  coding_minimax:
+    description: "MiniMax token plan — cloud primary for token-efficient coding"
+    weights:
+      coding: 0.40
+      speed: 0.25
+      reasoning: 0.20
+      context_handling: 0.10
+      multilingual: 0.05
+      creativity: 0.00
+    min_fit: 0.60
+
+  coding_alibaba:
+    description: "Alibaba coding plan — Qwen cloud models for coding"
+    weights:
+      coding: 0.45
+      reasoning: 0.25
+      multilingual: 0.15
+      context_handling: 0.10
+      speed: 0.05
+      creativity: 0.00
+    min_fit: 0.65
+
+  # ---------------------------------------------------------------------------
+  # Research & Knowledge
+  # ---------------------------------------------------------------------------
+
+  deepresearch:
+    description: "Research planning and synthesis — needs deep reasoning and long context"
+    weights:
+      reasoning: 0.40
+      context_handling: 0.30
+      creativity: 0.15
+      speed: 0.15
+      coding: 0.00
+      multilingual: 0.00
+    min_fit: 0.65
+
+  pmoves_research_coordinator:
+    description: "Complex research synthesis — highest reasoning demand"
+    weights:
+      reasoning: 0.40
+      context_handling: 0.25
+      coding: 0.15
+      creativity: 0.10
+      multilingual: 0.10
+      speed: 0.00
+    min_fit: 0.70
+
+  pmoves_knowledge_manager:
+    description: "RAG and indexing operations — needs context handling and reasoning"
+    weights:
+      context_handling: 0.30
+      reasoning: 0.25
+      speed: 0.20
+      coding: 0.15
+      multilingual: 0.10
+      creativity: 0.00
+    min_fit: 0.55
+
+  # ---------------------------------------------------------------------------
+  # Language & Media
+  # ---------------------------------------------------------------------------
+
+  langextract:
+    description: "Language detection and NLP — needs multilingual excellence and speed"
+    weights:
+      multilingual: 0.35
+      speed: 0.25
+      context_handling: 0.20
+      reasoning: 0.20
+      coding: 0.00
+      creativity: 0.00
+    min_fit: 0.60
+
+  pmoves_media_processor:
+    description: "Transcription analysis — needs reasoning and context for media content"
+    weights:
+      reasoning: 0.25
+      context_handling: 0.25
+      speed: 0.20
+      multilingual: 0.15
+      creativity: 0.10
+      coding: 0.05
+    min_fit: 0.55
+
+  pmoves_log_analyzer:
+    description: "Metrics and monitoring analysis — needs pattern recognition and speed"
+    weights:
+      reasoning: 0.30
+      speed: 0.25
+      coding: 0.20
+      context_handling: 0.15
+      creativity: 0.05
+      multilingual: 0.05
+    min_fit: 0.55
+
+  # ---------------------------------------------------------------------------
+  # Agent Work & Review
+  # ---------------------------------------------------------------------------
+
+  archon_work_orders:
+    description: "Autonomous workflow execution — needs reasoning and coding"
+    weights:
+      reasoning: 0.35
+      coding: 0.25
+      context_handling: 0.20
+      speed: 0.10
+      creativity: 0.05
+      multilingual: 0.05
+    min_fit: 0.65
+
+  archon_code_review:
+    description: "PR code review — needs deep code understanding and reasoning"
+    weights:
+      coding: 0.40
+      reasoning: 0.30
+      context_handling: 0.20
+      creativity: 0.05
+      speed: 0.05
+      multilingual: 0.00
+    min_fit: 0.70
+
+  # ---------------------------------------------------------------------------
+  # Vision & Specialized
+  # ---------------------------------------------------------------------------
+
+  vl_sentinel:
+    description: "Vision-language sentinel — needs multimodal creativity and reasoning"
+    weights:
+      creativity: 0.40
+      reasoning: 0.25
+      multilingual: 0.20
+      context_handling: 0.15
+      speed: 0.00
+      coding: 0.00
+    min_fit: 0.65
+
+  hirag_rerank:
+    description: "Hi-RAG cross-encoder reranking — needs reasoning and context handling"
+    weights:
+      reasoning: 0.40
+      context_handling: 0.30
+      multilingual: 0.20
+      speed: 0.10
+      coding: 0.00
+      creativity: 0.00
+    min_fit: 0.60

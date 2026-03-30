@@ -48,8 +48,8 @@ Each green check should represent:
 
 - [x] Approved remote coding lanes are named explicitly. <!-- 5 lanes in CLAWZ_CODING_PLAN_ALIGNMENT.md + tensorzero.toml -->
 - [x] Local-first routing remains the primary contract. <!-- Ollama primary in all tensorzero function chains -->
-- [ ] Suit-bearing lanes are profile-governed, not raw-env governed. <!-- PARTIAL: profiles exist but Agent Zero UI still defaults to OpenAI -->
-- [x] Profile-id naming drift is called out where tooling still uses legacy placeholders. <!-- workstation_5090 drift noted in gap report -->
+- [x] Suit-bearing lanes are profile-governed, not raw-env governed. <!-- Provider Activation Cascade: provider_catalog.yaml → profile-driven stack activation. make provider-activate reads laptop-4090.yaml coding_stacks, not raw env. -->
+- [x] Profile-id naming drift is called out where tooling still uses legacy placeholders. <!-- workstation_5090 drift noted in gap report; laptop-4090 profile now canonical -->
 
 ### 5. PMOVES control-plane alignment
 
@@ -91,6 +91,7 @@ Use one row per participating reviewer/agent. Add rows instead of overwriting ol
 | `5090-CODEX` | pending | — | PENDING | — | |
 | `Z890-CLAUDE` | infra/ops primary | Sections 2 (full), 4 (3/4), 5 (full), 6 (3/4), 8 (full). Agent Zero activated :8080, 23/23 containers healthy, 3 P0 blockers resolved, TensorZero 25+ models validated, Archon submodule + DeepResearch Dockerfile fixed. | SIGNED | 2026-03-28 | Runtime verification — not docs-only. 2 items deferred: profile-governed suit routing (Agent Zero UI still defaults OpenAI), automated CVE intake. |
 | `KILO-CODE` | pending | — | PENDING | — | |
+| `4090-CLAUDE` | 4090 node / provider cascade | Section 4 (4/4 — profile-governed routing delivered via Provider Activation Cascade). 4090 coding workstation: 5 stacks, VRAM budget, cross-node mesh. Provider catalog (13 providers), function demands (18 functions), cascade CLI verified. 6 cloud model strength profiles seeded. Runbook: 4 operational scenarios. NATS subjects: claw.provider.activated/deactivated.v1. | SIGNED | 2026-03-28 | Completes section 4 item 3 (suit-bearing lanes are now profile-governed via provider_catalog.yaml + laptop-4090.yaml). Manifest entries for MINIMAX_API_KEY/GLM_API_KEY deferred — CHIT-protected, needs make secrets-funnel. |
 | `CLAUDE` | pending | — | PENDING | — | |
 | `AGENT-ZERO` | pending | — | PENDING | — | Runtime/ops signoff once suit baseline work is real |
 | `OPERATOR` | decision authority | final merge/readiness judgment | PENDING | — | DARKXSIDE final say |

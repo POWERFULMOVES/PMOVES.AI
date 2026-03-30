@@ -1,0 +1,31 @@
+# 4090 Laptop GPU overrides — tighter VRAM management for 16GB
+# Referenced by: pmoves/config/profiles/laptop-4090.yaml
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.gpu.yml -f docker-compose.gpu-4090.yml up -d
+#
+# Key differences from default GPU profile:
+#   - Max 2 concurrent models (vs unlimited)
+#   - 85% VRAM threshold (vs 90% default) — laptop thermal headroom
+#   - 180s idle timeout (vs 300s) — aggressive cleanup for 16GB
+#   - 2GB system VRAM reserve for display + CUDA overhead
+
+services:
+  pmoves-ollama:
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    environment:
+      - OLLAMA_GPU_OVERHEAD=2048
+      - OLLAMA_MAX_LOADED_MODELS=2
+      - CUDA_VISIBLE_DEVICES=0
+
+  gpu-orchestrator:
+    environment:
+      - GPU_ORCHESTRATOR_VRAM_WARNING_THRESHOLD=0.85
+      - GPU_ORCHESTRATOR_IDLE_TIMEOUT_SECONDS=180
+      - GPU_ORCHESTRATOR_SYSTEM_VRAM_RESERVE_MB=2048
