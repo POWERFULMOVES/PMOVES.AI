@@ -103,7 +103,12 @@ def _set_kv(text: str, key: str, value: str) -> str:
 
 def _is_blank_or_placeholder(value: str) -> bool:
     normalized = _normalize_env_value(value)
-    return not normalized or normalized in PLACEHOLDER_VALUES
+    if not normalized or normalized in PLACEHOLDER_VALUES:
+        return True
+    # Catch Supabase-style "your_*_here" placeholders (e.g. your_secret_key_base_here)
+    if re.match(r"^your_\w+_here$", normalized):
+        return True
+    return False
 
 
 def _first_real(text: str, keys: list[str]) -> str:
