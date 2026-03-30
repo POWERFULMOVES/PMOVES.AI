@@ -57,7 +57,7 @@ echo "User: $DB_USER | DB: $DB_NAME"
 echo ""
 
 # Step 1: Create missing Supabase system roles
-log_step "Step 1/5: Ensuring Supabase system roles exist..."
+log_step "Step 1/7: Ensuring Supabase system roles exist..."
 
 EXISTING_ROLES=$(run_sql "SELECT rolname FROM pg_roles;" | grep -oP '^\s*\K\S+' || true)
 
@@ -81,7 +81,7 @@ create_role_if_missing "service_role" "NOLOGIN NOINHERIT BYPASSRLS"
 create_role_if_missing "pgbouncer" "LOGIN"
 
 # Step 2: Set passwords from env
-log_step "Step 2/5: Setting role passwords from env..."
+log_step "Step 2/7: Setting role passwords from env..."
 
 run_sql "ALTER USER $DB_USER WITH PASSWORD '$DB_PASS';" > /dev/null
 run_sql "ALTER USER supabase_admin WITH PASSWORD '$DB_PASS';" > /dev/null
@@ -89,7 +89,7 @@ run_sql "ALTER USER authenticator WITH PASSWORD '$DB_PASS';" > /dev/null
 log_info "Passwords aligned with SUPABASE_DB_PASSWORD"
 
 # Step 3: Ensure target database exists
-log_step "Step 3/5: Ensuring database '$DB_NAME' exists..."
+log_step "Step 3/7: Ensuring database '$DB_NAME' exists..."
 
 DB_EXISTS=$(run_sql "SELECT 1 FROM pg_database WHERE datname = '$DB_NAME';" | grep -c "1" || true)
 if [ "$DB_EXISTS" -eq 0 ]; then
@@ -99,8 +99,35 @@ else
     echo "  Database '$DB_NAME' exists"
 fi
 
-# Step 4: Run Supabase init scripts (idempotent)
-log_step "Step 4/5: Running Supabase init scripts..."
+# Step 4: Create _supabase database (required by Logflare/analytics)
+log_step "Step 4/7: Ensuring internal Supabase databases exist..."
+
+SUPA_DB_EXISTS=$(run_sql "SELECT 1 FROM pg_database WHERE datname = '_supabase';" | grep -c "1" || true)
+if [ "$SUPA_DB_EXISTS" -eq 0 ]; then
+    run_sql "CREATE DATABASE _supabase;" > /dev/null
+    log_info "Database '_supabase' created"
+else
+    echo "  Database '_supabase' exists"
+fi
+# Ensure supabase_admin owns _supabase (Logflare Ecto migrations require it)
+# MUST fail loud — this is the fix this PR exists for
+run_sql "ALTER DATABASE _supabase OWNER TO supabase_admin;"
+
+# Ensure schema ownership for realtime/pooler Ecto migrations
+log_step "Step 5/7: Ensuring schema ownership for Supabase services..."
+for schema in _realtime realtime _supabase _supavisor supavisor; do
+    run_sql "CREATE SCHEMA IF NOT EXISTS $schema;" "$DB_NAME" > /dev/null 2>&1 || true
+    run_sql "ALTER SCHEMA $schema OWNER TO supabase_admin;" "$DB_NAME"
+done
+
+# Create _analytics schema in _supabase DB (Logflare Ecto migrations require it)
+run_sql "CREATE SCHEMA IF NOT EXISTS _analytics;" "_supabase" > /dev/null 2>&1 || true
+run_sql "ALTER SCHEMA _analytics OWNER TO supabase_admin;" "_supabase"
+
+log_info "Schema ownership set for supabase_admin"
+
+# Step 6: Run Supabase init scripts (idempotent)
+log_step "Step 6/7: Running Supabase init scripts..."
 
 INIT_DIR="//docker-entrypoint-initdb.d"
 
@@ -146,8 +173,8 @@ else
     log_info "Init scripts applied"
 fi
 
-# Step 5: Verify
-log_step "Step 5/5: Verifying..."
+# Step 7: Verify
+log_step "Step 7/7: Verifying..."
 
 ROLE_COUNT=$(run_sql "SELECT COUNT(*) FROM pg_roles WHERE rolname IN ('supabase_admin','authenticator','anon','authenticated','service_role');" | grep -oP '\d+' | head -1)
 SCHEMA_COUNT=$(docker exec "$DB_CONTAINER" psql -U "$DB_USER" -h 127.0.0.1 -d "$DB_NAME" -tAc "SELECT COUNT(*) FROM pg_namespace WHERE nspname IN ('auth','storage','extensions','realtime');" 2>/dev/null || echo "0")
