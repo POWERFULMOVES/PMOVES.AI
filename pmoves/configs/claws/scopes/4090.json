@@ -1,14 +1,14 @@
 {
   "identity": {
     "node": "4090",
-    "role": "field-agent",
-    "description": "Field agent — UI/CLI specialist, Crush companion, testing/evidence playbooks",
+    "role": "gpu-inference",
+    "description": "Active GPU contributor — UI/CLI specialist, mobile inference, Crush companion",
     "hostname": "pmoves-laptop"
   },
   "openclaw_overrides": {
     "agents.defaults.model.primary": "claude-sonnet-4",
-    "tools.profile": "restricted",
-    "tools.exec.ask": "auto",
+    "tools.profile": "standard",
+    "tools.exec.ask": "auto-confirm",
     "channels": {
       "telegram": { "enabled": true },
       "discord": { "enabled": true }
@@ -17,6 +17,8 @@
   "exec_approvals": {
     "main": {
       "allowlist": [
+        { "pattern": "/usr/bin/docker", "note": "Docker container management and compose" },
+        { "pattern": "/usr/bin/make", "note": "Make targets" },
         { "pattern": "/usr/bin/git", "note": "Git operations" },
         { "pattern": "/usr/bin/gh", "note": "GitHub CLI — PR and issue management" },
         { "pattern": "/usr/bin/curl", "note": "Health checks and API calls" },
@@ -24,7 +26,9 @@
         { "pattern": "/usr/bin/python3", "note": "Python runtime" },
         { "pattern": "/usr/bin/nvidia-smi", "note": "GPU monitoring (RTX 4090 Laptop)" },
         { "pattern": "/usr/bin/ollama", "note": "Local model serving (GPU)" },
-        { "pattern": "/usr/bin/tailscale", "note": "Tailscale mesh status" }
+        { "pattern": "/usr/bin/tailscale", "note": "Tailscale mesh status" },
+        { "pattern": "/usr/bin/ffmpeg", "note": "Video encoding (NVENC pipeline)" },
+        { "pattern": "/usr/bin/nats", "note": "NATS CLI — GPU mesh message bus" }
       ]
     }
   },
@@ -36,6 +40,18 @@
     "agent-zero": {
       "type": "http",
       "url": "http://${TS_Z890}:8080/mcp"
+    },
+    "gpu-mesh": {
+      "type": "nats",
+      "subjects": [
+        "mesh.gpu.heartbeat.v1",
+        "mesh.gpu.model.loaded.v1",
+        "mesh.gpu.model.unloaded.v1",
+        "mesh.gpu.inference.request.v1",
+        "mesh.gpu.inference.result.v1",
+        "mesh.gpu.status.v1"
+      ],
+      "url": "nats://${TS_Z890}:4222"
     }
   },
   "damage_control_hooks": true,

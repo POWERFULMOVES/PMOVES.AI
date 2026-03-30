@@ -37,6 +37,7 @@ _BOTZ_GATEWAY_URL = os.getenv("BOTZ_GATEWAY_URL", "http://localhost:8054")
 # ANSI helpers (minimal — full rendering delegates to agent_terminal_theme)
 # ---------------------------------------------------------------------------
 def _supports_color() -> bool:
+    """Return whether the terminal supports ANSI color output."""
     if os.environ.get("NO_COLOR"):
         return False
     if os.environ.get("FORCE_COLOR"):
@@ -47,6 +48,7 @@ def _supports_color() -> bool:
 
 
 def _fg(hex_color: str) -> str:
+    """Return ANSI escape sequence for the given hex foreground color."""
     if not _supports_color():
         return ""
     h = hex_color.lstrip("#")
@@ -97,6 +99,11 @@ def _resolve_agent_id() -> tuple[str, str]:
             return aid, "hostname"
 
     return "unknown", "fallback"
+
+
+def _alter_name(alter: Dict[str, Any]) -> str:
+    """Return the display key used across persona tooling for an alter."""
+    return alter.get("name") or alter.get("id") or alter.get("display_name", "?")
 
 
 # ---------------------------------------------------------------------------
@@ -171,7 +178,7 @@ def cmd_theme(args: argparse.Namespace) -> int:
             print(f"{_DIM}  {desc}{_RST}")
         alters = sig.get("alters", [])
         if alters:
-            alter_names = [a.get("name", "?") for a in alters]
+            alter_names = [_alter_name(a) for a in alters]
             print(f"{_DIM}  alters: {', '.join(alter_names)}{_RST}")
         print(border)
     return 0
@@ -200,7 +207,7 @@ def cmd_persona_list(args: argparse.Namespace) -> int:
             }
             alters = sig.get("alters", [])
             if alters:
-                entry["alters"] = [a.get("name") for a in alters]
+                entry["alters"] = [_alter_name(a) for a in alters]
             personas.append(entry)
         print(json.dumps(personas, indent=2))
     else:
@@ -352,3 +359,6 @@ def main() -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
+
+
+

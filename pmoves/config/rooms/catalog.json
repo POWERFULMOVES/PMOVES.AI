@@ -24,6 +24,14 @@
       "display_name": "Z890 Infra Fabric Room",
       "manifest": "z890-infra.room.fabric.json",
       "summary": "Infrastructure room for topology, service health, secrets discipline, and operator bring-up."
+    },
+    {
+      "room_id": "5090-kilocode.room.studio",
+      "agent_id": "5090-kilocode",
+      "alter": "5090-kilocode",
+      "display_name": "5090 KiloCode GLM Workstation",
+      "manifest": "5090-kilocode.room.studio.json",
+      "summary": "GPU inference specialist node running KiloCode GLM on the GLM Coding Plan. Shares the 5090 with Claude Code and Codex."
     }
   ]
 }

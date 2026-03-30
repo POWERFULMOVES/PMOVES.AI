@@ -84,6 +84,11 @@ class WorkItemFilter(BaseModel):
     limit: int = 20
 
 
+def _alter_name(alter: Dict[str, Any]) -> str:
+    """Return the canonical lookup/display key for an agent alter."""
+    return alter.get("name") or alter.get("id") or alter.get("display_name", "?")
+
+
 def load_agent_signatures():
     """Load agent signatures from YAML config."""
     global agent_signatures
@@ -592,10 +597,14 @@ async def get_agent_alter_theme(agent_id: str, alter_name: str):
         raise HTTPException(status_code=404, detail=f"Agent '{agent_id}' not found")
     alters = sig.get("alters", [])
     for alter in alters:
-        if alter.get("name") == alter_name:
+        if alter_name in {
+            alter.get("name"),
+            alter.get("id"),
+            alter.get("display_name"),
+        }:
             return {
                 "agent_id": agent_id,
-                "alter_name": alter_name,
+                "alter_name": _alter_name(alter),
                 "glyph": alter.get("glyph"),
                 "color": alter.get("color"),
                 "accent": alter.get("accent"),
@@ -603,7 +612,7 @@ async def get_agent_alter_theme(agent_id: str, alter_name: str):
                 "resonance": alter.get("resonance", []),
                 "description": alter.get("description"),
             }
-    available = [a.get("name") for a in alters]
+    available = [_alter_name(a) for a in alters]
     raise HTTPException(
         status_code=404,
         detail=f"Alter '{alter_name}' not found for {agent_id}. Available: {available}",
@@ -648,7 +657,7 @@ async def whoami(instance_id: Optional[str] = None):
                         "color": sig.get("color", "#888888"),
                         "voice": sig.get("voice", "unknown"),
                     },
-                    "available_alters": [a.get("name") for a in sig.get("alters", [])],
+                    "available_alters": [_alter_name(a) for a in sig.get("alters", [])],
                     "skill_level": botz.get("skill_level"),
                     "is_available": botz.get("is_available"),
                 }
@@ -671,3 +680,6 @@ async def whoami(instance_id: Optional[str] = None):
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8054)
+
+
+

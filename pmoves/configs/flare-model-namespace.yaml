@@ -1,0 +1,61 @@
+# PMOVES.Flare — Model Namespace Configuration
+# Naming convention: pmoves/<model-family>/<variant>
+# Used across all nodes for consistent model identification
+
+namespace: "pmoves"
+separator: "/"
+
+mappings:
+  # --- Coding Plans ---
+  glm-coding:
+    flare_name: "pmoves/glm-5.1"
+    provider: "zai"
+    model_id: "glm-5.1"
+    api_endpoint: "https://api.z.ai/api/coding/paas/v4"
+    lane: "coding_plan"
+    nodes: [5090, z890]
+    fallback: "glm-4.7"
+
+  claude-coding:
+    flare_name: "pmoves/claude-sonnet-4"
+    provider: "anthropic"
+    model_id: "claude-sonnet-4-20250514"
+    claude_code_mapping:
+      sonnet: "glm-5.1"
+      opus: "glm-5.1"
+      haiku: "glm-4.5-air"
+    lane: "coding_plan"
+    nodes: [z890, 5090]
+
+  codex-coding:
+    flare_name: "pmoves/codex-v1"
+    provider: "openai"
+    model_id: "codex-mini-latest"
+    lane: "coding_plan"
+    nodes: [z890, 5090]
+
+  # --- Local GPU ---
+  qwen-coder:
+    flare_name: "pmoves/qwen-3-coder-32b"
+    provider: "ollama"
+    model_id: "qwen3-coder:32b"
+    lane: "local"
+    nodes: [5090]
+    vllm_compatible: true
+
+  qwen-vl:
+    flare_name: "pmoves/qwen-3-vl-8b"
+    provider: "ollama"
+    model_id: "qwen3-vl:8b"
+    lane: "local"
+    nodes: [5090]
+    vllm_compatible: true
+
+  # --- Inference ---
+  gemma-embed:
+    flare_name: "pmoves/gemma-3-embed"
+    provider: "ollama"
+    model_id: "gemma3:embed"
+    lane: "local"
+    nodes: [z890, 5090]
+    purpose: "embeddings"
