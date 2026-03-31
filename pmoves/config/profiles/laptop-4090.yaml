@@ -184,6 +184,24 @@ messaging:
   discord: true
   whatsapp: optional
   webrtc: true
+
+# =============================================================================
+# MiniMax Provider Cascade Binding
+# =============================================================================
+# Per MINIMAX_GLM_PARITY_ANALYSIS.md Phase 1: Profile Binding
+# Laptop has limited VRAM, so MiniMax-M2.1 is preferred (efficient)
+minimax_cascade:
+  preferred_model: minimax-m2.1
+  cascade_priority: medium
+  fallback_model: qwen3.5-4b
+  gpu_shape_store: false  # Limited VRAM
+  tensorzero_routing: pmoves-code
+
+# BoTZ Framework binding
+botz:
+  minimax_affinity: medium
+  tactical_partner: true
+
 notes:
   - Enable NVIDIA Optimus/Hybrid mode; ensure driver exposes CUDA.
   - Favor lower-power Ollama models when on battery.

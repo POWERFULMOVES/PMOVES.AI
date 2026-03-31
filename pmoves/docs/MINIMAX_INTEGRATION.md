@@ -1,8 +1,21 @@
 # MiniMax Integration — PMOVES.AI
 
-**Last Updated:** 2026-03-27  
+**Last Updated:** 2026-03-30  
 **Model:** MiniMax-M2.7 / MiniMax-M2.1  
 **Integration Status:** Native Support Active
+
+---
+
+## Phase 1 Foundation (2026-03-30)
+
+MiniMax parity lane Phase 1 complete per AGNOTE4482 protocol:
+
+| Deliverable | Status | Reference |
+|-------------|--------|-----------|
+| Provider Cascade | ✅ Created | [`pmoves/tools/models/minimax_provider_cascade.yaml`](../../tools/models/minimax_provider_cascade.yaml) |
+| TensorZero Config | ✅ Created | [`pmoves/config/tensorzero/tensorzero.minimax.toml`](../../config/tensorzero/tensorzero.minimax.toml) |
+| Profile Binding | ✅ Updated | `pmoves/config/profiles/workstation_5090.yaml`, `laptop-4090.yaml` |
+| CLAIM Entry | ✅ Added | [`AGNOTE4482PHI.t1.md`](./AGNOTE4482PHI.t1.md) |
 
 ---
 
@@ -236,6 +249,56 @@ OLLAMA_BASE_URL=http://localhost:11434
 |-------|----------------|------------|
 | MiniMax-M2.7 | 1,000,000 tokens | 32,000 tokens |
 | MiniMax-M2.1 | 100,000 tokens | 8,000 tokens |
+
+---
+
+## TensorZero Integration
+
+### Configuration
+
+MiniMax models are registered in TensorZero via [`tensorzero.minimax.toml`](../../config/tensorzero/tensorzero.minimax.toml):
+
+```toml
+[models."minimax-m2.7"]
+routing = ["minimax"]
+
+[models."minimax-m2.7".providers.minimax]
+type = "openai-compatible"
+model_name = "MiniMax-M2.7"
+base_url = "https://api.minimax.chat/v1"
+```
+
+### Provider Cascade
+
+The MiniMax provider cascade is configured in [`minimax_provider_cascade.yaml`](../../tools/models/minimax_provider_cascade.yaml):
+
+```yaml
+cascade:
+  minimax:
+    models:
+      - minimax-m2.7  # Primary: 1M context
+      - minimax-m2.1  # Fallback: 100K context
+    cascade_priority: high
+    thinking_mode: off  # Uses wave-function collapse, not CoT
+```
+
+### BoTZ Routing
+
+BoTZ Framework automatically routes to MiniMax based on task type:
+
+| Task Type | Primary Model | Fallback |
+|-----------|---------------|----------|
+| Long-context research | minimax-m2.7 | qwen3.5-27b |
+| Coding overflow | minimax-m2.1 | glm-4 |
+| Architecture visualization | minimax-m2.7 | — |
+| Hyperdimensional ops | minimax-m2.7 | — |
+
+### Environment Requirements
+
+```bash
+MINIMAX_API_KEY=your_api_key_here
+TENSORZERO_BASE_URL=http://localhost:3030
+```
 
 ---
 
