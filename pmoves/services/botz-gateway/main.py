@@ -42,6 +42,7 @@ AGENT_SIGNATURES_PATH = os.getenv("AGENT_SIGNATURES_PATH", "/app/config/agent_si
 nc: Optional[NATS] = None
 supabase_headers: Dict[str, str] = {}
 agent_signatures: Dict[str, Any] = {}
+active_providers: Dict[str, Dict[str, Any]] = {}  # provider_name -> activation payload
 
 
 # Pydantic models
@@ -127,7 +128,10 @@ async def lifespan(app: FastAPI):
         # Subscribe to BoTZ events
         await nc.subscribe("botz.heartbeat.v1", cb=handle_heartbeat_event)
         await nc.subscribe("botz.register.v1", cb=handle_register_event)
-        logger.info("Subscribed to BoTZ NATS subjects")
+        # Subscribe to provider cascade events for routing awareness
+        await nc.subscribe("claw.provider.activated.v1", cb=handle_provider_activated)
+        await nc.subscribe("claw.provider.deactivated.v1", cb=handle_provider_deactivated)
+        logger.info("Subscribed to BoTZ + provider cascade NATS subjects")
     except Exception as e:
         logger.warning(f"NATS connection failed: {e}")
         nc = None
@@ -172,6 +176,30 @@ async def handle_register_event(msg):
         await register_botz_instance(registration)
     except Exception as e:
         logger.error(f"Error handling registration: {e}")
+
+
+async def handle_provider_activated(msg):
+    """Track provider activations for routing decisions."""
+    try:
+        import json
+        data = json.loads(msg.data.decode())
+        provider = data.get("provider", "unknown")
+        active_providers[provider] = data
+        logger.info(f"Provider activated: {provider} (models: {data.get('models_added', [])})")
+    except Exception as e:
+        logger.error(f"Error handling provider activation: {e}")
+
+
+async def handle_provider_deactivated(msg):
+    """Remove deactivated providers from routing table."""
+    try:
+        import json
+        data = json.loads(msg.data.decode())
+        provider = data.get("provider", "unknown")
+        active_providers.pop(provider, None)
+        logger.info(f"Provider deactivated: {provider}")
+    except Exception as e:
+        logger.error(f"Error handling provider deactivation: {e}")
 
 
 async def cleanup_stale_instances():
@@ -674,6 +702,22 @@ async def whoami(instance_id: Optional[str] = None):
         "hostname": hostname,
         "theme": {"glyph": "?", "color": "#888888", "voice": "unknown"},
         "hint": "Pass ?instance_id=<id> for full identity lookup",
+    }
+
+
+@app.get("/v1/providers")
+async def get_active_providers():
+    """Return providers activated via cascade NATS events."""
+    return {
+        "providers": {
+            name: {
+                "models": payload.get("models_added", []),
+                "node_id": payload.get("node_id"),
+                "activated_at": payload.get("timestamp"),
+            }
+            for name, payload in active_providers.items()
+        },
+        "count": len(active_providers),
     }
 
 
