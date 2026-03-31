@@ -12,10 +12,10 @@ episode:
   concurrent: 1
 
 agent:
-  mode: api  # api (TensorZero) or local (Ollama)
+  mode: api  # api (TensorZero) or local (Ollama — mode: local not yet implemented)
   api_endpoint: "${TENSORZERO_URL:-http://localhost:3030}/v1/chat/completions"
-  model: "qwen3:14b"
-  local_fallback: "qwen3:8b"
+  model: "qwen35_9b"  # Registered in tensorzero.toml as qwen35_9b
+  local_fallback: "qwen3:8b"  # Ollama model name (for future local mode)
 
 environments:
   lightweight:  # < 1GB RAM, no external deps
