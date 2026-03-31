@@ -489,8 +489,11 @@ All resolved. No blockers.
 | W3/M2 (studio-board status UX: approved -> published visibility) | codex-gpt5 | 2026-03-25 | RECOMMENDED — UI follow-through after canonical lane decision | — |
 | W2/W4 (rooms + stage prospectus alignment) | codex-gpt5 | 2026-03-28 | RECOMMENDED — docs update required after room manifest merge wave | — |
 | W2/W5 (Agent Zero upstream `v1.3` baseline vs PMOVES hardened suit gap report) | codex-gpt5 | 2026-03-28 | VERIFIED — upstream at `v1.3`, PMOVES pin still Mar 7 hardened commit | — |
+| Infra (PR review sweep: #1151, #1155, #1156) | 4090-claude | 2026-03-28 | SHIPPED — 74 threads resolved, 3 PRs merged | main |
+| Infra (KiloCode claw config rebase + 18 CR fixes) | 4090-claude | 2026-03-28 | SHIPPED PR #1151 (merged 2026-03-30) | feature/kilo-claw-config |
+| Infra (Provider cascade: 7 CR + 3 Kilo fixes) | 4090-claude | 2026-03-28 | SHIPPED PR #1155 (merged 2026-03-29) | feat/4090-coding-workstation-stack |
 
-## Recommended Next Steps (Post 2026-03-24 CHIT Wave 1)
+## Recommended Next Steps (Post 2026-03-30 PR Sweep)
 
 ### 5090-claude (GPU Inference Specialist)
 | # | Task | Priority | Notes |
@@ -510,12 +513,17 @@ All resolved. No blockers.
 | 4 | Roadmap P0 cleanup + container rebuild manifest | **P1** | Clear stale blockers so z890/5090/codex sessions are productive |
 | 5 | P7 Agent Interpreter → 5090 TTS via Tailscale | P2 | UNBLOCKED since Step 7 |
 | 6 | W1: Agent Theming + Terminal | P2 | Roadmap claim |
+| 1 | ~~PR #1082 merge + AGNOTE/TAC docs~~ | ~~**P0**~~ | DONE — merged 2026-03-24, branch deleted |
+| 2 | P7 Agent Interpreter → 5090 TTS via Tailscale | **P1** | UNBLOCKED since Step 7 |
+| 3 | ~~W1: Agent Theming + Terminal~~ | ~~P2~~ | DONE — PRs #1065, #1101 merged, branch deleted |
+| 4 | PR #1158 review (Agent Zero v1.3 sync) | P1 | Z890's draft — review when ready |
+| 5 | W6-P3 voice binding verification | P2 | Persona selector shipped — verify with Flute |
 
 ### z890-claude (Infrastructure Coordinator)
 | # | Task | Priority | Notes |
 |---|------|----------|-------|
-| 1 | Container rebuilds (6 services — includes embedding env changes) | **P0** | Blocks Docker image freshness |
-| 2 | `pmoves_chunks_qwen3` Qdrant collection provision | P1 | New 3072d collection; old data untouched |
+| 1 | ~~Container rebuilds (6 services)~~ | ~~**P0**~~ | DONE — 28 containers healthy (2026-03-28) |
+| 2 | ~~`pmoves_chunks_qwen3` Qdrant provision~~ | ~~P1~~ | DONE — 700 points, 2560d, green |
 | 3 | W6-P1: Health/Wealth Docker wiring | P1 | NATS + /healthz + /metrics |
 | 4 | Jetson Orin onboarding | P2 | Via RustDesk |
 | 5 | NATS leaf node to 5090 | P2 | Flute NATS=connected proves bus healthy |
