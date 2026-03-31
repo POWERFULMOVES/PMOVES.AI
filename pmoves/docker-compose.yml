@@ -1048,7 +1048,7 @@ services:
     security_opt:
       - no-new-privileges:true
     ports:
-    - ${QDRANT_BIND:-127.0.0.1}:${QDRANT_PORT:-6333}:6333
+    - ${QDRANT_BIND:-0.0.0.0}:${QDRANT_PORT:-6333}:6333
     networks:
     - pmoves_data
     environment:
@@ -1076,7 +1076,7 @@ services:
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
     ports:
-    - ${MEILISEARCH_BIND:-127.0.0.1}:${MEILISEARCH_PORT:-7700}:7700
+    - ${MEILISEARCH_BIND:-0.0.0.0}:${MEILISEARCH_PORT:-7700}:7700
     networks:
     - pmoves_data
     volumes:
@@ -1112,8 +1112,8 @@ services:
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
     ports:
-    - ${NEO4J_BIND:-127.0.0.1}:${NEO4J_HTTP_PORT:-7474}:7474
-    - ${NEO4J_BIND:-127.0.0.1}:${NEO4J_BOLT_PORT:-7687}:7687
+    - ${NEO4J_BIND:-0.0.0.0}:${NEO4J_HTTP_PORT:-7474}:7474
+    - ${NEO4J_BIND:-0.0.0.0}:${NEO4J_BOLT_PORT:-7687}:7687
     volumes:
     - neo4j-data:/data
     - ./neo4j/cypher:/cypher:ro
@@ -1140,8 +1140,8 @@ services:
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
     ports:
-    - ${MINIO_BIND:-127.0.0.1}:${MINIO_PORT:-9000}:9000
-    - ${MINIO_CONSOLE_BIND:-127.0.0.1}:${MINIO_CONSOLE_PORT:-9001}:9001
+    - ${MINIO_BIND:-0.0.0.0}:${MINIO_PORT:-9000}:9000
+    - ${MINIO_CONSOLE_BIND:-0.0.0.0}:${MINIO_CONSOLE_PORT:-9001}:9001
     volumes:
     - minio-data:/data
     networks:
@@ -1194,7 +1194,7 @@ services:
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
     ports:
-    - ${HIRAG_V1_BIND:-127.0.0.1}:${HIRAG_V1_HOST_PORT:-8089}:8086
+    - ${HIRAG_V1_BIND:-0.0.0.0}:${HIRAG_V1_HOST_PORT:-8089}:8086
     depends_on:
       qdrant:
         condition: service_healthy
@@ -1223,7 +1223,7 @@ services:
     depends_on:
     - hi-rag-gateway-v2
     ports:
-    - ${RETRIEVAL_EVAL_BIND:-127.0.0.1}:${RETRIEVAL_EVAL_PORT:-8090}:8090
+    - ${RETRIEVAL_EVAL_BIND:-0.0.0.0}:${RETRIEVAL_EVAL_PORT:-8090}:8090
     volumes:
     - ./services/retrieval-eval:/app:rw
     - ./datasets:/app/data:rw
@@ -1251,7 +1251,7 @@ services:
     - AWS_DEFAULT_REGION=us-east-1
     - ALLOWED_BUCKETS=${ALLOWED_BUCKETS:-assets,outputs}
     ports:
-    - ${PRESIGN_BIND:-127.0.0.1}:${PRESIGN_PORT:-8088}:8080
+    - ${PRESIGN_BIND:-0.0.0.0}:${PRESIGN_PORT:-8088}:8080
     profiles:
     - data
     - orchestration
@@ -1279,7 +1279,7 @@ services:
     - DEFAULT_NAMESPACE=${INDEXER_NAMESPACE:-pmoves}
     - RENDER_AUTO_APPROVE=${RENDER_AUTO_APPROVE:-false}
     ports:
-    - ${RENDER_WEBHOOK_BIND:-127.0.0.1}:${RENDER_WEBHOOK_PORT:-8085}:8085
+    - ${RENDER_WEBHOOK_BIND:-0.0.0.0}:${RENDER_WEBHOOK_PORT:-8085}:8085
     profiles:
     - orchestration
     - workers
@@ -1314,7 +1314,7 @@ services:
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
     ports:
-    - ${MODEL_REGISTRY_BIND:-127.0.0.1}:${MODEL_REGISTRY_PORT:-8110}:8110
+    - ${MODEL_REGISTRY_BIND:-0.0.0.0}:${MODEL_REGISTRY_PORT:-8110}:8110
     depends_on:
       nats:
         condition: service_healthy
@@ -1361,7 +1361,7 @@ services:
     - SUPA_REST_URL=${SUPA_REST_URL:-http://supabase-kong:8000/rest/v1}
     - SUPA_REST_INTERNAL_URL=${SUPA_REST_INTERNAL_URL:-http://supabase-kong:8000/rest/v1}
     ports:
-    - ${EXTRACT_WORKER_BIND:-127.0.0.1}:${EXTRACT_WORKER_PORT:-8083}:8083
+    - ${EXTRACT_WORKER_BIND:-0.0.0.0}:${EXTRACT_WORKER_PORT:-8083}:8083
     profiles:
     - workers
     - orchestration
@@ -1407,7 +1407,7 @@ services:
       minio:
         condition: service_healthy
     ports:
-    - ${PDF_INGEST_BIND:-127.0.0.1}:${PDF_INGEST_PORT:-8092}:8092
+    - ${PDF_INGEST_BIND:-0.0.0.0}:${PDF_INGEST_PORT:-8092}:8092
     profiles:
     - workers
     - orchestration
@@ -1428,7 +1428,7 @@ services:
       dockerfile: services/langextract/Dockerfile
     restart: unless-stopped
     ports:
-    - ${LANGEXTRACT_BIND:-127.0.0.1}:${LANGEXTRACT_PORT:-8084}:8084
+    - ${LANGEXTRACT_BIND:-0.0.0.0}:${LANGEXTRACT_PORT:-8084}:8084
     profiles:
     - workers
     - orchestration
@@ -1458,7 +1458,7 @@ services:
       extract-worker:
         condition: service_started
     ports:
-    - ${NOTEBOOK_SYNC_BIND:-127.0.0.1}:${NOTEBOOK_SYNC_PORT:-8095}:8095
+    - ${NOTEBOOK_SYNC_BIND:-0.0.0.0}:${NOTEBOOK_SYNC_PORT:-8095}:8095
     profiles:
     - workers
     - orchestration
@@ -1495,7 +1495,7 @@ services:
       minio:
         condition: service_healthy
     ports:
-    - ${TRANSCRIBE_BIND:-127.0.0.1}:${TRANSCRIBE_HOST_PORT:-8074}:8000
+    - ${TRANSCRIBE_BIND:-0.0.0.0}:${TRANSCRIBE_HOST_PORT:-8074}:8000
     profiles:
     - workers
     networks:
@@ -1545,7 +1545,7 @@ services:
             - utility
             count: ${GPU_COUNT:-all}
     ports:
-    - ${FFMPEG_WHISPER_BIND:-127.0.0.1}:${FFMPEG_WHISPER_PORT:-8078}:8078
+    - ${FFMPEG_WHISPER_BIND:-0.0.0.0}:${FFMPEG_WHISPER_PORT:-8078}:8078
     profiles:
     - workers
     - orchestration
@@ -1582,7 +1582,7 @@ services:
             - gpu
             count: ${GPU_COUNT:-all}
     ports:
-    - ${MEDIA_VIDEO_BIND:-127.0.0.1}:${MEDIA_VIDEO_PORT:-8079}:8079
+    - ${MEDIA_VIDEO_BIND:-0.0.0.0}:${MEDIA_VIDEO_PORT:-8079}:8079
     profiles:
     - workers
     - orchestration
@@ -1615,7 +1615,7 @@ services:
             - gpu
             count: ${GPU_COUNT:-all}
     ports:
-    - ${MEDIA_AUDIO_BIND:-127.0.0.1}:${MEDIA_AUDIO_PORT:-8082}:8082
+    - ${MEDIA_AUDIO_BIND:-0.0.0.0}:${MEDIA_AUDIO_PORT:-8082}:8082
     profiles:
     - workers
     - orchestration
@@ -1686,7 +1686,7 @@ services:
       nats:
         condition: service_healthy
     ports:
-    - ${PMOVES_YT_BIND:-127.0.0.1}:${PMOVES_YT_PORT:-8077}:8077
+    - ${PMOVES_YT_BIND:-0.0.0.0}:${PMOVES_YT_PORT:-8077}:8077
     networks:
     - pmoves_app
     - pmoves_api
@@ -1754,7 +1754,7 @@ services:
       nats:
         condition: service_healthy
     ports:
-    - ${CHANNEL_MONITOR_BIND:-127.0.0.1}:${CHANNEL_MONITOR_PORT:-8097}:8097
+    - ${CHANNEL_MONITOR_BIND:-0.0.0.0}:${CHANNEL_MONITOR_PORT:-8097}:8097
     healthcheck:
       test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8097/healthz', timeout=5)"]
       interval: 30s
@@ -1832,7 +1832,7 @@ services:
     extra_hosts:
     - host.docker.internal:host-gateway
     ports:
-    - ${HIRAG_BIND:-127.0.0.1}:${HIRAG_V2_HOST_PORT:-8086}:8086
+    - ${HIRAG_BIND:-0.0.0.0}:${HIRAG_V2_HOST_PORT:-8086}:8086
     depends_on:
       qdrant:
         condition: service_healthy
@@ -1905,7 +1905,7 @@ services:
             - gpu
             count: ${GPU_COUNT:-all}
     ports:
-    - ${HIRAG_BIND:-127.0.0.1}:${HIRAG_V2_GPU_HOST_PORT:-8187}:8086  # Default 8187; 8090 reserved for retrieval-eval
+    - ${HIRAG_BIND:-0.0.0.0}:${HIRAG_V2_GPU_HOST_PORT:-8187}:8086  # Default 8187; 8090 reserved for retrieval-eval
     depends_on:
       qdrant:
         condition: service_healthy
@@ -2012,7 +2012,7 @@ services:
             - gpu
             count: ${GPU_COUNT:-all}
     ports:
-    - ${HIRAG_BIND:-127.0.0.1}:${HIRAG_V2_GPU_HOST_PORT:-8087}:8086
+    - ${HIRAG_BIND:-0.0.0.0}:${HIRAG_V2_GPU_HOST_PORT:-8087}:8086
     depends_on:
       qdrant:
         condition: service_healthy
@@ -2050,8 +2050,8 @@ services:
     - ${NATS_PASSWORD:-pmoves}
     restart: unless-stopped
     ports:
-    - ${NATS_BIND:-127.0.0.1}:${NATS_PORT:-4222}:4222
-    - ${NATS_BIND:-127.0.0.1}:${NATS_MONITORING_PORT:-9223}:8222
+    - ${NATS_BIND:-0.0.0.0}:${NATS_PORT:-4222}:4222
+    - ${NATS_BIND:-0.0.0.0}:${NATS_MONITORING_PORT:-9223}:8222
     networks:
     - pmoves_bus
     environment:
@@ -2146,8 +2146,8 @@ services:
       tensorzero-gateway:
         condition: service_healthy
     ports:
-    - ${AGENT_ZERO_BIND:-127.0.0.1}:${AGENT_ZERO_PORT:-8080}:8080
-    - ${AGENT_ZERO_BIND:-127.0.0.1}:${AGENT_ZERO_UI_PORT:-8081}:80
+    - ${AGENT_ZERO_BIND:-0.0.0.0}:${AGENT_ZERO_PORT:-8080}:8080
+    - ${AGENT_ZERO_BIND:-0.0.0.0}:${AGENT_ZERO_UI_PORT:-8081}:80
     volumes:
     - ${AGENT_ZERO_MEMORY_DIR:-./data/agent-zero/memory}:/a0/memory
     - ${AGENT_ZERO_KNOWLEDGE_DIR:-./data/agent-zero/knowledge}:/a0/knowledge
@@ -2227,9 +2227,9 @@ services:
     - import uvicorn; from services.archon.main import app; uvicorn.run(app, host='0.0.0.0',
       port=8091, log_level='info')
     ports:
-    - ${ARCHON_BIND:-127.0.0.1}:${ARCHON_PORT:-8091}:8091
-    - ${ARCHON_BIND:-127.0.0.1}:${ARCHON_MCP_PORT:-8051}:8051
-    - ${ARCHON_BIND:-127.0.0.1}:${ARCHON_WS_PORT:-8052}:8052
+    - ${ARCHON_BIND:-0.0.0.0}:${ARCHON_PORT:-8091}:8091
+    - ${ARCHON_BIND:-0.0.0.0}:${ARCHON_MCP_PORT:-8051}:8051
+    - ${ARCHON_BIND:-0.0.0.0}:${ARCHON_WS_PORT:-8052}:8052
     networks:
       pmoves_app:
         aliases:
@@ -2271,7 +2271,7 @@ services:
       - CIPHER_API_TOKEN=${CIPHER_API_TOKEN:-}
     command: ["node", "dist/src/app/index.cjs", "--mode", "api", "--port", "3000", "--host", "0.0.0.0", "--agent", "/app/memAgent/cipher.yml", "--mcp-transport-type", "sse"]
     ports:
-      - "${CIPHER_BIND:-127.0.0.1}:${CIPHER_PORT:-8096}:3000"
+      - "${CIPHER_BIND:-0.0.0.0}:${CIPHER_PORT:-8096}:3000"
     depends_on:
       neo4j:
         condition: service_healthy
@@ -2327,7 +2327,7 @@ services:
         condition: service_healthy
       nats-init:
         condition: service_completed_successfully
-    ports: ["${BOTZ_BIND:-127.0.0.1}:${BOTZ_PORT:-8054}:8054"]
+    ports: ["${BOTZ_BIND:-0.0.0.0}:${BOTZ_PORT:-8054}:8054"]
     profiles: ["agents", "botz"]
     networks: [pmoves_app, pmoves_bus, pmoves_api, pmoves_monitoring, pmoves_external]  # GitHub API
     healthcheck:
@@ -2356,8 +2356,8 @@ services:
       - GH_APP_INSTALLATION_ID=${GH_APP_INSTALLATION_ID:-}
       - AGENTZERO_MCP_URL=${AGENTZERO_MCP_URL:-http://agent-zero:8080/mcp}
     ports:
-      - ${GITHUB_CLEANUP_BIND:-127.0.0.1}:8100:8100
-      - ${GITHUB_CLEANUP_BIND:-127.0.0.1}:9096:9096
+      - ${GITHUB_CLEANUP_BIND:-0.0.0.0}:8100:8100
+      - ${GITHUB_CLEANUP_BIND:-0.0.0.0}:9096:9096
     depends_on:
       nats:
         condition: service_healthy
@@ -2391,8 +2391,8 @@ services:
       - BOTZ_MCP_URL=${BOTZ_MCP_URL:-http://botz-gateway:8102}
       - GITHUB_ORG=${GITHUB_ORG:-POWERFULMOVES}
     ports:
-      - ${GITHUB_TRIAGE_BIND:-127.0.0.1}:8101:8101
-      - ${GITHUB_TRIAGE_BIND:-127.0.0.1}:9097:9097
+      - ${GITHUB_TRIAGE_BIND:-0.0.0.0}:8101:8101
+      - ${GITHUB_TRIAGE_BIND:-0.0.0.0}:9097:9097
     depends_on:
       nats:
         condition: service_healthy
@@ -2426,7 +2426,7 @@ services:
     - GEOMETRY_WILDCARD=${GEOMETRY_WILDCARD:-geometry.>}
     - PORT=9224
     ports:
-    - ${A2UI_BIND:-127.0.0.1}:9224:9224
+    - ${A2UI_BIND:-0.0.0.0}:9224:9224
     depends_on:
       nats:
         condition: service_healthy
@@ -2477,7 +2477,7 @@ services:
       nats:
         condition: service_healthy
     ports:
-    - ${DEEPRESEARCH_BIND:-127.0.0.1}:${DEEPRESEARCH_PORT:-8098}:8098
+    - ${DEEPRESEARCH_BIND:-0.0.0.0}:${DEEPRESEARCH_PORT:-8098}:8098
     volumes:
     - ./contracts:/app/contracts:ro
     networks:
@@ -2505,7 +2505,7 @@ services:
     - SUPA_REST_URL=${SUPA_REST_URL:-http://supabase-kong:8000/rest/v1}
     - TENSORZERO_URL=${TENSORZERO_URL:-http://tensorzero-gateway:3000}
     ports:
-    - ${SUPASERCH_BIND:-127.0.0.1}:${SUPASERCH_PORT:-8099}:8099
+    - ${SUPASERCH_BIND:-0.0.0.0}:${SUPASERCH_PORT:-8099}:8099
     networks:
     - pmoves_app
     - pmoves_bus
@@ -2576,7 +2576,7 @@ services:
       nats:
         condition: service_healthy
     ports:
-    - ${PUBLISHER_DISCORD_BIND:-127.0.0.1}:8094:8092
+    - ${PUBLISHER_DISCORD_BIND:-0.0.0.0}:8094:8092
     profiles:
     - orchestration
     - agents
@@ -2598,7 +2598,7 @@ services:
     - JELLYFIN_URL=${JELLYFIN_INTERNAL_URL:-http://cataclysm-jellyfin:8096}
     - SUPA_REST_URL=${SUPA_REST_INTERNAL_URL:-${SUPA_REST_URL:-http://supabase-kong:8000/rest/v1}}
     ports:
-    - ${JELLYFIN_BRIDGE_BIND:-127.0.0.1}:8093:8093
+    - ${JELLYFIN_BRIDGE_BIND:-0.0.0.0}:8093:8093
     profiles:
     - orchestration
     networks:
@@ -2646,7 +2646,7 @@ services:
             capabilities:
             - gpu
     ports:
-    - ${OLLAMA_BIND:-127.0.0.1}:${OLLAMA_HOST_PORT:-11435}:11434
+    - ${OLLAMA_BIND:-0.0.0.0}:${OLLAMA_HOST_PORT:-11435}:11434
     networks:
     - pmoves_api
     - pmoves_external
@@ -2669,7 +2669,7 @@ services:
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
     ports:
-    - ${CLICKHOUSE_BIND:-127.0.0.1}:${TENSORZERO_CLICKHOUSE_PORT:-8123}:8123
+    - ${CLICKHOUSE_BIND:-0.0.0.0}:${TENSORZERO_CLICKHOUSE_PORT:-8123}:8123
     volumes:
     - tensorzero-clickhouse-data:/var/lib/clickhouse
     healthcheck:
@@ -2717,7 +2717,7 @@ services:
       tensorzero-clickhouse:
         condition: service_healthy
     ports:
-    - ${TENSORZERO_BIND:-127.0.0.1}:${TENSORZERO_PORT:-3030}:3000
+    - ${TENSORZERO_BIND:-0.0.0.0}:${TENSORZERO_PORT:-3030}:3000
     networks:
     - pmoves_api
     - pmoves_bus
@@ -2761,7 +2761,7 @@ services:
       tensorzero-gateway:
         condition: service_started
     ports:
-    - ${TENSORZERO_UI_BIND:-127.0.0.1}:${TENSORZERO_UI_PORT:-4000}:4000
+    - ${TENSORZERO_UI_BIND:-0.0.0.0}:${TENSORZERO_UI_PORT:-4000}:4000
     profiles:
     - tensorzero
     networks:
@@ -2818,7 +2818,7 @@ services:
     - pmoves_bus
     - pmoves_monitoring
     ports:
-    - ${GPU_ORCHESTRATOR_BIND:-127.0.0.1}:${GPU_ORCHESTRATOR_HOST_PORT:-8200}:8200
+    - ${GPU_ORCHESTRATOR_BIND:-0.0.0.0}:${GPU_ORCHESTRATOR_HOST_PORT:-8200}:8200
     healthcheck:
       test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8200/healthz', timeout=5)"]
       interval: 30s
@@ -2850,7 +2850,7 @@ services:
       - CHIT_REQUIRE_SIGNATURE=${CHIT_PROD_REQUIRE_SIGNATURE:-true}
       - CHIT_DECRYPT_ANCHORS=${CHIT_PROD_DECRYPT_ANCHORS:-true}
       - CHIT_PASSPHRASE=${CHIT_PROD_PASSPHRASE:?set CHIT_PROD_PASSPHRASE in env.shared}
-    ports: ["${EVO_CONTROLLER_BIND:-127.0.0.1}:8113:8113"]
+    ports: ["${EVO_CONTROLLER_BIND:-0.0.0.0}:8113:8113"]
     profiles: ["orchestration"]
     # Docker Desktop does not publish host ports for services attached only to internal networks.
     networks: [pmoves_app, pmoves_api, pmoves_bus, pmoves_external]
@@ -2881,7 +2881,7 @@ services:
       - TORCH_CUDA_ARCH_LIST=5.0;5.2;6.0;6.1;7.0;7.5;8.0;8.6;9.0
       - TORCH_CUDNN_V8_API_ENABLED=1
       - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
-    ports: ["${TTS_BIND:-127.0.0.1}:7861:7861"]
+    ports: ["${TTS_BIND:-0.0.0.0}:7861:7861"]
     profiles: ["gpu", "tts"]
     networks: [pmoves_app, pmoves_monitoring, pmoves_external]  # HuggingFace TTS model downloads
     deploy:
@@ -2929,7 +2929,7 @@ services:
       - HTTP_PROXY=
       - HTTPS_PROXY=
       - NO_PROXY=
-    ports: ["${FLUTE_BIND:-127.0.0.1}:8055:8055", "${FLUTE_BIND:-127.0.0.1}:8056:8056"]
+    ports: ["${FLUTE_BIND:-0.0.0.0}:8055:8055", "${FLUTE_BIND:-0.0.0.0}:8056:8056"]
     profiles: ["orchestration", "media"]
     # Attach a non-internal bridge so published host ports resolve on Docker Desktop.
     networks: [pmoves_app, pmoves_api, pmoves_bus, pmoves_external]
@@ -2968,7 +2968,7 @@ services:
       - CHIT_ENABLED=${CHIT_ENABLED:-true}
       - GEOMETRY_BUS_URL=${GEOMETRY_BUS_URL:-nats://nats:pmoves@nats:4222}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
-    ports: ["${TOKENISM_BIND:-127.0.0.1}:${TOKENISM_HOST_PORT:-8103}:8100"]
+    ports: ["${TOKENISM_BIND:-0.0.0.0}:${TOKENISM_HOST_PORT:-8103}:8100"]
     profiles: ["agents", "orchestration", "botz"]
     depends_on: [nats]
     networks: [pmoves_app, pmoves_api, pmoves_bus, pmoves_monitoring]
@@ -2991,7 +2991,7 @@ services:
       - NEXT_PUBLIC_TOKENISM_URL=${TOKENISM_UI_API_URL:-http://tokenism-simulator:8100}
       - NODE_ENV=production
       - PORT=8504
-    ports: ["${TOKENISM_UI_BIND:-127.0.0.1}:${TOKENISM_UI_HOST_PORT:-8504}:8504"]
+    ports: ["${TOKENISM_UI_BIND:-0.0.0.0}:${TOKENISM_UI_HOST_PORT:-8504}:8504"]
     profiles: ["agents", "botz"]
     networks: [pmoves_app]
     healthcheck:
@@ -3017,7 +3017,7 @@ services:
       - SUPABASE_URL=${SUPABASE_URL:-http://supabase-kong:8000}
       - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY:-}
       - PYTHONUNBUFFERED=1
-    ports: ["${CONSCIOUSNESS_BIND:-127.0.0.1}:${CONSCIOUSNESS_HOST_PORT:-8106}:8106"]
+    ports: ["${CONSCIOUSNESS_BIND:-0.0.0.0}:${CONSCIOUSNESS_HOST_PORT:-8106}:8106"]
     profiles: ["agents", "botz"]
     networks: [pmoves_app]
     healthcheck:
@@ -3049,7 +3049,7 @@ services:
       - SUPABASE_URL=http://supabase-kong:8000
       - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-}
       - MAX_CONCURRENT_CASTS=${MAX_CONCURRENT_CASTS:-4}
-    ports: ["${CAST_TTS_BIND:-127.0.0.1}:${CAST_TTS_PORT:-8060}:8060"]
+    ports: ["${CAST_TTS_BIND:-0.0.0.0}:${CAST_TTS_PORT:-8060}:8060"]
     profiles: ["cast", "media"]
     networks: [pmoves_app, pmoves_bus, pmoves_api, pmoves_external]
     user: "65532:65532"
@@ -3088,7 +3088,7 @@ services:
       - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
       - VOICE_RELAY_INPUT_SUBJECT=${VOICE_RELAY_INPUT_SUBJECT:-agentzero.task.result.v1}
       - VOICE_RELAY_OUTPUT_SUBJECT=${VOICE_RELAY_OUTPUT_SUBJECT:-voice.agent.response.v1}
-    ports: ["${VOICE_RELAY_BIND:-127.0.0.1}:${VOICE_RELAY_PORT:-8121}:8121"]
+    ports: ["${VOICE_RELAY_BIND:-0.0.0.0}:${VOICE_RELAY_PORT:-8121}:8121"]
     profiles: ["cast", "media"]
     networks: [pmoves_bus]
     read_only: true
@@ -3158,7 +3158,7 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:
-      - "${PMOVES_UI_BIND:-127.0.0.1}:4482:3000"
+      - "${PMOVES_UI_BIND:-0.0.0.0}:4482:3000"
     # Note: flute-gateway is optional (for voice features). Start with workers profile for full functionality.
     networks: [ pmoves_app, pmoves_api, pmoves_external ]
     profiles: [ "ui" ]
@@ -3182,7 +3182,7 @@ services:
     - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
     - HIRAG_INGEST_URL=${HIRAG_INGEST_URL:-http://hi-rag-gateway-v2:8086/ingest}
     ports:
-    - ${SESSION_CONTEXT_BIND:-127.0.0.1}:8102:8100
+    - ${SESSION_CONTEXT_BIND:-0.0.0.0}:8102:8100
     profiles:
     - workers
     networks:
@@ -3218,7 +3218,7 @@ services:
       - ENABLE_OBSERVABILITY=${WGER_OBSERVABILITY:-true}
       - PROMETHEUS_MULTIPROC_DIR=/tmp/prometheus
     ports:
-      - "${WGER_BIND:-127.0.0.1}:${WGER_PORT:-8000}:8000"
+      - "${WGER_BIND:-0.0.0.0}:${WGER_PORT:-8000}:8000"
     profiles: ["health", "wger"]
     networks:
       - pmoves_api
@@ -3310,7 +3310,7 @@ services:
       - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY}
       - TOOL_CACHE_TTL=${TOOL_CACHE_TTL:-300}
     ports:
-      - "${GATEWAY_AGENT_BIND:-127.0.0.1}:${GATEWAY_AGENT_PORT:-8111}:${GATEWAY_AGENT_PORT:-8111}"  # Default 8111; 8110 reserved for model-registry
+      - "${GATEWAY_AGENT_BIND:-0.0.0.0}:${GATEWAY_AGENT_PORT:-8111}:${GATEWAY_AGENT_PORT:-8111}"  # Default 8111; 8110 reserved for model-registry
     profiles: ["agents"]
     networks: [pmoves_api, pmoves_app, pmoves_bus]
     healthcheck:
@@ -3333,7 +3333,7 @@ services:
       - REFRESH_INTERVAL_SECONDS=${GITHUB_RUNNER_REFRESH_INTERVAL:-60}
       - LOG_LEVEL=${GITHUB_RUNNER_CTL_LOG_LEVEL:-INFO}
     depends_on: [ nats ]
-    ports: ["${GITHUB_RUNNER_CTL_BIND:-127.0.0.1}:8104:8104"]
+    ports: ["${GITHUB_RUNNER_CTL_BIND:-0.0.0.0}:8104:8104"]
     volumes:
       - ./services/github-runner-ctl/config:/app/config:ro
       - ./secrets/github_pat:/run/secrets/github_pat:ro
@@ -3387,7 +3387,7 @@ services:
     volumes:
     - invidious-companion-cache:/var/tmp/youtubei.js
     ports:
-    - ${INVIDIOUS_COMPANION_BIND:-127.0.0.1}:${INVIDIOUS_COMPANION_PORT:-8282}:8282
+    - ${INVIDIOUS_COMPANION_BIND:-0.0.0.0}:${INVIDIOUS_COMPANION_PORT:-8282}:8282
     profiles:
     - invidious
     networks:
@@ -3420,7 +3420,7 @@ services:
       \ ${INVIDIOUS_USE_REDIRECTOR:-true}\n  redirector_url: \"${INVIDIOUS_REDIRECTOR_URL:-https://redirect.invidious.io}\"\
       \n"
     ports:
-    - ${INVIDIOUS_BIND:-127.0.0.1}:${INVIDIOUS_PORT:-3000}:3000
+    - ${INVIDIOUS_BIND:-0.0.0.0}:${INVIDIOUS_PORT:-3000}:3000
     depends_on:
       invidious-db:
         condition: service_healthy
@@ -3461,7 +3461,7 @@ services:
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
     ports:
-    - ${GRAYJAY_BIND:-127.0.0.1}:${GRAYJAY_PLUGIN_HOST_PORT:-9096}:8080
+    - ${GRAYJAY_BIND:-0.0.0.0}:${GRAYJAY_PLUGIN_HOST_PORT:-9096}:8080
     profiles:
     - grayjay
     networks:
@@ -3483,14 +3483,14 @@ services:
     - .env.local
     environment:
     - GRAYJAY_PLUGIN_REGISTRY_URL=${GRAYJAY_PLUGIN_REGISTRY_URL:-http://grayjay-plugin-host:8080/plugins}
-    - GRAYJAY_SERVER_BIND=${GRAYJAY_SERVER_BIND:-127.0.0.1}
+    - GRAYJAY_SERVER_BIND=${GRAYJAY_SERVER_BIND:-0.0.0.0}
     - GRAYJAY_SERVER_PORT=${GRAYJAY_SERVER_PORT:-9095}
     - DOCKED_MODE=${DOCKED_MODE:-true}
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
     ports:
-    - ${GRAYJAY_BIND:-127.0.0.1}:${GRAYJAY_SERVER_PORT:-9095}:9095
+    - ${GRAYJAY_BIND:-0.0.0.0}:${GRAYJAY_SERVER_PORT:-9095}:9095
     depends_on:
       grayjay-plugin-host:
         condition: service_started
@@ -3544,7 +3544,7 @@ services:
       invidious-companion:
         condition: service_started
     ports:
-    - ${INVIDIOUS_PROXY_BIND:-127.0.0.1}:8281:80
+    - ${INVIDIOUS_PROXY_BIND:-0.0.0.0}:8281:80
     profiles:
     - invidious
     networks:
@@ -3598,7 +3598,7 @@ services:
     - pmoves_bus
     - pmoves_monitoring
     ports:
-    - ${LLAMA_LAB_BIND:-127.0.0.1}:8201:8201
+    - ${LLAMA_LAB_BIND:-0.0.0.0}:8201:8201
 
   # =============================================================================
   # GitHub Automation Services (Phase 3)
@@ -3622,7 +3622,7 @@ services:
     - DRY_RUN=${GITHUB_AUTOMATION_DRY_RUN:-true}
     - GITHUB_ORG=${GITHUB_ORG:-POWERFULMOVES}
     ports:
-    - ${GITHUB_AUTOMATION_BIND:-127.0.0.1}:8112:8102
+    - ${GITHUB_AUTOMATION_BIND:-0.0.0.0}:8112:8102
     profiles:
     - github-automation
     networks:
@@ -3658,7 +3658,7 @@ services:
     - MAIN_REPO=${MAIN_REPO:-PMOVES.AI}
     - WORKDIR=${WORKDIR:-/tmp/github-crossrepo-sync}
     ports:
-    - ${GITHUB_AUTOMATION_BIND:-127.0.0.1}:8113:8103
+    - ${GITHUB_AUTOMATION_BIND:-0.0.0.0}:8113:8103
     profiles:
     - github-automation
     networks:
@@ -3693,7 +3693,7 @@ services:
     - GITHUB_ORG=${GITHUB_ORG:-POWERFULMOVES}
     - AUTO_MERGE_REPOS=${AUTO_MERGE_REPOS:-}
     ports:
-    - ${GITHUB_AUTOMATION_BIND:-127.0.0.1}:8114:8104
+    - ${GITHUB_AUTOMATION_BIND:-0.0.0.0}:8114:8104
     profiles:
     - github-automation
     networks:
