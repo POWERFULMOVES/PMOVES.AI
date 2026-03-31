@@ -176,6 +176,19 @@ def _parse_action(text: str) -> str:
     return lines[-1] if lines else "noop"
 
 
+def _publish_nats(subject: str, payload: dict) -> bool:
+    """Best-effort NATS publish. Silently skips if nats CLI unavailable."""
+    import subprocess
+    try:
+        proc = subprocess.run(
+            ["nats", "pub", subject, json.dumps(payload)],
+            capture_output=True, text=True, timeout=5,
+        )
+        return proc.returncode == 0
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return False
+
+
 def run_episode(
     env_name: str,
     config: dict,
@@ -348,6 +361,19 @@ def run_episode(
         result["error"] = f"Unexpected response format: {exc}"
 
     result["duration_sec"] = round(time.time() - t0, 2)
+
+    # Best-effort NATS publish for observability
+    nats_cfg = config.get("nats", {})
+    subject = nats_cfg.get("episode_completed", "agentgym.episode.completed.v1")
+    _publish_nats(subject, {
+        "env": env_name,
+        "success": result["success"],
+        "score": result["score"],
+        "rounds": result["rounds"],
+        "duration_sec": result["duration_sec"],
+        "model": model,
+        "node": config.get("hardware", {}).get("node", "unknown"),
+    })
     return result
 
 

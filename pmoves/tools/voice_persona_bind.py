@@ -37,14 +37,14 @@ _FLUTE_URL = os.getenv("FLUTE_GATEWAY_URL", "http://localhost:8055")
 # ---------------------------------------------------------------------------
 VOICE_MAP: Dict[str, Dict[str, Any]] = {
     "analytical": {
-        "engine": "Kokoro",
+        "engine": "Kokoro TTS",
         "voice_id": "af_heart",
         "rate": 0.95,
         "pause_ms": 300,
         "emphasis": "moderate",
     },
     "architectural": {
-        "engine": "Kokoro",
+        "engine": "Kokoro TTS",
         "voice_id": "am_michael",
         "rate": 0.90,
         "pause_ms": 350,
@@ -79,7 +79,7 @@ VOICE_MAP: Dict[str, Dict[str, Any]] = {
         "emphasis": "high",
     },
     "dimensional": {
-        "engine": "Higgs",
+        "engine": "Higgs Audio",
         "voice_id": "default",
         "rate": 1.00,
         "pause_ms": 300,
@@ -93,14 +93,14 @@ VOICE_MAP: Dict[str, Dict[str, Any]] = {
         "emphasis": "high",
     },
     "strategic": {
-        "engine": "Kokoro",
+        "engine": "Kokoro TTS",
         "voice_id": "am_adam",
         "rate": 0.90,
         "pause_ms": 350,
         "emphasis": "moderate",
     },
     "broadcast": {
-        "engine": "Kokoro",
+        "engine": "Kokoro TTS",
         "voice_id": "am_adam",
         "rate": 0.90,
         "pause_ms": 300,
