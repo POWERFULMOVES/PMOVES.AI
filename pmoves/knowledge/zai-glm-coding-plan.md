@@ -1,107 +1,81 @@
-# Z.AI GLM Coding Plan — Provider Reference
-
-Last updated: 2026-03-29
-Source: https://docs.z.ai/devpack/using5.1
-
-## Overview
-
-The GLM Coding Plan is a subscription package for AI-powered coding tools. It provides access to GLM-5.1, GLM-5-Turbo, GLM-4.7, GLM-4.6, GLM-4.5, and GLM-4.5-Air models.
+# Z.AI GLM Coding Plan Reference
 
 ## API Endpoints
 
-| Purpose | URL |
-|---------|-----|
-| **Coding API (DEDICATED)** | `https://api.z.ai/api/coding/paas/v4` |
-| General API | `https://api.z.ai/api/paas/v4` |
-| Chat Completion | `https://api.z.ai/api/paas/v4/chat/completions` |
-| OpenAI-compatible | Same base, OpenAI format |
+| Endpoint | URL |
+|----------|-----|
+| Coding API (primary) | `https://api.z.ai/api/coding/paas/v4` |
+| API Key Management | `https://z.ai/manage-apikey/apikey-list` |
+| MCP Vision | `https://api.z.ai/api/mcp/vision/mcp` |
+| MCP Web Search | `https://api.z.ai/api/mcp/web_search_prime/mcp` |
+| MCP Web Reader | `https://api.z.ai/api/mcp/web_reader/mcp` |
+| MCP Zread | `https://api.z.ai/api/mcp/zread/mcp` |
 
-**CRITICAL:** The Coding Plan uses the dedicated Coding API endpoint, NOT the general API. Using the wrong endpoint will not consume Coding Plan quota.
+## Model Matrix
 
-## Models
-
-| Model | Reasoning | Context | Max Output | Best For |
-|-------|-----------|---------|------------|----------|
-| glm-5.1 | Yes | 204,800 | 131,072 | Complex tasks, rivals Claude Opus |
-| glm-5-turbo | Yes | 204,800 | 131,072 | Fast reasoning tasks |
-| glm-5 | Yes | 204,800 | 131,072 | Available on Max/Pro plans |
-| glm-4.7 | Yes | 204,800 | 131,072 | Routine coding (default) |
-| glm-4.6 | Yes | 204,800 | 131,072 | Standard tasks |
-| glm-4.5 | No | 131,072 | 16,384 | Quick tasks |
-| glm-4.5-air | No | 131,072 | 16,384 | Fast, lightweight (Haiku equivalent) |
+| Model | Context | Use Case | Mapping |
+|-------|---------|----------|---------|
+| glm-5.1 | 128K | Primary coding, complex reasoning | claude-sonnet-4, claude-opus-4 |
+| glm-4.7 | 128K | Balanced tasks, fallback | claude-sonnet-4 |
+| glm-4.5-air | 128K | Fast, lightweight tasks | claude-haiku-4-5 |
+| glm-4.6v | — | Vision analysis (MCP server) | N/A (tool-based) |
 
 ## Claude Code Configuration
 
 ```json
 {
-  "env": {
-    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "glm-4.5-air",
-    "ANTHROPIC_DEFAULT_SONNET_MODEL": "glm-5.1",
-    "ANTHROPIC_DEFAULT_OPUS_MODEL": "glm-5.1"
-  }
+  "apiProvider": "openai-compatible",
+  "apiKey": "${Z_AI_API_KEY}",
+  "baseURL": "https://api.z.ai/api/coding/paas/v4",
+  "model": "glm-5.1"
 }
 ```
 
-Location: `~/.claude/settings.json`
-
 ## Kilo Code Configuration
 
-1. Extensions → Kilo Code → Settings → Use your own API key
-2. API Provider: Z AI
-3. Z AI Entrypoint: International Coding Plan (`https://api.z.ai/api/coding/paas/v4/`)
-4. Z AI API Key: from https://z.ai/manage-apikey/apikey-list
-5. Model: glm-5.1 (or glm-4.7 for routine tasks)
+Set in `kilo.json` under `agents`:
+```json
+{
+  "agents": {
+    "model": "glm-5.1",
+    "modelProvider": "zai",
+    "modelFallback": "glm-4.7",
+    "codingApiEndpoint": "https://api.z.ai/api/coding/paas/v4"
+  }
+}
+```
 
 ## OpenClaw Configuration
 
 ```json
 {
-  "id": "glm-5.1",
-  "name": "GLM-5.1",
-  "reasoning": true,
-  "input": ["text"],
-  "contextWindow": 204800,
-  "maxTokens": 131072
+  "agents": {
+    "defaults": {
+      "model": {
+        "primary": "glm-5.1",
+        "fallback": "glm-4.7",
+        "provider": "zai"
+      }
+    }
+  }
 }
 ```
 
-Default: `"primary": "zai/glm-5.1"`, `"fallbacks": ["zai/glm-4.7"]`
+## MCP Servers
 
-## MCP Servers (4 included with Coding Plan)
+4 servers available — see `.kilo/command/zai-mcp.md` for full reference.
 
-| Server | Type | Install |
-|--------|------|---------|
-| Vision | stdio (npx @z_ai/mcp-server) | Node.js >= v22 |
-| Web Search | streamable-http | Remote |
-| Web Reader | streamable-http | Remote |
-| Zread | streamable-http | Remote |
+| Server | Type | Endpoint |
+|--------|------|----------|
+| zai-vision | stdio (npx) | `npx -y @z_ai/mcp-server` |
+| zai-web-search | streamable-http | `https://api.z.ai/api/mcp/web_search_prime/mcp` |
+| zai-web-reader | streamable-http | `https://api.z.ai/api/mcp/web_reader/mcp` |
+| zai-zread | streamable-http | `https://api.z.ai/api/mcp/zread/mcp` |
 
-All use same `Z_AI_API_KEY`. See `.kilo/command/zai-mcp.md` for config.
+## Usage Limits
 
-## Usage Limits (5-hour + weekly)
-
-| Plan | 5-Hour | Weekly |
-|------|--------|-------|
-| Lite | ~80 prompts | ~400 prompts |
-| Pro | ~400 prompts | ~2,000 prompts |
-| Max | ~1,600 prompts | ~8,000 prompts |
-
-GLM-5.1 consumes 3x during peak (14:00-18:00 UTC+8), 2x off-peak.
-Limited-time: GLM-5.1 and GLM-5-Turbo consume 1x off-peak through end of April.
-
-## PMOVES Integration
-
-- Coding API wired via TensorZero fallback chain (local → Ollama → coding_plan)
-- Claw taxonomy: bespoke study → understand → configure → test → document
-- PMOVES.Flare namespace: `pmoves/glm-5.1`, `pmoves/glm-4.7`
-- Node assignment: 5090 (primary GLM), 4090 (secondary)
-
-## References
-
-- Overview: https://docs.z.ai/devpack/overview.md
-- GLM-5.1 guide: https://docs.z.ai/devpack/using5.1
-- Kilo Code: https://docs.z.ai/scenario-example/develop-tools/kilo.md
-- OpenClaw: https://docs.z.ai/devpack/tool/openclaw.md
-- Claude Code: https://docs.z.ai/devpack/tool/claude.md
-- API reference: https://docs.z.ai/api-reference/llm/chat-completion.md
-- Pricing: https://docs.z.ai/guides/overview/pricing.md
+| Plan | Coding API | Search+Reader+Zread | Vision |
+|------|-----------|---------------------|--------|
+| Lite | Standard | 100/month | 5-hour pool |
+| Pro | Priority | 1,000/month | 5-hour pool |
+| Max | Highest priority | 4,000/month | 5-hour pool |

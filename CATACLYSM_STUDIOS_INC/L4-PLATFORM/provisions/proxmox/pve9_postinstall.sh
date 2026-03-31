@@ -100,11 +100,135 @@ EOF
 apt update
 
 # Basic QoL
-apt -y install curl gnupg tmux htop jq
+apt -y install curl gnupg tmux htop jq pciutils
 
-# Docker CE (for RustDesk containers)
+# --- NVIDIA Container Toolkit (GPU passthrough prerequisites) ---
+install_nvidia_container_toolkit() {
+  if command -v nvidia-container-toolkit >/dev/null 2>&1; then
+    log "NVIDIA container toolkit already installed."
+    return 0
+  fi
+
+  log "Installing NVIDIA container toolkit for GPU passthrough."
+  curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey \
+    | gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
+  curl -s -L https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list \
+    | sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' \
+    | tee /etc/apt/sources.list.d/nvidia-container-toolkit.list > /dev/null
+  apt update
+  apt -y install nvidia-container-toolkit
+  nvidia-ctk runtime configure --runtime=docker
+  log "NVIDIA container toolkit installed."
+}
+
+# --- GPU Orchestrator container ---
+configure_gpu_orchestrator() {
+  local image="${GPU_ORCH_IMAGE:-pmoves/gpu-orchestrator:latest}"
+  local data_root="${GPU_ORCH_DATA_DIR:-/var/lib/gpu-orchestrator}"
+
+  log "Provisioning GPU Orchestrator service (${image})."
+
+  mkdir -p "${data_root}"
+
+  cat <<EOF | tee /etc/systemd/system/gpu-orchestrator.service > /dev/null
+[Unit]
+Description=PMOVES GPU Orchestrator
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+EnvironmentFile=-/etc/default/gpu-orchestrator
+Restart=always
+TimeoutStopSec=30
+ExecStartPre=/usr/bin/docker rm -f gpu-orchestrator >/dev/null 2>&1 || true
+ExecStart=/bin/sh -c "/usr/bin/docker run --name gpu-orchestrator --rm \\
+  --gpus device=\${GPU_ORCHESTRATOR_GPU_INDEX:-0} \\
+  --network pmoves-net \\
+  -p 8200:8200 \\
+  -v /var/run/docker.sock:/var/run/docker.sock:ro \\
+  -v ${data_root}:/app/data \\
+  -e GPU_ORCHESTRATOR_HOST=0.0.0.0 \\
+  -e GPU_ORCHESTRATOR_PORT=8200 \\
+  -e GPU_ORCHESTRATOR_NATS_URL=\${GPU_ORCHESTRATOR_NATS_URL:-nats://nats:4222} \\
+  -e GPU_ORCHESTRATOR_GPU_INDEX=\${GPU_ORCHESTRATOR_GPU_INDEX:-0} \\
+  -e GPU_ORCHESTRATOR_VLLM_URL=\${GPU_ORCHESTRATOR_VLLM_URL:-http://host.docker.internal:8100} \\
+  -e GPU_ORCHESTRATOR_OLLAMA_URL=\${GPU_ORCHESTRATOR_OLLAMA_URL:-http://pmoves-ollama:11434} \\
+  ${image}"
+ExecStop=/usr/bin/docker stop gpu-orchestrator
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+  cat <<'EOF' | tee /etc/default/gpu-orchestrator > /dev/null
+# GPU Orchestrator configuration (env_prefix = GPU_ORCHESTRATOR_)
+GPU_ORCHESTRATOR_GPU_INDEX=0
+GPU_ORCHESTRATOR_NATS_URL=nats://nats:4222
+GPU_ORCHESTRATOR_VLLM_URL=http://host.docker.internal:8100
+GPU_ORCHESTRATOR_OLLAMA_URL=http://pmoves-ollama:11434
+EOF
+
+  systemctl daemon-reload
+  systemctl enable gpu-orchestrator.service
+  log "GPU Orchestrator service configured (start with: systemctl start gpu-orchestrator)."
+}
+
+# --- Ollama GPU container ---
+configure_ollama_gpu() {
+  local image="${OLLAMA_IMAGE:-ollama/ollama:latest}"
+  local data_root="${OLLAMA_DATA_DIR:-/var/lib/ollama}"
+
+  log "Provisioning Ollama GPU container (${image})."
+
+  mkdir -p "${data_root}"
+
+  cat <<EOF | tee /etc/systemd/system/ollama-gpu.service > /dev/null
+[Unit]
+Description=PMOVES Ollama GPU
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+EnvironmentFile=-/etc/default/ollama-gpu
+Restart=always
+TimeoutStopSec=30
+ExecStartPre=/usr/bin/docker rm -f pmoves-ollama >/dev/null 2>&1 || true
+ExecStart=/bin/sh -c "/usr/bin/docker run --name pmoves-ollama --rm \\
+  --gpus all \\
+  --network pmoves-net \\
+  -p 11434:11434 \\
+  -v ${data_root}:/root/.ollama \\
+  -e OLLAMA_HOST=0.0.0.0 \\
+  -e OLLAMA_ORIGINS='*' \\
+  ${image}"
+ExecStop=/usr/bin/docker stop pmoves-ollama
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+  cat <<'EOF' | tee /etc/default/ollama-gpu > /dev/null
+# Ollama GPU configuration
+EOF
+
+  systemctl daemon-reload
+  systemctl enable ollama-gpu.service
+  log "Ollama GPU service configured (start with: systemctl start ollama-gpu)."
+}
+
+# --- PMOVES docker network ---
+setup_pmoves_network() {
+  log "Creating PMOVES Docker networks."
+  docker network create pmoves-net 2>/dev/null || true
+  docker network create pmoves-local-models 2>/dev/null || true
+  log "Docker networks ready."
+}
+
+# Docker CE
 if ! command -v docker >/dev/null 2>&1; then
-  log "Installing Docker CE for RustDesk relay containers."
+  log "Installing Docker CE."
   install -m 0755 -d /etc/apt/keyrings
   curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
   chmod a+r /etc/apt/keyrings/docker.gpg
@@ -121,9 +245,20 @@ fi
 
 systemctl enable --now docker
 
+# GPU stack prerequisites
+install_nvidia_container_toolkit
+
+# PMOVES networking
+setup_pmoves_network
+
+# GPU services (Ollama + Orchestrator)
+configure_ollama_gpu
+configure_gpu_orchestrator
+
+# RustDesk relay
 configure_rustdesk_server
 
-# Tailscale on host (optional but convenient)
+# Tailscale on host
 curl -fsSL https://tailscale.com/install.sh | sh
 systemctl enable --now tailscaled
-echo "Now run: tailscale up --ssh --accept-routes"
+echo "Now run: tailscale up --ssh --accept-routes --tag=tag:pmoves --tag=tag:pve --tag=tag:production"

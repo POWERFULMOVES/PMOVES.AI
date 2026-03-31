@@ -39,26 +39,22 @@
         "Z_AI_API_KEY": "${Z_AI_API_KEY}",
         "Z_AI_MODE": "ZAI"
       },
-      "description": "GLM-4.6V vision: OCR, UI-to-code, screenshot diagnosis",
-      "docs": "https://docs.z.ai/devpack/mcp/vision-mcp-server"
+      "description": "GLM-4.6V vision analysis, OCR, UI-to-code"
     },
     "zai-web-search": {
       "type": "streamable-http",
       "url": "https://api.z.ai/api/mcp/web_search_prime/mcp",
-      "description": "LLM-optimized web search via GLM",
-      "docs": "https://docs.z.ai/devpack/mcp/search-mcp-server"
+      "description": "LLM-optimized web search"
     },
     "zai-web-reader": {
       "type": "streamable-http",
       "url": "https://api.z.ai/api/mcp/web_reader/mcp",
-      "description": "Full webpage content extraction",
-      "docs": "https://docs.z.ai/devpack/mcp/reader-mcp-server"
+      "description": "Full webpage content extraction"
     },
     "zai-zread": {
       "type": "streamable-http",
       "url": "https://api.z.ai/api/mcp/zread/mcp",
-      "description": "GitHub repo search and file reading",
-      "docs": "https://docs.z.ai/devpack/mcp/zread-mcp-server"
+      "description": "GitHub repo search and file reading"
     }
   },
   "references": {

@@ -81,3 +81,12 @@ darkxside:
 - KRISS KROSS Accord: `pmoves/docs/AGENTS/KRISS_KROSS_ACK.md`
 - Three-Body Doctrine: `pmoves/docs/PMOVESCHIT/THREE_BODY_DOCTRINE.md`
 - AI Graphiti Protocol: `pmoves/docs/AGENTS/AI_GRAPHITI_PROTOCOL.md`
+
+## KiloCode Integration
+
+- **Added:** 2026-03-27
+- DARKXSIDE ✦ attests to KiloCode GLM claw configuration on the 5090 node
+- DARKXSIDE co-creates with POWERFULMOVES through all three agent interfaces on 5090: Claude (`5090-CLAUDE`), Codex (`CODEX-GPT5`), and KiloCode (`KILOCODE-GLM`)
+- Glyph ✦ appears in all KiloCode trail entries as witness attestation
+- Coordination governed by AGNOTE4482PHI.t1 claim/release protocol
+- See: `pmoves/docs/AGENTS/KRISS_KROSS_ACK.md` (KiloCode GLM section)

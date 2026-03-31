@@ -1,64 +1,47 @@
-# PMOVES Claw Taxonomy — Reference
-
-Last updated: 2026-03-29
-Author: KiloCode GLM ▲ | DARKXSIDE ✦
+# Claw Taxonomy Reference
 
 ## Bespoke Integration Principle
 
-Every model integration in PMOVES follows a structured process:
-
-1. **Study** — Provider docs, HuggingFace model cards, benchmarks
-2. **Understand** — Context window, reasoning, tool use, vision, token limits
-3. **Configure** — Map to claw taxonomy with proper endpoints and fallbacks
-4. **Test** — Smokes, model readiness checks, edge cases
-5. **Document** — Record in taxonomy for all agents
+Each claw node is a bespoke integration — purpose-built for its hardware tier and agent workload. Claw configs are NOT one-size-fits-all; they encode node identity, exec policies, MCP topology, and model routing specific to that machine's role in the PMOVES.AI mesh.
 
 ## Provider Matrix
 
-### Z.AI GLM (Coding Plan)
-- Endpoint: `https://api.z.ai/api/coding/paas/v4`
-- Primary: glm-5.1 (204K context, reasoning)
-- Fallback: glm-4.7
-- MCP: Vision, Web Search, Web Reader, Zread
-- Docs: https://docs.z.ai/devpack/using5.1
-
-### Anthropic Claude
-- Primary: claude-opus-4 (Z890), claude-sonnet-4 (5090/4090)
-- Fallback: claude-haiku-4-5
-- Native vision, extended thinking
-- Integration: Direct API + TensorZero
-
-### OpenAI Codex
-- Primary: codex-mini-latest
-- Fallback: gpt-4o
-- Integration: TensorZero gateway
-
-### Local GPU (Ollama + vLLM)
-- Namespace: pmoves/ (PMOVES.Flare)
-- Examples: pmoves/qwen-3-coder-32b, pmoves/gemma-3-embed
-- Discovery: GPU orchestrator via mesh.gpu.model.loaded.v1
-- Pre-study: HuggingFace model cards
+| Provider | Models | Config Key | Notes |
+|----------|--------|------------|-------|
+| Z.AI (GLM) | glm-5.1, glm-4.7, glm-4.5-air | `zai` | Primary — coding API at `api.z.ai` |
+| Anthropic | claude-sonnet-4, claude-opus-4, claude-haiku-4-5 | `anthropic` | Sibling agent (claude-code) |
+| OpenAI | gpt-4o, gpt-4o-mini | `openai` | TensorZero routing |
+| Local (Ollama) | varies by GPU node | `ollama` | 5090, Jetson nodes |
 
 ## Claw Nodes
 
-| Node | Role | Primary Models |
-|------|------|---------------|
-| Z890 | Full infra coordinator | Claude Opus 4, Codex |
-| 5090 | GPU inference specialist | GLM-5.1, Ollama/vLLM |
-| 4090 | Active GPU contributor | GLM-5.1, Ollama (7-14B) |
+| Node | Role | GPU | Primary Model | Services |
+|------|------|-----|---------------|----------|
+| 5090 | GPU inference | RTX 5090 | glm-5.1 / claude-sonnet-4 | ollama, agent-zero, tensorzero, nats |
+| Z890 | Knowledge + orchestration | — | claude-sonnet-4 | cipher, archon, nats, neo4j |
+| Jetson | Edge inference | Orin | local (quantized) | ollama, tensorzero |
 
 ## PMOVES.Flare Namespace Convention
 
-Model names: `pmoves/<family>/<variant>`
-Example: `pmoves/glm-5.1`, `pmoves/qwen-3-coder-32b`
+Claw configs live under `pmoves/configs/claws/` and follow this structure:
 
-## Coding Plan Lanes (fallback chain)
+```
+pmoves/configs/claws/
+  scopes/
+    <node>.json          # Node-level claw identity + MCP + exec policies
+  opencode-<node>.json   # OpenClaw-specific mode + model overrides
+```
 
-`local → Ollama Cloud → coding_plan (GLM/Claude/Codex)`
+Config files use the `PMOVES.Flare` namespace pattern:
+- `pmoves-cipher` — Cipher memory MCP
+- `pmoves-*` — PMOVES-branded service integrations
+- `zai-*` — Z.AI provider integrations
+- Agent-tool MCP servers use short lowercase names (e.g., `docker`, `filesystem`)
 
-## References
+## Integration Points
 
-- Full taxonomy: pmoves/docs/CLAW_TAXONOMY.md
-- Model namespace: pmoves/configs/flare-model-namespace.yaml
-- Provider catalog: pmoves/config/provider_catalog.yaml
-- GPU models: pmoves/config/gpu-models.yaml
+- **kilo.json**: Project-level agent config, MCP server registry, context paths
+- **scopes/<node>.json**: Per-node claw identity, exec allowlists, MCP topology
+- **opencode-<node>.json**: OpenClaw mode bindings, model overrides, service ports
+- **.kilo/command/**: Operator slash commands for agent workflows
+- **.kilo/agent/**: Agent persona definitions

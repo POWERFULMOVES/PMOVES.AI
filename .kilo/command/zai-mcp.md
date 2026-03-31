@@ -15,17 +15,13 @@ Manage Z.AI MCP servers for Kilo Code on 5090.
 
 Requires `Z_AI_API_KEY` in environment. Get from https://z.ai/manage-apikey/apikey-list.
 
-### Vision (local)
-Requires Node.js >= v22. Runs via npx.
+### Vision (local, requires Node.js >= v22)
 ```
 npx -y @z_ai/mcp-server
 ```
 
 ### Remote servers
 Automatically available when Z_AI_API_KEY is set.
-- Web Search: https://api.z.ai/api/mcp/web_search_prime/mcp
-- Web Reader: https://api.z.ai/api/mcp/web_reader/mcp
-- Zread: https://api.z.ai/api/mcp/zread/mcp
 
 ## Rate Limits (per GLM Coding Plan)
 
@@ -35,8 +31,9 @@ Automatically available when Z_AI_API_KEY is set.
 | Pro | 1,000/month | 5-hour pool |
 | Max | 4,000/month | 5-hour pool |
 
-## Notes
+## References
 
-- One Z.AI API key works across all 4 servers
-- Vision requires local Node.js; remote servers need no install
-- Reference: https://docs.z.ai/devpack/mcp/vision-mcp-server
+- https://docs.z.ai/devpack/mcp/vision-mcp-server
+- https://docs.z.ai/devpack/mcp/search-mcp-server
+- https://docs.z.ai/devpack/mcp/reader-mcp-server
+- https://docs.z.ai/devpack/mcp/zread-mcp-server

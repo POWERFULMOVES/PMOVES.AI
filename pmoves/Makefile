@@ -156,6 +156,7 @@ include mk/infra.mk
 include mk/build-gate.mk
 include mk/nvidia-5090.mk
 include mk/hf.mk
+include mk/provider.mk
 
 .PHONY: update-service-docs
 update-service-docs: ## Regenerate service update notes from git metadata
@@ -1955,14 +1956,14 @@ model-readiness: ## Validate model registry, persona seeds, Ollama models, Tenso
 model-profiles: ## List available model manifests
 	@ls -1 models/*.yaml | sed 's#models/##' | sed 's#\.yaml##'
 
-model-apply: ensure-env-shared ## Apply a model profile into pmoves/.env.local (PROFILE=archon HOST=workstation_5090)
+model-apply: ensure-env-shared ## Apply a model profile into pmoves/.env.local (PROFILE=archon HOST=desktop-9950xd)
 	@PROFILE="$(PROFILE)" HOST="$(HOST)" bash tools/models/apply_profile.sh
 
-models-sync: ensure-env-shared ## Low-level sync via Python: make models-sync PROFILE=archon HOST=workstation_5090
-	@python3 tools/models/models_sync.py sync --profile "$(PROFILE)" --host "$${HOST:-workstation_5090}" --tensorzero-base "$(TENSORZERO_BASE_URL)"
+models-sync: ensure-env-shared ## Low-level sync via Python: make models-sync PROFILE=archon HOST=desktop-9950xd
+	@python3 tools/models/models_sync.py sync --profile "$(PROFILE)" --host "$${HOST:-desktop-9950xd}" --tensorzero-base "$(TENSORZERO_BASE_URL)"
 
 models-sync-dynamic: ensure-env-shared ## Dynamic sync from live model registry mappings (TARGET=all|agent-zero|archon|creator)
-	@python3 tools/models/models_sync.py sync-dynamic --target "$${TARGET:-all}" --host "$${HOST:-workstation_5090}" --tensorzero-base "$(TENSORZERO_BASE_URL)"
+	@python3 tools/models/models_sync.py sync-dynamic --target "$${TARGET:-all}" --host "$${HOST:-desktop-9950xd}" --tensorzero-base "$(TENSORZERO_BASE_URL)"
 
 model-swap: ensure-env-shared ## Swap a single model param into pmoves/.env.local (SERVICE=hirag NAME=<model-id>)
 	@python3 tools/models/models_sync.py swap --service "$(SERVICE)" --name "$(NAME)"
@@ -1970,7 +1971,7 @@ model-swap: ensure-env-shared ## Swap a single model param into pmoves/.env.loca
 models-seed-ollama: ## Pre-pull Ollama models from profiles/registry (override with OLLAMA_SEED_MODELS)
 	-@docker compose -p $(PROJECT) --profile tensorzero up -d pmoves-ollama >/dev/null 2>&1 || true
 	@bash -lc 'set -euo pipefail; \
-	  host="$${HOST:-workstation_5090}"; \
+	  host="$${HOST:-desktop-9950xd}"; \
 	  source="$${MODEL_SYNC_SOURCE:-auto}"; \
 	  if command -v python3 >/dev/null 2>&1; then pycmd="python3"; \
 	  elif command -v python >/dev/null 2>&1; then pycmd="python"; \

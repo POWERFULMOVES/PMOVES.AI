@@ -1,11 +1,22 @@
 # PMOVES v5 • ROADMAP
-Last updated: 2026-03-28
+Last updated: 2026-03-29
 
 ## Vision
 A production-ready, self-hostable orchestration mesh for creative + agent workloads across GPU boxes and Jetsons: **hybrid Hi‑RAG**, **Supabase Studio**, **n8n orchestration**, **Jellyfin publishing**, and **graph-aware retrieval**.
 
 ## Audit Snapshot (2026-03-12)
 
+- March 29 KiloCode claw configuration and GLM-5.1 taxonomy:
+  - `#1151` adds .kilo/ directory (3 agents, 14 commands), kilo.json, CLAW_TAXONOMY.md,
+    PMOVES.Flare model namespace, OS image catalog, Z.AI MCP servers, 5090 room manifest.
+  - ClaWz orphaned gitlink repaired (cfb4e3a → 2a406120, branch → main).
+  - Profile ID normalization: `workstation_5090` → `desktop-9950xd` across 14 files.
+  - 4090 promoted from field agent to active GPU contributor.
+  - Z.AI MCP servers (Vision, Web Search, Web Reader, Zread) configured for 5090.
+  - DARKXSIDE ✦ COCREATOR witness wired as KiloCode co-creation identity.
+  - Agent Zero v1.3 gap assessed — post-merge sync lane recommended, zero coupling to PR.
+  - prospectus implication: KiloCode GLM is now a first-class agent on 5090 alongside Claude and Codex;
+    the .kilo/ command structure establishes the pattern for future agent tooling.
 - March 27-28 room/stage wave landed on `main`:
   - `#1136` added room catalog contracts + dashboard loader.
   - `#1137` routed home launcher selection through room entry paths.
