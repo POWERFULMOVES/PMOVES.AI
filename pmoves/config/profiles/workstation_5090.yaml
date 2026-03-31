@@ -42,6 +42,24 @@ messaging:
   discord: true
   whatsapp: true
   webrtc: true
+
+# =============================================================================
+# MiniMax Provider Cascade Binding
+# =============================================================================
+# Per MINIMAX_GLM_PARITY_ANALYSIS.md Phase 1: Profile Binding
+# MiniMax is cloud-hosted, so this profile gets cascade routing hints
+minimax_cascade:
+  preferred_model: minimax-m2.7
+  cascade_priority: high
+  fallback_model: qwen3.5-9b
+  gpu_shape_store: true
+  tensorzero_routing: pmoves-architect
+
+# BoTZ Framework binding
+botz:
+  minimax_affinity: high
+  tactical_partner: true
+
 notes:
   - Alias of desktop-9950xd. Both IDs resolve to the same hardware profile.
   - Ensure NVIDIA Container Toolkit is installed.
