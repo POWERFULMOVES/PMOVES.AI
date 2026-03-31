@@ -2756,8 +2756,6 @@ services:
     volumes:
     - ./tensorzero/config:/app/config:ro
     depends_on:
-      supabase-db:
-        condition: service_healthy
       tensorzero-clickhouse:
         condition: service_healthy
       tensorzero-gateway:
