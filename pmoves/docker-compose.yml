@@ -2739,13 +2739,25 @@ services:
     environment:
     - TENSORZERO_GATEWAY_URL=${TENSORZERO_GATEWAY_URL:-http://tensorzero-gateway:3000}
     - TENSORZERO_CLICKHOUSE_URL=${TENSORZERO_CLICKHOUSE_GATEWAY_URL:-${TENSORZERO_CLICKHOUSE_URL:-http://tensorzero:tensorzero@tensorzero-clickhouse:8123/default}}
+    - TENSORZERO_POSTGRES_URL=${TENSORZERO_POSTGRES_URL:-postgresql://postgres:${SERVICE_PASSWORD_POSTGRES:-postgres}@supabase-db:5432/postgres}
     - DOCKED_MODE=${DOCKED_MODE:-true}
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
+    # Host environment leak guard (see x-host-leak-guard docs above)
+    - SSL_CERT_FILE=
+    - SSL_CERT_DIR=
+    - REQUESTS_CA_BUNDLE=
+    - CURL_CA_BUNDLE=
+    - NODE_EXTRA_CA_CERTS=
+    - HTTP_PROXY=
+    - HTTPS_PROXY=
+    - NO_PROXY=
     volumes:
     - ./tensorzero/config:/app/config:ro
     depends_on:
+      supabase-db:
+        condition: service_healthy
       tensorzero-clickhouse:
         condition: service_healthy
       tensorzero-gateway:
