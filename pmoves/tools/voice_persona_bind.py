@@ -190,6 +190,11 @@ def synthesize_agent_greeting(
         "agent_id": agent_id,
     }).encode("utf-8")
 
+    # Validate URL scheme to prevent SSRF via env var injection
+    if not _FLUTE_URL.startswith(("http://", "https://")):
+        print(f"[voice] Invalid FLUTE_GATEWAY_URL scheme: {_FLUTE_URL}", file=sys.stderr)
+        return None
+
     url = f"{_FLUTE_URL}/v1/voice/synthesize/prosodic"
     req = urllib.request.Request(
         url,
@@ -199,7 +204,7 @@ def synthesize_agent_greeting(
     )
 
     try:
-        with urllib.request.urlopen(req, timeout=30) as resp:
+        with urllib.request.urlopen(req, timeout=30) as resp:  # noqa: S310 — validated above
             return resp.read().decode("utf-8")
     except (urllib.error.URLError, urllib.error.HTTPError, OSError) as exc:
         print(f"WARNING: Flute-Gateway unavailable ({exc})", file=sys.stderr)

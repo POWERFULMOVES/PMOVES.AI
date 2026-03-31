@@ -118,7 +118,7 @@ class TestClawZHealth:
         """/healthz must return HTTP 200."""
         url = f"http://127.0.0.1:{CLAWZ_PORT}/healthz"
         req = urllib.request.Request(url, method="GET")
-        with urllib.request.urlopen(req, timeout=5) as resp:
+        with urllib.request.urlopen(req, timeout=5) as resp:  # noqa: S310 — hardcoded localhost
             assert resp.status == 200, f"/healthz returned {resp.status}"
 
     @pytest.mark.skipif(not _service_running(), reason="ClawZ not running on port 18789")
@@ -126,7 +126,7 @@ class TestClawZHealth:
         """/readyz must return HTTP 200."""
         url = f"http://127.0.0.1:{CLAWZ_PORT}/readyz"
         req = urllib.request.Request(url, method="GET")
-        with urllib.request.urlopen(req, timeout=5) as resp:
+        with urllib.request.urlopen(req, timeout=5) as resp:  # noqa: S310 — hardcoded localhost
             assert resp.status == 200, f"/readyz returned {resp.status}"
 
 

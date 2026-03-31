@@ -237,10 +237,17 @@ def run_episode(
     host = "localhost"
     env_base = f"http://{host}:{port}"
     agent_cfg = config.get("agent", {})
-    agent_url = agent_cfg.get(
-        "api_endpoint", "http://localhost:3030/v1/chat/completions"
-    )
-    model = agent_cfg.get("model", "qwen3:14b")
+    agent_mode = agent_cfg.get("mode", "api")
+    if agent_mode == "local":
+        # Local mode: use Ollama OpenAI-compatible endpoint
+        agent_url = "http://localhost:11434/v1/chat/completions"
+        model = agent_cfg.get("local_fallback", "qwen3:8b")
+    else:
+        # API mode: use TensorZero gateway
+        agent_url = agent_cfg.get(
+            "api_endpoint", "http://localhost:3030/v1/chat/completions"
+        )
+        model = agent_cfg.get("model", "qwen35_9b")
     max_rounds = config.get("episode", {}).get("max_rounds", 15)
     max_duration = config.get("episode", {}).get("max_duration_sec", 300)
 
