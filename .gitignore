@@ -155,6 +155,7 @@ pmoves/jellyfin-ai/logs/
 pmoves/jellyfin-ai/neo4j/
 pmoves/jellyfin-ai/qwen/
 pmoves/jellyfin-ai/redis/
+pmoves/jellyfin-ai/config/cache/
 pmoves/jellyfin-ai/config/data/
 pmoves/jellyfin-ai/config/.aspnet/
 pmoves/jellyfin-ai/config/.cache/
