@@ -241,6 +241,14 @@
           "sensitive": true
         },
         {
+          "key": "MINIMAX_API_KEY",
+          "file": "pmoves/env.tier-llm",
+          "prompt": "MiniMax API key (M2.7 / M2.1)",
+          "help": "Populate for MiniMax model routing via TensorZero. See docs/MINIMAX_API_KEY_SETUP.md.",
+          "required": false,
+          "sensitive": true
+        },
+        {
           "key": "OPENAI_API_KEY",
           "file": "pmoves/env.shared",
           "prompt": "OpenAI API key",

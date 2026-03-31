@@ -68,6 +68,10 @@
     "glmDocs": "https://docs.z.ai/devpack/using5.1",
     "glmApi": "https://docs.z.ai/api-reference/llm/chat-completion",
     "glmKiloCode": "https://docs.z.ai/scenario-example/develop-tools/kilo",
-    "glmOpenClaw": "https://docs.z.ai/devpack/tool/openclaw"
+    "glmOpenClaw": "https://docs.z.ai/devpack/tool/openclaw",
+    "minimaxIntegration": "pmoves/docs/MINIMAX_INTEGRATION.md",
+    "minimaxKeySetup": "pmoves/docs/MINIMAX_API_KEY_SETUP.md",
+    "minimaxCascade": "pmoves/tools/models/minimax_provider_cascade.yaml",
+    "minimaxSkills": ".kilocode/skills/minimax-*/SKILL.md"
   }
 }
