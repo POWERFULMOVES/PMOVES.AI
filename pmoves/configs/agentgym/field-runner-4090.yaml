@@ -1,0 +1,44 @@
+# AgentGym Field Runner — 4090 Laptop Configuration
+id: field-runner-4090
+hardware:
+  gpu: "RTX 4090 Laptop"
+  vram_gb: 16
+  ram_gb: 64
+  node: pmoves-4090
+
+episode:
+  max_duration_sec: 300
+  max_rounds: 15
+  concurrent: 1
+
+agent:
+  mode: api  # api (TensorZero) or local (Ollama)
+  api_endpoint: "${TENSORZERO_URL:-http://localhost:3030}/v1/chat/completions"
+  model: "qwen3:14b"
+  local_fallback: "qwen3:8b"
+
+environments:
+  lightweight:  # < 1GB RAM, no external deps
+    - {name: BabyAI, server_cmd: "agentenv-babyai", port: 36001}
+    - {name: TextCraft, server_cmd: "agentenv-textcraft", port: 36002}
+    - {name: Maze, server_cmd: "agentenv-maze", port: 36003}
+    - {name: Wordle, server_cmd: "agentenv-wordle", port: 36004}
+  moderate:  # 1-4GB RAM
+    - {name: ALFWorld, server_cmd: "agentenv-alfworld", port: 36005}
+    - {name: SQLGym, server_cmd: "agentenv-sqlgym", port: 36006}
+    - {name: WebShop, server_cmd: "agentenv-webshop", port: 36007}
+  skip:  # need browser infra or Java
+    - {name: WebArena, reason: "needs browser infrastructure"}
+    - {name: SciWorld, reason: "needs Java runtime"}
+
+nats:
+  episode_completed: "agentgym.episode.completed.v1"
+  eval_batch: "agentgym.eval.batch.completed.v1"
+  field_status: "agentgym.field.status.v1"
+
+metrics:
+  - score
+  - success_rate
+  - avg_rounds
+  - completion_time_sec
+  - token_count
