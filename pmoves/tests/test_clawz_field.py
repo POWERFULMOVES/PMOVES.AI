@@ -14,7 +14,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 CLAWZ_DIR = REPO_ROOT / "PMOVES-ClawZ"
-CLAWZ_PORT = int(os.getenv("CLAWZ_PORT", "18789"))
+CLAWZ_PORT = int(os.getenv("CLAWZ_PORT") or "18789")
 
 # Expected NATS subjects from agent_registry.yaml / nats-subjects.md context doc
 EXPECTED_NATS_SUBJECTS = [
