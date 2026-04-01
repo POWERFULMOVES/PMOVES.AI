@@ -1273,6 +1273,14 @@
           "help": "Admin API credential for stale-device pruning, tag updates, ACL automation. Separate from TAILSCALE_AUTHKEY.",
           "required": false,
           "sensitive": true
+        },
+        {
+          "key": "TAILSCALE_TAILNET",
+          "file": "pmoves/env.shared",
+          "prompt": "Tailscale tailnet organization name",
+          "help": "Your tailnet name (e.g. example.tail1234.ts.net). Used by tailscale-mcp for API calls.",
+          "required": false,
+          "type": "string"
         }
       ]
     },
