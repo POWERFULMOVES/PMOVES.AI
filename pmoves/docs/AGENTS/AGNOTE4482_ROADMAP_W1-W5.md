@@ -4,7 +4,7 @@ GRAPHITI_MARK: `PHI-4482-ROADMAP::W1-W6::PMOVES`
 
 > **Scratchpad**: All agents (5090-claude, z890-claude, 4090-claude, codex) read this before claiming workstream lanes.
 > **Origin**: 4090-claude session 2026-03-19, approved by DARKXSIDE.
-> **Status**: ACTIVE — refreshed 2026-03-28 after room/stage merge wave and upstream Agent Zero / ClaWz validation.
+> **Status**: ACTIVE — refreshed 2026-04-01 after self-review audit (Shift Crew, MiniMax parity, KiloCode claw, 2 Known Gaps resolved).
 
 ---
 
@@ -31,6 +31,32 @@ The site is not a traditional website — it's an **album / videogame / comic / 
 - **Prospectus implication**: the school/company/site should now be described as **rooms on a stage**, not just services in a stack. Rooms are the audience-facing surfaces; stage is the live state (`rehearsal`, `live`, `review`, `archive`) and suit/persona selection tells each room who is speaking.
 - **P7 implication**: P7 should not stop at "launcher + IDE." It should become the **room-aware stage manager** that opens the correct room, loads the correct suit, and hands off into the right runtime.
 - **Release/CVE intake implication**: Agent Zero and ClaWz suit updates should now follow a simple cadence: weekly upstream release/security intake, sprint-level sync decision, and release-gate verification before any gitlink change.
+
+### Post-Audit Activity (2026-03-28 → 2026-04-01)
+
+10+ PRs merged to main. Key deliverables:
+
+- **KiloCode claw config** (#1151): `.kilo/` directory init, GLM coding plan mode, DARKXSIDE co-creation wiring, vLLM integration, 3 agents + 8 commands
+- **4090 coding workstation stack** (#1155): Provider cascade (13 providers), function demands (18 functions), VRAM budget management, PBnJ launchers
+- **MiniMax parity Phase 1** (#1164): Provider cascade, TZ config, 9 skills created
+- **MiniMax parity Phase 2** (#1166): NATS wiring, BoTZ routing, KiloCode mode, env Known Roads hook
+- **MiniMax parity Phase 3-5** (landed via #1164/#1166): BoTZ tandem, DARKXSIDE triad, model fabric named lanes
+- **Shift Crew tools** (#1168): BoTZ Trinity CLI (plan+audit), voice persona binding (15 agents), beats-to-voice pipeline, BPM encoder (574 lines), ClawZ field tests (8/8), AgentGym field runner
+- **Security**: Host environment leak guard consolidated across all services (#1163)
+- **Infra**: BIND defaults reverted to 0.0.0.0 for fleet connectivity (#1162)
+- **TensorZero**: POSTGRES_URL fix (#1167), cross-profile supabase-db depends_on removal
+- **Deps**: codecov-action 5→6, cosign-installer 4.1.0→4.1.1
+
+**Known Gap resolutions (verified 2026-04-01):**
+- BoTZ JWT fail-open P0: **RESOLVED** — fail-closed in both `gateway.py` and `auth.py` (HTTPException 500)
+- BPM encoder P2: **RESOLVED** — `pmoves/tools/bpm_encoder.py` implemented (574 lines, PR #1168)
+- ClawZ gitlink: **RESOLVED** — orphaned SHA repaired (`ee274e80a3`)
+- Profile ID normalization: **RESOLVED** — `workstation_5090` alias created (`a747c0dbea`)
+
+**Still open:**
+- NATS unauthenticated references P0: ~100+ references in `pmoves/` (grep: `nats://(nats|localhost):4222` excluding `@`; exact count varies by submodule checkout state)
+- A2A server compose exposure: code exists but production exposure unverified
+- Signoff checklist sections 1, 3, 7: require runtime/prospectus/ClaWz verification
 
 ---
 

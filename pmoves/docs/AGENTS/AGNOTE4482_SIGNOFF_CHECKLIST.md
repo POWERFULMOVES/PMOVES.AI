@@ -4,7 +4,7 @@ GRAPHITI_MARK: `AGNOTE4482::SIGNOFF::CHECKLIST`
 
 > **Purpose**: one shared signoff gate for AGNOTE4482 prospectus, room/stage, suit, and control-plane updates.
 > **Rule**: each participating agent signs only for the sections they actually reviewed or executed.
-> **Status**: ACTIVE on 2026-03-28
+> **Status**: ACTIVE on 2026-04-01
 
 ---
 
@@ -94,6 +94,7 @@ Use one row per participating reviewer/agent. Add rows instead of overwriting ol
 | `4090-CLAUDE` | 4090 node / provider cascade | Section 4 (4/4 — profile-governed routing delivered via Provider Activation Cascade). 4090 coding workstation: 5 stacks, VRAM budget, cross-node mesh. Provider catalog (13 providers), function demands (18 functions), cascade CLI verified. 6 cloud model strength profiles seeded. Runbook: 4 operational scenarios. NATS subjects: claw.provider.activated/deactivated.v1. | SIGNED | 2026-03-28 | Completes section 4 item 3 (suit-bearing lanes are now profile-governed via provider_catalog.yaml + laptop-4090.yaml). Manifest entries for MINIMAX_API_KEY/GLM_API_KEY deferred — CHIT-protected, needs make secrets-funnel. |
 | `CLAUDE` | pending | — | PENDING | — | |
 | `AGENT-ZERO` | pending | — | PENDING | — | Runtime/ops signoff once suit baseline work is real |
+| `CLAUDE-OPUS` | self-review / docs audit | Sections 2 (gap report verified), 4 (profiles verified), 5 (control-plane files verified), 8 (docs parity verified). Sections 1, 3, 7 reviewed but cannot sign — require runtime/prospectus/ClaWz verification. 2 Known Gaps verified resolved (BoTZ JWT P0, BPM encoder P2). Agent/file counts updated. | SIGNED | 2026-04-01 | Docs-only self-review. No runtime verification performed. |
 | `OPERATOR` | decision authority | final merge/readiness judgment | PENDING | — | DARKXSIDE final say |
 
 ---
