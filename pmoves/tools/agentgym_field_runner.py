@@ -235,7 +235,7 @@ def run_episode(
             "error": f"Skipped: {env.get('reason', 'unsupported')}",
         }
 
-    port = env["port"]
+    port = int(env["port"])
     host = "localhost"
     env_base = f"http://{host}:{port}"
     agent_cfg = config.get("agent", {})
@@ -250,8 +250,8 @@ def run_episode(
             "api_endpoint", "http://localhost:3030/v1/chat/completions"
         )
         model = agent_cfg.get("model", "qwen35_9b")
-    max_rounds = config.get("episode", {}).get("max_rounds", 15)
-    max_duration = config.get("episode", {}).get("max_duration_sec", 300)
+    max_rounds = int(config.get("episode", {}).get("max_rounds", 15))
+    max_duration = float(config.get("episode", {}).get("max_duration_sec", 300))
 
     # --- Connectivity check ---
     env_alive = check_env_server(host, port)
@@ -364,6 +364,8 @@ def run_episode(
         result["success"] = done and total_reward > 0
         result["history"] = history
 
+    except ValueError as exc:
+        result["error"] = f"Invalid URL or config: {exc}"
     except (urllib.error.URLError, urllib.error.HTTPError, OSError) as exc:
         result["error"] = str(exc)
     except (KeyError, IndexError, json.JSONDecodeError) as exc:
