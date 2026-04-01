@@ -35,6 +35,9 @@ DEFAULTS = {
     # Presign/Render webhook secrets (demo defaults; replace in production)
     "PRESIGN_SHARED_SECRET": "change_me",
     "RENDER_WEBHOOK_SHARED_SECRET": "change_me",
+    # RustDesk self-hosted relay (KVM2) — fetched from server, not generated
+    "RUSTDESK_RELAY_HOST": "",
+    "RUSTDESK_PUBLIC_KEY": "",
 }
 
 PLACEHOLDER_VALUES = {
