@@ -2,14 +2,15 @@
 """BoTZ CLI — Agent Persona Selector + Identity Tool
 
 W6-P3 deliverable: CLI for selecting agent personas, resolving identity,
-and applying terminal themes across PMOVES nodes.
+applying terminal themes, planning, and auditing across PMOVES nodes.
 
 Usage:
     python pmoves/tools/botz_cli.py whoami
     python pmoves/tools/botz_cli.py theme 4090-claude
     python pmoves/tools/botz_cli.py persona list
     python pmoves/tools/botz_cli.py persona select 4090-claude
-    python pmoves/tools/botz_cli.py persona current
+    python pmoves/tools/botz_cli.py plan -d "Add NATS wiring to Health service"
+    python pmoves/tools/botz_cli.py audit -t pmoves/tools/provider_cascade.py
 
 Shell integration (set persona for current session):
     eval $(python pmoves/tools/botz_cli.py persona select 4090-claude --export)
@@ -17,8 +18,10 @@ Shell integration (set persona for current session):
 from __future__ import annotations
 
 import argparse
+import ast
 import json
 import os
+import re
 import socket
 import sys
 from pathlib import Path
@@ -302,6 +305,154 @@ def cmd_persona_current(args: argparse.Namespace) -> int:
 
 
 # ---------------------------------------------------------------------------
+# Shared helper — agent header rendering
+# ---------------------------------------------------------------------------
+def _render_agent_header(agent_id: str, label: str, value: str, file=None) -> str:
+    """Render a consistent agent attribution header line."""
+    sigs = _load_signatures()
+    sig = sigs.get(agent_id, {})
+    glyph = sig.get("glyph", "?")
+    color = sig.get("color", "#888888")
+    name = sig.get("display_name", agent_id)
+    fg = _fg(color)
+    header = f"{fg}{_BOLD}{glyph} {name}{_RST} | {fg}{color}{_RST} | {label}: {value}"
+    print(header, file=file or sys.stdout)
+    return header
+
+
+# ---------------------------------------------------------------------------
+# Plan command (botz-architect persona)
+# ---------------------------------------------------------------------------
+_PLAN_VERBS = [
+    "Analyze", "Design", "Implement", "Validate", "Deploy",
+    "Research", "Configure", "Wire", "Test", "Document",
+]
+
+
+def cmd_plan(args: argparse.Namespace) -> int:
+    """Create a structured plan using the botz-architect persona."""
+    description = args.description
+    _render_agent_header("botz-architect", "Plan", description,
+                         file=sys.stderr if args.json else None)
+
+    # Generate steps heuristically based on description length
+    words = description.split()
+    step_count = 3 if len(words) < 8 else 4 if len(words) < 15 else 5
+
+    steps = []
+    for i in range(step_count):
+        verb = _PLAN_VERBS[i % len(_PLAN_VERBS)]
+        if i == 0:
+            step = f"{verb} requirements and existing patterns"
+        elif i == step_count - 1:
+            step = f"{verb} and verify end-to-end"
+        else:
+            step = f"{verb} core changes for: {description}"
+        steps.append({"index": i + 1, "action": step, "status": "pending"})
+
+    if args.json:
+        result = {
+            "agent": "botz-architect",
+            "plan": description,
+            "steps": steps,
+            "step_count": step_count,
+        }
+        print(json.dumps(result, indent=2))
+    else:
+        print()
+        for s in steps:
+            print(f"  [ ] {s['index']}. {s['action']}")
+        print()
+    return 0
+
+
+# ---------------------------------------------------------------------------
+# Audit command (botz-auditor persona)
+# ---------------------------------------------------------------------------
+_SECURITY_PATTERNS = [
+    (r"\beval\s*\(", "eval() call — potential code injection"),
+    (r"\bexec\s*\(", "exec() call — potential code injection"),
+    (r"shell\s*=\s*True", "shell=True in subprocess — command injection risk"),
+    (r"password\s*=\s*[\"'][^\"']+[\"']", "hardcoded password"),
+    (r"secret\s*=\s*[\"'][^\"']+[\"']", "hardcoded secret"),
+    (r"api_key\s*=\s*[\"']sk-", "hardcoded API key"),
+]
+
+
+def cmd_audit(args: argparse.Namespace) -> int:
+    """Run an audit check using the botz-auditor persona."""
+    target = Path(args.target)
+    _render_agent_header("botz-auditor", "Audit", str(target),
+                         file=sys.stderr if args.json else None)
+
+    findings: List[Dict[str, Any]] = []
+    passed = True
+
+    # Check 1: File existence + is regular file
+    if not target.exists():
+        findings.append({"check": "existence", "status": "FAIL", "detail": f"{target} not found"})
+        passed = False
+    elif not target.is_file():
+        findings.append({"check": "existence", "status": "FAIL", "detail": f"{target} is not a regular file"})
+        passed = False
+    else:
+        findings.append({"check": "existence", "status": "PASS", "detail": str(target)})
+
+        content = target.read_text(encoding="utf-8", errors="replace")
+
+        # Check 2: Syntax validation
+        suffix = target.suffix.lower()
+        if suffix == ".py":
+            try:
+                ast.parse(content)
+                findings.append({"check": "syntax", "status": "PASS", "detail": "valid Python"})
+            except SyntaxError as e:
+                findings.append({"check": "syntax", "status": "FAIL", "detail": f"line {e.lineno}: {e.msg}"})
+                passed = False
+        elif suffix in (".yaml", ".yml"):
+            try:
+                import yaml
+                yaml.safe_load(content)
+                findings.append({"check": "syntax", "status": "PASS", "detail": "valid YAML"})
+            except yaml.YAMLError as e:
+                findings.append({"check": "syntax", "status": "FAIL", "detail": str(e)[:120]})
+                passed = False
+        elif suffix == ".json":
+            try:
+                json.loads(content)
+                findings.append({"check": "syntax", "status": "PASS", "detail": "valid JSON"})
+            except json.JSONDecodeError as e:
+                findings.append({"check": "syntax", "status": "FAIL", "detail": str(e)[:120]})
+                passed = False
+        else:
+            findings.append({"check": "syntax", "status": "SKIP", "detail": f"no validator for {suffix}"})
+
+        # Check 3: Security patterns
+        sec_hits = []
+        for pattern, desc in _SECURITY_PATTERNS:
+            matches = re.findall(pattern, content)
+            if matches:
+                sec_hits.append({"pattern": desc, "count": len(matches)})
+        if sec_hits:
+            findings.append({"check": "security", "status": "WARN", "detail": sec_hits})
+        else:
+            findings.append({"check": "security", "status": "PASS", "detail": "no suspicious patterns"})
+
+    verdict = "PASS" if passed else "FAIL"
+
+    if args.json:
+        print(json.dumps({"agent": "botz-auditor", "target": str(target), "verdict": verdict, "findings": findings}, indent=2))
+    else:
+        print()
+        for f in findings:
+            icon = {"PASS": "✓", "FAIL": "✗", "WARN": "⚠", "SKIP": "—"}.get(f["status"], "?")
+            print(f"  {icon} {f['check']}: {f['detail']}")
+        print()
+        print(f"  Verdict: {_BOLD}{verdict}{_RST}")
+    return 0 if passed else 1
+
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 def main() -> int:
@@ -336,12 +487,24 @@ def main() -> int:
     sel_p.add_argument("agent_id", help="Agent ID to select")
     sel_p.add_argument("--export", action="store_true", help="Output shell export commands")
 
+    # plan (botz-architect)
+    plan_p = subparsers.add_parser("plan", help="Create a structured plan (botz-architect)", parents=[json_parent])
+    plan_p.add_argument("-d", "--description", required=True, help="Plan description")
+
+    # audit (botz-auditor)
+    audit_p = subparsers.add_parser("audit", help="Audit a file for quality/security (botz-auditor)", parents=[json_parent])
+    audit_p.add_argument("-t", "--target", required=True, help="File to audit")
+
     args = parser.parse_args()
 
     if args.command == "whoami":
         return cmd_whoami(args)
     elif args.command == "theme":
         return cmd_theme(args)
+    elif args.command == "plan":
+        return cmd_plan(args)
+    elif args.command == "audit":
+        return cmd_audit(args)
     elif args.command == "persona":
         if args.persona_cmd == "list":
             return cmd_persona_list(args)
