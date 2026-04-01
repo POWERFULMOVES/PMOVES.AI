@@ -175,15 +175,11 @@ def synthesize_prosodic(
             "position_ratio": chunk.get("position_ratio", 0.0),
         })
 
+    # Flute-Gateway /v1/voice/synthesize/prosodic accepts: text, voice, format
     payload = {
         "text":    profile.get("text", ""),
         "voice":   voice,
-        "bpm":     profile.get("bpm", 120),
-        "chunks":  prosodic_chunks,
-        "options": {
-            "tempo_label":        profile.get("tempo_label", ""),
-            "total_duration_sec": profile.get("total_duration_sec", 0.0),
-        },
+        "format":  "wav",
     }
 
     url = f"{flute_url}/v1/voice/synthesize/prosodic"

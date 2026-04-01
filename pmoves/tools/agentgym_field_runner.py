@@ -142,6 +142,8 @@ def check_env_server(host: str, port: int, timeout: float = 3.0) -> bool:
 
 def _http_post(url: str, payload: dict, timeout: float = 30.0) -> dict:
     """POST JSON to *url* and return parsed JSON response."""
+    if not url.startswith(("http://", "https://")):
+        raise ValueError(f"Invalid URL scheme (expected http/https): {url}")
     data = json.dumps(payload).encode("utf-8")
     req = urllib.request.Request(
         url,
@@ -149,7 +151,7 @@ def _http_post(url: str, payload: dict, timeout: float = 30.0) -> dict:
         headers={"Content-Type": "application/json"},
         method="POST",
     )
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
+    with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310 — validated above
         return json.loads(resp.read().decode("utf-8"))
 
 

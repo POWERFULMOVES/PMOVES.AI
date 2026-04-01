@@ -307,7 +307,7 @@ def cmd_persona_current(args: argparse.Namespace) -> int:
 # ---------------------------------------------------------------------------
 # Shared helper — agent header rendering
 # ---------------------------------------------------------------------------
-def _render_agent_header(agent_id: str, label: str, value: str) -> str:
+def _render_agent_header(agent_id: str, label: str, value: str, file=None) -> str:
     """Render a consistent agent attribution header line."""
     sigs = _load_signatures()
     sig = sigs.get(agent_id, {})
@@ -316,7 +316,7 @@ def _render_agent_header(agent_id: str, label: str, value: str) -> str:
     name = sig.get("display_name", agent_id)
     fg = _fg(color)
     header = f"{fg}{_BOLD}{glyph} {name}{_RST} | {fg}{color}{_RST} | {label}: {value}"
-    print(header)
+    print(header, file=file or sys.stdout)
     return header
 
 
@@ -332,7 +332,8 @@ _PLAN_VERBS = [
 def cmd_plan(args: argparse.Namespace) -> int:
     """Create a structured plan using the botz-architect persona."""
     description = args.description
-    _render_agent_header("botz-architect", "Plan", description)
+    _render_agent_header("botz-architect", "Plan", description,
+                         file=sys.stderr if args.json else None)
 
     # Generate steps heuristically based on description length
     words = description.split()
@@ -381,14 +382,18 @@ _SECURITY_PATTERNS = [
 def cmd_audit(args: argparse.Namespace) -> int:
     """Run an audit check using the botz-auditor persona."""
     target = Path(args.target)
-    _render_agent_header("botz-auditor", "Audit", str(target))
+    _render_agent_header("botz-auditor", "Audit", str(target),
+                         file=sys.stderr if args.json else None)
 
     findings: List[Dict[str, Any]] = []
     passed = True
 
-    # Check 1: File existence
+    # Check 1: File existence + is regular file
     if not target.exists():
         findings.append({"check": "existence", "status": "FAIL", "detail": f"{target} not found"})
+        passed = False
+    elif not target.is_file():
+        findings.append({"check": "existence", "status": "FAIL", "detail": f"{target} is not a regular file"})
         passed = False
     else:
         findings.append({"check": "existence", "status": "PASS", "detail": str(target)})
@@ -409,7 +414,7 @@ def cmd_audit(args: argparse.Namespace) -> int:
                 import yaml
                 yaml.safe_load(content)
                 findings.append({"check": "syntax", "status": "PASS", "detail": "valid YAML"})
-            except Exception as e:
+            except yaml.YAMLError as e:
                 findings.append({"check": "syntax", "status": "FAIL", "detail": str(e)[:120]})
                 passed = False
         elif suffix == ".json":

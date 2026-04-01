@@ -10,11 +10,15 @@ import socket
 import urllib.request
 
 import pytest
+import yaml
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 CLAWZ_DIR = REPO_ROOT / "PMOVES-ClawZ"
-CLAWZ_PORT = int(os.getenv("CLAWZ_PORT") or "18789")
+try:
+    CLAWZ_PORT = int(os.getenv("CLAWZ_PORT") or "18789")
+except ValueError:
+    CLAWZ_PORT = 18789
 
 # Expected NATS subjects from agent_registry.yaml / nats-subjects.md context doc
 EXPECTED_NATS_SUBJECTS = [
@@ -97,13 +101,15 @@ class TestClawZSubmodule:
     def test_agent_registry_entry(self):
         """Agent registry must contain a clawz entry with evolution_stage pre_stage."""
         assert AGENT_REGISTRY.is_file(), f"Agent registry not found: {AGENT_REGISTRY}"
-        content = AGENT_REGISTRY.read_text(encoding="utf-8")
-        assert "clawz:" in content, "Missing 'clawz:' entry in agent_registry.yaml"
-        assert "evolution_stage: pre_stage" in content, (
-            "ClawZ registry entry missing 'evolution_stage: pre_stage'"
+        data = yaml.safe_load(AGENT_REGISTRY.read_text(encoding="utf-8"))
+        agents = data.get("agents", data)  # agents may be nested or flat
+        assert "clawz" in agents, "Missing 'clawz' entry in agent_registry.yaml"
+        entry = agents["clawz"]
+        assert entry.get("evolution_stage") == "pre_stage", (
+            f"Expected evolution_stage 'pre_stage', got '{entry.get('evolution_stage')}'"
         )
-        assert "port: 18789" in content, (
-            "ClawZ registry entry missing 'port: 18789'"
+        assert entry.get("port") == 18789, (
+            f"Expected port 18789, got {entry.get('port')}"
         )
 
 
