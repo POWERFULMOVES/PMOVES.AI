@@ -68,7 +68,11 @@ def _resolve_alter(sig: Dict[str, Any], alter_name: str) -> Optional[Dict[str, A
     """
     alters = sig.get("alters", [])
     for alter in alters:
-        if alter.get("name") == alter_name:
+        if alter_name in {
+            alter.get("name"),
+            alter.get("id"),
+            alter.get("display_name"),
+        }:
             return alter
     return None
 
@@ -109,7 +113,10 @@ def build_payload(
     if alter:
         alter_data = _resolve_alter(sig, alter)
         if alter_data is None:
-            available = [a.get("name") for a in sig.get("alters", [])]
+            available = [
+                a.get("name") or a.get("id") or a.get("display_name", "?")
+                for a in sig.get("alters", [])
+            ]
             print(
                 f"[warn] alter '{alter}' not found for {agent_id}; "
                 f"available: {available or 'none'}",
@@ -183,6 +190,7 @@ def _write_log(payload: Dict[str, Any]) -> None:
 
 
 def main() -> None:
+    """CLI entry point for signing a Graphiti trail entry."""
     parser = argparse.ArgumentParser(
         description="Sign a Graphiti trail entry with CHIT HMAC"
     )
@@ -255,3 +263,5 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
+

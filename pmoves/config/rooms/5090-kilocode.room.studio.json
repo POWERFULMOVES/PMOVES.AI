@@ -1,0 +1,172 @@
+{
+  "room_id": "5090-kilocode.room.studio",
+  "version": "1.0.0",
+  "display_name": "5090 KiloCode GLM Workstation",
+  "description": "GPU inference specialist node running KiloCode GLM on the GLM Coding Plan. Shares the 5090 with Claude Code and Codex.",
+  "agent_id": "5090-kilocode",
+  "alter": "5090-kilocode",
+  "room_type": "builder",
+  "owner_mode": "shared",
+  "shell": {
+    "theme": {
+      "theme_id": "kilocode-glm",
+      "accent_color": "#10B981",
+      "skin": "terminal-dark",
+      "icon": "code"
+    },
+    "layout": {
+      "default_route": "/dashboard/notebook/runtime",
+      "panels": [
+        {
+          "panel_id": "code-chat",
+          "kind": "chat",
+          "position": "left",
+          "size": 24,
+          "pinned": true
+        },
+        {
+          "panel_id": "gpu-controls",
+          "kind": "controls",
+          "position": "center",
+          "size": 50,
+          "pinned": true
+        },
+        {
+          "panel_id": "inference-notebook",
+          "kind": "notebook",
+          "position": "right",
+          "size": 26,
+          "pinned": true
+        }
+      ]
+    }
+  },
+  "apps": [
+    {
+      "app_id": "gpu-inference-console",
+      "kind": "dashboard",
+      "route": "/dashboard/gpu",
+      "provider": "pmoves-ui",
+      "action_namespace": "gpu",
+      "capabilities": ["inference-health", "model-status", "queue-depth", "throughput"],
+      "pinned": true,
+      "status": "active"
+    },
+    {
+      "app_id": "notebook-workbench",
+      "kind": "notebook",
+      "route": "/notebook-workbench",
+      "provider": "pmoves-notebook-workbench",
+      "action_namespace": "notebook",
+      "capabilities": ["threads", "entries", "snapshots", "runbooks"],
+      "pinned": true
+    },
+    {
+      "app_id": "cipher-memory",
+      "kind": "graph",
+      "route": "/dashboard/graphiti",
+      "provider": "pmoves-ui",
+      "action_namespace": "cipher",
+      "capabilities": ["memory-search", "trail", "audit"],
+      "pinned": false,
+      "status": "planned"
+    }
+  ],
+  "notebook": {
+    "provider": "open-notebook",
+    "workspace_ref": "kilocode-glm",
+    "thread_ref": "coding-sessions",
+    "default_page": "inference-runbook",
+    "sync": {
+      "mode": "authoritative",
+      "writeback_targets": ["entries", "pages", "threads"],
+      "artifact_prefix": "rooms/5090-kilocode"
+    }
+  },
+  "persona": {
+    "signature_ref": "5090-kilocode",
+    "voice": "technical",
+    "glyph": "GL",
+    "resonance": ["gpu", "inference", "kilocode", "glm", "coding-plan"]
+  },
+  "skill_bindings": [
+    {
+      "binding_id": "gpu-inference-audit",
+      "skill_id": "bringup-audit",
+      "room_id": "5090-kilocode.room.studio",
+      "display_name": "GPU Inference Audit",
+      "intent": ["gpu", "inference", "health"],
+      "activation": {
+        "invocation_mode": "workflow",
+        "trigger_phrases": ["audit gpu status", "check inference health", "verify model serving"],
+        "requires_selection": false
+      },
+      "surface": {
+        "app_id": "gpu-inference-console",
+        "target": "toolbar",
+        "route": "/dashboard/gpu"
+      },
+      "execution": {
+        "mode": "workflow",
+        "run_as": "worker",
+        "stream": "events",
+        "max_steps": 6
+      },
+      "context": {
+        "sources": ["room-state", "open-apps", "persona", "user-intent"],
+        "include_last_turns": 3,
+        "notebook_writeback": true,
+        "artifact_types": ["text", "json"]
+      },
+      "outputs": [
+        {
+          "target": "room-state",
+          "delivery": "replace",
+          "path": "gpu/inference-audit",
+          "artifact_type": "json"
+        },
+        {
+          "target": "notebook-page",
+          "delivery": "append",
+          "path": "pages/gpu-audits",
+          "artifact_type": "text"
+        }
+      ],
+      "guardrails": {
+        "require_approval": false,
+        "max_runtime_sec": 300,
+        "fail_open": true,
+        "one_active_run": true
+      },
+      "enabled": true,
+      "tags": ["gpu", "inference", "audit"]
+    }
+  ],
+  "policies": {
+    "model_routing": "native",
+    "publish": {
+      "allow_nats_emit": true,
+      "allow_external_publish": false,
+      "allowed_subjects": ["agent.graphiti.signed.v1", "gpu.inference.completed.v1"]
+    },
+    "memory": {
+      "graphiti": true,
+      "notebook_writeback": true,
+      "chit_handoff": false
+    }
+  },
+  "telemetry": {
+    "graphiti_phase": "KiloCode GLM",
+    "room_events_subject": "room.session.updated.v1",
+    "healthcheck_route": "/api/health"
+  },
+  "provenance": {
+    "source": "pmoves/config/rooms/catalog.json",
+    "updated_at": "2026-03-29T18:41:00Z",
+    "related_docs": [
+      "pmoves/docs/ROOM_MANIFEST_CONTRACT.md",
+      "pmoves/docs/MODEL_FABRIC_CONTRACT.md",
+      "plans/KILOCODE_PMOVES_INTEGRATION_PLAN.md"
+    ]
+  }
+}

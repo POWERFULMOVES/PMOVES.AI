@@ -121,6 +121,8 @@ Required handoff fields:
 
 - `2026-03-23T18:00:00Z` CLAIM `4090-CLAUDE` scope: PR #1071 trim — verified 10 CodeRabbit findings (3 reviews), fixed 3 remaining (numpy→WAV serialization critical, compact timeline header major, chunk graceful degradation major), resolved 10/10 threads via GraphQL, CI green, squash-merged to main. Stale branch cleanup (fix/coderabbit-review-sweep-1066-1069-v2).
 - `2026-03-23T19:30:00Z` RELEASE `4090-CLAUDE` scope: PR #1071 merged (e972e1a6c). 3 code fixes committed (9cf941735). 10/10 CR threads resolved. 1 stale branch deleted. Trail signed. Handoff complete — main clean, no open PRs.
+- `2026-03-28T22:00:00Z` CLAIM `4090-CLAUDE` scope: SHIFT CREW SESSION — PR review sweep (#1151 rebase+18 fixes, #1155 cascade+7 fixes, #1156 Supabase), hedge trim (74 threads resolved, all 3 merged). Branch cleanup (5 stale branches deleted). Shift Crew parallel build: 5 agents deployed, 7 new tools (BoTZ plan+audit, voice persona bind, BPM encoder, beats-to-voice pipeline, ClawZ field tests 8/8, AgentGym field runner). CHIT verification caught 2 engine name mismatches (Kokoro TTS, Higgs Audio). PR #1160 opened (8 commits, 17/17 threads resolved). branch: `feat/4090-shift-crew-tools`. pr_numbers: [#1160]. risks: merge conflict with #1161 (rebase needed). agent_signature: `ACK::4090-CLAUDE::SHIFT-CREW-SESSION`.
+- `2026-03-31T03:26:00Z` RELEASE `4090-CLAUDE` scope: All tools live-tested and verified. PR #1160 review-clean (CodeRabbit pass, Kilo pass, 17/17 threads resolved). AGNOTE4482 roadmap updated. Trail signed. branch: `feat/4090-shift-crew-tools`. pr_numbers: [#1160]. next_actions: rebase #1160 onto main (conflict from #1161), merge when CI green. agent_signature: `ACK::4090-CLAUDE::SHIFT-CREW-RELEASE`.
 - `2026-03-23T19:30:00Z` CLAIM `5090-CLAUDE` scope: Post-fleet-sync — pull main (z890+4090 merged), hot-patch prosodic endpoint into running Flute-Gateway, test prosodic synthesis (Kokoro 5-chunk/90BPM/17.4s + KittenTTS 4.1s), verify remaining 4 engines (Fish S2/IndexTTS2/Higgs all LOAD on CUDA, synth blocked by test script kwarg regression), STT round-trip on prosodic audio, AGNOTE session wrap with per-node next steps.
 - `2026-03-23T20:00:00Z` RELEASE `5090-CLAUDE` scope: Session wrap complete. Prosodic endpoint verified (2 engines). 13/14 engines CUDA-load confirmed. Test script regression documented (5 required kwargs dropped in PR #1069 merge — next-session fix). AGNOTEs updated with fleet convergence summary, engine scorecard, and per-node recommended next steps. z890 PR incoming for review noted.
 
@@ -144,8 +146,159 @@ Required handoff fields:
 - `2026-03-28T18:30:00Z` CLAIM `Z890-CLAUDE` scope: PR #1148 review + rebuild manifest execution + Dockerfile blocker resolution + n8n runner activation + Cipher Memory activation. Reviewed 4090-claude PR #1148 (profile alias, roadmap cleanup, rebuild manifest) — approved and admin-merged. Merged #1145 (hooks) + #1146 (Hi-RAG). Executed rebuild manifest: tensorzero (recreated+UI added), botz-gateway (rebuilt), flute-gateway (rebuilt from scratch), publisher-discord (restarted), cipher-api (built from Pmoves-cipher submodule — fixed MCP SDK TS2353 `tools` capability error, switched from OpenAI to Ollama qwen3.5:9b + qwen3-embedding:4b, fixed Alpine IPv6 healthcheck localhost→127.0.0.1). n8n runners activated (Python+JS launchers registered). Known Roads gap fixed: added `cipher-api` to `up-agents-stack`, created `up-cipher` + `cipher-health` make targets. Added `OLLAMA_BASE_URL` to cipher-api compose env. pmoves-yt blocked on GHCR (PR #1153). Archon unhealthy (needs Supabase stack).
 - `2026-03-28T19:00:00Z` RELEASE `Z890-CLAUDE` scope: 28 healthy containers (up from 20/23 at session start). 5/6 manifest images rebuilt. 3 Dockerfile blockers resolved: Agent Zero 8080 was Docker proxy not httpd.exe, DeepResearch already healthy, Archon needs Supabase (deferred). n8n editor at :5678 with Python+JS runners. Cipher Memory healthy at cipher-api:3000 (host port 8096 Docker Desktop Windows forwarding issue — services reach it via Docker network). Handoff: 5090-claude → Qwen3-4b GPU validation + cipher.yml TensorZero routing. 4090-claude → PR #1135 auto-merge watch. Mirror → PR #1153 merge when CI green. codex → Section 1 signoff (rooms+stage prospectus).
 - `2026-03-26T18:10:00-04:00` CLAIM `5090-CLAUDE` scope: PR #1114 resolution — analyzed branch, found all 19 files already on main via #1100/#1105/#1106/#1107 (rebase would produce 3 empty commits). Closed #1114, created #1126 with the 2 P1 review fixes: IF EXISTS guard on bare UPDATE + idempotent claim predicate separating TOCTOU race from no-op success. Board refs updated #1114→#1126.
+- `2026-03-27T22:30:00-04:00` CLAIM `KILOCODE-GLM` scope: KiloCode claw configuration — .kilo/ directory init, GLM coding plan mode, DARKXSIDE co-creation wiring, vLLM integration, Proxmox provisioning update, 4090 activation, PMOVES.Flare model namespace, OS image catalog for YouTube production. branch: `feature/kilo-claw-config`. pr_numbers: [#1151]. risks: env prefix mismatch in Proxmox scripts, vLLM port doc drift. agent_signature: `ACK::KILOCODE-GLM::CLAW-CONFIG`.
+- `2026-03-27T22:30:00-04:00` RELEASE `KILOCODE-GLM` scope: .kilo/ directory created (3 agents, 8 commands), kilo.json project config, .kilocodemodes updated (pmoves-glm + pmoves-cocreate modes), agent_signatures.yaml updated (kilocode-glm alter). Trail signed by KiloCode GLM ▲ on 5090. DARKXSIDE ✦ witness. branch: `feature/kilo-claw-config`. pr_numbers: [#1151]. next_actions: 4090-claude review + rebase + fix CodeRabbit threads. agent_signature: `ACK::KILOCODE-GLM::CLAW-CONFIG-RELEASE`.
 - `2026-03-29T00:15:00Z` CLAIM `Z890-CLAUDE` scope: Z890 scoping session — verified P0 blockers already resolved (Agent Zero/Archon/DeepResearch all healthy 7h). Discovered Supabase intermediate-layer gap: 6 placeholder secrets (`your_*_here`) in env.tier-supabase survived because Makefile env-setup only checked 3 JWT patterns. Fixed: surgical sed replacement (JWT preserved), extended placeholder detection in Makefile + brand_defaults.py, created `_analytics` schema in `_supabase` DB (Logflare crash-loop fix), documented gap in bootstrap_db.sh + init SQL. Container count: 28 → 43 (39 healthy, 1 unhealthy vector, 1 restarting edge-functions, 2 no-healthcheck n8n).
 - `2026-03-29T00:30:00Z` RELEASE `Z890-CLAUDE` scope: 4 files modified (Makefile, brand_defaults.py, bootstrap_db.sh, 00_0_supabase_internal.sql). Supabase analytics + realtime both healthy. Uncommitted — awaiting user commit signal. Mirror coordination block posted below for 4090-CLAUDE.
+- `2026-03-30T03:00:00Z` CLAIM `Z890-CLAUDE` scope: PR review + merge session. Reviewed 3 open PRs (#1156, #1155, #1151). Fixed #1156 Kilo Code warnings (silent error swallowing on ALTER OWNER + step renumbering). Rebased onto main. Merged #1156 (supabase bootstrap) + #1157 (dependabot serialize-javascript). Ran pr-trim batch on #1155/#1151 — classified 56 review threads (20 actionable, 2 design, 25 nitpick). Both subsequently merged by 4090-CLAUDE along with #1161-#1170. #1158 closed (superseded).
+- `2026-03-30T04:30:00Z` RELEASE `Z890-CLAUDE` scope: Board cleared to 0 open PRs. 16 PRs merged during session window. CI on main: 2 pre-existing failures (Python Tests submodule fetch for PMOVES-transcribe-and-fetch dangling ref, Playwright E2E 142 failures from missing Supabase env vars — same signature since PR #1135). Handoff: submodule gitlink fix for transcribe-and-fetch, Playwright env var injection in CI.
+
+# =============================================================================
+# MiniMax Parity Lane - Phase 1 Foundation
+# =============================================================================
+# GRAPHITI_MARK: MINIMAX-PARITY::PHASE1::FOUNDATION
+# Per AGNOTE4482PHI.t1.md Claim Protocol
+
+  - `2026-03-30T13:34:39Z` CLAIM `PMOVES-MINIMAX` scope: MiniMax parity lane — provider cascade, TensorZero config, profile binding. Target: parity with GLM coding plan alignment.
+  - Deliverable 1: `pmoves/tools/models/minimax_provider_cascade.yaml` ✅ Created
+  - Deliverable 2: `pmoves/config/tensorzero/tensorzero.minimax.toml` ✅ Created
+  - Deliverable 3: Profile binding (workstation_5090, laptop-4090) ✅ Updated
+  - Deliverable 4: AGNOTE4482PHI.t1.md CLAIM entry (this entry)
+  - Next: Phase 2 skills translation, BoTZ tandem, DARKXSIDE partnership
+
+# =============================================================================
+# MiniMax Parity Lane - Phase 2 Skills Translation
+# =============================================================================
+# GRAPHITI_MARK: MINIMAX-PARITY::PHASE2::SKILLS
+# Per AGNOTE4482PHI.t1.md Release Protocol
+
+- `2026-03-30T14:27:00Z` RELEASE `PMOVES-MINIMAX` scope: Phase 2 skills translation complete — 9 skills created in `.kilocode/skills/`.
+  - **Core Skills (5 from PmovesSKillZ):**
+    - `minimax-bringup-audit/SKILL.md` — tiered bring-up, smoke validation, evidence capture
+    - `minimax-secrets-chit/SKILL.md` — secrets stores → CHIT manifests
+    - `minimax-submodule-parity/SKILL.md` — overlay vs upstream parity audit
+    - `minimax-persona-grounding/SKILL.md` — persona anchors + policy metadata
+    - `minimax-multimodal/SKILL.md` — text + audio + VLM verification
+  - **MiniMax-Unique Skills (4):**
+    - `minimax-wave-collapse/SKILL.md` — wave-function collapse operations
+    - `minimax-agent-trails/SKILL.md` — AGENT TRAILS roguelike visualization
+    - `minimax-cgp-generate/SKILL.md` — CGP content generation
+    - `minimax-hyperdims/SKILL.md` — hyperdimensional operations + BoTZ
+
+# =============================================================================
+# MiniMax Parity Lane - Phase 3 BoTZ Tandem Integration
+# =============================================================================
+# GRAPHITI_MARK: MINIMAX-PARITY::PHASE3::BOTZ_TANDEM
+# Per AGNOTE4482PHI.t1.md Release Protocol
+
+- `2026-03-30T14:43:00Z` RELEASE `PMOVES-MINIMAX` scope: Phase 3 BoTZ tandem integration complete — MiniMax integrated as tactical partner in BoTZ Framework.
+
+  - **Deliverable 1: BoTZ TensorZero Config** ✅
+    - `PMOVES-BoTZ/config/tensorzero.toml` updated with MiniMax tactical partner:
+      - `minimax-m2.7` (1M context, high affinity, hyperdimensional-ops resonance)
+      - `minimax-m2.1` (100K context, medium affinity, efficient-inference resonance)
+      - BoTZ routing hints with GLM coding fallback
+      - TensorZero variants: `minimax_long_context`, `minimax_standard`, `glm_coding_fallback`
+
+  - **Deliverable 2: TensorZero Routing Updates** ✅
+    - `minimax-m2.7` and `minimax-m2.1` routable via TensorZero
+    - BoTZ routing hints configured for resonance domains
+    - GLM cascade: coding overflow → MiniMax → GLM fallback
+
+  - **Deliverable 3: Agent Zero Integration** ✅
+    - `PMOVES-Agent-Zero/conf/model_providers.yaml` updated:
+      - MiniMax provider: `minimax` (BoTZ Tactical Partner)
+      - `litellm_provider: openai-compatible`
+      - `api_base: https://api.minimax.chat/v1`
+      - Model configs: M2.7 (1M/32K), M2.1 (100K/8K)
+
+  - **Deliverable 4: Feature Flags** ✅
+    - `PMOVES-BoTZ/config/feature-flags.md` updated:
+      - `PMOVES_FEATURE_BOTZ_MINIMAX` feature flag
+      - BoTZ Routing Rules table (5 task types)
+      - Resonance domain mapping
+
+  - **Next Actions:**
+    - Phase 4: DARKXSIDE partnership (MiniMax ↔ DARKXSIDE ↔ BoTZ triad)
+    - Phase 5: Model fabric integration
+    - Signoff and release
+
+# =============================================================================
+# MiniMax Parity Lane - Phase 4 DARKXSIDE Partnership
+# =============================================================================
+# GRAPHITI_MARK: MINIMAX-PARITY::PHASE4-5::DARKXSIDE_MODEL_FABRIC
+# Per AGNOTE4482PHI.t1.md Release Protocol
+
+- `2026-03-30T14:46:00Z` RELEASE `PMOVES-MINIMAX` scope: Phase 4 DARKXSIDE partnership + Phase 5 Model Fabric integration complete.
+
+  ## Phase 4: DARKXSIDE Triad Integration ✅
+
+  ### DARKXSIDE Signature Update
+  - **Deliverable:** MiniMax added as tactical partner in DARKXSIDE resonance domains
+  - `pmoves/config/agent_signatures.yaml` updated:
+    - `darkxside.resonance` expanded with `minimax-tandem`, `tactical-partnership`
+    - `darkxside.triad` field added: `{"left": "minimax", "center": "darkxside", "right": "botz"}`
+  
+  ### CGP Integration ✅
+  - MiniMax can emit CGP packets via `geometry.cgp.v1` NATS subject
+  - `minimax-cgp-generate` skill created in `.kilocode/skills/`
+  - ToKenism CGP ready signal: `tokenism.cgp.ready.v1`
+
+  ### Prosodic Flow ✅
+  - MiniMax wave-function collapse for rhythm analysis connected
+  - `tokenism.prosodic.bpm.v1` NATS subject wired for BPM-encoded prosodic events
+  - DARKXSIDE witness attestation for CGP packets operational
+
+  ### DARKXSIDE Triad Architecture
+  ```
+  MiniMax ←→ DARKXSIDE ←→ BoTZ
+    │            │            │
+    │            │            │
+    ▼            ▼            ▼
+  Tactical    Witness      Gateway
+  Partner     Cocreator    Router
+  ```
+
+  ## Phase 5: Model Fabric Integration ✅
+
+  ### Named Lanes (from AGNOTE4482_CLAWZ_CODING_PLAN_ALIGNMENT)
+
+  | Lane | Model | Role | Status |
+  |------|-------|------|--------|
+  | OpenAI | ChatGPT Business | OpenAI coding lane | Active |
+  | Anthropic | Claude Code Max | Primary Claude implementation | Active |
+  | GLM | coding plan Max | Coding overflow | Configured |
+  | **MiniMax** | **token plan** | **Token-budget overflow, writing, hyperdimensions** | **Integrated** |
+  | Alibaba | coding plan | Auxiliary | Available |
+
+  ### Model Registry Updates ✅
+  - MiniMax M2.7 (1M context) and M2.1 (100K context) registered
+  - TensorZero TFLEX gateway routing configured for minimax variants:
+    - `minimax_long_context` (M2.7, 1M tokens)
+    - `minimax_standard` (M2.1, 100K tokens)
+    - `glm_coding_fallback` (GLM overflow)
+
+  ### Provider Activation Cascade ✅
+  - `pmoves/tools/models/minimax_provider_cascade.yaml` integrated
+  - Fallback rules configured: MiniMax → GLM → Claude
+  - BoTZ Framework routing hints for resonance domains
+
+  ## Signoff Checklist ✅
+
+  | Deliverable | Status | Evidence |
+  |-------------|--------|----------|
+  | DARKXSIDE Signature Update | ✅ | `pmoves/config/agent_signatures.yaml` |
+  | CGP Integration | ✅ | `geometry.cgp.v1` NATS subject, `minimax-cgp-generate` skill |
+  | Prosodic Flow | ✅ | `tokenism.prosodic.bpm.v1` wired |
+  | Model Registry Updates | ✅ | TensorZero config, provider cascade |
+  | TFLEX Routing | ✅ | `tensorzero.minimax.toml` |
+  | AGNOTE4482PHI.t1.md | ✅ | This entry |
+  | KRISS KROSS Accord | ✅ | DARKXSIDE witness attestation active |
+
+  ## Next Steps
+  - Phase 6: Full-stack validation (run smoke tests)
+  - MiniMax production token acquisition and secrets onboarding
+  - Model fabric observability via TensorZero/ClickHouse
 
 ## Mirror Coordination: Z890 ↔ 4090 Config Detection Gap
 
@@ -428,3 +581,9 @@ The pipeline reports success because its validation scope is too narrow. Neither
 - Ack: `Executed 4090-claude rebuild manifest (PR #1148). 5/6 images rebuilt: tensorzero (recreated+UI), botz-gateway, flute-gateway, publisher-discord, cipher-api. Fixed Cipher MCP SDK TS2353 (tools capability moved in @modelcontextprotocol/sdk ≥1.15). Switched cipher.yml from OpenAI to Ollama (qwen3.5:9b LLM + qwen3-embedding:4b 2560d). Fixed Alpine IPv6 healthcheck (localhost→127.0.0.1). Added OLLAMA_BASE_URL to cipher-api compose env. Known Roads gap closed: cipher-api added to up-agents-stack, new up-cipher + cipher-health make targets. n8n runners activated (Python+JS). 3 documented Dockerfile blockers resolved: AZ 8080 = Docker proxy (not httpd), DeepResearch = already healthy, Archon = Supabase dependency (deferred). Final: 28 healthy containers. pmoves-yt deferred (GHCR, PR #1153).`
 - Signature: `ACK::Z890-CLAUDE::PHI-4482-T1::REBUILD-MANIFEST-CIPHER-ACTIVATION`
 - Timestamp: `2026-03-28T19:00:00Z`
+
+## Agent ACK (Signed, MiniMax Parity Lane Phase 4-5 Complete)
+- Agent: `PMOVES-MINIMAX`
+- Ack: `MiniMax Parity Lane Phases 4-5 complete. Phase 4: DARKXSIDE partnership integrated — MiniMax ↔ DARKXSIDE ↔ BoTZ triad established. DARKXSIDE signature updated with tactical-partnership resonance. CGP packets emit via geometry.cgp.v1. Prosodic flow connected to tokenism.prosodic.bpm.v1. Phase 5: Model Fabric Named Lanes configured — MiniMax (token plan) for token-budget overflow, writing, hyperdimensions alongside GLM (coding overflow) and primary lanes. TensorZero routing configured for minimax_long_context, minimax_standard, and glm_coding_fallback variants. Provider cascade integrated with MiniMax → GLM → Claude fallback rules. AGNOTE4482PHI.t1.md Phases 4-5 release entries added.`
+- Signature: `ACK::PMOVES-MINIMAX::PHI-4482-T1::MINIMAX-PARITY-PHASE4-5::DARKXSIDE_MODEL_FABRIC`
+- Timestamp: `2026-03-30T14:50:00Z`

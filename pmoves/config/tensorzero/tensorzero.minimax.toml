@@ -1,0 +1,131 @@
+# =============================================================================
+# PMOVES.AI TensorZero Configuration - MiniMax Models
+# =============================================================================
+# MiniMax-M2.7 and MiniMax-M2.1 model routing configuration
+# 
+# This config extends the base TensorZero configuration with MiniMax models.
+# Place in: pmoves/config/tensorzero/ (loaded via include in main config)
+#
+# Reference: pmoves/docs/MINIMAX_INTEGRATION.md
+# Parity: Mirrors GLM-4.7 pattern per MINIMAX_GLM_PARITY_ANALYSIS.md
+# =============================================================================
+
+# =============================================================================
+# MiniMax Models
+# =============================================================================
+
+[models."minimax-m2.7"]
+# MiniMax M2.7 - 1M token context, primary model
+routing = ["minimax"]
+
+[models."minimax-m2.7".providers.minimax]
+type = "openai-compatible"
+model_name = "MiniMax-M2.7"
+base_url = "https://api.minimax.chat/v1"
+
+[models."minimax-m2.7".parameters]
+max_tokens = 32000
+temperature = 0.7
+top_p = 0.95
+presence_penalty = 0.0
+frequency_penalty = 0.0
+
+[models."minimax-m2.1"]
+# MiniMax M2.1 - 100K token context, efficient model
+routing = ["minimax"]
+
+[models."minimax-m2.1".providers.minimax]
+type = "openai-compatible"
+model_name = "MiniMax-M2.1"
+base_url = "https://api.minimax.chat/v1"
+
+[models."minimax-m2.1".parameters]
+max_tokens = 8000
+temperature = 0.7
+top_p = 0.95
+presence_penalty = 0.0
+frequency_penalty = 0.0
+
+# =============================================================================
+# BoTZ Variants - MiniMax Routing
+# =============================================================================
+# These variants are used by the BoTZ Framework for model routing
+
+[functions.pmovesa]
+# PMOVES Architect function - routes to MiniMax for long-context tasks
+type = "chat"
+
+[functions.pmovesa.variants.minimax_m27_long_context]
+type = "chat_completion"
+model = "minimax-m2.7"
+max_tokens = 32000
+temperature = 0.7
+system_template = "functions/pmovesa/system_template.minijinja"
+user_template = "functions/pmovesa/user_template.minijinja"
+retries = { num_retries = 3, max_delay_s = 30 }
+
+[functions.pmovesa.variants.minimax_m21_standard]
+type = "chat_completion"
+model = "minimax-m2.1"
+max_tokens = 8000
+temperature = 0.7
+system_template = "functions/pmovesa/system_template.minijinja"
+user_template = "functions/pmovesa/user_template.minijinja"
+retries = { num_retries = 3, max_delay_s = 30 }
+
+[functions.pmovesa.experimentation]
+type = "track_and_stop"
+metric = "response_quality"
+candidate_variants = [
+    "minimax_m27_long_context",
+    "minimax_m21_standard",
+]
+fallback_variants = ["minimax_m21_standard"]
+min_samples_per_variant = 10
+delta = 0.05
+epsilon = 0.1
+update_period_s = 300
+
+# =============================================================================
+# TensorZero Provider Type - MiniMax
+# =============================================================================
+
+[provider_types.minimax]
+# MiniMax OpenAI-compatible API
+# Requires MINIMAX_API_KEY environment variable
+env_vars = ["MINIMAX_API_KEY"]
+
+# =============================================================================
+# Environment Variable Requirements
+# =============================================================================
+
+# Required for MiniMax routing:
+# MINIMAX_API_KEY - MiniMax API authentication key
+#
+# Set via:
+#   - pmoves/env.shared: MINIMAX_API_KEY
+#   - GitHub Actions: MINIMAX_API_KEY secret
+#   - Local: export MINIMAX_API_KEY=your_key_here
+
+# =============================================================================
+# Hi-RAG Integration
+# =============================================================================
+# MiniMax queries can be routed through Hi-RAG for enhanced retrieval
+
+[functions.pmovesa.variants.minimax_m27_hirag]
+type = "chat_completion"
+model = "minimax-m2.7"
+max_tokens = 32000
+temperature = 0.7
+embedding_model = "qwen3-embedding-8b"
+k = 5
+max_distance = 0.4
+system_instructions = "functions/pmovesa/hirag_system.minijinja"
+retries = { num_retries = 3, max_delay_s = 30 }
+
+# =============================================================================
+# Revision History
+# =============================================================================
+# - 2026-03-30: Initial MiniMax TensorZero config
+#   Author: PMOVES-MiniMax Orchestrator
+#   GRAPHITI_MARK: MINIMAX-PARITY::PHASE1::FOUNDATION

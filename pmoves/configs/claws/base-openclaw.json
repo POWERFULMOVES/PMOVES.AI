@@ -1,6 +1,6 @@
 {
   "meta": {
-    "lastTouchedVersion": "2026.3.13",
+    "lastTouchedVersion": "2026.3.28",
     "template": true,
     "description": "PMOVES Multi-Claw base config — derived from Fly.io reference instance"
   },
@@ -18,7 +18,41 @@
     }
   },
   "models": {
-    "mode": "merge"
+    "mode": "merge",
+    "providers": {
+      "zai": {
+        "baseUrl": "https://api.z.ai/api/coding/paas/v4",
+        "models": [
+          {
+            "id": "glm-5.1",
+            "name": "GLM-5.1",
+            "reasoning": true,
+            "input": ["text"],
+            "cost": {"input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0},
+            "contextWindow": 204800,
+            "maxTokens": 131072
+          },
+          {
+            "id": "glm-4.7",
+            "name": "GLM-4.7",
+            "reasoning": true,
+            "input": ["text"],
+            "cost": {"input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0},
+            "contextWindow": 204800,
+            "maxTokens": 131072
+          },
+          {
+            "id": "glm-4.5-air",
+            "name": "GLM-4.5-Air",
+            "reasoning": false,
+            "input": ["text"],
+            "cost": {"input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0},
+            "contextWindow": 131072,
+            "maxTokens": 16384
+          }
+        ]
+      }
+    }
   },
   "agents": {
     "defaults": {

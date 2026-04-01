@@ -1,9 +1,8 @@
-# Alias for desktop-9950xd profile.
+# DEPRECATED alias for desktop-9950xd profile.
 #
-# Model management yamls (pmoves/models/*.yaml) use HOST_CLASS=workstation_5090
-# as a semantic label. The hardware profile config uses the descriptor-based ID
-# desktop-9950xd. This alias bridges the two naming conventions so that
-# `make model-apply HOST=workstation_5090` resolves correctly.
+# This file is retained for backward compatibility only. All new references
+# should use the canonical ID `desktop-9950xd`. This alias will be removed
+# in a future release.
 #
 # Canonical profile: pmoves/config/profiles/desktop-9950xd.yaml
 
@@ -43,6 +42,24 @@ messaging:
   discord: true
   whatsapp: true
   webrtc: true
+
+# =============================================================================
+# MiniMax Provider Cascade Binding
+# =============================================================================
+# Per MINIMAX_GLM_PARITY_ANALYSIS.md Phase 1: Profile Binding
+# MiniMax is cloud-hosted, so this profile gets cascade routing hints
+minimax_cascade:
+  preferred_model: minimax-m2.7
+  cascade_priority: high
+  fallback_model: qwen3.5-9b
+  gpu_shape_store: true
+  tensorzero_routing: pmoves-architect
+
+# BoTZ Framework binding
+botz:
+  minimax_affinity: high
+  tactical_partner: true
+
 notes:
   - Alias of desktop-9950xd. Both IDs resolve to the same hardware profile.
   - Ensure NVIDIA Container Toolkit is installed.

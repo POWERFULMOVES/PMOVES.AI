@@ -42,6 +42,7 @@ AGENT_SIGNATURES_PATH = os.getenv("AGENT_SIGNATURES_PATH", "/app/config/agent_si
 nc: Optional[NATS] = None
 supabase_headers: Dict[str, str] = {}
 agent_signatures: Dict[str, Any] = {}
+active_providers: Dict[str, Dict[str, Any]] = {}  # provider_name -> activation payload
 
 
 # Pydantic models
@@ -84,6 +85,11 @@ class WorkItemFilter(BaseModel):
     limit: int = 20
 
 
+def _alter_name(alter: Dict[str, Any]) -> str:
+    """Return the canonical lookup/display key for an agent alter."""
+    return alter.get("name") or alter.get("id") or alter.get("display_name", "?")
+
+
 def load_agent_signatures():
     """Load agent signatures from YAML config."""
     global agent_signatures
@@ -122,7 +128,10 @@ async def lifespan(app: FastAPI):
         # Subscribe to BoTZ events
         await nc.subscribe("botz.heartbeat.v1", cb=handle_heartbeat_event)
         await nc.subscribe("botz.register.v1", cb=handle_register_event)
-        logger.info("Subscribed to BoTZ NATS subjects")
+        # Subscribe to provider cascade events for routing awareness
+        await nc.subscribe("claw.provider.activated.v1", cb=handle_provider_activated)
+        await nc.subscribe("claw.provider.deactivated.v1", cb=handle_provider_deactivated)
+        logger.info("Subscribed to BoTZ + provider cascade NATS subjects")
     except Exception as e:
         logger.warning(f"NATS connection failed: {e}")
         nc = None
@@ -167,6 +176,30 @@ async def handle_register_event(msg):
         await register_botz_instance(registration)
     except Exception as e:
         logger.error(f"Error handling registration: {e}")
+
+
+async def handle_provider_activated(msg):
+    """Track provider activations for routing decisions."""
+    try:
+        import json
+        data = json.loads(msg.data.decode())
+        provider = data.get("provider", "unknown")
+        active_providers[provider] = data
+        logger.info(f"Provider activated: {provider} (models: {data.get('models_added', [])})")
+    except Exception as e:
+        logger.error(f"Error handling provider activation: {e}")
+
+
+async def handle_provider_deactivated(msg):
+    """Remove deactivated providers from routing table."""
+    try:
+        import json
+        data = json.loads(msg.data.decode())
+        provider = data.get("provider", "unknown")
+        active_providers.pop(provider, None)
+        logger.info(f"Provider deactivated: {provider}")
+    except Exception as e:
+        logger.error(f"Error handling provider deactivation: {e}")
 
 
 async def cleanup_stale_instances():
@@ -592,10 +625,14 @@ async def get_agent_alter_theme(agent_id: str, alter_name: str):
         raise HTTPException(status_code=404, detail=f"Agent '{agent_id}' not found")
     alters = sig.get("alters", [])
     for alter in alters:
-        if alter.get("name") == alter_name:
+        if alter_name in {
+            alter.get("name"),
+            alter.get("id"),
+            alter.get("display_name"),
+        }:
             return {
                 "agent_id": agent_id,
-                "alter_name": alter_name,
+                "alter_name": _alter_name(alter),
                 "glyph": alter.get("glyph"),
                 "color": alter.get("color"),
                 "accent": alter.get("accent"),
@@ -603,7 +640,7 @@ async def get_agent_alter_theme(agent_id: str, alter_name: str):
                 "resonance": alter.get("resonance", []),
                 "description": alter.get("description"),
             }
-    available = [a.get("name") for a in alters]
+    available = [_alter_name(a) for a in alters]
     raise HTTPException(
         status_code=404,
         detail=f"Alter '{alter_name}' not found for {agent_id}. Available: {available}",
@@ -648,7 +685,7 @@ async def whoami(instance_id: Optional[str] = None):
                         "color": sig.get("color", "#888888"),
                         "voice": sig.get("voice", "unknown"),
                     },
-                    "available_alters": [a.get("name") for a in sig.get("alters", [])],
+                    "available_alters": [_alter_name(a) for a in sig.get("alters", [])],
                     "skill_level": botz.get("skill_level"),
                     "is_available": botz.get("is_available"),
                 }
@@ -668,6 +705,25 @@ async def whoami(instance_id: Optional[str] = None):
     }
 
 
+@app.get("/v1/providers")
+async def get_active_providers():
+    """Return providers activated via cascade NATS events."""
+    return {
+        "providers": {
+            name: {
+                "models": payload.get("models_added", []),
+                "node_id": payload.get("node_id"),
+                "activated_at": payload.get("timestamp"),
+            }
+            for name, payload in active_providers.items()
+        },
+        "count": len(active_providers),
+    }
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8054)
+
+
+

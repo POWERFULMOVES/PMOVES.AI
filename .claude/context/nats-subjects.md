@@ -197,6 +197,43 @@ Example: `ingest.transcript.ready.v1`
   ```
 - **Subscribers:** Observability dashboards, Agent Zero
 
+## CLAW Provider Lifecycle Subjects
+
+**`claw.provider.activated.v1`**
+- **Direction:** Published by provider activation tooling → Consumed by CLAW orchestration, monitoring
+- **Purpose:** Announce that a provider key was activated and routing was updated
+- **Payload:**
+  ```json
+  {
+    "node_id": "pmoves-4090",
+    "provider": "anthropic",
+    "env_var": "ANTHROPIC_API_KEY",
+    "models_added": ["claude_sonnet_4"],
+    "functions_updated": ["agent_zero", "coding_claude_fallback"],
+    "coding_stacks_activated": ["claude_code"],
+    "vram_warnings": [],
+    "timestamp": "2026-03-28T16:00:00Z",
+    "success": true
+  }
+  ```
+- **Subscribers:** CLAW routing dashboards, mesh observers, Discord publisher
+
+**`claw.provider.deactivated.v1`**
+- **Direction:** Published by provider activation tooling → Consumed by CLAW orchestration, monitoring
+- **Purpose:** Announce that a provider key was removed and dependent lanes should rebalance
+- **Payload:**
+  ```json
+  {
+    "node_id": "pmoves-4090",
+    "provider": "anthropic",
+    "env_var": "ANTHROPIC_API_KEY",
+    "models_removed": ["claude_sonnet_4"],
+    "timestamp": "2026-03-28T18:00:00Z",
+    "success": true
+  }
+  ```
+- **Subscribers:** CLAW routing dashboards, mesh observers, Discord publisher
+
 ## autoresearch Experiment Subjects
 
 **`research.autoresearch.result.v1`**

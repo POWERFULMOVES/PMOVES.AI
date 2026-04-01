@@ -474,7 +474,7 @@ def _sync_media(manifest: dict, host: str) -> None:
     if "asr" in manifest and isinstance(manifest["asr"], dict):
         asr = manifest["asr"].get(host)
         if asr is None:
-            asr = manifest["asr"].get("workstation_5090") or next(iter(manifest["asr"].values()), "")
+            asr = manifest["asr"].get("desktop-9950xd") or next(iter(manifest["asr"].values()), "")
         if asr:
             model = str(asr).split()[0]
             env_map["WHISPER_MODEL"] = model
@@ -490,7 +490,7 @@ def _sync_media(manifest: dict, host: str) -> None:
 
 def _sync_creator(manifest: dict, host: str) -> None:
     vlm = manifest.get("vlm", {})
-    model = vlm.get(host) or vlm.get("workstation_5090") or next(iter(vlm.values()), "")
+    model = vlm.get(host) or vlm.get("desktop-9950xd") or next(iter(vlm.values()), "")
     flows = manifest.get("sd_workflows", {}).get("comfyui", [])
     env_map = {
         "VLM_MODEL": model,
@@ -558,7 +558,7 @@ def _seed_list_from_profiles(host: str) -> set[str]:
             _append_model(models, manifest.get("embedding", {}).get("local_ollama"))
         elif profile == "vlm-and-creator":
             vlm = manifest.get("vlm", {})
-            _append_model(models, vlm.get(host) or vlm.get("workstation_5090"))
+            _append_model(models, vlm.get(host) or vlm.get("desktop-9950xd"))
     return models
 
 
@@ -685,13 +685,13 @@ def build_parser() -> argparse.ArgumentParser:
 
     sync = sub.add_parser("sync", help="sync a model profile into env override file")
     sync.add_argument("--profile", required=True, choices=["agent-zero", "archon", "media", "vlm-and-creator"])
-    sync.add_argument("--host", default="workstation_5090")
+    sync.add_argument("--host", default="desktop-9950xd")
     sync.add_argument("--tensorzero-base", default="http://tensorzero-gateway:3000")
     sync.set_defaults(func=cmd_sync)
 
     sync_dynamic = sub.add_parser("sync-dynamic", help="sync overrides from live registry mappings")
     sync_dynamic.add_argument("--target", default="all", choices=["all", "agent-zero", "archon", "creator"])
-    sync_dynamic.add_argument("--host", default="workstation_5090")
+    sync_dynamic.add_argument("--host", default="desktop-9950xd")
     sync_dynamic.add_argument("--tensorzero-base", default="http://tensorzero-gateway:3000")
     sync_dynamic.add_argument("--cloud-order", default="", help="comma list, default MODEL_CLOUD_FALLBACK_ORDER")
     sync_dynamic.set_defaults(func=cmd_sync_dynamic)
@@ -702,7 +702,7 @@ def build_parser() -> argparse.ArgumentParser:
     swap.set_defaults(func=cmd_swap)
 
     seed = sub.add_parser("seed-list", help="print comma-separated local models to seed")
-    seed.add_argument("--host", default="workstation_5090")
+    seed.add_argument("--host", default="desktop-9950xd")
     seed.add_argument("--source", default="auto", choices=["auto", "profile", "registry", "dynamic"])
     seed.add_argument("--include-baseline", action="store_true", default=True)
     seed.set_defaults(func=cmd_seed_list)

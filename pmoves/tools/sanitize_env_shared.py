@@ -49,9 +49,11 @@ def build_allowlist() -> set:
                 if key:
                     allowed.add(key)
 
-    # 4. Always allow these infrastructure vars
+    # 4. Always allow these infrastructure vars (empty = nullify host leaks)
     allowed.update({
         "SSL_CERT_FILE", "SSL_CERT_DIR",
+        "HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY",
+        "REQUESTS_CA_BUNDLE", "CURL_CA_BUNDLE", "NODE_EXTRA_CA_CERTS",
         "DOCKED_MODE", "TOPOLOGY_MODE", "PARENT_SYSTEM", "PARENT_VERSION",
     })
 

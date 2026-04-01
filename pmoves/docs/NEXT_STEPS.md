@@ -1,9 +1,25 @@
 
 # PMOVES v5 • NEXT_STEPS
 Note: Consolidated plan index at pmoves/docs/PMOVES.AI PLANS/README_DOCS_INDEX.md.
-_Last updated: 2026-03-28_
+_Last updated: 2026-03-29_
 
 ## Current Status
+
+### Latest changes (Mar 29, 2026) — KiloCode Claw Configuration + GLM-5.1 Taxonomy
+- PR `#1151` establishes the `.kilo/` claw configuration framework for 5090:
+  - 3 agent definitions (darkxside, powerfulmoves, kilocode-glm), 14 commands
+  - CLAW_TAXONOMY.md codifies the bespoke model integration principle
+  - PMOVES.Flare namespace (`pmoves/`) for consistent model naming
+  - Z.AI MCP servers (Vision, Web Search, Web Reader, Zread) configured
+  - ClaWz orphaned gitlink repaired (cfb4e3a → fork main 2a406120)
+  - Profile ID normalization (workstation_5090 → desktop-9950xd) across 14 files
+  - 5090-kilocode room manifest added to rooms/stage system
+- DARKXSIDE ✦ attested to KiloCode integration in DARKXSIDE_SIGNATURE.md and KRISS_KROSS_ACK.md
+- Agent Zero v1.3 gap assessed: fork pinned to March 7, upstream at v1.3 (March 27),
+  502 upstream commits behind. Recommended: dedicated post-merge sync lane in PMOVES-Agent-Zero
+  submodule, re-apply PMOVES hardened patches, validate MCP/personas/Supabase wiring.
+- Next focus: land #1151, #1155, #1156, then open Agent Zero v1.3 sync lane and
+  provider cascade wiring (connect Z.AI MCP with provider_cascade.py from #1155).
 
 ### Latest changes (Mar 28, 2026) — Agent Zero v1.3 + Rooms/Stage Prospectus
 - Verified the upstream Agent Zero source of truth has moved to `v1.3` on **March 27, 2026** (`agent0ai/agent-zero`), while the PMOVES hardened fork and current gitlink pin still reflect the **March 7, 2026** hardened state.

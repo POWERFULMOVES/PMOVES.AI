@@ -1,0 +1,70 @@
+# PMOVES AI — Reproducible OS Image Catalog
+# For Proxmox VM/LXC templates and bare-metal provisioning
+# Last updated: 2026-03-27
+
+images:
+  # --- Base Distros ---
+  ubuntu-2404-base:
+    name: "Ubuntu 24.04 LTS Base"
+    distro: ubuntu
+    version: "24.04"
+    purpose: "General-purpose PMOVES node"
+    cloud_init: true
+    provision_script: provisions/ubuntu-2404-pmoves.sh
+    tags: [base, pmoves, production]
+
+  debian-13-base:
+    name: "Debian 13 Trixie Base"
+    distro: debian
+    version: "13"
+    purpose: "Proxmox host or minimal container"
+    cloud_init: true
+    provision_script: provisions/debian-13-pmoves.sh
+    tags: [base, pmoves, pve, production]
+
+  # --- GPU Nodes ---
+  ubuntu-2404-gpu:
+    name: "Ubuntu 24.04 LTS GPU"
+    distro: ubuntu
+    version: "24.04"
+    purpose: "GPU inference node (5090, 4090, Jetson)"
+    cloud_init: true
+    provision_script: provisions/ubuntu-2404-gpu-pmoves.sh
+    nvidia_drivers: "550"
+    nvidia_container_toolkit: true
+    ollama_gpu: true
+    vllm: true
+    tags: [gpu, vllm, ollama, inference, production]
+
+  # --- YouTube Production ---
+  ubuntu-2404-yt-studio:
+    name: "Ubuntu 24.04 YouTube Studio"
+    distro: ubuntu
+    version: "24.04"
+    purpose: "YouTube content production — recording, editing, rendering"
+    cloud_init: true
+    provision_script: provisions/ubuntu-2404-yt-studio.sh
+    packages: [ffmpeg, obs-studio, yt-dlp, handbrake, audacity]
+    tags: [youtube, studio, production, media]
+
+  ubuntu-2404-yt-encoder:
+    name: "Ubuntu 24.04 YouTube Encoder"
+    distro: ubuntu
+    version: "24.04"
+    purpose: "Hardware-accelerated video encoding (NVENC)"
+    cloud_init: true
+    provision_script: provisions/ubuntu-2404-yt-encoder.sh
+    nvidia_drivers: "550"
+    nvenc: true
+    packages: [ffmpeg, handbrake, vmaf]
+    tags: [youtube, encoding, gpu, nvenc, production]
+
+  # --- Service Nodes ---
+  ubuntu-2404-monitoring:
+    name: "Ubuntu 24.04 Monitoring"
+    distro: ubuntu
+    version: "24.04"
+    purpose: "Prometheus, Grafana, Loki, alerting"
+    cloud_init: true
+    provision_script: provisions/ubuntu-2404-monitoring-pmoves.sh
+    tags: [monitoring, observability, production]

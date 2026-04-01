@@ -170,6 +170,60 @@
           "sensitive": false
         },
         {
+          "key": "HTTP_PROXY",
+          "file": "pmoves/env.shared",
+          "prompt": null,
+          "default": "",
+          "help": "HTTP proxy — cleared to prevent Windows host leak into containers.",
+          "required": false,
+          "sensitive": false
+        },
+        {
+          "key": "HTTPS_PROXY",
+          "file": "pmoves/env.shared",
+          "prompt": null,
+          "default": "",
+          "help": "HTTPS proxy — cleared to prevent Windows host leak into containers.",
+          "required": false,
+          "sensitive": false
+        },
+        {
+          "key": "NO_PROXY",
+          "file": "pmoves/env.shared",
+          "prompt": null,
+          "default": "",
+          "help": "Proxy bypass list — cleared to prevent Windows host leak into containers.",
+          "required": false,
+          "sensitive": false
+        },
+        {
+          "key": "REQUESTS_CA_BUNDLE",
+          "file": "pmoves/env.shared",
+          "prompt": null,
+          "default": "",
+          "help": "Python requests CA bundle — cleared to prevent Windows host leak.",
+          "required": false,
+          "sensitive": false
+        },
+        {
+          "key": "CURL_CA_BUNDLE",
+          "file": "pmoves/env.shared",
+          "prompt": null,
+          "default": "",
+          "help": "curl CA bundle — cleared to prevent Windows host leak into containers.",
+          "required": false,
+          "sensitive": false
+        },
+        {
+          "key": "NODE_EXTRA_CA_CERTS",
+          "file": "pmoves/env.shared",
+          "prompt": null,
+          "default": "",
+          "help": "Node.js extra CA certs — cleared to prevent Windows host leak.",
+          "required": false,
+          "sensitive": false
+        },
+        {
           "key": "SUPABASE_URL",
           "file": "pmoves/env.shared",
           "prompt": "Remote Supabase base URL",
@@ -183,6 +237,14 @@
           "file": "pmoves/env.shared",
           "prompt": "Supabase service key (remote)",
           "help": "Needed when pointing at a remote Supabase instance.",
+          "required": false,
+          "sensitive": true
+        },
+        {
+          "key": "MINIMAX_API_KEY",
+          "file": "pmoves/env.tier-llm",
+          "prompt": "MiniMax API key (M2.7 / M2.1)",
+          "help": "Populate for MiniMax model routing via TensorZero. See docs/MINIMAX_API_KEY_SETUP.md.",
           "required": false,
           "sensitive": true
         },
