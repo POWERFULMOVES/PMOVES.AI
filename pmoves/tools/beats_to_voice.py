@@ -70,6 +70,9 @@ NATS_SUBJECT = "tokenism.prosodic.bpm.v1"
 
 def _post_json(url: str, payload: dict, timeout: int = 30) -> dict[str, Any] | None:
     """POST JSON via urllib.request. Returns parsed JSON or None on failure."""
+    if not url.startswith(("http://", "https://")):
+        sys.stderr.write(f"[beats_to_voice] Invalid URL scheme: {url}\n")
+        return None
     data = json.dumps(payload).encode("utf-8")
     req = urllib.request.Request(
         url,
@@ -98,11 +101,13 @@ def _post_json(url: str, payload: dict, timeout: int = 30) -> dict[str, Any] | N
 
 def _get_json(url: str, timeout: int = 5) -> dict[str, Any] | None:
     """GET JSON via urllib.request. Returns parsed JSON or None."""
+    if not url.startswith(("http://", "https://")):
+        return None
     req = urllib.request.Request(url, method="GET")
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310 — validated above
             return json.loads(resp.read().decode("utf-8"))
-    except Exception:
+    except (urllib.error.URLError, OSError):
         return None
 
 
