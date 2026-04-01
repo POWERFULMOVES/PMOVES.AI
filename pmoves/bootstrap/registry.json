@@ -1303,7 +1303,8 @@
           "prompt": "RustDesk server public key (id_ed25519.pub)",
           "help": "Server public key for client key pinning. Read from KVM2: cat /opt/rustdesk-server/id_ed25519.pub",
           "required": true,
-          "sensitive": false
+          "sensitive": false,
+          "type": "string"
         }
       ]
     }
