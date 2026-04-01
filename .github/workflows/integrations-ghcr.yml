@@ -272,7 +272,7 @@ jobs:
         uses: docker/setup-buildx-action@v4
 
       - name: Install Cosign
-        uses: sigstore/cosign-installer@v4.1.0
+        uses: sigstore/cosign-installer@v4.1.1
 
       - name: Log in to GHCR (App token preferred)
         id: login_ghcr_app
