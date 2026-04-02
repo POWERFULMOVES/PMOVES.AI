@@ -160,6 +160,21 @@ fleet-stale-audit: ## List stale Tailscale nodes (offline > 60 days)
 	@echo "Reference: pmoves/docs/TAILSCALE_NODE_HYGIENE.md"
 	@echo "Remove stale nodes via Tailscale admin console or API"
 
+# ── Secrets Sync ────────────────────────────────────────────────────
+# Triggers the sync-secrets-local.yml GitHub Actions workflow on the
+# self-hosted ai-lab runner, which hydrates local.env from GH Secrets.
+
+secrets-sync-trigger: ## Trigger GH Actions secrets sync to local runner
+	@echo "=== Triggering secrets sync workflow ==="
+	@gh workflow run sync-secrets-local.yml \
+		--field output_format=env \
+		--field target_os=$$(case "$$(uname -s)" in MINGW*|MSYS*|CYGWIN*) echo Windows;; Linux) echo Linux;; *) echo any;; esac)
+	@echo "Waiting for workflow to start..."
+	@sleep 8
+	@gh run list --workflow=sync-secrets-local.yml --limit=1 --json status,conclusion,createdAt,displayTitle \
+		| python -c "import sys,json; r=json.load(sys.stdin)[0]; print(f'  Status: {r[\"status\"]}  Conclusion: {r.get(\"conclusion\",\"pending\")}  Started: {r[\"createdAt\"]}')" 2>/dev/null \
+		|| gh run list --workflow=sync-secrets-local.yml --limit=1
+
 # ── GPU & Model Serving ──────────────────────────────────────────────
 
 up-ollama: ## Start Ollama service (default profile, always available)

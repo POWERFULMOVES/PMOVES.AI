@@ -4,9 +4,11 @@
 
 set -euo pipefail
 
-KEY="${LOCALAPPDATA:-$HOME/AppData/Local}/Temp/hostinger_vps"
+# Persistent project path first, then legacy temp paths as fallback
+KEY="${PMOVES_SECRETS_DIR:-${0%/*}/../../secrets}/hostinger_vps"
+[ -f "$KEY" ] || KEY="${LOCALAPPDATA:-$HOME/AppData/Local}/Temp/hostinger_vps"
 [ -f "$KEY" ] || KEY="/tmp/hostinger_vps"
-[ -f "$KEY" ] || { echo "ERROR: SSH key not found at either path"; exit 1; }
+[ -f "$KEY" ] || { echo "ERROR: SSH key not found. Expected at pmoves/secrets/hostinger_vps"; exit 1; }
 
 KVM2="${HOSTINGER_KVM2_IP:?Set HOSTINGER_KVM2_IP (KVM2 public IP)}"
 
