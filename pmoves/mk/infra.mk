@@ -175,6 +175,7 @@ secrets-sync-trigger: ## Trigger GH Actions secrets sync to local runner
 		| python -c "import sys,json; r=json.load(sys.stdin)[0]; print(f'  Status: {r[\"status\"]}  Conclusion: {r.get(\"conclusion\",\"pending\")}  Started: {r[\"createdAt\"]}')" 2>/dev/null \
 		|| gh run list --workflow=sync-secrets-local.yml --limit=1
 
+
 # ── GPU & Model Serving ──────────────────────────────────────────────
 
 up-ollama: ## Start Ollama service (default profile, always available)
