@@ -608,7 +608,11 @@ bashToolPatterns:
       TOPOLOGY LEAKAGE: Possible real Tailscale IP detected. Use hostnames
       (e.g., pmoves-z890, pmoves-powerfulmoves) instead of IPs in committed files.
       Tailscale IPs are dynamic and leak network topology in a public repo.
-      Use `tailscale status` or `make -C pmoves tailscale-docker-ip` for runtime lookup.
+      Use `/fleet:status` skill or `make -C pmoves fleet-status` for hostname-only fleet overview.
+      Use `make -C pmoves tailscale-docker-ip` for programmatic runtime lookup only.
+      ---
+      KNOWN ROADS: Fleet management uses /fleet:* skills (status, rustdesk-check,
+      enroll, fix-relay, stale-nodes, acl-audit). Never use raw IPs in commands.
       ---
       INTEGRITY CHECK: If you are writing a Tailscale IP into a file, verify it is an
       example/placeholder (100.64.1.x, 100.100.100.x) and not a real node address.
@@ -620,6 +624,7 @@ bashToolPatterns:
       TOPOLOGY LEAKAGE: Private LAN IP (192.168.x.x) detected. Use Tailscale
       hostnames or service names instead of LAN IPs in committed files.
       LAN IPs expose internal network structure in a public repo.
+      Use `/fleet:status` skill or `make -C pmoves fleet-status` for hostname-only output.
     ask: true
 
   # ---------------------------------------------------------------------------
