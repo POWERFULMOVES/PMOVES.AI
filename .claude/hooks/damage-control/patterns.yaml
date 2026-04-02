@@ -885,6 +885,9 @@ chitSafePaths:
   # NOT a blanket bypass: damage-control still blocks raw "docker compose up" commands.
   # This allows Edit tool to modify compose env vars for service configuration fixes.
   - "docker-compose.yml"
+  # Node-specific overrides — GPU enhancements, node identity, resource reservations
+  - "docker-compose.z890.override"
+  - "docker-compose.5090.override"
   # Integration compose overrides — registry reference fixes (GHCR org consolidation)
   - "docker-compose.integrations"
   # PR-kit compose files — integration starter templates
