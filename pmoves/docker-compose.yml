@@ -915,6 +915,8 @@ services:
     - SUPABASE_DB_URL=postgresql://${POSTGRES_USER:-${SUPABASE_DB_USER:-postgres}}:${POSTGRES_PASSWORD:-${SUPABASE_DB_PASSWORD:-postgres}}@supabase-db:5432/${POSTGRES_DB:-${SUPABASE_DB_NAME:-postgres}}
     - VERIFY_JWT=${FUNCTIONS_VERIFY_JWT:-true}
     command: ["start", "--main-service", "/home/deno/functions/main"]
+    volumes:
+    - ../PMOVES-supabase/docker/volumes/functions:/home/deno/functions:ro
     healthcheck:
       test: ["CMD-SHELL", "curl -sSf http://localhost:9000/health || exit 1"]
       interval: 20s
@@ -977,6 +979,8 @@ services:
     - LOGFLARE_PUBLIC_ACCESS_TOKEN=${LOGFLARE_PUBLIC_ACCESS_TOKEN:-}
     volumes:
     - supabase-vector-data:/var/lib/vector
+    - ../PMOVES-supabase/docker/volumes/logs/vector.yml:/etc/vector/vector.yml:ro
+    - /var/run/docker.sock:/var/run/docker.sock:ro
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9001/health"]
       interval: 20s
