@@ -160,6 +160,45 @@ providers:
     adapter_strategy: tensorzero_first
     fallback_lane: ollama
 
+  zai:
+    role: native_provider
+    sdk_family: openai_compatible
+    transport: openai_completions
+    request_shape: nexus.chat.v1
+    response_shape: nexus.chat.v1
+    auth_source: Z_AI_API_KEY
+    observability_mode: mirrored_to_tensorzero
+    native_strengths:
+      - openclaw-native agent orchestration
+      - tool calling and long-chain execution
+      - scheduled and persistent tasks
+      - multimodal vision coding (GLM-5V-Turbo)
+      - frontend recreation from screenshots
+      - GUI autonomous exploration
+      - CJK-native multilingual coding
+    adapter_strategy: native_sdk_first
+    fallback_lane: tensorzero
+    co_creation_tier: primary
+    relationship_status: active_partner
+    provider_docs:
+      turbo: "https://docs.z.ai/guides/llm/glm-5-turbo"
+      vision_turbo: "https://docs.z.ai/guides/vlm/glm-5v-turbo"
+      api_reference: "https://docs.z.ai/api-reference/llm/chat-completion"
+    served_models:
+      - glm-5-turbo        # OpenClaw-native: tool calling, long chains, scheduled tasks
+      - glm-5v-turbo       # Multimodal coding: vision + text, frontend recreation, GUI exploration
+      - glm-5.1            # Coding-optimized fallback
+      - glm-4-flash        # Fast multilingual
+      - glm-4-plus         # Quality reasoning
+      - glm-4-long         # 128K context
+    integration_notes: >
+      Z.AI (Zhipu AI) is PMOVES' primary co-creation partner for agentic workflows.
+      GLM-5-Turbo is the OpenClaw-native model — purpose-built for tool calling, command
+      following, and persistent agent tasks. GLM-5V-Turbo extends this with vision capabilities
+      for multimodal coding tasks (screenshot → code, GUI exploration, visual debugging).
+      Both models use the coding plan endpoint at api.z.ai/api/coding/paas/v4 with
+      TensorZero routing. Provider parity is maintained through the Nexus contract.
+
 lanes:
   agent_mesh:
     default_provider: tensorzero
