@@ -62,8 +62,10 @@ Arguments:
 #### Fallback: local auto-memory (if CIPHER_DOWN or MCP fails)
 
 Read the auto-memory files and search for reasoning-related entries using Grep:
-- Search for `reasoning`, `chain-of-thought`, `Q:`, `Result:` patterns
+- Search for `reasoning`, `reasoning_trace`, `chain-of-thought`, `Q:`, `Result:` patterns
 - Check topic files with `reasoning` in the filename
+- **Legacy note:** Historical entries may use category `reasoning_trace` instead of `reasoning`.
+  Search for both when retrieving patterns from older sessions.
 
 ---
 

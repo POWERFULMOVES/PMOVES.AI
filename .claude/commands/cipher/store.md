@@ -34,6 +34,9 @@ Arguments:
 - `submodule` — Submodule knowledge and configuration
 - `architecture` — System patterns and design
 - `reasoning` — Chain-of-thought reasoning traces
+- `agent_plan` — Agent execution plans and strategy outlines
+- `agent_checkpoint` — Mid-task progress snapshots for resilience
+- `agent_completion` — Task completion records and outcomes
 
 > **Known issue (2026-04-01):** MCP tools are currently blocked by the same gap as REST.
 > The MCP client (`pmoves-cipher-mcp/cipher_mcp/client.py`) calls `POST /api/memory`
