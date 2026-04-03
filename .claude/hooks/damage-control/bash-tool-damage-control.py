@@ -158,7 +158,7 @@ def load_config() -> Dict[str, Any]:
         sys.exit(2)
 
     if "bashToolPatterns" not in config:
-        print(f"SECURITY: Config missing 'bashToolPatterns' key — blocking all commands (fail-closed)", file=sys.stderr)
+        print("SECURITY: Config missing 'bashToolPatterns' key — blocking all commands (fail-closed)", file=sys.stderr)
         sys.exit(2)
 
     return config
@@ -242,15 +242,16 @@ def check_command(command: str, config: Dict[str, Any]) -> Tuple[bool, bool, str
     # CHIT bypass: CHIT tool commands can access env files they need to encode/rotate.
     # Destructive patterns (rm, DROP, git push --force) still apply — checked above.
     chit_bypass = config.get("chitBypassPatterns", [])
-    try:
-        is_chit_op = any(
-            re.search(pat, command, re.IGNORECASE)
-            for pat in chit_bypass
-            if pat
-        )
-    except re.error as e:
-        print(f"WARNING: Invalid regex in chitBypassPatterns — {e}", file=sys.stderr)
-        is_chit_op = False
+    is_chit_op = False
+    for pat in chit_bypass:
+        if pat:
+            try:
+                if re.search(pat, command, re.IGNORECASE):
+                    is_chit_op = True
+                    break
+            except re.error as e:
+                print(f"WARNING: Invalid regex in chitBypassPatterns: {pat!r} — {e}", file=sys.stderr)
+                continue
     if is_chit_op:
         return False, False, ""
 
