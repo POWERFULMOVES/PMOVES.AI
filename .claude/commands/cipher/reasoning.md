@@ -22,7 +22,7 @@ curl -sf --max-time 3 http://localhost:8096/health > /dev/null 2>&1 && echo "CIP
 
 Use the MCP tool `pmoves_cipher_store_reasoning`:
 
-```
+```yaml
 Tool: pmoves_cipher_store_reasoning
 Arguments:
   question: "$QUESTION"
@@ -52,7 +52,7 @@ Append the reasoning trace to your auto-memory file using the Write or Edit tool
 
 Use the MCP tool `pmoves_cipher_reasoning_patterns`:
 
-```
+```yaml
 Tool: pmoves_cipher_reasoning_patterns
 Arguments:
   query: "$PATTERN_QUERY"

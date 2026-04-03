@@ -18,7 +18,7 @@ curl -sf --max-time 3 http://localhost:8096/health > /dev/null 2>&1 && echo "CIP
 
 Use the MCP tool `pmoves_cipher_store`:
 
-```
+```yaml
 Tool: pmoves_cipher_store
 Arguments:
   content: "$CONTENT"
@@ -34,9 +34,6 @@ Arguments:
 - `submodule` — Submodule knowledge and configuration
 - `architecture` — System patterns and design
 - `reasoning` — Chain-of-thought reasoning traces
-- `agent_plan` — Agent execution plans and strategy outlines
-- `agent_checkpoint` — Mid-task progress snapshots for resilience
-- `agent_completion` — Task completion records and outcomes
 
 > **Known issue (2026-04-01):** MCP tools are currently blocked by the same gap as REST.
 > The MCP client (`pmoves-cipher-mcp/cipher_mcp/client.py`) calls `POST /api/memory`
@@ -59,7 +56,7 @@ This ensures the memory is persisted even when Cipher services are offline.
 Store with intent-shaped phrasing. When you later search, rephrase the query.
 Cipher's embedding model bridges the gap between how you stored and how you search.
 
-```
+```text
 # Marco (store)
 /cipher:store Agent orientation: claims register shows lanes A, B, C active
 
