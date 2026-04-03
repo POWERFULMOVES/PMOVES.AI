@@ -4,6 +4,7 @@ GRAPHITI_MARK: `PHI-4482-GATEWAY::PMOVES`
 
 ## Canonical Pointer
 Primary convergence record lives at:
+- `pmoves/docs/AGENTS/AGNOTE4482_SITREP.md` (cold-start orientation — **read this first** on fresh sessions)
 - `pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md`
 - `pmoves/docs/AGENTS/AGNOTE4482_SIGNOFF_CHECKLIST.md` (shared merge-signoff gate for AGNOTE4482 lanes)
 - `pmoves/docs/AGENTS/GRAPHITI_SIG_REVIEW_2026-02-21.md` (Phase 5 signature and traversal review snapshot)
@@ -103,3 +104,46 @@ Elder-context support is always available to reduce drift and collision across p
 - Timestamp: `2026-03-28`
 
 <!-- GRAPHITI_MARK: 4090-CLAUDE::ROOM-CATALOG-AUDIT::2026-03-28 -->
+
+## Self-Review Audit Record (2026-04-01)
+
+### Work Performed
+- Full self-review of AGNOTE4482 documentation suite, AGENTS folder, and Known Gaps
+- Verified P0/P2 gap resolutions via grep/read against current codebase
+- Refreshed agent count, external contributor count, and file count against live registry
+- Reviewed all convergence lanes since last audit (2026-03-28)
+- Cataloged 10+ PRs merged to main since last audit
+
+### Key Findings
+
+| Finding | Status | Evidence |
+|---------|--------|----------|
+| BoTZ JWT fail-open (P0) | **RESOLVED** | `gateway.py:292-299` returns HTTPException 500 on missing HAS_JOSE or SUPABASE_JWT_SECRET. `auth.py:57-65` returns HTTPException 500 on missing HAS_JOSE or JWT_SECRET. Both fail-closed. |
+| BPM encoder not implemented (P2) | **RESOLVED** | `pmoves/tools/bpm_encoder.py` exists, 574 lines, delivered in PR #1168 (Shift Crew tools) |
+| NATS unauthenticated references (P0) | **NOT IMPROVED** | 57 unauthenticated references across 34 files in `pmoves/` (grep: `nats://(nats\|localhost):4222` excluding `@`; measured 2026-04-02). Not reduced from baseline — batch migration still needed. |
+| A2A server not exposed (P0) | **CODE EXISTS** | `services/agent-zero/python/features/a2a/server.py` defines `/.well-known/agent-card.json` and `/.well-known/agent.json`. Compose exposure unconfirmed — needs runtime verification. |
+| Agent registry count | **STALE** | Registry has 71 entries, 13 external contributors. Docs said 60 agents, 7 contributors. |
+| AGENTS file count | **STALE** | 107 documents (66 root + 41 SUBMODULE_CODEX_HOMES). Docs said 73+. |
+
+#### Post-2026-03-28 Deliverables
+- **KiloCode claw config** (PR #1151): .kilo/ directory, GLM coding plan mode, 3 agents + 8 commands
+- **4090 coding workstation** (PR #1155): Provider cascade (13 providers), function demands (18 functions)
+- **MiniMax parity Phase 1-2** (PRs #1164, #1166): Provider cascade, TZ config, NATS wiring, BoTZ routing
+- **MiniMax parity Phase 3-5** (landed on main via #1164/#1166): BoTZ tandem, DARKXSIDE triad, model fabric
+- **Shift Crew tools** (PR #1168): BoTZ Trinity CLI, voice persona binding, beats-to-voice pipeline, BPM encoder, ClawZ field tests (8/8), AgentGym runner
+- **Security**: Host environment leak guard consolidated (PR #1163)
+- **Infra**: BIND defaults reverted to 0.0.0.0 for fleet connectivity (PR #1162)
+- **TensorZero**: POSTGRES_URL fix (#1167), cross-profile depends_on removal
+
+### Handoff Notes
+- NATS auth P0 needs continued batch migration (57 refs remain across 34 files — hotspots: `services/work-marshaling/`, `services/chat-relay/`, `services/node-registry/`, `tools/`)
+- A2A server needs runtime verification (compose exposure check)
+- Signoff checklist sections 1, 3, 7 still unchecked — require prospectus/ClaWz/P7 runtime verification
+- Agent registry count (71) should be reconciled with taxonomy docs that still reference 60
+
+### Agent ACK
+- Agent: `CLAUDE-OPUS`
+- Signature: `ACK::CLAUDE-OPUS::SELF-REVIEW-AUDIT`
+- Timestamp: `2026-04-01`
+
+<!-- GRAPHITI_MARK: CLAUDE-OPUS::SELF-REVIEW-AUDIT::2026-04-01 -->

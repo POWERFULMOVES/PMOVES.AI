@@ -1,14 +1,14 @@
 # PMOVES.AI Agents Documentation
 
-**Last updated:** 2026-03-12
-**Files:** 73+ documents across 7 tiers
-**Registry:** 60 agents in `pmoves/config/agent_registry.yaml` (taxonomy v1.4.0)
+**Last updated:** 2026-04-01
+**Files:** 107 documents across 7 tiers (66 root + 41 SUBMODULE_CODEX_HOMES)
+**Registry:** 71 agents in `pmoves/config/agent_registry.yaml` (taxonomy v1.4.0)
 
 ---
 
 ## Start Here
 
-1. **[agent_registry.yaml](../../config/agent_registry.yaml)** — Single source of truth for all 60 agents (class, type, port, NATS, CHIT toggles)
+1. **[agent_registry.yaml](../../config/agent_registry.yaml)** — Single source of truth for all 71 agents (class, type, port, NATS, CHIT toggles)
 2. **[PMOVES_AGENT_CLASS_TAXONOMY.md](./PMOVES_AGENT_CLASS_TAXONOMY.md)** — 4 classes (legendary/standard/specialized/utility), 7 service tiers, evolution stages
 3. **[AGENT_TAXONOMY_CROSS_REFERENCE.md](./AGENT_TAXONOMY_CROSS_REFERENCE.md)** — Maps 18 documents with change-impact matrix
 4. **[IMPLEMENTATION_GAP_ANALYSIS.md](./IMPLEMENTATION_GAP_ANALYSIS.md)** — What's built vs. what's planned
@@ -62,7 +62,7 @@ Foundation documents defining the agent classification system.
 | File | Purpose |
 |------|---------|
 | [PMOVES_AGENT_CLASS_TAXONOMY.md](./PMOVES_AGENT_CLASS_TAXONOMY.md) | Class definitions, evolution stages, layer model (v1.4.0) |
-| [PMOVES_UNIFIED_AGENT_TAXONOMY.md](./PMOVES_UNIFIED_AGENT_TAXONOMY.md) | Unified view across all 60 agents |
+| [PMOVES_UNIFIED_AGENT_TAXONOMY.md](./PMOVES_UNIFIED_AGENT_TAXONOMY.md) | Unified view across all 71 agents |
 | [PERSONAS.md](./PERSONAS.md) | Persona framework: schema, inheritance, CHIT attribution, 325+ catalog vision |
 | [PMOVES_AGENT_TOPOLOGY.md](./PMOVES_AGENT_TOPOLOGY.md) | Network topology and inter-agent communication patterns |
 
@@ -85,7 +85,7 @@ Machine-readable configuration referenced by scripts and services.
 
 | File | Location | Purpose |
 |------|----------|---------|
-| `agent_registry.yaml` | `pmoves/config/` | Single source of truth (60 agents) |
+| `agent_registry.yaml` | `pmoves/config/` | Single source of truth (71 agents) |
 | `model_strengths.yaml` | `pmoves/config/` | Model capability ratings for routing |
 | `skill-pairings.yaml` | `pmoves/configs/` | 7 FlOO$ skill pairings with dependencies |
 
@@ -133,7 +133,7 @@ Cultural anchors, aspirational notes, and vision documents.
 | [AGNOTE4482.FlOO$.md](./AGNOTE4482.FlOO%24.md) | FlOO$ lyrical/cultural anchor |
 | [AGNOTE4482FLUTE.md](./AGNOTE4482FLUTE.md) | Flute voice stack aspirational (4 lines) |
 | [AGNOTE4482DnB.PHI.Orchestra.md](./AGNOTE4482DnB.PHI.Orchestra.md) | Z890 DnB convergence score — dual jewels, topology, handoff to 4090+5090 |
-| [agent_vision_notes.md](./agent_vision_notes.md) | Prosodic bridge spec (BPM encoder — actionable, implementation pending) |
+| [agent_vision_notes.md](./agent_vision_notes.md) | Prosodic bridge spec (BPM encoder — implemented in `pmoves/tools/bpm_encoder.py`, 574 lines, PR #1168) |
 | [agnotes2.md](./agnotes2.md) | Shell output snapshot (historical) |
 | [agnotes3.md](./agnotes3.md) | 4-line vision note (historical) |
 | [CRUSH_OPERATOR_HOME.md](./CRUSH_OPERATOR_HOME.md) | Crush CLI companion operator guide |
@@ -183,8 +183,8 @@ Strategic and theoretical foundations (preserve as-is, no regular updates needed
 
 ## Quick Links
 
-- **Agent count:** 60 registered agents (`python -m pmoves.tools.agent_taxonomy_helper list`)
-- **External contributors:** 7 listed in `pmoves/config/agent_registry.yaml` (`claude-opus`, `kilocode`, `codex`, `gemini`, `cline`, `powerfulmoves`, `crush`)
+- **Agent count:** 71 registered agents (+ 13 external contributors) (`python -m pmoves.tools.agent_taxonomy_helper list`)
+- **External contributors:** 13 listed in `pmoves/config/agent_registry.yaml` (`claude-opus`, `kilocode`, `codex`, `gemini`, `cline`, `powerfulmoves`, `crush`, `z890-claude`, `5090-claude`, `4090-claude`, `botz-architect`, `botz-builder`, `botz-auditor`)
 - **Taxonomy version:** v1.4.0
 - **Persona seeds:** 8 standard personas in `pmoves/supabase/initdb/17_persona_seed.sql`
 - **Model registry:** `pmoves/config/gpu-models.yaml`
@@ -198,12 +198,12 @@ Strategic and theoretical foundations (preserve as-is, no regular updates needed
 
 | Priority | Gap | Owner |
 |----------|-----|-------|
-| P0 | BoTZ JWT HAS_JOSE fail-open (`features/mcp_bridge/auth.py:57-59`) | BoTZ submodule PR |
-| P0 | 111 unauthenticated NATS references across submodules | Batch migration effort |
-| P0 | A2A server (`/.well-known/agent.json`) not exposed on Agent Zero | Architecture work |
+| ~~P0~~ | ~~BoTZ JWT HAS_JOSE fail-open~~ | **RESOLVED** — BoTZ PR #79 merged. `gateway.py` and `auth.py` both return HTTPException 500 (fail-closed) when HAS_JOSE or JWT_SECRET is missing. Verified 2026-04-01. |
+| P0 | ~100+ unauthenticated NATS references in `pmoves/` (grep: `nats://(nats\|localhost):4222` excluding `@`; count varies by submodule state) | Batch migration not yet started — refs span services, integrations, docs |
+| P0 | A2A server (`/.well-known/agent.json`) — code exists at `services/agent-zero/python/features/a2a/server.py` but compose exposure unconfirmed | Runtime verification needed |
 | P1 | BoTZ Gateway integration speculative (proposal, not implemented) | See [BOTZ_GATEWAY_AGENT_INTEGRATION.md](./BOTZ_GATEWAY_AGENT_INTEGRATION.md) |
 | P1 | Health/Wealth services pre-stage (no healthz, metrics, NATS, CHIT) | See [AGNOTE4482.md](./AGNOTE4482.md) |
-| P2 | BPM encoder spec exists but `bpm_encoder.py` not implemented | See [agent_vision_notes.md](./agent_vision_notes.md) |
+| ~~P2~~ | ~~BPM encoder spec exists but `bpm_encoder.py` not implemented~~ | **RESOLVED** — `pmoves/tools/bpm_encoder.py` implemented (574 lines), delivered in PR #1168 (Shift Crew tools, 2026-04-01). |
 | P2 | Observability Map (`OBSERVABILITY_MAP.md`) referenced but doesn't exist | Create from Production Audit Lane C |
 
 ---
