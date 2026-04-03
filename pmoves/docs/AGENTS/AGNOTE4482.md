@@ -120,7 +120,7 @@ Elder-context support is always available to reduce drift and collision across p
 |---------|--------|----------|
 | BoTZ JWT fail-open (P0) | **RESOLVED** | `gateway.py:292-299` returns HTTPException 500 on missing HAS_JOSE or SUPABASE_JWT_SECRET. `auth.py:57-65` returns HTTPException 500 on missing HAS_JOSE or JWT_SECRET. Both fail-closed. |
 | BPM encoder not implemented (P2) | **RESOLVED** | `pmoves/tools/bpm_encoder.py` exists, 574 lines, delivered in PR #1168 (Shift Crew tools) |
-| NATS unauthenticated references (P0) | **NOT IMPROVED** | ~100+ unauthenticated references in `pmoves/` (grep: `nats://(nats\|localhost):4222` excluding `@`; exact count varies 96-139 by submodule checkout state). Not reduced from 111 baseline. |
+| NATS unauthenticated references (P0) | **NOT IMPROVED** | 57 unauthenticated references across 34 files in `pmoves/` (grep: `nats://(nats\|localhost):4222` excluding `@`; measured 2026-04-02). Not reduced from baseline — batch migration still needed. |
 | A2A server not exposed (P0) | **CODE EXISTS** | `services/agent-zero/python/features/a2a/server.py` defines `/.well-known/agent-card.json` and `/.well-known/agent.json`. Compose exposure unconfirmed — needs runtime verification. |
 | Agent registry count | **STALE** | Registry has 71 entries, 13 external contributors. Docs said 60 agents, 7 contributors. |
 | AGENTS file count | **STALE** | 107 documents (66 root + 41 SUBMODULE_CODEX_HOMES). Docs said 73+. |
@@ -136,7 +136,7 @@ Elder-context support is always available to reduce drift and collision across p
 - **TensorZero**: POSTGRES_URL fix (#1167), cross-profile depends_on removal
 
 ### Handoff Notes
-- NATS auth P0 needs continued batch migration (58 refs remain across 37 files, mostly in `pmoves/integrations/archon/`)
+- NATS auth P0 needs continued batch migration (57 refs remain across 34 files — hotspots: `services/work-marshaling/`, `services/chat-relay/`, `services/node-registry/`, `tools/`)
 - A2A server needs runtime verification (compose exposure check)
 - Signoff checklist sections 1, 3, 7 still unchecked — require prospectus/ClaWz/P7 runtime verification
 - Agent registry count (71) should be reconciled with taxonomy docs that still reference 60
