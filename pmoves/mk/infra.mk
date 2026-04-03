@@ -22,6 +22,11 @@ volume-reset: ## Reset a service volume: make volume-reset SERVICE=tensorzero-cl
 	  echo "Valid:  $(VALID_SERVICES)"; \
 	  exit 1; \
 	fi
+	@if ! echo "$(VALID_SERVICES)" | grep -qw "$(SERVICE)"; then \
+	  echo "ERROR: Invalid SERVICE '$(SERVICE)'"; \
+	  echo "Valid:  $(VALID_SERVICES)"; \
+	  exit 1; \
+	fi
 	@echo "=== Volume Reset: $(SERVICE) ==="
 	@echo "Step 1/5: Stopping $(SERVICE)..."
 	@$(DC) stop $(SERVICE) || true
@@ -109,7 +114,7 @@ tailscale-docker-ip: ## Show Tailscale Docker container's IP
 
 fleet-status: ## Show Tailscale nodes (hostnames only) + RustDesk relay health
 	@echo "=== Tailscale Fleet Status ==="
-	@tailscale status | awk '{print $$2, $$4, $$5, $$6, $$7}' || echo "ERROR: tailscale CLI not available"
+	@tailscale status | awk '{print $$2, $$4, $$5, $$6}' | sed 's/[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}/[redacted]/g' || echo "ERROR: tailscale CLI not available"
 	@echo ""
 	@echo "=== RustDesk Relay (KVM2) ==="
 	@timeout 3 bash -c 'echo "" > /dev/tcp/pmoves-kvm2/21116' 2>/dev/null \
@@ -139,7 +144,7 @@ fleet-enroll: ## Generate CHIT-signed enrollment token: make fleet-enroll ROLE=o
 	@echo "=== Generating Enrollment Token ==="
 	CHIT_PASSPHRASE="$${CHIT_PASSPHRASE}" \
 	RUSTDESK_RELAY_HOST="$$(tailscale ip -4 pmoves-kvm2 2>/dev/null)" \
-	RUSTDESK_PUBLIC_KEY="$${RUSTDESK_RELAY_KEY}" \
+	RUSTDESK_PUBLIC_KEY="$${RUSTDESK_PUBLIC_KEY}" \
 		$(PYTHON) scripts/fleet/generate-enrollment.py generate \
 			--role $(ROLE) \
 			--device "$(DEVICE)" \
@@ -148,7 +153,7 @@ fleet-enroll: ## Generate CHIT-signed enrollment token: make fleet-enroll ROLE=o
 fleet-stale-audit: ## List stale Tailscale nodes (offline > 60 days)
 	@echo "=== Stale Tailscale Node Audit ==="
 	@echo "Nodes offline > 60 days:"
-	@tailscale status | grep "offline" | awk '{print $$2, $$5, $$6, $$7}' | while read line; do \
+	@tailscale status | grep "offline" | awk '{print $$2, $$5, $$6}' | while read line; do \
 		echo "  $$line"; \
 	done
 	@echo ""

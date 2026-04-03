@@ -1295,6 +1295,7 @@
           "prompt": "RustDesk relay server IP or hostname",
           "help": "KVM2 public IP or Tailscale hostname. Used by hbbs -r flag and client config.",
           "required": true,
+          "sensitive": true,
           "type": "string"
         },
         {
