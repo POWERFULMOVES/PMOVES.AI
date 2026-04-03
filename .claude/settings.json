@@ -1,6 +1,15 @@
 {
   "permissions": {
     "allow": [
+      "Bash(git:*)",
+      "Bash(ls:*)",
+      "Bash(find:*)",
+      "Bash(grep:*)",
+      "Bash(wc:*)",
+      "Bash(curl:*)",
+      "Bash(python:*)",
+      "Bash(python3:*)",
+      "Bash(make:*)",
       "Bash(make -C pmoves z890-host-setup:*)",
       "Bash(make -C pmoves z890-host-verify:*)",
       "Bash(make -C pmoves z890-host-remove:*)",
@@ -17,6 +26,29 @@
       "Bash(make -C pmoves laptop-harden:*)",
       "Bash(make -C pmoves laptop-harden-verify:*)",
       "Bash(make -C pmoves laptop-harden-remove:*)"
+    ],
+    "deny": [
+      "Bash(docker compose up -d:*)",
+      "Bash(docker compose restart:*)",
+      "Bash(docker volume rm:*)",
+      "Bash(docker volume prune:*)",
+      "Bash(docker system prune -a:*)",
+      "Bash(git push --force:*)",
+      "Bash(git push -f:*)",
+      "Bash(git reset --hard:*)",
+      "Bash(rm -rf /:*)"
+    ],
+    "additionalDirectories": [
+      "D:/pinokio"
+    ]
+  },
+  "worktree": {
+    "symlinkDirectories": [
+      ".claude/hooks",
+      ".claude/context",
+      ".claude/learnings",
+      ".claude/commands",
+      ".claude/skills"
     ]
   },
   "hooks": {
@@ -128,6 +160,7 @@
     "skill-creator@claude-plugins-official": true,
     "playground@claude-plugins-official": true,
     "hookify@claude-plugins-official": true,
-    "claude-code-setup@claude-plugins-official": true
+    "claude-code-setup@claude-plugins-official": true,
+    "huggingface-skills@claude-plugins-official": true
   }
 }
