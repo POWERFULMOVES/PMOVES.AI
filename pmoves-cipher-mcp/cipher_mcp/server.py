@@ -77,6 +77,7 @@ async def main():
                 server_version="0.1.0",
                 capabilities=app.get_capabilities(
                     notification_options=NotificationOptions(),
+                    experimental_capabilities={},
                 ),
             ),
         )
