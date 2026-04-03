@@ -12,12 +12,18 @@ VALID_SERVICES := neo4j tensorzero-clickhouse meilisearch qdrant minio supabase-
 
 .PHONY: volume-reset volume-list docker-prune docker-prune-all branch-audit branch-cleanup \
        tailscale-docker-up tailscale-docker-down tailscale-docker-status tailscale-docker-ip \
+       fleet-status fleet-rustdesk-fix fleet-enroll fleet-stale-audit \
        up-ollama up-gpu-orchestrator up-vllm model-pull gpu-status port-audit \
 
 volume-reset: ## Reset a service volume: make volume-reset SERVICE=tensorzero-clickhouse
 	@if [ -z "$(SERVICE)" ]; then \
 	  echo "ERROR: SERVICE is required."; \
 	  echo "Usage:  make volume-reset SERVICE=<name>"; \
+	  echo "Valid:  $(VALID_SERVICES)"; \
+	  exit 1; \
+	fi
+	@if ! echo "$(VALID_SERVICES)" | grep -qw "$(SERVICE)"; then \
+	  echo "ERROR: Invalid SERVICE '$(SERVICE)'"; \
 	  echo "Valid:  $(VALID_SERVICES)"; \
 	  exit 1; \
 	fi
@@ -101,6 +107,58 @@ tailscale-docker-status: ## Show Tailscale Docker container connection status
 
 tailscale-docker-ip: ## Show Tailscale Docker container's IP
 	docker exec pmoves-tailscale tailscale ip -4
+
+# ── Fleet Management (RustDesk + Tailscale) ──────────────────────────
+# Skills: /fleet:status, /fleet:rustdesk-check, /fleet:enroll, /fleet:fix-relay
+# Docs:   pmoves/docs/operations/FLEET_REMOTE_ACCESS_RUNBOOK.md
+
+fleet-status: ## Show Tailscale nodes (hostnames only) + RustDesk relay health
+	@echo "=== Tailscale Fleet Status ==="
+	@tailscale status | awk '{print $$2, $$4, $$5, $$6}' | sed 's/[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}/[redacted]/g' || echo "ERROR: tailscale CLI not available"
+	@echo ""
+	@echo "=== RustDesk Relay (KVM2) ==="
+	@timeout 3 bash -c 'echo "" > /dev/tcp/pmoves-kvm2/21116' 2>/dev/null \
+		&& echo "  hbbs (21116): REACHABLE" || echo "  hbbs (21116): UNREACHABLE"
+	@timeout 3 bash -c 'echo "" > /dev/tcp/pmoves-kvm2/21117' 2>/dev/null \
+		&& echo "  hbbr (21117): REACHABLE" || echo "  hbbr (21117): UNREACHABLE"
+	@echo ""
+	@echo "=== Local RustDesk ==="
+	@tasklist 2>/dev/null | grep -qi rustdesk && echo "  RustDesk: RUNNING" || echo "  RustDesk: NOT RUNNING"
+
+fleet-rustdesk-fix: ## Fix KVM2 hbbs relay config (adds -r flag + restart)
+	@echo "=== Fixing KVM2 RustDesk Relay ==="
+	@bash scripts/claws/fix-kvm2-rustdesk-relay.sh
+	@echo ""
+	@echo "Verifying recovery..."
+	@sleep 5
+	@timeout 3 bash -c 'echo "" > /dev/tcp/pmoves-kvm2/21116' 2>/dev/null \
+		&& echo "  hbbs: RECOVERED" || echo "  hbbs: STILL DOWN — check /fleet:rustdesk-check"
+
+fleet-enroll: ## Generate CHIT-signed enrollment token: make fleet-enroll ROLE=owner DEVICE="name"
+	@if [ -z "$(ROLE)" ] || [ -z "$(DEVICE)" ]; then \
+		echo "ERROR: ROLE and DEVICE are required."; \
+		echo "Usage:  make fleet-enroll ROLE=owner DEVICE=\"Pixel 10\""; \
+		echo "Roles:  owner, unfcu, guest"; \
+		exit 1; \
+	fi
+	@echo "=== Generating Enrollment Token ==="
+	CHIT_PASSPHRASE="$${CHIT_PASSPHRASE}" \
+	RUSTDESK_RELAY_HOST="$$(tailscale ip -4 pmoves-kvm2 2>/dev/null)" \
+	RUSTDESK_PUBLIC_KEY="$${RUSTDESK_PUBLIC_KEY}" \
+		$(PYTHON) scripts/fleet/generate-enrollment.py generate \
+			--role $(ROLE) \
+			--device "$(DEVICE)" \
+			$(if $(TTL),--ttl $(TTL),)
+
+fleet-stale-audit: ## List stale Tailscale nodes (offline > 60 days)
+	@echo "=== Stale Tailscale Node Audit ==="
+	@echo "Nodes offline > 60 days:"
+	@tailscale status | grep "offline" | awk '{print $$2, $$5, $$6}' | while read line; do \
+		echo "  $$line"; \
+	done
+	@echo ""
+	@echo "Reference: pmoves/docs/TAILSCALE_NODE_HYGIENE.md"
+	@echo "Remove stale nodes via Tailscale admin console or API"
 
 # ── GPU & Model Serving ──────────────────────────────────────────────
 

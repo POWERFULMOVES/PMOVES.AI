@@ -413,6 +413,10 @@ encapsulate the correct stop/restart/env-injection flow.
 | `gh workflow run sync-secrets-local` | `make -C pmoves secrets-sync-trigger` | `/deploy:secrets-funnel` |
 | `docker compose build flute-gateway` | `make -C pmoves up-flute-gateway` | `/voice:status` |
 | `docker compose build hi-rag-gateway-v2` | `make -C pmoves up-hirag` | `/search:hirag` |
+| `tailscale status` (with raw IPs) | `make -C pmoves fleet-status` | `/fleet:status` |
+| SSH to KVM2 for RustDesk relay | `make -C pmoves fleet-rustdesk-fix` | `/fleet:fix-relay` |
+| Tailscale admin API calls | `make -C pmoves fleet-stale-audit` | `/fleet:stale-nodes` |
+| RustDesk enrollment / QR gen | `make -C pmoves fleet-enroll ROLE=... DEVICE=...` | `/fleet:enroll` |
 
 **volume-reset SERVICE values:** `neo4j`, `tensorzero-clickhouse`, `meilisearch`, `qdrant`, `minio`, `supabase-db`, `nats`
 

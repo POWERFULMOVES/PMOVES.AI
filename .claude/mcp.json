@@ -23,6 +23,16 @@
       "env": {
         "API_TOKEN": "${HOSTINGER_API_KEY}"
       }
+    },
+    "tailscale": {
+      "command": "npx",
+      "args": [
+        "tailscale-mcp@latest"
+      ],
+      "env": {
+        "TAILSCALE_API_KEY": "${TAILSCALE_API_KEY}",
+        "TAILSCALE_TAILNET": "${TAILSCALE_TAILNET}"
+      }
     }
   }
 }

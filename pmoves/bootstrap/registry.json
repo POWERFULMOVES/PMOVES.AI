@@ -1265,6 +1265,47 @@
           "default": "true",
           "help": "Enable SSH access over Tailscale (non-root, ACL-gated).",
           "required": false
+        },
+        {
+          "key": "TAILSCALE_API_KEY",
+          "file": "pmoves/env.shared",
+          "prompt": "Tailscale admin API key (device cleanup, ACL ops)",
+          "help": "Admin API credential for stale-device pruning, tag updates, ACL automation. Separate from TAILSCALE_AUTHKEY.",
+          "required": false,
+          "sensitive": true
+        },
+        {
+          "key": "TAILSCALE_TAILNET",
+          "file": "pmoves/env.shared",
+          "prompt": "Tailscale tailnet organization name",
+          "help": "Your tailnet name (e.g. example.tail1234.ts.net). Used by tailscale-mcp for API calls.",
+          "required": false,
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "id": "rustdesk",
+      "name": "RustDesk Self-Hosted Relay",
+      "description": "Self-hosted RustDesk ID/relay server on KVM2. Key pinning ensures only fleet devices connect.",
+      "variables": [
+        {
+          "key": "RUSTDESK_RELAY_HOST",
+          "file": "pmoves/env.shared",
+          "prompt": "RustDesk relay server IP or hostname",
+          "help": "KVM2 public IP or Tailscale hostname. Used by hbbs -r flag and client config.",
+          "required": true,
+          "sensitive": true,
+          "type": "string"
+        },
+        {
+          "key": "RUSTDESK_PUBLIC_KEY",
+          "file": "pmoves/env.shared",
+          "prompt": "RustDesk server public key (id_ed25519.pub)",
+          "help": "Server public key for client key pinning. Read from KVM2: cat /opt/rustdesk-server/id_ed25519.pub",
+          "required": true,
+          "sensitive": false,
+          "type": "string"
         }
       ]
     }
