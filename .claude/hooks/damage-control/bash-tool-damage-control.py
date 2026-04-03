@@ -136,15 +136,32 @@ def get_config_path() -> Path:
 
 
 def load_config() -> Dict[str, Any]:
-    """Load patterns from YAML config file."""
+    """Load patterns from YAML config file. Fails closed on any error."""
     config_path = get_config_path()
 
     if not config_path.exists():
-        print(f"Warning: Config not found at {config_path}", file=sys.stderr)
-        return {"bashToolPatterns": [], "zeroAccessPaths": [], "readOnlyPaths": [], "noDeletePaths": []}
+        print(f"SECURITY: Config not found at {config_path} — blocking all commands (fail-closed)", file=sys.stderr)
+        sys.exit(2)
 
-    with open(config_path, "r") as f:
-        return yaml.safe_load(f) or {}
+    try:
+        with open(config_path, "r") as f:
+            config = yaml.safe_load(f)
+    except yaml.YAMLError as e:
+        print(f"SECURITY: Failed to parse {config_path}: {e} — blocking all commands (fail-closed)", file=sys.stderr)
+        sys.exit(2)
+    except OSError as e:
+        print(f"SECURITY: Failed to read {config_path}: {e} — blocking all commands (fail-closed)", file=sys.stderr)
+        sys.exit(2)
+
+    if not isinstance(config, dict):
+        print(f"SECURITY: Config at {config_path} is not a dict — blocking all commands (fail-closed)", file=sys.stderr)
+        sys.exit(2)
+
+    if "bashToolPatterns" not in config:
+        print("SECURITY: Config missing 'bashToolPatterns' key — blocking all commands (fail-closed)", file=sys.stderr)
+        sys.exit(2)
+
+    return config
 
 
 # ============================================================================
@@ -170,7 +187,8 @@ def check_path_patterns(command: str, path: str, patterns: List[Tuple[str, str]]
                 cmd_prefix = pattern_template.replace("{path}", "")
                 if cmd_prefix and re.search(cmd_prefix + glob_regex, command, re.IGNORECASE):
                     return True, f"Blocked: {operation} operation on {path_type} {path}"
-            except re.error:
+            except re.error as e:
+                print(f"WARNING: Invalid regex for glob path pattern ({operation}, {path}): {e}", file=sys.stderr)
                 continue
     else:
         # Original literal path matching (prefix-based)
@@ -185,7 +203,8 @@ def check_path_patterns(command: str, path: str, patterns: List[Tuple[str, str]]
             try:
                 if re.search(pattern_expanded, command) or re.search(pattern_original, command):
                     return True, f"Blocked: {operation} operation on {path_type} {path}"
-            except re.error:
+            except re.error as e:
+                print(f"WARNING: Invalid regex for literal path pattern ({operation}, {path}): {e}", file=sys.stderr)
                 continue
 
     return False, ""
@@ -216,17 +235,23 @@ def check_command(command: str, config: Dict[str, Any]) -> Tuple[bool, bool, str
                     return False, True, reason  # Ask for confirmation
                 else:
                     return True, False, f"Blocked: {reason}"  # Block
-        except re.error:
+        except re.error as e:
+            print(f"WARNING: Invalid regex in bashToolPatterns: {pattern!r} — {e}", file=sys.stderr)
             continue
 
     # CHIT bypass: CHIT tool commands can access env files they need to encode/rotate.
     # Destructive patterns (rm, DROP, git push --force) still apply — checked above.
     chit_bypass = config.get("chitBypassPatterns", [])
-    is_chit_op = any(
-        re.search(pat, command, re.IGNORECASE)
-        for pat in chit_bypass
-        if pat
-    )
+    is_chit_op = False
+    for pat in chit_bypass:
+        if pat:
+            try:
+                if re.search(pat, command, re.IGNORECASE):
+                    is_chit_op = True
+                    break
+            except re.error as e:
+                print(f"WARNING: Invalid regex in chitBypassPatterns: {pat!r} — {e}", file=sys.stderr)
+                continue
     if is_chit_op:
         return False, False, ""
 
@@ -249,7 +274,8 @@ def check_command(command: str, config: Dict[str, Any]) -> Tuple[bool, bool, str
                             f"Approve only if intentionally modifying templates (e.g., security remediation)."
                         )
                     return True, False, f"Blocked: zero-access pattern {zero_path} (no operations allowed)"
-            except re.error:
+            except re.error as e:
+                print(f"WARNING: Invalid regex for zero-access glob {zero_path}: {e}", file=sys.stderr)
                 continue
         else:
             # Original literal path matching
