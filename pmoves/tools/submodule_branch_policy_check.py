@@ -51,7 +51,8 @@ def _expand_entries(values: list[str]) -> list[str]:
         # We detect this by re-joining fragments that lack '='.
         buf = ""
         for fragment in raw.split(","):
-            if "=" in fragment and buf:
+            if "=" in fragment and buf and "=" in buf:
+                # buf is already a complete entry; emit it and start fresh
                 entries.append(buf.strip())
                 buf = fragment
             elif buf:
