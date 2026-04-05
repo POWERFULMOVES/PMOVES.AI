@@ -1,16 +1,14 @@
 # GitHub App Configuration Update - Manual Steps
 
 **Date:** 2026-03-14
-**Status:** Code Complete | Manual GitHub.com Update Required
+**Status:** Runner webhook lane updated | Manual GitHub.com update required
 
 ---
 
 ## Summary of Automated Changes
 
-### ✅ Files Created
-1. `pmoves/n8n/flows/github_webhook_processor_v2.json` - Enhanced webhook workflow with 12 event types
-
-### ✅ Files Modified
+### ✅ Files Updated
+1. `pmoves/n8n/flows/github_webhook_processor.json` - GitHub runner webhook workflow with HMAC verification, Discord notifications, and a documented NATS stub
 1. `pmoves/chit/secrets_manifest.yaml` - Added `gh_webhook_secret` entry with `env.tier-worker` target
 2. `pmoves/env.shared` - Added `GH_WEBHOOK_SECRET=changeme-generate-in-github-app-settings`
 3. `pmoves/docker-compose.n8n.yml` - Added `GH_WEBHOOK_SECRET` environment variable to n8n service
@@ -51,25 +49,12 @@ https://github.com/organizations/POWERFULMOVES/settings/apps/PMOVES.AI
 
 ### Step 3: Subscribe to Webhook Events (Webhook Tab)
 
-**Current Events (3):**
+**Supported Events (3):**
 - `workflow_run`
 - `workflow_job`
 - `check_run`
 
-**Events to Add (9):**
-- ✅ `push` - Code pushes → trigger builds, index new code
-- ✅ `pull_request` - PR opened/closed/merged → agent triage
-- ✅ `pull_request_review` - Review submitted → dashboard update
-- ✅ `issues` - Issue opened/edited/closed → agent processing
-- ✅ `issue_comment` - Comment activity → sentiment/response
-- ✅ `release` - New releases → auto-deploy, changelog
-- ✅ `create` - Branch/tag created → notifications
-- ✅ `repository` - Repo settings changed → config sync
-- ✅ `delete` - Branch deletion → cleanup
-
-**Total After Update:** 12 events
-
-**Action:** Check additional event boxes, save.
+**Action:** Ensure the app is subscribed to exactly these runner-related events until a broader webhook workflow lands.
 
 ---
 
@@ -85,7 +70,7 @@ https://github.com/organizations/POWERFULMOVES/settings/apps/PMOVES.AI
 | Setting | Value |
 |---------|-------|
 | **Active** | ✅ (checked) |
-| **URL** | `https://<your-n8n-public-domain>/webhook/github` |
+| **URL** | `https://<your-n8n-public-domain>/webhook/github/webhooks/runner` |
 | **Content type** | `application/json` |
 | **Secret** | Click "Generate" button |
 
@@ -128,37 +113,34 @@ GH_WEBHOOK_SECRET=gits hmac random_generated_secret_value_from_github
 ### Test Webhook Delivery
 
 ```bash
-# Trigger a test event (create an issue)
-gh api repos/POWERFULMOVES/PMOVES.AI/issues --method POST \
-  -f title="Webhook Test $(date +%s)" \
-  -f body="Testing GitHub webhook v2"
+# Trigger a runner-related event by rerunning a recent workflow
+gh run list --limit 5
+gh run rerun <run-id>
 ```
 
-### Verify NATS Events
+### Verify Intended NATS Subjects
 
 ```bash
-# Monitor NATS for GitHub events
-nats sub "github.>" --csv
-
-# Should see events like:
-# github.push.v1
-# github.pull_request.v1
-# github.issues.v1
-# etc.
+# Current workflow behavior:
+# - verifies the GitHub HMAC signature
+# - prepares github.job.*.v1 envelopes
+# - logs the intended subject through the NATS stub
+# - sends the Discord notification
 ```
 
 ### Verify Discord Notifications
 
 Check Discord channel for webhook notifications. Should see formatted embeds with:
 - Repository name
-- Event emoji (📝, 🔥, 🚀, etc.)
-- Event details
-- Links to relevant resources
+- Workflow name
+- Runner name
+- Status / conclusion
+- Job identifier
 
 ### Verify n8n Workflow
 
 1. Login to n8n: `http://<n8n-domain>:5678`
-2. Import `pmoves/n8n/flows/github_webhook_processor_v2.json`
+2. Import `pmoves/n8n/flows/github_webhook_processor.json`
 3. Activate the workflow
 4. Trigger a test event
 5. Check workflow execution history
@@ -191,12 +173,12 @@ If n8n reports signature verification failures:
 
 1. Check n8n workflow execution history
 2. Verify NATS is running: `docker compose ps nats`
-3. Test NATS connection:
+3. Remember the current workflow uses a NATS stub, not a live publish node.
+4. If the `nats` CLI is installed, test the broker directly instead:
    ```bash
-   curl -X POST http://nats:4222/pub \
-     -H "subject: test.subject" \
-     -d '{"test": true}'
+   nats pub test.subject '{"test": true}'
    ```
+5. In n8n execution history, confirm the stub logged the intended `github.job.*.v1` subject.
 
 ---
 
@@ -213,9 +195,9 @@ If issues arise:
    - In GitHub App settings, click "Reveal" then "Delete" secret
    - Regenerate env.tier files without secret
 
-3. **Disable n8n workflow v2:**
-   - Deactivate `github_webhook_processor_v2.json`
-   - Re-enable v1 workflow if needed
+3. **Disable the current n8n workflow:**
+   - Deactivate `github_webhook_processor.json`
+   - Re-import the previous export if you need to restore an earlier workflow revision
 
 ---
 
@@ -224,12 +206,12 @@ If issues arise:
 After completing manual steps:
 
 - ✅ GitHub App permissions updated (contents:write, workflows:write, etc.)
-- ✅ All 12 webhook events subscribed
-- ✅ Webhook URL configured to n8n endpoint
+- ✅ Runner webhook events subscribed (`workflow_run`, `workflow_job`, `check_run`)
+- ✅ Webhook URL configured to the runner endpoint
 - ✅ Webhook secret added to env.shared and synced
-- ✅ n8n workflow v2 imported and active
+- ✅ `github_webhook_processor.json` imported and active
 - ✅ Test events received and processed
-- ✅ NATS events published correctly
+- ✅ n8n execution shows the expected `github.job.*.v1` stub subject
 - ✅ Discord notifications working
 
 ---
@@ -238,5 +220,5 @@ After completing manual steps:
 
 - **GitHub App Strategy:** `pmoves/docs/infrastructure/github-app-strategy.md`
 - **Integration Status:** `pmoves/docs/GITHUB_APP_INTEGRATION_STATUS.md`
-- **n8n Workflow:** `pmoves/n8n/flows/github_webhook_processor_v2.json`
+- **n8n Workflow:** `pmoves/n8n/flows/github_webhook_processor.json`
 - **Secrets Manifest:** `pmoves/chit/secrets_manifest.yaml`
