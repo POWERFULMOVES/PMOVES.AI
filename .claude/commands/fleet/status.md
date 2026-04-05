@@ -40,14 +40,9 @@ Execute the following steps:
    [ -f "$APPDATA/RustDesk/config/RustDesk2.toml" ] && echo "Config: found" || echo "Config: MISSING"
    ```
 
-4. **Store snapshot in Cipher (if available):**
-   ```bash
-   curl -sf --max-time 3 http://localhost:8096/health > /dev/null 2>&1 && \
-     curl -s -X POST http://localhost:8096/api/memory \
-       -H "Content-Type: application/json" \
-       -d "{\"content\": \"Fleet status snapshot: $(date -u +%Y-%m-%dT%H:%M:%SZ)\", \"category\": \"agent_checkpoint\", \"source\": \"fleet-status\"}" \
-     || true
-   ```
+4. **Continuity note (optional):**
+   - If the operator wants to preserve the snapshot, sign the fleet lane in `pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md`.
+   - Do **not** auto-write to `http://localhost:8096/api/memory` from this command until the Cipher `/api/memory` gap documented in `pmoves/docs/AGENTS/AGNOTE4482_SITREP.md` is closed.
 
 5. **Report to user:**
    - Table of nodes: hostname, OS, status (online/offline/stale)

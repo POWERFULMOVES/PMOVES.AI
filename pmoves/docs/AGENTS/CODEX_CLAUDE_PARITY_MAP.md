@@ -202,10 +202,12 @@ Fleet remote access parity:
 
 | Claude practice | Codex equivalent |
 | --- | --- |
-| tailnet device inventory | `tailscale status --json` or `curl -H "Authorization: Bearer $TAILSCALE_API_KEY" https://api.tailscale.com/api/v2/tailnet/-/devices` |
-| stale node delete | `curl -X DELETE -H "Authorization: Bearer $TAILSCALE_API_KEY" https://api.tailscale.com/api/v2/device/<deviceId>` |
-| RustDesk relay audit | `pmoves/docs/operations/RUSTDESK_SELF_HOSTED.md` plus remote `systemctl status hbbs hbbr fleet-audit-watcher` on KVM2 |
-| fleet policy audit | `curl -H "Authorization: Bearer $TAILSCALE_API_KEY" -H "Accept: application/hujson" https://api.tailscale.com/api/v2/tailnet/-/acl` and compare to `pmoves/configs/tailscale-acl-policy.json` |
+| `/fleet:status` | `make -C pmoves fleet-status` |
+| `/fleet:rustdesk-check` | `make -C pmoves fleet-status` for the quick view, then `pmoves/docs/operations/RUSTDESK_SELF_HOSTED.md` plus remote `systemctl status hbbs hbbr fleet-audit-watcher` on KVM2 for deeper checks |
+| `/fleet:fix-relay` | `make -C pmoves fleet-rustdesk-fix` |
+| `/fleet:stale-nodes` | `make -C pmoves fleet-stale-audit`; destructive deletes use `curl -u "${TAILSCALE_API_KEY}:" -X DELETE https://api.tailscale.com/api/v2/device/<deviceId>` after confirmation |
+| `/fleet:acl-audit` | `curl -u "${TAILSCALE_API_KEY}:" -H "Accept: application/hujson" https://api.tailscale.com/api/v2/tailnet/-/acl` and compare to `pmoves/configs/tailscale-acl-policy.json` |
+| `/fleet:enroll` | `make -C pmoves fleet-enroll ROLE=... DEVICE="..." [TTL=...]` |
 
 For z890 rebuild manifests, translate raw `docker compose build` steps to the nearest Known Road whenever one exists. Raw targeted builds are fallback preparation only; the final bring-up should still go through the make target path.
 

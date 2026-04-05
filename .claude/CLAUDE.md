@@ -414,8 +414,10 @@ encapsulate the correct stop/restart/env-injection flow.
 | `docker compose build flute-gateway` | `make -C pmoves up-flute-gateway` | `/voice:status` |
 | `docker compose build hi-rag-gateway-v2` | `make -C pmoves up-hirag` | `/search:hirag` |
 | `tailscale status` (with raw IPs) | `make -C pmoves fleet-status` | `/fleet:status` |
+| RustDesk relay + client deep diagnostics | `make -C pmoves fleet-status` plus `pmoves/docs/operations/RUSTDESK_SELF_HOSTED.md` | `/fleet:rustdesk-check` |
 | SSH to KVM2 for RustDesk relay | `make -C pmoves fleet-rustdesk-fix` | `/fleet:fix-relay` |
 | Tailscale admin API calls | `make -C pmoves fleet-stale-audit` | `/fleet:stale-nodes` |
+| Tailscale ACL drift audit | `pmoves/docs/operations/FLEET_REMOTE_ACCESS_RUNBOOK.md` + `pmoves/configs/tailscale-acl-policy.json` | `/fleet:acl-audit` |
 | RustDesk enrollment / QR gen | `make -C pmoves fleet-enroll ROLE=... DEVICE=...` | `/fleet:enroll` |
 
 **volume-reset SERVICE values:** `neo4j`, `tensorzero-clickhouse`, `meilisearch`, `qdrant`, `minio`, `supabase-db`, `nats`

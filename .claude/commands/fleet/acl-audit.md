@@ -88,7 +88,9 @@ curl -fsS -X POST \
 ## Known Road
 
 ```
-make -C pmoves fleet-stale-audit   # Includes ACL check
+No dedicated make target yet.
+Use the Tailscale admin API read path above, and pair with:
+make -C pmoves fleet-stale-audit
 ```
 
 ## Related

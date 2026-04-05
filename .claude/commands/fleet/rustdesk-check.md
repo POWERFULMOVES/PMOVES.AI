@@ -66,8 +66,8 @@ Compare against registered nodes in `pmoves/docs/operations/RUSTDESK_SELF_HOSTED
 - 4090 Laptop: Registered, Verified bidirectional
 - Jetson #1: Registered, Via relay (stabilizing)
 - Jetson #2: Registered, Via relay (stabilizing)
-- Phone (Pixel): QR code pending
-- Tablet (S8 Ultra): QR code pending
+- Phone: QR code pending
+- Tablet: QR code pending
 
 ### Step 4: Report
 

@@ -37,7 +37,7 @@ Run this command to:
 
 ```bash
 RUSTDESK_RELAY_HOST=$(tailscale ip -4 pmoves-kvm2 2>/dev/null || echo "UNKNOWN") \
-RUSTDESK_PUBLIC_KEY="${RUSTDESK_RELAY_KEY}" \
+RUSTDESK_PUBLIC_KEY="${RUSTDESK_PUBLIC_KEY}" \
 CHIT_PASSPHRASE="${CHIT_PASSPHRASE}" \
   python pmoves/scripts/fleet/generate-enrollment.py generate \
     --role <ROLE> \
@@ -73,7 +73,7 @@ After device scans QR / enters config:
 - Enrollment tokens are CHIT-signed (HMAC-SHA256) with TTL expiry
 - Expired tokens fail validation even if HMAC is correct (fail-closed)
 - NEVER commit QR codes or tokens to git (gitignored)
-- NEVER output CHIT_PASSPHRASE or RUSTDESK_RELAY_KEY values
+- NEVER output CHIT_PASSPHRASE or RUSTDESK_PUBLIC_KEY values
 - Token generation is logged to local ledger (`fleet/.enrollment-ledger.jsonl`, gitignored)
 
 ## Known Road
