@@ -24,7 +24,8 @@ services:
       resources:
         reservations:
           devices:
-            - capabilities: [gpu]
+            - driver: nvidia
+              capabilities: [gpu]
     environment:
       - NVIDIA_VISIBLE_DEVICES=0
       - OLLAMA_HOST=0.0.0.0:11434
