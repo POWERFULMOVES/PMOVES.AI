@@ -86,7 +86,7 @@ Include actionable recommendations:
 
 ## Known Road
 
-```
+```bash
 make -C pmoves fleet-status     # Quick overview
 /fleet:fix-relay                # If relay is down
 ```

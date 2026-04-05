@@ -78,7 +78,7 @@ tailscale status | grep "<hostname>" && echo "WARNING: Node still visible" || ec
 
 ## Known Road
 
-```
+```bash
 make -C pmoves fleet-stale-audit
 ```
 

@@ -78,7 +78,7 @@ After device scans QR / enters config:
 
 ## Known Road
 
-```
+```bash
 make -C pmoves fleet-enroll ROLE=owner DEVICE="Device Name"
 ```
 
