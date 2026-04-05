@@ -30,9 +30,7 @@ The canonical fix script is `pmoves/scripts/claws/fix-kvm2-rustdesk-relay.sh`. I
 make -C pmoves fleet-rustdesk-fix
 ```
 
-**Required environment variables** (loaded from env.shared by the make target):
-- `HOSTINGER_KVM2_IP` — KVM2 public IP (loaded from secrets, never displayed)
-- SSH key at `$LOCALAPPDATA/Temp/hostinger_vps` or `/tmp/hostinger_vps`
+**Required:** Environment variables are loaded automatically by the make target from env.shared (KVM2 IP, SSH credentials). Never display or hardcode these values.
 
 ### Step 3: Verify recovery
 

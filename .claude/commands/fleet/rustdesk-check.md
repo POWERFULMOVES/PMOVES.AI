@@ -16,6 +16,8 @@ Run this command when:
 
 ## Implementation
 
+> **Platform note:** Client checks (tasklist, $APPDATA) target Windows hosts. On Linux/macOS, substitute platform-native equivalents (pgrep, $HOME/.config).
+
 ### Step 1: KVM2 Relay Health
 
 Check relay service status via Tailscale hostname (NEVER raw IP):
@@ -60,14 +62,7 @@ Cross-reference Tailscale online nodes with RustDesk registration table:
 tailscale status | awk '!/offline/' | awk '{print $2}'
 ```
 
-Compare against registered nodes in `pmoves/docs/operations/RUSTDESK_SELF_HOSTED.md` (Fleet Registration Status table):
-- Z890: Registered, Verified bidirectional
-- 5090: Registered, Verified bidirectional
-- 4090 Laptop: Registered, Verified bidirectional
-- Jetson #1: Registered, Via relay (stabilizing)
-- Jetson #2: Registered, Via relay (stabilizing)
-- Phone: QR code pending
-- Tablet: QR code pending
+Compare against the **Fleet Registration Status** table in `pmoves/docs/operations/RUSTDESK_SELF_HOSTED.md` (single source of truth — do not hardcode device lists here).
 
 ### Step 4: Report
 

@@ -10,11 +10,13 @@ Run this command to:
 
 ## Implementation
 
+> **Platform note:** Commands below target Windows hosts (tasklist, $APPDATA). On Linux/macOS, substitute platform-native equivalents (pgrep, $HOME/.config).
+
 Execute the following steps:
 
 1. **Tailscale node status (hostnames only — NEVER output raw IPs):**
    ```bash
-   tailscale status | awk '{print $2, $4, $5, $6, $7}'
+   tailscale status | awk '{print $2, $4, $5, $6}' | sed 's/[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}/[redacted]/g'
    ```
 
    Parse the output and report:

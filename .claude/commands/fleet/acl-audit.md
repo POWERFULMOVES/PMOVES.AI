@@ -61,7 +61,9 @@ Flag any mismatches.
 
 ### Step 5: Policy update (if needed)
 
-If drift is detected, the fix is to apply the repo policy:
+**STOP: Destructive operation.** Present the drift summary to the user and wait for explicit approval before applying any ACL changes. Do not proceed automatically.
+
+If drift is detected AND the user explicitly approves, apply the repo policy:
 ```bash
 # Fetch current ETag first
 ETAG=$(curl -fsS -u "${TAILSCALE_API_KEY}:" -I \
