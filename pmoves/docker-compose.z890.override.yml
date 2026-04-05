@@ -10,9 +10,14 @@
 # Node: Intel Ultra 7 265K (20C/20T), 32GB RAM, RTX 3090 Ti (24GB VRAM)
 #
 # Usage:
-#   docker compose -f docker-compose.yml -f docker-compose.z890.override.yml up -d
-#   # or via make target:
 #   make -C pmoves up-z890
+#   # or manually via the dedicated standalone file:
+#   docker compose -f docker-compose.z890.yml --env-file env.z890 up -d
+#
+# NOTE: This override is not a standalone operator entrypoint. Layering it
+# directly onto docker-compose.yml inherits the base compose host-port defaults
+# and required secret interpolation, so use the dedicated z890 compose file for
+# manual starts.
 
 services:
   # ═════════════════════════════════════════════════════════════════════════════
