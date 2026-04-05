@@ -153,8 +153,11 @@ fleet-enroll: ## Generate CHIT-signed enrollment token: make fleet-enroll ROLE=o
 fleet-stale-audit: ## List stale Tailscale nodes (offline > 60 days)
 	@echo "=== Stale Tailscale Node Audit ==="
 	@echo "Nodes offline > 60 days:"
-	@tailscale status | grep "offline" | awk '{print $$2, $$5, $$6}' | while read line; do \
-		echo "  $$line"; \
+	@tailscale status | grep "offline" | while read line; do \
+		days=$$(echo "$$line" | grep -oE '[0-9]+d' | head -1 | tr -d 'd'); \
+		if [ -n "$$days" ] && [ "$$days" -ge 60 ] 2>/dev/null; then \
+			echo "  $$(echo "$$line" | awk '{print $$2}')  ($$days days)"; \
+		fi; \
 	done
 	@echo ""
 	@echo "Reference: pmoves/docs/TAILSCALE_NODE_HYGIENE.md"
