@@ -114,7 +114,16 @@ tailscale-docker-ip: ## Show Tailscale Docker container's IP
 
 fleet-status: ## Show Tailscale nodes (hostnames only) + RustDesk relay health
 	@echo "=== Tailscale Fleet Status ==="
-	@tailscale status | awk '{print $$2, $$4, $$5, $$6}' | sed 's/[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}/[redacted]/g' || echo "ERROR: tailscale CLI not available"
+	@if command -v tailscale >/dev/null 2>&1; then \
+		status="$$(tailscale status 2>/dev/null)" || status=""; \
+		if [ -n "$$status" ]; then \
+			printf '%s\n' "$$status" | awk '{print $$2, $$4, $$5, $$6}' | sed 's/[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}/[redacted]/g'; \
+		else \
+			echo "ERROR: tailscale status failed"; \
+		fi; \
+	else \
+		echo "ERROR: tailscale CLI not available"; \
+	fi
 	@echo ""
 	@echo "=== RustDesk Relay (KVM2) ==="
 	@timeout 3 bash -c 'echo "" > /dev/tcp/pmoves-kvm2/21116' 2>/dev/null \
@@ -143,7 +152,7 @@ fleet-enroll: ## Generate CHIT-signed enrollment token: make fleet-enroll ROLE=o
 	fi
 	@echo "=== Generating Enrollment Token ==="
 	CHIT_PASSPHRASE="$${CHIT_PASSPHRASE}" \
-	RUSTDESK_RELAY_HOST="$$(tailscale ip -4 pmoves-kvm2 2>/dev/null)" \
+	RUSTDESK_RELAY_HOST="$${RUSTDESK_RELAY_HOST:-pmoves-kvm2}" \
 	RUSTDESK_PUBLIC_KEY="$${RUSTDESK_PUBLIC_KEY}" \
 		$(PYTHON) scripts/fleet/generate-enrollment.py generate \
 			--role $(ROLE) \
