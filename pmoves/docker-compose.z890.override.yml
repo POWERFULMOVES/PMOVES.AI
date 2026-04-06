@@ -2,196 +2,60 @@
 # PMOVES.AI — Z890 / RTX 3090 Ti GPU Node Override
 # ═══════════════════════════════════════════════════════════════════════════════
 #
-# Only runs GPU-local services on this node. All data, agent, and gateway
-# services are consumed from the main PC (5090) via Tailscale MagicDNS.
+# GPU enhancement overlay for Z890. All services run from base compose —
+# this override ONLY adds GPU reservations, node identity, and VRAM-aware
+# config for CUDA-capable services.
+#
+# TOPOLOGY.md: "All services can run locally via Docker Compose profiles."
+# Node: Intel Ultra 7 265K (20C/20T), 32GB RAM, RTX 3090 Ti (24GB VRAM)
 #
 # Usage:
 #   make -C pmoves up-z890
-#   # or manually:
-#   docker compose -f docker-compose.yml -f docker-compose.gpu.yml \
-#     -f docker-compose.z890.override.yml --env-file env.z890 \
-#     --profile agents up -d pmoves-ollama mesh-agent
+#   # or manually via the dedicated standalone file:
+#   docker compose -f docker-compose.z890.yml --env-file env.z890 up -d
+#
+# NOTE: This override is not a standalone operator entrypoint. Layering it
+# directly onto docker-compose.yml inherits the base compose host-port defaults
+# and required secret interpolation, so use the dedicated z890 compose file for
+# manual starts.
 
 services:
   # ═════════════════════════════════════════════════════════════════════════════
-  # LOCAL GPU SERVICES (run on Z890)
+  # GPU-ENHANCED SERVICES — CUDA reservations for base definitions
   # ═════════════════════════════════════════════════════════════════════════════
 
   pmoves-ollama:
-    ports:
-      - "0.0.0.0:11434:11434"
     deploy:
       resources:
         reservations:
           devices:
-            - capabilities: [gpu]
+            - driver: nvidia
+              capabilities: [gpu]
     environment:
       - NVIDIA_VISIBLE_DEVICES=0
       - OLLAMA_HOST=0.0.0.0:11434
 
+  # ═════════════════════════════════════════════════════════════════════════════
+  # NODE IDENTITY — mesh agent announces Z890 capabilities to fleet
+  # ═════════════════════════════════════════════════════════════════════════════
+
   mesh-agent:
     environment:
-      - NODE_NAME=${NODE_NAME:-pmoves-3090ti}
+      - NODE_NAME=${NODE_NAME:-pmoves-z890}
       - NODE_TYPE=${NODE_TYPE:-gpu-desktop}
       - NODE_CAPABILITIES=${NODE_CAPABILITIES:-cuda,rtx3090ti,24gb-vram}
-      - NATS_URL=${NATS_URL}
-      - HIRAG_URL=${HIRAG_URL:-http://hi-rag-gateway-v2-gpu:8086}
-    # Override depends_on: mesh-agent normally depends on nats container,
-    # but NATS runs on main PC — no local container dependency.
-    depends_on: !reset {}
 
   # ═════════════════════════════════════════════════════════════════════════════
-  # DISABLED SERVICES (consumed from main PC via Tailscale)
+  # GPU SERVICES — uncomment per service as VRAM budget allows
+  # RTX 3090 Ti: 24GB total. Ollama reserves ~2-8GB depending on model.
   # ═════════════════════════════════════════════════════════════════════════════
-  # Setting profiles: [disabled] ensures these never start on Z890.
-  # The "disabled" profile is never activated in any Makefile target.
-  # IMPORTANT: Every service NOT explicitly run on Z890 must be listed here,
-  # including transitive dependents — compose validates the full graph.
 
-  # --- Data Tier ---
-  nats:
-    profiles: [disabled]
-  nats-init:
-    profiles: [disabled]
-  qdrant:
-    profiles: [disabled]
-  neo4j:
-    profiles: [disabled]
-  meilisearch:
-    profiles: [disabled]
-  minio:
-    profiles: [disabled]
-
-  # --- Supabase (full stack) ---
-  supabase-db:
-    profiles: [disabled]
-  supabase-rest:
-    profiles: [disabled]
-  supabase-analytics:
-    profiles: [disabled]
-  supabase-gotrue:
-    profiles: [disabled]
-  supabase-kong:
-    profiles: [disabled]
-  supabase-meta:
-    profiles: [disabled]
-  supabase-pooler:
-    profiles: [disabled]
-  supabase-postgrest:
-    profiles: [disabled]
-  supabase-realtime:
-    profiles: [disabled]
-  supabase-storage:
-    profiles: [disabled]
-  supabase-imgproxy:
-    profiles: [disabled]
-  supabase-edge-functions:
-    profiles: [disabled]
-  supabase-vector:
-    profiles: [disabled]
-
-  # --- LLM Gateway ---
-  tensorzero-clickhouse:
-    profiles: [disabled]
-  tensorzero-gateway:
-    profiles: [disabled]
-  tensorzero-ui:
-    profiles: [disabled]
-
-  # --- Agents (run on main PC) ---
-  agent-zero:
-    profiles: [disabled]
-  archon:
-    profiles: [disabled]
-
-  # --- NATS-dependent services ---
-  nats-echo-req:
-    profiles: [disabled]
-  a2ui-nats-bridge:
-    profiles: [disabled]
-  botz-gateway:
-    profiles: [disabled]
-  cast-tts-gateway:
-    profiles: [disabled]
-  cipher-api:
-    profiles: [disabled]
-  comfy-watcher:
-    profiles: [disabled]
-  deepresearch:
-    profiles: [disabled]
-  gpu-orchestrator:
-    profiles: [disabled]
-  llama-throughput-lab:
-    profiles: [disabled]
-  model-registry:
-    profiles: [disabled]
-  supaserch:
-    profiles: [disabled]
-  transcribe-backend:
-    profiles: [disabled]
-  voice-relay:
-    profiles: [disabled]
-
-  # --- Hi-RAG ---
-  hi-rag-gateway:
-    profiles: [disabled]
-  hi-rag-gateway-v2:
-    profiles: [disabled]
-  hi-rag-gateway-gpu:
-    profiles: [disabled]
-  hi-rag-gateway-v2-gpu:
-    profiles: [disabled]
-
-  # --- GitHub automation ---
-  github-branch-cleanup:
-    profiles: [disabled]
-  github-branch-naming:
-    profiles: [disabled]
-  github-crossrepo-pr:
-    profiles: [disabled]
-  github-crossrepo-sync:
-    profiles: [disabled]
-  github-issue-triage:
-    profiles: [disabled]
-
-  # --- Workers (run on main PC) ---
-  extract-worker:
-    profiles: [disabled]
-  langextract:
-    profiles: [disabled]
-  notebook-sync:
-    profiles: [disabled]
-  pdf-ingest:
-    profiles: [disabled]
-
-  # --- Media (run on main PC) ---
-  channel-monitor:
-    profiles: [disabled]
-  pmoves-yt:
-    profiles: [disabled]
-  publisher-discord:
-    profiles: [disabled]
-  jellyfin-bridge:
-    profiles: [disabled]
-  presign:
-    profiles: [disabled]
-  render-webhook:
-    profiles: [disabled]
-
-  # ═════════════════════════════════════════════════════════════════════════════
-  # PHASE 2 GPU SERVICES (uncomment when ready to expand)
-  # ═════════════════════════════════════════════════════════════════════════════
   # hi-rag-gateway-v2-gpu:
   #   deploy:
   #     resources:
   #       reservations:
   #         devices:
   #           - capabilities: [gpu]
-  #   environment:
-  #     - NVIDIA_VISIBLE_DEVICES=0
-  #     - QDRANT_URL=${QDRANT_URL}
-  #     - NEO4J_URL=${NEO4J_URL}
-  #     - MEILI_URL=${MEILI_URL}
   #
   # ffmpeg-whisper:
   #   deploy:
@@ -199,5 +63,3 @@ services:
   #       reservations:
   #         devices:
   #           - capabilities: [gpu]
-  #   environment:
-  #     - NVIDIA_VISIBLE_DEVICES=0
