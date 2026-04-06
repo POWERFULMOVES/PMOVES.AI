@@ -476,6 +476,15 @@ docker compose --profile agents --profile workers up -d
 - Used by Archon for agent coordination
 - Available for custom integrations
 
+**Configured local MCP servers** (`.claude/mcp.json`)
+- `pmoves-cipher` (SSE on `http://localhost:8096/sse`) for persistent memory lookups and writes
+- `docker` (`mcp/docker`) for container inspection through the local Docker socket
+- `hostinger-mcp` for Hostinger API tasks via `HOSTINGER_API_KEY`
+- `tailscale` for tailnet inventory, stale-node cleanup, tag inspection, and ACL operations via `TAILSCALE_API_KEY` + `TAILSCALE_TAILNET`
+
+**Enabled operator plugin pack** (`.claude/settings.json`)
+- `huggingface-skills@claude-plugins-official` is enabled in this lane; use it when Hub models, datasets, Spaces, or launch recipes are the source of truth instead of improvising ad-hoc retrieval paths
+
 **Configuration:**
 - Set `AGENTZERO_JETSTREAM=true` for reliable delivery
 - Configure `MCP_SERVICE_URL`, `MCP_CLIENT_ID`, `MCP_CLIENT_SECRET`

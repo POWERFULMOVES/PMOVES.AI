@@ -609,7 +609,7 @@ bashToolPatterns:
       (e.g., pmoves-z890, pmoves-powerfulmoves) instead of IPs in committed files.
       Tailscale IPs are dynamic and leak network topology in a public repo.
       Use `/fleet:status` skill or `make -C pmoves fleet-status` for hostname-only fleet overview.
-      Use `make -C pmoves tailscale-docker-ip` for programmatic runtime lookup only.
+      Use `make -C pmoves fleet-status` for hostname-only fleet overview at runtime.
       ---
       KNOWN ROADS: Fleet management uses /fleet:* skills (status, rustdesk-check,
       enroll, fix-relay, stale-nodes, acl-audit). Never use raw IPs in commands.
