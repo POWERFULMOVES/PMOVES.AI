@@ -104,6 +104,14 @@ remote rebuilds, stale-node cleanup, or z890 fleet ownership.
 - `curl -fsS http://localhost:8094/healthz | jq .`
 - `curl -fsS http://localhost:8055/healthz | jq .`
 
+### Fleet Known Roads
+
+- `make -C pmoves fleet-status`
+- `make -C pmoves fleet-stale-audit`
+- `make -C pmoves fleet-enroll ROLE=... DEVICE="..."`
+- `make -C pmoves fleet-rustdesk-fix`
+- There is no dedicated make target for ACL drift yet; use `TAILSCALE_API_KEY` with the read-only audit flow in `pmoves/docs/operations/FLEET_REMOTE_ACCESS_RUNBOOK.md`.
+
 ## Creator network control plane
 
 Use this lane when the operator task spans YouTube channels, playlists, creator outreach,
