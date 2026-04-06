@@ -9,7 +9,7 @@ RETRO_FLAGS ?=
 RUNNER_PHASE ?= local-certification
 SUBMODULE_LAYER_MANIFEST ?= configs/submodule_layer_validation_manifest.json
 SUBMODULE_BRANCH_DEFAULT ?= PMOVES.AI-Edition-Hardened
-SUBMODULE_BRANCH_ALLOW ?= PMOVES-DoX=PMOVES.AI-Edition-Hardened-DoX
+SUBMODULE_BRANCH_ALLOW ?= PMOVES-DoX=PMOVES.AI-Edition-Hardened-DoX,PMOVES-ClawZ=main
 AUDIT_RUNTIME_GPU ?= 0
 PRECHECK_VENV_WIN ?= .venv-pmoves/Scripts/python.exe
 PRECHECK_VENV_UNIX ?= .venv-pmoves/bin/python
