@@ -337,7 +337,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     )
     parser.add_argument(
         "--image",
-        default=os.getenv("RUNNER_IMAGE", "myoung34/github-runner:latest"),
+        default=os.getenv("RUNNER_IMAGE", "ghcr.io/powerfulmoves/github-runner-pmoves:latest"),
         help="Docker image used for runner containers.",
     )
     parser.add_argument(
