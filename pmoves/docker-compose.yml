@@ -1489,6 +1489,15 @@ services:
     image: ${TRANSCRIBE_BACKEND_IMAGE:-ghcr.io/powerfulmoves/pmoves-transcribe-backend:latest}
     restart: unless-stopped
     environment:
+    # Host environment leak guard (see x-host-leak-guard docs above)
+    - SSL_CERT_FILE=
+    - SSL_CERT_DIR=
+    - REQUESTS_CA_BUNDLE=
+    - CURL_CA_BUNDLE=
+    - NODE_EXTRA_CA_CERTS=
+    - HTTP_PROXY=
+    - HTTPS_PROXY=
+    - NO_PROXY=
     - SUPABASE_URL=${SUPA_REST_INTERNAL_URL:-${SUPA_REST_URL:-http://supabase-kong:8000/rest/v1}}
     - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-}
     - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
