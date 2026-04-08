@@ -98,6 +98,7 @@
         "name": "Prepare Discord Notification",
         "type": "n8n-nodes-base.functionItem",
         "typeVersion": 1,
+        "onError": "continueErrorOutput",
         "position": [
           1540,
           120
@@ -111,13 +112,13 @@
           "sendBody": true,
           "specifyBody": "json",
           "jsonBody": "={{ $json.payload }}",
-          "options": {},
-          "onError": "continueErrorOutput"
+          "options": {}
         },
         "id": "send_discord",
         "name": "Send Discord Notification",
         "type": "n8n-nodes-base.httpRequest",
         "typeVersion": 4.1,
+        "onError": "continueErrorOutput",
         "position": [
           1760,
           120
@@ -246,6 +247,13 @@
           [
             {
               "node": "Send Discord Notification",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Error Handler",
               "type": "main",
               "index": 0
             }

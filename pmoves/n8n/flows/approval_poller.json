@@ -54,13 +54,13 @@
               }
             ]
           },
-          "options": {},
-          "onError": "continueErrorOutput"
+          "options": {}
         },
         "id": "fetch_supabase",
         "name": "Fetch Pending Approvals",
         "type": "n8n-nodes-base.httpRequest",
         "typeVersion": 4.1,
+        "onError": "continueErrorOutput",
         "position": [
           -280,
           180
@@ -114,13 +114,13 @@
             "parameters": []
           },
           "body": "={{ JSON.stringify($json.envelope) }}",
-          "options": {},
-          "onError": "continueErrorOutput"
+          "options": {}
         },
         "id": "publish_event",
         "name": "Publish Approval Event",
         "type": "n8n-nodes-base.httpRequest",
         "typeVersion": 4.1,
+        "onError": "continueErrorOutput",
         "position": [
           520,
           180
@@ -156,13 +156,13 @@
             "parameters": []
           },
           "body": "={{ JSON.stringify($node[\"Prepare Publish Envelope\"].json[\"patch\"]) }}",
-          "options": {},
-          "onError": "continueErrorOutput"
+          "options": {}
         },
         "id": "mark_processed",
         "name": "Mark Publish Requested",
         "type": "n8n-nodes-base.httpRequest",
         "typeVersion": 4.1,
+        "onError": "continueErrorOutput",
         "position": [
           780,
           180
