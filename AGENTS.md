@@ -270,6 +270,7 @@ When creating or installing a new skill, always place it in:
 This is the managed skills directory. The agent will automatically discover
 any skill placed here — no extra configuration needed. Do NOT install skills
 into `~/.agents/skills/` (that directory is shared with other tools).
+<!-- /autoclaw:skill-path-guidance -->
 
 
 <!-- autoclaw:browser-agent-guidance -->
