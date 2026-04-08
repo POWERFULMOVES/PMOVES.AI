@@ -892,6 +892,8 @@ chitSafePaths:
   - "docker-compose.integrations"
   # PR-kit compose files — integration starter templates
   - "pr-kits"
+  # Context docs that need fleet/config renames (approved per issue #1173)
+  - ".claude/context/nats-subjects.md"
 
 # ---------------------------------------------------------------------------
 # PMOVES.AI - GIT SUBMODULES

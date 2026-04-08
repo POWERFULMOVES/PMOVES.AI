@@ -7,7 +7,7 @@ Enrollment tokens are CHIT-signed (HMAC-SHA256) and expire after TTL.
 
 Usage:
     python generate-enrollment.py --role owner --ttl 5m --device "Pixel 10"
-    python generate-enrollment.py --role unfcu --ttl 24h --device "UNFCU-Laptop-1"
+    python generate-enrollment.py --role partner --ttl 24h --device "Partner-Laptop-1"
     python generate-enrollment.py --role guest --ttl 1h
     python generate-enrollment.py --verify <token-json-file>
     python generate-enrollment.py --list  # show all unexpired tokens
@@ -43,9 +43,9 @@ ROLES = {
         "tailscale_tags": ["tag:pmoves"],
         "allowed_nodes": "*",
     },
-    "unfcu": {
-        "description": "UNFCU partner access — GPU nodes, agent + inference ports only",
-        "tailscale_tags": ["tag:unfcu"],
+    "partner": {
+        "description": "Partner access — GPU nodes, agent + inference ports only",
+        "tailscale_tags": ["tag:partner"],
         "allowed_nodes": ["pmoves-5090", "pmoves-z890"],
         "allowed_ports": [3030, 8080, 8081],
     },

@@ -132,7 +132,7 @@ RUSTDESK_RELAY_HOST=<KVM2_IP> RUSTDESK_PUBLIC_KEY=<KEY> CHIT_PASSPHRASE=<secret>
   python pmoves/scripts/fleet/generate-enrollment.py generate --role owner --ttl 5m --device "Pixel 10"
 
 # UNFCU partner (limited access, 24-hour window)
-... generate --role unfcu --ttl 24h --device "UNFCU-Laptop-1"
+... generate --role partner --ttl 24h --device "Partner-Laptop-1"
 
 # Guest demo (Agent Zero UI only, 1-hour window)
 ... generate --role guest --ttl 1h
@@ -143,7 +143,7 @@ RUSTDESK_RELAY_HOST=<KVM2_IP> RUSTDESK_PUBLIC_KEY=<KEY> CHIT_PASSPHRASE=<secret>
 | Role | Tailscale Tag | Allowed Nodes | Allowed Ports |
 |------|--------------|--------------|--------------|
 | `owner` | `tag:pmoves` | All | All |
-| `unfcu` | `tag:unfcu` | 5090, Z890 | 3030, 8080, 8081 |
+| `partner` | `tag:partner` | 5090, Z890 | 3030, 8080, 8081 |
 | `guest` | `tag:guest` | Z890 | 8081 |
 
 ### Security Layers
