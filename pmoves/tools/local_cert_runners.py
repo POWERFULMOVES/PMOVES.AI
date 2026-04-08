@@ -177,6 +177,24 @@ def _docker_socket_mount() -> str:
     return "/var/run/docker.sock:/var/run/docker.sock"
 
 
+def _secrets_volume_mount() -> str:
+    """Return host↔container bind-mount for persisting synced secrets.
+
+    Maps $APPDATA/pmoves (Windows) or ~/.config/pmoves (Linux) to the
+    container's /root/.config/pmoves so sync-secrets-local artifacts
+    persist to the host after the runner job completes.
+    """
+    if platform.system() == "Windows":
+        host_dir = os.path.join(os.environ.get("APPDATA", ""), "pmoves")
+    else:
+        host_dir = os.path.join(
+            os.environ.get("XDG_CONFIG_HOME", os.path.expanduser("~/.config")),
+            "pmoves",
+        )
+    os.makedirs(host_dir, exist_ok=True)
+    return f"{host_dir}:/root/.config/pmoves"
+
+
 def docker_run(
     repo: str, image: str, lane: RunnerLane, token: str, *, is_pat: bool = True,
 ) -> None:
@@ -225,6 +243,8 @@ def docker_run(
         "-e", "RUNNER_WORKDIR",
         "-v",
         _docker_socket_mount(),
+        "-v",
+        _secrets_volume_mount(),
         image,
     ])
     run_cmd(cmd, env=env)
