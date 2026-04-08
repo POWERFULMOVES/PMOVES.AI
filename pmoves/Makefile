@@ -835,6 +835,13 @@ up-data-tier: ## Start data tier (Qdrant, Neo4j, Meilisearch, MinIO)
 	@$(MAKE) --no-print-directory wait-data
 	@echo "✅ Data tier ready"
 
+.PHONY: up-minio
+up-minio: ## Start MinIO object storage (port 9000) + Presign
+	@echo "📦 Starting MinIO..."
+	@$(DC) up -d --force-recreate minio presign
+	@timeout 60 bash -c 'until curl -sf http://localhost:9000/minio/health/live; do sleep 2; done' || echo "⚠️ MinIO may still be starting"
+	@echo "✅ MinIO ready at http://localhost:9000 (console :9001)"
+
 .PHONY: up-bus
 up-bus: ## Start message bus (NATS)
 	@echo "📨 Starting message bus (NATS)..."
@@ -1542,13 +1549,9 @@ ifeq ($(EXTERNAL_MEILI),true)
 DATA_SERVICES += meilisearch
 endif
 
-ifeq ($(SUPA_PROVIDER),cli)
-		else
-ifeq ($(EXTERNAL_SUPABASE),true)
-		else
-DATA_SERVICES += postgres postgrest
-endif
-endif
+# NOTE: Supabase DB (postgres) and PostgREST are managed by the Supabase
+# stack (supabase-local profile or CLI), not by the main compose stack.
+# Do NOT add them to DATA_SERVICES — they have no matching compose service.
 
 # Canonical layer service sets for deterministic tiered bring-up/down.
 WORKER_SERVICES := hi-rag-gateway-v2 retrieval-eval render-webhook langextract extract-worker pdf-ingest transcribe-backend

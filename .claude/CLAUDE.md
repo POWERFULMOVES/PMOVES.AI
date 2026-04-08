@@ -420,6 +420,8 @@ encapsulate the correct stop/restart/env-injection flow.
 | Tailscale ACL drift audit | `pmoves/docs/operations/FLEET_REMOTE_ACCESS_RUNBOOK.md` + `pmoves/configs/tailscale-acl-policy.json` | `/fleet:acl-audit` |
 | RustDesk enrollment / QR gen | `make -C pmoves fleet-enroll ROLE=... DEVICE=...` | `/fleet:enroll` |
 
+| MinIO restart (object storage) | `make -C pmoves up-minio` | `/minio:status` |
+
 **volume-reset SERVICE values:** `neo4j`, `tensorzero-clickhouse`, `meilisearch`, `qdrant`, `minio`, `supabase-db`, `nats`
 
 If a rebuild manifest arrives as raw `docker compose build ...`, translate it to the nearest Known Road whenever possible. Use the raw build only when there is no dedicated make target yet, and still return to the make-target bring-up path for the actual service start.
