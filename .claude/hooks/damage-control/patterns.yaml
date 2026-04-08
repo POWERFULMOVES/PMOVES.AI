@@ -871,8 +871,6 @@ chitBypassPatterns:
   - 'make\s+.*secrets-sync'
   - 'make\s+.*secrets-runtime-hydrate'
   - 'make\s+.*ci-runners'
-  # with-env.sh is the env loader for all make targets
-  - 'with-env\.sh'
   # Tailscale key management
   - 'make\s+.*tailscale-save-key'
   - 'make\s+.*tailscale-join'

@@ -202,4 +202,5 @@ NUL
 
 # Git worktrees
 .worktrees/
+.claude/worktrees/
 
