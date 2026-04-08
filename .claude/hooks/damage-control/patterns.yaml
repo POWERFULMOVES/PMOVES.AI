@@ -880,14 +880,14 @@ chitBypassPatterns:
   - 'mini_cli\s+secrets'
   - 'pmoves\.tools\.mini_cli'
   # Tailscale API key generation — reads apikey from local.env to generate auth keys
-  - 'tailscale.*api'
+  - '\btailscale\b.*\bapi\b'
   - 'api\.tailscale\.com'
   # Fleet deployment scripts that need local.env/env.shared access
-  - 'deploy-tailscale'
-  - 'deploy-vps'
-  - 'hostinger-kvm-setup'
-  - 'migrate-vps'
-  - 'deploy-vps-cluster'
+  - '\bdeploy-tailscale\b'
+  - '\bdeploy-vps\b'
+  - '\bhostinger-kvm-setup\b'
+  - '\bmigrate-vps\b'
+  - '\bdeploy-vps-cluster\b'
 
 # File paths that CHIT operations may create/write — bypass zero-access.
 # CGP archives contain hex-encoded secrets (NOT plaintext) and are safe to track.
