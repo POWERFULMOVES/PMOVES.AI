@@ -29,7 +29,7 @@ export const DEFAULT_CONFIG = {
 };
 
 export const HEALTH_ENDPOINTS = {
-  tensorzero:      { path: '/v1/models',    method: 'GET' },
+  tensorzero:      { path: '/health',        method: 'GET' },
   gpuOrchestrator: { path: '/api/gpu/status', method: 'GET' },
   hirag:           { path: '/',              method: 'GET' },
   pmovesYt:        { path: '/healthz',       method: 'GET' },

@@ -9,7 +9,7 @@ const services = [
     name: 'TensorZero',
     port: 3030,
     routes: {
-      'GET /v1/models': { models: [{ id: 'claude-sonnet-4-5' }, { id: 'gemma_embed_local' }] },
+      'GET /health': { status: 'ok' },
       'GET /healthz': 'ok',
       'POST /v1/chat/completions': (body) => ({
         choices: [{
