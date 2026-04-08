@@ -131,7 +131,7 @@ Claws scripts SSH via key at `$LOCALAPPDATA/Temp/hostinger_vps`.
 RUSTDESK_RELAY_HOST=<KVM2_IP> RUSTDESK_PUBLIC_KEY=<KEY> CHIT_PASSPHRASE=<secret> \
   python pmoves/scripts/fleet/generate-enrollment.py generate --role owner --ttl 5m --device "Pixel 10"
 
-# UNFCU partner (limited access, 24-hour window)
+# Partner (limited access, 24-hour window)
 ... generate --role partner --ttl 24h --device "Partner-Laptop-1"
 
 # Guest demo (Agent Zero UI only, 1-hour window)

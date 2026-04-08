@@ -10,7 +10,7 @@ Run this command to:
 ## Arguments
 
 - `ROLE` — Required. One of: `owner`, `partner`, `guest`
-- `DEVICE` — Required. Device name (e.g., "Pixel 10", "UNFCU-Laptop-1")
+- `DEVICE` — Required. Device name (e.g., "Pixel 10", "Partner-Laptop-1")
 - `TTL` — Optional. Token lifetime (default: `5m`). Valid values: `5m`, `15m`, `1h`, `4h`, `24h`
 
 ## Roles
