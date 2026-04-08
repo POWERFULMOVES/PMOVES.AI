@@ -216,7 +216,7 @@ TAILSCALE_CIDRS = [c.strip() for c in os.environ.get("TAILSCALE_CIDRS","100.64.0
 TRUSTED_PROXY_SOURCES = [c.strip() for c in os.environ.get("HIRAG_TRUSTED_PROXIES", "").split(",") if c.strip()]
 
 HTTP_PORT = int(os.environ.get("HIRAG_HTTP_PORT","8086"))
-NAMESPACE_DEFAULT = os.environ.get("INDEXER_NAMESPACE","pmoves")
+NAMESPACE_DEFAULT = os.environ.get("INDEXER_NAMESPACE","*")
 
 logging.basicConfig(level=logging.INFO)
 logging.getLogger().setLevel(logging.INFO)
@@ -580,7 +580,8 @@ def meili_lexical(query, namespace, limit):
     if not USE_MEILI: return {}
     try:
         headers={'Authorization': f'Bearer {MEILI_API_KEY}'} if MEILI_API_KEY else {}
-        payload={'q': query, 'limit': max(10, limit*3), 'filter': [f"namespace = '{namespace}'"]}
+        filters = [f"namespace = '{namespace}'"] if namespace and namespace != "*" else []
+        payload={'q': query, 'limit': max(10, limit*3), 'filter': filters}
         r = requests.post(f"{MEILI_URL}/indexes/{COLL}/search", json=payload, headers=headers, timeout=10)
         if not r.ok:
             return {}
@@ -1503,12 +1504,17 @@ def hirag_query(req: QueryReq = Body(...), request: Request = None, _=Depends(re
             raise
         except Exception as e:
             logger.warning("ensure_qdrant_collection non-fatal: %s", e)
-        must = [FieldCondition(key="namespace", match=MatchValue(value=req.namespace))]
+        ns = req.namespace
+        if ns and ns != "*":
+            must = [FieldCondition(key="namespace", match=MatchValue(value=ns))]
+            qf = Filter(must=must)
+        else:
+            qf = None
         hits = _qdrant_search(
             collection_name=COLL,
             query_vector=vec,
             limit=max(req.k, RERANK_TOPN),
-            query_filter=Filter(must=must),
+            query_filter=qf,
             with_payload=True,
             with_vectors=False,
         )

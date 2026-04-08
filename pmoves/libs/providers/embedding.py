@@ -1,5 +1,7 @@
-import os, requests
+import logging, os, requests
 from typing import List
+
+logger = logging.getLogger(__name__)
 
 # Priority (local-first): ollama -> openai-compatible (LM Studio, vLLM, NVIDIA NIM) -> HuggingFace -> sentence-transformers
 
@@ -51,9 +53,13 @@ def _embed_tensorzero(text: str):
             data = resp.json() or {}
             arr = (data.get("data") or [{}])[0].get("embedding")
             if arr:
+                logger.info("TensorZero embedding OK: model=%s dim=%d", TENSORZERO_EMBED_MODEL, len(arr))
                 return arr
+            logger.warning("TensorZero returned empty embedding: %s", data)
+        else:
+            logger.warning("TensorZero embedding failed: %s %s", resp.status_code, resp.text[:200])
     except Exception:
-        pass
+        logger.exception("TensorZero embedding error")
     return None
 
 def _embed_ollama(text: str):
@@ -61,9 +67,13 @@ def _embed_ollama(text: str):
         r = requests.post(f"{OLLAMA_URL}/api/embeddings", json={"model": OLLAMA_EMBED_MODEL, "prompt": text}, timeout=15)
         if r.ok:
             v = r.json().get("embedding")
-            if v: return v
+            if v:
+                logger.info("Ollama embedding OK: model=%s dim=%d", OLLAMA_EMBED_MODEL, len(v))
+                return v
+        else:
+            logger.warning("Ollama embedding failed: %s", r.status_code)
     except Exception:
-        pass
+        logger.debug("Ollama embedding unavailable")
     return None
 
 def _embed_openai_compat(text: str):
@@ -102,7 +112,9 @@ def _embed_sentence_transformers(text: str):
     from sentence_transformers import SentenceTransformer
     if _st_model is None:
         _st_model = SentenceTransformer(ST_MODEL)
-    return _st_model.encode([text], normalize_embeddings=True).tolist()[0]
+    vec = _st_model.encode([text], normalize_embeddings=True).tolist()[0]
+    logger.warning("Using sentence-transformers fallback (%s, dim=%d) — may mismatch Qdrant collection", ST_MODEL, len(vec))
+    return vec
 
 def embed_text(text: str) -> List[float]:
     return (
