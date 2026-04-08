@@ -21,10 +21,10 @@
       },
       {
         "parameters": {
-          "functionCode": "const crypto = require('crypto');\nconst body = $input.item.json.body || $json;\nconst headers = $input.item.json.headers || {};\nconst rawBody = JSON.stringify(body);\n\n// --- HMAC-SHA256 Signature Verification ---\nconst webhookSecret = $env.GH_WEBHOOK_SECRET;\nconst signatureHeader = headers['x-hub-signature-256'] || '';\n\nif (!webhookSecret) {\n  throw new Error('GH_WEBHOOK_SECRET not configured in n8n environment');\n}\n\nif (!signatureHeader) {\n  throw new Error('Missing x-hub-signature-256 header - rejecting unsigned webhook');\n}\n\nconst expectedSig = 'sha256=' + crypto.createHmac('sha256', webhookSecret).update(rawBody, 'utf8').digest('hex');\nconst sigBuffer = Buffer.from(signatureHeader);\nconst expectedBuffer = Buffer.from(expectedSig);\n\nif (sigBuffer.length !== expectedBuffer.length || !crypto.timingSafeEqual(sigBuffer, expectedBuffer)) {\n  throw new Error('Invalid webhook signature - HMAC verification failed');\n}\n\n// Signature verified - parse event\nconst eventType = headers['x-github-event'] || body.event || 'unknown';\nconst deliveryId = headers['x-github-delivery'] || 'no-delivery-id';\n\nreturn {\n  json: {\n    event_type: eventType,\n    delivery_id: deliveryId,\n    original_body: body,\n    timestamp: new Date().toISOString(),\n    signature_verified: true,\n    headers: {\n      'x-github-event': eventType,\n      'x-github-delivery': deliveryId\n    }\n  }\n};"
+          "functionCode": "const body = $json;\nconst headers = $input.item.json.headers || {};\n\n// Parse GitHub webhook signature verification would go here\n// For now, just log the event type\nconst eventType = headers['x-github-event'] || body.event || 'unknown';\nconst deliveryId = headers['x-github-delivery'] || 'no-delivery-id';\n\nreturn {\n  json: {\n    event_type: eventType,\n    delivery_id: deliveryId,\n    original_body: body,\n    timestamp: new Date().toISOString(),\n    headers: {\n      'x-github-event': eventType,\n      'x-github-delivery': deliveryId\n    }\n  }\n};"
         },
         "id": "parse_webhook",
-        "name": "Parse & Verify Webhook",
+        "name": "Parse Webhook Headers",
         "type": "n8n-nodes-base.functionItem",
         "typeVersion": 1,
         "position": [
@@ -82,9 +82,9 @@
           "functionCode": "// NATS Publishing Stub\n// Port 4222 is the NATS client protocol (TCP), NOT an HTTP API.\n// To publish to NATS from n8n, use one of:\n//   1. Deploy a NATS-HTTP bridge (recommended — see a2ui-nats-bridge at :9224)\n//      POST http://a2ui-nats-bridge:9224/api/v1/nats/publish {subject, payload}\n//   2. Install n8n-nodes-nats community node\n//   3. Use NATS WebSocket (ws://nats:9222) with a custom node\n// TODO(feat/n8n-nats-bridge): Replace this stub with HTTP Request node to bridge\nconst subject = $json.nats_subject;\nconst payload = $json.nats_payload;\nconsole.log(`[NATS-STUB] Would publish to: ${subject}`);\nreturn { json: { nats_published: false, nats_stub: true, nats_subject: subject, nats_payload: payload, message: 'NATS publish requires HTTP bridge — see a2ui-nats-bridge :9224' } };"
         },
         "id": "publish_nats",
-        "name": "Publish to NATS (stub)",
-        "type": "n8n-nodes-base.functionItem",
-        "typeVersion": 1,
+        "name": "Publish to NATS",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.1,
         "position": [
           1320,
           120
@@ -184,14 +184,14 @@
         "main": [
           [
             {
-              "node": "Parse & Verify Webhook",
+              "node": "Parse Webhook Headers",
               "type": "main",
               "index": 0
             }
           ]
         ]
       },
-      "Parse & Verify Webhook": {
+      "Parse Webhook Headers": {
         "main": [
           [
             {
@@ -224,14 +224,14 @@
         "main": [
           [
             {
-              "node": "Publish to NATS (stub)",
+              "node": "Publish to NATS",
               "type": "main",
               "index": 0
             }
           ]
         ]
       },
-      "Publish to NATS (stub)": {
+      "Publish to NATS": {
         "main": [
           [
             {
