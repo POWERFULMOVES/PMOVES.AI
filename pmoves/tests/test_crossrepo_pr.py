@@ -112,6 +112,7 @@ class TestWorkflowTemplates:
             assert isinstance(template.assignees, list)
 
 
+@pytest.mark.skipif(not _wt, reason="github_crossrepo_pr service not installed")
 class TestPRAPI:
     """Test PR API endpoints (integration tests)."""
 

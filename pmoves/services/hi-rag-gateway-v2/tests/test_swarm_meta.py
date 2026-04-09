@@ -461,7 +461,7 @@ def test_geometry_decode_includes_builder_pack(gateway_v2_module):
 
     result = module.geometry_decode_text({"constellation_id": "const-1"})
     assert result["builder_pack"]["pack_id"] == "pack-9"
-    assert result["namespace"] == "*"
+    assert result["namespace"] == "pmoves"
     assert result["modality"].lower() == "text"
 
     const = module.shape_store.get_constellation("const-1")
