@@ -334,7 +334,7 @@ def _load_all_compose_files():
     results = {}
     for f in PMOVES_DIR.glob("docker-compose*.yml"):
         try:
-            data = yaml.safe_load(f.read_text())
+            data = yaml.safe_load(f.read_text(encoding="utf-8"))
             if isinstance(data, dict) and data.get("services"):
                 results[f.name] = data
         except yaml.YAMLError:
@@ -348,7 +348,7 @@ def test_no_deprecated_version_key():
     deprecated = []
     for f in PMOVES_DIR.glob("docker-compose*.yml"):
         try:
-            data = yaml.safe_load(f.read_text())
+            data = yaml.safe_load(f.read_text(encoding="utf-8"))
             if isinstance(data, dict) and "version" in data:
                 deprecated.append(f.name)
         except yaml.YAMLError:
