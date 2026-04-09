@@ -229,10 +229,10 @@ topology-chit-gate-strict: ## Strict topology+CHIT gate (warnings fail)
 	$$runner tools/topology_chit_gate.py --strict $(ARGS)
 
 pr-monitor: ## Monitor PR merge readiness incl actionable/nitpick/out-of-diff review learnings
-	@$(PRECHECK_PY) tools/pr_monitor.py --base "$${PR_MONITOR_BASE:-PMOVES.AI-Edition-Hardened}" --json-out "docs/logs/pr_monitor_latest.json" --learnings-out "docs/logs/pr_monitor_learnings_latest.md" $(ARGS)
+	@$(PRECHECK_PY) tools/pr_monitor.py $${PR_MONITOR_REPO:+--repo "$$PR_MONITOR_REPO"} --base "$${PR_MONITOR_BASE:-main}" --json-out "docs/logs/pr_monitor_latest.json" --learnings-out "docs/logs/pr_monitor_learnings_latest.md" $(ARGS)
 
 pr-monitor-strict: ## Strict PR monitor (non-zero when blockers remain)
-	@$(PRECHECK_PY) tools/pr_monitor.py --base "$${PR_MONITOR_BASE:-PMOVES.AI-Edition-Hardened}" --strict --json-out "docs/logs/pr_monitor_latest.json" --learnings-out "docs/logs/pr_monitor_learnings_latest.md" $(ARGS)
+	@$(PRECHECK_PY) tools/pr_monitor.py $${PR_MONITOR_REPO:+--repo "$$PR_MONITOR_REPO"} --base "$${PR_MONITOR_BASE:-main}" --strict --json-out "docs/logs/pr_monitor_latest.json" --learnings-out "docs/logs/pr_monitor_learnings_latest.md" $(ARGS)
 
 pr-monitor-chit-packet: ## Encode PR monitor learnings into CHIT packet artifact
 	@$(MAKE) --no-print-directory pr-monitor
