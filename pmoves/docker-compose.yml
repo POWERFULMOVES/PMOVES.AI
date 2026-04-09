@@ -2065,8 +2065,10 @@ services:
     - ${NATS_PASSWORD:-pmoves}
     restart: unless-stopped
     ports:
-    - ${NATS_BIND:-127.0.0.1}:${NATS_PORT:-4222}:4222
-    - ${NATS_BIND:-127.0.0.1}:${NATS_MONITORING_PORT:-9223}:8222
+    # NATS is the mesh-wide event bus — credential-guarded (nats:pmoves@),
+    # so 0.0.0.0 default is intentional to allow Tailscale mesh peers to connect.
+    - ${NATS_BIND:-0.0.0.0}:${NATS_PORT:-4222}:4222
+    - ${NATS_BIND:-0.0.0.0}:${NATS_MONITORING_PORT:-9223}:8222
     networks:
     - pmoves_bus
     environment:
