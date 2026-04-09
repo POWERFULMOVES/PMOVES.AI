@@ -237,22 +237,18 @@ class TestTokenismSimulatorIntegrations:
         """Get the base URL for the tokenism-simulator service."""
         return os.getenv('TOKENISM_URL', 'http://localhost:8100')
 
-    @pytest.fixture
-    def nats_url(self) -> str:
-        """Get the NATS URL."""
-        return os.getenv('NATS_URL', 'nats://localhost:4222')
+    @pytest.mark.asyncio
+    async def test_nats_connection(self, nats_client):
+        """Test that NATS is accessible (for publishing simulation results).
 
-    def test_nats_connection(self, nats_url: str):
-        """Test that NATS is accessible (for publishing simulation results)."""
-        try:
-            import nats
-            nc = nats.connect(nats_url, timeout=5)
-            assert nc.is_connected
-            nc.close()
-        except ImportError:
-            pytest.skip("nats library not available")
-        except Exception as e:
-            pytest.skip(f"NATS not available: {e}")
+        Uses the session-scoped ``nats_client`` fixture from
+        ``pmoves/tests/conftest.py`` which enforces the canonical
+        authenticated URL and skips cleanly when the broker is
+        unreachable. Previously this test called the synchronous
+        ``nats.connect()`` as a classmethod, which is not part of the
+        nats-py API and always raised.
+        """
+        assert nats_client.is_connected
 
     def test_tensorzero_connection(self):
         """Test that TensorZero gateway is accessible (for LLM analysis)."""
