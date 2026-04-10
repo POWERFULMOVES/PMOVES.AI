@@ -4,7 +4,7 @@
 **Color:** #E11D48 (Rose Crimson)
 **Accent:** #FB7185
 **Voice:** witness — observational, rhythmic, poetic weight
-**Co-author:** DARKXSIDE <darkxside@powerfulmoves.ai>
+**Co-author:** DARKXSIDE <darkxside@pmoves.ai>
 
 ## Identity
 
