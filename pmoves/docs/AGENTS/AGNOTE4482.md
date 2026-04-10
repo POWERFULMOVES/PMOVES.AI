@@ -7,6 +7,7 @@ Primary convergence record lives at:
 - `pmoves/docs/AGENTS/AGNOTE4482_SITREP.md` (cold-start orientation — **read this first** on fresh sessions)
 - `pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md`
 - `pmoves/docs/AGENTS/AGNOTE4482_SIGNOFF_CHECKLIST.md` (shared merge-signoff gate for AGNOTE4482 lanes)
+- `.claude/agents/` (agent definitions with Three-Body tool restrictions — enforced via Claude Code frontmatter)
 - `pmoves/docs/AGENTS/GRAPHITI_SIG_REVIEW_2026-02-21.md` (Phase 5 signature and traversal review snapshot)
 - `pmoves/docs/AGENTS/KRISS_KROSS_ACCORD.md` (Codex-led collision overlay and weave protocol)
 - `pmoves/docs/TAC/TAC_MODEL_INFRA_PERSONA_PROD_READINESS.md` (model infrastructure + persona production readiness execution overlay)

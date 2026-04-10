@@ -40,6 +40,22 @@ make -C pmoves health-quick 2>/dev/null || curl -s http://localhost:8080/healthz
 git status -sb && git log --oneline -5
 ```
 
+## Agent Definitions (Three-Body Solution)
+
+PMOVES.AI uses Claude Code agent frontmatter (`.claude/agents/`) to enforce the
+Three-Body Solution from AGNOTE4482PHI.t1.md at the tool level:
+
+| Agent | Body | Can Edit? | Key Constraint |
+|-------|------|-----------|----------------|
+| `delivery-agent` | Delivery | Yes | `disallowedTools: EnterPlanMode` |
+| `control-agent` | Control | No | `disallowedTools: Write, Edit, EnterPlanMode` |
+| `memory-agent` | Memory | No | Cipher/CHIT skills only |
+| `researcher` | — | No | Read-only, no sub-agents |
+| `test-runner` | — | No | Worktree-isolated, pytest only |
+| `pr-trimmer` | — | Yes | Worktree-isolated, PR review specialist |
+
+Use: `claude --agent delivery-agent` or dispatch via `Agent({subagent_type: "delivery-agent"})`.
+
 ## Key Files (Read These, Not All of CLAUDE.md)
 
 | Priority | File | Why |
@@ -47,8 +63,9 @@ git status -sb && git log --oneline -5
 | 1 | This file | Orientation |
 | 2 | [`AGNOTE4482.md`](./AGNOTE4482.md) | Gateway — canonical pointers + latest audit |
 | 3 | [`AGNOTE4482PHI.t1.md`](./AGNOTE4482PHI.t1.md) | Claim register — who's working on what |
-| 4 | `.claude/CLAUDE.md` | Full service catalog (heavy — skim Production Services) |
-| 5 | `pmoves/docs/NEXT_STEPS.md` | Current sprint priorities |
+| 4 | `.claude/agents/` | Agent definitions — Three-Body tool restrictions |
+| 5 | `.claude/CLAUDE.md` | Full service catalog (heavy — skim Production Services) |
+| 6 | `pmoves/docs/NEXT_STEPS.md` | Current sprint priorities |
 
 ## Cipher Marco/Polo
 

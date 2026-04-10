@@ -12,20 +12,28 @@ Single coordination note to prevent agent collision while PMOVES.AI converges CI
 - does not override claim ownership or merge controls
 
 ## Three-Body Solution
-### Body 1: Delivery Body (Execution Lane)
+
+**Enforcement:** Each body now has a matching Claude Code agent definition in
+`.claude/agents/` with `disallowedTools` restrictions. Agents dispatched via
+frontmatter cannot bypass their body's tool constraints.
+
+### Body 1: Delivery Body (Execution Lane) → `.claude/agents/delivery-agent.md`
 - Owner: active implementation agent for the current branch/PR.
 - Scope: code changes, workflow fixes, merge order, validation commands.
 - Rule: one owner per branch at a time; no parallel edits to the same branch without explicit handoff.
+- **Tool restriction:** `disallowedTools: EnterPlanMode` — executes directly, never plans.
 
-### Body 2: Control Body (Governance Lane)
+### Body 2: Control Body (Governance Lane) → `.claude/agents/control-agent.md`
 - Owner: orchestration/review agent.
 - Scope: merge sequencing, risk controls, branch pruning policy, doc parity.
 - Rule: no merge without up-to-date status in this note and PR comments.
+- **Tool restriction:** `disallowedTools: Write, Edit, EnterPlanMode` — read-only, cannot modify files.
 
-### Body 3: Memory Body (Cipher + CHIT Lane)
+### Body 3: Memory Body (Cipher + CHIT Lane) → `.claude/agents/memory-agent.md`
 - Owner: memory/security agent.
 - Scope: CHIT-safe coordination payloads, encrypted handoffs, signature trail, agent state continuity.
 - Rule: all cross-agent handoffs are posted as CHIT payload references, never plaintext secrets.
+- **Tool restriction:** `disallowedTools: Write, Edit, EnterPlanMode` — uses Cipher/CHIT skills only.
 
 ## Collision-Avoidance Protocol
 1. Claim: agent writes `CLAIM` entry with branch + scope + TTL.

@@ -54,7 +54,8 @@
       ".claude/context",
       ".claude/learnings",
       ".claude/commands",
-      ".claude/skills"
+      ".claude/skills",
+      ".claude/agents"
     ]
   },
   "hooks": {
