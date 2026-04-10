@@ -58,4 +58,8 @@ RUN chmod +x /app/entrypoint.sh
 
 EXPOSE 8001
 
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+    CMD curl -f http://localhost:8001/health || exit 1
 CMD ["./entrypoint.sh"]

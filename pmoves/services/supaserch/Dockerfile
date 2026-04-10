@@ -24,4 +24,8 @@ RUN groupadd -r pmoves --gid=65532 && \
 
 USER pmoves:pmoves
 
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+    CMD curl -f http://localhost:8099/health || exit 1
 CMD ["uvicorn", "services.supaserch.app:app", "--host", "0.0.0.0", "--port", "8099"]

@@ -57,4 +57,8 @@ EXPOSE 8086
 
 # Use wait-for-deps.sh as entrypoint to wait for Supabase realtime before starting
 ENTRYPOINT ["/app/scripts/wait-for-deps.sh"]
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+    CMD curl -f http://localhost:8086/health || exit 1
 CMD ["uvicorn","app:app","--host","0.0.0.0","--port","8086"]
