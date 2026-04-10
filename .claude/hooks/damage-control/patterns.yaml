@@ -862,6 +862,32 @@ chitBypassPatterns:
   - 'cipher:store'
   - 'cipher:search'
   - 'cipher:reasoning'
+  # Runner management make targets — need env.shared for GH_PAT/runner tokens
+  - 'ci-runners-local-cert'
+  - 'local_cert_runners'
+  # Secrets funnel make targets — orchestrate CHIT pipeline via make
+  - 'make\s+.*secrets-funnel'
+  - 'make\s+.*secrets-local-hydrate'
+  - 'make\s+.*secrets-sync'
+  - 'make\s+.*secrets-runtime-hydrate'
+  - 'make\s+.*ci-runners'
+  # Tailscale key management
+  - 'make\s+.*tailscale-save-key'
+  - 'make\s+.*tailscale-join'
+  - 'tailscale_brand_init'
+  - 'tailscale_brand_up'
+  # Mini CLI secrets operations (botz:secrets skill)
+  - 'mini_cli\s+secrets'
+  - 'pmoves\.tools\.mini_cli'
+  # Tailscale API key generation — reads apikey from local.env to generate auth keys
+  - '\btailscale\b.*\bapi\b'
+  - 'api\.tailscale\.com'
+  # Fleet deployment scripts that need local.env/env.shared access
+  - '\bdeploy-tailscale\b'
+  - '\bdeploy-vps\b'
+  - '\bhostinger-kvm-setup\b'
+  - '\bmigrate-vps\b'
+  - '\bdeploy-vps-cluster\b'
 
 # File paths that CHIT operations may create/write — bypass zero-access.
 # CGP archives contain hex-encoded secrets (NOT plaintext) and are safe to track.

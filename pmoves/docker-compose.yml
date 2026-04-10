@@ -1200,7 +1200,7 @@ services:
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
     ports:
-    - ${HIRAG_V1_BIND:-0.0.0.0}:${HIRAG_V1_HOST_PORT:-8089}:8086
+    - ${HIRAG_V1_BIND:-127.0.0.1}:${HIRAG_V1_HOST_PORT:-8089}:8086
     depends_on:
       qdrant:
         condition: service_healthy
@@ -1560,7 +1560,7 @@ services:
             - utility
             count: ${GPU_COUNT:-all}
     ports:
-    - ${FFMPEG_WHISPER_BIND:-0.0.0.0}:${FFMPEG_WHISPER_PORT:-8078}:8078
+    - ${FFMPEG_WHISPER_BIND:-127.0.0.1}:${FFMPEG_WHISPER_PORT:-8078}:8078
     profiles:
     - workers
     - orchestration
@@ -1597,7 +1597,7 @@ services:
             - gpu
             count: ${GPU_COUNT:-all}
     ports:
-    - ${MEDIA_VIDEO_BIND:-0.0.0.0}:${MEDIA_VIDEO_PORT:-8079}:8079
+    - ${MEDIA_VIDEO_BIND:-127.0.0.1}:${MEDIA_VIDEO_PORT:-8079}:8079
     profiles:
     - workers
     - orchestration
@@ -1630,7 +1630,7 @@ services:
             - gpu
             count: ${GPU_COUNT:-all}
     ports:
-    - ${MEDIA_AUDIO_BIND:-0.0.0.0}:${MEDIA_AUDIO_PORT:-8082}:8082
+    - ${MEDIA_AUDIO_BIND:-127.0.0.1}:${MEDIA_AUDIO_PORT:-8082}:8082
     profiles:
     - workers
     - orchestration
@@ -1701,7 +1701,7 @@ services:
       nats:
         condition: service_healthy
     ports:
-    - ${PMOVES_YT_BIND:-0.0.0.0}:${PMOVES_YT_PORT:-8077}:8077
+    - ${PMOVES_YT_BIND:-127.0.0.1}:${PMOVES_YT_PORT:-8077}:8077
     networks:
     - pmoves_app
     - pmoves_api
@@ -1769,7 +1769,7 @@ services:
       nats:
         condition: service_healthy
     ports:
-    - ${CHANNEL_MONITOR_BIND:-0.0.0.0}:${CHANNEL_MONITOR_PORT:-8097}:8097
+    - ${CHANNEL_MONITOR_BIND:-127.0.0.1}:${CHANNEL_MONITOR_PORT:-8097}:8097
     healthcheck:
       test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8097/healthz', timeout=5)"]
       interval: 30s
@@ -1847,7 +1847,7 @@ services:
     extra_hosts:
     - host.docker.internal:host-gateway
     ports:
-    - ${HIRAG_BIND:-0.0.0.0}:${HIRAG_V2_HOST_PORT:-8086}:8086
+    - ${HIRAG_BIND:-127.0.0.1}:${HIRAG_V2_HOST_PORT:-8086}:8086
     depends_on:
       qdrant:
         condition: service_healthy
@@ -1920,7 +1920,7 @@ services:
             - gpu
             count: ${GPU_COUNT:-all}
     ports:
-    - ${HIRAG_BIND:-0.0.0.0}:${HIRAG_V2_GPU_HOST_PORT:-8187}:8086  # Default 8187; 8090 reserved for retrieval-eval
+    - ${HIRAG_BIND:-127.0.0.1}:${HIRAG_V2_GPU_HOST_PORT:-8187}:8086  # Default 8187; 8090 reserved for retrieval-eval
     depends_on:
       qdrant:
         condition: service_healthy
@@ -2027,7 +2027,7 @@ services:
             - gpu
             count: ${GPU_COUNT:-all}
     ports:
-    - ${HIRAG_BIND:-0.0.0.0}:${HIRAG_V2_GPU_HOST_PORT:-8087}:8086
+    - ${HIRAG_BIND:-127.0.0.1}:${HIRAG_V2_GPU_HOST_PORT:-8087}:8086
     depends_on:
       qdrant:
         condition: service_healthy
@@ -2065,6 +2065,8 @@ services:
     - ${NATS_PASSWORD:-pmoves}
     restart: unless-stopped
     ports:
+    # NATS is the mesh-wide event bus — credential-guarded (nats:pmoves@),
+    # so 0.0.0.0 default is intentional to allow Tailscale mesh peers to connect.
     - ${NATS_BIND:-0.0.0.0}:${NATS_PORT:-4222}:4222
     - ${NATS_BIND:-0.0.0.0}:${NATS_MONITORING_PORT:-9223}:8222
     networks:
@@ -2161,8 +2163,8 @@ services:
       tensorzero-gateway:
         condition: service_healthy
     ports:
-    - ${AGENT_ZERO_BIND:-0.0.0.0}:${AGENT_ZERO_PORT:-8080}:8080
-    - ${AGENT_ZERO_BIND:-0.0.0.0}:${AGENT_ZERO_UI_PORT:-8081}:80
+    - ${AGENT_ZERO_BIND:-127.0.0.1}:${AGENT_ZERO_PORT:-8080}:8080
+    - ${AGENT_ZERO_BIND:-127.0.0.1}:${AGENT_ZERO_UI_PORT:-8081}:80
     volumes:
     - ${AGENT_ZERO_MEMORY_DIR:-./data/agent-zero/memory}:/a0/memory
     - ${AGENT_ZERO_KNOWLEDGE_DIR:-./data/agent-zero/knowledge}:/a0/knowledge
@@ -2492,7 +2494,7 @@ services:
       nats:
         condition: service_healthy
     ports:
-    - ${DEEPRESEARCH_BIND:-0.0.0.0}:${DEEPRESEARCH_PORT:-8098}:8098
+    - ${DEEPRESEARCH_BIND:-127.0.0.1}:${DEEPRESEARCH_PORT:-8098}:8098
     volumes:
     - ./contracts:/app/contracts:ro
     networks:
@@ -2520,7 +2522,7 @@ services:
     - SUPA_REST_URL=${SUPA_REST_URL:-http://supabase-kong:8000/rest/v1}
     - TENSORZERO_URL=${TENSORZERO_URL:-http://tensorzero-gateway:3000}
     ports:
-    - ${SUPASERCH_BIND:-0.0.0.0}:${SUPASERCH_PORT:-8099}:8099
+    - ${SUPASERCH_BIND:-127.0.0.1}:${SUPASERCH_PORT:-8099}:8099
     networks:
     - pmoves_app
     - pmoves_bus
@@ -2732,7 +2734,7 @@ services:
       tensorzero-clickhouse:
         condition: service_healthy
     ports:
-    - ${TENSORZERO_BIND:-0.0.0.0}:${TENSORZERO_PORT:-3030}:3000
+    - ${TENSORZERO_BIND:-127.0.0.1}:${TENSORZERO_PORT:-3030}:3000
     networks:
     - pmoves_api
     - pmoves_bus
@@ -2833,7 +2835,7 @@ services:
     - pmoves_bus
     - pmoves_monitoring
     ports:
-    - ${GPU_ORCHESTRATOR_BIND:-0.0.0.0}:${GPU_ORCHESTRATOR_HOST_PORT:-8200}:8200
+    - ${GPU_ORCHESTRATOR_BIND:-127.0.0.1}:${GPU_ORCHESTRATOR_HOST_PORT:-8200}:8200
     healthcheck:
       test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8200/healthz', timeout=5)"]
       interval: 30s
@@ -2865,7 +2867,7 @@ services:
       - CHIT_REQUIRE_SIGNATURE=${CHIT_PROD_REQUIRE_SIGNATURE:-true}
       - CHIT_DECRYPT_ANCHORS=${CHIT_PROD_DECRYPT_ANCHORS:-true}
       - CHIT_PASSPHRASE=${CHIT_PROD_PASSPHRASE:?set CHIT_PROD_PASSPHRASE in env.shared}
-    ports: ["${EVO_CONTROLLER_BIND:-0.0.0.0}:8113:8113"]
+    ports: ["${EVO_CONTROLLER_BIND:-127.0.0.1}:8113:8113"]
     profiles: ["orchestration"]
     # Docker Desktop does not publish host ports for services attached only to internal networks.
     networks: [pmoves_app, pmoves_api, pmoves_bus, pmoves_external]
@@ -2896,7 +2898,7 @@ services:
       - TORCH_CUDA_ARCH_LIST=5.0;5.2;6.0;6.1;7.0;7.5;8.0;8.6;9.0
       - TORCH_CUDNN_V8_API_ENABLED=1
       - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
-    ports: ["${TTS_BIND:-0.0.0.0}:7861:7861"]
+    ports: ["${TTS_BIND:-127.0.0.1}:7861:7861"]
     profiles: ["gpu", "tts"]
     networks: [pmoves_app, pmoves_monitoring, pmoves_external]  # HuggingFace TTS model downloads
     deploy:
@@ -2944,7 +2946,7 @@ services:
       - HTTP_PROXY=
       - HTTPS_PROXY=
       - NO_PROXY=
-    ports: ["${FLUTE_BIND:-0.0.0.0}:8055:8055", "${FLUTE_BIND:-0.0.0.0}:8056:8056"]
+    ports: ["${FLUTE_BIND:-127.0.0.1}:8055:8055", "${FLUTE_BIND:-127.0.0.1}:8056:8056"]
     profiles: ["orchestration", "media"]
     # Attach a non-internal bridge so published host ports resolve on Docker Desktop.
     networks: [pmoves_app, pmoves_api, pmoves_bus, pmoves_external]
@@ -3402,7 +3404,7 @@ services:
     volumes:
     - invidious-companion-cache:/var/tmp/youtubei.js
     ports:
-    - ${INVIDIOUS_COMPANION_BIND:-0.0.0.0}:${INVIDIOUS_COMPANION_PORT:-8282}:8282
+    - ${INVIDIOUS_COMPANION_BIND:-127.0.0.1}:${INVIDIOUS_COMPANION_PORT:-8282}:8282
     profiles:
     - invidious
     networks:
@@ -3435,7 +3437,7 @@ services:
       \ ${INVIDIOUS_USE_REDIRECTOR:-true}\n  redirector_url: \"${INVIDIOUS_REDIRECTOR_URL:-https://redirect.invidious.io}\"\
       \n"
     ports:
-    - ${INVIDIOUS_BIND:-0.0.0.0}:${INVIDIOUS_PORT:-3000}:3000
+    - ${INVIDIOUS_BIND:-127.0.0.1}:${INVIDIOUS_PORT:-3000}:3000
     depends_on:
       invidious-db:
         condition: service_healthy
@@ -3476,7 +3478,7 @@ services:
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
     ports:
-    - ${GRAYJAY_BIND:-0.0.0.0}:${GRAYJAY_PLUGIN_HOST_PORT:-9096}:8080
+    - ${GRAYJAY_BIND:-127.0.0.1}:${GRAYJAY_PLUGIN_HOST_PORT:-9096}:8080
     profiles:
     - grayjay
     networks:
@@ -3498,14 +3500,14 @@ services:
     - .env.local
     environment:
     - GRAYJAY_PLUGIN_REGISTRY_URL=${GRAYJAY_PLUGIN_REGISTRY_URL:-http://grayjay-plugin-host:8080/plugins}
-    - GRAYJAY_SERVER_BIND=${GRAYJAY_SERVER_BIND:-0.0.0.0}
+    - GRAYJAY_SERVER_BIND=${GRAYJAY_SERVER_BIND:-127.0.0.1}
     - GRAYJAY_SERVER_PORT=${GRAYJAY_SERVER_PORT:-9095}
     - DOCKED_MODE=${DOCKED_MODE:-true}
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
     ports:
-    - ${GRAYJAY_BIND:-0.0.0.0}:${GRAYJAY_SERVER_PORT:-9095}:9095
+    - ${GRAYJAY_BIND:-127.0.0.1}:${GRAYJAY_SERVER_PORT:-9095}:9095
     depends_on:
       grayjay-plugin-host:
         condition: service_started
