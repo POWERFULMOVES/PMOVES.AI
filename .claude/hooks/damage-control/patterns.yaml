@@ -890,6 +890,8 @@ chitSafePaths:
   - "docker-compose.5090.override"
   # Integration compose overrides — registry reference fixes (GHCR org consolidation)
   - "docker-compose.integrations"
+  # n8n compose — env var registration for workflow flows (approval poller, webhook processor)
+  - "docker-compose.n8n"
   # PR-kit compose files — integration starter templates
   - "pr-kits"
   # Context docs that need fleet/config renames (approved per issue #1173)
