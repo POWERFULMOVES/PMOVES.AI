@@ -1,6 +1,6 @@
 # AGENTS Documentation Implementation Gap Analysis
 
-**Date:** 2026-03-01 (updated from 2026-02-02)
+**Date:** 2026-04-10 (updated from 2026-03-01)
 **Branch:** PMOVES.AI-Edition-Hardened / main
 **Purpose:** Identify gaps between AGENTS documentation and current hardened branch implementation
 **Cross-References:**
@@ -314,26 +314,32 @@ CHIT Geometry Bus infrastructure is live but the full CGP pipeline is incomplete
 7. ✅ Codex Runtime Protocol ratified with focus/scout modes
 8. ✅ KRISS KROSS Accord ratified for multi-agent collision safety
 
-### Phase 2: Protocol Integration (Week 3-4)
+### Phase 2: Protocol Integration (Week 3-4) — PARTIAL ⚠️ (verified 2026-04-10)
 
-1. Implement A2A server in Agent Zero
-2. Add Agent Card endpoint
-3. Integrate A2A client in Archon
-4. Test basic agent discovery and task submission
+> A2A server.py exists; a2a_client.py for Archon NOT implemented. Low adoption (2 skill instances).
 
-### Phase 3: Architecture Refactoring (Week 5-6)
+1. ⚠️ Implement A2A server in Agent Zero — server.py exists
+2. ⚠️ Add Agent Card endpoint — partial
+3. ❌ Integrate A2A client in Archon — NOT implemented
+4. ❌ Test basic agent discovery and task submission — blocked on #3
 
-1. Refactor Agent Zero API to vertical slices
-2. Implement dynamic context priming
-3. Add expertise file system
-4. Create thread pattern templates
+### Phase 3: Architecture Refactoring (Week 5-6) — TEMPLATE COMPLETE ⚠️ (verified 2026-04-10)
 
-### Phase 4: Advanced Features (Week 7+)
+> Template + test-skill exist in Agent Zero skills dir; only 2 instances deployed.
 
-1. Implement P-Thread parallel execution
-2. Add F-Thread fusion consensus
-3. Implement L-Thread persistence
-4. Begin CHIT geometry integration
+1. ⚠️ Refactor Agent Zero API to vertical slices — partial
+2. ❌ Implement dynamic context priming
+3. ❌ Add expertise file system
+4. ⚠️ Create thread pattern templates — templates exist
+
+### Phase 4: Advanced Features (Week 7+) — COMPLETE ✅ (verified 2026-04-10)
+
+> bus.py + subjects.py + schema.py all exist. Event-driven coordination operational.
+
+1. ✅ Implement P-Thread parallel execution — mprocs + gateway operational
+2. ✅ Add F-Thread fusion consensus — threads.py + threads_persistent.py
+3. ✅ Implement L-Thread persistence — persistent thread store
+4. ✅ Begin CHIT geometry integration — CGP subjects active on NATS
 
 ---
 
