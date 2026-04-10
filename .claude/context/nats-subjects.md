@@ -575,7 +575,7 @@ Example: `ingest.transcript.ready.v1`
   ```json
   {
     "token_id": "tok-abc123",
-    "role": "owner|unfcu|guest",
+    "role": "owner|partner|guest",
     "device_name": "Pixel 10",
     "issued_at": "2026-03-27T18:00:00Z",
     "expires_at": 1774638000,

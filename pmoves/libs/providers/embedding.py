@@ -53,7 +53,7 @@ def _embed_tensorzero(text: str):
             data = resp.json() or {}
             arr = (data.get("data") or [{}])[0].get("embedding")
             if arr:
-                logger.info("TensorZero embedding OK: model=%s dim=%d", TENSORZERO_EMBED_MODEL, len(arr))
+                logger.debug("TensorZero embedding OK: model=%s dim=%d", TENSORZERO_EMBED_MODEL, len(arr))
                 return arr
             logger.warning("TensorZero returned empty embedding: %s", data)
         else:
@@ -68,7 +68,7 @@ def _embed_ollama(text: str):
         if r.ok:
             v = r.json().get("embedding")
             if v:
-                logger.info("Ollama embedding OK: model=%s dim=%d", OLLAMA_EMBED_MODEL, len(v))
+                logger.debug("Ollama embedding OK: model=%s dim=%d", OLLAMA_EMBED_MODEL, len(v))
                 return v
         else:
             logger.warning("Ollama embedding failed: %s", r.status_code)

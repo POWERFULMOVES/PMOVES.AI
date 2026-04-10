@@ -147,7 +147,7 @@ fleet-enroll: ## Generate CHIT-signed enrollment token: make fleet-enroll ROLE=o
 	@if [ -z "$(ROLE)" ] || [ -z "$(DEVICE)" ]; then \
 		echo "ERROR: ROLE and DEVICE are required."; \
 		echo "Usage:  make fleet-enroll ROLE=owner DEVICE=\"Pixel 10\""; \
-		echo "Roles:  owner, unfcu, guest"; \
+		echo "Roles:  owner, partner, guest"; \
 		exit 1; \
 	fi
 	@echo "=== Generating Enrollment Token ==="

@@ -46,6 +46,19 @@ on:
       - 'PMOVES.YT'
       - 'PMOVES-Jellyfin'
       - 'PMOVES-Supaserch'
+      # Priority 1: production services
+      - 'PMOVES-HiRAG'
+      - 'PMOVES-BoTZ'
+      - 'PMOVES-tensorzero'
+      - 'PMOVES-Neo4j'
+      - 'Pmoves-cipher'
+      # Priority 2: agent infrastructure
+      - 'PMOVES-E2B-Danger-Room'
+      - 'PMOVES-Pipecat'
+      - 'PMOVES-ClawZ'
+      # Priority 3: media/content
+      - 'PMOVES-transcribe-and-fetch'
+      - 'PMOVES-autoresearch'
       - '.github/workflows/integrations-ghcr.yml'
       - '.github/workflows/integrations-ghcr.matrix.json'
       - '.github/trivy/**'
@@ -65,6 +78,19 @@ on:
       - 'PMOVES.YT'
       - 'PMOVES-Jellyfin'
       - 'PMOVES-Supaserch'
+      # Priority 1: production services
+      - 'PMOVES-HiRAG'
+      - 'PMOVES-BoTZ'
+      - 'PMOVES-tensorzero'
+      - 'PMOVES-Neo4j'
+      - 'Pmoves-cipher'
+      # Priority 2: agent infrastructure
+      - 'PMOVES-E2B-Danger-Room'
+      - 'PMOVES-Pipecat'
+      - 'PMOVES-ClawZ'
+      # Priority 3: media/content
+      - 'PMOVES-transcribe-and-fetch'
+      - 'PMOVES-autoresearch'
       - '.github/workflows/integrations-ghcr.yml'
       - '.github/workflows/integrations-ghcr.matrix.json'
       - '.github/trivy/**'

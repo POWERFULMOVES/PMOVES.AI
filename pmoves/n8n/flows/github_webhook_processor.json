@@ -21,10 +21,10 @@
       },
       {
         "parameters": {
-          "functionCode": "const body = $json;\nconst headers = $input.item.json.headers || {};\n\n// Parse GitHub webhook signature verification would go here\n// For now, just log the event type\nconst eventType = headers['x-github-event'] || body.event || 'unknown';\nconst deliveryId = headers['x-github-delivery'] || 'no-delivery-id';\n\nreturn {\n  json: {\n    event_type: eventType,\n    delivery_id: deliveryId,\n    original_body: body,\n    timestamp: new Date().toISOString(),\n    headers: {\n      'x-github-event': eventType,\n      'x-github-delivery': deliveryId\n    }\n  }\n};"
+          "functionCode": "const crypto = require('crypto');\nconst body = $input.item.json.body || $json;\nconst headers = $input.item.json.headers || {};\nconst rawBody = JSON.stringify(body);\n\n// --- HMAC-SHA256 Signature Verification ---\nconst webhookSecret = $env.GH_WEBHOOK_SECRET;\nconst signatureHeader = headers['x-hub-signature-256'] || '';\n\nif (!webhookSecret) {\n  throw new Error('GH_WEBHOOK_SECRET not configured in n8n environment');\n}\n\nif (!signatureHeader) {\n  throw new Error('Missing x-hub-signature-256 header - rejecting unsigned webhook');\n}\n\nconst expectedSig = 'sha256=' + crypto.createHmac('sha256', webhookSecret).update(rawBody, 'utf8').digest('hex');\nconst sigBuffer = Buffer.from(signatureHeader);\nconst expectedBuffer = Buffer.from(expectedSig);\n\nif (sigBuffer.length !== expectedBuffer.length || !crypto.timingSafeEqual(sigBuffer, expectedBuffer)) {\n  throw new Error('Invalid webhook signature - HMAC verification failed');\n}\n\n// Signature verified - parse event\nconst eventType = headers['x-github-event'] || body.event || 'unknown';\nconst deliveryId = headers['x-github-delivery'] || 'no-delivery-id';\n\nreturn {\n  json: {\n    event_type: eventType,\n    delivery_id: deliveryId,\n    original_body: body,\n    timestamp: new Date().toISOString(),\n    signature_verified: true,\n    headers: {\n      'x-github-event': eventType,\n      'x-github-delivery': deliveryId\n    }\n  }\n};"
         },
         "id": "parse_webhook",
-        "name": "Parse Webhook Headers",
+        "name": "Parse & Verify Webhook",
         "type": "n8n-nodes-base.functionItem",
         "typeVersion": 1,
         "position": [
@@ -79,30 +79,12 @@
       },
       {
         "parameters": {
-          "url": "=http://nats:4222/pub",
-          "authentication": "none",
-          "sendBody": true,
-          "specifyBody": "json",
-          "jsonBody": "={{ JSON.stringify($json.nats_payload) }}",
-          "options": {
-            "headerParametersUi": {
-              "parameter": [
-                {
-                  "name": "subject",
-                  "value": "={{ $json.nats_subject }}"
-                },
-                {
-                  "name": "content-type",
-                  "value": "application/json"
-                }
-              ]
-            }
-          }
+          "functionCode": "// NATS Publishing Stub\n// Port 4222 is the NATS client protocol (TCP), NOT an HTTP API.\n// To publish to NATS from n8n, use one of:\n//   1. Deploy a NATS-HTTP bridge (recommended — see a2ui-nats-bridge at :9224)\n//      POST http://a2ui-nats-bridge:9224/api/v1/nats/publish {subject, payload}\n//   2. Install n8n-nodes-nats community node\n//   3. Use NATS WebSocket (ws://nats:9222) with a custom node\n// TODO(feat/n8n-nats-bridge): Replace this stub with HTTP Request node to bridge\nconst subject = $json.nats_subject;\nconst payload = $json.nats_payload;\nconsole.log(`[NATS-STUB] Would publish to: ${subject}`);\nreturn { json: { nats_published: false, nats_stub: true, nats_subject: subject, nats_payload: payload, message: 'NATS publish requires HTTP bridge — see a2ui-nats-bridge :9224' } };"
         },
         "id": "publish_nats",
-        "name": "Publish to NATS",
-        "type": "n8n-nodes-base.httpRequest",
-        "typeVersion": 4.1,
+        "name": "Publish to NATS (stub)",
+        "type": "n8n-nodes-base.functionItem",
+        "typeVersion": 1,
         "position": [
           1320,
           120
@@ -110,12 +92,13 @@
       },
       {
         "parameters": {
-          "functionCode": "const payload = $json.nats_payload;\nconst status = payload.payload?.status || 'unknown';\nconst conclusion = payload.payload?.conclusion || 'pending';\nconst repo = payload.payload?.repository || 'unknown';\nconst workflow = payload.payload?.workflow || 'unknown';\nconst runner = payload.payload?.runner || 'unknown';\n\nlet emoji = '⏳';\nif (status === 'in_progress') emoji = '🔄';\nelse if (status === 'completed') {\n  emoji = conclusion === 'success' ? '✅' : conclusion === 'failure' ? '❌' : '⚠️';\n}\n\nconst embed = {\n  title: `${emoji} GitHub Job ${status}`,\n  description: `**${workflow}** in ${repo}`,\n  color: conclusion === 'success' ? 0x00FF00 : conclusion === 'failure' ? 0xFF0000 : 0xFFFF00,\n  fields: [\n    {\n      name: 'Repository',\n      value: repo,\n      inline: true\n    },\n    {\n      name: 'Runner',\n      value: runner,\n      inline: true\n    },\n    {\n      name: 'Status',\n      value: status,\n      inline: true\n    },\n    {\n      name: 'Conclusion',\n      value: conclusion || 'pending',\n      inline: true\n    },\n    {\n      name: 'Job ID',\n      value: payload.payload?.job_id || 'unknown',\n      inline: false\n    },\n    {\n      name: 'Actor',\n      value: payload.payload?.actor || 'unknown',\n      inline: true\n    },\n    {\n      name: 'Timestamp',\n      value: payload.ts || new Date().toISOString(),\n      inline: false\n    }\n  ]\n};\n\nreturn {\n  json: {\n    webhookUrl: $env.DISCORD_WEBHOOK_URL || 'https://discord.com/api/webhooks/placeholder',\n    payload: {\n      username: 'PMOVES GitHub Runner Monitor',\n      embeds: [embed]\n    }\n  }\n};"
+          "functionCode": "const payload = $json.nats_payload;\nconst status = payload.payload?.status || 'unknown';\nconst conclusion = payload.payload?.conclusion || 'pending';\nconst repo = payload.payload?.repository || 'unknown';\nconst workflow = payload.payload?.workflow || 'unknown';\nconst runner = payload.payload?.runner || 'unknown';\n\nconst discordUrl = $env.DISCORD_WEBHOOK_URL;\nif (!discordUrl) {\n  throw new Error('DISCORD_WEBHOOK_URL not configured in n8n environment');\n}\n\nlet emoji = '⏳';\nif (status === 'in_progress') emoji = '🔄';\nelse if (status === 'completed') {\n  emoji = conclusion === 'success' ? '✅' : conclusion === 'failure' ? '❌' : '⚠️';\n}\n\nconst embed = {\n  title: `${emoji} GitHub Job ${status}`,\n  description: `**${workflow}** in ${repo}`,\n  color: conclusion === 'success' ? 0x00FF00 : conclusion === 'failure' ? 0xFF0000 : 0xFFFF00,\n  fields: [\n    {\n      name: 'Repository',\n      value: repo,\n      inline: true\n    },\n    {\n      name: 'Runner',\n      value: runner,\n      inline: true\n    },\n    {\n      name: 'Status',\n      value: status,\n      inline: true\n    },\n    {\n      name: 'Conclusion',\n      value: conclusion || 'pending',\n      inline: true\n    },\n    {\n      name: 'Job ID',\n      value: payload.payload?.job_id || 'unknown',\n      inline: false\n    },\n    {\n      name: 'Actor',\n      value: payload.payload?.actor || 'unknown',\n      inline: true\n    },\n    {\n      name: 'Timestamp',\n      value: payload.ts || new Date().toISOString(),\n      inline: false\n    }\n  ]\n};\n\nreturn {\n  json: {\n    webhookUrl: discordUrl,\n    payload: {\n      username: 'PMOVES GitHub Runner Monitor',\n      embeds: [embed]\n    }\n  }\n};"
         },
         "id": "prepare_notification",
         "name": "Prepare Discord Notification",
         "type": "n8n-nodes-base.functionItem",
         "typeVersion": 1,
+        "onError": "continueErrorOutput",
         "position": [
           1540,
           120
@@ -135,6 +118,7 @@
         "name": "Send Discord Notification",
         "type": "n8n-nodes-base.httpRequest",
         "typeVersion": 4.1,
+        "onError": "continueErrorOutput",
         "position": [
           1760,
           120
@@ -180,6 +164,19 @@
           1320,
           380
         ]
+      },
+      {
+        "parameters": {
+          "functionCode": "const errorNode = $input.item.json.$error?.node?.name || 'unknown';\nconst errorMessage = $input.item.json.$error?.message || 'No error message';\nconst timestamp = new Date().toISOString();\nconsole.error(`[github_webhook] Error in ${errorNode}: ${errorMessage} at ${timestamp}`);\nreturn { json: { error: true, node: errorNode, message: errorMessage, timestamp } };"
+        },
+        "id": "error_handler",
+        "name": "Error Handler",
+        "type": "n8n-nodes-base.functionItem",
+        "typeVersion": 1,
+        "position": [
+          1760,
+          340
+        ]
       }
     ],
     "connections": {
@@ -187,14 +184,14 @@
         "main": [
           [
             {
-              "node": "Parse Webhook Headers",
+              "node": "Parse & Verify Webhook",
               "type": "main",
               "index": 0
             }
           ]
         ]
       },
-      "Parse Webhook Headers": {
+      "Parse & Verify Webhook": {
         "main": [
           [
             {
@@ -227,14 +224,14 @@
         "main": [
           [
             {
-              "node": "Publish to NATS",
+              "node": "Publish to NATS (stub)",
               "type": "main",
               "index": 0
             }
           ]
         ]
       },
-      "Publish to NATS": {
+      "Publish to NATS (stub)": {
         "main": [
           [
             {
@@ -253,10 +250,35 @@
               "type": "main",
               "index": 0
             }
+          ],
+          [
+            {
+              "node": "Error Handler",
+              "type": "main",
+              "index": 0
+            }
           ]
         ]
       },
       "Send Discord Notification": {
+        "main": [
+          [
+            {
+              "node": "Respond Success",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Error Handler",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Error Handler": {
         "main": [
           [
             {

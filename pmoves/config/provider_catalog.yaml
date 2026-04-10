@@ -327,10 +327,70 @@ providers:
         serves:
           - function: coding_glm
             variant_name: cloud_zai_glm51
-            role: primary
+            role: fallback
             weight: 0.0
         strength_ref: glm-5.1
         vram_mb: 0
+      chat_zai_glm5_turbo:
+        model_name: "glm-5-turbo"
+        tz_model_key: chat_zai_glm5_turbo
+        serves:
+          - function: agent_zero
+            variant_name: hosted_zai_turbo
+            role: primary
+            weight: 0.6
+          - function: coding_glm
+            variant_name: cloud_zai_turbo
+            role: primary
+            weight: 0.8
+          - function: orchestrator
+            variant_name: primary_cloud_turbo
+            role: primary
+            weight: 0.7
+          - function: agent_zero_subordinate
+            variant_name: hosted_zai_turbo
+            role: primary
+            weight: 0.5
+          - function: archon_work_orders
+            variant_name: hosted_zai_turbo
+            role: primary
+            weight: 0.5
+          - function: deepresearch
+            variant_name: hosted_zai_turbo
+            role: secondary
+            weight: 0.3
+        strength_ref: glm-5-turbo
+        vram_mb: 0
+        notes: "OpenClaw-native model — optimized for tool calling, long chains, scheduled tasks, and agentic workflows"
+      chat_zai_glm5v_turbo:
+        model_name: "glm-5v-turbo"
+        tz_model_key: chat_zai_glm5v_turbo
+        serves:
+          - function: agent_zero
+            variant_name: hosted_zai_vision_turbo
+            role: secondary
+            weight: 0.3
+          - function: coding_glm
+            variant_name: cloud_zai_vision_turbo
+            role: secondary
+            weight: 0.4
+          - function: vl_sentinel
+            variant_name: vision_glm5v_turbo
+            role: primary
+            weight: 0.7
+          - function: deepresearch
+            variant_name: hosted_zai_vision_turbo
+            role: secondary
+            weight: 0.3
+          - function: pmoves_research_coordinator
+            variant_name: hosted_zai_vision_turbo
+            role: secondary
+            weight: 0.3
+        strength_ref: glm-5v-turbo
+        vram_mb: 0
+        notes: "Multimodal coding model — vision + text, frontend recreation, GUI exploration, visual debugging"
+        multimodal: true
+        input_modalities: ["text", "image", "video", "file"]
 
   # ---------------------------------------------------------------------------
   # GLM / BigModel.cn — GLM family (General endpoint, separate key)

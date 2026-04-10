@@ -317,6 +317,12 @@ def _ensure_agent_zero_defaults(text: str) -> str:
     if not embed_model:
         text = _set_kv(text, "A0_SET_embedding_model", "tensorzero::embedding_model_name::embed_default")
 
+    # AGENT_ZERO_EVENTS_TOKEN: shared token for n8n approval-poller x-agent-token header.
+    # Auto-generate if blank so n8n flows can authenticate to Agent Zero out-of-the-box.
+    events_token = _get_kv(text, "AGENT_ZERO_EVENTS_TOKEN")
+    if _is_blank_or_placeholder(events_token):
+        text = _set_kv(text, "AGENT_ZERO_EVENTS_TOKEN", _strong_random(32))
+
     return text
 
 

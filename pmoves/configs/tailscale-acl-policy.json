@@ -8,7 +8,7 @@
     "tag:vps": ["autogroup:admin"],
     "tag:lab": ["autogroup:admin"],
     "tag:exit": ["autogroup:admin"],
-    "tag:unfcu": ["autogroup:admin"],
+    "tag:partner": ["autogroup:admin"],
     "tag:guest": ["autogroup:admin"]
   },
 
@@ -27,13 +27,13 @@
     },
     {
       "action": "accept",
-      "src": ["tag:unfcu"],
+      "src": ["tag:partner"],
       "dst": [
         "tag:gpu:3030",
         "tag:gpu:8080",
         "tag:gpu:8081"
       ],
-      "comment": "UNFCU partner: Agent Zero API + UI, TensorZero Gateway only"
+      "comment": "Partner access: Agent Zero API + UI, TensorZero Gateway only"
     },
     {
       "action": "accept",

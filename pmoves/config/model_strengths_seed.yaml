@@ -597,6 +597,34 @@ models:
     cost_efficiency_score: 7.0
     notes: "The polyglot coder — Zhipu's latest, strong CJK coding and multilingual reasoning."
 
+  glm-5-turbo:
+    primary_strength: reasoning
+    strength_scores:
+      reasoning: 0.92
+      speed: 0.88
+      coding: 0.88
+      multilingual: 0.93
+      creativity: 0.78
+      context_handling: 0.90
+    preferred_functions: [agent_zero, coding_glm, orchestrator, archon_work_orders, agent_zero_subordinate]
+    cost_efficiency_score: 8.0
+    notes: "The claw engine — purpose-built for OpenClaw. Tool calling, long chains, scheduled tasks, agentic workflows. ZClawBench champion."
+
+  glm-5v-turbo:
+    primary_strength: coding
+    strength_scores:
+      reasoning: 0.90
+      speed: 0.82
+      coding: 0.90
+      multilingual: 0.92
+      creativity: 0.82
+      context_handling: 0.88
+    preferred_functions: [vl_sentinel, coding_glm, agent_zero, deepresearch, pmoves_research_coordinator]
+    cost_efficiency_score: 7.5
+    notes: "The eyes — multimodal coding foundation. Reads screenshots, recreates frontends, explores GUIs, tracks video objects. Sees what Turbo can't."
+    multimodal: true
+    input_modalities: ["text", "image", "video", "file"]
+
   glm-4-plus:
     primary_strength: reasoning
     strength_scores:

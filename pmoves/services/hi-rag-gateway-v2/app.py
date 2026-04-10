@@ -216,7 +216,8 @@ TAILSCALE_CIDRS = [c.strip() for c in os.environ.get("TAILSCALE_CIDRS","100.64.0
 TRUSTED_PROXY_SOURCES = [c.strip() for c in os.environ.get("HIRAG_TRUSTED_PROXIES", "").split(",") if c.strip()]
 
 HTTP_PORT = int(os.environ.get("HIRAG_HTTP_PORT","8086"))
-NAMESPACE_DEFAULT = os.environ.get("INDEXER_NAMESPACE","*")
+NAMESPACE_DEFAULT = os.environ.get("INDEXER_NAMESPACE","pmoves")
+QUERY_NAMESPACE_DEFAULT = os.environ.get("QUERY_NAMESPACE","*")
 
 logging.basicConfig(level=logging.INFO)
 logging.getLogger().setLevel(logging.INFO)
@@ -614,7 +615,7 @@ def _extract_persona(payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:
 
 class QueryReq(BaseModel):
     query: str
-    namespace: str = Field(default=NAMESPACE_DEFAULT)
+    namespace: str = Field(default=QUERY_NAMESPACE_DEFAULT)
     k: int = 10
     alpha: float = ALPHA
     use_rerank: Optional[bool] = None

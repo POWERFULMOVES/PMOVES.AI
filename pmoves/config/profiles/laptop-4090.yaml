@@ -35,7 +35,7 @@ model_bundles:
   - whisper-small
 
 # Which coding agent stacks this node supports
-# Model names aligned with Qwen 3.5 (March 2026) + GLM 5.1 (per PR #1151)
+# Model names aligned with Qwen 3.5 (March 2026) + GLM-5-Turbo / GLM-5V-Turbo (April 2026)
 coding_stacks:
   claude_code:
     cloud_primary: anthropic
@@ -47,9 +47,10 @@ coding_stacks:
     tz_function: coding_codex
   glm_coding_plan:
     cloud_primary: zai
-    cloud_model: glm-5.1            # Updated per PR #1151 Z.AI docs
-    local_fallback: qwen3.5:9b
+    cloud_model: glm-5-turbo        # OpenClaw-native: tool calling, long chains, agentic workflows
+    local_fallback: qwen3-coder:30b
     tz_function: coding_glm
+    vision_model: glm-5v-turbo       # Multimodal: screenshots, GUI exploration, visual debugging
   minimax_token_plan:
     cloud_primary: minimax
     local_fallback: qwen3.5:9b

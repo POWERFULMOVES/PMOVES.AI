@@ -60,6 +60,7 @@
         "name": "Fetch Pending Approvals",
         "type": "n8n-nodes-base.httpRequest",
         "typeVersion": 4.1,
+        "onError": "continueErrorOutput",
         "position": [
           -280,
           180
@@ -119,6 +120,7 @@
         "name": "Publish Approval Event",
         "type": "n8n-nodes-base.httpRequest",
         "typeVersion": 4.1,
+        "onError": "continueErrorOutput",
         "position": [
           520,
           180
@@ -160,6 +162,7 @@
         "name": "Mark Approval Row",
         "type": "n8n-nodes-base.httpRequest",
         "typeVersion": 4.1,
+        "onError": "continueErrorOutput",
         "position": [
           780,
           180
@@ -185,6 +188,19 @@
           240,
           -20
         ]
+      },
+      {
+        "parameters": {
+          "functionCode": "const errorNode = $input.item.json.$error?.node?.name || 'unknown';\nconst errorMessage = $input.item.json.$error?.message || 'No error message';\nconst timestamp = new Date().toISOString();\nconsole.error(`[approval_poller] Error in ${errorNode}: ${errorMessage} at ${timestamp}`);\nreturn { json: { error: true, node: errorNode, message: errorMessage, timestamp } };"
+        },
+        "id": "error_handler",
+        "name": "Error Handler",
+        "type": "n8n-nodes-base.functionItem",
+        "typeVersion": 1,
+        "position": [
+          520,
+          400
+        ]
       }
     ],
     "connections": {
@@ -204,6 +220,13 @@
           [
             {
               "node": "Split Pending Approvals",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Error Handler",
               "type": "main",
               "index": 0
             }
@@ -247,6 +270,13 @@
               "type": "main",
               "index": 0
             }
+          ],
+          [
+            {
+              "node": "Error Handler",
+              "type": "main",
+              "index": 0
+            }
           ]
         ]
       },
@@ -255,6 +285,13 @@
           [
             {
               "node": "Split Pending Approvals",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Error Handler",
               "type": "main",
               "index": 0
             }
