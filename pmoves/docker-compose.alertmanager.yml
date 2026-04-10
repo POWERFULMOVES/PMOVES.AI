@@ -1,0 +1,86 @@
+# =============================================================================
+# PMOVES.AI - Alertmanager Docker Compose Overlay
+# =============================================================================
+# Purpose: Alertmanager + Discord bridge service definitions
+# Recommendation: PMOVES-P3 #4 - Configure Alertmanager
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.alertmanager.yml up -d
+#
+# Environment:
+#   ALERTMANAGER_DISCORD_WEBHOOK_URL - Discord webhook URL (required)
+#   ALERTMANAGER_PORT                - Alertmanager HTTP port (default: 9093)
+#   BRIDGE_PORT                      - Discord bridge HTTP port (default: 9094)
+# =============================================================================
+
+services:
+  # ---------------------------------------------------------------------------
+  # Alertmanager - Prometheus alert routing and grouping
+  # ---------------------------------------------------------------------------
+  alertmanager:
+    image: prom/alertmanager:v0.28.1
+    container_name: pmoves-alertmanager
+    restart: unless-stopped
+    volumes:
+      - ./config/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - alertmanager-data:/alertmanager
+    environment:
+      - ALERTMANAGER_PORT=${ALERTMANAGER_PORT:-9093}
+    ports:
+      - "${ALERTMANAGER_BIND:-127.0.0.1}:${ALERTMANAGER_PORT:-9093}:9093"
+    networks:
+      - pmoves_monitoring
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:9093/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: "0.5"
+        reservations:
+          memory: 64M
+          cpus: "0.1"
+
+  # ---------------------------------------------------------------------------
+  # Alertmanager Discord Bridge - Webhook relay to Discord channels
+  # ---------------------------------------------------------------------------
+  alertmanager-discord-bridge:
+    build:
+      context: ./services/alertmanager-discord-bridge
+      dockerfile: Dockerfile
+    container_name: pmoves-alertmanager-discord-bridge
+    restart: unless-stopped
+    environment:
+      - ALERTMANAGER_DISCORD_WEBHOOK_URL=${ALERTMANAGER_DISCORD_WEBHOOK_URL:-}
+      - DISCORD_WEBHOOK_URL=${DISCORD_WEBHOOK_URL:-}
+      - BRIDGE_PORT=${BRIDGE_PORT:-9094}
+      - LOG_LEVEL=${BRIDGE_LOG_LEVEL:-INFO}
+    ports:
+      - "${BRIDGE_BIND:-127.0.0.1}:${BRIDGE_PORT:-9094}:9094"
+    networks:
+      - pmoves_monitoring
+    depends_on:
+      alertmanager:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:9094/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: "0.5"
+        reservations:
+          memory: 64M
+          cpus: "0.1"
+
+volumes:
+  alertmanager-data:
+    name: pmoves-alertmanager-data
