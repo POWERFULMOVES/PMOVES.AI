@@ -929,13 +929,13 @@ up-minimal: ## Start minimal stack (Supabase + Data + Bus only)
 
 .PHONY: bringup-layered
 bringup-layered: ## Deterministic local layered bring-up (minimal -> model-mgmt -> workers -> agents -> monitoring -> prod smoke)
-	@echo "🚀 Layered local bring-up (runtime=$${SUPABASE_RUNTIME:-cli})"
-	@SUPABASE_RUNTIME=$${SUPABASE_RUNTIME:-cli} $(MAKE) --no-print-directory up-minimal
-	@SUPABASE_RUNTIME=$${SUPABASE_RUNTIME:-cli} $(MAKE) --no-print-directory up-model-management
-	@SUPABASE_RUNTIME=$${SUPABASE_RUNTIME:-cli} $(MAKE) --no-print-directory up-workers
-	@SUPABASE_RUNTIME=$${SUPABASE_RUNTIME:-cli} $(MAKE) --no-print-directory up-agents
-	@SUPABASE_RUNTIME=$${SUPABASE_RUNTIME:-cli} $(MAKE) --no-print-directory up-monitoring
-	@SUPABASE_RUNTIME=$${SUPABASE_RUNTIME:-cli} $(MAKE) --no-print-directory smoke-prod
+	@echo "🚀 Layered local bring-up (runtime=$(SUPABASE_RUNTIME))"
+	@$(MAKE) --no-print-directory up-minimal
+	@$(MAKE) --no-print-directory up-model-management
+	@$(MAKE) --no-print-directory up-workers
+	@$(MAKE) --no-print-directory up-agents
+	@$(MAKE) --no-print-directory up-monitoring
+	@$(MAKE) --no-print-directory smoke-prod
 	@echo "✅ Layered local bring-up passed"
 
 .PHONY: up-model-management
