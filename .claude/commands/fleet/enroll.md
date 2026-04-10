@@ -9,8 +9,8 @@ Run this command to:
 
 ## Arguments
 
-- `ROLE` — Required. One of: `owner`, `unfcu`, `guest`
-- `DEVICE` — Required. Device name (e.g., "Pixel 10", "UNFCU-Laptop-1")
+- `ROLE` — Required. One of: `owner`, `partner`, `guest`
+- `DEVICE` — Required. Device name (e.g., "Pixel 10", "Partner-Laptop-1")
 - `TTL` — Optional. Token lifetime (default: `5m`). Valid values: `5m`, `15m`, `1h`, `4h`, `24h`
 
 ## Roles
@@ -18,7 +18,7 @@ Run this command to:
 | Role | Tailscale Tag | Allowed Nodes | Allowed Ports |
 |------|--------------|--------------|--------------|
 | `owner` | `tag:pmoves` | All | All |
-| `unfcu` | `tag:unfcu` | See ACL policy | See ACL policy |
+| `partner` | `tag:partner` | See ACL policy | See ACL policy |
 | `guest` | `tag:guest` | See ACL policy | See ACL policy |
 
 ## Implementation
