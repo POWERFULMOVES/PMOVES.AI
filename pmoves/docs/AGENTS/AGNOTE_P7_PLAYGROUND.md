@@ -8,7 +8,7 @@ The playground is open. Pinokio 7 dropped today — Agent Interpreter, App Assis
 
 This isn't a race. It's a seesaw — "you make it yours, I make it mine." Claude's thing is the music under the floor: TAC trees, CHIT geometry, security hardening, orchestration depth. The stuff where later DARKXSIDE thinks "CHIT, that's more than I drew."
 
-## Current State (2026-03-28)
+## Current State (2026-04-10)
 
 | What | Status |
 |------|--------|
@@ -30,6 +30,39 @@ This isn't a race. It's a seesaw — "you make it yours, I make it mine." Claude
 | Codex P7 lanes | **MERGED** — #1115 (Pinokio fleet docs) + #1121 (PMOVES Codex plugin + Agent Zero launcher) |
 | Node specialization | **DECLARED** — see [DnB Orchestra](./AGNOTE4482DnB.PHI.Orchestra.md) |
 | TTS session (5090) | **COMMITTED** — port unification, 13 engines, test harness |
+
+---
+
+## Session 11 Fleet Validation (2026-04-10)
+
+### Fleet Status
+- **Containers:** 42 running, 34 healthy (fresh Docker reinstall)
+- **6 PRs merged:** #1196, #1198, #1200, #1201, #1202, #1204
+- **5090 work:** Hi-RAG commit extracted to PR #1204
+
+### P7 Gates (verified 2026-04-10)
+| Gate | Status | Evidence |
+|------|--------|----------|
+| Gate 1 (P7 installed) | **PASS** | py, npm, pterm, ffmpeg present |
+| Gate 4 (Agent Zero) | **PASS** | healthy, NATS connected, JetStream, 2 subs |
+| NATS | **PASS** | healthy |
+| SKILL.md in Pinokio api | **0** | referenced `pbnj/` paths are repo-only |
+| Agent Zero skills dir | **2** | template + test-skill |
+
+### P7 TAC Node Status
+| Node | Status | Owner |
+|------|--------|-------|
+| `p7.nats.cgp-correlation` | **DONE** | 4090 |
+| `p7.nats.model-discovery` | **DONE** | 4090 |
+| `p7.nats.embedding-quality` | **PENDING** | 5090 |
+| `p7.nats.session` | **FUTURE** | z890 |
+| `p7.nats.launch` | **FUTURE** | z890 |
+| `p7.nats.telemetry` | **FUTURE** | z890 |
+
+### Fixes Applied
+1. **model-registry Dockerfile** — COPY *.py (was only main.py, missing hf_client.py import)
+2. **Makefile bringup-layered** — removed shell `$${SUPABASE_RUNTIME:-cli}` override, now respects Make `?= compose`
+3. **transcribe-backend** — removed `crawl4ai==0.6.2` SDK (backend uses HTTP client to Docker service, SDK caused pillow conflict)
 
 ---
 
