@@ -153,8 +153,6 @@ def _ensure_integration_credentials(text: str) -> str:
         text = _set_kv(text, "FIREFLY_APP_KEY", firefly_key)
 
     # n8n encryption key: 32-byte urlsafe token for workflow credential encryption.
-    # N8N_API_KEY is still not generated here because it requires a live n8n
-    # instance; use `make -C pmoves n8n-api-bootstrap` after bring-up.
     n8n_enc = _get_kv(text, "N8N_ENCRYPTION_KEY")
     if _is_blank_or_placeholder(n8n_enc):
         text = _set_kv(text, "N8N_ENCRYPTION_KEY", _strong_random(32))
@@ -163,6 +161,16 @@ def _ensure_integration_credentials(text: str) -> str:
     n8n_runners = _get_kv(text, "N8N_RUNNERS_AUTH_TOKEN")
     if _is_blank_or_placeholder(n8n_runners):
         text = _set_kv(text, "N8N_RUNNERS_AUTH_TOKEN", _strong_random(24))
+
+    # n8n owner password: auto-generate and persist in env.shared so it survives
+    # env file regeneration. This is the password for the n8n owner account created
+    # by `make n8n-bootstrap`. Previously only written to .env.local which was
+    # easily lost, causing 401 mismatches on subsequent bootstraps.
+    # N8N_API_KEY is NOT generated here (requires a live n8n instance) — it's
+    # minted by bootstrap_n8n_api.py and written back to env.shared after creation.
+    n8n_owner_pw = _get_kv(text, "N8N_OWNER_PASSWORD")
+    if _is_blank_or_placeholder(n8n_owner_pw):
+        text = _set_kv(text, "N8N_OWNER_PASSWORD", _strong_random(24))
 
     # Wger database password: PostgreSQL password for the wger database
     wger_db_pass = _get_kv(text, "WGER_DB_PASSWORD")
