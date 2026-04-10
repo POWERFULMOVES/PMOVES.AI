@@ -2579,6 +2579,38 @@ n8n-bootstrap: up-n8n n8n-api-bootstrap n8n-import-flows n8n-activate-flows n8n-
 	@echo "      Run 'make -C pmoves db-migrate' first if the migration has not been applied."
 	@echo "✔ n8n bootstrap complete"
 
+.PHONY: n8n-health n8n-status
+n8n-health: ## Quick n8n health check (container + API + runner readiness)
+	@echo "=== n8n Health Check ==="
+	@port=$${N8N_PORT:-5678}; \
+	  code=$$(curl -sf -o /dev/null -w "%{http_code}" "http://localhost:$$port/healthz" 2>/dev/null || echo "000"); \
+	  if [ "$$code" = "200" ]; then echo "✔ n8n healthy on :$$port"; \
+	  else echo "✗ n8n NOT healthy (HTTP $$code) on :$$port"; exit 1; fi
+	@api_key=$$(grep -s '^N8N_API_KEY=' env.shared .env.local 2>/dev/null | head -1 | cut -d= -f2-); \
+	  if [ -n "$$api_key" ]; then \
+	    code=$$(curl -sf -o /dev/null -w "%{http_code}" -H "X-N8N-API-KEY: $$api_key" \
+	      "http://localhost:$${N8N_PORT:-5678}/api/v1/workflows?limit=1" 2>/dev/null || echo "000"); \
+	    if [ "$$code" = "200" ]; then echo "✔ n8n API key valid"; \
+	    else echo "✗ n8n API key invalid (HTTP $$code) — run 'make n8n-bootstrap'"; fi; \
+	  else echo "⚠ N8N_API_KEY not found in env.shared or .env.local"; fi
+
+n8n-status: n8n-health ## n8n status: workflow count, activation state, runner health
+	@echo ""
+	@echo "=== n8n Workflow Status ==="
+	@api_key=$$(grep -s '^N8N_API_KEY=' env.shared .env.local 2>/dev/null | head -1 | cut -d= -f2-); \
+	  if [ -n "$$api_key" ]; then \
+	    curl -sf -H "X-N8N-API-KEY: $$api_key" "http://localhost:$${N8N_PORT:-5678}/api/v1/workflows?limit=100" 2>/dev/null \
+	    | $(PYTHON) -c "import sys,json; d=json.load(sys.stdin); ws=d.get('data',d) if isinstance(d,dict) else d; \
+	      active=[w for w in ws if w.get('active')]; \
+	      print(f'Workflows: {len(ws)} total, {len(active)} active, {len(ws)-len(active)} inactive'); \
+	      [print(f\"  {'✔' if w.get('active') else '○'} {w['name']} (id={w['id']})\") for w in ws]" 2>/dev/null \
+	    || echo "⚠ Could not fetch workflow list"; \
+	  else echo "⚠ N8N_API_KEY not set — cannot list workflows. Run 'make n8n-bootstrap'."; fi
+	@echo ""
+	@echo "=== n8n Runners ==="
+	@docker exec pmoves-n8n sh -c 'curl -sf http://localhost:5679/healthz 2>/dev/null && echo "✔ Runner healthy" || echo "○ Runner not responding (internal mode may not expose healthz)"' 2>/dev/null \
+	  || echo "⚠ Cannot reach n8n container"
+
 n8n-export-repo-flows: ## Export live n8n workflows into PMOVES-n8n and refresh the compatibility mirror
 	@$(PYTHON) "$(N8N_SUBMODULE_DIR)/scripts/export_repo_flows.py" --container pmoves-n8n --workflow-dir "$(N8N_CANONICAL_FLOWS_DIR)"
 	@$(MAKE) n8n-sync-submodule-flows
