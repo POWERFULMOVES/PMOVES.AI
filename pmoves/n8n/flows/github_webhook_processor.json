@@ -92,12 +92,13 @@
       },
       {
         "parameters": {
-          "functionCode": "const payload = $json.nats_payload;\nconst status = payload.payload?.status || 'unknown';\nconst conclusion = payload.payload?.conclusion || 'pending';\nconst repo = payload.payload?.repository || 'unknown';\nconst workflow = payload.payload?.workflow || 'unknown';\nconst runner = payload.payload?.runner || 'unknown';\n\nlet emoji = '⏳';\nif (status === 'in_progress') emoji = '🔄';\nelse if (status === 'completed') {\n  emoji = conclusion === 'success' ? '✅' : conclusion === 'failure' ? '❌' : '⚠️';\n}\n\nconst embed = {\n  title: `${emoji} GitHub Job ${status}`,\n  description: `**${workflow}** in ${repo}`,\n  color: conclusion === 'success' ? 0x00FF00 : conclusion === 'failure' ? 0xFF0000 : 0xFFFF00,\n  fields: [\n    {\n      name: 'Repository',\n      value: repo,\n      inline: true\n    },\n    {\n      name: 'Runner',\n      value: runner,\n      inline: true\n    },\n    {\n      name: 'Status',\n      value: status,\n      inline: true\n    },\n    {\n      name: 'Conclusion',\n      value: conclusion || 'pending',\n      inline: true\n    },\n    {\n      name: 'Job ID',\n      value: payload.payload?.job_id || 'unknown',\n      inline: false\n    },\n    {\n      name: 'Actor',\n      value: payload.payload?.actor || 'unknown',\n      inline: true\n    },\n    {\n      name: 'Timestamp',\n      value: payload.ts || new Date().toISOString(),\n      inline: false\n    }\n  ]\n};\n\nreturn {\n  json: {\n    webhookUrl: $env.DISCORD_WEBHOOK_URL || 'https://discord.com/api/webhooks/placeholder',\n    payload: {\n      username: 'PMOVES GitHub Runner Monitor',\n      embeds: [embed]\n    }\n  }\n};"
+          "functionCode": "const payload = $json.nats_payload;\nconst status = payload.payload?.status || 'unknown';\nconst conclusion = payload.payload?.conclusion || 'pending';\nconst repo = payload.payload?.repository || 'unknown';\nconst workflow = payload.payload?.workflow || 'unknown';\nconst runner = payload.payload?.runner || 'unknown';\n\nconst discordUrl = $env.DISCORD_WEBHOOK_URL;\nif (!discordUrl) {\n  throw new Error('DISCORD_WEBHOOK_URL not configured in n8n environment');\n}\n\nlet emoji = '⏳';\nif (status === 'in_progress') emoji = '🔄';\nelse if (status === 'completed') {\n  emoji = conclusion === 'success' ? '✅' : conclusion === 'failure' ? '❌' : '⚠️';\n}\n\nconst embed = {\n  title: `${emoji} GitHub Job ${status}`,\n  description: `**${workflow}** in ${repo}`,\n  color: conclusion === 'success' ? 0x00FF00 : conclusion === 'failure' ? 0xFF0000 : 0xFFFF00,\n  fields: [\n    {\n      name: 'Repository',\n      value: repo,\n      inline: true\n    },\n    {\n      name: 'Runner',\n      value: runner,\n      inline: true\n    },\n    {\n      name: 'Status',\n      value: status,\n      inline: true\n    },\n    {\n      name: 'Conclusion',\n      value: conclusion || 'pending',\n      inline: true\n    },\n    {\n      name: 'Job ID',\n      value: payload.payload?.job_id || 'unknown',\n      inline: false\n    },\n    {\n      name: 'Actor',\n      value: payload.payload?.actor || 'unknown',\n      inline: true\n    },\n    {\n      name: 'Timestamp',\n      value: payload.ts || new Date().toISOString(),\n      inline: false\n    }\n  ]\n};\n\nreturn {\n  json: {\n    webhookUrl: discordUrl,\n    payload: {\n      username: 'PMOVES GitHub Runner Monitor',\n      embeds: [embed]\n    }\n  }\n};"
         },
         "id": "prepare_notification",
         "name": "Prepare Discord Notification",
         "type": "n8n-nodes-base.functionItem",
         "typeVersion": 1,
+        "onError": "continueErrorOutput",
         "position": [
           1540,
           120
@@ -117,6 +118,7 @@
         "name": "Send Discord Notification",
         "type": "n8n-nodes-base.httpRequest",
         "typeVersion": 4.1,
+        "onError": "continueErrorOutput",
         "position": [
           1760,
           120
@@ -161,6 +163,19 @@
         "position": [
           1320,
           380
+        ]
+      },
+      {
+        "parameters": {
+          "functionCode": "const errorNode = $input.item.json.$error?.node?.name || 'unknown';\nconst errorMessage = $input.item.json.$error?.message || 'No error message';\nconst timestamp = new Date().toISOString();\nconsole.error(`[github_webhook] Error in ${errorNode}: ${errorMessage} at ${timestamp}`);\nreturn { json: { error: true, node: errorNode, message: errorMessage, timestamp } };"
+        },
+        "id": "error_handler",
+        "name": "Error Handler",
+        "type": "n8n-nodes-base.functionItem",
+        "typeVersion": 1,
+        "position": [
+          1760,
+          340
         ]
       }
     ],
@@ -235,10 +250,35 @@
               "type": "main",
               "index": 0
             }
+          ],
+          [
+            {
+              "node": "Error Handler",
+              "type": "main",
+              "index": 0
+            }
           ]
         ]
       },
       "Send Discord Notification": {
+        "main": [
+          [
+            {
+              "node": "Respond Success",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Error Handler",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Error Handler": {
         "main": [
           [
             {
