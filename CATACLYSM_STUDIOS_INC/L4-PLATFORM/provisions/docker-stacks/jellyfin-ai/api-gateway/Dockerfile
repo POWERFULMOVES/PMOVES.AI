@@ -15,4 +15,11 @@ RUN mkdir -p /app/logs
 
 EXPOSE 3000
 
+
+# Install curl for healthcheck
+RUN apk add --no-cache curl
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+    CMD curl -f http://localhost:3000/health || exit 1
 CMD ["npm", "start"]
