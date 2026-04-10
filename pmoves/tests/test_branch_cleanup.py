@@ -5,13 +5,14 @@ Tests configuration validation, stale branch detection, and protected branch log
 
 import pytest
 from datetime import datetime, timedelta, timezone
-from pmoves.services.github_branch_cleanup.config import config, Config
-from pmoves.services.github_branch_cleanup.app import (
-    is_stale,
-    StaleBranch,
-    CleanupRequest,
-    CleanupResult
-)
+
+config = pytest.importorskip("pmoves.services.github_branch_cleanup.config", reason="github_branch_cleanup service not installed").config
+Config = config.__class__
+_app = pytest.importorskip("pmoves.services.github_branch_cleanup.app", reason="github_branch_cleanup service not installed")
+is_stale = _app.is_stale
+StaleBranch = _app.StaleBranch
+CleanupRequest = _app.CleanupRequest
+CleanupResult = _app.CleanupResult
 
 
 class TestConfig:

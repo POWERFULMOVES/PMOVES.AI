@@ -6,7 +6,7 @@
     "hostname": "pmoves-5090"
   },
   "openclaw_overrides": {
-    "agents.defaults.model.primary": "claude-sonnet-4",
+    "agents.defaults.model.primary": "claude-opus-4-6",
     "tools.profile": "full",
     "tools.exec.ask": "auto",
     "channels": {

@@ -53,8 +53,8 @@
     ]
   },
   "modelOverrides": {
-    "primary": "claude-sonnet-4",
-    "fallback": "claude-haiku-4-5"
+    "primary": "claude-opus-4-6",
+    "fallback": "claude-sonnet-4-6"
   },
   "node": {
     "identity": "5090",
