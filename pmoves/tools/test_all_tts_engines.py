@@ -87,6 +87,8 @@ ENGINES = [
     {
         "id": "f5_tts",
         "name": "F5-TTS",
+        # F5-TTS needs model download before first load.
+        "setup_api": "/handle_f5_download",
         "load_api": "/handle_f5_load",
         "unload_api": "/handle_f5_unload",
         "load_kwargs": {"model_name": "F5-TTS Base"},
@@ -222,16 +224,16 @@ ENGINES = [
         },
     },
     {
-        # VibeVoice uses a separate panel (generate_vibevoice_podcast),
+        # VibeVoice uses a separate panel (handle_vibevoice_generation),
         # NOT the unified generate_unified_tts endpoint.
+        # Model download must happen first via /handle_vibevoice_download.
         "id": "vibevoice",
         "name": "VibeVoice",
+        "setup_api": "/handle_vibevoice_download",
         "load_api": "/handle_vibevoice_load",
         "unload_api": "/handle_vibevoice_unload",
         "load_kwargs": {
-            "selected_model_path": "",
-            "path": "models/VibeVoice-1.5B",
-            "use_flash_attention": False,
+            "selected_model_path": "models\\VibeVoice-1.5B",
         },
         "synth_kwargs": None,  # Separate endpoint — skip unified synth
     },
@@ -401,7 +403,14 @@ def load_engine(
         try:
             setup_result = client.predict(api_name=setup_api)
             setup_msg = str(setup_result) if setup_result else ""
-            if "❌" in setup_msg or "failed" in setup_msg.lower():
+            # Check for success FIRST — some engines return "pull failed,
+            # using existing ✅" which contains both "failed" and "✅".
+            # The ✅ indicates the setup ultimately succeeded.
+            if "\u2705" in setup_msg:
+                pass  # Setup succeeded despite partial warnings
+            elif "\u274c" in setup_msg:
+                return False, f"setup failed: {setup_msg[:60]}", client
+            elif "failed" in setup_msg.lower() and "existing" not in setup_msg.lower():
                 return False, f"setup failed: {setup_msg[:60]}", client
         except Exception as e:
             return False, f"setup error: {str(e)[:50]}", client
