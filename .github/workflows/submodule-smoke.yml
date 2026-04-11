@@ -1,0 +1,233 @@
+name: Submodule Update Smoke Test
+
+on:
+  pull_request:
+    types: [opened, synchronize, labeled]
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+  checks: write
+
+jobs:
+  gate-check:
+    name: Check if upstream-update PR
+    runs-on: ubuntu-latest
+    outputs:
+      should_run: ${{ steps.check.outputs.should_run }}
+    steps:
+      - name: Check for upstream-update label
+        id: check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+        run: |
+          if echo "$PR_LABELS" | grep -q '"upstream-update"'; then
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+            echo "PR has upstream-update label — running smoke tests"
+          else
+            echo "should_run=false" >> "$GITHUB_OUTPUT"
+            echo "PR does not have upstream-update label — skipping"
+          fi
+
+  smoke-test:
+    name: Submodule Smoke Test
+    needs: gate-check
+    if: needs.gate-check.outputs.should_run == 'true'
+    runs-on: [self-hosted, ai-lab]
+    timeout-minutes: 45
+
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@v2
+        with:
+          egress-policy: audit
+          allowed-endpoints: >
+            github.com:443
+            api.github.com:443
+            ghcr.io:443
+            registry-1.docker.io:443
+            auth.docker.io:443
+            production.cloudflare.docker.com:443
+
+      - name: Checkout PR branch
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Identify changed submodules
+        id: changed
+        run: |
+          set -euo pipefail
+
+          # Compare the PR branch against the base (main)
+          base_sha="${{ github.event.pull_request.base.sha }}"
+          head_sha="${{ github.event.pull_request.head.sha }}"
+
+          echo "Base: $base_sha"
+          echo "Head: $head_sha"
+
+          # Find changed submodule paths (gitlink changes show as commit type)
+          changed_subs=$(git diff --name-only "$base_sha" "$head_sha" | while read -r path; do
+            if git ls-tree "$head_sha" "$path" 2>/dev/null | grep -q "^160000"; then
+              echo "$path"
+            fi
+          done)
+
+          if [[ -z "$changed_subs" ]]; then
+            echo "No submodule gitlink changes detected"
+            echo "submodules=" >> "$GITHUB_OUTPUT"
+          else
+            echo "Changed submodules:"
+            echo "$changed_subs"
+            # Store as comma-separated for later steps
+            csv=$(echo "$changed_subs" | tr '\n' ',' | sed 's/,$//')
+            echo "submodules=$csv" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Verify submodule integrity
+        if: steps.changed.outputs.submodules != ''
+        run: |
+          set -euo pipefail
+
+          echo "Verifying submodule checkout integrity..."
+          git submodule status
+
+          IFS=',' read -ra subs <<< "${{ steps.changed.outputs.submodules }}"
+          for sub in "${subs[@]}"; do
+            echo ""
+            echo "Checking $sub ..."
+            if [[ ! -d "$sub" ]]; then
+              echo "  ERROR: submodule directory missing"
+              exit 1
+            fi
+            # Verify the directory is not empty (submodule initialized)
+            if [[ -z "$(ls -A "$sub" 2>/dev/null)" ]]; then
+              echo "  ERROR: submodule directory is empty (not initialized)"
+              exit 1
+            fi
+            echo "  OK: directory exists and is populated"
+          done
+
+      - name: Run verify-all smoke tests
+        id: verify
+        continue-on-error: true
+        working-directory: pmoves
+        run: |
+          set -euo pipefail
+
+          echo "Running make verify-all..."
+          echo ""
+
+          # Run with a timeout and capture output
+          if make verify-all VERIFY_PARALLEL=1 WAIT_T_LONG=180 2>&1 | tee /tmp/verify-output.txt; then
+            echo "result=pass" >> "$GITHUB_OUTPUT"
+          else
+            echo "result=fail" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check critical health endpoints
+        id: health
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+
+          results=""
+          failures=0
+
+          # Map submodule names to their service health endpoints
+          declare -A health_map=(
+            ["PMOVES-Agent-Zero"]="http://localhost:8080/healthz"
+            ["PMOVES-Archon"]="http://localhost:8091/healthz"
+          )
+
+          IFS=',' read -ra subs <<< "${{ steps.changed.outputs.submodules }}"
+
+          for sub in "${subs[@]}"; do
+            endpoint="${health_map[$sub]:-}"
+            if [[ -z "$endpoint" ]]; then
+              results="${results}- **${sub}**: no health endpoint mapped (skipped)\n"
+              continue
+            fi
+
+            status_code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "$endpoint" 2>/dev/null || echo "000")
+            if [[ "$status_code" == "200" ]]; then
+              results="${results}- **${sub}** (\`${endpoint}\`): ${status_code} OK\n"
+            else
+              results="${results}- **${sub}** (\`${endpoint}\`): ${status_code} FAIL\n"
+              failures=$((failures + 1))
+            fi
+          done
+
+          echo "health_results<<HEREDOC" >> "$GITHUB_OUTPUT"
+          echo -e "$results" >> "$GITHUB_OUTPUT"
+          echo "HEREDOC" >> "$GITHUB_OUTPUT"
+          echo "health_failures=$failures" >> "$GITHUB_OUTPUT"
+
+      - name: Post results as PR comment
+        if: always() && steps.changed.outputs.submodules != ''
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const verifyResult = '${{ steps.verify.outputs.result }}' || 'skipped';
+            const healthFailures = parseInt('${{ steps.health.outputs.health_failures }}' || '0');
+            const healthResults = `${{ steps.health.outputs.health_results }}` || 'No health checks ran';
+            const changedSubs = '${{ steps.changed.outputs.submodules }}'.split(',').filter(Boolean);
+
+            const verifyIcon = verifyResult === 'pass' ? ':white_check_mark:' : ':x:';
+            const healthIcon = healthFailures === 0 ? ':white_check_mark:' : ':warning:';
+            const overallIcon = (verifyResult === 'pass' && healthFailures === 0) ? ':white_check_mark:' : ':x:';
+
+            const body = [
+              `## ${overallIcon} Submodule Update Smoke Test Results`,
+              '',
+              '### Changed Submodules',
+              changedSubs.map(s => `- \`${s}\``).join('\n'),
+              '',
+              `### ${verifyIcon} Verify-All Result: **${verifyResult.toUpperCase()}**`,
+              '',
+              `### ${healthIcon} Health Endpoint Checks`,
+              healthResults || 'No health checks applicable',
+              '',
+              '### Verdict',
+              (verifyResult === 'pass' && healthFailures === 0)
+                ? ':white_check_mark: **PASS** — Safe to merge after manual review of upstream changelog.'
+                : ':x: **NEEDS ATTENTION** — Review failures above before merging. Check the [UPSTREAM_UPDATE_RUNBOOK](../blob/main/pmoves/docs/operations/UPSTREAM_UPDATE_RUNBOOK.md) for breaking change guidance.',
+              '',
+              '---',
+              '*Automated by submodule-smoke workflow*',
+            ].join('\n');
+
+            // Find and update existing comment or create new one
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+
+            const botComment = comments.find(c =>
+              c.user.type === 'Bot' && c.body.includes('Submodule Update Smoke Test Results')
+            );
+
+            if (botComment) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body: body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: body,
+              });
+            }
