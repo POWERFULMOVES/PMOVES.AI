@@ -1,0 +1,59 @@
+# Coder Claw — Coding-Specialist GPU Claw
+# Hybrid: OpenClaw + TensorZero + NATS mesh participation
+#
+# Runs on 5090/4090 nodes for local coding inference using Qwen3-Coder-Next MoE.
+# SWE-Bench SOTA model with 80B total / 3B active params (Apache 2.0).
+# Communicates with fleet via NATS mesh.gpu.* subjects.
+
+name: coder_claw
+role: coding-specialist
+description: "Coding-focused agent backed by Qwen3-Coder-Next MoE model for code generation, review, and refactoring"
+
+node_affinity:
+  - 5090
+  - 4090
+hostname_pattern: "coder-claw-*"
+
+model:
+  provider: ollama
+  model: qwen3-coder-next:80b
+  endpoint: http://localhost:11434
+  fallback: tensorzero
+
+capabilities:
+  - code_generation
+  - code_review
+  - refactoring
+  - test_generation
+  - local_inference
+  - gpu_monitoring
+
+nats:
+  url: nats://nats:pmoves@nats:4222
+  subscribe:
+    - mesh.gpu.command.v1
+    - pinokio.agent.session.v1
+  publish:
+    - mesh.gpu.status.v1
+    - mesh.gpu.model.loaded.v1
+    - mesh.gpu.command.result.v1
+
+exec_permissions:
+  - nvidia-smi
+  - python3
+  - curl
+  - git
+  - make
+  - nats
+  - ollama
+
+health:
+  endpoint: null  # No HTTP endpoint — health via NATS heartbeat
+  heartbeat_subject: mesh.gpu.status.v1
+  heartbeat_interval_seconds: 10
+
+agent_zero:
+  subordinate: true
+  profile: coder_claw
+  inherit_context: true
+  report_to: agent_zero

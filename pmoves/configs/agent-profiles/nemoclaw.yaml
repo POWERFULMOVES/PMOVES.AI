@@ -18,6 +18,12 @@ model:
   endpoint: http://localhost:11434
   fallback: null  # No fallback — local inference only
 
+multimodal_alternate:
+  provider: ollama
+  model: gemma3n:e2b
+  endpoint: http://localhost:11434
+  purpose: "Edge image/video/audio processing via Gemma 3n E2B multimodal"
+
 capabilities:
   - local_inference
   - gpu_monitoring
