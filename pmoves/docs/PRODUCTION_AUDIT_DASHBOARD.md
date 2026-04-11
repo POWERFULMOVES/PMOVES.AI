@@ -3,15 +3,24 @@
 > **Single source of truth** for PMOVES.AI production readiness.
 > Supersedes all individual audit documents accumulated Feb 7 -- Feb 18, 2026.
 
-**Last Updated:** 2026-03-26 (auto-reconciled)
-**Branch:** `fix/platform-activation-soundcloud-gpu`
-**Commit:** pending (session 2 work)
+**Last Updated:** 2026-04-10 (Session 11.2 fleet validation)
+**Branch:** `main`
+**Commit:** `e676eedc` (post 6-PR merge batch)
 **Consolidated From:** 27 audit documents
 **Evidence:** live runbook execution on 2026-03-05 (`make ghcr-prepublish-inrepo-build`, strict local Trivy sweep logs under `pmoves/docs/logs/ghcr-local-prepublish/`)
 
 ---
 
-## Latest Changes (Mar 15, 2026)
+## Latest Changes (Apr 10, 2026)
+
+### Session 11.2 Fleet Validation (Apr 10, 2026)
+
+- **Fleet:** 42 containers running, 34 healthy (fresh Docker reinstall bringup)
+- **Fixes applied:** model-registry Dockerfile COPY (crash-loop fix), Makefile bringup-layered SUPABASE_RUNTIME default, transcribe-backend pillow/crawl4ai conflict
+- **6 PRs merged:** #1196-#1204 (n8n registry, PR monitor, supabase fix, submodule advances, Hi-RAG 5090 commit extraction)
+- **ALIGNED_IMPLEMENTATION_ROADMAP phases annotated:** Phase 1 COMPLETE, Phase 2 PARTIAL, Phase 3 TEMPLATE, Phase 4 COMPLETE, Phase 5 COMPLETE (~80% implemented)
+
+## Previous Changes (Mar 15, 2026)
 
 ### TAC YAML Audit Trees + Umbrella Coverage (Mar 15, 2026)
 

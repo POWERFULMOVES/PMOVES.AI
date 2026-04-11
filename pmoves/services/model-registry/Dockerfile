@@ -19,7 +19,7 @@ RUN groupadd -r pmoves --gid=65532 && \
     useradd -r -g pmoves --uid=65532 --home-dir=/app --shell=/sbin/nologin pmoves
 
 # Copy application with correct ownership
-COPY --chown=pmoves:pmoves main.py .
+COPY --chown=pmoves:pmoves *.py .
 
 # Switch to non-root user
 USER pmoves:pmoves
