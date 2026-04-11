@@ -6,6 +6,7 @@
 # See: pmoves/configs/claws/scopes/5090.json for scope config
 
 .PHONY: 5090-ssh 5090-ollama-status 5090-gpu-status 5090-claw-deploy 5090-claw-verify
+.PHONY: 5090-nim-up 5090-nim-status 5090-nim-models
 
 5090-ssh: ## SSH to 5090 via Tailscale
 	@ssh -o StrictHostKeyChecking=no root@pmoves-5090
@@ -21,3 +22,14 @@
 
 5090-claw-verify: ## Verify claw deployment on 5090
 	@$(CLAW_SCRIPTS)/verify-claw.sh --scope 5090 --target root@pmoves-5090
+
+# --- NVIDIA NIM Lifecycle ---
+
+5090-nim-up: ## Start NVIDIA NIM container (Nemotron Super 49B)
+	$(DC) --profile nim up -d nvidia-nim
+
+5090-nim-status: ## Check NIM health (readiness probe)
+	@curl -sf http://localhost:$${NIM_HOST_PORT:-8000}/v1/health/ready && echo "NIM: ready" || echo "NIM: not ready"
+
+5090-nim-models: ## List available NIM models
+	@curl -sf http://localhost:$${NIM_HOST_PORT:-8000}/v1/models | python3 -m json.tool 2>/dev/null || echo "NIM: unreachable"

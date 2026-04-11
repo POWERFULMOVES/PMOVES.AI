@@ -2851,6 +2851,35 @@ services:
       model-registry:
         condition: service_healthy
         required: false
+
+  # NVIDIA NIM - Llama-3.3-Nemotron-Super-49B inference server (~30GB VRAM)
+  nvidia-nim:
+    <<: *tier-llm-hardened
+    image: nvcr.io/nim/nvidia/llama-3_3-nemotron-super-49b-v1:1.8.3
+    restart: unless-stopped
+    environment:
+      - NGC_API_KEY=${NGC_API_KEY:?NGC_API_KEY required for NIM}
+      - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
+    ports:
+      - "${NIM_BIND:-127.0.0.1}:${NIM_HOST_PORT:-8000}:8000"
+    profiles: ["gpu", "nim"]
+    networks:
+      - pmoves_api
+      - pmoves_monitoring
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/v1/health/ready"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+
   evo-controller:
     <<: *tier-agent-hardened-ro
     build:

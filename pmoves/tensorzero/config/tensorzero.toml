@@ -282,6 +282,57 @@ api_base = "http://pmoves-ollama:11434/v1"
 model_name = "deepseek-r1:14b"
 api_key_location = "none"
 
+# --- Nemotron Super 49B (NVIDIA NIM hosted — 30GB VRAM) ---
+# Llama-3.3-Nemotron-Super-49B via NVIDIA NIM container (OpenAI-compatible)
+[models.nemotron_super_49b_nim]
+routing = ["nvidia_nim"]
+
+[models.nemotron_super_49b_nim.providers.nvidia_nim]
+type = "openai"
+api_base = "http://nvidia-nim:8000/v1"
+model_name = "nvidia/llama-3.3-nemotron-super-49b-v1"
+api_key_location = "none"
+
+# --- Qwen3-Coder-Next 80B MoE (3B active — Apache 2.0, fits ~7GB) ---
+[models.coding_qwen3_coder_next_80b_local]
+routing = ["ollama_local"]
+
+[models.coding_qwen3_coder_next_80b_local.providers.ollama_local]
+type = "openai"
+api_base = "http://pmoves-ollama:11434/v1"
+model_name = "qwen3-coder-next:80b"
+api_key_location = "none"
+
+# --- Qwen3-Coder 480B (Alibaba Cloud DashScope — 35B active MoE, cloud-only) ---
+[models.coding_qwen3_coder_480b_cloud]
+routing = ["alibaba_dashscope"]
+
+[models.coding_qwen3_coder_480b_cloud.providers.alibaba_dashscope]
+type = "openai"
+api_base = "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"
+model_name = "qwen3-coder"
+api_key_location = "env::DASHSCOPE_API_KEY"
+
+# --- Gemma 3n E4B (Multimodal edge — ~3.5GB VRAM) ---
+[models.gemma_3n_e4b_local]
+routing = ["ollama_local"]
+
+[models.gemma_3n_e4b_local.providers.ollama_local]
+type = "openai"
+api_base = "http://pmoves-ollama:11434/v1"
+model_name = "gemma3n:e4b"
+api_key_location = "none"
+
+# --- Gemma 3n E2B (Jetson edge — ~2GB VRAM) ---
+[models.gemma_3n_e2b_edge]
+routing = ["ollama_edge"]
+
+[models.gemma_3n_e2b_edge.providers.ollama_edge]
+type = "openai"
+api_base = "http://jetson-ollama:11434/v1"
+model_name = "gemma3n:e2b"
+api_key_location = "none"
+
 [models.chat_together]
 routing = ["together_primary"]
 
@@ -537,6 +588,18 @@ model = "glm_4_plus"
 [functions.agent_zero.variants.hosted_glm_long]
 type = "chat_completion"
 model = "glm_4_long"
+
+# Nemotron Super 49B — NVIDIA NIM hosted (safe rollout, weight=0)
+[functions.agent_zero.variants.hosted_nim_nemotron]
+type = "chat_completion"
+model = "nemotron_super_49b_nim"
+weight = 0.0
+
+# Qwen3-Coder-Next 80B — local MoE (safe rollout, weight=0)
+[functions.agent_zero.variants.local_qwen3_coder_next]
+type = "chat_completion"
+model = "coding_qwen3_coder_next_80b_local"
+weight = 0.0
 
 [functions.langextract]
 type = "chat"
@@ -814,6 +877,18 @@ type = "chat_completion"
 model = "chat_alibaba_qwen"
 weight = 0.0
 
+# Qwen3-Coder-Next 80B — local MoE (safe rollout, weight=0)
+[functions.coding.variants.local_qwen3_coder_next]
+type = "chat_completion"
+model = "coding_qwen3_coder_next_80b_local"
+weight = 0.0
+
+# Qwen3-Coder 480B — Alibaba Cloud (safe rollout, weight=0)
+[functions.coding.variants.cloud_qwen3_coder_480b]
+type = "chat_completion"
+model = "coding_qwen3_coder_480b_cloud"
+weight = 0.0
+
 # Function: Orchestrator
 [functions.orchestrator]
 type = "chat"
@@ -840,6 +915,21 @@ type = "chat"
 type = "chat_completion"
 model = "vl_sentinel_qwen3vl_local"
 weight = 1.0
+
+# --- Function: Multimodal Edge ------------------------------------------------
+# Gemma 3n models for lightweight multimodal inference on edge and local GPU
+[functions.multimodal_edge]
+type = "chat"
+
+[functions.multimodal_edge.variants.gemma_3n_e4b]
+type = "chat_completion"
+model = "gemma_3n_e4b_local"
+weight = 1.0
+
+[functions.multimodal_edge.variants.gemma_3n_e2b_edge]
+type = "chat_completion"
+model = "gemma_3n_e2b_edge"
+weight = 0.0
 
 # --- Per-Stack Coding Functions (4090 Coding Workstation) ---
 # Each coding plan gets its own function for independent observability,
