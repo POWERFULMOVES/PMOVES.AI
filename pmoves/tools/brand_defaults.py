@@ -13,6 +13,12 @@ _REPO_ROOT = str(ROOT.parent)
 if _REPO_ROOT not in sys.path:
     sys.path.insert(0, _REPO_ROOT)
 
+from pmoves.tools._secrets_common import (
+    PLACEHOLDER_VALUES,
+    is_placeholder as _is_blank_or_placeholder,
+    normalize_env_value as _normalize_env_value,
+)
+
 ENV_DEFAULT = ROOT / "env.shared"
 ENV_GEN_DEFAULT = ROOT / ".env.generated"
 
@@ -43,12 +49,6 @@ DEFAULTS = {
     "RUSTDESK_RELAY_HOST": "",
     "RUSTDESK_PUBLIC_KEY": "",
 }
-
-from pmoves.tools._secrets_common import (
-    PLACEHOLDER_VALUES,
-    is_placeholder as _is_blank_or_placeholder,
-    normalize_env_value as _normalize_env_value,
-)
 
 # Values that have been superseded by newer defaults.
 # When brand-defaults sees an existing value matching a superseded entry,
