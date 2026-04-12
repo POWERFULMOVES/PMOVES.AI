@@ -82,15 +82,15 @@ root:
           action:
             type: grep
             target: "pmoves/tensorzero/config/tensorzero.toml"
-            pattern: "models.nim_"
-            expect: "NIM model with routing to nvidia-nim provider"
+            pattern: "models.nemotron_super_49b_nim"
+            expect: "nemotron_super_49b_nim model block with routing to nvidia-nim provider"
         - id: nims.tensorzero.agent-zero-variant
           task: "agent_zero function has NIM variant"
           action:
             type: grep
             target: "pmoves/tensorzero/config/tensorzero.toml"
-            pattern: "hosted_nim"
-            expect: "NIM variant in agent_zero function"
+            pattern: "functions.agent_zero.variants.hosted_nim_nemotron"
+            expect: "hosted_nim_nemotron variant registered under agent_zero function"
         - id: nims.tensorzero.metrics
           task: "NIM requests tracked in ClickHouse"
           action:
@@ -106,8 +106,13 @@ root:
           action:
             type: grep
             target: "pmoves/config/gpu-models.yaml"
-            pattern: "nim"
-            expect: "NIM model with VRAM estimate in model registry"
+            pattern: "nemotron-super:49b"
+            expect: "nemotron-super:49b entry with vram_mb: 30000 (30 GB budget for NIM)"
+        - id: nims.gpu-orch.vram-budget
+          task: "NIM VRAM budget matches registry"
+          action:
+            type: manual
+            expect: "gpu-models.yaml nemotron-super:49b reserves 30000 MB (RTX 5090 32GB leaves ~2GB headroom)"
         - id: nims.gpu-orch.lifecycle
           task: "NIM model lifecycle events on NATS"
           action:

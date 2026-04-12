@@ -1461,7 +1461,7 @@ up-legacy-both: ## Ensure v1 hi-rag gateway CPU+GPU are up
 	@$(DC) --profile gpu --profile legacy up -d hi-rag-gateway-gpu >/dev/null 2>&1 || true
 	@echo "✔ hi-rag-gateway v1: CPU(:8089) + GPU(:8090 if GPUs present)."
 
-.PHONY: up down clean smoke smoke-prod smoke-gpu smoke-qwen-rerank llama-throughput-smoke manifest-audit
+.PHONY: up down clean smoke smoke-prod smoke-gpu smoke-qwen-rerank smoke-new-models llama-throughput-smoke manifest-audit
 .PHONY: up down clean up-workers up-yt channel-monitor-up channel-monitor-smoke up-media up-jellyfin up-nats ps supabase-up supabase-stop supabase-clean supa-extract-remote env-setup env-check up-jellyfin-ai-nvenc down-jellyfin-ai-nvenc up-rustdesk down-rustdesk
 .PHONY: up down clean up-cloudflare down-cloudflare logs-cloudflare cloudflare-url restart-cloudflare up-workers up-yt up-media up-jellyfin up-nats ps supabase-up supabase-stop supabase-clean supa-extract-remote env-setup env-check manifest-audit
 .PHONY: discord-ping discord-ping-ps demo-content-published health-publisher-discord up-agents health-agent-zero health-jellyfin-bridge seed-approval seed-approval-ps m2-preflight evidence-stamp evidence-stamp-ps evidence-log evidence-log-ps m2-seed-demo n8n-webhook-demo
@@ -1586,6 +1586,32 @@ llama-throughput-smoke: ## Quick llama throughput validation (single request tes
 smoke-qwen-rerank: ## Enforce Qwen reranker selection on v2-gpu then run strict GPU smoke
 	@$(PYTHON) tools/smoke_gpu.py --require-qwen --stats-only $(ARGS) || python tools/smoke_gpu.py --require-qwen --stats-only $(ARGS) || py -3 tools/smoke_gpu.py --require-qwen --stats-only $(ARGS)
 	@GPU_SMOKE_STRICT=true $(MAKE) --no-print-directory smoke-gpu
+
+smoke-new-models: ## Smoke test new model providers (NIM, Qwen3-Coder-Next, Gemma 3n)
+	@echo "=== New Model Providers Smoke Test ==="
+	@echo "1) NVIDIA NIM health:"
+	@curl -sf http://localhost:$${NIM_HOST_PORT:-8000}/v1/health/ready >/dev/null 2>&1 \
+	  && echo "   NIM: ready" \
+	  || echo "   NIM: not available (skipped)"
+	@echo "2) TensorZero model catalog:"
+	@tz_json=$$(curl -sf http://localhost:3030/v1/models 2>/dev/null); \
+	if [ -z "$$tz_json" ]; then \
+	  echo "   TensorZero: unreachable"; \
+	else \
+	  for m in nemotron_super_49b_nim coding_qwen3_coder_next_80b_local gemma_3n_e4b_local; do \
+	    if echo "$$tz_json" | grep -q "\"$$m\""; then \
+	      echo "   $$m: present"; \
+	    else \
+	      echo "   $$m: MISSING"; \
+	    fi; \
+	  done; \
+	fi
+	@echo "3) Agent Zero provider catalog:"
+	@if [ -f ../PMOVES-Agent-Zero/conf/model_providers.yaml ] && grep -q nvidia_nim ../PMOVES-Agent-Zero/conf/model_providers.yaml; then \
+	  echo "   Agent Zero: nvidia_nim registered"; \
+	else \
+	  echo "   Agent Zero: nvidia_nim NOT registered"; \
+	fi
 
 manifest-audit: ## Report CHIT manifest projection (allow-missing for audit visibility)
 	@$(PYTHON) tools/secrets_sync.py report --manifest pmoves/chit/secrets_manifest.yaml --allow-missing || python tools/secrets_sync.py report --manifest pmoves/chit/secrets_manifest.yaml --allow-missing || py -3 tools/secrets_sync.py report --manifest pmoves/chit/secrets_manifest.yaml --allow-missing
