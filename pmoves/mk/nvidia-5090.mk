@@ -26,12 +26,19 @@ PMOVES_5090_DIR ?= /opt/PMOVES.AI/pmoves
 	@$(CLAW_SCRIPTS)/verify-claw.sh --scope 5090 --target root@pmoves-5090
 
 # --- NVIDIA NIM Lifecycle ---
+# These targets manage the NIM container on the 5090 GPU node via SSH.
+# Port defaults to 8200 to avoid collision with supabase-kong on 8000.
+# Override locally with: make 5090-nim-status NIM_HOST_PORT=9000
+# Override remote path with: make 5090-nim-up PMOVES_5090_DIR=/srv/pmoves
 
-5090-nim-up: ## Start NVIDIA NIM container (Nemotron Super 49B)
-	@ssh -o ConnectTimeout=5 root@pmoves-5090 'cd "$(PMOVES_5090_DIR)" && docker compose --profile nim up -d nvidia-nim' 2>/dev/null || echo "5090: unreachable or PMOVES_5090_DIR is incorrect"
+NIM_HOST_PORT ?= 8200
 
-5090-nim-status: ## Check NIM health (readiness probe)
-	@ssh -o ConnectTimeout=5 root@pmoves-5090 'curl -sf http://127.0.0.1:$${NIM_HOST_PORT:-8000}/v1/health/ready >/dev/null && echo "NIM: ready" || echo "NIM: not ready"' 2>/dev/null || echo "5090: unreachable"
+5090-nim-up: ## Start NVIDIA NIM container on 5090 (requires NGC_API_KEY)
+	@test -n "$${NGC_API_KEY}" || { echo "ERROR: NGC_API_KEY must be exported before running 5090-nim-up"; exit 1; }
+	@ssh -o ConnectTimeout=5 root@pmoves-5090 "cd '$(PMOVES_5090_DIR)' && NGC_API_KEY='$${NGC_API_KEY}' docker compose --profile nim up -d nvidia-nim" || { echo "5090: nim-up failed (check SSH reachability and PMOVES_5090_DIR='$(PMOVES_5090_DIR)')"; exit 1; }
 
-5090-nim-models: ## List available NIM models
-	@ssh -o ConnectTimeout=5 root@pmoves-5090 'curl -sf http://127.0.0.1:$${NIM_HOST_PORT:-8000}/v1/models | python3 -m json.tool 2>/dev/null || echo "NIM: unreachable"' 2>/dev/null || echo "5090: unreachable"
+5090-nim-status: ## Check NIM health on 5090 (readiness probe)
+	@ssh -o ConnectTimeout=5 root@pmoves-5090 "curl -sf http://127.0.0.1:$(NIM_HOST_PORT)/v1/health/ready" >/dev/null 2>&1 && echo "NIM: ready" || echo "NIM: not ready (or 5090 unreachable)"
+
+5090-nim-models: ## List available NIM models on 5090
+	@ssh -o ConnectTimeout=5 root@pmoves-5090 "curl -sf http://127.0.0.1:$(NIM_HOST_PORT)/v1/models" 2>/dev/null | python3 -m json.tool 2>/dev/null || echo "NIM: unreachable"

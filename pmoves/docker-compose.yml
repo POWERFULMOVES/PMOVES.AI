@@ -2853,6 +2853,8 @@ services:
         required: false
 
   # NVIDIA NIM - Llama-3.3-Nemotron-Super-49B inference server (~30GB VRAM)
+  # Default host port is 8200 (NOT 8000) to avoid colliding with supabase-kong,
+  # which binds 8000 by default. Override via NIM_HOST_PORT.
   nvidia-nim:
     <<: *tier-llm-hardened
     image: nvcr.io/nim/nvidia/llama-3_3-nemotron-super-49b-v1:1.8.3
@@ -2863,10 +2865,12 @@ services:
       - NGC_API_KEY=${NGC_API_KEY:-}
       - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
     ports:
-      - "${NIM_BIND:-127.0.0.1}:${NIM_HOST_PORT:-8000}:8000"
+      - "${NIM_BIND:-127.0.0.1}:${NIM_HOST_PORT:-8200}:8000"
     profiles: ["gpu", "nim"]
     networks:
       - pmoves_api
+      # pmoves_bus: publish mesh.gpu.model.loaded.v1 / .unloaded.v1 for model-registry sync
+      - pmoves_bus
       - pmoves_monitoring
     deploy:
       resources:
