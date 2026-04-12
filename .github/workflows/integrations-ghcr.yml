@@ -425,7 +425,6 @@ jobs:
             ${{ steps.cfg.outputs.build_args }}
           platforms: linux/amd64
           cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ steps.cfg.outputs.image_name }}:buildcache
-          cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ steps.cfg.outputs.image_name }}:buildcache,mode=max
 
       - name: Build and push (multi-arch)
         if: ${{ github.event_name != 'pull_request' && steps.meta.outputs.has_tags == 'true' }}
