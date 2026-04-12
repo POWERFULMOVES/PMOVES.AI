@@ -236,6 +236,29 @@ ON CONFLICT (name) DO UPDATE SET
   metadata = EXCLUDED.metadata,
   updated_at = NOW();
 
+-- NVIDIA NIM (local NIM container runtime)
+-- Name matches the canonical key used in pmoves/config/model_nexus.yaml,
+-- pmoves/configs/agent-profiles/nemotron_claw.yaml, and
+-- pmoves/configs/flare-model-namespace.yaml.
+INSERT INTO pmoves_core.model_providers (name, type, api_base, api_key_env_var, description, active, metadata)
+VALUES (
+  'nvidia_nim',
+  'openai_compatible',
+  'http://nvidia-nim:8000/v1',
+  'NGC_API_KEY',
+  'NVIDIA NIM local container runtime for Nemotron models',
+  true,
+  '{"network": "pmoves_api", "location": "local", "runtime": "nim"}'::jsonb
+)
+ON CONFLICT (name) DO UPDATE SET
+  type = EXCLUDED.type,
+  api_base = EXCLUDED.api_base,
+  api_key_env_var = EXCLUDED.api_key_env_var,
+  description = EXCLUDED.description,
+  active = EXCLUDED.active,
+  metadata = EXCLUDED.metadata,
+  updated_at = NOW();
+
 -- =============================================================================
 -- Local Chat Models (Ollama)
 -- =============================================================================
@@ -534,6 +557,102 @@ BEGIN
     2500,
     128000,
     'Phi3 Mini 3.8B - Edge deployment with 128k context',
+    true
+  )
+  ON CONFLICT (provider_id, model_id) DO UPDATE SET
+    name = EXCLUDED.name,
+    capabilities = EXCLUDED.capabilities,
+    vram_mb = EXCLUDED.vram_mb,
+    context_length = EXCLUDED.context_length,
+    description = EXCLUDED.description,
+    updated_at = NOW();
+
+  -- Qwen3-Coder-Next 80B MoE - SWE-Bench SOTA coding model
+  INSERT INTO pmoves_core.models (provider_id, name, model_id, model_type, capabilities, vram_mb, context_length, description, active)
+  VALUES (
+    v_ollama_local_id,
+    'qwen3_coder_next_80b_local',
+    'qwen3-coder-next:80b',
+    'chat',
+    '["chat", "code_generation", "code_review", "function_calling", "json_mode"]'::jsonb,
+    7000,
+    262144,
+    'Qwen3-Coder-Next 80B MoE - 3B active params, SWE-Bench SOTA. Apache 2.0',
+    true
+  )
+  ON CONFLICT (provider_id, model_id) DO UPDATE SET
+    name = EXCLUDED.name,
+    capabilities = EXCLUDED.capabilities,
+    vram_mb = EXCLUDED.vram_mb,
+    context_length = EXCLUDED.context_length,
+    description = EXCLUDED.description,
+    updated_at = NOW();
+
+  -- Gemma 3n E4B - Edge-optimized multimodal
+  INSERT INTO pmoves_core.models (provider_id, name, model_id, model_type, capabilities, vram_mb, context_length, description, active)
+  VALUES (
+    v_ollama_local_id,
+    'gemma_3n_e4b_local',
+    'gemma3n:e4b',
+    'chat',
+    '["chat", "vision", "video", "audio", "multimodal"]'::jsonb,
+    3500,
+    32768,
+    'Google Gemma 3n E4B - Edge multimodal with Per-Layer Embeddings',
+    true
+  )
+  ON CONFLICT (provider_id, model_id) DO UPDATE SET
+    name = EXCLUDED.name,
+    capabilities = EXCLUDED.capabilities,
+    vram_mb = EXCLUDED.vram_mb,
+    context_length = EXCLUDED.context_length,
+    description = EXCLUDED.description,
+    updated_at = NOW();
+
+  -- Gemma 3n E2B - Compact edge multimodal (Jetson)
+  INSERT INTO pmoves_core.models (provider_id, name, model_id, model_type, capabilities, vram_mb, context_length, description, active)
+  VALUES (
+    v_ollama_edge_id,
+    'gemma_3n_e2b_edge',
+    'gemma3n:e2b',
+    'chat',
+    '["chat", "vision", "video", "audio", "multimodal"]'::jsonb,
+    2000,
+    32768,
+    'Google Gemma 3n E2B - Compact multimodal for Jetson edge deployment',
+    true
+  )
+  ON CONFLICT (provider_id, model_id) DO UPDATE SET
+    name = EXCLUDED.name,
+    capabilities = EXCLUDED.capabilities,
+    vram_mb = EXCLUDED.vram_mb,
+    context_length = EXCLUDED.context_length,
+    description = EXCLUDED.description,
+    updated_at = NOW();
+
+END $$;
+
+-- =============================================================================
+-- NVIDIA NIM Local Models
+-- =============================================================================
+
+DO $$
+DECLARE
+  v_nim_local_id UUID;
+BEGIN
+  SELECT id INTO v_nim_local_id FROM pmoves_core.model_providers WHERE name = 'nvidia_nim';
+
+  -- Nemotron Super 49B - Agentic NIM model requiring exclusive GPU
+  INSERT INTO pmoves_core.models (provider_id, name, model_id, model_type, capabilities, vram_mb, context_length, description, active)
+  VALUES (
+    v_nim_local_id,
+    'nemotron_super_49b_local',
+    'nvidia/llama-3_3-nemotron-super-49b-v1',
+    'chat',
+    '["chat", "function_calling", "json_mode", "tool_use", "agentic_reasoning"]'::jsonb,
+    30000,
+    131072,
+    'NVIDIA Nemotron Super 49B - FP8, requires NIM container with exclusive GPU access',
     true
   )
   ON CONFLICT (provider_id, model_id) DO UPDATE SET

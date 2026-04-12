@@ -59,3 +59,36 @@ mappings:
     lane: "local"
     nodes: [z890, 5090]
     purpose: "embeddings"
+
+  # --- NVIDIA NIM ---
+  nemotron-super:
+    flare_name: "pmoves/nemotron-super-49b"
+    provider: "nvidia_nim"
+    model_id: "nvidia/llama-3_3-nemotron-super-49b-v1"
+    lane: "local"
+    nodes: [5090]
+    vllm_compatible: false
+
+  # --- Coding ---
+  qwen-coder-next:
+    flare_name: "pmoves/qwen-3-coder-next-80b"
+    provider: "ollama"
+    model_id: "qwen3-coder-next:80b"
+    lane: "local"
+    nodes: [5090, 4090]
+    vllm_compatible: true
+
+  # --- Edge Multimodal ---
+  gemma-3n-e4b:
+    flare_name: "pmoves/gemma-3n-e4b"
+    provider: "ollama"
+    model_id: "gemma3n:e4b"
+    lane: "local"
+    nodes: [5090, 4090]
+
+  gemma-3n-e2b:
+    flare_name: "pmoves/gemma-3n-e2b"
+    provider: "ollama"
+    model_id: "gemma3n:e2b"
+    lane: "edge"
+    nodes: [jetson]

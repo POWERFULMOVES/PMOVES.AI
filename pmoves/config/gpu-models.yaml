@@ -219,6 +219,41 @@ models:
     quantization: "Q4_K_M"
     context_length: 131072
 
+  # NVIDIA Nemotron Super 49B (NIM container)
+  - id: "nemotron-super:49b"
+    provider: nvidia_nim
+    vram_mb: 30000
+    description: "NVIDIA Nemotron Super 49B - Requires NIM container, exclusive GPU access at 30GB"
+    priority_default: 9
+    quantization: "FP8"
+    context_length: 131072
+
+  # Qwen3-Coder-Next 80B MoE
+  - id: "qwen3-coder-next:80b"
+    provider: ollama
+    vram_mb: 7000
+    description: "Qwen3-Coder-Next 80B MoE - SWE-Bench SOTA, 3B active params. Apache 2.0"
+    priority_default: 9
+    quantization: "MoE-3B-active"
+    context_length: 262144
+
+  # Gemma 3n Family (Google edge-optimized multimodal)
+  - id: "gemma3n:e4b"
+    provider: ollama
+    vram_mb: 3500
+    description: "Google Gemma 3n E4B - Edge multimodal (text/image/video/audio), Per-Layer Embeddings"
+    priority_default: 5
+    quantization: "E4B"
+    context_length: 32768
+
+  - id: "gemma3n:e2b"
+    provider: ollama
+    vram_mb: 2000
+    description: "Google Gemma 3n E2B - Compact multimodal for Jetson edge deployment"
+    priority_default: 4
+    quantization: "E2B"
+    context_length: 32768
+
   # TTS Models (Ultimate TTS Studio)
   - id: "kokoro"
     provider: tts
