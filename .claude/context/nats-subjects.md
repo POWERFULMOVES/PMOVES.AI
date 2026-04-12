@@ -880,6 +880,22 @@ Example: `ingest.transcript.ready.v1`
 
 ## Operations Subjects
 
+**`ops.submodule.update.detected.v1`**
+- **Direction:** Published by GitHub Actions (submodule-update-check workflow) → Consumed by Publisher-Discord, monitoring
+- **Purpose:** Notify that one or more tracked upstream submodules have new commits and auto-update PRs were created
+- **Payload:**
+  ```json
+  {
+    "workflow": "submodule-update-check",
+    "updated": 2,
+    "timestamp": "2026-04-12T06:00:00Z"
+  }
+  ```
+- **Publisher:** `.github/workflows/submodule-update-check.yml` (weekly + manual)
+- **Subscribers:** Publisher-Discord (alert team to pending PRs), ops monitoring
+- **Delivery:** Best-effort (publish only if `NATS_URL` secret is configured on the runner)
+- **Related:** See `pmoves/docs/operations/UPSTREAM_UPDATE_RUNBOOK.md` for the full update flow
+
 **`ops.pr.trim.completed.v1`**
 - **Direction:** Published by claude-code-cli (pr-hedge-trim tool) → Consumed by pr-monitor, Discord Publisher
 - **Purpose:** Notify that a PR hedge trim cycle completed — review threads classified, fixed, and resolved

@@ -5,12 +5,20 @@ synchronized with upstream changes in core submodules.
 
 ## Tracked Submodules
 
-| Submodule | Path | Branch | Expected Cadence | Risk Level |
-|-----------|------|--------|------------------|------------|
-| PMOVES-Agent-Zero | `PMOVES-Agent-Zero` | `PMOVES.AI-Edition-Hardened` | Frequent (weekly) | High — orchestration core, MCP API surface |
-| PMOVES-Archon | `PMOVES-Archon` | `PMOVES.AI-Edition-Hardened` | Moderate (biweekly) | Medium — agent forms, Supabase integration |
-| PMOVES-n8n | `PMOVES-n8n` | `PMOVES.AI-Edition-Hardened` | Monthly releases | Low-Medium — workflow engine, node updates |
-| PMOVES-supabase | `PMOVES-supabase` | `PMOVES.AI-Edition-Hardened` | Quarterly | High — database schema, auth, RLS policies |
+| Submodule | Path | Branch | Cadence | Risk | Health Endpoint |
+|-----------|------|--------|---------|------|-----------------|
+| PMOVES-Agent-Zero | `PMOVES-Agent-Zero` | `PMOVES.AI-Edition-Hardened` | Frequent (weekly) | High | `http://localhost:8080/healthz` |
+| PMOVES-Archon | `PMOVES-Archon` | `PMOVES.AI-Edition-Hardened` | Moderate (biweekly) | Medium | `http://localhost:8091/healthz` |
+| PMOVES-n8n | `PMOVES-n8n` | `PMOVES.AI-Edition-Hardened` | Monthly releases | Low-Medium | `http://localhost:5678/healthz` |
+| PMOVES-supabase | `PMOVES-supabase` | `PMOVES.AI-Edition-Hardened` | Quarterly | High | `http://localhost:8000/kong-status` |
+
+**Source of truth:** The health endpoints above MUST stay in sync with the
+`health_map` in `.github/workflows/submodule-smoke.yml`. If you add or change a
+port here, update that workflow file in the same PR.
+
+> **NATS event on update detection:** `ops.submodule.update.detected.v1`
+> (published best-effort by the workflow when `NATS_URL` secret is configured).
+> Documented in `.claude/context/nats-subjects.md`.
 
 ## How the Pipeline Works
 
@@ -153,12 +161,19 @@ make -C pmoves up-agent-zero
 If multiple submodules are affected:
 
 ```bash
-# Reset all submodules to the state at a known-good main commit
-git checkout <known-good-main-sha> -- .gitmodules
+# Restore BOTH .gitmodules AND the gitlink entries for each submodule path
+# from the known-good commit. Restoring only .gitmodules leaves the parent
+# repo's gitlinks pointing at the bad SHAs, which will resurface after
+# `git submodule update`.
+git checkout <known-good-main-sha> -- .gitmodules \
+    PMOVES-Agent-Zero PMOVES-Archon PMOVES-n8n PMOVES-supabase
+
+# Now .gitmodules AND the index gitlinks both reference the known-good state
 git submodule sync
 git submodule update --init --recursive
 
-# Stage everything
+# Stage everything (gitlinks already staged by the checkout above; this
+# is belt-and-suspenders in case you restored additional paths)
 git add .gitmodules PMOVES-Agent-Zero PMOVES-Archon PMOVES-n8n PMOVES-supabase
 git commit -m "fix(submodules): rollback all to known-good state"
 
@@ -172,6 +187,12 @@ make -C pmoves verify-all
 For cases where the automated pipeline is not running or you need immediate updates:
 
 ```bash
+# Create and switch to a dedicated manual-bump branch FIRST
+# (skipping this step lands the bump on whatever branch you happen to be on)
+git checkout main
+git pull origin main
+git checkout -b feature/manual-bump-agent-zero
+
 # Update a single submodule to latest upstream
 git submodule update --remote PMOVES-Agent-Zero
 
@@ -185,7 +206,7 @@ git add PMOVES-Agent-Zero
 git commit -m "chore(submodules): bump PMOVES-Agent-Zero to latest"
 
 # Push and create PR
-git push origin feature/manual-bump-agent-zero
+git push -u origin feature/manual-bump-agent-zero
 gh pr create \
   --title "chore(submodules): bump PMOVES-Agent-Zero to latest" \
   --body "Manual submodule bump. Review upstream changelog before merging." \

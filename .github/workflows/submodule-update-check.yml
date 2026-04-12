@@ -51,6 +51,9 @@ jobs:
       - name: Checkout (with submodules)
         uses: actions/checkout@v4
         with:
+          # Always compare against main — workflow_dispatch may run from any ref
+          # but gitlink comparison must use the canonical base branch.
+          ref: 'main'
           fetch-depth: 0
           submodules: true
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -59,6 +62,22 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Ensure upstream-update label exists
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          # Fail fast if the label cannot be created — smoke workflow gates on this
+          if ! gh label list --search "upstream-update" --json name --jq '.[].name' | grep -qx "upstream-update"; then
+            echo "Creating upstream-update label..."
+            gh label create upstream-update \
+              --description "Automated upstream submodule update" \
+              --color "0E8A16" \
+              --force
+          else
+            echo "upstream-update label already exists"
+          fi
 
       - name: Detect and propose updates
         id: updates
@@ -237,20 +256,15 @@ jobs:
               gh pr edit "$existing_pr" --body "$pr_body"
               echo "  Updated PR #${existing_pr}"
             else
+              # The "Ensure upstream-update label exists" step already guaranteed
+              # the label is present. Fail fast if PR creation errors — we never
+              # want an unlabeled PR because the smoke workflow gates on the label.
               gh pr create \
                 --title "chore(submodules): bump ${name} to upstream ${new_sha:0:10}" \
                 --body "$pr_body" \
                 --label "upstream-update" \
                 --base main \
-                --head "$pr_branch" || {
-                  echo "  WARN: PR creation failed (label may not exist yet)"
-                  # Retry without label
-                  gh pr create \
-                    --title "chore(submodules): bump ${name} to upstream ${new_sha:0:10}" \
-                    --body "$pr_body" \
-                    --base main \
-                    --head "$pr_branch" || true
-                }
+                --head "$pr_branch"
               echo "  PR created for ${name}"
             fi
 
@@ -288,10 +302,19 @@ jobs:
       - name: Post NATS event (if updates detected)
         if: steps.updates.outputs.updated_count != '0' && steps.updates.outputs.updated_count != ''
         continue-on-error: true
+        env:
+          # Credentials come from Actions secrets — never hardcode.
+          # Set NATS_URL in org/repo secrets (e.g. nats://user:pass@host:4222)
+          # or provide NATS_USER + NATS_PASSWORD and construct the URL here.
+          NATS_URL: ${{ secrets.NATS_URL }}
         run: |
-          # Publish to NATS if nats CLI is available (best-effort)
+          # Publish to NATS if nats CLI is available and a server URL is configured (best-effort)
+          if [[ -z "${NATS_URL:-}" ]]; then
+            echo "NATS_URL secret not set — skipping event publish"
+            exit 0
+          fi
           if command -v nats >/dev/null 2>&1; then
             nats pub "ops.submodule.update.detected.v1" \
               "{\"workflow\":\"submodule-update-check\",\"updated\":${{ steps.updates.outputs.updated_count }},\"timestamp\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}" \
-              --server nats://nats:pmoves@localhost:4222 || true
+              --server "$NATS_URL" || true
           fi
