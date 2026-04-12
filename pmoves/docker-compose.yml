@@ -2858,7 +2858,9 @@ services:
     image: nvcr.io/nim/nvidia/llama-3_3-nemotron-super-49b-v1:1.8.3
     restart: unless-stopped
     environment:
-      - NGC_API_KEY=${NGC_API_KEY:?NGC_API_KEY required for NIM}
+      # Keep base compose validation non-fatal when the nim profile is unused.
+      # Operators launching NIM should still set NGC_API_KEY explicitly.
+      - NGC_API_KEY=${NGC_API_KEY:-}
       - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
     ports:
       - "${NIM_BIND:-127.0.0.1}:${NIM_HOST_PORT:-8000}:8000"
