@@ -9,6 +9,10 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+_REPO_ROOT = str(ROOT.parent)
+if _REPO_ROOT not in sys.path:
+    sys.path.insert(0, _REPO_ROOT)
+
 ENV_DEFAULT = ROOT / "env.shared"
 ENV_GEN_DEFAULT = ROOT / ".env.generated"
 
@@ -40,18 +44,11 @@ DEFAULTS = {
     "RUSTDESK_PUBLIC_KEY": "",
 }
 
-PLACEHOLDER_VALUES = {
-    "",
-    "changeme",
-    "change_me",
-    "base64:CHANGE_ME",
-    "GENERATE_FROM_WGER_UI",
-    "SURREAL_USER_HERE",
-    "SURREAL_PASS_HERE",
-    "root",
-    "pmoves4482",
-    "minioadmin",
-}
+from pmoves.tools._secrets_common import (
+    PLACEHOLDER_VALUES,
+    is_placeholder as _is_blank_or_placeholder,
+    normalize_env_value as _normalize_env_value,
+)
 
 # Values that have been superseded by newer defaults.
 # When brand-defaults sees an existing value matching a superseded entry,
@@ -67,12 +64,6 @@ SUPERSEDED_VALUES: dict[str, str] = {
     "tensorzero::embedding_model_name::qwen3_embedding_4b_local": "qwen3_embedding_4b_local",
 }
 
-
-def _normalize_env_value(value: str) -> str:
-    value = value.strip()
-    if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
-        return value[1:-1].strip()
-    return value
 
 
 def _strong_random(n_bytes: int) -> str:
@@ -103,15 +94,6 @@ def _set_kv(text: str, key: str, value: str) -> str:
         return re.sub(pat, lambda m: m.group(1) + value, text, flags=re.M)
     return text + f"\n{key}={value}\n"
 
-
-def _is_blank_or_placeholder(value: str) -> bool:
-    normalized = _normalize_env_value(value)
-    if not normalized or normalized in PLACEHOLDER_VALUES:
-        return True
-    # Catch Supabase-style "your_*_here" placeholders (e.g. your_secret_key_base_here)
-    if re.match(r"^your_\w+_here$", normalized):
-        return True
-    return False
 
 
 def _first_real(text: str, keys: list[str]) -> str:

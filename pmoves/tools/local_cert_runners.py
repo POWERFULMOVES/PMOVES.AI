@@ -15,6 +15,11 @@ import shutil
 import subprocess
 import sys
 from dataclasses import dataclass
+from pathlib import Path
+
+_REPO_ROOT = str(Path(__file__).resolve().parents[2])
+if _REPO_ROOT not in sys.path:
+    sys.path.insert(0, _REPO_ROOT)
 
 
 @dataclass(frozen=True)
@@ -109,35 +114,46 @@ def registration_token(repo: str, lane: str) -> str:
     return token
 
 
-def access_token(repo: str, lane: str) -> tuple[str, bool]:
-    """Get a GitHub PAT for persistent runner auto-registration.
+def access_token(repo: str, lane: str) -> tuple[str, bool, str]:
+    """Get auth credentials for persistent runner registration.
 
-    With ACCESS_TOKEN, the myoung34/github-runner container auto-fetches
-    fresh registration tokens on each restart, preventing the perpetual
-    404 loop caused by expired RUNNER_TOKENs.
+    Priority:
+      0. GitHub App (APP_ID + APP_PRIVATE_KEY) — auto-renewing, no PAT needed
+      1. Lane-specific PAT (RUNNER_PAT_{LANE})
+      2. Shared PAT (RUNNER_PAT / GH_TOKEN / GITHUB_TOKEN)
+      3. Short-lived registration token (~1h, deprecated)
 
-    Returns (token, is_pat) — is_pat=True means use ACCESS_TOKEN env var,
-    is_pat=False means fall back to short-lived RUNNER_TOKEN.
+    Returns (token_or_app_id, is_persistent, auth_mode) where:
+      auth_mode = "app" | "pat" | "registration"
+    For "app" mode, token_or_app_id is the APP_ID (APP_PRIVATE_KEY read separately).
     """
+    # Priority 0: GitHub App credentials — the myoung34/github-runner image
+    # natively supports APP_ID + APP_PRIVATE_KEY and mints its own tokens.
+    app_id = os.getenv("GH_APP_ID")
+    app_key = os.getenv("GH_APP_SEC")
+    if app_id and app_key:
+        return app_id, True, "app"
+
+    # Priority 1-2: PAT cascade
     env_name = f"RUNNER_PAT_{lane.replace('-', '_').upper()}"
     lane_pat = os.getenv(env_name)
     if lane_pat:
-        return lane_pat, True
+        return lane_pat, True, "pat"
     shared_pat = (
         os.getenv("RUNNER_PAT")
         or os.getenv("GH_TOKEN")
         or os.getenv("GITHUB_TOKEN")
     )
     if shared_pat:
-        return shared_pat, True
-    # Fallback: short-lived registration token (expires in ~1h)
+        return shared_pat, True, "pat"
+    # Priority 3: short-lived registration token (expires in ~1h)
     print(
-        f"WARNING: No PAT found (set RUNNER_PAT or GH_TOKEN). "
+        f"WARNING: No App credentials or PAT found. "
         f"Using short-lived registration token for lane '{lane}' — "
         f"container will fail to re-register after ~1 hour.",
         file=sys.stderr,
     )
-    return registration_token(repo, lane), False
+    return registration_token(repo, lane), False, "registration"
 
 
 def docker_rm(container_name: str) -> None:
@@ -180,23 +196,19 @@ def _docker_socket_mount() -> str:
 def _secrets_volume_mount() -> str:
     """Return host↔container bind-mount for persisting synced secrets.
 
-    Maps $APPDATA/pmoves (Windows) or ~/.config/pmoves (Linux) to the
-    container's /root/.config/pmoves so sync-secrets-local artifacts
-    persist to the host after the runner job completes.
+    Uses canonical path from _secrets_common.host_config_dir() to avoid
+    duplication of the APPDATA/XDG resolution logic.
     """
-    if platform.system() == "Windows":
-        host_dir = os.path.join(os.environ.get("APPDATA", ""), "pmoves")
-    else:
-        host_dir = os.path.join(
-            os.environ.get("XDG_CONFIG_HOME", os.path.expanduser("~/.config")),
-            "pmoves",
-        )
+    from pmoves.tools._secrets_common import host_config_dir
+
+    host_dir = str(host_config_dir())
     os.makedirs(host_dir, exist_ok=True)
     return f"{host_dir}:/root/.config/pmoves"
 
 
 def docker_run(
-    repo: str, image: str, lane: RunnerLane, token: str, *, is_pat: bool = True,
+    repo: str, image: str, lane: RunnerLane, token: str,
+    *, is_pat: bool = True, auth_mode: str = "pat",
 ) -> None:
     resources = LANE_RESOURCES.get(lane.lane, {"cpus": "4", "memory": "8g"})
     cmd = [
@@ -223,12 +235,20 @@ def docker_run(
     # Security: pass secrets via bare -e KEY (inherits from parent env)
     # instead of -e KEY=VALUE which leaks into /proc/<pid>/cmdline.
     env = os.environ.copy()
-    if is_pat:
+    token_env_flags: list[str] = []
+
+    if auth_mode == "app":
+        # GitHub App: myoung34/github-runner natively supports APP_ID +
+        # APP_PRIVATE_KEY and mints installation tokens internally.
+        env["APP_ID"] = token  # token is actually app_id in this mode
+        env["APP_PRIVATE_KEY"] = os.getenv("GH_APP_SEC", "")
+        token_env_flags = ["APP_ID", "APP_PRIVATE_KEY"]
+    elif is_pat:
         env["ACCESS_TOKEN"] = token
-        token_env_flag = "ACCESS_TOKEN"
+        token_env_flags = ["ACCESS_TOKEN"]
     else:
         env["RUNNER_TOKEN"] = token
-        token_env_flag = "RUNNER_TOKEN"
+        token_env_flags = ["RUNNER_TOKEN"]
 
     env["REPO_URL"] = f"https://github.com/{repo}"
     env["RUNNER_NAME"] = lane.runner_name
@@ -238,13 +258,14 @@ def docker_run(
     cmd.extend([
         "-e", "REPO_URL",
         "-e", "RUNNER_NAME",
-        "-e", token_env_flag,
         "-e", "LABELS",
         "-e", "RUNNER_WORKDIR",
-        "-v",
-        _docker_socket_mount(),
-        "-v",
-        _secrets_volume_mount(),
+    ])
+    for flag in token_env_flags:
+        cmd.extend(["-e", flag])
+    cmd.extend([
+        "-v", _docker_socket_mount(),
+        "-v", _secrets_volume_mount(),
         image,
     ])
     run_cmd(cmd, env=env)
@@ -286,11 +307,15 @@ def _selected_lanes(names: list[str] | None) -> tuple[RunnerLane, ...]:
 def cmd_up(repo: str, image: str, lanes: tuple[RunnerLane, ...]) -> int:
     require_tool("docker")
     for lane in lanes:
-        token, is_pat = access_token(repo, lane.lane)
+        token, is_pat, auth_mode = access_token(repo, lane.lane)
         docker_rm(lane.container_name)
-        docker_run(repo, image, lane, token, is_pat=is_pat)
-        mode = "ACCESS_TOKEN (PAT)" if is_pat else "RUNNER_TOKEN (short-lived)"
-        print(f"started {lane.container_name} ({lane.runner_name}) [{mode}]")
+        docker_run(repo, image, lane, token, is_pat=is_pat, auth_mode=auth_mode)
+        mode_labels = {
+            "app": "APP_ID + APP_PRIVATE_KEY (GitHub App)",
+            "pat": "ACCESS_TOKEN (PAT)",
+            "registration": "RUNNER_TOKEN (short-lived)",
+        }
+        print(f"started {lane.container_name} ({lane.runner_name}) [{mode_labels.get(auth_mode, auth_mode)}]")
     return 0
 
 

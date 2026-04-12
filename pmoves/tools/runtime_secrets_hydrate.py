@@ -9,25 +9,19 @@ import subprocess
 from pathlib import Path
 from typing import Dict, List, Mapping, Sequence
 
+import sys
+_REPO_ROOT = str(Path(__file__).resolve().parents[2])
+if _REPO_ROOT not in sys.path:
+    sys.path.insert(0, _REPO_ROOT)
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
+from pmoves.tools._secrets_common import (
+    PROJECT_ROOT,
+    is_placeholder as _looks_placeholder,
+    parse_env_file as _parse_env_file,
+)
+
 DEFAULT_ENV_FILE = PROJECT_ROOT / "env.shared"
 DEFAULT_STATUS_FILE = PROJECT_ROOT / ".supabase.status.env"
-
-
-def _parse_env_file(path: Path) -> Dict[str, str]:
-    values: Dict[str, str] = {}
-    if not path.exists():
-        return values
-    for raw in path.read_text(encoding="utf-8", errors="ignore").splitlines():
-        line = raw.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        key, value = line.split("=", 1)
-        key = key.strip()
-        if key:
-            values[key] = value
-    return values
 
 
 def _write_env_file(path: Path, updates: Mapping[str, str]) -> None:
@@ -107,19 +101,6 @@ def _masked(value: str) -> str:
         return "***"
     return f"{value[:4]}...{value[-4:]}"
 
-
-def _looks_placeholder(value: str) -> bool:
-    lowered = value.strip().lower()
-    if not lowered:
-        return True
-    return (
-        lowered.startswith("placeholder_")
-        or lowered.startswith("your_")
-        or lowered.endswith("_here")
-        or lowered in {"changeme", "change_me", "none", "null", "example.com"}
-        or lowered.endswith("@example.com")
-        or lowered.endswith(".example.com")
-    )
 
 
 def hydrate_runtime_labels(

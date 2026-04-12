@@ -19,63 +19,18 @@ import sys
 from pathlib import Path
 from typing import Dict, Sequence
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
+_REPO_ROOT = str(Path(__file__).resolve().parents[2])
+if _REPO_ROOT not in sys.path:
+    sys.path.insert(0, _REPO_ROOT)
+
+from pmoves.tools._secrets_common import (
+    PROJECT_ROOT,
+    is_placeholder,
+    local_env_path as _default_local_env,
+    parse_env_file as _parse_env,
+)
+
 DEFAULT_ENV_SHARED = PROJECT_ROOT / "env.shared"
-
-PLACEHOLDER_VALUES = frozenset({
-    "", "changeme", "change_me", "none", "null",
-    "your_key_here", "placeholder", "example",
-})
-
-
-def _default_local_env() -> Path:
-    """Resolve the local.env path, preferring project-local over per-user.
-
-    Search order:
-      1. pmoves/secrets/local.env (project-local, written by CI runner)
-      2. $APPDATA/pmoves/secrets/local.env (Windows per-user)
-      3. $XDG_CONFIG_HOME/pmoves/secrets/local.env (Unix per-user)
-    """
-    # 1. Project-local path (reproducible across users/runners)
-    project_path = PROJECT_ROOT / "secrets" / "local.env"
-    if project_path.exists():
-        return project_path
-
-    # 2. Per-user config path (backward compat)
-    if sys.platform == "win32":
-        base = os.environ.get("APPDATA", "")
-        if not base:
-            base = str(Path.home() / "AppData" / "Roaming")
-    else:
-        base = os.environ.get("XDG_CONFIG_HOME", "")
-        if not base:
-            base = str(Path.home() / ".config")
-    return Path(base) / "pmoves" / "secrets" / "local.env"
-
-
-def _parse_env(path: Path) -> Dict[str, str]:
-    """Parse KEY=VALUE lines, skipping comments and blanks."""
-    values: Dict[str, str] = {}
-    if not path.exists():
-        return values
-    for raw in path.read_text(encoding="utf-8", errors="ignore").splitlines():
-        line = raw.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        # Strip optional 'export ' prefix (some env files use it)
-        if line.startswith("export "):
-            line = line[7:]
-        key, value = line.split("=", 1)
-        key = key.strip()
-        if key:
-            values[key] = value
-    return values
-
-
-def _is_empty_or_placeholder(value: str) -> bool:
-    """Return True if value is missing, empty, or a known placeholder."""
-    stripped = value.strip().lower()
-    return stripped in PLACEHOLDER_VALUES or stripped.startswith("placeholder_")
 
 
 def _masked(value: str) -> str:
@@ -115,17 +70,24 @@ def hydrate(
     env_shared_path: Path,
     *,
     dry_run: bool = False,
+    force: bool = False,
 ) -> Dict[str, str]:
-    """Overlay local.env values into env.shared for empty/placeholder keys."""
+    """Overlay local.env values into env.shared for empty/placeholder keys.
+
+    When force=True, overwrites ALL matching keys in env.shared with values
+    from local.env, even if the current value is non-placeholder. This is
+    needed when GH Secrets are rotated and the stale local value must be
+    replaced.
+    """
     local_values = _parse_env(local_env_path)
     shared_values = _parse_env(env_shared_path)
 
     updates: Dict[str, str] = {}
     for key, local_val in sorted(local_values.items()):
-        if _is_empty_or_placeholder(local_val):
+        if is_placeholder(local_val):
             continue  # Don't overlay empty local values
         current = shared_values.get(key, "")
-        if _is_empty_or_placeholder(current):
+        if force or is_placeholder(current):
             updates[key] = local_val
 
     if updates and not dry_run:
@@ -153,6 +115,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         action="store_true",
         help="Show what would be updated without writing",
     )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Overwrite existing non-placeholder values (use after rotating GH Secrets)",
+    )
     args = parser.parse_args(argv)
 
     local_env = args.local_env or _default_local_env()
@@ -168,7 +135,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 1
 
     prefix = "[dry-run] " if args.dry_run else ""
-    updates = hydrate(local_env, env_shared, dry_run=args.dry_run)
+    if args.force:
+        prefix = "[force] " + prefix
+    updates = hydrate(local_env, env_shared, dry_run=args.dry_run, force=args.force)
 
     if not updates:
         print("No keys needed hydration — env.shared already has real values.")
