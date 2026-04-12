@@ -129,15 +129,17 @@ def access_token(repo: str, lane: str) -> tuple[str, bool, str]:
     """
     # Priority 0: GitHub App credentials — the myoung34/github-runner image
     # natively supports APP_ID + APP_PRIVATE_KEY and mints its own tokens.
-    app_id = os.getenv("GH_APP_ID")
-    app_key = os.getenv("GH_APP_SEC")
-    if app_id and app_key:
-        return app_id, True, "app"
+    from pmoves.tools._secrets_common import is_placeholder
+
+    app_id = os.getenv("GH_APP_ID", "")
+    app_key = os.getenv("GH_APP_SEC", "")
+    if app_id and app_key and not is_placeholder(app_id) and not is_placeholder(app_key):
+        return (app_id, app_key), True, "app"
 
     # Priority 1-2: PAT cascade
     env_name = f"RUNNER_PAT_{lane.replace('-', '_').upper()}"
-    lane_pat = os.getenv(env_name)
-    if lane_pat:
+    lane_pat = os.getenv(env_name, "")
+    if lane_pat and not is_placeholder(lane_pat):
         return lane_pat, True, "pat"
     shared_pat = (
         os.getenv("RUNNER_PAT")
@@ -240,8 +242,10 @@ def docker_run(
     if auth_mode == "app":
         # GitHub App: myoung34/github-runner natively supports APP_ID +
         # APP_PRIVATE_KEY and mints installation tokens internally.
-        env["APP_ID"] = token  # token is actually app_id in this mode
-        env["APP_PRIVATE_KEY"] = os.getenv("GH_APP_SEC", "")
+        # token is a (app_id, app_key) tuple — validated in access_token().
+        app_id, app_key = token
+        env["APP_ID"] = app_id
+        env["APP_PRIVATE_KEY"] = app_key
         token_env_flags = ["APP_ID", "APP_PRIVATE_KEY"]
     elif is_pat:
         env["ACCESS_TOKEN"] = token

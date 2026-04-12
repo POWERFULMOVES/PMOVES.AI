@@ -140,6 +140,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     updates = hydrate(local_env, env_shared, dry_run=args.dry_run, force=args.force)
 
     if not updates:
+        if args.force:
+            local_values = _parse_env(local_env)
+            if not local_values:
+                print(f"WARNING: --force specified but {local_env} contains no keys", file=sys.stderr)
+            else:
+                real_count = sum(1 for v in local_values.values() if not is_placeholder(v))
+                if real_count == 0:
+                    print(f"WARNING: --force specified but all {len(local_values)} keys in {local_env} are placeholders", file=sys.stderr)
         print("No keys needed hydration — env.shared already has real values.")
         return 0
 

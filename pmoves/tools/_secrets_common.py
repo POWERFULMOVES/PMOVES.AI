@@ -78,7 +78,7 @@ def is_placeholder(value: str | None) -> bool:
         host = (urllib.parse.urlparse(candidate).hostname or "").lower()
         if host in {"example.com", "www.example.com"}:
             return True
-    except Exception:
+    except (ValueError, UnicodeError):
         pass
     return False
 
