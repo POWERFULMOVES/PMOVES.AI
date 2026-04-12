@@ -579,12 +579,12 @@ providers:
         model_name: "nvidia/llama-3.3-nemotron-super-49b-v1"
         tz_model_key: nemotron_super_49b_nim
         serves:
+          # Variant name must match the TZ config in pmoves/tensorzero/config/tensorzero.toml.
+          # PR #1211 defines [functions.agent_zero.variants.hosted_nim_nemotron].
+          # No deepresearch variant exists yet — add one to tensorzero.toml before
+          # extending `serves` to cover that function.
           - function: agent_zero
-            variant_name: local_nvidia_nim
-            role: secondary
-            weight: 0.0
-          - function: deepresearch
-            variant_name: local_nvidia_nim
+            variant_name: hosted_nim_nemotron
             role: secondary
             weight: 0.0
         strength_ref: null             # Needs seed entry
