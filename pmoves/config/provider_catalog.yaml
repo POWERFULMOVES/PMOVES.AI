@@ -561,3 +561,31 @@ providers:
             weight: 0.0
         strength_ref: null             # Needs seed entry
         vram_mb: 0
+
+  # ---------------------------------------------------------------------------
+  # NVIDIA NIM — Local Nemotron Super 49B on RTX 5090
+  # ---------------------------------------------------------------------------
+  # OpenAI-compatible endpoint served by the local `nvidia-nim` container.
+  # See pmoves/configs/tac_trees/nvidia-nims.tac.yaml for the integration plan
+  # and pmoves/config/model_nexus.yaml for the nexus-level provider record.
+  nvidia_nim:
+    env_var: NGC_API_KEY
+    key_pattern: ".*"
+    api_base: "http://nvidia-nim:8000/v1"
+    tz_type: openai
+    tier: llm
+    models:
+      nemotron_super_49b_nim:
+        model_name: "nvidia/llama-3.3-nemotron-super-49b-v1"
+        tz_model_key: nemotron_super_49b_nim
+        serves:
+          # Variant name must match the TZ config in pmoves/tensorzero/config/tensorzero.toml.
+          # PR #1211 defines [functions.agent_zero.variants.hosted_nim_nemotron].
+          # No deepresearch variant exists yet — add one to tensorzero.toml before
+          # extending `serves` to cover that function.
+          - function: agent_zero
+            variant_name: hosted_nim_nemotron
+            role: secondary
+            weight: 0.0
+        strength_ref: null             # Needs seed entry
+        vram_mb: 0                     # GPU-resident; tracked via gpu-orchestrator
