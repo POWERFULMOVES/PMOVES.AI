@@ -237,15 +237,18 @@ ON CONFLICT (name) DO UPDATE SET
   updated_at = NOW();
 
 -- NVIDIA NIM (local NIM container runtime)
+-- Name matches the canonical key used in pmoves/config/model_nexus.yaml,
+-- pmoves/configs/agent-profiles/nemotron_claw.yaml, and
+-- pmoves/configs/flare-model-namespace.yaml.
 INSERT INTO pmoves_core.model_providers (name, type, api_base, api_key_env_var, description, active, metadata)
 VALUES (
-  'nvidia_nim_local',
+  'nvidia_nim',
   'openai_compatible',
-  'http://localhost:8000/v1',
-  NULL,
+  'http://nvidia-nim:8000/v1',
+  'NGC_API_KEY',
   'NVIDIA NIM local container runtime for Nemotron models',
   true,
-  '{"network": "internal", "location": "local", "runtime": "nim"}'::jsonb
+  '{"network": "pmoves_api", "location": "local", "runtime": "nim"}'::jsonb
 )
 ON CONFLICT (name) DO UPDATE SET
   type = EXCLUDED.type,
@@ -637,7 +640,7 @@ DO $$
 DECLARE
   v_nim_local_id UUID;
 BEGIN
-  SELECT id INTO v_nim_local_id FROM pmoves_core.model_providers WHERE name = 'nvidia_nim_local';
+  SELECT id INTO v_nim_local_id FROM pmoves_core.model_providers WHERE name = 'nvidia_nim';
 
   -- Nemotron Super 49B - Agentic NIM model requiring exclusive GPU
   INSERT INTO pmoves_core.models (provider_id, name, model_id, model_type, capabilities, vram_mb, context_length, description, active)

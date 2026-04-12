@@ -36,6 +36,7 @@ nats:
   publish:
     - mesh.gpu.status.v1
     - mesh.gpu.model.loaded.v1
+    - mesh.gpu.model.unloaded.v1  # model-registry depends on both load and unload events
     - mesh.gpu.command.result.v1
 
 exec_permissions:
