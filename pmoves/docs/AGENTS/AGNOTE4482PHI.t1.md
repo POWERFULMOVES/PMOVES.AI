@@ -472,6 +472,9 @@ The pipeline reports success because its validation scope is too narrow. Neither
 
 - `2026-03-20T23:30:00Z` RELEASE `CLAUDE-OPUS` scope: Session review + coordination complete. 5090 handoff package ready.
 
+- `2026-04-12T16:00:00Z` CLAIM `4090-CLAUDE` scope: Secrets pipeline refactor (PR #1219) — _secrets_common.py shared module, --force mode, GitHub App runner auth. Exit node deployment on KVM4-1 (advertise + API approval + test). CHIT bypass additions (CGP decode, remote sysctl, Git state cleanup). branch: `refactor/secrets-pipeline-cleanup`. pr_numbers: [#1214, #1219].
+- `2026-04-12T20:00:00Z` RELEASE `4090-CLAUDE` scope: Secrets pipeline consolidated (4 duplicate implementations → 1 shared module, net -73 lines). --force mode live (`make secrets-funnel FORCE=1`). GitHub App auth for runners (priority 0, is_placeholder validation, TOCTOU-safe tuple passthrough). KVM4-1 exit node approved + tested (IPv4: 31.97.42.207 confirmed via curl ifconfig.me, LAN access preserved). PR #1219 review-complete (8 commits, CodeRabbit + Codex + 2 agent reviews — all findings addressed). CHIT bypass: CGP decode, remote sysctl, Git rebase cleanup. Handoff: z890-claude merge #1219 when CI green; test App-based runner restart (`make ci-runners-local-cert-up` with GH_APP_ID+GH_APP_SEC, no PAT). agent_signature: `ACK::4090-CLAUDE::SECRETS-EXIT-NODE`.
+
 ## Agent ACK (Signed)
 - Agent: `CODEX-GPT5`
 - Ack: `I acknowledge control of the current convergence lane and will not overlap branch edits without explicit handoff.`
