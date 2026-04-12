@@ -424,8 +424,8 @@ jobs:
             PIP_CONSTRAINT=requirements.lock
             ${{ steps.cfg.outputs.build_args }}
           platforms: linux/amd64
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ steps.cfg.outputs.image_name }}:buildcache
+          cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ steps.cfg.outputs.image_name }}:buildcache,mode=max
 
       - name: Build and push (multi-arch)
         if: ${{ github.event_name != 'pull_request' && steps.meta.outputs.has_tags == 'true' }}
@@ -440,8 +440,8 @@ jobs:
             ${{ steps.cfg.outputs.build_args }}
           platforms: ${{ steps.cfg.outputs.platforms }}
           tags: ${{ steps.meta.outputs.tags }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ steps.meta.outputs.ghcr_ns }}/${{ steps.cfg.outputs.image_name }}:buildcache
+          cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ steps.meta.outputs.ghcr_ns }}/${{ steps.cfg.outputs.image_name }}:buildcache,mode=max
 
       - name: Cosign sign GHCR digest (keyless)
         if: ${{ github.event_name != 'pull_request' && steps.meta.outputs.has_tags == 'true' && steps.meta.outputs.use_ghcr == 'true' }}
