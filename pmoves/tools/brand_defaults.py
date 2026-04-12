@@ -65,7 +65,6 @@ SUPERSEDED_VALUES: dict[str, str] = {
 }
 
 
-
 def _strong_random(n_bytes: int) -> str:
     return secrets.token_urlsafe(n_bytes)
 
@@ -93,7 +92,6 @@ def _set_kv(text: str, key: str, value: str) -> str:
     if re.search(pat, text, re.M):
         return re.sub(pat, lambda m: m.group(1) + value, text, flags=re.M)
     return text + f"\n{key}={value}\n"
-
 
 
 def _first_real(text: str, keys: list[str]) -> str:

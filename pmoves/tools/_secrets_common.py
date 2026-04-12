@@ -24,10 +24,10 @@ PLACEHOLDER_VALUES: frozenset[str] = frozenset({
     "",
     "changeme",
     "change_me",
-    "base64:CHANGE_ME",
-    "GENERATE_FROM_WGER_UI",
-    "SURREAL_USER_HERE",
-    "SURREAL_PASS_HERE",
+    "base64:change_me",
+    "generate_from_wger_ui",
+    "surreal_user_here",
+    "surreal_pass_here",
     "root",
     "pmoves4482",
     "minioadmin",
@@ -65,12 +65,10 @@ def is_placeholder(value: str | None) -> bool:
     lowered = normalized.lower()
     if not lowered or lowered in PLACEHOLDER_VALUES:
         return True
-    # Pattern: your_*_here, placeholder_*, *_here suffix
-    if re.match(r"^your_\w+_here$", lowered):
+    # Pattern: your_* prefix (any position), placeholder_* prefix
+    if "your_" in lowered:
         return True
     if lowered.startswith("placeholder_"):
-        return True
-    if "your_" in lowered and lowered.endswith("_here"):
         return True
     # Example domain checks (URLs and emails)
     if lowered.endswith("@example.com") or lowered.endswith(".example.com"):
@@ -92,18 +90,19 @@ def is_placeholder(value: str | None) -> bool:
 def host_config_dir() -> Path:
     """Return the platform-appropriate PMOVES config directory.
 
-    Windows: %APPDATA%/pmoves
-    Linux/Mac: $XDG_CONFIG_HOME/pmoves (default: ~/.config/pmoves)
+    Mirrors _config_paths.sh:pmoves_host_config_dir() logic exactly:
+    checks APPDATA first (covers Windows + WSL with APPDATA set),
+    then XDG_CONFIG_HOME, then platform-specific fallback.
     """
+    appdata = os.environ.get("APPDATA", "")
+    if appdata:
+        return Path(appdata) / "pmoves"
+    xdg = os.environ.get("XDG_CONFIG_HOME", "")
+    if xdg:
+        return Path(xdg) / "pmoves"
     if sys.platform == "win32":
-        base = os.environ.get("APPDATA", "")
-        if not base:
-            base = str(Path.home() / "AppData" / "Roaming")
-    else:
-        base = os.environ.get("XDG_CONFIG_HOME", "")
-        if not base:
-            base = str(Path.home() / ".config")
-    return Path(base) / "pmoves"
+        return Path.home() / "AppData" / "Roaming" / "pmoves"
+    return Path.home() / ".config" / "pmoves"
 
 
 def local_env_path() -> Path:
