@@ -1594,12 +1594,13 @@ smoke-new-models: ## Smoke test new model providers (NIM, Qwen3-Coder-Next, Gemm
 	  && echo "   NIM: ready" \
 	  || echo "   NIM: not available (skipped)"
 	@echo "2) TensorZero model catalog:"
-	@tz_json=$$(curl -sf http://localhost:3030/v1/models 2>/dev/null); \
+	@tz_port=$${TENSORZERO_HOST_PORT:-3030}; \
+	tz_json=$$(curl -sf "http://localhost:$$tz_port/v1/models" 2>/dev/null); \
 	if [ -z "$$tz_json" ]; then \
-	  echo "   TensorZero: unreachable"; \
+	  echo "   TensorZero: unreachable (port $$tz_port)"; \
 	else \
 	  for m in nemotron_super_49b_nim coding_qwen3_coder_next_80b_local gemma_3n_e4b_local; do \
-	    if echo "$$tz_json" | grep -q "\"$$m\""; then \
+	    if echo "$$tz_json" | grep -Fq "\"$$m\""; then \
 	      echo "   $$m: present"; \
 	    else \
 	      echo "   $$m: MISSING"; \
