@@ -10,24 +10,10 @@ from typing import Any, Dict, List, Optional
 import requests
 import yaml
 
-def _bootstrap_import_paths() -> None:
-    """Ensure PMOVES service modules resolve when PYTHONPATH is not preset."""
-    try:
-        here = Path(__file__).resolve()
-        candidates = (
-            here.parents[2],  # /app
-            here.parents[1],  # /app/services
-            here.parent,      # /app/services/agent-zero
-        )
-        for path in candidates:
-            text = str(path)
-            if text not in sys.path:
-                sys.path.insert(0, text)
-    except Exception:
-        pass
+# Bootstrap import paths using shared module
+from services.common.bootstrap import bootstrap_import_paths
 
-
-_bootstrap_import_paths()
+bootstrap_import_paths()
 
 try:
     from pmoves.chit import CGP_SPEC_VERSION

@@ -27,12 +27,9 @@ try:
 except ImportError:
     NATS_ANNOUNCE_AVAILABLE = False
 
-try:
-    _services_root = Path(__file__).resolve().parents[2]
-    if str(_services_root) not in sys.path:
-        sys.path.insert(0, str(_services_root))
-except Exception:
-    pass
+# Bootstrap import paths using shared module
+from services.common.bootstrap import bootstrap_import_paths
+bootstrap_import_paths()
 
 from services.common.events import envelope
 
@@ -82,148 +79,14 @@ def _ensure_supabase_env() -> None:
 _ensure_supabase_env()
 
 
-async def _check_tensorzero_connectivity(base_url: str) -> bool:
-    """Check if TensorZero is reachable at the given URL.
-
-    Args:
-        base_url: The OpenAI-compatible base URL to check.
-
-    Returns:
-        True if reachable, False otherwise.
-    """
-    try:
-        import httpx
-        # Test the /models endpoint which all TensorZero deployments expose
-        test_url = base_url.replace("/openai/v1", "").replace("/openai", "")
-        test_url = f"{test_url.rstrip('/')}/models"
-
-        async with httpx.AsyncClient(timeout=2.0) as client:
-            response = await client.get(test_url)
-            return response.status_code == 200
-    except Exception:
-        return False
+# TensorZero helpers — imported from shared module
+from services.common.tensorzero import (
+    sync_openai_compat_env as _sync_openai_compat_env,
+    check_tensorzero_connectivity as _check_tensorzero_connectivity,
+)
 
 
-def _check_tensorzero_sync(base_url: str) -> bool:
-    """Synchronous wrapper for TensorZero connectivity check.
-
-    Args:
-        base_url: The OpenAI-compatible base URL to check.
-
-    Returns:
-        True if reachable, False otherwise.
-    """
-    try:
-        # Run async check in new event loop
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-            return loop.run_until_complete(_check_tensorzero_connectivity(base_url))
-        finally:
-            loop.close()
-    except Exception:
-        return False
-
-
-def _tensorzero_openai_base() -> str:
-    """Return OpenAI-compatible base URL from TensorZero settings.
-
-    Priority for hybrid standalone mode:
-      1) TENSORZERO_BASE_URL (explicit, backward compatible)
-      2) TENSORZERO_URL (parent PMOVES.AI TensorZero)
-      3) host.docker.internal:3030 (hybrid mode default)
-
-    Returns:
-        OpenAI-compatible base URL or empty string if not configured.
-    """
-    # First, check explicit TENSORZERO_BASE_URL (backward compatibility)
-    base = (os.environ.get("TENSORZERO_BASE_URL") or "").strip()
-    if not base:
-        # Check for parent PMOVES.AI TensorZero in hybrid standalone mode
-        parent_tensorzero = os.environ.get("TENSORZERO_URL")
-        if parent_tensorzero:
-            base = parent_tensorzero
-        else:
-            # Fallback to host.docker.internal for hybrid mode
-            # This allows submodule to reach parent PMOVES.AI TensorZero
-            docked_mode = os.environ.get("DOCKED_MODE", "false").lower() == "true"
-            if not docked_mode:
-                # In standalone mode, try parent via host.docker.internal
-                base = "http://host.docker.internal:3030"
-
-    if not base:
-        return ""
-
-    base = base.rstrip("/")
-    if base.endswith("/openai/v1"):
-        return base
-    if base.endswith("/openai"):
-        return f"{base.rstrip('/')}/v1"
-    return f"{base}/openai/v1"
-
-
-def _sync_openai_compat_env() -> None:
-    """Sync TensorZero settings to OpenAI environment variables.
-
-    In hybrid standalone mode, verifies connectivity to parent TensorZero
-    via host.docker.internal and falls back gracefully if unreachable.
-    """
-    resolved_base = ""
-    for candidate in (
-        os.environ.get("OPENAI_COMPATIBLE_BASE_URL"),
-        os.environ.get("OPENAI_API_BASE"),
-        _tensorzero_openai_base(),
-    ):
-        value = (candidate or "").strip()
-        if value:
-            resolved_base = value
-            break
-
-    if resolved_base:
-        # In hybrid mode, verify connectivity to parent TensorZero
-        if "host.docker.internal" in resolved_base:
-            if _check_tensorzero_sync(resolved_base):
-                logger.info("TensorZero reachable at %s (hybrid mode)", resolved_base)
-            else:
-                logger.warning(
-                    "TensorZero unreachable at %s (hybrid mode). "
-                    "Ensure PMOVES.AI is running or set TENSORZERO_URL explicitly.",
-                    resolved_base
-                )
-                # Don't set unreachable base - allow fallback to direct OpenAI
-                resolved_base = ""
-
-    if resolved_base:
-        targets = (
-            "OPENAI_COMPATIBLE_BASE_URL",
-            "OPENAI_API_BASE",
-            "OPENAI_COMPATIBLE_BASE_URL_LLM",
-            "OPENAI_COMPATIBLE_BASE_URL_EMBEDDING",
-            "OPENAI_COMPATIBLE_BASE_URL_TTS",
-            "OPENAI_COMPATIBLE_BASE_URL_STT",
-        )
-        updated = []
-        for target in targets:
-            current = (os.environ.get(target) or "").strip()
-            if current:
-                continue
-            os.environ[target] = resolved_base
-            os.putenv(target, resolved_base)
-            updated.append(target)
-        if updated:
-            logger.info("OpenAI-compatible base resolved to %s", resolved_base)
-        else:
-            logger.debug("OpenAI-compatible base already set to %s", resolved_base)
-    key = (get_secret("OPENAI_API_KEY") or "").strip()
-    if not key:
-        tz_key = (get_secret("TENSORZERO_API_KEY") or "").strip()
-        if tz_key:
-            os.environ["OPENAI_API_KEY"] = tz_key
-            os.putenv("OPENAI_API_KEY", tz_key)
-            logger.info("OpenAI-compatible API key derived from TensorZero settings")
-
-
-_sync_openai_compat_env()
+_sync_openai_compat_env(check_connectivity=True)
 
 from .orchestrator import ArchonOrchestrator
 
