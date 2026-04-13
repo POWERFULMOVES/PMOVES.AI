@@ -14,26 +14,10 @@ from typing import Any, Dict, Iterable, List, Optional
 import httpx
 from fastapi import Body, Depends, FastAPI, HTTPException, Path as FPath, Query, Response
 from pydantic import BaseModel, Field
+# Bootstrap import paths using shared module
+from services.common.bootstrap import bootstrap_import_paths
 
-def _bootstrap_import_paths() -> None:
-    """Ensure PMOVES package roots are importable in container/runtime variants."""
-    try:
-        here = Path(__file__).resolve()
-        candidates = (
-            here.parents[2],  # /app
-            here.parents[1],  # /app/services
-            here.parent,      # /app/services/agent-zero
-        )
-        for path in candidates:
-            text = str(path)
-            if text not in sys.path:
-                sys.path.insert(0, text)
-    except Exception:
-        # Keep startup resilient; downstream imports will raise explicit errors if unresolved.
-        pass
-
-
-_bootstrap_import_paths()
+bootstrap_import_paths()
 
 from services.common.env import get_secret
 
@@ -49,70 +33,10 @@ logging.basicConfig(level=os.environ.get("LOG_LEVEL", "INFO"))
 
 
 # ---------------------------------------------------------------------------
-# Configuration helpers
+# Configuration helpers — imported from shared modules
 # ---------------------------------------------------------------------------
-
-
-def _env_bool(name: str, default: bool = False) -> bool:
-    value = os.environ.get(name)
-    if value is None:
-        return default
-    return value.lower() in {"1", "true", "yes", "on"}
-
-
-def _tensorzero_openai_base() -> str:
-    base = (os.environ.get("TENSORZERO_BASE_URL") or "").strip()
-    if not base:
-        return ""
-    base = base.rstrip("/")
-    if base.endswith("/openai/v1"):
-        return base
-    if base.endswith("/openai"):
-        return f"{base.rstrip('/')}/v1"
-    return f"{base}/openai/v1"
-
-
-def _sync_openai_compat_env() -> None:
-    resolved_base = ""
-    for candidate in (
-        os.environ.get("OPENAI_COMPATIBLE_BASE_URL"),
-        os.environ.get("OPENAI_API_BASE"),
-        _tensorzero_openai_base(),
-    ):
-        value = (candidate or "").strip()
-        if value:
-            resolved_base = value
-            break
-
-    if resolved_base:
-        targets = (
-            "OPENAI_COMPATIBLE_BASE_URL",
-            "OPENAI_API_BASE",
-            "OPENAI_COMPATIBLE_BASE_URL_LLM",
-            "OPENAI_COMPATIBLE_BASE_URL_EMBEDDING",
-            "OPENAI_COMPATIBLE_BASE_URL_TTS",
-            "OPENAI_COMPATIBLE_BASE_URL_STT",
-        )
-        updated = []
-        for target in targets:
-            current = (os.environ.get(target) or "").strip()
-            if current:
-                continue
-            os.environ[target] = resolved_base
-            os.putenv(target, resolved_base)
-            updated.append(target)
-        if updated:
-            logger.info("OpenAI-compatible base resolved to %s", resolved_base)
-        else:
-            logger.debug("OpenAI-compatible base already set to %s", resolved_base)
-    key = (get_secret("OPENAI_API_KEY") or "").strip()
-    if not key:
-        tz_key = (get_secret("TENSORZERO_API_KEY") or "").strip()
-        if tz_key:
-            os.environ["OPENAI_API_KEY"] = tz_key
-            os.putenv("OPENAI_API_KEY", tz_key)
-            logger.info("OpenAI-compatible API key derived from TensorZero settings")
-
+from services.common.config import env_bool as _env_bool
+from services.common.tensorzero import sync_openai_compat_env as _sync_openai_compat_env
 
 _sync_openai_compat_env()
 
