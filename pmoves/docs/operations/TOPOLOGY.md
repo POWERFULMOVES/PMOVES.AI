@@ -2,7 +2,7 @@
 
 > Single source of truth for all physical/virtual nodes, service assignments, agent teams, route flows, and runner strategy.
 >
-> Last updated: 2026-03-27
+> Last updated: 2026-04-13
 
 ---
 
@@ -13,6 +13,7 @@
 | Z890 (Windows 11) | LAN (dual NIC) | `ts:<z890>` | pmoves-z890 | Dev, GPU (RTX 3090 Ti) | `self-hosted, ai-lab` (secondary) | 32C / 128GB | electricity |
 | POWERFULMOVES (5090) | LAN (dual NIC) | `ts:<5090-linux>`, `ts:<5090-win>` | pmoves-powerfulmoves, powerfulmoves-1 | Primary GPU (RTX 5090) | `self-hosted, ai-lab, gpu, cuda` | 24C / 64GB | electricity |
 | 4090 Laptop (Windows) | LAN | `ts:<laptop>` | pmoves-4090 | Control Plane, Edge Orchestration, Agent Zero + Claws | — | RTX 4090 | electricity |
+| DGX Spark | LAN | `ts:<dgx-spark>` | pmoves-dgx-spark | Heavyweight Inference (Gemma 4 31B, Nemotron Super 49B, Qwen3-Coder 480B) | `self-hosted, ai-lab, gpu, cuda, spark` (pending) | 20C Arm / 128GB unified LPDDR5X | electricity |
 | Jetson Orin #1 | LAN (RustDesk + SSH) | `ts:<nano>` | pmoves-nano (rename to pmoves-nano-1 pending) | Edge Inference (Nemotron/NemoClaw), Claws | — | Orin (sm_87) | electricity |
 | Jetson Orin #2 | LAN (RustDesk + SSH) | TBD | TBD | Edge Inference (Nemotron/NemoClaw), Claws | — | Orin (sm_87) | electricity |
 | KVM4-1 | — | — | pmoves-kvm4-1 | API Gateway | `self-hosted, vps, kvm4, production` | 8C / 16GB | $10/mo |
@@ -48,6 +49,25 @@ Both Jetson Orin Nanos have SSH configured (`pmovesnvme@.110`, `pmovesnvme@.144`
 5. Agent Zero + Claws deployment
 
 **Total VPS cost:** $30/mo + electricity for local nodes.
+
+### DGX Spark — Heavyweight Inference Node (Pending)
+
+NVIDIA DGX Spark (GB10 Grace-Blackwell Superchip) on Tailscale. Purpose-built for 200B-param-class inference via unified memory:
+
+- **CPU+GPU:** 20-core Arm (10x Cortex-X925 + 10x Cortex-A725) + GB10 Grace-Blackwell
+- **Memory:** 128GB unified LPDDR5X (CPU+GPU coherent, no VRAM↔RAM copies)
+- **Throughput:** 1 petaFLOP FP4
+- **Target models:** Gemma 4 31B (FP16), Gemma 4 26B-A4B, Nemotron Super 49B, Qwen3-Coder 480B
+- **Runtime:** Ollama (CUDA) primary; NVIDIA NIM optional
+- **Ports:** 11434 (Ollama), 8200 (NIM if deployed — same default as 5090)
+- **Tailscale hostname:** `pmoves-dgx-spark`
+
+**Pending setup:**
+1. Tailscale join + tag assignment (`tag:spark`)
+2. Ollama install + `gemma4:31b`, `gemma4:26b-a4b`, `nemotron:49b` model pulls
+3. Registration in `agent-teams.yaml` under `agents/gpu-inference` tier
+4. TensorZero `ollama_spark` provider points at `http://pmoves-dgx-spark:11434/v1`
+5. `spark_claw` agent profile activates after first heartbeat on `mesh.gpu.status.v1`
 
 ---
 
