@@ -302,6 +302,46 @@ the historical context on why this script exists.
 **See:** `.claude/context/credentials-workflow.md` for complete bootstrap sequence and
 `pmoves/docs/operations/SEEDED_BRANDED_DEFAULTS.md` for full credential catalog.
 
+## Model Onboarding via HuggingFace MCP
+
+When adding a new open-weights model (Gemma, Qwen, Llama, Nemotron, etc.) to the
+PMOVES registry, always verify metadata upstream via the HF MCP tools BEFORE
+editing registry files.
+
+**Primary tool:** `mcp__claude_ai_Hugging_Face__hub_repo_details` — fetch
+parameter count, context length, architecture, license, last-updated date,
+and inference providers. Repo IDs are case-sensitive (`google/gemma-4-E4B-it`,
+not `google/gemma-4-e4b-it`).
+
+**Registry files to touch** (5 files, single atomic commit):
+1. `pmoves/config/gpu-models.yaml` — GPU VRAM catalog
+2. `pmoves/configs/flare-model-namespace.yaml` — operator-facing flare aliases
+3. `pmoves/supabase/initdb/12_model_registry_seed.sql` — agent cascade seed
+4. `pmoves/tensorzero/config/tensorzero.toml` — TensorZero routing + function variants (ALWAYS `weight = 0.0` for safe rollout)
+5. `pmoves/config/provider_catalog.yaml` — ONLY when adding a new PROVIDER (not per-model)
+
+**See:** `pmoves/docs/operations/MODEL_ONBOARDING.md` for the full runbook
+with HF MCP tool reference, VRAM budget estimation rules, and worked examples
+(Gemma 3n E4B, Gemma 4 family).
+
+## Damage-Control Hook Recovery
+
+If `patterns.yaml` is left with unresolved merge conflict markers during a
+rebase, `bash-tool-damage-control.py` fails to parse the file and blocks
+ALL Bash commands (fail-closed). This creates a deadlock where you can't
+run `git status` to diagnose or `git rebase --continue` to resolve.
+
+**Recovery escape hatch:** The **Edit tool** routes through a SEPARATE hook
+(`edit-tool-damage-control.py`) that doesn't depend on `patterns.yaml`
+parsing. Use Read to inspect + Edit to resolve conflict markers, then Bash
+resumes on the next invocation (hook re-reads the file every call).
+
+`patterns.yaml` is intentionally NOT in `readOnlyPaths` or `zeroAccessPaths`
+— it must stay self-editable to keep this recovery path open. Don't add it.
+
+**See:** `pmoves/docs/operations/DAMAGE_CONTROL_RECOVERY.md` for the full
+5-step recovery procedure and adjacent failure modes.
+
 ## Fleet Remote Access (Tailscale + RustDesk)
 
 - Canonical runbook: `pmoves/docs/operations/FLEET_REMOTE_ACCESS_RUNBOOK.md`
