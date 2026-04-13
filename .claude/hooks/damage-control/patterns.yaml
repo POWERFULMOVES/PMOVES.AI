@@ -871,6 +871,8 @@ chitBypassPatterns:
   - 'make\s+.*secrets-sync'
   - 'make\s+.*secrets-runtime-hydrate'
   - 'make\s+.*ci-runners'
+  # with-env.sh is the env loader for all make targets
+  - 'with-env\.sh'
   # Tailscale key management
   - 'make\s+.*tailscale-save-key'
   - 'make\s+.*tailscale-join'
@@ -888,6 +890,12 @@ chitBypassPatterns:
   - '\bhostinger-kvm-setup\b'
   - '\bmigrate-vps\b'
   - '\bdeploy-vps-cluster\b'
+  # Git state cleanup — remove stale rebase/merge crash artifacts from .git/
+  # VS Code crashes leave empty rebase-merge/rebase-apply dirs that block git rebase.
+  # rm -rf and force flags still blocked by bashToolPatterns (runs before bypass).
+  - '(rmdir|rm)\s+.*\.git[/\\](rebase-merge|rebase-apply)'
+  - 'rm\s+.*\.git[/\\](AUTO_MERGE|MERGE_HEAD|MERGE_MSG)'
+  - 'rm\s+.*\.git[/\\]\.MERGE_MSG\.swp'
 
 # File paths that CHIT operations may create/write — bypass zero-access.
 # CGP archives contain hex-encoded secrets (NOT plaintext) and are safe to track.
