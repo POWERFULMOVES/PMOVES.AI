@@ -630,6 +630,90 @@ BEGIN
     description = EXCLUDED.description,
     updated_at = NOW();
 
+  -- Gemma 4 E2B - Effective 2B multimodal (any-to-any, 128K ctx)
+  INSERT INTO pmoves_core.models (provider_id, name, model_id, model_type, capabilities, vram_mb, context_length, description, active)
+  VALUES (
+    v_ollama_local_id,
+    'gemma_4_e2b_local',
+    'gemma4:e2b',
+    'chat',
+    '["chat", "vision", "audio", "video", "multimodal"]'::jsonb,
+    3200,
+    131072,
+    'Google Gemma 4 E2B - Effective 2B multimodal, Apache 2.0',
+    true
+  )
+  ON CONFLICT (provider_id, model_id) DO UPDATE SET
+    name = EXCLUDED.name,
+    capabilities = EXCLUDED.capabilities,
+    vram_mb = EXCLUDED.vram_mb,
+    context_length = EXCLUDED.context_length,
+    description = EXCLUDED.description,
+    updated_at = NOW();
+
+  -- Gemma 4 E4B - Effective 4B multimodal (any-to-any, 128K ctx)
+  INSERT INTO pmoves_core.models (provider_id, name, model_id, model_type, capabilities, vram_mb, context_length, description, active)
+  VALUES (
+    v_ollama_local_id,
+    'gemma_4_e4b_local',
+    'gemma4:e4b',
+    'chat',
+    '["chat", "vision", "audio", "video", "multimodal"]'::jsonb,
+    5200,
+    131072,
+    'Google Gemma 4 E4B - Effective 4B multimodal, Apache 2.0',
+    true
+  )
+  ON CONFLICT (provider_id, model_id) DO UPDATE SET
+    name = EXCLUDED.name,
+    capabilities = EXCLUDED.capabilities,
+    vram_mb = EXCLUDED.vram_mb,
+    context_length = EXCLUDED.context_length,
+    description = EXCLUDED.description,
+    updated_at = NOW();
+
+  -- Gemma 4 26B-A4B MoE - 3.8B active, speed-focused, 256K ctx
+  INSERT INTO pmoves_core.models (provider_id, name, model_id, model_type, capabilities, vram_mb, context_length, description, active)
+  VALUES (
+    v_ollama_local_id,
+    'gemma_4_26b_a4b_local',
+    'gemma4:26b-a4b',
+    'chat',
+    '["chat", "code_generation", "vision", "audio", "multimodal"]'::jsonb,
+    15000,
+    262144,
+    'Google Gemma 4 26B-A4B MoE - 3.8B active, LMArena 1441, Apache 2.0',
+    true
+  )
+  ON CONFLICT (provider_id, model_id) DO UPDATE SET
+    name = EXCLUDED.name,
+    capabilities = EXCLUDED.capabilities,
+    vram_mb = EXCLUDED.vram_mb,
+    context_length = EXCLUDED.context_length,
+    description = EXCLUDED.description,
+    updated_at = NOW();
+
+  -- Gemma 4 31B Dense - SOTA quality, 256K ctx, LMArena 1452
+  INSERT INTO pmoves_core.models (provider_id, name, model_id, model_type, capabilities, vram_mb, context_length, description, active)
+  VALUES (
+    v_ollama_local_id,
+    'gemma_4_31b_local',
+    'gemma4:31b',
+    'chat',
+    '["chat", "code_generation", "reasoning", "vision", "audio", "multimodal"]'::jsonb,
+    18000,
+    262144,
+    'Google Gemma 4 31B Dense - SOTA quality, beats Llama 4 on AIME/LiveCodeBench, Apache 2.0',
+    true
+  )
+  ON CONFLICT (provider_id, model_id) DO UPDATE SET
+    name = EXCLUDED.name,
+    capabilities = EXCLUDED.capabilities,
+    vram_mb = EXCLUDED.vram_mb,
+    context_length = EXCLUDED.context_length,
+    description = EXCLUDED.description,
+    updated_at = NOW();
+
 END $$;
 
 -- =============================================================================

@@ -254,6 +254,40 @@ models:
     quantization: "E2B"
     context_length: 32768
 
+  # Gemma 4 Family (Google, Apache 2.0, released 2026-04-02)
+  # Current SOTA open multimodal family — beats Llama 4 on AIME/LiveCodeBench/GPQA/τ2-bench
+  - id: "gemma4:e2b"
+    provider: ollama
+    vram_mb: 3200
+    description: "Google Gemma 4 E2B - Effective 2B multimodal (any-to-any), 128K ctx, Apache 2.0"
+    priority_default: 5
+    quantization: "Q4_K_M"
+    context_length: 131072
+
+  - id: "gemma4:e4b"
+    provider: ollama
+    vram_mb: 5200
+    description: "Google Gemma 4 E4B - Effective 4B multimodal (any-to-any), 128K ctx, Apache 2.0"
+    priority_default: 6
+    quantization: "Q4_K_M"
+    context_length: 131072
+
+  - id: "gemma4:26b-a4b"
+    provider: ollama
+    vram_mb: 15000
+    description: "Google Gemma 4 26B-A4B MoE - 3.8B active, speed-focused, 256K ctx, LMArena 1441"
+    priority_default: 8
+    quantization: "Q4_K_M-MoE"
+    context_length: 262144
+
+  - id: "gemma4:31b"
+    provider: ollama
+    vram_mb: 18000
+    description: "Google Gemma 4 31B Dense - SOTA quality, 256K ctx, LMArena 1452, beats Llama 4"
+    priority_default: 9
+    quantization: "Q4_K_M"
+    context_length: 262144
+
   # TTS Models (Ultimate TTS Studio)
   - id: "kokoro"
     provider: tts
