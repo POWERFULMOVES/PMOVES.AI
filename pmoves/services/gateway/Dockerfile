@@ -21,7 +21,7 @@ USER pmoves:pmoves
 
 EXPOSE 8085
 
-# Health check
+# Health check (gateway has no dedicated /healthz — probe root)
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
-    CMD curl -f http://localhost:8085/health || exit 1
+    CMD curl -f http://localhost:8085/ || exit 1
 CMD ["uvicorn", "pmoves.services.gateway.gateway.main:app", "--host", "0.0.0.0", "--port", "8085"]

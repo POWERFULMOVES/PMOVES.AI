@@ -25,5 +25,5 @@ EXPOSE 8097
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
-    CMD curl -f http://localhost:8097/health || exit 1
+    CMD curl -f http://localhost:8097/healthz || exit 1
 CMD ["uvicorn", "channel_monitor.main:app", "--host", "0.0.0.0", "--port", "8097"]

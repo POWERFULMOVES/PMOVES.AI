@@ -22,5 +22,5 @@ EXPOSE 8111
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
-    CMD curl -f http://localhost:8111/health || exit 1
+    CMD curl -f http://localhost:8111/healthz || exit 1
 CMD ["python", "app.py"]

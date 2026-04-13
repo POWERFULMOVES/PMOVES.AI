@@ -38,5 +38,5 @@ EXPOSE 8079
 
 # Health check (GPU service — extended start-period)
 HEALTHCHECK --interval=30s --timeout=5s --start-period=120s --retries=3 \
-    CMD curl -f http://localhost:8079/health || exit 1
+    CMD curl -f http://localhost:8079/healthz || exit 1
 CMD ["uvicorn","server:app","--host","0.0.0.0","--port","8079"]
