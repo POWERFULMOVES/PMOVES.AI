@@ -1,0 +1,88 @@
+# =============================================================================
+# PMOVES.AI - Alertmanager Configuration
+# =============================================================================
+# Purpose: Severity-based alert routing to Discord via webhook bridge
+# Recommendation: PMOVES-P3 #4 — Configure Alertmanager
+#
+# Routing Strategy:
+#   - critical → discord-critical  (5s group_wait, 1h repeat)
+#   - warning  → discord-warning   (30s group_wait, 12h repeat)
+#   - info     → discord-info      (30m group_interval, 24h repeat)
+#   - default  → discord-default   (10s group_wait, 4h repeat)
+#
+# Inhibition: Critical alerts suppress warnings for same alertname+service
+# =============================================================================
+
+# ---------------------------------------------------------------------------
+# Global defaults
+# ---------------------------------------------------------------------------
+global:
+  resolve_timeout: 5m
+
+# ---------------------------------------------------------------------------
+# Routing tree
+# ---------------------------------------------------------------------------
+route:
+  receiver: 'discord-default'
+  group_by: ['alertname', 'service']
+  group_wait: 10s
+  group_interval: 5m
+  repeat_interval: 4h
+  routes:
+    # Critical alerts — immediate notification, hourly repeat
+    - match:
+        severity: critical
+      receiver: 'discord-critical'
+      group_wait: 5s
+      group_interval: 5m
+      repeat_interval: 1h
+
+    # Warning alerts — short delay for grouping, 12h repeat
+    - match:
+        severity: warning
+      receiver: 'discord-warning'
+      group_wait: 30s
+      group_interval: 10m
+      repeat_interval: 12h
+
+    # Info alerts — low urgency, daily repeat
+    - match:
+        severity: info
+      receiver: 'discord-info'
+      group_wait: 30s
+      group_interval: 30m
+      repeat_interval: 24h
+
+# ---------------------------------------------------------------------------
+# Inhibition rules — critical suppresses warning for same alert+service
+# ---------------------------------------------------------------------------
+inhibit_rules:
+  - source_match:
+      severity: 'critical'
+    target_match:
+      severity: 'warning'
+    equal: ['alertname', 'service']
+
+# ---------------------------------------------------------------------------
+# Receivers — Discord webhook bridge endpoints
+# ---------------------------------------------------------------------------
+receivers:
+  - name: 'discord-default'
+    webhook_configs:
+      - url: 'http://alertmanager-discord-bridge:9094/alerts'
+        send_resolved: true
+
+  - name: 'discord-critical'
+    webhook_configs:
+      - url: 'http://alertmanager-discord-bridge:9094/alerts/critical'
+        send_resolved: true
+
+  - name: 'discord-warning'
+    webhook_configs:
+      - url: 'http://alertmanager-discord-bridge:9094/alerts/warning'
+        send_resolved: true
+
+  - name: 'discord-info'
+    webhook_configs:
+      - url: 'http://alertmanager-discord-bridge:9094/alerts/info'
+        send_resolved: true

@@ -1,1 +1,8 @@
--r requirements.lock
+fastapi>=0.110.0,<1.0
+uvicorn[standard]>=0.27.0,<1.0
+nats-py>=2.7.0,<3.0
+neo4j>=5.18.0,<6.0
+pydantic>=2.6.0,<3.0
+pydantic-settings>=2.2.0,<3.0
+structlog>=24.1.0,<25.0
+prometheus-client>=0.20.0,<1.0

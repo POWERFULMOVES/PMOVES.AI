@@ -36,162 +36,162 @@
 # YAML anchors for tier-based env file loading
 # Format: Maps with env_file key for <<: merge pattern
 # Tier architecture isolates secrets by service category (data, api, llm, worker, media, agent)
-x-env-tier-data: &id001
+x-env-tier-data:
   env_file:
-    - env.shared
-    - env.tier-data
+  - env.shared
+  - env.tier-data
   cap_drop:
-    - ALL
+  - ALL
   cap_add:
-    - NET_BIND_SERVICE
-    - CHOWN
-    - SETGID
-    - SETUID
+  - NET_BIND_SERVICE
+  - CHOWN
+  - SETGID
+  - SETUID
   security_opt:
-    - no-new-privileges:true
+  - no-new-privileges:true
 
-x-env-tier-api: &id002
+x-env-tier-api:
   env_file:
-    - env.shared
-    - env.tier-api
+  - env.shared
+  - env.tier-api
   cap_drop:
-    - ALL
+  - ALL
   cap_add:
-    - NET_BIND_SERVICE
-    - CHOWN
-    - SETGID
-    - SETUID
+  - NET_BIND_SERVICE
+  - CHOWN
+  - SETGID
+  - SETUID
   security_opt:
-    - no-new-privileges:true
+  - no-new-privileges:true
 
-x-env-tier-api-gpu: &id002gpu
+x-env-tier-api-gpu:
   env_file:
-    - env.shared
-    - env.tier-api
+  - env.shared
+  - env.tier-api
   cap_drop:
-    - ALL
+  - ALL
   cap_add:
-    - NET_BIND_SERVICE
-    - CHOWN
-    - SETGID
-    - SETUID
+  - NET_BIND_SERVICE
+  - CHOWN
+  - SETGID
+  - SETUID
   security_opt:
-    - no-new-privileges:true
+  - no-new-privileges:true
 
-x-env-tier-llm: &id006
+x-env-tier-llm:
   env_file:
-    - env.shared
-    - env.tier-llm
+  - env.shared
+  - env.tier-llm
   cap_drop:
-    - ALL
+  - ALL
   cap_add:
-    - NET_BIND_SERVICE
-    - CHOWN
-    - SETGID
-    - SETUID
+  - NET_BIND_SERVICE
+  - CHOWN
+  - SETGID
+  - SETUID
   security_opt:
-    - no-new-privileges:true
+  - no-new-privileges:true
 
-x-env-tier-worker: &id003
+x-env-tier-worker:
   env_file:
-    - env.shared
-    - env.tier-worker
+  - env.shared
+  - env.tier-worker
   cap_drop:
-    - ALL
+  - ALL
   cap_add:
-    - NET_BIND_SERVICE
-    - CHOWN
-    - SETGID
-    - SETUID
+  - NET_BIND_SERVICE
+  - CHOWN
+  - SETGID
+  - SETUID
   security_opt:
-    - no-new-privileges:true
+  - no-new-privileges:true
 
-x-env-tier-media: &id004
+x-env-tier-media:
   env_file:
-    - env.shared
-    - env.tier-media
+  - env.shared
+  - env.tier-media
   cap_drop:
-    - ALL
+  - ALL
   cap_add:
-    - NET_BIND_SERVICE
-    - CHOWN
-    - SETGID
-    - SETUID
+  - NET_BIND_SERVICE
+  - CHOWN
+  - SETGID
+  - SETUID
   security_opt:
-    - no-new-privileges:true
+  - no-new-privileges:true
 
-x-env-tier-agent: &id005
+x-env-tier-agent:
   env_file:
-    - env.shared
-    - env.tier-agent
+  - env.shared
+  - env.tier-agent
   cap_drop:
-    - ALL
+  - ALL
   cap_add:
-    - NET_BIND_SERVICE
-    - CHOWN
-    - SETGID
-    - SETUID
+  - NET_BIND_SERVICE
+  - CHOWN
+  - SETGID
+  - SETUID
   security_opt:
-    - no-new-privileges:true
+  - no-new-privileges:true
 
-x-env-tier-agent-ro: &id005ro
+x-env-tier-agent-ro:
   env_file:
-    - env.shared
-    - env.tier-agent
+  - env.shared
+  - env.tier-agent
   cap_drop:
-    - ALL
+  - ALL
   cap_add:
-    - NET_BIND_SERVICE
+  - NET_BIND_SERVICE
   read_only: true
   security_opt:
-    - no-new-privileges:true
+  - no-new-privileges:true
   tmpfs:
-    - /tmp:noexec,nosuid,size=64m
-    - /var/tmp:noexec,nosuid,size=64m
+  - /tmp:noexec,nosuid,size=64m
+  - /var/tmp:noexec,nosuid,size=64m
 
-x-env-tier-ui: &id007
+x-env-tier-ui:
   env_file:
-    - env.shared
-    - env.tier-ui
+  - env.shared
+  - env.tier-ui
   cap_drop:
-    - ALL
+  - ALL
   cap_add:
-    - NET_BIND_SERVICE
+  - NET_BIND_SERVICE
   read_only: true
   security_opt:
-    - no-new-privileges:true
+  - no-new-privileges:true
   tmpfs:
-    - /tmp:noexec,nosuid,size=64m
-    - /var/tmp:noexec,nosuid,size=64m
+  - /tmp:noexec,nosuid,size=64m
+  - /var/tmp:noexec,nosuid,size=64m
 
-x-env-tier-supabase: &id008
+x-env-tier-supabase:
   env_file:
-    - env.shared
-    - env.tier-supabase
+  - env.shared
+  - env.tier-supabase
   cap_drop:
-    - ALL
+  - ALL
   cap_add:
-    - NET_BIND_SERVICE
-    - CHOWN
-    - SETGID
-    - SETUID
+  - NET_BIND_SERVICE
+  - CHOWN
+  - SETGID
+  - SETUID
   security_opt:
-    - no-new-privileges:true
+  - no-new-privileges:true
 
-x-env-tier-supabase-ro: &id008ro
+x-env-tier-supabase-ro:
   env_file:
-    - env.shared
-    - env.tier-supabase
+  - env.shared
+  - env.tier-supabase
   cap_drop:
-    - ALL
+  - ALL
   cap_add:
-    - NET_BIND_SERVICE
+  - NET_BIND_SERVICE
   read_only: true
   security_opt:
-    - no-new-privileges:true
+  - no-new-privileges:true
   tmpfs:
-    - /tmp:noexec,nosuid,size=64m
-    - /var/tmp:noexec,nosuid,size=64m
+  - /tmp:noexec,nosuid,size=64m
+  - /var/tmp:noexec,nosuid,size=64m
 
 # =============================================================================
 # HOST ENVIRONMENT LEAK GUARD
@@ -301,32 +301,32 @@ x-env-tier-supabase-ro: &id008ro
 
 # Read-only hardening for stateless services
 # Use for: API gateways, proxies, compute services (no local writes)
-x-hardening: &hardening
+x-hardening:
   cap_drop:
-    - ALL
+  - ALL
   cap_add:
-    - NET_BIND_SERVICE
+  - NET_BIND_SERVICE
   read_only: true
   security_opt:
-    - no-new-privileges:true
+  - no-new-privileges:true
   tmpfs:
-    - /tmp:noexec,nosuid,size=64m
-    - /var/tmp:noexec,nosuid,size=64m
+  - /tmp:noexec,nosuid,size=64m
+  - /var/tmp:noexec,nosuid,size=64m
 
 # Read-write hardening for services needing filesystem access
 # Use for: Databases, log writers, services with volumes
-x-hardening-rw: &hardening-rw
+x-hardening-rw:
   cap_drop:
-    - ALL
+  - ALL
   cap_add:
-    - NET_BIND_SERVICE
-    - CHOWN
-    - DAC_OVERRIDE
-    - FOWNER
-    - SETGID
-    - SETUID
+  - NET_BIND_SERVICE
+  - CHOWN
+  - DAC_OVERRIDE
+  - FOWNER
+  - SETGID
+  - SETUID
   security_opt:
-    - no-new-privileges:true
+  - no-new-privileges:true
 
 # =============================================================================
 # COMBINED TIER + HARDENING ANCHORS
@@ -337,178 +337,178 @@ x-hardening-rw: &hardening-rw
 
 x-tier-supabase-hardened: &tier-supabase-hardened
   env_file:
-    - env.shared
-    - env.tier-supabase
+  - env.shared
+  - env.tier-supabase
   cap_drop:
-    - ALL
+  - ALL
   cap_add:
-    - NET_BIND_SERVICE
-    - CHOWN
-    - DAC_OVERRIDE
-    - FOWNER
-    - SETGID
-    - SETUID
+  - NET_BIND_SERVICE
+  - CHOWN
+  - DAC_OVERRIDE
+  - FOWNER
+  - SETGID
+  - SETUID
   security_opt:
-    - no-new-privileges:true
+  - no-new-privileges:true
 
 x-tier-supabase-hardened-ro: &tier-supabase-hardened-ro
   env_file:
-    - env.shared
-    - env.tier-supabase
+  - env.shared
+  - env.tier-supabase
   cap_drop:
-    - ALL
+  - ALL
   cap_add:
-    - NET_BIND_SERVICE
+  - NET_BIND_SERVICE
   read_only: true
   security_opt:
-    - no-new-privileges:true
+  - no-new-privileges:true
   tmpfs:
-    - /tmp:noexec,nosuid,size=64m
-    - /var/tmp:noexec,nosuid,size=64m
+  - /tmp:noexec,nosuid,size=64m
+  - /var/tmp:noexec,nosuid,size=64m
 
 x-tier-agent-hardened: &tier-agent-hardened
   env_file:
-    - env.shared
-    - env.tier-agent
+  - env.shared
+  - env.tier-agent
   cap_drop:
-    - ALL
+  - ALL
   cap_add:
-    - NET_BIND_SERVICE
-    - CHOWN
-    - SETGID
-    - SETUID
+  - NET_BIND_SERVICE
+  - CHOWN
+  - SETGID
+  - SETUID
   security_opt:
-    - no-new-privileges:true
+  - no-new-privileges:true
 
 x-tier-agent-hardened-ro: &tier-agent-hardened-ro
   env_file:
-    - env.shared
-    - env.tier-agent
+  - env.shared
+  - env.tier-agent
   cap_drop:
-    - ALL
+  - ALL
   cap_add:
-    - NET_BIND_SERVICE
+  - NET_BIND_SERVICE
   read_only: true
   security_opt:
-    - no-new-privileges:true
+  - no-new-privileges:true
   tmpfs:
-    - /tmp:noexec,nosuid,size=64m
-    - /var/tmp:noexec,nosuid,size=64m
+  - /tmp:noexec,nosuid,size=64m
+  - /var/tmp:noexec,nosuid,size=64m
 
 x-tier-agent-hardened-rw: &tier-agent-hardened-rw
   env_file:
-    - env.shared
-    - env.tier-agent
+  - env.shared
+  - env.tier-agent
   cap_drop:
-    - ALL
+  - ALL
   cap_add:
-    - NET_BIND_SERVICE
-    - CHOWN
-    - SETGID
-    - SETUID
+  - NET_BIND_SERVICE
+  - CHOWN
+  - SETGID
+  - SETUID
   security_opt:
-    - no-new-privileges:true
+  - no-new-privileges:true
 
 x-tier-llm-hardened: &tier-llm-hardened
   env_file:
-    - env.shared
-    - env.tier-llm
+  - env.shared
+  - env.tier-llm
   cap_drop:
-    - ALL
+  - ALL
   cap_add:
-    - NET_BIND_SERVICE
-    - CHOWN
-    - SETGID
-    - SETUID
+  - NET_BIND_SERVICE
+  - CHOWN
+  - SETGID
+  - SETUID
   security_opt:
-    - no-new-privileges:true
+  - no-new-privileges:true
 
 x-tier-worker-hardened: &tier-worker-hardened
   env_file:
-    - env.shared
-    - env.tier-worker
+  - env.shared
+  - env.tier-worker
   cap_drop:
-    - ALL
+  - ALL
   cap_add:
-    - NET_BIND_SERVICE
-    - CHOWN
-    - SETGID
-    - SETUID
+  - NET_BIND_SERVICE
+  - CHOWN
+  - SETGID
+  - SETUID
   security_opt:
-    - no-new-privileges:true
+  - no-new-privileges:true
 
 x-tier-api-hardened: &tier-api-hardened
   env_file:
-    - env.shared
-    - env.tier-api
+  - env.shared
+  - env.tier-api
   cap_drop:
-    - ALL
+  - ALL
   cap_add:
-    - NET_BIND_SERVICE
-    - CHOWN
-    - SETGID
-    - SETUID
+  - NET_BIND_SERVICE
+  - CHOWN
+  - SETGID
+  - SETUID
   security_opt:
-    - no-new-privileges:true
+  - no-new-privileges:true
 
 x-tier-data-hardened: &tier-data-hardened
   env_file:
-    - env.shared
-    - env.tier-data
+  - env.shared
+  - env.tier-data
   cap_drop:
-    - ALL
+  - ALL
   cap_add:
-    - NET_BIND_SERVICE
-    - CHOWN
-    - DAC_OVERRIDE
-    - FOWNER
-    - SETGID
-    - SETUID
+  - NET_BIND_SERVICE
+  - CHOWN
+  - DAC_OVERRIDE
+  - FOWNER
+  - SETGID
+  - SETUID
   security_opt:
-    - no-new-privileges:true
+  - no-new-privileges:true
 
 x-tier-media-hardened: &tier-media-hardened
   env_file:
-    - env.shared
-    - env.tier-media
+  - env.shared
+  - env.tier-media
   cap_drop:
-    - ALL
+  - ALL
   cap_add:
-    - NET_BIND_SERVICE
-    - CHOWN
-    - SETGID
-    - SETUID
+  - NET_BIND_SERVICE
+  - CHOWN
+  - SETGID
+  - SETUID
   security_opt:
-    - no-new-privileges:true
+  - no-new-privileges:true
 
 x-tier-ui-hardened: &tier-ui-hardened
   env_file:
-    - env.shared
-    - env.tier-ui
+  - env.shared
+  - env.tier-ui
   cap_drop:
-    - ALL
+  - ALL
   cap_add:
-    - NET_BIND_SERVICE
+  - NET_BIND_SERVICE
   read_only: true
   security_opt:
-    - no-new-privileges:true
+  - no-new-privileges:true
   tmpfs:
-    - /tmp:noexec,nosuid,size=64m
-    - /var/tmp:noexec,nosuid,size=64m
+  - /tmp:noexec,nosuid,size=64m
+  - /var/tmp:noexec,nosuid,size=64m
 
 x-tier-api-hardened-gpu: &tier-api-hardened-gpu
   env_file:
-    - env.shared
-    - env.tier-api
+  - env.shared
+  - env.tier-api
   cap_drop:
-    - ALL
+  - ALL
   cap_add:
-    - NET_BIND_SERVICE
-    - CHOWN
-    - SETGID
-    - SETUID
+  - NET_BIND_SERVICE
+  - CHOWN
+  - SETGID
+  - SETUID
   security_opt:
-    - no-new-privileges:true
+  - no-new-privileges:true
 
 # PMOVES.AI production compose project
 name: pmoves
@@ -552,6 +552,11 @@ services:
     networks:
     - pmoves_data
 
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4G
   supabase-gotrue:
     <<: *tier-supabase-hardened
     image: supabase/gotrue:v2.186.0
@@ -604,6 +609,11 @@ services:
     - pmoves_api
     - pmoves_data
 
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
   supabase-postgrest:
     <<: *tier-supabase-hardened-ro
     image: postgrest/postgrest:v14.3
@@ -642,6 +652,11 @@ services:
     - pmoves_api
     - pmoves_data
 
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
   supabase-kong:
     <<: *tier-supabase-hardened
     image: kong:3.7.1
@@ -687,6 +702,11 @@ services:
     - pmoves_api
     - pmoves_data
 
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
   supabase-realtime:
     <<: *tier-supabase-hardened
     image: supabase/realtime:v2.72.0
@@ -737,6 +757,11 @@ services:
     - pmoves_api
     - pmoves_data
 
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
   supabase-storage:
     <<: *tier-supabase-hardened
     image: supabase/storage-api:v1.37.1
@@ -793,6 +818,11 @@ services:
     - pmoves_api
     - pmoves_data
 
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
   supabase-studio:
     <<: *tier-supabase-hardened
     # Pinned 2025-02-04: Latest stable from Supabase
@@ -846,6 +876,11 @@ services:
   # ---------------------------------------------------------------------------
   # Supabase imgproxy — image transformation for Storage
   # ---------------------------------------------------------------------------
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
   supabase-imgproxy:
     <<: *tier-supabase-hardened-ro
     image: darthsim/imgproxy:v3.30.1
@@ -872,6 +907,11 @@ services:
   # ---------------------------------------------------------------------------
   # Supabase postgres-meta — database metadata API for Studio
   # ---------------------------------------------------------------------------
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
   supabase-meta:
     <<: *tier-supabase-hardened-ro
     image: supabase/postgres-meta:v0.95.2
@@ -901,6 +941,11 @@ services:
   # ---------------------------------------------------------------------------
   # Supabase Edge Runtime — Deno edge functions
   # ---------------------------------------------------------------------------
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
   supabase-edge-functions:
     <<: *tier-supabase-hardened
     image: supabase/edge-runtime:v1.70.0
@@ -933,6 +978,11 @@ services:
   # ---------------------------------------------------------------------------
   # Supabase Analytics (Logflare) — log analytics backend
   # ---------------------------------------------------------------------------
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
   supabase-analytics:
     <<: *tier-supabase-hardened
     image: supabase/logflare:1.30.3
@@ -969,6 +1019,11 @@ services:
   # ---------------------------------------------------------------------------
   # Supabase Vector — log collection pipeline (ships to Analytics)
   # ---------------------------------------------------------------------------
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4G
   supabase-vector:
     <<: *tier-supabase-hardened
     image: timberio/vector:0.28.1-alpine
@@ -998,6 +1053,11 @@ services:
   # ---------------------------------------------------------------------------
   # Supavisor — connection pooler (PgBouncer replacement)
   # ---------------------------------------------------------------------------
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
   supabase-pooler:
     <<: *tier-supabase-hardened
     image: supabase/supavisor:2.7.4
@@ -1042,17 +1102,22 @@ services:
   # END SUPABASE STACK
   # =============================================================================
 
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
   qdrant:
     image: qdrant/qdrant:v1.14.1
     restart: unless-stopped
     cap_drop:
-      - ALL
+    - ALL
     cap_add:
-      - NET_BIND_SERVICE
-      - CHOWN
-      - SETGID
+    - NET_BIND_SERVICE
+    - CHOWN
+    - SETGID
     security_opt:
-      - no-new-privileges:true
+    - no-new-privileges:true
     ports:
     - ${QDRANT_BIND:-0.0.0.0}:${QDRANT_PORT:-6333}:6333
     networks:
@@ -1070,6 +1135,11 @@ services:
       timeout: 10s
       retries: 5
       start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4G
   meilisearch:
     <<: *tier-data-hardened
     image: getmeili/meilisearch:v1.8
@@ -1093,21 +1163,26 @@ services:
       timeout: 10s
       retries: 5
       start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4G
   neo4j:
     image: neo4j:5.22
     env_file:
-      - env.tier-data
+    - env.tier-data
     cap_drop:
-      - ALL
+    - ALL
     cap_add:
-      - NET_BIND_SERVICE
-      - CHOWN
-      - DAC_OVERRIDE
-      - FOWNER
-      - SETGID
-      - SETUID
+    - NET_BIND_SERVICE
+    - CHOWN
+    - DAC_OVERRIDE
+    - FOWNER
+    - SETGID
+    - SETUID
     security_opt:
-      - no-new-privileges:true
+    - no-new-privileges:true
     restart: unless-stopped
     environment:
     - NEO4J_AUTH=${NEO4J_AUTH:-neo4j/${NEO4J_PASSWORD:-pm_kDhuaogcUc1oOOVeGMNCkQ}}
@@ -1133,6 +1208,11 @@ services:
       timeout: 5s
       retries: 12
       start_period: 20s
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4G
   minio:
     <<: *tier-data-hardened
     # Pinned 2025-02-04: Latest RELEASE tag (MinIO stopped publishing to Docker Hub Oct 2025)
@@ -1159,6 +1239,11 @@ services:
       timeout: 10s
       retries: 5
       start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4G
   hi-rag-gateway:
     <<: *tier-api-hardened
     build:
@@ -1219,6 +1304,11 @@ services:
       timeout: 10s
       retries: 5
       start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
   retrieval-eval:
     <<: *tier-worker-hardened
     build: ./services/retrieval-eval
@@ -1247,6 +1337,11 @@ services:
     - pmoves_bus
     extra_hosts:
     - host.docker.internal:host-gateway
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
   presign:
     <<: *tier-api-hardened
     build: ./services/presign
@@ -1274,6 +1369,11 @@ services:
       timeout: 10s
       retries: 3
       start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
   render-webhook:
     <<: *tier-api-hardened
     build: ./services/render-webhook
@@ -1304,6 +1404,11 @@ services:
       timeout: 10s
       retries: 3
       start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
   model-registry:
     <<: *tier-api-hardened
     build:
@@ -1340,6 +1445,11 @@ services:
     - pmoves_bus
     extra_hosts:
     - host.docker.internal:host-gateway
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
   extract-worker:
     <<: *tier-worker-hardened
     build: ./services/extract-worker
@@ -1392,6 +1502,11 @@ services:
       timeout: 10s
       retries: 3
       start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
   pdf-ingest:
     <<: *tier-worker-hardened
     build:
@@ -1427,6 +1542,11 @@ services:
       timeout: 10s
       retries: 3
       start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
   langextract:
     <<: *tier-worker-hardened
     build:
@@ -1446,6 +1566,11 @@ services:
       timeout: 10s
       retries: 3
       start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
   notebook-sync:
     <<: *tier-worker-hardened
     build: ./services/notebook-sync
@@ -1481,6 +1606,11 @@ services:
       start_period: 15s
 
   # Transcribe-and-Fetch backend (submodule: PMOVES-transcribe-and-fetch)
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
   transcribe-backend:
     <<: *tier-worker-hardened
     build:
@@ -1525,6 +1655,11 @@ services:
       retries: 3
       start_period: 30s
 
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
   ffmpeg-whisper:
     <<: *tier-media-hardened
     build:
@@ -1559,6 +1694,9 @@ services:
             - compute
             - utility
             count: ${GPU_COUNT:-all}
+        limits:
+          cpus: '4.0'
+          memory: 8G
     ports:
     - ${FFMPEG_WHISPER_BIND:-127.0.0.1}:${FFMPEG_WHISPER_PORT:-8078}:8078
     profiles:
@@ -1596,6 +1734,9 @@ services:
           - capabilities:
             - gpu
             count: ${GPU_COUNT:-all}
+        limits:
+          cpus: '4.0'
+          memory: 8G
     ports:
     - ${MEDIA_VIDEO_BIND:-127.0.0.1}:${MEDIA_VIDEO_PORT:-8079}:8079
     profiles:
@@ -1629,6 +1770,9 @@ services:
           - capabilities:
             - gpu
             count: ${GPU_COUNT:-all}
+        limits:
+          cpus: '4.0'
+          memory: 8G
     ports:
     - ${MEDIA_AUDIO_BIND:-127.0.0.1}:${MEDIA_AUDIO_PORT:-8082}:8082
     profiles:
@@ -1667,8 +1811,7 @@ services:
     - YT_NATS_ENABLE=${YT_NATS_ENABLE:-true}
     - HIRAG_URL=${HIRAG_URL:-http://hi-rag-gateway-v2:8086}
     - YT_PLAYER_CLIENT=${YT_PLAYER_CLIENT:-android}
-    - YT_USER_AGENT=${YT_USER_AGENT:-Mozilla/5.0 (Macintosh; Intel Mac OS X 14_6)
-      AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.6 Safari/605.1.15}
+    - YT_USER_AGENT=${YT_USER_AGENT:-Mozilla/5.0 (Macintosh; Intel Mac OS X 14_6) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.6 Safari/605.1.15}
     - YT_COOKIES=${YT_COOKIES:-/app/config/cookies/darkxside.youtube.cookies.txt}
     - BGUTIL_HTTP_BASE_URL=${BGUTIL_HTTP_BASE_URL:-http://bgutil-pot-provider:4416}
     - BGUTIL_DISABLE_INNERTUBE=${BGUTIL_DISABLE_INNERTUBE:-1}
@@ -1714,6 +1857,11 @@ services:
       timeout: 10s
       retries: 3
       start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
   bgutil-pot-provider:
     image: brainicism/bgutil-ytdlp-pot-provider:1.2.2
     restart: unless-stopped
@@ -1734,6 +1882,11 @@ services:
       timeout: 10s
       retries: 3
       start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
   channel-monitor:
     <<: *tier-agent-hardened-ro
     build: ./services/channel-monitor
@@ -1781,6 +1934,11 @@ services:
     - pmoves_bus
     - pmoves_data
     - pmoves_external  # Required for YouTube API access
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
   hi-rag-gateway-v2:
     <<: *tier-api-hardened
     build:
@@ -1865,6 +2023,11 @@ services:
       timeout: 10s
       retries: 5
       start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
   hi-rag-gateway-gpu:
     <<: *tier-api-hardened
     build:
@@ -1920,6 +2083,9 @@ services:
           - capabilities:
             - gpu
             count: ${GPU_COUNT:-all}
+        limits:
+          cpus: '4.0'
+          memory: 8G
     ports:
     - ${HIRAG_BIND:-127.0.0.1}:${HIRAG_V2_GPU_HOST_PORT:-8187}:8086  # Default 8187; 8090 reserved for retrieval-eval
     depends_on:
@@ -2028,6 +2194,9 @@ services:
           - capabilities:
             - gpu
             count: ${GPU_COUNT:-all}
+        limits:
+          cpus: '4.0'
+          memory: 8G
     ports:
     - ${HIRAG_BIND:-127.0.0.1}:${HIRAG_V2_GPU_HOST_PORT:-8087}:8086
     depends_on:
@@ -2086,6 +2255,11 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
   nats-init:
     image: natsio/nats-box:0.14.5
     entrypoint: ["/bin/sh", "/scripts/init_streams.sh"]
@@ -2105,6 +2279,11 @@ services:
     - no-new-privileges:true
     tmpfs:
     - /tmp:size=16m,noexec,nosuid
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
   agent-zero:
     <<: *tier-agent-hardened
     build:
@@ -2174,11 +2353,7 @@ services:
     - ${AGENT_ZERO_LOG_DIR:-./data/agent-zero/logs}:/a0/logs
     - ${AGENT_ZERO_RUNTIME_DIR:-./data/agent-zero/runtime}:/a0/runtime
     healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "curl -fsS http://localhost:80/ >/dev/null || curl -fsS http://localhost:8080/healthz >/dev/null || exit 1",
-        ]
+      test: ["CMD-SHELL", "curl -fsS http://localhost:80/ >/dev/null || curl -fsS http://localhost:8080/healthz >/dev/null || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -2187,6 +2362,11 @@ services:
     - pmoves_app
     - pmoves_bus
     - pmoves_external  # Required for LLM provider APIs
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
   archon:
     <<: *tier-agent-hardened
     build:
@@ -2199,42 +2379,42 @@ services:
     environment:
       # SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY from env.tier-agent
       # NATS_URL from env.tier-agent has credentials: nats://nats:pmoves@nats:4222
-      - PORT=8091
-      - ENVIRONMENT=${ENVIRONMENT:-production}
-      - ARCHON_ENV=${ARCHON_ENV:-production}
-      - ARCHON_SERVER_PORT=${ARCHON_SERVER_PORT:-8091}
-      - ARCHON_SERVER_URL=${ARCHON_SERVER_URL:-http://localhost:8091}
-      - ARCHON_MCP_PORT=${ARCHON_MCP_PORT:-8051}
-      - ARCHON_AGENTS_PORT=${ARCHON_AGENTS_PORT:-8052}
-      - ARCHON_VENDOR_FORCE_PLACEHOLDER=${ARCHON_VENDOR_FORCE_PLACEHOLDER:-0}
-      - ENVIRONMENT=${ENVIRONMENT:-production}
-      - ARCHON_ENV=${ARCHON_ENV:-production}
+    - PORT=8091
+    - ENVIRONMENT=${ENVIRONMENT:-production}
+    - ARCHON_ENV=${ARCHON_ENV:-production}
+    - ARCHON_SERVER_PORT=${ARCHON_SERVER_PORT:-8091}
+    - ARCHON_SERVER_URL=${ARCHON_SERVER_URL:-http://localhost:8091}
+    - ARCHON_MCP_PORT=${ARCHON_MCP_PORT:-8051}
+    - ARCHON_AGENTS_PORT=${ARCHON_AGENTS_PORT:-8052}
+    - ARCHON_VENDOR_FORCE_PLACEHOLDER=${ARCHON_VENDOR_FORCE_PLACEHOLDER:-0}
+    - ENVIRONMENT=${ENVIRONMENT:-production}
+    - ARCHON_ENV=${ARCHON_ENV:-production}
       # Compose-first Archon Supabase wiring. CLI mode can override via
       # ARCHON_SUPABASE_* / SUPABASE_* env values.
-      - ARCHON_SUPABASE_BASE_URL=${ARCHON_SUPABASE_BASE_URL:-${ARCHON_SUPABASE_REST_URL:-${SUPABASE_REST_URL:-http://supabase-kong:8000/rest/v1}}}
-      - SUPABASE_URL=${ARCHON_SUPABASE_URL:-${SUPABASE_INTERNAL_URL:-http://supabase-kong:8000}}
-      - SUPABASE_REST_URL=${ARCHON_SUPABASE_REST_URL:-${SUPABASE_REST_URL:-http://supabase-kong:8000/rest/v1}}
-      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-${SERVICE_ROLE_KEY:-${SUPABASE_SECRET_KEY:-}}}
-      - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY:-${SUPABASE_SERVICE_ROLE_KEY:-${SERVICE_ROLE_KEY:-${SUPABASE_SECRET_KEY:-}}}}
-      - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
-      - SUPA_REST_URL=${ARCHON_SUPABASE_REST_URL:-${SUPABASE_REST_URL:-http://supabase-kong:8000/rest/v1}}
+    - ARCHON_SUPABASE_BASE_URL=${ARCHON_SUPABASE_BASE_URL:-${ARCHON_SUPABASE_REST_URL:-${SUPABASE_REST_URL:-http://supabase-kong:8000/rest/v1}}}
+    - SUPABASE_URL=${ARCHON_SUPABASE_URL:-${SUPABASE_INTERNAL_URL:-http://supabase-kong:8000}}
+    - SUPABASE_REST_URL=${ARCHON_SUPABASE_REST_URL:-${SUPABASE_REST_URL:-http://supabase-kong:8000/rest/v1}}
+    - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-${SERVICE_ROLE_KEY:-${SUPABASE_SECRET_KEY:-}}}
+    - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY:-${SUPABASE_SERVICE_ROLE_KEY:-${SERVICE_ROLE_KEY:-${SUPABASE_SECRET_KEY:-}}}}
+    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - SUPA_REST_URL=${ARCHON_SUPABASE_REST_URL:-${SUPABASE_REST_URL:-http://supabase-kong:8000/rest/v1}}
       # TensorZero routing — _sync_openai_compat_env() in services/archon/main.py
       # reads TENSORZERO_BASE_URL and populates OPENAI_COMPATIBLE_BASE_URL* vars
-      - TENSORZERO_BASE_URL=${TENSORZERO_BASE_URL:-http://tensorzero-gateway:3000}
-      - TENSORZERO_URL=${TENSORZERO_URL:-http://tensorzero-gateway:3000}
+    - TENSORZERO_BASE_URL=${TENSORZERO_BASE_URL:-http://tensorzero-gateway:3000}
+    - TENSORZERO_URL=${TENSORZERO_URL:-http://tensorzero-gateway:3000}
       # GitHub App credentials — archon MCP cross-repo cloning (planned)
-      - GH_APP_ID=${GH_APP_ID:-}
-      - GH_APP_SEC=${GH_APP_SEC:-}
-      - GH_APP_INSTALLATION_ID=${GH_APP_INSTALLATION_ID:-}
+    - GH_APP_ID=${GH_APP_ID:-}
+    - GH_APP_SEC=${GH_APP_SEC:-}
+    - GH_APP_INSTALLATION_ID=${GH_APP_INSTALLATION_ID:-}
       # Host environment leak guard (see x-host-leak-guard docs above)
-      - SSL_CERT_FILE=
-      - SSL_CERT_DIR=
-      - REQUESTS_CA_BUNDLE=
-      - CURL_CA_BUNDLE=
-      - NODE_EXTRA_CA_CERTS=
-      - HTTP_PROXY=
-      - HTTPS_PROXY=
-      - NO_PROXY=
+    - SSL_CERT_FILE=
+    - SSL_CERT_DIR=
+    - REQUESTS_CA_BUNDLE=
+    - CURL_CA_BUNDLE=
+    - NODE_EXTRA_CA_CERTS=
+    - HTTP_PROXY=
+    - HTTPS_PROXY=
+    - NO_PROXY=
     depends_on:
       nats:
         condition: service_healthy
@@ -2243,8 +2423,7 @@ services:
     command:
     - python
     - -c
-    - import uvicorn; from services.archon.main import app; uvicorn.run(app, host='0.0.0.0',
-      port=8091, log_level='info')
+    - import uvicorn; from services.archon.main import app; uvicorn.run(app, host='0.0.0.0', port=8091, log_level='info')
     ports:
     - ${ARCHON_BIND:-0.0.0.0}:${ARCHON_PORT:-8091}:8091
     - ${ARCHON_BIND:-0.0.0.0}:${ARCHON_MCP_PORT:-8051}:8051
@@ -2261,14 +2440,18 @@ services:
     healthcheck:
       test:
       - CMD-SHELL
-      - python -c "import urllib.request,sys; sys.exit(0) if urllib.request.urlopen('http://localhost:8091/healthz').getcode()==200
-        else sys.exit(1)"
+      - python -c "import urllib.request,sys; sys.exit(0) if urllib.request.urlopen('http://localhost:8091/healthz').getcode()==200 else sys.exit(1)"
       interval: 20s
       timeout: 5s
       retries: 12
       start_period: 15s
 
   # Tier: agent (Cipher Memory - knowledge-graph memory for Claude Code / agents)
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
   cipher-api:
     <<: *tier-agent-hardened
     build:
@@ -2276,21 +2459,21 @@ services:
       dockerfile: Dockerfile
     restart: unless-stopped
     environment:
-      - CIPHER_API_PREFIX=
-      - NODE_ENV=production
-      - NEO4J_URI=bolt://neo4j:7687
-      - NEO4J_USER=${NEO4J_USER:-neo4j}
-      - NEO4J_PASSWORD=${NEO4J_PASSWORD:-neo4j}
-      - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
-      - OLLAMA_BASE_URL=http://pmoves-ollama:11434
-      - DOCKED_MODE=${DOCKED_MODE:-true}
-      - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
-      - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
-      - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
-      - CIPHER_API_TOKEN=${CIPHER_API_TOKEN:-}
+    - CIPHER_API_PREFIX=
+    - NODE_ENV=production
+    - NEO4J_URI=bolt://neo4j:7687
+    - NEO4J_USER=${NEO4J_USER:-neo4j}
+    - NEO4J_PASSWORD=${NEO4J_PASSWORD:-neo4j}
+    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - OLLAMA_BASE_URL=http://pmoves-ollama:11434
+    - DOCKED_MODE=${DOCKED_MODE:-true}
+    - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
+    - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
+    - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
+    - CIPHER_API_TOKEN=${CIPHER_API_TOKEN:-}
     command: ["node", "dist/src/app/index.cjs", "--mode", "api", "--port", "3000", "--host", "0.0.0.0", "--agent", "/app/memAgent/cipher.yml", "--mcp-transport-type", "sse"]
     ports:
-      - "${CIPHER_BIND:-0.0.0.0}:${CIPHER_PORT:-8096}:3000"
+    - "${CIPHER_BIND:-0.0.0.0}:${CIPHER_PORT:-8096}:3000"
     depends_on:
       neo4j:
         condition: service_healthy
@@ -2304,14 +2487,19 @@ services:
       timeout: 10s
       retries: 3
 
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
   mesh-agent:
     <<: *tier-agent-hardened-ro
     build: ./services/mesh-agent
     restart: unless-stopped
     environment:
     # NATS_URL from env.shared/env.tier-agent has credentials: nats://nats:pmoves@nats:4222
-      - HIRAG_URL=${HIRAG_URL:-http://hi-rag-gateway-v2-gpu:8086}
-      - ANNOUNCE_SEC=${ANNOUNCE_SEC:-15}
+    - HIRAG_URL=${HIRAG_URL:-http://hi-rag-gateway-v2-gpu:8086}
+    - ANNOUNCE_SEC=${ANNOUNCE_SEC:-15}
     depends_on: [nats]
     profiles: ["agents"]
     networks: [pmoves_app, pmoves_bus]
@@ -2323,24 +2511,29 @@ services:
       start_period: 15s
 
   # Tier: agent (BoTZ Gateway - Bot management with Geometry BUS integration)
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
   botz-gateway:
     <<: *tier-agent-hardened-ro
     build: ./services/botz-gateway
     restart: unless-stopped
     environment:
-      - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
-      - SUPABASE_URL=${SUPABASE_URL:-http://supabase-kong:8000}
-      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_KEY}
-      - TENSORZERO_URL=${TENSORZERO_URL:-http://tensorzero-gateway:3000}
-      - BOTZ_HEARTBEAT_INTERVAL=${BOTZ_HEARTBEAT_INTERVAL:-30}
-      - BOTZ_STALE_THRESHOLD=${BOTZ_STALE_THRESHOLD:-5}
-      - AGENT_SIGNATURES_PATH=/app/config/agent_signatures.yaml
+    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - SUPABASE_URL=${SUPABASE_URL:-http://supabase-kong:8000}
+    - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_KEY}
+    - TENSORZERO_URL=${TENSORZERO_URL:-http://tensorzero-gateway:3000}
+    - BOTZ_HEARTBEAT_INTERVAL=${BOTZ_HEARTBEAT_INTERVAL:-30}
+    - BOTZ_STALE_THRESHOLD=${BOTZ_STALE_THRESHOLD:-5}
+    - AGENT_SIGNATURES_PATH=/app/config/agent_signatures.yaml
       # GitHub App credentials — MCP GitHub server token minting
-      - GH_APP_ID=${GH_APP_ID:-}
-      - GH_APP_SEC=${GH_APP_SEC:-}
-      - GH_APP_INSTALLATION_ID=${GH_APP_INSTALLATION_ID:-}
+    - GH_APP_ID=${GH_APP_ID:-}
+    - GH_APP_SEC=${GH_APP_SEC:-}
+    - GH_APP_INSTALLATION_ID=${GH_APP_INSTALLATION_ID:-}
     volumes:
-      - ./config/agent_signatures.yaml:/app/config/agent_signatures.yaml:ro
+    - ./config/agent_signatures.yaml:/app/config/agent_signatures.yaml:ro
     depends_on:
       nats:
         condition: service_healthy
@@ -2357,6 +2550,11 @@ services:
       start_period: 15s
 
   # Tier: agent (GitHub Branch Cleanup - automated stale branch removal)
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
   github-branch-cleanup:
     <<: *tier-agent-hardened-ro
     build: ./services/github-branch-cleanup
@@ -2365,18 +2563,18 @@ services:
     hostname: github-branch-cleanup
     restart: unless-stopped
     environment:
-      - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
-      - SERVICE_PORT=8100
-      - BRANCH_STALE_DAYS=${BRANCH_STALE_DAYS:-30}
-      - DRY_RUN=${DRY_RUN:-true}
-      - PROTECTED_BRANCHES=${PROTECTED_BRANCHES:-main,PMOVES.AI-Edition-Hardened,release-*}
-      - GITHUB_ORG=${GITHUB_ORG:-POWERFULMOVES}
-      - GH_APP_ID=${GH_APP_ID:-}
-      - GH_APP_INSTALLATION_ID=${GH_APP_INSTALLATION_ID:-}
-      - AGENTZERO_MCP_URL=${AGENTZERO_MCP_URL:-http://agent-zero:8080/mcp}
+    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - SERVICE_PORT=8100
+    - BRANCH_STALE_DAYS=${BRANCH_STALE_DAYS:-30}
+    - DRY_RUN=${DRY_RUN:-true}
+    - PROTECTED_BRANCHES=${PROTECTED_BRANCHES:-main,PMOVES.AI-Edition-Hardened,release-*}
+    - GITHUB_ORG=${GITHUB_ORG:-POWERFULMOVES}
+    - GH_APP_ID=${GH_APP_ID:-}
+    - GH_APP_INSTALLATION_ID=${GH_APP_INSTALLATION_ID:-}
+    - AGENTZERO_MCP_URL=${AGENTZERO_MCP_URL:-http://agent-zero:8080/mcp}
     ports:
-      - ${GITHUB_CLEANUP_BIND:-0.0.0.0}:8100:8100
-      - ${GITHUB_CLEANUP_BIND:-0.0.0.0}:9096:9096
+    - ${GITHUB_CLEANUP_BIND:-0.0.0.0}:8100:8100
+    - ${GITHUB_CLEANUP_BIND:-0.0.0.0}:9096:9096
     depends_on:
       nats:
         condition: service_healthy
@@ -2394,6 +2592,11 @@ services:
       start_period: 10s
 
   # Tier: agent (GitHub Issue Triage - intelligent issue classification)
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
   github-issue-triage:
     <<: *tier-agent-hardened-ro
     build: ./services/github-issue-triage
@@ -2402,16 +2605,16 @@ services:
     hostname: github-issue-triage
     restart: unless-stopped
     environment:
-      - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
-      - SERVICE_PORT=8101
-      - HIRAG_URL=${HIRAG_URL:-http://hi-rag-gateway-v2:8086}
-      - LABEL_CONFIDENCE_THRESHOLD=${LABEL_CONFIDENCE_THRESHOLD:-0.7}
-      - INDEX_HISTORICAL_ISSUES=${INDEX_HISTORICAL_ISSUES:-true}
-      - BOTZ_MCP_URL=${BOTZ_MCP_URL:-http://botz-gateway:8102}
-      - GITHUB_ORG=${GITHUB_ORG:-POWERFULMOVES}
+    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - SERVICE_PORT=8101
+    - HIRAG_URL=${HIRAG_URL:-http://hi-rag-gateway-v2:8086}
+    - LABEL_CONFIDENCE_THRESHOLD=${LABEL_CONFIDENCE_THRESHOLD:-0.7}
+    - INDEX_HISTORICAL_ISSUES=${INDEX_HISTORICAL_ISSUES:-true}
+    - BOTZ_MCP_URL=${BOTZ_MCP_URL:-http://botz-gateway:8102}
+    - GITHUB_ORG=${GITHUB_ORG:-POWERFULMOVES}
     ports:
-      - ${GITHUB_TRIAGE_BIND:-0.0.0.0}:8101:8101
-      - ${GITHUB_TRIAGE_BIND:-0.0.0.0}:9097:9097
+    - ${GITHUB_TRIAGE_BIND:-0.0.0.0}:8101:8101
+    - ${GITHUB_TRIAGE_BIND:-0.0.0.0}:9097:9097
     depends_on:
       nats:
         condition: service_healthy
@@ -2431,6 +2634,11 @@ services:
       start_period: 10s
 
   # Tier: agent (A2UI NATS bridge - geometry bus integration)
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
   a2ui-nats-bridge:
     <<: *tier-agent-hardened-ro
     build: ./services/a2ui-nats-bridge
@@ -2461,12 +2669,16 @@ services:
       - CMD
       - python3
       - -c
-      - import urllib.request; urllib.request.urlopen('http://localhost:9224/healthz',
-        timeout=5)
+      - import urllib.request; urllib.request.urlopen('http://localhost:9224/healthz', timeout=5)
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 20s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
   deepresearch:
     <<: *tier-agent-hardened-rw
     build:
@@ -2509,6 +2721,11 @@ services:
       timeout: 10s
       retries: 3
       start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
   supaserch:
     <<: *tier-agent-hardened-ro
     build:
@@ -2537,6 +2754,11 @@ services:
       timeout: 10s
       retries: 3
       start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
   nats-echo-req:
     <<: *tier-agent-hardened-ro
     build:
@@ -2559,6 +2781,11 @@ services:
       timeout: 10s
       retries: 3
       start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
   nats-echo-res:
     <<: *tier-agent-hardened-ro
     build:
@@ -2581,6 +2808,11 @@ services:
       timeout: 10s
       retries: 3
       start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
   publisher-discord:
     <<: *tier-agent-hardened-ro
     build:
@@ -2609,6 +2841,11 @@ services:
       timeout: 10s
       retries: 3
       start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
   jellyfin-bridge:
     <<: *tier-agent-hardened-ro
     build: ./services/jellyfin-bridge
@@ -2630,6 +2867,11 @@ services:
       timeout: 10s
       retries: 3
       start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
   pmoves-ollama:
     <<: *tier-llm-hardened
     image: ${PMOVES_OLLAMA_IMAGE:-ollama/ollama:0.18.0@sha256:e23e6499890325d31f3454cdc83f7a613a2423c8a9e167bbafea0b0e3c27d7c6}
@@ -2664,6 +2906,9 @@ services:
             count: all
             capabilities:
             - gpu
+        limits:
+          cpus: '4.0'
+          memory: 8G
     ports:
     - ${OLLAMA_BIND:-0.0.0.0}:${OLLAMA_HOST_PORT:-11435}:11434
     networks:
@@ -2701,6 +2946,11 @@ services:
       retries: 5
     networks:
     - pmoves_data
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4G
   tensorzero-gateway:
     <<: *tier-llm-hardened
     # Pinned 2025-02-04: Latest stable from TensorZero
@@ -2750,6 +3000,11 @@ services:
       timeout: 10s
       retries: 5
       start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
   tensorzero-ui:
     <<: *tier-llm-hardened
     # Pinned 2025-02-04: Latest stable from TensorZero (matches gateway version)
@@ -2793,6 +3048,11 @@ services:
       timeout: 10s
       retries: 3
       start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
   gpu-orchestrator:
     env_file:
     - env.shared
@@ -2816,8 +3076,8 @@ services:
     volumes:
       # SECURITY: Docker socket required for spawning GPU model containers.
       # Mounted read-only with hardened security context (no-new-privileges, cap_drop).
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-      - ./config/gpu-models.yaml:/config/gpu-models.yaml:ro
+    - /var/run/docker.sock:/var/run/docker.sock:ro
+    - ./config/gpu-models.yaml:/config/gpu-models.yaml:ro
     deploy:
       resources:
         reservations:
@@ -2826,10 +3086,13 @@ services:
             count: all
             capabilities:
             - gpu
+        limits:
+          cpus: '4.0'
+          memory: 8G
     security_opt:
-      - no-new-privileges:true
+    - no-new-privileges:true
     cap_drop:
-      - ALL
+    - ALL
     profiles:
     - gpu
     networks:
@@ -2895,15 +3158,15 @@ services:
     restart: unless-stopped
     environment:
     # NATS_URL from env.tier-agent has credentials: nats://nats:pmoves@nats:4222
-      - PORT=8113
-      - SUPA_REST_URL=${SUPA_REST_INTERNAL_URL:-${SUPA_REST_URL:-http://supabase-kong:8000/rest/v1}}
-      - EVOSWARM_POLL_SECONDS=${EVOSWARM_POLL_SECONDS:-300}
-      - EVOSWARM_SAMPLE_LIMIT=${EVOSWARM_SAMPLE_LIMIT:-25}
-      - EVOSWARM_NAMESPACE=${EVOSWARM_NAMESPACE:-}
-      - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
-      - CHIT_REQUIRE_SIGNATURE=${CHIT_PROD_REQUIRE_SIGNATURE:-true}
-      - CHIT_DECRYPT_ANCHORS=${CHIT_PROD_DECRYPT_ANCHORS:-true}
-      - CHIT_PASSPHRASE=${CHIT_PROD_PASSPHRASE:?set CHIT_PROD_PASSPHRASE in env.shared}
+    - PORT=8113
+    - SUPA_REST_URL=${SUPA_REST_INTERNAL_URL:-${SUPA_REST_URL:-http://supabase-kong:8000/rest/v1}}
+    - EVOSWARM_POLL_SECONDS=${EVOSWARM_POLL_SECONDS:-300}
+    - EVOSWARM_SAMPLE_LIMIT=${EVOSWARM_SAMPLE_LIMIT:-25}
+    - EVOSWARM_NAMESPACE=${EVOSWARM_NAMESPACE:-}
+    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - CHIT_REQUIRE_SIGNATURE=${CHIT_PROD_REQUIRE_SIGNATURE:-true}
+    - CHIT_DECRYPT_ANCHORS=${CHIT_PROD_DECRYPT_ANCHORS:-true}
+    - CHIT_PASSPHRASE=${CHIT_PROD_PASSPHRASE:?set CHIT_PROD_PASSPHRASE in env.shared}
     ports: ["${EVO_CONTROLLER_BIND:-127.0.0.1}:8113:8113"]
     profiles: ["orchestration"]
     # Docker Desktop does not publish host ports for services attached only to internal networks.
@@ -2918,6 +3181,11 @@ services:
       start_period: 15s
 
   # Ultimate TTS Studio - Multi-engine TTS with 7 engines (Gradio UI)
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
   ultimate-tts-studio:
     build:
       context: ./docker/ultimate-tts-studio
@@ -2926,15 +3194,15 @@ services:
     restart: unless-stopped
     <<: *tier-media-hardened
     environment:
-      - GRADIO_SERVER_NAME=0.0.0.0
-      - GRADIO_SERVER_PORT=7861
-      - GRADIO_MCP_SERVER=false  # Requires gradio[mcp] extra - enable after image rebuild
+    - GRADIO_SERVER_NAME=0.0.0.0
+    - GRADIO_SERVER_PORT=7861
+    - GRADIO_MCP_SERVER=false    # Requires gradio[mcp] extra - enable after image rebuild
       # WSL2/CUDA compatibility settings
-      - CUDA_FORCE_PTX_JIT=1
-      - CUDA_DEVICE_ORDER=PCI_BUS_ID
-      - TORCH_CUDA_ARCH_LIST=5.0;5.2;6.0;6.1;7.0;7.5;8.0;8.6;9.0
-      - TORCH_CUDNN_V8_API_ENABLED=1
-      - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
+    - CUDA_FORCE_PTX_JIT=1
+    - CUDA_DEVICE_ORDER=PCI_BUS_ID
+    - TORCH_CUDA_ARCH_LIST=5.0;5.2;6.0;6.1;7.0;7.5;8.0;8.6;9.0
+    - TORCH_CUDNN_V8_API_ENABLED=1
+    - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
     ports: ["${TTS_BIND:-127.0.0.1}:7861:7861"]
     profiles: ["gpu", "tts"]
     networks: [pmoves_app, pmoves_monitoring, pmoves_external]  # HuggingFace TTS model downloads
@@ -2942,11 +3210,12 @@ services:
       resources:
         reservations:
           devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
+          - driver: nvidia
+            count: 1
+            capabilities: [gpu]
         limits:
           memory: 8G
+          cpus: '4.0'
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:7861/gradio_api/info || exit 1"]
       interval: 30s
@@ -2964,33 +3233,33 @@ services:
     restart: unless-stopped
     environment:
     # NATS_URL from env.shared/env.tier-media has credentials: nats://nats:pmoves@nats:4222
-      - PORT=8055
-      - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
-      - SUPABASE_URL=${SUPABASE_INTERNAL_URL:-${SUPABASE_URL:-http://supabase-kong:8000}}
-      - TENSORZERO_URL=${TENSORZERO_URL:-http://tensorzero-gateway:3000}
-      - DEFAULT_VOICE_PROVIDER=${DEFAULT_VOICE_PROVIDER:-vibevoice}
-      - ULTIMATE_TTS_URL=${ULTIMATE_TTS_URL:-http://host.docker.internal:7860}
-      - ULTIMATE_TTS_TIMEOUT_SEC=${ULTIMATE_TTS_TIMEOUT_SEC:-300}
-      - FLUTE_API_KEY=${FLUTE_API_KEY:-}
-      # CHIT voice attribution: publishes CGP events to tokenism.geometry.event.v1
-      # NATS subject for every voice synthesis. Enables downstream consumers
-      # (tokenism simulator, hi-rag indexing) to correlate audio with prosodic
-      # BPM structure. Safe to enable — events are best-effort and non-blocking.
-      - CHIT_VOICE_ATTRIBUTION=${CHIT_VOICE_ATTRIBUTION:-true}
-      - CHIT_GEOMETRY_SUBJECT=${CHIT_GEOMETRY_SUBJECT:-tokenism.geometry.event.v1}
-      - CHIT_NAMESPACE=${CHIT_NAMESPACE:-pmoves.voice}
-      - CHIT_REQUIRE_SIGNATURE=${CHIT_PROD_REQUIRE_SIGNATURE:-true}
-      - CHIT_DECRYPT_ANCHORS=${CHIT_PROD_DECRYPT_ANCHORS:-true}
-      - CHIT_PASSPHRASE=${CHIT_PROD_PASSPHRASE:?set CHIT_PROD_PASSPHRASE in env.shared}
+    - PORT=8055
+    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - SUPABASE_URL=${SUPABASE_INTERNAL_URL:-${SUPABASE_URL:-http://supabase-kong:8000}}
+    - TENSORZERO_URL=${TENSORZERO_URL:-http://tensorzero-gateway:3000}
+    - DEFAULT_VOICE_PROVIDER=${DEFAULT_VOICE_PROVIDER:-vibevoice}
+    - ULTIMATE_TTS_URL=${ULTIMATE_TTS_URL:-http://host.docker.internal:7860}
+    - ULTIMATE_TTS_TIMEOUT_SEC=${ULTIMATE_TTS_TIMEOUT_SEC:-300}
+    - FLUTE_API_KEY=${FLUTE_API_KEY:-}
+    # CHIT voice attribution: publishes CGP events to tokenism.geometry.event.v1
+    # NATS subject for every voice synthesis. Enables downstream consumers
+    # (tokenism simulator, hi-rag indexing) to correlate audio with prosodic
+    # BPM structure. Safe to enable — events are best-effort and non-blocking.
+    - CHIT_VOICE_ATTRIBUTION=${CHIT_VOICE_ATTRIBUTION:-true}
+    - CHIT_GEOMETRY_SUBJECT=${CHIT_GEOMETRY_SUBJECT:-tokenism.geometry.event.v1}
+    - CHIT_NAMESPACE=${CHIT_NAMESPACE:-pmoves.voice}
+    - CHIT_REQUIRE_SIGNATURE=${CHIT_PROD_REQUIRE_SIGNATURE:-true}
+    - CHIT_DECRYPT_ANCHORS=${CHIT_PROD_DECRYPT_ANCHORS:-true}
+    - CHIT_PASSPHRASE=${CHIT_PROD_PASSPHRASE:?set CHIT_PROD_PASSPHRASE in env.shared}
       # Host environment leak guard (see x-host-leak-guard docs above)
-      - SSL_CERT_FILE=
-      - SSL_CERT_DIR=
-      - REQUESTS_CA_BUNDLE=
-      - CURL_CA_BUNDLE=
-      - NODE_EXTRA_CA_CERTS=
-      - HTTP_PROXY=
-      - HTTPS_PROXY=
-      - NO_PROXY=
+    - SSL_CERT_FILE=
+    - SSL_CERT_DIR=
+    - REQUESTS_CA_BUNDLE=
+    - CURL_CA_BUNDLE=
+    - NODE_EXTRA_CA_CERTS=
+    - HTTP_PROXY=
+    - HTTPS_PROXY=
+    - NO_PROXY=
     ports: ["${FLUTE_BIND:-127.0.0.1}:8055:8055", "${FLUTE_BIND:-127.0.0.1}:8056:8056"]
     profiles: ["orchestration", "media"]
     # Attach a non-internal bridge so published host ports resolve on Docker Desktop.
@@ -3005,6 +3274,11 @@ services:
       start_period: 60s
 
   # Tier: agent (Tokenism Simulator - CHIT/geometry bus simulation service)
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
   tokenism-simulator:
     build:
       context: ./services/tokenism-simulator
@@ -3014,22 +3288,22 @@ services:
     <<: *tier-agent-hardened-ro
     environment:
     # NATS_URL from env.shared/env.tier-agent has credentials: nats://nats:pmoves@nats:4222
-      - TOKENISM_HOST=${TOKENISM_HOST:-0.0.0.0}
-      - TOKENISM_PORT=${TOKENISM_PORT:-8100}
-      - FLASK_ENV=${FLASK_ENV:-production}
-      - SECRET_KEY=${SECRET_KEY:-pmoves-tokenism-secret}
-      - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
-      - NATS_CLIENT_NAME=tokenism-simulator
-      - NATS_JETSTREAM=${NATS_JETSTREAM:-true}
-      - TENSORZERO_URL=${TENSORZERO_URL:-http://tensorzero-gateway:3000}
-      - TENSORZERO_MODEL=${TENSORZERO_MODEL:-claude-sonnet-4-5}
-      - SUPABASE_URL=${SUPABASE_URL:-http://supabase-kong:8000}
-      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
-      - AGENTZERO_URL=${AGENTZERO_URL:-http://agent-zero:8080}
-      - AGENTZERO_MCP_ENABLED=${AGENTZERO_MCP_ENABLED:-true}
-      - CHIT_ENABLED=${CHIT_ENABLED:-true}
-      - GEOMETRY_BUS_URL=${GEOMETRY_BUS_URL:-nats://nats:pmoves@nats:4222}
-      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    - TOKENISM_HOST=${TOKENISM_HOST:-0.0.0.0}
+    - TOKENISM_PORT=${TOKENISM_PORT:-8100}
+    - FLASK_ENV=${FLASK_ENV:-production}
+    - SECRET_KEY=${SECRET_KEY:-pmoves-tokenism-secret}
+    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - NATS_CLIENT_NAME=tokenism-simulator
+    - NATS_JETSTREAM=${NATS_JETSTREAM:-true}
+    - TENSORZERO_URL=${TENSORZERO_URL:-http://tensorzero-gateway:3000}
+    - TENSORZERO_MODEL=${TENSORZERO_MODEL:-claude-sonnet-4-5}
+    - SUPABASE_URL=${SUPABASE_URL:-http://supabase-kong:8000}
+    - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
+    - AGENTZERO_URL=${AGENTZERO_URL:-http://agent-zero:8080}
+    - AGENTZERO_MCP_ENABLED=${AGENTZERO_MCP_ENABLED:-true}
+    - CHIT_ENABLED=${CHIT_ENABLED:-true}
+    - GEOMETRY_BUS_URL=${GEOMETRY_BUS_URL:-nats://nats:pmoves@nats:4222}
+    - LOG_LEVEL=${LOG_LEVEL:-INFO}
     ports: ["${TOKENISM_BIND:-0.0.0.0}:${TOKENISM_HOST_PORT:-8103}:8100"]
     profiles: ["agents", "orchestration", "botz"]
     depends_on: [nats]
@@ -3042,6 +3316,11 @@ services:
       start_period: 30s
 
   # PMOVES Tokenism UI - Interactive dashboard for token economy simulation
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
   tokenism-ui:
     build:
       context: ./PMOVES-ToKenism-Multi/pmoves-nextjs
@@ -3050,9 +3329,9 @@ services:
     restart: unless-stopped
     <<: *tier-ui-hardened
     environment:
-      - NEXT_PUBLIC_TOKENISM_URL=${TOKENISM_UI_API_URL:-http://tokenism-simulator:8100}
-      - NODE_ENV=production
-      - PORT=8504
+    - NEXT_PUBLIC_TOKENISM_URL=${TOKENISM_UI_API_URL:-http://tokenism-simulator:8100}
+    - NODE_ENV=production
+    - PORT=8504
     ports: ["${TOKENISM_UI_BIND:-0.0.0.0}:${TOKENISM_UI_HOST_PORT:-8504}:8504"]
     profiles: ["agents", "botz"]
     networks: [pmoves_app]
@@ -3064,6 +3343,11 @@ services:
       start_period: 30s
 
   # Consciousness Service - CHR Algorithm & CGP Generation (port 8105)
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
   consciousness-service:
     build:
       context: ./services/consciousness-service
@@ -3072,13 +3356,13 @@ services:
     restart: unless-stopped
     <<: *tier-agent-hardened-ro
     environment:
-      - SERVICE_NAME=consciousness-service
-      - SERVICE_PORT=${CONSCIOUSNESS_HOST_PORT:-8106}
-      - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
-      - CHIT_PROD_PASSPHRASE=${CHIT_PROD_PASSPHRASE:?set CHIT_PROD_PASSPHRASE in env.shared}
-      - SUPABASE_URL=${SUPABASE_URL:-http://supabase-kong:8000}
-      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY:-}
-      - PYTHONUNBUFFERED=1
+    - SERVICE_NAME=consciousness-service
+    - SERVICE_PORT=${CONSCIOUSNESS_HOST_PORT:-8106}
+    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - CHIT_PROD_PASSPHRASE=${CHIT_PROD_PASSPHRASE:?set CHIT_PROD_PASSPHRASE in env.shared}
+    - SUPABASE_URL=${SUPABASE_URL:-http://supabase-kong:8000}
+    - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY:-}
+    - PYTHONUNBUFFERED=1
     ports: ["${CONSCIOUSNESS_BIND:-0.0.0.0}:${CONSCIOUSNESS_HOST_PORT:-8106}:8106"]
     profiles: ["agents", "botz"]
     networks: [pmoves_app]
@@ -3093,6 +3377,11 @@ services:
         condition: service_healthy
 
   # Cast TTS Gateway - Chromecast/Google Home TTS routing (port 8060)
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
   cast-tts-gateway:
     build:
       context: ./services/cast-tts-gateway
@@ -3101,16 +3390,16 @@ services:
     restart: unless-stopped
     <<: *tier-agent-hardened-ro
     environment:
-      - PORT=8060
-      - FLUTE_GATEWAY_URL=http://flute-gateway:8055
-      - ULTIMATE_TTS_URL=${ULTIMATE_TTS_URL:-http://host.docker.internal:7860}
-      - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
-      - CHIT_REQUIRE_SIGNATURE=${CHIT_REQUIRE_SIGNATURE:-false}
-      - CHIT_DECRYPT_ANCHORS=${CHIT_DECRYPT_ANCHORS:-false}
-      - CHIT_PASSPHRASE=${CHIT_PROD_PASSPHRASE:-changeme}
-      - SUPABASE_URL=http://supabase-kong:8000
-      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-}
-      - MAX_CONCURRENT_CASTS=${MAX_CONCURRENT_CASTS:-4}
+    - PORT=8060
+    - FLUTE_GATEWAY_URL=http://flute-gateway:8055
+    - ULTIMATE_TTS_URL=${ULTIMATE_TTS_URL:-http://host.docker.internal:7860}
+    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - CHIT_REQUIRE_SIGNATURE=${CHIT_REQUIRE_SIGNATURE:-false}
+    - CHIT_DECRYPT_ANCHORS=${CHIT_DECRYPT_ANCHORS:-false}
+    - CHIT_PASSPHRASE=${CHIT_PROD_PASSPHRASE:-changeme}
+    - SUPABASE_URL=http://supabase-kong:8000
+    - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-}
+    - MAX_CONCURRENT_CASTS=${MAX_CONCURRENT_CASTS:-4}
     ports: ["${CAST_TTS_BIND:-0.0.0.0}:${CAST_TTS_PORT:-8060}:8060"]
     profiles: ["cast", "media"]
     networks: [pmoves_app, pmoves_bus, pmoves_api, pmoves_external]
@@ -3146,16 +3435,16 @@ services:
     restart: unless-stopped
     <<: *tier-worker-hardened
     environment:
-      - PORT=8121
-      - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
-      - VOICE_RELAY_INPUT_SUBJECT=${VOICE_RELAY_INPUT_SUBJECT:-agentzero.task.result.v1}
-      - VOICE_RELAY_OUTPUT_SUBJECT=${VOICE_RELAY_OUTPUT_SUBJECT:-voice.agent.response.v1}
+    - PORT=8121
+    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - VOICE_RELAY_INPUT_SUBJECT=${VOICE_RELAY_INPUT_SUBJECT:-agentzero.task.result.v1}
+    - VOICE_RELAY_OUTPUT_SUBJECT=${VOICE_RELAY_OUTPUT_SUBJECT:-voice.agent.response.v1}
     ports: ["${VOICE_RELAY_BIND:-0.0.0.0}:${VOICE_RELAY_PORT:-8121}:8121"]
     profiles: ["cast", "media"]
     networks: [pmoves_bus]
     read_only: true
     tmpfs:
-      - /tmp:noexec,nosuid,size=64m
+    - /tmp:noexec,nosuid,size=64m
     healthcheck:
       test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8121/healthz', timeout=5)\" || exit 1"]
       interval: 30s
@@ -3169,7 +3458,7 @@ services:
       resources:
         limits:
           cpus: '0.5'
-          memory: 128M
+          memory: 256M
         reservations:
           cpus: '0.1'
           memory: 32M
@@ -3180,50 +3469,50 @@ services:
       context: ./ui
       dockerfile: Dockerfile
     restart: unless-stopped
-    env_file: [ env.shared.generated, env.shared, env.tier-ui, .env.generated, .env.local ]
+    env_file: [env.shared.generated, env.shared, env.tier-ui, .env.generated, .env.local]
     environment:
-      - NODE_ENV=production
+    - NODE_ENV=production
       # Supabase
-      - NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL:-http://localhost:8000}
-      - NEXT_PUBLIC_SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY:-${ANON_KEY:-${SUPABASE_PUBLISHABLE_KEY:-}}}
-      - NEXT_PUBLIC_SUPABASE_REST_URL=${NEXT_PUBLIC_SUPABASE_REST_URL:-http://localhost:8000/rest/v1}
+    - NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL:-http://localhost:8000}
+    - NEXT_PUBLIC_SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY:-${ANON_KEY:-${SUPABASE_PUBLISHABLE_KEY:-}}}
+    - NEXT_PUBLIC_SUPABASE_REST_URL=${NEXT_PUBLIC_SUPABASE_REST_URL:-http://localhost:8000/rest/v1}
       # Voice/TTS
-      - NEXT_PUBLIC_FLUTE_GATEWAY_URL=${NEXT_PUBLIC_FLUTE_GATEWAY_URL:-http://localhost:8055}
-      - NEXT_PUBLIC_FLUTE_WS_URL=${NEXT_PUBLIC_FLUTE_WS_URL:-ws://localhost:8056}
+    - NEXT_PUBLIC_FLUTE_GATEWAY_URL=${NEXT_PUBLIC_FLUTE_GATEWAY_URL:-http://localhost:8055}
+    - NEXT_PUBLIC_FLUTE_WS_URL=${NEXT_PUBLIC_FLUTE_WS_URL:-ws://localhost:8056}
       # Agent Services (client-side needs localhost)
-      - NEXT_PUBLIC_AGENT_ZERO_URL=${NEXT_PUBLIC_AGENT_ZERO_URL:-http://localhost:8080}
-      - NEXT_PUBLIC_AGENT_ZERO_UI_URL=${NEXT_PUBLIC_AGENT_ZERO_UI_URL:-http://localhost:8081}
-      - NEXT_PUBLIC_ARCHON_URL=${NEXT_PUBLIC_ARCHON_URL:-http://localhost:8091}
-      - NEXT_PUBLIC_ARCHON_UI_URL=${NEXT_PUBLIC_ARCHON_UI_URL:-http://localhost:3737}
+    - NEXT_PUBLIC_AGENT_ZERO_URL=${NEXT_PUBLIC_AGENT_ZERO_URL:-http://localhost:8080}
+    - NEXT_PUBLIC_AGENT_ZERO_UI_URL=${NEXT_PUBLIC_AGENT_ZERO_UI_URL:-http://localhost:8081}
+    - NEXT_PUBLIC_ARCHON_URL=${NEXT_PUBLIC_ARCHON_URL:-http://localhost:8091}
+    - NEXT_PUBLIC_ARCHON_UI_URL=${NEXT_PUBLIC_ARCHON_UI_URL:-http://localhost:3737}
       # Knowledge & Search
-      - NEXT_PUBLIC_HIRAG_URL=${NEXT_PUBLIC_HIRAG_URL:-http://localhost:8086}
-      - NEXT_PUBLIC_OPEN_NOTEBOOK_API_URL=${NEXT_PUBLIC_OPEN_NOTEBOOK_API_URL:-http://localhost:5055}
-      - NEXT_PUBLIC_TENSORZERO_UI_URL=${NEXT_PUBLIC_TENSORZERO_UI_URL:-http://localhost:4000}
+    - NEXT_PUBLIC_HIRAG_URL=${NEXT_PUBLIC_HIRAG_URL:-http://localhost:8086}
+    - NEXT_PUBLIC_OPEN_NOTEBOOK_API_URL=${NEXT_PUBLIC_OPEN_NOTEBOOK_API_URL:-http://localhost:5055}
+    - NEXT_PUBLIC_TENSORZERO_UI_URL=${NEXT_PUBLIC_TENSORZERO_UI_URL:-http://localhost:4000}
       # Media & Ingestion
-      - NEXT_PUBLIC_PRESIGN_URL=${NEXT_PUBLIC_PRESIGN_URL:-http://localhost:8088}
-      - NEXT_PUBLIC_PMOVES_YT_BASE_URL=${NEXT_PUBLIC_PMOVES_YT_BASE_URL:-http://localhost:8077}
-      - NEXT_PUBLIC_CHANNEL_MONITOR_STATS_URL=${NEXT_PUBLIC_CHANNEL_MONITOR_STATS_URL:-http://localhost:8097/api/monitor/stats}
+    - NEXT_PUBLIC_PRESIGN_URL=${NEXT_PUBLIC_PRESIGN_URL:-http://localhost:8088}
+    - NEXT_PUBLIC_PMOVES_YT_BASE_URL=${NEXT_PUBLIC_PMOVES_YT_BASE_URL:-http://localhost:8077}
+    - NEXT_PUBLIC_CHANNEL_MONITOR_STATS_URL=${NEXT_PUBLIC_CHANNEL_MONITOR_STATS_URL:-http://localhost:8097/api/monitor/stats}
       # Token Economy Simulation
-      - NEXT_PUBLIC_TOKENISM_URL=${NEXT_PUBLIC_TOKENISM_URL:-http://localhost:8103}
+    - NEXT_PUBLIC_TOKENISM_URL=${NEXT_PUBLIC_TOKENISM_URL:-http://localhost:8103}
       # Monitoring Stack
-      - NEXT_PUBLIC_GRAFANA_URL=${NEXT_PUBLIC_GRAFANA_URL:-http://localhost:3002}
-      - NEXT_PUBLIC_PROMETHEUS_URL=${NEXT_PUBLIC_PROMETHEUS_URL:-http://localhost:9090}
-      - NEXT_PUBLIC_LOKI_URL=${NEXT_PUBLIC_LOKI_URL:-http://localhost:3100}
+    - NEXT_PUBLIC_GRAFANA_URL=${NEXT_PUBLIC_GRAFANA_URL:-http://localhost:3002}
+    - NEXT_PUBLIC_PROMETHEUS_URL=${NEXT_PUBLIC_PROMETHEUS_URL:-http://localhost:9090}
+    - NEXT_PUBLIC_LOKI_URL=${NEXT_PUBLIC_LOKI_URL:-http://localhost:3100}
       # Server-side health checks: rewrite localhost → host.docker.internal
-      - HEALTH_CHECK_HOST=host.docker.internal
+    - HEALTH_CHECK_HOST=host.docker.internal
       # Server-side only (Docker hostnames OK)
-      - POSTGREST_URL=${POSTGREST_URL:-http://supabase-kong:8000/rest/v1}
-      - PRESIGN_SHARED_SECRET=${PRESIGN_SHARED_SECRET}
-      - RENDER_WEBHOOK_URL=${RENDER_WEBHOOK_URL:-http://render-webhook:8085/comfy/webhook}
-      - OPEN_NOTEBOOK_API_URL=${OPEN_NOTEBOOK_API_URL:-http://open-notebook:5055}
-      - TOKENISM_URL=${TOKENISM_URL:-http://pmoves-tokenism-simulator-1:8100}
+    - POSTGREST_URL=${POSTGREST_URL:-http://supabase-kong:8000/rest/v1}
+    - PRESIGN_SHARED_SECRET=${PRESIGN_SHARED_SECRET}
+    - RENDER_WEBHOOK_URL=${RENDER_WEBHOOK_URL:-http://render-webhook:8085/comfy/webhook}
+    - OPEN_NOTEBOOK_API_URL=${OPEN_NOTEBOOK_API_URL:-http://open-notebook:5055}
+    - TOKENISM_URL=${TOKENISM_URL:-http://pmoves-tokenism-simulator-1:8100}
     extra_hosts:
-      - "host.docker.internal:host-gateway"
+    - "host.docker.internal:host-gateway"
     ports:
-      - "${PMOVES_UI_BIND:-0.0.0.0}:4482:3000"
+    - "${PMOVES_UI_BIND:-0.0.0.0}:4482:3000"
     # Note: flute-gateway is optional (for voice features). Start with workers profile for full functionality.
-    networks: [ pmoves_app, pmoves_api, pmoves_external ]
-    profiles: [ "ui" ]
+    networks: [pmoves_app, pmoves_api, pmoves_external]
+    profiles: ["ui"]
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:3000/api/health || exit 1"]
       interval: 20s
@@ -3232,6 +3521,11 @@ services:
       start_period: 30s
 
   # Session Context Worker - Transforms Claude Code session context to Hi-RAG KB entries
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
   session-context-worker:
     <<: *tier-worker-hardened
     image: ${SESSION_CONTEXT_WORKER_IMAGE:-ghcr.io/powerfulmoves/pmoves-session-context-worker:latest}
@@ -3251,7 +3545,7 @@ services:
     - pmoves_app
     - pmoves_bus
     depends_on:
-      - hi-rag-gateway-v2
+    - hi-rag-gateway-v2
     healthcheck:
       test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8100/healthz', timeout=5)"]
       interval: 30s
@@ -3260,41 +3554,46 @@ services:
       start_period: 15s
 
   # Wger - Fitness tracker with health metrics and workout logging
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
   wger:
     <<: *tier-api-hardened
     image: ${WGER_IMAGE:-ghcr.io/powerfulmoves/pmoves-health-wger:pmoves-latest}
     restart: unless-stopped
     environment:
       # Database configuration
-      - DATABASE_URL=postgres://wger:${WGER_DB_PASSWORD:-changeme}@wger-db:5432/wger
+    - DATABASE_URL=postgres://wger:${WGER_DB_PASSWORD:-changeme}@wger-db:5432/wger
       # Django configuration
-      - DJANGO_ALLOWED_HOSTS=*
-      - DJANGO_SECRET_KEY=${WGER_SECRET_KEY:-changeme}
-      - WGER_ENABLE_REGISTRATION=${WGER_ENABLE_REGISTRATION:-true}
+    - DJANGO_ALLOWED_HOSTS=*
+    - DJANGO_SECRET_KEY=${WGER_SECRET_KEY:-changeme}
+    - WGER_ENABLE_REGISTRATION=${WGER_ENABLE_REGISTRATION:-true}
       # NATS configuration for event publishing
-      - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
-      - WGER_ENABLE_NATS=${WGER_ENABLE_NATS:-true}
+    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - WGER_ENABLE_NATS=${WGER_ENABLE_NATS:-true}
       # Admin credentials
-      - WGER_ADMIN_PASSWORD=${WGER_ADMIN_PASSWORD:-changeme}
+    - WGER_ADMIN_PASSWORD=${WGER_ADMIN_PASSWORD:-changeme}
       # PMOVES integration
-      - ENABLE_OBSERVABILITY=${WGER_OBSERVABILITY:-true}
-      - PROMETHEUS_MULTIPROC_DIR=/tmp/prometheus
+    - ENABLE_OBSERVABILITY=${WGER_OBSERVABILITY:-true}
+    - PROMETHEUS_MULTIPROC_DIR=/tmp/prometheus
     ports:
-      - "${WGER_BIND:-0.0.0.0}:${WGER_PORT:-8000}:8000"
+    - "${WGER_BIND:-0.0.0.0}:${WGER_PORT:-8000}:8000"
     profiles: ["health", "wger"]
     networks:
-      - pmoves_api
-      - pmoves_bus
-      - pmoves_data
+    - pmoves_api
+    - pmoves_bus
+    - pmoves_data
     depends_on:
       wger-db:
         condition: service_healthy
       nats:
         condition: service_healthy
     volumes:
-      - wger-static:/home/wger/static
-      - wger-media:/home/wger/media
-      - wger-prometheus:/tmp/prometheus
+    - wger-static:/home/wger/static
+    - wger-media:/home/wger/media
+    - wger-prometheus:/tmp/prometheus
     healthcheck:
       test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v2/health/', timeout=5)"]
       interval: 30s
@@ -3303,20 +3602,25 @@ services:
       start_period: 40s
 
   # Wger database - PostgreSQL backend for fitness data
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
   wger-db:
     <<: *tier-data-hardened
     image: postgres:15-alpine
     restart: unless-stopped
     environment:
-      - POSTGRES_DB=wger
-      - POSTGRES_USER=wger
-      - POSTGRES_PASSWORD=${WGER_DB_PASSWORD:-changeme}
-      - PGDATA=/var/lib/postgresql/data/pgdata
+    - POSTGRES_DB=wger
+    - POSTGRES_USER=wger
+    - POSTGRES_PASSWORD=${WGER_DB_PASSWORD:-changeme}
+    - PGDATA=/var/lib/postgresql/data/pgdata
     volumes:
-      - wger-db:/var/lib/postgresql/data
+    - wger-db:/var/lib/postgresql/data
     profiles: ["health", "wger"]
     networks:
-      - pmoves_data
+    - pmoves_data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U wger -d wger"]
       interval: 20s
@@ -3325,6 +3629,11 @@ services:
       start_period: 10s
 
   # Comfy Watcher - ComfyUI output watcher for NATS integration
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4G
   comfy-watcher:
     build:
       context: .
@@ -3333,20 +3642,20 @@ services:
     <<: *tier-worker-hardened
     environment:
       # NATS_URL from env.shared/env.tier-worker has credentials: nats://nats:pmoves@nats:4222
-      - MINIO_ENDPOINT=${MINIO_ENDPOINT:-minio:9000}
-      - MINIO_ACCESS_KEY=${MINIO_USER:?Run make brand-defaults}
-      - MINIO_SECRET_KEY=${MINIO_PASSWORD:?Run make brand-defaults}
-      - MINIO_BUCKET=${MINIO_BUCKET:-pmoves-comfyui}
-      - PUBLIC_BASE_URL=${PUBLIC_BASE_URL:-http://minio:9000}
-      - PRESIGN_EXPIRES_HOURS=${PRESIGN_EXPIRES_HOURS:-24}
+    - MINIO_ENDPOINT=${MINIO_ENDPOINT:-minio:9000}
+    - MINIO_ACCESS_KEY=${MINIO_USER:?Run make brand-defaults}
+    - MINIO_SECRET_KEY=${MINIO_PASSWORD:?Run make brand-defaults}
+    - MINIO_BUCKET=${MINIO_BUCKET:-pmoves-comfyui}
+    - PUBLIC_BASE_URL=${PUBLIC_BASE_URL:-http://minio:9000}
+    - PRESIGN_EXPIRES_HOURS=${PRESIGN_EXPIRES_HOURS:-24}
     depends_on:
       nats:
         condition: service_healthy
       minio:
         condition: service_healthy
     volumes:
-      - comfy-watcher-output:/data
-      - comfy-watcher-state:/state
+    - comfy-watcher-output:/data
+    - comfy-watcher-state:/state
     profiles: ["orchestration", "workers"]
     networks: [pmoves_bus, pmoves_data]
     healthcheck:
@@ -3357,22 +3666,27 @@ services:
       start_period: 15s
 
   # Gateway Agent - Orchestrates 100+ MCP tools via Agent Zero MCP API
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
   gateway-agent:
     build: ./services/gateway-agent
     restart: unless-stopped
     env_file:
-      - env.shared
-      - .env.generated
+    - env.shared
+    - .env.generated
     environment:
-      - PORT=${GATEWAY_AGENT_PORT:-8111}
-      - AGENT_ZERO_URL=${AGENT_ZERO_URL:-http://agent-zero:8080}
-      - CIPHER_URL=${CIPHER_URL:-http://cipher-api:8096}
-      - TENSORZERO_URL=${TENSORZERO_URL:-http://tensorzero-gateway:3000}
-      - SUPABASE_URL=${SUPABASE_URL:-http://supabase-kong:8000}
-      - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY}
-      - TOOL_CACHE_TTL=${TOOL_CACHE_TTL:-300}
+    - PORT=${GATEWAY_AGENT_PORT:-8111}
+    - AGENT_ZERO_URL=${AGENT_ZERO_URL:-http://agent-zero:8080}
+    - CIPHER_URL=${CIPHER_URL:-http://cipher-api:8096}
+    - TENSORZERO_URL=${TENSORZERO_URL:-http://tensorzero-gateway:3000}
+    - SUPABASE_URL=${SUPABASE_URL:-http://supabase-kong:8000}
+    - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY}
+    - TOOL_CACHE_TTL=${TOOL_CACHE_TTL:-300}
     ports:
-      - "${GATEWAY_AGENT_BIND:-0.0.0.0}:${GATEWAY_AGENT_PORT:-8111}:${GATEWAY_AGENT_PORT:-8111}"  # Default 8111; 8110 reserved for model-registry
+    - "${GATEWAY_AGENT_BIND:-0.0.0.0}:${GATEWAY_AGENT_PORT:-8111}:${GATEWAY_AGENT_PORT:-8111}"    # Default 8111; 8110 reserved for model-registry
     profiles: ["agents"]
     networks: [pmoves_api, pmoves_app, pmoves_bus]
     healthcheck:
@@ -3383,22 +3697,27 @@ services:
       start_period: 30s
 
   # GitHub Runner Control - Manages self-hosted GitHub runners
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
   github-runner-ctl:
     build: ./services/github-runner-ctl
     restart: unless-stopped
     <<: *tier-agent-hardened-rw
     environment:
-      - PORT=8104
-      - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
-      - GITHUB_PAT_FILE=${GITHUB_PAT_FILE:-/run/secrets/github_pat}
-      - GITHUB_REPOSITORIES=${GITHUB_REPOSITORIES:-POWERFULMOVES/PMOVES.AI}
-      - REFRESH_INTERVAL_SECONDS=${GITHUB_RUNNER_REFRESH_INTERVAL:-60}
-      - LOG_LEVEL=${GITHUB_RUNNER_CTL_LOG_LEVEL:-INFO}
-    depends_on: [ nats ]
+    - PORT=8104
+    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - GITHUB_PAT_FILE=${GITHUB_PAT_FILE:-/run/secrets/github_pat}
+    - GITHUB_REPOSITORIES=${GITHUB_REPOSITORIES:-POWERFULMOVES/PMOVES.AI}
+    - REFRESH_INTERVAL_SECONDS=${GITHUB_RUNNER_REFRESH_INTERVAL:-60}
+    - LOG_LEVEL=${GITHUB_RUNNER_CTL_LOG_LEVEL:-INFO}
+    depends_on: [nats]
     ports: ["${GITHUB_RUNNER_CTL_BIND:-0.0.0.0}:8104:8104"]
     volumes:
-      - ./services/github-runner-ctl/config:/app/config:ro
-      - ./secrets/github_pat:/run/secrets/github_pat:ro
+    - ./services/github-runner-ctl/config:/app/config:ro
+    - ./secrets/github_pat:/run/secrets/github_pat:ro
     profiles: ["orchestration", "workers"]
     networks: [pmoves_api, pmoves_bus, pmoves_monitoring, pmoves_external]  # GitHub API for runner mgmt
     healthcheck:
@@ -3408,6 +3727,11 @@ services:
       retries: 3
       start_period: 30s
 
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
   invidious-db:
     image: postgres:14
     restart: unless-stopped
@@ -3431,6 +3755,11 @@ services:
     networks:
     - pmoves_data
     - pmoves_app
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4G
   invidious-companion:
     # Quay tags churn; default to latest unless explicitly pinned via env.
     image: ${INVIDIOUS_COMPANION_IMAGE:-quay.io/invidious/invidious-companion:latest}
@@ -3462,6 +3791,11 @@ services:
       timeout: 10s
       retries: 3
       start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
   invidious:
     # Quay tags churn; default to latest unless explicitly pinned via env.
     image: ${INVIDIOUS_IMAGE:-quay.io/invidious/invidious:latest}
@@ -3471,16 +3805,7 @@ services:
     environment:
     - INVIDIOUS_HMAC_KEY=${INVIDIOUS_HMAC_KEY:-c51f3b3a42fbf044a9b1094eadbc79743b0d859999441d3dcfce55f5ad64a9a1}
     - INVIDIOUS_COMPANION_KEY=${INVIDIOUS_COMPANION_KEY:-60eec5b733160c57}
-    - "INVIDIOUS_CONFIG=db:\n  dbname: ${INVIDIOUS_PG_DB:-invidious}\n  user: ${INVIDIOUS_PG_USER:-kemal}\n\
-        \  password: ${INVIDIOUS_PG_PASSWORD:-kemal}\n  host: invidious-db\n  port:\
-        \ 5432\n  check_tables: true\ndomain: ${INVIDIOUS_DOMAIN:-}\nexternal_port:\
-        \ ${INVIDIOUS_EXTERNAL_PORT:-3000}\nhttps_only: ${INVIDIOUS_HTTPS_ONLY:-false}\n\
-      hmac_key: \"${INVIDIOUS_HMAC_KEY:-c51f3b3a42fbf044a9b1094eadbc79743b0d859999441d3dcfce55f5ad64a9a1}\"\ninvidious_companion:\n\
-      \  - private_url: \"http://invidious-companion:8282\"\n    public_url: \"${INVIDIOUS_COMPANION_PUBLIC_URL:-http://localhost:8281}\"\
-      \ninvidious_companion_key: \"${INVIDIOUS_COMPANION_KEY:-60eec5b733160c57}\"\nstatistics_enabled: ${INVIDIOUS_STATISTICS_ENABLED:-false}\nuse_innertube_for_captions:\
-      \ ${INVIDIOUS_USE_INNERTUBE_CAPTIONS:-true}\nredirector:\n  use_invidious_redirector:\
-      \ ${INVIDIOUS_USE_REDIRECTOR:-true}\n  redirector_url: \"${INVIDIOUS_REDIRECTOR_URL:-https://redirect.invidious.io}\"\
-      \n"
+    - "INVIDIOUS_CONFIG=db:\n  dbname: ${INVIDIOUS_PG_DB:-invidious}\n  user: ${INVIDIOUS_PG_USER:-kemal}\n  password: ${INVIDIOUS_PG_PASSWORD:-kemal}\n  host: invidious-db\n  port: 5432\n  check_tables: true\ndomain: ${INVIDIOUS_DOMAIN:-}\nexternal_port: ${INVIDIOUS_EXTERNAL_PORT:-3000}\nhttps_only: ${INVIDIOUS_HTTPS_ONLY:-false}\nhmac_key: \"${INVIDIOUS_HMAC_KEY:-c51f3b3a42fbf044a9b1094eadbc79743b0d859999441d3dcfce55f5ad64a9a1}\"\ninvidious_companion:\n  - private_url: \"http://invidious-companion:8282\"\n    public_url: \"${INVIDIOUS_COMPANION_PUBLIC_URL:-http://localhost:8281}\"\ninvidious_companion_key: \"${INVIDIOUS_COMPANION_KEY:-60eec5b733160c57}\"\nstatistics_enabled: ${INVIDIOUS_STATISTICS_ENABLED:-false}\nuse_innertube_for_captions: ${INVIDIOUS_USE_INNERTUBE_CAPTIONS:-true}\nredirector:\n  use_invidious_redirector: ${INVIDIOUS_USE_REDIRECTOR:-true}\n  redirector_url: \"${INVIDIOUS_REDIRECTOR_URL:-https://redirect.invidious.io}\"\n"
     ports:
     - ${INVIDIOUS_BIND:-127.0.0.1}:${INVIDIOUS_PORT:-3000}:3000
     depends_on:
@@ -3501,6 +3826,11 @@ services:
     - pmoves_app
     - pmoves_bus
     - pmoves_external  # YouTube + Invidious redirect API
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
   grayjay-plugin-host:
     build: ./services/grayjay-plugin-host
     restart: unless-stopped
@@ -3512,11 +3842,9 @@ services:
     environment:
     - JELLYFIN_PUBLIC_URL=${JELLYFIN_PUBLIC_BASE_URL:-http://localhost:8096}
     - GRAYJAY_PLUGIN_HOST_PUBLIC_URL=${GRAYJAY_PLUGIN_HOST_PUBLIC_URL:-http://localhost:9096}
-    - GRAYJAY_PLUGIN_REGISTRY_TITLE=${GRAYJAY_PLUGIN_REGISTRY_TITLE:-PMOVES Plugin
-      Registry}
+    - GRAYJAY_PLUGIN_REGISTRY_TITLE=${GRAYJAY_PLUGIN_REGISTRY_TITLE:-PMOVES Plugin Registry}
     - GRAYJAY_JELLYFIN_PLUGIN_NAME=${GRAYJAY_JELLYFIN_PLUGIN_NAME:-PMOVES Jellyfin}
-    - GRAYJAY_JELLYFIN_PLUGIN_DESCRIPTION=${GRAYJAY_JELLYFIN_PLUGIN_DESCRIPTION:-Self-hosted
-      Jellyfin connector for PMOVES}
+    - GRAYJAY_JELLYFIN_PLUGIN_DESCRIPTION=${GRAYJAY_JELLYFIN_PLUGIN_DESCRIPTION:-Self-hosted Jellyfin connector for PMOVES}
     - GRAYJAY_JELLYFIN_PLUGIN_ID=${GRAYJAY_JELLYFIN_PLUGIN_ID:-pmoves-jellyfin}
     - DOCKED_MODE=${DOCKED_MODE:-true}
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
@@ -3535,6 +3863,11 @@ services:
       timeout: 10s
       retries: 3
       start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
   grayjay-server:
     image: registry.gitlab.futo.org/videostreaming/grayjay/grayjay:latest
     restart: unless-stopped
@@ -3567,16 +3900,18 @@ services:
       timeout: 10s
       retries: 3
       start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
   cloudflared:
     image: cloudflare/cloudflared:2024.8.0
     restart: unless-stopped
     command:
     - /bin/sh
     - -c
-    - "if [ -n \"$$CLOUDFLARE_TUNNEL_TOKEN\" ]; then\n  exec cloudflared tunnel --no-autoupdate\
-      \ run;\nelif [ -n \"$$CLOUDFLARE_TUNNEL_NAME\" ]; then\n  exec cloudflared tunnel\
-      \ --no-autoupdate run \"$$CLOUDFLARE_TUNNEL_NAME\";\nelse\n  echo \"Set CLOUDFLARE_TUNNEL_TOKEN\
-      \ or CLOUDFLARE_TUNNEL_NAME before starting cloudflared.\";\n  exit 1;\nfi\n"
+    - "if [ -n \"$$CLOUDFLARE_TUNNEL_TOKEN\" ]; then\n  exec cloudflared tunnel --no-autoupdate run;\nelif [ -n \"$$CLOUDFLARE_TUNNEL_NAME\" ]; then\n  exec cloudflared tunnel --no-autoupdate run \"$$CLOUDFLARE_TUNNEL_NAME\";\nelse\n  echo \"Set CLOUDFLARE_TUNNEL_TOKEN or CLOUDFLARE_TUNNEL_NAME before starting cloudflared.\";\n  exit 1;\nfi\n"
     env_file:
     - env.shared.generated
     - env.shared
@@ -3599,6 +3934,11 @@ services:
       timeout: 10s
       retries: 3
       start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
   invidious-companion-proxy:
     build: ./services/invidious-companion-proxy
     restart: unless-stopped
@@ -3624,6 +3964,11 @@ services:
       retries: 3
       start_period: 10s
   # Llama.cpp throughput benchmarking toolkit (GPU, on-demand)
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
   llama-throughput-lab:
     build:
       context: ../PMOVES-llama-throughput-lab
@@ -3648,6 +3993,9 @@ services:
           - driver: nvidia
             count: all
             capabilities: [gpu]
+        limits:
+          cpus: '4.0'
+          memory: 8G
     depends_on:
       nats:
         condition: service_healthy
@@ -3705,6 +4053,11 @@ services:
       retries: 3
       start_period: 15s
 
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
   github-crossrepo-sync:
     build:
       context: ./services/github-crossrepo-sync
@@ -3741,6 +4094,11 @@ services:
       retries: 3
       start_period: 15s
 
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
   github-crossrepo-pr:
     build:
       context: ./services/github-crossrepo-pr
@@ -3776,6 +4134,11 @@ services:
       retries: 3
       start_period: 15s
 
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
 volumes:
   neo4j-data: {}
   qdrant-data: {}
