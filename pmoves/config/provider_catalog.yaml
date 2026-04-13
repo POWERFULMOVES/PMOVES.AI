@@ -589,3 +589,49 @@ providers:
             weight: 0.0
         strength_ref: null             # Needs seed entry
         vram_mb: 0                     # GPU-resident; tracked via gpu-orchestrator
+
+  # ---------------------------------------------------------------------------
+  # llamacpp_rocm — AMD RDNA4 (dual R9700) via llama.cpp ROCm/HIP backend
+  # ---------------------------------------------------------------------------
+  # OpenAI-compatible endpoint served by `llama-server` (ships with llama.cpp)
+  # running on the 9850X3D dual-R9700 workstation via Tailscale hostname.
+  # Ollama's bundled ROCm v6 libs do NOT include gfx1201 kernels (RDNA4), so
+  # the canonical runtime is llama.cpp's HIP backend (built against ROCm 7.1+).
+  # See pmoves/docs/operations/TOPOLOGY.md for the rdna4 node entry.
+  llamacpp_rocm:
+    env_var: LLAMACPP_ROCM_API_KEY
+    key_pattern: ".*"
+    api_base: "http://pmoves-rdna4:8080/v1"
+    tz_type: openai
+    tier: llm
+    models:
+      gemma_4_31b_rocm:
+        model_name: "gemma-4-31b-it-Q4_K_M.gguf"
+        tz_model_key: gemma_4_31b_rocm
+        serves:
+          # Variant name matches functions.multimodal_large.variants.gemma_4_31b_rocm
+          # and functions.agent_zero.variants.local_gemma_4_31b_rocm in tensorzero.toml.
+          - function: multimodal_large
+            variant_name: gemma_4_31b_rocm
+            role: secondary
+            weight: 0.0
+          - function: agent_zero
+            variant_name: local_gemma_4_31b_rocm
+            role: secondary
+            weight: 0.0
+        strength_ref: null
+        vram_mb: 18000                 # Q4 on single R9700; FP16 splits across both cards
+      gemma_4_26b_a4b_rocm:
+        model_name: "gemma-4-26B-A4B-it-Q4_K_M.gguf"
+        tz_model_key: gemma_4_26b_a4b_rocm
+        serves:
+          - function: multimodal_large
+            variant_name: gemma_4_26b_a4b_rocm
+            role: secondary
+            weight: 0.0
+          - function: agent_zero
+            variant_name: local_gemma_4_26b_a4b_rocm
+            role: secondary
+            weight: 0.0
+        strength_ref: null
+        vram_mb: 15000                 # Q4 MoE, 3.8B active

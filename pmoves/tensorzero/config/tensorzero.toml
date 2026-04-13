@@ -412,6 +412,31 @@ api_base = "http://pmoves-dgx-spark:11434/v1"
 model_name = "nemotron:49b"
 api_key_location = "none"
 
+# --- AMD R9700 RDNA4 Node Routing (dual R9700, 64GB VRAM, ROCm 7.1+) ---
+# Heavyweight inference via llama.cpp HIP backend on pmoves-rdna4.
+# Ollama is NOT used here because its bundled ROCm v6 libs lack gfx1201 kernels.
+# Canonical runtime is `llama-server` (OpenAI-compatible, ships with llama.cpp).
+
+# Gemma 4 31B on AMD R9700 (llama.cpp ROCm, Q4 single card or FP16 dual split)
+[models.gemma_4_31b_rocm]
+routing = ["llamacpp_rocm"]
+
+[models.gemma_4_31b_rocm.providers.llamacpp_rocm]
+type = "openai"
+api_base = "http://pmoves-rdna4:8080/v1"
+model_name = "gemma-4-31b-it-Q4_K_M.gguf"
+api_key_location = "none"
+
+# Gemma 4 26B-A4B MoE on AMD R9700
+[models.gemma_4_26b_a4b_rocm]
+routing = ["llamacpp_rocm"]
+
+[models.gemma_4_26b_a4b_rocm.providers.llamacpp_rocm]
+type = "openai"
+api_base = "http://pmoves-rdna4:8080/v1"
+model_name = "gemma-4-26B-A4B-it-Q4_K_M.gguf"
+api_key_location = "none"
+
 [models.chat_together]
 routing = ["together_primary"]
 
@@ -678,6 +703,18 @@ weight = 0.0
 [functions.agent_zero.variants.hosted_spark_nemotron]
 type = "chat_completion"
 model = "nemotron_super_49b_spark"
+weight = 0.0
+
+# Gemma 4 31B on AMD R9700 — llama.cpp ROCm fallback for agent_zero (weight=0)
+[functions.agent_zero.variants.local_gemma_4_31b_rocm]
+type = "chat_completion"
+model = "gemma_4_31b_rocm"
+weight = 0.0
+
+# Gemma 4 26B-A4B MoE on AMD R9700 — llama.cpp ROCm fallback (weight=0)
+[functions.agent_zero.variants.local_gemma_4_26b_a4b_rocm]
+type = "chat_completion"
+model = "gemma_4_26b_a4b_rocm"
 weight = 0.0
 
 # Qwen3-Coder-Next 80B — local MoE (safe rollout, weight=0)
@@ -1056,6 +1093,17 @@ weight = 0.0
 [functions.multimodal_large.variants.gemma_4_26b_a4b_spark]
 type = "chat_completion"
 model = "gemma_4_26b_a4b_spark"
+weight = 0.0
+
+# AMD R9700 variants — llama.cpp ROCm (safe rollout, weight=0)
+[functions.multimodal_large.variants.gemma_4_31b_rocm]
+type = "chat_completion"
+model = "gemma_4_31b_rocm"
+weight = 0.0
+
+[functions.multimodal_large.variants.gemma_4_26b_a4b_rocm]
+type = "chat_completion"
+model = "gemma_4_26b_a4b_rocm"
 weight = 0.0
 
 # --- Per-Stack Coding Functions (4090 Coding Workstation) ---
