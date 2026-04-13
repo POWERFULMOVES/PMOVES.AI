@@ -189,11 +189,13 @@ def _load_gateway_v2(monkeypatch: pytest.MonkeyPatch, **env) -> tuple[types.Modu
         def mount(self, *args, **kwargs):
             return None
 
+        def include_router(self, *args, **kwargs):
+            pass
+
         def on_event(self, event: str):  # pragma: no cover - placeholder
             def decorator(func):
                 return func
             return decorator
-
         def websocket(self, path: str, **kwargs):  # pragma: no cover - placeholder
             def decorator(func):
                 self.routes[(path, "WEBSOCKET")] = func
@@ -216,7 +218,30 @@ def _load_gateway_v2(monkeypatch: pytest.MonkeyPatch, **env) -> tuple[types.Modu
     def _depends(callable=None):
         return callable
 
+    class _APIRouter:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def get(self, *_args, **_kwargs):
+            def decorator(func):
+                return func
+            return decorator
+
+        def post(self, *_args, **_kwargs):
+            def decorator(func):
+                return func
+            return decorator
+
+        def websocket(self, *_args, **_kwargs):
+            def decorator(func):
+                return func
+            return decorator
+
+        def include_router(self, *args, **kwargs):
+            pass
+
     fastapi_module.FastAPI = _FastAPI
+    fastapi_module.APIRouter = _APIRouter
     fastapi_module.Body = _body
     fastapi_module.Depends = _depends
     fastapi_module.HTTPException = _HTTPException
@@ -300,7 +325,19 @@ def _load_gateway_v2(monkeypatch: pytest.MonkeyPatch, **env) -> tuple[types.Modu
 
     monkeypatch.setenv("CHIT_DECODE_TEXT", "true")
     for key, value in env.items():
-        monkeypatch.setenv(key, value)
+        if value is None:
+            monkeypatch.delenv(key, raising=False)
+        else:
+            monkeypatch.setenv(key, value)
+
+    # Purge cached submodules so fresh env vars take effect on reimport
+    for _mod in (
+        'config', 'geometry_bus', 'routes', 'routes.health', 'routes.query', 'routes.geometry',
+        'models', 'embeddings', 'rerank', 'security',
+        'clients', 'clients.qdrant', 'clients.neo4j', 'clients.openai_compat',
+        'hirag_gateway_v2_test', 'hirag_gateway_v2_disabled', 'hirag_gateway_v2_enabled',
+    ):
+        sys.modules.pop(_mod, None)
 
     module_path = root_path / "pmoves/services/hi-rag-gateway-v2/app.py"
     module_name = env.get("_module_name", "hirag_gateway_v2_test")
@@ -310,6 +347,12 @@ def _load_gateway_v2(monkeypatch: pytest.MonkeyPatch, **env) -> tuple[types.Modu
     sys.modules[module_name] = module
     spec.loader.exec_module(module)
     sys.modules.setdefault("pmoves.services.hi_rag_gateway_v2.app", module)
+
+    # Propagate CHIT_DECODE_TEXT to routes.geometry (imports at module level from config)
+    rg_mod = sys.modules.get('routes.geometry')
+    if rg_mod is not None:
+        rg_mod.CHIT_DECODE_TEXT = True
+
 
     def _cleanup() -> None:
         sys.modules.pop(module_name, None)

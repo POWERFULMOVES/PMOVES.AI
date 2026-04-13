@@ -252,6 +252,15 @@ def _reload_with_env(monkeypatch, module, **env):
         else:
             monkeypatch.setenv(key, value)
 
+    # Purge cached submodules so fresh env vars take effect on reimport
+    for _mod in (
+        'config', 'geometry_bus', 'routes', 'routes.health', 'routes.query', 'routes.geometry',
+        'models', 'embeddings', 'rerank', 'security',
+        'clients', 'clients.qdrant', 'clients.neo4j', 'clients.openai_compat',
+    ):
+        sys.modules.pop(_mod, None)
+
+
     module_name = module.__name__
     module_path = Path(module.__file__)
     spec = importlib.util.spec_from_file_location(module_name, module_path)
