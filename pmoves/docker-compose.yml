@@ -2972,6 +2972,13 @@ services:
       - ULTIMATE_TTS_URL=${ULTIMATE_TTS_URL:-http://host.docker.internal:7860}
       - ULTIMATE_TTS_TIMEOUT_SEC=${ULTIMATE_TTS_TIMEOUT_SEC:-300}
       - FLUTE_API_KEY=${FLUTE_API_KEY:-}
+      # CHIT voice attribution: publishes CGP events to tokenism.geometry.event.v1
+      # NATS subject for every voice synthesis. Enables downstream consumers
+      # (tokenism simulator, hi-rag indexing) to correlate audio with prosodic
+      # BPM structure. Safe to enable — events are best-effort and non-blocking.
+      - CHIT_VOICE_ATTRIBUTION=${CHIT_VOICE_ATTRIBUTION:-true}
+      - CHIT_GEOMETRY_SUBJECT=${CHIT_GEOMETRY_SUBJECT:-tokenism.geometry.event.v1}
+      - CHIT_NAMESPACE=${CHIT_NAMESPACE:-pmoves.voice}
       - CHIT_REQUIRE_SIGNATURE=${CHIT_PROD_REQUIRE_SIGNATURE:-true}
       - CHIT_DECRYPT_ANCHORS=${CHIT_PROD_DECRYPT_ANCHORS:-true}
       - CHIT_PASSPHRASE=${CHIT_PROD_PASSPHRASE:?set CHIT_PROD_PASSPHRASE in env.shared}

@@ -803,6 +803,20 @@ async def synthesize_prosodic_speech(request: SynthesizeRequest):
 
         REQUESTS_TOTAL.labels(endpoint="/v1/voice/synthesize/prosodic", status="200").inc()
 
+        # Publish CHIT voice attribution event with prosodic metadata
+        # (best-effort — only fires when CHIT_VOICE_ATTRIBUTION is enabled).
+        # The stitched audio is at 22050 Hz mono 16-bit, so duration is
+        # len(stitched_samples) / 22050. This lets downstream geometry-bus
+        # consumers correlate voice synthesis with BPM-encoded prosodic
+        # structure for CGP events.
+        prosodic_audio_duration = len(stitched) / 22050.0
+        await _publish_chit_voice_event(
+            provider=f"ultimate_tts:{request.engine or 'kokoro'}:prosodic",
+            text_length=len(request.text),
+            audio_duration=prosodic_audio_duration,
+            voice=request.voice,
+        )
+
         # Return WAV bytes with compact metadata in headers.
         # Full timeline available via X-Prosodic-Timeline-URL (future) or
         # by POST-ing to /v1/voice/synthesize/prosodic with Accept: application/json.
