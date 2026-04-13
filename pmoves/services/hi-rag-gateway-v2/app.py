@@ -1,4 +1,4 @@
-"""PMOVES Hi-RAG Gateway v2 — slim wiring module.
+"""PMOVES Hi-RAG Gateway v2 - slim wiring module.
 
 All business logic lives in dedicated modules:
   config, models, embeddings, rerank, security, geometry_bus,
