@@ -1,7 +1,20 @@
+# -- Stage 1: Build dependencies -----------------------------------------
+FROM python:3.11-slim@sha256:9358444059ed78e2975ada2c189f1c1a3144a5dab6f35bff8c981afb38946634 AS builder
+
+WORKDIR /build
+COPY requirements.txt requirements.lock ./
+RUN pip install --no-cache-dir --constraint requirements.lock \
+    --prefix=/install -r requirements.txt
+
+# -- Stage 2: Runtime ----------------------------------------------------
 FROM python:3.11-slim@sha256:9358444059ed78e2975ada2c189f1c1a3144a5dab6f35bff8c981afb38946634
+
 WORKDIR /app
-COPY requirements.txt requirements.lock .
-RUN pip install --no-cache-dir --constraint requirements.lock -r requirements.txt
+
+# Copy installed dependencies from builder
+COPY --from=builder /install /usr/local
+
+# Copy application code
 COPY . .
 
 # Security: Run as non-root user
@@ -11,4 +24,9 @@ RUN groupadd -r pmoves --gid=65532 && \
 
 USER pmoves:pmoves
 
-CMD ["python","linker.py"]
+EXPOSE 8090
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD ["python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8090/health')"] || exit 1
+
+CMD ["python", "-m", "uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8090"]
