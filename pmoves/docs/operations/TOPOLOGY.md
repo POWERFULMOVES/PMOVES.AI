@@ -14,6 +14,7 @@
 | POWERFULMOVES (5090) | LAN (dual NIC) | `ts:<5090-linux>`, `ts:<5090-win>` | pmoves-powerfulmoves, powerfulmoves-1 | Primary GPU (RTX 5090) | `self-hosted, ai-lab, gpu, cuda` | 24C / 64GB | electricity |
 | 4090 Laptop (Windows) | LAN | `ts:<laptop>` | pmoves-4090 | Control Plane, Edge Orchestration, Agent Zero + Claws | — | RTX 4090 | electricity |
 | DGX Spark | LAN | `ts:<dgx-spark>` | pmoves-dgx-spark | Heavyweight Inference (Gemma 4 31B, Nemotron Super 49B, Qwen3-Coder 480B) | `self-hosted, ai-lab, gpu, cuda, spark` (pending) | 20C Arm / 128GB unified LPDDR5X | electricity |
+| R9700 Workstation (Linux) | LAN | `ts:<rdna4>` | pmoves-rdna4 | Heavyweight ROCm Inference (Gemma 4 31B/26B-A4B via llama.cpp) | `self-hosted, ai-lab, gpu, rocm, rdna4` (pending) | 9850X3D / 32GB + 2x R9700 (64GB VRAM total) | electricity |
 | Jetson Orin #1 | LAN (RustDesk + SSH) | `ts:<nano>` | pmoves-nano (rename to pmoves-nano-1 pending) | Edge Inference (Nemotron/NemoClaw), Claws | — | Orin (sm_87) | electricity |
 | Jetson Orin #2 | LAN (RustDesk + SSH) | TBD | TBD | Edge Inference (Nemotron/NemoClaw), Claws | — | Orin (sm_87) | electricity |
 | KVM4-1 | — | — | pmoves-kvm4-1 | API Gateway | `self-hosted, vps, kvm4, production` | 8C / 16GB | $10/mo |
@@ -68,6 +69,29 @@ NVIDIA DGX Spark (GB10 Grace-Blackwell Superchip) on Tailscale. Purpose-built fo
 3. Registration in `agent-teams.yaml` under `agents/gpu-inference` tier
 4. TensorZero `ollama_spark` provider points at `http://pmoves-dgx-spark:11434/v1`
 5. `spark_claw` agent profile activates after first heartbeat on `mesh.gpu.status.v1`
+
+### AMD R9700 (RDNA4) — ROCm Inference Node (Pending)
+
+AMD Radeon AI PRO R9700 dual-GPU workstation on Tailscale. Unique value: 64GB VRAM (2x32GB) at lower capital cost than equivalent NVIDIA cards, with native RDNA4 support in ROCm 7.1+:
+
+- **CPU:** AMD Ryzen 9 9850X3D (8-core with 3D V-Cache)
+- **RAM:** 32GB DDR5
+- **GPU:** 2x AMD Radeon AI PRO R9700 (32GB VRAM each, 64GB total, gfx1201 / RDNA4)
+- **Runtime:** llama.cpp HIP backend (ROCm 7.1+). **Ollama is NOT used** — its bundled ROCm v6 libs lack gfx1201 kernels as of 2026-04.
+- **Server:** `llama-server` (OpenAI-compatible, ships with llama.cpp) on port 8080
+- **Target models:** Gemma 4 31B Q4 (single card), Gemma 4 31B FP16 (dual-card split), Gemma 4 26B-A4B, any GGUF up to 64GB
+- **Benchmark reference:** ~99 tok/s for 7B Q4 (tlee933/llama.cpp-rdna4-gfx1201 fork); competitive with RTX 4070 Ti
+- **Tailscale hostname:** `pmoves-rdna4`
+
+**Pending setup:**
+1. Tailscale join + tag assignment (`tag:rdna4`)
+2. ROCm 7.1+ install + gfx1201 kernel verification
+3. llama.cpp HIP build (or use `tlee933/llama.cpp-rdna4-gfx1201` fork)
+4. GGUF model download to `/opt/llama-models` via `make rdna4-model-pull HF_REPO=bartowski/google_gemma-4-31B-it-GGUF FILE=gemma-4-31b-it-Q4_K_M.gguf`
+5. `make rdna4-llamacpp-up` to start llama-server with dual-GPU tensor-split
+6. Registration in `agent-teams.yaml` under `agents/gpu-inference` tier
+7. TensorZero `llamacpp_rocm` provider points at `http://pmoves-rdna4:8080/v1`
+8. `rocm_claw` agent profile activates after first heartbeat on `mesh.gpu.status.v1`
 
 ---
 
