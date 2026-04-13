@@ -260,6 +260,44 @@ make -C pmoves auth-alignment     # Cross-tier credential consistency check
 - `pmoves/tools/brand_defaults.py` - Applies seeded branded defaults (auto-generates Neo4j, strengthens Meilisearch/Invidious keys)
 - `pmoves/tools/push-gh-secrets.sh` - Syncs env values to GitHub Actions secrets (filtered by CHIT manifest)
 - `pmoves/bootstrap/registry.json` - Declarative service variable definitions
+- `pmoves/scripts/with-env.sh` - **Canonical env loader.** Use this instead of `. env.shared`
+  in any Make target, script, or CI step that needs env.shared values. Raw `. env.shared`
+  sourcing fails because env.shared is in Docker env_file format (KEY=value, no `export`),
+  not bash. `with-env.sh` parses the file safely and exports the values. See PR #1046 for
+  the root-cause analysis and full remediation history.
+
+**Operator command paths:**
+```bash
+# Run any command with env.shared loaded into the environment
+bash pmoves/scripts/with-env.sh <command>
+
+# Example: run a pytest with all service env vars available
+bash pmoves/scripts/with-env.sh pytest pmoves/tests/test_nats_subjects.py
+
+# In Makefile recipes, invoke via:
+@bash scripts/with-env.sh make -C pmoves smoke
+```
+
+**Git state cleanup workflows** (operator commands for triaging dirty worktrees):
+```bash
+# Check if a worktree is mid-merge/cherry-pick/rebase
+git -C <worktree-path> status --short
+git -C <worktree-path> rev-parse -q --verify MERGE_HEAD  # exits 0 if in merge state
+git -C <worktree-path> rev-parse -q --verify CHERRY_PICK_HEAD
+git -C <worktree-path> rev-parse -q --verify REBASE_HEAD
+
+# Authoritative sitrep for all worktrees (use this, not per-worktree spot checks)
+make -C pmoves worktree-sitrep           # snapshot
+make -C pmoves worktree-sitrep-strict    # gate (non-zero exit on any dirty/conflicted worktree)
+
+# Stale state files that can remain after an interrupted merge/rebase:
+#   .git/MERGE_HEAD, .git/MERGE_MSG, .git/AUTO_MERGE, .git/rebase-merge/, .git/rebase-apply/
+# These are cleaned by `git merge --abort` or `git rebase --abort` respectively.
+```
+
+See `pmoves/docs/AGENTS/CODEX_CIPHER_MEMORY_IMPLEMENTATION_MAP.md` for the full worktree
+cleanup strategy and `pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md` (search `with-env.sh`) for
+the historical context on why this script exists.
 
 **See:** `.claude/context/credentials-workflow.md` for complete bootstrap sequence and
 `pmoves/docs/operations/SEEDED_BRANDED_DEFAULTS.md` for full credential catalog.
