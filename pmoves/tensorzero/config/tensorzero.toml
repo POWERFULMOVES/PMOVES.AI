@@ -378,6 +378,40 @@ api_base = "http://pmoves-ollama:11434/v1"
 model_name = "gemma4:31b"
 api_key_location = "none"
 
+# --- DGX Spark Node Routing (GB10 Grace-Blackwell, 128GB unified LPDDR5X) ---
+# Heavyweight inference via Ollama CUDA backend on pmoves-dgx-spark.
+# Unified memory fits 200B-param-class models without VRAM copies.
+
+# Gemma 4 31B on DGX Spark (SOTA multimodal, unified memory)
+[models.gemma_4_31b_spark]
+routing = ["ollama_spark"]
+
+[models.gemma_4_31b_spark.providers.ollama_spark]
+type = "openai"
+api_base = "http://pmoves-dgx-spark:11434/v1"
+model_name = "gemma4:31b"
+api_key_location = "none"
+
+# Gemma 4 26B-A4B MoE on DGX Spark
+[models.gemma_4_26b_a4b_spark]
+routing = ["ollama_spark"]
+
+[models.gemma_4_26b_a4b_spark.providers.ollama_spark]
+type = "openai"
+api_base = "http://pmoves-dgx-spark:11434/v1"
+model_name = "gemma4:26b-a4b"
+api_key_location = "none"
+
+# Nemotron Super 49B on DGX Spark (Ollama native, no NIM container required)
+[models.nemotron_super_49b_spark]
+routing = ["ollama_spark"]
+
+[models.nemotron_super_49b_spark.providers.ollama_spark]
+type = "openai"
+api_base = "http://pmoves-dgx-spark:11434/v1"
+model_name = "nemotron:49b"
+api_key_location = "none"
+
 [models.chat_together]
 routing = ["together_primary"]
 
@@ -638,6 +672,12 @@ model = "glm_4_long"
 [functions.agent_zero.variants.hosted_nim_nemotron]
 type = "chat_completion"
 model = "nemotron_super_49b_nim"
+weight = 0.0
+
+# Nemotron Super 49B on DGX Spark — Ollama native, no NIM container (weight=0)
+[functions.agent_zero.variants.hosted_spark_nemotron]
+type = "chat_completion"
+model = "nemotron_super_49b_spark"
 weight = 0.0
 
 # Qwen3-Coder-Next 80B — local MoE (safe rollout, weight=0)
@@ -995,14 +1035,27 @@ weight = 0.0
 [functions.multimodal_large]
 type = "chat"
 
+# Gemma 4 26B-A4B — local Ollama fallback (safe rollout, weight=0)
 [functions.multimodal_large.variants.gemma_4_26b_a4b]
 type = "chat_completion"
 model = "gemma_4_26b_a4b_local"
 weight = 0.0
 
+# Gemma 4 31B — local Ollama fallback (safe rollout, weight=0)
 [functions.multimodal_large.variants.gemma_4_31b]
 type = "chat_completion"
 model = "gemma_4_31b_local"
+weight = 0.0
+
+# DGX Spark variants — all weight=0.0 for safe rollout
+[functions.multimodal_large.variants.gemma_4_31b_spark]
+type = "chat_completion"
+model = "gemma_4_31b_spark"
+weight = 0.0
+
+[functions.multimodal_large.variants.gemma_4_26b_a4b_spark]
+type = "chat_completion"
+model = "gemma_4_26b_a4b_spark"
 weight = 0.0
 
 # --- Per-Stack Coding Functions (4090 Coding Workstation) ---

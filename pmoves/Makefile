@@ -155,6 +155,7 @@ include mk/preflight.mk
 include mk/infra.mk
 include mk/build-gate.mk
 include mk/nvidia-5090.mk
+include mk/nvidia-dgx-spark.mk
 include mk/hf.mk
 include mk/provider.mk
 
