@@ -8,6 +8,14 @@ All business logic lives in dedicated modules:
 import sys
 from pathlib import Path
 
+# Ensure service directory on sys.path for sibling module imports
+try:
+    _service_dir = Path(__file__).resolve().parent
+    if str(_service_dir) not in sys.path:
+        sys.path.insert(0, str(_service_dir))
+except Exception:
+    pass
+
 # Ensure repo root on sys.path for shared tools (services.common, libs.*, etc.)
 try:
     _repo_root = Path(__file__).resolve().parents[2]
