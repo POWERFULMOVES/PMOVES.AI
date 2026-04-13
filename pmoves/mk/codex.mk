@@ -90,8 +90,8 @@ chit-manifest-check: ## Verify v1 CHIT manifest is in sync with v2 source
 	elif [ -x "$(CODEX_VENV_UNIX)" ]; then runner="$(CODEX_VENV_UNIX)"; fi; \
 	$$runner tools/chit_manifest_sync.py --check --source "$(CHIT_MANIFEST_SOURCE)" --dest "$(CHIT_MANIFEST_DEST)"
 
-secrets-local-hydrate: ensure-env-shared ## Overlay real API keys from local.env into env.shared
-	@$(CODEX_PY) tools/secrets_local_hydrate.py --env-shared env.shared
+secrets-local-hydrate: ensure-env-shared ## Overlay real API keys from local.env into env.shared (FORCE=1 to overwrite stale)
+	@$(CODEX_PY) tools/secrets_local_hydrate.py --env-shared env.shared $(if $(FORCE),--force)
 
 secrets-runtime-hydrate: ensure-env-shared ## Pull runtime-emitted labels (Supabase/container) into env.shared
 	-@$(MAKE) --no-print-directory supa-status
@@ -100,7 +100,7 @@ secrets-runtime-hydrate: ensure-env-shared ## Pull runtime-emitted labels (Supab
 secrets-funnel-sync: chit-manifest-sync chit-export ## Materialize generated env files from CHIT + secrets manifest
 	@PYTHONPATH="$(CURDIR)/.." $(CODEX_PY) tools/secrets_sync.py generate --manifest pmoves/chit/secrets_manifest.yaml --cgp "$(CHIT_EXPORT_PATH)" $(SECRETS_SYNC_FLAGS)
 
-secrets-funnel: ## Portable secrets flow: local hydrate -> CHIT export -> manifest sync -> audit gates (optional boot user)
+secrets-funnel: ## Portable secrets flow: local hydrate -> CHIT export -> manifest sync -> audit gates (FORCE=1 to overwrite stale)
 	@$(MAKE) --no-print-directory secrets-local-hydrate
 	@$(MAKE) --no-print-directory secrets-runtime-hydrate
 	@$(CODEX_PY) tools/credential_urlencoder.py
