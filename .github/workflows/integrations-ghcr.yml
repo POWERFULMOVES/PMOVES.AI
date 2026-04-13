@@ -353,6 +353,11 @@ jobs:
           USE_GHCR: ${{ steps.login_ghcr_app.outcome == 'success' || steps.login_ghcr_pat.outcome == 'success' || steps.login_ghcr_actions.outcome == 'success' }}
         run: |
           set -euo pipefail
+          # Compute lowercased namespace for cache refs (needed by all event types)
+          OWNER_LC="${{ github.repository_owner }}"
+          OWNER_LC="${OWNER_LC,,}"
+          echo "ghcr_ns=${OWNER_LC}" >> $GITHUB_OUTPUT
+
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             echo "use_ghcr=false" >> $GITHUB_OUTPUT
             echo "has_tags=false" >> $GITHUB_OUTPUT
@@ -424,8 +429,7 @@ jobs:
             PIP_CONSTRAINT=requirements.lock
             ${{ steps.cfg.outputs.build_args }}
           platforms: linux/amd64
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ steps.meta.outputs.ghcr_ns }}/${{ steps.cfg.outputs.image_name }}:buildcache
 
       - name: Build and push (multi-arch)
         if: ${{ github.event_name != 'pull_request' && steps.meta.outputs.has_tags == 'true' }}
@@ -440,8 +444,8 @@ jobs:
             ${{ steps.cfg.outputs.build_args }}
           platforms: ${{ steps.cfg.outputs.platforms }}
           tags: ${{ steps.meta.outputs.tags }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ steps.meta.outputs.ghcr_ns }}/${{ steps.cfg.outputs.image_name }}:buildcache
+          cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ steps.meta.outputs.ghcr_ns }}/${{ steps.cfg.outputs.image_name }}:buildcache,mode=max
 
       - name: Cosign sign GHCR digest (keyless)
         if: ${{ github.event_name != 'pull_request' && steps.meta.outputs.has_tags == 'true' && steps.meta.outputs.use_ghcr == 'true' }}

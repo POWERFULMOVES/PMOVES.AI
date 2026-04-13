@@ -2,12 +2,13 @@
 # Build with: docker buildx build --platform linux/amd64,linux/arm64 \
 #   -f services/agent-zero/Dockerfile.multiarch -t pmoves-agent-zero:latest .
 #
-# The upstream base image agent0ai/agent-zero-base:latest already supports
-# both architectures.  GPU support is provided by the NVIDIA container runtime
-# at deploy time (--gpus all), not baked into the base image.
+# The upstream base image agent0ai/agent-zero-base supports both architectures.
+# GPU support is provided by the NVIDIA container runtime at deploy time
+# (--gpus all), not baked into the base image.
 
 # ── Stage 1: Build upstream Agent Zero ──────────────────────────
-FROM agent0ai/agent-zero-base:latest AS upstream
+ARG A0_BASE_TAG=latest
+FROM agent0ai/agent-zero-base:${A0_BASE_TAG} AS upstream
 
 ARG AGENT_ZERO_REPO=https://github.com/POWERFULMOVES/PMOVES-Agent-Zero.git
 ARG AGENT_ZERO_REF=PMOVES.AI-Edition-Hardened
@@ -16,14 +17,17 @@ ARG AGENT_ZERO_REF=PMOVES.AI-Edition-Hardened
 RUN git clone --depth=1 --branch ${AGENT_ZERO_REF} \
       ${AGENT_ZERO_REPO} /git/agent-zero
 
-# Install upstream deps into the pre-existing /opt/venv-a0
+# Install upstream deps into the pre-existing /opt/venv-a0.
+# NOTE: preload.py intentionally NOT run. PMOVES routes embeddings through
+# TensorZero (A0_SET_embed_model_provider=openai), not HuggingFace.
+# The preload downloads ~80MB sentence-transformers model never used at runtime.
+# If re-enabling, also add huggingface.co:443 to integrations-ghcr.yml egress.
 RUN . /opt/venv-a0/bin/activate \
     && uv pip install --no-cache-dir -r /git/agent-zero/requirements.txt \
-    && uv pip install --no-cache-dir -r /git/agent-zero/requirements2.txt \
-    && python /git/agent-zero/preload.py --dockerized=true
+    && uv pip install --no-cache-dir -r /git/agent-zero/requirements2.txt
 
 # ── Stage 2: PMOVES overlay ────────────────────────────────────
-FROM agent0ai/agent-zero-base:latest AS app
+FROM agent0ai/agent-zero-base:${A0_BASE_TAG} AS app
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -44,7 +48,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       libgl1 libglib2.0-0 libsm6 libxext6 \
     && rm -rf /var/lib/apt/lists/*
 
-# PMOVES Python requirements
+# PMOVES Python requirements (overrides upstream pins where needed)
 COPY services/agent-zero/requirements.txt services/agent-zero/requirements.lock ./
 RUN . /opt/venv-a0/bin/activate \
     && uv pip install --no-cache-dir \
