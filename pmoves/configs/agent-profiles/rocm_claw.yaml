@@ -1,0 +1,62 @@
+# ROCm Claw — AMD RDNA4 GPU Agentic Claw
+# Hybrid: OpenClaw + TensorZero/llama.cpp-rocm + NATS mesh participation
+#
+# Runs on the dual-R9700 (RDNA4 gfx1201) workstation for large-context
+# multimodal inference via llama.cpp HIP backend. Ollama is NOT used
+# because its bundled ROCm v6 libs lack gfx1201 kernels (as of 2026-04).
+# Canonical runtime: llama-server (OpenAI-compatible, ships with llama.cpp).
+
+name: rocm_claw
+role: amd-rdna4-multimodal-claw
+description: "AMD R9700 (dual RDNA4, 64GB VRAM) claw for Gemma 4 multimodal inference via llama.cpp ROCm backend"
+
+node_affinity:
+  - rdna4
+hostname_pattern: "pmoves-rdna4"
+
+model:
+  provider: llamacpp_rocm
+  model: gemma-4-31b-it-Q4_K_M.gguf
+  endpoint: http://pmoves-rdna4:8080/v1
+  fallback: tensorzero
+
+capabilities:
+  - multimodal_inference
+  - large_context_256k
+  - dual_gpu_split
+  - rocm_hip_backend
+  - gguf_native
+  - gpu_monitoring
+
+nats:
+  url: nats://nats:pmoves@nats:4222
+  subscribe:
+    - mesh.gpu.command.v1
+    - pinokio.agent.session.v1
+  publish:
+    - mesh.gpu.status.v1
+    - mesh.gpu.model.loaded.v1
+    - mesh.gpu.model.unloaded.v1
+    - mesh.gpu.command.result.v1
+
+exec_permissions:
+  - rocm-smi
+  - rocminfo
+  - llama-server
+  - huggingface-cli
+  - python3
+  - curl
+  - git
+  - make
+  - nats
+
+health:
+  endpoint: http://pmoves-rdna4:8080/v1/models
+  heartbeat_subject: mesh.gpu.status.v1
+  heartbeat_interval_seconds: 10
+
+agent_zero:
+  subordinate: true
+  profile: rocm_claw
+  inherit_context: true
+  report_to: agent_zero
