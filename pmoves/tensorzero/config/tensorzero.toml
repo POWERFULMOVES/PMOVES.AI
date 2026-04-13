@@ -333,6 +333,51 @@ api_base = "http://jetson-ollama:11434/v1"
 model_name = "gemma3n:e2b"
 api_key_location = "none"
 
+# --- Gemma 4 Family (Google, Apache 2.0, released 2026-04-02) ---
+# Current SOTA open multimodal — beats Llama 4 on AIME/LiveCodeBench/GPQA.
+# All variants routed to ollama_local by default. DGX Spark and AMD R9700
+# add dedicated routing variants in follow-up PRs.
+
+# Gemma 4 E2B (Effective 2B, 128K ctx, ~3GB Q4)
+[models.gemma_4_e2b_local]
+routing = ["ollama_local"]
+
+[models.gemma_4_e2b_local.providers.ollama_local]
+type = "openai"
+api_base = "http://pmoves-ollama:11434/v1"
+model_name = "gemma4:e2b"
+api_key_location = "none"
+
+# Gemma 4 E4B (Effective 4B, 128K ctx, ~5GB Q4)
+[models.gemma_4_e4b_local]
+routing = ["ollama_local"]
+
+[models.gemma_4_e4b_local.providers.ollama_local]
+type = "openai"
+api_base = "http://pmoves-ollama:11434/v1"
+model_name = "gemma4:e4b"
+api_key_location = "none"
+
+# Gemma 4 26B-A4B MoE (3.8B active, 256K ctx, ~15GB Q4)
+[models.gemma_4_26b_a4b_local]
+routing = ["ollama_local"]
+
+[models.gemma_4_26b_a4b_local.providers.ollama_local]
+type = "openai"
+api_base = "http://pmoves-ollama:11434/v1"
+model_name = "gemma4:26b-a4b"
+api_key_location = "none"
+
+# Gemma 4 31B Dense (SOTA multimodal, 256K ctx, ~18GB Q4)
+[models.gemma_4_31b_local]
+routing = ["ollama_local"]
+
+[models.gemma_4_31b_local.providers.ollama_local]
+type = "openai"
+api_base = "http://pmoves-ollama:11434/v1"
+model_name = "gemma4:31b"
+api_key_location = "none"
+
 [models.chat_together]
 routing = ["together_primary"]
 
@@ -929,6 +974,35 @@ weight = 1.0
 [functions.multimodal_edge.variants.gemma_3n_e2b_edge]
 type = "chat_completion"
 model = "gemma_3n_e2b_edge"
+weight = 0.0
+
+# Gemma 4 E2B — new SOTA edge multimodal (safe rollout, weight=0)
+[functions.multimodal_edge.variants.gemma_4_e2b]
+type = "chat_completion"
+model = "gemma_4_e2b_local"
+weight = 0.0
+
+# Gemma 4 E4B — new SOTA edge multimodal (safe rollout, weight=0)
+[functions.multimodal_edge.variants.gemma_4_e4b]
+type = "chat_completion"
+model = "gemma_4_e4b_local"
+weight = 0.0
+
+# --- Function: Multimodal Large ----------------------------------------------
+# Gemma 4 26B-A4B and 31B for high-quality multimodal inference on heavyweight
+# GPU nodes (DGX Spark, dual R9700, 5090). Dedicated function keeps the
+# routing policy separate from multimodal_edge (E2B/E4B on smaller nodes).
+[functions.multimodal_large]
+type = "chat"
+
+[functions.multimodal_large.variants.gemma_4_26b_a4b]
+type = "chat_completion"
+model = "gemma_4_26b_a4b_local"
+weight = 0.0
+
+[functions.multimodal_large.variants.gemma_4_31b]
+type = "chat_completion"
+model = "gemma_4_31b_local"
 weight = 0.0
 
 # --- Per-Stack Coding Functions (4090 Coding Workstation) ---
