@@ -146,8 +146,15 @@ def access_token(repo: str, lane: str) -> tuple[str, bool, str]:
         or os.getenv("GH_TOKEN")
         or os.getenv("GITHUB_TOKEN")
     )
-    if shared_pat:
+    if shared_pat and not is_placeholder(shared_pat):
         return shared_pat, True, "pat"
+    if shared_pat:
+        print(
+            "WARNING: Ignoring placeholder shared PAT "
+            "(RUNNER_PAT/GH_TOKEN/GITHUB_TOKEN); "
+            "falling back to registration token.",
+            file=sys.stderr,
+        )
     # Priority 3: short-lived registration token (expires in ~1h)
     print(
         f"WARNING: No App credentials or PAT found. "
