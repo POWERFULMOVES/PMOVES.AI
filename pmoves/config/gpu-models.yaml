@@ -272,7 +272,10 @@ models:
     quantization: "Q4_K_M"
     context_length: 131072
 
-  - id: "gemma4:26b-a4b"
+  # Ollama publishes this as plain ":26b" tag (A4B MoE architecture is implied).
+  # Verified via https://registry.ollama.ai/v2/library/gemma4/manifests/26b (200 OK)
+  # — the ":26b-a4b" tag returns MANIFEST_UNKNOWN.
+  - id: "gemma4:26b"
     provider: ollama
     vram_mb: 15000
     description: "Google Gemma 4 26B-A4B MoE - 3.8B active, speed-focused, 256K ctx, LMArena 1441"

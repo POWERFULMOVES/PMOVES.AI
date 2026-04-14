@@ -113,9 +113,13 @@ mappings:
   gemma-4-26b-a4b:
     flare_name: "pmoves/gemma-4-26b-a4b"
     provider: "ollama"
-    model_id: "gemma4:26b-a4b"
+    # Ollama publishes the A4B MoE variant as the default ":26b" tag.
+    # Verified via registry.ollama.ai manifest API (":26b-a4b" returns 404).
+    model_id: "gemma4:26b"
     lane: "local"
-    nodes: [5090, 4090]
+    # 15000MB quantized footprint > 4090 laptop available VRAM (16384-2048=14336MB) → OOM.
+    # Restricted to 5090 (24GB) until a higher-VRAM 4090 desktop variant is onboarded.
+    nodes: [5090]
 
   gemma-4-31b:
     flare_name: "pmoves/gemma-4-31b"
