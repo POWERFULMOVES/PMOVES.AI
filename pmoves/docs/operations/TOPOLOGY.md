@@ -65,7 +65,7 @@ NVIDIA DGX Spark (GB10 Grace-Blackwell Superchip) on Tailscale. Purpose-built fo
 
 **Pending setup:**
 1. Tailscale join + tag assignment (`tag:spark`)
-2. Ollama install + `gemma4:31b`, `gemma4:26b-a4b`, `nemotron:49b` model pulls
+2. Ollama install + `gemma4:31b`, `gemma4:26b`, `nemotron:49b` model pulls
 3. Registration in `agent-teams.yaml` under `agents/gpu-inference` tier
 4. TensorZero `ollama_spark` provider points at `http://pmoves-dgx-spark:11434/v1`
 5. `spark_claw` agent profile activates after first heartbeat on `mesh.gpu.status.v1`
