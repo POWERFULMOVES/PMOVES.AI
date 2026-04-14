@@ -27,8 +27,8 @@ spark-ollama-pull: ## Pull a model on DGX Spark: make spark-ollama-pull MODEL=ge
 	@test -n "$(MODEL)" || { echo "ERROR: MODEL required (e.g. MODEL=gemma4:31b)"; exit 1; }
 	@ssh -o ConnectTimeout=10 root@$(OLLAMA_SPARK_HOST) "ollama pull $(MODEL)" || { echo "spark: pull failed"; exit 1; }
 
-spark-gemma4-pull: ## Pull all 4 Gemma 4 variants on DGX Spark (E2B + E4B + 26B-A4B + 31B)
-	@ssh -o ConnectTimeout=10 root@$(OLLAMA_SPARK_HOST) "ollama pull gemma4:e2b && ollama pull gemma4:e4b && ollama pull gemma4:26b-a4b && ollama pull gemma4:31b" || { echo "spark: gemma4 pull failed"; exit 1; }
+spark-gemma4-pull: ## Pull all 4 Gemma 4 variants on DGX Spark (E2B + E4B + 26B + 31B)
+	@ssh -o ConnectTimeout=10 root@$(OLLAMA_SPARK_HOST) "ollama pull gemma4:e2b && ollama pull gemma4:e4b && ollama pull gemma4:26b && ollama pull gemma4:31b" || { echo "spark: gemma4 pull failed"; exit 1; }
 
 spark-health: ## Check DGX Spark Ollama HTTP endpoint via Tailscale
 	@curl -sf http://$(OLLAMA_SPARK_HOST):$(OLLAMA_SPARK_PORT)/api/tags >/dev/null 2>&1 && echo "spark: ready" || echo "spark: not ready (or unreachable)"
