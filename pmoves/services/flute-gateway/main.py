@@ -41,6 +41,10 @@ from providers import (
     VibeVoiceBusyError,
     VibeVoiceNoAudioError,
     VibeVoiceProvider,
+    VoiceboxBusyError,
+    VoiceboxError,
+    VoiceboxNoProfileError,
+    VoiceboxProvider,
     WhisperProvider,
     UltimateTTSError,
     UltimateTTSProvider,
@@ -129,6 +133,9 @@ SUPABASE_KEY = get_secret("SUPABASE_SERVICE_ROLE_KEY", "")
 VIBEVOICE_URL = (os.getenv("VIBEVOICE_URL") or "http://host.docker.internal:7860").strip()
 WHISPER_URL = os.getenv("WHISPER_URL", "http://ffmpeg-whisper:8078")
 ULTIMATE_TTS_URL = os.getenv("ULTIMATE_TTS_URL", "http://host.docker.internal:7860")
+# Voicebox is a Pinokio-managed voice production service (default port 17493).
+# Set VOICEBOX_URL="" to disable. Auto-normalized for Docker contexts below.
+VOICEBOX_URL = os.getenv("VOICEBOX_URL", "http://host.docker.internal:17493")
 DEFAULT_PROVIDER = os.getenv("DEFAULT_VOICE_PROVIDER", "vibevoice")
 FLUTE_API_KEY = get_secret("FLUTE_API_KEY", "")
 
@@ -174,6 +181,8 @@ def _normalize_vibevoice_url(url: str) -> str:
 
 
 VIBEVOICE_URL = _normalize_vibevoice_url(VIBEVOICE_URL)
+# Voicebox runs on the host via Pinokio — same Docker-context normalization applies.
+VOICEBOX_URL = _normalize_vibevoice_url(VOICEBOX_URL)
 
 # API Key authentication dependency
 async def verify_api_key(x_api_key: str = Header(None, alias="X-API-Key")):
@@ -211,6 +220,7 @@ CHIT_EVENTS_FAILED = Counter(
 vibevoice_provider: Optional[VibeVoiceProvider] = None
 whisper_provider: Optional[WhisperProvider] = None
 ultimate_tts_provider: Optional[UltimateTTSProvider] = None
+voicebox_provider: Optional[VoiceboxProvider] = None
 nats_client = None
 
 
@@ -326,7 +336,7 @@ class ConfigResponse(BaseModel):
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan - startup and shutdown with NATS service announcement."""
-    global vibevoice_provider, whisper_provider, ultimate_tts_provider, nats_client
+    global vibevoice_provider, whisper_provider, ultimate_tts_provider, voicebox_provider, nats_client
 
     logger.info("Starting Flute Gateway...")
 
@@ -358,6 +368,14 @@ async def lifespan(app: FastAPI):
     else:
         ultimate_tts_provider = None
         logger.info("Ultimate-TTS disabled (set ULTIMATE_TTS_URL to enable).")
+
+    # Initialize Voicebox provider (optional)
+    if VOICEBOX_URL:
+        voicebox_provider = VoiceboxProvider(VOICEBOX_URL)
+        logger.info("Voicebox provider enabled at %s (synthesis requires a profile)", VOICEBOX_URL)
+    else:
+        voicebox_provider = None
+        logger.info("Voicebox disabled (set VOICEBOX_URL to enable).")
 
     # Initialize NATS (optional)
     try:
@@ -428,6 +446,12 @@ async def health_check():
     else:
         providers["ultimate_tts"] = False
 
+    # Check Voicebox
+    if voicebox_provider:
+        providers["voicebox"] = await voicebox_provider.health_check()
+    else:
+        providers["voicebox"] = False
+
     # Check NATS
     nats_status = "connected" if nats_client and nats_client.is_connected else "disconnected"
 
@@ -463,6 +487,8 @@ async def get_config():
         providers.insert(0, "vibevoice")
     if ultimate_tts_provider:
         providers.append("ultimate_tts")
+    if voicebox_provider:
+        providers.append("voicebox")
 
     return ConfigResponse(
         providers=providers,
@@ -564,6 +590,35 @@ async def synthesize_speech(request: SynthesizeRequest):
                 sample_rate=24000,
                 format="wav"
             )
+        elif provider_name == "voicebox" and voicebox_provider:
+            audio_data = await voicebox_provider.synthesize(
+                text=request.text,
+                voice=request.voice,
+                engine=request.engine,
+            )
+            if not audio_data:
+                raise HTTPException(status_code=502, detail="Voicebox returned empty audio.")
+            duration = time.time() - start_time
+            TTS_DURATION.labels(provider="voicebox").observe(duration)
+
+            # Estimate audio duration from WAV (24kHz assumed; Voicebox uses Qwen3-TTS at 12kHz/24kHz)
+            audio_duration = len(audio_data) / 48000
+
+            REQUESTS_TOTAL.labels(endpoint="/v1/voice/synthesize", status="200").inc()
+
+            # Publish CHIT voice attribution event (best-effort)
+            await _publish_chit_voice_event(
+                provider="voicebox",
+                text_length=len(request.text),
+                audio_duration=audio_duration,
+                voice=request.voice,
+            )
+
+            return SynthesizeResponse(
+                duration_seconds=audio_duration,
+                sample_rate=24000,
+                format="wav"
+            )
         else:
             if provider_name == "vibevoice" and not vibevoice_provider:
                 raise HTTPException(
@@ -575,9 +630,18 @@ async def synthesize_speech(request: SynthesizeRequest):
                     status_code=503,
                     detail="Ultimate-TTS provider not configured (set ULTIMATE_TTS_URL to the running studio URL).",
                 )
+            if provider_name == "voicebox" and not voicebox_provider:
+                raise HTTPException(
+                    status_code=503,
+                    detail="Voicebox provider not configured (set VOICEBOX_URL to the running Voicebox server URL).",
+                )
             raise HTTPException(status_code=400, detail=f"Provider '{provider_name}' not available")
 
-    except (VibeVoiceBusyError, VibeVoiceNoAudioError, UltimateTTSError) as exc:
+    except VoiceboxNoProfileError as exc:
+        # Voicebox first-run not complete — distinct status so operators can act
+        REQUESTS_TOTAL.labels(endpoint="/v1/voice/synthesize", status="503").inc()
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except (VibeVoiceBusyError, VibeVoiceNoAudioError, UltimateTTSError, VoiceboxBusyError, VoiceboxError) as exc:
         REQUESTS_TOTAL.labels(endpoint="/v1/voice/synthesize", status="502").inc()
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     except HTTPException as exc:
@@ -670,6 +734,34 @@ async def synthesize_speech_audio(request: SynthesizeRequest):
                 headers={"Content-Disposition": 'attachment; filename="ultimate_tts.wav"'},
             )
 
+        elif provider_name == "voicebox" and voicebox_provider:
+            wav_bytes = await voicebox_provider.synthesize(
+                text=request.text,
+                voice=request.voice,
+                engine=request.engine,
+            )
+            if not wav_bytes:
+                raise HTTPException(status_code=502, detail="Voicebox returned empty audio.")
+
+            if output_format == "pcm":
+                # Extract PCM from WAV
+                try:
+                    with io.BytesIO(wav_bytes) as buf:
+                        with wave.open(buf, "rb") as wf:
+                            pcm_data = wf.readframes(wf.getnframes())
+                    REQUESTS_TOTAL.labels(endpoint="/v1/voice/synthesize/audio", status="200").inc()
+                    return Response(content=pcm_data, media_type="application/octet-stream")
+                except wave.Error:
+                    REQUESTS_TOTAL.labels(endpoint="/v1/voice/synthesize/audio", status="200").inc()
+                    return Response(content=wav_bytes, media_type="application/octet-stream")
+
+            REQUESTS_TOTAL.labels(endpoint="/v1/voice/synthesize/audio", status="200").inc()
+            return Response(
+                content=wav_bytes,
+                media_type="audio/wav",
+                headers={"Content-Disposition": 'attachment; filename="voicebox.wav"'},
+            )
+
         if provider_name == "vibevoice" and not vibevoice_provider:
             raise HTTPException(
                 status_code=503,
@@ -680,8 +772,16 @@ async def synthesize_speech_audio(request: SynthesizeRequest):
                 status_code=503,
                 detail="Ultimate-TTS provider not configured (set ULTIMATE_TTS_URL to the running studio URL).",
             )
+        if provider_name == "voicebox" and not voicebox_provider:
+            raise HTTPException(
+                status_code=503,
+                detail="Voicebox provider not configured (set VOICEBOX_URL to the running Voicebox server URL).",
+            )
         raise HTTPException(status_code=400, detail=f"Provider '{provider_name}' not available")
-    except (VibeVoiceBusyError, VibeVoiceNoAudioError, UltimateTTSError) as exc:
+    except VoiceboxNoProfileError as exc:
+        REQUESTS_TOTAL.labels(endpoint="/v1/voice/synthesize/audio", status="503").inc()
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except (VibeVoiceBusyError, VibeVoiceNoAudioError, UltimateTTSError, VoiceboxBusyError, VoiceboxError) as exc:
         REQUESTS_TOTAL.labels(endpoint="/v1/voice/synthesize/audio", status="502").inc()
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     except HTTPException as exc:
