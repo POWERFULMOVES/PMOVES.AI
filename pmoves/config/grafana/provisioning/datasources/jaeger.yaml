@@ -1,0 +1,32 @@
+# =============================================================================
+# PMOVES.AI - Grafana Jaeger Datasource
+# =============================================================================
+# Purpose: Provision Jaeger as the default tracing datasource in Grafana
+# Recommendation: PMOVES Rec #8 - Distributed Tracing
+#
+# Enables "Explore > Traces" in Grafana with direct Jaeger integration.
+# The Jaeger query service must be reachable at http://jaeger:16686.
+# =============================================================================
+
+apiVersion: 1
+
+datasources:
+  - name: Jaeger
+    type: jaeger
+    access: proxy
+    url: http://jaeger:16686
+    isDefault: false
+    editable: true
+    jsonData:
+      tracesToMetrics:
+        datasourceUid: prometheus
+        tags:
+          - key: service.name
+            value: service
+      nodeGraph:
+        enabled: true
+      traceQuery:
+        timeShiftEnabled: true
+        spanBar:
+          type: TagName
+          tagName: http.method
