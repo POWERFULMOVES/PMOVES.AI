@@ -154,6 +154,7 @@ async def nats_connection(
 
 # Graceful import — tracing is opt-in
 try:
+    from opentelemetry.trace import SpanKind
     from services.common.tracing import (
         inject_trace_headers,
         extract_trace_headers,
@@ -230,9 +231,21 @@ def make_traced_callback(
         ctx = extract_trace_headers(msg_headers)
         tracer = get_tracer(service_name)
 
-        with trace_nats_message(subject, msg.data) as span:
-            if span is not None and ctx is not None:
-                span.set_attribute("messaging.trace_propagated", True)
+        with tracer.start_as_current_span(
+            f"nats.receive {subject}",
+            context=ctx,
+            kind=SpanKind.CONSUMER if _trace_available else None,
+            attributes={
+                "messaging.system": "nats",
+                "messaging.destination": subject,
+                "messaging.operation": "receive",
+            },
+        ) as span:
+            if span is not None:
+                if ctx is not None:
+                    span.set_attribute("messaging.trace_propagated", True)
+                if hasattr(msg, "data") and msg.data is not None:
+                    span.set_attribute("message.size", len(msg.data))
             await handler(msg)
 
     return _wrapped

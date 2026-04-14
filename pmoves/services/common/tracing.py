@@ -13,7 +13,7 @@ Usage::
 
     # Inside a request handler the middleware creates the parent span;
     # child spans are created automatically via ``tracer.start_span()``.
-""
+"""
 
 from __future__ import annotations
 

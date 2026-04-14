@@ -9,7 +9,7 @@
 #
 # Environment:
 #   JAEGER_UI_PORT       - Jaeger UI port (default: 16686)
-#   OTEL_GRPC_PORT       - OTLP gRPC receiver port (default: 4317)
+#   OTEL_GRPC_PORT       - OTLP gRPC receiver port (default: 4327)
 #   OTEL_HTTP_PORT       - OTLP HTTP receiver port (default: 4318)
 #   OTEL_METRICS_PORT    - OTEL Collector Prometheus metrics port (default: 8889)
 #
@@ -68,7 +68,7 @@ services:
     volumes:
       - ./config/otel/otel-collector-config.yaml:/etc/otelcol/config.yaml:ro
     ports:
-      - "${OTEL_GRPC_PORT:-4317}:4317"
+      - "${OTEL_GRPC_PORT:-4327}:4317"
       - "${OTEL_HTTP_PORT:-4318}:4318"
       - "${OTEL_METRICS_PORT:-8889}:8889"
     networks:

@@ -13,7 +13,7 @@ Usage::
 
 Compatible with existing Prometheus metrics — this middleware does not
 interfere with ``prometheus_fastapi_instrumentator`` or similar.
-""
+"""
 
 from __future__ import annotations
 
