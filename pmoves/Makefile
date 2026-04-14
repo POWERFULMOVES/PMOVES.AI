@@ -3209,39 +3209,51 @@ OVERLAY_UI      := -f docker-compose.ui.yml
 OVERLAY_WORKERS := -f docker-compose.workers.yml
 OVERLAY_APPS    := -f docker-compose.apps.yml
 
-OVERLAY_DC = $(DC) -p $(PROJECT) --project-directory $(CURDIR) $(COMPOSE_ENV_FILES) $(OVERLAY_BASE)
+# Use the raw docker compose binary (NOT $(DC), which includes STACK_FILES and would
+# pull the monolithic docker-compose.yml into overlay targets, defeating isolation).
+OVERLAY_DC := docker compose -p $(PROJECT) --project-directory $(CURDIR) $(COMPOSE_ENV_FILES) $(OVERLAY_BASE)
+
+# Profile selectors — overlay services use explicit profiles
+# (e.g. supabase-local, ui, agents, media, orchestration, gpu, nim, tts, cast).
+OVERLAY_PROFILES_CORE    := --profile supabase-local
+OVERLAY_PROFILES_AGENTS  := --profile agents
+OVERLAY_PROFILES_MEDIA   := --profile media --profile orchestration --profile gpu --profile nim --profile tts --profile cast
+OVERLAY_PROFILES_UI      := --profile ui
+OVERLAY_PROFILES_WORKERS := --profile workers
+OVERLAY_PROFILES_APPS    := --profile apps
+OVERLAY_PROFILES_FULL    := $(OVERLAY_PROFILES_CORE) $(OVERLAY_PROFILES_AGENTS) $(OVERLAY_PROFILES_MEDIA) $(OVERLAY_PROFILES_UI) $(OVERLAY_PROFILES_WORKERS) $(OVERLAY_PROFILES_APPS)
 
 .PHONY: overlay-up-full overlay-up-core overlay-up-agents overlay-up-media overlay-up-ui overlay-up-workers overlay-up-apps overlay-down
 
 overlay-up-full: ## Start ALL services via overlay files (base + all tiers)
-@echo "🚀 Starting full stack via overlay files..."
-@$(OVERLAY_DC) $(OVERLAY_CORE) $(OVERLAY_AGENTS) $(OVERLAY_MEDIA) $(OVERLAY_UI) $(OVERLAY_WORKERS) $(OVERLAY_APPS) up -d
-@echo "✅ Full stack started (84 services across 6 overlays)"
+	@echo "🚀 Starting full stack via overlay files..."
+	@$(OVERLAY_DC) $(OVERLAY_CORE) $(OVERLAY_AGENTS) $(OVERLAY_MEDIA) $(OVERLAY_UI) $(OVERLAY_WORKERS) $(OVERLAY_APPS) $(OVERLAY_PROFILES_FULL) up -d
+	@echo "✅ Full stack started (84 services across 6 overlays)"
 
 overlay-up-core: ## Start core infrastructure via overlay (nats, supabase, data stores)
-@$(OVERLAY_DC) $(OVERLAY_CORE) up -d
-@echo "✅ Core infrastructure started (24 services)"
+	@$(OVERLAY_DC) $(OVERLAY_CORE) $(OVERLAY_PROFILES_CORE) up -d
+	@echo "✅ Core infrastructure started (24 services)"
 
 overlay-up-agents: ## Start agent services via overlay
-@$(OVERLAY_DC) $(OVERLAY_CORE) $(OVERLAY_AGENTS) up -d
-@echo "✅ Agent services started (14 services)"
+	@$(OVERLAY_DC) $(OVERLAY_CORE) $(OVERLAY_AGENTS) $(OVERLAY_PROFILES_CORE) $(OVERLAY_PROFILES_AGENTS) up -d
+	@echo "✅ Agent services started (14 services)"
 
 overlay-up-media: ## Start media services via overlay
-@$(OVERLAY_DC) $(OVERLAY_CORE) $(OVERLAY_MEDIA) up -d
-@echo "✅ Media services started (15 services)"
+	@$(OVERLAY_DC) $(OVERLAY_CORE) $(OVERLAY_MEDIA) $(OVERLAY_PROFILES_CORE) $(OVERLAY_PROFILES_MEDIA) up -d
+	@echo "✅ Media services started (15 services)"
 
 overlay-up-ui: ## Start UI services via overlay
-@$(OVERLAY_DC) $(OVERLAY_CORE) $(OVERLAY_UI) up -d
-@echo "✅ UI services started (8 services)"
+	@$(OVERLAY_DC) $(OVERLAY_CORE) $(OVERLAY_UI) $(OVERLAY_PROFILES_CORE) $(OVERLAY_PROFILES_UI) up -d
+	@echo "✅ UI services started (8 services)"
 
 overlay-up-workers: ## Start worker services via overlay
-@$(OVERLAY_DC) $(OVERLAY_CORE) $(OVERLAY_WORKERS) up -d
-@echo "✅ Worker services started (19 services)"
+	@$(OVERLAY_DC) $(OVERLAY_CORE) $(OVERLAY_WORKERS) $(OVERLAY_PROFILES_CORE) $(OVERLAY_PROFILES_WORKERS) up -d
+	@echo "✅ Worker services started (19 services)"
 
 overlay-up-apps: ## Start application services via overlay
-@$(OVERLAY_DC) $(OVERLAY_CORE) $(OVERLAY_APPS) up -d
-@echo "✅ Application services started (4 services)"
+	@$(OVERLAY_DC) $(OVERLAY_CORE) $(OVERLAY_APPS) $(OVERLAY_PROFILES_CORE) $(OVERLAY_PROFILES_APPS) up -d
+	@echo "✅ Application services started (4 services)"
 
 overlay-down: ## Stop all overlay services
-@$(OVERLAY_DC) $(OVERLAY_CORE) $(OVERLAY_AGENTS) $(OVERLAY_MEDIA) $(OVERLAY_UI) $(OVERLAY_WORKERS) $(OVERLAY_APPS) down
-@echo "✅ All overlay services stopped"
+	@$(OVERLAY_DC) $(OVERLAY_CORE) $(OVERLAY_AGENTS) $(OVERLAY_MEDIA) $(OVERLAY_UI) $(OVERLAY_WORKERS) $(OVERLAY_APPS) $(OVERLAY_PROFILES_FULL) down
+	@echo "✅ All overlay services stopped"
