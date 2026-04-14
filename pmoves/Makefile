@@ -2730,6 +2730,98 @@ vibevoice-smoke: ## Check VibeVoice realtime /config (requires VibeVoice running
 	curl -sS "http://localhost:$$port/config" | jq .
 
 # ────────────────────────────────────────────────────────────────────────────
+# VOICEBOX (Pinokio-managed voice production service)
+# ────────────────────────────────────────────────────────────────────────────
+# Voicebox is NOT docker-compose managed — it runs as a Pinokio app on the
+# host (default port 17493). The flute-gateway VoiceboxProvider talks to it
+# over HTTP via VOICEBOX_URL=http://host.docker.internal:17493 by default.
+#
+# First-run blocker: Voicebox ships with 0 voice profiles. Create at least
+# one profile via the Voicebox UI and download Qwen3-TTS 1.7B BEFORE
+# attempting synthesis, otherwise /generate/stream returns 404.
+
+.PHONY: up-voicebox
+up-voicebox: ## Start Voicebox via Pinokio (host-side, NOT docker-compose)
+	@echo "Voicebox is a Pinokio-managed app and must be launched via the Pinokio UI"
+	@echo "  pterm path: $$(curl -sf http://127.0.0.1:42000/pinokio/path/pterm 2>/dev/null || echo 'D:/pinokio/bin/npm/pterm.cmd')"
+	@echo "  start: pterm run voicebox.pinokio.git"
+	@echo "  expected URL: http://localhost:$${VOICEBOX_HOST_PORT:-17493}"
+	@echo "  flute-gateway uses: VOICEBOX_URL=$${VOICEBOX_URL:-http://host.docker.internal:$${VOICEBOX_HOST_PORT:-17493}}"
+
+.PHONY: voicebox-smoke
+voicebox-smoke: ## Smoke check Voicebox /health (expects 200, reports profile count)
+	@which jq >/dev/null 2>&1 || (echo "jq is required for voicebox-smoke" && exit 1)
+	@port=$${VOICEBOX_HOST_PORT:-17493}; \
+	code=$$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:$$port/health" || true); \
+	if [ "$$code" != "200" ]; then \
+	  echo "✖ Voicebox /health => $$code (start via Pinokio: pterm run voicebox.pinokio.git)"; \
+	  exit 1; \
+	fi; \
+	echo "✔ Voicebox /health 200"; \
+	curl -sS "http://localhost:$$port/health" | jq '{model_loaded, model_downloaded, gpu_type, backend_variant}'; \
+	profile_count=$$(curl -sS "http://localhost:$$port/profiles" | jq 'length' 2>/dev/null || echo "?"); \
+	echo "  profiles: $$profile_count"; \
+	if [ "$$profile_count" = "0" ]; then \
+	  echo "  ⚠ no profiles configured — synthesis will fail until a profile is created via the Voicebox UI"; \
+	fi
+
+.PHONY: voicebox-status
+voicebox-status: ## List Voicebox voice profiles via /profiles
+	@which jq >/dev/null 2>&1 || (echo "jq is required for voicebox-status" && exit 1)
+	@port=$${VOICEBOX_HOST_PORT:-17493}; \
+	code=$$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:$$port/profiles" || true); \
+	if [ "$$code" != "200" ]; then \
+	  echo "✖ Voicebox /profiles => $$code"; \
+	  exit 1; \
+	fi; \
+	curl -sS "http://localhost:$$port/profiles" | jq '.[] | {id, name, default_engine, language}'
+
+.PHONY: voicebox-profile-create
+voicebox-profile-create: ## Create a default Voicebox preset profile (Kokoro, no audio sample needed)
+	@which jq >/dev/null 2>&1 || (echo "jq is required for voicebox-profile-create" && exit 1)
+	@port=$${VOICEBOX_HOST_PORT:-17493}; \
+	engine=$${VOICEBOX_PROFILE_ENGINE:-kokoro}; \
+	echo "Voicebox: creating default '$$engine' preset profile..."; \
+	echo "  fetching presets via GET /profiles/presets/$$engine"; \
+	preset_json=$$(curl -sf "http://localhost:$$port/profiles/presets/$$engine"); \
+	if [ -z "$$preset_json" ]; then \
+	  echo "✖ failed to fetch preset voices for engine '$$engine' (start Voicebox first: pterm run voicebox.pinokio.git)"; \
+	  exit 1; \
+	fi; \
+	voice_id=$$(echo "$$preset_json" | jq -r '.voices[0].voice_id // empty'); \
+	voice_name=$$(echo "$$preset_json" | jq -r '.voices[0].name // empty'); \
+	if [ -z "$$voice_id" ]; then \
+	  echo "✖ no preset voices returned for engine '$$engine' (response: $$preset_json)"; \
+	  exit 1; \
+	fi; \
+	echo "  selected voice: $$voice_name ($$voice_id)"; \
+	profile_name=$${VOICEBOX_PROFILE_NAME:-PMOVES Default}; \
+	body=$$(jq -nc \
+	  --arg name "$$profile_name" \
+	  --arg engine "$$engine" \
+	  --arg voice_id "$$voice_id" \
+	  '{name: $$name, voice_type: "preset", language: "en", preset_engine: $$engine, preset_voice_id: $$voice_id, default_engine: $$engine}'); \
+	echo "  POST /profiles body: $$body"; \
+	resp=$$(curl -sf -X POST "http://localhost:$$port/profiles" \
+	  -H "Content-Type: application/json" \
+	  -d "$$body"); \
+	if [ -z "$$resp" ]; then \
+	  echo "✖ Voicebox /profiles POST failed (try voicebox-status to inspect existing profiles)"; \
+	  exit 1; \
+	fi; \
+	profile_id=$$(echo "$$resp" | jq -r '.id'); \
+	echo "✔ Voicebox profile created"; \
+	echo "  id:   $$profile_id"; \
+	echo "  name: $$profile_name"; \
+	echo "  engine: $$engine"; \
+	echo "  voice: $$voice_name ($$voice_id)"; \
+	echo ""; \
+	echo "  Test synthesis: curl http://localhost:$$port/generate/stream -X POST \\"; \
+	echo "                   -H 'Content-Type: application/json' \\"; \
+	echo "                   -d '{\"profile_id\":\"$$profile_id\",\"text\":\"Hello world\",\"engine\":\"$$engine\"}' \\"; \
+	echo "                   -o /tmp/voicebox-test.wav"
+
+# ────────────────────────────────────────────────────────────────────────────
 # FLUTE-GATEWAY VOICE SERVICE
 # ────────────────────────────────────────────────────────────────────────────
 
