@@ -1,0 +1,97 @@
+# =============================================================================
+# PMOVES.AI - Distributed Tracing Docker Compose Overlay
+# =============================================================================
+# Purpose: Jaeger + OpenTelemetry Collector for distributed tracing
+# Recommendation: PMOVES Rec #8 - Distributed Tracing
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.tracing.yml up -d
+#
+# Environment:
+#   JAEGER_UI_PORT       - Jaeger UI port (default: 16686)
+#   OTEL_GRPC_PORT       - OTLP gRPC receiver port (default: 4317)
+#   OTEL_HTTP_PORT       - OTLP HTTP receiver port (default: 4318)
+#   OTEL_METRICS_PORT    - OTEL Collector Prometheus metrics port (default: 8889)
+#
+# Services:
+#   jaeger         - Jaeger all-in-one (UI + collector + agent)
+#   otel-collector - OpenTelemetry Collector (receives, processes, exports)
+# =============================================================================
+
+services:
+  # ---------------------------------------------------------------------------
+  # Jaeger All-in-One - Distributed tracing UI and storage
+  # ---------------------------------------------------------------------------
+  jaeger:
+    image: jaegertracing/all-in-one:1.62
+    container_name: pmoves-jaeger
+    restart: unless-stopped
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+      - LOG_LEVEL=info
+      - MEMORY_MAX_TRACES=100000
+    ports:
+      - "${JAEGER_BIND:-127.0.0.1}:${JAEGER_UI_PORT:-16686}:16686"
+      - "14268:14268"
+      - "14250:14250"
+      - "4317:4317"
+    networks:
+      - pmoves_monitoring
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:16686"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "1.0"
+        reservations:
+          memory: 128M
+          cpus: "0.1"
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp:size=100M,mode=1777
+
+  # ---------------------------------------------------------------------------
+  # OpenTelemetry Collector - Central trace receiver and processor
+  # ---------------------------------------------------------------------------
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.112.0
+    container_name: pmoves-otel-collector
+    restart: unless-stopped
+    command: ["--config=/etc/otelcol/config.yaml"]
+    volumes:
+      - ./config/otel/otel-collector-config.yaml:/etc/otelcol/config.yaml:ro
+    ports:
+      - "${OTEL_GRPC_PORT:-4317}:4317"
+      - "${OTEL_HTTP_PORT:-4318}:4318"
+      - "${OTEL_METRICS_PORT:-8889}:8889"
+    networks:
+      - pmoves_monitoring
+    depends_on:
+      jaeger:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:13133/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "1.0"
+        reservations:
+          memory: 128M
+          cpus: "0.1"
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp:size=100M,mode=1777
