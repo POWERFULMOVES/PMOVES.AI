@@ -8,3 +8,4 @@ resources:
   - pmoves-core-deployment.yaml
   - pmoves-core-service.yaml
   - ingress.yaml
+  - ../networkpolicies
