@@ -193,7 +193,7 @@ class VoiceboxProvider(VoiceProvider):
         payload: Dict[str, Any] = {
             "profile_id": profile_id,
             "text": text,
-            "engine": kwargs.get("engine", self.DEFAULT_ENGINE),
+            "engine": kwargs.get("engine"),
             "model_size": kwargs.get("model_size", self.DEFAULT_MODEL_SIZE),
             "language": kwargs.get("language"),
             "seed": kwargs.get("seed"),
@@ -209,6 +209,7 @@ class VoiceboxProvider(VoiceProvider):
             async with httpx.AsyncClient(timeout=self._timeout) as client:
                 async with client.stream("POST", self.generate_endpoint, json=payload) as response:
                     if response.status_code == 404:
+                        self._cached_profile_id = None
                         raise VoiceboxNoProfileError(
                             f"Voicebox returned 404 for profile_id={profile_id} — "
                             "profile may have been deleted between resolve and synthesize."
@@ -340,6 +341,8 @@ class VoiceboxProvider(VoiceProvider):
             logger.debug("Voicebox health_status failed: %s", exc)
 
         status["ready_for_synthesis"] = (
-            status["reachable"] and status["profiles_count"] > 0
+            status["reachable"]
+            and status["model_loaded"]
+            and status["profiles_count"] > 0
         )
         return status

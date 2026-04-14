@@ -601,8 +601,16 @@ async def synthesize_speech(request: SynthesizeRequest):
             duration = time.time() - start_time
             TTS_DURATION.labels(provider="voicebox").observe(duration)
 
-            # Estimate audio duration from WAV (24kHz assumed; Voicebox uses Qwen3-TTS at 12kHz/24kHz)
-            audio_duration = len(audio_data) / 48000
+            # Parse WAV header to derive actual sample rate and duration
+            try:
+                with io.BytesIO(audio_data) as buf:
+                    with wave.open(buf, "rb") as wf:
+                        sample_rate = wf.getframerate()
+                        frame_count = wf.getnframes()
+                audio_duration = frame_count / sample_rate
+            except wave.Error:
+                audio_duration = len(audio_data) / 48000  # fallback
+                sample_rate = 24000
 
             REQUESTS_TOTAL.labels(endpoint="/v1/voice/synthesize", status="200").inc()
 
@@ -616,7 +624,7 @@ async def synthesize_speech(request: SynthesizeRequest):
 
             return SynthesizeResponse(
                 duration_seconds=audio_duration,
-                sample_rate=24000,
+                sample_rate=sample_rate,
                 format="wav"
             )
         else:
