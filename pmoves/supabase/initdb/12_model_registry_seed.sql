@@ -675,6 +675,8 @@ BEGIN
   -- Gemma 4 26B-A4B MoE - 3.8B active, speed-focused, 256K ctx
   -- HF pipeline_tag: image-text-to-text (vision only, NO audio/video despite HF multimodal family)
   -- Ollama publishes this as plain ":26b" tag (A4B MoE architecture is implied)
+  -- Clean up legacy tag from pre-rename (gemma4:26b-a4b -> gemma4:26b)
+  DELETE FROM pmoves_core.models WHERE provider_id = v_ollama_local_id AND model_id = 'gemma4:26b-a4b';
   INSERT INTO pmoves_core.models (provider_id, name, model_id, model_type, capabilities, vram_mb, context_length, description, active)
   VALUES (
     v_ollama_local_id,
