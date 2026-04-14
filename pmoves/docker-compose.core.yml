@@ -1,0 +1,1047 @@
+##############################################################################
+# PMOVES.AI - Docker Compose Overlay: Essential Infrastructure
+##############################################################################
+# Services: core tier
+# Always combine with base: docker compose -f docker-compose.base.yml -f docker-compose.core.yml up -d
+#
+# Generated from docker-compose.yml by scripts/split_compose.py
+##############################################################################
+services:
+  nats:
+    <<: &tier-data-hardened
+      env_file:
+      - env.shared
+      - env.tier-data
+      cap_drop:
+      - ALL
+      cap_add:
+      - NET_BIND_SERVICE
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - SETGID
+      - SETUID
+      security_opt:
+      - no-new-privileges:true
+
+    # Pinned 2025-02-04: Latest stable 2.11.x alpine version
+    image: nats:2.11.8-alpine
+    command:
+    - -js
+    - -m
+    - '8222'
+    - --user
+    - ${NATS_USER:-nats}
+    - --pass
+    - ${NATS_PASSWORD:-pmoves}
+    restart: unless-stopped
+    ports:
+    # NATS is the mesh-wide event bus — credential-guarded (nats:pmoves@),
+    # so 0.0.0.0 default is intentional to allow Tailscale mesh peers to connect.
+    - ${NATS_BIND:-0.0.0.0}:${NATS_PORT:-4222}:4222
+    - ${NATS_BIND:-0.0.0.0}:${NATS_MONITORING_PORT:-9223}:8222
+    networks:
+    - pmoves_bus
+    environment:
+    - DOCKED_MODE=${DOCKED_MODE:-true}
+    - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
+    - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
+    - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - wget --no-verbose --tries=1 --spider http://localhost:8222/varz || exit 1
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+  nats-init:
+    image: natsio/nats-box:0.14.5
+    entrypoint: ["/bin/sh", "/scripts/init_streams.sh"]
+    environment:
+    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    volumes:
+    - ./scripts/nats:/scripts:ro
+    networks:
+    - pmoves_bus
+    depends_on:
+      nats:
+        condition: service_healthy
+    restart: "no"
+    cap_drop: ["ALL"]
+    read_only: true
+    security_opt:
+    - no-new-privileges:true
+    tmpfs:
+    - /tmp:size=16m,noexec,nosuid
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+  supabase-db:
+    <<: &tier-supabase-hardened
+      env_file:
+      - env.shared
+      - env.tier-supabase
+      cap_drop:
+      - ALL
+      cap_add:
+      - NET_BIND_SERVICE
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - SETGID
+      - SETUID
+      security_opt:
+      - no-new-privileges:true
+
+    image: supabase/postgres:17.6.1.079
+    restart: unless-stopped
+    profiles:
+    - supabase-local
+    environment:
+    - POSTGRES_USER=${SUPABASE_DB_USER:?Set SUPABASE_DB_USER in env.tier-supabase}
+    - POSTGRES_PASSWORD=${SUPABASE_DB_PASSWORD:?Set SUPABASE_DB_PASSWORD in env.tier-supabase}
+    - POSTGRES_DB=${SUPABASE_DB_NAME:-postgres}
+    - POSTGRES_INITDB_ARGS=--encoding=UTF-8
+    # PMOVES extensions
+    - DOCKED_MODE=${DOCKED_MODE:-true}
+    - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
+    - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
+    - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    ports:
+    - ${SUPABASE_DB_BIND:-127.0.0.1}:${SUPABASE_DB_PORT:-54322}:5432
+    volumes:
+    - supabase-db-data:/var/lib/postgresql/data
+    - ./supabase/initdb:/docker-entrypoint-initdb.d/pmoves-init:ro
+    networks:
+    - pmoves_data
+
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4G
+  supabase-gotrue:
+    <<: *tier-supabase-hardened
+    image: supabase/gotrue:v2.186.0
+    restart: unless-stopped
+    profiles:
+    - supabase-local
+    environment:
+    - GOTRUE_SITE_URL=${SUPABASE_SITE_URL}
+    - API_EXTERNAL_URL=${SUPABASE_PUBLIC_URL}
+    - GOTRUE_API_HOST=0.0.0.0
+    - GOTRUE_API_PORT=9999
+    # Database connection
+    - GOTRUE_DB_DRIVER=postgres
+    - GOTRUE_DB_DATABASE_URL=postgres://${POSTGRES_USER:-${SUPABASE_DB_USER:-postgres}}:${POSTGRES_PASSWORD_URLENCODED:-${POSTGRES_PASSWORD:-${SUPABASE_DB_PASSWORD:-postgres}}}@supabase-db:5432/${POSTGRES_DB:-${SUPABASE_DB_NAME:-postgres}}?sslmode=disable
+    # JWT configuration — standard names with legacy fallbacks
+    - GOTRUE_JWT_SECRET=${JWT_SECRET:-${SUPABASE_JWT_SECRET}}
+    - GOTRUE_JWT_ALGORITHM=${SUPABASE_JWT_ALGORITHM:-HS256}
+    - GOTRUE_JWT_EXP=${JWT_EXPIRY:-${SUPABASE_JWT_EXP:-3600} }
+    # 2025 key naming (service_role_key from PMOVES-supabase standard)
+    - GOTRUE_JWT_ADMIN_SECRET=${SUPABASE_SERVICE_ROLE_KEY:-${SERVICE_ROLE_KEY:?Set SERVICE_ROLE_KEY or SUPABASE_SERVICE_ROLE_KEY}}
+    - GOTRUE_JWT_DEFAULT_GROUP_NAME=authenticated
+    # Logging
+    - GOTRUE_LOG_LEVEL=info
+    - GOTRUE_LOG_LEVEL_STACK=info
+    # URI Allow list (for VPS deployment)
+    - GOTRUE_URI_ALLOW_LIST=${SUPABASE_URI_ALLOW_LIST}
+    # Optional Google OAuth (self-hosted Supabase auth)
+    - GOTRUE_EXTERNAL_GOOGLE_ENABLED=${SUPABASE_AUTH_EXTERNAL_GOOGLE_ENABLED:-false}
+    - GOTRUE_EXTERNAL_GOOGLE_CLIENT_ID=${SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID:-}
+    - GOTRUE_EXTERNAL_GOOGLE_SECRET=${SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET:-}
+    - GOTRUE_EXTERNAL_GOOGLE_REDIRECT_URI=${SUPABASE_AUTH_EXTERNAL_GOOGLE_REDIRECT_URI:-}
+    - GOTRUE_EXTERNAL_GOOGLE_SKIP_NONCE_CHECK=${SUPABASE_AUTH_EXTERNAL_GOOGLE_SKIP_NONCE_CHECK:-false}
+    # PMOVES context
+    - DOCKED_MODE=${DOCKED_MODE:-true}
+    - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
+    - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
+    - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9999/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    depends_on:
+      supabase-db:
+        condition: service_healthy
+    ports:
+    - ${SUPABASE_AUTH_BIND:-127.0.0.1}:${SUPABASE_GOTRUE_PORT:-9999}:9999
+    networks:
+    - pmoves_api
+    - pmoves_data
+
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+  supabase-realtime:
+    <<: *tier-supabase-hardened
+    image: supabase/realtime:v2.72.0
+    restart: unless-stopped
+    profiles:
+    - supabase-local
+    environment:
+    # Database connection
+    - DB_HOST=supabase-db
+    - DB_PORT=5432
+    - DB_NAME=${POSTGRES_DB:-${SUPABASE_DB_NAME:-postgres}}
+    - DB_USER=${POSTGRES_USER:-${SUPABASE_DB_USER:-postgres}}
+    - DB_PASSWORD=${POSTGRES_PASSWORD:-${SUPABASE_DB_PASSWORD:-postgres}}
+    - DB_SSL=false
+    - DB_AFTER_CONNECT_QUERY=SET search_path TO _realtime
+    - DB_ENC_KEY=${SUPABASE_REALTIME_ENC_KEY:-supabaserealtime}
+    # App configuration
+    - APP_NAME=realtime
+    - PORT=4000
+    - RLIMIT_NOFILE=10000
+    - SEED_SELF_HOST=true
+    - RUN_JANITOR=true
+    - DISABLE_HEALTHCHECK_LOGGING=true
+    - ERL_AFLAGS=-proto_dist inet_tcp
+    - DNS_NODES=''
+    # JWT secret (must match gotrue) - standard variable name
+    - API_JWT_SECRET=${JWT_SECRET:-${SUPABASE_JWT_SECRET:-}}
+    - SECRET_KEY_BASE=${SECRET_KEY_BASE:-${SUPABASE_REALTIME_SECRET:-${JWT_SECRET:-${SUPABASE_JWT_SECRET:-}}}}
+    # PMOVES context
+    - DOCKED_MODE=${DOCKED_MODE:-true}
+    - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
+    - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
+    - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
+    # Healthcheck: Simple HTTP check (Realtime serves HTML on /)
+    # Note: Official Supabase uses /api/tenants/{tenant}/health with Bearer token, but that endpoint returns 500 until DB migrations complete
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sSf http://localhost:4000/ > /dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    depends_on:
+      supabase-db:
+        condition: service_healthy
+    ports:
+    - ${SUPABASE_REALTIME_BIND:-127.0.0.1}:${SUPABASE_REALTIME_PORT:-4010}:4000
+    networks:
+    - pmoves_api
+    - pmoves_data
+
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+  supabase-storage:
+    <<: *tier-supabase-hardened
+    image: supabase/storage-api:v1.37.1
+    restart: unless-stopped
+    profiles:
+    - supabase-local
+    environment:
+    # Standard key names with legacy fallbacks
+    - ANON_KEY=${ANON_KEY:-${SUPABASE_ANON_KEY:-}}
+    - SERVICE_KEY=${SERVICE_ROLE_KEY:-${SUPABASE_SERVICE_ROLE_KEY:-}}
+    # JWT secret - standard variable name
+    - PGRST_JWT_SECRET=${JWT_SECRET:-${SUPABASE_JWT_SECRET:-}}
+    - PGRST_JWT_ALGORITHM=${SUPABASE_JWT_ALGORITHM:-HS256}
+    # PostgREST connection
+    - POSTGREST_URL=http://supabase-postgrest:3000
+    # Database connection (use env variables, not hardcoded credentials)
+    - DATABASE_URL=postgres://${POSTGRES_USER:-${SUPABASE_DB_USER:-postgres}}:${POSTGRES_PASSWORD_URLENCODED:-${POSTGRES_PASSWORD:-${SUPABASE_DB_PASSWORD:-postgres}}}@supabase-db:5432/${POSTGRES_DB:-${SUPABASE_DB_NAME:-postgres}}
+    # Storage configuration
+    - FILE_SIZE_LIMIT=52428800
+    - STORAGE_BACKEND=file
+    - FILE_STORAGE_BACKEND_PATH=/var/lib/storage
+    - REQUEST_ALLOW_X_FORWARDED_PATH=true
+    # Image transformation via imgproxy
+    - ENABLE_IMAGE_TRANSFORMATION=true
+    - IMGPROXY_URL=http://supabase-imgproxy:5001
+    # Tenant mode (single tenant for self-hosted)
+    - TENANT_ID=stub
+    - REGION=${SUPABASE_STORAGE_REGION:-stub}
+    - GLOBAL_S3_BUCKET=${SUPABASE_S3_BUCKET:-stub}
+    # PMOVES context
+    - DOCKED_MODE=${DOCKED_MODE:-true}
+    - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
+    - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
+    - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
+    # Healthcheck: Use 127.0.0.1 explicitly (localhost resolves to ::1 on IPv6, causing connection refused)
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:5000/status"]
+      interval: 5s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    depends_on:
+      supabase-db:
+        condition: service_healthy
+      supabase-postgrest:
+        condition: service_started  # distroless image — no shell for healthcheck
+      supabase-imgproxy:
+        condition: service_healthy
+    volumes:
+    - supabase-storage-data:/var/lib/storage
+    ports:
+    - ${SUPABASE_STORAGE_BIND:-127.0.0.1}:${SUPABASE_STORAGE_PORT:-5000}:5000
+    networks:
+    - pmoves_api
+    - pmoves_data
+
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+  supabase-imgproxy:
+    <<: &tier-supabase-hardened-ro
+      env_file:
+      - env.shared
+      - env.tier-supabase
+      cap_drop:
+      - ALL
+      cap_add:
+      - NET_BIND_SERVICE
+      read_only: true
+      security_opt:
+      - no-new-privileges:true
+      tmpfs:
+      - /tmp:noexec,nosuid,size=64m
+      - /var/tmp:noexec,nosuid,size=64m
+
+    image: darthsim/imgproxy:v3.30.1
+    restart: unless-stopped
+    profiles:
+    - supabase-local
+    environment:
+    - IMGPROXY_BIND=:5001
+    - IMGPROXY_LOCAL_FILESYSTEM_ROOT=/
+    - IMGPROXY_USE_ETAG=true
+    - IMGPROXY_ENABLE_WEBP_DETECTION=${IMGPROXY_ENABLE_WEBP_DETECTION:-true}
+    - IMGPROXY_MAX_SRC_RESOLUTION=16.8
+    healthcheck:
+      test: ["CMD", "imgproxy", "health"]
+      interval: 5s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    volumes:
+    - supabase-storage-data:/var/lib/storage:ro
+    networks:
+    - pmoves_data
+
+  # ---------------------------------------------------------------------------
+  # Supabase postgres-meta — database metadata API for Studio
+  # ---------------------------------------------------------------------------
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+  supabase-meta:
+    <<: *tier-supabase-hardened-ro
+    image: supabase/postgres-meta:v0.95.2
+    restart: unless-stopped
+    profiles:
+    - supabase-local
+    environment:
+    - PG_META_PORT=8080
+    - PG_META_DB_HOST=supabase-db
+    - PG_META_DB_PORT=5432
+    - PG_META_DB_NAME=${POSTGRES_DB:-${SUPABASE_DB_NAME:-postgres}}
+    - PG_META_DB_USER=${POSTGRES_USER:-${SUPABASE_DB_USER:-postgres}}
+    - PG_META_DB_PASSWORD=${POSTGRES_PASSWORD:-${SUPABASE_DB_PASSWORD:-postgres}}
+    - CRYPTO_KEY=${PG_META_CRYPTO_KEY:-}
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"const h=require('http');h.get('http://localhost:8080/health',r=>{r.resume();process.exit(r.statusCode===200?0:1)}).on('error',()=>process.exit(1))\""]
+      interval: 20s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    depends_on:
+      supabase-db:
+        condition: service_healthy
+    networks:
+    - pmoves_data
+
+  # ---------------------------------------------------------------------------
+  # Supabase Edge Runtime — Deno edge functions
+  # ---------------------------------------------------------------------------
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+  supabase-kong:
+    <<: *tier-supabase-hardened
+    image: kong:3.7.1
+    restart: unless-stopped
+    profiles:
+    - supabase-local
+    environment:
+    # Database configuration (Kong uses Postgres for config storage)
+    - KONG_DATABASE=postgres
+    - KONG_PG_HOST=supabase-db
+    - KONG_PG_DATABASE=${POSTGRES_DB:-${SUPABASE_DB_NAME:-postgres}}
+    - KONG_PG_USER=${POSTGRES_USER:-${SUPABASE_DB_USER:-postgres}}
+    - KONG_PG_PASSWORD=${POSTGRES_PASSWORD:-${SUPABASE_DB_PASSWORD:-postgres}}
+    # Kong configuration
+    - KONG_PROXY_ACCESS_LOG=/dev/stdout
+    - KONG_ADMIN_ACCESS_LOG=/dev/stdout
+    - KONG_PROXY_ERROR_LOG=/dev/stderr
+    - KONG_ADMIN_ERROR_LOG=/dev/stderr
+    - KONG_PROXY_LISTEN=0.0.0.0:8000
+    - KONG_ADMIN_LISTEN=0.0.0.0:8001  # container-internal; host restriction via Docker port mapping line below
+    # JWT plugin
+    - KONG_PLUGINS=bundled,jwt
+    - KONG_NGINX_PROXY_PROXY_BUFFERS=8 16k
+    # PMOVES context
+    - DOCKED_MODE=${DOCKED_MODE:-true}
+    - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
+    - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
+    - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
+    entrypoint: ["/bin/sh", "-c", "kong migrations bootstrap --yes 2>/dev/null || true; exec /docker-entrypoint.sh kong docker-start"]
+    healthcheck:
+      test: ["CMD", "kong", "health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    depends_on:
+      supabase-db:
+        condition: service_healthy
+    ports:
+    - ${KONG_PROXY_BIND:-127.0.0.1}:${SUPABASE_KONG_PROXY_PORT:-8000}:8000
+    - ${KONG_ADMIN_BIND:-127.0.0.1}:${SUPABASE_KONG_ADMIN_PORT:-8001}:8001
+    networks:
+    - pmoves_api
+    - pmoves_data
+
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+  supabase-edge-functions:
+    <<: *tier-supabase-hardened
+    image: supabase/edge-runtime:v1.70.0
+    restart: unless-stopped
+    profiles:
+    - supabase-local
+    environment:
+    - JWT_SECRET=${JWT_SECRET:?Set JWT_SECRET in env.tier-supabase}
+    - SUPABASE_URL=http://supabase-kong:8000
+    - SUPABASE_ANON_KEY=${ANON_KEY:?Set ANON_KEY in env.tier-supabase}
+    - SUPABASE_SERVICE_ROLE_KEY=${SERVICE_ROLE_KEY:?Set SERVICE_ROLE_KEY in env.tier-supabase}
+    - SUPABASE_DB_URL=postgresql://${POSTGRES_USER:-${SUPABASE_DB_USER:-postgres}}:${POSTGRES_PASSWORD:-${SUPABASE_DB_PASSWORD:-postgres}}@supabase-db:5432/${POSTGRES_DB:-${SUPABASE_DB_NAME:-postgres}}
+    - VERIFY_JWT=${FUNCTIONS_VERIFY_JWT:-true}
+    command: ["start", "--main-service", "/home/deno/functions/main"]
+    volumes:
+    - ../PMOVES-supabase/docker/volumes/functions:/home/deno/functions:ro
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sSf http://localhost:9000/health || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    depends_on:
+      supabase-analytics:
+        condition: service_healthy
+    networks:
+    - pmoves_api
+    - pmoves_data  # reach supabase-db, supabase-analytics
+
+  # ---------------------------------------------------------------------------
+  # Supabase Analytics (Logflare) — log analytics backend
+  # ---------------------------------------------------------------------------
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+  supabase-postgrest:
+    <<: *tier-supabase-hardened-ro
+    image: postgrest/postgrest:v14.3
+    restart: unless-stopped
+    profiles:
+    - supabase-local
+    environment:
+    # Database connection (from env.tier-supabase)
+    - PGRST_DB_URI=postgres://${POSTGRES_USER:-${SUPABASE_DB_USER:-postgres}}:${POSTGRES_PASSWORD_URLENCODED:-${POSTGRES_PASSWORD:-${SUPABASE_DB_PASSWORD:-postgres}}}@supabase-db:5432/${POSTGRES_DB:-${SUPABASE_DB_NAME:-postgres}}
+    # JWT secret (must match gotrue) - standard variable name
+    - PGRST_JWT_SECRET=${JWT_SECRET:-${SUPABASE_JWT_SECRET:-}}
+    - PGRST_JWT_ALGORITHM=${SUPABASE_JWT_ALGORITHM:-HS256}
+    - PGRST_JWT_SECRET_IS_BASE64=false
+    # PostgREST v14+ settings
+    - PGRST_DB_USE_LEGACY_GUCS=false
+    - PGRST_APP_SETTINGS_JWT_SECRET=${JWT_SECRET:-${SUPABASE_JWT_SECRET:-}}
+    - PGRST_APP_SETTINGS_JWT_EXP=${JWT_EXPIRY:-${SUPABASE_JWT_EXP:-3600}}
+    # API configuration
+    - PGRST_DB_SCHEMAS=${SUPABASE_SCHEMA:-public,pmoves_core}
+    - PGRST_ANON_ROLE=${SUPABASE_ANON_ROLE:-anon}
+    - PGRST_DB_MAX_ROWS=${SUPABASE_MAX_ROWS:-1000}
+    - PGRST_DB_POOL=${SUPABASE_DB_POOL:-15}
+    - PGRST_DB_POOL_TIMEOUT=${SUPABASE_POOL_TIMEOUT:-5}
+    # PMOVES context
+    - DOCKED_MODE=${DOCKED_MODE:-true}
+    - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
+    - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
+    - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
+    # Note: No healthcheck - postgrest/postgrest image is distroless without shell tools
+    depends_on:
+      supabase-db:
+        condition: service_healthy
+    ports:
+    - ${SUPABASE_REST_BIND:-127.0.0.1}:${SUPABASE_POSTGREST_PORT:-3000}:3000
+    networks:
+    - pmoves_api
+    - pmoves_data
+
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+  supabase-pooler:
+    <<: *tier-supabase-hardened
+    image: supabase/supavisor:2.7.4
+    restart: unless-stopped
+    profiles:
+    - supabase-local
+    environment:
+    - PORT=4000
+    - POSTGRES_PORT=5432
+    - POSTGRES_DB=${POSTGRES_DB:-${SUPABASE_DB_NAME:-postgres}}
+    - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-${SUPABASE_DB_PASSWORD:-postgres}}
+    - DATABASE_URL=ecto://${POSTGRES_USER:-${SUPABASE_DB_USER:-postgres}}:${POSTGRES_PASSWORD_URLENCODED:-${POSTGRES_PASSWORD:-${SUPABASE_DB_PASSWORD:-postgres}}}@supabase-db:5432/_supabase
+    - CLUSTER_POSTGRES=true
+    - SECRET_KEY_BASE=${SECRET_KEY_BASE:?Set SECRET_KEY_BASE in env.tier-supabase}
+    - VAULT_ENC_KEY=${VAULT_ENC_KEY:?Set VAULT_ENC_KEY in env.tier-supabase}
+    - API_JWT_SECRET=${JWT_SECRET:?Set JWT_SECRET in env.tier-supabase}
+    - METRICS_JWT_SECRET=${JWT_SECRET}
+    - REGION=local
+    - ERL_AFLAGS=-proto_dist inet_tcp
+    - POOLER_TENANT_ID=${POOLER_TENANT_ID:-default-tenant}
+    - POOLER_DEFAULT_POOL_SIZE=${POOLER_DEFAULT_POOL_SIZE:-20}
+    - POOLER_MAX_CLIENT_CONN=${POOLER_MAX_CLIENT_CONN:-100}
+    - POOLER_POOL_MODE=transaction
+    - DB_POOL_SIZE=${POOLER_DB_POOL_SIZE:-5}
+    command: ["/bin/sh", "-c", "/app/bin/migrate && if [ -f /etc/pooler/pooler.exs ]; then /app/bin/supavisor eval \"$$(cat /etc/pooler/pooler.exs)\"; else echo 'WARN: /etc/pooler/pooler.exs not found,
+        skipping tenant seeding'; fi && /app/bin/server"]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sSf http://127.0.0.1:4000/api/health -o /dev/null || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    depends_on:
+      supabase-db:
+        condition: service_healthy
+    ports:
+    - ${SUPABASE_POOLER_BIND:-127.0.0.1}:${SUPABASE_POOLER_PORT:-54329}:5432
+    - ${SUPABASE_POOLER_BIND:-127.0.0.1}:${SUPABASE_POOLER_TRANSACTION_PORT:-6543}:6543
+    networks:
+    - pmoves_data
+
+  # =============================================================================
+  # END SUPABASE STACK
+  # =============================================================================
+
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+  supabase-analytics:
+    <<: *tier-supabase-hardened
+    image: supabase/logflare:1.30.3
+    restart: unless-stopped
+    profiles:
+    - supabase-local
+    environment:
+    - LOGFLARE_NODE_HOST=127.0.0.1
+    - DB_USERNAME=${POSTGRES_USER:-${SUPABASE_DB_USER:-postgres}}
+    - DB_DATABASE=_supabase
+    - DB_HOSTNAME=supabase-db
+    - DB_PORT=5432
+    - DB_PASSWORD=${POSTGRES_PASSWORD:-${SUPABASE_DB_PASSWORD:-postgres}}
+    - DB_SCHEMA=_analytics
+    - LOGFLARE_PUBLIC_ACCESS_TOKEN=${LOGFLARE_PUBLIC_ACCESS_TOKEN:?Set LOGFLARE_PUBLIC_ACCESS_TOKEN in env.tier-supabase}
+    - LOGFLARE_PRIVATE_ACCESS_TOKEN=${LOGFLARE_PRIVATE_ACCESS_TOKEN:?Set LOGFLARE_PRIVATE_ACCESS_TOKEN in env.tier-supabase}
+    - LOGFLARE_SINGLE_TENANT=true
+    - LOGFLARE_SUPABASE_MODE=true
+    - POSTGRES_BACKEND_URL=postgresql://${POSTGRES_USER:-${SUPABASE_DB_USER:-postgres}}:${POSTGRES_PASSWORD_URLENCODED:-${POSTGRES_PASSWORD:-${SUPABASE_DB_PASSWORD:-postgres}}}@supabase-db:5432/_supabase
+    - POSTGRES_BACKEND_SCHEMA=_analytics
+    - LOGFLARE_FEATURE_FLAG_OVERRIDE=multibackend=true
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sSf http://localhost:4000/health -o /dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 120s
+    depends_on:
+      supabase-db:
+        condition: service_healthy
+    networks:
+    - pmoves_data
+
+  # ---------------------------------------------------------------------------
+  # Supabase Vector — log collection pipeline (ships to Analytics)
+  # ---------------------------------------------------------------------------
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4G
+  supabase-studio:
+    <<: *tier-supabase-hardened
+    # Pinned 2025-02-04: Latest stable from Supabase
+    image: supabase/studio:2026.02.04-sha-fba1944
+    restart: unless-stopped
+    profiles:
+    - supabase-local
+    environment:
+    # Postgres Meta connection (Studio uses pg-meta, not PostgREST directly)
+    - STUDIO_PG_META_URL=http://supabase-meta:8080
+    # Auth / Kong gateway
+    - SUPABASE_URL=http://supabase-kong:8000
+    - SUPABASE_PUBLIC_URL=${API_EXTERNAL_URL:-${SUPABASE_PUBLIC_URL:-}}
+    - SUPABASE_ANON_KEY=${ANON_KEY:-${SUPABASE_ANON_KEY:-}}
+    - SUPABASE_SERVICE_KEY=${SERVICE_ROLE_KEY:-${SUPABASE_SERVICE_ROLE_KEY:-}}
+    - AUTH_JWT_SECRET=${JWT_SECRET:-${SUPABASE_JWT_SECRET:-}}
+    - PG_META_CRYPTO_KEY=${PG_META_CRYPTO_KEY:-}
+    # Analytics (Logflare) integration
+    - LOGFLARE_PUBLIC_ACCESS_TOKEN=${LOGFLARE_PUBLIC_ACCESS_TOKEN:-}
+    - LOGFLARE_PRIVATE_ACCESS_TOKEN=${LOGFLARE_PRIVATE_ACCESS_TOKEN:-}
+    - LOGFLARE_URL=http://supabase-analytics:4000
+    - NEXT_PUBLIC_ENABLE_LOGS=true
+    - NEXT_ANALYTICS_BACKEND_PROVIDER=postgres
+    # PMOVES context
+    - DOCKED_MODE=${DOCKED_MODE:-true}
+    - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
+    - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
+    - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
+    # Healthcheck: External check (Next.js 16 binds to container hostname, not localhost)
+    # Note: Official Supabase uses node -e fetch but their image has different network config
+    # We rely on container being started successfully (logs show "Ready in Xms")
+    healthcheck:
+      test: ["CMD-SHELL", "node -e 'process.exit(0)' || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    depends_on:
+      supabase-meta:
+        condition: service_healthy
+      supabase-gotrue:
+        condition: service_healthy
+      supabase-analytics:
+        condition: service_healthy
+    ports:
+    - ${SUPABASE_STUDIO_BIND:-127.0.0.1}:${SUPABASE_STUDIO_PORT:-54323}:3000
+    networks:
+    - pmoves_api
+    - pmoves_data  # reach supabase-meta, supabase-analytics
+
+  # ---------------------------------------------------------------------------
+  # Supabase imgproxy — image transformation for Storage
+  # ---------------------------------------------------------------------------
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+  supabase-vector:
+    <<: *tier-supabase-hardened
+    image: timberio/vector:0.28.1-alpine
+    restart: unless-stopped
+    profiles:
+    - supabase-local
+    environment:
+    - LOGFLARE_PUBLIC_ACCESS_TOKEN=${LOGFLARE_PUBLIC_ACCESS_TOKEN:-}
+    volumes:
+    - supabase-vector-data:/var/lib/vector
+    - ../PMOVES-supabase/docker/volumes/logs/vector.yml:/etc/vector/vector.yml:ro
+    # SECURITY: Docker socket required for Vector docker_logs source
+    # (PMOVES-supabase/docker/volumes/logs/vector.yml). Read-only mount.
+    - /var/run/docker.sock:/var/run/docker.sock:ro
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9001/health"]
+      interval: 20s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    depends_on:
+      supabase-analytics:
+        condition: service_healthy
+    networks:
+    - pmoves_data
+
+  # ---------------------------------------------------------------------------
+  # Supavisor — connection pooler (PgBouncer replacement)
+  # ---------------------------------------------------------------------------
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+  qdrant:
+    image: qdrant/qdrant:v1.14.1
+    restart: unless-stopped
+    cap_drop:
+    - ALL
+    cap_add:
+    - NET_BIND_SERVICE
+    - CHOWN
+    - SETGID
+    security_opt:
+    - no-new-privileges:true
+    ports:
+    - ${QDRANT_BIND:-0.0.0.0}:${QDRANT_PORT:-6333}:6333
+    networks:
+    - pmoves_data
+    environment:
+    - DOCKED_MODE=${DOCKED_MODE:-true}
+    - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
+    - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
+    - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
+    volumes:
+    - qdrant-data:/qdrant/storage
+    healthcheck:
+      test: ["CMD-SHELL", "bash -lc \"exec 3<>/dev/tcp/127.0.0.1/6333 && printf 'GET /healthz HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && grep -q '200 OK' <&3\" || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4G
+  meilisearch:
+    <<: *tier-data-hardened
+    image: getmeili/meilisearch:v1.8
+    restart: unless-stopped
+    environment:
+    - MEILI_ENV=production
+    - MEILI_MASTER_KEY=${MEILI_MASTER_KEY:?Set MEILI_MASTER_KEY in env.shared or env.tier-data}
+    - DOCKED_MODE=${DOCKED_MODE:-true}
+    - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
+    - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
+    - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
+    ports:
+    - ${MEILISEARCH_BIND:-0.0.0.0}:${MEILISEARCH_PORT:-7700}:7700
+    networks:
+    - pmoves_data
+    volumes:
+    - meilisearch-data:/meili_data
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:7700/health >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4G
+  neo4j:
+    image: neo4j:5.22
+    env_file:
+    - env.tier-data
+    cap_drop:
+    - ALL
+    cap_add:
+    - NET_BIND_SERVICE
+    - CHOWN
+    - DAC_OVERRIDE
+    - FOWNER
+    - SETGID
+    - SETUID
+    security_opt:
+    - no-new-privileges:true
+    restart: unless-stopped
+    environment:
+    - NEO4J_AUTH=${NEO4J_AUTH:-neo4j/${NEO4J_PASSWORD:-pm_kDhuaogcUc1oOOVeGMNCkQ}}
+    - NEO4J_dbms_security_allow__csv__import__from__file__urls=true
+    - NEO4J_server_config_strict__validation_enabled=false
+    - DOCKED_MODE=${DOCKED_MODE:-true}
+    - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
+    - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
+    - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
+    ports:
+    - ${NEO4J_BIND:-0.0.0.0}:${NEO4J_HTTP_PORT:-7474}:7474
+    - ${NEO4J_BIND:-0.0.0.0}:${NEO4J_BOLT_PORT:-7687}:7687
+    volumes:
+    - neo4j-data:/data
+    - ./neo4j/cypher:/cypher:ro
+    networks:
+    - pmoves_data
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - wget -qO- http://localhost:7474 >/dev/null 2>&1 || exit 1
+      interval: 20s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4G
+  minio:
+    <<: *tier-data-hardened
+    # Pinned 2025-02-04: Latest RELEASE tag (MinIO stopped publishing to Docker Hub Oct 2025)
+    image: minio/minio:RELEASE.2025-07-23T15-54-02Z
+    command: server /data --console-address ":9001"
+    environment:
+    - MINIO_ROOT_USER=${MINIO_USER:?Run make brand-defaults}
+    - MINIO_ROOT_PASSWORD=${MINIO_PASSWORD:?Run make brand-defaults}
+    - DOCKED_MODE=${DOCKED_MODE:-true}
+    - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
+    - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
+    - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
+    ports:
+    - ${MINIO_BIND:-0.0.0.0}:${MINIO_PORT:-9000}:9000
+    - ${MINIO_CONSOLE_BIND:-0.0.0.0}:${MINIO_CONSOLE_PORT:-9001}:9001
+    volumes:
+    - minio-data:/data
+    networks:
+    - pmoves_data
+    - pmoves_bus
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:9000/minio/health/live || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4G
+  tensorzero-clickhouse:
+    <<: &tier-llm-hardened
+      env_file:
+      - env.shared
+      - env.tier-llm
+      cap_drop:
+      - ALL
+      cap_add:
+      - NET_BIND_SERVICE
+      - CHOWN
+      - SETGID
+      - SETUID
+      security_opt:
+      - no-new-privileges:true
+
+    image: clickhouse/clickhouse-server:24.12-alpine
+    restart: unless-stopped
+    environment:
+    - CLICKHOUSE_USER=tensorzero
+    - CLICKHOUSE_PASSWORD=tensorzero
+    - CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT=1
+    - DOCKED_MODE=${DOCKED_MODE:-true}
+    - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
+    - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
+    - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
+    ports:
+    - ${CLICKHOUSE_BIND:-0.0.0.0}:${TENSORZERO_CLICKHOUSE_PORT:-8123}:8123
+    volumes:
+    - tensorzero-clickhouse-data:/var/lib/clickhouse
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - wget --spider --tries 1 http://$${CLICKHOUSE_USER:-default}:$${CLICKHOUSE_PASSWORD:-}@$${HOSTNAME:-localhost}:8123/ping
+      start_period: 30s
+      interval: 5s
+      timeout: 2s
+      retries: 5
+    networks:
+    - pmoves_data
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4G
+  tensorzero-gateway:
+    <<: *tier-llm-hardened
+    # Pinned 2025-02-04: Latest stable from TensorZero
+    image: tensorzero/gateway:2026.1.8
+    restart: unless-stopped
+    command:
+    - --config-file
+    - /app/config/tensorzero.toml
+    environment:
+    - TENSORZERO_CLICKHOUSE_URL=${TENSORZERO_CLICKHOUSE_GATEWAY_URL:-${TENSORZERO_CLICKHOUSE_URL:-http://tensorzero:tensorzero@tensorzero-clickhouse:8123/default}}
+    # Keep gateway bootable in local-first mode when cloud provider keys are absent.
+    - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-local-disabled}
+    - GLM_API_KEY=${GLM_API_KEY:-local-disabled}
+    - OPENAI_API_KEY=${OPENAI_API_KEY:-local-disabled}
+    - GROQ_API_KEY=${GROQ_API_KEY:-local-disabled}
+    - MOONSHOT_API_KEY=${MOONSHOT_API_KEY:-local-disabled}
+    - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-local-disabled}
+    - VENICE_API_KEY=${VENICE_API_KEY:-local-disabled}
+    - Z_AI_API_KEY=${Z_AI_API_KEY:-local-disabled}
+    - ALIBABA_PRO_CODING_PLAN=${ALIBABA_PRO_CODING_PLAN:-local-disabled}
+    - MINIMAX_API_KEY=${MINIMAX_API_KEY:-local-disabled}
+    - TOGETHER_AI_API_KEY=${TOGETHER_AI_API_KEY:-local-disabled}
+    - CLOUDFLARE_API_TOKEN=${CLOUDFLARE_API_TOKEN:-local-disabled}
+    - GEMINI_API_KEY=${GEMINI_API_KEY:-local-disabled}
+    - OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=${OTEL_EXPORTER_OTLP_TRACES_ENDPOINT:-}
+    - DOCKED_MODE=${DOCKED_MODE:-true}
+    - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
+    - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
+    - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
+    volumes:
+    - ./tensorzero/config:/app/config:ro
+    depends_on:
+      tensorzero-clickhouse:
+        condition: service_healthy
+    ports:
+    - ${TENSORZERO_BIND:-127.0.0.1}:${TENSORZERO_PORT:-3030}:3000
+    networks:
+    - pmoves_api
+    - pmoves_bus
+    - pmoves_data
+    - pmoves_external
+    extra_hosts:
+    - host.docker.internal:host-gateway
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/health >/dev/null 2>&1 || curl -fsS http://localhost:3000/health || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+  tensorzero-ui:
+    <<: *tier-llm-hardened
+    # Pinned 2025-02-04: Latest stable from TensorZero (matches gateway version)
+    image: tensorzero/ui:2026.1.8
+    restart: unless-stopped
+    environment:
+    - TENSORZERO_GATEWAY_URL=${TENSORZERO_GATEWAY_URL:-http://tensorzero-gateway:3000}
+    - TENSORZERO_CLICKHOUSE_URL=${TENSORZERO_CLICKHOUSE_GATEWAY_URL:-${TENSORZERO_CLICKHOUSE_URL:-http://tensorzero:tensorzero@tensorzero-clickhouse:8123/default}}
+    - TENSORZERO_POSTGRES_URL=${TENSORZERO_POSTGRES_URL:-postgresql://postgres:${SERVICE_PASSWORD_POSTGRES:-postgres}@supabase-db:5432/postgres}
+    - DOCKED_MODE=${DOCKED_MODE:-true}
+    - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
+    - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
+    - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
+    # Host environment leak guard (see x-host-leak-guard docs above)
+    - SSL_CERT_FILE=
+    - SSL_CERT_DIR=
+    - REQUESTS_CA_BUNDLE=
+    - CURL_CA_BUNDLE=
+    - NODE_EXTRA_CA_CERTS=
+    - HTTP_PROXY=
+    - HTTPS_PROXY=
+    - NO_PROXY=
+    volumes:
+    - ./tensorzero/config:/app/config:ro
+    depends_on:
+      tensorzero-clickhouse:
+        condition: service_healthy
+      tensorzero-gateway:
+        condition: service_started
+    ports:
+    - ${TENSORZERO_UI_BIND:-0.0.0.0}:${TENSORZERO_UI_PORT:-4000}:4000
+    profiles:
+    - tensorzero
+    networks:
+    - pmoves_app
+    - pmoves_data
+    - pmoves_external
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:4000/ >/dev/null 2>&1 || curl -fsS http://localhost:4000/ || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+  cloudflared:
+    image: cloudflare/cloudflared:2024.8.0
+    restart: unless-stopped
+    command:
+    - /bin/sh
+    - -c
+    - "if [ -n \"$$CLOUDFLARE_TUNNEL_TOKEN\" ]; then\n  exec cloudflared tunnel --no-autoupdate run;\nelif [ -n \"$$CLOUDFLARE_TUNNEL_NAME\" ]; then\n  exec cloudflared tunnel --no-autoupdate run \"$$CLOUDFLARE_TUNNEL_NAME\"\
+      ;\nelse\n  echo \"Set CLOUDFLARE_TUNNEL_TOKEN or CLOUDFLARE_TUNNEL_NAME before starting cloudflared.\";\n  exit 1;\nfi\n"
+    env_file:
+    - env.shared.generated
+    - env.shared
+    - .env.generated
+    - .env.local
+    environment:
+    - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN:-}
+    - CLOUDFLARE_TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN:-}
+    - CLOUDFLARE_TUNNEL_NAME=${CLOUDFLARE_TUNNEL_NAME:-}
+    volumes:
+    - ${CLOUDFLARE_CREDENTIALS_DIR:-./cloudflared}:/home/nonroot/.cloudflared:rw
+    profiles:
+    - cloudflare
+    networks:
+    - pmoves_app
+    - pmoves_external  # Cloudflare edge tunnel (mandatory)
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -f 'cloudflared' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+  invidious-db:
+    image: postgres:14
+    restart: unless-stopped
+    environment:
+    - POSTGRES_DB=${INVIDIOUS_PG_DB:-invidious}
+    - POSTGRES_USER=${INVIDIOUS_PG_USER:-kemal}
+    - POSTGRES_PASSWORD=${INVIDIOUS_PG_PASSWORD:-kemal}
+    volumes:
+    - invidious-postgres-data:/var/lib/postgresql/data
+    - ./services/invidious/config/sql:/config/sql:ro
+    - ./services/invidious/init-invidious-db.sh:/docker-entrypoint-initdb.d/init-invidious-db.sh:ro
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB -h 127.0.0.1
+      interval: 20s
+      timeout: 5s
+      retries: 12
+    profiles:
+    - invidious
+    networks:
+    - pmoves_data
+    - pmoves_app
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4G

@@ -2,6 +2,30 @@
 # PMOVES.AI - Hardened Architecture Docker Compose Configuration
 # =============================================================================
 #
+# SPLIT NOTICE (Rec #9):
+# This monolithic file has been split into logical overlay files for
+# maintainability. The overlays are:
+#   docker-compose.base.yml   — Shared anchors (x-env-tier-*, x-hardening-*),
+#                                volumes, and networks
+#   docker-compose.core.yml   — Essential infrastructure (24 services)
+#   docker-compose.agents.yml — Agent services (14 services)
+#   docker-compose.media.yml  — Media services (15 services)
+#   docker-compose.ui.yml     — UI services (8 services)
+#   docker-compose.workers.yml— Worker services (19 services)
+#   docker-compose.apps.yml   — Applications (4 services)
+#
+# Usage:
+#   make overlay-up-full          # Start all via overlays
+#   make overlay-up-core          # Start core infrastructure only
+#   make overlay-up-agents        # Start agents (includes core)
+#   See Makefile for all overlay targets.
+#
+# This file is preserved as the canonical reference. For active development,
+# use the overlay files + docker-compose.base.yml.
+# =============================================================================
+#
+# =============================================================================
+#
 # Network Architecture (5-Tier Isolation Model):
 # -----------------------------------------------
 # 1. pmoves_data  - Data tier (vector DBs, graph DBs, search indexes)

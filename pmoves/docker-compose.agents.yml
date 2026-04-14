@@ -1,0 +1,839 @@
+##############################################################################
+# PMOVES.AI - Docker Compose Overlay: Agent Services
+##############################################################################
+# Services: agents tier
+# Always combine with base: docker compose -f docker-compose.base.yml -f docker-compose.agents.yml up -d
+#
+# Generated from docker-compose.yml by scripts/split_compose.py
+##############################################################################
+services:
+  agent-zero:
+    <<: &tier-agent-hardened
+      env_file:
+      - env.shared
+      - env.tier-agent
+      cap_drop:
+      - ALL
+      cap_add:
+      - NET_BIND_SERVICE
+      - CHOWN
+      - SETGID
+      - SETUID
+      security_opt:
+      - no-new-privileges:true
+
+    build:
+      context: .
+      dockerfile: ./services/agent-zero/Dockerfile
+    restart: unless-stopped
+    environment:
+    - PORT=8080
+    # NATS_URL from env.tier-agent has credentials: nats://nats:pmoves@nats:4222
+    - AGENT_ZERO_API_BASE=${AGENT_ZERO_API_BASE:-http://127.0.0.1:80}
+    - AGENT_ZERO_HEALTH_PATH=${AGENT_ZERO_HEALTH_PATH:-/healthz}
+    - AGENT_ZERO_HEALTH_PATH_FALLBACK=${AGENT_ZERO_HEALTH_PATH_FALLBACK:-/health}
+    - AGENT_ZERO_CAPTURE_OUTPUT=${AGENT_ZERO_CAPTURE_OUTPUT:-true}
+    - AGENT_ZERO_EXTRA_ARGS=${AGENT_ZERO_EXTRA_ARGS:---port=80 --host=0.0.0.0}
+    - PYTHONPATH=${AGENT_ZERO_PYTHONPATH:-/app:/app/services}
+    - AGENTZERO_JETSTREAM=${AGENTZERO_JETSTREAM:-true}
+    - AGENTZERO_JS_UNAVAILABLE_THRESHOLD=${AGENTZERO_JS_UNAVAILABLE_THRESHOLD:-1}
+    - TENSORZERO_URL=${TENSORZERO_URL:-http://tensorzero-gateway:3000}
+    - CHIT_REQUIRE_SIGNATURE=${CHIT_PROD_REQUIRE_SIGNATURE:-true}
+    - CHIT_DECRYPT_ANCHORS=${CHIT_PROD_DECRYPT_ANCHORS:-true}
+    - CHIT_PASSPHRASE=${CHIT_PROD_PASSPHRASE:?set CHIT_PROD_PASSPHRASE in env.shared}
+    - DOCKED_MODE=${DOCKED_MODE:-true}
+    - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
+    - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
+    - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
+    # LLM routing: use TensorZero gateway as OpenAI-compatible provider
+    # Agent Zero's get_default_value() reads A0_SET_* from env (dotenv priority)
+    # Dummy key silences LiteLLM "Missing API Key" warning — TensorZero handles auth
+    - OPENAI_API_KEY=${OPENAI_API_KEY:-tensorzero-routed}
+    - A0_SET_chat_model_provider=openai
+    # Chat/util/browser wrappers ADD openai/ prefix internally — do NOT double it
+    - A0_SET_chat_model_name=tensorzero::function_name::agent_zero
+    - A0_SET_chat_model_api_base=http://tensorzero-gateway:3000/openai/v1
+    - A0_SET_util_model_provider=openai
+    - A0_SET_util_model_name=tensorzero::function_name::agent_zero
+    - A0_SET_util_model_api_base=http://tensorzero-gateway:3000/openai/v1
+    - A0_SET_embed_model_provider=openai
+    # Embed wrapper does NOT add openai/ prefix — must include it here
+    - A0_SET_embed_model_name=openai/tensorzero::embedding_model_name::gemma_embed_local
+    - A0_SET_embed_model_api_base=http://tensorzero-gateway:3000/openai/v1
+    - A0_SET_browser_model_provider=openai
+    - A0_SET_browser_model_name=tensorzero::function_name::agent_zero
+    - A0_SET_browser_model_api_base=http://tensorzero-gateway:3000/openai/v1
+    # Host environment leak guard (see x-host-leak-guard docs above)
+    - SSL_CERT_FILE=
+    - SSL_CERT_DIR=
+    - REQUESTS_CA_BUNDLE=
+    - CURL_CA_BUNDLE=
+    - NODE_EXTRA_CA_CERTS=
+    - HTTP_PROXY=
+    - HTTPS_PROXY=
+    - NO_PROXY=
+    depends_on:
+      nats:
+        condition: service_healthy
+      nats-init:
+        condition: service_completed_successfully
+      tensorzero-gateway:
+        condition: service_healthy
+    ports:
+    - ${AGENT_ZERO_BIND:-127.0.0.1}:${AGENT_ZERO_PORT:-8080}:8080
+    - ${AGENT_ZERO_BIND:-127.0.0.1}:${AGENT_ZERO_UI_PORT:-8081}:80
+    volumes:
+    - ${AGENT_ZERO_MEMORY_DIR:-./data/agent-zero/memory}:/a0/memory
+    - ${AGENT_ZERO_KNOWLEDGE_DIR:-./data/agent-zero/knowledge}:/a0/knowledge
+    - ${AGENT_ZERO_INSTRUMENTS_DIR:-./data/agent-zero/instruments}:/a0/instruments
+    - ${AGENT_ZERO_LOG_DIR:-./data/agent-zero/logs}:/a0/logs
+    - ${AGENT_ZERO_RUNTIME_DIR:-./data/agent-zero/runtime}:/a0/runtime
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:80/ >/dev/null || curl -fsS http://localhost:8080/healthz >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+    - pmoves_app
+    - pmoves_bus
+    - pmoves_external  # Required for LLM provider APIs
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+  archon:
+    <<: *tier-agent-hardened
+    build:
+      context: .
+      dockerfile: ./services/archon/Dockerfile
+      args:
+      - ARCHON_GIT_REMOTE=${ARCHON_GIT_REMOTE:-https://github.com/POWERFULMOVES/PMOVES-Archon.git}
+      - ARCHON_GIT_REF=${ARCHON_GIT_REF:-main}
+    restart: unless-stopped
+    environment:
+      # SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY from env.tier-agent
+      # NATS_URL from env.tier-agent has credentials: nats://nats:pmoves@nats:4222
+    - PORT=8091
+    - ENVIRONMENT=${ENVIRONMENT:-production}
+    - ARCHON_ENV=${ARCHON_ENV:-production}
+    - ARCHON_SERVER_PORT=${ARCHON_SERVER_PORT:-8091}
+    - ARCHON_SERVER_URL=${ARCHON_SERVER_URL:-http://localhost:8091}
+    - ARCHON_MCP_PORT=${ARCHON_MCP_PORT:-8051}
+    - ARCHON_AGENTS_PORT=${ARCHON_AGENTS_PORT:-8052}
+    - ARCHON_VENDOR_FORCE_PLACEHOLDER=${ARCHON_VENDOR_FORCE_PLACEHOLDER:-0}
+    - ENVIRONMENT=${ENVIRONMENT:-production}
+    - ARCHON_ENV=${ARCHON_ENV:-production}
+      # Compose-first Archon Supabase wiring. CLI mode can override via
+      # ARCHON_SUPABASE_* / SUPABASE_* env values.
+    - ARCHON_SUPABASE_BASE_URL=${ARCHON_SUPABASE_BASE_URL:-${ARCHON_SUPABASE_REST_URL:-${SUPABASE_REST_URL:-http://supabase-kong:8000/rest/v1}}}
+    - SUPABASE_URL=${ARCHON_SUPABASE_URL:-${SUPABASE_INTERNAL_URL:-http://supabase-kong:8000}}
+    - SUPABASE_REST_URL=${ARCHON_SUPABASE_REST_URL:-${SUPABASE_REST_URL:-http://supabase-kong:8000/rest/v1}}
+    - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-${SERVICE_ROLE_KEY:-${SUPABASE_SECRET_KEY:-}}}
+    - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY:-${SUPABASE_SERVICE_ROLE_KEY:-${SERVICE_ROLE_KEY:-${SUPABASE_SECRET_KEY:-}}}}
+    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - SUPA_REST_URL=${ARCHON_SUPABASE_REST_URL:-${SUPABASE_REST_URL:-http://supabase-kong:8000/rest/v1}}
+      # TensorZero routing — _sync_openai_compat_env() in services/archon/main.py
+      # reads TENSORZERO_BASE_URL and populates OPENAI_COMPATIBLE_BASE_URL* vars
+    - TENSORZERO_BASE_URL=${TENSORZERO_BASE_URL:-http://tensorzero-gateway:3000}
+    - TENSORZERO_URL=${TENSORZERO_URL:-http://tensorzero-gateway:3000}
+      # GitHub App credentials — archon MCP cross-repo cloning (planned)
+    - GH_APP_ID=${GH_APP_ID:-}
+    - GH_APP_SEC=${GH_APP_SEC:-}
+    - GH_APP_INSTALLATION_ID=${GH_APP_INSTALLATION_ID:-}
+      # Host environment leak guard (see x-host-leak-guard docs above)
+    - SSL_CERT_FILE=
+    - SSL_CERT_DIR=
+    - REQUESTS_CA_BUNDLE=
+    - CURL_CA_BUNDLE=
+    - NODE_EXTRA_CA_CERTS=
+    - HTTP_PROXY=
+    - HTTPS_PROXY=
+    - NO_PROXY=
+    depends_on:
+      nats:
+        condition: service_healthy
+      tensorzero-gateway:
+        condition: service_healthy
+    command:
+    - python
+    - -c
+    - import uvicorn; from services.archon.main import app; uvicorn.run(app, host='0.0.0.0', port=8091, log_level='info')
+    ports:
+    - ${ARCHON_BIND:-0.0.0.0}:${ARCHON_PORT:-8091}:8091
+    - ${ARCHON_BIND:-0.0.0.0}:${ARCHON_MCP_PORT:-8051}:8051
+    - ${ARCHON_BIND:-0.0.0.0}:${ARCHON_WS_PORT:-8052}:8052
+    networks:
+      pmoves_app:
+        aliases:
+        - archon-server
+      pmoves_api:
+      pmoves_bus:
+      pmoves_external:
+    extra_hosts:
+    - host.docker.internal:host-gateway
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - python -c "import urllib.request,sys; sys.exit(0) if urllib.request.urlopen('http://localhost:8091/healthz').getcode()==200 else sys.exit(1)"
+      interval: 20s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
+
+  # Tier: agent (Cipher Memory - knowledge-graph memory for Claude Code / agents)
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+  gateway-agent:
+    build: ./services/gateway-agent
+    restart: unless-stopped
+    env_file:
+    - env.shared
+    - .env.generated
+    environment:
+    - PORT=${GATEWAY_AGENT_PORT:-8111}
+    - AGENT_ZERO_URL=${AGENT_ZERO_URL:-http://agent-zero:8080}
+    - CIPHER_URL=${CIPHER_URL:-http://cipher-api:8096}
+    - TENSORZERO_URL=${TENSORZERO_URL:-http://tensorzero-gateway:3000}
+    - SUPABASE_URL=${SUPABASE_URL:-http://supabase-kong:8000}
+    - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY}
+    - TOOL_CACHE_TTL=${TOOL_CACHE_TTL:-300}
+    ports:
+    - "${GATEWAY_AGENT_BIND:-0.0.0.0}:${GATEWAY_AGENT_PORT:-8111}:${GATEWAY_AGENT_PORT:-8111}"    # Default 8111; 8110 reserved for model-registry
+    profiles: ["agents"]
+    networks: [pmoves_api, pmoves_app, pmoves_bus]
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8111/healthz', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # GitHub Runner Control - Manages self-hosted GitHub runners
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+  hi-rag-gateway:
+    <<: &tier-api-hardened
+      env_file:
+      - env.shared
+      - env.tier-api
+      cap_drop:
+      - ALL
+      cap_add:
+      - NET_BIND_SERVICE
+      - CHOWN
+      - SETGID
+      - SETUID
+      security_opt:
+      - no-new-privileges:true
+
+    build:
+      context: .
+      dockerfile: services/hi-rag-gateway/Dockerfile
+    restart: unless-stopped
+    environment:
+    # Host environment leak guard (see x-host-leak-guard docs above)
+    - SSL_CERT_FILE=
+    - SSL_CERT_DIR=
+    - REQUESTS_CA_BUNDLE=
+    - CURL_CA_BUNDLE=
+    - NODE_EXTRA_CA_CERTS=
+    - HTTP_PROXY=
+    - HTTPS_PROXY=
+    - NO_PROXY=
+    - QDRANT_URL=${QDRANT_URL:-http://qdrant:6333}
+    - QDRANT_COLLECTION=${QDRANT_COLLECTION:-pmoves_chunks_qwen3}
+    - SENTENCE_MODEL=${SENTENCE_MODEL:-all-MiniLM-L6-v2}
+    - HIRAG_HTTP_PORT=${HIRAG_HTTP_PORT:-8086}
+    - GRAPH_BOOST=${GRAPH_BOOST:-0.15}
+    - ENTITY_CACHE_TTL=${ENTITY_CACHE_TTL:-3600}
+    - ENTITY_CACHE_MAX=${ENTITY_CACHE_MAX:-10000}
+    - USE_MEILI=${USE_MEILI:-true}
+    - MEILI_URL=${MEILI_URL:-http://meilisearch:7700}
+    - NEO4J_URL=${NEO4J_URL:-bolt://neo4j:7687}
+    - NEO4J_USER=${NEO4J_USER:-neo4j}
+    - NEO4J_PASSWORD=${NEO4J_PASSWORD:-pm_kDhuaogcUc1oOOVeGMNCkQ}
+    - NEO4J_DICT_REFRESH_SEC=${NEO4J_DICT_REFRESH_SEC:-300}
+    - NEO4J_DICT_LIMIT=${NEO4J_DICT_LIMIT:-1000}
+    - TAILSCALE_ONLY=${TAILSCALE_ONLY:-false}
+    - TAILSCALE_ADMIN_ONLY=${TAILSCALE_ADMIN_ONLY:-false}
+    - TAILSCALE_CIDRS=${TAILSCALE_CIDRS:-}
+    - CHIT_REQUIRE_SIGNATURE=${CHIT_PROD_REQUIRE_SIGNATURE:-true}
+    - CHIT_DECRYPT_ANCHORS=${CHIT_PROD_DECRYPT_ANCHORS:-true}
+    - CHIT_PASSPHRASE=${CHIT_PROD_PASSPHRASE:?set CHIT_PROD_PASSPHRASE in env.shared}
+    - DOCKED_MODE=${DOCKED_MODE:-true}
+    - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
+    - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
+    - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
+    ports:
+    - ${HIRAG_V1_BIND:-127.0.0.1}:${HIRAG_V1_HOST_PORT:-8089}:8086
+    depends_on:
+      qdrant:
+        condition: service_healthy
+        required: false
+      neo4j:
+        condition: service_healthy
+        required: false
+    networks:
+    - pmoves_api
+    - pmoves_data
+    - pmoves_bus
+    - pmoves_external  # HuggingFace model downloads at runtime
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8086/', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+  hi-rag-gateway-v2:
+    <<: *tier-api-hardened
+    build:
+      context: .
+      dockerfile: services/hi-rag-gateway-v2/Dockerfile
+    restart: unless-stopped
+    environment:
+    # Host environment leak guard (see x-host-leak-guard docs above)
+    - SSL_CERT_FILE=
+    - SSL_CERT_DIR=
+    - REQUESTS_CA_BUNDLE=
+    - CURL_CA_BUNDLE=
+    - NODE_EXTRA_CA_CERTS=
+    - HTTP_PROXY=
+    - HTTPS_PROXY=
+    - NO_PROXY=
+    - QDRANT_URL=${QDRANT_URL:-http://qdrant:6333}
+    - QDRANT_COLLECTION=${QDRANT_COLLECTION:-pmoves_chunks_qwen3}
+    - QDRANT_RECREATE_ON_DIM_MISMATCH=${QDRANT_RECREATE_ON_DIM_MISMATCH:-false}
+    - SENTENCE_MODEL=${SENTENCE_MODEL:-all-MiniLM-L6-v2}
+    - INDEXER_NAMESPACE=${INDEXER_NAMESPACE:-pmoves}
+    - QUERY_NAMESPACE=${QUERY_NAMESPACE:-*}
+    - ALPHA=${ALPHA:-0.7}
+    - RERANK_ENABLE=${RERANK_ENABLE:-true}
+    - RERANK_MODEL=${RERANK_MODEL:-BAAI/bge-reranker-base}
+    - RERANK_TOPN=${RERANK_TOPN:-50}
+    - RERANK_K=${RERANK_K:-10}
+    - RERANK_FUSION=${RERANK_FUSION:-mul}
+    - USE_MEILI=true
+    - MEILI_URL=${MEILI_URL:-http://meilisearch:7700}
+    - NEO4J_URL=${NEO4J_URL:-bolt://neo4j:7687}
+    - NEO4J_USER=${NEO4J_USER:-neo4j}
+    - NEO4J_PASSWORD=${NEO4J_PASSWORD:-pm_kDhuaogcUc1oOOVeGMNCkQ}
+    - EMBEDDING_BACKEND=${EMBEDDING_BACKEND:-tensorzero}
+    - USE_OLLAMA_EMBED=${USE_OLLAMA_EMBED:-false}
+    - OLLAMA_URL=${OLLAMA_URL:-http://pmoves-ollama:11434}
+    - OLLAMA_EMBED_MODEL=${OLLAMA_EMBED_MODEL:-qwen3-embedding:4b}
+    - TENSORZERO_BASE_URL=${TENSORZERO_BASE_URL:-http://tensorzero-gateway:3000}
+    - TENSORZERO_EMBED_MODEL=${TENSORZERO_EMBED_MODEL:-tensorzero::embedding_model_name::qwen3_embedding_4b_local}
+    - GRAPH_BOOST=${GRAPH_BOOST:-0.15}
+    - ENTITY_CACHE_TTL=${ENTITY_CACHE_TTL:-60}
+    - ENTITY_CACHE_MAX=${ENTITY_CACHE_MAX:-1000}
+    - NEO4J_DICT_REFRESH_SEC=${NEO4J_DICT_REFRESH_SEC:-60}
+    - NEO4J_DICT_LIMIT=${NEO4J_DICT_LIMIT:-50000}
+    - TAILSCALE_ONLY=${TAILSCALE_ONLY:-false}
+    - TAILSCALE_CIDRS=${TAILSCALE_CIDRS:-100.64.0.0/10}
+    - SUPA_REST_URL=${SUPA_REST_URL:-http://supabase-kong:8000/rest/v1}
+    - SUPABASE_REALTIME_URL=${SUPABASE_REALTIME_URL:-ws://supabase-realtime:4000}
+    - CHIT_REQUIRE_SIGNATURE=${CHIT_PROD_REQUIRE_SIGNATURE:-true}
+    - CHIT_DECRYPT_ANCHORS=${CHIT_PROD_DECRYPT_ANCHORS:-true}
+    - CHIT_PASSPHRASE=${CHIT_PROD_PASSPHRASE:?set CHIT_PROD_PASSPHRASE in env.shared}
+    - DOCKED_MODE=${DOCKED_MODE:-true}
+    - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
+    - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
+    - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
+    # Host environment leak guard (see x-host-leak-guard docs above)
+    - SSL_CERT_FILE=
+    - SSL_CERT_DIR=
+    - REQUESTS_CA_BUNDLE=
+    - CURL_CA_BUNDLE=
+    - NODE_EXTRA_CA_CERTS=
+    - HTTP_PROXY=
+    - HTTPS_PROXY=
+    - NO_PROXY=
+    extra_hosts:
+    - host.docker.internal:host-gateway
+    ports:
+    - ${HIRAG_BIND:-127.0.0.1}:${HIRAG_V2_HOST_PORT:-8086}:8086
+    depends_on:
+      qdrant:
+        condition: service_healthy
+      neo4j:
+        condition: service_healthy
+    networks:
+    - pmoves_api
+    - pmoves_data
+    - pmoves_bus
+    - pmoves_external  # Required for reranker API calls
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8086/', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+  hi-rag-gateway-gpu:
+    <<: *tier-api-hardened
+    build:
+      context: .
+      dockerfile: services/hi-rag-gateway/Dockerfile
+      args:
+      - TORCH_CUDA_VERSION=${TORCH_CUDA_VERSION:-cu128}
+      - TORCH_SKIP_CUDA=0
+    restart: unless-stopped
+    environment:
+    # Host environment leak guard (see x-host-leak-guard docs above)
+    - SSL_CERT_FILE=
+    - SSL_CERT_DIR=
+    - REQUESTS_CA_BUNDLE=
+    - CURL_CA_BUNDLE=
+    - NODE_EXTRA_CA_CERTS=
+    - HTTP_PROXY=
+    - HTTPS_PROXY=
+    - NO_PROXY=
+    - QDRANT_URL=${QDRANT_URL:-http://qdrant:6333}
+    - QDRANT_COLLECTION=${QDRANT_COLLECTION:-pmoves_chunks_qwen3}
+    - QDRANT_RECREATE_ON_DIM_MISMATCH=${QDRANT_RECREATE_ON_DIM_MISMATCH:-false}
+    - SENTENCE_MODEL=${SENTENCE_MODEL:-all-MiniLM-L6-v2}
+    - HIRAG_HTTP_PORT=${HIRAG_HTTP_PORT:-8086}
+    - GRAPH_BOOST=${GRAPH_BOOST:-0.15}
+    - ENTITY_CACHE_TTL=${ENTITY_CACHE_TTL:-3600}
+    - ENTITY_CACHE_MAX=${ENTITY_CACHE_MAX:-10000}
+    - USE_MEILI=${USE_MEILI:-true}
+    - MEILI_URL=${MEILI_URL:-http://meilisearch:7700}
+    - NEO4J_URL=${NEO4J_URL:-bolt://neo4j:7687}
+    - NEO4J_USER=${NEO4J_USER:-neo4j}
+    - NEO4J_PASSWORD=${NEO4J_PASSWORD:-pm_kDhuaogcUc1oOOVeGMNCkQ}
+    - NEO4J_DICT_REFRESH_SEC=${NEO4J_DICT_REFRESH_SEC:-300}
+    - NEO4J_DICT_LIMIT=${NEO4J_DICT_LIMIT:-1000}
+    - TAILSCALE_ONLY=${TAILSCALE_ONLY:-false}
+    - TAILSCALE_ADMIN_ONLY=${TAILSCALE_ADMIN_ONLY:-false}
+    - TAILSCALE_CIDRS=${TAILSCALE_CIDRS:-}
+    - RERANK_ENABLE=${RERANK_ENABLE:-true}
+    - RERANK_MODEL=${RERANK_MODEL:-BAAI/bge-reranker-base}
+    - RERANK_TOPN=${RERANK_TOPN:-50}
+    - RERANK_K=${RERANK_K:-10}
+    - CHIT_REQUIRE_SIGNATURE=${CHIT_PROD_REQUIRE_SIGNATURE:-true}
+    - CHIT_DECRYPT_ANCHORS=${CHIT_PROD_DECRYPT_ANCHORS:-true}
+    - CHIT_PASSPHRASE=${CHIT_PROD_PASSPHRASE:?set CHIT_PROD_PASSPHRASE in env.shared}
+    - DOCKED_MODE=${DOCKED_MODE:-true}
+    - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
+    - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
+    - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
+    deploy:
+      resources:
+        reservations:
+          devices:
+          - capabilities:
+            - gpu
+            count: ${GPU_COUNT:-all}
+        limits:
+          cpus: '4.0'
+          memory: 8G
+    ports:
+    - ${HIRAG_BIND:-127.0.0.1}:${HIRAG_V2_GPU_HOST_PORT:-8187}:8086  # Default 8187; 8090 reserved for retrieval-eval
+    depends_on:
+      qdrant:
+        condition: service_healthy
+        required: false
+      neo4j:
+        condition: service_healthy
+        required: false
+    networks:
+    - pmoves_api
+    - pmoves_data
+    - pmoves_bus
+    - pmoves_external  # HuggingFace reranker model downloads at runtime
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8086/', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+  hi-rag-gateway-v2-gpu:
+    <<:
+      env_file:
+      - env.shared
+      - env.tier-api
+      cap_drop:
+      - ALL
+      cap_add:
+      - NET_BIND_SERVICE
+      - CHOWN
+      - SETGID
+      - SETUID
+      security_opt:
+      - no-new-privileges:true
+
+# PMOVES.AI production compose project
+    build:
+      context: .
+      dockerfile: services/hi-rag-gateway-v2/Dockerfile.gpu
+      args:
+        TORCH_CUDA: ${TORCH_CUDA_VERSION:-cu128}
+        TORCH_VERSION: ${TORCH_VERSION:-2.9.0}
+        TORCHAUDIO_VERSION: ${TORCHAUDIO_VERSION:-2.9.0}
+    runtime: nvidia
+    restart: unless-stopped
+    command:
+    - uvicorn
+    - app:app
+    - --host
+    - 0.0.0.0
+    - --port
+    - '8086'
+    environment:
+    # Host environment leak guard (see x-host-leak-guard docs above)
+    - SSL_CERT_FILE=
+    - SSL_CERT_DIR=
+    - REQUESTS_CA_BUNDLE=
+    - CURL_CA_BUNDLE=
+    - NODE_EXTRA_CA_CERTS=
+    - HTTP_PROXY=
+    - HTTPS_PROXY=
+    - NO_PROXY=
+    - QDRANT_URL=${QDRANT_URL:-http://qdrant:6333}
+    - QDRANT_COLLECTION=${QDRANT_COLLECTION:-pmoves_chunks_qwen3}
+    - SENTENCE_MODEL=${SENTENCE_MODEL:-all-MiniLM-L6-v2}
+    - INDEXER_NAMESPACE=${INDEXER_NAMESPACE:-pmoves}
+    - QUERY_NAMESPACE=${QUERY_NAMESPACE:-*}
+    - ALPHA=${ALPHA:-0.7}
+    - RERANK_ENABLE=${RERANK_ENABLE:-true}
+    - RERANK_MODEL=Qwen/Qwen3-Reranker-4B
+    - RERANK_TOPN=${RERANK_TOPN:-50}
+    - RERANK_K=${RERANK_K:-10}
+    - RERANK_FUSION=${RERANK_FUSION:-mul}
+    - USE_MEILI=${USE_MEILI:-true}
+    - MEILI_URL=${MEILI_URL:-http://meilisearch:7700}
+    - GRAPH_BOOST=${GRAPH_BOOST:-0.15}
+    - ENTITY_CACHE_TTL=${ENTITY_CACHE_TTL:-60}
+    - ENTITY_CACHE_MAX=${ENTITY_CACHE_MAX:-1000}
+    - NEO4J_DICT_REFRESH_SEC=${NEO4J_DICT_REFRESH_SEC:-60}
+    - NEO4J_DICT_LIMIT=${NEO4J_DICT_LIMIT:-50000}
+    - CHIT_DECODE_TEXT=${CHIT_DECODE_TEXT:-true}
+    - CHIT_DECODE_IMAGE=${CHIT_DECODE_IMAGE:-true}
+    - CHIT_DECODE_AUDIO=${CHIT_DECODE_AUDIO:-true}
+    - CHIT_PERSIST_DB=${CHIT_PERSIST_DB:-false}
+    - PGHOST=${PGHOST:-postgres}
+    - PGPORT=${PGPORT:-5432}
+    - PGUSER=${POSTGRES_USER:-pmoves}
+    - PGPASSWORD=${POSTGRES_PASSWORD:-pmoves}
+    - PGDATABASE=${POSTGRES_DB:-pmoves}
+    - SUPA_REST_URL=${SUPA_REST_URL:-http://supabase-kong:8000/rest/v1}
+    - SUPABASE_REALTIME_URL=${SUPABASE_REALTIME_URL:-ws://supabase-realtime:4000}
+    - EMBEDDING_BACKEND=${EMBEDDING_BACKEND:-tensorzero}
+    - OLLAMA_URL=${OLLAMA_URL:-http://pmoves-ollama:11434}
+    - OLLAMA_EMBED_MODEL=${OLLAMA_EMBED_MODEL:-qwen3-embedding:4b}
+    - TENSORZERO_BASE_URL=${TENSORZERO_BASE_URL:-http://tensorzero-gateway:3000}
+    - TENSORZERO_API_KEY=${TENSORZERO_API_KEY:-}
+    - TENSORZERO_EMBED_MODEL=${TENSORZERO_EMBED_MODEL:-tensorzero::embedding_model_name::qwen3_embedding_4b_local}
+    - CHIT_REQUIRE_SIGNATURE=${CHIT_PROD_REQUIRE_SIGNATURE:-true}
+    - CHIT_DECRYPT_ANCHORS=${CHIT_PROD_DECRYPT_ANCHORS:-true}
+    - CHIT_PASSPHRASE=${CHIT_PROD_PASSPHRASE:?set CHIT_PROD_PASSPHRASE in env.shared}
+    - NVIDIA_DRIVER_CAPABILITIES=${NVIDIA_DRIVER_CAPABILITIES:-compute,utility}
+    - DOCKED_MODE=${DOCKED_MODE:-true}
+    - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
+    - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
+    - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
+    # Host environment leak guard (see x-host-leak-guard docs above)
+    - SSL_CERT_FILE=
+    - SSL_CERT_DIR=
+    - REQUESTS_CA_BUNDLE=
+    - CURL_CA_BUNDLE=
+    - NODE_EXTRA_CA_CERTS=
+    - HTTP_PROXY=
+    - HTTPS_PROXY=
+    - NO_PROXY=
+    gpus: all
+    deploy:
+      resources:
+        reservations:
+          devices:
+          - capabilities:
+            - gpu
+            count: ${GPU_COUNT:-all}
+        limits:
+          cpus: '4.0'
+          memory: 8G
+    ports:
+    - ${HIRAG_BIND:-127.0.0.1}:${HIRAG_V2_GPU_HOST_PORT:-8087}:8086
+    depends_on:
+      qdrant:
+        condition: service_healthy
+        required: false
+      neo4j:
+        condition: service_healthy
+        required: false
+    networks:
+    - pmoves_api
+    - pmoves_data
+    - pmoves_bus
+    - pmoves_external  # Required for hub fallback and host-gateway Supabase routes
+    extra_hosts:
+    - host.docker.internal:host-gateway
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8086/', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+  # ── NATS Message Bus — JetStream-enabled event broker ──────────────────
+  # Auth: nats://nats:pmoves@nats:4222 | Monitoring: :8222/varz
+  # See: pmoves/docs/NATS_CONFIGURATION.md
+  mesh-agent:
+    <<: &tier-agent-hardened-ro
+      env_file:
+      - env.shared
+      - env.tier-agent
+      cap_drop:
+      - ALL
+      cap_add:
+      - NET_BIND_SERVICE
+      read_only: true
+      security_opt:
+      - no-new-privileges:true
+      tmpfs:
+      - /tmp:noexec,nosuid,size=64m
+      - /var/tmp:noexec,nosuid,size=64m
+
+    build: ./services/mesh-agent
+    restart: unless-stopped
+    environment:
+    # NATS_URL from env.shared/env.tier-agent has credentials: nats://nats:pmoves@nats:4222
+    - HIRAG_URL=${HIRAG_URL:-http://hi-rag-gateway-v2-gpu:8086}
+    - ANNOUNCE_SEC=${ANNOUNCE_SEC:-15}
+    depends_on: [nats]
+    profiles: ["agents"]
+    networks: [pmoves_app, pmoves_bus]
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import os; os.kill(1, 0)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+  # Tier: agent (BoTZ Gateway - Bot management with Geometry BUS integration)
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+  cipher-api:
+    <<: *tier-agent-hardened
+    build:
+      context: ../Pmoves-cipher
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+    - CIPHER_API_PREFIX=
+    - NODE_ENV=production
+    - NEO4J_URI=bolt://neo4j:7687
+    - NEO4J_USER=${NEO4J_USER:-neo4j}
+    - NEO4J_PASSWORD=${NEO4J_PASSWORD:-neo4j}
+    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - OLLAMA_BASE_URL=http://pmoves-ollama:11434
+    - DOCKED_MODE=${DOCKED_MODE:-true}
+    - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
+    - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
+    - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
+    - CIPHER_API_TOKEN=${CIPHER_API_TOKEN:-}
+    command: ["node", "dist/src/app/index.cjs", "--mode", "api", "--port", "3000", "--host", "0.0.0.0", "--agent", "/app/memAgent/cipher.yml", "--mcp-transport-type", "sse"]
+    ports:
+    - "${CIPHER_BIND:-0.0.0.0}:${CIPHER_PORT:-8096}:3000"
+    depends_on:
+      neo4j:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+    profiles: ["agents"]
+    networks: [pmoves_app, pmoves_data, pmoves_bus]
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+  a2ui-nats-bridge:
+    <<: *tier-agent-hardened-ro
+    build: ./services/a2ui-nats-bridge
+    image: ${A2UI_BRIDGE_IMAGE:-ghcr.io/powerfulmoves/pmoves-a2ui-nats-bridge:pmoves-latest}
+    container_name: pmoves-a2ui-nats-bridge
+    hostname: a2ui-nats-bridge
+    restart: unless-stopped
+    environment:
+    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    # NATS_URL from env.shared/env.tier-agent has credentials: nats://nats:pmoves@nats:4222
+    - A2UI_RENDER_SUBJECT=${A2UI_RENDER_SUBJECT:-a2ui.render.v1}
+    - GEOMETRY_WILDCARD=${GEOMETRY_WILDCARD:-geometry.>}
+    - PORT=9224
+    ports:
+    - ${A2UI_BIND:-0.0.0.0}:9224:9224
+    depends_on:
+      nats:
+        condition: service_healthy
+      nats-init:
+        condition: service_completed_successfully
+    profiles:
+    - agents
+    networks:
+    - pmoves_app
+    - pmoves_bus
+    healthcheck:
+      test:
+      - CMD
+      - python3
+      - -c
+      - import urllib.request; urllib.request.urlopen('http://localhost:9224/healthz', timeout=5)
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+  nats-echo-req:
+    <<: *tier-agent-hardened-ro
+    build:
+      context: ./services
+      dockerfile: nats-echo/Dockerfile
+    restart: unless-stopped
+    environment:
+    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - NATS_ECHO_SUBJECT=research.deepresearch.request.v1
+    depends_on:
+    - nats
+    profiles:
+    - agents
+    - diag
+    networks:
+    - pmoves_bus
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import os; os.kill(1, 0)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+  nats-echo-res:
+    <<: *tier-agent-hardened-ro
+    build:
+      context: ./services
+      dockerfile: nats-echo/Dockerfile
+    restart: unless-stopped
+    environment:
+    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - NATS_ECHO_SUBJECT=research.deepresearch.result.v1
+    depends_on:
+    - nats
+    profiles:
+    - agents
+    - diag
+    networks:
+    - pmoves_bus
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import os; os.kill(1, 0)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+  consciousness-service:
+    build:
+      context: ./services/consciousness-service
+      dockerfile: Dockerfile
+    image: ${CONSCIOUSNESS_IMAGE:-ghcr.io/powerfulmoves/pmoves-consciousness:pmoves-latest}
+    restart: unless-stopped
+    <<: *tier-agent-hardened-ro
+    environment:
+    - SERVICE_NAME=consciousness-service
+    - SERVICE_PORT=${CONSCIOUSNESS_HOST_PORT:-8106}
+    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - CHIT_PROD_PASSPHRASE=${CHIT_PROD_PASSPHRASE:?set CHIT_PROD_PASSPHRASE in env.shared}
+    - SUPABASE_URL=${SUPABASE_URL:-http://supabase-kong:8000}
+    - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY:-}
+    - PYTHONUNBUFFERED=1
+    ports: ["${CONSCIOUSNESS_BIND:-0.0.0.0}:${CONSCIOUSNESS_HOST_PORT:-8106}:8106"]
+    profiles: ["agents", "botz"]
+    networks: [pmoves_app]
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import httpx; httpx.get('http://localhost:8106/healthz').raise_for_status()\" || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    depends_on:
+      nats-init:
+        condition: service_healthy
+
+  # Cast TTS Gateway - Chromecast/Google Home TTS routing (port 8060)
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+  evo-controller:
+    <<: *tier-agent-hardened-ro
+    build:
+      context: .
+      dockerfile: services/evo-controller/Dockerfile
+    image: ${EVO_CONTROLLER_IMAGE:-ghcr.io/powerfulmoves/pmoves-evo-controller:latest}
+    restart: unless-stopped
+    environment:
+    # NATS_URL from env.tier-agent has credentials: nats://nats:pmoves@nats:4222
+    - PORT=8113
+    - SUPA_REST_URL=${SUPA_REST_INTERNAL_URL:-${SUPA_REST_URL:-http://supabase-kong:8000/rest/v1}}
+    - EVOSWARM_POLL_SECONDS=${EVOSWARM_POLL_SECONDS:-300}
+    - EVOSWARM_SAMPLE_LIMIT=${EVOSWARM_SAMPLE_LIMIT:-25}
+    - EVOSWARM_NAMESPACE=${EVOSWARM_NAMESPACE:-}
+    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - CHIT_REQUIRE_SIGNATURE=${CHIT_PROD_REQUIRE_SIGNATURE:-true}
+    - CHIT_DECRYPT_ANCHORS=${CHIT_PROD_DECRYPT_ANCHORS:-true}
+    - CHIT_PASSPHRASE=${CHIT_PROD_PASSPHRASE:?set CHIT_PROD_PASSPHRASE in env.shared}
+    ports: ["${EVO_CONTROLLER_BIND:-127.0.0.1}:8113:8113"]
+    profiles: ["orchestration"]
+    # Docker Desktop does not publish host ports for services attached only to internal networks.
+    networks: [pmoves_app, pmoves_api, pmoves_bus, pmoves_external]
+    extra_hosts:
+    - host.docker.internal:host-gateway
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8113/healthz', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+  # Ultimate TTS Studio - Multi-engine TTS with 7 engines (Gradio UI)
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M

@@ -3193,3 +3193,55 @@ neo4j-restore: ## Restore Neo4j from backup (usage: make neo4j-restore BACKUP=ba
 		echo "❌ Neo4j container not available after restore"; \
 		exit 1; \
 	fi
+
+# =============================================================================
+# Overlay-based Compose Targets (Rec #9)
+# =============================================================================
+# These targets use the split overlay files (docker-compose.base.yml + tier overlays)
+# For the original monolithic compose, use the existing up-all / up-core targets.
+# =============================================================================
+
+OVERLAY_BASE    := -f docker-compose.base.yml
+OVERLAY_CORE    := -f docker-compose.core.yml
+OVERLAY_AGENTS  := -f docker-compose.agents.yml
+OVERLAY_MEDIA   := -f docker-compose.media.yml
+OVERLAY_UI      := -f docker-compose.ui.yml
+OVERLAY_WORKERS := -f docker-compose.workers.yml
+OVERLAY_APPS    := -f docker-compose.apps.yml
+
+OVERLAY_DC = $(DC) -p $(PROJECT) --project-directory $(CURDIR) $(COMPOSE_ENV_FILES) $(OVERLAY_BASE)
+
+.PHONY: overlay-up-full overlay-up-core overlay-up-agents overlay-up-media overlay-up-ui overlay-up-workers overlay-up-apps overlay-down
+
+overlay-up-full: ## Start ALL services via overlay files (base + all tiers)
+@echo "🚀 Starting full stack via overlay files..."
+@$(OVERLAY_DC) $(OVERLAY_CORE) $(OVERLAY_AGENTS) $(OVERLAY_MEDIA) $(OVERLAY_UI) $(OVERLAY_WORKERS) $(OVERLAY_APPS) up -d
+@echo "✅ Full stack started (84 services across 6 overlays)"
+
+overlay-up-core: ## Start core infrastructure via overlay (nats, supabase, data stores)
+@$(OVERLAY_DC) $(OVERLAY_CORE) up -d
+@echo "✅ Core infrastructure started (24 services)"
+
+overlay-up-agents: ## Start agent services via overlay
+@$(OVERLAY_DC) $(OVERLAY_CORE) $(OVERLAY_AGENTS) up -d
+@echo "✅ Agent services started (14 services)"
+
+overlay-up-media: ## Start media services via overlay
+@$(OVERLAY_DC) $(OVERLAY_CORE) $(OVERLAY_MEDIA) up -d
+@echo "✅ Media services started (15 services)"
+
+overlay-up-ui: ## Start UI services via overlay
+@$(OVERLAY_DC) $(OVERLAY_CORE) $(OVERLAY_UI) up -d
+@echo "✅ UI services started (8 services)"
+
+overlay-up-workers: ## Start worker services via overlay
+@$(OVERLAY_DC) $(OVERLAY_CORE) $(OVERLAY_WORKERS) up -d
+@echo "✅ Worker services started (19 services)"
+
+overlay-up-apps: ## Start application services via overlay
+@$(OVERLAY_DC) $(OVERLAY_CORE) $(OVERLAY_APPS) up -d
+@echo "✅ Application services started (4 services)"
+
+overlay-down: ## Stop all overlay services
+@$(OVERLAY_DC) $(OVERLAY_CORE) $(OVERLAY_AGENTS) $(OVERLAY_MEDIA) $(OVERLAY_UI) $(OVERLAY_WORKERS) $(OVERLAY_APPS) down
+@echo "✅ All overlay services stopped"

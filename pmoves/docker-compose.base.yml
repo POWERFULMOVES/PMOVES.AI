@@ -1,0 +1,580 @@
+#=============================================================================
+# PMOVES.AI - Docker Compose Base (shared anchors, volumes, networks)
+#=============================================================================
+# This file contains YAML anchors (x-env-tier-*, x-hardening-*),
+# shared volumes, and networks definitions used by all overlay files.
+#
+# Usage: docker compose \
+#   -f docker-compose.base.yml \
+#   -f docker-compose.core.yml \
+#   -f docker-compose.agents.yml up -d
+#
+# Or use Makefile targets: make up-full, make up-core, etc.
+#
+# Generated from docker-compose.yml by scripts/split_compose.py
+#=============================================================================
+x-env-tier-data:
+  env_file:
+  - env.shared
+  - env.tier-data
+  cap_drop:
+  - ALL
+  cap_add:
+  - NET_BIND_SERVICE
+  - CHOWN
+  - SETGID
+  - SETUID
+  security_opt:
+  - no-new-privileges:true
+
+x-env-tier-api:
+  env_file:
+  - env.shared
+  - env.tier-api
+  cap_drop:
+  - ALL
+  cap_add:
+  - NET_BIND_SERVICE
+  - CHOWN
+  - SETGID
+  - SETUID
+  security_opt:
+  - no-new-privileges:true
+
+x-env-tier-api-gpu:
+  env_file:
+  - env.shared
+  - env.tier-api
+  cap_drop:
+  - ALL
+  cap_add:
+  - NET_BIND_SERVICE
+  - CHOWN
+  - SETGID
+  - SETUID
+  security_opt:
+  - no-new-privileges:true
+
+x-env-tier-llm:
+  env_file:
+  - env.shared
+  - env.tier-llm
+  cap_drop:
+  - ALL
+  cap_add:
+  - NET_BIND_SERVICE
+  - CHOWN
+  - SETGID
+  - SETUID
+  security_opt:
+  - no-new-privileges:true
+
+x-env-tier-worker:
+  env_file:
+  - env.shared
+  - env.tier-worker
+  cap_drop:
+  - ALL
+  cap_add:
+  - NET_BIND_SERVICE
+  - CHOWN
+  - SETGID
+  - SETUID
+  security_opt:
+  - no-new-privileges:true
+
+x-env-tier-media:
+  env_file:
+  - env.shared
+  - env.tier-media
+  cap_drop:
+  - ALL
+  cap_add:
+  - NET_BIND_SERVICE
+  - CHOWN
+  - SETGID
+  - SETUID
+  security_opt:
+  - no-new-privileges:true
+
+x-env-tier-agent:
+  env_file:
+  - env.shared
+  - env.tier-agent
+  cap_drop:
+  - ALL
+  cap_add:
+  - NET_BIND_SERVICE
+  - CHOWN
+  - SETGID
+  - SETUID
+  security_opt:
+  - no-new-privileges:true
+
+x-env-tier-agent-ro:
+  env_file:
+  - env.shared
+  - env.tier-agent
+  cap_drop:
+  - ALL
+  cap_add:
+  - NET_BIND_SERVICE
+  read_only: true
+  security_opt:
+  - no-new-privileges:true
+  tmpfs:
+  - /tmp:noexec,nosuid,size=64m
+  - /var/tmp:noexec,nosuid,size=64m
+
+x-env-tier-ui:
+  env_file:
+  - env.shared
+  - env.tier-ui
+  cap_drop:
+  - ALL
+  cap_add:
+  - NET_BIND_SERVICE
+  read_only: true
+  security_opt:
+  - no-new-privileges:true
+  tmpfs:
+  - /tmp:noexec,nosuid,size=64m
+  - /var/tmp:noexec,nosuid,size=64m
+
+x-env-tier-supabase:
+  env_file:
+  - env.shared
+  - env.tier-supabase
+  cap_drop:
+  - ALL
+  cap_add:
+  - NET_BIND_SERVICE
+  - CHOWN
+  - SETGID
+  - SETUID
+  security_opt:
+  - no-new-privileges:true
+
+x-env-tier-supabase-ro:
+  env_file:
+  - env.shared
+  - env.tier-supabase
+  cap_drop:
+  - ALL
+  cap_add:
+  - NET_BIND_SERVICE
+  read_only: true
+  security_opt:
+  - no-new-privileges:true
+  tmpfs:
+  - /tmp:noexec,nosuid,size=64m
+  - /var/tmp:noexec,nosuid,size=64m
+
+# =============================================================================
+# HOST ENVIRONMENT LEAK GUARD
+# =============================================================================
+# Windows Docker Desktop inherits host env vars into containers. Linux
+# containers cannot use Windows paths (SSL_CERT_FILE, REQUESTS_CA_BUNDLE) or
+# corporate proxy settings (HTTP_PROXY). This anchor list nullifies all known
+# leak vectors. Apply to every service environment block.
+#
+# Precedence: environment block > env_file > host inheritance.
+# Empty assignment effectively unsets the variable in the container.
+#
+# Canonical guard list (copy into each service environment block):
+#   - SSL_CERT_FILE=
+#   - SSL_CERT_DIR=
+#   - REQUESTS_CA_BUNDLE=
+#   - CURL_CA_BUNDLE=
+#   - NODE_EXTRA_CA_CERTS=
+#   - HTTP_PROXY=
+#   - HTTPS_PROXY=
+#   - NO_PROXY=
+# =============================================================================
+
+# =============================================================================
+# CONTAINER HARDENING TEMPLATES (Security Baseline)
+# =============================================================================
+#
+# These YAML anchors provide container security hardening for all services.
+# Apply to service definitions using the <<: *anchor-name merge pattern.
+#
+# Hardening Options Explained:
+# ----------------------------
+# - cap_drop: [ALL] - Drop all Linux capabilities (principle of least privilege)
+# - cap_add: [NET_BIND_SERVICE] - Add back only specific capabilities needed
+# - read_only: true - Mount container rootfs as read-only (prevents modification)
+# - security_opt: [no-new-privileges:true] - Prevent privilege escalation via setuid/setgid
+# - tmpfs: - Mount temporary filesystems with noexec/nosuid flags
+#
+# When to Use Each Template:
+# --------------------------
+# 1. x-hardening (&hardening) - For stateless, read-only services:
+#    - API gateways, proxies, pure compute services
+#    - Services that don't write to local filesystem
+#    - Example: presign, render-webhook, model-registry
+#
+# 2. x-hardening-rw (&hardening-rw) - For services with write requirements:
+#    - Databases (need data directory writes)
+#    - Log aggregators (need log file writes)
+#    - Services with tmp/cache volumes
+#    - Example: postgres, neo4j, nats
+#
+# Adding Additional Capabilities:
+# --------------------------------
+# If a service needs additional capabilities beyond NET_BIND_SERVICE:
+#
+#   service-name:
+#     <<: *hardening  # Start with base template
+#     cap_add:
+#       - NET_BIND_SERVICE  # From template
+#       - CHOWN            # Add this if needed for file ownership
+#       - SETGID           # Add this if needed for group operations
+#       - SETUID           # Add this if needed for user operations
+#     cap_drop: [ALL]      # Keep drop ALL to only allow explicitly added caps
+#
+# Services Reiring Custom tmpfs Mounts:
+# -------------------------------------
+# Some services need additional tmpfs mounts beyond /tmp and /var/tmp:
+#
+#   service-name:
+#     <<: *hardening
+#     tmpfs:
+#       - /tmp:noexec,nosuid,size=64m       # From template
+#       - /var/tmp:noexec,nosuid,size=64m   # From template
+#       - /app/cache:rw,noexec,nosuid,size=128m  # Add service-specific mount
+#
+# Common Capabilities Reference:
+# ------------------------------
+# - NET_BIND_SERVICE - Bind to ports < 1024
+# - CHOWN - Change file ownership
+# - SETGID - Set group ID
+# - SETUID - Set user ID
+# - DAC_OVERRIDE - Bypass file read/write/execute permission checks
+# - FOWNER - Bypass permission checks on operations with file descriptors
+# - KILL - Send signals to processes
+# - NET_ADMIN - Network administration (firewall, routing)
+# - SYS_ADMIN - Perform system administration tasks (AVOID if possible)
+#
+# Security Impact:
+# ---------------
+# - Attack Surface: Reduces container privileges by ~90%
+# - Privilege Escalation: Blocks setuid/setgid escalation vectors
+# - Rootfs Protection: Read-only prevents malicious code injection
+# - Temporary Files: noexec/nosuid prevents executable tmp attacks
+# - Compliance: Aligns with CIS Docker Benchmark 1.0.0 sections 5.1-5.3
+#
+# Applying to Services:
+# ---------------------
+# This PR adds template anchors only. Follow-up PR will apply to all services.
+# See: Task 5 - Apply container hardening to all services
+#
+# References:
+# -----------
+# - CIS Docker Benchmark 1.0.0: https://www.cisecurity.org/benchmark/docker
+# - Docker Security: https://docs.docker.com/engine/security/
+# - Kubernetes Pod Security: https://kubernetes.io/docs/concepts/security/pod-security-standards/
+# =============================================================================
+
+# Read-only hardening for stateless services
+# Use for: API gateways, proxies, compute services (no local writes)
+x-hardening:
+  cap_drop:
+  - ALL
+  cap_add:
+  - NET_BIND_SERVICE
+  read_only: true
+  security_opt:
+  - no-new-privileges:true
+  tmpfs:
+  - /tmp:noexec,nosuid,size=64m
+  - /var/tmp:noexec,nosuid,size=64m
+
+# Read-write hardening for services needing filesystem access
+# Use for: Databases, log writers, services with volumes
+x-hardening-rw:
+  cap_drop:
+  - ALL
+  cap_add:
+  - NET_BIND_SERVICE
+  - CHOWN
+  - DAC_OVERRIDE
+  - FOWNER
+  - SETGID
+  - SETUID
+  security_opt:
+  - no-new-privileges:true
+
+# =============================================================================
+# COMBINED TIER + HARDENING ANCHORS
+# =============================================================================
+# Docker Compose doesn't support multiple <<: merge keys on same mapping level.
+# These combined anchors provide both tier env_file and hardening in one reference.
+# =============================================================================
+
+x-tier-supabase-hardened:
+  env_file:
+  - env.shared
+  - env.tier-supabase
+  cap_drop:
+  - ALL
+  cap_add:
+  - NET_BIND_SERVICE
+  - CHOWN
+  - DAC_OVERRIDE
+  - FOWNER
+  - SETGID
+  - SETUID
+  security_opt:
+  - no-new-privileges:true
+
+x-tier-supabase-hardened-ro:
+  env_file:
+  - env.shared
+  - env.tier-supabase
+  cap_drop:
+  - ALL
+  cap_add:
+  - NET_BIND_SERVICE
+  read_only: true
+  security_opt:
+  - no-new-privileges:true
+  tmpfs:
+  - /tmp:noexec,nosuid,size=64m
+  - /var/tmp:noexec,nosuid,size=64m
+
+x-tier-agent-hardened:
+  env_file:
+  - env.shared
+  - env.tier-agent
+  cap_drop:
+  - ALL
+  cap_add:
+  - NET_BIND_SERVICE
+  - CHOWN
+  - SETGID
+  - SETUID
+  security_opt:
+  - no-new-privileges:true
+
+x-tier-agent-hardened-ro:
+  env_file:
+  - env.shared
+  - env.tier-agent
+  cap_drop:
+  - ALL
+  cap_add:
+  - NET_BIND_SERVICE
+  read_only: true
+  security_opt:
+  - no-new-privileges:true
+  tmpfs:
+  - /tmp:noexec,nosuid,size=64m
+  - /var/tmp:noexec,nosuid,size=64m
+
+x-tier-agent-hardened-rw:
+  env_file:
+  - env.shared
+  - env.tier-agent
+  cap_drop:
+  - ALL
+  cap_add:
+  - NET_BIND_SERVICE
+  - CHOWN
+  - SETGID
+  - SETUID
+  security_opt:
+  - no-new-privileges:true
+
+x-tier-llm-hardened:
+  env_file:
+  - env.shared
+  - env.tier-llm
+  cap_drop:
+  - ALL
+  cap_add:
+  - NET_BIND_SERVICE
+  - CHOWN
+  - SETGID
+  - SETUID
+  security_opt:
+  - no-new-privileges:true
+
+x-tier-worker-hardened:
+  env_file:
+  - env.shared
+  - env.tier-worker
+  cap_drop:
+  - ALL
+  cap_add:
+  - NET_BIND_SERVICE
+  - CHOWN
+  - SETGID
+  - SETUID
+  security_opt:
+  - no-new-privileges:true
+
+x-tier-api-hardened:
+  env_file:
+  - env.shared
+  - env.tier-api
+  cap_drop:
+  - ALL
+  cap_add:
+  - NET_BIND_SERVICE
+  - CHOWN
+  - SETGID
+  - SETUID
+  security_opt:
+  - no-new-privileges:true
+
+x-tier-data-hardened:
+  env_file:
+  - env.shared
+  - env.tier-data
+  cap_drop:
+  - ALL
+  cap_add:
+  - NET_BIND_SERVICE
+  - CHOWN
+  - DAC_OVERRIDE
+  - FOWNER
+  - SETGID
+  - SETUID
+  security_opt:
+  - no-new-privileges:true
+
+x-tier-media-hardened:
+  env_file:
+  - env.shared
+  - env.tier-media
+  cap_drop:
+  - ALL
+  cap_add:
+  - NET_BIND_SERVICE
+  - CHOWN
+  - SETGID
+  - SETUID
+  security_opt:
+  - no-new-privileges:true
+
+x-tier-ui-hardened:
+  env_file:
+  - env.shared
+  - env.tier-ui
+  cap_drop:
+  - ALL
+  cap_add:
+  - NET_BIND_SERVICE
+  read_only: true
+  security_opt:
+  - no-new-privileges:true
+  tmpfs:
+  - /tmp:noexec,nosuid,size=64m
+  - /var/tmp:noexec,nosuid,size=64m
+
+x-tier-api-hardened-gpu:
+  env_file:
+  - env.shared
+  - env.tier-api
+  cap_drop:
+  - ALL
+  cap_add:
+  - NET_BIND_SERVICE
+  - CHOWN
+  - SETGID
+  - SETUID
+  security_opt:
+  - no-new-privileges:true
+
+# PMOVES.AI production compose project
+name: pmoves
+volumes:
+  neo4j-data: {}
+  qdrant-data: {}
+  meilisearch-data: {}
+  minio-data: {}
+  # Legacy volume (kept for backward compatibility during migration)
+  supabase-data: {}
+  # 2025 Supabase integrated volumes
+  supabase-db-data: {}
+  supabase-db-config: {}
+  supabase-storage-data: {}
+  supabase-vector-data: {}
+  notebook-sync-data: {}
+  tensorzero-clickhouse-data: {}
+  invidious-postgres-data: {}
+  invidious-companion-cache: {}
+  pmoves-ollama-models: {}
+  comfy-watcher-output: {}
+  comfy-watcher-state: {}
+  llama-results: {}
+  # Wger fitness tracker volumes
+  wger-db: {}
+  wger-static: {}
+  wger-media: {}
+  wger-prometheus: {}
+  pmoves-yt-data: {}
+networks:
+  pmoves_data:
+    name: pmoves_data
+    driver: bridge
+    internal: true
+    ipam:
+      driver: default
+      config:
+      - subnet: 172.30.4.0/24
+        gateway: 172.30.4.1
+  pmoves_api:
+    name: pmoves_api
+    driver: bridge
+    internal: true
+    ipam:
+      driver: default
+      config:
+      - subnet: 172.30.1.0/24
+        gateway: 172.30.1.1
+  pmoves_app:
+    name: pmoves_app
+    driver: bridge
+    internal: true
+    ipam:
+      driver: default
+      config:
+      - subnet: 172.30.2.0/24
+        gateway: 172.30.2.1
+  pmoves_bus:
+    name: pmoves_bus
+    driver: bridge
+    internal: true
+    ipam:
+      driver: default
+      config:
+      - subnet: 172.30.3.0/24
+        gateway: 172.30.3.1
+  pmoves_monitoring:
+    name: pmoves_monitoring
+    driver: bridge
+    internal: true
+    ipam:
+      driver: default
+      config:
+      - subnet: 172.30.5.0/24
+        gateway: 172.30.5.1
+  # NOTE: supabase_net no longer needed - Supabase services now use internal pmoves_data/pmoves_api networks
+  # pmoves and cataclysm kept for external service compatibility
+  pmoves:
+    external: true
+    name: pmoves-net
+  cataclysm:
+    external: true
+    name: cataclysm-net
+  # External network for services requiring internet access (YouTube API, LLM providers, etc.)
+  pmoves_external:
+    name: pmoves_external
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+      - subnet: 172.30.6.0/24
+        gateway: 172.30.6.1
