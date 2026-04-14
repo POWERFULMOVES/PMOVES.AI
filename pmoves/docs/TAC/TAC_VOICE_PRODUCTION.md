@@ -72,8 +72,8 @@ Agent Zero Task (meta.voice_mode=true)
 - Agent Zero → voice-relay: ✅ Shipped
 - voice-relay → voice.agent.response.v1: ✅ Shipped
 - Publisher-Discord audio attachment: ✅ Wired (base64 → .wav attachment)
-- **Voice → PMOVES.YT**: ❌ NOT WIRED — no voice consumer in YT publisher
-- **Skill pairings**: ❌ No voice-synthesis pairing in `skill-pairings.yaml`
+- **Voice → PMOVES.YT**: 📋 INTENTIONAL — voice chain bypasses YT by design. See `pmoves/docs/architecture/voice-chain-end-to-end.md` (Session 12 Lane 4 decision: voice-relay targets host consumers + Discord, not media-ingestion services).
+- **Skill pairings**: ✅ `voice-synthesis` pairing wired in `pmoves/configs/skill-pairings.yaml:158-205` (text-generate → prosodic-analyze → tts-synthesize → cast-to-device)
 
 ## Phase 4: Known Bugs
 
@@ -86,13 +86,20 @@ Agent Zero Task (meta.voice_mode=true)
 ❌ CPU fallback also failed: Padding_idx must be within num_embeddings
 ```
 
-**Root cause:** Vocab/embedding mismatch in the Higgs integration inside Ultimate-TTS-Studio-SUP3R-Edition. The model checkpoint's embedding matrix was saved with a smaller vocab size than what the tokenizer currently exposes, OR a special token (like `<pad>`) was added without calling `model.resize_token_embeddings()`.
+**Root cause (Session 12 research):** The HuggingFace repo `bosonai/higgs-audio-v2-generation-3B-base` was **republished on 2026-04-04** in a new single-file `AutoModelForTextToWaveform` format (flat config, `model_type: "higgs_audio_v2"`, no nested `text_config`). The vendored `higgs_audio/` subtree inside `SUP3RMASS1VE/Ultimate-TTS-Studio-SUP3R-Edition` has not been updated to match. When the new flat config hits the legacy composition loader, `configuration_higgs_audio.py:168-169` falls through to an empty `CONFIG_MAPPING["llama"]()` default (vocab_size=32000) while still using `pad_token_id=128001` from the top-level config. Then `modeling_higgs_audio.py:900` instantiates `nn.Embedding(32000, 4096, padding_idx=128001)` → PyTorch raises `ValueError` in `torch/nn/modules/sparse.py`.
 
-**Fix location:** Ultimate-TTS-Studio-SUP3R-Edition upstream repo (NOT PMOVES). Likely in `app/handlers/higgs_handler.py` or similar.
+**Not** a `resize_token_embeddings()` oversight — vendored code was correct against the *previous* checkpoint version. Hardware-agnostic (CPU fallback fails identically).
 
-**Workaround:** Skip Higgs. VoxCPM, F5-TTS, and Fish S2 cover its use cases.
+**Related upstream issue:** [`boson-ai/higgs-audio#176`](https://github.com/boson-ai/higgs-audio/issues/176) — same root cause, manifests one step earlier at `HiggsAudioTokenizer.__init__`.
 
-**Upstream action:** File issue at `SUP3RMASS1VE/Ultimate-TTS-Studio-SUP3R-Edition` with the reproduction steps.
+**Fix options (any one unblocks Higgs):**
+- **A:** Pin to pre-2026-04-04 checkpoint revision in `app/higgs_audio_handler.py:436-442` (add `revision=<sha>` to `snapshot_download`). Fastest.
+- **B:** Upgrade to `AutoModelForTextToWaveform` loader (requires `transformers>=5.3.0.dev0` + adapter).
+- **C:** Sync vendored subtree from latest `boson-ai/higgs-audio` (gated on upstream fix for #176).
+
+**Workaround:** Skip Higgs. VoxCPM, F5-TTS, and Fish S2 Pro cover its use cases.
+
+**Full RCA + filing-ready issue body:** `pmoves/docs/issues/higgs-upstream-embedding-bug.md` + `higgs-upstream-embedding-bug-draft.md`. No existing issue in the SUP3R repo references `Padding_idx` — the draft is ready to file as a new issue at `SUP3RMASS1VE/Ultimate-TTS-Studio-SUP3R-Edition`.
 
 ### VibeVoice: Separate endpoint (not unified)
 
@@ -121,13 +128,13 @@ PMOVES has ZERO formal skills for pterm, gepeto, or pinokio management despite h
 - [x] Expressive intents sweep 4/4 (narrate, dramatic, multilingual, agent)
 - [x] Prosodic synthesis with CHIT CGP events
 - [x] Voicebox API surface mapped (22 TTS endpoints)
-- [ ] **VibeVoice separate endpoint test** (`/handle_vibevoice_generation`)
-- [ ] **Voicebox provider integration** into Flute-Gateway (`VoiceboxProvider` class)
-- [ ] **Creator pipeline test**: synthesize → Discord webhook with .wav attachment
-- [ ] **Pterm/pinokio skill stubs** in `.claude/commands/pinokio/`
-- [ ] **Voice-synthesis skill pairing** in `pmoves/configs/skill-pairings.yaml`
-- [ ] **PMOVES.YT voice integration** (stretch goal — new consumer)
-- [ ] **Higgs upstream issue filed** (housekeeping)
+- [ ] **VibeVoice separate endpoint test** (`/handle_vibevoice_generation`) — Session 12 Lane 3 ships WebSocket harness
+- [x] **Voicebox provider integration** into Flute-Gateway (`VoiceboxProvider` class) — Session 12 Lane 1
+- [x] **Creator pipeline test**: synthesize → Discord webhook with .wav attachment — Session 11 (`voice_to_discord_test.py --synthetic`)
+- [x] **Pterm/pinokio skill stubs** in `.claude/commands/pinokio/` — Session 11 (5 commands shipped)
+- [x] **Voice-synthesis skill pairing** in `pmoves/configs/skill-pairings.yaml` — already wired at lines 158-205 (Phase 3 claim was stale)
+- [x] **PMOVES.YT voice integration** — Session 12 Lane 4: documented as intentional non-wiring in `pmoves/docs/architecture/voice-chain-end-to-end.md`
+- [ ] **Higgs upstream issue filed** at `SUP3RMASS1VE/Ultimate-TTS-Studio-SUP3R-Edition` — root cause isolated, filing-ready body at `pmoves/docs/issues/higgs-upstream-embedding-bug-draft.md` (Session 12 research). Related: `boson-ai/higgs-audio#176` (same root cause, one step earlier in the stack). Filing itself is a user action — just copy-paste the draft into a new GitHub issue.
 
 ## Phase 7: NATS Subjects Catalog (Voice Lane)
 
