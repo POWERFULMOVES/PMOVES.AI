@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import sys
@@ -7,7 +8,7 @@ import uuid
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-import requests
+import httpx
 import yaml
 
 # Bootstrap import paths using shared module
@@ -62,18 +63,24 @@ def load_form(name: str) -> Dict[str, Any]:
     return yaml.safe_load(p.read_text(encoding="utf-8"))
 
 
-def geometry_publish_cgp(cgp: Dict[str, Any]) -> Dict[str, Any]:
-    r = requests.post(f"{GATEWAY_URL}/geometry/event", json={"type": CGP_SPEC_VERSION, "data": cgp}, timeout=20)
-    r.raise_for_status()
-    return r.json()
+async def geometry_publish_cgp(cgp: Dict[str, Any]) -> Dict[str, Any]:
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        r = await client.post(
+            f"{GATEWAY_URL}/geometry/event",
+            json={"type": CGP_SPEC_VERSION, "data": cgp},
+        )
+        r.raise_for_status()
+        return r.json()
 
 
-def geometry_jump(point_id: str) -> Dict[str, Any]:
-    r = requests.get(f"{GATEWAY_URL}/shape/point/{point_id}/jump", timeout=10)
-    r.raise_for_status(); return r.json()
+async def geometry_jump(point_id: str) -> Dict[str, Any]:
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        r = await client.get(f"{GATEWAY_URL}/shape/point/{point_id}/jump")
+        r.raise_for_status()
+        return r.json()
 
 
-def geometry_decode_text(
+async def geometry_decode_text(
     mode: str, constellation_id: str, k: int = 5, shape_id: Optional[str] = None
 ) -> Dict[str, Any]:
     body: Dict[str, Any] = {
@@ -85,34 +92,46 @@ def geometry_decode_text(
     }
     if shape_id:
         body["shape_id"] = shape_id
-    r = requests.post(f"{GATEWAY_URL}/geometry/decode/text", json=body, timeout=60)
-    r.raise_for_status(); return r.json()
+    async with httpx.AsyncClient(timeout=60.0) as client:
+        r = await client.post(f"{GATEWAY_URL}/geometry/decode/text", json=body)
+        r.raise_for_status()
+        return r.json()
 
 
-def geometry_calibration_report(data: Dict[str, Any]) -> Dict[str, Any]:
-    r = requests.post(f"{GATEWAY_URL}/geometry/calibration/report", json={"cgp": data}, timeout=20)
-    r.raise_for_status(); return r.json()
+async def geometry_calibration_report(data: Dict[str, Any]) -> Dict[str, Any]:
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        r = await client.post(
+            f"{GATEWAY_URL}/geometry/calibration/report", json={"cgp": data}
+        )
+        r.raise_for_status()
+        return r.json()
 
 
-def ingest_youtube(url: str) -> Dict[str, Any]:
+async def ingest_youtube(url: str) -> Dict[str, Any]:
     yt = os.environ.get("YT_URL", "http://localhost:8077")
-    r = requests.post(f"{yt}/yt/ingest", json={"url": url}, timeout=120)
-    r.raise_for_status(); return r.json()
+    async with httpx.AsyncClient(timeout=120.0) as client:
+        r = await client.post(f"{yt}/yt/ingest", json={"url": url})
+        r.raise_for_status()
+        return r.json()
 
 
-def media_transcript(video_id: str) -> Dict[str, Any]:
+async def media_transcript(video_id: str) -> Dict[str, Any]:
     yt = os.environ.get("YT_URL", "http://localhost:8077")
-    r = requests.post(f"{yt}/yt/transcript", json={"video_id": video_id}, timeout=600)
-    r.raise_for_status(); return r.json()
+    async with httpx.AsyncClient(timeout=600.0) as client:
+        r = await client.post(f"{yt}/yt/transcript", json={"video_id": video_id})
+        r.raise_for_status()
+        return r.json()
 
 
-def comfy_render(flow_id: str, inputs: Dict[str, Any]) -> Dict[str, Any]:
+async def comfy_render(flow_id: str, inputs: Dict[str, Any]) -> Dict[str, Any]:
     rw = os.environ.get("RENDER_WEBHOOK_URL", "http://localhost:8085")
-    # Minimal placeholder: forward to render-webhook if such endpoint exists in your service
-    r = requests.post(f"{rw}/comfy/render", json={"flow_id": flow_id, "inputs": inputs}, timeout=120)
-    if r.status_code >= 400:
-        return {"ok": False, "status": r.status_code, "detail": r.text[:300]}
-    return r.json()
+    async with httpx.AsyncClient(timeout=120.0) as client:
+        r = await client.post(
+            f"{rw}/comfy/render", json={"flow_id": flow_id, "inputs": inputs}
+        )
+        if r.status_code >= 400:
+            return {"ok": False, "status": r.status_code, "detail": r.text[:300]}
+        return r.json()
 
 
 def _ensure_notebook_credentials() -> None:
@@ -139,7 +158,7 @@ def _summarize_note(note: Dict[str, Any]) -> Optional[str]:
     return content[:277].rstrip() + "..."
 
 
-def notebook_search(payload: Dict[str, Any]) -> Dict[str, Any]:
+async def notebook_search(payload: Dict[str, Any]) -> Dict[str, Any]:
     _ensure_notebook_credentials()
 
     query = (payload.get("query") or payload.get("text") or "").strip()
@@ -198,38 +217,38 @@ def notebook_search(payload: Dict[str, Any]) -> Dict[str, Any]:
     data: Optional[Dict[str, Any]] = None
     selected_endpoint: Optional[str] = None
     last_404 = False
-    for endpoint, body in attempts:
-        try:
-            response = requests.post(
-                f"{NOTEBOOK_API_URL.rstrip('/')}{endpoint}",
-                json=body,
-                headers=headers,
-                timeout=20,
-            )
-        except requests.exceptions.RequestException as exc:
-            raise ValueError(f"Open Notebook request failed: {exc}") from None
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        for endpoint, body in attempts:
+            try:
+                response = await client.post(
+                    f"{NOTEBOOK_API_URL.rstrip('/')}{endpoint}",
+                    json=body,
+                    headers=headers,
+                )
+            except httpx.HTTPError as exc:
+                raise ValueError(f"Open Notebook request failed: {exc}") from None
 
-        if response.status_code == 404:
-            last_404 = True
-            continue
-        if response.status_code in (401, 403):
-            raise ValueError(
-                "Open Notebook authentication failed; check OPEN_NOTEBOOK_API_TOKEN / OPEN_NOTEBOOK_PASSWORD alignment."
-            ) from None
-        try:
-            response.raise_for_status()
-        except requests.exceptions.HTTPError:
-            detail = response.text.strip() or f"status {response.status_code}"
-            raise ValueError(f"Open Notebook search failed: {detail}") from None
-        try:
-            parsed = response.json()
-        except ValueError:
-            raise ValueError("Open Notebook returned non-JSON search response") from None
-        if not isinstance(parsed, dict):
-            raise ValueError("Open Notebook search response must be a JSON object") from None
-        data = parsed
-        selected_endpoint = endpoint
-        break
+            if response.status_code == 404:
+                last_404 = True
+                continue
+            if response.status_code in (401, 403):
+                raise ValueError(
+                    "Open Notebook authentication failed; check OPEN_NOTEBOOK_API_TOKEN / OPEN_NOTEBOOK_PASSWORD alignment."
+                ) from None
+            try:
+                response.raise_for_status()
+            except httpx.HTTPStatusError:
+                detail = response.text.strip() or f"status {response.status_code}"
+                raise ValueError(f"Open Notebook search failed: {detail}") from None
+            try:
+                parsed = response.json()
+            except ValueError:
+                raise ValueError("Open Notebook returned non-JSON search response") from None
+            if not isinstance(parsed, dict):
+                raise ValueError("Open Notebook search response must be a JSON object") from None
+            data = parsed
+            selected_endpoint = endpoint
+            break
 
     if data is None:
         if last_404:
@@ -298,35 +317,35 @@ def _generate_error_id() -> str:
     return str(uuid.uuid4())[:8]
 
 
-def _e2b_request(
+async def _e2b_request(
     method: str,
     url: str,
     json_body: Dict = None,
     timeout: int = 30
-) -> Optional[requests.Response]:
+) -> Optional[httpx.Response]:
     """
     Make E2B API request with proper error handling.
 
     Returns None on network errors, allowing caller to handle gracefully.
     """
     try:
-        response = requests.request(
-            method,
-            url,
-            json=json_body,
-            headers=_e2b_headers(),
-            timeout=timeout
-        )
-        return response
-    except requests.exceptions.Timeout:
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            response = await client.request(
+                method,
+                url,
+                json=json_body,
+                headers=_e2b_headers(),
+            )
+            return response
+    except httpx.TimeoutException:
         return None
-    except requests.exceptions.ConnectionError:
+    except httpx.ConnectError:
         return None
-    except requests.exceptions.RequestException:
+    except httpx.HTTPError:
         return None
 
 
-def _e2b_json_response(response: requests.Response, error_context: str) -> Dict[str, Any]:
+def _e2b_json_response(response: httpx.Response, error_context: str) -> Dict[str, Any]:
     """
     Safely parse JSON response from E2B API.
 
@@ -377,7 +396,7 @@ def _e2b_json_response(response: requests.Response, error_context: str) -> Dict[
     return result
 
 
-def e2b_sandbox_create(payload: Dict[str, Any]) -> Dict[str, Any]:
+async def e2b_sandbox_create(payload: Dict[str, Any]) -> Dict[str, Any]:
     """Create a new E2B sandbox for code execution."""
     duration = int(payload.get("duration", 3600))
     memory_mb = int(payload.get("memory_mb", 2048))
@@ -389,7 +408,7 @@ def e2b_sandbox_create(payload: Dict[str, Any]) -> Dict[str, Any]:
         "cpu_limit": cpu_limit
     }
 
-    response = _e2b_request(
+    response = await _e2b_request(
         "POST",
         f"{E2B_MCP_SERVER_URL}/sandbox/create",
         request_body,
@@ -402,7 +421,7 @@ def e2b_sandbox_create(payload: Dict[str, Any]) -> Dict[str, Any]:
     return _e2b_json_response(response, "sandbox_create")
 
 
-def e2b_sandbox_execute(payload: Dict[str, Any]) -> Dict[str, Any]:
+async def e2b_sandbox_execute(payload: Dict[str, Any]) -> Dict[str, Any]:
     """Execute code in an existing E2B sandbox."""
     sandbox_id = payload.get("sandbox_id")
     if not sandbox_id:
@@ -420,7 +439,7 @@ def e2b_sandbox_execute(payload: Dict[str, Any]) -> Dict[str, Any]:
         "code": code
     }
 
-    response = _e2b_request(
+    response = await _e2b_request(
         "POST",
         f"{E2B_MCP_SERVER_URL}/sandbox/execute",
         request_body,
@@ -433,13 +452,13 @@ def e2b_sandbox_execute(payload: Dict[str, Any]) -> Dict[str, Any]:
     return _e2b_json_response(response, "sandbox_execute")
 
 
-def e2b_sandbox_terminate(payload: Dict[str, Any]) -> Dict[str, Any]:
+async def e2b_sandbox_terminate(payload: Dict[str, Any]) -> Dict[str, Any]:
     """Terminate an existing E2B sandbox."""
     sandbox_id = payload.get("sandbox_id")
     if not sandbox_id:
         raise ValueError("'sandbox_id' is required")
 
-    response = _e2b_request(
+    response = await _e2b_request(
         "DELETE",
         f"{E2B_MCP_SERVER_URL}/sandbox/{sandbox_id}",
         timeout=10
@@ -451,7 +470,7 @@ def e2b_sandbox_terminate(payload: Dict[str, Any]) -> Dict[str, Any]:
     return _e2b_json_response(response, "sandbox_terminate")
 
 
-def e2b_desktop_create(payload: Dict[str, Any]) -> Dict[str, Any]:
+async def e2b_desktop_create(payload: Dict[str, Any]) -> Dict[str, Any]:
     """Create a new E2B desktop sandbox with GUI access."""
     duration = int(payload.get("duration", 3600))
     memory_mb = int(payload.get("memory_mb", 2048))
@@ -463,7 +482,7 @@ def e2b_desktop_create(payload: Dict[str, Any]) -> Dict[str, Any]:
         "resolution": resolution
     }
 
-    response = _e2b_request(
+    response = await _e2b_request(
         "POST",
         f"{E2B_MCP_SERVER_URL}/desktop/create",
         request_body,
@@ -482,7 +501,7 @@ def e2b_desktop_create(payload: Dict[str, Any]) -> Dict[str, Any]:
     return result
 
 
-def e2b_spell_execute(payload: Dict[str, Any]) -> Dict[str, Any]:
+async def e2b_spell_execute(payload: Dict[str, Any]) -> Dict[str, Any]:
     """Execute an E2B spell (predefined code pattern)."""
     spell_name = payload.get("spell_name")
     if not spell_name:
@@ -497,7 +516,7 @@ def e2b_spell_execute(payload: Dict[str, Any]) -> Dict[str, Any]:
         "timeout": timeout
     }
 
-    response = _e2b_request(
+    response = await _e2b_request(
         "POST",
         f"{E2B_MCP_SERVER_URL}/spell/execute",
         request_body,
@@ -510,7 +529,7 @@ def e2b_spell_execute(payload: Dict[str, Any]) -> Dict[str, Any]:
     return _e2b_json_response(response, "spell_execute")
 
 
-def e2b_surf_scrape(payload: Dict[str, Any]) -> Dict[str, Any]:
+async def e2b_surf_scrape(payload: Dict[str, Any]) -> Dict[str, Any]:
     """Scrape/web surf a URL and extract content."""
     url = payload.get("url")
     if not url:
@@ -527,7 +546,7 @@ def e2b_surf_scrape(payload: Dict[str, Any]) -> Dict[str, Any]:
         "follow_links": follow_links
     }
 
-    response = _e2b_request(
+    response = await _e2b_request(
         "POST",
         f"{E2B_MCP_SERVER_URL}/surf/scrape",
         request_body,
@@ -561,19 +580,19 @@ COMMAND_REGISTRY: Dict[str, str] = {
 }
 
 
-def execute_command(cmd: Optional[str], payload: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+async def execute_command(cmd: Optional[str], payload: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """Execute an MCP command using the local runtime helpers."""
 
     payload = payload or {}
     if not cmd:
         raise ValueError("'cmd' is required")
     if cmd == "geometry.publish_cgp":
-        return geometry_publish_cgp(payload.get("cgp") or {})
+        return await geometry_publish_cgp(payload.get("cgp") or {})
     if cmd == "geometry.jump":
         point_id = payload.get("point_id")
         if not point_id:
             raise ValueError("'point_id' is required")
-        return geometry_jump(point_id)
+        return await geometry_jump(point_id)
     if cmd == "geometry.decode_text":
         mode = payload.get("mode", "geometry")
         constellation_id = payload.get("constellation_id")
@@ -581,27 +600,27 @@ def execute_command(cmd: Optional[str], payload: Optional[Dict[str, Any]] = None
             raise ValueError("'constellation_id' is required")
         k = int(payload.get("k", 5))
         shape_id = payload.get("shape_id")
-        return geometry_decode_text(mode, constellation_id, k, shape_id=shape_id)
+        return await geometry_decode_text(mode, constellation_id, k, shape_id=shape_id)
     if cmd == "geometry.calibration.report":
-        return geometry_calibration_report(payload.get("cgp") or payload.get("data") or {})
+        return await geometry_calibration_report(payload.get("cgp") or payload.get("data") or {})
     if cmd == "ingest.youtube":
         url = payload.get("url")
         if not url:
             raise ValueError("'url' is required")
-        return ingest_youtube(url)
+        return await ingest_youtube(url)
     if cmd == "media.transcribe":
         video_id = payload.get("video_id")
         if not video_id:
             raise ValueError("'video_id' is required")
-        return media_transcript(video_id)
+        return await media_transcript(video_id)
     if cmd == "comfy.render":
         flow_id = payload.get("flow_id")
         if not flow_id:
             raise ValueError("'flow_id' is required")
         inputs = payload.get("inputs") or {}
-        return comfy_render(flow_id, inputs)
+        return await comfy_render(flow_id, inputs)
     if cmd == "notebook.search":
-        return notebook_search(payload)
+        return await notebook_search(payload)
     if cmd == "form.get":
         current_form = payload.get("name", FORM_NAME)
         return {"form": load_form(current_form)}
@@ -611,17 +630,17 @@ def execute_command(cmd: Optional[str], payload: Optional[Dict[str, Any]] = None
         return {"ok": True, "form": new_form}
     # E2B Agentic Computer Use Commands
     if cmd == "e2b.sandbox.create":
-        return e2b_sandbox_create(payload)
+        return await e2b_sandbox_create(payload)
     if cmd == "e2b.sandbox.execute":
-        return e2b_sandbox_execute(payload)
+        return await e2b_sandbox_execute(payload)
     if cmd == "e2b.sandbox.terminate":
-        return e2b_sandbox_terminate(payload)
+        return await e2b_sandbox_terminate(payload)
     if cmd == "e2b.desktop.create":
-        return e2b_desktop_create(payload)
+        return await e2b_desktop_create(payload)
     if cmd == "e2b.spell.execute":
-        return e2b_spell_execute(payload)
+        return await e2b_spell_execute(payload)
     if cmd == "e2b.surf.scrape":
-        return e2b_surf_scrape(payload)
+        return await e2b_surf_scrape(payload)
     raise ValueError(f"Unknown E2B command: {cmd}")
 
 
@@ -638,6 +657,7 @@ def main():
     # Lightweight MCP-like shim over stdio: accepts line-delimited JSON commands
     form = load_form(FORM_NAME)
     _stdout({"event": "ready", "form": form.get("name")})
+    loop = asyncio.new_event_loop()
     for line in sys.stdin:
         line = line.strip()
         if not line:
@@ -648,9 +668,11 @@ def main():
             _stdout({"error": "invalid_json"}); continue
         cmd = req.get("cmd")
         try:
-            _stdout(execute_command(cmd, req))
+            result = loop.run_until_complete(execute_command(cmd, req))
+            _stdout(result)
         except Exception as e:
             _stdout({"error": str(e)})
+    loop.close()
 
 
 if __name__ == "__main__":

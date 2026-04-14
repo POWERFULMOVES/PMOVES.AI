@@ -2,6 +2,7 @@
 fastapi
 uvicorn
 pydantic
+httpx
 nats-py
 jsonschema
 PyYAML
