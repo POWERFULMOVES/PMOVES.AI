@@ -26,7 +26,7 @@ Flute-Gateway :8055              tokenism.geometry.event.v1  →   tokenism simu
   ├─ WhisperProvider                      ▼ filter+transform
   ├─ CloningProvider             voice.agent.response.v1     →   voice_follow_agent (host TTS)
   └─ Pipecat processors                                           voice_follow_cast_agent (Google Cast)
-     (flute-gateway/pipecat/)                                     publisher-discord (Discord webhooks)
+     (flute-gateway/pipecat/)
 
                                  voice.training.request.v1   →   training worker (planned)
 ```
@@ -81,7 +81,7 @@ duplicate the HTTP API without adding value.
 |---------|----------|----------|--------|-------|
 | `tokenism.geometry.event.v1` | flute-gateway (CHIT attribution) | tokenism simulator, hi-rag indexer | `{namespace, modality, provider, text_length, audio_duration_seconds, voice, ts}` | Best-effort publish; failures tracked via `flute_chit_events_failed_total` Prometheus counter |
 | `agentzero.task.result.v1` | agent-zero | voice-relay | Agent Zero task completion envelope | Configurable via `VOICE_RELAY_INPUT_SUBJECT` |
-| `voice.agent.response.v1` | voice-relay | voice_follow_agent, voice_follow_cast_agent, publisher-discord | See `pmoves/contracts/schemas/voice/agent.response.v1.schema.json` | Configurable via `VOICE_RELAY_OUTPUT_SUBJECT` |
+| `voice.agent.response.v1` | voice-relay | voice_follow_agent, voice_follow_cast_agent | See `pmoves/contracts/schemas/voice/agent.response.v1.schema.json` | Configurable via `VOICE_RELAY_OUTPUT_SUBJECT` |
 | `voice.training.request.v1` | flute-gateway (cloning) | training worker (planned) | Voice cloning training trigger | Listed in cgp_sub_probe.py for forward compatibility |
 | `geometry.cgp.v1`, `geometry.>`, `tokenism.>` | various CHIT-aware services | CGP consumers | CGP packet format | Wildcard subjects covered by `cgp_sub_probe.py` |
 
@@ -104,7 +104,7 @@ republishes.** Source at `pmoves/services/voice-relay/main.py`, port 8121.
 |----------|------------|--------|--------|
 | `voice_follow_agent` | `voice.agent.response.v1` | Host TTS speaker (via `voice-speaker` daemon on `:8120`) | host-side daemon, started by `make -C pmoves voice-follow-start` |
 | `voice_follow_cast_agent` | `voice.agent.response.v1` | Google Cast device | host-side daemon |
-| `publisher-discord` | `voice.agent.response.v1` (and other `ingest.*` subjects) | Discord webhook with `.wav` attachment | `pmoves/services/publisher-discord/` |
+| `publisher-discord` | `ingest.file.added.v1`, `ingest.transcript.ready.v1`, `ingest.summary.ready.v1`, `ingest.chapters.ready.v1`, `content.published.v1`, `tokenism.*` | Discord webhook notifications (file delivery via `POST /publish` API) | `pmoves/services/publisher-discord/` |
 | `voice-speaker` | HTTP `:8120` | Local audio playback | host-side daemon, started by `make -C pmoves voice-speaker-start` |
 
 The consumer set is intentionally **host-side and Discord-side**. There is no
@@ -183,22 +183,27 @@ gap. The plan that produced this document explicitly defers this work.
 
 ## End-to-End Test
 
-Session 12 Lane 3 ships two verification tools:
+Session 12 Lane 3 ships the following verification tools:
 
-1. **`pmoves/tools/voice_chain_e2e_test.py`** — publishes a synthetic
-   `agentzero.task.result.v1` and waits for the relay to republish on
-   `voice.agent.response.v1`. Validates the payload transformation and reports
-   publish→republish latency.
+1. **`pmoves/tools/voice_to_discord_test.py`** — end-to-end test for the
+   voice→Discord delivery path. Supports `--synthetic` (bus-only, no
+   synthesis) and `--live` (full chain through Flute-Gateway).
 
-2. **`pmoves/services/flute-gateway/tests/test_vibevoice_realtime.py`** —
-   functional WebSocket harness against a live VibeVoice realtime server.
-   Skipped in the default hermetic suite (`@pytest.mark.functional`).
+2. **`pmoves/tools/cgp_sub_probe.py`** — subscribes to CGP/geometry NATS
+   subjects and reports attribution events arriving on the bus.
 
-Run the bus-only verification (no synthesis required):
+3. **`pmoves/services/flute-gateway/tests/test_gateway.py`** — hermetic unit
+   tests for the Flute-Gateway, including VibeVoice provider initialization,
+   synthesis calls, health checks, and persona management.
 
-```bash
-python pmoves/tools/voice_chain_e2e_test.py
-```
+4. **`pmoves/tools/voice_chain_e2e_test.py`** (planned) — will publish a
+   synthetic `agentzero.task.result.v1` and wait for the relay to republish on
+   `voice.agent.response.v1`, validating payload transformation and
+   publish-to-republish latency. Not yet implemented.
+
+5. **`pmoves/services/flute-gateway/tests/test_vibevoice_realtime.py`**
+   (planned) — functional WebSocket harness against a live VibeVoice realtime
+   server. Not yet implemented.
 
 Run the full producer→bus→consumer chain manually:
 
@@ -208,8 +213,8 @@ make -C pmoves up-flute-gateway
 make -C pmoves up-vibevoice
 # voice-relay should be up via its profile (`make -C pmoves up-voice-relay` if available)
 
-# 2. Verify the bus chain
-python pmoves/tools/voice_chain_e2e_test.py
+# 2. Verify the bus chain (planned — voice_chain_e2e_test.py not yet implemented)
+# python pmoves/tools/voice_chain_e2e_test.py
 
 # 3. Verify a producer end-to-end through Discord
 python pmoves/tools/voice_to_discord_test.py --synthetic   # bus + Discord, no synthesis
