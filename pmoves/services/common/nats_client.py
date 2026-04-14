@@ -5,6 +5,9 @@ defaults for reconnection, timeout, and error handling.
 
 Consolidates the NATS boilerplate repeated across 30+ services.
 
+Includes optional OpenTelemetry trace context propagation for
+distributed tracing across NATS message boundaries.
+
 Usage::
 
     from services.common.nats_client import create_nats_connection
@@ -21,7 +24,7 @@ Or via the context manager::
 
 from __future__ import annotations
 
-import asyncio
+import json
 import logging
 import os
 from contextlib import asynccontextmanager
@@ -143,6 +146,110 @@ async def nats_connection(
                 pass
 
 
+
+
+# -----------------------------------------------------------------------
+# Trace-propagating publish / subscribe helpers
+# -----------------------------------------------------------------------
+
+# Graceful import — tracing is opt-in
+try:
+    from opentelemetry.trace import SpanKind
+    from services.common.tracing import (
+        inject_trace_headers,
+        extract_trace_headers,
+        trace_nats_message,
+        get_tracer,
+    )
+    _trace_available = True
+except (ImportError, Exception):
+    _trace_available = False
+
+
+async def traced_publish(
+    nc: Any,
+    subject: str,
+    payload: bytes,
+    headers: dict[str, str] | None = None,
+) -> None:
+    """Publish a NATS message with trace context propagation.
+
+    Injects the current W3C ``traceparent`` header into the NATS message
+    headers so downstream consumers can link their spans to the producer.
+
+    Falls back to a plain ``nc.publish()`` when tracing is not available.
+
+    Args:
+        nc: A connected NATS client.
+        subject: NATS subject to publish to.
+        payload: Message body as bytes.
+        headers: Optional existing headers (trace context will be merged in).
+    """
+    hdrs = dict(headers) if headers else {}
+
+    if _trace_available:
+        try:
+            hdrs = inject_trace_headers(hdrs)
+        except Exception as exc:
+            logger.debug("Failed to inject trace headers: %s", exc)
+
+    await nc.publish(subject, payload, headers=hdrs or None)
+
+
+def make_traced_callback(
+    service_name: str,
+    subject: str,
+    handler: Callable,
+) -> Callable:
+    """Wrap a NATS subscription callback with trace context extraction.
+
+    When a message arrives, the wrapper extracts ``traceparent`` from the
+    message headers, creates a child span, and calls *handler* inside that
+    span context.  The handler receives the original NATS message.
+
+    Falls back to calling *handler* directly when tracing is not available.
+
+    Usage::
+
+        async def on_message(msg):
+            ...
+
+        await nc.subscribe(
+            "compute.nodes.heartbeat",
+            cb=make_traced_callback("my-service", "compute.nodes.heartbeat", on_message),
+        )
+    """
+    if not _trace_available:
+        return handler
+
+    async def _wrapped(msg: Any) -> None:
+        # NATS headers are a dict-like; coerce to plain dict for propagator.
+        msg_headers: dict[str, str] = {}
+        if hasattr(msg, "headers") and msg.headers:
+            msg_headers = dict(msg.headers)
+
+        ctx = extract_trace_headers(msg_headers)
+        tracer = get_tracer(service_name)
+
+        with tracer.start_as_current_span(
+            f"nats.receive {subject}",
+            context=ctx,
+            kind=SpanKind.CONSUMER if _trace_available else None,
+            attributes={
+                "messaging.system": "nats",
+                "messaging.destination": subject,
+                "messaging.operation": "receive",
+            },
+        ) as span:
+            if span is not None:
+                if ctx is not None:
+                    span.set_attribute("messaging.trace_propagated", True)
+                if hasattr(msg, "data") and msg.data is not None:
+                    span.set_attribute("message.size", len(msg.data))
+            await handler(msg)
+
+    return _wrapped
+
 # -----------------------------------------------------------------------
 # Callback helpers
 # -----------------------------------------------------------------------
@@ -184,5 +291,7 @@ __all__ = [
     "make_logging_error_cb",
     "make_logging_disconnected_cb",
     "make_logging_reconnected_cb",
+    "traced_publish",
+    "make_traced_callback",
     "DEFAULT_NATS_URL",
 ]
