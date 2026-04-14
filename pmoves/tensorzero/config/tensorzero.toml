@@ -365,7 +365,9 @@ routing = ["ollama_local"]
 [models.gemma_4_26b_a4b_local.providers.ollama_local]
 type = "openai"
 api_base = "http://pmoves-ollama:11434/v1"
-model_name = "gemma4:26b-a4b"
+# Ollama publishes the 26B A4B MoE variant as the default ":26b" tag.
+# Verified via registry.ollama.ai manifest API (":26b-a4b" returns 404).
+model_name = "gemma4:26b"
 api_key_location = "none"
 
 # Gemma 4 31B Dense (SOTA multimodal, 256K ctx, ~18GB Q4)
@@ -399,7 +401,9 @@ routing = ["ollama_spark"]
 [models.gemma_4_26b_a4b_spark.providers.ollama_spark]
 type = "openai"
 api_base = "http://pmoves-dgx-spark:11434/v1"
-model_name = "gemma4:26b-a4b"
+# Ollama publishes the 26B A4B MoE variant as the default ":26b" tag.
+# Verified via registry.ollama.ai manifest API (":26b-a4b" returns 404).
+model_name = "gemma4:26b"
 api_key_location = "none"
 
 # Nemotron Super 49B on DGX Spark (Ollama native, no NIM container required)
