@@ -1,0 +1,59 @@
+# =============================================================================
+# PMOVES.AI - OpenTelemetry Collector Configuration
+# =============================================================================
+# Purpose: Central trace collection and export to Jaeger
+# Recommendation: PMOVES Rec #8 - Distributed Tracing
+#
+# Receivers:
+#   - OTLP gRPC (:4317) and HTTP (:4318) for service instrumentation
+# Processors:
+#   - batch: groups spans into batches for efficient export
+#   - memory_limiter: prevents OOM under load
+# Exporters:
+#   - jaeger: sends traces to Jaeger all-in-one
+#   - prometheus: exposes trace metrics for Grafana
+#   - logging: debug exporter for development
+# =============================================================================
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  batch:
+    send_batch_size: 1024
+    timeout: 5s
+    send_batch_max_size: 2048
+  memory_limiter:
+    check_interval: 5s
+    limit_mib: 400
+    spike_limit_mib: 100
+
+exporters:
+  jaeger:
+    endpoint: jaeger:14250
+    tls:
+      insecure: true
+  prometheus:
+    endpoint: 0.0.0.0:8889
+    namespace: pmoves_otel
+  logging:
+    loglevel: warn
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [jaeger, logging]
+    metrics:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [prometheus, logging]
+  telemetry:
+    logs:
+      level: info
