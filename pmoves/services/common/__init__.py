@@ -93,63 +93,83 @@ except Exception:  # pragma: no cover
     # Graceful fallback if dependencies unavailable
     pass
 
-# New shared infrastructure modules (P4 extraction) — optional imports
-# Wrapped in try/except because CI runners may not have fastapi, nats, etc.
+# New shared infrastructure modules (P4 extraction).
+#
+# Each import is wrapped independently in try/except so that CLI-only virtual
+# environments (e.g., the pmoves tooling venv used by `brand_defaults.py`,
+# `ensure_env_shared.py`, etc.) can `import pmoves.services.common` without
+# needing every service-runtime dependency (fastapi, pydantic-settings,
+# nats-py, structlog, ...). Service runtime containers install the full
+# deps and get the complete surface; CLI tools degrade gracefully by
+# skipping the helpers they don't need. Matches the existing try/except
+# pattern used above for CHIT Geometry imports.
+
 try:
     from .bootstrap import bootstrap_import_paths, ensure_import_paths  # noqa: F401
+    __all__ += ["bootstrap_import_paths", "ensure_import_paths"]
+except ImportError:
+    pass
+
+try:
     from .tensorzero import (  # noqa: F401
         tensorzero_openai_base,
         sync_openai_compat_env,
         check_tensorzero_connectivity,
     )
+    __all__ += [
+        "tensorzero_openai_base",
+        "sync_openai_compat_env",
+        "check_tensorzero_connectivity",
+    ]
+except ImportError:
+    pass
+
+try:
     from .nats_client import (  # noqa: F401
         NatsConnectionConfig,
         create_nats_connection,
         nats_connection,
         DEFAULT_NATS_URL,
     )
+    __all__ += [
+        "NatsConnectionConfig",
+        "create_nats_connection",
+        "nats_connection",
+        "DEFAULT_NATS_URL",
+    ]
+except ImportError:
+    pass
+
+try:
     from .health import (  # noqa: F401
         build_health_payload,
         create_health_endpoint,
         register_health_endpoint,
     )
+    __all__ += [
+        "build_health_payload",
+        "create_health_endpoint",
+        "register_health_endpoint",
+    ]
+except ImportError:
+    pass
+
+try:
     from .config import (  # noqa: F401
         BaseServiceSettings,
         TensorZeroSettings,
         env_bool,
     )
+    __all__ += ["BaseServiceSettings", "TensorZeroSettings", "env_bool"]
+except ImportError:
+    pass
+
+try:
     from .logging import (  # noqa: F401
         configure_structlog,
         get_logger,
         setup_logging,
     )
-
-    __all__ += [
-        # bootstrap
-        "bootstrap_import_paths",
-        "ensure_import_paths",
-        # tensorzero
-        "tensorzero_openai_base",
-        "sync_openai_compat_env",
-        "check_tensorzero_connectivity",
-        # nats_client
-        "NatsConnectionConfig",
-        "create_nats_connection",
-        "nats_connection",
-        "DEFAULT_NATS_URL",
-        # health
-        "build_health_payload",
-        "create_health_endpoint",
-        "register_health_endpoint",
-        # config
-        "BaseServiceSettings",
-        "TensorZeroSettings",
-        "env_bool",
-        # logging
-        "configure_structlog",
-        "get_logger",
-        "setup_logging",
-    ]
-except Exception:  # pragma: no cover
-    # Graceful fallback if service dependencies unavailable (e.g. CI runner)
+    __all__ += ["configure_structlog", "get_logger", "setup_logging"]
+except ImportError:
     pass
