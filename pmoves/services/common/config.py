@@ -24,7 +24,7 @@ try:
 except ImportError:
     from pydantic import BaseSettings  # type: ignore[no-redef]
 
-from services.common.env import get_secret
+from .env import get_secret
 
 
 def env_bool(name: str, default: bool = False) -> bool:
