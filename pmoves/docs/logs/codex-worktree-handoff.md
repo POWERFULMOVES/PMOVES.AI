@@ -34,15 +34,26 @@ data loss.
 file mtime of `Apr 5 05:35` to the second — the same batch operation.
 
 **Recovery command (safe — does not move HEAD):**
+
+> **⚠ USER DECISION REQUIRED — do not auto-execute.**
+> These commands are safe (idempotent, don't move HEAD) but they rewrite
+> thousands of files in three submodules. Run them only after the user
+> has reviewed each submodule's state and explicitly approved.
+
 ```bash
-git -C D:/PMOVES.AI/PMOVES.AI/PMOVES-Deep-Serch checkout HEAD -- .
-git -C D:/PMOVES.AI/PMOVES.AI/PMOVES-Jellyfin checkout HEAD -- .
-git -C D:/PMOVES.AI/PMOVES.AI/PMOVES-tensorzero checkout HEAD -- .
+# Canonical pattern: `.claude/CLAUDE.md` → "Submodule working-tree wipe
+# recovery" section (added via PR #1256). `git restore .` rewrites the
+# working tree from HEAD's tree without moving HEAD itself.
+git -C D:/PMOVES.AI/PMOVES.AI/PMOVES-Deep-Serch restore .
+git -C D:/PMOVES.AI/PMOVES.AI/PMOVES-Jellyfin restore .
+git -C D:/PMOVES.AI/PMOVES.AI/PMOVES-tensorzero restore .
 ```
 
 **Note:** This recovery pattern is documented in PR #1256 as "Insight 1 —
-Submodule working-tree wipe recovery" and the learning is committed to
-`.claude/CLAUDE.md`. The PR is merge-ready at time of writing.
+Submodule working-tree wipe recovery" and the learning lands in
+`.claude/CLAUDE.md` once that PR merges. PR #1256 is CI-green but
+`mergeStateStatus: BLOCKED` pending CodeRabbit actionable resolution
+(tracked in the follow-up plan that stacks on top of this handoff).
 
 **User decision required:** Execute the recovery commands, or leave until a
 separate remediation session. z890-claude did NOT execute these — the locked
@@ -149,10 +160,17 @@ covered all the content.
 
 **Kept — active open PRs:**
 - `D:/PMOVES.AI/pmoves-rec11-13-k8s-tests-async` [feat/rec11-13-k8s-tests-async] → PR #1234 (CI blocked, see Finding 2)
-- `D:/PMOVES.AI/pmoves-substrate-insights` [docs/substrate-session-insights] → PR #1256 (merge-ready)
+- `D:/PMOVES.AI/pmoves-substrate-insights` [docs/substrate-session-insights] → PR #1256 (CI-green, CodeRabbit follow-up pending — see note under Finding 1)
 
 **Kept — needs-review:**
-- `D:/PMOVES.AI/pmoves-services-common-relative-imports` (detached HEAD at `c0b99d99`, same SHA as PR #1255 HEAD owned by `hunnibear`). Do NOT remove — it's tracking a branch that's actively being worked on by another user, just detached from our local branch ref. Investigate the branch-ref drift rather than blindly removing the worktree.
+
+- **⚠ Active work — DO NOT REMOVE:** `D:/PMOVES.AI/pmoves-services-common-relative-imports`
+  - Detached HEAD at `c0b99d99`, same SHA as PR #1255 HEAD owned by `hunnibear`.
+  - This is **actively being worked on by another user** — the worktree is only
+    detached from our local branch ref, not abandoned.
+  - Investigate the branch-ref drift (reattach to `fix/services-common-relative-imports`
+    once confirmed safe) rather than removing the worktree.
+  - Cross-check with hunnibear before any action.
 
 **Kept — codex-owned (handoff to codex):**
 - `C:/Users/DARKXSIDE/.codex/worktrees/data-services-docs` [codex/data-services-provisioning-docs]
@@ -200,11 +218,11 @@ Signed via `make -C pmoves sign-trail` at end of session with summary:
 4. **Review 3 remaining stashes** (`stash@{0}`, `stash@{1}`, `stash@{2}`) for salvageable content before dropping.
 
 ### Medium-priority (ongoing)
-5. **31 unsampled submodules still have potential drift** — of the 34 total submodules, this session sampled 8 and found 3/4 of the working-tree-drift samples were in the Deep-Serch/Jellyfin/tensorzero desync pattern. The remaining 26 submodules are unexamined; a systematic `merge-base --is-ancestor` sweep would classify them all in one pass.
+5. **26 of 34 total submodules remain unexamined** — this session sampled 8 submodules, found 3 in the working-tree-wipe pattern (Deep-Serch, Jellyfin, tensorzero) and 5 benign. The remaining 26 are unexamined; a systematic `merge-base --is-ancestor` sweep would classify them all in one pass.
 6. **Codex worktree cleanup** (3 items — see "Kept — codex-owned" above). Codex should action on next session.
 7. **PR #1234 CI** — code-level async/sync parity fix needed. Not a test-mock fix. Requires investigation by branch owner.
 8. **PR #1255** — actively owned by `hunnibear` + their Claude session, not this z890 session. Leave alone. Our local `services-common-relative-imports` worktree is at detached HEAD on the same SHA as the PR — reconciling that is a separate future task.
-9. **PR #1256** — merge-ready (see Block 3A of session plan). User will drive the admin merge.
+9. **PR #1256** — CI-green; `mergeStateStatus: BLOCKED` pending CodeRabbit actionable resolution. Being addressed in a follow-up plan stacked on this handoff. User will drive the admin merge once CodeRabbit clears.
 
 ---
 
