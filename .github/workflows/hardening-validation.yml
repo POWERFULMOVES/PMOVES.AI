@@ -162,11 +162,11 @@ jobs:
           fi
 
   # ============================================================================
-  # Docker Security Checks (Cross-Platform)
+  # Docker Security Checks
   # ============================================================================
   docker-bench:
     name: Docker Bench Security
-    runs-on: [self-hosted, ai-lab]
+    runs-on: ubuntu-latest
     timeout-minutes: 15
 
     steps:
@@ -178,7 +178,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
 
-      # ---- Cross-platform checks (Linux + Windows) ----
+      # ---- GitHub-hosted Linux runner checks ----
       - name: Check Docker daemon security config
         shell: bash
         run: |
@@ -252,7 +252,7 @@ jobs:
           fi
 
           echo ""
-          echo "=== Cross-Platform Checks Complete ==="
+          echo "=== Docker Security Checks Complete ==="
 
       - name: Validate compose hardening directives
         shell: bash
