@@ -197,7 +197,7 @@ class HierarchicalReasoner:
             "context_spread": round(ctx_spread, 4),
         })
 
-        return {"trace": trace}
+        return {"trace": trace[:self.levels]}
 
     # ------------------------------------------------------------------
     # Heuristic helpers
