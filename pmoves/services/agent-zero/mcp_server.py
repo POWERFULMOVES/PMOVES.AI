@@ -580,8 +580,8 @@ COMMAND_REGISTRY: Dict[str, str] = {
 }
 
 
-async def execute_command(cmd: Optional[str], payload: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-    """Execute an MCP command using the local runtime helpers."""
+async def execute_command_async(cmd: Optional[str], payload: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """Execute an MCP command using the local runtime helpers (async)."""
 
     payload = payload or {}
     if not cmd:
@@ -644,6 +644,16 @@ async def execute_command(cmd: Optional[str], payload: Optional[Dict[str, Any]] 
     raise ValueError(f"Unknown E2B command: {cmd}")
 
 
+def execute_command(cmd: Optional[str], payload: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """Synchronous wrapper for backward compatibility.
+
+    Existing callers that expect a blocking (sync) ``execute_command`` continue
+    to work without any code changes.  Internally this spins up a fresh event
+    loop and delegates to :func:`execute_command_async`.
+    """
+    return asyncio.run(execute_command_async(cmd, payload))
+
+
 def list_commands() -> List[Dict[str, Any]]:
     """Return metadata for exposed MCP commands."""
 
@@ -668,7 +678,7 @@ def main():
             _stdout({"error": "invalid_json"}); continue
         cmd = req.get("cmd")
         try:
-            result = loop.run_until_complete(execute_command(cmd, req))
+            result = loop.run_until_complete(execute_command_async(cmd, req))
             _stdout(result)
         except Exception as e:
             _stdout({"error": str(e)})
