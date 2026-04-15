@@ -175,6 +175,8 @@ _SSRF_PATH_DENYLIST: re.Pattern = re.compile(
     r"|%00",                  # null-byte encoding
     re.IGNORECASE,
 )
+_SSRF_PATH_SEGMENT_RE: re.Pattern = re.compile(r"^[A-Za-z0-9._~-]{1,128}$")
+_SSRF_QUERY_TOKEN_RE: re.Pattern = re.compile(r"^[A-Za-z0-9._~%+-]{0,256}$")
 
 # Maximum URL length to prevent abuse.
 _MAX_IMAGE_URL_LENGTH = 2048
@@ -228,14 +230,39 @@ def _sanitize_fetch_path(parsed_path: str, parsed_query: str) -> str:
 
     This function operates on values that have already passed through
     ``_validate_remote_image_url`` (scheme/host/credential/traversal checks).
-    It constructs a new path string from those validated components rather
-    than forwarding the raw user string, breaking the taint chain for
-    static-analysis tools (e.g. CodeQL SSRF detection).
+    It constrains the request target to host-relative paths with safe
+    segment/query characters so callers cannot smuggle an absolute-form URL
+    or unsafe control characters into the outbound request line.
     """
-    # Re-compose from validated components only; never forward the raw URL.
-    safe_path = parsed_path if parsed_path else "/"
-    if parsed_query:
-        return f"{safe_path}?{parsed_query}"
+    raw_path = parsed_path or "/"
+    if not raw_path.startswith("/") or raw_path.startswith("//"):
+        raise HTTPException(400, "image URL path must stay within the allowlisted host")
+
+    safe_segments = []
+    for segment in raw_path.split("/"):
+        if not segment:
+            continue
+        if not _SSRF_PATH_SEGMENT_RE.fullmatch(segment):
+            raise HTTPException(400, "image URL contains unsafe path segment")
+        safe_segments.append(segment)
+
+    safe_path = "/" + "/".join(safe_segments) if safe_segments else "/"
+    if not parsed_query:
+        return safe_path
+
+    safe_pairs = []
+    for raw_pair in parsed_query.split("&"):
+        if not raw_pair:
+            continue
+        key, has_sep, value = raw_pair.partition("=")
+        if not key or not _SSRF_QUERY_TOKEN_RE.fullmatch(key):
+            raise HTTPException(400, "image URL contains unsafe query parameter")
+        if has_sep and not _SSRF_QUERY_TOKEN_RE.fullmatch(value):
+            raise HTTPException(400, "image URL contains unsafe query parameter")
+        safe_pairs.append(raw_pair if has_sep else key)
+
+    if safe_pairs:
+        return f"{safe_path}?{'&'.join(safe_pairs)}"
     return safe_path
 
 
