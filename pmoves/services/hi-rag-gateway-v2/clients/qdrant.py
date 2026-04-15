@@ -7,6 +7,11 @@ from fastapi import HTTPException
 try:
     from qdrant_client import QdrantClient
     from qdrant_client.http.models import Filter, FieldCondition, MatchValue, Distance, VectorParams, PointStruct
+    try:
+        from qdrant_client.http.exceptions import ResponseHandlingException, UnexpectedResponse
+    except ImportError:
+        ResponseHandlingException = None  # type: ignore
+        UnexpectedResponse = None  # type: ignore
 except ImportError:
     QdrantClient = None  # type: ignore
     Filter = None  # type: ignore
@@ -15,6 +20,8 @@ except ImportError:
     Distance = None  # type: ignore
     VectorParams = None  # type: ignore
     PointStruct = None  # type: ignore
+    ResponseHandlingException = None  # type: ignore
+    UnexpectedResponse = None  # type: ignore
 
 from config import QDRANT_URL, COLL, RECREATE_ON_MISMATCH, logger
 
@@ -133,6 +140,24 @@ def _collection_point_count(collection_name: str) -> int:
         return 0
 
 
+def _is_collection_missing_error(exc: Exception) -> bool:
+    """Return True when the Qdrant client is specifically reporting 404/missing."""
+    status_code = getattr(exc, "status_code", None)
+    if status_code == 404:
+        return True
+
+    qdrant_error_types = tuple(
+        err_type
+        for err_type in (UnexpectedResponse, ResponseHandlingException)
+        if err_type is not None
+    )
+    if qdrant_error_types and isinstance(exc, qdrant_error_types):
+        message = str(exc).lower()
+        return "not found" in message and "collection" in message
+
+    return False
+
+
 def ensure_qdrant_collection(vector_dim: int):
     """Create or resync the Qdrant collection when the embed dimension changes.
 
@@ -148,8 +173,11 @@ def ensure_qdrant_collection(vector_dim: int):
     """
     try:
         info = qdrant.get_collection(COLL)
-    except Exception:
-        info = None
+    except Exception as exc:
+        if _is_collection_missing_error(exc):
+            info = None
+        else:
+            raise
 
     needs_recreate = False
     if info is not None:
@@ -220,4 +248,4 @@ def ensure_qdrant_collection(vector_dim: int):
         raise
     except Exception as e:
         logger.exception("ensure_qdrant_collection failed")
-        raise HTTPException(500, f"Qdrant collection error: {e}")
+        raise HTTPException(500, f"Qdrant collection error: {e}") from e

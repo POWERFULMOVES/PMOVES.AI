@@ -66,7 +66,7 @@ def hirag_query(req: QueryReq = Body(...), request: Request = None, _=Depends(re
         logger.warning("hirag.query hits=%d namespace=%s ip=%s", len(hits), req.namespace, client_ip)
     except Exception as e:
         logger.exception("Qdrant search error")
-        raise HTTPException(503, f"Qdrant search error: {e}")
+        raise HTTPException(503, f"Qdrant search error: {e}") from e
 
     # lexical scores
     meili_scores = meili_lexical(req.query, req.namespace, req.k) if USE_MEILI else {}
@@ -174,7 +174,8 @@ def hirag_upsert_batch(req: UpsertReq = Body(...), _=Depends(require_admin_tails
                 continue
             try:
                 items.append(json.loads(line))
-            except Exception:
+            except Exception as exc:
+                logger.warning("Skipping malformed JSONL row: %s (%s)", line, exc)
                 continue
     else:
         raise HTTPException(400, "Either items or jsonl must be provided")
@@ -219,7 +220,7 @@ def hirag_upsert_batch(req: UpsertReq = Body(...), _=Depends(require_admin_tails
             qdrant.upsert(collection_name=COLL, points=points)
     except Exception as e:
         logger.exception("Qdrant upsert failed")
-        raise HTTPException(503, f"Qdrant upsert error: {e}")
+        raise HTTPException(503, f"Qdrant upsert error: {e}") from e
 
     # Optional lexical indexing (MeiliSearch)
     indexed = 0

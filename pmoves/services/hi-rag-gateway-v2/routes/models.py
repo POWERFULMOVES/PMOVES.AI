@@ -41,9 +41,10 @@ def swap_embedding_model(body: Dict[str, Any], request: Request):
     if not isinstance(model_name, str) or not model_name.strip():
         raise HTTPException(status_code=400, detail="model must be a non-empty string")
 
+    normalized_name = model_name.strip()
     from embeddings import swap_embedding_model as _swap
     try:
-        result = _swap(model_name)
+        result = _swap(normalized_name)
         return result
     except Exception as e:
         raise HTTPException(500, f"Failed to swap embedding model: {e}") from e
@@ -62,9 +63,10 @@ def swap_reranker_model(body: Dict[str, Any], request: Request):
     if not isinstance(model_name, str) or not model_name.strip():
         raise HTTPException(status_code=400, detail="model must be a non-empty string")
 
+    normalized_name = model_name.strip()
     from rerank import swap_reranker_model as _swap
     try:
-        result = _swap(model_name)
+        result = _swap(normalized_name)
         return result
     except Exception as e:
         raise HTTPException(500, f"Failed to swap reranker model: {e}") from e

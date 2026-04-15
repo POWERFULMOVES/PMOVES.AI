@@ -16,9 +16,7 @@ import requests
 from config import (
     ALPHA,
     RERANK_ENABLE,
-    RERANK_MODEL_RESOLVED,
     RERANK_PROVIDER,
-    RERANKER_TYPE,
     DEVICE,
     _RERANK_FP16_EFFECTIVE,
     TENSORZERO_BASE_URL,
@@ -112,7 +110,8 @@ def _get_reranker():
 
         try:
             use_fp16 = _cfg._RERANK_FP16_EFFECTIVE
-            reranker_type = _detect_reranker_type(model_name)
+            configured_model_name = _cfg.RERANK_MODEL or model_name
+            reranker_type = _cfg.RERANKER_TYPE or _detect_reranker_type(configured_model_name)
 
             if reranker_type == "llm":
                 if FlagLLMReranker is None:
@@ -123,7 +122,7 @@ def _get_reranker():
                 _cfg._reranker = FlagLLMReranker(
                     model_name,
                     use_fp16=use_fp16,
-                    devices=[DEVICE] if DEVICE == "cuda" else None,
+                    devices=[f"{DEVICE}:0"] if DEVICE == "cuda" else None,
                 )
             else:
                 if FlagReranker is None:

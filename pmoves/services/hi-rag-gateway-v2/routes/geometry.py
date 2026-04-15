@@ -1,11 +1,11 @@
 """Geometry, mindmap, signaling, and mesh endpoints for hi-rag-gateway-v2."""
 
-import asyncio
 import json
 import math
 import io
 from typing import Any, Dict, List, Optional
 
+import anyio
 from fastapi import APIRouter, Body, HTTPException, Request, Depends, WebSocket, WebSocketDisconnect
 import urllib3
 
@@ -146,8 +146,9 @@ def geometry_event(body: Dict[str, Any], _=Depends(require_tailscale)):
     if CHIT_REQUIRE_SIGNATURE:
         try:
             from tools.chit_security import verify_cgp, decrypt_anchors
-        except Exception:
-            raise HTTPException(500, "security module not available")
+        except Exception as exc:
+            logger.exception("security module import failed")
+            raise HTTPException(500, f"security module not available: {type(exc).__name__}: {exc}") from exc
         if not CHIT_PASSPHRASE:
             raise HTTPException(500, "CHIT_REQUIRE_SIGNATURE=true but CHIT_PASSPHRASE not set")
         if not verify_cgp(payload, CHIT_PASSPHRASE):
@@ -277,7 +278,7 @@ def geometry_decode_text(body: Dict[str, Any], _=Depends(require_tailscale)):
         return review
 
     else:
-        hrm_info = _hrm_controller.status(namespace)
+        hrm_info = _hrm_controller.status(namespace) if _hrm_controller is not None else None
         return {
             "mode": mode,
             "points": top_pts,
@@ -540,7 +541,7 @@ def mesh_handshake(body: Dict[str, Any], _=Depends(require_admin_tailscale)):
             nc = await _nats.connect(servers=[NATS_URL])
             await nc.publish("mesh.shape.handshake.v1", json.dumps(payload).encode())
             await nc.flush(); await nc.drain()
-        asyncio.run(_pub())
+        anyio.from_thread.run(_pub)
         return {"ok": True}
     except Exception as e:
         logger.exception("mesh publish failed")

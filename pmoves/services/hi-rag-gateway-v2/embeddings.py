@@ -101,11 +101,14 @@ def embed_query(text: str) -> List[float]:
     """
     # Try provider chain first
     vec = None
-    try:
-        vec = _embed_via_providers(text)
-    except Exception:
-        logger.exception("Provider embedding failed; will attempt fallback")
-        vec = None
+    if _embed_via_providers is None:
+        logger.debug("No provider embedding available; using local fallback")
+    else:
+        try:
+            vec = _embed_via_providers(text)
+        except Exception:
+            logger.exception("Provider embedding failed; will attempt fallback")
+            vec = None
 
     vec = _coerce_vector(vec)
     if vec:
@@ -227,8 +230,8 @@ def swap_embedding_model(model_name: str) -> Dict[str, Any]:
             try:
                 if hasattr(_cfg._embedder, "model") and hasattr(_cfg._embedder.model, "to"):
                     _cfg._embedder.model.to("meta")  # free GPU memory
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("embedder.model.to('meta') failed: %s", exc)
         _cfg._embedder = None
         _cfg._embedding_model_loaded = None
         # Update config atomically: model name and type together
