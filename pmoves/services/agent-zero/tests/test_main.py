@@ -4,8 +4,9 @@ import asyncio
 import importlib.util
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
-from typing import Callable, Dict
+from typing import Any, Callable, Dict
 
+import httpx
 import pytest
 
 pytest.importorskip("fastapi")
@@ -73,6 +74,34 @@ def _prepare_agent_zero(module, monkeypatch):
     return module
 
 
+class _DummyAsyncClient:
+    def __init__(self, captured: dict[str, dict[str, object]], *args: Any, **kwargs: Any) -> None:
+        captured["client"] = {"timeout": kwargs.get("timeout")}
+        self._captured = captured
+
+    async def __aenter__(self) -> "_DummyAsyncClient":
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb) -> None:
+        return None
+
+    async def post(self, url: str, *, json: dict[str, object]) -> "_DummyResponse":
+        self._captured["request"] = {"url": url, "json": json}
+        return _DummyResponse(url)
+
+
+class _DummyResponse:
+    def __init__(self, url: str) -> None:
+        self.status_code = 200
+        self._request = httpx.Request("POST", url)
+
+    def raise_for_status(self) -> None:  # pragma: no cover - simple stub
+        return None
+
+    def json(self) -> dict[str, object]:
+        return {"ok": True}
+
+
 def test_environment_endpoint_reflects_env_overrides(monkeypatch, load_service_module):
     monkeypatch.setenv("PORT", "9090")
     monkeypatch.setenv("NATS_URL", "nats://demo:4222")
@@ -120,11 +149,11 @@ def test_mcp_endpoints_expose_registry(monkeypatch, load_service_module):
 
     executed: dict[str, tuple[str, dict]] = {}
 
-    def fake_execute(cmd, args):
+    async def fake_execute(cmd, args):
         executed["call"] = (cmd, args)
         return {"ok": True, "args": args}
 
-    monkeypatch.setattr(module.mcp_server, "execute_command", fake_execute)
+    monkeypatch.setattr(module.mcp_server, "execute_command_async", fake_execute)
 
     with TestClient(module.app) as client:
         commands_response = client.get("/mcp/commands")
@@ -153,22 +182,10 @@ def test_geometry_decode_text_uses_new_payload(monkeypatch, load_service_module)
 
     captured: dict[str, dict[str, object]] = {}
 
-    class DummyResponse:
-        status_code = 200
+    def fake_async_client(*args: Any, **kwargs: Any) -> _DummyAsyncClient:
+        return _DummyAsyncClient(captured, *args, **kwargs)
 
-        def raise_for_status(self) -> None:  # pragma: no cover - simple stub
-            return None
-
-        def json(self) -> dict[str, object]:
-            return {"ok": True}
-
-    def fake_post(url: str, json: dict[str, object], timeout: int) -> DummyResponse:
-        captured["url"] = url
-        captured["json"] = json
-        captured["timeout"] = timeout
-        return DummyResponse()
-
-    monkeypatch.setattr(module.mcp_server.requests, "post", fake_post)
+    monkeypatch.setattr(module.mcp_server.httpx, "AsyncClient", fake_async_client)
 
     with TestClient(module.app) as client:
         response = client.post(
@@ -188,10 +205,10 @@ def test_geometry_decode_text_uses_new_payload(monkeypatch, load_service_module)
     payload = response.json()
     assert payload["result"]["ok"] is True
 
-    assert captured["url"] == f"{module.mcp_server.GATEWAY_URL}/geometry/decode/text"
-    assert captured["timeout"] == 60
+    assert captured["request"]["url"] == f"{module.mcp_server.GATEWAY_URL}/geometry/decode/text"
+    assert captured["client"]["timeout"] == 60.0
 
-    request_body = captured["json"]
+    request_body = captured["request"]["json"]
     assert request_body["mode"] == "geometry"
     assert request_body["constellation_id"] == "const-123"
     assert request_body["k"] == 3
