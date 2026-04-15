@@ -131,6 +131,10 @@ class HRMSidecar:
             min_steps=self.config.min_ponder_steps,
             max_steps=self.config.max_ponder_steps,
             halt_threshold=self.config.halt_threshold,
+            d_model=self.config.d_model,
+            nhead=self.config.nhead,
+            dim_feedforward=self.config.dim_feedforward,
+            dropout=self.config.dropout,
         )
         self.reasoner = HierarchicalReasoner(
             levels=self.config.reasoning_levels,
@@ -267,7 +271,9 @@ class HRMSidecar:
                     reasoning_result = self.reasoner.reason(state_tensor)
                     reasoning_trace = reasoning_result.get("trace", [])
 
-                    state = state_tensor.squeeze(0).detach().cpu().tolist()
+                    # Use reasoner-refined state, not original state_tensor
+                    refined_state = reasoning_result.get("state", state_tensor)
+                    state = refined_state.squeeze(0).detach().cpu().tolist()
             except Exception:
                 logger.debug("Deep stream inference failed", exc_info=True)
                 ponder_steps = 0
