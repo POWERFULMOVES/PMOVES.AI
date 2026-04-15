@@ -809,8 +809,7 @@ def list_mcp_commands(
 
 
 async def _execute_command(cmd: str, args: Dict[str, Any]) -> Dict[str, Any]:
-    loop = asyncio.get_running_loop()
-    return await loop.run_in_executor(None, mcp_server.execute_command, cmd, args)
+    return await mcp_server.execute_command_async(cmd, args)
 
 
 @app.post("/mcp/execute", response_model=MCPExecuteResponse)
