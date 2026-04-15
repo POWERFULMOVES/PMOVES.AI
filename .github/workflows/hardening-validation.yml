@@ -35,12 +35,12 @@ jobs:
 
     steps:
       - name: Harden Runner
-        uses: step-security/harden-runner@v2
+        uses: step-security/harden-runner@6c3c2f2c1c457b00c10c4848d6f5491db3b629df
         with:
           egress-policy: audit
 
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
 
       - name: Run hardening validation
         id: hardening-check
@@ -62,7 +62,7 @@ jobs:
 
       - name: Upload hardening report
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: hardening-report
           path: hardening-report.md
@@ -106,12 +106,12 @@ jobs:
 
     steps:
       - name: Harden Runner
-        uses: step-security/harden-runner@v2
+        uses: step-security/harden-runner@6c3c2f2c1c457b00c10c4848d6f5491db3b629df
         with:
           egress-policy: audit
 
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
 
       - name: Check USER directive
         run: |
@@ -162,25 +162,23 @@ jobs:
           fi
 
   # ============================================================================
-  # Docker Security Checks (Cross-Platform)
+  # Docker Security Checks
   # ============================================================================
   docker-bench:
     name: Docker Bench Security
-    runs-on: [self-hosted, ai-lab]
+    runs-on: ubuntu-latest
     timeout-minutes: 15
-    env:
-      DOCKER_CONTENT_TRUST: 1
 
     steps:
       - name: Harden Runner
-        uses: step-security/harden-runner@v2
+        uses: step-security/harden-runner@6c3c2f2c1c457b00c10c4848d6f5491db3b629df
         with:
           egress-policy: audit
 
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
 
-      # ---- Cross-platform checks (Linux + Windows) ----
+      # ---- GitHub-hosted Linux runner checks ----
       - name: Check Docker daemon security config
         shell: bash
         run: |
@@ -194,18 +192,25 @@ jobs:
           fi
           echo "✓ Docker daemon reachable"
 
-          # 2. Check content trust (image signing)
-          if docker info --format '{{.SecurityOptions}}' 2>/dev/null | grep -qi "content-trust"; then
-            echo "✓ Content trust enabled"
+          # 2. Check rootless/user namespace isolation posture
+          SECURITY_OPTIONS=$(docker info --format '{{json .SecurityOptions}}' 2>/dev/null || echo '[]')
+          if printf '%s' "$SECURITY_OPTIONS" | grep -qi 'name=rootless'; then
+            echo "✓ Rootless Docker enabled"
+          elif printf '%s' "$SECURITY_OPTIONS" | grep -qi 'name=userns'; then
+            echo "✓ User namespace remap enabled"
           else
-            echo "⚠ Content trust not enabled (set DOCKER_CONTENT_TRUST=1)"
+            echo "ℹ Rootless/userns-remap not detected (runner compatibility decision)"
           fi
 
-          # 3. Check default runtime
+          # 3. Image provenance policy lives in CI and deploy refs, not daemon flags
+          echo "ℹ Image signing is enforced via cosign in the GHCR publish workflow."
+          echo "ℹ Prefer digest-pinned image refs in deployment manifests when practical."
+
+          # 4. Check default runtime
           RUNTIME=$(docker info --format '{{.DefaultRuntime}}' 2>/dev/null || echo "unknown")
           echo "ℹ Default runtime: $RUNTIME"
 
-          # 4. Check live-restore (daemon resilience)
+          # 5. Check live-restore (daemon resilience)
           LIVE_RESTORE=$(docker info --format '{{.LiveRestoreEnabled}}' 2>/dev/null || echo "unknown")
           if [ "$LIVE_RESTORE" = "true" ]; then
             echo "✓ Live restore enabled"
@@ -213,7 +218,7 @@ jobs:
             echo "ℹ Live restore disabled (daemon config — not CI-fixable)"
           fi
 
-          # 5. Check no containers running as privileged
+          # 6. Check no containers running as privileged
           # Exclude BuildKit builders (always privileged by design) and CI runners
           PRIV_CONTAINERS=$(docker ps -q 2>/dev/null | xargs -r docker inspect --format '{{.Name}} {{.HostConfig.Privileged}}' 2>/dev/null | grep "true" | grep -v "buildx_buildkit_\|github-runner" || true)
           if [ -n "$PRIV_CONTAINERS" ]; then
@@ -247,7 +252,7 @@ jobs:
           fi
 
           echo ""
-          echo "=== Cross-Platform Checks Complete ==="
+          echo "=== Docker Security Checks Complete ==="
 
       - name: Validate compose hardening directives
         shell: bash
@@ -331,12 +336,12 @@ jobs:
 
     steps:
       - name: Harden Runner
-        uses: step-security/harden-runner@v2
+        uses: step-security/harden-runner@6c3c2f2c1c457b00c10c4848d6f5491db3b629df
         with:
           egress-policy: audit
 
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
 
       - name: Materialize compose env files from templates
         run: |
@@ -438,7 +443,7 @@ jobs:
           cat summary.md
 
       - name: Upload summary
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: validation-summary
           path: summary.md

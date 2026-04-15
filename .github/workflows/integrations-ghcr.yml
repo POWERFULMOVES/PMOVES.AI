@@ -122,7 +122,7 @@ jobs:
       names: ${{ steps.resolve.outputs.names }}
     steps:
       - name: Checkout (matrix config)
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
 
       - name: Resolve integration matrix
         id: resolve
@@ -157,9 +157,122 @@ jobs:
           print(f"Resolved {len(names)} integration lane(s) (target={target})")
           PY
 
+  build-validate-pr:
+    name: Validate ${{ matrix.name }} (PR)
+    needs: resolve-matrix
+    if: ${{ github.event_name == 'pull_request' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        name: ${{ fromJSON(needs.resolve-matrix.outputs.names) }}
+
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@6c3c2f2c1c457b00c10c4848d6f5491db3b629df
+        with:
+          egress-policy: audit
+
+      - name: Checkout (stub)
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+
+      - name: Load integration config
+        id: cfg
+        run: |
+          set -euo pipefail
+          pybin="$(command -v python3 || command -v python || true)"
+          if [ -z "$pybin" ]; then
+            echo "::error::python3/python is required on runner for matrix config resolution."
+            exit 1
+          fi
+          "$pybin" - <<'PY'
+          import json
+          import os
+          import pathlib
+          import sys
+          import uuid
+
+          name = os.environ["MATRIX_NAME"]
+          matrix_path = pathlib.Path(".github/workflows/integrations-ghcr.matrix.json")
+          entries = json.loads(matrix_path.read_text(encoding="utf-8"))
+          match = next((entry for entry in entries if entry.get("name") == name), None)
+          if not match:
+              print(f"::error::No config found for integration '{name}'", file=sys.stderr)
+              sys.exit(1)
+
+          output = pathlib.Path(os.environ["GITHUB_OUTPUT"])
+          with output.open("a", encoding="utf-8") as fh:
+              for key, value in match.items():
+                  if value is None:
+                      value = ""
+                  if isinstance(value, bool):
+                      fh.write(f"{key}={'true' if value else 'false'}\n")
+                  else:
+                      text = str(value)
+                      if "\n" in text:
+                          delim = f"EOF_{key}_{uuid.uuid4().hex}"
+                          fh.write(f"{key}<<{delim}\n{text}\n{delim}\n")
+                      else:
+                          fh.write(f"{key}={text}\n")
+          PY
+        env:
+          MATRIX_NAME: ${{ matrix.name }}
+
+      - name: Prepare integration source
+        run: |
+          set -euo pipefail
+          cfg_url='${{ steps.cfg.outputs.git_url }}'
+          cfg_ref='${{ steps.cfg.outputs.ref }}'
+          case "$cfg_url" in
+            https://github.com/*) ;;
+            *)
+              echo "::error::Unsupported git_url '$cfg_url' (only https://github.com/* is allowed)."
+              exit 1
+              ;;
+          esac
+          if ! printf '%s' "$cfg_ref" | grep -Eq '^[A-Za-z0-9._/-]+$'; then
+            echo "::error::Unsupported git ref '$cfg_ref'."
+            exit 1
+          fi
+
+          if [ "$cfg_url" = "https://github.com/POWERFULMOVES/PMOVES.AI.git" ]; then
+            echo "Using checked-out PMOVES.AI workspace as integration source"
+            rm -rf integration-src
+            mkdir -p integration-src
+            git archive --format=tar HEAD | tar -x -C integration-src
+          else
+            git clone --depth=1 --branch "$cfg_ref" "$cfg_url" integration-src
+          fi
+
+      - name: Free disk space (runner)
+        run: |
+          set -euxo pipefail
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/lib/android || true
+          sudo rm -rf /usr/local/share/boost || true
+          df -h
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd
+
+      - name: Build (PR validation, no push)
+        uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f
+        with:
+          context: integration-src/${{ steps.cfg.outputs.context }}
+          file: integration-src/${{ steps.cfg.outputs.dockerfile }}
+          push: false
+          build-args: |
+            PIP_CONSTRAINT=requirements.lock
+            ${{ steps.cfg.outputs.build_args }}
+          platforms: linux/amd64
+
   build-publish:
     name: Build ${{ matrix.name }}
     needs: resolve-matrix
+    if: ${{ github.event_name != 'pull_request' }}
     # Distribute across all available self-hosted Linux runners for parallel builds.
     runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 60
@@ -176,7 +289,7 @@ jobs:
 
     steps:
       - name: Harden Runner
-        uses: step-security/harden-runner@v2
+        uses: step-security/harden-runner@6c3c2f2c1c457b00c10c4848d6f5491db3b629df
         with:
           egress-policy: audit
           allowed-endpoints: >
@@ -192,7 +305,7 @@ jobs:
             security.ubuntu.com:443
 
       - name: Checkout (stub)
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
 
       - name: Load integration config
         id: cfg
@@ -238,7 +351,7 @@ jobs:
       - name: Generate GitHub App token (for clone + GHCR)
         id: app_token
         continue-on-error: true
-        uses: actions/create-github-app-token@v3
+        uses: actions/create-github-app-token@1b10c78c7865c340bc4f6099eb2f838309f1e8c3
         with:
           app-id: ${{ secrets.GH_APP_ID }}
           private-key: ${{ secrets.GH_APP_SEC }}
@@ -292,19 +405,19 @@ jobs:
           df -h
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v4
+        uses: docker/setup-qemu-action@ce360397dd3f832beb865e1373c09c0e9f86d70a
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
+        uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd
 
       - name: Install Cosign
-        uses: sigstore/cosign-installer@v4.1.1
+        uses: sigstore/cosign-installer@cad07c2e89fa2edd6e2d7bab4c1aa38e53f76003
 
       - name: Log in to GHCR (App token preferred)
         id: login_ghcr_app
         if: ${{ steps.app_token.outputs.token != '' }}
         continue-on-error: true
-        uses: docker/login-action@v4
+        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121
         with:
           registry: ${{ env.REGISTRY }}
           username: x-access-token
@@ -314,7 +427,7 @@ jobs:
         id: login_ghcr_pat
         if: ${{ steps.login_ghcr_app.outcome != 'success' && env.GHCR_USERNAME != '' && env.GHCR_PAT != '' }}
         continue-on-error: true
-        uses: docker/login-action@v4
+        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ env.GHCR_USERNAME }}
@@ -324,7 +437,7 @@ jobs:
         id: login_ghcr_actions
         if: ${{ steps.login_ghcr_app.outcome != 'success' && steps.login_ghcr_pat.outcome != 'success' }}
         continue-on-error: true
-        uses: docker/login-action@v4
+        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -337,8 +450,8 @@ jobs:
           exit 1
 
       - name: Optional login to Docker Hub
-        if: ${{ github.event_name != 'pull_request' && env.DOCKERHUB_USERNAME && env.DOCKERHUB_PASSWORD }}
-        uses: docker/login-action@v4
+        if: ${{ env.DOCKERHUB_USERNAME && env.DOCKERHUB_PASSWORD }}
+        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121
         with:
           registry: docker.io
           username: ${{ env.DOCKERHUB_USERNAME }}
@@ -357,16 +470,6 @@ jobs:
           OWNER_LC="${{ github.repository_owner }}"
           OWNER_LC="${OWNER_LC,,}"
           echo "ghcr_ns=${OWNER_LC}" >> $GITHUB_OUTPUT
-
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            echo "use_ghcr=false" >> $GITHUB_OUTPUT
-            echo "has_tags=false" >> $GITHUB_OUTPUT
-            echo "tags<<EOF" >> $GITHUB_OUTPUT
-            echo "" >> $GITHUB_OUTPUT
-            echo "EOF" >> $GITHUB_OUTPUT
-            echo "::notice::Pull request build detected; registry publish/sign/scan steps are skipped."
-            exit 0
-          fi
 
           DATE_TAG=$(date +%Y%m%d)
           SHA_SHORT=${GITHUB_SHA::7}
@@ -416,29 +519,14 @@ jobs:
           echo -e "$TAGS" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
 
-      # PRs validate Dockerfile/build correctness without publishing artifacts.
-      # Build native amd64 only — skip arm64 QEMU emulation to cut PR time ~50%.
-      - name: Build (PR validation, no push)
-        if: ${{ github.event_name == 'pull_request' }}
-        uses: docker/build-push-action@v7
-        with:
-          context: integration-src/${{ steps.cfg.outputs.context }}
-          file: integration-src/${{ steps.cfg.outputs.dockerfile }}
-          push: false
-          build-args: |
-            PIP_CONSTRAINT=requirements.lock
-            ${{ steps.cfg.outputs.build_args }}
-          platforms: linux/amd64
-          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ steps.meta.outputs.ghcr_ns }}/${{ steps.cfg.outputs.image_name }}:buildcache
-
       - name: Build and push (multi-arch)
-        if: ${{ github.event_name != 'pull_request' && steps.meta.outputs.has_tags == 'true' }}
+        if: ${{ steps.meta.outputs.has_tags == 'true' }}
         id: build
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f
         with:
           context: integration-src/${{ steps.cfg.outputs.context }}
           file: integration-src/${{ steps.cfg.outputs.dockerfile }}
-          push: ${{ github.event_name != 'pull_request' }}
+          push: true
           build-args: |
             PIP_CONSTRAINT=requirements.lock
             ${{ steps.cfg.outputs.build_args }}
@@ -448,7 +536,7 @@ jobs:
           cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ steps.meta.outputs.ghcr_ns }}/${{ steps.cfg.outputs.image_name }}:buildcache,mode=max
 
       - name: Cosign sign GHCR digest (keyless)
-        if: ${{ github.event_name != 'pull_request' && steps.meta.outputs.has_tags == 'true' && steps.meta.outputs.use_ghcr == 'true' }}
+        if: ${{ steps.meta.outputs.has_tags == 'true' && steps.meta.outputs.use_ghcr == 'true' }}
         env:
           IMAGE_DIGEST_REF: ${{ env.REGISTRY }}/${{ steps.meta.outputs.ghcr_ns }}/${{ steps.cfg.outputs.image_name }}@${{ steps.build.outputs.digest }}
           COSIGN_EXPERIMENTAL: "1"
@@ -457,20 +545,20 @@ jobs:
           cosign sign --yes "$IMAGE_DIGEST_REF"
 
       - name: Install Syft (SBOM)
-        if: ${{ github.event_name != 'pull_request' && steps.cfg.outputs.generate_sbom == 'true' && steps.meta.outputs.has_tags == 'true' }}
-        uses: anchore/sbom-action/download-syft@v0.24.0
+        if: ${{ steps.cfg.outputs.generate_sbom == 'true' && steps.meta.outputs.has_tags == 'true' }}
+        uses: anchore/sbom-action/download-syft@e22c389904149dbc22b58101806040fa8d37a610
 
       - name: Generate SBOMs (CycloneDX)
         id: sbom
-        if: ${{ github.event_name != 'pull_request' && steps.cfg.outputs.generate_sbom == 'true' && steps.meta.outputs.has_tags == 'true' }}
+        if: ${{ steps.cfg.outputs.generate_sbom == 'true' && steps.meta.outputs.has_tags == 'true' }}
         run: |
           set -euo pipefail
           syft packages "${{ steps.meta.outputs.primary_tag }}" -o cyclonedx-json > sbom.cdx.json
           echo "sbom_path=sbom.cdx.json" >> $GITHUB_OUTPUT
 
       - name: Upload SBOM artifact
-        if: ${{ github.event_name != 'pull_request' && steps.cfg.outputs.generate_sbom == 'true' && steps.meta.outputs.has_tags == 'true' }}
-        uses: actions/upload-artifact@v7
+        if: ${{ steps.cfg.outputs.generate_sbom == 'true' && steps.meta.outputs.has_tags == 'true' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: ${{ matrix.name }}-sbom
           path: ${{ steps.sbom.outputs.sbom_path }}
@@ -486,14 +574,14 @@ jobs:
           df -h
 
       - name: Pull image for Trivy (private GHCR)
-        if: ${{ github.event_name != 'pull_request' && steps.meta.outputs.has_tags == 'true' }}
+        if: ${{ steps.meta.outputs.has_tags == 'true' }}
         run: |
           set -euo pipefail
           docker pull "${{ steps.meta.outputs.primary_tag }}"
 
       - name: Trivy vulnerability scan (HIGH/CRITICAL)
-        if: ${{ github.event_name != 'pull_request' && steps.meta.outputs.has_tags == 'true' }}
-        uses: aquasecurity/trivy-action@0.35.0
+        if: ${{ steps.meta.outputs.has_tags == 'true' }}
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1
         with:
           # Gate on HIGH/CRITICAL with fixes available (vendor/unfixed CVEs are still surfaced by the next step).
           # This avoids blocking nightly builds on upstream issues we can't remediate immediately, while keeping
@@ -509,8 +597,8 @@ jobs:
           timeout: '10m0s'
 
       - name: Trivy vulnerability scan report (includes unfixed)
-        if: ${{ github.event_name != 'pull_request' && steps.meta.outputs.has_tags == 'true' }}
-        uses: aquasecurity/trivy-action@0.35.0
+        if: ${{ steps.meta.outputs.has_tags == 'true' }}
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1
         with:
           image-ref: ${{ steps.meta.outputs.primary_tag }}
           format: table
@@ -525,14 +613,14 @@ jobs:
           timeout: '10m0s'
 
       - name: Upload Trivy report artifact
-        if: ${{ github.event_name != 'pull_request' && steps.meta.outputs.has_tags == 'true' }}
-        uses: actions/upload-artifact@v7
+        if: ${{ steps.meta.outputs.has_tags == 'true' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: ${{ matrix.name }}-trivy
           path: trivy-${{ matrix.name }}.txt
 
       - name: Cosign verify GHCR digest (keyless)
-        if: ${{ github.event_name != 'pull_request' && steps.meta.outputs.has_tags == 'true' && steps.meta.outputs.use_ghcr == 'true' }}
+        if: ${{ steps.meta.outputs.has_tags == 'true' && steps.meta.outputs.use_ghcr == 'true' }}
         env:
           IMAGE_DIGEST_REF: ${{ env.REGISTRY }}/${{ steps.meta.outputs.ghcr_ns }}/${{ steps.cfg.outputs.image_name }}@${{ steps.build.outputs.digest }}
           COSIGN_EXPERIMENTAL: "1"
