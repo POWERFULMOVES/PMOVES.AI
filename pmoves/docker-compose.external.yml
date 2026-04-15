@@ -117,13 +117,16 @@ services:
       - ./data/open-notebook/surreal_data:/mydata
 
   open-notebook-ext:
-    image: ${OPEN_NOTEBOOK_IMAGE:-ghcr.io/lfnovo/open-notebook:1.8.0}
-    # Pinned upstream default; override OPEN_NOTEBOOK_IMAGE for PMOVES fork/custom tags.
+    image: ${OPEN_NOTEBOOK_IMAGE:-ghcr.io/powerfulmoves/pmoves-open-notebook:pmoves-latest}
+    # Default points at the PMOVES.AI-Edition-Hardened fork image (matches
+    # docker-compose.open-notebook.yml). The `*-ext` suffix here indicates the
+    # sidecar SurrealDB topology; still the same hardened fork image underneath.
     depends_on:
       - open-notebook-surrealdb-ext
     networks:
       pmoves_app:
         aliases:
+          - pmoves-open-notebook-ext
           - open-notebook-ext
       pmoves_external: {}
     environment:

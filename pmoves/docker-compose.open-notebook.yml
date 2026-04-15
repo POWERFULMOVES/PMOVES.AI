@@ -12,9 +12,16 @@ x-env-tier-worker: &env-tier-worker
 
 services:
   open-notebook:
-    image: ${OPEN_NOTEBOOK_IMAGE:-ghcr.io/lfnovo/open-notebook:1.8.0}
-    # Pinned upstream default; override OPEN_NOTEBOOK_IMAGE for PMOVES fork/custom tags.
-    container_name: cataclysm-open-notebook
+    image: ${OPEN_NOTEBOOK_IMAGE:-ghcr.io/powerfulmoves/pmoves-open-notebook:pmoves-latest}
+    # Default points at the PMOVES.AI-Edition-Hardened fork image built from
+    # the PMOVES-Open-Notebook submodule (TensorZero provider mode, fail-closed
+    # auth, USER directive, /healthz + /metrics, Fernet credential encryption,
+    # Phase C hardening: NATS auth, no root SurrealDB defaults).
+    # Override OPEN_NOTEBOOK_IMAGE only to pin a specific SHA tag or test an
+    # upstream build. The `cataclysm-open-notebook` network alias below is
+    # retained per the migration-safe topology policy
+    # (pmoves/docs/ARC/network_fabric.md, tools/topology_chit_gate.py).
+    container_name: pmoves-open-notebook
     restart: unless-stopped
     <<: *env-tier-worker
     environment:
@@ -44,18 +51,22 @@ services:
     networks:
       cataclysm:
         aliases:
+          - pmoves-open-notebook
           - cataclysm-open-notebook
       pmoves:
         aliases:
-          - cataclysm-open-notebook
+          - pmoves-open-notebook
           - open-notebook
+          - cataclysm-open-notebook
       pmoves_api:
         aliases:
+          - pmoves-open-notebook
           - open-notebook
       pmoves_app:
         aliases:
-          - cataclysm-open-notebook
+          - pmoves-open-notebook
           - open-notebook
+          - cataclysm-open-notebook
 networks:
   cataclysm:
     external: true

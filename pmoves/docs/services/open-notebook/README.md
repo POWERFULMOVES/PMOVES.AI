@@ -11,23 +11,32 @@ Last verified: 2026-03-06.
 - Docker install guide (v1.8.0): `https://github.com/lfnovo/open-notebook/blob/v1.8.0/docs/1-INSTALLATION/docker-compose.md`
 
 ## Image policy for PMOVES
-- Default in PMOVES compose/env templates: `ghcr.io/lfnovo/open-notebook:1.8.0`
-- PMOVES-branded image exists: `ghcr.io/powerfulmoves/pmoves-open-notebook:pmoves-latest`
-- Current version state (verified 2026-03-06):
+- **Default in PMOVES compose/env templates: `ghcr.io/powerfulmoves/pmoves-open-notebook:pmoves-latest`** (Phase 9L, 2026-04-15)
+- Upstream reference image: `ghcr.io/lfnovo/open-notebook:1.8.0` (use only as a comparison/escape hatch)
+- Current version state (verified 2026-04-15):
   - Upstream latest release: `v1.8.0` (published 2026-02-27)
-  - PMOVES image package version: `1.6.2`
+  - PMOVES fork base: upstream 1.8 + 70 upstream commits merged via `5cc0ba4`, plus
+    TensorZero provider mode, fail-closed auth, USER directive, /healthz + /metrics,
+    Fernet credential encryption, Phase C hardening (NATS auth, no root SurrealDB defaults)
+  - Fork commit tracked by submodule gitlink at `PMOVES-Open-Notebook @ 0533c8a`
 
 Recommendation:
-- Keep production defaults on upstream `1.8.0` until PMOVES fork is rebuilt on `1.8.x`.
-- Use `OPEN_NOTEBOOK_IMAGE` override when validating PMOVES-specific image updates.
+- Use the PMOVES fork image as the default. The `OPEN_NOTEBOOK_IMAGE` env var still exists as
+  an override for pinning to a specific SHA tag or testing an upstream build.
+- When bumping the PMOVES fork, bump the gitlink on `PMOVES.AI-Edition-Hardened`
+  and let the GHCR build workflow publish a fresh `:pmoves-latest` + `:YYYYMMDD-sha7` tag.
 
 ## Compose wiring
 - File: `pmoves/docker-compose.open-notebook.yml`
 - Service: `open-notebook`
+- Container name: `pmoves-open-notebook` (since Phase 9L, 2026-04-15)
+- Network aliases: `pmoves-open-notebook` (canonical), `open-notebook` (short), and
+  `cataclysm-open-notebook` (legacy alias retained per migration-safe topology policy,
+  see `pmoves/docs/ARC/network_fabric.md` and `pmoves/tools/topology_chit_gate.py`).
 - Ports (host -> container):
   - UI `${OPEN_NOTEBOOK_UI_PORT:-8503}:8502` (Next.js UI)
   - API `${OPEN_NOTEBOOK_API_PORT:-5055}:5055` (FastAPI backend)
-- Network: shared `cataclysm-net` plus PMOVES compatibility aliases.
+- Networks: `pmoves-net`, `cataclysm-net`, `pmoves_api`, `pmoves_app` (all compatibility-mapped).
 
 ## PMOVES expected compatibility (with evidence level)
 The following paths are expected to work against upstream `1.8.0` and PMOVES `1.6.2`.

@@ -939,6 +939,11 @@ chitSafePaths:
   - "docker-compose.integrations"
   # n8n compose — env var registration for workflow flows (approval poller, webhook processor)
   - "docker-compose.n8n"
+  # Open Notebook integration compose — PMOVES fork image switch + container rename
+  # (Phase 9L, 2026-04-15: decouple from upstream lfnovo/open-notebook default)
+  - "docker-compose.open-notebook"
+  # External integration compose — shared sidecar services (open-notebook-ext, jellyfin-ext)
+  - "docker-compose.external"
   # PR-kit compose files — integration starter templates
   - "pr-kits"
   # Context docs that need fleet/config renames (approved per issue #1173)
