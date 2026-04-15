@@ -203,12 +203,24 @@ def _validate_remote_image_url(raw_url: Any) -> str:
         raise HTTPException(400, "image URL path contains disallowed characters")
 
     host = parsed.hostname.lower()
-    if CHIT_IMAGE_FETCH_ALLOWED_HOSTS and host not in CHIT_IMAGE_FETCH_ALLOWED_HOSTS:
+    # Remote image fetches must resolve to a server-controlled host allowlist.
+    if not CHIT_IMAGE_FETCH_ALLOWED_HOSTS:
+        raise HTTPException(
+            400,
+            "remote image fetching requires CHIT_IMAGE_FETCH_ALLOWED_HOSTS to be configured",
+        )
+    if host not in CHIT_IMAGE_FETCH_ALLOWED_HOSTS:
         raise HTTPException(400, f"image host not allowed: {host}")
-    if not CHIT_IMAGE_FETCH_ALLOW_PRIVATE and not CHIT_IMAGE_FETCH_ALLOWED_HOSTS:
-        if _host_is_private_or_internal(host):
-            raise HTTPException(400, f"private/internal image host blocked: {host}")
     return url
+
+
+def _resolve_allowed_image_host(hostname: str) -> str:
+    """Return the canonical allowlisted hostname for image fetching."""
+    host = (hostname or "").strip().lower()
+    for allowed_host in CHIT_IMAGE_FETCH_ALLOWED_HOSTS:
+        if host == allowed_host:
+            return allowed_host
+    raise HTTPException(400, f"image host not allowed: {host or '<none>'}")
 
 
 def _sanitize_fetch_path(parsed_path: str, parsed_query: str) -> str:
@@ -236,7 +248,7 @@ def _fetch_remote_image(raw_url: str, *, timeout: int = 20) -> urllib3.HTTPRespo
     """
     url = _validate_remote_image_url(raw_url)
     parsed = urlparse(url)
-    host = parsed.hostname
+    host = _resolve_allowed_image_host(parsed.hostname or "")
     port = parsed.port or (443 if parsed.scheme == "https" else 80)
 
     try:
