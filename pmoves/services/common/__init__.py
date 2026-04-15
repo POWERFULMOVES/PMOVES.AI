@@ -93,58 +93,63 @@ except Exception:  # pragma: no cover
     # Graceful fallback if dependencies unavailable
     pass
 
-# New shared infrastructure modules (P4 extraction)
-from .bootstrap import bootstrap_import_paths, ensure_import_paths  # noqa: F401
-from .tensorzero import (  # noqa: F401
-    tensorzero_openai_base,
-    sync_openai_compat_env,
-    check_tensorzero_connectivity,
-)
-from .nats_client import (  # noqa: F401
-    NatsConnectionConfig,
-    create_nats_connection,
-    nats_connection,
-    DEFAULT_NATS_URL,
-)
-from .health import (  # noqa: F401
-    build_health_payload,
-    create_health_endpoint,
-    register_health_endpoint,
-)
-from .config import (  # noqa: F401
-    BaseServiceSettings,
-    TensorZeroSettings,
-    env_bool,
-)
-from .logging import (  # noqa: F401
-    configure_structlog,
-    get_logger,
-    setup_logging,
-)
+# New shared infrastructure modules (P4 extraction) — optional imports
+# Wrapped in try/except because CI runners may not have fastapi, nats, etc.
+try:
+    from .bootstrap import bootstrap_import_paths, ensure_import_paths  # noqa: F401
+    from .tensorzero import (  # noqa: F401
+        tensorzero_openai_base,
+        sync_openai_compat_env,
+        check_tensorzero_connectivity,
+    )
+    from .nats_client import (  # noqa: F401
+        NatsConnectionConfig,
+        create_nats_connection,
+        nats_connection,
+        DEFAULT_NATS_URL,
+    )
+    from .health import (  # noqa: F401
+        build_health_payload,
+        create_health_endpoint,
+        register_health_endpoint,
+    )
+    from .config import (  # noqa: F401
+        BaseServiceSettings,
+        TensorZeroSettings,
+        env_bool,
+    )
+    from .logging import (  # noqa: F401
+        configure_structlog,
+        get_logger,
+        setup_logging,
+    )
 
-__all__ += [
-    # bootstrap
-    "bootstrap_import_paths",
-    "ensure_import_paths",
-    # tensorzero
-    "tensorzero_openai_base",
-    "sync_openai_compat_env",
-    "check_tensorzero_connectivity",
-    # nats_client
-    "NatsConnectionConfig",
-    "create_nats_connection",
-    "nats_connection",
-    "DEFAULT_NATS_URL",
-    # health
-    "build_health_payload",
-    "create_health_endpoint",
-    "register_health_endpoint",
-    # config
-    "BaseServiceSettings",
-    "TensorZeroSettings",
-    "env_bool",
-    # logging
-    "configure_structlog",
-    "get_logger",
-    "setup_logging",
-]
+    __all__ += [
+        # bootstrap
+        "bootstrap_import_paths",
+        "ensure_import_paths",
+        # tensorzero
+        "tensorzero_openai_base",
+        "sync_openai_compat_env",
+        "check_tensorzero_connectivity",
+        # nats_client
+        "NatsConnectionConfig",
+        "create_nats_connection",
+        "nats_connection",
+        "DEFAULT_NATS_URL",
+        # health
+        "build_health_payload",
+        "create_health_endpoint",
+        "register_health_endpoint",
+        # config
+        "BaseServiceSettings",
+        "TensorZeroSettings",
+        "env_bool",
+        # logging
+        "configure_structlog",
+        "get_logger",
+        "setup_logging",
+    ]
+except Exception:  # pragma: no cover
+    # Graceful fallback if service dependencies unavailable (e.g. CI runner)
+    pass
