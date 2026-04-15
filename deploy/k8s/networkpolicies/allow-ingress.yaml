@@ -6,7 +6,7 @@ metadata:
 spec:
   podSelector:
     matchLabels:
-      role: gateway
+      app.kubernetes.io/part-of: pmoves-ai
   policyTypes:
     - Ingress
   ingress:
