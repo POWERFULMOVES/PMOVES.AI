@@ -1051,6 +1051,7 @@ services:
   supabase-vector:
     <<: *tier-supabase-hardened
     image: timberio/vector:0.28.1-alpine
+    command: ["--config", "/etc/vector/vector.yml"]
     restart: unless-stopped
     profiles:
     - supabase-local
