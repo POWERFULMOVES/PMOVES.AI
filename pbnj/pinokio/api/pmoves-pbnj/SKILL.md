@@ -60,7 +60,7 @@ agent_id: pmoves_pbnj_bridge
 | `"deploy 4090"` | Coding workstation to 4090 | `4090-deploy.json` |
 | `"check cluster status"` | K8s status | `status.json` |
 | `"check vps fleet"` | All VPS node health | `vps-status.json` |
-| `"stop everything"` | Stop all stacks | `local-down.json` / `kvm4-down.json` |
+| `"stop everything"` | Stop all stacks | `lab-down.json` → `kvm4-down.json` → `local-down.json` |
 
 ---
 
