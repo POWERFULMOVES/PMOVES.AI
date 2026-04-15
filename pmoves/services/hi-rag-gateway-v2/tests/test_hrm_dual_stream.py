@@ -371,6 +371,7 @@ class TestConfigDefaults:
 # Test is_torch_available
 # ===================================================================
 
+@pytest.mark.skipif(not HAS_TORCH, reason="torch not installed in CI")
 class TestTorchAvailability:
     def test_torch_available_consistent(self):
         """is_torch_available matches actual torch availability."""
