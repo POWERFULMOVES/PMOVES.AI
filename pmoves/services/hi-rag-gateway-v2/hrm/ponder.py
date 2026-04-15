@@ -177,8 +177,8 @@ class PonderingController:
                 total_state = total_state + weight * state
                 steps_taken = step
 
-                # Halt condition
-                if weight >= self.halt_threshold and step >= self.min_steps:
+                # Halt condition (check raw halt_prob, not remainder-capped weight)
+                if halt_prob >= self.halt_threshold and step >= self.min_steps:
                     break
 
                 # Apply transform for next step
