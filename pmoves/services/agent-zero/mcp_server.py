@@ -320,7 +320,7 @@ def _generate_error_id() -> str:
 async def _e2b_request(
     method: str,
     url: str,
-    json_body: Dict = None,
+    json_body: dict[str, Any] | None = None,
     timeout: int = 30
 ) -> Optional[httpx.Response]:
     """
