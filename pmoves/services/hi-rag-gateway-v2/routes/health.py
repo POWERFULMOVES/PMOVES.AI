@@ -3,16 +3,12 @@
 import os
 from typing import Any, Dict
 
-from fastapi import APIRouter, Request, Depends
+from fastapi import APIRouter, Depends, Request
 
-from config import (
-    RERANK_ENABLE, RERANK_MODEL, USE_MEILI, GRAPH_BOOST, ALPHA, COLL,
-    logger, get_rerank_status, _rerank_model_label, _reranker,
-    HRM_ENABLED, HRM_FAST_THRESHOLD, HRM_MAX_PONDER_STEPS, HRM_HALT_THRESHOLD,
-)
-from geometry_bus import _hrm_controller, _enhanced_hrm
-from security import require_tailscale, require_admin_tailscale
-from clients.neo4j import _warm_entities, _warm_last, refresh_warm_dictionary
+import geometry_bus as _geometry_bus_mod
+import clients.neo4j as _neo4j_mod
+import config as _cfg
+from security import require_admin_tailscale, require_tailscale
 
 router = APIRouter()
 
@@ -27,16 +23,20 @@ def stats(request: Request):
         cuda = bool(torch.cuda.is_available())
     except Exception:
         cuda = None
-    model_report = _rerank_model_label or RERANK_MODEL
+    model_report = _cfg._rerank_model_label or _cfg.RERANK_MODEL
     return {
-        "rerank_enabled": RERANK_ENABLE,
-        "rerank_model": (model_report or None) if RERANK_ENABLE else None,
-        "rerank_loaded": _reranker is not None,
+        "rerank_enabled": _cfg.RERANK_ENABLE,
+        "rerank_model": (model_report or None) if _cfg.RERANK_ENABLE else None,
+        "rerank_loaded": _cfg._reranker is not None,
         "cuda": cuda,
-        "use_meili": USE_MEILI,
-        "graph": {"boost": GRAPH_BOOST, "types": len(_warm_entities), "last_refresh": _warm_last},
-        "alpha": ALPHA,
-        "collection": COLL,
+        "use_meili": _cfg.USE_MEILI,
+        "graph": {
+            "boost": _cfg.GRAPH_BOOST,
+            "types": len(_neo4j_mod._warm_entities),
+            "last_refresh": _neo4j_mod._warm_last,
+        },
+        "alpha": _cfg.ALPHA,
+        "collection": _cfg.COLL,
     }
 
 
@@ -44,8 +44,8 @@ def stats(request: Request):
 def admin_rerank_status(request: Request):
     if os.environ.get("SMOKE_ALLOW_ADMIN_STATS", "false").lower() != "true":
         require_admin_tailscale(request)
-    status = get_rerank_status()
-    status["model_report"] = _rerank_model_label or status["model"]
+    status = _cfg.get_rerank_status()
+    status["model_report"] = _cfg._rerank_model_label or status["model"]
     return status
 
 
@@ -62,13 +62,13 @@ def set_rerank_model_label(body: Dict[str, Any], request: Request):
 
 @router.post("/hirag/admin/refresh")
 def hirag_admin_refresh(_=Depends(require_admin_tailscale)):
-    refresh_warm_dictionary()
-    return {"ok": True, "last_refresh": _warm_last}
+    _neo4j_mod.refresh_warm_dictionary()
+    return {"ok": True, "last_refresh": _neo4j_mod._warm_last}
 
 
 @router.post("/hirag/admin/cache/clear")
 def hirag_admin_cache_clear(_=Depends(require_admin_tailscale)):
-    refresh_warm_dictionary()
+    _neo4j_mod.refresh_warm_dictionary()
     return {"ok": True}
 
 
@@ -78,16 +78,24 @@ def admin_hrm_status(request: Request):
     """Enhanced HRM dual-stream sidecar status."""
     if os.environ.get("SMOKE_ALLOW_ADMIN_STATS", "false").lower() != "true":
         require_admin_tailscale(request)
-    legacy = _hrm_controller.status("*") if _hrm_controller else {"enabled": False}
-    enhanced = _enhanced_hrm.status() if _enhanced_hrm is not None else {"enabled": False, "loaded": False}
+    legacy = (
+        _geometry_bus_mod._hrm_controller.status("*")
+        if _geometry_bus_mod._hrm_controller
+        else {"enabled": False}
+    )
+    enhanced = (
+        _geometry_bus_mod._enhanced_hrm.status()
+        if _geometry_bus_mod._enhanced_hrm is not None
+        else {"enabled": False, "loaded": False}
+    )
     return {
         "legacy_hrm": legacy,
         "enhanced_hrm": enhanced,
         "config": {
-            "HRM_ENABLED": HRM_ENABLED,
-            "HRM_FAST_THRESHOLD": HRM_FAST_THRESHOLD,
-            "HRM_MAX_PONDER_STEPS": HRM_MAX_PONDER_STEPS,
-            "HRM_HALT_THRESHOLD": HRM_HALT_THRESHOLD,
+            "HRM_ENABLED": _cfg.HRM_ENABLED,
+            "HRM_FAST_THRESHOLD": _cfg.HRM_FAST_THRESHOLD,
+            "HRM_MAX_PONDER_STEPS": _cfg.HRM_MAX_PONDER_STEPS,
+            "HRM_HALT_THRESHOLD": _cfg.HRM_HALT_THRESHOLD,
         },
     }
 

@@ -33,11 +33,20 @@ try:
     from sentence_transformers import SentenceTransformer
 except ImportError:
     SentenceTransformer = None  # type: ignore
-
 try:
     from FlagEmbedding import FlagReranker
 except ImportError:
     FlagReranker = None  # type: ignore
+
+try:
+    from FlagEmbedding import FlagLLMReranker
+except ImportError:
+    FlagLLMReranker = None  # type: ignore
+
+try:
+    from FlagEmbedding import BGEM3FlagModel
+except ImportError:
+    BGEM3FlagModel = None  # type: ignore
 
 try:
     from rapidfuzz import fuzz
@@ -54,6 +63,21 @@ from urllib.parse import quote_plus, urlparse
 QDRANT_URL = os.environ.get("QDRANT_URL", "http://qdrant:6333")
 COLL = os.environ.get("QDRANT_COLLECTION", "pmoves_chunks_qwen3")
 MODEL = os.environ.get("SENTENCE_MODEL", "all-MiniLM-L6-v2")
+# EMBEDDING_MODEL can override MODEL for embedding-specific selection.
+# Supports SentenceTransformer models and BAAI/bge-m3 (uses BGEM3FlagModel).
+EMBEDDING_MODEL = os.environ.get("EMBEDDING_MODEL", MODEL)
+# EMBEDDING_DIMENSION is auto-detected from model; override via env only if needed.
+EMBEDDING_DIMENSION = os.environ.get("EMBEDDING_DIMENSION")  # None = auto-detect
+
+# --- Embedding model type detection ---
+def _detect_embedding_model_type(model_name: str) -> str:
+    """Return 'bge3' for BGEM3FlagModel models, 'sentence' for SentenceTransformer."""
+    name_lower = model_name.lower()
+    if "bge-m3" in name_lower:
+        return "bge3"
+    return "sentence"
+
+EMBEDDING_MODEL_TYPE = _detect_embedding_model_type(EMBEDDING_MODEL)
 ALPHA = float(os.environ.get("ALPHA", "0.7"))
 
 # Collect rerank validation notes so startup logs and admin routes can expose them.
@@ -111,6 +135,16 @@ def _parse_optional_bool(name: str) -> Optional[bool]:
 RERANK_ENABLE = _parse_bool("RERANK_ENABLE", True)
 _default_rerank_model = "Qwen/Qwen3-Reranker-4B"
 RERANK_MODEL = (os.environ.get("RERANK_MODEL", _default_rerank_model) or _default_rerank_model).strip()
+
+# --- Reranker model type detection ---
+def _detect_reranker_type(model_name: str) -> str:
+    """Return 'llm' for FlagLLMReranker models (gemma-based), 'flag' for FlagReranker."""
+    name_lower = model_name.lower()
+    if "gemma" in name_lower or "llm" in name_lower.split("/")[-1].lower():
+        return "llm"
+    return "flag"
+
+RERANKER_TYPE = _detect_reranker_type(RERANK_MODEL)
 # Optional local model snapshot path (bind-mounted inside the GPU container).
 _rerank_model_path_raw = (os.environ.get("RERANK_MODEL_PATH") or "").strip()
 if _rerank_model_path_raw:
@@ -151,6 +185,8 @@ RERANK_USE_FP16_OVERRIDE = _parse_optional_bool("RERANK_USE_FP16")
 
 # lazy-init reranker to reduce cold start time; declared early for diagnostics
 _reranker = None
+# Track the model name currently loaded in _reranker (for hot-swap validation)
+_reranker_model_loaded: Optional[str] = None
 
 # --- Device detection ---
 _USE_CUDA_ENV = os.environ.get("USE_CUDA", "true").lower() == "true"
@@ -329,6 +365,8 @@ else:
 # Global state
 # ---------------------------------------------------------------------------
 _embedder = None
+# Track the embedding model name currently loaded (for hot-swap validation)
+_embedding_model_loaded: Optional[str] = None
 
 RECREATE_ON_MISMATCH = os.environ.get(
     "QDRANT_RECREATE_ON_DIM_MISMATCH", "false"

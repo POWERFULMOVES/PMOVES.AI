@@ -374,8 +374,4 @@ class TestConfigDefaults:
 class TestTorchAvailability:
     def test_torch_available_consistent(self):
         """is_torch_available matches actual torch availability."""
-        try:
-            import torch as _t
-            assert is_torch_available() is True
-        except ImportError:
-            assert is_torch_available() is False
+        assert is_torch_available() is HAS_TORCH

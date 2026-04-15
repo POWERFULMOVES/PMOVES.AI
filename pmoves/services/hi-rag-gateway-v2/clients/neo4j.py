@@ -50,8 +50,10 @@ def refresh_warm_dictionary():
                 lim=NEO4J_DICT_LIMIT,
             )
             for r in recs:
-                v = r["v"]; t = (r["t"] or "UNK").upper()
-                if not v: continue
+                v = r["v"]
+                t = (r["t"] or "UNK").upper()
+                if not v:
+                    continue
                 tmp.setdefault(t, set()).add(v)
         _warm_entities = tmp
         _warm_last = time.time()
@@ -76,7 +78,11 @@ if driver is not None:
 def graph_terms(query: str, limit: int = 8, entity_types: Optional[List[str]] = None):
     toks = [t.lower() for t in re.split(r"\W+", query) if t and len(t) > 2]
     if not toks: return []
-    types_norm = set([x.upper() for x in (entity_types or [])]) if entity_types else None
+    types_norm = (
+        {x.strip().upper() for x in (entity_types or []) if isinstance(x, str) and x.strip()}
+        if entity_types
+        else None
+    )
     out: Set[str] = set()
     for tname, values in _warm_entities.items():
         if types_norm and tname not in types_norm:

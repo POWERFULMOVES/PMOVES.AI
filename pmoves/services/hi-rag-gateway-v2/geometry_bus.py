@@ -704,19 +704,13 @@ def _persist_cgp_to_db(cgp: Dict[str, Any]):
                     summary = const.get("summary")
                     # insert constellation (preserve CGP/meta provenance if present)
                     const_meta = {}
-                    try:
-                        if isinstance(const.get("meta"), dict):
-                            const_meta.update(const.get("meta") or {})
-                    except Exception:
-                        pass
-                    try:
-                        if isinstance(cgp.get("meta"), dict):
-                            for k in ("namespace", "pack_id", "pack_version", "population_id", "builder_pack"):
-                                v = cgp["meta"].get(k)
-                                if v is not None:
-                                    const_meta[k] = v
-                    except Exception:
-                        pass
+                    if isinstance(const.get("meta"), dict):
+                        const_meta.update(const.get("meta") or {})
+                    if isinstance(cgp.get("meta"), dict):
+                        for k in ("namespace", "pack_id", "pack_version", "population_id", "builder_pack"):
+                            v = cgp["meta"].get(k)
+                            if v is not None:
+                                const_meta[k] = v
                     cur.execute(
                         """
                         INSERT INTO public.constellations(anchor_id, summary, radial_min, radial_max, spectrum, meta)
@@ -747,6 +741,9 @@ def _persist_cgp_to_db(cgp: Dict[str, Any]):
                             )
                         )
         conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
     finally:
         conn.close()
 

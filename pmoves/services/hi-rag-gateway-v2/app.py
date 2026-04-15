@@ -1,8 +1,8 @@
-"""PMOVES Hi-RAG Gateway v2 — slim wiring module.
+"""PMOVES Hi-RAG Gateway v2 - slim wiring module.
 
 All business logic lives in dedicated modules:
   config, models, embeddings, rerank, security, geometry_bus,
-  clients/{qdrant,neo4j,openai_compat}, routes/{health,query,geometry}.
+  clients/{qdrant,neo4j,openai_compat}, routes/{health,query,geometry,models}.
 """
 
 import sys
@@ -40,10 +40,12 @@ app = FastAPI(
 from routes.health import router as _health_router
 from routes.query import router as _query_router
 from routes.geometry import router as _geometry_router
+from routes.models import router as _models_router
 
 app.include_router(_health_router)
 app.include_router(_query_router)
 app.include_router(_geometry_router)
+app.include_router(_models_router)
 
 # ── Static geometry UI ──────────────────────────────────────────────────────
 app.mount(
@@ -68,10 +70,19 @@ from config import (  # noqa: E402, F401
     TAILSCALE_ONLY, TAILSCALE_ADMIN_ONLY, TAILSCALE_CIDRS,
     SUPABASE_REST_URL, SUPABASE_SERVICE_KEY, SUPABASE_ANON_KEY,
     HRM_ENABLED, HRM_FAST_THRESHOLD, HRM_MAX_PONDER_STEPS, HRM_HALT_THRESHOLD,
+    EMBEDDING_MODEL, EMBEDDING_MODEL_TYPE, EMBEDDING_DIMENSION,
+    RERANKER_TYPE, _embedding_model_loaded, _reranker_model_loaded,
 )
 from models import QueryReq, QueryResp, UpsertReq, UpsertItem  # noqa: F401
 from embeddings import embed_query  # noqa: F401
+from embeddings import (  # noqa: F401
+    swap_embedding_model, get_embedding_status, get_embedding_dimension,
+    embed_query_multi,
+)
 from rerank import hybrid_score, _get_reranker  # noqa: F401
+from rerank import (  # noqa: F401
+    swap_reranker_model, get_reranker_status, compute_rerank_scores,
+)
 from security import (  # noqa: F401
     require_tailscale, require_admin_tailscale,
     _client_ip, _tailscale_ip_allowed, _tailscale_violation_detail,
