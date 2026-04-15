@@ -24,17 +24,21 @@ bashToolPatterns:
   # ---------------------------------------------------------------------------
   # DESTRUCTIVE FILE OPERATIONS
   # ---------------------------------------------------------------------------
-  - pattern: '\brm\s+(-[^\s]*)*-[rRf]'
-    reason: rm with recursive or force flags
+  # Negative lookbehinds exclude `docker rm`/`podman rm` — targeted container
+  # removal is not mass filesystem destruction. The dangerous form
+  # (`docker rm -f $(docker ps ...)`) is caught by a separate hard-block
+  # rule further down the file.
+  - pattern: '(?<!docker\s)(?<!podman\s)\brm\s+(-[^\s]*)*-[rRf]'
+    reason: rm with recursive or force flags (filesystem rm, not docker/podman)
 
-  - pattern: '\brm\s+-[rRf]'
-    reason: rm with recursive or force flags
+  - pattern: '(?<!docker\s)(?<!podman\s)\brm\s+-[rRf]'
+    reason: rm with recursive or force flags (filesystem rm, not docker/podman)
 
-  - pattern: '\brm\s+--recursive'
-    reason: rm with --recursive flag
+  - pattern: '(?<!docker\s)(?<!podman\s)\brm\s+--recursive'
+    reason: rm with --recursive flag (filesystem rm, not docker/podman)
 
-  - pattern: '\brm\s+--force'
-    reason: rm with --force flag
+  - pattern: '(?<!docker\s)(?<!podman\s)\brm\s+--force'
+    reason: rm with --force flag (filesystem rm, not docker/podman)
 
   - pattern: '\bsudo\s+rm\b'
     reason: sudo rm

@@ -259,10 +259,18 @@ def check_command(command: str, config: Dict[str, Any]) -> Tuple[bool, bool, str
     template_suffixes = (".example", ".sample", ".template", ".defaults")
 
     # 2. Check for ANY access to zero-access paths (including reads)
+    #
+    # Token-boundary rule: for file/identifier patterns (no trailing '/'),
+    # append (?!\w) so ".env" does not substring-match inside "os.environ".
+    # For directory-prefix patterns (ending with '/'), the '/' is itself a
+    # boundary — the match is meant to fire on ANY file inside the directory
+    # (e.g., "~/.ssh/id_rsa"), so we must NOT append (?!\w) there.
     for zero_path in zero_access_paths:
+        is_dir_prefix = zero_path.endswith('/')
+        token_boundary = '' if is_dir_prefix else r'(?!\w)'
         if is_glob_pattern(zero_path):
-            # Convert glob to regex for command matching
-            glob_regex = glob_to_regex(zero_path)
+            # Convert glob to regex for command matching.
+            glob_regex = glob_to_regex(zero_path) + token_boundary
             try:
                 if re.search(glob_regex, command, re.IGNORECASE):
                     # Check if command targets a template file
@@ -283,8 +291,14 @@ def check_command(command: str, config: Dict[str, Any]) -> Tuple[bool, bool, str
             escaped_expanded = re.escape(expanded)
             escaped_original = re.escape(zero_path)
 
-            # Check both expanded path (/Users/x/.ssh/) and original tilde form (~/.ssh/)
-            if re.search(escaped_expanded, command) or re.search(escaped_original, command):
+            # Check both expanded path (/Users/x/.ssh/) and original tilde form (~/.ssh/).
+            # For non-directory literals (e.g. ".env"), append (?!\w) so the literal
+            # cannot substring-match inside a longer identifier like "os.environ".
+            # Directory prefixes (ending with '/') intentionally skip the boundary —
+            # they match anything in the directory, including word-char filenames.
+            bounded_expanded = escaped_expanded + token_boundary
+            bounded_original = escaped_original + token_boundary
+            if re.search(bounded_expanded, command) or re.search(bounded_original, command):
                 # Check if command targets a template file
                 if any(suffix in command.lower() for suffix in template_suffixes):
                     return False, True, (
