@@ -274,6 +274,12 @@ CHIT_IMAGE_FETCH_ALLOWED_HOSTS = {
 CHIT_PERSIST_DB = os.environ.get("CHIT_PERSIST_DB", "false").lower() == "true"
 GAN_SIDECAR_ENABLED = os.environ.get("GAN_SIDECAR_ENABLED", "false").lower() == "true"
 
+# --- Enhanced HRM dual-stream configuration (P6 Phase 3) ---
+HRM_ENABLED = os.environ.get("HRM_ENABLED", "false").lower() == "true"
+HRM_FAST_THRESHOLD = float(os.environ.get("HRM_FAST_THRESHOLD", "0.3"))
+HRM_MAX_PONDER_STEPS = int(os.environ.get("HRM_MAX_PONDER_STEPS", "8"))
+HRM_HALT_THRESHOLD = float(os.environ.get("HRM_HALT_THRESHOLD", "0.9"))
+
 PGHOST = os.environ.get("PGHOST")
 PGPORT = int(os.environ.get("PGPORT", "5432"))
 PGUSER = os.environ.get("PGUSER")

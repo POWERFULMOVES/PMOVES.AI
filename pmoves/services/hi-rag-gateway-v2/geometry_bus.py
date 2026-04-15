@@ -67,6 +67,26 @@ try:
 except Exception:
     _hrm_controller = None  # type: ignore
 
+# --- Enhanced HRM dual-stream sidecar (P6 Phase 3) ---
+_enhanced_hrm = None
+try:
+    _hrm_pkg_dir = str(Path(__file__).resolve().parent / "hrm")
+    if _hrm_pkg_dir not in sys.path:
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from hrm import HRMSidecar, HRMSidecarConfig as _HRMCfg
+    from config import HRM_ENABLED, DEVICE, HRM_FAST_THRESHOLD, HRM_MAX_PONDER_STEPS, HRM_HALT_THRESHOLD
+    _enhanced_hrm = HRMSidecar(_HRMCfg(
+        enabled=HRM_ENABLED,
+        device=DEVICE,
+        fast_threshold=HRM_FAST_THRESHOLD,
+        max_ponder_steps=HRM_MAX_PONDER_STEPS,
+        halt_threshold=HRM_HALT_THRESHOLD,
+    ))
+    logging.getLogger("hirag.gateway.v2").info("Enhanced HRM dual-stream sidecar initialised (enabled=%s)", HRM_ENABLED)
+except Exception:
+    logging.getLogger("hirag.gateway.v2").info("Enhanced HRM sidecar not available; using legacy controller only")
+    _enhanced_hrm = None
+
 # ---------------------------------------------------------------------------
 # WebSocket room management
 # ---------------------------------------------------------------------------
