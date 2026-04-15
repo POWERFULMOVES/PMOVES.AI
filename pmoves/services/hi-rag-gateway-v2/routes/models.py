@@ -37,9 +37,9 @@ def swap_embedding_model(body: Dict[str, Any], request: Request):
     if os.environ.get("SMOKE_ALLOW_ADMIN_STATS", "false").lower() != "true":
         require_admin_tailscale(request)
 
-    model_name = (body or {}).get("model", "").strip()
-    if not model_name:
-        raise HTTPException(400, "'model' field is required")
+    model_name = (body or {}).get("model")
+    if not isinstance(model_name, str) or not model_name.strip():
+        raise HTTPException(status_code=400, detail="model must be a non-empty string")
 
     from embeddings import swap_embedding_model as _swap
     try:
@@ -58,9 +58,9 @@ def swap_reranker_model(body: Dict[str, Any], request: Request):
     if os.environ.get("SMOKE_ALLOW_ADMIN_STATS", "false").lower() != "true":
         require_admin_tailscale(request)
 
-    model_name = (body or {}).get("model", "").strip()
-    if not model_name:
-        raise HTTPException(400, "'model' field is required")
+    model_name = (body or {}).get("model")
+    if not isinstance(model_name, str) or not model_name.strip():
+        raise HTTPException(status_code=400, detail="model must be a non-empty string")
 
     from rerank import swap_reranker_model as _swap
     try:

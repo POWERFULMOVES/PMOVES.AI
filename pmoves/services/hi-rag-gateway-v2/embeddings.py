@@ -216,6 +216,7 @@ def swap_embedding_model(model_name: str) -> Dict[str, Any]:
 
     Returns dict with status and new model info.
     Thread-safe: acquires lock during swap.
+    Validates the new model by encoding a test string before reporting success.
     """
     import config as _cfg
     with _embedder_lock:
@@ -230,13 +231,30 @@ def swap_embedding_model(model_name: str) -> Dict[str, Any]:
                 pass
         _cfg._embedder = None
         _cfg._embedding_model_loaded = None
-        # Update config
+        # Update config atomically: model name and type together
         _cfg.EMBEDDING_MODEL = model_name
         _cfg.EMBEDDING_MODEL_TYPE = _detect_type(model_name)
         logger.info(
             "Embedding model hot-swap: %s (%s) -> %s (%s)",
             old_model, old_type, model_name, _cfg.EMBEDDING_MODEL_TYPE,
         )
+        # Validate: actually load and try encoding a test string
+        try:
+            embedder = _get_embedder()
+            if _is_bge3(model_name):
+                test_vec = _encode_bge3(embedder, "validation test")
+            else:
+                test_vec = _encode_sentence(embedder, "validation test")
+            if not test_vec:
+                raise RuntimeError("model returned empty vector during validation")
+        except Exception as exc:
+            # Rollback on failure
+            logger.error("Model validation failed for %s: %s", model_name, exc)
+            _cfg.EMBEDDING_MODEL = old_model
+            _cfg.EMBEDDING_MODEL_TYPE = old_type
+            _cfg._embedder = None
+            _cfg._embedding_model_loaded = None
+            raise RuntimeError(f"Model validation failed for {model_name}: {exc}") from exc
     return {
         "ok": True,
         "previous_model": old_model,

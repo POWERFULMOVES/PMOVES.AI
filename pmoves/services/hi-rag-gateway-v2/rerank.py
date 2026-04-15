@@ -79,7 +79,7 @@ def _tensorzero_rerank(query: str, pool: List[Dict[str, Any]]) -> Optional[List[
         resp = requests.post(url, json=payload, headers=headers, timeout=TENSORZERO_RERANK_TIMEOUT)
         if not resp.ok:
             logger.warning(
-                "tensorzero rerank request failed status=%s body=%s", resp.status_code, resp.text[:200]
+                "Rerank error: status=%s", resp.status_code,
             )
             return None
         data = resp.json() if resp.headers.get("content-type", "").startswith("application/json") else {}
