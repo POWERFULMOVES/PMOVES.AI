@@ -44,7 +44,7 @@ import nats
 from nats.aio.client import Client as NATS
 from nats.aio.msg import Msg
 
-from services.common.service_registry import (
+from .service_registry import (
     ServiceAnnouncement,
     ServiceInfo,
     ServiceTier,
