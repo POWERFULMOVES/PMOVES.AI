@@ -3,40 +3,54 @@
 Operational recommendations for Docker daemon configuration on PMOVES.AI hosts.
 These settings are daemon-level and cannot be enforced by CI — they require host admin action.
 
-## Content Trust (Image Signing)
+## Image Provenance And Hardened Bases
 
-**CIS Benchmark:** 4.5 — "Enable Content trust for Docker"
+Docker Content Trust is no longer the primary recommendation for PMOVES images.
+Use immutable image digests plus Sigstore/cosign verification for PMOVES-built images,
+and prefer Docker Hardened Images or similarly minimized bases for runtime workloads.
 
-Content trust ensures that only signed images are pulled from registries.
+### Recommended Baseline
 
-### Enable Globally
+- Pin production image references by digest where operationally practical:
+  `image@sha256:...`
+- Verify PMOVES-built images with Sigstore/cosign before promotion.
+- Keep builder and runtime stages separate so compilers and package managers do not
+  ship in the final runtime image.
+- Prefer hardened/minimal runtime bases and non-root users.
 
-Add to `/etc/docker/daemon.json` (Linux) or Docker Desktop settings:
+### PMOVES CI Coverage
 
-```json
-{
-  "content-trust": {
-    "mode": "enforce"
-  }
-}
-```
+The `integrations-ghcr.yml` workflow signs GHCR-published images with cosign and
+verifies the resulting digest after push. This is the repo's primary provenance
+control for PMOVES-built images.
 
-Or set the environment variable for all Docker CLI sessions:
+### Hardened Images And Packages
 
-```bash
-# Add to /etc/environment or shell profile
-export DOCKER_CONTENT_TRUST=1
-```
+When adopting Docker Hardened Images:
 
-### CI Coverage
+- Pin the hardened base image by digest, not tag.
+- Align package installation with the hardened base's documented package manager.
+  For current Docker Hardened Images guidance, that means following the base-specific
+  flow rather than assuming Debian/Ubuntu `apt` semantics will carry over.
+- Treat hardened-package adoption as an image-by-image migration so builds stay
+  reproducible and scanners keep clean signal.
 
-The `hardening-validation.yml` workflow sets `DOCKER_CONTENT_TRUST=1` at the
-job level for the Docker Bench job. This ensures CI itself practices content
-trust during image pulls.
+### Legacy Note
 
-**Note:** SHA-pinned images (`image@sha256:...`) bypass content trust entirely —
-they are already verified by digest, which is a stronger guarantee than signature
-verification alone.
+Docker's Content Trust documentation is still useful historical context, but it is
+not the forward-looking control PMOVES should optimize around. Prefer digest pinning,
+cosign signatures, and registry attestations instead.
+
+## Self-Hosted GitHub Actions Runners
+
+For this repo's public PR surface:
+
+- Run untrusted pull request image validation on GitHub-hosted runners.
+- Reserve self-hosted runners for trusted `push` and `workflow_dispatch` paths.
+- Prefer dedicated runner labels/groups for image builds over broad generic
+  self-hosted pools.
+- Use ephemeral runners where feasible; otherwise schedule aggressive image/container
+  cleanup and review daemon exposure regularly.
 
 ## Live Restore
 
@@ -106,5 +120,8 @@ docker system prune -f --filter "until=72h"
 
 - [CIS Docker Benchmark v2.0.0](https://www.cisecurity.org/benchmark/docker)
 - [Docker Content Trust documentation](https://docs.docker.com/engine/security/trust/)
+- [Docker Hardened Images: image digests](https://docs.docker.com/dhi/core-concepts/digests/)
+- [Docker Hardened Images: code signing](https://docs.docker.com/dhi/core-concepts/signatures/)
+- [Docker Hardened Images: hardened packages](https://docs.docker.com/dhi/how-to/hardened-packages/)
 - [Docker Live Restore](https://docs.docker.com/engine/containers/live-restore/)
 - PMOVES.AI Known Roads: `make -C pmoves docker-prune` / `make -C pmoves docker-prune-all`
