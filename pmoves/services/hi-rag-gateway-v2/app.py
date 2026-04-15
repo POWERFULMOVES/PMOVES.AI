@@ -67,6 +67,7 @@ from config import (  # noqa: E402, F401
     RERANK_MODEL_RESOLVED, RERANK_MODEL_PATH, RERANK_USE_FP16_OVERRIDE,
     TAILSCALE_ONLY, TAILSCALE_ADMIN_ONLY, TAILSCALE_CIDRS,
     SUPABASE_REST_URL, SUPABASE_SERVICE_KEY, SUPABASE_ANON_KEY,
+    HRM_ENABLED, HRM_FAST_THRESHOLD, HRM_MAX_PONDER_STEPS, HRM_HALT_THRESHOLD,
 )
 from models import QueryReq, QueryResp, UpsertReq, UpsertItem  # noqa: F401
 from embeddings import embed_query  # noqa: F401
@@ -77,7 +78,7 @@ from security import (  # noqa: F401
     _fetch_remote_image, _enrich_mindmap_item,
 )
 from geometry_bus import (  # noqa: F401
-    shape_store, _hrm_controller,
+    shape_store, _hrm_controller, _enhanced_hrm,
     _room_add, _room_remove, _room_broadcast, _room_broadcast_roster,
     _room_ws_id, _room_ids,
     _geometry_context, _get_active_builder_pack,
@@ -90,7 +91,7 @@ try:  # noqa: F401
     from services.common.shape_store import ShapeStore  # noqa: F401
 except Exception:
     ShapeStore = None  # type: ignore[misc]
-from routes.health import admin_rerank_status  # noqa: F401
+from routes.health import admin_rerank_status, admin_hrm_status  # noqa: F401
 from routes.geometry import geometry_decode_text, mindmap_route  # noqa: F401
 from clients.qdrant import qdrant, _qdrant_search, ensure_qdrant_collection  # noqa: F401
 from clients.neo4j import driver, _warm_entities, _warm_last, graph_terms  # noqa: F401
