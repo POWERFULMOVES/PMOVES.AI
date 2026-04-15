@@ -44,7 +44,10 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 ARG ARCHON_GIT_REMOTE=https://github.com/POWERFULMOVES/PMOVES-Archon.git
-ARG ARCHON_GIT_REF=main
+# PMOVES-Archon fork default branch is PMOVES.AI-Edition-Hardened, not main.
+# See integrations-ghcr.matrix.json archon-ui entry for the canonical pattern.
+# Changing this unblocked a 4-month CI rot (last successful build: 2025-12-23).
+ARG ARCHON_GIT_REF=PMOVES.AI-Edition-Hardened
 ARG USE_LOCAL_VENDOR=0
 
 # ============================================================================
