@@ -304,6 +304,9 @@ model_name = "qwen3-coder-next:80b"
 api_key_location = "none"
 
 # --- Qwen3-Coder 480B (Alibaba Cloud DashScope — 35B active MoE, cloud-only) ---
+# Env var: ALIBABA_PRO_CODING_PLAN is the PMOVES canonical name for this secret
+# (also used by chat_alibaba_qwen at line 209 for the same DashScope endpoint,
+# and plumbed through docker-compose.yml with a `:-local-disabled` fallback).
 [models.coding_qwen3_coder_480b_cloud]
 routing = ["alibaba_dashscope"]
 
@@ -311,7 +314,7 @@ routing = ["alibaba_dashscope"]
 type = "openai"
 api_base = "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"
 model_name = "qwen3-coder"
-api_key_location = "env::DASHSCOPE_API_KEY"
+api_key_location = "env::ALIBABA_PRO_CODING_PLAN"
 
 # --- Gemma 3n E4B (Multimodal edge — ~3.5GB VRAM) ---
 [models.gemma_3n_e4b_local]
@@ -1076,11 +1079,15 @@ weight = 0.0
 [functions.multimodal_large]
 type = "chat"
 
-# Gemma 4 26B-A4B — local Ollama fallback (safe rollout, weight=0)
+# Gemma 4 26B-A4B — local Ollama DEFAULT route.
+# NOTE: This variant has no explicit weight, so it defaults to positive.
+# multimodal_large is a brand-new function (Phase 7); TensorZero requires at
+# least one positive-weight variant or it refuses to start the gateway.
+# 26B-A4B is the smallest local Gemma 4 option (~15GB VRAM via Q4_K_M),
+# making it the most defensible default across the fleet.
 [functions.multimodal_large.variants.gemma_4_26b_a4b]
 type = "chat_completion"
 model = "gemma_4_26b_a4b_local"
-weight = 0.0
 
 # Gemma 4 31B — local Ollama fallback (safe rollout, weight=0)
 [functions.multimodal_large.variants.gemma_4_31b]
