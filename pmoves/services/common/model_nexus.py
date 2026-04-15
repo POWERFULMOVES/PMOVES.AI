@@ -4,7 +4,10 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any, Mapping
 
-import yaml
+try:
+    import yaml
+except ImportError:
+    yaml = None
 
 _PMOVES_DIR = Path(__file__).resolve().parents[2]
 _DEFAULT_NEXUS_PATH = _PMOVES_DIR / "config" / "model_nexus.yaml"
