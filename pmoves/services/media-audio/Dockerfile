@@ -32,4 +32,8 @@ RUN groupadd -r pmoves --gid=65532 && \
 USER pmoves:pmoves
 
 EXPOSE 8082
+
+# Health check (GPU service — process-based, skeleton without HTTP server)
+HEALTHCHECK --interval=30s --timeout=5s --start-period=120s --retries=3 \
+    CMD pgrep -f "uvicorn" || exit 1
 CMD ["uvicorn","server:app","--host","127.0.0.1","--port","8082"]

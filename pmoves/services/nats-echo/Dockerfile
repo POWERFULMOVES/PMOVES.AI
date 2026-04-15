@@ -14,4 +14,8 @@ RUN groupadd -r pmoves --gid=65532 && \
 
 USER pmoves:pmoves
 # Script reads NATS_URL and NATS_ECHO_SUBJECT from the environment.
+
+# Health check (process-based for non-HTTP worker)
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+    CMD test -f /proc/1/cmdline || exit 1
 CMD ["python", "/app/nats_echo.py"]

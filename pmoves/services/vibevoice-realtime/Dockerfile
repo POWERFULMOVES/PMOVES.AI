@@ -42,4 +42,8 @@ RUN groupadd -r pmoves --gid=65532 && \
 USER pmoves
 
 EXPOSE 3000
+
+# Health check (GPU service — extended start-period)
+HEALTHCHECK --interval=30s --timeout=5s --start-period=120s --retries=3 \
+    CMD curl -f http://localhost:3000/healthz || exit 1
 ENTRYPOINT ["/entrypoint.sh"]

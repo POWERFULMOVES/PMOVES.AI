@@ -29,7 +29,14 @@ RUN groupadd -r pmoves --gid=65532 && \
     useradd -r -g pmoves -G video --uid=65532 --home-dir=/app --shell=/sbin/nologin pmoves && \
     chown -R pmoves:pmoves /app
 
+
+# Install curl for healthcheck
+RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
 USER pmoves:pmoves
 
 EXPOSE 8079
+
+# Health check (GPU service — process-based, skeleton without HTTP server)
+HEALTHCHECK --interval=30s --timeout=5s --start-period=120s --retries=3 \
+    CMD pgrep -f "uvicorn" || exit 1
 CMD ["uvicorn","server:app","--host","0.0.0.0","--port","8079"]
