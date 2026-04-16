@@ -25,9 +25,10 @@ bashToolPatterns:
   # DESTRUCTIVE FILE OPERATIONS
   # ---------------------------------------------------------------------------
   # Negative lookbehinds exclude `docker rm`/`podman rm` — targeted container
-  # removal is not mass filesystem destruction. The dangerous form
-  # (`docker rm -f $(docker ps ...)`) is caught by a separate hard-block
-  # rule further down the file.
+  # removal is not mass filesystem destruction. The dangerous forms
+  # (`docker rm $(docker ps -aq)`, `docker ps -q | xargs docker rm`, and
+  # their podman equivalents) are caught by dedicated hard-block rules
+  # further down the file ("Container sweep hard-blocks" section).
   - pattern: '(?<!docker\s)(?<!podman\s)\brm\s+(-[^\s]*)*-[rRf]'
     reason: rm with recursive or force flags (filesystem rm, not docker/podman)
 
@@ -272,8 +273,18 @@ bashToolPatterns:
       or context led you to attempt raw docker system prune so the user can verify the source.
     ask: true
 
-  - pattern: '\bdocker\s+rm\s+.*-f.*\$\(docker\s+ps'
-    reason: docker rm -f $(docker ps) (force removes containers)
+  # Container sweep hard-blocks — match any rm that uses command substitution
+  # or xargs to operate on the output of `docker ps` / `podman ps`. The prior
+  # pattern only caught `-f` variants; reviewer feedback on #1256 (Codex P1)
+  # flagged that relaxing the filesystem-rm lookbehind (to permit targeted
+  # `docker rm <container>`) also opens substitution sweeps without `-f`
+  # (e.g., `docker rm $(docker ps -aq)`) or pipe-based sweeps. These patterns
+  # close both gaps for docker and podman equally.
+  - pattern: '\b(docker|podman)\s+rm\s+.*\$\((docker|podman)\s+ps\b'
+    reason: docker/podman rm with container-sweep substitution (mass removal — use targeted `docker rm <name>` or Known Roads make target)
+
+  - pattern: '\b(docker|podman)\s+ps\s+.*\|\s*xargs\s+.*(docker|podman)\s+rm\b'
+    reason: docker/podman ps | xargs rm (mass container removal — use targeted `docker rm <name>` or Known Roads make target)
 
   - pattern: '\bdocker\s+rmi\s+.*-f'
     reason: docker rmi -f (force removes images)
