@@ -45,7 +45,44 @@ container state from a prior GH App reinstall is stale.
 
 This is the Phase 9G deliverable.
 
-### 1. Create fine-grained PAT
+### Primary path — agent-automated via gh CLI (one command)
+
+If `gh` CLI is authenticated on the host with scopes `admin:org` (or
+`repo + workflow`), a single Make target handles the entire fix:
+
+```bash
+# Sanity check first (dry-run, no writes):
+make -C pmoves gha-runner-ctl-check-pat
+# Expected: "OK: gh token scopes satisfy {...} requirement."
+
+# Apply the fix (injects GITHUB_PAT + cycles container):
+make -C pmoves gha-runner-ctl-setup
+```
+
+What the composite target does:
+1. `gha-runner-ctl-setup-pat` — reads `gh auth token` value, writes it into
+   `pmoves/env.shared` under `GITHUB_PAT=...` (updates in place if already
+   present, appends otherwise). Never prints the token.
+2. `gha-runner-ctl-cycle` — recreates the `github-runner-ctl` container via
+   `docker compose --profile orchestration up -d --force-recreate`, then
+   tails the last 15 log lines to confirm `"Loaded GitHub PAT from
+   environment variable"`.
+
+**Why this path exists:** the `gh` CLI's OAuth token (stored in the keyring
+on the host that auth'd with `gh auth login`) already has
+`admin:org, repo, workflow` scope for the org-owner account. That covers
+the `Actions: Read + Administration: Read/Write` requirement from
+`services/github-runner-ctl/github/client.py`. No fine-grained PAT creation
+UI walk required.
+
+**Scope verification:** `make gha-runner-ctl-check-pat` exits 2 if
+scope is insufficient, with a hint to re-auth:
+`gh auth refresh --scopes admin:org,repo,workflow`.
+
+### Fallback path — operator creates fine-grained PAT
+
+If `gh` CLI isn't available or the account auth'd with `gh` is not an
+owner/admin of the target org, create a dedicated fine-grained PAT:
 
 1. Go to https://github.com/settings/personal-access-tokens/new
 2. Resource owner: your user (or `POWERFULMOVES` org)
@@ -56,30 +93,10 @@ This is the Phase 9G deliverable.
    - **Administration:** Read and Write  (required for runner registration queries)
 5. Expiration: 90 days (or per your policy)
 6. Generate and copy token (format `github_pat_11...` or `ghp_...`)
+7. Edit `pmoves/env.shared` and add `GITHUB_PAT=<token>`
+8. Cycle the container: `make -C pmoves gha-runner-ctl-cycle`
 
-### 2. Add to env.shared
-
-```bash
-# Edit pmoves/env.shared and add:
-GITHUB_PAT=github_pat_11XXXXXXXXX
-```
-
-`env.shared` is the Docker env_file format (KEY=VALUE, no `export`). See
-`pmoves/scripts/with-env.sh` for the canonical loader pattern.
-
-### 3. Cycle the monitor container
-
-```bash
-# Recreate github-runner-ctl with the new GITHUB_PAT env var:
-bash pmoves/scripts/with-env.sh docker compose \
-  -f pmoves/docker-compose.yml \
-  --profile orchestration \
-  up -d --force-recreate github-runner-ctl
-```
-
-The runner-ctl container is in the `orchestration` and `workers` profiles.
-
-### 4. Verify
+### Verify
 
 ```bash
 # No more IsADirectoryError:
@@ -92,6 +109,23 @@ curl -s http://localhost:8104/healthz
 
 # NATS alerts for runner status should also resume (separate bug: see Known Gap below).
 ```
+
+### Secret-sync alternative (CHIT pipeline, currently not wired for this key)
+
+`pmoves/chit/secrets_manifest.yaml` already lists `GITHUB_PAT` as a target
+key (env.tier-agent) with `GH_PAT_PUBLISH` as a fallback alias. In theory
+`make -C pmoves secrets-sync-trigger` would populate it via the
+`sync-secrets-local.yml` GitHub Actions workflow.
+
+In practice this doesn't work for runner-ctl today because:
+1. GitHub Actions secret names cannot start with `GITHUB_` (reserved namespace,
+   HTTP 422 on `gh secret set GITHUB_PAT`).
+2. The alias target `GH_PAT_PUBLISH` is GHCR-scoped (package publishing) —
+   insufficient for the runner admin API.
+
+Extending the sync pipeline to carry a dedicated `GH_MONITOR_PAT` source
+secret is a Phase 9G.1 follow-up. For now, `make gha-runner-ctl-setup` (or
+the fallback operator-PAT path) is authoritative.
 
 ---
 

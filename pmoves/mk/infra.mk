@@ -187,6 +187,30 @@ secrets-sync-trigger: ## Trigger GH Actions secrets sync to local runner
 		| python -c "import sys,json; r=json.load(sys.stdin)[0]; print(f'  Status: {r[\"status\"]}  Conclusion: {r.get(\"conclusion\",\"pending\")}  Started: {r[\"createdAt\"]}')" 2>/dev/null \
 		|| gh run list --workflow=sync-secrets-local.yml --limit=1
 
+# ── GHA Runner Monitor PAT (Phase 9G) ───────────────────────────────
+# github-runner-ctl needs a PAT with admin:org (or repo+workflow) scope
+# to query /actions/runners. These targets automate injection via the
+# local gh CLI's auth token — no operator-created PAT needed.
+
+gha-runner-ctl-check-pat: ## Verify gh CLI has sufficient scope for runner-ctl (dry-run)
+	@$(PYTHON) tools/inject_github_pat_from_gh_cli.py --check
+
+gha-runner-ctl-setup-pat: ## Inject GITHUB_PAT from gh CLI token into env.shared
+	@echo "=== Phase 9G: GHA runner-ctl PAT setup via gh CLI ==="
+	@$(PYTHON) tools/inject_github_pat_from_gh_cli.py
+	@echo ""
+	@echo "Next: make gha-runner-ctl-cycle  (recreates the container to pick up env)"
+
+gha-runner-ctl-cycle: ## Recreate github-runner-ctl container so it loads fresh env.shared
+	@echo "=== Recreating github-runner-ctl ==="
+	@$(DC) --profile orchestration up -d --force-recreate github-runner-ctl
+	@sleep 5
+	@echo ""
+	@echo "--- Last 15 log lines ---"
+	@docker logs pmoves-github-runner-ctl-1 --tail 15 2>&1 | tail -15
+
+gha-runner-ctl-setup: gha-runner-ctl-setup-pat gha-runner-ctl-cycle ## Full Phase 9G path: inject PAT + cycle container
+
 
 # ── GPU & Model Serving ──────────────────────────────────────────────
 
