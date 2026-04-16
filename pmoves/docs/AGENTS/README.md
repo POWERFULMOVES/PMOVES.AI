@@ -89,7 +89,7 @@ Machine-readable configuration referenced by scripts and services.
 | `model_strengths.yaml` | `pmoves/config/` | Model capability ratings for routing |
 | `skill-pairings.yaml` | `pmoves/configs/` | 7 FlOO$ skill pairings with dependencies |
 
-### Tier 4: Operator Guides (9 files)
+### Tier 4: Operator Guides (10 files)
 
 Runbooks for Codex and Claude operators.
 
@@ -104,6 +104,7 @@ Runbooks for Codex and Claude operators.
 | [CODEX_PERSONA_STYLE_PLAYBOOK.md](./CODEX_PERSONA_STYLE_PLAYBOOK.md) | Persona voice/style configuration |
 | [KRISS_KROSS_ACCORD.md](./KRISS_KROSS_ACCORD.md) | Multi-agent collision safety protocol (ratified 2026-02-25) |
 | [KRISS_KROSS_ACK.md](./KRISS_KROSS_ACK.md) | Witness attestation for KRISS KROSS ratification |
+| [OPERATOR_FACING_CLAUDE_MD_MIRRORS.md](./OPERATOR_FACING_CLAUDE_MD_MIRRORS.md) | Operator-facing mirrors of `.claude/CLAUDE.md` runbook sections (submodule recovery, CodeQL sanitizer) |
 
 ### Creator Control Plane
 

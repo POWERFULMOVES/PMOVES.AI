@@ -536,7 +536,7 @@ Taint is broken at `len()` — the analyzer sees an int, not the string.
 - Adding a runtime-noop sanitizer is cheaper than restructuring validation
 
 **When NOT to use this pattern:**
-- If CodeQL is flagging a *real* dataflow bug, fix the actual issue
+- If CodeQL is flagging a *real* dataflow bug, remediate the underlying issue
 - If you can't articulate why the original code was safe, the answer
   isn't "add `quote()` until the warning goes away" — it's "read the
   code more carefully"
