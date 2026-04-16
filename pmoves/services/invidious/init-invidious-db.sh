@@ -34,14 +34,28 @@ SQL_FILES=(
 
 echo "[init-invidious-db] Loading schema into database: ${POSTGRES_DB:-invidious}"
 
+# Preflight: verify every SQL file exists before starting any psql. If any
+# are missing, fail fast — continuing on would leave the DB in a partial
+# state (some tables created, others not), which manifests as Invidious
+# runtime errors on unrelated queries and is hard to diagnose post-boot.
+missing=()
+for sql_file in "${SQL_FILES[@]}"; do
+  if [[ ! -f "${SQL_DIR}/${sql_file}" ]]; then
+    missing+=("${sql_file}")
+  fi
+done
+if (( ${#missing[@]} > 0 )); then
+  echo "[init-invidious-db] ERROR: ${#missing[@]} required SQL file(s) missing from ${SQL_DIR}:" >&2
+  for m in "${missing[@]}"; do echo "  - ${m}" >&2; done
+  echo "[init-invidious-db] Aborting init to prevent partial schema. Verify the bind-mount:" >&2
+  echo "  pmoves/services/invidious/config/sql/ → /config/sql/ in docker-compose.yml" >&2
+  exit 1
+fi
+
 for sql_file in "${SQL_FILES[@]}"; do
   sql_path="${SQL_DIR}/${sql_file}"
-  if [[ -f "${sql_path}" ]]; then
-    echo "[init-invidious-db] Applying ${sql_file}..."
-    psql -v ON_ERROR_STOP=1 --username "${POSTGRES_USER}" --dbname "${POSTGRES_DB}" -f "${sql_path}"
-  else
-    echo "[init-invidious-db] WARNING: ${sql_path} not found, skipping"
-  fi
+  echo "[init-invidious-db] Applying ${sql_file}..."
+  psql -v ON_ERROR_STOP=1 --username "${POSTGRES_USER}" --dbname "${POSTGRES_DB}" -f "${sql_path}"
 done
 
 echo "[init-invidious-db] Schema load complete."
