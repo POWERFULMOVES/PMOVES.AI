@@ -20,10 +20,11 @@ Do not replay "open everything to `0.0.0.0`" diffs into `docker-compose.yml`.
 Use one of these paths instead:
 
 1. keep the base compose default as-is
-2. set a reviewed `*_BIND=0.0.0.0` override in a local ignored env file
+2. set a reviewed `*_BIND=0.0.0.0` override in `pmoves/env.mesh-bind.local`
 3. document the rationale in AGNOTE / PR notes when a new service joins the mesh allowlist
 
-`pmoves/env.mesh-bind.example` is the reviewed allowlist starter file for node-local overrides.
+`pmoves/env.mesh-bind.example` is the reviewed starter file. Copy only the
+needed entries into `pmoves/env.mesh-bind.local`, which is ignored by git.
 
 ## Reviewed Override Pattern
 
@@ -37,7 +38,8 @@ AGENT_ZERO_BIND=0.0.0.0
 NATS_BIND=127.0.0.1
 ```
 
-Set overrides in `env.shared`, `env.z890`, or another ignored node-local env file.
+Use `pmoves/env.mesh-bind.local` for ad hoc node-local exposure changes. Promote
+anything durable into tracked files like `env.z890` only through a separate PR.
 
 ## Service Classes
 
@@ -73,7 +75,10 @@ These services are reviewed for opt-in direct mesh exposure, but the preferred p
 
 ### Mesh-Default Today
 
-Some services already publish to `0.0.0.0` in the current compose. Treat that as current runtime state, not a license to widen neighboring services without review. Use `make -C pmoves port-audit` to inspect the live inventory on the node you are changing.
+Some services already publish to `0.0.0.0` in the current compose. Treat that
+as current runtime state, not a license to widen neighboring services without
+review. `make -C pmoves port-audit` reads `pmoves/env.mesh-bind.local` when
+present so node-local reviewed exceptions do not require editing tracked Python.
 
 Examples:
 
@@ -90,8 +95,9 @@ Examples:
 # Audit all port bindings against the preferred policy
 make -C pmoves port-audit
 
-# Confirm the reviewed override file before copying entries into a node-local env
-Get-Content pmoves/env.mesh-bind.example
+# Seed the ignored local override file, then audit the node
+Copy-Item pmoves/env.mesh-bind.example pmoves/env.mesh-bind.local
+make -C pmoves port-audit
 ```
 
 ## Pinokio Caddy Compatibility
@@ -108,7 +114,7 @@ direct git operations on `env.shared` because that file also carries secrets.
 The safe workflow:
 
 1. keep inline defaults in `docker-compose.yml`
-2. copy reviewed overrides from `env.mesh-bind.example` into a local ignored env file
+2. copy reviewed overrides from `env.mesh-bind.example` into `env.mesh-bind.local`
 3. use `make -C pmoves secrets-funnel` when you intentionally need to touch `env.shared`
 
 ## Docker Inter-Container Communication

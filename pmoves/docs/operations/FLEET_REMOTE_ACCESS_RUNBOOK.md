@@ -161,7 +161,7 @@ Important current runtime note:
 ## Host Port Exposure Rule
 
 - Do not solve remote-access friction by flipping large sections of `docker-compose.yml` from `127.0.0.1` to `0.0.0.0`.
-- If a service needs direct mesh reachability, use a reviewed `*_BIND=0.0.0.0` override from `pmoves/env.mesh-bind.example` in a node-local env file.
+- If a service needs direct mesh reachability, copy the reviewed `*_BIND=0.0.0.0` entries you need from `pmoves/env.mesh-bind.example` into `pmoves/env.mesh-bind.local`.
 - Data-tier and admin surfaces stay on a separate review path even if a stash or local experiment widened them before.
 
 ---

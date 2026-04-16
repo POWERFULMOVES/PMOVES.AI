@@ -10,24 +10,70 @@ Usage:
     make -C pmoves port-audit               # via Makefile
 """
 import json
-import re
+import os
 import subprocess
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+DEFAULT_BIND_FILE = ROOT / "env.mesh-bind.local"
+PORT_AUDIT_BIND_FILE_ENV = "PORT_AUDIT_BIND_FILE"
 
-# Services allowed to bind to 0.0.0.0 (mesh-accessible).
-# Preferred policy is still loopback-by-default with reviewed mesh overrides.
-# The compose file contains some historical broader defaults, so treat this tool
-# as a tightening audit rather than proof that every current base binding is
-# already ideal. For node-local opt-ins, copy reviewed entries from
-# `pmoves/env.mesh-bind.example` and add those services here only on nodes where
-# direct mesh exposure is intentional.
-MESH_ALLOWED_SERVICES = set()
+# Bind vars that intentionally map to mesh-accessible services when the local
+# ignored bind file opts them into 0.0.0.0 exposure.
+BIND_VAR_TO_SERVICES = {
+    "AGENT_ZERO_BIND": {"agent-zero"},
+    "BOTZ_BIND": {"botz-gateway"},
+    "CHANNEL_MONITOR_BIND": {"channel-monitor"},
+    "DEEPRESEARCH_BIND": {"deepresearch-local"},
+    "EVO_CONTROLLER_BIND": {"evo-controller"},
+    "FLUTE_BIND": {"flute-gateway"},
+    "GPU_ORCHESTRATOR_BIND": {"gpu-orchestrator"},
+    "HIRAG_BIND": {"hi-rag-gateway-v2", "hi-rag-gateway-v2-gpu"},
+    "HIRAG_V1_BIND": {"hi-rag-gateway"},
+    "KONG_PROXY_BIND": {"supabase-kong"},
+    "NATS_BIND": {"nats"},
+    "PMOVES_UI_BIND": {"pmoves-ui"},
+    "PMOVES_YT_BIND": {"pmoves-yt"},
+    "PUBLISHER_DISCORD_BIND": {"publisher-discord"},
+    "SUPASERCH_BIND": {"supaserch"},
+    "TENSORZERO_BIND": {"tensorzero-gateway"},
+    "TTS_BIND": {"ultimate-tts-studio"},
+}
 
 # Kong admin port is explicitly excluded from mesh
 KONG_ADMIN_PORTS = {"8001"}
+
+
+def load_mesh_allowed_services() -> tuple[Path, set[str], set[str]]:
+    """Load mesh-allowed service names from a local ignored bind override file."""
+    bind_file = Path(os.environ.get(PORT_AUDIT_BIND_FILE_ENV, str(DEFAULT_BIND_FILE)))
+    allowed_services: set[str] = set()
+    unmapped_vars: set[str] = set()
+
+    if not bind_file.exists():
+        return bind_file, allowed_services, unmapped_vars
+
+    try:
+        for raw_line in bind_file.read_text(encoding="utf-8").splitlines():
+            line = raw_line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            bind_var, bind_value = line.split("=", 1)
+            bind_var = bind_var.strip()
+            bind_value = bind_value.strip().strip('"').strip("'")
+            if bind_value != "0.0.0.0":
+                continue
+
+            mapped_services = BIND_VAR_TO_SERVICES.get(bind_var)
+            if mapped_services:
+                allowed_services.update(mapped_services)
+            elif bind_var.endswith("_BIND"):
+                unmapped_vars.add(bind_var)
+    except OSError as exc:
+        print(f"WARNING: Could not read bind override file {bind_file}: {exc}", file=sys.stderr)
+
+    return bind_file, allowed_services, unmapped_vars
 
 
 def parse_compose_config():
@@ -46,7 +92,7 @@ def parse_compose_config():
         return None
 
 
-def audit_ports(config: dict) -> list[dict]:
+def audit_ports(config: dict, mesh_allowed_services: set[str]) -> list[dict]:
     """Extract and classify port bindings from compose config."""
     findings = []
     services = config.get("services", {})
@@ -73,7 +119,7 @@ def audit_ports(config: dict) -> list[dict]:
             if not host_ip:
                 host_ip = "0.0.0.0"
 
-            is_mesh = svc_name in MESH_ALLOWED_SERVICES
+            is_mesh = svc_name in mesh_allowed_services
             is_kong_admin = svc_name == "supabase-kong" and published in KONG_ADMIN_PORTS
 
             if is_kong_admin:
@@ -97,9 +143,22 @@ def audit_ports(config: dict) -> list[dict]:
     return findings
 
 
-def print_report(findings: list[dict]) -> int:
+def print_report(
+    findings: list[dict],
+    bind_file: Path,
+    mesh_allowed_services: set[str],
+    unmapped_vars: set[str],
+) -> int:
     """Print audit report and return exit code (non-zero if violations)."""
     violations = [f for f in findings if f["status"] == "VIOLATION"]
+
+    if bind_file.exists():
+        source = ", ".join(sorted(mesh_allowed_services)) or "none"
+        print(f"Local mesh allowlist file: {bind_file}")
+        print(f"Reviewed mesh exceptions loaded: {source}")
+        if unmapped_vars:
+            print(f"WARNING: Unmapped *_BIND entries ignored by audit: {', '.join(sorted(unmapped_vars))}")
+        print("")
 
     print(f"{'SERVICE':<35} {'HOST_PORT':>10} {'BIND':>12} {'EXPECTED':>12} {'STATUS':>10}")
     print("-" * 85)
@@ -130,8 +189,9 @@ def main() -> int:
         print("ERROR: compose config returned no services — failing closed.", file=sys.stderr)
         return 1
 
-    findings = audit_ports(config)
-    return print_report(findings)
+    bind_file, mesh_allowed_services, unmapped_vars = load_mesh_allowed_services()
+    findings = audit_ports(config, mesh_allowed_services)
+    return print_report(findings, bind_file, mesh_allowed_services, unmapped_vars)
 
 
 if __name__ == "__main__":
