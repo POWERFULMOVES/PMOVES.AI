@@ -18,11 +18,12 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 # Services allowed to bind to 0.0.0.0 (mesh-accessible).
-# Since all docker-compose.yml port bindings now default to 127.0.0.1,
-# this set should be empty for single-host (laptop) deployments.
-# Multi-host nodes (Z890, KVM) override via env vars (*_BIND=0.0.0.0)
-# which makes them appear as 0.0.0.0 in `docker compose config` output —
-# add those services here only on nodes where mesh exposure is intentional.
+# Preferred policy is still loopback-by-default with reviewed mesh overrides.
+# The compose file contains some historical broader defaults, so treat this tool
+# as a tightening audit rather than proof that every current base binding is
+# already ideal. For node-local opt-ins, copy reviewed entries from
+# `pmoves/env.mesh-bind.example` and add those services here only on nodes where
+# direct mesh exposure is intentional.
 MESH_ALLOWED_SERVICES = set()
 
 # Kong admin port is explicitly excluded from mesh

@@ -1,75 +1,68 @@
 # Port Binding Security Model
 
-All Docker Compose host port bindings use env-var-controlled bind addresses with safe defaults.
+All Docker Compose host port bindings use env-var-controlled bind addresses. The
+preferred posture is still "loopback by default, widen only with intent," but
+the base compose contains some historical `0.0.0.0` defaults that should be
+tightened deliberately rather than copied forward in blanket edits.
 
-## Three-Tier Model
+## Four-Tier Model
 
 | Tier | Default Bind | Purpose | Example |
 |------|-------------|---------|---------|
-| **localhost-only** | `127.0.0.1` | Admin UIs, databases, internal services | Kong admin, MinIO, Supabase Studio |
-| **mesh-accessible** | `0.0.0.0` | Services consumed by Tailscale mesh nodes | Agent Zero, NATS, TensorZero, Flute |
-| **custom** | varies | Override via `*_BIND` env var | Any service needing different binding |
+| **localhost-only** | `127.0.0.1` | Admin UIs, databases, and services that should stay host-local | Kong admin, Supabase DB |
+| **mesh-default** | `0.0.0.0` | Small set of services already published by base compose for direct mesh consumption | NATS |
+| **mesh-eligible override** | `127.0.0.1` | Services that may be opened on specific nodes through a reviewed `*_BIND` override | Agent Zero, TensorZero, Flute |
+| **custom** | varies | Node-specific override via `*_BIND` env var | Any service with an approved exception |
 
-## Override Pattern
+## Review Rule
+
+Do not replay "open everything to `0.0.0.0`" diffs into `docker-compose.yml`.
+Use one of these paths instead:
+
+1. keep the base compose default as-is
+2. set a reviewed `*_BIND=0.0.0.0` override in a local ignored env file
+3. document the rationale in AGNOTE / PR notes when a new service joins the mesh allowlist
+
+`pmoves/env.mesh-bind.example` is the reviewed allowlist starter file for node-local overrides.
+
+## Reviewed Override Pattern
 
 Every port binding uses `${SERVICE_BIND:-DEFAULT}:${SERVICE_PORT:-PORT}:CONTAINER_PORT`:
 
 ```bash
-# Make MinIO console accessible from Tailscale (dev only)
-MINIO_CONSOLE_BIND=0.0.0.0
+# Open a reviewed control-plane surface on a node that needs direct mesh access
+AGENT_ZERO_BIND=0.0.0.0
 
-# Lock Agent Zero to localhost
-AGENT_ZERO_BIND=127.0.0.1
+# Lock a published service back down on a local-only workstation
+NATS_BIND=127.0.0.1
 ```
 
-Set overrides in `env.shared` or pass via environment.
+Set overrides in `env.shared`, `env.z890`, or another ignored node-local env file.
 
-## Service Classification
+## Service Classes
 
-### Localhost-Only (127.0.0.1 default)
+### Never Widen Without Separate Review
 
-| Service | Bind Var | Port |
-|---------|----------|------|
-| Kong Admin | `KONG_ADMIN_BIND` | 8001 |
-| MinIO API | `MINIO_BIND` | 9000 |
-| MinIO Console | `MINIO_CONSOLE_BIND` | 9001 |
-| BoTZ Gateway | `BOTZ_BIND` | 8054 |
-| Supabase DB | `SUPABASE_DB_BIND` | 54322 |
-| Supabase Auth | `SUPABASE_AUTH_BIND` | 9999 |
-| Supabase REST | `SUPABASE_REST_BIND` | 3000 (PostgREST — distinct from Grafana 3000 below; runs in `supabase-local` profile only) |
-| Supabase Realtime | `SUPABASE_REALTIME_BIND` | 4010 |
-| Supabase Storage | `SUPABASE_STORAGE_BIND` | 5000 |
-| Supabase Studio | `SUPABASE_STUDIO_BIND` | 54323 |
-| Supabase Pooler | `SUPABASE_POOLER_BIND` | 54329/6543 |
-| Qdrant | `QDRANT_BIND` | 6333 |
-| Meilisearch | `MEILISEARCH_BIND` | 7700 |
-| Neo4j | `NEO4J_BIND` | 7474/7687 |
-| ClickHouse | `CLICKHOUSE_BIND` | 8123 |
-| TensorZero UI | `TENSORZERO_UI_BIND` | 4000 |
-| Archon | `ARCHON_BIND` | 8091/8051/8052 |
-| Cipher | `CIPHER_BIND` | 8096 |
-| Ollama | `OLLAMA_BIND` | 11435 |
-| Tokenism | `TOKENISM_BIND` | 8103 |
-| Consciousness | `CONSCIOUSNESS_BIND` | 8105 |
-| Cast TTS | `CAST_TTS_BIND` | 8060 |
-| Voice Relay | `VOICE_RELAY_BIND` | 8121 |
-| PMOVES UI | `PMOVES_UI_BIND` | 4482 |
-| Wger | `WGER_BIND` | 8000 |
-| Gateway Agent | `GATEWAY_AGENT_BIND` | 8111 |
-| GitHub services | `GITHUB_*_BIND` | various |
+These are the surfaces the abandoned stash tried to widen and this lane intentionally does not:
 
-### Mesh-Accessible (0.0.0.0 default)
+| Service | Bind Var | Why it stays separate |
+|---------|----------|-----------------------|
+| Supabase DB / Auth / REST / Realtime / Storage / Studio / Pooler | `SUPABASE_*_BIND` | Database, auth, and admin surface area |
+| Kong Admin | `KONG_ADMIN_BIND` | Direct admin plane |
+| Qdrant / Meilisearch / Neo4j / ClickHouse | `QDRANT_BIND`, `MEILISEARCH_BIND`, `NEO4J_BIND`, `CLICKHOUSE_BIND` | Data-tier stores |
+| MinIO API / Console | `MINIO_BIND`, `MINIO_CONSOLE_BIND` | Object store + admin console |
+
+### Reviewed Mesh Override Allowlist
+
+These services are reviewed for opt-in direct mesh exposure, but the preferred path is still an explicit override rather than another base-compose default change:
 
 | Service | Bind Var | Port |
 |---------|----------|------|
 | Kong Proxy | `KONG_PROXY_BIND` | 8000 |
 | Agent Zero | `AGENT_ZERO_BIND` | 8080/8081 |
 | Flute-Gateway | `FLUTE_BIND` | 8055/8056 |
-| NATS | `NATS_BIND` | 4222/9223 |
 | TensorZero Gateway | `TENSORZERO_BIND` | 3030 |
-| Hi-RAG v2 | `HIRAG_BIND` | 8086/8087/8187 |
-| Hi-RAG v1 | `HIRAG_V1_BIND` | 8089 |
-| Grafana | `GRAFANA_BIND` | 3000 (shares port with Supabase REST above — profiles are mutually exclusive or use `GRAFANA_PORT` override) |
+| Hi-RAG v1 / v2 | `HIRAG_V1_BIND`, `HIRAG_BIND` | 8089 / 8086/8087/8187 |
 | DeepResearch | `DEEPRESEARCH_BIND` | 8098 |
 | SupaSerch | `SUPASERCH_BIND` | 8099 |
 | PMOVES.YT | `PMOVES_YT_BIND` | 8077 |
@@ -78,35 +71,48 @@ Set overrides in `env.shared` or pass via environment.
 | GPU Orchestrator | `GPU_ORCHESTRATOR_BIND` | 8200 |
 | Evo Controller | `EVO_CONTROLLER_BIND` | 8113 |
 
+### Mesh-Default Today
+
+Some services already publish to `0.0.0.0` in the current compose. Treat that as current runtime state, not a license to widen neighboring services without review. Use `make -C pmoves port-audit` to inspect the live inventory on the node you are changing.
+
+Examples:
+
+| Service | Bind Var | Notes |
+|---------|----------|-------|
+| NATS | `NATS_BIND` | Mesh event bus; already published by base compose |
+| BoTZ Gateway | `BOTZ_BIND` | Currently mesh-default in compose |
+| Publisher Discord | `PUBLISHER_DISCORD_BIND` | Currently mesh-default in compose |
+| PMOVES UI | `PMOVES_UI_BIND` | Currently mesh-default in compose |
+
 ## Verification
 
 ```bash
-# Audit all port bindings
+# Audit all port bindings against the preferred policy
 make -C pmoves port-audit
 
-# Quick check from another machine
-curl http://100.x.x.x:8001  # Should FAIL (Kong admin, localhost-only)
-curl http://100.x.x.x:8080  # Should OK (Agent Zero, mesh)
+# Confirm the reviewed override file before copying entries into a node-local env
+Get-Content pmoves/env.mesh-bind.example
 ```
 
 ## Pinokio Caddy Compatibility
 
-The Pinokio Caddy reverse proxy runs **on the host** and reaches services via `localhost:PORT`. Binding to `127.0.0.1` does NOT break Caddy — it still accesses the same `127.0.0.1` address. The proxy ports (42000+) are independently managed by Pinokio and bind to `0.0.0.0` for LAN/VPN sharing.
+The Pinokio Caddy reverse proxy runs on the host and reaches services via
+`localhost:PORT`. Binding to `127.0.0.1` does not break Caddy. The proxy ports
+(`42000+`) are independently managed by Pinokio and bind to `0.0.0.0` for LAN
+and VPN sharing.
 
 ## env.shared and Damage-Control Hook
 
-The `_BIND` variables exist in env.shared but the damage-control hook blocks
-direct git operations on this file. This is by design — env.shared contains
-credentials. The workaround:
+The `_BIND` variables live in env files, but the damage-control hook blocks
+direct git operations on `env.shared` because that file also carries secrets.
+The safe workflow:
 
-1. docker-compose.yml has inline defaults: `${*_BIND:-127.0.0.1}` — works without env.shared
-2. `make -C pmoves brand-defaults` programmatically updates env.shared
-3. To manually commit env.shared changes, use `make -C pmoves secrets-funnel`
-
-The inline defaults ensure port binding security works out-of-the-box on a
-fresh clone without any env.shared file present. The damage-control hook
-protects against accidentally committing credentials bundled in the same file.
+1. keep inline defaults in `docker-compose.yml`
+2. copy reviewed overrides from `env.mesh-bind.example` into a local ignored env file
+3. use `make -C pmoves secrets-funnel` when you intentionally need to touch `env.shared`
 
 ## Docker Inter-Container Communication
 
-Container-to-container traffic uses Docker networks (`pmoves_api`, `pmoves_data`, `pmoves_bus`), never host ports. Changing host port bindings has zero impact on inter-service communication.
+Container-to-container traffic uses Docker networks (`pmoves_api`,
+`pmoves_data`, `pmoves_bus`), never host ports. Changing host port bindings
+does not change inter-service communication inside the mesh.
