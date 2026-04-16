@@ -677,6 +677,21 @@ models:
     cost_efficiency_score: 8.0
     notes: "The flash thinker — Google's speed demon with surprising depth. 1M context window."
 
+  claude_sonnet_4:
+    primary_strength: reasoning
+    strength_scores:
+      reasoning: 0.92
+      speed: 0.75
+      coding: 0.90
+      multilingual: 0.80
+      creativity: 0.82
+      context_handling: 0.92
+    preferred_functions: [agent_zero, coding_claude_fallback, orchestrator, archon_code_review]
+    cost_efficiency_score: 5.5
+    multimodal: true
+    input_modalities: ["text", "image"]
+    notes: "The craftsman — Anthropic's balanced powerhouse. 200K context, strong tool use, excellent structured output. Codes like a senior, reasons like an architect."
+
   # ===========================================================================
   # PMOVES-Built Models (CHIT-Distilled)
   # ===========================================================================

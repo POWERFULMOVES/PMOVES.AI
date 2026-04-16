@@ -59,7 +59,7 @@ providers:
             variant_name: cloud_claude
             role: primary
             weight: 0.0
-        strength_ref: null             # Needs seed entry
+        strength_ref: claude_sonnet_4
         vram_mb: 0
 
   # ---------------------------------------------------------------------------
