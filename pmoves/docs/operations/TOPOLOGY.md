@@ -17,7 +17,7 @@
 | R9700 Workstation (Linux) | LAN | `ts:<rdna4>` | pmoves-rdna4 | Heavyweight ROCm Inference (Gemma 4 31B/26B-A4B via llama.cpp) | `self-hosted, ai-lab, gpu, rocm, rdna4` (pending) | 9850X3D / 32GB + 2x R9700 (64GB VRAM total) | electricity |
 | Jetson Orin #1 | LAN (RustDesk + SSH) | `ts:<nano>` | pmoves-nano (rename to pmoves-nano-1 pending) | Edge Inference (Nemotron/NemoClaw), Claws | — | Orin (sm_87) | electricity |
 | Jetson Orin #2 | LAN (RustDesk + SSH) | TBD | TBD | Edge Inference (Nemotron/NemoClaw), Claws | — | Orin (sm_87) | electricity |
-| KVM4-1 | — | 31.97.42.207 | pmoves-kvm4-1 | API Gateway + Tailscale Egress Exit Node (Phase 9Q) | `self-hosted, vps, kvm4, production` | 8C / 16GB | $10/mo |
+| KVM4-1 | — | `ts:<kvm4-1>` | pmoves-kvm4-1 | API Gateway + Tailscale Egress Exit Node (Phase 9Q) | `self-hosted, vps, kvm4, production` | 8C / 16GB | $10/mo |
 | KVM4-2 | — | — | pmoves-kvm4-2 | Data / Storage | `self-hosted, vps, kvm4, production` | 8C / 16GB | $10/mo |
 | KVM2 | — | — | pmoves-kvm2 | Reverse Proxy (nginx SSL) / RustDesk Relay | `self-hosted, vps, kvm2, backup` | 4C / 8GB | $10/mo |
 | Cloudflare Edge | — | — | — | DNS, Worker routing | — | Edge | Free plan |

@@ -961,6 +961,9 @@ chitSafePaths:
   - "pr-kits"
   # Context docs that need fleet/config renames (approved per issue #1173)
   - ".claude/context/nats-subjects.md"
+  # Runner topology context — mirror surface for fleet role changes
+  # (Phase 9Q, 2026-04-16: KVM4-1 role expansion for YT egress — PR #1262)
+  - ".claude/context/runner-topology.md"
 
 # ---------------------------------------------------------------------------
 # PMOVES.AI - GIT SUBMODULES

@@ -8,10 +8,19 @@
 |------|------|-------------|--------|
 | **Z890** | Dev + GPU (3090Ti) | All (local Docker Compose) | `self-hosted, ai-lab, gpu, cuda` |
 | **5090** | Primary GPU (pending) | Future inference | (pending) |
-| **KVM4-1** | API Gateway | TensorZero, Agent Zero, Hi-RAG, Archon, Gateway Agent | `self-hosted, vps, kvm4, production` |
+| **KVM4-1** | API Gateway + Tailscale Egress Exit Node (Phase 9Q) | TensorZero, Agent Zero, Hi-RAG, Archon, Gateway Agent; outbound exit for `pmoves-yt` stack | `self-hosted, vps, kvm4, production` |
 | **KVM4-2** | Data/Storage | Supabase, NATS, Qdrant, Neo4j, Meilisearch, MinIO, monitoring | `self-hosted, vps, kvm4, production` |
-| **KVM2** | Exit Node | nginx (SSL termination) | `self-hosted, vps, kvm2, backup` |
+| **KVM2** | Reverse Proxy / RustDesk Relay | nginx (SSL termination), RustDesk hbbs/hbbr | `self-hosted, vps, kvm2, backup` |
 | **Cloudflare** | Edge | DNS, CI Worker | — |
+
+**Phase 9Q — YT egress routing (2026-04-16, PR #1262):** `pmoves-yt`,
+`bgutil-pot-provider`, `invidious-companion`, and `invidious` route all
+outbound HTTP/HTTPS through a Tailscale sidecar (`tailscale-yt-egress`)
+configured with `--exit-node=pmoves-kvm4-1`. See
+`pmoves/docs/operations/YT_EGRESS_RUNBOOK.md` for activation/rollback.
+The egress path is transparent to event consumers — no new NATS subjects
+are introduced. See `.claude/context/nats-subjects.md` for the subject
+catalog; `ingest.*.v1` flows through normally when egress is active.
 
 ## Route: Public → Services
 

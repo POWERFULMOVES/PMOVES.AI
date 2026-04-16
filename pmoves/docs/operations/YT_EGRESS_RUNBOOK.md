@@ -2,7 +2,7 @@
 
 **Phase:** 9Q
 **Last updated:** 2026-04-16
-**Exit node:** `pmoves-kvm4-1` (Hostinger datacenter IP `31.97.42.207`)
+**Exit node:** `pmoves-kvm4-1` (Hostinger datacenter — resolve via Tailscale MagicDNS)
 
 ## When to Activate
 
@@ -34,9 +34,9 @@ make -C pmoves yt-egress-preflight
 ```
 
 Expected output:
-```
-[yt-egress] Preflight: checking KVM4-1 Tailscale status...
-[yt-egress] KVM4-1 reachable on tailnet.
+```text
+[yt-egress] Preflight: checking pmoves-kvm4-1 Tailscale exit-node advertisement...
+[yt-egress] pmoves-kvm4-1 is advertising as exit node.
 ```
 
 If the preflight fails:
@@ -82,16 +82,19 @@ make -C pmoves yt-egress-verify
 
 Expected output:
 
-```
+```text
 --- Host IP (residential baseline) ---
-<your residential IP, e.g. 71.190.90.179>
+<residential-ip-redacted>
 
---- PMOVES.YT container egress IP (expected: 31.97.42.207 or Hostinger range) ---
-31.97.42.207
+--- PMOVES.YT container egress IP (expected: pmoves-kvm4-1 / Hostinger range) ---
+<hostinger-datacenter-ip-redacted>
 
 --- Test ingest (dQw4w9WgXcQ, short known-good video) ---
 {"ok": true, "ingest_id": "..."}
 ```
+
+Host and container IPs must differ. The Makefile target fails with a clear
+error if they match (proxy inactive) or if the container is not running.
 
 If the test ingest returns `{"detail": "Failed to download..."}`:
 - Wait 60 seconds and retry (sidecar may still be establishing route)
@@ -188,8 +191,8 @@ yt-dlp --cookies-from-browser chrome \
   https://www.youtube.com/
 # Copy file to PMOVES host:
 scp darkxside.youtube.cookies.txt pmoves:pmoves/config/cookies/
-# Restart pmoves-yt to pick up (no compose rebuild needed):
-make -C pmoves up-pmoves-yt
+# Restart YT stack to pick up (no compose rebuild needed):
+make -C pmoves up-yt
 ```
 
 ## Related Files
