@@ -952,6 +952,11 @@ chitSafePaths:
   # (Phase 9P, 2026-04-16: SQL schema for Invidious DB + init-invidious-db.sh)
   - "pmoves/services/invidious/"
   - "services/invidious/"
+  # YT egress compose — Tailscale sidecar routing YT-facing services through
+  # KVM4-1 exit node (Phase 9Q, 2026-04-16: YouTube residential-IP 403 bypass)
+  - "docker-compose.yt-egress"
+  # YT egress Make target lib
+  - "mk/egress.mk"
   # PR-kit compose files — integration starter templates
   - "pr-kits"
   # Context docs that need fleet/config renames (approved per issue #1173)
