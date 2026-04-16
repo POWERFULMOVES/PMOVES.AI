@@ -948,6 +948,10 @@ chitSafePaths:
   - "docker-compose.open-notebook"
   # External integration compose — shared sidecar services (open-notebook-ext, jellyfin-ext)
   - "docker-compose.external"
+  # Invidious SQL init scripts + shell wrapper — restoring lost service config
+  # (Phase 9P, 2026-04-16: SQL schema for Invidious DB + init-invidious-db.sh)
+  - "pmoves/services/invidious/"
+  - "services/invidious/"
   # PR-kit compose files — integration starter templates
   - "pr-kits"
   # Context docs that need fleet/config renames (approved per issue #1173)
