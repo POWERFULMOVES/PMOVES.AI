@@ -3810,12 +3810,15 @@ services:
     - pmoves_app
     - pmoves_bus
     - pmoves_external  # YouTube innertube API
+    # The invidious-companion image is a compiled Deno binary with NO shell
+    # and NO wget/curl — CMD-SHELL based healthchecks fail every time (Phase
+    # 9P observed 760+ failing streak despite service working normally).
+    # Docker has no way to HTTP-probe without invoking something in the
+    # container, so we disable the healthcheck. Liveness is still monitored
+    # via Prometheus scraping (service exposes metrics) and the PMOVES.YT
+    # fallback flow surfaces actual unhealthy states as 5xx response chains.
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8282/ >/dev/null 2>&1 || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 15s
+      disable: true
     deploy:
       resources:
         limits:

@@ -9,10 +9,10 @@
 enabled = true
 async_writes = true
 
-# OTLP export disabled — re-enable when OTel collector is running
-# [gateway.export.otlp.traces]
-# enabled = true
-# format = "opentelemetry"
+# OTLP export — re-enabled P7 P0.2 (OTel collector in docker-compose.tracing.yml)
+[gateway.export.otlp.traces]
+enabled = true
+format = "opentelemetry"
 
 # --- Chat models: Agent Zero orchestration (local GPU and edge) ------------
 # Updated 2026-03-15: Replaced stale models with Qwen 3.5 + LFM2 family
