@@ -895,10 +895,14 @@ chitBypassPatterns:
   - '\bmigrate-vps\b'
   - '\bdeploy-vps-cluster\b'
   # Git state cleanup — remove stale rebase/merge crash artifacts from .git/
-  # VS Code crashes leave empty rebase-merge/rebase-apply dirs that block git rebase.
-  # rm -rf and force flags still blocked by bashToolPatterns (runs before bypass).
+  # VS Code crashes and OneDrive file locks leave empty rebase-merge/rebase-apply
+  # dirs that block git rebase. Covers both top-level .git/ and worktree paths
+  # under .git/worktrees/<name>/. rm -rf and force flags still blocked by
+  # bashToolPatterns (runs before bypass).
   - '(rmdir|rm)\s+.*\.git[/\\](rebase-merge|rebase-apply)'
+  - '(rmdir|rm)\s+.*\.git[/\\]worktrees[/\\][^/\\]+[/\\](rebase-merge|rebase-apply)'
   - 'rm\s+.*\.git[/\\](AUTO_MERGE|MERGE_HEAD|MERGE_MSG)'
+  - 'rm\s+.*\.git[/\\]worktrees[/\\][^/\\]+[/\\](AUTO_MERGE|MERGE_HEAD|MERGE_MSG)'
   - 'rm\s+.*\.git[/\\]\.MERGE_MSG\.swp'
   # CGP decode → env.shared hydration — CHIT pipeline reads hex-encoded CGP
   # bundle and writes decoded values to env.shared. This is the canonical
