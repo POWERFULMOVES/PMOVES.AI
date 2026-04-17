@@ -18,10 +18,10 @@ import logging
 import os
 import signal
 import sys
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
+import httpx
 import nats
 
 try:
@@ -39,6 +39,7 @@ NATS_SUBJECT = "ingest.cookies.refreshed.v1"
 COOKIE_OUTPUT_PATH = os.environ.get("YT_COOKIE_OUTPUT_PATH", "/app/config/cookies/yt-cookies.txt")
 TABLE_PATH = "/rest/v1/yt_oauth_cookies"
 DEFAULT_USER_ID = "darkxside"
+VALID_STATUSES = {"success", "failed", "revoked"}
 
 
 def _get_fernet() -> Optional[Fernet]:
@@ -57,18 +58,31 @@ def _get_fernet() -> Optional[Fernet]:
 
 
 def _decrypt(value: str) -> str:
-    """Decrypt Fernet-encrypted value, or return as-is."""
+    """Decrypt Fernet-encrypted value. Raises RuntimeError on failure.
+
+    CRITICAL: must NOT fall back to ciphertext — writing encrypted bytes
+    as a cookie file corrupts yt-dlp's session and silently breaks the
+    YT pipeline. Fail loud so the operator can diagnose key mismatch.
+    """
     f = _get_fernet()
-    if f is None or not value:
+    if f is None:
+        raise RuntimeError("Fernet unavailable — VAULT_ENC_KEY missing or cryptography not installed")
+    if not value:
         return value
     try:
         return f.decrypt(value.encode()).decode()
-    except Exception:
-        return value
+    except Exception as e:
+        raise RuntimeError(f"Fernet decryption failed (VAULT_ENC_KEY mismatch?): {e}")
 
 
 def _supabase_url() -> str:
-    return os.environ.get("SUPABASE_URL", os.environ.get("SUPA_REST_URL", "http://supabase-kong:8000"))
+    url = os.environ.get("SUPABASE_URL", os.environ.get("SUPA_REST_URL", "http://supabase-kong:8000"))
+    # Strip trailing /rest/v1 to avoid duplicated path when combined with TABLE_PATH
+    for suffix in ("/rest/v1/", "/rest/v1"):
+        if url.endswith(suffix):
+            url = url[: -len(suffix)]
+            break
+    return url.rstrip("/")
 
 
 def _supabase_headers() -> dict:
@@ -81,15 +95,15 @@ def _supabase_headers() -> dict:
 
 
 async def fetch_and_write_cookies(user_id: str = DEFAULT_USER_ID) -> bool:
-    """Fetch encrypted cookies from Supabase, decrypt, write to disk.
+    """Fetch encrypted cookies from Supabase, decrypt, atomically write to disk.
 
-    Returns True on success.
+    Returns True on success. Uses async httpx + atomic write (tmp + rename)
+    so the yt-dlp per-request readers never see a torn cookie file.
     """
-    import httpx
-
     url = f"{_supabase_url()}{TABLE_PATH}?user_id=eq.{user_id}&select=encrypted_cookies"
     try:
-        resp = httpx.get(url, headers=_supabase_headers(), timeout=10)
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.get(url, headers=_supabase_headers())
         rows = resp.json() if resp.status_code == 200 else []
     except Exception as e:
         logger.error(f"Failed to fetch cookies from Supabase: {e}")
@@ -99,36 +113,70 @@ async def fetch_and_write_cookies(user_id: str = DEFAULT_USER_ID) -> bool:
         logger.warning("No cookies in Supabase — waiting for first refresh")
         return False
 
-    cookies_str = _decrypt(rows[0]["encrypted_cookies"])
-    if not cookies_str:
-        logger.error("Failed to decrypt cookies (VAULT_ENC_KEY mismatch?)")
+    try:
+        cookies_str = _decrypt(rows[0]["encrypted_cookies"])
+    except RuntimeError as e:
+        logger.error(f"Decryption failed (will NOT write ciphertext to cookie file): {e}")
         return False
 
+    if not cookies_str:
+        logger.error("Decrypted cookie blob is empty — refusing to write")
+        return False
+
+    # Atomic write: tmp + rename. yt-dlp reads the cookiefile per-request so
+    # a non-atomic write (file truncated mid-rewrite) would produce torn reads.
     output = Path(COOKIE_OUTPUT_PATH)
     output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text(cookies_str)
-    logger.info(f"Wrote {len(cookies_str)} bytes to {output}")
+    tmp = output.with_suffix(output.suffix + ".tmp")
+    try:
+        tmp.write_text(cookies_str)
+        tmp.replace(output)
+    except OSError as e:
+        logger.error(f"Cookie write failed: {e}")
+        tmp.unlink(missing_ok=True)
+        return False
+
+    logger.info(f"Wrote {len(cookies_str)} bytes to {output} (atomic)")
     return True
 
 
 async def _on_message(msg):
-    """Handle ingest.cookies.refreshed.v1 NATS messages."""
+    """Handle ingest.cookies.refreshed.v1 NATS messages.
+
+    Validates payload shape + user_id match before acting. Silently defaulting
+    user_id would apply the wrong account's cookies in a multi-user setup.
+    """
     try:
         data = json.loads(msg.data.decode())
-        status = data.get("status", "unknown")
-        user_id = data.get("user_id", DEFAULT_USER_ID)
-        logger.info(f"Received {NATS_SUBJECT}: status={status}, user={user_id}")
+    except (UnicodeDecodeError, json.JSONDecodeError) as e:
+        logger.warning(f"Malformed NATS payload on {NATS_SUBJECT}: {e}")
+        return
 
-        if status == "success":
-            ok = await fetch_and_write_cookies(user_id)
-            if ok:
-                logger.info("Cookie file updated — pmoves-yt will pick up on next request")
-            else:
-                logger.warning("Cookie write failed — existing file left in place")
+    if not isinstance(data, dict):
+        logger.warning(f"NATS payload is not an object: {type(data).__name__}")
+        return
+
+    status = data.get("status")
+    if status not in VALID_STATUSES:
+        logger.warning(f"NATS payload has invalid status={status!r}, expected one of {VALID_STATUSES}")
+        return
+
+    # Require explicit user_id — no silent default. If absent, skip the write.
+    user_id = data.get("user_id")
+    if not user_id or not isinstance(user_id, str):
+        logger.warning("NATS payload missing/invalid user_id — skipping")
+        return
+
+    logger.info(f"Received {NATS_SUBJECT}: status={status}, user={user_id}")
+
+    if status == "success":
+        ok = await fetch_and_write_cookies(user_id)
+        if ok:
+            logger.info("Cookie file updated — pmoves-yt will pick up on next request")
         else:
-            logger.warning(f"Refresh reported status={status}, skipping write")
-    except Exception as e:
-        logger.exception(f"Error processing {NATS_SUBJECT}: {e}")
+            logger.warning("Cookie write failed — existing file left in place")
+    else:
+        logger.warning(f"Refresh reported status={status}, skipping write")
 
 
 async def run() -> None:
@@ -140,9 +188,15 @@ async def run() -> None:
     await nc.subscribe(NATS_SUBJECT, cb=_on_message)
     logger.info(f"Subscribed to {NATS_SUBJECT}")
 
-    # On startup, try to write existing cookies (if any)
+    # On startup, try to write existing cookies (catch-up after container restart)
     logger.info("Checking for existing cookies on startup...")
     await fetch_and_write_cookies()
+
+    # Touch liveness marker so the Docker healthcheck knows we reached steady state
+    try:
+        Path("/tmp/healthy").touch()
+    except OSError:
+        pass
 
     # Wait for signal
     stop = asyncio.Event()

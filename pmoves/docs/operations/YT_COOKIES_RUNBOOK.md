@@ -17,7 +17,7 @@ services work together:
 3. **yt-cookie-writer** (sidecar) — subscribes to NATS event, decrypts
    cookies, writes Netscape file to shared volume that pmoves-yt reads
 
-## First-Time Setup
+## First-Time Setup (6 steps)
 
 ### 1. Verify Google OAuth client credentials
 
@@ -118,7 +118,10 @@ make -C pmoves yt-cookies-refresh
 ### Cookie file not updating after NATS event
 
 1. Check writer sidecar logs: `docker logs pmoves-yt-cookie-writer-1`
-2. Verify NATS connectivity: `nats sub ingest.cookies.refreshed.v1`
+2. Verify NATS connectivity (auth required — base nats service runs with `--auth nats:pmoves`):
+   ```bash
+   nats sub --server "nats://nats:pmoves@localhost:4222" ingest.cookies.refreshed.v1
+   ```
 3. Check `VAULT_ENC_KEY` is consistent between refresher and writer
 4. Check shared volume mount exists in both containers
 
@@ -144,7 +147,7 @@ standing and the video being accessible. Check:
 
 ## Architecture
 
-```
+```text
 ┌─────────────────────────────┐
 │  make yt-cookies-auth       │ One-time: browser consent
 │  tools/yt_oauth_flow.py     │ → encrypted refresh_token in Supabase
