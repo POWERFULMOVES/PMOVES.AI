@@ -33,7 +33,7 @@
     "yaml": "^2.8.3"
   },
   "overrides": {
-    "dompurify": ">=3.3.2"
+    "dompurify": ">=3.4.0"
   },
   "devDependencies": {
     "@playwright/test": "^1.56.1",
