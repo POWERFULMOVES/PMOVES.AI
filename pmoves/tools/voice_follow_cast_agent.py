@@ -9,7 +9,7 @@ NATS Subjects:
   - agent.response.v1 (fallback)
 
 Config via env:
-  - CAST_FOLLOW_NATS_URL (default: nats://127.0.0.1:4222)
+  - CAST_FOLLOW_NATS_URL (default: nats://nats:pmoves@nats:4222; prod: CHIT-managed)
   - CAST_TTS_GATEWAY_URL (default: http://localhost:8060)
   - CAST_DEFAULT_DEVICE (default: None → auto-select)
   - CAST_FOLLOW_VOICE (default: default)
@@ -61,12 +61,12 @@ def _resolve_nats_url() -> str:
     if nats_url:
         # Translate docker-only alias to host-accessible URL
         if nats_url.startswith("nats://nats:") or nats_url.startswith("tls://nats:"):
-            return "nats://127.0.0.1:4222"
+            return "nats://nats:pmoves@nats:4222"
         if nats_url.startswith("nats://localhost:") or nats_url.startswith("tls://localhost:"):
             return nats_url.replace("://localhost:", "://127.0.0.1:", 1)
         return nats_url
 
-    return "nats://127.0.0.1:4222"
+    return "nats://nats:pmoves@nats:4222"
 
 
 def _extract_text(payload: Dict[str, Any]) -> Optional[str]:
