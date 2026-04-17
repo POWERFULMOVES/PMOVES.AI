@@ -20,7 +20,7 @@ import sys
 import uvicorn
 from fastapi import FastAPI
 
-from cookie_extractor import run_extraction
+from cookie_extractor import extract_cookies_and_po_token
 from nats_publisher import publish_cookies_refreshed
 from oauth_handler import refresh_access_token
 from scheduler import RefreshScheduler
@@ -68,9 +68,9 @@ async def do_refresh() -> None:
         await publish_cookies_refreshed(status="failed", error=str(e)[:200])
         return
 
-    # 4. Playwright cookie extraction
+    # 4. Playwright cookie extraction (await — we're already inside the asyncio loop)
     try:
-        cookies_str, po_token = run_extraction(access_token)
+        cookies_str, po_token = await extract_cookies_and_po_token(access_token)
         logger.info(f"Cookies extracted: {len(cookies_str)} bytes, PO token: {'yes' if po_token else 'no'}")
     except Exception as e:
         err = f"Playwright extraction failed: {e}"

@@ -33,10 +33,20 @@ def _get_fernet() -> Optional[Fernet]:
 
 
 def encrypt(value: str, fernet: Optional[Fernet] = None) -> str:
-    """Encrypt value with Fernet, or return as-is."""
-    f = fernet or _get_fernet()
-    if f is None or not value:
+    """Encrypt value with Fernet. Raises RuntimeError if encryption unavailable.
+
+    Cookies + PO tokens carry YouTube session auth — they must never land in
+    Supabase as plaintext. If VAULT_ENC_KEY is missing or cryptography is
+    unavailable, refuse to proceed rather than silently storing plaintext.
+    """
+    if not value:
         return value
+    f = fernet or _get_fernet()
+    if f is None:
+        raise RuntimeError(
+            "Fernet encryption unavailable (VAULT_ENC_KEY missing or cryptography "
+            "not installed). Refusing to persist plaintext cookies to Supabase."
+        )
     return f.encrypt(value.encode()).decode()
 
 

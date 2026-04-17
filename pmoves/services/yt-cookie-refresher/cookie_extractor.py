@@ -119,6 +119,7 @@ def _cookies_to_netscape(cookies: list[dict]) -> str:
     return "\n".join(lines) + "\n"
 
 
-def run_extraction(access_token: str, video_id: str = TEST_VIDEO_ID) -> tuple[str, Optional[str]]:
-    """Sync wrapper for the async extraction."""
-    return asyncio.run(extract_cookies_and_po_token(access_token, video_id))
+# NOTE: No sync wrapper. do_refresh() is async (called by the FastAPI cron
+# scheduler which runs in the event loop). `asyncio.run()` from within an
+# active loop raises RuntimeError. Callers should `await` extract_cookies_and_po_token
+# directly. This function was removed per CodeRabbit P1 thread on PR #1273.
