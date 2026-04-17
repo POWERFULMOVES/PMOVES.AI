@@ -187,6 +187,48 @@ secrets-sync-trigger: ## Trigger GH Actions secrets sync to local runner
 		| python -c "import sys,json; r=json.load(sys.stdin)[0]; print(f'  Status: {r[\"status\"]}  Conclusion: {r.get(\"conclusion\",\"pending\")}  Started: {r[\"createdAt\"]}')" 2>/dev/null \
 		|| gh run list --workflow=sync-secrets-local.yml --limit=1
 
+# ── GHA Runner Monitor PAT (Phase 9G) ───────────────────────────────
+# github-runner-ctl needs a PAT with admin:org (or repo+workflow) scope
+# to query /actions/runners. These targets automate injection via the
+# local gh CLI's auth token — no operator-created PAT needed.
+
+gha-runner-ctl-check-pat: ## Verify gh CLI has sufficient scope for runner-ctl (dry-run)
+	@$(PYTHON) tools/inject_github_pat_from_gh_cli.py --check
+
+gha-runner-ctl-setup-pat: ## Inject GITHUB_PAT from gh CLI token into env.shared
+	@echo "=== Phase 9G: GHA runner-ctl PAT setup via gh CLI ==="
+	@$(PYTHON) tools/inject_github_pat_from_gh_cli.py
+	@echo ""
+	@echo "Next: make gha-runner-ctl-cycle  (regenerates env.tier-* + recreates container)"
+
+gha-runner-ctl-cycle: ## Cycle github-runner-ctl via canonical secrets-funnel + compose up
+	@echo "=== Phase 9G: github-runner-ctl cycle (canonical pipeline) ==="
+	@echo ""
+	@echo "Step 1/4: Regenerate env.tier-* files (funnel-sync, non-gating)..."
+	@$(MAKE) --no-print-directory secrets-funnel-sync 2>&1 || echo "⚠  secrets-funnel-sync had warnings (continuing — tier files will be validated next)"
+	@echo ""
+	@echo "Step 2/4: Validate env.tier-agent contains GITHUB_PAT..."
+	@if [ ! -f env.tier-agent ]; then \
+		echo "ERROR: env.tier-agent missing after funnel-sync. Aborting cycle."; \
+		echo "Hint: run 'make secrets-funnel' for full pipeline with diagnostics."; \
+		exit 1; \
+	fi
+	@if ! grep -q "^GITHUB_PAT=" env.tier-agent; then \
+		echo "ERROR: GITHUB_PAT key missing from env.tier-agent."; \
+		echo "Hint: run 'make gha-runner-ctl-setup-pat' first to inject the token."; \
+		exit 1; \
+	fi
+	@echo "✓ env.tier-agent has GITHUB_PAT"
+	@echo ""
+	@echo "Step 3/4: Recreate github-runner-ctl container..."
+	@$(DC) --profile orchestration up -d --force-recreate github-runner-ctl
+	@sleep 5
+	@echo ""
+	@echo "Step 4/4: Verify monitor loaded the PAT..."
+	@docker logs pmoves-github-runner-ctl-1 --tail 15 2>&1 | tail -15
+
+gha-runner-ctl-setup: gha-runner-ctl-setup-pat gha-runner-ctl-cycle ## Full Phase 9G path: inject PAT → secrets-funnel → cycle container
+
 
 # ── GPU & Model Serving ──────────────────────────────────────────────
 
