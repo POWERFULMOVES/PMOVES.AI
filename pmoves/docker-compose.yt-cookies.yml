@@ -1,8 +1,20 @@
-# Phase 9Q.2: YouTube cookie refresh service overlay
+# Phase 9Q.2: YouTube cookie refresh services overlay
 # Usage: docker compose -f docker-compose.yml -f docker-compose.yt-cookies.yml --profile yt-cookies up -d
 #
-# Requires PR 1 (Supabase migration) to be applied first.
-# Operator must have run `make yt-cookies-auth` to store refresh token.
+# Prerequisites:
+#   1. Supabase migration 20260417000000 applied
+#   2. Operator ran `make yt-cookies-auth` (stored refresh token)
+#
+# Services:
+#   yt-cookie-refresher — weekly Playwright harvest, encrypts + stores in Supabase
+#   yt-cookie-writer    — NATS subscriber, decrypts + writes to shared volume
+#
+# The shared volume `yt-cookies-vol` is mounted by both the writer (rw) and
+# pmoves-yt (ro via override below). pmoves-yt's yt-dlp reads the cookiefile
+# per-request — no container restart needed when cookies update.
+
+volumes:
+  yt-cookies-vol:
 
 services:
   yt-cookie-refresher:
@@ -41,3 +53,43 @@ services:
         limits:
           cpus: '2.0'
           memory: 2G
+
+  yt-cookie-writer:
+    build:
+      context: ./services/yt-cookie-writer
+    # main.py now touches /tmp/healthy after NATS subscription is active,
+    # matching the Dockerfile healthcheck. This override keeps it consistent.
+    healthcheck:
+      test: ["CMD", "python", "-c", "from pathlib import Path; assert Path('/tmp/healthy').exists()"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    restart: unless-stopped
+    environment:
+      - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+      - SUPABASE_URL=${SUPABASE_URL:-http://supabase-kong:8000}
+      - SERVICE_ROLE_KEY=${SERVICE_ROLE_KEY}
+      - VAULT_ENC_KEY=${VAULT_ENC_KEY:-}
+      - YT_COOKIE_OUTPUT_PATH=/cookies/yt-cookies.txt
+      - LOG_LEVEL=${YT_COOKIE_WRITER_LOG_LEVEL:-INFO}
+      - SSL_CERT_FILE=
+      - SSL_CERT_DIR=
+      - REQUESTS_CA_BUNDLE=
+    depends_on:
+      nats:
+        condition: service_healthy
+    volumes:
+      - yt-cookies-vol:/cookies
+    profiles: ["yt-cookies"]
+    networks: [pmoves_bus, pmoves_api]
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+
+  # Override pmoves-yt to mount the shared cookie volume (read-only)
+  pmoves-yt:
+    volumes:
+      - yt-cookies-vol:/app/config/cookies:ro
