@@ -119,10 +119,15 @@ def inject_into_env_file(env_path: pathlib.Path, token: str) -> None:
         text = f"{text}{sep}{new_line}\n"
         action = "appended"
 
+    # Atomic write: write to temp then rename — avoids partial writes corrupting
+    # env.shared (which holds 90+ credentials) on SIGINT/power loss mid-write.
+    tmp_path = env_path.with_suffix(env_path.suffix + ".tmp")
     try:
-        env_path.write_text(text)
+        tmp_path.write_text(text)
+        tmp_path.replace(env_path)
     except OSError as e:
         print(f"ERROR: cannot write {env_path}: {e}", file=sys.stderr)
+        tmp_path.unlink(missing_ok=True)
         sys.exit(3)
 
     # Print length only, never the token itself
