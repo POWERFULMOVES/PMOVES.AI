@@ -199,17 +199,22 @@ gha-runner-ctl-setup-pat: ## Inject GITHUB_PAT from gh CLI token into env.shared
 	@echo "=== Phase 9G: GHA runner-ctl PAT setup via gh CLI ==="
 	@$(PYTHON) tools/inject_github_pat_from_gh_cli.py
 	@echo ""
-	@echo "Next: make gha-runner-ctl-cycle  (recreates the container to pick up env)"
+	@echo "Next: make gha-runner-ctl-cycle  (regenerates env.tier-* + recreates container)"
 
-gha-runner-ctl-cycle: ## Recreate github-runner-ctl container so it loads fresh env.shared
-	@echo "=== Recreating github-runner-ctl ==="
+gha-runner-ctl-cycle: ## Cycle github-runner-ctl via canonical secrets-funnel + compose up
+	@echo "=== Phase 9G: github-runner-ctl cycle (canonical pipeline) ==="
+	@echo ""
+	@echo "Step 1/3: Regenerate env.tier-* files via secrets-funnel..."
+	@$(MAKE) --no-print-directory secrets-funnel
+	@echo ""
+	@echo "Step 2/3: Recreate github-runner-ctl container..."
 	@$(DC) --profile orchestration up -d --force-recreate github-runner-ctl
 	@sleep 5
 	@echo ""
-	@echo "--- Last 15 log lines ---"
+	@echo "Step 3/3: Verify monitor loaded the PAT..."
 	@docker logs pmoves-github-runner-ctl-1 --tail 15 2>&1 | tail -15
 
-gha-runner-ctl-setup: gha-runner-ctl-setup-pat gha-runner-ctl-cycle ## Full Phase 9G path: inject PAT + cycle container
+gha-runner-ctl-setup: gha-runner-ctl-setup-pat gha-runner-ctl-cycle ## Full Phase 9G path: inject PAT → secrets-funnel → cycle container
 
 
 # ── GPU & Model Serving ──────────────────────────────────────────────

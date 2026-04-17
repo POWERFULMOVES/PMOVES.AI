@@ -63,10 +63,19 @@ What the composite target does:
 1. `gha-runner-ctl-setup-pat` — reads `gh auth token` value, writes it into
    `pmoves/env.shared` under `GITHUB_PAT=...` (updates in place if already
    present, appends otherwise). Never prints the token.
-2. `gha-runner-ctl-cycle` — recreates the `github-runner-ctl` container via
-   `docker compose --profile orchestration up -d --force-recreate`, then
-   tails the last 15 log lines to confirm `"Loaded GitHub PAT from
-   environment variable"`.
+2. `gha-runner-ctl-cycle` — canonical pipeline:
+   a. `make secrets-funnel` — CHIT export regenerates `env.tier-agent` from
+      the updated `env.shared` (so the container's `env_file: env.tier-agent`
+      carries the new `GITHUB_PAT`)
+   b. `$(DC) up -d --force-recreate github-runner-ctl` — recreates the container
+   c. Tails the last 15 log lines to confirm `"Loaded GitHub PAT from
+      environment variable"`.
+
+**Why secrets-funnel matters:** the `github-runner-ctl` service uses
+`<<: *tier-agent-hardened-rw` which loads `env.tier-agent` (not `env.shared`
+directly). `secrets-funnel` is the canonical path that regenerates tier env
+files from the CHIT manifest + `env.shared`. Skipping it means the container
+starts with stale tier-env and `${GITHUB_PAT}` resolves blank.
 
 **Why this path exists:** the `gh` CLI's OAuth token (stored in the keyring
 on the host that auth'd with `gh auth login`) already has
@@ -94,7 +103,8 @@ owner/admin of the target org, create a dedicated fine-grained PAT:
 5. Expiration: 90 days (or per your policy)
 6. Generate and copy token (format `github_pat_11...` or `ghp_...`)
 7. Edit `pmoves/env.shared` and add `GITHUB_PAT=<token>`
-8. Cycle the container: `make -C pmoves gha-runner-ctl-cycle`
+8. Cycle via canonical pipeline: `make -C pmoves gha-runner-ctl-cycle`
+   (runs `secrets-funnel` → regenerates `env.tier-agent` → recreates container)
 
 ### Verify
 
@@ -135,11 +145,20 @@ This is NOT part of Phase 9G. It's the known-road runner cycle.
 
 ```bash
 make -C pmoves ci-runners-local-cert-down
-make -C pmoves ci-runners-local-cert-up
+# Load env.shared into the shell so APP_ID/APP_PRIVATE_KEY/RUNNER_* are set:
+bash pmoves/scripts/with-env.sh make -C pmoves ci-runners-local-cert-up
 make -C pmoves ci-runners-local-cert-status
 ```
 
 Expected: 3 runners online with labels `self-hosted, ai-lab` / `self-hosted, vps` / `self-hosted, hotfix`.
+
+**Known failure (2026-04-16 observed):** running `ci-runners-local-cert-up`
+without the `with-env.sh` prefix exits with `docker run` error 125 because
+`APP_ID` and `APP_PRIVATE_KEY` are passed via `-e APP_ID` (which expects
+them in the invoking shell's env). `local_cert_runners.py` assumes the
+caller has already sourced `env.shared`. The `with-env.sh` wrapper is the
+canonical loader (see CLAUDE.md). File as follow-up: teach the tool to
+read `env.shared` directly when host env vars are absent.
 
 ### Verify via GitHub API
 
