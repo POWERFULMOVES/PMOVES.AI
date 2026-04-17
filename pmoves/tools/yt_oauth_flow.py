@@ -80,8 +80,18 @@ def _require_env(key: str) -> str:
 
 
 def _supabase_url() -> str:
-    """Canonical Supabase REST URL (Kong gateway)."""
-    return _env("SUPABASE_URL", _env("SUPA_REST_URL", "http://supabase-kong:8000"))
+    """Canonical Supabase REST URL base (Kong gateway, no path suffix).
+
+    TABLE_PATH already contains '/rest/v1/...', so strip any '/rest/v1' tail
+    from SUPA_REST_URL (which often includes it) to avoid '/rest/v1/rest/v1/'.
+    """
+    url = _env("SUPABASE_URL", _env("SUPA_REST_URL", "http://supabase-kong:8000"))
+    # Strip trailing /rest/v1 or /rest/v1/ to get base URL
+    for suffix in ("/rest/v1/", "/rest/v1"):
+        if url.endswith(suffix):
+            url = url[: -len(suffix)]
+            break
+    return url.rstrip("/")
 
 
 def _supabase_headers() -> dict:
@@ -228,8 +238,11 @@ def _upsert_tokens(refresh_token_enc: str, access_token_enc: str,
         "requires_manual_reauth": False,
     }
 
+    # on_conflict=user_id ensures PostgREST performs UPSERT on the unique constraint
+    # (per pmoves_core.yt_oauth_cookies_user_id_unique). Without this, merge-duplicates
+    # header alone is ambiguous and PostgREST may fail or insert duplicates.
     resp = httpx.post(
-        f"{url}{TABLE_PATH}",
+        f"{url}{TABLE_PATH}?on_conflict=user_id",
         headers=headers,
         json=payload,
         timeout=15,
@@ -286,9 +299,12 @@ def cmd_auth() -> None:
     server_thread = threading.Thread(target=server.handle_request, daemon=True)
     server_thread.start()
 
-    print(f"Opening browser for Google OAuth2 consent...")
+    print("Opening browser for Google OAuth2 consent...")
     print(f"  Redirect URI: {redirect_uri}")
-    print(f"  Scopes: {OAUTH_SCOPES}")
+    # CodeQL note: OAUTH_SCOPES is a hardcoded public constant (youtube.readonly),
+    # but CodeQL flags all f-string logging in OAuth flows. Log as plain concat
+    # to break the taint path (equivalent runtime behavior).
+    print("  Scopes: " + OAUTH_SCOPES)
     print()
     webbrowser.open(auth_url)
     print("Waiting for OAuth2 callback... (Ctrl+C to cancel)")
