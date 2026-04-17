@@ -18,7 +18,7 @@ Two distinct components, two distinct auth modes:
 ## Symptoms
 
 ### Monitor broken
-```
+```text
 $ docker logs pmoves-github-runner-ctl-1 --tail 5
 ERROR - Failed to load GitHub PAT from file
 IsADirectoryError: [Errno 21] Is a directory: '/run/secrets/github_pat'
@@ -28,7 +28,7 @@ ERROR - Failed to get runners for POWERFULMOVES/PMOVES.AI: GitHub PAT not availa
 Root cause: `pmoves/secrets/github_pat` exists on the host as a **directory**, not a file. The compose volume mount `./secrets/github_pat:/run/secrets/github_pat:ro` then exposes it as a directory inside the container, and `open(...)` raises `IsADirectoryError`.
 
 ### Runners crash-looping
-```
+```text
 $ docker ps --filter "name=gha-runner"
 gha-runner-ai-lab    Restarting (1) 37 seconds ago
 gha-runner-vps       Restarting (1) 12 seconds ago
@@ -173,7 +173,7 @@ Expected: all 3 `status: "online"`.
 
 ## Known Gap — NATSPublisher.publish_alert kwarg mismatch
 
-```
+```text
 ERROR - Failed to refresh runner status: NATSPublisher.publish_alert() got an unexpected keyword argument 'event_type'
 ```
 
@@ -227,7 +227,7 @@ Note: `pmoves/secrets/` is gitignored, so the file won't be committed.
 
 ## Related Files
 
-- `pmoves/services/github-runner-ctl/github/client.py:50-75` — PAT loader
+- `pmoves/services/github-runner-ctl/github/client.py:50-78` — PAT loader
 - `pmoves/docker-compose.yml:3730-3746` — runner-ctl service definition
 - `pmoves/env.shared.example` — `GITHUB_PAT` documentation (look for "Phase 9G")
 - `pmoves/mk/preflight.mk:55-85` — `ci-runners-*` Make targets

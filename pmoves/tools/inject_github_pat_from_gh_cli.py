@@ -28,6 +28,7 @@ Called via `make -C pmoves gha-runner-ctl-setup-pat`.
 from __future__ import annotations
 
 import argparse
+import os
 import pathlib
 import re
 import subprocess
@@ -54,7 +55,7 @@ def get_gh_token() -> str:
         print("ERROR: gh CLI not found. Install: https://cli.github.com/", file=sys.stderr)
         sys.exit(1)
     except subprocess.CalledProcessError as e:
-        print(f"ERROR: gh CLI not authenticated. Run: gh auth login", file=sys.stderr)
+        print("ERROR: gh CLI not authenticated. Run: gh auth login", file=sys.stderr)
         print(f"gh stderr: {e.stderr.strip()}", file=sys.stderr)
         sys.exit(1)
     token = result.stdout.strip()
@@ -121,9 +122,15 @@ def inject_into_env_file(env_path: pathlib.Path, token: str) -> None:
 
     # Atomic write: write to temp then rename — avoids partial writes corrupting
     # env.shared (which holds 90+ credentials) on SIGINT/power loss mid-write.
+    # Also chmod 0o600 so the file is owner-only readable (holds PAT + all other creds).
     tmp_path = env_path.with_suffix(env_path.suffix + ".tmp")
     try:
         tmp_path.write_text(text)
+        try:
+            os.chmod(tmp_path, 0o600)
+        except OSError:
+            # chmod is a no-op on Windows filesystems — not fatal
+            pass
         tmp_path.replace(env_path)
     except OSError as e:
         print(f"ERROR: cannot write {env_path}: {e}", file=sys.stderr)
@@ -158,8 +165,8 @@ def main() -> None:
 
     env_path = pathlib.Path(args.env_file)
     inject_into_env_file(env_path, token)
-    print(f"Next: cycle the monitor container so it picks up the new env var:")
-    print(f"  make -C pmoves gha-runner-ctl-cycle")
+    print("Next: cycle the monitor container so it picks up the new env var:")
+    print("  make -C pmoves gha-runner-ctl-cycle")
 
 
 if __name__ == "__main__":
