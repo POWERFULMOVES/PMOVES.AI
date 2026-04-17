@@ -1,0 +1,122 @@
+# docker-compose.yt-egress.yml — PMOVES.YT outbound via Tailscale exit node
+# ============================================================================
+# Phase 9Q (2026-04-16)
+#
+# Purpose
+# -------
+# Routes all YouTube-facing services (pmoves-yt, bgutil-pot-provider,
+# invidious-companion, invidious) through the KVM4-1 Tailscale exit node
+# (pmoves-kvm4-1, Hostinger datacenter) to bypass YouTube's residential-IP
+# anti-bot 403s. Home residential fingerprints are invisible to YouTube once
+# every yt-dlp request + PO token fetch + companion stream resolves through
+# the datacenter egress.
+#
+# KVM4-1 was approved as a Tailscale exit node on 2026-04-12 by 4090-CLAUDE
+# (see pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md, 2026-04-12 RELEASE entry).
+# Earlier scripts in deploy/provision/kvm2-exit-node.sh target KVM2 and are
+# superseded by the KVM4-1 setup.
+#
+# Usage
+# -----
+#   make -C pmoves up-yt-egress       # Activate sidecar, restart YT stack through proxy
+#   make -C pmoves yt-egress-verify   # Compare host IP vs container egress IP
+#   make -C pmoves down-yt-egress     # Stop sidecar, YT reverts to residential IP
+#
+# Architecture
+# ------------
+# The sidecar runs tailscale/tailscale:latest in userspace mode (no TUN
+# device needed) with TS_EXTRA_ARGS=--exit-node=pmoves-kvm4-1. Tailscale
+# exposes two proxy listeners inside the pmoves_app network:
+#   - SOCKS5 on :1055 (for clients that prefer SOCKS5)
+#   - HTTP CONNECT on :1080 (used by yt-dlp/urllib via HTTP_PROXY env)
+#
+# The four service overrides below set HTTP_PROXY/HTTPS_PROXY to the
+# sidecar's HTTP listener. yt-dlp auto-respects these via Python urllib, so
+# no submodule code change is required. Internal Docker DNS targets
+# (minio, nats, supabase, etc.) are listed in NO_PROXY so internal traffic
+# stays on pmoves_app.
+
+services:
+  tailscale-yt-egress:
+    image: tailscale/tailscale:latest
+    container_name: pmoves-tailscale-yt-egress
+    hostname: pmoves-yt-egress
+    restart: unless-stopped
+    environment:
+      # Fail at compose parse time if TAILSCALE_AUTHKEY is unset — the
+      # userspace Tailscale container silently fails to join the tailnet
+      # with an empty authkey, which leaves the proxy listening but with
+      # no actual exit-node tunnel. This guard forces the error upstream.
+      - TS_AUTHKEY=${TAILSCALE_AUTHKEY:?TAILSCALE_AUTHKEY must be set for yt-egress (run make -C pmoves secrets-funnel)}
+      - TS_USERSPACE=true
+      - TS_HOSTNAME=pmoves-yt-egress
+      - TS_STATE_DIR=/var/lib/tailscale
+      - TS_ACCEPT_DNS=true
+      # Route all outbound through KVM4-1. --exit-node-allow-lan-access lets
+      # the sidecar still reach pmoves_app services directly (otherwise all
+      # traffic would tunnel, including internal DNS).
+      - TS_EXTRA_ARGS=--exit-node=pmoves-kvm4-1 --exit-node-allow-lan-access
+      # SOCKS5 + HTTP CONNECT proxy listeners (both bound to 0.0.0.0 so peers
+      # on pmoves_app can reach them).
+      - TS_SOCKS5_SERVER=0.0.0.0:1055
+      - TS_OUTBOUND_HTTP_PROXY_LISTEN=0.0.0.0:1080
+    volumes:
+      - tailscale-yt-egress-state:/var/lib/tailscale
+    networks:
+      - pmoves_app
+    cap_add:
+      - NET_ADMIN  # required for userspace proxy listeners
+    healthcheck:
+      test: ["CMD", "tailscale", "status", "--peers=false"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+
+  # --- Service overrides --------------------------------------------------
+  # Each override only sets the proxy env vars + depends_on for ordering.
+  # The rest of the service definition stays in docker-compose.yml.
+
+  pmoves-yt:
+    environment:
+      - HTTP_PROXY=http://tailscale-yt-egress:1080
+      - HTTPS_PROXY=http://tailscale-yt-egress:1080
+      - NO_PROXY=localhost,127.0.0.1,minio,nats,supabase-kong,supabase-postgrest,invidious,invidious-companion,invidious-db,channel-monitor,hi-rag-gateway-v2,bgutil-pot-provider,ffmpeg-whisper,extract-worker,tailscale-yt-egress
+    depends_on:
+      tailscale-yt-egress:
+        condition: service_healthy
+
+  bgutil-pot-provider:
+    environment:
+      - HTTP_PROXY=http://tailscale-yt-egress:1080
+      - HTTPS_PROXY=http://tailscale-yt-egress:1080
+      - NO_PROXY=localhost,127.0.0.1,minio,nats,tailscale-yt-egress
+    depends_on:
+      tailscale-yt-egress:
+        condition: service_healthy
+
+  invidious-companion:
+    environment:
+      - HTTP_PROXY=http://tailscale-yt-egress:1080
+      - HTTPS_PROXY=http://tailscale-yt-egress:1080
+      - NO_PROXY=localhost,127.0.0.1,invidious,invidious-db,tailscale-yt-egress
+    depends_on:
+      tailscale-yt-egress:
+        condition: service_healthy
+
+  invidious:
+    environment:
+      - HTTP_PROXY=http://tailscale-yt-egress:1080
+      - HTTPS_PROXY=http://tailscale-yt-egress:1080
+      - NO_PROXY=localhost,127.0.0.1,invidious-db,invidious-companion,tailscale-yt-egress
+    depends_on:
+      tailscale-yt-egress:
+        condition: service_healthy
+
+volumes:
+  tailscale-yt-egress-state:

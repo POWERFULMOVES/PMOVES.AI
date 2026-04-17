@@ -17,9 +17,9 @@
 | R9700 Workstation (Linux) | LAN | `ts:<rdna4>` | pmoves-rdna4 | Heavyweight ROCm Inference (Gemma 4 31B/26B-A4B via llama.cpp) | `self-hosted, ai-lab, gpu, rocm, rdna4` (pending) | 9850X3D / 32GB + 2x R9700 (64GB VRAM total) | electricity |
 | Jetson Orin #1 | LAN (RustDesk + SSH) | `ts:<nano>` | pmoves-nano (rename to pmoves-nano-1 pending) | Edge Inference (Nemotron/NemoClaw), Claws | — | Orin (sm_87) | electricity |
 | Jetson Orin #2 | LAN (RustDesk + SSH) | TBD | TBD | Edge Inference (Nemotron/NemoClaw), Claws | — | Orin (sm_87) | electricity |
-| KVM4-1 | — | — | pmoves-kvm4-1 | API Gateway | `self-hosted, vps, kvm4, production` | 8C / 16GB | $10/mo |
+| KVM4-1 | — | `ts:<kvm4-1>` | pmoves-kvm4-1 | API Gateway + Tailscale Egress Exit Node (Phase 9Q) | `self-hosted, vps, kvm4, production` | 8C / 16GB | $10/mo |
 | KVM4-2 | — | — | pmoves-kvm4-2 | Data / Storage | `self-hosted, vps, kvm4, production` | 8C / 16GB | $10/mo |
-| KVM2 | — | — | pmoves-kvm2 | Exit Node / Proxy | `self-hosted, vps, kvm2, backup` | 4C / 8GB | $10/mo |
+| KVM2 | — | — | pmoves-kvm2 | Reverse Proxy (nginx SSL) / RustDesk Relay | `self-hosted, vps, kvm2, backup` | 4C / 8GB | $10/mo |
 | Cloudflare Edge | — | — | — | DNS, Worker routing | — | Edge | Free plan |
 | GitHub Cloud | — | — | — | Lightweight CI | `ubuntu-latest` | 2C / 7GB | $0.008/min |
 
@@ -147,7 +147,13 @@ Services deployed via `docker-compose.vps.override.yml`:
 | Loki | 3100 | `/ready` | monitoring |
 | MinIO | 9000 (API) / 9001 (Console) | `/minio/health/live` | — |
 
-### KVM2 — Exit Node / Reverse Proxy / RustDesk Relay
+### KVM2 — Reverse Proxy / RustDesk Relay
+
+> Note (Phase 9Q, 2026-04-16): KVM2 provides nginx SSL ingress (reverse
+> proxy for public endpoints) and RustDesk relay. The egress exit node for
+> outbound traffic (e.g., PMOVES.YT routing around YouTube residential-IP
+> blocks) is **KVM4-1**, not KVM2. The `deploy/provision/kvm2-exit-node.sh`
+> script is an older draft never activated in production.
 
 | Service | Port | Health | Notes |
 |---------|------|--------|-------|
