@@ -1,0 +1,43 @@
+# Phase 9Q.2: YouTube cookie refresh service overlay
+# Usage: docker compose -f docker-compose.yml -f docker-compose.yt-cookies.yml --profile yt-cookies up -d
+#
+# Requires PR 1 (Supabase migration) to be applied first.
+# Operator must have run `make yt-cookies-auth` to store refresh token.
+
+services:
+  yt-cookie-refresher:
+    build:
+      context: ./services/yt-cookie-refresher
+    restart: unless-stopped
+    environment:
+      - PORT=8115
+      - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+      - SUPABASE_URL=${SUPABASE_URL:-http://supabase-kong:8000}
+      - SERVICE_ROLE_KEY=${SERVICE_ROLE_KEY}
+      - VAULT_ENC_KEY=${VAULT_ENC_KEY:-}
+      - CHANNEL_MONITOR_GOOGLE_CLIENT_ID=${CHANNEL_MONITOR_GOOGLE_CLIENT_ID}
+      - CHANNEL_MONITOR_GOOGLE_CLIENT_SECRET=${CHANNEL_MONITOR_GOOGLE_CLIENT_SECRET}
+      - YT_COOKIE_REFRESH_CRON=${YT_COOKIE_REFRESH_CRON:-0 0 * * 0}
+      - LOG_LEVEL=${YT_COOKIE_REFRESHER_LOG_LEVEL:-INFO}
+      # Clear Windows SSL env leak (same fix as github-runner-ctl)
+      - SSL_CERT_FILE=
+      - SSL_CERT_DIR=
+      - REQUESTS_CA_BUNDLE=
+    depends_on:
+      nats:
+        condition: service_healthy
+    ports:
+      - "${YT_COOKIE_REFRESHER_BIND:-127.0.0.1}:8115:8115"
+    profiles: ["yt-cookies"]
+    networks: [pmoves_api, pmoves_bus]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8115/healthz', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
