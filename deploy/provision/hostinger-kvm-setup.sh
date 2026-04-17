@@ -228,7 +228,7 @@ net.ipv4.ip_forward = 1
 net.ipv6.conf.all.forwarding = 1
 EOF
         ts_args+=(--advertise-exit-node)
-        ts_args+=(--tag=tag:pmoves --tag=tag:kvm --tag=tag:exit-node)
+        ts_args+=(--tag=tag:pmoves --tag=tag:kvm --tag=tag:exit)
     elif [ "$NODE_TYPE" = "gpu-5090" ]; then
         ts_args+=(--tag=tag:pmoves --tag=tag:gpu --tag=tag:gpu-5090 --tag=tag:production)
     else

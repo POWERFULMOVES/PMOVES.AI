@@ -235,7 +235,8 @@ All 5 infrastructure blockers (B1-B5) resolved as of 2026-02-17. See `pmoves/doc
 
 | Level | Count | Services |
 |-------|-------|----------|
-| **Full** | 5 | Tokenism Simulator, Hi-RAG v2, Gateway, Neo4j Mind Map, Agent Zero |
+| **None (verified -- zero chit_security imports found)** | 5 | Tokenism Simulator, Hi-RAG v2, Gateway, Neo4j Mind Map, Agent Zero |
+| *(Corrected 2026-04-17: grep confirmed no crypto imports in these service directories. See research/CHIT_SECRETS_MANAGEMENT_AUDIT.md finding F-20.)* | | |
 | **Partial** | 8 | A2UI Bridge, PMOVES.YT, DeepResearch, SupaSerch, Consciousness, Evo Controller, AgentGym, Flute |
 | **None** | 13 | Extract Worker, PDF Ingest, FFmpeg Whisper, Media analyzers, Channel Monitor, etc. |
 
