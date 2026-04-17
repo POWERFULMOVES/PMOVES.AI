@@ -154,9 +154,15 @@ KVM2 watcher requirements:
 
 Important current runtime note:
 
-- The repo default NATS posture binds port `4222` to localhost only.
-- That means a watcher running on KVM2 cannot publish to the default broker until one PMOVES node exposes NATS on a Tailscale-reachable interface.
+- The root compose currently publishes NATS by default, but node-specific stacks and firewalls can still make the chosen broker unreachable from KVM2.
+- Before expecting watcher publish to work, verify the target broker is reachable over the intended Tailscale or LAN path and not just bound inside a local-only node profile.
 - Even when remote publish is blocked, the watcher still gives useful local evidence in `/var/log/pmoves/fleet-audit.jsonl`.
+
+## Host Port Exposure Rule
+
+- Do not solve remote-access friction by flipping large sections of `docker-compose.yml` from `127.0.0.1` to `0.0.0.0`.
+- If a service needs direct mesh reachability, copy the reviewed `*_BIND=0.0.0.0` entries you need from `pmoves/env.mesh-bind.example` into `pmoves/env.mesh-bind.local`.
+- Data-tier and admin surfaces stay on a separate review path even if a stash or local experiment widened them before.
 
 ---
 
@@ -177,6 +183,8 @@ Important current runtime note:
 
 - `pmoves/docs/operations/RUSTDESK_SELF_HOSTED.md`
 - `pmoves/docs/TAILSCALE_NODE_HYGIENE.md`
+- `pmoves/docs/security/PORT_BINDING_MODEL.md`
+- `pmoves/env.mesh-bind.example`
 - `pmoves/configs/tailscale-acl-policy.json`
 - `pmoves/scripts/fleet/generate-enrollment.py`
 - `pmoves/scripts/fleet/fleet-audit-watcher.sh`

@@ -21,6 +21,7 @@ pmoves/scripts/fleet/.enrollment-ledger.jsonl
 env.tier-*
 # Runtime-populated credential files (never commit populated values)
 pmoves/env.shared
+pmoves/env.mesh-bind.local
 pmoves/.supabase.status.env
 pmoves/env.supa.runtime
 secrets/
