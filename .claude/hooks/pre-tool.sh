@@ -66,6 +66,40 @@ if [ "$TOOL_NAME" = "Edit" ] || [ "$TOOL_NAME" = "Write" ]; then
     fi
 fi
 
+# CHIT security enforcement (soft gate)
+# Warns when CHIT-protected files are being modified without explicit acknowledgment
+CHIT_PROTECTED_FILES=(
+    "pmoves/tools/chit_security.py"
+    "pmoves/tools/chit_common.py"
+    "pmoves/tools/chit_security_validator.py"
+    "pmoves/chit/__init__.py"
+    "pmoves/scripts/fleet/generate-enrollment.py"
+)
+
+if [ "$TOOL_NAME" = "Edit" ] || [ "$TOOL_NAME" = "Write" ] || [ "$TOOL_NAME" = "Bash" ]; then
+    if [ -n "${CHIT_PASSPHRASE:-}" ]; then
+        for chit_file in "${CHIT_PROTECTED_FILES[@]}"; do
+            if echo "$TOOL_PARAMS" | grep -qF "$chit_file"; then
+                # Check if chit-acknowledge flag is present
+                if ! echo "$TOOL_PARAMS" | grep -qF "chit-acknowledge"; then
+                    echo "⚠️  CHIT SECURITY WARNING: Modifying CHIT-protected file without 'chit-acknowledge' flag" >&2
+                    echo "   File: $chit_file" >&2
+                    echo "   CHIT_PASSPHRASE is set — ensure this modification is intentional." >&2
+                    echo "   Include 'chit-acknowledge' in the tool call to suppress this warning." >&2
+
+                    # Log CHIT security event
+                    SECURITY_LOG="$HOME/.claude/logs/security-events.log"
+                    mkdir -p "$(dirname "$SECURITY_LOG")"
+                    echo "[$(date -u +"%Y-%m-%dT%H:%M:%SZ")] CHIT_WARN: $TOOL_NAME - File: $chit_file - User: $(whoami)" >> "$SECURITY_LOG"
+
+                    # Soft gate: warn but don't block
+                fi
+                break
+            fi
+        done
+    fi
+fi
+
 # All checks passed
 echo "[Hook] Pre-tool validation passed for: $TOOL_NAME" >&2
 exit 0

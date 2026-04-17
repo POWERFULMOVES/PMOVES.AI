@@ -1,6 +1,10 @@
 """
 CHIT (Cognitive Holographic Information Transfer) Module
 
+WARNING: This module provides base16 hex ENCODING, not ENCRYPTION.
+Base16 is trivially reversible and provides zero cryptographic protection.
+For actual encryption, use pmoves.tools.chit_security.
+
 Provides encoding/decoding of environment secrets using CGP (CHIT Geometry Packets).
 Supports multi-target output: tier env files, GitHub Secrets, Docker Secrets.
 """
@@ -11,6 +15,7 @@ import hashlib
 import json
 import base64
 import logging
+import warnings
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 from dataclasses import dataclass, field
@@ -36,7 +41,7 @@ class CGPPoint:
     def to_dict(self) -> Dict[str, Any]:
         return {
             "label": self.label,
-            "value": self.value if self.encoding == "cleartext" else _hex_encode(self.value),  # noqa: CodeQL [py/clear-text-storage-sensitive-data] — CGP by-design encodes secrets for tier env file generation
+            "value": self.value if self.encoding == "cleartext" else _hex_encode(self.value),  # NOTE: base16 hex encoding is intentional for CGP transport format, but it is NOT encryption — trivially reversible. Use pmoves.tools.chit_security for real encryption.
             "anchor": self.anchor,
             "encoding": self.encoding,
         }
@@ -77,12 +82,36 @@ def _generate_anchor(label: str, salt: str = "") -> List[float]:
 
 
 def _hex_encode(value: str) -> str:
-    """Hex-encode a string value."""
+    """Hex-encode a string value.
+
+    .. deprecated::
+        Base16 hex encoding is NOT encryption. Use pmoves.tools.chit_security
+        for actual cryptographic protection of sensitive data.
+    """
+    warnings.warn(
+        "_hex_encode uses base16 encoding which is NOT encryption — "
+        "it is trivially reversible. Use pmoves.tools.chit_security for "
+        "actual cryptographic protection.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     return base64.b16encode(value.encode()).decode()
 
 
 def _hex_decode(value: str) -> str:
-    """Hex-decode a string value."""
+    """Hex-decode a string value.
+
+    .. deprecated::
+        Base16 hex decoding is NOT decryption. Use pmoves.tools.chit_security
+        for actual cryptographic protection of sensitive data.
+    """
+    warnings.warn(
+        "_hex_decode uses base16 decoding which is NOT decryption — "
+        "it is trivially reversible. Use pmoves.tools.chit_security for "
+        "actual cryptographic protection.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     # Remove any non-hex characters
     clean = value.strip().replace(" ", "")
     return base64.b16decode(clean.encode()).decode()
@@ -303,45 +332,62 @@ def sync_common_credentials(
     overwrite existing values unless force=True. This prevents accidentally
     replacing strong production passwords with weak development defaults.
 
-    WARNING: Default credentials are for development only.
-    Do not use 'changeme' or 'minioadmin' in production.
-
     Args:
         base_dir: Base directory containing env.tier-* files
-        common_creds: Optional dict of credential key -> value. If not provided,
-                      uses sensible defaults for PMOVES.AI development.
+        common_creds: Optional dict of credential key -> value. If provided,
+                      these are used directly (recommended — passed by
+                      apply_manifest_v2 from decoded CGP bundle). If not
+                      provided, falls back to os.environ lookups, then as
+                      absolute last resort uses insecure defaults with a
+                      loud deprecation warning.
         force: If True, overwrite existing credentials. If False (default),
                only add missing credentials, never replace existing ones.
 
     Returns:
-        Dictionary mapping file paths to lists of changes made:
-        {"/path/to/env.tier-data": ["Added POSTGRES_PASSWORD=changeme"], ...}
-
-    Default credentials (when common_creds not provided):
-        - POSTGRES_PASSWORD: changeme
-        - MINIO_ACCESS_KEY: minioadmin
-        - MINIO_SECRET_KEY: minioadmin
-        - MINIO_ROOT_USER: minioadmin
-        - MINIO_ROOT_PASSWORD: minioadmin
-        - MINIO_USER: minioadmin
-        - MINIO_PASSWORD: minioadmin
-        - NEO4J_AUTH: neo4j/changeme
-        - NEO4J_PASSWORD: changeme
-        - PGRST_DB_URI: postgres://pmoves:changeme@postgres:5432/pmoves
+        Dictionary mapping file paths to lists of changes made.
     """
+    _COMMON_CRED_KEYS = [
+        "POSTGRES_PASSWORD", "MINIO_ACCESS_KEY", "MINIO_SECRET_KEY",
+        "MINIO_ROOT_USER", "MINIO_ROOT_PASSWORD", "MINIO_USER",
+        "MINIO_PASSWORD", "NEO4J_AUTH", "NEO4J_PASSWORD", "PGRST_DB_URI",
+    ]
+
     if common_creds is None:
-        common_creds = {
-            "POSTGRES_PASSWORD": "changeme",
-            "MINIO_ACCESS_KEY": "minioadmin",
-            "MINIO_SECRET_KEY": "minioadmin",
-            "MINIO_ROOT_USER": "minioadmin",
-            "MINIO_ROOT_PASSWORD": "minioadmin",
-            "MINIO_USER": "minioadmin",
-            "MINIO_PASSWORD": "minioadmin",
-            "NEO4J_AUTH": "neo4j/changeme",
-            "NEO4J_PASSWORD": "changeme",
-            "PGRST_DB_URI": "postgres://pmoves:changeme@postgres:5432/pmoves",
-        }
+        # Try os.environ first (set by CI, Docker Compose, or operator)
+        common_creds = {k: os.environ.get(k, "") for k in _COMMON_CRED_KEYS}
+        empty_keys = [k for k, v in common_creds.items() if not v]
+
+        if empty_keys:
+            # Absolute last resort: insecure defaults with deprecation warning
+            import traceback
+            caller = ""
+            for frame in traceback.extract_stack():
+                if "chit/__init__.py" not in frame.filename:
+                    caller = f"{frame.filename}:{frame.lineno}"
+                    break
+            warnings.warn(
+                f"sync_common_credentials called without common_creds and "
+                f"missing env vars: {', '.join(empty_keys)}. "
+                f"Falling back to INSECURE defaults (changeme/minioadmin). "
+                f"Caller: {caller}. "
+                f"Pass common_creds explicitly or set env vars to silence this.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            _INSECURE_DEFAULTS = {
+                "POSTGRES_PASSWORD": "changeme",
+                "MINIO_ACCESS_KEY": "minioadmin",
+                "MINIO_SECRET_KEY": "minioadmin",
+                "MINIO_ROOT_USER": "minioadmin",
+                "MINIO_ROOT_PASSWORD": "minioadmin",
+                "MINIO_USER": "minioadmin",
+                "MINIO_PASSWORD": "minioadmin",
+                "NEO4J_AUTH": "neo4j/changeme",
+                "NEO4J_PASSWORD": "changeme",
+                "PGRST_DB_URI": "postgres://pmoves:changeme@postgres:5432/pmoves",
+            }
+            for k in empty_keys:
+                common_creds[k] = _INSECURE_DEFAULTS[k]
 
     # Tier files that may contain common credentials
     tier_files = [
@@ -499,9 +545,15 @@ def apply_manifest_v2(
     # Write tier env files
     if tier_files:
         write_to_tier_envs(secrets, tier_files, base_dir)
-
-    # Sync common credentials across all tier files
-    sync_common_credentials(base_dir)
+    # Sync common credentials — pass decoded secrets to avoid chicken-and-egg
+    # with os.environ lookups when secrets come FROM the CGP bundle being processed.
+    _COMMON_CRED_KEYS = [
+        "POSTGRES_PASSWORD", "MINIO_ACCESS_KEY", "MINIO_SECRET_KEY",
+        "MINIO_ROOT_USER", "MINIO_ROOT_PASSWORD", "MINIO_USER",
+        "MINIO_PASSWORD", "NEO4J_AUTH", "NEO4J_PASSWORD", "PGRST_DB_URI",
+    ]
+    _common_from_secrets = {k: secrets[k] for k in _COMMON_CRED_KEYS if k in secrets}
+    sync_common_credentials(base_dir, common_creds=_common_from_secrets if _common_from_secrets else None)
 
     # Write GitHub secrets
     github_path = base_dir / "data" / "chit" / "github_secrets.json"

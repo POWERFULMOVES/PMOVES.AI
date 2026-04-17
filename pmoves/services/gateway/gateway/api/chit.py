@@ -1,4 +1,4 @@
-import os, json, base64, hashlib, hmac, logging
+import os, json, base64, hashlib, hmac, logging, struct
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence
 
@@ -10,6 +10,7 @@ from cryptography.hazmat.primitives import hashes as _hashes  # type: ignore
 
 from pmoves.chit import CGP_SPEC_VERSION
 from services.common.env import get_secret
+from pmoves.tools.chit_security import _unpack_floats
 
 router = APIRouter(tags=["CHIT"])
 logger = logging.getLogger(__name__)
@@ -80,8 +81,8 @@ def decrypt_anchor(const: Dict[str, Any]) -> None:
                      const.get("id", "<unknown>"), exc)
         return
     try:
-        const["anchor"] = json.loads(pt.decode())
-    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+        const["anchor"] = _unpack_floats(pt)
+    except (struct.error, ValueError, AttributeError) as exc:
         logger.error("Failed to decode anchor for constellation %s: %s", const.get("id", "<unknown>"), exc)
         return
     const.pop("anchor_enc", None)
