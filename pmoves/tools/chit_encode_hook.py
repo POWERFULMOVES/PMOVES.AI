@@ -272,7 +272,12 @@ def main() -> int:
         text = data.get("content", data.get("text", ""))
         metadata = {k: v for k, v in data.items() if k not in ("content", "text")}
     else:
-        # Read from stdin
+        # Read from stdin — force UTF-8 on Windows where stdin defaults to cp1252
+        # and produces lone surrogates that break downstream hashing.
+        try:
+            sys.stdin.reconfigure(encoding="utf-8", errors="replace")
+        except AttributeError:
+            pass
         text = sys.stdin.read().strip()
         metadata = {}
 
