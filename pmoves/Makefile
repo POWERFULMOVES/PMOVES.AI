@@ -160,6 +160,7 @@ include mk/amd-rdna4.mk
 include mk/hf.mk
 include mk/provider.mk
 include mk/egress.mk
+include mk/yt-cookies.mk
 
 .PHONY: update-service-docs
 update-service-docs: ## Regenerate service update notes from git metadata

@@ -964,6 +964,11 @@ chitSafePaths:
   # Runner topology context — mirror surface for fleet role changes
   # (Phase 9Q, 2026-04-16: KVM4-1 role expansion for YT egress — PR #1262)
   - ".claude/context/runner-topology.md"
+  # Phase 9Q.2: YouTube cookie refresh schema + Make targets + CLI tool
+  # (2026-04-17: OAuth2 scaffold for automated YT cookie harvesting)
+  - "supabase/migrations/20260417"
+  - "mk/yt-cookies.mk"
+  - "tools/yt_oauth_flow.py"
 
 # ---------------------------------------------------------------------------
 # PMOVES.AI - GIT SUBMODULES
