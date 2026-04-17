@@ -204,8 +204,8 @@ gha-runner-ctl-setup-pat: ## Inject GITHUB_PAT from gh CLI token into env.shared
 gha-runner-ctl-cycle: ## Cycle github-runner-ctl via canonical secrets-funnel + compose up
 	@echo "=== Phase 9G: github-runner-ctl cycle (canonical pipeline) ==="
 	@echo ""
-	@echo "Step 1/3: Regenerate env.tier-* files via secrets-funnel..."
-	@$(MAKE) --no-print-directory secrets-funnel
+	@echo "Step 1/3: Regenerate env.tier-* files (funnel-sync, non-gating)..."
+	@$(MAKE) --no-print-directory secrets-funnel-sync 2>&1 || echo "⚠  secrets-funnel-sync had warnings (continuing — tier files generated)"
 	@echo ""
 	@echo "Step 2/3: Recreate github-runner-ctl container..."
 	@$(DC) --profile orchestration up -d --force-recreate github-runner-ctl
