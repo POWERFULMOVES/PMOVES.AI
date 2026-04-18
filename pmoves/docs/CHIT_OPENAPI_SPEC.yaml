@@ -79,7 +79,7 @@ paths:
                 $ref: '#/components/schemas/EncryptedCGP'
         '400':
           description: Missing passphrase or invalid anchors
-      x-implementation: pmoves.tools.chit_security.encrypt_anchor
+      x-implementation: pmoves.tools.chit_security.encrypt_anchors
       x-status: implemented-as-function
 
   /chit/decrypt:
@@ -136,24 +136,41 @@ components:
   schemas:
     CGPInput:
       type: object
-      description: Cryptographic Geometry Packet — input format
-      required: [schema_version, contributor, anchors]
+      description: >
+        Cryptographic Geometry Packet — input format.
+        Packet shape matches what pmoves.tools.chit_security.sign_cgp() and
+        encrypt_anchors() operate on: a `spec` block and a list of
+        `super_nodes`, each with `constellations` that carry `anchor`
+        float vectors. The encrypt path walks super_nodes[].constellations[]
+        and requires an `anchor` field on each constellation; fields beyond
+        `spec`/`super_nodes` are preserved through sign/verify/encrypt.
       properties:
-        schema_version:
-          type: string
-          example: "1.0"
-        contributor:
-          type: string
-          example: "pmoves-archon"
-        anchors:
-          type: array
-          items:
-            type: number
-          description: Float32 anchor vectors for geometric hashing
-        metadata:
+        spec:
           type: object
+          description: Spec block (schema version, contributor, descriptive fields)
           additionalProperties: true
-          description: Optional metadata key-value pairs
+          example:
+            schema_version: "1.0"
+            contributor: "pmoves-archon"
+        super_nodes:
+          type: array
+          description: Super-node array. Each super_node carries one or more constellations.
+          items:
+            type: object
+            properties:
+              constellations:
+                type: array
+                items:
+                  type: object
+                  required: [anchor]
+                  properties:
+                    anchor:
+                      type: array
+                      items:
+                        type: number
+                        format: float
+                      description: Float32 anchor vector. Gets Fernet/AES-GCM-encrypted and replaced by anchor_enc on the encrypt path.
+      additionalProperties: true
 
     SignedCGP:
       allOf:
@@ -163,20 +180,26 @@ components:
           properties:
             sig:
               type: object
-              required: [kid, mac, ts]
+              description: >
+                Signature envelope produced by sign_cgp() in chit_security.py.
+                alg/kid describe the signing algorithm + key ID; hmac is the
+                base64-encoded HMAC digest. No timestamp field is currently
+                emitted by sign_cgp — verify_cgp() does not read one either.
+              required: [alg, hmac]
               properties:
+                alg:
+                  type: string
+                  description: Signing algorithm
+                  example: "HMAC-SHA256"
                 kid:
                   type: string
-                  description: Key identifier
+                  nullable: true
+                  description: Key identifier (optional; null when not provided to sign_cgp)
                   example: "chit-hmac-sha256"
-                mac:
+                hmac:
                   type: string
-                  description: HMAC-SHA256 signature (hex)
-                  example: "a3f2b1c4d5e6..."
-                ts:
-                  type: string
-                  format: date-time
-                  description: Signature timestamp (ISO 8601)
+                  description: Base64-encoded HMAC digest (base64, not hex)
+                  example: "o9CzQx+LY6pA5K..."
 
     EncryptedCGP:
       allOf:
