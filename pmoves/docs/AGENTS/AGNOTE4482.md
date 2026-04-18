@@ -173,4 +173,40 @@ Elder-context support is always available to reduce drift and collision across p
 - Signature: `ACK::AGENT-ZERO-GLM::A2A-RUNTIME-WIRING`
 - Timestamp: `2026-04-17`
 
+
+
+## Post-Merge Review & SPARK Node Onboarding (2026-04-18)
+
+### Work Performed
+- **PR Review**: Reviewed 3 open PRs (#1275, #1279, #1287) via specialized subordinates
+- **PR #1275 (CHIT crypto P0)**: Fixed lazy accessor, sys.path resolution, numpy guard, key separation
+- **PR #1279 (GRAPHITI/NATS/TAC)**: Fixed JetStream syntax, stream coverage, TAC tree schema, media stubs, shared SubjectEntry
+- **PR #1287 (port audit tests)**: Fixed Path.read_text module-scoped patch
+- **PR #1289 (env.shared)**: Corrected path to `pmoves/env.shared`
+- **PR #1290 (geometry_decoder)**: Fail-closed passphrase, versioned KDF (PBKDF2 + scrypt fallback)
+- **PR #1291 (CodeQL dedup)**: Removed duplicate CodeQL job from merge-gate.yml
+- **PR #1294**: Superseded #1275+#1279 (add/add conflict on chit_common.py)
+- **Post-merge**: Verified all fixes on main (79+13 tests pass), cleaned 10 stale branches
+- **Test fixes**: Resolved 3 pre-existing issues (sys.exit mock, typer importorskip, Pydantic V2 migration)
+- **SPARK runner**: Registered `pmoves-spark-runner` (self-hosted, spark, Linux, ARM64) — online at `/opt/actions-runner-spark`
+
+### Files Changed (this session)
+| File | Change |
+|------|--------|
+| `pmoves/tools/chit_common.py` | New — shared canon() extracted |
+| `pmoves/services/common/nats_types.py` | New — shared SubjectEntry dataclass |
+| `pmoves/tests/services/test_pr1279_fixes.py` | New — 13 regression tests |
+| `pmoves/tools/chit_security_validator.py` | @validator → @field_validator (Pydantic V2) |
+| `pmoves/tests/test_wger_cgp_validation.py` | sys.exit mock, test data fix |
+| `pmoves/tests/test_mini_cli.py` | pytest.importorskip('typer') |
+| `pmoves/services/gateway/gateway/api/chit.py` | Lazy accessor, numpy guard |
+| `pmoves/tools/local_cert_runners.py` | env.shared path fix |
+| `.github/workflows/merge-gate.yml` | CodeQL dedup |
+
+### Agent ACK
+- Agent: `PMOVES-AGENT-ZERO-SPARK`
+- Signature: `ACK::PMOVES-AGENT-ZERO-SPARK::POST-MERGE-REVIEW-SPARK-ONBOARD`
+- Timestamp: `2026-04-18`
+
+<!-- GRAPHITI_MARK: PMOVES-AGENT-ZERO-SPARK::POST-MERGE-REVIEW-SPARK-ONBOARD::2026-04-18 -->
 <!-- GRAPHITI_MARK: AGENT-ZERO-GLM::A2A-RUNTIME-WIRING::2026-04-17 -->
