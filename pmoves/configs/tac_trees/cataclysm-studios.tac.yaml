@@ -1,0 +1,119 @@
+# TAC Tree: CATACLYSM STUDIOS INC
+# 5-tier creative pipeline: L1 Discovery → L2 Foundation → L3 Production → L4 Refinement → L5 Legendary
+# Generated: 2026-04-17
+# See: research/CATACLYSM_STUDIOS_RESEARCH_REPORT.md
+# Schema: canonical name:/root:/children: per PR #1279
+
+name: cataclysm-studios
+version: 1.0.0
+description: Creative production pipeline across 5 quality tiers
+
+root:
+  id: cataclysm-pipeline
+  task: Orchestrate 5-tier creative production pipeline
+  context: |
+    Manages content from initial concept exploration through legendary flagship production.
+    Each tier has entry/exit conditions. Depends on PMOVES-Creator for video, vibevoice for audio.
+  agent_hint: creative-director
+  status: planned
+  children:
+    - id: l1-discovery
+      task: Explore creative concepts and validate audience fit
+      context: Initial phase — generate concepts, research audience, validate viability
+      agent_hint: researcher
+      status: planned
+      children:
+        - id: concept-exploration
+          task: Generate and evaluate creative concepts
+          context: Brainstorm concepts, score against brand guidelines, shortlist top candidates
+          agent_hint: creative-writer
+          status: planned
+        - id: audience-research
+          task: Research target audience demographics and psychographics
+          context: Map audience segments, analyze engagement patterns, identify content opportunities
+          agent_hint: researcher
+          status: planned
+
+    - id: l2-foundation
+      task: Build foundational assets and brand guidelines
+      context: Establish brand voice, visual identity, and content calendar
+      agent_hint: brand-strategist
+      status: planned
+      depends_on: [l1-discovery]
+      children:
+        - id: brand-guidelines
+          task: Create brand voice and visual identity guidelines
+          context: Document tone, colors, typography, imagery standards for all content
+          agent_hint: designer
+          status: planned
+        - id: content-calendar
+          task: Plan content release schedule
+          context: Map content to platforms, seasons, events. Align with marketing goals
+          agent_hint: project-manager
+          status: planned
+
+    - id: l3-production
+      task: Core content creation across media types
+      context: Produce video, audio, and written content using PMOVES pipeline
+      agent_hint: producer
+      status: planned
+      depends_on: [l2-foundation]
+      children:
+        - id: video-production
+          task: Video content creation via PMOVES-Creator pipeline
+          context: Leverage PMOVES-Creator (ComfyUI fork) for video generation and post-production
+          agent_hint: video-editor
+          status: planned
+        - id: audio-production
+          task: Audio/voice content via vibevoice pipeline
+          context: Use vibevoice-realtime for voice synthesis, flute-gateway for prosodic analysis
+          agent_hint: audio-engineer
+          status: planned
+        - id: written-content
+          task: Written content and copywriting
+          context: Blog posts, social media copy, scripts, documentation
+          agent_hint: creative-writer
+          status: planned
+
+    - id: l4-refinement
+      task: Quality review, A/B testing, and optimization
+      context: Validate content quality through structured review and testing
+      agent_hint: qa-reviewer
+      status: planned
+      depends_on: [l3-production]
+      children:
+        - id: quality-review
+          task: Multi-axis quality assessment
+          context: Review for brand alignment, technical quality, engagement potential, accessibility
+          agent_hint: qa-reviewer
+          status: planned
+        - id: ab-testing
+          task: A/B test content variants
+          context: Test thumbnails, headlines, CTAs. Measure engagement and conversion
+          agent_hint: data-analyst
+          status: planned
+
+    - id: l5-legendary
+      task: Flagship content with maximum production value
+      context: Highest tier — premium production quality, cross-platform distribution
+      agent_hint: creative-director
+      status: planned
+      depends_on: [l4-refinement]
+      children:
+        - id: flagship-production
+          task: Produce highest-quality flagship content
+          context: Maximum budget, multi-format output, premiere launch strategy
+          agent_hint: creative-director
+          status: planned
+
+nats_subjects:
+  - creative.concept.explore.v1
+  - creative.audience.research.v1
+  - creative.brand.guidelines.v1
+  - creative.calendar.plan.v1
+  - creative.video.produce.v1
+  - creative.audio.produce.v1
+  - creative.written.produce.v1
+  - creative.quality.review.v1
+  - creative.ab.test.v1
+  - creative.flagship.produce.v1
