@@ -1,0 +1,105 @@
+# TAC Tree: CATACLYSM STUDIOS INC
+# 5-tier creative pipeline: L1 Discovery → L2 Foundation → L3 Production → L4 Refinement → L5 Legendary
+# Generated: 2026-04-17
+# See: research/CATACLYSM_STUDIOS_RESEARCH_REPORT.md
+
+tac_tree:
+  name: cataclysm-studios
+  version: 1.0.0
+  description: Creative production pipeline across 5 quality tiers
+
+  phases:
+    - name: discovery
+      label: "L1 Discovery"
+      description: Initial creative exploration and concept validation
+      entry_conditions:
+        - creative_brief_approved
+      exit_conditions:
+        - concept_validated
+        - audience_researched
+      skills:
+        - name: concept-exploration
+          description: Generate and evaluate creative concepts
+          nats_subject: creative.concept.explore.v1
+        - name: audience-research
+          description: Research target audience demographics and psychographics
+          nats_subject: creative.audience.research.v1
+
+    - name: foundation
+      label: "L2 Foundation"
+      description: Build foundational assets and brand guidelines
+      depends_on: [discovery]
+      entry_conditions:
+        - concept_validated
+      exit_conditions:
+        - brand_guidelines_draft
+        - content_calendar_draft
+      skills:
+        - name: brand-guidelines
+          description: Create brand voice, visual identity guidelines
+          nats_subject: creative.brand.guidelines.v1
+        - name: content-calendar
+          description: Plan content release schedule
+          nats_subject: creative.calendar.plan.v1
+
+    - name: production
+      label: "L3 Production"
+      description: Core content creation across media types
+      depends_on: [foundation]
+      entry_conditions:
+        - brand_guidelines_draft
+      exit_conditions:
+        - content_assets_created
+        - quality_review_passed
+      skills:
+        - name: video-production
+          description: Video content creation via PMOVES-Creator pipeline
+          nats_subject: creative.video.produce.v1
+        - name: audio-production
+          description: Audio/voice content via vibevoice pipeline
+          nats_subject: creative.audio.produce.v1
+        - name: written-content
+          description: Written content and copywriting
+          nats_subject: creative.written.produce.v1
+
+    - name: refinement
+      label: "L4 Refinement"
+      description: Quality review, A/B testing, optimization
+      depends_on: [production]
+      entry_conditions:
+        - content_assets_created
+      exit_conditions:
+        - ab_tests_concluded
+        - final_assets_approved
+      skills:
+        - name: quality-review
+          description: Multi-axis quality assessment
+          nats_subject: creative.quality.review.v1
+        - name: ab-testing
+          description: A/B test content variants
+          nats_subject: creative.ab.test.v1
+
+    - name: legendary
+      label: "L5 Legendary"
+      description: Flagship content with maximum production value
+      depends_on: [refinement]
+      entry_conditions:
+        - final_assets_approved
+      exit_conditions:
+        - legendary_content_published
+      skills:
+        - name: flagship-production
+          description: Highest-quality flagship content
+          nats_subject: creative.flagship.produce.v1
+
+  nats_subjects:
+    - creative.concept.explore.v1
+    - creative.audience.research.v1
+    - creative.brand.guidelines.v1
+    - creative.calendar.plan.v1
+    - creative.video.produce.v1
+    - creative.audio.produce.v1
+    - creative.written.produce.v1
+    - creative.quality.review.v1
+    - creative.ab.test.v1
+    - creative.flagship.produce.v1
