@@ -344,7 +344,8 @@ class CGPValidator:
                     )
                     return False, "Signature required but not present"
 
-                if self.passphrase:
+                _signing_key = os.getenv("CHIT_SIGNING_KEY", "")
+                if self.passphrase or _signing_key:
                     if not verify_cgp(cgp, self.passphrase):
                         self._log_audit(
                             cgp=cgp,

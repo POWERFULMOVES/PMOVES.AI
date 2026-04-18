@@ -16,12 +16,12 @@ from typing import Any, Dict
 
 # Resolve imports for chit_security
 _SCRIPT_DIR = Path(__file__).resolve().parent
-_PMOVES_ROOT = _SCRIPT_DIR.parent.parent.parent
+_PMOVES_ROOT = _SCRIPT_DIR.parent.parent.parent.parent
 if str(_PMOVES_ROOT) not in sys.path:
     sys.path.insert(0, str(_PMOVES_ROOT))
 
-from tools.chit_security import sign_cgp, encrypt_anchors  # noqa: E402
-from tools.chit_common import canon  # noqa: E402
+from pmoves.tools.chit_security import sign_cgp, encrypt_anchors  # noqa: E402
+from pmoves.tools.chit_common import canon  # noqa: E402
 
 
 def sign_cgp_file(cgp: Dict[str, Any], passphrase: str) -> Dict[str, Any]:

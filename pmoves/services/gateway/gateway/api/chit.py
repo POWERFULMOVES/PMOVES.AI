@@ -89,7 +89,7 @@ def decrypt_anchor(const: Dict[str, Any]) -> None:
         return
     try:
         const["anchor"] = _unpack_floats(pt)
-    except (struct.error, ValueError, AttributeError) as exc:
+    except (struct.error, ValueError, AttributeError, ModuleNotFoundError) as exc:
         logger.error("Failed to decode anchor for constellation %s: %s", const.get("id", "<unknown>"), exc)
         return
     const.pop("anchor_enc", None)
