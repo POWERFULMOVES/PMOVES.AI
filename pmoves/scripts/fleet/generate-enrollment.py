@@ -83,8 +83,10 @@ LEDGER_PATH = Path(__file__).parent / ".enrollment-ledger.jsonl"
 # HMAC signing (inline, no dependency on pmoves.chit at script level)
 # ---------------------------------------------------------------------------
 
-def _canon(obj: dict[str, Any]) -> bytes:
-    return json.dumps(obj, sort_keys=True, separators=(",", ":")).encode("utf-8")
+_TOOLS_DIR = Path(__file__).resolve().parent.parent.parent / "tools"
+if str(_TOOLS_DIR.parent) not in sys.path:
+    sys.path.insert(0, str(_TOOLS_DIR.parent))
+from tools.chit_common import canon as _canon
 
 
 def sign_enrollment(payload: dict[str, Any], passphrase: str) -> dict[str, Any]:
@@ -242,8 +244,8 @@ def generate(args: argparse.Namespace) -> None:
         enrollment = sign_enrollment(enrollment, passphrase)
         print(f"Token signed with CHIT HMAC (kid: {enrollment['sig']['kid']})", file=sys.stderr)
     else:
-        print("WARNING: CHIT_PASSPHRASE not set — token issued UNSIGNED.", file=sys.stderr)
-        print("Set CHIT_PASSPHRASE for production enrollment.", file=sys.stderr)
+        print("ERROR: CHIT_PASSPHRASE env var is required — refusing to issue unsigned tokens.", file=sys.stderr)
+        sys.exit(1)
 
     # Generate RustDesk-only QR (for mobile app import)
     rustdesk_qr_data = json.dumps(enrollment["rustdesk"], separators=(",", ":"))
