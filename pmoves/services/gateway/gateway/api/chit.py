@@ -1,4 +1,4 @@
-import os, json, base64, hashlib, hmac, logging
+import os, json, base64, hashlib, hmac, logging, struct
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence
 
@@ -10,13 +10,23 @@ from cryptography.hazmat.primitives import hashes as _hashes  # type: ignore
 
 from pmoves.chit import CGP_SPEC_VERSION
 from services.common.env import get_secret
+from pmoves.tools.chit_security import _unpack_floats
 
 router = APIRouter(tags=["CHIT"])
 logger = logging.getLogger(__name__)
 
 CHIT_REQUIRE_SIGNATURE = os.getenv("CHIT_REQUIRE_SIGNATURE","false").lower()=="true"
 CHIT_DECRYPT_ANCHORS = os.getenv("CHIT_DECRYPT_ANCHORS","false").lower()=="true"
-CHIT_PASSPHRASE = get_secret("CHIT_PASSPHRASE","change-me")
+_CHIT_PASSPHRASE: str | None = os.getenv("CHIT_PASSPHRASE")
+
+def _require_chit_passphrase() -> str:
+    """Fail-closed accessor — raises only when passphrase is actually needed."""
+    if not _CHIT_PASSPHRASE:
+        raise RuntimeError(
+            "CHIT_PASSPHRASE not set — gateway cannot operate without a passphrase. "
+            "Refusing to fall back to a default (fail-closed)."
+        )
+    return _CHIT_PASSPHRASE
 CHIT_CODEBOOK_PATH = os.getenv("CHIT_CODEBOOK_PATH","tests/data/codebook.jsonl")
 CHIT_LEARNED_TEXT = os.getenv("CHIT_LEARNED_TEXT","false").lower()=="true"
 CHIT_T5_MODEL = os.getenv("CHIT_T5_MODEL")  # optional HF model path/name
@@ -55,13 +65,12 @@ def verify_hmac(cgp: Dict[str, Any]) -> bool:
     if not sig: return not CHIT_REQUIRE_SIGNATURE
     mac_b64 = sig.get("hmac","")
     doc = dict(cgp); doc.pop("sig", None)
-    mac2 = hmac.new(CHIT_PASSPHRASE.encode("utf-8"), canon(doc), hashlib.sha256).digest()
+    mac2 = hmac.new(_require_chit_passphrase().encode("utf-8"), canon(doc), hashlib.sha256).digest()
     try:
         mac1 = base64.b64decode(mac_b64)
     except Exception:
         return False
     return hmac.compare_digest(mac1, mac2)
-
 def decrypt_anchor(const: Dict[str, Any]) -> None:
     if "anchor" in const: return
     enc = const.get("anchor_enc")
@@ -70,8 +79,7 @@ def decrypt_anchor(const: Dict[str, Any]) -> None:
     if not CHIT_DECRYPT_ANCHORS:
         raise HTTPException(status_code=400, detail="Encrypted anchor but CHIT_DECRYPT_ANCHORS=false")
     iv = base64.b64decode(enc["iv"]); salt = base64.b64decode(enc["salt"]); ct = base64.b64decode(enc["ct"])
-    kdf = PBKDF2HMAC(algorithm=_hashes.SHA256(), length=32, salt=salt, iterations=600_000)
-    key = kdf.derive(CHIT_PASSPHRASE.encode("utf-8"))
+    key = kdf.derive(_require_chit_passphrase().encode("utf-8"))
     aead = AESGCM(key); aad = canon({"id": const.get("id","")})
     try:
         pt = aead.decrypt(iv, ct, aad)
@@ -80,8 +88,8 @@ def decrypt_anchor(const: Dict[str, Any]) -> None:
                      const.get("id", "<unknown>"), exc)
         return
     try:
-        const["anchor"] = json.loads(pt.decode())
-    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+        const["anchor"] = _unpack_floats(pt)
+    except (struct.error, ValueError, AttributeError, ModuleNotFoundError) as exc:
         logger.error("Failed to decode anchor for constellation %s: %s", const.get("id", "<unknown>"), exc)
         return
     const.pop("anchor_enc", None)

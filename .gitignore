@@ -205,3 +205,12 @@ NUL
 .worktrees/
 .claude/worktrees/
 
+
+# Root artifacts (docx conversion, PDFs, temp files)
+Wrote
+Simulation*.md
+Simulation*.pdf
+Simulation*.docx
+Holographic*.md
+PMOVES.AI Provisioning Bundle*.pdf
+.coverage

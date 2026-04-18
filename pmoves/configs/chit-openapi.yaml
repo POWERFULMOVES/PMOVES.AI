@@ -1,0 +1,304 @@
+openapi: "3.1.0"
+info:
+  title: PMOVES CHIT API
+  version: "1.0.0"
+  description: |
+    CHIT (Constellation Harvest Integrity Token) API for CGP signing,
+    verification, anchor encryption/decryption, and provenance validation.
+    Per CGP v1.0 spec — canonical crypto in chit_security.py.
+
+paths:
+  /chit/sign:
+    post:
+      summary: Sign a CGP
+      description: |
+        Computes HMAC-SHA256 over canonical JSON of the CGP (excluding sig field).
+        Returns the CGP with sig{alg, kid, hmac} appended.
+      operationId: signCgp
+      tags: [Signing]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CgpSignRequest"
+      responses:
+        "200":
+          description: Signed CGP
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SignedCgp"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /chit/verify:
+    post:
+      summary: Verify a CGP signature
+      description: |
+        Verifies HMAC-SHA256 signature using constant-time comparison.
+        Returns boolean valid field.
+      operationId: verifyCgp
+      tags: [Signing]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SignedCgp"
+      responses:
+        "200":
+          description: Verification result
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [valid]
+                properties:
+                  valid:
+                    type: boolean
+
+  /chit/encrypt:
+    post:
+      summary: Encrypt CGP anchors
+      description: |
+        Encrypts anchor float32 vectors using AES-256-GCM.
+        Key derived via PBKDF2-HMAC-SHA256 (600K iterations).
+        Replaces anchor with anchor_enc{alg, iv, salt, ct}.
+        Also signs the resulting CGP.
+      operationId: encryptAnchors
+      tags: [Encryption]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CgpEncryptRequest"
+      responses:
+        "200":
+          description: CGP with encrypted anchors
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EncryptedCgp"
+
+  /chit/decrypt:
+    post:
+      summary: Decrypt CGP anchors
+      description: |
+        Decrypts anchor_enc fields back to float32 anchor arrays.
+        Key derived from passphrase + per-CGP salt.
+      operationId: decryptAnchors
+      tags: [Encryption]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CgpDecryptRequest"
+      responses:
+        "200":
+          description: CGP with decrypted anchors
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SignedCgp"
+        "400":
+          description: Decryption failed (wrong passphrase or tampered ciphertext)
+
+  /chit/validate:
+    post:
+      summary: Full CGP validation
+      description: |
+        Validates CGP schema, spectrum constraints, signature,
+        and security level requirements.
+      operationId: validateCgp
+      tags: [Validation]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CgpValidateRequest"
+      responses:
+        "200":
+          description: Validation result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationResult"
+
+components:
+ schemas:
+    CgpSignRequest:
+      type: object
+      required: [cgp, passphrase]
+      properties:
+        cgp:
+          $ref: "#/components/schemas/CgpDocument"
+        passphrase:
+          type: string
+          format: password
+          description: CHIT signing passphrase
+        kid:
+          type: string
+          description: Optional key identifier override
+
+    CgpEncryptRequest:
+      type: object
+      required: [cgp, passphrase]
+      properties:
+        cgp:
+          $ref: "#/components/schemas/CgpDocument"
+        passphrase:
+          type: string
+          format: password
+          description: CHIT encryption passphrase
+        kid:
+          type: string
+          description: Optional key identifier override
+
+    CgpDecryptRequest:
+      type: object
+      required: [cgp, passphrase]
+      properties:
+        cgp:
+          $ref: "#/components/schemas/EncryptedCgp"
+        passphrase:
+          type: string
+          format: password
+
+    CgpValidateRequest:
+      type: object
+      required: [cgp]
+      properties:
+        cgp:
+          $ref: "#/components/schemas/CgpDocument"
+        passphrase:
+          type: string
+          format: password
+          description: Required for SIGNED/STRICT security levels
+        security_level:
+          type: string
+          enum: [OPEN, SIGNED, STRICT]
+          default: SIGNED
+
+    CgpDocument:
+      type: object
+      required: [schema_version]
+      properties:
+        schema_version:
+          type: string
+          enum: ["0.1", "0.2", "1.0"]
+        contributor:
+          type: string
+        super_nodes:
+          type: array
+          items:
+            $ref: "#/components/schemas/SuperNode"
+
+    SuperNode:
+      type: object
+      properties:
+        id:
+          type: string
+        constellations:
+          type: array
+          items:
+            $ref: "#/components/schemas/Constellation"
+
+    Constellation:
+      type: object
+      properties:
+        id:
+          type: string
+        anchor:
+          type: array
+          items:
+            type: number
+            format: float
+          description: Float32 anchor vector (plaintext)
+        anchor_enc:
+          $ref: "#/components/schemas/AnchorEnc"
+          description: Encrypted anchor (replaces anchor when encrypted)
+
+    AnchorEnc:
+      type: object
+      required: [alg, iv, salt, ct]
+      properties:
+        alg:
+          type: string
+          enum: [AES-GCM]
+        iv:
+          type: string
+          format: base64
+          description: 12-byte IV
+        salt:
+          type: string
+          format: base64
+          description: 16-byte salt
+        ct:
+          type: string
+          format: base64
+          description: AES-GCM ciphertext + 16-byte tag
+
+    Signature:
+      type: object
+      required: [alg, kid, hmac]
+      properties:
+        alg:
+          type: string
+          enum: [HMAC-SHA256]
+        kid:
+          type: string
+          description: Key identifier (SHA256 of passphrase, first 16 hex chars)
+        hmac:
+          type: string
+          format: base64
+          description: 32-byte HMAC-SHA256 digest
+
+    SignedCgp:
+      allOf:
+        - $ref: "#/components/schemas/CgpDocument"
+        - type: object
+          required: [sig]
+          properties:
+            sig:
+              $ref: "#/components/schemas/Signature"
+
+    EncryptedCgp:
+      allOf:
+        - $ref: "#/components/schemas/SignedCgp"
+        - type: object
+          description: CGP with anchor_enc replacing anchor in constellations
+
+    ValidationResult:
+      type: object
+      required: [valid, errors]
+      properties:
+        valid:
+          type: boolean
+        security_level:
+          type: string
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              code:
+                type: string
+              message:
+                type: string
+              field:
+                type: string
+
+  responses:
+    BadRequest:
+      description: Invalid request
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string

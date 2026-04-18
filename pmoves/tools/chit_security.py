@@ -4,6 +4,7 @@ import base64
 import hmac
 import hashlib
 import json
+import logging
 import os
 import struct
 from typing import Any, Dict, List
@@ -17,29 +18,78 @@ except Exception:
     _CRYPTO_OK = False
 
 
-def _canon(obj: Dict[str, Any]) -> bytes:
-    return json.dumps(obj, sort_keys=True, separators=(",", ":")).encode("utf-8")
+from pmoves.tools.chit_common import canon as _canon  # noqa: F401 — re-export for backward compat
+
+logger = logging.getLogger(__name__)
 
 
-def sign_cgp(cgp: Dict[str, Any], passphrase: str, kid: str | None = None) -> Dict[str, Any]:
+# ---------------------------------------------------------------------------
+# Key separation: CHIT_SIGNING_KEY / CHIT_ENCRYPTION_KEY vs CHIT_PASSPHRASE
+# ---------------------------------------------------------------------------
+
+def _get_signing_key() -> str:
+    """Return the HMAC signing key from environment.
+
+    Priority:
+    1. CHIT_SIGNING_KEY  (recommended — separate key for signing)
+    2. CHIT_PASSPHRASE   (legacy fallback — same key for signing + encryption)
+
+    Raises:
+        RuntimeError: if neither env var is set.
+    """
+    key = os.environ.get("CHIT_SIGNING_KEY") or os.environ.get("CHIT_PASSPHRASE", "")
+    if not key:
+        raise RuntimeError("CHIT_SIGNING_KEY or CHIT_PASSPHRASE env var is required")
+    if not os.environ.get("CHIT_SIGNING_KEY") and os.environ.get("CHIT_PASSPHRASE"):
+        logger.warning(
+            "Using CHIT_PASSPHRASE for signing — recommend setting CHIT_SIGNING_KEY "
+            "separately for key separation"
+        )
+    return key
+
+
+def _get_encryption_key() -> str:
+    """Return the AES encryption key from environment.
+
+    Priority:
+    1. CHIT_ENCRYPTION_KEY  (recommended — separate key for encryption)
+    2. CHIT_PASSPHRASE       (legacy fallback — same key for signing + encryption)
+
+    Raises:
+        RuntimeError: if neither env var is set.
+    """
+    key = os.environ.get("CHIT_ENCRYPTION_KEY") or os.environ.get("CHIT_PASSPHRASE", "")
+    if not key:
+        raise RuntimeError("CHIT_ENCRYPTION_KEY or CHIT_PASSPHRASE env var is required")
+    if not os.environ.get("CHIT_ENCRYPTION_KEY") and os.environ.get("CHIT_PASSPHRASE"):
+        logger.warning(
+            "Using CHIT_PASSPHRASE for encryption — recommend setting CHIT_ENCRYPTION_KEY "
+            "separately for key separation"
+        )
+    return key
+
+
+def sign_cgp(cgp: Dict[str, Any], passphrase: str | None = None, kid: str | None = None) -> Dict[str, Any]:
+    signing_key = passphrase or _get_signing_key()
     doc = json.loads(json.dumps(cgp))  # deep copy
-    kid = kid or hashlib.sha256(passphrase.encode()).hexdigest()[:16]
+    kid = kid or hashlib.sha256(signing_key.encode()).hexdigest()[:16]
     meta = {"alg": "HMAC-SHA256", "kid": kid}
     doc_nosig = json.loads(json.dumps(doc))
     doc_nosig.pop("sig", None)
-    mac = hmac.new(passphrase.encode("utf-8"), _canon(doc_nosig), hashlib.sha256).digest()
+    mac = hmac.new(signing_key.encode("utf-8"), _canon(doc_nosig), hashlib.sha256).digest()
     doc["sig"] = {**meta, "hmac": base64.b64encode(mac).decode("ascii")}
     return doc
 
 
-def verify_cgp(cgp: Dict[str, Any], passphrase: str) -> bool:
+def verify_cgp(cgp: Dict[str, Any], passphrase: str | None = None) -> bool:
+    signing_key = passphrase or _get_signing_key()
     if "sig" not in cgp:
         return False
     sig = cgp["sig"]
     mac_b64 = sig.get("hmac", "")
     doc_nosig = json.loads(json.dumps(cgp))
     doc_nosig.pop("sig", None)
-    mac2 = hmac.new(passphrase.encode("utf-8"), _canon(doc_nosig), hashlib.sha256).digest()
+    mac2 = hmac.new(signing_key.encode("utf-8"), _canon(doc_nosig), hashlib.sha256).digest()
     try:
         mac1 = base64.b64decode(mac_b64)
     except Exception:
@@ -67,12 +117,14 @@ def _unpack_floats(buf: bytes) -> List[float]:
     return a.astype(float).tolist()
 
 
-def encrypt_anchors(cgp: Dict[str, Any], passphrase: str, kid: str | None = None) -> Dict[str, Any]:
+def encrypt_anchors(cgp: Dict[str, Any], passphrase: str | None = None, kid: str | None = None) -> Dict[str, Any]:
     if not _CRYPTO_OK:
         raise RuntimeError("cryptography not installed")
+    encryption_key = passphrase or _get_encryption_key()
+    signing_key = passphrase or _get_signing_key()
     doc = json.loads(json.dumps(cgp))
     salt = os.urandom(16)
-    key = _derive_key(passphrase, salt, 32)
+    key = _derive_key(encryption_key, salt, 32)
     for s in doc.get("super_nodes", []) or []:
         for const in s.get("constellations", []) or []:
             if "anchor" not in const:
@@ -89,10 +141,11 @@ def encrypt_anchors(cgp: Dict[str, Any], passphrase: str, kid: str | None = None
                 "salt": base64.b64encode(salt).decode("ascii"),
                 "ct": base64.b64encode(ct).decode("ascii"),
             }
-    return sign_cgp(doc, passphrase, kid=kid)
+    return sign_cgp(doc, passphrase=signing_key, kid=kid)
 
 
-def decrypt_anchors(cgp: Dict[str, Any], passphrase: str) -> Dict[str, Any]:
+def decrypt_anchors(cgp: Dict[str, Any], passphrase: str | None = None) -> Dict[str, Any]:
+    encryption_key = passphrase or _get_encryption_key()
     doc = json.loads(json.dumps(cgp))
     has_encrypted_anchors = any(
         const.get("anchor_enc")
@@ -111,7 +164,7 @@ def decrypt_anchors(cgp: Dict[str, Any], passphrase: str) -> Dict[str, Any]:
             iv = base64.b64decode(enc["iv"])
             salt = base64.b64decode(enc["salt"])
             ct = base64.b64decode(enc["ct"])
-            key = _derive_key(passphrase, salt, 32)
+            key = _derive_key(encryption_key, salt, 32)
             aead = AESGCM(key)
             aad = _canon({"id": const.get("id", "")})
             pt = aead.decrypt(iv, ct, aad)
@@ -125,4 +178,6 @@ __all__ = [
     "verify_cgp",
     "encrypt_anchors",
     "decrypt_anchors",
+    "_get_signing_key",
+    "_get_encryption_key",
 ]

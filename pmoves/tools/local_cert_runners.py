@@ -52,6 +52,40 @@ LANES: tuple[RunnerLane, ...] = (
 )
 
 
+def _load_env_shared() -> dict[str, str]:
+    """Read env.shared into a dict."""
+    env_path = Path(_REPO_ROOT) / "pmoves" / "env.shared"
+    result: dict[str, str] = {}
+    if not env_path.exists():
+        return result
+    with open(env_path, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            if "=" in line:
+                key, _, val = line.partition("=")
+                result[key.strip()] = val.strip()
+    return result
+
+
+def _ensure_env_loaded() -> None:
+    """Load env.shared into os.environ as fallback if not already loaded.
+
+    This makes the script self-contained when invoked directly
+    (e.g. `python tools/local_cert_runners.py up`) without requiring
+    the with-env.sh wrapper. Mirrors the fallback pattern in
+    provider_cascade.py._read_env_shared().
+    """
+    if os.getenv("PMOVES_ENV_LOADER"):
+        return  # already loaded by with-env.sh
+    for key, value in _load_env_shared().items():
+        if key not in os.environ:
+            os.environ[key] = value
+
+
+
+
 def run_cmd(
     args: list[str],
     check: bool = True,
@@ -406,6 +440,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
 
 
 def main(argv: list[str]) -> int:
+    _ensure_env_loaded()
     args = parse_args(argv)
     lanes = _selected_lanes(args.lane)
     try:
