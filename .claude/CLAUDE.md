@@ -308,7 +308,9 @@ make -C pmoves worktree-sitrep-strict    # gate (non-zero exit on any dirty/conf
 #
 #   2. If HEAD has commits you want to keep, restore working tree from
 #      HEAD without touching HEAD itself:
-#        git -C <submodule> restore .
+#        # General form — handles all 3 wipe subtypes:
+#        #   ` M` worktree modifications, `D ` staged deletions, missing index file
+#        git -C <submodule> restore --source=HEAD --staged --worktree :/
 #
 #   3. If HEAD is also wrong, stash submodule commits before update:
 #        git -C <submodule> stash --include-untracked \
@@ -320,6 +322,11 @@ make -C pmoves worktree-sitrep-strict    # gate (non-zero exit on any dirty/conf
 # `git log` and `git rev-parse HEAD` inside the submodule before running
 # any submodule reset command. `restore` rewrites the working tree from
 # HEAD's tree; `update` resets HEAD to the superproject pointer.
+#
+# Wipe signature: if each wiped sub retains exactly ONE file
+# (`PMOVES.AI_INTEGRATION.md`), that matches the 2026-04-04/05 batch
+# pattern — predates all logged AI agent sessions. See memory
+# entry `project_submodule_wipe_forensic.md` for full forensic record.
 ```
 
 See `pmoves/docs/AGENTS/CODEX_CIPHER_MEMORY_IMPLEMENTATION_MAP.md` for the full worktree
@@ -585,6 +592,7 @@ encapsulate the correct stop/restart/env-injection flow.
 | Tailscale admin API calls | `make -C pmoves fleet-stale-audit` | `/fleet:stale-nodes` |
 | Tailscale ACL drift audit | `pmoves/docs/operations/FLEET_REMOTE_ACCESS_RUNBOOK.md` + `pmoves/configs/tailscale-acl-policy.json` | `/fleet:acl-audit` |
 | RustDesk enrollment / QR gen | `make -C pmoves fleet-enroll ROLE=... DEVICE=...` | `/fleet:enroll` |
+| Submodule working-tree wipe | `git -C <sub> restore --source=HEAD --staged --worktree :/` | — |
 
 | MinIO restart (object storage) | `make -C pmoves up-minio` | `/minio:status` |
 
