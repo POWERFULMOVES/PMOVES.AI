@@ -54,8 +54,14 @@ commits that were ahead of the gitlink locally.
 2. If HEAD has commits you want to keep, restore working tree from HEAD
    without touching HEAD itself:
    ```bash
-   git -C <submodule> restore .
+   # General form — handles all 3 wipe subtypes:
+   #   ` M` worktree modifications, `D ` staged deletions, missing index file
+   git -C <submodule> restore --source=HEAD --staged --worktree :/
    ```
+   The `:/` pathspec is git's root-magic signature: it scopes to every file
+   from the repo root, regardless of the caller's cwd. `--staged --worktree`
+   together rewrite both the index and the working tree from `--source=HEAD`,
+   which is what the three wipe subtypes require.
 
 3. If HEAD is also wrong, stash submodule commits before update:
    ```bash
