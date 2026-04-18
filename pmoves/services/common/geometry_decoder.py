@@ -48,6 +48,11 @@ try:
 except Exception:
     HAS_CRYPTOGRAPHY = False
 
+# Anchor KDF version identifiers
+_ANCHOR_KDF_SCRYPT = "scrypt"
+_ANCHOR_KDF_PBKDF2 = "PBKDF2-HMAC-SHA256"
+
+
 try:
     import numpy as np
     HAS_NUMPY = True
@@ -366,6 +371,8 @@ def encrypt_anchor(
 
     return {
         "alg": "AES-GCM",
+        "kdf": _ANCHOR_KDF_PBKDF2,
+        "kdf_iter": "600000",
         "iv": base64.b64encode(iv).decode("ascii"),
         "salt": base64.b64encode(salt).decode("ascii"),
         "ct": base64.b64encode(ct).decode("ascii"),
@@ -419,13 +426,23 @@ def decrypt_anchor(
     except (binascii.Error, ValueError) as e:
         raise ValueError(f"Invalid base64 encoding in anchor_enc: {e}") from e
 
-    kdf = PBKDF2HMAC(
-        algorithm=_hashes.SHA256(),
-        length=32,
-        salt=salt,
-        iterations=600_000,
-    )
-    key = kdf.derive(passphrase.encode())
+    kdf_type = anchor_enc.get("kdf")
+    if kdf_type == _ANCHOR_KDF_PBKDF2 or kdf_type is None:
+        # New PBKDF2 path (None for forward compat during transition)
+        kdf = PBKDF2HMAC(
+            algorithm=_hashes.SHA256(),
+            length=32,
+            salt=salt,
+            iterations=600_000,
+        )
+        key = kdf.derive(passphrase.encode())
+    elif kdf_type == _ANCHOR_KDF_SCRYPT:
+        # Legacy scrypt fallback
+        key = hashlib.scrypt(
+            passphrase.encode(), salt=salt, n=2**14, r=8, p=1, dklen=32
+        )
+    else:
+        raise ValueError(f"Unsupported anchor KDF: {kdf_type}")
 
     aead = AESGCM(key)
     aad = _canon({"id": constellation_id})
