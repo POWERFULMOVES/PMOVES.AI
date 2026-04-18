@@ -9,7 +9,7 @@ set -e
 
 HOST_TYPE="${1:-}"
 REPO_URL="https://github.com/POWERFULMOVES/PMOVES.AI"
-RUNNER_VERSION="2.321.0"
+RUNNER_VERSION="2.332.0"
 
 # Registration token (valid for 1 hour from generation)
 # Generate with: gh api repos/POWERFULMOVES/PMOVES.AI/actions/runners/registration-token -X POST --jq '.token'

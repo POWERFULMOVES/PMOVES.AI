@@ -277,7 +277,7 @@ install_runner() {
         log_info "Falling back to setup-runner.sh pattern..."
 
         local runner_dir="/home/runner/actions-runner-${NODE_TYPE}"
-        local runner_version="2.321.0"
+        local runner_version="2.332.0"
         local labels
 
         case "$NODE_TYPE" in

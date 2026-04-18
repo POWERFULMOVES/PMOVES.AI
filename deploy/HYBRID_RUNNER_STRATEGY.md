@@ -38,7 +38,7 @@ PMOVES.AI uses a **hybrid runner strategy** combining self-hosted infrastructure
     └──────────┘    └────────────┘  └─────────────┘
     • RTX 5090       • cloudstartup   • ubuntu-latest
     • CUDA builds    • kvm4 (prod)    • Lightweight
-    • Hi-RAG GPU     • kvm2 (backup)  • No cache req
+    • Hi-RAG GPU     • SPARK (ARM)    • No cache req
     • Ollama         • Docker cache   • Fast spin-up
                      • Deployments
 ```
@@ -50,6 +50,7 @@ PMOVES.AI uses a **hybrid runner strategy** combining self-hosted infrastructure
 | Runner | Labels | Role | Hardware | Monthly Cost |
 |--------|--------|------|----------|-------------|
 | **AI Lab** | `self-hosted, ai-lab, gpu, cuda` | GPU builds, model inference | RTX 5090/4090/3090Ti, 128GB RAM | $0 (electricity ~$20) |
+| **SPARK** | `self-hosted, spark, Linux, ARM64` | A2A/MCP relay, CPU-intensive tasks | 20 cores, 119GB RAM, ARM64 (NVIDIA DGX) | $0 (fleet asset) |
 | **cloudstartup** | `self-hosted, vps, cloudstartup, staging` | Staging deploys, CPU builds | 8 vCPU, 16GB RAM, Hostinger VPS | $10/mo |
 | **kvm4** | `self-hosted, vps, kvm4, production` | Production deploys | 8 vCPU, 16GB RAM, Hostinger VPS | $10/mo |
 | **kvm2** | `self-hosted, vps, kvm2, backup` | Overflow/backup | 4 vCPU, 8GB RAM, Hostinger VPS | $10/mo |
