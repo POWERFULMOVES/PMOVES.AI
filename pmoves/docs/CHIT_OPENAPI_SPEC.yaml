@@ -1,0 +1,197 @@
+openapi: 3.1.0
+info:
+  title: PMOVES CHIT API
+  version: 0.1.0
+  description: |
+    Cryptographic Hash Integrity Trail API.
+    STUB — endpoints defined from code analysis, not yet implemented as HTTP routes.
+    See: pmoves/tools/chit_security.py, pmoves/tools/chit_security_validator.py
+
+paths:
+  /chit/sign:
+    post:
+      summary: Sign a CGP with HMAC-SHA256
+      description: Signs a Cryptographic Geometry Packet using the canonical CHIT signing implementation.
+        Supports separate signing keys via CHIT_SIGNING_KEY env var.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CGPInput'
+      responses:
+        '200':
+          description: Signed CGP with HMAC signature
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SignedCGP'
+        '400':
+          description: Missing or invalid passphrase
+        '500':
+          description: Signing key unavailable
+      x-implementation: pmoves.tools.chit_security.sign_cgp
+      x-status: implemented-as-function
+
+  /chit/verify:
+    post:
+      summary: Verify a CGP HMAC signature
+      description: Verifies the HMAC-SHA256 signature on a signed CGP.
+        Returns valid=true if signature matches, false if tampered or wrong key.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignedCGP'
+      responses:
+        '200':
+          description: Verification result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  valid:
+                    type: boolean
+                  reason:
+                    type: string
+      x-implementation: pmoves.tools.chit_security.verify_cgp
+      x-status: implemented-as-function
+
+  /chit/encrypt:
+    post:
+      summary: Encrypt CGP anchor vectors with AES-256-GCM
+      description: Encrypts anchor vectors in a CGP using PBKDF2-derived AES-256-GCM key.
+        Supports separate encryption keys via CHIT_ENCRYPTION_KEY env var.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CGPInput'
+      responses:
+        '200':
+          description: CGP with encrypted anchors
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EncryptedCGP'
+        '400':
+          description: Missing passphrase or invalid anchors
+      x-implementation: pmoves.tools.chit_security.encrypt_anchor
+      x-status: implemented-as-function
+
+  /chit/decrypt:
+    post:
+      summary: Decrypt CGP anchor vectors
+      description: Decrypts AES-256-GCM encrypted anchor vectors back to float32 arrays.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EncryptedCGP'
+      responses:
+        '200':
+          description: CGP with decrypted anchors
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CGPInput'
+        '400':
+          description: Missing passphrase or decryption failure
+      x-implementation: pmoves.tools.chit_security.decrypt_anchors
+      x-status: implemented-as-function
+
+  /chit/validate:
+    post:
+      summary: Validate CGP against schema
+      description: Validates a CGP structure against the CHIT contract schema.
+        Checks required fields, version format, and data types.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignedCGP'
+      responses:
+        '200':
+          description: Validation result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  valid:
+                    type: boolean
+                  errors:
+                    type: array
+                    items:
+                      type: string
+      x-implementation: pmoves.tools.chit_security_validator.CGPValidator
+      x-status: implemented-as-class
+
+components:
+  schemas:
+    CGPInput:
+      type: object
+      description: Cryptographic Geometry Packet — input format
+      required: [schema_version, contributor, anchors]
+      properties:
+        schema_version:
+          type: string
+          example: "1.0"
+        contributor:
+          type: string
+          example: "pmoves-archon"
+        anchors:
+          type: array
+          items:
+            type: number
+          description: Float32 anchor vectors for geometric hashing
+        metadata:
+          type: object
+          additionalProperties: true
+          description: Optional metadata key-value pairs
+
+    SignedCGP:
+      allOf:
+        - $ref: '#/components/schemas/CGPInput'
+        - type: object
+          required: [sig]
+          properties:
+            sig:
+              type: object
+              required: [kid, mac, ts]
+              properties:
+                kid:
+                  type: string
+                  description: Key identifier
+                  example: "chit-hmac-sha256"
+                mac:
+                  type: string
+                  description: HMAC-SHA256 signature (hex)
+                  example: "a3f2b1c4d5e6..."
+                ts:
+                  type: string
+                  format: date-time
+                  description: Signature timestamp (ISO 8601)
+
+    EncryptedCGP:
+      allOf:
+        - $ref: '#/components/schemas/SignedCGP'
+        - type: object
+          required: [anchor_enc]
+          properties:
+            anchor_enc:
+              type: string
+              description: Base64-encoded AES-256-GCM ciphertext (includes nonce + tag)
+              example: "dGVzdC1ub25jZS1hbmQtdGFnLWhlcmU="
+
+x-status: stub
+x-notes: >
+  Functions exist in chit_security.py but no HTTP routes expose them yet.
+  Gateway API at pmoves/services/gateway/ should implement these routes.
+  Key separation supported via CHIT_SIGNING_KEY and CHIT_ENCRYPTION_KEY env vars.
+  Added: 2026-04-17
