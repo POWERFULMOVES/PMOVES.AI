@@ -54,7 +54,7 @@ LANES: tuple[RunnerLane, ...] = (
 
 def _load_env_shared() -> dict[str, str]:
     """Read env.shared into a dict."""
-    env_path = Path(_REPO_ROOT) / "env.shared"
+    env_path = Path(_REPO_ROOT) / "pmoves" / "env.shared"
     result: dict[str, str] = {}
     if not env_path.exists():
         return result
