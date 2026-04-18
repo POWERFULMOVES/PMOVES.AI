@@ -11,7 +11,7 @@ import sys
 from pathlib import Path
 
 DEFAULT_PATHS = [
-    Path(os.environ.get('XDG_CONFIG_HOME', os.path.expanduser('~/.config')))) / 'pmoves' / 'secrets' / 'local.env',
+    Path(os.environ.get('XDG_CONFIG_HOME', os.path.expanduser('~/.config'))) / 'pmoves' / 'secrets' / 'local.env',
     Path('/pmoves/secrets/local.env'),
 ]
 
