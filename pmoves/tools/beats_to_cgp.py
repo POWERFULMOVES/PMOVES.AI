@@ -68,7 +68,7 @@ console = Console()
 # ── Defaults ──────────────────────────────────────────────────────────────────
 DEFAULT_SUMMARY   = os.environ.get("BEATS_SUMMARY",  "pmoves/data/beats/playlists/groups_summary.json")
 DEFAULT_FP        = os.environ.get("BEATS_FP",        "pmoves/data/beats/soundcloud/darkxside/.fingerprints.json")
-DEFAULT_NATS      = os.environ.get("NATS_URL",         "nats://localhost:4222")
+DEFAULT_NATS      = os.environ.get("NATS_URL",         "nats://nats:pmoves@nats:4222")
 DEFAULT_GATEWAY   = os.environ.get("GATEWAY_URL",      "http://localhost:8100")
 SUBJECT_CGP       = "geometry.cgp.v1"
 SUBJECT_CTRL      = "geometry.beats.control.v1"

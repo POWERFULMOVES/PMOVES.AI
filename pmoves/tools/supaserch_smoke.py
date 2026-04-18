@@ -17,7 +17,7 @@ from nats.aio.client import Client as NATS
 async def publish_and_wait() -> dict[str, object]:
     request_id = f"supaserch-smoke-{uuid.uuid4().hex[:8]}"
     nc = NATS()
-    url = os.getenv("NATS_URL", "nats://localhost:4222")
+    url = os.getenv("NATS_URL", "nats://nats:pmoves@nats:4222")
     await nc.connect(url)
     loop = asyncio.get_running_loop()
     future: asyncio.Future | None = loop.create_future()

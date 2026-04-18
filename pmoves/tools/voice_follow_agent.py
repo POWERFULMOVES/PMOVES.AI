@@ -10,7 +10,7 @@ Default subjects:
   - agent.response.v1
 
 Config via env:
-  - NATS_URL (default: nats://localhost:4222)
+  - NATS_URL (default: nats://nats:pmoves@nats:4222; prod: CHIT-managed)
   - VOICE_FOLLOW_SUBJECTS (comma-separated)
   - VOICE_SPEAKER_URL (default: http://127.0.0.1:8120)
   - VOICE_SPEAKER_MODE (stream|batch, default: stream)
@@ -50,12 +50,12 @@ def _resolve_nats_url() -> str:
     if nats_url:
         # Ignore docker-only alias when running on host.
         if nats_url.startswith("nats://nats:") or nats_url.startswith("tls://nats:"):
-            return "nats://127.0.0.1:4222"
+            return "nats://nats:pmoves@nats:4222"
         if nats_url.startswith("nats://localhost:") or nats_url.startswith("tls://localhost:"):
             return nats_url.replace("://localhost:", "://127.0.0.1:", 1)
         return nats_url
 
-    return "nats://127.0.0.1:4222"
+    return "nats://nats:pmoves@nats:4222"
 
 
 def _extract_text(payload: Dict[str, Any]) -> Optional[str]:

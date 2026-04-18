@@ -11,7 +11,7 @@ Usage:
     python pmoves/tools/ingest_gdrive_beats.py \\
         --remote "gdrive:Beats" \\
         --local "/data/beats/gdrive" \\
-        --nats-url "nats://localhost:4222"
+        --nats-url "nats://nats:pmoves@nats:4222"
 
 Prerequisites:
     - rclone configured with a 'gdrive' remote (rclone config)
@@ -19,7 +19,7 @@ Prerequisites:
     - pip install nats-py asyncio
 
 Env overrides:
-    NATS_URL            — default nats://localhost:4222
+    NATS_URL            — default nats://nats:pmoves@nats:4222
     BEATS_REMOTE        — default gdrive:Beats
     BEATS_LOCAL_DIR     — default /data/beats/gdrive
 """
@@ -50,7 +50,7 @@ def parse_args():
     )
     parser.add_argument(
         "--nats-url",
-        default=os.environ.get("NATS_URL", "nats://localhost:4222"),
+        default=os.environ.get("NATS_URL", "nats://nats:pmoves@nats:4222"),
         help="NATS server URL",
     )
     parser.add_argument(

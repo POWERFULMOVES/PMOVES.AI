@@ -28,7 +28,7 @@ Usage:
     python pmoves/tools/voice_chain_e2e_test.py
 
     # Custom NATS URL
-    NATS_URL=nats://localhost:4222 python pmoves/tools/voice_chain_e2e_test.py
+    NATS_URL=nats://nats:pmoves@nats:4222 python pmoves/tools/voice_chain_e2e_test.py
 
     # Longer wait window (for slow runners)
     python pmoves/tools/voice_chain_e2e_test.py --wait 15

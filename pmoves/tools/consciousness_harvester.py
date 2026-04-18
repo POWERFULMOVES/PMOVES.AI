@@ -63,7 +63,7 @@ logger = logging.getLogger(__name__)
 
 # Configuration
 ARCHON_URL = os.environ.get("ARCHON_URL", "http://localhost:8091")
-NATS_URL = os.environ.get("NATS_URL", "nats://localhost:4222")
+NATS_URL = os.environ.get("NATS_URL", "nats://nats:pmoves@nats:4222")
 HIRAG_V2_URL = os.environ.get("HIRAG_V2_URL", "http://localhost:8086")
 
 # NATS subjects

@@ -16,7 +16,7 @@ async def main():
     ap = argparse.ArgumentParser(description="Publish a shape-capsule handshake over NATS")
     ap.add_argument("file", help="JSON file containing a CGP (data field optional)")
     ap.add_argument("--subject", default="mesh.shape.handshake.v1")
-    ap.add_argument("--nats", default=os.environ.get("NATS_URL","nats://localhost:4222"))
+    ap.add_argument("--nats", default=os.environ.get("NATS_URL","nats://nats:pmoves@nats:4222"))
     args = ap.parse_args()
 
     with open(args.file, "r", encoding="utf-8") as f:

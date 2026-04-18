@@ -8,13 +8,13 @@ Usage:
 
     # Run with both NATS and HTTP API
     await run_with_api(
-        nats_url="nats://localhost:4222",
+        nats_url="nats://nats:pmoves@nats:4222",
         api_host="0.0.0.0",
         api_port=8082,
     )
 
     # Or use components separately
-    registry = NodeRegistry(nats_url="nats://localhost:4222")
+    registry = NodeRegistry(nats_url="nats://nats:pmoves@nats:4222")
     await registry.start()
 
 NATS Subjects:
