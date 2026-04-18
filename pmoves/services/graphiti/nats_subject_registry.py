@@ -9,17 +9,8 @@ See: research/part1_tac_trees_analysis.md section 4 for full subject catalog
 """
 
 from typing import Dict, List
-from dataclasses import dataclass, field
 
-
-@dataclass
-class SubjectEntry:
-    subject: str
-    status: str  # 'wired' | 'stub' | 'defined_only'
-    stage: str  # pipeline stage or team
-    subscriber_file: str  # path to subscriber code, or empty
-    publisher: str  # agent/service that publishes
-    notes: str
+from pmoves.services.common.nats_types import SubjectEntry
 
 
 SUBJECT_REGISTRY: List[SubjectEntry] = [
@@ -46,7 +37,7 @@ SUBJECT_REGISTRY: List[SubjectEntry] = [
     # Stage 4: Sign Trail (1 subject) — WIRED
     # ----------------------------------------------------------------
     SubjectEntry("agent.graphiti.signed.v1", "wired", "sign-trail",
-                 "pmoves/services/gateway/scripts/sign_trail.py",
+                 "pmoves/tools/sign_trail.py",
                  "archon", "Implemented — delegates to chit_security"),
 
     # ----------------------------------------------------------------

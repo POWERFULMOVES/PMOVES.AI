@@ -3,94 +3,146 @@
 # Generated: 2026-04-17
 # See: research/CATACLYSM_STUDIOS_RESEARCH_REPORT.md
 
-tac_tree:
-  name: cataclysm-studios
-  version: 1.0.0
-  description: Creative production pipeline across 5 quality tiers
+name: cataclysm-studios
+version: 1.0.0
+description: Creative production pipeline across 5 quality tiers
 
-  phases:
-    - name: discovery
-      label: "L1 Discovery"
-      description: Initial creative exploration and concept validation
-      entry_conditions:
-        - creative_brief_approved
-      exit_conditions:
-        - concept_validated
-        - audience_researched
-      skills:
-        - name: concept-exploration
-          description: Generate and evaluate creative concepts
-          nats_subject: creative.concept.explore.v1
-        - name: audience-research
-          description: Research target audience demographics and psychographics
-          nats_subject: creative.audience.research.v1
+root:
+  id: cataclysm-studios
+  task: "Cataclysm Studios creative production pipeline review"
+  context: "5-tier quality pipeline from L1 Discovery through L5 Legendary"
+  agent_hint: floos-resolver
+  children:
 
-    - name: foundation
-      label: "L2 Foundation"
-      description: Build foundational assets and brand guidelines
-      depends_on: [discovery]
-      entry_conditions:
-        - concept_validated
-      exit_conditions:
-        - brand_guidelines_draft
-        - content_calendar_draft
-      skills:
-        - name: brand-guidelines
-          description: Create brand voice, visual identity guidelines
-          nats_subject: creative.brand.guidelines.v1
-        - name: content-calendar
-          description: Plan content release schedule
-          nats_subject: creative.calendar.plan.v1
+    # =====================================================================
+    # Phase 1: L1 Discovery
+    # =====================================================================
+    - id: cataclysm-studios.discovery
+      task: "L1 Discovery — initial creative exploration and concept validation"
+      context: "Generate and evaluate creative concepts; research target audience"
+      agent_hint: floos-resolver
+      children:
+        - id: cataclysm-studios.discovery.concept-exploration
+          task: "Generate and evaluate creative concepts"
+          action:
+            type: manual
+            instruction: "Verify concept exploration skill is wired on creative.concept.explore.v1"
+            expect: "Concept exploration produces at least 3 viable creative directions"
+          context: "Brainstorm and evaluate creative directions against brief"
+          agent_hint: floos-resolver
 
-    - name: production
-      label: "L3 Production"
-      description: Core content creation across media types
-      depends_on: [foundation]
-      entry_conditions:
-        - brand_guidelines_draft
-      exit_conditions:
-        - content_assets_created
-        - quality_review_passed
-      skills:
-        - name: video-production
-          description: Video content creation via PMOVES-Creator pipeline
-          nats_subject: creative.video.produce.v1
-        - name: audio-production
-          description: Audio/voice content via vibevoice pipeline
-          nats_subject: creative.audio.produce.v1
-        - name: written-content
-          description: Written content and copywriting
-          nats_subject: creative.written.produce.v1
+        - id: cataclysm-studios.discovery.audience-research
+          task: "Research target audience demographics and psychographics"
+          action:
+            type: manual
+            instruction: "Verify audience research skill is wired on creative.audience.research.v1"
+            expect: "Audience persona document with demographics, psychographics, channels"
+          context: "Primary and secondary audience profiling"
+          agent_hint: floos-resolver
 
-    - name: refinement
-      label: "L4 Refinement"
-      description: Quality review, A/B testing, optimization
-      depends_on: [production]
-      entry_conditions:
-        - content_assets_created
-      exit_conditions:
-        - ab_tests_concluded
-        - final_assets_approved
-      skills:
-        - name: quality-review
-          description: Multi-axis quality assessment
-          nats_subject: creative.quality.review.v1
-        - name: ab-testing
-          description: A/B test content variants
-          nats_subject: creative.ab.test.v1
+    # =====================================================================
+    # Phase 2: L2 Foundation
+    # =====================================================================
+    - id: cataclysm-studios.foundation
+      task: "L2 Foundation — build foundational assets and brand guidelines"
+      context: "Create brand voice, visual identity, and content calendar"
+      agent_hint: floos-resolver
+      children:
+        - id: cataclysm-studios.foundation.brand-guidelines
+          task: "Create brand voice and visual identity guidelines"
+          action:
+            type: manual
+            instruction: "Verify brand guidelines skill is wired on creative.brand.guidelines.v1"
+            expect: "Brand guidelines document covering voice, tone, visual identity"
+          context: "Establishes creative guardrails for all downstream production"
+          agent_hint: floos-resolver
 
-    - name: legendary
-      label: "L5 Legendary"
-      description: Flagship content with maximum production value
-      depends_on: [refinement]
-      entry_conditions:
-        - final_assets_approved
-      exit_conditions:
-        - legendary_content_published
-      skills:
-        - name: flagship-production
-          description: Highest-quality flagship content
-          nats_subject: creative.flagship.produce.v1
+        - id: cataclysm-studios.foundation.content-calendar
+          task: "Plan content release schedule"
+          action:
+            type: manual
+            instruction: "Verify content calendar skill is wired on creative.calendar.plan.v1"
+            expect: "Content calendar with dates, platforms, content types, owners"
+          context: "Aligned to campaign goals and platform cadence"
+          agent_hint: floos-resolver
+
+    # =====================================================================
+    # Phase 3: L3 Production
+    # =====================================================================
+    - id: cataclysm-studios.production
+      task: "L3 Production — core content creation across media types"
+      context: "Video, audio, and written content via PMOVES pipelines"
+      agent_hint: floos-resolver
+      children:
+        - id: cataclysm-studios.production.video
+          task: "Video content creation via PMOVES-Creator pipeline"
+          action:
+            type: manual
+            instruction: "Verify video production skill is wired on creative.video.produce.v1"
+            expect: "Video asset produced per brand guidelines"
+          context: "PMOVES-Creator pipeline for video generation"
+          agent_hint: floos-resolver
+
+        - id: cataclysm-studios.production.audio
+          task: "Audio/voice content via vibevoice pipeline"
+          action:
+            type: manual
+            instruction: "Verify audio production skill is wired on creative.audio.produce.v1"
+            expect: "Audio asset with voice synthesis and mixing"
+          context: "Vibevoice pipeline for audio/voice content"
+          agent_hint: floos-resolver
+
+        - id: cataclysm-studios.production.written
+          task: "Written content and copywriting"
+          action:
+            type: manual
+            instruction: "Verify written content skill is wired on creative.written.produce.v1"
+            expect: "Copy draft aligned to brand voice guidelines"
+          context: "Long-form and short-form written content"
+          agent_hint: floos-resolver
+
+    # =====================================================================
+    # Phase 4: L4 Refinement
+    # =====================================================================
+    - id: cataclysm-studios.refinement
+      task: "L4 Refinement — quality review, A/B testing, optimization"
+      context: "Multi-axis quality assessment and variant testing"
+      agent_hint: floos-resolver
+      children:
+        - id: cataclysm-studios.refinement.quality-review
+          task: "Multi-axis quality assessment"
+          action:
+            type: manual
+            instruction: "Verify quality review skill is wired on creative.quality.review.v1"
+            expect: "Quality scorecard with pass/fail per axis"
+          context: "Evaluate against brand guidelines, audience fit, production quality"
+          agent_hint: floos-resolver
+
+        - id: cataclysm-studios.refinement.ab-testing
+          task: "A/B test content variants"
+          action:
+            type: manual
+            instruction: "Verify A/B testing skill is wired on creative.ab.test.v1"
+            expect: "Test results with statistical significance and winner recommendation"
+          context: "Split-test content variants on target audience segment"
+          agent_hint: floos-resolver
+
+    # =====================================================================
+    # Phase 5: L5 Legendary
+    # =====================================================================
+    - id: cataclysm-studios.legendary
+      task: "L5 Legendary — flagship content with maximum production value"
+      context: "Highest-quality flagship content for key campaigns"
+      agent_hint: floos-resolver
+      children:
+        - id: cataclysm-studios.legendary.flagship
+          task: "Highest-quality flagship content production"
+          action:
+            type: manual
+            instruction: "Verify flagship production skill is wired on creative.flagship.produce.v1"
+            expect: "Flagship asset meeting L5 quality bar across all review axes"
+          context: "Maximum production value — premium assets for marquee campaigns"
+          agent_hint: floos-resolver
 
   nats_subjects:
     - creative.concept.explore.v1

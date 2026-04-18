@@ -8,7 +8,7 @@ streams:
     retention: limits
     max_msgs: 10000
     max_age: 24h
-    max_bytes: 256MB
+    max_bytes: 268435456
     replicas: 1
     consumers:
       - name: gpu-inference-worker
@@ -39,4 +39,23 @@ streams:
     subjects: ["mesh.gpu.metrics.>"]
     retention: limits
     max_msgs: 50000
-    max_age: 6h
+
+  - name: mesh_gpu_command
+    subjects: ["mesh.gpu.command.>"]
+    retention: limits
+    max_msgs: 10000
+    max_age: 24h
+    max_bytes: 268435456
+    replicas: 1
+    consumers:
+      - name: gpu-command-worker
+        durable_name: gpu-command-worker
+        ack_policy: explicit
+        max_deliver: 3
+        filter_subject: "mesh.gpu.command.v1"
+
+  - name: mesh_gpu_status
+    subjects: ["mesh.gpu.status.>", "mesh.gpu.model.>"]
+    retention: interest
+    max_msgs: 1000
+    max_age: 1h
