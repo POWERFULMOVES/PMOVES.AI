@@ -1,77 +1,64 @@
 """
 scripts/chit_sign.py — Sign and optionally encrypt CGPs for PMOVES.AI demos.
 
+Delegates ALL crypto to chit_security.py (the canonical CHIT implementation per CGP v1.0 spec).
+This module provides only CLI convenience — no independent crypto.
+
 Usage:
   python scripts/chit_sign.py --in tests/data/cgp_fixture.json --out data/cgp_signed.json \
          --passphrase "secret" --encrypt-anchors
-
-Flags:
-  --passphrase: when provided, HMAC-SHA256 is computed over the CGP (sans 'sig').
-  --encrypt-anchors: replaces 'anchor' with 'anchor_enc' (AES-GCM with key derived via scrypt).
 """
-import os, json, base64, hashlib, hmac, secrets, argparse
+import argparse
+import json
+import os
+import sys
+from pathlib import Path
 from typing import Any, Dict
 
-def canon(obj: Dict[str, Any]) -> bytes:
-    return json.dumps(obj, sort_keys=True, separators=(",", ":")).encode("utf-8")
+# Resolve imports for chit_security
+_SCRIPT_DIR = Path(__file__).resolve().parent
+_PMOVES_ROOT = _SCRIPT_DIR.parent.parent.parent
+if str(_PMOVES_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PMOVES_ROOT))
 
-def hmac_sign(doc: Dict[str, Any], passphrase: str) -> Dict[str, Any]:
-    d = dict(doc)
-    d.pop("sig", None)
-    mac = hmac.new(passphrase.encode("utf-8"), canon(d), hashlib.sha256).digest()
-    sig = {
-        "alg": "HMAC-SHA256",
-        "kid": "demo",
-        "ts": int(__import__("time").time()),
-        "hmac": base64.b64encode(mac).decode("ascii"),
-    }
-    doc["sig"] = sig
-    return doc
+from tools.chit_security import sign_cgp, encrypt_anchors  # noqa: E402
+from tools.chit_common import canon  # noqa: E402
 
-def aesgcm_encrypt_anchor(const: Dict[str, Any], passphrase: str) -> None:
-    try:
-        from cryptography.hazmat.primitives.ciphers.aead import AESGCM
-    except Exception as e:
-        raise SystemExit("cryptography is required for --encrypt-anchors") from e
-    if "anchor" not in const: 
-        return
-    anchor = const["anchor"]
-    salt = os.urandom(16)
-    iv = os.urandom(12)
-    key = hashlib.scrypt(passphrase.encode("utf-8"), salt=salt, n=2**14, r=8, p=1, dklen=32)
-    aead = AESGCM(key)
-    aad = canon({"id": const.get("id","")})
-    pt = json.dumps(anchor).encode("utf-8")
-    ct = aead.encrypt(iv, pt, aad)
-    const["anchor_enc"] = {
-        "iv": base64.b64encode(iv).decode("ascii"),
-        "salt": base64.b64encode(salt).decode("ascii"),
-        "ct": base64.b64encode(ct).decode("ascii"),
-    }
-    const.pop("anchor", None)
 
-def process(cgp: Dict[str, Any], passphrase: str=None, encrypt_anchors: bool=False) -> Dict[str, Any]:
-    out = dict(cgp)
-    for s in out.get("super_nodes", []):
-        for const in s.get("constellations", []):
-            if encrypt_anchors and passphrase:
-                aesgcm_encrypt_anchor(const, passphrase)
-    if passphrase:
-        out = hmac_sign(out, passphrase)
-    return out
+def process(cgp: Dict[str, Any], passphrase: str, encrypt: bool = False) -> Dict[str, Any]:
+    """Sign and optionally encrypt a CGP using canonical chit_security implementation."""
+    if encrypt:
+        return encrypt_anchors(cgp, passphrase)
+    return sign_cgp(cgp, passphrase)
+
 
 def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--in", dest="inp", required=True)
-    ap.add_argument("--out", dest="outp", required=True)
-    ap.add_argument("--passphrase", dest="passphrase", default=None)
-    ap.add_argument("--encrypt-anchors", dest="encrypt", action="store_true")
+    ap = argparse.ArgumentParser(description="Sign/encrypt CGPs via chit_security")
+    ap.add_argument("--in", dest="inp", required=True, help="Input CGP JSON file")
+    ap.add_argument("--out", dest="outp", required=True, help="Output signed CGP JSON file")
+    ap.add_argument("--passphrase", dest="passphrase", default=None,
+                    help="Passphrase (or set CHIT_PASSPHRASE env var)")
+    ap.add_argument("--encrypt-anchors", dest="encrypt", action="store_true",
+                    help="Encrypt anchor vectors with AES-GCM")
     args = ap.parse_args()
-    cgp = json.load(open(args.inp, "r", encoding="utf-8"))
-    out = process(cgp, args.passphrase, args.encrypt)
-    os.makedirs(os.path.dirname(args.outp), exist_ok=True)
-    json.dump(out, open(args.outp, "w", encoding="utf-8"), indent=2)
-    print("Wrote", args.outp)
+
+    passphrase = args.passphrase or os.environ.get("CHIT_PASSPHRASE", "")
+    if not passphrase:
+        ap.error("--passphrase or CHIT_PASSPHRASE env var is required")
+
+    with open(args.inp, "r", encoding="utf-8") as f:
+        cgp = json.load(f)
+
+    result = process(cgp, passphrase, args.encrypt)
+
+    out_dir = os.path.dirname(os.path.abspath(args.outp))
+    if out_dir:
+        os.makedirs(out_dir, exist_ok=True)
+    with open(args.outp, "w", encoding="utf-8") as f:
+        json.dump(result, f, indent=2)
+
+    print(f"Wrote {args.outp}")
+
 
 if __name__ == "__main__":
     main()
