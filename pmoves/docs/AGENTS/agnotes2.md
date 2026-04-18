@@ -818,7 +818,7 @@
 
        External Networks:
        - supabase_network_PMOVES.AI - Bridge to Supabase CLI stack
-       - cataclysim-net - Legacy (Jellyfin only)
+       - cataclysm-net - Legacy (Jellyfin only)
 
        ---
        SERVICE CATALOG WITH CROSS-REFERENCES

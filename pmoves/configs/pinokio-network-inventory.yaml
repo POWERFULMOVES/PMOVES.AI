@@ -228,6 +228,134 @@ nodes:
     services: []
 
 # ─────────────────────────────────────────────────────────────────────────────
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Node: DGX Spark (pmoves-dgx-spark) — GPU Inference (GB10 Grace-Blackwell)
+  # ─────────────────────────────────────────────────────────────────────────────
+  - hostname: pmoves-dgx-spark
+    tailscale_host: pmoves-dgx-spark
+    role: gpu-inference
+    pinokio_lww: false
+    tailscale_tag: tag:gpu
+    services:
+      - name: Ollama
+        port: 11434
+        class: intentional
+        owner: docker
+        description: "Local LLM inference (CUDA) — Gemma 4 31B, Nemotron Super 49B"
+        health_endpoint: "/api/tags"
+      - name: NIM
+        port: 8200
+        class: intentional
+        owner: nvidia
+        description: "NVIDIA NIM inference API (optional)"
+        health_endpoint: "/v1/models"
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Node: KVM2 — Exit Proxy
+  # ─────────────────────────────────────────────────────────────────────────────
+  - hostname: kvm2
+    tailscale_host: kvm2
+    role: exit-proxy
+    pinokio_lww: false
+    tailscale_tag: tag:exit
+    services:
+      - name: Cloudflare-Tunnel
+        port: 7844
+        class: intentional
+        owner: cloudflared
+        description: "Cloudflare tunnel for public ingress / upload bypass"
+        health_endpoint: null
+      - name: Tailscale-Funnel
+        port: dynamic
+        class: intentional
+        owner: tailscale
+        description: "Tailscale Funnel for public ingress"
+        health_endpoint: null
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Node: KVM4-1 — API Gateway
+  # ─────────────────────────────────────────────────────────────────────────────
+  - hostname: kvm4-1
+    tailscale_host: kvm4-1
+    role: api-gateway
+    pinokio_lww: false
+    tailscale_tag: tag:pmoves
+    services:
+      - name: NATS
+        port: 4222
+        class: intentional
+        owner: docker
+        description: "NATS message bus relay"
+        health_endpoint: "http://localhost:8222/varz"
+      - name: Discord-Bot
+        port: dynamic
+        class: intentional
+        owner: pinokio
+        description: "ElizaOS Discord bot (School of PowerfulMoves)"
+        health_endpoint: null
+      - name: Health-Check
+        port: dynamic
+        class: intentional
+        owner: pmoves
+        description: "Fleet health monitoring"
+        health_endpoint: "/healthz"
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Node: KVM4-2 — Data Storage
+  # ─────────────────────────────────────────────────────────────────────────────
+  - hostname: kvm4-2
+    tailscale_host: kvm4-2
+    role: data-storage
+    pinokio_lww: false
+    tailscale_tag: tag:pmoves
+    services:
+      - name: Supabase
+        port: 8000
+        class: intentional
+        owner: docker
+        description: "Supabase API gateway (PostgREST + Auth)"
+        health_endpoint: null
+      - name: MinIO
+        port: 9000
+        class: intentional
+        owner: docker
+        description: "S3-compatible object storage (models, media)"
+        health_endpoint: "/minio/health/live"
+      - name: Qdrant
+        port: 6333
+        class: intentional
+        owner: docker
+        description: "Vector database for HiRAG"
+        health_endpoint: "/healthz"
+      - name: Meilisearch
+        port: 7700
+        class: intentional
+        owner: docker
+        description: "Full-text search for HiRAG"
+        health_endpoint: "/health"
+      - name: Neo4j
+        port: 7474
+        class: intentional
+        owner: docker
+        description: "Graph database for CHIT geometry + HiRAG"
+        health_endpoint: null
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Node: Jetson Orin — Edge AI
+  # ─────────────────────────────────────────────────────────────────────────────
+  - hostname: jetson-orin
+    tailscale_host: jetson-orin
+    role: edge-ai
+    pinokio_lww: false
+    tailscale_tag: tag:lab
+    services:
+      - name: Ollama
+        port: 11434
+        class: intentional
+        owner: docker
+        description: "Edge LLM inference (JetPack CUDA)"
+        health_endpoint: "/api/tags"
+
 # Security Posture
 # ─────────────────────────────────────────────────────────────────────────────
 security:
