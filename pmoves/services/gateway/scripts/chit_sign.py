@@ -16,7 +16,7 @@ from typing import Any, Dict
 
 # Resolve imports for chit_security
 _SCRIPT_DIR = Path(__file__).resolve().parent
-_PMOVES_ROOT = _SCRIPT_DIR.parent.parent.parent.parent
+_PMOVES_ROOT = _SCRIPT_DIR.parent.parent.parent.parent.parent
 if str(_PMOVES_ROOT) not in sys.path:
     sys.path.insert(0, str(_PMOVES_ROOT))
 

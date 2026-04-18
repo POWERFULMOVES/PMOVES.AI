@@ -83,8 +83,6 @@ LEDGER_PATH = Path(__file__).parent / ".enrollment-ledger.jsonl"
 # HMAC signing (inline, no dependency on pmoves.chit at script level)
 # ---------------------------------------------------------------------------
 
-import sys
-from pathlib import Path
 _TOOLS_DIR = Path(__file__).resolve().parent.parent.parent / "tools"
 if str(_TOOLS_DIR.parent) not in sys.path:
     sys.path.insert(0, str(_TOOLS_DIR.parent))
