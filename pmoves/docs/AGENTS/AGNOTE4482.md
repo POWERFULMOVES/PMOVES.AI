@@ -122,7 +122,7 @@ Elder-context support is always available to reduce drift and collision across p
 | BoTZ JWT fail-open (P0) | **RESOLVED** | `gateway.py:292-299` returns HTTPException 500 on missing HAS_JOSE or SUPABASE_JWT_SECRET. `auth.py:57-65` returns HTTPException 500 on missing HAS_JOSE or JWT_SECRET. Both fail-closed. |
 | BPM encoder not implemented (P2) | **RESOLVED** | `pmoves/tools/bpm_encoder.py` exists, 574 lines, delivered in PR #1168 (Shift Crew tools) |
 | NATS unauthenticated references (P0) | **NOT IMPROVED** | 57 unauthenticated references across 34 files in `pmoves/` (grep: `nats://(nats\|localhost):4222` excluding `@`; measured 2026-04-02). Not reduced from baseline — batch migration still needed. |
-| A2A server not exposed (P0) | **CODE EXISTS** | `services/agent-zero/python/features/a2a/server.py` defines `/.well-known/agent-card.json` and `/.well-known/agent.json`. Compose exposure unconfirmed — needs runtime verification. |
+| A2A server not exposed (P0) | **RESOLVED** | `server.py` refactored: `create_a2a_router()` exports mountable APIRouter. `main.py` mounts it via `app.include_router()` on port 8080. `docker-compose.yml` adds `A2A_DISCOVERY_PUBLIC`/`A2A_TASKS_PUBLIC` env vars. Routes: `/.well-known/agent-card.json`, `/a2a/v1/tasks`, `/a2a/v1/discover`. Auth via `SUPABASE_JWT_SECRET` (from x-hardening). |
 | Agent registry count | **STALE** | Registry has 71 entries, 13 external contributors. Docs said 60 agents, 7 contributors. |
 | AGENTS file count | **STALE** | 107 documents (66 root + 41 SUBMODULE_CODEX_HOMES). Docs said 73+. |
 
@@ -148,3 +148,29 @@ Elder-context support is always available to reduce drift and collision across p
 - Timestamp: `2026-04-01`
 
 <!-- GRAPHITI_MARK: CLAUDE-OPUS::SELF-REVIEW-AUDIT::2026-04-01 -->
+
+## A2A Server Runtime Wiring (2026-04-17)
+
+### Work Performed
+- Refactored `server.py`: extracted `create_a2a_router()` returning mountable `APIRouter` with all A2A routes (discovery, tasks, artifacts)
+- Moved agent card from `app.state` to module-level `_agent_card` for router compatibility
+- Excluded `/healthz` from router to avoid conflict with parent `main.py`
+- `create_app()` preserved as backward-compatible standalone mode (internally uses `create_a2a_router()`)
+- Updated `main.py`: added try/except import guard, `app.include_router(create_a2a_router())` after app creation
+- Updated `docker-compose.yml`: added `A2A_DISCOVERY_PUBLIC` and `A2A_TASKS_PUBLIC` env vars (default: `false`)
+- Updated `__init__.py`: exported `create_a2a_router` in `__all__`
+
+### Files Changed
+| File | Change |
+|------|--------|
+| `services/agent-zero/python/features/a2a/server.py` | Added `create_a2a_router()`, refactored to module-level `_agent_card`, `_register_a2a_routes()` shared by router and app |
+| `services/agent-zero/python/features/a2a/__init__.py` | Added `create_a2a_router` to exports |
+| `services/agent-zero/main.py` | Import guard + `include_router` mount |
+| `docker-compose.yml` | `A2A_DISCOVERY_PUBLIC`, `A2A_TASKS_PUBLIC` env vars |
+
+### Agent ACK
+- Agent: `AGENT-ZERO-GLM`
+- Signature: `ACK::AGENT-ZERO-GLM::A2A-RUNTIME-WIRING`
+- Timestamp: `2026-04-17`
+
+<!-- GRAPHITI_MARK: AGENT-ZERO-GLM::A2A-RUNTIME-WIRING::2026-04-17 -->
