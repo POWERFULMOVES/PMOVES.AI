@@ -895,11 +895,20 @@ chitBypassPatterns:
   - '\bmigrate-vps\b'
   - '\bdeploy-vps-cluster\b'
   # Git state cleanup — remove stale rebase/merge crash artifacts from .git/
-  # VS Code crashes leave empty rebase-merge/rebase-apply dirs that block git rebase.
-  # rm -rf and force flags still blocked by bashToolPatterns (runs before bypass).
-  - '(rmdir|rm)\s+.*\.git[/\\](rebase-merge|rebase-apply)'
-  - 'rm\s+.*\.git[/\\](AUTO_MERGE|MERGE_HEAD|MERGE_MSG)'
-  - 'rm\s+.*\.git[/\\]\.MERGE_MSG\.swp'
+  # VS Code crashes and OneDrive file locks leave empty rebase-merge/rebase-apply
+  # dirs that block git rebase. Covers both top-level .git/ and worktree paths
+  # under .git/worktrees/<name>/. rm -rf and force flags still blocked by
+  # bashToolPatterns (runs before bypass).
+  #
+  # Each pattern anchors to a SINGLE operand: the path after rm/rmdir must be
+  # the git artifact path and nothing else. `\S+` prevents embedded whitespace
+  # or shell tokens; `\s*$` requires end-of-command so additional arguments
+  # like `~/.ssh/id_rsa` cannot ride along (codex P1 on #1266).
+  - '^\s*(rmdir|rm)\s+\S*\.git[/\\](rebase-merge|rebase-apply)\s*$'
+  - '^\s*(rmdir|rm)\s+\S*\.git[/\\]worktrees[/\\][^/\\\s]+[/\\](rebase-merge|rebase-apply)\s*$'
+  - '^\s*rm\s+\S*\.git[/\\](AUTO_MERGE|MERGE_HEAD|MERGE_MSG)\s*$'
+  - '^\s*rm\s+\S*\.git[/\\]worktrees[/\\][^/\\\s]+[/\\](AUTO_MERGE|MERGE_HEAD|MERGE_MSG)\s*$'
+  - '^\s*rm\s+\S*\.git[/\\]\.MERGE_MSG\.swp\s*$'
   # CGP decode → env.shared hydration — CHIT pipeline reads hex-encoded CGP
   # bundle and writes decoded values to env.shared. This is the canonical
   # secrets delivery path when sync-secrets-local.yml writes CGP format only.
