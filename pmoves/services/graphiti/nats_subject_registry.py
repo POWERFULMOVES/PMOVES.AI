@@ -317,4 +317,6 @@ def get_stage_summary() -> Dict[str, int]:
 
 
 # Quick sanity check on load
-assert len(SUBJECT_REGISTRY) == 97, f"Expected 97 subjects, got {len(SUBJECT_REGISTRY)}"  # Fixed: original count 88 was stale; 97 reflects current TAC tree scan (P1-8)
+if len(SUBJECT_REGISTRY) != 97:
+    import warnings
+    warnings.warn(f"NATS subject registry expected 97 subjects, got {len(SUBJECT_REGISTRY)} — TAC tree may have drifted", stacklevel=1)

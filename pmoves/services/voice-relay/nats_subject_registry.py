@@ -17,7 +17,7 @@ SUBJECT_REGISTRY: List[SubjectEntry] = [
         "",
         "pmoves/services/voice-relay/main.py",
         "",
-        "JetStream publish with ack — P1-3 wiring applied",
+        "Core NATS publish (voice-relay does not use JetStream)",
     ),
     SubjectEntry("voice.cast.request.v1", "defined_only", "", "", "", "TAC-defined, no subscriber yet"),
     SubjectEntry("voice.cast.completed.v1", "defined_only", "", "", "", "TAC-defined, no subscriber yet"),
