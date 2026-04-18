@@ -10,6 +10,8 @@ concurrency:
 permissions:
   contents: read
   packages: write
+  id-token: write
+  attestations: write
 
 env:
   REGISTRY_GHCR: ghcr.io/powerfulmoves
@@ -101,6 +103,7 @@ jobs:
         continue-on-error: true
 
       - name: Build & push
+        id: build
         uses: docker/build-push-action@v7
         with:
           context: ${{ matrix.context || format('{0}/{1}', github.workspace, matrix.repo) }}
@@ -121,3 +124,11 @@ jobs:
           sbom: true
           build-args: |
             IMAGE_REF=${{ matrix.ref }}
+
+      - name: Attest build provenance (SLSA L3)
+        if: steps.build.outputs.digest != ''
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-name: ${{ env.REGISTRY_GHCR }}/${{ matrix.name }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
