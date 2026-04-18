@@ -71,14 +71,12 @@
       "action": "accept",
       "src": [
         "tag:pmoves",
-        "tag:lab",
-        "tag:partner",
-        "tag:guest"
+        "tag:lab"
       ],
       "dst": [
         "autogroup:internet:*"
       ],
-      "comment": "Exit node consume: allowed sources can route traffic through exit nodes"
+      "comment": "Exit node consume: pmoves + lab only. tag:partner and tag:guest intentionally excluded — partner is limited to 3030/8080/8081 and guest to 8081 per RUSTDESK_SELF_HOSTED.md role matrix; granting them full internet egress would be a privilege escalation vs the documented role limits."
     },
     {
       "action": "accept",
