@@ -11,16 +11,11 @@ Key components:
 - Client: HTTP client for discovering and communicating with agents
 
 Example:
-    from features.a2a import AgentCard, create_server
+    from features.a2a import create_a2a_router, AgentCard
 
-    card = AgentCard(
-        name="my-agent",
-        description="An example agent",
-        version="1.0.0",
-        capabilities=["task_execution"],
-        input_modalities=["text/plain"],
-        output_modalities=["text/plain"]
-    )
+    # Mount into existing FastAPI app:
+    a2a_router = create_a2a_router()
+    app.include_router(a2a_router)
 """
 
 from .types import (
@@ -34,7 +29,7 @@ from .types import (
     TaskErrorResponse,
     JSONRPCError,
 )
-from .server import create_app, lifespan
+from .server import create_app, create_a2a_router, lifespan
 
 __all__ = [
     "AgentCard",
@@ -47,6 +42,7 @@ __all__ = [
     "TaskErrorResponse",
     "JSONRPCError",
     "create_app",
+    "create_a2a_router",
     "lifespan",
 ]
 

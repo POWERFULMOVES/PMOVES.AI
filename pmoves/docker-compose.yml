@@ -2334,6 +2334,9 @@ services:
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
+    # A2A protocol — Agent-to-Agent interoperability (AGNOTE4482 Item 2)
+    - A2A_DISCOVERY_PUBLIC=${A2A_DISCOVERY_PUBLIC:-false}
+    - A2A_TASKS_PUBLIC=${A2A_TASKS_PUBLIC:-false}
     # LLM routing: use TensorZero gateway as OpenAI-compatible provider
     # Agent Zero's get_default_value() reads A0_SET_* from env (dotenv priority)
     # Dummy key silences LiteLLM "Missing API Key" warning — TensorZero handles auth

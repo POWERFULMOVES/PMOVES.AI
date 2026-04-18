@@ -50,6 +50,14 @@ from services.common.forms import (
 
 import mcp_server
 
+# A2A protocol integration
+try:
+    from python.features.a2a.server import create_a2a_router
+    _A2A_ROUTER_AVAILABLE = True
+except ImportError:
+    create_a2a_router = None
+    _A2A_ROUTER_AVAILABLE = False
+
 
 @dataclass
 class AgentZeroRuntimeConfig:
@@ -641,6 +649,14 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Agent Zero Supervisor", lifespan=lifespan)
+
+# Mount A2A protocol routes
+if _A2A_ROUTER_AVAILABLE:
+    a2a_router = create_a2a_router()
+    app.include_router(a2a_router)
+    logger.info("A2A protocol routes mounted (/.well-known/agent-card.json, /a2a/v1/*)")
+else:
+    logger.warning("A2A router not available — python.features.a2a.server import failed")
 
 # Prometheus metrics
 from prometheus_client import (
