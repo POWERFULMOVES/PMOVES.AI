@@ -17,7 +17,13 @@ logger = logging.getLogger(__name__)
 
 CHIT_REQUIRE_SIGNATURE = os.getenv("CHIT_REQUIRE_SIGNATURE","false").lower()=="true"
 CHIT_DECRYPT_ANCHORS = os.getenv("CHIT_DECRYPT_ANCHORS","false").lower()=="true"
-CHIT_PASSPHRASE = get_secret("CHIT_PASSPHRASE","change-me")
+_CHIT_PASSPHRASE = os.getenv("CHIT_PASSPHRASE")
+if not _CHIT_PASSPHRASE:
+    raise RuntimeError(
+        "CHIT_PASSPHRASE not set — gateway cannot operate without a passphrase. "
+        "Refusing to fall back to a default (fail-closed)."
+    )
+CHIT_PASSPHRASE = _CHIT_PASSPHRASE
 CHIT_CODEBOOK_PATH = os.getenv("CHIT_CODEBOOK_PATH","tests/data/codebook.jsonl")
 CHIT_LEARNED_TEXT = os.getenv("CHIT_LEARNED_TEXT","false").lower()=="true"
 CHIT_T5_MODEL = os.getenv("CHIT_T5_MODEL")  # optional HF model path/name
