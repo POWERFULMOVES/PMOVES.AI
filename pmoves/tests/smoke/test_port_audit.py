@@ -441,11 +441,38 @@ class TestPrintReportUnmappedVars:
 
 
 class TestLoadMeshAllowedServices:
-    """load_mesh_allowed_services file parsing."""
+    """load_mesh_allowed_services file parsing.
 
-    def test_returns_empty_when_file_missing(self) -> None:
-        """Missing bind file returns empty sets."""
-        bind_file, allowed, unmapped = load_mesh_allowed_services()
+    Isolation note: load_mesh_allowed_services() in port_audit.py reads
+    the env var PORT_AUDIT_BIND_FILE FIRST, falling back to the module
+    constant DEFAULT_BIND_FILE only when the env var is unset. Tests that
+    want deterministic behaviour must:
+      1. Clear PORT_AUDIT_BIND_FILE (monkeypatch.delenv), OR override it
+         with the target path, and
+      2. Patch DEFAULT_BIND_FILE to a tmp-path target.
+    Skipping either step makes the test depend on the developer's shell
+    state (CI-only passes, local developer hits stale path, etc.).
+
+    "Missing file" tests use `tmp_path / "definitely-missing-<uuid>"`
+    instead of the repo-relative default, because `env.mesh-bind.local`
+    is gitignored but may exist on developer machines — a local copy
+    would cause a false negative on the missing-file branch.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _isolate_bind_file_env(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Clear PORT_AUDIT_BIND_FILE for every test so DEFAULT_BIND_FILE
+        patches actually take effect. Runs before each test in this class."""
+        monkeypatch.delenv(PORT_AUDIT_BIND_FILE_ENV, raising=False)
+
+    def test_returns_empty_when_file_missing(self, tmp_path: Path) -> None:
+        """Missing bind file returns empty sets — guaranteed absent path."""
+        import uuid
+        missing = tmp_path / f"bind-file-{uuid.uuid4().hex}.missing"
+        with patch("pmoves.tools.port_audit.DEFAULT_BIND_FILE", missing):
+            bind_file, allowed, unmapped = load_mesh_allowed_services()
         assert allowed == set()
         assert unmapped == set()
 
