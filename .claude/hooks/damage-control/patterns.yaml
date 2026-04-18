@@ -280,8 +280,15 @@ bashToolPatterns:
   # `docker rm <container>`) also opens substitution sweeps without `-f`
   # (e.g., `docker rm $(docker ps -aq)`) or pipe-based sweeps. These patterns
   # close both gaps for docker and podman equally.
-  - pattern: '\b(docker|podman)\s+rm\s+.*\$\((docker|podman)\s+ps\b'
+  # `\s*` after `\$\(` and after the inner command name tolerates spaced
+  # substitutions like `docker rm $( docker ps -aq )` (codex P1 follow-up
+  # on #1267). Same pattern extends to backtick substitution for defense
+  # in depth against older shell syntax.
+  - pattern: '\b(docker|podman)\s+rm\s+.*\$\(\s*(docker|podman)\s+ps\b'
     reason: docker/podman rm with container-sweep substitution (mass removal — use targeted `docker rm <name>` or Known Roads make target)
+
+  - pattern: '\b(docker|podman)\s+rm\s+.*`\s*(docker|podman)\s+ps\b'
+    reason: docker/podman rm with backtick container-sweep substitution (mass removal — use targeted `docker rm <name>` or Known Roads make target)
 
   - pattern: '\b(docker|podman)\s+ps\s+.*\|\s*xargs\s+.*(docker|podman)\s+rm\b'
     reason: docker/podman ps | xargs rm (mass container removal — use targeted `docker rm <name>` or Known Roads make target)
