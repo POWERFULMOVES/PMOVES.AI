@@ -144,6 +144,11 @@ fleet-rustdesk-fix: ## Fix KVM2 hbbs relay config (adds -r flag + restart)
 		&& echo "  hbbs: RECOVERED" || echo "  hbbs: STILL DOWN — check /fleet:rustdesk-check"
 
 fleet-enroll: ## Generate CHIT-signed enrollment token: make fleet-enroll ROLE=owner DEVICE="name"
+	@if [ -z "$${CHIT_PASSPHRASE}" ]; then \
+		echo "ERROR: CHIT_PASSPHRASE is required for fleet enrollment"; \
+		echo "Set it with: export CHIT_PASSPHRASE=your-passphrase"; \
+		exit 1; \
+	fi
 	@if [ -z "$(ROLE)" ] || [ -z "$(DEVICE)" ]; then \
 		echo "ERROR: ROLE and DEVICE are required."; \
 		echo "Usage:  make fleet-enroll ROLE=owner DEVICE=\"Pixel 10\""; \

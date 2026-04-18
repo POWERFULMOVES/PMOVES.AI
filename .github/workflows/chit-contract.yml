@@ -123,6 +123,10 @@ jobs:
           echo "✅ Found all CHIT environment variables"
 
           echo ""
+          echo 'Check CHIT key separation awareness (informational — not required yet)'
+          rg -l 'CHIT_SIGNING_KEY|CHIT_ENCRYPTION_KEY' pmoves/ || echo "INFO: No key separation refs found (CHIT_PASSPHRASE fallback active)"
+
+          echo ""
           echo "======================================"
           echo "✅ All CHIT contract checks passed!"
           echo "======================================"
