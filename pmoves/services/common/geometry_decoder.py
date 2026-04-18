@@ -42,6 +42,8 @@ from pydantic import ValidationError
 # Optional dependencies with graceful fallback
 try:
     from cryptography.hazmat.primitives.ciphers.aead import AESGCM  # type: ignore
+    from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+    from cryptography.hazmat.primitives import hashes as _hashes
     HAS_CRYPTOGRAPHY = True
 except Exception:
     HAS_CRYPTOGRAPHY = False
@@ -74,6 +76,7 @@ from pmoves.services.common.geometry_models import (
     detect_cgp_version,
     cgp_dict_to_model,
 )
+from pmoves.tools.chit_common import canon as _canon
 
 logger = logging.getLogger(__name__)
 
@@ -96,29 +99,21 @@ class CHITConfig:
     _codebook_path: Optional[str] = None
     _learned_text: bool = False
     _t5_model: Optional[str] = None
-    _warned_default_passphrase: bool = False
 
     @classmethod
     def get_passphrase(cls) -> str:
-        """Get CHIT passphrase for signing/encryption.
+        """Get CHIT passphrase for signing/encryption (fail-closed).
 
         Raises:
-            ValueError: If CHIT_PASSPHRASE is not set and a secure value is required
+            RuntimeError: If CHIT_PASSPHRASE is not set
         """
         if cls._passphrase is None:
             cls._passphrase = get_secret("CHIT_PASSPHRASE", "")
-            if not cls._passphrase:
-                # Only log once to avoid spam
-                if not cls._warned_default_passphrase:
-                    logger.warning(
-                        "CHIT_PASSPHRASE not set - using insecure default. "
-                        "Set CHIT_PASSPHRASE environment variable for production use."
-                    )
-                    cls._warned_default_passphrase = True
-                # Use a hash of the system path as a fallback (better than "change-me")
-                import socket
-                fallback = f"pmoves-{socket.gethostname()}"
-                cls._passphrase = fallback
+        if not cls._passphrase:
+            raise RuntimeError(
+                "CHIT_PASSPHRASE not set — geometry decoder cannot operate without a passphrase. "
+                "Refusing to fall back to an insecure default (fail-closed)."
+            )
         return cls._passphrase
 
     @classmethod
@@ -160,25 +155,6 @@ class CHITConfig:
 # =============================================================================
 # Security Utilities
 # =============================================================================
-
-def _canon(obj: Dict[str, Any]) -> bytes:
-    """Create canonical JSON representation for signing.
-
-    Uses deterministic JSON with sorted keys and minimal whitespace
-    to ensure consistent hashing across platforms.
-
-    Args:
-        obj: Dictionary to canonicalize
-
-    Returns:
-        Canonical JSON bytes
-
-    Example:
-        >>> _canon({"b": 2, "a": 1})
-        b'{"a":1,"b":2}'
-    """
-    return json.dumps(obj, sort_keys=True, separators=(",", ":")).encode("utf-8")
-
 
 def sign_cgp(
     cgp: Dict[str, Any],
@@ -372,15 +348,14 @@ def encrypt_anchor(
     passphrase = passphrase or CHITConfig.get_passphrase()
     salt = os.urandom(16)
 
-    # Scrypt key derivation (matching gateway implementation)
-    key = hashlib.scrypt(
-        passphrase.encode(),
+    # PBKDF2-HMAC-SHA256 key derivation (matching chit_security.py unified standard)
+    kdf = PBKDF2HMAC(
+        algorithm=_hashes.SHA256(),
+        length=32,
         salt=salt,
-        n=2**14,
-        r=8,
-        p=1,
-        dklen=32,
+        iterations=600_000,
     )
+    key = kdf.derive(passphrase.encode())
 
     # Pack floats
     plain = _pack_floats(anchor)
@@ -444,14 +419,13 @@ def decrypt_anchor(
     except (binascii.Error, ValueError) as e:
         raise ValueError(f"Invalid base64 encoding in anchor_enc: {e}") from e
 
-    key = hashlib.scrypt(
-        passphrase.encode(),
+    kdf = PBKDF2HMAC(
+        algorithm=_hashes.SHA256(),
+        length=32,
         salt=salt,
-        n=2**14,
-        r=8,
-        p=1,
-        dklen=32,
+        iterations=600_000,
     )
+    key = kdf.derive(passphrase.encode())
 
     aead = AESGCM(key)
     aad = _canon({"id": constellation_id})
