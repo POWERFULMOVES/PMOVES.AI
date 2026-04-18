@@ -57,3 +57,8 @@ exclude_lines = [
     "if TYPE_CHECKING:",
     "@abstractmethod",
 ]
+
+[project.optional-dependencies]
+dev = [
+    "cryptography",
+]
