@@ -3,8 +3,8 @@ Unit tests for CHIT CGP validation in PMOVES Health integration.
 
 Tests CGP schema compliance and validation tool functionality.
 """
-
 import json
+import unittest.mock
 import pytest
 from pathlib import Path
 
@@ -12,7 +12,10 @@ from pathlib import Path
 import sys
 sys.path.insert(0, str(Path(__file__).parent.parent / "integrations" / "health-wger" / "tools"))
 
-from validate_cgp import validate_cgp, load_schema, create_test_payload
+# Prevent validate_cgp from calling sys.exit during import
+with unittest.mock.patch('sys.exit'):
+    from validate_cgp import validate_cgp, load_schema, create_test_payload
+
 
 
 class TestCGPSchemaValidation:
@@ -249,7 +252,7 @@ class TestHealthConstellationExamples:
             "spec": "chit.cgp.v1.0",
             "meta": {
                 "source": "text",
-                "units_mode": "measurements",
+                "units_mode": "samples",
                 "K": 2,
                 "bins": 6,
                 "backend": "sentence-transformers/all-MiniLM-L6-v2"

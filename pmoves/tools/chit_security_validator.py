@@ -37,7 +37,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from enum import Enum
 
 import httpx
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator
 
 # CHIT security module is REQUIRED — fail-closed on import failure
 try:
@@ -117,7 +117,7 @@ class CGPConstellation(BaseModel):
     points: List[CGPPoint] = Field(default_factory=list)
     meta: Dict[str, Any] = Field(default_factory=dict)
 
-    @validator('spectrum')
+    @field_validator('spectrum')
     def validate_spectrum(cls, v):
         """Spectrum must be normalized (sum to 1.0)"""
         if v and abs(sum(v) - 1.0) > 0.001:
@@ -153,7 +153,7 @@ class CGPDocument(BaseModel):
     updated_at: Optional[str] = None
     sig: Optional[CGPSignature] = None
 
-    @validator('spec')
+    @field_validator('spec')
     def validate_spec(cls, v):
         """Validate CGP schema version"""
         valid_specs = {ver.value for ver in CGPVersion}
