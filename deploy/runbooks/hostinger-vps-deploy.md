@@ -21,17 +21,17 @@ terraform plan -var-file=hostinger.tfvars
 terraform apply -var-file=hostinger.tfvars
 ```
 
-Alternatively, use the Python SDK at `docs/Hostingerapi/`:
-```bash
-python3 docs/Hostingerapi/provision_vps.py --plan=vc2-4c-8gb --region=us-east
-```
+Alternatively, use the Hostinger MCP server (configured in `.claude/mcp.json` with
+`HOSTINGER_API_KEY`) from an MCP-capable client — it wraps the same VPS
+provisioning endpoints as the Terraform flow and avoids needing a separate
+Python SDK on the operator machine.
 
 ### 2. Install Tailscale
 
 ```bash
 ssh root@<vps-ip>
 curl -fsSL https://tailscale.com/install.sh | sh
-tailscale up --authkey=$TS_AUTHKEY --tag=hostinger
+tailscale up --authkey="$TS_AUTHKEY" --advertise-tags=tag:hostinger
 ```
 
 Verify: `tailscale status` should show the node with `tag:hostinger`.
@@ -71,9 +71,9 @@ docker compose -f pmoves/docker/docker-compose.yml up -d
 
 ```bash
 # Health checks
-curl http://localhost:8080/healthz  # Gateway
-curl http://localhost:5432/healthz  # Postgres
-curl http://localhost:9000/minio/health/live  # MinIO
+curl http://localhost:8080/healthz               # Gateway (HTTP)
+pg_isready -h localhost -p 5432                  # Postgres (wire protocol, not HTTP)
+curl http://localhost:9000/minio/health/live     # MinIO (HTTP)
 
 # Tailscale connectivity
 tailscale ping pmoves-dgx-spark
