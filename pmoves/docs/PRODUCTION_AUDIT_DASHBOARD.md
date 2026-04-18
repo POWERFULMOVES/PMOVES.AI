@@ -3,9 +3,9 @@
 > **Single source of truth** for PMOVES.AI production readiness.
 > Supersedes all individual audit documents accumulated Feb 7 -- Feb 18, 2026.
 
-**Last Updated:** 2026-04-10 (Session 11.2 fleet validation)
+**Last Updated:** 2026-04-17 (auto-reconciled)
 **Branch:** `main`
-**Commit:** `e676eedc` (post 6-PR merge batch)
+**Commit:** `a1fe68b6d6` (post 6-PR merge batch)
 **Consolidated From:** 27 audit documents
 **Evidence:** live runbook execution on 2026-03-05 (`make ghcr-prepublish-inrepo-build`, strict local Trivy sweep logs under `pmoves/docs/logs/ghcr-local-prepublish/`)
 
