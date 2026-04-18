@@ -14,6 +14,7 @@ if "httpx" not in sys.modules:
 import json
 import os
 import struct
+from datetime import datetime, timezone
 import pytest
 
 from pmoves.tools.chit_common import canon
@@ -48,7 +49,7 @@ def minimal_cgp():
     return {
         "spec": "chit.cgp.v1.0",
         "summary": "test packet",
-        "created_at": "2026-04-17T00:00:00+00:00",
+        "created_at": datetime.now(timezone.utc).isoformat(),
         "super_nodes": [],
     }
 
@@ -255,10 +256,10 @@ class TestVerifyCgp:
         del corrupted["sig"]["hmac"]
         assert verify_cgp(corrupted, passphrase=PASSPHRASE) is False
 
-    def test_extra_field_in_sig_changes_canon_and_fails(self):
-        """Adding extra fields to sig changes canonical form — verification fails."""
+    def test_extra_field_in_body_changes_canon_and_fails(self, signed_cgp):
+        """Adding extra top-level fields changes canonical form — verification fails."""
         modified = json.loads(json.dumps(signed_cgp))
-        modified["sig"]["extra"] = "field"
+        modified["extra"] = "field"
         # Extra field changes the canonical JSON, so HMAC no longer matches
         assert verify_cgp(modified, passphrase=PASSPHRASE) is False
 
