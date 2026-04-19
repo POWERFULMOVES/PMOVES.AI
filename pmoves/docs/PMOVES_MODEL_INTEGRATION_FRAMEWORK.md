@@ -195,6 +195,7 @@ Simultaneous fit check:
 | `spark_claw` | `gemma4-dense` | `qwen3.6` |
 | `sidecar` | `glm-5-turbo` (cloud) | `qwen3.6` (local) |
 
+> **Note:** `researcher` profile is defined in `.a0proj/agents.json` (sidecar config), not created by this PR. It maps to GLM-5.1 via the `zai_coding` provider.
 ---
 
 ## 4. Pinokio P7 Integration
@@ -227,9 +228,11 @@ Model load/unload events flow through the TAC tree at `p7.nats.model-discovery`.
 | `qwen3.6` | `p7.nats.model-discovery` | `mesh.gpu.model.loaded.v1` | DECLARED |
 | `gemma4-dense` | `p7.nats.model-discovery` | `mesh.gpu.model.loaded.v1` | DECLARED |
 | `nemotron-3-super` | `p7.nats.model-discovery` | `mesh.gpu.model.loaded.v1` | DECLARED |
-> **Note:** DECLARED = suit files define NATS subjects but no runtime wiring exists yet. Requires publisher/subscriber code in `provider_cascade.py` or a model-registry service. No evidence of runtime NATS wiring for model-suits in the current codebase.
+| Cloud models | `null` | `null` | N/A |
 
 Reference: [pinokio-p7.tac.yaml](pmoves/configs/tac_trees/pinokio-p7.tac.yaml) §Phase 2
+
+> **Note:** DECLARED status — NATS subjects are defined in suit YAMLs but no runtime wiring exists yet. Requires publisher/subscriber code in `provider_cascade.py` or a model-registry service. No evidence of runtime NATS wiring for model-suits in the current codebase.
 
 ---
 

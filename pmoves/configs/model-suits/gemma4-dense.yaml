@@ -12,7 +12,7 @@ provider_display: "Ollama on DGX Spark"
 distillation_stage: model_fine_tune
 
 model_config:
-  model_name: gemma4:31b-q4
+  model_name: "gemma4:31b-q4"
   endpoint: http://pmoves-dgx-spark:11434/v1
   api_key_env: null
   context_window: 32768
@@ -62,7 +62,7 @@ local_fallback:
   available: true
   reason: "Local model — IS the fallback target for cloud chat models"
   fallback_model_suit: qwen3.6
-  notes: "On machines without DGX Spark, fall back to qwen3.6 instead"
+  notes: "On machines without DGX Spark, qwen3.6 is the fallback (same as cloud model fallbacks)"
 
 fine_tuning:
   possible: true
