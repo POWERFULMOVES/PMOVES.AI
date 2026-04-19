@@ -384,7 +384,7 @@ model_name = "gemma4:31b"
 api_key_location = "none"
 
 # --- DGX Spark Node Routing (GB10 Grace-Blackwell, 128GB unified LPDDR5X) ---
-# Heavyweight inference via Ollama CUDA backend on pmoves-dgx-spark.
+# Heavyweight inference via Ollama CUDA backend on pmoves-gb10-spark.
 # Unified memory fits 200B-param-class models without VRAM copies.
 
 # Gemma 4 31B on DGX Spark (SOTA multimodal, unified memory)
@@ -393,7 +393,7 @@ routing = ["ollama_spark"]
 
 [models.gemma_4_31b_spark.providers.ollama_spark]
 type = "openai"
-api_base = "http://pmoves-dgx-spark:11434/v1"
+api_base = "http://pmoves-gb10-spark:11434/v1"
 model_name = "gemma4:31b"
 api_key_location = "none"
 
@@ -403,7 +403,7 @@ routing = ["ollama_spark"]
 
 [models.gemma_4_26b_a4b_spark.providers.ollama_spark]
 type = "openai"
-api_base = "http://pmoves-dgx-spark:11434/v1"
+api_base = "http://pmoves-gb10-spark:11434/v1"
 # Ollama publishes the 26B A4B MoE variant as the default ":26b" tag.
 # Verified via registry.ollama.ai manifest API (":26b-a4b" returns 404).
 model_name = "gemma4:26b"
@@ -415,12 +415,12 @@ routing = ["ollama_spark"]
 
 [models.nemotron_super_49b_spark.providers.ollama_spark]
 type = "openai"
-api_base = "http://pmoves-dgx-spark:11434/v1"
+api_base = "http://pmoves-gb10-spark:11434/v1"
 model_name = "nemotron:49b"
 api_key_location = "none"
 
 # --- AMD R9700 RDNA4 Node Routing (dual R9700, 64GB VRAM, ROCm 7.1+) ---
-# Heavyweight inference via llama.cpp HIP backend on pmoves-rdna4.
+# Heavyweight inference via llama.cpp HIP backend on pmoves-9850x3d-r9700.
 # Ollama is NOT used here because its bundled ROCm v6 libs lack gfx1201 kernels.
 # Canonical runtime is `llama-server` (OpenAI-compatible, ships with llama.cpp).
 
@@ -430,7 +430,7 @@ routing = ["llamacpp_rocm"]
 
 [models.gemma_4_31b_rocm.providers.llamacpp_rocm]
 type = "openai"
-api_base = "http://pmoves-rdna4:8080/v1"
+api_base = "http://pmoves-9850x3d-r9700:8080/v1"
 model_name = "gemma-4-31b-it-Q4_K_M.gguf"
 api_key_location = "none"
 
@@ -440,7 +440,56 @@ routing = ["llamacpp_rocm"]
 
 [models.gemma_4_26b_a4b_rocm.providers.llamacpp_rocm]
 type = "openai"
-api_base = "http://pmoves-rdna4:8080/v1"
+api_base = "http://pmoves-9850x3d-r9700:8080/v1"
+model_name = "gemma-4-26B-A4B-it-Q4_K_M.gguf"
+api_key_location = "none"
+
+# --- Phase C: DGX Spark (GB10) + dual R9700 (RDNA4) dedicated variants -------
+# Added with new profile YAMLs (dgx-spark-grace-blackwell, workstation-9850x3d-
+# dual-r9700). All weight=0.0 for safe rollout — flip to small % after 48h soak
+# + load test, and after Phase D ships ARM64 multi-arch CI for Spark images.
+
+# Gemma 4 31B on DGX Spark (FP16, unified LPDDR5X)
+[models.ollama_spark_gemma4_31b_fp16]
+routing = ["ollama_spark"]
+
+[models.ollama_spark_gemma4_31b_fp16.providers.ollama_spark]
+type = "openai"
+api_base = "http://pmoves-gb10-spark:11434/v1"
+model_name = "gemma4:31b"
+api_key_location = "none"
+
+# Nemotron-3-Super 120B-A12B NVFP4 on DGX Spark
+# HF: nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-NVFP4 (verified HF API 2026-04-19)
+# License: NVIDIA Open Model License (OML). Spark-only — RDNA4 gfx1201 lacks
+# FP8/NVFP4 kernels in ROCm 7.1 as of this date.
+[models.ollama_spark_nemotron3_super_120b_fp8]
+routing = ["ollama_spark"]
+
+[models.ollama_spark_nemotron3_super_120b_fp8.providers.ollama_spark]
+type = "openai"
+api_base = "http://pmoves-gb10-spark:11434/v1"
+model_name = "nemotron-3-super-120b-nvfp4"
+api_key_location = "none"
+
+# Gemma 4 31B on AMD R9700 (Q4_K_M single-GPU, llama.cpp HIP)
+# Custom fork: tlee933/llama.cpp-rdna4-gfx1201 (ROCm 7.1 + gfx1201 kernels)
+[models.llamacpp_rdna4_gemma4_31b_q4km]
+routing = ["llamacpp_rocm"]
+
+[models.llamacpp_rdna4_gemma4_31b_q4km.providers.llamacpp_rocm]
+type = "openai"
+api_base = "http://pmoves-9850x3d-r9700:8080/v1"
+model_name = "gemma-4-31b-it-Q4_K_M.gguf"
+api_key_location = "none"
+
+# Gemma 4 26B-A4B MoE on dual R9700 (row-split, --tensor-split 0.5,0.5)
+[models.llamacpp_rdna4_gemma4_26b_dual]
+routing = ["llamacpp_rocm"]
+
+[models.llamacpp_rdna4_gemma4_26b_dual.providers.llamacpp_rocm]
+type = "openai"
+api_base = "http://pmoves-9850x3d-r9700:8080/v1"
 model_name = "gemma-4-26B-A4B-it-Q4_K_M.gguf"
 api_key_location = "none"
 
@@ -728,6 +777,31 @@ weight = 0.0
 [functions.agent_zero.variants.local_qwen3_coder_next]
 type = "chat_completion"
 model = "coding_qwen3_coder_next_80b_local"
+weight = 0.0
+
+# --- Phase C variants (DGX Spark + dual R9700) — all weight=0.0 --------------
+# Gemma 4 31B FP16 on DGX Spark
+[functions.agent_zero.variants.ollama_spark_gemma4_31b_fp16]
+type = "chat_completion"
+model = "ollama_spark_gemma4_31b_fp16"
+weight = 0.0
+
+# Nemotron-3-Super 120B-A12B NVFP4 on DGX Spark (heavyweight reasoning)
+[functions.agent_zero.variants.ollama_spark_nemotron3_super_120b_fp8]
+type = "chat_completion"
+model = "ollama_spark_nemotron3_super_120b_fp8"
+weight = 0.0
+
+# Gemma 4 31B Q4_K_M on single R9700 (llama.cpp HIP)
+[functions.agent_zero.variants.llamacpp_rdna4_gemma4_31b_q4km]
+type = "chat_completion"
+model = "llamacpp_rdna4_gemma4_31b_q4km"
+weight = 0.0
+
+# Gemma 4 26B-A4B MoE on dual R9700 (row-split)
+[functions.agent_zero.variants.llamacpp_rdna4_gemma4_26b_dual]
+type = "chat_completion"
+model = "llamacpp_rdna4_gemma4_26b_dual"
 weight = 0.0
 
 [functions.langextract]
@@ -1115,6 +1189,25 @@ weight = 0.0
 [functions.multimodal_large.variants.gemma_4_26b_a4b_rocm]
 type = "chat_completion"
 model = "gemma_4_26b_a4b_rocm"
+weight = 0.0
+
+# --- Phase C multimodal_large variants — dedicated Spark + dual-RDNA4 routes --
+# Gemma 4 31B FP16 on DGX Spark (unified memory, SOTA multimodal)
+[functions.multimodal_large.variants.ollama_spark_gemma4_31b_fp16]
+type = "chat_completion"
+model = "ollama_spark_gemma4_31b_fp16"
+weight = 0.0
+
+# Gemma 4 31B Q4_K_M on single R9700 (dedicated variant distinct from gemma_4_31b_rocm)
+[functions.multimodal_large.variants.llamacpp_rdna4_gemma4_31b_q4km]
+type = "chat_completion"
+model = "llamacpp_rdna4_gemma4_31b_q4km"
+weight = 0.0
+
+# Gemma 4 26B-A4B MoE on dual R9700 (row-split, distinct from gemma_4_26b_a4b_rocm)
+[functions.multimodal_large.variants.llamacpp_rdna4_gemma4_26b_dual]
+type = "chat_completion"
+model = "llamacpp_rdna4_gemma4_26b_dual"
 weight = 0.0
 
 # --- Per-Stack Coding Functions (4090 Coding Workstation) ---
