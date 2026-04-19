@@ -18,8 +18,8 @@ _TOOLS_DIR = str(Path(__file__).resolve().parent)
 if _TOOLS_DIR not in sys.path:
     sys.path.insert(0, _TOOLS_DIR)
 
-# chit_decoder only needs numpy — safe to import unconditionally
-import chit_decoder  # noqa: E402
+# chit_verify only needs numpy — safe to import unconditionally
+import chit_verify  # noqa: E402
 
 # chit_backend pulls heavy deps; gate behind importorskip
 chit_backend = pytest.importorskip("chit_backend")  # noqa: E402
@@ -67,23 +67,23 @@ class TestKlDivergenceSpectrum:
 
     def test_uniform_distribution_near_zero(self):
         """Uniform spectrum → KL ≈ 0."""
-        result = chit_decoder.kl_divergence_spectrum([1.0, 1.0, 1.0, 1.0], bins=4)
+        result = chit_verify.kl_divergence_spectrum([1.0, 1.0, 1.0, 1.0], bins=4)
         assert result < 1e-4
 
     def test_peaked_distribution_positive(self):
         """Peaked [100,1,1,1] → KL > 0."""
-        result = chit_decoder.kl_divergence_spectrum([100.0, 1.0, 1.0, 1.0], bins=4)
+        result = chit_verify.kl_divergence_spectrum([100.0, 1.0, 1.0, 1.0], bins=4)
         assert result > 0.5
 
     def test_single_bin_zero(self):
         """Single bin: p=u=1, log(1)=0."""
-        result = chit_decoder.kl_divergence_spectrum([1.0], bins=1)
+        result = chit_verify.kl_divergence_spectrum([1.0], bins=1)
         assert result < 1e-4
 
     def test_known_two_bin_value(self):
         """[3,1] bins=2: p≈[0.75,0.25], u=[0.5,0.5].
         KL = 0.75*ln(1.5) + 0.25*ln(0.5) ≈ 0.1308."""
-        result = chit_decoder.kl_divergence_spectrum([3.0, 1.0], bins=2)
+        result = chit_verify.kl_divergence_spectrum([3.0, 1.0], bins=2)
         assert abs(result - 0.1308) < 0.01
 
 

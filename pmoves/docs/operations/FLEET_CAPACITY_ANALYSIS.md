@@ -214,6 +214,7 @@ No load test exists today. Add one of:
 # Install (one-off, host-side)
 choco install k6   # Windows
 # or: brew install k6
+sudo apt install -y k6  # Debian/Ubuntu (Hostinger KVMs)
 
 # 100 req/s × 10 min against Hi-RAG v2
 k6 run --vus 20 --duration 10m - <<'EOF'

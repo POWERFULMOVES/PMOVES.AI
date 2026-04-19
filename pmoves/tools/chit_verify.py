@@ -5,9 +5,9 @@ Decodes a CGP JSON payload back to structured chunk references (exact mode)
 or reconstructs text from geometric encoding using a corpus JSONL (geometry mode).
 
 Usage:
-    python pmoves/tools/chit_decoder.py --cgp geometry_payload.json --mode exact
-    python pmoves/tools/chit_decoder.py --cgp geometry_payload.json --mode geometry --corpus chunks.jsonl --compute-metrics
-    python pmoves/tools/chit_decoder.py --cgp geometry_payload.json --compute-metrics --output report.json
+    python pmoves/tools/chit_verify.py --cgp geometry_payload.json --mode exact
+    python pmoves/tools/chit_verify.py --cgp geometry_payload.json --mode geometry --corpus chunks.jsonl --compute-metrics
+    python pmoves/tools/chit_verify.py --cgp geometry_payload.json --compute-metrics --output report.json
 
 Standalone tool — no PMOVES-internal imports.
 """
