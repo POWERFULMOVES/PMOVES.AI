@@ -1,0 +1,65 @@
+# RustDesk Self-Hosted Server Stack
+# Deploy on KVM4-1 (API Gateway node) for fleet remote desktop access.
+#
+# Usage:
+#   RUSTDESK_RELAY_HOST=<public-ip-or-tailscale-host> docker compose -f rustdesk-selfhosted.yml up -d
+#
+# After first start, get the public key:
+#   cat rustdesk-data/hbbs/id_ed25519.pub
+#
+# Configure RustDesk clients with:
+#   ID Server:      <RUSTDESK_RELAY_HOST>
+#   Relay Server:   <RUSTDESK_RELAY_HOST>
+#   Key:            <contents of id_ed25519.pub>
+
+services:
+  hbbs:
+    image: rustdesk/rustdesk-server:latest
+    container_name: pmoves-rustdesk-hbbs
+    command: ["hbbs", "-r", "${RUSTDESK_RELAY_HOST:?RUSTDESK_RELAY_HOST must be set}"]
+    environment:
+      TZ: ${TZ:-UTC}
+    volumes:
+      - ./rustdesk-data/hbbs:/root
+    network_mode: host
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:21118/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  hbbr:
+    image: rustdesk/rustdesk-server:latest
+    container_name: pmoves-rustdesk-hbbr
+    command: ["hbbr"]
+    environment:
+      TZ: ${TZ:-UTC}
+    volumes:
+      - ./rustdesk-data/hbbr:/root
+    network_mode: host
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 21117 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+# Note: network_mode: host means ports are bound directly on the host.
+# Required ports (ensure firewall allows these):
+#   21115/tcp  - NAT type test
+#   21116/tcp  - ID registration / rendezvous
+#   21116/udp  - ID registration / rendezvous
+#   21117/tcp  - Relay (data channel)
+#   21118/tcp  - WebSockets (hbbs API)
+#   21119/tcp  - WebSockets (hbbr API)
