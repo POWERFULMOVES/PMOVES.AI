@@ -190,7 +190,7 @@ Strategic and theoretical foundations (preserve as-is, no regular updates needed
 - **Persona seeds:** 8 standard personas in `pmoves/supabase/initdb/17_persona_seed.sql`
 - **Model registry:** `pmoves/config/gpu-models.yaml`
 - **Skill pairings:** `pmoves/configs/skill-pairings.yaml` (7 FlOO$ pairings)
-- **Model Integration Framework:** `pmoves/docs/PMOVES_MODEL_INTEGRATION_FRAMEWORK.md`
+- **Model Integration Framework:** `../PMOVES_MODEL_INTEGRATION_FRAMEWORK.md` _(lands via PR #1309)_
 - **Submodule skill routing:** `pmoves/configs/submodule_skill_registry.json`
 - **Mermaid diagrams:** 5 regenerable via `python -m pmoves.tools.agent_taxonomy_helper`
 

@@ -186,6 +186,7 @@ From `PMOVES_UNIFIED_AGENT_TAXONOMY.md`, agents span layers L0–L5. Each agent 
 | **L2** | Bus + Routing | NATS transport, gateway routing | NATS, TensorZero, Hi-RAG |
 | **L2.5** | Hyperdimensions | Geometry state visualization + control knobs | Hyperdimensions, CHIT |
 | **L3** | Swarm Intelligence | EvoSwarm, role-based packs | Swarm Attribution, BoTZ _(legacy)_ |
+| **L4** | Modal / LLM Routing | Embeddings, TensorZero gateway routing | Hi-RAG, TensorZero, Gemma4 (embeds text) |
 | **L5** | Memory + Safety | Persistent storage, CHIT manifests, sandboxes | Cipher, Supabase, Danger Room |
 
 ### Agent Layer Coverage Map
