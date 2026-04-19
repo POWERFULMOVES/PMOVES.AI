@@ -107,7 +107,7 @@ local_fallback:
   fallback_model_suit:  # Which suit to use when this one fails
 ```
 
-Cloud models always point to a local suit. Local models set `fallback_model_suit: null` — they ARE the fallback.
+Cloud models always point to a local suit. Local models MAY reference a smaller local fallback (e.g., `gemma4-dense` → `qwen3.6` when DGX Spark isn't available) or set `fallback_model_suit: null` if they are the smallest option.
 
 ### `fine_tuning` — Maps to `model_fine_tune`
 
@@ -165,7 +165,7 @@ The **DGX Spark** (GB10 Grace-Blackwell, 128GB unified LPDDR5X, 1 petaFLOP FP4) 
 
 ### Memory Math
 
-```
+```text
 DGX Spark Total:           128 GB unified LPDDR5X
 ─────────────────────────────────────────────────
 Nemotron-3 Super Q4:       ~100 GB  (leaves 20-28GB KV cache)
@@ -194,7 +194,6 @@ Simultaneous fit check:
 |---------------|-------------------|----------|
 | `spark_claw` | `gemma4-dense` | `qwen3.6` |
 | `sidecar` | `glm-5-turbo` (cloud) | `qwen3.6` (local) |
-| `researcher` | `glm-5.1` (cloud) | `qwen3.6` (local) |
 
 ---
 
@@ -225,10 +224,10 @@ Model load/unload events flow through the TAC tree at `p7.nats.model-discovery`.
 
 | Suit | TAC Node | NATS Subject | Status |
 |------|----------|-------------|--------|
-| `qwen3.6` | `p7.nats.model-discovery` | `mesh.gpu.model.loaded.v1` | DONE |
-| `gemma4-dense` | `p7.nats.model-discovery` | `mesh.gpu.model.loaded.v1` | DONE |
-| `nemotron-3-super` | `p7.nats.model-discovery` | `mesh.gpu.model.loaded.v1` | DONE |
-| Cloud models | `null` | `null` | N/A |
+| `qwen3.6` | `p7.nats.model-discovery` | `mesh.gpu.model.loaded.v1` | DECLARED |
+| `gemma4-dense` | `p7.nats.model-discovery` | `mesh.gpu.model.loaded.v1` | DECLARED |
+| `nemotron-3-super` | `p7.nats.model-discovery` | `mesh.gpu.model.loaded.v1` | DECLARED |
+> **Note:** DECLARED = suit files define NATS subjects but no runtime wiring exists yet. Requires publisher/subscriber code in `provider_cascade.py` or a model-registry service. No evidence of runtime NATS wiring for model-suits in the current codebase.
 
 Reference: [pinokio-p7.tac.yaml](pmoves/configs/tac_trees/pinokio-p7.tac.yaml) §Phase 2
 
@@ -254,7 +253,7 @@ The `agent_zero.subordinate_profile` field determines which agent profile loads 
 - `spark_claw`: DGX Spark profile for local heavyweights. Runs on `pmoves-dgx-spark` hostname. Full GPU access, NATS mesh participation.
 
 Switching example:
-```
+```bash
 # Sidecar mode (cloud-first, any device)
 A0_SET_chat_model=https://integrate.api.nvidia.com/v1/glm-5-turbo
 subordinate_profile=sidecar
@@ -308,7 +307,7 @@ Only models with open weights can be fine-tuned on DGX Spark:
 
 ### Pipeline Stages
 
-```
+```text
 1. Data Collection
    └── Accumulate trace trajectories from Agent Zero sessions
    └── PMOVESCHIT Cipher Memory stores interaction patterns
@@ -343,7 +342,7 @@ Only models with open weights can be fine-tuned on DGX Spark:
 
 Per [THREE_BODY_DOCTRINE.md §7](pmoves/docs/PMOVESCHIT/THREE_BODY_DOCTRINE.md), fine-tuning connects to EvoSwarm:
 
-```
+```text
 distillation.requested.v1 → EvoSwarm Controller
                         → fitness evaluation against trace trajectories
                         → genome evolution (learning rate, chit weight, etc.)
@@ -357,7 +356,7 @@ distillation.requested.v1 → EvoSwarm Controller
 
 ### Fallback Chain
 
-```
+```text
 Primary (cloud)           → Fallback (local)         → Last Resort
 ──────────────────────────────────────────────────────────────────
 glm-5-turbo (chat)       → qwen3.6 (utility)         → gemma4-dense (if on Spark)

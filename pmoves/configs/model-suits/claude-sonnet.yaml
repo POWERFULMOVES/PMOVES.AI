@@ -68,10 +68,10 @@ cross_agent:
   clawz: full
   typer: untested
   pinokio: none
-  notes: "ClaWZ uses Claude as its native model — full compatibility"
 
 metadata:
   source: anthropic_docs
+  notes: "ClaWZ uses Claude as its native model — full compatibility"
   last_verified: 2026-04-19
   benchmark_data:
   - source: anthropic_official

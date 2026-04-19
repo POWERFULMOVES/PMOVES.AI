@@ -1,6 +1,6 @@
 # GLM-5.1 — Cloud via Z.AI MAX Plan
-# Current Agent Zero utility model. Same NVIDIA integrate API endpoint
-# as GLM-5-turbo. Good for coding tasks. No local weights.
+# Current Agent Zero utility model. Accessible via Z.AI API.
+# Good for coding tasks. No local weights.
 #
 # Distillation: config_tuning (provider settings captured, no local fine-tune)
 # Source: Hermes Agent video (AICodeKing), YouTube Signals Analysis §2.1
@@ -12,7 +12,8 @@ distillation_stage: config_tuning
 
 model_config:
   model_name: glm-5.1
-  endpoint: https://integrate.api.nvidia.com/v1
+  # TODO: verify Z.AI base URL — may be https://open.bigmodel.cn/api/paas/v4 or custom proxy
+  endpoint: https://open.bigmodel.cn/api/paas/v4
   api_key_env: ZAI_API_KEY
   context_window: 128000
   max_output_tokens: 16384
@@ -26,7 +27,7 @@ prompt_style:
   notes: >
     GLM-5.1 is the successor to GLM-5-turbo with improved coding capability.
     Responds well to structured markdown with clear task decomposition.
-    Free tier via NVIDIA integrate API.
+    Free tier via Z.AI MAX plan.
 
 agent_zero:
   role: utility
@@ -34,8 +35,8 @@ agent_zero:
   subordinate_profile: sidecar
   strengths:
   - coding
-   - code generation
-   - structured output
+  - code generation
+  - structured output
   - tool calling
   limitations:
   - cloud-only (no local fallback weights)
@@ -69,7 +70,7 @@ metadata:
   last_verified: 2026-04-19
   benchmark_data:
   - source: youtube_signals
-    notes: "Free tier available via NVIDIA integrate API — same endpoint as GLM-5-turbo"
+    notes: "Free tier available via Z.AI MAX plan — same endpoint as GLM-5-turbo"
   - source: hermes_agent_video
     notes: "Hermes Agent uses GLM-5.1 for coding/research tasks via cloud"
 

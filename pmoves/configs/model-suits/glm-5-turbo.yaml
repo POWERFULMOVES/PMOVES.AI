@@ -1,6 +1,6 @@
 # GLM-5-Turbo — Cloud via Z.AI MAX Plan
-# Current Agent Zero chat model. Accessible via NVIDIA integrate API
-# with free tier. No local weights — fallback to Qwen3.6.
+# Current Agent Zero chat model. Accessible via Z.AI API.
+# No local weights — fallback to Qwen3.6.
 #
 # Distillation: config_tuning (provider settings captured, no local fine-tune)
 # Source: Hermes Agent video (AICodeKing), YouTube Signals Analysis §2.1
@@ -12,7 +12,8 @@ distillation_stage: config_tuning
 
 model_config:
   model_name: glm-5-turbo
-  endpoint: https://integrate.api.nvidia.com/v1
+  # TODO: verify Z.AI base URL — may be https://open.bigmodel.cn/api/paas/v4 or custom proxy
+  endpoint: https://open.bigmodel.cn/api/paas/v4
   api_key_env: ZAI_API_KEY
   context_window: 128000
   max_output_tokens: 8192
@@ -26,7 +27,7 @@ prompt_style:
   notes: >
     GLM models respond well to structured markdown prompts.
     No XML tag preference — keep prompts clean and direct.
-    Free tier available via NVIDIA integrate API endpoint.
+    Free tier available via Z.AI MAX plan.
 
 agent_zero:
   role: chat
@@ -69,7 +70,7 @@ metadata:
   last_verified: 2026-04-19
   benchmark_data:
   - source: youtube_signals
-    notes: "Free tier available via NVIDIA integrate API (integrate.api.nvidia.com/v1)"
+    notes: "Free tier available via Z.AI MAX plan"
   - source: hermes_agent_video
     notes: "Recommended over local models for coding/research/larger tasks"
 
