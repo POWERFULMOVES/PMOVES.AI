@@ -218,4 +218,7 @@ NUL
 
 # Coverage reports
 .coverage
+.harness/workspace/
+.harness/offloads/
+.harness/threads/
 .a0proj/
