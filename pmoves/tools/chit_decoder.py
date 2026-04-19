@@ -198,7 +198,7 @@ def compute_metrics(cgp: dict, mode: str, corpus: dict = None) -> dict:
                 point_text = pt.get("text", "") or ""
                 corpus_content = corpus[ref_id].get("content", "") or ""
                 if point_text and corpus_content:
-                    ratio = SequenceMatcher(None, point_text, corpus_content).ratio()
+                    ratio = SequenceMatcher(None, point_text, corpus_content[:512]).ratio()
                     text_similarities.append(ratio)
         mean_sim = round(float(statistics.mean(text_similarities)), 4) if text_similarities else None
         mean_proj = round(float(statistics.mean(projections)), 4) if projections else None
