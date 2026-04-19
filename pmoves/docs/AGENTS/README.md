@@ -47,7 +47,7 @@ The creator-network lane treats Codex as a legendary operator that can traverse:
 - Channel Monitor for source discovery, scheduling, and event routing
 - transcribe-and-fetch for transcript and fetch augmentation
 - Jellyfin and publisher surfaces for playback, packaging, and downstream publishing
-- Discord and BoTZ for agent-mediated response, routing, and operator interaction
+- Discord via ClaWZ (PMOVES-ClawZ) for agent-mediated response, routing, and operator interaction
 - CATACLYSM_STUDIOS_INC for business, brand, and community constraints that govern what the stack should do
 - local and remote model tiers for extraction, embedding, rerank, narration, and orchestration
 
@@ -61,7 +61,7 @@ Foundation documents defining the agent classification system.
 
 | File | Purpose |
 |------|---------|
-| [PMOVES_AGENT_CLASS_TAXONOMY.md](./PMOVES_AGENT_CLASS_TAXONOMY.md) | Class definitions, evolution stages, layer model (v1.4.0) |
+| [PMOVES_AGENT_CLASS_TAXONOMY.md](./PMOVES_AGENT_CLASS_TAXONOMY.md) | Class definitions, evolution stages, layer model (v1.5.0) |
 | [PMOVES_UNIFIED_AGENT_TAXONOMY.md](./PMOVES_UNIFIED_AGENT_TAXONOMY.md) | Unified view across all 71 agents |
 | [PERSONAS.md](./PERSONAS.md) | Persona framework: schema, inheritance, CHIT attribution, 325+ catalog vision |
 | [PMOVES_AGENT_TOPOLOGY.md](./PMOVES_AGENT_TOPOLOGY.md) | Network topology and inter-agent communication patterns |
@@ -76,7 +76,7 @@ Cross-cutting patterns that govern how agents interact.
 | [AGENT_RESILIENCE_PATTERNS.md](./AGENT_RESILIENCE_PATTERNS.md) | 3-layer resilience model (preventive → Cipher recovery → registry systemic) |
 | [AGENT_CONTEXT_PATTERNS.md](./AGENT_CONTEXT_PATTERNS.md) | Universal 4-tier context hierarchy for all agents |
 | [PMOVES_HYPERDIMENSIONS_CONTROL_PLANE.md](./PMOVES_HYPERDIMENSIONS_CONTROL_PLANE.md) | Geometry visualization surface and toggle schema |
-| [BOTZ_GATEWAY_AGENT_INTEGRATION.md](./BOTZ_GATEWAY_AGENT_INTEGRATION.md) | BoTZ Gateway integration proposal (speculative — not yet implemented) |
+| [BOTZ_GATEWAY_AGENT_INTEGRATION.md](./BOTZ_GATEWAY_AGENT_INTEGRATION.md) | ~~BoTZ Gateway integration proposal~~ **ARCHIVED (2026-04-19)** — see `archive/founding-strategy/` |
 | [PmovesSKillZ.md](./PmovesSKillZ.md) | Skill bundle definitions and marketplace patterns |
 
 ### Tier 3: Configuration (3 files)
@@ -165,7 +165,7 @@ Strategic and theoretical foundations (preserve as-is, no regular updates needed
 | File | Purpose |
 |------|---------|
 | [AI Agent Integration and Best Practices.md](<./AI Agent Integration and Best Practices.md>) | A2A blueprint and thread engineering patterns |
-| [Aligning AI Agents with Indy Dev Dan.md](<./Aligning AI Agents with Indy Dev Dan.md>) | Theoretical foundation for agent alignment |
+| [Aligning AI Agents with Indy Dev Dan.md](<./Aligning AI Agents with Indy Dev Dan.md>) | ~~Theoretical foundation~~ **ARCHIVED (2026-04-19)** — see `archive/founding-strategy/` |
 | [PMOVES.AI Agentic Architecture Deep Dive.md](<./PMOVES.AI Agentic Architecture Deep Dive.md>) | Architecture deep dive with geometric cognitive architectures |
 
 ### Additional Files
@@ -186,10 +186,11 @@ Strategic and theoretical foundations (preserve as-is, no regular updates needed
 
 - **Agent count:** 71 registered agents (+ 13 external contributors) (`python -m pmoves.tools.agent_taxonomy_helper list`)
 - **External contributors:** 13 listed in `pmoves/config/agent_registry.yaml` (`claude-opus`, `kilocode`, `codex`, `gemini`, `cline`, `powerfulmoves`, `crush`, `z890-claude`, `5090-claude`, `4090-claude`, `botz-architect`, `botz-builder`, `botz-auditor`)
-- **Taxonomy version:** v1.4.0
+- **Taxonomy version:** v1.5.0
 - **Persona seeds:** 8 standard personas in `pmoves/supabase/initdb/17_persona_seed.sql`
 - **Model registry:** `pmoves/config/gpu-models.yaml`
 - **Skill pairings:** `pmoves/configs/skill-pairings.yaml` (7 FlOO$ pairings)
+- **Model Integration Framework:** `../PMOVES_MODEL_INTEGRATION_FRAMEWORK.md` _(lands via PR #1309)_
 - **Submodule skill routing:** `pmoves/configs/submodule_skill_registry.json`
 - **Mermaid diagrams:** 5 regenerable via `python -m pmoves.tools.agent_taxonomy_helper`
 
@@ -202,8 +203,7 @@ Strategic and theoretical foundations (preserve as-is, no regular updates needed
 | ~~P0~~ | ~~BoTZ JWT HAS_JOSE fail-open~~ | **RESOLVED** — BoTZ PR #79 merged. `gateway.py` and `auth.py` both return HTTPException 500 (fail-closed) when HAS_JOSE or JWT_SECRET is missing. Verified 2026-04-01. |
 | P0 | ~100+ unauthenticated NATS references in `pmoves/` (grep: `nats://(nats\|localhost):4222` excluding `@`; count varies by submodule state) | Batch migration not yet started — refs span services, integrations, docs |
 | P0 | A2A server (`/.well-known/agent.json`) — code exists at `services/agent-zero/python/features/a2a/server.py` but compose exposure unconfirmed | Runtime verification needed |
-| P1 | BoTZ Gateway integration speculative (proposal, not implemented) | See [BOTZ_GATEWAY_AGENT_INTEGRATION.md](./BOTZ_GATEWAY_AGENT_INTEGRATION.md) |
-| P1 | Health/Wealth services pre-stage (no healthz, metrics, NATS, CHIT) | See [AGNOTE4482.md](./AGNOTE4482.md) |
+| ~~P1~~ | ~~BoTZ Gateway integration speculative~~ | **ARCHIVED (2026-04-19)** — BoTZ era doc moved to `archive/founding-strategy/`. Discord now via ClaWZ. |
 | ~~P2~~ | ~~BPM encoder spec exists but `bpm_encoder.py` not implemented~~ | **RESOLVED** — `pmoves/tools/bpm_encoder.py` implemented (574 lines), delivered in PR #1168 (Shift Crew tools, 2026-04-01). |
 | P2 | Observability Map (`OBSERVABILITY_MAP.md`) referenced but doesn't exist | Create from Production Audit Lane C |
 
