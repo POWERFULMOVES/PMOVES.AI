@@ -191,6 +191,30 @@ up-bots: ## Start bot services (BotZ gateway)
 	@echo "✔ Bots up (botz-gateway)."
 
 # =============================================================================
+# CLAWZ (OpenClaw) — Standalone submodule with own docker-compose.yml
+# =============================================================================
+
+CLAWZ_DIR := $(CURDIR)/../PMOVES-ClawZ
+
+.PHONY: clawz-up
+clawz-up: ## Start ClawZ (OpenClaw gateway) — requires pmoves_api network running
+	@echo "🦀 Starting ClawZ (OpenClaw gateway)..."
+	@test -f $(CLAWZ_DIR)/docker-compose.yml || (echo "❌ PMOVES-ClawZ submodule not initialized. Run: git submodule update --init PMOVES-ClawZ" && exit 1)
+	@cd $(CLAWZ_DIR) && docker compose up -d
+	@echo "✔ ClawZ up (openclaw-gateway :18789, openclaw-cli :18790)."
+
+.PHONY: clawz-down
+clawz-down: ## Stop ClawZ (OpenClaw gateway)
+	@echo "🦀 Stopping ClawZ..."
+	@cd $(CLAWZ_DIR) && docker compose down
+	@echo "✔ ClawZ down."
+
+.PHONY: clawz-logs
+clawz-logs: ## Tail ClawZ gateway logs
+	@cd $(CLAWZ_DIR) && docker compose logs -f openclaw-gateway
+
+
+# =============================================================================
 # OBSERVABILITY-FIRST STARTUP (Tier-based, dependency-ordered)
 # =============================================================================
 

@@ -3610,6 +3610,8 @@ services:
       # PMOVES integration
     - ENABLE_OBSERVABILITY=${WGER_OBSERVABILITY:-true}
     - PROMETHEUS_MULTIPROC_DIR=/tmp/prometheus
+      # NOTE: /metrics available on port 8000 via ENABLE_OBSERVABILITY;
+      # pmoves_monitoring network added below for Prometheus scrape access
     ports:
     - "${WGER_BIND:-0.0.0.0}:${WGER_PORT:-8000}:8000"
     profiles: ["health", "wger"]
@@ -3617,6 +3619,7 @@ services:
     - pmoves_api
     - pmoves_bus
     - pmoves_data
+    - pmoves_monitoring  # Prometheus scrape access for /metrics
     depends_on:
       wger-db:
         condition: service_healthy
@@ -3626,6 +3629,8 @@ services:
     - wger-static:/home/wger/static
     - wger-media:/home/wger/media
     - wger-prometheus:/tmp/prometheus
+    # NOTE: wger uses /api/v2/health/ natively, not PMOVES-standard /healthz
+    # healthcheck aligned to wger's native path; /healthz shim deferred to PMOVES image overlay
     healthcheck:
       test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v2/health/', timeout=5)"]
       interval: 30s
@@ -3633,12 +3638,6 @@ services:
       retries: 5
       start_period: 40s
 
-  # Wger database - PostgreSQL backend for fitness data
-    deploy:
-      resources:
-        limits:
-          cpus: '1.0'
-          memory: 512M
   wger-db:
     <<: *tier-data-hardened
     image: postgres:15-alpine
