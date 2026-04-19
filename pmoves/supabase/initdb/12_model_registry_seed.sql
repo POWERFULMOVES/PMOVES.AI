@@ -1734,6 +1734,151 @@ BEGIN
 END $$;
 
 -- =============================================================================
+-- Phase C: DGX Spark (GB10 Grace-Blackwell) + dual R9700 (RDNA4) providers
+-- =============================================================================
+-- Registered as staging endpoints. TensorZero routing_weight defaults to 0.0
+-- (serves via [functions.*.variants.*] wrt variant weights in tensorzero.toml).
+-- Flip to active/positive weight after 48h soak + load test on hardware.
+
+-- Ollama on DGX Spark (ARM64 + CUDA-on-ARM, stock DGX OS, 128 GB unified LPDDR5X)
+INSERT INTO pmoves_core.model_providers (name, type, api_base, api_key_env_var, description, active, metadata)
+VALUES (
+  'ollama_spark',
+  'ollama',
+  'http://pmoves-gb10-spark:11434/v1',
+  'OLLAMA_SPARK_API_KEY',
+  'Ollama on NVIDIA DGX Spark (GB10 Grace-Blackwell ARM64, 128GB unified LPDDR5X)',
+  true,
+  '{"status": "staging", "network": "tailnet", "location": "local", "arch": "arm64", "gpu": "gb10", "hostname": "pmoves-gb10-spark", "phase": "C"}'::jsonb
+)
+ON CONFLICT (name) DO UPDATE SET
+  type = EXCLUDED.type,
+  api_base = EXCLUDED.api_base,
+  api_key_env_var = EXCLUDED.api_key_env_var,
+  description = EXCLUDED.description,
+  active = EXCLUDED.active,
+  metadata = EXCLUDED.metadata,
+  updated_at = NOW();
+
+-- llama.cpp HIP on AMD Ryzen 9850X3D + dual Radeon AI Pro R9700 (RDNA4 gfx1201)
+-- Custom fork: tlee933/llama.cpp-rdna4-gfx1201 (ROCm 7.1 + gfx1201 kernels NOT
+-- in stock Ollama as of 2026-04). llama-server on :8080 exposes OpenAI-compat.
+INSERT INTO pmoves_core.model_providers (name, type, api_base, api_key_env_var, description, active, metadata)
+VALUES (
+  'llamacpp_rocm',
+  'openai_compatible',
+  'http://pmoves-9850x3d-r9700:8080/v1',
+  'LLAMACPP_ROCM_API_KEY',
+  'llama-server (HIP) on AMD Ryzen 9850X3D + dual R9700 RDNA4 gfx1201 (ROCm 7.1)',
+  true,
+  '{"status": "staging", "network": "tailnet", "location": "local", "arch": "rdna4", "gpu": "radeon-ai-pro-r9700", "gpu_count": 2, "total_vram_mb": 65536, "hostname": "pmoves-9850x3d-r9700", "phase": "C", "fork": "tlee933/llama.cpp-rdna4-gfx1201"}'::jsonb
+)
+ON CONFLICT (name) DO UPDATE SET
+  type = EXCLUDED.type,
+  api_base = EXCLUDED.api_base,
+  api_key_env_var = EXCLUDED.api_key_env_var,
+  description = EXCLUDED.description,
+  active = EXCLUDED.active,
+  metadata = EXCLUDED.metadata,
+  updated_at = NOW();
+
+-- Phase C models (staging — routing_weight 0.0 via TZ variant weights)
+DO $$
+DECLARE
+  v_spark_id UUID;
+  v_rocm_id UUID;
+BEGIN
+  SELECT id INTO v_spark_id FROM pmoves_core.model_providers WHERE name = 'ollama_spark';
+  SELECT id INTO v_rocm_id FROM pmoves_core.model_providers WHERE name = 'llamacpp_rocm';
+
+  -- Gemma 4 31B FP16 on DGX Spark (unified memory, SOTA multimodal)
+  INSERT INTO pmoves_core.models (provider_id, name, model_id, model_type, capabilities, vram_mb, context_length, description, active)
+  VALUES (
+    v_spark_id,
+    'ollama_spark_gemma4_31b_fp16',
+    'gemma4:31b',
+    'chat',
+    '["chat", "code_generation", "reasoning", "vision"]'::jsonb,
+    36000,
+    262144,
+    'Google Gemma 4 31B FP16 on DGX Spark — unified LPDDR5X (staging, Phase C)',
+    true
+  )
+  ON CONFLICT (provider_id, model_id) DO UPDATE SET
+    name = EXCLUDED.name,
+    capabilities = EXCLUDED.capabilities,
+    vram_mb = EXCLUDED.vram_mb,
+    context_length = EXCLUDED.context_length,
+    description = EXCLUDED.description,
+    updated_at = NOW();
+
+  -- Nemotron-3-Super 120B-A12B NVFP4 on DGX Spark (Spark-only, no RDNA4 FP8 kernels)
+  -- HF: nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-NVFP4 (verified HF API 2026-04-19)
+  INSERT INTO pmoves_core.models (provider_id, name, model_id, model_type, capabilities, vram_mb, context_length, description, active)
+  VALUES (
+    v_spark_id,
+    'ollama_spark_nemotron3_super_120b_fp8',
+    'nemotron-3-super-120b-nvfp4',
+    'chat',
+    '["chat", "function_calling", "json_mode", "tool_use", "agentic_reasoning"]'::jsonb,
+    90000,
+    131072,
+    'NVIDIA Nemotron-3-Super 120B-A12B NVFP4 on DGX Spark — NVIDIA OML license (staging, Phase C)',
+    true
+  )
+  ON CONFLICT (provider_id, model_id) DO UPDATE SET
+    name = EXCLUDED.name,
+    capabilities = EXCLUDED.capabilities,
+    vram_mb = EXCLUDED.vram_mb,
+    context_length = EXCLUDED.context_length,
+    description = EXCLUDED.description,
+    updated_at = NOW();
+
+  -- Gemma 4 31B Q4_K_M on single R9700 (llama.cpp HIP)
+  INSERT INTO pmoves_core.models (provider_id, name, model_id, model_type, capabilities, vram_mb, context_length, description, active)
+  VALUES (
+    v_rocm_id,
+    'llamacpp_rdna4_gemma4_31b_q4km',
+    'gemma-4-31b-it-Q4_K_M.gguf',
+    'chat',
+    '["chat", "code_generation", "reasoning", "vision"]'::jsonb,
+    18000,
+    262144,
+    'Google Gemma 4 31B Q4_K_M on single R9700 via llama.cpp HIP (staging, Phase C)',
+    true
+  )
+  ON CONFLICT (provider_id, model_id) DO UPDATE SET
+    name = EXCLUDED.name,
+    capabilities = EXCLUDED.capabilities,
+    vram_mb = EXCLUDED.vram_mb,
+    context_length = EXCLUDED.context_length,
+    description = EXCLUDED.description,
+    updated_at = NOW();
+
+  -- Gemma 4 26B-A4B MoE on dual R9700 (row-split --tensor-split 0.5,0.5)
+  INSERT INTO pmoves_core.models (provider_id, name, model_id, model_type, capabilities, vram_mb, context_length, description, active)
+  VALUES (
+    v_rocm_id,
+    'llamacpp_rdna4_gemma4_26b_dual',
+    'gemma-4-26B-A4B-it-Q4_K_M.gguf',
+    'chat',
+    '["chat", "code_generation", "vision"]'::jsonb,
+    15000,
+    262144,
+    'Google Gemma 4 26B-A4B MoE on dual R9700 (row-split) via llama.cpp HIP (staging, Phase C)',
+    true
+  )
+  ON CONFLICT (provider_id, model_id) DO UPDATE SET
+    name = EXCLUDED.name,
+    capabilities = EXCLUDED.capabilities,
+    vram_mb = EXCLUDED.vram_mb,
+    context_length = EXCLUDED.context_length,
+    description = EXCLUDED.description,
+    updated_at = NOW();
+
+END $$;
+
+-- =============================================================================
 -- Audit Log Entry
 -- =============================================================================
 
