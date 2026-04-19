@@ -31,23 +31,22 @@ GRAPHITI_MARK: `AGNOTE4482::CLAWZ::GAP_REPORT`
   - fork `main` is ahead by `11346`
   - behind by `0`
 
-**Interpretation:** both fork branches are behind upstream, but `main` is dramatically newer than `PMOVES.AI-Edition-Hardened`. The hardened branch does not currently look like a maintained PMOVES overlay line.
+**Interpretation:** `main` carries 6 PMOVES-specific commits ahead of upstream (NATS bridge, Nemotron catalog, compose wiring, integration dossier, review fixes, merge) but remains 1092 behind upstream `main`. The hardened branch is dramatically stale (12438 behind) and does not look like a maintained PMOVES overlay line.
 
 ---
 
 ## What This Means
 
-### 1. There is no meaningful PMOVES-specific ClaWz divergence yet
+### 1. There is now minimal PMOVES-specific ClaWz divergence
 
-- both fork branches compare as pure upstream ancestors
-- neither branch is ahead of upstream `main`
-- the current PMOVES story is mostly branch naming and pin drift, not a durable PMOVES overlay pack
+- fork `main` is 6 commits ahead of upstream — these are real PMOVES overlays (NATS bridge, NVIDIA catalog, compose wiring)
+- the current PMOVES story is still mostly branch naming and upstream drift, but the 6 commits prove the fork-overlay pattern works
 
-### 2. The root pin policy needs repair before more suit growth
+### 2. The root pin has been repaired
 
-- the root gitlink points to an orphaned SHA
-- that makes the current root state hard to reason about, hard to reproduce, and hard to promote safely
-- before more ClaW/P7 room-stage suit work, PMOVES should pin to a real, reviewable branch head
+- ~~the root gitlink points to an orphaned SHA~~ — **RESOLVED**: root now pins to `f05fd3f547` (see Resolution Update below)
+- the orphaned-pin blocker that previously made root state unreproducible is closed
+- future ClaW/P7 room-stage suit work can proceed from a known-good pin
 
 ### 3. The fork still matters
 
