@@ -218,3 +218,4 @@ NUL
 
 # Coverage reports
 .coverage
+.a0proj/
