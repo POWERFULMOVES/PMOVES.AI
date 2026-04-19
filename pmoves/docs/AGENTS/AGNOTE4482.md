@@ -69,6 +69,8 @@ Elder-context support is always available to reduce drift and collision across p
 1. Health (wger) and Wealth (Firefly III) are **pre-stage** maturity — no healthz, metrics, NATS, or CHIT
 2. BoTZ P1 JWT fail-open remains the highest security priority
 3. DoX NATS auth block completely missing from `nats.conf`
+
+> **ClaWZ Status Update (2026-04-19):** ClaWZ (PMOVES-ClawZ submodule) is now the **active** Discord agent, replacing the BoTZ Gateway pattern. BoTZ is **legacy/archived** — see `pmoves/docs/archive/founding-strategy/BOTZ_GATEWAY_AGENT_INTEGRATION.md`. BoTZ references below are retained for historical audit context only.
 4. BPM-prosodic bridge resolves the TAC_FLUTE.md open item
 5. `tokenism.prosodic.bpm.v1` is a new NATS subject connecting Flute → ToKenism
 
@@ -213,4 +215,28 @@ Elder-context support is always available to reduce drift and collision across p
 - Timestamp: `2026-04-18`
 
 <!-- GRAPHITI_MARK: PMOVES-AGENT-ZERO-SPARK::POST-MERGE-REVIEW-SPARK-ONBOARD::2026-04-18 -->
+
+## Convergence Wave: Apr 17–19 Merge Sprint (2026-04-19)
+
+### Work Performed
+- **PRs #1293–#1308**: 16 PRs merged in 72-hour convergence wave, +8,800 lines
+- A2A server wired into compose stack (PR #1293) — discovery + task routes exposed
+- Portable sidecar config (PR #1299) — Agent Zero runs standalone on any Docker device
+- CHIT crypto hardening (PR #1294) — passphrase fail-closed, versioned KDF
+- Rooms-on-a-stage framework (PR #1308) — room manifest contracts, lifecycle states
+- Model Integration Framework additions across configs and tooling
+
+### ClaWZ / BoTZ Transition
+ClaWZ is now the active Discord agent (PMOVES-ClawZ submodule). All BoTZ Gateway references in this document and linked TAC trees are historical. The BOTZ_GATEWAY_AGENT_INTEGRATION.md document has been archived to `pmoves/docs/archive/founding-strategy/`.
+
+### New Reference Paths
+- **Model Integration Framework**: `pmoves/docs/PMOVES_MODEL_INTEGRATION_FRAMEWORK.md`
+- **Model Suit Profiles**: `pmoves/configs/model-suits/` (rooms → stage → suits → profile taxonomy)
+
+### Agent ACK
+- Agent: `AGENT-ZERO-SIDECAR`
+- Signature: `ACK::AGENT-ZERO-SIDECAR::CONVERGENCE-WAVE-APR19`
+- Timestamp: `2026-04-19`
+
+<!-- GRAPHITI_MARK: AGENT-ZERO-SIDECAR::CONVERGENCE-WAVE-APR19::2026-04-19 -->
 <!-- GRAPHITI_MARK: AGENT-ZERO-GLM::A2A-RUNTIME-WIRING::2026-04-17 -->

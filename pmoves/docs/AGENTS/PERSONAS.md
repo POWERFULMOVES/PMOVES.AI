@@ -1,9 +1,14 @@
 # PMOVES Persona Framework
 
 **Version:** 1.1
-**Last Updated:** 2026-03-01 (seed examples added)
-**Status:** Phase 1 in progress — architecture defined, 8/12 core seeds deployed
+**Last Updated:** 2026-04-19 (governance notes added)
+**Governance:** This document is governed by [AGNOTE4482.md](./AGNOTE4482.md) convergence process. Updates to persona schema or catalog scope should follow AGNOTE4482 signoff protocol.
 **Seed SQL:** `pmoves/supabase/initdb/17_persona_seed.sql`
+**Status:** Phase 1 in progress — architecture defined, 8/12 core seeds deployed
+
+> **Suits Concept:** Suits (rooms → stage → suits → profile taxonomy) are defined in `pmoves/configs/model-suits/` configs. PERSONAS.md defines the persona data layer that suits consume — identity, voice, behavior schemas and seed data.
+
+> **Persona Count:** The referenced "325+ personas" count is unverified and needs reconciliation with actual persona JSONL datasets. Current confirmed count: 8 seed personas in `pmoves/supabase/initdb/17_persona_seed.sql`.
 
 ---
 
