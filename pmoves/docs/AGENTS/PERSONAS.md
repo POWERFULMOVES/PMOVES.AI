@@ -4,17 +4,17 @@
 **Last Updated:** 2026-04-19 (governance notes added)
 **Governance:** This document is governed by [AGNOTE4482.md](./AGNOTE4482.md) convergence process. Updates to persona schema or catalog scope should follow AGNOTE4482 signoff protocol.
 **Seed SQL:** `pmoves/supabase/initdb/17_persona_seed.sql`
-**Status:** Phase 1 in progress — architecture defined, 8/12 core seeds deployed
+**Status:** Phase 1 complete — architecture defined, 8/8 core seeds deployed in production
 
 > **Suits Concept:** Suits (rooms → stage → suits → profile taxonomy) are defined in `pmoves/configs/model-suits/` configs. PERSONAS.md defines the persona data layer that suits consume — identity, voice, behavior schemas and seed data.
 
-> **Persona Count:** The referenced "325+ personas" count is unverified and needs reconciliation with actual persona JSONL datasets. Current confirmed count: 8 seed personas in `pmoves/supabase/initdb/17_persona_seed.sql`.
+> **Persona Count:** 8 seed personas are deployed in production (see `pmoves/supabase/initdb/17_persona_seed.sql`). The framework supports inheritance and expansion to domain-specific personas. A historical "325+" figure from early CATACLYSM STUDIOS ecosystem planning was never materialized as deployable persona data — see [Historical Note](#historical-note-325-figure) below.
 
 ---
 
 ## Overview
 
-The PMOVES Persona Framework defines a structured approach to creating, managing, and evolving AI agent personas. This document outlines the schema, mathematical foundations, and implementation roadmap for the referenced "325+ personas" across the CATACLYSM STUDIOS ecosystem.
+The PMOVES Persona Framework defines a structured approach to creating, managing, and evolving AI agent personas. This document outlines the schema, mathematical foundations, and implementation roadmap for personas across the PMOVES platform.
 
 ---
 
@@ -114,33 +114,22 @@ CREATE TABLE public.persona_avatar (
 
 ## Persona Categories
 
-The 325+ personas are organized into hierarchical categories:
+The persona framework supports hierarchical categories with inheritance. Currently 8 seed personas are deployed (see [All 8 Seeded Personas](#all-8-seeded-personas) below). The category structure is designed for expansion:
 
-### Category Breakdown
+### Planned Category Structure
 
-| Category | Count | Description |
-|----------|-------|-------------|
-| **Core Agents** | 12 | Primary orchestration personas |
-| **Domain Experts** | 85 | Specialized knowledge areas |
-| **Creative** | 45 | Art, music, writing personas |
-| **Technical** | 65 | Engineering, DevOps, security |
-| **Support** | 40 | Customer service, help desk |
-| **Research** | 35 | Academic, scientific domains |
-| **Entertainment** | 28 | Gaming, media, social |
-| **Utility** | 15 | Tools, automation, data |
+| Category | Purpose |
+|----------|---------|
+| **Core Agents** | Primary orchestration personas (8 deployed) |
+| **Domain Experts** | Specialized knowledge areas (Phase 2) |
+| **Creative** | Art, music, writing personas (Phase 2+) |
+| **Technical** | Engineering, DevOps, security (Phase 2+) |
+| **Support** | Customer service, help desk (Phase 3) |
+| **Research** | Academic, scientific domains (Phase 2+) |
+| **Entertainment** | Gaming, media, social (Phase 3) |
+| **Utility** | Tools, automation, data (Phase 3) |
 
-### Core Agent Personas
-
-| Slug | Name | Role |
-|------|------|------|
-| `agent-zero` | Agent Zero | Central orchestrator |
-| `archon` | Archon | Knowledge manager |
-| `mesh-node` | Mesh Agent | Distributed coordinator |
-| `flute-voice` | Flute | Voice communication |
-| `supaserch` | SupaSerch | Deep research |
-| `pmoves-crush` | PMOVES Crush | CLI companion |
-| `deep-researcher` | DeepResearch | Research planner |
-| `consciousness` | Consciousness | Self-awareness layer |
+> **Note:** The 8 seeded personas (Developer, Creator, Researcher, Analyst, Coordinator, Security Auditor, Tester, Archivist) are role-based identities used by the agent orchestration layer. They are distinct from the 71 agents in `agent_registry.yaml`, which define service endpoints and NATS topology. Personas define *who* an agent is; the registry defines *what* an agent does.
 
 ---
 
@@ -394,25 +383,25 @@ JSON configuration for persona behavior limits:
 
 ## Implementation Roadmap
 
-### Phase 1: Core Personas (Q1 2026) (In Progress)
-- [ ] Define 12 core agent personas (8/12 seeded in production)
-- [ ] Implement persona schema in Supabase
-- [ ] Link to existing voice personas
-- [ ] Basic CHIT attribution integration
+### Phase 1: Core Personas (Q1 2026) — Complete
+- [x] Define 8 core agent personas (all seeded in production)
+- [x] Implement persona schema in Supabase
+- [x] Link to existing voice personas
+- [x] Basic CHIT attribution config on each seed
 
-### Phase 2: Domain Expansion (Q2 2026)
-- [ ] Add 85 domain expert personas
-- [ ] Implement inheritance system
-- [ ] Geometric signature generation
+### Phase 2: Domain Expansion (Q2 2026) — Planned
+- [ ] Add domain expert personas (inheritance from core seeds)
+- [ ] Implement inheritance system (extend/override/merge)
+- [ ] Geometric signature generation for similarity search
 - [ ] Similarity search via pgvector
 
-### Phase 3: Full Catalog (Q3 2026)
-- [ ] Complete 325+ persona catalog
+### Phase 3: Scale (Q3 2026) — Planned
+- [ ] Expand catalog for showtime demos (target: 20-50 personas)
 - [ ] Advanced Dirichlet attribution
 - [ ] Swarm consensus for multi-persona responses
 - [ ] Avatar generation pipeline
 
-### Phase 4: Evolution (Q4 2026)
+### Phase 4: Evolution (Q4 2026+) — Vision
 - [ ] Persona learning from interactions
 - [ ] Dynamic trait adjustment
 - [ ] User-created personas
@@ -429,7 +418,7 @@ GET /v1/personas
 Query: ?category=core&active=true&limit=50
 Response: {
     "personas": [...],
-    "total": 325,
+    "total": 8,
     "categories": {...}
 }
 ```
@@ -551,4 +540,68 @@ persona handles each user request
 - `.claude/context/voice-personas.md` - Voice persona system
 - `pmoves/docs/FLUTE_PROSODIC_ARCHITECTURE.md` - Voice synthesis
 - `pmoves/docs/PMOVESCHIT/IMPLEMENTATION_STATUS.md` - CHIT status
-- `CATACLYSM_STUDIOS_INC/ABOUT/` - Brand and platform vision
+ - `CATACLYSM_STUDIOS_INC/ABOUT/` - Brand and platform vision
+
+---
+
+## Showtime Readiness
+
+### Current State (8 personas deployed)
+
+The 8 seed personas provide full coverage for core agent operations (development, research, creation, analysis, coordination, security, testing, archival). For internal development and testing, this is sufficient.
+
+### What Showtime Needs
+
+"Showtime" means public demos, investor presentations, or live creator workflows where persona diversity is visible to end users. The gap between current state and showtime-ready:
+
+| Area | Current | Showtime Target | Gap |
+|------|---------|-----------------|-----|
+| **Persona count** | 8 seeds | 20-50 | Need domain expert + creative personas |
+| **Inheritance system** | Schema supports it | Working | Code not implemented |
+| **Geometric signatures** | Column exists | Generated on creation | hyperbolic-encoder not wired |
+| **Avatar pipeline** | Table exists | Generated avatars | No generation pipeline |
+| **Persona routing** | Manual config | Auto-routing by task type | Agent Zero routing logic needed |
+| **Voice binding** | Schema link exists | TTS per persona | Voice persona integration incomplete |
+| **Showcase personas** | N/A | 3-5 demo-ready with backstories, avatars, voices | Content creation needed |
+
+### Recommended Showtime Prep Order
+
+1. **Create 3-5 showcase personas** with rich backstories, custom traits, and avatar images (manually authored SQL inserts)
+2. **Wire persona routing** in Agent Zero so task type → persona selection is automatic
+3. **Implement inheritance** so showcase personas can extend core seeds
+4. **Generate geometric signatures** for similarity-based persona discovery
+5. **Bind voice personas** so each showcase persona has a distinct TTS voice
+
+---
+
+## Persona Dataset Inventory
+
+### JSONL Files
+
+| File | Content | Status |
+|------|---------|--------|
+| `pmoves/datasets/personas/archon-smoke-10.jsonl` | 10 Archon smoke test persona records | Test data, not production personas |
+
+### Other Persona Data
+
+| File | Content | Status |
+|------|---------|--------|
+| `pmoves/supabase/initdb/17_persona_seed.sql` | 8 production seed personas | **Primary source of truth** |
+| `pmoves/config/agent_registry.yaml` | 71 agent service definitions | Agents ≠ personas (see note above) |
+
+> **No persona JSONL catalog exists.** The 325+ figure was a planning target, not a dataset that was ever created. All persona data lives in the seed SQL.
+
+---
+
+## Historical Note: "325+" Figure
+
+The "325+ personas" count originated from early CATACLYSM STUDIOS ecosystem planning documents (pre-PMOVES submodule reorganization). It represented an aspirational catalog size across all planned categories (Core, Domain, Creative, Technical, Support, Research, Entertainment, Utility).
+
+This number was never backed by:
+- Deployable persona records in any database
+- JSONL datasets in the repository
+- SQL seed files beyond the 8 core personas
+
+The category breakdown table (325 = 12+85+45+65+40+35+28+15) was a planning allocation, not a count of implemented personas. As the project evolved from centralized services to a submodule monorepo architecture, the persona system was right-sized to 8 production seeds that cover the actual agent orchestration needs.
+
+Future expansion should target concrete use cases (showtime demos, domain expert scenarios) rather than chasing an arbitrary catalog number.
