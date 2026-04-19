@@ -36,6 +36,45 @@ log_warn()    { echo -e "${YELLOW}[WARN]${NC} $1"; }
 log_error()   { echo -e "${RED}[ERROR]${NC} $1"; }
 log_section() { echo -e "${BLUE}[====]${NC} $1"; }
 
+# Autodetect output captured for show_summary (populated only when autodetect ran)
+AUTODETECT_RAN=0
+AUTODETECT_SUGGESTION=""
+
+# Resolve $NODE_TYPE via glances-autodetect when operator passes "auto"
+# or when PMOVES_AUTODETECT=1 is set in the environment. Safe to call multiple
+# times; behaves as a no-op if $NODE_TYPE is already a valid explicit value.
+autodetect_node_type() {
+    local autodetect_script="${SCRIPT_DIR}/glances-autodetect.sh"
+
+    # Only run if explicitly requested
+    if [ "$NODE_TYPE" != "auto" ] && [ "${PMOVES_AUTODETECT:-0}" != "1" ]; then
+        return 0
+    fi
+
+    log_section "Autodetect: resolving node-type via glances-autodetect.sh..."
+
+    if [ ! -x "$autodetect_script" ] && [ ! -f "$autodetect_script" ]; then
+        log_error "Autodetect requested but script not found at: $autodetect_script"
+        log_error "Pass an explicit node-type instead: $0 <kvm4-1|kvm4-2|kvm2|gpu-5090>"
+        exit 1
+    fi
+
+    local suggested
+    suggested="$(bash "$autodetect_script" --suggest 2>/dev/null || echo unknown)"
+    AUTODETECT_RAN=1
+    AUTODETECT_SUGGESTION="$suggested"
+
+    if [ -z "$suggested" ] || [ "$suggested" = "unknown" ]; then
+        log_error "Autodetect could not confidently determine a node-type."
+        log_error "Run 'sudo bash ${autodetect_script}' for the full spec report, then"
+        log_error "pass the node-type explicitly:  $0 <kvm4-1|kvm4-2|kvm2|gpu-5090>"
+        exit 1
+    fi
+
+    log_info "Autodetect suggested node-type: $suggested"
+    NODE_TYPE="$suggested"
+}
+
 # Validate node type
 validate_node_type() {
     case "$NODE_TYPE" in
@@ -54,6 +93,10 @@ validate_node_type() {
             echo "  rdna4-workstation AMD Ryzen 9850X3D + dual R9700 (ROCm 7.1 + llama.cpp HIP)"
             echo "  dgx-spark         NVIDIA DGX Spark ARM64 overlay (Ollama + fleet agent)"
             echo "  pve-member        Proxmox VE 9 cluster member (no Docker-on-host; VMs only)"
+            echo ""
+            echo "  auto              Detect via deploy/provision/glances-autodetect.sh"
+            echo ""
+            echo "Or set PMOVES_AUTODETECT=1 to force detection regardless of argument."
             exit 1
             ;;
     esac
@@ -586,6 +629,9 @@ show_summary() {
     log_section "========================================="
 
     echo ""
+    if [ "$AUTODETECT_RAN" -eq 1 ]; then
+        log_info "Node-type resolved via autodetect: ${AUTODETECT_SUGGESTION}"
+    fi
     log_info "Node: pmoves-${NODE_TYPE}"
     log_info "Docker: $(docker --version 2>/dev/null || echo 'not installed')"
     log_info "Compose: $(docker compose version 2>/dev/null || echo 'not installed')"
@@ -644,6 +690,7 @@ show_summary() {
 
 # Main
 main() {
+    autodetect_node_type
     validate_node_type
     check_env
 
