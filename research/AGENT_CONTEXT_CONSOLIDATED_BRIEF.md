@@ -2,7 +2,7 @@
 
 **Purpose:** Authoritative reference for all Agent Zero sessions on PMOVES.AI.
 **Generated:** 2026-04-19 from 14 source documents + 23 agent learnings.
-**Rule:** Read this BEFORE acting. If in doubt, check `services-catalog.md` — it is the single source of truth for ports.
+**Rule:** Read this BEFORE acting. If in doubt, check `.claude/context/services-catalog.md` — it is the single source of truth for ports.
 
 ---
 
@@ -15,12 +15,12 @@ TensorZero uses **port 3000** for Docker-internal communication (confirmed in do
 | Service | Docker-Internal | Host-Exposed | Notes | Source |
 |---------|-----------------|--------------|-------|--------|
 | **TensorZero Gateway** | **3000** | **3030** | 3000 for containers, 3030 for host | docker-compose.yml, CLAUDE.md |
-| **TensorZero UI Dashboard** | **4000** | 3030 | tensorzero.md |
+| **TensorZero UI Dashboard** | **4000** | — | Internal only, not host-exposed |
 | **ClickHouse (TZ observability)** | **8123** | — | tensorzero.md |
 | **Grafana** | **3000** | — | services-catalog.md |
 | **Agent Zero** | **8080** (API), **8081** (UI) | — | services-catalog.md |
 | **Archon** | **8091** (API), **3737** (UI), **8051/8052** (MCP) | — | services-catalog.md |
-| **BoTZ MCP Gateway** | **2091** | 8054 (old/phantom) | services-catalog.md |
+| **BoTZ MCP Gateway** | **2091** (internal) | 8054 (host-exposed) | docker-compose.yml maps 8054:8054; services-catalog.md lists 2091 as internal port |
 | **Gateway Agent** | **8100** (internal) | — | services-catalog.md |
 | **Model Registry** | **8111** | 8110 (changed PR #845) | services-catalog.md |
 | **BoTZ VPN MCP** | **8110** | — | services-catalog.md (took 8110 after Model Registry moved) |
@@ -61,7 +61,7 @@ TensorZero uses **port 3000** for Docker-internal communication (confirmed in do
 
 ### Service Name Corrections
 
-- "BoTZ Gateway" port 8054 in the topology Mermaid diagrams is **outdated**. The actual service in services-catalog is "BoTZ MCP Gateway" at **2091**. The 8054 port is not assigned to any current service.
+- "BoTZ MCP Gateway" has two ports: **2091** (internal, per services-catalog.md) and **8054** (host-exposed, per docker-compose.yml `8054:8054` mapping). Both are active. The 2091 is the container-internal port; 8054 is the host binding.
 - "Gateway Agent" at 8100 is a separate service from "BoTZ MCP Gateway" at 2091.
 - "Cipher Memory" and "Headscale" both appear at 8096 — these are different services in different compose profiles.
 
@@ -333,8 +333,8 @@ Defined in `.claude/agents/` with tool-level enforcement:
 | `AGENTS.md` | Project-wide multi-agent conventions | All agents |
 | `docs/AGENTS/AGNOTE4482_SITREP.md` | Cold-start orientation for any agent | All agents |
 | `docs/AGENTS/AGNOTE4482PHI.t1.md` | Active claim register | All agents |
-| `docs/AGENTS/PMOVES_AGENT_CLASS_TAXONOMY.md` | Agent type system (60 agents) | Claude Code architecture |
-| `docs/AGENTS/PMOVES_AGENT_TOPOLOGY.md` | Visual topology + TAC tree | Claude Code architecture |
+| `pmoves/docs/AGENTS/PMOVES_AGENT_CLASS_TAXONOMY.md` | Agent type system (60 agents) | Claude Code architecture |
+| `pmoves/docs/AGENTS/PMOVES_AGENT_TOPOLOGY.md` | Visual topology + TAC tree | Claude Code architecture |
 
 ### Crypto & Security
 
@@ -362,13 +362,13 @@ Defined in `.claude/agents/` with tool-level enforcement:
 | `pmoves/tests/unit/` | Pure unit tests | Agent Zero (test-engineer) |
 | `pmoves/tests/smoke/` | Quick health checks | Agent Zero (test-engineer) |
 | `pmoves/tests/test_chit_security.py` | CHIT crypto tests (664 lines) | Claude Code (security) |
-| `pmoves/tests/test_port_audit.py` | Port audit tests (61 tests) | Agent Zero (test-engineer) |
+| `pmoves/tests/unit/test_port_audit.py` | Port audit tests (61 tests) | Agent Zero (test-engineer) |
 
 ### Operations
 
 | File | Purpose | Who Owns |
 |------|---------|----------|
-| `docs/operations/MODEL_ONBOARDING.md` | Model registry update runbook | Claude Code (delivery) |
+| `pmoves/docs/operations/MODEL_ONBOARDING.md` | Model registry update runbook | Claude Code (delivery) |
 | `pmoves/tools/agent_taxonomy_helper.py` | Agent registry CLI query tool | Claude Code (delivery) |
 | `pmoves/tools/port_audit.py` | Port conflict detection | Claude Code (infra) |
 | `pmoves/tools/mini_cli.py` | Sidecar orchestration CLI | Agent Zero |
@@ -401,19 +401,9 @@ Defined in `.claude/agents/` with tool-level enforcement:
 - Each node may have different containers, worktrees, claim register state
 - Always verify with health checks before assuming
 
-### CI Audit (2026-04-19)
+### Changelog
 
-All 9 PRs merged this session had merge-gate passing. `claude-review` failed on #1290-1293 but is a known flake that doesn't block merge-gate. No regressions introduced.
-### Model Onboarding (from MODEL_ONBOARDING.md)
-
-- PR #1226 in progress: Gemma 4 family (E2B/E4B/26B-A4B/31B) onboarding
-- Introduces new `multimodal_large` TensorZero function for larger models
-
-### Cross-Node Context Gap
-
-- Claude context is NOT consistent across z890/4090/5090
-- Each node may have different containers, worktrees, claim register state
-- Always verify with health checks before assuming
+- **2026-04-19**: CI audit — 9 PRs merged (#1290-#1299), merge-gate passing, `claude-review` flake on #1290-1293 (known, non-blocking). No regressions.
 
 ---
 

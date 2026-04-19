@@ -2,7 +2,7 @@
 
 > **Instance**: PMOVES-Agent-Zero-SPARK | Port 5080 | Image: agent0ai/agent-zero:latest
 > **Date**: 2026-04-19 | **Status**: PLANNING (read-only analysis)
-> **Constraint**: Do NOT modify any project files except this research document.
+> **Note**: This document is read-only analysis. Implementation steps reference separate operational procedures (see deploy/sidecar/ for canonical templates).
 
 ---
 
@@ -453,7 +453,7 @@ Write to .a0proj/agents.json:
     ],
     "custom_providers": {
       "ollama_spark": {
-        "base_url": "http://172.17.0.1:11434",
+        "base_url": "http://host.docker.internal:11434",
         "provider": "ollama",
         "api_key": "ollama"
       }
@@ -509,79 +509,35 @@ Write to .a0proj/agents.json:
 - **pmoves-researcher / pmoves-code-reviewer**: Specialized roles matching Agent SDK roles (researcher, code-reviewer).
 - All profiles include code_execution_remote for host access and PARENT_SYSTEM=PMOVES.AI in their prompt.
 - custom_providers is only needed on profiles that use Ollama directly (TensorZero profiles use standard OpenAI-compat).
+> **Note:** Per-profile `custom_providers` depends on Agent Zero version support. Verify your Agent Zero build supports this feature before relying on it.
 
 ---
 
-### Phase 3: Required Env Vars for Sidecar Mode (Minimal Local Dev Set)
+### Phase 3: Required Env Vars for Sidecar Mode
 
-#### 3.1 Container Environment Variables (docker run -e flags)
+#### 3.1 Canonical Template
 
-Minimum vars to set on the container for sidecar-adjacent behavior without the full compose stack:
+**See `deploy/sidecar/sidecar-env.template`** — canonical sidecar env template (added PR #1299). This template contains the complete set of env vars for standalone sidecar mode. Do NOT maintain a separate copy.
 
-```bash
-# === TOPOLOGY (sidecar identity) ===
--e DOCKED_MODE=true
--e TOPOLOGY_MODE=standalone          # standalone until compose stack is up
--e PARENT_SYSTEM=PMOVES.AI
--e PARENT_VERSION=1.0.0-hardened
+#### 3.2 Key Decision Rationale
 
-# === CHIT (dev mode -- non-enforcing) ===
--e CHIT_PASSPHRASE=<your-dev-passphrase>
--e CHIT_REQUIRE_SIGNATURE=false      # Dev: do not enforce
--e CHIT_DECRYPT_ANCHORS=false        # Dev: do not enforce
-# NOTE: Do NOT set CHIT_PROD_* -- those use compose ${:?} interpolation
+| Decision | Value | Why |
+|----------|-------|-----|
+| TOPOLOGY_MODE | `standalone` | Compose stack is not running — cannot use `docked` |
+| AGENTZERO_JETSTREAM | `false` | NATS bus unreachable in standalone — prevents connection errors |
+| CHIT_REQUIRE_SIGNATURE | `false` | Dev mode — CHIT enforcement requires compose-provided secrets |
+| CHIT_DECRYPT_ANCHORS | `false` | Dev mode — same rationale as above |
+| CHIT_PROD_* vars | Omitted | Compose-only `${:?}` interpolation — does not apply to `docker run` |
 
-# === JETSTREAM (disabled -- NATS not reachable) ===
--e AGENTZERO_JETSTREAM=false
--e AGENTZERO_JS_UNAVAILABLE_THRESHOLD=999  # Effectively never fails
-
-# === TENSORZERO (pre-staged, unreachable) ===
--e TENSORZERO_URL=http://tensorzero-gateway:3000
-
-# === NATS (pre-staged, unreachable) ===
--e NATS_URL=nats://nats:pmoves@nats:4222
-
-# === HOST ENV LEAK GUARD ===
--e SSL_CERT_FILE=
--e SSL_CERT_DIR=
--e REQUESTS_CA_BUNDLE=
--e CURL_CA_BUNDLE=
--e NODE_EXTRA_CA_CERTS=
--e HTTP_PROXY=
--e HTTPS_PROXY=
--e NO_PROXY=
-```
-
-#### 3.2 Variables NOT Needed for Local Dev
-
-| Var | Reason |
-|-----|--------|
-| CHIT_PROD_PASSPHRASE | Compose-only ${:?} syntax -- does not apply to docker run |
-| CHIT_PROD_REQUIRE_SIGNATURE | Same -- compose interpolation only |
-| SUPABASE_SERVICE_ROLE_KEY | No Supabase reachable -- leave empty |
-| OPENAI_API_KEY | Not using OpenAI direct -- Ollama has no key requirement |
-| A0_SET_* model vars | Handled via settings.json custom_providers (more flexible) |
-
-#### 3.3 Env Files vs Inline -e Flags
-
-**Option A: Inline -e flags** (simpler, no file management)
+#### 3.3 Applying the Template
 
 ```bash
-docker run -e DOCKED_MODE=true -e TOPOLOGY_MODE=standalone ...
-```
+# Option A: Reference the template directly
+--env-file deploy/sidecar/sidecar-env.template
 
-**Option B: Env file mount** (closer to compose parity) -- RECOMMENDED
-
-```bash
-# Create a local sidecar env file
-cat > /path/to/sidecar.env << ENVEOF
-DOCKED_MODE=true
-TOPOLOGY_MODE=standalone
-PARENT_SYSTEM=PMOVES.AI
-...etc...
-ENVEOF
-
-docker run --env-file /path/to/sidecar.env ...
+# Option B: Copy and customize for this host
+cp deploy/sidecar/sidecar-env.template /path/to/sidecar.env
+# Edit /path/to/sidecar.env with host-specific values, then:-env-file /path/to/sidecar.env
 ```
 
 ---
@@ -681,47 +637,7 @@ docker run -d \
 
 #### 5.3 sidecar.env File Content
 
-```bash
-# === PMOVES Sidecar Configuration ===
-# PMOVES-Agent-Zero-SPARK -- Local dev sidecar mode
-
-# Topology
-DOCKED_MODE=true
-TOPOLOGY_MODE=standalone
-PARENT_SYSTEM=PMOVES.AI
-PARENT_VERSION=1.0.0-hardened
-
-# CHIT (dev mode -- non-enforcing)
-CHIT_PASSPHRASE=dev-local-sidecar-override
-CHIT_REQUIRE_SIGNATURE=false
-CHIT_DECRYPT_ANCHORS=false
-
-# JetStream (disabled -- NATS not reachable in standalone)
-AGENTZERO_JETSTREAM=false
-AGENTZERO_JS_UNAVAILABLE_THRESHOLD=999
-
-# Pre-staged endpoints (unreachable but ready for compose transition)
-NATS_URL=nats://nats:pmoves@nats:4222
-TENSORZERO_URL=http://tensorzero-gateway:3000
-SUPABASE_URL=http://supabase-kong:8000
-SUPABASE_SERVICE_ROLE_KEY=
-SUPA_REST_URL=http://supabase-kong:8000/rest/v1
-HIRAG_URL=http://hi-rag-gateway-v2:8086
-
-# Agent Zero
-AGENT_ZERO_API_BASE=http://127.0.0.1:80
-PORT=8080
-
-# Host env leak guard
-SSL_CERT_FILE=
-SSL_CERT_DIR=
-REQUESTS_CA_BUNDLE=
-CURL_CA_BUNDLE=
-NODE_EXTRA_CA_CERTS=
-HTTP_PROXY=
-HTTPS_PROXY=
-NO_PROXY=
-```
+See `deploy/sidecar/sidecar-env.template` — canonical sidecar env template (added PR #1299). Do NOT maintain a separate copy. The template contains the complete env configuration for standalone sidecar mode including topology, CHIT dev settings, JetStream disable, pre-staged endpoints, and host env leak guard.
 
 #### 5.4 Data Directory Setup (on host, before docker run)
 

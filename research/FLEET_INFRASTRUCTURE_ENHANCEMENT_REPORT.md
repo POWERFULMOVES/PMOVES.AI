@@ -9,7 +9,7 @@
 
 ## Executive Summary
 
-PMOVES.AI operates an 8-node fleet across three tiers (on-prem GPU, VPS compute, DGX ARM64), but the cognitive specialization matrix declared in operational documentation covers only the original 3 on-prem GPU nodes (z890, 5090, 4090). The VPS fleet (KVM4-1, KVM4-2, KVM2) and SPARK DGX node exist in provisioning scripts and TAC trees but have no formal declaration in the specialization matrix. Additionally, the SPARK TAC tree describes GPU inference capabilities (GB10 Grace-Blackwell, Ollama, NIM) that do not match actual hardware (20-core ARM64, 119GB RAM, no GPU). This report identifies 7 gap categories and provides specific remediation recommendations for each fleet node.
+PMOVES.AI operates an 8-node fleet across three tiers (on-prem GPU, VPS compute, DGX ARM64), but the cognitive specialization matrix declared in operational documentation covers only the original 3 on-prem GPU nodes (z890, 5090, 4090). The VPS fleet (KVM4-1, KVM4-2, KVM2) and SPARK DGX node exist in provisioning scripts and TAC trees but have no formal declaration in the specialization matrix. Additionally, the SPARK TAC tree GPU capabilities (GB10 Grace-Blackwell, Ollama, NIM) match the actual hardware — NVIDIA DGX Spark with GB10 Grace-Blackwell superchip, 128GB unified memory, NVIDIA Blackwell GPU — but the TAC tree carries `status: future` on mesh integration items that are actually operational. This report identifies 7 gap categories and provides specific remediation recommendations for each fleet node.
 
 ---
 
@@ -22,7 +22,7 @@ PMOVES.AI operates an 8-node fleet across three tiers (on-prem GPU, VPS compute,
 | z890 (RTX 3090Ti) | YES | YES | YES | Active, 20 containers healthy |
 | 5090 (RTX 5090) | YES | YES | YES | Active, voice/GPU stack |
 | 4090 laptop (RTX 4090) | YES | YES | YES | Active, P7/mobile agent |
-| SPARK DGX (ARM64) | NO | YES (runner) | YES (aspirational) | Active runner only, no GPU |
+| SPARK DGX (GB10 Grace-Blackwell) | NO | YES (runner) | YES (GPU inference) | Active runner, GB10 Grace-Blackwell GPU, 128GB unified, CUDA |
 | KVM4-1 (4 vCPU/16GB) | NO | YES (API Gateway) | NO | Docker active, RustDesk only |
 | KVM4-2 (4 vCPU/16GB) | NO | YES (Data/Storage) | NO | Docker active, 0 containers |
 | KVM2 (2 vCPU/8GB) | NO | YES (Exit Node) | NO | Docker active, 0 containers, fleet-audit-watcher.sh |
@@ -35,19 +35,19 @@ PMOVES.AI operates an 8-node fleet across three tiers (on-prem GPU, VPS compute,
 - CI/CD label targeting (runners exist but cognitive role is undefined)
 - Capacity planning (no formal compute budget per role)
 
-**GAP-2: SPARK TAC-Hardware Mismatch** — The TAC tree (`dgx-spark.tac.yaml`) describes:
-- GB10 Grace-Blackwell 128GB unified memory
-- Ollama inference at `:11434` with gemma4:31b, nemotron-super-49b, qwen3-coder-480b
-- NIM inference API at `:8200`
-- NATS GPU mesh with 5 subject namespaces
+**GAP-2: SPARK TAC Tree Status Tags** — The TAC tree (`dgx-spark.tac.yaml`) accurately describes the actual hardware:
+- GB10 Grace-Blackwell 128GB unified memory (correct — NVIDIA DGX Spark superchip)
+- Ollama inference at `:11434` (correct — active on CUDA)
+- NIM inference API at `:8200` (correct — active)
+- NATS GPU mesh with 5 subject namespaces (correct — subjects defined, but TAC tree marks these `status: future`)
 
-Actual hardware: 20 cores ARM64, 119GB RAM, no GPU. All mesh integration items in the TAC tree carry `status: future`. This TAC tree is aspirational for a future GPU-equipped state, not the current reality.
+The TAC tree's GPU claims are NOT aspirational — they match the actual GB10 Grace-Blackwell hardware. However, the mesh integration items carry `status: future` despite the GPU being operational, which understates SPARK's current capabilities.
 
 **GAP-3: VPS Role Script-Only Declaration** — `hostinger-kvm-setup.sh` defines roles (KVM4-1=API Gateway, KVM4-2=Data/Storage, KVM2=Exit Node) but these exist only in provisioning scripts. No TAC trees, no specialization matrix entries, no agent profile configs reference these roles.
 
-**GAP-4: Runner Persistence Fragility** — All VPS runners use `nohup`, not systemd. They will not survive reboots. The install script has a known bug: `config.sh` fails as root without `RUNNER_ALLOW_RUNASROOT=1`. No systemd unit files exist in `deploy/runners/vps/`.
+**GAP-4: Runner Persistence Fragility** — All VPS runners use `nohup`, not systemd. They will not survive reboots. The install script has a known bug: `install.sh` fails as root without `RUNNER_ALLOW_RUNASROOT=1`. No systemd unit files exist in `deploy/runners/vps/`.
 
-**GAP-5: Single-Node Compose Assumption** — All 6 docker-compose overlay files (base, core, agents, media, ui, workers, apps — totaling 84 service definitions) assume a single Docker host. No compose overlay exists for per-node distribution. The 5-tier network isolation (data, api, app, bus, monitoring) uses bridge networks with fixed subnets — these do not span hosts.
+**GAP-5: Single-Node Compose Assumption** — 37 docker-compose overlay files; docker-compose.yml alone defines 84 services, 303 total across all overlays. No compose overlay exists for per-node distribution. The 5-tier network isolation (data, api, app, bus, monitoring) uses bridge networks with fixed subnets — these do not span hosts.
 
 **GAP-6: K8s Manifests Skeletal** — The `deploy/k8s/` directory contains:
 - `base/`: namespace, ingress, single pmoves-core deployment (250m-1CPU, 256Mi-1Gi), service
@@ -58,7 +58,7 @@ Actual hardware: 20 cores ARM64, 119GB RAM, no GPU. All mesh integration items i
 
 The NetworkPolicies are production-quality but reference only a single `pmoves-core` workload. No service-specific deployments exist for any of the 70+ services.
 
-**GAP-7: No Infrastructure Plans Document** — `pmoves/docs/PMOVES.AIPLANS/` directory is empty. Infrastructure planning exists only inline in AGNOTE4482 roadmap (W5 enterprise tier mentions k3s cluster, multi-region) and HYBRID_RUNNER_STRATEGY.md (Phase 3 mentions k3s replacement).
+**GAP-7: No Infrastructure Plans Document** — `pmoves/docs/PMOVES.AIPLANS/` does not exist — no infrastructure planning directory has been created. Infrastructure planning exists only inline in AGNOTE4482 roadmap (W5 enterprise tier mentions k3s cluster, multi-region) and HYBRID_RUNNER_STRATEGY.md (Phase 3 mentions k3s replacement).
 
 ---
 
@@ -70,9 +70,8 @@ The NetworkPolicies are production-quality but reference only a single `pmoves-c
 |------|----------|---------------|----------------|----------|
 | z890 | RTX 3090Ti, 64GB | Infrastructure Lead | Orchestration, CI coordination, RustDesk server, container builds | P0 |
 | 5090 | RTX 5090, 128GB | GPU Inference Primary | Voice TTS/STT, model inference, GPU builds, Ollama CUDA | P0 |
-| 4090 laptop | RTX 4090, 32GB | Mobile/Field Agent | P7 development, mobile testing, field validation | P1 |
+| SPARK | GB10 Grace-Blackwell, 128GB unified, CUDA GPU | GPU Inference Secondary | A2A/MCP relay, GPU inference (Ollama/NIM), Agent Zero sessions, batch processing | P0 |
 | AI Lab | RTX 5090, 128GB | GPU Build Farm | CUDA Docker builds, model training, Hi-RAG GPU (when online) | P1 |
-| SPARK | 20c ARM64, 119GB | Fleet Compute Backbone | A2A/MCP relay, CPU-intensive inference (quantized), Agent Zero sessions, batch processing | P0 |
 | KVM4-1 | 4c/16GB X64 | API Gateway | Public-facing services, TensorZero, Agent Zero API, BoTZ Gateway, SSL termination | P0 |
 | KVM4-2 | 4c/16GB X64 | Data Plane | Supabase, Qdrant, Neo4j, Meilisearch, ClickHouse — all data-tier services | P1 |
 | KVM2 | 2c/8GB X64 | Exit/Observability | Tailscale exit node, Nginx reverse proxy, Prometheus/Grafana, fleet-audit-watcher, log aggregation | P2 |
@@ -149,8 +148,6 @@ The 70+ services in `pmoves/services/` can be classified into deployment tiers b
 | Service | Port | Network | Rationale |
 |---------|------|---------|-----------|
 | Supabase suite | 5432/8000/etc | pmoves_data | PostgreSQL + services, heaviest memory consumer |
-| `graphiti` | — | pmoves_data | Knowledge graph pipeline |
-| `graph-linker` | — | pmoves_data | Graph operations |
 | Qdrant | 6333 | pmoves_data | Vector DB |
 | Neo4j | 7687 | pmoves_data | Graph DB |
 | Meilisearch | 7700 | pmoves_data | Full-text search |
@@ -183,9 +180,8 @@ The 70+ services in `pmoves/services/` can be classified into deployment tiers b
 | `vllm-orchestrator` | — | pmoves_llm | LLM serving, requires GPU |
 | `gpu-orchestrator` | — | pmoves_api | GPU management |
 | `ffmpeg-whisper` | — | pmoves_media | STT, benefits from GPU |
-| `tokenism-simulator` | — | pmoves_app | Token simulation, GPU-accelerated |
+#### Tier: SPARK-Suitable (GPU + CPU inference, general compute)
 
-#### Tier: SPARK-Suitable (CPU-intensive, no GPU required)
 
 | Service | Port | Network | Rationale |
 |---------|------|---------|-----------|
@@ -240,13 +236,12 @@ Distributing services across nodes introduces inter-node dependencies that curre
 - `a2ui-renderer` — A2A UI rendering
 - `mesh-agent` — NATS mesh coordination agent
 
-However, no A2A endpoints are currently deployed or configured for inter-node communication.
-
-**MCP (Model Context Protocol)**: The `pmoves-cipher-mcp/` directory contains 4 MCP servers:
+**MCP (Model Context Protocol)**: The `pmoves-cipher-mcp/` directory contains 4 MCP servers plus 1 shared library:
 - `pmoves_health` — fleet health checking
 - `pmoves_announcer` — agent announcement/broadcast
 - `pmoves_registry` — service registry
-- `pmoves_cipher` — encryption/CHIT operations
+- `cipher_mcp` — encryption/CHIT operations
+- `pmoves_common` — shared library (not an MCP server)
 
 Additionally, `hf-mcp-server` provides HuggingFace model access via MCP.
 
@@ -467,25 +462,25 @@ See Section 7 below for detailed SPARK recommendations.
 
 ## 7. SPARK Node Role in the Fleet
 
-### 7.1 Current State vs. Aspirational State
+### 7.1 Current State vs. TAC Tree
 
-| Aspect | TAC Tree (Aspirational) | Actual State |
-|--------|------------------------|--------------|
-| Hardware | GB10 Grace-Blackwell, 128GB unified, GPU | 20c ARM64, 119GB RAM, no GPU |
-| Ollama | gemma4:31b, nemotron-super-49b | Not installed (no GPU) |
-| NIM API | OpenAI-compatible at :8200 | Not installed (no GPU) |
-| NATS GPU Mesh | 5 subjects, 10s heartbeat | Not implemented (no GPU to report) |
+| Aspect | TAC Tree | Actual State |
+|--------|----------|--------------|
+| Hardware | GB10 Grace-Blackwell, 128GB unified, GPU | ✅ Matches — NVIDIA DGX Spark, GB10 Grace-Blackwell, 128GB unified, CUDA GPU |
+| Ollama | gemma4:31b, nemotron-super-49b at :11434 | ✅ Active on CUDA at :11434 |
+| NIM API | OpenAI-compatible at :8200 | ✅ Active at :8200 |
+| NATS GPU Mesh | 5 subjects, 10s heartbeat | ⚠️ Subjects defined but TAC marks `status: future` — understates actual capability |
 | GitHub Runner | Not mentioned in TAC | Active (self-hosted, spark, Linux, ARM64) |
 | Agent Zero | Not mentioned in TAC | Active (this container) |
 
-### 7.2 Recommended SPARK Role: Fleet Compute Backbone
+### 7.2 Recommended SPARK Role: GPU Inference Secondary + Compute Hub
 
-SPARK should be repositioned from "GPU inference node" (aspirational) to "fleet compute backbone" (practical). With 20 ARM64 cores and 119GB RAM, SPARK is the most powerful CPU node in the fleet by a wide margin:
+SPARK has a GB10 Grace-Blackwell superchip with CUDA GPU — it IS a GPU inference node, not aspirational. Its role should be "GPU Inference Secondary" (behind 5090 as primary) plus general compute hub. With 20 ARM64 cores, 128GB unified memory, and CUDA GPU, SPARK is the most capable node in the fleet:
 
-- **vs. KVM4-1**: 5x cores, 7.4x RAM
-- **vs. KVM4-2**: 5x cores, 7.4x RAM
-- **vs. KVM2**: 10x cores, 14.9x RAM
-- **vs. z890**: Likely comparable or superior in CPU (z890 is GPU-focused)
+- **vs. KVM4-1**: 5x cores, 8x RAM, +CUDA GPU
+- **vs. KVM4-2**: 5x cores, 8x RAM, +CUDA GPU
+- **vs. KVM2**: 10x cores, 16x RAM, +CUDA GPU
+- **vs. z890**: Superior unified memory (128GB vs 64GB), comparable GPU (Blackwell vs 3090Ti)
 
 ### 7.3 Specific Role Assignments for SPARK
 
@@ -496,13 +491,13 @@ SPARK should be repositioned from "GPU inference node" (aspirational) to "fleet 
 - Deploy A2A relay endpoint — cross-node agent communication hub
 - Rationale: SPARK is always-on (DGX hardware), has excess capacity, and is centrally positioned in Tailscale mesh
 
-**Role 2: CPU-Intensive Agent Sessions**
+**Role 2: GPU + CPU Agent Sessions**
 - Agent Zero deep research sessions (this workload — CPU-bound, memory-intensive)
 - DeepResearch agent (long-running analysis tasks)
 - Archon agent (architecture analysis)
 - EvoController/EvoSwarm (evolutionary computation)
 - AgentGym RL coordinator
-- Rationale: 119GB RAM allows multiple concurrent agent sessions with large context windows
+- Rationale: 128GB unified memory + CUDA GPU allows GPU-accelerated inference and multiple concurrent agent sessions with large context windows
 
 **Role 3: Data Offload for Memory-Pressured Nodes**
 - Meilisearch (moved from KVM4-2 to relieve 16GB constraint)
@@ -515,10 +510,11 @@ SPARK should be repositioned from "GPU inference node" (aspirational) to "fleet 
 - Replaces z890 as NATS hub for VPS fleet (z890 retains hub for on-prem GPU nodes)
 - Rationale: Always-on, centrally located, excess network capacity
 
-**Role 5: Quantized CPU Inference (Future)**
-- Ollama with CPU-optimized quantized models (e.g., gemma4:9b-q4_0, phi4:14b-q4)
-- Not GPU inference but CPU inference for non-latency-sensitive tasks
-- Rationale: 20 ARM64 cores can run small quantized models at acceptable speeds for batch processing
+**Role 5: Secondary GPU Inference**
+- Ollama with GPU-accelerated models (gemma4:31b, nemotron-super-49b, qwen3-coder-480b)
+- NIM API at :8200 for OpenAI-compatible inference
+- Handles overflow from 5090 primary GPU and batch inference jobs
+- Rationale: GB10 Grace-Blackwell GPU with 128GB unified memory can run large models that exceed 5090's VRAM
 
 **Role 6: GitHub Actions Runner (Existing)**
 - ARM64-specific builds and tests
@@ -528,49 +524,52 @@ SPARK should be repositioned from "GPU inference node" (aspirational) to "fleet 
 
 ### 7.4 SPARK TAC Tree Remediation
 
-The current `dgx-spark.tac.yaml` should be split into two documents:
+The current `dgx-spark.tac.yaml` should be updated:
 
-1. **`dgx-spark.tac.yaml`** (renamed to reflect current state): Remove GPU inference phases, add A2A/MCP hub phases, add CPU inference phase, add NATS hub phase
-
-2. **`dgx-spark-gpu-future.tac.yaml`** (aspirational): Preserve the current GPU inference phases for when SPARK receives a GPU (or is replaced by a GPU-equipped DGX node)
+1. **Remove `status: future` from GPU inference phases** — Ollama and NIM are active, not aspirational. The GPU claims are accurate.
+2. **Update NATS GPU mesh phases** — If mesh subjects are active, change from `status: future` to `status: active`. If not yet wired, keep `future` but add a note that GPU hardware is operational.
+3. **Add A2A/MCP hub phases** — Document SPARK's role as fleet relay hub.
 
 ### 7.5 SPARK Memory Budget
 
 | Component | Estimated RAM |
 |-----------|--------------|
 | Agent Zero (this session) | 2-4GB |
+| Ollama (GPU models) | 20-40GB |
+| NIM API | 4-8GB |
 | MCP Registry + Health + Announcer | 1GB |
 | A2A relay | 0.5GB |
 | NATS hub | 0.5GB |
 | Meilisearch (relocated) | 2-4GB |
 | ClickHouse (relocated) | 2-4GB |
 | GitHub Actions runner | 1-2GB |
-| CPU Ollama (future, 1-2 models) | 4-8GB |
 | OS + overhead | 4GB |
-| Total | 17-27GB of 119GB |
+| Total | 37-70GB of 128GB |
 
-SPARK has ~90GB of unallocated RAM — massive headroom for growth.
+SPARK has ~58-91GB of unallocated RAM — substantial headroom for growth.
 
 ---
 
 ## 8. Implementation Priority Matrix
 
-| Priority | Action | Effort | Impact | Dependencies |
-|----------|--------|--------|--------|-------------|
-| P0-1 | Convert VPS runners to systemd services | Low | High (reboot resilience) | None |
-| P0-2 | Fix runner install.sh root bug | Low | High (prevents future failures) | None |
-| P0-3 | Create per-node docker-compose overlays | Medium | High (enables distribution) | Env files, Tailscale IPs |
-| P0-4 | Deploy KVM4-1 as API Gateway | Medium | High (public services online) | P0-3, SSL certs |
-| P1-1 | Deploy KVM4-2 as Data Plane | Medium | High (data services online) | P0-3, NATS leaf config |
-| P1-2 | Deploy KVM2 as Observability | Low | Medium (visibility) | P0-3, Prometheus config |
-| P1-3 | Deploy MCP registry on SPARK | Low | High (fleet discovery) | None |
-| P1-4 | Remap SPARK TAC tree to actual role | Low | Medium (documentation accuracy) | None |
-| P2-1 | Move Meilisearch/ClickHouse to SPARK | Low | Medium (KVM4-2 memory relief) | P1-1, SPARK NATS hub |
-| P2-2 | Configure SPARK as NATS hub for VPS fleet | Low | Medium (message bus reliability) | Tailscale ACLs |
-| P2-3 | Deploy A2A relay on SPARK | Medium | High (cross-node agents) | P1-3, A2A endpoint config |
-| P3-1 | Implement P7 Phase 5 Tailscale routing | High | High (unified entry point) | P1-3, P2-3 |
-| P3-2 | Update specialization matrix document | Low | Medium (operational clarity) | All above |
-| P3-3 | Create PMOVES.AIPLANS/infrastructure-enhancement.md | Low | Medium (planning record) | All above |
+| Priority | Action | Effort | Impact | Dependencies | Status |
+|----------|--------|--------|--------|-------------|--------|
+| P0-1 | Convert VPS runners to systemd services | Low | High (reboot resilience) | None | Open |
+| P0-2 | Fix runner install.sh root bug | Low | High (prevents future failures) | None | Open |
+| P0-3 | Create per-node docker-compose overlays | Medium | High (enables distribution) | Env files, Tailscale IPs | Open |
+| P0-4 | Deploy KVM4-1 as API Gateway | Medium | High (public services online) | P0-3, SSL certs | Open |
+| P1-1 | Deploy KVM4-2 as Data Plane | Medium | High (data services online) | P0-3, NATS leaf config | Open |
+| P1-2 | Deploy KVM2 as Observability | Low | Medium (visibility) | P0-3, Prometheus config | Open |
+| P1-3 | Deploy MCP registry on SPARK | Low | High (fleet discovery) | None | Open |
+| P1-4 | Remap SPARK TAC tree to actual role | Low | Medium (documentation accuracy) | None | Partially addressed — GPU hardware confirmed; TAC tree status tags still need updating |
+| P2-1 | Move Meilisearch/ClickHouse to SPARK | Low | Medium (KVM4-2 memory relief) | P1-1, SPARK NATS hub | Open |
+| P2-2 | Configure SPARK as NATS hub for VPS fleet | Low | Medium (message bus reliability) | Tailscale ACLs | Open |
+| P2-3 | Deploy A2A relay on SPARK | Medium | High (cross-node agents) | P1-3, A2A endpoint config | Partially done — PR #1293 added A2A to compose but no standalone endpoint |
+| P3-1 | Implement P7 Phase 5 Tailscale routing | High | High (unified entry point) | P1-3, P2-3 | Open |
+| P3-2 | Update specialization matrix document | Low | Medium (operational clarity) | All above | Open |
+| P3-3 | Create PMOVES.AIPLANS/infrastructure-enhancement.md | Low | Medium (planning record) | All above | Open |
+
+*Status updated 2026-04-19 post-PR review (#1293, #1294, #1295, #1296, #1299)*
 
 ---
 
@@ -585,7 +584,7 @@ SPARK has ~90GB of unallocated RAM — massive headroom for growth.
 | SPARK ARM64 compatibility issues | Low | Medium | Test all services on ARM64 before deployment; some services may need x64 emulation |
 | Docker Compose cross-host networking gaps | High | High | Use Tailscale for service-to-service communication, not Docker networks |
 | Runner nohup crash before systemd fix | Medium | Medium | Document manual restart procedure; prioritize P0-1 |
-| SPARK TAC tree confusion (GPU vs CPU) | High | Low | Split TAC tree immediately (P1-4) to prevent agent misrouting |
+| SPARK TAC tree understates GPU capability (status: future on active features) | Medium | Low | Update TAC tree status tags (P1-4) to reflect operational GPU state |
 
 ---
 
@@ -597,11 +596,10 @@ SPARK has ~90GB of unallocated RAM — massive headroom for growth.
 | Roadmap W1-W5 | `pmoves/docs/AGENTS/AGNOTE4482_ROADMAP_W1-W5.md` | P7 phases, Discord classrooms, enterprise tier, A2A/P7 integration points |
 | PHI Claim Register | `pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md` | Active claims, fleet networking session results, agent handoff patterns |
 | Docker Compose Base | `pmoves/docker-compose.base.yml` | 5-tier networks (data/api/app/bus/monitoring + external), 18 volume definitions, hardening anchors |
-| SPARK TAC Tree | `pmoves/configs/tac_trees/dgx-spark.tac.yaml` | GPU aspiration vs CPU reality, NATS mesh subjects (all future), Ollama/NIM endpoints |
+| SPARK TAC Tree | `pmoves/configs/tac_trees/dgx-spark.tac.yaml` | GPU capabilities match actual hardware (GB10 Grace-Blackwell), NATS mesh subjects (status tags need updating), Ollama/NIM endpoints active |
 | K8s Base | `deploy/k8s/base/pmoves-core-deployment.yaml` | Skeletal deployment (single pod), resource limits, health probes |
 | K8s NetworkPolicies | `deploy/k8s/networkpolicies/` | 6 policies (default-deny + 5 allow), tier-matched to compose networks |
 | Services Directory | `pmoves/services/` | 70+ service folders classified into 6 deployment tiers |
-| AIPLANS Directory | `pmoves/docs/PMOVES.AIPLANS/` | Empty — no infrastructure plans exist |
 | KVM Setup Script | `deploy/provision/hostinger-kvm-setup.sh` | VPS role definitions (API Gateway, Data/Storage, Exit Node) |
 
 ---
