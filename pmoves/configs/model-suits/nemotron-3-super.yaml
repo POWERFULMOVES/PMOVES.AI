@@ -13,7 +13,7 @@ distillation_stage: model_fine_tune
 
 model_config:
   model_name: "nemotron-3-super:q4"
-  endpoint: http://pmoves-dgx-spark:11434/v1
+  endpoint: http://pmoves-dgx-spark:11434/v1  # TODO: replace pmoves-dgx-spark with actual hostname for this deployment
   api_key_env: null
   context_window: 32768
   max_output_tokens: 8192

@@ -20,7 +20,9 @@ The Distillation pipeline ([THREE_BODY_DOCTRINE.md §7](pmoves/docs/PMOVESCHIT/T
 | `model_fine_tune` | LoRA/adapter weights trained on accumulated traces | `fine_tuning` |
 | `full_distillation` | Complete config + model + context strategy for cross-agent deployment | All fields populated |
 
-Each suit profile lives in `/a0/usr/projects/pmoves_ai/pmoves/configs/model-suits/` and is **layered above** agent profiles in `/a0/usr/projects/pmoves_ai/pmoves/configs/agent-profiles/`. Agent profiles define *where* a claw runs (node affinity, NATS subjects, exec permissions). Model suits define *how* a model behaves (temperature, prompt format, fallback chain, cross-agent compatibility).
+Each suit profile lives in `pmoves/configs/model-suits/` and is **layered above** agent profiles in `pmoves/configs/agent-profiles/`. Agent profiles define *where* a claw runs (node affinity, NATS subjects, exec permissions). Model suits define *how* a model behaves (temperature, prompt format, fallback chain, cross-agent compatibility).
+
+> **Status: Design / Future Work** — Model suit files in `pmoves/configs/model-suits/` define the canonical per-model configuration schema. Runtime loading via `model_nexus.py` currently reads only the central `pmoves/config/model_nexus.yaml` registry. A future integration step will add suit discovery/merge logic to `model_nexus.py` that reads individual suit files and applies `subordinate_profile` to agent profiles. Until then, suits serve as the authoritative configuration reference and are manually applied to agent profiles.
 
 **Key principle:** Agent profiles are hardware/topology concerns. Model suits are capability/behavior concerns. They compose — a `spark_claw` agent profile can load any model suit that targets `ollama_spark`.
 
@@ -217,7 +219,7 @@ Reference: [AGNOTE_P7_PLAYGROUND.md](pmoves/docs/AGENTS/AGNOTE_P7_PLAYGROUND.md)
 
 The `pinokio_p7.pbnj_launch` field indicates whether the PBNJ Pinokio app manages the model's lifecycle. Currently all models are `false` — PBNJ manages service stacks (Agent Zero, NATS, Supabase) but not individual model pull/load cycles. This may change as PBNJ evolves to include GPU mesh management.
 
-Reference: `/a0/usr/projects/pmoves_ai/pbnj/pinokio/api/pmoves-services/pinokio.json`
+Reference: `pbnj/pinokio/api/pmoves-services/pinokio.json`
 
 ### 4.3 TAC Node Tracking
 
@@ -346,12 +348,14 @@ Only models with open weights can be fine-tuned on DGX Spark:
 Per [THREE_BODY_DOCTRINE.md §7](pmoves/docs/PMOVESCHIT/THREE_BODY_DOCTRINE.md), fine-tuning connects to EvoSwarm:
 
 ```text
-distillation.requested.v1 → EvoSwarm Controller
-                        → fitness evaluation against trace trajectories
-                        → genome evolution (learning rate, chit weight, etc.)
-                        → deployed configuration / model weights
-                        → agent.rl.model.deployed.v1
+persona.optimize.request.v1 → EvoSwarm Persona Optimizer
+                         → fitness evaluation against trace trajectories
+                         → genome evolution (learning rate, chit weight, etc.)
+                         → deployed configuration / model weights
+                         → persona.optimize.result.v1
 ```
+
+> **Status: Pending Implementation** — EvoSwarm persona optimizer uses `persona.optimize.*` subjects. The `distillation.requested.v1` and `agent.rl.model.deployed.v1` subjects shown in THREE_BODY_DOCTRINE §7 are the target architecture. Integration is stubbed: `persona_optimizer.py` line 321 marks "actual EvoSwarm integration TBD", line 477 has "TODO: Integrate actual EvoSwarm optimization loop".
 
 ---
 
