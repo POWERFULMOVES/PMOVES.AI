@@ -34,8 +34,8 @@ agent_zero:
   subordinate_profile: sidecar
   strengths:
   - coding
-   - code generation
-   - structured output
+  - code generation
+  - structured output
   - tool calling
   limitations:
   - cloud-only (no local fallback weights)

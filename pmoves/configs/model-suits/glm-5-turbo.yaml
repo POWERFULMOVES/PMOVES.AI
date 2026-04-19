@@ -13,7 +13,7 @@ distillation_stage: config_tuning
 model_config:
   model_name: glm-5-turbo
   endpoint: https://integrate.api.nvidia.com/v1
-  api_key_env: ZAI_API_KEY
+  api_key_env: Z_AI_API_KEY
   context_window: 128000
   max_output_tokens: 8192
   temperature: 0.7

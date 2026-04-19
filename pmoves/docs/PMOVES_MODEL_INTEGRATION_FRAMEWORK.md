@@ -196,6 +196,7 @@ Simultaneous fit check:
 | `sidecar` | `glm-5-turbo` (cloud) | `qwen3.6` (local) |
 | `researcher` | `glm-5.1` (cloud) | `qwen3.6` (local) |
 
+> **Note:** `researcher` profile is defined in `.a0proj/agents.json` (sidecar config), not created by this PR. It maps to GLM-5.1 via the `zai_coding` provider.
 ---
 
 ## 4. Pinokio P7 Integration
@@ -225,12 +226,14 @@ Model load/unload events flow through the TAC tree at `p7.nats.model-discovery`.
 
 | Suit | TAC Node | NATS Subject | Status |
 |------|----------|-------------|--------|
-| `qwen3.6` | `p7.nats.model-discovery` | `mesh.gpu.model.loaded.v1` | DONE |
-| `gemma4-dense` | `p7.nats.model-discovery` | `mesh.gpu.model.loaded.v1` | DONE |
-| `nemotron-3-super` | `p7.nats.model-discovery` | `mesh.gpu.model.loaded.v1` | DONE |
+| `qwen3.6` | `p7.nats.model-discovery` | `mesh.gpu.model.loaded.v1` | PLANNED |
+| `gemma4-dense` | `p7.nats.model-discovery` | `mesh.gpu.model.loaded.v1` | PLANNED |
+| `nemotron-3-super` | `p7.nats.model-discovery` | `mesh.gpu.model.loaded.v1` | PLANNED |
 | Cloud models | `null` | `null` | N/A |
 
 Reference: [pinokio-p7.tac.yaml](pmoves/configs/tac_trees/pinokio-p7.tac.yaml) §Phase 2
+
+> **Note:** PLANNED status — NATS subjects are defined in suit YAMLs but no publisher/subscriber service exists in-repo yet. Requires DGX Spark Ollama runtime + JetStream NATS bus.
 
 ---
 
