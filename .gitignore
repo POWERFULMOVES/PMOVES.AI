@@ -209,3 +209,6 @@ NUL
 # Binary artifacts in repo root only
 /*.pdf
 /*.docx
+
+# Coverage reports
+.coverage
