@@ -1,6 +1,6 @@
 # PMOVES Agent Topology & TAC Tree
 
-_v1.4.0 (60 agents) — Last updated: 2026-02-18_
+_v1.5.0 (71 agents; exact count varies per latest agent_registry.yaml scan) — Last updated: 2026-04-19_
 
 Visual topology of the PMOVES.AI agent ecosystem. All diagrams are derived from the single source of truth at `pmoves/config/agent_registry.yaml` and can be regenerated with:
 
@@ -35,9 +35,13 @@ graph TD
         archon["Archon<br/>:8091"]:::standard
     end
 
-    subgraph BOTZ_SHIP["BoTZ Ship — Agent Runtime"]
+    subgraph BOTZ_SHIP["BoTZ Ship — Agent Runtime _(legacy)_"]
         botz_gateway["BoTZ Gateway<br/>:8054"]:::standard
         gateway_agent["Gateway Agent<br/>:8100"]:::standard
+    end
+
+    subgraph CLAWZ_DISCORD["ClaWZ — Discord Agent _(active)_"]
+        clawz["ClaWZ<br/>PMOVES-ClawZ submodule"]:::standard
     end
 
     subgraph DOX_INTEL["DoX Intel — Document Intelligence"]
@@ -128,7 +132,7 @@ graph TD
 
     %% MCP / orchestration links
     agent_zero --> archon
-    agent_zero --> botz_gateway
+    agent_zero --> botz_gateway %% _(legacy — Discord now via ClaWZ)_
     agent_zero --> supaserch
     agent_zero --> deep_research
     agent_zero --> dox
@@ -136,6 +140,7 @@ graph TD
     agent_zero --> cipher_memory
     agent_zero --> evoswarm_controller
     agent_zero --> mai_ui
+    agent_zero --> clawz
     archon --> tensorzero
     botz_gateway --> gateway_agent
 
@@ -179,7 +184,8 @@ graph TD
     PMOVES --> agent_zero["Agent Zero"]:::standard
 
     agent_zero --> archon["Archon"]:::standard
-    agent_zero --> botz_gateway["BoTZ Gateway"]:::standard
+    agent_zero --> botz_gateway["BoTZ Gateway _(legacy)_"]:::standard
+    agent_zero --> clawz["ClaWZ _(active Discord)_"]:::standard
     agent_zero --> supaserch["SupaSerch"]:::standard
     agent_zero --> deep_research["DeepResearch"]:::standard
     agent_zero --> dox["DoX"]:::standard
@@ -263,6 +269,7 @@ Every registered agent mapped to its subsystem, class, type, tier, and NATS part
 | **Core** | Agent Zero | Standard | Agent/API | 6 | Mega | `agent.tool.executed.v1` | `mesh.node.announce.v1` |
 | **Archon Nexus** | Archon | Standard | Agent/LLM | 6 | Stage 2 | — | — |
 | **BoTZ Ship** | BoTZ Gateway | Standard | Agent/Worker | 6 | Stage 1 | `botz.workitem.assigned.v1`, `botz.work.available.v1` | `botz.heartbeat.v1`, `botz.register.v1`, `botz.work.claimed.v1` |
+| **ClaWZ Discord** | ClaWZ | Standard | Agent/API | 6 | Stage 1 | — | — |
 | **BoTZ Ship** | Gateway Agent | Standard | Agent/API | 6 | Stage 1 | — | — |
 | **DoX Intel** | DoX | Standard | Worker/Data | 4 | Stage 1 | — | — |
 | **Research** | SupaSerch | Standard | Agent/LLM | 6 | Stage 2 | `supaserch.result.v1` | `supaserch.request.v1` |
@@ -520,5 +527,21 @@ graph LR
 - [`AGENT_TAXONOMY_CROSS_REFERENCE.md`](./AGENT_TAXONOMY_CROSS_REFERENCE.md) — Master cross-reference hub
 - [`AGENT_RESILIENCE_PATTERNS.md`](./AGENT_RESILIENCE_PATTERNS.md) — Resilience protocol and patterns
 - [`../PMOVESCHIT/LIVING_TEMPLATE_AGENT_TAXONOMY.md`](../PMOVESCHIT/LIVING_TEMPLATE_AGENT_TAXONOMY.md) — Living template with CHIT examples
-- `pmoves/config/agent_registry.yaml` — Single source of truth (machine-readable)
 - `pmoves/tools/agent_taxonomy_helper.py` — CLI query tool (`mermaid` subcommand)
+- `pmoves/config/agent_registry.yaml` — Single source of truth (machine-readable)
+
+---
+
+## Topology Update Notes (2026-04-19)
+
+### ClaWZ — Active Discord Agent
+ClaWZ (PMOVES-ClawZ submodule) is now the **active** Discord agent, replacing the BoTZ Gateway pattern for Discord-mediated interactions. BoTZ Ship subgraphs and references are retained for historical context but marked as `_(legacy)_`.
+
+### A2A Server Topology (PR #1293)
+A2A (Agent-to-Agent) protocol is now wired into the compose stack. Agent Zero exposes an A2A endpoint for cross-agent communication. See `docker-compose.yml` and `.claude/mcp.json` for wiring details.
+
+### Sidecar Topology (PR #1299)
+Portable sidecar configuration enables Agent Zero to run as a standalone container on any device with Docker, using `host.docker.internal` for host service access. See `deploy/sidecar/` and `PMOVES_AI_CONFIG.promptinclude.md` for sidecar topology notes.
+
+### Publisher-Discord Gap
+Publisher-Discord remains **planned but not yet implemented**. It is listed in the assignment table but has no active service code. ClaWZ coding plan identifies this as a gap to close.

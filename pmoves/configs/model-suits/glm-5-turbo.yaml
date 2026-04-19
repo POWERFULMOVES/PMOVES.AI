@@ -1,0 +1,81 @@
+# GLM-5-Turbo — Cloud via Z.AI MAX Plan
+# Current Agent Zero chat model. Accessible via Z.AI API.
+# No local weights — fallback to Qwen3.6.
+#
+# Distillation: config_tuning (provider settings captured, no local fine-tune)
+# Source: Hermes Agent video (AICodeKing), YouTube Signals Analysis §2.1
+
+name: glm-5-turbo
+provider: zai
+provider_display: "Z.AI MAX Plan"
+distillation_stage: config_tuning
+
+model_config:
+  model_name: glm-5-turbo
+  # TODO: verify Z.AI base URL — may be https://open.bigmodel.cn/api/paas/v4 or custom proxy
+  endpoint: https://open.bigmodel.cn/api/paas/v4
+  api_key_env: ZAI_API_KEY
+  context_window: 128000
+  max_output_tokens: 8192
+  temperature: 0.7
+  top_p: 0.9
+
+prompt_style:
+  format: markdown
+  system_prompt_template: null
+  preferred_language: en
+  notes: >
+    GLM models respond well to structured markdown prompts.
+    No XML tag preference — keep prompts clean and direct.
+    Free tier available via Z.AI MAX plan.
+
+agent_zero:
+  role: chat
+  a0_set_prefix: A0_SET_chat_model
+  subordinate_profile: sidecar
+  strengths:
+  - coding
+  - research
+  - reasoning
+  - multi-turn dialogue
+  limitations:
+  - cloud-only (no local fallback weights)
+  - requires network connectivity
+  - free tier may have rate limits
+
+pinokio_p7:
+  discoverable: false
+  pbnj_launch: false
+  tac_node: null
+  nats_subject: null
+  notes: "Cloud API — not discoverable by P7 Agent Interpreter (no local Ollama endpoint)"
+
+local_fallback:
+  available: false
+  reason: "No local GLM weights published — use Qwen3.6 or Gemma4 dense locally"
+  fallback_model_suit: qwen3.6
+
+fine_tuning:
+  possible: false
+  reason: "No open weights available for GLM-5 series"
+
+cross_agent:
+  agent_zero: full
+  clawz: limited
+  typer: untested
+  pinokio: none
+
+metadata:
+  source: youtube_hermes_glm51
+  last_verified: 2026-04-19
+  benchmark_data:
+  - source: youtube_signals
+    notes: "Free tier available via Z.AI MAX plan"
+  - source: hermes_agent_video
+    notes: "Recommended over local models for coding/research/larger tasks"
+
+ecosystem_role: |
+  Primary chat brain for Agent Zero sidecar. Handles general reasoning,
+  coding assistance, and multi-turn conversations. Routes through Z.AI MAX
+  plan which wraps NVIDIA's hosted inference. When connectivity fails or
+  latency is unacceptable, Agent Zero falls back to qwen3.6 local suit.

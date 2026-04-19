@@ -1,6 +1,6 @@
 # PMOVES Agent Class Taxonomy
 
-_Last updated: 2026-02-18 — v1.4.0 (60 agents)_
+_Last updated: 2026-04-19 — v1.5.0 (71 agents; exact count varies per latest agent_registry.yaml scan)_
 
 This document formalizes the PMOVES agent naming and classification system as a **type system** — composable, collectible agents with classes, types, evolutions, and connections. Think Pokemon and Transformers: no matter how small, every agent has a type, a place in the hierarchy, and connections through all the layers it can touch.
 
@@ -10,7 +10,7 @@ This taxonomy is grounded in and cross-references:
 
 - [`PMOVES_UNIFIED_AGENT_TAXONOMY.md`](./PMOVES_UNIFIED_AGENT_TAXONOMY.md) — 6-layer fold model (L0–L5), 5 canonical planes
 - [`PmovesSKillZ.md`](./PmovesSKillZ.md) — Skill bundles, operator expectations
-- [`BOTZ_GATEWAY_AGENT_INTEGRATION.md`](./BOTZ_GATEWAY_AGENT_INTEGRATION.md) — BoTZ Gateway vs Gateway Agent
+- [`BOTZ_GATEWAY_AGENT_INTEGRATION.md`](./BOTZ_GATEWAY_AGENT_INTEGRATION.md) — ~~BoTZ Gateway vs Gateway Agent~~ **ARCHIVED (2026-04-19)** — see `pmoves/docs/archive/founding-strategy/`
 - [`PMOVES_HYPERDIMENSIONS_CONTROL_PLANE.md`](./PMOVES_HYPERDIMENSIONS_CONTROL_PLANE.md) — Geometry state vector, control mappings
 - [`../../.claude/context/services-catalog.md`](../../.claude/context/services-catalog.md) — Service ports, tiers, health endpoints
 - [`../../.claude/context/submodules.md`](../../.claude/context/submodules.md) — 20+ submodule catalog
@@ -108,7 +108,8 @@ Types are derived from the 7 canonical service tiers defined in `services-catalo
 | Cast TTS Gateway | Standard | Media | API | 5 |
 | Ultimate-TTS-Studio | Standard | Media | LLM | 5 |
 | TensorZero Gateway | Standard | API | LLM | 2 |
-| BoTZ Gateway | Standard | Agent | Worker | 6 |
+| BoTZ Gateway | Standard | Agent | Worker | 6 | _(legacy — archived 2026-04-19; Discord now served by ClaWZ)_ |
+| ClaWZ | Standard | Agent | API | 6 | _(active Discord agent; PMOVES-ClawZ submodule)_ |
 | Gateway Agent | Standard | Agent | API | 6 |
 | Channel Monitor | Standard | Worker | Media | 4 |
 | Cipher Memory | Specialized | Data | Agent | 1 |
@@ -118,8 +119,7 @@ Types are derived from the 7 canonical service tiers defined in `services-catalo
 | PDF Ingest | Standard | Worker | Data | 4 |
 | Presign | Utility | API | Data | 2 |
 | Render Webhook | Utility | API | Worker | 2 |
-| Publisher-Discord | Standard | Worker | API | 4 |
-| Jellyfin Bridge | Specialized | Media | Data | 5 |
+| Publisher-Discord | Standard | Worker | API | 4 | _(planned — not yet implemented; gap identified in ClaWZ coding plan)_ |
 | Mesh Agent | Standard | Agent | Data | 6 |
 | NATS | Utility | Data | API | 1 |
 | Supabase | Utility | Data | API | 1 |
@@ -185,8 +185,8 @@ From `PMOVES_UNIFIED_AGENT_TAXONOMY.md`, agents span layers L0–L5. Each agent 
 | **L1** | Orchestrators | Control-plane coordination | Agent Zero, Archon |
 | **L2** | Bus + Routing | NATS transport, gateway routing | NATS, TensorZero, Hi-RAG |
 | **L2.5** | Hyperdimensions | Geometry state visualization + control knobs | Hyperdimensions, CHIT |
-| **L3** | Swarm Intelligence | EvoSwarm, role-based packs | Swarm Attribution, BoTZ |
-| **L4** | Modal Intelligence | Text LLM, audio/TTS/STT, VLM | All LLM/Media agents |
+| **L3** | Swarm Intelligence | EvoSwarm, role-based packs | Swarm Attribution, BoTZ _(legacy)_ |
+| **L4** | Modal / LLM Routing | Embeddings, TensorZero gateway routing | Hi-RAG, TensorZero, Gemma4 (embeds text) |
 | **L5** | Memory + Safety | Persistent storage, CHIT manifests, sandboxes | Cipher, Supabase, Danger Room |
 
 ### Agent Layer Coverage Map

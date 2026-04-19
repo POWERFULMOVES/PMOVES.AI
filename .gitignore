@@ -198,6 +198,12 @@ pmoves/env.supa.runtime.bak.*
 
 # Windows
 desktop.ini
+
+# =============================================================================
+# Shell artifacts
+# =============================================================================
+Wrote
+pr_body.md
 Thumbs.db
 NUL
 
@@ -206,11 +212,13 @@ NUL
 .claude/worktrees/
 
 
-# Root artifacts (docx conversion, PDFs, temp files)
-Wrote
-Simulation*.md
-Simulation*.pdf
-Simulation*.docx
-Holographic*.md
-PMOVES.AI Provisioning Bundle*.pdf
+# Binary artifacts in repo root only
+/*.pdf
+/*.docx
+
+# Coverage reports
 .coverage
+.harness/workspace/
+.harness/offloads/
+.harness/threads/
+.a0proj/

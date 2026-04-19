@@ -1,0 +1,69 @@
+id: workstation-9850x3d-dual-r9700
+name: "Workstation — AMD Ryzen 9850X3D + dual Radeon AI Pro R9700"
+description: >
+  AMD workstation with Ryzen 9850X3D (8C / 3D V-Cache) and dual Radeon AI Pro
+  R9700 (RDNA4 gfx1201, 2x 32 GB = 64 GB total VRAM). Inference backend:
+  llama.cpp HIP via custom fork `tlee933/llama.cpp-rdna4-gfx1201` (ROCm 7.1 +
+  gfx1201 kernels NOT in stock Ollama as of 2026-04). llama-server on :8080
+  exposes OpenAI-compatible API; rocm-smi-exporter on :9835 feeds Prometheus.
+  Dual-GPU mode: --tensor-split 0.5,0.5 --split-mode row.
+hardware:
+  cpu:
+    vendor: AMD
+    model: Ryzen 9850X3D (8C / 3D V-Cache)
+    cores: 8
+    threads: 16
+    arch: amd64
+  gpus:
+    - type: amd-rdna4
+      model: Radeon AI Pro R9700
+      gpu_target: gfx1201
+      memory_gb: 32
+    - type: amd-rdna4
+      model: Radeon AI Pro R9700
+      gpu_target: gfx1201
+      memory_gb: 32
+  total_vram_gb: 64                 # 2x 32 GB
+  rocm_version: "7.1"
+  ram_gb: 128
+  storage: "NVMe SSD"
+  tags: [workstation, amd64, rdna4, gfx1201, dual-gpu]
+inference_backend: "llama.cpp-hip"
+inference_server:
+  name: llama-server
+  port: 8080                        # OpenAI-compatible API
+  fork: "tlee933/llama.cpp-rdna4-gfx1201"
+  notes: "Stock Ollama lacks gfx1201 kernels — must use this fork."
+dual_gpu_flags:
+  tensor_split: "0.5,0.5"
+  split_mode: "row"
+metrics:
+  rocm_smi_exporter_port: 9835      # Prometheus scrape target
+compose_overrides:
+  - docker-compose.rocm.override.yml
+model_bundles:
+  - gemma-4-31b-q4km              # Single-GPU fit
+  - gemma-4-26b-a4b-dual          # Dual-GPU row-split
+services:
+  - mesh-agent                    # Node announcer (NATS every 15s)
+  - fleet-agent                   # Fleet watcher / audit participant
+  - llama-server                  # OpenAI-compatible inference endpoint (:8080)
+  - rocm-smi-exporter             # Prometheus GPU metrics (:9835)
+mcp:
+  - docker
+  - host
+messaging:
+  telegram: optional
+  discord: true
+  whatsapp: false
+  webrtc: true
+tailscale:
+  role: gpu-node
+  hostname_pattern: "pmoves-9850x3d-r9700"
+notes:
+  - "Dual R9700 RDNA4 — 2x 32 GB (64 GB total). Row-split mode for tensor parallel: --tensor-split 0.5,0.5 --split-mode row."
+  - "Stock Ollama ROCm v6 libs DO NOT include gfx1201 kernels. Canonical runtime is llama.cpp HIP backend built against ROCm 7.1+."
+  - "Custom fork: tlee933/llama.cpp-rdna4-gfx1201."
+  - "NO FP8/NVFP4 kernel support on gfx1201 — Nemotron-3-Super NVFP4 NOT viable here (Spark-only)."
+  - "Phase C: all TensorZero variants weight=0.0 pending 48h soak + load test."
+  - "Target models: Gemma 4 31B Q4_K_M (single-GPU), Gemma 4 26B-A4B MoE (dual-GPU row-split)."

@@ -1,3 +1,8 @@
+> **SUPERSEDED (2026-04-19)** — Archived to `pmoves/docs/archive/founding-strategy/`. 
+> Reason: ElizaOS/Venice.ai era strategy replaced by ClaWZ/OpenClaw architecture. 
+> See: `pmoves/docs/AGENTS/AGNOTE4482.md` for current governance.
+> Discord bot functionality now served by ClaWZ (PMOVES-ClawZ submodule).
+
 # PMOVES Edition: Comprehensive Discord Bot Architecture
 
 **The PMOVES Edition Discord bot represents a sophisticated multi-agent AI system** that merges ElizaOS with Venice.ai Pro, implements Model Context Protocol (MCP) for bidirectional tool integration, orchestrates creative workflows through n8n automation, and leverages Supabase vector storage for intelligent RAG-powered conversations. This production-ready architecture supports three distinct server contexts with isolated behaviors while maintaining unified codebase deployment from Windows development to Linux VPS production.

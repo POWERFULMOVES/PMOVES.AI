@@ -1,3 +1,8 @@
+> **SUPERSEDED (2026-04-19)** — Archived to `pmoves/docs/archive/founding-strategy/`. 
+> Reason: ElizaOS/Venice.ai era strategy replaced by ClaWZ/OpenClaw architecture. 
+> See: `pmoves/docs/AGENTS/AGNOTE4482.md` for current governance.
+> Discord bot functionality now served by ClaWZ (PMOVES-ClawZ submodule).
+
 # **The PMOVES-BoTZ Strategic Architecture: A Comprehensive Guide to Agentic Engineering**
 
 ## **Executive Summary: The Transition to Agentic Systems**

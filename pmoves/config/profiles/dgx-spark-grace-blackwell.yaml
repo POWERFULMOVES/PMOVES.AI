@@ -1,0 +1,53 @@
+id: dgx-spark-grace-blackwell
+name: "NVIDIA DGX Spark (GB10 Grace-Blackwell)"
+description: >
+  NVIDIA DGX Spark workstation — ARM64 node with GB10 Grace-Blackwell SoC.
+  20-core Arm CPU (10x Cortex-X925 + 10x Cortex-A725) + Blackwell GPU sharing
+  128 GB unified LPDDR5X memory (SM_110). Stock DGX OS provides CUDA-on-ARM.
+  Target hardware for 120B-class models at NVFP4/FP8 quantization — unified
+  memory eliminates VRAM copies. Inference backend: Ollama (ARM64 CUDA build).
+hardware:
+  cpu:
+    vendor: NVIDIA
+    model: "GB10 (20-core Arm - 10x Cortex-X925 + 10x Cortex-A725)"
+    cores: 20
+    threads: 20
+    arch: arm64
+  gpu:
+    type: nvidia-blackwell
+    models: ["GB10 Blackwell (integrated)"]
+    memory_gb: 128                # Unified with CPU (LPDDR5X)
+    compute_capability: "11.0"    # SM_110 Blackwell
+    cuda_version: "13.0"
+  ram_gb: 128                     # Unified memory shared with GPU
+  unified_memory_gb: 128
+  storage: "NVMe SSD"
+  tags: [workstation, dgx, arm64, grace-blackwell, sm_110, unified-memory]
+compose_overrides:
+  - docker-compose.arm64.override.yml
+model_bundles:
+  - gemma-4-31b-fp16            # Spark flagship multimodal
+  - nemotron-3-super-nvfp4      # NVIDIA Nemotron-3-Super 120B-A12B NVFP4 (OML license)
+  - gemma-4-26b-a4b             # Gemma 4 26B-A4B MoE
+services:
+  - mesh-agent                  # Node announcer (NATS every 15s)
+  - fleet-agent                 # Fleet watcher / audit participant
+  - ollama                      # ARM64 Ollama with CUDA-on-ARM
+mcp:
+  - docker
+  - host
+messaging:
+  telegram: optional
+  discord: true
+  whatsapp: false
+  webrtc: true
+tailscale:
+  role: gpu-node
+  hostname_pattern: "pmoves-gb10-spark"
+notes:
+  - "Unified 128 GB LPDDR5X — GPU and CPU share the pool. Fits 120B-class models at NVFP4 without VRAM copies."
+  - "ARM64 platform — requires arm64 image variants (Phase D multi-arch CI work)."
+  - "Docker must use --runtime nvidia. Set in /etc/docker/daemon.json."
+  - "Inference backend: Ollama (ARM64 build with CUDA-on-ARM, stock DGX OS)."
+  - "Phase C: all TensorZero variants weight=0.0 pending 48h soak + load test."
+  - "Target models: Gemma 4 31B FP16, Gemma 4 26B-A4B, Nemotron-3-Super 120B-A12B NVFP4 (HF: nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-NVFP4)."
