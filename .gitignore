@@ -206,11 +206,9 @@ NUL
 .claude/worktrees/
 
 
-# Root artifacts (docx conversion, PDFs, temp files)
+# Root artifacts (shell redirect, docx conversion, PDFs, PR templates)
 Wrote
-Simulation*.md
-Simulation*.pdf
-Simulation*.docx
-Holographic*.md
-PMOVES.AI Provisioning Bundle*.pdf
+*.pdf
+*.docx
+pr_body.md
 .coverage
