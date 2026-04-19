@@ -1835,7 +1835,11 @@ services:
     - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
     - YT_NATS_ENABLE=${YT_NATS_ENABLE:-true}
     - HIRAG_URL=${HIRAG_URL:-http://hi-rag-gateway-v2:8086}
-    - YT_PLAYER_CLIENT=${YT_PLAYER_CLIENT:-android}
+    # Multi-client rotation (Phase 9C): yt-dlp tries clients in order until one succeeds.
+    # 'web' first to use cookies + PO token (highest auth fidelity), then mobile fallbacks
+    # that skip signature checks. 'tv_embedded' last as a known-good for age/region gates.
+    - YT_PLAYER_CLIENT=${YT_PLAYER_CLIENT:-web,mweb,android,ios,tv_embedded}
+    - YT_ENABLE_PO_TOKEN=${YT_ENABLE_PO_TOKEN:-true}
     - YT_USER_AGENT=${YT_USER_AGENT:-Mozilla/5.0 (Macintosh; Intel Mac OS X 14_6) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.6 Safari/605.1.15}
     - YT_COOKIES=${YT_COOKIES:-/app/config/cookies/darkxside.youtube.cookies.txt}
     - BGUTIL_HTTP_BASE_URL=${BGUTIL_HTTP_BASE_URL:-http://bgutil-pot-provider:4416}

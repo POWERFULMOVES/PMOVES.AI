@@ -89,7 +89,15 @@ services:
           cpus: '0.5'
           memory: 256M
 
-  # Override pmoves-yt to mount the shared cookie volume (read-only)
+  # Override pmoves-yt to mount the shared cookie volume (read-only).
+  # Path alignment: yt-cookie-writer outputs /cookies/yt-cookies.txt inside its
+  # own container; the same volume mounted here exposes that file at
+  # /app/config/cookies/yt-cookies.txt. YT_COOKIES is overridden to point at
+  # this location so the base compose default
+  # (/app/config/cookies/darkxside.youtube.cookies.txt — placeholder filename)
+  # does not silently shadow the writer's output.
   pmoves-yt:
+    environment:
+      - YT_COOKIES=/app/config/cookies/yt-cookies.txt
     volumes:
       - yt-cookies-vol:/app/config/cookies:ro
