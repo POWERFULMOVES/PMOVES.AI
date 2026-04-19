@@ -22,6 +22,10 @@ AGNOTE4482 prospectus updates should now use one shared signoff gate:
 
 Each participating agent signs only for the sections they actually reviewed or executed. Merge readiness is a multi-agent decision, not a single-agent vibe check.
 
+### P7 — Room-Aware Stage Manager
+
+Pinokio 7 (P7) is the PMOVES runtime launcher and fleet orchestrator. In the rooms-on-a-stage model, P7 is not just a process spawner — it is the **room-aware stage manager**: it knows which rooms exist (via `pmoves/config/rooms/catalog.json`), selects the appropriate room profile for a given workload, and manages the transition between rehearsal → live → review → archive states. P7's NATS subjects (`p7.nats.launch`, `p7.nats.session`) are the control plane for room entry and lifecycle. When agents claim work via AGNOTE4482, P7 is the context they launch into.
+
 ## Elder-Context Pattern
 `LADY P` is the connector persona for pre-flight context:
 - Role: elder guide that gives reminders and smooth context before an agent starts execution.

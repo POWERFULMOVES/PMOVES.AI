@@ -14,8 +14,8 @@ GRAPHITI_MARK: `AGNOTE4482::CLAWZ::GAP_REPORT`
 - **PMOVES fork reality**: `POWERFULMOVES/PMOVES-ClawZ` is a fork of `openclaw/openclaw`, last pushed on **March 25, 2026**, with default branch `main`.
 - **Fork release reality**: the PMOVES fork currently publishes **no GitHub releases or tags** of its own.
 - **Hardened branch reality**: `PMOVES.AI-Edition-Hardened` points at commit `85b267aae9aa95b6da2f6a000ec247dbdcff5351`, an upstream-derived commit from **February 15, 2026**.
-- **Current PMOVES gitlink reality**: the root PMOVES.AI repo is pinned to submodule commit `cfb4e3a936262315948628d2da32d7158c4fbb30`.
-- **Important consequence**: that gitlink SHA is **not resolvable** in the PMOVES fork or upstream on GitHub, so the current PMOVES pin is not just stale; it is orphaned.
+- **Current PMOVES gitlink reality**: the root PMOVES.AI repo is pinned to submodule commit `f05fd3f547d3b061717f14582d92f14071f9caaa` (resolved — see Resolution Update below).
+- **Important note**: the previous orphaned pin (`cfb4e3a93`) was resolved on 2026-04-18.
 
 ---
 
@@ -25,29 +25,28 @@ GRAPHITI_MARK: `AGNOTE4482::CLAWZ::GAP_REPORT`
   - ahead by `0`
   - behind by `12438`
 - `openclaw/openclaw:main -> POWERFULMOVES/PMOVES-ClawZ:main`
-  - ahead by `0`
+  - ahead by `6` (PMOVES-specific commits: NATS bridge, Nemotron catalog, compose wiring, integration dossier, review fixes, merge)
   - behind by `1092`
 - `POWERFULMOVES/PMOVES-ClawZ:PMOVES.AI-Edition-Hardened -> POWERFULMOVES/PMOVES-ClawZ:main`
   - fork `main` is ahead by `11346`
   - behind by `0`
 
-**Interpretation:** both fork branches are behind upstream, but `main` is dramatically newer than `PMOVES.AI-Edition-Hardened`. The hardened branch does not currently look like a maintained PMOVES overlay line.
+**Interpretation:** `main` carries 6 PMOVES-specific commits ahead of upstream (NATS bridge, Nemotron catalog, compose wiring, integration dossier, review fixes, merge) but remains 1092 behind upstream `main`. The hardened branch is dramatically stale (12438 behind) and does not look like a maintained PMOVES overlay line.
 
 ---
 
 ## What This Means
 
-### 1. There is no meaningful PMOVES-specific ClaWz divergence yet
+### 1. There is now minimal PMOVES-specific ClaWz divergence
 
-- both fork branches compare as pure upstream ancestors
-- neither branch is ahead of upstream `main`
-- the current PMOVES story is mostly branch naming and pin drift, not a durable PMOVES overlay pack
+- fork `main` is 6 commits ahead of upstream — these are real PMOVES overlays (NATS bridge, NVIDIA catalog, compose wiring)
+- the current PMOVES story is still mostly branch naming and upstream drift, but the 6 commits prove the fork-overlay pattern works
 
-### 2. The root pin policy needs repair before more suit growth
+### 2. The root pin has been repaired
 
-- the root gitlink points to an orphaned SHA
-- that makes the current root state hard to reason about, hard to reproduce, and hard to promote safely
-- before more ClaW/P7 room-stage suit work, PMOVES should pin to a real, reviewable branch head
+- ~~the root gitlink points to an orphaned SHA~~ — **RESOLVED**: root now pins to `f05fd3f547` (see Resolution Update below)
+- the orphaned-pin blocker that previously made root state unreproducible is closed
+- future ClaW/P7 room-stage suit work can proceed from a known-good pin
 
 ### 3. The fork still matters
 
