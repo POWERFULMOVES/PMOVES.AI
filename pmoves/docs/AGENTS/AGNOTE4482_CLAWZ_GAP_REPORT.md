@@ -14,8 +14,8 @@ GRAPHITI_MARK: `AGNOTE4482::CLAWZ::GAP_REPORT`
 - **PMOVES fork reality**: `POWERFULMOVES/PMOVES-ClawZ` is a fork of `openclaw/openclaw`, last pushed on **March 25, 2026**, with default branch `main`.
 - **Fork release reality**: the PMOVES fork currently publishes **no GitHub releases or tags** of its own.
 - **Hardened branch reality**: `PMOVES.AI-Edition-Hardened` points at commit `85b267aae9aa95b6da2f6a000ec247dbdcff5351`, an upstream-derived commit from **February 15, 2026**.
-- **Current PMOVES gitlink reality**: the root PMOVES.AI repo is pinned to submodule commit `cfb4e3a936262315948628d2da32d7158c4fbb30`.
-- **Important consequence**: that gitlink SHA is **not resolvable** in the PMOVES fork or upstream on GitHub, so the current PMOVES pin is not just stale; it is orphaned.
+- **Current PMOVES gitlink reality**: the root PMOVES.AI repo is pinned to submodule commit `f05fd3f547d3b061717f14582d92f14071f9caaa` (resolved — see Resolution Update below).
+- **Important note**: the previous orphaned pin (`cfb4e3a93`) was resolved on 2026-04-18.
 
 ---
 
@@ -25,7 +25,7 @@ GRAPHITI_MARK: `AGNOTE4482::CLAWZ::GAP_REPORT`
   - ahead by `0`
   - behind by `12438`
 - `openclaw/openclaw:main -> POWERFULMOVES/PMOVES-ClawZ:main`
-  - ahead by `0`
+  - ahead by `6` (PMOVES-specific commits: NATS bridge, Nemotron catalog, compose wiring, integration dossier, review fixes, merge)
   - behind by `1092`
 - `POWERFULMOVES/PMOVES-ClawZ:PMOVES.AI-Edition-Hardened -> POWERFULMOVES/PMOVES-ClawZ:main`
   - fork `main` is ahead by `11346`

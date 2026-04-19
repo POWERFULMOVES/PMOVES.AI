@@ -553,7 +553,7 @@ All resolved. No blockers.
 | 3 | W6-P1: Health/Wealth Docker wiring | P1 | NATS + /healthz + /metrics |
 | 4 | Jetson Orin onboarding | P2 | Via RustDesk |
 | 5 | NATS leaf node to 5090 | P2 | Flute NATS=connected proves bus healthy |
-| 6 | ~~ClaWz branch/pin repair plan~~ | ~~P2~~ | RESOLVED — synced at `c050805cc`, not orphaned. ClawZ is Pre-Stage, not broken. |
+| 6 | ~~ClaWz branch/pin repair plan~~ | ~~P2~~ | RESOLVED — synced at `f05fd3f547`, not orphaned. ClawZ is Pre-Stage, not broken. |
 | 7 | ~~ClaWz profile-id normalization~~ | ~~P2~~ | RESOLVED — `workstation_5090` alias created by 4090-claude (see `pmoves/config/profiles/workstation_5090.yaml`) |
 | 8 | n8n runner investigation | P1 | `N8N_RUNNERS_ENABLED` already defaults to `true` in docker-compose — check n8n UI workflow activation, auth token, version |
 
@@ -561,7 +561,7 @@ All resolved. No blockers.
 | # | Task | Priority | Notes |
 |---|------|----------|-------|
 | 1 | ~~Publish the Agent Zero `v1.3` gap report~~ | ~~P0~~ | DONE — gap report published. Sync decision (accept pin vs pull v1.3) is a planning call, not a code blocker. |
-| 2 | ~~Publish the PMOVES-ClawZ gap report~~ | ~~P0~~ | DONE — gap report published. ClawZ synced at `c050805cc`, Pre-Stage, not orphaned. |
+| 2 | ~~Publish the PMOVES-ClawZ gap report~~ | ~~P0~~ | DONE — gap report published. ClawZ synced at `f05fd3f547`, Pre-Stage, not orphaned. |
 | 3 | Align AGNOTE/P7/website language around rooms + stage | **P0** | Make the prospectus consistent — rooms are now shipped (#1136-#1143) |
 | 4 | Close Supabase → Agent Zero → Publisher → Discord activation loop | **P0** | Validate `approval_poller.json` + `echo_publisher.json`; n8n runners already enabled — investigate UI activation state |
 | 5 | Pick canonical Discord publish lane | **P0** | Decide between `publisher-discord` NATS subscriber and n8n webhook relay; demote the other |
