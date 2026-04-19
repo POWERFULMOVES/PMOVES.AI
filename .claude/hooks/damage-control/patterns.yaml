@@ -996,6 +996,12 @@ chitSafePaths:
   - "supabase/migrations/20260417"
   - "mk/yt-cookies.mk"
   - "tools/yt_oauth_flow.py"
+  # Submodule deployment profile templates — contain example values, NOT real secrets
+  # These are deployment templates (some with file extension matching zero-access) inside submodule repos
+  - "PMOVES-Tailscale/deploy/profiles/"
+  - "PMOVES-Tailscale/docker/"
+  - "PMOVES-Tailscale/cloudflare/"
+  - "PMOVES-Tailscale/headscale/"
 
 # ---------------------------------------------------------------------------
 # PMOVES.AI - GIT SUBMODULES
