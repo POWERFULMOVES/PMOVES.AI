@@ -136,12 +136,12 @@
           "key": "SUPABASE_REALTIME_ENC_KEY",
           "file": "pmoves/env.tier-supabase",
           "prompt": "Supabase Realtime DB encryption key",
-          "help": "Used by supabase-realtime for DB_ENC_KEY. Generate: openssl rand -hex 16",
+          "help": "Used by supabase-realtime for DB_ENC_KEY. Must be exactly 16 characters (AES-128-ECB raw key, NOT hex-decoded by Realtime). The default 'supabaserealtime' is 16 chars; we generate a stronger random 16-char urlsafe value.",
           "required": true,
           "sensitive": true,
           "generate": {
-            "type": "random_hex",
-            "length": 32
+            "type": "random_urlsafe",
+            "length": 16
           }
         }
       ]
