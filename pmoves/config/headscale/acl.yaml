@@ -103,10 +103,17 @@ acls:
 
   # ── Tag-Level ACLs: infrastructure nodes ─────────────────
 
-  # Exit node: full internet egress for the tailnet
+  # Exit node egress: tailnet clients authorized to route via exit nodes
+  # src = client principals who USE the exit node (not tag:exit itself)
+  # dst = autogroup:internet:* = public IP ranges advertised by exit nodes
   - action: accept
-    src: [tag:exit]
-    dst: [autogroup:internet:*]
+    src:
+      - group:admin
+      - group:support
+      - group:infrastructure
+      - group:users
+    dst:
+      - "autogroup:internet:*"
 
   # PVE: Proxmox VE web UI — admin-only access
   - action: accept
