@@ -64,6 +64,7 @@ jobs:
             "pmoves/supabase/migrations/20260115_model_registry.sql"
             "pmoves/supabase/migrations/20250204000000_channel_monitor_tables.sql"
             "pmoves/supabase/migrations/20260218_model_spotlight.sql"
+            "pmoves/supabase/migrations/20260420000000_rls_hardening.sql"
           )
           echo "Scanning ${#files[@]} SQL files for 'USING true' or 'to anon'..."
           # Fail on blanket USING true or explicit anon grants outside dev

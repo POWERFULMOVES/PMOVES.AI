@@ -33,6 +33,14 @@ logger = logging.getLogger("botz-gateway")
 NATS_URL = os.getenv("NATS_URL", "nats://nats:pmoves@nats:4222")
 SUPABASE_URL = os.getenv("SUPABASE_URL", "http://supabase-kong:8000")
 SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
+
+# Fail-closed: refuse to start without a valid service role key (C-04)
+if not SUPABASE_KEY:
+    raise RuntimeError(
+        "SUPABASE_SERVICE_ROLE_KEY is not set or empty. "
+        "BoTZ Gateway cannot start without a valid service role key. "
+        "Set SUPABASE_SERVICE_ROLE_KEY in the environment and restart."
+    )
 TENSORZERO_URL = os.getenv("TENSORZERO_URL", "http://tensorzero:3030")
 HEARTBEAT_INTERVAL = int(os.getenv("BOTZ_HEARTBEAT_INTERVAL", "30"))
 STALE_THRESHOLD_MINUTES = int(os.getenv("BOTZ_STALE_THRESHOLD", "5"))
