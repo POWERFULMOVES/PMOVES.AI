@@ -204,7 +204,17 @@ def _build_auth_url(client_id: str, redirect_uri: str, state: str) -> str:
 
 
 def _exchange_code(code: str, client_id: str, client_secret: str, redirect_uri: str) -> dict:
-    """Exchange authorization code for tokens."""
+    """Exchange authorization code for tokens.
+
+    Uses stdlib urllib for the token exchange because some Windows + miniconda
+    httpx installs intermittently fail with `getaddrinfo failed` even when the
+    OS resolver succeeds (observed during Phase 9C bootstrap). urllib uses the
+    OS resolver path directly and avoids httpx's connection-pool DNS cache.
+    """
+    import json as _json
+    import urllib.parse as _urlparse
+    import urllib.request as _urlreq
+
     payload = {
         "code": code,
         "client_id": client_id,
@@ -212,9 +222,17 @@ def _exchange_code(code: str, client_id: str, client_secret: str, redirect_uri: 
         "redirect_uri": redirect_uri,
         "grant_type": "authorization_code",
     }
-    resp = httpx.post(GOOGLE_TOKEN_URL, data=payload, timeout=30)
-    resp.raise_for_status()
-    return resp.json()
+    data = _urlparse.urlencode(payload).encode("ascii")
+    req = _urlreq.Request(
+        GOOGLE_TOKEN_URL,
+        data=data,
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+        method="POST",
+    )
+    with _urlreq.urlopen(req, timeout=30) as resp:
+        if resp.status >= 400:
+            raise RuntimeError(f"token exchange HTTP {resp.status}: {resp.read()[:200]}")
+        return _json.loads(resp.read().decode("utf-8"))
 
 
 # ---------------------------------------------------------------------------
