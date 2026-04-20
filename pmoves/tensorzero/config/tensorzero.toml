@@ -9,9 +9,14 @@
 enabled = true
 async_writes = true
 
-# OTLP export — re-enabled P7 P0.2 (OTel collector in docker-compose.tracing.yml)
+# OTLP export — disabled by default so the gateway boots without the tracing
+# overlay. P7 P0.2 enabled this against docker-compose.tracing.yml, but the
+# tracing stack isn't part of the default bring-up; TensorZero 2026.1.8 panics
+# with "invalid URI . Reason empty string" when enabled=true and the
+# OTEL_EXPORTER_OTLP_TRACES_ENDPOINT env var is unset. Re-enable together
+# with the tracing overlay and a populated endpoint.
 [gateway.export.otlp.traces]
-enabled = true
+enabled = false
 format = "opentelemetry"
 
 # --- Chat models: Agent Zero orchestration (local GPU and edge) ------------
