@@ -60,6 +60,10 @@ def generate_value(spec: Optional[Dict]) -> Optional[str]:
         if length % 2 != 0:
             length += 1
         return secrets.token_hex(length // 2)
+    return _generate_token_or_passphrase(spec, gen_type)
+
+
+def _generate_token_or_passphrase(spec: Dict, gen_type: str) -> Optional[str]:
     if gen_type == "random_urlsafe":
         length = int(spec.get("length", 32))
         token = secrets.token_urlsafe(length)
@@ -74,6 +78,30 @@ def generate_value(spec: Optional[Dict]) -> Optional[str]:
     return None
 
 
+def value_matches_spec(value: Optional[str], spec: Optional[Dict]) -> bool:
+    """Return True if `value` looks like a valid output of `spec`.
+
+    Used to detect corrupted previously-generated values (non-hex chars in a
+    random_hex slot, wrong length, etc.). When False, the bootstrap path
+    treats the slot as empty and regenerates — so a single `make env-setup
+    ARGS=--accept-defaults` self-heals VAULT_ENC_KEY / PG_META_CRYPTO_KEY /
+    LOGFLARE_*_TOKEN drift without operator intervention.
+    """
+    if not value or not spec or "type" not in spec:
+        return True  # nothing to check against
+    gen_type = spec["type"]
+    if gen_type == "random_hex":
+        length = int(spec.get("length", 32))
+        if len(value) != length:
+            return False
+        return all(c in string.hexdigits for c in value)
+    # Intentionally lax for random_urlsafe: some legacy values were generated
+    # via `openssl rand -base64 | tr -d '='` which includes `+` and `/` (not
+    # strictly url-safe). Regenerating those would rotate working n8n / wger /
+    # jellyfin passwords for no security benefit. Only hex values get the
+    # strict character-set check because their downstream consumers (Fernet /
+    # vault keys) actually require hex.
+    return True
 def normalize_bool(value: str) -> str:
     truthy = {"true", "t", "yes", "y", "1"}
     falsy = {"false", "f", "no", "n", "0"}
@@ -397,6 +425,14 @@ def bootstrap(registry: Dict, services: List[Dict], accept_defaults: bool) -> in
             env = get_env(var["file"])
             key = var["key"]
             existing = env.get(key)
+            # Detect corrupted previously-generated values (e.g. non-hex chars in
+            # a random_hex slot). When the existing value fails the generator's
+            # format check, treat the slot as empty so the regen path fires.
+            gen_spec = var.get("generate")
+            if existing and gen_spec and not value_matches_spec(existing, gen_spec):
+                _warn(f"{key} in {var['file']} fails {gen_spec.get('type')} format check — regenerating")
+                existing = None
+                env.set(key, "")
             inherited = None if existing not in (None, "") else resolve_inherit(var)
             default = existing
             if default in (None, "") and inherited not in (None, ""):
@@ -404,8 +440,8 @@ def bootstrap(registry: Dict, services: List[Dict], accept_defaults: bool) -> in
             if default in (None, ""):
                 default = var.get("default")
             generated = None
-            if (existing in (None, "")) and var.get("generate"):
-                generated = generate_value(var.get("generate"))
+            if (existing in (None, "")) and gen_spec:
+                generated = generate_value(gen_spec)
                 if default in (None, "") and generated:
                     default = generated
 
