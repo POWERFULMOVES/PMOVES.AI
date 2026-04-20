@@ -287,7 +287,7 @@ EOF
 Description=rocm-smi exporter HTTP responder
 
 [Service]
-ExecStart=/bin/sh -c 'printf "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\n"; cat /run/rocm-smi-metrics.prom 2>/dev/null || true'
+ExecStart=/bin/sh -c 'body=$(cat /run/rocm-smi-metrics.prom 2>/dev/null || printf ""); printf "HTTP/1.1 200 OK\r\nContent-Type: text/plain; version=0.0.4\r\nContent-Length: %d\r\nConnection: close\r\n\r\n%s" "${#body}" "$body"'
 StandardInput=socket
 StandardOutput=socket
 EOF

@@ -393,7 +393,7 @@ routing = ["ollama_spark"]
 
 [models.gemma_4_31b_spark.providers.ollama_spark]
 type = "openai"
-api_base = "http://pmoves-dgx-spark:11434/v1"
+api_base = "http://pmoves-gb10-spark:11434/v1"
 model_name = "gemma4:31b"
 api_key_location = "none"
 
@@ -403,7 +403,7 @@ routing = ["ollama_spark"]
 
 [models.gemma_4_26b_a4b_spark.providers.ollama_spark]
 type = "openai"
-api_base = "http://pmoves-dgx-spark:11434/v1"
+api_base = "http://pmoves-gb10-spark:11434/v1"
 # Ollama publishes the 26B A4B MoE variant as the default ":26b" tag.
 # Verified via registry.ollama.ai manifest API (":26b-a4b" returns 404).
 model_name = "gemma4:26b"
@@ -415,7 +415,7 @@ routing = ["ollama_spark"]
 
 [models.nemotron_super_49b_spark.providers.ollama_spark]
 type = "openai"
-api_base = "http://pmoves-dgx-spark:11434/v1"
+api_base = "http://pmoves-gb10-spark:11434/v1"
 model_name = "nemotron:49b"
 api_key_location = "none"
 
@@ -430,7 +430,7 @@ routing = ["llamacpp_rocm"]
 
 [models.gemma_4_31b_rocm.providers.llamacpp_rocm]
 type = "openai"
-api_base = "http://pmoves-rdna4:8080/v1"
+api_base = "http://pmoves-9850x3d-r9700:8080/v1"
 model_name = "gemma-4-31b-it-Q4_K_M.gguf"
 api_key_location = "none"
 
@@ -440,7 +440,7 @@ routing = ["llamacpp_rocm"]
 
 [models.gemma_4_26b_a4b_rocm.providers.llamacpp_rocm]
 type = "openai"
-api_base = "http://pmoves-rdna4:8080/v1"
+api_base = "http://pmoves-9850x3d-r9700:8080/v1"
 model_name = "gemma-4-26B-A4B-it-Q4_K_M.gguf"
 api_key_location = "none"
 
