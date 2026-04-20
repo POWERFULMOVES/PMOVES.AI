@@ -98,15 +98,16 @@ AI workloads with short turn-taking patterns).
 | Year | Users  | Peak concurrent | Fleet cap   | Gap                               |
 |------|-------:|----------------:|-------------|-----------------------------------|
 | Y1   |    500 |              50 | 90-150      | 2-3x headroom                     |
-| Y2   |  2,000 |             200 | 90-150      | **break-even** — optimize         |
+| Y2   |  2,000 |             200 | 90-150      | **1.3-2.2x underprovisioned**     |
 | Y3   |  8,000 |             800 | 90-150      | **6-9x underprovisioned**         |
 | Y4   | 25,000 |           2,500 | 90-150      | ~20x underprovisioned             |
 | Y5   | 80,000 |           8,000 | 90-150      | ~60x underprovisioned             |
 
 **Read:**
 
-- Fleet carries **Y1 comfortably** and **Y2 at break-even** with the new
-  hardware landed.
+- Fleet carries **Y1 comfortably** but **Y2 is already underprovisioned
+  by 1.3-2.2×** at the 10% concurrency assumption — optimization and/or
+  capacity adds are required before UNFCU pilot goes live.
 - **Y3 is the scale cliff.** The fix is not "buy more Z890s." The fix is
   Proxmox scale-out + cloud GPU burst + community-edge offload (pushing
   inference toward the community-operator Pi/Jetson nodes that are
@@ -125,11 +126,16 @@ budget yields ~100 concurrent users per KVM.
 
 | Year | Exit users | KVMs needed | VPS cost    | Revenue @ $5/user/mo |
 |------|-----------:|------------:|-------------|----------------------:|
-| Y1   |         50 |           1 | $5-10       |              $2.5K/mo |
-| Y2   |        200 |           2 | $10-20      |               $10K/mo |
-| Y3   |        800 |           8 | $40-80      |               $40K/mo |
-| Y4   |      2,500 |          25 | $125-250    |              $125K/mo |
-| Y5   |      8,000 |          80 | $400-800    |              $400K/mo |
+| Y1   |         50 |           1 | $5-10       |              $250/mo  |
+| Y2   |        200 |           2 | $10-20      |               $1K/mo  |
+| Y3   |        800 |           8 | $40-80      |               $4K/mo  |
+| Y4   |      2,500 |          25 | $125-250    |            $12.5K/mo  |
+| Y5   |      8,000 |          80 | $400-800    |              $40K/mo  |
+
+Revenue assumes pure $5/user/mo pricing. A premium "fast-lane" SKU at
+$25-50/user/mo (EU/UN low-latency or burst-bandwidth tier) would 5-10×
+these numbers and change the unit-economics story materially. Revisit
+pricing architecture before committing to the ladder above.
 
 **Hard architectural rule:** Do **NOT** colocate exit-node user traffic
 with the PMOVES API traffic. KVM4-1 currently runs both the API gateway
@@ -146,7 +152,7 @@ These must land BEFORE UNFCU Y2 pilot goes live, not after.
 | Problem                                                | Fix                                                                                                          |
 |--------------------------------------------------------|--------------------------------------------------------------------------------------------------------------|
 | KVM4-2 over-subscribed (~29 GB declared on 16 GB box)  | Upgrade to Hostinger 32 GB tier **OR** split Supabase to new VPS **OR** migrate data tier to on-prem         |
-| No concurrency caps on Agent Zero                      | Add `AGENT_ZERO_MAX_WORKERS=4` env var (or tuned value from measured footprint)                               |
+| No concurrency caps on Agent Zero                      | **Pending implementation** — Agent Zero's current entrypoint calls `uvicorn.run()` without reading a worker cap env var. Implement via `uvicorn --limit-concurrency=N` CLI flag OR add an explicit worker pool in the A0 FastAPI app; then document the tuned value here. Do NOT add unused env vars as "fixes". |
 | YT egress + future user exit traffic share KVM4-1      | Split tier **BEFORE** user product launches                                                                  |
 | No Agent Zero horizontal scaling pattern               | Proxmox + VM templates = tenant-per-stack                                                                    |
 | No load/capacity baseline                              | Add `k6` or `vegeta` smoke: 100 req/s × 10 min against Hi-RAG + A0 MCP                                       |
@@ -212,16 +218,51 @@ No load test exists today. Add one of:
 
 ```bash
 # Install (one-off, host-side)
-choco install k6   # Windows
-# or: brew install k6
-sudo apt install -y k6  # Debian/Ubuntu (Hostinger KVMs)
+choco install k6                                        # Windows
+brew install k6                                         # macOS
+sudo apt install -y k6                                  # Debian/Ubuntu (xk6 repo)
+# Upstream docs (distro-agnostic): https://k6.io/docs/get-started/installation/
 
-# 100 req/s × 10 min against Hi-RAG v2
-k6 run --vus 20 --duration 10m - <<'EOF'
+# 100 req/s × 10 min against Hi-RAG v2 (constant-arrival-rate = guaranteed RPS)
+k6 run - <<'EOF'
 import http from 'k6/http';
+export const options = {
+  scenarios: {
+    hirag_steady: {
+      executor: 'constant-arrival-rate',
+      rate: 100,               // 100 iterations per timeUnit
+      timeUnit: '1s',
+      duration: '10m',
+      preAllocatedVUs: 50,
+      maxVUs: 200,
+    },
+  },
+};
 export default function () {
   http.post('http://localhost:8086/hirag/query',
     JSON.stringify({query: 'test', top_k: 10, rerank: true}),
+    {headers: {'Content-Type': 'application/json'}});
+}
+EOF
+
+# Same load pattern against Agent Zero MCP (subordinate-task endpoint)
+k6 run - <<'EOF'
+import http from 'k6/http';
+export const options = {
+  scenarios: {
+    a0_steady: {
+      executor: 'constant-arrival-rate',
+      rate: 100,
+      timeUnit: '1s',
+      duration: '10m',
+      preAllocatedVUs: 50,
+      maxVUs: 200,
+    },
+  },
+};
+export default function () {
+  http.post('http://localhost:8080/mcp/command',
+    JSON.stringify({command: 'noop_probe', args: {}}),
     {headers: {'Content-Type': 'application/json'}});
 }
 EOF
@@ -233,16 +274,37 @@ EOF
 echo "POST http://localhost:8086/hirag/query
 Content-Type: application/json
 @hirag_query.json" | vegeta attack -rate=100 -duration=10m | vegeta report
+
+echo "POST http://localhost:8080/mcp/command
+Content-Type: application/json
+@a0_mcp_probe.json" | vegeta attack -rate=100 -duration=10m | vegeta report
 ```
 
 Run both Hi-RAG and A0 MCP targets. File the result in
 `pmoves/docs/operations/LOAD_TEST_BASELINE.md` (create on first run).
+Minimum baseline artifacts: p50 / p95 / p99 latency per endpoint, error
+rate, peak RSS per container during the run.
 
 ### 9.3 KVM4-2 over-subscription verification
 
 ```bash
-# Sum declared memory of containers on KVM4-2 (run on the box)
-ssh kvm4-2 'docker stats --no-stream --format "{{.Name}} {{.MemUsage}}"'
+# Sum of DECLARED memory limits (what compose promised each container).
+# docker stats shows "used/limit" — we want the limit half, in bytes.
+# Use docker inspect for an authoritative declared-limit read.
+ssh kvm4-2 bash <<'EOF'
+total=0
+for cid in $(docker ps -q); do
+  lim=$(docker inspect --format='{{.HostConfig.Memory}}' "$cid")
+  name=$(docker inspect --format='{{.Name}}' "$cid" | sed 's|^/||')
+  printf "%-30s %s\n" "$name" "$(numfmt --to=iec-i --suffix=B "$lim" 2>/dev/null || echo "$lim B")"
+  total=$((total + lim))
+done
+echo "---"
+echo "Declared limit sum: $(numfmt --to=iec-i --suffix=B "$total")"
+EOF
+
+# Current working-set snapshot (separate from declared limits)
+ssh kvm4-2 'docker stats --no-stream --format "table {{.Name}}\t{{.MemUsage}}\t{{.MemPerc}}"'
 
 # Compare to host capacity
 ssh kvm4-2 'free -h'
@@ -252,6 +314,13 @@ If the sum of container limits (or peak working set) exceeds the 16 GB
 host, the box is OOM-risk. Current declared sum is ~29 GB — **actively
 over-subscribed today**. One of the §7 three options must ship before
 UNFCU onboarding.
+
+**Blast radius if unfixed:** Supabase auth + all RAG retrieval + MinIO
+storage fail simultaneously when any single data-tier container hits its
+limit — no graceful degradation path exists today. One OOM event during
+the UNFCU pilot window (months 4-6) combined with a ~6-hour recovery
+could consume the entire monthly SLA credit cap and put the contract in
+breach territory.
 
 ---
 
