@@ -1,0 +1,604 @@
+diff --git a/pmoves/config/gpu-models.yaml b/pmoves/config/gpu-models.yaml
+index 935feb4a8..15022a503 100644
+--- a/pmoves/config/gpu-models.yaml
++++ b/pmoves/config/gpu-models.yaml
+@@ -171,6 +171,19 @@ models:
+     quantization: "Q4_K_M"
+     context_length: 262144
+ 
++  # Nemotron-3-Super-120B-A12B NVFP4 (DGX Spark — 128GB unified LPDDR5X fits FP8-class footprint)
++  # HF: nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-NVFP4 (verified 2026-04-19 via HF API)
++  # License: NVIDIA Open Model License (OML). NOT viable on RDNA4 gfx1201 (no FP8/FP4 kernels).
++  - id: "nemotron-3-super-120b-nvfp4"
++    provider: ollama
++    vram_mb: 90000                # ~88 GB NVFP4 weights; sits inside 128GB unified with activation headroom
++    hf_id: "nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-NVFP4"
++    description: "NVIDIA Nemotron-3-Super 120B-A12B NVFP4 - Spark-only (unified memory, agentic MoE)"
++    priority_default: 9
++    quantization: "NVFP4"
++    context_length: 131072
++    target_hardware: ["gb10"]
++
+   # Embedding Models (Ollama)
+   - id: "qwen3-embedding:4b"
+     provider: ollama
+@@ -374,3 +387,39 @@ jetson_orin_nano:
+   total_vram_mb: 8192  # Shared with system RAM
+   system_reserve_mb: 4096
+   compute_capability: "8.7"
++
++# NVIDIA DGX Spark (GB10 Grace-Blackwell)
++# Unified LPDDR5X shared between 20-core Arm CPU and Blackwell GPU.
++# Hostname convention: pmoves-gb10-spark. Inference backend: Ollama (ARM64 CUDA).
++gb10:
++  name: "NVIDIA DGX Spark (GB10 Grace-Blackwell)"
++  vendor: "NVIDIA"
++  arch: "grace-blackwell"
++  platform: "arm64"
++  total_vram_mb: 131072           # 128 GB unified LPDDR5X (CPU + GPU share the pool)
++  system_reserve_mb: 16384        # Leave ~16 GB for Arm host OS and inference runtime
++  compute_capability: "11.0"      # SM_110 Blackwell
++  cpu_companion: "20-core Arm (10x Cortex-X925 + 10x Cortex-A725)"
++  inference_backend: "ollama"     # Ollama ARM64 build with CUDA-on-ARM (DGX OS stock)
++  hostname: "pmoves-gb10-spark"
++
++# AMD Radeon AI Pro R9700 (RDNA4, gfx1201)
++# Dual-GPU workstation: 2x 32 GB = 64 GB total VRAM on AMD Ryzen 9850X3D.
++# Hostname convention: pmoves-9850x3d-r9700. Inference backend: llama.cpp HIP
++# (custom fork tlee933/llama.cpp-rdna4-gfx1201 — ROCm 7.1 + gfx1201 kernels NOT
++# in stock Ollama as of 2026-04). llama-server on :8080 exposes OpenAI-compat
++# API; rocm-smi-exporter on :9835 feeds Prometheus.
++radeon-ai-pro-r9700:
++  name: "AMD Radeon AI Pro R9700 (RDNA4 gfx1201)"
++  vendor: "AMD"
++  arch: "rdna4"
++  gpu_target: "gfx1201"
++  total_vram_mb: 32768            # Per-card; workstation has 2x for 64 GB total
++  system_reserve_mb: 2048
++  rocm_version: "7.1"
++  inference_backend: "llama.cpp-hip"
++  inference_server: "llama-server"
++  tensor_split: "0.5,0.5"         # Dual-GPU row-split mode
++  split_mode: "row"
++  cpu_companion: "AMD Ryzen 9850X3D (8C / 3D V-Cache)"
++  hostname: "pmoves-9850x3d-r9700"
+diff --git a/pmoves/config/profiles/dgx-spark-grace-blackwell.yaml b/pmoves/config/profiles/dgx-spark-grace-blackwell.yaml
+new file mode 100644
+index 000000000..d5fd29882
+--- /dev/null
++++ b/pmoves/config/profiles/dgx-spark-grace-blackwell.yaml
+@@ -0,0 +1,53 @@
++id: dgx-spark-grace-blackwell
++name: "NVIDIA DGX Spark (GB10 Grace-Blackwell)"
++description: >
++  NVIDIA DGX Spark workstation — ARM64 node with GB10 Grace-Blackwell SoC.
++  20-core Arm CPU (10x Cortex-X925 + 10x Cortex-A725) + Blackwell GPU sharing
++  128 GB unified LPDDR5X memory (SM_110). Stock DGX OS provides CUDA-on-ARM.
++  Target hardware for 120B-class models at NVFP4/FP8 quantization — unified
++  memory eliminates VRAM copies. Inference backend: Ollama (ARM64 CUDA build).
++hardware:
++  cpu:
++    vendor: NVIDIA
++    model: "GB10 (20-core Arm - 10x Cortex-X925 + 10x Cortex-A725)"
++    cores: 20
++    threads: 20
++    arch: arm64
++  gpu:
++    type: nvidia-blackwell
++    models: ["GB10 Blackwell (integrated)"]
++    memory_gb: 128                # Unified with CPU (LPDDR5X)
++    compute_capability: "11.0"    # SM_110 Blackwell
++    cuda_version: "13.0"
++  ram_gb: 128                     # Unified memory shared with GPU
++  unified_memory_gb: 128
++  storage: "NVMe SSD"
++  tags: [workstation, dgx, arm64, grace-blackwell, sm_110, unified-memory]
++compose_overrides:
++  - docker-compose.arm64.override.yml
++model_bundles:
++  - gemma-4-31b-fp16            # Spark flagship multimodal
++  - nemotron-3-super-nvfp4      # NVIDIA Nemotron-3-Super 120B-A12B NVFP4 (OML license)
++  - gemma-4-26b-a4b             # Gemma 4 26B-A4B MoE
++services:
++  - mesh-agent                  # Node announcer (NATS every 15s)
++  - fleet-agent                 # Fleet watcher / audit participant
++  - ollama                      # ARM64 Ollama with CUDA-on-ARM
++mcp:
++  - docker
++  - host
++messaging:
++  telegram: optional
++  discord: true
++  whatsapp: false
++  webrtc: true
++tailscale:
++  role: gpu-node
++  hostname_pattern: "pmoves-gb10-spark"
++notes:
++  - "Unified 128 GB LPDDR5X — GPU and CPU share the pool. Fits 120B-class models at NVFP4 without VRAM copies."
++  - "ARM64 platform — requires arm64 image variants (Phase D multi-arch CI work)."
++  - "Docker must use --runtime nvidia. Set in /etc/docker/daemon.json."
++  - "Inference backend: Ollama (ARM64 build with CUDA-on-ARM, stock DGX OS)."
++  - "Phase C: all TensorZero variants weight=0.0 pending 48h soak + load test."
++  - "Target models: Gemma 4 31B FP16, Gemma 4 26B-A4B, Nemotron-3-Super 120B-A12B NVFP4 (HF: nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-NVFP4)."
+diff --git a/pmoves/config/profiles/workstation-9850x3d-dual-r9700.yaml b/pmoves/config/profiles/workstation-9850x3d-dual-r9700.yaml
+new file mode 100644
+index 000000000..842680bf2
+--- /dev/null
++++ b/pmoves/config/profiles/workstation-9850x3d-dual-r9700.yaml
+@@ -0,0 +1,69 @@
++id: workstation-9850x3d-dual-r9700
++name: "Workstation — AMD Ryzen 9850X3D + dual Radeon AI Pro R9700"
++description: >
++  AMD workstation with Ryzen 9850X3D (8C / 3D V-Cache) and dual Radeon AI Pro
++  R9700 (RDNA4 gfx1201, 2x 32 GB = 64 GB total VRAM). Inference backend:
++  llama.cpp HIP via custom fork `tlee933/llama.cpp-rdna4-gfx1201` (ROCm 7.1 +
++  gfx1201 kernels NOT in stock Ollama as of 2026-04). llama-server on :8080
++  exposes OpenAI-compatible API; rocm-smi-exporter on :9835 feeds Prometheus.
++  Dual-GPU mode: --tensor-split 0.5,0.5 --split-mode row.
++hardware:
++  cpu:
++    vendor: AMD
++    model: Ryzen 9850X3D (8C / 3D V-Cache)
++    cores: 8
++    threads: 16
++    arch: amd64
++  gpus:
++    - type: amd-rdna4
++      model: Radeon AI Pro R9700
++      gpu_target: gfx1201
++      memory_gb: 32
++    - type: amd-rdna4
++      model: Radeon AI Pro R9700
++      gpu_target: gfx1201
++      memory_gb: 32
++  total_vram_gb: 64                 # 2x 32 GB
++  rocm_version: "7.1"
++  ram_gb: 128
++  storage: "NVMe SSD"
++  tags: [workstation, amd64, rdna4, gfx1201, dual-gpu]
++inference_backend: "llama.cpp-hip"
++inference_server:
++  name: llama-server
++  port: 8080                        # OpenAI-compatible API
++  fork: "tlee933/llama.cpp-rdna4-gfx1201"
++  notes: "Stock Ollama lacks gfx1201 kernels — must use this fork."
++dual_gpu_flags:
++  tensor_split: "0.5,0.5"
++  split_mode: "row"
++metrics:
++  rocm_smi_exporter_port: 9835      # Prometheus scrape target
++compose_overrides:
++  - docker-compose.rocm.override.yml
++model_bundles:
++  - gemma-4-31b-q4km              # Single-GPU fit
++  - gemma-4-26b-a4b-dual          # Dual-GPU row-split
++services:
++  - mesh-agent                    # Node announcer (NATS every 15s)
++  - fleet-agent                   # Fleet watcher / audit participant
++  - llama-server                  # OpenAI-compatible inference endpoint (:8080)
++  - rocm-smi-exporter             # Prometheus GPU metrics (:9835)
++mcp:
++  - docker
++  - host
++messaging:
++  telegram: optional
++  discord: true
++  whatsapp: false
++  webrtc: true
++tailscale:
++  role: gpu-node
++  hostname_pattern: "pmoves-9850x3d-r9700"
++notes:
++  - "Dual R9700 RDNA4 — 2x 32 GB (64 GB total). Row-split mode for tensor parallel: --tensor-split 0.5,0.5 --split-mode row."
++  - "Stock Ollama ROCm v6 libs DO NOT include gfx1201 kernels. Canonical runtime is llama.cpp HIP backend built against ROCm 7.1+."
++  - "Custom fork: tlee933/llama.cpp-rdna4-gfx1201."
++  - "NO FP8/NVFP4 kernel support on gfx1201 — Nemotron-3-Super NVFP4 NOT viable here (Spark-only)."
++  - "Phase C: all TensorZero variants weight=0.0 pending 48h soak + load test."
++  - "Target models: Gemma 4 31B Q4_K_M (single-GPU), Gemma 4 26B-A4B MoE (dual-GPU row-split)."
+diff --git a/pmoves/config/provider_catalog.yaml b/pmoves/config/provider_catalog.yaml
+index 14ddcffa8..71fbd7f00 100644
+--- a/pmoves/config/provider_catalog.yaml
++++ b/pmoves/config/provider_catalog.yaml
+@@ -608,6 +608,7 @@ providers:
+       gemma_4_31b_rocm:
+         model_name: "gemma-4-31b-it-Q4_K_M.gguf"
+         tz_model_key: gemma_4_31b_rocm
++        status: staging                # Phase C — pending 48h soak + load test
+         serves:
+           # Variant name matches functions.multimodal_large.variants.gemma_4_31b_rocm
+           # and functions.agent_zero.variants.local_gemma_4_31b_rocm in tensorzero.toml.
+@@ -619,11 +620,17 @@ providers:
+             variant_name: local_gemma_4_31b_rocm
+             role: secondary
+             weight: 0.0
++          # Phase C dedicated single-GPU variant
++          - function: multimodal_large
++            variant_name: llamacpp_rdna4_gemma4_31b_q4km
++            role: secondary
++            weight: 0.0
+         strength_ref: null
+         vram_mb: 18000                 # Q4 on single R9700; FP16 splits across both cards
+       gemma_4_26b_a4b_rocm:
+         model_name: "gemma-4-26B-A4B-it-Q4_K_M.gguf"
+         tz_model_key: gemma_4_26b_a4b_rocm
++        status: staging                # Phase C — dual-GPU row-split via tensor-split 0.5,0.5
+         serves:
+           - function: multimodal_large
+             variant_name: gemma_4_26b_a4b_rocm
+@@ -633,5 +640,55 @@ providers:
+             variant_name: local_gemma_4_26b_a4b_rocm
+             role: secondary
+             weight: 0.0
++          # Phase C dedicated dual-GPU variant (row-split across both R9700 cards)
++          - function: multimodal_large
++            variant_name: llamacpp_rdna4_gemma4_26b_dual
++            role: secondary
++            weight: 0.0
+         strength_ref: null
+         vram_mb: 15000                 # Q4 MoE, 3.8B active
++
++  # ---------------------------------------------------------------------------
++  # ollama_spark — NVIDIA DGX Spark (GB10 Grace-Blackwell, 128 GB unified LPDDR5X)
++  # ---------------------------------------------------------------------------
++  # OpenAI-compatible endpoint served by Ollama running natively on the
++  # pmoves-gb10-spark ARM64 node (CUDA-on-ARM, stock DGX OS). Unified memory
++  # pool fits 120B-class models at NVFP4 without VRAM copies.
++  # Phase C introduction: all variants weight=0.0 pending ARM64 multi-arch CI
++  # and 48h soak test. See pmoves/config/profiles/dgx-spark-grace-blackwell.yaml.
++  ollama_spark:
++    env_var: OLLAMA_SPARK_API_KEY
++    key_pattern: ".*"
++    api_base: "http://pmoves-gb10-spark:11434/v1"
++    tz_type: openai
++    tier: llm
++    models:
++      ollama_spark_gemma4_31b_fp16:
++        model_name: "gemma4:31b"
++        tz_model_key: ollama_spark_gemma4_31b_fp16
++        status: staging
++        serves:
++          - function: multimodal_large
++            variant_name: ollama_spark_gemma4_31b_fp16
++            role: secondary
++            weight: 0.0
++          - function: agent_zero
++            variant_name: ollama_spark_gemma4_31b_fp16
++            role: secondary
++            weight: 0.0
++        strength_ref: null
++        vram_mb: 36000                 # FP16 weights sit in unified LPDDR5X
++      ollama_spark_nemotron3_super_120b_fp8:
++        # HF: nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-NVFP4 (verified via HF API 2026-04-19)
++        # License: NVIDIA Open Model License (OML). Spark-only — RDNA4 gfx1201
++        # has no FP8/NVFP4 kernels in ROCm 7.1 as of this date.
++        model_name: "nemotron-3-super-120b-nvfp4"
++        tz_model_key: ollama_spark_nemotron3_super_120b_fp8
++        status: staging
++        serves:
++          - function: agent_zero
++            variant_name: ollama_spark_nemotron3_super_120b_fp8
++            role: secondary
++            weight: 0.0
++        strength_ref: null
++        vram_mb: 90000                 # NVFP4 quant; fits 128 GB unified with headroom
+diff --git a/pmoves/configs/flare-model-namespace.yaml b/pmoves/configs/flare-model-namespace.yaml
+index 8e1a492e6..ef1bd0b93 100644
+--- a/pmoves/configs/flare-model-namespace.yaml
++++ b/pmoves/configs/flare-model-namespace.yaml
+@@ -126,3 +126,41 @@ mappings:
+     model_id: "gemma4:31b"
+     lane: "local"
+     nodes: [5090, dgx-spark]
++
++  # --- Phase C: DGX Spark (GB10) + dual R9700 (RDNA4) operator aliases ---
++  # All entries target staging endpoints; TensorZero variant weights are 0.0
++  # pending 48h soak + load test (see PR description).
++  spark-gemma4:
++    flare_name: "pmoves/spark-gemma4"
++    provider: "ollama_spark"
++    model_id: "gemma4:31b"
++    tensorzero_variant: "ollama_spark_gemma4_31b_fp16"
++    lane: "local"
++    nodes: [dgx-spark]
++
++  spark-nemotron3:
++    flare_name: "pmoves/spark-nemotron3"
++    provider: "ollama_spark"
++    # HF: nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-NVFP4 (verified 2026-04-19)
++    # Spark-only; NOT viable on RDNA4 gfx1201 (no FP8/FP4 kernels).
++    model_id: "nemotron-3-super-120b-nvfp4"
++    tensorzero_variant: "ollama_spark_nemotron3_super_120b_fp8"
++    lane: "local"
++    nodes: [dgx-spark]
++
++  rdna4-gemma4:
++    flare_name: "pmoves/rdna4-gemma4"
++    provider: "llamacpp_rocm"
++    model_id: "gemma-4-31b-it-Q4_K_M.gguf"
++    tensorzero_variant: "llamacpp_rdna4_gemma4_31b_q4km"
++    lane: "local"
++    nodes: [rdna4]
++
++  rdna4-gemma4-dual:
++    flare_name: "pmoves/rdna4-gemma4-dual"
++    provider: "llamacpp_rocm"
++    # Dual-R9700 row-split (--tensor-split 0.5,0.5 --split-mode row)
++    model_id: "gemma-4-26B-A4B-it-Q4_K_M.gguf"
++    tensorzero_variant: "llamacpp_rdna4_gemma4_26b_dual"
++    lane: "local"
++    nodes: [rdna4]
+diff --git a/pmoves/supabase/initdb/12_model_registry_seed.sql b/pmoves/supabase/initdb/12_model_registry_seed.sql
+index a8b3be00b..3b2fe3d04 100644
+--- a/pmoves/supabase/initdb/12_model_registry_seed.sql
++++ b/pmoves/supabase/initdb/12_model_registry_seed.sql
+@@ -1733,6 +1733,151 @@ BEGIN
+ 
+ END $$;
+ 
++-- =============================================================================
++-- Phase C: DGX Spark (GB10 Grace-Blackwell) + dual R9700 (RDNA4) providers
++-- =============================================================================
++-- Registered as staging endpoints. TensorZero routing_weight defaults to 0.0
++-- (serves via [functions.*.variants.*] wrt variant weights in tensorzero.toml).
++-- Flip to active/positive weight after 48h soak + load test on hardware.
++
++-- Ollama on DGX Spark (ARM64 + CUDA-on-ARM, stock DGX OS, 128 GB unified LPDDR5X)
++INSERT INTO pmoves_core.model_providers (name, type, api_base, api_key_env_var, description, active, metadata)
++VALUES (
++  'ollama_spark',
++  'ollama',
++  'http://pmoves-gb10-spark:11434/v1',
++  'OLLAMA_SPARK_API_KEY',
++  'Ollama on NVIDIA DGX Spark (GB10 Grace-Blackwell ARM64, 128GB unified LPDDR5X)',
++  true,
++  '{"status": "staging", "network": "tailnet", "location": "local", "arch": "arm64", "gpu": "gb10", "hostname": "pmoves-gb10-spark", "phase": "C"}'::jsonb
++)
++ON CONFLICT (name) DO UPDATE SET
++  type = EXCLUDED.type,
++  api_base = EXCLUDED.api_base,
++  api_key_env_var = EXCLUDED.api_key_env_var,
++  description = EXCLUDED.description,
++  active = EXCLUDED.active,
++  metadata = EXCLUDED.metadata,
++  updated_at = NOW();
++
++-- llama.cpp HIP on AMD Ryzen 9850X3D + dual Radeon AI Pro R9700 (RDNA4 gfx1201)
++-- Custom fork: tlee933/llama.cpp-rdna4-gfx1201 (ROCm 7.1 + gfx1201 kernels NOT
++-- in stock Ollama as of 2026-04). llama-server on :8080 exposes OpenAI-compat.
++INSERT INTO pmoves_core.model_providers (name, type, api_base, api_key_env_var, description, active, metadata)
++VALUES (
++  'llamacpp_rocm',
++  'openai_compatible',
++  'http://pmoves-9850x3d-r9700:8080/v1',
++  'LLAMACPP_ROCM_API_KEY',
++  'llama-server (HIP) on AMD Ryzen 9850X3D + dual R9700 RDNA4 gfx1201 (ROCm 7.1)',
++  true,
++  '{"status": "staging", "network": "tailnet", "location": "local", "arch": "rdna4", "gpu": "radeon-ai-pro-r9700", "gpu_count": 2, "total_vram_mb": 65536, "hostname": "pmoves-9850x3d-r9700", "phase": "C", "fork": "tlee933/llama.cpp-rdna4-gfx1201"}'::jsonb
++)
++ON CONFLICT (name) DO UPDATE SET
++  type = EXCLUDED.type,
++  api_base = EXCLUDED.api_base,
++  api_key_env_var = EXCLUDED.api_key_env_var,
++  description = EXCLUDED.description,
++  active = EXCLUDED.active,
++  metadata = EXCLUDED.metadata,
++  updated_at = NOW();
++
++-- Phase C models (staging — routing_weight 0.0 via TZ variant weights)
++DO $$
++DECLARE
++  v_spark_id UUID;
++  v_rocm_id UUID;
++BEGIN
++  SELECT id INTO v_spark_id FROM pmoves_core.model_providers WHERE name = 'ollama_spark';
++  SELECT id INTO v_rocm_id FROM pmoves_core.model_providers WHERE name = 'llamacpp_rocm';
++
++  -- Gemma 4 31B FP16 on DGX Spark (unified memory, SOTA multimodal)
++  INSERT INTO pmoves_core.models (provider_id, name, model_id, model_type, capabilities, vram_mb, context_length, description, active)
++  VALUES (
++    v_spark_id,
++    'ollama_spark_gemma4_31b_fp16',
++    'gemma4:31b',
++    'chat',
++    '["chat", "code_generation", "reasoning", "vision"]'::jsonb,
++    36000,
++    262144,
++    'Google Gemma 4 31B FP16 on DGX Spark — unified LPDDR5X (staging, Phase C)',
++    true
++  )
++  ON CONFLICT (provider_id, model_id) DO UPDATE SET
++    name = EXCLUDED.name,
++    capabilities = EXCLUDED.capabilities,
++    vram_mb = EXCLUDED.vram_mb,
++    context_length = EXCLUDED.context_length,
++    description = EXCLUDED.description,
++    updated_at = NOW();
++
++  -- Nemotron-3-Super 120B-A12B NVFP4 on DGX Spark (Spark-only, no RDNA4 FP8 kernels)
++  -- HF: nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-NVFP4 (verified HF API 2026-04-19)
++  INSERT INTO pmoves_core.models (provider_id, name, model_id, model_type, capabilities, vram_mb, context_length, description, active)
++  VALUES (
++    v_spark_id,
++    'ollama_spark_nemotron3_super_120b_fp8',
++    'nemotron-3-super-120b-nvfp4',
++    'chat',
++    '["chat", "function_calling", "json_mode", "tool_use", "agentic_reasoning"]'::jsonb,
++    90000,
++    131072,
++    'NVIDIA Nemotron-3-Super 120B-A12B NVFP4 on DGX Spark — NVIDIA OML license (staging, Phase C)',
++    true
++  )
++  ON CONFLICT (provider_id, model_id) DO UPDATE SET
++    name = EXCLUDED.name,
++    capabilities = EXCLUDED.capabilities,
++    vram_mb = EXCLUDED.vram_mb,
++    context_length = EXCLUDED.context_length,
++    description = EXCLUDED.description,
++    updated_at = NOW();
++
++  -- Gemma 4 31B Q4_K_M on single R9700 (llama.cpp HIP)
++  INSERT INTO pmoves_core.models (provider_id, name, model_id, model_type, capabilities, vram_mb, context_length, description, active)
++  VALUES (
++    v_rocm_id,
++    'llamacpp_rdna4_gemma4_31b_q4km',
++    'gemma-4-31b-it-Q4_K_M.gguf',
++    'chat',
++    '["chat", "code_generation", "reasoning", "vision"]'::jsonb,
++    18000,
++    262144,
++    'Google Gemma 4 31B Q4_K_M on single R9700 via llama.cpp HIP (staging, Phase C)',
++    true
++  )
++  ON CONFLICT (provider_id, model_id) DO UPDATE SET
++    name = EXCLUDED.name,
++    capabilities = EXCLUDED.capabilities,
++    vram_mb = EXCLUDED.vram_mb,
++    context_length = EXCLUDED.context_length,
++    description = EXCLUDED.description,
++    updated_at = NOW();
++
++  -- Gemma 4 26B-A4B MoE on dual R9700 (row-split --tensor-split 0.5,0.5)
++  INSERT INTO pmoves_core.models (provider_id, name, model_id, model_type, capabilities, vram_mb, context_length, description, active)
++  VALUES (
++    v_rocm_id,
++    'llamacpp_rdna4_gemma4_26b_dual',
++    'gemma-4-26B-A4B-it-Q4_K_M.gguf',
++    'chat',
++    '["chat", "code_generation", "vision"]'::jsonb,
++    15000,
++    262144,
++    'Google Gemma 4 26B-A4B MoE on dual R9700 (row-split) via llama.cpp HIP (staging, Phase C)',
++    true
++  )
++  ON CONFLICT (provider_id, model_id) DO UPDATE SET
++    name = EXCLUDED.name,
++    capabilities = EXCLUDED.capabilities,
++    vram_mb = EXCLUDED.vram_mb,
++    context_length = EXCLUDED.context_length,
++    description = EXCLUDED.description,
++    updated_at = NOW();
++
++END $$;
++
+ -- =============================================================================
+ -- Audit Log Entry
+ -- =============================================================================
+diff --git a/pmoves/tensorzero/config/tensorzero.toml b/pmoves/tensorzero/config/tensorzero.toml
+index aacc96497..e274b64cf 100644
+--- a/pmoves/tensorzero/config/tensorzero.toml
++++ b/pmoves/tensorzero/config/tensorzero.toml
+@@ -444,6 +444,55 @@ api_base = "http://pmoves-rdna4:8080/v1"
+ model_name = "gemma-4-26B-A4B-it-Q4_K_M.gguf"
+ api_key_location = "none"
+ 
++# --- Phase C: DGX Spark (GB10) + dual R9700 (RDNA4) dedicated variants -------
++# Added with new profile YAMLs (dgx-spark-grace-blackwell, workstation-9850x3d-
++# dual-r9700). All weight=0.0 for safe rollout — flip to small % after 48h soak
++# + load test, and after Phase D ships ARM64 multi-arch CI for Spark images.
++
++# Gemma 4 31B on DGX Spark (FP16, unified LPDDR5X)
++[models.ollama_spark_gemma4_31b_fp16]
++routing = ["ollama_spark"]
++
++[models.ollama_spark_gemma4_31b_fp16.providers.ollama_spark]
++type = "openai"
++api_base = "http://pmoves-gb10-spark:11434/v1"
++model_name = "gemma4:31b"
++api_key_location = "none"
++
++# Nemotron-3-Super 120B-A12B NVFP4 on DGX Spark
++# HF: nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-NVFP4 (verified HF API 2026-04-19)
++# License: NVIDIA Open Model License (OML). Spark-only — RDNA4 gfx1201 lacks
++# FP8/NVFP4 kernels in ROCm 7.1 as of this date.
++[models.ollama_spark_nemotron3_super_120b_fp8]
++routing = ["ollama_spark"]
++
++[models.ollama_spark_nemotron3_super_120b_fp8.providers.ollama_spark]
++type = "openai"
++api_base = "http://pmoves-gb10-spark:11434/v1"
++model_name = "nemotron-3-super-120b-nvfp4"
++api_key_location = "none"
++
++# Gemma 4 31B on AMD R9700 (Q4_K_M single-GPU, llama.cpp HIP)
++# Custom fork: tlee933/llama.cpp-rdna4-gfx1201 (ROCm 7.1 + gfx1201 kernels)
++[models.llamacpp_rdna4_gemma4_31b_q4km]
++routing = ["llamacpp_rocm"]
++
++[models.llamacpp_rdna4_gemma4_31b_q4km.providers.llamacpp_rocm]
++type = "openai"
++api_base = "http://pmoves-9850x3d-r9700:8080/v1"
++model_name = "gemma-4-31b-it-Q4_K_M.gguf"
++api_key_location = "none"
++
++# Gemma 4 26B-A4B MoE on dual R9700 (row-split, --tensor-split 0.5,0.5)
++[models.llamacpp_rdna4_gemma4_26b_dual]
++routing = ["llamacpp_rocm"]
++
++[models.llamacpp_rdna4_gemma4_26b_dual.providers.llamacpp_rocm]
++type = "openai"
++api_base = "http://pmoves-9850x3d-r9700:8080/v1"
++model_name = "gemma-4-26B-A4B-it-Q4_K_M.gguf"
++api_key_location = "none"
++
+ [models.chat_together]
+ routing = ["together_primary"]
+ 
+@@ -730,6 +779,31 @@ type = "chat_completion"
+ model = "coding_qwen3_coder_next_80b_local"
+ weight = 0.0
+ 
++# --- Phase C variants (DGX Spark + dual R9700) — all weight=0.0 --------------
++# Gemma 4 31B FP16 on DGX Spark
++[functions.agent_zero.variants.ollama_spark_gemma4_31b_fp16]
++type = "chat_completion"
++model = "ollama_spark_gemma4_31b_fp16"
++weight = 0.0
++
++# Nemotron-3-Super 120B-A12B NVFP4 on DGX Spark (heavyweight reasoning)
++[functions.agent_zero.variants.ollama_spark_nemotron3_super_120b_fp8]
++type = "chat_completion"
++model = "ollama_spark_nemotron3_super_120b_fp8"
++weight = 0.0
++
++# Gemma 4 31B Q4_K_M on single R9700 (llama.cpp HIP)
++[functions.agent_zero.variants.llamacpp_rdna4_gemma4_31b_q4km]
++type = "chat_completion"
++model = "llamacpp_rdna4_gemma4_31b_q4km"
++weight = 0.0
++
++# Gemma 4 26B-A4B MoE on dual R9700 (row-split)
++[functions.agent_zero.variants.llamacpp_rdna4_gemma4_26b_dual]
++type = "chat_completion"
++model = "llamacpp_rdna4_gemma4_26b_dual"
++weight = 0.0
++
+ [functions.langextract]
+ type = "chat"
+ 
+@@ -1117,6 +1191,25 @@ type = "chat_completion"
+ model = "gemma_4_26b_a4b_rocm"
+ weight = 0.0
+ 
++# --- Phase C multimodal_large variants — dedicated Spark + dual-RDNA4 routes --
++# Gemma 4 31B FP16 on DGX Spark (unified memory, SOTA multimodal)
++[functions.multimodal_large.variants.ollama_spark_gemma4_31b_fp16]
++type = "chat_completion"
++model = "ollama_spark_gemma4_31b_fp16"
++weight = 0.0
++
++# Gemma 4 31B Q4_K_M on single R9700 (dedicated variant distinct from gemma_4_31b_rocm)
++[functions.multimodal_large.variants.llamacpp_rdna4_gemma4_31b_q4km]
++type = "chat_completion"
++model = "llamacpp_rdna4_gemma4_31b_q4km"
++weight = 0.0
++
++# Gemma 4 26B-A4B MoE on dual R9700 (row-split, distinct from gemma_4_26b_a4b_rocm)
++[functions.multimodal_large.variants.llamacpp_rdna4_gemma4_26b_dual]
++type = "chat_completion"
++model = "llamacpp_rdna4_gemma4_26b_dual"
++weight = 0.0
++
+ # --- Per-Stack Coding Functions (4090 Coding Workstation) ---
+ # Each coding plan gets its own function for independent observability,
+ # failover policies, and A/B testing between providers.
