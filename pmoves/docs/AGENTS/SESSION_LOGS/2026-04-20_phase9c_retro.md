@@ -45,10 +45,10 @@ discovery needed a fix before the original OAuth task could resume.
 ## Bundle A — Kong OOM + host-port binding (root cause)
 
 **Logical PR name:** `fix(supabase): Kong OOM + port bind root cause`
-**Commits:**
-- `d26b955f1f fix(supabase): Kong single-worker + 0.0.0.0 bind`
-- `86f9daf5f6 fix(supabase): raise kong memory limit 256M → 1024M`
-- `00d2b0bd2b chore(agnote4482): Phase 9C infra hardening Agent ACK + Kong 1GiB`
+**Commits (chronological, memory-bump progression 256M → 512M → 1024M → 512M):**
+- `86f9daf5f6 fix(supabase): raise kong memory limit 256M → 512M` (initial bump; still OOM'd)
+- `00d2b0bd2b chore(agnote4482): Phase 9C infra hardening Agent ACK + Kong 1GiB` (512M → 1024M probe + ACK)
+- `d26b955f1f fix(supabase): Kong single-worker + 0.0.0.0 bind` (final: 1024M → 512M after single-worker fix)
 
 **What it fixes.** Two Docker-Desktop-on-Windows symptoms that
 compound: Kong OOM-looping at `256M` because it reads host
@@ -56,6 +56,12 @@ compound: Kong OOM-looping at `256M` because it reads host
 worker per host core, each loading the full plugin set; and the host
 port forwarder silently failing to activate on multi-port `127.0.0.1`
 bindings.
+
+The three commits above are an incremental investigation, not three
+independent fixes. The memory-bump progression was diagnostic — each
+larger cap confirmed the root cause was worker-count multiplication
+rather than a genuine leak. Final stable footprint is ~91 MiB on the
+512M cap once `KONG_NGINX_WORKER_PROCESSES=1` pinned the worker count.
 
 **Files touched:** `pmoves/docker-compose.yml` (Kong service block),
 `pmoves/docs/AGENTS/AGNOTE4482.md` (Agent ACK).
