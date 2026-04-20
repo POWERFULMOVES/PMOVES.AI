@@ -84,9 +84,21 @@ ports:
   - ${KONG_ADMIN_BIND:-0.0.0.0}:${SUPABASE_KONG_ADMIN_PORT:-8001}:8001
 ```
 
-Operators who need LAN-isolation can override `KONG_PROXY_BIND=127.0.0.1`
-in `env.shared` AND confirm their Docker Desktop version is on a build
-where this quirk is resolved upstream.
+Operators who need LAN-isolation must override **BOTH** bind vars in
+`env.shared` — the proxy (8000) and the admin API (8001) have
+independent defaults, and setting only `KONG_PROXY_BIND` leaves the
+admin API exposed on 0.0.0.0 (the remote-management plane):
+
+```bash
+# Loopback-only isolation (requires Docker Desktop build where the
+# multi-port 127.0.0.1 quirk is resolved upstream):
+KONG_PROXY_BIND=127.0.0.1
+KONG_ADMIN_BIND=127.0.0.1
+```
+
+Setting one without the other is worse than the 0.0.0.0 default —
+it gives a false sense of isolation while leaving the admin plane
+reachable.
 
 ### Diagnosis rule
 
@@ -141,9 +153,35 @@ must be:
 ```
 
 Not `random_hex, 32` (which produces 32 ASCII chars, wrong size).
-Regenerate existing corrupted values via `make env-setup
-ARGS=--accept-defaults` — the `bootstrap_env.py` self-heal described
-below will catch it.
+
+**Regenerating an existing legacy 32-char value:** the `bootstrap_env.py`
+format check described below is **intentionally lax** for
+`random_urlsafe` — it accepts any length and any character set,
+because tightening the check would rotate working n8n / wger / jellyfin
+passwords that were generated with slightly-off legacy tooling. That
+leniency means a 32-char legacy `SUPABASE_REALTIME_ENC_KEY` will **not**
+be caught by `make env-setup ARGS=--accept-defaults` and Realtime will
+keep crash-looping with `Bad key size`.
+
+**Manual recovery for a legacy REALTIME_ENC_KEY:**
+
+```bash
+cd pmoves && python -c "
+import secrets, re
+from pathlib import Path
+p = Path('env.tier-supabase')
+text = p.read_text(encoding='utf-8')
+new_val = secrets.token_urlsafe(16)[:16]
+text = re.sub(r'^SUPABASE_REALTIME_ENC_KEY=.*$',
+              f'SUPABASE_REALTIME_ENC_KEY={new_val}',
+              text, count=1, flags=re.MULTILINE)
+p.write_text(text, encoding='utf-8')
+print(f'regenerated; len={len(new_val)}')
+"
+make -C pmoves supa-restart
+```
+
+This is the same inline script used during the Phase 9C session.
 
 ---
 
@@ -166,9 +204,16 @@ the slot was **empty or placeholder**. A slot holding a corrupted value
 
 `pmoves/scripts/bootstrap_env.py` now runs a format check
 (`value_matches_spec()`) before deciding a slot is set: if the existing
-value fails the declared generator's format (non-hex char for
-`random_hex`, wrong length, etc.), it's treated as empty and
+value fails the declared generator's format, it's treated as empty and
 regenerated.
+
+**Scope of the check (deliberately asymmetric):**
+
+| Generator type | Check | Rationale |
+|---|---|---|
+| `random_hex` | Length + character set (`0-9a-fA-F`) | Fernet / vault keys require hex; a non-hex byte breaks decryption immediately, so strict is safe |
+| `random_urlsafe` | Always passes (length and charset both ignored) | Legacy values from `openssl rand -base64 ... \| tr -d '='` have `+/` chars and frequently wrong lengths; tightening would rotate working n8n / wger / jellyfin passwords |
+| `passphrase` | Always passes | Same rationale as urlsafe |
 
 ### Recovery command
 
@@ -177,8 +222,15 @@ make -C pmoves env-setup ARGS=--accept-defaults
 ```
 
 On the first run after the fix, this will print `[warn] <KEY> fails
-<generator> format check — regenerating` for every corrupted slot and
-write fresh values. Idempotent on clean values.
+<generator> format check — regenerating` for every corrupted **hex**
+slot and write fresh values. Idempotent on clean values.
+
+### What this does NOT catch
+
+Legacy `random_urlsafe` slots with wrong length or wrong character set
+pass through unchanged. The known case is `SUPABASE_REALTIME_ENC_KEY`
+set as 32 hex chars from the old registry spec — see the manual
+recovery block in the Realtime section above for the one-shot fix.
 
 ---
 
