@@ -125,6 +125,7 @@ create table if not exists pmoves_core.event_log (
   agent_id uuid,
   event_type text not null,
   payload jsonb not null
+);
 
 -- =============================================================================
 -- Row Level Security for pmoves_core schema (C-02)
