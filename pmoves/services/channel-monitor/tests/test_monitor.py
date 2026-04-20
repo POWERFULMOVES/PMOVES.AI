@@ -83,7 +83,11 @@ if "yt_dlp" not in sys.modules:
     yt_dlp_stub.YoutubeDL = _YoutubeDL  # type: ignore[attr-defined]
     sys.modules["yt_dlp"] = yt_dlp_stub
 
-from channel_monitor.monitor import ChannelMonitor, _extract_youtube_video_id  # noqa: E402
+from channel_monitor.monitor import (  # noqa: E402
+    ChannelMonitor,
+    _extract_youtube_video_id,
+    _normalize_channel_url,
+)
 
 
 def _build_monitor(tmp_path, config_name: str = "channel.json") -> ChannelMonitor:
@@ -506,6 +510,34 @@ def test_extract_youtube_video_id_allows_valid_hosts(url, expected):
 )
 def test_extract_youtube_video_id_rejects_spoofed_hosts(url):
     assert _extract_youtube_video_id(url) is None
+
+
+@pytest.mark.parametrize(
+    "url,expected",
+    [
+        # Handle channels get /videos appended so yt-dlp enumerates the video
+        # list; without the tab, extract_flat returns 3 tab entries instead.
+        ("https://www.youtube.com/@ColeMedin", "https://www.youtube.com/@ColeMedin/videos"),
+        ("https://www.youtube.com/@ColeMedin/", "https://www.youtube.com/@ColeMedin/videos"),
+        # Channel-ID URLs likewise need the /videos tab.
+        (
+            "https://www.youtube.com/channel/UCMwVTLZIRRUyyVrkjDpn4pA",
+            "https://www.youtube.com/channel/UCMwVTLZIRRUyyVrkjDpn4pA/videos",
+        ),
+        # Already-tabbed or non-channel URLs pass through unchanged.
+        ("https://www.youtube.com/@ColeMedin/videos", "https://www.youtube.com/@ColeMedin/videos"),
+        ("https://www.youtube.com/@ColeMedin/shorts", "https://www.youtube.com/@ColeMedin/shorts"),
+        ("https://www.youtube.com/@ColeMedin/community", "https://www.youtube.com/@ColeMedin/community"),
+        (
+            "https://www.youtube.com/playlist?list=PLGupOT04oMfok7S8W8Js7lZZIlhM8ufc8",
+            "https://www.youtube.com/playlist?list=PLGupOT04oMfok7S8W8Js7lZZIlhM8ufc8",
+        ),
+        ("https://www.youtube.com/watch?v=abc123", "https://www.youtube.com/watch?v=abc123"),
+        ("https://soundcloud.com/darkxside", "https://soundcloud.com/darkxside"),
+    ],
+)
+def test_normalize_channel_url(url, expected):
+    assert _normalize_channel_url(url) == expected
 
 
 def test_create_youtube_control_request_persists_pending_row(tmp_path):
