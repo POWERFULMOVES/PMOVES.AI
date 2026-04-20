@@ -87,10 +87,20 @@ def compute_spectrum(projs: list[float], bins: int) -> list[float]:
 
 
 def compute_mhep(projs: list[float]) -> float:
-    """Mean Harmonic Embedding Perplexity: avg of 1/sum(softmax(projs)) per constellation.
+    """Mean Harmonic Embedding Perplexity — inverse of the shifted-softmax denominator.
 
-    For a single constellation, MHEP = 1 / sum(softmax(projs)).
-    Returns 0.0 if no projections.
+    For a single constellation, MHEP = 1 / sum(exp(projs - max(projs))). This is
+    equivalent to the softmax temperature-1 normalizer evaluated in max-shifted
+    log-space (numerical stability), NOT 1/sum(softmax(projs)) — the latter is
+    always 1.0 by definition of softmax.
+
+    Interpretation: MHEP is bounded in (0, 1]. MHEP → 1.0 as one projection
+    dominates (peaked); MHEP → 1/N as projections are equal (flat). For example:
+      - compute_mhep([0.0]) == 1.0           (single projection)
+      - compute_mhep([1.0, 1.0]) == 0.5      (flat, N=2 → 1/2)
+      - compute_mhep([10.0, 0.0, 0.0]) ≈ 1.0 (peaked)
+
+    Returns 0.0 if no projections (edge case for empty constellations).
     """
     if not projs:
         return 0.0
@@ -114,7 +124,7 @@ def build_cgp(
     categories = sorted(category_groups.keys())
     num_cats = len(categories)
     if num_cats == 0:
-        return {"spec": "chit.cgp.v0.1", "super_nodes": []}
+        return {"spec": "chit.cgp.v1.0", "super_nodes": []}
 
     radius = 1.0
     now = datetime.now(timezone.utc).isoformat()
@@ -257,7 +267,7 @@ def build_cgp(
     avg_mhep = float(np.mean(mhep_values)) if mhep_values else 0.0
 
     cgp = {
-        "spec": "chit.cgp.v0.1",
+        "spec": "chit.cgp.v1.0",
         "created_at": now,
         "updated_at": now,
         "summary": f"CGP auto-mapped from {sum(len(v) for v in category_groups.values())} chunks "
@@ -353,7 +363,7 @@ def main():
     # 3. Load model
     eprint(f"Loading model '{args.backend}'...")
     model = SentenceTransformer(args.backend)
-    eprint(f"  Model loaded, embedding dim: {model.get_embedding_dimension()}")
+    eprint(f"  Model loaded, embedding dim: {model.get_sentence_embedding_dimension()}")
 
     # 4. Encode all chunks per category
     eprint("Encoding chunks per category...")
