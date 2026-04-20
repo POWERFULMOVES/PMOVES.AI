@@ -70,6 +70,38 @@ acls:
     dst:
       - group:users
 
+  # Exit nodes can route traffic to the internet
+  # Without this rule, exit-node tagged devices drop all egress traffic
+  - action: accept
+    src:
+      - "tag:exit"
+    dst:
+      - "autogroup:internet:*"
+
+  # rocm-smi exporter — monitoring only
+  - action: accept
+    src:
+      - "tag:monitoring"
+    dst:
+      - "tag:rdna4"
+    ports: [9835]
+
+  # Proxmox VE web UI — admin only
+  - action: accept
+    src:
+      - "tag:pve"
+    dst:
+      - group:infrastructure
+    ports: [8006]
+
+  # GPU Orchestrator — PMOVES services only
+  - action: accept
+    src:
+      - "tag:pmoves"
+    dst:
+      - group:infrastructure
+    ports: [8200]
+
 # =============================================================================
 # Tag Owners - Define who can assign which tags
 # =============================================================================
@@ -79,6 +111,21 @@ tagowners:
   tag:infra: [group:admin]
   tag:server: [group:admin]
   tag:user: [group:admin, group:support]
+  tag:exit: [group:admin]
+  tag:rdna4: [group:admin]
+  tag:dgx: [group:admin]
+  tag:monitoring: [group:admin]
+  tag:pmoves: [group:admin]
+  tag:pve: [group:admin]
+
+# =============================================================================
+# Auto Approvers - Headscale-specific: auto-approve exit node advertisements
+# Note: Only 'exitNode' and 'routes' are valid sub-keys here.
+# For auto-approving node registration with other tags (rdna4, dgx, etc.),
+# configure Headscale server config.yaml auto_approvers, not this ACL file.
+# =============================================================================
+autoApprovers:
+  exitNode: ["tag:exit"]
 
 # =============================================================================
 # SSH Rule - SSH access via VPN mesh
