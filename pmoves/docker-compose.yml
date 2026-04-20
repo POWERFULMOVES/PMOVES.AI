@@ -548,7 +548,7 @@ services:
 
   supabase-db:
     <<: *tier-supabase-hardened
-    image: supabase/postgres:17.6.1.079
+    image: supabase/postgres:17.6.1.108
     restart: unless-stopped
     profiles:
     - supabase-local
@@ -1151,7 +1151,7 @@ services:
           cpus: '0.5'
           memory: 256M
   qdrant:
-    image: qdrant/qdrant:v1.14.1
+    image: qdrant/qdrant:v1.16.0
     restart: unless-stopped
     cap_drop:
     - ALL
@@ -1185,7 +1185,7 @@ services:
           memory: 4G
   meilisearch:
     <<: *tier-data-hardened
-    image: getmeili/meilisearch:v1.8
+    image: getmeili/meilisearch:v1.34.1
     restart: unless-stopped
     environment:
     - MEILI_ENV=production
@@ -1212,7 +1212,7 @@ services:
           cpus: '2.0'
           memory: 4G
   neo4j:
-    image: neo4j:5.22
+    image: neo4j:5.26.22
     env_file:
     - env.tier-data
     cap_drop:
@@ -1259,6 +1259,7 @@ services:
   minio:
     <<: *tier-data-hardened
     # Pinned 2025-02-04: Latest RELEASE tag (MinIO stopped publishing to Docker Hub Oct 2025)
+    # ⚠️ WARNING: MinIO Community Edition is EOL (archived Feb 2026). Migration to SeaweedFS/Garage/Enterprise planned.
     image: minio/minio:RELEASE.2025-07-23T15-54-02Z
     command: server /data --console-address ":9001"
     environment:
