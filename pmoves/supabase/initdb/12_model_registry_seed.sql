@@ -1817,7 +1817,7 @@ BEGIN
   INSERT INTO pmoves_core.models (provider_id, name, model_id, model_type, capabilities, vram_mb, context_length, description, active)
   VALUES (
     v_spark_id,
-    'ollama_spark_nemotron3_super_120b_fp8',
+    'ollama_spark_nemotron3_super_120b_nvfp4',
     'nemotron-3-super-120b-nvfp4',
     'chat',
     '["chat", "function_calling", "json_mode", "tool_use", "agentic_reasoning"]'::jsonb,

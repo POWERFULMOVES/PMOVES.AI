@@ -678,16 +678,16 @@ providers:
             weight: 0.0
         strength_ref: null
         vram_mb: 36000                 # FP16 weights sit in unified LPDDR5X
-      ollama_spark_nemotron3_super_120b_fp8:
+      ollama_spark_nemotron3_super_120b_nvfp4:
         # HF: nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-NVFP4 (verified via HF API 2026-04-19)
         # License: NVIDIA Open Model License (OML). Spark-only — RDNA4 gfx1201
         # has no FP8/NVFP4 kernels in ROCm 7.1 as of this date.
         model_name: "nemotron-3-super-120b-nvfp4"
-        tz_model_key: ollama_spark_nemotron3_super_120b_fp8
+        tz_model_key: ollama_spark_nemotron3_super_120b_nvfp4
         status: staging
         serves:
           - function: agent_zero
-            variant_name: ollama_spark_nemotron3_super_120b_fp8
+            variant_name: ollama_spark_nemotron3_super_120b_nvfp4
             role: secondary
             weight: 0.0
         strength_ref: null
