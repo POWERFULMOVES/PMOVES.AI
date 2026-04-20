@@ -342,7 +342,7 @@ services:
     volumes:
     - supabase-storage-data:/var/lib/storage:ro
     networks:
-    - pmoves_data
+    - pmoves_api
 
   # ---------------------------------------------------------------------------
   # Supabase postgres-meta — database metadata API for Studio
@@ -463,7 +463,6 @@ services:
         condition: service_healthy
     networks:
     - pmoves_api
-    - pmoves_data  # reach supabase-db, supabase-analytics
 
   # ---------------------------------------------------------------------------
   # Supabase Analytics (Logflare) — log analytics backend
@@ -654,8 +653,7 @@ services:
     ports:
     - ${SUPABASE_STUDIO_BIND:-127.0.0.1}:${SUPABASE_STUDIO_PORT:-54323}:3000
     networks:
-    - pmoves_api
-    - pmoves_data  # reach supabase-meta, supabase-analytics
+    - pmoves_api  # supabase-meta and analytics reachable via kong on pmoves_api
 
   # ---------------------------------------------------------------------------
   # Supabase imgproxy — image transformation for Storage
@@ -719,6 +717,7 @@ services:
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
+    - QDRANT__SERVICE__API_KEY=${QDRANT__API_KEY:?Set QDRANT__API_KEY in env.tier-data}
     volumes:
     - qdrant-data:/qdrant/storage
     healthcheck:
@@ -777,9 +776,15 @@ services:
     - no-new-privileges:true
     restart: unless-stopped
     environment:
-    - NEO4J_AUTH=${NEO4J_AUTH:-neo4j/${NEO4J_PASSWORD:-pm_kDhuaogcUc1oOOVeGMNCkQ}}
+    - NEO4J_AUTH=neo4j/${NEO4J_PASSWORD:?Set NEO4J_PASSWORD in env.tier-data}
     - NEO4J_dbms_security_allow__csv__import__from__file__urls=true
     - NEO4J_server_config_strict__validation_enabled=false
+    # APOC extensions with safe procedure allowlist
+    - NEO4J_apoc_export_file_enabled=true
+    - NEO4J_apoc_import_file_enabled=true
+    - NEO4J_apoc_import_file_use__neo4j__config__true=true
+    - NEO4JLABS_PLUGINS=["apoc"]
+    - NEO4J_dbms_security_procedures_unrestricted=apoc.coll.*,apoc.text.*,apoc.path.*,apoc.algo.*
     - DOCKED_MODE=${DOCKED_MODE:-true}
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}

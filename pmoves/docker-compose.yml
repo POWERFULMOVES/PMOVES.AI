@@ -631,7 +631,6 @@ services:
     - ${SUPABASE_AUTH_BIND:-127.0.0.1}:${SUPABASE_GOTRUE_PORT:-9999}:9999
     networks:
     - pmoves_api
-    - pmoves_data
 
     deploy:
       resources:
@@ -674,7 +673,6 @@ services:
     - ${SUPABASE_REST_BIND:-127.0.0.1}:${SUPABASE_POSTGREST_PORT:-3000}:3000
     networks:
     - pmoves_api
-    - pmoves_data
 
     deploy:
       resources:
@@ -738,7 +736,6 @@ services:
     - ${KONG_ADMIN_BIND:-0.0.0.0}:${SUPABASE_KONG_ADMIN_PORT:-8001}:8001
     networks:
     - pmoves_api
-    - pmoves_data
 
     deploy:
       resources:
@@ -797,7 +794,6 @@ services:
     - ${SUPABASE_REALTIME_BIND:-127.0.0.1}:${SUPABASE_REALTIME_PORT:-4010}:4000
     networks:
     - pmoves_api
-    - pmoves_data
 
     deploy:
       resources:
@@ -858,7 +854,6 @@ services:
     - ${SUPABASE_STORAGE_BIND:-127.0.0.1}:${SUPABASE_STORAGE_PORT:-5000}:5000
     networks:
     - pmoves_api
-    - pmoves_data
 
     deploy:
       resources:
@@ -920,8 +915,7 @@ services:
     ports:
     - ${SUPABASE_STUDIO_BIND:-127.0.0.1}:${SUPABASE_STUDIO_PORT:-54323}:3000
     networks:
-    - pmoves_api
-    - pmoves_data  # reach supabase-meta, supabase-analytics
+    - pmoves_api  # supabase-meta and analytics reachable via kong on pmoves_api
 
   # ---------------------------------------------------------------------------
   # Supabase imgproxy — image transformation for Storage
@@ -952,7 +946,7 @@ services:
     volumes:
     - supabase-storage-data:/var/lib/storage:ro
     networks:
-    - pmoves_data
+    - pmoves_api
 
   # ---------------------------------------------------------------------------
   # Supabase postgres-meta — database metadata API for Studio
@@ -1022,8 +1016,7 @@ services:
       supabase-analytics:
         condition: service_healthy
     networks:
-    - pmoves_api
-    - pmoves_data  # reach supabase-db, supabase-analytics
+    - pmoves_api  # supabase-db and analytics reachable via kong on pmoves_api
     # Pin upstream resolvers for Deno cold-boot imports. The edge-runtime
     # image fetches https://deno.land/std@...` at worker-bootstrap time;
     # Docker's embedded DNS (127.0.0.11) intermittently fails to forward
@@ -1187,6 +1180,7 @@ services:
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
+    - QDRANT__SERVICE__API_KEY=${QDRANT__API_KEY:?Set QDRANT__API_KEY in env.tier-data}
     volumes:
     - qdrant-data:/qdrant/storage
     healthcheck:
@@ -1245,9 +1239,15 @@ services:
     - no-new-privileges:true
     restart: unless-stopped
     environment:
-    - NEO4J_AUTH=${NEO4J_AUTH:-neo4j/${NEO4J_PASSWORD:-pm_kDhuaogcUc1oOOVeGMNCkQ}}
+    - NEO4J_AUTH=neo4j/${NEO4J_PASSWORD:?Set NEO4J_PASSWORD in env.tier-data}
     - NEO4J_dbms_security_allow__csv__import__from__file__urls=true
     - NEO4J_server_config_strict__validation_enabled=false
+    # APOC extensions with safe procedure allowlist
+    - NEO4J_apoc_export_file_enabled=true
+    - NEO4J_apoc_import_file_enabled=true
+    - NEO4J_apoc_import_file_use__neo4j__config__true=true
+    - NEO4JLABS_PLUGINS=["apoc"]
+    - NEO4J_dbms_security_procedures_unrestricted=apoc.coll.*,apoc.text.*,apoc.path.*,apoc.algo.*
     - DOCKED_MODE=${DOCKED_MODE:-true}
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
@@ -1323,6 +1323,7 @@ services:
     - NO_PROXY=
     - QDRANT_URL=${QDRANT_URL:-http://qdrant:6333}
     - QDRANT_COLLECTION=${QDRANT_COLLECTION:-pmoves_chunks_qwen3}
+    - QDRANT__API_KEY=${QDRANT__API_KEY:?Set QDRANT__API_KEY in env.tier-data}
     - SENTENCE_MODEL=${SENTENCE_MODEL:-all-MiniLM-L6-v2}
     - HIRAG_HTTP_PORT=${HIRAG_HTTP_PORT:-8086}
     - GRAPH_BOOST=${GRAPH_BOOST:-0.15}
@@ -1330,9 +1331,10 @@ services:
     - ENTITY_CACHE_MAX=${ENTITY_CACHE_MAX:-10000}
     - USE_MEILI=${USE_MEILI:-true}
     - MEILI_URL=${MEILI_URL:-http://meilisearch:7700}
+    - MEILI_MASTER_KEY=${MEILI_MASTER_KEY:?Set MEILI_MASTER_KEY in env.tier-data}
     - NEO4J_URL=${NEO4J_URL:-bolt://neo4j:7687}
     - NEO4J_USER=${NEO4J_USER:-neo4j}
-    - NEO4J_PASSWORD=${NEO4J_PASSWORD:-pm_kDhuaogcUc1oOOVeGMNCkQ}
+    - NEO4J_PASSWORD=${NEO4J_PASSWORD:?Set NEO4J_PASSWORD in env.tier-data}
     - NEO4J_DICT_REFRESH_SEC=${NEO4J_DICT_REFRESH_SEC:-300}
     - NEO4J_DICT_LIMIT=${NEO4J_DICT_LIMIT:-1000}
     - TAILSCALE_ONLY=${TAILSCALE_ONLY:-false}
@@ -1535,6 +1537,7 @@ services:
     - HTTPS_PROXY=
     - NO_PROXY=
     - MEILI_URL=${MEILI_URL:-http://meilisearch:7700}
+    - MEILI_MASTER_KEY=${MEILI_MASTER_KEY:?Set MEILI_MASTER_KEY in env.tier-data}
     - SUPA_REST_URL=${SUPA_REST_URL:-http://supabase-kong:8000/rest/v1}
     - SUPA_REST_INTERNAL_URL=${SUPA_REST_INTERNAL_URL:-http://supabase-kong:8000/rest/v1}
     ports:
@@ -2023,6 +2026,7 @@ services:
     - QDRANT_URL=${QDRANT_URL:-http://qdrant:6333}
     - QDRANT_COLLECTION=${QDRANT_COLLECTION:-pmoves_chunks_qwen3}
     - QDRANT_RECREATE_ON_DIM_MISMATCH=${QDRANT_RECREATE_ON_DIM_MISMATCH:-false}
+    - QDRANT__API_KEY=${QDRANT__API_KEY:?Set QDRANT__API_KEY in env.tier-data}
     - SENTENCE_MODEL=${SENTENCE_MODEL:-all-MiniLM-L6-v2}
     - INDEXER_NAMESPACE=${INDEXER_NAMESPACE:-pmoves}
     - QUERY_NAMESPACE=${QUERY_NAMESPACE:-*}
@@ -2034,9 +2038,10 @@ services:
     - RERANK_FUSION=${RERANK_FUSION:-mul}
     - USE_MEILI=true
     - MEILI_URL=${MEILI_URL:-http://meilisearch:7700}
+    - MEILI_MASTER_KEY=${MEILI_MASTER_KEY:?Set MEILI_MASTER_KEY in env.tier-data}
     - NEO4J_URL=${NEO4J_URL:-bolt://neo4j:7687}
     - NEO4J_USER=${NEO4J_USER:-neo4j}
-    - NEO4J_PASSWORD=${NEO4J_PASSWORD:-pm_kDhuaogcUc1oOOVeGMNCkQ}
+    - NEO4J_PASSWORD=${NEO4J_PASSWORD:?Set NEO4J_PASSWORD in env.tier-data}
     - EMBEDDING_BACKEND=${EMBEDDING_BACKEND:-tensorzero}
     - USE_OLLAMA_EMBED=${USE_OLLAMA_EMBED:-false}
     - OLLAMA_URL=${OLLAMA_URL:-http://pmoves-ollama:11434}
@@ -2115,6 +2120,7 @@ services:
     - QDRANT_URL=${QDRANT_URL:-http://qdrant:6333}
     - QDRANT_COLLECTION=${QDRANT_COLLECTION:-pmoves_chunks_qwen3}
     - QDRANT_RECREATE_ON_DIM_MISMATCH=${QDRANT_RECREATE_ON_DIM_MISMATCH:-false}
+    - QDRANT__API_KEY=${QDRANT__API_KEY:?Set QDRANT__API_KEY in env.tier-data}
     - SENTENCE_MODEL=${SENTENCE_MODEL:-all-MiniLM-L6-v2}
     - HIRAG_HTTP_PORT=${HIRAG_HTTP_PORT:-8086}
     - GRAPH_BOOST=${GRAPH_BOOST:-0.15}
@@ -2122,9 +2128,10 @@ services:
     - ENTITY_CACHE_MAX=${ENTITY_CACHE_MAX:-10000}
     - USE_MEILI=${USE_MEILI:-true}
     - MEILI_URL=${MEILI_URL:-http://meilisearch:7700}
+    - MEILI_MASTER_KEY=${MEILI_MASTER_KEY:?Set MEILI_MASTER_KEY in env.tier-data}
     - NEO4J_URL=${NEO4J_URL:-bolt://neo4j:7687}
     - NEO4J_USER=${NEO4J_USER:-neo4j}
-    - NEO4J_PASSWORD=${NEO4J_PASSWORD:-pm_kDhuaogcUc1oOOVeGMNCkQ}
+    - NEO4J_PASSWORD=${NEO4J_PASSWORD:?Set NEO4J_PASSWORD in env.tier-data}
     - NEO4J_DICT_REFRESH_SEC=${NEO4J_DICT_REFRESH_SEC:-300}
     - NEO4J_DICT_LIMIT=${NEO4J_DICT_LIMIT:-1000}
     - TAILSCALE_ONLY=${TAILSCALE_ONLY:-false}
@@ -2201,6 +2208,7 @@ services:
     - NO_PROXY=
     - QDRANT_URL=${QDRANT_URL:-http://qdrant:6333}
     - QDRANT_COLLECTION=${QDRANT_COLLECTION:-pmoves_chunks_qwen3}
+    - QDRANT__API_KEY=${QDRANT__API_KEY:?Set QDRANT__API_KEY in env.tier-data}
     - SENTENCE_MODEL=${SENTENCE_MODEL:-all-MiniLM-L6-v2}
     - INDEXER_NAMESPACE=${INDEXER_NAMESPACE:-pmoves}
     - QUERY_NAMESPACE=${QUERY_NAMESPACE:-*}
