@@ -240,3 +240,59 @@ ClaWZ is now the active Discord agent (PMOVES-ClawZ submodule). All BoTZ Gateway
 
 <!-- GRAPHITI_MARK: AGENT-ZERO-SIDECAR::CONVERGENCE-WAVE-APR19::2026-04-19 -->
 <!-- GRAPHITI_MARK: AGENT-ZERO-GLM::A2A-RUNTIME-WIRING::2026-04-17 -->
+
+## Phase 9C Cookie Pipeline + Supabase Hardening (2026-04-20)
+
+### Work Performed
+- **Secrets bridge**: `brand_defaults.py` aliases `GOOGLE_CLIENT_ID/SECRET` → `CHANNEL_MONITOR_GOOGLE_CLIENT_ID/SECRET` so the generic GH secret namespace lands in the prefixed slot yt-cookies + channel-monitor consume
+- **Self-healing secrets**: `bootstrap_env.py` gains `value_matches_spec()` format check — `random_hex` slots with non-hex chars regenerate on the next `make env-setup ARGS=--accept-defaults` (caught corrupt VAULT_ENC_KEY + INVIDIOUS_COMPANION_KEY in one pass)
+- **Registry correction**: `SUPABASE_REALTIME_ENC_KEY` generator changed from `random_hex 32` (32 chars = 32 bytes ≠ AES-128) to `random_urlsafe 16` — Realtime's Erlang `crypto:crypto_one_time/4` consumes DB_ENC_KEY as raw bytes and requires exactly 16
+- **Env loader 120× speedup**: `scripts/with-env.sh` replaces 3× per-line `sed` forks with pure-bash parameter expansion. Windows/MSYS2 env.shared load drops from ~108s to 0.9s — cascades through every Make target that chains `with-env.sh`
+- **Kong OOM root cause**: Port-bind failure (`NetworkSettings.Ports` empty despite `HostConfig.PortBindings` declared) traced to Kong OOM-killing at 99.5% of its 256 MiB limit. Raised to 1024 MiB after 512 MiB also OOM'd. Lesson: when bindings declare but don't activate, check `docker events --filter container=X` for OOM before blaming the port forwarder
+- **Runner PAT cascade**: `local_cert_runners.py` adds `GITHUB_PAT` (Phase 9G canonical) to the PAT resolution chain + length/marker gate that rejects truncated multi-line PEMs so the runner image no longer crashes with "Expecting: ANY PRIVATE KEY"
+- **DNS-resilient OAuth**: `yt_oauth_flow._exchange_code()` switches from httpx to stdlib `urllib.request.urlopen` — bypasses httpx connection-pool DNS cache failures seen on Windows/miniconda
+- **Env repair tool**: New `fix_env_shared_multiline.py` collapses multi-line PEM/SSH values into `\n`-escaped single-line form so Docker Compose's strict KEY=VALUE parser stops erroring mid-body
+- **PMOVES.YT pointer**: Superproject bumped `b98f2d1 → 8d971cd` — promotes the multi-client fallback chain (PR #7) already merged into the submodule but orphaned in the gitlink
+- **Sync with SPARK wave**: Rebased 7 local commits on top of 29 SPARK-lane commits (PRs #1316-#1323 — DGX Spark + R9700 hardware registration, fleet capacity analysis, playlist synthesis briefing, channel research batch)
+
+### Files Changed
+| File | Change |
+|------|--------|
+| `pmoves/tools/brand_defaults.py` | `_ensure_channel_monitor_google_alias()` |
+| `pmoves/tools/local_cert_runners.py` | GITHUB_PAT cascade + PEM length gate |
+| `pmoves/tools/yt_oauth_flow.py` | urllib stdlib for token exchange |
+| `pmoves/tools/fix_env_shared_multiline.py` | New — multi-line PEM collapse tool |
+| `pmoves/mk/yt-cookies.mk` | `up-yt-cookies*`, `build-yt-image`, `yt-ingest-bootstrap-noegress` |
+| `pmoves/scripts/bootstrap_env.py` | `value_matches_spec()` self-heal gate |
+| `pmoves/bootstrap/registry.json` | SUPABASE_REALTIME_ENC_KEY → random_urlsafe 16 |
+| `pmoves/scripts/with-env.sh` | sed forks → pure-bash parameter expansion |
+| `pmoves/docker-compose.yml` | Kong memory 256M → 1024M |
+| `PMOVES.YT` (gitlink) | b98f2d1 → 8d971cd |
+
+### Commits on `main`
+```
+86f9daf5f6 fix(supabase): raise kong memory limit 256M → 1024M (OOM at 99.5%)
+626394659a perf(with-env): replace per-line sed forks with pure-bash expansion
+fe216e7e69 fix(supabase): SUPABASE_REALTIME_ENC_KEY must be 16 chars, not 32 hex
+0b0fad19cc fix(bootstrap): self-heal corrupt random_hex secrets via format check
+f4680832c6 chore(submodule): bump PMOVES.YT to 8d971cd (Phase 9C fallback chain)
+4ce30f4e3f feat(yt-cookies): add up-yt-cookies* + noegress bootstrap targets
+f09727fc67 feat(env-repair): add fix_env_shared_multiline.py
+68404af710 fix(yt-oauth): use stdlib urllib for token exchange
+cf3d2ab4d7 fix(runners): reject truncated PEMs + accept GITHUB_PAT in cascade
+f27c1a1055 feat(secrets): alias GOOGLE_CLIENT_ID/SECRET → CHANNEL_MONITOR_GOOGLE_*
+c373bf1c35 feat(yt-cookies): one-click bootstrap targets — make yt-ingest-bootstrap
+```
+
+### Key Learnings (captured for next agent)
+1. **Port bind silent-fail diagnosis**: `NetworkSettings.Ports: []` while `HostConfig.PortBindings` is populated almost always means the container keeps dying before Docker Desktop finishes host-side setup. Check `docker events --filter container=X` + `docker stats` for OOM before touching the network layer
+2. **Healthcheck can lie during startup**: Kong reports "(healthy)" at ~20s in, then OOMs later under load. A healthy status is not proof of stable-state health
+3. **Registry help text can drift from generator reality**: `openssl rand -hex 16` produces 32 chars, but the consumer may want 16 bytes raw — character count ≠ byte count for AES key sizing. Help text should cite the consumer's actual requirement, not the generation recipe
+4. **MSYS2 fork tax dominates** large shell scripts. Replace external utility calls with pure-bash wherever the logic is expressible as parameter expansion — a single loop with 500 iterations × 3 forks is ~90s+ on Windows
+
+### Agent ACK
+- Agent: `CLAUDE-OPUS`
+- Signature: `ACK::CLAUDE-OPUS::PHASE-9C-INFRA-HARDENING`
+- Timestamp: `2026-04-20`
+
+<!-- GRAPHITI_MARK: CLAUDE-OPUS::PHASE-9C-INFRA-HARDENING::2026-04-20 -->
