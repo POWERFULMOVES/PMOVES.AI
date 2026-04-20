@@ -10,7 +10,7 @@
 # Revoke:          make yt-cookies-revoke   (kill vault entry)
 # ---------------------------------------------------------------------------
 
-.PHONY: yt-cookies-auth yt-cookies-refresh yt-cookies-status yt-cookies-revoke yt-cookies-check yt-cookies-bootstrap yt-ingest-bootstrap
+.PHONY: yt-cookies-auth yt-cookies-refresh yt-cookies-status yt-cookies-revoke yt-cookies-check yt-cookies-bootstrap yt-ingest-bootstrap yt-ingest-bootstrap-noegress up-yt-cookies build-yt-image
 
 yt-cookies-check: ## Preflight: verify Google OAuth client env vars are set
 	@echo "=== YT Cookies: preflight check ==="
@@ -116,3 +116,49 @@ yt-ingest-bootstrap: ## ONE-CLICK end-to-end: egress + cookies + verify (browser
 	@echo ""
 	@echo ""
 	@echo "✓ Phase 9C live. Per-client metrics at: curl -s http://localhost:8077/metrics | grep yt_download_"
+
+build-yt-image: ## Build pmoves-yt image (canonical pipeline; consumes COMPOSE_ENV_FILES + STACK_FILES)
+	@echo "🔨 Building pmoves-yt image from PMOVES.YT submodule..."
+	@$(DC) build pmoves-yt
+
+# Cookies overlay needs a tailored DC that does NOT include the GPU/comfyui
+# overlays — those declare hi-rag-gateway-v2-gpu and other GPU services with
+# `gpus:` keys that conflict at compose-merge time when our cookies overlay
+# is layered on top of the full STACK_FILES set. Scope to base + cookies only.
+COOKIES_DC := docker compose -p $(PROJECT) --project-directory $(CURDIR) $(COMPOSE_ENV_FILES) -f docker-compose.yml -f docker-compose.yt-cookies.yml
+
+up-yt-cookies: ## Start yt-cookie-refresher + yt-cookie-writer (Phase 9Q.2 services)
+	@echo "🍪 Starting yt-cookie services (refresher + writer)..."
+	@$(COOKIES_DC) --profile yt-cookies up -d yt-cookie-refresher yt-cookie-writer
+	@echo "✅ Cookie services up. Refresher API: http://localhost:8115/healthz"
+
+up-yt-cookies-recreate: ## Force-recreate cookie services to pick up env.shared changes
+	@echo "🍪 Force-recreating yt-cookie services (env refresh)..."
+	@$(COOKIES_DC) --profile yt-cookies up -d --force-recreate yt-cookie-refresher yt-cookie-writer
+	@echo "✅ Cookie services recreated. Refresher API: http://localhost:8115/healthz"
+
+# Skip-egress variant — runs cookies + multi-client only. Use when the
+# Tailscale exit node is offline/unapproved, to test whether cookies +
+# yt-dlp internal player_client rotation alone clears the 403s.
+yt-ingest-bootstrap-noegress: ## Same as yt-ingest-bootstrap but skips the Tailscale egress sidecar
+	@echo "=== Phase 9C: cookies-only bootstrap (no egress sidecar) ==="
+	@echo ""
+	@echo "[1/4] Rebuilding pmoves-yt with new fallback-chain code..."
+	@$(MAKE) --no-print-directory build-yt-image
+	@$(MAKE) --no-print-directory up-yt
+	@echo ""
+	@echo "[2/4] Starting cookie services (refresher + writer)..."
+	@$(MAKE) --no-print-directory up-yt-cookies
+	@sleep 5
+	@echo ""
+	@echo "[3/4] OAuth bootstrap (browser will open — click 'Allow')..."
+	@$(MAKE) --no-print-directory yt-cookies-bootstrap
+	@echo ""
+	@echo "[4/4] Smoke test: ingesting a known-good Cole Medin video..."
+	@curl -fsS --max-time 180 -X POST http://localhost:8077/yt/ingest \
+	  -H 'Content-Type: application/json' \
+	  -d '{"url":"https://www.youtube.com/watch?v=6woc6ii-zoE","namespace":"pmoves.youtube.ai","bucket":"assets"}' \
+	  | head -c 800 || echo "(ingest returned non-2xx; check 'docker logs pmoves-pmoves-yt-1 --tail 40')"
+	@echo ""
+	@echo ""
+	@echo "✓ Phase 9C cookies-only path complete. If smoke test failed, egress fallback may be needed."
