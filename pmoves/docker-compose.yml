@@ -701,9 +701,14 @@ services:
     - KONG_ADMIN_ERROR_LOG=/dev/stderr
     - KONG_PROXY_LISTEN=0.0.0.0:8000
     - KONG_ADMIN_LISTEN=0.0.0.0:8001  # container-internal; host restriction via Docker port mapping line below
-    # JWT plugin
-    - KONG_PLUGINS=bundled,jwt
+    # JWT plugin (already in bundled — no need to list separately)
+    - KONG_PLUGINS=bundled
     - KONG_NGINX_PROXY_PROXY_BUFFERS=8 16k
+    # Pin to single worker. Kong reads host /proc/cpuinfo for worker count,
+    # not the cpus cgroup limit, so on a 24-core host it would spawn 24
+    # workers × ~80MB each (full plugin load) = ~2GB before accepting any
+    # traffic. `1` matches the 0.5 CPU budget + keeps memory bounded.
+    - KONG_NGINX_WORKER_PROCESSES=1
     # PMOVES context
     - DOCKED_MODE=${DOCKED_MODE:-true}
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
@@ -720,8 +725,17 @@ services:
       supabase-db:
         condition: service_healthy
     ports:
-    - ${KONG_PROXY_BIND:-127.0.0.1}:${SUPABASE_KONG_PROXY_PORT:-8000}:8000
-    - ${KONG_ADMIN_BIND:-127.0.0.1}:${SUPABASE_KONG_ADMIN_PORT:-8001}:8001
+    # NOTE: Kong host bind defaults to 0.0.0.0 (not 127.0.0.1) because
+    # Docker Desktop on Windows silently drops explicit 127.0.0.1 binds on
+    # services that declare multiple host ports — the HostConfig declares
+    # the mapping but NetworkSettings.Ports stays empty, host-side forwarder
+    # never activates, and you get connection-refused from the host while
+    # the service is fine on the Docker network. 0.0.0.0 works around it.
+    # Operators who need LAN-isolation should set KONG_PROXY_BIND=127.0.0.1
+    # in env.shared AND confirm Docker Desktop version ≥29.5 (where this
+    # is reportedly fixed upstream).
+    - ${KONG_PROXY_BIND:-0.0.0.0}:${SUPABASE_KONG_PROXY_PORT:-8000}:8000
+    - ${KONG_ADMIN_BIND:-0.0.0.0}:${SUPABASE_KONG_ADMIN_PORT:-8001}:8001
     networks:
     - pmoves_api
     - pmoves_data
@@ -730,7 +744,11 @@ services:
       resources:
         limits:
           cpus: '0.5'
-          memory: 1024M
+          # 512M fits a single-worker Kong with bundled plugins + DB cache
+          # warmup + modest request headroom. Previously set to 256M which
+          # OOM'd on startup; briefly raised to 1024M to confirm the root
+          # cause was worker-count-driven memory multiplication, not leak.
+          memory: 512M
   supabase-realtime:
     <<: *tier-supabase-hardened
     image: supabase/realtime:v2.72.0
