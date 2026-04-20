@@ -78,7 +78,7 @@ autodetect_node_type() {
 # Validate node type
 validate_node_type() {
     case "$NODE_TYPE" in
-        kvm4-1|kvm4-2|kvm2|gpu-5090|rdna4-workstation|dgx-spark|pve-member) ;;
+        kvm4-1|kvm4-2|kvm2|gpu-5090|rdna4-workstation|dgx-spark|pve-member|pve-member-fresh) ;;
         *)
             log_error "Invalid node type: '$NODE_TYPE'"
             echo "Usage: $0 <node-type>"
@@ -93,6 +93,7 @@ validate_node_type() {
             echo "  rdna4-workstation AMD Ryzen 9850X3D + dual R9700 (ROCm 7.1 + llama.cpp HIP)"
             echo "  dgx-spark         NVIDIA DGX Spark ARM64 overlay (Ollama + fleet agent)"
             echo "  pve-member        Proxmox VE 9 cluster member (no Docker-on-host; VMs only)"
+            echo "  pve-member-fresh  Bare Debian box — install PVE then join as cluster member"
             echo ""
             echo "  auto              Detect via deploy/provision/glances-autodetect.sh"
             echo ""
@@ -108,7 +109,7 @@ check_env() {
 
     # GITHUB_PAT required for any node that will run a GitHub Actions runner.
     # pve-member runs NO runner on the hypervisor (VMs do), so skip the check.
-    if [ "$NODE_TYPE" != "pve-member" ]; then
+    if [ "$NODE_TYPE" != "pve-member" ] && [ "$NODE_TYPE" != "pve-member-fresh" ]; then
         if [ -z "${GITHUB_PAT:-}" ]; then
             log_error "GITHUB_PAT not set. Generate at: https://github.com/settings/tokens/new"
             exit 1
@@ -199,7 +200,7 @@ harden_system() {
             ufw allow 11434/tcp comment "Ollama"
             ufw allow 8200/tcp comment "GPU Orchestrator"
             ;;
-        pve-member)
+        pve-member|pve-member-fresh)
             # Proxmox cluster member — PVE web UI + corosync cluster ports
             ufw allow 8006/tcp comment "PVE Web UI"
             ufw allow 5404:5412/udp comment "Corosync cluster membership"
@@ -240,7 +241,7 @@ EOF
 install_docker() {
     log_section "Step 2: Installing Docker..."
 
-    if [ "$NODE_TYPE" = "pve-member" ]; then
+    if [ "$NODE_TYPE" = "pve-member" ] || [ "$NODE_TYPE" = "pve-member-fresh" ]; then
         log_info "Skipping Docker — PVE cluster members run containers inside VMs/LXCs, not on the host."
         log_info "See pmoves/docs/infrastructure/docker_proxmox_integration.md"
         return 0
@@ -320,7 +321,7 @@ EOF
         dgx-spark)
             ts_args+=(--tag=tag:pmoves --tag=tag:gpu --tag=tag:spark --tag=tag:arm64 --tag=tag:production)
             ;;
-        pve-member)
+        pve-member|pve-member-fresh)
             ts_args+=(--tag=tag:pmoves --tag=tag:pve --tag=tag:cluster --tag=tag:production)
             ;;
         *)
@@ -350,7 +351,7 @@ EOF
 install_runner() {
     log_section "Step 4: Installing GitHub Actions runner..."
 
-    if [ "$NODE_TYPE" = "pve-member" ]; then
+    if [ "$NODE_TYPE" = "pve-member" ] || [ "$NODE_TYPE" = "pve-member-fresh" ]; then
         log_info "Skipping runner install — GitHub Actions runners live inside PVE VMs, not on the hypervisor."
         return 0
     fi
@@ -505,7 +506,7 @@ install_dgx_spark_overlay() {
     cat >/etc/systemd/system/ollama.service.d/override.conf <<'EOF'
 [Service]
 Environment="OLLAMA_HOST=0.0.0.0:11434"
-Environment="OLLAMA_ORIGINS=*"
+Environment="OLLAMA_ORIGINS=http://100.64.0.0/10,http://127.0.0.1:*"
 EOF
     systemctl daemon-reload
     systemctl enable --now ollama || true
@@ -515,7 +516,7 @@ EOF
 
 # Step 5d: PVE cluster-member helper (Tailscale join + cluster prep notes)
 install_pve_member_prep() {
-    if [ "$NODE_TYPE" != "pve-member" ]; then
+    if [ "$NODE_TYPE" != "pve-member" ] && [ "$NODE_TYPE" != "pve-member-fresh" ]; then
         return 0
     fi
 
@@ -584,7 +585,7 @@ INFERENCE_BACKEND=ollama-arm64
 EOF
             fi
             ;;
-        pve-member)
+        pve-member|pve-member-fresh)
             # PVE host keeps env minimal — services live in VMs
             :
             ;;
@@ -676,7 +677,7 @@ show_summary() {
             echo "  3. Smoke test: curl http://localhost:11434/api/tags"
             echo "  4. Ensure Tailscale tag:spark is approved in ACL"
             ;;
-        pve-member)
+        pve-member|pve-member-fresh)
             echo "  1. Join PVE cluster: pvecm add <controller-tailscale-hostname>"
             echo "  2. Verify membership: pvecm status"
             echo "  3. Configure storage (ZFS or Ceph): see deploy/proxmox/cluster/ (Phase G)"
@@ -697,6 +698,19 @@ main() {
     log_section "========================================="
     log_section "PMOVES.AI KVM Provisioning: $NODE_TYPE"
     log_section "========================================="
+
+    # pve-member-fresh: bare Debian box needs PVE installed first
+    if [ "$NODE_TYPE" = "pve-member-fresh" ]; then
+        log_section "Installing Proxmox VE on bare Debian..."
+        if [ -x "${SCRIPT_DIR:-.}/pve_on_debian13.sh" ]; then
+            bash "${SCRIPT_DIR:-.}/pve_on_debian13.sh"
+        else
+            log_error "pve_on_debian13.sh not found in ${SCRIPT_DIR:-.} — cannot provision pve-member-fresh"
+            exit 1
+        fi
+        log_info "PVE installed. Continuing as pve-member..."
+    fi
+
     echo ""
 
     harden_system

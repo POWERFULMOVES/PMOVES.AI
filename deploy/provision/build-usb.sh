@@ -146,7 +146,11 @@ fi
 if grep -q "REPLACE_WITH_STRONG_RANDOM_AT_BUILD_TIME" "$answer_file"; then
   if [[ "$GEN_ROOT_PASSWORD" == "true" ]] && [[ -z "$ROOT_PASSWORD" ]]; then
     ROOT_PASSWORD="$(openssl rand -base64 32 | tr -d '=+/' | cut -c1-24)"
-    log "Generated random root password (24 chars). SAVE THIS: $ROOT_PASSWORD"
+    ROOT_PASSWORD_FILE="${OUTPUT_DIR}/root-password-$(date +%Y%m%d-%H%M%S).txt"
+    echo "$ROOT_PASSWORD" > "$ROOT_PASSWORD_FILE"
+    chmod 600 "$ROOT_PASSWORD_FILE"
+    log "Root password saved to: $ROOT_PASSWORD_FILE"
+    log_warn "DELETE this file after recording the password!"
   fi
   if [[ -z "$ROOT_PASSWORD" ]]; then
     err "Answer file has root password placeholder. Pass --root-password=STRING or --generate-root-password."

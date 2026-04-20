@@ -144,7 +144,7 @@ mappings:
     # HF: nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-NVFP4 (verified 2026-04-19)
     # Spark-only; NOT viable on RDNA4 gfx1201 (no FP8/FP4 kernels).
     model_id: "nemotron-3-super-120b-nvfp4"
-    tensorzero_variant: "ollama_spark_nemotron3_super_120b_fp8"
+    tensorzero_variant: "ollama_spark_nemotron3_super_120b_nvfp4"
     lane: "local"
     nodes: [dgx-spark]
 

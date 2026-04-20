@@ -29,6 +29,7 @@ set -euo pipefail
 # Configuration
 # ------------------------------------------------------------------
 ROCM_VERSION="${ROCM_VERSION:-7.1}"
+LLAMA_CPP_PIN="a6e76c64dd525a1bd7726fa1d1145954cef375a8"
 LLAMA_CPP_REPO="${LLAMA_CPP_REPO:-https://github.com/tlee933/llama.cpp-rdna4-gfx1201}"
 LLAMA_CPP_DIR="${LLAMA_CPP_DIR:-/opt/llama.cpp-rdna4}"
 LLAMA_SERVER_PORT="${LLAMA_SERVER_PORT:-8080}"
@@ -144,7 +145,7 @@ build_llama_cpp() {
     git -C "${LLAMA_CPP_DIR}" reset --hard origin/HEAD
   else
     log "Cloning llama.cpp RDNA4 fork"
-    git clone --depth 1 "${LLAMA_CPP_REPO}" "${LLAMA_CPP_DIR}"
+    git clone --depth 1 "${LLAMA_CPP_REPO}" "${LLAMA_CPP_DIR}" && git -C "${LLAMA_CPP_DIR}" checkout "${LLAMA_CPP_PIN}"
   fi
 
   log "Building llama.cpp with HIP target ${GPU_TARGETS}"
@@ -170,6 +171,12 @@ build_llama_cpp() {
 # Systemd llama-server
 # ------------------------------------------------------------------
 install_llama_server_unit() {
+  log_section "Creating llama system user..."
+  if ! id llama &>/dev/null; then
+      useradd -r -M -d /opt/llama.cpp -s /usr/sbin/nologin llama
+  fi
+  usermod -aG render,video llama
+
   log "Installing llama-server systemd unit"
 
   mkdir -p "${LLAMA_MODELS_DIR}"
@@ -196,15 +203,18 @@ Wants=network-online.target
 
 [Service]
 Type=simple
+User=llama
+Group=llama
 EnvironmentFile=/etc/default/llama-server
 ExecStart=/bin/sh -c '/usr/local/bin/llama-server --model $LLAMA_MODEL_PATH --host $LLAMA_HOST --port $LLAMA_PORT --ctx-size $LLAMA_CONTEXT_SIZE $LLAMA_EXTRA_ARGS'
 Restart=on-failure
 RestartSec=5s
-User=root
 
 [Install]
 WantedBy=multi-user.target
 EOF
+
+  chown -R llama:llama /opt/llama.cpp
 
   systemctl daemon-reload
   systemctl enable llama-server.service

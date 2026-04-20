@@ -63,6 +63,7 @@ zfs.copies = 1
 # --node-type=pve-member. The host will NOT install Docker (enforced by that
 # branch of the setup script).
 source = "from-url"
+# TODO: Add cert_fingerprint or fetch over Tailscale SSH for supply-chain safety
 url = "https://raw.githubusercontent.com/POWERFULMOVES/PMOVES.AI/main/deploy/provision/pve-first-boot.sh"
 # NOTE: hash pinning recommended in production. Omit for now; build-usb.sh
 # will inject the expected cert fingerprint via substitution.

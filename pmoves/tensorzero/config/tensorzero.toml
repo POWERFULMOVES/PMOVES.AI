@@ -463,10 +463,10 @@ api_key_location = "none"
 # HF: nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-NVFP4 (verified HF API 2026-04-19)
 # License: NVIDIA Open Model License (OML). Spark-only — RDNA4 gfx1201 lacks
 # FP8/NVFP4 kernels in ROCm 7.1 as of this date.
-[models.ollama_spark_nemotron3_super_120b_fp8]
+[models.ollama_spark_nemotron3_super_120b_nvfp4]
 routing = ["ollama_spark"]
 
-[models.ollama_spark_nemotron3_super_120b_fp8.providers.ollama_spark]
+[models.ollama_spark_nemotron3_super_120b_nvfp4.providers.ollama_spark]
 type = "openai"
 api_base = "http://pmoves-gb10-spark:11434/v1"
 model_name = "nemotron-3-super-120b-nvfp4"
@@ -787,9 +787,9 @@ model = "ollama_spark_gemma4_31b_fp16"
 weight = 0.0
 
 # Nemotron-3-Super 120B-A12B NVFP4 on DGX Spark (heavyweight reasoning)
-[functions.agent_zero.variants.ollama_spark_nemotron3_super_120b_fp8]
+[functions.agent_zero.variants.ollama_spark_nemotron3_super_120b_nvfp4]
 type = "chat_completion"
-model = "ollama_spark_nemotron3_super_120b_fp8"
+model = "ollama_spark_nemotron3_super_120b_nvfp4"
 weight = 0.0
 
 # Gemma 4 31B Q4_K_M on single R9700 (llama.cpp HIP)
