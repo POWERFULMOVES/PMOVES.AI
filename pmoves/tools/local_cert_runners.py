@@ -167,7 +167,19 @@ def access_token(repo: str, lane: str) -> tuple[str, bool, str]:
 
     app_id = os.getenv("GH_APP_ID", "")
     app_key = os.getenv("GH_APP_SEC", "")
-    if app_id and app_key and not is_placeholder(app_id) and not is_placeholder(app_key):
+    # Reject obviously-truncated PEM bodies. _load_env_shared() reads env.shared
+    # line-by-line and only captures the first line of multi-line values, so a
+    # PEM stored raw (BEGIN...lines...END) collapses to its 31-char BEGIN header
+    # and the runner registration crashes with "short header" / "Expecting: ANY
+    # PRIVATE KEY". If the key is too short to be a real PEM, fall through to
+    # the PAT cascade rather than handing a broken value to the runner image.
+    pem_looks_valid = (
+        bool(app_key)
+        and len(app_key) > 256
+        and "BEGIN" in app_key
+        and "END" in app_key
+    )
+    if app_id and pem_looks_valid and not is_placeholder(app_id) and not is_placeholder(app_key):
         return (app_id, app_key), True, "app"
 
     # Priority 1-2: PAT cascade
@@ -175,8 +187,13 @@ def access_token(repo: str, lane: str) -> tuple[str, bool, str]:
     lane_pat = os.getenv(env_name, "")
     if lane_pat and not is_placeholder(lane_pat):
         return lane_pat, True, "pat"
+    # GITHUB_PAT is the Phase 9G-canonical name (set by inject_github_pat_from_gh_cli.py)
+    # — accept it in the cascade so runners can authenticate via the same PAT the
+    # github-runner-ctl monitor uses, without forcing the operator to duplicate
+    # the value under a runner-specific name.
     shared_pat = (
         os.getenv("RUNNER_PAT")
+        or os.getenv("GITHUB_PAT")
         or os.getenv("GH_TOKEN")
         or os.getenv("GITHUB_TOKEN")
     )
