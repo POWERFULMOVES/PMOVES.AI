@@ -595,6 +595,9 @@ encapsulate the correct stop/restart/env-injection flow.
 | Submodule working-tree wipe | `git -C <sub> restore --source=HEAD --staged --worktree :/` | — |
 
 | MinIO restart (object storage) | `make -C pmoves up-minio` | `/minio:status` |
+| Supabase stack restart (all 13 services) | `make -C pmoves supa-restart` | — |
+| Supabase container crash-loop diagnosis | `pmoves/docs/operations/SUPABASE_OPERATIONS.md` | — |
+| Kong port bind fails silently (HostConfig set, NetSettings empty) | Check `docker events --filter container=X` for OOM FIRST (worker-count memory multiplication is common). See SUPABASE_OPERATIONS.md | — |
 
 **volume-reset SERVICE values:** `neo4j`, `tensorzero-clickhouse`, `meilisearch`, `qdrant`, `minio`, `supabase-db`, `nats`
 
