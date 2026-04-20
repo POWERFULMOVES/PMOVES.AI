@@ -1,0 +1,903 @@
+diff --git a/CATACLYSM_STUDIOS_INC/L4-PLATFORM/provisions/proxmox/pve9_postinstall.sh b/CATACLYSM_STUDIOS_INC/L4-PLATFORM/provisions/proxmox/pve9_postinstall.sh
+index 9c51f4774..d508c13a3 100644
+--- a/CATACLYSM_STUDIOS_INC/L4-PLATFORM/provisions/proxmox/pve9_postinstall.sh
++++ b/CATACLYSM_STUDIOS_INC/L4-PLATFORM/provisions/proxmox/pve9_postinstall.sh
+@@ -258,7 +258,30 @@ configure_gpu_orchestrator
+ # RustDesk relay
+ configure_rustdesk_server
+ 
+-# Tailscale on host
+-curl -fsSL https://tailscale.com/install.sh | sh
++# Tailscale on host (idempotent)
++if ! command -v tailscale >/dev/null 2>&1; then
++  log "Installing Tailscale."
++  curl -fsSL https://tailscale.com/install.sh | sh
++else
++  log "Tailscale already installed."
++fi
+ systemctl enable --now tailscaled
+-echo "Now run: tailscale up --ssh --accept-routes --tag=tag:pmoves --tag=tag:pve --tag=tag:production"
++
++if tailscale status >/dev/null 2>&1; then
++  log "Tailscale already joined to tailnet: $(tailscale ip -4 2>/dev/null || echo 'unknown')"
++else
++  echo "Now run: tailscale up --ssh --accept-routes --tag=tag:pmoves --tag=tag:pve --tag=tag:production"
++fi
++
++# CHIT-signed completion beacon — best-effort
++if [[ -x /opt/pmoves/pmoves/tools/sign_trail.py ]] && [[ -n "${CHIT_PASSPHRASE:-}" ]]; then
++  log "Emitting CHIT completion beacon."
++  python3 /opt/pmoves/pmoves/tools/sign_trail.py \
++    --agent-id "pve9-postinstall" \
++    --summary "PVE 9 post-install completed on $(hostname)" \
++    --phase "Phase A" 2>/dev/null || log "Beacon emit failed (non-fatal)."
++else
++  log "CHIT beacon skipped (sign_trail.py or CHIT_PASSPHRASE absent)."
++fi
++
++log "PVE 9 post-install complete. Review: systemctl list-unit-files | grep -E 'rustdesk|gpu-orchestrator|ollama-gpu'"
+diff --git a/CATACLYSM_STUDIOS_INC/L4-PLATFORM/provisions/proxmox/pve_on_debian13.sh b/CATACLYSM_STUDIOS_INC/L4-PLATFORM/provisions/proxmox/pve_on_debian13.sh
+index 430ee99df..dd05bdfc9 100644
+--- a/CATACLYSM_STUDIOS_INC/L4-PLATFORM/provisions/proxmox/pve_on_debian13.sh
++++ b/CATACLYSM_STUDIOS_INC/L4-PLATFORM/provisions/proxmox/pve_on_debian13.sh
+@@ -1,19 +1,91 @@
+ #!/usr/bin/env bash
+ # Convert a minimal Debian 13 (Trixie) to Proxmox VE 9
++#
++# Usage:
++#   sudo bash pve_on_debian13.sh [--profile=standalone|cluster-node]
++#
++# Profiles:
++#   standalone   (default) Single PVE host. No hardware gating.
++#   cluster-node Intended for joining a PVE cluster. Adds pre-flight checks
++#                for 10 GbE + 2x NVMe (cluster replication/Ceph prerequisites).
++#                Fails closed if prerequisites absent.
++
+ set -euo pipefail
+ 
++PROFILE="standalone"
++for arg in "$@"; do
++  case "$arg" in
++    --profile=*)
++      PROFILE="${arg#*=}"
++      ;;
++    -h|--help)
++      sed -n '2,15p' "$0"
++      exit 0
++      ;;
++    *)
++      echo "Unknown flag: $arg" >&2
++      exit 2
++      ;;
++  esac
++done
++
++log() { echo -e "\n[pve-on-debian] $*"; }
++
++if [[ $EUID -ne 0 ]]; then
++  echo "[pve-on-debian] ERROR: must run as root" >&2
++  exit 1
++fi
++
++# --- Pre-flight (cluster-node profile only) ---
++if [[ "$PROFILE" == "cluster-node" ]]; then
++  log "Running cluster-node pre-flight checks"
++
++  # 10 GbE link presence
++  nic_speed_max="$(cat /sys/class/net/*/speed 2>/dev/null | sort -n | tail -1 || echo 0)"
++  if [[ "${nic_speed_max:-0}" -lt 10000 ]]; then
++    echo "[pve-on-debian] ERROR: cluster-node profile requires ≥10 GbE NIC (found ${nic_speed_max} Mb/s max)" >&2
++    echo "  Override by running without --profile=cluster-node" >&2
++    exit 1
++  fi
++  log "NIC speed OK (max ${nic_speed_max} Mb/s)"
++
++  # At least 2 NVMe devices (for ZFS mirror / Ceph journal separation)
++  nvme_count="$(lsblk -dn -o NAME,TYPE 2>/dev/null | awk '/^nvme/ && $2=="disk"{c++} END{print c+0}')"
++  if [[ "${nvme_count:-0}" -lt 2 ]]; then
++    echo "[pve-on-debian] ERROR: cluster-node profile requires ≥2 NVMe disks (found ${nvme_count})" >&2
++    exit 1
++  fi
++  log "NVMe count OK (${nvme_count} devices)"
++
++  # Corosync needs IOMMU-friendly network stack; warn if unset
++  if ! grep -q 'intel_iommu=on\|amd_iommu=on' /proc/cmdline 2>/dev/null; then
++    log "WARN: IOMMU not enabled on kernel cmdline. PCIe passthrough will not work until enabled."
++    log "      Edit /etc/default/grub GRUB_CMDLINE_LINUX_DEFAULT to add intel_iommu=on or amd_iommu=on"
++  fi
++elif [[ "$PROFILE" != "standalone" ]]; then
++  echo "[pve-on-debian] ERROR: unknown profile '$PROFILE' (expected: standalone, cluster-node)" >&2
++  exit 2
++fi
++
++log "Applying profile: $PROFILE"
++
+ apt update && apt -y full-upgrade
+ apt -y install curl gnupg2 lsb-release
+ 
+-# Add PVE repo
++# Add PVE repo (Trixie / PVE 9)
+ echo "deb [arch=amd64 signed-by=/usr/share/keyrings/proxmox-archive-keyring.gpg] http://download.proxmox.com/debian/pve trixie pve-no-subscription" > /etc/apt/sources.list.d/pve-install-repo.list
+ curl -fsSL https://enterprise.proxmox.com/debian/proxmox-release-trixie.gpg -o /usr/share/keyrings/proxmox-archive-keyring.gpg
+ 
+ apt update
+ apt -y install proxmox-ve postfix open-iscsi
+ 
+-# (Optional) remove Debian kernel
+-apt -y remove linux-image-amd64 'linux-image-6.*-amd64' || true
+-apt -y autoremove --purge
++# (Optional) remove stock Debian kernel — only safe after confirming PVE kernel boots
++if [[ "${KEEP_DEBIAN_KERNEL:-0}" != "1" ]]; then
++  apt -y remove linux-image-amd64 'linux-image-6.*-amd64' || true
++  apt -y autoremove --purge
++fi
+ 
+-echo "Reboot into Proxmox VE kernel."
++log "Reboot into Proxmox VE kernel, then run pve9_postinstall.sh"
++if [[ "$PROFILE" == "cluster-node" ]]; then
++  log "After reboot: run 'pvecm add <controller>' to join the cluster."
++fi
+diff --git a/deploy/provision/hostinger-kvm-setup.sh b/deploy/provision/hostinger-kvm-setup.sh
+index 62b76e321..63e74a503 100644
+--- a/deploy/provision/hostinger-kvm-setup.sh
++++ b/deploy/provision/hostinger-kvm-setup.sh
+@@ -39,16 +39,21 @@ log_section() { echo -e "${BLUE}[====]${NC} $1"; }
+ # Validate node type
+ validate_node_type() {
+     case "$NODE_TYPE" in
+-        kvm4-1|kvm4-2|kvm2|gpu-5090) ;;
++        kvm4-1|kvm4-2|kvm2|gpu-5090|rdna4-workstation|dgx-spark|pve-member) ;;
+         *)
+             log_error "Invalid node type: '$NODE_TYPE'"
+-            echo "Usage: $0 <kvm4-1|kvm4-2|kvm2|gpu-5090>"
++            echo "Usage: $0 <node-type>"
+             echo ""
+-            echo "Node types:"
+-            echo "  kvm4-1    API Gateway (TensorZero, Agent Zero, Hi-RAG CPU)"
+-            echo "  kvm4-2    Data/Storage (Supabase, Qdrant, Neo4j, Meilisearch)"
+-            echo "  kvm2      Exit Node (Tailscale exit, Nginx, SSL termination)"
+-            echo "  gpu-5090  GPU Node (vLLM, Ollama, GPU Orchestrator)"
++            echo "VPS node types (Hostinger KVM):"
++            echo "  kvm4-1            API Gateway (TensorZero, Agent Zero, Hi-RAG CPU)"
++            echo "  kvm4-2            Data/Storage (Supabase, Qdrant, Neo4j, Meilisearch)"
++            echo "  kvm2              Exit Node (Tailscale exit, Nginx, SSL, RustDesk relay)"
++            echo "  gpu-5090          GPU Node (vLLM, Ollama, GPU Orchestrator) — NVIDIA"
++            echo ""
++            echo "Workstation node types (bare-metal AI lab):"
++            echo "  rdna4-workstation AMD Ryzen 9850X3D + dual R9700 (ROCm 7.1 + llama.cpp HIP)"
++            echo "  dgx-spark         NVIDIA DGX Spark ARM64 overlay (Ollama + fleet agent)"
++            echo "  pve-member        Proxmox VE 9 cluster member (no Docker-on-host; VMs only)"
+             exit 1
+             ;;
+     esac
+@@ -58,9 +63,13 @@ validate_node_type() {
+ check_env() {
+     log_section "Checking environment..."
+ 
+-    if [ -z "${GITHUB_PAT:-}" ]; then
+-        log_error "GITHUB_PAT not set. Generate at: https://github.com/settings/tokens/new"
+-        exit 1
++    # GITHUB_PAT required for any node that will run a GitHub Actions runner.
++    # pve-member runs NO runner on the hypervisor (VMs do), so skip the check.
++    if [ "$NODE_TYPE" != "pve-member" ]; then
++        if [ -z "${GITHUB_PAT:-}" ]; then
++            log_error "GITHUB_PAT not set. Generate at: https://github.com/settings/tokens/new"
++            exit 1
++        fi
+     fi
+ 
+     if [ -z "${TAILSCALE_AUTHKEY:-}" ]; then
+@@ -68,6 +77,10 @@ check_env() {
+         log_info "Generate at: https://login.tailscale.com/admin/settings/keys"
+     fi
+ 
++    if [ -z "${CHIT_PASSPHRASE:-}" ]; then
++        log_warn "CHIT_PASSPHRASE not set. Provisioning beacon will be emitted unsigned."
++    fi
++
+     log_info "Node type: $NODE_TYPE"
+     log_info "Hostname: $(hostname)"
+     log_info "OS: $(. /etc/os-release && echo "$PRETTY_NAME")"
+@@ -132,6 +145,24 @@ harden_system() {
+             ufw allow 11434/tcp comment "Ollama"
+             ufw allow 8100:8160/tcp comment "vLLM model ports"
+             ;;
++        rdna4-workstation)
++            # AMD R9700 inference node — llama.cpp HIP server + metrics
++            ufw allow 8080/tcp comment "llama-server (OpenAI-compatible)"
++            ufw allow 9835/tcp comment "rocm-smi Prometheus exporter"
++            ufw allow 8200/tcp comment "GPU Orchestrator"
++            ;;
++        dgx-spark)
++            # NVIDIA DGX Spark ARM64 — Ollama + fleet agent
++            ufw allow 11434/tcp comment "Ollama"
++            ufw allow 8200/tcp comment "GPU Orchestrator"
++            ;;
++        pve-member)
++            # Proxmox cluster member — PVE web UI + corosync cluster ports
++            ufw allow 8006/tcp comment "PVE Web UI"
++            ufw allow 5404:5412/udp comment "Corosync cluster membership"
++            ufw allow 22/tcp comment "SSH"
++            # Deliberately NO Docker ports — containers run in VMs, not host
++            ;;
+     esac
+ 
+     ufw --force enable
+@@ -166,6 +197,12 @@ EOF
+ install_docker() {
+     log_section "Step 2: Installing Docker..."
+ 
++    if [ "$NODE_TYPE" = "pve-member" ]; then
++        log_info "Skipping Docker — PVE cluster members run containers inside VMs/LXCs, not on the host."
++        log_info "See pmoves/docs/infrastructure/docker_proxmox_integration.md"
++        return 0
++    fi
++
+     if command -v docker &>/dev/null; then
+         log_info "Docker already installed: $(docker --version)"
+         return 0
+@@ -218,22 +255,35 @@ install_tailscale() {
+     )
+ 
+     # KVM2 is the exit node
+-    if [ "$NODE_TYPE" = "kvm2" ]; then
+-        log_info "Configuring as Tailscale exit node..."
+-        # Enable IP forwarding for exit node
+-        sysctl -w net.ipv4.ip_forward=1
+-        sysctl -w net.ipv6.conf.all.forwarding=1
+-        cat >> /etc/sysctl.d/99-tailscale.conf <<'EOF'
++    case "$NODE_TYPE" in
++        kvm2)
++            log_info "Configuring as Tailscale exit node..."
++            # Enable IP forwarding for exit node
++            sysctl -w net.ipv4.ip_forward=1
++            sysctl -w net.ipv6.conf.all.forwarding=1
++            cat >> /etc/sysctl.d/99-tailscale.conf <<'EOF'
+ net.ipv4.ip_forward = 1
+ net.ipv6.conf.all.forwarding = 1
+ EOF
+-        ts_args+=(--advertise-exit-node)
+-        ts_args+=(--tag=tag:pmoves --tag=tag:kvm --tag=tag:exit)
+-    elif [ "$NODE_TYPE" = "gpu-5090" ]; then
+-        ts_args+=(--tag=tag:pmoves --tag=tag:gpu --tag=tag:gpu-5090 --tag=tag:production)
+-    else
+-        ts_args+=(--tag=tag:pmoves --tag=tag:kvm --tag=tag:production)
+-    fi
++            ts_args+=(--advertise-exit-node)
++            ts_args+=(--tag=tag:pmoves --tag=tag:kvm --tag=tag:exit)
++            ;;
++        gpu-5090)
++            ts_args+=(--tag=tag:pmoves --tag=tag:gpu --tag=tag:gpu-5090 --tag=tag:production)
++            ;;
++        rdna4-workstation)
++            ts_args+=(--tag=tag:pmoves --tag=tag:gpu --tag=tag:rdna4 --tag=tag:production)
++            ;;
++        dgx-spark)
++            ts_args+=(--tag=tag:pmoves --tag=tag:gpu --tag=tag:spark --tag=tag:arm64 --tag=tag:production)
++            ;;
++        pve-member)
++            ts_args+=(--tag=tag:pmoves --tag=tag:pve --tag=tag:cluster --tag=tag:production)
++            ;;
++        *)
++            ts_args+=(--tag=tag:pmoves --tag=tag:kvm --tag=tag:production)
++            ;;
++    esac
+ 
+     tailscale up "${ts_args[@]}"
+ 
+@@ -257,10 +307,17 @@ EOF
+ install_runner() {
+     log_section "Step 4: Installing GitHub Actions runner..."
+ 
++    if [ "$NODE_TYPE" = "pve-member" ]; then
++        log_info "Skipping runner install — GitHub Actions runners live inside PVE VMs, not on the hypervisor."
++        return 0
++    fi
++
+     # Create runner user if not exists
+     if ! id -u runner &>/dev/null; then
+         useradd -m -s /bin/bash runner
+-        usermod -aG docker runner
++        if command -v docker &>/dev/null; then
++            usermod -aG docker runner
++        fi
+     fi
+ 
+     # Use the hardened runner install script
+@@ -285,6 +342,8 @@ install_runner() {
+             kvm4-2) labels="self-hosted,vps,kvm4,kvm4-2,production,Linux,X64" ;;
+             kvm2)   labels="self-hosted,vps,kvm2,backup,Linux,X64" ;;
+             gpu-5090) labels="self-hosted,vps,gpu,gpu-5090,production,Linux,X64" ;;
++            rdna4-workstation) labels="self-hosted,ai-lab,gpu,rdna4,rocm,production,Linux,X64" ;;
++            dgx-spark) labels="self-hosted,ai-lab,gpu,spark,arm64,production,Linux,ARM64" ;;
+         esac
+ 
+         sudo -u runner mkdir -p "$runner_dir"
+@@ -305,8 +364,10 @@ install_runner() {
+         # Download and configure runner
+         cd "$runner_dir"
+         if [ ! -f "./config.sh" ]; then
++            local runner_arch="x64"
++            [ "$NODE_TYPE" = "dgx-spark" ] && runner_arch="arm64"
+             curl -sL -o actions-runner.tar.gz \
+-                "https://github.com/actions/runner/releases/download/v${runner_version}/actions-runner-linux-x64-${runner_version}.tar.gz"
++                "https://github.com/actions/runner/releases/download/v${runner_version}/actions-runner-linux-${runner_arch}-${runner_version}.tar.gz"
+             sudo -u runner tar xzf actions-runner.tar.gz
+             rm actions-runner.tar.gz
+         fi
+@@ -354,6 +415,83 @@ EOF
+     log_info "Work directory ready at /opt/pmoves"
+ }
+ 
++# Step 5b: RDNA4 GPU stack (only for rdna4-workstation)
++install_rdna4_stack() {
++    if [ "$NODE_TYPE" != "rdna4-workstation" ]; then
++        return 0
++    fi
++
++    log_section "Step 5b: Installing RDNA4 (ROCm 7.1 + llama.cpp HIP)..."
++
++    local installer="${SCRIPT_DIR}/rdna4-gpu-install.sh"
++    if [ ! -f "$installer" ]; then
++        log_error "rdna4-gpu-install.sh not found at: $installer"
++        return 1
++    fi
++
++    local extra_flags=()
++    local gpu_count
++    gpu_count="$(lspci -nn 2>/dev/null | grep -iE 'amd.*radeon.*(navi 48|9070|9700)' | wc -l || echo 0)"
++    if [ "${gpu_count:-0}" -ge 2 ]; then
++        log_info "Detected ${gpu_count} R9700-class GPUs — enabling --dual-gpu"
++        extra_flags+=("--dual-gpu")
++    fi
++
++    bash "$installer" "${extra_flags[@]}"
++    log_info "RDNA4 stack provisioning dispatched (reboot may be required for amdgpu-dkms)."
++}
++
++# Step 5c: DGX Spark ARM64 overlay (Ollama + fleet agent only; stock OS retained)
++install_dgx_spark_overlay() {
++    if [ "$NODE_TYPE" != "dgx-spark" ]; then
++        return 0
++    fi
++
++    log_section "Step 5c: Installing DGX Spark ARM64 overlay..."
++
++    # Ollama ARM64 install (NVIDIA DGX OS already ships CUDA-on-ARM drivers)
++    if ! command -v ollama &>/dev/null; then
++        log_info "Installing Ollama (ARM64)..."
++        curl -fsSL https://ollama.com/install.sh | sh
++    else
++        log_info "Ollama already installed: $(ollama --version 2>/dev/null || true)"
++    fi
++
++    # Expose Ollama on all interfaces (Tailscale ACL gates access)
++    mkdir -p /etc/systemd/system/ollama.service.d
++    cat >/etc/systemd/system/ollama.service.d/override.conf <<'EOF'
++[Service]
++Environment="OLLAMA_HOST=0.0.0.0:11434"
++Environment="OLLAMA_ORIGINS=*"
++EOF
++    systemctl daemon-reload
++    systemctl enable --now ollama || true
++
++    log_info "DGX Spark overlay ready. Stock NVIDIA DGX OS retained."
++}
++
++# Step 5d: PVE cluster-member helper (Tailscale join + cluster prep notes)
++install_pve_member_prep() {
++    if [ "$NODE_TYPE" != "pve-member" ]; then
++        return 0
++    fi
++
++    log_section "Step 5d: PVE cluster-member preparation..."
++
++    # Ensure corosync IP forwarding + multicast hints (PVE cluster requirement)
++    if ! grep -q 'pve.cluster' /etc/sysctl.d/99-pmoves-pve.conf 2>/dev/null; then
++        cat >/etc/sysctl.d/99-pmoves-pve.conf <<'EOF'
++# PMOVES PVE cluster member sysctls
++net.ipv4.conf.all.rp_filter = 2
++EOF
++        sysctl --system >/dev/null 2>&1 || true
++    fi
++
++    log_info "PVE prep complete. Join cluster with:"
++    log_info "  pvecm add <controller-host-or-tailscale-name>"
++    log_info "See deploy/proxmox/cluster/join-cluster.sh (created in Phase G)"
++}
++
+ # Step 6: PMOVES.Flare model namespace & vLLM endpoint
+ setup_flare_config() {
+     log_section "Step 6: Configuring PMOVES.Flare model namespace..."
+@@ -369,9 +507,10 @@ MODEL_NAMESPACE=pmoves
+ EOF
+     fi
+ 
+-    if [ "$NODE_TYPE" = "gpu-5090" ]; then
+-        if ! grep -q '^VLLM_ENDPOINT=' "$env_file" 2>/dev/null; then
+-            cat >> "$env_file" <<'EOF'
++    case "$NODE_TYPE" in
++        gpu-5090)
++            if ! grep -q '^VLLM_ENDPOINT=' "$env_file" 2>/dev/null; then
++                cat >> "$env_file" <<'EOF'
+ 
+ # vLLM remote GPU endpoint
+ VLLM_ENDPOINT=http://localhost:8100
+@@ -380,10 +519,35 @@ VLLM_ENDPOINT_LARGE=http://localhost:8130
+ # Coding plan lane
+ GLM_CODING_PLAN_ENABLED=true
+ EOF
+-        fi
+-    else
+-        if ! grep -q '^VLLM_ENDPOINT=' "$env_file" 2>/dev/null; then
+-            cat >> "$env_file" <<'EOF'
++            fi
++            ;;
++        rdna4-workstation)
++            if ! grep -q '^LLAMA_SERVER_ENDPOINT=' "$env_file" 2>/dev/null; then
++                cat >> "$env_file" <<'EOF'
++
++# Local llama.cpp HIP server (R9700 / RDNA4 gfx1201)
++LLAMA_SERVER_ENDPOINT=http://localhost:8080
++INFERENCE_BACKEND=llamacpp-rocm
++EOF
++            fi
++            ;;
++        dgx-spark)
++            if ! grep -q '^OLLAMA_ENDPOINT=' "$env_file" 2>/dev/null; then
++                cat >> "$env_file" <<'EOF'
++
++# Local Ollama on DGX Spark ARM64
++OLLAMA_ENDPOINT=http://localhost:11434
++INFERENCE_BACKEND=ollama-arm64
++EOF
++            fi
++            ;;
++        pve-member)
++            # PVE host keeps env minimal — services live in VMs
++            :
++            ;;
++        *)
++            if ! grep -q '^VLLM_ENDPOINT=' "$env_file" 2>/dev/null; then
++                cat >> "$env_file" <<'EOF'
+ 
+ # vLLM remote GPU endpoint (routed via Tailscale)
+ VLLM_ENDPOINT=http://pmoves-gpu-5090:8100
+@@ -392,12 +556,29 @@ VLLM_ENDPOINT_LARGE=http://pmoves-gpu-5090:8130
+ # Coding plan lane
+ GLM_CODING_PLAN_ENABLED=true
+ EOF
+-        fi
+-    fi
++            fi
++            ;;
++    esac
+ 
+     log_info "PMOVES.Flare model namespace configured (MODEL_NAMESPACE=pmoves)"
+ }
+ 
++# CHIT-signed completion beacon — best-effort, skipped if tooling/passphrase absent
++emit_provision_beacon() {
++    log_section "Emitting provisioning beacon..."
++
++    local sign_trail="/opt/pmoves/pmoves/tools/sign_trail.py"
++    if [ -x "$sign_trail" ] && [ -n "${CHIT_PASSPHRASE:-}" ]; then
++        python3 "$sign_trail" \
++            --agent-id "hostinger-kvm-setup" \
++            --summary "Provisioned $NODE_TYPE on $(hostname)" \
++            --phase "Phase A" 2>/dev/null \
++            || log_warn "CHIT beacon emit failed (non-fatal)"
++    else
++        log_info "CHIT beacon skipped (sign_trail.py or CHIT_PASSPHRASE absent)"
++    fi
++}
++
+ # Show summary
+ show_summary() {
+     log_section "========================================="
+@@ -435,6 +616,26 @@ show_summary() {
+             echo "  3. Verify orchestrator: curl http://localhost:8200/healthz"
+             echo "  4. Pull a model:  curl http://localhost:11434/api/pull -d '{\"name\":\"qwen3-coder:32b\"}'"
+             ;;
++        rdna4-workstation)
++            echo "  1. Reboot to activate amdgpu-dkms kernel module"
++            echo "  2. Verify ROCm: rocminfo | head -40"
++            echo "  3. Pull a model: make -C pmoves rdna4-model-pull  (or manual: huggingface-cli download)"
++            echo "  4. Start llama-server: systemctl start llama-server"
++            echo "  5. Smoke test: curl http://localhost:8080/v1/models"
++            echo "  6. GPU metrics: curl http://localhost:9835/"
++            ;;
++        dgx-spark)
++            echo "  1. Verify CUDA-on-ARM: nvidia-smi  (stock DGX OS ships drivers)"
++            echo "  2. Pull a model: ollama pull gemma2:27b"
++            echo "  3. Smoke test: curl http://localhost:11434/api/tags"
++            echo "  4. Ensure Tailscale tag:spark is approved in ACL"
++            ;;
++        pve-member)
++            echo "  1. Join PVE cluster: pvecm add <controller-tailscale-hostname>"
++            echo "  2. Verify membership: pvecm status"
++            echo "  3. Configure storage (ZFS or Ceph): see deploy/proxmox/cluster/ (Phase G)"
++            echo "  4. Enable HA for critical VMs: see PROXMOX_CLUSTER_RUNBOOK.md (Phase G)"
++            ;;
+     esac
+     echo ""
+     echo "  Runner status: sudo systemctl status github-runner-pmoves-${NODE_TYPE}"
+@@ -456,7 +657,11 @@ main() {
+     install_tailscale
+     install_runner
+     setup_workdir
++    install_rdna4_stack
++    install_dgx_spark_overlay
++    install_pve_member_prep
+     setup_flare_config
++    emit_provision_beacon
+     show_summary
+ }
+ 
+diff --git a/deploy/provision/rdna4-gpu-install.sh b/deploy/provision/rdna4-gpu-install.sh
+new file mode 100644
+index 000000000..7af312534
+--- /dev/null
++++ b/deploy/provision/rdna4-gpu-install.sh
+@@ -0,0 +1,361 @@
++#!/usr/bin/env bash
++# AMD Radeon AI Pro R9700 (RDNA4 gfx1201) GPU stack installer
++#
++# Installs ROCm 7.1, AMD GPU drivers, and builds the gfx1201-compatible
++# llama.cpp HIP fork (Ollama bundled ROCm v6 does not support gfx1201 as of
++# 2026-04). Produces a systemd-managed llama-server at :8080 with an
++# OpenAI-compatible API.
++#
++# Sourced by deploy/provision/hostinger-kvm-setup.sh when
++# --node-type=rdna4-workstation is selected, but safe to run standalone.
++#
++# Target hardware:
++#   - AMD Ryzen 9850X3D (or any modern x86_64)
++#   - 1x or 2x AMD Radeon AI Pro R9700 (32 GB, RDNA4, gfx1201)
++#   - Ubuntu 24.04 Server (noble) minimum
++#
++# Idempotent. Safe to re-run.
++#
++# Usage (standalone):
++#   sudo bash rdna4-gpu-install.sh [--model-pull] [--dual-gpu]
++#
++# Flags:
++#   --model-pull  Download default Gemma 4 GGUF after install (~18 GB)
++#   --dual-gpu    Configure llama-server for tensor-split across 2 GPUs
++
++set -euo pipefail
++
++# ------------------------------------------------------------------
++# Configuration
++# ------------------------------------------------------------------
++ROCM_VERSION="${ROCM_VERSION:-7.1}"
++LLAMA_CPP_REPO="${LLAMA_CPP_REPO:-https://github.com/tlee933/llama.cpp-rdna4-gfx1201}"
++LLAMA_CPP_DIR="${LLAMA_CPP_DIR:-/opt/llama.cpp-rdna4}"
++LLAMA_SERVER_PORT="${LLAMA_SERVER_PORT:-8080}"
++LLAMA_MODELS_DIR="${LLAMA_MODELS_DIR:-/var/lib/llama-models}"
++DEFAULT_MODEL="${DEFAULT_MODEL:-bartowski/gemma-2-27b-it-GGUF}"
++GPU_TARGETS="${GPU_TARGETS:-gfx1201}"
++
++MODEL_PULL=false
++DUAL_GPU=false
++for arg in "$@"; do
++  case "$arg" in
++    --model-pull) MODEL_PULL=true ;;
++    --dual-gpu)   DUAL_GPU=true ;;
++    *) echo "Unknown flag: $arg" >&2; exit 2 ;;
++  esac
++done
++
++log() { echo -e "\n[rdna4] $*"; }
++
++require_root() {
++  if [[ $EUID -ne 0 ]]; then
++    echo "[rdna4] ERROR: must run as root (sudo)" >&2
++    exit 1
++  fi
++}
++
++# ------------------------------------------------------------------
++# Pre-flight
++# ------------------------------------------------------------------
++preflight() {
++  log "Pre-flight checks"
++
++  . /etc/os-release
++  if [[ "$ID" != "ubuntu" ]] || [[ "${VERSION_ID%%.*}" -lt 24 ]]; then
++    echo "[rdna4] ERROR: Ubuntu 24.04+ required (found $PRETTY_NAME)" >&2
++    exit 1
++  fi
++
++  if ! lspci -nn 2>/dev/null | grep -iE 'amd|ati' | grep -iE 'radeon|navi' >/dev/null; then
++    echo "[rdna4] WARN: no AMD Radeon GPU detected via lspci; continuing anyway" >&2
++  fi
++
++  local gpu_count
++  gpu_count="$(lspci -nn 2>/dev/null | grep -iE 'amd.*radeon.*(navi 48|rdna 4|9070|9700)' | wc -l || echo 0)"
++  if [[ "$DUAL_GPU" == "true" ]] && [[ "$gpu_count" -lt 2 ]]; then
++    echo "[rdna4] WARN: --dual-gpu requested but fewer than 2 R9700-class GPUs detected" >&2
++  fi
++}
++
++# ------------------------------------------------------------------
++# ROCm install
++# ------------------------------------------------------------------
++install_rocm() {
++  if dpkg -l rocm-dev 2>/dev/null | grep -q '^ii'; then
++    log "ROCm already installed; skipping"
++    return 0
++  fi
++
++  log "Installing ROCm ${ROCM_VERSION}"
++
++  DEBIAN_FRONTEND=noninteractive apt-get update -qq
++  DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
++    wget curl gnupg ca-certificates lsb-release
++
++  install -d -m 0755 /etc/apt/keyrings
++  curl -fsSL https://repo.radeon.com/rocm/rocm.gpg.key \
++    | gpg --dearmor -o /etc/apt/keyrings/rocm.gpg
++
++  cat >/etc/apt/sources.list.d/rocm.list <<EOF
++deb [arch=amd64 signed-by=/etc/apt/keyrings/rocm.gpg] https://repo.radeon.com/rocm/apt/${ROCM_VERSION} noble main
++EOF
++
++  cat >/etc/apt/sources.list.d/amdgpu.list <<EOF
++deb [arch=amd64 signed-by=/etc/apt/keyrings/rocm.gpg] https://repo.radeon.com/amdgpu/${ROCM_VERSION}/ubuntu noble main
++EOF
++
++  # Priority pin so rocm packages aren't clobbered by stock Ubuntu
++  cat >/etc/apt/preferences.d/rocm-pin-600 <<EOF
++Package: *
++Pin: release o=repo.radeon.com
++Pin-Priority: 600
++EOF
++
++  apt-get update -qq
++  DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
++    amdgpu-dkms \
++    rocm-dev \
++    rocm-libs \
++    rocm-hip-runtime \
++    rocm-smi-lib \
++    rocminfo \
++    hip-dev \
++    hipcc
++
++  # User groups for GPU access
++  for user in "${SUDO_USER:-}" pmoves runner; do
++    [[ -z "$user" ]] && continue
++    if id "$user" &>/dev/null; then
++      usermod -aG render,video "$user" || true
++    fi
++  done
++
++  log "ROCm ${ROCM_VERSION} installed"
++}
++
++# ------------------------------------------------------------------
++# Build llama.cpp with gfx1201 kernels
++# ------------------------------------------------------------------
++build_llama_cpp() {
++  if [[ -x "${LLAMA_CPP_DIR}/build/bin/llama-server" ]]; then
++    log "llama.cpp already built at ${LLAMA_CPP_DIR}; rebuilding to catch upstream fixes"
++    git -C "${LLAMA_CPP_DIR}" fetch --depth 1 origin
++    git -C "${LLAMA_CPP_DIR}" reset --hard origin/HEAD
++  else
++    log "Cloning llama.cpp RDNA4 fork"
++    git clone --depth 1 "${LLAMA_CPP_REPO}" "${LLAMA_CPP_DIR}"
++  fi
++
++  log "Building llama.cpp with HIP target ${GPU_TARGETS}"
++  DEBIAN_FRONTEND=noninteractive apt-get install -y -qq cmake build-essential ninja-build
++
++  cmake -S "${LLAMA_CPP_DIR}" -B "${LLAMA_CPP_DIR}/build" \
++    -G Ninja \
++    -DGGML_HIP=ON \
++    -DAMDGPU_TARGETS="${GPU_TARGETS}" \
++    -DCMAKE_BUILD_TYPE=Release \
++    -DCMAKE_INSTALL_PREFIX=/usr/local
++
++  cmake --build "${LLAMA_CPP_DIR}/build" --parallel "$(nproc)"
++
++  install -m 0755 "${LLAMA_CPP_DIR}/build/bin/llama-server" /usr/local/bin/llama-server
++  install -m 0755 "${LLAMA_CPP_DIR}/build/bin/llama-cli" /usr/local/bin/llama-cli || true
++  install -m 0755 "${LLAMA_CPP_DIR}/build/bin/llama-bench" /usr/local/bin/llama-bench || true
++
++  log "llama.cpp RDNA4 binaries installed to /usr/local/bin/"
++}
++
++# ------------------------------------------------------------------
++# Systemd llama-server
++# ------------------------------------------------------------------
++install_llama_server_unit() {
++  log "Installing llama-server systemd unit"
++
++  mkdir -p "${LLAMA_MODELS_DIR}"
++
++  local tensor_split_arg=""
++  if [[ "$DUAL_GPU" == "true" ]]; then
++    tensor_split_arg="--tensor-split 0.5,0.5 --split-mode row"
++  fi
++
++  cat >/etc/default/llama-server <<EOF
++# llama-server runtime overrides
++LLAMA_MODEL_PATH=${LLAMA_MODELS_DIR}/default.gguf
++LLAMA_HOST=0.0.0.0
++LLAMA_PORT=${LLAMA_SERVER_PORT}
++LLAMA_CONTEXT_SIZE=8192
++LLAMA_EXTRA_ARGS="${tensor_split_arg}"
++EOF
++
++  cat >/etc/systemd/system/llama-server.service <<'EOF'
++[Unit]
++Description=llama.cpp OpenAI-compatible server (AMD R9700 / RDNA4)
++After=network-online.target
++Wants=network-online.target
++
++[Service]
++Type=simple
++EnvironmentFile=/etc/default/llama-server
++ExecStart=/bin/sh -c '/usr/local/bin/llama-server --model $LLAMA_MODEL_PATH --host $LLAMA_HOST --port $LLAMA_PORT --ctx-size $LLAMA_CONTEXT_SIZE $LLAMA_EXTRA_ARGS'
++Restart=on-failure
++RestartSec=5s
++User=root
++
++[Install]
++WantedBy=multi-user.target
++EOF
++
++  systemctl daemon-reload
++  systemctl enable llama-server.service
++  log "llama-server unit enabled (start with: systemctl start llama-server)"
++}
++
++# ------------------------------------------------------------------
++# rocm-smi Prometheus exporter (systemd, outputs /metrics via socat)
++# ------------------------------------------------------------------
++install_rocm_smi_exporter() {
++  log "Installing rocm-smi Prometheus exporter"
++
++  cat >/usr/local/bin/rocm-smi-exporter.sh <<'EOF'
++#!/usr/bin/env bash
++# Minimal Prometheus exporter for rocm-smi metrics. Outputs plain text on stdout.
++set -euo pipefail
++
++while true; do
++  {
++    echo "# HELP rocm_gpu_temperature_celsius GPU temperature"
++    echo "# TYPE rocm_gpu_temperature_celsius gauge"
++    rocm-smi --showtemp --json 2>/dev/null \
++      | jq -r 'to_entries[] | select(.value["Temperature (Sensor edge) (C)"]) | "rocm_gpu_temperature_celsius{gpu=\"\(.key)\"} \(.value["Temperature (Sensor edge) (C)"])"' 2>/dev/null || true
++
++    echo "# HELP rocm_gpu_memory_used_bytes GPU memory used"
++    echo "# TYPE rocm_gpu_memory_used_bytes gauge"
++    rocm-smi --showmemuse --json 2>/dev/null \
++      | jq -r 'to_entries[] | select(.value["VRAM Total Used Memory (B)"]) | "rocm_gpu_memory_used_bytes{gpu=\"\(.key)\"} \(.value["VRAM Total Used Memory (B)"])"' 2>/dev/null || true
++
++    echo "# HELP rocm_gpu_utilization_ratio GPU utilization 0-1"
++    echo "# TYPE rocm_gpu_utilization_ratio gauge"
++    rocm-smi --showuse --json 2>/dev/null \
++      | jq -r 'to_entries[] | select(.value["GPU use (%)"]) | "rocm_gpu_utilization_ratio{gpu=\"\(.key)\"} \((.value["GPU use (%)"] | tonumber) / 100)"' 2>/dev/null || true
++  } > /run/rocm-smi-metrics.prom.$$
++  mv /run/rocm-smi-metrics.prom.$$ /run/rocm-smi-metrics.prom
++  sleep 10
++done
++EOF
++  chmod 0755 /usr/local/bin/rocm-smi-exporter.sh
++
++  cat >/etc/systemd/system/rocm-smi-exporter.service <<'EOF'
++[Unit]
++Description=rocm-smi Prometheus exporter (file-based)
++After=network.target
++
++[Service]
++Type=simple
++ExecStart=/usr/local/bin/rocm-smi-exporter.sh
++Restart=on-failure
++RestartSec=5s
++
++[Install]
++WantedBy=multi-user.target
++EOF
++
++  cat >/etc/systemd/system/rocm-smi-http.socket <<EOF
++[Unit]
++Description=rocm-smi exporter HTTP socket
++
++[Socket]
++ListenStream=9835
++Accept=yes
++
++[Install]
++WantedBy=sockets.target
++EOF
++
++  cat >/etc/systemd/system/rocm-smi-http@.service <<'EOF'
++[Unit]
++Description=rocm-smi exporter HTTP responder
++
++[Service]
++ExecStart=/bin/sh -c 'printf "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\n"; cat /run/rocm-smi-metrics.prom 2>/dev/null || true'
++StandardInput=socket
++StandardOutput=socket
++EOF
++
++  systemctl daemon-reload
++  systemctl enable --now rocm-smi-exporter.service rocm-smi-http.socket
++  log "rocm-smi exporter on :9835/metrics"
++}
++
++# ------------------------------------------------------------------
++# Optional model pull
++# ------------------------------------------------------------------
++pull_default_model() {
++  log "Pulling default model: ${DEFAULT_MODEL}"
++  if ! command -v huggingface-cli >/dev/null 2>&1; then
++    DEBIAN_FRONTEND=noninteractive apt-get install -y -qq python3-pip python3-venv
++    python3 -m venv /opt/hf-cli-venv
++    /opt/hf-cli-venv/bin/pip install --quiet --upgrade pip huggingface_hub
++    ln -sf /opt/hf-cli-venv/bin/huggingface-cli /usr/local/bin/huggingface-cli
++  fi
++
++  huggingface-cli download "${DEFAULT_MODEL}" \
++    --include "*Q4_K_M*.gguf" \
++    --local-dir "${LLAMA_MODELS_DIR}" \
++    --local-dir-use-symlinks=False || {
++      log "WARN: model download failed; service will remain configured but not active"
++      return 0
++    }
++
++  # Point default.gguf at the first Q4_K_M file
++  local latest
++  latest="$(find "${LLAMA_MODELS_DIR}" -name '*Q4_K_M*.gguf' -printf '%T@ %p\n' | sort -n | tail -1 | awk '{print $2}')"
++  if [[ -n "$latest" ]]; then
++    ln -sf "$latest" "${LLAMA_MODELS_DIR}/default.gguf"
++    log "default.gguf -> $latest"
++  fi
++}
++
++# ------------------------------------------------------------------
++# CHIT completion beacon (best-effort — skipped if tooling absent)
++# ------------------------------------------------------------------
++emit_completion_beacon() {
++  if [[ -x /opt/pmoves/pmoves/tools/sign_trail.py ]] && [[ -n "${CHIT_PASSPHRASE:-}" ]]; then
++    log "Emitting CHIT completion beacon"
++    python3 /opt/pmoves/pmoves/tools/sign_trail.py \
++      --agent-id "rdna4-provision" \
++      --summary "RDNA4 GPU stack provisioned on $(hostname)" \
++      --phase "Phase A" 2>/dev/null || true
++  fi
++}
++
++# ------------------------------------------------------------------
++# Main
++# ------------------------------------------------------------------
++main() {
++  require_root
++  preflight
++  install_rocm
++  build_llama_cpp
++  install_llama_server_unit
++  install_rocm_smi_exporter
++
++  if [[ "$MODEL_PULL" == "true" ]]; then
++    pull_default_model
++  fi
++
++  emit_completion_beacon
++
++  log "==========================================="
++  log "RDNA4 GPU stack ready"
++  log "==========================================="
++  log "Next steps:"
++  log "  1. Drop a GGUF model into ${LLAMA_MODELS_DIR}/default.gguf (or symlink)"
++  log "  2. systemctl start llama-server"
++  log "  3. curl http://127.0.0.1:${LLAMA_SERVER_PORT}/v1/models"
++  log "  4. Metrics: curl http://127.0.0.1:9835/"
++  log ""
++  log "Kernel reboot may be required for amdgpu-dkms to load."
++}
++
++main "$@"
