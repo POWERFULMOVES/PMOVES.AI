@@ -64,7 +64,11 @@ autoinstall:
 
   # --- Storage ---
   # ZFS mirror on 2x NVMe (strongly recommended for dev workstation).
-  # If only 1 NVMe present, autoinstall will fail out; rerun with --storage-mode=single.
+  # If only 1 NVMe present, autoinstall will fail out. Single-disk operators
+  # must hand-edit this block before burning the USB — replace the `storage:`
+  # section with:  storage: { layout: { name: direct } }
+  # A `--storage-mode=single|redundant` flag in build-usb.sh would automate the
+  # swap — not yet implemented; track in follow-up issue.
   storage:
     layout:
       name: zfs
