@@ -730,7 +730,7 @@ services:
       resources:
         limits:
           cpus: '0.5'
-          memory: 256M
+          memory: 512M
   supabase-realtime:
     <<: *tier-supabase-hardened
     image: supabase/realtime:v2.72.0
