@@ -1,3 +1,15 @@
+project_id = "pmoves"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "graphql_public", "pmoves_core", "pmoves_kb"]
+extra_search_path = ["public", "extensions", "pmoves_core", "pmoves_kb"]
+max_rows = 1000
+
+[api.tls]
+enabled = false
+
 # Port used by db diff command to initialize the shadow database.
 shadow_port = 54320
 # The database major version to use. This has to be the same as your remote database's. Run `SHOW
