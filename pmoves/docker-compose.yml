@@ -893,6 +893,14 @@ services:
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
+    # Bind Studio's Next.js server to all interfaces without a DNS lookup.
+    # Next.js 16+ reads HOSTNAME to pick its listen address; Docker sets
+    # HOSTNAME to the container's short ID by default, and Next.js then
+    # resolves that ID as a DNS name before binding. Resolution fails with
+    # `getaddrinfo EAI_AGAIN` (the short ID isn't registered in Docker's
+    # embedded DNS) and the server exits, kicking the container into a
+    # restart loop. Pinning to 0.0.0.0 skips the lookup entirely.
+    - HOSTNAME=0.0.0.0
     # Healthcheck: External check (Next.js 16 binds to container hostname, not localhost)
     # Note: Official Supabase uses node -e fetch but their image has different network config
     # We rely on container being started successfully (logs show "Ready in Xms")
@@ -1016,6 +1024,15 @@ services:
     networks:
     - pmoves_api
     - pmoves_data  # reach supabase-db, supabase-analytics
+    # Pin upstream resolvers for Deno cold-boot imports. The edge-runtime
+    # image fetches https://deno.land/std@...` at worker-bootstrap time;
+    # Docker's embedded DNS (127.0.0.11) intermittently fails to forward
+    # external queries on Docker Desktop Windows, leaving the worker stuck
+    # in `failed to lookup address information: Temporary failure in name
+    # resolution`. Explicit resolvers avoid the flap.
+    dns:
+    - 1.1.1.1
+    - 8.8.8.8
 
   # ---------------------------------------------------------------------------
   # Supabase Analytics (Logflare) — log analytics backend
