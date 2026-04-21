@@ -12,7 +12,7 @@
 #   - Relative volume paths resolve to /docker/{project-name}/ on VPS
 #
 # Config files (config.yaml, acl.yaml) must be uploaded separately via SSH
-# to /docker/headscale/config/ before or after compose deployment.
+# to /docker/{project-name}/config/ before or after compose deployment.
 # =============================================================================
 
 services:

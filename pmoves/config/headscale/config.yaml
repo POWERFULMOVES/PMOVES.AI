@@ -60,9 +60,9 @@ prefixes:
 # DNS Configuration
 # =============================================================================
 # MagicDNS is auto-enabled when base_domain is set.
-# base_domain must differ from the server_url domain.
+# base_domain must be disjoint from server_url hostname (Headscale 0.27.x validation).
 dns:
-  base_domain: pmoves.local
+  base_domain: ts.pmoves.net
   override_local_dns: true
   nameservers:
     global:
