@@ -197,7 +197,7 @@ services:
     environment:
     - PORT=${GATEWAY_AGENT_PORT:-8111}
     - AGENT_ZERO_URL=${AGENT_ZERO_URL:-http://agent-zero:8080}
-    - CIPHER_URL=${CIPHER_URL:-http://cipher-api:8096}
+    - CIPHER_URL=${CIPHER_URL:-http://cipher-api:8105}
     - TENSORZERO_URL=${TENSORZERO_URL:-http://tensorzero-gateway:3000}
     - SUPABASE_URL=${SUPABASE_URL:-http://supabase-kong:8000}
     - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY}
@@ -653,7 +653,7 @@ services:
     - CIPHER_API_TOKEN=${CIPHER_API_TOKEN:-}
     command: ["node", "dist/src/app/index.cjs", "--mode", "api", "--port", "3000", "--host", "0.0.0.0", "--agent", "/app/memAgent/cipher.yml", "--mcp-transport-type", "sse"]
     ports:
-    - "${CIPHER_BIND:-0.0.0.0}:${CIPHER_PORT:-8096}:3000"
+    - "${CIPHER_BIND:-0.0.0.0}:${CIPHER_PORT:-8105}:3000"
     depends_on:
       neo4j:
         condition: service_healthy

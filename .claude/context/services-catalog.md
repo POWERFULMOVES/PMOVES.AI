@@ -502,7 +502,7 @@ Comprehensive reference of all production services, ports, APIs, and integration
 - **CI Pipeline:** `build-images` (amd64, manual dispatch — via PMOVES-BoTZ submodule)
 
 ### Cipher Memory API (cipher-api)
-- **Port:** 8096 (remapped from internal 3000 to avoid Grafana conflict)
+- **Port:** 8105 (remapped from internal 3000 to avoid Grafana conflict)
 - **Purpose:** Knowledge-graph memory service for Claude Code and agents
 - **Backend:** Node.js + Neo4j
 - **API Endpoints:**
@@ -521,7 +521,7 @@ Comprehensive reference of all production services, ports, APIs, and integration
 - **Dependencies:** Neo4j (shared), NATS
 - **Compose Profile:** `agents`
 - **CI Pipeline:** `local-build-only` (compose `build:` directive)
-- **Health:** `GET http://localhost:8096/health`
+- **Health:** `GET http://localhost:8105/health`
 
 ## CHIT & Geometry Services
 

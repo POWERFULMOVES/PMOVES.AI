@@ -887,7 +887,7 @@ agents:
     class: specialized
     primary_type: data
     secondary_type: agent
-    port: 8096
+    port: 8105
     health: "/health"
     layers: [L0, L5]
     evolution_stage: base
@@ -2005,5 +2005,5 @@ agents:
       Level 11 Cipher Gateway Specialist. Extracts sonic fingerprints via ffprobe/ffmpeg
       lavfi (ebur128 R128 loudness, aspectralstats spectral analysis). Clusters DARKXSIDE
       beats into named sonic constellations, writes M3U8 playlists, checkpoints to Cipher
-      Memory at :8096, emits geometry events to the NATS Geometry Bus for Holographic
+      Memory at :8105, emits geometry events to the NATS Geometry Bus for Holographic
       CHIT Block generation. Monitored live via Glances REST API.
