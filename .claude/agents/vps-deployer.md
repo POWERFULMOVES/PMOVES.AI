@@ -159,3 +159,23 @@ Minimize ~10-15s round-trips:
 - Use base64 for file transfers (avoids SCP overhead)
 - Batch verification commands
 - Prefer Hostinger MCP over SSH when possible
+
+## mcp2cli Hostinger MCP Wiring
+
+The Hostinger API is accessed via the mcp2cli skill with ad-hoc stdio invocation:
+
+**Discovery** (list available tools):
+```
+mcp2cli server=<any> action=servers   # confirm not pre-configured
+mcp2cli mcp_stdio="npx hostinger-api-mcp@latest" mcp_env="API_TOKEN=§§secret(HOSTINGER_API_KEY)" action=list
+```
+
+**Key tools** (verify with action=help before calling):
+- `vps-get-virtual-machines-v1` — list VPS fleet, get IDs for fleet-map.yaml
+- `vps-create-new-project-v1` — deploy compose project
+- `vps-get-docker-compose-projects-v1` — check existing deployments
+- `vps-delete-docker-compose-project-v1` — remove project (rollback)
+- `vps-add-dns-record-v1` — DNS A/CNAME records
+- `vps-add-firewall-rule-v1` — open service ports
+
+**Important**: Always use `action=list` then `action=help` before `action=call` — tool names may change between Hostinger MCP versions. Never hardcode tool names from examples.
