@@ -309,3 +309,7 @@
 	path = PMOVES-ClawZ
 	url = https://github.com/POWERFULMOVES/PMOVES-ClawZ.git
 	branch = main
+[submodule "PMOVES-space-agent"]
+	path = PMOVES-space-agent
+	url = https://github.com/POWERFULMOVES/PMOVES-space-agent.git
+	branch = PMOVES.AI-Edition-Hardened
