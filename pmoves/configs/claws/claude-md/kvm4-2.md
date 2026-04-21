@@ -24,7 +24,7 @@ You may NOT: run docker, make, ssh to other nodes, or manage network/proxy servi
 | Qdrant | 6333 | Vector embeddings |
 | Meilisearch | 7700 | Full-text search |
 | Neo4j | 7474/7687 | Graph database (HTTP/Bolt) |
-| Cipher Memory | 8096 | Agent memory |
+| Cipher Memory | 8105 | Agent memory |
 
 ## Common Queries
 

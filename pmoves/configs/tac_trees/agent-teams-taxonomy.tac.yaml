@@ -88,7 +88,7 @@ root:
             notebook_sync   — Port 8095 — Open Notebook sync
             dox             — Document intelligence
             open_notebook   — Knowledge base (SurrealDB)
-            cipher_memory   — Port 8096 — Knowledge graph memory (Neo4j)
+            cipher_memory   — Port 8105 — Knowledge graph memory (Neo4j)
           agent_hint: codex
 
         - id: team.research.node_affinity
