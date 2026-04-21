@@ -463,7 +463,7 @@ Comprehensive reference of all production services, ports, APIs, and integration
   - Route advertisement
   - ACL policy enforcement
 - **Key APIs:**
-  - `GET /healthz` - Service health
+  - `GET /health` - Service health
   - `GET /metrics` - Prometheus metrics
   - `POST /api/v1/apikey` - Create auth keys
   - `GET /api/v1/machines` - List connected nodes

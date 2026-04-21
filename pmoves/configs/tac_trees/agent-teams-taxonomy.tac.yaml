@@ -391,7 +391,7 @@ root:
           task: "Agent roster"
           context: |
             mesh_agent        — No HTTP port — Node announcer (NATS every 15s)
-            headscale         — Port 8181 — Mesh VPN coordination
+            headscale         — Port 8096 — Mesh VPN coordination
             vps_fleet_manager — Hostinger KVM orchestration
           agent_hint: codex
 

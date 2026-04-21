@@ -2,28 +2,72 @@
 # PMOVES.AI Headscale Configuration
 # =============================================================================
 # Self-hosted Tailscale control server for VPN mesh networking
+# Compatible with Headscale 0.27.x (latest stable as of 2026-04-21)
 # =============================================================================
 
 # Server URL - externally accessible address for clients
+# WARNING: Must be HTTPS for DERP relay and Noise protocol to work.
+# HTTP is acceptable for tailnet-only access (Tailscale IP as server_url).
 server_url: https://headscale.pmoves.local
 
 # Listen address for the API server
 listen_addr: 0.0.0.0:8096
 
 # Metrics listen address for Prometheus scraping
+# Empty string "" disables metrics endpoint.
 metrics_listen_addr: 0.0.0.0:9090
+
+# Disable update check on startup (recommended for production)
+disable_check_updates: true
+
+# =============================================================================
+# Noise Protocol (TS2021)
+# =============================================================================
+# Required for Tailscale v2 Noise protocol. Auto-generated if missing.
+noise:
+  private_key_path: /var/lib/headscale/noise_private.key
 
 # =============================================================================
 # Database Configuration
 # =============================================================================
-db_type: sqlite3
-db_path: /var/lib/headscale/db.sqlite
+# SQLite is the default and recommended for most deployments.
+# Postgres support exists but is "highly discouraged" — legacy only.
+database:
+  type: sqlite
+  sqlite:
+    path: /var/lib/headscale/db.sqlite
+    write_ahead_log: true
 
 # =============================================================================
 # ACL Policy
 # =============================================================================
+# mode: "file" (default) reads from policy.path
+# mode: "database" reads from database (for dynamic policies)
 policy:
+  mode: file
   path: /etc/headscale/acl.yaml
+
+# =============================================================================
+# IP Allocation Prefixes
+# =============================================================================
+# MUST be subsets of CGNAT (100.64.0.0/10) and Tailscale ULA (fd7a:115c:a1e0::/48).
+# Using ranges outside these will cause undefined behaviour.
+prefixes:
+  v4: 100.64.0.0/10
+  v6: fd7a:115c:a1e0::/48
+
+# =============================================================================
+# DNS Configuration
+# =============================================================================
+# MagicDNS is auto-enabled when base_domain is set.
+# base_domain must differ from the server_url domain.
+dns:
+  base_domain: pmoves.local
+  override_local_dns: true
+  nameservers:
+    global:
+      - 1.1.1.1
+      - 1.0.0.1
 
 # =============================================================================
 # DERP Relay Configuration
@@ -34,68 +78,24 @@ derp:
     enabled: false
   urls:
     - https://controlplane.tailscale.com/derpmap/default
-  # Optional: Override paths for specific DERP regions
-  paths:
-    - /etc/headscale/derp.yaml
+  auto_update_enabled: true
+  update_frequency: 3h
 
 # =============================================================================
-# IP Allocation
+# Node Configuration
 # =============================================================================
-# CGNAT range for Tailscale
-prefixes:
-  - fd7a:115c:a1e0::/48  # IPv6
-  - 100.64.0.0/10        # IPv4
+node:
+  expiry: 0
+  ephemeral:
+    inactivity_timeout: 30m
 
 # =============================================================================
-# DNS Configuration
-# =============================================================================
-dns:
-  # Global nameservers
-  nameservers:
-    global:
-      - 1.1.1.1
-      - 1.0.0.1
-
-  # Split DNS resolutions for specific domains
-  domains:
-    - pmoves.local
-    - pmoves-internal.local
-
-  # Magic DNS (enables <hostname>.<namespace>.headscale resolution)
-  magic_dns: true
-
-  # Base domain for MagicDNS
-  base_domain: pmoves.local
-# =============================================================================
-# Noise Protocol (Tailscale v2)
-# =============================================================================
-noise:
-  private_key_path: /var/lib/headscale/noise_private.key
-
-# =============================================================================
-# Logging Configuration
+# Logging
 # =============================================================================
 log:
-  format: text  # text or json
-  level: info   # debug, info, warn, error
+  level: info
+  format: text
 
-# =============================================================================
-# Client Configuration
-# =============================================================================
-# Randomize client port for NAT traversal
-randomize_client_port: true
-
-# Disable updates check
-disable_updates_check: false
-
-# =============================================================================
-# Security
-# =============================================================================
-# Enable/disable legacy CLI features
-ephemeral_node_inactivity_timeout: 30m
-
-# =============================================================================
-# Experimental Features
-# =============================================================================
-# Enable WireGuard requested port (for better NAT traversal)
-# wireguard_port: 0
+# Disable sending logs to Tailscale Inc.
+logtail:
+  enabled: false

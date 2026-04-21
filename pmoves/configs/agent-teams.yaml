@@ -126,7 +126,7 @@ teams:
     agents:
       - mesh_agent        # Node announcer
       - container_agent   # Port 8111 — Docker networking diagnostics + sidecar bridge
-      - headscale         # Port 8181 — Mesh VPN
+      - headscale         # Port 8096 — Mesh VPN
       - vps_fleet_manager # Hostinger KVM orchestration
       - nemoclaw          # Jetson edge GPU agent (hybrid: Kilo Code + Agent Zero subordinate)
 
