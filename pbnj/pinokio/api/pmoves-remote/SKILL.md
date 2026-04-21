@@ -60,4 +60,4 @@ agent_id: pmoves_remote_access
 
 - Tailscale or Headscale client installed on each node
 - RustDesk server running (self-hosted or relay)
-- Headscale control plane at port 8181
+- Headscale control plane at port 8096

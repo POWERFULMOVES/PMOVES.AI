@@ -24,7 +24,7 @@ Self-contained compose files for deploying PMOVES services via the Hostinger
 2. Hostinger MCP: vps-add-firewall-rule-v1   (open service ports)
 3. SSH: base64 encode + decode config files    (upload configs)
 4. SSH: docker compose restart                 (pick up configs)
-5. SSH: docker compose ps + curl healthz       (verify health)
+5. SSH: docker compose ps + curl /health       (verify health)
 ```
 
 ## Config Upload Pattern

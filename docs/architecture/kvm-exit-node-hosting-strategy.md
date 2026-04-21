@@ -68,7 +68,7 @@ Total estimated monthly cost: **$30/mo** (3x Hostinger KVM) + home electricity f
 
 | Service | Port | Status | Resource Impact |
 |---------|------|--------|----------------|
-| Headscale (Tailscale control plane) | 8181 | Running | Low (~100MB RAM) |
+| Headscale (Tailscale control plane) | 8096 | Running | Low (~100MB RAM) |
 | Cloudflared (tunnel daemon) | — | Running | Low (~50MB RAM) |
 | Tailscale client | — | Running | Low (~30MB RAM) |
 | RustDesk hbbs (signaling) | 21115-21117 | Running | Low (~30MB RAM) |
@@ -199,7 +199,7 @@ graph TB
     subgraph "Hostinger US-East DC"
         subgraph "KVM2 - Exit Node & Light Services"
             EXIT["Tailscale Exit Node<br/>IPTables NAT Forwarding"]
-            HEADSCALE["Headscale<br/>:8181"]
+            HEADSCALE["Headscale<br/>:8096"]
             CLOUDFLARED["Cloudflared Tunnel"]
             RUSTDESK["RustDesk hbbs/hbbr"]
             PBNJ_WEB["PBNJ Web UI<br/>:3001 (planned)"]
@@ -324,7 +324,7 @@ graph TB
 
 | Service | Port | RAM Est. | Status | Notes |
 |---------|------|----------|--------|-------|
-| Headscale | 8181 | ~100MB | Existing | Tailscale control plane |
+| Headscale | 8096 | ~100MB | Existing | Tailscale control plane |
 | Cloudflared | — | ~50MB | Existing | CF tunnel daemon |
 | RustDesk hbbs/hbbr | 21115-21119 | ~80MB | Existing | Remote desktop |
 | Tailscale Exit Node | — | ~30MB | **New** | IPTables NAT + route advertising |
@@ -511,7 +511,7 @@ alias vpn-status='tailscale exit list && echo "Current: $(tailscale status | gre
     {"protocol": "TCP", "port": "22", "action": "accept", "source": "custom", "address": "tag:pmoves via TS"},
     {"protocol": "TCP", "port": "80", "action": "accept", "source": "any"},
     {"protocol": "TCP", "port": "443", "action": "accept", "source": "any"},
-    {"protocol": "TCP", "port": "8181", "action": "accept", "source": "custom", "address": "100.64.0.0/10"},
+    {"protocol": "TCP", "port": "8096", "action": "accept", "source": "custom", "address": "100.64.0.0/10"},
     {"protocol": "UDP", "port": "41641", "action": "accept", "source": "any"},
     {"protocol": "TCP", "port": "21115-21119", "action": "accept", "source": "any"},
     {"protocol": "TCP", "port": "3001", "action": "accept", "source": "any"},

@@ -34,7 +34,7 @@ services:
   # =============================================================================
   headscale:
     <<: *vpn-tier
-    image: ghcr.io/juanfont/headscale:latest
+    image: ghcr.io/juanfont/headscale:v0.28.0
     container_name: pmoves-headscale
     restart: unless-stopped
     command: serve
@@ -132,7 +132,7 @@ services:
   # =============================================================================
   headscale-agent:
     <<: *vpn-tier
-    image: ghcr.io/juanfont/headscale:latest
+    image: ghcr.io/juanfont/headscale:v0.28.0
     container_name: pmoves-headscale-agent
     restart: unless-stopped
     command: up
