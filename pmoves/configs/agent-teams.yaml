@@ -36,7 +36,7 @@ teams:
       - notebook_sync     # Port 8095 — Open Notebook sync
       - dox               # Document intelligence
       - open_notebook     # Knowledge base (SurrealDB)
-      - cipher_memory     # Port 8096 — Knowledge graph memory
+      - cipher_memory     # Port 8105 — Knowledge graph memory
 
   media:
     name: "Media & Voice"
