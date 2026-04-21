@@ -64,7 +64,7 @@ make verify-all
 # Check specific service health
 curl http://localhost:8055/healthz   # flute-gateway
 curl http://localhost:3030/health    # tensorzero
-curl http://localhost:8096/health    # cipher-memory
+curl http://localhost:8105/health    # cipher-memory
 ```
 
 ## Registry Consolidation (2026-03-28, z890-claude)

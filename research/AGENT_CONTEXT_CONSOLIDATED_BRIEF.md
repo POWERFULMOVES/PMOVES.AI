@@ -24,7 +24,7 @@ TensorZero uses **port 3000** for Docker-internal communication (confirmed in do
 | **Gateway Agent** | **8100** (internal) | — | services-catalog.md |
 | **Model Registry** | **8111** | 8110 (changed PR #845) | services-catalog.md |
 | **BoTZ VPN MCP** | **8110** | — | services-catalog.md (took 8110 after Model Registry moved) |
-| **Cipher Memory API** | **8096** (remapped from 3000) | — | services-catalog.md |
+| **Cipher Memory API** | **8105** (remapped from 3000) | — | services-catalog.md |
 | **Headscale** | **8096** (API), **9091** (metrics) | — | services-catalog.md |
 | **Health (wger)** | **8000** (`WGER_PORT`) | 8080 (Agent Zero) | services-catalog.md |
 | **Neo4j** | **7474** (HTTP), **7687** (Bolt) | — | services-catalog.md |
@@ -54,8 +54,8 @@ TensorZero uses **port 3000** for Docker-internal communication (confirmed in do
 
 ### Port Conflict Notes
 
-- **Headscale (8096) and Cipher Memory (8096)** share the same port number in **different compose profiles** (`remote` vs `agents`). They must never run simultaneously.
-- **Grafana (3000)** is the canonical owner. Supabase PostgREST, Invidious, and VibeVoice must override their port env vars when Grafana is active.
+- **Headscale (8096) and Cipher Memory (8105)** use different port numbers. Cipher Memory was reassigned from 8096 to 8105 in PR #1344/#1345 to eliminate the collision.
+- ~~"Cipher Memory" and "Headscale" both appear at 8096~~ → **Resolved** — Cipher Memory moved to 8105, Headscale retains 8096.
 - **Tokenism (8103→8100 internal) and Gateway Agent (8100 internal)** share internal port 8100 but use different host mappings.
 - **cAdvisor defaults to 8080** which conflicts with Agent Zero — must be reconfigured.
 
@@ -63,7 +63,7 @@ TensorZero uses **port 3000** for Docker-internal communication (confirmed in do
 
 - "BoTZ MCP Gateway" has two ports: **2091** (internal, per services-catalog.md) and **8054** (host-exposed, per docker-compose.yml `8054:8054` mapping). Both are active. The 2091 is the container-internal port; 8054 is the host binding.
 - "Gateway Agent" at 8100 is a separate service from "BoTZ MCP Gateway" at 2091.
-- "Cipher Memory" and "Headscale" both appear at 8096 — these are different services in different compose profiles.
+- ~~"Cipher Memory" and "Headscale" both appeared at 8096~~ → **Resolved** in PR #1344/#1345. Cipher Memory is now at 8105.
 
 ### Environment Variable Naming
 

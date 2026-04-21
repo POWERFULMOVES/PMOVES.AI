@@ -132,7 +132,7 @@
        - Agent Zero (8080 API, 8081 UI)
        - Archon (8091 API, 3737 UI)
        - Channel Monitor (8097)
-       - Cipher Memory (8096)
+       - Cipher Memory (8105)
        - Consciousness Service (CGP mapper)
        - DeepResearch (8098 NATS worker)
        - SupaSerch (8099 orchestrator)
@@ -829,7 +829,7 @@
        - Agent Zero (8080/8081) → MCP API, NATS subscriptions → Hi-RAG, Archon, PMOVES.YT
        - Archon (8091/3737) → Supabase prompts → Agent Zero MCP
        - Channel Monitor (8097) → NATS watcher → PMOVES.YT ingest
-       - Cipher Memory (8096) → Neo4j backend → MCP bridge for Claude Code
+       - Cipher Memory (8105) → Neo4j backend → MCP bridge for Claude Code
 
        Retrieval & Knowledge:
        - Hi-RAG Gateway v2 (8086/8087) ← Qdrant + Neo4j + Meilisearch [CPU/GPU]

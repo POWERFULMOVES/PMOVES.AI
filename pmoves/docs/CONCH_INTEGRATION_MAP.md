@@ -69,7 +69,7 @@ The CONCH (Consciousness Harvest) pipeline implements CHR (Constellation Harvest
   "super_nodes": [{
     "id": "consciousness-super",
     "label": "pmoves.consciousness",
-    "summary": "CHR clustering results",
+| `honcho` | Session/memory management | **Overlap** — Cipher Memory (8105) |
     "constellations": [{
       "id": "constellation-0",
       "summary": "Materialist theories",
@@ -82,7 +82,7 @@ The CONCH (Consciousness Harvest) pipeline implements CHR (Constellation Harvest
         "conf": 0.9,
         "summary": "Physicalism is the theory..."
       }],
-      "meta": {
+| `honcho` | Cipher Memory (8105) | Prefer Cipher — Neo4j-backed, MCP-integrated |
         "namespace": "pmoves.consciousness",
         "mhep": 0.85
       }
@@ -101,7 +101,7 @@ The CONCH (Consciousness Harvest) pipeline implements CHR (Constellation Harvest
 ```
 
 ---
-
+- `honcho` plugin vs Cipher Memory (8105) — Cipher is preferred (Neo4j-backed, MCP-integrated)
 ## API Endpoints
 
 ### CHR Endpoints
@@ -335,7 +335,7 @@ bash pmoves/scripts/verify_chr_conch.sh
 
 ### Remaining
 
-1. **Port 8096 conflict**: consciousness-service conflicts with cipher-memory
+1. **~~Port 8096 conflict: consciousness-service conflicts with cipher-memory~~** → **Resolved** — cipher_memory moved to 8105
    - **Workaround:** Use `docker compose --profile agents up consciousness-service`
    - **Note:** Services can run simultaneously if properly configured
 

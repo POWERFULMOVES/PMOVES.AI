@@ -47,7 +47,7 @@ Output: named sonic constellations → **M3U8 playlists + CHIT geometry events**
 |---------|-------------|
 | `analyze` | Full ffmpeg lavfi fingerprint → cluster → playlists → Cipher checkpoint |
 | `groups` | Display existing sonic groups from last run |
-| `status` | Probe Cipher Memory at `:8096` + Glances at `:61208` |
+Cipher Memory at `:8105`
 
 ---
 
@@ -119,14 +119,14 @@ pmoves/data/beats/soundcloud/darkxside/
 
 ## Pipeline Integration
 
-### Cipher Memory (port 8096)
+### Cipher Memory (port 8105)
 Checkpoints are written at two stages:
 1. `fingerprint_complete` — all files analyzed, before clustering
 2. `grouping_complete` — full group manifest (resumable if interrupted)
 
 ```bash
 # Query latest checkpoint
-curl http://localhost:8096/api/memory/search?q=analyze_beats&category=agent_checkpoint
+curl http://localhost:8105/api/memory/search?q=analyze_beats&category=agent_checkpoint
 ```
 
 ### NATS Geometry Bus
@@ -178,7 +178,7 @@ uv run pmoves/tools/analyze_beats.py status
 BEATS_INPUT=pmoves/data/beats/soundcloud/darkxside
 BEATS_OUTPUT=pmoves/data/beats/playlists
 NATS_URL=nats://localhost:4222
-CIPHER_URL=http://localhost:8096
+CIPHER_URL=http://localhost:8105
 GLANCES_URL=http://localhost:61208
 ```
 
@@ -194,7 +194,7 @@ ssh 5090 "cd PMOVES.AI && uv run pmoves/tools/analyze_beats.py analyze \
   --input /data/beats/gdrive \
   --output /data/beats/playlists \
   --nats nats://z890:4222 \
-  --cipher http://z890:8096"
+--cipher http://z890:8105"
 ```
 
 ---

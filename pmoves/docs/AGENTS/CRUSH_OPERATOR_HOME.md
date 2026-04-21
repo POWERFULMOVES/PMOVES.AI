@@ -92,7 +92,7 @@ When Crush completes significant work, write a graphiti block in `docs/AGENT_TRA
 | Service | How Crush Uses It |
 |---------|-------------------|
 | **Agent Zero MCP** (`localhost:8080/mcp/*`) | Orchestration commands, task delegation |
-| **Cipher Memory** (`localhost:8096`) | Persistent memory, reasoning traces, pattern storage |
+| **Cipher Memory** (`localhost:8105`) | Persistent memory, reasoning traces, pattern storage |
 | **Hi-RAG v2** (`localhost:8086`) | Knowledge retrieval, semantic search |
 | **TensorZero** (`localhost:3030/v1`) | All LLM calls route through here |
 | **NATS** (`localhost:4222`) | Event-driven coordination |
