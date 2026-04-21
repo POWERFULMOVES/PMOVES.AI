@@ -22,7 +22,8 @@ db_path: /var/lib/headscale/db.sqlite
 # =============================================================================
 # ACL Policy
 # =============================================================================
-acl_policy_path: /etc/headscale/acl.yaml
+policy:
+  path: /etc/headscale/acl.yaml
 
 # =============================================================================
 # DERP Relay Configuration
