@@ -132,11 +132,10 @@ services:
   # =============================================================================
   headscale-agent:
     <<: *vpn-tier
-    image: ghcr.io/juanfont/headscale:v0.28.0
+    image: tailscale/tailscale:stable
     container_name: pmoves-headscale-agent
     restart: unless-stopped
-    command: up
-    privileged: true
+    command: sh -c "tailscaled --state=/var/lib/tailscale/tailscaled.state & sleep 2 && tailscale up --login-server=$HEADSCALE_ADDR --authkey=$HEADSCALE_AUTH_KEY --hostname=$HEADSCALE_HOSTNAME --accept-routes=$HEADSCALE_ACCEPT_ROUTES --ssh=$HEADSCALE_SSH --advertise-tags=$HEADSCALE_TAGS && tail -f /dev/null"
     network_mode: host
     environment:
       - HEADSCALE_ADDR=${HEADSCALE_ADDR:-headscale:8096}
@@ -150,7 +149,7 @@ services:
       - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
     volumes:
       - /dev/net/tun:/dev/net/tun
-      - headscale-agent-state:/var/lib/headscale
+      - headscale-agent-state:/var/lib/tailscale
     profiles:
       - remote
 

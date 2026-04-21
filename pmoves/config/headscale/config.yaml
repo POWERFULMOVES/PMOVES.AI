@@ -1,1 +1,77 @@
-# DEPRECATED — authoritative config lives in vendor/PMOVES-Headscale/pmoves/config.yaml
+# Mirrored from PMOVES-Headscale submodule (PMOVES.AI-Edition-Hardened branch)
+# PMOVES.AI Headscale Configuration — v0.28.0
+# =============================================================================
+# Self-hosted Tailscale control server for VPN mesh networking
+# Fork: github.com/POWERFULMOVES/PMOVES-headscale
+# =============================================================================
+
+server_url: https://headscale.pmoves.local
+listen_addr: 0.0.0.0:8096
+metrics_listen_addr: 0.0.0.0:9090
+grpc_listen_addr: 127.0.0.1:50443
+grpc_allow_insecure: false
+disable_check_updates: true
+randomize_client_port: false
+
+noise:
+  private_key_path: /var/lib/headscale/noise_private.key
+
+prefixes:
+  v4: 100.64.0.0/10
+  v6: fd7a:115c:a1e0::/48
+  allocation: sequential
+
+derp:
+  server:
+    enabled: false
+  urls:
+    - https://controlplane.tailscale.com/derpmap/default
+  auto_update_enabled: true
+  update_frequency: 3h
+
+node:
+  expiry: 0
+  ephemeral:
+    inactivity_timeout: 30m
+  routes:
+    ha:
+      probe_interval: 10s
+      probe_timeout: 5s
+
+database:
+  type: sqlite
+  debug: false
+  gorm:
+    prepare_stmt: true
+    parameterized_queries: true
+    skip_err_record_not_found: true
+    slow_threshold: 1000
+  sqlite:
+    path: /var/lib/headscale/db.sqlite
+    write_ahead_log: true
+    wal_autocheckpoint: 1000
+
+policy:
+  mode: file
+  path: /etc/headscale/acl.yaml
+
+dns:
+  base_domain: ts.pmoves.net
+  override_local_dns: true
+  nameservers:
+    global:
+      - 1.1.1.1
+      - 1.0.0.1
+
+unix_socket: /var/run/headscale/headscale.sock
+unix_socket_permission: "0770"
+
+log:
+  level: info
+  format: text
+
+logtail:
+  enabled: false
+
+taildrop:
+  enabled: true
