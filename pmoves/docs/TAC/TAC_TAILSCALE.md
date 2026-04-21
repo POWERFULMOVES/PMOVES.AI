@@ -10,7 +10,7 @@
 | **Control Plane** | Tailscale Cloud (Headscale planned) |
 | **Ports** | — (overlay network, no dedicated port) |
 | **Health** | `tailscale status` / `tailscale ping <host>` |
-| **Metrics** | Headscale: `GET :8181/metrics` (when deployed) |
+| **Metrics** | Headscale: `GET :8096/metrics` (when deployed) |
 | **Submodules** | [`PMOVES-Tailscale`](../../PMOVES-Tailscale/), [`PMOVES-Headscale`](../../PMOVES-Headscale/) |
 | **Docker Profile** | Standalone (`docker-compose.tailscale.yml`) |
 | **Tier** | api (cross-cutting infrastructure) |

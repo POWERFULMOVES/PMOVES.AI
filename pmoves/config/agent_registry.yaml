@@ -1335,7 +1335,7 @@ agents:
     class: utility
     primary_type: data
     secondary_type: api
-    port: 8181
+    port: 8096
     health: "/health"
     layers: [L0]
     evolution_stage: base

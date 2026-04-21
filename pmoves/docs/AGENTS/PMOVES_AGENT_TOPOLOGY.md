@@ -109,7 +109,7 @@ graph TD
         grafana["Grafana<br/>:3000"]:::utility
         loki["Loki<br/>:3100"]:::utility
         n8n_wf["n8n<br/>:5678"]:::utility
-        headscale["Headscale<br/>:8181"]:::utility
+         headscale["Headscale<br/>:8096"]:::utility
         rustdesk["RustDesk<br/>:21115"]:::utility
         invidious["Invidious<br/>:3333"]:::utility
     end
