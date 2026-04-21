@@ -1,1 +1,49 @@
-# DEPRECATED — authoritative compose lives in vendor/PMOVES-Headscale/pmoves/docker-compose.hostinger.yml
+# Mirrored from PMOVES-Headscale submodule (PMOVES.AI-Edition-Hardened branch)
+# PMOVES Headscale — Hostinger Docker API Variant
+# =============================================================================
+# Fork: github.com/POWERFULMOVES/PMOVES-headscale
+# Derived from upstream official compose + PMOVES hardening requirements
+#
+# Hostinger API constraints satisfied:
+#   - No external networks
+#   - No profiles section
+#   - No env_file references
+#   - No ${VAR:-default} — bare ${VAR} only
+#   - Absolute volume paths
+#
+# Docker hardening applied:
+#   - read_only: true (immutable filesystem)
+#   - tmpfs: /var/run/headscale (unix socket — required with read_only)
+#   - Config volume mounted :ro
+#   - command: serve (REQUIRED — #1 Docker deployment error)
+#   - Version-pinned image (never :latest)
+#
+# Config files (config.yaml, acl.yaml) uploaded via SSH base64 decode
+# to /docker/headscale/config/ before or after compose deployment.
+# =============================================================================
+
+services:
+  headscale:
+    image: ghcr.io/juanfont/headscale:v0.28.0
+    container_name: pmoves-headscale
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /var/run/headscale
+    command: serve
+    environment:
+      - DOCKED_MODE=${DOCKED_MODE}
+      - PARENT_SYSTEM=${PARENT_SYSTEM}
+      - PARENT_VERSION=${PARENT_VERSION}
+    ports:
+      - "8096:8096"
+      - "9091:9090"
+    volumes:
+      - /docker/headscale/config:/etc/headscale:ro
+      - /docker/headscale/data:/var/lib/headscale
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8096/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
