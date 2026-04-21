@@ -62,11 +62,11 @@ PMOVES.AI is a **production-ready multi-agent orchestration platform** featuring
 - Triggers ingestion when new content detected
 - Posts to PMOVES.YT `/yt/ingest` endpoint
 
-**Cipher Memory** [Port 8096]
+**Cipher Memory** [Port 8105]
 - Knowledge-graph memory for Claude Code and agents (Neo4j backend)
 - MCP bridge at `pmoves-cipher-mcp/` (stdio transport)
-- API: `POST http://localhost:8096/api/memory`, `GET /api/memory/search?q=...`
-- Health: `GET http://localhost:8096/health`
+- API: `POST http://localhost:8105/api/memory`, `GET /api/memory/search?q=...`
+- Health: `GET http://localhost:8105/health`
 - **Use for:** Persistent agent memory, reasoning traces, pattern storage
 - **MCP tools:** `pmoves_cipher_store`, `pmoves_cipher_search`, `pmoves_cipher_store_reasoning`, `pmoves_cipher_reasoning_patterns`
 
@@ -656,7 +656,7 @@ docker compose --profile agents --profile workers up -d
 - Available for custom integrations
 
 **Configured local MCP servers** (`.claude/mcp.json`)
-- `pmoves-cipher` (SSE on `http://localhost:8096/sse`) for persistent memory lookups and writes
+- `pmoves-cipher` (SSE on `http://localhost:8105/sse`) for persistent memory lookups and writes
 - `docker` (`mcp/docker`) for container inspection through the local Docker socket
 - `hostinger-mcp` for Hostinger API tasks via `HOSTINGER_API_KEY`
 - `tailscale` for tailnet inventory, stale-node cleanup, tag inspection, and ACL operations via `TAILSCALE_API_KEY` + `TAILSCALE_TAILNET`
