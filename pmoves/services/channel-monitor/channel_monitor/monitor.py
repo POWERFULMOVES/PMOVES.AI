@@ -448,6 +448,31 @@ def _extract_channel_id_from_url(url: Optional[str]) -> Optional[str]:
     return None
 
 
+def _normalize_channel_url(url: str) -> str:
+    """Append `/videos` tab to YouTube channel URLs so yt-dlp enumerates the
+    video list instead of returning tab metadata entries. Leaves playlists,
+    watch URLs, and non-YouTube URLs unchanged."""
+    try:
+        parsed = urlparse(url)
+    except Exception:
+        return url
+    host = (parsed.netloc or "").lower()
+    if "youtube.com" not in host and "youtu.be" not in host:
+        return url
+    parts = [segment for segment in parsed.path.split("/") if segment]
+    if not parts:
+        return url
+    is_handle = parts[0].startswith("@")
+    is_channel_path = parts[0].lower() == "channel" and len(parts) >= 2
+    if not (is_handle or is_channel_path):
+        return url
+    tab_index = 1 if is_handle else 2
+    if len(parts) > tab_index:
+        return url
+    base = url.rstrip("/")
+    return f"{base}/videos"
+
+
 def _extract_channel_handle(channel: Dict[str, Any]) -> Optional[str]:
     candidates = [
         channel.get("channel_id"),
@@ -690,12 +715,14 @@ class ChannelMonitor:
                 if playlist_target:
                     videos = await self._fetch_youtube_flat(playlist_target, cookies_path, max_videos)
             elif source_url:
-                videos = await self._fetch_youtube_flat(source_url, cookies_path, max_videos)
+                videos = await self._fetch_youtube_flat(
+                    _normalize_channel_url(source_url), cookies_path, max_videos
+                )
             else:
                 if self.config["global_settings"].get("use_rss_feed", True) and channel_id:
                     videos = await self._fetch_via_rss(channel_id)
                 elif channel_id:
-                    playlist_url = f"https://www.youtube.com/channel/{channel_id}"
+                    playlist_url = f"https://www.youtube.com/channel/{channel_id}/videos"
                     videos = await self._fetch_youtube_flat(playlist_url, cookies_path, max_videos)
         elif platform == "soundcloud" and source_url:
             videos = await self._fetch_soundcloud(source_url, cookies_path, max_videos)
