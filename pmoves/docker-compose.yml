@@ -1874,10 +1874,14 @@ services:
     - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
     - YT_NATS_ENABLE=${YT_NATS_ENABLE:-true}
     - HIRAG_URL=${HIRAG_URL:-http://hi-rag-gateway-v2:8086}
-    # Multi-client rotation (Phase 9C): yt-dlp tries clients in order until one succeeds.
-    # 'web' first to use cookies + PO token (highest auth fidelity), then mobile fallbacks
-    # that skip signature checks. 'tv_embedded' last as a known-good for age/region gates.
-    - YT_PLAYER_CLIENT=${YT_PLAYER_CLIENT:-web,mweb,android,ios,tv_embedded}
+    # Multi-client rotation (Phase 9C + 2026-04-21 robustness fix): yt-dlp tries
+    # clients in order until one succeeds. 'default' first uses yt-dlp's own
+    # adaptive rotation (stays current with YouTube client-availability changes
+    # as yt-dlp updates); 'web' + 'mweb' are the auth'd/cookie'd fallbacks;
+    # 'tv_embedded' handles age/region gates; 'android_vr' is the edge-case
+    # client that saved us on videos where `web_safari`/`web` returned no
+    # formats (e.g. @ColeMedin nxHKBq5ZU9U, 6woc6ii-zoE — 2026-04-20 session).
+    - YT_PLAYER_CLIENT=${YT_PLAYER_CLIENT:-default,web,mweb,tv_embedded,android_vr}
     - YT_ENABLE_PO_TOKEN=${YT_ENABLE_PO_TOKEN:-true}
     - YT_USER_AGENT=${YT_USER_AGENT:-Mozilla/5.0 (Macintosh; Intel Mac OS X 14_6) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.6 Safari/605.1.15}
     - YT_COOKIES=${YT_COOKIES:-/app/config/cookies/darkxside.youtube.cookies.txt}
