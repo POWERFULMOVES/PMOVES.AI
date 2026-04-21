@@ -432,9 +432,6 @@
     "yt_options": {
       "write_info_json": true,
       "extractor_args": {
-        "youtube": {
-          "player_client": ["web_safari"]
-        },
         "youtubepot-bgutilhttp": {
           "base_url": ["http://bgutil-pot-provider:4416"]
         }
