@@ -45,7 +45,7 @@ The architecture follows a strict 3-tier separation: **KVM2** (network edge/exit
 
 | Service | Port | RAM | Status | Notes |
 |---------|------|-----|--------|-------|
-| Headscale (Tailscale control plane) | 8181 | ~100 MB | Running | Self-hosted TS control plane |
+| Headscale (Tailscale control plane) | 8096 | ~100 MB | Running | Self-hosted TS control plane |
 | Cloudflared (tunnel daemon) | — | ~50 MB | Running | Cloudflare tunnel to KVM2 |
 | Tailscale client | — | ~30 MB | Running | Mesh networking |
 | RustDesk hbbs (signaling) | 21115-21117 | ~30 MB | Running | Remote desktop signaling |

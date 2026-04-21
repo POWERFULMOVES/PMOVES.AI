@@ -94,7 +94,7 @@ Convert compose if needed (strip external networks, inline volume paths). Deploy
 Base64-encode config files locally. Upload via `mkdir -p && base64 -d` in single chained command. Set permissions. Restart container to pick up configs.
 
 ### Phase 4: Health Verify (SSH)
-`docker compose ps` → poll for healthy/running (10s intervals, max 6 attempts). Curl healthz endpoint. Verify metrics if available.
+`docker compose ps` → poll for healthy/running (10s intervals, max 6 attempts). Curl /health endpoint. Verify metrics if available.
 
 ### Phase 5: Post-Deploy (SSH)
 Run service-specific post-deploy steps (see registry below). Store generated secrets via `ce_memory_store` — NEVER in output.
