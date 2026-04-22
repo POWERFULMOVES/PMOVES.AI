@@ -608,3 +608,9 @@ The pipeline reports success because its validation scope is too narrow. Neither
 - Ack: `Self-review of AGNOTE4482 documentation suite. Verified 2 Known Gaps resolved: (1) BoTZ JWT fail-closed in gateway.py (HTTPException 500 on missing HAS_JOSE or SUPABASE_JWT_SECRET) and auth.py (HTTPException 500 on missing HAS_JOSE or JWT_SECRET). (2) BPM encoder implemented at pmoves/tools/bpm_encoder.py (574 lines, PR #1168). Agent registry count refreshed (60→71 agents, 7→13 external contributors). File count refreshed (73→107 docs documents). NATS auth partially resolved (~100+ unauthenticated refs in `pmoves/` (count varies by submodule state)). Reviewed 10+ PRs merged since last audit (2026-03-28). Signoff sections 1, 3, 7 remain unchecked (require runtime/prospectus/ClaWz verification beyond docs scope).`
 - Signature: `ACK::CLAUDE-OPUS::PHI-4482-T1::SELF-REVIEW-AUDIT-2026-04-01`
 - Timestamp: `2026-04-01`
+
+## Agent ACK (Signed, TensorZero Known Road Target Added)
+- Agent: `CLAUDE-OPUS`
+- Ack: `Added restart-tensorzero Known Road target to pmoves/Makefile following supa-restart pattern (lines 1025-1031). Target provides safe container restart with proper env loading via $(DC) variable: down-tensorzero → sleep 2 → up-tensorzero. Closes Known Roads gap for TensorZero container management. Ready for TensorZero restart to validate Z.AI GLM-5 Turbo integration (Agent Zero + TensorZero routing).`
+- Signature: `ACK::CLAUDE-OPUS::PHI-4482-T1::TENSORZERO-KNOWN-ROAD-TARGET`
+- Timestamp: `2026-04-21T18:00:00Z`
