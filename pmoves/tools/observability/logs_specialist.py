@@ -120,7 +120,7 @@ class LokiLogsSpecialist:
         start = end - timedelta(hours=hours)
 
         # LogQL for error logs
-        logql = f'{{{{service="{service}"}}}} |~ "(?i)(error|exception|fatal|panic)"'
+        logql = f'{{service="{service}"}} |~ "(?i)(error|exception|fatal|panic)"'
 
         result = self.query_range(logql, start, end, limit=500)
 
@@ -212,7 +212,7 @@ class LokiLogsSpecialist:
         end = datetime.now()
         start = end - timedelta(hours=hours)
 
-        logql = f'{{{{service="{service}"}}}}' if service else ""
+        logql = f'{{service="{service}"}}' if service else ""
         logql += f' |~ "{pattern}"'
 
         result = self.query_range(logql, start, end, limit=1000)
