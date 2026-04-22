@@ -166,6 +166,19 @@ teams:
       - wealth            # Firefly III finance tracking
       - health            # wger fitness tracking
 
+  observability:
+    name: "Observability & Monitoring"
+    description: "Metrics, logs, traces, dashboards, and alerting for MOF surface area"
+    node_affinity: [kvm4-1, z890]
+    ci_runner: ai-lab
+    compose_profiles: [monitoring]
+    agents:
+      - metrics_specialist      # Prometheus metrics analysis
+      - dashboard_specialist    # Grafana dashboard management
+      - logs_specialist         # Loki log analysis
+      - tracing_specialist      # Jaeger distributed tracing
+      - llm_observability       # TensorZero LLM performance
+
 # Validation: all agents from agent_registry.yaml must appear in exactly one team
 # Run: python -c "
 # import yaml
