@@ -69,7 +69,7 @@ class JaegerTracingSpecialist:
         params = {
             "service": service,
             "limit": str(limit),
-            "lookback": f"{lookbackHours}h"
+            "lookback": f"{lookback_hours}h"
         }
 
         response = self.session.get(

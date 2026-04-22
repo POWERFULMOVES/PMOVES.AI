@@ -16,6 +16,7 @@ Environment:
 """
 
 import argparse
+import json
 import os
 import re
 import sys
@@ -119,7 +120,7 @@ class LokiLogsSpecialist:
         start = end - timedelta(hours=hours)
 
         # LogQL for error logs
-        logql = f'{{{{service="{service}"}}}} |~ "(?i)(error|exception|fatal|panic)"'
+        logql = f'{{service="{service}"}} |~ "(?i)(error|exception|fatal|panic)"'
 
         result = self.query_range(logql, start, end, limit=500)
 

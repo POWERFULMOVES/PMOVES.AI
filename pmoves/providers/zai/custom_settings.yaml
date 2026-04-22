@@ -54,7 +54,7 @@ models:
     temperature_default: 0.7
     prompt_format: instruction
 
-  glm-5.1:
+  glm-5.1-runtime:
     flare_name: pmoves/glm-5.1
     role: runtime
     tier: flagship_reasoning

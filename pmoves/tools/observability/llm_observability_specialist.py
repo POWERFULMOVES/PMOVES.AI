@@ -54,24 +54,30 @@ class TensorZeroObservabilitySpecialist:
         self.user = user or os.getenv("TENSORZERO_CLICKHOUSE_USER", "tensorzero")
         self.password = password or os.getenv("TENSORZERO_CLICKHOUSE_PASSWORD", "tensorzero")
 
-    def query(self, sql: str) -> List[Dict[str, Any]]:
+    def query(self, sql: str, params: Dict[str, Any] = None) -> List[Dict[str, Any]]:
         """Execute SQL query on ClickHouse.
 
         Args:
-            sql: SQL query
+            sql: SQL query with {param} placeholders
+            params: Optional dict of parameters (will be prefixed with param_)
 
         Returns:
             Query results as list of dicts
         """
-        params = {
-            "query": sql,
+        query_params = {
             "database": "default",
             "format": "JSON"
         }
 
-        response = requests.get(
+        # Add any parameters with param_ prefix for ClickHouse HTTP interface
+        if params:
+            for key, value in params.items():
+                query_params[f"param_{key}"] = str(value)
+
+        response = requests.post(
             self.clickhouse_url,
-            params=params,
+            data=sql.encode("utf-8"),
+            params=query_params,
             auth=(self.user, self.password),
             timeout=30
         )
@@ -95,7 +101,11 @@ class TensorZeroObservabilitySpecialist:
         end = datetime.now()
         start = end - timedelta(hours=hours)
 
-        model_filter = f"AND model_name = '{model}'" if model else ""
+        params = {"hours": hours}
+        if model:
+            params["model"] = model
+
+        model_filter = "AND model_name = {model}" if model else ""
 
         sql = f"""
         SELECT
@@ -108,13 +118,13 @@ class TensorZeroObservabilitySpecialist:
             sum(prompt_tokens) as total_prompt_tokens,
             sum(completion_tokens) as total_completion_tokens
         FROM requests
-        WHERE start_time >= now() - INTERVAL {hours} HOUR
-          {model_filter}
+        WHERE start_time >= now() - INTERVAL {{hours:param_hours}} HOUR
+          {model_filter if model else ""}
         GROUP BY model_name
         ORDER BY total_requests DESC
         """
 
-        results = self.query(sql)
+        results = self.query(sql, params)
 
         if not results:
             return {"error": "No data found for the specified period"}

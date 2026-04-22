@@ -54,7 +54,7 @@ tensorzero_config:
 
 flare_namespace:
   alias: pmoves/claude-sonnet-4
-  canonical_name: claude-sonnet-4-5
+  canonical_name: claude-sonnet-4
   provider_url: https://docs.anthropic.com
 
 capabilities:

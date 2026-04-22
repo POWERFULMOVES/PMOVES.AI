@@ -115,7 +115,7 @@ class PrometheusMetricsSpecialist:
         anomalies = []
 
         # Check for high error rate
-        error_rate_query = f'rate({{service}}_errors_total[5m]) > 0.05'
+        error_rate_query = f'rate({service}_errors_total[5m]) > 0.05'
         try:
             result = self.query_range(error_rate_query, start, end)
             if result["data"]["result"]:
@@ -131,7 +131,7 @@ class PrometheusMetricsSpecialist:
             print(f"[WARN] Error rate check failed: {e}")
 
         # Check for high latency
-        latency_query = f'rate({{service}}_latency_seconds_bucket[5m])'
+        latency_query = f'rate({service}_latency_seconds_bucket[5m])'
         try:
             result = self.query_range(latency_query, start, end)
             if result["data"]["result"]:
@@ -147,7 +147,7 @@ class PrometheusMetricsSpecialist:
             print(f"[WARN] Latency check failed: {e}")
 
         # Check for resource saturation (CPU, memory)
-        cpu_query = f'rate(process_cpu_seconds_total{{{{service="{service}"}}}[5m])) > 0.8'
+        cpu_query = f'rate(process_cpu_seconds_total{{service="{service}"}}[5m]) > 0.8'
         try:
             result = self.query_range(cpu_query, start, end)
             if result["data"]["result"]:
