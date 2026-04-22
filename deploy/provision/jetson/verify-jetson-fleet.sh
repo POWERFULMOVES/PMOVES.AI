@@ -64,8 +64,9 @@ else
 fi
 
 ssh_jetson() {
+  local target="${ip:-$JETSON_HOST}"
   ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new \
-    "${SSH_USER}@${JETSON_HOST}" "$@"
+    "${SSH_USER}@${target}" "$@"
 }
 
 section "1. JetPack 7.0 / L4T r37"

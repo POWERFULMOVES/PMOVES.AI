@@ -96,7 +96,7 @@ else
     --auth-key "$TAILSCALE_AUTHKEY" \
     --hostname "pmoves-${DEVICE}" \
     --accept-routes --accept-dns \
-    --tag=tag:pmoves --tag=tag:jetson --tag=tag:nemotron --tag=tag:edge --tag=tag:arm64 --tag=tag:production
+    --advertise-tags=tag:pmoves,tag:jetson,tag:nemotron,tag:edge,tag:arm64,tag:production
   sleep 3
   log "Tailscale: $(tailscale ip -4 2>/dev/null || echo pending) / $(tailscale status | head -1 || echo unknown)"
 fi
