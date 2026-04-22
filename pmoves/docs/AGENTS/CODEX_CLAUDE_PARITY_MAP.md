@@ -62,7 +62,7 @@ operations (`make`, `curl`, and existing PMOVES scripts).
 | `/agents:subordinate` | delegate via NATS `agent.handoff.request.v1` and capture completion on `agent.handoff.completed.v1` |
 | `/agents:task-status` | monitor active tasks through Agent Zero runtime status and NATS task subjects |
 | `/botz:mcp` | BotZ config: `PMOVES-BoTZ/config/codex/mcp_gateway.json` and PMOVES root codex profile |
-| Claude Cipher MCP (`pmoves-cipher` in `.claude/mcp.json`) | `uv run --directory ./pmoves-cipher-mcp python -m cipher_mcp.server` and verify `curl -fsS http://localhost:8096/health` |
+| Claude Cipher MCP (`pmoves-cipher` in `.claude/mcp.json`) | `uv run --directory ./pmoves-cipher-mcp python -m cipher_mcp.server` and verify `curl -fsS http://localhost:8105/health` |
 
 ## High-priority parity wave (Mar 2026)
 
@@ -75,8 +75,8 @@ operations (`make`, `curl`, and existing PMOVES scripts).
 | `/archon:status` | `curl -sf http://localhost:8091/healthz | jq .` and `curl -sf -o /dev/null -w "%{http_code}" http://localhost:3737/` |
 | `/archon:forms` | `curl -sf http://localhost:8091/api/forms | jq '.[] | {id,name,agent_type,status}'` |
 | `/archon:prompts` | `curl -sf http://localhost:8091/api/prompts | jq '.[] | {id,name,tags,updated_at}'` |
-| `/cipher:store` | `curl -s -X POST http://localhost:8096/api/memory -H "Content-Type: application/json" -d '{"content":"<content>","category":"<category>","source":"codex"}'` |
-| `/cipher:search` | `curl -s "http://localhost:8096/api/memory/search?q=<query>&limit=10"` |
+| `/cipher:store` | `curl -s -X POST http://localhost:8105/api/memory -H "Content-Type: application/json" -d '{"content":"<content>","category":"<category>","source":"codex"}'` |
+| `/cipher:search` | `curl -s "http://localhost:8105/api/memory/search?q=<query>&limit=10"` |
 | `/cipher:reasoning` | store/retrieve reasoning traces with category `reasoning_trace` via Cipher memory API |
 | `/gpu:status` | `curl -s http://localhost:8200/api/gpu/status | jq .` |
 | `/gpu:models` | `curl -s "http://localhost:8200/api/gpu/models?include_unloaded=true" | jq .` |

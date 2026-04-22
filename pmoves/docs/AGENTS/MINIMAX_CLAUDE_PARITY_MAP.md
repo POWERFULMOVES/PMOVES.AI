@@ -17,7 +17,7 @@ establishing parity between **PMOVES-KiloCode-MiniMax** and the **Claude ↔ Cod
 | `/minimax:status` | `/health:quick` | `make -C pmoves codex-health-quick` |
 | `/minimax:check-all` | `/health:check-all` | `make -C pmoves verify-all` |
 | `/minimax:botz-status` | `/botz:status` | `curl -fsS http://localhost:3030/api/status \| jq .` |
-| `/minimax:waves` | — | `curl -sf http://localhost:8096/api/memory?q=wave*` |
+| `/minimax:waves` | — | `curl -sf http://localhost:8105/api/memory?q=wave*` |
 
 ## BoTZ Framework Integration
 
@@ -71,8 +71,8 @@ establishing parity between **PMOVES-KiloCode-MiniMax** and the **Claude ↔ Cod
 |----------------|-------------------|-----------------|
 | `/minimax:search` | `/search:hirag` | `curl -X POST http://localhost:8086/hirag/query` |
 | `/minimax:deepresearch` | `/search:deepresearch` | DeepResearch via NATS |
-| `/minimax:memory-store` | `/cipher:store` | `curl -sf http://localhost:8096/api/memory` |
-| `/minimax:memory-recall` | `/cipher:search` | `curl -sf "http://localhost:8096/api/memory/search?q="` |
+| `/minimax:memory-store` | `/cipher:store` | `curl -sf http://localhost:8105/api/memory` |
+| `/minimax:memory-recall` | `/cipher:search` | `curl -sf "http://localhost:8105/api/memory/search?q="` |
 
 ## CHIT and Geometry Bus
 

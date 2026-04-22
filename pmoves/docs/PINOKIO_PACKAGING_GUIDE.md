@@ -1205,7 +1205,7 @@ module.exports = {
 | FFmpeg-Whisper | Standard | 5+4 | 8078 | Recommended | `pmoves-whisper` |
 | Media-Video | Standard | 5+4 | 8079 | Required | `pmoves-media-video` |
 | Jellyfin Bridge | Specialized | 5+1 | 8093 | No | `pmoves-jellyfin-bridge` |
-| Cipher Memory | Specialized | 1+6 | 8096 | No | `pmoves-cipher` |
+| Cipher Memory | Specialized | 1+6 | 8105 | No | `pmoves-cipher` |
 | Crush | Standard | 7+6 | - | No | `pmoves-crush` |
 | EvoSwarm | Standard | 4+6 | 8113 | Required | `pmoves-evoswarm` |
 

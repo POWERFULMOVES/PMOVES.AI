@@ -1002,6 +1002,9 @@ chitSafePaths:
   - "PMOVES-Tailscale/docker/"
   - "PMOVES-Tailscale/cloudflare/"
   - "PMOVES-Tailscale/headscale/"
+  # Infrastructure compose files (PR #1347 fixes: MINIO_IMAGE env var)
+  - "pmoves/docker-compose.core.yml"
+  - "pmoves/docs/CONCH_INTEGRATION_MAP.md"
 
 # ---------------------------------------------------------------------------
 # PMOVES.AI - GIT SUBMODULES

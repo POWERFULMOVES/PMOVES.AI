@@ -69,7 +69,7 @@ _None — plugins communicate through Agent Zero's runtime, not NATS directly._
 | `codex_provider` | Codex integration provider | — |
 | `discord` | Discord bot plugin | **Overlap** — Publisher-Discord (8094) |
 | `guard_system` | Security guard system | Partial — BoTZ auth model |
-| `honcho` | Session/memory management | **Overlap** — Cipher Memory (8096) |
+| `honcho` | Session/memory management | **Overlap** — Cipher Memory (8105) |
 | `langfuse_observability` | LLM observability | **Overlap** — TensorZero ClickHouse |
 | `lazys_a0_marketplace` | Plugin marketplace UI | — |
 | `linear` | Linear issue tracker integration | — |
@@ -82,7 +82,7 @@ _None — plugins communicate through Agent Zero's runtime, not NATS directly._
 
 | Plugin | PMOVES Native Service | Recommendation |
 |--------|----------------------|----------------|
-| `honcho` | Cipher Memory (8096) | Prefer Cipher — Neo4j-backed, MCP-integrated |
+| `honcho` | Cipher Memory (8105) | Prefer Cipher — Neo4j-backed, MCP-integrated |
 | `youtube_transcribe` | PMOVES.YT (8077) + FFmpeg-Whisper (8078) | Prefer PMOVES.YT — full pipeline with NATS events |
 | `langfuse_observability` | TensorZero (3030) + ClickHouse | Prefer TensorZero — unified observability |
 | `discord` | Publisher-Discord (8094) | Prefer Publisher — integrated with NATS events |
@@ -121,7 +121,7 @@ plugins/<plugin_name>/
 
 | Plugin | Native Alternative | Verdict | Rationale |
 |--------|-------------------|---------|-----------|
-| `honcho` | Cipher Memory (8096) | **Prefer native** | Cipher provides Neo4j-backed knowledge graphs, MCP integration, reasoning traces, and NATS event publishing (see [nats-subjects.md](../../.claude/context/nats-subjects.md#cipher-memory-subjects)). Honcho duplicates session/memory management without PMOVES observability. |
+| `honcho` | Cipher Memory (8105) | **Prefer native** | Cipher provides Neo4j-backed knowledge graphs, MCP integration, reasoning traces, and NATS event publishing (see [nats-subjects.md](../../.claude/context/nats-subjects.md#cipher-memory-subjects)). Honcho duplicates session/memory management without PMOVES observability. |
 | `youtube_transcribe` | PMOVES.YT (8077) + FFmpeg-Whisper (8078) | **Prefer native** | PMOVES.YT offers full pipeline: download → MinIO storage → Whisper transcription → NATS events (`ingest.transcript.ready.v1`). Plugin only provides basic YouTube transcription without event-driven integration (see [services-catalog.md](../../.claude/context/services-catalog.md)). |
 | `langfuse_observability` | TensorZero (3030) + ClickHouse | **Prefer native** | TensorZero is the canonical LLM observability layer — unified gateway for all model providers with ClickHouse-backed metrics, token tracking, and latency dashboards (see [observability-patterns.md](../../.claude/context/observability-patterns.md)). Langfuse adds a parallel observability stack with no integration to existing dashboards. |
 | `discord` | Publisher-Discord (8094) | **Prefer native** | Publisher-Discord is NATS-integrated, subscribing to `ingest.file.added.v1`, `ingest.transcript.ready.v1`, and other events (see [nats-subjects.md](../../.claude/context/nats-subjects.md#media-ingestion-subjects)). The plugin provides direct Discord bot functionality but lacks event bus integration. |

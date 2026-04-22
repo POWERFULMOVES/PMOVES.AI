@@ -91,7 +91,7 @@ Codex should prefer PMOVES-native pairings before inventing ad hoc chains:
 ### Memory
 
 Primary memory path:
-- `Pmoves-cipher` at `http://localhost:8096`
+- `Pmoves-cipher` at `http://localhost:8105`
 
 Codex memory functions:
 - store decisions, checkpoints, and reasoning traces in Cipher

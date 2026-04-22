@@ -23,7 +23,7 @@
 | NATS (4222) | Event bus for skill coordination | Yes |
 | Supabase PostgREST (3010) | Skill registry + user data | Yes |
 | Agent Zero (8080) | Orchestration control plane | Yes |
-| Cipher Memory (8096) | Agent memory persistence | Optional |
+| Cipher Memory (8105) | PostgREST API | Yes |
 
 ## Downstream Consumers
 
@@ -101,7 +101,7 @@ BoTZ Gateway comprises 17 feature modules spanning work distribution, CLI instan
 ### Plugin Ecosystem Overlap
 
 The a0-plugins index contains 4 plugins that overlap with PMOVES native services:
-- `honcho` plugin vs Cipher Memory (8096) — Cipher is preferred (Neo4j-backed, MCP-integrated)
+- `honcho` plugin vs Cipher Memory (8105) — Cipher is preferred (Neo4j-backed, MCP-integrated)
 - `youtube_transcribe` vs PMOVES.YT (8077) — PMOVES.YT preferred (full pipeline with NATS)
 - `discord` vs Publisher-Discord (8094) — Publisher preferred (NATS-integrated)
 - `langfuse_observability` vs TensorZero (3030) — TensorZero preferred (unified observability)

@@ -15,9 +15,9 @@ PMOVES companions:
 - `pmoves/docs/AGENTS/AI_GRAPHITI_PROTOCOL.md`
 
 Core checks:
-- `curl -fsS http://localhost:8096/health | jq .`
+- `curl -fsS http://localhost:8105/health | jq .`
 - `uv run --directory ./pmoves-cipher-mcp python -m cipher_mcp.server`
-- `curl -s "http://localhost:8096/api/memory/search?q=pmoves&limit=5"`
+- `curl -s "http://localhost:8105/api/memory/search?q=pmoves&limit=5"`
 
 Related parity tokens:
 - `/cipher:store`

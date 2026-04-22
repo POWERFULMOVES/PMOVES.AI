@@ -71,7 +71,7 @@ graph TD
     end
 
     subgraph CIPHER_EVOLUTION["Cipher Evolution Backbone"]
-        cipher_memory["Cipher Memory<br/>:8096"]:::specialized
+        cipher_memory["Cipher Memory<br/>:8105"]:::specialized
         consciousness_service["Consciousness Service"]:::specialized
         evoswarm_controller["EvoSwarm Controller<br/>:8113"]:::standard
         swarm_attribution["Swarm Attribution"]:::specialized

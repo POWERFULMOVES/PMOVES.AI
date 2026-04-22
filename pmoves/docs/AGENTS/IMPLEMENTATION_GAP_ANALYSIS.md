@@ -35,7 +35,7 @@ The AGENTS documentation in `pmoves/docs/AGENTS/` describes a sophisticated agen
 | Component | Status | Notes |
 |-----------|--------|-------|
 | **Security Patterns** | ✅ Implemented | `security/patterns.yaml` with damage-control hooks (deterministic + probabilistic) |
-| **Cipher Memory** | ✅ Implemented | Port 8096, Neo4j backend, MCP bridge at `pmoves-cipher-mcp/`, `agent_plan/checkpoint/completion` categories |
+| **Cipher Memory** | ✅ Implemented | Port 8105, Neo4j backend, MCP bridge at `pmoves-cipher-mcp/`, `agent_plan/checkpoint/completion` categories |
 | **Codex Runtime Protocol** | ✅ Implemented | `CODEX_RUNTIME_PROTOCOL.md` with focus/scout modes, confidence gates, PR sweep |
 | **KRISS KROSS Accord** | ✅ Ratified | Collision-safe multi-agent traversal with Graphiti trail + CHIT attestation (2026-02-25) |
 | **Agent Resilience Patterns** | ✅ Implemented | 3-layer model (preventive → Cipher recovery → registry systemic) |
@@ -309,7 +309,7 @@ CHIT Geometry Bus infrastructure is live but the full CGP pipeline is incomplete
 2. ✅ Implement deterministic hooks (pre_command.py) — Known Roads + GAN defense active
 3. ✅ Create SKILL.md template — BoTZ skill marketplace operational
 4. ✅ Convert one instrument to skill format as proof-of-concept
-5. ✅ Cipher Memory deployed (port 8096) with agent plan/checkpoint/completion categories
+5. ✅ Cipher Memory deployed (port 8105) with agent plan/checkpoint/completion categories
 6. ✅ Agent Registry created (`agent_registry.yaml`) with 60 agents, resilience attributes
 7. ✅ Codex Runtime Protocol ratified with focus/scout modes
 8. ✅ KRISS KROSS Accord ratified for multi-agent collision safety

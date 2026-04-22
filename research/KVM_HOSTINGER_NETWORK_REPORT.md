@@ -75,7 +75,7 @@ The architecture follows a strict 3-tier separation: **KVM2** (network edge/exit
 
 **CLAW scope:** Restricted profile, `claude-sonnet-4` model, auto-confirm. Can manage GitHub PRs (gh), NATS messages, systemctl, journalctl, git, ollama, claude, wrangler. No docker, no make, no SSH to other nodes.
 
-**MCP servers configured:** `pmoves-cipher` (SSE at `${TS_Z890}:8096`), `agent-zero` (HTTP at `${TS_Z890}:8080/mcp`).
+**MCP servers configured:** `pmoves-cipher` (SSE at `${TS_Z890}:8105`), `agent-zero` (HTTP at `${TS_Z890}:8080/mcp`).
 
 #### KVM4-2 — Data Storage (source: `claws/scopes/kvm4-2.json`, `claude-md/kvm4-2.md`)
 
@@ -87,13 +87,13 @@ The architecture follows a strict 3-tier separation: **KVM2** (network edge/exit
 | Qdrant (vector DB) | 6333 | ~1 GB | Running | Embeddings store |
 | Meilisearch (full-text search) | 7700 | ~300 MB | Running | Search engine |
 | Neo4j (graph DB) | 7474/7687 | ~1 GB | Running | Knowledge graph |
-| Cipher Memory | 8096 | ~200 MB | Running | Agent memory persistence |
+| Cipher Memory | 8105 | ~200 MB | Running | Agent memory persistence |
 | GitHub Actions runner | — | ~100 MB | Running | Self-hosted CI/CD |
 | **Total** | | ~4.6 GB | | **~11.4 GB free** |
 
 **CLAW scope:** Restricted profile, `claude-sonnet-4` model, auto-confirm. Only data operations: psql, mc (MinIO), curl to data endpoints, python3, git. No docker, no make, no SSH.
 
-**MCP servers configured:** `pmoves-cipher` (SSE at `cipher-memory:8096`).
+**MCP servers configured:** `pmoves-cipher` (SSE at `cipher-memory:8105`).
 
 ### 1.3 Tailscale Tags (Current vs. Required)
 
@@ -166,7 +166,6 @@ Hostinger provides `hostinger/api-mcp-server` (npx package). Can be added to CLA
 {
   "mcpServers": {
     "hostinger": {
-      "command": "npx",
       "args": ["-y", "hostinger-api-mcp-server"],
       "env": { "HOSTINGER_API_TOKEN": "${HOSTINGER_API_TOKEN}" }
     }

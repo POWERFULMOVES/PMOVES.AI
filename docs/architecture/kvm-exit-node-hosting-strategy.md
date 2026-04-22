@@ -97,7 +97,7 @@ Total estimated monthly cost: **$30/mo** (3x Hostinger KVM) + home electricity f
 | Qdrant (vector DB) | 6333 | Running | Medium (~1GB RAM) |
 | Meilisearch (full-text search) | 7700 | Running | Low (~300MB RAM) |
 | Neo4j (graph DB) | 7474/7687 | Running | Medium (~1GB RAM) |
-| Cipher Memory | 8096 | Running | Low (~200MB RAM) |
+| Cipher Memory | 8105 | Running | Low (~200MB RAM) |
 | GitHub Actions runner | — | Running | Low (~100MB RAM) |
 
 **Estimated total usage:** ~4.6GB RAM, <15% CPU — **~11.4 GB RAM free, ~16 vCPU available**
@@ -223,7 +223,7 @@ graph TB
             NEO4J["Neo4j<br/>:7474/:7687"]
             MEILI["Meilisearch<br/>:7700"]
             MINIO["MinIO<br/>:9000/:9001"]
-            CIPHER["Cipher Memory<br/>:8096"]
+            CIPHER["Cipher Memory<br/>:8105"]
         end
     end
 
@@ -315,7 +315,7 @@ graph TB
 | Neo4j | 7474/7687 | ~1GB | Existing | Knowledge graph |
 | Meilisearch | 7700 | ~300MB | Existing | Full-text search |
 | MinIO | 9000/9001 | ~500MB | Existing | Object storage (models, media) |
-| Cipher Memory | 8096 | ~200MB | Existing | Agent memory persistence |
+| Cipher Memory | 8105 | ~200MB | Existing | Agent memory persistence |
 | ClickHouse | 8123 | ~1GB | Planned | Analytics OLAP |
 | GitHub Runner | — | ~100MB | Existing | CI/CD |
 | **Subtotal** | | **~5.1GB** | | Fits comfortably in ~16GB |
