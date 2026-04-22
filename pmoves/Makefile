@@ -1861,8 +1861,8 @@ OTEL_METRICS_PORT ?= 8889
 up-tracing: ## Start distributed tracing stack (Jaeger UI + OTLP Collector)
 	@echo "[*] Starting distributed tracing stack..."
 	@bash -lc '. ./scripts/with-env.sh; \
-		docker compose -f docker-compose.yml -f docker-compose.tracing.yml up -d jaeger otel-collector; \n		echo "[+] Jaeger UI:    http://localhost:$${JAEGER_UI_PORT}"; \
-		echo "[+] Jaeger UI:    http://localhost:16686"; \n		echo "[+] OTLP HTTP:    http://localhost:4318/v1/traces"; \n		echo "[+] OTLP gRPC:    http://localhost:4327"; \n		echo "[+] Metrics:      http://localhost:8889/metrics"; \n		echo "[*] Trace visualization available at Jaeger UI"'
+		docker compose -f docker-compose.yml -f docker-compose.tracing.yml up -d jaeger otel-collector; echo "[+] Jaeger UI:    http://localhost:$${JAEGER_UI_PORT}"; \
+		echo "[+] Jaeger UI:    http://localhost:16686"; echo "[+] OTLP HTTP:    http://localhost:4318/v1/traces"; echo "[+] OTLP gRPC:    http://localhost:4327"; echo "[+] Metrics:      http://localhost:8889/metrics"; echo "[*] Trace visualization available at Jaeger UI"'
 down-tracing: ## Stop distributed tracing stack and remove volumes
 	@bash -lc 'docker compose -f docker-compose.tracing.yml down -v'
 
