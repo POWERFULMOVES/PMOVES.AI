@@ -166,7 +166,6 @@ Hostinger provides `hostinger/api-mcp-server` (npx package). Can be added to CLA
 {
   "mcpServers": {
     "hostinger": {
-**Service:** Cipher Memory, Port 8105, Tier: data
       "args": ["-y", "hostinger-api-mcp-server"],
       "env": { "HOSTINGER_API_TOKEN": "${HOSTINGER_API_TOKEN}" }
     }

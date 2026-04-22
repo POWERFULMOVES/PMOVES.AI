@@ -244,7 +244,7 @@ What each repo expects from and provides to each other:
 | **BoTZ** → Agent Zero | MCP tool execution | MCP (:2091) | Active |
 | **BoTZ** → BoTZ CLI instances | Work distribution | `botz.*` NATS | Active |
 | **Agent Zero** → All agents | Tool execution events | `agent.tool.executed.v1` NATS | Active |
-| **Agent Zero** → Cipher Memory | Checkpoint/resume | HTTP (:8105) | Active |
+| **Agent Zero** | Cipher Memory | Checkpoint/resume | HTTP (:8105) | Active |
 | **Cipher** → All agents | Plan/checkpoint/completion | HTTP API | Active |
 | **ClawZ** → Agent Zero | Chat-to-agent delegation | MCP / NATS | **Planned** |
 | **ClawZ** → Flute | Voice TTS via channels | HTTP | **Planned** |

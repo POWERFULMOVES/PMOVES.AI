@@ -23,7 +23,7 @@
 | NATS (4222) | Event bus for skill coordination | Yes |
 | Supabase PostgREST (3010) | Skill registry + user data | Yes |
 | Agent Zero (8080) | Orchestration control plane | Yes |
-| Cipher Memory (8105) | PostgREST API | Memory index metadata |
+| Cipher Memory (8105) | PostgREST API | Yes |
 
 ## Downstream Consumers
 

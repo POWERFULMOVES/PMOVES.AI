@@ -24,7 +24,7 @@ TensorZero uses **port 3000** for Docker-internal communication (confirmed in do
 | **Gateway Agent** | **8100** (internal) | — | services-catalog.md |
 | **Model Registry** | **8111** | 8110 (changed PR #845) | services-catalog.md |
 | **BoTZ VPN MCP** | **8110** | — | services-catalog.md (took 8110 after Model Registry moved) |
-| **Cipher Memory API** | **8105** (remapped from 3000) | — | services-catalog.md |
+| **Cipher Memory API** | **8105** (remapped from 3000) | — | | services-catalog.md |
 | **Headscale** | **8096** (API), **9091** (metrics) | — | services-catalog.md |
 | **Health (wger)** | **8000** (`WGER_PORT`) | 8080 (Agent Zero) | services-catalog.md |
 | **Neo4j** | **7474** (HTTP), **7687** (Bolt) | — | services-catalog.md |

@@ -47,7 +47,6 @@ Output: named sonic constellations → **M3U8 playlists + CHIT geometry events**
 |---------|-------------|
 | `analyze` | Full ffmpeg lavfi fingerprint → cluster → playlists → Cipher checkpoint |
 | `groups` | Display existing sonic groups from last run |
-Cipher Memory at `:8105`
 
 ---
 
