@@ -1967,6 +1967,193 @@ agents:
       compose_profile: null
     description: "MCP bridge for E2B sandboxed code execution"
 
+  metrics_specialist:
+    name: "Prometheus Metrics Specialist"
+    class: specialized
+    primary_type: data
+    secondary_type: api
+    port: null                         # CLI agent — queries Prometheus HTTP API
+    health: null
+    layers: [L4, L5, L6]
+    evolution_stage: active
+    signature: "claude-opus"
+    nats:
+      publishes:
+        - "observability.metrics.anomaly.v1"
+        - "observability.metrics.trend.v1"
+      subscribes:
+        - "mesh.node.announce.v1"
+        - "observability.query.request.v1"
+    chit_toggles:
+      delta_sensitive: true            # metric rate changes → delta
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: true
+      attribution_gated: true
+    resilience:
+      context_budget: medium
+      checkpoint_frequency: per_query
+      recovery_strategy: none
+      cipher_categories: [metrics_analysis, anomaly_detection]
+    topology:
+      node_affinity: [kvm4-1, z890]
+      team: observability
+      ci_runner: ai-lab
+      compose_profile: monitoring
+    tool_path: "pmoves/tools/observability/metrics_specialist.py"
+    runtime: "uv run"
+    description: "Prometheus metrics analysis, anomaly detection, performance trending"
+
+  dashboard_specialist:
+    name: "Grafana Dashboard Specialist"
+    class: specialized
+    primary_type: ui
+    secondary_type: data
+    port: null                         # CLI agent — manages Grafana via HTTP API
+    health: null
+    layers: [L4, L5, L6, L7]
+    evolution_stage: active
+    signature: "claude-opus"
+    nats:
+      publishes:
+        - "observability.dashboard.updated.v1"
+        - "observability.alert.configured.v1"
+      subscribes:
+        - "observability.metrics.anomaly.v1"
+        - "observability.query.request.v1"
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: false
+      attribution_gated: true
+    resilience:
+      context_budget: medium
+      checkpoint_frequency: per_dashboard
+      recovery_strategy: none
+      cipher_categories: [dashboard_management, alert_configuration]
+    topology:
+      node_affinity: [kvm4-1, z890]
+      team: observability
+      ci_runner: ai-lab
+      compose_profile: monitoring
+    tool_path: "pmoves/tools/observability/dashboard_specialist.py"
+    runtime: "uv run"
+    description: "Grafana dashboard creation, metric visualization, alert configuration"
+
+  logs_specialist:
+    name: "Loki Logs Specialist"
+    class: specialized
+    primary_type: data
+    secondary_type: worker
+    port: null                         # CLI agent — queries Loki HTTP API
+    health: null
+    layers: [L4, L5, L6]
+    evolution_stage: active
+    signature: "claude-opus"
+    nats:
+      publishes:
+        - "observability.logs.pattern.v1"
+        - "observability.logs.error.v1"
+        - "observability.logs.correlation.v1"
+      subscribes:
+        - "ingest.file.added.v1"
+        - "observability.query.request.v1"
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: true
+      attribution_gated: true
+    resilience:
+      context_budget: large
+      checkpoint_frequency: per_analysis
+      recovery_strategy: cipher_resumable
+      cipher_categories: [log_analysis, error_detection]
+    topology:
+      node_affinity: [kvm4-1, kvm4-2, z890]
+      team: observability
+      ci_runner: vps
+      compose_profile: monitoring
+    tool_path: "pmoves/tools/observability/logs_specialist.py"
+    runtime: "uv run"
+    description: "Loki log pattern analysis, error detection, cross-service correlation"
+
+  tracing_specialist:
+    name: "Jaeger Tracing Specialist"
+    class: specialized
+    primary_type: data
+    secondary_type: api
+    port: null                         # CLI agent — queries Jaeger HTTP API
+    health: null
+    layers: [L4, L5, L6]
+    evolution_stage: active
+    signature: "claude-opus"
+    nats:
+      publishes:
+        - "observability.trace.bottleneck.v1"
+        - "observability.trace.correlation.v1"
+      subscribes:
+        - "observability.query.request.v1"
+        - "agent.tool.executed.v1"
+    chit_toggles:
+      delta_sensitive: true            # latency changes → delta
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: true
+      attribution_gated: true
+    resilience:
+      context_budget: medium
+      checkpoint_frequency: per_trace
+      recovery_strategy: none
+      cipher_categories: [trace_analysis, bottleneck_detection]
+    topology:
+      node_affinity: [kvm4-1, z890]
+      team: observability
+      ci_runner: ai-lab
+      compose_profile: monitoring
+    tool_path: "pmoves/tools/observability/tracing_specialist.py"
+    runtime: "uv run"
+    description: "Jaeger distributed tracing, performance bottleneck identification"
+
+  llm_observability:
+    name: "TensorZero LLM Observability Specialist"
+    class: specialized
+    primary_type: llm
+    secondary_type: data
+    port: null                         # CLI agent — queries TensorZero ClickHouse
+    health: null
+    layers: [L3, L4, L5, L6]
+    evolution_stage: active
+    signature: "claude-opus"
+    nats:
+      publishes:
+        - "observability.llm.performance.v1"
+        - "observability.llm.cost.v1"
+        - "observability.llm.model_comparison.v1"
+      subscribes:
+        - "mesh.gpu.model.loaded.v1"
+        - "observability.query.request.v1"
+    chit_toggles:
+      delta_sensitive: true            # token usage changes → delta
+      kappa_sensitive: true            # latency patterns → kappa
+      hz_sensitive: true               # throughput → Hz
+      swarm_participant: true
+      attribution_gated: true
+    resilience:
+      context_budget: medium
+      checkpoint_frequency: per_analysis
+      recovery_strategy: cipher_resumable
+      cipher_categories: [llm_performance, cost_optimization]
+    topology:
+      node_affinity: [z890, 5090]      # GPU nodes preferred
+      team: observability
+      ci_runner: ai-lab
+      compose_profile: monitoring
+    tool_path: "pmoves/tools/observability/llm_observability_specialist.py"
+    runtime: "uv run"
+    description: "TensorZero LLM performance analysis, cost optimization, model comparison"
+
   cipher_beats_analyst:
     name: "Cipher Beats Analyst"
     class: specialized
