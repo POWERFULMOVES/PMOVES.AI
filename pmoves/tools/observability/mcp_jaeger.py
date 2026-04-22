@@ -215,7 +215,7 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
             trace_id = arguments["trace_id"]
 
             trace = client.get_trace(trace_id)
-            spans = trace.get("data", {}).get("spans", [])
+            spans = trace.get("data", [{}])[0].get("spans", [])
 
             if not spans:
                 total_duration = 0
