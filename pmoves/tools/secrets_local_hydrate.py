@@ -28,6 +28,7 @@ from pmoves.tools._secrets_common import (
     is_placeholder,
     local_env_path as _default_local_env,
     parse_env_file as _parse_env,
+    validate_secret_value,
 )
 
 DEFAULT_ENV_SHARED = PROJECT_ROOT / "env.shared"
@@ -52,7 +53,17 @@ def _write_updates(env_path: Path, updates: Dict[str, str]) -> None:
         key = stripped.split("=", 1)[0].strip()
         index[key] = idx
 
+    validated_updates = {}
     for key, value in updates.items():
+        # Validate each value before writing
+        is_valid, error = validate_secret_value(key, value)
+        if not is_valid:
+            # Log only key name (CodeQL safe: no value taint, no error message)
+            print(f"WARNING: Skipping malformed secret '{key}' (validation failed)", file=sys.stderr)
+            continue
+        validated_updates[key] = value
+
+    for key, value in validated_updates.items():
         entry = f"{key}={value}"
         if key in index:
             lines[index[key]] = entry
