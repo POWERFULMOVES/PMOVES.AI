@@ -72,17 +72,19 @@ main() {
 
   log "Joining tailnet as: $hostname"
 
+  # Build tags list
+  local tags="tag:pmoves,tag:z890,tag:workstation,tag:multiboot"
+  case "$distro" in
+    ubuntu|popos|fedora|nobara|cachyos|nixos) tags+=",tag:${distro}" ;;
+  esac
+
   local ts_args=(
     --auth-key "$TAILSCALE_AUTHKEY"
     --hostname "$hostname"
     --accept-routes
     --accept-dns
-    --tag=tag:pmoves --tag=tag:z890 --tag=tag:workstation --tag=tag:multiboot
+    --advertise-tags="$tags"
   )
-  # Distro-specific tag for ACL differentiation
-  case "$distro" in
-    ubuntu|popos|fedora|nobara|cachyos|nixos) ts_args+=(--tag="tag:${distro}") ;;
-  esac
 
   if [[ -n "${TAILSCALE_EXTRA_ARGS:-}" ]]; then
     # shellcheck disable=SC2086

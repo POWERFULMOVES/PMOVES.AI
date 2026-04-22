@@ -55,17 +55,8 @@ fi
 # Portable YAML extraction without python deps in extracted values
 yaml_get() {
   # Extract a scalar value from distros.<distro>.<key>
+  # Uses awk-based parser (works for flat scalar fields)
   local distro="$1" key="$2"
-  python3 - "$distro" "$key" <<'PYEOF' 2>/dev/null
-import sys
-try:
-    import yaml  # PyYAML
-except Exception:
-    sys.exit(2)
-with open(sys.argv[0].replace("-","").replace("_","").replace("manifest",""),"r") as _:
-    pass
-PYEOF
-  # Fallback: awk-based extractor (works for flat scalar fields)
   awk -v d="$distro" -v k="$key" '
     $0 ~ ("^  " d ":") { inblock=1; next }
     inblock && /^  [a-z0-9_-]+:/ && !/^    / { inblock=0 }
