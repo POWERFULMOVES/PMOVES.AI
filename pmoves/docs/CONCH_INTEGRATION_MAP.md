@@ -69,7 +69,6 @@ The CONCH (Consciousness Harvest) pipeline implements CHR (Constellation Harvest
   "super_nodes": [{
     "id": "consciousness-super",
     "label": "pmoves.consciousness",
-| `honcho` | Session/memory management | **Overlap** — Cipher Memory (8105) |
     "constellations": [{
       "id": "constellation-0",
       "summary": "Materialist theories",
@@ -82,7 +81,6 @@ The CONCH (Consciousness Harvest) pipeline implements CHR (Constellation Harvest
         "conf": 0.9,
         "summary": "Physicalism is the theory..."
       }],
-| `honcho` | Cipher Memory (8105) | Prefer Cipher — Neo4j-backed, MCP-integrated |
         "namespace": "pmoves.consciousness",
         "mhep": 0.85
       }
