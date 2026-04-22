@@ -2947,6 +2947,93 @@ down-z890: ## Stop Z890 GPU node services
 	@$(LOAD_ENV_Z890) docker compose -p $(PROJECT)-z890 $(Z890_COMPOSE) down
 	@echo "✔ Z890 node stopped."
 
+# ── Z890 Multi-Boot Bootstrap ─────────────────────────────────────────────
+# Driver targets for deploy/provision/z890/*.  See deploy/provision/z890/README.md
+# for the full operator runbook.
+
+# Accept optional DISTRO / DEVICE: make z890-media-usb DISTRO=ubuntu-24.04 DEVICE=/dev/sdb
+DISTRO ?=
+DEVICE ?=
+
+.PHONY: z890-media-usb
+z890-media-usb: ## Prepare fallback per-device USB installer (DISTRO=ubuntu-24.04|pop-os-22.04|... DEVICE=/dev/sdX)
+	@if [ -z "$(DISTRO)" ]; then echo "Usage: make z890-media-usb DISTRO=<name> [DEVICE=/dev/sdX]"; \
+	  grep -A1 '^  [a-z0-9-]*:' ../deploy/provision/z890/pxe/distro-manifest.yaml | grep -v '^--' | head -20; exit 1; fi
+	@sudo bash ../deploy/provision/z890/media/prepare-usb.sh \
+	  --distro $(DISTRO) $(if $(DEVICE),--device $(DEVICE),)
+
+.PHONY: z890-media-nvme
+z890-media-nvme: ## Partition external NVMe as multi-boot target (DEVICE=/dev/nvme0n1)
+	@if [ -z "$(DEVICE)" ]; then echo "Usage: make z890-media-nvme DEVICE=/dev/nvme0n1"; exit 1; fi
+	@sudo bash ../deploy/provision/z890/media/prepare-nvme-target.sh --device $(DEVICE)
+
+.PHONY: z890-pxe-serve
+z890-pxe-serve: ## Serve netboot.xyz custom menu for Z890 (runs on 5090 — see README)
+	@echo "PXE serve requires netboot.xyz running on the 5090 node."
+	@echo "Custom menu: deploy/provision/z890/pxe/netboot-menu-pmoves.ipxe"
+	@echo "Distro catalog: deploy/provision/z890/pxe/distro-manifest.yaml"
+	@echo ""
+	@echo "To serve:"
+	@echo "  1. On 5090: docker run -d --name netbootxyz-z890 \\"
+	@echo "       -p 8080:80 \\"
+	@echo "       -v \$$PWD/deploy/provision/z890/pxe:/config/menus/custom \\"
+	@echo "       ghcr.io/netbootxyz/netbootxyz"
+	@echo "  2. On Z890: F12 boot menu → PXE → choose entry from PMOVES menu"
+	@echo ""
+	@echo "Fallback if 5090 is down:  make z890-media-usb DISTRO=<name> DEVICE=/dev/sdX"
+
+.PHONY: z890-post-install
+z890-post-install: ## Run per-distro post-install (auto-detects running distro via profile.yaml)
+	@if [ ! -r /opt/pmoves/profile.yaml ] && [ ! -r /etc/os-release ]; then \
+	  echo "ERROR: neither profile.yaml nor /etc/os-release readable"; exit 1; fi
+	@distro="$$(awk -F': ' '/^distro:/{gsub(/[ \t]/,"",$$2);print $$2;exit}' /opt/pmoves/profile.yaml 2>/dev/null | tr -d '\"')"; \
+	if [ -z "$$distro" ]; then . /etc/os-release && distro="$$ID"; fi; \
+	case "$$distro" in \
+	  ubuntu)   script=ubuntu-24.04-post.sh ;; \
+	  pop|popos) script=pop-os-22.04-post.sh ;; \
+	  fedora|nobara) script=fedora-nobara-post.sh ;; \
+	  cachyos)  script=cachyos-post.sh ;; \
+	  nixos)    echo "NixOS uses declarative nixos-post.nix — see deploy/provision/z890/README.md"; exit 0 ;; \
+	  *)        echo "Unknown distro '$$distro' — run scripts manually from deploy/provision/z890/"; exit 1 ;; \
+	esac; \
+	echo "Running deploy/provision/z890/$$script..."; \
+	sudo bash ../deploy/provision/z890/$$script
+
+.PHONY: z890-verify
+z890-verify: ## Full verification sweep after Z890 bootstrap (profile, tailscale, docker, nvidia, NATS, Hi-RAG)
+	@if [ -f ../deploy/provision/z890/common/99-verify.sh ]; then \
+	  bash ../deploy/provision/z890/common/99-verify.sh; \
+	else \
+	  echo "ERROR: verify script not found. Did you clone PMOVES.AI to the standard path?"; exit 1; \
+	fi
+
+# ── Jetson JetPack 7 Reflash ─────────────────────────────────────────────
+# Driver targets for deploy/provision/jetson/*.  See deploy/provision/jetson/README.md
+# for the full reflash runbook. DEVICE must be nemotron-1 or nemotron-2.
+
+.PHONY: jetson-reflash
+jetson-reflash: ## Drive SDK Manager to reflash Jetson to JetPack 7 (DEVICE=nemotron-1|nemotron-2)
+	@if [ -z "$(DEVICE)" ]; then echo "Usage: make jetson-reflash DEVICE=nemotron-1 (or nemotron-2)"; exit 1; fi
+	@case "$(DEVICE)" in nemotron-1|nemotron-2) ;; *) echo "DEVICE must be nemotron-1 or nemotron-2"; exit 1 ;; esac
+	@echo "Pre-flight: SDK Manager requires x86 Ubuntu 22.04 host + Jetson in recovery mode."
+	@echo "If this host is not that, use jetson-post-flash only once Jetson is already reachable."
+	@sudo TAILSCALE_AUTHKEY=$${TAILSCALE_AUTHKEY} \
+	  bash ../deploy/provision/jetson/jetpack7-reflash.sh --device $(DEVICE)
+
+.PHONY: jetson-post-flash
+jetson-post-flash: ## Copy + run post-flash-bootstrap.sh on an already-flashed Jetson (DEVICE=nemotron-N)
+	@if [ -z "$(DEVICE)" ]; then echo "Usage: make jetson-post-flash DEVICE=nemotron-1 (or nemotron-2)"; exit 1; fi
+	@scp ../deploy/provision/jetson/post-flash-bootstrap.sh \
+	  ../deploy/provision/jetson/nemotron-branding \
+	  pmoves-$(DEVICE):/tmp/
+	@ssh pmoves-$(DEVICE) \
+	  "sudo DEVICE=$(DEVICE) TAILSCALE_AUTHKEY=$${TAILSCALE_AUTHKEY} bash /tmp/post-flash-bootstrap.sh"
+
+.PHONY: jetson-verify
+jetson-verify: ## Verify Jetson fleet integration (DEVICE=nemotron-1|nemotron-2)
+	@if [ -z "$(DEVICE)" ]; then echo "Usage: make jetson-verify DEVICE=nemotron-1 (or nemotron-2)"; exit 1; fi
+	@bash ../deploy/provision/jetson/verify-jetson-fleet.sh --device $(DEVICE)
+
 .PHONY: ps-z890
 ps-z890: ## Show Z890 node service status
 	@$(LOAD_ENV_Z890) docker compose -p $(PROJECT)-z890 $(Z890_COMPOSE) ps
