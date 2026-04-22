@@ -147,7 +147,7 @@ class PrometheusMetricsSpecialist:
             print(f"[WARN] Latency check failed: {e}")
 
         # Check for resource saturation (CPU, memory)
-        cpu_query = f'rate(process_cpu_seconds_total{{{{service="{service}"}}}[5m])) > 0.8'
+        cpu_query = f'rate(process_cpu_seconds_total{{service="{service}"}}[5m]) > 0.8'
         try:
             result = self.query_range(cpu_query, start, end)
             if result["data"]["result"]:
