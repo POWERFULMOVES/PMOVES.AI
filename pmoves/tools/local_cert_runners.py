@@ -312,6 +312,10 @@ def docker_run(
         env["RUNNER_TOKEN"] = token
         token_env_flags = ["RUNNER_TOKEN"]
 
+    # Enable runner reuse to prevent restart loop when containers are recreated
+    # Runner state persists in the mounted volume at /root/.config/pmoves
+    env["RUNNER_ALLOW_RUNNER_REUSE"] = "true"
+
     env["REPO_URL"] = f"https://github.com/{repo}"
     env["RUNNER_NAME"] = lane.runner_name
     env["LABELS"] = lane.labels

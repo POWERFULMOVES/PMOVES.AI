@@ -296,3 +296,45 @@ c373bf1c35 feat(yt-cookies): one-click bootstrap targets — make yt-ingest-boot
 - Timestamp: `2026-04-20`
 
 <!-- GRAPHITI_MARK: CLAUDE-OPUS::PHASE-9C-INFRA-HARDENING::2026-04-20 -->
+
+## Runner Restart Loop Fix (2026-04-22)
+
+### Problem
+All three local-cert runners (`gha-runner-ai-lab`, `gha-runner-vps`, `gha-runner-hotfix`) stuck in restart loop with exit code 2. Error pattern:
+```
+Cannot configure the runner because it is already configured.
+Runner reusage is disabled
+```
+
+### Root Cause
+Runner state persistence conflict:
+1. Containers mount `$HOME/.config/pmoves` → `/root/.config/pmoves`
+2. GitHub runner stores configuration in the mounted volume
+3. `docker_rm()` removes container but volume preserves runner state
+4. New container tries to configure already-configured runner → restart loop
+
+### Fix Applied
+Added `RUNNER_ALLOW_RUNNER_REUSE=true` to `local_cert_runners.py`:
+```python
+# Enable runner reuse to prevent restart loop when containers are recreated
+env["RUNNER_ALLOW_RUNNER_REUSE"] = "true"
+```
+
+### Result
+- All runners now stable (no restart loop)
+- Runners successfully reuse existing configuration
+- Runners connected to GitHub and picking up jobs
+- See `pmoves/docs/operations/FIX_RUNNER_RESTART_LOOP.md` for full analysis
+
+### Files Changed
+| File | Change |
+|------|--------|
+| `pmoves/tools/local_cert_runners.py` | Added `RUNNER_ALLOW_RUNNER_REUSE=true` environment variable |
+| `pmoves/docs/operations/FIX_RUNNER_RESTART_LOOP.md` | New — full problem analysis and fix documentation |
+
+### Agent ACK
+- Agent: `CLAUDE-OPUS`
+- Signature: `ACK::CLAUDE-OPUS::RUNNER-RESTART-LOOP-FIX`
+- Timestamp: `2026-04-22`
+
+<!-- GRAPHITI_MARK: CLAUDE-OPUS::RUNNER-RESTART-LOOP-FIX::2026-04-22 -->
