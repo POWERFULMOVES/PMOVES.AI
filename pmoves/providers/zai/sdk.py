@@ -114,9 +114,9 @@ class ZAIProvider:
         Initialize Z.AI provider
 
         Args:
-            api_key: Z.AI API key (defaults to ZAI_API_KEY env var)
+            api_key: Z.AI API key (defaults to Z_AI_API_KEY env var)
         """
-        self.api_key = api_key or os.getenv("ZAI_API_KEY")
+        self.api_key = api_key or os.getenv("Z_AI_API_KEY")
         self.tensorzero_gateway = os.getenv("TENSORZERO_GATEWAY_URL", "http://localhost:3030")
 
     async def chat(
