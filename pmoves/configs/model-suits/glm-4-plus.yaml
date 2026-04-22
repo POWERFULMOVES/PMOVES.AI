@@ -25,7 +25,6 @@ distillation_pipeline:
   stages:
     - name: config_tuning
       enabled: true
-      settings_file: pmoves/providers/zai/custom_settings.yaml
 
     - name: context_priming
       enabled: true
