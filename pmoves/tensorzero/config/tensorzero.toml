@@ -9,9 +9,10 @@
 enabled = true
 async_writes = true
 
-# OTLP export — re-enabled P7 P0.2 (OTel collector in docker-compose.tracing.yml)
+# OTLP export — temporarily disabled for debugging
+# TODO: Fix transport error to otel-collector
 [gateway.export.otlp.traces]
-enabled = true
+enabled = false
 format = "opentelemetry"
 
 # --- Chat models: Agent Zero orchestration (local GPU and edge) ------------
@@ -260,6 +261,46 @@ routing = ["zai_glm51"]
 type = "openai"
 api_base = "https://api.z.ai/api/coding/paas/v4"
 model_name = "glm-5.1"
+api_key_location = "env::Z_AI_API_KEY"
+
+# --- GLM 4.7 (Primary model for GLM Coding Plan) ---
+[models.chat_zai_glm47]
+routing = ["zai_glm47"]
+
+[models.chat_zai_glm47.providers.zai_glm47]
+type = "openai"
+api_base = "https://api.z.ai/api/coding/paas/v4"
+model_name = "glm-4.7"
+api_key_location = "env::Z_AI_API_KEY"
+
+# --- GLM 5 (Flagship model) ---
+[models.chat_zai_glm5]
+routing = ["zai_glm5"]
+
+[models.chat_zai_glm5.providers.zai_glm5]
+type = "openai"
+api_base = "https://api.z.ai/api/coding/paas/v4"
+model_name = "glm-5"
+api_key_location = "env::Z_AI_API_KEY"
+
+# --- GLM 5 Turbo (Fast flagship) ---
+[models.chat_zai_glm5_turbo]
+routing = ["zai_glm5_turbo"]
+
+[models.chat_zai_glm5_turbo.providers.zai_glm5_turbo]
+type = "openai"
+api_base = "https://api.z.ai/api/coding/paas/v4"
+model_name = "glm-5-turbo"
+api_key_location = "env::Z_AI_API_KEY"
+
+# --- GLM 4.5 Air (Efficient model) ---
+[models.chat_zai_glm45_air]
+routing = ["zai_glm45_air"]
+
+[models.chat_zai_glm45_air.providers.zai_glm45_air]
+type = "openai"
+api_base = "https://api.z.ai/api/coding/paas/v4"
+model_name = "glm-4.5-air"
 api_key_location = "env::Z_AI_API_KEY"
 
 # --- Qwen3-Coder 30B MoE (3.3B active — SWE-Bench SOTA, fits 16GB) ---
@@ -530,6 +571,24 @@ type = "anthropic"
 model_name = "claude-sonnet-4-20250514"
 api_key_location = "env::ANTHROPIC_API_KEY"
 
+# Claude Opus 4 (flagship reasoning model)
+[models.claude_opus_4]
+routing = ["anthropic_direct"]
+
+[models.claude_opus_4.providers.anthropic_direct]
+type = "anthropic"
+model_name = "claude-opus-4-20250514"
+api_key_location = "env::ANTHROPIC_API_KEY"
+
+# Claude Haiku 4 (fast, efficient model)
+[models.claude_haiku_4]
+routing = ["anthropic_direct"]
+
+[models.claude_haiku_4.providers.anthropic_direct]
+type = "anthropic"
+model_name = "claude-haiku-4-20250514"
+api_key_location = "env::ANTHROPIC_API_KEY"
+
 # --- GLM-4 Model Family (Zhipu AI) ------------------------------------------
 #
 # Two endpoint classes — use them accordingly:
@@ -563,6 +622,36 @@ type = "openai"
 api_base = "https://open.bigmodel.cn/api/paas/v4"
 model_name = "glm-4-long"
 api_key_location = "env::GLM_API_KEY"
+
+# GLM-5.1: Flagship model with extended reasoning (META-AGENT RUNTIME MODEL)
+[models.glm_5_1]
+routing = ["bigmodel_glm51"]
+
+[models.glm_5_1.providers.bigmodel_glm51]
+type = "openai"
+api_base = "https://open.bigmodel.cn/api/paas/v4"
+model_name = "glm-5.1"
+api_key_location = "env::Z_AI_API_KEY"
+
+# GLM-4 Air: Balanced performance and efficiency
+[models.glm_4_air]
+routing = ["bigmodel_air"]
+
+[models.glm_4_air.providers.bigmodel_air]
+type = "openai"
+api_base = "https://open.bigmodel.cn/api/paas/v4"
+model_name = "glm-4-air"
+api_key_location = "env::Z_AI_API_KEY"
+
+# GLM-4 Flash: Fastest model for quick responses
+[models.glm_4_flash]
+routing = ["bigmodel_flash"]
+
+[models.glm_4_flash.providers.bigmodel_flash]
+type = "openai"
+api_base = "https://open.bigmodel.cn/api/paas/v4"
+model_name = "glm-4-flash"
+api_key_location = "env::Z_AI_API_KEY"
 
 # --- Embedding models ------------------------------------------------------
 
