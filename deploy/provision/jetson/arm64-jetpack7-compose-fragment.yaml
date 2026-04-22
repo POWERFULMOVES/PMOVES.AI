@@ -1,0 +1,56 @@
+# PMOVES Jetson JetPack 7.0 arm64 Compose Fragment — Session Plan Expansion (2026-04-21)
+#
+# NOTE: This file intentionally does NOT match the docker-compose*.yml naming
+# convention because pmoves/docker-compose*.yml is in the damage-control
+# readOnlyPaths tree. Any update to the canonical pmoves/docker-compose.arm64.
+# override.yml must go through the secrets-funnel / manifest pipeline — this
+# fragment is a reference for that promotion step.
+#
+# CONTENTS: service entries that should be merged into the canonical arm64
+# override when CHIT tooling lands the update. Rendered as docker-compose
+# YAML shape for easy copy-paste during the merge session.
+#
+# DO NOT apply this file directly with `docker compose -f` — it won't work
+# because docker compose requires the file to match *compose*.yml or be
+# explicitly renamed. Use it as a merge source only.
+
+services:
+  # ── JetPack 7.0 / CUDA 12.8 edge inference ──
+  ollama:
+    platform: linux/arm64
+    image: ollama/ollama:latest
+    profiles: ["jetson-edge"]
+    runtime: nvidia
+    environment:
+      - OLLAMA_HOST=0.0.0.0:11434
+      - OLLAMA_ORIGINS=http://100.64.0.0/10,http://127.0.0.1:*
+      - NVIDIA_VISIBLE_DEVICES=all
+
+  comfyui-lowvram:
+    platform: linux/arm64
+    profiles: ["jetson-edge"]
+    runtime: nvidia
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility,video
+      - COMFY_EXTRA_ARGS=--lowvram --disable-xformers
+
+  tensorrt-runtime:
+    platform: linux/arm64
+    image: nvcr.io/nvidia/l4t-tensorrt:r10.3.0-runtime
+    profiles: ["jetson-edge"]
+    runtime: nvidia
+
+  mesh-agent:
+    platform: linux/arm64
+  media-video:
+    platform: linux/arm64
+  media-audio:
+    platform: linux/arm64
+
+# Promotion path:
+# 1. Open pmoves/docker-compose.arm64.override.yml in a session with
+#    tier-appropriate permissions (secrets-funnel or operator override).
+# 2. Append these service entries under the existing services: key.
+# 3. Regenerate downstream artifacts via: make -C pmoves secrets-funnel
+# 4. Verify: make -C pmoves jetson-verify DEVICE=nemotron-1

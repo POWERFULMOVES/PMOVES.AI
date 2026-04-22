@@ -1336,6 +1336,44 @@
           "type": "string"
         }
       ]
+    },
+    {
+      "id": "jetson-fleet",
+      "name": "Jetson Orin Edge Fleet",
+      "description": "Per-device metadata for Nemotron/NemoClaw Jetson Orin Nanos. Set on the running Jetson via deploy/provision/jetson/post-flash-bootstrap.sh; consumed by mesh-agent announcements and arm64 compose overrides.",
+      "variables": [
+        {
+          "key": "JETSON_DEVICE_NAME",
+          "file": "pmoves/env.shared",
+          "prompt": "Jetson device identifier",
+          "help": "Short name for this Jetson in the fleet (nemotron-1 | nemotron-2). Exposed in /etc/motd banner, mesh-agent announcements, and Tailscale hostname (pmoves-<name>).",
+          "required": false,
+          "sensitive": false,
+          "type": "string",
+          "allowed_values": ["nemotron-1", "nemotron-2"]
+        },
+        {
+          "key": "NEMOTRON_VARIANT",
+          "file": "pmoves/env.shared",
+          "prompt": "Nemotron/NemoClaw variant",
+          "help": "Software variant running on this Jetson: 'nemotron' (default NVIDIA Nemotron family) or 'nemoclaw' (PMOVES-customized claw agent). Drives motd colorization and agent-team registration.",
+          "required": false,
+          "sensitive": false,
+          "type": "string",
+          "default": "nemotron",
+          "allowed_values": ["nemotron", "nemoclaw"]
+        },
+        {
+          "key": "JETPACK_VERSION",
+          "file": "pmoves/env.shared",
+          "prompt": "JetPack version installed on this Jetson",
+          "help": "Target: 7.0 after reflash (matches 5090 CUDA 12.8 stack). Set by post-flash-bootstrap.sh.",
+          "required": false,
+          "sensitive": false,
+          "type": "string",
+          "default": "7.0"
+        }
+      ]
     }
   ]
 }
