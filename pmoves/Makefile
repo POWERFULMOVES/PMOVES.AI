@@ -1023,6 +1023,13 @@ down-tensorzero: ## Stop TensorZero gateway
 	@echo "🧠 Stopping TensorZero..."
 	@$(DC) --profile tensorzero down
 
+.PHONY: restart-tensorzero
+restart-tensorzero: ## Restart TensorZero LLM gateway
+	@echo "🔄 Restarting TensorZero..."
+	@$(MAKE) --no-print-directory down-tensorzero
+	@sleep 2
+	@$(MAKE) --no-print-directory up-tensorzero
+
 .PHONY: down-agents
 down-agents: ## Stop agent services
 	@echo "🤖 Stopping agents..."
@@ -1842,6 +1849,28 @@ monitoring-report: ## Print a quick Prometheus summary (targets, failures, top C
 
 docker-logs-brief: ## Summarize recent Docker WARN/ERROR lines + container health for PMOVES/supabase containers
 	@$(PYTHON) tools/docker_logs_brief.py --tail $${DOCKER_LOGS_TAIL:-120} --save docs/evidence/docker_logs_brief_latest.txt
+
+# -------- Distributed Tracing (Jaeger + OTLP) --------
+.PHONY: up-tracing down-tracing tracing-open tracing-status
+
+JAEGER_UI_PORT ?= 16686
+OTEL_HTTP_PORT ?= 4318
+OTEL_GRPC_PORT ?= 4327
+OTEL_METRICS_PORT ?= 8889
+
+up-tracing: ## Start distributed tracing stack (Jaeger UI + OTLP Collector)
+	@echo "[*] Starting distributed tracing stack..."
+	@bash -lc '. ./scripts/with-env.sh; \
+		docker compose -f docker-compose.yml -f docker-compose.tracing.yml up -d jaeger otel-collector; \n		echo "[+] Jaeger UI:    http://localhost:$${JAEGER_UI_PORT}"; \
+		echo "[+] Jaeger UI:    http://localhost:16686"; \n		echo "[+] OTLP HTTP:    http://localhost:4318/v1/traces"; \n		echo "[+] OTLP gRPC:    http://localhost:4327"; \n		echo "[+] Metrics:      http://localhost:8889/metrics"; \n		echo "[*] Trace visualization available at Jaeger UI"'
+down-tracing: ## Stop distributed tracing stack and remove volumes
+	@bash -lc 'docker compose -f docker-compose.tracing.yml down -v'
+
+tracing-open: ## Open Jaeger UI in your browser
+	@$(PYTHON) -c "import webbrowser; webbrowser.open('http://localhost:$(JAEGER_UI_PORT)')"
+
+tracing-status: ## Show distributed tracing stack status
+	@docker compose -f docker-compose.tracing.yml ps
 
 # -------- Tailscale helpers --------
 .PHONY: tailscale-save-key tailscale-join tailscale-rejoin tailscale-status tailscale-logout
