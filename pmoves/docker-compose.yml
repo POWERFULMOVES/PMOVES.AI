@@ -3019,11 +3019,11 @@ services:
     healthcheck:
       test:
       - CMD-SHELL
-      - wget --spider --tries 1 http://$${CLICKHOUSE_USER:-default}:$${CLICKHOUSE_PASSWORD:-}@$${HOSTNAME:-localhost}:8123/ping
-      start_period: 30s
-      interval: 5s
-      timeout: 2s
-      retries: 5
+      - wget --spider --tries=1 --timeout=5 http://$${CLICKHOUSE_USER:-default}:$${CLICKHOUSE_PASSWORD:-}@127.0.0.1:8123/ping
+      start_period: 90s
+      interval: 10s
+      timeout: 10s
+      retries: 10
     networks:
     - pmoves_data
     deploy:
@@ -3055,7 +3055,7 @@ services:
     - TOGETHER_AI_API_KEY=${TOGETHER_AI_API_KEY:-local-disabled}
     - CLOUDFLARE_API_TOKEN=${CLOUDFLARE_API_TOKEN:-local-disabled}
     - GEMINI_API_KEY=${GEMINI_API_KEY:-local-disabled}
-    - OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=${OTEL_EXPORTER_OTLP_TRACES_ENDPOINT:-}
+    - OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=${OTEL_EXPORTER_OTLP_TRACES_ENDPOINT:-http://pmoves-otel-collector:4317}
     - DOCKED_MODE=${DOCKED_MODE:-true}
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
@@ -3071,6 +3071,7 @@ services:
     - pmoves_api
     - pmoves_bus
     - pmoves_data
+    - pmoves_monitoring
     - pmoves_external
     extra_hosts:
     - host.docker.internal:host-gateway
