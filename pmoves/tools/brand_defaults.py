@@ -28,6 +28,8 @@ DEFAULTS = {
     "MINIO_SECRET_KEY": "",
     # Search (will be strengthened below if too short)
     "MEILI_MASTER_KEY": "master_key",
+    # Vector search (Qdrant API key for inter-service authentication)
+    "QDRANT__API_KEY": "",
     # Geometry graph (compose reads NEO4J_AUTH; we set URL, user, and generate password if missing)
     "NEO4J_URL": "bolt://neo4j:7687",
     "NEO4J_USER": "neo4j",
@@ -382,6 +384,11 @@ def upsert_env(path: Path, env_gen_path: Path, pairs: dict[str, str]) -> None:
     companion_key = _get_kv(text, "INVIDIOUS_COMPANION_KEY")
     if len(companion_key) != 16:
         text = _set_kv(text, "INVIDIOUS_COMPANION_KEY", _rand_exact_len(16))
+
+    # Qdrant API key for inter-service authentication
+    qdrant_key = _get_kv(text, "QDRANT__API_KEY")
+    if len(qdrant_key) < 32:
+        text = _set_kv(text, "QDRANT__API_KEY", _strong_random(32))
 
     hmac_key = _get_kv(text, "INVIDIOUS_HMAC_KEY")
     if len(hmac_key) < 32:
