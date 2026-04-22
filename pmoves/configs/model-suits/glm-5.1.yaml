@@ -1,81 +1,96 @@
-# GLM-5.1 — Cloud via Z.AI MAX Plan
-# Current Agent Zero utility model. Accessible via Z.AI API.
-# Good for coding tasks. No local weights.
-#
-# Distillation: config_tuning (provider settings captured, no local fine-tune)
-# Source: Hermes Agent video (AICodeKing), YouTube Signals Analysis §2.1
+# Model Suit: GLM-5.1 (Z.AI)
+# PMOVES.AI Meta-Agent Configuration
+# Provider: Z.AI (Zhipu AI / BigModel)
 
-name: glm-5.1
-provider: zai
-provider_display: "Z.AI MAX Plan"
-distillation_stage: config_tuning
+suit:
+  id: glm-5.1
+  name: GLM-5.1 (Zhipu AI)
+  provider: zai
+  flare_name: pmoves/glm-5.1
+  model_family: glm
+  tier: flagship
+  role: runtime  # THIS IS MY ACTUAL RUNTIME MODEL
 
 model_config:
-  model_name: glm-5.1
-  # TODO: verify Z.AI base URL — may be https://open.bigmodel.cn/api/paas/v4 or custom proxy
-  endpoint: https://open.bigmodel.cn/api/paas/v4
-  api_key_env: ZAI_API_KEY
   context_window: 128000
-  max_output_tokens: 16384
-  temperature: 0.6
-  top_p: 0.9
+  max_output_tokens: 8192
+  supports_vision: true
+  supports_extended_thinking: true  # GLM-5.1 supports extended reasoning
+  supports_function_calling: true
+  temperature_range: [0.0, 1.0]
+  top_p_range: [0.0, 1.0]
+  top_k: null
 
-prompt_style:
-  format: markdown
-  system_prompt_template: null
-  preferred_language: en
-  notes: >
-    GLM-5.1 is the successor to GLM-5-turbo with improved coding capability.
-    Responds well to structured markdown with clear task decomposition.
-    Free tier via Z.AI MAX plan.
+distillation_pipeline:
+  stages:
+    - name: config_tuning
+      enabled: true
+      settings_file: pmoves/providers/zai/custom_settings.yaml
 
-agent_zero:
-  role: utility
-  a0_set_prefix: A0_SET_utility_model
-  subordinate_profile: sidecar
-  strengths:
-  - coding
-  - code generation
-  - structured output
-  - tool calling
-  limitations:
-  - cloud-only (no local fallback weights)
-  - requires network connectivity
-  - free tier may have rate limits
+    - name: context_priming
+      enabled: true
+      system_prompt: |
+        You are GLM-5.1, Zhipu AI's flagship model.
+        You are a powerful bilingual (Chinese-English) assistant with extended reasoning capabilities.
+        You prefer instruction-format prompts with clear role separation (system, user, assistant, tool).
+        You have a 128K token context window, support vision input, and can use tools.
+        You are the ACTUAL RUNTIME MODEL for the PMOVES.AI Meta-Agent.
 
-pinokio_p7:
-  discoverable: false
-  pbnj_launch: false
-  tac_node: null
-  nats_subject: null
-  notes: "Cloud API — not discoverable by P7 Agent Interpreter"
+    - name: model_fine_tune
+      enabled: false
+      reason: "Cloud-only model - no weight updates possible"
+
+    - name: full_distillation
+      enabled: false
+      reason: "Cloud-only model - no weight updates possible"
+
+tensorzero_config:
+  model_name: glm-5.1
+  weight: 0.1  # Already exists in TensorZero, keeping low weight
+  routing:
+    - function: meta_agent_runtime
+      priority: 1
+    - function: bilingual_chat
+      priority: 1
+    - function: code_generation
+      priority: 2
+    - function: reasoning
+      priority: 2
+
+flare_namespace:
+  alias: pmoves/glm-5.1
+  canonical_name: glm-5.1
+  provider_url: https://open.bigmodel.cn/dev/api
+  already_registered: true  # Already exists in flare-model-namespace.yaml
+
+capabilities:
+  - code_generation
+  - reasoning
+  - extended_thinking  # GLM-5.1 feature
+  - vision
+  - tools
+  - function_calling
+  - large_context
+  - bilingual  # Chinese-English
 
 local_fallback:
   available: false
-  reason: "No local GLM weights published — use Qwen3.6 locally for utility tasks"
-  fallback_model_suit: qwen3.6
-
-fine_tuning:
-  possible: false
-  reason: "No open weights available for GLM-5.1"
+  reason: "Z.AI models are cloud-only with no open weights"
 
 cross_agent:
   agent_zero: full
-  clawz: limited
+  clawz: full
+  archon: full
   typer: untested
-  pinokio: none
+  pinokio: full
+  a2ui: full
 
 metadata:
-  source: youtube_hermes_glm51
-  last_verified: 2026-04-19
+  source: pmoves/meta-agent/zai
+  last_verified: 2026-04-21
   benchmark_data:
-  - source: youtube_signals
-    notes: "Free tier available via Z.AI MAX plan — same endpoint as GLM-5-turbo"
-  - source: hermes_agent_video
-    notes: "Hermes Agent uses GLM-5.1 for coding/research tasks via cloud"
-
-ecosystem_role: |
-  Primary utility model for Agent Zero sidecar. Handles code generation,
-  structured output formatting, and tool-calling scenarios where precision
-  matters more than conversational flair. Lower temperature than chat model
-  for deterministic coding output. Falls back to qwen3.6 local when offline.
+    - source: "Z.AI Documentation"
+      url: "https://open.bigmodel.cn/dev/api"
+    - source: "BigModel GitHub"
+      url: "https://github.com/MetaGLM"
+  runtime_note: "THIS IS THE MODEL POWERING THE META-AGENT (CLAUDE-OPUS)"

@@ -34,6 +34,65 @@ mappings:
     lane: "coding_plan"
     nodes: [z890, 5090]
 
+  # --- Anthropic Provider (Meta-Agent Phase 1) ---
+  claude-sonnet-4:
+    flare_name: "pmoves/claude-sonnet-4"
+    provider: "anthropic"
+    model_id: "claude-sonnet-4-5"
+    lane: "cloud"
+    nodes: [z890, 5090]
+    tensorzero_variant: "claude-sonnet-4"
+
+  claude-opus-4:
+    flare_name: "pmoves/claude-opus-4"
+    provider: "anthropic"
+    model_id: "claude-opus-4-5"
+    lane: "cloud"
+    nodes: [z890, 5090]
+    tensorzero_variant: "claude-opus-4"
+
+  claude-haiku-4:
+    flare_name: "pmoves/claude-haiku-4"
+    provider: "anthropic"
+    model_id: "claude-haiku-4-5"
+    lane: "cloud"
+    nodes: [z890, 5090]
+    tensorzero_variant: "claude-haiku-4"
+
+  # --- Z.AI Provider (Meta-Agent Runtime) ---
+  glm-5-1:
+    flare_name: "pmoves/glm-5.1"
+    provider: "zai"
+    model_id: "glm-5.1"
+    lane: "cloud"
+    nodes: [z890, 5090]
+    tensorzero_variant: "glm-5.1"
+    runtime_model: true
+
+  glm-4-plus:
+    flare_name: "pmoves/glm-4-plus"
+    provider: "zai"
+    model_id: "glm-4-plus"
+    lane: "cloud"
+    nodes: [z890, 5090]
+    tensorzero_variant: "glm-4-plus"
+
+  glm-4-air:
+    flare_name: "pmoves/glm-4-air"
+    provider: "zai"
+    model_id: "glm-4-air"
+    lane: "cloud"
+    nodes: [z890, 5090]
+    tensorzero_variant: "glm-4-air"
+
+  glm-4-flash:
+    flare_name: "pmoves/glm-4-flash"
+    provider: "zai"
+    model_id: "glm-4-flash"
+    lane: "cloud"
+    nodes: [z890, 5090]
+    tensorzero_variant: "glm-4-flash"
+
   # --- Local GPU ---
   qwen-coder:
     flare_name: "pmoves/qwen-3-coder-32b"
