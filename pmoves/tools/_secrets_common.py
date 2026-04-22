@@ -129,18 +129,14 @@ def validate_secret_value(key: str, value: str) -> tuple[bool, str | None]:
         (is_valid, error_message) - If invalid, error_message explains why
 
     Checks for:
-    - Embedded newlines (literal \\n or actual newlines)
+    - Actual newlines (literal \\n is allowed for JWTs/multiline configs)
     - Special characters that break Docker Compose parsing (+ in unquoted values)
     - Suspicious patterns (base64 fragments concatenated to API keys)
     """
     if not value:
         return True, None
 
-    # Check for literal \n (backslash-n) which indicates concatenation
-    if "\\n" in value:
-        return False, f"contains literal '\\\\n' - value appears to be multiple values concatenated"
-
-    # Check for actual newlines
+    # Check for actual newlines (literal \n is allowed for JWTs/multiline configs)
     if "\n" in value or "\r" in value:
         return False, "contains actual newline characters - secret values must be single-line"
 
@@ -151,7 +147,6 @@ def validate_secret_value(key: str, value: str) -> tuple[bool, str | None]:
         if value.find("=") > 50:
             # Check if there's a transition from non-base64 to base64
             # Common API keys: alnum with specific prefixes (AIza, sk-, etc.)
-            import re
             # Pattern: prefix like "AIza" or "sk-" followed by base64
             if re.search(r'[A-Za-z0-9_-]{20,}[=]{1,2}[A-Za-z0-9+/=]{10,}', value):
                 return False, "appears to be multiple values concatenated (API key + base64 fragment)"
@@ -202,8 +197,11 @@ def parse_env_file(path: Path) -> Dict[str, str]:
         # Validate the value format
         is_valid, error = validate_secret_value(key, value)
         if not is_valid:
-            print(f"WARNING: Skipping malformed secret '{key}': {error}", file=sys.stderr)
+            # Log only key name and error type, not the value (CodeQL safe)
+            print(f"WARNING: Skipping malformed secret '{key}': {error} (length={len(value)})", file=sys.stderr)
             continue
 
+        # Strip/normalize value before storage (regression prevention from PR #1356)
+        value = normalize_env_value(value)
         values[key] = value
     return values
