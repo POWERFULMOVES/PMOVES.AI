@@ -538,7 +538,7 @@ jobs:
 
       - name: Attest build provenance (SLSA L3)
         if: steps.build.outputs.digest != '' && steps.meta.outputs.has_tags == 'true'
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v4
         with:
           subject-name: ${{ env.REGISTRY }}/${{ steps.meta.outputs.ghcr_ns }}/${{ steps.cfg.outputs.image_name }}
           subject-digest: ${{ steps.build.outputs.digest }}
