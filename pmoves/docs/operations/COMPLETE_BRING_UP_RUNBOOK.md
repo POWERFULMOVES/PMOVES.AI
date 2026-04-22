@@ -90,7 +90,7 @@ This runbook provides a comprehensive "soup to nuts" guide for bringing up a com
 
 ### Phase 2: Environment & Credential Setup (15-30 minutes)
 
-**Objective:** Configure environment variables and credentials for all 66 services
+**Objective:** Configure environment variables and credentials for all 65+ services
 
 **Steps:**
 1. **Create Base Environment File**
@@ -266,7 +266,7 @@ This runbook provides a comprehensive "soup to nuts" guide for bringing up a com
 5. **Validate Data Tier Integration**
    ```bash
    # Test Neo4j connectivity
-   docker exec neo4j-local cypher-shell -u neo4j:password "MATCH (n) RETURN count(n);"
+   docker exec neo4j cypher-shell -u neo4j -p "$NEO4J_AUTH" "MATCH (n) RETURN count(n);"
 
    # Test Qdrant collection
    curl -X GET "http://localhost:6333/collections/pmoves_chunks_qwen3"
@@ -334,7 +334,7 @@ This runbook provides a comprehensive "soup to nuts" guide for bringing up a com
    ```
 
 5. **Validate Worker Integration**
-   - Verify NATS subscriptions: `nats subs ">.*.v1"`
+   - Verify NATS subscriptions: `nats sub ">"` or `nats sub "*.*.v1"`
    - Check worker logs for successful NATS connections
    - Validate MinIO connectivity: `curl http://localhost:8088/healthz`
 
@@ -428,10 +428,10 @@ This runbook provides a comprehensive "soup to nuts" guide for bringing up a com
    make up-monitoring
    ```
    - Prometheus: Metrics scraping (port 9090)
-   - Grafana: Dashboard visualization (port 3000)
+   - Grafana: Dashboard visualization (port 3002)
    - Loki: Log aggregation (port 3100)
    - Promtail: Log collector
-   - Access Grafana: http://localhost:3000 (default admin/admin credentials)
+   - Access Grafana: http://localhost:3002 (default admin/admin credentials)
 
 4. **Start PMOVES UI Dashboard**
    ```bash
@@ -482,7 +482,7 @@ This runbook provides a comprehensive "soup to nuts" guide for bringing up a com
 
 3. **Validate Service Dependencies**
    - Check all containers are running: `docker ps --format "table {{.Names}}\t{{.Status}}"`
-   - Verify container counts (expect 60+ containers for full stack)
+   - Verify container counts (expect 65+ containers for full stack)
    - Check for OOM warnings: `docker events --filter 'event=oom'`
    - Validate network connectivity: `docker network inspect pmoves_default`
 
@@ -832,7 +832,7 @@ make verify-all            # Verify all services + tests
 | Meilisearch | 7700 | Full-text search |
 | MinIO | 9000 API / 9001 Console | Object storage |
 | Prometheus | 9090 | Metrics |
-| Grafana | 3000 | Dashboards |
+| Grafana | 3002 | Dashboards |
 | Loki | 3100 | Logs |
 | PMOVES UI | 4482 | Central dashboard |
 | n8n | 5678 | Workflow automation |
@@ -857,10 +857,10 @@ make bringup-layered         # Deterministic layered bring-up
 make up-all-new              # Start all services in dependency order
 make smoke-prod              # Production smoke tests
 make env-check               # Validate environment configuration
-make health-quick            # Quick health check for all services
+make health-summary           # Quick health check for all services
 make down                    # Stop all services
-make backup-data              # Backup all data stores
-make restore-data            # Restore data stores from backups
+make backup                   # Backup all data stores (see LOCAL_DEV.md)
+make restore                  # Restore data stores from backups (see LOCAL_DEV.md)
 ```
 
 ---
@@ -868,7 +868,7 @@ make restore-data            # Restore data stores from backups
 ## Success Criteria
 
 ✅ **Full Stack Bring-Up Complete When:**
-1. All 60+ containers running without restarts
+1. All 65+ containers running without restarts
 2. All health endpoints returning HTTP 200
 3. NATS message bus operational with active streams
 4. Agent mesh synchronized (Agent Zero, Archon, Mesh Agent)

@@ -12,7 +12,7 @@
 4. **Configuration failure**: New container tries to configure already-configured runner → error
 
 **Error Pattern:**
-```
+```text
 Cannot configure the runner because it is already configured.
 An error occurred: Value cannot be null. (Parameter 'configuredSettings')
 Runner reusage is disabled
@@ -87,7 +87,11 @@ def docker_run(
     # ... existing code ...
 
     # Add runner reuse flag BEFORE creating container
-    env["RUNNER_ALLOW_RUNNER_REUSE"] = "true"  # ← ADD THIS LINE
+    env["RUNNER_ALLOW_RUNNER_REUSE"] = "true"
+
+    # CRITICAL: Add RUNNER_ALLOW_RUNNER_REUSE to docker command flags
+    # The env dict alone is not enough - must be passed via -e to container
+    token_env_flags.append("RUNNER_ALLOW_RUNNER_REUSE")
 
     env["REPO_URL"] = f"https://github.com/{repo}"
     env["RUNNER_NAME"] = lane.runner_name

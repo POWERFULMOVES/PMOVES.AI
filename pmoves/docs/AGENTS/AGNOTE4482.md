@@ -301,7 +301,7 @@ c373bf1c35 feat(yt-cookies): one-click bootstrap targets — make yt-ingest-boot
 
 ### Problem
 All three local-cert runners (`gha-runner-ai-lab`, `gha-runner-vps`, `gha-runner-hotfix`) stuck in restart loop with exit code 2. Error pattern:
-```
+```text
 Cannot configure the runner because it is already configured.
 Runner reusage is disabled
 ```

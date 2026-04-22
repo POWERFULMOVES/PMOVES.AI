@@ -58,6 +58,12 @@ make env-setup ARGS=--accept-defaults
 # Start Supabase (13 services)
 make up-supabase
 
+# Apply database migrations and seeds
+make supabase-bootstrap
+
+# Configure authentication
+make auth-bootstrap
+
 # Start data tier (Neo4j, Qdrant, Meilisearch, MinIO)
 make up-data-tier
 
@@ -72,7 +78,7 @@ make up-agents
 #### Step 3: Verify Everything Works (2 minutes)
 ```bash
 # Quick health check
-make health-quick
+make health-summary
 
 # Full smoke test
 make smoke-prod
@@ -82,7 +88,7 @@ make smoke-prod
 
 ```bash
 # Check all service health
-make health-quick
+make health-summary
 
 # View all containers
 docker ps --format "table {{.Names}}\t{{.Status}}"
@@ -109,7 +115,7 @@ Once running, access services at:
 | Agent Zero | http://localhost:8081 | - |
 | Archon | http://localhost:3737 | - |
 | TensorZero UI | http://localhost:4000 | - |
-| Grafana | http://localhost:3000 | admin/admin |
+| Grafana | http://localhost:3002 | admin/admin |
 | Supabase Studio | http://localhost:54323 | - |
 | PMOVES UI | http://localhost:4482 | - |
 
@@ -130,15 +136,15 @@ docker events --filter 'event=oom' --since 1h
 # Re-validate environment
 make env-check
 
-# Regenerate JWT secrets if needed
-make supabase-generate-keys
+# Refresh expired JWT tokens if needed
+make supa-jwt-refresh
 ```
 
 ### NATS connection issues
 ```bash
-# Test NATS connectivity
+# Test NATS connectivity (if NATS CLI is installed)
 nats pub test.subject "hello"
-nats subs ">test.subject"
+nats sub ">test.subject"
 
 # Validate NATS URL includes credentials
 grep NATS_URL env.shared  # Should be: nats://nats:password@nats:4222
@@ -176,12 +182,12 @@ docker inspect <container-name> | jq '.[0].State.ExitCode'
 
 ## Quick Decision Tree
 
-```
+```text
 New to PMOVES?
 ├─ Yes → Run `make first-run` (fully guided)
 └─ No → Choose deployment scenario:
     ├─ Development → `make up-minimal` (core services only)
-    ├─ Full stack → `make up-all-new` (all 66 services)
+    ├─ Full stack → `make up-all-new` (full stack; 65+ services)
     ├─ Production → `make bringup-layered` (step-by-step with verification)
     └─ Multi-host → `make mesh-setup && make first-run-multi-host`
 ```
