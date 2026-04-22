@@ -814,6 +814,66 @@ BEGIN
     description = EXCLUDED.description,
     updated_at = NOW();
 
+  -- Z.AI GLM-5.1 (Flagship - META-AGENT RUNTIME MODEL)
+  INSERT INTO pmoves_core.models (provider_id, name, model_id, model_type, capabilities, vram_mb, context_length, description, active)
+  VALUES (
+    v_zai_id,
+    'glm_5_1',
+    'glm-5.1',
+    'chat',
+    '["chat", "function_calling", "extended_thinking", "vision", "chinese", "bilingual"]'::jsonb,
+    0,
+    128000,
+    'Z.AI GLM-5.1 - Flagship model with extended reasoning and vision (META-AGENT RUNTIME MODEL)',
+    true
+  )
+  ON CONFLICT (provider_id, model_id) DO UPDATE SET
+    name = EXCLUDED.name,
+    capabilities = EXCLUDED.capabilities,
+    context_length = EXCLUDED.context_length,
+    description = EXCLUDED.description,
+    updated_at = NOW();
+
+  -- Z.AI GLM-4-Plus (Premium tier)
+  INSERT INTO pmoves_core.models (provider_id, name, model_id, model_type, capabilities, vram_mb, context_length, description, active)
+  VALUES (
+    v_zai_id,
+    'glm_4_plus',
+    'glm-4-plus',
+    'chat',
+    '["chat", "function_calling", "vision", "chinese", "bilingual"]'::jsonb,
+    0,
+    128000,
+    'Z.AI GLM-4-Plus - Premium tier for complex reasoning with vision support',
+    true
+  )
+  ON CONFLICT (provider_id, model_id) DO UPDATE SET
+    name = EXCLUDED.name,
+    capabilities = EXCLUDED.capabilities,
+    context_length = EXCLUDED.context_length,
+    description = EXCLUDED.description,
+    updated_at = NOW();
+
+  -- Z.AI GLM-4-Air (Balanced tier)
+  INSERT INTO pmoves_core.models (provider_id, name, model_id, model_type, capabilities, vram_mb, context_length, description, active)
+  VALUES (
+    v_zai_id,
+    'glm_4_air',
+    'glm-4-air',
+    'chat',
+    '["chat", "function_calling", "chinese", "bilingual"]'::jsonb,
+    0,
+    128000,
+    'Z.AI GLM-4-Air - Balanced performance and efficiency',
+    true
+  )
+  ON CONFLICT (provider_id, model_id) DO UPDATE SET
+    name = EXCLUDED.name,
+    capabilities = EXCLUDED.capabilities,
+    context_length = EXCLUDED.context_length,
+    description = EXCLUDED.description,
+    updated_at = NOW();
+
   -- OpenAI GPT-4o-mini
   INSERT INTO pmoves_core.models (provider_id, name, model_id, model_type, capabilities, vram_mb, context_length, description, active)
   VALUES (
