@@ -2,7 +2,7 @@
 
 > Single source of truth for all physical/virtual nodes, service assignments, agent teams, route flows, and runner strategy.
 >
-> Last updated: 2026-04-13
+> Last updated: 2026-04-21
 
 ---
 
@@ -10,13 +10,13 @@
 
 | Node | LAN IP | Tailscale IP | Tailscale Hostname | Role | Runner Labels | vCPU / RAM | Cost |
 |------|--------|-------------|--------------------|----- |---------------|------------|------|
-| Z890 (Windows 11) | LAN (dual NIC) | `ts:<z890>` | pmoves-z890 | Dev, GPU (RTX 3090 Ti) | `self-hosted, ai-lab` (secondary) | 32C / 128GB | electricity |
+| Z890 (Multi-Boot: Win11 / Ubuntu / Pop / Fedora / Cachy / Nix) | LAN (dual NIC) | `ts:<z890-<distro>>` | pmoves-z890-<distro> | Dev, GPU (RTX 3090 Ti); multi-boot runbook: `deploy/provision/z890/README.md` | `self-hosted, ai-lab` (secondary) | 32C / 128GB | electricity |
 | POWERFULMOVES (5090) | LAN (dual NIC) | `ts:<5090-linux>`, `ts:<5090-win>` | pmoves-powerfulmoves, powerfulmoves-1 | Primary GPU (RTX 5090) | `self-hosted, ai-lab, gpu, cuda` | 24C / 64GB | electricity |
 | 4090 Laptop (Windows) | LAN | `ts:<laptop>` | pmoves-4090 | Control Plane, Edge Orchestration, Agent Zero + Claws | — | RTX 4090 | electricity |
 | DGX Spark | LAN | `ts:<dgx-spark>` | pmoves-dgx-spark | Heavyweight Inference (Gemma 4 31B, Nemotron Super 49B, Qwen3-Coder 480B) | `self-hosted, ai-lab, gpu, cuda, spark` (pending) | 20C Arm / 128GB unified LPDDR5X | electricity |
 | R9700 Workstation (Linux) | LAN | `ts:<rdna4>` | pmoves-rdna4 | Heavyweight ROCm Inference (Gemma 4 31B/26B-A4B via llama.cpp) | `self-hosted, ai-lab, gpu, rocm, rdna4` (pending) | 9850X3D / 32GB + 2x R9700 (64GB VRAM total) | electricity |
-| Jetson Orin #1 | LAN (RustDesk + SSH) | `ts:<nano>` | pmoves-nano (rename to pmoves-nano-1 pending) | Edge Inference (Nemotron/NemoClaw), Claws | — | Orin (sm_87) | electricity |
-| Jetson Orin #2 | LAN (RustDesk + SSH) | TBD | TBD | Edge Inference (Nemotron/NemoClaw), Claws | — | Orin (sm_87) | electricity |
+| Jetson Orin #1 (Nemotron) | LAN (RustDesk + SSH) | `ts:<nano>` | pmoves-nemotron-1 (rename pending; JetPack 7.0 reflash scheduled) | Edge Inference (Nemotron/NemoClaw), Claws — CUDA 12.8, L4T r37 | — | Orin (sm_87) | electricity |
+| Jetson Orin #2 (NemoClaw) | LAN (RustDesk + SSH) | TBD | pmoves-nemotron-2 (JetPack 7.0 reflash scheduled) | Edge Inference (Nemotron/NemoClaw), Claws — CUDA 12.8, L4T r37 | — | Orin (sm_87) | electricity |
 | KVM4-1 | — | `ts:<kvm4-1>` | pmoves-kvm4-1 | API Gateway + Tailscale Egress Exit Node (Phase 9Q) | `self-hosted, vps, kvm4, production` | 8C / 16GB | $10/mo |
 | KVM4-2 | — | — | pmoves-kvm4-2 | Data / Storage | `self-hosted, vps, kvm4, production` | 8C / 16GB | $10/mo |
 | KVM2 | — | — | pmoves-kvm2 | Reverse Proxy (nginx SSL) / RustDesk Relay | `self-hosted, vps, kvm2, backup` | 4C / 8GB | $10/mo |
@@ -42,12 +42,17 @@ Both Jetson Orin Nanos have SSH configured (`pmovesnvme@.110`, `pmovesnvme@.144`
 - RustDesk config: KVM2 relay, both root and user paths
 - pmoves-claw SSH key injected to root
 
-**Remaining:**
-1. Jetson #1: Tailscale active (pmoves-nano, 100.x), pending rename to pmoves-nano-1
-2. Jetson #2: Fresh Tailscale install needed
-3. JetPack version check and potential update
+**Remaining (2026-04-21 update):**
+1. Jetson #1: Tailscale active (pmoves-nano, 100.x), rename to `pmoves-nemotron-1` queued
+2. Jetson #2: Fresh Tailscale install needed, join as `pmoves-nemotron-2`
+3. **JetPack 7.0 reflash scheduled** — runbook: `deploy/provision/jetson/README.md`
+   - `make -C pmoves jetson-reflash DEVICE=nemotron-1` (requires x86 Ubuntu 22.04 SDK host)
+   - `make -C pmoves jetson-reflash DEVICE=nemotron-2`
+   - Post-reflash: `make -C pmoves jetson-verify DEVICE=nemotron-N`
+   - ~45 min per device; do not schedule during UNFCU demos
 4. Registration in `agent-teams.yaml` and `node-agent-specialization.yaml`
 5. Agent Zero + Claws deployment
+6. arm64 compose override: `pmoves/docker-compose.arm64.override.yml` (expand for JetPack 7 — see session plan)
 
 **Total VPS cost:** $30/mo + electricity for local nodes.
 
