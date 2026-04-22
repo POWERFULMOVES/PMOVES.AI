@@ -166,6 +166,28 @@ include mk/yt-cookies.mk
 update-service-docs: ## Regenerate service update notes from git metadata
 	@$(PYTHON) scripts/update_service_logs.py $(ARGS)
 
+.PHONY: docs-runbook
+docs-runbook: ## Open the comprehensive bring-up runbook
+	@if command -v xdg-open >/dev/null 2>&1; then \
+		xdg-open docs/operations/COMPLETE_BRING_UP_RUNBOOK.md; \
+	elif command -v open >/dev/null 2>&1; then \
+		open docs/operations/COMPLETE_BRING_UP_RUNBOOK.md; \
+	else \
+		echo "Runbook location: docs/operations/COMPLETE_BRING_UP_RUNBOOK.md"; \
+		echo "Quickstart location: docs/operations/QUICKSTART.md"; \
+	fi
+
+.PHONY: docs-quickstart
+docs-quickstart: ## Open the quick start guide
+	@if command -v xdg-open >/dev/null 2>&1; then \
+		xdg-open docs/operations/QUICKSTART.md; \
+	elif command -v open >/dev/null 2>&1; then \
+		open docs/operations/QUICKSTART.md; \
+	else \
+		echo "Quickstart location: docs/operations/QUICKSTART.md"; \
+		echo "Full runbook: docs/operations/COMPLETE_BRING_UP_RUNBOOK.md"; \
+	fi
+
 # -------- Updates ----------
 .PHONY: update
 update: ensure-env-shared  ## Pull repo + images, recreate stack
