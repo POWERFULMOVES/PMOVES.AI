@@ -259,11 +259,8 @@ check-tools: ## Check required tools and versions
 		echo "↷ npm unavailable or unreachable; skipping latest-version check"; \
 	else \
 		newest=$$(printf "%s\n%s\n" "$$supa_version" "$$latest" | sort -V | tail -1); \
-		if [ "$$newest" = "$$latest" ] && [ "$$supa_version" != "$$latest" ]; then \
-			echo "⚠️  Supabase CLI update available: $$supa_version → $$latest"; \
-			echo "   Update with: npm update -g supabase"; \
-		else \
-			echo "✅ Supabase CLI version: $$supa_version"; \
+		if [ "$$newest" = "$$latest" ] && [ "$$supa_version" != "$$latest" ]; then \; echo "⚠️  Supabase CLI update available: $$supa_version → $$latest"; \; echo "   Update with: npm update -g supabase"; \
+		else \; echo "✅ Supabase CLI version: $$supa_version"; \
 		fi; \
 	fi
 
@@ -319,8 +316,7 @@ supa-start: ensure-env-shared ## Start Supabase stack for selected runtime (cli 
 		docker network create "$(SUPABASE_NETWORK)" >/dev/null 2>&1 || true; \
 		extra_start_args=""; \
 		if [ -n "$${SUPABASE_CLI_EXCLUDE:-}" ]; then \
-			extra_start_args="$$extra_start_args -x $${SUPABASE_CLI_EXCLUDE}"; \
-			echo "↷ supabase start exclude: $${SUPABASE_CLI_EXCLUDE}"; \
+			extra_start_args="$$extra_start_args -x $${SUPABASE_CLI_EXCLUDE}"; \; echo "↷ supabase start exclude: $${SUPABASE_CLI_EXCLUDE}"; \
 		fi; \
 		eval "supabase start --workdir \".\" --network-id \"$(SUPABASE_NETWORK)\" $$extra_start_args"; \
 		if echo ",$${SUPABASE_CLI_EXCLUDE:-}," | grep -q ",vector,"; then \
@@ -331,8 +327,7 @@ supa-start: ensure-env-shared ## Start Supabase stack for selected runtime (cli 
 		echo "🗄️ Starting Supabase Kong/Compose stack (SUPABASE_RUNTIME=$(SUPABASE_RUNTIME))..."; \
 		$(DC) up -d supabase-db; \
 		db=$$(bash "$(SUPABASE_DB_HELPER)" running 2>/dev/null || true); \
-		if [ -z "$$db" ]; then \
-			echo "❌ Supabase DB container not found after start."; \
+		if [ -z "$$db" ]; then \; echo "❌ Supabase DB container not found after start."; \
 			exit 1; \
 		fi; \
 		ready=0; \
@@ -381,8 +376,7 @@ supa-status: ## Show Supabase status for selected runtime and export env snapsho
 		status_file=$$(mktemp); \
 		if supabase status --workdir "." > "$$status_file" 2>&1; then \
 			cat "$$status_file"; \
-		else \
-			echo "↷ Supabase CLI stack not running yet."; \
+		else \; echo "↷ Supabase CLI stack not running yet."; \
 		fi; \
 		rm -f "$$status_file"; \
 		env_snapshot=$$(mktemp); \
@@ -392,9 +386,7 @@ supa-status: ## Show Supabase status for selected runtime and export env snapsho
 			rm -f "$$env_snapshot"; \
 		fi; \
 		if [ -s ".supabase.status.env" ]; then \
-			$(PYTHON) scripts/supabase/runtime_env_bridge.py --status-file .supabase.status.env --output env.supa.runtime >/dev/null 2>&1 || true; \
-			echo ""; \
-			echo "📌 Runtime env snapshot: .supabase.status.env"; \
+			$(PYTHON) scripts/supabase/runtime_env_bridge.py --status-file .supabase.status.env --output env.supa.runtime >/dev/null 2>&1 || true; \; echo ""; \; echo "📌 Runtime env snapshot: .supabase.status.env"; \
 			grep -E '^(API_URL|DB_URL|STUDIO_URL|ANON_KEY|SERVICE_ROLE_KEY|JWT_SECRET)=' .supabase.status.env || true; \
 			if [ -s "env.supa.runtime" ]; then \
 				echo "🔗 Runtime service overlay: env.supa.runtime"; \
@@ -441,12 +433,10 @@ supa-logs: ## Tail logs for selected runtime (set SVC=<container/service> for a 
 	fi
 	@if [ "$(SUPABASE_RUNTIME)" = "cli" ]; then \
 		containers=$$(docker ps --format '{{.Names}}' | grep -E '^supabase_' || true); \
-		if [ -z "$$containers" ]; then \
-			echo "No Supabase CLI containers running."; \
+		if [ -z "$$containers" ]; then \; echo "No Supabase CLI containers running."; \
 			exit 0; \
 		fi; \
-		for c in $$containers; do \
-			echo "---- $$c (tail=80) ----"; \
+		for c in $$containers; do \; echo "---- $$c (tail=80) ----"; \
 			docker logs --tail=80 "$$c" || true; \
 		done; \
 	else \
@@ -509,8 +499,7 @@ supa-collation-refresh: ## Refresh collation version for all Supabase databases 
 	for dbname in postgres _supabase; do \
 		echo "  -> ALTER DATABASE $$dbname REFRESH COLLATION VERSION"; \
 		if ! docker exec -i "$$db" psql -U postgres -d "$$dbname" \
-			-c "ALTER DATABASE $$dbname REFRESH COLLATION VERSION;" 2>&1; then \
-			echo "  ❌ ALTER DATABASE $$dbname failed"; \
+			-c "ALTER DATABASE $$dbname REFRESH COLLATION VERSION;" 2>&1; then \; echo "  ❌ ALTER DATABASE $$dbname failed"; \
 			failed=1; \
 		fi; \
 	done; \
@@ -571,8 +560,7 @@ supabase-bootstrap: ## Apply pending Supabase migrations + seeds (tracked in pub
 			if [ "$$applied" = "1" ]; then \
 				echo "   Skipping migration (already applied): $$name"; \
 				continue; \
-			fi; \
-			echo "   Applying migration: $$name"; \
+			fi; \; echo "   Applying migration: $$name"; \
 			docker exec -i "$$db" psql -v ON_ERROR_STOP=1 -U postgres -d postgres < "$$migration"; \
 			docker exec -i "$$db" psql -v ON_ERROR_STOP=1 -U postgres -d postgres -c "INSERT INTO public.pmoves_bootstrap_history(kind, filename) VALUES ('migration', '$$name') ON CONFLICT DO NOTHING;"; \
 		done; \
@@ -587,8 +575,7 @@ supabase-bootstrap: ## Apply pending Supabase migrations + seeds (tracked in pub
 			if [ "$$applied" = "1" ]; then \
 				echo "   Skipping seed (already applied): $$name"; \
 				continue; \
-			fi; \
-			echo "   Applying seed: $$name"; \
+			fi; \; echo "   Applying seed: $$name"; \
 			docker exec -i "$$db" psql -v ON_ERROR_STOP=1 -U postgres -d postgres < "$$seed"; \
 			docker exec -i "$$db" psql -v ON_ERROR_STOP=1 -U postgres -d postgres -c "INSERT INTO public.pmoves_bootstrap_history(kind, filename) VALUES ('seed', '$$name') ON CONFLICT DO NOTHING;"; \
 		done; \
@@ -1023,6 +1010,13 @@ down-tensorzero: ## Stop TensorZero gateway
 	@echo "🧠 Stopping TensorZero..."
 	@$(DC) --profile tensorzero down
 
+.PHONY: restart-tensorzero
+restart-tensorzero: ## Restart TensorZero LLM gateway
+	@echo "🔄 Restarting TensorZero..."
+	@$(MAKE) --no-print-directory down-tensorzero
+	@sleep 2
+	@$(MAKE) --no-print-directory up-tensorzero
+
 .PHONY: down-agents
 down-agents: ## Stop agent services
 	@echo "🤖 Stopping agents..."
@@ -1357,8 +1351,7 @@ bootstrap-tier-envs: ## Create missing tier env files from examples (Hardened br
 	@echo "Bootstrapping tier environment files from examples..."
 	@created=""; \
 	for tier in data supabase api llm worker media agent ui; do \
-		if [ ! -f "env.tier-$$tier" ] && [ -f "env.tier-$$tier.example" ]; then \
-			echo "→ Creating env.tier-$$tier from example..."; \
+		if [ ! -f "env.tier-$$tier" ] && [ -f "env.tier-$$tier.example" ]; then \; echo "→ Creating env.tier-$$tier from example..."; \
 			cp "env.tier-$$tier.example" "env.tier-$$tier"; \
 			created="$$created env.tier-$$tier"; \
 		fi; \
@@ -1382,8 +1375,7 @@ populate-tier-envs: bootstrap-tier-envs ## Populate tier env files with defaults
 		echo "✓ Populated env.tier-data"; \
 	fi; \
 	if [ -f "env.tier-supabase" ]; then \
-		if grep -q "your_jwt_secret_here\|your_anon_key_here\|your_service_role_key_here" env.tier-supabase 2>/dev/null; then \
-			echo "Generating Supabase secrets with proper JWT tokens..."; \
+		if grep -q "your_jwt_secret_here\|your_anon_key_here\|your_service_role_key_here" env.tier-supabase 2>/dev/null; then \; echo "Generating Supabase secrets with proper JWT tokens..."; \
 			if [ -x scripts/supabase/generate-keys.sh ]; then \
 				scripts/supabase/generate-keys.sh > env.tier-supabase; \
 				echo "✓ Populated env.tier-supabase (via generate-keys.sh with valid JWTs)"; \
@@ -1843,6 +1835,28 @@ monitoring-report: ## Print a quick Prometheus summary (targets, failures, top C
 docker-logs-brief: ## Summarize recent Docker WARN/ERROR lines + container health for PMOVES/supabase containers
 	@$(PYTHON) tools/docker_logs_brief.py --tail $${DOCKER_LOGS_TAIL:-120} --save docs/evidence/docker_logs_brief_latest.txt
 
+# -------- Distributed Tracing (Jaeger + OTLP) --------
+.PHONY: up-tracing down-tracing tracing-open tracing-status
+
+JAEGER_UI_PORT ?= 16686
+OTEL_HTTP_PORT ?= 4318
+OTEL_GRPC_PORT ?= 4327
+OTEL_METRICS_PORT ?= 8889
+
+up-tracing: ## Start distributed tracing stack (Jaeger UI + OTLP Collector)
+	@echo "[*] Starting distributed tracing stack..."
+	@bash -lc '. ./scripts/with-env.sh; \
+		docker compose -f docker-compose.yml -f docker-compose.tracing.yml up -d jaeger otel-collector; \; echo "[+] Jaeger UI:    http://localhost:$${JAEGER_UI_PORT}"; \
+		echo "[+] Jaeger UI:    http://localhost:16686"; \; echo "[+] OTLP HTTP:    http://localhost:4318/v1/traces"; \; echo "[+] OTLP gRPC:    http://localhost:4327"; \; echo "[+] Metrics:      http://localhost:8889/metrics"; \; echo "[*] Trace visualization available at Jaeger UI"'
+down-tracing: ## Stop distributed tracing stack and remove volumes
+	@bash -lc 'docker compose -f docker-compose.tracing.yml down -v'
+
+tracing-open: ## Open Jaeger UI in your browser
+	@$(PYTHON) -c "import webbrowser; webbrowser.open('http://localhost:$(JAEGER_UI_PORT)')"
+
+tracing-status: ## Show distributed tracing stack status
+	@docker compose -f docker-compose.tracing.yml ps
+
 # -------- Tailscale helpers --------
 .PHONY: tailscale-save-key tailscale-join tailscale-rejoin tailscale-status tailscale-logout
 
@@ -1949,14 +1963,11 @@ claws-status: ## Health check all claw instances
 	@for scope in $$(ls $(CLAW_SCOPES) | sed 's/.json//'); do \
 		TARGET_VAR="CLAW_TARGET_$$scope"; \
 		TARGET="$${!TARGET_VAR:-}"; \
-		if [ -n "$$TARGET" ]; then \
-			echo ""; \
-			echo "--- $$scope ($$TARGET) ---"; \
+		if [ -n "$$TARGET" ]; then \; echo ""; \; echo "--- $$scope ($$TARGET) ---"; \
 			ssh -o ConnectTimeout=3 "$$TARGET" \
 				"echo 'SSH: OK'; kilo --version 2>/dev/null || echo 'Kilo: not installed'; tailscale status --self 2>/dev/null | head -1 || echo 'Tailscale: not found'" \
 				2>/dev/null || echo "  UNREACHABLE"; \
-		else \
-			echo "--- $$scope: no target configured ---"; \
+		else \; echo "--- $$scope: no target configured ---"; \
 		fi; \
 	done
 
@@ -3273,8 +3284,7 @@ neo4j-migrate: ## Run Neo4j migration (usage: make neo4j-migrate VERSION=003)
 		echo "Usage: make neo4j-migrate VERSION=003"; \
 		echo ""; \
 		echo "Available migrations:"; \
-		ls -1 ../PMOVES-Neo4j/db/migrations/*.cypher 2>/dev/null | while read -r f; do \
-			echo "  • $$(basename "$$f")"; \
+		ls -1 ../PMOVES-Neo4j/db/migrations/*.cypher 2>/dev/null | while read -r f; do \; echo "  • $$(basename "$$f")"; \
 		done; \
 		exit 1; \
 	fi
@@ -3285,8 +3295,7 @@ neo4j-seed: ## Load Neo4j seed data (usage: make neo4j-seed SEED=001_person_alia
 		echo "Usage: make neo4j-seed SEED=001_person_aliases.csv"; \
 		echo ""; \
 		echo "Available seeds:"; \
-		ls -1 ../PMOVES-Neo4j/db/seeds/*.csv 2>/dev/null | while read -r f; do \
-			echo "  • $$(basename "$$f")"; \
+		ls -1 ../PMOVES-Neo4j/db/seeds/*.csv 2>/dev/null | while read -r f; do \; echo "  • $$(basename "$$f")"; \
 		done; \
 		exit 1; \
 	fi
@@ -3352,8 +3361,7 @@ neo4j-backup: ## Backup Neo4j database to backups/ with timestamp
 			docker cp $$container_name:/backups/neo4j_$${timestamp}.cypher "$$backup_dir/neo4j_$${timestamp}.cypher" 2>/dev/null && \
 				echo "✅ Backup created: $$backup_dir/neo4j_$${timestamp}.cypher" && \
 				ls -lh "$$backup_dir/neo4j_$${timestamp}.cypher"; \
-		else \
-			echo "❌ Backup failed - neither dump nor cypher export succeeded"; \
+		else \; echo "❌ Backup failed - neither dump nor cypher export succeeded"; \
 			exit 1; \
 		fi; \
 	else \
