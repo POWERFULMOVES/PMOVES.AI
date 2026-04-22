@@ -24,6 +24,7 @@ set -euo pipefail
 
 DEVICE=""
 SKIP_FLASH=0
+JETSON_USER="${JETSON_USER:-pmovesnvme}"
 JETPACK_VERSION="${JETPACK_VERSION:-7.0}"
 SDKM_CLI="${SDKM_CLI:-/usr/local/bin/sdkmanager}"
 
@@ -161,23 +162,23 @@ done
 if [[ -z "$JETSON_HOST" ]]; then
   log "⚠ Could not reach $DEVICE via ping. Manual deploy required:"
   log "  1. Connect to Jetson over USB-C ethernet (192.168.55.1) or LAN"
-  log "  2. Run: scp deploy/provision/jetson/post-flash-bootstrap.sh user@\$JETSON_IP:/tmp/"
-  log "  3. Run: ssh user@\$JETSON_IP 'sudo DEVICE=$DEVICE bash /tmp/post-flash-bootstrap.sh'"
+  log "  2. Run: scp deploy/provision/jetson/post-flash-bootstrap.sh ${JETSON_USER}@\$JETSON_IP:/tmp/"
+  log "  3. Run: ssh ${JETSON_USER}@\$JETSON_IP 'sudo DEVICE=$DEVICE bash /tmp/post-flash-bootstrap.sh'"
   exit 0
 fi
 
 log "Copying post-flash-bootstrap.sh + nemotron-branding/ to Jetson..."
 scp -o StrictHostKeyChecking=accept-new \
   "$(dirname "${BASH_SOURCE[0]}")/post-flash-bootstrap.sh" \
-  "$JETSON_HOST:/tmp/post-flash-bootstrap.sh"
+  "${JETSON_USER}@${JETSON_HOST}:/tmp/post-flash-bootstrap.sh"
 scp -o StrictHostKeyChecking=accept-new -r \
   "$(dirname "${BASH_SOURCE[0]}")/nemotron-branding" \
-  "$JETSON_HOST:/tmp/"
+  "${JETSON_USER}@${JETSON_HOST}:/tmp/"
 
-log "Running post-flash-bootstrap on $JETSON_HOST..."
-ssh "$JETSON_HOST" \
+log "Running post-flash-bootstrap on ${JETSON_USER}@${JETSON_HOST}..."
+ssh "${JETSON_USER}@${JETSON_HOST}"\
   "sudo DEVICE=${DEVICE} TAILSCALE_AUTHKEY=${TAILSCALE_AUTHKEY:-} bash /tmp/post-flash-bootstrap.sh" || {
-    log "WARN: post-flash ran with errors — check manually via ssh $JETSON_HOST"
+    log "WARN: post-flash ran with errors — check manually via ssh ${JETSON_USER}@${JETSON_HOST}"
   }
 
 log "═══════════════════════════════════════════"
