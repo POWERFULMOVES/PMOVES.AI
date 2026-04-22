@@ -1,0 +1,86 @@
+# Model Suit: Claude Sonnet 4
+# PMOVES.AI Meta-Agent Configuration
+# Provider: Anthropic
+
+suit:
+  id: claude-sonnet-4
+  name: Claude Sonnet 4 (Latest)
+  provider: anthropic
+  flare_name: pmoves/claude-sonnet-4
+  model_family: claude-4
+  tier: premium
+  role: balanced
+
+model_config:
+  context_window: 200000
+  max_output_tokens: 8192
+  supports_vision: true
+  supports_extended_thinking: false
+  temperature_range: [0.0, 1.0]
+  top_p_range: [0.0, 1.0]
+  top_k: null
+
+distillation_pipeline:
+  stages:
+    - name: config_tuning
+      enabled: true
+      settings_file: pmoves/providers/anthropic/custom_settings.yaml
+
+    - name: context_priming
+      enabled: true
+      system_prompt: |
+        You are Claude, a helpful AI assistant made by Anthropic.
+        You prefer XML tags for structured output (thinking, code, analysis, result).
+        You have a 200K token context window and support vision input.
+
+    - name: model_fine_tune
+      enabled: false
+      reason: "Cloud-only model - no weight updates possible"
+
+    - name: full_distillation
+      enabled: false
+      reason: "Cloud-only model - no weight updates possible"
+
+tensorzero_config:
+  model_name: claude-sonnet-4-5
+  weight: 0.0
+  routing:
+    - function: general_chat
+      priority: 1
+    - function: code_generation
+      priority: 2
+    - function: analysis
+      priority: 1
+
+flare_namespace:
+  alias: pmoves/claude-sonnet-4
+  canonical_name: claude-sonnet-4-5
+  provider_url: https://docs.anthropic.com
+
+capabilities:
+  - code_generation
+  - reasoning
+  - vision
+  - tools
+  - large_context
+
+local_fallback:
+  available: false
+  reason: "Anthropic models are cloud-only with no open weights"
+
+cross_agent:
+  agent_zero: full
+  clawz: full
+  archon: full
+  typer: full
+  pinokio: full
+  a2ui: full
+
+metadata:
+  source: pmoves/meta-agent/anthropic
+  last_verified: 2026-04-21
+  benchmark_data:
+    - source: "Anthropic Documentation"
+      url: "https://docs.anthropic.com/en/docs/about-models"
+    - source: "Indy Dev Dan Videos"
+      url: "https://www.youtube.com/@IndyDevDan"
