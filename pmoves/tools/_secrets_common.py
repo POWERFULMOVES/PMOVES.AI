@@ -197,9 +197,8 @@ def parse_env_file(path: Path) -> Dict[str, str]:
         # Validate the value format
         is_valid, error = validate_secret_value(key, value)
         if not is_valid:
-            # Log only key name and error type (CodeQL safe: no value taint)
-            value_len = len(value)
-            print(f"WARNING: Skipping malformed secret '{key}': {error} (length={value_len})", file=sys.stderr)
+            # Log only key name (CodeQL safe: no value taint, no error message)
+            print(f"WARNING: Skipping malformed secret '{key}' (validation failed)", file=sys.stderr)
             continue
 
         # Strip/normalize value before storage (regression prevention from PR #1356)
