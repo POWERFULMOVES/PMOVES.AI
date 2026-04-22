@@ -122,6 +122,52 @@ def local_env_path() -> Path:
 # Env File Parsing
 # ---------------------------------------------------------------------------
 
+def validate_secret_value(key: str, value: str) -> tuple[bool, str | None]:
+    """Validate a secret value for corruption or format issues.
+
+    Returns:
+        (is_valid, error_message) - If invalid, error_message explains why
+
+    Checks for:
+    - Embedded newlines (literal \\n or actual newlines)
+    - Special characters that break Docker Compose parsing (+ in unquoted values)
+    - Suspicious patterns (base64 fragments concatenated to API keys)
+    """
+    if not value:
+        return True, None
+
+    # Check for literal \n (backslash-n) which indicates concatenation
+    if "\\n" in value:
+        return False, f"contains literal '\\\\n' - value appears to be multiple values concatenated"
+
+    # Check for actual newlines
+    if "\n" in value or "\r" in value:
+        return False, "contains actual newline characters - secret values must be single-line"
+
+    # Check for suspicious base64 concatenation patterns
+    # Pattern: API key followed by base64-like string (alnum+/= with padding)
+    if len(value) > 100:  # Normal API keys are < 100 chars
+        # Look for base64 padding (= or ==) not at the start
+        if value.find("=") > 50:
+            # Check if there's a transition from non-base64 to base64
+            # Common API keys: alnum with specific prefixes (AIza, sk-, etc.)
+            import re
+            # Pattern: prefix like "AIza" or "sk-" followed by base64
+            if re.search(r'[A-Za-z0-9_-]{20,}[=]{1,2}[A-Za-z0-9+/=]{10,}', value):
+                return False, "appears to be multiple values concatenated (API key + base64 fragment)"
+
+    # Check for unquoted special characters that break Docker Compose
+    # Docker Compose treats + as an operator in unquoted values
+    # This only matters if the value isn't properly quoted
+    if "+" in value and not (value.startswith('"') or value.startswith("'")):
+        # Allow + in specific contexts (bearer tokens, some API keys)
+        # But reject if it looks like base64 (has padding =)
+        if "=" in value and value.endswith("="):
+            return False, "contains '+' character with base64 padding - will break Docker Compose parsing"
+
+    return True, None
+
+
 def parse_env_file(path: Path) -> Dict[str, str]:
     """Parse KEY=VALUE lines from a dotenv file, skipping comments and blanks."""
     values: Dict[str, str] = {}
@@ -129,12 +175,35 @@ def parse_env_file(path: Path) -> Dict[str, str]:
         return values
     for raw in path.read_text(encoding="utf-8", errors="ignore").splitlines():
         line = raw.strip()
-        if not line or line.startswith("#") or "=" not in line:
+        if not line or line.startswith("#"):
             continue
         if line.startswith("export "):
             line = line[7:]
-        key, value = line.split("=", 1)
+
+        # Skip lines without proper KEY=VALUE format
+        # Must have '=' with non-empty key and value on both sides
+        if "=" not in line:
+            continue
+
+        # Split on first '=' only
+        parts = line.split("=", 1)
+        if len(parts) != 2:
+            continue
+
+        key, value = parts
         key = key.strip()
-        if key:
-            values[key] = value
+
+        # Validate key format (uppercase alphanumeric with underscores)
+        if not key or not key.isupper() or not key.replace("_", "").isalnum():
+            # Skip lines that don't look like KEY=VALUE format
+            # This catches base64 fragments with '=' padding like "abcd1234=="
+            continue
+
+        # Validate the value format
+        is_valid, error = validate_secret_value(key, value)
+        if not is_valid:
+            print(f"WARNING: Skipping malformed secret '{key}': {error}", file=sys.stderr)
+            continue
+
+        values[key] = value
     return values
