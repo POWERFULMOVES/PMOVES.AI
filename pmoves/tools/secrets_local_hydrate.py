@@ -58,7 +58,9 @@ def _write_updates(env_path: Path, updates: Dict[str, str]) -> None:
         # Validate each value before writing
         is_valid, error = validate_secret_value(key, value)
         if not is_valid:
-            print(f"WARNING: Skipping malformed secret '{key}': {error} (length={len(value)})", file=sys.stderr)
+            # Log only key name and error type (CodeQL safe: no value taint)
+            value_len = len(value)
+            print(f"WARNING: Skipping malformed secret '{key}': {error} (length={value_len})", file=sys.stderr)
             continue
         validated_updates[key] = value
 
