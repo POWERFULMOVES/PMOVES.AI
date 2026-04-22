@@ -45,10 +45,7 @@ Both Jetson Orin Nanos have SSH configured (`pmovesnvme@.110`, `pmovesnvme@.144`
 **Remaining (2026-04-21 update):**
 1. Jetson #1: Tailscale active (pmoves-nano, 100.x), rename to `pmoves-nemotron-1` queued
 2. Jetson #2: Fresh Tailscale install needed, join as `pmoves-nemotron-2`
-3. **JetPack 7.0 reflash scheduled** — runbook: `deploy/provision/jetson/README.md`
-   - `make -C pmoves jetson-reflash DEVICE=nemotron-1` (requires x86 Ubuntu 22.04 SDK host)
-   - `make -C pmoves jetson-reflash DEVICE=nemotron-2`
-   - Post-reflash: `make -C pmoves jetson-verify DEVICE=nemotron-N`
+3. **JetPack 7.0 reflash scheduled** — see `deploy/provision/jetson/` for scripts and documentation
    - ~45 min per device; do not schedule during UNFCU demos
 4. Registration in `agent-teams.yaml` and `node-agent-specialization.yaml`
 5. Agent Zero + Claws deployment
