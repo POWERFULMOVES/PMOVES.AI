@@ -151,7 +151,7 @@ setup_gpu_orchestrator() {
         -v /var/run/docker.sock:/var/run/docker.sock:ro \
         -e GPU_ORCHESTRATOR_HOST=0.0.0.0 \
         -e GPU_ORCHESTRATOR_PORT=8200 \
-        -e GPU_ORCHESTRATOR_NATS_URL="${NATS_URL:-nats://nats:4222}" \
+        -e GPU_ORCHESTRATOR_NATS_URL="${NATS_URL:-nats://nats:pmoves@nats:4222}" \
         -e GPU_ORCHESTRATOR_GPU_INDEX="${GPU_INDEX:-0}" \
         -e GPU_ORCHESTRATOR_VLLM_URL="${VLLM_URL:-http://host.docker.internal:8100}" \
         -e GPU_ORCHESTRATOR_OLLAMA_URL="${OLLAMA_URL:-http://pmoves-ollama:11434}" \
