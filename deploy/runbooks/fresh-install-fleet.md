@@ -8,6 +8,11 @@ Bootable USB provisioning for Linux targets:
 
 Windows tracks (Z890, 5090, 4090) are documented separately in `fresh-install-fleet-windows.md`.
 
+## Install-Day Fast Path
+
+- AMD workstation install-day guide: `deploy/runbooks/amd-r9700-install-day.md`
+- Helper agent: `.claude/agents/amd-usb-installer.md`
+
 ## Prerequisites
 
 On the build host (any Linux with root, or Windows WSL2):
