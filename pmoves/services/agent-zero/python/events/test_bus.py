@@ -50,7 +50,7 @@ class EventBusTester:
     async def setup(self):
         """Initialize event bus for testing."""
         logger.info("Setting up event bus...")
-        self.bus = EventBus(nats_url="nats://localhost:4222")
+        self.bus = EventBus(nats_url="nats://nats:pmoves@localhost:4222")
         await self.bus.connect()
 
         # Register schema for AGENT_STARTED events
