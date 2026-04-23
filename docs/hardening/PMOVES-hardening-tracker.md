@@ -354,6 +354,6 @@ All 5 infrastructure blockers (B1-B5) resolved as of 2026-02-17. See `pmoves/doc
 ---
 
 **Target achieved:** 0 open P1, 0 open CodeQL alerts (live snapshot)
-**Dependabot posture:** 1 open medium alert, 0 open high alerts (live snapshot 2026-03-04)
+**Dependabot posture:** 0 open alerts (1H/17M/8L resolved in commit 21d95ef37, 2026-04-23)
 **Previous version:** v3.0 (2026-02-17)
 **Last updated:** 2026-04-23
