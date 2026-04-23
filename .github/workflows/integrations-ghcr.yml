@@ -351,7 +351,6 @@ jobs:
 
       - name: Generate GitHub App token (for clone + GHCR)
         id: app_token
-        continue-on-error: true
         uses: actions/create-github-app-token@1b10c78c7865c340bc4f6099eb2f838309f1e8c3
         with:
           app-id: ${{ secrets.GH_APP_ID }}

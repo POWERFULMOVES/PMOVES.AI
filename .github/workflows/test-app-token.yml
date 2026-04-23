@@ -16,6 +16,8 @@ jobs:
         with:
           app-id: ${{ secrets.GH_APP_ID }}
           private-key: ${{ secrets.GH_APP_SEC }}
+          permission-contents: read
+          permission-metadata: read
 
       - name: Verify Token
         env:
