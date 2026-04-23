@@ -11,7 +11,8 @@ Windows tracks (Z890, 5090, 4090) are documented separately in `fresh-install-fl
 ## Install-Day Fast Path
 
 - AMD workstation install-day guide: `deploy/runbooks/amd-r9700-install-day.md`
-- Helper agent: `.claude/agents/amd-usb-installer.md`
+- Jetson refresh-day guide: `deploy/runbooks/jetson-refresh-day.md`
+- Helper agents: `.claude/agents/amd-usb-installer.md`, `.claude/agents/jetson-refresh-operator.md`
 
 ## Prerequisites
 

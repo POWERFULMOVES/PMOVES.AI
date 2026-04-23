@@ -7,6 +7,10 @@ base images and TensorRT toolchains.
 
 **Sibling runbook:** `../z890/README.md` (Z890 multi-boot bootstrap).
 
+**Fast path:** `deploy/runbooks/jetson-refresh-day.md`
+
+**Helper agent:** `.claude/agents/jetson-refresh-operator.md`
+
 **Why JetPack 7.0 vs in-place 6.x bump?** The user explicitly chose a full
 reflash for CUDA 12.8 parity with 5090 and access to the latest NVIDIA
 container ecosystem on Ubuntu 24.04. Not reversible without another full
