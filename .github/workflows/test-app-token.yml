@@ -14,7 +14,7 @@ jobs:
         id: app-token
         uses: actions/create-github-app-token@v3
         with:
-          app-id: ${{ secrets.GH_APP_ID }}
+          client-id: ${{ secrets.GH_APP_CLIENT_ID }}
           private-key: ${{ secrets.GH_APP_SEC }}
           permission-contents: read
           permission-metadata: read
@@ -25,24 +25,22 @@ jobs:
         run: |
           echo "=== App Token Test ==="
           echo "Token length: ${#GH_TOKEN}"
-          USER=$(gh api user --jq '.login')
-          echo "Authenticated as: $USER"
           REPO=$(gh api repos/POWERFULMOVES/PMOVES.AI --jq '.full_name')
           echo "Repo access: $REPO"
+          PRIVATE=$(gh api repos/POWERFULMOVES/PMOVES.AI --jq '.private')
+          echo "Private: $PRIVATE"
           echo "=== SUCCESS: App token is working ==="
 
       - name: Failure Diagnostics
         if: failure()
         run: |
-          echo "=== FAILURE: App token generation failed ==="
+          echo "=== FAILURE: App token verification failed ==="
           echo ""
-          echo "Most likely cause: GH_APP_SEC contains OAuth client secret"
-          echo "instead of PEM private key (must start with -----BEGIN)"
+          echo "Possible causes:"
+          echo "1. App installation permissions not approved"
+          echo "   → Go to https://github.com/settings/installations"
+          echo "   → Click the App, review and approve new permissions"
+          echo "2. App not installed on this repository"
+          echo "3. permission-* params missing from create-github-app-token step"
           echo ""
-          echo "Fix:"
-          echo "1. Go to https://github.com/settings/developers"
-          echo "2. Click the App → Private keys tab"
-          echo "3. Generate a new private key (downloads .pem file)"
-          echo "4. Update GH_APP_SEC repo secret with full PEM content"
-          echo ""
-          echo "See: deploy/runbooks/github-app-permission-matrix.md §5
+          echo "See: deploy/runbooks/github-app-permission-matrix.md"
