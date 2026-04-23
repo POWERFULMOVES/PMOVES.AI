@@ -80,7 +80,7 @@ from nats.aio.client import Client as NATS
 
 async def main():
     nc = NATS()
-    await nc.connect(os.getenv("NATS_URL", "nats://localhost:4222"))
+    await nc.connect(os.getenv("NATS_URL", "nats://nats:pmoves@nats:4222"))
     await nc.publish(
         "content.published.v1",
         json.dumps(
