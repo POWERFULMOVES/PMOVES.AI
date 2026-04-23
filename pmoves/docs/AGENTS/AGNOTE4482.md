@@ -338,3 +338,34 @@ env["RUNNER_ALLOW_RUNNER_REUSE"] = "true"
 - Timestamp: `2026-04-22`
 
 <!-- GRAPHITI_MARK: CLAUDE-OPUS::RUNNER-RESTART-LOOP-FIX::2026-04-22 -->
+
+## Launch Prep Audit Record (2026-04-23)
+
+### Work Performed
+- Pulled remote main (243 commits, cipher port 8096->8105 already in CLAUDE.md, PMOVES-space-agent added, Z890 multi-boot, Jetson JetPack 7, headscale 0.27.x rewrite)
+- Triaged 11 new PR branches — all already MERGED on 2026-04-22 (secrets-validation, zai-provider-sdk, distributed-tracing, observability-agents, claude4-glm4 model suits, observability-mcp-servers, tensorzero-observability-fixes, meta-agent-phase-1-clean). 3 closed unmerged.
+- NATS P0: 4 original hotspot dirs already migrated. Remaining 21 files in: vllm-orchestrator, supaserch, gateway-agent, benchmark-runner, agent-zero/bus.py — secondary batch needed
+- A2A server: PARTIAL verdict. Routes mounted at /a2a on port 8080/8081. Default: disabled (a2a_server_enabled=false). Auth: mcp_server_token required. Compose does NOT enable it. Correct security posture — activate via A0_SET_a2a_server_enabled=true when ready.
+- Signed AGNOTE4482_SIGNOFF_CHECKLIST.md sections 1, 3, 7
+
+### Key Findings
+| Finding | Status | Evidence |
+|---------|--------|----------|
+| NATS hotspot dirs (work-marshaling, chat-relay, node-registry, tools) | **RESOLVED** | All production code migrated; 21 files remain in secondary batch |
+| A2A server compose exposure | **PARTIAL** | Mounted/wired, disabled by default — intentional security posture |
+| Cipher Memory port 8096->8105 | **RESOLVED** | CLAUDE.md lines 65/68/69 show 8105 |
+| 11 agent PR branches | **RESOLVED** | All merged 2026-04-22 before triage |
+| PMOVES-transcribe-and-fetch gitlink | **OPEN** | Missing ref — pull requires --no-recurse-submodules until fixed |
+
+### Handoff Notes
+- NATS secondary batch: vllm-orchestrator/, supaserch/app.py, gateway-agent/nats_integration.py, benchmark-runner/, agent-zero/python/events/bus.py
+- A2A activation: set A0_SET_a2a_server_enabled=true + A0_SET_mcp_server_token in env.shared when ready
+- PMOVES-transcribe-and-fetch: needs upstream commit published or gitlink rewound
+- PR #1370 (Cipher MCP fix): CI green, blocked by broken Cipher submodule gitlink — needs Cipher submodule owner
+
+### Agent ACK
+- Agent: `4090-CLAUDE`
+- Signature: `ACK::4090-CLAUDE::LAUNCH-PREP-AUDIT`
+- Timestamp: `2026-04-23`
+
+<!-- GRAPHITI_MARK: 4090-CLAUDE::LAUNCH-PREP-AUDIT::2026-04-23 -->
