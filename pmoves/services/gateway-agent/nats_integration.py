@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 
 
 # Configuration
-NATS_URL = os.environ.get("NATS_URL", "nats://localhost:4222")
+NATS_URL = os.environ.get("NATS_URL", "nats://nats:pmoves@localhost:4222")
 NATS_USER = os.environ.get("NATS_USER", "")
 NATS_PASS = os.environ.get("NATS_PASS", "")
 NATS_ENABLED = os.environ.get("NATS_ENABLED", "true").lower() == "true"
