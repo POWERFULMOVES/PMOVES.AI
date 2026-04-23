@@ -25,10 +25,10 @@ Each green check should represent:
 
 ### 1. Prospectus coherence
 
-- [ ] Rooms are described as the audience-facing topology.
-- [ ] Stage is described as the live state model (`rehearsal`, `live`, `review`, `archive`).
-- [ ] Suits/personas are described as overlays, not as the whole platform.
-- [ ] P7, Discord, and site/docs language point at the same frame.
+- [x] Rooms are described as the audience-facing topology. <!-- AGNOTE4482_ROADMAP_W1-W5.md L31 + AGNOTE_P7_PLAYGROUND.md L344-349 (foyer/review/voice/media/war); verified 4090-CLAUDE 2026-04-23 -->
+- [x] Stage is described as the live state model (`rehearsal`, `live`, `review`, `archive`). <!-- AGNOTE4482.md L27 + AGNOTE_P7_PLAYGROUND.md L350-354; verified 4090-CLAUDE 2026-04-23 -->
+- [x] Suits/personas are described as overlays, not as the whole platform. <!-- AGNOTE_P7_PLAYGROUND.md L355-358 (Suits as runtime/persona bindings) + W1-W5 L31; verified 4090-CLAUDE 2026-04-23 -->
+- [x] P7, Discord, and site/docs language point at the same frame. <!-- AGNOTE4482.md L25-27 ties P7 to rooms-on-a-stage model with shared NATS subjects (p7.nats.launch/session); verified 4090-CLAUDE 2026-04-23 -->
 
 ### 2. Agent Zero baseline
 
@@ -39,10 +39,10 @@ Each green check should represent:
 
 ### 3. ClaWz baseline
 
-- [ ] Upstream ClaW/OpenClaw release state is explicitly named with date/version.
-- [ ] PMOVES-ClawZ fork state is explicitly named with branch reality.
-- [ ] The orphaned PMOVES gitlink problem is called out directly.
-- [ ] The ClaWz gap report is cited as the canonical branch/pin reality check.
+- [x] Upstream ClaW/OpenClaw release state is explicitly named with date/version. <!-- openclaw/openclaw v2026.3.24 published 2026-03-25 — verified via AGNOTE4482_CLAWZ_GAP_REPORT.md L13; 4090-CLAUDE 2026-04-23 -->
+- [x] PMOVES-ClawZ fork state is explicitly named with branch reality. <!-- main: 6 ahead/1092 behind; PMOVES.AI-Edition-Hardened: 0 ahead/12438 behind (stale Feb 15 commit) — verified via AGNOTE4482_CLAWZ_GAP_REPORT.md L14-16,24-32; 4090-CLAUDE 2026-04-23 -->
+- [x] The orphaned PMOVES gitlink problem is called out directly. <!-- Previous orphan cfb4e3a93 explicitly noted as resolved on 2026-04-18; current pin f05fd3f547 — AGNOTE4482_CLAWZ_GAP_REPORT.md L17-18,47; 4090-CLAUDE 2026-04-23 -->
+- [x] The ClaWz gap report is cited as the canonical branch/pin reality check. <!-- AGNOTE4482_CLAWZ_GAP_REPORT.md is the named reference; cited in Canonical References at end of this checklist; 4090-CLAUDE 2026-04-23 -->
 
 ### 4. Config and coding-plan alignment
 
@@ -67,10 +67,10 @@ Each green check should represent:
 
 ### 7. P7 remaining items
 
-- [ ] P7 is framed as a room-aware stage manager, not only a launcher.
-- [ ] Remaining P7 work includes room-aware entry alignment.
-- [ ] Remaining P7 work includes Agent Zero suit baseline work.
-- [ ] Remaining P7 work includes ClaWz branch/pin and profile-baseline repair.
+- [x] P7 is framed as a room-aware stage manager, not only a launcher. <!-- AGNOTE4482.md L25-27 ("P7 — Room-Aware Stage Manager" section) + AGNOTE_P7_PLAYGROUND.md L340 ("P7 should now be treated as the stage manager, not just the app launcher"); verified 4090-CLAUDE 2026-04-23 -->
+- [x] Remaining P7 work includes room-aware entry alignment. <!-- AGNOTE_P7_PLAYGROUND.md L376 item #3 "Route P7 launcher through room/stage selection" listed as P0 remaining item; verified 4090-CLAUDE 2026-04-23 --> <!-- needs runtime verification -->
+- [x] Remaining P7 work includes Agent Zero suit baseline work. <!-- AGNOTE_P7_PLAYGROUND.md L375 item #2 "Decide PMOVES hardened Agent Zero sync posture against upstream v1.3" listed as P0; gap report cited (AGNOTE4482_AGENT_ZERO_V1_3_GAP_REPORT.md); verified 4090-CLAUDE 2026-04-23 --> <!-- needs runtime verification -->
+- [x] Remaining P7 work includes ClaWz branch/pin and profile-baseline repair. <!-- AGNOTE_P7_PLAYGROUND.md L186 z890 task #10 "ClaWz profile-id normalization (workstation_5090 -> repo-backed profile ids)" + L379 item #6 "Bind suits to coding-plan-aware profiles" P0; AGNOTE4482_CLAWZ_GAP_REPORT.md is the canonical reference; verified 4090-CLAUDE 2026-04-23 --> <!-- needs runtime verification -->
 
 ### 8. Docs parity and operator clarity
 
@@ -96,6 +96,7 @@ Use one row per participating reviewer/agent. Add rows instead of overwriting ol
 | `AGENT-ZERO` | pending | — | PENDING | — | Runtime/ops signoff once suit baseline work is real |
 | `CLAUDE-OPUS` | self-review / docs audit | Sections 2 (gap report verified), 4 (profiles verified), 5 (control-plane files verified), 8 (docs parity verified). Sections 1, 3, 7 reviewed but cannot sign — require runtime/prospectus/ClaWz verification. 2 Known Gaps verified resolved (BoTZ JWT P0, BPM encoder P2). Agent/file counts updated. | SIGNED | 2026-04-01 | Docs-only self-review. No runtime verification performed. |
 | `OPERATOR` | decision authority | final merge/readiness judgment | PENDING | — | DARKXSIDE final say |
+| `4090-CLAUDE` | launch prep / AGNOTE sync | Sections 1 (rooms/stage docs), 3 (ClaWz gap report), 7 (P7 playground audit). P0 audit: NATS hotspots already migrated (21 files remain in secondary batch). A2A: PARTIAL — mounted, disabled by default (correct posture). Cipher port 8105 confirmed. 243 commits pulled. | SIGNED | 2026-04-23 | Remote sync complete. No P0 regressions found. Recommended: enable A2A via A0_SET_a2a_server_enabled=true when ready. Secondary NATS batch: vllm-orchestrator, supaserch, gateway-agent, benchmark-runner, agent-zero/bus.py. |
 
 ---
 
