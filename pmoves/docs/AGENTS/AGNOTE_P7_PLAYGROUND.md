@@ -377,6 +377,7 @@ P7 should now be treated as the **stage manager**, not just the app launcher.
 | 4 | Run 4090 → 5090 remote TTS flow end to end | P1 | Proves the stage-manager story works across nodes |
 | 5 | Bind suit/theme selection to room context | P1 | Makes the prospectus feel intentional instead of decorative |
 | 6 | Bind suits to coding-plan-aware profiles | P0 | Lets PMOVES scale many suits without losing local-first discipline or seat/token awareness |
+| 7 | Repair ClaWz branch/pin baseline before suit overlays | P0 | Pick a real fork branch head as the PMOVES-ClawZ suit base — orphaned gitlink resolved 2026-04-18 but hardened branch still pins Feb 15 upstream |
 
 Two critical issues found and fixed:
 1. Dead Gradio `/api/` predict endpoint (404) → migrated to `/gradio_api/call/` event-based SSE

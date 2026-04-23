@@ -25,10 +25,10 @@ Each green check should represent:
 
 ### 1. Prospectus coherence
 
-- [ ] Rooms are described as the audience-facing topology.
-- [ ] Stage is described as the live state model (`rehearsal`, `live`, `review`, `archive`).
-- [ ] Suits/personas are described as overlays, not as the whole platform.
-- [ ] P7, Discord, and site/docs language point at the same frame.
+- [x] Rooms are described as the audience-facing topology. <!-- ROOM_MANIFEST_CONTRACT.md line 26: "audience-facing topology" — fixed 2026-04-23 -->
+- [x] Stage is described as the live state model (`rehearsal`, `live`, `review`, `archive`). <!-- ROOM_MANIFEST_CONTRACT.md schema line 102: stage field added 2026-04-23 -->
+- [x] Suits/personas are described as overlays, not as the whole platform. <!-- ROOM_MANIFEST_CONTRACT.md Core Rule 3: explicit boundary statement added 2026-04-23 -->
+- [ ] P7, Discord, and site/docs language point at the same frame. <!-- FAIL: ROADMAP and NEXT_STEPS explicitly state this alignment has NOT happened yet. Requires Discord channel descriptions + site updates. -->
 
 ### 2. Agent Zero baseline
 
@@ -39,10 +39,10 @@ Each green check should represent:
 
 ### 3. ClaWz baseline
 
-- [ ] Upstream ClaW/OpenClaw release state is explicitly named with date/version.
-- [ ] PMOVES-ClawZ fork state is explicitly named with branch reality.
-- [ ] The orphaned PMOVES gitlink problem is called out directly.
-- [ ] The ClaWz gap report is cited as the canonical branch/pin reality check.
+- [x] Upstream ClaW/OpenClaw release state is explicitly named with date/version. <!-- CLAWZ_GAP_REPORT: v2026.3.24, March 25, 2026 -->
+- [x] PMOVES-ClawZ fork state is explicitly named with branch reality. <!-- CLAWZ_GAP_REPORT: main branch, no releases/tags, hardened branch Feb 15 -->
+- [x] The orphaned PMOVES gitlink problem is called out directly. <!-- CLAWZ_GAP_REPORT: resolved 2026-04-18, before/after SHAs recorded -->
+- [x] The ClaWz gap report is cited as the canonical branch/pin reality check. <!-- NEXT_STEPS.md line 87: "canonical ClaWz branch/pin reality check" -->
 
 ### 4. Config and coding-plan alignment
 
@@ -63,14 +63,14 @@ Each green check should represent:
 - [x] Weekly intake path is documented. <!-- Agent Zero v1.3 gap report, "Weekly intake" section -->
 - [x] Sprint-level sync decision path is documented. <!-- adopt/preserve/drop classification in gap report -->
 - [x] Canonical sinks are named (`hardening tracker`, `NEXT_STEPS`, `ROADMAP`, audit dashboard). <!-- All 4 named in gap report -->
-- [ ] Suit updates are framed as release concerns, not background chores. <!-- PARTIAL: cadence documented but no automation yet -->
+- [ ] Suit updates are framed as release concerns, not background chores. <!-- PARTIAL: standing rule added to hardening tracker 2026-04-23; no CI gate automation yet -->
 
 ### 7. P7 remaining items
 
-- [ ] P7 is framed as a room-aware stage manager, not only a launcher.
-- [ ] Remaining P7 work includes room-aware entry alignment.
-- [ ] Remaining P7 work includes Agent Zero suit baseline work.
-- [ ] Remaining P7 work includes ClaWz branch/pin and profile-baseline repair.
+- [x] P7 is framed as a room-aware stage manager, not only a launcher. <!-- AGNOTE4482.md line 27, AGNOTE_P7_PLAYGROUND.md line 340 -->
+- [x] Remaining P7 work includes room-aware entry alignment. <!-- P7 Remaining Items table row 3, P0 -->
+- [x] Remaining P7 work includes Agent Zero suit baseline work. <!-- P7 Remaining Items table row 2, P0 -->
+- [x] Remaining P7 work includes ClaWz branch/pin and profile-baseline repair. <!-- P7 Remaining Items table rows 6-7, P0 — row 7 added 2026-04-23 -->
 
 ### 8. Docs parity and operator clarity
 
@@ -95,6 +95,7 @@ Use one row per participating reviewer/agent. Add rows instead of overwriting ol
 | `CLAUDE` | pending | — | PENDING | — | |
 | `AGENT-ZERO` | pending | — | PENDING | — | Runtime/ops signoff once suit baseline work is real |
 | `CLAUDE-OPUS` | self-review / docs audit | Sections 2 (gap report verified), 4 (profiles verified), 5 (control-plane files verified), 8 (docs parity verified). Sections 1, 3, 7 reviewed but cannot sign — require runtime/prospectus/ClaWz verification. 2 Known Gaps verified resolved (BoTZ JWT P0, BPM encoder P2). Agent/file counts updated. | SIGNED | 2026-04-01 | Docs-only self-review. No runtime verification performed. |
+| `SIDECAR-SPARK` | docs audit + signoff gap closure | §1 (3/4 — fixed contract terminology, stage field, overlay boundary; §1.4 Discord/site external), §3 (4/4 — researcher-verified), §6.4 (PARTIAL — standing rule added, no CI gate), §7 (4/4 — added ClaWz row to P7 items). Also: doc count reconciliation (76/109/13), supabase config cleanup, CODING_PLAN_ALIGNMENT stale SHA fix. | SIGNED | 2026-04-23 | GB10 Blackwell sidecar. Research subordinates for §1+§6.4 and §3+§7. §1.4 requires Discord/site updates outside this session. |
 | `OPERATOR` | decision authority | final merge/readiness judgment | PENDING | — | DARKXSIDE final say |
 
 ---

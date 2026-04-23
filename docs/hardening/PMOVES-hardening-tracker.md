@@ -342,6 +342,16 @@ All 5 infrastructure blockers (B1-B5) resolved as of 2026-02-17. See `pmoves/doc
 
 ---
 
+## Suit Update Release Policy
+
+**Standing rule:** Suit updates (Agent Zero hardened overlay, ClaWz profile normalization, persona/voice bindings, model routing changes) are **release concerns**, not background chores.
+
+- Any PR that modifies files under `pmoves/config/profiles/`, `pmoves/config/agent_signatures.yaml`, or suit-related Make targets must include a release-notes entry.
+- The hardening tracker scorecard above should reflect suit-update release status alongside security hardening status.
+- Automation gap: no CI gate currently enforces this — tracked as P2 in P2 Open Issues.
+
+---
+
 **Target achieved:** 0 open P1, 0 open CodeQL alerts (live snapshot)
 **Dependabot posture:** 1 open medium alert, 0 open high alerts (live snapshot 2026-03-04)
 **Previous version:** v3.0 (2026-02-17)

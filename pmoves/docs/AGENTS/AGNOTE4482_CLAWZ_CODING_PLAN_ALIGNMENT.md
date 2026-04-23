@@ -132,7 +132,7 @@ The policy above is still correct, but the live ClaWz repo state is not as matur
 - upstream `openclaw/openclaw` is already shipping current releases, with `v2026.3.24` published on **March 25, 2026**
 - the PMOVES fork `POWERFULMOVES/PMOVES-ClawZ` has no fork-specific releases/tags right now
 - fork `PMOVES.AI-Edition-Hardened` is an old upstream-derived branch from **February 15, 2026**
-- the root PMOVES gitlink is pinned to `cfb4e3a936262315948628d2da32d7158c4fbb30`, which is not resolvable in the fork or upstream on GitHub
+- ~~the root PMOVES gitlink is pinned to `cfb4e3a936262315948628d2da32d7158c4fbb30`, which is not resolvable~~ — **RESOLVED 2026-04-18**: root now pins to `f05fd3f547` (see CLAWZ_GAP_REPORT)
 
 **Interpretation:** ClaWz currently needs branch/pin repair more than it needs fresh suit ornamentation.
 
