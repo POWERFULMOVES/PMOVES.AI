@@ -37,7 +37,7 @@ class BenchmarkServer:
 
     def __init__(
         self,
-        nats_url: str = "nats://localhost:4222",
+        nats_url: str = "nats://nats:pmoves@localhost:4222",
         output_dir: str = "/tmp/benchmark-results",
         tensorzero_url: str = "http://localhost:3030",
     ):
@@ -342,7 +342,7 @@ class BenchmarkServer:
 
 
 async def run_server(
-    nats_url: str = "nats://localhost:4222",
+    nats_url: str = "nats://nats:pmoves@localhost:4222",
     output_dir: str = "/tmp/benchmark-results",
     tensorzero_url: str = "http://localhost:3030",
 ):
@@ -387,7 +387,7 @@ if __name__ == "__main__":
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     )
 
-    nats_url = os.getenv("NATS_URL", "nats://localhost:4222")
+    nats_url = os.getenv("NATS_URL", "nats://nats:pmoves@localhost:4222")
     output_dir = os.getenv("BENCHMARK_OUTPUT_DIR", "/tmp/benchmark-results")
     tensorzero_url = os.getenv("TENSORZERO_URL", "http://localhost:3030")
 

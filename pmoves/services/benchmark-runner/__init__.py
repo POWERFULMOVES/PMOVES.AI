@@ -22,7 +22,7 @@ Usage:
     print(f"Throughput: {result.tokens_per_second} tokens/sec")
 
     # Run as service
-    await run_server(nats_url="nats://localhost:4222")
+    await run_server(nats_url="nats://nats:pmoves@localhost:4222")
 
 NATS Subjects:
     - compute.benchmark.request.v1: Submit benchmark requests
