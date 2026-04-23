@@ -1,6 +1,6 @@
 # Agent Taxonomy Cross-Reference Hub
 
-_Last updated: 2026-02-18 — v1.4.0 (60 agents)_
+_Last updated: 2026-02-18 — v1.4.0 (76 agents)_
 
 Master cross-reference for all documents, concepts, and implementation files involved in the PMOVES Agent Class Taxonomy. When the taxonomy changes, use this document to identify which files need updates.
 
@@ -24,7 +24,7 @@ Master cross-reference for all documents, concepts, and implementation files inv
 | 12 | **NATS Subjects** | `.claude/context/nats-subjects.md` | Research, media, agent, mesh, remote event subjects | Events |
 | 13 | **Geometry NATS Subjects** | `.claude/context/geometry-nats-subjects.md` | ToKenism, geometry core, CGP schema subjects | Events |
 | 14 | **Original Vision (agnotes2)** | `pmoves/docs/AGENTS/agnotes2.md` | Pokemon/Transformers metaphor, latent space amplification, portal mapping | Vision |
-| 15 | **Agent Registry** | `pmoves/config/agent_registry.yaml` | Single source of truth: 60 agents with class, type, tier, layers, NATS, toggles | Data |
+| 15 | **Agent Registry** | `pmoves/config/agent_registry.yaml` | Single source of truth: 76 agents with class, type, tier, layers, NATS, toggles | Data |
 | 16 | **CLI Helper Tool** | `pmoves/tools/agent_taxonomy_helper.py` | list/show/connections/types commands | Tool |
 | 17 | **Agent Resilience Patterns** | `pmoves/docs/AGENTS/AGENT_RESILIENCE_PATTERNS.md` | 3-layer resilience model, Cipher snapshots, checkpoint protocol, budget classes, recovery strategies | Pattern |
 | 18 | **Agent Topology & TAC Tree** | `pmoves/docs/AGENTS/PMOVES_AGENT_TOPOLOGY.md` | 5 Mermaid diagrams: master topology, TAC tree, evolution path, data flow, NATS nervous system | Visual |

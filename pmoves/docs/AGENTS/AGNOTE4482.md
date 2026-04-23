@@ -129,8 +129,8 @@ Elder-context support is always available to reduce drift and collision across p
 | BPM encoder not implemented (P2) | **RESOLVED** | `pmoves/tools/bpm_encoder.py` exists, 574 lines, delivered in PR #1168 (Shift Crew tools) |
 | NATS unauthenticated references (P0) | **NOT IMPROVED** | 57 unauthenticated references across 34 files in `pmoves/` (grep: `nats://(nats\|localhost):4222` excluding `@`; measured 2026-04-02). Not reduced from baseline — batch migration still needed. |
 | A2A server not exposed (P0) | **RESOLVED** | `server.py` refactored: `create_a2a_router()` exports mountable APIRouter. `main.py` mounts it via `app.include_router()` on port 8080. `docker-compose.yml` adds `A2A_DISCOVERY_PUBLIC`/`A2A_TASKS_PUBLIC` env vars. Routes: `/.well-known/agent-card.json`, `/a2a/v1/tasks`, `/a2a/v1/discover`. Auth via `SUPABASE_JWT_SECRET` (from x-hardening). |
-| Agent registry count | **STALE** | Registry has 71 entries, 13 external contributors. Docs said 60 agents, 7 contributors. |
-| AGENTS file count | **STALE** | 107 documents (66 root + 41 SUBMODULE_CODEX_HOMES). Docs said 73+. |
+| Agent registry count | **STALE** | Registry has 76 entries, 13 external contributors. Docs said 60 agents, 7 contributors. |
+| AGENTS file count | **STALE** | 109 documents (67 root + 41 SUBMODULE_CODEX_HOMES). Docs said 73+. |
 
 #### Post-2026-03-28 Deliverables
 - **KiloCode claw config** (PR #1151): .kilo/ directory, GLM coding plan mode, 3 agents + 8 commands
