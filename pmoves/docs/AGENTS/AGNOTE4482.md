@@ -338,3 +338,41 @@ env["RUNNER_ALLOW_RUNNER_REUSE"] = "true"
 - Timestamp: `2026-04-22`
 
 <!-- GRAPHITI_MARK: CLAUDE-OPUS::RUNNER-RESTART-LOOP-FIX::2026-04-22 -->
+
+## SPARK Capability Correction + Doc Alignment (2026-04-23)
+
+### Work Performed
+- **Identified fundamental assumption errors** in SIDECAR_PROMOTION_PLAN.md and HYBRID_RUNNER_STRATEGY.md — both described SPARK as a degraded/limited sidecar when it is a full PMOVES.AI node
+- **HYBRID_RUNNER_STRATEGY.md**: Updated SPARK from 'A2A/MCP relay' to full node (CHIT, P7, TeraFormer, IC, ClaWZ, 76 agents). Added SPARK Node Capabilities section with 10-row table. Added CHIT security note. Updated date to 2026-04-23.
+- **SIDECAR_PROMOTION_PLAN.md**: Added CRITICAL CORRECTION header, SPARK-Specific Correction subsection, CHIT enforcement to gap analysis, SPARK shortcuts for Phase 1/5.3, abbreviated Appendix A transition for SPARK. Generic sidecar steps preserved for non-SPARK devices.
+- **Memory stored**: SPARK capability correction (ce_memory d2402dcd) + 7 YouTube CHIT validation signals (ce_memory 10a84f36)
+- **Scheduled tasks created**: (1) YouTube Playlist Deep CHIT Signal Research — full 80-video analysis of PLGupOT04oMfok7S8W8Js7lZZIlhM8ufc8, (2) Sidecar Plugin Parity + Space Agent Integration — plugin inventory comparison + PLUGIN_PARITY.md + agents.json profiles
+
+### 7 YouTube CHIT Validation Signals (from 5 videos analyzed)
+1. Hermes skills-as-procedures → CHIT distillation config_tuning layer
+2. NemoClaw config self-modification (open problem) → CHIT signed configs solve it
+3. Harness error recovery → CHIT at crypto level not prompt level
+4. Qwen3.6/Gemma4 model suit data for SPARK deployment
+5. Archon guide harness → maps to CHIT pipeline
+6. ClaWZ fork 1092 commits behind → harness restructure over fork maintenance
+7. DGX Spark GB10 confirmed → validates SPARK as full PMOVES platform
+
+### Files Changed
+| File | Change |
+|------|--------|
+| `deploy/HYBRID_RUNNER_STRATEGY.md` | SPARK capability correction + new section (461→485 lines) |
+| `research/SIDECAR_PROMOTION_PLAN.md` | 6 SPARK-specific corrections (759→789 lines) |
+
+### Scheduled Tasks
+| Task ID | Name | Status |
+|---------|------|--------|
+| FGfhfE6A | YouTube Playlist Deep CHIT Signal Research | Pending |
+| bZucmlNg | Sidecar Plugin Parity + Space Agent Integration | Pending |
+
+### Agent ACK
+- Agent: `AGENT-ZERO-SIDECAR`
+- Signature: `ACK::AGENT-ZERO-SIDECAR::SPARK-CAPABILITY-CORRECTION-DOC-ALIGNMENT`
+- Timestamp: `2026-04-23`
+
+<!-- GRAPHITI_MARK: AGENT-ZERO-SIDECAR::SPARK-CAPABILITY-CORRECTION-DOC-ALIGNMENT::2026-04-23 -->
+<!-- GRAPHITI_MARK: CLAUDE-OPUS::RUNNER-RESTART-LOOP-FIX::2026-04-22 -->
