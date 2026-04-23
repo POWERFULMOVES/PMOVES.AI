@@ -127,7 +127,7 @@ Elder-context support is always available to reduce drift and collision across p
 |---------|--------|----------|
 | BoTZ JWT fail-open (P0) | **RESOLVED** | `gateway.py:292-299` returns HTTPException 500 on missing HAS_JOSE or SUPABASE_JWT_SECRET. `auth.py:57-65` returns HTTPException 500 on missing HAS_JOSE or JWT_SECRET. Both fail-closed. |
 | BPM encoder not implemented (P2) | **RESOLVED** | `pmoves/tools/bpm_encoder.py` exists, 574 lines, delivered in PR #1168 (Shift Crew tools) |
-| NATS unauthenticated references (P0) | **NOT IMPROVED** | 57 unauthenticated references across 34 files in `pmoves/` (grep: `nats://(nats\|localhost):4222` excluding `@`; measured 2026-04-02). Not reduced from baseline — batch migration still needed. |
+| NATS unauthenticated references (P0) | **RESOLVED** | All 110 NATS URLs in non-test code are authenticated (`nats://nats:pmoves@nats:4222`). PR #1375 completed docs migration. Code files migrated in prior convergence waves. Verified 2026-04-23. |
 | A2A server not exposed (P0) | **RESOLVED** | `server.py` refactored: `create_a2a_router()` exports mountable APIRouter. `main.py` mounts it via `app.include_router()` on port 8080. `docker-compose.yml` adds `A2A_DISCOVERY_PUBLIC`/`A2A_TASKS_PUBLIC` env vars. Routes: `/.well-known/agent-card.json`, `/a2a/v1/tasks`, `/a2a/v1/discover`. Auth via `SUPABASE_JWT_SECRET` (from x-hardening). |
 | Agent registry count | **STALE** | Registry has 76 entries, 13 external contributors. Docs said 60 agents, 7 contributors. |
 | AGENTS file count | **STALE** | 109 documents (67 root + 41 SUBMODULE_CODEX_HOMES). Docs said 73+. |
@@ -143,7 +143,7 @@ Elder-context support is always available to reduce drift and collision across p
 - **TensorZero**: POSTGRES_URL fix (#1167), cross-profile depends_on removal
 
 ### Handoff Notes
-- NATS auth P0 needs continued batch migration (57 refs remain across 34 files — hotspots: `services/work-marshaling/`, `services/chat-relay/`, `services/node-registry/`, `tools/`)
+- NATS auth P0 **RESOLVED** (2026-04-23) — All 110 non-test URLs use authenticated form. PR #1375 completed docs, code migrated in prior waves.
 - A2A server needs runtime verification (compose exposure check)
 - Signoff checklist sections 1, 3, 7 still unchecked — require prospectus/ClaWz/P7 runtime verification
 - Agent registry count (71) should be reconciled with taxonomy docs that still reference 60
