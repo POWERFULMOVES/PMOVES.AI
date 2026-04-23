@@ -25,7 +25,7 @@ Usage:
     print(f"CPU: {vllm_profile.required_cpu_cores}, RAM: {vllm_profile.required_ram_mb}MB")
 
     # Run as standalone service
-    await run_orchestrator(nats_url="nats://localhost:4222")
+    await run_orchestrator(nats_url="nats://nats:pmoves@localhost:4222")
 
 Supported Models:
     - llama-3-8b, llama-3-70b

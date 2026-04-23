@@ -28,7 +28,7 @@ class VLLMOrchestrator:
 
     def __init__(
         self,
-        nats_url: str = "nats://localhost:4222",
+        nats_url: str = "nats://nats:pmoves@localhost:4222",
         model_path: str = "/models",
         compose_dir: str = "/tmp/vllm-compose",
     ):
@@ -370,7 +370,7 @@ class VLLMOrchestrator:
 
 
 async def run_orchestrator(
-    nats_url: str = "nats://localhost:4222",
+    nats_url: str = "nats://nats:pmoves@localhost:4222",
     model_path: str = "/models",
     compose_dir: str = "/tmp/vllm-compose",
 ):
@@ -407,7 +407,7 @@ if __name__ == "__main__":
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     )
 
-    nats_url = os.environ.get("NATS_URL", "nats://localhost:4222")
+    nats_url = os.environ.get("NATS_URL", "nats://nats:pmoves@localhost:4222")
     model_path = os.environ.get("MODEL_PATH", "/models")
 
     try:

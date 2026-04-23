@@ -62,7 +62,7 @@ logger = structlog.get_logger(__name__)
 def get_settings():
     """Get service settings from environment variables."""
     return {
-        "nats_url": os.getenv("NATS_URL", "nats://localhost:4222"),
+        "nats_url": os.getenv("NATS_URL", "nats://nats:pmoves@localhost:4222"),
         "api_host": os.getenv("VLLM_ORCHESTRATOR_HOST", "0.0.0.0"),
         "api_port": int(os.getenv("VLLM_ORCHESTRATOR_PORT", "8099")),
         "model_path": os.getenv("VLLM_MODEL_PATH", "/models"),
