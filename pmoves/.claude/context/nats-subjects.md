@@ -6,7 +6,7 @@ Comprehensive reference of all NATS message subjects used for event-driven commu
 
 ## NATS Configuration
 
-- **Server:** `nats://localhost:4222`
+- **Server:** `nats://nats:pmoves@nats:4222`
 - **JetStream:** Enabled for persistence
 - **Version:** 2.10-alpine
 
