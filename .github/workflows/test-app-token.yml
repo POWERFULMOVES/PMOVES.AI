@@ -1,0 +1,46 @@
+name: Test GitHub App Token
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate App Token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ secrets.GH_APP_ID }}
+          private-key: ${{ secrets.GH_APP_SEC }}
+
+      - name: Verify Token
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          echo "=== App Token Test ==="
+          echo "Token length: ${#GH_TOKEN}"
+          USER=$(gh api user --jq '.login')
+          echo "Authenticated as: $USER"
+          REPO=$(gh api repos/POWERFULMOVES/PMOVES.AI --jq '.full_name')
+          echo "Repo access: $REPO"
+          echo "=== SUCCESS: App token is working ==="
+
+      - name: Failure Diagnostics
+        if: failure()
+        run: |
+          echo "=== FAILURE: App token generation failed ==="
+          echo ""
+          echo "Most likely cause: GH_APP_SEC contains OAuth client secret"
+          echo "instead of PEM private key (must start with -----BEGIN)"
+          echo ""
+          echo "Fix:"
+          echo "1. Go to https://github.com/settings/developers"
+          echo "2. Click the App → Private keys tab"
+          echo "3. Generate a new private key (downloads .pem file)"
+          echo "4. Update GH_APP_SEC repo secret with full PEM content"
+          echo ""
+          echo "See: deploy/runbooks/github-app-permission-matrix.md §5
