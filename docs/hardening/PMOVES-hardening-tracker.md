@@ -339,6 +339,7 @@ All 5 infrastructure blockers (B1-B5) resolved as of 2026-02-17. See `pmoves/doc
 | `pmoves/tests/hardening/test_docker_hardening.py` | Validation suite (35 services) |
 | `.github/workflows/hardening-validation.yml` | CI hardening checks |
 | `.github/workflows/integrations-ghcr.yml` | Integration builds (Cosign+SBOM+Trivy) |
+| `.github/workflows/suit-release-policy.yml` | §6.4 suit update release-notes gate |
 
 ---
 
@@ -348,11 +349,11 @@ All 5 infrastructure blockers (B1-B5) resolved as of 2026-02-17. See `pmoves/doc
 
 - Any PR that modifies files under `pmoves/config/profiles/`, `pmoves/config/agent_signatures.yaml`, or suit-related Make targets must include a release-notes entry.
 - The hardening tracker scorecard above should reflect suit-update release status alongside security hardening status.
-- Automation gap: no CI gate currently enforces this — tracked as P2 in P2 Open Issues.
+- **CI gate:** `.github/workflows/suit-release-policy.yml` enforces this rule automatically on all PRs to main.
 
 ---
 
 **Target achieved:** 0 open P1, 0 open CodeQL alerts (live snapshot)
 **Dependabot posture:** 1 open medium alert, 0 open high alerts (live snapshot 2026-03-04)
 **Previous version:** v3.0 (2026-02-17)
-**Last updated:** 2026-03-05
+**Last updated:** 2026-04-23
