@@ -319,7 +319,7 @@ All 5 can coexist: 3 local (Ollama) + 2 cloud (API). 128GB unified memory handle
 
 **Search window**: March 25 – April 24, 2026
 **Method**: Fresh YouTube API searches via researcher subordinate. No prior analysis relied upon.
-**CHIT intrusion note**: Prior analysis (Signal 5, video srx9iwnjK2M) claimed a "Full Archon guide (2hr45m)" from coleam00. Fresh searches for "Archon agent zero" and "coleam00 Archon agent zero" returned ZERO results. The video may have been removed/unlisted, or the prior claim was inaccurate. Flagged per behavioral rules — not incorporated below.
+**Correction (2026-04-24)**: Prior note incorrectly claimed video srx9iwnjK2M was unverifiable/removed. yt-dlp confirmed it exists at playlist position 37 (2:45:31, 'Full Archon Guide - Build AI Coding Harnesses That Actually Ship (LIVE)' by Cole Medin). The original claim was a YouTube search indexing failure incorrectly encoded as fact. See `research/FRESH_VIDEO_ANALYSIS.md` for full transcript-grounded analysis.
 
 ---
 
@@ -349,11 +349,11 @@ All five flagged as potential timeline accelerators. Harness engineering directl
 
 | Topic | Status |
 |-------|--------|
-| Archon + Agent Zero integration guides | NO content found (zero results for "Archon agent zero") |
+| Archon + Agent Zero integration guides | **FOUND** — srx9iwnjK2M (Full Archon Guide, 2:45:31), DMXyDpnzNpY (Official Guide, 23:18), qMnClynCAmM (AI Coding Is Harnesses, 30:48), plus V3 explainers. Prior 'NO content found' was a search failure. |
 | ComfyUI + Agent Zero (last 30 days) | NO content found (3 videos from Feb, all outside window) |
 | PMOVES creator pipeline | NO content found (expected — niche) |
-| coleam00 original content (last 30 days) | NOT surfacing in search — may be unlisted, privated, or channel inactive |
-| Playlist PLGupOT04oMfok7S8W8Js7lZZIlhM8ufc8 | Inaccessible via available tools |
+| coleam00 original content (last 30 days) | **ACTIVE** — 3 videos in user's playlist (positions 6, 35, 37), 8+ Archon-specific videos on channel. Prior claim of inactivity was false. |
+| Playlist PLGupOT04oMfok7S8W8Js7lZZIlhM8ufc8 | **ACCESSIBLE** — 1,589 videos verified via yt-dlp --flat-playlist. Prior 'inaccessible' was a tool limitation, not a data limitation. |
 
 ---
 
@@ -361,7 +361,7 @@ All five flagged as potential timeline accelerators. Harness engineering directl
 
 The harness engineering space is active with 5 highly relevant videos in 30 days. These validate the PMOVES thesis that orchestration code (the harness) matters more than model selection. The dumbfoundry Agent Zero + Paperclip video is the most directly composable — it demonstrates governance wrapping around Agent Zero, which is architecturally identical to CHIT wrapping Agent Zero in PMOVES.
 
-Archon-specific content is completely absent from YouTube. If the user's 'deep dives that could speed up timeline' refers to Archon guides, those do not exist in public search. If it refers to harness engineering patterns (which is the broader category ARCHON falls under), the 5 videos above are the signal.
+Archon-specific content is **abundant** on YouTube. Cole Medin has 8+ Archon-specific videos including a 2:45 live guide, an official guide, and multiple V3 explainers. The prior claim of absence was a search indexing failure incorrectly generalized. See `FRESH_VIDEO_ANALYSIS.md` Task 2 for full transcript-grounded analysis with fair comparison to PMOVES.
 
 **Recommendation**: Transcribe the dumbfoundry (Agent Zero x Paperclip) and PY (Harness Engineering 6x) videos. Both are directly applicable to PMOVES architecture decisions and likely contain patterns that can be extracted and implemented within days.
 | 62 | VBV4sxUBdsE | Hermes Agent + GLM-5.1: RIP OpenClaw | AICodeKing | 12:29 |

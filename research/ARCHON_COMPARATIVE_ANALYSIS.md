@@ -8,7 +8,9 @@
 
 ## 1. What ARCHON Actually Is
 
-ARCHON (coleam00/archon, forked as POWERFULMOVES/PMOVES-Archon) is a **RAG knowledge management system** with project/task management capabilities. It is not a structural framework layer.
+ARCHON (coleam00/archon, forked as POWERFULMOVES/PMOVES-Archon) is a **knowledge-and-task orchestration layer** with MCP agent integration — often framed as a 'RAG system' but this undersells it. It is a coding command center that turns unstructured AI coding into structured, auditable process. See `FRESH_VIDEO_ANALYSIS.md` Task 2 for transcript-grounded re-evaluation.
+
+**Fairness correction (2026-04-24)**: The original framing below evaluated Archon against MOF theory and found it wanting — which is like evaluating a hammer by asking whether it understands metallurgy. Archon is not trying to be a structural framework. It is a practical tool that developers actually use. The comparison tables remain technically accurate but the framing was dismissive. Cole Medin's harness pattern, context engineering thesis, dark factory vision, and MCP ecosystem are architecturally significant and complementary to PMOVES.
 
 **Core capabilities**:
 - Web crawling (Crawl4AI + Playwright) with configurable depth, tagging, code extraction
