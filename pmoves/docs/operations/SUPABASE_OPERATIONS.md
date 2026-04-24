@@ -262,6 +262,44 @@ dns:
 
 ---
 
+## GoTrue network isolation (service unreachable)
+
+### Symptom
+
+`pmoves-supabase-gotrue-1` enters restart loop with:
+
+```text
+hostname resolving error (lookup supabase-db on 127.0.0.11:53: server misbehaving)
+failed to connect to database: connection error
+```
+
+### Root cause
+
+**Network topology mismatch:** GoTrue (on `pmoves_api`) cannot resolve `supabase-db`
+because the database is ONLY on `pmoves_data` network. Docker Compose bridge
+networks are isolated - containers on different networks cannot reach each other
+by service name.
+
+### Fix
+
+Add the database to BOTH networks so it's accessible from all tiers:
+
+```yaml
+# In docker-compose.yml under supabase-db:
+networks:
+  - pmoves_data
+  - pmoves_api  # Services on pmoves_api need DB access
+```
+
+**Why this works:** Services on `pmoves_api` can now reach the database via that
+shared network. Services on `pmoves_data` continue using that network. The database
+is accessible from both isolated tiers without conflating the network architecture.
+
+**Documentation:** See [FIX_GOTRUE_NETWORK_ISOLATION.md](./FIX_GOTRUE_NETWORK_ISOLATION.md)
+for full analysis, common mistakes, and testing checklist.
+
+---
+
 ## Crash-loop diagnosis workflow
 
 When any `pmoves-supabase-*` container is in `Restarting`:
@@ -294,6 +332,7 @@ docker inspect <name> --format 'Restarts: {{.RestartCount}} | StartedAt: {{.Stat
 | `Bad key size` (AES) in Realtime | `DB_ENC_KEY` wrong size | `bootstrap/registry.json` `random_urlsafe 16` |
 | `Non-hex character` | Corrupt `random_hex` secret | `make env-setup ARGS=--accept-defaults` |
 | `EAI_AGAIN <short-id>` | Next.js resolving container ID | `HOSTNAME=0.0.0.0` in service env |
+| `hostname resolving error (lookup supabase-db on 127.0.0.11:53` | GoTrue/PostgRES T on wrong network | Add DB to `pmoves_api` network (see FIX_GOTRUE_NETWORK_ISOLATION.md) |
 | `deno.land ... name resolution` | External DNS via embedded resolver | `dns: [1.1.1.1, 8.8.8.8]` on service |
 | `container oom` events | Kong worker-count multiplication | `KONG_NGINX_WORKER_PROCESSES=1` |
 | `NetworkSettings.Ports` empty on multi-port | Docker Desktop Windows quirk | `KONG_PROXY_BIND=0.0.0.0` |
