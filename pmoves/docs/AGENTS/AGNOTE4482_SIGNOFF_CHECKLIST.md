@@ -63,7 +63,7 @@ Each green check should represent:
 - [x] Weekly intake path is documented. <!-- Agent Zero v1.3 gap report, "Weekly intake" section -->
 - [x] Sprint-level sync decision path is documented. <!-- adopt/preserve/drop classification in gap report -->
 - [x] Canonical sinks are named (`hardening tracker`, `NEXT_STEPS`, `ROADMAP`, audit dashboard). <!-- All 4 named in gap report -->
-- [ ] Suit updates are framed as release concerns, not background chores. <!-- PARTIAL: standing rule added to hardening tracker 2026-04-23; no CI gate automation yet -->
+- [x] Suit updates are framed as release concerns, not background chores. <!-- FULL: suit-release-policy.yml CI gate (.github/workflows/) detects profile/signature/suit changes and requires release-notes entry. Re-checked 2026-04-24 after backup-restore regression. -->
 
 ### 7. P7 remaining items
 
@@ -78,6 +78,14 @@ Each green check should represent:
 - [x] The docs do not imply a production-ready suit baseline where one does not exist. <!-- Gap reports explicitly state pin is Mar 7, not v1.3 -->
 - [x] The signoff artifact itself is linked from AGNOTE4482 canon. <!-- Added to AGNOTE4482.md Canonical Pointer section -->
 - [x] Reviewer notes can point to one shared checklist instead of scattered comments. <!-- This file is the single gate -->
+
+
+### 9. Branch hygiene
+
+- [ ] All branches follow the naming convention in SITREP (`feat/`, `fix/`, `infra/`, `docs/`, `refactor/`).
+- [ ] Every non-main branch has an associated PR (no un-PR'd work branches).
+- [ ] No orphan branches exist in the claim register (CLAIMED >7 days with no PR and no CHIT trail activity → ORPHANED).
+- [ ] CHIT trail is recorded for branch lifecycle events (creation, PR link, merge, deletion) on NATS subject `branch.{branch_name}.trail.v1`.
 
 ---
 
