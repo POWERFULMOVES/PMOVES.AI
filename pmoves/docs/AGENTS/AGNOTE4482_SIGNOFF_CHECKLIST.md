@@ -63,7 +63,7 @@ Each green check should represent:
 - [x] Weekly intake path is documented. <!-- Agent Zero v1.3 gap report, "Weekly intake" section -->
 - [x] Sprint-level sync decision path is documented. <!-- adopt/preserve/drop classification in gap report -->
 - [x] Canonical sinks are named (`hardening tracker`, `NEXT_STEPS`, `ROADMAP`, audit dashboard). <!-- All 4 named in gap report -->
-- [ ] Suit updates are framed as release concerns, not background chores. <!-- PARTIAL: standing rule added to hardening tracker 2026-04-23; no CI gate automation yet -->
+- [x] Suit updates are framed as release concerns, not background chores. <!-- FULL: suit-release-policy.yml CI gate (.github/workflows/) detects profile/signature/suit changes and requires release-notes entry. Re-checked 2026-04-24 after backup-restore regression. -->
 
 ### 7. P7 remaining items
 
