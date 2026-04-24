@@ -1,7 +1,7 @@
 """Functional integration tests for A2UI NATS Bridge.
 
 These tests require:
-- NATS server running at nats://localhost:4222
+- NATS server running at nats://nats:pmoves@nats:4222
 - A2UI bridge service running at http://localhost:9224
 
 Run with:

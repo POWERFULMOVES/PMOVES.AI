@@ -127,10 +127,10 @@ Elder-context support is always available to reduce drift and collision across p
 |---------|--------|----------|
 | BoTZ JWT fail-open (P0) | **RESOLVED** | `gateway.py:292-299` returns HTTPException 500 on missing HAS_JOSE or SUPABASE_JWT_SECRET. `auth.py:57-65` returns HTTPException 500 on missing HAS_JOSE or JWT_SECRET. Both fail-closed. |
 | BPM encoder not implemented (P2) | **RESOLVED** | `pmoves/tools/bpm_encoder.py` exists, 574 lines, delivered in PR #1168 (Shift Crew tools) |
-| NATS unauthenticated references (P0) | **NOT IMPROVED** | 57 unauthenticated references across 34 files in `pmoves/` (grep: `nats://(nats\|localhost):4222` excluding `@`; measured 2026-04-02). Not reduced from baseline — batch migration still needed. |
+| NATS unauthenticated references (P0) | **RESOLVED** | All 110 NATS URLs in non-test code are authenticated (`nats://nats:pmoves@nats:4222`). PR #1375 completed docs migration. Code files migrated in prior convergence waves. Verified 2026-04-23. |
 | A2A server not exposed (P0) | **RESOLVED** | `server.py` refactored: `create_a2a_router()` exports mountable APIRouter. `main.py` mounts it via `app.include_router()` on port 8080. `docker-compose.yml` adds `A2A_DISCOVERY_PUBLIC`/`A2A_TASKS_PUBLIC` env vars. Routes: `/.well-known/agent-card.json`, `/a2a/v1/tasks`, `/a2a/v1/discover`. Auth via `SUPABASE_JWT_SECRET` (from x-hardening). |
-| Agent registry count | **STALE** | Registry has 71 entries, 13 external contributors. Docs said 60 agents, 7 contributors. |
-| AGENTS file count | **STALE** | 107 documents (66 root + 41 SUBMODULE_CODEX_HOMES). Docs said 73+. |
+| Agent registry count | **STALE** | Registry has 76 entries, 13 external contributors. Docs said 60 agents, 7 contributors. |
+| AGENTS file count | **STALE** | 109 documents (67 root + 41 SUBMODULE_CODEX_HOMES). Docs said 73+. |
 
 #### Post-2026-03-28 Deliverables
 - **KiloCode claw config** (PR #1151): .kilo/ directory, GLM coding plan mode, 3 agents + 8 commands
@@ -143,7 +143,7 @@ Elder-context support is always available to reduce drift and collision across p
 - **TensorZero**: POSTGRES_URL fix (#1167), cross-profile depends_on removal
 
 ### Handoff Notes
-- NATS auth P0 needs continued batch migration (57 refs remain across 34 files — hotspots: `services/work-marshaling/`, `services/chat-relay/`, `services/node-registry/`, `tools/`)
+- NATS auth P0 **RESOLVED** (2026-04-23) — All 110 non-test URLs use authenticated form. PR #1375 completed docs, code migrated in prior waves.
 - A2A server needs runtime verification (compose exposure check)
 - Signoff checklist sections 1, 3, 7 still unchecked — require prospectus/ClaWz/P7 runtime verification
 - Agent registry count (71) should be reconciled with taxonomy docs that still reference 60
@@ -369,3 +369,40 @@ env["RUNNER_ALLOW_RUNNER_REUSE"] = "true"
 - Timestamp: `2026-04-23`
 
 <!-- GRAPHITI_MARK: 4090-CLAUDE::LAUNCH-PREP-AUDIT::2026-04-23 -->
+
+## SPARK Capability Correction + Doc Alignment (2026-04-23)
+
+### Work Performed
+- **Identified fundamental assumption errors** in SIDECAR_PROMOTION_PLAN.md and HYBRID_RUNNER_STRATEGY.md — both described SPARK as a degraded/limited sidecar when it is a full PMOVES.AI node
+- **HYBRID_RUNNER_STRATEGY.md**: Updated SPARK from 'A2A/MCP relay' to full node (CHIT, P7, TeraFormer, IC, ClaWZ, 76 agents). Added SPARK Node Capabilities section with 10-row table. Added CHIT security note. Updated date to 2026-04-23.
+- **SIDECAR_PROMOTION_PLAN.md**: Added CRITICAL CORRECTION header, SPARK-Specific Correction subsection, CHIT enforcement to gap analysis, SPARK shortcuts for Phase 1/5.3, abbreviated Appendix A transition for SPARK. Generic sidecar steps preserved for non-SPARK devices.
+- **Memory stored**: SPARK capability correction (ce_memory d2402dcd) + 7 YouTube CHIT validation signals (ce_memory 10a84f36)
+- **Scheduled tasks created**: (1) YouTube Playlist Deep CHIT Signal Research — full 80-video analysis of PLGupOT04oMfok7S8W8Js7lZZIlhM8ufc8, (2) Sidecar Plugin Parity + Space Agent Integration — plugin inventory comparison + PLUGIN_PARITY.md + agents.json profiles
+
+### 7 YouTube CHIT Validation Signals (from 5 videos analyzed)
+1. Hermes skills-as-procedures → CHIT distillation config_tuning layer
+2. NemoClaw config self-modification (open problem) → CHIT signed configs solve it
+3. Harness error recovery → CHIT at crypto level not prompt level
+4. Qwen3.6/Gemma4 model suit data for SPARK deployment
+5. Archon guide harness → maps to CHIT pipeline
+6. ClaWZ fork 1092 commits behind → harness restructure over fork maintenance
+7. DGX Spark GB10 confirmed → validates SPARK as full PMOVES platform
+
+### Files Changed
+| File | Change |
+|------|--------|
+| `deploy/HYBRID_RUNNER_STRATEGY.md` | SPARK capability correction + new section (461→485 lines) |
+| `research/SIDECAR_PROMOTION_PLAN.md` | 6 SPARK-specific corrections (759→789 lines) |
+
+### Scheduled Tasks
+| Task ID | Name | Status |
+|---------|------|--------|
+| FGfhfE6A | YouTube Playlist Deep CHIT Signal Research | Pending |
+| bZucmlNg | Sidecar Plugin Parity + Space Agent Integration | Pending |
+
+### Agent ACK
+- Agent: `AGENT-ZERO-SIDECAR`
+- Signature: `ACK::AGENT-ZERO-SIDECAR::SPARK-CAPABILITY-CORRECTION-DOC-ALIGNMENT`
+- Timestamp: `2026-04-23`
+
+<!-- GRAPHITI_MARK: AGENT-ZERO-SIDECAR::SPARK-CAPABILITY-CORRECTION-DOC-ALIGNMENT::2026-04-23 -->

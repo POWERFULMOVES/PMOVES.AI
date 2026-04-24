@@ -39,7 +39,7 @@ The AGENTS documentation in `pmoves/docs/AGENTS/` describes a sophisticated agen
 | **Codex Runtime Protocol** | ✅ Implemented | `CODEX_RUNTIME_PROTOCOL.md` with focus/scout modes, confidence gates, PR sweep |
 | **KRISS KROSS Accord** | ✅ Ratified | Collision-safe multi-agent traversal with Graphiti trail + CHIT attestation (2026-02-25) |
 | **Agent Resilience Patterns** | ✅ Implemented | 3-layer model (preventive → Cipher recovery → registry systemic) |
-| **Agent Class Taxonomy** | ✅ v1.4.0 | 60 agents registered in `agent_registry.yaml` with types, tiers, NATS, CHIT toggles |
+| **Agent Class Taxonomy** | ✅ v1.4.0 | 76 agents registered in `agent_registry.yaml` with types, tiers, NATS, CHIT toggles |
 | **Persona Seeds** | ✅ Implemented | 8 standard personas seeded via `17_persona_seed.sql` with model preferences |
 | **Model Registry** | ✅ Implemented | `gpu-models.yaml` reconciled with SQL registry (Anthropic, TTS, expanded mappings) |
 | **CHIT Geometry Bus** | ⚠️ Partial | Endpoints exist (`/geometry/calibration/report` on Hi-RAG), NATS subjects active (`geometry.cgp.v1`), but full CGP encode/decode pipeline incomplete |
@@ -223,7 +223,7 @@ CHIT Geometry Bus infrastructure is live but the full CGP pipeline is incomplete
 - ✅ NATS subjects active: `geometry.cgp.v1`, `geometry.swarm.meta.v1`, `pmoves.geometry.cgp.ready.v1`
 - ✅ EvoSwarm Controller (port 8113) publishes `geometry.swarm.meta.v1`
 - ✅ Swarm Attribution agent registered, subscribes to `geometry.attribution.request.v1`
-- ✅ CHIT toggles defined for all 60 agents in `agent_registry.yaml`
+- ✅ CHIT toggles defined for 76 agents in `agent_registry.yaml`
 - ✅ `sign_cgp()` available in `chit_security.py` for trail signing
 
 **Still Required:**
@@ -310,7 +310,7 @@ CHIT Geometry Bus infrastructure is live but the full CGP pipeline is incomplete
 3. ✅ Create SKILL.md template — BoTZ skill marketplace operational
 4. ✅ Convert one instrument to skill format as proof-of-concept
 5. ✅ Cipher Memory deployed (port 8105) with agent plan/checkpoint/completion categories
-6. ✅ Agent Registry created (`agent_registry.yaml`) with 60 agents, resilience attributes
+6. ✅ Agent Registry created (`agent_registry.yaml`) with 76 agents, resilience attributes
 7. ✅ Codex Runtime Protocol ratified with focus/scout modes
 8. ✅ KRISS KROSS Accord ratified for multi-agent collision safety
 

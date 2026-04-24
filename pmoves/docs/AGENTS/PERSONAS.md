@@ -129,7 +129,7 @@ The persona framework supports hierarchical categories with inheritance. Current
 | **Entertainment** | Gaming, media, social (Phase 3) |
 | **Utility** | Tools, automation, data (Phase 3) |
 
-> **Note:** The 8 seeded personas (Developer, Creator, Researcher, Analyst, Coordinator, Security Auditor, Tester, Archivist) are role-based identities used by the agent orchestration layer. They are distinct from the 71 agents in `agent_registry.yaml`, which define service endpoints and NATS topology. Personas define *who* an agent is; the registry defines *what* an agent does.
+> **Note:** The 8 seeded personas (Developer, Creator, Researcher, Analyst, Coordinator, Security Auditor, Tester, Archivist) are role-based identities used by the agent orchestration layer. They are distinct from the 76 agents in `agent_registry.yaml`, which define service endpoints and NATS topology. Personas define *who* an agent is; the registry defines *what* an agent does.
 
 ---
 
@@ -587,7 +587,7 @@ The 8 seed personas provide full coverage for core agent operations (development
 | File | Content | Status |
 |------|---------|--------|
 | `pmoves/supabase/initdb/17_persona_seed.sql` | 8 production seed personas | **Primary source of truth** |
-| `pmoves/config/agent_registry.yaml` | 71 agent service definitions | Agents ≠ personas (see note above) |
+| `pmoves/config/agent_registry.yaml` | 76 agent service definitions | Agents ≠ personas (see note above) |
 
 > **No persona JSONL catalog exists.** The 325+ figure was a planning target, not a dataset that was ever created. All persona data lives in the seed SQL.
 

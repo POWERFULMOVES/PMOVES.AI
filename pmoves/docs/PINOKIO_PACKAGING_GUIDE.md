@@ -621,7 +621,7 @@ module.exports = {
         text: `
 SUPABASE_URL=${args.supabase_url}
 SUPABASE_KEY=${args.supabase_key}
-NATS_URL=nats://localhost:4222
+NATS_URL=nats://nats:pmoves@nats:4222
         `.trim()
       }
     },
@@ -814,7 +814,7 @@ module.exports = {
 # PMOVES Agent Zero Configuration
 SUPABASE_URL=your_supabase_url
 SUPABASE_SERVICE_ROLE_KEY=your_key
-NATS_URL=nats://localhost:4222
+NATS_URL=nats://nats:pmoves@nats:4222
 OPENAI_API_KEY=your_key
 ANTHROPIC_API_KEY=your_key
 
@@ -1221,7 +1221,7 @@ SUPABASE_URL=https://xxx.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=xxx
 
 # NATS (event bus)
-NATS_URL=nats://localhost:4222
+NATS_URL=nats://nats:pmoves@nats:4222
 
 # LLM Providers (at least one required)
 OPENAI_API_KEY=xxx

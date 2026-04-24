@@ -1,6 +1,6 @@
 # PMOVES Agent Class Taxonomy
 
-_Last updated: 2026-04-19 — v1.5.0 (71 agents; exact count varies per latest agent_registry.yaml scan)_
+_Last updated: 2026-04-19 — v1.5.0 (76 agents; exact count varies per latest agent_registry.yaml scan)_
 
 This document formalizes the PMOVES agent naming and classification system as a **type system** — composable, collectible agents with classes, types, evolutions, and connections. Think Pokemon and Transformers: no matter how small, every agent has a type, a place in the hierarchy, and connections through all the layers it can touch.
 
