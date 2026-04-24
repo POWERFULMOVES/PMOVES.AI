@@ -312,4 +312,56 @@ All 5 can coexist: 3 local (Ollama) + 2 cloud (API). 128GB unified memory handle
 | 11 | qMnClynCAmM | AI Coding Is Harnesses | Cole Medin | 30:48 |
 | 12 | srx9iwnjK2M | Full Archon Guide | Cole Medin | 2:45:31 |
 | 24 | N2LHg2-J3p8 | Build a Claw: NemoClaw on DGX Spark | NVIDIA Developer | 52:34 |
+
+---
+
+## Creator Pipeline Deep Dives (2026-04-24)
+
+**Search window**: March 25 – April 24, 2026
+**Method**: Fresh YouTube API searches via researcher subordinate. No prior analysis relied upon.
+**CHIT intrusion note**: Prior analysis (Signal 5, video srx9iwnjK2M) claimed a "Full Archon guide (2hr45m)" from coleam00. Fresh searches for "Archon agent zero" and "coleam00 Archon agent zero" returned ZERO results. The video may have been removed/unlisted, or the prior claim was inaccurate. Flagged per behavioral rules — not incorporated below.
+
+---
+
+### Harness Engineering (High Relevance Cluster)
+
+| Priority | Title | Channel | Date | URL | Key Takeaway |
+|----------|-------|---------|------|-----|-------------|
+| 1 | Rethinking AI Agents: The Rise of Harness Engineering | PY | Apr 14 | https://www.youtube.com/watch?v=Xxuxg8PcBvc | "Same model. Same benchmark. 6x the performance difference." Harness as primary performance differentiator, not model. |
+| 2 | Harness Engineering: Why AI Agents Fail Without It | Devsplainers | Apr 8 | https://www.youtube.com/watch?v=f2oP5mpluQg | Positions harness engineering as #1 skill for reliable AI coding agents in 2026. References OpenAI's bet on harness patterns. |
+| 3 | Agent Zero x Paperclip: Governed Autonomous AI Operations | dumbfoundry | Apr 17 | https://www.youtube.com/watch?v=WNrBKq8DmlA | Combines Agent Zero (intelligence) with Paperclip (governance). Directly applicable to CHIT-as-governance-layer. |
+| 4 | One Million Lines of Code. Zero Keystrokes | AI-plus-plus | Mar 19 | https://www.youtube.com/watch?v=nQqKP6liaF4 | OpenAI Codex case study shipping 1M lines via harness engineering. Scale validation. |
+| 5 | Paradigm Shift: Harnesses to Protection Layers | htekdev | Mar 23 | https://www.youtube.com/watch?v=PcaccHNqfhI | Harnesses evolving into protection layers. Maps to CHIT fail-closed design. |
+
+All five flagged as potential timeline accelerators. Harness engineering directly validates the CHIT-as-harness-layer thesis from Grand Convergence L2.
+
+---
+
+### Security
+
+| Title | Channel | Date | URL | Relevance |
+|-------|---------|------|-----|----------|
+| CVE-2026-4308: SSRF Vulnerability in Agent-Zero AI Framework | infotech409 | Mar 17 | https://www.youtube.com/watch?v=96860FVjYIs | Moderate — security awareness for PMOVES hardening, not actionable how-to |
+
+---
+
+### Gaps Found
+
+| Topic | Status |
+|-------|--------|
+| Archon + Agent Zero integration guides | NO content found (zero results for "Archon agent zero") |
+| ComfyUI + Agent Zero (last 30 days) | NO content found (3 videos from Feb, all outside window) |
+| PMOVES creator pipeline | NO content found (expected — niche) |
+| coleam00 original content (last 30 days) | NOT surfacing in search — may be unlisted, privated, or channel inactive |
+| Playlist PLGupOT04oMfok7S8W8Js7lZZIlhM8ufc8 | Inaccessible via available tools |
+
+---
+
+### Assessment
+
+The harness engineering space is active with 5 highly relevant videos in 30 days. These validate the PMOVES thesis that orchestration code (the harness) matters more than model selection. The dumbfoundry Agent Zero + Paperclip video is the most directly composable — it demonstrates governance wrapping around Agent Zero, which is architecturally identical to CHIT wrapping Agent Zero in PMOVES.
+
+Archon-specific content is completely absent from YouTube. If the user's 'deep dives that could speed up timeline' refers to Archon guides, those do not exist in public search. If it refers to harness engineering patterns (which is the broader category ARCHON falls under), the 5 videos above are the signal.
+
+**Recommendation**: Transcribe the dumbfoundry (Agent Zero x Paperclip) and PY (Harness Engineering 6x) videos. Both are directly applicable to PMOVES architecture decisions and likely contain patterns that can be extracted and implemented within days.
 | 62 | VBV4sxUBdsE | Hermes Agent + GLM-5.1: RIP OpenClaw | AICodeKing | 12:29 |
