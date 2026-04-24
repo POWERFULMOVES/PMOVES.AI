@@ -17,6 +17,22 @@ git branch      # what branch am I on?
 git worktree list  # am I in a worktree?
 ```
 
+### Branch Naming Convention
+
+| Prefix | Use For |
+|--------|----------|
+| `feat/` | New features |
+| `fix/` | Bug fixes |
+| `infra/` | Infrastructure, CI/CD, DevOps |
+| `docs/` | Documentation-only changes |
+| `refactor/` | Code refactoring (no behavior change) |
+
+**Workstream IDs**: Use `w1`–`w6` (from ROADMAP) or GitHub issue/PR number.
+Example: `feat/w3-discord-classrooms`, `fix/1287-runner-loop`
+
+**Forbidden**: `feature/` (use `feat/`), `pr/` (branches ≠ PRs), `p1/`–`p7/` (use workstream ID).
+
+
 ## What's Happening Right Now?
 
 | Question | Where to Look |
@@ -38,6 +54,16 @@ make -C pmoves health-quick 2>/dev/null || curl -s http://localhost:8080/healthz
 
 # Git state
 git status -sb && git log --oneline -5
+
+# PR check — warn if working on un-PR'd branch
+BRANCH=$(git rev-parse --abbrev-ref HEAD)
+if [ "$BRANCH" != "main" ]; then
+  PR_COUNT=$(gh pr list --head "$BRANCH" --state open --json number --jq 'length' 2>/dev/null || echo "0")
+  if [ "$PR_COUNT" -eq "0" ]; then
+    echo "WARNING: working on un-PR'd branch: ${BRANCH}"
+  fi
+fi
+
 ```
 
 ## Agent Definitions (Three-Body Solution)
@@ -116,5 +142,15 @@ Claude's context is NOT consistent across z890/4090/5090. Each node may have:
 | CLAUDE-OPUS | any | Architecture, self-review, convergence |
 
 ---
+
+## Restore Safety
+
+> **Incident**: 2026-04-23 — file-level backup restore of AGNOTE4482_SIGNOFF_CHECKLIST.md silently overwrote 7 committed checkmarks (§1.1–1.3, §3.1–3.3). File-level restores bypass git merge/conflict detection.
+>
+> **Rule**: Before restoring ANY AGNOTE file from backup, run:
+> ```bash
+> git diff HEAD -- <file>
+> ```
+> Verify no checkmarks (`- [x]`) would be lost. If the backup is older than HEAD, the restore MUST be a manual merge, not a file copy.
 
 *If you're Husk and you just dropped in: welcome. Start at the top.*

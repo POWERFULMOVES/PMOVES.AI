@@ -79,6 +79,14 @@ Each green check should represent:
 - [x] The signoff artifact itself is linked from AGNOTE4482 canon. <!-- Added to AGNOTE4482.md Canonical Pointer section -->
 - [x] Reviewer notes can point to one shared checklist instead of scattered comments. <!-- This file is the single gate -->
 
+
+### 9. Branch hygiene
+
+- [ ] All branches follow the naming convention in SITREP (`feat/`, `fix/`, `infra/`, `docs/`, `refactor/`).
+- [ ] Every non-main branch has an associated PR (no un-PR'd work branches).
+- [ ] No orphan branches exist in the claim register (CLAIMED >7 days with no PR and no CHIT trail activity → ORPHANED).
+- [ ] CHIT trail is recorded for branch lifecycle events (creation, PR link, merge, deletion) on NATS subject `branch.{branch_name}.trail.v1`.
+
 ---
 
 ## Signoff Ledger
