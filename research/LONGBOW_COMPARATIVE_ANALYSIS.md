@@ -15,7 +15,7 @@ PMOVES.AI and PMOVES--Longbow are converging on the same problem space — distr
 |---|---|---|
 | Language | Python / TypeScript | Go |
 | File count | ~42+ subdirectories, monorepo | 1,173 files, single-service |
-| Maturity | Architecture-complete, 31/36 signoff | Production-hardened, v0.1.9 |
+| Maturity | Architecture-complete, 32/37 signoff | Production-hardened, v0.1.9 |
 | Core abstraction | Geometry-encoded information (CHIT CGPs) | Zero-copy vectors (Arrow RecordBatches) |
 | Transport | NATS JetStream (pub/sub) | Apache Arrow Flight (gRPC streaming) |
 | Memory model | Shared observability gap (ClickHouse + Prometheus) | Slab arena off-heap allocation |
@@ -97,7 +97,7 @@ Longbow started as a vector database and is adding agent-specific features (temp
 Agent framework → CHIT encoding → EVO SWARM → ToKenism → Deployment convergence
 v0.8             v0.9          v0.95       v1.0         Apr 17-23 waves
 ```
-PMOVES.AI started as an agent orchestration system and is adding infrastructure dependencies (ClickHouse, Neo4j, NATS, TensorZero). Its signoff progression (31/36) tracks framework completeness.
+PMOVES.AI started as an agent orchestration system and is adding infrastructure dependencies (ClickHouse, Neo4j, NATS, TensorZero). Its signoff progression (32/37) tracks framework completeness.
 
 ### 3.2 Convergence Density by Domain
 
