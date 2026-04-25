@@ -64,6 +64,7 @@ Each green check should represent:
 - [x] Sprint-level sync decision path is documented. <!-- adopt/preserve/drop classification in gap report -->
 - [x] Canonical sinks are named (`hardening tracker`, `NEXT_STEPS`, `ROADMAP`, audit dashboard). <!-- All 4 named in gap report -->
 - [x] Suit updates are framed as release concerns, not background chores. <!-- FULL: suit-release-policy.yml CI gate (.github/workflows/) detects profile/signature/suit changes and requires release-notes entry. Re-checked 2026-04-24 after backup-restore regression. -->
+- [x] Agent Zero fork sync completed (2026-04-25). Branch PMOVES.AI-Edition-v1.9 pushed, gap 604→0, MiniMax litellm format fixed. <!-- Verified: fork branch exists, 2 overlay commits, 7/7 validation checks passed -->
 
 ### 7. P7 remaining items
 
