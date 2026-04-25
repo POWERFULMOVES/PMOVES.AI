@@ -1,0 +1,50 @@
+through the whole spec-driven flow.
+Lists out some key patterns here like
+the plan checker as a gatekeeper before
+execution, goal backward verification,
+which um yeah.
+I mean, that this is the thing with all
+these frameworks is there's so much like
+word soup, word salad. Like what does
+that even mean? And obviously it's not
+that hard to like get into the readme
+and stuff, but I don't even remember
+exactly what all these things mean and
+I've used GSD before.
+Uh okay. So, here's what Archon supports
+for us.
+&gt;&gt; [cough]
+&gt;&gt; The closest existing workflow is the
+Archon piv loop.
+Which yeah, that's like literally the
+workflow that I described here in the
+diagram. So, this is the closest to GSD
+because it has the same stages of
+planning and then implementing and then
+validating.
+&gt;&gt; [snorts]
+&gt;&gt; Okay, so now it asks us some questions
+here.
+Uh wow, it asked us seven questions.
+Okay, let me try to get through these
+really quick. So, is this a full project
+or a single feature?
+GSD covers an entire project life cycle.
+Archon workflows typically target a
+single feature issue.
+Um
+Wait a second. I'm actually kind of
+confused by the question.
+Oh, I see. So, it's like do we want to
+have it build an entire PRD for like an
+entire project or is it more like a
+workflow that takes a PRD or feature
+description and runs GSD style plan
+execute. Yeah, actually let's do that.
+Yeah, so for question number one, let's
+do something in between. So, workflow
+that takes a PRD
+or feature description and runs GSD
+style plan execute verify. That makes
+more sense.
+Um

@@ -1,0 +1,180 @@
+videos, but it's like an ongoing joke
+where
+um I don't even remember where it
+originated. It was like something with
+GPT where like I was asking for recipes
+in a YouTube video and it kept like
+bringing up spicy mango even between
+conversations where there's no long-term
+memory.
+So, it just kind of became a joke from
+there.
+All right.
+Let's see.
+All right. Um you know what? So, man,
+there's so many good questions in the
+chat still, but I do want to get to the
+next part here where I will uh build a
+workflow with you guys.
+So, let's let's go back into our
+repository.
+I'm going to close out of this session
+and start a new one.
+All right.
+&gt;&gt; [sighs and gasps]
+&gt;&gt; So, uh here, hold on. Let me clear.
+There we go.
+All right. So, what I want to show you
+guys now
+is how to build a custom workflow in
+Archon.
+And there are a million different ways
+or different kinds of workflows you can
+build.
+And like I said, you can take
+inspiration from all these existing
+ones, even pointing Archon to look at
+these to, you know, understand best
+practices and how we've been building
+workflows already. But as as an example,
+like I've teased already, I want to
+build GSD
+as an Archon workflow.
+So, with GSD, it's a a lightweight and
+powerful meta prompting context
+engineering spec-driven development
+system. With a little bit of word salad
+there, but basically, it's a simplistic
+approach to going from planning all the
+way to getting your work done with
+coding agents. It's It's It's nice.
+And um he I actually really appreciate
+the inspiration behind the project. So,
+he says, "Other spectrum development
+tools exist like B mad and spec kit, but
+they all seem to make things way more
+complicated than they need to be." Which
+I agree with this. I actually already
+said this in the live stream where these
+tools are very inspirational, but just
+like it's more than you really want in
+your process and they're so opinionated.
+You've got your sprint ceremonies and
+story points and stakeholder syncs and
+retrospectives and Jira workflows.
+I'm not a 50-person software company. I
+don't want to play enterprise theater.
+And like, preach, man. Like, that's
+good. [laughter]
+So, I built GSD. The complexity is in
+the system, not in your workflow.
+So, the the system gives Claude
+everything it needs to do the work and
+verify it, right? Like, that's that's
+the harness here is it's a system for
+planning, implementing, and validating,
+a lot of like what I've already been
+talking about. I trust the workflow it
+does It just does a good job. It just
+gets it done.
+And so, I want to take some of the these
+ideas here. So, I'm not like, okay, I'm
+not going to build this like
+step-by-step in Archon. I'm not going to
+build a replica, but I'm going to take
+the general flow
+of the different phases, like discussing
+and planning and executing and some of
+their strategies for splitting up work
+into different stages and their
+verification. I want to take inspiration
+from this.
+But I'm going to do it with Claude. So,
+watch this. I'm going to copy this repo.
+I'm going to paste it in
+and I'm just going to say, "Load the
+Archon skill. I want you to help me make
+an Archon workflow
+that takes very heavy inspiration from
+GSD, the repo that I gave you the path
+to here. So, I want you to analyze the
+repo. I want you to dig deep into the
+process here and how it goes through the
+different phases, how it manages tasks
+and does verification. And I want you to
+analyze other workflows in Archon, some
+of the defaults to get an idea for like
+how those work and how we can translate
+ideas from GSD into a new workflow that
+we'll create. That'll basically go
+through the same process having human
+approval gates for different steps of
+the way within planning and validation.
+So, actually one more thing that I want
+to add to the prompt here is I'll say I
+want you to, after you do your research,
+ask me questions. Make sure that we're
+aligned on what this workflow does and
+how we're going to take inspiration from
+GSD.
+And so, I mean, if you wanted to go so
+far, you could pretty much replicate all
+of GSD as an Archon workflow. That would
+take a lot of work. I think that would
+take too long to do in this live stream,
+which is why I'm doing it more like in
+like, you know, let's just take
+inspiration from GSD versus replicate it
+exactly, but we'll still get something
+pretty similar here. I actually did
+already test this before the live stream
+and the results were were pretty good.
+Now, it is going to take a while
+to do the research initially or at least
+a decent amount of time. So, I'll answer
+some more questions while we let this
+run.
+Uh but I think this is a nice demo
+because without getting too complex
+here, just showing you at a high level
+how it's like, no matter what you want
+to build, just describe your process.
+Have it look at existing workflows for
+reference and of course, Archon skill
+helps, and then just start building with
+it.
+In fact, one of the workflows that we
+have is a workflow builder. It's very
+meta, but whenever we want to build a
+workflow, we can use this. It just kind
+of provides some more structure, right?
+It's a harness around building more
+custom workflows. A harness around
+building harnesses. If I had a dime for
+every time I said harness in this live
+stream, I would just go retire.
+All right.
+Let's see.
+By the way, I built collab mem for agent
+memory context engine, close to 100
+stars already.
+Hey, that's pretty cool.
+Congratulations.
+Yeah, long-term memory for AI coding is
+it's very powerful, very needed.
+Let's see. Um do you have the
+possibility to temporarily run commands
+from the web UI? Like running a dev
+server from your work tree to check the
+look and feel of your change from your
+work tree.
+Yeah, so we have played around with the
+idea of having like a basic terminal
+in the web UI
+to do things like that, but we haven't
+built that yet.
+Um it's one of those things where it's
+like, let's see if people really need
+that before we build it. A lot of what
+we've built in Archon up until this
+point has been like
