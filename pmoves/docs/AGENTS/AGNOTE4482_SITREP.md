@@ -105,7 +105,7 @@ Claude's context is NOT consistent across z890/4090/5090. Each node may have:
 
 ## Node Capacity Quick Reference
 
-Prior to PR #1378 (PMOVES_MOF_ARCHITECTURE.md, 2026-04-24), nodes were described by expertise
+Prior to PR #1378 (MOF architecture invariant, 2026-04-24), nodes were described by expertise
 lane — Z890 "owned" infra, 4090 "owned" provider cascade, 5090 "owned" GPU/voice. That framing
 was a pre-MOF mental model: it implied hard domain ownership and discouraged cross-node delegation.
 
@@ -115,7 +115,7 @@ gating: it tells you what a node can sustain under load, not what work it is per
 
 Cross-node delegation is the primary mechanism for matching workload to capacity:
 1. Agent Zero `/mcp/*` — synchronous MCP tool call to a peer node
-2. A2A `/.well-known/agent-card.json` — async agent-to-agent via the A2A spec
+2. A2A `/.well-known/agent-card.json` — async agent-to-agent via the A2A spec (partially mounted; disabled by default)
 3. NATS `agent.peer.heartbeat.v1` — presence/capability announcement (Phase D
    mutual-watching skill, not yet live)
 
