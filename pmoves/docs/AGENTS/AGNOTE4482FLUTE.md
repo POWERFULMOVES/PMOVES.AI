@@ -37,7 +37,7 @@ Flute is the synthesis layer that scales these signals into voice prosody, visua
 
 The BPM↔boundary↔frequency mapping already lives in [`AGNOTE4482.BEATS.md`](./AGNOTE4482.BEATS.md) and is implemented in [`pmoves/tools/bpm_encoder.py`](../../tools/bpm_encoder.py):
 
-```
+```text
 SENTENCE (350ms pause) → 60 BPM  → Largo   → C4 (262 Hz)
 BREATH   (130ms pause) → 80 BPM  → Adagio  → D4 (294 Hz)
 CLAUSE   (180ms pause) → 90 BPM  → Andante → E4 (330 Hz)
@@ -67,7 +67,7 @@ The seed asks: where do the **7 chakras** sit on this 5-band ladder? The proposa
 
 The seed's "6 seconds is breathing exercise 6 in 6 out" is a 10 BPM cadence — slower than every band currently in the BPM table. It needs its own pseudo-band:
 
-```
+```text
 INHALE   (6000ms ramp up)   → 10 BPM → Grave-largo → C2 (65 Hz)  → chakra: Root → Crown
 EXHALE   (6000ms ramp down) → 10 BPM → Grave-largo → C2 (65 Hz)  → chakra: Crown → Root
 ```
@@ -84,7 +84,7 @@ The seed's "tap hammeroff 3s at the hz log up so 3 then the next octave up for 3
 
 Implementation as a CGP packet sequence:
 
-```
+```text
 t=0s   → tap on C3 (130 Hz)   → hold 3s
 t=3s   → hammer-off, tap C4 (262 Hz)   → hold 3s
 t=6s   → hammer-off, tap C5 (523 Hz)   → hold 3s
@@ -114,6 +114,8 @@ Total cycle = 9s. Couples cleanly with the 12s breath cycle: 3 inhales + 1 octav
 
 ## Movement V — Missing Nodes (Answers to the Seed's Final Question)
 
+**Status:** proposal (none implemented in this PR). Each item below is tracked as an issue stub in [`pmoves/docs/audit/FLUTE_CHIT_GAP_2026-04-26.md`](../audit/FLUTE_CHIT_GAP_2026-04-26.md). The new NATS subjects (`health.ekg.bpm.v1`, `wellbeing.matrix.score.v1`) and the Well-Being Matrix Monitor service entry are pending catalog registration in `.claude/context/nats-subjects.md` and `.claude/context/services-catalog.md` — that catalog sync is its own scope (see [Open Catalog Sync](#open-catalog-sync) below) since `.claude/context/` is fenced by the damage-control hook for protected-path writes.
+
 The seed asks: *"any other node we should pay attention to?"* — these are the answers, ranked by closeness to the existing prosodic bridge.
 
 1. **Chakra encoder (`pmoves/tools/chakra_encoder.py`)** — extend bpm_encoder with the 7-chakra band table from Movement I. Same CGP v0.2 schema, new `chakra` field. Estimated 80 lines.
@@ -134,6 +136,21 @@ The seed closed with *"any other node we should pay attention to?"* — these st
 - Does the Tap-HammerOff pattern carry semantic meaning (focus / reset / transition) or is it a pure visual/audio motif?
 - How does the Well-Being Matrix interact with **Flute's persona system** — does each persona have a default chakra signature, or is chakra orthogonal to persona?
 - What's the ground-truth dataset for "matrix score" — adherence to ideal cadence, HRV improvement, subjective user rating, or a composite?
+
+---
+
+## Open Catalog Sync
+
+Pending follow-up (separate scope; not blocking this PR):
+
+1. Add to [`.claude/context/nats-subjects.md`](../../../.claude/context/nats-subjects.md) under a new "Proposed (Flute Well-Being Matrix)" section:
+   - `health.ekg.bpm.v1` — published by EKG/HRV ingest (rPPG/Polar H10/healthkit) → consumed by matrix monitor + Flute prosodic envelope
+   - `wellbeing.matrix.score.v1` — published by matrix monitor → consumed by UI / Hyperdimensions cymatic visualizer / agent personas
+2. Add to [`.claude/context/services-catalog.md`](../../../.claude/context/services-catalog.md) under a new "Proposed Services (Flute Well-Being Matrix)" section:
+   - **Well-Being Matrix Monitor** — proposed port `8057+` (after current Flute WS at `8056`), `GET /healthz`, subscribes to `tokenism.prosodic.bpm.v1` + `health.ekg.bpm.v1`, publishes `wellbeing.matrix.score.v1`
+   - **EKG / HRV Ingest** — proposed port TBD, publishes `health.ekg.bpm.v1`, input candidates: rPPG / Polar H10 / Apple Watch healthkit
+
+Why a separate scope: `.claude/context/` is fenced by the damage-control hook (read-only by default) — touching it requires either an explicit allow-rule override or operator confirmation. Filing the catalog sync as its own PR keeps that gate visible rather than bypassing it.
 
 ---
 
