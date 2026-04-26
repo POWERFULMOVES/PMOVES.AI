@@ -40,11 +40,13 @@
 
 ## Summary
 
-- **5 implemented** (geometry-bus subject, voice attribution, BPM bridge, CGP format, prosodic NATS, providers, persona selector — counted as one row each above)
-- **2 partial** (pipecat duplex harness, voice clone endpoint)
-- **12 unimplemented** — fall into two clusters:
-  - **Multimodal vision cluster** (Doc B, never engineered): POML, Mangle, Qwen-Omni, JAMZ, Flute geometry-bus bridge
-  - **Well-being-matrix cluster** (AGNOTE seed, never engineered): chakra encoder, EKG ingest, matrix monitor, breath cycle generator, tap-hammeroff CGP, cymatic visualizer
+**Totals: 20 features audited → 7 implemented / 2 partial / 11 unimplemented**
+
+- **7 implemented:** `geometry.cgp.v1` subject, CHIT voice attribution, BPM↔boundary bridge, CGP v0.2 packet format, `tokenism.prosodic.bpm.v1` NATS subject, multi-engine TTS providers, persona selection by intent
+- **2 partial:** pipecat duplex harness, voice-clone endpoint
+- **11 unimplemented** — fall into two clusters:
+  - **Multimodal vision cluster** (Doc B, never engineered, 5 items): POML, Mangle, Qwen-Omni, JAMZ, Flute geometry-bus bridge
+  - **Well-being-matrix cluster** (AGNOTE seed, never engineered, 6 items): chakra-axis encoder, EKG/HRV ingest, matrix-monitor service, breath cycle generator, tap-hammeroff CGP, cymatic visualizer
 
 **Highest-leverage gap:** Flute geometry-bus bridge (Issue stub 5). The bus exists, CHIT exists, the `geometry.cgp.v1` subject is wired — but Flute itself doesn't ride the bus. Closing this single gap connects voice prosody to CHIT geometry attribution at the service boundary, which then unlocks every downstream CHIT-aware voice feature.
 
