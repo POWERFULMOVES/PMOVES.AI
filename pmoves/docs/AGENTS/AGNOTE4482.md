@@ -493,3 +493,57 @@ No change: **32/37**. Remaining: §1.4 (external) + §9.1–§9.4 (compose stack
 - Timestamp: `2026-04-24T13:06:00Z`
 
 <!-- GRAPHITI_MARK: AGENT-ZERO-GLM::NATS-P0-RE-VERIFICATION::2026-04-24 -->
+
+## 4090-CLAUDE Session Audit (2026-04-26)
+
+### Work Performed
+
+**PMOVES-space-agent initialization + scan:**
+- Initialized submodule (was added as gitlink `10fb3c8a` but never checked out locally)
+- Full scan: docker-compose.pmoves.yml, env.pmoves.example, nats_client.js, pmoves_bridge.js, CLAUDE.md
+- **P0 bug fixed**: `pmoves_bridge.js:56` — template literal closed with `"` instead of backtick, causing `update_widget` action to silently truncate widget path. Fixed on `PMOVES.AI-Edition-Hardened` branch, commit `98b59b2`
+- Gitlink bumped `10fb3c8a → 98b59b2` (also picks up router path fix `284c0c1`)
+- Island vs fleet architecture documented: standalone NATS sidecar (island = SPARK/edge offline), `pmoves_bus` network (fleet = Z890/5090 docked) — intentional design
+- Integration gap report filed as issue #1383 for Z890-CLAUDE: 9-item checklist (compose stanza, env vars, NATS subjects catalog, services catalog, agent registry stub, NATS auth URL, space event subjects, fleet-mode compose path, health endpoint)
+
+**SPARK fleet topology + 3-phi architecture:**
+- Fleet nodes recorded: SPARK (GB10 Blackwell 128GB unified), 5090 (32GB GPU), Sonic Z890 (24GB), Knuckles (AMD 64GB), 4090 laptop (16GB)
+- 3-phi Jam architecture: SPARK + Agent Zero + space-agent as three-body comms relay (gluon plasma posture — deconfined across mesh in fleet mode, sovereign in island mode)
+- Design ethos: "no parlor tricks, only real connection with the ability to crank to 11" — every integration must provide genuine capability, impedance-matching ensures no node bottleneck
+
+**Phase B SITREP rewrite (Village Rule):**
+- Claimed lane in PHI.t1.md (2026-04-24T16:48Z)
+- Rewrote §"Agent Lanes Quick Reference" → §"Node Capacity Quick Reference"
+- Added ≤200-word preamble: pre-MOF mental model → MOF lattice invariant, 3 delegation mechanisms (Agent Zero /mcp/*, A2A disabled-by-default, NATS Phase D pending)
+- New 9-row table: Z890, 5090, 4090 laptop, SPARK, Knuckles, KVM4-1, KVM4-2, KVM2, (floating)
+- PR #1387 opened. Rebased onto main (`c69c938dd`), 3 CodeRabbit threads resolved (deprecated doc ref × 2, A2A readiness caveat)
+- Village Rule satisfied: one scope, one PR, no Phase D/E expansion
+
+**Repo sitrep + PR triage (2026-04-26):**
+- 16 new commits on main since session start (Agent Zero v1.9 sync, §1.4 copy-paste drafts, SPARK fast-forward, AGNOTE4482 dedup)
+- 18 open PRs triaged: Flute wave (6 PRs, all CI green, docs-only), security wave (#1390-#1392), Phase C (#1385), docs-reconcile (#1386), sign-trail fix (#1381, DIRTY — needs rebase), A2A activation (#1371), drafts (#1373-#1374), dependabot (#1372, #1388, Playwright pre-existing flake)
+- §9 Branch Hygiene finding: 2 orphan branches without PRs — `fix/agnote4482-section9-recovery` and `fix/branch-lifecycle-chit-wiring` (both created 2026-04-24, superseded by main, no associated PRs). Recommend deletion.
+
+### Key Findings
+
+| Finding | Status | Evidence |
+|---------|--------|----------|
+| pmoves_bridge.js update_widget P0 | **RESOLVED** | Backtick/quote mismatch on line 56 fixed, commit `98b59b2` |
+| space-agent gitlink stale | **RESOLVED** | Bumped to `98b59b2` |
+| space-agent fleet integration | **OPEN** | Issue #1383 assigned to Z890-CLAUDE (9 items) |
+| §1.4 Discord + site language | **DRAFT READY** | `deploy/brand/S14_DRAFTS.md` (commit `d752b7330`) — operator deployment pending |
+| §9 orphan branches | **IDENTIFIED** | 2 branches without PRs, superseded by main; safe to delete |
+| PR #1387 Phase B | **IN REVIEW** | Rebased, CR fixes pushed, CI running |
+
+### Handoff Notes
+- Merge sequence ready: security wave (#1390-#1392) → Flute wave (1394→1395→1393→1396→1401→1400) → #1387 → Phase C (#1385→#1386)
+- #1381 (sign-trail PYTHONPATH) needs rebase before merge — DIRTY/CONFLICTING
+- §9 orphan branches safe to delete: `fix/agnote4482-section9-recovery`, `fix/branch-lifecycle-chit-wiring`
+- Post-merge handoff for #1387: append ACK block + CLAIM→RELEASE in PHI.t1.md
+
+### Agent ACK
+- Agent: `4090-CLAUDE`
+- Signature: `ACK::4090-CLAUDE::SESSION-AUDIT-2026-04-26`
+- Timestamp: `2026-04-26`
+
+<!-- GRAPHITI_MARK: 4090-CLAUDE::SESSION-AUDIT-2026-04-26::2026-04-26 -->
