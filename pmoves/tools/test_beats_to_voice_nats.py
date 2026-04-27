@@ -28,17 +28,9 @@ class TestNatsPublishCgp(unittest.IsolatedAsyncioTestCase):
         assert subject_used == beats_to_voice.NATS_SUBJECT
 
     async def test_publish_nats_unavailable(self):
-        """_nats_publish_cgp returns False when nats-py raises on import."""
-        original_import = __builtins__.__import__ if hasattr(__builtins__, "__import__") else __import__
-
-        def _failing_import(name, *args, **kwargs):
-            if name == "nats":
-                raise ImportError("no nats")
-            return original_import(name, *args, **kwargs)
-
+        """_nats_publish_cgp returns False when nats-py is not installed."""
         with patch.dict("sys.modules", {"nats": None}):
-            with patch("builtins.__import__", side_effect=_failing_import):
-                result = await beats_to_voice._nats_publish_cgp({"spec": "chit.cgp.v0.2"})
+            result = await beats_to_voice._nats_publish_cgp({"spec": "chit.cgp.v0.2"})
         assert result is False
 
 
@@ -106,7 +98,7 @@ class TestRunPipelinePublishNats(unittest.TestCase):
     def test_publish_nats_true_sets_key(self):
         """run_pipeline with publish_nats=True sets nats_published in cgp stage."""
         with patch.object(beats_to_voice, "_check_flute_health", return_value=False):
-            with patch("asyncio.run", return_value=True):
+            with patch.object(beats_to_voice, "_nats_publish_cgp", new=AsyncMock(return_value=True)):
                 results = beats_to_voice.run_pipeline(
                     text="test text", bpm=90, publish_nats=True
                 )

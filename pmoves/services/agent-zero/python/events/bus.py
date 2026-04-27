@@ -32,12 +32,21 @@ import weakref
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional, Set
+from urllib.parse import urlparse, urlunparse
 
 from nats.aio.client import Client as NATSClient
 from nats.aio.msg import Msg
 import nats
 
 logger = logging.getLogger("pmoves.agent_zero.events.bus")
+
+
+def _redact_url(url: str) -> str:
+    p = urlparse(url)
+    if not p.username:
+        return url
+    netloc = p.hostname + (f":{p.port}" if p.port else "")
+    return urlunparse(p._replace(netloc=netloc))
 
 
 @dataclass
@@ -178,7 +187,7 @@ class EventBus:
                         logger.warning(f"JetStream not available: {e}")
                         self.js = None
 
-                logger.info(f"Event bus connected to {self.nats_url}")
+                logger.info(f"Event bus connected to {_redact_url(self.nats_url)}")
 
             except Exception as e:
                 logger.error(f"Failed to connect to NATS: {e}")

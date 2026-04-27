@@ -154,33 +154,34 @@ async def _listen_loop(
         sys.exit(1)
 
     nc = await natspy.connect(nats_url)
-
-    async def _handler(msg) -> None:
-        try:
-            data = json.loads(msg.data.decode("utf-8"))
-            text = data.get("response_text") or data.get("text", "")
-            aid = data.get("user_id") or agent_id
-            if not text:
-                return
-            sys.stderr.write(
-                f"[beats_to_voice] Trigger received agent={aid} len={len(text)}\n"
-            )
-            results = run_pipeline(text=text, voice=voice, agent_id=aid, flute_url=flute_url)
-            cgp = results.get("cgp_packet", {})
-            if cgp:
-                await nc.publish(NATS_SUBJECT, json.dumps(cgp).encode("utf-8"))
-                sys.stderr.write(f"[beats_to_voice] CGP published to {NATS_SUBJECT}\n")
-        except Exception as e:
-            sys.stderr.write(f"[beats_to_voice] Handler error: {e}\n")
-
-    await nc.subscribe(trigger_subject, cb=_handler)
-    sys.stderr.write(
-        f"[beats_to_voice] Listening on {trigger_subject} → publishes to {NATS_SUBJECT}\n"
-    )
     try:
+        async def _handler(msg) -> None:
+            try:
+                data = json.loads(msg.data.decode("utf-8"))
+                text = data.get("response_text") or data.get("text", "")
+                aid = data.get("user_id") or agent_id
+                if not text:
+                    return
+                sys.stderr.write(
+                    f"[beats_to_voice] Trigger received agent={aid} len={len(text)}\n"
+                )
+                results = run_pipeline(text=text, voice=voice, agent_id=aid, flute_url=flute_url)
+                cgp = results.get("cgp_packet", {})
+                if cgp:
+                    await nc.publish(NATS_SUBJECT, json.dumps(cgp).encode("utf-8"))
+                    sys.stderr.write(f"[beats_to_voice] CGP published to {NATS_SUBJECT}\n")
+            except Exception as e:
+                sys.stderr.write(f"[beats_to_voice] Handler error: {e}\n")
+
+        await nc.subscribe(trigger_subject, cb=_handler)
+        sys.stderr.write(
+            f"[beats_to_voice] Listening on {trigger_subject} → publishes to {NATS_SUBJECT}\n"
+        )
         while True:
             await asyncio.sleep(1)
     except (KeyboardInterrupt, asyncio.CancelledError):
+        pass
+    finally:
         await nc.drain()
 
 
