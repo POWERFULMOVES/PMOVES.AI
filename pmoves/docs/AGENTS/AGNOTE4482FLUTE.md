@@ -170,3 +170,34 @@ Why a separate scope: `.claude/context/` is fenced by the damage-control hook (r
 ◆ Claude Opus | #7C3AED | 2026-04-26 | AGNOTE4482FLUTE expanded from 4-line seed
 Resonance: prosodic-bridge, well-being-matrix, chakra-encoder, voice-synthesis
 Seed-respect: original 3 brainstorm lines preserved verbatim in `## Seed` section.
+
+---
+
+## Geometry Bridge (#1397) — shipped 2026-04-27
+
+Mirror-lane delivery of the highest-leverage gap from PR #1401 §3.1: Flute now publishes voice synthesis events on **two** subjects in parallel.
+
+| Subject | Layer | Payload | Producer | Default consumers |
+|---|---|---|---|---|
+| `tokenism.geometry.event.v1` | Legacy raw event (unchanged) | Flat dict: `{namespace, modality, provider, text_length, audio_duration_seconds, voice, ts}` | Flute (existing) | tokenism (legacy attribution) |
+| `geometry.cgp.v1` | Canonical CGP v0.2 packet (new) | `{spec: "chit.cgp.v0.2", super_nodes:[...], points:[{modality:"voice_synthesis", ...}], sig:{alg, kid, hmac}}` | Flute (new, via `geometry_bridge.py`) | graphiti, matrix monitor, cymatic visualizer, persona signature broadcast |
+
+**Feature flags:**
+- `FLUTE_CGP_SUBJECT` — default `geometry.cgp.v1`
+- `FLUTE_GEOMETRY_DUAL_PUBLISH` — default `true` (kill-switch: `false` skips canonical publish only, legacy still emits)
+- `CHIT_PASSPHRASE` — required for HMAC signing; missing → unsigned + warning (dev-mode pattern matches `sign_trail`)
+
+**Code:** `pmoves/services/flute-gateway/geometry_bridge.py` (`GeometryBridge.encode_packet` + `verify_packet`), `pmoves/services/flute-gateway/chit_signing.py` (vendored signer, byte-equivalent to `pmoves.tools.chit_security`).
+
+**Drift guard:** `tests/test_geometry_bridge.py::test_sign_byte_equivalence_with_canonical` — fails if the vendored signer ever diverges from the canonical surface.
+
+**Metrics:** `flute_chit_cgp_published_total{subject}` Counter incremented on every canonical publish. `flute_chit_events_failed_total{reason}` gained `legacy_publish_failed` and `cgp_publish_failed` labels.
+
+**Out of scope (next PRs):**
+- Flute consuming inbound `geometry.cgp.v1` from other services (subscribe-side handler)
+- Deprecation timeline for `tokenism.geometry.event.v1` (post-consumer-migration audit)
+- #1398 chakra encoder + #1399 breath generator (independent low-cost wins)
+
+◆ Claude Opus | #7C3AED | 2026-04-27 | Geometry Bridge (#1397) shipped — dual-publish, signed CGP v0.2, 19 tests green
+Resonance: geometry-bus, dual-publish-migration, hmac-sign-verify, drift-guard
+Mirror-lane: shipped per PR #1401 §3.1 / §3.2 recommendation; z890's authoring lane untouched.
