@@ -44,6 +44,8 @@ PMOVES uses a Known Roads model: every dangerous-but-necessary operation has a c
 | `netsh interface portproxy` | `make -C pmoves z890-host-setup` | — |
 | `gh workflow run sync-secrets-local` | `make -C pmoves secrets-sync-trigger` | `/deploy:secrets-funnel` |
 | `docker compose build flute-gateway` | `make -C pmoves up-flute-gateway` | `/voice:status` |
+| `docker compose up ffmpeg-whisper` (mic STT, narrower than `up-yt`) | `make -C pmoves up-ffmpeg-whisper` | `/voice:status` |
+| `docker compose up voice-relay` (NATS bridge for mic chain) | `make -C pmoves up-voice-relay` | `/voice:status` |
 | `docker compose build hi-rag-gateway-v2` | `make -C pmoves up-hirag` | `/search:hirag` |
 | `tailscale status` (raw IPs) | `make -C pmoves fleet-status` | `/fleet:status` |
 | RustDesk deep diagnostics | `make -C pmoves fleet-status` + `pmoves/docs/operations/RUSTDESK_SELF_HOSTED.md` | `/fleet:rustdesk-check` |
