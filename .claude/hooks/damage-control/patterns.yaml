@@ -1005,6 +1005,9 @@ chitSafePaths:
   # Infrastructure compose files (PR #1347 fixes: MINIO_IMAGE env var)
   - "pmoves/docker-compose.core.yml"
   - "pmoves/docs/CONCH_INTEGRATION_MAP.md"
+  # A2A activation — add A0_SET_a2a_server_enabled + MCP_SERVER_TOKEN to agent-zero overlays
+  # (fix/a2a-activation-and-gitlink-rewind: enable A2A server endpoint for agent-card discovery)
+  - "pmoves/docker-compose.agents.yml"
 
 # ---------------------------------------------------------------------------
 # PMOVES.AI - GIT SUBMODULES
