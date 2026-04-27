@@ -74,8 +74,12 @@ sudo bash deploy/provision/build-usb.sh \
   --autoinstall=deploy/provision/autoinstall/pve-cluster-node.toml \
   --device=/dev/sdc \
   --hostname=pmoves-pve-01 \
+  --generate-root-password \
   --ssh-keys-from-github=POWERFULMOVES
 ```
+
+The generated Proxmox root password is written to `./root-password-<timestamp>.txt` in
+the directory where you run the command. Record it, then delete the file.
 
 Use `--dry-run` first to validate; the script refuses to write to devices >512 GB
 unless you pass `--allow-large-device --yes-really` (protects the 4 TB external).
