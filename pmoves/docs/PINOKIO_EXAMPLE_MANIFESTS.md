@@ -188,7 +188,7 @@ SUPABASE_SERVICE_ROLE_KEY=eyJxxx
 # -----------------------------------------------------------------------------
 # NATS Event Bus (optional)
 # -----------------------------------------------------------------------------
-NATS_URL=nats://localhost:4222
+NATS_URL=nats://nats:pmoves@nats:4222
 
 # -----------------------------------------------------------------------------
 # MCP Servers (optional - for tool discovery)

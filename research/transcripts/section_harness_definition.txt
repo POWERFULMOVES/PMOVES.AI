@@ -1,0 +1,90 @@
+prompt engineering is a part of context
+engineering. So it's it's a evolution
+where it builds on top of itself.
+And so this year we have evolved to
+harness engineering. And this is what
+Archon is all about. So harness
+engineering can mean a lot of different
+things, but in essence, a harness is a
+layer on top of the coding agent. It's
+the tooling and the process that you
+build on top of the coding agent to make
+it more reliable and basically taking
+your whole you know, process for
+building software
+and you know, building the the layer on
+top of the coding agent where you
+enforce that process. So a lot of
+different strategies out there like B
+Mad and GitHub Spec Kit and GSD, you
+could consider them harnesses because
+you're you're wrapping the coding agent
+with this higher level layer of your
+strategy for engineering. And we have a
+Stripe Minions. The Ralph Loop is a
+harness. Anthropic has open sourced
+quite a few harnesses. I've covered some
+on my channel.
+Really every single big company is
+converging on the idea of harnesses.
+Instead of focusing on making the model
+better or making the tool better like
+the coding agent better, it's it's all
+about like how do we create the system
+that wraps the coding agent, right?
+And so there's a lot of studies that
+have been done that have shown like even
+if you are using the exact same model,
+you're not improving underlying model or
+tool, you can go from a 6.7% pull
+request acceptance rate to almost 70%
+and the only thing is the harness. So
+building in your strategies around
+context curation and validation and your
+approach for planning, right? Like we'll
+talk about all that today when we cover
+building harnesses with Archon, but it's
+a big deal. Like maybe you guys heard of
+Stripe Minions. This went like super
+viral last month because Stripe
+they built their own internal harness.
+It's kind of like a more powerful
+version of the Ralph Loop that allows
+them to ship 1300 AI only generated pull
+requests every single week. And like
+Claude Code itself is starting to build
+a lot of harness into the tool. So not
+just calling the coding agent, you know,
+calling the LLM with the coding agent,
+but how can we like orchestrate many
+different Claude Code sessions together?
+So like Claude Code has support for
+agent teams. They're doing a ton of sub
+agents right now. So when they had their
+source code leak last month,
+it was shown that like 60% of the code
+is still like wrapping the underlying
+model itself like Sonnet and Opus and
+Haiku,
+but then 40% of their code is with these
+more like harness features like agent
+teams. And so all that to say, it's the
+direction that all of these companies
+are heading where they're building
+harnesses. The coding tools themselves
+are building this. All of the biggest
+companies like uh Stripe and Shopify and
+AWS, they're all building their own
+internal harnesses.
+But the problem with all these harnesses
+is they're not open-source and they're
+not custom to you.
+What if you want to take your software
+development life cycle, your process for
+working with AI coding assistance, and
+what if you want to package it up into
+your own harness? Well, that is the
+value proposition of Arkon. Arkon is the
+harness builder. So for the first time
+ever, we have an open-source platform
+that makes it easy for you to build your

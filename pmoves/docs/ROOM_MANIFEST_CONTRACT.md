@@ -23,7 +23,7 @@ Without a room manifest:
 
 ## Contract Model
 ### 1. Room
-A room is the agent-facing operating shell.
+A room is the audience-facing topology — the entrypoint through which users (human or agent) access the platform's capabilities.
 
 It owns:
 - shell theme and layout
@@ -68,7 +68,7 @@ A binding answers:
 ## Core Rules
 1. Room owns presentation and session ergonomics; notebook owns durable state.
 2. Skills never bind directly to raw UI assumptions; they bind to declared surfaces and action namespaces.
-3. Persona and alter selection may change room defaults, but should not fork the contract shape.
+3. Suits and personas are runtime overlays on the platform — they control appearance, voice, and model routing within a room, but do not define the platform's topology or contract shape. The platform exists before any suit is applied.
 4. Skills may write back into notebook state only through declared targets.
 5. Room policy must remain compatible with PMOVES model routing, Graphiti, and CHIT rails.
 6. Rooms should be additive overlays, not hard forks of upstream interface systems.
@@ -99,6 +99,7 @@ The room manifest declares:
 - notebook: provider, workspace/thread refs, sync mode
 - skill bindings: room-local binding records
 - policies: model routing, publish policy, memory policy
+- stage: current lifecycle state (`rehearsal` | `live` | `review` | `archive`)
 - telemetry/provenance: optional observability and trace context
 
 ## Skill-to-Room Binding Model

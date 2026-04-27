@@ -107,7 +107,7 @@ class EventBus:
         )
     """
 
-    def __init__(self, nats_url: str = "nats://localhost:4222", use_jetstream: bool = False):
+    def __init__(self, nats_url: str = "nats://nats:pmoves@nats:4222", use_jetstream: bool = False):
         """
         Initialize event bus.
 
@@ -544,7 +544,7 @@ _bus: Optional[EventBus] = None
 _bus_lock = asyncio.Lock()
 
 
-async def get_event_bus(nats_url: str = "nats://localhost:4222") -> EventBus:
+async def get_event_bus(nats_url: str = "nats://nats:pmoves@nats:4222") -> EventBus:
     """
     Get or create singleton event bus instance.
 

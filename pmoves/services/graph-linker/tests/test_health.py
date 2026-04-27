@@ -17,7 +17,7 @@ def healthy_client():
         mock_settings.return_value = Settings(
             neo4j_url="bolt://localhost:7687",
             neo4j_password="test",
-            nats_url="nats://localhost:4222",
+            nats_url="nats://nats:pmoves@nats:4222",
         )
         neo4j_inst = MagicMock()
         neo4j_inst.connect = AsyncMock()
@@ -43,7 +43,7 @@ def degraded_client():
         mock_settings.return_value = Settings(
             neo4j_url="bolt://localhost:7687",
             neo4j_password="test",
-            nats_url="nats://localhost:4222",
+            nats_url="nats://nats:pmoves@nats:4222",
         )
         neo4j_inst = MagicMock()
         neo4j_inst.connect = AsyncMock()

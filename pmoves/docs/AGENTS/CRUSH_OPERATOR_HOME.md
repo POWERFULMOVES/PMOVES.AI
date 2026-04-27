@@ -104,7 +104,7 @@ When Crush completes significant work, write a graphiti block in `docs/AGENT_TRA
 | `CRUSH.md` | Playbook — quick start and configuration guide |
 | `docs/AGENT_TRAIL.md` | Living trail of all agent contributions |
 | `pmoves/docs/AGENTS/AI_GRAPHITI_PROTOCOL.md` | Full protocol specification |
-| `pmoves/config/agent_signatures.yaml` | Visual identity registry (7 contributors) |
+| `pmoves/config/agent_signatures.yaml` | Visual identity registry (13 contributors) |
 | `pmoves/config/agent_registry.yaml` | Runtime agent registry |
 | `pmoves/contracts/schemas/crush/graphiti.discovered.v1.schema.json` | Discovery event schema |
 | `pmoves/tools/crush_configurator.py` | Config generator (injects Graphiti context) |

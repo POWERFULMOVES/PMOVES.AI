@@ -1,6 +1,6 @@
 # PMOVES Agent Topology & TAC Tree
 
-_v1.5.0 (71 agents; exact count varies per latest agent_registry.yaml scan) — Last updated: 2026-04-19_
+_v1.5.0 (76 agents; exact count varies per latest agent_registry.yaml scan) — Last updated: 2026-04-19_
 
 Visual topology of the PMOVES.AI agent ecosystem. All diagrams are derived from the single source of truth at `pmoves/config/agent_registry.yaml` and can be regenerated with:
 

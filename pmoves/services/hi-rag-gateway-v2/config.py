@@ -61,6 +61,7 @@ from urllib.parse import quote_plus, urlparse
 # Environment variables
 # ---------------------------------------------------------------------------
 QDRANT_URL = os.environ.get("QDRANT_URL", "http://qdrant:6333")
+QDRANT__API_KEY = os.environ.get("QDRANT__API_KEY", "")
 COLL = os.environ.get("QDRANT_COLLECTION", "pmoves_chunks_qwen3")
 MODEL = os.environ.get("SENTENCE_MODEL", "all-MiniLM-L6-v2")
 # EMBEDDING_MODEL can override MODEL for embedding-specific selection.

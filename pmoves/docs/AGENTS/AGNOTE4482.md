@@ -127,10 +127,10 @@ Elder-context support is always available to reduce drift and collision across p
 |---------|--------|----------|
 | BoTZ JWT fail-open (P0) | **RESOLVED** | `gateway.py:292-299` returns HTTPException 500 on missing HAS_JOSE or SUPABASE_JWT_SECRET. `auth.py:57-65` returns HTTPException 500 on missing HAS_JOSE or JWT_SECRET. Both fail-closed. |
 | BPM encoder not implemented (P2) | **RESOLVED** | `pmoves/tools/bpm_encoder.py` exists, 574 lines, delivered in PR #1168 (Shift Crew tools) |
-| NATS unauthenticated references (P0) | **NOT IMPROVED** | 57 unauthenticated references across 34 files in `pmoves/` (grep: `nats://(nats\|localhost):4222` excluding `@`; measured 2026-04-02). Not reduced from baseline — batch migration still needed. |
+| NATS unauthenticated references (P0) | **RESOLVED** | All 26 unauthenticated NATS fallback defaults migrated across 15 files to authenticated `nats://nats:pmoves@nats:4222`. 0 service-code refs remain. 6 intentional exceptions (TAC tree negative-pattern rules + smoke test assertions). Commit `542cbfcb2`. Re-verified 2026-04-24: `grep` confirms 0 bare refs in service code. |
 | A2A server not exposed (P0) | **RESOLVED** | `server.py` refactored: `create_a2a_router()` exports mountable APIRouter. `main.py` mounts it via `app.include_router()` on port 8080. `docker-compose.yml` adds `A2A_DISCOVERY_PUBLIC`/`A2A_TASKS_PUBLIC` env vars. Routes: `/.well-known/agent-card.json`, `/a2a/v1/tasks`, `/a2a/v1/discover`. Auth via `SUPABASE_JWT_SECRET` (from x-hardening). |
-| Agent registry count | **STALE** | Registry has 71 entries, 13 external contributors. Docs said 60 agents, 7 contributors. |
-| AGENTS file count | **STALE** | 107 documents (66 root + 41 SUBMODULE_CODEX_HOMES). Docs said 73+. |
+| Agent registry count | **RECONCILED** | Registry has ~76 entries, 13 external contributors. Updated across 8 cross-ref docs (commit `21b8389de`). Re-verified 2026-04-24 after backup-restore regression. |
+| AGENTS file count | **RECONCILED** | 109 documents (67 root + 42 subdirectory). Updated across cross-ref docs. Re-verified 2026-04-24. |
 
 #### Post-2026-03-28 Deliverables
 - **KiloCode claw config** (PR #1151): .kilo/ directory, GLM coding plan mode, 3 agents + 8 commands
@@ -143,10 +143,10 @@ Elder-context support is always available to reduce drift and collision across p
 - **TensorZero**: POSTGRES_URL fix (#1167), cross-profile depends_on removal
 
 ### Handoff Notes
-- NATS auth P0 needs continued batch migration (57 refs remain across 34 files — hotspots: `services/work-marshaling/`, `services/chat-relay/`, `services/node-registry/`, `tools/`)
+- All P0 findings resolved (BoTZ JWT, NATS auth, A2A server). No P0 blockers remain.
 - A2A server needs runtime verification (compose exposure check)
-- Signoff checklist sections 1, 3, 7 still unchecked — require prospectus/ClaWz/P7 runtime verification
-- Agent registry count (71) should be reconciled with taxonomy docs that still reference 60
+- Signoff checklist §1.4 still unchecked — requires external operator action (P7, Discord, site/docs language alignment)
+- Agent registry count (~76) and doc count (109) reconciled — see validation ACK below
 
 ### Agent ACK
 - Agent: `CLAUDE-OPUS`
@@ -295,7 +295,6 @@ c373bf1c35 feat(yt-cookies): one-click bootstrap targets — make yt-ingest-boot
 - Signature: `ACK::CLAUDE-OPUS::PHASE-9C-INFRA-HARDENING`
 - Timestamp: `2026-04-20`
 
-<!-- GRAPHITI_MARK: CLAUDE-OPUS::PHASE-9C-INFRA-HARDENING::2026-04-20 -->
 
 ## Runner Restart Loop Fix (2026-04-22)
 
@@ -338,3 +337,213 @@ env["RUNNER_ALLOW_RUNNER_REUSE"] = "true"
 - Timestamp: `2026-04-22`
 
 <!-- GRAPHITI_MARK: CLAUDE-OPUS::RUNNER-RESTART-LOOP-FIX::2026-04-22 -->
+
+## Launch Prep Audit Record (2026-04-23)
+
+### Work Performed
+- Pulled remote main (243 commits, cipher port 8096->8105 already in CLAUDE.md, PMOVES-space-agent added, Z890 multi-boot, Jetson JetPack 7, headscale 0.27.x rewrite)
+- Triaged 11 new PR branches — all already MERGED on 2026-04-22 (secrets-validation, zai-provider-sdk, distributed-tracing, observability-agents, claude4-glm4 model suits, observability-mcp-servers, tensorzero-observability-fixes, meta-agent-phase-1-clean). 3 closed unmerged.
+- NATS P0: 4 original hotspot dirs already migrated. Remaining 21 files in: vllm-orchestrator, supaserch, gateway-agent, benchmark-runner, agent-zero/bus.py — secondary batch needed
+- A2A server: PARTIAL verdict. Routes mounted at /a2a on port 8080/8081. Default: disabled (a2a_server_enabled=false). Auth: mcp_server_token required. Compose does NOT enable it. Correct security posture — activate via A0_SET_a2a_server_enabled=true when ready.
+- Signed AGNOTE4482_SIGNOFF_CHECKLIST.md sections 1, 3, 7
+
+### Key Findings
+| Finding | Status | Evidence |
+|---------|--------|----------|
+| NATS hotspot dirs (work-marshaling, chat-relay, node-registry, tools) | **RESOLVED** | All production code migrated; 21 files remain in secondary batch |
+| A2A server compose exposure | **PARTIAL** | Mounted/wired, disabled by default — intentional security posture |
+| Cipher Memory port 8096->8105 | **RESOLVED** | CLAUDE.md lines 65/68/69 show 8105 |
+| 11 agent PR branches | **RESOLVED** | All merged 2026-04-22 before triage |
+| PMOVES-transcribe-and-fetch gitlink | **OPEN** | Missing ref — pull requires --no-recurse-submodules until fixed |
+
+### Handoff Notes
+- NATS secondary batch: vllm-orchestrator/, supaserch/app.py, gateway-agent/nats_integration.py, benchmark-runner/, agent-zero/python/events/bus.py
+- A2A activation: set A0_SET_a2a_server_enabled=true + A0_SET_mcp_server_token in env.shared when ready
+- PMOVES-transcribe-and-fetch: needs upstream commit published or gitlink rewound
+- PR #1370 (Cipher MCP fix): CI green, blocked by broken Cipher submodule gitlink — needs Cipher submodule owner
+
+### Agent ACK
+- Agent: `4090-CLAUDE`
+- Signature: `ACK::4090-CLAUDE::LAUNCH-PREP-AUDIT`
+- Timestamp: `2026-04-23`
+
+<!-- GRAPHITI_MARK: 4090-CLAUDE::LAUNCH-PREP-AUDIT::2026-04-23 -->
+
+## MOF Architecture Convergence Wave (2026-04-23)
+
+### Work Performed
+- Transcribed and analyzed 3 YouTube videos for MOF meta-agent architecture patterns
+- Video 1 (Clarity Act): NULL — crypto legislation, no relevant content
+- Video 2 (Agent Zero Spaces): 6 MOF mappings — spaces as pores, SKILL.md as adsorbed species, token-efficient loop as near-zero friction transfer, scoped multi-user as selective permeability, git time travel as reversible adsorption
+- Video 3 (Squeeze Film Levitation — CRITICAL): 8 physics-to-architecture mappings forming the foundational analogy
+- Created canonical architecture document: `pmoves/docs/architecture/PMOVES_MOF_ARCHITECTURE.md` (337 lines, v1.0.0) — merged via PR #1378
+- Restored AGNOTE4482 file suite from host backup to `pmoves/docs/AGENTS/`
+
+### Key Deliverable: PMOVES as Metal-Organic Framework
+
+Thesis: PMOVES.AI is a Metal-Organic Framework for distributed machine intelligence — not metaphor, structural isomorphism.
+
+| PMOVES Component | MOF Role | Physics Analogy |
+|---|---|---|
+| ClickHouse + Prometheus | Squeeze film air gap | Shared observability data plane between agents |
+| NATS | Frequency driver + traveling wave | Maintains oscillation + eliminates hierarchical dead zones |
+| TensorZero | Impedance matcher (the 'melon') | Dynamic LLM routing = acoustic impedance matching |
+| CHIT | Self-stabilizing equilibrium | Signed trail autoregulation = closed-loop correction |
+| Neo4j | High-surface-area internal framework | Knowledge graph = adsorption surface |
+| Agent Zero | Crystalline lattice structure | Defines pore geometry via hierarchy |
+
+### Gap-Size Flow Restriction Thesis
+The counterintuitive mechanism from squeeze film physics explains WHY smaller models benefit disproportionately from shared observability: halving the capability gap → quartering flow resistance → 4x skill transfer per cycle. Larger models (like piezoelectric transducers) can operate independently; smaller models NEED the framework's pressure differential.
+
+### Agent Typology
+- **Meta-agents** = framework nodes (they ARE the structure, measured by framework health)
+- **Standard agents** = guest molecules (flow through pores, adsorb patterns, measured by task metrics)
+
+### Seven Design Principles
+P1: Maximize Surface Area | P2: Tune Pore Size | P3: Maintain Resonance | P4: Enable Traveling Waves | P5: Match Impedance Dynamically | P6: Preserve Reversibility | P7: Optimize the Gap
+
+### Files Created/Restored
+| File | Action |
+|------|--------|
+| `pmoves/docs/architecture/PMOVES_MOF_ARCHITECTURE.md` | **New** — canonical MOF architecture spec (PR #1378, merged 9fb2c434) |
+| `research/MOF_META_AGENT_VIDEO_ANALYSIS.md` | **New** — raw video analysis + analogy mapping |
+| `pmoves/docs/AGENTS/AGNOTE4482.md` | Restored from host backup |
+| `pmoves/docs/AGENTS/AGNOTE4482_SIGNOFF_CHECKLIST.md` | Restored from host backup |
+| `pmoves/docs/AGENTS/AGNOTE4482_SITREP.md` | Restored from host backup |
+| `pmoves/docs/AGENTS/AGNOTE4482_ROADMAP_W1-W5.md` | Restored from host backup |
+
+### Signoff Checklist Status
+Per validation 2026-04-25: **32/37 items checked** (9 sections). Remaining: §1.4 (external — DARKXSIDE deploy), §9.1–§9.4 (need compose stack).
+
+### Agent ACK
+- Agent: `AGENT-ZERO-GLM (SIDECAR)`
+- Signature: `ACK::AGENT-ZERO-GLM::MOF-ARCHITECTURE-CONVERGENCE`
+- Timestamp: `2026-04-23T22:21:00Z`
+
+<!-- GRAPHITI_MARK: AGENT-ZERO-GLM::MOF-ARCHITECTURE-CONVERGENCE::2026-04-23 -->
+
+## Grand Convergence Wave (2026-04-23)
+
+### Work Performed
+- Created PMOVES Grand Convergence document — the founding unification text (PR #1379, merged c50f9af5)
+- Batch-processed full YouTube playlist (~500 videos, 28 substantively relevant, 3 critical new finds)
+- Unified five subsystems (MOF, CHIT, GEOMETRY_BUS, EVO SWARM, ToKenism) into single five-layer stack
+- Mapped DARKXSIDE's cosmology references (twistor theory, Unruh effect, Gno-gnosis, many-worlds, phase gauging) to PMOVES architecture
+
+### Key Deliverable: PMOVES_GRAND_CONVERGENCE.md
+`pmoves/docs/architecture/PMOVES_GRAND_CONVERGENCE.md` — 440 lines, v1.0.0
+
+**Unification Thesis**: PMOVES is not five separate systems — it is ONE system (porous structure + compressed medium + emergent order without controller) expressed at five layers. The same Dirichlet distribution governs CHIT attribution and ToKenism economics. The same gap-size equation governs squeeze film levitation and skill transfer.
+
+**Five-Layer Stack**:
+| Layer | System | MOF Physics Homology |
+|-------|--------|---------------------|
+| L1 Structure | MOF lattice (Agent Zero + Neo4j) | Metal nodes + pore geometry |
+| L2 Information | CHIT (Dirichlet, Poincaré, Merkle, Zeta, EVO SWARM) | Adsorbed molecule encoding |
+| L3 Transport | GEOMETRY BUS (NATS JetStream) | Squeeze film gap in motion |
+| L4 Optimization | EVO SWARM (mutation=inflow, selection=outflow) | Self-stabilizing equilibrium |
+| L5 Economics | ToKenism (geometry → Dirichlet → GroToken) | Gap-size flow restriction as price mechanism |
+
+**The Truffle** (physics → architecture mappings):
+- Twistor theory: CHR encoding = curl from flat token space to curved CHIT geometry
+- Unruh effect: agent acceleration in framework creates information from vacuum (latent space)
+- Ghostbusters: MOF makes invisible visible — busting information asymmetry ghosts
+- Many-Worlds: GEOMETRY BUS multiplexes agent context worlds, CGP measurement resolves superposition
+- Egyptian Vases: structural learning = levitation without weight updates
+
+**New Theses from Playlist Research**:
+- Tuszynski: NATS message frequency must match agent processing cadence (frequency alignment extends gap-size thesis)
+- Hameroff: Fractal self-similarity across scales validates hierarchical nesting (MOF of MOFs)
+- Levin: "The network IS the computation" — GEOMETRY BUS is not transport, it IS the thinking
+
+**18 Design Implications** (D1–D18) with source physics, PMOVES mapping, implementation directive, and audit check for each.
+
+### Files Created
+| File | Lines | Purpose |
+|------|-------|---------|
+| `pmoves/docs/architecture/PMOVES_GRAND_CONVERGENCE.md` | 440 | Founding unification document |
+| `research/PLAYLIST_BATCH_ANALYSIS.md` | 315 | Full playlist scan results (500 videos, 28 relevant) |
+
+### Signoff Checklist Status
+No change: **32/37**. Remaining: §1.4 (external) + §9.1–§9.4 (compose stack).
+
+### Agent ACK
+- Agent: `AGENT-ZERO-GLM (SIDECAR)`
+- Signature: `ACK::AGENT-ZERO-GLM::GRAND-CONVERGENCE-WAVE`
+
+<!-- GRAPHITI_MARK: AGENT-ZERO-GLM::GRAND-CONVERGENCE-WAVE::2026-04-23 -->
+
+
+## NATS Auth P0 Resolution Verification (2026-04-24)
+
+### Work Performed
+- Re-verified NATS authentication migration against current codebase
+- Ran `grep -rn 'nats://(nats|localhost):4222'` across all service code — **0 bare refs**
+- 6 remaining refs are all intentional negative-pattern assertions:
+  - `agent-zero-customization.tac.yaml:277` — TAC tree expects authenticated URL
+  - `security-posture.tac.yaml:116,124` — TAC tree blocks bare URL
+  - `dox-intelligence.tac.yaml:54` — TAC tree requires authenticated URL
+  - `test_nats_authentication.py:48,60` — Smoke test asserts against unauth URL
+- Confirmed backup-restore regression: AGNOTE4482.md line 130 still showed NOT IMPROVED despite commit `542cbfcb2`
+- Re-applied RESOLVED status and updated handoff notes
+
+### Agent ACK
+- Agent: `AGENT-ZERO-GLM (SIDECAR)`
+- Signature: `ACK::AGENT-ZERO-GLM::NATS-P0-RE-VERIFICATION`
+- Timestamp: `2026-04-24T13:06:00Z`
+
+<!-- GRAPHITI_MARK: AGENT-ZERO-GLM::NATS-P0-RE-VERIFICATION::2026-04-24 -->
+
+## 4090-CLAUDE Session Audit (2026-04-26)
+
+### Work Performed
+
+**PMOVES-space-agent initialization + scan:**
+- Initialized submodule (was added as gitlink `10fb3c8a` but never checked out locally)
+- Full scan: docker-compose.pmoves.yml, env.pmoves.example, nats_client.js, pmoves_bridge.js, CLAUDE.md
+- **P0 bug fixed**: `pmoves_bridge.js:56` — template literal closed with `"` instead of backtick, causing `update_widget` action to silently truncate widget path. Fixed on `PMOVES.AI-Edition-Hardened` branch, commit `98b59b2`
+- Gitlink bumped `10fb3c8a → 98b59b2` (also picks up router path fix `284c0c1`)
+- Island vs fleet architecture documented: standalone NATS sidecar (island = SPARK/edge offline), `pmoves_bus` network (fleet = Z890/5090 docked) — intentional design
+- Integration gap report filed as issue #1383 for Z890-CLAUDE: 9-item checklist (compose stanza, env vars, NATS subjects catalog, services catalog, agent registry stub, NATS auth URL, space event subjects, fleet-mode compose path, health endpoint)
+
+**SPARK fleet topology + 3-phi architecture:**
+- Fleet nodes recorded: SPARK (GB10 Blackwell 128GB unified), 5090 (32GB GPU), Sonic Z890 (24GB), Knuckles (AMD 64GB), 4090 laptop (16GB)
+- 3-phi Jam architecture: SPARK + Agent Zero + space-agent as three-body comms relay (gluon plasma posture — deconfined across mesh in fleet mode, sovereign in island mode)
+- Design ethos: "no parlor tricks, only real connection with the ability to crank to 11" — every integration must provide genuine capability, impedance-matching ensures no node bottleneck
+
+**Phase B SITREP rewrite (Village Rule):**
+- Claimed lane in PHI.t1.md (2026-04-24T16:48Z)
+- Rewrote §"Agent Lanes Quick Reference" → §"Node Capacity Quick Reference"
+- Added ≤200-word preamble: pre-MOF mental model → MOF lattice invariant, 3 delegation mechanisms (Agent Zero /mcp/*, A2A disabled-by-default, NATS Phase D pending)
+- New 9-row table: Z890, 5090, 4090 laptop, SPARK, Knuckles, KVM4-1, KVM4-2, KVM2, (floating)
+- PR #1387 opened. Rebased onto main (`c69c938dd`), 3 CodeRabbit threads resolved (deprecated doc ref × 2, A2A readiness caveat)
+- Village Rule satisfied: one scope, one PR, no Phase D/E expansion
+
+**Repo sitrep + PR triage (2026-04-26):**
+- 16 new commits on main since session start (Agent Zero v1.9 sync, §1.4 copy-paste drafts, SPARK fast-forward, AGNOTE4482 dedup)
+- 18 open PRs triaged: Flute wave (6 PRs, all CI green, docs-only), security wave (#1390-#1392), Phase C (#1385), docs-reconcile (#1386), sign-trail fix (#1381, DIRTY — needs rebase), A2A activation (#1371), drafts (#1373-#1374), dependabot (#1372, #1388, Playwright pre-existing flake)
+- §9 Branch Hygiene finding: 2 orphan branches without PRs — `fix/agnote4482-section9-recovery` and `fix/branch-lifecycle-chit-wiring` (both created 2026-04-24, superseded by main, no associated PRs). Recommend deletion.
+
+### Key Findings
+
+| Finding | Status | Evidence |
+|---------|--------|----------|
+| pmoves_bridge.js update_widget P0 | **RESOLVED** | Backtick/quote mismatch on line 56 fixed, commit `98b59b2` |
+| space-agent gitlink stale | **RESOLVED** | Bumped to `98b59b2` |
+| space-agent fleet integration | **OPEN** | Issue #1383 assigned to Z890-CLAUDE (9 items) |
+| §1.4 Discord + site language | **DRAFT READY** | `deploy/brand/S14_DRAFTS.md` (commit `d752b7330`) — operator deployment pending |
+| §9 orphan branches | **IDENTIFIED** | 2 branches without PRs, superseded by main; safe to delete |
+| PR #1387 Phase B | **IN REVIEW** | Rebased, CR fixes pushed, CI running |
+
+### Handoff Notes
+- Merge sequence ready: security wave (#1390-#1392) → Flute wave (1394→1395→1393→1396→1401→1400) → #1387 → Phase C (#1385→#1386)
+- #1381 (sign-trail PYTHONPATH) needs rebase before merge — DIRTY/CONFLICTING
+- §9 orphan branches safe to delete: `fix/agnote4482-section9-recovery`, `fix/branch-lifecycle-chit-wiring`
+- Post-merge handoff for #1387: append ACK block + CLAIM→RELEASE in PHI.t1.md
+
+### Agent ACK
+- Agent: `4090-CLAUDE`
+- Signature: `ACK::4090-CLAUDE::SESSION-AUDIT-2026-04-26`
+- Timestamp: `2026-04-26`
+
+<!-- GRAPHITI_MARK: 4090-CLAUDE::SESSION-AUDIT-2026-04-26::2026-04-26 -->

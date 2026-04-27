@@ -1,14 +1,14 @@
 # PMOVES.AI Agents Documentation
 
 **Last updated:** 2026-04-01
-**Files:** 107 documents across 7 tiers (66 root + 41 SUBMODULE_CODEX_HOMES)
-**Registry:** 71 agents in `pmoves/config/agent_registry.yaml` (taxonomy v1.4.0)
+**Files:** 109 documents across 7 tiers (67 root + 41 SUBMODULE_CODEX_HOMES)
+**Registry:** 76 agents in `pmoves/config/agent_registry.yaml` (taxonomy v1.4.0)
 
 ---
 
 ## Start Here
 
-1. **[agent_registry.yaml](../../config/agent_registry.yaml)** — Single source of truth for all 71 agents (class, type, port, NATS, CHIT toggles)
+1. **[agent_registry.yaml](../../config/agent_registry.yaml)** — Single source of truth for all 76 agents (class, type, port, NATS, CHIT toggles)
 2. **[PMOVES_AGENT_CLASS_TAXONOMY.md](./PMOVES_AGENT_CLASS_TAXONOMY.md)** — 4 classes (legendary/standard/specialized/utility), 7 service tiers, evolution stages
 3. **[AGENT_TAXONOMY_CROSS_REFERENCE.md](./AGENT_TAXONOMY_CROSS_REFERENCE.md)** — Maps 18 documents with change-impact matrix
 4. **[IMPLEMENTATION_GAP_ANALYSIS.md](./IMPLEMENTATION_GAP_ANALYSIS.md)** — What's built vs. what's planned
@@ -62,7 +62,7 @@ Foundation documents defining the agent classification system.
 | File | Purpose |
 |------|---------|
 | [PMOVES_AGENT_CLASS_TAXONOMY.md](./PMOVES_AGENT_CLASS_TAXONOMY.md) | Class definitions, evolution stages, layer model (v1.5.0) |
-| [PMOVES_UNIFIED_AGENT_TAXONOMY.md](./PMOVES_UNIFIED_AGENT_TAXONOMY.md) | Unified view across all 71 agents |
+| [PMOVES_UNIFIED_AGENT_TAXONOMY.md](./PMOVES_UNIFIED_AGENT_TAXONOMY.md) | Unified view across all 76 agents |
 | [PERSONAS.md](./PERSONAS.md) | Persona framework: schema, inheritance, CHIT attribution, 325+ catalog vision |
 | [PMOVES_AGENT_TOPOLOGY.md](./PMOVES_AGENT_TOPOLOGY.md) | Network topology and inter-agent communication patterns |
 
@@ -85,7 +85,7 @@ Machine-readable configuration referenced by scripts and services.
 
 | File | Location | Purpose |
 |------|----------|---------|
-| `agent_registry.yaml` | `pmoves/config/` | Single source of truth (71 agents) |
+| `agent_registry.yaml` | `pmoves/config/` | Single source of truth (76 agents) |
 | `model_strengths.yaml` | `pmoves/config/` | Model capability ratings for routing |
 | `skill-pairings.yaml` | `pmoves/configs/` | 7 FlOO$ skill pairings with dependencies |
 
@@ -184,7 +184,7 @@ Strategic and theoretical foundations (preserve as-is, no regular updates needed
 
 ## Quick Links
 
-- **Agent count:** 71 registered agents (+ 13 external contributors) (`python -m pmoves.tools.agent_taxonomy_helper list`)
+- **Agent count:** 76 registered agents (+ 13 external contributors) (`python -m pmoves.tools.agent_taxonomy_helper list`)
 - **External contributors:** 13 listed in `pmoves/config/agent_registry.yaml` (`claude-opus`, `kilocode`, `codex`, `gemini`, `cline`, `powerfulmoves`, `crush`, `z890-claude`, `5090-claude`, `4090-claude`, `botz-architect`, `botz-builder`, `botz-auditor`)
 - **Taxonomy version:** v1.5.0
 - **Persona seeds:** 8 standard personas in `pmoves/supabase/initdb/17_persona_seed.sql`

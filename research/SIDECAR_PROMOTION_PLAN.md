@@ -4,6 +4,8 @@
 > **Date**: 2026-04-19 | **Status**: PLANNING (read-only analysis)
 > **Note**: This document is read-only analysis. Implementation steps reference separate operational procedures (see deploy/sidecar/ for canonical templates).
 
+> ⚠️ **CRITICAL CORRECTION (2026-04-23)**: This plan was written under incorrect assumptions that PMOVES-SPARK is a minimal/degraded sidecar. SPARK is a FULL PMOVES.AI node with: GH_PAT push capability, CHIT crypto hardened (fail-closed passphrase, versioned KDF PBKDF2+scrypt), NATS auth P0 resolved (0 unauthenticated refs), A2A server wired, 76 registered agents, ClaWZ active Discord agent, P7 stage manager, TeraFormer, IC, and pmoves-spark-runner online. The `standalone`/`degraded` decisions below apply to a GENERIC sidecar on an arbitrary device — NOT to SPARK specifically. See AGNOTE4482 for canonical SPARK state.
+
 ---
 
 ## Table of Contents
@@ -38,7 +40,20 @@
 | code_execution_remote | Working | Direct host access via CLI connector |
 | Project Mount | Mounted | host usr dir to /a0/usr |
 
+### SPARK-Specific Correction
+
+The assessment above describes a bare container state. The ACTUAL SPARK node (as of 2026-04-19 convergence wave) has:
+- CHIT crypto: Hardened (fail-closed, versioned KDF)
+- NATS: Auth P0 resolved, runner registered
+- A2A: Server wired and exposed
+- Agents: 76 registered, 13 contributors
+- Push: Direct GH_PAT to origin/main
+- ClaWZ: Active Discord agent (BoTZ archived)
+
+The promotion steps below are valid for deploying Agent Zero as a sidecar on a NEW/EMPTY device. For SPARK specifically, only Phase 0 (GPU passthrough) and Phase 5 (container hardening) are needed — the rest is already operational.
+
 ### LLM Routing (Current)
+
 
 - Custom provider ollama_spark pointing to http://172.17.0.1:11434
 - Model: llama3.2:3b (Tier 2 fallback in PMOVES cascade)
@@ -309,9 +324,9 @@ PARENT_VERSION=1.0.0-hardened
 | PARENT_SYSTEM | Set via env var | Low |
 | Skills configuration | Reference pmoves skills from agents.json | Low |
 | CHIT_PASSPHRASE | Set a local dev value (not production CHIT_PROD) | Low |
+| CHIT full enforcement | Enable CHIT_REQUIRE_SIGNATURE=true, CHIT_DECRYPT_ANCHORS=true | Low (SPARK already has hardened crypto) |
 
 ### LLM Routing Transition Path
-
 ```
 Current:  Ollama direct (172.17.0.1:11434) -> llama3.2:3b
           |
@@ -362,8 +377,10 @@ python3 -m pmoves.tools.mini_cli bootstrap \
   --service agent-zero \
   --without-glancer
 ```
+> **SPARK Shortcut**: On PMOVES-SPARK, skip Phase 1 entirely — env.shared and env.tier-agent are already bootstrapped with hardened CHIT values. Only verify with `env validate --tier agent`.
 
 **What this does:**
+
 1. Loads pmoves/bootstrap/registry.json
 2. Generates missing values using registry generators (random_hex, passphrase, etc.)
 3. Writes pmoves/env.shared and pmoves/env.tier-agent with generated defaults
@@ -638,6 +655,9 @@ docker run -d \
 #### 5.3 sidecar.env File Content
 
 See `deploy/sidecar/sidecar-env.template` — canonical sidecar env template (added PR #1299). Do NOT maintain a separate copy. The template contains the complete env configuration for standalone sidecar mode including topology, CHIT dev settings, JetStream disable, pre-staged endpoints, and host env leak guard.
+> **SPARK Note**: The template above is for GENERIC sidecar devices. SPARK should use its existing hardened env.shared with CHIT_REQUIRE_SIGNATURE=true and CHIT_DECRYPT_ANCHORS=true (not the dev-mode false values in the template).
+
+#### 5.4 Data Directory Setup (on host, before docker run)
 
 #### 5.4 Data Directory Setup (on host, before docker run)
 
@@ -699,6 +719,16 @@ curl -s http://localhost:5080/api/agents | python3 -m json.tool
 ## Appendix A: Transition to Full Compose Mode
 
 When the full PMOVES compose stack is brought up on this host:
+### SPARK-Specific Transition
+
+SPARK does NOT need the full transition path — it already operates as a full PMOVES.AI node. When the compose stack is brought up on SPARK's host:
+1. Change TOPOLOGY_MODE=docked in existing env.shared (already has CHIT_PROD_PASSPHRASE)
+2. Set AGENTZERO_JETSTREAM=true (NATS auth already configured)
+3. Start via compose — no env regeneration needed
+
+The generic transition steps below apply to OTHER devices being promoted from generic sidecar to docked mode.
+
+1. Stop standalone container: docker stop PMOVES-Agent-Zero-SPARK
 
 1. Stop standalone container: docker stop PMOVES-Agent-Zero-SPARK
 2. Run python3 -m pmoves.tools.mini_cli env init --profile prod to apply CHIT production secrets

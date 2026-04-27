@@ -1,0 +1,145 @@
+dark factory. This is the exciting like
+last part of the live stream that I'll
+be covering with you guys here. Um yeah,
+I'm I'm actually pretty stoked for this.
+I don't know if you guys know what a
+dark factory is. Um it's
+kind of like a a term that was coined in
+the last Well, actually it was a a term
+that was coined in the late uh 1900s.
+Uh that sounds weird. It like 1990s, I
+think, like the idea of a dark factory
+is um you have a factory without lights
+because it's robots running the entire
+thing. And then recently people have
+been talking about like dark factory as
+it relates to code bases. And basically,
+a dark factory is a code base that
+self-evolves. Like AI is the only one
+writing code ever on the code base. And
+so, an experiment that I want to run,
+I'm giving you a little bit of a teaser
+to what I'll talk about at the end of
+the workshop here, an experiment I want
+to run is a public dark factory code
+base where every single evolution of the
+code base, like every pull request,
+every release, is managed by Archon
+workflows.
+Because we can build our process like we
+can define exactly how we want to manage
+issues and pull requests and releases,
+we can define it as Archon workflow. So,
+we basically use Archon as a dark
+factory harness, which sounds kind of
+it sounds silly. Uh but I'm actually
+like really excited to try this as a um
+kind of like public experiment here.
+Like I I literally wanted to get to the
+point where like anyone can create an
+issue, and then I'll have Archon like
+figure out is this an issue that we
+should uh address for this code base,
+and then it'll handle it automatically
+all the way to like pull request and
+reviewing and merging into the main
+branch.
+So, we'll talk about that, but obviously
+we got to get Archon uh spun up for the
+first time here. So, I'll show you guys
+the installation. I'll show you what it
+looks like to run workflows with Archon.
+And then I want to build a workflow with
+you guys. And then we'll do some of the
+dark fa- factory fancy stuff at the end.
+All right. So, I'm going to go into the
+readme here.
+So, I'll put a link to Arkon in the chat
+again.
+If you guys want to follow along and
+install with me on your machine or a
+VPS.
+If we scroll down to the get started,
+this is where we're going to work right
+now.
+&gt;&gt; [snorts]
+&gt;&gt; So, literally all you have to have
+installed before you run Arkon is your
+coding agent and the GitHub CLI. In
+fact, I list bun as a prerequisite, but
+the setup process is going to even
+install this automatically
+if you don't have it yet.
+So, I do list Claude code as a
+pre-wreck. You can use Codex as well.
+That's also supported with Arkon. It's
+just not quite as stable right now as
+Claude code. So, I'll definitely be
+updating the docs as I address that or
+as we address that.
+But then obviously the GitHub CLI is an
+important dependency as well.
+You don't need the GitHub CLI for every
+Arkon workflow.
+But um yeah, being able to work with
+GitHub is a very core part of Arkon
+because most workflows are relying on
+having the issue or pull request be like
+the starting point, right? Like
+reviewing pull requests or fixing GitHub
+issues. Most of the time when I'm
+working with Arkon, it's it's dealing
+with artifacts in GitHub essentially,
+right? So, that's why I have that as a
+prerequisite.
+So, once you have those things
+installed,
+&gt;&gt; [snorts]
+&gt;&gt; um we have the binary. So, we're working
+on making it so there's like a single
+install script. So, you can do this if
+you want. I'm just going to show you
+that my my approach of like cloning the
+repository and setting up from there cuz
+that's what I'm more comfortable with.
+This is like a newer thing that we're
+working on to make it like even easier
+to set up Arkon. So, I'm going to
+install it this way. So, I'll I'll copy
+this command to clone the repository and
+I'll do that within my VPS here.
+So, there we go. Clone Arkon and then
+obviously change my directory into Arkon
+and then check this out. Um so, I'm
+going to run in dangerously skip
+permission mode just because I don't
+want to have to deal with approving
+things right now.
+Open up the folder. Uh yes, I accept.
+There we go. All right. Now, watch this.
+All I have to do is say set up Arkon.
+I don't have to say anything else. It's
+going to walk me through the entire
+process. So, you if you have the
+pre-reqs and then you clone the repo,
+you just go into your Claude or Codex
+and you say set up Arkon and that's it.
+So, first it's going to uh see like what
+we already have set up. It's going to
+realize that we haven't set up anything
+and then what it should do is it should
+load the Arkon skill. So, we have this
+skill that like walks it through how to
+help us with Claude or with the the
+whole setup of Arkon with Claude.
+All right.
+&gt;&gt; [cough and clears throat]
+&gt;&gt; I guess I have to wait for it to to work
+here.
+And by the way,
+if we see it um I'm just did like
+control O to see the output here.
+It's just like understanding the code
+base. I'm actually surprised it didn't
+load the Arkon skill.
+Um you're in the let's see. What is it

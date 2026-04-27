@@ -6,8 +6,28 @@
 
 
 [gateway.observability]
-enabled = true
-async_writes = true
+# CHIT GATE: Disabled per Cyber Defence Initiative (2026-04-25).
+# TensorZero observability.enabled=true auto-creates ClickHouse inference
+# tables that store full prompt text + response text with no TTL.
+# This violates Data Retention Policy T0 classification (prompts are
+# ephemeral) and creates a warrantable data store for user content.
+#
+# RE-ENABLE CONDITIONS (all required):
+# 1. ClickHouse TTL of 14 days on auto-created Inference table
+#    (ALTER TABLE Inference MODIFY TTL timestamp + INTERVAL 14 DAY)
+# 2. Prompt text column dropped or masked in Inference table
+# 3. CHIT_REQUIRE_SIGNATURE=true in production
+# 4. Data Retention Policy section 3.5 updated to reflect prompt storage
+# 5. Security audit confirms no PII in stored prompts
+# 6. Approval: CTO + security lead signed commit message
+#
+# See: docs/data-retention-deletion-policy.md (section 3.5)
+# See: docs/biometric-data-handling-policy.md (section 3.4)
+# CHIT Trail: discovered during production verification 2026-04-25.
+#   Memory system fabricated verified-clean state from policy document
+#   rather than code reality - flagged as CHIT intrusion.
+enabled = false
+async_writes = false
 
 # OTLP export — disabled by default so the gateway boots without the tracing
 # overlay. P7 P0.2 enabled this against docker-compose.tracing.yml, but the

@@ -1,0 +1,40 @@
+And then when I asked it to build
+support for Codex, like following the
+pattern that I did for Claude, it
+one-shotted that as well.
+And so, if you wanted to create a pull
+request adding support for GitHub
+Copilot, you could. You could literally
+one-shot it because the documentation is
+there, the coding agent can reference
+that if you have like Claude code open
+up in the Archon repository or Codex.
+And um and then also like it can just
+copy how we already have it set up for
+an existing coding agent. So, we have
+Archon set up in a way where the code
+base is very easy to evolve because
+everything is set up as like super easy
+patterns to understand. Like the coding
+agent can understand very easily, like
+here's how I add a new coding agent,
+here's how I add a new adapter, uh
+whatever we want to do to evolve the
+system.
+Yeah.
+Um can workflows be told to obey token
+rates and limits?
+So, I think that's actually something we
+have an open issue for cuz there's not a
+way to like set a max budget for tokens,
+but it would be pretty easy to add that.
+Like on a per node level, it's like I
+want you to stop if this is taking more
+than 100,000 tokens cuz this that
+definitely means that like the coding
+agent is going off the rails here or
+whatever. So, we don't have support for
+that yet, but um I think I mean, I don't
+I don't really want to like go on a hunt
+here and try to find this exact one,
+but uh there are there is definitely an

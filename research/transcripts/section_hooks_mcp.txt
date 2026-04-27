@@ -1,0 +1,50 @@
+shot this. So, make sure we research Pi
+Agent first. We'll create the Pi
+Assistant defaults. So, just again,
+based off the patterns that we already
+have for Claude and Codex.
+We'll implement We'll follow the
+Claude.ts structure as lay lazy logger,
+async generator to send the query into
+Pi. You guys probably don't care about
+the details here. I'm actually pretty
+interested in this. It It really
+understands what to do here.
+Um, defining uh, hooks and MCP and
+skills. Love that. Uh,
+laying out the critical risks as well.
+Like things that we have to make sure we
+validate and be extra careful with or do
+more research for.
+And then it has open questions for us as
+well.
+And, um, so maybe what I'll do right
+here is I will answer the open questions
+and then send it off like approve the
+the workflow to continue with the rest
+here. So,
+Okay.
+All right, there are some open questions
+in the summary. I'm going to answer this
+quickly, and then I want you to approve
+the workflow to continue.
+So, for the Pi Agent SDK package name,
+uh, well, you know, actually I don't
+know that. So, I need you to search the
+web
+um, for that.
+Um,
+Oh, actually none of these questions are
+for me. These are all things that it has
+to research. So, I need I need you to
+research each of the
+uh, answers to the open questions in the
+summary and then send that in as context
+to approve the workflow.
+Okay, so little bit of a pivot there. I
+thought it was like questions to align
+with me, but it was more just like, uh,
+you know, mechanically how does the Pi
+Agent SDK work? So, we'll have it figure
+these things out. I thought that it
+would find those things in its own

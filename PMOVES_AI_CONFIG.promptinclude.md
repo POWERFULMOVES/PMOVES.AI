@@ -51,4 +51,10 @@ When compose stack is available:
 3. Set CHIT_DECRYPT_ANCHORS=true
 4. Set AGENTZERO_JETSTREAM=true
 5. Switch to tensorzero agent profile
+
+## Git Operations on Agent Zero Projects
+
+* For project directories containing `.a0proj/project.json`, NEVER run `git checkout`, `git rebase`, `git merge`, or branch switching directly in `/a0/usr/projects/*/` directories
+* Use git worktrees in `/tmp/` or separate clones in `/tmp/` for checkout/rebase/merge/branch-switch operations to avoid corrupting Agent Zero project configuration files
+* Safe operations on main working directory: `push`, `pull --ff-only`, `fetch`, `status`, `log`, `diff`, `dispatch`
 6. Restart container
