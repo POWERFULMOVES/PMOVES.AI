@@ -348,6 +348,7 @@ env["RUNNER_ALLOW_RUNNER_REUSE"] = "true"
 - Signed AGNOTE4482_SIGNOFF_CHECKLIST.md sections 1, 3, 7
 
 ### Key Findings
+
 | Finding | Status | Evidence |
 |---------|--------|----------|
 | NATS hotspot dirs (work-marshaling, chat-relay, node-registry, tools) | **RESOLVED** | All production code migrated; 21 files remain in secondary batch |

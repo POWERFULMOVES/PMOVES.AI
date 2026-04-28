@@ -159,7 +159,7 @@ async def _listen_loop(
             try:
                 data = json.loads(msg.data.decode("utf-8"))
                 text = data.get("response_text") or data.get("text", "")
-                aid = data.get("user_id") or agent_id
+                aid = agent_id  # user_id is the request originator, not the processing agent
                 if not text:
                     return
                 sys.stderr.write(
