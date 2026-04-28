@@ -13,7 +13,7 @@ from contextlib import asynccontextmanager, suppress
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
-from urllib.parse import quote_plus, urlparse
+from urllib.parse import quote_plus, urlparse, urlunparse
 
 import httpx
 from fastapi import FastAPI, HTTPException, Query, Response
@@ -29,6 +29,15 @@ from prometheus_client import (
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
+
+
+def _redact_url(url: str) -> str:
+    p = urlparse(url)
+    if not p.username:
+        return url
+    netloc = p.hostname + (f":{p.port}" if p.port else "")
+    return urlunparse(p._replace(netloc=netloc))
+
 
 # Module-level task reference for proper cleanup
 _nats_task: Optional[asyncio.Task[None]] = None
@@ -505,10 +514,10 @@ async def _connect_nats() -> None:
         app.state.nats = nc
         await nc.subscribe("supaserch.request.v1", cb=_handle_nats_message)
         NATS_CONNECTION_GAUGE.set(1)
-        logger.info("Connected to NATS at %s", url)
+        logger.info("Connected to NATS at %s", _redact_url(url))
     except Exception as exc:  # noqa: BLE001
         NATS_CONNECTION_GAUGE.set(0)
-        logger.warning("Failed to connect to NATS at %s: %s", url, exc)
+        logger.warning("Failed to connect to NATS at %s: %s", _redact_url(url), exc)
 
 
 @app.get("/healthz")

@@ -20,6 +20,7 @@ import logging
 import os
 from datetime import datetime
 from typing import Any, Dict, List, Optional
+from urllib.parse import urlparse, urlunparse
 
 try:
     import nats
@@ -29,6 +30,14 @@ except ImportError:
     NATS_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
+
+
+def _redact_url(url: str) -> str:
+    p = urlparse(url)
+    if not p.username:
+        return url
+    netloc = p.hostname + (f":{p.port}" if p.port else "")
+    return urlunparse(p._replace(netloc=netloc))
 
 
 # Configuration
@@ -124,7 +133,7 @@ class NATSIntegration:
             self.nc = await nats.connect(**options)
             self.js = self.nc.jetstream()
 
-            logger.info(f"Connected to NATS at {NATS_URL}")
+            logger.info(f"Connected to NATS at {_redact_url(NATS_URL)}")
             return True
 
         except Exception as e:
