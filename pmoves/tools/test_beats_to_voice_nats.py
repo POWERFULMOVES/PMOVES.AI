@@ -36,7 +36,7 @@ class TestNatsPublishCgp(unittest.IsolatedAsyncioTestCase):
 
 class TestListenHandler(unittest.IsolatedAsyncioTestCase):
     async def test_handler_runs_pipeline_and_publishes(self):
-        """Listen handler calls run_pipeline with response_text and publishes CGP."""
+        """Listen handler calls run_pipeline with response_text and uses configured agent_id."""
         mock_nc = AsyncMock()
         mock_nats = MagicMock()
         mock_nats.connect = AsyncMock(return_value=mock_nc)
@@ -44,10 +44,11 @@ class TestListenHandler(unittest.IsolatedAsyncioTestCase):
         msg = MagicMock()
         msg.data = json.dumps({
             "response_text": "Hello from Agent Zero",
-            "user_id": "z890-claude",
+            "user_id": "z890-claude",  # originator — should NOT become agent_id
         }).encode("utf-8")
 
         called = {}
+        subscribed = asyncio.Event()
 
         def fake_pipeline(**kwargs):
             called.update(kwargs)
@@ -57,6 +58,7 @@ class TestListenHandler(unittest.IsolatedAsyncioTestCase):
 
         async def fake_subscribe(subject, cb):
             captured_handlers.append(cb)
+            subscribed.set()
 
         mock_nc.subscribe = fake_subscribe
         mock_nc.drain = AsyncMock()
@@ -72,9 +74,8 @@ class TestListenHandler(unittest.IsolatedAsyncioTestCase):
                         "http://localhost:8055",
                     )
                 )
-                await asyncio.sleep(0.05)
-                if captured_handlers:
-                    await captured_handlers[0](msg)
+                await asyncio.wait_for(subscribed.wait(), timeout=2.0)
+                await captured_handlers[0](msg)
                 task.cancel()
                 try:
                     await task
@@ -82,7 +83,7 @@ class TestListenHandler(unittest.IsolatedAsyncioTestCase):
                     pass
 
         assert called.get("text") == "Hello from Agent Zero"
-        assert called.get("agent_id") == "z890-claude"
+        assert called.get("agent_id") == "4090-claude"  # configured agent_id, not user_id
         mock_nc.publish.assert_awaited()
 
 
