@@ -42,11 +42,12 @@ Both Jetson Orin Nanos have SSH configured (`pmovesnvme@.110`, `pmovesnvme@.144`
 - RustDesk config: KVM2 relay, both root and user paths
 - pmoves-claw SSH key injected to root
 
-**Remaining (2026-04-21 update):**
+**Remaining (2026-04-28 update — USB Provisioning Sweep doc-side ready):**
 1. Jetson #1: Tailscale active (pmoves-nano, 100.x), rename to `pmoves-nemotron-1` queued
 2. Jetson #2: Fresh Tailscale install needed, join as `pmoves-nemotron-2`
-3. **JetPack 7.0 reflash scheduled** — see `deploy/provision/jetson/` for scripts and documentation
-   - ~45 min per device; do not schedule during UNFCU demos
+3. **JetPack 7.0 reflash — doc-side ready, operator-pending Phase C** — see `deploy/provision/jetson/` for scripts and documentation; runbook drift-verified 2026-04-28 (no findings against `jetpack7-reflash.sh` / `post-flash-bootstrap.sh` / `verify-jetson-fleet.sh`)
+   - ~45 min per device, sequential (SDK Manager binds USB recovery one device at a time); do not schedule during UNFCU demos
+   - Per-device flow: `make -C pmoves fleet-enroll ROLE=edge DEVICE=nemotron-N` → recovery mode → `sudo TAILSCALE_AUTHKEY=... bash deploy/provision/jetson/jetpack7-reflash.sh --device nemotron-N` → `make -C pmoves jetson-verify DEVICE=nemotron-N`
 4. Registration in `agent-teams.yaml` and `node-agent-specialization.yaml`
 5. Agent Zero + Claws deployment
 6. arm64 compose override: `pmoves/docker-compose.arm64.override.yml` (expand for JetPack 7 — see session plan)
