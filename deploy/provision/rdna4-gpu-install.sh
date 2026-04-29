@@ -48,6 +48,7 @@ for arg in "$@"; do
 done
 
 log() { echo -e "\n[rdna4] $*"; }
+log_section() { log "─── $* ───"; }
 
 require_root() {
   if [[ $EUID -ne 0 ]]; then
