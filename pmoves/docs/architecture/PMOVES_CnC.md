@@ -103,9 +103,62 @@ connect in one motion.
   without circuit breaker. "More damage than it prevents" → healthcheck
   masking + phantom defaults.
 
+## P7 Accord — Procession as Catchable Shape
+
+The BPM procession (sync → async → dependent link) is not a recipe.
+It's a recognizable form that a gate can catch and a stage manager can index.
+
+### The Shape
+
+When a fix lands, something should carry the learning forward.
+When a trace lands, something should ground it in a fix.
+The dependent link binds them — not sequential, but paired.
+
+### Catchable Signals
+
+A gate on remote can parse for these without understanding content:
+
+| Signal | Pattern | Means |
+|--------|---------|-------|
+| Paired PRs | Commit msg contains `Companion: #NNNN` or `Trace #N` | Code and docs travel together |
+| Trace ref in fix | Commit msg contains `Ref:.*CnC` or `Ref:.*Trace` | Fix acknowledges its trace |
+| Circuit ref in docs | File path contains `CIRCUIT_BREAKER` or `PMOVES_CnC` | Docs acknowledge their circuit |
+| Orphan fix | Code PR with no companion ref, touches optional deps | Flag for review — did the learning get captured? |
+| Orphan trace | Docs PR with no companion fix ref | Flag for review — is this grounded? |
+
+### The Accord
+
+Not every fix needs a trace. Not every trace needs a fix.
+But when a fix reveals a *pattern* (not just a typo),
+the accord says: carry it forward or explicitly decline.
+
+The gate doesn't block. It surfaces.
+P7 sees the shape and presents it in the room.
+
+### P7 Alignment
+
+P7 is the stage manager — it opens the room, loads the suit, hands off.
+The CnC accord gives P7 a shape to recognize:
+
+- **Foyer**: Incoming PRs — P7 checks for paired shape, flags orphans
+- **Review room**: PRs on screen — P7 surfaces the dependent link visually
+- **War room**: Active incidents — P7 pulls relevant traces by circle resonance
+
+The goal: P7 doesn't need to understand the content.
+It recognizes the shape and routes accordingly.
+Same form, different content — that's the accord.
+
+### Not a Recipe
+
+This is not a checklist that every PR must pass.
+It's a signal that the gate can catch and the stage manager can index.
+The form remains; the content changes.
+Similar remain — the shape persists across instances.
+
 ## Status
 
 Seed. Trace #0 planted. Circle Maker has one resonance pattern.
 Circuit Breaker codified as promptinclude.
+P7 Accord defined — gate shape specified, not implemented.
 
 This document breathes. It grows with each trace.
