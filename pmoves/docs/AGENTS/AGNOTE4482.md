@@ -551,3 +551,85 @@ No change: **32/37**. Remaining: §1.4 (external) + §9.1–§9.4 (compose stack
 - Timestamp: `2026-04-26`
 
 <!-- GRAPHITI_MARK: 4090-CLAUDE::SESSION-AUDIT-2026-04-26::2026-04-26 -->
+
+---
+
+## USB Provisioning Sweep (2026-04-28)
+
+### Work Performed
+Doc-side delivery of the USB provisioning sweep covering AMD R9700 (`pmoves-rdna4`)
+and Jetson Orin Nano ×2 (`nemotron-1`, `nemotron-2`). Phases A/B/C are operator-side
+(physical USB boot + cable handling); Phase D (documentation + drift verification +
+script fixes) is delivered from this CLI session.
+
+| Phase | Deliverable | State |
+|---|---|---|
+| A | Ubuntu 22.04 live USB build host on Z890 | ⏳ operator (Path A: temp live USB; Path B fallback: Pop!_OS 22.04 slot) |
+| B | AMD R9700 cloud-init flash (ROCm 7.1 + llama.cpp HIP, dual-card tensor-split) | ⏳ operator |
+| C | Jetson reflash ×2 (JetPack 6.2.1 → 7.0 / L4T r37 / CUDA 12.8) | ⏳ operator (~45 min/device sequential, NOT during UNFCU demo) |
+| D1 | Drift verification — runbooks vs actual scripts | ✅ landed (5 doc-only drifts + 1 real script bug fixed) |
+| D2 | AGNOTE4482 + AGNOTE4482PHI.t1.md trail entries | ✅ landed |
+| D3 | `pmoves/docs/AGENTS/AGNOTE-pmoves-rdna4.md` (mirror of AGNOTE-dgx-spark.md) | ✅ landed |
+| D4 | TOPOLOGY.md cross-link + HARDWARE_PROFILES_JETPACK7_ADDENDUM.md status row | ✅ landed |
+| D5 | `make sign-trail` invocation | ⏳ deferred (no `CHIT_PASSPHRASE` in CLI session — voice-activated per memory) |
+
+### Three-Body Pattern
+- **Delivery body:** `z890-claude` (this session) — script fixes, new AGNOTE, doc updates
+- **Control body:** Verification gates `make -C pmoves fleet-status`, `jetson-verify`, `rdna4-rocm-status` (operator runs after Phases A/B/C)
+- **Memory body:** AGNOTE4482PHI.t1.md CLAIM/REVIEW/RELEASE entries + this audit record + new AGNOTE-pmoves-rdna4.md
+
+### Drift Findings
+**Documentation-only drifts (plan vs actual filesystem) — no fix required:**
+1. Plan: `deploy/build-usb.sh` → Actual: `deploy/provision/build-usb.sh`
+2. Plan: `deploy/rdna4-gpu-install.sh` → Actual: `deploy/provision/rdna4-gpu-install.sh`
+3. Plan: `deploy/hostinger-kvm-setup.sh` → Actual: `deploy/provision/hostinger-kvm-setup.sh`
+4. Plan invocation: `--node-type=rdna4-workstation` → Actual: positional `bash hostinger-kvm-setup.sh rdna4-workstation`
+5. Plan flag style: `--iso /path` → Actual: `--iso=/path` (build-usb.sh uses `--flag=value` form)
+
+**Real script bug fixed:**
+6. `deploy/provision/rdna4-gpu-install.sh` — `install_llama_server_unit()` called undefined `log_section` function. Under `set -euo pipefail` this aborts AMD provisioning at the systemd-unit step. Fixed by adding `log_section() { log "─── $* ───"; }` after the existing `log()` definition (line 51). Verified bug still present on main even after PR #1316 (phase-a-deploy-refresh) merged 397 lines to the same file.
+
+### Pre-flight Findings (advisory, not actioned)
+1. **`pmoves/deploy/provision/z890/pxe/distro-manifest.yaml`** has no vanilla `ubuntu-22.04` entry. Operator should manually fetch from `releases.ubuntu.com/22.04/` per Phase A — do NOT permanently add a 22.04 slot for one-time SDK Manager prerequisite (scope creep). Pop!_OS 22.04 entry exists as Path B fallback.
+2. **`pmoves/config/signing_identity_cards.yaml`** has no `rdna4-runner`, `nemotron-1`, or `nemotron-2` rows. Audit policy: cards seed only when an `agent_id` starts emitting trail entries. Flagged as ⏳ pending in `AGNOTE-pmoves-rdna4.md` Status block.
+3. **Default model drift (informational):** `rdna4-gpu-install.sh:37` defaults to Gemma 2 27B; `HARDWARE_PROFILES_JETPACK7_ADDENDUM` and TOPOLOGY assume Gemma 4 31B Q4. First post-install `make rdna4-model-pull` should target Gemma 4 explicitly via `HF_REPO=` override.
+
+### Files Changed
+| File | Change |
+|------|--------|
+| `pmoves/docs/AGENTS/AGNOTE-pmoves-rdna4.md` | NEW — node doc mirroring AGNOTE-dgx-spark.md |
+| `pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md` | EDIT — CLAIM / REVIEW / RELEASE block + signed ACK |
+| `pmoves/docs/AGENTS/AGNOTE4482.md` | EDIT — this audit-record section |
+| `pmoves/docs/operations/TOPOLOGY.md` | EDIT — rdna4 block (lines 75-104) cross-linked to new AGNOTE |
+| `pmoves/docs/operations/HARDWARE_PROFILES_JETPACK7_ADDENDUM.md` | EDIT — added "Reflash Completed (operator-pending)" row to JetPack 7.0 Rollout table + new "AMD R9700 (RDNA4) Rollout" section |
+| `deploy/provision/rdna4-gpu-install.sh` | EDIT — added missing `log_section` function (drift #6 bug fix) |
+
+### Signoff Checklist Status
+✅ Three-body separation honored (delivery / control / memory)
+✅ Village Rule (no agent operates alone) — Control = make-target verification gates; Memory = AGNOTE trail
+✅ GRAPHITI_MARK footer on PHI.t1.md ACK block
+✅ AGNOTE-pmoves-rdna4.md mirrors AGNOTE-dgx-spark.md structure (Node / Status / Three-Body / Near-Term Lane)
+⚠️ D5 trail-signing deferred (no `CHIT_PASSPHRASE` in CLI; expected per CLAUDE.md "Signing is optional locally")
+⏳ Phases A/B/C operator-side — physical hardware action not possible from CLI
+
+### Operator-Side Handoff (Phases A → B → C)
+1. **Phase A:** Build Ubuntu 22.04.5 LTS live USB; boot Z890; install SDK Manager CLI in live env; clone PMOVES.AI to `/tmp/pmoves`
+2. **Phase B (AMD R9700):**
+   - `make -C pmoves fleet-enroll ROLE=workstation DEVICE=pmoves-rdna4`
+   - `sudo bash deploy/provision/build-usb.sh --iso=/path/to/ubuntu-24.04...iso --autoinstall=deploy/provision/autoinstall/rdna4-workstation.yaml --device=/dev/sdY --hostname=pmoves-rdna4 --ssh-keys-from-github=POWERFULMOVES`
+   - Boot AMD box from prepared USB → unattended install → first-boot systemd unit auto-runs `hostinger-kvm-setup.sh rdna4-workstation`
+   - Verify: `make -C pmoves rdna4-rocm-status` + `rdna4-llamacpp-up` + `curl http://pmoves-rdna4:8080/v1/models`
+3. **Phase C (Jetson, sequential):** for each device in {nemotron-1, nemotron-2}:
+   - `make -C pmoves fleet-enroll ROLE=edge DEVICE=nemotron-N`
+   - Put Jetson in recovery mode (RECOVERY button + power); confirm `lsusb | grep -i nvidia`
+   - `sudo TAILSCALE_AUTHKEY=tskey-xxx bash deploy/provision/jetson/jetpack7-reflash.sh --device nemotron-N`
+   - Wait ~45 min, do NOT interrupt
+   - Verify: `make -C pmoves jetson-verify DEVICE=nemotron-N`
+
+### Agent ACK
+- Delivery agent: `z890-claude` — Signature: `ACK::Z890-CLAUDE::USB-PROVISIONING-SWEEP-DOCS::2026-04-28`
+- Control agent: pending operator-side gate runs (`fleet-status`, `jetson-verify`, `rdna4-rocm-status`)
+- Memory agent: pending D5 `make sign-trail` invocation (operator with `CHIT_PASSPHRASE`)
+- Timestamp: `2026-04-28`
+
+<!-- GRAPHITI_MARK: Z890-CLAUDE::USB-PROVISIONING-SWEEP-DOCS::2026-04-28 -->

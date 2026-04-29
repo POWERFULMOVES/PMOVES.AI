@@ -17,6 +17,10 @@ until a tooling-approved merge can happen. `TOPOLOGY.md` already links here.
 | Canonical image | `nvcr.io/nvidia/l4t-jetpack:r37.0.0` |
 | Reflash runbook | `deploy/provision/jetson/README.md` |
 | Time per device | ~45 min |
+| Doc-side drift-verified | 2026-04-28 (USB Provisioning Sweep — no findings against `jetpack7-reflash.sh` / `post-flash-bootstrap.sh` / `verify-jetson-fleet.sh`) |
+| nemotron-1 reflash | ⏳ operator-pending (Phase C of USB Provisioning Sweep) |
+| nemotron-2 reflash | ⏳ operator-pending (Phase C of USB Provisioning Sweep) |
+| Hard prerequisite | x86_64 Ubuntu 22.04 host with NVIDIA SDK Manager CLI — Z890 currently Win11; Path A live USB or Path B Pop!_OS 22.04 slot |
 
 **Deprecated:** `nvcr.io/nvidia/l4t-jetpack:r36.4.4` (JetPack 6.2.1).
 **Migration path:**
