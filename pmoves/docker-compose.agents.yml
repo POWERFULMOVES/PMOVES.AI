@@ -325,7 +325,7 @@ services:
     - RERANK_TOPN=${RERANK_TOPN:-50}
     - RERANK_K=${RERANK_K:-10}
     - RERANK_FUSION=${RERANK_FUSION:-mul}
-    - USE_MEILI=true
+    - USE_MEILI=${USE_MEILI:-false}
     - MEILI_URL=${MEILI_URL:-http://meilisearch:7700}
     - NEO4J_URL=${NEO4J_URL:-bolt://neo4j:7687}
     - NEO4J_USER=${NEO4J_USER:-neo4j}

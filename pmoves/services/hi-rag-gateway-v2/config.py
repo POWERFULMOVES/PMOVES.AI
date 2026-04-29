@@ -226,7 +226,7 @@ TENSORZERO_API_KEY = (os.environ.get("TENSORZERO_API_KEY") or "").strip()
 
 USE_MEILI = os.environ.get("USE_MEILI", "false").lower() == "true"
 MEILI_URL = os.environ.get("MEILI_URL", "http://meilisearch:7700")
-MEILI_API_KEY = os.environ.get("MEILI_API_KEY", "master_key")
+MEILI_API_KEY = os.environ.get("MEILI_API_KEY") or os.environ.get("MEILI_MASTER_KEY", "")
 
 _RERANK_STATUS_CACHE = get_rerank_status()
 
