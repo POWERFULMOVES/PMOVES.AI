@@ -72,7 +72,7 @@ NVIDIA DGX Spark (GB10 Grace-Blackwell Superchip) on Tailscale. Purpose-built fo
 4. TensorZero `ollama_spark` provider points at `http://pmoves-dgx-spark:11434/v1`
 5. `spark_claw` agent profile activates after first heartbeat on `mesh.gpu.status.v1`
 
-### AMD R9700 (RDNA4) — ROCm Inference Node (Pending)
+### AMD R9700 (RDNA4) — ROCm Inference Node (Operator-Pending Flash)
 
 AMD Radeon AI PRO R9700 dual-GPU workstation on Tailscale. Unique value: 64GB VRAM (2x32GB) at lower capital cost than equivalent NVIDIA cards, with native RDNA4 support in ROCm 7.1+:
 
@@ -84,16 +84,29 @@ AMD Radeon AI PRO R9700 dual-GPU workstation on Tailscale. Unique value: 64GB VR
 - **Target models:** Gemma 4 31B Q4 (single card), Gemma 4 31B FP16 (dual-card split), Gemma 4 26B-A4B, any GGUF up to 64GB
 - **Benchmark reference:** ~99 tok/s for 7B Q4 (tlee933/llama.cpp-rdna4-gfx1201 fork); competitive with RTX 4070 Ti
 - **Tailscale hostname:** `pmoves-rdna4`
+- **Node doc:** [`pmoves/docs/AGENTS/AGNOTE-pmoves-rdna4.md`](../AGENTS/AGNOTE-pmoves-rdna4.md) — status block, near-term lane, known risks
+- **USB Provisioning Sweep (2026-04-28):** doc + script side ready; operator owns Phase B physical flash. See `AGNOTE4482.md` "USB Provisioning Sweep" audit record.
 
-**Pending setup:**
-1. Tailscale join + tag assignment (`tag:rdna4`)
-2. ROCm 7.1+ install + gfx1201 kernel verification
-3. llama.cpp HIP build (or use `tlee933/llama.cpp-rdna4-gfx1201` fork)
-4. GGUF model download to `/opt/llama-models` via `make rdna4-model-pull HF_REPO=bartowski/google_gemma-4-31B-it-GGUF FILE=gemma-4-31b-it-Q4_K_M.gguf`
-5. `make rdna4-llamacpp-up` to start llama-server with dual-GPU tensor-split
-6. Registration in `agent-teams.yaml` under `agents/gpu-inference` tier
-7. TensorZero `llamacpp_rocm` provider points at `http://pmoves-rdna4:8080/v1`
-8. `rocm_claw` agent profile activates after first heartbeat on `mesh.gpu.status.v1`
+**Doc-side ready (✅) / operator-pending (⏳):**
+1. ✅ Cloud-init autoinstall `deploy/provision/autoinstall/rdna4-workstation.yaml`
+2. ✅ ROCm 7.1 + llama.cpp HIP installer `deploy/provision/rdna4-gpu-install.sh` (bug fixed 2026-04-28: missing `log_section` function)
+3. ✅ Hostinger node-type wired (`rdna4-workstation` in `hostinger-kvm-setup.sh`)
+4. ✅ Make integration `pmoves/mk/amd-rdna4.mk` (six targets)
+5. ⏳ Operator: build USB via `deploy/provision/build-usb.sh --iso=... --autoinstall=... --device=/dev/sdY` (requires Ubuntu 22.04 host for SDK Manager parity in same session)
+6. ⏳ Operator: boot AMD box → first-boot systemd unit auto-installs ROCm + llama.cpp HIP
+7. ⏳ Operator: `make -C pmoves fleet-enroll ROLE=workstation DEVICE=pmoves-rdna4` + `tailscale up` with `--auth-key`
+8. ⏳ Operator: GGUF model download via `make -C pmoves rdna4-model-pull HF_REPO=bartowski/google_gemma-4-31B-it-GGUF FILE=gemma-4-31b-it-Q4_K_M.gguf` (Note: script default is Gemma 2 27B; explicit Gemma 4 override required for fleet parity)
+9. ⏳ Operator: `make -C pmoves rdna4-llamacpp-up` to start llama-server with dual-GPU tensor-split
+10. ⏳ Post-flash: registration in `agent-teams.yaml` under `agents/gpu-inference` tier
+11. ⏳ Post-flash: TensorZero `llamacpp_rocm` provider added to `tensorzero.toml` (always `weight = 0.0` initially)
+12. ⏳ Post-flash: `signing_identity_cards.yaml` row for `rdna4-runner` (label `self-hosted, ai-lab, gpu, rocm, rdna4`) — seed only when agent emits first trail entry
+13. ⏳ `rocm_claw` agent profile activates after first heartbeat on `mesh.gpu.status.v1`
+
+**Verification gates** (operator runs after Phase B):
+- `make -C pmoves rdna4-rocm-status` — both R9700s visible in `rocminfo | grep gfx1201`
+- `make -C pmoves rdna4-llamacpp-status` — `/v1/models` reachable on `:8080`
+- `make -C pmoves fleet-status | grep rdna4` — Tailscale online
+- `nats sub 'mesh.gpu.status.v1'` — node publishes heartbeats
 
 ---
 
