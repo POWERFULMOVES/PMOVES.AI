@@ -595,6 +595,7 @@ script fixes) is delivered from this CLI session.
 3. **Default model drift (informational):** `rdna4-gpu-install.sh:37` defaults to Gemma 2 27B; `HARDWARE_PROFILES_JETPACK7_ADDENDUM` and TOPOLOGY assume Gemma 4 31B Q4. First post-install `make rdna4-model-pull` should target Gemma 4 explicitly via `HF_REPO=` override.
 
 ### Files Changed
+
 | File | Change |
 |------|--------|
 | `pmoves/docs/AGENTS/AGNOTE-pmoves-rdna4.md` | NEW — node doc mirroring AGNOTE-dgx-spark.md |

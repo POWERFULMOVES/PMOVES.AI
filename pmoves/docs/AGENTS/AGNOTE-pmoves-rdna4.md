@@ -6,7 +6,7 @@
 - **Role**: ROCm-backed inference node, llama.cpp HIP fork (`tlee933/llama.cpp-rdna4-gfx1201` pinned at `a6e76c64`)
 - **Server**: `llama-server` on `:8080` (OpenAI-compat: `/v1/chat/completions`, `/v1/models`)
 - **Access**: Tailscale `tag:pmoves`, `tag:gpu`, `tag:rdna4`, `tag:production`; ports 8080 (llama-server) + 9835 (rocm-smi exporter)
-- **Provider**: TensorZero `llamacpp_rocm` provider points at `http://pmoves-rdna4:8080/v1` (registers post first-boot validation)
+- **Provider**: TensorZero `llamacpp_rocm` provider target URL `http://pmoves-rdna4:8080/v1` (Tailscale hostname; the cloud-init seed `rdna4-workstation.yaml` defaults to `pmoves-9850x3d-r9700` — operator must pass `--hostname=pmoves-rdna4` to `build-usb.sh` per AGNOTE4482 §"Operator-Side Handoff" so all three config surfaces register the correct base URL: `pmoves/tensorzero/config/tensorzero.toml`, `pmoves/config/provider_catalog.yaml`, `pmoves/supabase/initdb/12_model_registry_seed.sql`)
 - **Default Model**: TBD — capture from `make rdna4-model-pull` after first flash. Script default is `bartowski/gemma-2-27b-it-GGUF`; addendum target is Gemma 4 31B Q4 (single-card) or Gemma 4 31B FP16 (dual-card tensor-split).
 - **NATS Subjects**: `mesh.gpu.status.v1` participation (same five mesh.gpu.* streams as DGX Spark — see `pmoves/nats/mesh_gpu_streams.yaml`)
 - **Hardware profile**: `pmoves/config/profiles/workstation-9850x3d-dual-r9700.yaml` *(create on first capacity benchmark)*
