@@ -6,7 +6,7 @@
 - **Role**: ROCm-backed inference node, llama.cpp HIP fork (`tlee933/llama.cpp-rdna4-gfx1201` pinned at `a6e76c64`)
 - **Server**: `llama-server` on `:8080` (OpenAI-compat: `/v1/chat/completions`, `/v1/models`)
 - **Access**: Tailscale `tag:pmoves`, `tag:gpu`, `tag:rdna4`, `tag:production`; ports 8080 (llama-server) + 9835 (rocm-smi exporter)
-- **Provider**: TensorZero `llamacpp_rocm` provider target URL `http://pmoves-rdna4:8080/v1` (Tailscale hostname; the cloud-init seed `rdna4-workstation.yaml` defaults to `pmoves-9850x3d-r9700` — operator must pass `--hostname=pmoves-rdna4` to `build-usb.sh` per AGNOTE4482 §"Operator-Side Handoff" so all three config surfaces register the correct base URL: `pmoves/tensorzero/config/tensorzero.toml`, `pmoves/config/provider_catalog.yaml`, `pmoves/supabase/initdb/12_model_registry_seed.sql`)
+- **Provider**: TensorZero `llamacpp_rocm` already registered in Phase C (PR #1318, merged 2026-04-19) — `tensorzero.toml:447` uses `api_base = "http://pmoves-9850x3d-r9700:8080/v1"` with `weight = 0.0` for safe rollout. **Hostname drift**: TOPOLOGY documents `pmoves-rdna4` as the Tailscale hostname, but the 3 already-merged config surfaces (`tensorzero.toml`, `provider_catalog.yaml:604`, `12_model_registry_seed.sql:1830`) reference `pmoves-9850x3d-r9700`. See Known Risks #5 for the resolution path.
 - **Default Model**: TBD — capture from `make rdna4-model-pull` after first flash. Script default is `bartowski/gemma-2-27b-it-GGUF`; addendum target is Gemma 4 31B Q4 (single-card) or Gemma 4 31B FP16 (dual-card tensor-split).
 - **NATS Subjects**: `mesh.gpu.status.v1` participation (same five mesh.gpu.* streams as DGX Spark — see `pmoves/nats/mesh_gpu_streams.yaml`)
 - **Hardware profile**: `pmoves/config/profiles/workstation-9850x3d-dual-r9700.yaml` *(create on first capacity benchmark)*
@@ -26,20 +26,23 @@ The node carries the ROCm side of PMOVES inference parity:
 
 ## Status
 - ✅ Hardware profile defined in TOPOLOGY (lines 75-97)
-- ✅ Cloud-init autoinstall (`rdna4-workstation.yaml`) — ZFS-mirror or ext4 fallback, SSH key-only
-- ✅ ROCm 7.1 + llama.cpp HIP installer (`rdna4-gpu-install.sh`)
+- ✅ Cloud-init autoinstall (`rdna4-workstation.yaml`) — ZFS-mirror or ext4 fallback, SSH key-only (Phase B / PR #1317)
+- ✅ ROCm 7.1 + llama.cpp HIP installer (`rdna4-gpu-install.sh`) (Phase A / PR #1316; bug fix in this PR)
 - ✅ Make integration (`pmoves/mk/amd-rdna4.mk`)
 - ✅ Hostinger node-type wired (`rdna4-workstation` case in `hostinger-kvm-setup.sh`)
 - ✅ Tailscale tag scaffolding (`tag:rdna4`)
 - ✅ rocm-smi Prometheus exporter (systemd, `:9835`)
+- ✅ Hardware profile YAML — `pmoves/config/profiles/workstation-9850x3d-dual-r9700.yaml` (Phase C / PR #1318, merged 2026-04-19)
+- ✅ TensorZero `llamacpp_rocm` provider registered in `tensorzero.toml:447+` with `weight = 0.0` safe-rollout (Phase C / PR #1318) — see Known Risks #5 for hostname drift
+- ✅ `provider_catalog.yaml:594+` rdna4 entry (Phase C / PR #1318)
+- ✅ Model registry seed entry `pmoves/supabase/initdb/12_model_registry_seed.sql:1797+` (Phase C / PR #1318)
 - ⏳ USB flash + first boot — pending operator (Phase B of USB Provisioning Sweep)
 - ⏳ Tailscale enrollment via `make -C pmoves fleet-enroll ROLE=workstation DEVICE=pmoves-rdna4`
 - ⏳ ROCm + dual-GPU verification (`rocm-smi --showmeminfo vram --showuse`)
-- ⏳ TensorZero `llamacpp_rocm` provider registration in `tensorzero.toml`
-- ⏳ Model registry seed entry (`pmoves/supabase/initdb/12_model_registry_seed.sql`)
+- ⏳ Hostname drift resolution — TOPOLOGY says `pmoves-rdna4`, configs say `pmoves-9850x3d-r9700` (Known Risks #5)
 - ⏳ `signing_identity_cards.yaml` row for `rdna4-runner` (label: `self-hosted, ai-lab, gpu, rocm, rdna4`)
-- ⏳ Hardware profile YAML — `pmoves/config/profiles/workstation-9850x3d-dual-r9700.yaml`
 - ⏳ Capacity benchmark vs RTX 5090 (~99 tok/s for 7B Q4 reference, target Gemma 4 31B Q4 throughput)
+- ⏳ Cascade variant `weight = 0.0` → small % rollout flip after 48h soak + load test (per `tensorzero.toml` Phase C comment)
 - ⏳ `rocm_claw` agent profile activation after first heartbeat on `mesh.gpu.status.v1`
 
 ## Three-Body Pattern
@@ -53,14 +56,28 @@ The node carries the ROCm side of PMOVES inference parity:
 3. Reboot to load `amdgpu-dkms`; verify `rocminfo | grep gfx1201`
 4. Pull a model: `make -C pmoves rdna4-model-pull HF_REPO=bartowski/google_gemma-4-31B-it-GGUF FILE=gemma-4-31b-it-Q4_K_M.gguf`
 5. Start llama-server: `make -C pmoves rdna4-llamacpp-up` (sets `--tensor-split 0.5,0.5` for dual-card)
-6. Register TensorZero provider; add `weight = 0.0` cascade variant for safe rollout
+6. **Resolve hostname drift** (Known Risks #5) — either rename Tailscale to `pmoves-9850x3d-r9700` (matches configs) or update 3 config files to `pmoves-rdna4` (matches TOPOLOGY). Recommend the latter for fleet-naming consistency.
 7. Add `rdna4-runner` card to `signing_identity_cards.yaml`; populate `rdna4_claw` agent profile after first `mesh.gpu.status.v1` event
 8. First capacity benchmark — establish tok/s for {Q4 single-card, FP16 dual-card} on Gemma 4 31B; record in TOPOLOGY
+9. After 48h soak + load test: flip TensorZero cascade variant `weight = 0.0` → small percentage (per `tensorzero.toml` Phase C comment)
 
 ## Known Risks
 1. **`amdgpu-dkms` requires reboot** — first-boot script runs ROCm install but llama-server won't start until kernel module loads. Reboot before `rdna4-llamacpp-up`.
 2. **gfx1201 is RDNA4-only** — Ollama bundled ROCm cannot serve this hardware; do NOT attempt Ollama installation as a fallback.
 3. **ZFS-mirror requires 2× NVMe** — autoinstall fails on single-NVMe boxes. Manual edit to `storage: { layout: { name: direct } }` in `rdna4-workstation.yaml` before USB build if only one NVMe present.
 4. **Default model drift** — `rdna4-gpu-install.sh:37` defaults to Gemma 2 27B; addendum / TOPOLOGY assume Gemma 4 31B. First post-install `make rdna4-model-pull` should target Gemma 4 explicitly.
+5. **Hostname drift between TOPOLOGY and Phase C configs** — TOPOLOGY documents the Tailscale hostname as `pmoves-rdna4` (with `tag:rdna4`), but Phase C configurations merged 2026-04-19 (PR #1318) reference `pmoves-9850x3d-r9700` in three already-merged surfaces:
+   - `pmoves/tensorzero/config/tensorzero.toml:458` (`api_base = "http://pmoves-9850x3d-r9700:8080/v1"`)
+   - `pmoves/config/provider_catalog.yaml:604`
+   - `pmoves/supabase/initdb/12_model_registry_seed.sql:1830`
+
+   The cloud-init seed `deploy/provision/autoinstall/rdna4-workstation.yaml:25` defaults `hostname: pmoves-9850x3d-r9700` (matches the configs but not TOPOLOGY).
+
+   **Resolution paths (operator picks one):**
+   - **A) Recommended** — Update the 3 config files to `pmoves-rdna4`; operator passes `--hostname=pmoves-rdna4` to `build-usb.sh` per AGNOTE4482 §"Operator-Side Handoff". Aligns with TOPOLOGY + fleet naming convention.
+   - **B)** Update TOPOLOGY rdna4 block + this AGNOTE to use `pmoves-9850x3d-r9700` and let cloud-init default win. Aligns with Phase C configs, breaks fleet `pmoves-<role>` naming.
+
+   Either resolution is a follow-up PR scope, NOT this one (would expand scope beyond Phase D documentation sweep).
 
 Added: 2026-04-28
+Updated: 2026-04-29 (Status accuracy correction + Known Risk #5 hostname drift; Phase B/C found already-merged via PRs #1317/#1318)
