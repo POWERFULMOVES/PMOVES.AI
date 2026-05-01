@@ -152,6 +152,35 @@ Example: `ingest.transcript.ready.v1`
   ```
 - **Subscribers:** Discord Publisher, Extract Worker, analysis pipelines
 
+## Provenance-First Content Subjects
+
+These subjects carry the `z890` / PMOVES-SPARK parity lane that keeps junk out of HiRAG while preserving semantic shape, provenance, and Hyperdimensions replay data.
+
+**`content.raw.v1`**
+- **Direction:** Published by ingest and messaging surfaces -> Consumed by `content-provenance-gate`, PMOVES-SPARK
+- **Purpose:** Raw message/content payload entering provenance-first shaping before HiRAG
+- **Core Fields:** `content_id`, `text`, `source_ref`, optional `favorite_words`, `aliases`, `labels`
+
+**`content.lexicon.shaped.v1`**
+- **Direction:** Published by `content-provenance-gate` or PMOVES-SPARK -> Consumed by provenance attesters, Hyperdimensions
+- **Purpose:** Context-shaped lexical view of the content with anchors, favorite words, and semantic weights
+- **Core Fields:** `shape_id`, `anchor_terms`, `semantic_weights`, `noise_score`, `semantic_density`
+
+**`content.provenance.attested.v1`**
+- **Direction:** Published by provenance attesters -> Consumed by the HiRAG gate, Hyperdimensions, Hi-RAG v2
+- **Purpose:** Attach CHIT geometry, graphiti mark, and Merkle lineage before deciding whether content is worthy of HiRAG ingest
+- **Core Fields:** `graphiti_mark`, `merkle_root`, `provenance_refs`, `hyperbolic_coords`, `spectral_signature`
+
+**`content.hirag.accepted.v1`**
+- **Direction:** Published by the `content-provenance-gate` -> Consumed by Hi-RAG v2, Hyperdimensions, operators
+- **Purpose:** Content is semantically dense enough and sufficiently attested to enter HiRAG
+- **Core Fields:** `kb_namespace`, `accepted_reason`, `scorecard`
+
+**`content.hirag.rejected.v1`**
+- **Direction:** Published by the `content-provenance-gate` -> Consumed by PMOVES-SPARK, Hyperdimensions, operators
+- **Purpose:** Reject low-signal or weakly attested content before it pollutes HiRAG
+- **Core Fields:** `rejected_reason`, `rejected_reasons`, `scorecard`
+
 **`ingest.summary.ready.v1`**
 - **Direction:** Published by summary generation services
 - **Purpose:** Notify that content summary is available

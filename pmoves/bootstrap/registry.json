@@ -1374,6 +1374,55 @@
           "default": "7.0"
         }
       ]
+    },
+    {
+      "id": "space-agent",
+      "name": "PMOVES Space-Agent",
+      "description": "Node.js space management with NATS bridge (port 3010). Submodule PMOVES-space-agent on PMOVES.AI-Edition-Hardened branch. Single-user-app mode for fleet integration.",
+      "variables": [
+        {
+          "key": "PMOVES_BRIDGE_API_KEY",
+          "file": "pmoves/env.shared",
+          "prompt": "Space-Agent bridge API key (X-PMOVES-API-KEY header)",
+          "help": "Required header for /api/pmoves_bridge route. Generate: openssl rand -hex 32",
+          "required": true,
+          "sensitive": true,
+          "generate": {
+            "type": "random_hex",
+            "length": 32
+          }
+        },
+        {
+          "key": "SPACE_AGENT_BIND",
+          "file": "pmoves/env.shared",
+          "prompt": "Host bind address for space-agent",
+          "default": "127.0.0.1",
+          "help": "Loopback by default; set to 0.0.0.0 only if exposing to LAN.",
+          "required": false,
+          "sensitive": false,
+          "type": "string"
+        },
+        {
+          "key": "SPACE_AGENT_PORT",
+          "file": "pmoves/env.shared",
+          "prompt": "Host port for space-agent",
+          "default": "3010",
+          "help": "Container port is fixed at 3010; this is the host-side mapping.",
+          "required": false,
+          "sensitive": false,
+          "type": "string"
+        },
+        {
+          "key": "SPACE_AGENT_SRC",
+          "file": "pmoves/env.shared",
+          "prompt": "Path to PMOVES-space-agent submodule (mounted into /app/pmoves)",
+          "default": "../PMOVES-space-agent/pmoves",
+          "help": "Relative to docker-compose.yml location. Override only if running against a non-standard checkout.",
+          "required": false,
+          "sensitive": false,
+          "type": "string"
+        }
+      ]
     }
   ],
   "canonical_aliases": {
