@@ -22,14 +22,17 @@ Environment Variables:
     CHANNEL_MONITOR_DATABASE_URL: PostgreSQL connection string
     CHANNEL_MONITOR_NAMESPACE: Default namespace for sources
     CHANNEL_MONITOR_SECRET: Auth token for protected endpoints
+    CHANNEL_MONITOR_CONTENT_RAW_PUBLISH: Toggle `content.raw.v1` publishing for manual drops
     CHANNEL_MONITOR_GOOGLE_CLIENT_ID: Google OAuth client ID
     CHANNEL_MONITOR_GOOGLE_CLIENT_SECRET: Google OAuth client secret
     CHANNEL_MONITOR_GOOGLE_REDIRECT_URI: OAuth redirect URI
     CHANNEL_MONITOR_GOOGLE_SCOPES: Comma-separated OAuth scopes
+    NATS_URL: NATS connection string used for `content.raw.v1` publishing
 """
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import re
@@ -43,7 +46,21 @@ from prometheus_client import Counter, generate_latest, CONTENT_TYPE_LATEST
 from pydantic import BaseModel, Field, validator
 
 from .config import config_path_from_env, ensure_config, save_config
-from .monitor import ChannelMonitor
+from .monitor import ChannelMonitor, build_manual_drop_raw_content
+
+try:  # pragma: no cover - optional at import time
+    import nats as nats_pkg
+    NATS_AVAILABLE = True
+except ImportError:  # pragma: no cover
+    nats_pkg = None  # type: ignore
+    NATS_AVAILABLE = False
+
+try:
+    from services.common.events import envelope as build_event_envelope
+    CONTRACT_EVENTS_AVAILABLE = True
+except ImportError:
+    build_event_envelope = None  # type: ignore
+    CONTRACT_EVENTS_AVAILABLE = False
 
 
 def _parse_scopes(value: str | None) -> list[str]:
@@ -86,6 +103,11 @@ DATABASE_URL = os.getenv(
     "CHANNEL_MONITOR_DATABASE_URL", "postgresql://postgres:postgres@supabase-db:5432/postgres"
 )
 DEFAULT_NAMESPACE = os.getenv("CHANNEL_MONITOR_NAMESPACE", "pmoves")
+NATS_URL = os.getenv("NATS_URL", "nats://nats:pmoves@nats:4222")
+CONTENT_RAW_SUBJECT = "content.raw.v1"
+CONTENT_RAW_PUBLISH_ENABLED = os.getenv(
+    "CHANNEL_MONITOR_CONTENT_RAW_PUBLISH", "true"
+).strip().lower() in {"1", "true", "yes"}
 STATUS_SECRET = os.getenv("CHANNEL_MONITOR_SECRET")
 if not STATUS_SECRET:
     LOGGER.warning("CHANNEL_MONITOR_SECRET is not set — all protected endpoints are unauthenticated")
@@ -105,13 +127,49 @@ monitor = ChannelMonitor(
     google_redirect_uri=GOOGLE_REDIRECT_URI,
     google_scopes=GOOGLE_SCOPES or None,
 )
+_nats_client = None
+
+
+async def _publish_content_raw_event(payload: Dict[str, Any], *, correlation_id: str) -> bool:
+    global _nats_client
+    if not CONTENT_RAW_PUBLISH_ENABLED:
+        return False
+    if _nats_client is None or _nats_client.is_closed:
+        LOGGER.warning("content.raw.v1 publish skipped because NATS is not connected")
+        return False
+
+    event = payload
+    if CONTRACT_EVENTS_AVAILABLE and build_event_envelope is not None:
+        event = build_event_envelope(
+            CONTENT_RAW_SUBJECT,
+            payload,
+            correlation_id=correlation_id,
+            source="channel-monitor",
+        )
+    try:
+        await _nats_client.publish(CONTENT_RAW_SUBJECT, json.dumps(event).encode("utf-8"))
+        await _nats_client.flush()
+        LOGGER.info("Published manual-drop raw content to %s", CONTENT_RAW_SUBJECT)
+        return True
+    except Exception as exc:
+        LOGGER.warning("content.raw.v1 publish failed (non-fatal): %s", exc)
+        return False
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Manage Channel Monitor application lifespan."""
+    global _nats_client
     # Startup
     await monitor.start()
     app.state.monitor = monitor
+    if NATS_AVAILABLE and CONTENT_RAW_PUBLISH_ENABLED:
+        try:
+            _nats_client = await nats_pkg.connect(NATS_URL)
+            LOGGER.info("content.raw.v1 publisher connected to %s", NATS_URL)
+        except Exception as exc:
+            LOGGER.warning("content.raw.v1 publisher connection failed (non-fatal): %s", exc)
+    elif CONTENT_RAW_PUBLISH_ENABLED and not NATS_AVAILABLE:
+        LOGGER.warning("CHANNEL_MONITOR_CONTENT_RAW_PUBLISH is enabled but nats-py is not installed")
     # Ensure metrics counters exist
     _ = CHANNEL_CHECKS_TOTAL.labels(kind="startup").inc(0)
     _ = STATUS_UPDATES_TOTAL.labels(result="noop").inc(0)
@@ -119,6 +177,12 @@ async def lifespan(app: FastAPI):
     _ = DISCORD_DROP_REVIEWS_TOTAL.labels(action="noop").inc(0)
     yield
     # Shutdown
+    if _nats_client and not _nats_client.is_closed:
+        try:
+            await _nats_client.close()
+        except Exception:
+            pass
+        _nats_client = None
     await monitor.shutdown()
 
 
@@ -616,11 +680,33 @@ async def ingest_discord_drop(
         DISCORD_DROPS_TOTAL.labels(result="error").inc()
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
+    raw_payload = build_manual_drop_raw_content(
+        urls=urls,
+        content=payload.content,
+        namespace=payload.namespace or result.get("namespace"),
+        tags=payload.tags,
+        source=payload.source,
+        approval_mode=mode,
+        source_context=metadata or None,
+        media_type=payload.media_type,
+        format_override=payload.format,
+        result=result,
+    )
+    content_raw_emitted = False
+    if raw_payload is not None:
+        correlation_id = payload.message_id or raw_payload["content_id"]
+        content_raw_emitted = await _publish_content_raw_event(
+            raw_payload,
+            correlation_id=correlation_id,
+        )
+
     DISCORD_DROPS_TOTAL.labels(result="success").inc()
     return {
         "status": "ok",
         "approval_mode": mode,
         "next_action": None if mode == "auto" else "POST /api/monitor/discord-drop/approve",
+        "content_raw_emitted": content_raw_emitted,
+        "content_raw_content_id": raw_payload["content_id"] if raw_payload else None,
         **result,
     }
 
