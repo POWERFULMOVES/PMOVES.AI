@@ -92,6 +92,36 @@
     "content.published.v1": {
       "schema": "schemas/content/published.v1.schema.json"
     },
+    "content.raw.v1": {
+      "schema": "schemas/content/raw.v1.schema.json",
+      "description": "Raw content entering the provenance-first shaping lane before SPARK lexicon processing.",
+      "publisher": ["messaging-gateway", "channel-monitor", "content-provenance-gate"],
+      "subscriber": ["content-provenance-gate", "pmoves-dgx-spark"]
+    },
+    "content.lexicon.shaped.v1": {
+      "schema": "schemas/content/lexicon.shaped.v1.schema.json",
+      "description": "Context-shaped lexical payload with favorite words, anchors, and semantic weights.",
+      "publisher": ["content-provenance-gate", "pmoves-dgx-spark"],
+      "subscriber": ["content-provenance-gate", "pmoves-dgx-spark", "pmoves-hyperdimensions"]
+    },
+    "content.provenance.attested.v1": {
+      "schema": "schemas/content/provenance.attested.v1.schema.json",
+      "description": "Lexicon-shaped payload attested with CHIT geometry, graphiti mark, and Merkle root.",
+      "publisher": ["content-provenance-gate", "pmoves-dgx-spark"],
+      "subscriber": ["content-provenance-gate", "hi-rag-gateway-v2", "pmoves-hyperdimensions"]
+    },
+    "content.hirag.accepted.v1": {
+      "schema": "schemas/content/hirag.accepted.v1.schema.json",
+      "description": "Provenance-attested content accepted for HiRAG ingestion.",
+      "publisher": ["content-provenance-gate"],
+      "subscriber": ["hi-rag-gateway-v2", "pmoves-hyperdimensions", "messaging-gateway"]
+    },
+    "content.hirag.rejected.v1": {
+      "schema": "schemas/content/hirag.rejected.v1.schema.json",
+      "description": "Content rejected before HiRAG ingest because provenance or semantic gates failed.",
+      "publisher": ["content-provenance-gate"],
+      "subscriber": ["pmoves-dgx-spark", "pmoves-hyperdimensions", "messaging-gateway"]
+    },
     "finance.monthly.summary.v1": {
       "schema": "schemas/finance/monthly.summary.v1.schema.json"
     },
