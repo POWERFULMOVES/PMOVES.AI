@@ -18,7 +18,7 @@ input:
   properties:
     a2ui_spec:
       type: object
-      description: "A2UI animation JSON spec (see a2ui-animation-schema.json)"
+      description: "A2UI animation JSON spec (see a2ui-animation-schema.json). Text and heading elements may opt into text_layout.engine=pretext with maxWidth, lineHeight, letterSpacing, wordBreak, whiteSpace, maxLines, shrinkWrap, and debugBoxes for caption-safe or living-doc renders."
     format:
       type: string
       enum: [mp4, gif, webm]
@@ -41,12 +41,17 @@ output:
       type: integer
     scenes:
       type: integer
+    layout_summary:
+      type: object
+      description: "Inventory of text layout usage, including how many text elements requested Pretext-driven wrapping."
 
 # Service endpoint
 service:
   url: "http://localhost:8105/render"
   method: POST
   timeout_ms: 120000
+  alternates:
+    - "http://localhost:8105/render/provenance"
 
 # Dependencies
 dependencies:
@@ -57,6 +62,9 @@ dependencies:
   nats_subjects:
     - skills.pipeline.research-render.v1
     - skills.pipeline.model-benchmark-viz.v1
+  notes:
+    - "The PMOVES lane currently consumes the @chenglou/pretext package surface while tracking POWERFULMOVES/Pmoves-pretext as the living-docs alignment fork."
+    - "Use /render/provenance for direct living-doc artifacts when the caller already has weighted terms, sections, and provenance refs."
 
 # Agent binding
 agent: creator

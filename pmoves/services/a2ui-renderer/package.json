@@ -8,11 +8,14 @@
     "build": "tsc && remotion bundle src/remotion/index.tsx",
     "start": "node dist/index.js",
     "render": "remotion render src/remotion/index.tsx",
+    "render:provenance:still": "node scripts/render-provenance-artifact.mjs",
+    "render:provenance:file": "node scripts/render-provenance-artifact.mjs",
     "lint": "eslint src/",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.700.0",
+    "@chenglou/pretext": "^0.0.6",
     "@remotion/bundler": "4.0.436",
     "@remotion/cli": "4.0.436",
     "@remotion/media": "4.0.436",
