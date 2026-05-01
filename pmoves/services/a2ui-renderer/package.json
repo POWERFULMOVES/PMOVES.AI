@@ -8,8 +8,8 @@
     "build": "tsc && remotion bundle src/remotion/index.tsx",
     "start": "node dist/index.js",
     "render": "remotion render src/remotion/index.tsx",
-    "render:provenance:still": "node scripts/render-provenance-artifact.mjs",
-    "render:provenance:file": "node scripts/render-provenance-artifact.mjs",
+    "render:provenance:still": "node scripts/render-provenance-artifact.mjs demos/provenance_living_doc.request.json demos/provenance_living_doc.preview.png",
+    "render:provenance:file": "node scripts/render-provenance-artifact.mjs demos/provenance_living_doc.request.json demos/provenance_living_doc.preview.mp4",
     "lint": "eslint src/",
     "typecheck": "tsc --noEmit"
   },
