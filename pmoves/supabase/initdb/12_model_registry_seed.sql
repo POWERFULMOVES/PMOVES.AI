@@ -1827,11 +1827,11 @@ INSERT INTO pmoves_core.model_providers (name, type, api_base, api_key_env_var, 
 VALUES (
   'llamacpp_rocm',
   'openai_compatible',
-  'http://pmoves-9850x3d-r9700:8080/v1',
+  'http://pmoves-rdna4:8080/v1',
   'LLAMACPP_ROCM_API_KEY',
   'llama-server (HIP) on AMD Ryzen 9850X3D + dual R9700 RDNA4 gfx1201 (ROCm 7.1)',
   true,
-  '{"status": "staging", "network": "tailnet", "location": "local", "arch": "rdna4", "gpu": "radeon-ai-pro-r9700", "gpu_count": 2, "total_vram_mb": 65536, "hostname": "pmoves-9850x3d-r9700", "phase": "C", "fork": "tlee933/llama.cpp-rdna4-gfx1201"}'::jsonb
+  '{"status": "staging", "network": "tailnet", "location": "local", "arch": "rdna4", "gpu": "radeon-ai-pro-r9700", "gpu_count": 2, "total_vram_mb": 65536, "hostname": "pmoves-rdna4", "phase": "C", "fork": "tlee933/llama.cpp-rdna4-gfx1201"}'::jsonb
 )
 ON CONFLICT (name) DO UPDATE SET
   type = EXCLUDED.type,

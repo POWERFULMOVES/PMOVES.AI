@@ -405,7 +405,7 @@ gb10:
 
 # AMD Radeon AI Pro R9700 (RDNA4, gfx1201)
 # Dual-GPU workstation: 2x 32 GB = 64 GB total VRAM on AMD Ryzen 9850X3D.
-# Hostname convention: pmoves-9850x3d-r9700. Inference backend: llama.cpp HIP
+# Hostname convention: pmoves-rdna4. Inference backend: llama.cpp HIP
 # (custom fork tlee933/llama.cpp-rdna4-gfx1201 — ROCm 7.1 + gfx1201 kernels NOT
 # in stock Ollama as of 2026-04). llama-server on :8080 exposes OpenAI-compat
 # API; rocm-smi-exporter on :9835 feeds Prometheus.
@@ -422,4 +422,4 @@ radeon-ai-pro-r9700:
   tensor_split: "0.5,0.5"         # Dual-GPU row-split mode
   split_mode: "row"
   cpu_companion: "AMD Ryzen 9850X3D (8C / 3D V-Cache)"
-  hostname: "pmoves-9850x3d-r9700"
+  hostname: "pmoves-rdna4"

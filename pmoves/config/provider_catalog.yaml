@@ -601,7 +601,7 @@ providers:
   llamacpp_rocm:
     env_var: LLAMACPP_ROCM_API_KEY
     key_pattern: ".*"
-    api_base: "http://pmoves-9850x3d-r9700:8080/v1"
+    api_base: "http://pmoves-rdna4:8080/v1"
     tz_type: openai
     tier: llm
     models:
