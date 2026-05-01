@@ -342,7 +342,7 @@ app.post('/render', renderLimiter, requireAuth, async (req: Request, res: Respon
         bucket: MINIO_BUCKET,
         format,
         source: 'a2ui-renderer',
-        agent_id: 'darkxside',
+        agent_id: process.env.PROVENANCE_AGENT_ID || 'unknown',
         timestamp: new Date().toISOString(),
       },
     });
@@ -359,7 +359,7 @@ app.post('/render', renderLimiter, requireAuth, async (req: Request, res: Respon
 
     // Graphiti emission (fire-and-forget)
     publishNats('agent.graphiti.signed.v1', {
-      agent_id: 'darkxside',
+      agent_id: process.env.PROVENANCE_AGENT_ID || 'unknown',
       glyph: '\u2726',
       color: '#E11D48',
       phase: 'a2ui-render',
@@ -468,7 +468,7 @@ app.post('/render/chart', renderLimiter, requireAuth, async (req: Request, res: 
         bucket: MINIO_BUCKET,
         format: 'mp4',
         source: 'a2ui-renderer',
-        agent_id: 'darkxside',
+        agent_id: process.env.PROVENANCE_AGENT_ID || 'unknown',
         timestamp: new Date().toISOString(),
       },
     });
@@ -561,7 +561,7 @@ app.post('/render/provenance', renderLimiter, requireAuth, async (req: Request, 
         format,
         source: 'a2ui-renderer',
         artifact_kind: 'provenance-living-doc',
-        agent_id: 'darkxside',
+        agent_id: process.env.PROVENANCE_AGENT_ID || 'unknown',
         timestamp: new Date().toISOString(),
       },
     });
@@ -577,7 +577,7 @@ app.post('/render/provenance', renderLimiter, requireAuth, async (req: Request, 
     });
 
     publishNats('agent.graphiti.signed.v1', {
-      agent_id: 'darkxside',
+      agent_id: process.env.PROVENANCE_AGENT_ID || 'unknown',
       glyph: '\u2726',
       color: '#E11D48',
       phase: 'a2ui-provenance',

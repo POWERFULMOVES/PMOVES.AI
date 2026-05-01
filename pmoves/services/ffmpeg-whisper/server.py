@@ -68,7 +68,9 @@ ProviderLiteral = Literal["faster-whisper", "whisper", "qwen2-audio"]
 logger = logging.getLogger(__name__)
 
 # ── CHIT / NATS CGP publishing ───────────────────────────────────────────────
-NATS_URL = os.environ.get("NATS_URL", "nats://nats:pmoves@nats:4222")
+NATS_URL = os.environ.get("NATS_URL", "")
+if not NATS_URL:
+    raise KeyError("NATS_URL environment variable is required")
 CGP_PUBLISH_ENABLED = os.environ.get(
     "FFW_CGP_PUBLISH", "true"
 ).lower() in ("1", "true", "yes")
@@ -77,7 +79,7 @@ CGP_SUBJECT = "tokenism.cgp.ready.v1"
 TRANSCRIPT_READY_SUBJECT = "ingest.transcript.ready.v1"
 CONTENT_RAW_SUBJECT = "content.raw.v1"
 CONTENT_RAW_PUBLISH_ENABLED = os.environ.get(
-    "FFW_CONTENT_RAW_PUBLISH", "true"
+    "FFW_CONTENT_RAW_PUBLISH", "false"
 ).lower() in ("1", "true", "yes")
 
 _nats_client = None  # persistent NATS connection, set in lifespan

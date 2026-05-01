@@ -27,6 +27,13 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from fastapi import FastAPI
+from fastapi import Depends, HTTPException, Request, Security
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from pydantic import BaseModel, Field
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
 from prometheus_client import (
     CONTENT_TYPE_LATEST,
     REGISTRY,
@@ -55,7 +62,7 @@ logger = logging.getLogger("content_provenance_gate")
 SERVICE_NAME = os.environ.get("SERVICE_NAME", "content-provenance-gate")
 NODE_NAME = os.environ.get("NODE_NAME", "z890")
 NODE_ROLE = os.environ.get("NODE_ROLE", "z890")
-NATS_URL = os.environ.get("NATS_URL", "nats://nats:pmoves@nats:4222")
+NATS_URL = os.environ["NATS_URL"]
 HEALTH_PORT = int(os.environ.get("HEALTH_PORT", "8112"))
 QUEUE_GROUP = os.environ.get("CONTENT_PROVENANCE_QUEUE", "content-provenance-gate")
 HIRAG_NAMESPACE = os.environ.get("HIRAG_NAMESPACE", "hirag-provenance")
@@ -133,25 +140,40 @@ _nc: Optional[NATS] = None
 _nats_loop_task: Optional[asyncio.Task] = None
 
 
+_chit_encode_content = None
+CHIT_ENCODE_HOOK_PATH = os.environ.get("CHIT_ENCODE_HOOK_PATH", "")
+
+
 def _load_chit_encode_content():
-    candidates = [
-        Path(__file__).resolve().parents[2] / "tools" / "chit_encode_hook.py",
-        Path(__file__).resolve().parents[1] / "tools" / "chit_encode_hook.py",
-    ]
-    for candidate in candidates:
-        if not candidate.is_file():
-            continue
-        spec = importlib.util.spec_from_file_location("content_provenance_chit_encode", candidate)
-        if spec is None or spec.loader is None:
-            continue
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
-        if hasattr(module, "chit_encode_content"):
-            return module.chit_encode_content
-    raise ImportError("Could not locate tools/chit_encode_hook.py for provenance attestation")
+    """Load chit_encode_content from a single pinned directory.
 
-
-chit_encode_content = _load_chit_encode_content()
+    CHIT_ENCODE_HOOK_PATH must be set to an exact directory containing
+    chit_encode_hook.py. No parent directory walking is performed.
+    Returns None if CHIT_ENCODE_HOOK_PATH is not set.
+    """
+    global _chit_encode_content
+    if _chit_encode_content is not None:
+        return _chit_encode_content
+    if not CHIT_ENCODE_HOOK_PATH:
+        return None
+    hook_file = Path(CHIT_ENCODE_HOOK_PATH) / "chit_encode_hook.py"
+    if not hook_file.is_file():
+        raise ImportError(
+            f"CHIT_ENCODE_HOOK_PATH set but {hook_file} does not exist"
+        )
+    spec = importlib.util.spec_from_file_location(
+        "chit_encode_hook", hook_file
+    )
+    if spec is None or spec.loader is None:
+        raise ImportError(f"Failed to create module spec for {hook_file}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    if hasattr(module, "chit_encode_content"):
+        _chit_encode_content = module.chit_encode_content
+        return _chit_encode_content
+    raise ImportError(
+        f"{hook_file} exists but has no 'chit_encode_content' callable"
+    )
 
 
 @asynccontextmanager
@@ -183,6 +205,56 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Content Provenance Gate", version="0.1.0", lifespan=lifespan)
+GATE_API_KEY = os.environ.get("GATE_API_KEY", "")
+_bearer_scheme = HTTPBearer(auto_error=False)
+
+limiter = Limiter(key_func=get_remote_address, default_limits=["10/minute"])
+app.state.limiter = limiter
+app.add_middleware(SlowAPIMiddleware)
+app.add_exception_handler(RateLimitExceeded, lambda r, e: HTTPException(429, "Rate limit exceeded"))
+
+_MAX_BODY_BYTES = 512 * 1024  # 512 KB
+
+
+async def _require_api_key(
+    credentials: HTTPAuthorizationCredentials = Security(_bearer_scheme),
+) -> None:
+    if not GATE_API_KEY:
+        return  # no key configured = open (dev mode, protect with network policy)
+    if credentials is None or credentials.credentials != GATE_API_KEY:
+        raise HTTPException(status_code=401, detail="Invalid or missing API key")
+
+
+class PreviewRawRequest(BaseModel):
+    text: str = Field(default="", max_length=10000)
+    source_ref: Optional[str] = Field(default=None, max_length=500)
+    content_type: Optional[str] = Field(default="text/plain", max_length=100)
+    favorite_words: Optional[List[str]] = Field(default=None, max_length=100)
+    aliases: Optional[List[str]] = Field(default=None, max_length=100)
+    labels: Optional[List[str]] = Field(default=None, max_length=100)
+    lane: Optional[str] = Field(default="text", max_length=50)
+    content_id: Optional[str] = Field(default=None, max_length=200)
+    model_config = {"extra": "ignore"}
+
+
+class EvaluateRequest(BaseModel):
+    content_id: str = Field(min_length=1, max_length=200)
+    text: str = Field(min_length=1, max_length=10000)
+    source_ref: Optional[str] = Field(default=None, max_length=500)
+    shape_id: Optional[str] = Field(default=None, max_length=200)
+    merkle_root: Optional[str] = Field(default=None, max_length=200)
+    graphiti_mark: Optional[str] = Field(default=None, max_length=500)
+    provenance_refs: Optional[List[str]] = Field(default=None, max_length=50)
+    favorite_words: Optional[List[str]] = Field(default=None, max_length=100)
+    anchor_terms: Optional[List[str]] = Field(default=None, max_length=100)
+    semantic_weights: Optional[List[Dict[str, Any]]] = Field(default=None)
+    noise_score: Optional[float] = Field(default=None)
+    semantic_density: Optional[float] = Field(default=None)
+    hyperbolic_coords: Optional[Dict[str, Any]] = Field(default=None)
+    spectral_signature: Optional[List[Any]] = Field(default=None)
+    dirichlet_weights: Optional[Dict[str, Any]] = Field(default=None)
+    checksum: Optional[str] = Field(default=None, max_length=200)
+    model_config = {"extra": "ignore"}
 
 
 def _now_iso() -> str:
@@ -355,7 +427,12 @@ def attest_shaped_content(payload: Dict[str, Any]) -> Dict[str, Any]:
         "aliases": payload.get("aliases", []),
         "labels": payload.get("labels", []),
     }
-    cgp = chit_encode_content(payload["text"], metadata=metadata)
+    chit_fn = _load_chit_encode_content()
+    if chit_fn is None:
+        raise RuntimeError(
+            "CHIT encode hook not available — set CHIT_ENCODE_HOOK_PATH to enable attestation"
+        )
+    cgp = chit_fn(payload["text"], metadata=metadata)
     leaf_inputs = [
         payload["content_id"],
         payload["shape_id"],
@@ -470,6 +547,8 @@ def preview_raw_pipeline(payload: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def _parse_message_body(data: bytes) -> Tuple[Optional[Dict[str, Any]], Dict[str, Any]]:
+    if len(data) > _MAX_BODY_BYTES:
+        raise ValueError(f"Request body exceeds {_MAX_BODY_BYTES // 1024} KB limit")
     decoded = json.loads(data.decode("utf-8"))
     if isinstance(decoded, dict) and isinstance(decoded.get("payload"), dict):
         return decoded, decoded["payload"]
@@ -627,20 +706,29 @@ async def healthz():
 
 
 @app.get("/metrics")
-async def metrics():
+async def metrics(_auth: None = Depends(_require_api_key)):
     from fastapi.responses import Response
-
     return Response(generate_latest(REGISTRY), media_type=CONTENT_TYPE_LATEST)
 
 
 @app.post("/v1/preview/raw")
-async def preview_raw(payload: Dict[str, Any]):
-    return preview_raw_pipeline(payload)
+@limiter.limit("10/minute")
+async def preview_raw(
+    request: Request,
+    body: PreviewRawRequest,
+    _auth: None = Depends(_require_api_key),
+):
+    return preview_raw_pipeline(body.model_dump())
 
 
 @app.post("/v1/evaluate")
-async def evaluate(payload: Dict[str, Any]):
-    topic, decision = evaluate_attested_content(payload)
+@limiter.limit("10/minute")
+async def evaluate(
+    request: Request,
+    body: EvaluateRequest,
+    _auth: None = Depends(_require_api_key),
+):
+    topic, decision = evaluate_attested_content(body.model_dump())
     return {
         "topic": topic,
         "payload": decision,

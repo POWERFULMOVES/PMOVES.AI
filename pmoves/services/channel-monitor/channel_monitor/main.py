@@ -100,13 +100,17 @@ CONFIG = ensure_config(CONFIG_PATH)
 
 QUEUE_URL = os.getenv("CHANNEL_MONITOR_QUEUE_URL", "http://pmoves-yt:8077/yt/ingest")
 DATABASE_URL = os.getenv(
-    "CHANNEL_MONITOR_DATABASE_URL", "postgresql://postgres:postgres@supabase-db:5432/postgres"
+    "CHANNEL_MONITOR_DATABASE_URL", ""
 )
+if not DATABASE_URL:
+    raise KeyError("CHANNEL_MONITOR_DATABASE_URL environment variable is required")
 DEFAULT_NAMESPACE = os.getenv("CHANNEL_MONITOR_NAMESPACE", "pmoves")
-NATS_URL = os.getenv("NATS_URL", "nats://nats:pmoves@nats:4222")
+NATS_URL = os.getenv("NATS_URL", "")
+if not NATS_URL:
+    raise KeyError("NATS_URL environment variable is required")
 CONTENT_RAW_SUBJECT = "content.raw.v1"
 CONTENT_RAW_PUBLISH_ENABLED = os.getenv(
-    "CHANNEL_MONITOR_CONTENT_RAW_PUBLISH", "true"
+    "CHANNEL_MONITOR_CONTENT_RAW_PUBLISH", "false"
 ).strip().lower() in {"1", "true", "yes"}
 STATUS_SECRET = os.getenv("CHANNEL_MONITOR_SECRET")
 if not STATUS_SECRET:
