@@ -41,11 +41,13 @@ from routes.health import router as _health_router
 from routes.query import router as _query_router
 from routes.geometry import router as _geometry_router
 from routes.models import router as _models_router
+from routes.provenance import router as _provenance_router
 
 app.include_router(_health_router)
 app.include_router(_query_router)
 app.include_router(_geometry_router)
 app.include_router(_models_router)
+app.include_router(_provenance_router)
 
 # ── Static geometry UI ──────────────────────────────────────────────────────
 app.mount(
@@ -53,6 +55,14 @@ app.mount(
     StaticFiles(directory=str(Path(__file__).resolve().parent / "web"), html=True),
     name="geometry",
 )
+
+_hyperdimensions_dir = Path(__file__).resolve().parents[3] / "Pmoves-hyperdimensions"
+if _hyperdimensions_dir.exists():
+    app.mount(
+        "/hyperdimensions/app",
+        StaticFiles(directory=str(_hyperdimensions_dir), html=True),
+        name="hyperdimensions-app",
+    )
 
 # ── Backward-compatible re-exports (tests import these from app) ────────────
 from config import (  # noqa: E402, F401
@@ -73,7 +83,14 @@ from config import (  # noqa: E402, F401
     EMBEDDING_MODEL, EMBEDDING_MODEL_TYPE, EMBEDDING_DIMENSION,
     RERANKER_TYPE, _embedding_model_loaded, _reranker_model_loaded,
 )
-from models import QueryReq, QueryResp, UpsertReq, UpsertItem  # noqa: F401
+from models import (  # noqa: F401
+    QueryReq,
+    QueryResp,
+    UpsertReq,
+    UpsertItem,
+    ProvenanceAcceptedItem,
+    ProvenanceUpsertReq,
+)
 from embeddings import embed_query  # noqa: F401
 from embeddings import (  # noqa: F401
     swap_embedding_model, get_embedding_status, get_embedding_dimension,
@@ -94,6 +111,7 @@ from geometry_bus import (  # noqa: F401
     _room_ws_id, _room_ids,
     _geometry_context, _get_active_builder_pack,
     _load_codebook, _get_gan_sidecar, _persist_cgp_to_db,
+    get_latest_provenance_hyperdimensions_save, get_latest_provenance_cgp,
     # additional re-exports for test backward-compat
     geometry_params, _active_builder_packs,
     _set_active_builder_pack, _fetch_geometry_pack, _apply_swarm_meta,
@@ -104,6 +122,7 @@ except Exception:
     ShapeStore = None  # type: ignore[misc]
 from routes.health import admin_rerank_status, admin_hrm_status  # noqa: F401
 from routes.geometry import geometry_decode_text, mindmap_route  # noqa: F401
+from provenance_ingest import provenance_payload_to_upsert_item, upsert_provenance_payloads  # noqa: F401
 from clients.qdrant import qdrant, _qdrant_search, ensure_qdrant_collection  # noqa: F401
 from clients.neo4j import driver, _warm_entities, _warm_last, graph_terms  # noqa: F401
 from clients.openai_compat import meili_lexical, _extract_persona  # noqa: F401
