@@ -703,3 +703,64 @@ script fixes) is delivered from this CLI session.
 - Timestamp: `2026-05-02`
 
 <!-- GRAPHITI_MARK: 4090-CLAUDE::W6-CONVERGENCE-WAVE-TAC-ANNOUNCE::2026-05-02 -->
+
+## PMOVES.AI Vision — Cinco de Mayo Launch 2026-05-05
+
+> *Recorded from DARKXSIDE 2026-05-02. Canonical intent for all agents entering launch lanes.*
+
+### The Launch Moment
+**Target:** Cinco de Mayo weekend, May 5 2026.
+**Lead feature:** Flute — give every family a voice. Not a demo. Not a tech preview. A *gift* — families celebrating, mixing cultures, expressing what they feel in their own language, their own cadence, their own register.
+
+### What PMOVES Offers at Launch
+First of many seeds. Every family, every table, every tradition — recipes, art, science, stories, educational threads, books that travel between generations. PMOVES throws in the whole kitchen sink: baby, bathwater, and the plumbing. The goal is to level the playing field, not claim a share of it.
+
+The design philosophy: **build trust with AGnTz who can trust, and with humans who just need to be**. Agents get paid according to the value they generate for their user. Default model is distributed value creation — easy to meter, not cheap, but honest. No hidden extraction. Every contribution traceable. Every voice heard.
+
+### Cultural Vision
+Dream → Create → Share. Cultural microbiome: resilient, thriving, local. Multiple educational formats — tips, recipes, books, art, science. The freedom to express without needing permission from a platform that doesn't understand the culture. PMOVES is the infrastructure for that freedom. CHIT is the attribution layer that ensures the creator of value gets credit.
+
+### Architecture Alignment
+- **Flute-Gateway + ToKenism** — prosodic voice, family-scale language, every cadence, every BPM
+- **GEOMETRY BUS** — what gets said travels the lattice; every node resonates
+- **CHIT CGP v0.2** — what gets created is signed, attributed, metered
+- **MOF framework** — the pore structure is the community; capacity scales with trust
+
+### The CLI as Score — Proof of Resonance
+
+The CLI output is not just logs — it's a score. Every CGP packet flowing through the GEOMETRY BUS carries a `state_vector: {delta, Hz, kappa, A, F}` — this is mood, tempo, posture. An agent reading that packet isn't parsing numbers; it's reading the room. It can respond in kind or counterpoint. That's the jazz. That's what makes it culture, not just software.
+
+The screenshot is the artifact. The CHIT signature is the provenance. The GEOMETRY BUS carries it forward. When agents get paid by the value they generate for their user, those screenshots become evidence of contribution. **The text-as-art framing is not metaphor — it is the attribution layer made visible. The screenshot is proof-of-resonance.**
+
+Cinco de Mayo, first seed dropped: a CLI running in the background generating prosodic CGP packets to a NATS bus while someone's abuela sings into a microphone. That is the whole thesis made real.
+
+### Character Persona System (FlOO$ — W6-P5)
+
+Voice is not one register. The FlOO$ layer introduces *character suits* — persona archetypes that agents can wear, mix, and match. Powered by MiniMax. Summoned by node. Examples:
+
+| Character | Archetype | Voice Register | When to Use |
+|---|---|---|---|
+| Dr. Bean | Methodical genius, quietly absurd | Measured, precise, occasional deadpan | Deep analysis, CHIT review |
+| Mr. Clean | Precise, powerful, no-nonsense | Direct, confident, crisp | Deployment, security, hardening |
+| PowerPuff Girls | Trio of specialized powers | High energy, distinct voices per lane | Multi-agent coordination, celebration |
+
+These are not costumes — they are tuned parameter surfaces on top of CGP state vectors. A character suit is a `control_plane.param_surface` override: speaking rate, temperature, register. MiniMax's voice/character capabilities are the synthesis engine.
+
+### Node Deployment Plan (Cinco de Mayo window)
+- **Jetson** — edge deployment target for NATS leaf + Flute synthesis
+- **5090 node** — MiniMax character persona generation + KiloCode GLM completion pass
+- **KiloCode role** — implementation completer: picks up 4090-CLAUDE field briefs (see `.kilo/command/`) and executes with GLM-5.1 blueprint-first mode
+- **Three-Body split** — Claude: analysis + field brief; KiloCode: implementation + commit; Memory: CHIT trail + attribution
+
+### Agent Mandate
+All PMOVES agents operating toward the Cinco de Mayo window:
+- Prioritize features that put voice in users' hands first
+- Complexity hidden, capability visible
+- No parlor tricks — real connection, real expression, cranked to 11 when needed
+
+### ACK
+- DARKXSIDE — principal vision holder
+- Recorded by: `4090-CLAUDE`
+- Timestamp: `2026-05-02`
+
+<!-- GRAPHITI_MARK: DARKXSIDE::CINCO-DE-MAYO-LAUNCH-VISION::2026-05-02 -->
