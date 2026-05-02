@@ -23,7 +23,7 @@ except ImportError:
     ResponseHandlingException = None  # type: ignore
     UnexpectedResponse = None  # type: ignore
 
-from config import QDRANT_URL, COLL, RECREATE_ON_MISMATCH, logger
+from config import QDRANT_URL, QDRANT__API_KEY, COLL, RECREATE_ON_MISMATCH, logger
 
 # Safety threshold: refuse to auto-recreate collections with more points than
 # this unless QDRANT_FORCE_RECREATE=true.  Prevents accidental data loss when
@@ -35,7 +35,7 @@ _FORCE_RECREATE = os.environ.get("QDRANT_FORCE_RECREATE", "false").lower() in (
 
 # --- Qdrant client instance ---
 if QdrantClient is not None:
-    qdrant = QdrantClient(url=QDRANT_URL, timeout=30.0)
+    qdrant = QdrantClient(url=QDRANT_URL, api_key=QDRANT__API_KEY or None, timeout=30.0)
 else:
     qdrant = None  # type: ignore
 

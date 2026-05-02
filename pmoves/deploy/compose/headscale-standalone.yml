@@ -42,7 +42,7 @@ services:
       - /docker/headscale/config:/etc/headscale:ro
       - /docker/headscale/data:/var/lib/headscale
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:8096/health"]
+      test: ["CMD", "headscale", "health"]
       interval: 15s
       timeout: 5s
       retries: 3

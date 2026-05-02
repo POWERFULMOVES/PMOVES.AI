@@ -17,6 +17,22 @@ git branch      # what branch am I on?
 git worktree list  # am I in a worktree?
 ```
 
+### Branch Naming Convention
+
+| Prefix | Use For |
+|--------|----------|
+| `feat/` | New features |
+| `fix/` | Bug fixes |
+| `infra/` | Infrastructure, CI/CD, DevOps |
+| `docs/` | Documentation-only changes |
+| `refactor/` | Code refactoring (no behavior change) |
+
+**Workstream IDs**: Use `w1`–`w6` (from ROADMAP) or GitHub issue/PR number.
+Example: `feat/w3-discord-classrooms`, `fix/1287-runner-loop`
+
+**Forbidden**: `feature/` (use `feat/`), `pr/` (branches ≠ PRs), `p1/`–`p7/` (use workstream ID).
+
+
 ## What's Happening Right Now?
 
 | Question | Where to Look |
@@ -38,6 +54,16 @@ make -C pmoves health-quick 2>/dev/null || curl -s http://localhost:8080/healthz
 
 # Git state
 git status -sb && git log --oneline -5
+
+# PR check — warn if working on un-PR'd branch
+BRANCH=$(git rev-parse --abbrev-ref HEAD)
+if [ "$BRANCH" != "main" ]; then
+  PR_COUNT=$(gh pr list --head "$BRANCH" --state open --json number --jq 'length' 2>/dev/null || echo "0")
+  if [ "$PR_COUNT" -eq "0" ]; then
+    echo "WARNING: working on un-PR'd branch: ${BRANCH}"
+  fi
+fi
+
 ```
 
 ## Agent Definitions (Three-Body Solution)
@@ -103,18 +129,47 @@ Claude's context is NOT consistent across z890/4090/5090. Each node may have:
 
 **Always verify before assuming.** Run the health check above, then check the claim register.
 
-## Agent Lanes Quick Reference
+## Node Capacity Quick Reference
 
-| Agent | Primary Node | Lane |
-|-------|-------------|------|
-| Z890-CLAUDE | z890 | Infra, fleet, compose, CI runners |
-| 4090-CLAUDE | 4090 laptop | Provider cascade, Shift Crew, field testing |
-| 5090-CLAUDE | 5090 | GPU, voice stack, submodule sync |
-| CODEX-GPT5 | any | Docs, prospectus, creator control plane |
-| KILOCODE-GLM | 5090 | GLM coding plan, vLLM, Proxmox |
-| PMOVES-MINIMAX | any | Token plan overflow, writing, hyperdimensions |
-| CLAUDE-OPUS | any | Architecture, self-review, convergence |
+Prior to PR #1378 (MOF architecture invariant, 2026-04-24), nodes were described by expertise
+lane — Z890 "owned" infra, 4090 "owned" provider cascade, 5090 "owned" GPU/voice. That framing
+was a pre-MOF mental model: it implied hard domain ownership and discouraged cross-node delegation.
+
+After the Grand Convergence merge, every PMOVES node is a **pore in the MOF lattice** — capable
+of running any PMOVES workload up to its physical capacity. Capacity class is **advisory**, not
+gating: it tells you what a node can sustain under load, not what work it is permitted to do.
+
+Cross-node delegation is the primary mechanism for matching workload to capacity:
+1. Agent Zero `/mcp/*` — synchronous MCP tool call to a peer node
+2. A2A `/.well-known/agent-card.json` — async agent-to-agent via the A2A spec (partially mounted; disabled by default)
+3. NATS `agent.peer.heartbeat.v1` — presence/capability announcement (Phase D
+   mutual-watching skill, not yet live)
+
+The table below shows physical constraints and soft-priority notes per node.
+No row is a hard lane assignment.
+
+| Node | Capacity Class | Physical Constraints | Notes |
+|------|----------------|---------------------|-------|
+| Z890 (Sonic) | Workstation / multi-boot | 24GB VRAM; high core count; multi-OS | Most recent compose + CI runbook context |
+| 5090 | Workstation / GPU-heavy | 32GB VRAM; CUDA primary | GPU inference workhorse; Opus 4.7 mirror active |
+| 4090 laptop | Laptop / GPU-medium | 16GB VRAM; mobile; island-capable | Current operator node; provider proximity |
+| SPARK (GB10 Blackwell) | Edge / unified-memory-large | 128GB unified memory; Blackwell | Island-mode capable; 3-phi relay candidate |
+| Knuckles (AMD) | Workstation / CPU-heavy | 64GB RAM; AMD; no discrete GPU | Batch/CPU overflow; high-RAM non-GPU tasks |
+| KVM4-1 | VPS / API-gateway | Network-primary; low VRAM | External API gateway; `self-hosted, kvm4` CI runner |
+| KVM4-2 | VPS / data-storage | Storage-optimized | Data/storage tier |
+| KVM2 | VPS / exit-proxy | Minimal compute; network-only | Exit proxy; RustDesk ScaleTail relay |
+| (floating) | Inherits host node | Varies | CODEX-GPT5, CLAUDE-OPUS, PMOVES-MINIMAX — no fixed node |
 
 ---
+
+## Restore Safety
+
+> **Incident**: 2026-04-23 — file-level backup restore of AGNOTE4482_SIGNOFF_CHECKLIST.md silently overwrote 7 committed checkmarks (§1.1–1.3, §3.1–3.3). File-level restores bypass git merge/conflict detection.
+>
+> **Rule**: Before restoring ANY AGNOTE file from backup, run:
+> ```bash
+> git diff HEAD -- <file>
+> ```
+> Verify no checkmarks (`- [x]`) would be lost. If the backup is older than HEAD, the restore MUST be a manual merge, not a file copy.
 
 *If you're Husk and you just dropped in: welcome. Start at the top.*

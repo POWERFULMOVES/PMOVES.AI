@@ -127,10 +127,10 @@ Elder-context support is always available to reduce drift and collision across p
 |---------|--------|----------|
 | BoTZ JWT fail-open (P0) | **RESOLVED** | `gateway.py:292-299` returns HTTPException 500 on missing HAS_JOSE or SUPABASE_JWT_SECRET. `auth.py:57-65` returns HTTPException 500 on missing HAS_JOSE or JWT_SECRET. Both fail-closed. |
 | BPM encoder not implemented (P2) | **RESOLVED** | `pmoves/tools/bpm_encoder.py` exists, 574 lines, delivered in PR #1168 (Shift Crew tools) |
-| NATS unauthenticated references (P0) | **RESOLVED** | All 110 NATS URLs in non-test code are authenticated (`nats://nats:pmoves@nats:4222`). PR #1375 completed docs migration. Code files migrated in prior convergence waves. Verified 2026-04-23. |
+| NATS unauthenticated references (P0) | **RESOLVED** | All 26 unauthenticated NATS fallback defaults migrated across 15 files to authenticated `nats://nats:pmoves@nats:4222`. 0 service-code refs remain. 6 intentional exceptions (TAC tree negative-pattern rules + smoke test assertions). Commit `542cbfcb2`. Re-verified 2026-04-24: `grep` confirms 0 bare refs in service code. |
 | A2A server not exposed (P0) | **RESOLVED** | `server.py` refactored: `create_a2a_router()` exports mountable APIRouter. `main.py` mounts it via `app.include_router()` on port 8080. `docker-compose.yml` adds `A2A_DISCOVERY_PUBLIC`/`A2A_TASKS_PUBLIC` env vars. Routes: `/.well-known/agent-card.json`, `/a2a/v1/tasks`, `/a2a/v1/discover`. Auth via `SUPABASE_JWT_SECRET` (from x-hardening). |
-| Agent registry count | **VERIFIED** | 15 agents in `agent_signatures.yaml` (canonical source). Docs claimed 60/76 were stale — registry tracks PMOVES agents, not external agents. |
-| AGENTS file count | **VERIFIED** | 67 .md files in `pmoves/docs/AGENTS/` (verified 2026-04-24). Docs claimed 73+/109 were stale. |
+| Agent registry count | **VERIFIED** | 15 PMOVES-canonical agents in `pmoves/config/agent_signatures.yaml`; broader registry has ~76 entries including 13 external contributors per commit `21b8389de` (8 cross-ref docs updated). Older "60/76" figures conflated the two pools. Re-verified 2026-04-24 after backup-restore regression. |
+| AGENTS file count | **VERIFIED** | 67 .md files in `pmoves/docs/AGENTS/` (root); 109 total including 42 subdirectory docs. Older "73+" claims were partial counts. Cross-ref docs updated. Re-verified 2026-04-24. |
 
 #### Post-2026-03-28 Deliverables
 - **KiloCode claw config** (PR #1151): .kilo/ directory, GLM coding plan mode, 3 agents + 8 commands
@@ -143,10 +143,10 @@ Elder-context support is always available to reduce drift and collision across p
 - **TensorZero**: POSTGRES_URL fix (#1167), cross-profile depends_on removal
 
 ### Handoff Notes
-- NATS auth P0 **RESOLVED** (2026-04-23) — All 110 non-test URLs use authenticated form. PR #1375 completed docs, code migrated in prior waves.
+- All P0 findings resolved (BoTZ JWT, NATS auth, A2A server). No P0 blockers remain.
 - A2A server needs runtime verification (compose exposure check)
-- Signoff checklist sections 1, 3, 7 still unchecked — require prospectus/ClaWz/P7 runtime verification
-- Agent registry count (71) should be reconciled with taxonomy docs that still reference 60
+- Signoff checklist §1.4 still unchecked — requires external operator action (P7, Discord, site/docs language alignment)
+- Agent registry count (~76) and doc count (109) reconciled — see validation ACK below
 
 ### Agent ACK
 - Agent: `CLAUDE-OPUS`
@@ -294,8 +294,8 @@ c373bf1c35 feat(yt-cookies): one-click bootstrap targets — make yt-ingest-boot
 - Agent: `CLAUDE-OPUS`
 - Signature: `ACK::CLAUDE-OPUS::PHASE-9C-INFRA-HARDENING`
 - Timestamp: `2026-04-20`
+- Branch Cleanup: none
 
-<!-- GRAPHITI_MARK: CLAUDE-OPUS::PHASE-9C-INFRA-HARDENING::2026-04-20 -->
 
 ## Runner Restart Loop Fix (2026-04-22)
 
@@ -336,6 +336,7 @@ env["RUNNER_ALLOW_RUNNER_REUSE"] = "true"
 - Agent: `CLAUDE-OPUS`
 - Signature: `ACK::CLAUDE-OPUS::RUNNER-RESTART-LOOP-FIX`
 - Timestamp: `2026-04-22`
+- Branch Cleanup: none
 
 <!-- GRAPHITI_MARK: CLAUDE-OPUS::RUNNER-RESTART-LOOP-FIX::2026-04-22 -->
 
@@ -349,6 +350,7 @@ env["RUNNER_ALLOW_RUNNER_REUSE"] = "true"
 - Signed AGNOTE4482_SIGNOFF_CHECKLIST.md sections 1, 3, 7
 
 ### Key Findings
+
 | Finding | Status | Evidence |
 |---------|--------|----------|
 | NATS hotspot dirs (work-marshaling, chat-relay, node-registry, tools) | **RESOLVED** | All production code migrated; 21 files remain in secondary batch |
@@ -367,45 +369,9 @@ env["RUNNER_ALLOW_RUNNER_REUSE"] = "true"
 - Agent: `4090-CLAUDE`
 - Signature: `ACK::4090-CLAUDE::LAUNCH-PREP-AUDIT`
 - Timestamp: `2026-04-23`
+- Branch Cleanup: none
 
 <!-- GRAPHITI_MARK: 4090-CLAUDE::LAUNCH-PREP-AUDIT::2026-04-23 -->
-
-## SPARK Capability Correction + Doc Alignment (2026-04-23)
-
-### Work Performed
-- **Identified fundamental assumption errors** in SIDECAR_PROMOTION_PLAN.md and HYBRID_RUNNER_STRATEGY.md — both described SPARK as a degraded/limited sidecar when it is a full PMOVES.AI node
-- **HYBRID_RUNNER_STRATEGY.md**: Updated SPARK from 'A2A/MCP relay' to full node (CHIT, P7, TeraFormer, IC, ClaWZ, 76 agents). Added SPARK Node Capabilities section with 10-row table. Added CHIT security note. Updated date to 2026-04-23.
-- **SIDECAR_PROMOTION_PLAN.md**: Added CRITICAL CORRECTION header, SPARK-Specific Correction subsection, CHIT enforcement to gap analysis, SPARK shortcuts for Phase 1/5.3, abbreviated Appendix A transition for SPARK. Generic sidecar steps preserved for non-SPARK devices.
-- **Memory stored**: SPARK capability correction (ce_memory d2402dcd) + 7 YouTube CHIT validation signals (ce_memory 10a84f36)
-- **Scheduled tasks created**: (1) YouTube Playlist Deep CHIT Signal Research — full 80-video analysis of PLGupOT04oMfok7S8W8Js7lZZIlhM8ufc8, (2) Sidecar Plugin Parity + Space Agent Integration — plugin inventory comparison + PLUGIN_PARITY.md + agents.json profiles
-
-### 7 YouTube CHIT Validation Signals (from 5 videos analyzed)
-1. Hermes skills-as-procedures → CHIT distillation config_tuning layer
-2. NemoClaw config self-modification (open problem) → CHIT signed configs solve it
-3. Harness error recovery → CHIT at crypto level not prompt level
-4. Qwen3.6/Gemma4 model suit data for SPARK deployment
-5. Archon guide harness → maps to CHIT pipeline
-6. ClaWZ fork 1092 commits behind → harness restructure over fork maintenance
-7. DGX Spark GB10 confirmed → validates SPARK as full PMOVES platform
-
-### Files Changed
-| File | Change |
-|------|--------|
-| `deploy/HYBRID_RUNNER_STRATEGY.md` | SPARK capability correction + new section (461→485 lines) |
-| `research/SIDECAR_PROMOTION_PLAN.md` | 6 SPARK-specific corrections (759→789 lines) |
-
-### Scheduled Tasks
-| Task ID | Name | Status |
-|---------|------|--------|
-| FGfhfE6A | YouTube Playlist Deep CHIT Signal Research | Pending |
-| bZucmlNg | Sidecar Plugin Parity + Space Agent Integration | Pending |
-
-### Agent ACK
-- Agent: `AGENT-ZERO-SIDECAR`
-- Signature: `ACK::AGENT-ZERO-SIDECAR::SPARK-CAPABILITY-CORRECTION-DOC-ALIGNMENT`
-- Timestamp: `2026-04-23`
-
-<!-- GRAPHITI_MARK: AGENT-ZERO-SIDECAR::SPARK-CAPABILITY-CORRECTION-DOC-ALIGNMENT::2026-04-23 -->
 
 ## MOF Architecture Convergence Wave (2026-04-23)
 
@@ -451,7 +417,7 @@ P1: Maximize Surface Area | P2: Tune Pore Size | P3: Maintain Resonance | P4: En
 | `pmoves/docs/AGENTS/AGNOTE4482_ROADMAP_W1-W5.md` | Restored from host backup |
 
 ### Signoff Checklist Status
-Per prior audit: **19/20 items checked**. Only §1.4 remains (external operator action — P7, Discord, and site/docs language alignment). No change this session.
+Per validation 2026-04-25: **32/37 items checked** (9 sections). Remaining: §1.4 (external — DARKXSIDE deploy), §9.1–§9.4 (need compose stack).
 
 ### Agent ACK
 - Agent: `AGENT-ZERO-GLM (SIDECAR)`
@@ -503,12 +469,11 @@ Per prior audit: **19/20 items checked**. Only §1.4 remains (external operator 
 | `research/PLAYLIST_BATCH_ANALYSIS.md` | 315 | Full playlist scan results (500 videos, 28 relevant) |
 
 ### Signoff Checklist Status
-No change: **19/20**. Only §1.4 remains (external operator action).
+No change: **32/37**. Remaining: §1.4 (external) + §9.1–§9.4 (compose stack).
 
 ### Agent ACK
 - Agent: `AGENT-ZERO-GLM (SIDECAR)`
 - Signature: `ACK::AGENT-ZERO-GLM::GRAND-CONVERGENCE-WAVE`
-- Timestamp: `2026-04-23T23:01:00Z`
 
 <!-- GRAPHITI_MARK: AGENT-ZERO-GLM::GRAND-CONVERGENCE-WAVE::2026-04-23 -->
 
@@ -623,3 +588,160 @@ Five-phase coherence audit landing the foundation for the **5×5 trail handshake
 
 <!-- GRAPHITI_MARK: CLAUDE-OPUS::CREDENTIAL-AUDIT-PHASES-1-5::2026-04-26 -->
 <!-- GRAPHITI_MARK: Z890-CLAUDE::CREDENTIAL-AUDIT-REVIEW::2026-04-26 -->
+
+## NATS Auth P0 Resolution Verification (2026-04-24)
+
+### Work Performed
+- Re-verified NATS authentication migration against current codebase
+- Ran `grep -rn 'nats://(nats|localhost):4222'` across all service code — **0 bare refs**
+- 6 remaining refs are all intentional negative-pattern assertions:
+  - `agent-zero-customization.tac.yaml:277` — TAC tree expects authenticated URL
+  - `security-posture.tac.yaml:116,124` — TAC tree blocks bare URL
+  - `dox-intelligence.tac.yaml:54` — TAC tree requires authenticated URL
+  - `test_nats_authentication.py:48,60` — Smoke test asserts against unauth URL
+- Confirmed backup-restore regression: AGNOTE4482.md line 130 still showed NOT IMPROVED despite commit `542cbfcb2`
+- Re-applied RESOLVED status and updated handoff notes
+
+### Agent ACK
+- Agent: `AGENT-ZERO-GLM (SIDECAR)`
+- Signature: `ACK::AGENT-ZERO-GLM::NATS-P0-RE-VERIFICATION`
+- Timestamp: `2026-04-24T13:06:00Z`
+
+<!-- GRAPHITI_MARK: AGENT-ZERO-GLM::NATS-P0-RE-VERIFICATION::2026-04-24 -->
+
+## 4090-CLAUDE Session Audit (2026-04-26)
+
+### Work Performed
+
+**PMOVES-space-agent initialization + scan:**
+- Initialized submodule (was added as gitlink `10fb3c8a` but never checked out locally)
+- Full scan: docker-compose.pmoves.yml, env.pmoves.example, nats_client.js, pmoves_bridge.js, CLAUDE.md
+- **P0 bug fixed**: `pmoves_bridge.js:56` — template literal closed with `"` instead of backtick, causing `update_widget` action to silently truncate widget path. Fixed on `PMOVES.AI-Edition-Hardened` branch, commit `98b59b2`
+- Gitlink bumped `10fb3c8a → 98b59b2` (also picks up router path fix `284c0c1`)
+- Island vs fleet architecture documented: standalone NATS sidecar (island = SPARK/edge offline), `pmoves_bus` network (fleet = Z890/5090 docked) — intentional design
+- Integration gap report filed as issue #1383 for Z890-CLAUDE: 9-item checklist (compose stanza, env vars, NATS subjects catalog, services catalog, agent registry stub, NATS auth URL, space event subjects, fleet-mode compose path, health endpoint)
+
+**SPARK fleet topology + 3-phi architecture:**
+- Fleet nodes recorded: SPARK (GB10 Blackwell 128GB unified), 5090 (32GB GPU), Sonic Z890 (24GB), Knuckles (AMD 64GB), 4090 laptop (16GB)
+- 3-phi Jam architecture: SPARK + Agent Zero + space-agent as three-body comms relay (gluon plasma posture — deconfined across mesh in fleet mode, sovereign in island mode)
+- Design ethos: "no parlor tricks, only real connection with the ability to crank to 11" — every integration must provide genuine capability, impedance-matching ensures no node bottleneck
+
+**Phase B SITREP rewrite (Village Rule):**
+- Claimed lane in PHI.t1.md (2026-04-24T16:48Z)
+- Rewrote §"Agent Lanes Quick Reference" → §"Node Capacity Quick Reference"
+- Added ≤200-word preamble: pre-MOF mental model → MOF lattice invariant, 3 delegation mechanisms (Agent Zero /mcp/*, A2A disabled-by-default, NATS Phase D pending)
+- New 9-row table: Z890, 5090, 4090 laptop, SPARK, Knuckles, KVM4-1, KVM4-2, KVM2, (floating)
+- PR #1387 opened. Rebased onto main (`c69c938dd`), 3 CodeRabbit threads resolved (deprecated doc ref × 2, A2A readiness caveat)
+- Village Rule satisfied: one scope, one PR, no Phase D/E expansion
+
+**Repo sitrep + PR triage (2026-04-26):**
+- 16 new commits on main since session start (Agent Zero v1.9 sync, §1.4 copy-paste drafts, SPARK fast-forward, AGNOTE4482 dedup)
+- 18 open PRs triaged: Flute wave (6 PRs, all CI green, docs-only), security wave (#1390-#1392), Phase C (#1385), docs-reconcile (#1386), sign-trail fix (#1381, DIRTY — needs rebase), A2A activation (#1371), drafts (#1373-#1374), dependabot (#1372, #1388, Playwright pre-existing flake)
+- §9 Branch Hygiene finding: 2 orphan branches without PRs — `fix/agnote4482-section9-recovery` and `fix/branch-lifecycle-chit-wiring` (both created 2026-04-24, superseded by main, no associated PRs). Recommend deletion.
+
+### Key Findings
+
+| Finding | Status | Evidence |
+|---------|--------|----------|
+| pmoves_bridge.js update_widget P0 | **RESOLVED** | Backtick/quote mismatch on line 56 fixed, commit `98b59b2` |
+| space-agent gitlink stale | **RESOLVED** | Bumped to `98b59b2` |
+| space-agent fleet integration | **OPEN** | Issue #1383 assigned to Z890-CLAUDE (9 items) |
+| §1.4 Discord + site language | **DRAFT READY** | `deploy/brand/S14_DRAFTS.md` (commit `d752b7330`) — operator deployment pending |
+| §9 orphan branches | **IDENTIFIED** | 2 branches without PRs, superseded by main; safe to delete |
+| PR #1387 Phase B | **IN REVIEW** | Rebased, CR fixes pushed, CI running |
+
+### Handoff Notes
+- Merge sequence ready: security wave (#1390-#1392) → Flute wave (1394→1395→1393→1396→1401→1400) → #1387 → Phase C (#1385→#1386)
+- #1381 (sign-trail PYTHONPATH) needs rebase before merge — DIRTY/CONFLICTING
+- §9 orphan branches safe to delete: `fix/agnote4482-section9-recovery`, `fix/branch-lifecycle-chit-wiring`
+- Post-merge handoff for #1387: append ACK block + CLAIM→RELEASE in PHI.t1.md
+
+### Agent ACK
+- Agent: `4090-CLAUDE`
+- Signature: `ACK::4090-CLAUDE::SESSION-AUDIT-2026-04-26`
+- Timestamp: `2026-04-26`
+
+<!-- GRAPHITI_MARK: 4090-CLAUDE::SESSION-AUDIT-2026-04-26::2026-04-26 -->
+
+---
+
+## USB Provisioning Sweep (2026-04-28)
+
+### Work Performed
+Doc-side delivery of the USB provisioning sweep covering AMD R9700 (`pmoves-rdna4`)
+and Jetson Orin Nano ×2 (`nemotron-1`, `nemotron-2`). Phases A/B/C are operator-side
+(physical USB boot + cable handling); Phase D (documentation + drift verification +
+script fixes) is delivered from this CLI session.
+
+| Phase | Deliverable | State |
+|---|---|---|
+| A | Ubuntu 22.04 live USB build host on Z890 | ⏳ operator (Path A: temp live USB; Path B fallback: Pop!_OS 22.04 slot) |
+| B | AMD R9700 cloud-init flash (ROCm 7.1 + llama.cpp HIP, dual-card tensor-split) | ⏳ operator |
+| C | Jetson reflash ×2 (JetPack 6.2.1 → 7.0 / L4T r37 / CUDA 12.8) | ⏳ operator (~45 min/device sequential, NOT during UNFCU demo) |
+| D1 | Drift verification — runbooks vs actual scripts | ✅ landed (5 doc-only drifts + 1 real script bug fixed) |
+| D2 | AGNOTE4482 + AGNOTE4482PHI.t1.md trail entries | ✅ landed |
+| D3 | `pmoves/docs/AGENTS/AGNOTE-pmoves-rdna4.md` (mirror of AGNOTE-dgx-spark.md) | ✅ landed |
+| D4 | TOPOLOGY.md cross-link + HARDWARE_PROFILES_JETPACK7_ADDENDUM.md status row | ✅ landed |
+| D5 | `make sign-trail` invocation | ⏳ deferred (no `CHIT_PASSPHRASE` in CLI session — voice-activated per memory) |
+
+### Three-Body Pattern
+- **Delivery body:** `z890-claude` (this session) — script fixes, new AGNOTE, doc updates
+- **Control body:** Verification gates `make -C pmoves fleet-status`, `jetson-verify`, `rdna4-rocm-status` (operator runs after Phases A/B/C)
+- **Memory body:** AGNOTE4482PHI.t1.md CLAIM/REVIEW/RELEASE entries + this audit record + new AGNOTE-pmoves-rdna4.md
+
+### Drift Findings
+**Documentation-only drifts (plan vs actual filesystem) — no fix required:**
+1. Plan: `deploy/build-usb.sh` → Actual: `deploy/provision/build-usb.sh`
+2. Plan: `deploy/rdna4-gpu-install.sh` → Actual: `deploy/provision/rdna4-gpu-install.sh`
+3. Plan: `deploy/hostinger-kvm-setup.sh` → Actual: `deploy/provision/hostinger-kvm-setup.sh`
+4. Plan invocation: `--node-type=rdna4-workstation` → Actual: positional `bash hostinger-kvm-setup.sh rdna4-workstation`
+5. Plan flag style: `--iso /path` → Actual: `--iso=/path` (build-usb.sh uses `--flag=value` form)
+
+**Real script bug fixed:**
+6. `deploy/provision/rdna4-gpu-install.sh` — `install_llama_server_unit()` called undefined `log_section` function. Under `set -euo pipefail` this aborts AMD provisioning at the systemd-unit step. Fixed by adding `log_section() { log "─── $* ───"; }` after the existing `log()` definition (line 51). Verified bug still present on main even after PR #1316 (phase-a-deploy-refresh) merged 397 lines to the same file.
+
+### Pre-flight Findings (advisory, not actioned)
+1. **`pmoves/deploy/provision/z890/pxe/distro-manifest.yaml`** has no vanilla `ubuntu-22.04` entry. Operator should manually fetch from `releases.ubuntu.com/22.04/` per Phase A — do NOT permanently add a 22.04 slot for one-time SDK Manager prerequisite (scope creep). Pop!_OS 22.04 entry exists as Path B fallback.
+2. **`pmoves/config/signing_identity_cards.yaml`** has no `rdna4-runner`, `nemotron-1`, or `nemotron-2` rows. Audit policy: cards seed only when an `agent_id` starts emitting trail entries. Flagged as ⏳ pending in `AGNOTE-pmoves-rdna4.md` Status block.
+3. **Default model drift (informational):** `rdna4-gpu-install.sh:37` defaults to Gemma 2 27B; `HARDWARE_PROFILES_JETPACK7_ADDENDUM` and TOPOLOGY assume Gemma 4 31B Q4. First post-install `make rdna4-model-pull` should target Gemma 4 explicitly via `HF_REPO=` override.
+
+### Files Changed
+
+| File | Change |
+|------|--------|
+| `pmoves/docs/AGENTS/AGNOTE-pmoves-rdna4.md` | NEW — node doc mirroring AGNOTE-dgx-spark.md |
+| `pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md` | EDIT — CLAIM / REVIEW / RELEASE block + signed ACK |
+| `pmoves/docs/AGENTS/AGNOTE4482.md` | EDIT — this audit-record section |
+| `pmoves/docs/operations/TOPOLOGY.md` | EDIT — rdna4 block (lines 75-104) cross-linked to new AGNOTE |
+| `pmoves/docs/operations/HARDWARE_PROFILES_JETPACK7_ADDENDUM.md` | EDIT — added "Reflash Completed (operator-pending)" row to JetPack 7.0 Rollout table + new "AMD R9700 (RDNA4) Rollout" section |
+| `deploy/provision/rdna4-gpu-install.sh` | EDIT — added missing `log_section` function (drift #6 bug fix) |
+
+### Signoff Checklist Status
+✅ Three-body separation honored (delivery / control / memory)
+✅ Village Rule (no agent operates alone) — Control = make-target verification gates; Memory = AGNOTE trail
+✅ GRAPHITI_MARK footer on PHI.t1.md ACK block
+✅ AGNOTE-pmoves-rdna4.md mirrors AGNOTE-dgx-spark.md structure (Node / Status / Three-Body / Near-Term Lane)
+⚠️ D5 trail-signing deferred (no `CHIT_PASSPHRASE` in CLI; expected per CLAUDE.md "Signing is optional locally")
+⏳ Phases A/B/C operator-side — physical hardware action not possible from CLI
+
+### Operator-Side Handoff (Phases A → B → C)
+1. **Phase A:** Build Ubuntu 22.04.5 LTS live USB; boot Z890; install SDK Manager CLI in live env; clone PMOVES.AI to `/tmp/pmoves`
+2. **Phase B (AMD R9700):**
+   - `make -C pmoves fleet-enroll ROLE=workstation DEVICE=pmoves-rdna4`
+   - `sudo bash deploy/provision/build-usb.sh --iso=/path/to/ubuntu-24.04...iso --autoinstall=deploy/provision/autoinstall/rdna4-workstation.yaml --device=/dev/sdY --hostname=pmoves-rdna4 --ssh-keys-from-github=POWERFULMOVES`
+   - Boot AMD box from prepared USB → unattended install → first-boot systemd unit auto-runs `hostinger-kvm-setup.sh rdna4-workstation`
+   - Verify: `make -C pmoves rdna4-rocm-status` + `rdna4-llamacpp-up` + `curl http://pmoves-rdna4:8080/v1/models`
+3. **Phase C (Jetson, sequential):** for each device in {nemotron-1, nemotron-2}:
+   - `make -C pmoves fleet-enroll ROLE=edge DEVICE=nemotron-N`
+   - Put Jetson in recovery mode (RECOVERY button + power); confirm `lsusb | grep -i nvidia`
+   - `sudo TAILSCALE_AUTHKEY=tskey-xxx bash deploy/provision/jetson/jetpack7-reflash.sh --device nemotron-N`
+   - Wait ~45 min, do NOT interrupt
+   - Verify: `make -C pmoves jetson-verify DEVICE=nemotron-N`
+
+### Agent ACK
+- Delivery agent: `z890-claude` — Signature: `ACK::Z890-CLAUDE::USB-PROVISIONING-SWEEP-DOCS::2026-04-28`
+- Control agent: pending operator-side gate runs (`fleet-status`, `jetson-verify`, `rdna4-rocm-status`)
+- Memory agent: pending D5 `make sign-trail` invocation (operator with `CHIT_PASSPHRASE`)
+- Timestamp: `2026-04-28`
+
+<!-- GRAPHITI_MARK: Z890-CLAUDE::USB-PROVISIONING-SWEEP-DOCS::2026-04-28 -->

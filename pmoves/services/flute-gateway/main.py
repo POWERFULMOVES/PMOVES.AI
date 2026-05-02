@@ -36,6 +36,10 @@ from pydantic import BaseModel, Field
 from services.common.env import get_secret
 from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
 
+# Geometry-bus bridge (#1397): wraps voice events into signed CGP v0.2 packets
+# for the canonical geometry.cgp.v1 subject. Legacy subject stays unchanged.
+from geometry_bridge import GeometryBridge, cgp_subject, is_dual_publish_enabled
+
 # Provider imports
 from providers import (
     VibeVoiceBusyError,
@@ -143,6 +147,10 @@ FLUTE_API_KEY = get_secret("FLUTE_API_KEY", "")
 CHIT_VOICE_ATTRIBUTION = os.getenv("CHIT_VOICE_ATTRIBUTION", "false").lower() == "true"
 CHIT_NAMESPACE = os.getenv("CHIT_NAMESPACE", "pmoves.voice")
 CHIT_GEOMETRY_SUBJECT = os.getenv("CHIT_GEOMETRY_SUBJECT", "tokenism.geometry.event.v1")
+# Geometry-bus bridge (#1397): canonical CGP subject + dual-publish kill-switch.
+# FLUTE_CGP_SUBJECT and FLUTE_GEOMETRY_DUAL_PUBLISH are resolved lazily via
+# geometry_bridge.cgp_subject() / is_dual_publish_enabled() so test monkeypatch
+# of env works without re-importing this module.
 
 
 def _pcm16_to_wav_bytes(pcm16: bytes, sample_rate: int) -> bytes:
@@ -215,6 +223,11 @@ CHIT_EVENTS_FAILED = Counter(
     "Total CHIT event publish failures",
     ["reason"]
 )
+CHIT_CGP_PUBLISHED = Counter(
+    "flute_chit_cgp_published_total",
+    "Total CGP v0.2 packets published to the canonical geometry-bus subject (#1397)",
+    ["subject"]
+)
 
 # Provider instances (initialized on startup)
 vibevoice_provider: Optional[VibeVoiceProvider] = None
@@ -222,6 +235,8 @@ whisper_provider: Optional[WhisperProvider] = None
 ultimate_tts_provider: Optional[UltimateTTSProvider] = None
 voicebox_provider: Optional[VoiceboxProvider] = None
 nats_client = None
+# Geometry-bus bridge (#1397): module-level singleton, instantiated on first use.
+geometry_bridge: Optional[GeometryBridge] = None
 
 
 async def _publish_chit_voice_event(
@@ -232,30 +247,41 @@ async def _publish_chit_voice_event(
 ) -> None:
     """Publish voice synthesis event to CHIT geometry bus (best-effort).
 
-    Only publishes if CHIT_VOICE_ATTRIBUTION is enabled.
-    Non-blocking: errors are logged but don't fail the request.
+    Dual-publish (#1397): always publishes the legacy flat event to
+    `CHIT_GEOMETRY_SUBJECT` (default `tokenism.geometry.event.v1`) so existing
+    tokenism consumers keep working unchanged; additionally publishes a
+    HMAC-signed CGP v0.2 packet to `FLUTE_CGP_SUBJECT` (default `geometry.cgp.v1`)
+    when `FLUTE_GEOMETRY_DUAL_PUBLISH` is true (default), so canonical
+    consumers (graphiti, matrix monitor, cymatic visualizer) get a
+    schema-valid packet.
+
+    Both publishes are gated by `CHIT_VOICE_ATTRIBUTION`. Errors on either
+    publish are logged but do not fail the request.
     """
+    global geometry_bridge
+
     if not CHIT_VOICE_ATTRIBUTION or not nats_client:
         return
+
+    payload = {
+        "namespace": CHIT_NAMESPACE,
+        "modality": "voice_synthesis",
+        "provider": provider,
+        "text_length": text_length,
+        "audio_duration_seconds": audio_duration,
+        "voice": voice,
+        "ts": datetime.now(timezone.utc).isoformat(),
+    }
+
+    # 1. Legacy publish — flat event on tokenism.geometry.event.v1 (unchanged)
     try:
-        payload = {
-            "namespace": CHIT_NAMESPACE,
-            "modality": "voice_synthesis",
-            "provider": provider,
-            "text_length": text_length,
-            "audio_duration_seconds": audio_duration,
-            "voice": voice,
-            "ts": datetime.now(timezone.utc).isoformat(),
-        }
         await nats_client.publish(
             CHIT_GEOMETRY_SUBJECT,
             json.dumps(payload).encode("utf-8"),
         )
         logger.debug("chit_voice_event_published", extra={"subject": CHIT_GEOMETRY_SUBJECT})
     except Exception as exc:
-        # Track failures in Prometheus for observability
-        CHIT_EVENTS_FAILED.labels(reason="publish_failed").inc()
-        # If user explicitly enabled CHIT, they should know it's failing
+        CHIT_EVENTS_FAILED.labels(reason="legacy_publish_failed").inc()
         if CHIT_VOICE_ATTRIBUTION:
             logger.error(
                 "chit_voice_event_failed",
@@ -263,17 +289,44 @@ async def _publish_chit_voice_event(
                     "error": str(exc),
                     "exc_type": type(exc).__name__,
                     "provider": provider,
+                    "subject": CHIT_GEOMETRY_SUBJECT,
                 },
-                exc_info=True
+                exc_info=True,
             )
         else:
             logger.debug(
                 "chit_voice_event_failed",
-                extra={
-                    "error": str(exc),
-                    "exc_type": type(exc).__name__,
-                },
+                extra={"error": str(exc), "exc_type": type(exc).__name__},
             )
+
+    # 2. Canonical publish — signed CGP v0.2 on geometry.cgp.v1 (#1397)
+    if not is_dual_publish_enabled():
+        return
+    if geometry_bridge is None:
+        geometry_bridge = GeometryBridge()
+    canonical_subject = cgp_subject()
+    try:
+        cgp_packet = geometry_bridge.encode_packet(payload)
+        await nats_client.publish(
+            canonical_subject,
+            json.dumps(cgp_packet).encode("utf-8"),
+        )
+        CHIT_CGP_PUBLISHED.labels(subject=canonical_subject).inc()
+        logger.debug(
+            "chit_cgp_packet_published",
+            extra={"subject": canonical_subject, "signed": "sig" in cgp_packet},
+        )
+    except Exception as exc:
+        CHIT_EVENTS_FAILED.labels(reason="cgp_publish_failed").inc()
+        logger.error(
+            "chit_cgp_publish_failed",
+            extra={
+                "error": str(exc),
+                "exc_type": type(exc).__name__,
+                "subject": canonical_subject,
+            },
+            exc_info=True,
+        )
 
 
 # Pydantic models

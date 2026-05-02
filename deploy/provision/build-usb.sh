@@ -31,6 +31,8 @@
 #   --device=PATH              Target USB device (required, e.g. /dev/sdb)
 #   --hostname=STR             Substitute REPLACEME hostname in the answer file
 #   --ssh-keys-from-github=USR Fetch pubkeys from https://github.com/USR.keys
+#   --root-password=STR        Root password to inject into Proxmox answer files
+#   --generate-root-password   Generate and save a strong Proxmox root password
 #   --dry-run                  Show what would be done, don't write
 #   --allow-large-device       Override the 512 GB safety limit (requires --yes-really)
 #   --yes-really               Confirmation token for destructive flags
@@ -66,6 +68,7 @@ for arg in "$@"; do
 done
 
 log() { echo "[build-usb] $*"; }
+warn() { echo "[build-usb] WARN: $*"; }
 err() { echo "[build-usb] ERROR: $*" >&2; exit 1; }
 
 [[ -z "$ISO" ]]          && err "--iso is required"
@@ -134,6 +137,7 @@ log "Detected ISO family: $family"
 work_dir="$(mktemp -d)"
 trap 'rm -rf "$work_dir"' EXIT
 answer_file="$work_dir/$(basename "$AUTOINSTALL")"
+output_dir="$(pwd -P)"
 cp "$AUTOINSTALL" "$answer_file"
 
 if [[ -n "$HOSTNAME_OVERRIDE" ]]; then
@@ -146,11 +150,11 @@ fi
 if grep -q "REPLACE_WITH_STRONG_RANDOM_AT_BUILD_TIME" "$answer_file"; then
   if [[ "$GEN_ROOT_PASSWORD" == "true" ]] && [[ -z "$ROOT_PASSWORD" ]]; then
     ROOT_PASSWORD="$(openssl rand -base64 32 | tr -d '=+/' | cut -c1-24)"
-    ROOT_PASSWORD_FILE="${OUTPUT_DIR}/root-password-$(date +%Y%m%d-%H%M%S).txt"
+    ROOT_PASSWORD_FILE="${output_dir}/root-password-$(date +%Y%m%d-%H%M%S).txt"
     echo "$ROOT_PASSWORD" > "$ROOT_PASSWORD_FILE"
     chmod 600 "$ROOT_PASSWORD_FILE"
     log "Root password saved to: $ROOT_PASSWORD_FILE"
-    log_warn "DELETE this file after recording the password!"
+    warn "Delete this file after recording the password."
   fi
   if [[ -z "$ROOT_PASSWORD" ]]; then
     err "Answer file has root password placeholder. Pass --root-password=STRING or --generate-root-password."

@@ -18,6 +18,7 @@ CLI:
 from __future__ import annotations
 
 import argparse
+import asyncio
 import json
 import os
 import sys
@@ -62,6 +63,8 @@ FLUTE_GATEWAY_URL = os.environ.get("FLUTE_GATEWAY_URL", "http://localhost:8055")
 DEFAULT_VOICE = os.environ.get("BEATS_VOICE", "default")
 DEFAULT_AGENT_ID = os.environ.get("BEATS_AGENT_ID", "4090-claude")
 NATS_SUBJECT = "tokenism.prosodic.bpm.v1"
+NATS_URL = os.environ.get("NATS_URL", "nats://localhost:4222")
+NATS_TRIGGER_SUBJECT = os.environ.get("BEATS_TRIGGER_SUBJECT", "voice.agent.response.v1")
 
 
 # ---------------------------------------------------------------------------
@@ -115,6 +118,71 @@ def _check_flute_health(base_url: str) -> bool:
     """Check if Flute-Gateway is reachable."""
     result = _get_json(f"{base_url}/healthz", timeout=3)
     return result is not None
+
+
+# ---------------------------------------------------------------------------
+# NATS publish / subscribe
+# ---------------------------------------------------------------------------
+
+async def _nats_publish_cgp(cgp_packet: dict, nats_url: str = NATS_URL) -> bool:
+    """Publish CGP packet to tokenism.prosodic.bpm.v1. Returns True on success."""
+    try:
+        import nats as natspy  # optional dep — lazy import, same pattern as beats_to_cgp.py
+        nc = await natspy.connect(nats_url)
+        await nc.publish(NATS_SUBJECT, json.dumps(cgp_packet).encode("utf-8"))
+        await nc.drain()
+        return True
+    except Exception as e:
+        sys.stderr.write(f"[beats_to_voice] NATS publish skipped: {e}\n")
+        return False
+
+
+async def _listen_loop(
+    nats_url: str,
+    trigger_subject: str,
+    voice: str,
+    agent_id: str,
+    flute_url: str,
+) -> None:
+    """Subscribe to trigger_subject; run pipeline on each message; publish CGP to NATS_SUBJECT."""
+    try:
+        import nats as natspy
+    except ImportError:
+        sys.stderr.write(
+            "[beats_to_voice] nats-py required for listen mode: pip install nats-py\n"
+        )
+        sys.exit(1)
+
+    nc = await natspy.connect(nats_url)
+    try:
+        async def _handler(msg) -> None:
+            try:
+                data = json.loads(msg.data.decode("utf-8"))
+                text = data.get("response_text") or data.get("text", "")
+                aid = agent_id  # user_id is the request originator, not the processing agent
+                if not text:
+                    return
+                sys.stderr.write(
+                    f"[beats_to_voice] Trigger received agent={aid} len={len(text)}\n"
+                )
+                results = run_pipeline(text=text, voice=voice, agent_id=aid, flute_url=flute_url)
+                cgp = results.get("cgp_packet", {})
+                if cgp:
+                    await nc.publish(NATS_SUBJECT, json.dumps(cgp).encode("utf-8"))
+                    sys.stderr.write(f"[beats_to_voice] CGP published to {NATS_SUBJECT}\n")
+            except Exception as e:
+                sys.stderr.write(f"[beats_to_voice] Handler error: {e}\n")
+
+        await nc.subscribe(trigger_subject, cb=_handler)
+        sys.stderr.write(
+            f"[beats_to_voice] Listening on {trigger_subject} → publishes to {NATS_SUBJECT}\n"
+        )
+        while True:
+            await asyncio.sleep(1)
+    except (KeyboardInterrupt, asyncio.CancelledError):
+        pass
+    finally:
+        await nc.drain()
 
 
 # ---------------------------------------------------------------------------
@@ -202,6 +270,8 @@ def run_pipeline(
     voice: str = "default",
     agent_id: str = DEFAULT_AGENT_ID,
     flute_url: str = FLUTE_GATEWAY_URL,
+    publish_nats: bool = False,
+    nats_url: str = NATS_URL,
 ) -> dict[str, Any]:
     """Run the full Beats-to-Voice pipeline.
 
@@ -271,6 +341,9 @@ def run_pipeline(
         "nats_subject": NATS_SUBJECT,
     }
     results["cgp_packet"] = cgp_packet
+    if publish_nats:
+        published = asyncio.run(_nats_publish_cgp(cgp_packet, nats_url))
+        results["stages"]["cgp"]["nats_published"] = published
 
     # ---- Stage 4: Voice synthesis (optional) ----
     flute_available = _check_flute_health(flute_url)
@@ -361,6 +434,17 @@ def _cmd_full(args: argparse.Namespace) -> None:
         sys.stderr.write(f"[beats_to_voice] CGP packet saved to {cgp_path}\n")
 
 
+def _cmd_listen(args: argparse.Namespace) -> None:
+    """Subscribe to trigger subject and auto-run pipeline on each message."""
+    asyncio.run(_listen_loop(
+        nats_url=args.nats_url,
+        trigger_subject=args.trigger_subject,
+        voice=args.voice,
+        agent_id=args.agent_id,
+        flute_url=args.flute_url,
+    ))
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         prog="beats_to_voice",
@@ -397,6 +481,26 @@ def main() -> None:
                         help="Flute-Gateway base URL")
     p_full.add_argument("--save-cgp", type=str, default="", help="Save CGP packet to file path")
     p_full.set_defaults(func=_cmd_full)
+
+    # -- listen --
+    p_listen = sub.add_parser(
+        "listen", help="Subscribe to NATS trigger subject and auto-run pipeline"
+    )
+    p_listen.add_argument(
+        "--nats-url", type=str, default=NATS_URL, help="NATS server URL"
+    )
+    p_listen.add_argument(
+        "--trigger-subject", type=str, default=NATS_TRIGGER_SUBJECT,
+        help=f"NATS subject to subscribe to (default: {NATS_TRIGGER_SUBJECT})",
+    )
+    p_listen.add_argument("--voice", type=str, default=DEFAULT_VOICE, help="Voice profile name")
+    p_listen.add_argument(
+        "--agent-id", type=str, default=DEFAULT_AGENT_ID, help="Agent ID for CGP"
+    )
+    p_listen.add_argument(
+        "--flute-url", type=str, default=FLUTE_GATEWAY_URL, help="Flute-Gateway base URL"
+    )
+    p_listen.set_defaults(func=_cmd_listen)
 
     args = parser.parse_args()
     args.func(args)

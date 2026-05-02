@@ -645,7 +645,7 @@ def transcribe(request: Request, body: Dict[str, Any] = Body(...)):
 
     language = body.get("language")
     model_name = body.get("whisper_model") or DEFAULT_WHISPER_MODEL
-    diarize = bool(body.get("diarize", True))
+    diarize = bool(body.get("diarize", os.environ.get("WHISPER_DIARIZE", "false").lower() in ("1", "true", "yes")))
     out_audio_key = body.get("out_audio_key")
     context_id = body.get("context_id") or request.headers.get("x-context-id")
 
@@ -776,7 +776,7 @@ async def transcribe_file(
     provider: Optional[str] = Form(None),
     model: Optional[str] = Form(None),
     whisper_model: Optional[str] = Form(None),
-    diarize: bool = Form(True),
+    diarize: bool = Form(False),
     context_id: Optional[str] = Form(None),
 ) -> Dict[str, Any]:
     """

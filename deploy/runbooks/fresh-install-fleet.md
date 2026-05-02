@@ -8,6 +8,12 @@ Bootable USB provisioning for Linux targets:
 
 Windows tracks (Z890, 5090, 4090) are documented separately in `fresh-install-fleet-windows.md`.
 
+## Install-Day Fast Path
+
+- AMD workstation install-day guide: `deploy/runbooks/amd-r9700-install-day.md`
+- Jetson refresh-day guide: `deploy/runbooks/jetson-refresh-day.md`
+- Helper agents: `.claude/agents/amd-usb-installer.md`, `.claude/agents/jetson-refresh-operator.md`
+
 ## Prerequisites
 
 On the build host (any Linux with root, or Windows WSL2):
@@ -74,8 +80,12 @@ sudo bash deploy/provision/build-usb.sh \
   --autoinstall=deploy/provision/autoinstall/pve-cluster-node.toml \
   --device=/dev/sdc \
   --hostname=pmoves-pve-01 \
+  --generate-root-password \
   --ssh-keys-from-github=POWERFULMOVES
 ```
+
+The generated Proxmox root password is written to `./root-password-<timestamp>.txt` in
+the directory where you run the command. Record it, then delete the file.
 
 Use `--dry-run` first to validate; the script refuses to write to devices >512 GB
 unless you pass `--allow-large-device --yes-really` (protects the 4 TB external).

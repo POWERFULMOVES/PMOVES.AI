@@ -285,7 +285,7 @@ ports-resolve: ## Display topology-aware port resolution map for all services
 	@PYTHONPATH="$(CURDIR)" $(PRECHECK_PY) services/common/port_resolver.py
 
 sign-trail: ## Sign a Graphiti trail entry with CHIT HMAC
-	@$(PRECHECK_PY) tools/sign_trail.py \
+	@PYTHONPATH="$(CURDIR)/.." $(PRECHECK_PY) tools/sign_trail.py \
 		--agent-id "$${AGENT:-claude-opus}" \
 		--summary "$${SUMMARY:-Trail entry signed}" \
 		--phase "$${PHASE:-Phase H}" \

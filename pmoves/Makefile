@@ -2907,6 +2907,40 @@ flute-gateway-smoke: ## Smoke test Flute-Gateway health + provider status
 	@curl -sf http://localhost:8055/healthz || { echo "Flute-Gateway not responding at http://localhost:8055/healthz"; exit 1; }
 
 # ────────────────────────────────────────────────────────────────────────────
+# FFMPEG-WHISPER STT SERVICE (mic chain — STT only, narrower than up-yt)
+# ────────────────────────────────────────────────────────────────────────────
+
+.PHONY: up-ffmpeg-whisper ffmpeg-whisper-smoke
+up-ffmpeg-whisper: ## Start ffmpeg-whisper STT service (port 8078, requires GPU)
+	@echo "Starting ffmpeg-whisper..."
+	@$(DC) --profile workers up -d --build ffmpeg-whisper
+	@sleep 5
+	@curl -sf http://localhost:8078/healthz > /dev/null 2>&1 \
+	  && echo "ffmpeg-whisper ready at http://localhost:8078" \
+	  || echo "ffmpeg-whisper may still be starting (check: curl http://localhost:8078/healthz)"
+
+ffmpeg-whisper-smoke: ## Smoke test ffmpeg-whisper health
+	@echo "ffmpeg-whisper smoke test..."
+	@curl -sf http://localhost:8078/healthz || { echo "ffmpeg-whisper not responding at http://localhost:8078/healthz"; exit 1; }
+
+# ────────────────────────────────────────────────────────────────────────────
+# VOICE-RELAY NATS BRIDGE (mic chain — Agent Zero result → voice.agent.response)
+# ────────────────────────────────────────────────────────────────────────────
+
+.PHONY: up-voice-relay voice-relay-smoke
+up-voice-relay: ## Start voice-relay NATS bridge (port 8121, CPU only)
+	@echo "Starting voice-relay..."
+	@$(DC) --profile media up -d voice-relay
+	@sleep 5
+	@curl -sf http://localhost:8121/healthz > /dev/null 2>&1 \
+	  && echo "voice-relay ready at http://localhost:8121" \
+	  || echo "voice-relay may still be starting (check: curl http://localhost:8121/healthz)"
+
+voice-relay-smoke: ## Smoke test voice-relay health
+	@echo "voice-relay smoke test..."
+	@curl -sf http://localhost:8121/healthz || { echo "voice-relay not responding at http://localhost:8121/healthz"; exit 1; }
+
+# ────────────────────────────────────────────────────────────────────────────
 # HI-RAG GATEWAY (Hybrid RAG v2)
 # ────────────────────────────────────────────────────────────────────────────
 

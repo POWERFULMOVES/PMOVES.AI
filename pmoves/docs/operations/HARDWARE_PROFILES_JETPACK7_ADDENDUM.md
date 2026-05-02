@@ -17,6 +17,10 @@ until a tooling-approved merge can happen. `TOPOLOGY.md` already links here.
 | Canonical image | `nvcr.io/nvidia/l4t-jetpack:r37.0.0` |
 | Reflash runbook | `deploy/provision/jetson/README.md` |
 | Time per device | ~45 min |
+| Doc-side drift-verified | 2026-04-28 (USB Provisioning Sweep — no findings against `jetpack7-reflash.sh` / `post-flash-bootstrap.sh` / `verify-jetson-fleet.sh`) |
+| nemotron-1 reflash | ⏳ operator-pending (Phase C of USB Provisioning Sweep) |
+| nemotron-2 reflash | ⏳ operator-pending (Phase C of USB Provisioning Sweep) |
+| Hard prerequisite | x86_64 Ubuntu 22.04 host with NVIDIA SDK Manager CLI — Z890 currently Win11; Path A live USB or Path B Pop!_OS 22.04 slot |
 
 **Deprecated:** `nvcr.io/nvidia/l4t-jetpack:r36.4.4` (JetPack 6.2.1).
 **Migration path:**
@@ -30,6 +34,25 @@ make -C pmoves jetson-reflash DEVICE=nemotron-2
 make -C pmoves jetson-verify DEVICE=nemotron-1
 make -C pmoves jetson-verify DEVICE=nemotron-2
 ```
+
+## AMD R9700 (RDNA4) Rollout — Sibling to JetPack 7
+
+The USB Provisioning Sweep (2026-04-28) bundles AMD R9700 first-flash with the
+Jetson reflash since both share the Ubuntu 22.04 build-host prerequisite.
+
+| Property | Value |
+|---------|-------|
+| Build USB tool | `deploy/provision/build-usb.sh` (auto-detects Ubuntu vs Proxmox ISO; refuses devices > 512 GB) |
+| Cloud-init seed | `deploy/provision/autoinstall/rdna4-workstation.yaml` |
+| GPU stack installer | `deploy/provision/rdna4-gpu-install.sh` (sourced by `hostinger-kvm-setup.sh rdna4-workstation`) |
+| ROCm version | 7.1 |
+| llama.cpp fork | `tlee933/llama.cpp-rdna4-gfx1201` pinned at `a6e76c64` |
+| Server | `llama-server` on `:8080` (OpenAI-compat) |
+| Metrics | rocm-smi Prometheus exporter on `:9835` |
+| Default model | `bartowski/gemma-2-27b-it-GGUF` (script default) — operator should override to Gemma 4 31B for fleet parity via `make rdna4-model-pull HF_REPO=bartowski/google_gemma-4-31B-it-GGUF FILE=gemma-4-31b-it-Q4_K_M.gguf` |
+| Doc-side drift-verified | 2026-04-28 — 5 doc-only path/flag drifts in plan vs filesystem; 1 real script bug fixed (`rdna4-gpu-install.sh:51` missing `log_section` function) |
+| pmoves-rdna4 first flash | ⏳ operator-pending (Phase B of USB Provisioning Sweep) |
+| Node doc | [`pmoves/docs/AGENTS/AGNOTE-pmoves-rdna4.md`](../AGENTS/AGNOTE-pmoves-rdna4.md) |
 
 ## Z890 Multi-Boot Slot Map
 

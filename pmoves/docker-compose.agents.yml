@@ -28,7 +28,7 @@ services:
     restart: unless-stopped
     environment:
     - PORT=8080
-    # NATS_URL from env.tier-agent has credentials: nats://nats:pmoves@nats:4222
+    # NATS_URL from env.tier-agent has credentials: nats://<from-env.shared>
     - AGENT_ZERO_API_BASE=${AGENT_ZERO_API_BASE:-http://127.0.0.1:80}
     - AGENT_ZERO_HEALTH_PATH=${AGENT_ZERO_HEALTH_PATH:-/healthz}
     - AGENT_ZERO_HEALTH_PATH_FALLBACK=${AGENT_ZERO_HEALTH_PATH_FALLBACK:-/health}
@@ -63,6 +63,8 @@ services:
     - A0_SET_browser_model_provider=openai
     - A0_SET_browser_model_name=tensorzero::function_name::agent_zero
     - A0_SET_browser_model_api_base=http://tensorzero-gateway:3000/openai/v1
+    - A0_SET_a2a_server_enabled=true
+    - A0_SET_mcp_server_token=${MCP_SERVER_TOKEN:-}
     # Host environment leak guard (see x-host-leak-guard docs above)
     - SSL_CERT_FILE=
     - SSL_CERT_DIR=
@@ -114,7 +116,7 @@ services:
     restart: unless-stopped
     environment:
       # SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY from env.tier-agent
-      # NATS_URL from env.tier-agent has credentials: nats://nats:pmoves@nats:4222
+      # NATS_URL from env.tier-agent has credentials: nats://<from-env.shared>
     - PORT=8091
     - ENVIRONMENT=${ENVIRONMENT:-production}
     - ARCHON_ENV=${ARCHON_ENV:-production}
@@ -132,7 +134,7 @@ services:
     - SUPABASE_REST_URL=${ARCHON_SUPABASE_REST_URL:-${SUPABASE_REST_URL:-http://supabase-kong:8000/rest/v1}}
     - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-${SERVICE_ROLE_KEY:-${SUPABASE_SECRET_KEY:-}}}
     - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY:-${SUPABASE_SERVICE_ROLE_KEY:-${SERVICE_ROLE_KEY:-${SUPABASE_SECRET_KEY:-}}}}
-    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - NATS_URL=${NATS_URL}
     - SUPA_REST_URL=${ARCHON_SUPABASE_REST_URL:-${SUPABASE_REST_URL:-http://supabase-kong:8000/rest/v1}}
       # TensorZero routing — _sync_openai_compat_env() in services/archon/main.py
       # reads TENSORZERO_BASE_URL and populates OPENAI_COMPATIBLE_BASE_URL* vars
@@ -592,7 +594,7 @@ services:
       retries: 5
       start_period: 120s
   # ── NATS Message Bus — JetStream-enabled event broker ──────────────────
-  # Auth: nats://nats:pmoves@nats:4222 | Monitoring: :8222/varz
+  # Auth: nats://<from-env.shared> | Monitoring: :8222/varz
   # See: pmoves/docs/NATS_CONFIGURATION.md
   mesh-agent:
     <<: &tier-agent-hardened-ro
@@ -613,7 +615,7 @@ services:
     build: ./services/mesh-agent
     restart: unless-stopped
     environment:
-    # NATS_URL from env.shared/env.tier-agent has credentials: nats://nats:pmoves@nats:4222
+    # NATS_URL from env.shared/env.tier-agent has credentials: nats://<from-env.shared>
     - HIRAG_URL=${HIRAG_URL:-http://hi-rag-gateway-v2-gpu:8086}
     - ANNOUNCE_SEC=${ANNOUNCE_SEC:-15}
     depends_on: [nats]
@@ -644,7 +646,7 @@ services:
     - NEO4J_URI=bolt://neo4j:7687
     - NEO4J_USER=${NEO4J_USER:-neo4j}
     - NEO4J_PASSWORD=${NEO4J_PASSWORD:-neo4j}
-    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - NATS_URL=${NATS_URL}
     - OLLAMA_BASE_URL=http://pmoves-ollama:11434
     - DOCKED_MODE=${DOCKED_MODE:-true}
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
@@ -680,8 +682,8 @@ services:
     hostname: a2ui-nats-bridge
     restart: unless-stopped
     environment:
-    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
-    # NATS_URL from env.shared/env.tier-agent has credentials: nats://nats:pmoves@nats:4222
+    - NATS_URL=${NATS_URL}
+    # NATS_URL from env.shared/env.tier-agent has credentials: nats://<from-env.shared>
     - A2UI_RENDER_SUBJECT=${A2UI_RENDER_SUBJECT:-a2ui.render.v1}
     - GEOMETRY_WILDCARD=${GEOMETRY_WILDCARD:-geometry.>}
     - PORT=9224
@@ -719,7 +721,7 @@ services:
       dockerfile: nats-echo/Dockerfile
     restart: unless-stopped
     environment:
-    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - NATS_URL=${NATS_URL}
     - NATS_ECHO_SUBJECT=research.deepresearch.request.v1
     depends_on:
     - nats
@@ -746,7 +748,7 @@ services:
       dockerfile: nats-echo/Dockerfile
     restart: unless-stopped
     environment:
-    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - NATS_URL=${NATS_URL}
     - NATS_ECHO_SUBJECT=research.deepresearch.result.v1
     depends_on:
     - nats
@@ -776,7 +778,7 @@ services:
     environment:
     - SERVICE_NAME=consciousness-service
     - SERVICE_PORT=${CONSCIOUSNESS_HOST_PORT:-8106}
-    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - NATS_URL=${NATS_URL}
     - CHIT_PROD_PASSPHRASE=${CHIT_PROD_PASSPHRASE:?set CHIT_PROD_PASSPHRASE in env.shared}
     - SUPABASE_URL=${SUPABASE_URL:-http://supabase-kong:8000}
     - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY:-}
@@ -808,13 +810,13 @@ services:
     image: ${EVO_CONTROLLER_IMAGE:-ghcr.io/powerfulmoves/pmoves-evo-controller:latest}
     restart: unless-stopped
     environment:
-    # NATS_URL from env.tier-agent has credentials: nats://nats:pmoves@nats:4222
+    # NATS_URL from env.tier-agent has credentials: nats://<from-env.shared>
     - PORT=8113
     - SUPA_REST_URL=${SUPA_REST_INTERNAL_URL:-${SUPA_REST_URL:-http://supabase-kong:8000/rest/v1}}
     - EVOSWARM_POLL_SECONDS=${EVOSWARM_POLL_SECONDS:-300}
     - EVOSWARM_SAMPLE_LIMIT=${EVOSWARM_SAMPLE_LIMIT:-25}
     - EVOSWARM_NAMESPACE=${EVOSWARM_NAMESPACE:-}
-    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - NATS_URL=${NATS_URL}
     - CHIT_REQUIRE_SIGNATURE=${CHIT_PROD_REQUIRE_SIGNATURE:-true}
     - CHIT_DECRYPT_ANCHORS=${CHIT_PROD_DECRYPT_ANCHORS:-true}
     - CHIT_PASSPHRASE=${CHIT_PROD_PASSPHRASE:?set CHIT_PROD_PASSPHRASE in env.shared}

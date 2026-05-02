@@ -1,0 +1,70 @@
+here. Uh but yeah, so anyway, with
+Arkon, you obviously have some kind of
+trigger for your workflow.
+So traditionally without a harness, it
+would just be like sending a prompt into
+Claude code, right? Like that is your
+trigger. But with Arkon, there's a quite
+a few different ways that we can use it.
+And I'll I'll show you guys that today.
+We have the CLI. So we can have our
+Claude code or Codex, whatever um
+instance like trigger an Arkon workflow.
+So we can dispatch work to delegate
+behind the scenes. So we can do a lot of
+work in parallel. I also have a whole
+web interface. And I I'll definitely
+show that off today as well.
+Um that's the wrong link. This is it. So
+we have a whole web interface where we
+can manage our workflows
+and we can uh kick off workflows
+uh from the web UI directly.
+And uh so there's basically like a a
+coding agent sitting behind the web
+interface. So we can ask it to do work
+on our different repositories that we
+have registered with Arkon and it'll
+automatically route the request. It'll
+pick the right workflow and it will
+dispatch it. And we can do a ton of
+workflows in parallel if you want as
+well. So I'll I'll show you all of that
+today. But we have the web UI and then
+we even have different adapters so that
+you can, for example, talk to Arkon
+directly in Slack. So you can say like,
+hey, there's a GitHub issue for um this
+repo. Go and you know, handle that
+issue. I want to see a pull request in
+the end with a fix for that issue. And
+you can do that through Slack. And we
+have different conversations that you
+can manage through different threads in
+Slack. So for every single platform, we
+support parallel execution.
+Arkon handles work trees and isolation
+under the hood so you don't even have to
+worry about it. That's one of the other
+big unlocks with Arkon is how it
+supports working on things in parallel.
+And so I can go into my Claude code and
+I can have it use the CLI to fix eight
+GitHub issues at the exact same time.
+And they all run in different work trees
+so they don't step on each other's toes.
+They don't override each other's changes
+and we don't have to deal with merge
+conflicts just to get the pull requests
+created. It's really powerful.
+And so we start with our trigger. And
+then um again, this is just an example
+of a workflow we can create. So we could
+go like into planning mode. So maybe
+there's a new feature that we want to
+build. We want to start by going through
+the planning process with our coding
+agent.
+And so we have a step in our Arkon
+workflow where we are prompting our
+coding agent like here is the feature we
