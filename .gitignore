@@ -224,11 +224,10 @@ NUL
 .a0proj/
 
 # Kilocode plugin npm bootstrap artifacts (tracked content: agent/, command/, rules/, skills/ markdown)
-.kilo/node_modules/
+# (node_modules/ already covered by global rule on line 80)
 .kilo/package.json
 .kilo/package-lock.json
 .kilo/bun.lock
-.kilocode/node_modules/
 .kilocode/package.json
 .kilocode/package-lock.json
 .kilocode/bun.lock

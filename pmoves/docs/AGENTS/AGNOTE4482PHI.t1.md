@@ -654,7 +654,7 @@ The pipeline reports success because its validation scope is too narrow. Neither
 
 ## Submodule Sync Lane (2026-05-02)
 
-- `2026-05-02T00:00:00Z` CLAIM `CLAUDE-OPUS (Z890)` scope: Submodule sync triage post-AGNOTE4482 review. Five dirty submodules in superproject working tree audited; root causes identified per submodule. Authored plan file `~/.claude/plans/yes-and-status-of-silly-lemon.md`. Resolved local cleanup (cipher .bak files, supabase .gradle local exclude, redundant chore branch deletion, regenerated archive SITREP revert, .kilo/.kilocode npm artifact gitignore). Opened first promote PR. Branch (superproject): `main` clean except 4 deferred nested-gitlink dirties + transcribe-and-fetch (CHIT replacement deferred per operator). pr_numbers: [POWERFULMOVES/PMOVES-AgentGym#1]. risks: low — gitlink-only forward advances, all on upstream origin/main of nested repos. agent_signature: `ACK::CLAUDE-OPUS::SUBMODULE-SYNC-LANE-Z890`.
+- `2026-05-02T00:00:00Z` CLAIM `CLAUDE-OPUS (Z890)` scope: Submodule sync triage post-AGNOTE4482 review. Five dirty submodules in superproject working tree audited; root causes identified per submodule. Authored plan file `~/.claude/plans/yes-and-status-of-silly-lemon.md`. Resolved local cleanup (cipher .bak files, supabase .gradle local exclude, redundant chore branch deletion, regenerated archive SITREP revert, .kilo/.kilocode npm artifact gitignore). Opened first promote PR. Branch (superproject): `chore/agnote-submodule-sync-lane-2026-05-02`. pr_numbers: [POWERFULMOVES/PMOVES.AI#1418, POWERFULMOVES/PMOVES-AgentGym#1]. risks: low — gitlink-only forward advances, all on upstream origin/main of nested repos. chit_artifact_path: `~/.claude/plans/yes-and-status-of-silly-lemon.md` (handoff payload — plan file is the cross-agent reference; CHIT trail unsigned this session per repo policy "Signing is optional locally" when no `CHIT_PASSPHRASE` available). agent_signature: `ACK::CLAUDE-OPUS::SUBMODULE-SYNC-LANE-Z890`.
 
 - `2026-05-02T00:00:00Z` REVIEW `CLAUDE-OPUS (Z890)` scope: Findings per submodule —
   - **PMOVES-transcribe-and-fetch**: recursive failure root-cause = 3 orphan gitlinks (`PMOVES-Archon`, `github-mcp-server`, `pmoves-ottomator-agents`) committed to tree with NO `.gitmodules` file at any commit (origin HEAD `aef3a86e`, prior `6d9c65d`, local `322f05f`). Superproject gitlink already rewound by main `71b1887d11`. Workaround `--no-recurse-submodules` remains; permanent fix needs upstream PR in transcribe-and-fetch repo. Per operator direction: to be replaced by PMOVES CHIT-prefixed three.js mapped to HyperDimensions theme control — no immediate fix.
@@ -668,14 +668,14 @@ The pipeline reports success because its validation scope is too narrow. Neither
 
 ### Lanes Available for Handoff
 
-**Lane A: Archon nested-pointer promote PR** — `CODEX-GPT5` candidate (matches submodule work pattern PR #1064). Repo: POWERFULMOVES/PMOVES-Archon. Base: `PMOVES.AI-Edition-Hardened`. New branch: `chore/promote-nested-pointers-2026-05`. Bump 4 gitlinks:
+**Lane A: Archon nested-pointer promote PR** — `CODEX-GPT5` candidate (matches submodule work pattern PR #1064). Repo: POWERFULMOVES/PMOVES-Archon. Base: `PMOVES.AI-Edition-Hardened`. New branch: `chore/archon-promote-nested-pointers-2026-05`. Bump 4 gitlinks:
 - `external/PMOVES-Agent-Zero`: `d8eb4678 → a583eb82` (MiniMax provider)
 - `external/PMOVES-BoTZ`: `8461b77c → bf9b372b` (MiniMax + MCP + JWT auth)
 - `external/PMOVES-HiRAG`: `89d4abf3 → e904b12a` (CHIT geometry context, already merged via Hi-RAG #4)
 - `pmoves_multi_agent_pro_pack/PMOVES-BotZ-gateway`: `40e1e33d → 8336b2fb` (env strip + adapter sanitize)
 - DO NOT extend stale `chore/promote-nested-submodule-pointers` branch; open fresh PR. Reference: PR #12 closed unmerged.
 
-**Lane B: BoTZ nested-pointer promote PR** — `CODEX-GPT5` or sibling-CLAUDE node. Repo: POWERFULMOVES/PMOVES-BoTZ. Base: `main`. New branch: `chore/promote-nested-pointers-2026-05`. Bump 7 gitlinks:
+**Lane B: BoTZ nested-pointer promote PR** — `CODEX-GPT5` or sibling-CLAUDE node. Repo: POWERFULMOVES/PMOVES-BoTZ. Base: `main`. New branch: `chore/botz-promote-nested-pointers-2026-05`. Bump 7 gitlinks:
 - `features/cipher/pmoves_cipher`: `873abb1b → c4f8348f` (Ollama backend + MCP capabilities — UNBLOCKS superproject PR #1370)
 - `features/skills/repos/anthropics-skills`: `69c0b1a0 → b9e19e6f`
 - `features/skills/repos/aws-skills`: `ece56a8e → de932ce4`
