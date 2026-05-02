@@ -222,3 +222,13 @@ NUL
 .harness/offloads/
 .harness/threads/
 .a0proj/
+
+# Kilocode plugin npm bootstrap artifacts (tracked content: agent/, command/, rules/, skills/ markdown)
+.kilo/node_modules/
+.kilo/package.json
+.kilo/package-lock.json
+.kilo/bun.lock
+.kilocode/node_modules/
+.kilocode/package.json
+.kilocode/package-lock.json
+.kilocode/bun.lock

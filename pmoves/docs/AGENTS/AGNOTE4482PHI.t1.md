@@ -651,3 +651,51 @@ The pipeline reports success because its validation scope is too narrow. Neither
 - Timestamp: `2026-04-28T17:13:38Z`
 
 <!-- GRAPHITI_MARK: Z890-CLAUDE::USB-PROVISIONING-SWEEP-DOCS::2026-04-28 -->
+
+## Submodule Sync Lane (2026-05-02)
+
+- `2026-05-02T00:00:00Z` CLAIM `CLAUDE-OPUS (Z890)` scope: Submodule sync triage post-AGNOTE4482 review. Five dirty submodules in superproject working tree audited; root causes identified per submodule. Authored plan file `~/.claude/plans/yes-and-status-of-silly-lemon.md`. Resolved local cleanup (cipher .bak files, supabase .gradle local exclude, redundant chore branch deletion, regenerated archive SITREP revert, .kilo/.kilocode npm artifact gitignore). Opened first promote PR. Branch (superproject): `main` clean except 4 deferred nested-gitlink dirties + transcribe-and-fetch (CHIT replacement deferred per operator). pr_numbers: [POWERFULMOVES/PMOVES-AgentGym#1]. risks: low — gitlink-only forward advances, all on upstream origin/main of nested repos. agent_signature: `ACK::CLAUDE-OPUS::SUBMODULE-SYNC-LANE-Z890`.
+
+- `2026-05-02T00:00:00Z` REVIEW `CLAUDE-OPUS (Z890)` scope: Findings per submodule —
+  - **PMOVES-transcribe-and-fetch**: recursive failure root-cause = 3 orphan gitlinks (`PMOVES-Archon`, `github-mcp-server`, `pmoves-ottomator-agents`) committed to tree with NO `.gitmodules` file at any commit (origin HEAD `aef3a86e`, prior `6d9c65d`, local `322f05f`). Superproject gitlink already rewound by main `71b1887d11`. Workaround `--no-recurse-submodules` remains; permanent fix needs upstream PR in transcribe-and-fetch repo. Per operator direction: to be replaced by PMOVES CHIT-prefixed three.js mapped to HyperDimensions theme control — no immediate fix.
+  - **PMOVES-AgentGym**: lmrlgym `83abeedb → 911d726b` (3 upstream community bugfixes via LMRL-Gym PR #18 ap-fixes). No active promote branch on AgentGym origin. PR opened: POWERFULMOVES/PMOVES-AgentGym#1.
+  - **PMOVES-Archon**: 4 nested forward-only advances. Stale branch `chore/promote-nested-submodule-pointers` (PR #12 closed unmerged 2026-04-19) — do NOT extend, open fresh. HiRAG matches stale branch; Agent-Zero/BoTZ/BotZ-gateway advanced further locally (MiniMax + MCP + JWT + env-strip).
+  - **PMOVES-BoTZ**: 7 nested forward-only advances. Stale branch `sync/archon-nested-skill-pointers` (no PR ever opened) — do NOT extend, open fresh. skills-marketplace matches stale branch; cipher (`pmoves_cipher 873abb1b → c4f8348f`) advance contains the **MCP capabilities fix that previously blocked superproject PR #1370**. 5 other skills repos advance to upstream community tips.
+  - **.kilo/.kilocode**: gitignore patterns added for npm bootstrap artifacts (package.json, package-lock.json, node_modules/, bun.lock). Tracked agent/command/rules/skills .md content unaffected.
+  - **transcribe-and-fetch LFS**: separate dirty state on 3 SVG files (LFS smudge mismatch after gitlink rewind) — investigated as advisory, not actioned per CHIT-replacement direction.
+
+- `2026-05-02T00:00:00Z` RELEASE `CLAUDE-OPUS (Z890)` scope: Local triage + first promote PR landed. Two promote PRs remain (Archon, BoTZ) — explicit handoff lanes published below for KILOCODE-GLM / CODEX-GPT5 / sibling-CLAUDE nodes. Superproject gitlink bumps deferred until each promote PR merges upstream. Trail unsigned locally (no CHIT_PASSPHRASE in CLI; per repo policy "Signing is optional locally"). next_actions: (a) review/merge POWERFULMOVES/PMOVES-AgentGym#1, (b) claim Archon promote lane, (c) claim BoTZ promote lane, (d) post-merge: 3 superproject gitlink bumps in a single PR.
+
+### Lanes Available for Handoff
+
+**Lane A: Archon nested-pointer promote PR** — `CODEX-GPT5` candidate (matches submodule work pattern PR #1064). Repo: POWERFULMOVES/PMOVES-Archon. Base: `PMOVES.AI-Edition-Hardened`. New branch: `chore/promote-nested-pointers-2026-05`. Bump 4 gitlinks:
+- `external/PMOVES-Agent-Zero`: `d8eb4678 → a583eb82` (MiniMax provider)
+- `external/PMOVES-BoTZ`: `8461b77c → bf9b372b` (MiniMax + MCP + JWT auth)
+- `external/PMOVES-HiRAG`: `89d4abf3 → e904b12a` (CHIT geometry context, already merged via Hi-RAG #4)
+- `pmoves_multi_agent_pro_pack/PMOVES-BotZ-gateway`: `40e1e33d → 8336b2fb` (env strip + adapter sanitize)
+- DO NOT extend stale `chore/promote-nested-submodule-pointers` branch; open fresh PR. Reference: PR #12 closed unmerged.
+
+**Lane B: BoTZ nested-pointer promote PR** — `CODEX-GPT5` or sibling-CLAUDE node. Repo: POWERFULMOVES/PMOVES-BoTZ. Base: `main`. New branch: `chore/promote-nested-pointers-2026-05`. Bump 7 gitlinks:
+- `features/cipher/pmoves_cipher`: `873abb1b → c4f8348f` (Ollama backend + MCP capabilities — UNBLOCKS superproject PR #1370)
+- `features/skills/repos/anthropics-skills`: `69c0b1a0 → b9e19e6f`
+- `features/skills/repos/aws-skills`: `ece56a8e → de932ce4`
+- `features/skills/repos/huggingface-skills`: `ea6ec9a6 → 221f5f78`
+- `features/skills/repos/obsidian-plugin-skill`: `b2fa26c7 → 803c4d9f`
+- `features/skills/repos/skillcreator-skills`: `b2a07d6a → 628dce65`
+- `features/skills/repos/skills-marketplace`: matches stale `sync/archon-nested-skill-pointers` (already at `3fa16a94`)
+- DO NOT extend stale `sync/archon-nested-skill-pointers` branch; open fresh PR.
+
+**Lane C (post-merge superproject sync)** — any agent. After A+B+AgentGym#1 merge: open single superproject PR bumping `PMOVES-AgentGym`, `PMOVES-Archon`, `PMOVES-BoTZ` gitlinks to their new tips. Forward-only, low-risk.
+
+**Reference paths for handoff agents:**
+- Plan file: `C:/Users/russe/.claude/plans/yes-and-status-of-silly-lemon.md` (status snapshot + execution sequence)
+- AGNOTE4482 latest entry: see Z890-CLAUDE 2026-04-28 USB sweep above
+- Submodule audit pattern source: `pmoves/docs/AGENTS/AGNOTE4482PHI.5090-SUBMODULE-AUDIT.md` (5090-CLAUDE 2026-03-21 28→0 drift cleanup)
+
+## Agent ACK (Signed, Submodule Sync Lane)
+- Agent: `CLAUDE-OPUS (Z890)`
+- Ack: `Submodule sync triage post-AGNOTE4482 review. Five dirty submodules audited per lane. Local cleanup committed (cipher .bak removal, supabase .gradle local exclude, .kilo/.kilocode npm gitignore, redundant chore/known-roads-mic-make-targets branch deletion after squash-merge confirm via diff abe5a6f132 vs 90d38e7644 = empty, regenerated archived SITREP reverted to preserve 2026-02-17 ARCHIVED banner). First promote PR opened: POWERFULMOVES/PMOVES-AgentGym#1 (lmrlgym 83abeedb→911d726b, 3 upstream LMRL-Gym community bugfixes via PR #18, all on origin/main). Two further promote lanes (Archon 4-pointer, BoTZ 7-pointer) explicitly handed off above for KILOCODE-GLM / CODEX-GPT5 / sibling-CLAUDE pickup — both stale upstream branches identified (Archon PR #12 closed unmerged, BoTZ sync branch never had a PR) so handoff agents should open FRESH branches not extend. Cipher pointer advance in BoTZ lane is the long-blocked PR #1370 unblock. Trail unsigned locally (no CHIT_PASSPHRASE).`
+- Signature: `ACK::CLAUDE-OPUS::PHI-4482-T1::SUBMODULE-SYNC-LANE-Z890`
+- Timestamp: `2026-05-02T00:00:00Z`
+
+<!-- GRAPHITI_MARK: CLAUDE-OPUS::SUBMODULE-SYNC-LANE-Z890::2026-05-02 -->
