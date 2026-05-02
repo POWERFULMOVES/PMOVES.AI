@@ -634,3 +634,72 @@ script fixes) is delivered from this CLI session.
 - Timestamp: `2026-04-28`
 
 <!-- GRAPHITI_MARK: Z890-CLAUDE::USB-PROVISIONING-SWEEP-DOCS::2026-04-28 -->
+
+## W6 Convergence Wave + TAC Lane Announce (2026-04-27 → 2026-05-02)
+
+### Work Performed
+
+**W6-P3 NATS push model (beats_to_voice):**
+- Added `publish_nats=False` param to `run_pipeline()` — publishes CGP packets to `tokenism.prosodic.bpm.v1` after Stage 3
+- Added `listen` subcommand — subscribes to `voice.agent.response.v1`, auto-runs pipeline, publishes CGP; transforms Shift Crew from CLI pull model to reactive push model
+- nats-py stays optional (lazy import, graceful fallback)
+- 5 unit tests, all deterministic (asyncio.Event replaces timing-dependent sleep)
+- PR #1402 merged 2026-04-27
+
+**Flute geometry-bus bridge (dual-publish CGP v0.2):**
+- `pmoves/tools/geometry_bridge.py` — publishes CGP packets to both `tokenism.prosodic.bpm.v1` and `geometry.cgp.v1`
+- Vendor signer drift guard: `test_sign_byte_equivalence_with_canonical` enforces parity between vendored `chit_signing.py` and canonical
+- PR #1404 merged 2026-04-27
+
+**Security: NATS credential redaction:**
+- 4 services (supaserch, agent-zero bus, gateway-agent, vllm-orchestrator) logged NATS URLs with credentials in plaintext
+- `_redact_url()` helper (stdlib `urllib.parse.urlparse` + `urlunparse`) strips userinfo before log emission
+- Zero functional change — connection calls use unredacted URL; only log output is sanitized
+- PR #1405 merged 2026-04-28
+
+**beats_to_voice agent_id semantics fix:**
+- `voice.agent.response.v1` payload: `user_id` is the request originator (end-user), NOT the processing agent — confirmed via NATS catalog
+- Fixed line 162: `aid = data.get("user_id") or agent_id` → `aid = agent_id`
+- Asyncio.Event race fix in test handler capture; PR thread cleanup (#1381 MD058 + machine-local path ref)
+- PR #1406 merged 2026-04-28
+
+**§9 Branch hygiene docs rescue from SPARK orphan branches:**
+- `fix/agnote4482-section9-recovery` and `fix/branch-lifecycle-chit-wiring` (SPARK lane, 2026-04-24) had stranded §9 branch naming convention docs, ROADMAP CHIT columns, and SITREP Restore Safety section
+- Cherry-picked clean commits; `stale-branch-sweep.yml` was already on main (landed `9b6eee7af`) — only docs were missing
+- Branches retained as reference per Village Rule (not deleted)
+- PR #1407 merged 2026-04-28
+
+**W6 TAC lane announce:**
+- Read TAC_HEALTH.md, TAC_WEALTH.md, TAC_TOKENISM.md, TAC_FLUTE.md + ROADMAP Active Claim Register
+- Created GitHub issues with full TAC-grounded handoff (file paths, exact signoff checklist items, NATS subjects, pattern references, CHIT-humility disclosures):
+  - Issue #1410 — W6-P1 [z890]: Health Phase 4 CHIT + Prometheus scrape; Wealth Phase 1+2 healthz/metrics/NATS
+  - Issue #1411 — W6-P2 [5090]: bpm_encoder NATS publish gap + ToKenism env.shared P1 fix
+  - Issue #1412 — W6-P5 [opus]: FlOO$ life-persona-voice pipeline architecture review + Phase A spec
+- ROADMAP Active Claim Register updated: W6-P3 NATS row added (SHIPPED), W6-P1/P2/P5 rows updated with issue numbers
+
+### Key Findings
+
+| Finding | Status | Evidence |
+|---------|--------|----------|
+| NATS credentials in startup logs | **RESOLVED** | `_redact_url()` in 4 services; PR #1405 |
+| beats_to_voice pull-model gap | **RESOLVED** | Push model live; PR #1402 |
+| geometry.cgp.v1 dual-publish | **RESOLVED** | Geometry bus bridge live; PR #1404 |
+| beats_to_voice agent_id semantics | **RESOLVED** | Line 162 fix + deterministic tests; PR #1406 |
+| §9 SPARK docs stranded on orphan branches | **RESOLVED** | Rescued via PR #1407; branches retained as reference |
+| W6-P1 Health Phase 4 CHIT + Prometheus wger | **ANNOUNCED** | Issue #1410 assigned to z890-claude |
+| W6-P2 bpm_encoder NATS publish + ToKenism env.shared | **ANNOUNCED** | Issue #1411 assigned to 5090-claude |
+| W6-P5 FlOO$ architecture review | **ANNOUNCED** | Issue #1412 assigned to claude-opus |
+
+### Handoff Notes
+- geometry.cgp.v1 subscribe path (`geometry.packet.decoded.v1` Flute consume) not yet implemented — open gap for Flute team
+- TAC_FLUTE.md: needs update to reflect `geometry.cgp.v1` dual-publish now live (#1404)
+- Prometheus scrape config (`pmoves/config/prometheus.yml`): wger target still PENDING (Health Phase 1 item 3)
+- ToKenism env.shared P1: `export` syntax + NATS_URL credentials still unresolved (W6-P2 scope)
+- §9 orphan branches `fix/agnote4482-section9-recovery` + `fix/branch-lifecycle-chit-wiring` retained as reference — do NOT delete
+
+### Agent ACK
+- Agent: `4090-CLAUDE`
+- Signature: `ACK::4090-CLAUDE::W6-CONVERGENCE-WAVE-TAC-ANNOUNCE`
+- Timestamp: `2026-05-02`
+
+<!-- GRAPHITI_MARK: 4090-CLAUDE::W6-CONVERGENCE-WAVE-TAC-ANNOUNCE::2026-05-02 -->
