@@ -223,11 +223,12 @@ NUL
 .harness/threads/
 .a0proj/
 
-# Kilocode plugin npm bootstrap artifacts (tracked content: agent/, command/, rules/, skills/ markdown)
-# (node_modules/ already covered by global rule on line 80)
-.kilo/package.json
-.kilo/package-lock.json
-.kilo/bun.lock
-.kilocode/package.json
-.kilocode/package-lock.json
-.kilocode/bun.lock
+# Kilocode plugin — ignore bootstrap artifacts, keep tracked content
+# .kilo/ has agent/ + command/; .kilocode/ has rules/ + skills/
+# Pattern: ignore the whole dir, negate the tracked subdirs (future-proofs new artifact types)
+.kilo/*
+!.kilo/agent/
+!.kilo/command/
+.kilocode/*
+!.kilocode/rules/
+!.kilocode/skills/
