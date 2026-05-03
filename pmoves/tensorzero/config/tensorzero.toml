@@ -455,7 +455,7 @@ routing = ["llamacpp_rocm"]
 
 [models.gemma_4_31b_rocm.providers.llamacpp_rocm]
 type = "openai"
-api_base = "http://pmoves-9850x3d-r9700:8080/v1"
+api_base = "http://pmoves-rdna4:8080/v1"
 model_name = "gemma-4-31b-it-Q4_K_M.gguf"
 api_key_location = "none"
 
@@ -465,7 +465,7 @@ routing = ["llamacpp_rocm"]
 
 [models.gemma_4_26b_a4b_rocm.providers.llamacpp_rocm]
 type = "openai"
-api_base = "http://pmoves-9850x3d-r9700:8080/v1"
+api_base = "http://pmoves-rdna4:8080/v1"
 model_name = "gemma-4-26B-A4B-it-Q4_K_M.gguf"
 api_key_location = "none"
 
@@ -504,7 +504,7 @@ routing = ["llamacpp_rocm"]
 
 [models.llamacpp_rdna4_gemma4_31b_q4km.providers.llamacpp_rocm]
 type = "openai"
-api_base = "http://pmoves-9850x3d-r9700:8080/v1"
+api_base = "http://pmoves-rdna4:8080/v1"
 model_name = "gemma-4-31b-it-Q4_K_M.gguf"
 api_key_location = "none"
 
@@ -514,7 +514,7 @@ routing = ["llamacpp_rocm"]
 
 [models.llamacpp_rdna4_gemma4_26b_dual.providers.llamacpp_rocm]
 type = "openai"
-api_base = "http://pmoves-9850x3d-r9700:8080/v1"
+api_base = "http://pmoves-rdna4:8080/v1"
 model_name = "gemma-4-26B-A4B-it-Q4_K_M.gguf"
 api_key_location = "none"
 

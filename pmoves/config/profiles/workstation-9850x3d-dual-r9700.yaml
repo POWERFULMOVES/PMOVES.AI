@@ -59,7 +59,7 @@ messaging:
   webrtc: true
 tailscale:
   role: gpu-node
-  hostname_pattern: "pmoves-9850x3d-r9700"
+  hostname_pattern: "pmoves-rdna4"
 notes:
   - "Dual R9700 RDNA4 — 2x 32 GB (64 GB total). Row-split mode for tensor parallel: --tensor-split 0.5,0.5 --split-mode row."
   - "Stock Ollama ROCm v6 libs DO NOT include gfx1201 kernels. Canonical runtime is llama.cpp HIP backend built against ROCm 7.1+."
