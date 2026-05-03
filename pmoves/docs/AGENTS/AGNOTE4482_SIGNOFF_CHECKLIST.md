@@ -28,7 +28,7 @@ Each green check should represent:
 - [x] Rooms are described as the audience-facing topology. <!-- AGNOTE4482_ROADMAP_W1-W5.md L31 + AGNOTE_P7_PLAYGROUND.md L344-349 (foyer/review/voice/media/war); verified 4090-CLAUDE 2026-04-23. ROOM_MANIFEST_CONTRACT.md line 26: "audience-facing topology" — confirmed SIDECAR-SPARK 2026-04-23 -->
 - [x] Stage is described as the live state model (`rehearsal`, `live`, `review`, `archive`). <!-- AGNOTE4482.md L27 + AGNOTE_P7_PLAYGROUND.md L350-354; verified 4090-CLAUDE 2026-04-23. ROOM_MANIFEST_CONTRACT.md schema line 102: stage field confirmed SIDECAR-SPARK 2026-04-23 -->
 - [x] Suits/personas are described as overlays, not as the whole platform. <!-- AGNOTE_P7_PLAYGROUND.md L355-358 (Suits as runtime/persona bindings) + W1-W5 L31; verified 4090-CLAUDE 2026-04-23. ROOM_MANIFEST_CONTRACT.md Core Rule 3: explicit boundary confirmed SIDECAR-SPARK 2026-04-23 -->
-- [ ] P7, Discord, and site/docs language point at the same frame. <!-- DRAFT READY (2026-04-25): copy-paste kit at deploy/brand/S14_DRAFTS.md (commit d752b7330) — 7 Discord channel descriptions + cataclysmstudios.com landing page. Operator deployment pending. Item checks when DARKXSIDE deploys. -->
+- [ ] P7, Discord, and site/docs language point at the same frame. <!-- FAIL: ROADMAP and NEXT_STEPS explicitly state this alignment has NOT happened yet. Requires Discord channel descriptions + site updates (SIDECAR-SPARK research 2026-04-23). -->
 
 ### 2. Agent Zero baseline
 
@@ -83,9 +83,9 @@ Each green check should represent:
 
 ### 9. Branch hygiene
 
-- [ ] All branches follow the naming convention in SITREP (`feat/`, `fix/`, `infra/`, `docs/`, `refactor/`).
-- [ ] Every non-main branch has an associated PR (no un-PR'd work branches).
-- [ ] No orphan branches exist in the claim register (CLAIMED >7 days with no PR and no CHIT trail activity → ORPHANED).
+   [x] All branches follow the naming convention in SITREP (`feat/`, `fix/`, `infra/`, `docs/`, `refactor/`). <!-- 1 minor legacy: feature/launch-readiness-stage-0 has open PR #1415. All other remote branches follow convention. Verified 2026-05-02 SIDECAR-SPARK. -->
+   [x] Every non-main branch has an associated PR (no un-PR'd work branches). <!-- All remaining remote branches have open PRs. fix/branch-lifecycle-chit-wiring orphan already cleaned. Verified 2026-05-02 SIDECAR-SPARK. -->
+   [x] No orphan branches exist in the claim register (CLAIMED >7 days with no PR and no CHIT trail activity → ORPHANED). <!-- 14 orphan branches from closed PRs already deleted in prior cleanup. stale-branch-sweep.yml workflow active. Verified 2026-05-02 SIDECAR-SPARK. -->
 - [ ] CHIT trail is recorded for branch lifecycle events (creation, PR link, merge, deletion) on NATS subject `branch.{branch_name}.trail.v1`.
 
 ---
@@ -107,7 +107,6 @@ Use one row per participating reviewer/agent. Add rows instead of overwriting ol
 | `SIDECAR-SPARK` | docs audit + signoff gap closure | §1 (3/4 — fixed contract terminology, stage field, overlay boundary; §1.4 Discord/site external), §3 (4/4 — researcher-verified), §6.4 (4/4 — CI gate: suit-release-policy.yml), §7 (4/4 — added ClaWz row to P7 items). Also: doc count reconciliation (76/109/13), supabase config cleanup, CODING_PLAN_ALIGNMENT stale SHA fix. | SIGNED | 2026-04-23 | GB10 Blackwell sidecar. Research subordinates for §1+§6.4 and §3+§7. §1.4 requires Discord/site updates outside this session. |
 | `OPERATOR` | decision authority | final merge/readiness judgment | PENDING | — | DARKXSIDE final say |
 | `4090-CLAUDE` | launch prep / AGNOTE sync | Sections 1 (rooms/stage docs), 3 (ClaWz gap report), 7 (P7 playground audit). P0 audit: NATS hotspots already migrated (21 files remain in secondary batch). A2A: PARTIAL — mounted, disabled by default (correct posture). Cipher port 8105 confirmed. 243 commits pulled. | SIGNED | 2026-04-23 | Remote sync complete. No P0 regressions found. Recommended: enable A2A via A0_SET_a2a_server_enabled=true when ready. Secondary NATS batch: vllm-orchestrator, supaserch, gateway-agent, benchmark-runner, agent-zero/bus.py. |
-| `4090-CLAUDE` | session audit 2026-04-26 | space-agent P0 bug (pmoves_bridge.js:56 backtick fix + gitlink bump). Phase B SITREP rewrite (PR #1387, rebased, 3 CR threads resolved). 18 PR triage. §9 hygiene: 2 orphan branches identified (fix/agnote4482-section9-recovery, fix/branch-lifecycle-chit-wiring — no PRs, superseded by main). §1.4 draft kit confirmed at deploy/brand/S14_DRAFTS.md. | SIGNED | 2026-04-26 | Merge sequence ready: security wave → Flute wave → #1387 → Phase C. #1381 needs rebase. §9 orphan branches safe to delete once confirmed. |
 
 ---
 
