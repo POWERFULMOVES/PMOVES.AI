@@ -127,7 +127,7 @@ Elder-context support is always available to reduce drift and collision across p
 |---------|--------|----------|
 | BoTZ JWT fail-open (P0) | **RESOLVED** | `gateway.py:292-299` returns HTTPException 500 on missing HAS_JOSE or SUPABASE_JWT_SECRET. `auth.py:57-65` returns HTTPException 500 on missing HAS_JOSE or JWT_SECRET. Both fail-closed. |
 | BPM encoder not implemented (P2) | **RESOLVED** | `pmoves/tools/bpm_encoder.py` exists, 574 lines, delivered in PR #1168 (Shift Crew tools) |
-| NATS unauthenticated references (P0) | **RESOLVED** | All 26 unauthenticated NATS fallback defaults migrated across 15 files to authenticated `nats://nats:pmoves@nats:4222`. 0 service-code refs remain. 6 intentional exceptions (TAC tree negative-pattern rules + smoke test assertions). Commit `542cbfcb2`. Re-verified 2026-04-24: `grep` confirms 0 bare refs in service code. |
+| NATS unauthenticated references (P0) | **RESOLVED** | Originally migrated to authenticated `nats://nats:pmoves@nats:4222` (commit `542cbfcb2`). Subsequently hardened: all hardcoded credential defaults removed from service code and docker-compose.agents.yml (commit `1388c4324`). NATS_URL now required via env var with no fallback. 6 intentional exceptions remain (TAC tree + smoke tests). |
 | A2A server not exposed (P0) | **RESOLVED** | `server.py` refactored: `create_a2a_router()` exports mountable APIRouter. `main.py` mounts it via `app.include_router()` on port 8080. `docker-compose.yml` adds `A2A_DISCOVERY_PUBLIC`/`A2A_TASKS_PUBLIC` env vars. Routes: `/.well-known/agent-card.json`, `/a2a/v1/tasks`, `/a2a/v1/discover`. Auth via `SUPABASE_JWT_SECRET` (from x-hardening). |
 | Agent registry count | **VERIFIED** | 15 PMOVES-canonical agents in `pmoves/config/agent_signatures.yaml`; broader registry has ~76 entries including 13 external contributors per commit `21b8389de` (8 cross-ref docs updated). Older "60/76" figures conflated the two pools. Re-verified 2026-04-24 after backup-restore regression. |
 | AGENTS file count | **VERIFIED** | 67 .md files in `pmoves/docs/AGENTS/` (root); 109 total including 42 subdirectory docs. Older "73+" claims were partial counts. Cross-ref docs updated. Re-verified 2026-04-24. |
@@ -417,7 +417,7 @@ P1: Maximize Surface Area | P2: Tune Pore Size | P3: Maintain Resonance | P4: En
 | `pmoves/docs/AGENTS/AGNOTE4482_ROADMAP_W1-W5.md` | Restored from host backup |
 
 ### Signoff Checklist Status
-Per validation 2026-04-25: **32/37 items checked** (9 sections). Remaining: §1.4 (external — DARKXSIDE deploy), §9.1–§9.4 (need compose stack).
+Per validation 2026-05-03: **35/37 items checked** (9 sections). Remaining: §1.4 (partial — site/docs addressed in PR #1420, Discord topics follow-up), §9.4 (blocked — CHIT trail wiring requires NATS bus). §9.1–§9.3 resolved 2026-05-03.
 
 ### Agent ACK
 - Agent: `AGENT-ZERO-GLM (SIDECAR)`
@@ -469,7 +469,7 @@ Per validation 2026-04-25: **32/37 items checked** (9 sections). Remaining: §1.
 | `research/PLAYLIST_BATCH_ANALYSIS.md` | 315 | Full playlist scan results (500 videos, 28 relevant) |
 
 ### Signoff Checklist Status
-No change: **32/37**. Remaining: §1.4 (external) + §9.1–§9.4 (compose stack).
+Updated 2026-05-03: **35/37**. Remaining: §1.4 (partial — PR #1420) + §9.4 (blocked on NATS). §9.1–§9.3 resolved.
 
 ### Agent ACK
 - Agent: `AGENT-ZERO-GLM (SIDECAR)`
