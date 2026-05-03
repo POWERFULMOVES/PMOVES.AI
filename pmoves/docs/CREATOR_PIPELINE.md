@@ -73,7 +73,7 @@ The CREATOR pipeline manages generative content workflows through ComfyUI, conne
 - Accepts title, summary, merkle root, shape id, weighted terms, favorite words, sections, and provenance refs
 - Renders the `ProvenanceLivingDoc` composition directly instead of requiring an intermediate A2UI scene builder
 - Returns `provenance_summary` in the response and in `a2ui.render.completed.v1`
-- Local artifact helper: `npm run build && node scripts/render-provenance-artifact.mjs demos/provenance_living_doc.request.json demos/provenance_living_doc.preview.png`
+- Local artifact helper: `npm run render:provenance:still`
 - Video example: `npm run render:provenance:file -- demos/provenance_living_doc.mof_example.json demos/provenance_living_doc.mof_example.preview.mp4`
 
 **Why this lane exists:**
