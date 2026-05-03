@@ -1,4 +1,21 @@
+# PMOVES.AI Architecture Context
+
+PMOVES.AI is structured as a **Metal-Organic Framework (MOF)** for distributed machine intelligence — the crystalline lattice through which autonomous agents flow. Operationally, this manifests as a **rooms-on-a-stage** model:
+
+- **P7 (Pinokio 7)** is the evolving room-aware stage manager — it selects rooms, loads suits, and manages stage transitions (rehearsal → live → review → archive). P7's tree grows with the platform.
+- **Rooms** are agent-owned workspaces (infra, field control, voice studio, workstation) defined in `pmoves/config/rooms/catalog.json`.
+- **Suits** are runtime/persona bindings (Agent Zero, ClaWZ, voice personas) layered onto rooms.
+- **Stage** is the lifecycle state per room: `rehearsal` → `live` → `review` → `archive`.
+
+Key references:
+- [Room Manifest Contract](pmoves/docs/ROOM_MANIFEST_CONTRACT.md) — room interface specification
+- [AGNOTE4482](pmoves/docs/AGENTS/AGNOTE4482.md) — P7 stage manager definition
+- [AGENTS.md](AGENTS.md) — project structure and canonical documentation
+
+---
+
 # Development Guide for Pinokio Projects
+
 
 ## Non-Negotiable Execution Workflow
 
