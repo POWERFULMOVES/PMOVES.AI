@@ -22,6 +22,15 @@ NODE_DIFF_REPORT = REPO_ROOT / "pmoves" / "docs" / "logs" / "node_descriptions_d
 
 
 def _run_audit(*args: str) -> subprocess.CompletedProcess[str]:
+    """
+    Run the audit script with the given CLI arguments and capture its output.
+    
+    Parameters:
+        *args (str): Command-line arguments forwarded to the audit script.
+    
+    Returns:
+        subprocess.CompletedProcess[str]: Completed process containing `stdout`, `stderr`, and `returncode`.
+    """
     return subprocess.run(
         [sys.executable, str(SCRIPT), *args],
         capture_output=True,
@@ -53,7 +62,11 @@ def test_audit_writes_node_diff() -> None:
 
 @pytest.mark.skipif(not SCRIPT.exists(), reason="audit script not present")
 def test_audit_strict_fails_on_p0() -> None:
-    """The repo currently has 7 P0 PEM-misuse findings (per sitrep §2)."""
+    """
+    Ensure the audit script fails when run in strict mode targeting P0 severity.
+    
+    Asserts the subprocess exit code is 1, indicating strict mode fails when P0 findings are present.
+    """
     result = _run_audit("--strict", "--severity", "P0")
     assert result.returncode == 1, "strict mode must fail when P0 findings exist"
 

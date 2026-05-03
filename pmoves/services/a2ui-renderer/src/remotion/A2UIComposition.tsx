@@ -41,6 +41,12 @@ interface A2UIElement {
   [key: string]: unknown;
 }
 
+/**
+ * Resolve an element's x and y coordinates, preferring explicit `position` values over `style` fallbacks.
+ *
+ * @param el - The element whose coordinates to resolve; `position` fields override `style` fields when present.
+ * @returns An object with `x` and `y` taken from `el.position` if available, otherwise from `el.style`; each value may be a `number`, `string`, or `undefined`.
+ */
 function resolveElementPosition(el: A2UIElement): { x?: number | string; y?: number | string } {
   return {
     x: el.position?.x ?? el.style?.x,
@@ -48,6 +54,12 @@ function resolveElementPosition(el: A2UIElement): { x?: number | string; y?: num
   };
 }
 
+/**
+ * Normalizes an input to a valid CSS text-align value.
+ *
+ * @param value - The input to interpret as text alignment (commonly a string).
+ * @returns `'center'` or `'right'` when `value` strictly equals those strings, `'left'` otherwise.
+ */
 function resolveCssTextAlign(value: unknown): React.CSSProperties['textAlign'] {
   return value === 'center' || value === 'right' ? value : 'left';
 }

@@ -61,11 +61,24 @@ export interface ResolvedTextLayout {
 
 const DEFAULT_TEXT_WIDTH = 720;
 
+/**
+ * Detects whether the current runtime exposes APIs usable for canvas-based text measurement.
+ *
+ * @returns `true` if `globalThis` contains either `OffscreenCanvas` or `document`, `false` otherwise.
+ */
 function hasCanvasMeasurementRuntime(): boolean {
   const runtime = globalThis as Record<string, unknown>;
   return 'OffscreenCanvas' in runtime || 'document' in runtime;
 }
 
+/**
+ * Resolve a numeric layout value possibly expressed as a percentage or `'px'` string into an absolute number.
+ *
+ * @param value - The input value to resolve; may be a number, a string (e.g., `"50%"`, `"12px"`, or `"3.5"`), or `undefined`.
+ * @param reference - Reference number used when `value` is a percentage (e.g., percent of this reference).
+ * @param fallback - Value to return when `value` is missing or cannot be parsed to a finite number.
+ * @returns The resolved finite number. For percentage strings returns `(reference * percentage) / 100`; for `'px'` strings returns the parsed pixels; for plain numeric strings returns the parsed value; returns `fallback` if parsing fails or input is invalid.
+ */
 function resolveNumeric(value: number | string | undefined, reference: number, fallback: number): number {
   if (typeof value === 'number' && Number.isFinite(value)) {
     return value;
@@ -100,10 +113,24 @@ function resolveNumeric(value: number | string | undefined, reference: number, f
   return fallback;
 }
 
+/**
+ * Resolve the font size from the provided style, falling back to 36px when absent or invalid.
+ *
+ * @returns The resolved font size in pixels; defaults to 36 when `style.fontSize` is not present or cannot be parsed.
+ */
 function resolveFontSize(style: TextStyleConfig | undefined): number {
   return resolveNumeric(style?.fontSize, 0, 36);
 }
 
+/**
+ * Compute the effective line height for text using a layout override or style values.
+ *
+ * If `layout.lineHeight` is a finite number it is used; otherwise the function derives line height from `style` (using `style.lineHeight` when valid, or falling back to approximately 1.2× the resolved font size).
+ *
+ * @param style - Optional text style configuration used to derive font size and style line-height
+ * @param layout - Optional layout configuration that can override line height
+ * @returns The resolved line height as a number (in pixels)
+ */
 function resolveLineHeight(style: TextStyleConfig | undefined, layout: TextLayoutConfig | undefined): number {
   if (typeof layout?.lineHeight === 'number' && Number.isFinite(layout.lineHeight)) {
     return layout.lineHeight;
@@ -113,11 +140,27 @@ function resolveLineHeight(style: TextStyleConfig | undefined, layout: TextLayou
   return resolveNumeric(style?.lineHeight, 0, Math.round(fontSize * 1.2));
 }
 
+/**
+ * Determines the effective letter spacing, using the layout override when present and falling back to the style value or 0.
+ *
+ * @param style - Text style configuration that may include `letterSpacing`
+ * @param layout - Layout configuration that may include `letterSpacing` and takes precedence over `style`
+ * @returns The resolved letter spacing in pixels; `0` when unspecified or not a finite value
+ */
 function resolveLetterSpacing(style: TextStyleConfig | undefined, layout: TextLayoutConfig | undefined): number {
   const raw = layout?.letterSpacing ?? style?.letterSpacing;
   return resolveNumeric(raw, 0, 0);
 }
 
+/**
+ * Constructs a canvas-compatible font string from a text style configuration.
+ *
+ * Defaults missing values to `fontStyle: "normal"`, `fontWeight: "400"`, `fontFamily: "sans-serif"`,
+ * and resolves `fontSize` via `resolveFontSize`.
+ *
+ * @param style - Optional text style configuration used to derive font style, weight, size, and family
+ * @returns A collapsed-whitespace font string formatted as `"fontStyle fontWeight {fontSize}px fontFamily"`
+ */
 function buildCanvasFont(style: TextStyleConfig | undefined): string {
   const fontSize = resolveFontSize(style);
   const fontStyle = typeof style?.fontStyle === 'string' && style.fontStyle.trim()
@@ -133,6 +176,16 @@ function buildCanvasFont(style: TextStyleConfig | undefined): string {
   return `${fontStyle} ${fontWeight} ${fontSize}px ${fontFamily}`.replace(/\s+/g, ' ').trim();
 }
 
+/**
+ * Resolve text lines and layout metrics using the Pretext engine when available.
+ *
+ * @param text - The source text to measure and layout.
+ * @param style - Optional style hints (font, fontSize, lineHeight, letterSpacing, textAlign, width/maxWidth, etc.) that influence font construction and alignment.
+ * @param layout - Optional layout configuration (must specify `engine: 'pretext'` to run) that controls maxWidth, line/word wrapping, letter spacing, maxLines, shrinkWrap, textAlign, locale, debugBoxes, and related behavior.
+ * @param size - Optional element size hints; `size.width` is used as a candidate for resolving `maxWidth`.
+ * @param canvasWidth - The reference canvas width (in pixels) used for resolving percentage-based or relative widths.
+ * @returns A `ResolvedTextLayout` containing computed lines and metrics when the pretext engine is selected and measurement succeeds; `null` if the engine is not `pretext`, the runtime lacks canvas/document measurement support, or an error occurs during measurement/layout.
+ */
 export function resolveTextLayout(
   text: string,
   style: TextStyleConfig | undefined,

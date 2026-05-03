@@ -20,6 +20,14 @@ type ParagraphProps = {
 
 const panelShadow = '0 28px 80px rgba(15, 23, 42, 0.35)';
 
+/**
+ * Compute a clamped progress value from 0 to 1 for a reveal animation over a frame interval.
+ *
+ * @param frame - Current frame index.
+ * @param start - Frame at which the reveal begins.
+ * @param duration - Number of frames over which the reveal goes from start to completion.
+ * @returns A number between `0` and `1` representing progress; values before `start` yield `0` and after `start + duration` yield `1`.
+ */
 function revealProgress(frame: number, start: number, duration: number): number {
   return interpolate(frame, [start, start + duration], [0, 1], {
     extrapolateLeft: 'clamp',
@@ -27,6 +35,16 @@ function revealProgress(frame: number, start: number, duration: number): number 
   });
 }
 
+/**
+ * Creates an inline style object that animates opacity and positional translation for a reveal effect.
+ *
+ * @param frame - Current animation frame used to compute reveal progress
+ * @param start - Frame at which the reveal begins
+ * @param duration - Number of frames over which the reveal progresses from start to completion
+ * @param offsetX - Horizontal pixel offset when progress is 0 (defaults to 0)
+ * @param offsetY - Vertical pixel offset when progress is 0 (defaults to 24)
+ * @returns An inline style with `opacity` (0 to 1) and `transform` translating from the given offsets toward `translate(0px, 0px)`
+ */
 function revealStyle(frame: number, start: number, duration: number, offsetX = 0, offsetY = 24): React.CSSProperties {
   const progress = revealProgress(frame, start, duration);
   return {

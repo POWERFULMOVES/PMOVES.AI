@@ -16,6 +16,15 @@ def hirag_upsert_provenance(
     req: ProvenanceUpsertReq = Body(...),
     _=Depends(require_admin_tailscale),
 ):
+    """
+    Accept a ProvenanceUpsertReq and upsert its serialized items into the provenance store.
+    
+    Parameters:
+        req (ProvenanceUpsertReq): Request containing `items` to upsert and the flags `ensure_collection` and `index_lexical` that control collection creation and lexical indexing.
+    
+    Returns:
+        The value returned by `upsert_provenance_payloads`, containing the upsert operation's outcomes and related metadata.
+    """
     payloads = [item.model_dump() for item in req.items]
     return upsert_provenance_payloads(
         payloads,

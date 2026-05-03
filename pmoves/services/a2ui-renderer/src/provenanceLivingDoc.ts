@@ -59,10 +59,26 @@ const DEFAULT_PALETTE: ProvenancePalette = {
   muted: '#cbd5e1',
 };
 
+/**
+ * Restricts a number to lie within the specified inclusive range.
+ *
+ * @param value - The number to constrain
+ * @param min - The lower bound (inclusive)
+ * @param max - The upper bound (inclusive)
+ * @returns The input value constrained to the range `[min, max]`
+ */
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
 }
 
+/**
+ * Normalize a value into a trimmed, length-limited string, using a fallback when the input is not a usable string.
+ *
+ * @param value - The input to coerce into a string
+ * @param fallback - The string to return when `value` is not a non-empty string after trimming
+ * @param maxLength - Maximum number of characters to keep from the trimmed string
+ * @returns A trimmed string truncated to at most `maxLength` characters, or `fallback` if the input is not a non-empty string
+ */
 function asString(value: unknown, fallback: string, maxLength: number): string {
   if (typeof value !== 'string') {
     return fallback;
@@ -74,6 +90,14 @@ function asString(value: unknown, fallback: string, maxLength: number): string {
   return trimmed.slice(0, maxLength);
 }
 
+/**
+ * Normalize an input into a list of trimmed, non-empty strings limited by count and length.
+ *
+ * @param value - The value to normalize; treated as an array of potential strings. Non-arrays produce an empty list.
+ * @param maxItems - Maximum number of items to include in the result.
+ * @param maxLength - Maximum length for each string; longer strings are truncated.
+ * @returns An array of trimmed, non-empty strings, containing at most `maxItems` entries and with each entry truncated to `maxLength` characters.
+ */
 function asStringList(value: unknown, maxItems: number, maxLength: number): string[] {
   if (!Array.isArray(value)) {
     return [];
@@ -85,6 +109,13 @@ function asStringList(value: unknown, maxItems: number, maxLength: number): stri
     .map((item) => item.slice(0, maxLength));
 }
 
+/**
+ * Coerces an input to a finite number when possible.
+ *
+ * @param value - The value to convert; accepts a finite number or a string containing a numeric literal.
+ * @param fallback - The number to return if `value` cannot be converted to a finite number.
+ * @returns The finite numeric value parsed from `value`, or `fallback` if conversion fails.
+ */
 function asNumber(value: unknown, fallback: number): number {
   if (typeof value === 'number' && Number.isFinite(value)) {
     return value;
@@ -98,10 +129,25 @@ function asNumber(value: unknown, fallback: number): number {
   return fallback;
 }
 
+/**
+ * Normalize an arbitrary input into a weight value between 0 and 1.
+ *
+ * @param value - Input to coerce into a weight; accepts numbers or numeric strings, otherwise a fallback is used
+ * @returns A number in the inclusive range 0 to 1; when input is not a finite number the result defaults to 0.5
+ */
 function normalizeWeight(value: unknown): number {
   return clamp(asNumber(value, 0.5), 0, 1);
 }
 
+/**
+ * Normalize an untyped value into an array of up to four validated ProvenanceSection objects.
+ *
+ * Accepts an array of entries (objects) and extracts `heading` and `body` strings from each entry.
+ * Non-object entries are ignored. Entries where both heading and body are empty after normalization
+ * are omitted.
+ *
+ * @param value - The input to normalize; expected to be an array of objects with optional `heading` and `body` properties.
+ * @returns An array (maximum length 4) of sections where each section has a `heading` (defaults to `"Section"` when empty, maximum 80 characters) and a `body` (defaults to the heading when empty, maximum 600 characters).
 function normalizeSections(value: unknown): ProvenanceSection[] {
   if (!Array.isArray(value)) {
     return [];
@@ -126,6 +172,17 @@ function normalizeSections(value: unknown): ProvenanceSection[] {
     .slice(0, 4);
 }
 
+/**
+ * Normalize an untyped value into an array of provenance reference entries.
+ *
+ * Accepts an array of strings or objects and produces up to six validated references;
+ * string entries become `label`-only references, and object entries are normalized
+ * to include `label`, optional `uri`, and optional `kind`. Entries lacking both
+ * label and URI are omitted.
+ *
+ * @param value - Untyped input expected to be an array of strings or objects
+ * @returns An array of `ProvenanceReference` objects (maximum 6 entries) with trimmed and length-limited `label`, optional `uri`, and optional `kind`
+ */
 function normalizeReferences(value: unknown): ProvenanceReference[] {
   if (!Array.isArray(value)) {
     return [];
@@ -159,6 +216,12 @@ function normalizeReferences(value: unknown): ProvenanceReference[] {
     .slice(0, 6);
 }
 
+/**
+ * Normalizes an untyped value into a list of provenance terms.
+ *
+ * @param value - The input to normalize; expected to be an array of strings or objects describing terms.
+ * @returns An array of up to eight `ProvenanceTerm` objects sorted by descending `weight`. Each entry contains a trimmed, truncated `term`, a normalized `weight`, and optional `cluster` and `role` when present.
+ */
 function normalizeTerms(value: unknown): ProvenanceTerm[] {
   if (!Array.isArray(value)) {
     return [];
@@ -192,6 +255,12 @@ function normalizeTerms(value: unknown): ProvenanceTerm[] {
     .slice(0, 8);
 }
 
+/**
+ * Normalize an arbitrary input into a validated ProvenancePalette.
+ *
+ * @param value - Input that may contain palette fields; if missing or not an object, the default palette is used.
+ * @returns A ProvenancePalette with each color field coerced to a safe string and default values filled from DEFAULT_PALETTE.
+ */
 function normalizePalette(value: unknown): ProvenancePalette {
   if (!value || typeof value !== 'object') {
     return { ...DEFAULT_PALETTE };
@@ -208,6 +277,16 @@ function normalizePalette(value: unknown): ProvenancePalette {
   };
 }
 
+/**
+ * Estimate a playback duration for a provenance living document in milliseconds.
+ *
+ * Calculates an estimated duration based on the number of sections, weighted terms,
+ * provenance references, and the length of the summary provided on `input`.
+ *
+ * @param input - An object that may contain `sections` (array), `weighted_terms` (array),
+ *   `provenance_refs` (array), and `summary` (string); missing or invalid fields are treated as empty.
+ * @returns The estimated duration in milliseconds, clamped to the range 9000–24000.
+ */
 export function estimateProvenanceDurationMs(input: Record<string, unknown>): number {
   const sectionCount = Array.isArray(input.sections) ? input.sections.length : 0;
   const termCount = Array.isArray(input.weighted_terms) ? input.weighted_terms.length : 0;
@@ -225,6 +304,17 @@ export function estimateProvenanceDurationMs(input: Record<string, unknown>): nu
   );
 }
 
+/**
+ * Normalize an arbitrary input into a validated ProvenanceLivingDoc structure.
+ *
+ * Converts and sanitizes fields from the provided raw input, applying sensible defaults,
+ * string trimming/truncation, numeric clamping, array length limits, and palette normalization.
+ * If the input is not an object it is treated as empty; if no sections remain after normalization,
+ * a single fallback section is inserted that uses the summary as context.
+ *
+ * @param input - Raw untyped input to normalize into a ProvenanceLivingDoc
+ * @returns A fully normalized ProvenanceLivingDoc with validated fields, defaults applied, and constraints enforced
+ */
 export function normalizeProvenanceLivingDoc(input: unknown): ProvenanceLivingDoc {
   const record = input && typeof input === 'object' ? input as Record<string, unknown> : {};
   const title = asString(record.title, 'PMOVES Living Document', 120);
@@ -262,6 +352,12 @@ export function normalizeProvenanceLivingDoc(input: unknown): ProvenanceLivingDo
   };
 }
 
+/**
+ * Produce a compact summary of counts and presence flags for a provenance living document.
+ *
+ * @param doc - The provenance living document to summarize
+ * @returns An object with counts for sections (`section_count`), weighted terms (`weighted_term_count`), favorite words (`favorite_word_count`), and provenance references (`provenance_ref_count`), plus `merkle_root_present` and `shape_id_present` which are `true` when the corresponding fields are non-empty after trimming, `false` otherwise
+ */
 export function summarizeProvenanceLivingDoc(doc: ProvenanceLivingDoc): ProvenanceLivingDocSummary {
   return {
     section_count: doc.sections.length,
@@ -273,6 +369,11 @@ export function summarizeProvenanceLivingDoc(doc: ProvenanceLivingDoc): Provenan
   };
 }
 
+/**
+ * Create a normalized example Provenance Living Doc for use in samples, demos, and tests.
+ *
+ * @returns A concrete, normalized ProvenanceLivingDoc populated with sample title, subtitle, summary, merkle/shape identifiers, favorite words, weighted terms, sections, and provenance references.
+ */
 export function sampleProvenanceLivingDoc(): ProvenanceLivingDoc {
   return normalizeProvenanceLivingDoc({
     title: 'HiRAG Provenance Surface',

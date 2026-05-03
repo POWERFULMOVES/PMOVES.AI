@@ -165,6 +165,14 @@ def _set_latest_provenance_artifacts(
     cgp: Dict[str, Any],
     hyperdimensions_save: Dict[str, Any],
 ) -> None:
+    """
+    Cache the latest provenance payload, CGP, and hyperdimensions save as deep-copied artifacts under the module's provenance lock.
+    
+    Parameters:
+        payload (Dict[str, Any]): The original provenance payload to cache; stored as a deep copy.
+        cgp (Dict[str, Any]): The converted canonical geometry pack (CGP) to cache; stored as a deep copy.
+        hyperdimensions_save (Dict[str, Any]): The hyperdimensions configuration to cache; stored as a deep copy.
+    """
     global _latest_provenance_payload, _latest_provenance_cgp
     global _latest_provenance_hyperdimensions_save
     with _latest_provenance_lock:
@@ -174,6 +182,12 @@ def _set_latest_provenance_artifacts(
 
 
 def get_latest_provenance_hyperdimensions_save() -> Optional[Dict[str, Any]]:
+    """
+    Retrieve the most recent provenance hyperdimensions save snapshot.
+    
+    Returns:
+        dict: A deep copy of the last cached hyperdimensions save, or `None` if no snapshot has been cached.
+    """
     with _latest_provenance_lock:
         if _latest_provenance_hyperdimensions_save is None:
             return None
@@ -181,6 +195,12 @@ def get_latest_provenance_hyperdimensions_save() -> Optional[Dict[str, Any]]:
 
 
 def get_latest_provenance_cgp() -> Optional[Dict[str, Any]]:
+    """
+    Get the most recently cached provenance CGP.
+    
+    Returns:
+        Optional[Dict[str, Any]]: A deep copy of the cached CGP dictionary if available, otherwise `None`.
+    """
     with _latest_provenance_lock:
         if _latest_provenance_cgp is None:
             return None
@@ -188,6 +208,18 @@ def get_latest_provenance_cgp() -> Optional[Dict[str, Any]]:
 
 
 def _pack_key(namespace: str, modality: Optional[str]) -> tuple[str, str]:
+    """
+    Normalize a namespace and modality into a canonical lowercase key pair.
+    
+    Both inputs are trimmed of surrounding whitespace and lowercased. If `namespace` is falsy it becomes an empty string; if `modality` is falsy or empty it becomes the literal `"*"`.
+    
+    Parameters:
+        namespace (str): Namespace identifier to normalize.
+        modality (Optional[str]): Modality identifier to normalize; may be None.
+    
+    Returns:
+        tuple[str, str]: A pair `(ns, mod)` containing the normalized namespace and modality.
+    """
     ns = (namespace or "").strip().lower()
     mod = (modality or "*").strip().lower() or "*"
     return ns, mod
@@ -349,6 +381,11 @@ async def _apply_swarm_meta(payload: Dict[str, Any]) -> None:
 # NATS geometry swarm worker
 # ---------------------------------------------------------------------------
 async def _geometry_swarm_worker() -> None:
+    """
+    Run a persistent NATS subscriber that listens for geometry swarm metadata and applies builder-pack updates.
+    
+    This background worker maintains a connection to the configured NATS server, subscribes to the "geometry.swarm.meta.v1" subject, decodes incoming JSON payloads (either raw dicts or JSON bytes), and forwards valid payloads to _apply_swarm_meta for activation/deactivation of builder packs. The worker reconnects with backoff on errors and stops when cancelled or when its internal stop event is set.
+    """
     global _geometry_swarm_nc, _geometry_swarm_stop
     backoff = max(1.0, GEOMETRY_REALTIME_BACKOFF)
     while True:
@@ -399,6 +436,17 @@ async def _geometry_swarm_worker() -> None:
 
 
 async def _content_provenance_worker() -> None:
+    """
+    Run a resilient NATS listener that ingests accepted provenance messages and bridges them into the geometry subsystem.
+    
+    Subscribes to the `content.hirag.accepted.v1` NATS subject, deserializes incoming messages (accepting either a raw dict or a wrapper with a `payload` field), and for each valid payload:
+    - upserts the provenance payload into the provenance store,
+    - converts the payload into a CGP and a hyperdimensions save snapshot,
+    - caches the latest provenance artifacts,
+    - forwards the CGP to the ShapeStore (if available) and broadcasts both `geometry.cgp.v1` and `hyperdimensions.save.v1` messages to the `geometry` WebSocket room.
+    
+    The worker runs in a reconnect loop with backoff and integrates with the module-level stop event and NATS connection handles; it exits cleanly on cancellation or when the stop event is set.
+    """
     global _content_provenance_nc, _content_provenance_stop
     backoff = max(1.0, GEOMETRY_REALTIME_BACKOFF)
     while True:
@@ -409,6 +457,14 @@ async def _content_provenance_worker() -> None:
             _content_provenance_stop = stop_event
 
             async def _handler(msg):
+                """
+                Handle an incoming NATS message for the `content.hirag.accepted.v1` subject by ingesting provenance, caching derived artifacts, and forwarding geometry events.
+                
+                Parses JSON from msg.data and, if a payload object is present, upserts the provenance payload to storage, converts it into CGP and hyperdimensions save artifacts, updates the in-memory latest-provenance cache, emits a geometry event to the ShapeStore (when available), and broadcasts both `geometry.cgp.v1` and `hyperdimensions.save.v1` messages to the `geometry` WebSocket room.
+                
+                Parameters:
+                    msg: NATS message object whose `data` is expected to be JSON bytes containing either a top-level dict or a dict with a `payload` field.
+                """
                 try:
                     decoded = json.loads(msg.data.decode())
                 except Exception:
@@ -880,7 +936,11 @@ def _persist_cgp_to_db(cgp: Dict[str, Any]):
 # ---------------------------------------------------------------------------
 @contextlib.asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Manage Hi-RAG Gateway lifespan with geometry realtime and swarm workers."""
+    """
+    Manage the application's geometry background workers and cache during FastAPI lifespan.
+    
+    On startup: if a ShapeStore is configured, warms the shape cache from Supabase, starts the Supabase realtime geometry listener when a realtime URL and API key are available, and starts NATS listeners for swarm metadata and content provenance when a NATS client URL and client are available. On shutdown: cancels and awaits the realtime task, signals and cancels the swarm and content-provenance workers, and clears their task and stop-event handles.
+    """
     global _geometry_realtime_task, _geometry_swarm_task, _geometry_swarm_stop
     global _content_provenance_task, _content_provenance_stop
 

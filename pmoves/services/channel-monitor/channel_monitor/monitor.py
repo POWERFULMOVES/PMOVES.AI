@@ -86,10 +86,26 @@ MANUAL_DROP_STOPWORDS = {
 
 
 def utcnow() -> datetime:
+    """
+    Get the current UTC time as a timezone-aware datetime.
+    
+    Returns:
+        datetime: Current UTC time with tzinfo set to `timezone.utc`.
+    """
     return datetime.now(timezone.utc)
 
 
 def _semantic_hint_terms(text: str, top_k: int = 6) -> List[str]:
+    """
+    Extract the most frequent meaningful token terms from text for semantic hints.
+    
+    Parameters:
+        text (str): Input text to analyze.
+        top_k (int): Number of top frequent terms to return.
+    
+    Returns:
+        List[str]: The top_k most common lowercase tokens (letters, digits, underscores, or dashes) excluding stopwords, ordered by descending frequency.
+    """
     tokens = [
         token.lower()
         for token in re.findall(r"[a-zA-Z][a-zA-Z0-9_-]{1,}", text)
@@ -100,6 +116,20 @@ def _semantic_hint_terms(text: str, top_k: int = 6) -> List[str]:
 
 
 def _compact(value: Any) -> Any:
+    """
+    Recursively remove None and empty values from nested dictionaries and lists.
+    
+    Traverses the given value and:
+    - For dicts: returns a new dict with keys whose values are not None after compacting; returns `None` if the resulting dict is empty.
+    - For lists: returns a new list containing compacted items that are not `None`; returns `None` if the resulting list is empty.
+    - For scalar values: returns `None` for `None`, empty string, empty list, or empty dict; otherwise returns the original value.
+    
+    Parameters:
+        value (Any): The input value to compact (may be a dict, list, or scalar).
+    
+    Returns:
+        Any: The compacted value, or `None` if the input (or resulting container) is empty.
+    """
     if isinstance(value, dict):
         cleaned: Dict[str, Any] = {}
         for key, val in value.items():
@@ -157,7 +187,18 @@ def _normalize_source_class(value: Any, *, default: str) -> str:
 
 
 def _truncate_text(value: Any, *, limit: int = 180) -> Optional[str]:
-    """Collapse whitespace and truncate *value* to *limit* characters."""
+    """
+    Collapse internal whitespace and truncate the input text to at most `limit` characters.
+    
+    Parameters:
+        value (Any): Input value to normalize and truncate; non-string inputs return `None`.
+        limit (int): Maximum allowed length of the returned string (default 180).
+    
+    Returns:
+        Optional[str]: `None` if `value` is not a non-empty string after collapsing whitespace;
+        otherwise the original text with internal whitespace collapsed and truncated with `...`
+        appended when truncation occurs.
+    """
     if not isinstance(value, str):
         return None
     text = " ".join(value.strip().split())
@@ -181,6 +222,35 @@ def build_manual_drop_raw_content(
     format_override: Optional[str] = None,
     result: Optional[Dict[str, Any]] = None,
 ) -> Optional[Dict[str, Any]]:
+    """
+    Builds a normalized "manual drop" content record from provided URLs, message text, tags, and context, or returns None when inputs are insufficient.
+    
+    Parameters:
+        urls (List[str]): Candidate URLs associated with the drop.
+        content (Optional[str]): Raw message or note text (may be empty).
+        namespace (Optional[str]): Optional namespace to attach into metadata.
+        tags (Optional[List[str]]): Optional list of tag strings.
+        source (str): Source name (will be normalized to snake_case).
+        approval_mode (str): Approval mode label to include in metadata.
+        source_context (Optional[Dict[str, Any]]): Arbitrary context; a nested `discord` dict is recognized for Discord-specific fields.
+        media_type (str): Media type label (default: "video").
+        format_override (Optional[str]): Optional format string to include in metadata.
+        result (Optional[Dict[str, Any]]): Optional result payload containing `accepted`, `skipped`, `approval_state`, `channel_id`, and optional `channel_name` used to populate aliases and meta.
+    
+    Returns:
+        Optional[Dict[str, Any]]: A normalized content record with keys:
+            - `content_id` (str): Deterministic identifier for the drop.
+            - `text` (str): Composed text combining message and contextual lines.
+            - `source_ref` (str): Best available source reference (Discord message ref, first URL, or synthetic manual-drop ref).
+            - `content_type` (str): MIME-like content type (`text/discord-message` when Discord context present).
+            - `lane` (str): Processing lane (always "messaging").
+            - `aliases` (List[str]): Short identifier aliases (message/channel/guild ids and accepted ids).
+            - `favorite_words` (List[str]): Top semantic hint terms derived from text/tags.
+            - `labels` (List[str]): Short labels describing source/class/approval/media and a few tags.
+            - `meta` (Dict[str, Any]): Compacted metadata including namespace, source, source_class, approval_mode, media_type, format, url lists/counts, tags, discord/context payloads, accepted/skipped lists and counts, approval_state, channel_id, and `emitted_at` timestamp.
+    
+        Returns `None` when there is no message text, no accepted video ids, and no URLs (i.e., insufficient input to create a manual drop).
+    """
     clean_urls = [value.strip() for value in urls if isinstance(value, str) and value.strip()]
     clean_tags = [str(tag).strip() for tag in (tags or []) if str(tag).strip()]
     message_text = " ".join(content.strip().split()) if isinstance(content, str) and content.strip() else ""
@@ -317,6 +387,17 @@ def build_manual_drop_raw_content(
 
 class _TemplateVariables(dict[str, str]):
     def __missing__(self, key: str) -> str:
+        """
+        Provide a placeholder for missing template variables.
+        
+        When a mapping lookup fails during template formatting, return the key surrounded by braces so unknown placeholders remain intact (e.g. for key 'name' return '{name}').
+        
+        Parameters:
+            key (str): The missing template variable name.
+        
+        Returns:
+            str: The placeholder string with the key enclosed in curly braces.
+        """
         return "{" + key + "}"
 
 

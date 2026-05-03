@@ -122,6 +122,19 @@ type LayoutSummary = {
   engines: string[];
 };
 
+/**
+ * Summarizes text-layout characteristics used across an A2UI spec's scenes.
+ *
+ * Iterates all scenes and their elements, counting text/heading elements and collecting layout-related metrics.
+ *
+ * @param spec - The A2UI specification object to analyze; expected to contain a `scenes` array of scene objects each with an `elements` array.
+ * @returns An object describing layout usage:
+ *  - `text_elements`: total number of `text` or `heading` elements found
+ *  - `pretext_elements`: number of elements using the `pretext` text engine
+ *  - `debug_layout_elements`: number of elements with `text_layout.debugBoxes === true`
+ *  - `bounded_text_elements`: number of elements that specify a width or maxWidth (via layout, size, or style)
+ *  - `engines`: array of unique text layout engine names observed (e.g., `["browser", "pretext"]`)
+ */
 function summarizeLayoutUsage(spec: any): LayoutSummary {
   const engines = new Set<string>();
   let textElements = 0;
@@ -166,6 +179,12 @@ function summarizeLayoutUsage(spec: any): LayoutSummary {
   };
 }
 
+/**
+ * Normalize and validate a requested render format string.
+ *
+ * @param rawFormat - The incoming format value (commonly from a query or user input)
+ * @returns The canonical lowercase format (`"mp4"`, `"gif"`, or `"webm"`) if allowed, `null` otherwise
+ */
 function normalizeRenderFormat(rawFormat: unknown): string | null {
   const format = typeof rawFormat === 'string' ? rawFormat.trim().toLowerCase() : 'mp4';
   if (!ALLOWED_RENDER_FORMATS.has(format)) {
@@ -235,12 +254,24 @@ async function uploadToMinIO(filePath: string, key: string, contentType: string)
   return `${MINIO_ENDPOINT}/${MINIO_BUCKET}/${key}`;
 }
 
+/**
+ * Infer the ingest kind for a media file based on its format.
+ *
+ * @param format - The render or file format (for example: `'mp4'`, `'gif'`, `'webm'`)
+ * @returns `image` for `'gif'`, `video` for `'mp4'` or `'webm'`, `other` for any other format
+ */
 function inferIngestKind(format: string): 'audio' | 'video' | 'image' | 'document' | 'other' {
   if (format === 'gif') return 'image';
   if (format === 'mp4' || format === 'webm') return 'video';
   return 'other';
 }
 
+/**
+ * Map a render format identifier to the appropriate HTTP MIME type.
+ *
+ * @param format - Format string such as 'mp4', 'webm', or 'gif'
+ * @returns The MIME type for the given format: `'image/gif'` for `gif`, `'video/webm'` for `webm`, otherwise `'video/mp4'`
+ */
 function inferContentType(format: string): string {
   if (format === 'gif') return 'image/gif';
   if (format === 'webm') return 'video/webm';

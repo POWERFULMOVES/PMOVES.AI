@@ -8,6 +8,11 @@ const cwd = process.cwd();
 const entryPoint = path.resolve(cwd, 'src', 'remotion', 'index.tsx');
 const argv = process.argv.slice(2);
 
+/**
+ * Resolve a filesystem path to an absolute path using the process current working directory when needed.
+ * @param {string} value - The input path, either absolute or relative.
+ * @returns {string} The absolute path: the same value if already absolute, otherwise resolved relative to the current working directory.
+ */
 function resolveCliPath(value) {
   return path.isAbsolute(value) ? value : path.resolve(cwd, value);
 }

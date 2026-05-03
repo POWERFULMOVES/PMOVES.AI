@@ -92,7 +92,27 @@ def _build_transcription_cgp(
     request_id: str,
     context_id: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Build a CGP v1.0 packet from transcription results."""
+    """
+    Build a CGP v1.0 packet representing the provided transcription.
+    
+    Parameters:
+        transcript (Dict[str, Any]): Transcription result containing `segments`, `language`, `model`, `provider`, and optional `speakers`.
+        video_id (Optional[str]): Original video identifier to include in metadata.
+        audio_uri (Optional[str]): URI for the audio asset to include in metadata.
+        request_id (str): Request identifier used to name the CGP super-node and constellation.
+        context_id (Optional[str]): Optional context identifier added to metadata when provided.
+    
+    Returns:
+        Dict[str, Any]: A CGP v1.0-style dictionary with fields:
+            - `spec`: CGP spec version.
+            - `summary`: Short summary describing the number of segments.
+            - `created_at`: ISO8601 UTC timestamp of packet creation.
+            - `super_nodes`: List containing a single super-node with a constellation that includes:
+                - `points`: up to 50 segment points (each with `id`, `modality`, `proj`, `conf`, `summary`).
+                  Segment summaries are trimmed to 200 characters; `proj` is duration-normalized and capped, `conf` is fixed.
+                - `spectrum`: three-element normalized array [segment density, total duration normalized to 1 hour, speaker diversity].
+            - `meta`: metadata including source subject, tags, language, model, provider, video_id, audio_uri, speaker_count, and optional `context_id`.
+    """
     segments = transcript.get("segments") or []
     points = []
     for i, seg in enumerate(segments[:50]):
@@ -146,6 +166,16 @@ def _build_transcription_cgp(
 
 
 def _semantic_hint_terms(text: str, top_k: int = 5) -> List[str]:
+    """
+    Extract the most frequent meaningful tokens from the given text as semantic hint terms.
+    
+    Parameters:
+        text (str): Input text to extract tokens from.
+        top_k (int): Maximum number of terms to return.
+    
+    Returns:
+        List[str]: Lowercased tokens (up to `top_k`) ordered by descending frequency. Tokens start with a letter and may include letters, digits, underscores, or hyphens; common stopwords are excluded.
+    """
     stopwords = {
         "a", "an", "and", "are", "as", "at", "be", "by", "for", "from",
         "if", "in", "into", "is", "it", "its", "of", "on", "or", "that",
@@ -169,6 +199,29 @@ def _build_provenance_raw_content(
     namespace: Optional[str],
     context_id: Optional[str] = None,
 ) -> Dict[str, Any]:
+    """
+    Builds a provenance-style raw content payload for a transcript suitable for publishing to NATS.
+    
+    Parameters:
+        transcript (Dict[str, Any]): Transcript object containing at least `text`, and optionally `language`, `model`, `provider`, `segments`, and `speakers`.
+        video_id (Optional[str]): Optional video identifier to associate with the content; used to derive `content_id`, `source_ref`, and aliases.
+        audio_uri (Optional[str]): Optional URI of the audio resource; used as `source_ref` when provided.
+        request_id (str): Request identifier used to derive `content_id` when `video_id` is absent.
+        namespace (Optional[str]): Optional namespace placed into the payload `meta`.
+        context_id (Optional[str]): Optional context identifier added to `meta` and `aliases` when provided.
+    
+    Returns:
+        Dict[str, Any]: A dictionary containing the raw content payload with keys including:
+            - `content_id`: generated identifier ("transcript:{video_id or request_id}").
+            - `text`: trimmed transcript text.
+            - `source_ref`: audio URI or synthesized source reference.
+            - `content_type`: fixed value `"audio/transcript"`.
+            - `lane`: fixed value `"audio"`.
+            - `aliases`: list containing `video_id` and/or `context_id` when present.
+            - `favorite_words`: list of semantic hint terms extracted from the transcript text.
+            - `labels`: list of labels including provider.
+            - `meta`: metadata dictionary with namespace, language, model, provider, video/audio identifiers, segment and speaker counts, `emitted_at` timestamp, and optional `context_id`.
+    """
     text = (transcript.get("text") or "").strip()
     content_id = f"transcript:{video_id or request_id}"
     source_ref = audio_uri or (f"video:{video_id}" if video_id else f"ffmpeg-whisper:{request_id}")
@@ -202,7 +255,11 @@ def _build_provenance_raw_content(
 
 
 async def _publish_cgp_async(subject: str, payload: Dict[str, Any]) -> None:
-    """Publish to NATS via persistent client (best-effort, async)."""
+    """
+    Publish a JSON-serializable payload to a NATS subject using the module-level persistent client.
+    
+    The payload is JSON-encoded and sent to the given subject. If the persistent NATS client is not connected or closed, the function logs a warning and returns without error. Any exceptions raised during publish or flush are caught and logged as non-fatal warnings.
+    """
     global _nats_client
     if _nats_client is None or _nats_client.is_closed:
         logger.warning("NATS client not connected, skipping publish to %s", subject)
@@ -239,7 +296,19 @@ def _publish_cgp(subject: str, payload: Dict[str, Any]) -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Manage FFmpeg-Whisper service lifespan with NATS service announcement."""
+    """
+    Manage the application's startup and shutdown tasks, including optional NATS service announcement and establishing a persistent NATS client for CGP/raw-content publishing.
+    
+    On startup:
+    - If `announce_service` is available, attempts a best-effort NATS service announcement using SERVICE_* environment variables to build the announcement payload; failures are logged and do not abort startup.
+    - If NATS CGP support is available and CGP or raw-content publishing is enabled, attempts to connect and store a persistent NATS client used for later publishing; connection failures are logged and treated as non-fatal.
+    
+    On shutdown:
+    - If a persistent NATS client was created and remains open, closes it.
+    
+    Parameters:
+        app (FastAPI): The FastAPI application instance whose lifespan this function manages.
+    """
     # Get service configuration for announcement
     port = int(os.getenv("PORT", "8078"))
     hostname = os.getenv("HOSTNAME", socket.gethostname())
@@ -631,6 +700,43 @@ def _transcribe_with_provider(
 
 @app.post("/transcribe")
 def transcribe(request: Request, body: Dict[str, Any] = Body(...)):
+    """
+    Handle transcription request for an S3 object and return transcription results and metadata.
+    
+    Parameters:
+        request (Request): FastAPI request object; used to read headers (e.g., `x-context-id`).
+        body (Dict[str, Any]): JSON payload with expected keys:
+            - bucket (str): S3 bucket name (required).
+            - key (str): S3 object key for the source audio/video (required).
+            - video_id (Optional[str]): External video identifier to associate with segments.
+            - namespace (Optional[str]): Namespace used when building provenance payloads.
+            - provider (Optional[str]): Transcription provider; defaults to service default.
+            - language (Optional[str]): Requested transcription language.
+            - whisper_model (Optional[str]): Model name to use; defaults to service default.
+            - diarize (Optional[bool]): Whether to run speaker diarization.
+            - out_audio_key (Optional[str]): If provided, uploads converted WAV to this S3 key.
+            - context_id (Optional[str]): Correlation/context id; can also be provided via `x-context-id` header.
+    
+    Returns:
+        Dict[str, Any]: Response object containing:
+            - ok (bool): Always `True` on success.
+            - text (Optional[str]): Full transcript text.
+            - language (Optional[str]): Detected or requested language.
+            - segments (Optional[List[Dict]]): List of cleaned segment dictionaries.
+            - word_segments (Optional[List[Dict]]): Word-level timing segments when available.
+            - speakers (Optional[Dict]): Speaker summary (counts and durations).
+            - audio_uri (str): Public or MinIO S3 URI for the audio used for transcription.
+            - s3_uri (str): Same as `audio_uri`.
+            - model (str): Model identifier used.
+            - device (Optional[str]): Device used for transcription (e.g., `cuda`, `cpu`).
+            - provider (str): Provider used.
+            - forwarded (Optional[bool]): `True` if forwarded to MEDIA_AUDIO_URL, `False` if forwarding failed, `None` if forwarding not attempted.
+            - context_id (Optional[str]): Included when provided.
+    
+    Raises:
+        HTTPException: If request validation fails (missing bucket/key or unsupported provider),
+                       if ffmpeg conversion fails, or for unexpected transcription errors.
+    """
     bucket = body.get("bucket")
     key = body.get("key")
     video_id = body.get("video_id")
@@ -780,10 +886,35 @@ async def transcribe_file(
     context_id: Optional[str] = Form(None),
 ) -> Dict[str, Any]:
     """
-    Transcribe an uploaded audio file directly (multipart/form-data).
-
-    This complements the existing `/transcribe` endpoint (bucket/key JSON) and is used
-    by Flute Gateway for ad-hoc STT requests.
+    Transcribes an uploaded audio file and returns the transcript along with metadata.
+    
+    Processes a multipart/form-data upload, converts the file to a mono 16 kHz WAV, runs the selected STT provider/model, and (when configured) publishes CGP and provenance-ready raw content to NATS. Temporary files are removed on exit.
+    
+    Parameters:
+        request (Request): FastAPI request; used to read optional `x-context-id` header when `context_id` is not provided.
+        audio (UploadFile): Uploaded audio file.
+        language (Optional[str]): Desired transcription language hint.
+        provider (Optional[str]): Transcription provider to use; defaults to the service default.
+        model (Optional[str]): Model name (fallback for `whisper_model`).
+        whisper_model (Optional[str]): Whisper-specific model name (preferred over `model`).
+        diarize (bool): Whether to run speaker diarization when supported by the provider.
+        context_id (Optional[str]): Optional context identifier to include in provenance/CGP payloads.
+    
+    Returns:
+        Dict[str, Any]: A result object containing:
+            - "ok" (bool): Always true on success.
+            - "text" (str|None): Full transcript text.
+            - "language" (str|None): Detected or requested language.
+            - "segments" (List[Dict]|None): Time-aligned segments.
+            - "word_segments" (List[Dict]|None): Word-level timing segments when available.
+            - "speakers" (Dict|None): Speaker summary (counts/durations) when diarization ran.
+            - "model" (str): Resolved model name.
+            - "device" (str|None): Device used for inference.
+            - "provider" (str): Resolved provider name.
+            - "context_id" (str, optional): Included when provided or taken from `x-context-id` header.
+    
+    Raises:
+        HTTPException: 400 when `provider` is unsupported; 500 for ffmpeg conversion failures or other transcription errors.
     """
 
     chosen_provider = (provider or DEFAULT_PROVIDER).lower()

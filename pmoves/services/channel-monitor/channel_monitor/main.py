@@ -64,19 +64,14 @@ except ImportError:
 
 
 def _parse_scopes(value: str | None) -> list[str]:
-    """Parse OAuth scopes from a comma or space-separated string.
-
-    Args:
-        value: Comma or space-separated OAuth scopes, or None.
-
+    """
+    Parse a comma- or space-separated OAuth scope string into a list of scope tokens.
+    
+    Parameters:
+    	value (str | None): Optional string containing scopes separated by commas and/or whitespace.
+    
     Returns:
-        List of non-empty scope tokens. Returns empty list if value is None or empty.
-
-    Examples:
-        >>> _parse_scopes("scope1,scope2 scope3")
-        ['scope1', 'scope2', 'scope3']
-        >>> _parse_scopes(None)
-        []
+    	list[str]: List of non-empty scope tokens; returns an empty list when `value` is None or empty.
     """
     if not value:
         return []
@@ -135,6 +130,18 @@ _nats_client = None
 
 
 async def _publish_content_raw_event(payload: Dict[str, Any], *, correlation_id: str) -> bool:
+    """
+    Publish a raw-content event to the configured NATS subject when content-raw publishing is enabled.
+    
+    If a contract event envelope builder is available, the payload will be wrapped with that envelope using the provided correlation_id and a fixed source before sending. No action is taken and `False` is returned when publishing is disabled or the NATS client is not connected.
+    
+    Parameters:
+        payload (Dict[str, Any]): The raw content payload to publish.
+        correlation_id (str): Identifier used to correlate the event (included in the envelope when applied).
+    
+    Returns:
+        bool: `True` if the event was successfully published and flushed to NATS, `False` otherwise.
+    """
     global _nats_client
     if not CONTENT_RAW_PUBLISH_ENABLED:
         return False
@@ -161,7 +168,14 @@ async def _publish_content_raw_event(payload: Dict[str, Any], *, correlation_id:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Manage Channel Monitor application lifespan."""
+    """
+    Application lifespan manager that starts and stops the Channel Monitor and its associated resources.
+    
+    On startup, starts the global ChannelMonitor, stores it on app.state.monitor, optionally connects a NATS client when content raw publishing is enabled, and ensures Prometheus counters exist. On shutdown, closes the NATS client if open and shuts down the ChannelMonitor.
+    
+    Parameters:
+        app (FastAPI): The FastAPI application whose lifecycle this manager controls; the started monitor is attached to app.state.monitor.
+    """
     global _nats_client
     # Startup
     await monitor.start()
@@ -620,7 +634,26 @@ async def ingest_discord_drop(
     _: None = Depends(require_secret),
     monitor: ChannelMonitor = Depends(get_monitor),
 ):
-    """Queue video links dropped into Discord for PMOVES ingestion."""
+    """
+    Queue video links dropped into Discord for PMOVES ingestion and optionally publish a raw-content event.
+    
+    Collects URLs from the request body (explicit `urls` plus URLs extracted from `content`), deduplicates and validates them, builds metadata including Discord trace fields, queues ingestion via the ChannelMonitor, and — when configured — attempts to publish a `content.raw.v1` event for the manual drop. Increments Prometheus counters for success and error cases.
+    
+    Parameters:
+        payload (DiscordDropRequest): Request payload containing `urls`, `content`, optional Discord trace fields, metadata, namespace, tags, approval_mode, and video/format options.
+    
+    Returns:
+        dict: Response object containing:
+            - `status`: `"ok"`.
+            - `approval_mode`: chosen mode (`"auto"` or `"ask"`).
+            - `next_action`: approval endpoint when mode is `"ask"`, otherwise `null`.
+            - `content_raw_emitted`: `true` if a raw-content event was emitted, `false` otherwise.
+            - `content_raw_content_id`: raw content ID when available, otherwise `null`.
+            - plus fields from the ingestion `result` returned by the monitor.
+    
+    Raises:
+        HTTPException: 400 when no URLs are found in the payload, when `approval_mode` is invalid, or when ingestion fails with a `ValueError` (error message forwarded).
+    """
 
     candidates: List[str] = []
     if payload.urls:

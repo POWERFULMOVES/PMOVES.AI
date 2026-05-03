@@ -14,6 +14,15 @@ from embeddings import embed_query
 
 
 def _compact(value: Any) -> Any:
+    """
+    Recursively remove empty or null-like values from a nested structure.
+    
+    Parameters:
+    	value (Any): A value to compact; may be a dict, list, or any scalar. Dicts and lists are processed recursively and have entries/elements removed when they are empty, `None`, `""`, `[]`, or `{}`.
+    
+    Returns:
+    	compacted (Any or None): The cleaned value with empty entries removed; returns `None` if the input or resulting structure is empty.
+    """
     if isinstance(value, dict):
         cleaned = {
             key: compacted
@@ -30,6 +39,23 @@ def _compact(value: Any) -> Any:
 
 
 def provenance_payload_to_upsert_item(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Normalize a provenance-accepted payload into a standardized upsert item suitable for embedding and Qdrant/Meilisearch storage.
+    
+    Parameters:
+        payload (Dict[str, Any]): Incoming provenance-accepted payload. Expected keys that may be used include
+            `content_id`, `shape_id`, `kb_namespace` or `namespace`, `chunk_id`, `doc_id`, `text`, `meta`, and
+            provenance metadata fields such as `source_ref`, `merkle_root`, `graphiti_mark`, `accepted_reason`,
+            `provenance_refs`, `favorite_words`, `anchor_terms`, `semantic_weights`, and `scorecard`.
+    
+    Returns:
+        Dict[str, Any]: An item dictionary with keys:
+            - `doc_id` (str): Derived document identifier.
+            - `chunk_id` (str): Derived chunk identifier.
+            - `text` (str): Text content (defaults to empty string if missing).
+            - `namespace` (str): Resolved namespace (defaults to module default).
+            - `payload` (Dict[str, Any]): Compacted provenance payload with empty values removed; defaults to an empty dict.
+    """
     content_id = str(payload.get("content_id") or payload.get("shape_id") or "").strip()
     shape_id = str(payload.get("shape_id") or content_id).strip()
     namespace = str(payload.get("kb_namespace") or payload.get("namespace") or NAMESPACE_DEFAULT).strip() or NAMESPACE_DEFAULT
@@ -64,6 +90,17 @@ def provenance_payload_to_upsert_item(payload: Dict[str, Any]) -> Dict[str, Any]
 
 
 def _index_lexical_docs(items: List[Dict[str, Any]]) -> int:
+    """
+    Ensure a Meilisearch index exists and publish the provided items as documents to that index.
+    
+    Each item should be a dict with keys used to build the document: `chunk_id`, `doc_id`, `text`, optional `namespace`, and optional `payload` (a dict of extra fields). The function attempts to create the index (id `COLL`) and then POSTs the assembled documents to Meilisearch.
+    
+    Parameters:
+        items (List[Dict[str, Any]]): List of item dictionaries to index.
+    
+    Returns:
+        int: The number of documents sent if Meilisearch responded with an OK status, `0` otherwise.
+    """
     headers = {"Content-Type": "application/json"}
     if MEILI_API_KEY:
         headers["Authorization"] = f"Bearer {MEILI_API_KEY}"
@@ -104,6 +141,26 @@ def upsert_provenance_payloads(
     ensure_collection: bool = True,
     index_lexical: bool = True,
 ) -> Dict[str, Any]:
+    """
+    Convert and upsert provenance-accepted payloads into the vector store and optionally index their text lexically.
+    
+    Processes the given list of payload dictionaries by filtering ones that contain text, normalizing each into an upsertable item, embedding their text, creating deterministic Qdrant point IDs, and upserting the resulting points into the configured Qdrant collection. Optionally ensures the Qdrant collection vector size and adds documents to Meilisearch for lexical search; Meilisearch failures are caught and logged without aborting the upsert.
+    
+    Parameters:
+        payloads (List[Dict[str, Any]]): Iterable of provenance payload dictionaries; only entries with a truthy `"text"` field are processed.
+        ensure_collection (bool, optional): If true and embeddings are produced, ensure the Qdrant collection exists and matches the embedding dimensionality. Defaults to True.
+        index_lexical (bool, optional): If true, attempt to index items into Meilisearch for lexical search; failures are logged and do not fail the overall operation. Defaults to True.
+    
+    Returns:
+        Dict[str, Any]: Result summary containing:
+            - `ok` (bool): Always `True` on successful completion.
+            - `upserted` (int): Number of points upserted into Qdrant.
+            - `lexical_indexed` (int): Number of documents indexed into Meilisearch (0 on failure or if disabled).
+            - `items` (List[Dict[str, Any]]): The normalized items that were prepared for upsert.
+    
+    Raises:
+        RuntimeError: If the Qdrant client or PointStruct type is unavailable.
+    """
     accepted_payloads = [payload for payload in payloads if isinstance(payload, dict) and payload.get("text")]
     if not accepted_payloads:
         return {"ok": True, "upserted": 0, "lexical_indexed": 0}

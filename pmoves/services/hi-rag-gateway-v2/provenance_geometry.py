@@ -96,10 +96,27 @@ _PROVENANCE_SURFACE_CODE = """function surface(input) {
 
 
 def _clamp(value: float, lower: float, upper: float) -> float:
+    """
+    Clamp a numeric value into the inclusive range [lower, upper].
+    
+    Returns:
+        float: The input value constrained to be no less than `lower` and no greater than `upper`.
+    """
     return max(lower, min(upper, value))
 
 
 def _stable_id(*parts: object) -> str:
+    """
+    Create a short, deterministic identifier from the provided parts.
+    
+    Concatenates the stringified, whitespace-stripped non-empty parts using "::" (or uses the literal "provenance" if no parts produce content), computes the SHA-1 hash of the resulting UTF-8 bytes, and returns the first 12 hexadecimal characters of that hash.
+    
+    Parameters:
+        *parts (object): Sequence of values to include in the identifier; each is converted to str and stripped, and empty results are ignored.
+    
+    Returns:
+        str: A 12-character hexadecimal stable identifier derived from the input parts.
+    """
     joined = "::".join(str(part).strip() for part in parts if str(part).strip())
     if not joined:
         joined = "provenance"
@@ -107,6 +124,16 @@ def _stable_id(*parts: object) -> str:
 
 
 def _coerce_float(value: Any, default: Optional[float] = None) -> Optional[float]:
+    """
+    Coerces various input values into a finite float, returning a provided fallback when conversion is not possible.
+    
+    Parameters:
+        value (Any): The value to coerce; may be numeric, string, or other types.
+        default (Optional[float]): The value to return if coercion fails or the input is not a finite number.
+    
+    Returns:
+        Optional[float]: The coerced finite float, or `default` if conversion is not possible or the result is not finite. Booleans are treated as non-coercible and cause `default` to be returned.
+    """
     if isinstance(value, bool):
         return default
     if isinstance(value, (int, float)):
@@ -128,6 +155,18 @@ def _coerce_float(value: Any, default: Optional[float] = None) -> Optional[float
 
 
 def _short_text(text: str, limit: int = 220) -> str:
+    """
+    Produce a whitespace-normalized excerpt of `text`, truncated to at most `limit` characters.
+    
+    Consecutive whitespace is collapsed to single spaces and leading/trailing whitespace is removed. If the normalized text exceeds `limit`, it is truncated so the result is at most `limit` characters and ends with the single-character ellipsis "…". `None` is treated as an empty string.
+    
+    Parameters:
+        text (str): Input text to normalize and shorten.
+        limit (int): Maximum length of the returned string, including the ellipsis when applied.
+    
+    Returns:
+        str: The normalized, possibly truncated text excerpt.
+    """
     compact = " ".join(str(text or "").split())
     if len(compact) <= limit:
         return compact
@@ -135,6 +174,18 @@ def _short_text(text: str, limit: int = 220) -> str:
 
 
 def _token_fallbacks(text: str, *, limit: int) -> List[str]:
+    """
+    Extract up to `limit` candidate term tokens from free-form text.
+    
+    Filters lowercase tokens matched by the module token pattern, excluding stopwords, duplicates, and tokens shorter than 4 characters.
+    
+    Parameters:
+        text (str): Free-form text to scan for tokens.
+        limit (int): Maximum number of tokens to return.
+    
+    Returns:
+        List[str]: Collected tokens (lowercase), in the order found, up to `limit`.
+    """
     tokens: List[str] = []
     seen = set()
     for match in _TERM_PATTERN.finditer(str(text or "").lower()):
@@ -156,6 +207,16 @@ def _merge_term(
     favorite: bool = False,
     anchor: bool = False,
 ) -> None:
+    """
+    Merge a term into a case-insensitive term bucket, inserting or updating an entry's label, weight, and flags.
+    
+    Parameters:
+        bucket (Dict[str, Dict[str, Any]]): Mutable mapping keyed by lowercase term to an entry dict with keys "term", "weight", "favorite", and "anchor".
+        term (Any): Candidate term label to merge; converted to a stripped string. Labels shorter than 2 characters are ignored.
+        weight (Optional[float]): Numeric weight for the term; coerced to a finite float (defaults to 0.0) and used only if greater than an existing weight.
+        favorite (bool): If True, mark the term as a favorite; the stored "favorite" flag becomes True if either existing or this value is True.
+        anchor (bool): If True, mark the term as an anchor; the stored "anchor" flag becomes True if either existing or this value is True.
+    """
     label = str(term or "").strip()
     if len(label) < 2:
         return
@@ -179,6 +240,22 @@ def _merge_term(
 
 
 def extract_weighted_terms(payload: Dict[str, Any], *, max_terms: int = 8) -> List[Dict[str, Any]]:
+    """
+    Build a deduplicated, normalized list of weighted term objects extracted from a provenance payload.
+    
+    Parses `semantic_weights`, then injects `favorite_words` and `anchor_terms`, and falls back to regex token extraction from `payload["text"]` when no terms are found; merges duplicates by case-insensitive key, preserves the longest label, and prefers higher weights and flagged (favorite/anchor) status. Results are sorted by weight, favorite, anchor, and label, truncated to `max_terms`, and weights are normalized into the range [0.15, 1.0].
+    
+    Parameters:
+        payload (Dict[str, Any]): Provenance payload containing optional keys `semantic_weights`, `favorite_words`, `anchor_terms`, and `text`.
+        max_terms (int): Maximum number of terms to return (default 8).
+    
+    Returns:
+        List[Dict[str, Any]]: A list of term objects with keys:
+            - `term` (str): Normalized label.
+            - `weight` (float): Normalized weight (rounded to 4 decimals, between 0.15 and 1.0).
+            - `favorite` (bool): Whether the term is marked or inferred as a favorite.
+            - `anchor` (bool): Whether the term is marked or inferred as an anchor.
+    """
     bucket: Dict[str, Dict[str, Any]] = {}
     favorite_words = [
         str(word).strip()
@@ -264,6 +341,26 @@ def provenance_payload_state_vector(
     *,
     weighted_terms: Optional[List[Dict[str, Any]]] = None,
 ) -> Dict[str, float]:
+    """
+    Compute an 8-dimensional provenance state vector derived from payload content and extracted weighted terms.
+    
+    Parameters:
+        payload (Dict[str, Any]): Accepted provenance payload containing fields such as `text`, `provenance_refs`, `merkle_root`, `graphiti_mark`, and an optional `scorecard.noise_score`.
+        weighted_terms (Optional[List[Dict[str, Any]]]): Pre-extracted list of term dicts with keys `term`, `weight`, `favorite`, and `anchor`. If omitted, terms are extracted from `payload`.
+    
+    Returns:
+        Dict[str, float]: A dictionary of rounded numeric parameters representing the provenance state:
+            - "delta": float between 0.05 and 0.95
+            - "kappa": negative float between -0.95 and -0.12
+            - "Hz": float between 0.05 and 0.95
+            - "F": fitness score between 0.05 and 1.0
+            - "A": attribution score between 0.05 and 1.0
+            - "spectrum": mean term weight clamped to [0.0, 1.0]
+            - "lineage": provenance reference strength (0.0–1.0)
+            - "dispersion": mean absolute deviation of term weights (0.0–1.0)
+            - "noise_score": clamped noise score (0.0–1.0)
+            - "term_count": number of terms (as float)
+    """
     terms = weighted_terms or extract_weighted_terms(payload)
     weights = [float(item.get("weight") or 0.0) for item in terms] or [0.5]
     mean_weight = sum(weights) / len(weights)
@@ -302,6 +399,22 @@ def provenance_payload_state_vector(
 
 
 def provenance_payload_to_cgp(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Convert an accepted provenance payload into a CGP geometry artifact dictionary.
+    
+    Parameters:
+        payload (Dict[str, Any]): Accepted provenance payload containing at minimum a non-empty `text` field and optional fields such as `semantic_weights`, `favorite_words`, `anchor_terms`, `content_id`, `shape_id`, `kb_namespace`/`namespace`, `source_ref`, `merkle_root`, `graphiti_mark`, `provenance_refs`, and `scorecard`. The payload is used to extract weighted terms and compute a provenance state vector which are embedded into the resulting geometry.
+    
+    Returns:
+        Dict[str, Any]: A CGP geometry object conforming to the module's artifact shape containing:
+            - top-level metadata (`spec`, `type`, `id`, `label`, `source`, `ts`, `meta`),
+            - a `super_nodes` list with a provenance super-node that includes `x`, `y`, `r`, `state_vector`, and `constellations`,
+            - each constellation contains `id`, `label`, `summary`, `anchor`, `spectrum`, `radial_minmax`, `points`, and `meta`.
+        Term entries and the state vector values are rounded/normalized as produced by the module's helpers.
+    
+    Raises:
+        ValueError: If `payload["text"]` is empty or missing.
+    """
     text = str(payload.get("text") or "").strip()
     if not text:
         raise ValueError("accepted provenance payload requires non-empty text")
@@ -413,6 +526,25 @@ def provenance_payload_to_cgp(payload: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def _param(name: str, value: float, *, minimum: float, maximum: float, runtime: float) -> Dict[str, Any]:
+    """
+    Create a parameter descriptor dictionary used for UI sliders or runtime controls.
+    
+    Parameters:
+        name (str): Parameter identifier; used as the returned descriptor's `name`.
+        value (float): Current parameter value; will be rounded to 4 decimals.
+        minimum (float): Minimum allowed value for the parameter; rounded to 4 decimals.
+        maximum (float): Maximum allowed value for the parameter; rounded to 4 decimals.
+        runtime (float): Suggested runtime value or metadata passed through as `runtime`.
+    
+    Returns:
+        dict: A mapping with keys:
+            - `name`: the parameter identifier.
+            - `value`: the rounded current value.
+            - `min`: the rounded minimum value.
+            - `max`: the rounded maximum value.
+            - `step`: numeric step size (0.02 when `name` is `"kappa"`, otherwise 0.01).
+            - `runtime`: the provided runtime metadata.
+    """
     step = 0.01
     if name == "kappa":
         step = 0.02
@@ -427,6 +559,23 @@ def _param(name: str, value: float, *, minimum: float, maximum: float, runtime: 
 
 
 def provenance_payload_to_hyperdimensions_save(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Produce a Hyperdimensions save/configuration dictionary for rendering a provenance-derived surface.
+    
+    The returned configuration encodes camera/display settings, surface parameter ranges, slider-like extra parameters
+    derived from the payload's computed state vector, embedded surface code, and metadata (identifiers, top terms,
+    provenance fields, and a short excerpt).
+    
+    Parameters:
+        payload (dict): An "accepted provenance" payload whose text, term weights, scoring fields, and identifiers
+            are used to derive the surface configuration.
+    
+    Returns:
+        dict: A Hyperdimensions save/config object containing keys:
+            - version, display, parameters, extraParameters, surface, outputs, meta
+            where `extraParameters` reflects the computed state vector (delta, kappa, hz, fitness, attribution,
+            spectrum, lineage) and `meta` includes content/shape ids, top terms, state_vector, and an excerpt.
+    """
     weighted_terms = extract_weighted_terms(payload)
     state = provenance_payload_state_vector(payload, weighted_terms=weighted_terms)
     text = str(payload.get("text") or "").strip()

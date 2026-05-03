@@ -140,6 +140,22 @@ def mindmap_route(
 
 @router.post("/geometry/event")
 def geometry_event(body: Dict[str, Any], _=Depends(require_tailscale)):
+    """
+    Handle an incoming geometry CGP event: validate payload, optionally verify/decrypt signatures, persist and broadcast the event.
+    
+    Parameters:
+        body (dict): Parsed request JSON expected to contain a `data` key with the CGP payload.
+        _: Tailnet dependency (injected by FastAPI); omitted from detailed docs.
+    
+    Returns:
+        dict: `{"ok": True}` when the event was accepted and processing started.
+    
+    Raises:
+        HTTPException: 503 if the ShapeStore is unavailable.
+        HTTPException: 400 if `body` lacks a valid `data` dict.
+        HTTPException: 500 if required security modules or passphrase are missing.
+        HTTPException: 401 if CGP signature verification fails.
+    """
     if shape_store is None:
         raise HTTPException(503, "ShapeStore unavailable")
     payload = body.get("data") if isinstance(body, dict) else None
@@ -175,6 +191,15 @@ def geometry_event(body: Dict[str, Any], _=Depends(require_tailscale)):
 
 @router.get("/hyperdimensions/provenance/latest.json")
 def hyperdimensions_latest_provenance(_=Depends(require_tailscale)):
+    """
+    Serve the latest accepted hyperdimensions provenance snapshot.
+    
+    Raises:
+        HTTPException: 404 if no accepted provenance geometry snapshot is available.
+    
+    Returns:
+        dict: The provenance snapshot object.
+    """
     latest = get_latest_provenance_hyperdimensions_save()
     if latest is None:
         raise HTTPException(404, "No accepted provenance geometry snapshot available yet")
@@ -183,6 +208,14 @@ def hyperdimensions_latest_provenance(_=Depends(require_tailscale)):
 
 @router.get("/hyperdimensions/provenance/view")
 def hyperdimensions_latest_provenance_view(_=Depends(require_tailscale)):
+    """
+    Redirects the client to the Hyperdimensions app preconfigured to load the latest provenance snapshot.
+    
+    Returns:
+        RedirectResponse: A 307 redirect to `/hyperdimensions/app/` with query parameters:
+        `saveUrl=/hyperdimensions/provenance/latest.json`, `fallbackSave=saves/chit_manifold.json`,
+        and `liveRoom=geometry`.
+    """
     return RedirectResponse(
         url="/hyperdimensions/app/?saveUrl=/hyperdimensions/provenance/latest.json&fallbackSave=saves/chit_manifold.json&liveRoom=geometry",
         status_code=307,
@@ -191,6 +224,19 @@ def hyperdimensions_latest_provenance_view(_=Depends(require_tailscale)):
 
 @router.get("/shape/point/{point_id}/jump")
 def shape_point_jump(point_id: str, _=Depends(require_tailscale)):
+    """
+    Retrieve the locator for a shape point and return it in a success payload.
+    
+    Parameters:
+        point_id (str): Identifier of the shape point to look up.
+    
+    Returns:
+        dict: Payload containing `"ok": True` and `"locator"` with the point's locator.
+    
+    Raises:
+        HTTPException: 503 if the ShapeStore is unavailable.
+        HTTPException: 404 if no locator is found for the given `point_id`.
+    """
     if shape_store is None:
         raise HTTPException(503, "ShapeStore unavailable")
     loc = shape_store.jump_locator(point_id)

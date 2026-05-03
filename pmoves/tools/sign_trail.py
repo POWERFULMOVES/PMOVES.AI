@@ -47,7 +47,17 @@ _FALLBACK = {"glyph": "\u25C6", "color": "#7C3AED", "accent": "#A78BFA", "voice"
 
 
 def _load_signature(agent_id: str) -> Dict[str, Any]:
-    """Look up glyph, color, voice from agent_signatures.yaml."""
+    """
+    Load an agent's signature data (glyph, color, accent, voice) from the agent_signatures.yaml file.
+    
+    Attempts to read and parse the signatures file and return the signature dict for the given agent_id when present. If the file is missing, unreadable, or the agent_id is not found, returns a minimal fallback dictionary that includes `agent_id` and default visual/voice values so callers never fail.
+    
+    Parameters:
+        agent_id (str): The agent identifier to look up in the signatures file.
+    
+    Returns:
+        dict: The signature dictionary for `agent_id` when available; otherwise a fallback dict containing `agent_id` plus default glyph/color/accent/voice values.
+    """
     try:
         import yaml  # type: ignore[import-untyped]
 
@@ -121,9 +131,18 @@ def _resolve_signing_card_id(agent_id: str) -> Optional[str]:
 
 
 def _resolve_alter(sig: Dict[str, Any], alter_name: str) -> Optional[Dict[str, Any]]:
-    """Find an alter by name within an agent's signature entry.
-
-    Returns the alter dict if found, or None.
+    """
+    Find an alter entry in an agent signature that matches the given alter identifier.
+    
+    Searches the signature's "alters" list for an entry whose "name", "id", or
+    "display_name" equals `alter_name`.
+    
+    Parameters:
+        sig (Dict[str, Any]): Agent signature dictionary that may contain an "alters" list.
+        alter_name (str): Identifier to match against an alter's `name`, `id`, or `display_name`.
+    
+    Returns:
+        Dict[str, Any] or None: The matching alter dictionary if found, `None` otherwise.
     """
     alters = sig.get("alters", [])
     for alter in alters:
@@ -158,12 +177,25 @@ def build_payload(
     resonance: Optional[list] = None,
     alter: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Build an unsigned Graphiti signature payload.
-
-    If *alter* is provided, override visual identity fields (glyph, color,
-    accent, voice, resonance) with the named alter from the agent's ``alters``
-    array.  The ``agent_id`` stays the same — ``selected_alter`` records which
-    persona was active.
+    """
+    Build an unsigned Graphiti signature payload for an agent.
+    
+    If `alter` matches an entry in the agent's `alters`, that alter's visual
+    identity fields (glyph, color, accent, voice, resonance) override the base
+    identity and `selected_alter` is set. The payload includes `signing_card_id`
+    when a single active signing card for the agent is found; the field is omitted
+    if no active card is available.
+    
+    Parameters:
+        resonance (list | None): Override the identity resonance when provided.
+        alter (str | None): Name, id, or display name of an alter to apply; when
+            not found, the base identity is used and a warning is emitted to stderr.
+    
+    Returns:
+        dict: The unsigned payload containing keys such as `agent_id`,
+        `display_name`, `glyph`, `color`, `accent`, `voice`, `phase`, `timestamp`,
+        `resonance`, and `summary`. May also include `selected_alter` and/or
+        `signing_card_id` when applicable.
     """
     sig = _load_signature(agent_id)
 

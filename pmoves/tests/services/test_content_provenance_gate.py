@@ -4,6 +4,18 @@ from pmoves.services.common.events import envelope
 
 
 def _load_gate(load_service_module, monkeypatch):
+    """
+    Load the content provenance gate service module with NATS disabled for tests.
+    
+    Sets the environment variable `CONTENT_PROVENANCE_DISABLE_NATS` to `"1"` using the provided `monkeypatch`, then loads and returns the gate service module by calling `load_service_module` with the service name and entry path.
+    
+    Parameters:
+        load_service_module (callable): Function that accepts `(service_name, entry_path)` and returns the loaded module.
+        monkeypatch: Pytest `monkeypatch` fixture used to set environment variables.
+    
+    Returns:
+        module: The loaded `content_provenance_gate_service` module.
+    """
     monkeypatch.setenv("CONTENT_PROVENANCE_DISABLE_NATS", "1")
     return load_service_module(
         "content_provenance_gate_service",

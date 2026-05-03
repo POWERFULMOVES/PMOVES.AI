@@ -145,6 +145,12 @@ class Finding:
     evidence: str | None = None
 
     def asdict(self) -> dict[str, Any]:
+        """
+        Produce a plain dictionary representation of the dataclass instance.
+        
+        Returns:
+            dict[str, Any]: Mapping of field names to their values, suitable for serialization.
+        """
         return asdict(self)
 
 
@@ -156,9 +162,26 @@ class Report:
     cards_summary: dict[str, Any] = field(default_factory=dict)
 
     def add(self, **kwargs: Any) -> None:
+        """
+        Append a new Finding to this report's findings list.
+        
+        Parameters:
+            **kwargs: Keyword arguments used to construct the Finding. Accepted keys:
+                check (str): Short identifier for the check that produced the finding.
+                severity (str): Severity level (e.g., "P0", "P1", "P2").
+                message (str): Human-readable description of the finding.
+                location (optional): Optional file/line or surface location associated with the finding.
+                evidence (optional): Optional additional context or evidence for the finding.
+        """
         self.findings.append(Finding(**kwargs))
 
     def by_severity(self) -> dict[str, int]:
+        """
+        Aggregate and count findings by severity.
+        
+        Returns:
+            severity_counts (dict[str, int]): Mapping from severity label (e.g., "P0", "P1", "P2") to the number of findings with that severity.
+        """
         out: Counter[str] = Counter()
         for f in self.findings:
             out[f.severity] += 1
@@ -166,26 +189,57 @@ class Report:
 
 
 def _read_yaml(path: Path) -> Any:
+    """
+    Load and parse a YAML file from the given filesystem path.
+    
+    Parameters:
+        path (Path): Path to the YAML file to read.
+    
+    Returns:
+        The Python object produced by parsing the YAML content (e.g., dict, list, scalar), or `None` if the file is empty.
+    """
     with path.open("r", encoding="utf-8") as f:
         return yaml.safe_load(f)
 
 
 def _read_json(path: Path) -> Any:
+    """
+    Read and parse a JSON file.
+    
+    Parameters:
+        path (Path): Path to the JSON file to read.
+    
+    Returns:
+        Any: The deserialized JSON value (e.g., JSON objects as dicts, arrays as lists).
+    """
     with path.open("r", encoding="utf-8") as f:
         return json.load(f)
 
 
 def _read_text(path: Path) -> str:
+    """
+    Read a text file and return its contents as a Unicode string.
+    
+    Parameters:
+        path (Path): Path to the file to read.
+    
+    Returns:
+        str: File contents decoded as UTF-8; any undecodable bytes are replaced with the Unicode replacement character.
+    """
     return path.read_text(encoding="utf-8", errors="replace")
 
 
 def parse_canonical_aliases_from_registry(registry_path: Path) -> dict[str, list[str]] | None:
-    """Read the structured ``canonical_aliases`` block from registry.json.
-
-    Preferred over the markdown parser when the registry block exists — JSON
-    is the durable form, markdown is the human-facing explainer.  Returns
-    ``None`` (not ``{}``) when the block is absent so the caller can fall
-    back to the markdown parser.
+    """
+    Extract canonical-to-aliases mapping from a registry JSON file.
+    
+    Reads the top-level `canonical_aliases` object from the given registry JSON and returns a mapping where each canonical name maps to a list of alias strings. Non-string alias entries are ignored and any alias equal to its canonical name is omitted. If the file is missing, contains invalid JSON, or the `canonical_aliases` block is absent or not an object, returns `None` so callers can fall back to other sources.
+    
+    Parameters:
+        registry_path (Path): Path to the registry JSON file.
+    
+    Returns:
+        dict[str, list[str]] | None: Mapping of canonical name to list of alias strings, or `None` if the registry block is unavailable or invalid.
     """
     if not registry_path.exists():
         return None
@@ -209,11 +263,16 @@ def parse_canonical_aliases_from_registry(registry_path: Path) -> dict[str, list
 
 
 def parse_canonical_aliases_from_markdown(doc_path: Path) -> dict[str, list[str]]:
-    """Extract deprecated-alias declarations from CANONICAL_NAMES.md.
-
-    Fallback parser used when registry.json's ``canonical_aliases`` block
-    is missing.  Markdown formatting changes silently break this — the
-    structured JSON form should be preferred long-term.
+    """
+    Extract canonical names and their deprecated aliases from a CANONICAL_NAMES.md-style markdown document.
+    
+    Parses the document at doc_path and returns a mapping where each canonical identifier (e.g., `MY_SERVICE`) maps to a list of deprecated alias identifiers found in the same section. Identifiers are filtered to match the pattern `[A-Z_][A-Z0-9_]*` and any alias identical to its canonical name is omitted. If the file is missing or no aliases are present, an empty dict or empty lists are returned respectively.
+    
+    Parameters:
+        doc_path (Path): Path to the CANONICAL_NAMES.md markdown file to parse.
+    
+    Returns:
+        dict[str, list[str]]: Mapping from canonical identifier to a list of deprecated aliases.
     """
     if not doc_path.exists():
         return {}
@@ -251,7 +310,22 @@ def parse_canonical_aliases(doc_path: Path, registry_path: Path | None = None) -
 
 
 def check_signing_cards(report: Report) -> None:
-    """Validate identity cards parse and bind to agent_signatures."""
+    """
+    Validate signing identity cards and record findings into the given Report.
+    
+    Performs these checks and records results in `report` (via findings, `surfaces_scanned`, and `cards_summary`):
+    - Ensures the signing_identity_cards.yaml file exists.
+    - Loads `cards` and records the scanned count.
+    - Optionally validates each card against an embedded JSON Schema when `jsonschema` is available; records schema errors as `P1` findings and notes schema validation status in `surfaces_scanned`.
+    - Ensures agent_signatures.yaml exists and loads its `signatures` mapping; missing file is a `P0` finding.
+    - For each card: enforces presence and uniqueness of `card_id` (`P0`), presence of `h.agent_id` (`P0`), presence of `h.role` (`P1`), and presence of `ml.primary_method` (`P0`).
+    - For active cards with `role == "agent"`, checks that `h.agent_id` has an entry in `agent_signatures.yaml` (`P1`).
+    - Ensures at most one active card exists per `agent_id` (`P0`).
+    - Populates `report.cards_summary` with total cards, active count, and counts of active cards by role.
+    
+    Parameters:
+        report (Report): Report object to which findings, scanned-surface metadata, and the cards summary will be added.
+    """
     if not SIGNING_CARDS.exists():
         report.add(
             check="signing_cards.exists",
@@ -357,7 +431,13 @@ def check_signing_cards(report: Report) -> None:
 
 
 def check_health_endpoints(report: Report) -> None:
-    """Compare per-service health paths in agent_registry vs catalog claims."""
+    """
+    Scan the agent registry for declared health endpoints and record a summary; flag a catalog-wide `/healthz` claim.
+    
+    If the agent registry file is missing, a `P0` finding is added and the function returns. When present, the function records the number of agents scanned in `report.surfaces_scanned["agent_registry"]["count"]`, collects each agent's `health` value and stores the sorted distinct non-empty paths in `report.surfaces_scanned["health_paths_distinct"]`. If the services catalog contains a global claim that all services expose `/healthz`, the function adds a `P1` finding indicating the catalog's global `/healthz` assertion.
+    
+    Note: this function does not validate or compare individual agent `health` paths against per-service catalog entries.
+    """
     if not AGENT_REGISTRY.exists():
         report.add(check="agent_registry.exists", severity="P0", message="agent_registry.yaml missing")
         return
@@ -394,7 +474,11 @@ def check_health_endpoints(report: Report) -> None:
 
 
 def check_nats_subjects(report: Report) -> None:
-    """Every NATS subject mentioned in context docs must match the regex."""
+    """
+    Validate inline NATS subjects in the context document against the expected subject pattern.
+    
+    Scans .claude/context/nats-subjects.md for backticked subject references, records the number of distinct subjects in report.surfaces_scanned["nats_subjects_distinct"], and adds a `P2` finding for each subject that does not match the `<cat>.<svc>.<event>.v<N>` pattern (location set to the context file).
+    """
     if not NATS_SUBJECTS.exists():
         return
     text = _read_text(NATS_SUBJECTS)
@@ -414,8 +498,13 @@ def check_nats_subjects(report: Report) -> None:
 
 
 def check_compose_empty_defaults(report: Report, canonical_aliases: dict[str, list[str]]) -> None:
-    """Each ${VAR:-} empty default in compose must be canonical, an accepted
-    alias of one, or carry an explicit host-leak-guard annotation."""
+    """
+    Enforce that every `${VAR:-}` empty-default in docker-compose files is either a canonical name, an accepted alias, or explicitly annotated with `host-leak-guard`.
+    
+    Parameters:
+    	report (Report): Accumulates findings and scan metadata for this check.
+    	canonical_aliases (dict[str, list[str]]): Mapping from canonical name to its accepted aliases used to validate `${VAR:-}` variable names.
+    """
     aliases_to_canonical: dict[str, str] = {}
     for canonical, alist in canonical_aliases.items():
         aliases_to_canonical[canonical] = canonical
@@ -455,7 +544,11 @@ def check_compose_empty_defaults(report: Report, canonical_aliases: dict[str, li
 
 
 def check_workflow_pem_misuse(report: Report) -> None:
-    """No workflow may pass GH_APP_SEC where private-key is expected."""
+    """
+    Detects GitHub workflows that pass the `GH_APP_SEC` secret into `private-key` inputs.
+    
+    Searches `.github/workflows/*.yml` for occurrences of `private-key: ${{ secrets.GH_APP_SEC }}`. For each match it adds a `P0` finding with check `"workflow.pem_misuse"`, a message indicating `GH_APP_SEC` was used where `GH_APP_PRIVATE_KEY` is canonical, and a `location` of the form `path:line`. It also records the total number of offenders in `report.surfaces_scanned["workflow_pem_misuse"]`.
+    """
     if not WORKFLOWS_DIR.exists():
         return
     pattern = re.compile(r"private-key:\s*\$\{\{\s*secrets\.GH_APP_SEC\s*\}\}")
@@ -513,7 +606,15 @@ def check_port_collisions(report: Report) -> None:
 
 
 def render_node_descriptions_diff(report: Report) -> str:
-    """Phase 5 — render the one-row-per-node diff across surfaces."""
+    """
+    Render a Markdown table listing nodes found in the registry and agent registry with brief descriptions and agreement checks.
+    
+    Parameters:
+        report (Report): Report object used to record findings; a `P0` finding with check `"registry.parse"` will be added if the registry JSON fails to decode.
+    
+    Returns:
+        md (str): A Markdown document (string) containing one row per node with columns for registry description, agent_registry name, health path, catalog presence marker, and a first-disagreement note; ends with a total nodes scanned line.
+    """
     rows: list[dict[str, str]] = []
 
     registry: dict[str, Any] = {}
@@ -587,6 +688,14 @@ def render_node_descriptions_diff(report: Report) -> str:
 
 
 def write_outputs(report: Report) -> None:
+    """
+    Write the report outputs to disk: a JSON summary and the node descriptions diff.
+    
+    Ensures the logs directory exists, writes pmoves/docs/logs/naming_drift_latest.json containing a fixed timestamp ("2026-04-26"), `by_severity`, serialized `findings`, `surfaces_scanned`, and `cards_summary`, and writes pmoves/docs/logs/node_descriptions_diff_latest.md using the rendered node descriptions diff produced from `report`.
+    
+    Parameters:
+        report (Report): Report instance containing findings, scan metadata, and summaries to serialize.
+    """
     LOGS_DIR.mkdir(parents=True, exist_ok=True)
     summary = {
         "timestamp": "2026-04-26",
@@ -601,6 +710,17 @@ def write_outputs(report: Report) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
+    """
+    Run the naming-drift audit CLI: parse arguments, execute all checks, write reports, and emit a summary.
+    
+    This function serves as the script entrypoint: it accepts optional CLI arguments (or an argv list for programmatic invocation), runs the full set of repository scans and validations (populating a Report and writing the JSON and markdown outputs), and prints either a human-readable summary or a JSON summary to stdout depending on flags.
+    
+    Parameters:
+        argv (list[str] | None): Optional list of command-line arguments to parse; if None, arguments are taken from sys.argv.
+    
+    Returns:
+        int: Process exit code. Returns `1` when `--strict` is provided and there are findings at or above the selected severity threshold; otherwise returns `0`.
+    """
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--strict", action="store_true", help="exit non-zero on any P0/P1 finding")
     parser.add_argument("--severity", default="P1", choices=["P0", "P1", "P2"])

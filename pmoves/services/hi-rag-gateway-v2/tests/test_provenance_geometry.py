@@ -9,6 +9,12 @@ import pytest
 
 @pytest.fixture()
 def provenance_geometry_module():
+    """
+    Provide a dynamically loaded provenance_geometry module for tests and ensure it is removed from sys.modules after use.
+    
+    Yields:
+        module (module): The imported provenance_geometry module, registered under the temporary name "hirag_provenance_geometry_test". The fixture guarantees the name is removed from sys.modules when the consumer completes.
+    """
     path = Path(__file__).resolve().parents[1] / "provenance_geometry.py"
     spec = importlib.util.spec_from_file_location("hirag_provenance_geometry_test", path)
     module = importlib.util.module_from_spec(spec)
@@ -23,6 +29,19 @@ def provenance_geometry_module():
 
 
 def _sample_payload() -> dict:
+    """
+    Return a representative provenance payload dictionary used by the tests.
+    
+    The payload contains typical provenance and semantic metadata used to exercise transformation
+    helpers: identifiers and references (`content_id`, `source_ref`, `shape_id`, `merkle_root`,
+    `graphiti_mark`), lexical fields (`text`, `favorite_words`, `anchor_terms`), semantic weights
+    (`semantic_weights`: list of objects with `term`, `weight`, and optional `anchor`/`favorite` flags),
+    provenance references (`provenance_refs`), scoring (`scorecard`), namespace and acceptance info
+    (`kb_namespace`, `accepted_reason`), and worker metadata (`meta`).
+    
+    Returns:
+        payload (dict): A fully populated example payload matching the shape expected by the tests.
+    """
     return {
         "content_id": "discord:msg-123",
         "text": "Provenance and merkle lineage anchor the semantic shape while favorite words keep the lexicon contextual.",
