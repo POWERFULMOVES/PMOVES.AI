@@ -28,6 +28,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from fastapi import FastAPI
 from fastapi import Depends, HTTPException, Request, Security
+from fastapi.responses import JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field
 from slowapi import Limiter
@@ -62,7 +63,8 @@ logger = logging.getLogger("content_provenance_gate")
 SERVICE_NAME = os.environ.get("SERVICE_NAME", "content-provenance-gate")
 NODE_NAME = os.environ.get("NODE_NAME", "z890")
 NODE_ROLE = os.environ.get("NODE_ROLE", "z890")
-NATS_URL = os.environ["NATS_URL"]
+_NATS_DISABLE = os.environ.get("CONTENT_PROVENANCE_DISABLE_NATS", "").lower() in ("1", "true", "yes")
+NATS_URL = os.environ.get("NATS_URL") if not _NATS_DISABLE else None
 HEALTH_PORT = int(os.environ.get("HEALTH_PORT", "8112"))
 QUEUE_GROUP = os.environ.get("CONTENT_PROVENANCE_QUEUE", "content-provenance-gate")
 HIRAG_NAMESPACE = os.environ.get("HIRAG_NAMESPACE", "hirag-provenance")
@@ -211,7 +213,10 @@ _bearer_scheme = HTTPBearer(auto_error=False)
 limiter = Limiter(key_func=get_remote_address, default_limits=["10/minute"])
 app.state.limiter = limiter
 app.add_middleware(SlowAPIMiddleware)
-app.add_exception_handler(RateLimitExceeded, lambda r, e: HTTPException(429, "Rate limit exceeded"))
+def _rate_limit_handler(request: Request, exc: RateLimitExceeded) -> JSONResponse:
+    return JSONResponse(status_code=429, content={"detail": "Rate limit exceeded"})
+
+app.add_exception_handler(RateLimitExceeded, _rate_limit_handler)
 
 _MAX_BODY_BYTES = 512 * 1024  # 512 KB
 
