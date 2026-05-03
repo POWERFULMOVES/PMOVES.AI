@@ -8,6 +8,8 @@
 
 A local-first, multi-agent orchestration platform that coordinates autonomous agents (Agent Zero, Archon), hybrid retrieval (Hi-RAG v2), voice synthesis, media processing, and knowledge graphs — all wired together with NATS event-driven messaging and full Prometheus/Grafana/Loki observability.
 
+PMOVES is structured as a **Metal-Organic Framework (MOF)** for distributed machine intelligence — the crystalline lattice through which autonomous agents flow. Operationally, this translates to a **rooms-on-a-stage** model: P7 (Pinokio 7) is the evolving room-aware stage manager that selects rooms, loads suits, and manages stage transitions (rehearsal → live → review → archive). This model grows with the platform — new rooms, stage states, and suit types are added as the topology evolves.
+
 ## Quick Start
 
 ```bash
@@ -61,7 +63,15 @@ See [`pmoves/docs/PMOVESCHIT/`](pmoves/docs/PMOVESCHIT/) for the full 19-documen
 
 ## Rooms on a Stage
 
-PMOVES organizes its platform as **rooms on a stage** — each room is an agent-owned workspace with bound services, skills, and notebook state. Rooms own presentation and session ergonomics; the notebook plane owns durable memory. The [Room Manifest Contract](pmoves/docs/ROOM_MANIFEST_CONTRACT.md) defines the interface; [`pmoves/config/rooms/catalog.json`](pmoves/config/rooms/catalog.json) is the canonical seed catalog.
+PMOVES' **Metal-Organic Framework** architecture manifests operationally as **rooms on a stage** — a living topology (not a frozen specification) with three layers:
+
+- **Rooms** are the agent-owned entrypoints: infra fabric, field control, voice studio, workstation. Each room binds services, skills, and notebook state.
+- **Stage** is the lifecycle state per room: `rehearsal` → `live` → `review` → `archive`. Rooms transition through these states as work progresses.
+- **Suits** are the runtime/persona bindings layered onto rooms — upstream Agent Zero as the external baseline, PMOVES hardened overlays as the custom fit, voice/theme/persona as the visible styling layer.
+
+**P7 (Pinokio 7)** is the evolving room-aware stage manager: it reads the room catalog, selects the appropriate room profile for a given workload, loads the correct suit, and manages stage transitions. P7's NATS subjects (`p7.nats.launch`, `p7.nats.session`) are the control plane for room entry and lifecycle. As the platform grows, P7's tree adds new rooms, stage states, and suit types — the topology is designed to expand.
+
+Rooms own presentation and session ergonomics; the notebook plane owns durable memory. The [Room Manifest Contract](pmoves/docs/ROOM_MANIFEST_CONTRACT.md) defines the interface; [`pmoves/config/rooms/catalog.json`](pmoves/config/rooms/catalog.json) is the canonical seed catalog. See [AGNOTE4482](pmoves/docs/AGENTS/AGNOTE4482.md) for the full P7 specification.
 
 ### Room Index
 
