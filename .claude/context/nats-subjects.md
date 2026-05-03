@@ -374,6 +374,36 @@ Example: `ingest.transcript.ready.v1`
   ```
 - **Subscribers:** Observability systems, UI dashboards
 
+**`pmoves.space.action.v1`**
+- **Direction:** Published by Space-Agent bridge (on inbound `/api/pmoves_bridge` POST)
+- **Purpose:** Surface space CRUD actions (create_space, update_widget, delete_space, list_spaces, read_space) onto the bus for downstream listeners
+- **Payload:**
+  ```json
+  {
+    "action": "create_space",
+    "username": "pilot-id",
+    "spaceId": "uuid-or-slug",
+    "request_id": "uuid",
+    "timestamp": "2026-04-25T12:00:00Z"
+  }
+  ```
+- **Subscribers:** Agent Zero (for orchestration), audit/observability sinks
+
+**`pmoves.space.event.v1`**
+- **Direction:** Published by Space-Agent on customware lifecycle changes
+- **Purpose:** Notify subscribers when space state advances (mutation succeeded, widget updated, space deleted)
+- **Payload:**
+  ```json
+  {
+    "event": "widget_updated",
+    "username": "pilot-id",
+    "spaceId": "uuid-or-slug",
+    "widgetId": "widget-name",
+    "timestamp": "2026-04-25T12:00:00Z"
+  }
+  ```
+- **Subscribers:** UI feeds, attestation workers (Stage 8 token-stub watches for `event` to mint work-receipts)
+
 **`agent.graphiti.signed.v1`**
 - **Direction:** Published by BoTZ MCP Gateway and agent handoff services
 - **Purpose:** Emit graphiti-signed trail events for cross-agent handoff attribution

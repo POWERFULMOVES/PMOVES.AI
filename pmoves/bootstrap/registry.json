@@ -1374,6 +1374,112 @@
           "default": "7.0"
         }
       ]
+    },
+    {
+      "id": "space-agent",
+      "name": "PMOVES Space-Agent",
+      "description": "Node.js space management with NATS bridge (port 3010). Submodule PMOVES-space-agent on PMOVES.AI-Edition-Hardened branch. Single-user-app mode for fleet integration.",
+      "variables": [
+        {
+          "key": "PMOVES_BRIDGE_API_KEY",
+          "file": "pmoves/env.shared",
+          "prompt": "Space-Agent bridge API key (X-PMOVES-API-KEY header)",
+          "help": "Required header for /api/pmoves_bridge route. Generate: openssl rand -hex 32",
+          "required": true,
+          "sensitive": true,
+          "generate": {
+            "type": "random_hex",
+            "length": 32
+          }
+        },
+        {
+          "key": "SPACE_AGENT_BIND",
+          "file": "pmoves/env.shared",
+          "prompt": "Host bind address for space-agent",
+          "default": "127.0.0.1",
+          "help": "Loopback by default; set to 0.0.0.0 only if exposing to LAN.",
+          "required": false,
+          "sensitive": false,
+          "type": "string"
+        },
+        {
+          "key": "SPACE_AGENT_PORT",
+          "file": "pmoves/env.shared",
+          "prompt": "Host port for space-agent",
+          "default": "3010",
+          "help": "Container port is fixed at 3010; this is the host-side mapping.",
+          "required": false,
+          "sensitive": false,
+          "type": "string"
+        },
+        {
+          "key": "SPACE_AGENT_SRC",
+          "file": "pmoves/env.shared",
+          "prompt": "Path to PMOVES-space-agent submodule (mounted into /app/pmoves)",
+          "default": "../PMOVES-space-agent/pmoves",
+          "help": "Relative to docker-compose.yml location. Override only if running against a non-standard checkout.",
+          "required": false,
+          "sensitive": false,
+          "type": "string"
+        }
+      ]
     }
-  ]
+  ],
+  "canonical_aliases": {
+    "_doc": "Structured form of pmoves/docs/operations/CANONICAL_NAMES.md. The audit gate (pmoves/scripts/audit_naming_drift.py) reads this block first and falls back to the markdown only when this block is absent. When a canonical decision changes, update both surfaces. Each entry: aliases (deprecated names accepted in fallback chains during sunset window), sunset (ISO date or condition), severity (P0/P1/P2 from sitrep), reference (markdown section).",
+    "JWT_SECRET": {
+      "aliases": [
+        "SUPABASE_JWT_SECRET",
+        "GOTRUE_JWT_SECRET",
+        "PGRST_JWT_SECRET",
+        "API_JWT_SECRET",
+        "AUTH_JWT_SECRET",
+        "METRICS_JWT_SECRET"
+      ],
+      "sunset": "2026-05-26",
+      "severity": "P0",
+      "reference": "CANONICAL_NAMES.md §1"
+    },
+    "SERVICE_ROLE_KEY": {
+      "aliases": [
+        "SUPABASE_SERVICE_ROLE_KEY",
+        "SUPABASE_SERVICE_KEY",
+        "RENDER_WEBHOOK_SUPABASE_SERVICE_ROLE_KEY",
+        "SUPABASE_SECRET_KEY"
+      ],
+      "sunset": "2026-05-26",
+      "severity": "P0",
+      "reference": "CANONICAL_NAMES.md §2"
+    },
+    "GH_APP_PRIVATE_KEY": {
+      "aliases": ["GH_APP_SEC"],
+      "sunset": "operator uploads PEM secret",
+      "severity": "P0",
+      "reference": "CANONICAL_NAMES.md §3"
+    },
+    "MCP_SERVER_TOKEN": {
+      "aliases": [],
+      "sunset": "compose drops empty default; env_file authoritative",
+      "severity": "P1",
+      "reference": "CANONICAL_NAMES.md §5"
+    },
+    "NATS_URL": {
+      "aliases": [],
+      "sunset": "drop embedded password fallback in compose",
+      "severity": "P1",
+      "reference": "CANONICAL_NAMES.md §7"
+    },
+    "GH_PAT": {
+      "aliases": [
+        "GH_PAT_PUBLISH",
+        "PMOVES_GITBOT_PAT",
+        "CATACLYSMSTUDIOS_GH_PAT",
+        "HUNNINBEAR_GH_PAT",
+        "DOCKER_PAT"
+      ],
+      "sunset": "post-GitHub-App migration; consolidate after §3 lands",
+      "severity": "P1",
+      "reference": "CANONICAL_NAMES.md §9"
+    }
+  }
 }

@@ -98,6 +98,37 @@ agents:
       compose_profile: agents
     description: "Primary L1 orchestrator with embedded agent runtime and MCP API"
 
+  space_agent:
+    name: "PMOVES Space-Agent"
+    class: standard
+    primary_type: agent
+    secondary_type: worker
+    port: 3010
+    health: "/api/health"
+    layers: [L0, L2, L4]
+    evolution_stage: stage_1
+    nats:
+      publishes: ["pmoves.space.action.v1", "pmoves.space.event.v1"]
+      subscribes: []
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: false
+      attribution_gated: true
+    resilience:
+      context_budget: small
+      checkpoint_frequency: per_action
+      recovery_strategy: stateless
+      cipher_categories: []
+    submodule: "PMOVES-space-agent"
+    topology:
+      node_affinity: [z890, 5090]
+      team: orchestration
+      ci_runner: ai-lab
+      compose_profile: agents
+    description: "Node.js space/widget customware bridge — surfaces CRUD actions and lifecycle events on NATS"
+
   archon:
     name: "Archon"
     class: standard

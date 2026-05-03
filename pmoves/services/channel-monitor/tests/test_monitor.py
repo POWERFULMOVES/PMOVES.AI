@@ -87,6 +87,7 @@ from channel_monitor.monitor import (  # noqa: E402
     ChannelMonitor,
     _extract_youtube_video_id,
     _normalize_channel_url,
+    build_manual_drop_raw_content,
 )
 
 
@@ -155,6 +156,76 @@ def test_apply_filters_respects_age_and_keywords(tmp_path):
     filtered = monitor._apply_filters(videos, filters)
 
     assert [video["video_id"] for video in filtered] == ["vid-1"]
+
+
+def test_build_manual_drop_raw_content_prefers_discord_context():
+    payload = build_manual_drop_raw_content(
+        urls=[
+            "https://www.youtube.com/watch?v=abc123xyz00",
+            "https://youtu.be/def456uvw99",
+        ],
+        content="Quantum provenance shimmer with Hyperdimensions and CHIT.",
+        namespace="pmoves",
+        tags=["hyperdimensions", "art"],
+        source="discord_agent",
+        approval_mode="ask",
+        source_context={
+            "source_class": "candidate",
+            "discord": {
+                "guild_id": "guild-7",
+                "channel_id": "channel-9",
+                "channel_name": "ops-lab",
+                "message_id": "message-11",
+                "author_id": "user-3",
+            },
+        },
+        media_type="video",
+        format_override="bestvideo+bestaudio",
+        result={
+            "accepted": [{"url": "https://www.youtube.com/watch?v=abc123xyz00", "video_id": "abc123xyz00"}],
+            "skipped": [],
+            "channel_id": "discord_agent:pmoves",
+            "approval_state": "pending_review",
+        },
+    )
+
+    assert payload is not None
+    assert payload["content_id"] == "manual-drop:discord_agent:message-11"
+    assert payload["source_ref"] == "discord://guild-7/channel-9/message-11"
+    assert payload["content_type"] == "text/discord-message"
+    assert payload["lane"] == "messaging"
+    assert "candidate" in payload["labels"]
+    assert "discord" in payload["labels"]
+    assert "quantum" in payload["favorite_words"]
+    assert "ops-lab" in payload["text"]
+    assert payload["meta"]["approval_state"] == "pending_review"
+    assert payload["meta"]["accepted_count"] == 1
+    assert payload["meta"]["urls"][0] == "https://www.youtube.com/watch?v=abc123xyz00"
+
+
+def test_build_manual_drop_raw_content_skips_empty_duplicate_only_message():
+    payload = build_manual_drop_raw_content(
+        urls=["https://www.youtube.com/watch?v=abc123xyz00"],
+        content=None,
+        namespace="pmoves",
+        tags=None,
+        source="discord_agent",
+        approval_mode="ask",
+        source_context={
+            "source_class": "candidate",
+            "discord": {
+                "channel_id": "channel-9",
+                "message_id": "message-11",
+            },
+        },
+        result={
+            "accepted": [],
+            "skipped": [{"url": "https://www.youtube.com/watch?v=abc123xyz00", "video_id": "abc123xyz00"}],
+            "approval_state": "pending_review",
+        },
+    )
+
+    assert payload is None
 
 
 def test_queue_videos_success_updates_status(tmp_path, monkeypatch):

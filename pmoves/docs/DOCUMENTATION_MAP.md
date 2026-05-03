@@ -1,6 +1,6 @@
 # PMOVES.AI Documentation Map
 
-**Living Document** | **CHIT Layer Taxonomy** | **Last Updated:** 2026-02-19
+**Living Document** | **CHIT Layer Taxonomy** | **Last Updated:** 2026-04-25
 
 > Master crosslinked index organized by CHIT's 5-layer taxonomy. Each entry is classified, crosslinked, and tracked for freshness. This document is the entry point for navigating the entire PMOVES.AI documentation corpus.
 
@@ -115,6 +115,8 @@ Concrete implementation guides, service catalogs, tool references, and integrati
 | AgentGym-RL Operations | `pmoves/docs/AGENTGYM_RL_OPERATIONS.md` | Current | L3:EvoSwarm Ops, L1:CGP Spec |
 | Graphiti Agent Registry | `pmoves/docs/GRAPHITI_AGENT_REGISTRY.md` | Current | L1:Graphiti Protocol |
 | Graphiti Integration Guide | `pmoves/docs/GRAPHITI_INTEGRATION_GUIDE.md` | Current | L1:Graphiti Protocol, L3:Agent Registry |
+| Hyperdimensions Control Plane | `pmoves/docs/AGENTS/PMOVES_HYPERDIMENSIONS_CONTROL_PLANE.md` | Current | L2:Math UI, L3:SPARK Provenance |
+| SPARK Provenance Parity Contract | `pmoves/docs/architecture/PMOVES_SPARK_PROVENANCE_PARITY.md` | Current | L3:Hyperdimensions, L1:Graphiti Protocol, L5:Doc Hygiene |
 
 ---
 

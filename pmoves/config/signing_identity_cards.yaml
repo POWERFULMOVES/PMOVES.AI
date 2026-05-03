@@ -1,0 +1,266 @@
+# 5×5 Signing Identity Cards
+#
+# One card per active signer. Each card has two halves:
+#
+#   ml — Machine-loadable (what the verifier checks):
+#        SSH fingerprint, OpenSSH allowed_signers entry, GPG key id,
+#        GitHub App installation id, CI runner label.
+#
+#   h  — Human-readable (what both sides recognize at a glance):
+#        agent_id, glyph, color, voice, role.
+#
+# When both halves agree across {agent emit, operator confirm,
+# CI verify, trail record}, the channel is 5×5.
+#
+# Pairs with:
+#   schema:     pmoves/contracts/schemas/identity/signing-card.v1.schema.json (pending land)
+#   explainer:  pmoves/docs/operations/SIGNING_IDENTITY_CARDS.md
+#   trail tie:  signature.v2.schema.json `signing_card_id` (pending field)
+#   audit:      pmoves/scripts/audit_naming_drift.py (Phase 4 — verifies cards parse +
+#               every emitting agent_id has an active card here).
+#
+# H half is sourced from pmoves/config/agent_signatures.yaml — keep these in sync.
+# ML half is operator-provided when SSH/GPG/App keys land. Until then, cards are
+# `active: true` with `ml.primary_method` set but key fields null. Audit reports
+# them as "h-only / pending-ml" (advisory, not fatal — see plan Owner-Decision D).
+
+schema_version: "1.0.0"
+generated: "2026-04-26"
+
+cards:
+  # ---- Operator ----
+  - card_id: "00000000-0000-4000-8000-000000000001"
+    issued_at: "2026-04-26T14:06:00Z"
+    active: true
+    ml:
+      primary_method: ssh
+      ssh_fingerprint: null   # operator-provided when ssh-keygen lands on Z890
+      ssh_allowed_signers_line: null
+    h:
+      agent_id: "darkxside"
+      display_name: "DARKXSIDE"
+      glyph: "✦"        # ✦
+      color: "#E11D48"
+      voice: witness
+      role: operator
+
+  # ---- Primary agents (h-half from agent_signatures.yaml) ----
+  - card_id: "00000000-0000-4000-8000-000000000002"
+    issued_at: "2026-04-26T14:06:00Z"
+    active: true
+    ml:
+      primary_method: github-app
+      github_app_installation_id: null   # populated from GH_APP_INSTALLATION_ID secret at runtime
+    h:
+      agent_id: "claude-opus"
+      display_name: "Claude Opus"
+      glyph: "◆"        # ◆
+      color: "#7C3AED"
+      voice: analytical
+      role: agent
+
+  - card_id: "00000000-0000-4000-8000-000000000003"
+    issued_at: "2026-04-26T14:06:00Z"
+    active: true
+    ml:
+      primary_method: github-app
+      github_app_installation_id: null
+    h:
+      agent_id: "codex"
+      display_name: "Codex"
+      glyph: "■"        # ■
+      color: "#2563EB"
+      voice: terse
+      role: agent
+
+  - card_id: "00000000-0000-4000-8000-000000000004"
+    issued_at: "2026-04-26T14:06:00Z"
+    active: true
+    ml:
+      primary_method: github-app
+      github_app_installation_id: null
+    h:
+      agent_id: "kilocode"
+      display_name: "KiloCode"
+      glyph: "▲"        # ▲
+      color: "#059669"
+      voice: architectural
+      role: agent
+
+  - card_id: "00000000-0000-4000-8000-000000000005"
+    issued_at: "2026-04-26T14:06:00Z"
+    active: true
+    ml:
+      primary_method: github-app
+      github_app_installation_id: null
+    h:
+      agent_id: "gemini"
+      display_name: "Gemini"
+      glyph: "★"        # ★
+      color: "#D97706"
+      voice: strategic
+      role: agent
+
+  - card_id: "00000000-0000-4000-8000-000000000006"
+    issued_at: "2026-04-26T14:06:00Z"
+    active: true
+    ml:
+      primary_method: github-app
+      github_app_installation_id: null
+    h:
+      agent_id: "cline"
+      display_name: "Cline"
+      glyph: "●"        # ●
+      color: "#DC2626"
+      voice: conversational
+      role: agent
+
+  - card_id: "00000000-0000-4000-8000-000000000007"
+    issued_at: "2026-04-26T14:06:00Z"
+    active: true
+    ml:
+      primary_method: github-app
+      github_app_installation_id: null
+    h:
+      agent_id: "crush"
+      display_name: "Crush"
+      glyph: "◇"        # ◇
+      color: "#0EA5E9"
+      voice: companion
+      role: agent
+
+  # ---- Node-bound agent personas (one per Z890/5090/4090) ----
+  - card_id: "00000000-0000-4000-8000-000000000010"
+    issued_at: "2026-04-26T14:06:00Z"
+    active: true
+    ml:
+      primary_method: github-app
+      github_app_installation_id: null
+      ci_runner_label: "self-hosted, ai-lab"
+    h:
+      agent_id: "z890-claude"
+      display_name: "Z890 Claude"
+      glyph: "⚙"        # ⚙
+      color: "#1E40AF"
+      voice: analytical
+      role: agent
+
+  - card_id: "00000000-0000-4000-8000-000000000011"
+    issued_at: "2026-04-26T14:06:00Z"
+    active: true
+    ml:
+      primary_method: github-app
+      github_app_installation_id: null
+      ci_runner_label: "self-hosted, ai-lab, gpu, cuda"
+    h:
+      agent_id: "5090-claude"
+      display_name: "5090 Claude"
+      glyph: "♫"        # ♫
+      color: "#9333EA"
+      voice: conversational
+      role: agent
+
+  - card_id: "00000000-0000-4000-8000-000000000012"
+    issued_at: "2026-04-26T14:06:00Z"
+    active: true
+    ml:
+      primary_method: github-app
+      github_app_installation_id: null
+    h:
+      agent_id: "4090-claude"
+      display_name: "4090 Claude"
+      glyph: "◉"        # ◉
+      color: "#0D9488"
+      voice: terse
+      role: agent
+
+  # ---- Service account: GitHub App ----
+  - card_id: "00000000-0000-4000-8000-000000000020"
+    issued_at: "2026-04-26T14:06:00Z"
+    active: true
+    notes: |
+      The PMOVES.AI GitHub App. App registered; private-key PEM upload pending
+      (sitrep §2). Until GH_APP_PRIVATE_KEY lands, `installation_id` is recorded
+      from the repo secret but the action call falls back to PAT via
+      continue-on-error in 4 build/integration workflows.
+    ml:
+      primary_method: github-app
+      github_app_installation_id: null   # mirror GH_APP_INSTALLATION_ID at runtime
+    h:
+      agent_id: "github-app"
+      display_name: "PMOVES GitHub App"
+      glyph: "⦶"        # ⦶ Circled equals — service-account marker
+      color: "#0891B2"
+      voice: directive
+      role: service-account
+
+  # ---- CI runner identities (label-only; no SSH key on these) ----
+  - card_id: "00000000-0000-4000-8000-000000000030"
+    issued_at: "2026-04-26T14:06:00Z"
+    active: true
+    ml:
+      primary_method: github-app
+      ci_runner_label: "self-hosted, ai-lab, gpu, cuda"
+    h:
+      agent_id: "ai-lab-runner"
+      display_name: "AI-Lab Runner"
+      glyph: "⚶"        # ⚶ Vesta — runner sigil
+      color: "#0EA5E9"
+      voice: directive
+      role: runner
+
+  - card_id: "00000000-0000-4000-8000-000000000031"
+    issued_at: "2026-04-26T14:06:00Z"
+    active: true
+    ml:
+      primary_method: github-app
+      ci_runner_label: "self-hosted, vps, kvm4, production"
+    h:
+      agent_id: "kvm4-runner"
+      display_name: "KVM4 Runner"
+      glyph: "⚶"
+      color: "#16A34A"
+      voice: directive
+      role: runner
+
+  - card_id: "00000000-0000-4000-8000-000000000032"
+    issued_at: "2026-04-26T14:06:00Z"
+    active: true
+    ml:
+      primary_method: github-app
+      ci_runner_label: "self-hosted, vps, kvm2, backup"
+    h:
+      agent_id: "kvm2-runner"
+      display_name: "KVM2 Runner"
+      glyph: "⚶"
+      color: "#A16207"
+      voice: directive
+      role: runner
+
+  - card_id: "00000000-0000-4000-8000-000000000033"
+    issued_at: "2026-04-26T14:06:00Z"
+    active: true
+    ml:
+      primary_method: github-app
+      ci_runner_label: "self-hosted, vps, cloudstartup, staging"
+    h:
+      agent_id: "cloudstartup-runner"
+      display_name: "Cloudstartup Runner"
+      glyph: "⚶"
+      color: "#7C3AED"
+      voice: directive
+      role: runner
+
+  - card_id: "00000000-0000-4000-8000-000000000034"
+    issued_at: "2026-04-26T14:06:00Z"
+    active: true
+    ml:
+      primary_method: github-app
+      ci_runner_label: "self-hosted, spark, Linux, ARM64"
+    h:
+      agent_id: "spark-runner"
+      display_name: "SPARK Runner"
+      glyph: "⚶"
+      color: "#EA580C"
+      voice: directive
+      role: runner

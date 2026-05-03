@@ -42,8 +42,7 @@ jobs:
             MATCHES=$(git diff --name-only "$BASE" "$HEAD" -- "$p" 2>/dev/null)
             if [ -n "$MATCHES" ]; then
               TOUCHED=true
-              TOUCHED_FILES="$TOUCHED_FILES
-$MATCHES"
+              TOUCHED_FILES="$TOUCHED_FILES"$'\n'"$MATCHES"
             fi
           done
 
@@ -51,8 +50,7 @@ $MATCHES"
           MAKE_DIFF=$(git diff "$BASE" "$HEAD" -- Makefile 2>/dev/null)
           if echo "$MAKE_DIFF" | grep -qiE '(suit|profile|signature|clawz|persona|voice.bind|model.route)'; then
             TOUCHED=true
-            TOUCHED_FILES="$TOUCHED_FILES
-Makefile (suit-related target)"
+            TOUCHED_FILES="$TOUCHED_FILES"$'\n'"Makefile (suit-related target)"
           fi
 
           echo "touched=$TOUCHED" >> "$GITHUB_OUTPUT"

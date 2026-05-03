@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import asyncio
+from collections import Counter as CollectionsCounter
 import hashlib
 import json
 import logging
 import os
+import re
 from datetime import datetime, timezone, timedelta
 from functools import partial
 from typing import Any, Dict, List, Optional, Set
@@ -75,9 +77,26 @@ CREATOR_COMMENT_POLICY_TEMPLATES = {
     ),
 }
 
+MANUAL_DROP_STOPWORDS = {
+    "a", "an", "and", "are", "as", "ask", "at", "auto", "be", "by", "for",
+    "from", "if", "in", "into", "is", "it", "its", "manual", "mode", "of",
+    "on", "or", "source", "that", "the", "their", "this", "to", "url", "urls",
+    "video", "with",
+}
+
 
 def utcnow() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def _semantic_hint_terms(text: str, top_k: int = 6) -> List[str]:
+    tokens = [
+        token.lower()
+        for token in re.findall(r"[a-zA-Z][a-zA-Z0-9_-]{1,}", text)
+        if token.lower() not in MANUAL_DROP_STOPWORDS
+    ]
+    counts = CollectionsCounter(tokens)
+    return [term for term, _ in counts.most_common(top_k)]
 
 
 def _compact(value: Any) -> Any:
@@ -147,6 +166,153 @@ def _truncate_text(value: Any, *, limit: int = 180) -> Optional[str]:
     if len(text) <= limit:
         return text
     return text[: limit - 3] + "..."
+
+
+def build_manual_drop_raw_content(
+    *,
+    urls: List[str],
+    content: Optional[str],
+    namespace: Optional[str],
+    tags: Optional[List[str]],
+    source: str,
+    approval_mode: str,
+    source_context: Optional[Dict[str, Any]] = None,
+    media_type: str = "video",
+    format_override: Optional[str] = None,
+    result: Optional[Dict[str, Any]] = None,
+) -> Optional[Dict[str, Any]]:
+    clean_urls = [value.strip() for value in urls if isinstance(value, str) and value.strip()]
+    clean_tags = [str(tag).strip() for tag in (tags or []) if str(tag).strip()]
+    message_text = " ".join(content.strip().split()) if isinstance(content, str) and content.strip() else ""
+    normalized_source = source.strip().lower().replace(" ", "_") if source else "manual_drop"
+    resolved_context = source_context if isinstance(source_context, dict) else {}
+    discord_context = (
+        resolved_context.get("discord") if isinstance(resolved_context.get("discord"), dict) else {}
+    )
+    source_class = _normalize_source_class(resolved_context.get("source_class"), default="candidate")
+    accepted = result.get("accepted") if isinstance(result, dict) and isinstance(result.get("accepted"), list) else []
+    skipped = result.get("skipped") if isinstance(result, dict) and isinstance(result.get("skipped"), list) else []
+    accepted_ids = [
+        str(entry.get("video_id"))
+        for entry in accepted
+        if isinstance(entry, dict) and entry.get("video_id")
+    ]
+
+    if not message_text and not accepted_ids and not clean_urls:
+        return None
+    if not message_text and not accepted_ids:
+        return None
+
+    message_id = discord_context.get("message_id")
+    channel_id = discord_context.get("channel_id")
+    guild_id = discord_context.get("guild_id")
+    channel_name = discord_context.get("channel_name")
+    if not channel_name and isinstance(result, dict):
+        channel_name = result.get("channel_name") or result.get("channel_id")
+    content_seed = message_id or (accepted_ids[0] if accepted_ids else None)
+    if not content_seed:
+        seed_material = "|".join([normalized_source, message_text, *clean_urls])
+        content_seed = hashlib.sha1(seed_material.encode("utf-8")).hexdigest()[:12]
+
+    if message_id and channel_id:
+        message_parts = ["discord:/"]
+        if guild_id:
+            message_parts.append(str(guild_id))
+        message_parts.append(str(channel_id))
+        message_parts.append(str(message_id))
+        source_ref = "/".join(message_parts)
+    elif clean_urls:
+        source_ref = clean_urls[0]
+    else:
+        source_ref = f"manual-drop:{normalized_source}:{content_seed}"
+
+    context_lines = [
+        f"Source: {normalized_source}",
+        f"Approval mode: {approval_mode}",
+        f"Source class: {source_class}",
+    ]
+    if channel_name:
+        context_lines.append(f"Channel: {channel_name}")
+    if clean_tags:
+        context_lines.append("Tags: " + ", ".join(clean_tags))
+    if clean_urls:
+        context_lines.append("URLs:")
+        context_lines.extend(clean_urls)
+
+    text_sections = []
+    if message_text:
+        text_sections.append(message_text)
+    text_sections.append("\n".join(context_lines))
+    text = "\n\n".join(section for section in text_sections if section).strip()
+
+    lexicon_material = " ".join(
+        value
+        for value in [
+            message_text,
+            channel_name if isinstance(channel_name, str) else None,
+            source_class,
+            " ".join(clean_tags),
+        ]
+        if value
+    )
+    favorite_words = _semantic_hint_terms(lexicon_material or text)
+    if not favorite_words and clean_tags:
+        favorite_words = clean_tags[:6]
+
+    labels: List[str] = []
+    for value in [
+        "manual-drop",
+        normalized_source,
+        source_class,
+        approval_mode,
+        media_type or "video",
+        "discord" if discord_context else None,
+    ]:
+        if isinstance(value, str) and value and value not in labels:
+            labels.append(value)
+    for tag in clean_tags[:4]:
+        normalized_tag = tag.lower().replace(" ", "-")
+        if normalized_tag not in labels:
+            labels.append(normalized_tag)
+
+    aliases = [
+        str(value)
+        for value in [message_id, channel_id, guild_id, *accepted_ids[:5]]
+        if value not in (None, "")
+    ]
+
+    return {
+        "content_id": f"manual-drop:{normalized_source}:{content_seed}",
+        "text": text,
+        "source_ref": source_ref,
+        "content_type": "text/discord-message" if discord_context else "text/manual-drop",
+        "lane": "messaging",
+        "aliases": aliases,
+        "favorite_words": favorite_words,
+        "labels": labels,
+        "meta": _compact(
+            {
+                "namespace": namespace,
+                "source": normalized_source,
+                "source_class": source_class,
+                "approval_mode": approval_mode,
+                "media_type": media_type or "video",
+                "format": format_override,
+                "url_count": len(clean_urls),
+                "urls": clean_urls,
+                "tags": clean_tags,
+                "discord": discord_context,
+                "source_context": resolved_context,
+                "accepted": accepted,
+                "accepted_count": len(accepted),
+                "skipped": skipped,
+                "skipped_count": len(skipped),
+                "approval_state": result.get("approval_state") if isinstance(result, dict) else None,
+                "channel_id": result.get("channel_id") if isinstance(result, dict) else None,
+                "emitted_at": utcnow().isoformat(),
+            }
+        ),
+    }
 
 
 class _TemplateVariables(dict[str, str]):
