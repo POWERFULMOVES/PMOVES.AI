@@ -1,131 +1,58 @@
-Implement NATS publish model for bpm_encoder.py (W6-P2 sub-item). This is a handoff from 4090-CLAUDE field brief — all analysis done, exact code specified below.
+Wire `bpm_encoder.py` to publish CGP v0.2 packets directly to NATS on `tokenism.prosodic.bpm.v1`.
 
-## Context
+## Lane
 
-`pmoves/tools/bpm_encoder.py` builds CGP v0.2 packets via `build_cgp_packet()` (line 398) but never publishes them. This is the same pull-model gap that `beats_to_voice.py` had before PR #1402. The pattern is proven — this is a straight port.
+W6-P2 · KiloCode/5090 · branch `feat/w6-tokenism-nats-5090`
 
-**Issue:** #1411 (W6-P2 [5090]: bpm_encoder NATS publish gap)
-**Branch:** `feat/w6-tokenism-nats-5090`
-**Village Rule:** one scope, one commit, one PR
+## Arguments
 
-## What currently exists in bpm_encoder.py
+- `$ARGUMENTS` — optional: prosodic input (text or JSON profile) to publish
 
-- `build_cgp_packet()` at line 398 — full CGP v0.2 packet, docstring says "NATS publish" but never does it
-- `_cmd_encode()` at line 487 — builds packet on `--cgp` flag, prints stdout only
-- No `asyncio` import, no `os` import, no `NATS_URL` constant, no `NATS_SUBJECT` constant
-- Total file: 572 lines
+## Status (verified 2026-05-06)
 
-## Exact Changes
+- ✅ `pmoves/tools/bpm_encoder.py:399-444` — `wrap_as_cgp_packet()` already returns dict ready for NATS publish on `tokenism.prosodic.bpm.v1`
+- ✅ `pmoves/tools/beats_to_voice.py:127` — `_nats_publish_cgp()` already implements the publish helper for the same subject
+- ❌ Branch `feat/w6-tokenism-nats-5090` does not yet exist on origin
+- ❌ This brief was just authored; no PR yet
 
-### Step 1: Add imports (after `import time` at line 34)
+## Scope (one PR)
 
-```python
-import asyncio
-import os
-```
+1. **Hoist the publish helper** out of `beats_to_voice.py` so `bpm_encoder.py` (and any future caller) can reuse it without an indirect import. Candidate destinations:
+   - `pmoves/services/common/nats_cgp.py` (preferred — matches `services/common/` convention)
+   - or extend `pmoves/tools/bpm_encoder.py` to expose a `publish_to_nats()` method directly
+2. **Add CLI runner** to `bpm_encoder.py`:
+   ```bash
+   python -m pmoves.tools.bpm_encoder --bpm 90 --persona kokoro --publish
+   ```
+   Default subject: `tokenism.prosodic.bpm.v1`. Override via `--subject` or env `BPM_NATS_SUBJECT`.
+3. **Regression test** modeled on `pmoves/tests/services/test_pr1279_fixes.py` — validate packet structure + subject match.
+4. **No app/code changes outside the encoder + a thin runner** — Village Rule: one scope, one PR.
 
-### Step 2: Add constants (after `BOUNDARY_PAUSE_MS` block, ~line 66)
+## Pre-flight
 
-```python
-NATS_URL = os.environ.get("NATS_URL", "nats://localhost:4222")
-NATS_SUBJECT = "tokenism.prosodic.bpm.v1"
-```
-
-### Step 3: Add publish function (after `build_cgp_packet()`, before `# CLI (argparse)` comment)
-
-```python
-async def _nats_publish_cgp(cgp_packet: dict, nats_url: str = NATS_URL) -> bool:
-    """Publish CGP packet to tokenism.prosodic.bpm.v1. Returns True on success."""
-    try:
-        import nats as natspy
-        nc = await natspy.connect(nats_url)
-        await nc.publish(NATS_SUBJECT, json.dumps(cgp_packet).encode("utf-8"))
-        await nc.drain()
-        return True
-    except Exception as e:
-        sys.stderr.write(f"[bpm_encoder] NATS publish skipped: {e}\n")
-        return False
-```
-
-### Step 4: Modify `_cmd_encode()` (after `print(json.dumps(packet, indent=2))` at line 494)
-
-```python
-    if args.cgp and getattr(args, "publish_nats", False):
-        published = asyncio.run(_nats_publish_cgp(packet, args.nats_url))
-        if not published:
-            sys.stderr.write("[bpm_encoder] CGP not published to NATS\n")
-```
-
-### Step 5: Add CLI flags to encode subparser (after `--agent-id` arg, ~line 546)
-
-```python
-    p_enc.add_argument("--publish-nats", action="store_true",
-                        help="Publish CGP packet to NATS after encoding")
-    p_enc.add_argument("--nats-url", type=str, default=NATS_URL,
-                        help="NATS server URL")
-```
-
-## Test File to Create
-
-**File:** `pmoves/tools/test_bpm_encoder_nats.py`
-
-```python
-"""Tests for bpm_encoder NATS publish."""
-import asyncio
-import sys
-import unittest
-from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
-
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-import bpm_encoder
-
-
-class TestNatsPublishCgp(unittest.IsolatedAsyncioTestCase):
-    async def test_publish_success(self):
-        mock_nc = AsyncMock()
-        mock_nats = MagicMock()
-        mock_nats.connect = AsyncMock(return_value=mock_nc)
-        with patch.dict("sys.modules", {"nats": mock_nats}):
-            result = await bpm_encoder._nats_publish_cgp({"spec": "chit.cgp.v0.2"})
-        assert result is True
-        mock_nc.publish.assert_awaited_once()
-        subject_used = mock_nc.publish.call_args[0][0]
-        assert subject_used == bpm_encoder.NATS_SUBJECT
-
-    async def test_publish_nats_unavailable(self):
-        with patch.dict("sys.modules", {"nats": None}):
-            result = await bpm_encoder._nats_publish_cgp({"spec": "chit.cgp.v0.2"})
-        assert result is False
-
-
-if __name__ == "__main__":
-    unittest.main()
+```bash
+make -C pmoves up-nats               # ensure bus is up
+curl -s http://localhost:4222/varz   # confirm broker reachable
+git fetch origin && git checkout -b feat/w6-tokenism-nats-5090 origin/main
 ```
 
 ## Verification
 
-```bash
-# 1. Tests pass (no live NATS needed)
-python -m pytest pmoves/tools/test_bpm_encoder_nats.py -v
+- `nats sub tokenism.prosodic.bpm.v1` shows live JSON packet when CLI runs
+- `python -m pmoves.tools.bpm_encoder --bpm 90 --persona kokoro --publish` exits 0
+- `pytest pmoves/tests/tools/test_bpm_encoder_nats.py` (new file) — packet schema + subject assert
+- CI green on PR (merge-gate, hardening, python-tests, CodeRabbit)
 
-# 2. CLI still works (no regression)
-python pmoves/tools/bpm_encoder.py encode --bpm 120 --pattern "hello world" --cgp
+## Related
 
-# 3. New flag appears
-python pmoves/tools/bpm_encoder.py encode --help
+- `/chit-encode` — sibling encode-to-CGP command
+- AGNOTE4482.BEATS.md — BPM math reference
+- AGNOTE4482PHI.t1.md L671-686 — submodule Lane A/B specs (parallel work, not this lane)
+- Memory `feedback_pipeline_bypass_self_catch.md` — never raw `docker compose`
+- Memory `feedback_use_make_targets_for_builds.md` — always Make targets
 
-# 4. Graceful NATS miss (not crash)
-python pmoves/tools/bpm_encoder.py encode --bpm 120 --pattern "test" --cgp --publish-nats --nats-url nats://localhost:9999
-```
+## Notes
 
-## Pattern Reference
-
-`pmoves/tools/beats_to_voice.py` — identical pattern, already on main via PR #1402.
-`pmoves/tools/test_beats_to_voice_nats.py` — test reference (5/5 passing).
-
-## Co-author
-
-```
-Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
-```
+- **Reuse, don't reimplement.** The `_nats_publish_cgp` in `beats_to_voice.py` is the canonical publish helper — verified 2026-05-06 to publish on the correct subject with correct format. Hoist it.
+- Pairs with §9.4 hardening signoff (`branch.{branch_name}.trail.v1` NATS pattern). Once this lane lands, §9.4 unblocks because the pattern is proven.
+- DARKXSIDE co-creation attribution required in trail entry on close.
