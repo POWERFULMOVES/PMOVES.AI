@@ -528,7 +528,7 @@ def build_cgp_packet(profile: dict[str, Any], agent_id: str = "4090-claude") -> 
                 "top_k":         max(5, round(state_vector["Hz"] * 20)),
                 "speaking_rate": round(bpm / 120.0, 2),
             },
-            "chakra": freq_to_chakra(avg_freq),
+            "chakra": freq_to_chakra(avg_freq) if chunks else None,
         },
         "prosodic_profile": {
             "text":               profile.get("text", ""),
