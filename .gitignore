@@ -224,3 +224,13 @@ NUL
 .harness/offloads/
 .harness/threads/
 .a0proj/
+
+# Kilocode plugin — ignore bootstrap artifacts, keep tracked content
+# .kilo/ has agent/ + command/; .kilocode/ has rules/ + skills/
+# Pattern: ignore the whole dir, negate the tracked subdirs (future-proofs new artifact types)
+.kilo/*
+!.kilo/agent/
+!.kilo/command/
+.kilocode/*
+!.kilocode/rules/
+!.kilocode/skills/
