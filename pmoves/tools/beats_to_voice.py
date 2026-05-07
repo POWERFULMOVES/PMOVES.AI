@@ -63,7 +63,7 @@ FLUTE_GATEWAY_URL = os.environ.get("FLUTE_GATEWAY_URL", "http://localhost:8055")
 DEFAULT_VOICE = os.environ.get("BEATS_VOICE", "default")
 DEFAULT_AGENT_ID = os.environ.get("BEATS_AGENT_ID", "4090-claude")
 NATS_SUBJECT = "tokenism.prosodic.bpm.v1"
-NATS_URL = os.environ.get("NATS_URL", "nats://localhost:4222")
+NATS_URL = os.environ.get("NATS_URL", "")
 NATS_TRIGGER_SUBJECT = os.environ.get("BEATS_TRIGGER_SUBJECT", "voice.agent.response.v1")
 
 
