@@ -217,6 +217,7 @@ def _empty_packet(
                     "total_chunks": 0,
                     "duration_estimate_ms": 0,
                     "avg_bpm": 0,
+                    "chakra_band": chakra_to_band(0),
                     "energy_profile": {
                         "sentence_count": 0, "clause_count": 0,
                         "phrase_count": 0, "breath_count": 0, "presto_count": 0,
