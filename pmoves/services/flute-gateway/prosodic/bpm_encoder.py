@@ -222,7 +222,7 @@ async def publish_bpm_event(
         return False
 
     if not nats_url:
-        nats_url = os.getenv("NATS_URL", "nats://nats:pmoves@nats:4222")
+        nats_url = os.getenv("NATS_URL", "")
 
     try:
         import nats as nats_client

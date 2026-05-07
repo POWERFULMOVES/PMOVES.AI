@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import asyncio
 import json
 import math
 import re
@@ -492,6 +493,13 @@ def _cmd_encode(args: argparse.Namespace) -> None:
     if args.cgp:
         packet = build_cgp_packet(profile, agent_id=args.agent_id)
         print(json.dumps(packet, indent=2))
+
+        if args.publish:
+            subject = args.subject or "tokenism.prosodic.bpm.v1"
+            import os as _os
+            from pmoves.services.common.nats_client import publish_cgp as _pub
+            published = asyncio.run(_pub(packet, subject=subject, nats_url=_os.getenv("NATS_URL", "")))
+            print(json.dumps({"nats_published": published, "subject": subject}))
     else:
         print(json.dumps(profile, indent=2))
 
@@ -544,6 +552,8 @@ def main() -> None:
     p_enc.add_argument("--pattern", type=str, default="", help="Text pattern to encode")
     p_enc.add_argument("--cgp", action="store_true", help="Output as CGP v0.2 packet")
     p_enc.add_argument("--agent-id", type=str, default="4090-claude", help="Agent ID for CGP packet")
+    p_enc.add_argument("--publish", action="store_true", help="Publish CGP packet to NATS")
+    p_enc.add_argument("--subject", type=str, default="", help="NATS subject (default: tokenism.prosodic.bpm.v1)")
     p_enc.set_defaults(func=_cmd_encode)
 
     # -- note --
