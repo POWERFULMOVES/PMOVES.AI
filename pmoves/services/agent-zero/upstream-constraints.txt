@@ -1,0 +1,5 @@
+# Constraints for upstream agent-zero deps in Dockerfile Stage 1.
+# Only pins that prevent broken upstream transitive deps.
+# Do NOT use requirements.lock here — it pins our direct deps
+# and will conflict with upstream version requirements.
+pyreqwest-impersonate<0.5.5

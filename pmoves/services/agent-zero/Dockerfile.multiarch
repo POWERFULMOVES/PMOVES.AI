@@ -12,14 +12,15 @@ FROM agent0ai/agent-zero-base:${A0_BASE_TAG} AS upstream
 
 ARG AGENT_ZERO_REPO=https://github.com/POWERFULMOVES/PMOVES-Agent-Zero.git
 ARG AGENT_ZERO_REF=PMOVES.AI-Edition-Hardened
-ARG PIP_CONSTRAINT=requirements.lock
 
 # Clone PMOVES fork of Agent Zero (matches submodule branch)
 RUN git clone --depth=1 --branch ${AGENT_ZERO_REF} \
       ${AGENT_ZERO_REPO} /git/agent-zero
 
-# Copy constraint file into Stage 1 so the upstream pip install respects our pins
-COPY services/agent-zero/requirements.lock /tmp/constraints/requirements.lock
+# Minimal constraints for upstream transitive deps that have broken releases.
+# Do NOT use requirements.lock here — it pins our direct deps and will
+# conflict with upstream version requirements (e.g. crontab version mismatch).
+COPY services/agent-zero/upstream-constraints.txt /tmp/upstream-constraints.txt
 
 # Install upstream deps into the pre-existing /opt/venv-a0.
 # NOTE: preload.py intentionally NOT run. PMOVES routes embeddings through
@@ -27,8 +28,8 @@ COPY services/agent-zero/requirements.lock /tmp/constraints/requirements.lock
 # The preload downloads ~80MB sentence-transformers model never used at runtime.
 # If re-enabling, also add huggingface.co:443 to integrations-ghcr.yml egress.
 RUN . /opt/venv-a0/bin/activate \
-    && uv pip install --no-cache-dir --constraint /tmp/constraints/requirements.lock -r /git/agent-zero/requirements.txt \
-    && uv pip install --no-cache-dir --constraint /tmp/constraints/requirements.lock -r /git/agent-zero/requirements2.txt
+    && uv pip install --no-cache-dir --constraint /tmp/upstream-constraints.txt -r /git/agent-zero/requirements.txt \
+    && uv pip install --no-cache-dir --constraint /tmp/upstream-constraints.txt -r /git/agent-zero/requirements2.txt
 
 # ── Stage 2: PMOVES overlay ────────────────────────────────────
 FROM agent0ai/agent-zero-base:${A0_BASE_TAG} AS app
