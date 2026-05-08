@@ -19,6 +19,8 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any
 
+from pmoves.services.common.chakra import CHAKRA_BANDS, chakra_to_band
+
 from .types import BoundaryType, ProsodicChunk
 
 # ---------------------------------------------------------------------------
@@ -43,37 +45,6 @@ MIDI_OFFSET: dict[BoundaryType, int] = {
 
 # Milliseconds per syllable estimate (150ms average spoken English)
 _MS_PER_SYLLABLE = 150
-
-# 7-chakra axis — mirrors pmoves/tools/bpm_encoder.py CHAKRA_BANDS (AGNOTE4482FLUTE.md Movement I)
-CHAKRA_BANDS: list[dict[str, Any]] = [
-    {"name": "muladhara",    "label": "Root",      "element": "Earth",
-     "bpm_min": 40,  "bpm_max": 55,  "hz": 65.41,  "note": "C2", "boundary": "SENTENCE",
-     "breath_in_sec": 6, "breath_out_sec": 6},
-    {"name": "svadhisthana", "label": "Sacral",    "element": "Water",
-     "bpm_min": 55,  "bpm_max": 70,  "hz": 146.83, "note": "D3", "boundary": "BREATH",
-     "breath_in_sec": 5, "breath_out_sec": 5},
-    {"name": "manipura",     "label": "Solar",     "element": "Fire",
-     "bpm_min": 70,  "bpm_max": 90,  "hz": 164.81, "note": "E3", "boundary": "CLAUSE",
-     "breath_in_sec": 4, "breath_out_sec": 4},
-    {"name": "anahata",      "label": "Heart",     "element": "Air",
-     "bpm_min": 80,  "bpm_max": 100, "hz": 349.23, "note": "F4", "boundary": "PHRASE",
-     "breath_in_sec": 4, "breath_out_sec": 6},
-    {"name": "vishuddha",    "label": "Throat",    "element": "Ether",
-     "bpm_min": 90,  "bpm_max": 110, "hz": 392.00, "note": "G4", "boundary": "PHRASE",
-     "breath_in_sec": 3, "breath_out_sec": 5},
-    {"name": "ajna",         "label": "Third Eye", "element": "Light",
-     "bpm_min": 100, "bpm_max": 130, "hz": 440.00, "note": "A4", "boundary": "NONE",
-     "breath_in_sec": 2, "breath_out_sec": 4},
-    {"name": "sahasrara",    "label": "Crown",     "element": "Consciousness",
-     "bpm_min": 130, "bpm_max": 180, "hz": 523.25, "note": "C5", "boundary": "NONE",
-     "breath_in_sec": 0, "breath_out_sec": 0},
-]
-
-
-def chakra_to_band(bpm: float) -> dict[str, Any]:
-    """Return nearest chakra band for a BPM value (by band midpoint)."""
-    return min(CHAKRA_BANDS, key=lambda b: abs(bpm - (b["bpm_min"] + b["bpm_max"]) / 2.0))
-
 
 def encode_bpm_timeline(
     chunks: list[ProsodicChunk],
