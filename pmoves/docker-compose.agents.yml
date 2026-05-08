@@ -833,6 +833,40 @@ services:
       retries: 3
       start_period: 15s
 
+  space-agent:
+    <<: *tier-agent-hardened
+    image: node:22-slim
+    working_dir: /app
+    restart: unless-stopped
+    environment:
+    - PORT=3010
+    - SINGLE_USER_APP=true
+    - PMOVES_NATS_URL=${PMOVES_NATS_URL:-nats://nats:pmoves@nats:4222}
+    - PMOVES_BRIDGE_API_KEY=${PMOVES_BRIDGE_API_KEY:?set PMOVES_BRIDGE_API_KEY in env.shared}
+    - PMOVES_NATS_SUBJECT_PREFIX=pmoves.space
+    - CUSTOMWARE_PATH=/app/customware
+    volumes:
+    - ${SPACE_AGENT_SRC:-../PMOVES-space-agent/pmoves}:/app/pmoves
+    - ${SPACE_AGENT_DATA:-./data/space-agent}:/app/customware
+    command: sh -c "cp -r /app/pmoves/server /app/server && cp -r /app/pmoves/app /app/app && npm install && node space serve"
+    ports: ["${SPACE_AGENT_BIND:-127.0.0.1}:${SPACE_AGENT_PORT:-3010}:3010"]
+    depends_on:
+      nats:
+        condition: service_healthy
+    profiles: ["agents"]
+    networks: [pmoves_app, pmoves_bus]
+    healthcheck:
+      test: ["CMD", "node", "-e", "const http=require('http');http.get('http://localhost:3010/api/health',r=>{r.statusCode===200?process.exit(0):process.exit(1)}).on('error',()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+
   # Ultimate TTS Studio - Multi-engine TTS with 7 engines (Gradio UI)
     deploy:
       resources:
