@@ -33,7 +33,12 @@ import re
 import sys
 import time
 from typing import Any
-from pmoves.services.common.chakra import CHAKRA_BANDS, chakra_to_band, freq_to_chakra
+try:
+    from pmoves.services.common.chakra import CHAKRA_BANDS, chakra_to_band, freq_to_chakra
+except ImportError:
+    import pathlib as _pl
+    sys.path.insert(0, str(_pl.Path(__file__).resolve().parents[2]))
+    from pmoves.services.common.chakra import CHAKRA_BANDS, chakra_to_band, freq_to_chakra
 # ---------------------------------------------------------------------------
 # Constants (mirrored from musicMapping.ts)
 # ---------------------------------------------------------------------------
