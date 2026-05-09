@@ -69,13 +69,20 @@ operations (`make`, `curl`, and existing PMOVES scripts).
 
 ## Pinokio runtime
 
+Set `PINOKIO_PTERM` to the full `pterm` executable path before running these checks.
+
+- Windows default: `D:/pinokio/bin/npm/pterm.cmd`
+- WSL against that Windows install: `/mnt/d/pinokio/bin/npm/pterm.cmd`
+- Native Linux: use the Pinokio install path or `command -v pterm`
+- If using a directory-style `PINOKIO_BIN`, derive `PINOKIO_PTERM` from it first.
+
 | Claude command | Codex equivalent |
 | --- | --- |
-| `/pinokio:app-list` | `D:/pinokio/bin/npm/pterm.cmd search ""` and parse the returned app list by `running` / `ready` state |
-| `/pinokio:app-search` | `D:/pinokio/bin/npm/pterm.cmd search "<query>"` and rank running or ready apps first |
-| `/pinokio:app-start` | `D:/pinokio/bin/npm/pterm.cmd run "<app_id>"`, then poll `pterm search "<app_id>"` until `ready_url` is present |
-| `/pinokio:app-stop` | `D:/pinokio/bin/npm/pterm.cmd stop "<app_id>"`, then verify `running=false` through `pterm search "<app_id>"` |
-| `/pinokio:voice-apps` | `D:/pinokio/bin/npm/pterm.cmd search ""` filtered for voice/TTS/audio apps, then feed endpoints into Flute/TTS checks |
+| `/pinokio:app-list` | `$PINOKIO_PTERM search ""` and parse the returned app list by `running` / `ready` state |
+| `/pinokio:app-search` | `$PINOKIO_PTERM search "<query>"` and rank running or ready apps first |
+| `/pinokio:app-start` | `$PINOKIO_PTERM run "<app_id>"`, then poll `$PINOKIO_PTERM search "<app_id>"` until `ready_url` is present |
+| `/pinokio:app-stop` | `$PINOKIO_PTERM stop "<app_id>"`, then verify `running=false` through `$PINOKIO_PTERM search "<app_id>"` |
+| `/pinokio:voice-apps` | `$PINOKIO_PTERM search ""` filtered for voice/TTS/audio apps, then feed endpoints into Flute/TTS checks |
 
 ## High-priority parity wave (Mar 2026)
 
