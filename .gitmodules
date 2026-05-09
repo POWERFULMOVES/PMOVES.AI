@@ -313,3 +313,6 @@
 	path = PMOVES-space-agent
 	url = https://github.com/POWERFULMOVES/PMOVES-space-agent.git
 	branch = PMOVES.AI-Edition-Hardened
+[submodule "skills/Pmoves-skills"]
+	path = skills/Pmoves-skills
+	url = https://github.com/POWERFULMOVES/Pmoves-skills.git

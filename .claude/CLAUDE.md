@@ -21,6 +21,10 @@ Per PR #1378 MOF Architecture: PMOVES is a Metal-Organic Framework for distribut
 | Cold-start orientation | `pmoves/docs/AGENTS/AGNOTE4482_SITREP.md` |
 | Audit gateway + convergence waves | `pmoves/docs/AGENTS/AGNOTE4482.md` |
 | Architecture thesis | `pmoves/docs/architecture/PMOVES_MOF_ARCHITECTURE.md`, `PMOVES_GRAND_CONVERGENCE.md` |
+| AGENTS.md format reference & taxonomy | [`PMOVES-agents.md/`](../PMOVES-agents.md/) submodule (fork of agentsmd/agents.md, Tier-2 always-relevant) |
+| Skills constellation | [`skills/`](../skills/) — Anthropic skills, agent-sandbox, fork-repository, awesome-agent-skills, claude-d3js (see `skills/README.md`) |
+| Pinokio launcher development | [`PINOKIO_LAUNCHER_GUIDE.md`](./PINOKIO_LAUNCHER_GUIDE.md) — on-demand context for `D:\pinokio\` work |
+| Living-docs freshness rules | [`pmoves/configs/living_docs_registry.yaml`](../pmoves/configs/living_docs_registry.yaml) — tracked by `make -C pmoves docs-reconcile-check` |
 | Per-subsystem detail | that subsystem's `CLAUDE.md` — opt-in only (Tier 2/3 below) |
 
 ## Context Loading Priority (For ALL Agents)
@@ -31,9 +35,11 @@ Per PR #1378 MOF Architecture: PMOVES is a Metal-Organic Framework for distribut
 - `pmoves/docs/AGENTS/AGNOTE4482_SITREP.md` (cold-start orientation)
 
 **Tier 2 — On-Demand (Major Subsystems):**
+- `PMOVES-agents.md/` — AGENTS.md format reference + agent taxonomy/persona docs (Tier-2 *always-relevant*: load when discussing agent class, taxonomy, or AGENTS.md format)
 - `PMOVES-Archon/.claude/CLAUDE.md` — agent service architecture
 - `PMOVES-BoTZ/.claude/CLAUDE.md` — skills marketplace framework (legacy/archived per 2026-04-19)
 - `PMOVES-Agent-Zero/.claude/CLAUDE.md` — orchestration patterns
+- `skills/` — skills constellation (5 forks: Anthropic skills, agent-sandbox, fork-repository, awesome-agent-skills, claude-d3js); load `skills/README.md` first
 - Load only when working directly on that subsystem.
 
 **Tier 3 — Conditional (Integration Workspaces):**

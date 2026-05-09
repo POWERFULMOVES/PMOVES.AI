@@ -36,6 +36,7 @@ from typing import Dict, List, Optional
 
 DASHBOARD_REL = "docs/PRODUCTION_AUDIT_DASHBOARD.md"
 TRACKER_REL = "docs/security/P2_SUBMODULE_TRACKER.md"
+REGISTRY_REL = "configs/living_docs_registry.yaml"
 
 
 # ── Data classes ─────────────────────────────────────────────────────
@@ -78,11 +79,21 @@ class GitState:
 class Finding:
     """A reconciliation finding."""
 
-    category: str  # stale_commit, stale_date, stale_tracker, submodule_drift
+    category: str  # stale_commit, stale_date, stale_tracker, submodule_drift, stale_doc
     severity: str  # P1, P2, INFO
     message: str
     current: str = ""
     expected: str = ""
+
+
+@dataclass
+class TrackedDoc:
+    """A registry entry from living_docs_registry.yaml."""
+
+    path: str
+    freshness_days: int = 30
+    severity: str = "P2"
+    description: str = ""
 
 
 @dataclass
@@ -155,6 +166,23 @@ def get_git_state(repo_root: Path, dashboard_sha: str) -> GitState:
         utc_date=utc_date,
         commits_since=commits_since,
     )
+
+
+def get_file_last_commit_date(repo_root: Path, rel_path: str) -> Optional[str]:
+    """Return the date (YYYY-MM-DD) of the last commit that touched rel_path.
+
+    Falls back to filesystem mtime if the file is untracked, returns None
+    if both fail.
+    """
+    raw = _run_git("log", "-1", "--format=%aI", "--", rel_path, cwd=repo_root)
+    if raw and len(raw) >= 10:
+        return raw[:10]
+    # Fallback: filesystem mtime (handles untracked / new files)
+    fs_path = repo_root / rel_path
+    if fs_path.is_file():
+        mtime = datetime.fromtimestamp(fs_path.stat().st_mtime, tz=timezone.utc)
+        return mtime.strftime("%Y-%m-%d")
+    return None
 
 
 def get_submodule_status(repo_root: Path) -> Dict[str, str]:
@@ -296,6 +324,114 @@ def check_freshness(
             except ValueError:
                 pass
 
+    return findings
+
+
+def load_living_docs_registry(registry_path: Path) -> List[TrackedDoc]:
+    """Load registered docs from YAML. Empty list if file missing or invalid.
+
+    PyYAML is preferred but optional — falls back to a tiny inline parser
+    that handles the registry's flat-list-of-mappings shape.
+    """
+    if not registry_path.is_file():
+        return []
+    try:
+        import yaml  # type: ignore[import-untyped]
+
+        data = yaml.safe_load(registry_path.read_text(encoding="utf-8")) or {}
+    except ImportError:
+        data = _parse_registry_yaml_minimal(registry_path.read_text(encoding="utf-8"))
+    except Exception:
+        return []
+
+    entries = data.get("tracked", []) if isinstance(data, dict) else []
+    docs: List[TrackedDoc] = []
+    for entry in entries:
+        if not isinstance(entry, dict) or "path" not in entry:
+            continue
+        docs.append(
+            TrackedDoc(
+                path=str(entry["path"]),
+                freshness_days=int(entry.get("freshness_days", 30)),
+                severity=str(entry.get("severity", "P2")).upper(),
+                description=str(entry.get("description", "")),
+            )
+        )
+    return docs
+
+
+def _parse_registry_yaml_minimal(text: str) -> dict:
+    """Tiny YAML subset parser for the registry's flat-list-of-mappings shape.
+
+    Only handles `tracked:` followed by `- key: value` blocks. Anything else
+    (anchors, nested mappings, multiline strings) is silently dropped.
+    """
+    tracked: List[dict] = []
+    current: Optional[dict] = None
+    in_tracked = False
+    for raw in text.splitlines():
+        line = raw.split("#", 1)[0].rstrip()
+        if not line.strip():
+            continue
+        if line == "tracked:" or line.startswith("tracked:"):
+            in_tracked = True
+            continue
+        if not in_tracked:
+            continue
+        stripped = line.lstrip()
+        indent = len(line) - len(stripped)
+        if stripped.startswith("- ") and indent <= 2:
+            if current:
+                tracked.append(current)
+            current = {}
+            stripped = stripped[2:]
+            if ":" in stripped:
+                k, _, v = stripped.partition(":")
+                current[k.strip()] = v.strip().strip('"').strip("'")
+        elif current is not None and ":" in stripped:
+            k, _, v = stripped.partition(":")
+            current[k.strip()] = v.strip().strip('"').strip("'")
+    if current:
+        tracked.append(current)
+    return {"tracked": tracked}
+
+
+def check_registered_docs_freshness(
+    repo_root: Path,
+    docs: List[TrackedDoc],
+) -> List[Finding]:
+    """For each registered doc, compare last-commit date against freshness budget."""
+    findings: List[Finding] = []
+    now = datetime.now(timezone.utc)
+    for doc in docs:
+        last_date_str = get_file_last_commit_date(repo_root, doc.path)
+        if not last_date_str:
+            findings.append(
+                Finding(
+                    category="stale_doc",
+                    severity="P2",
+                    message=f"Tracked doc `{doc.path}` not found",
+                    current="missing",
+                    expected="present",
+                )
+            )
+            continue
+        try:
+            last_dt = datetime.strptime(last_date_str, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+        except ValueError:
+            continue
+        age_days = (now - last_dt).days
+        if age_days > doc.freshness_days:
+            findings.append(
+                Finding(
+                    category="stale_doc",
+                    severity=doc.severity,
+                    message=f"`{doc.path}` last updated {age_days} days ago "
+                    f"(budget: {doc.freshness_days}d, severity: {doc.severity})",
+                    current=last_date_str,
+                    expected=f"within {doc.freshness_days} days",
+                )
+            )
     return findings
 
 
@@ -490,6 +626,12 @@ def main() -> int:
         check_freshness(dashboard_meta, git_state, args.max_age_days, args.max_commits_behind)
     )
     findings.extend(check_tracker_staleness(tracker_items, submodule_shas))
+
+    # Registry-based freshness check (CLAUDE.md fleet, AGENTS.md, AGNOTE family, etc.)
+    registry_path = pmoves_root / REGISTRY_REL
+    tracked_docs = load_living_docs_registry(registry_path)
+    if tracked_docs:
+        findings.extend(check_registered_docs_freshness(repo_root, tracked_docs))
 
     report = ReconcileReport(
         findings=findings,

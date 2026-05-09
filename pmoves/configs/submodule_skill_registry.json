@@ -1,6 +1,14 @@
 {
-  "$schema_version": "1.0.0",
+  "$schema_version": "1.1.0",
   "$description": "Maps every PMOVES.AI submodule to its relevant skills, context files, AGENTS docs, domain tags, and context tier. Source of truth for Claude Code CLI and Codex context orchestration.",
+  "$common_context_files": [
+    ".claude/BOOTSTRAP.md",
+    ".claude/CATALOG.md",
+    ".claude/PATTERNS.md",
+    "AGENTS.md",
+    "PMOVES-agents.md/"
+  ],
+  "$common_context_files_note": "Files in this list are merged into every non-canonical submodule's effective context_files when skill_tag_injector.py runs. Bumped from 1.0.0 to 1.1.0 on 2026-05-08 alongside the CLAUDE.md keystone restructure (docs/claude-md-modernize-fleet branch). Edit per-submodule context_files for entries that need MORE than the common set.",
   "$domain_tag_skill_map": {
     "orchestration": ["agents/*", "deploy/*", "health/*", "nats/*"],
     "media": ["yt/*", "tts/*", "pipecat/*", "jellyfin/*"],
