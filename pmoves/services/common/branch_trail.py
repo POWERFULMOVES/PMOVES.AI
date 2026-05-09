@@ -99,6 +99,8 @@ def build_branch_event(
     """
     if event not in EVENT_TYPES:
         raise ValueError(f"event must be one of {EVENT_TYPES}, got {event!r}")
+    if event in {"link_pr", "merge"} and not (pr_url or "").strip():
+        raise ValueError(f"pr_url is required for {event!r} branch lifecycle events")
     if ecosystem not in ECOSYSTEMS:
         raise ValueError(f"ecosystem must be one of {ECOSYSTEMS}, got {ecosystem!r}")
     # Side-effect: validate branch up front so emit() fails fast before signing

@@ -117,9 +117,20 @@ class TestBuildBranchEvent:
         with pytest.raises(ValueError, match="disallowed"):
             branch_trail.build_branch_event("invalid branch", "create")
 
+    @pytest.mark.parametrize("event", ["link_pr", "merge"])
+    @pytest.mark.parametrize("pr_url", [None, "", "   "])
+    def test_rejects_pr_events_without_pr_url(
+        self, event: str, pr_url: str | None
+    ) -> None:
+        with pytest.raises(ValueError, match="pr_url is required"):
+            branch_trail.build_branch_event("main", event, pr_url=pr_url)
+
     def test_all_event_types_valid(self) -> None:
         for ev in branch_trail.EVENT_TYPES:
-            out = branch_trail.build_branch_event("main", ev)
+            kwargs = {}
+            if ev in {"link_pr", "merge"}:
+                kwargs["pr_url"] = "https://github.com/foo/bar/pull/1"
+            out = branch_trail.build_branch_event("main", ev, **kwargs)
             assert out["event"] == ev
 
 
@@ -194,7 +205,10 @@ class TestBuildPayload:
     def test_summary_format(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("CHIT_SIGNING_KEY", "k")
         payload = branch_trail.build_payload(
-            "feat/foo", "merge", "claude-opus"
+            "feat/foo",
+            "merge",
+            "claude-opus",
+            pr_url="https://github.com/foo/bar/pull/1",
         )
         # Reuses sign_trail's payload skeleton — summary is the human-readable label
         assert payload["summary"] == "branch.lifecycle.merge on feat/foo"
