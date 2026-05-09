@@ -58,7 +58,10 @@ jobs:
             base="${{ github.event.pull_request.base.sha }}"
             head="${{ github.event.pull_request.head.sha }}"
 
-            if ! git diff --name-only "$base" "$head" > /tmp/chit-changed-files.txt; then
+            if ! merge_base="$(git merge-base "$base" "$head")"; then
+              echo "Unable to find pull request merge base; running CHIT checks fail-safe."
+              run_checks=true
+            elif ! git diff --name-only "$merge_base" "$head" > /tmp/chit-changed-files.txt; then
               echo "Unable to diff pull request range; running CHIT checks fail-safe."
               run_checks=true
             else
