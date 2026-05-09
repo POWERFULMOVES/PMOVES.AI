@@ -13,19 +13,17 @@ POWERFULMOVES forks of upstream agent-skill repositories. Each entry is a git su
 | `Pmoves-skills` | `skills/Pmoves-skills/` | [anthropics/skills](https://github.com/anthropics/skills) | Anthropic's official skills library — reference for skill authoring patterns | ✅ Added |
 | `PMOVES-awesome-agent-skills` | `skills/PMOVES-awesome-agent-skills/` | [heilcheng/awesome-agent-skills](https://github.com/heilcheng/awesome-agent-skills) | Curated index of skills/tools/tutorials for AI coding agents | ✅ Added (2026-05-09) |
 | `pmoves-fork-repository-skill` | `skills/pmoves-fork-repository-skill/` | [disler/fork-repository-skill](https://github.com/disler/fork-repository-skill) | Fork the running agent N times to branch engineering work | ✅ Added (2026-05-09) |
-| `PMOVES-agent-sandbox-skill` | `skills/PMOVES-agent-sandbox-skill/` | [disler/agent-sandbox-skill](https://github.com/disler/agent-sandbox-skill) | Manage isolated execution environments for agents | ⏳ Pending Bash-permission approval |
-| `Pmoves-claude-d3js-skill` | `skills/Pmoves-claude-d3js-skill/` | [chrisvoncsefalvay/claude-d3js-skill](https://github.com/chrisvoncsefalvay/claude-d3js-skill) | D3.js skill — Claude-driven data visualization | ⏳ Pending Bash-permission approval |
+| `PMOVES-agent-sandbox-skill` | `skills/PMOVES-agent-sandbox-skill/` | [disler/agent-sandbox-skill](https://github.com/disler/agent-sandbox-skill) | Manage isolated execution environments for agents | ✅ Added (2026-05-09) |
+| `Pmoves-claude-d3js-skill` | `skills/Pmoves-claude-d3js-skill/` | [chrisvoncsefalvay/claude-d3js-skill](https://github.com/chrisvoncsefalvay/claude-d3js-skill) | D3.js skill — Claude-driven data visualization | ✅ Added (2026-05-09) |
 
-## Why "pending Bash-permission approval"
+## Adding more skill forks (future)
 
-Adding external submodules from forks crosses a security boundary: untrusted-code integration. The first round of singleton adds (2026-05-09 z890) landed two of four; the remaining two are blocked at the Bash-tool permission gate per-URL. An operator can complete them by running these singletons themselves (e.g., `! <command>` in a Claude Code prompt, or directly in a shell):
+All five entries in the constellation table landed across two singleton rounds on 2026-05-09 (z890). Adding new external skill forks crosses an untrusted-code-integration boundary that requires both:
 
-```bash
-git submodule add https://github.com/POWERFULMOVES/PMOVES-agent-sandbox-skill.git skills/PMOVES-agent-sandbox-skill
-git submodule add https://github.com/POWERFULMOVES/Pmoves-claude-d3js-skill.git skills/Pmoves-claude-d3js-skill
-```
+1. A damage-control allowlist entry if any read-only path is touched (see `.claude/hooks/damage-control/patterns.yaml`).
+2. **Per-URL Bash-tool authorization** — the runtime gates each external repo URL separately, even after general approval. The cleanest path is for an operator to run the singleton add as a `! <command>` in a Claude Code prompt, or directly in a shell.
 
-After running, flip the Status column above to ✅ (with date). The `.claude/context/submodules.md` registry is already updated per the now-applied proposal in `pmoves/docs/proposals/SUBMODULES_MD_UPDATE_PROPOSAL.md`; the proposal file can be deleted once all five forks land.
+The `.claude/context/submodules.md` registry is the canonical map of these forks; `pmoves/configs/submodule_skill_registry.json` carries context-tag injection rules.
 
 ## Activation paths
 

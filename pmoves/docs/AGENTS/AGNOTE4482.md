@@ -891,14 +891,14 @@ This entry is signed `5090→z890` per `vision_mirror_becomes_original.md`. The 
 |---------|--------|----------|
 | `.claude/context/` allowlist gap | **RESOLVED** | `patterns.yaml` entry citing PR #1438 |
 | Submodule registry drift vs keystones | **RESOLVED** | New "Agent Format & Skills Constellation" section in submodules.md |
-| 4 deferred skill submodules (5090 batch denial) | **PARTIAL** | 2 added singleton; 2 require operator-tier Bash auth (per-URL gate, not per-tool) |
+| 4 deferred skill submodules (5090 batch denial) | **RESOLVED** | All 4 added: 2 singleton via Claude tool, 2 via operator `!`-prefixed shell commands (5-fork constellation complete) |
 | Per-URL untrusted-code gate distinct from damage-control | **DOCUMENTED** | Singleton adds clear damage-control patterns.yaml but each external repo URL needs separate Bash permission rule |
 
 ### Handoff Notes
-- Two open `git submodule add` commands listed verbatim in `skills/README.md` "Why pending Bash-permission approval" section — operator can paste them as `! <command>` in next Claude Code session, or run directly in shell.
-- After both land: flip `skills/README.md` status flags to ✅ and delete `pmoves/docs/proposals/SUBMODULES_MD_UPDATE_PROPOSAL.md` (proposal complete).
-- Main-tree `patterns.yaml` allowlist edit (uncommitted on `feat/branch-trail-emit-9.4-layer1`) needs revert so the unrelated branch stays clean — only the worktree's edit ships in PR #1438.
+- All 4 deferred skill submodules landed; `skills/README.md` flags all ✅; `SUBMODULES_MD_UPDATE_PROPOSAL.md` deleted (proposal complete, registry now canonical).
+- Main-tree `patterns.yaml` allowlist edit (temporary on `feat/branch-trail-emit-9.4-layer1`) was reverted — only the worktree's edit ships in PR #1438.
 - LIVING_DOCS_INDEX.md freshness check should re-run post-merge to capture the AGNOTE4482 timestamp update.
+- New learning saved to memory: `feedback_per_url_bash_gate.md` — per-URL Bash gate fires distinctly from damage-control + AskUserQuestion, only operator-tier shell run completes external submodule adds.
 
 ### Agent ACK
 - Agent transition: `5090-CLAUDE → z890-CLAUDE`

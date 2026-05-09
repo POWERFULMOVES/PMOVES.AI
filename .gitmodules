@@ -322,3 +322,9 @@
 [submodule "skills/pmoves-fork-repository-skill"]
 	path = skills/pmoves-fork-repository-skill
 	url = https://github.com/POWERFULMOVES/pmoves-fork-repository-skill.git
+[submodule "skills/PMOVES-agent-sandbox-skill"]
+	path = skills/PMOVES-agent-sandbox-skill
+	url = https://github.com/POWERFULMOVES/PMOVES-agent-sandbox-skill.git
+[submodule "skills/Pmoves-claude-d3js-skill"]
+	path = skills/Pmoves-claude-d3js-skill
+	url = https://github.com/POWERFULMOVES/Pmoves-claude-d3js-skill.git
