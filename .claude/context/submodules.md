@@ -8,7 +8,7 @@ PMOVES.AI uses git submodules to integrate external projects and specialized ser
 
 **Repository:** `https://github.com/POWERFULMOVES/PMOVES.AI`
 **Branch tracking:** All submodules track `PMOVES.AI-Edition-Hardened`
-**Total submodules:** 49 (including vendor/legacy dual-mounts)
+**Total submodules:** 54 (including vendor/legacy dual-mounts; +5 in `skills/` after Phase 2)
 
 ## Fork Architecture (Vendor-to-Fork Migration)
 
@@ -77,6 +77,34 @@ Each fork should contain a `PMOVES_INTEGRATION.md` documenting: upstream source,
 - **Relevant Skills:** `/agents:status`, `/agents:mcp-query`, `/deploy:up`, `/botz:profile`
 - **README:** [PMOVES-Archon/README.md](../../../PMOVES-Archon/README.md)
 - **Duplicate Path:** Also mounted at `pmoves/integrations/archon/`
+
+---
+
+## Agent Format & Skills Constellation
+
+This tier holds the canonical reference for the **AGENTS.md open format** (universal coding-agent contract) and the **skills constellation** — POWERFULMOVES forks of upstream agent-skill repositories. Treat `PMOVES-agents.md/` as **Tier-2 always-relevant**: load it whenever discussing agent classes, taxonomy, persona schema, or AGENTS.md format itself. Skills constellation entries are **Tier-2 on-demand** — load `skills/README.md` first, then the specific skill submodule.
+
+### PMOVES-agents.md
+- **Path:** `PMOVES-agents.md/`
+- **Repository:** https://github.com/POWERFULMOVES/PMOVES-agents.md
+- **Upstream:** [agentsmd/agents.md](https://agents.md) — open format for guiding coding agents (Claude Code, Codex, Copilot, Cursor, etc.)
+- **Purpose:** Canonical home for AGENTS.md format reference, agent taxonomy, and persona schema docs
+- **Tier:** **Tier-2 always-relevant** (load when format/taxonomy/persona work touches the conversation)
+- **Cross-refs:** Root `AGENTS.md` follows this format; `pmoves/docs/AGENTS/PMOVES_AGENT_CLASS_TAXONOMY.md` and `PMOVES_AGENT_TOPOLOGY.md` are taxonomy docs that may migrate here (gated on user confirmation)
+
+### skills/ — Skills Constellation
+
+POWERFULMOVES forks of upstream agent-skill repositories, mounted as nested submodules under `skills/`. Load `skills/README.md` first; load a specific skill submodule's CLAUDE.md / README only when working in that skill's domain.
+
+| Submodule | Upstream | Purpose |
+|-----------|----------|---------|
+| `skills/Pmoves-skills/` | [anthropics/skills](https://github.com/anthropics/skills) | Anthropic's official skills library — reference for skill authoring patterns |
+| `skills/PMOVES-awesome-agent-skills/` | [heilcheng/awesome-agent-skills](https://github.com/heilcheng/awesome-agent-skills) | Curated index of skills/tools/tutorials for AI coding agents |
+| `skills/pmoves-fork-repository-skill/` | [disler/fork-repository-skill](https://github.com/disler/fork-repository-skill) | Fork the running agent N times to branch engineering work |
+| `skills/PMOVES-agent-sandbox-skill/` | [disler/agent-sandbox-skill](https://github.com/disler/agent-sandbox-skill) | Manage isolated execution environments for agents |
+| `skills/Pmoves-claude-d3js-skill/` | [chrisvoncsefalvay/claude-d3js-skill](https://github.com/chrisvoncsefalvay/claude-d3js-skill) | D3.js skill — Claude-driven data visualization patterns |
+
+Activation paths and cross-references live in `skills/README.md`.
 
 ---
 

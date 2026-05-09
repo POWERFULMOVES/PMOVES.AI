@@ -316,3 +316,9 @@
 [submodule "skills/Pmoves-skills"]
 	path = skills/Pmoves-skills
 	url = https://github.com/POWERFULMOVES/Pmoves-skills.git
+[submodule "skills/PMOVES-awesome-agent-skills"]
+	path = skills/PMOVES-awesome-agent-skills
+	url = https://github.com/POWERFULMOVES/PMOVES-awesome-agent-skills.git
+[submodule "skills/pmoves-fork-repository-skill"]
+	path = skills/pmoves-fork-repository-skill
+	url = https://github.com/POWERFULMOVES/pmoves-fork-repository-skill.git
