@@ -1,5 +1,5 @@
 # Claude -> Codex Parity Map (PMOVES)
-_Last updated: 2026-03-28_
+_Last updated: 2026-05-07_
 
 This map translates common `.claude/commands/*` workflows into Codex-native
 operations (`make`, `curl`, and existing PMOVES scripts).
@@ -39,6 +39,7 @@ operations (`make`, `curl`, and existing PMOVES scripts).
 | `/search:hirag` | `curl -X POST http://localhost:8086/hirag/query -H "Content-Type: application/json" -d '{"query":"<q>","top_k":10,"rerank":true}'` |
 | `/search:supaserch` | `make -C pmoves supaserch-smoke` then query HTTP fallback `http://localhost:8099/v1/search?q=<q>` |
 | `/search:deepresearch` | `make -C pmoves deepresearch-smoke` or `make -C pmoves deepresearch-smoke-in-net` |
+| `/search:ingest-content` | ingest via PMOVES.YT `POST /yt/ingest` or direct extract-worker `POST http://localhost:8083/ingest`, then query Hi-RAG |
 
 ## CHIT, geometry, and EvoSwarm
 
@@ -50,6 +51,8 @@ operations (`make`, `curl`, and existing PMOVES scripts).
 | `/chit:visualize` | use geometry UI/demo targets (`make -C pmoves web-geometry`) |
 | `/chit:bpm` | `curl -fsS http://localhost:8086/geometry/calibration/report | jq .` and validate bpm-derived geometry metadata |
 | `/chit:floos` | `make -C pmoves pr-monitor-flows` then `make -C pmoves pr-monitor-chit-packet` |
+| `/chit:review-sweep` | `make -C pmoves pr-monitor` then `make -C pmoves pr-monitor-chit-packet`; optionally publish `ops.pr.review.completed.v1` |
+| `/chit:sign-trail` | `make -C pmoves sign-trail SUMMARY="<summary>" AGENT="${AGENT:-codex}" PHASE="${PHASE:-Phase H}"` |
 | EvoSwarm checks | `curl -fsS http://localhost:8113/healthz` and `curl -fsS http://localhost:8113/config | jq .` |
 
 ## Agent orchestration and MCP
@@ -63,6 +66,23 @@ operations (`make`, `curl`, and existing PMOVES scripts).
 | `/agents:task-status` | monitor active tasks through Agent Zero runtime status and NATS task subjects |
 | `/botz:mcp` | BotZ config: `PMOVES-BoTZ/config/codex/mcp_gateway.json` and PMOVES root codex profile |
 | Claude Cipher MCP (`pmoves-cipher` in `.claude/mcp.json`) | `uv run --directory ./pmoves-cipher-mcp python -m cipher_mcp.server` and verify `curl -fsS http://localhost:8105/health` |
+
+## Pinokio runtime
+
+Set `PINOKIO_PTERM` to the full `pterm` executable path before running these checks.
+
+- Windows default: `D:/pinokio/bin/npm/pterm.cmd`
+- WSL against that Windows install: `/mnt/d/pinokio/bin/npm/pterm.cmd`
+- Native Linux: use the Pinokio install path or `command -v pterm`
+- If using a directory-style `PINOKIO_BIN`, derive `PINOKIO_PTERM` from it first.
+
+| Claude command | Codex equivalent |
+| --- | --- |
+| `/pinokio:app-list` | `$PINOKIO_PTERM search ""` and parse the returned app list by `running` / `ready` state |
+| `/pinokio:app-search` | `$PINOKIO_PTERM search "<query>"` and rank running or ready apps first |
+| `/pinokio:app-start` | `$PINOKIO_PTERM run "<app_id>"`, then poll `$PINOKIO_PTERM search "<app_id>"` until `ready_url` is present |
+| `/pinokio:app-stop` | `$PINOKIO_PTERM stop "<app_id>"`, then verify `running=false` through `$PINOKIO_PTERM search "<app_id>"` |
+| `/pinokio:voice-apps` | `$PINOKIO_PTERM search ""` filtered for voice/TTS/audio apps, then feed endpoints into Flute/TTS checks |
 
 ## High-priority parity wave (Mar 2026)
 
@@ -152,6 +172,8 @@ operations (`make`, `curl`, and existing PMOVES scripts).
 | `/pipecat:status` | `curl -fsS http://localhost:8055/healthz | jq .` |
 | `/tts:status` | `curl -fsS http://localhost:7861/gradio_api/info | jq .` |
 | `/tts:synthesize` | Flute synth endpoint `POST /v1/voice/synthesize/prosodic` |
+| `/tts:express` | resolve intent from `pmoves/configs/tts-engine-expressions.yaml`, ensure the Pinokio TTS backend is ready, then call the selected Gradio/Flute synthesis path |
+| `/tts:test-engine` | `python -X utf8 pmoves/tools/test_all_tts_engines.py --engine <engine_id> [--load-only] [--metrics]` |
 
 ## Runtime services and tests
 
@@ -164,6 +186,13 @@ operations (`make`, `curl`, and existing PMOVES scripts).
 | `/discord:status` | `curl -fsS http://localhost:8094/healthz` |
 | `/jellyfin:status` | `curl -fsS http://localhost:8093/healthz` |
 | `/notebook:status` | `curl -fsS http://localhost:8095/healthz` |
+
+## Documentation and TAC audit
+
+| Claude command | Codex equivalent |
+| --- | --- |
+| `/docs:reconcile` | `make -C pmoves docs-reconcile-check` by default; use `docs-reconcile` to update or `docs-reconcile-json` for machine output |
+| `/tac:review` | resolve the TAC tree under `pmoves/configs/tac_trees/`, then run `python pmoves/tools/tac_runner.py --format text <tree-path>` and JSON mode for structured output |
 
 ## Git and worktree operations
 
@@ -178,6 +207,7 @@ operations (`make`, `curl`, and existing PMOVES scripts).
 | `/github:issues` | `gh issue list --limit 20` |
 | `/github:security` | `gh api repos/POWERFULMOVES/PMOVES.AI/code-scanning/alerts` |
 | `/pr-monitor` | `make -C pmoves pr-monitor` then `make -C pmoves pr-monitor-live` |
+| `/pr-trim` | `make -C pmoves pr-trim-analyze PR=<number>` then address valid threads and run `make -C pmoves pr-trim-resolve PR=<number> RESOLVE_ACTIONABLE=1` |
 
 ## Submodule integration audit
 

@@ -89,7 +89,7 @@ ToKenism **is** the CHIT engine — all CHIT integration radiates from here.
 | Auth (JWT/Bearer) | Partial | Smart contract auth only |
 | Docker hardening | Yes | Standard patterns applied |
 | NATS auth | Yes | Uses authenticated NATS |
-| `env.shared` format | **P1** | Uses `export` syntax (Docker-incompatible) |
+| `env.shared` format | Resolved | Docker-compatible `KEY=value` syntax in `PMOVES-ToKenism-Multi/env.shared` |
 | Hardhat CI | **Issue** | Wrong `working-directory` in GitHub Actions |
 | Temp files | **Issue** | 4 `.new` temp files need cleanup |
 | Duplicate layout | **Issue** | Duplicate `layout.tsx` found |
@@ -98,8 +98,8 @@ ToKenism **is** the CHIT engine — all CHIT integration radiates from here.
 
 | Finding | Severity | Status |
 |---------|----------|--------|
-| `export` syntax in `env.shared` | P1 | **Open** |
-| NATS_URL missing credentials | P1 | **Open** — defaults to `nats://nats:pmoves@nats:4222` |
+| `export` syntax in `env.shared` | P1 | **Resolved** — no `export` prefix in `PMOVES-ToKenism-Multi/env.shared` |
+| NATS_URL missing credentials | P1 | **Resolved** — defaults to `nats://nats:pmoves@nats:4222` |
 | Hardhat CI wrong `working-directory` | P2 | **Open** |
 | 4 `.new` temp files | P3 | Cleanup needed |
 
@@ -135,8 +135,7 @@ The `musicMapping.ts` module provides the mathematical foundation for BPM-prosod
 
 ## Open Items
 
-- `env.shared` uses `export` syntax incompatible with Docker `env_file`
-- NATS_URL missing credentials in defaults
+- Live ToKenism/Flute smoke should confirm `tokenism.prosodic.bpm.v1` packets after W6-P2 publish path
 - Hardhat CI wrong `working-directory`
 - 4 `.new` temp files need cleanup
 - Duplicate `layout.tsx` found — needs deduplication

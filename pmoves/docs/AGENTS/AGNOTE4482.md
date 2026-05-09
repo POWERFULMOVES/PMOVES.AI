@@ -798,14 +798,14 @@ script fixes) is delivered from this CLI session.
 | beats_to_voice agent_id semantics | **RESOLVED** | Line 162 fix + deterministic tests; PR #1406 |
 | §9 SPARK docs stranded on orphan branches | **RESOLVED** | Rescued via PR #1407; branches retained as reference |
 | W6-P1 Health Phase 4 CHIT + Prometheus wger | **ANNOUNCED** | Issue #1410 assigned to z890-claude |
-| W6-P2 bpm_encoder NATS publish + ToKenism env.shared | **ANNOUNCED** | Issue #1411 assigned to 5090-claude |
+| W6-P2 bpm_encoder NATS publish + ToKenism env.shared | **RESOLVED** | PR #1425 hoisted reusable NATS publish helper and added `bpm_encoder --publish`; ToKenism `env.shared` is Docker-clean with authenticated `NATS_URL` default |
 | W6-P5 FlOO$ architecture review | **ANNOUNCED** | Issue #1412 assigned to claude-opus |
 
 ### Handoff Notes
 - geometry.cgp.v1 subscribe path (`geometry.packet.decoded.v1` Flute consume) not yet implemented — open gap for Flute team
 - TAC_FLUTE.md: needs update to reflect `geometry.cgp.v1` dual-publish now live (#1404)
 - Prometheus scrape config (`pmoves/config/prometheus.yml`): wger target still PENDING (Health Phase 1 item 3)
-- ToKenism env.shared P1: `export` syntax + NATS_URL credentials still unresolved (W6-P2 scope)
+- ToKenism env.shared P1 resolved in W6-P2 close-out; remaining verification is operator-side live publish smoke on `tokenism.prosodic.bpm.v1`
 - §9 orphan branches `fix/agnote4482-section9-recovery` + `fix/branch-lifecycle-chit-wiring` retained as reference — do NOT delete
 
 ### Agent ACK

@@ -502,10 +502,10 @@ All resolved. No blockers.
 | W1 (prosodic activation + engine verification) | 5090-claude | 2026-03-23 | VERIFIED — prosodic 2/2, CUDA load 13/14 | — | — | main |
 | Infra (Discord publisher-discord rebuild + MCP validation) | z890-claude | 2026-03-23 | SHIPPED — container running, MCP+REST validated | — | — | feat/discord-publisher-mcp |
 | W6-P1 (Health/Wealth Docker wiring + NATS) | z890-claude | 2026-03-23 | RECOMMENDED — issue #1410 | #1410 | — | — |
-| W6-P2 (bpm_encoder.py + ToKenism NATS bridge) | 5090-claude | 2026-03-23 | RECOMMENDED — issue #1411 | #1411 | — | — |
+| W6-P2 (bpm_encoder.py + ToKenism NATS bridge) | 5090-claude | 2026-03-23 | SHIPPED — `bpm_encoder --publish` + reusable NATS helper | #1411, #1425 | — | main |
 | W6-P3 (Persona selector + BoTZ CLI) | 4090-claude | 2026-03-25 | SHIPPED — botz_cli.py (19 tests) | — | — | feat/w6-p3-persona-selector |
 | W6-P3 (NATS push model: beats_to_voice reactive synthesis) | 4090-claude | 2026-04-27 | SHIPPED — publish + listen loop, 5 tests green | #1402, #1404, #1405, #1406 | — | main |
-| W6-P3 (Voice binding: persona → Flute prosodic) | 5090-claude | 2026-03-23 | RECOMMENDED — after P2 (W6-P3 NATS foundation on main) | — | — | — |
+| W6-P3 (Voice binding: persona → Flute prosodic) | 5090-claude | 2026-03-23 | READY — P2 shipped; needs 5090 live Flute verification | — | — | — |
 | W6-P5 (FlOO$ life-persona-voice pipeline) | claude-opus | 2026-03-23 | RECOMMENDED — issue #1412 | #1412 | — | — |
 | Infra (CHIT CGP Wave 1: Extract Worker + FFmpeg-Whisper) | 4090-claude | 2026-03-24 | SHIPPED `f7dafa56`, `6046d518` | — | — | feat/chit-integration-wave-1 |
 | Infra (Embedding standardization: Qwen3-4b/3072d) | 4090-claude | 2026-03-24 | SHIPPED `77888c8b` | — | — | feat/chit-integration-wave-1 |
