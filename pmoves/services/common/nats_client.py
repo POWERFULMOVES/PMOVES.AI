@@ -30,10 +30,28 @@ import os
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from typing import Any, AsyncIterator, Callable, Optional, Sequence
+from urllib.parse import urlsplit, urlunsplit
 
 logger = logging.getLogger(__name__)
 
 DEFAULT_NATS_URL = os.getenv("NATS_URL", "")
+
+
+def _redact_url(url: str) -> str:
+    """Return *url* with userinfo removed for safe logging."""
+    try:
+        parts = urlsplit(url)
+        if not parts.netloc or "@" not in parts.netloc:
+            return url
+        host = parts.hostname or ""
+        if ":" in host and not host.startswith("["):
+            host = f"[{host}]"
+        netloc = host
+        if parts.port is not None:
+            netloc = f"{netloc}:{parts.port}"
+        return urlunsplit((parts.scheme, netloc, parts.path, parts.query, parts.fragment))
+    except Exception:
+        return "<redacted>"
 
 
 @dataclass
@@ -110,7 +128,11 @@ async def create_nats_connection(
     kwargs.update(overrides)
 
     service_name = config.name or "unknown"
-    logger.info("Connecting to NATS at %s (service=%s)", config.url, service_name)
+    logger.info(
+        "Connecting to NATS at %s (service=%s)",
+        _redact_url(config.url),
+        service_name,
+    )
 
     try:
         nc = await nats.connect(**kwargs)
@@ -312,7 +334,8 @@ async def publish_cgp(
         return False
 
     try:
-        async with nats_connection(name="cgp-publisher") as nc:
+        config = NatsConnectionConfig(url=nats_url, name="cgp-publisher")
+        async with nats_connection(config) as nc:
             await traced_publish(nc, subject, json.dumps(cgp_packet).encode("utf-8"))
         return True
     except Exception as exc:

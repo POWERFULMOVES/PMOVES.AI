@@ -49,6 +49,10 @@ class TestEncodeSubject:
             "branch*wildcard",  # NATS wildcard char
             "branch>terminator",  # NATS terminator char
             "branch\nnewline",
+            "feat/",
+            "feat//branch",
+            "feat..branch",
+            "feat/.branch",
         ],
     )
     def test_rejects_invalid(self, bad: str) -> None:

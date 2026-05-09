@@ -73,6 +73,11 @@ def encode_subject(branch: str) -> str:
             f"alphanumeric; max length 255)"
         )
     encoded = branch.replace("/", ".")
+    if any(token == "" for token in encoded.split(".")):
+        raise ValueError(
+            f"branch name {branch!r} produces a disallowed empty NATS subject token "
+            "(consecutive separators or trailing dot/slash are not allowed)"
+        )
     return f"branch.{encoded}.trail.{SUBJECT_VERSION}"
 
 
