@@ -45,8 +45,17 @@ Write-Host "[4/5] Injecting authorized key..."
 $authKeysPath = "$env:ProgramData\ssh\administrators_authorized_keys"
 New-Item -Path "$env:ProgramData\ssh" -ItemType Directory -Force | Out-Null
 $existing = if (Test-Path $authKeysPath) { Get-Content $authKeysPath -Raw } else { "" }
-if ($existing -notmatch [regex]::Escape("pmoves-claw@pmoves.ai")) {
+# Dedup on the base64 key body (middle field of "type body comment") so any agent
+# pubkey can be re-applied idempotently — not just the default pmoves-claw key.
+$keyBody = ($PubKey -split '\s+')[1]
+if (-not $keyBody) {
+    throw "Invalid -PubKey: expected 'type body [comment]', got: $PubKey"
+}
+if ($existing -notmatch [regex]::Escape($keyBody)) {
     Add-Content -Path $authKeysPath -Value $PubKey
+    Write-Host "  Appended new key (body=$($keyBody.Substring(0, [Math]::Min(20, $keyBody.Length)))...)"
+} else {
+    Write-Host "  Key already present (no-op)"
 }
 icacls $authKeysPath /inheritance:r /grant "Administrators:F" /grant "SYSTEM:F" | Out-Null
 Write-Host "  Key written to: $authKeysPath"
