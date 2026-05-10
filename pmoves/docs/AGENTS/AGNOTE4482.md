@@ -357,12 +357,12 @@ env["RUNNER_ALLOW_RUNNER_REUSE"] = "true"
 | A2A server compose exposure | **PARTIAL** | Mounted/wired, disabled by default — intentional security posture |
 | Cipher Memory port 8096->8105 | **RESOLVED** | CLAUDE.md lines 65/68/69 show 8105 |
 | 11 agent PR branches | **RESOLVED** | All merged 2026-04-22 before triage |
-| PMOVES-transcribe-and-fetch gitlink | **OPEN** | Missing ref — pull requires --no-recurse-submodules until fixed |
+| PMOVES-transcribe-and-fetch gitlink | **RESOLVED** | Gitlink rewound to a reachable upstream SHA; `git submodule update --init` succeeds without `--no-recurse-submodules`. Verify with `git -C PMOVES-transcribe-and-fetch rev-parse HEAD` after pulling. |
 
 ### Handoff Notes
 - NATS secondary batch: vllm-orchestrator/, supaserch/app.py, gateway-agent/nats_integration.py, benchmark-runner/, agent-zero/python/events/bus.py
 - A2A activation: set A0_SET_a2a_server_enabled=true + A0_SET_mcp_server_token in env.shared when ready
-- PMOVES-transcribe-and-fetch: needs upstream commit published or gitlink rewound
+- PMOVES-transcribe-and-fetch: gitlink rewound — RESOLVED (see Triage Outcomes row above)
 - PR #1370 (Cipher MCP fix): CI green, blocked by broken Cipher submodule gitlink — needs Cipher submodule owner
 
 ### Agent ACK
