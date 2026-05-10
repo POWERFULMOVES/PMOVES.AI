@@ -2,7 +2,9 @@
 
 **Ports, URLs, health endpoints. Load this on demand when you need a specific service address.**
 
-All services expose `/healthz` for liveness and `/metrics` for Prometheus.
+Most HTTP services expose `/healthz` for liveness and `/metrics` for Prometheus, but
+treat each entry's listed endpoint as authoritative — exceptions exist (e.g., Mesh
+Agent has no HTTP interface; Cipher Memory exposes `/health`, not `/healthz`).
 
 ## Core Infrastructure
 
