@@ -20,7 +20,7 @@ This file is a thin keystone. Always-loaded context lives in `.claude/BOOTSTRAP.
 | Multi-agent coordination gateway (Three-Body, Village Rule, signoff) | [`pmoves/docs/AGENTS/AGNOTE4482.md`](pmoves/docs/AGENTS/AGNOTE4482.md) |
 | Active claims register | [`pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md`](pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md) |
 | Architecture thesis | [`pmoves/docs/architecture/PMOVES_MOF_ARCHITECTURE.md`](pmoves/docs/architecture/PMOVES_MOF_ARCHITECTURE.md), [`PMOVES_GRAND_CONVERGENCE.md`](pmoves/docs/architecture/PMOVES_GRAND_CONVERGENCE.md) |
-| AGENTS.md format reference & agent taxonomy | [`PMOVES-agents.md/`](PMOVES-agents.md/) submodule (fork of agentsmd/agents.md) |
+| AGENTS.md format reference & agent taxonomy | [`AGENTS.md`](AGENTS.md) — project agent taxonomy, persona docs, and AGENTS.md format spec |
 | Skills constellation (Anthropic skills, agent-sandbox, fork-repository, awesome-agent-skills, claude-d3js) | [`skills/`](skills/) submodules + `skills/README.md` |
 | Submodule-specific patterns | that submodule's `CLAUDE.md` — opt-in only, not auto-loaded |
 | Living-docs freshness rules | [`pmoves/configs/living_docs_registry.yaml`](pmoves/configs/living_docs_registry.yaml) |

@@ -172,17 +172,17 @@ def get_file_last_commit_date(repo_root: Path, rel_path: str) -> Optional[str]:
     """Return the date (YYYY-MM-DD) of the last commit that touched rel_path.
 
     Falls back to filesystem mtime if the file is untracked, returns None
-    if both fail.
+    if the file does not exist (deleted docs must not appear fresh via git history).
     """
+    fs_path = repo_root / rel_path
+    if not fs_path.is_file():
+        return None
     raw = _run_git("log", "-1", "--format=%aI", "--", rel_path, cwd=repo_root)
     if raw and len(raw) >= 10:
         return raw[:10]
     # Fallback: filesystem mtime (handles untracked / new files)
-    fs_path = repo_root / rel_path
-    if fs_path.is_file():
-        mtime = datetime.fromtimestamp(fs_path.stat().st_mtime, tz=timezone.utc)
-        return mtime.strftime("%Y-%m-%d")
-    return None
+    mtime = datetime.fromtimestamp(fs_path.stat().st_mtime, tz=timezone.utc)
+    return mtime.strftime("%Y-%m-%d")
 
 
 def get_submodule_status(repo_root: Path) -> Dict[str, str]:
@@ -341,7 +341,8 @@ def load_living_docs_registry(registry_path: Path) -> List[TrackedDoc]:
         data = yaml.safe_load(registry_path.read_text(encoding="utf-8")) or {}
     except ImportError:
         data = _parse_registry_yaml_minimal(registry_path.read_text(encoding="utf-8"))
-    except Exception:
+    except Exception as exc:
+        sys.stderr.write(f"[docs_reconcile] registry parse error: {exc}\n")
         return []
 
     entries = data.get("tracked", []) if isinstance(data, dict) else []

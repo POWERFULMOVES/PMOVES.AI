@@ -703,6 +703,13 @@
       "context_files": [],
       "agents_docs": [],
       "canonical": "PMOVES-surf"
+    },
+    "skills/Pmoves-skills": {
+      "context_tier": 2,
+      "domain_tags": ["agents", "mcp"],
+      "skills": [],
+      "context_files": [],
+      "agents_docs": []
     }
   }
 }

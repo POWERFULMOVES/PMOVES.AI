@@ -65,7 +65,7 @@ Pinokio projects normally follow a standardized structure with app logic separat
 
 Pinokio projects follow a standardized structure with app logic separated from launcher scripts:
 
-```
+```text
 project-root/
 ├── app/                 # Self-contained app logic (can be standalone repo)
 │   ├── package.json     # Node.js projects
@@ -87,7 +87,7 @@ project-root/
 
 The only exceptions are serverless web apps---purely frontend only web applications that do NOT have a server component and connect to 3rd party API endpoints--in which case the folder structure looks like the following (No need for launcher scripts since the index.html will automatically launch. The only thing needed is the metadata file named pinokio.json):
 
-```
+```text
 project-root/
 ├── index.html           # The serverless web app entry point
 ├── ...
@@ -106,7 +106,7 @@ IMPORTANT: ALWAYS try to follow the best practices in the examples folder (D:\pi
 
 Example: in the following project structure:
 
-```
+```text
 project-root/
 ├── pinokio/                 # Pinokio launcher folder
 │    ├── start.js             # Launch script
@@ -119,7 +119,7 @@ project-root/
 
 The `pinokio/start.js` should use the correct path `../backend` as the `path` attribute, as follows:
 
-```
+```javascript
 {
   run: [{
     ...
@@ -150,7 +150,7 @@ If we are starting with existing launcher script files, work with the existing f
 - If starting from scratch, first determine what type of project you will be building, and then check the examples folder (D:\pinokio\prototype\system\examples) to see if you can adopt them instead of coming up everything from scratch.
 - Even if there are no relevant examples, check the examples to get inspiration for how you would structure the script files even if you have to write from scratch.
 ### 4. Writing from scratch as a last resort
-If there are relevant examples to adopt from, write the scripts from scratch, but just make sure to follow the requirements in the next section.
+If there are no relevant examples to adopt from, write the scripts from scratch, but just make sure to follow the requirements in the next section.
 ### 5. Debugging
 When the user reports something is not working, ALWAYS inspect the logs folder to get all the execution logs. For more info on how this works, check the "Troubleshooting with Logs" section below.
 
@@ -228,7 +228,7 @@ module.exports = {
 ## 2. Launching serverless web apps
 
 - In case of purely static web apps WITHOUT servers or backends (for example an HTML based app that connects to 3rd party servers--either remote or localhost), we do NOT need the launcher scripts.
-- In these cases, simply include `index.html` in the project root folder and everything should automatically work. No need for any of the pinokio launcher scripts. (Do 
+- In these cases, simply include `index.html` in the project root folder and everything should automatically work. No need for any of the pinokio launcher scripts. 
 - You still need to include the metadata file so they show up properly on pinokio:
   - `pinokio.json`: For metadata
 
@@ -331,7 +331,7 @@ Pinokio stores the logs for everything that happened in terminal at the followin
 ### Log Structure
 In case there is a `pinokio` folder in the project root folder, you should be able to find the logs folder here:
 
-```
+```text
 pinokio/
 └── logs/   # Direct user interaction logs
     ├── api/     # Launcher script logs (install.js, start.js, etc.)
@@ -341,7 +341,7 @@ pinokio/
 
 Otherwise, the `logs` folder should be found at project root:
 
-```
+```text
 logs/
 ├── api/     # Launcher script logs (install.js, start.js, etc.)
 ├── dev/     # AI coding tool logs (organized by tool)
@@ -425,7 +425,7 @@ logs/
 ## AI Libraries (Pytorch, Xformers, Triton, Sageattention, etc.)
 If the launcher has a dedicated built-in script named `torch.js`, it can be used as follows:
 
-```
+```javascript
 // install.js
 module.exports = {
   run: [

@@ -47,7 +47,7 @@ These are the rendering targets. Doc updates should propagate visually through t
 | Surface | Repo / module | Doc anchor |
 |---------|---------------|------------|
 | **A2UI** (NATS-backed agent UI bridge) | [`PMOVES-A2UI/`](./PMOVES-A2UI/) | `.claude/context/geometry-nats-subjects.md` (`a2ui.*` subjects) |
-| **Hyperdimensions** (visualization layer) | [`PMOVES-Hyperdimensions/`](./PMOVES-Hyperdimensions/) | submodule README + skill `/hyperdim:*` |
+| **Hyperdimensions** (visualization layer) | [`Pmoves-hyperdimensions/`](./Pmoves-hyperdimensions/) | submodule README + skill `/hyperdim:*` |
 | **D3JS skill** (Claude-driven viz) | [`skills/Pmoves-claude-d3js-skill/`](./skills/Pmoves-claude-d3js-skill/) | [`skills/README.md`](./skills/README.md) |
 | **Creator pipeline** (themes, motion, remotion) | `PMOVES-Creator/` | submodule context |
 | **A2UI NATS bridge** (port 9224) | service-side | `.claude/CATALOG.md` |

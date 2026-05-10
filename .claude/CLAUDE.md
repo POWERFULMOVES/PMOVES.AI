@@ -39,7 +39,7 @@ Per PR #1378 MOF Architecture: PMOVES is a Metal-Organic Framework for distribut
 - `PMOVES-Archon/.claude/CLAUDE.md` — agent service architecture
 - `PMOVES-BoTZ/.claude/CLAUDE.md` — skills marketplace framework (legacy/archived per 2026-04-19)
 - `PMOVES-Agent-Zero/.claude/CLAUDE.md` — orchestration patterns
-- `skills/` — skills constellation (5 forks: Anthropic skills, agent-sandbox, fork-repository, awesome-agent-skills, claude-d3js); load `skills/README.md` first
+- `skills/` — skills constellation (5 forks registered in `.gitmodules`: Pmoves-skills, agent-sandbox, fork-repository, awesome-agent-skills, claude-d3js — run `git submodule update --init skills/` to populate); load `skills/README.md` first
 - Load only when working directly on that subsystem.
 
 **Tier 3 — Conditional (Integration Workspaces):**
