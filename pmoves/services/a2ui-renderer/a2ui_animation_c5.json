@@ -1,0 +1,463 @@
+{
+  "spec": {
+    "_remotion_version": "4.0.436",
+    "version": "a2ui.animation.v2",
+    "metadata": {
+      "title": "CGP Visualization",
+      "origin_subject": "unknown.cgp",
+      "durationInFrames": 300,
+      "fps": 30,
+      "width": 1920,
+      "height": 1080,
+      "colorSpace": "bt601"
+    },
+    "defaultProps": {
+      "cgp_id": "unknown",
+      "source": "cipher_beats_analyst",
+      "audio_file": null,
+      "playbackRate": 1.0
+    },
+    "calculateMetadata": {
+      "_note": "Implemented in a2ui-renderer src/remotion/A2UIComposition.tsx",
+      "resolves": [
+        "durationInFrames",
+        "fps"
+      ],
+      "audio_driven": false
+    },
+    "schema": {
+      "_type": "zod",
+      "_ref": "A2UIProps",
+      "_pkg": "@remotion/zod-types",
+      "fields": {
+        "cgp_id": "z.string()",
+        "source": "z.string()",
+        "audio_file": "z.string().nullable()",
+        "playbackRate": "z.number().min(0.1).max(4.0)"
+      }
+    },
+    "sfx_anchors": [
+      {
+        "id": "sfx_0",
+        "freq_hz": 2000.0,
+        "amplitude": 0.4949,
+        "frame_hint": 0,
+        "sfx_type": "beat_pulse"
+      }
+    ],
+    "scenes": [
+      {
+        "id": "scene_01_cgp_topology",
+        "startFrame": 0,
+        "durationInFrames": 300,
+        "elements": [
+          {
+            "id": "anchor_Allegro_balanced_Bright_c5",
+            "type": "text",
+            "content": "Allegro_balanced_Bright_c5",
+            "style": {
+              "x": 960,
+              "y": 7288,
+              "fontSize": 48,
+              "color": "#00FFCC",
+              "fontFamily": "Inter, sans-serif"
+            },
+            "animations": [
+              {
+                "property": "opacity",
+                "from": 0,
+                "to": 1,
+                "startFrame": 0,
+                "durationInFrames": 15,
+                "easing": "easeInOut"
+              }
+            ]
+          },
+          {
+            "id": "spectral_pulse_0",
+            "type": "glyph",
+            "symbol": "\u25c8",
+            "style": {
+              "x": 960,
+              "y": 540,
+              "fontSize": 49,
+              "color": "#FF00FF"
+            },
+            "sfx_anchor_id": "sfx_0",
+            "animations": [
+              {
+                "property": "scale",
+                "from": 1.0,
+                "to": 1.74745,
+                "startFrame": 0,
+                "durationInFrames": 5,
+                "loop": true,
+                "easing": "spring"
+              }
+            ]
+          },
+          {
+            "id": "point_ea4c4fe96253",
+            "type": "glyph",
+            "symbol": "\u25cf",
+            "style": {
+              "x": 480,
+              "y": 531,
+              "fontSize": 24,
+              "color": "rgba(0, 255, 204, 0.00)"
+            },
+            "animations": [
+              {
+                "property": "opacity",
+                "from": 0,
+                "to": 0.0,
+                "startFrame": 0,
+                "durationInFrames": 10,
+                "easing": "easeInOut"
+              }
+            ]
+          },
+          {
+            "id": "point_7f0633eea267",
+            "type": "glyph",
+            "symbol": "\u25cf",
+            "style": {
+              "x": 480,
+              "y": 538,
+              "fontSize": 24,
+              "color": "rgba(0, 255, 204, 0.00)"
+            },
+            "animations": [
+              {
+                "property": "opacity",
+                "from": 0,
+                "to": 0.0,
+                "startFrame": 0,
+                "durationInFrames": 10,
+                "easing": "easeInOut"
+              }
+            ]
+          },
+          {
+            "id": "point_9b77c7a90200",
+            "type": "glyph",
+            "symbol": "\u25cf",
+            "style": {
+              "x": 480,
+              "y": 532,
+              "fontSize": 24,
+              "color": "rgba(0, 255, 204, 0.00)"
+            },
+            "animations": [
+              {
+                "property": "opacity",
+                "from": 0,
+                "to": 0.0,
+                "startFrame": 0,
+                "durationInFrames": 10,
+                "easing": "easeInOut"
+              }
+            ]
+          },
+          {
+            "id": "point_0f8e9f5263e8",
+            "type": "glyph",
+            "symbol": "\u25cf",
+            "style": {
+              "x": 480,
+              "y": 543,
+              "fontSize": 24,
+              "color": "rgba(0, 255, 204, 0.00)"
+            },
+            "animations": [
+              {
+                "property": "opacity",
+                "from": 0,
+                "to": 0.0,
+                "startFrame": 0,
+                "durationInFrames": 10,
+                "easing": "easeInOut"
+              }
+            ]
+          },
+          {
+            "id": "point_54e30909b5da",
+            "type": "glyph",
+            "symbol": "\u25cf",
+            "style": {
+              "x": 480,
+              "y": 525,
+              "fontSize": 24,
+              "color": "rgba(0, 255, 204, 0.00)"
+            },
+            "animations": [
+              {
+                "property": "opacity",
+                "from": 0,
+                "to": 0.0,
+                "startFrame": 0,
+                "durationInFrames": 10,
+                "easing": "easeInOut"
+              }
+            ]
+          },
+          {
+            "id": "point_6c58ee770b3b",
+            "type": "glyph",
+            "symbol": "\u25cf",
+            "style": {
+              "x": 480,
+              "y": 527,
+              "fontSize": 24,
+              "color": "rgba(0, 255, 204, 0.00)"
+            },
+            "animations": [
+              {
+                "property": "opacity",
+                "from": 0,
+                "to": 0.0,
+                "startFrame": 0,
+                "durationInFrames": 10,
+                "easing": "easeInOut"
+              }
+            ]
+          },
+          {
+            "id": "point_6bc9b2ab10aa",
+            "type": "glyph",
+            "symbol": "\u25cf",
+            "style": {
+              "x": 480,
+              "y": 534,
+              "fontSize": 24,
+              "color": "rgba(0, 255, 204, 0.00)"
+            },
+            "animations": [
+              {
+                "property": "opacity",
+                "from": 0,
+                "to": 0.0,
+                "startFrame": 0,
+                "durationInFrames": 10,
+                "easing": "easeInOut"
+              }
+            ]
+          },
+          {
+            "id": "point_8ce16b68419d",
+            "type": "glyph",
+            "symbol": "\u25cf",
+            "style": {
+              "x": 480,
+              "y": 543,
+              "fontSize": 24,
+              "color": "rgba(0, 255, 204, 0.00)"
+            },
+            "animations": [
+              {
+                "property": "opacity",
+                "from": 0,
+                "to": 0.0,
+                "startFrame": 0,
+                "durationInFrames": 10,
+                "easing": "easeInOut"
+              }
+            ]
+          },
+          {
+            "id": "point_2137e0890aa9",
+            "type": "glyph",
+            "symbol": "\u25cf",
+            "style": {
+              "x": 480,
+              "y": 538,
+              "fontSize": 24,
+              "color": "rgba(0, 255, 204, 0.00)"
+            },
+            "animations": [
+              {
+                "property": "opacity",
+                "from": 0,
+                "to": 0.0,
+                "startFrame": 0,
+                "durationInFrames": 10,
+                "easing": "easeInOut"
+              }
+            ]
+          },
+          {
+            "id": "point_bdd0e21b759d",
+            "type": "glyph",
+            "symbol": "\u25cf",
+            "style": {
+              "x": 480,
+              "y": 532,
+              "fontSize": 24,
+              "color": "rgba(0, 255, 204, 0.00)"
+            },
+            "animations": [
+              {
+                "property": "opacity",
+                "from": 0,
+                "to": 0.0,
+                "startFrame": 0,
+                "durationInFrames": 10,
+                "easing": "easeInOut"
+              }
+            ]
+          },
+          {
+            "id": "point_e46387818651",
+            "type": "glyph",
+            "symbol": "\u25cf",
+            "style": {
+              "x": 480,
+              "y": 505,
+              "fontSize": 24,
+              "color": "rgba(0, 255, 204, 0.00)"
+            },
+            "animations": [
+              {
+                "property": "opacity",
+                "from": 0,
+                "to": 0.0,
+                "startFrame": 0,
+                "durationInFrames": 10,
+                "easing": "easeInOut"
+              }
+            ]
+          },
+          {
+            "id": "point_d6b7da8653e3",
+            "type": "glyph",
+            "symbol": "\u25cf",
+            "style": {
+              "x": 480,
+              "y": 545,
+              "fontSize": 24,
+              "color": "rgba(0, 255, 204, 0.00)"
+            },
+            "animations": [
+              {
+                "property": "opacity",
+                "from": 0,
+                "to": 0.0,
+                "startFrame": 0,
+                "durationInFrames": 10,
+                "easing": "easeInOut"
+              }
+            ]
+          },
+          {
+            "id": "point_9de547e07211",
+            "type": "glyph",
+            "symbol": "\u25cf",
+            "style": {
+              "x": 480,
+              "y": 547,
+              "fontSize": 24,
+              "color": "rgba(0, 255, 204, 0.00)"
+            },
+            "animations": [
+              {
+                "property": "opacity",
+                "from": 0,
+                "to": 0.0,
+                "startFrame": 0,
+                "durationInFrames": 10,
+                "easing": "easeInOut"
+              }
+            ]
+          },
+          {
+            "id": "point_b3735c6fe77d",
+            "type": "glyph",
+            "symbol": "\u25cf",
+            "style": {
+              "x": 480,
+              "y": 536,
+              "fontSize": 24,
+              "color": "rgba(0, 255, 204, 0.00)"
+            },
+            "animations": [
+              {
+                "property": "opacity",
+                "from": 0,
+                "to": 0.0,
+                "startFrame": 0,
+                "durationInFrames": 10,
+                "easing": "easeInOut"
+              }
+            ]
+          },
+          {
+            "id": "point_29faff2c0a6c",
+            "type": "glyph",
+            "symbol": "\u25cf",
+            "style": {
+              "x": 480,
+              "y": 541,
+              "fontSize": 24,
+              "color": "rgba(0, 255, 204, 0.00)"
+            },
+            "animations": [
+              {
+                "property": "opacity",
+                "from": 0,
+                "to": 0.0,
+                "startFrame": 0,
+                "durationInFrames": 10,
+                "easing": "easeInOut"
+              }
+            ]
+          },
+          {
+            "id": "point_d96890523ae8",
+            "type": "glyph",
+            "symbol": "\u25cf",
+            "style": {
+              "x": 480,
+              "y": 532,
+              "fontSize": 24,
+              "color": "rgba(0, 255, 204, 0.00)"
+            },
+            "animations": [
+              {
+                "property": "opacity",
+                "from": 0,
+                "to": 0.0,
+                "startFrame": 0,
+                "durationInFrames": 10,
+                "easing": "easeInOut"
+              }
+            ]
+          },
+          {
+            "id": "point_4e97aeeaa8b1",
+            "type": "glyph",
+            "symbol": "\u25cf",
+            "style": {
+              "x": 480,
+              "y": 529,
+              "fontSize": 24,
+              "color": "rgba(0, 255, 204, 0.00)"
+            },
+            "animations": [
+              {
+                "property": "opacity",
+                "from": 0,
+                "to": 0.0,
+                "startFrame": 0,
+                "durationInFrames": 10,
+                "easing": "easeInOut"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "data_bindings": {
+      "cgp_source": "unknown"
+    }
+  }
+}
