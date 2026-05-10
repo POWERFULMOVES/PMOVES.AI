@@ -164,8 +164,8 @@ root:
           task: "Tailscale SSH enabled on 4090 laptop"
           action:
             type: shell
-            command: "tailscale status --json | python -c \"import json,sys; d=json.load(sys.stdin); print('ssh:', d.get('Self',{}).get('Capabilities',[]))\" "
-            expect: "ssh capability listed; or run: tailscale set --ssh to enable"
+            command: "tailscale debug features 2>/dev/null | grep -i ssh || tailscale status --json | python -c \"import json,sys; d=json.load(sys.stdin); print('ssh-enabled' if d.get('Self',{}).get('TailscaleSSHEnabled') else 'DISABLED')\""
+            expect: "ssh-enabled (or SSH feature listed in debug features output)"
           context: >
             Tailscale SSH allows SPARK and other fleet nodes to SSH into
             pmoves-laptop without Windows password. Auth via Tailscale identity.
@@ -190,11 +190,11 @@ root:
           agent_hint: 4090-claude
 
         - id: n4090.mesh.reach-spark
-          task: "Can reach SPARK (pmoves-gb10-spark)"
+          task: "Can reach SPARK (pmoves-spark)"
           action:
             type: shell
-            command: "tailscale ping pmoves-gb10-spark --timeout 5s --c 1"
-            expect: "Pong from pmoves-gb10-spark via direct connection"
+            command: "tailscale ping pmoves-spark --timeout 5s --c 1"
+            expect: "Pong from pmoves-spark via direct connection"
           context: >
             DGX Spark GB10 Grace-Blackwell 128GB — fleet inference backbone.
             Primary 120B+ model host. Must be tagged tag:gpu in Tailscale admin.
@@ -224,8 +224,8 @@ root:
           task: "Ollama service running on :11434"
           action:
             type: shell
-            command: "curl -s http://localhost:11434/api/tags | python -c \"import json,sys; models=json.load(sys.stdin)['models']; print(len(models), 'models')\""
-            expect: "6 models (profile set, no stale pre-2025 models)"
+            command: "curl -s http://localhost:11434/api/tags | python -c \"import json,sys; names=[m['name'] for m in json.load(sys.stdin)['models']]; required={'qwen3-embedding:8b','qwen3-vl:8b','qwen3-coder:30b','qwen3.5:9b','qwen3.5:4b','lfm2:24b'}; missing=required-set(names); print('ok' if not missing else 'MISSING:'+','.join(sorted(missing)))\""
+            expect: "ok (all 6 profile-expected models present)"
           agent_hint: 4090-claude
 
         - id: n4090.ollama.embedding
