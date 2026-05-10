@@ -190,13 +190,19 @@ messaging:
 # MiniMax Provider Cascade Binding
 # =============================================================================
 # Per MINIMAX_GLM_PARITY_ANALYSIS.md Phase 1: Profile Binding
-# Laptop has limited VRAM, so MiniMax-M2.1 is preferred (efficient)
+# Upgraded to M2.7 (1M ctx, token plan) — M2.1 was the efficient fallback pre-plan
 minimax_cascade:
-  preferred_model: minimax-m2.1
+  preferred_model: minimax-m2.7
   cascade_priority: medium
   fallback_model: qwen3.5-4b
   gpu_shape_store: false  # Limited VRAM
   tensorzero_routing: pmoves-code
+
+# Ollama Pro subscription — cloud-proxied models via standard Ollama API (:11434)
+# No local VRAM consumed; models served from Ollama cloud backend
+ollama_pro:
+  enabled: true
+  note: "Run: ollama list to see available Pro models on this node"
 
 # BoTZ Framework binding
 botz:

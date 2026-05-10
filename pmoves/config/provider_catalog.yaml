@@ -435,14 +435,14 @@ providers:
     coding_stack: minimax_token_plan
     models:
       chat_minimax:
-        model_name: "MiniMax-Text-01"
+        model_name: "MiniMax-M2.7"
         tz_model_key: chat_minimax
         serves:
           - function: coding_minimax
             variant_name: cloud_minimax
             role: primary
             weight: 0.8
-        strength_ref: minimax-text-01
+        strength_ref: minimax-m2.7
         vram_mb: 0
 
   # ---------------------------------------------------------------------------
@@ -666,16 +666,20 @@ providers:
       ollama_spark_gemma4_31b_fp16:
         model_name: "gemma4:31b"
         tz_model_key: ollama_spark_gemma4_31b_fp16
-        status: staging
+        status: soak                   # Phase C promoted 2026-05-10 — SPARK online
         serves:
           - function: multimodal_large
             variant_name: ollama_spark_gemma4_31b_fp16
             role: secondary
-            weight: 0.0
+            weight: 0.1
           - function: agent_zero
             variant_name: ollama_spark_gemma4_31b_fp16
             role: secondary
-            weight: 0.0
+            weight: 0.1
+          - function: coding
+            variant_name: spark_gemma4_31b_fp16
+            role: secondary
+            weight: 0.1
         strength_ref: null
         vram_mb: 36000                 # FP16 weights sit in unified LPDDR5X
       ollama_spark_nemotron3_super_120b_nvfp4:

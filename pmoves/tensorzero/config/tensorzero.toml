@@ -274,7 +274,7 @@ routing = ["minimax_primary"]
 [models.chat_minimax.providers.minimax_primary]
 type = "openai"
 api_base = "https://api.minimaxi.chat/v1"
-model_name = "MiniMax-Text-01"
+model_name = "MiniMax-M2.7"
 api_key_location = "env::MINIMAX_API_KEY"
 
 # --- GLM 5.1 (Upgraded per Z.AI coding plan docs — PR #1151) ---
@@ -285,6 +285,28 @@ routing = ["zai_glm51"]
 type = "openai"
 api_base = "https://api.z.ai/api/coding/paas/v4"
 model_name = "glm-5.1"
+api_key_location = "env::Z_AI_API_KEY"
+
+# --- GLM-5-Turbo (KiloCode primary — agentic workflows, tool calling, long chains) ---
+# Synced from provider_catalog.yaml: serves coding_glm (w=0.8) + agent_zero (w=0.6)
+[models.chat_zai_glm5_turbo]
+routing = ["zai_glm5_turbo"]
+
+[models.chat_zai_glm5_turbo.providers.zai_glm5_turbo]
+type = "openai"
+api_base = "https://api.z.ai/api/coding/paas/v4"
+model_name = "glm-5-turbo"
+api_key_location = "env::Z_AI_API_KEY"
+
+# --- GLM-5V-Turbo (Vision + coding — frontend recreation, GUI exploration, visual debugging) ---
+# Synced from provider_catalog.yaml: serves coding_glm (w=0.4) + vl_sentinel (w=0.7)
+[models.chat_zai_glm5v_turbo]
+routing = ["zai_glm5v_turbo"]
+
+[models.chat_zai_glm5v_turbo.providers.zai_glm5v_turbo]
+type = "openai"
+api_base = "https://api.z.ai/api/coding/paas/v4"
+model_name = "glm-5v-turbo"
 api_key_location = "env::Z_AI_API_KEY"
 
 # --- Qwen3-Coder 30B MoE (3.3B active — SWE-Bench SOTA, fits 16GB) ---
@@ -409,7 +431,7 @@ model_name = "gemma4:31b"
 api_key_location = "none"
 
 # --- DGX Spark Node Routing (GB10 Grace-Blackwell, 128GB unified LPDDR5X) ---
-# Heavyweight inference via Ollama CUDA backend on pmoves-dgx-spark.
+# Heavyweight inference via Ollama CUDA backend on pmoves-gb10-spark.
 # Unified memory fits 200B-param-class models without VRAM copies.
 
 # Gemma 4 31B on DGX Spark (SOTA multimodal, unified memory)
@@ -804,12 +826,26 @@ type = "chat_completion"
 model = "coding_qwen3_coder_next_80b_local"
 weight = 0.0
 
-# --- Phase C variants (DGX Spark + dual R9700) — all weight=0.0 --------------
+# GLM-5-Turbo — KiloCode primary (agentic, tool calling, long chains)
+[functions.agent_zero.variants.hosted_glm5_turbo]
+type = "chat_completion"
+model = "chat_zai_glm5_turbo"
+weight = 0.6
+
+# GLM-5V-Turbo — vision + coding (frontend, GUI, visual debugging)
+[functions.agent_zero.variants.hosted_glm5v_turbo]
+type = "chat_completion"
+model = "chat_zai_glm5v_turbo"
+weight = 0.3
+
+# --- Phase C variants (DGX Spark + dual R9700) — soak at 0.1 ----------------
+# SPARK online 2026-05-10: promote gemma4:31b from weight=0.0 to 0.1 soak.
+# Nemotron 120B + R9700 variants remain 0.0 (model not yet confirmed on SPARK).
 # Gemma 4 31B FP16 on DGX Spark
 [functions.agent_zero.variants.ollama_spark_gemma4_31b_fp16]
 type = "chat_completion"
 model = "ollama_spark_gemma4_31b_fp16"
-weight = 0.0
+weight = 0.1
 
 # Nemotron-3-Super 120B-A12B NVFP4 on DGX Spark (heavyweight reasoning)
 [functions.agent_zero.variants.ollama_spark_nemotron3_super_120b_nvfp4]
@@ -1117,6 +1153,12 @@ type = "chat_completion"
 model = "coding_qwen3_coder_480b_cloud"
 weight = 0.0
 
+# Gemma 4 31B FP16 on SPARK — Phase C soak for coding workloads (weight=0.1)
+[functions.coding.variants.spark_gemma4_31b_fp16]
+type = "chat_completion"
+model = "ollama_spark_gemma4_31b_fp16"
+weight = 0.1
+
 # Function: Orchestrator
 [functions.orchestrator]
 type = "chat"
@@ -1216,12 +1258,12 @@ type = "chat_completion"
 model = "gemma_4_26b_a4b_rocm"
 weight = 0.0
 
-# --- Phase C multimodal_large variants — dedicated Spark + dual-RDNA4 routes --
+# --- Phase C multimodal_large variants — SPARK at 0.1 soak, R9700 at 0.0 ----
 # Gemma 4 31B FP16 on DGX Spark (unified memory, SOTA multimodal)
 [functions.multimodal_large.variants.ollama_spark_gemma4_31b_fp16]
 type = "chat_completion"
 model = "ollama_spark_gemma4_31b_fp16"
-weight = 0.0
+weight = 0.1
 
 # Gemma 4 31B Q4_K_M on single R9700 (dedicated variant distinct from gemma_4_31b_rocm)
 [functions.multimodal_large.variants.llamacpp_rdna4_gemma4_31b_q4km]
@@ -1275,9 +1317,19 @@ model = "coding_qwen3_coder_30b_local"
 type = "chat_completion"
 model = "chat_openrouter"
 
-# GLM Coding Plan (Z.ai GLM-5.1 primary, local fallback)
+# GLM Coding Plan — GLM-5-Turbo primary (synced from provider_catalog.yaml)
 [functions.coding_glm]
 type = "chat"
+
+[functions.coding_glm.variants.cloud_zai_glm5_turbo]
+type = "chat_completion"
+model = "chat_zai_glm5_turbo"
+weight = 0.8
+
+[functions.coding_glm.variants.cloud_zai_glm5v_turbo]
+type = "chat_completion"
+model = "chat_zai_glm5v_turbo"
+weight = 0.4
 
 [functions.coding_glm.variants.cloud_zai_glm51]
 type = "chat_completion"
