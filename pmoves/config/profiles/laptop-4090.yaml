@@ -202,7 +202,18 @@ minimax_cascade:
 # No local VRAM consumed; models served from Ollama cloud backend
 ollama_pro:
   enabled: true
-  note: "Run: ollama list to see available Pro models on this node"
+  cloud_models:                    # verified via ollama list 2026-05-10
+    - kimi-k2:1t-cloud             # Moonshot Kimi K2 1T MoE (32B active) — coding + long-ctx
+    - qwen3-coder:480b-cloud       # Qwen3-Coder 480B via cloud (no VRAM cost)
+    - qwen3-next:80b-cloud         # Qwen3-Next 80B
+    - qwen3-vl:235b-cloud          # Qwen3 Vision-Language 235B
+    - deepseek-v3.2:cloud          # DeepSeek V3.2
+    - glm-4.7:cloud                # GLM 4.7 (Z.AI/KiloCode compatible)
+    - minimax-m2:cloud             # MiniMax M2 series
+    - gemini-3-pro-preview:latest  # Gemini 3 Pro Preview
+    - gemini-3-flash-preview:cloud # Gemini 3 Flash Preview
+    - devstral-2:123b-cloud        # Mistral DevStral 2 123B
+    - nemotron-3-nano:30b-cloud    # NVIDIA Nemotron-3 Nano 30B
 
 # BoTZ Framework binding
 botz:

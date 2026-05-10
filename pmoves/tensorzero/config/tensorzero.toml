@@ -431,7 +431,7 @@ model_name = "gemma4:31b"
 api_key_location = "none"
 
 # --- DGX Spark Node Routing (GB10 Grace-Blackwell, 128GB unified LPDDR5X) ---
-# Heavyweight inference via Ollama CUDA backend on pmoves-gb10-spark.
+# Heavyweight inference via Ollama CUDA backend on pmoves-spark.
 # Unified memory fits 200B-param-class models without VRAM copies.
 
 # Gemma 4 31B on DGX Spark (SOTA multimodal, unified memory)
@@ -440,7 +440,7 @@ routing = ["ollama_spark"]
 
 [models.gemma_4_31b_spark.providers.ollama_spark]
 type = "openai"
-api_base = "http://pmoves-gb10-spark:11434/v1"
+api_base = "http://pmoves-spark:11434/v1"
 model_name = "gemma4:31b"
 api_key_location = "none"
 
@@ -450,7 +450,7 @@ routing = ["ollama_spark"]
 
 [models.gemma_4_26b_a4b_spark.providers.ollama_spark]
 type = "openai"
-api_base = "http://pmoves-gb10-spark:11434/v1"
+api_base = "http://pmoves-spark:11434/v1"
 # Ollama publishes the 26B A4B MoE variant as the default ":26b" tag.
 # Verified via registry.ollama.ai manifest API (":26b-a4b" returns 404).
 model_name = "gemma4:26b"
@@ -462,7 +462,7 @@ routing = ["ollama_spark"]
 
 [models.nemotron_super_49b_spark.providers.ollama_spark]
 type = "openai"
-api_base = "http://pmoves-gb10-spark:11434/v1"
+api_base = "http://pmoves-spark:11434/v1"
 model_name = "nemotron:49b"
 api_key_location = "none"
 
@@ -502,7 +502,7 @@ routing = ["ollama_spark"]
 
 [models.ollama_spark_gemma4_31b_fp16.providers.ollama_spark]
 type = "openai"
-api_base = "http://pmoves-gb10-spark:11434/v1"
+api_base = "http://pmoves-spark:11434/v1"
 model_name = "gemma4:31b"
 api_key_location = "none"
 
@@ -515,8 +515,8 @@ routing = ["ollama_spark"]
 
 [models.ollama_spark_nemotron3_super_120b_nvfp4.providers.ollama_spark]
 type = "openai"
-api_base = "http://pmoves-gb10-spark:11434/v1"
-model_name = "nemotron-3-super-120b-nvfp4"
+api_base = "http://pmoves-spark:11434/v1"
+model_name = "nemotron-3-super:120b"
 api_key_location = "none"
 
 # Gemma 4 31B on AMD R9700 (Q4_K_M single-GPU, llama.cpp HIP)
@@ -847,11 +847,11 @@ type = "chat_completion"
 model = "ollama_spark_gemma4_31b_fp16"
 weight = 0.1
 
-# Nemotron-3-Super 120B-A12B NVFP4 on DGX Spark (heavyweight reasoning)
+# Nemotron-3-Super 120B on DGX Spark — model verified on SPARK 2026-05-10 (tag: nemotron-3-super:120b)
 [functions.agent_zero.variants.ollama_spark_nemotron3_super_120b_nvfp4]
 type = "chat_completion"
 model = "ollama_spark_nemotron3_super_120b_nvfp4"
-weight = 0.0
+weight = 0.1
 
 # Gemma 4 31B Q4_K_M on single R9700 (llama.cpp HIP)
 [functions.agent_zero.variants.llamacpp_rdna4_gemma4_31b_q4km]
