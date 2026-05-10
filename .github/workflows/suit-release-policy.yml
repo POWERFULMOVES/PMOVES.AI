@@ -54,7 +54,11 @@ jobs:
           fi
 
           echo "touched=$TOUCHED" >> "$GITHUB_OUTPUT"
-          echo "files=$TOUCHED_FILES" >> "$GITHUB_OUTPUT"
+          {
+            echo "files<<PMOVES_SUIT_EOF"
+            echo "$TOUCHED_FILES"
+            echo "PMOVES_SUIT_EOF"
+          } >> "$GITHUB_OUTPUT"
 
           if [ "$TOUCHED" = "true" ]; then
             echo "::notice::Suit-related files changed:$TOUCHED_FILES"
