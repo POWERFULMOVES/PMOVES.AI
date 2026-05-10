@@ -145,9 +145,9 @@ cross_node:
         - nats:4222
         - minio:9000
       access_via: [tailscale]
-    pmoves-gb10-spark:
+    pmoves-spark:
       role: fleet_inference
-      tailscale_host: pmoves-gb10-spark
+      tailscale_host: pmoves-spark
       hardware: "GB10 Grace-Blackwell 128GB unified — ARM64"
       services:
         - ollama:11434                 # Gemma 4 31B FP16, Nemotron-Super-49B
