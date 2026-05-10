@@ -827,20 +827,20 @@ model = "coding_qwen3_coder_next_80b_local"
 weight = 0.0
 
 # GLM-5-Turbo — KiloCode primary (agentic, tool calling, long chains)
-[functions.agent_zero.variants.hosted_glm5_turbo]
+[functions.agent_zero.variants.hosted_zai_turbo]
 type = "chat_completion"
 model = "chat_zai_glm5_turbo"
 weight = 0.6
 
 # GLM-5V-Turbo — vision + coding (frontend, GUI, visual debugging)
-[functions.agent_zero.variants.hosted_glm5v_turbo]
+[functions.agent_zero.variants.hosted_zai_vision_turbo]
 type = "chat_completion"
 model = "chat_zai_glm5v_turbo"
 weight = 0.3
 
 # --- Phase C variants (DGX Spark + dual R9700) — soak at 0.1 ----------------
-# SPARK online 2026-05-10: promote gemma4:31b from weight=0.0 to 0.1 soak.
-# Nemotron 120B + R9700 variants remain 0.0 (model not yet confirmed on SPARK).
+# SPARK online 2026-05-10: gemma4:31b + nemotron-3-super:120b both promoted 0.0→0.1 soak.
+# Nemotron tag verified via /api/tags (nemotron-3-super:120b). R9700 variants remain 0.0.
 # Gemma 4 31B FP16 on DGX Spark
 [functions.agent_zero.variants.ollama_spark_gemma4_31b_fp16]
 type = "chat_completion"
@@ -1321,12 +1321,12 @@ model = "chat_openrouter"
 [functions.coding_glm]
 type = "chat"
 
-[functions.coding_glm.variants.cloud_zai_glm5_turbo]
+[functions.coding_glm.variants.cloud_zai_turbo]
 type = "chat_completion"
 model = "chat_zai_glm5_turbo"
 weight = 0.8
 
-[functions.coding_glm.variants.cloud_zai_glm5v_turbo]
+[functions.coding_glm.variants.cloud_zai_vision_turbo]
 type = "chat_completion"
 model = "chat_zai_glm5v_turbo"
 weight = 0.4

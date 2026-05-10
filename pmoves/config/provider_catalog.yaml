@@ -693,6 +693,6 @@ providers:
           - function: agent_zero
             variant_name: ollama_spark_nemotron3_super_120b_nvfp4
             role: secondary
-            weight: 0.0
+            weight: 0.1                             # soak — model verified on pmoves-spark 2026-05-10
         strength_ref: null
         vram_mb: 90000                 # NVFP4 quant; fits 128 GB unified with headroom
