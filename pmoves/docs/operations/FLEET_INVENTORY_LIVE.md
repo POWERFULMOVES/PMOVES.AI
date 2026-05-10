@@ -169,6 +169,8 @@ Per `pmoves/docs/TAILSCALE_NODE_HYGIENE.md` (offline > 60 days = stale):
 
 ## Phase 2 — Z890 Dual-NIC Fix Runbook (operator-executed)
 
+> **Pattern reference:** [`SAME_SUBNET_GHOST_PATTERN.md`](./SAME_SUBNET_GHOST_PATTERN.md) — cross-platform diagnosis (Windows / Linux / macOS). This Phase 2 runbook is the **Z890 + Windows applied instance** of that pattern; reach for the pattern doc first if the affected host isn't Z890. Also referenced in W0 Substrate lane brief: [`AGNOTE4482PHI.W0-SUBSTRATE.md`](../AGENTS/AGNOTE4482PHI.W0-SUBSTRATE.md).
+>
 > **Why this can't be automated by the agent:** modifying NIC IP assignments requires elevated PowerShell on Z890 and is a shared-system change. Auto mode policy: agent prepares the runbook; operator executes.
 >
 > **Reversibility:** every step has an inverse. Option B (disable adapter) is the safest fallback if anything misbehaves.
