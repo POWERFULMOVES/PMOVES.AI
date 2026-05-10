@@ -23,13 +23,18 @@ if (-not (Test-Path $configPath)) {
     throw "sshd_config not found at $configPath — run enable-ssh-windows.ps1 first."
 }
 
-# Pre-flight: ensure at least one authorized key exists, otherwise hardening
-# will lock out everyone (PasswordAuthentication no + no keys = no access).
+# Pre-flight: require at least one parseable key in administrators_authorized_keys.
+# Hardening sets PasswordAuthentication no, so a file that exists but holds only
+# comments/whitespace would still produce a permanent lockout. Gate on the
+# parsed key count, not on file presence or non-whitespace content.
 $authKeysPath = "$env:ProgramData\ssh\administrators_authorized_keys"
-if (-not (Test-Path $authKeysPath) -or [string]::IsNullOrWhiteSpace((Get-Content $authKeysPath -Raw))) {
-    throw "Refusing to harden: $authKeysPath missing or empty. Run enable-ssh-windows.ps1 first to install keys."
+if (-not (Test-Path $authKeysPath)) {
+    throw "Refusing to harden: $authKeysPath missing. Run enable-ssh-windows.ps1 first to install keys."
 }
 $keyCount = (Get-Content $authKeysPath | Where-Object { $_ -match '^\s*ssh-' }).Count
+if ($keyCount -lt 1) {
+    throw "Refusing to harden: $authKeysPath contains zero parseable 'ssh-*' key lines. Run enable-ssh-windows.ps1 first."
+}
 Write-Host "[pre] Found $keyCount authorized key(s) in administrators_authorized_keys"
 
 # Hardening directives. Reasoning per line:
