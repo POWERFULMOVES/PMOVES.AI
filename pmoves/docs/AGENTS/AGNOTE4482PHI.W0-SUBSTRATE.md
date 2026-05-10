@@ -191,4 +191,4 @@ These are not blocking — they can be answered during PR-1 / PR-2 review.
 - [FLEET_INVENTORY_LIVE.md](../operations/FLEET_INVENTORY_LIVE.md) — Z890 Phase 2 worked example
 - [SAME_SUBNET_GHOST_PATTERN.md](../operations/SAME_SUBNET_GHOST_PATTERN.md) — Cross-platform pattern reference (companion PR)
 - [ROOM_MANIFEST_CONTRACT.md](../ROOM_MANIFEST_CONTRACT.md) — Room manifest schema (separate concern from hardware profile, but the destination of the binding chain)
-- [project_z890_kong_bind_real_root_cause.md](../../../../C%3A/Users/DARKXSIDE/.claude/projects/D--PMOVES-AI-PMOVES-AI/memory/project_z890_kong_bind_real_root_cause.md) — operator memory on Docker Desktop 29.4.0 bug interaction (read alongside same-subnet ghost — they are *separate* root causes that surfaced concurrently on Z890)
+- Operator-local Cipher memory `project_z890_kong_bind_real_root_cause.md` — Docker Desktop 29.4.0 bind bug interaction (read alongside same-subnet ghost — they are *separate* root causes that surfaced concurrently on Z890; the Docker Desktop bug is fixed in ≥29.5). Per-operator memory, not committed to repo.
