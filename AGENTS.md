@@ -124,4 +124,4 @@ The PMOVES-agents.md submodule is the canonical home for:
 
 ## Skills Constellation
 
-POWERFULMOVES forks of upstream agent-skill repositories live under [`skills/`](skills/) — see [`skills/README.md`](skills/README.md) for the full map. Currently includes Anthropic's `skills` (added) plus 4 forks pending operator approval (`PMOVES-awesome-agent-skills`, `pmoves-fork-repository-skill`, `PMOVES-agent-sandbox-skill`, `Pmoves-claude-d3js-skill`).
+POWERFULMOVES forks of upstream agent-skill repositories live under [`skills/`](skills/) — see [`skills/README.md`](skills/README.md) for the full map. All five forks landed across two singleton rounds on 2026-05-09 (z890): `Pmoves-skills` (Anthropic), `PMOVES-awesome-agent-skills`, `pmoves-fork-repository-skill`, `PMOVES-agent-sandbox-skill`, `Pmoves-claude-d3js-skill`. New external skill forks still require per-URL Bash-tool authorization (singleton add) — see `skills/README.md` for the procedure.
