@@ -1,0 +1,583 @@
+{
+  "spec": "chit.cgp.v0.2",
+  "type": "geometry.cgp.v1",
+  "id": "b5d2a972d2f8",
+  "label": "Allegro_balanced_Bright_c1",
+  "source": "cipher_beats_analyst",
+  "ts": 1778426241.505443,
+  "super_nodes": [
+    {
+      "id": "7a95df70b961",
+      "label": "Beats: Allegro_balanced_Bright_c1",
+      "type": "beats_constellation",
+      "x": 0.5117,
+      "y": 0.25,
+      "r": 12.5,
+      "state_vector": {
+        "delta": 0.5117,
+        "kappa": -0.0648,
+        "Hz": 0.25,
+        "A": 0.0,
+        "F": 0.5
+      },
+      "constellations": [
+        {
+          "id": "30a77a481fed",
+          "label": "Allegro_balanced_Bright_c1",
+          "anchor": [
+            0.0,
+            12.492,
+            -0.459
+          ],
+          "spectrum": [
+            0.25,
+            0.5117,
+            0.9352
+          ],
+          "points": [
+            {
+              "id": "6b211be55c46",
+              "label": "Absynth Club mix",
+              "modality": "audio",
+              "proj": [
+                0.25,
+                0.5183,
+                0.045
+              ],
+              "conf": 0.0,
+              "sv": {
+                "delta": 0.5183,
+                "kappa": -0.045,
+                "Hz": 0.25,
+                "A": 0.0,
+                "F": 0.5
+              },
+              "offset": [
+                0.036599999999999966,
+                -0.5,
+                -0.045
+              ],
+              "duration_s": 196.421208,
+              "file": "pmoves\\data\\beats\\soundcloud\\darkxside\\Absynth Club mix.opus"
+            },
+            {
+              "id": "280ee80d82e2",
+              "label": "Arcade Low - 2",
+              "modality": "audio",
+              "proj": [
+                0.25,
+                0.5117,
+                0.065
+              ],
+              "conf": 0.0,
+              "sv": {
+                "delta": 0.5117,
+                "kappa": -0.065,
+                "Hz": 0.25,
+                "A": 0.0,
+                "F": 0.5
+              },
+              "offset": [
+                0.023400000000000087,
+                -0.5,
+                -0.065
+              ],
+              "duration_s": 40.644813,
+              "file": "pmoves\\data\\beats\\soundcloud\\darkxside\\Arcade Low - 2.opus"
+            },
+            {
+              "id": "d335c93121e7",
+              "label": "Ask Me",
+              "modality": "audio",
+              "proj": [
+                0.25,
+                0.5133,
+                0.06
+              ],
+              "conf": 0.0,
+              "sv": {
+                "delta": 0.5133,
+                "kappa": -0.06,
+                "Hz": 0.25,
+                "A": 0.0,
+                "F": 0.5
+              },
+              "offset": [
+                0.026599999999999957,
+                -0.5,
+                -0.06
+              ],
+              "duration_s": 114.301563,
+              "file": "pmoves\\data\\beats\\soundcloud\\darkxside\\Ask Me.opus"
+            },
+            {
+              "id": "368c597d98db",
+              "label": "Ask You",
+              "modality": "audio",
+              "proj": [
+                0.25,
+                0.5133,
+                0.06
+              ],
+              "conf": 0.0,
+              "sv": {
+                "delta": 0.5133,
+                "kappa": -0.06,
+                "Hz": 0.25,
+                "A": 0.0,
+                "F": 0.5
+              },
+              "offset": [
+                0.026599999999999957,
+                -0.5,
+                -0.06
+              ],
+              "duration_s": 80.006542,
+              "file": "pmoves\\data\\beats\\soundcloud\\darkxside\\Ask You.opus"
+            },
+            {
+              "id": "b36387bb777d",
+              "label": "CLANK",
+              "modality": "audio",
+              "proj": [
+                0.25,
+                0.515,
+                0.055
+              ],
+              "conf": 0.0,
+              "sv": {
+                "delta": 0.515,
+                "kappa": -0.055,
+                "Hz": 0.25,
+                "A": 0.0,
+                "F": 0.5
+              },
+              "offset": [
+                0.030000000000000027,
+                -0.5,
+                -0.055
+              ],
+              "duration_s": 91.949979,
+              "file": "pmoves\\data\\beats\\soundcloud\\darkxside\\CLANK.opus"
+            },
+            {
+              "id": "7d262d2019bf",
+              "label": "FIRST BOSS",
+              "modality": "audio",
+              "proj": [
+                0.25,
+                0.5017,
+                0.095
+              ],
+              "conf": 0.0,
+              "sv": {
+                "delta": 0.5017,
+                "kappa": -0.095,
+                "Hz": 0.25,
+                "A": 0.0,
+                "F": 0.5
+              },
+              "offset": [
+                0.0034000000000000696,
+                -0.5,
+                -0.095
+              ],
+              "duration_s": 57.032375,
+              "file": "pmoves\\data\\beats\\soundcloud\\darkxside\\FIRST BOSS.opus"
+            },
+            {
+              "id": "de59c6e6344f",
+              "label": "Guitary Dwstro 3busy 4",
+              "modality": "audio",
+              "proj": [
+                0.25,
+                0.4933,
+                0.12
+              ],
+              "conf": 0.0,
+              "sv": {
+                "delta": 0.4933,
+                "kappa": -0.12,
+                "Hz": 0.25,
+                "A": 0.0,
+                "F": 0.5
+              },
+              "offset": [
+                -0.013399999999999967,
+                -0.5,
+                -0.12
+              ],
+              "duration_s": 128.084875,
+              "file": "pmoves\\data\\beats\\soundcloud\\darkxside\\Guitary Dwstro 3busy 4.opus"
+            },
+            {
+              "id": "2d5d63bd9e20",
+              "label": "Lira 9",
+              "modality": "audio",
+              "proj": [
+                0.25,
+                0.51,
+                0.07
+              ],
+              "conf": 0.0,
+              "sv": {
+                "delta": 0.51,
+                "kappa": -0.07,
+                "Hz": 0.25,
+                "A": 0.0,
+                "F": 0.5
+              },
+              "offset": [
+                0.020000000000000018,
+                -0.5,
+                -0.07
+              ],
+              "duration_s": 126.664853,
+              "file": "pmoves\\data\\beats\\soundcloud\\darkxside\\Lira 9.m4a"
+            },
+            {
+              "id": "50fe93384ccf",
+              "label": "Looops 6long",
+              "modality": "audio",
+              "proj": [
+                0.25,
+                0.5267,
+                0.02
+              ],
+              "conf": 0.0,
+              "sv": {
+                "delta": 0.5267,
+                "kappa": -0.02,
+                "Hz": 0.25,
+                "A": 0.0,
+                "F": 0.5
+              },
+              "offset": [
+                0.05339999999999989,
+                -0.5,
+                -0.02
+              ],
+              "duration_s": 90.418503,
+              "file": "pmoves\\data\\beats\\soundcloud\\darkxside\\Looops 6long.m4a"
+            },
+            {
+              "id": "81e8f93ae90c",
+              "label": "MATTER COMMANDER",
+              "modality": "audio",
+              "proj": [
+                0.25,
+                0.5183,
+                0.045
+              ],
+              "conf": 0.0,
+              "sv": {
+                "delta": 0.5183,
+                "kappa": -0.045,
+                "Hz": 0.25,
+                "A": 0.0,
+                "F": 0.5
+              },
+              "offset": [
+                0.036599999999999966,
+                -0.5,
+                -0.045
+              ],
+              "duration_s": 102.478367,
+              "file": "pmoves\\data\\beats\\soundcloud\\darkxside\\MATTER COMMANDER.mp3"
+            },
+            {
+              "id": "6de46192c4f3",
+              "label": "Piano Wax 76 Bpm dnb Dark",
+              "modality": "audio",
+              "proj": [
+                0.25,
+                0.505,
+                0.085
+              ],
+              "conf": 0.0,
+              "sv": {
+                "delta": 0.505,
+                "kappa": -0.085,
+                "Hz": 0.25,
+                "A": 0.0,
+                "F": 0.5
+              },
+              "offset": [
+                0.010000000000000009,
+                -0.5,
+                -0.085
+              ],
+              "duration_s": 208.136333,
+              "file": "pmoves\\data\\beats\\soundcloud\\darkxside\\Piano Wax 76 Bpm dnb Dark.opus"
+            },
+            {
+              "id": "6282c0405f72",
+              "label": "Rak no# 10 mix issue no# 4",
+              "modality": "audio",
+              "proj": [
+                0.25,
+                0.515,
+                0.055
+              ],
+              "conf": 0.0,
+              "sv": {
+                "delta": 0.515,
+                "kappa": -0.055,
+                "Hz": 0.25,
+                "A": 0.0,
+                "F": 0.5
+              },
+              "offset": [
+                0.030000000000000027,
+                -0.5,
+                -0.055
+              ],
+              "duration_s": 93.733854,
+              "file": "pmoves\\data\\beats\\soundcloud\\darkxside\\Rak no# 10 mix issue no# 4.opus"
+            },
+            {
+              "id": "87c3cf2d2711",
+              "label": "RAKS LIT",
+              "modality": "audio",
+              "proj": [
+                0.25,
+                0.5167,
+                0.05
+              ],
+              "conf": 0.0,
+              "sv": {
+                "delta": 0.5167,
+                "kappa": -0.05,
+                "Hz": 0.25,
+                "A": 0.0,
+                "F": 0.5
+              },
+              "offset": [
+                0.033400000000000096,
+                -0.5,
+                -0.05
+              ],
+              "duration_s": 247.072625,
+              "file": "pmoves\\data\\beats\\soundcloud\\darkxside\\RAKS LIT.opus"
+            },
+            {
+              "id": "c39406b4d4b4",
+              "label": "Ree 3b 25",
+              "modality": "audio",
+              "proj": [
+                0.25,
+                0.4967,
+                0.11
+              ],
+              "conf": 0.0,
+              "sv": {
+                "delta": 0.4967,
+                "kappa": -0.11,
+                "Hz": 0.25,
+                "A": 0.0,
+                "F": 0.5
+              },
+              "offset": [
+                -0.00660000000000005,
+                -0.5,
+                -0.11
+              ],
+              "duration_s": 153.684875,
+              "file": "pmoves\\data\\beats\\soundcloud\\darkxside\\Ree 3b 25.opus"
+            },
+            {
+              "id": "57616c357d11",
+              "label": "Reminiscence",
+              "modality": "audio",
+              "proj": [
+                0.25,
+                0.525,
+                0.025
+              ],
+              "conf": 0.0,
+              "sv": {
+                "delta": 0.525,
+                "kappa": -0.025,
+                "Hz": 0.25,
+                "A": 0.0,
+                "F": 0.5
+              },
+              "offset": [
+                0.050000000000000044,
+                -0.5,
+                -0.025
+              ],
+              "duration_s": 90.416313,
+              "file": "pmoves\\data\\beats\\soundcloud\\darkxside\\Reminiscence.opus"
+            },
+            {
+              "id": "0b73383d7703",
+              "label": "SCARD",
+              "modality": "audio",
+              "proj": [
+                0.25,
+                0.5017,
+                0.095
+              ],
+              "conf": 0.0,
+              "sv": {
+                "delta": 0.5017,
+                "kappa": -0.095,
+                "Hz": 0.25,
+                "A": 0.0,
+                "F": 0.5
+              },
+              "offset": [
+                0.0034000000000000696,
+                -0.5,
+                -0.095
+              ],
+              "duration_s": 51.898417,
+              "file": "pmoves\\data\\beats\\soundcloud\\darkxside\\SCARD.opus"
+            },
+            {
+              "id": "d3d37ac5d537",
+              "label": "Strange Love",
+              "modality": "audio",
+              "proj": [
+                0.25,
+                0.51,
+                0.07
+              ],
+              "conf": 0.0,
+              "sv": {
+                "delta": 0.51,
+                "kappa": -0.07,
+                "Hz": 0.25,
+                "A": 0.0,
+                "F": 0.5
+              },
+              "offset": [
+                0.020000000000000018,
+                -0.5,
+                -0.07
+              ],
+              "duration_s": 134.419833,
+              "file": "pmoves\\data\\beats\\soundcloud\\darkxside\\Strange Love.opus"
+            },
+            {
+              "id": "ce5e665732df",
+              "label": "TALK SLOW",
+              "modality": "audio",
+              "proj": [
+                0.25,
+                0.5117,
+                0.065
+              ],
+              "conf": 0.0,
+              "sv": {
+                "delta": 0.5117,
+                "kappa": -0.065,
+                "Hz": 0.25,
+                "A": 0.0,
+                "F": 0.5
+              },
+              "offset": [
+                0.023400000000000087,
+                -0.5,
+                -0.065
+              ],
+              "duration_s": 68.577958,
+              "file": "pmoves\\data\\beats\\soundcloud\\darkxside\\TALK SLOW.opus"
+            },
+            {
+              "id": "e3fe34a0d2c9",
+              "label": "The Setup Just Leave Me Alone \u29f8 Don't Leave Me Alone",
+              "modality": "audio",
+              "proj": [
+                0.25,
+                0.525,
+                0.025
+              ],
+              "conf": 0.0,
+              "sv": {
+                "delta": 0.525,
+                "kappa": -0.025,
+                "Hz": 0.25,
+                "A": 0.0,
+                "F": 0.5
+              },
+              "offset": [
+                0.050000000000000044,
+                -0.5,
+                -0.025
+              ],
+              "duration_s": 95.886646,
+              "file": "pmoves\\data\\beats\\soundcloud\\darkxside\\The Setup Just Leave Me Alone \u29f8 Don't Leave Me Alone.opus"
+            },
+            {
+              "id": "a32ab6531313",
+              "label": "THEY'LL KILL YOU (OOMPA LOOMPA mix)",
+              "modality": "audio",
+              "proj": [
+                0.25,
+                0.5167,
+                0.05
+              ],
+              "conf": 0.0,
+              "sv": {
+                "delta": 0.5167,
+                "kappa": -0.05,
+                "Hz": 0.25,
+                "A": 0.0,
+                "F": 0.5
+              },
+              "offset": [
+                0.033400000000000096,
+                -0.5,
+                -0.05
+              ],
+              "duration_s": 198.809396,
+              "file": "pmoves\\data\\beats\\soundcloud\\darkxside\\THEY'LL KILL YOU (OOMPA LOOMPA mix).opus"
+            },
+            {
+              "id": "90d1d4edad37",
+              "label": "WEIRD v1",
+              "modality": "audio",
+              "proj": [
+                0.25,
+                0.5017,
+                0.095
+              ],
+              "conf": 0.0,
+              "sv": {
+                "delta": 0.5017,
+                "kappa": -0.095,
+                "Hz": 0.25,
+                "A": 0.0,
+                "F": 0.5
+              },
+              "offset": [
+                0.0034000000000000696,
+                -0.5,
+                -0.095
+              ],
+              "duration_s": 116.189208,
+              "file": "pmoves\\data\\beats\\soundcloud\\darkxside\\WEIRD v1.opus"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "control_plane": {
+    "state_vector": {
+      "delta": 0.5117,
+      "kappa": -0.0648,
+      "Hz": 0.25,
+      "A": 0.0,
+      "F": 0.5
+    },
+    "param_surface": {
+      "sense_mode_threshold": 0.5,
+      "n_groups_hint": 6,
+      "temperature": 0.50468,
+      "top_k": 5
+    }
+  }
+}
