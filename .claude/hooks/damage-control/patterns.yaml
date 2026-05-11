@@ -994,6 +994,10 @@ chitSafePaths:
   # Submodule registry — Phase 2 skills constellation + PMOVES-agents.md entry
   # (approved per PR #1438 / proposal at pmoves/docs/proposals/SUBMODULES_MD_UPDATE_PROPOSAL.md)
   - ".claude/context/submodules.md"
+  # Security patterns — add "Node SSH Hardening (Cross-Platform)" section
+  # documenting Windows OpenSSH ACL silent-failure mode + idempotent key
+  # injection (extends the patterns introduced in PR #1451's claw scripts).
+  - ".claude/context/security-patterns.md"
   # Phase 9Q.2: YouTube cookie refresh schema + Make targets + CLI tool
   # (2026-04-17: OAuth2 scaffold for automated YT cookie harvesting)
   - "supabase/migrations/20260417"
