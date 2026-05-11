@@ -150,7 +150,7 @@ ExecStart=/bin/sh -c "/usr/bin/docker run --name gpu-orchestrator --rm \\
   -v ${data_root}:/app/data \\
   -e GPU_ORCHESTRATOR_HOST=0.0.0.0 \\
   -e GPU_ORCHESTRATOR_PORT=8200 \\
-  -e GPU_ORCHESTRATOR_NATS_URL=\${GPU_ORCHESTRATOR_NATS_URL:-nats://nats:4222} \\
+  -e GPU_ORCHESTRATOR_NATS_URL=\${GPU_ORCHESTRATOR_NATS_URL:-nats://nats:pmoves@nats:4222} \\
   -e GPU_ORCHESTRATOR_GPU_INDEX=\${GPU_ORCHESTRATOR_GPU_INDEX:-0} \\
   -e GPU_ORCHESTRATOR_VLLM_URL=\${GPU_ORCHESTRATOR_VLLM_URL:-http://host.docker.internal:8100} \\
   -e GPU_ORCHESTRATOR_OLLAMA_URL=\${GPU_ORCHESTRATOR_OLLAMA_URL:-http://pmoves-ollama:11434} \\
@@ -163,8 +163,9 @@ EOF
 
   cat <<'EOF' | tee /etc/default/gpu-orchestrator > /dev/null
 # GPU Orchestrator configuration (env_prefix = GPU_ORCHESTRATOR_)
+# NATS URL default for local dev only; production overrides via secrets-funnel-injected env.
 GPU_ORCHESTRATOR_GPU_INDEX=0
-GPU_ORCHESTRATOR_NATS_URL=nats://nats:4222
+GPU_ORCHESTRATOR_NATS_URL=nats://nats:pmoves@nats:4222
 GPU_ORCHESTRATOR_VLLM_URL=http://host.docker.internal:8100
 GPU_ORCHESTRATOR_OLLAMA_URL=http://pmoves-ollama:11434
 EOF
