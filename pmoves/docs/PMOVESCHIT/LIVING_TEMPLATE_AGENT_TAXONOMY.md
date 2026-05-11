@@ -4,7 +4,9 @@
 
 # Living Template: Agent Taxonomy in CHIT
 
-_Last updated: 2026-02-18 — v1.4.0 (59 agents)_
+_Last updated: 2026-02-18 — v1.4.0 schema (originally 59 agents; current `agent_registry.yaml` has **76 agents** verified 2026-04-24 — see issue #1436 C2 for full CGP regeneration to bump K=59 → K=76 across all sample blocks)_
+
+> **Staleness notice (per issue #1436):** This template's CGP sample blocks hard-code `K=59` and `taxonomy_version="1.4.0"`. Generating CGPs from these samples without regeneration produces malformed packets that disagree with the current `agent_registry.yaml` (76 agents). The header has been corrected; full sample regeneration is tracked under issue #1436 C2.
 
 This living template demonstrates how the PMOVES Agent Class Taxonomy maps through all five CHIT mathematical pillars, with concrete examples, CGP packet samples, and expanded use cases. It serves as both documentation and validation artifact — a working example of PMOVES in action.
 
@@ -718,7 +720,7 @@ Three representative agents added in v1.4.0, one per class:
 
 | Item | Status | Note |
 |------|--------|------|
-| ToKenism-Multi CGP sample at `integrations/contracts/chit/samples/agent-taxonomy-cgp.json` | Needs regeneration | Sample was generated at v1.0.0 with K=7; needs re-export at v1.4.0 with K=59 |
+| ToKenism-Multi CGP sample at `integrations/contracts/chit/samples/agent-taxonomy-cgp.json` | Needs regeneration | Sample was generated at v1.0.0 with K=7; needs re-export at v1.4.0 with K=76 (per current `agent_registry.yaml` — issue #1436 C2) |
 | Section 1 agent card (CGP v0.2) | Updated | `meta.K` bumped to 59, `taxonomy_version` added as `"1.4.0"` |
 | Section 4 CGP sample | Updated | `meta.K` bumped to 59, `taxonomy_version` updated to `"1.4.0"`, new agents added to constellations |
 | Hyperbolic embedding (Section 2, Pillar 2) | Approximate | Ring descriptions reference original agents only; v1.4.0 agents not yet placed on Poincare disk |
@@ -731,7 +733,7 @@ This living template is valid when:
 
 1. All 5 CHIT pillars are demonstrated with agent taxonomy examples
 2. CGP sample packet conforms to `chit.cgp.v0.2` spec
-3. Agent names match `pmoves/config/agent_registry.yaml` (59 agents at v1.4.0)
+3. Agent names match `pmoves/config/agent_registry.yaml` (76 agents per registry verified 2026-04-24; doc body still shows v1.4.0 K=59 sample blocks pending issue #1436 C2 regeneration)
 4. NATS subjects match `.claude/context/nats-subjects.md` and `geometry-nats-subjects.md`
 5. Layer assignments match `PMOVES_UNIFIED_AGENT_TAXONOMY.md`
 6. Control mappings match `PMOVES_HYPERDIMENSIONS_CONTROL_PLANE.md`
