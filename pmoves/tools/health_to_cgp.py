@@ -58,7 +58,9 @@ def convert_to_cgp(group_name: str, logs: List[Dict[str, Any]]) -> Dict[str, Any
     
     # Calculate group averages
     avg_delta = sum(parse_health_metrics(m)["delta"] for m in logs) / len(logs) if logs else 0
+    avg_kappa = sum(parse_health_metrics(m)["kappa"] for m in logs) / len(logs) if logs else 0
     avg_hz = sum(parse_health_metrics(m)["Hz"] for m in logs) / len(logs) if logs else 0
+    avg_a = sum(parse_health_metrics(m)["A"] for m in logs) / len(logs) if logs else 0
     avg_f = sum(parse_health_metrics(m)["F"] for m in logs) / len(logs) if logs else 0
     
     # Group Anchor Position
@@ -109,9 +111,9 @@ def convert_to_cgp(group_name: str, logs: List[Dict[str, Any]]) -> Dict[str, Any
         "control_plane": {
             "state_vector": {
                 "delta": round(avg_delta, 4),
-                "kappa": round(-1 * avg_f, 4),
+                "kappa": round(avg_kappa, 4),
                 "Hz": round(avg_hz, 4),
-                "A": 0.0,
+                "A": round(avg_a, 4),
                 "F": round(avg_f, 4)
             }
         }

@@ -58,7 +58,9 @@ def convert_to_cgp(group_name: str, events: List[Dict[str, Any]]) -> Dict[str, A
     
     # Calculate group averages
     avg_delta = sum(parse_wealth_metrics(m)["delta"] for m in events) / len(events) if events else 0
+    avg_kappa = sum(parse_wealth_metrics(m)["kappa"] for m in events) / len(events) if events else 0
     avg_hz = sum(parse_wealth_metrics(m)["Hz"] for m in events) / len(events) if events else 0
+    avg_a = sum(parse_wealth_metrics(m)["A"] for m in events) / len(events) if events else 0
     avg_f = sum(parse_wealth_metrics(m)["F"] for m in events) / len(events) if events else 0
     
     # Group Anchor Position
@@ -109,9 +111,9 @@ def convert_to_cgp(group_name: str, events: List[Dict[str, Any]]) -> Dict[str, A
         "control_plane": {
             "state_vector": {
                 "delta": round(avg_delta, 4),
-                "kappa": round(-1 * avg_f, 4),
+                "kappa": round(avg_kappa, 4),
                 "Hz": round(avg_hz, 4),
-                "A": 0.0,
+                "A": round(avg_a, 4),
                 "F": round(avg_f, 4)
             }
         }
