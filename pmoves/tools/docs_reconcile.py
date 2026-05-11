@@ -350,10 +350,14 @@ def load_living_docs_registry(registry_path: Path) -> List[TrackedDoc]:
     for entry in entries:
         if not isinstance(entry, dict) or "path" not in entry:
             continue
+        try:
+            freshness_days = int(entry.get("freshness_days", 30))
+        except (TypeError, ValueError):
+            freshness_days = 30
         docs.append(
             TrackedDoc(
                 path=str(entry["path"]),
-                freshness_days=int(entry.get("freshness_days", 30)),
+                freshness_days=freshness_days,
                 severity=str(entry.get("severity", "P2")).upper(),
                 description=str(entry.get("description", "")),
             )

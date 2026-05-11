@@ -887,6 +887,7 @@ This entry is signed `5090→z890` per `vision_mirror_becomes_original.md`. The 
 - Singleton-added 2 of 4 deferred skill submodules: `skills/PMOVES-awesome-agent-skills`, `skills/pmoves-fork-repository-skill`. Remaining 2 (`PMOVES-agent-sandbox-skill`, `Pmoves-claude-d3js-skill`) blocked at Bash-tool permission gate per-URL despite operator approval via AskUserQuestion — surfaced as operator-run `!` shell commands in `skills/README.md`.
 
 ### Key Findings
+
 | Finding | Status | Evidence |
 |---------|--------|----------|
 | `.claude/context/` allowlist gap | **RESOLVED** | `patterns.yaml` entry citing PR #1438 |

@@ -18,7 +18,7 @@
 
 | Doc | Path | Role | Freshness budget |
 |-----|------|------|------------------|
-| Service catalog | [`.claude/CATALOG.md`](./.claude/CATALOG.md) | Ports, URLs, health endpoints — drifts fastest | **14d / P1** |
+| Service catalog | [`.claude/context/services-catalog.md`](./.claude/context/services-catalog.md) | Ports, URLs, health endpoints — drifts fastest | **14d / P1** |
 | Active claim register | [`pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md`](./pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md) | Who's working on what right now (Village Rule) | **3d / P1** |
 | Cold-start sitrep | [`pmoves/docs/AGENTS/AGNOTE4482_SITREP.md`](./pmoves/docs/AGENTS/AGNOTE4482_SITREP.md) | Current convergence state for fresh sessions | **7d / P1** |
 | Multi-agent gateway | [`pmoves/docs/AGENTS/AGNOTE4482.md`](./pmoves/docs/AGENTS/AGNOTE4482.md) | Three-Body, signoff gate, audit trail | 14d / P1 |

@@ -6,7 +6,7 @@
     ".claude/CATALOG.md",
     ".claude/PATTERNS.md",
     "AGENTS.md",
-    "PMOVES-agents.md/"
+    "PMOVES-agents.md"
   ],
   "$common_context_files_note": "Files in this list are merged into every non-canonical submodule's effective context_files when skill_tag_injector.py runs. Bumped from 1.0.0 to 1.1.0 on 2026-05-08 alongside the CLAUDE.md keystone restructure (docs/claude-md-modernize-fleet branch). Edit per-submodule context_files for entries that need MORE than the common set.",
   "$domain_tag_skill_map": {
@@ -707,6 +707,34 @@
     "skills/Pmoves-skills": {
       "context_tier": 2,
       "domain_tags": ["agents", "mcp"],
+      "skills": [],
+      "context_files": [],
+      "agents_docs": []
+    },
+    "skills/PMOVES-awesome-agent-skills": {
+      "context_tier": 2,
+      "domain_tags": ["agents", "mcp"],
+      "skills": [],
+      "context_files": [],
+      "agents_docs": []
+    },
+    "skills/pmoves-fork-repository-skill": {
+      "context_tier": 2,
+      "domain_tags": ["agents"],
+      "skills": [],
+      "context_files": [],
+      "agents_docs": []
+    },
+    "skills/PMOVES-agent-sandbox-skill": {
+      "context_tier": 2,
+      "domain_tags": ["agents", "sandbox"],
+      "skills": [],
+      "context_files": [],
+      "agents_docs": []
+    },
+    "skills/Pmoves-claude-d3js-skill": {
+      "context_tier": 2,
+      "domain_tags": ["ui"],
       "skills": [],
       "context_files": [],
       "agents_docs": []

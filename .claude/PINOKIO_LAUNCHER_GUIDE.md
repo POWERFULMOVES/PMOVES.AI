@@ -236,7 +236,7 @@ module.exports = {
 
 - In many cases, we may not even need a web UI, but instead just a simple way to run scripts.
 - This may include TUI (Terminal User Interface) apps, a simple launcher 
-- In these cases, all we need is the launcher file `pinokio.js`, which may link to multiple scripts. In this case, there are no web apps (no serverless apsp, no servers), but instead just the default pinokio launcher UI that calls a bunch of scripts.
+- In these cases, all we need is the launcher file `pinokio.js`, which may link to multiple scripts. In this case, there are no web apps (no serverless apps, no servers), but instead just the default pinokio launcher UI that calls a bunch of scripts.
 - Here are some examples:
   - A pinokio script to toggle the desktop theme between dark and light
     - Write some code (python or javascript or whatever)
@@ -265,7 +265,7 @@ These APIs can be used to describe each step in a pinokio script:
 - fs.read: read from file
 - fs.copy: copy files
 - fs.download: download files
-- fs.link: create a symbolic link (or junction on windows) for folders
+- fs.link: create a symbolic link (or junction on Windows) for folders
 - fs.open: open the system file explorer at a given path
 - fs.cat: print file contents
 - jump: jump to a specific step
@@ -285,7 +285,7 @@ These APIs can be used to describe each step in a pinokio script:
 ### Template variables
 The following variables are accessible inside template expressions (example `{{args.command}` in scripts, resulting in dynamic behaviors of scripts:
 - input: An input is a variable that gets passed from one RPC call to the next
-- args: args is the parameter object that gets passed into the script (via pinokio.js `params`). Unlike `input` which takes the value passed in from the immediately previous step, `args` is a global value that is the same through out the entire script execution.
+- args: args is the parameter object that gets passed into the script (via pinokio.js `params`). Unlike `input` which takes the value passed in from the immediately previous step, `args` is a global value that is the same throughout the entire script execution.
 - local: local variable object that can be set with `local.set` API
 - self: refers to the script file itself (which is JSON or JavaScript). For example if `start.js` that's currently running has `daemon: true` set, `{{self.daemon}}` will evaluate to true.
 - uri: The current script uri
@@ -375,7 +375,7 @@ logs/
 ### 3. Minimal Always
 - If you are starting with existing script files, before modifying, creating, or removing any script files, first look at `pinokio.js` to understand which script files are actually used in the launcher. The only script files used are the ones mentioned in the `pinokio.js` file. The `pinokio.js` file is the file that constructs the UI dynamically.
 - Do not create a redundant script file that does something that already exists. Instead modify the existing script file for the feature. For example, do not create an `install.json` file for installation if `install.js` already exists. Instead, modify the `install.js` file.
-- Pinokio accepts both JSON and JS script files, so when determining whether a script for a specific purpose already exists, check both JSON and JS files mentioned in the `pinokio.js` file. Do not create script files for rendundant purpose.
+- Pinokio accepts both JSON and JS script files, so when determining whether a script for a specific purpose already exists, check both JSON and JS files mentioned in the `pinokio.js` file. Do not create script files for redundant purpose.
 - When building launchers for existing projects cloned from a repository, try to stay away from modifying the project folder (the `D:\pinokio\api\Ultimate-TTS-Studio.git` folder), even if installations are failing. Instead, try to work around it by creating additional files in the launcher folder, and using those files IN ADDITION to the default project.
   - The only exception when you may need to make changes to the project folder is when the user explicitly wants to modify the existing project. Otherwise if the purpose is to simply write a launcher, the app logic folder should never be touched.
 - When running shell commands, take full advantage of the Pinokio `shell.run` API, which provides features like `env`, `venv`, `input`, `path`, `sudo`, `on`, etc. which can greatly reduce the amount of script code.
@@ -414,7 +414,7 @@ logs/
 ### 11. pinokio.json
 - Do not touch the `version` field since the version is the script schema version and the one pre-set in `pinokio.js` must be used.
 - `icon`: It's best if we have a user friendly icon to represent the app, so try to get an image and link it from `pinokio.json`.
-  - If the git repository for the `D:\pinokio\api\Ultimate-TTS-Studio.git` folder points to GitHub (for example https://github.com/<USERNAME>/<REPO_NAME>`, ask the user if they want to download the icon from GitHub, and if approved, get the `avatar_url` by fetching `https://api.github.com/users/<USERNAME>`, and then download the image to the root folder as `icon.png`, and set `icon.png` as the `icon` field of the `pinokio.json`. 
+  - If the git repository for the `D:\pinokio\api\Ultimate-TTS-Studio.git` folder points to GitHub (for example https://github.com/`<USERNAME>`/`<REPO_NAME>`), ask the user if they want to download the icon from GitHub, and if approved, get the `avatar_url` by fetching `https://api.github.com/users/<USERNAME>`, and then download the image to the root folder as `icon.png`, and set `icon.png` as the `icon` field of the `pinokio.json`. 
 ### 12. Gitignore
 - When a launcher involves cloning 3rd party repositories, downloading files dynamically, or some files to be generated, these need to be included in the .gitignore file. This may include things like:
   - Cloning git repositories
