@@ -257,7 +257,7 @@ root:
           action:
             type: file_exists
             target: "/a0/conf/model_providers.yaml"
-            expect: "ollama_spark entry pointing to http://pmoves-dgx-spark:11434"
+            expect: "ollama_spark entry pointing to http://pmoves-gb10-spark:11434"
           context: >
             Provider added to /a0/conf/model_providers.yaml.
             PMOVES Spark preset uses this provider.
