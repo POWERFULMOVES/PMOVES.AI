@@ -107,3 +107,21 @@ Full stack with NATS, TensorZero, Supabase, monitoring. See `pmoves/docker-compo
 - Hardening tracker: `docs/hardening/PMOVES-hardening-tracker.md`
 - Trivy scans gate on HIGH/CRITICAL in CI
 - CodeQL for code scanning regressions
+
+## AGENTS.md Format Reference
+
+This file follows the **[agents.md open format](https://agents.md)** — a universal contract for guiding coding agents (Claude Code, Codex, Copilot, Cursor, Aider, etc.). The PMOVES fork of the format spec lives at [`PMOVES-agents.md/`](PMOVES-agents.md/) (submodule, fork of [agentsmd/agents.md](https://github.com/agentsmd/agents.md)).
+
+The PMOVES-agents.md submodule is the canonical home for:
+- AGENTS.md format reference + extensions
+- Agent taxonomy & class definitions
+- Persona schema and seed personas
+- Universal coding-agent docs
+
+**Tier:** *Tier-2 always-relevant* — load when discussing agent classes, taxonomy, persona schema, or AGENTS.md format itself.
+
+**Cross-refs:** This `AGENTS.md` (project root) carries project-specific structure & commands; the format/taxonomy reference lives in the submodule. Today, taxonomy docs (`pmoves/docs/AGENTS/PMOVES_AGENT_CLASS_TAXONOMY.md`, `PMOVES_AGENT_TOPOLOGY.md`) live in `pmoves/docs/`; migrating them into `PMOVES-agents.md/` is gated on explicit user confirmation since it changes git history paths.
+
+## Skills Constellation
+
+POWERFULMOVES forks of upstream agent-skill repositories live under [`skills/`](skills/) — see [`skills/README.md`](skills/README.md) for the full map. All five forks landed across two singleton rounds on 2026-05-09 (z890): `Pmoves-skills` (Anthropic), `PMOVES-awesome-agent-skills`, `pmoves-fork-repository-skill`, `PMOVES-agent-sandbox-skill`, `Pmoves-claude-d3js-skill`. New external skill forks still require per-URL Bash-tool authorization (singleton add) — see `skills/README.md` for the procedure.
