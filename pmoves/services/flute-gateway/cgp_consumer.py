@@ -5,9 +5,12 @@ import os
 from typing import Any, Dict
 from nats.aio.client import Client as NATS
 from chit_signing import verify_cgp
+from geometry_bridge import cgp_subject
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
+
+_STRICT_MODE = bool(os.environ.get("CHIT_SIGNING_KEY") or os.environ.get("CHIT_PASSPHRASE"))
 
 async def main():
     nc = NATS()
@@ -26,21 +29,20 @@ async def main():
 
         try:
             payload: Dict[str, Any] = json.loads(data)
-            
-            # Optionally verify signature if passphrase exists
-            # We will forward it anyway if it is structurally valid, but could reject here.
+
             is_valid = verify_cgp(payload)
             if not is_valid:
-                logger.warning("Packet signature invalid or missing.")
+                if _STRICT_MODE:
+                    logger.warning("Dropping packet: signature invalid and CHIT signing is configured.")
+                    return
+                logger.warning("Packet signature invalid or missing (strict mode off — forwarding).")
 
-            # Translate to geometry.packet.decoded.v1
-            # For flute, we might just unwrap the points
             decoded_event = {
                 "source_spec": payload.get("spec"),
                 "super_nodes": payload.get("super_nodes", []),
                 "control_plane": payload.get("control_plane", {})
             }
-            
+
             publish_subject = "geometry.packet.decoded.v1"
             await nc.publish(publish_subject, json.dumps(decoded_event).encode())
             logger.info(f"Successfully decoded and published to {publish_subject}")
@@ -50,7 +52,7 @@ async def main():
         except Exception as e:
             logger.error(f"Error processing message: {e}")
 
-    subscribe_subject = "geometry.cgp.v1"
+    subscribe_subject = cgp_subject()
     await nc.subscribe(subscribe_subject, cb=message_handler)
     logger.info(f"Subscribed to {subscribe_subject}")
 
