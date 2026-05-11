@@ -48,9 +48,9 @@ goto loop
 :: nested-quote escaping problems of -Command across cmd → powershell.
 set "WRAP=%TEMP%\pmoves-elevate-%STEM%.ps1"
 > "%WRAP%" echo $ErrorActionPreference = 'Continue'
->> "%WRAP%" echo $target = '%SCRIPT_DIR%%TARGET%'
->> "%WRAP%" echo $log = '%LOG%'
->> "%WRAP%" echo $argString = '%FWD%'.Trim()
+>> "%WRAP%" echo $target = "%SCRIPT_DIR%%TARGET%"
+>> "%WRAP%" echo $log = "%LOG%"
+>> "%WRAP%" echo $argString = '!FWD:'=''!'.Trim()
 >> "%WRAP%" echo if ($argString) { $cmd = "& `"$target`" $argString" } else { $cmd = "& `"$target`"" }
 >> "%WRAP%" echo Invoke-Expression $cmd ^*^>^&1 ^| Tee-Object -FilePath $log
 >> "%WRAP%" echo Write-Host ''

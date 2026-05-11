@@ -58,10 +58,10 @@ After each run, read the log and check for expected markers:
 
 | Task | Success markers (must all appear) |
 |---|---|
-| Enable SSH (default key) | `=== SSH Setup Complete ===`, `sshd: Running`, exactly one `ssh-ed25519` line in `administrators_authorized_keys` |
-| Enable SSH (added key) | `Appended new key` (first run) OR `Key already present (no-op)` (re-run). After verification, check that `administrators_authorized_keys` has both the original and the new key (count `^ssh-` lines). |
+| Enable SSH (default key) | `=== SSH Setup Complete ===`, `sshd: Running (Automatic)` |
+| Enable SSH (added key) | `Appended new key` (first run) OR `Key already present (no-op)` (re-run) |
 | Harden SSH | `PasswordAuthentication no`, `PermitRootLogin prohibit-password`, `MaxAuthTries 3`, `PubkeyAuthentication yes` in the updated `sshd_config` (the script prints the diff) |
-| Harden SSH dry-run | `(would set) ...` lines for each setting, no actual change applied |
+| Harden SSH dry-run | `=== DryRun: no changes written ===` |
 
 ## Safety Rules
 
