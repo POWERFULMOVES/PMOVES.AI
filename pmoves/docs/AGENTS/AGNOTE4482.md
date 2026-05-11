@@ -357,7 +357,7 @@ env["RUNNER_ALLOW_RUNNER_REUSE"] = "true"
 | A2A server compose exposure | **PARTIAL** | Mounted/wired, disabled by default — intentional security posture |
 | Cipher Memory port 8096->8105 | **RESOLVED** | CLAUDE.md lines 65/68/69 show 8105 |
 | 11 agent PR branches | **RESOLVED** | All merged 2026-04-22 before triage |
-| PMOVES-transcribe-and-fetch gitlink | **RESOLVED** | Gitlink rewound to a reachable upstream SHA; `git submodule update --init` succeeds without `--no-recurse-submodules`. Verify with `git -C PMOVES-transcribe-and-fetch rev-parse HEAD` after pulling. |
+| PMOVES-transcribe-and-fetch gitlink | **RESOLVED** | Gitlink rewound to reachable upstream SHA `aef3a86e817bc2d266b8b0845b6b118062e8dc7a`; `git submodule update --init` succeeds without `--no-recurse-submodules`. Verify with `git -C PMOVES-transcribe-and-fetch rev-parse HEAD` after pulling and confirm it matches the SHA. |
 
 ### Handoff Notes
 - NATS secondary batch: vllm-orchestrator/, supaserch/app.py, gateway-agent/nats_integration.py, benchmark-runner/, agent-zero/python/events/bus.py
