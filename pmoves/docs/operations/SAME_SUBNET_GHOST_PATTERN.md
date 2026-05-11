@@ -148,7 +148,9 @@ sudo ip addr add 10.99.0.1/24 dev <secondary_iface>
 #### macOS
 
 ```bash
-sudo networksetup -setmanual "<service_name>" 10.99.0.1 255.255.255.0
+# networksetup -setmanual requires: <service> <ip> <subnet> <router>
+# Use 0.0.0.0 for router if the ghost subnet has no default gateway
+sudo networksetup -setmanual "<service_name>" 10.99.0.1 255.255.255.0 0.0.0.0
 ```
 
 ### Option B — Disable the secondary adapter entirely
@@ -232,7 +234,8 @@ sudo ip link set <secondary_iface> up
 #### macOS
 
 ```bash
-sudo networksetup -setmanual "<service_name>" <ghost_ip> <netmask>
+# networksetup -setmanual requires: <service> <ip> <subnet> <router>
+sudo networksetup -setmanual "<service_name>" <ghost_ip> <netmask> <router>
 sudo networksetup -setnetworkserviceenabled "<service_name>" on
 ```
 
