@@ -298,6 +298,11 @@ MEDIA_AUDIO_URL = os.environ.get("MEDIA_AUDIO_URL")
 PYANNOTE_AUTH_TOKEN = os.environ.get("PYANNOTE_AUTH_TOKEN")
 
 
+def _env_truthy(name: str, default: str = "false") -> bool:
+    """Single source of truth for env-flag parsing (e.g. WHISPER_DIARIZE)."""
+    return os.environ.get(name, default).lower() in ("1", "true", "yes")
+
+
 def _coerce_timeout(value: Optional[str], default: float) -> float:
     if not value:
         return default
@@ -645,7 +650,7 @@ def transcribe(request: Request, body: Dict[str, Any] = Body(...)):
 
     language = body.get("language")
     model_name = body.get("whisper_model") or DEFAULT_WHISPER_MODEL
-    diarize = bool(body.get("diarize", os.environ.get("WHISPER_DIARIZE", "false").lower() in ("1", "true", "yes")))
+    diarize = bool(body.get("diarize", _env_truthy("WHISPER_DIARIZE")))
     out_audio_key = body.get("out_audio_key")
     context_id = body.get("context_id") or request.headers.get("x-context-id")
 
@@ -776,7 +781,7 @@ async def transcribe_file(
     provider: Optional[str] = Form(None),
     model: Optional[str] = Form(None),
     whisper_model: Optional[str] = Form(None),
-    diarize: bool = Form(False),
+    diarize: Optional[bool] = Form(None),
     context_id: Optional[str] = Form(None),
 ) -> Dict[str, Any]:
     """
@@ -789,6 +794,9 @@ async def transcribe_file(
     chosen_provider = (provider or DEFAULT_PROVIDER).lower()
     if chosen_provider not in SUPPORTED_PROVIDERS:
         raise HTTPException(400, f"provider must be one of {', '.join(SUPPORTED_PROVIDERS)}")
+
+    if diarize is None:
+        diarize = _env_truthy("WHISPER_DIARIZE")
 
     model_name = whisper_model or model or DEFAULT_WHISPER_MODEL
     resolved_context_id = context_id or request.headers.get("x-context-id")
