@@ -172,7 +172,7 @@ After any deletion operation, verify across all stores:
 
 | Store | Verification Method |
 -------|-------------------|
-| Supabase (PostgreSQL) | `SELECT COUNT(*) FROM sessions WHERE updated_at > now() - interval '24 hours'` |
+| Supabase (PostgreSQL) | `SELECT COUNT(*) FROM sessions WHERE updated_at < now() - interval '24 hours'` — expect 0 (sessions older than the 24h policy window must be purged) |
 | Qdrant | `scroll` collection with filter `created_at < threshold` — expect 0 results |
 | Neo4j | `MATCH (n) WHERE n.created_at < datetime() - duration({days: 30}) RETURN count(n)` — expect 0 |
 | MinIO | `mc ls --recursive minio/bucket/ --older-than 7d` — expect 0 |
