@@ -2,8 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { bundle } from '@remotion/bundler';
 import { renderMedia, renderStill, selectComposition } from '@remotion/renderer';
-import provenanceLivingDoc from '../src/provenanceLivingDoc.ts';
-const { normalizeProvenanceLivingDoc } = provenanceLivingDoc;
+import { normalizeProvenanceLivingDoc } from '../src/provenanceLivingDoc.ts';
 
 const cwd = process.cwd();
 const entryPoint = path.resolve(cwd, 'src', 'remotion', 'index.tsx');
