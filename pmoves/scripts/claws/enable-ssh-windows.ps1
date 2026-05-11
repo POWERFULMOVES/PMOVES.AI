@@ -26,13 +26,18 @@ if ($sshCap.State -ne 'Installed') {
     Write-Host "[1/5] OpenSSH Server already installed"
 }
 
-# 2. Start and enable sshd
-Write-Host "[2/5] Starting sshd service..."
-Start-Service sshd
+# 2. Start and enable sshd + ssh-agent
+# Both services must have StartupType flipped BEFORE Start-Service. sshd's
+# post-install default is Manual (Start-Service accepts that), but ssh-agent
+# ships Disabled — Start-Service on a Disabled service throws and aborts the
+# script under $ErrorActionPreference='Stop'. Always Set-Service first.
+Write-Host "[2/5] Starting sshd + ssh-agent services..."
 Set-Service -Name sshd -StartupType 'Automatic'
-Start-Service ssh-agent
+Start-Service sshd
 Set-Service -Name ssh-agent -StartupType 'Automatic'
+Start-Service ssh-agent
 Write-Host "  sshd: Running (Automatic)"
+Write-Host "  ssh-agent: Running (Automatic)"
 
 # 3. Set default shell to PowerShell
 Write-Host "[3/5] Setting default shell to PowerShell..."
