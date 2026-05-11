@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-03-13 02:43 UTC",
+  "generated_at": "2026-04-05 15:08 UTC",
   "manifest": "pmoves/configs/submodule_layer_validation_manifest.json",
   "summary": {
     "submodules": 1,
@@ -12,7 +12,7 @@
       "path": "PMOVES-Danger-infra",
       "url": "https://github.com/POWERFULMOVES/PMOVES-Danger-infra.git",
       "status_prefix": " ",
-      "commit": "eeb04436572d1f8797702dbd369a0455a9f46ace",
+      "commit": "62f4c272086ed98a8dea65506876d90af2152462",
       "initialized": true,
       "remote_commit_reachable": "local",
       "required_files_any_ok": true,
