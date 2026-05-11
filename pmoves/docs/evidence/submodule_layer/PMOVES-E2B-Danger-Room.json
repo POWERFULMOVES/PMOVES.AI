@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-03-13 02:43 UTC",
+  "generated_at": "2026-04-05 15:09 UTC",
   "manifest": "pmoves/configs/submodule_layer_validation_manifest.json",
   "summary": {
     "submodules": 1,
@@ -12,7 +12,7 @@
       "path": "PMOVES-E2B-Danger-Room",
       "url": "https://github.com/POWERFULMOVES/PMOVES-E2B-Danger-Room.git",
       "status_prefix": " ",
-      "commit": "bc8eafebc4e432357dcb3bdff4cb10c2e5244a54",
+      "commit": "d2d0fcc20dc848be7f45efb6e4ea933165cdc0fa",
       "initialized": true,
       "remote_commit_reachable": "local",
       "required_files_any_ok": true,

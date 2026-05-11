@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-03-13 02:45 UTC",
+  "generated_at": "2026-04-05 15:12 UTC",
   "manifest": "pmoves/configs/submodule_layer_validation_manifest.json",
   "summary": {
     "submodules": 1,
@@ -12,7 +12,7 @@
       "path": "PMOVES-surf",
       "url": "https://github.com/POWERFULMOVES/PMOVES-surf.git",
       "status_prefix": " ",
-      "commit": "a27fbb28ea8b69b76798a7fd3d293a1a26dcdace",
+      "commit": "86f7d11359f4e19ec8f11d1daba1612c324ecb97",
       "initialized": true,
       "remote_commit_reachable": "local",
       "required_files_any_ok": true,

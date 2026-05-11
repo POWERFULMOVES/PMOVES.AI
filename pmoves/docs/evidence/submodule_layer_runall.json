@@ -1,9 +1,18 @@
 {
   "manifest": "pmoves/configs/submodule_layer_validation_manifest.json",
-  "modules_checked": 40,
-  "total_errors": 0,
+  "modules_checked": 44,
+  "total_errors": 1,
   "total_warnings": 0,
   "runs": [
+    {
+      "name": "PMOVES-a0-plugins",
+      "path": "PMOVES-a0-plugins",
+      "returncode": 0,
+      "errors": 0,
+      "warnings": 0,
+      "json_path": "pmoves/docs/evidence/submodule_layer/PMOVES-a0-plugins.json",
+      "md_path": "pmoves/docs/evidence/submodule_layer/PMOVES-a0-plugins.md"
+    },
     {
       "name": "PMOVES-A2UI",
       "path": "PMOVES-A2UI",
@@ -16,8 +25,8 @@
     {
       "name": "PMOVES-Agent-Zero",
       "path": "PMOVES-Agent-Zero",
-      "returncode": 0,
-      "errors": 0,
+      "returncode": 1,
+      "errors": 1,
       "warnings": 0,
       "json_path": "pmoves/docs/evidence/submodule_layer/PMOVES-Agent-Zero.json",
       "md_path": "pmoves/docs/evidence/submodule_layer/PMOVES-Agent-Zero.md"
@@ -50,6 +59,15 @@
       "md_path": "pmoves/docs/evidence/submodule_layer/PMOVES-Archon.md"
     },
     {
+      "name": "PMOVES-autoresearch",
+      "path": "PMOVES-autoresearch",
+      "returncode": 0,
+      "errors": 0,
+      "warnings": 0,
+      "json_path": "pmoves/docs/evidence/submodule_layer/PMOVES-autoresearch.json",
+      "md_path": "pmoves/docs/evidence/submodule_layer/PMOVES-autoresearch.md"
+    },
+    {
       "name": "PMOVES-BoTZ",
       "path": "PMOVES-BoTZ",
       "returncode": 0,
@@ -75,6 +93,15 @@
       "warnings": 0,
       "json_path": "pmoves/docs/evidence/submodule_layer/Pmoves-cipher.json",
       "md_path": "pmoves/docs/evidence/submodule_layer/Pmoves-cipher.md"
+    },
+    {
+      "name": "PMOVES-ClawZ",
+      "path": "PMOVES-ClawZ",
+      "returncode": 0,
+      "errors": 0,
+      "warnings": 0,
+      "json_path": "pmoves/docs/evidence/submodule_layer/PMOVES-ClawZ.json",
+      "md_path": "pmoves/docs/evidence/submodule_layer/PMOVES-ClawZ.md"
     },
     {
       "name": "PMOVES-Creator",
@@ -237,6 +264,15 @@
       "warnings": 0,
       "json_path": "pmoves/docs/evidence/submodule_layer/PMOVES-n8n.json",
       "md_path": "pmoves/docs/evidence/submodule_layer/PMOVES-n8n.md"
+    },
+    {
+      "name": "PMOVES-Neo4j",
+      "path": "PMOVES-Neo4j",
+      "returncode": 0,
+      "errors": 0,
+      "warnings": 0,
+      "json_path": "pmoves/docs/evidence/submodule_layer/PMOVES-Neo4j.json",
+      "md_path": "pmoves/docs/evidence/submodule_layer/PMOVES-Neo4j.md"
     },
     {
       "name": "PMOVES-Open-Notebook",

@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-03-13 02:44 UTC",
+  "generated_at": "2026-04-05 15:10 UTC",
   "manifest": "pmoves/configs/submodule_layer_validation_manifest.json",
   "summary": {
     "submodules": 1,
@@ -12,7 +12,7 @@
       "path": "PMOVES-llama-throughput-lab",
       "url": "https://github.com/POWERFULMOVES/PMOVES-llama-throughput-lab.git",
       "status_prefix": " ",
-      "commit": "5c96bcfcf6f4c7649e65007ffe4be93883ef951f",
+      "commit": "30279632ac94a2ff2c189a699e1ee9e5b7f697ff",
       "initialized": true,
       "remote_commit_reachable": "local",
       "required_files_any_ok": true,
