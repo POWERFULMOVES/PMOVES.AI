@@ -1,6 +1,16 @@
 # PMOVES.AI gitignore
 
 # =============================================================================
+# AutoClaw / AutoGLM local workspace state (machine-local, not PMOVES code)
+# =============================================================================
+HEARTBEAT.md
+IDENTITY.md
+SOUL.md
+TOOLS.md
+USER.md
+.openclaw/
+
+# =============================================================================
 # Infrastructure Secrets (relay keys, QR configs, audits — NEVER COMMIT)
 # =============================================================================
 rustdesk-*-qr.png
