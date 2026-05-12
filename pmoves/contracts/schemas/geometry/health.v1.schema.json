@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Health Tokenism Geometry Packet (geometry.health.v1)",
+  "description": "CGP payload representing human/system vitality as geometry points for A2UI.",
+  "type": "object",
+  "required": [
+    "spec",
+    "type",
+    "super_nodes"
+  ],
+  "additionalProperties": true,
+  "properties": {
+    "spec": {
+      "type": "string",
+      "enum": ["chit.cgp.v0.2"]
+    },
+    "type": {
+      "type": "string",
+      "enum": ["geometry.health.v1"]
+    },
+    "id": { "type": "string" },
+    "label": { "type": "string" },
+    "source": { "type": "string" },
+    "ts": { "type": ["number", "string"] },
+    "super_nodes": {
+      "type": "array",
+      "minItems": 1
+    },
+    "control_plane": {
+      "type": "object",
+      "properties": {
+        "state_vector": {
+          "type": "object",
+          "properties": {
+            "delta": { "type": "number", "description": "Velocity/Activity level (e.g., BPM)" },
+            "kappa": { "type": "number", "description": "Curvature/Sleep efficiency (e.g., HRV)" },
+            "Hz": { "type": "number", "description": "Spectral Entropy/Metabolic burn" },
+            "A": { "type": "number", "description": "Attribution/Dietary adherence" },
+            "F": { "type": "number", "description": "Overall Vitality/Fitness score" }
+          }
+        }
+      }
+    }
+  }
+}

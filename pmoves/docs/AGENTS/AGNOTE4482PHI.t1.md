@@ -707,3 +707,10 @@ The pipeline reports success because its validation scope is too narrow. Neither
 - Timestamp: `2026-05-02T00:00:00Z`
 
 <!-- GRAPHITI_MARK: CLAUDE-OPUS::SUBMODULE-SYNC-LANE-Z890::2026-05-02 -->
+
+## W0 Substrate Lane — Cross-Platform Node Onboarding (OPEN)
+
+- `2026-05-09T22:00:00Z` CLAIM `Z890-CLAUDE` scope: W0 Substrate lane brief authored — cross-platform node onboarding (Linux + Windows hardware scan + same-subnet ghost detector + Unifi probe + auto-write profile YAML). Brief: [AGNOTE4482PHI.W0-SUBSTRATE.md](./AGNOTE4482PHI.W0-SUBSTRATE.md). Pattern companion: [SAME_SUBNET_GHOST_PATTERN.md](../operations/SAME_SUBNET_GHOST_PATTERN.md) (separate PR off `docs/same-subnet-ghost-pattern`). Trigger: Z890 dual-NIC fix (PR #1432, commit `4a970a71`) revealed system-agnostic gap; user rolling new systems through Unifi. PR series PR-1..PR-6 inside the brief are claim-able by 4090-CLAUDE / shift crew / Codex.
+- `2026-05-09T22:00:00Z` RELEASE `Z890-CLAUDE` scope: Brief delivered. Lane open. Recommended primary owner: 4090-CLAUDE (cross-fleet operability reach). Z890-CLAUDE retains test-validation interest on PR-3 (Windows companion) since Z890 is the live trigger node, but does not claim PR-3 implementation. Open questions for operator captured in brief § "Open Questions for Operator" — not blocking, can be answered during PR-1 / PR-2 review. Trail unsigned locally (no CHIT_PASSPHRASE).
+
+<!-- GRAPHITI_MARK: Z890-CLAUDE::W0-SUBSTRATE-BRIEF::2026-05-09 -->

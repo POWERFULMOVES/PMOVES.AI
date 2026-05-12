@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-03-13 02:46 UTC",
+  "generated_at": "2026-04-05 15:13 UTC",
   "manifest": "pmoves/configs/submodule_layer_validation_manifest.json",
   "summary": {
     "submodules": 1,
@@ -12,7 +12,7 @@
       "path": "PMOVES-Ultimate-TTS-Studio",
       "url": "https://github.com/POWERFULMOVES/PMOVES-Ultimate-TTS-Studio.git",
       "status_prefix": " ",
-      "commit": "7ee6b9df1db3d6632f99e3a4d3c48cd008a5cc5f",
+      "commit": "26ca5a2acd238a21d5242a72fba3dbd24c5996d5",
       "initialized": true,
       "remote_commit_reachable": "local",
       "required_files_any_ok": true,

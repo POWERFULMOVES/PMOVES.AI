@@ -1,7 +1,9 @@
 # AGENTS Documentation Implementation Gap Analysis
 
-**Date:** 2026-04-10 (updated from 2026-03-01)
-**Branch:** PMOVES.AI-Edition-Hardened / main
+> **DEPRECATION NOTICE (per issue #1436 C3):** This document references the historical `PMOVES.AI-Edition-Hardened` branch as its baseline. The active hardened branch is now `PMOVES.AI-Edition-v1.9` (sync completed 2026-04-25). Multiple gaps documented here have been **RESOLVED** in v1.9 — including A2A server, thread types, and SKILL.md pattern. Treat all gap claims below as **historical** until a full refresh against `PMOVES.AI-Edition-v1.9` is published. Do not use this document to plan new work without cross-checking against the v1.9 branch first.
+
+**Date:** 2026-04-10 (updated from 2026-03-01) — **historical baseline; see deprecation notice above**
+**Branch:** PMOVES.AI-Edition-Hardened (historical) — current: `PMOVES.AI-Edition-v1.9`
 **Purpose:** Identify gaps between AGENTS documentation and current hardened branch implementation
 **Cross-References:**
 - [CODEX_RUNTIME_PROTOCOL.md](./CODEX_RUNTIME_PROTOCOL.md) — Operating modes and validation standards

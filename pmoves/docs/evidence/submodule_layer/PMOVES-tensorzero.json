@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-03-13 02:45 UTC",
+  "generated_at": "2026-04-05 15:12 UTC",
   "manifest": "pmoves/configs/submodule_layer_validation_manifest.json",
   "summary": {
     "submodules": 1,
@@ -12,7 +12,7 @@
       "path": "PMOVES-tensorzero",
       "url": "https://github.com/POWERFULMOVES/PMOVES-tensorzero.git",
       "status_prefix": " ",
-      "commit": "d71f4d14f1026e165243dfa281520ae7a84b0cc5",
+      "commit": "3f941d337b26da8c70f4aa48306817f7794fbfbd",
       "initialized": true,
       "remote_commit_reachable": "local",
       "required_files_any_ok": true,

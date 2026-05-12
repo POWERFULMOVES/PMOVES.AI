@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-03-13 02:44 UTC",
+  "generated_at": "2026-04-05 15:09 UTC",
   "manifest": "pmoves/configs/submodule_layer_validation_manifest.json",
   "summary": {
     "submodules": 1,
@@ -12,7 +12,7 @@
       "path": "PMOVES-E2b-Spells",
       "url": "https://github.com/POWERFULMOVES/PMOVES-E2b-Spells.git",
       "status_prefix": " ",
-      "commit": "43f4f8b8bf375c4c2de3df1a76d011943bbd727e",
+      "commit": "049731c122a051c9993e02934cc06b0e896d53dd",
       "initialized": true,
       "remote_commit_reachable": "local",
       "required_files_any_ok": true,

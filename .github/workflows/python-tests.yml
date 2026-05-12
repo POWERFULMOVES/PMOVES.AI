@@ -108,8 +108,14 @@ jobs:
                   "librosa", "numba", "kokoro", "newspaper3k", "boto3",
                   "langchain", "langchain-community", "langchain-core",
                   "litellm", "pymupdf", "qdrant-client"}
+          skip_normalized = {s.lower().replace('-', '_') for s in skip}
 
-          # Collect unique package names (strip versions to let pip resolve)
+          # Keep resolver guardrails for packages with known bad upstream releases.
+          preserve_specs = {"pyreqwest-impersonate"}
+          preserve_normalized = {s.lower().replace('-', '_') for s in preserve_specs}
+
+          # Collect unique package specs. Most entries strip versions to let pip resolve;
+          # preserved specs keep explicit guardrails for packages with bad releases.
           packages = set()
           base_packages = ["pytest", "pytest-asyncio", "pytest-cov"]
 
@@ -122,11 +128,15 @@ jobs:
                           continue  # Skip comments, empty lines, and pip options
                       # Extract just the package name
                       name = re.split(r'[>=<\[!~]', line)[0].strip()
-                      if name.lower().replace('-', '_') in {s.lower().replace('-', '_') for s in skip}:
+                      normalized = name.lower().replace('-', '_')
+                      if normalized in skip_normalized:
                           continue
-                      packages.add(name)
+                      if normalized in preserve_normalized:
+                          packages.add(line.split(" #", 1)[0].strip())
+                      else:
+                          packages.add(name)
 
-          # Install base packages + deduplicated requirements (no version pins)
+          # Install base packages + deduplicated requirements.
           to_install = base_packages + sorted(packages)
           subprocess.check_call([sys.executable, "-m", "pip", "install", *to_install])
           PY

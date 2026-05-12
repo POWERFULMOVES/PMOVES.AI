@@ -61,6 +61,8 @@ coding_stacks:
     tz_function: coding_alibaba
 
 # VRAM budget (16GB total, 2GB system reserve = 14GB usable)
+# Installed variants: qwen3-embedding:8b (4.7GB) and qwen3-vl:8b (6.1GB).
+# Profile updated 2026-05-10 to match actual inventory.
 vram_budget:
   total_mb: 16384
   system_reserve_mb: 2048
@@ -68,22 +70,22 @@ vram_budget:
   max_concurrent_models: 2
   idle_timeout_seconds: 180
   always_resident:
-    - model: qwen3-embedding:4b
-      vram_mb: 3000
+    - model: qwen3-embedding:8b        # 8b installed (original design specified :4b)
+      vram_mb: 4700
       reason: "HiRAG, extract-worker, cipher-memory need constant embeddings"
   co_residency_groups:
     coding_focus:
-      models: [qwen3-coder:30b, qwen3-embedding:4b]
-      total_mb: 9500
+      models: [qwen3-coder:30b, qwen3-embedding:8b]
+      total_mb: 11000                  # 30b offloads excess layers to 64GB RAM
     general_focus:
-      models: [qwen3.5:9b, qwen3-embedding:4b]
-      total_mb: 9600
+      models: [qwen3.5:9b, qwen3-embedding:8b]
+      total_mb: 11000
     research_focus:
-      models: [lfm2:24b, qwen3-embedding:4b]
-      total_mb: 14000                # Tight — may need embedding eviction (usable: 14336)
+      models: [lfm2:24b, qwen3-embedding:8b]
+      total_mb: 14336                  # Tight — may need embedding eviction
     multimodal_minimal:
-      models: [qwen3.5:4b, qwen3-embedding:4b, qwen3-vl:4b]
-      total_mb: 9000
+      models: [qwen3.5:4b, qwen3-embedding:8b, qwen3-vl:8b]
+      total_mb: 13800                  # 3GB + 4.7GB + 6.1GB — fits 14.3GB
 
 mcp:
   - docker
@@ -143,6 +145,15 @@ cross_node:
         - nats:4222
         - minio:9000
       access_via: [tailscale]
+    pmoves-spark:
+      role: fleet_inference
+      tailscale_host: pmoves-spark
+      hardware: "GB10 Grace-Blackwell 128GB unified — ARM64"
+      services:
+        - ollama:11434                 # Gemma 4 31B FP16, Nemotron-Super-49B
+        - nim:8200                     # NVIDIA NIM (optional)
+      access_via: [tailscale, nats]
+      notes: "Primary 120B+ inference node. Route lfm2:24b and qwen3-coder-480b here at full precision."
 
   channels:
     nats:
@@ -174,7 +185,7 @@ nats_announce:
     vram: 16gb
     cuda: sm_89
     coding: [qwen3-coder-30b, qwen3.5-9b]
-    embeddings: qwen3-embed-4b
+    embeddings: qwen3-embed-8b
     stacks: [claude, codex, glm, minimax, alibaba]
     claws: 4
     geometry_bus: true
@@ -190,13 +201,30 @@ messaging:
 # MiniMax Provider Cascade Binding
 # =============================================================================
 # Per MINIMAX_GLM_PARITY_ANALYSIS.md Phase 1: Profile Binding
-# Laptop has limited VRAM, so MiniMax-M2.1 is preferred (efficient)
+# Upgraded to M2.7 (1M ctx, token plan) — M2.1 was the efficient fallback pre-plan
 minimax_cascade:
-  preferred_model: minimax-m2.1
+  preferred_model: minimax-m2.7
   cascade_priority: medium
   fallback_model: qwen3.5-4b
   gpu_shape_store: false  # Limited VRAM
   tensorzero_routing: pmoves-code
+
+# Ollama Pro subscription — cloud-proxied models via standard Ollama API (:11434)
+# No local VRAM consumed; models served from Ollama cloud backend
+ollama_pro:
+  enabled: true
+  cloud_models:                    # verified via ollama list 2026-05-10
+    - kimi-k2:1t-cloud             # Moonshot Kimi K2 1T MoE (32B active) — coding + long-ctx
+    - qwen3-coder:480b-cloud       # Qwen3-Coder 480B via cloud (no VRAM cost)
+    - qwen3-next:80b-cloud         # Qwen3-Next 80B
+    - qwen3-vl:235b-cloud          # Qwen3 Vision-Language 235B
+    - deepseek-v3.2:cloud          # DeepSeek V3.2
+    - glm-4.7:cloud                # GLM 4.7 (Z.AI/KiloCode compatible)
+    - minimax-m2:cloud             # MiniMax M2 series
+    - gemini-3-pro-preview:latest  # Gemini 3 Pro Preview
+    - gemini-3-flash-preview:cloud # Gemini 3 Flash Preview
+    - devstral-2:123b-cloud        # Mistral DevStral 2 123B
+    - nemotron-3-nano:30b-cloud    # NVIDIA Nemotron-3 Nano 30B
 
 # BoTZ Framework binding
 botz:

@@ -68,12 +68,13 @@ jobs:
 
       - name: Verify release-notes entry
         if: steps.detect.outputs.touched == 'true'
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
         run: |
           echo "Suit files were modified. Checking for release-notes evidence..."
           PASS=false
 
           # Check 1: PR body contains release-note keyword
-          PR_BODY="${{ github.event.pull_request.body }}"
           if echo "$PR_BODY" | grep -qiE '(release.note|release-note|RELEASE NOTE)'; then
             echo "✓ PR body contains release-note reference."
             PASS=true

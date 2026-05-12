@@ -246,7 +246,7 @@ The deletion script also scans for T4 data where it **shouldn't** be:
 
 | Check | Frequency | Method |
 -------|-----------|--------|
- | T4 sandbox exists and is tmpfs | Every 5 min | `mount  grep pmoves-bio` — alert if missing or on disk |
+ | T4 sandbox exists and is tmpfs | Every 5 min | `mount \| grep pmoves-bio` — alert if missing or on disk |
  | No T4 data in persistent stores | Hourly | Query Qdrant, PostgreSQL, Neo4j, MinIO for biometric tags |
  | Log redaction active | Every 5 min | Tail logs, scan for unredacted biometric patterns |
  | Config flags at secure defaults | On container start | Validate env vars match policy defaults |
