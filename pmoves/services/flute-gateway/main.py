@@ -457,11 +457,26 @@ async def lifespan(app: FastAPI):
         logger.warning("NATS connection failed: %s (continuing without NATS)", e)
         nats_client = None
 
+    # Start CGP geometry consumer as a companion background task.
+    # Opt-out: set CGP_CONSUMER_ENABLED=false to disable.
+    _cgp_task: Optional[asyncio.Task] = None
+    _cgp_enabled = os.environ.get("CGP_CONSUMER_ENABLED", "true").strip().lower() not in {"false", "0", "no", "off"}
+    if nats_client and _cgp_enabled:
+        from cgp_consumer import main as _cgp_consumer_main
+        _cgp_task = asyncio.create_task(_cgp_consumer_main())
+        logger.info("CGP consumer started on subject %s", cgp_subject())
+
     logger.info("Flute Gateway started successfully")
     yield
 
     # Shutdown
     logger.info("Shutting down Flute Gateway...")
+    if _cgp_task and not _cgp_task.done():
+        _cgp_task.cancel()
+        try:
+            await _cgp_task
+        except asyncio.CancelledError:
+            pass
     if nats_client:
         await nats_client.close()
 
