@@ -98,7 +98,7 @@ Docker daemon but the host-side proxy only forwards localhost traffic.
 
 Run `pmoves/scripts/audit_network_reality.sh` (see PR-B). It cross-checks:
 1. `docker inspect` reports binding
-2. Host-side `netstat`/`Get-NetTCPConnection` confirms listener
+2. Host-side PowerShell `TcpClient` probe (with `netstat` fallback) confirms listener
 3. Subnet-internal connect from sibling container succeeds
 
 ### Workaround pattern

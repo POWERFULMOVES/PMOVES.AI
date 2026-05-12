@@ -12,17 +12,21 @@
 #
 # Usage:
 #   with-pmoves-network.sh --network pmoves_bus --name my-container <image> [args...]
-#   with-pmoves-network.sh --network pmoves_bus pmoves_external --name my-container <image>
+#   with-pmoves-network.sh --network pmoves_bus --network pmoves_external --name my-container <image>
 #
 # The script derives the alias from --name. If --name is not set, it warns and
 # falls back to a random alias (hostname).
+#
+# Note: each --network flag takes exactly ONE network name. For dual-attach, repeat
+# the flag: --network pmoves_bus --network pmoves_external (space-separated after
+# a single --network flag will swallow non-flag tokens as network names).
 #
 # Examples:
 #   # Run a one-off NATS publisher on pmoves_bus with proper DNS alias:
 #   with-pmoves-network.sh --network pmoves_bus --name my-publisher natsio/nats-box:latest
 #
 #   # Dual-attach (bus + external) for a task needing NATS + internet:
-#   with-pmoves-network.sh --network pmoves_bus pmoves_external --name my-agent my-image:latest
+#   with-pmoves-network.sh --network pmoves_bus --network pmoves_external --name my-agent my-image:latest
 
 set -euo pipefail
 
@@ -39,20 +43,18 @@ while [[ $i -le ${#args[@]} ]]; do
   arg="${args[$i-1]}"
   case "$arg" in
     --network)
-      # Collect all consecutive network values (allows multiple --network flags
-      # OR space-separated values after a single --network)
+      # Take exactly ONE token per --network flag.
+      # Multi-network dual-attach requires repeating: --network A --network B
       i=$((i+1))
-      while [[ $i -le ${#args[@]} ]]; do
+      if [[ $i -le ${#args[@]} ]]; then
         next="${args[$i-1]}"
-        if [[ "$next" == --* ]]; then break; fi
-        # Accept pmoves_* networks; pass through others unchanged
         if [[ "$next" == pmoves_* ]]; then
           NETWORKS+=("$next")
         else
           EXTRA_ARGS+=("--network" "$next")
         fi
         i=$((i+1))
-      done
+      fi
       ;;
     --name)
       CONTAINER_NAME="${args[$i]:-}"
@@ -73,6 +75,15 @@ done
 if [[ ${#NETWORKS[@]} -eq 0 ]]; then
   echo "ERROR: no pmoves_* network specified — use --network pmoves_<tier>" >&2
   echo "       Available: pmoves_data pmoves_api pmoves_app pmoves_bus pmoves_monitoring pmoves_external" >&2
+  exit 1
+fi
+
+# Dual-attach requires --name: docker network connect needs a named target
+ADDITIONAL_NETS=("${NETWORKS[@]:1}")
+if [[ ${#ADDITIONAL_NETS[@]} -gt 0 ]] && [[ -z "$CONTAINER_NAME" ]]; then
+  echo "ERROR: dual-attach (${#ADDITIONAL_NETS[@]} additional network(s)) requires --name <container>" >&2
+  echo "       docker network connect cannot target an unnamed container." >&2
+  echo "       Add --name <service-name> to your command." >&2
   exit 1
 fi
 
@@ -97,9 +108,6 @@ if [[ $SKIP_ALIAS -eq 0 ]]; then
   fi
 fi
 
-# Additional networks (docker run only supports one --network; use docker network connect after)
-ADDITIONAL_NETS=("${NETWORKS[@]:1}")
-
 # Extra user args (non-network, non-name)
 CMD+=("${EXTRA_ARGS[@]}")
 
@@ -109,17 +117,18 @@ echo "▶ ${CMD[*]}" >&2
 "${CMD[@]}" &
 CONTAINER_PID=$!
 
-# If container was named, attach additional networks before it starts processing
-if [[ ${#ADDITIONAL_NETS[@]} -gt 0 ]] && [[ -n "$CONTAINER_NAME" ]]; then
-  sleep 0.2  # allow container to register
+# Attach additional networks before container starts processing.
+# CONTAINER_NAME is guaranteed non-empty here (pre-flight check above).
+if [[ ${#ADDITIONAL_NETS[@]} -gt 0 ]]; then
+  sleep 0.2  # allow container to register in Docker daemon
   for net in "${ADDITIONAL_NETS[@]}"; do
-    if [[ $SKIP_ALIAS -eq 0 ]] && [[ -n "$CONTAINER_NAME" ]]; then
-      ALIAS=$(echo "$CONTAINER_NAME" | sed 's/^pmoves-//;s/-[0-9]*$//')
-      docker network connect --alias "$ALIAS" "$net" "$CONTAINER_NAME" 2>/dev/null || true
-    else
-      docker network connect "$net" "$CONTAINER_NAME" 2>/dev/null || true
-    fi
     echo "▶ docker network connect $net $CONTAINER_NAME" >&2
+    if [[ $SKIP_ALIAS -eq 0 ]]; then
+      ALIAS=$(echo "$CONTAINER_NAME" | sed 's/^pmoves-//;s/-[0-9]*$//')
+      docker network connect --alias "$ALIAS" "$net" "$CONTAINER_NAME"
+    else
+      docker network connect "$net" "$CONTAINER_NAME"
+    fi
   done
 fi
 
