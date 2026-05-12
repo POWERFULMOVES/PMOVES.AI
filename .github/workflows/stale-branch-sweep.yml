@@ -64,7 +64,8 @@ jobs:
             if [[ "${LAST_COMMIT_DATE}" < "${CUTOFF}" ]]; then
               # Check CHIT trail state via NATS subject pattern
               # Branch is considered ACTIVE if recent agent.graphiti.signed.v1 entries
-              # exist on branch.{branch_name}.trail.v1
+              # exist on branch.<path-segments>.trail.v1 (slash → dot encoding,
+              # e.g. feat/foo → branch.feat.foo.trail.v1)
               # In CI context, we check the claim register for CHIT trail references
               CHIT_ACTIVE="false"
               if grep -q "${branch}" pmoves/docs/AGENTS/AGNOTE4482_ROADMAP_W1-W5.md 2>/dev/null; then

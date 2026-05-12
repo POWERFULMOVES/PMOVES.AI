@@ -1515,6 +1515,29 @@ nats server report connections
   {"work_order_id": "wo-123", "workflow_type": "submodule_update", "repos": ["PMOVES.AI"], "changes": [...], "approved": true}
   ```
 
+**`branch.<path-segments>.trail.v1`**
+- **Direction:** Published by `pmoves-ci-bot` (GH Actions) → Consumed by monitoring / audit lane
+- **Purpose:** §9.4 branch lifecycle CHIT trail — emits a HMAC-signed entry on branch create,
+  PR link, merge, and delete. Subject uses dot-separated branch path segments
+  (e.g. `branch.feat.my-feature.trail.v1`). Implemented by `pmoves/services/common/branch_trail.py`
+  (Layer 1 emit primitive) and `.github/workflows/branch-trail-emit.yml` (Layer 4 GH Actions).
+- **Payload:**
+  ```json
+  {
+    "spec": "branch-trail-v1",
+    "branch": "feat/my-feature",
+    "event": "create",
+    "sha": "abc1234",
+    "agent_id": "pmoves-ci-bot",
+    "signing_card_id": "00000000-0000-4000-8000-000000000035",
+    "ecosystem": "github",
+    "timestamp": "2026-05-12T00:00:00Z"
+  }
+  ```
+- **Notes:** Signing key delivered via `CHIT_PASSPHRASE` / `CHIT_SIGNING_KEY` repo secrets.
+  Best-effort — publish failure logs and exits 0 without blocking branch operations.
+  Gated against fork PRs to prevent RCE on the tailnet-connected ai-lab runner.
+
 ## Agent Zero Task Coordination Subjects
 
 > **Source:** Z890 gap analysis (2026-03-15). Previously undocumented.
