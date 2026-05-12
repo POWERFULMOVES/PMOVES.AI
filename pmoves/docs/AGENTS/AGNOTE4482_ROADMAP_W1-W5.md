@@ -520,7 +520,7 @@ All resolved. No blockers.
 | Infra (KiloCode claw config rebase + 18 CR fixes) | 4090-claude | 2026-03-28 | SHIPPED (merged 2026-03-30) | #1151 | — | feature/kilo-claw-config |
 | Infra (Provider cascade: 7 CR + 3 Kilo fixes) | 4090-claude | 2026-03-28 | SHIPPED (merged 2026-03-29) | #1155 | — | feat/4090-coding-workstation-stack |
 
-> **ORPHANED status**: A claim transitions to ORPHANED when CLAIMED >7 days with no PR and no CHIT trail activity on `branch.{branch_name}.trail.v1`. ORPHANED entries trigger branch deletion via `stale-branch-sweep.yml`.
+> **ORPHANED status**: A claim transitions to ORPHANED when CLAIMED >7 days with no PR and no CHIT trail activity on `branch.<path-segments>.trail.v1` (slash → dot encoding; e.g. `feat/foo` → `branch.feat.foo.trail.v1`). ORPHANED entries trigger branch deletion via `stale-branch-sweep.yml`.
 
 
 ## Recommended Next Steps (Post 2026-03-30 PR Sweep)

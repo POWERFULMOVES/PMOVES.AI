@@ -264,3 +264,22 @@ cards:
       color: "#EA580C"
       voice: directive
       role: runner
+
+  - card_id: "00000000-0000-4000-8000-000000000035"
+    issued_at: "2026-05-12T00:00:00Z"
+    active: true
+    notes: |
+      CI emitter identity for §9.4 branch lifecycle trail. Used by
+      .github/workflows/branch-trail-emit.yml when publishing
+      branch.<segments>.trail.v1 events to NATS. Key material delivered
+      via CHIT_SIGNING_KEY repo secret on self-hosted, ai-lab runners.
+    ml:
+      primary_method: github-app
+      ci_runner_label: "self-hosted, ai-lab"
+    h:
+      agent_id: "pmoves-ci-bot"
+      display_name: "PMOVES CI Bot"
+      glyph: "⚙"
+      color: "#475569"
+      voice: directive
+      role: ci-bot

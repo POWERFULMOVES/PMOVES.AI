@@ -1,0 +1,68 @@
+name: Branch Trail Emit (§9.4)
+
+# Closes AGNOTE4482 §9.4 hardening signoff — emits a CHIT-signed lifecycle
+# trail entry to NATS subject `branch.<path-segments>.trail.v1` whenever a
+# branch is created, linked to a PR, merged, or deleted.
+#
+# Layer 4 of the §9.4 design — see plan and pmoves/services/common/branch_trail.py
+# for Layer 1 (canonical emit primitive). Layers 2 (CLI) and 3 (HTTP gateway)
+# are deferred until a non-tailnet emitter needs them.
+#
+# Runs on a tailnet-attached self-hosted runner so it can publish to the
+# private NATS bus. Failures are best-effort — a missing trail entry never
+# blocks the branch operation that triggered it.
+
+on:
+  push:
+    branches-ignore:
+      - main
+  pull_request:
+    types: [opened, closed]
+  delete:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: branch-trail-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  emit:
+    name: emit lifecycle trail
+    runs-on: [self-hosted, ai-lab]
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          submodules: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install minimal runtime deps
+        run: |
+          python -m pip install --upgrade pip
+          # Only what branch_trail's transitive imports need.
+          # chit_security is stdlib-only; sign_trail needs PyYAML;
+          # publish_cgp needs nats-py. No torch, no fastapi.
+          python -m pip install --no-cache-dir 'nats-py>=2.6.0' 'PyYAML>=6.0' 'jsonschema>=4.0'
+
+      - name: Emit lifecycle event
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+          GITHUB_EVENT_PATH: ${{ github.event_path }}
+          GITHUB_REF: ${{ github.ref }}
+          GITHUB_SHA: ${{ github.sha }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+          RUNNER_NAME: ${{ runner.name }}
+          NATS_URL: ${{ secrets.NATS_URL_TAILNET }}
+          CHIT_SIGNING_KEY: ${{ secrets.CHIT_SIGNING_KEY }}
+          LOG_LEVEL: INFO
+        run: python .github/scripts/branch_trail_ci.py

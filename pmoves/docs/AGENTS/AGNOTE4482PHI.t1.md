@@ -714,3 +714,9 @@ The pipeline reports success because its validation scope is too narrow. Neither
 - `2026-05-09T22:00:00Z` RELEASE `Z890-CLAUDE` scope: Brief delivered. Lane open. Recommended primary owner: 4090-CLAUDE (cross-fleet operability reach). Z890-CLAUDE retains test-validation interest on PR-3 (Windows companion) since Z890 is the live trigger node, but does not claim PR-3 implementation. Open questions for operator captured in brief § "Open Questions for Operator" — not blocking, can be answered during PR-1 / PR-2 review. Trail unsigned locally (no CHIT_PASSPHRASE).
 
 <!-- GRAPHITI_MARK: Z890-CLAUDE::W0-SUBSTRATE-BRIEF::2026-05-09 -->
+
+## §9.4 Close-out Lane — Branch Trail Layer 4 + Spec Amendment (OPEN)
+
+- `2026-05-12T00:00:00Z` CLAIM `5090-CLAUDE` scope: §9.4 hardening signoff close-out — Layer 4 GitHub Actions workflow + spec amendment + `pmoves-ci-bot` signing card. Builds on PR #1437 (Layer 1 emit primitive, merged 2026-05-11). Files: `.github/workflows/branch-trail-emit.yml`, `.github/scripts/branch_trail_ci.py`, `pmoves/config/signing_identity_cards.yaml` (card 0035), `pmoves/tests/ci/test_branch_trail_ci.py`. Spec amendments: subject pattern `branch.{branch_name}.trail.v1` → `branch.<path-segments>.trail.v1` in `AGNOTE4482_SIGNOFF_CHECKLIST.md:89`, `AGNOTE4482_ROADMAP_W1-W5.md:523`, `stale-branch-sweep.yml:67`. Defers Layer 2 (CLI wrapper) and Layer 3 (HTTP gateway) until non-tailnet emitter need. Branch: `feat/9-4-branch-trail-emit-workflow`. Co-creator: DARKXSIDE. risks: low — additive workflow + new card + comment-only updates in stale-sweep. chit_artifact_path: `~/.claude/plans/yes-and-status-of-silly-lemon.md`. agent_signature: `ACK::5090-CLAUDE::§9.4-LAYER-4-CLOSEOUT`.
+
+<!-- GRAPHITI_MARK: 5090-CLAUDE::9.4-LAYER-4-CLOSEOUT::2026-05-12 -->
