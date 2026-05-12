@@ -56,6 +56,12 @@ set "WRAP=%TEMP%\pmoves-elevate-%STEM%.ps1"
 >> "%WRAP%" echo Write-Host ''
 >> "%WRAP%" echo Write-Host '=== Done. Press Enter to close this window. ===' -ForegroundColor Green
 >> "%WRAP%" echo $null = Read-Host
+:: The elevated PS is launched with -NoExit so the window stays open if the
+:: wrapper fails to load (e.g. syntax error) — without -NoExit such failures
+:: would flash and disappear. But once the wrapper's Read-Host returns, the
+:: user expects the window to close on Enter; [Environment]::Exit(0) forces
+:: that exit even under -NoExit.
+>> "%WRAP%" echo [Environment]::Exit(0)
 
 echo.
 echo PMOVES claw — about to ask Windows for permission to make admin changes.
