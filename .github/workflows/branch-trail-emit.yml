@@ -52,6 +52,23 @@ jobs:
           # publish_cgp needs nats-py. No torch, no fastapi.
           python -m pip install --no-cache-dir 'nats-py>=2.6.0' 'PyYAML>=6.0' 'jsonschema>=4.0'
 
+      - name: Diagnostic — NATS URL structural fingerprint (no value leak)
+        env:
+          NATS_URL: ${{ secrets.NATS_URL_TAILNET }}
+        run: |
+          python - <<'PYEOF'
+          import os
+          v = os.environ.get("NATS_URL", "")
+          print(f"len={len(v)}")
+          print(f"startswith_nats_proto={v.startswith('nats://')}")
+          print(f"endswith_4222={v.endswith(':4222')}")
+          print(f"colon_count={v.count(':')}")
+          print(f"at_count={v.count('@')}")
+          print(f"has_trailing_ws={v != v.strip()}")
+          print(f"first_char_ord={ord(v[0]) if v else 'empty'}")
+          print(f"last_char_ord={ord(v[-1]) if v else 'empty'}")
+          PYEOF
+
       - name: Emit lifecycle event
         env:
           PYTHONPATH: ${{ github.workspace }}
