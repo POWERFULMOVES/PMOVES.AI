@@ -953,3 +953,18 @@ Translation is handled at the ingestion layer — Whisper/cloud API does the lin
 
 <!-- GRAPHITI_MARK: ANTIGRAVITY-OPUS::MULTILINGUAL-TRANSLATION-TOOLING::2026-05-11 -->
 
+### ACK::ANTIGRAVITY-OPUS::MULTILINGUAL-TRANSLATION-TOOLING::2026-05-11
+- **Status**: VALIDATED (Local Path)
+- **Validation Results**:
+    - `target_language` and `task` parameters successfully propagated to `WhisperModel.transcribe`.
+    - Markdown metadata injection verified (`**Task:** Translate`, `**Detected Language:** en`).
+    - Renamed `process_audio_with_groq` -> `process_audio_with_cloud_api` for provider-agnosticism.
+    - dispatcher logic refactored for clean engine switching (Local vs Registry vs Cloud API).
+- **Handoff to SPARK/4090-CLAUDE**:
+    - **SPARK**: Complete the implementation of `process_audio_with_cloud_api` to support configurable `base_url` for Ollama/MiniMax/Alibaba (replacing hardcoded Groq endpoints).
+    - **4090-CLAUDE**: Implement strict Pydantic validation for `VideoRequest.task` in `main.py` (ensure values are limited to `["transcribe", "translate"]`).
+    - **SPARK**: Scale Remotion/Three.js hologram geometry in A2UI to fill the 1920x1080 viewport.
+- **Commit Reference**: `feat(transcribe): rename groq to cloud_api and validate multilingual parameters`
+- **Timestamp**: `2026-05-12T16:59:00Z`
+
+<!-- GRAPHITI_MARK: ANTIGRAVITY::MULTILINGUAL-VALIDATION::2026-05-12 -->
