@@ -13,6 +13,7 @@ name: Branch Trail Emit (§9.4)
 # blocks the branch operation that triggered it.
 
 on:
+  create:
   push:
     branches-ignore:
       - main
@@ -29,6 +30,9 @@ concurrency:
 
 jobs:
   emit:
+    # Block fork PRs from running on the tailnet-connected self-hosted runner
+    # to prevent untrusted code execution (RCE via pull_request from forks).
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork == false }}
     name: emit lifecycle trail
     runs-on: [self-hosted, ai-lab]
     timeout-minutes: 5

@@ -108,6 +108,21 @@ def parse_github_event(
             }
         return None
 
+    if event_name == "create":
+        if event_data.get("ref_type") != "branch":
+            return None
+        branch = event_data.get("ref") or ""
+        if not branch or branch == "main":
+            return None
+        sender = (event_data.get("sender") or {}).get("login")
+        return {
+            "branch": branch,
+            "event": "create",
+            "sha": sha,
+            "committer": sender,
+            "runner": runner,
+        }
+
     if event_name == "delete":
         if event_data.get("ref_type") != "branch":
             return None
@@ -147,7 +162,11 @@ async def main() -> int:
     repository = os.environ.get("GITHUB_REPOSITORY", "")
     runner = os.environ.get("RUNNER_NAME") or os.environ.get("GITHUB_RUN_ID")
 
-    event_data = _load_event_payload()
+    try:
+        event_data = _load_event_payload()
+    except Exception:
+        logger.exception("failed to load GitHub event payload; continuing best-effort")
+        return 0
 
     kwargs = parse_github_event(
         event_name=event_name,
@@ -172,7 +191,11 @@ async def main() -> int:
 
     from pmoves.services.common.branch_trail import emit
 
-    ok = await emit(agent_id=CI_AGENT_ID, ecosystem="github", **kwargs)
+    try:
+        ok = await emit(agent_id=CI_AGENT_ID, ecosystem="github", **kwargs)
+    except Exception:
+        logger.exception("branch_trail.emit raised; continuing best-effort")
+        return 0
     if not ok:
         logger.warning(
             "branch_trail.emit returned False (NATS publish best-effort "
