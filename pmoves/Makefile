@@ -2168,6 +2168,38 @@ voice-follow-stop: ## Stop voice-follow daemon
 voice-follow-logs: ## Tail voice-follow logs
 	@[ -f .pmoves_voice_follow.log ] && tail -f .pmoves_voice_follow.log || echo "No voice-follow log found. Run 'make -C pmoves voice-follow-start' first."
 
+# -------- Voice stack health + unified launch --------
+.PHONY: voice-health up-voice
+
+voice-health: ## Check health of full voice stack (NATS, Flute, TTS backends, Voice-Relay)
+	@echo "=== Voice Stack Health ==="
+	@curl -sf http://localhost:4222/healthz > /dev/null 2>&1 \
+	  && echo "  NATS       (:4222) ✔" \
+	  || echo "  NATS       (:4222) ✗  — run: make up-bus"
+	@curl -sf http://localhost:8055/healthz > /dev/null 2>&1 \
+	  && echo "  Flute      (:8055) ✔" \
+	  || echo "  Flute      (:8055) ✗  — run: make overlay-up-media  (needs env.tier-media)"
+	@curl -sf http://localhost:3000/ > /dev/null 2>&1 \
+	  && echo "  VibeVoice  (:3000) ✔  [CPU fallback]" \
+	  || echo "  VibeVoice  (:3000) ✗  — optional; run: make up-voice"
+	@curl -sf http://localhost:7861/gradio_api/info > /dev/null 2>&1 \
+	  && echo "  UltimateTTS(:7861) ✔  [GPU preferred]" \
+	  || echo "  UltimateTTS(:7861) ✗  — GPU nodes only; run: make up-tts-studio"
+	@curl -sf http://localhost:8121/healthz > /dev/null 2>&1 \
+	  && echo "  VoiceRelay (:8121) ✔" \
+	  || echo "  VoiceRelay (:8121) ✗  — run: make up-voice-relay"
+
+up-voice: ## Start voice stack: Flute-Gateway + VibeVoice CPU fallback + Voice-Relay
+	@echo "Starting voice stack (Flute + VibeVoice + Voice-Relay)..."
+	@docker compose -p $(PROJECT) --project-directory $(CURDIR) $(COMPOSE_ENV_FILES) \
+		-f docker-compose.base.yml \
+		-f docker-compose.media.yml \
+		-f docker-compose.voice.yml \
+		--profile media --profile voice \
+		up -d flute-gateway vibevoice voice-relay
+	@echo ""
+	@$(MAKE) --no-print-directory voice-health
+
 .PHONY: voice-follow-smoke voice-agent-discord-smoke
 
 voice-follow-smoke: ## Smoke: start speaker + follow(--once), trigger voice agent, assert speaker was called
