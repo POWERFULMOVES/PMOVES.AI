@@ -1,0 +1,104 @@
+# MiniMax Edition Agent Profile
+# PMOVES.AI KiloCode MiniMax Edition
+#
+# Runs on 5090 (primary) or 4090 laptop (portable) nodes
+# for MiniMax M2.7/M2.1 inference via Token Plan.
+# Complements GLM coding plan with long-context capabilities.
+
+name: minimax_edition
+role: minimax-kilocode-claw
+description: "MiniMax Edition KiloCode claw for M2.7/M2.1 inference with 1M/100K token context, character persona synthesis, and multimodal capabilities"
+
+node_affinity:
+  - 5090  # Primary - GPU node for character persona generation
+  - laptop-4090  # Portable - for mobile/field work
+  - z890  # Fallback - when 5090 unavailable
+
+model:
+  provider: minimax
+  model: minimax-m2.7
+  endpoint: https://api.minimax.chat/v1
+  fallback_model: minimax-m2.1
+  token_plan_api_key_env: MINIMAX_TOKEN_PLAN_API_KEY
+
+capabilities:
+  - long_context_research
+  - hyperdimensional_reasoning
+  - character_persona_synthesis
+  - multimodal_generation  # text, speech, video, music, image
+  - architecture_visualization
+  - agent_trails_navigation
+  - writing_vibes
+  - prosodic_flow
+  - coding_overflow
+
+nats:
+  url: nats://nats:pmoves@nats:4222
+  subscribe:
+    - voice.agent.response.v1
+    - tokenism.prosodic.bpm.v1
+    - geometry.cgp.v1
+    - minimax.character.request.v1
+  publish:
+    - minimax.character.response.v1
+    - minimax.voice.prosodic.v1
+    - minimax.agent.trail.v1
+
+# FlOO$ Character Persona System
+flOO$:
+  enabled: true
+  default_persona: dr-bean  # Methodical genius, quietly absurd
+  personas:
+    - dr-bean:  # Deep analysis, CHIT review
+        archetype: methodical_genius
+        voice_register: measured_precise
+        temperature: 0.3
+        speaking_rate: normal
+    - mr-clean:  # Deployment, security, hardening
+        archetype: precise_powerful
+        voice_register: direct_confident
+        temperature: 0.1
+        speaking_rate: fast
+    - powerpuff-girls:  # Multi-agent coordination, celebration
+        archetype: specialized_powers
+        voice_register: high_energy
+        temperature: 0.6
+        speaking_rate: varied
+
+exec_permissions:
+  - python3
+  - curl
+  - git
+  - make
+  - nats
+  - docker  # For containerized tasks
+
+health:
+  endpoint: http://localhost:3030/api/status
+  heartbeat_subject: minimax.agent.status.v1
+  heartbeat_interval_seconds: 30
+
+agent_zero:
+  subordinate: true
+  profile: minimax_edition
+  inherit_context: true
+  report_to: agent_zero
+  model_binding: minimax-m2.7
+
+# TensorZero integration
+tensorzero:
+  enabled: true
+  variants:
+    - minimax_m27_longcontext
+      model: minimax-m2.7
+      weight: 0.7
+    - minimax_m21_efficient
+      model: minimax-m2.1
+      weight: 0.3
+
+# Token Plan quota management
+token_plan:
+  quota_monitor: true
+  fallback_on_quota_exhausted: true
+  fallback_provider: glm
+  fallback_model: glm-4.7

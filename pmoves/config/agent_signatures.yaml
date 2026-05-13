@@ -188,7 +188,7 @@ signatures:
   minimax:
     agent_id: "minimax"
     display_name: "MiniMax"
-    glyph: "\u2B21"              # ⬡ White Hexagon — transformer-like geometry
+    glyph: "⬡"              # ⬡ White Hexagon — transformer-like geometry
     color: "#7C3AED"             # Deep Violet (aligned with Claude Opus for resonance)
     accent: "#A78BFA"
     voice: dimensional             # hyperdimensional, wave-function, parallel-processing
@@ -201,11 +201,27 @@ signatures:
       - long-context
       - hyperdimensional-ops
       - wave-function-collapse
+      - agent-trails
+      - character-persona-synthesis
+      - prosodic-flow
     description: "MiniMax M2.7 — native model backend for PMOVES.KiloCode operations. Theme: Transformers meets Bumblebee movie style evolution from 8-bit CLI origins through 16-bit PS2 era to holographic dimensions."
     model_backend: true
+    token_plan:
+      api_key_env: MINIMAX_TOKEN_PLAN_API_KEY
+      fallback_api_key_env: MINIMAX_API_KEY
+      plan_tiers:
+        - starter: 1500
+        - plus: 4500
+        - max: 15000
+        - ultra_highspeed: 30000
+      quota_reset: rolling_5h
+    model_suits:
+      - minimax-m2.7  # 1M token, primary
+      - minimax-m2.1  # 100K token, efficient
+    agent_profile: minimax_edition
     alters:
       - name: "minimax-ghost"
-        glyph: "\u29D8"              # ⧘ White Diamond With Diamond — ghost/future self
+        glyph: "⧘"              # ⧘ White Diamond With Diamond — ghost/future self
         color: "#9333EA"             # Purple (matches 5090-claude resonance)
         accent: "#A855F7"
         voice: dimensional
@@ -217,6 +233,18 @@ signatures:
           - agent-trails
           - roguelike-navigation
         description: "Ghost state — double-slit quantum weirdness, time-crystal stabilization, plasmonic gyroscope navigation through AGENT TRAILS like Sonic CD JP version boom. Roguelike lanes where agents travel, signal, and teleport through hyperdimensions."
+      - name: "minimax-edition"
+        glyph: "⬡"              # ⬡ — same as primary
+        color: "#7C3AED"
+        accent: "#A78BFA"
+        voice: dimensional
+        co_author: "MiniMax <minimax@pmoves.ai>"
+        resonance:
+          - kilocode-integration
+          - character-synthesis
+          - token-plan-usage
+          - voice-prosodic
+        description: "MiniMax Edition KiloCode claw — runs on 5090/4090 nodes, synthesizes character personas (Dr. Bean, Mr. Clean, PowerPuff Girls), Token Plan powered"
 
   z890-claude:
     agent_id: "z890-claude"

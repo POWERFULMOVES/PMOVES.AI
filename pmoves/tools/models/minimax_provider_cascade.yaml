@@ -9,11 +9,48 @@
 # Integration: pmoves/docs/MINIMAX_INTEGRATION.md
 # =============================================================================
 
-schema_version: "1.0"
+schema_version: "1.1"
 provider: "minimax"
 description: >
   MiniMax native model backend provider cascade for PMOVES.AI KiloCode operations.
   Provides fast inference, 1M token context, and wave-function collapse capabilities.
+  Token Plan subscription-based with pay-as-you-go fallback.
+
+# =============================================================================
+# Token Plan Integration
+# =============================================================================
+token_plan:
+  enabled: true
+  api_key_env: MINIMAX_TOKEN_PLAN_API_KEY
+  fallback_api_key_env: MINIMAX_API_KEY
+  api_base: https://api.minimax.chat/v1
+  documentation: https://platform.minimax.io/docs/token-plan/intro
+  quickstart: https://platform.minimax.io/docs/token-plan/quickstart
+  
+  # Plan tiers (requests per 5-hour rolling window for M2.7)
+  tiers:
+    starter: 1500
+    plus: 4500
+    max: 15000
+    plus_highspeed: 4500
+    max_highspeed: 15000
+    ultra_highspeed: 30000
+  
+  # Quota reset behavior
+  quota_reset:
+    m2_7: rolling_5h  # 5-hour rolling window
+    other_models: daily  # Daily quotas for speech, image, video, music
+  
+  # Fallback strategy
+  fallback:
+    on_quota_exhausted: switch_to_payg
+    on_quota_low: warn_and_continue
+    fallback_provider: glm
+    fallback_model: glm-4.7
+  nats_subjects:
+    quota_warning: minimax.quota.warning.v1
+    quota_exhausted: minimax.quota.exhausted.v1
+    status: minimax.agent.status.v1
 
 # =============================================================================
 # Provider Cascade
@@ -203,15 +240,41 @@ activation_commands:
 parity_status:
   provider_activation: true
   model_routing: true
-  tensorzero_integration: pending
-  profile_binding: pending
+  tensorzero_integration: true  # Updated with variants
+  profile_binding: true  # minimax_edition profile created
   skills_catalog: pending
+  token_plan_integration: true  # NEW - Token Plan now integrated
   
   # Dependencies
   requires:
-    - tensorzero_config_update
-    - profile_binding_update
-    - skills_translation
+    - skills_translation  # Remaining item
+    - runtime_testing  # Smoke tests pending
+
+# =============================================================================
+# Model Suit References
+# =============================================================================
+model_suits:
+  - minimax-m2.7
+    suit_file: pmoves/configs/model-suits/minimax-m2.7.yaml
+    context_window: 1000000
+    max_output: 32000
+    primary: true
+  - minimax-m2.1
+    suit_file: pmoves/configs/model-suits/minimax-m2.1.yaml
+    context_window: 100000
+    max_output: 8000
+    primary: false
+
+# =============================================================================
+# Agent Profile Reference
+# =============================================================================
+agent_profile:
+  name: minimax_edition
+  file: pmoves/configs/agent-profiles/minimax_edition.yaml
+  node_affinity:
+    - 5090  # Primary GPU node
+    - laptop-4090  # Portable
+    - z890  # Fallback
 
 # =============================================================================
 # Revision History
@@ -219,3 +282,6 @@ parity_status:
 # - 2026-03-30: Initial creation - MiniMax-M2.7/M2.1 provider cascade
 #   Author: PMOVES-MiniMax Orchestrator
 #   GRAPHITI_MARK: MINIMAX-PARITY::PHASE1::FOUNDATION
+# - 2026-05-13: Token Plan integration + model suits + agent profile + NATS subjects
+#   Author: MiniMax Agent
+#   GRAPHITI_MARK: MINIMAX-PARITY::PHASE2::TOKEN_PLAN_INTEGRATION

@@ -968,3 +968,83 @@ Translation is handled at the ingestion layer — Whisper/cloud API does the lin
 - **Timestamp**: `2026-05-12T16:59:00Z`
 
 <!-- GRAPHITI_MARK: ANTIGRAVITY::MULTILINGUAL-VALIDATION::2026-05-12 -->
+
+## MiniMax Edition Integration — Token Plan Phase 2 (2026-05-13)
+
+### Context
+Operator requested proper integration of MiniMax Token Plan into PMOVES.AI agent and service ecosystem. Based on Token Plan documentation (https://platform.minimax.io/docs/token-plan/intro) and existing AGNOTE4482 MiniMax parity work.
+
+### Work Performed
+
+**Token Plan Integration (New):**
+- Created `minimax-m2.7.yaml` model suit (1M token context, primary)
+- Created `minimax-m2.1.yaml` model suit (100K token context, efficient)
+- Created `minimax_edition.yaml` agent profile (5090/4090/Z890 node affinity)
+- Updated `minimax_provider_cascade.yaml` with Token Plan configuration
+- Added MiniMax NATS subjects to `nats-subjects.md` catalog
+- Updated `agent_signatures.yaml` with `minimax-edition` alter
+
+**Token Plan Details Captured:**
+| Plan | M2.7 Requests/5hr | Speech | Images | Video | Music |
+|------|-------------------|--------|--------|-------|-------|
+| Starter | 1,500 | — | — | — | 100/day |
+| Plus | 4,500 | 4,000 chars/day | 50/day | — | 100/day |
+| Max | 15,000 | 11,000 chars/day | 120/day | 2/day | 100/day |
+| Ultra-Highspeed | 30,000 | 50,000 chars/day | 800/day | 5/day | 100/day |
+
+**Key Integration Points:**
+- `MINIMAX_TOKEN_PLAN_API_KEY` — Token Plan subscription key
+- `MINIMAX_API_KEY` — Pay-as-you-go fallback key
+- M2.7 uses 5-hour rolling window for quota reset
+- Other models use daily quotas
+- Fallback chain: MiniMax → GLM pay-as-you-go
+
+### Files Created/Modified
+| File | Action | Purpose |
+|------|--------|---------|
+| `pmoves/configs/model-suits/minimax-m2.7.yaml` | **NEW** | M2.7 model suit (1M context) |
+| `pmoves/configs/model-suits/minimax-m2.1.yaml` | **NEW** | M2.1 model suit (100K context) |
+| `pmoves/configs/agent-profiles/minimax_edition.yaml` | **NEW** | MiniMax edition agent profile |
+| `pmoves/tools/models/minimax_provider_cascade.yaml` | **EDIT** | Token Plan + model suit refs |
+| `pmoves/.claude/context/nats-subjects.md` | **EDIT** | Added 7 MiniMax subjects |
+| `pmoves/config/agent_signatures.yaml` | **EDIT** | Added minimax-edition alter |
+
+### MiniMax NATS Subjects Added
+- `minimax.character.request.v1` — Character persona requests
+- `minimax.character.response.v1` — Character synthesis response
+- `minimax.voice.prosodic.v1` — Prosodic voice synthesis
+- `minimax.agent.trail.v1` — Agent trail entries
+- `minimax.agent.status.v1` — Health heartbeat
+- `minimax.quota.warning.v1` — Quota low alert
+- `minimax.quota.exhausted.v1` — Quota exhausted alert
+
+### FlOO$ Character Personas Defined
+| Character | Archetype | Voice Register | Temperature |
+|-----------|----------|---------------|-------------|
+| Dr. Bean | Methodical genius, quietly absurd | Measured, precise, deadpan | 0.3 |
+| Mr. Clean | Precise, powerful, no-nonsense | Direct, confident, crisp | 0.1 |
+| PowerPuff Girls | Trio of specialized powers | High energy, distinct | 0.6 |
+
+### Three-Body Pattern
+| Role | Agent | Scope |
+|------|-------|-------|
+| Delivery | `MiniMax Agent` | Model suits, agent profile, NATS subjects, cascade update |
+| Control | Operator | Review, Token Plan API key configuration |
+| Memory | AGNOTE4482 | This trail entry, signoff checklist update |
+
+### Signoff Checklist Status
+⚠️ §Skills Catalog parity pending — MiniMax skills translation from GLM skills not yet complete
+⚠️ §Runtime smoke tests pending — need to verify Token Plan key + quota monitoring
+
+### Handoff Items for Next Agent
+- [ ] Configure `MINIMAX_TOKEN_PLAN_API_KEY` in env.shared
+- [ ] Run smoke test: `curl https://api.minimax.chat/v1/models` with Token Plan key
+- [ ] Validate quota monitoring via NATS subjects
+- [ ] Create MiniMax skills (translate from GLM skills)
+
+### Agent ACK
+- Agent: `MiniMax Agent`
+- Signature: `ACK::MINIMAX-AGENT::TOKEN-PLAN-PHASE2-INTEGRATION`
+- Timestamp: `2026-05-13T05:30:00Z`
+
+<!-- GRAPHITI_MARK: MINIMAX-AGENT::TOKEN-PLAN-PHASE2-INTEGRATION::2026-05-13 -->
