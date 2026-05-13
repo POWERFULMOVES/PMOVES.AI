@@ -176,12 +176,11 @@ if [[ $PORTS_ONLY -eq 0 ]]; then
   nats_running=$(docker inspect "${PROJECT}-nats-1" --format '{{.State.Running}}' 2>/dev/null || echo "false")
   nats_net=$(docker inspect "${PROJECT}-nats-1" \
     --format '{{range $k,$v := .NetworkSettings.Networks}}{{$k}} {{end}}' 2>/dev/null \
-    | tr ' ' '\n' | grep pmoves_bus || echo "")
+    | tr ' ' '\n' | grep -Fx pmoves_bus || echo "")
 
   if [[ "$nats_running" == "true" ]] && [[ -n "$nats_net" ]]; then
     probe_result=$(docker run --rm \
       --network pmoves_bus \
-      --add-host host.docker.internal:host-gateway \
       appropriate/nc -zv -w 3 nats 4222 2>&1 || echo "FAILED")
     if echo "$probe_result" | grep -qE "open|succeeded|connected"; then
       ok "pmoves_bus → nats:4222  internal DNS resolves ✔"
