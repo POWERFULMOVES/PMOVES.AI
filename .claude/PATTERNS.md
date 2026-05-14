@@ -77,7 +77,7 @@ The Make-target Known Roads above cover dangerous *Bash commands*. Protected *fi
 
 It is not an on/off flag. The value must carry a *provable reason* tied to the specific change:
 
-```
+```bash
 KNOWN_ROAD=<domain>:<reason>
 ```
 
@@ -88,7 +88,7 @@ KNOWN_ROAD=<domain>:<reason>
 | | `pr:<number>` / `issue:<number>` | references a tracked PR / issue |
 
 **Example** — editing `pmoves/docker-compose.base.yml` under an approved handoff:
-```
+```bash
 KNOWN_ROAD=compose:handoff:z890-compose-base-network-tier-anchors.md
 ```
 Set it in the shell that launches Claude Code, or in `.claude/settings.json` `env` for the duration of the work. **Never bake it into committed settings** — it is per-task, not ambient.
