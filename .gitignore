@@ -9,6 +9,8 @@ SOUL.md
 TOOLS.md
 USER.md
 .openclaw/
+.opencode/
+/config/
 
 # =============================================================================
 # Infrastructure Secrets (relay keys, QR configs, audits — NEVER COMMIT)
