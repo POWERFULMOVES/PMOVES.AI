@@ -87,6 +87,7 @@ def _record(tool: str, file_path: str, domain: str, reason: str) -> bool:
         "domain": domain,
         "reason": reason,
         "agent": os.environ.get("AGENT_ID") or os.environ.get("PMOVES_NODE_ID") or "unknown",
+        "session": os.environ.get("CLAUDE_SESSION_ID") or os.environ.get("SESSION_ID") or "unknown",
     }
     try:
         path = _trail_path()
