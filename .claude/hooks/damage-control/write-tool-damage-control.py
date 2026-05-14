@@ -23,6 +23,10 @@ from typing import Dict, Any, List, Tuple
 
 import yaml
 
+# Known Roads — contextualized, provable bypass for readOnlyPath domains.
+sys.path.insert(0, str(Path(__file__).parent))
+from known_roads import evaluate_known_road, known_road_hint  # noqa: E402
+
 
 def is_glob_pattern(pattern: str) -> bool:
     """Check if pattern contains glob wildcards."""
@@ -125,6 +129,14 @@ def check_path(file_path: str, config: Dict[str, Any]) -> Tuple[bool, str, bool]
         if safe_normalized in normalized_fwd:
             return False, "", False
 
+    # Known Road — contextualized, provable bypass (see known_roads.py / PATTERNS.md).
+    kr_allowed, kr_detail = evaluate_known_road("Write", file_path, normalized_fwd)
+    if kr_allowed:
+        return False, "", False
+    if kr_detail:
+        # File is in a Known Road domain but the road is invalid — block with detail.
+        return True, kr_detail, False
+
     # Check zero-access paths first (no access at all)
     for zero_path in config.get("zeroAccessPaths", []):
         if match_path(file_path, zero_path):
@@ -179,7 +191,9 @@ def main() -> None:
             print(json.dumps(output))
             sys.exit(0)
         else:
-            print(f"SECURITY: Blocked write to {reason}: {file_path}", file=sys.stderr)
+            hint = "" if "Known Road" in reason else known_road_hint(
+                os.path.normpath(file_path).replace("\\", "/"))
+            print(f"SECURITY: Blocked write to {reason}: {file_path}{hint}", file=sys.stderr)
             sys.exit(2)
 
     sys.exit(0)

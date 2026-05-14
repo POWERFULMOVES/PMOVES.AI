@@ -71,6 +71,38 @@ PMOVES uses a Known Roads model: every dangerous-but-necessary operation has a c
 
 If a rebuild manifest arrives as raw `docker compose build ...`, translate to the nearest Known Road whenever possible. Use raw build only when no dedicated target exists yet, and still return to the Make-target bring-up path.
 
+## Known Roads — Protected-File Edits via `KNOWN_ROAD`
+
+The Make-target Known Roads above cover dangerous *Bash commands*. Protected *file edits* — paths in `readOnlyPaths` (`pmoves/docker-compose*.yml`, migrations, contract schemas) — have their own Known Road: the **`KNOWN_ROAD` environment variable**, enforced by `.claude/hooks/damage-control/known_roads.py`.
+
+It is not an on/off flag. The value must carry a *provable reason* tied to the specific change:
+
+```bash
+KNOWN_ROAD=<domain>:<reason>
+```
+
+| Part | Values | Meaning |
+|---|---|---|
+| `<domain>` | `compose` (extensible) | which `readOnlyPath` class is opened |
+| `<reason>` | `handoff:<filename>` | the brief at `pmoves/docs/handoffs/<filename>` must exist on disk |
+| | `pr:<number>` / `issue:<number>` | references a tracked PR / issue |
+
+**Example** — editing `pmoves/docker-compose.base.yml` under an approved handoff:
+```bash
+KNOWN_ROAD=compose:handoff:z890-compose-base-network-tier-anchors.md
+```
+Set it in the shell that launches Claude Code, or in `.claude/settings.json` `env` for the duration of the work. **Never bake it into committed settings** — it is per-task, not ambient.
+
+**Provability guarantees:**
+- A bare value (`1`, `true`, arbitrary string) is **not** a Known Road — the edit stays blocked.
+- `handoff:` reasons are checked against the filesystem; a missing brief is rejected.
+- Every granted bypass appends a line to `.claude/hooks/damage-control/known-roads.jsonl` — append-only, git-tracked (`merge=union`), machine-parseable. **Fail-closed:** if the trail line cannot be written, the bypass is denied (an unrecorded bypass is not provable).
+- Scope is narrow: `compose:` opens *only* `pmoves/docker-compose*.yml`. Migrations, contracts, secrets stay blocked regardless.
+
+**Extending to a new domain:** add a predicate to `DOMAIN_PATTERNS` in `known_roads.py`. Parse / provability / trail logic is shared — only the per-domain file matcher changes. Codex mirrors `known_roads.py` for cross-agent parity.
+
+**Modifying the hook scripts themselves** (rare, meta) needs an explicit `Edit(.claude/hooks/damage-control/**)` + `Write(.claude/hooks/damage-control/**)` rule in `.claude/settings.local.json` — agents cannot self-grant this. *Using* an existing Known Road needs no permission rule, only the env var.
+
 ## Damage-Control Hook Recovery
 
 If `patterns.yaml` is left with unresolved merge conflict markers during a rebase, `bash-tool-damage-control.py` fails to parse the file and blocks ALL Bash commands (fail-closed). Deadlock — you can't run `git status` or `git rebase --continue`.
