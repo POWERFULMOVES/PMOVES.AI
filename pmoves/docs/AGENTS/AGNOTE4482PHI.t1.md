@@ -732,3 +732,11 @@ The pipeline reports success because its validation scope is too narrow. Neither
 - `2026-05-12T04:00:00Z` RELEASE `5090-CLAUDE` scope: §9.4 acceptance criterion **SATISFIED in production**. Workflow on PR #1462 emit ran end-to-end on revived `pmoves-ai-lab-runner` (fresh registration token + RUNNER_ALLOW_RUNNER_REUSE=true + pmoves_bus network attach), HMAC-signed payload received on NATS subject `branch.chore.9-4-e2e-create-test.trail.v1` with `signing_card_id: 0035`, `event: create`, real committer/sha/runner metadata. PR #1462 comment 4432694453 carries the captured payload as audit evidence. Three of four lifecycle events (`create`, `link_pr`, `merge`) share the same code path — proven by `create`. Fourth event (`delete`) requires workflow on default branch (GH constraint on `on: delete`) — testable post-merge. **Follow-up PR planned**: one-line §9.4 checkbox flip in `AGNOTE4482_SIGNOFF_CHECKLIST.md:89` after observing `delete` event on main. **Gotcha banked**: `gh secret set NAME --body -` treats `-` as literal body (stored "-"), NOT stdin marker. Correct syntax: `printf 'value' | gh secret set NAME` (no `--body`). Diagnostic step caught it (`len=1, first_char_ord=45`); diagnostic since removed.
 
 <!-- GRAPHITI_MARK: 5090-CLAUDE::9.4-ACCEPTANCE-CRITERION-SATISFIED::2026-05-12 -->
+
+## Multilingual Ingestion & Provider-Agnostic Scaling (2026-05-12)
+
+- 2026-05-12T16:00:00Z CLAIM ANTIGRAVITY-OPUS scope: Multilingual ingestion hardening - refactor 	ranscribe1.py for provider-agnosticism (process_audio_with_cloud_api), wire 	arget_language and 	ask through orchestrator/registry paths, validate local translation loop via smoke test. Submodule: PMOVES-transcribe-and-fetch.
+- 2026-05-12T17:15:00Z RELEASE ANTIGRAVITY-OPUS scope: Hardening complete. Structural refactor lands cloud_api abstraction; dispatcher logic corrected for Local/Registry/Cloud switching. Metadata injection verified in Markdown output. PR staged in main repo with updated gitlink.
+- 2026-05-12T17:20:00Z CLAIM SPARK scope: Implementation of process_audio_with_cloud_api for Ollama/MiniMax/Alibaba (configurable ase_url); A2UI Remotion hologram geometry scaling (1920x1080 viewport).
+
+<!-- GRAPHITI_MARK: ANTIGRAVITY-OPUS::MULTILINGUAL-SCALE-HANDOFF::2026-05-12 -->
