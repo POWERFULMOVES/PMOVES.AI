@@ -30,10 +30,28 @@ import os
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from typing import Any, AsyncIterator, Callable, Optional, Sequence
+from urllib.parse import urlsplit, urlunsplit
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_NATS_URL = os.getenv("NATS_URL", "nats://nats:pmoves@nats:4222")
+DEFAULT_NATS_URL = os.getenv("NATS_URL", "")
+
+
+def _redact_url(url: str) -> str:
+    """Return *url* with userinfo removed for safe logging."""
+    try:
+        parts = urlsplit(url)
+        if not parts.netloc or "@" not in parts.netloc:
+            return url
+        host = parts.hostname or ""
+        if ":" in host and not host.startswith("["):
+            host = f"[{host}]"
+        netloc = host
+        if parts.port is not None:
+            netloc = f"{netloc}:{parts.port}"
+        return urlunsplit((parts.scheme, netloc, parts.path, parts.query, parts.fragment))
+    except Exception:
+        return "<redacted>"
 
 
 @dataclass
@@ -110,7 +128,11 @@ async def create_nats_connection(
     kwargs.update(overrides)
 
     service_name = config.name or "unknown"
-    logger.info("Connecting to NATS at %s (service=%s)", config.url, service_name)
+    logger.info(
+        "Connecting to NATS at %s (service=%s)",
+        _redact_url(config.url),
+        service_name,
+    )
 
     try:
         nc = await nats.connect(**kwargs)
@@ -284,6 +306,42 @@ def make_logging_reconnected_cb(service_name: str) -> Callable:
     return _reconnected_cb
 
 
+
+# -----------------------------------------------------------------------
+# CGP publish convenience
+# -----------------------------------------------------------------------
+
+async def publish_cgp(
+    cgp_packet: dict[str, Any],
+    subject: str,
+    nats_url: str = "",
+) -> bool:
+    """Publish a CGP v0.2 packet to a NATS subject (best-effort).
+
+    Wraps :func:`create_nats_connection` for one-shot publish-and-drain.
+    Returns True on success, False if skipped or failed.
+
+    Args:
+        cgp_packet: CGP v0.2 packet dict (must be JSON-serializable).
+        subject: NATS subject to publish to (e.g. ``tokenism.prosodic.bpm.v1``).
+        nats_url: NATS server URL. Falls back to ``NATS_URL`` env var.
+            Raises ValueError if neither is set.
+    """
+    if not nats_url:
+        nats_url = os.getenv("NATS_URL", "")
+    if not nats_url:
+        logger.warning("publish_cgp: NATS_URL not set — skipping publish to %s", subject)
+        return False
+
+    try:
+        config = NatsConnectionConfig(url=nats_url, name="cgp-publisher")
+        async with nats_connection(config) as nc:
+            await traced_publish(nc, subject, json.dumps(cgp_packet).encode("utf-8"))
+        return True
+    except Exception as exc:
+        logger.warning("publish_cgp failed on %s: %s", subject, exc)
+        return False
+
 __all__ = [
     "NatsConnectionConfig",
     "create_nats_connection",
@@ -293,5 +351,6 @@ __all__ = [
     "make_logging_reconnected_cb",
     "traced_publish",
     "make_traced_callback",
+    "publish_cgp",
     "DEFAULT_NATS_URL",
 ]

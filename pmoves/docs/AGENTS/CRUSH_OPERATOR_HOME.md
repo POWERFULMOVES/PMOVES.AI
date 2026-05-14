@@ -92,7 +92,7 @@ When Crush completes significant work, write a graphiti block in `docs/AGENT_TRA
 | Service | How Crush Uses It |
 |---------|-------------------|
 | **Agent Zero MCP** (`localhost:8080/mcp/*`) | Orchestration commands, task delegation |
-| **Cipher Memory** (`localhost:8096`) | Persistent memory, reasoning traces, pattern storage |
+| **Cipher Memory** (`localhost:8105`) | Persistent memory, reasoning traces, pattern storage |
 | **Hi-RAG v2** (`localhost:8086`) | Knowledge retrieval, semantic search |
 | **TensorZero** (`localhost:3030/v1`) | All LLM calls route through here |
 | **NATS** (`localhost:4222`) | Event-driven coordination |
@@ -104,7 +104,7 @@ When Crush completes significant work, write a graphiti block in `docs/AGENT_TRA
 | `CRUSH.md` | Playbook — quick start and configuration guide |
 | `docs/AGENT_TRAIL.md` | Living trail of all agent contributions |
 | `pmoves/docs/AGENTS/AI_GRAPHITI_PROTOCOL.md` | Full protocol specification |
-| `pmoves/config/agent_signatures.yaml` | Visual identity registry (7 contributors) |
+| `pmoves/config/agent_signatures.yaml` | Visual identity registry (13 contributors) |
 | `pmoves/config/agent_registry.yaml` | Runtime agent registry |
 | `pmoves/contracts/schemas/crush/graphiti.discovered.v1.schema.json` | Discovery event schema |
 | `pmoves/tools/crush_configurator.py` | Config generator (injects Graphiti context) |

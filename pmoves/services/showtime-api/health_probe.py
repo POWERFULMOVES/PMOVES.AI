@@ -32,7 +32,7 @@ SERVICE_CATALOG: list[dict[str, Any]] = [
     {"name": "TensorZero UI", "url": "http://localhost:4000", "tier": 7, "type": "UI"},
     {"name": "TensorZero GW", "url": f"http://localhost:{os.environ.get('TENSORZERO_PORT', '3030')}", "tier": 2, "type": "API"},
     {"name": "Open Notebook", "url": "http://localhost:8503", "tier": 1, "type": "Data"},
-    {"name": "Cipher Memory", "url": "http://localhost:8096/health", "tier": 1, "type": "Data"},
+    {"name": "Cipher Memory", "url": "http://localhost:8105/health", "tier": 1, "type": "Data"},
     {"name": "BoTZ Gateway", "url": "http://localhost:8054/healthz", "tier": 6, "type": "Agent"},
     {"name": "DeepResearch", "url": "http://localhost:8098/healthz", "tier": 3, "type": "LLM"},
     {"name": "Flute-Gateway", "url": "http://localhost:8055/healthz", "tier": 2, "type": "API"},

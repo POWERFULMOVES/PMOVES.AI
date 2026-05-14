@@ -1,0 +1,29 @@
+{
+  "title": "SPARK Provenance Surface",
+  "subtitle": "Weighted lexicon, trusted refs, and motion-ready context",
+  "summary": "Messages are shaped before HiRAG ingest so the same semantic bundle can drive living docs, motion clips, and Hyperdimensions overlays without copy drift.",
+  "merkle_root": "mkl_bf09f4d2725aab14",
+  "shape_id": "shape.spark.mof.2026-04-30",
+  "favorite_words": ["signal", "shape", "resonance", "witness", "provenance"],
+  "weighted_terms": [
+    { "term": "provenance", "weight": 0.98, "cluster": "trust" },
+    { "term": "hyperdimensions", "weight": 0.9, "cluster": "surface" },
+    { "term": "spark", "weight": 0.82, "cluster": "agent-pass" },
+    { "term": "hirag", "weight": 0.76, "cluster": "index" }
+  ],
+  "sections": [
+    {
+      "heading": "Summary",
+      "body": "Accepted content retains favorite words, weighted lexicon, and lineage so the artifact can be reviewed visually before it becomes a clip, a notebook block, or a geometry annotation."
+    },
+    {
+      "heading": "Operator Note",
+      "body": "Use /render/provenance when the document itself is part of the artifact and text fit matters as much as the rendered motion."
+    }
+  ],
+  "provenance_refs": [
+    { "label": "content.raw.v1", "kind": "subject" },
+    { "label": "content.hirag.accepted.v1", "kind": "subject" },
+    { "label": "geometry room", "kind": "surface" }
+  ]
+}

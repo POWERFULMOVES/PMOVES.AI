@@ -30,7 +30,7 @@
 | Archon | 8091, 3737 | `PMOVES-Archon/CLAUDE.md` | `PMOVES-Archon/README.md` | `pmoves/docs/ARCHON_INTEGRATION.md` | `archon.*` | `/healthz` | -- | L3 |
 | Mesh Agent | -- | -- | -- | -- | `mesh.announce.*` | -- | -- | L3 |
 | Channel Monitor | 8097 | -- | `pmoves/services/channel-monitor/` | -- | -- | `/healthz` | -- | L3 |
-| Cipher Memory | 8096 | `Pmoves-cipher/CLAUDE.md` | `Pmoves-cipher/README.md` | Inline | `cipher.*` | `/health` | -- | L3 |
+| Cipher Memory | 8105 | `Pmoves-cipher/CLAUDE.md` | `Pmoves-cipher/README.md` | Inline | `cipher.*` | `/health` | -- | L3 |
 
 ## Retrieval & Knowledge Services
 

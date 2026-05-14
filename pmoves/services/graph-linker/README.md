@@ -70,7 +70,7 @@ python -m pytest tests/ -v
 
 ```bash
 docker build -t pmoves-graph-linker .
-docker run -e NEO4J_URL=bolt://neo4j:7687 -e NATS_URL=nats://nats:4222 pmoves-graph-linker
+docker run -e NEO4J_URL=bolt://neo4j:7687 -e NATS_URL=nats://nats:pmoves@nats:4222 pmoves-graph-linker
 ```
 
 ## Files

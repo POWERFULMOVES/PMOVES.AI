@@ -23,7 +23,7 @@ root:
             target: "pmoves/docs/TAC/TAC_WEALTH.md"
             pattern: "8075"
             expect: "Port 8075 referenced (FIREFLY_PORT)"
-          context: "Port 8096 is Cipher Memory, Firefly uses FIREFLY_PORT=8075"
+          context: "Port 8105 is Cipher Memory, Firefly uses FIREFLY_PORT=8075"
           agent_hint: codex
 
         - id: firefly-iii.docs.branded-defaults

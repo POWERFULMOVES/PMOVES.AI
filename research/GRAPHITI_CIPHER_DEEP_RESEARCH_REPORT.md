@@ -300,7 +300,7 @@ The FlOO$ resolver is a **pure pipeline orchestration engine** with NO cryptogra
 ### 3.1 Architecture
 
 ```
-Claude Code CLI ──stdio/MCP──► pmoves-cipher-mcp (Python) ──HTTP──► cipher-api (Node.js/Neo4j) @ :8096
+Claude Code CLI ──stdio/MCP──► pmoves-cipher-mcp (Python) ──HTTP──► cipher-api (Node.js/Neo4j) @ :8105
 ```
 
 **CRITICAL FINDING**: `pmoves-cipher-mcp` contains **ZERO cryptography**. No encrypt, decrypt, sign, hmac, sha, aes, or rsa references in any file. The name "Cipher" is metaphorical — it is a knowledge-graph memory service.
@@ -369,7 +369,7 @@ CMD ["sh", "-lc", "cipher --mode mcp --transport http --port 8765"]
 ```
 
 **Two separate cipher services exist** (from audit 2026-02-19):
-- `cipher-api` (:8096) — Node.js/Neo4j, the canonical PMOVES cipher memory
+- `cipher-api` (:8105) — Node.js/Neo4j, the canonical PMOVES cipher memory
 - `pmoves-botz-cipher` (:8000) — Referenced in docker-compose but **undefined** (dangling reference)
 
 ### 3.7 Storage Backend
@@ -599,7 +599,7 @@ Minimum viable test suite (6 tests):
 
 ### Priority 4: Harden Cipher MCP (Week 3)
 
-1. Fix dangling `pmoves-botz-cipher:8000` reference to `cipher-api:8096`
+1. Fix dangling `pmoves-botz-cipher:8000` reference to `cipher-api:8105`
 2. Add auth requirement — fail closed when `CIPHER_API_TOKEN` is unset
 3. Add missing NATS event for `pmoves_cipher_reasoning_patterns` tool
 4. Convert to proper git submodule

@@ -49,14 +49,16 @@
 |---------|-----------|-------------|
 | `tokenism.geometry.event.v1` | Publishes | Voice synthesis attribution events |
 | `tokenism.prosodic.bpm.v1` | Publishes | BPM-encoded prosodic timeline events |
-| `geometry.packet.decoded.v1` | Subscribes | Decoded geometry packets for voice rendering |
+| `geometry.cgp.v1` | Publishes | CGP v0.2 dual-publish via geometry-bus bridge (`geometry_bridge.py`, PR #1404) |
+| `geometry.packet.decoded.v1` | Subscribes | Decoded geometry packets for voice rendering — **not yet implemented** |
 
 ## CHIT Integration Status
 
 | Capability | Status | Notes |
 |------------|--------|-------|
 | CGP packet generation | Active | Via `tokenism.geometry.event.v1` |
-| BPM prosodic encoding | **NEW** | Via `tokenism.prosodic.bpm.v1` |
+| BPM prosodic encoding | Active | Via `tokenism.prosodic.bpm.v1` (PR #1402) |
+| GEOMETRY BUS dual-publish | **Active** | `geometry_bridge.py` publishes to both `tokenism.prosodic.bpm.v1` + `geometry.cgp.v1` (PR #1404) |
 | Voice persona attribution | Active | `voice_persona_id` in CGP packets |
 | Hz sensitivity | Enabled | `chit_toggles.hz_sensitive: true` |
 
@@ -90,6 +92,7 @@
 
 - **Architecture:** [`pmoves/docs/FLUTE_PROSODIC_ARCHITECTURE.md`](../FLUTE_PROSODIC_ARCHITECTURE.md)
 - **BPM Bridge:** [`pmoves/docs/AGENTS/AGNOTE4482.BEATS.md`](../AGENTS/AGNOTE4482.BEATS.md)
+- **Geometry Bridge:** `pmoves/tools/geometry_bridge.py` (dual-publish CGP v0.2, PR #1404)
 - **API Reference:** `.claude/context/flute-gateway.md`
 - **Integration Topology:** [`TAC_INTEGRATION_TOPOLOGY.md`](./TAC_INTEGRATION_TOPOLOGY.md)
 
@@ -97,6 +100,8 @@
 
 - ESP32 WebRTC signaling (Phase 5)
 - ~~Prosodic BPM encoding for CHIT attribution~~ → **RESOLVED** (see BPM-Prosodic Bridge)
+- ~~GEOMETRY BUS dual-publish~~ → **RESOLVED** `geometry_bridge.py` PR #1404 — publishes `tokenism.prosodic.bpm.v1` + `geometry.cgp.v1`
+- `geometry.packet.decoded.v1` subscribe path (Flute consuming from geometry bus) — **not yet implemented**
 - Edge mesh node protocol
 
 <!-- GRAPHITI_MARK: CLAUDE-OPUS::TAC-TOPOLOGY-AUDIT::2026-02-20 -->

@@ -7,10 +7,16 @@
 
 import { registerRoot } from 'remotion';
 import { A2UIComposition } from './A2UIComposition';
+import { ProvenanceLivingDocComposition } from './ProvenanceLivingDoc';
 import React from 'react';
 
 const RemotionRoot: React.FC = () => {
-  return <A2UIComposition />;
+  return (
+    <>
+      <A2UIComposition />
+      <ProvenanceLivingDocComposition />
+    </>
+  );
 };
 
 registerRoot(RemotionRoot);

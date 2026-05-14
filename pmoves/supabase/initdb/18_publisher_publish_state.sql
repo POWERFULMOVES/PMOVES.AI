@@ -72,6 +72,25 @@ before update on public.publisher_audit
 for each row
 execute function public.set_publisher_audit_updated_at();
 
+-- RLS for publisher_audit (H-07)
+ALTER TABLE public.publisher_audit ENABLE ROW LEVEL SECURITY;
+GRANT ALL ON public.publisher_audit TO service_role;
+DO $$ BEGIN
+  CREATE POLICY publisher_audit_svc ON public.publisher_audit
+    FOR ALL TO service_role USING (true) WITH CHECK (true);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+DO $$ BEGIN
+  CREATE POLICY publisher_audit_auth_read ON public.publisher_audit
+    FOR SELECT TO authenticated USING (true);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+DO $$ BEGIN
+  CREATE POLICY publisher_audit_anon_deny ON public.publisher_audit
+    FOR ALL TO anon USING (false) WITH CHECK (false);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
 create table if not exists public.publisher_metrics_rollup (
   artifact_uri text primary key,
   namespace text,
@@ -100,6 +119,46 @@ create table if not exists public.publisher_discord_metrics (
 
 create index if not exists idx_publisher_discord_metrics_published_at
   on public.publisher_discord_metrics(published_at desc);
+
+-- RLS for publisher_metrics_rollup (H-07)
+ALTER TABLE public.publisher_metrics_rollup ENABLE ROW LEVEL SECURITY;
+GRANT ALL ON public.publisher_metrics_rollup TO service_role;
+GRANT SELECT ON public.publisher_metrics_rollup TO authenticated;
+DO $$ BEGIN
+  CREATE POLICY publisher_metrics_svc ON public.publisher_metrics_rollup
+    FOR ALL TO service_role USING (true) WITH CHECK (true);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+DO $$ BEGIN
+  CREATE POLICY publisher_metrics_auth_read ON public.publisher_metrics_rollup
+    FOR SELECT TO authenticated USING (true);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+DO $$ BEGIN
+  CREATE POLICY publisher_metrics_anon_deny ON public.publisher_metrics_rollup
+    FOR ALL TO anon USING (false) WITH CHECK (false);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+-- RLS for publisher_discord_metrics (H-07)
+ALTER TABLE public.publisher_discord_metrics ENABLE ROW LEVEL SECURITY;
+GRANT ALL ON public.publisher_discord_metrics TO service_role;
+GRANT SELECT ON public.publisher_discord_metrics TO authenticated;
+DO $$ BEGIN
+  CREATE POLICY publisher_discord_metrics_svc ON public.publisher_discord_metrics
+    FOR ALL TO service_role USING (true) WITH CHECK (true);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+DO $$ BEGIN
+  CREATE POLICY publisher_discord_metrics_auth_read ON public.publisher_discord_metrics
+    FOR SELECT TO authenticated USING (true);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+DO $$ BEGIN
+  CREATE POLICY publisher_discord_metrics_anon_deny ON public.publisher_discord_metrics
+    FOR ALL TO anon USING (false) WITH CHECK (false);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 create or replace function public.claim_studio_board_publish(
   p_row_id bigint,

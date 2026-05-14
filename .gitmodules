@@ -309,3 +309,27 @@
 	path = PMOVES-ClawZ
 	url = https://github.com/POWERFULMOVES/PMOVES-ClawZ.git
 	branch = main
+[submodule "PMOVES-space-agent"]
+	path = PMOVES-space-agent
+	url = https://github.com/POWERFULMOVES/PMOVES-space-agent.git
+	branch = PMOVES.AI-Edition-Hardened
+[submodule "skills/Pmoves-skills"]
+	path = skills/Pmoves-skills
+	url = https://github.com/POWERFULMOVES/Pmoves-skills.git
+	branch = main
+[submodule "skills/PMOVES-awesome-agent-skills"]
+	path = skills/PMOVES-awesome-agent-skills
+	url = https://github.com/POWERFULMOVES/PMOVES-awesome-agent-skills.git
+	branch = main
+[submodule "skills/pmoves-fork-repository-skill"]
+	path = skills/pmoves-fork-repository-skill
+	url = https://github.com/POWERFULMOVES/pmoves-fork-repository-skill.git
+	branch = main
+[submodule "skills/PMOVES-agent-sandbox-skill"]
+	path = skills/PMOVES-agent-sandbox-skill
+	url = https://github.com/POWERFULMOVES/PMOVES-agent-sandbox-skill.git
+	branch = main
+[submodule "skills/Pmoves-claude-d3js-skill"]
+	path = skills/Pmoves-claude-d3js-skill
+	url = https://github.com/POWERFULMOVES/Pmoves-claude-d3js-skill.git
+	branch = main

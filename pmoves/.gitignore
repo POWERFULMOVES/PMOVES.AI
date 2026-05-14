@@ -47,3 +47,5 @@ env.tier-vpn
 env.tier-worker
 env.tier-supabase.urlencoded
 env.z890
+env.presign.additions
+.codex/

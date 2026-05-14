@@ -814,6 +814,66 @@ BEGIN
     description = EXCLUDED.description,
     updated_at = NOW();
 
+  -- Z.AI GLM-5.1 (Flagship - META-AGENT RUNTIME MODEL)
+  INSERT INTO pmoves_core.models (provider_id, name, model_id, model_type, capabilities, vram_mb, context_length, description, active)
+  VALUES (
+    v_zai_id,
+    'glm_5_1',
+    'glm-5.1',
+    'chat',
+    '["chat", "function_calling", "extended_thinking", "vision", "chinese", "bilingual"]'::jsonb,
+    0,
+    128000,
+    'Z.AI GLM-5.1 - Flagship model with extended reasoning and vision (META-AGENT RUNTIME MODEL)',
+    true
+  )
+  ON CONFLICT (provider_id, model_id) DO UPDATE SET
+    name = EXCLUDED.name,
+    capabilities = EXCLUDED.capabilities,
+    context_length = EXCLUDED.context_length,
+    description = EXCLUDED.description,
+    updated_at = NOW();
+
+  -- Z.AI GLM-4-Plus (Premium tier)
+  INSERT INTO pmoves_core.models (provider_id, name, model_id, model_type, capabilities, vram_mb, context_length, description, active)
+  VALUES (
+    v_zai_id,
+    'glm_4_plus',
+    'glm-4-plus',
+    'chat',
+    '["chat", "function_calling", "vision", "chinese", "bilingual"]'::jsonb,
+    0,
+    128000,
+    'Z.AI GLM-4-Plus - Premium tier for complex reasoning with vision support',
+    true
+  )
+  ON CONFLICT (provider_id, model_id) DO UPDATE SET
+    name = EXCLUDED.name,
+    capabilities = EXCLUDED.capabilities,
+    context_length = EXCLUDED.context_length,
+    description = EXCLUDED.description,
+    updated_at = NOW();
+
+  -- Z.AI GLM-4-Air (Balanced tier)
+  INSERT INTO pmoves_core.models (provider_id, name, model_id, model_type, capabilities, vram_mb, context_length, description, active)
+  VALUES (
+    v_zai_id,
+    'glm_4_air',
+    'glm-4-air',
+    'chat',
+    '["chat", "function_calling", "chinese", "bilingual"]'::jsonb,
+    0,
+    128000,
+    'Z.AI GLM-4-Air - Balanced performance and efficiency',
+    true
+  )
+  ON CONFLICT (provider_id, model_id) DO UPDATE SET
+    name = EXCLUDED.name,
+    capabilities = EXCLUDED.capabilities,
+    context_length = EXCLUDED.context_length,
+    description = EXCLUDED.description,
+    updated_at = NOW();
+
   -- OpenAI GPT-4o-mini
   INSERT INTO pmoves_core.models (provider_id, name, model_id, model_type, capabilities, vram_mb, context_length, description, active)
   VALUES (
@@ -1767,11 +1827,11 @@ INSERT INTO pmoves_core.model_providers (name, type, api_base, api_key_env_var, 
 VALUES (
   'llamacpp_rocm',
   'openai_compatible',
-  'http://pmoves-9850x3d-r9700:8080/v1',
+  'http://pmoves-rdna4:8080/v1',
   'LLAMACPP_ROCM_API_KEY',
   'llama-server (HIP) on AMD Ryzen 9850X3D + dual R9700 RDNA4 gfx1201 (ROCm 7.1)',
   true,
-  '{"status": "staging", "network": "tailnet", "location": "local", "arch": "rdna4", "gpu": "radeon-ai-pro-r9700", "gpu_count": 2, "total_vram_mb": 65536, "hostname": "pmoves-9850x3d-r9700", "phase": "C", "fork": "tlee933/llama.cpp-rdna4-gfx1201"}'::jsonb
+  '{"status": "staging", "network": "tailnet", "location": "local", "arch": "rdna4", "gpu": "radeon-ai-pro-r9700", "gpu_count": 2, "total_vram_mb": 65536, "hostname": "pmoves-rdna4", "phase": "C", "fork": "tlee933/llama.cpp-rdna4-gfx1201"}'::jsonb
 )
 ON CONFLICT (name) DO UPDATE SET
   type = EXCLUDED.type,
@@ -1817,7 +1877,7 @@ BEGIN
   INSERT INTO pmoves_core.models (provider_id, name, model_id, model_type, capabilities, vram_mb, context_length, description, active)
   VALUES (
     v_spark_id,
-    'ollama_spark_nemotron3_super_120b_fp8',
+    'ollama_spark_nemotron3_super_120b_nvfp4',
     'nemotron-3-super-120b-nvfp4',
     'chat',
     '["chat", "function_calling", "json_mode", "tool_use", "agentic_reasoning"]'::jsonb,

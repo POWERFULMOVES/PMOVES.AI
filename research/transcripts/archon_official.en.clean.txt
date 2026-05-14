@@ -1,0 +1,2024 @@
+WEBVTT
+Welcome<00:00:00.560><c> to</c><00:00:00.880><c> Archon,</c><00:00:01.600><c> your</c><00:00:01.760><c> command</c><00:00:02.159><c> center</c>
+Welcome to Archon, your command center
+Welcome to Archon, your command center
+for<00:00:02.800><c> AI</c><00:00:03.280><c> coding.</c><00:00:03.679><c> It</c><00:00:03.919><c> is</c><00:00:04.080><c> your</c><00:00:04.319><c> tool</c><00:00:04.640><c> to</c><00:00:04.960><c> manage</c>
+for AI coding. It is your tool to manage
+for AI coding. It is your tool to manage
+all<00:00:05.680><c> of</c><00:00:05.839><c> your</c><00:00:06.080><c> knowledge</c><00:00:06.560><c> and</c><00:00:06.879><c> tasks</c><00:00:07.359><c> for</c><00:00:07.680><c> your</c>
+all of your knowledge and tasks for your
+all of your knowledge and tasks for your
+AI<00:00:08.400><c> coding</c><00:00:08.800><c> assistant.</c><00:00:09.840><c> The</c><00:00:10.160><c> big</c><00:00:10.400><c> goal</c><00:00:10.639><c> of</c>
+AI coding assistant. The big goal of
+AI coding assistant. The big goal of
+Archon<00:00:11.599><c> is</c><00:00:11.840><c> to</c><00:00:12.080><c> be</c><00:00:12.639><c> the</c><00:00:12.880><c> one</c><00:00:13.200><c> tool</c><00:00:13.599><c> that</c>
+Archon is to be the one tool that
+Archon is to be the one tool that
+enables<00:00:14.400><c> AI</c><00:00:14.799><c> and</c><00:00:15.040><c> human</c><00:00:15.280><c> collaboration</c><00:00:15.839><c> at</c><00:00:16.080><c> a</c>
+enables AI and human collaboration at a
+enables AI and human collaboration at a
+very<00:00:16.720><c> deep</c><00:00:17.039><c> level.</c><00:00:17.359><c> It's</c><00:00:17.600><c> something</c><00:00:17.760><c> that</c><00:00:18.000><c> is</c>
+very deep level. It's something that is
+very deep level. It's something that is
+very<00:00:18.480><c> much</c><00:00:18.800><c> missing</c><00:00:19.199><c> in</c><00:00:19.439><c> the</c><00:00:19.600><c> AI</c><00:00:19.920><c> coding</c><00:00:20.320><c> space</c>
+very much missing in the AI coding space
+very much missing in the AI coding space
+right<00:00:20.800><c> now.</c><00:00:21.199><c> So,</c><00:00:21.359><c> Archon</c><00:00:21.840><c> is</c><00:00:21.920><c> the</c><00:00:22.080><c> tool</c><00:00:22.240><c> to</c>
+right now. So, Archon is the tool to
+right now. So, Archon is the tool to
+fill<00:00:22.560><c> in</c><00:00:22.800><c> that</c><00:00:22.960><c> gap</c><00:00:23.279><c> for</c><00:00:23.519><c> you.</c><00:00:24.240><c> for</c><00:00:24.560><c> you</c><00:00:24.800><c> as</c><00:00:25.039><c> the</c>
+fill in that gap for you. for you as the
+fill in that gap for you. for you as the
+user.<00:00:25.600><c> It</c><00:00:25.760><c> is</c><00:00:25.920><c> a</c><00:00:26.320><c> beautiful</c><00:00:26.800><c> user</c><00:00:27.119><c> interface</c>
+user. It is a beautiful user interface
+user. It is a beautiful user interface
+to<00:00:27.760><c> manage</c><00:00:28.080><c> all</c><00:00:28.240><c> of</c><00:00:28.400><c> your</c><00:00:28.560><c> projects</c><00:00:29.039><c> and</c><00:00:29.279><c> tasks</c>
+to manage all of your projects and tasks
+to manage all of your projects and tasks
+and<00:00:30.480><c> all</c><00:00:30.720><c> of</c><00:00:30.800><c> the</c><00:00:30.960><c> knowledge</c><00:00:31.279><c> that</c><00:00:31.519><c> you're</c>
+and all of the knowledge that you're
+and all of the knowledge that you're
+curating<00:00:32.239><c> for</c><00:00:32.559><c> your</c><00:00:32.800><c> code</c><00:00:33.120><c> bases,</c><00:00:33.600><c> the</c>
+curating for your code bases, the
+curating for your code bases, the
+libraries<00:00:34.320><c> that</c><00:00:34.640><c> you</c><00:00:34.800><c> are</c><00:00:35.040><c> using.</c><00:00:35.680><c> And</c><00:00:35.840><c> then</c>
+libraries that you are using. And then
+libraries that you are using. And then
+for<00:00:36.239><c> the</c><00:00:36.480><c> AI</c><00:00:36.880><c> coding</c><00:00:37.200><c> assistant,</c><00:00:37.680><c> it</c><00:00:37.840><c> is</c><00:00:38.000><c> an</c>
+for the AI coding assistant, it is an
+for the AI coding assistant, it is an
+MCP<00:00:38.879><c> server</c><00:00:39.360><c> to</c><00:00:39.680><c> manage</c><00:00:40.079><c> all</c><00:00:40.320><c> of</c><00:00:40.399><c> the</c><00:00:40.640><c> same</c>
+MCP server to manage all of the same
+MCP server to manage all of the same
+things.<00:00:41.200><c> So</c><00:00:41.440><c> super</c><00:00:41.760><c> easy</c><00:00:42.000><c> to</c><00:00:42.239><c> connect</c><00:00:42.480><c> this</c><00:00:42.719><c> to</c>
+things. So super easy to connect this to
+things. So super easy to connect this to
+literally<00:00:43.680><c> any</c><00:00:44.079><c> AI</c><00:00:44.559><c> coding</c><00:00:44.879><c> assistant.</c><00:00:45.600><c> And</c>
+literally any AI coding assistant. And
+literally any AI coding assistant. And
+then<00:00:45.920><c> you</c><00:00:46.079><c> instantly</c><00:00:46.480><c> give</c><00:00:46.640><c> it</c><00:00:46.879><c> access</c>
+then you instantly give it access
+then you instantly give it access
+through<00:00:47.440><c> the</c><00:00:47.600><c> MCP</c><00:00:48.480><c> to</c><00:00:48.879><c> search</c><00:00:49.200><c> all</c><00:00:49.440><c> of</c><00:00:49.600><c> the</c>
+through the MCP to search all of the
+through the MCP to search all of the
+documentation<00:00:50.320><c> that</c><00:00:50.480><c> you've</c><00:00:50.719><c> curated</c><00:00:51.440><c> and</c>
+documentation that you've curated and
+documentation that you've curated and
+manage<00:00:52.160><c> the</c><00:00:52.399><c> same</c><00:00:52.719><c> projects</c><00:00:53.039><c> and</c><00:00:53.360><c> tasks</c><00:00:53.680><c> in</c>
+manage the same projects and tasks in
+manage the same projects and tasks in
+this<00:00:54.239><c> canban</c><00:00:54.800><c> board.</c><00:00:55.680><c> And</c><00:00:55.840><c> so</c><00:00:56.160><c> for</c><00:00:56.480><c> this</c><00:00:56.640><c> video</c>
+this canban board. And so for this video
+this canban board. And so for this video
+right<00:00:57.199><c> now,</c><00:00:57.520><c> I've</c><00:00:57.760><c> got</c><00:00:57.920><c> three</c><00:00:58.160><c> things</c><00:00:58.399><c> for</c>
+right now, I've got three things for
+right now, I've got three things for
+you.<00:00:58.960><c> First</c><00:00:59.199><c> of</c><00:00:59.359><c> all,</c><00:00:59.600><c> I</c><00:00:59.840><c> want</c><00:00:59.920><c> to</c><00:01:00.079><c> cover</c><00:01:00.399><c> why</c>
+you. First of all, I want to cover why
+you. First of all, I want to cover why
+we<00:01:00.879><c> actually</c><00:01:01.039><c> care</c><00:01:01.199><c> about</c><00:01:01.440><c> using</c><00:01:01.680><c> Archon</c><00:01:02.239><c> in</c>
+we actually care about using Archon in
+we actually care about using Archon in
+the<00:01:02.719><c> first</c><00:01:02.879><c> place.</c><00:01:03.680><c> Then</c><00:01:03.920><c> a</c><00:01:04.080><c> quick</c><00:01:04.239><c> start.</c><00:01:04.479><c> I</c>
+the first place. Then a quick start. I
+the first place. Then a quick start. I
+just<00:01:04.799><c> want</c><00:01:04.879><c> to</c><00:01:04.960><c> help</c><00:01:05.119><c> you</c><00:01:05.280><c> in</c><00:01:05.439><c> a</c><00:01:05.600><c> couple</c><00:01:05.760><c> of</c>
+just want to help you in a couple of
+just want to help you in a couple of
+minutes<00:01:06.159><c> get</c><00:01:06.320><c> Archon</c><00:01:06.880><c> fully</c><00:01:07.200><c> set</c><00:01:07.360><c> up</c><00:01:07.760><c> and</c>
+minutes get Archon fully set up and
+minutes get Archon fully set up and
+connected<00:01:08.479><c> to</c><00:01:08.720><c> your</c><00:01:08.880><c> AI</c><00:01:09.280><c> coding</c><00:01:09.680><c> assistant.</c>
+connected to your AI coding assistant.
+connected to your AI coding assistant.
+And<00:01:10.320><c> then</c><00:01:10.479><c> the</c><00:01:10.640><c> last</c><00:01:10.799><c> thing</c><00:01:11.119><c> that</c><00:01:11.439><c> I</c><00:01:11.600><c> want</c><00:01:11.760><c> to</c>
+And then the last thing that I want to
+And then the last thing that I want to
+go<00:01:12.000><c> through</c><00:01:12.240><c> with</c><00:01:12.479><c> you</c><00:01:12.960><c> is</c><00:01:13.280><c> a</c><00:01:13.680><c> practical</c><00:01:14.240><c> guide</c>
+go through with you is a practical guide
+go through with you is a practical guide
+on<00:01:14.960><c> how</c><00:01:15.280><c> to</c><00:01:15.520><c> use</c><00:01:15.760><c> Archon</c><00:01:16.400><c> in</c><00:01:16.720><c> your</c><00:01:16.880><c> AI</c><00:01:17.360><c> coding</c>
+on how to use Archon in your AI coding
+on how to use Archon in your AI coding
+workflows<00:01:18.560><c> so</c><00:01:18.720><c> that</c><00:01:18.880><c> you</c><00:01:19.119><c> can</c><00:01:19.280><c> significantly</c>
+workflows so that you can significantly
+workflows so that you can significantly
+improve<00:01:20.560><c> the</c><00:01:20.799><c> code</c><00:01:21.119><c> quality</c><00:01:21.600><c> output</c><00:01:22.320><c> of</c><00:01:22.560><c> your</c>
+improve the code quality output of your
+improve the code quality output of your
+coding<00:01:23.119><c> assistants</c><00:01:23.759><c> and</c><00:01:24.080><c> how</c><00:01:24.320><c> easy</c><00:01:24.560><c> it</c><00:01:24.720><c> is</c><00:01:24.799><c> for</c>
+coding assistants and how easy it is for
+coding assistants and how easy it is for
+you<00:01:25.200><c> to</c><00:01:25.520><c> manage</c><00:01:26.159><c> your</c><00:01:26.400><c> AI</c><00:01:26.799><c> coding</c><00:01:27.119><c> assistance.</c>
+you to manage your AI coding assistance.
+you to manage your AI coding assistance.
+So<00:01:27.840><c> putting</c><00:01:28.159><c> yourself</c><00:01:28.560><c> in</c><00:01:28.799><c> the</c><00:01:29.040><c> driver's</c><00:01:29.360><c> seat</c>
+So putting yourself in the driver's seat
+So putting yourself in the driver's seat
+while<00:01:30.240><c> also</c><00:01:30.720><c> still</c><00:01:31.040><c> enabling</c><00:01:31.680><c> your</c><00:01:32.000><c> AI</c><00:01:32.400><c> coding</c>
+while also still enabling your AI coding
+while also still enabling your AI coding
+assistance<00:01:33.280><c> to</c><00:01:33.520><c> go</c><00:01:33.759><c> very</c><00:01:34.079><c> far.</c><00:01:34.560><c> Now</c><00:01:34.880><c> first</c><00:01:35.040><c> of</c>
+assistance to go very far. Now first of
+assistance to go very far. Now first of
+all<00:01:35.439><c> why</c><00:01:35.600><c> do</c><00:01:35.759><c> we</c><00:01:35.920><c> care</c><00:01:36.079><c> about</c><00:01:36.240><c> using</c><00:01:36.560><c> Archon</c><00:01:37.119><c> in</c>
+all why do we care about using Archon in
+all why do we care about using Archon in
+the<00:01:37.439><c> first</c><00:01:37.600><c> place?</c><00:01:37.920><c> I</c><00:01:38.079><c> mean,</c><00:01:38.159><c> that's</c><00:01:38.320><c> the</c><00:01:38.479><c> big</c>
+the first place? I mean, that's the big
+the first place? I mean, that's the big
+question<00:01:38.880><c> you</c><00:01:39.119><c> have</c><00:01:39.280><c> whenever</c><00:01:39.759><c> you're</c>
+question you have whenever you're
+question you have whenever you're
+looking<00:01:40.159><c> at</c><00:01:40.400><c> a</c><00:01:40.560><c> new</c><00:01:40.720><c> tool,</c><00:01:41.439><c> especially</c><00:01:41.840><c> when</c>
+looking at a new tool, especially when
+looking at a new tool, especially when
+it's<00:01:42.240><c> one</c><00:01:42.479><c> related</c><00:01:42.799><c> to</c><00:01:42.960><c> AI</c><00:01:43.280><c> and</c><00:01:43.520><c> there's</c>
+it's one related to AI and there's
+it's one related to AI and there's
+millions<00:01:44.079><c> of</c><00:01:44.240><c> tools</c><00:01:44.640><c> out</c><00:01:44.880><c> there.</c><00:01:45.520><c> Well,</c><00:01:45.759><c> the</c>
+millions of tools out there. Well, the
+millions of tools out there. Well, the
+big<00:01:46.240><c> problem</c><00:01:46.479><c> that</c><00:01:46.720><c> we</c><00:01:46.880><c> have</c><00:01:47.119><c> with</c><00:01:47.439><c> AI</c><00:01:47.840><c> coding</c>
+big problem that we have with AI coding
+big problem that we have with AI coding
+assistants<00:01:48.640><c> right</c><00:01:48.880><c> now</c><00:01:49.360><c> is</c><00:01:49.680><c> they</c><00:01:50.000><c> take</c><00:01:50.240><c> care</c>
+assistants right now is they take care
+assistants right now is they take care
+of<00:01:50.720><c> too</c><00:01:51.040><c> many</c><00:01:51.280><c> things</c><00:01:51.600><c> under</c><00:01:52.000><c> the</c><00:01:52.240><c> hood.</c>
+of too many things under the hood.
+of too many things under the hood.
+Here's<00:01:53.119><c> what</c><00:01:53.280><c> I</c><00:01:53.439><c> mean</c><00:01:53.520><c> by</c><00:01:53.680><c> that.</c><00:01:54.159><c> In</c><00:01:54.399><c> our</c><00:01:54.640><c> tools</c>
+Here's what I mean by that. In our tools
+Here's what I mean by that. In our tools
+that<00:01:55.119><c> we</c><00:01:55.280><c> have</c><00:01:55.439><c> like</c><00:01:55.840><c> Kirao</c><00:01:56.320><c> or</c><00:01:56.479><c> Cloud</c><00:01:56.799><c> Code</c><00:01:57.040><c> or</c>
+that we have like Kirao or Cloud Code or
+that we have like Kirao or Cloud Code or
+Codeex,<00:01:57.759><c> all</c><00:01:57.840><c> these</c><00:01:58.079><c> coding</c><00:01:58.479><c> assistants,</c>
+Codeex, all these coding assistants,
+Codeex, all these coding assistants,
+they<00:01:59.600><c> have</c><00:01:59.680><c> the</c><00:01:59.920><c> ability</c><00:02:00.240><c> to</c><00:02:00.560><c> search</c><00:02:00.799><c> the</c><00:02:01.040><c> web.</c>
+they have the ability to search the web.
+they have the ability to search the web.
+That's<00:02:01.680><c> their</c><00:02:01.920><c> way</c><00:02:02.079><c> to</c><00:02:02.719><c> retrieve</c><00:02:03.360><c> external</c>
+That's their way to retrieve external
+That's their way to retrieve external
+documentation.<00:02:04.880><c> right</c><00:02:05.119><c> now</c><00:02:05.600><c> searching</c><00:02:05.920><c> the</c>
+documentation. right now searching the
+documentation. right now searching the
+web<00:02:06.240><c> for</c><00:02:06.479><c> lang</c><00:02:06.880><c> chain</c><00:02:07.040><c> or</c><00:02:07.200><c> pideantic</c><00:02:07.840><c> AI</c><00:02:08.160><c> all</c>
+web for lang chain or pideantic AI all
+web for lang chain or pideantic AI all
+these<00:02:08.560><c> libraries</c><00:02:08.959><c> that</c><00:02:09.200><c> we're</c><00:02:09.520><c> using</c><00:02:10.239><c> and</c>
+these libraries that we're using and
+these libraries that we're using and
+they<00:02:10.640><c> also</c><00:02:10.959><c> have</c><00:02:11.120><c> the</c><00:02:11.280><c> ability</c><00:02:11.599><c> to</c><00:02:11.840><c> create</c>
+they also have the ability to create
+they also have the ability to create
+their<00:02:12.319><c> own</c><00:02:12.640><c> internal</c><00:02:13.599><c> task</c><00:02:14.080><c> lists</c><00:02:14.560><c> so</c><00:02:14.720><c> they</c>
+their own internal task lists so they
+their own internal task lists so they
+can<00:02:15.040><c> organize</c><00:02:15.520><c> their</c><00:02:15.760><c> own</c><00:02:15.920><c> work</c><00:02:16.319><c> and</c><00:02:16.560><c> knock</c>
+can organize their own work and knock
+can organize their own work and knock
+things<00:02:17.040><c> out</c><00:02:17.360><c> task</c><00:02:17.760><c> by</c><00:02:18.000><c> task</c><00:02:18.640><c> and</c><00:02:18.879><c> that's</c><00:02:19.120><c> all</c>
+things out task by task and that's all
+things out task by task and that's all
+fine<00:02:19.760><c> and</c><00:02:20.000><c> these</c><00:02:20.239><c> capabilities</c><00:02:20.959><c> are</c><00:02:21.200><c> quite</c>
+fine and these capabilities are quite
+fine and these capabilities are quite
+powerful<00:02:22.400><c> but</c><00:02:22.640><c> the</c><00:02:22.800><c> problem</c><00:02:23.040><c> is</c><00:02:23.280><c> there's</c><00:02:23.599><c> not</c>
+powerful but the problem is there's not
+powerful but the problem is there's not
+really<00:02:24.000><c> a</c><00:02:24.239><c> way</c><00:02:24.319><c> for</c><00:02:24.560><c> us</c><00:02:24.720><c> to</c><00:02:25.040><c> collaborate</c><00:02:25.520><c> with</c>
+really a way for us to collaborate with
+really a way for us to collaborate with
+the<00:02:25.920><c> AI</c><00:02:26.239><c> coding</c><00:02:26.560><c> assistant</c><00:02:26.959><c> on</c><00:02:27.200><c> these</c><00:02:27.440><c> things</c>
+the AI coding assistant on these things
+the AI coding assistant on these things
+we<00:02:28.080><c> can't</c><00:02:28.239><c> really</c><00:02:28.560><c> pick</c><00:02:29.120><c> the</c><00:02:29.440><c> knowledge</c><00:02:29.840><c> that</c>
+we can't really pick the knowledge that
+we can't really pick the knowledge that
+it<00:02:30.480><c> searches</c><00:02:30.800><c> through</c><00:02:31.120><c> because</c><00:02:31.280><c> it's</c><00:02:31.520><c> just</c>
+it searches through because it's just
+it searches through because it's just
+going<00:02:31.760><c> to</c><00:02:31.920><c> search</c><00:02:32.160><c> the</c><00:02:32.400><c> entire</c><00:02:32.800><c> internet</c><00:02:33.599><c> we</c>
+going to search the entire internet we
+going to search the entire internet we
+can't<00:02:34.080><c> really</c><00:02:34.400><c> interact</c><00:02:34.879><c> with</c><00:02:35.120><c> this</c><00:02:35.440><c> task</c>
+can't really interact with this task
+can't really interact with this task
+list.<00:02:36.160><c> It's</c><00:02:36.400><c> more</c><00:02:36.560><c> of</c><00:02:36.720><c> an</c><00:02:36.959><c> internal</c><00:02:37.440><c> tool.</c><00:02:38.080><c> You</c>
+list. It's more of an internal tool. You
+list. It's more of an internal tool. You
+see<00:02:38.400><c> the</c><00:02:38.640><c> problem</c><00:02:38.879><c> here?</c><00:02:39.120><c> It</c><00:02:39.280><c> takes</c><00:02:39.440><c> care</c><00:02:39.599><c> of</c><00:02:39.680><c> a</c>
+see the problem here? It takes care of a
+see the problem here? It takes care of a
+lot<00:02:39.920><c> of</c><00:02:40.080><c> things</c><00:02:40.239><c> for</c><00:02:40.480><c> us,</c><00:02:40.959><c> which</c><00:02:41.280><c> kind</c><00:02:41.440><c> of</c>
+lot of things for us, which kind of
+lot of things for us, which kind of
+kicks<00:02:41.920><c> us</c><00:02:42.080><c> out</c><00:02:42.239><c> of</c><00:02:42.400><c> the</c><00:02:42.560><c> driver's</c><00:02:42.959><c> seat</c><00:02:43.440><c> in</c>
+kicks us out of the driver's seat in
+kicks us out of the driver's seat in
+some<00:02:43.920><c> ways</c><00:02:44.080><c> that</c><00:02:44.239><c> we'd</c><00:02:44.480><c> really</c><00:02:44.640><c> want</c><00:02:44.800><c> to</c><00:02:44.879><c> be</c><00:02:44.959><c> a</c>
+some ways that we'd really want to be a
+some ways that we'd really want to be a
+part<00:02:45.280><c> of</c><00:02:45.440><c> the</c><00:02:45.680><c> process,</c><00:02:46.080><c> actually</c><00:02:46.480><c> defining</c>
+part of the process, actually defining
+part of the process, actually defining
+the<00:02:47.200><c> tasks</c><00:02:47.599><c> and</c><00:02:47.920><c> choosing</c><00:02:48.720><c> the</c><00:02:49.040><c> different</c>
+the tasks and choosing the different
+the tasks and choosing the different
+sources<00:02:49.760><c> that</c><00:02:50.000><c> our</c><00:02:50.160><c> AI</c><00:02:50.480><c> coding</c><00:02:50.800><c> assistant</c><00:02:51.200><c> is</c>
+sources that our AI coding assistant is
+sources that our AI coding assistant is
+going<00:02:51.599><c> to</c><00:02:51.840><c> look</c><00:02:52.080><c> for</c><00:02:52.560><c> to</c><00:02:52.959><c> understand</c><00:02:53.280><c> the</c>
+going to look for to understand the
+going to look for to understand the
+libraries<00:02:54.000><c> that</c><00:02:54.160><c> we're</c><00:02:54.400><c> building</c><00:02:54.640><c> with.</c><00:02:55.040><c> And</c>
+libraries that we're building with. And
+libraries that we're building with. And
+that<00:02:55.440><c> is</c><00:02:55.680><c> exactly</c><00:02:56.319><c> what</c><00:02:56.640><c> Archon</c><00:02:57.200><c> helps</c><00:02:57.440><c> us</c>
+that is exactly what Archon helps us
+that is exactly what Archon helps us
+with.<00:02:57.840><c> So,</c><00:02:57.920><c> I</c><00:02:58.080><c> have</c><00:02:58.160><c> a</c><00:02:58.319><c> little</c><00:02:58.400><c> demo</c><00:02:58.720><c> going</c><00:02:58.959><c> on</c>
+with. So, I have a little demo going on
+with. So, I have a little demo going on
+the<00:02:59.200><c> lefth</c><00:02:59.360><c> hand</c><00:02:59.599><c> side</c><00:02:59.840><c> here.</c><00:03:00.400><c> This</c><00:03:00.560><c> is</c><00:03:00.720><c> more</c>
+the lefth hand side here. This is more
+the lefth hand side here. This is more
+just<00:03:01.280><c> mock</c><00:03:01.599><c> calls</c><00:03:01.920><c> to</c><00:03:02.159><c> show</c><00:03:02.239><c> you</c><00:03:02.400><c> how</c><00:03:02.560><c> archon</c>
+just mock calls to show you how archon
+just mock calls to show you how archon
+works<00:03:03.120><c> at</c><00:03:03.200><c> a</c><00:03:03.360><c> high</c><00:03:03.440><c> level.</c><00:03:03.680><c> We'll</c><00:03:03.920><c> really</c><00:03:04.080><c> get</c>
+works at a high level. We'll really get
+works at a high level. We'll really get
+into<00:03:04.319><c> the</c><00:03:04.480><c> AI</c><00:03:04.800><c> coding</c><00:03:05.120><c> workflow</c><00:03:05.760><c> in</c><00:03:06.000><c> a</c><00:03:06.239><c> little</c>
+into the AI coding workflow in a little
+into the AI coding workflow in a little
+bit<00:03:06.480><c> here.</c><00:03:06.720><c> And</c><00:03:06.879><c> so,</c><00:03:07.120><c> first</c><00:03:07.280><c> of</c><00:03:07.440><c> all,</c><00:03:07.840><c> it's</c>
+bit here. And so, first of all, it's
+bit here. And so, first of all, it's
+searching<00:03:08.560><c> my</c><00:03:08.879><c> documentation,</c><00:03:09.760><c> everything</c>
+searching my documentation, everything
+searching my documentation, everything
+that<00:03:10.239><c> I've</c><00:03:10.480><c> already</c><00:03:10.720><c> curated</c><00:03:11.200><c> for</c><00:03:11.360><c> it</c><00:03:11.519><c> in</c><00:03:11.840><c> the</c>
+that I've already curated for it in the
+that I've already curated for it in the
+Archon<00:03:12.640><c> user</c><00:03:12.879><c> interface.</c><00:03:13.440><c> So,</c><00:03:13.599><c> I</c><00:03:13.840><c> get</c><00:03:14.000><c> to</c>
+Archon user interface. So, I get to
+Archon user interface. So, I get to
+point<00:03:14.400><c> it</c><00:03:14.800><c> to</c><00:03:15.040><c> where</c><00:03:15.360><c> to</c><00:03:15.680><c> search.</c><00:03:16.480><c> And</c><00:03:16.640><c> so,</c><00:03:16.879><c> it</c>
+point it to where to search. And so, it
+point it to where to search. And so, it
+pulls<00:03:17.360><c> certain</c><00:03:17.680><c> pages</c><00:03:18.000><c> from</c><00:03:18.159><c> the</c>
+pulls certain pages from the
+pulls certain pages from the
+documentation.<00:03:19.200><c> It's</c><00:03:19.440><c> performing</c><00:03:19.920><c> rag</c><00:03:20.319><c> under</c>
+documentation. It's performing rag under
+documentation. It's performing rag under
+the<00:03:20.800><c> hood</c><00:03:21.120><c> for</c><00:03:21.599><c> both</c><00:03:21.920><c> keyword</c><00:03:22.319><c> and</c><00:03:22.640><c> semantic</c>
+the hood for both keyword and semantic
+the hood for both keyword and semantic
+searching.<00:03:24.080><c> Very,</c><00:03:24.319><c> very</c><00:03:24.640><c> powerful</c><00:03:24.959><c> rag</c>
+searching. Very, very powerful rag
+searching. Very, very powerful rag
+strategies<00:03:25.680><c> that</c><00:03:25.840><c> we</c><00:03:26.000><c> have</c><00:03:26.080><c> for</c><00:03:26.239><c> this.</c><00:03:26.480><c> And</c>
+strategies that we have for this. And
+strategies that we have for this. And
+then<00:03:26.720><c> I</c><00:03:26.879><c> also</c><00:03:27.040><c> have</c><00:03:27.200><c> it</c><00:03:27.360><c> set</c><00:03:27.519><c> up</c><00:03:27.840><c> to</c><00:03:28.159><c> manage</c><00:03:28.560><c> the</c>
+then I also have it set up to manage the
+then I also have it set up to manage the
+tasks<00:03:29.120><c> here.</c><00:03:29.280><c> here.</c><00:03:29.440><c> So,</c><00:03:29.599><c> we'll</c><00:03:29.760><c> see</c><00:03:29.840><c> in</c><00:03:30.000><c> a</c>
+tasks here. here. So, we'll see in a
+tasks here. here. So, we'll see in a
+little<00:03:30.239><c> bit</c><00:03:30.560><c> that</c><00:03:30.799><c> it's</c><00:03:31.040><c> going</c><00:03:31.120><c> to</c><00:03:31.200><c> start</c>
+little bit that it's going to start
+little bit that it's going to start
+moving<00:03:31.760><c> around</c><00:03:32.000><c> these</c><00:03:32.319><c> tasks</c><00:03:32.720><c> and</c><00:03:32.959><c> it's</c><00:03:33.200><c> going</c>
+moving around these tasks and it's going
+moving around these tasks and it's going
+to<00:03:33.440><c> be</c><00:03:34.000><c> realtime</c><00:03:34.640><c> updates</c><00:03:35.040><c> for</c><00:03:35.200><c> us.</c><00:03:35.440><c> So,</c><00:03:35.519><c> when</c>
+to be realtime updates for us. So, when
+to be realtime updates for us. So, when
+it<00:03:35.920><c> uses</c><00:03:36.159><c> the</c><00:03:36.239><c> Archon</c><00:03:36.720><c> MCP</c><00:03:37.440><c> to</c><00:03:37.680><c> move</c><00:03:37.840><c> these</c>
+it uses the Archon MCP to move these
+it uses the Archon MCP to move these
+tasks<00:03:38.560><c> around,</c><00:03:39.120><c> we</c><00:03:39.360><c> don't</c><00:03:39.440><c> even</c><00:03:39.599><c> have</c><00:03:39.760><c> to</c>
+tasks around, we don't even have to
+tasks around, we don't even have to
+refresh<00:03:40.239><c> our</c><00:03:40.480><c> UI</c><00:03:40.879><c> and</c><00:03:41.040><c> we</c><00:03:41.200><c> can</c><00:03:41.280><c> watch</c><00:03:41.519><c> it</c><00:03:41.760><c> work</c>
+refresh our UI and we can watch it work
+refresh our UI and we can watch it work
+in<00:03:42.239><c> real</c><00:03:42.560><c> time.</c><00:03:43.120><c> And</c><00:03:43.280><c> we</c><00:03:43.519><c> can</c><00:03:43.599><c> even</c><00:03:43.840><c> create</c><00:03:44.159><c> our</c>
+in real time. And we can even create our
+in real time. And we can even create our
+own<00:03:44.879><c> tasks</c><00:03:45.440><c> here</c><00:03:46.000><c> without</c><00:03:46.400><c> even</c><00:03:46.720><c> having</c><00:03:46.879><c> to</c>
+own tasks here without even having to
+own tasks here without even having to
+interrupt<00:03:47.519><c> Cloud</c><00:03:47.920><c> Code.</c><00:03:48.239><c> We</c><00:03:48.400><c> can</c><00:03:48.560><c> collaborate</c>
+interrupt Cloud Code. We can collaborate
+interrupt Cloud Code. We can collaborate
+with<00:03:49.280><c> it</c><00:03:49.840><c> because</c><00:03:50.159><c> the</c><00:03:50.400><c> next</c><00:03:50.560><c> time</c><00:03:50.720><c> it</c><00:03:50.879><c> looks</c>
+with it because the next time it looks
+with it because the next time it looks
+at<00:03:51.200><c> the</c><00:03:51.360><c> tasks</c><00:03:51.680><c> that</c><00:03:51.840><c> it</c><00:03:52.080><c> has</c><00:03:52.239><c> to</c><00:03:52.400><c> do,</c><00:03:52.879><c> it'll</c>
+at the tasks that it has to do, it'll
+at the tasks that it has to do, it'll
+find<00:03:53.360><c> those</c><00:03:53.680><c> new</c><00:03:53.840><c> tasks</c><00:03:54.239><c> that</c><00:03:54.480><c> we</c><00:03:54.720><c> have</c>
+find those new tasks that we have
+find those new tasks that we have
+created<00:03:55.280><c> for</c><00:03:55.440><c> it.</c><00:03:55.920><c> So,</c><00:03:56.159><c> take</c><00:03:56.239><c> a</c><00:03:56.319><c> look</c><00:03:56.480><c> at</c><00:03:56.560><c> this</c>
+created for it. So, take a look at this
+created for it. So, take a look at this
+in<00:03:56.959><c> just</c><00:03:57.120><c> a</c><00:03:57.280><c> second</c><00:03:57.439><c> here.</c><00:03:57.840><c> We'll</c><00:03:58.080><c> see</c><00:03:58.159><c> it</c><00:03:58.319><c> move</c>
+in just a second here. We'll see it move
+in just a second here. We'll see it move
+the<00:03:58.799><c> first</c><00:03:58.959><c> task</c><00:03:59.200><c> to</c><00:03:59.439><c> doing.</c><00:03:59.760><c> Boom.</c><00:04:00.159><c> There</c><00:04:00.319><c> we</c>
+the first task to doing. Boom. There we
+the first task to doing. Boom. There we
+go.<00:04:00.959><c> Live</c><00:04:01.280><c> updates.</c><00:04:01.680><c> And</c><00:04:01.840><c> it's</c><00:04:02.000><c> just</c><00:04:02.159><c> going</c><00:04:02.239><c> to</c>
+go. Live updates. And it's just going to
+go. Live updates. And it's just going to
+keep<00:04:02.560><c> going</c><00:04:02.720><c> through</c><00:04:03.360><c> moving</c><00:04:03.680><c> all</c><00:04:03.920><c> these</c>
+keep going through moving all these
+keep going through moving all these
+tasks<00:04:04.560><c> around.</c><00:04:05.200><c> It's</c><00:04:05.280><c> kind</c><00:04:05.439><c> of</c><00:04:05.519><c> simulating</c>
+tasks around. It's kind of simulating
+tasks around. It's kind of simulating
+what<00:04:06.159><c> we</c><00:04:06.319><c> do</c><00:04:06.480><c> in</c><00:04:06.640><c> a</c><00:04:06.879><c> real</c><00:04:07.120><c> AI</c><00:04:07.519><c> development</c>
+what we do in a real AI development
+what we do in a real AI development
+workflow.<00:04:08.959><c> So</c><00:04:09.120><c> there</c><00:04:09.280><c> we</c><00:04:09.360><c> go.</c><00:04:09.519><c> It</c><00:04:09.680><c> moved</c><00:04:09.920><c> it</c><00:04:10.080><c> to</c>
+workflow. So there we go. It moved it to
+workflow. So there we go. It moved it to
+review.<00:04:10.640><c> And</c><00:04:10.799><c> then</c><00:04:10.959><c> it's</c><00:04:11.120><c> going</c><00:04:11.200><c> to</c><00:04:11.280><c> keep</c>
+review. And then it's going to keep
+review. And then it's going to keep
+going<00:04:11.599><c> on</c><00:04:11.760><c> and</c><00:04:12.000><c> on</c><00:04:12.159><c> and</c><00:04:12.400><c> on.</c><00:04:12.720><c> Very,</c><00:04:12.959><c> very</c><00:04:13.280><c> cool.</c>
+going on and on and on. Very, very cool.
+going on and on and on. Very, very cool.
+And<00:04:13.920><c> there</c><00:04:14.080><c> are</c><00:04:14.239><c> so</c><00:04:14.480><c> many</c><00:04:14.720><c> other</c><00:04:15.040><c> things</c><00:04:15.439><c> that</c>
+And there are so many other things that
+And there are so many other things that
+we<00:04:16.000><c> have</c><00:04:16.160><c> in</c><00:04:16.479><c> store</c><00:04:16.639><c> for</c><00:04:16.880><c> Archon</c><00:04:17.519><c> as</c><00:04:17.680><c> well.</c>
+we have in store for Archon as well.
+we have in store for Archon as well.
+Being<00:04:18.400><c> able</c><00:04:18.560><c> to</c><00:04:18.799><c> actually</c><00:04:19.280><c> kick</c><00:04:19.519><c> off</c><00:04:19.759><c> our</c><00:04:20.000><c> AI</c>
+Being able to actually kick off our AI
+Being able to actually kick off our AI
+coding<00:04:20.880><c> assistants</c><00:04:21.359><c> as</c><00:04:21.759><c> background</c><00:04:22.240><c> tasks</c><00:04:22.639><c> in</c>
+coding assistants as background tasks in
+coding assistants as background tasks in
+Archon<00:04:23.440><c> for</c><00:04:24.080><c> our</c><00:04:24.320><c> planning</c><00:04:24.800><c> or</c><00:04:25.199><c> validating</c>
+Archon for our planning or validating
+Archon for our planning or validating
+like<00:04:25.919><c> reviewing</c><00:04:26.240><c> our</c><00:04:26.479><c> poll</c><00:04:26.800><c> requests.</c>
+like reviewing our poll requests.
+like reviewing our poll requests.
+There's<00:04:27.520><c> so</c><00:04:27.759><c> many</c><00:04:28.080><c> different</c><00:04:28.479><c> things</c><00:04:29.040><c> that</c><00:04:29.280><c> we</c>
+There's so many different things that we
+There's so many different things that we
+have<00:04:29.600><c> in</c><00:04:29.840><c> store</c><00:04:30.000><c> for</c><00:04:30.240><c> Archon.</c><00:04:30.800><c> This</c><00:04:30.880><c> is</c><00:04:31.040><c> just</c>
+have in store for Archon. This is just
+have in store for Archon. This is just
+the<00:04:31.520><c> beginning</c><00:04:31.759><c> that</c><00:04:32.000><c> we</c><00:04:32.160><c> have</c><00:04:32.240><c> for</c><00:04:32.400><c> the</c>
+the beginning that we have for the
+the beginning that we have for the
+knowledge<00:04:33.199><c> and</c><00:04:33.520><c> task</c><00:04:33.840><c> management,</c><00:04:34.240><c> but</c><00:04:34.560><c> still</c>
+knowledge and task management, but still
+knowledge and task management, but still
+very<00:04:35.440><c> very</c><00:04:35.759><c> powerful.</c><00:04:36.560><c> And</c><00:04:36.720><c> so</c><00:04:36.960><c> with</c><00:04:37.199><c> that,</c>
+very very powerful. And so with that,
+very very powerful. And so with that,
+now<00:04:37.759><c> that</c><00:04:37.919><c> you</c><00:04:38.080><c> got</c><00:04:38.160><c> a</c><00:04:38.320><c> good</c><00:04:38.479><c> understanding</c><00:04:38.880><c> of</c>
+now that you got a good understanding of
+now that you got a good understanding of
+how<00:04:39.280><c> Archon</c><00:04:39.759><c> works</c><00:04:39.919><c> at</c><00:04:40.000><c> a</c><00:04:40.160><c> high</c><00:04:40.320><c> level,</c><00:04:40.639><c> allow</c>
+how Archon works at a high level, allow
+how Archon works at a high level, allow
+me<00:04:41.040><c> to</c><00:04:41.199><c> help</c><00:04:41.360><c> you</c><00:04:41.520><c> get</c><00:04:41.600><c> it</c><00:04:41.840><c> set</c><00:04:42.000><c> up</c><00:04:42.240><c> now</c>
+me to help you get it set up now
+me to help you get it set up now
+connected<00:04:42.880><c> to</c><00:04:42.960><c> your</c><00:04:43.040><c> AI</c><00:04:43.360><c> coding</c><00:04:43.680><c> assistant</c><00:04:44.080><c> in</c>
+connected to your AI coding assistant in
+connected to your AI coding assistant in
+just<00:04:44.639><c> a</c><00:04:44.880><c> few</c><00:04:45.040><c> minutes.</c><00:04:45.600><c> So</c><00:04:45.919><c> getting</c><00:04:46.160><c> started</c>
+just a few minutes. So getting started
+just a few minutes. So getting started
+with<00:04:46.800><c> Archon</c><00:04:47.360><c> is</c><00:04:47.600><c> fairly</c><00:04:47.919><c> straightforward</c>
+with Archon is fairly straightforward
+with Archon is fairly straightforward
+and<00:04:48.720><c> most</c><00:04:48.960><c> of</c><00:04:49.040><c> the</c><00:04:49.199><c> setup</c><00:04:49.759><c> you're</c><00:04:50.080><c> actually</c>
+and most of the setup you're actually
+and most of the setup you're actually
+walked<00:04:50.639><c> through</c><00:04:50.960><c> in</c><00:04:51.280><c> the</c><00:04:51.520><c> user</c><00:04:51.840><c> interface</c>
+walked through in the user interface
+walked through in the user interface
+once<00:04:52.560><c> you</c><00:04:52.720><c> have</c><00:04:52.800><c> the</c><00:04:53.040><c> application</c><00:04:53.440><c> up</c><00:04:53.600><c> and</c>
+once you have the application up and
+once you have the application up and
+running.<00:04:54.000><c> I'll</c><00:04:54.240><c> show</c><00:04:54.320><c> you</c><00:04:54.400><c> that</c><00:04:54.639><c> in</c><00:04:54.960><c> a</c><00:04:55.120><c> little</c>
+running. I'll show you that in a little
+running. I'll show you that in a little
+bit.<00:04:56.000><c> And</c><00:04:56.160><c> there</c><00:04:56.320><c> are</c><00:04:56.479><c> only</c><00:04:56.720><c> a</c><00:04:56.960><c> couple</c><00:04:57.040><c> of</c>
+bit. And there are only a couple of
+bit. And there are only a couple of
+prerequisites<00:04:58.000><c> that</c><00:04:58.240><c> we</c><00:04:58.479><c> have</c><00:04:58.639><c> in</c><00:04:58.880><c> this</c>
+prerequisites that we have in this
+prerequisites that we have in this
+readme<00:04:59.440><c> which</c><00:04:59.600><c> of</c><00:04:59.759><c> course</c><00:04:59.919><c> I'll</c><00:05:00.160><c> have</c><00:05:00.240><c> this</c>
+readme which of course I'll have this
+readme which of course I'll have this
+linked<00:05:00.720><c> in</c><00:05:00.960><c> the</c><00:05:01.120><c> description.</c><00:05:02.000><c> You'll</c><00:05:02.240><c> want</c>
+linked in the description. You'll want
+linked in the description. You'll want
+Docker<00:05:02.960><c> or</c><00:05:03.280><c> Docker</c><00:05:03.680><c> Desktop</c><00:05:04.160><c> preferably</c>
+Docker or Docker Desktop preferably
+Docker or Docker Desktop preferably
+because<00:05:04.960><c> Archon</c><00:05:05.520><c> runs</c><00:05:05.759><c> as</c><00:05:05.919><c> a</c><00:05:06.160><c> few</c><00:05:06.240><c> different</c>
+because Archon runs as a few different
+because Archon runs as a few different
+containers.<00:05:07.440><c> You'll</c><00:05:07.680><c> want</c><00:05:07.840><c> Superbase</c>
+containers. You'll want Superbase
+containers. You'll want Superbase
+because<00:05:08.560><c> it's</c><00:05:08.720><c> the</c><00:05:08.880><c> database</c><00:05:09.280><c> that</c><00:05:09.520><c> powers</c>
+because it's the database that powers
+because it's the database that powers
+all<00:05:10.479><c> of</c><00:05:10.720><c> Archon.</c><00:05:11.520><c> There</c><00:05:11.759><c> is</c><00:05:11.840><c> a</c><00:05:12.000><c> free</c><00:05:12.240><c> tier</c><00:05:12.560><c> for</c>
+all of Archon. There is a free tier for
+all of Archon. There is a free tier for
+the<00:05:12.800><c> cloud</c><00:05:13.120><c> superbase.</c><00:05:13.680><c> You</c><00:05:13.840><c> don't</c><00:05:13.919><c> even</c><00:05:14.080><c> have</c>
+the cloud superbase. You don't even have
+the cloud superbase. You don't even have
+to<00:05:14.320><c> pay</c><00:05:14.560><c> anything.</c><00:05:14.960><c> That's</c><00:05:15.120><c> what</c><00:05:15.280><c> I'm</c><00:05:15.520><c> using</c>
+to pay anything. That's what I'm using
+to pay anything. That's what I'm using
+for<00:05:16.160><c> this</c><00:05:16.320><c> demonstration.</c><00:05:17.360><c> And</c><00:05:17.520><c> then</c><00:05:17.759><c> also</c>
+for this demonstration. And then also
+for this demonstration. And then also
+local<00:05:18.479><c> Superbase</c><00:05:19.120><c> works.</c><00:05:19.360><c> If</c><00:05:19.520><c> you</c><00:05:19.600><c> want</c><00:05:19.680><c> to</c>
+local Superbase works. If you want to
+local Superbase works. If you want to
+host<00:05:20.080><c> it</c><00:05:20.240><c> yourself,</c><00:05:20.720><c> you</c><00:05:20.880><c> can</c><00:05:20.960><c> do</c><00:05:21.199><c> that</c><00:05:21.440><c> as</c>
+host it yourself, you can do that as
+host it yourself, you can do that as
+well.<00:05:22.240><c> And</c><00:05:22.400><c> then</c><00:05:22.560><c> you'll</c><00:05:22.880><c> obviously</c><00:05:23.199><c> need</c><00:05:23.440><c> an</c>
+well. And then you'll obviously need an
+well. And then you'll obviously need an
+API<00:05:24.240><c> key</c><00:05:24.479><c> for</c><00:05:25.039><c> an</c><00:05:25.280><c> LLM</c><00:05:25.759><c> provider,</c><00:05:26.240><c> OpenAI.</c><00:05:27.199><c> And</c>
+API key for an LLM provider, OpenAI. And
+API key for an LLM provider, OpenAI. And
+then<00:05:27.440><c> we</c><00:05:27.680><c> also</c><00:05:28.000><c> support</c><00:05:28.479><c> Gemini</c><00:05:29.039><c> and</c><00:05:29.360><c> Olama.</c>
+then we also support Gemini and Olama.
+then we also support Gemini and Olama.
+So<00:05:30.080><c> if</c><00:05:30.240><c> you</c><00:05:30.320><c> want</c><00:05:30.400><c> to</c><00:05:30.639><c> run</c><00:05:30.800><c> things</c><00:05:31.280><c> 100%</c>
+So if you want to run things 100%
+So if you want to run things 100%
+locally<00:05:32.400><c> to</c><00:05:32.639><c> have</c><00:05:32.720><c> your</c><00:05:32.880><c> own</c><00:05:33.199><c> private</c>
+locally to have your own private
+locally to have your own private
+knowledge<00:05:34.000><c> base,</c><00:05:34.560><c> you</c><00:05:34.800><c> can</c><00:05:34.880><c> do</c><00:05:34.960><c> that</c><00:05:35.120><c> with</c>
+knowledge base, you can do that with
+knowledge base, you can do that with
+Olama.<00:05:36.160><c> And</c><00:05:36.320><c> so</c><00:05:36.479><c> that's</c><00:05:36.720><c> another</c><00:05:36.960><c> really</c>
+Olama. And so that's another really
+Olama. And so that's another really
+awesome<00:05:37.600><c> benefit</c><00:05:37.919><c> to</c><00:05:38.240><c> Archon.</c><00:05:39.199><c> And</c><00:05:39.280><c> then</c><00:05:39.440><c> to</c>
+awesome benefit to Archon. And then to
+awesome benefit to Archon. And then to
+get<00:05:39.840><c> started,</c><00:05:40.240><c> all</c><00:05:40.320><c> we</c><00:05:40.560><c> have</c><00:05:40.639><c> to</c><00:05:40.800><c> do</c><00:05:41.280><c> is</c><00:05:41.680><c> start</c>
+get started, all we have to do is start
+get started, all we have to do is start
+by<00:05:42.240><c> cloning</c><00:05:42.639><c> the</c><00:05:42.880><c> Archon</c><00:05:43.440><c> repository.</c><00:05:44.080><c> And</c>
+by cloning the Archon repository. And
+by cloning the Archon repository. And
+we're<00:05:44.400><c> using</c><00:05:44.639><c> the</c><00:05:45.039><c> stable</c><00:05:45.440><c> branch</c><00:05:45.840><c> because</c>
+we're using the stable branch because
+we're using the stable branch because
+that's<00:05:46.479><c> where</c><00:05:46.639><c> we</c><00:05:46.880><c> have</c><00:05:47.360><c> the</c><00:05:47.680><c> official</c>
+that's where we have the official
+that's where we have the official
+releases.<00:05:48.960><c> And</c><00:05:49.199><c> so</c><00:05:49.360><c> you</c><00:05:49.520><c> can</c><00:05:49.680><c> use</c><00:05:49.919><c> the</c><00:05:50.160><c> main</c>
+releases. And so you can use the main
+releases. And so you can use the main
+branch<00:05:50.639><c> if</c><00:05:50.880><c> you</c><00:05:51.039><c> want</c><00:05:51.199><c> something</c><00:05:51.360><c> a</c><00:05:51.520><c> bit</c><00:05:51.680><c> more</c>
+branch if you want something a bit more
+branch if you want something a bit more
+experimental,<00:05:52.880><c> but</c><00:05:53.039><c> I'd</c><00:05:53.280><c> recommend</c><00:05:53.680><c> starting</c>
+experimental, but I'd recommend starting
+experimental, but I'd recommend starting
+with<00:05:54.240><c> the</c><00:05:54.400><c> staple</c><00:05:54.720><c> branch.</c><00:05:55.039><c> Then</c><00:05:55.199><c> we</c><00:05:55.360><c> just</c>
+with the staple branch. Then we just
+with the staple branch. Then we just
+change<00:05:55.680><c> our</c><00:05:55.919><c> directory</c><00:05:56.639><c> into</c><00:05:56.960><c> archon.</c><00:05:57.440><c> And</c>
+change our directory into archon. And
+change our directory into archon. And
+now<00:05:57.759><c> you</c><00:05:57.919><c> can</c><00:05:58.000><c> open</c><00:05:58.160><c> up</c><00:05:58.320><c> this</c><00:05:58.479><c> folder</c><00:05:58.800><c> in</c><00:05:59.039><c> your</c>
+now you can open up this folder in your
+now you can open up this folder in your
+favorite<00:05:59.440><c> code</c><00:05:59.759><c> editor.</c><00:06:00.479><c> Like</c><00:06:00.639><c> you</c><00:06:00.800><c> can</c><00:06:00.960><c> do</c>
+favorite code editor. Like you can do
+favorite code editor. Like you can do
+Visual<00:06:01.759><c> Studio</c><00:06:02.080><c> Code</c><00:06:02.320><c> or</c><00:06:02.479><c> Windsurf</c><00:06:02.960><c> or</c>
+Visual Studio Code or Windsurf or
+Visual Studio Code or Windsurf or
+Cursor,<00:06:03.759><c> whatever</c><00:06:04.000><c> you</c><00:06:04.160><c> want</c><00:06:04.240><c> to</c><00:06:04.319><c> do.</c><00:06:04.560><c> Go</c>
+Cursor, whatever you want to do. Go
+Cursor, whatever you want to do. Go
+ahead<00:06:04.880><c> and</c><00:06:05.039><c> open</c><00:06:05.280><c> this</c><00:06:05.440><c> up.</c><00:06:05.919><c> And</c><00:06:06.080><c> then</c><00:06:06.240><c> we</c><00:06:06.400><c> can</c>
+ahead and open this up. And then we can
+ahead and open this up. And then we can
+set<00:06:06.720><c> up</c><00:06:06.960><c> our</c><00:06:07.360><c> environment</c><00:06:07.919><c> variables.</c><00:06:08.800><c> The</c>
+set up our environment variables. The
+set up our environment variables. The
+only<00:06:09.280><c> two</c><00:06:09.600><c> values</c><00:06:10.000><c> we</c><00:06:10.240><c> have</c><00:06:10.319><c> to</c><00:06:10.479><c> set</c><00:06:10.720><c> right</c><00:06:10.960><c> now</c>
+only two values we have to set right now
+only two values we have to set right now
+is<00:06:11.280><c> our</c><00:06:11.520><c> Superbase</c><00:06:12.160><c> URL</c><00:06:12.800><c> and</c><00:06:13.280><c> service</c><00:06:13.759><c> RO</c><00:06:14.080><c> key.</c>
+is our Superbase URL and service RO key.
+is our Superbase URL and service RO key.
+everything<00:06:15.360><c> else</c><00:06:15.759><c> like</c><00:06:16.160><c> our</c><00:06:16.400><c> openi</c><00:06:16.960><c> API</c><00:06:17.360><c> key</c>
+everything else like our openi API key
+everything else like our openi API key
+for example<00:06:18.080><c> we</c><00:06:18.319><c> actually</c><00:06:18.560><c> set</c><00:06:18.720><c> in</c><00:06:18.960><c> the</c>
+for example we actually set in the
+for example we actually set in the
+archon<00:06:19.520><c> user</c><00:06:19.759><c> interface</c><00:06:20.479><c> in</c><00:06:20.720><c> the</c><00:06:20.880><c> settings</c>
+archon user interface in the settings
+archon user interface in the settings
+page<00:06:21.520><c> we'll</c><00:06:21.680><c> see</c><00:06:21.840><c> in</c><00:06:22.080><c> a</c><00:06:22.240><c> little</c><00:06:22.319><c> bit</c><00:06:22.880><c> and</c><00:06:23.039><c> so</c>
+page we'll see in a little bit and so
+page we'll see in a little bit and so
+going<00:06:23.520><c> to</c><00:06:23.840><c> my</c><00:06:24.240><c> superbase</c><00:06:24.800><c> dashboard</c><00:06:25.280><c> the</c><00:06:25.520><c> way</c>
+going to my superbase dashboard the way
+going to my superbase dashboard the way
+that<00:06:25.680><c> you</c><00:06:25.840><c> get</c><00:06:26.000><c> these</c><00:06:26.240><c> two</c><00:06:26.479><c> values</c><00:06:26.960><c> for</c><00:06:27.280><c> cloud</c>
+that you get these two values for cloud
+that you get these two values for cloud
+superbase<00:06:28.479><c> is</c><00:06:28.639><c> you</c><00:06:28.880><c> go</c><00:06:29.039><c> into</c><00:06:29.440><c> your</c><00:06:29.759><c> project</c>
+superbase is you go into your project
+superbase is you go into your project
+once<00:06:30.240><c> you</c><00:06:30.400><c> have</c><00:06:30.479><c> it</c><00:06:30.639><c> created</c><00:06:31.199><c> go</c><00:06:31.360><c> to</c><00:06:31.440><c> the</c>
+once you have it created go to the
+once you have it created go to the
+project<00:06:31.919><c> settings</c><00:06:32.160><c> on</c><00:06:32.319><c> the</c><00:06:32.400><c> lefth</c><00:06:32.639><c> hand</c><00:06:32.880><c> side</c>
+project settings on the lefth hand side
+project settings on the lefth hand side
+and<00:06:33.600><c> then</c><00:06:33.759><c> when</c><00:06:34.000><c> you</c><00:06:34.080><c> go</c><00:06:34.319><c> to</c><00:06:34.720><c> data</c><00:06:35.199><c> API</c><00:06:35.840><c> this</c><00:06:36.000><c> is</c>
+and then when you go to data API this is
+and then when you go to data API this is
+where<00:06:36.240><c> you</c><00:06:36.400><c> can</c><00:06:36.560><c> get</c><00:06:36.720><c> your</c><00:06:37.039><c> project</c><00:06:37.360><c> URL</c><00:06:37.759><c> so</c><00:06:38.000><c> go</c>
+where you can get your project URL so go
+where you can get your project URL so go
+ahead<00:06:38.240><c> and</c><00:06:38.400><c> copy</c><00:06:38.639><c> that</c><00:06:39.039><c> and</c><00:06:39.360><c> insert</c><00:06:39.680><c> that</c><00:06:39.840><c> for</c>
+ahead and copy that and insert that for
+ahead and copy that and insert that for
+the<00:06:40.240><c> superbase</c><00:06:40.720><c> URL</c><00:06:41.360><c> and</c><00:06:41.520><c> then</c><00:06:41.600><c> to</c><00:06:41.840><c> get</c><00:06:41.919><c> your</c>
+the superbase URL and then to get your
+the superbase URL and then to get your
+service<00:06:42.319><c> role</c><00:06:42.560><c> key</c><00:06:42.800><c> you</c><00:06:42.960><c> go</c><00:06:43.120><c> to</c><00:06:43.280><c> API</c><00:06:43.759><c> keys</c><00:06:44.400><c> And</c>
+service role key you go to API keys And
+service role key you go to API keys And
+then<00:06:44.720><c> you</c><00:06:44.880><c> want</c><00:06:45.039><c> to</c><00:06:45.280><c> reveal</c><00:06:45.680><c> and</c><00:06:46.000><c> copy</c><00:06:46.479><c> the</c>
+then you want to reveal and copy the
+then you want to reveal and copy the
+service<00:06:47.199><c> role</c><00:06:47.680><c> secret.</c><00:06:48.160><c> And</c><00:06:48.319><c> we</c><00:06:48.560><c> want</c><00:06:48.639><c> to</c><00:06:48.720><c> be</c>
+service role secret. And we want to be
+service role secret. And we want to be
+in<00:06:49.039><c> the</c><00:06:49.120><c> legacy</c><00:06:49.600><c> API</c><00:06:50.080><c> keys</c><00:06:50.400><c> tab.</c><00:06:51.039><c> So</c><00:06:51.360><c> go</c><00:06:51.520><c> ahead</c>
+in the legacy API keys tab. So go ahead
+in the legacy API keys tab. So go ahead
+and<00:06:51.919><c> fill</c><00:06:52.160><c> out</c><00:06:52.479><c> both</c><00:06:52.720><c> of</c><00:06:52.880><c> those</c><00:06:53.039><c> things</c><00:06:53.360><c> right</c>
+and fill out both of those things right
+and fill out both of those things right
+here.<00:06:54.160><c> If</c><00:06:54.400><c> you</c><00:06:54.560><c> are</c><00:06:54.720><c> running</c><00:06:55.120><c> local</c>
+here. If you are running local
+here. If you are running local
+superbase,<00:06:56.400><c> then</c><00:06:56.720><c> usually</c><00:06:57.199><c> your</c><00:06:57.520><c> Superbase</c>
+superbase, then usually your Superbase
+superbase, then usually your Superbase
+URL<00:06:58.639><c> is</c><00:06:58.960><c> going</c><00:06:59.120><c> to</c><00:06:59.199><c> be</c><00:06:59.440><c> this</c><00:06:59.680><c> right</c><00:06:59.919><c> here.</c><00:07:00.160><c> So</c>
+URL is going to be this right here. So
+URL is going to be this right here. So
+host.doccker.in
+host.doccker.in
+host.doccker.in
+pointing<00:07:02.560><c> outside</c><00:07:02.880><c> of</c><00:07:03.039><c> the</c><00:07:03.199><c> archon</c><00:07:03.680><c> container</c>
+pointing outside of the archon container
+pointing outside of the archon container
+then<00:07:04.720><c> with</c><00:07:04.960><c> the</c><00:07:05.120><c> port</c><00:07:05.440><c> for</c><00:07:05.840><c> your</c><00:07:06.240><c> Superbase</c>
+then with the port for your Superbase
+then with the port for your Superbase
+Kong<00:07:07.759><c> container.</c><00:07:08.720><c> And</c><00:07:08.880><c> then</c><00:07:09.120><c> this</c><00:07:09.360><c> service</c><00:07:09.599><c> ro</c>
+Kong container. And then this service ro
+Kong container. And then this service ro
+key.<00:07:10.240><c> You</c><00:07:10.400><c> set</c><00:07:10.560><c> that</c><00:07:10.800><c> yourself</c><00:07:11.039><c> in</c><00:07:11.280><c> the</c>
+key. You set that yourself in the
+key. You set that yourself in the
+environment<00:07:11.759><c> variables</c><00:07:12.160><c> when</c><00:07:12.400><c> you</c><00:07:12.560><c> are</c>
+environment variables when you are
+environment variables when you are
+self-hosting<00:07:13.280><c> a</c><00:07:13.440><c> superbase.</c><00:07:14.319><c> That</c><00:07:14.479><c> is</c><00:07:14.639><c> all</c>
+self-hosting a superbase. That is all
+self-hosting a superbase. That is all
+you<00:07:14.960><c> have</c><00:07:15.039><c> to</c><00:07:15.199><c> do.</c><00:07:15.520><c> Now</c><00:07:15.759><c> our</c><00:07:16.000><c> environment</c>
+you have to do. Now our environment
+you have to do. Now our environment
+variables<00:07:16.639><c> are</c><00:07:16.800><c> set</c><00:07:16.880><c> up.</c><00:07:17.120><c> Make</c><00:07:17.280><c> sure</c><00:07:17.360><c> you</c>
+variables are set up. Make sure you
+variables are set up. Make sure you
+actually<00:07:17.680><c> do</c><00:07:17.840><c> that</c><00:07:18.000><c> in</c><00:07:18.240><c> av</c><00:07:19.120><c> file.</c><00:07:19.440><c> So</c><00:07:19.520><c> you'll</c>
+actually do that in av file. So you'll
+actually do that in av file. So you'll
+copy.
+copy.
+copy.
+Rename<00:07:22.319><c> it</c><00:07:22.479><c> to</c><00:07:22.800><c> env</c><00:07:23.440><c> set</c><00:07:23.599><c> up</c><00:07:23.759><c> those</c><00:07:23.919><c> values.</c>
+Rename it to env set up those values.
+Rename it to env set up those values.
+And<00:07:24.560><c> now</c><00:07:24.720><c> we</c><00:07:24.960><c> can</c><00:07:25.039><c> start</c><00:07:25.199><c> the</c><00:07:25.440><c> archon</c>
+And now we can start the archon
+And now we can start the archon
+containers.<00:07:26.479><c> And</c><00:07:26.720><c> actually</c><00:07:27.039><c> one</c><00:07:27.280><c> last</c><00:07:27.440><c> thing</c>
+containers. And actually one last thing
+containers. And actually one last thing
+before<00:07:28.000><c> we</c><00:07:28.160><c> spin</c><00:07:28.400><c> up</c><00:07:28.560><c> archon,</c><00:07:29.120><c> we</c><00:07:29.280><c> need</c><00:07:29.360><c> to</c><00:07:29.680><c> set</c>
+before we spin up archon, we need to set
+before we spin up archon, we need to set
+up<00:07:30.080><c> our</c><00:07:30.479><c> database.</c><00:07:30.960><c> And</c><00:07:31.120><c> so</c><00:07:31.280><c> going</c><00:07:31.520><c> back</c><00:07:31.599><c> to</c>
+up our database. And so going back to
+up our database. And so going back to
+the<00:07:32.000><c> instructions</c><00:07:32.400><c> in</c><00:07:32.560><c> the</c><00:07:32.720><c> readme,</c><00:07:33.440><c> we</c><00:07:33.599><c> just</c>
+the instructions in the readme, we just
+the instructions in the readme, we just
+finished<00:07:34.080><c> our</c><00:07:34.319><c> environment</c><00:07:34.800><c> configuration.</c>
+finished our environment configuration.
+finished our environment configuration.
+Now<00:07:36.080><c> we</c><00:07:36.240><c> need</c><00:07:36.319><c> to</c><00:07:36.479><c> run</c><00:07:36.720><c> our</c><00:07:37.039><c> database</c><00:07:37.520><c> setup.</c>
+Now we need to run our database setup.
+Now we need to run our database setup.
+And<00:07:38.080><c> so</c><00:07:38.160><c> I</c><00:07:38.319><c> call</c><00:07:38.479><c> up</c><00:07:38.720><c> the</c><00:07:38.960><c> specific</c><00:07:39.280><c> file</c><00:07:39.599><c> right</c>
+And so I call up the specific file right
+And so I call up the specific file right
+here<00:07:40.080><c> that</c><00:07:40.319><c> has</c><00:07:40.560><c> all</c><00:07:40.800><c> of</c><00:07:40.960><c> the</c><00:07:41.120><c> SQL</c><00:07:41.520><c> you</c><00:07:41.680><c> need</c><00:07:41.759><c> to</c>
+here that has all of the SQL you need to
+here that has all of the SQL you need to
+run.<00:07:42.160><c> So</c><00:07:42.319><c> you</c><00:07:42.479><c> just</c><00:07:42.639><c> need</c><00:07:42.720><c> to</c><00:07:42.880><c> go</c><00:07:43.039><c> to</c>
+run. So you just need to go to
+run. So you just need to go to
+migrations<00:07:44.479><c> complete</c><00:07:44.880><c> setup.sql.</c><00:07:46.319><c> Copy</c><00:07:46.639><c> the</c>
+migrations complete setup.sql. Copy the
+migrations complete setup.sql. Copy the
+content<00:07:47.199><c> here.</c><00:07:47.520><c> And</c><00:07:47.599><c> then</c><00:07:47.759><c> we'll</c><00:07:47.919><c> go</c><00:07:48.000><c> into</c><00:07:48.319><c> our</c>
+content here. And then we'll go into our
+content here. And then we'll go into our
+SQL<00:07:48.960><c> editor</c><00:07:49.280><c> in</c><00:07:49.520><c> Superbase.</c><00:07:50.160><c> And</c><00:07:50.319><c> so</c><00:07:50.479><c> going</c>
+SQL editor in Superbase. And so going
+SQL editor in Superbase. And so going
+back<00:07:50.880><c> over</c><00:07:51.039><c> to</c><00:07:51.199><c> Superbase,</c><00:07:51.759><c> it's</c><00:07:52.000><c> this</c><00:07:52.319><c> tab</c>
+back over to Superbase, it's this tab
+back over to Superbase, it's this tab
+right<00:07:52.800><c> here</c><00:07:52.960><c> in</c><00:07:53.120><c> the</c><00:07:53.280><c> top</c><00:07:53.440><c> left</c><00:07:53.919><c> for</c><00:07:54.160><c> the</c><00:07:54.319><c> SQL</c>
+right here in the top left for the SQL
+right here in the top left for the SQL
+editor.<00:07:55.440><c> Create</c><00:07:55.680><c> a</c><00:07:55.919><c> new</c><00:07:56.080><c> snippet.</c><00:07:56.879><c> Paste</c><00:07:57.120><c> it</c>
+editor. Create a new snippet. Paste it
+editor. Create a new snippet. Paste it
+in<00:07:57.599><c> and</c><00:07:57.919><c> run</c><00:07:58.080><c> it.</c><00:07:58.400><c> This</c><00:07:58.479><c> is</c><00:07:58.639><c> going</c><00:07:58.800><c> to</c><00:07:58.960><c> create</c>
+in and run it. This is going to create
+in and run it. This is going to create
+all<00:07:59.680><c> of</c><00:08:00.000><c> our</c><00:08:00.319><c> archon</c><00:08:00.879><c> tables.</c><00:08:01.360><c> And</c><00:08:01.599><c> you</c><00:08:01.759><c> don't</c>
+all of our archon tables. And you don't
+all of our archon tables. And you don't
+have<00:08:01.919><c> to</c><00:08:02.080><c> know</c><00:08:02.319><c> every</c><00:08:02.639><c> single</c><00:08:02.960><c> table</c><00:08:03.360><c> that</c><00:08:03.599><c> we</c>
+have to know every single table that we
+have to know every single table that we
+need<00:08:03.840><c> to</c><00:08:04.000><c> create</c><00:08:04.160><c> here,</c><00:08:04.319><c> but</c><00:08:04.560><c> I'd</c><00:08:04.720><c> recommend</c>
+need to create here, but I'd recommend
+need to create here, but I'd recommend
+just<00:08:05.199><c> going</c><00:08:05.280><c> to</c><00:08:05.440><c> the</c><00:08:05.520><c> table</c><00:08:05.759><c> editor</c><00:08:06.080><c> and</c>
+just going to the table editor and
+just going to the table editor and
+making<00:08:06.400><c> sure</c><00:08:06.560><c> that</c><00:08:06.720><c> you</c><00:08:06.879><c> see</c><00:08:07.280><c> a</c><00:08:07.520><c> lot</c><00:08:07.599><c> of</c><00:08:07.759><c> Archon</c>
+making sure that you see a lot of Archon
+making sure that you see a lot of Archon
+tables<00:08:08.639><c> here</c><00:08:08.960><c> after</c><00:08:09.680><c> you</c><00:08:09.919><c> run</c><00:08:10.160><c> that</c><00:08:10.400><c> SQL.</c><00:08:10.960><c> So,</c>
+tables here after you run that SQL. So,
+tables here after you run that SQL. So,
+awesome.<00:08:11.520><c> And</c><00:08:11.680><c> this</c><00:08:11.840><c> is</c><00:08:11.919><c> all</c><00:08:12.080><c> going</c><00:08:12.160><c> to</c><00:08:12.240><c> be</c>
+awesome. And this is all going to be
+awesome. And this is all going to be
+empty<00:08:12.639><c> now,</c><00:08:12.879><c> but</c><00:08:13.039><c> we're</c><00:08:13.199><c> going</c><00:08:13.280><c> to</c><00:08:13.360><c> populate</c>
+empty now, but we're going to populate
+empty now, but we're going to populate
+this<00:08:14.000><c> in</c><00:08:14.160><c> a</c><00:08:14.319><c> little</c><00:08:14.400><c> bit</c><00:08:14.560><c> when</c><00:08:14.800><c> I</c><00:08:14.960><c> show</c><00:08:15.039><c> you</c>
+this in a little bit when I show you
+this in a little bit when I show you
+practically<00:08:16.000><c> how</c><00:08:16.319><c> to</c><00:08:16.560><c> actually</c><00:08:16.879><c> use</c><00:08:17.199><c> archon.</c>
+practically how to actually use archon.
+practically how to actually use archon.
+So,<00:08:18.319><c> going</c><00:08:18.560><c> back</c><00:08:18.800><c> to</c><00:08:19.039><c> the</c><00:08:19.199><c> guide</c><00:08:19.520><c> here</c><00:08:19.919><c> after</c>
+So, going back to the guide here after
+So, going back to the guide here after
+we<00:08:20.560><c> have</c><00:08:20.800><c> our</c><00:08:21.120><c> database</c><00:08:21.599><c> set</c><00:08:21.759><c> up,</c><00:08:22.240><c> now</c><00:08:22.479><c> we</c><00:08:22.720><c> can</c>
+we have our database set up, now we can
+we have our database set up, now we can
+move<00:08:23.039><c> on</c><00:08:23.280><c> to</c><00:08:23.599><c> actually</c><00:08:24.080><c> spinning</c><00:08:24.560><c> up</c><00:08:24.800><c> the</c>
+move on to actually spinning up the
+move on to actually spinning up the
+containers.<00:08:25.759><c> And</c><00:08:25.919><c> it's</c><00:08:26.160><c> just</c><00:08:26.319><c> a</c><00:08:26.560><c> single</c>
+containers. And it's just a single
+containers. And it's just a single
+command.<00:08:27.599><c> You</c><00:08:27.759><c> got</c><00:08:27.919><c> make</c><00:08:28.080><c> sure</c><00:08:28.160><c> you</c><00:08:28.319><c> have</c>
+command. You got make sure you have
+command. You got make sure you have
+Docker<00:08:28.800><c> installed.</c><00:08:29.199><c> Once</c><00:08:29.440><c> you</c><00:08:29.520><c> do,</c><00:08:29.759><c> it's</c><00:08:29.919><c> just</c>
+Docker installed. Once you do, it's just
+Docker installed. Once you do, it's just
+a<00:08:30.319><c> single</c><00:08:30.639><c> command</c><00:08:31.199><c> to</c><00:08:31.520><c> spin</c><00:08:31.840><c> up</c><00:08:32.080><c> everything.</c>
+a single command to spin up everything.
+a single command to spin up everything.
+And<00:08:32.959><c> so</c><00:08:33.120><c> I'll</c><00:08:33.279><c> go</c><00:08:33.440><c> to</c><00:08:33.599><c> my</c><00:08:33.760><c> terminal</c><00:08:34.159><c> here</c><00:08:34.399><c> back</c>
+And so I'll go to my terminal here back
+And so I'll go to my terminal here back
+in<00:08:34.640><c> our</c><00:08:34.800><c> archon</c><00:08:35.279><c> folder.</c><00:08:35.919><c> Paste</c><00:08:36.240><c> this</c><00:08:36.399><c> in</c>
+in our archon folder. Paste this in
+in our archon folder. Paste this in
+docker<00:08:37.120><c> compose</c><00:08:37.519><c> up</c><00:08:38.159><c> build-d.</c><00:08:39.360><c> This</c><00:08:39.519><c> is</c><00:08:39.680><c> going</c>
+docker compose up build-d. This is going
+docker compose up build-d. This is going
+to<00:08:39.919><c> build</c><00:08:40.159><c> all</c><00:08:40.399><c> of</c><00:08:40.560><c> our</c><00:08:40.719><c> archon</c><00:08:41.200><c> containers</c><00:08:41.599><c> at</c>
+to build all of our archon containers at
+to build all of our archon containers at
+the<00:08:41.919><c> same</c><00:08:42.080><c> time.</c><00:08:42.320><c> We</c><00:08:42.560><c> got</c><00:08:42.719><c> one</c><00:08:42.880><c> for</c><00:08:43.039><c> our</c><00:08:43.200><c> user</c>
+the same time. We got one for our user
+the same time. We got one for our user
+interface,<00:08:44.000><c> one</c><00:08:44.159><c> for</c><00:08:44.320><c> the</c><00:08:44.480><c> MCP</c><00:08:45.040><c> server,</c><00:08:45.760><c> and</c>
+interface, one for the MCP server, and
+interface, one for the MCP server, and
+one<00:08:46.399><c> for</c><00:08:46.640><c> all</c><00:08:46.880><c> of</c><00:08:46.959><c> the</c><00:08:47.120><c> API</c><00:08:47.600><c> endpoints.</c><00:08:48.080><c> And</c>
+one for all of the API endpoints. And
+one for all of the API endpoints. And
+it's<00:08:48.399><c> going</c><00:08:48.480><c> to</c><00:08:48.560><c> take</c><00:08:48.640><c> a</c><00:08:48.800><c> little</c><00:08:48.959><c> bit</c><00:08:49.120><c> to</c>
+it's going to take a little bit to
+it's going to take a little bit to
+build.<00:08:49.600><c> So</c><00:08:49.839><c> be</c><00:08:50.000><c> patient.</c><00:08:50.640><c> Come</c><00:08:50.880><c> back</c><00:08:51.040><c> in</c><00:08:51.360><c> 10</c><00:08:51.519><c> to</c>
+build. So be patient. Come back in 10 to
+build. So be patient. Come back in 10 to
+15<00:08:52.080><c> minutes,</c><00:08:52.480><c> and</c><00:08:52.640><c> then</c><00:08:52.800><c> we'll</c><00:08:52.959><c> be</c><00:08:53.120><c> good</c><00:08:53.200><c> to</c>
+15 minutes, and then we'll be good to
+15 minutes, and then we'll be good to
+move<00:08:53.600><c> on.</c><00:08:54.000><c> All</c><00:08:54.080><c> right,</c><00:08:54.399><c> our</c><00:08:54.640><c> containers</c><00:08:55.120><c> are</c>
+move on. All right, our containers are
+move on. All right, our containers are
+built.<00:08:55.600><c> This</c><00:08:55.760><c> is</c><00:08:55.839><c> what</c><00:08:56.000><c> your</c><00:08:56.160><c> logs</c><00:08:56.480><c> should</c>
+built. This is what your logs should
+built. This is what your logs should
+look<00:08:56.800><c> like</c><00:08:56.959><c> if</c><00:08:57.279><c> everything</c><00:08:57.600><c> is</c><00:08:57.839><c> working</c><00:08:58.080><c> well.</c>
+look like if everything is working well.
+look like if everything is working well.
+You<00:08:58.640><c> can</c><00:08:58.720><c> also</c><00:08:58.959><c> verify</c><00:08:59.600><c> that</c><00:08:59.839><c> the</c><00:09:00.080><c> three</c>
+You can also verify that the three
+You can also verify that the three
+containers<00:09:00.800><c> are</c><00:09:01.040><c> up</c><00:09:01.200><c> and</c><00:09:01.360><c> running</c><00:09:01.600><c> in</c><00:09:01.920><c> Docker</c>
+containers are up and running in Docker
+containers are up and running in Docker
+Desktop.<00:09:03.279><c> Then</c><00:09:03.440><c> with</c><00:09:03.600><c> that,</c><00:09:03.839><c> we</c><00:09:04.000><c> can</c><00:09:04.160><c> go</c>
+Desktop. Then with that, we can go
+Desktop. Then with that, we can go
+straight<00:09:04.560><c> to</c><00:09:04.800><c> the</c><00:09:04.959><c> Archon</c><00:09:05.519><c> user</c><00:09:05.839><c> interface</c>
+straight to the Archon user interface
+straight to the Archon user interface
+local<00:09:06.560><c> host</c><00:09:06.880><c> port</c><00:09:07.279><c> 3737</c><00:09:08.560><c> by</c><00:09:08.880><c> default.</c><00:09:09.279><c> Those</c>
+local host port 3737 by default. Those
+local host port 3737 by default. Those
+ports<00:09:09.760><c> are</c><00:09:09.920><c> configurable</c><00:09:10.560><c> as</c><00:09:10.800><c> well.</c><00:09:11.440><c> So</c><00:09:11.519><c> you</c>
+ports are configurable as well. So you
+ports are configurable as well. So you
+want<00:09:11.839><c> to</c><00:09:12.000><c> bounce</c><00:09:12.240><c> right</c><00:09:12.480><c> to</c><00:09:12.720><c> the</c><00:09:12.959><c> settings</c>
+want to bounce right to the settings
+want to bounce right to the settings
+page<00:09:13.600><c> here</c><00:09:14.000><c> because</c><00:09:14.160><c> you</c><00:09:14.399><c> want</c><00:09:14.480><c> to</c><00:09:14.640><c> set</c><00:09:14.800><c> up</c><00:09:14.959><c> the</c>
+page here because you want to set up the
+page here because you want to set up the
+credentials<00:09:15.680><c> for</c><00:09:15.920><c> the</c><00:09:16.080><c> LLM</c><00:09:16.560><c> providers</c><00:09:16.880><c> that</c>
+credentials for the LLM providers that
+credentials for the LLM providers that
+you<00:09:17.279><c> want</c><00:09:17.360><c> to</c><00:09:17.519><c> use.</c><00:09:17.760><c> And</c><00:09:17.920><c> so</c><00:09:18.080><c> all</c><00:09:18.160><c> these</c><00:09:18.399><c> are</c>
+you want to use. And so all these are
+you want to use. And so all these are
+blank<00:09:18.720><c> by</c><00:09:18.959><c> default.</c><00:09:19.680><c> I'll</c><00:09:19.920><c> just</c><00:09:20.080><c> start</c><00:09:20.320><c> by</c>
+blank by default. I'll just start by
+blank by default. I'll just start by
+using<00:09:20.800><c> OpenAI</c><00:09:21.440><c> right</c><00:09:21.519><c> now.</c><00:09:21.760><c> So</c><00:09:21.839><c> I'll</c><00:09:22.080><c> save</c><00:09:22.320><c> all</c>
+using OpenAI right now. So I'll save all
+using OpenAI right now. So I'll save all
+my<00:09:22.720><c> changes.</c><00:09:23.360><c> And</c><00:09:23.519><c> then</c><00:09:23.680><c> I</c><00:09:23.920><c> can</c><00:09:24.160><c> select</c><00:09:24.880><c> the</c>
+my changes. And then I can select the
+my changes. And then I can select the
+provider<00:09:25.519><c> I</c><00:09:25.839><c> want</c><00:09:25.920><c> to</c><00:09:26.080><c> use</c><00:09:26.320><c> for</c><00:09:26.560><c> both</c><00:09:26.800><c> my</c><00:09:27.120><c> large</c>
+provider I want to use for both my large
+provider I want to use for both my large
+language<00:09:27.760><c> model</c><00:09:28.080><c> and</c><00:09:28.320><c> my</c><00:09:28.560><c> embedding</c><00:09:29.040><c> model.</c>
+language model and my embedding model.
+language model and my embedding model.
+Archon<00:09:29.760><c> uses</c><00:09:30.080><c> both</c><00:09:30.560><c> under</c><00:09:30.800><c> the</c><00:09:30.959><c> hood</c><00:09:31.200><c> for</c>
+Archon uses both under the hood for
+Archon uses both under the hood for
+crawling<00:09:32.000><c> for</c><00:09:32.160><c> all</c><00:09:32.320><c> the</c><00:09:32.480><c> documentation</c><00:09:33.040><c> that</c>
+crawling for all the documentation that
+crawling for all the documentation that
+we<00:09:33.440><c> store</c><00:09:33.839><c> in</c><00:09:34.080><c> our</c><00:09:34.240><c> knowledge</c><00:09:34.560><c> base.</c><00:09:34.880><c> And</c><00:09:35.040><c> so</c>
+we store in our knowledge base. And so
+we store in our knowledge base. And so
+we<00:09:35.600><c> have</c><00:09:35.760><c> quite</c><00:09:36.000><c> a</c><00:09:36.160><c> few</c><00:09:36.320><c> different</c><00:09:36.560><c> chat</c>
+we have quite a few different chat
+we have quite a few different chat
+providers<00:09:37.279><c> that</c><00:09:37.519><c> are</c><00:09:37.680><c> available.</c><00:09:38.320><c> I'm</c><00:09:38.560><c> just</c>
+providers that are available. I'm just
+providers that are available. I'm just
+using<00:09:38.959><c> OpenAI.</c><00:09:39.600><c> You</c><00:09:39.760><c> can</c><00:09:39.839><c> select</c><00:09:40.080><c> your</c><00:09:40.240><c> model</c>
+using OpenAI. You can select your model
+using OpenAI. You can select your model
+and<00:09:40.720><c> then</c><00:09:40.880><c> click</c><00:09:41.120><c> on</c><00:09:41.279><c> save</c><00:09:41.680><c> settings.</c><00:09:42.080><c> Don't</c>
+and then click on save settings. Don't
+and then click on save settings. Don't
+forget<00:09:42.480><c> to</c><00:09:42.720><c> do</c><00:09:42.880><c> that.</c><00:09:43.440><c> And</c><00:09:43.600><c> then</c><00:09:43.760><c> after</c><00:09:44.160><c> we</c>
+forget to do that. And then after we
+forget to do that. And then after we
+save<00:09:44.640><c> the</c><00:09:44.880><c> settings</c><00:09:45.040><c> for</c><00:09:45.200><c> the</c><00:09:45.360><c> LLM,</c><00:09:45.839><c> then</c><00:09:45.920><c> we</c>
+save the settings for the LLM, then we
+save the settings for the LLM, then we
+can<00:09:46.080><c> go</c><00:09:46.240><c> to</c><00:09:46.399><c> our</c><00:09:46.560><c> embedding</c><00:09:46.959><c> provider.</c>
+can go to our embedding provider.
+can go to our embedding provider.
+There's<00:09:47.600><c> less</c><00:09:47.839><c> options</c><00:09:48.080><c> here</c><00:09:48.320><c> because</c><00:09:48.640><c> some</c>
+There's less options here because some
+There's less options here because some
+providers<00:09:49.279><c> like</c><00:09:49.440><c> open</c><00:09:49.760><c> router</c><00:09:50.080><c> don't</c>
+providers like open router don't
+providers like open router don't
+actually<00:09:50.560><c> have</c><00:09:50.720><c> embedding</c><00:09:51.200><c> models,</c><00:09:51.440><c> but</c><00:09:51.680><c> we</c>
+actually have embedding models, but we
+actually have embedding models, but we
+can<00:09:52.160><c> set</c><00:09:52.640><c> each</c><00:09:53.040><c> one</c><00:09:53.279><c> separately.</c><00:09:53.839><c> I</c><00:09:54.080><c> can</c><00:09:54.240><c> use</c>
+can set each one separately. I can use
+can set each one separately. I can use
+OpenAI<00:09:55.279><c> for</c><00:09:55.440><c> chat</c><00:09:55.839><c> and</c><00:09:56.000><c> then</c><00:09:56.160><c> I</c><00:09:56.320><c> could</c><00:09:56.399><c> use</c>
+OpenAI for chat and then I could use
+OpenAI for chat and then I could use
+Olama<00:09:57.120><c> for</c><00:09:57.279><c> embeddings</c><00:09:57.839><c> for</c><00:09:58.000><c> example.</c><00:09:58.720><c> So</c>
+Olama for embeddings for example. So
+Olama for embeddings for example. So
+select<00:09:59.279><c> your</c><00:09:59.440><c> provider</c><00:09:59.839><c> here</c><00:10:00.160><c> again,</c><00:10:00.480><c> set</c><00:10:00.720><c> the</c>
+select your provider here again, set the
+select your provider here again, set the
+model<00:10:01.120><c> and</c><00:10:01.360><c> then</c><00:10:01.519><c> save</c><00:10:01.839><c> your</c><00:10:02.080><c> settings</c><00:10:02.720><c> and</c>
+model and then save your settings and
+model and then save your settings and
+then<00:10:03.040><c> boom,</c><00:10:03.360><c> we</c><00:10:03.519><c> are</c><00:10:03.680><c> good</c><00:10:03.760><c> to</c><00:10:03.839><c> go.</c><00:10:04.080><c> That's</c>
+then boom, we are good to go. That's
+then boom, we are good to go. That's
+everything<00:10:04.560><c> that</c><00:10:04.800><c> we</c><00:10:04.959><c> have</c><00:10:05.120><c> to</c><00:10:05.279><c> set</c><00:10:05.440><c> up</c><00:10:05.760><c> in</c><00:10:06.000><c> the</c>
+everything that we have to set up in the
+everything that we have to set up in the
+settings<00:10:06.560><c> here.</c><00:10:06.959><c> And</c><00:10:07.120><c> then</c><00:10:07.279><c> going</c><00:10:07.519><c> to</c><00:10:07.680><c> the</c><00:10:07.920><c> MCP</c>
+settings here. And then going to the MCP
+settings here. And then going to the MCP
+tab,<00:10:08.800><c> we</c><00:10:09.040><c> have</c><00:10:09.200><c> instructions</c><00:10:09.760><c> for</c><00:10:10.000><c> how</c><00:10:10.160><c> to</c>
+tab, we have instructions for how to
+tab, we have instructions for how to
+connect<00:10:10.640><c> Archon</c><00:10:11.360><c> to</c><00:10:11.680><c> pretty</c><00:10:11.920><c> much</c><00:10:12.160><c> any</c><00:10:12.480><c> AI</c>
+connect Archon to pretty much any AI
+connect Archon to pretty much any AI
+coding<00:10:13.279><c> assistant.</c><00:10:13.920><c> I</c><00:10:14.160><c> mean,</c><00:10:14.320><c> we</c><00:10:14.480><c> don't</c><00:10:14.720><c> have</c>
+coding assistant. I mean, we don't have
+coding assistant. I mean, we don't have
+explicit<00:10:15.680><c> instructions</c><00:10:16.480><c> for</c><00:10:16.880><c> every</c><00:10:17.279><c> coding</c>
+explicit instructions for every coding
+explicit instructions for every coding
+assistant<00:10:18.079><c> here,</c><00:10:18.160><c> but</c><00:10:18.399><c> we</c><00:10:18.560><c> have</c><00:10:18.640><c> a</c><00:10:18.800><c> lot</c>
+assistant here, but we have a lot
+assistant here, but we have a lot
+covered.<00:10:19.920><c> And</c><00:10:20.560><c> any</c><00:10:21.120><c> MCP</c><00:10:21.839><c> compatible</c><00:10:22.320><c> AI</c>
+covered. And any MCP compatible AI
+covered. And any MCP compatible AI
+coding<00:10:23.040><c> assistant</c><00:10:23.519><c> can</c><00:10:23.760><c> connect</c><00:10:24.000><c> to</c><00:10:24.160><c> Archon.</c>
+coding assistant can connect to Archon.
+coding assistant can connect to Archon.
+So,<00:10:24.720><c> you</c><00:10:24.880><c> can</c><00:10:24.959><c> kind</c><00:10:25.120><c> of</c><00:10:25.200><c> just</c><00:10:25.440><c> copy</c><00:10:26.000><c> the</c>
+So, you can kind of just copy the
+So, you can kind of just copy the
+instructions<00:10:26.720><c> we</c><00:10:26.959><c> have</c><00:10:27.040><c> for</c><00:10:27.279><c> one</c><00:10:27.440><c> of</c><00:10:27.519><c> the</c>
+instructions we have for one of the
+instructions we have for one of the
+other<00:10:27.920><c> coding</c><00:10:28.240><c> assistants.</c><00:10:28.640><c> So,</c><00:10:28.800><c> for</c><00:10:28.959><c> cloud</c>
+other coding assistants. So, for cloud
+other coding assistants. So, for cloud
+code,<00:10:29.519><c> for</c><00:10:29.600><c> example,</c><00:10:29.920><c> I'll</c><00:10:30.160><c> go</c><00:10:30.320><c> here.</c><00:10:30.800><c> I'll</c>
+code, for example, I'll go here. I'll
+code, for example, I'll go here. I'll
+copy<00:10:31.279><c> the</c><00:10:31.519><c> single</c><00:10:31.760><c> line.</c><00:10:32.000><c> That's</c><00:10:32.160><c> literally</c>
+copy the single line. That's literally
+copy the single line. That's literally
+all<00:10:32.640><c> I</c><00:10:32.880><c> have</c><00:10:32.959><c> to</c><00:10:33.040><c> do.</c><00:10:33.279><c> Then,</c><00:10:33.519><c> I'll</c><00:10:33.680><c> go</c><00:10:33.760><c> back</c><00:10:33.920><c> to</c>
+all I have to do. Then, I'll go back to
+all I have to do. Then, I'll go back to
+my<00:10:34.160><c> editor</c><00:10:34.560><c> here.</c><00:10:34.880><c> All</c><00:10:34.959><c> I</c><00:10:35.120><c> have</c><00:10:35.200><c> to</c><00:10:35.360><c> do</c><00:10:35.440><c> is</c>
+my editor here. All I have to do is
+my editor here. All I have to do is
+paste<00:10:36.079><c> this</c><00:10:36.320><c> command</c><00:10:36.560><c> in</c><00:10:36.720><c> my</c><00:10:36.880><c> terminal.</c><00:10:37.279><c> And</c>
+paste this command in my terminal. And
+paste this command in my terminal. And
+boom,<00:10:37.839><c> I</c><00:10:38.079><c> am</c><00:10:38.240><c> now</c><00:10:38.399><c> connected</c><00:10:38.800><c> to</c><00:10:39.040><c> Archon.</c><00:10:39.600><c> It</c>
+boom, I am now connected to Archon. It
+boom, I am now connected to Archon. It
+is<00:10:39.839><c> that</c><00:10:40.079><c> easy.</c><00:10:40.320><c> I</c><00:10:40.560><c> just</c><00:10:40.640><c> get</c><00:10:40.800><c> this</c><00:10:41.040><c> error</c>
+is that easy. I just get this error
+is that easy. I just get this error
+because<00:10:41.760><c> I</c><00:10:42.000><c> already</c><00:10:42.240><c> am</c><00:10:42.480><c> connected.</c><00:10:42.800><c> But</c><00:10:42.880><c> then</c>
+because I already am connected. But then
+because I already am connected. But then
+I<00:10:43.120><c> can</c><00:10:43.200><c> do</c><00:10:43.360><c> claude</c><00:10:43.680><c> mcp</c><00:10:44.240><c> list</c><00:10:44.640><c> and</c><00:10:44.880><c> this</c><00:10:45.040><c> is</c>
+I can do claude mcp list and this is
+I can do claude mcp list and this is
+going<00:10:45.279><c> to</c><00:10:45.440><c> actually</c><00:10:45.839><c> verify</c><00:10:46.399><c> my</c><00:10:46.720><c> connection</c>
+going to actually verify my connection
+going to actually verify my connection
+to<00:10:47.360><c> archon.</c><00:10:48.000><c> Looking</c><00:10:48.399><c> really</c><00:10:48.720><c> really</c><00:10:49.040><c> good.</c>
+to archon. Looking really really good.
+to archon. Looking really really good.
+So<00:10:49.360><c> you</c><00:10:49.519><c> just</c><00:10:49.680><c> have</c><00:10:49.839><c> to</c><00:10:49.920><c> follow</c><00:10:50.320><c> whatever</c>
+So you just have to follow whatever
+So you just have to follow whatever
+process<00:10:51.279><c> we</c><00:10:51.440><c> have</c><00:10:51.600><c> here</c><00:10:51.920><c> based</c><00:10:52.240><c> on</c><00:10:52.399><c> your</c><00:10:52.640><c> AI</c>
+process we have here based on your AI
+process we have here based on your AI
+coding<00:10:53.360><c> assistant</c><00:10:53.920><c> and</c><00:10:54.160><c> then</c><00:10:54.320><c> you're</c><00:10:54.560><c> good</c><00:10:54.720><c> to</c>
+coding assistant and then you're good to
+coding assistant and then you're good to
+go.<00:10:55.200><c> The</c><00:10:55.440><c> last</c><00:10:55.760><c> thing</c><00:10:55.920><c> that</c><00:10:56.160><c> I'd</c><00:10:56.480><c> recommend</c>
+go. The last thing that I'd recommend
+go. The last thing that I'd recommend
+doing<00:10:57.200><c> is</c><00:10:57.519><c> go</c><00:10:57.680><c> back</c><00:10:57.839><c> to</c><00:10:58.000><c> the</c><00:10:58.160><c> settings</c><00:10:58.800><c> and</c>
+doing is go back to the settings and
+doing is go back to the settings and
+copy<00:10:59.519><c> the</c><00:11:00.000><c> recommended</c><00:11:00.560><c> global</c><00:11:00.959><c> rules</c><00:11:01.279><c> that</c>
+copy the recommended global rules that
+copy the recommended global rules that
+we<00:11:01.600><c> have</c><00:11:01.760><c> for</c><00:11:01.920><c> your</c><00:11:02.079><c> coding</c><00:11:02.399><c> assistant.</c><00:11:02.720><c> So</c>
+we have for your coding assistant. So
+we have for your coding assistant. So
+you<00:11:02.959><c> got</c><00:11:03.120><c> one</c><00:11:03.279><c> for</c><00:11:03.440><c> cloud</c><00:11:03.760><c> code</c><00:11:04.240><c> and</c><00:11:04.399><c> then</c><00:11:04.560><c> one</c>
+you got one for cloud code and then one
+you got one for cloud code and then one
+that<00:11:04.959><c> applies</c><00:11:05.279><c> to</c><00:11:05.519><c> any</c><00:11:05.760><c> other</c><00:11:06.000><c> AI</c><00:11:06.399><c> coding</c>
+that applies to any other AI coding
+that applies to any other AI coding
+assistant.<00:11:07.200><c> So</c><00:11:07.440><c> copy</c><00:11:07.760><c> this</c><00:11:08.240><c> and</c><00:11:08.480><c> then</c><00:11:08.640><c> for</c>
+assistant. So copy this and then for
+assistant. So copy this and then for
+cloud<00:11:09.120><c> code</c><00:11:09.519><c> for</c><00:11:09.519><c> example,</c><00:11:10.000><c> you</c><00:11:10.240><c> just</c><00:11:10.399><c> go</c><00:11:10.480><c> to</c>
+cloud code for example, you just go to
+cloud code for example, you just go to
+your<00:11:10.880><c> cloud.md.</c><00:11:11.760><c> I've</c><00:11:12.000><c> already</c><00:11:12.160><c> got</c><00:11:12.240><c> this</c>
+your cloud.md. I've already got this
+your cloud.md. I've already got this
+pasted<00:11:12.880><c> in</c><00:11:13.040><c> here.</c><00:11:13.760><c> And</c><00:11:13.920><c> then</c><00:11:14.079><c> for</c><00:11:14.320><c> another</c><00:11:14.640><c> AI</c>
+pasted in here. And then for another AI
+pasted in here. And then for another AI
+coding<00:11:15.279><c> assistant</c><00:11:15.680><c> like</c><00:11:15.839><c> Codeex,</c><00:11:16.320><c> it'd</c><00:11:16.480><c> be</c>
+coding assistant like Codeex, it'd be
+coding assistant like Codeex, it'd be
+something<00:11:16.800><c> like</c><00:11:16.959><c> your</c><00:11:17.120><c> agents.mmd.</c><00:11:18.079><c> So</c><00:11:18.240><c> just</c>
+something like your agents.mmd. So just
+something like your agents.mmd. So just
+follow<00:11:18.640><c> the</c><00:11:18.880><c> instructions</c><00:11:19.279><c> to</c><00:11:19.440><c> set</c><00:11:19.600><c> up</c><00:11:19.760><c> global</c>
+follow the instructions to set up global
+follow the instructions to set up global
+rules<00:11:20.320><c> for</c><00:11:20.480><c> your</c><00:11:20.720><c> coding</c><00:11:21.040><c> assistant</c><00:11:21.760><c> and</c>
+rules for your coding assistant and
+rules for your coding assistant and
+paste<00:11:22.320><c> this</c><00:11:22.480><c> in.</c><00:11:23.040><c> And</c><00:11:23.200><c> this</c><00:11:23.360><c> is</c><00:11:23.600><c> all</c><00:11:23.920><c> you</c><00:11:24.160><c> need.</c>
+paste this in. And this is all you need.
+paste this in. And this is all you need.
+Your<00:11:24.880><c> coding</c><00:11:25.200><c> assistant</c><00:11:25.600><c> now</c><00:11:25.920><c> understands</c>
+Your coding assistant now understands
+Your coding assistant now understands
+how<00:11:26.880><c> to</c><00:11:27.120><c> use</c><00:11:27.440><c> archon</c><00:11:27.920><c> for</c><00:11:28.160><c> the</c><00:11:28.320><c> knowledge</c><00:11:28.959><c> and</c>
+how to use archon for the knowledge and
+how to use archon for the knowledge and
+task<00:11:29.760><c> management.</c><00:11:30.480><c> And</c><00:11:30.560><c> then</c><00:11:30.800><c> upgrading</c>
+task management. And then upgrading
+task management. And then upgrading
+archon<00:11:31.839><c> is</c><00:11:32.000><c> also</c><00:11:32.399><c> very</c><00:11:32.720><c> easy.</c><00:11:33.120><c> When</c><00:11:33.360><c> there</c><00:11:33.519><c> are</c>
+archon is also very easy. When there are
+archon is also very easy. When there are
+new<00:11:33.839><c> changes</c><00:11:34.160><c> you</c><00:11:34.399><c> want</c><00:11:34.560><c> to</c><00:11:34.640><c> bring</c><00:11:34.800><c> in</c><00:11:35.040><c> for</c><00:11:35.279><c> new</c>
+new changes you want to bring in for new
+new changes you want to bring in for new
+releases<00:11:35.839><c> that</c><00:11:36.000><c> we</c><00:11:36.160><c> have,</c><00:11:36.399><c> you</c><00:11:36.560><c> just</c><00:11:36.720><c> have</c><00:11:36.800><c> to</c>
+releases that we have, you just have to
+releases that we have, you just have to
+pull<00:11:37.120><c> the</c><00:11:37.279><c> latest</c><00:11:37.519><c> changes</c><00:11:37.839><c> with</c><00:11:38.000><c> git.</c><00:11:38.640><c> run</c>
+pull the latest changes with git. run
+pull the latest changes with git. run
+the<00:11:39.200><c> exact</c><00:11:39.519><c> same</c><00:11:39.760><c> docker</c><00:11:40.240><c> compose</c><00:11:40.560><c> command</c>
+the exact same docker compose command
+the exact same docker compose command
+that<00:11:40.959><c> you</c><00:11:41.120><c> ran</c><00:11:41.360><c> to</c><00:11:41.600><c> start</c><00:11:41.839><c> things</c><00:11:42.079><c> for</c><00:11:42.240><c> the</c>
+that you ran to start things for the
+that you ran to start things for the
+first<00:11:42.640><c> time.</c><00:11:43.279><c> And</c><00:11:43.440><c> then</c><00:11:43.680><c> the</c><00:11:43.920><c> last</c><00:11:44.079><c> thing</c><00:11:44.240><c> is</c>
+first time. And then the last thing is
+first time. And then the last thing is
+there's<00:11:44.800><c> a</c><00:11:45.120><c> section</c><00:11:45.519><c> in</c><00:11:45.760><c> the</c><00:11:46.000><c> settings</c><00:11:46.320><c> page</c>
+there's a section in the settings page
+there's a section in the settings page
+that<00:11:46.800><c> will</c><00:11:46.959><c> alert</c><00:11:47.200><c> you</c><00:11:47.360><c> of</c><00:11:47.519><c> any</c><00:11:47.680><c> migrations</c>
+that will alert you of any migrations
+that will alert you of any migrations
+that<00:11:48.399><c> you</c><00:11:48.480><c> need</c><00:11:48.560><c> to</c><00:11:48.720><c> run.</c><00:11:48.959><c> So</c><00:11:49.040><c> you</c><00:11:49.200><c> can</c><00:11:49.279><c> click</c>
+that you need to run. So you can click
+that you need to run. So you can click
+on<00:11:49.600><c> a</c><00:11:49.760><c> button</c><00:11:50.000><c> right</c><00:11:50.160><c> here,</c><00:11:50.720><c> copy</c><00:11:51.040><c> the</c><00:11:51.279><c> SQL</c><00:11:51.680><c> to</c>
+on a button right here, copy the SQL to
+on a button right here, copy the SQL to
+run<00:11:52.240><c> those</c><00:11:52.560><c> migrations</c><00:11:53.040><c> and</c><00:11:53.279><c> then</c><00:11:53.360><c> you</c><00:11:53.519><c> go</c>
+run those migrations and then you go
+run those migrations and then you go
+into<00:11:53.760><c> the</c><00:11:53.920><c> SQL</c><00:11:54.240><c> editor</c><00:11:54.640><c> just</c><00:11:54.800><c> like</c><00:11:54.959><c> we</c><00:11:55.120><c> did</c>
+into the SQL editor just like we did
+into the SQL editor just like we did
+earlier<00:11:55.920><c> running</c><00:11:56.240><c> that</c><00:11:56.480><c> to</c><00:11:56.640><c> get</c><00:11:56.800><c> your</c>
+earlier running that to get your
+earlier running that to get your
+database<00:11:57.519><c> up</c><00:11:57.680><c> to</c><00:11:57.920><c> speed</c><00:11:58.160><c> as</c><00:11:58.480><c> well.</c><00:11:58.959><c> That</c><00:11:59.120><c> is</c>
+database up to speed as well. That is
+database up to speed as well. That is
+it.<00:11:59.519><c> Very</c><00:11:59.760><c> easy</c><00:12:00.000><c> to</c><00:12:00.160><c> upgrade.</c><00:12:00.800><c> So</c><00:12:01.040><c> with</c><00:12:01.200><c> that,</c>
+it. Very easy to upgrade. So with that,
+it. Very easy to upgrade. So with that,
+you<00:12:01.839><c> have</c><00:12:02.000><c> Archon</c><00:12:02.480><c> fully</c><00:12:02.800><c> set</c><00:12:02.959><c> up.</c><00:12:03.600><c> Now</c><00:12:04.000><c> quick</c>
+you have Archon fully set up. Now quick
+you have Archon fully set up. Now quick
+word<00:12:04.480><c> from</c><00:12:04.720><c> our</c><00:12:04.880><c> sponsor,</c><00:12:05.279><c> which</c><00:12:05.440><c> is</c><00:12:05.600><c> very</c>
+word from our sponsor, which is very
+word from our sponsor, which is very
+thematic<00:12:06.320><c> for</c><00:12:06.480><c> Archon,</c><00:12:06.959><c> by</c><00:12:07.120><c> the</c><00:12:07.200><c> way.</c><00:12:07.519><c> Then</c>
+thematic for Archon, by the way. Then
+thematic for Archon, by the way. Then
+we'll<00:12:07.920><c> get</c><00:12:08.000><c> on</c><00:12:08.160><c> to</c><00:12:08.320><c> how</c><00:12:08.480><c> you</c><00:12:08.639><c> can</c><00:12:08.800><c> practically</c>
+we'll get on to how you can practically
+we'll get on to how you can practically
+use<00:12:09.519><c> Archon</c><00:12:10.240><c> in</c><00:12:10.399><c> an</c><00:12:10.560><c> AI</c><00:12:10.880><c> coding</c><00:12:11.200><c> workflow.</c>
+use Archon in an AI coding workflow.
+use Archon in an AI coding workflow.
+I'll<00:12:11.760><c> show</c><00:12:11.920><c> you</c><00:12:12.160><c> how</c><00:12:12.399><c> I</c><00:12:12.720><c> approach</c><00:12:13.120><c> a</c><00:12:13.440><c> brand</c><00:12:13.680><c> new</c>
+I'll show you how I approach a brand new
+I'll show you how I approach a brand new
+project,<00:12:14.560><c> how</c><00:12:14.800><c> I</c><00:12:15.040><c> incorporate</c><00:12:15.519><c> Archon</c><00:12:16.000><c> into</c>
+project, how I incorporate Archon into
+project, how I incorporate Archon into
+it.<00:12:16.560><c> The</c><00:12:16.720><c> sponsor</c><00:12:17.040><c> of</c><00:12:17.279><c> today's</c><00:12:17.600><c> video</c><00:12:17.839><c> is</c><00:12:18.079><c> none</c>
+it. The sponsor of today's video is none
+it. The sponsor of today's video is none
+other<00:12:18.560><c> than</c><00:12:18.720><c> Superbase</c><00:12:19.440><c> themselves,</c><00:12:19.839><c> which</c><00:12:20.079><c> I</c>
+other than Superbase themselves, which I
+other than Superbase themselves, which I
+am<00:12:20.320><c> pumped</c><00:12:20.639><c> for</c><00:12:20.880><c> because</c><00:12:21.120><c> for</c><00:12:21.360><c> the</c><00:12:21.519><c> longest</c>
+am pumped for because for the longest
+am pumped for because for the longest
+time,<00:12:22.000><c> they've</c><00:12:22.240><c> been</c><00:12:22.320><c> a</c><00:12:22.480><c> core</c><00:12:22.800><c> part</c><00:12:22.959><c> of</c><00:12:23.200><c> my</c>
+time, they've been a core part of my
+time, they've been a core part of my
+tech<00:12:23.760><c> stack</c><00:12:24.079><c> and</c><00:12:24.639><c> the</c><00:12:24.880><c> database</c><00:12:25.279><c> that</c><00:12:25.600><c> powers</c>
+tech stack and the database that powers
+tech stack and the database that powers
+all<00:12:26.320><c> of</c><00:12:26.720><c> Archon.</c><00:12:27.360><c> Very</c><00:12:27.760><c> thematic.</c><00:12:28.560><c> They</c>
+all of Archon. Very thematic. They
+all of Archon. Very thematic. They
+recently<00:12:29.120><c> had</c><00:12:29.279><c> their</c><00:12:29.519><c> first</c><00:12:29.760><c> ever</c>
+recently had their first ever
+recently had their first ever
+conference,<00:12:30.639><c> Superbase</c><00:12:31.200><c> Select.</c><00:12:31.600><c> That's</c><00:12:31.760><c> the</c>
+conference, Superbase Select. That's the
+conference, Superbase Select. That's the
+video<00:12:32.160><c> you're</c><00:12:32.399><c> looking</c><00:12:32.560><c> at</c><00:12:32.800><c> right</c><00:12:32.959><c> here.</c><00:12:33.519><c> It's</c>
+video you're looking at right here. It's
+video you're looking at right here. It's
+the<00:12:33.920><c> full</c><00:12:34.160><c> recap,</c><00:12:34.480><c> which</c><00:12:34.720><c> I'll</c><00:12:34.880><c> link</c><00:12:35.040><c> to</c><00:12:35.200><c> in</c>
+the full recap, which I'll link to in
+the full recap, which I'll link to in
+the<00:12:35.600><c> description.</c><00:12:36.399><c> and</c><00:12:36.639><c> their</c><00:12:36.880><c> CEO</c><00:12:37.360><c> Paul</c>
+the description. and their CEO Paul
+the description. and their CEO Paul
+Coppstone.<00:12:38.240><c> He</c><00:12:38.399><c> kicked</c><00:12:38.560><c> things</c><00:12:38.720><c> off</c><00:12:38.880><c> by</c>
+Coppstone. He kicked things off by
+Coppstone. He kicked things off by
+introducing<00:12:39.519><c> a</c><00:12:39.760><c> lot</c><00:12:39.839><c> of</c><00:12:39.920><c> incredible</c><00:12:40.399><c> new</c>
+introducing a lot of incredible new
+introducing a lot of incredible new
+additions<00:12:41.120><c> to</c><00:12:41.440><c> the</c><00:12:41.680><c> platform.</c><00:12:42.560><c> Starting</c><00:12:42.880><c> with</c>
+additions to the platform. Starting with
+additions to the platform. Starting with
+a<00:12:43.279><c> remote</c><00:12:43.600><c> MCP</c><00:12:44.160><c> server.</c><00:12:44.480><c> I've</c><00:12:44.639><c> been</c><00:12:44.800><c> waiting</c>
+a remote MCP server. I've been waiting
+a remote MCP server. I've been waiting
+for<00:12:45.120><c> this</c><00:12:45.279><c> one</c><00:12:45.519><c> so</c><00:12:45.680><c> our</c><00:12:45.839><c> agents</c><00:12:46.240><c> can</c><00:12:46.480><c> manage</c>
+for this one so our agents can manage
+for this one so our agents can manage
+our<00:12:47.519><c> Superbase</c><00:12:48.160><c> projects</c><00:12:48.560><c> without</c><00:12:48.959><c> us</c><00:12:49.200><c> having</c>
+our Superbase projects without us having
+our Superbase projects without us having
+to<00:12:49.600><c> install</c><00:12:50.079><c> anything.</c><00:12:50.800><c> And</c><00:12:50.959><c> then</c><00:12:51.200><c> a</c><00:12:51.360><c> lot</c><00:12:51.440><c> of</c>
+to install anything. And then a lot of
+to install anything. And then a lot of
+new<00:12:51.760><c> things</c><00:12:51.920><c> for</c><00:12:52.320><c> scalability</c><00:12:53.200><c> enterprise</c>
+new things for scalability enterprise
+new things for scalability enterprise
+level<00:12:54.160><c> in</c><00:12:54.399><c> particular</c><00:12:55.120><c> incorporating</c><00:12:55.760><c> S3</c>
+level in particular incorporating S3
+level in particular incorporating S3
+buckets,<00:12:56.560><c> Oreo</c><00:12:57.040><c> which</c><00:12:57.200><c> is</c><00:12:57.279><c> a</c><00:12:57.440><c> platform</c><00:12:57.680><c> they</c>
+buckets, Oreo which is a platform they
+buckets, Oreo which is a platform they
+just<00:12:58.079><c> acquired</c><00:12:58.880><c> and</c><00:12:59.200><c> a</c><00:12:59.440><c> new</c><00:12:59.680><c> open</c><00:13:00.000><c> source</c>
+just acquired and a new open source
+just acquired and a new open source
+initiative<00:13:01.040><c> for</c><00:13:01.440><c> database</c><00:13:01.920><c> orchestration</c>
+initiative for database orchestration
+initiative for database orchestration
+called<00:13:02.720><c> multi-gress</c><00:13:03.440><c> which</c><00:13:03.600><c> is</c><00:13:03.760><c> probably</c><00:13:03.920><c> the</c>
+called multi-gress which is probably the
+called multi-gress which is probably the
+biggest<00:13:04.480><c> thing</c><00:13:04.880><c> for</c><00:13:05.200><c> making</c><00:13:05.600><c> superbase</c><00:13:06.160><c> that</c>
+biggest thing for making superbase that
+biggest thing for making superbase that
+much<00:13:06.639><c> more</c><00:13:06.959><c> scalable.</c><00:13:07.760><c> I</c><00:13:08.079><c> really</c><00:13:08.399><c> do</c><00:13:08.639><c> think</c>
+much more scalable. I really do think
+much more scalable. I really do think
+that<00:13:09.360><c> Superbase</c><00:13:10.000><c> is</c><00:13:10.399><c> the</c><00:13:10.639><c> future</c><00:13:10.880><c> of</c>
+that Superbase is the future of
+that Superbase is the future of
+Postgress.<00:13:11.680><c> When</c><00:13:11.839><c> they</c><00:13:12.000><c> say</c><00:13:12.160><c> scale</c><00:13:12.399><c> the</c>
+Postgress. When they say scale the
+Postgress. When they say scale the
+millions<00:13:13.040><c> they</c><00:13:13.200><c> really</c><00:13:13.440><c> mean</c><00:13:13.600><c> it.</c><00:13:13.839><c> And</c><00:13:14.000><c> the</c>
+millions they really mean it. And the
+millions they really mean it. And the
+biggest<00:13:14.480><c> takeaway</c><00:13:14.880><c> that</c><00:13:15.040><c> I</c><00:13:15.279><c> got</c><00:13:15.600><c> out</c><00:13:15.839><c> of</c><00:13:16.000><c> this</c>
+biggest takeaway that I got out of this
+biggest takeaway that I got out of this
+event<00:13:16.560><c> is</c><00:13:16.800><c> that</c><00:13:17.040><c> they</c><00:13:17.279><c> understand</c><00:13:17.680><c> the</c>
+event is that they understand the
+event is that they understand the
+limitations<00:13:18.480><c> of</c><00:13:18.720><c> Postgress</c><00:13:19.360><c> as</c><00:13:19.600><c> the</c>
+limitations of Postgress as the
+limitations of Postgress as the
+underlying<00:13:20.240><c> database</c><00:13:21.200><c> and</c><00:13:21.440><c> they're</c>
+underlying database and they're
+underlying database and they're
+addressing<00:13:22.079><c> that</c><00:13:22.320><c> by</c><00:13:22.560><c> building</c><00:13:22.959><c> things</c><00:13:23.279><c> on</c>
+addressing that by building things on
+addressing that by building things on
+top<00:13:23.760><c> of</c><00:13:24.079><c> the</c><00:13:24.320><c> Postgress</c><00:13:24.880><c> engine</c><00:13:25.200><c> while</c><00:13:25.440><c> still</c>
+top of the Postgress engine while still
+top of the Postgress engine while still
+making<00:13:25.839><c> it</c><00:13:26.000><c> just</c><00:13:26.240><c> as</c><00:13:26.639><c> easy</c><00:13:27.200><c> for</c><00:13:27.440><c> us</c><00:13:27.680><c> as</c><00:13:27.839><c> the</c><00:13:28.000><c> end</c>
+making it just as easy for us as the end
+making it just as easy for us as the end
+users<00:13:28.639><c> to</c><00:13:28.959><c> leverage</c><00:13:29.360><c> Superbase.</c><00:13:30.320><c> And</c><00:13:30.560><c> with</c>
+users to leverage Superbase. And with
+users to leverage Superbase. And with
+that,<00:13:31.120><c> they've</c><00:13:31.440><c> got</c><00:13:31.519><c> their</c><00:13:31.760><c> series</c><00:13:32.240><c> E</c><00:13:32.480><c> for</c><00:13:32.720><c> a</c>
+that, they've got their series E for a
+that, they've got their series E for a
+$100<00:13:33.360><c> million</c><00:13:33.839><c> raise</c><00:13:34.160><c> and</c><00:13:34.320><c> a</c><00:13:34.639><c> $5</c><00:13:34.880><c> billion</c>
+$100 million raise and a $5 billion
+$100 million raise and a $5 billion
+valuation,<00:13:36.000><c> which</c><00:13:36.160><c> is</c><00:13:36.399><c> extremely</c>
+valuation, which is extremely
+valuation, which is extremely
+impressive.<00:13:37.920><c> And</c><00:13:38.240><c> last</c><00:13:38.399><c> thing</c><00:13:38.560><c> I'll</c><00:13:38.800><c> say,</c><00:13:39.040><c> if</c>
+impressive. And last thing I'll say, if
+impressive. And last thing I'll say, if
+you<00:13:39.360><c> really</c><00:13:39.600><c> want</c><00:13:39.760><c> to</c><00:13:40.000><c> dive</c><00:13:40.639><c> into</c><00:13:41.120><c> multi-gress</c>
+you really want to dive into multi-gress
+you really want to dive into multi-gress
+and<00:13:42.079><c> see</c><00:13:42.320><c> how</c><00:13:42.639><c> that</c><00:13:42.880><c> makes</c><00:13:43.279><c> Superbase</c><00:13:43.920><c> so</c>
+and see how that makes Superbase so
+and see how that makes Superbase so
+scalable,<00:13:44.880><c> Sugamarine</c><00:13:46.000><c> did</c><00:13:46.240><c> a</c><00:13:46.480><c> talk</c><00:13:46.880><c> right</c>
+scalable, Sugamarine did a talk right
+scalable, Sugamarine did a talk right
+after<00:13:47.440><c> Paul</c><00:13:47.760><c> Coppstone</c><00:13:48.320><c> where</c><00:13:48.480><c> he</c><00:13:48.720><c> covers</c>
+after Paul Coppstone where he covers
+after Paul Coppstone where he covers
+more<00:13:49.440><c> of</c><00:13:49.519><c> the</c><00:13:49.680><c> core</c><00:13:50.000><c> architecture.</c><00:13:50.560><c> So</c><00:13:50.639><c> if</c><00:13:50.800><c> you</c>
+more of the core architecture. So if you
+more of the core architecture. So if you
+want<00:13:50.959><c> to</c><00:13:51.120><c> get</c><00:13:51.200><c> more</c><00:13:51.440><c> technical</c><00:13:51.839><c> and</c><00:13:52.079><c> see</c><00:13:52.320><c> how</c>
+want to get more technical and see how
+want to get more technical and see how
+Superbase<00:13:53.279><c> can</c><00:13:53.440><c> really</c><00:13:53.760><c> scale,</c><00:13:54.480><c> definitely</c>
+Superbase can really scale, definitely
+Superbase can really scale, definitely
+check<00:13:55.120><c> that</c><00:13:55.360><c> out.</c><00:13:55.680><c> And</c><00:13:55.920><c> really</c><00:13:56.160><c> the</c><00:13:56.480><c> whole</c>
+check that out. And really the whole
+check that out. And really the whole
+recap<00:13:57.279><c> is</c><00:13:57.519><c> worth</c><00:13:57.760><c> checking</c><00:13:58.000><c> out.</c><00:13:58.240><c> So</c><00:13:58.399><c> link</c><00:13:58.560><c> in</c>
+recap is worth checking out. So link in
+recap is worth checking out. So link in
+the<00:13:58.880><c> description.</c><00:13:59.440><c> I</c><00:13:59.680><c> am</c><00:13:59.839><c> always</c><00:14:00.079><c> behind</c>
+the description. I am always behind
+the description. I am always behind
+Superbase<00:14:00.959><c> and</c><00:14:01.120><c> I</c><00:14:01.199><c> love</c><00:14:01.360><c> it</c><00:14:01.519><c> as</c><00:14:01.680><c> a</c><00:14:01.920><c> platform.</c>
+Superbase and I love it as a platform.
+Superbase and I love it as a platform.
+So,<00:14:02.800><c> this</c><00:14:03.040><c> is</c><00:14:03.199><c> probably</c><00:14:03.440><c> the</c><00:14:03.760><c> most</c><00:14:04.079><c> important</c>
+So, this is probably the most important
+So, this is probably the most important
+part<00:14:04.720><c> of</c><00:14:04.959><c> the</c><00:14:05.120><c> video,</c><00:14:05.519><c> showing</c><00:14:05.839><c> you</c><00:14:06.240><c> how</c><00:14:06.560><c> to</c>
+part of the video, showing you how to
+part of the video, showing you how to
+use<00:14:07.279><c> Archon</c><00:14:08.160><c> in</c><00:14:08.399><c> an</c><00:14:08.639><c> AI</c><00:14:08.959><c> development</c>
+use Archon in an AI development
+use Archon in an AI development
+workflow.<00:14:09.760><c> And</c><00:14:09.920><c> the</c><00:14:10.079><c> main</c><00:14:10.240><c> point</c><00:14:10.480><c> that</c><00:14:10.639><c> I</c><00:14:10.880><c> want</c>
+workflow. And the main point that I want
+workflow. And the main point that I want
+to<00:14:11.120><c> drive</c><00:14:11.360><c> across</c><00:14:11.920><c> here</c><00:14:12.480><c> in</c><00:14:12.639><c> the</c><00:14:12.800><c> next</c><00:14:12.959><c> like</c>
+to drive across here in the next like
+to drive across here in the next like
+five<00:14:13.440><c> minutes</c><00:14:13.600><c> that</c><00:14:13.839><c> I've</c><00:14:14.000><c> got</c><00:14:14.160><c> with</c><00:14:14.320><c> you</c><00:14:14.800><c> is</c>
+five minutes that I've got with you is
+five minutes that I've got with you is
+that<00:14:15.360><c> it's</c><00:14:15.680><c> up</c><00:14:15.839><c> to</c><00:14:16.000><c> you</c><00:14:16.240><c> to</c><00:14:16.480><c> define</c><00:14:16.880><c> your</c><00:14:17.120><c> own</c>
+that it's up to you to define your own
+that it's up to you to define your own
+AI<00:14:18.000><c> coding</c><00:14:18.480><c> workflow</c><00:14:18.880><c> and</c><00:14:19.199><c> how</c><00:14:19.440><c> you</c><00:14:19.680><c> want</c><00:14:19.839><c> to</c>
+AI coding workflow and how you want to
+AI coding workflow and how you want to
+incorporate<00:14:20.480><c> Archon.</c><00:14:21.279><c> There's</c><00:14:21.519><c> a</c><00:14:21.680><c> lot</c><00:14:21.760><c> of</c>
+incorporate Archon. There's a lot of
+incorporate Archon. There's a lot of
+flexibility<00:14:22.480><c> here.</c><00:14:22.720><c> I'm</c><00:14:22.959><c> going</c><00:14:23.040><c> to</c><00:14:23.120><c> recommend</c>
+flexibility here. I'm going to recommend
+flexibility here. I'm going to recommend
+a<00:14:23.839><c> couple</c><00:14:24.000><c> of</c><00:14:24.639><c> commands</c><00:14:25.120><c> that</c><00:14:25.360><c> I</c><00:14:25.519><c> have</c><00:14:25.760><c> for</c>
+a couple of commands that I have for
+a couple of commands that I have for
+reusable<00:14:26.720><c> workflows.</c><00:14:27.600><c> But</c><00:14:27.760><c> you</c><00:14:28.079><c> get</c><00:14:28.240><c> to</c>
+reusable workflows. But you get to
+reusable workflows. But you get to
+decide<00:14:29.040><c> when</c><00:14:29.279><c> archon</c><00:14:29.839><c> looks</c><00:14:30.000><c> in</c><00:14:30.160><c> the</c>
+decide when archon looks in the
+decide when archon looks in the
+knowledge<00:14:30.560><c> base,</c><00:14:30.880><c> when</c><00:14:31.120><c> it</c><00:14:31.279><c> manage</c><00:14:31.600><c> tasks,</c>
+knowledge base, when it manage tasks,
+knowledge base, when it manage tasks,
+does<00:14:32.079><c> it</c><00:14:32.320><c> create</c><00:14:32.480><c> the</c><00:14:32.720><c> projects?</c><00:14:33.040><c> Do</c><00:14:33.199><c> you</c>
+does it create the projects? Do you
+does it create the projects? Do you
+create<00:14:33.600><c> the</c><00:14:33.839><c> projects</c><00:14:34.160><c> for</c><00:14:34.320><c> the</c><00:14:34.560><c> coding</c>
+create the projects for the coding
+create the projects for the coding
+assistant<00:14:35.360><c> first?</c><00:14:35.920><c> That</c><00:14:36.160><c> is</c><00:14:36.320><c> all</c><00:14:36.560><c> up</c><00:14:36.720><c> to</c><00:14:36.880><c> you</c>
+assistant first? That is all up to you
+assistant first? That is all up to you
+entirely.<00:14:38.399><c> And</c><00:14:38.560><c> so</c><00:14:38.720><c> when</c><00:14:39.040><c> I</c><00:14:39.199><c> am</c><00:14:39.360><c> starting</c><00:14:39.680><c> a</c>
+entirely. And so when I am starting a
+entirely. And so when I am starting a
+new<00:14:40.160><c> project</c><00:14:40.639><c> or</c><00:14:40.880><c> a</c><00:14:41.120><c> new</c><00:14:41.360><c> feature</c><00:14:41.920><c> in</c><00:14:42.160><c> an</c>
+new project or a new feature in an
+new project or a new feature in an
+existing<00:14:42.800><c> project,</c><00:14:43.279><c> the</c><00:14:43.519><c> first</c><00:14:43.680><c> thing</c><00:14:43.760><c> I'll</c>
+existing project, the first thing I'll
+existing project, the first thing I'll
+do<00:14:44.480><c> is</c><00:14:44.800><c> set</c><00:14:44.959><c> up</c><00:14:45.120><c> my</c><00:14:45.440><c> knowledge.</c><00:14:46.320><c> What</c><00:14:46.560><c> are</c><00:14:46.720><c> the</c>
+do is set up my knowledge. What are the
+do is set up my knowledge. What are the
+files<00:14:47.360><c> that</c><00:14:47.600><c> I</c><00:14:47.839><c> want</c><00:14:48.079><c> my</c><00:14:48.320><c> coding</c><00:14:48.639><c> assistant</c><00:14:48.959><c> to</c>
+files that I want my coding assistant to
+files that I want my coding assistant to
+reference<00:14:49.440><c> or</c><00:14:49.680><c> the</c><00:14:49.920><c> documentation</c><00:14:50.880><c> that</c><00:14:51.120><c> I</c>
+reference or the documentation that I
+reference or the documentation that I
+want<00:14:51.360><c> it</c><00:14:51.600><c> to</c><00:14:51.760><c> search</c><00:14:52.000><c> through?</c><00:14:52.399><c> For</c><00:14:52.480><c> example,</c>
+want it to search through? For example,
+want it to search through? For example,
+maybe<00:14:53.199><c> I'm</c><00:14:53.440><c> building</c><00:14:53.600><c> an</c><00:14:53.760><c> AI</c><00:14:54.079><c> agent</c><00:14:54.399><c> with</c>
+maybe I'm building an AI agent with
+maybe I'm building an AI agent with
+Pantic<00:14:55.120><c> AI</c><00:14:55.519><c> or</c><00:14:55.680><c> I'm</c><00:14:55.920><c> working</c><00:14:56.079><c> on</c><00:14:56.720><c> some</c><00:14:56.959><c> backend</c>
+Pantic AI or I'm working on some backend
+Pantic AI or I'm working on some backend
+that's<00:14:57.680><c> using</c><00:14:58.000><c> Superbase</c><00:14:58.560><c> for</c><00:14:58.720><c> the</c><00:14:58.880><c> database</c>
+that's using Superbase for the database
+that's using Superbase for the database
+and<00:14:59.440><c> I</c><00:14:59.680><c> want</c><00:14:59.839><c> my</c><00:15:00.079><c> AI</c><00:15:00.399><c> coding</c><00:15:00.639><c> assistant</c><00:15:01.040><c> to</c><00:15:01.120><c> be</c>
+and I want my AI coding assistant to be
+and I want my AI coding assistant to be
+able<00:15:01.360><c> to</c><00:15:01.519><c> search</c><00:15:01.760><c> through</c><00:15:01.920><c> this</c>
+able to search through this
+able to search through this
+documentation<00:15:02.800><c> to</c><00:15:03.120><c> understand</c><00:15:03.519><c> how</c><00:15:03.760><c> to</c><00:15:03.920><c> code</c>
+documentation to understand how to code
+documentation to understand how to code
+with<00:15:04.800><c> Pantic</c><00:15:05.360><c> AI</c><00:15:05.680><c> or</c><00:15:05.920><c> with</c><00:15:06.079><c> the</c><00:15:06.320><c> Superbase</c>
+with Pantic AI or with the Superbase
+with Pantic AI or with the Superbase
+SDK.<00:15:07.920><c> So</c><00:15:08.240><c> find</c><00:15:08.720><c> those</c><00:15:09.199><c> resources</c><00:15:10.320><c> and</c><00:15:10.639><c> what</c>
+SDK. So find those resources and what
+SDK. So find those resources and what
+you<00:15:11.120><c> want</c><00:15:11.279><c> to</c><00:15:11.519><c> do</c><00:15:11.839><c> is</c><00:15:12.079><c> you</c><00:15:12.320><c> want</c><00:15:12.399><c> to</c><00:15:12.560><c> go</c><00:15:12.639><c> to</c><00:15:12.800><c> the</c>
+you want to do is you want to go to the
+you want to do is you want to go to the
+documentation.<00:15:13.760><c> So</c><00:15:14.000><c> for</c><00:15:14.079><c> example,</c><00:15:14.399><c> I</c><00:15:14.560><c> can</c><00:15:14.639><c> go</c>
+documentation. So for example, I can go
+documentation. So for example, I can go
+to<00:15:14.880><c> Google</c><00:15:15.120><c> here</c><00:15:15.199><c> and</c><00:15:15.360><c> I</c><00:15:15.519><c> can</c><00:15:15.600><c> go</c><00:15:15.760><c> superbase</c>
+to Google here and I can go superbase
+to Google here and I can go superbase
+documentation.<00:15:18.240><c> There</c><00:15:18.399><c> we</c><00:15:18.560><c> go.</c><00:15:18.720><c> I</c><00:15:18.880><c> got</c><00:15:18.959><c> the</c>
+documentation. There we go. I got the
+documentation. There we go. I got the
+superbase<00:15:19.680><c> docs</c><00:15:20.240><c> and</c><00:15:20.560><c> I</c><00:15:20.880><c> can</c><00:15:21.120><c> actually</c><00:15:21.519><c> start</c>
+superbase docs and I can actually start
+superbase docs and I can actually start
+by<00:15:22.160><c> just</c><00:15:22.639><c> crawling</c><00:15:23.040><c> this</c><00:15:23.440><c> if</c><00:15:23.680><c> I</c><00:15:23.839><c> want</c><00:15:24.000><c> to.</c><00:15:24.240><c> So</c><00:15:24.320><c> I</c>
+by just crawling this if I want to. So I
+by just crawling this if I want to. So I
+can<00:15:24.560><c> go</c><00:15:24.639><c> to</c><00:15:24.800><c> archon,</c><00:15:25.600><c> click</c><00:15:25.839><c> on</c><00:15:26.160><c> add</c><00:15:26.480><c> new</c>
+can go to archon, click on add new
+can go to archon, click on add new
+knowledge,<00:15:27.440><c> paste</c><00:15:27.680><c> in</c><00:15:27.839><c> this</c><00:15:28.079><c> URL</c><00:15:28.560><c> and</c><00:15:28.880><c> start</c>
+knowledge, paste in this URL and start
+knowledge, paste in this URL and start
+the<00:15:29.360><c> crawl</c><00:15:30.160><c> for</c><00:15:30.560><c> any</c><00:15:30.880><c> old</c><00:15:31.279><c> website.</c><00:15:31.920><c> This</c>
+the crawl for any old website. This
+the crawl for any old website. This
+works.<00:15:32.959><c> However,</c><00:15:33.279><c> there</c><00:15:33.519><c> are</c><00:15:33.680><c> a</c><00:15:33.839><c> couple</c><00:15:34.000><c> of</c>
+works. However, there are a couple of
+works. However, there are a couple of
+formats<00:15:34.560><c> that</c><00:15:34.800><c> are</c><00:15:34.959><c> actually</c><00:15:35.440><c> more</c><00:15:35.920><c> optimal</c>
+formats that are actually more optimal
+formats that are actually more optimal
+for<00:15:36.880><c> crawling.</c><00:15:37.680><c> So</c><00:15:37.839><c> going</c><00:15:38.079><c> to</c><00:15:38.320><c> superbase</c><00:15:38.880><c> to</c>
+for crawling. So going to superbase to
+for crawling. So going to superbase to
+the<00:15:39.199><c> documentation</c><00:15:39.839><c> here.</c><00:15:40.480><c> If</c><00:15:40.639><c> I</c><00:15:40.800><c> go</c><00:15:40.959><c> to</c>
+the documentation here. If I go to
+the documentation here. If I go to
+llms.ext,<00:15:42.399><c> text.</c><00:15:43.120><c> Take</c><00:15:43.279><c> a</c><00:15:43.440><c> look</c><00:15:43.600><c> at</c><00:15:43.839><c> this.</c>
+llms.ext, text. Take a look at this.
+llms.ext, text. Take a look at this.
+Most<00:15:45.040><c> documentation</c><00:15:45.839><c> websites,</c><00:15:46.320><c> if</c><00:15:46.560><c> you</c><00:15:46.720><c> just</c>
+Most documentation websites, if you just
+Most documentation websites, if you just
+append<00:15:47.440><c> llm.ext</c><00:15:48.560><c> to</c><00:15:48.720><c> it,</c><00:15:49.199><c> I</c><00:15:49.440><c> can</c><00:15:49.600><c> do</c><00:15:49.680><c> the</c><00:15:49.920><c> exact</c>
+append llm.ext to it, I can do the exact
+append llm.ext to it, I can do the exact
+same<00:15:50.560><c> thing</c><00:15:50.800><c> for</c><00:15:51.279><c> Pantic</c><00:15:52.000><c> AI.</c><00:15:52.959><c> It</c><00:15:53.199><c> has</c><00:15:53.360><c> this</c>
+same thing for Pantic AI. It has this
+same thing for Pantic AI. It has this
+curated<00:15:54.240><c> list</c><00:15:54.560><c> of</c><00:15:54.800><c> files</c><00:15:55.759><c> that</c><00:15:56.079><c> are</c><00:15:56.480><c> ready</c><00:15:56.720><c> to</c>
+curated list of files that are ready to
+curated list of files that are ready to
+be<00:15:57.120><c> ingested</c><00:15:57.440><c> as</c><00:15:57.680><c> markdown</c><00:15:58.160><c> for</c><00:15:58.320><c> your</c><00:15:58.480><c> AI</c>
+be ingested as markdown for your AI
+be ingested as markdown for your AI
+coding<00:15:59.199><c> assistant.</c><00:15:59.600><c> So,</c><00:15:59.680><c> I'd</c><00:16:00.000><c> highly</c>
+coding assistant. So, I'd highly
+coding assistant. So, I'd highly
+recommend<00:16:01.279><c> looking</c><00:16:01.680><c> to</c><00:16:02.000><c> see</c><00:16:02.240><c> if</c><00:16:02.560><c> your</c>
+recommend looking to see if your
+recommend looking to see if your
+documentation<00:16:03.600><c> has</c><00:16:03.920><c> that,</c><00:16:04.160><c> and</c><00:16:04.320><c> then</c><00:16:04.480><c> if</c><00:16:04.639><c> it</c>
+documentation has that, and then if it
+documentation has that, and then if it
+does,<00:16:05.040><c> copy</c><00:16:05.360><c> this,</c><00:16:05.759><c> go</c><00:16:05.920><c> into</c><00:16:06.320><c> Archon,</c><00:16:07.360><c> and</c>
+does, copy this, go into Archon, and
+does, copy this, go into Archon, and
+then<00:16:08.079><c> crawl</c><00:16:08.480><c> this</c><00:16:08.880><c> instead</c><00:16:09.199><c> of</c><00:16:09.360><c> just</c><00:16:09.600><c> the</c><00:16:09.759><c> raw</c>
+then crawl this instead of just the raw
+then crawl this instead of just the raw
+web<00:16:10.320><c> page.</c><00:16:10.720><c> I'll</c><00:16:10.959><c> actually</c><00:16:11.279><c> start</c><00:16:11.519><c> the</c><00:16:11.680><c> crawl</c>
+web page. I'll actually start the crawl
+web page. I'll actually start the crawl
+here<00:16:12.399><c> so</c><00:16:12.560><c> we</c><00:16:12.800><c> can</c><00:16:12.959><c> see</c><00:16:13.040><c> this</c><00:16:13.279><c> in</c><00:16:13.600><c> action.</c>
+here so we can see this in action.
+here so we can see this in action.
+Another<00:16:14.480><c> format</c><00:16:14.880><c> that's</c><00:16:15.199><c> really</c><00:16:15.440><c> great</c><00:16:15.600><c> is</c>
+Another format that's really great is
+Another format that's really great is
+sitemaps.<00:16:16.639><c> And</c><00:16:16.800><c> so</c><00:16:17.279><c> mem</c><00:16:17.759><c> zero</c><00:16:18.160><c> for</c><00:16:18.320><c> example,</c>
+sitemaps. And so mem zero for example,
+sitemaps. And so mem zero for example,
+which<00:16:19.120><c> is</c><00:16:19.279><c> a</c><00:16:19.680><c> tool</c><00:16:20.000><c> for</c><00:16:20.320><c> agentic</c><00:16:20.959><c> memory.</c><00:16:21.600><c> They</c>
+which is a tool for agentic memory. They
+which is a tool for agentic memory. They
+have<00:16:22.000><c> a</c><00:16:22.240><c> sitemap.</c><00:16:22.720><c> And</c><00:16:22.880><c> so</c><00:16:22.959><c> I</c><00:16:23.040><c> can</c><00:16:23.120><c> do</c>
+have a sitemap. And so I can do
+have a sitemap. And so I can do
+just/sitemap.xml.
+just/sitemap.xml.
+just/sitemap.xml.
+This<00:16:25.440><c> is</c><00:16:25.600><c> typically</c><00:16:26.399><c> how</c><00:16:26.720><c> you</c><00:16:26.959><c> check</c><00:16:27.199><c> for</c><00:16:27.360><c> a</c>
+This is typically how you check for a
+This is typically how you check for a
+sitemap.<00:16:28.480><c> This</c><00:16:28.720><c> is</c><00:16:28.880><c> also</c><00:16:29.279><c> a</c><00:16:29.519><c> very</c><00:16:29.759><c> good</c>
+sitemap. This is also a very good
+sitemap. This is also a very good
+format.<00:16:30.240><c> So</c><00:16:30.320><c> I</c><00:16:30.560><c> can</c><00:16:30.639><c> copy</c><00:16:30.880><c> this,</c><00:16:31.519><c> go</c><00:16:31.680><c> into</c>
+format. So I can copy this, go into
+format. So I can copy this, go into
+archon,<00:16:32.639><c> add</c><00:16:32.880><c> this</c><00:16:33.120><c> knowledge,</c><00:16:33.680><c> start</c>
+archon, add this knowledge, start
+archon, add this knowledge, start
+crawling.<00:16:34.880><c> Boom.</c><00:16:35.199><c> There</c><00:16:35.360><c> we</c><00:16:35.519><c> go.</c><00:16:35.680><c> And</c><00:16:35.839><c> you</c><00:16:36.079><c> can</c>
+crawling. Boom. There we go. And you can
+crawling. Boom. There we go. And you can
+crawl<00:16:36.959><c> in</c><00:16:37.360><c> parallel</c><00:16:37.839><c> if</c><00:16:38.079><c> you</c><00:16:38.240><c> want</c><00:16:38.320><c> to.</c><00:16:38.639><c> So</c><00:16:38.880><c> now</c>
+crawl in parallel if you want to. So now
+crawl in parallel if you want to. So now
+we're<00:16:39.279><c> crawling</c><00:16:39.600><c> both</c><00:16:39.759><c> the</c><00:16:39.839><c> MEZO</c><00:16:40.399><c> and</c><00:16:40.480><c> Pantic</c>
+we're crawling both the MEZO and Pantic
+we're crawling both the MEZO and Pantic
+AI<00:16:41.279><c> documentation</c><00:16:41.839><c> at</c><00:16:42.079><c> the</c><00:16:42.240><c> same</c><00:16:42.320><c> time.</c><00:16:42.560><c> And</c>
+AI documentation at the same time. And
+AI documentation at the same time. And
+once<00:16:43.040><c> this</c><00:16:43.279><c> crawling</c><00:16:43.680><c> is</c><00:16:43.920><c> complete,</c><00:16:44.800><c> our</c>
+once this crawling is complete, our
+once this crawling is complete, our
+coding<00:16:45.839><c> assistant</c><00:16:46.240><c> through</c><00:16:46.480><c> MCP</c><00:16:47.040><c> will</c>
+coding assistant through MCP will
+coding assistant through MCP will
+immediately<00:16:47.759><c> be</c><00:16:47.920><c> able</c><00:16:48.079><c> to</c><00:16:48.160><c> search</c><00:16:48.480><c> through</c>
+immediately be able to search through
+immediately be able to search through
+everything<00:16:49.680><c> that</c><00:16:49.920><c> we</c><00:16:50.160><c> brought</c><00:16:50.399><c> into</c><00:16:50.800><c> our</c><00:16:51.120><c> own</c>
+everything that we brought into our own
+everything that we brought into our own
+private<00:16:51.920><c> knowledge</c><00:16:52.240><c> base.</c><00:16:52.800><c> All</c><00:16:52.880><c> right,</c><00:16:53.120><c> I</c>
+private knowledge base. All right, I
+private knowledge base. All right, I
+have<00:16:53.519><c> both</c><00:16:53.680><c> of</c><00:16:53.839><c> my</c><00:16:54.000><c> documentations</c><00:16:54.720><c> crawled</c>
+have both of my documentations crawled
+have both of my documentations crawled
+now<00:16:55.199><c> and</c><00:16:55.360><c> I</c><00:16:55.519><c> can</c><00:16:55.600><c> also</c><00:16:55.839><c> click</c><00:16:56.000><c> in</c><00:16:56.160><c> to</c><00:16:56.320><c> view</c><00:16:56.560><c> the</c>
+now and I can also click in to view the
+now and I can also click in to view the
+different<00:16:57.040><c> chunks</c><00:16:57.440><c> and</c><00:16:57.759><c> the</c><00:16:58.000><c> code</c><00:16:58.240><c> examples</c>
+different chunks and the code examples
+different chunks and the code examples
+that<00:16:59.279><c> we're</c><00:16:59.440><c> able</c><00:16:59.600><c> to</c><00:16:59.759><c> search</c><00:17:00.079><c> through</c><00:17:00.240><c> with</c>
+that we're able to search through with
+that we're able to search through with
+the<00:17:00.639><c> Archon</c><00:17:01.199><c> MCP.</c><00:17:02.240><c> And</c><00:17:02.399><c> again,</c><00:17:02.720><c> these</c><00:17:03.040><c> can</c><00:17:03.199><c> be</c>
+the Archon MCP. And again, these can be
+the Archon MCP. And again, these can be
+any<00:17:03.680><c> URLs</c><00:17:04.240><c> that</c><00:17:04.400><c> you</c><00:17:04.640><c> want</c><00:17:04.799><c> to</c><00:17:04.959><c> crawl.</c><00:17:05.360><c> I</c><00:17:05.679><c> would</c>
+any URLs that you want to crawl. I would
+any URLs that you want to crawl. I would
+recommend<00:17:06.400><c> generally</c><00:17:06.959><c> sticking</c><00:17:07.360><c> to</c><00:17:08.160><c> library</c>
+recommend generally sticking to library
+recommend generally sticking to library
+documentation,<00:17:09.679><c> especially</c><00:17:10.079><c> with</c><00:17:10.319><c> the</c>
+documentation, especially with the
+documentation, especially with the
+sitemaps<00:17:11.199><c> and</c><00:17:11.360><c> the</c><00:17:11.520><c> LLM.ext,</c><00:17:12.720><c> but</c><00:17:12.959><c> it</c><00:17:13.120><c> is</c>
+sitemaps and the LLM.ext, but it is
+sitemaps and the LLM.ext, but it is
+quite<00:17:13.520><c> flexible.</c><00:17:14.079><c> There's</c><00:17:14.319><c> a</c><00:17:14.480><c> lot</c><00:17:14.559><c> that</c><00:17:14.799><c> you</c>
+quite flexible. There's a lot that you
+quite flexible. There's a lot that you
+can<00:17:15.039><c> bring</c><00:17:15.520><c> into</c><00:17:15.760><c> your</c><00:17:16.000><c> Archon</c><00:17:16.480><c> knowledge</c>
+can bring into your Archon knowledge
+can bring into your Archon knowledge
+base.<00:17:17.280><c> So,</c><00:17:17.439><c> we've</c><00:17:17.679><c> got</c><00:17:17.760><c> that</c><00:17:18.000><c> set</c><00:17:18.160><c> up</c><00:17:18.319><c> now</c><00:17:18.480><c> and</c>
+base. So, we've got that set up now and
+base. So, we've got that set up now and
+we<00:17:18.959><c> already</c><00:17:19.120><c> have</c><00:17:19.280><c> Archon</c><00:17:19.839><c> connected</c><00:17:20.079><c> through</c>
+we already have Archon connected through
+we already have Archon connected through
+MCP.<00:17:21.280><c> Now,</c><00:17:21.520><c> we</c><00:17:21.760><c> can</c><00:17:21.839><c> dive</c><00:17:22.160><c> right</c><00:17:22.400><c> into</c><00:17:23.039><c> coding</c>
+MCP. Now, we can dive right into coding
+MCP. Now, we can dive right into coding
+something.<00:17:24.240><c> Now,</c><00:17:24.480><c> when</c><00:17:24.720><c> I</c><00:17:24.959><c> am</c><00:17:25.439><c> creating</c><00:17:26.000><c> code</c>
+something. Now, when I am creating code
+something. Now, when I am creating code
+with<00:17:26.480><c> an</c><00:17:26.640><c> AI</c><00:17:26.959><c> coding</c><00:17:27.280><c> assistant,</c><00:17:27.760><c> I</c><00:17:27.919><c> always</c>
+with an AI coding assistant, I always
+with an AI coding assistant, I always
+split<00:17:28.559><c> things</c><00:17:28.720><c> up</c><00:17:28.960><c> between</c><00:17:29.440><c> planning</c><00:17:30.000><c> and</c>
+split things up between planning and
+split things up between planning and
+implementation.<00:17:31.280><c> I</c><00:17:31.520><c> even</c><00:17:31.679><c> have</c><00:17:31.760><c> a</c><00:17:32.000><c> full</c><00:17:32.160><c> video</c>
+implementation. I even have a full video
+implementation. I even have a full video
+that<00:17:32.480><c> I'll</c><00:17:32.720><c> link</c><00:17:32.880><c> to</c><00:17:33.039><c> right</c><00:17:33.280><c> here</c><00:17:33.520><c> where</c><00:17:33.840><c> I</c><00:17:34.000><c> go</c>
+that I'll link to right here where I go
+that I'll link to right here where I go
+through<00:17:34.400><c> my</c><00:17:34.720><c> general</c><00:17:35.039><c> process.</c><00:17:35.520><c> And</c><00:17:35.679><c> there's</c>
+through my general process. And there's
+through my general process. And there's
+this<00:17:36.320><c> really</c><00:17:36.559><c> nifty</c><00:17:36.880><c> Excal</c><00:17:37.679><c> diagram</c><00:17:38.000><c> that</c><00:17:38.240><c> I</c>
+this really nifty Excal diagram that I
+this really nifty Excal diagram that I
+have<00:17:38.640><c> going</c><00:17:38.880><c> through</c><00:17:39.440><c> how</c><00:17:39.600><c> I</c><00:17:39.840><c> plan</c><00:17:40.160><c> things</c><00:17:40.400><c> out</c>
+have going through how I plan things out
+have going through how I plan things out
+and<00:17:41.120><c> then</c><00:17:41.360><c> how</c><00:17:41.600><c> I</c><00:17:41.919><c> implement</c><00:17:42.400><c> it.</c><00:17:43.120><c> And</c><00:17:43.600><c> I</c><00:17:44.000><c> don't</c>
+and then how I implement it. And I don't
+and then how I implement it. And I don't
+do<00:17:45.120><c> all</c><00:17:45.360><c> of</c><00:17:45.520><c> this</c><00:17:45.760><c> from</c><00:17:46.080><c> scratch</c><00:17:46.559><c> every</c><00:17:46.880><c> single</c>
+do all of this from scratch every single
+do all of this from scratch every single
+time.<00:17:48.000><c> I</c><00:17:48.320><c> take</c><00:17:48.559><c> my</c><00:17:48.960><c> general</c><00:17:49.360><c> process</c><00:17:49.760><c> for</c>
+time. I take my general process for
+time. I take my general process for
+planning.<00:17:50.799><c> I</c><00:17:51.039><c> package</c><00:17:51.360><c> that</c><00:17:51.600><c> up</c><00:17:51.840><c> into</c><00:17:52.160><c> a</c>
+planning. I package that up into a
+planning. I package that up into a
+markdown<00:17:53.039><c> document</c><00:17:53.440><c> that</c><00:17:53.679><c> I</c><00:17:53.840><c> have</c><00:17:54.080><c> as</c><00:17:54.480><c> a</c>
+markdown document that I have as a
+markdown document that I have as a
+reusable<00:17:55.280><c> workflow.</c><00:17:56.160><c> You</c><00:17:56.480><c> can</c><00:17:56.559><c> take</c><00:17:56.880><c> this</c><00:17:57.120><c> as</c>
+reusable workflow. You can take this as
+reusable workflow. You can take this as
+a<00:17:57.600><c> starting</c><00:17:57.919><c> point</c><00:17:58.080><c> if</c><00:17:58.240><c> you</c><00:17:58.320><c> want.</c><00:17:58.480><c> I'll</c><00:17:58.720><c> have</c>
+a starting point if you want. I'll have
+a starting point if you want. I'll have
+this<00:17:58.960><c> linked</c><00:17:59.200><c> in</c><00:17:59.360><c> the</c><00:17:59.520><c> description</c><00:17:59.919><c> as</c><00:18:00.240><c> well.</c>
+this linked in the description as well.
+this linked in the description as well.
+But<00:18:01.360><c> I</c><00:18:01.679><c> encourage</c><00:18:02.160><c> you</c><00:18:02.960><c> to</c><00:18:03.360><c> take</c><00:18:03.679><c> my</c><00:18:04.000><c> general</c>
+But I encourage you to take my general
+But I encourage you to take my general
+ideas<00:18:04.799><c> around</c><00:18:05.200><c> planning</c><00:18:05.600><c> and</c><00:18:05.840><c> executing</c><00:18:06.320><c> and</c>
+ideas around planning and executing and
+ideas around planning and executing and
+actually<00:18:06.880><c> build</c><00:18:07.120><c> your</c><00:18:07.360><c> own</c><00:18:07.840><c> workflows.</c><00:18:08.880><c> And</c>
+actually build your own workflows. And
+actually build your own workflows. And
+that's<00:18:09.200><c> the</c><00:18:09.360><c> thing</c><00:18:09.520><c> with</c><00:18:09.679><c> Archon</c><00:18:10.320><c> is</c><00:18:10.559><c> you</c><00:18:10.720><c> get</c>
+that's the thing with Archon is you get
+that's the thing with Archon is you get
+to<00:18:11.039><c> customize</c><00:18:11.760><c> how</c><00:18:12.160><c> you</c><00:18:12.559><c> leverage</c><00:18:12.880><c> it</c><00:18:13.120><c> in</c><00:18:13.360><c> your</c>
+to customize how you leverage it in your
+to customize how you leverage it in your
+workflows.<00:18:14.000><c> Like</c><00:18:14.240><c> for</c><00:18:14.320><c> example,</c><00:18:15.200><c> I</c><00:18:15.440><c> have</c><00:18:15.600><c> step</c>
+workflows. Like for example, I have step
+workflows. Like for example, I have step
+one,<00:18:16.400><c> read</c><00:18:16.640><c> and</c><00:18:16.799><c> analyze</c><00:18:17.120><c> a</c><00:18:17.360><c> requirements.</c><00:18:17.840><c> So</c>
+one, read and analyze a requirements. So
+one, read and analyze a requirements. So
+there's<00:18:18.240><c> a</c><00:18:18.400><c> specific</c><00:18:18.720><c> file</c><00:18:19.039><c> that</c><00:18:19.200><c> I</c><00:18:19.360><c> pass</c><00:18:19.600><c> in</c>
+there's a specific file that I pass in
+there's a specific file that I pass in
+which<00:18:20.000><c> is</c><00:18:20.080><c> just</c><00:18:20.320><c> what</c><00:18:20.480><c> I</c><00:18:20.640><c> want</c><00:18:20.720><c> to</c><00:18:20.960><c> build.</c><00:18:21.520><c> And</c>
+which is just what I want to build. And
+which is just what I want to build. And
+I<00:18:21.840><c> have</c><00:18:21.919><c> a</c><00:18:22.160><c> really</c><00:18:22.400><c> simple</c><00:18:22.880><c> request</c><00:18:23.280><c> for</c><00:18:23.840><c> this</c>
+I have a really simple request for this
+I have a really simple request for this
+demonstration<00:18:24.640><c> purpose.</c><00:18:24.960><c> I</c><00:18:25.120><c> just</c><00:18:25.280><c> want</c><00:18:25.360><c> to</c>
+demonstration purpose. I just want to
+demonstration purpose. I just want to
+build<00:18:25.520><c> a</c><00:18:25.679><c> panenti</c><00:18:26.480><c> agent</c><00:18:26.799><c> that</c><00:18:27.120><c> uses</c><00:18:27.360><c> mem.</c><00:18:28.000><c> So</c>
+build a panenti agent that uses mem. So
+build a panenti agent that uses mem. So
+obviously<00:18:28.480><c> it</c><00:18:28.720><c> has</c><00:18:28.799><c> to</c><00:18:29.039><c> leverage</c><00:18:29.600><c> both</c><00:18:29.919><c> of</c><00:18:30.080><c> the</c>
+obviously it has to leverage both of the
+obviously it has to leverage both of the
+pieces<00:18:30.480><c> of</c><00:18:30.720><c> documentation</c><00:18:31.360><c> I</c><00:18:31.600><c> have</c><00:18:31.679><c> in</c>
+pieces of documentation I have in
+pieces of documentation I have in
+archon.<00:18:32.640><c> So</c><00:18:32.799><c> I</c><00:18:32.960><c> have</c><00:18:33.039><c> it</c><00:18:33.280><c> understand</c><00:18:33.679><c> the</c>
+archon. So I have it understand the
+archon. So I have it understand the
+requirements<00:18:34.400><c> first</c><00:18:34.880><c> and</c><00:18:35.039><c> then</c><00:18:35.200><c> I</c><00:18:35.360><c> have</c><00:18:35.440><c> this</c>
+requirements first and then I have this
+requirements first and then I have this
+little<00:18:35.919><c> research</c><00:18:36.320><c> phase</c><00:18:36.640><c> where</c><00:18:36.880><c> it</c><00:18:37.360><c> lists</c><00:18:37.679><c> the</c>
+little research phase where it lists the
+little research phase where it lists the
+different<00:18:38.240><c> sources</c><00:18:38.640><c> that</c><00:18:38.880><c> we</c><00:18:39.120><c> have</c><00:18:39.280><c> crawled</c>
+different sources that we have crawled
+different sources that we have crawled
+in<00:18:39.760><c> archon</c><00:18:40.160><c> and</c><00:18:40.320><c> then</c><00:18:40.400><c> it</c><00:18:40.640><c> performs</c><00:18:40.960><c> rag</c><00:18:41.440><c> to</c>
+in archon and then it performs rag to
+in archon and then it performs rag to
+look<00:18:42.160><c> through</c><00:18:42.400><c> the</c><00:18:42.559><c> different</c><00:18:42.720><c> chunks</c><00:18:43.039><c> and</c>
+look through the different chunks and
+look through the different chunks and
+code<00:18:43.520><c> examples</c><00:18:43.840><c> that</c><00:18:44.080><c> we</c><00:18:44.240><c> have</c><00:18:44.480><c> there.</c><00:18:45.440><c> And</c>
+code examples that we have there. And
+code examples that we have there. And
+then<00:18:45.679><c> I</c><00:18:45.840><c> do</c><00:18:46.000><c> codebase</c><00:18:46.559><c> analysis</c><00:18:47.039><c> if</c><00:18:47.280><c> it's</c><00:18:47.440><c> a</c>
+then I do codebase analysis if it's a
+then I do codebase analysis if it's a
+feature<00:18:48.160><c> in</c><00:18:48.400><c> an</c><00:18:48.559><c> existing</c><00:18:48.960><c> codebase.</c><00:18:49.840><c> And</c>
+feature in an existing codebase. And
+feature in an existing codebase. And
+then<00:18:50.080><c> I</c><00:18:50.240><c> have</c><00:18:50.320><c> a</c><00:18:50.559><c> plan</c><00:18:50.880><c> and</c><00:18:51.200><c> design.</c><00:18:51.840><c> I</c><00:18:52.000><c> don't</c>
+then I have a plan and design. I don't
+then I have a plan and design. I don't
+need<00:18:52.240><c> to</c><00:18:52.400><c> cover</c><00:18:52.559><c> this</c><00:18:52.799><c> whole</c><00:18:52.960><c> markdown</c>
+need to cover this whole markdown
+need to cover this whole markdown
+because<00:18:53.760><c> the</c><00:18:54.000><c> point</c><00:18:54.160><c> I'm</c><00:18:54.400><c> trying</c><00:18:54.559><c> to</c><00:18:54.720><c> drive</c>
+because the point I'm trying to drive
+because the point I'm trying to drive
+home<00:18:55.200><c> here</c><00:18:55.360><c> is</c><00:18:55.600><c> I</c><00:18:55.840><c> just</c><00:18:56.080><c> fit</c><00:18:56.320><c> archon</c><00:18:56.799><c> into</c><00:18:57.120><c> some</c>
+home here is I just fit archon into some
+home here is I just fit archon into some
+part<00:18:57.520><c> of</c><00:18:57.679><c> my</c><00:18:57.919><c> planning</c><00:18:58.320><c> process</c><00:18:58.720><c> and</c><00:18:58.880><c> you</c><00:18:59.120><c> can</c>
+part of my planning process and you can
+part of my planning process and you can
+customize<00:18:59.679><c> this</c><00:19:00.160><c> to</c><00:19:00.400><c> however</c><00:19:00.799><c> you</c><00:19:01.039><c> want</c><00:19:01.200><c> your</c>
+customize this to however you want your
+customize this to however you want your
+AI<00:19:01.760><c> coding</c><00:19:02.080><c> assistant</c><00:19:02.480><c> to</c><00:19:02.799><c> use</c><00:19:03.039><c> archon.</c><00:19:04.000><c> And</c>
+AI coding assistant to use archon. And
+AI coding assistant to use archon. And
+then<00:19:04.320><c> I'm</c><00:19:04.480><c> going</c><00:19:04.559><c> to</c><00:19:04.720><c> do</c><00:19:04.799><c> the</c><00:19:05.039><c> exact</c><00:19:05.440><c> same</c>
+then I'm going to do the exact same
+then I'm going to do the exact same
+thing<00:19:05.919><c> for</c><00:19:06.240><c> the</c><00:19:06.400><c> implementation</c><00:19:07.120><c> phase.</c><00:19:07.600><c> I'm</c>
+thing for the implementation phase. I'm
+thing for the implementation phase. I'm
+going<00:19:08.000><c> to</c><00:19:08.559><c> take</c><00:19:08.880><c> my</c><00:19:09.200><c> general</c><00:19:09.600><c> process,</c>
+going to take my general process,
+going to take my general process,
+package<00:19:10.799><c> it</c><00:19:10.960><c> up</c><00:19:11.200><c> into</c><00:19:11.600><c> a</c><00:19:11.919><c> command</c><00:19:12.240><c> that</c><00:19:12.480><c> I</c><00:19:12.720><c> can</c>
+package it up into a command that I can
+package it up into a command that I can
+execute<00:19:13.280><c> as</c><00:19:13.520><c> a</c><00:19:13.679><c> reusable</c><00:19:14.240><c> workflow.</c><00:19:14.960><c> And</c><00:19:15.200><c> this</c>
+execute as a reusable workflow. And this
+execute as a reusable workflow. And this
+one<00:19:15.679><c> specifically</c><00:19:16.640><c> speaks</c><00:19:16.960><c> to</c><00:19:17.120><c> how</c><00:19:17.360><c> to</c>
+one specifically speaks to how to
+one specifically speaks to how to
+leverage<00:19:17.919><c> the</c><00:19:18.160><c> projects</c><00:19:18.559><c> and</c><00:19:18.799><c> tasks</c><00:19:19.200><c> within</c>
+leverage the projects and tasks within
+leverage the projects and tasks within
+archon.<00:19:20.160><c> So,</c><00:19:20.320><c> I</c><00:19:20.480><c> tell</c><00:19:20.559><c> it</c><00:19:20.799><c> to</c><00:19:21.280><c> look</c><00:19:21.440><c> in</c><00:19:21.679><c> my</c>
+archon. So, I tell it to look in my
+archon. So, I tell it to look in my
+global<00:19:22.160><c> rules</c><00:19:22.400><c> because</c><00:19:22.559><c> this</c><00:19:22.720><c> is</c><00:19:22.799><c> where</c><00:19:22.880><c> I'll</c>
+global rules because this is where I'll
+global rules because this is where I'll
+specify<00:19:23.600><c> any</c><00:19:24.000><c> existing</c><00:19:24.559><c> projects</c><00:19:24.960><c> in</c><00:19:25.120><c> Archon</c>
+specify any existing projects in Archon
+specify any existing projects in Archon
+that<00:19:25.760><c> I'm</c><00:19:25.919><c> working</c><00:19:26.160><c> on.</c><00:19:26.720><c> If</c><00:19:26.960><c> it</c><00:19:27.120><c> doesn't</c><00:19:27.360><c> find</c>
+that I'm working on. If it doesn't find
+that I'm working on. If it doesn't find
+one<00:19:27.840><c> there,</c><00:19:28.240><c> then</c><00:19:28.480><c> I</c><00:19:28.640><c> tell</c><00:19:28.799><c> it</c><00:19:29.039><c> to</c><00:19:29.280><c> make</c><00:19:29.520><c> a</c><00:19:29.760><c> new</c>
+one there, then I tell it to make a new
+one there, then I tell it to make a new
+project<00:19:30.480><c> and</c><00:19:30.720><c> then</c><00:19:31.200><c> manage</c><00:19:31.520><c> all</c><00:19:31.679><c> the</c><00:19:31.840><c> tasks.</c>
+project and then manage all the tasks.
+project and then manage all the tasks.
+So,<00:19:32.400><c> create</c><00:19:32.640><c> new</c><00:19:32.880><c> tasks</c><00:19:33.280><c> for</c><00:19:33.520><c> each</c><00:19:33.679><c> of</c><00:19:33.840><c> the</c>
+So, create new tasks for each of the
+So, create new tasks for each of the
+things<00:19:34.160><c> that</c><00:19:34.400><c> it's</c><00:19:34.640><c> doing</c><00:19:35.039><c> to</c><00:19:35.360><c> knock</c><00:19:35.600><c> out</c><00:19:35.760><c> my</c>
+things that it's doing to knock out my
+things that it's doing to knock out my
+implementation<00:19:36.640><c> for</c><00:19:36.960><c> me.</c><00:19:37.360><c> These</c><00:19:37.600><c> are</c><00:19:37.679><c> the</c>
+implementation for me. These are the
+implementation for me. These are the
+kinds<00:19:38.080><c> of</c><00:19:38.160><c> things</c><00:19:38.480><c> again</c><00:19:38.799><c> that</c><00:19:39.039><c> you</c><00:19:39.280><c> can</c>
+kinds of things again that you can
+kinds of things again that you can
+customize<00:19:40.000><c> to</c><00:19:40.320><c> however</c><00:19:40.720><c> you</c><00:19:41.039><c> want</c><00:19:41.120><c> to</c><00:19:41.360><c> use</c>
+customize to however you want to use
+customize to however you want to use
+Archon.<00:19:42.080><c> And</c><00:19:42.160><c> I'm</c><00:19:42.240><c> going</c><00:19:42.320><c> to</c><00:19:42.400><c> keep</c><00:19:42.559><c> saying</c>
+Archon. And I'm going to keep saying
+Archon. And I'm going to keep saying
+that<00:19:43.039><c> over</c><00:19:43.200><c> and</c><00:19:43.440><c> over</c><00:19:43.600><c> again</c><00:19:44.080><c> because</c><00:19:44.320><c> that's</c>
+that over and over again because that's
+that over and over again because that's
+the<00:19:44.720><c> main</c><00:19:44.960><c> point</c><00:19:45.200><c> that</c><00:19:45.440><c> I</c><00:19:45.679><c> want</c><00:19:45.760><c> to</c><00:19:45.919><c> drive</c><00:19:46.160><c> home</c>
+the main point that I want to drive home
+the main point that I want to drive home
+here.<00:19:47.200><c> And</c><00:19:47.360><c> so,</c><00:19:47.600><c> I'll</c><00:19:47.840><c> show</c><00:19:47.919><c> you.</c><00:19:48.160><c> I</c><00:19:48.400><c> actually</c>
+here. And so, I'll show you. I actually
+here. And so, I'll show you. I actually
+ran<00:19:48.880><c> the</c><00:19:49.120><c> create</c><00:19:49.440><c> plan</c><00:19:50.080><c> already</c><00:19:50.559><c> on</c><00:19:50.799><c> my</c><00:19:51.039><c> simple</c>
+ran the create plan already on my simple
+ran the create plan already on my simple
+request<00:19:51.760><c> for</c><00:19:51.919><c> the</c><00:19:52.080><c> Pantic</c><00:19:52.640><c> AI</c><00:19:52.880><c> agent.</c><00:19:53.679><c> And</c>
+request for the Pantic AI agent. And
+request for the Pantic AI agent. And
+here<00:19:54.160><c> we</c><00:19:54.320><c> go.</c><00:19:54.559><c> It's</c><00:19:54.799><c> using</c><00:19:55.039><c> rag</c><00:19:55.760><c> uh</c><00:19:55.840><c> in</c><00:19:56.080><c> Archon</c>
+here we go. It's using rag uh in Archon
+here we go. It's using rag uh in Archon
+to<00:19:56.720><c> search</c><00:19:56.960><c> through</c><00:19:57.120><c> the</c><00:19:57.280><c> chunks</c><00:19:57.600><c> and</c><00:19:57.919><c> the</c>
+to search through the chunks and the
+to search through the chunks and the
+code<00:19:58.400><c> examples.</c><00:19:59.280><c> It's</c><00:19:59.440><c> doing</c><00:19:59.760><c> quite</c><00:19:59.919><c> a</c><00:20:00.080><c> bit</c>
+code examples. It's doing quite a bit
+code examples. It's doing quite a bit
+analysis<00:20:00.880><c> here.</c><00:20:01.120><c> This</c><00:20:01.280><c> is</c><00:20:01.440><c> looking</c><00:20:01.679><c> really</c>
+analysis here. This is looking really
+analysis here. This is looking really
+good.<00:20:02.400><c> And</c><00:20:02.559><c> then</c><00:20:02.799><c> finally,</c><00:20:03.280><c> after</c><00:20:03.760><c> it</c><00:20:04.000><c> reads</c>
+good. And then finally, after it reads
+good. And then finally, after it reads
+through<00:20:04.799><c> all</c><00:20:05.120><c> of</c><00:20:05.280><c> my</c><00:20:05.600><c> documentation</c><00:20:06.160><c> that</c><00:20:06.400><c> it</c>
+through all of my documentation that it
+through all of my documentation that it
+thinks<00:20:06.720><c> it</c><00:20:06.960><c> needs,</c><00:20:07.679><c> it</c><00:20:07.919><c> builds</c><00:20:08.320><c> the</c><00:20:08.640><c> plan</c><00:20:08.960><c> for</c>
+thinks it needs, it builds the plan for
+thinks it needs, it builds the plan for
+me.<00:20:09.440><c> So,</c><00:20:09.600><c> I</c><00:20:09.840><c> go</c><00:20:09.919><c> into</c><00:20:10.320><c> the</c><00:20:10.559><c> PRPS</c><00:20:11.200><c> folder.</c><00:20:11.840><c> This</c>
+me. So, I go into the PRPS folder. This
+me. So, I go into the PRPS folder. This
+is<00:20:12.080><c> a</c><00:20:12.240><c> very</c><00:20:12.559><c> simple</c><00:20:12.880><c> version</c><00:20:13.200><c> of</c><00:20:13.520><c> PRP,</c><00:20:14.160><c> by</c><00:20:14.240><c> the</c>
+is a very simple version of PRP, by the
+is a very simple version of PRP, by the
+way,<00:20:14.480><c> if</c><00:20:14.640><c> you</c><00:20:14.799><c> followed</c><00:20:15.120><c> my</c><00:20:15.280><c> other</c><00:20:15.520><c> content</c><00:20:16.160><c> in</c>
+way, if you followed my other content in
+way, if you followed my other content in
+the<00:20:16.559><c> past.</c><00:20:16.799><c> But</c><00:20:17.039><c> yeah,</c><00:20:17.280><c> take</c><00:20:17.440><c> a</c><00:20:17.520><c> look</c><00:20:17.600><c> at</c><00:20:17.760><c> this.</c>
+the past. But yeah, take a look at this.
+the past. But yeah, take a look at this.
+We<00:20:18.160><c> have</c><00:20:18.240><c> this</c><00:20:18.480><c> full</c><00:20:19.120><c> implementation</c><00:20:19.840><c> plan</c>
+We have this full implementation plan
+We have this full implementation plan
+with<00:20:20.320><c> all</c><00:20:20.480><c> my</c><00:20:20.640><c> research</c><00:20:21.039><c> findings</c><00:20:21.440><c> from</c>
+with all my research findings from
+with all my research findings from
+Archon.<00:20:22.559><c> It's</c><00:20:22.799><c> got</c><00:20:22.960><c> the</c><00:20:23.200><c> different</c><00:20:23.440><c> tasks</c>
+Archon. It's got the different tasks
+Archon. It's got the different tasks
+that<00:20:24.160><c> I</c><00:20:24.320><c> wanted</c><00:20:24.559><c> to</c><00:20:24.640><c> knock</c><00:20:24.880><c> out</c><00:20:25.039><c> one</c><00:20:25.200><c> by</c><00:20:25.440><c> one.</c>
+that I wanted to knock out one by one.
+that I wanted to knock out one by one.
+So<00:20:25.840><c> now</c><00:20:26.000><c> when</c><00:20:26.160><c> I</c><00:20:26.320><c> go</c><00:20:26.480><c> and</c><00:20:26.799><c> actually</c><00:20:27.280><c> execute</c>
+So now when I go and actually execute
+So now when I go and actually execute
+this<00:20:28.159><c> plan,</c><00:20:28.799><c> we're</c><00:20:29.039><c> going</c><00:20:29.200><c> to</c><00:20:29.440><c> have</c><00:20:29.840><c> all</c><00:20:30.080><c> of</c>
+this plan, we're going to have all of
+this plan, we're going to have all of
+these<00:20:30.559><c> tasks</c><00:20:31.280><c> created</c><00:20:31.919><c> and</c><00:20:32.240><c> managed</c><00:20:32.640><c> in</c>
+these tasks created and managed in
+these tasks created and managed in
+Archon.<00:20:33.440><c> It</c><00:20:33.520><c> is</c><00:20:33.679><c> a</c><00:20:33.919><c> beautiful</c><00:20:34.320><c> thing.</c><00:20:34.640><c> So</c><00:20:35.039><c> I'm</c>
+Archon. It is a beautiful thing. So I'm
+Archon. It is a beautiful thing. So I'm
+going<00:20:35.360><c> to</c><00:20:35.520><c> come</c><00:20:35.679><c> back</c><00:20:35.919><c> once</c><00:20:36.240><c> I</c><00:20:36.400><c> have</c>
+going to come back once I have
+going to come back once I have
+everything<00:20:36.799><c> executed.</c><00:20:37.360><c> I'll</c><00:20:37.520><c> show</c><00:20:37.600><c> you</c><00:20:37.760><c> how</c>
+everything executed. I'll show you how
+everything executed. I'll show you how
+that<00:20:38.080><c> worked</c><00:20:38.320><c> as</c><00:20:38.559><c> well.</c><00:20:38.880><c> All</c><00:20:38.880><c> right.</c><00:20:39.039><c> I</c><00:20:39.200><c> just</c>
+that worked as well. All right. I just
+that worked as well. All right. I just
+wanted<00:20:39.520><c> to</c><00:20:39.679><c> come</c><00:20:39.840><c> back</c><00:20:40.080><c> mid-execution</c><00:20:40.960><c> really</c>
+wanted to come back mid-execution really
+wanted to come back mid-execution really
+quick<00:20:41.360><c> to</c><00:20:41.600><c> show</c><00:20:41.760><c> you</c><00:20:42.240><c> that</c><00:20:42.480><c> I</c><00:20:42.720><c> executed</c><00:20:43.280><c> my</c>
+quick to show you that I executed my
+quick to show you that I executed my
+workflow.<00:20:44.240><c> It's</c><00:20:44.559><c> starting</c><00:20:44.880><c> a</c><00:20:45.200><c> new</c><00:20:45.360><c> project</c>
+workflow. It's starting a new project
+workflow. It's starting a new project
+and<00:20:46.080><c> adding</c><00:20:46.400><c> a</c><00:20:46.559><c> bunch</c><00:20:46.720><c> of</c><00:20:46.880><c> new</c><00:20:47.120><c> tasks.</c><00:20:47.600><c> And</c><00:20:47.760><c> so</c>
+and adding a bunch of new tasks. And so
+and adding a bunch of new tasks. And so
+we<00:20:48.159><c> can</c><00:20:48.240><c> see</c><00:20:48.320><c> that</c><00:20:48.559><c> here</c><00:20:49.120><c> it</c><00:20:49.360><c> created</c><00:20:49.600><c> a</c><00:20:49.840><c> brand</c>
+we can see that here it created a brand
+we can see that here it created a brand
+new<00:20:50.159><c> project</c><00:20:50.400><c> in</c><00:20:50.640><c> Archon.</c><00:20:51.280><c> The</c><00:20:51.600><c> nine</c><00:20:51.840><c> tasks</c>
+new project in Archon. The nine tasks
+new project in Archon. The nine tasks
+that<00:20:52.480><c> I</c><00:20:52.640><c> had</c><00:20:52.799><c> in</c><00:20:52.960><c> the</c><00:20:53.120><c> plan</c><00:20:53.280><c> that</c><00:20:53.440><c> I</c><00:20:53.600><c> created,</c>
+that I had in the plan that I created,
+that I had in the plan that I created,
+it<00:20:54.080><c> converted</c><00:20:54.480><c> into</c><00:20:54.799><c> Archon</c><00:20:55.280><c> tasks</c><00:20:55.520><c> and</c><00:20:55.679><c> it</c>
+it converted into Archon tasks and it
+it converted into Archon tasks and it
+moved<00:20:56.000><c> the</c><00:20:56.159><c> first</c><00:20:56.320><c> one</c><00:20:56.480><c> into</c><00:20:56.799><c> doing</c><00:20:57.039><c> to</c><00:20:57.200><c> set</c><00:20:57.280><c> up</c>
+moved the first one into doing to set up
+moved the first one into doing to set up
+the<00:20:57.600><c> initial</c><00:20:57.919><c> project</c><00:20:58.240><c> structure.</c><00:20:59.120><c> Very,</c>
+the initial project structure. Very,
+the initial project structure. Very,
+very<00:20:59.679><c> nice.</c><00:20:59.919><c> So,</c><00:21:00.080><c> not</c><00:21:00.320><c> only</c><00:21:00.480><c> is</c><00:21:00.559><c> it</c><00:21:00.799><c> easier</c><00:21:01.039><c> for</c>
+very nice. So, not only is it easier for
+very nice. So, not only is it easier for
+us<00:21:01.440><c> to</c><00:21:01.679><c> manage</c><00:21:02.000><c> the</c><00:21:02.240><c> tasks</c><00:21:02.480><c> for</c><00:21:02.640><c> our</c><00:21:02.799><c> coding</c>
+us to manage the tasks for our coding
+us to manage the tasks for our coding
+assistant<00:21:03.360><c> in</c><00:21:03.520><c> Archon,</c><00:21:04.240><c> it</c><00:21:04.400><c> also</c><00:21:04.640><c> gives</c><00:21:04.799><c> us</c><00:21:04.960><c> a</c>
+assistant in Archon, it also gives us a
+assistant in Archon, it also gives us a
+lot<00:21:05.200><c> of</c><00:21:05.360><c> observability</c><00:21:06.000><c> into</c><00:21:06.320><c> what's</c>
+lot of observability into what's
+lot of observability into what's
+happening.<00:21:06.880><c> We</c><00:21:07.039><c> can</c><00:21:07.200><c> even</c><00:21:07.360><c> click</c><00:21:07.520><c> in</c><00:21:07.919><c> to</c><00:21:08.159><c> see</c>
+happening. We can even click in to see
+happening. We can even click in to see
+the<00:21:08.640><c> description</c><00:21:09.120><c> to</c><00:21:09.360><c> kind</c><00:21:09.520><c> of</c><00:21:09.600><c> see</c><00:21:10.000><c> a</c><00:21:10.240><c> little</c>
+the description to kind of see a little
+the description to kind of see a little
+bit<00:21:10.480><c> of</c><00:21:10.640><c> extra</c><00:21:10.960><c> details</c><00:21:11.360><c> of</c><00:21:11.600><c> what</c><00:21:11.760><c> the</c><00:21:11.919><c> coding</c>
+bit of extra details of what the coding
+bit of extra details of what the coding
+assistant<00:21:12.640><c> wants</c><00:21:12.880><c> to</c><00:21:12.960><c> do</c><00:21:13.120><c> for</c><00:21:13.679><c> this</c><00:21:14.000><c> specific</c>
+assistant wants to do for this specific
+assistant wants to do for this specific
+task.<00:21:14.799><c> And</c><00:21:14.960><c> again,</c><00:21:15.200><c> we</c><00:21:15.360><c> can</c><00:21:15.440><c> always</c><00:21:15.679><c> edit</c><00:21:16.000><c> this</c>
+task. And again, we can always edit this
+task. And again, we can always edit this
+to<00:21:16.799><c> change</c><00:21:16.960><c> the</c><00:21:17.200><c> instructions</c><00:21:17.679><c> live.</c><00:21:18.080><c> We</c><00:21:18.240><c> can</c>
+to change the instructions live. We can
+to change the instructions live. We can
+add<00:21:18.559><c> new</c><00:21:18.880><c> tasks</c><00:21:19.280><c> if</c><00:21:19.520><c> we</c><00:21:19.679><c> think</c><00:21:19.760><c> it's</c><00:21:20.000><c> missing</c>
+add new tasks if we think it's missing
+add new tasks if we think it's missing
+something.<00:21:21.200><c> We</c><00:21:21.440><c> have</c><00:21:21.600><c> that</c><00:21:21.840><c> flexibility</c><00:21:22.559><c> to</c>
+something. We have that flexibility to
+something. We have that flexibility to
+edit<00:21:23.520><c> things</c><00:21:23.840><c> live</c><00:21:24.320><c> and</c><00:21:24.640><c> again</c><00:21:25.200><c> determine</c><00:21:25.679><c> the</c>
+edit things live and again determine the
+edit things live and again determine the
+workflow<00:21:26.320><c> in</c><00:21:26.640><c> the</c><00:21:26.799><c> markdown</c><00:21:27.440><c> document.</c><00:21:28.240><c> So</c>
+workflow in the markdown document. So
+workflow in the markdown document. So
+I'll<00:21:28.720><c> come</c><00:21:28.880><c> back</c><00:21:29.120><c> again</c><00:21:29.440><c> once</c><00:21:29.679><c> we</c><00:21:29.840><c> have</c><00:21:30.000><c> the</c>
+I'll come back again once we have the
+I'll come back again once we have the
+final<00:21:30.400><c> implementation.</c><00:21:31.440><c> Okay,</c><00:21:31.760><c> our</c>
+final implementation. Okay, our
+final implementation. Okay, our
+implementation<00:21:32.640><c> is</c><00:21:32.960><c> complete.</c><00:21:33.360><c> I</c><00:21:33.600><c> just</c><00:21:33.760><c> cut</c>
+implementation is complete. I just cut
+implementation is complete. I just cut
+it<00:21:34.080><c> short</c><00:21:34.240><c> of</c><00:21:34.400><c> the</c><00:21:34.559><c> validation</c><00:21:35.039><c> here</c><00:21:35.360><c> because</c>
+it short of the validation here because
+it short of the validation here because
+it's<00:21:36.240><c> not</c><00:21:36.400><c> the</c><00:21:36.559><c> point</c><00:21:36.720><c> to</c><00:21:36.960><c> have</c><00:21:37.120><c> a</c><00:21:37.280><c> fully</c>
+it's not the point to have a fully
+it's not the point to have a fully
+complete<00:21:38.080><c> solution</c><00:21:38.880><c> in</c><00:21:39.120><c> this</c><00:21:39.360><c> video</c><00:21:39.600><c> here.</c>
+complete solution in this video here.
+complete solution in this video here.
+But<00:21:40.000><c> yeah,</c><00:21:40.240><c> it's</c><00:21:40.400><c> got</c><00:21:40.480><c> all</c><00:21:40.640><c> the</c><00:21:40.799><c> tasks</c><00:21:41.120><c> in</c>
+But yeah, it's got all the tasks in
+But yeah, it's got all the tasks in
+review.<00:21:41.919><c> It</c><00:21:42.080><c> was</c><00:21:42.240><c> just</c><00:21:42.400><c> about</c><00:21:42.559><c> to</c><00:21:42.799><c> create</c><00:21:42.960><c> the</c>
+review. It was just about to create the
+review. It was just about to create the
+tests<00:21:43.440><c> and</c><00:21:43.679><c> then</c><00:21:43.919><c> move</c><00:21:44.159><c> everything</c><00:21:44.480><c> into</c>
+tests and then move everything into
+tests and then move everything into
+done.<00:21:45.120><c> So</c><00:21:45.200><c> the</c><00:21:45.360><c> Archon</c><00:21:45.840><c> integration</c><00:21:46.240><c> for</c><00:21:46.400><c> the</c>
+done. So the Archon integration for the
+done. So the Archon integration for the
+project<00:21:46.880><c> management</c><00:21:47.200><c> is</c><00:21:47.440><c> working</c><00:21:47.679><c> perfectly.</c>
+project management is working perfectly.
+project management is working perfectly.
+And<00:21:48.799><c> if</c><00:21:48.960><c> we</c><00:21:49.120><c> look</c><00:21:49.200><c> at</c><00:21:49.360><c> the</c><00:21:49.520><c> code</c><00:21:49.919><c> just</c><00:21:50.320><c> really</c>
+And if we look at the code just really
+And if we look at the code just really
+quickly<00:21:51.200><c> here,</c><00:21:51.840><c> I</c><00:21:52.080><c> can</c><00:21:52.159><c> see</c><00:21:52.400><c> and</c><00:21:52.559><c> I</c><00:21:52.640><c> I</c><00:21:52.880><c> checked</c>
+quickly here, I can see and I I checked
+quickly here, I can see and I I checked
+this<00:21:53.280><c> off</c><00:21:53.520><c> camera</c><00:21:53.760><c> already.</c><00:21:54.159><c> It's</c><00:21:54.320><c> looking</c>
+this off camera already. It's looking
+this off camera already. It's looking
+really<00:21:54.720><c> good.</c><00:21:54.960><c> Like</c><00:21:55.120><c> it</c><00:21:55.360><c> clearly</c><00:21:55.760><c> understands</c>
+really good. Like it clearly understands
+really good. Like it clearly understands
+how<00:21:56.400><c> to</c><00:21:56.559><c> build</c><00:21:56.799><c> padanti</c><00:21:57.600><c> agents,</c><00:21:58.240><c> how</c><00:21:58.400><c> to</c><00:21:58.559><c> work</c>
+how to build padanti agents, how to work
+how to build padanti agents, how to work
+with<00:21:58.880><c> the</c><00:21:59.039><c> memories</c><00:21:59.440><c> with</c><00:21:59.679><c> me</c><00:22:00.080><c> zero.</c><00:22:00.559><c> This</c><00:22:00.799><c> is</c>
+with the memories with me zero. This is
+with the memories with me zero. This is
+the<00:22:01.039><c> kind</c><00:22:01.200><c> of</c><00:22:01.280><c> thing</c><00:22:01.360><c> it</c><00:22:01.679><c> would</c><00:22:01.840><c> not</c><00:22:02.080><c> have</c><00:22:02.240><c> been</c>
+the kind of thing it would not have been
+the kind of thing it would not have been
+able<00:22:02.640><c> to</c><00:22:02.960><c> figure</c><00:22:03.200><c> out</c><00:22:03.840><c> without</c><00:22:04.240><c> being</c><00:22:04.480><c> able</c><00:22:04.640><c> to</c>
+able to figure out without being able to
+able to figure out without being able to
+look<00:22:05.039><c> at</c><00:22:05.200><c> the</c><00:22:05.360><c> mem</c><00:22:05.679><c> zero</c><00:22:05.919><c> and</c><00:22:06.080><c> podantic</c>
+look at the mem zero and podantic
+look at the mem zero and podantic
+documentation<00:22:07.440><c> because</c><00:22:07.679><c> LLMs</c><00:22:08.240><c> have</c><00:22:08.320><c> the</c>
+documentation because LLMs have the
+documentation because LLMs have the
+notorious<00:22:09.039><c> training</c><00:22:09.360><c> cutoff.</c><00:22:09.840><c> They</c><00:22:10.000><c> don't</c>
+notorious training cutoff. They don't
+notorious training cutoff. They don't
+understand<00:22:10.640><c> these</c><00:22:11.039><c> libraries</c><00:22:11.679><c> and</c><00:22:11.919><c> that's</c>
+understand these libraries and that's
+understand these libraries and that's
+why<00:22:12.320><c> we</c><00:22:12.480><c> need</c><00:22:12.720><c> rag</c><00:22:13.200><c> with</c><00:22:13.440><c> archon</c><00:22:14.240><c> for</c><00:22:14.480><c> it</c><00:22:14.640><c> to</c>
+why we need rag with archon for it to
+why we need rag with archon for it to
+write<00:22:15.520><c> accurate</c><00:22:16.000><c> code</c><00:22:16.240><c> and</c><00:22:16.480><c> it</c><00:22:16.720><c> definitely</c>
+write accurate code and it definitely
+write accurate code and it definitely
+looks<00:22:17.520><c> like</c><00:22:17.679><c> it</c><00:22:18.000><c> did.</c><00:22:18.559><c> So</c><00:22:18.880><c> yeah,</c><00:22:19.360><c> at</c><00:22:19.600><c> a</c><00:22:19.760><c> high</c>
+looks like it did. So yeah, at a high
+looks like it did. So yeah, at a high
+level<00:22:20.480><c> that's</c><00:22:20.720><c> how</c><00:22:20.799><c> I</c><00:22:21.039><c> use</c><00:22:21.280><c> archon</c><00:22:21.840><c> with</c><00:22:22.080><c> my</c>
+level that's how I use archon with my
+level that's how I use archon with my
+planning<00:22:22.640><c> and</c><00:22:22.960><c> my</c><00:22:23.200><c> executing.</c><00:22:23.919><c> Build</c><00:22:24.240><c> these</c>
+planning and my executing. Build these
+planning and my executing. Build these
+workflows<00:22:25.039><c> yourself.</c><00:22:25.679><c> take</c><00:22:25.840><c> inspiration</c>
+workflows yourself. take inspiration
+workflows yourself. take inspiration
+from<00:22:26.640><c> this</c><00:22:26.799><c> if</c><00:22:26.960><c> you</c><00:22:27.120><c> want</c><00:22:27.200><c> because</c><00:22:27.440><c> again</c><00:22:27.679><c> I</c>
+from this if you want because again I
+from this if you want because again I
+will<00:22:27.919><c> have</c><00:22:28.000><c> these</c><00:22:28.240><c> linked</c><00:22:28.720><c> in</c><00:22:28.960><c> the</c>
+will have these linked in the
+will have these linked in the
+description<00:22:29.520><c> if</c><00:22:29.760><c> you</c><00:22:29.919><c> want</c><00:22:30.000><c> to</c><00:22:30.159><c> use</c><00:22:30.320><c> these</c>
+description if you want to use these
+description if you want to use these
+slash<00:22:30.960><c> commands</c><00:22:31.440><c> and</c><00:22:31.919><c> slash</c><00:22:32.320><c> commands</c><00:22:32.720><c> are</c>
+slash commands and slash commands are
+slash commands and slash commands are
+just<00:22:33.200><c> prompts</c><00:22:33.600><c> and</c><00:22:33.760><c> so</c><00:22:34.000><c> no</c><00:22:34.080><c> matter</c><00:22:34.320><c> your</c><00:22:34.480><c> AI</c>
+just prompts and so no matter your AI
+just prompts and so no matter your AI
+coding<00:22:35.200><c> assistant</c><00:22:35.600><c> you</c><00:22:35.679><c> can</c><00:22:35.760><c> tell</c><00:22:35.919><c> it</c><00:22:36.080><c> to</c><00:22:36.320><c> look</c>
+coding assistant you can tell it to look
+coding assistant you can tell it to look
+at<00:22:36.559><c> this</c><00:22:36.799><c> markdown</c><00:22:37.280><c> document</c><00:22:37.600><c> and</c><00:22:37.760><c> and</c>
+at this markdown document and and
+at this markdown document and and
+execute<00:22:38.640><c> this</c><00:22:38.960><c> operation</c><00:22:40.000><c> you</c><00:22:40.159><c> don't</c><00:22:40.400><c> have</c><00:22:40.480><c> to</c>
+execute this operation you don't have to
+execute this operation you don't have to
+use<00:22:40.880><c> cloud</c><00:22:41.280><c> code</c><00:22:41.440><c> like</c><00:22:41.600><c> I'm</c><00:22:41.840><c> using</c><00:22:42.000><c> in</c><00:22:42.240><c> this</c>
+use cloud code like I'm using in this
+use cloud code like I'm using in this
+demo<00:22:42.880><c> it</c><00:22:43.120><c> is</c><00:22:43.200><c> just</c><00:22:43.360><c> my</c><00:22:43.600><c> preferred</c><00:22:43.919><c> AI</c><00:22:44.240><c> coding</c>
+demo it is just my preferred AI coding
+demo it is just my preferred AI coding
+assistant<00:22:44.960><c> right</c><00:22:45.200><c> now</c><00:22:45.679><c> so</c><00:22:45.919><c> that</c><00:22:46.159><c> is</c>
+assistant right now so that is
+assistant right now so that is
+everything<00:22:46.559><c> that</c><00:22:46.720><c> I</c><00:22:46.960><c> have</c><00:22:47.039><c> for</c><00:22:47.280><c> you</c><00:22:47.520><c> my</c><00:22:47.760><c> friend</c>
+everything that I have for you my friend
+everything that I have for you my friend
+on<00:22:48.480><c> using</c><00:22:48.960><c> archon</c><00:22:49.520><c> a</c><00:22:49.760><c> full</c><00:22:49.919><c> guide</c><00:22:50.240><c> with</c><00:22:50.400><c> the</c>
+on using archon a full guide with the
+on using archon a full guide with the
+setup<00:22:50.880><c> and</c><00:22:51.120><c> how</c><00:22:51.280><c> to</c><00:22:51.600><c> incorporate</c><00:22:52.080><c> in</c><00:22:52.240><c> your</c><00:22:52.400><c> AI</c>
+setup and how to incorporate in your AI
+setup and how to incorporate in your AI
+coding<00:22:53.120><c> workflows</c><00:22:54.080><c> I</c><00:22:54.320><c> definitely</c><00:22:54.720><c> want</c><00:22:54.880><c> to</c><00:22:55.120><c> be</c>
+coding workflows I definitely want to be
+coding workflows I definitely want to be
+putting<00:22:55.440><c> out</c><00:22:55.600><c> a</c><00:22:55.760><c> lot</c><00:22:55.919><c> more</c><00:22:56.159><c> content</c><00:22:56.480><c> on</c><00:22:56.799><c> my</c>
+putting out a lot more content on my
+putting out a lot more content on my
+channel<00:22:57.120><c> in</c><00:22:57.280><c> the</c><00:22:57.440><c> near</c><00:22:57.679><c> future</c><00:22:58.000><c> as</c><00:22:58.240><c> well,</c>
+channel in the near future as well,
+channel in the near future as well,
+diving<00:22:59.280><c> even</c><00:22:59.600><c> deeper</c><00:23:00.159><c> into</c><00:23:00.480><c> incorporating</c>
+diving even deeper into incorporating
+diving even deeper into incorporating
+Archon<00:23:01.600><c> into</c><00:23:01.919><c> building</c><00:23:02.400><c> full</c><00:23:02.880><c> projects</c><00:23:03.360><c> end</c>
+Archon into building full projects end
+Archon into building full projects end
+to<00:23:03.760><c> end.</c><00:23:04.159><c> So</c><00:23:04.720><c> definitely</c><00:23:05.200><c> stay</c><00:23:05.440><c> tuned</c><00:23:05.679><c> for</c>
+to end. So definitely stay tuned for
+to end. So definitely stay tuned for
+that<00:23:06.000><c> if</c><00:23:06.159><c> you're</c><00:23:06.400><c> interested.</c><00:23:07.200><c> If</c><00:23:07.360><c> you</c>
+that if you're interested. If you
+that if you're interested. If you
+appreciated<00:23:08.000><c> this</c><00:23:08.240><c> video</c><00:23:08.559><c> and</c><00:23:08.880><c> Archon</c><00:23:09.440><c> and</c>
+appreciated this video and Archon and
+appreciated this video and Archon and
+you're<00:23:09.760><c> looking</c><00:23:09.919><c> forward</c><00:23:10.159><c> to</c><00:23:10.320><c> more</c><00:23:10.640><c> content</c>
+you're looking forward to more content
+you're looking forward to more content
+on<00:23:11.360><c> AI</c><00:23:11.760><c> coding</c><00:23:12.080><c> and</c><00:23:12.320><c> using</c><00:23:12.640><c> Archon,</c><00:23:13.440><c> I</c><00:23:13.600><c> would</c>
+on AI coding and using Archon, I would
+on AI coding and using Archon, I would
+really<00:23:13.919><c> appreciate</c><00:23:14.240><c> a</c><00:23:14.480><c> like</c><00:23:14.640><c> and</c><00:23:14.880><c> a</c>
+really appreciate a like and a
+really appreciate a like and a
+subscribe.<00:23:15.600><c> And</c><00:23:15.760><c> with</c><00:23:15.919><c> that,</c><00:23:16.240><c> I'll</c><00:23:16.480><c> see</c><00:23:16.640><c> you</c>
+subscribe. And with that, I'll see you
+subscribe. And with that, I'll see you
+in<00:23:17.039><c> the</c><00:23:17.200><c> next</c>

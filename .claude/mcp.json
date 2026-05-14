@@ -4,7 +4,7 @@
       "command": "uv",
       "args": ["--directory", "./pmoves-cipher-mcp", "run", "python", "-m", "cipher_mcp.server"],
       "env": {
-        "CIPHER_URL": "http://localhost:8096",
+        "CIPHER_URL": "http://localhost:8105",
         "NATS_URL": "nats://nats:pmoves@nats:4222"
       }
     },

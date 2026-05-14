@@ -21,7 +21,8 @@ import random
 import time
 
 FLUTE_GATEWAY_URL = os.getenv("FLUTE_GATEWAY_URL", "http://localhost:8055")
-NATS_URL = os.getenv("NATS_URL", "nats://localhost:4222")
+# Default for local dev only; production reads NATS_URL from secrets-funnel.
+NATS_URL = os.getenv("NATS_URL", "nats://nats:pmoves@localhost:4222")
 
 # Agent Skill Profiles (0-100)
 AGENTS = {

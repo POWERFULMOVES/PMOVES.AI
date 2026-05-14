@@ -17,7 +17,7 @@ services:
     build:
       context: ../PMOVES-n8n
       dockerfile: compose/n8n/Dockerfile
-    image: pmoves/n8n:2.1.0-runtime
+    image: pmoves/n8n:2.1.5-runtime
     container_name: pmoves-n8n
     restart: unless-stopped
     <<: *env-tier-worker
@@ -67,7 +67,7 @@ services:
       - n8n-data:/home/node/.n8n
       - ../PMOVES-n8n/workflows:/flows:ro
   n8n-runners:
-    image: n8nio/runners:2.1.0
+    image: n8nio/runners:2.1.5
     container_name: pmoves-n8n-runners
     restart: unless-stopped
     <<: *env-tier-worker

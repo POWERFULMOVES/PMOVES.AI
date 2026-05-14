@@ -34,7 +34,7 @@ def test_settings() -> Settings:
         neo4j_user="neo4j",
         neo4j_password="test",
         neo4j_database="test",
-        nats_url="nats://localhost:4222",
+        nats_url="nats://nats:pmoves@nats:4222",
         migrations_dir="migrations",
         subjects=[
             "gen.image.result.v1",
@@ -161,7 +161,7 @@ def app_client() -> Generator[TestClient, None, None]:
         mock_settings.return_value = Settings(
             neo4j_url="bolt://localhost:7687",
             neo4j_password="test",
-            nats_url="nats://localhost:4222",
+            nats_url="nats://nats:pmoves@nats:4222",
         )
 
         neo4j_inst = MagicMock()

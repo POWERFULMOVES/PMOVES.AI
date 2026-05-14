@@ -1,6 +1,18 @@
 # PMOVES.AI gitignore
 
 # =============================================================================
+# AutoClaw / AutoGLM local workspace state (machine-local, not PMOVES code)
+# =============================================================================
+HEARTBEAT.md
+IDENTITY.md
+SOUL.md
+TOOLS.md
+USER.md
+.openclaw/
+.opencode/
+/config/
+
+# =============================================================================
 # Infrastructure Secrets (relay keys, QR configs, audits — NEVER COMMIT)
 # =============================================================================
 rustdesk-*-qr.png
@@ -173,6 +185,8 @@ pmoves/docs/logs/ci_queue_guard_latest.json
 pmoves/docs/logs/branch_divergence_*.txt
 pmoves/docs/logs/graphiti_signed_latest.json
 pmoves/docs/logs/claude_review_latest.cgp.json
+pmoves/docs/logs/naming_drift_latest.json
+pmoves/docs/logs/node_descriptions_diff_latest.md
 
 # =============================================================================
 # DAO Documentation (managed separately)
@@ -198,6 +212,12 @@ pmoves/env.supa.runtime.bak.*
 
 # Windows
 desktop.ini
+
+# =============================================================================
+# Shell artifacts
+# =============================================================================
+Wrote
+pr_body.md
 Thumbs.db
 NUL
 
@@ -206,11 +226,23 @@ NUL
 .claude/worktrees/
 
 
-# Root artifacts (docx conversion, PDFs, temp files)
-Wrote
-Simulation*.md
-Simulation*.pdf
-Simulation*.docx
-Holographic*.md
-PMOVES.AI Provisioning Bundle*.pdf
+# Binary artifacts in repo root only
+/*.pdf
+/*.docx
+
+# Coverage reports
 .coverage
+.harness/workspace/
+.harness/offloads/
+.harness/threads/
+.a0proj/
+
+# Kilocode plugin — ignore bootstrap artifacts, keep tracked content
+# .kilo/ has agent/ + command/; .kilocode/ has rules/ + skills/
+# Pattern: ignore the whole dir, negate the tracked subdirs (future-proofs new artifact types)
+.kilo/*
+!.kilo/agent/
+!.kilo/command/
+.kilocode/*
+!.kilocode/rules/
+!.kilocode/skills/

@@ -335,7 +335,7 @@ MiniMax reasoning patterns are stored and retrieved via Cipher Memory:
 
 ```bash
 # Store MiniMax reasoning pattern
-curl -X POST http://localhost:8096/api/memory \
+curl -X POST http://localhost:8105/api/memory \
   -H "Content-Type: application/json" \
   -d '{
     "type": "agent_pattern",
@@ -345,7 +345,7 @@ curl -X POST http://localhost:8096/api/memory \
   }'
 
 # Search patterns
-curl "http://localhost:8096/api/memory/search?q=minimax+hyperdimensional"
+curl "http://localhost:8105/api/memory/search?q=minimax+hyperdimensional"
 ```
 
 ---

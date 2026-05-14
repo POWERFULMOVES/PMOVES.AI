@@ -1,0 +1,126 @@
+# Nemotron-3 Super — Local via Ollama on DGX Spark
+# NVIDIA's reference agent model for DGX Spark. ~100GB model weights,
+# leaving 20-28GB KV cache on 128GB unified memory. First-class NIM
+# Cloud citizen. Deploy configs in nvidia/NeMo/NeMoTron repo.
+#
+# Distillation: model_fine_tune (NVIDIA open weights + NIM optimization)
+# Source: YouTube Signals Analysis §2.2 (NVIDIA Developer, NemoClaw on DGX Spark)
+
+name: nemotron-3-super
+provider: ollama_spark
+provider_display: "Ollama on DGX Spark (NVIDIA NIM)"
+distillation_stage: model_fine_tune
+
+model_config:
+  model_name: "nemotron-3-super:q4"
+  endpoint: http://pmoves-dgx-spark:11434/v1  # TODO: replace pmoves-dgx-spark with actual hostname for this deployment
+  api_key_env: null
+  context_window: 32768
+  max_output_tokens: 8192
+  temperature: 0.6
+  top_p: 0.9
+  ollama_config:
+    num_gpu: 999
+    num_batch: 4096
+    ubatch: 1024
+    quantization: Q4
+    nvruntime: nvidia-container-runtime
+
+prompt_style:
+  format: structured
+  system_prompt_template: null
+  preferred_language: en
+  notes: >
+    Nemotron models are optimized for tool calling and agentic patterns.
+    NVIDIA NIM Cloud optimization means the model has been specifically
+    tuned for DGX Spark unified memory architecture. Works well with
+    structured JSON/system-message patterns used by NemoClaw.
+
+agent_zero:
+  role: chat
+  a0_set_prefix: A0_SET_chat_model
+  subordinate_profile: spark_claw
+  strengths:
+  - NVIDIA first-class NIM Cloud citizen (optimized for Spark)
+  - super efficient for single-purpose agents
+  - native tool calling support
+  - NVIDIA-optimized for GB10 Grace-Blackwell
+  limitations:
+  - ~100GB model weights limit KV cache to 20-28GB on 128GB Spark
+  - conversations cannot be huge at that KV cache size
+  - task-dependent — best for focused single-purpose agents
+  - requires DGX Spark (cannot run on smaller GPUs)
+
+pinokio_p7:
+  discoverable: true
+  pbnj_launch: false
+  tac_node: p7.nats.model-discovery
+  nats_subject: mesh.gpu.model.loaded.v1
+  notes: >
+    Discoverable by P7 Agent Interpreter when running on DGX Spark Ollama.
+    Large model means it will not be auto-launched by P7 — requires explicit
+    mesh.gpu.command.v1 instruction to load. Publishes status on NATS.
+
+local_fallback:
+  available: false
+  reason: "Requires DGX Spark 128GB unified memory — cannot run on smaller hardware"
+  fallback_model_suit: gemma4-dense
+  notes: "On non-Spark machines, use gemma4-dense as the local heavyweight"
+
+fine_tuning:
+  possible: true
+  method: lora
+  target_platform: dgx-spark
+  notes: >
+    NVIDIA provides open weights. NIM Cloud optimization includes training
+    paths. Deploy configs available in nvidia/NeMo/NeMoTron repo on GitHub.
+    LoRA fine-tuning on DGX Spark viable but KV cache constraint means
+    training batch sizes must be small. Best for targeted task-specific adapters.
+
+cross_agent:
+  agent_zero: full
+  clawz: limited
+  typer: untested
+  pinokio: limited
+
+metadata:
+  source: youtube_nemoclaw_dgx_spark
+  last_verified: 2026-04-19
+  benchmark_data:
+  - source: nvidia_developer_video
+    target_platform: "DGX Spark (GB10 Grace-Blackwell)"
+    model_weights_gb: "~100GB"
+    kv_cache_remaining_gb: "20-28GB"
+    notes: "Super efficient for single-use-case agents on Spark"
+  - source: nvidia_nemo_repo
+    notes: "Deploy configs available in nvidia/NeMo/NeMoTron repository"
+  - source: youtube_signals
+    notes: "NIM Cloud is first-class citizen for Spark — tested and optimized"
+
+ecosystem_role: |
+  DGX Spark heavyweight specialist. Unlike Gemma4 dense (general-purpose
+  throughput), Nemotron-3 Super excels as a dedicated single-purpose agent —
+  coding, retrieval, or task-specific roles where focused capability beats
+  broad flexibility. The 20-28GB KV cache constraint means this model should
+  NOT be used for long conversational sessions; instead, deploy it as a
+  dedicated agent (e.g., spark_claw profile with nemotron as the model)
+  that handles specific task types. NemoClaw (NVIDIA reference agent
+  framework) uses Nemotron-3 Super as its default — PMOVES ClaWZ should
+  evaluate NemoClaw patterns as a potential modernization path.
+  Memory math: 128GB total - ~100GB weights = 20-28GB KV cache.
+  At Q4 quantization, this supports moderate context windows but not
+  extended multi-turn agent sessions.
+
+nats:
+  publish:
+    - mesh.gpu.model.loaded.v1
+    - mesh.gpu.model.unloaded.v1
+    - mesh.gpu.status.v1
+    - mesh.gpu.command.result.v1
+  subscribe:
+    - mesh.gpu.command.v1
+
+health:
+  endpoint: http://pmoves-dgx-spark:11434/api/tags
+  heartbeat_subject: mesh.gpu.status.v1
+  heartbeat_interval_seconds: 10

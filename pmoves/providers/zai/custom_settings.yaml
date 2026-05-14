@@ -1,0 +1,159 @@
+# Z.AI Provider Custom Settings
+# PMOVES.AI Meta-Agent Configuration
+# Documentation: https://docs.z.ai/devpack/overview
+
+provider:
+  id: zai
+  name: Z.AI (Zhipu AI / BigModel)
+  type: cloud_runtime
+  website: https://api.z.ai
+  documentation: https://docs.z.ai/devpack/overview
+
+models:
+  glm-5-turbo:
+    flare_name: pmoves/glm-5-turbo
+    role: primary
+    tier: flagship_fast
+    context_window: 128000
+    max_output_tokens: 8192
+    supports_vision: true
+    supports_thinking: true
+    temperature_default: 0.7
+    prompt_format: instruction
+
+  glm-5.1:
+    flare_name: pmoves/glm-5.1
+    role: standard
+    tier: flagship_reasoning
+    context_window: 128000
+    max_output_tokens: 8192
+    supports_vision: true
+    supports_thinking: true
+    temperature_default: 0.7
+    prompt_format: instruction
+
+  glm-5:
+    flare_name: pmoves/glm-5
+    role: premium
+    tier: flagship
+    context_window: 128000
+    max_output_tokens: 8192
+    supports_vision: true
+    supports_thinking: true
+    temperature_default: 0.7
+    prompt_format: instruction
+
+  glm-4.5-air:
+    flare_name: pmoves/glm-4.5-air
+    role: balanced
+    tier: efficient
+    context_window: 128000
+    max_output_tokens: 4096
+    supports_vision: false
+    supports_thinking: false
+    temperature_default: 0.7
+    prompt_format: instruction
+
+glm_coding_plan:
+  # Subscription-based coding plan with GLM-5 Turbo as primary fast model
+  primary_fast_model: glm-5-turbo
+  primary_complex_model: glm-5.1
+
+  pricing_tiers:
+    lite:
+      prompts_per_period: 80
+      hours_per_period: 5
+      suitable_for: "Individual developers, testing"
+
+    pro:
+      prompts_per_period: 400
+      hours_per_period: 5
+      suitable_for: "Professional developers, small teams"
+
+    max:
+      prompts_per_period: 1600
+      hours_per_period: 5
+      suitable_for: "Power users, large teams"
+
+  claude_code_mappings:
+    opus: glm-5.1  # Complex tasks
+    sonnet: glm-5-turbo  # Fast primary
+    haiku: glm-4.5-air  # Lightweight
+
+  supported_tools:
+    - claude_code
+    - roo_code
+    - kilo_code
+    - cline
+    - opencode
+    - crush
+    - goose
+    - openclaw
+
+  api_endpoint: https://api.z.ai/api/coding/paas/v4
+  protocol: openai_compatible
+
+prompt_style:
+  format: instruction
+  system_prompt_template: null
+  preferred_language: en
+  notes: |
+    GLM models prefer instruction-format prompts with clear role separation.
+    Use system prompt for task context, user prompt for specific instructions.
+    GLM-5.1 supports extended reasoning and multi-modal inputs.
+
+  instruction_tags:
+    system: System role for task context and persona
+    user: User role for specific instructions
+    assistant: Assistant role for responses
+    tool: Tool role for function calling results
+
+integration:
+  tensorzero_gateway: http://localhost:3030
+  tensorzero_model_format: "tensorzero::model_name::{model_name}"
+  a2a_endpoint: http://localhost:8080/mcp/execute
+  agent_zero_mcp: true
+
+  # I am NATIVE to this provider (I run on GLM Coding Plan)
+  meta_agent_access: runtime
+  base_provider: true
+
+capabilities:
+  - code_generation
+  - reasoning
+  - vision
+  - tools
+  - extended_thinking  # GLM-5.1
+  - large_context  # 128K tokens
+  - function_calling  # All GLM-4 models
+
+limitations:
+  - Cannot change weights (cloud-only)
+  - No local variant available
+  - Requires API key
+  - Rate limits apply
+
+local_fallback:
+  available: false
+  reason: "Z.AI models are cloud-only with no open weights"
+  fallback_model_suit: null
+
+cross_agent:
+  agent_zero: full
+  clawz: full
+  typer: untested
+  pinokio: full
+  a2ui: full
+
+metadata:
+  source: pmoves/meta-agent/zai
+  last_verified: 2026-04-21
+  benchmark_data:
+    - source: "Z.AI GLM Coding Plan Documentation"
+      url: "https://docs.z.ai/devpack/overview"
+    - source: "Z.AI Tool Integration"
+      url: "https://docs.z.ai/devpack/tool/others"
+    - source: "Z.AI Best Practices"
+      url: "https://docs.z.ai/devpack/resources/best-practice"
+    - source: "Z.AI API Reference"
+      url: "https://api.z.ai/api/coding/paas/v4"

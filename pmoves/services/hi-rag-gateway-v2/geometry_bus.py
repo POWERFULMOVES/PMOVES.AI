@@ -41,6 +41,11 @@ from config import (
     PGDATABASE,
     logger,
 )
+from provenance_ingest import upsert_provenance_payloads
+from provenance_geometry import (
+    provenance_payload_to_cgp,
+    provenance_payload_to_hyperdimensions_save,
+)
 
 # --- Optional heavy dependencies ---
 try:
@@ -143,9 +148,43 @@ _geometry_realtime_task: Optional[asyncio.Task] = None
 _geometry_swarm_task: Optional[asyncio.Task] = None
 _geometry_swarm_stop: Optional[asyncio.Event] = None
 _geometry_swarm_nc = None
+_content_provenance_task: Optional[asyncio.Task] = None
+_content_provenance_stop: Optional[asyncio.Event] = None
+_content_provenance_nc = None
+_latest_provenance_lock = threading.RLock()
+_latest_provenance_payload: Optional[Dict[str, Any]] = None
+_latest_provenance_cgp: Optional[Dict[str, Any]] = None
+_latest_provenance_hyperdimensions_save: Optional[Dict[str, Any]] = None
 
 _builder_pack_lock = threading.RLock()
 _active_builder_packs: Dict[tuple[str, str], Dict[str, Any]] = {}
+
+
+def _set_latest_provenance_artifacts(
+    payload: Dict[str, Any],
+    cgp: Dict[str, Any],
+    hyperdimensions_save: Dict[str, Any],
+) -> None:
+    global _latest_provenance_payload, _latest_provenance_cgp
+    global _latest_provenance_hyperdimensions_save
+    with _latest_provenance_lock:
+        _latest_provenance_payload = copy.deepcopy(payload)
+        _latest_provenance_cgp = copy.deepcopy(cgp)
+        _latest_provenance_hyperdimensions_save = copy.deepcopy(hyperdimensions_save)
+
+
+def get_latest_provenance_hyperdimensions_save() -> Optional[Dict[str, Any]]:
+    with _latest_provenance_lock:
+        if _latest_provenance_hyperdimensions_save is None:
+            return None
+        return copy.deepcopy(_latest_provenance_hyperdimensions_save)
+
+
+def get_latest_provenance_cgp() -> Optional[Dict[str, Any]]:
+    with _latest_provenance_lock:
+        if _latest_provenance_cgp is None:
+            return None
+        return copy.deepcopy(_latest_provenance_cgp)
 
 
 def _pack_key(namespace: str, modality: Optional[str]) -> tuple[str, str]:
@@ -355,6 +394,94 @@ async def _geometry_swarm_worker() -> None:
                 with contextlib.suppress(Exception):
                     await _geometry_swarm_nc.close()
                 _geometry_swarm_nc = None
+        if stop_event.is_set():
+            break
+
+
+async def _content_provenance_worker() -> None:
+    global _content_provenance_nc, _content_provenance_stop
+    backoff = max(1.0, GEOMETRY_REALTIME_BACKOFF)
+    while True:
+        stop_event = asyncio.Event()
+        try:
+            nc = await nats.connect(servers=[NATS_URL])
+            _content_provenance_nc = nc
+            _content_provenance_stop = stop_event
+
+            async def _handler(msg):
+                try:
+                    decoded = json.loads(msg.data.decode())
+                except Exception:
+                    logger.warning("Invalid content.hirag.accepted payload received")
+                    return
+
+                if isinstance(decoded, dict) and isinstance(decoded.get("payload"), dict):
+                    payload = decoded["payload"]
+                elif isinstance(decoded, dict):
+                    payload = decoded
+                else:
+                    return
+
+                try:
+                    result = await asyncio.to_thread(upsert_provenance_payloads, [payload])
+                    logger.info(
+                        "content.hirag.accepted.v1 -> upserted=%s lexical_indexed=%s chunk=%s",
+                        result.get("upserted"),
+                        result.get("lexical_indexed"),
+                        payload.get("shape_id") or payload.get("content_id"),
+                    )
+                except Exception:
+                    logger.exception("Failed to ingest content.hirag.accepted payload")
+
+                try:
+                    cgp = provenance_payload_to_cgp(payload)
+                    hyperdimensions_save = provenance_payload_to_hyperdimensions_save(payload)
+                    _set_latest_provenance_artifacts(payload, cgp, hyperdimensions_save)
+                    if shape_store is not None:
+                        shape_store.on_geometry_event({"type": "geometry.cgp.v1", "data": cgp})
+                    await _room_broadcast("geometry", {"type": "geometry.cgp.v1", "data": cgp})
+                    await _room_broadcast(
+                        "geometry",
+                        {
+                            "type": "hyperdimensions.save.v1",
+                            "label": f"live:{payload.get('shape_id') or payload.get('content_id') or 'provenance'}",
+                            "shape_id": payload.get("shape_id"),
+                            "content_id": payload.get("content_id"),
+                            "config": hyperdimensions_save,
+                        },
+                    )
+                    logger.info(
+                        "content.hirag.accepted.v1 -> geometry bridged shape=%s points=%s",
+                        payload.get("shape_id") or payload.get("content_id"),
+                        sum(
+                            len((constellation or {}).get("points") or [])
+                            for node in cgp.get("super_nodes", []) or []
+                            for constellation in (node or {}).get("constellations", []) or []
+                        ),
+                    )
+                except Exception:
+                    logger.exception(
+                        "Failed to bridge content.hirag.accepted payload into geometry"
+                    )
+
+            await nc.subscribe("content.hirag.accepted.v1", cb=_handler)
+            await stop_event.wait()
+            break
+        except asyncio.CancelledError:
+            break
+        except Exception:
+            logger.exception(
+                "NATS content.hirag.accepted listener error; retrying in %.1fs", backoff
+            )
+            await asyncio.sleep(backoff)
+        finally:
+            _content_provenance_stop = None
+            if _content_provenance_nc is not None:
+                with contextlib.suppress(Exception):
+                    await _content_provenance_nc.drain()
+                with contextlib.suppress(Exception):
+                    await _content_provenance_nc.close()
+                _content_provenance_nc = None
         if stop_event.is_set():
             break
 
@@ -755,6 +882,7 @@ def _persist_cgp_to_db(cgp: Dict[str, Any]):
 async def lifespan(app: FastAPI):
     """Manage Hi-RAG Gateway lifespan with geometry realtime and swarm workers."""
     global _geometry_realtime_task, _geometry_swarm_task, _geometry_swarm_stop
+    global _content_provenance_task, _content_provenance_stop
 
     # Startup
     if shape_store is None:
@@ -773,8 +901,10 @@ async def lifespan(app: FastAPI):
             if hasattr(nats, "connect"):
                 _geometry_swarm_task = asyncio.create_task(_geometry_swarm_worker())
                 logger.info("NATS geometry.swarm.meta listener started (url=%s)", NATS_URL)
+                _content_provenance_task = asyncio.create_task(_content_provenance_worker())
+                logger.info("NATS content.hirag.accepted listener started (url=%s)", NATS_URL)
             else:
-                logger.info("NATS client unavailable; geometry.swarm.meta listener skipped")
+                logger.info("NATS client unavailable; geometry.swarm.meta/content.hirag.accepted listeners skipped")
 
     yield
 
@@ -792,3 +922,11 @@ async def lifespan(app: FastAPI):
             await _geometry_swarm_task
         _geometry_swarm_task = None
     _geometry_swarm_stop = None
+    if _content_provenance_stop is not None:
+        _content_provenance_stop.set()
+    if _content_provenance_task is not None:
+        _content_provenance_task.cancel()
+        with contextlib.suppress(Exception):
+            await _content_provenance_task
+        _content_provenance_task = None
+    _content_provenance_stop = None

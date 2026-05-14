@@ -11,6 +11,7 @@ import os
 import signal
 import sys
 from typing import Any
+from urllib.parse import urlparse, urlunparse
 
 import structlog
 from aiohttp import web
@@ -58,11 +59,19 @@ structlog.configure(
 logger = structlog.get_logger(__name__)
 
 
+def _redact_url(url: str) -> str:
+    p = urlparse(url)
+    if not p.username:
+        return url
+    netloc = p.hostname + (f":{p.port}" if p.port else "")
+    return urlunparse(p._replace(netloc=netloc))
+
+
 # Configuration from environment
 def get_settings():
     """Get service settings from environment variables."""
     return {
-        "nats_url": os.getenv("NATS_URL", "nats://localhost:4222"),
+        "nats_url": os.getenv("NATS_URL", "nats://nats:pmoves@nats:4222"),
         "api_host": os.getenv("VLLM_ORCHESTRATOR_HOST", "0.0.0.0"),
         "api_port": int(os.getenv("VLLM_ORCHESTRATOR_PORT", "8099")),
         "model_path": os.getenv("VLLM_MODEL_PATH", "/models"),
@@ -293,7 +302,7 @@ async def main():
     )
 
     logger.info("vLLM Orchestrator service starting",
-               nats_url=settings["nats_url"],
+               nats_url=_redact_url(settings["nats_url"]),
                api_port=settings["api_port"])
 
     # Create service

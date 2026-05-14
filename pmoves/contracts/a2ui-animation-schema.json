@@ -190,6 +190,59 @@
             }
           }
         },
+        "text_layout": {
+          "type": "object",
+          "description": "Optional multiline text layout hints. Use engine=pretext to force deterministic wrapping inside the Remotion browser runtime.",
+          "properties": {
+            "engine": {
+              "type": "string",
+              "enum": ["browser", "pretext"],
+              "default": "browser"
+            },
+            "maxWidth": {
+              "type": ["number", "string"],
+              "description": "Maximum text width in px or percent of the canvas width."
+            },
+            "lineHeight": {
+              "type": "number",
+              "minimum": 1
+            },
+            "letterSpacing": {
+              "type": "number"
+            },
+            "whiteSpace": {
+              "type": "string",
+              "enum": ["normal", "pre-wrap"],
+              "default": "normal"
+            },
+            "wordBreak": {
+              "type": "string",
+              "enum": ["normal", "keep-all"],
+              "default": "normal"
+            },
+            "textAlign": {
+              "type": "string",
+              "enum": ["left", "center", "right"],
+              "default": "left"
+            },
+            "maxLines": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "shrinkWrap": {
+              "type": "boolean",
+              "default": false
+            },
+            "debugBoxes": {
+              "type": "boolean",
+              "default": false
+            },
+            "locale": {
+              "type": "string",
+              "description": "Optional Intl.Segmenter locale override for prepare/layout calls."
+            }
+          }
+        },
         "data_key": {
           "type": "string",
           "description": "Key into data_bindings for dynamic content"

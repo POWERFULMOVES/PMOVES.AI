@@ -73,7 +73,7 @@ The `opencode.json` configures MCP servers and agent modes per node:
   "mcpServers": {
     "pmoves-cipher": {
       "type": "sse",
-      "url": "http://cipher-memory:8096/sse"
+      "url": "http://cipher-memory:8105/sse"
     }
   },
   "modes": {
@@ -201,7 +201,7 @@ Tokens are generated at deploy time and rotated via `rotate-tokens.sh`.
 
 | Server | Transport | Endpoint | Purpose |
 |--------|-----------|----------|---------|
-| pmoves-cipher | SSE | `http://cipher-memory:8096/sse` | Agent memory (Neo4j) |
+| pmoves-cipher | SSE | `http://cipher-memory:8105/sse` | Agent memory (Neo4j) |
 
 ### Z890-Only MCP Servers
 

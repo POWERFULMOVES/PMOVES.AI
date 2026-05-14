@@ -51,7 +51,7 @@ logger = logging.getLogger(__name__)
 
 # Configuration
 AGENT_ZERO_URL = os.environ.get("AGENT_ZERO_URL", "http://agent-zero:8080")
-CIPHER_URL = os.environ.get("CIPHER_URL", "http://cipher-api:8096")
+CIPHER_URL = os.environ.get("CIPHER_URL", "http://cipher-api:8105")
 TENSORZERO_URL = os.environ.get("TENSORZERO_URL", "http://tensorzero-gateway:3000")
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
 SUPABASE_SERVICE_KEY = os.environ.get("SUPABASE_SERVICE_KEY", "")

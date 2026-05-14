@@ -1,22 +1,25 @@
 # Submodule Layer Run-All
 
 ## Summary
-- Manifest: `C:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\configs\submodule_layer_validation_manifest.json`
-- Modules checked: **40**
-- Total errors: **0**
+- Manifest: `D:\PMOVES.AI\PMOVES.AI\pmoves\configs\submodule_layer_validation_manifest.json`
+- Modules checked: **44**
+- Total errors: **1**
 - Total warnings: **0**
 
 ## Per-module results
 | Module | Path | Exit | Errors | Warnings | JSON | Report |
 | --- | --- | --- | --- | --- | --- | --- |
+| `PMOVES-a0-plugins` | `PMOVES-a0-plugins` | `0` | `0` | `0` | `pmoves/docs/evidence/submodule_layer/PMOVES-a0-plugins.json` | `pmoves/docs/evidence/submodule_layer/PMOVES-a0-plugins.md` |
 | `PMOVES-A2UI` | `PMOVES-A2UI` | `0` | `0` | `0` | `pmoves/docs/evidence/submodule_layer/PMOVES-A2UI.json` | `pmoves/docs/evidence/submodule_layer/PMOVES-A2UI.md` |
-| `PMOVES-Agent-Zero` | `PMOVES-Agent-Zero` | `0` | `0` | `0` | `pmoves/docs/evidence/submodule_layer/PMOVES-Agent-Zero.json` | `pmoves/docs/evidence/submodule_layer/PMOVES-Agent-Zero.md` |
+| `PMOVES-Agent-Zero` | `PMOVES-Agent-Zero` | `1` | `1` | `0` | `pmoves/docs/evidence/submodule_layer/PMOVES-Agent-Zero.json` | `pmoves/docs/evidence/submodule_layer/PMOVES-Agent-Zero.md` |
 | `PMOVES-AgentGym` | `PMOVES-AgentGym` | `0` | `0` | `0` | `pmoves/docs/evidence/submodule_layer/PMOVES-AgentGym.json` | `pmoves/docs/evidence/submodule_layer/PMOVES-AgentGym.md` |
 | `Pmoves-AgentGym-RL` | `Pmoves-AgentGym-RL` | `0` | `0` | `0` | `pmoves/docs/evidence/submodule_layer/Pmoves-AgentGym-RL.json` | `pmoves/docs/evidence/submodule_layer/Pmoves-AgentGym-RL.md` |
 | `PMOVES-Archon` | `PMOVES-Archon` | `0` | `0` | `0` | `pmoves/docs/evidence/submodule_layer/PMOVES-Archon.json` | `pmoves/docs/evidence/submodule_layer/PMOVES-Archon.md` |
+| `PMOVES-autoresearch` | `PMOVES-autoresearch` | `0` | `0` | `0` | `pmoves/docs/evidence/submodule_layer/PMOVES-autoresearch.json` | `pmoves/docs/evidence/submodule_layer/PMOVES-autoresearch.md` |
 | `PMOVES-BoTZ` | `PMOVES-BoTZ` | `0` | `0` | `0` | `pmoves/docs/evidence/submodule_layer/PMOVES-BoTZ.json` | `pmoves/docs/evidence/submodule_layer/PMOVES-BoTZ.md` |
 | `PMOVES-BotZ-gateway` | `PMOVES-BotZ-gateway` | `0` | `0` | `0` | `pmoves/docs/evidence/submodule_layer/PMOVES-BotZ-gateway.json` | `pmoves/docs/evidence/submodule_layer/PMOVES-BotZ-gateway.md` |
 | `Pmoves-cipher` | `Pmoves-cipher` | `0` | `0` | `0` | `pmoves/docs/evidence/submodule_layer/Pmoves-cipher.json` | `pmoves/docs/evidence/submodule_layer/Pmoves-cipher.md` |
+| `PMOVES-ClawZ` | `PMOVES-ClawZ` | `0` | `0` | `0` | `pmoves/docs/evidence/submodule_layer/PMOVES-ClawZ.json` | `pmoves/docs/evidence/submodule_layer/PMOVES-ClawZ.md` |
 | `PMOVES-Creator` | `PMOVES-Creator` | `0` | `0` | `0` | `pmoves/docs/evidence/submodule_layer/PMOVES-Creator.json` | `pmoves/docs/evidence/submodule_layer/PMOVES-Creator.md` |
 | `PMOVES-crush` | `PMOVES-crush` | `0` | `0` | `0` | `pmoves/docs/evidence/submodule_layer/PMOVES-crush.json` | `pmoves/docs/evidence/submodule_layer/PMOVES-crush.md` |
 | `PMOVES-Danger-infra` | `PMOVES-Danger-infra` | `0` | `0` | `0` | `pmoves/docs/evidence/submodule_layer/PMOVES-Danger-infra.json` | `pmoves/docs/evidence/submodule_layer/PMOVES-Danger-infra.md` |
@@ -35,6 +38,7 @@
 | `PMOVES-llama-throughput-lab` | `PMOVES-llama-throughput-lab` | `0` | `0` | `0` | `pmoves/docs/evidence/submodule_layer/PMOVES-llama-throughput-lab.json` | `pmoves/docs/evidence/submodule_layer/PMOVES-llama-throughput-lab.md` |
 | `PMOVES-MAI-UI` | `PMOVES-MAI-UI` | `0` | `0` | `0` | `pmoves/docs/evidence/submodule_layer/PMOVES-MAI-UI.json` | `pmoves/docs/evidence/submodule_layer/PMOVES-MAI-UI.md` |
 | `PMOVES-n8n` | `PMOVES-n8n` | `0` | `0` | `0` | `pmoves/docs/evidence/submodule_layer/PMOVES-n8n.json` | `pmoves/docs/evidence/submodule_layer/PMOVES-n8n.md` |
+| `PMOVES-Neo4j` | `PMOVES-Neo4j` | `0` | `0` | `0` | `pmoves/docs/evidence/submodule_layer/PMOVES-Neo4j.json` | `pmoves/docs/evidence/submodule_layer/PMOVES-Neo4j.md` |
 | `PMOVES-Open-Notebook` | `PMOVES-Open-Notebook` | `0` | `0` | `0` | `pmoves/docs/evidence/submodule_layer/PMOVES-Open-Notebook.json` | `pmoves/docs/evidence/submodule_layer/PMOVES-Open-Notebook.md` |
 | `PMOVES-Pinokio-Ultimate-TTS-Studio` | `PMOVES-Pinokio-Ultimate-TTS-Studio` | `0` | `0` | `0` | `pmoves/docs/evidence/submodule_layer/PMOVES-Pinokio-Ultimate-TTS-Studio.json` | `pmoves/docs/evidence/submodule_layer/PMOVES-Pinokio-Ultimate-TTS-Studio.md` |
 | `PMOVES-Pipecat` | `PMOVES-Pipecat` | `0` | `0` | `0` | `pmoves/docs/evidence/submodule_layer/PMOVES-Pipecat.json` | `pmoves/docs/evidence/submodule_layer/PMOVES-Pipecat.md` |

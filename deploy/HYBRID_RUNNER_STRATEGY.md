@@ -1,7 +1,7 @@
 # PMOVES.AI Hybrid Runner Strategy
 
 **Status**: Production-ready
-**Last Updated**: 2025-12-08
+**Last Updated**: 2026-04-23
 
 ## Executive Summary
 
@@ -38,7 +38,7 @@ PMOVES.AI uses a **hybrid runner strategy** combining self-hosted infrastructure
     └──────────┘    └────────────┘  └─────────────┘
     • RTX 5090       • cloudstartup   • ubuntu-latest
     • CUDA builds    • kvm4 (prod)    • Lightweight
-    • Hi-RAG GPU     • SPARK (ARM)    • No cache req
+     • SPARK (ARM) — Full PMOVES.AI node (CHIT, P7, TeraFormer, IC, ClaWZ)
     • Ollama         • Docker cache   • Fast spin-up
                      • Deployments
 ```
@@ -50,7 +50,7 @@ PMOVES.AI uses a **hybrid runner strategy** combining self-hosted infrastructure
 | Runner | Labels | Role | Hardware | Monthly Cost |
 |--------|--------|------|----------|-------------|
 | **AI Lab** | `self-hosted, ai-lab, gpu, cuda` | GPU builds, model inference | RTX 5090/4090/3090Ti, 128GB RAM | $0 (electricity ~$20) |
-| **SPARK** | `self-hosted, spark, Linux, ARM64` | A2A/MCP relay, CPU-intensive tasks | 20 cores, 119GB RAM, ARM64 (NVIDIA DGX) | $0 (fleet asset) |
+| **SPARK** | `self-hosted, spark, Linux, ARM64` | Full PMOVES.AI node: CHIT crypto, P7 stage manager, TeraFormer, IC, A2A server, ClaWZ Discord agent, 76 registered agents, GH_PAT push capability | GB10 Grace-Blackwell (DGX Spark), 20 cores, 128GB unified memory, ARM64 | $0 (fleet asset) |
 | **cloudstartup** | `self-hosted, vps, cloudstartup, staging` | Staging deploys, CPU builds | 8 vCPU, 16GB RAM, Hostinger VPS | $10/mo |
 | **kvm4** | `self-hosted, vps, kvm4, production` | Production deploys | 8 vCPU, 16GB RAM, Hostinger VPS | $10/mo |
 | **kvm2** | `self-hosted, vps, kvm2, backup` | Overflow/backup | 4 vCPU, 8GB RAM, Hostinger VPS | $10/mo |
@@ -216,6 +216,9 @@ function determineRunnerStrategy(changedFiles) {
   // 5. Default to VPS (safe fallback)
   return { runner: 'vps', labels: ['self-hosted', 'vps'] };
 }
+
+// Note: SPARK is a Full PMOVES.AI node (CHIT, P7, agents), not a limited A2A/MCP relay.
+// It can handle any workload routed to it, including CHIT-signed config operations.
 ```
 
 ### Routing Examples
@@ -434,6 +437,27 @@ jobs:
 2. **Secrets in env vars** - Never hardcode in `worker.js`
 3. **Rate limiting** - Cloudflare automatic DDoS protection
 4. **CORS policy** - Restrict origins for API endpoints
+
+### SPARK CHIT Security
+
+SPARK runs with **CHIT signed configs** — the 'model modifies own config' guardrail problem (identified in NemoClaw/DGX Spark analysis) is solved by PMOVES CHIT at the crypto level. Config mutations require valid CHIT signatures, making unauthorized self-modification cryptographically impossible.
+
+## SPARK Node Capabilities (Updated 2026-04-23)
+
+SPARK (DGX Spark, GB10 Grace-Blackwell) is a FULL PMOVES.AI node, not a limited relay. Per AGNOTE4482 convergence records:
+
+| Capability | Status | Evidence |
+|------------|--------|----------|
+| CHIT Crypto | Hardened | Fail-closed passphrase, versioned KDF (PBKDF2 + scrypt fallback) |
+| NATS Auth | Resolved | P0 unauthenticated references reduced to 0 (was 57 across 34 files) |
+| A2A Server | Wired | Discovery + task routes exposed, agent card at /.well-known/agent-card.json |
+| GH_PAT Push | Active | Direct push to origin/main, no host relay needed |
+| ClaWZ | Active | Replaced BoTZ as Discord agent, PMOVES-ClawZ submodule |
+| P7 Stage Manager | Active | Room-aware fleet orchestration, NATS subjects p7.nats.launch/session |
+| Agent Registry | 76 agents | 13 external contributors, agent_signatures.yaml |
+| TeraFormer | Available | Model fabric alignment complete |
+| IC (Integration Controller) | Available | Cross-submodule coordination |
+| pmoves-spark-runner | Online | Self-hosted GitHub Actions runner at /opt/actions-runner-spark |
 
 ## Future Roadmap
 

@@ -1,0 +1,80 @@
+people were obsessed with prompt
+engineering. And the idea behind prompt
+engineering is how can we craft our
+prompts to the LLM to get the single
+best output. So at this point people are
+very much like caring about just you
+know, that very next turn with the LLM.
+How do we get it to do or output what we
+want?
+And then that evolved in 2025 to the
+idea of context engineering. So now we
+don't care about just single outputs.
+Now we care about entire sessions,
+especially for AI coding sessions.
+Context engineering is the idea of you
+know, how can we curate the perfect
+context. Nothing more than the coding
+agent needs, but exactly what it needs
+to have all the context it needs to
+plausibly do the task.
+So this was popularized by a lot of
+people like Toby, the CEO of Shopify. Of
+course Andrej Karpathy cuz whenever you
+post something, of course it goes viral.
+But context engineering, it's a very
+powerful evolution because it's treating
+the context for our coding agents as an
+engineered resource. So we evolve our AI
+layer as I like to call it just like we
+evolve our code base. So we version
+control our rules and our commands and
+our skills and whenever there's a
+problem that comes up with our
+system, like there's a bug that our
+coding agent produces, instead of just
+fixing the bug and moving on, the idea
+behind context engineering is we look
+into our process. Like what could we
+make better with our commands or what
+could we make better with our rules so
+that that issue doesn't happen again. Or
+at least that's the goal of evolving our
+context.
+So it's a very powerful concept and I
+created a lot of content last year
+around context engineering. Now the
+important thing is these different
+evolutions, it's not like they replace
+each other. Context engineering does not
+replace prompt engineering. In fact,
+prompt engineering is a part of context
+engineering. So it's it's a evolution
+where it builds on top of itself.
+And so this year we have evolved to
+harness engineering. And this is what
+Archon is all about. So harness
+engineering can mean a lot of different
+things, but in essence, a harness is a
+layer on top of the coding agent. It's
+the tooling and the process that you
+build on top of the coding agent to make
+it more reliable and basically taking
+your whole you know, process for
+building software
+and you know, building the the layer on
+top of the coding agent where you
+enforce that process. So a lot of
+different strategies out there like B
+Mad and GitHub Spec Kit and GSD, you
+could consider them harnesses because
+you're you're wrapping the coding agent
+with this higher level layer of your
+strategy for engineering. And we have a
+Stripe Minions. The Ralph Loop is a
+harness. Anthropic has open sourced
+quite a few harnesses. I've covered some
+on my channel.
+Really every single big company is
+converging on the idea of harnesses.
+Instead of focusing on making the model

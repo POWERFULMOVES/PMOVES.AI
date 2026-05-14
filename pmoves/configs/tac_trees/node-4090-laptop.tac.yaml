@@ -148,8 +148,8 @@ root:
     # Phase 4: Tailscale Mesh Connectivity
     # =========================================================================
     - id: n4090.mesh
-      task: "Tailscale mesh connectivity to 5090 and Z890"
-      context: "All 3 nodes must be reachable for full fleet operation"
+      task: "Tailscale mesh connectivity to 5090, Z890, and SPARK"
+      context: "All fleet nodes must be reachable for full operation"
       agent_hint: 4090-claude
       children:
         - id: n4090.mesh.status
@@ -158,6 +158,18 @@ root:
             type: shell
             command: "tailscale status"
             expect: "pmoves-laptop online at pmoves-laptop.ts"
+          agent_hint: 4090-claude
+
+        - id: n4090.mesh.ssh-enabled
+          task: "Tailscale SSH enabled on 4090 laptop"
+          action:
+            type: shell
+            command: "tailscale debug features 2>/dev/null | grep -i ssh || tailscale status --json | python -c \"import json,sys; d=json.load(sys.stdin); print('ssh-enabled' if d.get('Self',{}).get('TailscaleSSHEnabled') else 'DISABLED')\""
+            expect: "ssh-enabled (or SSH feature listed in debug features output)"
+          context: >
+            Tailscale SSH allows SPARK and other fleet nodes to SSH into
+            pmoves-laptop without Windows password. Auth via Tailscale identity.
+            Enable with: tailscale set --ssh (operator runs once).
           agent_hint: 4090-claude
 
         - id: n4090.mesh.reach-5090
@@ -177,6 +189,17 @@ root:
             expect: "Pong from pmoves-z890.ts via direct connection"
           agent_hint: 4090-claude
 
+        - id: n4090.mesh.reach-spark
+          task: "Can reach SPARK (pmoves-spark)"
+          action:
+            type: shell
+            command: "tailscale ping pmoves-spark --timeout 5s --c 1"
+            expect: "Pong from pmoves-spark via direct connection"
+          context: >
+            DGX Spark GB10 Grace-Blackwell 128GB — fleet inference backbone.
+            Primary 120B+ model host. Must be tagged tag:gpu in Tailscale admin.
+          agent_hint: 4090-claude
+
         - id: n4090.mesh.z890-services
           task: "Z890 key services reachable"
           action:
@@ -187,6 +210,62 @@ root:
               - Grafana: pmoves-z890.ts:3000
               - Agent Zero: pmoves-z890.ts:8080
             expect: "All Z890 services accessible via Tailscale IP"
+          agent_hint: 4090-claude
+
+    # =========================================================================
+    # Phase 4b: Ollama Model Health
+    # =========================================================================
+    - id: n4090.ollama
+      task: "Ollama model inventory matches laptop-4090.yaml profile"
+      context: "Profile expects: qwen3-embedding:8b, qwen3-vl:8b, qwen3-coder:30b, qwen3.5:9b, qwen3.5:4b, lfm2:24b"
+      agent_hint: 4090-claude
+      children:
+        - id: n4090.ollama.running
+          task: "Ollama service running on :11434"
+          action:
+            type: shell
+            command: "curl -s http://localhost:11434/api/tags | python -c \"import json,sys; names=[m['name'] for m in json.load(sys.stdin)['models']]; required={'qwen3-embedding:8b','qwen3-vl:8b','qwen3-coder:30b','qwen3.5:9b','qwen3.5:4b','lfm2:24b'}; missing=required-set(names); print('ok' if not missing else 'MISSING:'+','.join(sorted(missing)))\""
+            expect: "ok (all 6 profile-expected models present)"
+          agent_hint: 4090-claude
+
+        - id: n4090.ollama.embedding
+          task: "qwen3-embedding:8b resident (always-resident)"
+          action:
+            type: shell
+            command: "curl -s http://localhost:11434/api/tags | python -c \"import json,sys; names=[m['name'] for m in json.load(sys.stdin)['models']]; print('ok' if 'qwen3-embedding:8b' in names else 'MISSING')\""
+            expect: "ok"
+          context: >
+            Always-resident embedding model (4.7GB VRAM).
+            If missing: ollama pull qwen3-embedding:8b
+          agent_hint: 4090-claude
+
+        - id: n4090.ollama.coder
+          task: "qwen3-coder:30b available (coding fallback)"
+          action:
+            type: shell
+            command: "curl -s http://localhost:11434/api/tags | python -c \"import json,sys; names=[m['name'] for m in json.load(sys.stdin)['models']]; print('ok' if 'qwen3-coder:30b' in names else 'MISSING')\""
+            expect: "ok"
+          context: >
+            Primary local coding fallback. ~18GB on disk — partial CPU offload.
+            If missing: ollama pull qwen3-coder:30b (~18GB, 10+ min)
+          agent_hint: 4090-claude
+
+        - id: n4090.ollama.stale-check
+          task: "No pre-2025 stale models on disk"
+          action:
+            type: manual
+            instruction: >
+              Run: ollama list
+              Verify NONE of these appear: gemma2, gemma3, llama3.2,
+              deepseek-r1, deepseek-coder-v2, phi4, qwen2.5, nomic-embed-text,
+              embeddinggemma, llama3.2-vision, jina-embeddings-v2-base-code, functiongemma
+            expect: "Only profile-expected models present"
+          context: >
+            Stale models consume ~67GB disk. Cleanup:
+            ollama rm nomic-embed-text embeddinggemma gemma3:latest gemma3:12b
+            gemma2:latest llama3.2:latest llama3.2-vision qwen2.5:7b qwen2.5vl:7b
+            deepseek-r1:latest deepseek-coder-v2:latest phi4:latest
+            jina-embeddings-v2-base-code functiongemma
           agent_hint: 4090-claude
 
     # =========================================================================

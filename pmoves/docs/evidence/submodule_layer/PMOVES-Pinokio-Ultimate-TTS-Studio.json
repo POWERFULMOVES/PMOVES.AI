@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-03-13 02:45 UTC",
+  "generated_at": "2026-04-05 15:11 UTC",
   "manifest": "pmoves/configs/submodule_layer_validation_manifest.json",
   "summary": {
     "submodules": 1,
@@ -12,7 +12,7 @@
       "path": "PMOVES-Pinokio-Ultimate-TTS-Studio",
       "url": "https://github.com/POWERFULMOVES/PMOVES-Pinokio-Ultimate-TTS-Studio.git",
       "status_prefix": " ",
-      "commit": "7a91ca90cbee2eb69babbcf4590d840915f7ed6a",
+      "commit": "efdfd938542a1780205903576003d890604ab77d",
       "initialized": true,
       "remote_commit_reachable": "local",
       "required_files_any_ok": true,

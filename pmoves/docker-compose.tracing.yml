@@ -23,7 +23,7 @@ services:
   # Jaeger All-in-One - Distributed tracing UI and storage
   # ---------------------------------------------------------------------------
   jaeger:
-    image: jaegertracing/all-in-one:1.62
+    image: jaegertracing/all-in-one:latest
     container_name: pmoves-jaeger
     restart: unless-stopped
     environment:

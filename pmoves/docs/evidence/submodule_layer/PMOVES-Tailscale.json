@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-03-13 02:45 UTC",
+  "generated_at": "2026-04-05 15:12 UTC",
   "manifest": "pmoves/configs/submodule_layer_validation_manifest.json",
   "summary": {
     "submodules": 1,
@@ -12,7 +12,7 @@
       "path": "PMOVES-Tailscale",
       "url": "https://github.com/POWERFULMOVES/PMOVES-Tailscale.git",
       "status_prefix": " ",
-      "commit": "43a3bc7bd3ef3886806953e0a9075a70aa44cb41",
+      "commit": "6666dcd810016923bea2c271c90088eda6e4b521",
       "initialized": true,
       "remote_commit_reachable": "local",
       "required_files_any_ok": true,

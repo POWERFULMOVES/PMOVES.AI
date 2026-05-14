@@ -100,7 +100,7 @@ remote rebuilds, stale-node cleanup, or z890 fleet ownership.
 ### Fleet checks
 
 - `tailscale status --json`
-- `curl -fsS http://localhost:8096/health | jq .`
+- `curl -fsS http://localhost:8105/health | jq .`
 - `curl -fsS http://localhost:8094/healthz | jq .`
 - `curl -fsS http://localhost:8055/healthz | jq .`
 
@@ -208,7 +208,7 @@ transcripts, Discord, Jellyfin, or cross-model orchestration.
 ## Cipher MCP bridge
 
 - Cipher API health:
-  - `curl -fsS http://localhost:8096/health | jq .`
+  - `curl -fsS http://localhost:8105/health | jq .`
 - Local MCP bridge server:
   - `uv run --directory ./pmoves-cipher-mcp python -m cipher_mcp.server`
 - Compose service check:

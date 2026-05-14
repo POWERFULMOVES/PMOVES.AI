@@ -84,7 +84,7 @@ All GEOMETRY BUS participants MUST use this canonical version. Legacy aliases (`
 | **hi-rag-gateway-v2** | 8086/8087 | `geometry.cgp.v1`, `tokenism.cgp.*` | Hybrid RAG with geometric indexing | [Hi-RAG v2](../../PMOVES-HiRAG/CLAUDE.md) |
 | **hyperdimensions** | - | `geometry.cgp.v1` (via Portal) | Three.js WebGL shape rendering | [hyperdimensions.md](services/hyperdimensions.md) |
 | **botz-skills** | - | `geometry.cgp.v1`, `geometry.packet.encoded.v1` | CHIT tools: encode, tokenism, render | [botz-skills.md](services/botz-skills.md) |
-| **cipher-memory** | 8096 | `geometry.event.v1` | Persistent agent memory storage | [Cipher Memory](../../.claude/context/credentials-workflow.md) |
+| **cipher-memory** | 8105 | `geometry.event.v1` | Persistent agent memory storage | [Cipher Memory](../../.claude/context/credentials-workflow.md) |
 
 ---
 
@@ -363,7 +363,7 @@ Check: from pmoves.chit import CGP_SPEC_VERSION
 
 **Issue:** Port conflicts
 ```
-Solution: consciousness-service (8096) conflicts with cipher-memory
+Solution: ~~consciousness-service (8096) conflicts with cipher-memory~~ → **Resolved** — cipher_memory moved to 8105
 Use: docker compose --profile agents up consciousness-service
 ```
 

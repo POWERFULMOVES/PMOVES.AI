@@ -35,7 +35,7 @@
   "mcp_servers": {
     "pmoves-cipher": {
       "type": "sse",
-      "url": "http://${TS_Z890}:8096/sse"
+      "url": "http://${TS_Z890}:8105/sse"
     },
     "agent-zero": {
       "type": "http",

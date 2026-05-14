@@ -65,7 +65,7 @@ class BaseServiceSettings(BaseSettings):
                 env_prefix = "MY_SERVICE_"
     """
 
-    nats_url: str = os.getenv("NATS_URL", "nats://nats:pmoves@nats:4222")
+    nats_url: str = os.getenv("NATS_URL", "")
     port: int = int(os.getenv("PORT", "8080"))
     log_level: str = os.getenv("LOG_LEVEL", "INFO")
     docked_mode: bool = env_bool("DOCKED_MODE", default=False)

@@ -1,7 +1,7 @@
 profile: agent-zero
-# Choose by HOST_CLASS: workstation_5090 | laptop_4090 | desktop_3090ti | jetson_orin | vps_small
+# Choose by HOST_CLASS: desktop-9950xd | laptop_4090 | desktop_3090ti | jetson_orin | vps_small
 targets:
-  workstation_5090:
+  desktop-9950xd:
     llm: qwen3-32b-instruct@int8        # prefer int8/fp16; avoid int4
     ctx: 128k
     decoding: {temperature: 0.3, top_p: 0.8}

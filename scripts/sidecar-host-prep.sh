@@ -65,10 +65,10 @@ cat > "$BASE_DIR/sidecar.env" << 'ENVEOF'
 # Portable — works on any device with Docker
 
 # Topology
-DOCKED_MODE=true
+DOCKED_MODE=false
 TOPOLOGY_MODE=standalone
 PARENT_SYSTEM=PMOVES.AI
-PARENT_VERSION=1.0.0-hardened
+PARENT_VERSION=v1.0.0-hardened
 
 # CHIT (dev mode -- non-enforcing)
 CHIT_PASSPHRASE=dev-local-sidecar-override
@@ -79,17 +79,23 @@ CHIT_DECRYPT_ANCHORS=false
 AGENTZERO_JETSTREAM=false
 AGENTZERO_JS_UNAVAILABLE_THRESHOLD=999
 
-# Pre-staged endpoints (unreachable but ready for compose transition)
-NATS_URL=nats://nats:pmoves@nats:4222
-TENSORZERO_URL=http://tensorzero-gateway:3000
-SUPABASE_URL=http://supabase-kong:8000
-SUPABASE_SERVICE_ROLE_KEY=
-SUPA_REST_URL=http://supabase-kong:8000/rest/v1
-HIRAG_URL=http://hi-rag-gateway-v2:8086
+# Ollama -- Local inference via host gateway
+OLLAMA_URL=http://host.docker.internal:11434
 
-# Agent Zero
-AGENT_ZERO_API_BASE=http://127.0.0.1:80
-PORT=8080
+# TensorZero -- Prepared (activate when compose stack available)
+TENSORZERO_BASE_URL=http://host.docker.internal:3000
+
+# Supabase -- Prepared (activate when compose stack available)
+# SUPABASE_URL=
+# SUPABASE_ANON_KEY=
+# SUPABASE_SERVICE_KEY=
+
+# NATS -- Disabled in standalone
+# NATS_URL=nats://nats:pmoves@nats:4222
+
+# Agent Zero ports
+AGENTZERO_PORT=8080
+AGENTZERO_UI_PORT=8081
 
 # Host env leak guard
 SSL_CERT_FILE=

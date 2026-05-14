@@ -40,7 +40,7 @@ uv run python main.py
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `CIPHER_URL` | `http://localhost:8096` | Cipher Memory API base URL |
+| `CIPHER_URL` | `http://localhost:8105` | Cipher Memory API base URL |
 | `NATS_URL` | `nats://nats:pmoves@nats:4222` | NATS server for announcements |
 
 ## Claude Code Integration
@@ -55,7 +55,7 @@ Add to `.claude/mcp.json`:
       "command": "uv",
       "args": ["--directory", "./pmoves-cipher-mcp", "run", "python", "-m", "cipher_mcp.server"],
       "env": {
-        "CIPHER_URL": "http://localhost:8096",
+        "CIPHER_URL": "http://localhost:8105",
         "NATS_URL": "nats://nats:pmoves@nats:4222"
       }
     }
@@ -66,7 +66,7 @@ Add to `.claude/mcp.json`:
 ## Docker
 
 The Cipher Memory backend runs as `cipher-api` in the PMOVES docker-compose
-stack (profile: `agents`, port 8096). It shares the existing Neo4j instance.
+stack (profile: `agents`, port 8105). It shares the existing Neo4j instance.
 
 ## Package Structure
 

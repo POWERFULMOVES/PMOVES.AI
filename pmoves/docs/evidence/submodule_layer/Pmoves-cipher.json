@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-03-13 02:43 UTC",
+  "generated_at": "2026-04-05 15:07 UTC",
   "manifest": "pmoves/configs/submodule_layer_validation_manifest.json",
   "summary": {
     "submodules": 1,
@@ -12,7 +12,7 @@
       "path": "Pmoves-cipher",
       "url": "https://github.com/POWERFULMOVES/Pmoves-cipher.git",
       "status_prefix": " ",
-      "commit": "2bd33b9d2dc8f7974c5bf995375658f291bab7c2",
+      "commit": "ed701cae084ad1623e55fdb376fc38d5d0474f4a",
       "initialized": true,
       "remote_commit_reachable": "local",
       "required_files_any_ok": true,
