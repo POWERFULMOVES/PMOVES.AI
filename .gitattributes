@@ -16,3 +16,6 @@ Dockerfile text eol=lf
 *.ps1 text eol=crlf
 *.bat text eol=crlf
 
+# Append-only audit trails — union-merge so concurrent branch appends never conflict
+.claude/hooks/damage-control/known-roads.jsonl merge=union eol=lf
+
