@@ -44,16 +44,19 @@
     "zai-web-search": {
       "type": "streamable-http",
       "url": "https://api.z.ai/api/mcp/web_search_prime/mcp",
+      "headers": {"Authorization": "Bearer ${Z_AI_API_KEY}"},
       "description": "LLM-optimized web search"
     },
     "zai-web-reader": {
       "type": "streamable-http",
       "url": "https://api.z.ai/api/mcp/web_reader/mcp",
+      "headers": {"Authorization": "Bearer ${Z_AI_API_KEY}"},
       "description": "Full webpage content extraction"
     },
     "zai-zread": {
       "type": "streamable-http",
       "url": "https://api.z.ai/api/mcp/zread/mcp",
+      "headers": {"Authorization": "Bearer ${Z_AI_API_KEY}"},
       "description": "GitHub repo search and file reading"
     }
   },
