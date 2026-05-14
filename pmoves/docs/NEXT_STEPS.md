@@ -3,6 +3,13 @@
 Note: Consolidated plan index at pmoves/docs/PMOVES.AI PLANS/README_DOCS_INDEX.md.
 _Last updated: 2026-03-29_
 
+### Latest changes (Apr 25, 2026) — Agent Zero Fork Sync Complete
+- Agent Zero fork sync completed: branch `PMOVES.AI-Edition-v1.9` pushed to `POWERFULMOVES/PMOVES-Agent-Zero`, closing the 604-commit gap against upstream v1.9.
+- Fresh Overlay strategy applied: 28 clean cherry-picks + 6 conflicting files re-implemented on v1.9 base.
+- MiniMax litellm_provider format corrected from `openai-compatible` to `openai`.
+- Old branch `PMOVES.AI-Edition-Hardened` (pin 2e000aa, Mar 7) retained as fallback.
+- Next step: boot validation of PMOVES.AI-Edition-v1.9 before switching default branch.
+
 ## Current Status
 
 ### Latest changes (Mar 29, 2026) — KiloCode Claw Configuration + GLM-5.1 Taxonomy

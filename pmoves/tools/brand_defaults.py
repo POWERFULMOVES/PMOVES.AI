@@ -28,6 +28,8 @@ DEFAULTS = {
     "MINIO_SECRET_KEY": "",
     # Search (will be strengthened below if too short)
     "MEILI_MASTER_KEY": "master_key",
+    # Vector search (Qdrant API key for inter-service authentication)
+    "QDRANT__API_KEY": "",
     # Geometry graph (compose reads NEO4J_AUTH; we set URL, user, and generate password if missing)
     "NEO4J_URL": "bolt://neo4j:7687",
     "NEO4J_USER": "neo4j",
@@ -120,6 +122,35 @@ def _ensure_notebook_and_surreal_credentials(text: str) -> str:
     text = _set_kv(text, "SURREAL_PASS", surreal_pass)
     text = _set_kv(text, "OPEN_NOTEBOOK_SURREAL_USER", surreal_user)
     text = _set_kv(text, "OPEN_NOTEBOOK_SURREAL_PASS", surreal_pass)
+    return text
+
+
+def _ensure_channel_monitor_google_alias(text: str) -> str:
+    """Mirror GOOGLE_CLIENT_ID/SECRET into the CHANNEL_MONITOR_GOOGLE_* namespace.
+
+    The sync-secrets-local workflow exports GH secrets under generic names
+    (GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET) but the channel-monitor service
+    and the Phase 9Q.2 yt-cookies pipeline both consume the same OAuth client
+    via the prefixed CHANNEL_MONITOR_GOOGLE_CLIENT_ID/SECRET names. This
+    function copies values across when:
+      * the prefixed key is missing or still a placeholder
+      * the generic key has a real value
+
+    Direction is one-way (generic → prefixed). If the operator has set the
+    prefixed key explicitly, it is left alone.
+    """
+    pairs = (
+        ("GOOGLE_CLIENT_ID", "CHANNEL_MONITOR_GOOGLE_CLIENT_ID"),
+        ("GOOGLE_CLIENT_SECRET", "CHANNEL_MONITOR_GOOGLE_CLIENT_SECRET"),
+    )
+    for source, target in pairs:
+        target_val = _get_kv(text, target)
+        if not _is_blank_or_placeholder(target_val):
+            continue
+        source_val = _get_kv(text, source)
+        if _is_blank_or_placeholder(source_val):
+            continue
+        text = _set_kv(text, target, source_val)
     return text
 
 
@@ -354,6 +385,11 @@ def upsert_env(path: Path, env_gen_path: Path, pairs: dict[str, str]) -> None:
     if len(companion_key) != 16:
         text = _set_kv(text, "INVIDIOUS_COMPANION_KEY", _rand_exact_len(16))
 
+    # Qdrant API key for inter-service authentication
+    qdrant_key = _get_kv(text, "QDRANT__API_KEY")
+    if len(qdrant_key) < 32:
+        text = _set_kv(text, "QDRANT__API_KEY", _strong_random(32))
+
     hmac_key = _get_kv(text, "INVIDIOUS_HMAC_KEY")
     if len(hmac_key) < 32:
         text = _set_kv(text, "INVIDIOUS_HMAC_KEY", _strong_random(24))
@@ -369,6 +405,14 @@ def upsert_env(path: Path, env_gen_path: Path, pairs: dict[str, str]) -> None:
 
     # Generate integration credentials (Firefly III, n8n, Wger) if missing.
     text = _ensure_integration_credentials(text)
+
+    # Alias generic Google OAuth credentials into the channel-monitor / yt-cookies
+    # namespace. Phase 9C: yt-cookies pipeline + channel-monitor both look for
+    # CHANNEL_MONITOR_GOOGLE_CLIENT_ID/SECRET, but the canonical secrets pipeline
+    # exports them under the shorter GOOGLE_CLIENT_ID/SECRET names. Without this
+    # alias, the placeholder lingers in env.shared even after a successful sync
+    # and the OAuth flow refuses to start.
+    text = _ensure_channel_monitor_google_alias(text)
 
     # Identity defaults: operator email cascades to Supabase, n8n, Wger.
     text = _ensure_identity_defaults(text)

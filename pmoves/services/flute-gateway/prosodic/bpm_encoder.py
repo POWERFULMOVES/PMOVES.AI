@@ -19,6 +19,8 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any
 
+from pmoves.services.common.chakra import CHAKRA_BANDS, chakra_to_band
+
 from .types import BoundaryType, ProsodicChunk
 
 # ---------------------------------------------------------------------------
@@ -43,7 +45,6 @@ MIDI_OFFSET: dict[BoundaryType, int] = {
 
 # Milliseconds per syllable estimate (150ms average spoken English)
 _MS_PER_SYLLABLE = 150
-
 
 def encode_bpm_timeline(
     chunks: list[ProsodicChunk],
@@ -142,6 +143,7 @@ def encode_bpm_timeline(
                     "total_chunks": len(chunks),
                     "duration_estimate_ms": duration_estimate_ms,
                     "avg_bpm": avg_bpm,
+                    "chakra_band": chakra_to_band(avg_bpm),
                     "energy_profile": {
                         "sentence_count": sentence_count,
                         "clause_count": clause_count,
@@ -186,6 +188,7 @@ def _empty_packet(
                     "total_chunks": 0,
                     "duration_estimate_ms": 0,
                     "avg_bpm": 0,
+                    "chakra_band": chakra_to_band(0),
                     "energy_profile": {
                         "sentence_count": 0, "clause_count": 0,
                         "phrase_count": 0, "breath_count": 0, "presto_count": 0,
@@ -222,7 +225,7 @@ async def publish_bpm_event(
         return False
 
     if not nats_url:
-        nats_url = os.getenv("NATS_URL", "nats://nats:pmoves@nats:4222")
+        nats_url = os.getenv("NATS_URL", "")
 
     try:
         import nats as nats_client

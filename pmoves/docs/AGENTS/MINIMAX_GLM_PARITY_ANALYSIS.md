@@ -99,7 +99,7 @@ providers:
 ```
 /minimax:status   →  curl -sf http://localhost:3030/api/status | jq '.minimax'
 /minimax:botz     →  curl -sf http://localhost:3030/api/routing | jq '.botz_affinity'
-/minimax:waves    →  curl -sf http://localhost:8096/api/memory?q=wave* (hyperdimensional)
+/minimax:waves    →  curl -sf http://localhost:8105/api/memory?q=wave* (hyperdimensional)
 /minimax:cgp      →  curl -sf http://localhost:8XXX/geometry/state (CGP packets)
 ```
 

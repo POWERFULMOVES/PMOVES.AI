@@ -3,9 +3,11 @@
 > Execution guide for the Consciousness Harvest (CONCH) pipeline. Builds on CHIT encoding to transform consciousness research datasets into grounded personas via CGP packets. Prerequisites: Layer 1 protocol docs.
 
 # PMOVES Consciousness Integration • Execution Guide
-_Last updated: 2025-12-09_
+_Last updated: 2026-04-19_
 
 This guide operationalizes the consciousness knowledge harvest and its transformation into grounded personas via the PMOVES stack (Supabase, Geometry Bus, CHIT playback, Hi-RAG v2, Evo Swarm).
+> **Note:** The "325" in this pipeline refers to 325 consciousness **theories** from Robert Lawrence Kuhn's *Landscape of Consciousness* (Closer to Truth), **not** personas. The pipeline transforms theories → CGP → grounded personas.
+
 
 ---
 
@@ -44,13 +46,16 @@ Persona Grounding (consciousness shapes → combinations → LLM selection)
 | Component | Status | Notes |
 |-----------|--------|-------|
 | Directory structure | ✅ Created | 10 theory categories |
-| Research papers | ✅ 3 files | ~2MB HTML content |
-| RAG schema | ✅ SQL exists | consciousness-schema.sql |
-| Theory content | ❌ Empty | Needs harvest scripts |
+| Research papers | ✅ 3 files + taxonomy | kuhn_full_taxonomy.json (325 theories) |
+| RAG schema | ✅ SQL exists | consciousness-schema.sql + grounded personas SQL |
+| Theory content | ✅ Populated | 216 chunks from taxonomy + papers |
 | Website mirror | ❌ Empty | Needs Selenium scraper |
-| Embeddings JSONL | ⚠️ Minimal | Only 3 chunks |
-| CGP mapper | ❌ Missing | Needs implementation |
-| Persona eval gates | ❌ Not wired | Schema only |
+| Embeddings JSONL | ✅ 216 chunks | consciousness-chunks.jsonl |
+| CGP payload | ✅ Generated | geometry_payload.json — 10 super-nodes |
+| CGP mapper | ✅ Built | chit_backend.py (sentence-transformers + KMeans) |
+| CGP decoder | ✅ Built | chit_decoder.py (exact + geometry modes) |
+| Persona eval gates | ⚠️ SQL only | Schema exists in v5_12_grounded_personas.sql, not wired |
+| Video ingestion | ❌ Broken | PMOVES.YT submodule empty — P0 blocker |
 
 ---
 
@@ -58,13 +63,14 @@ Persona Grounding (consciousness shapes → combinations → LLM selection)
 
 ```bash
 # Core infrastructure
-make env-setup
 make supa-start
-make up
-make up-agents
+make overlay-up-core
+
+# Or start tiers individually
+make up-data-tier up-bus up-agents
 
 # Verify services are healthy
-make verify-all
+make overlay-up-core
 ```
 
 **Optional services:**
@@ -277,7 +283,8 @@ make ingest-consciousness-yt ARGS="--max 5"
    - `ingest.file.added.v1`
    - `ingest.transcript.ready.v1`
 
----
+> ⚠️ **PMOVES.YT submodule is broken** — the submodule directory is empty (22-line exec shim pointing to an uninitialized submodule). Video ingestion is **non-functional** until the submodule is re-initialized with actual content. This is a P0 blocker for Phase 3.
+
 
 ## Phase 4: CGP Generation & Geometry Publication (1-2 hours)
 
@@ -520,9 +527,8 @@ python pmoves/tools/chit_decoder.py \
 ```bash
 python pmoves/tools/chit_decoder.py \
   --cgp pmoves/data/consciousness/geometry_payload.json \
-  --corpus pmoves/data/consciousness/.../consciousness-chunks.jsonl \
   --mode geometry \
-  --compute-metrics
+  --corpus pmoves/data/consciousness/Constellation-Harvest-Regularization/processed-for-rag/embeddings-ready/consciousness-chunks.jsonl \
 ```
 
 **Expected metrics:**
@@ -530,14 +536,10 @@ python pmoves/tools/chit_decoder.py \
 - Coverage > 0.8
 - Per-constellation fidelity reports
 
-### 7.3 Test Multimodal Decode (if video content)
+### 7.3 Multimodal Decode (future work)
 
-```bash
-python pmoves/tools/chit_decoder_mm.py \
-  --cgp pmoves/data/consciousness/geometry_payload.json \
-  --image-corpus ./images/ \
-  --mode clip
-```
+> `chit_decoder_mm.py` is not yet built. Planned for CLIP-based image+geometry decoding when video/image corpus is available.
+
 
 ---
 
@@ -615,7 +617,7 @@ docker logs hi-rag-gateway-v2 2>&1 | grep -i shape
 
 | Task | Command |
 |------|---------|
-| Stack status | `make verify-all` |
+| Stack status | `make overlay-up-core` |
 | Harvest consciousness | `make -C pmoves harvest-consciousness` |
 | Apply schema | `make supa-migrate` |
 | Publish geometry | `make mesh-handshake FILE=...` |
@@ -632,12 +634,16 @@ docker logs hi-rag-gateway-v2 2>&1 | grep -i shape
 
 ## Missing Components (TODO)
 
-1. **CGP Auto-Mapper**: Transform consciousness_theories → CGP packets automatically
+~~1. **CGP Auto-Mapper**~~ → ✅ **DONE** — `pmoves/tools/chit_backend.py`
 2. **Retrieval-Eval Dataset**: 50-100 labeled queries for persona gates
 3. **Persona Publish Gate Service**: Async evaluator for metric thresholds
 4. **Geometry Service Endpoints**: `/v0/geometry/*` REST API
 5. **Consciousness Metadata Schema**: Extended fields (author, epistemology, relations)
+6. `chit_decoder_mm.py` — Multimodal CGP decoder (future work)
+7. **Fix PMOVES.YT submodule** — P0 blocker for video ingestion (Phase 3)
 
 ---
+
+> **Clarification:** The "325" in this pipeline refers to 325 consciousness **theories** from Robert Lawrence Kuhn's *Landscape of Consciousness* (Closer to Truth), **not** personas. The pipeline transforms theories → CGP → grounded personas.
 
 Keep this guide updated as ingestion scripts, CGP mappers, or automation targets evolve.

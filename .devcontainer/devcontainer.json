@@ -46,7 +46,7 @@
     8055,
     8080,
     8086,
-    8096,
+    8105,
     9090
   ],
   "portsAttributes": {
@@ -57,7 +57,7 @@
     "8055": { "label": "Flute Voice Gateway", "onAutoForward": "silent" },
     "8080": { "label": "Agent Zero Orchestrator", "onAutoForward": "silent" },
     "8086": { "label": "Hi-RAG v2 Knowledge Search", "onAutoForward": "notify" },
-    "8096": { "label": "Cipher Memory", "onAutoForward": "silent" },
+    "8105": { "label": "Cipher Memory", "onAutoForward": "silent" },
     "9090": { "label": "Prometheus Metrics", "onAutoForward": "silent" }
   },
   "postCreateCommand": "bash .devcontainer/post-create.sh",

@@ -36,6 +36,7 @@ from tools.chit_security import sign_cgp  # noqa: E402
 # Constants
 # ---------------------------------------------------------------------------
 _SIGNATURES_PATH = _PMOVES_ROOT / "config" / "agent_signatures.yaml"
+_SIGNING_CARDS_PATH = _PMOVES_ROOT / "config" / "signing_identity_cards.yaml"
 _SCHEMA_PATH = (
     _PMOVES_ROOT / "contracts" / "schemas" / "agent-graphiti" / "signature.v1.schema.json"
 )
@@ -59,6 +60,64 @@ def _load_signature(agent_id: str) -> Dict[str, Any]:
         pass
     # Return a minimal fallback so the tool never hard-fails on missing YAML
     return {"agent_id": agent_id, **_FALLBACK}
+
+
+def _resolve_signing_card_id(agent_id: str) -> Optional[str]:
+    """Look up the active signing card for an agent_id (5×5 channel #4).
+
+    Reads ``pmoves/config/signing_identity_cards.yaml`` and returns the
+    ``card_id`` of the unique active card whose ``h.agent_id`` matches.
+    Returns ``None`` (with a stderr warning) when:
+
+      * the cards file is missing or unparseable,
+      * no active card exists for this agent_id,
+      * multiple active cards exist (data integrity bug — let the audit
+        gate catch it; don't pick one silently here).
+
+    Advisory mode per Owner-Decision D: signing continues without a
+    card_id stamp.  When mandatory mode lands the ``signing_card_id``
+    field on signature.v2 is populated by this resolver.
+    """
+    try:
+        import yaml  # type: ignore[import-untyped]
+    except Exception:
+        return None
+    if not _SIGNING_CARDS_PATH.exists():
+        print(
+            f"[warn] signing_identity_cards.yaml missing at {_SIGNING_CARDS_PATH} — "
+            f"no signing_card_id will be stamped (advisory)",
+            file=sys.stderr,
+        )
+        return None
+    try:
+        with open(_SIGNING_CARDS_PATH, encoding="utf-8") as fh:
+            data = yaml.safe_load(fh) or {}
+    except Exception as exc:
+        print(f"[warn] cards file parse error: {exc}", file=sys.stderr)
+        return None
+    cards = data.get("cards") or []
+    matches = [
+        c for c in cards
+        if isinstance(c, dict)
+        and c.get("active")
+        and ((c.get("h") or {}).get("agent_id") == agent_id)
+    ]
+    if not matches:
+        print(
+            f"[warn] no active signing card for agent_id={agent_id} — "
+            f"trail entry signed without signing_card_id (advisory)",
+            file=sys.stderr,
+        )
+        return None
+    if len(matches) > 1:
+        ids = [c.get("card_id") for c in matches]
+        print(
+            f"[warn] multiple active cards for agent_id={agent_id}: {ids} — "
+            f"refusing to stamp until audit reconciles",
+            file=sys.stderr,
+        )
+        return None
+    return matches[0].get("card_id")
 
 
 def _resolve_alter(sig: Dict[str, Any], alter_name: str) -> Optional[Dict[str, Any]]:
@@ -142,6 +201,12 @@ def build_payload(
     # Record which alter was selected (agent_id stays primary)
     if alter_data:
         payload["selected_alter"] = alter
+
+    # 5×5 channel #4: stamp signing_card_id when an active card exists.
+    # Advisory mode — missing card warns but does not block (Owner-Decision D).
+    card_id = _resolve_signing_card_id(agent_id)
+    if card_id:
+        payload["signing_card_id"] = card_id
 
     return payload
 

@@ -16,6 +16,7 @@ from services.common.nats_client import (
     DEFAULT_NATS_URL,
     NatsConnectionConfig,
     create_nats_connection,
+    publish_cgp,
 )
 
 
@@ -64,6 +65,17 @@ def test_nats_connection_config_custom():
     assert kwargs["error_cb"] is cb
 
 
+def test_redact_url_strips_userinfo():
+    """NATS credentials are not emitted in connection logs."""
+    from services.common import nats_client as nc_mod
+
+    assert (
+        nc_mod._redact_url("nats://pmoves:secret@nats.example:4222")
+        == "nats://nats.example:4222"
+    )
+    assert nc_mod._redact_url("nats://nats.example:4222") == "nats://nats.example:4222"
+
+
 @pytest.mark.asyncio
 async def test_create_nats_connection_success():
     """create_nats_connection returns a connected client."""
@@ -84,3 +96,26 @@ async def test_create_nats_connection_retry_on_failure():
     with patch.dict("sys.modules", {"nats": mock_nats_module}):
         with pytest.raises(ConnectionError, match="NATS connection failed"):
             await create_nats_connection()
+
+
+@pytest.mark.asyncio
+async def test_publish_cgp_uses_explicit_nats_url():
+    """publish_cgp honors its nats_url override instead of falling back to env."""
+    mock_nc = AsyncMock()
+    packet = {"spec": "chit.cgp.v0.2", "summary": "test"}
+
+    with patch("services.common.nats_client.nats_connection") as mock_conn_ctx, patch(
+        "services.common.nats_client.traced_publish", new_callable=AsyncMock
+    ) as mock_publish:
+        mock_conn_ctx.return_value.__aenter__.return_value = mock_nc
+        result = await publish_cgp(
+            packet,
+            subject="tokenism.prosodic.bpm.v1",
+            nats_url="nats://override:4222",
+        )
+
+    assert result is True
+    config = mock_conn_ctx.call_args.args[0]
+    assert config.url == "nats://override:4222"
+    assert config.name == "cgp-publisher"
+    mock_publish.assert_awaited_once()

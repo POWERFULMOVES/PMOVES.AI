@@ -50,3 +50,26 @@ class UpsertReq(BaseModel):
     jsonl: Optional[str] = None  # newline-separated JSON
     ensure_collection: bool = True
     index_lexical: bool = False
+
+
+class ProvenanceAcceptedItem(BaseModel):
+    content_id: str
+    text: str
+    source_ref: str
+    shape_id: str
+    merkle_root: str
+    graphiti_mark: str
+    kb_namespace: str = Field(default=NAMESPACE_DEFAULT)
+    accepted_reason: Optional[str] = None
+    provenance_refs: Optional[List[str]] = None
+    favorite_words: Optional[List[str]] = None
+    anchor_terms: Optional[List[str]] = None
+    semantic_weights: Optional[List[Dict[str, Any]]] = None
+    scorecard: Dict[str, Any] = {}
+    meta: Optional[Dict[str, Any]] = None
+
+
+class ProvenanceUpsertReq(BaseModel):
+    items: List[ProvenanceAcceptedItem]
+    ensure_collection: bool = True
+    index_lexical: bool = True

@@ -1,0 +1,36 @@
+# PMOVES VPS Fleet Map
+# Maps service roles to Hostinger VPS IDs
+# VPS IDs obtained via: Hostinger MCP vps-get-virtual-machines-v1
+# NEVER commit real VPS IDs — use placeholders
+
+fleet:
+  api-gateway:
+    vps_id: PLACEHOLDER_API_GATEWAY_VPS_ID
+    description: "Primary user-facing services — Agent Zero, TensorZero, Gateway"
+    services:
+      - agent-zero
+      - tensorzero
+      - gateway-agent
+
+  data-services:
+    vps_id: PLACEHOLDER_DATA_SERVICES_VPS_ID
+    description: "Storage and search services — Supabase, Neo4j, Qdrant, Meilisearch"
+    services:
+      - supabase
+      - neo4j
+      - qdrant
+      - meilisearch
+
+  exit-node:
+    vps_id: PLACEHOLDER_EXIT_NODE_VPS_ID
+    description: "Network edge services — Headscale, RustDesk, nginx"
+    services:
+      - headscale
+      - rustdesk
+      - nginx
+
+# How to populate:
+# 1. Run Hostinger MCP vps-get-virtual-machines-v1
+# 2. Map each VPS to a role based on its purpose
+# 3. Replace PLACEHOLDER_* values with real VPS IDs
+# 4. NEVER commit real IDs to git — use env override or CHIT

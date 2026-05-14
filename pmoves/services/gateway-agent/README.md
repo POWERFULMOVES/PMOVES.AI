@@ -226,7 +226,7 @@ gateway-agent:
   ports: ["8100:8100"]
   environment:
     - AGENT_ZERO_URL=http://agent-zero:8080
-    - CIPHER_URL=http://cipher-api:8096
+    - CIPHER_URL=http://cipher-api:8105
     - TENSORZERO_URL=http://tensorzero-gateway:3030
   profiles: ["agents", "gateway"]
 ```
@@ -242,7 +242,7 @@ docker run -d \
   --name pmoves-gateway-agent \
   -p 8100:8100 \
   -e AGENT_ZERO_URL=http://agent-zero:8080 \
-  -e CIPHER_URL=http://cipher-api:8096 \
+  -e CIPHER_URL=http://cipher-api:8105 \
   pmoves/gateway-agent:latest
 ```
 

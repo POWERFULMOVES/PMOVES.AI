@@ -94,6 +94,9 @@ Recommended parameter surfaces to tune (service-level):
 | Plane | Function/API | Role |
 | --- | --- | --- |
 | Geometry ingest | `POST /geometry/event` (gateway + hi-rag v2) | Accept CGP envelope and warm ShapeStore |
+| Provenance live save | `GET /hyperdimensions/provenance/latest.json` | Expose the latest accepted provenance payload as a Hyperdimensions save config |
+| Provenance live viewer | `GET /hyperdimensions/provenance/view` | Open the gateway-hosted Hyperdimensions surface against the live provenance save |
+| Live geometry room | `WS /ws/signaling/geometry` | Push `hyperdimensions.save.v1` updates into the running surface without reload |
 | Cross-modal jump | `GET /shape/point/{point_id}/jump` | Resolve modality locators from geometry point |
 | Decode checks | `POST /geometry/decode/text`, `/geometry/decode/image`, `/geometry/decode/audio` | Observer-facing interpretation |
 | Calibration | `POST /geometry/calibration/report` | Report entropy/divergence metrics for gating |

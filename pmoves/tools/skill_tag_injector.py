@@ -33,9 +33,17 @@ def load_registry() -> dict:
         return json.load(fh)
 
 
-def build_tag_block(name: str, entry: dict) -> str:
+def build_tag_block(name: str, entry: dict, common_context: list[str] | None = None) -> str:
     skills = entry.get("skills", [])
-    context_files = entry.get("context_files", [])
+    per_submodule_context = entry.get("context_files", [])
+    # Merge common context files (BOOTSTRAP/CATALOG/PATTERNS/AGENTS.md/PMOVES-agents.md/)
+    # ahead of per-submodule entries; deduplicate while preserving order.
+    seen: set[str] = set()
+    context_files: list[str] = []
+    for item in (common_context or []) + per_submodule_context:
+        if item not in seen:
+            seen.add(item)
+            context_files.append(item)
     domain_tags = entry.get("domain_tags", [])
     tier = entry.get("context_tier", 4)
     tier_label = TIER_LABELS.get(tier, "Unknown")
@@ -94,6 +102,7 @@ def main() -> int:
     dry_run = "--dry-run" in sys.argv
     registry = load_registry()
     submodules = registry.get("submodules", {})
+    common_context = registry.get("$common_context_files", [])
 
     injected = 0
     skipped = 0
@@ -108,7 +117,7 @@ def main() -> int:
             skipped += 1
             continue
 
-        block = build_tag_block(name, entry)
+        block = build_tag_block(name, entry, common_context=common_context)
         rel = claude_md.relative_to(REPO_ROOT).as_posix()
 
         if inject_tags(claude_md, block, dry_run=dry_run):

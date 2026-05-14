@@ -1,0 +1,111 @@
+# Qwen3.6 — Local via Ollama
+# Excellent Agent Zero utility model. Fits 16GB VRAM at Q4_K_M.
+# Proven Ollama config: NGL=999, num_batch=4096, ubatch=1024.
+# Can fine-tune via LoRA on DGX Spark.
+#
+# Distillation: model_fine_tune (open weights + LoRA path available)
+# Source: YouTube Signals Analysis §2.4 (Digital Spaceport benchmark)
+
+name: qwen3.6
+provider: ollama_local
+provider_display: "Ollama (Local)"
+distillation_stage: model_fine_tune
+
+model_config:
+  model_name: qwen3.6:q4_k_m
+  endpoint: http://localhost:11434/v1
+  api_key_env: null
+  context_window: 32768
+  max_output_tokens: 8192
+  temperature: 0.7
+  top_p: 0.9
+  ollama_config:
+    num_gpu: 999
+    num_batch: 4096
+    ubatch: 1024
+    quantization: Q4_K_M
+
+prompt_style:
+  format: markdown
+  system_prompt_template: null
+  preferred_language: en
+  notes: >
+    Qwen models respond well to structured markdown with clear section headers.
+    Good at following tool-calling schemas. Excels at 4K+ context where
+    inbatch processing kicks in — ideal for agentic workflows.
+
+agent_zero:
+  role: utility
+  a0_set_prefix: A0_SET_utility_model
+  subordinate_profile: sidecar
+  strengths:
+  - fast inference (3,262 tok/s generate at 2K)
+  - agentic workflows (excellent at 4K+ context)
+  - tool calling
+  - code generation
+  - fits small GPU (16GB VRAM)
+  limitations:
+  - slower than Gemma4 dense on equivalent hardware
+  - 32K context (less than cloud models)
+  - dual 3060 required for comfortable VRAM headroom
+
+pinokio_p7:
+  discoverable: true
+  pbnj_launch: false
+  tac_node: p7.nats.model-discovery
+  nats_subject: mesh.gpu.model.loaded.v1
+  notes: >
+    Discoverable by P7 Agent Interpreter when running on local Ollama.
+    P7 can auto-launch via built-in pinokio skill if Ollama endpoint exposed.
+    Publishes mesh.gpu.model.loaded.v1 on NATS when pulled.
+
+local_fallback:
+  available: true
+  reason: "Primary local fallback for cloud models — this IS the fallback"
+  fallback_model_suit: null
+
+fine_tuning:
+  possible: true
+  method: lora
+  target_platform: dgx-spark
+  notes: >
+    Open weights available on HuggingFace. LoRA fine-tuning viable on DGX Spark
+    with 128GB unified memory. Use Unsloth for efficient training.
+    Good candidate for PMOVES-specific tool-calling fine-tune.
+
+cross_agent:
+  agent_zero: full
+  clawz: limited
+  typer: untested
+  pinokio: full
+
+metadata:
+  source: youtube_benchmark_digital_spaceport
+  last_verified: 2026-04-19
+  benchmark_data:
+  - source: youtube_signals_benchmark
+    hardware: "dual RTX 3060 (12GB each)"
+    quantization: Q4_K_M
+    vram_required: 15.9GB
+    prompt_tok_per_sec_2k: 713
+    prompt_tok_per_sec_8k: 2279
+    prompt_tok_per_sec_16k: 2241
+    generate_tok_per_sec_2k: 3262
+    notes: "Inbatch processing excels at 4K+ context — best for agentic workflows"
+  - source: inferred_dgx_spark
+    notes: "Should exceed 5,000+ tok/s with 128GB unified memory on DGX Spark"
+
+ecosystem_role: |
+  Primary local utility model and cloud fallback target. When GLM-5-turbo or
+  GLM-5.1 are unavailable (network down, rate limited), Agent Zero switches
+  to Qwen3.6 via A0_SET_utility_model. Excellent for subordinate agents that
+  need fast tool-calling without cloud dependency. On DGX Spark, serves as
+  the lightweight utility slot alongside Gemma4 dense and Nemotron-3 Super.
+  LoRA fine-tuning path makes it the first candidate for PMOVES-specific
+  distillation (model_fine_tune stage).
+nats:
+  publish:
+    - mesh.gpu.model.loaded.v1
+    - mesh.gpu.model.unloaded.v1
+  subscribe:
+    - mesh.gpu.command.v1

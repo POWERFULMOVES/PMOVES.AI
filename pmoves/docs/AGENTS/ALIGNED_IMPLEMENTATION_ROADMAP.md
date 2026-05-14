@@ -766,7 +766,7 @@ class EventBus:
     - Metrics tracking
     """
 
-    def __init__(self, nats_url: str = "nats://localhost:4222"):
+    def __init__(self, nats_url: str = "nats://nats:pmoves@nats:4222"):
         self.nats_url = nats_url
         self.nc: Optional[NATSClient] = None
         self.validators: Dict[str, SchemaValidator] = {}

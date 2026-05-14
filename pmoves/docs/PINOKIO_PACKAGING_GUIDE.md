@@ -621,7 +621,7 @@ module.exports = {
         text: `
 SUPABASE_URL=${args.supabase_url}
 SUPABASE_KEY=${args.supabase_key}
-NATS_URL=nats://localhost:4222
+NATS_URL=nats://nats:pmoves@nats:4222
         `.trim()
       }
     },
@@ -814,7 +814,7 @@ module.exports = {
 # PMOVES Agent Zero Configuration
 SUPABASE_URL=your_supabase_url
 SUPABASE_SERVICE_ROLE_KEY=your_key
-NATS_URL=nats://localhost:4222
+NATS_URL=nats://nats:pmoves@nats:4222
 OPENAI_API_KEY=your_key
 ANTHROPIC_API_KEY=your_key
 
@@ -1205,7 +1205,7 @@ module.exports = {
 | FFmpeg-Whisper | Standard | 5+4 | 8078 | Recommended | `pmoves-whisper` |
 | Media-Video | Standard | 5+4 | 8079 | Required | `pmoves-media-video` |
 | Jellyfin Bridge | Specialized | 5+1 | 8093 | No | `pmoves-jellyfin-bridge` |
-| Cipher Memory | Specialized | 1+6 | 8096 | No | `pmoves-cipher` |
+| Cipher Memory | Specialized | 1+6 | 8105 | No | `pmoves-cipher` |
 | Crush | Standard | 7+6 | - | No | `pmoves-crush` |
 | EvoSwarm | Standard | 4+6 | 8113 | Required | `pmoves-evoswarm` |
 
@@ -1221,7 +1221,7 @@ SUPABASE_URL=https://xxx.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=xxx
 
 # NATS (event bus)
-NATS_URL=nats://localhost:4222
+NATS_URL=nats://nats:pmoves@nats:4222
 
 # LLM Providers (at least one required)
 OPENAI_API_KEY=xxx

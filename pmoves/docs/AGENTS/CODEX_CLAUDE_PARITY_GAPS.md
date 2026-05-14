@@ -1,16 +1,16 @@
 # Codex Claude Parity Gaps Report
-_Generated: 2026-04-05_
+_Generated: 2026-05-08_
 
 ## Scope
 - Commands source: `.claude\commands`
 - Parity map: `pmoves\docs\AGENTS\CODEX_CLAUDE_PARITY_MAP.md`
 
 ## Summary
-- Claude command tokens: **127**
-- Parity map tokens: **120**
-- Mapped tokens: **119**
-- Missing tokens: **8**
-- Coverage: **93.7%**
+- Claude command tokens: **132**
+- Parity map tokens: **133**
+- Mapped tokens: **132**
+- Missing tokens: **0**
+- Coverage: **100.0%**
 
 ## Prefix Coverage
 | Prefix | Claude Tokens | Mapped Tokens | Missing Tokens |
@@ -19,13 +19,13 @@ _Generated: 2026-04-05_
 | `agents` | 5 | 5 | 0 |
 | `archon` | 3 | 3 | 0 |
 | `botz` | 4 | 4 | 0 |
-| `chit` | 8 | 6 | 2 |
+| `chit` | 8 | 8 | 0 |
 | `cipher` | 3 | 3 | 0 |
 | `crush` | 2 | 2 | 0 |
 | `db` | 3 | 3 | 0 |
 | `deploy` | 7 | 7 | 0 |
 | `discord` | 2 | 2 | 0 |
-| `docs` | 1 | 0 | 1 |
+| `docs` | 1 | 1 | 0 |
 | `fleet` | 6 | 6 | 0 |
 | `github` | 4 | 4 | 0 |
 | `gpu` | 3 | 3 | 0 |
@@ -40,30 +40,18 @@ _Generated: 2026-04-05_
 | `nats` | 4 | 4 | 0 |
 | `notebook` | 3 | 3 | 0 |
 | `observability` | 3 | 3 | 0 |
+| `pinokio` | 5 | 5 | 0 |
 | `pipecat` | 2 | 2 | 0 |
-| `root` | 3 | 2 | 1 |
-| `search` | 4 | 3 | 1 |
-| `tac` | 1 | 0 | 1 |
+| `root` | 3 | 3 | 0 |
+| `search` | 4 | 4 | 0 |
+| `tac` | 1 | 1 | 0 |
 | `tensorzero` | 1 | 1 | 0 |
 | `test` | 2 | 2 | 0 |
-| `tts` | 6 | 4 | 2 |
+| `tts` | 6 | 6 | 0 |
 | `voice` | 2 | 2 | 0 |
 | `workitems` | 3 | 3 | 0 |
 | `worktree` | 4 | 4 | 0 |
 | `yt` | 10 | 10 | 0 |
 
 ## Missing Tokens by Prefix
-- `chit`
-  - `chit:review-sweep`
-  - `chit:sign-trail`
-- `docs`
-  - `docs:reconcile`
-- `root`
-  - `pr-trim`
-- `search`
-  - `search:ingest-content`
-- `tac`
-  - `tac:review`
-- `tts`
-  - `tts:express`
-  - `tts:test-engine`
+- None

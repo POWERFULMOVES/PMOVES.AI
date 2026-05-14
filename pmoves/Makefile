@@ -166,6 +166,28 @@ include mk/yt-cookies.mk
 update-service-docs: ## Regenerate service update notes from git metadata
 	@$(PYTHON) scripts/update_service_logs.py $(ARGS)
 
+.PHONY: docs-runbook
+docs-runbook: ## Open the comprehensive bring-up runbook
+	@if command -v xdg-open >/dev/null 2>&1; then \
+		xdg-open docs/operations/COMPLETE_BRING_UP_RUNBOOK.md; \
+	elif command -v open >/dev/null 2>&1; then \
+		open docs/operations/COMPLETE_BRING_UP_RUNBOOK.md; \
+	else \
+		echo "Runbook location: docs/operations/COMPLETE_BRING_UP_RUNBOOK.md"; \
+		echo "Quickstart location: docs/operations/QUICKSTART.md"; \
+	fi
+
+.PHONY: docs-quickstart
+docs-quickstart: ## Open the quick start guide
+	@if command -v xdg-open >/dev/null 2>&1; then \
+		xdg-open docs/operations/QUICKSTART.md; \
+	elif command -v open >/dev/null 2>&1; then \
+		open docs/operations/QUICKSTART.md; \
+	else \
+		echo "Quickstart location: docs/operations/QUICKSTART.md"; \
+		echo "Full runbook: docs/operations/COMPLETE_BRING_UP_RUNBOOK.md"; \
+	fi
+
 # -------- Updates ----------
 .PHONY: update
 update: ensure-env-shared  ## Pull repo + images, recreate stack
@@ -189,6 +211,30 @@ up-all: ## Start core, agents+UIs, n8n, and monitoring (single env)
 up-bots: ## Start bot services (BotZ gateway)
 	@$(DC) --profile data --profile workers --profile botz up -d botz-gateway
 	@echo "✔ Bots up (botz-gateway)."
+
+# =============================================================================
+# CLAWZ (OpenClaw) — Standalone submodule with own docker-compose.yml
+# =============================================================================
+
+CLAWZ_DIR := $(CURDIR)/../PMOVES-ClawZ
+
+.PHONY: clawz-up
+clawz-up: ## Start ClawZ (OpenClaw gateway) — requires pmoves_api network running
+	@echo "🦀 Starting ClawZ (OpenClaw gateway)..."
+	@test -f $(CLAWZ_DIR)/docker-compose.yml || (echo "❌ PMOVES-ClawZ submodule not initialized. Run: git submodule update --init PMOVES-ClawZ" && exit 1)
+	@cd $(CLAWZ_DIR) && docker compose up -d
+	@echo "✔ ClawZ up (openclaw-gateway :18789, openclaw-cli :18790)."
+
+.PHONY: clawz-down
+clawz-down: ## Stop ClawZ (OpenClaw gateway)
+	@echo "🦀 Stopping ClawZ..."
+	@cd $(CLAWZ_DIR) && docker compose down
+	@echo "✔ ClawZ down."
+
+.PHONY: clawz-logs
+clawz-logs: ## Tail ClawZ gateway logs
+	@cd $(CLAWZ_DIR) && docker compose logs -f openclaw-gateway
+
 
 # =============================================================================
 # OBSERVABILITY-FIRST STARTUP (Tier-based, dependency-ordered)
@@ -235,11 +281,8 @@ check-tools: ## Check required tools and versions
 		echo "↷ npm unavailable or unreachable; skipping latest-version check"; \
 	else \
 		newest=$$(printf "%s\n%s\n" "$$supa_version" "$$latest" | sort -V | tail -1); \
-		if [ "$$newest" = "$$latest" ] && [ "$$supa_version" != "$$latest" ]; then \
-			echo "⚠️  Supabase CLI update available: $$supa_version → $$latest"; \
-			echo "   Update with: npm update -g supabase"; \
-		else \
-			echo "✅ Supabase CLI version: $$supa_version"; \
+		if [ "$$newest" = "$$latest" ] && [ "$$supa_version" != "$$latest" ]; then \; echo "⚠️  Supabase CLI update available: $$supa_version → $$latest"; \; echo "   Update with: npm update -g supabase"; \
+		else \; echo "✅ Supabase CLI version: $$supa_version"; \
 		fi; \
 	fi
 
@@ -295,8 +338,7 @@ supa-start: ensure-env-shared ## Start Supabase stack for selected runtime (cli 
 		docker network create "$(SUPABASE_NETWORK)" >/dev/null 2>&1 || true; \
 		extra_start_args=""; \
 		if [ -n "$${SUPABASE_CLI_EXCLUDE:-}" ]; then \
-			extra_start_args="$$extra_start_args -x $${SUPABASE_CLI_EXCLUDE}"; \
-			echo "↷ supabase start exclude: $${SUPABASE_CLI_EXCLUDE}"; \
+			extra_start_args="$$extra_start_args -x $${SUPABASE_CLI_EXCLUDE}"; \; echo "↷ supabase start exclude: $${SUPABASE_CLI_EXCLUDE}"; \
 		fi; \
 		eval "supabase start --workdir \".\" --network-id \"$(SUPABASE_NETWORK)\" $$extra_start_args"; \
 		if echo ",$${SUPABASE_CLI_EXCLUDE:-}," | grep -q ",vector,"; then \
@@ -307,8 +349,7 @@ supa-start: ensure-env-shared ## Start Supabase stack for selected runtime (cli 
 		echo "🗄️ Starting Supabase Kong/Compose stack (SUPABASE_RUNTIME=$(SUPABASE_RUNTIME))..."; \
 		$(DC) up -d supabase-db; \
 		db=$$(bash "$(SUPABASE_DB_HELPER)" running 2>/dev/null || true); \
-		if [ -z "$$db" ]; then \
-			echo "❌ Supabase DB container not found after start."; \
+		if [ -z "$$db" ]; then \; echo "❌ Supabase DB container not found after start."; \
 			exit 1; \
 		fi; \
 		ready=0; \
@@ -357,8 +398,7 @@ supa-status: ## Show Supabase status for selected runtime and export env snapsho
 		status_file=$$(mktemp); \
 		if supabase status --workdir "." > "$$status_file" 2>&1; then \
 			cat "$$status_file"; \
-		else \
-			echo "↷ Supabase CLI stack not running yet."; \
+		else \; echo "↷ Supabase CLI stack not running yet."; \
 		fi; \
 		rm -f "$$status_file"; \
 		env_snapshot=$$(mktemp); \
@@ -368,9 +408,7 @@ supa-status: ## Show Supabase status for selected runtime and export env snapsho
 			rm -f "$$env_snapshot"; \
 		fi; \
 		if [ -s ".supabase.status.env" ]; then \
-			$(PYTHON) scripts/supabase/runtime_env_bridge.py --status-file .supabase.status.env --output env.supa.runtime >/dev/null 2>&1 || true; \
-			echo ""; \
-			echo "📌 Runtime env snapshot: .supabase.status.env"; \
+			$(PYTHON) scripts/supabase/runtime_env_bridge.py --status-file .supabase.status.env --output env.supa.runtime >/dev/null 2>&1 || true; \; echo ""; \; echo "📌 Runtime env snapshot: .supabase.status.env"; \
 			grep -E '^(API_URL|DB_URL|STUDIO_URL|ANON_KEY|SERVICE_ROLE_KEY|JWT_SECRET)=' .supabase.status.env || true; \
 			if [ -s "env.supa.runtime" ]; then \
 				echo "🔗 Runtime service overlay: env.supa.runtime"; \
@@ -417,12 +455,10 @@ supa-logs: ## Tail logs for selected runtime (set SVC=<container/service> for a 
 	fi
 	@if [ "$(SUPABASE_RUNTIME)" = "cli" ]; then \
 		containers=$$(docker ps --format '{{.Names}}' | grep -E '^supabase_' || true); \
-		if [ -z "$$containers" ]; then \
-			echo "No Supabase CLI containers running."; \
+		if [ -z "$$containers" ]; then \; echo "No Supabase CLI containers running."; \
 			exit 0; \
 		fi; \
-		for c in $$containers; do \
-			echo "---- $$c (tail=80) ----"; \
+		for c in $$containers; do \; echo "---- $$c (tail=80) ----"; \
 			docker logs --tail=80 "$$c" || true; \
 		done; \
 	else \
@@ -485,8 +521,7 @@ supa-collation-refresh: ## Refresh collation version for all Supabase databases 
 	for dbname in postgres _supabase; do \
 		echo "  -> ALTER DATABASE $$dbname REFRESH COLLATION VERSION"; \
 		if ! docker exec -i "$$db" psql -U postgres -d "$$dbname" \
-			-c "ALTER DATABASE $$dbname REFRESH COLLATION VERSION;" 2>&1; then \
-			echo "  ❌ ALTER DATABASE $$dbname failed"; \
+			-c "ALTER DATABASE $$dbname REFRESH COLLATION VERSION;" 2>&1; then \; echo "  ❌ ALTER DATABASE $$dbname failed"; \
 			failed=1; \
 		fi; \
 	done; \
@@ -547,8 +582,7 @@ supabase-bootstrap: ## Apply pending Supabase migrations + seeds (tracked in pub
 			if [ "$$applied" = "1" ]; then \
 				echo "   Skipping migration (already applied): $$name"; \
 				continue; \
-			fi; \
-			echo "   Applying migration: $$name"; \
+			fi; \; echo "   Applying migration: $$name"; \
 			docker exec -i "$$db" psql -v ON_ERROR_STOP=1 -U postgres -d postgres < "$$migration"; \
 			docker exec -i "$$db" psql -v ON_ERROR_STOP=1 -U postgres -d postgres -c "INSERT INTO public.pmoves_bootstrap_history(kind, filename) VALUES ('migration', '$$name') ON CONFLICT DO NOTHING;"; \
 		done; \
@@ -563,8 +597,7 @@ supabase-bootstrap: ## Apply pending Supabase migrations + seeds (tracked in pub
 			if [ "$$applied" = "1" ]; then \
 				echo "   Skipping seed (already applied): $$name"; \
 				continue; \
-			fi; \
-			echo "   Applying seed: $$name"; \
+			fi; \; echo "   Applying seed: $$name"; \
 			docker exec -i "$$db" psql -v ON_ERROR_STOP=1 -U postgres -d postgres < "$$seed"; \
 			docker exec -i "$$db" psql -v ON_ERROR_STOP=1 -U postgres -d postgres -c "INSERT INTO public.pmoves_bootstrap_history(kind, filename) VALUES ('seed', '$$name') ON CONFLICT DO NOTHING;"; \
 		done; \
@@ -999,6 +1032,13 @@ down-tensorzero: ## Stop TensorZero gateway
 	@echo "🧠 Stopping TensorZero..."
 	@$(DC) --profile tensorzero down
 
+.PHONY: restart-tensorzero
+restart-tensorzero: ## Restart TensorZero LLM gateway
+	@echo "🔄 Restarting TensorZero..."
+	@$(MAKE) --no-print-directory down-tensorzero
+	@sleep 2
+	@$(MAKE) --no-print-directory up-tensorzero
+
 .PHONY: down-agents
 down-agents: ## Stop agent services
 	@echo "🤖 Stopping agents..."
@@ -1333,8 +1373,7 @@ bootstrap-tier-envs: ## Create missing tier env files from examples (Hardened br
 	@echo "Bootstrapping tier environment files from examples..."
 	@created=""; \
 	for tier in data supabase api llm worker media agent ui; do \
-		if [ ! -f "env.tier-$$tier" ] && [ -f "env.tier-$$tier.example" ]; then \
-			echo "→ Creating env.tier-$$tier from example..."; \
+		if [ ! -f "env.tier-$$tier" ] && [ -f "env.tier-$$tier.example" ]; then \; echo "→ Creating env.tier-$$tier from example..."; \
 			cp "env.tier-$$tier.example" "env.tier-$$tier"; \
 			created="$$created env.tier-$$tier"; \
 		fi; \
@@ -1358,8 +1397,7 @@ populate-tier-envs: bootstrap-tier-envs ## Populate tier env files with defaults
 		echo "✓ Populated env.tier-data"; \
 	fi; \
 	if [ -f "env.tier-supabase" ]; then \
-		if grep -q "your_jwt_secret_here\|your_anon_key_here\|your_service_role_key_here" env.tier-supabase 2>/dev/null; then \
-			echo "Generating Supabase secrets with proper JWT tokens..."; \
+		if grep -q "your_jwt_secret_here\|your_anon_key_here\|your_service_role_key_here" env.tier-supabase 2>/dev/null; then \; echo "Generating Supabase secrets with proper JWT tokens..."; \
 			if [ -x scripts/supabase/generate-keys.sh ]; then \
 				scripts/supabase/generate-keys.sh > env.tier-supabase; \
 				echo "✓ Populated env.tier-supabase (via generate-keys.sh with valid JWTs)"; \
@@ -1819,6 +1857,28 @@ monitoring-report: ## Print a quick Prometheus summary (targets, failures, top C
 docker-logs-brief: ## Summarize recent Docker WARN/ERROR lines + container health for PMOVES/supabase containers
 	@$(PYTHON) tools/docker_logs_brief.py --tail $${DOCKER_LOGS_TAIL:-120} --save docs/evidence/docker_logs_brief_latest.txt
 
+# -------- Distributed Tracing (Jaeger + OTLP) --------
+.PHONY: up-tracing down-tracing tracing-open tracing-status
+
+JAEGER_UI_PORT ?= 16686
+OTEL_HTTP_PORT ?= 4318
+OTEL_GRPC_PORT ?= 4327
+OTEL_METRICS_PORT ?= 8889
+
+up-tracing: ## Start distributed tracing stack (Jaeger UI + OTLP Collector)
+	@echo "[*] Starting distributed tracing stack..."
+	@bash -lc '. ./scripts/with-env.sh; \
+		docker compose -f docker-compose.yml -f docker-compose.tracing.yml up -d jaeger otel-collector; \; echo "[+] Jaeger UI:    http://localhost:$${JAEGER_UI_PORT}"; \
+		echo "[+] Jaeger UI:    http://localhost:16686"; \; echo "[+] OTLP HTTP:    http://localhost:4318/v1/traces"; \; echo "[+] OTLP gRPC:    http://localhost:4327"; \; echo "[+] Metrics:      http://localhost:8889/metrics"; \; echo "[*] Trace visualization available at Jaeger UI"'
+down-tracing: ## Stop distributed tracing stack and remove volumes
+	@bash -lc 'docker compose -f docker-compose.tracing.yml down -v'
+
+tracing-open: ## Open Jaeger UI in your browser
+	@$(PYTHON) -c "import webbrowser; webbrowser.open('http://localhost:$(JAEGER_UI_PORT)')"
+
+tracing-status: ## Show distributed tracing stack status
+	@docker compose -f docker-compose.tracing.yml ps
+
 # -------- Tailscale helpers --------
 .PHONY: tailscale-save-key tailscale-join tailscale-rejoin tailscale-status tailscale-logout
 
@@ -1925,14 +1985,11 @@ claws-status: ## Health check all claw instances
 	@for scope in $$(ls $(CLAW_SCOPES) | sed 's/.json//'); do \
 		TARGET_VAR="CLAW_TARGET_$$scope"; \
 		TARGET="$${!TARGET_VAR:-}"; \
-		if [ -n "$$TARGET" ]; then \
-			echo ""; \
-			echo "--- $$scope ($$TARGET) ---"; \
+		if [ -n "$$TARGET" ]; then \; echo ""; \; echo "--- $$scope ($$TARGET) ---"; \
 			ssh -o ConnectTimeout=3 "$$TARGET" \
 				"echo 'SSH: OK'; kilo --version 2>/dev/null || echo 'Kilo: not installed'; tailscale status --self 2>/dev/null | head -1 || echo 'Tailscale: not found'" \
 				2>/dev/null || echo "  UNREACHABLE"; \
-		else \
-			echo "--- $$scope: no target configured ---"; \
+		else \; echo "--- $$scope: no target configured ---"; \
 		fi; \
 	done
 
@@ -2110,6 +2167,38 @@ voice-follow-stop: ## Stop voice-follow daemon
 
 voice-follow-logs: ## Tail voice-follow logs
 	@[ -f .pmoves_voice_follow.log ] && tail -f .pmoves_voice_follow.log || echo "No voice-follow log found. Run 'make -C pmoves voice-follow-start' first."
+
+# -------- Voice stack health + unified launch --------
+.PHONY: voice-health up-voice
+
+voice-health: ## Check health of full voice stack (NATS, Flute, TTS backends, Voice-Relay)
+	@echo "=== Voice Stack Health ==="
+	@curl -sf http://localhost:4222/healthz > /dev/null 2>&1 \
+	  && echo "  NATS       (:4222) ✔" \
+	  || echo "  NATS       (:4222) ✗  — run: make up-bus"
+	@curl -sf http://localhost:8055/healthz > /dev/null 2>&1 \
+	  && echo "  Flute      (:8055) ✔" \
+	  || echo "  Flute      (:8055) ✗  — run: make overlay-up-media  (needs env.tier-media)"
+	@curl -sf http://localhost:3000/ > /dev/null 2>&1 \
+	  && echo "  VibeVoice  (:3000) ✔  [CPU fallback]" \
+	  || echo "  VibeVoice  (:3000) ✗  — optional; run: make up-voice"
+	@curl -sf http://localhost:7861/gradio_api/info > /dev/null 2>&1 \
+	  && echo "  UltimateTTS(:7861) ✔  [GPU preferred]" \
+	  || echo "  UltimateTTS(:7861) ✗  — GPU nodes only; run: make up-tts-studio"
+	@curl -sf http://localhost:8121/healthz > /dev/null 2>&1 \
+	  && echo "  VoiceRelay (:8121) ✔" \
+	  || echo "  VoiceRelay (:8121) ✗  — run: make up-voice-relay"
+
+up-voice: ## Start voice stack: Flute-Gateway + VibeVoice CPU fallback + Voice-Relay
+	@echo "Starting voice stack (Flute + VibeVoice + Voice-Relay)..."
+	@docker compose -p $(PROJECT) --project-directory $(CURDIR) $(COMPOSE_ENV_FILES) \
+		-f docker-compose.base.yml \
+		-f docker-compose.media.yml \
+		-f docker-compose.voice.yml \
+		--profile media --profile voice \
+		up -d flute-gateway vibevoice voice-relay
+	@echo ""
+	@$(MAKE) --no-print-directory voice-health
 
 .PHONY: voice-follow-smoke voice-agent-discord-smoke
 
@@ -2387,7 +2476,7 @@ supaserch-health: ## Check SupaSerch health endpoint (200 expected)
 .PHONY: supaserch-smoke
 supaserch-smoke: ## Publish SupaSerch request via NATS and verify HTTP fallback responds
 	@echo "→ Publishing SupaSerch smoke request on supaserch.request.v1"
-	@bash -lc $'$(LOAD_ENV_SHARED) python3 - <<"PY"\nimport asyncio\nimport json\nimport os\nimport sys\nimport uuid\nimport urllib.request\nfrom urllib.error import URLError, HTTPError\n\nfrom nats.aio.client import Client as NATS\n\n\nasync def publish_and_wait() -> dict[str, object]:\n    request_id = f"supaserch-smoke-{uuid.uuid4().hex[:8]}"\n    nc = NATS()\n    url = os.getenv("NATS_URL", "nats://localhost:4222")\n    await nc.connect(url)\n    loop = asyncio.get_running_loop()\n    future: asyncio.Future | None = loop.create_future()\n\n    async def handler(msg):\n        nonlocal future\n        try:\n            data = json.loads(msg.data.decode("utf-8"))\n        except json.JSONDecodeError:\n            return\n        if data.get("request_id") != request_id:\n            return\n        if future and not future.done():\n            future.set_result(data)\n\n    sid = await nc.subscribe("supaserch.result.v1", cb=handler)\n    payload = {\n        "request_id": request_id,\n        "query": "supaserch smoke verification",\n        "correlation_id": request_id,\n        "trigger": "make supaserch-smoke",\n    }\n    await nc.publish("supaserch.request.v1", json.dumps(payload).encode("utf-8"))\n    await nc.flush()\n    try:\n        result = await asyncio.wait_for(future, timeout=10)\n    except asyncio.TimeoutError:\n        print("✖ Did not receive supaserch.result.v1 within 10s")\n        await nc.unsubscribe(sid)\n        await nc.drain()\n        sys.exit(1)\n    await nc.unsubscribe(sid)\n    await nc.drain()\n    fallback = result.get("fallback", {}) if isinstance(result, dict) else {}\n    if fallback.get("status") != "ok":\n        print("✖ NATS fallback status not ok:", json.dumps(fallback))\n        sys.exit(1)\n    via = fallback.get("via", "unknown")\n    latency = fallback.get("latency_ms", 0)\n    print(f"✔ NATS round-trip complete (via {via}, latency {latency} ms)")\n    return result\n\n\nresult = asyncio.run(publish_and_wait())\nhost_port = os.getenv("SUPASERCH_HOST_PORT", os.getenv("SUPASERCH_PORT", "8099"))\nhttp_url = f"http://localhost:{host_port}/v1/search?q=supaserch+smoke+http"\ntry:\n    with urllib.request.urlopen(http_url, timeout=8) as resp:\n        body = json.loads(resp.read().decode("utf-8"))\nexcept (HTTPError, URLError, TimeoutError) as exc:\n    print(f"✖ HTTP fallback request failed: {exc}")\n    sys.exit(1)\n\nfallback = body.get("fallback", {}) if isinstance(body, dict) else {}\nif fallback.get("status") != "ok":\n    print("✖ HTTP fallback status not ok:", json.dumps(fallback))\n    sys.exit(1)\n\nvia = fallback.get("via", "unknown")\nlatency = fallback.get("latency_ms", 0)\nprint(f"✔ HTTP fallback responded (via {via}, latency {latency} ms)")\nPY'
+	@bash -lc $'$(LOAD_ENV_SHARED) python3 - <<"PY"\nimport asyncio\nimport json\nimport os\nimport sys\nimport uuid\nimport urllib.request\nfrom urllib.error import URLError, HTTPError\n\nfrom nats.aio.client import Client as NATS\n\n\nasync def publish_and_wait() -> dict[str, object]:\n    request_id = f"supaserch-smoke-{uuid.uuid4().hex[:8]}"\n    nc = NATS()\n    url = os.getenv("NATS_URL", "nats://nats:pmoves@nats:4222")\n    await nc.connect(url)\n    loop = asyncio.get_running_loop()\n    future: asyncio.Future | None = loop.create_future()\n\n    async def handler(msg):\n        nonlocal future\n        try:\n            data = json.loads(msg.data.decode("utf-8"))\n        except json.JSONDecodeError:\n            return\n        if data.get("request_id") != request_id:\n            return\n        if future and not future.done():\n            future.set_result(data)\n\n    sid = await nc.subscribe("supaserch.result.v1", cb=handler)\n    payload = {\n        "request_id": request_id,\n        "query": "supaserch smoke verification",\n        "correlation_id": request_id,\n        "trigger": "make supaserch-smoke",\n    }\n    await nc.publish("supaserch.request.v1", json.dumps(payload).encode("utf-8"))\n    await nc.flush()\n    try:\n        result = await asyncio.wait_for(future, timeout=10)\n    except asyncio.TimeoutError:\n        print("✖ Did not receive supaserch.result.v1 within 10s")\n        await nc.unsubscribe(sid)\n        await nc.drain()\n        sys.exit(1)\n    await nc.unsubscribe(sid)\n    await nc.drain()\n    fallback = result.get("fallback", {}) if isinstance(result, dict) else {}\n    if fallback.get("status") != "ok":\n        print("✖ NATS fallback status not ok:", json.dumps(fallback))\n        sys.exit(1)\n    via = fallback.get("via", "unknown")\n    latency = fallback.get("latency_ms", 0)\n    print(f"✔ NATS round-trip complete (via {via}, latency {latency} ms)")\n    return result\n\n\nresult = asyncio.run(publish_and_wait())\nhost_port = os.getenv("SUPASERCH_HOST_PORT", os.getenv("SUPASERCH_PORT", "8099"))\nhttp_url = f"http://localhost:{host_port}/v1/search?q=supaserch+smoke+http"\ntry:\n    with urllib.request.urlopen(http_url, timeout=8) as resp:\n        body = json.loads(resp.read().decode("utf-8"))\nexcept (HTTPError, URLError, TimeoutError) as exc:\n    print(f"✖ HTTP fallback request failed: {exc}")\n    sys.exit(1)\n\nfallback = body.get("fallback", {}) if isinstance(body, dict) else {}\nif fallback.get("status") != "ok":\n    print("✖ HTTP fallback status not ok:", json.dumps(fallback))\n    sys.exit(1)\n\nvia = fallback.get("via", "unknown")\nlatency = fallback.get("latency_ms", 0)\nprint(f"✔ HTTP fallback responded (via {via}, latency {latency} ms)")\nPY'
 
 .PHONY: build-push-supaserch
 REGISTRY ?= ghcr.io
@@ -2534,7 +2623,7 @@ ghcr-list: ## List all images in the integrations-ghcr matrix
 
 .PHONY: deepresearch-smoke
 deepresearch-smoke: ## Publish a sample DeepResearch request and wait for a result (requires worker running)
-	@ENV_FILE="$(CURDIR)/env.shared" bash -lc '. ./scripts/with-env.sh "$$ENV_FILE" && PYTHONPATH="$(CURDIR)/.." python3 tools/deepresearch_smoke.py --nats nats://localhost:4222 --timeout $${DEEPRESEARCH_SMOKE_TIMEOUT:-60}'
+	@ENV_FILE="$(CURDIR)/env.shared" bash -lc '. ./scripts/with-env.sh "$$ENV_FILE" && PYTHONPATH="$(CURDIR)/.." python3 tools/deepresearch_smoke.py --timeout $${DEEPRESEARCH_SMOKE_TIMEOUT:-60}'
 
 .PHONY: deepresearch-smoke-in-net
 deepresearch-smoke-in-net: ## Run DeepResearch NATS smoke inside the compose network (reliable visibility)
@@ -2850,6 +2939,40 @@ flute-gateway-smoke: ## Smoke test Flute-Gateway health + provider status
 	@curl -sf http://localhost:8055/healthz || { echo "Flute-Gateway not responding at http://localhost:8055/healthz"; exit 1; }
 
 # ────────────────────────────────────────────────────────────────────────────
+# FFMPEG-WHISPER STT SERVICE (mic chain — STT only, narrower than up-yt)
+# ────────────────────────────────────────────────────────────────────────────
+
+.PHONY: up-ffmpeg-whisper ffmpeg-whisper-smoke
+up-ffmpeg-whisper: ## Start ffmpeg-whisper STT service (port 8078, requires GPU)
+	@echo "Starting ffmpeg-whisper..."
+	@$(DC) --profile workers up -d --build ffmpeg-whisper
+	@sleep 5
+	@curl -sf http://localhost:8078/healthz > /dev/null 2>&1 \
+	  && echo "ffmpeg-whisper ready at http://localhost:8078" \
+	  || echo "ffmpeg-whisper may still be starting (check: curl http://localhost:8078/healthz)"
+
+ffmpeg-whisper-smoke: ## Smoke test ffmpeg-whisper health
+	@echo "ffmpeg-whisper smoke test..."
+	@curl -sf http://localhost:8078/healthz || { echo "ffmpeg-whisper not responding at http://localhost:8078/healthz"; exit 1; }
+
+# ────────────────────────────────────────────────────────────────────────────
+# VOICE-RELAY NATS BRIDGE (mic chain — Agent Zero result → voice.agent.response)
+# ────────────────────────────────────────────────────────────────────────────
+
+.PHONY: up-voice-relay voice-relay-smoke
+up-voice-relay: ## Start voice-relay NATS bridge (port 8121, CPU only)
+	@echo "Starting voice-relay..."
+	@$(DC) --profile media up -d voice-relay
+	@sleep 5
+	@curl -sf http://localhost:8121/healthz > /dev/null 2>&1 \
+	  && echo "voice-relay ready at http://localhost:8121" \
+	  || echo "voice-relay may still be starting (check: curl http://localhost:8121/healthz)"
+
+voice-relay-smoke: ## Smoke test voice-relay health
+	@echo "voice-relay smoke test..."
+	@curl -sf http://localhost:8121/healthz || { echo "voice-relay not responding at http://localhost:8121/healthz"; exit 1; }
+
+# ────────────────────────────────────────────────────────────────────────────
 # HI-RAG GATEWAY (Hybrid RAG v2)
 # ────────────────────────────────────────────────────────────────────────────
 
@@ -2922,6 +3045,93 @@ up-z890: ## Start Z890 GPU node (Ollama + NATS Leaf + Mesh Agent + Container Age
 down-z890: ## Stop Z890 GPU node services
 	@$(LOAD_ENV_Z890) docker compose -p $(PROJECT)-z890 $(Z890_COMPOSE) down
 	@echo "✔ Z890 node stopped."
+
+# ── Z890 Multi-Boot Bootstrap ─────────────────────────────────────────────
+# Driver targets for deploy/provision/z890/*.  See deploy/provision/z890/README.md
+# for the full operator runbook.
+
+# Accept optional DISTRO / DEVICE: make z890-media-usb DISTRO=ubuntu-24.04 DEVICE=/dev/sdb
+DISTRO ?=
+DEVICE ?=
+
+.PHONY: z890-media-usb
+z890-media-usb: ## Prepare fallback per-device USB installer (DISTRO=ubuntu-24.04|pop-os-22.04|... DEVICE=/dev/sdX)
+	@if [ -z "$(DISTRO)" ]; then echo "Usage: make z890-media-usb DISTRO=<name> [DEVICE=/dev/sdX]"; \
+	  grep -A1 '^  [a-z0-9-]*:' ../deploy/provision/z890/pxe/distro-manifest.yaml | grep -v '^--' | head -20; exit 1; fi
+	@sudo bash ../deploy/provision/z890/media/prepare-usb.sh \
+	  --distro $(DISTRO) $(if $(DEVICE),--device $(DEVICE),)
+
+.PHONY: z890-media-nvme
+z890-media-nvme: ## Partition external NVMe as multi-boot target (DEVICE=/dev/nvme0n1)
+	@if [ -z "$(DEVICE)" ]; then echo "Usage: make z890-media-nvme DEVICE=/dev/nvme0n1"; exit 1; fi
+	@sudo bash ../deploy/provision/z890/media/prepare-nvme-target.sh --device $(DEVICE)
+
+.PHONY: z890-pxe-serve
+z890-pxe-serve: ## Serve netboot.xyz custom menu for Z890 (runs on 5090 — see README)
+	@echo "PXE serve requires netboot.xyz running on the 5090 node."
+	@echo "Custom menu: deploy/provision/z890/pxe/netboot-menu-pmoves.ipxe"
+	@echo "Distro catalog: deploy/provision/z890/pxe/distro-manifest.yaml"
+	@echo ""
+	@echo "To serve:"
+	@echo "  1. On 5090: docker run -d --name netbootxyz-z890 \\"
+	@echo "       -p 8080:80 \\"
+	@echo "       -v \$$PWD/deploy/provision/z890/pxe:/config/menus/custom \\"
+	@echo "       ghcr.io/netbootxyz/netbootxyz"
+	@echo "  2. On Z890: F12 boot menu → PXE → choose entry from PMOVES menu"
+	@echo ""
+	@echo "Fallback if 5090 is down:  make z890-media-usb DISTRO=<name> DEVICE=/dev/sdX"
+
+.PHONY: z890-post-install
+z890-post-install: ## Run per-distro post-install (auto-detects running distro via profile.yaml)
+	@if [ ! -r /opt/pmoves/profile.yaml ] && [ ! -r /etc/os-release ]; then \
+	  echo "ERROR: neither profile.yaml nor /etc/os-release readable"; exit 1; fi
+	@distro="$$(awk -F': ' '/^distro:/{gsub(/[ \t]/,"",$$2);print $$2;exit}' /opt/pmoves/profile.yaml 2>/dev/null | tr -d '\"')"; \
+	if [ -z "$$distro" ]; then . /etc/os-release && distro="$$ID"; fi; \
+	case "$$distro" in \
+	  ubuntu)   script=ubuntu-24.04-post.sh ;; \
+	  pop|popos) script=pop-os-22.04-post.sh ;; \
+	  fedora|nobara) script=fedora-nobara-post.sh ;; \
+	  cachyos)  script=cachyos-post.sh ;; \
+	  nixos)    echo "NixOS uses declarative nixos-post.nix — see deploy/provision/z890/README.md"; exit 0 ;; \
+	  *)        echo "Unknown distro '$$distro' — run scripts manually from deploy/provision/z890/"; exit 1 ;; \
+	esac; \
+	echo "Running deploy/provision/z890/$$script..."; \
+	sudo bash ../deploy/provision/z890/$$script
+
+.PHONY: z890-verify
+z890-verify: ## Full verification sweep after Z890 bootstrap (profile, tailscale, docker, nvidia, NATS, Hi-RAG)
+	@if [ -f ../deploy/provision/z890/common/99-verify.sh ]; then \
+	  bash ../deploy/provision/z890/common/99-verify.sh; \
+	else \
+	  echo "ERROR: verify script not found. Did you clone PMOVES.AI to the standard path?"; exit 1; \
+	fi
+
+# ── Jetson JetPack 7 Reflash ─────────────────────────────────────────────
+# Driver targets for deploy/provision/jetson/*.  See deploy/provision/jetson/README.md
+# for the full reflash runbook. DEVICE must be nemotron-1 or nemotron-2.
+
+.PHONY: jetson-reflash
+jetson-reflash: ## Drive SDK Manager to reflash Jetson to JetPack 7 (DEVICE=nemotron-1|nemotron-2)
+	@if [ -z "$(DEVICE)" ]; then echo "Usage: make jetson-reflash DEVICE=nemotron-1 (or nemotron-2)"; exit 1; fi
+	@case "$(DEVICE)" in nemotron-1|nemotron-2) ;; *) echo "DEVICE must be nemotron-1 or nemotron-2"; exit 1 ;; esac
+	@echo "Pre-flight: SDK Manager requires x86 Ubuntu 22.04 host + Jetson in recovery mode."
+	@echo "If this host is not that, use jetson-post-flash only once Jetson is already reachable."
+	@sudo TAILSCALE_AUTHKEY=$${TAILSCALE_AUTHKEY} \
+	  bash ../deploy/provision/jetson/jetpack7-reflash.sh --device $(DEVICE)
+
+.PHONY: jetson-post-flash
+jetson-post-flash: ## Copy + run post-flash-bootstrap.sh on an already-flashed Jetson (DEVICE=nemotron-N)
+	@if [ -z "$(DEVICE)" ]; then echo "Usage: make jetson-post-flash DEVICE=nemotron-1 (or nemotron-2)"; exit 1; fi
+	@scp ../deploy/provision/jetson/post-flash-bootstrap.sh \
+	  ../deploy/provision/jetson/nemotron-branding \
+	  pmoves-$(DEVICE):/tmp/
+	@ssh pmoves-$(DEVICE) \
+	  "sudo DEVICE=$(DEVICE) TAILSCALE_AUTHKEY=$${TAILSCALE_AUTHKEY} bash /tmp/post-flash-bootstrap.sh"
+
+.PHONY: jetson-verify
+jetson-verify: ## Verify Jetson fleet integration (DEVICE=nemotron-1|nemotron-2)
+	@if [ -z "$(DEVICE)" ]; then echo "Usage: make jetson-verify DEVICE=nemotron-1 (or nemotron-2)"; exit 1; fi
+	@bash ../deploy/provision/jetson/verify-jetson-fleet.sh --device $(DEVICE)
 
 .PHONY: ps-z890
 ps-z890: ## Show Z890 node service status
@@ -3162,8 +3372,7 @@ neo4j-migrate: ## Run Neo4j migration (usage: make neo4j-migrate VERSION=003)
 		echo "Usage: make neo4j-migrate VERSION=003"; \
 		echo ""; \
 		echo "Available migrations:"; \
-		ls -1 ../PMOVES-Neo4j/db/migrations/*.cypher 2>/dev/null | while read -r f; do \
-			echo "  • $$(basename "$$f")"; \
+		ls -1 ../PMOVES-Neo4j/db/migrations/*.cypher 2>/dev/null | while read -r f; do \; echo "  • $$(basename "$$f")"; \
 		done; \
 		exit 1; \
 	fi
@@ -3174,8 +3383,7 @@ neo4j-seed: ## Load Neo4j seed data (usage: make neo4j-seed SEED=001_person_alia
 		echo "Usage: make neo4j-seed SEED=001_person_aliases.csv"; \
 		echo ""; \
 		echo "Available seeds:"; \
-		ls -1 ../PMOVES-Neo4j/db/seeds/*.csv 2>/dev/null | while read -r f; do \
-			echo "  • $$(basename "$$f")"; \
+		ls -1 ../PMOVES-Neo4j/db/seeds/*.csv 2>/dev/null | while read -r f; do \; echo "  • $$(basename "$$f")"; \
 		done; \
 		exit 1; \
 	fi
@@ -3241,8 +3449,7 @@ neo4j-backup: ## Backup Neo4j database to backups/ with timestamp
 			docker cp $$container_name:/backups/neo4j_$${timestamp}.cypher "$$backup_dir/neo4j_$${timestamp}.cypher" 2>/dev/null && \
 				echo "✅ Backup created: $$backup_dir/neo4j_$${timestamp}.cypher" && \
 				ls -lh "$$backup_dir/neo4j_$${timestamp}.cypher"; \
-		else \
-			echo "❌ Backup failed - neither dump nor cypher export succeeded"; \
+		else \; echo "❌ Backup failed - neither dump nor cypher export succeeded"; \
 			exit 1; \
 		fi; \
 	else \

@@ -11,7 +11,7 @@ Do NOT let a connection failure interrupt your workflow.
 ### Step 1: Health check (silent, non-blocking)
 
 ```bash
-curl -sf --max-time 3 http://localhost:8096/health > /dev/null 2>&1 && echo "CIPHER_UP" || echo "CIPHER_DOWN"
+curl -sf --max-time 3 http://localhost:8105/health > /dev/null 2>&1 && echo "CIPHER_UP" || echo "CIPHER_DOWN"
 ```
 
 ### Step 2a: Search via MCP tool (primary — if CIPHER_UP)

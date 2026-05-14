@@ -26,7 +26,7 @@
   "mcp_servers": {
     "pmoves-cipher": {
       "type": "sse",
-      "url": "http://cipher-memory:8096/sse"
+      "url": "http://cipher-memory:8105/sse"
     }
   },
   "damage_control_hooks": true,

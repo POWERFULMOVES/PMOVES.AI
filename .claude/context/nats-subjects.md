@@ -374,6 +374,36 @@ Example: `ingest.transcript.ready.v1`
   ```
 - **Subscribers:** Observability systems, UI dashboards
 
+**`pmoves.space.action.v1`**
+- **Direction:** Published by Space-Agent bridge (on inbound `/api/pmoves_bridge` POST)
+- **Purpose:** Surface space CRUD actions (create_space, update_widget, delete_space, list_spaces, read_space) onto the bus for downstream listeners
+- **Payload:**
+  ```json
+  {
+    "action": "create_space",
+    "username": "pilot-id",
+    "spaceId": "uuid-or-slug",
+    "request_id": "uuid",
+    "timestamp": "2026-04-25T12:00:00Z"
+  }
+  ```
+- **Subscribers:** Agent Zero (for orchestration), audit/observability sinks
+
+**`pmoves.space.event.v1`**
+- **Direction:** Published by Space-Agent on customware lifecycle changes
+- **Purpose:** Notify subscribers when space state advances (mutation succeeded, widget updated, space deleted)
+- **Payload:**
+  ```json
+  {
+    "event": "widget_updated",
+    "username": "pilot-id",
+    "spaceId": "uuid-or-slug",
+    "widgetId": "widget-name",
+    "timestamp": "2026-04-25T12:00:00Z"
+  }
+  ```
+- **Subscribers:** UI feeds, attestation workers (Stage 8 token-stub watches for `event` to mint work-receipts)
+
 **`agent.graphiti.signed.v1`**
 - **Direction:** Published by BoTZ MCP Gateway and agent handoff services
 - **Purpose:** Emit graphiti-signed trail events for cross-agent handoff attribution
@@ -1484,6 +1514,29 @@ nats server report connections
   ```json
   {"work_order_id": "wo-123", "workflow_type": "submodule_update", "repos": ["PMOVES.AI"], "changes": [...], "approved": true}
   ```
+
+**`branch.<path-segments>.trail.v1`**
+- **Direction:** Published by `pmoves-ci-bot` (GH Actions) → Consumed by monitoring / audit lane
+- **Purpose:** §9.4 branch lifecycle CHIT trail — emits a HMAC-signed entry on branch create,
+  PR link, merge, and delete. Subject uses dot-separated branch path segments
+  (e.g. `branch.feat.my-feature.trail.v1`). Implemented by `pmoves/services/common/branch_trail.py`
+  (Layer 1 emit primitive) and `.github/workflows/branch-trail-emit.yml` (Layer 4 GH Actions).
+- **Payload:**
+  ```json
+  {
+    "spec": "branch-trail-v1",
+    "branch": "feat/my-feature",
+    "event": "create",
+    "sha": "abc1234",
+    "agent_id": "pmoves-ci-bot",
+    "signing_card_id": "00000000-0000-4000-8000-000000000035",
+    "ecosystem": "github",
+    "timestamp": "2026-05-12T00:00:00Z"
+  }
+  ```
+- **Notes:** Signing key delivered via `CHIT_PASSPHRASE` / `CHIT_SIGNING_KEY` repo secrets.
+  Best-effort — publish failure logs and exits 0 without blocking branch operations.
+  Gated against fork PRs to prevent RCE on the tailnet-connected ai-lab runner.
 
 ## Agent Zero Task Coordination Subjects
 

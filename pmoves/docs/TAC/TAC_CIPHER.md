@@ -7,7 +7,7 @@
 | Field | Value |
 |-------|-------|
 | **Service** | Cipher Memory |
-| **Port** | 8096 |
+| **Port** | 8105 |
 | **Health** | `GET /health` |
 | **Metrics** | None (planned) |
 | **Submodule** | `Pmoves-cipher` |
@@ -95,7 +95,7 @@ Cipher MCP bridge publishes fire-and-forget events after successful memory opera
 | Finding | Severity | Status |
 |---------|----------|--------|
 | No API authentication | P2 | **Fixed** — Bearer token auth added (`CIPHER_API_TOKEN` env); graceful skip if unset |
-| `CIPHER_URL` default mismatch | P1 | **Fixed** — main docker-compose + gateway-agent + VPS override all default to `cipher-api:8096` |
+| `CIPHER_URL` default mismatch | P1 | **Fixed** — main docker-compose + gateway-agent + VPS override all default to `cipher-api:8105` |
 | `pmoves-cipher-mcp/` not a proper submodule | P2 | **Open** — directory in main repo, not a git submodule |
 | Missing `.gitignore` in `pmoves-cipher-mcp/` | P3 | **Fixed** — `.gitignore` now covers `__pycache__/`, `.venv/`, etc. |
 
@@ -111,7 +111,7 @@ Cipher Memory serves as the **universal checkpoint/resume system** for all PMOVE
        │ checkpoint          │ checkpoint          │ checkpoint
        ▼                     ▼                     ▼
 ┌──────────────────────────────────────────────────────────┐
-│                    Cipher Memory (:8096)                   │
+│                    Cipher Memory (:8105)                   │
 │                                                           │
 │  Categories:                                              │
 │  ┌──────────────┬────────────────┬─────────────────┐     │
@@ -150,7 +150,7 @@ Claude Code CLI  ──stdio──►  cipher_mcp (Python)  ──HTTP──► 
 - ~~No NATS integration — HTTP-only, invisible to event-driven services~~ → **Implemented** (MCP bridge publishes `cipher.memory.stored.v1`, `cipher.memory.searched.v1`, `cipher.reasoning.stored.v1`)
 - No `/metrics` endpoint — not scraped by Prometheus
 - No API authentication — depends entirely on network isolation
-- ~~`CIPHER_URL` default mismatch between gateway-agent and actual deployment~~ → **Fixed** (aligned to `cipher-api:8096`)
+- ~~`CIPHER_URL` default mismatch between gateway-agent and actual deployment~~ → **Fixed** (aligned to `cipher-api:8105`)
 - `pmoves-cipher-mcp/` not yet converted to proper git submodule
 - ~~Missing `.gitignore` in `pmoves-cipher-mcp/`~~ → **Fixed**
 - ~~Could publish `cipher.memory.stored.v1` to NATS for cross-service observability~~ → **Implemented**

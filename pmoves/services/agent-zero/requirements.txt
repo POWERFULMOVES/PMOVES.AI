@@ -21,6 +21,10 @@ browser-use
 crontab
 docker
 duckduckgo-search
+# pyreqwest-impersonate is a transitive dep of duckduckgo-search. 0.5.5 ships
+# sdist-only; source build needs cmake/perl absent from the agent-zero base image.
+# Use != to skip only the broken release — allows 0.5.6+ once upstream restores wheels.
+pyreqwest-impersonate!=0.5.5
 faiss-cpu
 fastmcp
 fasta2a

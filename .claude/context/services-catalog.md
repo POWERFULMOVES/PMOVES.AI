@@ -41,6 +41,25 @@ Comprehensive reference of all production services, ports, APIs, and integration
 - **Compose Profile:** `agents`
 - **CI Pipeline:** `none` (no Dockerfile — uses agent-zero image or inline build)
 
+### PMOVES Space-Agent
+- **Port:** 3010
+- **Submodule:** `PMOVES-space-agent` (branch: `PMOVES.AI-Edition-Hardened`)
+- **Purpose:** Node.js space/widget customware bridge — surfaces CRUD actions and lifecycle events on NATS
+- **Key APIs:**
+  - `GET /api/health` — Health check (HTTP 200)
+  - `GET /api/pmoves_bridge` — Bridge status + NATS connection state
+  - `POST /api/pmoves_bridge` — Space/widget CRUD actions (`create_space`, `update_widget`, `delete_space`, `list_spaces`, `read_space`)
+  - `GET /api/pmoves_nats_status` — NATS connection details
+- **Auth:** `X-PMOVES-API-KEY` header → `PMOVES_BRIDGE_API_KEY` env var
+- **NATS Subjects:** Publishes `pmoves.space.action.v1`, `pmoves.space.event.v1`
+- **Compose Profile:** `agents`
+- **Router constraint:** Single-segment paths only (`/api/<name>`) — no nested paths
+- **Environment:**
+  - `PMOVES_BRIDGE_API_KEY` — REQUIRED, generate with `openssl rand -hex 32`
+  - `PMOVES_NATS_URL` — defaults to `nats://nats:pmoves@nats:4222`
+  - `SPACE_AGENT_SRC` — host path to submodule `pmoves/` dir (default: `../PMOVES-space-agent/pmoves`)
+  - `SPACE_AGENT_DATA` — host path for customware persistence (default: `./data/space-agent`)
+
 ### Channel Monitor
 - **Ports:** 8097
 - **Purpose:** External content watcher (YouTube, RSS feeds)
@@ -463,7 +482,7 @@ Comprehensive reference of all production services, ports, APIs, and integration
   - Route advertisement
   - ACL policy enforcement
 - **Key APIs:**
-  - `GET /healthz` - Service health
+  - `GET /health` - Service health
   - `GET /metrics` - Prometheus metrics
   - `POST /api/v1/apikey` - Create auth keys
   - `GET /api/v1/machines` - List connected nodes
@@ -502,7 +521,7 @@ Comprehensive reference of all production services, ports, APIs, and integration
 - **CI Pipeline:** `build-images` (amd64, manual dispatch — via PMOVES-BoTZ submodule)
 
 ### Cipher Memory API (cipher-api)
-- **Port:** 8096 (remapped from internal 3000 to avoid Grafana conflict)
+- **Port:** 8105 (remapped from internal 3000 to avoid Grafana conflict)
 - **Purpose:** Knowledge-graph memory service for Claude Code and agents
 - **Backend:** Node.js + Neo4j
 - **API Endpoints:**
@@ -521,7 +540,7 @@ Comprehensive reference of all production services, ports, APIs, and integration
 - **Dependencies:** Neo4j (shared), NATS
 - **Compose Profile:** `agents`
 - **CI Pipeline:** `local-build-only` (compose `build:` directive)
-- **Health:** `GET http://localhost:8096/health`
+- **Health:** `GET http://localhost:8105/health`
 
 ## CHIT & Geometry Services
 

@@ -52,7 +52,7 @@
 
 ### Missing Integrations
 
-- **Port 8096 conflict with Cipher Memory**: `consciousness-service` uses `${CONSCIOUSNESS_HOST_PORT:-8096}:8096` but Cipher Memory already occupies port 8096 (`${CIPHER_PORT:-8096}:3000`). Must assign a different port.
+- **~~Port 8096 conflict with Cipher Memory~~** → **Resolved** — cipher_memory moved to 8105 (see PR #1344/#1345). Historical note: `consciousness-service` uses `${CONSCIOUSNESS_HOST_PORT:-8096}:8096`.
 - **Missing `pmoves_bus` network**: The service only joins `pmoves_app` but publishes to NATS. Without `pmoves_bus`, NATS at `nats:4222` is unreachable. Every other NATS-publishing service includes `pmoves_bus`.
 - **Embeddings bypass TensorZero**: `chr_algorithm.py` loads `SentenceTransformer("all-MiniLM-L6-v2")` locally instead of routing through TensorZero gateway (`POST http://tensorzero:3000/v1/embeddings`). Misses centralized observability.
 - **No `env.shared.example` update**: `CONSCIOUSNESS_HOST_PORT` and `CONSCIOUSNESS_IMAGE` not added to env templates.
@@ -161,7 +161,7 @@ Only `pmoves/docker-compose.yml` contains the actual healthcheck fixes. The othe
 ### CHIT/GEOMETRY Issues
 
 - **CGP spec version mismatch**: Existing context uses `v0.1`/`v0.2`, new docs use `v1.0`. Need to update canonical context files.
-- **Port 8096 conflict documented but not resolved** between consciousness-service and cipher-memory.
+- **~~Port 8096 conflict documented but not resolved~~** → **Resolved** — cipher_memory moved to 8105 (PR #1344/#1345).
 - **Dead documentation links**: 4 referenced files not created by the PR.
 - **New NATS subjects undocumented** in canonical context: `geometry.cgp.calibration.v1`, `geometry.packet.encoded.v1`, `agentgym.train.completed.v1`.
 
@@ -348,7 +348,7 @@ All new subjects should be registered in `.claude/context/nats-subjects.md`.
 
 ### 4. Port 8096 Conflict (affects #905, #916)
 
-Both consciousness-service and cipher-memory claim port 8096. One must change. Since cipher-memory is already in production compose, consciousness-service should get a new port (suggest 8097 — currently channel-monitor, or 8105+ which are unallocated).
+~~Both consciousness-service and cipher-memory claimed port 8096~~ → **Resolved** — cipher_memory moved to 8105. Consciousness-service retains 8096.
 
 ### 5. CHIT CGP Spec Version (affects #905, #916)
 

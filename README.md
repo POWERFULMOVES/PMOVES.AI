@@ -8,6 +8,8 @@
 
 A local-first, multi-agent orchestration platform that coordinates autonomous agents (Agent Zero, Archon), hybrid retrieval (Hi-RAG v2), voice synthesis, media processing, and knowledge graphs — all wired together with NATS event-driven messaging and full Prometheus/Grafana/Loki observability.
 
+PMOVES is structured as a **Metal-Organic Framework (MOF)** for distributed machine intelligence — the crystalline lattice through which autonomous agents flow. Operationally, this translates to a **rooms-on-a-stage** model: P7 (Pinokio 7) is the evolving room-aware stage manager that selects rooms, loads suits, and manages stage transitions (rehearsal → live → review → archive). This model grows with the platform — new rooms, stage states, and suit types are added as the topology evolves.
+
 ## Quick Start
 
 ```bash
@@ -59,9 +61,83 @@ Compressed Hierarchical Information Transfer (CHIT) and the Geometry Bus are cor
 
 See [`pmoves/docs/PMOVESCHIT/`](pmoves/docs/PMOVESCHIT/) for the full 19-document collection including decoder specifications, neural-network notebooks, audit reports, and UI design specs.
 
-## Service Index + CHIT Map
+## Rooms on a Stage
 
-**Geometry + CHIT core**
+PMOVES' **Metal-Organic Framework** architecture manifests operationally as **rooms on a stage** — a living topology (not a frozen specification) with three layers:
+
+- **Rooms** are the agent-owned entrypoints: infra fabric, field control, voice studio, workstation. Each room binds services, skills, and notebook state.
+- **Stage** is the lifecycle state per room: `rehearsal` → `live` → `review` → `archive`. Rooms transition through these states as work progresses.
+- **Suits** are the runtime/persona bindings layered onto rooms — upstream Agent Zero as the external baseline, PMOVES hardened overlays as the custom fit, voice/theme/persona as the visible styling layer.
+
+**P7 (Pinokio 7)** is the evolving room-aware stage manager: it reads the room catalog, selects the appropriate room profile for a given workload, loads the correct suit, and manages stage transitions. P7's NATS subjects (`p7.nats.launch`, `p7.nats.session`) are the control plane for room entry and lifecycle. As the platform grows, P7's tree adds new rooms, stage states, and suit types — the topology is designed to expand.
+
+Rooms own presentation and session ergonomics; the notebook plane owns durable memory. The [Room Manifest Contract](pmoves/docs/ROOM_MANIFEST_CONTRACT.md) defines the interface; [`pmoves/config/rooms/catalog.json`](pmoves/config/rooms/catalog.json) is the canonical seed catalog. See [AGNOTE4482](pmoves/docs/AGENTS/AGNOTE4482.md) for the full P7 specification.
+
+### Room Index
+
+#### 🏗️ Z890 Infra Fabric Room
+**Purpose:** Infrastructure room for topology, service health, secrets discipline, and operator bring-up.
+**Profile:** `z890-infra` · **Agent:** `z890-claude` · **Manifest:** [`z890-infra.room.fabric.json`](pmoves/config/rooms/z890-infra.room.fabric.json)
+
+- `pmoves/services/node-registry/` — Multi-host node discovery and health reporting
+- `pmoves/services/resource-detector/` — Hardware capability detection (GPU, CPU, memory)
+- `pmoves/services/work-marshaling/` — Distributed task scheduling and work queue management
+- `pmoves/services/gpu-orchestrator/` — GPU resource allocation and scheduling
+- `pmoves/services/vllm-orchestrator/` — vLLM inference server lifecycle management
+- `pmoves/services/model-registry/` — Central model catalog with version tracking
+- `pmoves/services/tensorzero-config-api/` — Dynamic TensorZero model configuration API
+- `pmoves/services/benchmark-runner/` — Automated performance benchmarking harness
+- `pmoves/services/nats-echo/` — NATS message debugging and replay tool
+- `pmoves/services/analysis-echo/` — Analysis pipeline event echo and auditing
+- `pmoves/services/evoswarm/` — Evolutionary swarm optimization coordinator
+
+#### 🔭 4090 Field Control Room
+**Purpose:** Scout/control room for review, topology, handoff, and notebook-backed triage.
+**Profile:** `4090-field` · **Agent:** `4090-claude` · **Manifest:** [`4090-field.room.control.json`](pmoves/config/rooms/4090-field.room.control.json)
+
+- `pmoves/services/agent-zero/` — MCP bridge + decision engine (ingests Supabase + CHIT events)
+- `pmoves/services/archon/` — Agent builder/knowledge management with Supabase CLI realtime + NATS clients
+- `pmoves/services/deepresearch/` — Tongyi DeepResearch bridge with OpenRouter/local modes plus Open Notebook mirroring
+- `pmoves/services/supaserch/` — Multimodal holographic deep research orchestrator
+- `pmoves/services/graph-linker/` — Knowledge graph linking and entity relationship management
+- `pmoves/services/session-context-worker/` — Session context aggregation for multi-turn agent conversations
+- `pmoves/services/gateway-agent/` — Unified API gateway with agent-aware routing
+- `pmoves/services/botz-gateway/` — Skills marketplace gateway for BoTZ agent capabilities
+- `pmoves/services/agentgym-rl-coordinator/` — Reinforcement learning coordinator for agent skill training
+- `pmoves/services/consciousness-service/` — Agent self-model and meta-cognitive state tracking
+- `pmoves/services/chat-relay/` — Agent-to-agent and agent-to-user chat relay
+- `pmoves/services/messaging-gateway/` — Multi-channel messaging gateway
+- `pmoves/services/a2ui-nats-bridge/` — Agent Zero UI to NATS event bridge
+- `pmoves/services/open-notebook/` — Streamlit UI + SurrealDB API (container ports 8502/5055 per upstream; host defaults map to `:8503` UI and `:5055` API, override with `OPEN_NOTEBOOK_*_PORT`) for research assets and MCP notebooks. Doc: [`pmoves/docs/services/open-notebook/`](pmoves/docs/services/open-notebook/)
+- `pmoves/services/notebook-sync/` — Bridges Open Notebook datasets into Supabase and LangExtract flows
+- `pmoves/services/retrieval-eval/` — Retrieval benchmarking, relies on Supabase + hi-rag
+
+#### 🎙️ 5090 Voice Studio
+**Purpose:** Voice-first room for TTS, media pipelines, notebook-backed iteration, and audition workflows.
+**Profile:** `5090-voice` · **Agent:** `5090-claude` · **Manifest:** [`5090-voice.room.studio.json`](pmoves/config/rooms/5090-voice.room.studio.json)
+
+- `pmoves/services/flute-gateway/` — Multimodal voice communication layer (HTTP `:8055`, WebSocket `:8056`) with Pipecat integration and prosodic synthesis
+- `pmoves/services/vibevoice-realtime/` — Real-time voice synthesis service
+- `pmoves/services/pmoves-yt/` — YouTube ingest; publishes geometry packets after segmentation
+- `pmoves/services/channel-monitor/` — External content watcher; triggers ingestion on new uploads
+- `pmoves/services/publisher/` — Discord & Jellyfin publisher with geometry-aware payloads
+- `pmoves/services/publisher-discord/` — Dedicated Discord notification bot for ingest/summary events
+- `pmoves/services/jellyfin-bridge/` + `pmoves/docs/services/jellyfin-ai/` — Media sync bridging Jellyfin metadata into Supabase + Discord publisher
+- `pmoves/services/{presign,render-webhook,extract-worker,langextract,media-audio,media-video,pdf-ingest,comfy-watcher,comfyui}` — Supporting ingestion, extraction, and media tooling
+
+#### 💻 5090 KiloCode GLM Workstation
+**Purpose:** GPU inference specialist node running KiloCode GLM on the GLM Coding Plan. Shares the 5090 with Claude Code and Codex.
+**Profile:** `5090-kilocode` · **Agent:** `5090-kilocode` · **Manifest:** [`5090-kilocode.room.studio.json`](pmoves/config/rooms/5090-kilocode.room.studio.json)
+
+- `pmoves/services/tensorzero-config-api/` — Dynamic TensorZero model configuration API (shared with Infra room)
+- `pmoves/services/gpu-orchestrator/` — GPU resource allocation and scheduling (shared with Infra room)
+- `pmoves/services/model-registry/` — Central model catalog with version tracking (shared with Infra room)
+- `pmoves/services/retrieval-eval/` — Retrieval benchmarking (shared with Field Control room)
+
+### Cross-Cutting: Geometry & CHIT Fabric
+
+These services form the knowledge and geometry substrate available to **all rooms** via the NATS event bus:
+
 - `pmoves/services/hi-rag-gateway-v2/` — v2 gateway (CPU `:8086`, GPU `:8087`). Handles `/geometry/*`, jump, decode, calibration, Supabase realtime warmups, and CGP persistence.
 - `pmoves/services/hi-rag-gateway/` — v1 legacy gateway (host `:8089`). Minimal CHIT endpoints for backward compatibility.
 - `pmoves/services/gateway/` — Experimental CHIT UI/API for live geometry visualisation and WebRTC broadcast.
@@ -69,76 +145,37 @@ See [`pmoves/docs/PMOVESCHIT/`](pmoves/docs/PMOVESCHIT/) for the full 19-documen
 - `pmoves/services/evo-controller/` — Geometry tuning controller; reads CGPs from Supabase, emits tuning capsules back into the bus.
 - `pmoves/services/tokenism-simulator/` — Token geometry simulation and visualization.
 
-**Voice & audio**
-- `pmoves/services/flute-gateway/` — Multimodal voice communication layer (HTTP `:8055`, WebSocket `:8056`) with Pipecat integration and prosodic synthesis.
-- `pmoves/services/vibevoice-realtime/` — Real-time voice synthesis service.
+### Cross-Cutting: Orchestration & External Data
 
-**Orchestration & knowledge**
-- `pmoves/services/agent-zero/` — MCP bridge + decision engine (ingests Supabase + CHIT events).
-- `pmoves/services/archon/` — Agent builder/knowledge management with Supabase CLI realtime + NATS clients.
-- `pmoves/services/deepresearch/` — Tongyi DeepResearch bridge with OpenRouter/local modes plus Open Notebook mirroring.
-- `pmoves/services/supaserch/` — Multimodal holographic deep research orchestrator.
 - `pmoves/services/n8n/` — Workflow orchestrator; health/finance webhooks emit CGPs via hi-rag v2.
-- `pmoves/services/graph-linker/` — Knowledge graph linking and entity relationship management.
-- `pmoves/services/session-context-worker/` — Session context aggregation for multi-turn agent conversations.
-
-**Agent infrastructure**
-- `pmoves/services/botz-gateway/` — Skills marketplace gateway for BoTZ agent capabilities.
-- `pmoves/services/gateway-agent/` — Unified API gateway with agent-aware routing.
-- `pmoves/services/agentgym-rl-coordinator/` — Reinforcement learning coordinator for agent skill training.
-- `pmoves/services/consciousness-service/` — Agent self-model and meta-cognitive state tracking.
-
-**Model & GPU management**
-- `pmoves/services/tensorzero-config-api/` — Dynamic TensorZero model configuration API.
-- `pmoves/services/gpu-orchestrator/` — GPU resource allocation and scheduling.
-- `pmoves/services/vllm-orchestrator/` — vLLM inference server lifecycle management.
-- `pmoves/services/model-registry/` — Central model catalog with version tracking.
-
-**Communication & messaging**
-- `pmoves/services/messaging-gateway/` — Multi-channel messaging gateway.
-- `pmoves/services/chat-relay/` — Agent-to-agent and agent-to-user chat relay.
-- `pmoves/services/a2ui-nats-bridge/` — Agent Zero UI to NATS event bridge.
-
-**External integrations (pmoves-net)**
-- `pmoves/services/open-notebook/` (doc lives in `pmoves/docs/services/open-notebook/`) — Streamlit UI + SurrealDB API (container ports 8502/5055 per upstream; host defaults map to `:8503` UI and `:5055` API, override with `OPEN_NOTEBOOK_*_PORT`) mounted via `make up-open-notebook` for research assets and MCP notebooks.
 - `pmoves/services/wger/` — Health metrics ingest (paired with Supabase tables + `health.weekly.summary.v1` CGPs).
 - `pmoves/services/firefly-iii/` — Personal finance ingest; finance flows create `finance.monthly.summary.v1` CGPs.
-- `pmoves/services/jellyfin-bridge/` + `pmoves/docs/services/jellyfin-ai/` — Media sync bridging Jellyfin metadata into Supabase + Discord publisher.
-
-**Infrastructure & observability**
-- `pmoves/services/node-registry/` — Multi-host node discovery and health reporting.
-- `pmoves/services/resource-detector/` — Hardware capability detection (GPU, CPU, memory).
-- `pmoves/services/work-marshaling/` — Distributed task scheduling and work queue management.
-- `pmoves/services/benchmark-runner/` — Automated performance benchmarking harness.
-- `pmoves/services/nats-echo/` — NATS message debugging and replay tool.
-- `pmoves/services/analysis-echo/` — Analysis pipeline event echo and auditing.
-- `pmoves/services/evoswarm/` — Evolutionary swarm optimization coordinator.
-
-**Operational substrates**
-- `pmoves/services/pmoves-yt/` — YouTube ingest; publishes geometry packets after segmentation.
-- `pmoves/services/channel-monitor/` — External content watcher; triggers ingestion on new uploads.
-- `pmoves/services/retrieval-eval/` — Retrieval benchmarking, relies on Supabase + hi-rag.
-- `pmoves/services/publisher/` — Discord & Jellyfin publisher with geometry-aware payloads.
-- `pmoves/services/publisher-discord/` — Dedicated Discord notification bot for ingest/summary events.
-- `pmoves/services/{presign,render-webhook,extract-worker,langextract,media-audio,media-video,pdf-ingest,comfy-watcher,comfyui}` — Supporting ingestion, extraction, and media tooling.
-- `pmoves/services/notebook-sync/` — Bridges Open Notebook datasets into Supabase and LangExtract flows.
 
 See each directory's README for ports, Make targets, and geometry notes. New integrations reference external repositories under `integrations-workspace/` and the setup steps captured in `pmoves/docs/EXTERNAL_INTEGRATIONS_BRINGUP.md`.
 
 ## Dashboards & UIs (local defaults)
 
-- Supabase Studio: http://127.0.0.1:65433 (CLI stack) — created by `make supa-start`.
-- Hi-RAG v2 Geometry Console (GPU): http://localhost:${HIRAG_V2_GPU_HOST_PORT:-8087}/geometry/ (after `make up`).
+### By Room
+
+**Z890 Infra Fabric Room:**
 - TensorZero UI: http://localhost:4000 (after `make up-tensorzero`).
 - TensorZero Gateway: http://localhost:3030 (proxy to 3000 in-container).
+
+**4090 Field Control Room:**
+- Supabase Studio: http://127.0.0.1:65433 (CLI stack) — created by `make supa-start`.
 - Agent Zero UI: http://localhost:8080 (after `make up-agents`).
 - Archon Health: http://localhost:8091/healthz (after `make up-agents`).
   - If your forks use non-standard health endpoints, set `NEXT_PUBLIC_AGENT_ZERO_HEALTH_PATH` / `NEXT_PUBLIC_ARCHON_HEALTH_PATH`. See `pmoves/docs/SERVICE_HEALTH_ENDPOINTS.md`.
+- Open Notebook: http://localhost:8503 (after `make -C pmoves notebook-up`).
+- n8n: http://localhost:5678 (after `make -C pmoves up-n8n`).
+
+**5090 Voice Studio:**
 - Jellyfin: http://localhost:8096 (after `make -C pmoves up-jellyfin-ai`).
 - Jellyfin API Dashboard: http://localhost:8400; Gateway: http://localhost:8300.
-- Open Notebook: http://localhost:8503 (after `make -C pmoves notebook-up`).
 - Invidious: http://127.0.0.1:3000 (companion at http://127.0.0.1:8282).
-- n8n: http://localhost:5678 (after `make -C pmoves up-n8n`).
+
+**5090 KiloCode GLM Workstation:**
+- Hi-RAG v2 Geometry Console (GPU): http://localhost:${HIRAG_V2_GPU_HOST_PORT:-8087}/geometry/ (after `make up`).
 
 ### Default access and operator credentials
 

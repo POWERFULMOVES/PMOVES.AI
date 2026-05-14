@@ -1,0 +1,35 @@
+# =============================================================================
+# nginx Standalone — Hostinger Docker API Variant
+# =============================================================================
+# Self-contained compose file for deployment via Hostinger vps-create-new-project-v1.
+# Minimal nginx reverse proxy for TLS termination and upstream routing.
+#
+# Hostinger API constraints satisfied:
+#   - No external networks
+#   - No profiles section
+#   - No env_file references
+#   - No ${VAR:-default} defaults
+#   - Relative volume paths resolve to /docker/{project-name}/ on VPS
+#
+# TLS certs and nginx.conf must be uploaded separately via SSH to
+# /docker/{project-name}/config/ and /docker/{project-name}/certs/
+# before or after compose deployment.
+# =============================================================================
+
+services:
+  nginx:
+    image: nginx:alpine
+    container_name: pmoves-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./config/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./certs:/etc/nginx/certs:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:80/ || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 5s

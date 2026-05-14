@@ -1,0 +1,104 @@
+# Anthropic Provider Custom Settings
+# PMOVES.AI Meta-Agent Configuration
+
+provider:
+  id: anthropic
+  name: Anthropic (Claude)
+  type: cloud_native
+  website: https://www.anthropic.com
+  documentation: https://docs.anthropic.com
+
+models:
+  claude-sonnet-4-20250514:
+    flare_name: pmoves/claude-sonnet-4
+    role: chat
+    tier: balanced
+    context_window: 200000
+    max_output_tokens: 8192
+    supports_vision: true
+    supports_thinking: false
+    temperature_default: 0.7
+    prompt_format: xml
+
+  claude-opus-4-20250514:
+    flare_name: pmoves/claude-opus-4
+    role: reasoning
+    tier: advanced
+    context_window: 200000
+    max_output_tokens: 8192
+    supports_vision: true
+    supports_thinking: true  # Extended thinking
+    temperature_default: 0.7
+    prompt_format: xml
+
+  claude-haiku-4-20250514:
+    flare_name: pmoves/claude-haiku-4
+    role: fast
+    tier: efficient
+    context_window: 200000
+    max_output_tokens: 8192
+    supports_vision: true
+    supports_thinking: false
+    temperature_default: 0.7
+    prompt_format: xml
+
+prompt_style:
+  format: xml
+  system_prompt_template: null
+  preferred_language: en
+  notes: |
+    Claude models prefer XML tags for structured output.
+    Use <thinking></thinking> for reasoning (Opus only).
+    Use <code></code> for code blocks.
+    Use <analysis></analysis> for step-by-step breakdown.
+
+  xml_tags:
+    thinking: Used by Opus for extended reasoning
+    code: For code blocks
+    analysis: For step-by-step analysis
+    result: For final answers
+
+integration:
+  tensorzero_gateway: http://localhost:3030
+  tensorzero_model_format: "tensorzero::model_name::{model_name}"
+  a2a_endpoint: http://localhost:8080/mcp/execute
+  agent_zero_mcp: true
+
+  # I am NATIVE to this provider (I am Claude)
+  meta_agent_access: native
+  base_provider: true
+
+capabilities:
+  - code_generation
+  - reasoning
+  - vision
+  - tools
+  - extended_thinking  # Opus only
+  - large_context  # 200K tokens
+
+limitations:
+  - Cannot change weights (cloud-only)
+  - No local variant available
+  - Requires API key
+  - Rate limits apply
+
+local_fallback:
+  available: false
+  reason: "Anthropic models are cloud-only with no open weights"
+  fallback_model_suit: null
+
+cross_agent:
+  agent_zero: full
+  clawz: full
+  typer: untested
+  pinokio: full
+  a2ui: full
+
+metadata:
+  source: pmoves/meta-agent/anthropic
+  last_verified: 2026-04-21
+  benchmark_data:
+    - source: "Anthropic Documentation"
+      url: "https://docs.anthropic.com"
+    - source: "Model Cards"
+      url: "https://docs.anthropic.com/en/docs/about-models"

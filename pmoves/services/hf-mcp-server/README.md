@@ -104,7 +104,7 @@ mcp_servers:
 | `HF_HUB_CACHE` | `/models/hub` | Hugging Face Hub cache |
 | `HUGGINGFACE_HUB_TOKEN` | - | HF Hub API token (for gated models) |
 | `HF_HUB_ENABLE_HF_TRANSFER` | `1` | Enable HF transfer acceleration |
-| `NATS_URL` | `nats://localhost:4222` | NATS server URL |
+| `NATS_URL` | `nats://nats:pmoves@nats:4222` | NATS server URL |
 | `PORT` | `8096` | Server port |
 
 ## NATS Events

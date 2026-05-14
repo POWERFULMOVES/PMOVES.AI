@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Content HiRAG Rejected",
+  "type": "object",
+  "required": [
+    "content_id",
+    "text",
+    "source_ref",
+    "rejected_reason",
+    "scorecard"
+  ],
+  "properties": {
+    "content_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "text": {
+      "type": "string",
+      "minLength": 1
+    },
+    "source_ref": {
+      "type": "string",
+      "minLength": 1
+    },
+    "shape_id": {
+      "type": "string"
+    },
+    "merkle_root": {
+      "type": "string",
+      "pattern": "^0x[a-fA-F0-9]{64}$"
+    },
+    "graphiti_mark": {
+      "type": "string"
+    },
+    "rejected_reason": {
+      "type": "string",
+      "minLength": 1
+    },
+    "rejected_reasons": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "provenance_refs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "favorite_words": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "anchor_terms": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "semantic_weights": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "scorecard": {
+      "type": "object"
+    },
+    "meta": {
+      "type": "object"
+    }
+  }
+}

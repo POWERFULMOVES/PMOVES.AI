@@ -96,7 +96,7 @@
          ┌────▼─────┐        ┌────▼────┐          ┌──▼──────┐   ┌─────▼────┐
          │ Health   │        │ Wealth  │          │Publisher │   │ Cipher   │
          │ (wger)   │◄──────►│(Firefly)│          │ Discord  │   │ Memory   │
-         │ Fitness  │ Health │ Finance │          │  :8094   │   │  :8096   │
+         │ Fitness  │ Health │ Finance │          │  :8094   │   │  :8105   │
          │          │↔Spend  │         │          └──────────┘   │ Neo4j    │
          └──────────┘ correl └─────────┘                        └──────────┘
 ```
@@ -244,7 +244,7 @@ What each repo expects from and provides to each other:
 | **BoTZ** → Agent Zero | MCP tool execution | MCP (:2091) | Active |
 | **BoTZ** → BoTZ CLI instances | Work distribution | `botz.*` NATS | Active |
 | **Agent Zero** → All agents | Tool execution events | `agent.tool.executed.v1` NATS | Active |
-| **Agent Zero** → Cipher Memory | Checkpoint/resume | HTTP (:8096) | Active |
+| **Agent Zero** | Cipher Memory | Checkpoint/resume | HTTP (:8105) | Active |
 | **Cipher** → All agents | Plan/checkpoint/completion | HTTP API | Active |
 | **ClawZ** → Agent Zero | Chat-to-agent delegation | MCP / NATS | **Planned** |
 | **ClawZ** → Flute | Voice TTS via channels | HTTP | **Planned** |
@@ -283,7 +283,7 @@ What each repo expects from and provides to each other:
 1. ~~**BoTZ:** Fix JWT fail-open in `auth.py:59`~~ → **Fixed** (`auth.py:63-67` now raises HTTPException 500)
 2. **DoX:** Add NATS auth block to `nats.conf`
 3. **ToKenism:** Fix `export` syntax in `env.shared`
-4. ~~**Cipher:** Fix `CIPHER_URL` default mismatch~~ → **Fixed** (now `cipher-api:8096`)
+4. ~~**Cipher:** Fix `CIPHER_URL` default mismatch~~ → **Fixed** (now `cipher-api:8105`)
 
 ### Short-term (P2)
 5. **Health:** Add `/healthz` endpoint (Django middleware)

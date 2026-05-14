@@ -435,14 +435,14 @@ providers:
     coding_stack: minimax_token_plan
     models:
       chat_minimax:
-        model_name: "MiniMax-Text-01"
+        model_name: "MiniMax-M2.7"
         tz_model_key: chat_minimax
         serves:
           - function: coding_minimax
             variant_name: cloud_minimax
             role: primary
             weight: 0.8
-        strength_ref: minimax-text-01
+        strength_ref: minimax-m2.7
         vram_mb: 0
 
   # ---------------------------------------------------------------------------
@@ -608,6 +608,7 @@ providers:
       gemma_4_31b_rocm:
         model_name: "gemma-4-31b-it-Q4_K_M.gguf"
         tz_model_key: gemma_4_31b_rocm
+        status: staging                # Phase C — pending 48h soak + load test
         serves:
           # Variant name matches functions.multimodal_large.variants.gemma_4_31b_rocm
           # and functions.agent_zero.variants.local_gemma_4_31b_rocm in tensorzero.toml.
@@ -619,11 +620,17 @@ providers:
             variant_name: local_gemma_4_31b_rocm
             role: secondary
             weight: 0.0
+          # Phase C dedicated single-GPU variant
+          - function: multimodal_large
+            variant_name: llamacpp_rdna4_gemma4_31b_q4km
+            role: secondary
+            weight: 0.0
         strength_ref: null
         vram_mb: 18000                 # Q4 on single R9700; FP16 splits across both cards
       gemma_4_26b_a4b_rocm:
         model_name: "gemma-4-26B-A4B-it-Q4_K_M.gguf"
         tz_model_key: gemma_4_26b_a4b_rocm
+        status: staging                # Phase C — dual-GPU row-split via tensor-split 0.5,0.5
         serves:
           - function: multimodal_large
             variant_name: gemma_4_26b_a4b_rocm
@@ -633,5 +640,59 @@ providers:
             variant_name: local_gemma_4_26b_a4b_rocm
             role: secondary
             weight: 0.0
+          # Phase C dedicated dual-GPU variant (row-split across both R9700 cards)
+          - function: multimodal_large
+            variant_name: llamacpp_rdna4_gemma4_26b_dual
+            role: secondary
+            weight: 0.0
         strength_ref: null
         vram_mb: 15000                 # Q4 MoE, 3.8B active
+
+  # ---------------------------------------------------------------------------
+  # ollama_spark — NVIDIA DGX Spark (GB10 Grace-Blackwell, 128 GB unified LPDDR5X)
+  # ---------------------------------------------------------------------------
+  # OpenAI-compatible endpoint served by Ollama running natively on the
+  # pmoves-spark ARM64 node (CUDA-on-ARM, stock DGX OS). Unified memory
+  # pool fits 120B-class models at NVFP4 without VRAM copies.
+  # Phase C introduction: all variants weight=0.0 pending ARM64 multi-arch CI
+  # and 48h soak test. See pmoves/config/profiles/dgx-spark-grace-blackwell.yaml.
+  ollama_spark:
+    env_var: OLLAMA_SPARK_API_KEY
+    key_pattern: ".*"
+    api_base: "http://pmoves-spark:11434/v1"
+    tz_type: openai
+    tier: llm
+    models:
+      ollama_spark_gemma4_31b_fp16:
+        model_name: "gemma4:31b"
+        tz_model_key: ollama_spark_gemma4_31b_fp16
+        status: soak                   # Phase C promoted 2026-05-10 — SPARK online
+        serves:
+          - function: multimodal_large
+            variant_name: ollama_spark_gemma4_31b_fp16
+            role: secondary
+            weight: 0.1
+          - function: agent_zero
+            variant_name: ollama_spark_gemma4_31b_fp16
+            role: secondary
+            weight: 0.1
+          - function: coding
+            variant_name: spark_gemma4_31b_fp16
+            role: secondary
+            weight: 0.1
+        strength_ref: null
+        vram_mb: 36000                 # FP16 weights sit in unified LPDDR5X
+      ollama_spark_nemotron3_super_120b_nvfp4:
+        # HF: nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-NVFP4 (verified via HF API 2026-04-19)
+        # License: NVIDIA Open Model License (OML). Spark-only — RDNA4 gfx1201
+        # has no FP8/NVFP4 kernels in ROCm 7.1 as of this date.
+        model_name: "nemotron-3-super:120b"    # actual Ollama tag on pmoves-spark (verified 2026-05-10)
+        tz_model_key: ollama_spark_nemotron3_super_120b_nvfp4
+        status: soak                            # present on SPARK — promote to soak
+        serves:
+          - function: agent_zero
+            variant_name: ollama_spark_nemotron3_super_120b_nvfp4
+            role: secondary
+            weight: 0.1                             # soak — model verified on pmoves-spark 2026-05-10
+        strength_ref: null
+        vram_mb: 90000                 # NVFP4 quant; fits 128 GB unified with headroom

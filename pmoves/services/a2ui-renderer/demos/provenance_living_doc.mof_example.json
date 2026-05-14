@@ -1,0 +1,30 @@
+{
+  "title": "MOF Signal Surface",
+  "subtitle": "MAF, art, and substrate discovery rendered as a living document",
+  "summary": "This example turns a fast-moving semantic bundle into a reviewable artifact. The weighted lexicon stays attached to provenance, the favorite words stay visible, and the result can be tuned into motion without losing the shape of the original signal.",
+  "merkle_root": "mkl_mof_8a31c5f0f4b9e261",
+  "shape_id": "shape.mof.maf.substrate.discovery",
+  "favorite_words": ["signal", "chimera", "substrate", "resonance", "awareness"],
+  "weighted_terms": [
+    { "term": "signal", "weight": 0.99, "cluster": "semantic-core" },
+    { "term": "substrate", "weight": 0.93, "cluster": "material-context" },
+    { "term": "awareness", "weight": 0.88, "cluster": "self-discovery" },
+    { "term": "chimera", "weight": 0.84, "cluster": "art-surface" },
+    { "term": "resonance", "weight": 0.8, "cluster": "spectral-tuning" }
+  ],
+  "sections": [
+    {
+      "heading": "Intent",
+      "body": "Make the hidden shape visible. Words should carry semantic weight, remain attached to their source lineage, and be available as living material for motion, notebooks, and CHIT-adjacent surfaces."
+    },
+    {
+      "heading": "Operator Mode",
+      "body": "Use the render when you want to inspect how a phrase clusters before indexing or before turning it into audiovisual output. The artifact is not just a report; it is a staging surface for tuning the spectra."
+    }
+  ],
+  "provenance_refs": [
+    { "label": "content.raw.v1", "kind": "subject" },
+    { "label": "content.lexicon.shaped.v1", "kind": "subject" },
+    { "label": "content.hirag.accepted.v1", "kind": "subject" }
+  ]
+}

@@ -68,7 +68,7 @@ sudo tailscale up
 
 If connecting to the parent PMOVES.AI Headscale control plane:
 
-1. Access the parent Headscale at `https://headscale.pmoves.local:8096`
+1. Access the parent Headscale at `https://headscale.pmoves.local`
 2. Generate a pre-auth key:
    ```bash
    # On the Headscale server
@@ -77,7 +77,7 @@ If connecting to the parent PMOVES.AI Headscale control plane:
 3. Configure your env file:
    ```bash
    TAILSCALE_AUTHKEY=<preauthkey-from-headscale>
-   TAILSCALE_LOGIN_SERVER=https://headscale.pmoves.local:8096
+   TAILSCALE_LOGIN_SERVER=https://headscale.pmoves.local
    ```
 4. The Tailscale sidecar will connect to Headscale instead of the cloud service
 

@@ -39,6 +39,9 @@ event_bus = EventBus(
     subscribe_topics=[
         "ingest.file.added.v1",
         "ingest.transcript.ready.v1",
+        "content.raw.v1",
+        "content.hirag.accepted.v1",
+        "content.hirag.rejected.v1",
         "kb.upsert.request.v1",
         "kb.upsert.result.v1",
     ],

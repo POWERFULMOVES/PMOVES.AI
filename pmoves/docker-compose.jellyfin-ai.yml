@@ -97,7 +97,7 @@ services:
       NVIDIA_DRIVER_CAPABILITIES: ${JELLYFIN_NVIDIA_DRIVER_CAPABILITIES:-compute,video,utility}
 
   jellyfin-neo4j:
-    image: neo4j:5.15
+    image: neo4j:5.26.22
     container_name: pmoves-jellyfin-neo4j
     profiles: ["default", "jellyfin-ai"]
     environment:

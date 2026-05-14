@@ -6,7 +6,7 @@
 
 ### 1.1 Honcho Plugin vs Cipher Memory
 
-| Dimension | Honcho (a0-plugin) | Cipher Memory (8096) |
+| Dimension | Honcho (a0-plugin) | Cipher Memory (8105) |
 |-----------|-------------------|---------------------|
 | Backend | External service | Neo4j + optional Qdrant |
 | Transport | Agent Zero runtime | HTTP API + MCP (stdio) |
@@ -145,7 +145,7 @@
 ## 5. Recommended Priority Order
 
 1. ~~**P1:** Fix BoTZ JWT fail-open (`auth.py:59`)~~ → **Fixed**
-2. ~~**P1:** Fix Cipher `CIPHER_URL` default mismatch~~ → **Fixed** (main compose + gateway-agent + VPS override aligned to `cipher-api:8096`; note: library defaults in submodule code may still differ — verify per-service fallback values)
+2. ~~**P1:** Fix Cipher `CIPHER_URL` default mismatch~~ → **Fixed** (main compose + gateway-agent + VPS override aligned to `cipher-api:8105`; note: library defaults in submodule code may still differ — verify per-service fallback values)
 3. **P2:** Add Cipher API authentication
 4. **P2:** Add ClawZ Prometheus `/metrics` endpoint
 5. **P2:** Document plugin deduplication strategy (E5)

@@ -166,7 +166,7 @@ Step 4: /chit:sign-trail (archon) → agent.graphiti.signed.v1
 ### 1.7 TAC_CIPHER.md (Bonus — not a YAML tree but critical context)
 
 **Path:** `pmoves/docs/TAC/TAC_CIPHER.md`
-**Service:** Cipher Memory, Port 8096, Tier: data
+**Service:** Cipher Memory, Port 8105, Tier: data
 
 **Upstream:** Neo4j (required), Qdrant (optional), NATS (optional)
 **Downstream:** Agent Zero, Archon, BoTZ Gateway, Claude Code CLI, all agents
@@ -217,7 +217,7 @@ Three concurrent components launched via asyncio:
 ```
 asyncio.run(run())
   ├── asyncio.create_task(_announce_once())     # NATS services.announce.v1 (fire-and-forget)
-  ├── asyncio.create_task(_health_loop(60s))     # Periodic health check to Cipher :8096
+  ├── asyncio.create_task(_health_loop(60s))     # Periodic health check to Cipher :8105
   └── await mcp_main()                           # Blocking MCP stdio server
 ```
 
@@ -253,7 +253,7 @@ All NATS events are fire-and-forget via `_spawn_background()` — tool returns i
 
 `CipherClient` class — async HTTP client using `httpx`:
 
-**URL Resolution:** `CIPHER_URL` → `CIPHER_MEMORY_URL` → `http://localhost:8096`
+**URL Resolution:** `CIPHER_URL` → `CIPHER_MEMORY_URL` → `http://localhost:8105`
 
 **Auth:** Reads `CIPHER_API_TOKEN` env var, sends `Authorization: Bearer <token>` header if set. No token = no auth header (dev mode).
 
@@ -301,7 +301,7 @@ SUBJECT_REASONING_STORED = "cipher.reasoning.stored.v1"  # {reasoning_id, questi
 - Same connect→publish→flush→close pattern as nats_events.py
 
 **pmoves_registry/__init__.py** — URL resolution:
-- `get_cipher_url()`: CIPHER_URL → CIPHER_MEMORY_URL → http://localhost:8096
+- `get_cipher_url()`: CIPHER_URL → CIPHER_MEMORY_URL → http://localhost:8105
 - `get_nats_url()`: NATS_URL → nats://nats:pmoves@nats:4222
 - `get_tensorzero_url()`: TENSORZERO_URL → TENSORZERO_GATEWAY_URL → http://tensorzero-gateway:3030
 
@@ -398,9 +398,9 @@ The actual HMAC implementation would be in the Archon service or a shared CHIT l
 
 **No Dockerfile exists in pmoves-cipher-mcp/.** The submodule is not containerized independently.
 
-The Cipher Memory Node.js backend runs as `cipher-api` in the main `pmoves/docker-compose.yml` (profile: `agents`, port 8096). The MCP bridge runs as a stdio process spawned by Claude Code CLI — no container needed.
+The Cipher Memory Node.js backend runs as `cipher-api` in the main `pmoves/docker-compose.yml` (profile: `agents`, port 8105). The MCP bridge runs as a stdio process spawned by Claude Code CLI — no container needed.
 
-README mentions: "The Cipher Memory backend runs as cipher-api in the PMOVES docker-compose stack (profile: agents, port 8096). It shares the existing Neo4j instance."
+README mentions: "The Cipher Memory backend runs as cipher-api in the PMOVES docker-compose stack (profile: agents, port 8105). It shares the existing Neo4j instance."
 
 ### 4.2 NATS Subjects
 
@@ -472,7 +472,7 @@ PR Created → codex scans (/pr-monitor) → claude-opus trims (/pr-trim)
 
 GRAPHITI data flows:
 - **Into training:** Agent Graphiti trail entries are used as embedding fine-tuning training data
-- **Into Cipher Memory:** Stored via Neo4j knowledge graph (cipher_memory agent, port 8096)
+- **Into Cipher Memory:** Stored via Neo4j knowledge graph (cipher_memory agent, port 8105)
 - **Into onboarding:** Every new agent must sign a Graphiti trail entry
 - **Into handoffs:** Agent SDK handoff publishes `agent.graphiti.signed.v1`
 
@@ -494,7 +494,7 @@ The `/chit:sign-trail` skill (CHIT HMAC signing of Graphiti trail entries) is re
 ### 5.3 Cipher-MCP is a Thin Bridge, Not a Crypto Module
 
 The cipher-mcp submodule is a straightforward MCP→HTTP bridge with NATS event side-effects:
-- 4 MCP tools → 4 HTTP endpoints on Cipher Memory :8096
+- 4 MCP tools → 4 HTTP endpoints on Cipher Memory :8105
 - 3 NATS fire-and-forget events after successful operations
 - 1 NATS service announcement on startup
 - 1 periodic health check loop
@@ -520,7 +520,7 @@ The cipher-mcp submodule is a straightforward MCP→HTTP bridge with NATS event 
 | No tests | Open | Zero test files in cipher-mcp |
 | get_tensorzero_url() unused | Stub | Exported but never called |
 | pmoves_reasoning_patterns no NATS event | Inconsistency | Other 3 tools emit NATS events; reasoning_patterns search does not |
-| Announcer port mismatch | Potential bug | Announcer defaults to port 8082 but Cipher Memory is on 8096 |
+| Announcer port mismatch | Potential bug | Announcer defaults to port 8082 but Cipher Memory is on 8105 |
 
 ### 5.6 GRAPHITI Data Flow Summary
 
@@ -536,7 +536,7 @@ The cipher-mcp submodule is a straightforward MCP→HTTP bridge with NATS event 
      ┌────────────┐   ┌────────────┐   ┌────────────┐
      │ Cipher Mem  │   │ Training   │   │ Agent      │
      │ (Neo4j)     │   │ Pipeline   │   │ Onboarding │
-     │ :8096       │   │ (Unsloth)  │   │ (step 7)   │
+     │ :8105       │   │ (Unsloth)  │   │ (step 7)   │
      └──────┬─────┘   └────────────┘   └────────────┘
             │
             │ MCP stdio

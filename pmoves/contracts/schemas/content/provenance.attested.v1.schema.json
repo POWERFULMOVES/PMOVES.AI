@@ -1,0 +1,116 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Content Provenance Attested",
+  "type": "object",
+  "required": [
+    "content_id",
+    "text",
+    "source_ref",
+    "shape_id",
+    "graphiti_mark",
+    "merkle_root",
+    "provenance_refs",
+    "anchor_terms",
+    "semantic_weights",
+    "noise_score",
+    "semantic_density"
+  ],
+  "properties": {
+    "content_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "text": {
+      "type": "string",
+      "minLength": 1
+    },
+    "source_ref": {
+      "type": "string",
+      "minLength": 1
+    },
+    "shape_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "graphiti_mark": {
+      "type": "string",
+      "minLength": 1
+    },
+    "merkle_root": {
+      "type": "string",
+      "pattern": "^0x[a-fA-F0-9]{64}$"
+    },
+    "provenance_refs": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string"
+      }
+    },
+    "anchor_terms": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "favorite_words": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "semantic_weights": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "term",
+          "weight"
+        ],
+        "properties": {
+          "term": {
+            "type": "string"
+          },
+          "weight": {
+            "type": "number",
+            "minimum": 0
+          },
+          "favorite": {
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    "noise_score": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "semantic_density": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "hyperbolic_coords": {
+      "type": "object"
+    },
+    "spectral_signature": {
+      "type": "array",
+      "items": {
+        "type": "number"
+      }
+    },
+    "dirichlet_weights": {
+      "type": "object"
+    },
+    "checksum": {
+      "type": "string"
+    },
+    "attested_at": {
+      "type": "string"
+    },
+    "meta": {
+      "type": "object"
+    }
+  }
+}

@@ -176,11 +176,6 @@ mode_binding:
 # =============================================================================
 # MiniMax is cloud-hosted, so hardware profiles are for fallback/local routing
 profile_hints:
-  workstation_5090:
-    preferred_model: minimax-m2.7
-    cascade_fallback: qwen3.5-9b
-    gpu_shape_store: true
-  
   laptop-4090:
     preferred_model: minimax-m2.1
     cascade_fallback: qwen3.5-4b

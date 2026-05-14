@@ -1,4 +1,4 @@
-.PHONY: env-bootstrap-lite env-setup env-check preflight flight-check flight-check-retro preflight-retro showtime bringup-showtime smoke-showtime showtime-links showtime-links-open showtime-links-strict submodule-integrity submodule-layer-validate submodule-layer-validate-one submodule-layer-validate-all submodule-layer-validate-all-strict submodule-layer-validate-strict submodule-branch-policy-check audit-layers audit-layers-static audit-layers-runtime ci-runners-check ci-runners-check-strict ci-runners-map ci-runners-map-strict ci-runners-lockdown ci-runners-lockdown-strict ci-runners-local-cert-up ci-runners-local-cert-down ci-runners-local-cert-status ci-queue-sitrep ci-queue-drain-nonpr ci-queue-drain-nonpr-apply skill-registry-validate auth-alignment auth-alignment-strict topology-chit-gate topology-chit-gate-strict pr-monitor pr-monitor-strict pr-monitor-chit-packet pr-trim-analyze pr-trim-resolve pr-trim-report pr-trim floos-status floos-pr-monitor-validate floos-pr-monitor-resolve floos-pr-monitor-run-dry chit-flow-pr-monitor chit-flow-pr-monitor-strict ports-resolve sign-trail
+.PHONY: env-bootstrap-lite env-setup env-check preflight flight-check flight-check-retro preflight-retro showtime bringup-showtime smoke-showtime showtime-links showtime-links-open showtime-links-strict submodule-integrity submodule-layer-validate submodule-layer-validate-one submodule-layer-validate-all submodule-layer-validate-all-strict submodule-layer-validate-strict submodule-branch-policy-check audit-layers audit-layers-static audit-layers-runtime ci-runners-check ci-runners-check-strict ci-runners-map ci-runners-map-strict ci-runners-lockdown ci-runners-lockdown-strict ci-runners-local-cert-up ci-runners-local-cert-down ci-runners-local-cert-status ci-queue-sitrep ci-queue-drain-nonpr ci-queue-drain-nonpr-apply skill-registry-validate auth-alignment auth-alignment-strict topology-chit-gate topology-chit-gate-strict pr-monitor pr-monitor-strict pr-monitor-chit-packet pr-trim-analyze pr-trim-resolve pr-trim-report pr-trim floos-status floos-pr-monitor-validate floos-pr-monitor-resolve floos-pr-monitor-run-dry chit-flow-pr-monitor chit-flow-pr-monitor-strict ports-resolve sign-trail naming-drift-check naming-drift-strict
 
 # Force UTF-8 output on Windows (cp1252 chokes on Unicode/emoji in pr-trim et al.)
 export PYTHONIOENCODING ?= utf-8
@@ -285,8 +285,14 @@ ports-resolve: ## Display topology-aware port resolution map for all services
 	@PYTHONPATH="$(CURDIR)" $(PRECHECK_PY) services/common/port_resolver.py
 
 sign-trail: ## Sign a Graphiti trail entry with CHIT HMAC
-	@$(PRECHECK_PY) tools/sign_trail.py \
+	@PYTHONPATH="$(CURDIR)/.." $(PRECHECK_PY) tools/sign_trail.py \
 		--agent-id "$${AGENT:-claude-opus}" \
 		--summary "$${SUMMARY:-Trail entry signed}" \
 		--phase "$${PHASE:-Phase H}" \
 		$(ARGS)
+
+naming-drift-check: ## Audit naming drift across registries/compose/schemas/cards (warn-only)
+	@$(PRECHECK_PY) scripts/audit_naming_drift.py $(ARGS)
+
+naming-drift-strict: ## Audit naming drift in CI mode (non-zero exit on P0/P1)
+	@$(PRECHECK_PY) scripts/audit_naming_drift.py --strict --severity P1 $(ARGS)

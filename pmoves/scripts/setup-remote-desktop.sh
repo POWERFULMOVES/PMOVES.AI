@@ -23,10 +23,19 @@ if [ ! -f "$PROJECT_ROOT/env.tier-vpn" ]; then
 fi
 
 # Generate Headscale API key if not set
-if grep -q "change-me-generated-secret" "$PROJECT_ROOT/env.tier-vpn"; then
+# Handles three cases: (1) sentinel from old example → replace,
+# (2) real key already set → skip, (3) key absent → append
+if grep -q '^HEADSCALE_API_KEY=change-me-generated-secret' "$PROJECT_ROOT/env.tier-vpn" 2>/dev/null; then
+    echo "🔑 Replacing placeholder Headscale API key..."
+    API_KEY=$(openssl rand -hex 32)
+    sed -i "s/^HEADSCALE_API_KEY=change-me-generated-secret/HEADSCALE_API_KEY=$API_KEY/" "$PROJECT_ROOT/env.tier-vpn"
+    echo "✅ API key generated and saved."
+elif grep -q '^HEADSCALE_API_KEY=' "$PROJECT_ROOT/env.tier-vpn" 2>/dev/null; then
+    echo "🔑 HEADSCALE_API_KEY already set in env.tier-vpn."
+else
     echo "🔑 Generating new Headscale API key..."
     API_KEY=$(openssl rand -hex 32)
-    sed -i "s/HEADSCALE_API_KEY=change-me-generated-secret/HEADSCALE_API_KEY=$API_KEY/" "$PROJECT_ROOT/env.tier-vpn"
+    echo "HEADSCALE_API_KEY=$API_KEY" >> "$PROJECT_ROOT/env.tier-vpn"
     echo "✅ API key generated and saved."
 fi
 

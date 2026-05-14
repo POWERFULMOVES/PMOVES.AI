@@ -53,7 +53,33 @@ The CREATOR pipeline manages generative content workflows through ComfyUI, conne
 **Process:**
 1. Benchmark data → A2UI chart spec
 2. A2UI → Remotion renderer (Thread 2.1)
-3. Remotion output → MinIO `assets/benchmarks/`
+3. Text/heading blocks may opt into `text_layout.engine=pretext` for deterministic wrap, caption fit, and living-doc overlays inside the Remotion browser runtime
+4. Remotion output → MinIO `assets/benchmarks/`
+
+### 2a. Living Docs Text Layout
+
+**Purpose:** Keep captions, transcript overlays, provenance labels, and living-doc copy blocks stable before they become exported motion assets.
+
+**Control seam:** `pmoves/services/a2ui-renderer/src/remotion/` consumes the `@chenglou/pretext` package surface while PMOVES tracks the [`POWERFULMOVES/Pmoves-pretext`](https://github.com/POWERFULMOVES/Pmoves-pretext) fork for ongoing living-doc alignment. When canvas measurement is unavailable, the lane falls back to normal browser text wrapping instead of failing closed.
+
+**Usage pattern:**
+1. Emit an A2UI `text` or `heading` element
+2. Provide `size.width` or `text_layout.maxWidth`
+3. Set `text_layout.engine=pretext`
+4. Optionally add `lineHeight`, `letterSpacing`, `wordBreak`, `whiteSpace`, `maxLines`, `shrinkWrap`, or `debugBoxes`
+5. Render through `remotion-render`; inspect `layout_summary` in the response or `a2ui.render.completed.v1`
+
+**Dedicated route:** `POST /render/provenance`
+- Accepts title, summary, merkle root, shape id, weighted terms, favorite words, sections, and provenance refs
+- Renders the `ProvenanceLivingDoc` composition directly instead of requiring an intermediate A2UI scene builder
+- Returns `provenance_summary` in the response and in `a2ui.render.completed.v1`
+- Local artifact helper: `npm run render:provenance:still`
+- Video example: `npm run render:provenance:file -- demos/provenance_living_doc.mof_example.json demos/provenance_living_doc.mof_example.preview.mp4`
+
+**Why this lane exists:**
+- Browser-accurate multiline wrapping without DOM probe code in PMOVES docs flows
+- Safer transcript/caption overlays for FFmpeg-Whisper and channel-monitor derived artifacts
+- A shared text-fit substrate for future Remotion clips, provenance cards, and notebook exports
 
 ### 3. CHIT Constellation Art
 

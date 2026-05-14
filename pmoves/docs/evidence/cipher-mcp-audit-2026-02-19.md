@@ -3,19 +3,19 @@ _Generated: 2026-02-19_
 
 ## Architecture
 ```
-Claude Code CLI ──stdio──► pmoves-cipher-mcp (Python) ──HTTP──► cipher-api (Node.js/Neo4j) @ :8096
+Claude Code CLI ──stdio──► pmoves-cipher-mcp (Python) ──HTTP──► cipher-api (Node.js/Neo4j) @ :8105
 ```
 
 ## Audit Checklist
 
 | # | Check | Status | Details |
 |---|-------|--------|---------|
-| 1 | MCP config correct | PASS | `.claude/mcp.json` → `pmoves-cipher` server, stdio transport via `uv`, `CIPHER_URL=http://localhost:8096` |
+| 1 | MCP config correct | PASS | `.claude/mcp.json` → `pmoves-cipher` server, stdio transport via `uv`, `CIPHER_URL=http://localhost:8105` |
 | 2 | Server code valid | PASS | `cipher_mcp/server.py` registers 4 tools via `TOOL_HANDLERS` mapping, asyncio entry point |
 | 3 | Client connects | PASS | `cipher_mcp/client.py` uses `httpx.AsyncClient`, resolves URL via `pmoves_registry.get_cipher_url()` |
 | 4 | All 4 tools registered | PASS | `pmoves_cipher_store`, `pmoves_cipher_search`, `pmoves_cipher_store_reasoning`, `pmoves_cipher_reasoning_patterns` |
-| 5 | Service registry correct | PASS | `pmoves_registry/__init__.py` checks `CIPHER_URL` → `CIPHER_MEMORY_URL` → default `http://localhost:8096` |
-| 6 | cipher-api in compose | PASS | Service `cipher-api` defined at compose line 1608, builds from `../Pmoves-cipher`, port 8096 mapped from 3000 |
+| 5 | Service registry correct | PASS | `pmoves_registry/__init__.py` checks `CIPHER_URL` → `CIPHER_MEMORY_URL` → default `http://localhost:8105` |
+| 6 | cipher-api in compose | PASS | Service `cipher-api` defined at compose line 1608, builds from `../Pmoves-cipher`, port 8105 mapped from 3000 |
 | 7 | NATS URL has creds | PASS | `get_nats_url()` defaults to `nats://nats:pmoves@nats:4222` |
 
 ## Findings
@@ -24,7 +24,7 @@ Claude Code CLI ──stdio──► pmoves-cipher-mcp (Python) ──HTTP──
 **File:** `pmoves/docker-compose.yml:2224`
 **Issue:** `gateway-agent` env `CIPHER_URL=${CIPHER_URL:-http://pmoves-botz-cipher:8000}` references a service `pmoves-botz-cipher` that is **not defined** in docker-compose.
 **Impact:** gateway-agent cannot reach cipher memory if `CIPHER_URL` is unset.
-**Fix:** Change default to `http://cipher-api:8096` (the actual cipher service).
+**Fix:** Change default to `http://cipher-api:8105` (the actual cipher service).
 
 ### P2: `pmoves-cipher-mcp/` is NOT a submodule
 **Current:** Tracked as a regular directory (tree object in git index).
@@ -37,7 +37,7 @@ Claude Code CLI ──stdio──► pmoves-cipher-mcp (Python) ──HTTP──
 **Fix:** Add `.gitignore` with standard Python exclusions.
 
 ### INFO: Two separate cipher services
-- `cipher-api` (:8096) — Cipher Memory Node.js service (Neo4j backend, used by pmoves-cipher-mcp)
+- `cipher-api` (:8105) — Cipher Memory Node.js service (Neo4j backend, used by pmoves-cipher-mcp)
 - `pmoves-botz-cipher` (:8000) — BoTZ cipher service (referenced but undefined in compose)
 - These are architecturally distinct; `cipher-api` is the canonical PMOVES cipher memory.
 
@@ -67,7 +67,7 @@ Requires cipher-api container running (Docker profile `agents`):
 docker compose --profile agents up -d cipher-api
 
 # Verify health
-curl http://localhost:8096/health
+curl http://localhost:8105/health
 
 # Test MCP server locally
 uv --directory ./pmoves-cipher-mcp run python -m cipher_mcp.server
@@ -78,6 +78,6 @@ uv --directory ./pmoves-cipher-mcp run python -m cipher_mcp.server
 
 ## Recommended Immediate Actions
 
-1. **Fix dangling CIPHER_URL** in gateway-agent (change `pmoves-botz-cipher:8000` → `cipher-api:8096`)
+1. **Fix dangling CIPHER_URL** in gateway-agent (change `pmoves-botz-cipher:8000` → `cipher-api:8105`)
 2. **Add .gitignore** to `pmoves-cipher-mcp/`
 3. **Defer submodule conversion** until PMOVES-cipher-mcp repo is created on GitHub
