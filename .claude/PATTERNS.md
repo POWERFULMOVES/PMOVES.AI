@@ -351,6 +351,100 @@ DNS: `pmoves.ai` zone (pending Cloudflare migration). Subdomains: api, agent, ra
 
 Quick refs: `.claude/context/runner-topology.md`, `pmoves/docs/operations/WORKFLOW_RUNNER_MAP.md`, `deploy/HYBRID_RUNNER_STRATEGY.md`.
 
+## PostToolUse format hooks (opt-in)
+
+Two best-effort PostToolUse hooks live at `.claude/hooks/posttool-format/` — operator-gated; **not** wired into `.claude/settings.json` by default.
+
+| Hook | Trigger | Action |
+|------|---------|--------|
+| `python-format.sh` | `Edit`/`Write` on `*.py` | `uv run ruff format` + `uv run ruff check --fix --quiet` (output capped at 20 lines) |
+| `ui-lint.sh` | `Edit`/`Write` under `pmoves/ui/` matching `*.ts*` or `*.js*` | `pnpm lint --fix --max-warnings=0 -- <path>` (falls back to `npx eslint --fix`), capped at 30 lines |
+
+Both hooks read Claude Code's JSON via stdin, parse `tool_input.file_path`, and **always exit 0** — PostToolUse hooks must never block subsequent tool calls. They skip silently when `uv`/`pnpm` is missing or the file no longer exists. `ui-lint.sh` deliberately skips `tsc --noEmit` (too slow inside a hook); run `cd pmoves/ui && pnpm typecheck` separately at PR prep.
+
+Example operator opt-in (`.claude/settings.json`):
+
+```jsonc
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          { "type": "command", "command": ".claude/hooks/posttool-format/python-format.sh" },
+          { "type": "command", "command": ".claude/hooks/posttool-format/ui-lint.sh" }
+        ]
+      }
+    ]
+  }
+}
+```
+
+Source: gap-fill roadmap Wave 0 Task 11 (`docs/superpowers/plans/2026-05-15-pmoves-gap-fill-roadmap.md`).
+
 ## Submodules (pointer)
 
 `PMOVES-Agent-Zero`, `PMOVES-Archon`, `PMOVES.YT`, `PMOVES-Jellyfin`, `PMOVES-Open-Notebook`, `PMOVES-Deep-Serch`, `PMOVES-BoTZ`, `PMOVES-DoX`, `PMOVES-HiRAG`, plus health/wealth integrations and more (20 total). Full catalog: `.claude/context/submodules.md`.
+
+## Gap-fill artifacts (2026-05-15)
+
+Wave 0 of the [gap-fill roadmap](../docs/superpowers/plans/2026-05-15-pmoves-gap-fill-roadmap.md) landed these artifacts (35-item analysis; Tier 1 + Tier 3 scoped to autonomous build).
+
+### Activated constellation skills (pointers)
+| Pointer | Source submodule | Use case |
+|---------|------------------|----------|
+| `.claude/skills/fork-repository/` | `skills/pmoves-fork-repository-skill/` | Fan-out engineering work |
+| `.claude/skills/agent-sandbox/` | `skills/PMOVES-agent-sandbox-skill/` | Isolated execution; pairs with `archon-qa-agent` |
+| `.claude/skills/claude-d3js/` | `skills/Pmoves-claude-d3js-skill/` | D3.js visualizations |
+
+### Composable skills (`.claude/skills/`)
+| Skill | Invocation | Purpose |
+|-------|------------|---------|
+| `pmoves-mesh-preflight` | both | Catalog-driven `/healthz` walk |
+| `pmoves-nats-subject-audit` | Claude-only | Diff declared vs live JetStream subjects |
+| `pmoves-living-docs-refresh` | Claude-only | Surface stale docs from reconcile registry |
+| `pmoves-submodule-fleet` | both | 25+ submodule hygiene + behind-main |
+| `pmoves-chit-sign` | Claude-only | Sign + claim + stage NATS `chit.signed.v1` |
+
+### Governance subagents (`.claude/agents/`)
+| Agent | Role | Trigger |
+|-------|------|---------|
+| `nats-subject-auditor` | Gate new NATS publishers | New publisher/subscriber in diff |
+| `chit-compliance-reviewer` | CHIT-aware service review | PR touches CHIT-aware port |
+| `claim-collision-agent` | Block dual claims | Write/Edit on `AGNOTE4482PHI.t1.md` |
+| `chit-pr-audit-agent` | Control body ACK gate | CHIT-aware service modified |
+| `archon-qa-agent` | Mint flow QA | Between `archon.mint.agent.v1` and `archon.mint.confirmed.v1` |
+
+### Archon mint slash commands (`.claude/commands/archon/`)
+- `/archon:mint-agent` — mint a new PMOVES agent.
+- `/archon:mint-skill` — mint a new skill.
+- `/archon:creator-onboard` — provision a creator identity.
+
+> Mint NATS subjects (`archon.mint.*.v1`, `archon.qa.result.v1`) are Wave 2 service-side work; commands stage payloads for manual publish via `pmoves-nats-mcp` until then.
+
+### Governance hooks (opt-in)
+| Hook | Type | Behavior |
+|------|------|----------|
+| `governance/signoff-gate.sh` | PreToolUse Bash | Blocks `gh pr merge` without 3-body ACK in `AGNOTE4482_SIGNOFF_CHECKLIST.md` |
+| `governance/known-roads-enforcer.py` | PreToolUse Bash | Redirects raw `docker compose up/restart/down` → `make -C pmoves up-*` |
+| `governance/claim-collision-pre.py` | PreToolUse Write/Edit | Blocks dual claims on `AGNOTE4482PHI.t1.md` |
+| `session-env-check.sh` (modified) | SessionStart | Appends Emperor-CHIT-Humility disclosure to `additionalContext` |
+
+Operator opt-in snippet:
+```jsonc
+"PreToolUse": [
+  { "matcher": "Bash", "hooks": [
+    { "type": "command", "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/governance/signoff-gate.sh\"" },
+    { "type": "command", "command": "uv run --quiet \"$CLAUDE_PROJECT_DIR/.claude/hooks/governance/known-roads-enforcer.py\"" }
+  ]},
+  { "matcher": "Edit|Write", "hooks": [
+    { "type": "command", "command": "uv run --quiet \"$CLAUDE_PROJECT_DIR/.claude/hooks/governance/claim-collision-pre.py\"" }
+  ]}
+]
+```
+
+### NATS MCP server (`pmoves-nats-mcp/`)
+Tools: `nats_publish(subject, payload, headers?)`, `nats_subscribe(subject, timeout_seconds?, max_messages?)`. Setup: `cd pmoves-nats-mcp && uv sync && uv run python -m nats_mcp.server`. Wire into `.claude/mcp.json` per the project README — operator opt-in after smoke-test.
+
+### Wave 1 / Wave 2 (operator + service-side)
+See [`docs/superpowers/plans/2026-05-15-pmoves-gap-fill-roadmap.md`](../docs/superpowers/plans/2026-05-15-pmoves-gap-fill-roadmap.md) §§ "Wave 1" and "Wave 2" — API-keyed MCPs (Prometheus/Loki, Sentry, Linear, Brave, Cloudflare, Playwright, Postgres), Supabase schema migrations (`archon_minted_artifacts`, `agent_id` FK), and Archon-side mint subject publishers.
