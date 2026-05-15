@@ -4,6 +4,7 @@ set -euo pipefail
 env_name="${1:-PMOVES.AI}"
 python_target="${2:-${PMOVES_PYTHON:-}}"
 include_docs="${INCLUDE_DOCS:-0}"
+include_bringup="${INCLUDE_BRINGUP:-0}"
 
 have(){ command -v "$1" >/dev/null 2>&1; }
 py_cmd="python"
@@ -17,6 +18,12 @@ echo "Scanning for requirements.txt files..."
 roots=(services tools)
 if [[ "$include_docs" == "1" ]]; then roots+=(docs); fi
 mapfile -t reqs < <(find "${roots[@]}" -type f -name requirements.txt 2>/dev/null || true)
+# INCLUDE_BRINGUP=1 → also install pmoves/tools/bringup/requirements.txt
+# (operator-facing CLI tooling: glances, etc.). Kept separate so the default
+# venv stays focused on service runtime deps.
+if [[ "$include_bringup" == "1" ]] && [[ -f "tools/bringup/requirements.txt" ]]; then
+  reqs+=("tools/bringup/requirements.txt")
+fi
 if [[ ${#reqs[@]} -eq 0 ]]; then echo "No requirements.txt under: ${roots[*]}"; exit 0; fi
 
 have_uv=0
