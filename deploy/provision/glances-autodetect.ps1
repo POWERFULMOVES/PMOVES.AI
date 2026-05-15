@@ -12,10 +12,10 @@
 # USAGE:
 #   # Must be run in PowerShell (any version >=5.1). No elevation required.
 #   .\glances-autodetect.ps1                    # interactive report + suggestion
-#   .\glances-autodetect.ps1 --json             # structured JSON to stdout
-#   .\glances-autodetect.ps1 --json-file PATH   # write JSON to file
-#   .\glances-autodetect.ps1 --suggest          # print ONLY the suggested node-type
-#   .\glances-autodetect.ps1 --help             # usage
+#   .\glances-autodetect.ps1 -Json              # structured JSON to stdout
+#   .\glances-autodetect.ps1 -JsonFile PATH     # write JSON to file
+#   .\glances-autodetect.ps1 -Suggest           # print ONLY the suggested node-type
+#   .\glances-autodetect.ps1 -Help              # usage
 #
 # JSON SCHEMA (matches glances-autodetect.sh - stable):
 #   {
@@ -174,15 +174,18 @@ function Get-DiskInfo {
                 name       = $d.FriendlyName
                 size_gb    = $sizeGb
                 rotational = $rotational
+                bus_type   = [string]$d.BusType
             }
         }
     } catch {
         # Fallback: WMI
         Get-CimInstance Win32_DiskDrive | ForEach-Object {
+            $busType = if ($_.Model -match 'NVMe') { 'NVMe' } else { 'Unknown' }
             $disks += @{
                 name       = $_.Model
                 size_gb    = [int][Math]::Round($_.Size / 1GB)
                 rotational = ($_.MediaType -notmatch 'SSD|NVMe|Solid')
+                bus_type   = $busType
             }
         }
     }
@@ -236,7 +239,7 @@ function Get-NodeSuggestion {
 
     $nvidiaGpus = @($Gpus | Where-Object { $_.vendor -eq 'nvidia' })
     $amdGpus    = @($Gpus | Where-Object { $_.vendor -eq 'amd' -and $_.model -notmatch 'Radeon.*Graphics' })
-    $nvmeCount  = ($Disks | Where-Object { $_.rotational -eq $false }).Count
+    $nvmeCount  = @($Disks | Where-Object { $_.bus_type -match '^NVMe$' }).Count
     $maxNicGbps = ($Nics | ForEach-Object { $_.speed_mbps } | Measure-Object -Maximum).Maximum / 1000
 
     # DGX Spark: ARM64 + NVIDIA (would be rare on bare Windows, but handle it)
@@ -245,8 +248,8 @@ function Get-NodeSuggestion {
     }
 
     # RTX 5090
-    if ($nvidiaGpus | Where-Object { $_.model -match '5090' }) {
-        return @{ type='gpu-5090'; confidence='high'; rationale="Detected NVIDIA RTX 5090 + $($CpuInfo.model) + $RamGb GB RAM" }
+    if (($nvidiaGpus | Where-Object { $_.model -match '5090' }) -and $RamGb -ge 64) {
+        return @{ type='gpu-5090'; confidence='high'; rationale="Detected NVIDIA RTX 5090 + $($CpuInfo.model) + $RamGb GB RAM (>=64 GB required)" }
     }
 
     # RTX 4090
@@ -254,10 +257,10 @@ function Get-NodeSuggestion {
         return @{ type='gpu-4090'; confidence='high'; rationale="Detected NVIDIA RTX 4090 + $($CpuInfo.model) + $RamGb GB RAM" }
     }
 
-    # RDNA4 workstation: AMD Radeon R9700 / gfx1201 / Navi 48
-    $rdna4Match = $amdGpus | Where-Object { $_.model -match 'R9700|Navi 48|Radeon AI Pro|gfx1201|RDNA.?4' }
-    if ($rdna4Match) {
-        return @{ type='rdna4-workstation'; confidence='high'; rationale="Detected $($rdna4Match[0].model) + $($CpuInfo.model) + $RamGb GB RAM" }
+    # RDNA4 workstation: AMD Ryzen + >=2 AMD Radeon (gfx1201/R9700/RDNA4)
+    $rdna4Match = @($amdGpus | Where-Object { $_.model -match 'R9700|Navi 48|Radeon AI Pro|gfx1201|RDNA.?4' })
+    if ($CpuInfo.model -match 'Ryzen' -and $rdna4Match.Count -ge 2) {
+        return @{ type='rdna4-workstation'; confidence='high'; rationale="Detected $($rdna4Match[0].model) (x$($rdna4Match.Count)) + Ryzen $($CpuInfo.model) + $RamGb GB RAM" }
     }
 
     # PVE-member-fresh candidate: >=10 GbE + >=2 NVMe + >=64 GB RAM
@@ -266,7 +269,7 @@ function Get-NodeSuggestion {
     }
 
     # Generic discrete GPU workstation
-    if (($nvidiaGpus.Count + $amdGpus.Count) -gt 0 -and $RamGb -ge 16) {
+    if (($nvidiaGpus.Count + $amdGpus.Count) -gt 0 -and $RamGb -ge 32) {
         $gpuName = if ($nvidiaGpus.Count -gt 0) { $nvidiaGpus[0].model } else { $amdGpus[0].model }
         return @{ type='desktop-workstation'; confidence='medium'; rationale="Detected $gpuName + $($CpuInfo.model) + $RamGb GB RAM" }
     }
@@ -307,7 +310,7 @@ $result = [ordered]@{
         [ordered]@{ vendor=$_.vendor; model=$_.model; vram_gb=$_.vram_gb; pci_id=$_.pci_id }
     })
     disks = @($disks | ForEach-Object {
-        [ordered]@{ name=$_.name; size_gb=$_.size_gb; rotational=$_.rotational }
+        [ordered]@{ name=$_.name; size_gb=$_.size_gb; rotational=$_.rotational; bus_type=$_.bus_type }
     })
     nics = @($nics | ForEach-Object {
         [ordered]@{ name=$_.name; speed_mbps=$_.speed_mbps }
