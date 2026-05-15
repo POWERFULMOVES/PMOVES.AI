@@ -355,6 +355,16 @@ class CGPValidator:
                             duration=time.time() - start_time
                         )
                         return False, "Invalid CGP signature"
+                else:
+                    # Fail-closed: no key available to verify signature
+                    self._log_audit(
+                        cgp=cgp,
+                        source=source,
+                        valid=False,
+                        error=ValidationErrorType.MISSING_SIGNATURE,
+                        duration=time.time() - start_time
+                    )
+                    return False, "Signature verification required but no signing key configured"
 
             # Decrypt anchors (if encrypted)
             if security_level == SecurityLevel.ENCRYPTED:
