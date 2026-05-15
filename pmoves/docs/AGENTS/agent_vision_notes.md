@@ -6,3 +6,16 @@
 ok lets review for merge c:\Users\russe\Documents\GitHub\PMOVES.AI\.claude\commands\pr-monitor.md has an upgrade in place but this doc will be a good start c:\Users\russe\Documents\GitHub\PMOVES.AI\pmoves\docs\AGENTS think like pokemone and transformers no mater how small as a uv typescript helper displaying skills with
 connections through all the layers it can touch that can be turned on or off with chit checks mapped to tunable parameters then mapped to hyperdimensions to not only visualize but inform and allows fun maths to be had with the math currently in the chit stack to be used in creative demmonstrations of PMOVES in action and
 doubles as validation metric that
+
+---
+
+## Vision
+(To be populated — describe the agent vision subsystem scope and goals)
+
+## Scope
+(To be populated — which agents, which modalities, which deployment contexts)
+
+## Status
+- Document type: Stub populated from AGNOTE4482 gap analysis
+- Last updated: 2026-05-15
+- Next step: Gather vision subsystem requirements from agent taxonomy
