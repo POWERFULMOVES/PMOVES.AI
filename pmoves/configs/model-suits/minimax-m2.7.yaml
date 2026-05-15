@@ -1,0 +1,131 @@
+# Model Suit: MiniMax M2.7
+# PMOVES.AI MiniMax Edition Configuration
+# Provider: MiniMax Token Plan
+# Documentation: https://platform.minimax.io/docs/token-plan/intro
+#
+# Theme: Transformers meets Bumblebee movie style evolution from 8-bit CLI
+# origins through 16-bit PS2 era to holographic dimensions.
+
+suit:
+  id: minimax-m2.7
+  name: MiniMax M2.7 (Token Plan)
+  provider: minimax
+  flare_name: pmoves/minimax-m2.7
+  model_family: minimax
+  tier: flagship_longcontext
+  role: primary_longcontext  # PRIMARY LONG-CONTEXT MODEL - 1M token window
+
+model_config:
+  context_window: 1000000
+  max_output_tokens: 32000
+  supports_vision: true
+  supports_streaming: true
+  supports_multimodal: true  # text, speech, video, music, image
+  temperature_range: [0.0, 1.0]
+  top_p_range: [0.0, 1.0]
+  top_k: null
+
+# Token Plan specific
+token_plan:
+  enabled: true
+  api_key_env: MINIMAX_TOKEN_PLAN_API_KEY
+  api_base: https://api.minimax.chat/v1
+  fallback_api_key_env: MINIMAX_API_KEY  # Pay-as-you-go fallback
+  plan_tiers:
+    - starter: 1500  # requests per 5 hours
+    - plus: 4500
+    - max: 15000
+    - plus_highspeed: 4500
+    - max_highspeed: 15000
+    - ultra_highspeed: 30000
+  quota_reset: rolling_5h  # M2.7 uses 5-hour rolling window
+
+distillation_pipeline:
+  stages:
+    - name: config_tuning
+      enabled: true
+      notes: MiniMax M2.7 configuration tuning
+
+    - name: context_priming
+      enabled: true
+      system_prompt: |
+        You are MiniMax M2.7, MiniMax's flagship model with 1M token context window.
+        You provide hyperdimensional operations, wave-function collapse reasoning,
+        and long-context research capabilities. You are the PRIMARY LONG-CONTEXT MODEL
+        for the PMOVES.AI MiniMax Edition integration.
+
+        Your unique capabilities include:
+        - 1 million token context window for massive document analysis
+        - Wave-function collapse for parallel state exploration
+        - Hyperdimensional reasoning for complex architecture visualization
+        - Multimodal support: text, speech, video, music, and image generation
+
+        You excel at long-context research, architecture visualization, writing tasks,
+        and agent trail navigation through hyperdimensions.
+
+    - name: model_fine_tune
+      enabled: false
+      reason: "Cloud-only model - no weight updates possible"
+
+    - name: full_distillation
+      enabled: false
+      reason: "Cloud-only model - no weight updates possible"
+
+tensorzero_config:
+  model_name: minimax-m2.7
+  weight: 0.7  # Primary weight per cascade config
+  routing:
+    - function: long_context_research
+      priority: 1
+    - function: architecture_visualization
+      priority: 1
+    - function: hyperdimensional_reasoning
+      priority: 1
+    - function: writing_tasks
+      priority: 1
+    - function: coding_overflow
+      priority: 1  # GLM overflow target
+
+flare_namespace:
+  alias: pmoves/minimax-m2.7
+  canonical_name: minimax-m2.7
+  provider_url: https://api.minimax.chat/v1
+  already_registered: true
+
+capabilities:
+  - long_context  # 1M token context
+  - hyperdimensional_ops
+  - wave_function_collapse
+  - multimodal  # text, speech, video, music, image
+  - code_generation
+  - reasoning
+  - vision
+  - fast_inference
+  - agent_trails  # Navigate through agent trails
+  - architecture_visualization
+  - writing_vibes  # Creative writing with prosodic flow
+
+local_fallback:
+  available: true
+  reason: "Cloud-hosted but with Token Plan quota limits"
+  fallback_model_suit: glm-4.7
+  fallback_trigger: quota_exhausted  # Switch to pay-as-you-go or wait
+
+cross_agent:
+  agent_zero: full
+  clawz: limited  # Requires adapter layer
+  archon: full
+  typer: untested
+  pinokio: full
+  a2ui: full
+  kilocode: full  # KiloCode MiniMax edition
+
+metadata:
+  source: pmoves/minimax-integration
+  last_verified: 2026-05-13
+  benchmark_data:
+    - source: "MiniMax Token Plan Documentation"
+      url: "https://platform.minimax.io/docs/token-plan/intro"
+    - source: "MiniMax API Reference"
+      url: "https://platform.minimax.io/docs/token-plan/quickstart"
+  runtime_note: "PRIMARY LONG-CONTEXT MODEL FOR MINIMAX EDITION - 1M token window, multimodal support"
