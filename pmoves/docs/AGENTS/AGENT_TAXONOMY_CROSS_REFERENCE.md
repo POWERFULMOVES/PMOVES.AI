@@ -2,6 +2,8 @@
 
 _Last updated: 2026-02-18 — v1.4.0 (76 agents)_
 
+> **Freshness Note — 2026-05-08:** Last substantive update was 2026-02-18 (v1.4.0). The taxonomy is now at v1.5.0 (76 agents). Cross-references may be stale. Verify against `PMOVES_AGENT_CLASS_TAXONOMY.md` before relying on this hub.
+
 Master cross-reference for all documents, concepts, and implementation files involved in the PMOVES Agent Class Taxonomy. When the taxonomy changes, use this document to identify which files need updates.
 
 ---

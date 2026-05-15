@@ -1,4 +1,5 @@
 {
+  "_pinned_versions_note": "Dependencies pinned to exact versions on 2026-05-14 to prevent supply chain attacks (F-07). Re-pin after auditing new releases before upgrading. hostinger-api-mcp=0.2.1, tailscale-mcp=2026.4.10-1",
   "mcpServers": {
     "pmoves-cipher": {
       "command": "uv",
@@ -22,7 +23,7 @@
     "hostinger-mcp": {
       "command": "npx",
       "args": [
-        "hostinger-api-mcp@latest"
+        "hostinger-api-mcp@0.2.1"
       ],
       "env": {
         "API_TOKEN": "${HOSTINGER_API_KEY}"
@@ -31,7 +32,7 @@
     "tailscale": {
       "command": "npx",
       "args": [
-        "tailscale-mcp@latest"
+        "tailscale-mcp@2026.4.10-1"
       ],
       "env": {
         "TAILSCALE_API_KEY": "${TAILSCALE_API_KEY}",

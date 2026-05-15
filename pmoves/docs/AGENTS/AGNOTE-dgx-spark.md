@@ -25,11 +25,28 @@ That document is the working parity contract for:
 - ✅ Makefile include added
 - ✅ Ollama Spark provider configured
 - ✅ PMOVES Spark preset created
+- ✅ Hardware profile created (4090, 2026-05-14): `pmoves/config/profiles/dgx-spark-grace-blackwell.yaml`
+- ✅ Agent Zero fork synced to upstream v1.14 (4090, 2026-05-14): `PMOVES.AI-Edition-v1.14`
+- ✅ Model strategy documented: `pmoves/docs/SPARK_MODEL_STRATEGY.md` (786 lines, 2026-05-08)
+- ✅ NATS stream definitions: `pmoves/nats/mesh_gpu_streams.yaml` (7 streams)
+- ✅ Content provenance streams: `pmoves/nats/content_provenance_streams.yaml` (3 consumers)
+- ✅ Model deploy script: `scripts/spark_deploy_models.sh` (--dry-run supported)
+- ✅ Supply chain hardening applied (2026-05-14): see `research/SUPPLY_CHAIN_HARDENING_PLAN_2026-05-14.md`
 - ⏳ Flare model namespace TODO
-- ⏳ NATS JetStream streams (defined, not deployed)
-- ⏳ `content.*` shaping/provenance subjects not deployed yet
-- ⏳ raw-content -> shaped-content -> attested-content -> HiRAG gate not wired yet
-- ⏳ Hyperdimensions replay of shaped lexicon scenes not wired yet
+- ⏳ NATS JetStream streams (defined, not deployed) — Phase 2
+- ⏳ `content.*` shaping/provenance subjects (defined, not deployed) — Phase 3
+- ⏳ raw-content -> shaped-content -> attested-content -> HiRAG gate not wired yet — Phase 3
+- ⏳ Hyperdimensions replay of shaped lexicon scenes not wired yet — Phase 4
+
+## Phase Progress
+
+| Phase | Description | Status |
+|-------|-------------|--------|
+| 0 | Housekeeping (sync, docs, hardening) | ✅ Complete (2026-05-14) |
+| 1 | Model deployment (P0: Qwen3.5-35B-A3B + Qwen2.5-Coder-32B) | ⏳ Script ready, awaiting host execution |
+| 2 | NATS mesh.gpu.* stream deployment | ⏳ YAML ready, awaiting JetStream |
+| 3 | Content shaping pipeline (raw→shaped→attested→HiRAG) | ⏳ Streams defined, wiring needed |
+| 4 | Hyperdimensions replay + lexicon control surface | ⏳ Backlog |
 
 ## Expanded Role
 - SPARK is the heavy inference side of PMOVES message shaping in this lane.
