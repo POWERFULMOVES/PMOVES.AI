@@ -12,7 +12,7 @@ When a downstream agent is unsure, it should query this doc, never invent.
 
 | Node | Role | Tailnet name | Public surface |
 |------|------|--------------|----------------|
-| **Z890 (ai-lab)** | Dev + GPU (3090Ti); full Docker Compose mesh | `pmoves-z890` | None directly; reached over Tailscale |
+| **Z890 (ai-lab)** | Production ai-lab node, GPU (RTX 3090 Ti); workstation co-located with dev workflow; full Docker Compose mesh | `pmoves-z890` | None directly; reached over Tailscale |
 | **5090** | Primary GPU (pending hardware) | `pmoves-5090` | None |
 | **KVM4-1** | API gateway VPS + Tailscale egress exit | `pmoves-kvm4-1` | `api.pmoves.ai`, `agent.pmoves.ai`, `rag.pmoves.ai`, `gateway.pmoves.ai` |
 | **KVM4-2** | Data/storage VPS (Supabase, NATS, MinIO, Neo4j, Qdrant, Meilisearch, monitoring) | `pmoves-kvm4-2` | `supabase.pmoves.ai`, `nats.pmoves.ai`, `minio.pmoves.ai`, `grafana.pmoves.ai`, `search.pmoves.ai` |
