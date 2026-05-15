@@ -47,6 +47,9 @@
 #   - Idempotent: no state writes unless --json-file given.
 #   - System is NOT modified by this script.
 
+# Support both PowerShell (-Param) and Linux-style (--param) flags for parity
+# with the Bash companion.  We parse $args manually first, then set the
+# declared params so the rest of the script stays unchanged.
 param(
     [switch]$Json,
     [string]$JsonFile,
@@ -56,6 +59,18 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'SilentlyContinue'
+
+$i = 0
+while ($i -lt $args.Count) {
+    switch ($args[$i]) {
+        '--json'      { $Json = $true }
+        '--json-file' { if ($i + 1 -lt $args.Count) { $JsonFile = $args[++$i] } else { throw '--json-file requires a path argument' } }
+        '--suggest'   { $Suggest = $true }
+        '--help'      { $Help = $true }
+        default       { Write-Warn "Unknown argument: $($args[$i])" }
+    }
+    $i++
+}
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -218,7 +233,8 @@ function Get-PlatformHints {
                    (Test-Path 'C:\Program Files\Tailscale\tailscale.exe')
     $hasDocker    = $null -ne (Get-Service -Name 'com.docker.service' -ErrorAction SilentlyContinue) -or
                    (Test-Path 'C:\Program Files\Docker\Docker\Docker Desktop.exe')
-    $hasHyperV    = (Get-Service -Name 'vmms' -ErrorAction SilentlyContinue).Status -eq 'Running'
+    $vmmsSvc = Get-Service -Name 'vmms' -ErrorAction SilentlyContinue
+    $hasHyperV    = ($null -ne $vmmsSvc) -and ($vmmsSvc.Status -eq 'Running')
     $hasWsl2      = $null -ne (Get-Command 'wsl' -ErrorAction SilentlyContinue) -and
                    ((wsl --list --quiet 2>$null) -ne $null)
     @{
