@@ -62,11 +62,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # PMOVES Python requirements (overrides upstream pins where needed)
 COPY --chown=65532:65532 services/agent-zero/requirements.txt services/agent-zero/requirements.lock ./
-USER pmoves:pmoves
 RUN . /opt/venv-a0/bin/activate \
     && uv pip install --no-cache-dir \
        --constraint requirements.lock -r requirements.txt
-USER root
 
 # Init script (replaces upstream /ins/copy_A0.sh)
 RUN install -d -o 65532 -g 65532 /a0 \
