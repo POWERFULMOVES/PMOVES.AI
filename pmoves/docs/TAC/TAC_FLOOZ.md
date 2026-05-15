@@ -24,12 +24,11 @@ FlOO$ is a thin **overlay service**, not a primary pipeline stage. It listens fo
 
 ```
 Wealth (Firefly III)  ─┐
-Health (wger)         ─┼─→  finance.event.v1  ─→  FlOO$ Persona Mapper  ─→  flooz.cgp.ready.v1
-Agent-Zero finance-skill ┘                       (state machine)              (CGP v0.2 + persona overlay)
+Health (wger)         ─┼─→  finance.event.v1  ─→  FlOO$ Persona Mapper  ─→  tokenism.prosodic.bpm.v1
+Agent-Zero finance-skill ┘                       (state machine)         (CGP v0.2 + persona_overlay,
+                                                                          source: "flooz")
                                                                                        │
-                                                                                       ▼
-                                                                  tokenism.prosodic.bpm.v1
-                                                                  (ToKenism merges overlay + BPM profile)
+                                                              (ToKenism merges overlay + BPM profile)
                                                                                        │
                                                                                        ▼
                                                               POST /v1/voice/synthesize/prosodic
@@ -49,9 +48,11 @@ Agent-Zero finance-skill ┘                       (state machine)              
 | Subject | Direction | Producer → Consumer |
 |---------|-----------|----------------------|
 | `finance.event.v1` | ingress | Wealth / Health / agent-finance-skill → FlOO$ |
-| `flooz.persona.computed.v1` | egress (audit) | FlOO$ → any observer (Hyperdimensions, audit log) |
-| `flooz.cgp.ready.v1` | egress (control) | FlOO$ → ToKenism (alternative to direct `tokenism.prosodic.bpm.v1` write — preserves FlOO$ vs ToKenism separation) |
+| `tokenism.prosodic.bpm.v1` | egress (control) | **FlOO$ publishes directly** — the existing ToKenism inbound subject (`pmoves/tools/beats_to_voice.py:65`). FlOO$ is just another producer of the same CGP-shape packet, now with an additive `persona_overlay` block. |
+| `flooz.persona.computed.v1` | egress (audit shadow) | FlOO$ → any observer (Hyperdimensions, audit log). **Optional**; not in the hot path; renders the same overlay in a smaller payload for visualization without re-deriving from CGP. |
 | `flooz.persona.cache.invalidate.v1` | sideband | Operator / signoff event → FlOO$ |
+
+> **Decision (revised after Codex review on PR #1487):** Earlier draft proposed `flooz.cgp.ready.v1` as a control-plane subject between FlOO$ and ToKenism. That introduced a relay requirement with no real isolation benefit. **Dropped.** FlOO$ publishes directly to `tokenism.prosodic.bpm.v1` — same subject ToKenism already consumes — and is tagged in CGP `source: "flooz"` for attribution. ToKenism remains the single subject owner; FlOO$ is one of many possible producers (alongside `bpm_encoder.py`'s `4090-claude` source).
 
 **Disambiguation against the MiniMax Phase 2 catalog (PR #1484):** MiniMax adds `minimax.character.*` and `minimax.voice.prosodic.v1` for **character-archetype** synthesis (Dr. Bean / Mr. Clean / PowerPuff Girls). FlOO$ adds `flooz.*` for **economic-state** persona overlays. They are orthogonal and chain — FlOO$ outputs an overlay that names which MiniMax character to render; MiniMax renders the audio. No subject collision.
 
@@ -160,13 +161,13 @@ Per `pmoves/docs/architecture/PMOVES_MOF_ARCHITECTURE.md`: every PMOVES node is 
 | Service skeleton | `pmoves/services/flooz/main.py` (FastAPI on `:8119`) |
 | Health endpoint | `GET /healthz` — 3-tier model, returns `degraded` when NATS disconnected |
 | Metrics endpoint | `GET /metrics` — Prometheus, counters for `flooz_events_total`, `flooz_overlays_emitted_total`, `flooz_persona_state_total{state=...}` |
-| NATS subjects registered | Add four `flooz.*` subjects + `finance.event.v1` to `pmoves/.claude/context/nats-subjects.md` |
+| NATS subjects registered | Add `finance.event.v1`, `flooz.persona.computed.v1`, `flooz.persona.cache.invalidate.v1` to `pmoves/.claude/context/nats-subjects.md`; document FlOO$ as a new producer on the existing `tokenism.prosodic.bpm.v1` entry |
 | Docker wiring | `docker-compose.yml` block under `flooz` profile, `*tier-api-hardened` anchor |
 | Prometheus scrape | `pmoves/monitoring/prometheus/prometheus.yml` adds `flooz` job |
 | Agent signature | `pmoves/config/agent_signatures.yaml` adds `flooz` agent_id |
 | Unit tests | `tests/services/flooz/test_passthrough.py` — input event → CGP packet with empty `persona_overlay.modulation` (all zero biases), but valid `version` and `trigger_event_id` |
 
-**Acceptance:** A `finance.event.v1` published from a smoke test arrives at ToKenism via `flooz.cgp.ready.v1` with a valid CGP v0.2 packet whose `persona_overlay.modulation.*_bias` values are all `0.0`. ToKenism renders identically to the no-FlOO$ baseline.
+**Acceptance:** A `finance.event.v1` published from a smoke test arrives at ToKenism via `tokenism.prosodic.bpm.v1` with a valid CGP v0.2 packet whose `source: "flooz"`, `persona_overlay.version: "0.1"`, and `persona_overlay.modulation.*_bias` values are all `0.0`. ToKenism renders identically to the no-FlOO$ baseline (same subject, additive overlay block ignored by current consumer).
 
 ## Phase B — Persona Engine (P1)
 
