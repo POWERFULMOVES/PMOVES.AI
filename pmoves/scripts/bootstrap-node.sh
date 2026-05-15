@@ -136,7 +136,7 @@ if [[ -f "$PROFILE_PATH" ]]; then
 else
   echo -e "  ${RED}✗${RST}  ERROR: Profile not found: pmoves/config/profiles/${PROFILE}.yaml" >&2
   echo "" >&2
-  echo "  Run: python deploy/provision/json-to-profile.py --node-id $NODE_ID to generate it" >&2
+  echo "  Run: python deploy/provision/json-to-profile.py --node-id $NODE_ID --profile $PROFILE to generate it" >&2
   echo "" >&2
   exit 1
 fi
@@ -162,23 +162,19 @@ else
   fi
 fi
 
-# ── Step 4 — NATS subscribe test ──────────────────────────────────────────────
+# ── Step 4 — NATS connectivity probe ─────────────────────────────────────────
 
 echo ""
-echo "=== Step 4: NATS Subscribe Test ==="
+echo "=== Step 4: NATS Connectivity Probe ==="
 
-if ! command -v nats >/dev/null 2>&1; then
-  warn "nats CLI not found — skipping NATS subscribe test"
-  dim "Install: https://github.com/nats-io/natscli/releases"
+if command -v nats >/dev/null 2>&1; then
+    if nats server ping --server "${NATS_URL:-nats://localhost:4222}" 2>/dev/null; then
+        ok "NATS connectivity: server ping OK"
+    else
+        warn "NATS server ping failed — NATS may not be running (non-fatal)"
+    fi
 else
-  info "Testing NATS subscribe on mesh.node.announce.v1 (3s timeout)..."
-  if timeout 3 nats sub --server "${NATS_URL:-nats://localhost:4222}" mesh.node.announce.v1 2>/dev/null; then
-    ok "NATS subscribe test succeeded"
-  else
-    warn "NATS subscribe test timed out or failed — NATS may not be running"
-    dim "Start NATS: docker compose up -d nats"
-    dim "NATS URL  : ${NATS_URL:-nats://localhost:4222}"
-  fi
+    warn "nats CLI not found — skipping NATS connectivity probe"
 fi
 
 # ── Step 5 — Runner label assignment ─────────────────────────────────────────
