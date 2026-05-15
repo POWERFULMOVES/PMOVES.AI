@@ -62,14 +62,14 @@ usage() {
   echo ""
 }
 
-for arg in "$@"; do
-  case "$arg" in --help|-h) usage; exit 0 ;; esac
-done
-
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --node-id)  NODE_ID="${2:-}"; shift 2 ;;
-    --profile)  PROFILE="${2:-}"; shift 2 ;;
+    --node-id)
+      [[ "${2:-}" == --* ]] && { echo "ERROR: --node-id requires a value" >&2; exit 1; }
+      NODE_ID="${2:-}"; shift 2 ;;
+    --profile)
+      [[ "${2:-}" == --* ]] && { echo "ERROR: --profile requires a value" >&2; exit 1; }
+      PROFILE="${2:-}"; shift 2 ;;
     --help|-h)  usage; exit 0 ;;
     *)
       echo "ERROR: Unknown argument: $1" >&2
@@ -82,6 +82,15 @@ done
 if [[ -z "$NODE_ID" ]] || [[ -z "$PROFILE" ]]; then
   echo "ERROR: --node-id and --profile are required" >&2
   usage >&2
+  exit 1
+fi
+
+if [[ ! "$NODE_ID" =~ ^[a-zA-Z0-9_-]+$ ]]; then
+  echo "ERROR: --node-id '$NODE_ID' contains invalid characters (use [a-zA-Z0-9_-] only)" >&2
+  exit 1
+fi
+if [[ ! "$PROFILE" =~ ^[a-zA-Z0-9_-]+$ ]]; then
+  echo "ERROR: --profile '$PROFILE' contains invalid characters (use [a-zA-Z0-9_-] only)" >&2
   exit 1
 fi
 
@@ -108,18 +117,21 @@ echo "=== Step 1: Tailscale Enrollment ==="
 
 if ! command -v tailscale >/dev/null 2>&1; then
   warn "tailscale CLI not found — skipping enrollment"
-elif tailscale status 2>/dev/null | grep -qF "$NODE_ID"; then
-  ok "Node '$NODE_ID' already enrolled in tailnet"
 else
-  if [[ -z "${TAILSCALE_AUTHKEY:-}" ]]; then
-    warn "TAILSCALE_AUTHKEY not set — skipping enrollment"
-    dim "Set TAILSCALE_AUTHKEY to auto-enroll, or run: sudo tailscale up --hostname=$NODE_ID"
+  ts_status=$(tailscale status 2>/dev/null || true)
+  if echo "$ts_status" | grep -qF "$NODE_ID"; then
+    ok "Tailscale: $NODE_ID already enrolled"
   else
-    info "Enrolling '$NODE_ID' in tailnet..."
-    if tailscale up --auth-key="$TAILSCALE_AUTHKEY" --hostname="$NODE_ID"; then
-      ok "Tailscale enrollment complete — node: $NODE_ID"
+    if [[ -z "${TAILSCALE_AUTHKEY:-}" ]]; then
+      warn "TAILSCALE_AUTHKEY not set — skipping Tailscale enrollment"
+      dim "Set TAILSCALE_AUTHKEY to auto-enroll, or run: sudo tailscale up --hostname=$NODE_ID"
     else
-      fail "tailscale up failed — check auth key and tailscaled status"
+      info "Enrolling '$NODE_ID' in tailnet..."
+      if tailscale up --auth-key="$TAILSCALE_AUTHKEY" --hostname="$NODE_ID"; then
+        ok "Tailscale: enrolled as $NODE_ID"
+      else
+        fail "tailscale up failed — check auth key and tailscaled status"
+      fi
     fi
   fi
 fi
@@ -159,6 +171,7 @@ else
     ok "pmoves_bus network created — subnet=172.30.3.0/24"
   else
     fail "docker network create pmoves_bus failed — check Docker daemon"
+    exit 1
   fi
 fi
 
@@ -187,7 +200,7 @@ if [[ -n "${RUNNER_TOKEN:-}" ]]; then
   dim "gh CLI example:"
   dim "  gh api repos/POWERFULMOVES/PMOVES.AI/actions/runners/registration-token --method POST"
   dim "  ./config.sh --url https://github.com/POWERFULMOVES/PMOVES.AI --token <token> --labels $NODE_ID,$PROFILE"
-  ok "RUNNER_TOKEN acknowledged — proceed with manual registration above"
+  warn "RUNNER_TOKEN set but runner registration is manual — see commands above"
 else
   dim "RUNNER_TOKEN not set — skipping runner registration"
 fi
