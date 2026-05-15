@@ -27,6 +27,7 @@
 #     "gpus":            [ { "vendor": "amd|nvidia|intel", "model": "...", "vram_gb": 32, "pci_id": "1002:7550" } ],
 #     "disks":           [ { "name": "nvme0n1", "size_gb": 1000, "rotational": false } ],
 #     "nics":            [ { "name": "eth0", "speed_mbps": 10000 } ],
+#     "nic_collisions":  [ { "primary": "<iface> (<ip>) [UP]", "ghost": "<iface> (<ip>) [DOWN]", "subnet": "<cidr>" } ],
 #     "platform_hints":  { "is_pve": false, "is_dgx_os": false, "has_tailscale": false, "has_docker": false },
 #     "suggested_node_type":   "rdna4-workstation",
 #     "suggestion_confidence": "high" | "medium" | "low",
@@ -370,6 +371,9 @@ for d in data.get("blockdevices", []):
 NIC_ENTRIES=()
 MAX_NIC_SPEED=0
 
+# Populates NIC_COLLISION_ENTRIES
+NIC_COLLISION_ENTRIES=()
+
 detect_nics() {
     NIC_ENTRIES=()
     MAX_NIC_SPEED=0
@@ -394,6 +398,56 @@ detect_nics() {
             MAX_NIC_SPEED="$speed"
         fi
     done
+}
+
+# Same-subnet ghost detector (Linux)
+# See: pmoves/docs/operations/SAME_SUBNET_GHOST_PATTERN.md
+# Requires: ip(8), python3
+detect_nic_collisions() {
+    NIC_COLLISION_ENTRIES=()
+    command -v ip      >/dev/null 2>&1 || return 0
+    command -v python3 >/dev/null 2>&1 || return 0
+
+    local addr_list link_states
+    addr_list="$(ip -4 -o addr show 2>/dev/null | awk '/scope global/ {print $2, $4}')"
+    [ -z "$addr_list" ] && return 0
+    link_states="$(ip -o link show 2>/dev/null | awk '{gsub(/:$/,"",$2); print $2, $9}')"
+
+    while IFS='|' read -r p_iface p_ip g_iface g_ip subnet; do
+        [ -z "$p_iface" ] && continue
+        local p_state g_state
+        p_state="$(echo "$link_states" | awk -v i="$p_iface" '$1==i {print $2; exit}')"
+        g_state="$(echo "$link_states" | awk -v i="$g_iface"  '$1==i {print $2; exit}')"
+        NIC_COLLISION_ENTRIES+=("$(printf \
+            '{"primary":"%s (%s) [%s]","ghost":"%s (%s) [%s]","subnet":"%s"}' \
+            "$(json_escape "$p_iface")" "$(json_escape "$p_ip")" "$(json_escape "${p_state:-UNKNOWN}")" \
+            "$(json_escape "$g_iface")" "$(json_escape "$g_ip")" "$(json_escape "${g_state:-UNKNOWN}")" \
+            "$(json_escape "$subnet")")")
+    done < <(echo "$addr_list" | python3 -c '
+import sys
+from ipaddress import ip_interface
+
+entries = {}
+for line in sys.stdin:
+    parts = line.strip().split()
+    if len(parts) < 2: continue
+    iface, cidr = parts[0], parts[1]
+    try:
+        iobj = ip_interface(cidr)
+    except ValueError:
+        continue
+    ip_str = str(iobj.ip)
+    if ip_str.startswith("169.254.") or ip_str == "127.0.0.1" or ip_str.startswith("10.255."):
+        continue
+    net = str(iobj.network)
+    entries.setdefault(net, []).append((iface, ip_str))
+
+for subnet, members in entries.items():
+    if len(members) < 2: continue
+    primary = members[0]
+    for ghost in members[1:]:
+        print(f"{primary[0]}|{primary[1]}|{ghost[0]}|{ghost[1]}|{subnet}")
+')
 }
 
 # Platform hints
@@ -558,15 +612,17 @@ join_by_comma() {
 }
 
 emit_json() {
-    local gpus_json disks_json nics_json
+    local gpus_json disks_json nics_json collisions_json
     gpus_json="[$(join_by_comma "${GPU_ENTRIES[@]}")]"
     disks_json="[$(join_by_comma "${DISK_ENTRIES[@]}")]"
     nics_json="[$(join_by_comma "${NIC_ENTRIES[@]}")]"
+    collisions_json="[$(join_by_comma "${NIC_COLLISION_ENTRIES[@]}")]"
 
     # Handle empty arrays (join_by_comma on empty = "")
-    [ "${#GPU_ENTRIES[@]}"  -eq 0 ] && gpus_json="[]"
-    [ "${#DISK_ENTRIES[@]}" -eq 0 ] && disks_json="[]"
-    [ "${#NIC_ENTRIES[@]}"  -eq 0 ] && nics_json="[]"
+    [ "${#GPU_ENTRIES[@]}"           -eq 0 ] && gpus_json="[]"
+    [ "${#DISK_ENTRIES[@]}"          -eq 0 ] && disks_json="[]"
+    [ "${#NIC_ENTRIES[@]}"           -eq 0 ] && nics_json="[]"
+    [ "${#NIC_COLLISION_ENTRIES[@]}" -eq 0 ] && collisions_json="[]"
 
     cat <<EOF
 {
@@ -585,6 +641,7 @@ emit_json() {
   "gpus": ${gpus_json},
   "disks": ${disks_json},
   "nics": ${nics_json},
+  "nic_collisions": ${collisions_json},
   "platform_hints": {
     "is_pve": ${HINT_IS_PVE},
     "is_dgx_os": ${HINT_IS_DGX},
@@ -642,6 +699,23 @@ print_report() {
         echo "           - ${name}: ${speed} Mb/s"
     done
     echo ""
+    if [ "${#NIC_COLLISION_ENTRIES[@]}" -eq 0 ]; then
+        echo "NIC collisions: none detected"
+    else
+        log_warn "Same-subnet ghost adapter(s) detected — Docker port binds may silently fail:"
+        local entry primary ghost subnet
+        for entry in "${NIC_COLLISION_ENTRIES[@]}"; do
+            primary="$(echo "$entry" | sed -n 's/.*"primary":"\([^"]*\)".*/\1/p')"
+            ghost="$(  echo "$entry" | sed -n 's/.*"ghost":"\([^"]*\)".*/\1/p')"
+            subnet="$( echo "$entry" | sed -n 's/.*"subnet":"\([^"]*\)".*/\1/p')"
+            echo "  Subnet $subnet"
+            echo "    Primary : $primary"
+            echo "    Ghost   : $ghost"
+        done
+        echo "  See: pmoves/docs/operations/SAME_SUBNET_GHOST_PATTERN.md" >&2
+        echo "  Fix: re-IP ghost adapter to a dedicated CIDR, then restart Docker stack." >&2
+    fi
+    echo ""
     echo "Platform hints:"
     echo "  is_pve:        ${HINT_IS_PVE}"
     echo "  is_dgx_os:     ${HINT_IS_DGX}"
@@ -680,6 +754,7 @@ main() {
     detect_gpus
     detect_disks
     detect_nics
+    detect_nic_collisions
     detect_platform_hints
 
     suggest_node_type
