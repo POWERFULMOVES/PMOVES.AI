@@ -31,6 +31,19 @@ except ImportError:
 # Mapping helpers
 # ---------------------------------------------------------------------------
 
+_REQUIRED_PROBE_FIELDS = ("cpu", "ram_gb", "suggested_node_type")
+
+
+def validate_probe(data: dict) -> None:
+    missing = [f for f in _REQUIRED_PROBE_FIELDS if f not in data]
+    if missing:
+        print(
+            f"ERROR: Probe JSON is missing required fields: {', '.join(missing)}",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+
 _TAILSCALE_ROLE_MAP = {
     "gpu-5090": "gpu-node",
     "gpu-4090": "gpu-node",
@@ -56,9 +69,9 @@ def build_tags(arch: str, gpus: list, suggested_node_type: str) -> list:
     """Derive hardware tags from arch, GPU list, and suggested node type."""
     tags = [map_arch(arch)]
 
-    if gpus:
-        vendor = gpus[0].get("vendor", "").lower()
-        if vendor in ("nvidia", "amd", "intel"):
+    for g in gpus:
+        vendor = g.get("vendor", "").lower()
+        if vendor in ("nvidia", "amd", "intel") and vendor not in tags:
             tags.append(vendor)
 
     # Workload class tag derived from node type
@@ -114,7 +127,7 @@ def build_profile(data: dict, node_id: str) -> dict:
 
     # --- Hardware dict ---
     hardware: dict = {"cpu": cpu_dict}
-    hardware.update(gpu_block)  # injects "gpu" or "gpus" key
+    hardware.update(gpu_block)  # injects "gpus" key (list, always consistent)
     hardware["ram_gb"] = ram_gb
     hardware["tags"] = build_tags(arch, gpus, suggested_node_type)
 
@@ -196,29 +209,19 @@ def _infer_cpu_vendor(model: str) -> str:
 
 
 def _build_gpu_block(gpus: list) -> dict:
-    """Return either {gpu: {...}} for a single GPU or {gpus: [...]} for multiple."""
+    """Return {gpus: [...]} for any number of GPUs (consistent list, never singular gpu key)."""
     if not gpus:
         return {}
-    if len(gpus) == 1:
-        g = gpus[0]
-        return {
-            "gpu": {
-                "vendor": g.get("vendor", ""),
-                "model": g.get("model", ""),
-                "vram_gb": g.get("vram_gb", 0),
-            }
-        }
-    # multiple GPUs
-    gpu_list = []
-    for g in gpus:
-        gpu_list.append(
+    return {
+        "gpus": [
             {
                 "vendor": g.get("vendor", ""),
-                "model": g.get("model", ""),
+                "model":  g.get("model", ""),
                 "vram_gb": g.get("vram_gb", 0),
             }
-        )
-    return {"gpus": gpu_list}
+            for g in gpus
+        ]
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -259,7 +262,7 @@ def load_json(path: str) -> dict:
         sys.exit(1)
 
 
-def write_profile(profile: dict, out_dir: str, node_id: str, force: bool) -> str:
+def write_profile(yaml_text: str, out_dir: str, node_id: str, force: bool) -> str:
     """Write profile YAML to <out_dir>/<node_id>.yaml. Returns the output path."""
     os.makedirs(out_dir, exist_ok=True)
     out_path = os.path.join(out_dir, f"{node_id}.yaml")
@@ -271,7 +274,7 @@ def write_profile(profile: dict, out_dir: str, node_id: str, force: bool) -> str
         )
         sys.exit(1)
     with open(out_path, "w", encoding="utf-8") as fh:
-        fh.write(_dump_yaml(profile))
+        fh.write(yaml_text)
     return out_path
 
 
@@ -330,6 +333,7 @@ def main() -> None:
     args = parser.parse_args()
 
     data = load_json(args.json)
+    validate_probe(data)
     profile = build_profile(data, args.node_id)
     yaml_text = _dump_yaml(profile)
 
@@ -337,7 +341,7 @@ def main() -> None:
         print(yaml_text, end="")
         return
 
-    out_path = write_profile(profile, args.out_dir, args.node_id, args.force)
+    out_path = write_profile(yaml_text, args.out_dir, args.node_id, args.force)
     print(f"Profile written: {out_path}")
 
 
