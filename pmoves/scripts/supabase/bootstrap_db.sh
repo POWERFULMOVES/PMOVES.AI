@@ -83,13 +83,20 @@ create_role_if_missing "pgbouncer" "LOGIN"
 # Step 2: Set passwords from env
 log_step "Step 2/7: Setting role passwords from env..."
 
-run_sql "ALTER USER $DB_USER WITH PASSWORD '$DB_PASS';" > /dev/null
+# Escape single quotes for safe SQL interpolation
+SAFE_DB_PASS="${DB_PASS//\'/\'\'}"
+
+run_sql "ALTER USER $DB_USER WITH PASSWORD '$SAFE_DB_PASS';" > /dev/null
 # supabase_admin is a reserved superuser role in supabase/postgres images;
 # only superusers can ALTER it.  Guard with a DO block so non-superuser
 # bootstrap connections (e.g. POSTGRES_USER=pmoves) fail gracefully.
-run_sql "DO \$\$ BEGIN ALTER USER supabase_admin WITH PASSWORD '$DB_PASS'; EXCEPTION WHEN insufficient_privilege THEN RAISE NOTICE 'skipped supabase_admin ALTER (current user is not superuser)'; END \$\$;" > /dev/null
-run_sql "ALTER USER authenticator WITH PASSWORD '$DB_PASS';" > /dev/null
-log_info "Passwords aligned with SUPABASE_DB_PASSWORD"
+ALTER_OUTPUT=$(run_sql "DO \$\$ BEGIN ALTER USER supabase_admin WITH PASSWORD '$SAFE_DB_PASS'; EXCEPTION WHEN insufficient_privilege THEN RAISE NOTICE 'skipped supabase_admin ALTER (current user is not superuser)'; END \$\$;" 2>&1)
+if echo "$ALTER_OUTPUT" | grep -q "skipped"; then
+    log_warn "Passwords aligned (supabase_admin ALTER skipped: current user is not superuser)"
+else
+    log_info "Passwords aligned with SUPABASE_DB_PASSWORD"
+fi
+run_sql "ALTER USER authenticator WITH PASSWORD '$SAFE_DB_PASS';" > /dev/null
 
 # Step 3: Ensure target database exists
 log_step "Step 3/7: Ensuring database '$DB_NAME' exists..."
