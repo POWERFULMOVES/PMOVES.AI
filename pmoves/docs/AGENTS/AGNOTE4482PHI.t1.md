@@ -740,3 +740,9 @@ The pipeline reports success because its validation scope is too narrow. Neither
 - 2026-05-12T17:20:00Z CLAIM SPARK scope: Implementation of process_audio_with_cloud_api for Ollama/MiniMax/Alibaba (configurable ase_url); A2UI Remotion hologram geometry scaling (1920x1080 viewport).
 
 <!-- GRAPHITI_MARK: ANTIGRAVITY-OPUS::MULTILINGUAL-SCALE-HANDOFF::2026-05-12 -->
+
+## W6-P5 FlOO$ Architecture Lane — Claim (2026-05-15)
+
+- `2026-05-15T22:00:00Z` CLAIM `5090-CLAUDE (opus)` scope: W6-P5 architecture review + Phase A spec for FlOO$ life-persona-voice pipeline (issue #1412, Village Rule: architecture doc first, no code). Deliverable: `pmoves/docs/TAC/TAC_FLOOZ.md` (new). Branch: `docs/w6-flooz-architecture-opus`. Cross-node team formed for review: 4090-CLAUDE + SPARK (acknowledged via PR #1484/#1485 handoff comments earlier this session). Three-body: delivery=5090-CLAUDE (this), control=DARKXSIDE + AGNOTE4482_SIGNOFF_CHECKLIST §1/§7, memory=this trail + AGNOTE4482PHI.t1.md row + roadmap row updated to CLAIMED. risks: low — doc-only PR, no runtime code. agent_signature: `ACK::5090-CLAUDE::W6-P5-FLOOZ-ARCH-CLAIM`.
+
+<!-- GRAPHITI_MARK: 5090-CLAUDE::W6-P5-FLOOZ-ARCH-CLAIM::2026-05-15 -->
