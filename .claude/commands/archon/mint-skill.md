@@ -10,6 +10,12 @@ Invoke when the operator says "mint a skill", "scaffold a SKILL.md", or "registe
 
 ## Implementation
 
+### Step 0 — Authenticate the creator (Google OAuth via Supabase)
+
+**Mandatory.** Skills are tied to a creator identity (same RLS rules as agents). Follow the Step 0 procedure in `/archon:mint-agent` to obtain a valid Supabase session JWT with `provider: 'google'` and `email_verified: true`. Capture `creator_id` (Supabase `auth.users.id`) and `creator_email` for the skill manifest.
+
+If OAuth wiring is not live, halt — see `.claude/context/self-hosted-defaults.md` § "Authentication".
+
 ### Step 1 — Collect the manifest
 
 Ask the operator for:
@@ -17,7 +23,7 @@ Ask the operator for:
 - `skill-name` — kebab-case (e.g. `pmoves-room-rotator`).
 - `description` — single sentence beginning with an action verb; this becomes the frontmatter `description`.
 - `user-invocable?` — boolean. If false, set frontmatter `user-invocable: false` (Claude-only).
-- `owning-persona` — accountable agent or human.
+- `owning-persona` — accountable agent or human; defaults to authenticated creator email from Step 0.
 - Optional: `tools`, `dependencies` (other skills it composes with).
 
 Validate uniqueness:

@@ -10,13 +10,32 @@ Invoke when the operator says "onboard a creator", "add a new persona", or "regi
 
 ## Implementation
 
-### Step 1 — Collect creator identity
+### Step 0 — Authenticate via Google OAuth (Supabase)
 
-Ask the operator for:
+**Mandatory and primary.** Unlike agent/skill minting (which uses an *existing* creator's session), creator onboarding **provisions** the creator from a fresh Google OAuth handshake. This is the canonical identity-creation path.
+
+1. Direct the new human to sign in:
+   - **Prod**: `https://archon.pmoves.ai/auth/sign-up?provider=google`
+   - **Dev**: `http://127.0.0.1:3737/auth/sign-up?provider=google`
+2. Supabase Auth redirects to Google, returns to `https://supabase.pmoves.ai/auth/v1/callback`, then back to the Archon UI with a session.
+3. The Supabase row in `auth.users` is the canonical identity. Capture from the session JWT:
+   - `auth.users.id` (UUID) → becomes the `creator_id` in `archon_minted_artifacts`
+   - `email` (Google-verified) → used to derive `email_hash`
+   - `user_metadata.full_name`, `user_metadata.avatar_url` → optional profile fields
+   - `app_metadata.provider` MUST equal `'google'`
+4. **No magic-link, no email/password, no SSO with other providers.** Google OAuth is the only enabled provider per `.claude/context/self-hosted-defaults.md` § "Authentication — Google OAuth via Supabase".
+5. If the operator running this command is **not the new creator**, the new creator must complete the OAuth handshake themselves (the operator cannot impersonate them). Wait for the operator to relay `auth.users.id` and verified `email` before continuing.
+
+If `supabase.pmoves.ai` is unreachable: halt and surface the wiring docs. Onboarding without OAuth is not supported.
+
+### Step 1 — Collect creator profile (post-auth)
+
+`handle`, `default-room`, and optional fields below are collected AFTER the OAuth handshake confirms identity. `email` is sourced from the verified Google JWT — do not ask the operator to type it.
+
+Ask for:
 
 - `handle` — unique human-readable handle (e.g. `cataclysm`, `phi-knuckles`).
 - `role` — one of `delivery`, `control`, `memory`, `creator`, `observer`, or a free-form role.
-- `email` — contact address (will be hashed before publish, not stored plain).
 - `default-room` — one of the entries in `pmoves/config/rooms/catalog.json`.
 - Optional: `github_username`, `tailscale_node`, `bio`.
 
@@ -35,15 +54,19 @@ Until the table exists, stash the row under `/tmp/creator-<handle>.json`:
 ```jsonc
 {
   "kind": "creator",
+  "creator_id": "<supabase auth.users.id from Step 0>",
   "handle": "<handle>",
   "role": "<role>",
-  "email_hash": "<sha256(email)>",
+  "email_hash": "<sha256(verified-google-email)>",
+  "provider": "google",
   "default_room": "<default-room>",
   "github_username": "<optional>",
   "tailscale_node": "<optional>",
   "minted_at": "<RFC3339>"
 }
 ```
+
+Supabase RLS (Wave 1): only the row's own `creator_id` (the authenticated user) can read/write it; admins (role = 'admin' in `app_metadata`) can read all rows.
 
 Compute `email_hash`:
 
@@ -71,9 +94,11 @@ Stage `archon.mint.creator.v1`:
 {
   "subject": "archon.mint.creator.v1",
   "payload": {
+    "creator_id": "<supabase auth.users.id>",
     "handle": "<handle>",
     "role": "<role>",
     "email_hash": "<sha256>",
+    "provider": "google",
     "default_room": "<default-room>",
     "github_username": "<optional>",
     "ts": "<RFC3339>"

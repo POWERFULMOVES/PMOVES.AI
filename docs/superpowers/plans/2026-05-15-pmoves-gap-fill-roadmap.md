@@ -173,6 +173,61 @@ These need API tokens or remote resources; surface as PRs/instructions, do not a
 | W1.11 | Supabase schema: `agent_id` FK on `archon_prompts` | DB migration |
 | W1.12 | Enable Wave-0 hooks in `.claude/settings.json` | Operator decision |
 
+> **Self-hosted note (2026-05-15)**: PMOVES.AI is self-hosted on ai-lab + Hostinger VPS with branded `pmoves.ai` DNS. Several Wave-1 SaaS MCPs above have self-hosted equivalents that should be preferred. See **Wave 1.5** below before installing any SaaS variant.
+
+---
+
+## Wave 1.5 — Self-hosted alternatives + production readiness (2026-05-15 addition)
+
+Driven by the self-hosted operating context. Where a self-hosted equivalent exists, it should be the default — Wave 1 SaaS MCPs become opt-in only for cases where the self-hosted path is genuinely insufficient. Cross-reference: [`.claude/context/self-hosted-defaults.md`](../../../.claude/context/self-hosted-defaults.md).
+
+### Self-hosted MCP substitutions
+
+| Wave 1 SaaS item | Self-hosted alternative | Status / notes |
+|------------------|------------------------|----------------|
+| W1.3 Sentry MCP | **Glitchtip MCP** (self-hosted Sentry-compatible) at `errors.pmoves.ai` | Wave 1.5 — stand up Glitchtip on KVM4-2; reuse `mcp-server-sentry` (DSN-compatible) |
+| W1.4 Linear MCP | **GitHub Issues MCP** (already covered by `github@claude-plugins-official`) + AGNOTE4482PHI.t1.md active claim register | No Linear needed — GitHub is the canonical issue tracker |
+| W1.5 Brave Search MCP | **SupaSerch + DeepResearch internal**; if external web grounding is required, evaluate self-hostable SearXNG behind `search.pmoves.ai` | Defer Brave until SearXNG decision |
+| W1.6 Cloudflare MCP | **Cloudflare MCP is itself acceptable** because the Cloudflare control plane is intrinsically SaaS. Scope to read-only token unless a specific Workers/R2 task needs write. | Approved — but use a least-privilege token |
+| W1.1 Prometheus MCP | **Use as-is**; Prometheus IS self-hosted on KVM4-2 → no SaaS dependency. Point at `https://grafana.pmoves.ai/api/datasources/proxy/<id>/api/v1` or direct internal `http://kvm4-2:9090` over Tailscale. | Wave 1.5 — re-point env to internal URL |
+| W1.2 Loki MCP | **Use as-is**; Loki self-hosted on KVM4-2. | Wave 1.5 — re-point env to internal URL |
+| W1.8 Postgres MCP | **Use as-is** against self-hosted Supabase Postgres (port `:5432` on KVM4-2 over Tailscale). | Wave 1.5 — DB password via `/deploy:secrets-funnel` |
+| W1.7 Playwright MCP | **Use as-is**; Playwright is local, no SaaS dependency. | Approved — install `npx playwright install` on ai-lab and KVM4-1 |
+| W1.9 Fetch + Sequential-Thinking | **Use as-is**; both are local stdio. | Approved |
+
+### OAuth wiring (Google + Supabase)
+
+| # | Item | Status |
+|---|------|--------|
+| W1.5.1 | Enable Google OAuth provider in Supabase Studio (Auth → Providers) | Operator action |
+| W1.5.2 | Register redirect URIs in Google Cloud Console | Operator action |
+| W1.5.3 | Configure Supabase RLS for `archon_minted_artifacts` so rows are scoped by `creator_id = auth.uid()` | DB migration paired with W1.10 |
+| W1.5.4 | Configure Supabase RLS for `archon_agents` and `archon_prompts.creator_id` FK | DB migration paired with W1.11 |
+| W1.5.5 | Service-role keys for backend-to-backend (Archon mint subjects, Cipher writes) — NOT OAuth | Operator action — rotate quarterly via secrets-funnel |
+| W1.5.6 | Document Supabase Auth → JWT claim → Archon role mapping (`creator` / `admin` / `agent`) | Doc PR |
+
+### Production-readiness checklist (per minted artifact)
+
+Every artifact emerging from Archon's mint MUST satisfy:
+
+- [ ] No hardcoded `localhost:<port>` in operator-shipped config
+- [ ] URLs use `*.pmoves.ai` or are env-var driven with prod default
+- [ ] Auth (where present) = Supabase + Google OAuth (PKCE for SPAs)
+- [ ] No SaaS provider chosen where a self-hosted equivalent exists (provider table in `self-hosted-defaults.md`)
+- [ ] NATS subjects fit a branded namespace (`archon.*`, `chit.*`, `geometry.*`, `tokenism.*`, `p7.*`, `ingest.*`, `research.*`, `mesh.*`, `persona.*`)
+- [ ] Service-to-service auth uses NATS user/pass OR Supabase service role OR mTLS — never OAuth
+- [ ] Tier declaration (`dev` / `staging` / `prod`) present in manifest with env-var URL mapping
+
+Enforced by `archon-qa-agent` (updated 2026-05-15 — see Wave-0.5 Task #11).
+
+### Wave 1.5 deliverables
+
+- [ ] `.claude/context/self-hosted-defaults.md` — branded URLs, OAuth wiring, provider preferences. **Done 2026-05-15.**
+- [ ] `archon-qa-agent` branded-defaults audit step. **Done 2026-05-15.**
+- [ ] Google OAuth wiring documented in `/archon:mint-agent`, `/archon:mint-skill`, `/archon:creator-onboard`. **Done 2026-05-15.**
+- [ ] Glitchtip stand-up on KVM4-2 (operator action; not Claude-authorable).
+- [ ] SearXNG decision (defer to Wave 2 if SupaSerch is sufficient).
+
 ---
 
 ## Wave 2 — Service-side implementation (separate PRs)
