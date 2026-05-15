@@ -26,6 +26,7 @@
 #     "gpus":            [ { "vendor": "nvidia|amd|intel", "model": "...", "vram_gb": 24, "pci_id": "" } ],
 #     "disks":           [ { "name": "NVMe ...", "size_gb": 1000, "rotational": false } ],
 #     "nics":            [ { "name": "Ethernet", "speed_mbps": 10000 } ],
+#     "nic_collisions":  [ { "primary": "<adapter> (<ip>) [Up]", "ghost": "<adapter> (<ip>) [Disconnected]", "subnet": "<cidr>" } ],
 #     "platform_hints":  { "is_pve": false, "is_dgx_os": false, "has_tailscale": false,
 #                          "has_docker": false, "has_wsl2": false, "has_hyper_v": false },
 #     "suggested_node_type":   "gpu-4090",
@@ -226,6 +227,78 @@ function Get-NicInfo {
 }
 
 # ---------------------------------------------------------------------------
+# Same-subnet ghost detector
+# See: pmoves/docs/operations/SAME_SUBNET_GHOST_PATTERN.md
+#
+# Returns an array of collision objects. Empty on healthy hosts.
+# Output field: nic_collisions: [{primary, ghost, subnet}]
+#
+# A "ghost" is a disconnected/inactive adapter whose IP falls inside the
+# same /24 as an active adapter. Docker Desktop's port-forwarder silently
+# no-ops binds when a ghost claims the routing table entry first.
+# ---------------------------------------------------------------------------
+function Get-NicCollisions {
+    $collisions = @()
+    $addrs = Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
+        Where-Object { $_.IPAddress -notlike '169.254.*' -and
+                       $_.IPAddress -ne '127.0.0.1' -and
+                       $_.IPAddress -notlike '10.255.*' }    # exclude Docker internal
+
+    # Group by subnet prefix (honour PrefixLength; /24 is the common case)
+    $bySubnet = @{}
+    foreach ($addr in $addrs) {
+        $ip = [System.Net.IPAddress]::Parse($addr.IPAddress)
+        $pl = [int]$addr.PrefixLength
+        # Build network address string to group by
+        $bytes = $ip.GetAddressBytes()
+        $netKey = if ($pl -ge 24) {
+            "$($bytes[0]).$($bytes[1]).$($bytes[2]).0/$pl"
+        } elseif ($pl -ge 16) {
+            "$($bytes[0]).$($bytes[1]).0.0/$pl"
+        } else {
+            "$($bytes[0]).0.0.0/$pl"
+        }
+        if (-not $bySubnet.ContainsKey($netKey)) { $bySubnet[$netKey] = @() }
+        $bySubnet[$netKey] += $addr
+    }
+
+    foreach ($subnet in $bySubnet.Keys) {
+        $members = $bySubnet[$subnet]
+        if ($members.Count -lt 2) { continue }
+
+        # Classify: primary = Up, ghost = everything else
+        $primaries = @($members | Where-Object {
+            (Get-NetAdapter -InterfaceIndex $_.InterfaceIndex -ErrorAction SilentlyContinue).Status -eq 'Up'
+        })
+        $ghosts = @($members | Where-Object {
+            $s = (Get-NetAdapter -InterfaceIndex $_.InterfaceIndex -ErrorAction SilentlyContinue).Status
+            $s -ne 'Up'
+        })
+
+        foreach ($ghost in $ghosts) {
+            $primary = if ($primaries.Count -gt 0) { $primaries[0] } else { $members[0] }
+            $primaryAdapter = Get-NetAdapter -InterfaceIndex $primary.InterfaceIndex -ErrorAction SilentlyContinue
+            $ghostAdapter   = Get-NetAdapter -InterfaceIndex $ghost.InterfaceIndex   -ErrorAction SilentlyContinue
+            $collisions += @{
+                primary = "$($primaryAdapter.Name) ($($primary.IPAddress)) [$($primaryAdapter.Status)]"
+                ghost   = "$($ghostAdapter.Name) ($($ghost.IPAddress)) [$($ghostAdapter.Status)]"
+                subnet  = $subnet
+            }
+        }
+
+        # Two-Up collision (both active): flag as warning
+        if ($ghosts.Count -eq 0 -and $primaries.Count -ge 2) {
+            $collisions += @{
+                primary = "$((Get-NetAdapter -InterfaceIndex $primaries[0].InterfaceIndex -ErrorAction SilentlyContinue).Name) ($($primaries[0].IPAddress)) [Up]"
+                ghost   = "$((Get-NetAdapter -InterfaceIndex $primaries[1].InterfaceIndex -ErrorAction SilentlyContinue).Name) ($($primaries[1].IPAddress)) [Up - both active]"
+                subnet  = $subnet
+            }
+        }
+    }
+    $collisions
+}
+
+# ---------------------------------------------------------------------------
 # Platform hints
 # ---------------------------------------------------------------------------
 function Get-PlatformHints {
@@ -306,8 +379,9 @@ $ramGb  = Get-RamGb
 $gpus   = Get-GpuInfo
 $disks  = Get-DiskInfo
 $nics   = Get-NicInfo
-$hints  = Get-PlatformHints
-$suggestion = Get-NodeSuggestion -CpuInfo $cpu -RamGb $ramGb -Gpus $gpus -Disks $disks -Nics $nics -OsArch $osRaw.arch
+$hints         = Get-PlatformHints
+$nicCollisions = Get-NicCollisions
+$suggestion    = Get-NodeSuggestion -CpuInfo $cpu -RamGb $ramGb -Gpus $gpus -Disks $disks -Nics $nics -OsArch $osRaw.arch
 
 $result = [ordered]@{
     os = [ordered]@{
@@ -330,6 +404,9 @@ $result = [ordered]@{
     })
     nics = @($nics | ForEach-Object {
         [ordered]@{ name=$_.name; speed_mbps=$_.speed_mbps }
+    })
+    nic_collisions = @($nicCollisions | ForEach-Object {
+        [ordered]@{ primary=$_.primary; ghost=$_.ghost; subnet=$_.subnet }
     })
     platform_hints = [ordered]@{
         is_pve        = $hints.is_pve
@@ -393,6 +470,21 @@ foreach ($d in $disks) {
 Write-Sect "NICs (Up)"
 foreach ($n in $nics) {
     Write-Host "  $($n.name)  $($n.speed_mbps) Mbps"
+}
+
+Write-Sect "NIC Collision Check"
+if ($nicCollisions.Count -eq 0) {
+    Write-Host "  No same-subnet ghost adapters detected" -ForegroundColor Green
+} else {
+    foreach ($col in $nicCollisions) {
+        Write-Warn "Same-subnet collision on $($col.subnet)"
+        Write-Host "    Primary : $($col.primary)"
+        Write-Host "    Ghost   : $($col.ghost)"
+    }
+    Write-Host ""
+    Write-Warn "Docker Desktop may silently fail port binds on this host."
+    Write-Host "  See: pmoves/docs/operations/SAME_SUBNET_GHOST_PATTERN.md"
+    Write-Host "  Fix: re-IP ghost adapter to a dedicated CIDR, then restart Docker stack."
 }
 
 Write-Sect "Platform Hints"
