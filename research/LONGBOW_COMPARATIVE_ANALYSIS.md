@@ -242,7 +242,7 @@ This preserves both systems' design principles: PMOVES.AI handles the geometry e
 **PMOVES.AI's velocity** (governance-outward):
 - Post-signoff: Deployment convergence, sidecar promotion, compose stack activation
 - Direction: Complete cooperative AI framework (governance + orchestration + economics)
-- Speed: Architecture-complete but implementation-in-progress (35/37 signoff)
+ Speed: Architecture-complete but implementation-in-progress (35/37 signoff)
 - Risk: Heavy architectural burden may slow feature delivery; physics metaphor may limit adoption
 
 ### 6.3 Trajectory Intersection

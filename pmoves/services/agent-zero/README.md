@@ -71,3 +71,73 @@ The service reads configuration from environment variables and exposes the resol
 - Make targets
   - Bring up agents: `make up-agents` (includes Agent Zero)
   - Bring up gateways: `make up-both-gateways` (v2 CPU) / `make up-gpu-gateways` (v2 GPU)
+
+---
+
+## Auto-Update System
+
+### How It Works
+
+A GitHub Actions workflow (`agent-zero-upstream-check.yml`) runs daily at 06:00 UTC and checks for new releases of [agent0ai/agent-zero](https://github.com/agent0ai/agent-zero).
+
+**Version tracking:** The current pinned upstream version is stored in `.a0-upstream-version`. This is the single source of truth for "which upstream version are we tracking?"
+
+**Detection flow:**
+1. Workflow fetches latest release tag from `agent0ai/agent-zero` via GitHub API
+2. Compares against `.a0-upstream-version`
+3. If different and no existing PR, creates a draft PR
+
+**Draft PR contents:**
+- Bumps `AGENT_ZERO_REF` ARG in `Dockerfile.multiarch` to the new upstream tag
+- Updates `.a0-upstream-version` pin file
+- Updates `upstream-constraints.txt` if new transitive dep pins are needed
+- Includes fork sync instructions and review checklist
+
+**CI behavior:**
+- The PR initially points at the upstream tag (not the fork branch), so CI **will fail** until fork sync is completed
+- On CI failure, a comment is posted explaining that fork sync is the expected next step
+- After fork sync, update `AGENT_ZERO_REF` to the synced fork branch → CI re-runs
+- On CI pass, PR is labeled `ready-for-review` for manual merge approval
+
+### Fork Sync Process
+
+Fork syncing is **manual** and **not automated** because:
+- 24 PMOVES overlay commits must be re-applied
+- 6 files with architectural conflicts need re-implementation
+- NATS hardening, Prometheus metrics, and TensorZero integrations need validation
+
+**Steps:**
+1. Note the upstream version from the draft PR
+2. In `POWERFULMOVES/PMOVES-Agent-Zero`, sync from upstream tag
+3. Create branch `PMOVES.AI-Edition-v{version}` with overlays applied
+4. Update the draft PR's `AGENT_ZERO_REF` to the fork branch
+5. Verify CI passes
+6. Review and merge
+
+### upstream-constraints.txt
+
+This file pins **transitive dependencies** that agent-zero pulls in indirectly via its `requirements.txt`. These pins prevent known-bad versions from being installed in Stage 1 of the Docker build.
+
+**Rules:**
+- Only transitive deps (not direct agent-zero deps)
+- Only pins that prevent conflicts with PMOVES Stage 2 dependencies
+- PMOVES-specific pins go in `requirements.lock`
+- Direct agent-zero deps go in agent-zero's own `requirements.txt`
+
+### Manual Trigger
+
+The workflow supports manual dispatch with an optional version override:
+
+```yaml
+# In GitHub Actions → Run workflow
+upstream_version: "v1.14"  # optional, auto-detects if empty
+```
+
+### Files
+
+| File | Purpose |
+------|---------|
+| `.github/workflows/agent-zero-upstream-check.yml` | Daily upstream check + PR creation |
+| `.a0-upstream-version` | Current pinned upstream version tag |
+| `upstream-constraints.txt` | Transitive dep pins for Stage 1 install |
+| `Dockerfile.multiarch` | `AGENT_ZERO_REF` ARG (bumped by workflow) |

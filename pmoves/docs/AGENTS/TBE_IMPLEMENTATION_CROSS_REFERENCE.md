@@ -1,3 +1,6 @@
+> **DEPRECATED — 2026-05-08**
+> Cross-references the dead branch `PMOVES.AI-Edition-Hardened`. Implementation gaps described here were largely resolved in the MOF convergence. See `IMPLEMENTATION_GAP_ANALYSIS.md` for current status.
+
 # TBE Implementation Cross-Reference Report
 
 **Date:** 2026-02-08
