@@ -2,6 +2,11 @@
   "_pinned_versions_note": "Dependencies pinned to exact versions on 2026-05-14 to prevent supply chain attacks (F-07). Re-pin after auditing new releases before upgrading. hostinger-api-mcp=0.2.1, tailscale-mcp=2026.4.10-1",
   "mcpServers": {
     "pmoves-cipher": {
+      "type": "sse",
+      "url": "http://localhost:8105/mcp/sse"
+    },
+    "_pmoves-cipher-legacy-python-wrapper": {
+      "_disabled": "Replaced 2026-05-15 with direct SSE to Cipher's native MCP endpoint. The Python wrapper called non-existent /api/memory routes. Kept here commented for rollback; remove in follow-up after SSE validated for 2 weeks.",
       "command": "uv",
       "args": ["--directory", "./pmoves-cipher-mcp", "run", "python", "-m", "cipher_mcp.server"],
       "env": {
