@@ -89,10 +89,10 @@ agent_zero:
 tensorzero:
   enabled: true
   variants:
-    - minimax_m27_longcontext
+    - name: minimax_m27_longcontext
       model: minimax-m2.7
       weight: 0.7
-    - minimax_m21_efficient
+    - name: minimax_m21_efficient
       model: minimax-m2.1
       weight: 0.3
 

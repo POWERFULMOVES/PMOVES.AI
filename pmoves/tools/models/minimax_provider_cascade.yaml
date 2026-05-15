@@ -254,12 +254,12 @@ parity_status:
 # Model Suit References
 # =============================================================================
 model_suits:
-  - minimax-m2.7
+  - name: minimax-m2.7
     suit_file: pmoves/configs/model-suits/minimax-m2.7.yaml
     context_window: 1000000
     max_output: 32000
     primary: true
-  - minimax-m2.1
+  - name: minimax-m2.1
     suit_file: pmoves/configs/model-suits/minimax-m2.1.yaml
     context_window: 100000
     max_output: 8000
