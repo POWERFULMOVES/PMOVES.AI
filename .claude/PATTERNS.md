@@ -274,6 +274,59 @@ Commands: `/chit:floos status`, `/chit:floos validate <pairing>`, `make -C pmove
 
 **Full FlOO$ flow:** `make -C pmoves chit-flow-pr-monitor` / `chit-flow-pr-monitor-strict`.
 
+## Merge Hazards — Stacked PRs and Squash-Merge Rebase
+
+Two recurring git/PR-flow gotchas that every PMOVES agent should know before driving a merge sequence.
+
+### Stacked-PR auto-close
+
+When a PR's `base` is another feature branch (stacked PR), merging the base with `--delete-branch` causes GitHub to **auto-close the dependent**. Recovery is awkward (chicken-and-egg: can't reopen without base, can't change base without reopening).
+
+**Prevention (preferred):**
+- **Redirect dependent to `main` first**: `gh pr edit <dep#> --base main` before merging the base, OR
+- **Merge base without `--delete-branch`** and clean up branches manually after all dependents land, OR
+- Avoid stacking — structure dependents off `main` and rely on commit ordering.
+
+**Recovery (if it already happened):**
+```bash
+# 1. Recreate deleted base from main (temporary)
+git push origin origin/main:refs/heads/<deleted-base-branch>
+# 2. Reopen
+gh pr reopen <dep#>
+# 3. Redirect base
+gh pr edit <dep#> --base main
+# 4. Delete the temporary base
+git push origin --delete <deleted-base-branch>
+# 5. Rebase the dependent onto main locally (handle squash-merge case — see below)
+```
+
+### Squash-merge rebase (the "patch already upstream" case)
+
+When a base PR is **squash-merged** to main, the original commits are gone from main's history (replaced by one squash commit with a different SHA). Dependent PRs/branches that still carry the original commits will conflict on rebase because git sees the same content arriving twice.
+
+**Fix:** `git rebase --onto origin/main <last-squash-merged-original-sha>` — this replays only commits **after** the squash-merged ones onto current main, skipping the duplicates.
+
+```bash
+# Dependent's branch has: [base-PR-commit-1] [base-PR-commit-2] [dependent-commit]
+# Main has:               [...] [squash-merge-of-base-PR-commits-1-and-2]
+# Rebase replays only the dependent's own commit:
+git rebase --onto origin/main <sha-of-base-PR-commit-2>
+```
+
+**Detection:** `git rebase origin/main` reports `patch contents already upstream` or hits add/add conflicts on files the base PR introduced.
+
+### Submodule conflict during rebase
+
+When a submodule pointer conflicts during rebase (`UU` for a gitlink, `160000` mode), `git checkout --ours <path>` does **not** reliably take the rebase target's SHA. Use index-direct write instead:
+
+```bash
+git ls-tree origin/main <submodule-path>          # get target SHA
+git update-index --cacheinfo 160000,<target-sha>,<submodule-path>
+git rebase --continue   # or: git commit --amend --no-edit
+```
+
+The hint git prints (`Recursive merging with submodules currently only supports trivial cases. Please manually handle the merging of each conflicted submodule.`) is the canonical signal to switch to this approach.
+
 ## UI Development Checklist
 
 Based on CodeRabbit learnings (`.claude/learnings/ui-error-handling-review-2025.md`):
