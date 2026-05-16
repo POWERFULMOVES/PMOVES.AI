@@ -1,0 +1,16 @@
+name: POWERFULMOVES
+description: Default PMOVES.AI agent persona — balanced cognition for general orchestration, NATS-mediated coordination, and CHIT-signed work. Active when no form override is set via AGENT_FORM env var.
+weights:
+  decode: 0.33
+  retrieve: 0.34
+  generate: 0.33
+band_emphasis:
+  low: 0.33
+  mid: 0.34
+  high: 0.33
+mesh_offload_threshold:
+  gpu_free_mem_gb: 4
+  latency_ms: 100
+sharing:
+  shapes_only_default: true
+  allow_artifacts_on_approve: true

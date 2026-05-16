@@ -2441,6 +2441,18 @@ services:
     - ${AGENT_ZERO_INSTRUMENTS_DIR:-./data/agent-zero/instruments}:/a0/instruments
     - ${AGENT_ZERO_LOG_DIR:-./data/agent-zero/logs}:/a0/logs
     - ${AGENT_ZERO_RUNTIME_DIR:-./data/agent-zero/runtime}:/a0/runtime
+    # Forms layer — persona/cognition profiles consumed by mcp_server.load_form().
+    # Read-only: forms are introspective metadata; runtime never rewrites them.
+    - ./configs/agents/forms:/app/configs/agents/forms:ro
+    # Operator-state mount — env.shared into DARKXSIDE-AZ-5090.
+    # DARKXSIDE is the witness + co-creator identity layer; POWERFULMOVES (this
+    # org / brand / repo) emerges from it. rw is the correct default for
+    # operator-state surfaces — DARKXSIDE-AZ is the operator on this node, not
+    # a peripheral service requesting elevation. Constraints (if any) are
+    # operator self-discipline, not architecture.
+    # Override: set ENV_SHARED_MODE=ro in env.shared to harden on nodes where
+    # write access is not needed (e.g., read-only observer deployments).
+    - ./env.shared:/secrets/env.shared:${ENV_SHARED_MODE:-rw}
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:80/ >/dev/null || curl -fsS http://localhost:8080/healthz >/dev/null || exit 1"]
       interval: 30s
