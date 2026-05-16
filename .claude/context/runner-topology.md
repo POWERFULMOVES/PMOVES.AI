@@ -7,6 +7,7 @@
 | Node | Role | Key Services | Runner |
 |------|------|-------------|--------|
 | **Z890** | Production ai-lab node, GPU (RTX 3090 Ti); workstation co-located with dev workflow | All (local Docker Compose) | `self-hosted, ai-lab, gpu, cuda` |
+| **B850 "Knuckles"** (= R9700 Workstation pre-Phase-C) | Heavyweight ROCm Inference target; **current state: 9850X3D / 32GB / 1× R9700 / Ubuntu 24.04.4 / /dev/kfd present / hostname `pmoves-b850-ai-top`**. Hosts the Claude Code dev shell. | All (local Docker Compose, ROCm install operator-pending) | `self-hosted, ai-lab` (target: `+gpu, rocm, rdna4`) |
 | **5090** | Primary GPU (pending) | Future inference | (pending) |
 | **KVM4-1** | API Gateway + Tailscale Egress Exit Node (Phase 9Q) | TensorZero, Agent Zero, Hi-RAG, Archon, Gateway Agent; outbound exit for `pmoves-yt` stack | `self-hosted, vps, kvm4, production` |
 | **KVM4-2** | Data/Storage | Supabase, NATS, Qdrant, Neo4j, Meilisearch, MinIO, monitoring | `self-hosted, vps, kvm4, production` |
