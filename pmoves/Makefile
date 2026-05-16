@@ -1991,7 +1991,7 @@ hostinger-ssh: ## SSH into Hostinger VPS using CHIT-managed credentials
 	@$(LOAD_ENV_SHARED) bash -lc 'ssh -o StrictHostKeyChecking=no -i <(echo "$$HOSTINGER_SSH_PRIVATE_KEY") $$HOSTINGER_SSH_USER@$$HOSTINGER_SSH_HOST'
 
 # -------- Multi-Claw Fleet (Kilo Code / OpenClaw) --------
-.PHONY: claw-deploy claw-verify claws-status claw-rotate
+.PHONY: claw-deploy claw-verify claws-status claw-rotate claw-key-install
 
 CLAW_SCRIPTS := $(CURDIR)/scripts/claws
 CLAW_SCOPES  := $(CURDIR)/configs/claws/scopes
@@ -2036,6 +2036,15 @@ claw-rotate: ## Rotate tokens on claw: make claw-rotate SCOPE=kvm4-1 [DRY_RUN=1]
 	TARGET="$${!TARGET_VAR:-}"; \
 	if [ -z "$$TARGET" ]; then echo "ERROR: No target for scope $(SCOPE)"; exit 1; fi; \
 	$(CLAW_SCRIPTS)/rotate-tokens.sh --target "$$TARGET" $(if $(DRY_RUN),--dry-run)
+
+.PHONY: claw-key-install
+claw-key-install: ## Install hostinger_vps SSH key: HOSTINGER_VPS_KEY="$(cat /path/to/key)" make claw-key-install
+	@test -n "$(HOSTINGER_VPS_KEY)" || (echo "ERROR: HOSTINGER_VPS_KEY is required" && echo "Usage: HOSTINGER_VPS_KEY=\"\$$(cat /path/to/key)\" make -C pmoves claw-key-install" && exit 1)
+	@mkdir -p $(CURDIR)/secrets
+	@printf '%s\n' "$(HOSTINGER_VPS_KEY)" > $(CURDIR)/secrets/hostinger_vps
+	@chmod 600 $(CURDIR)/secrets/hostinger_vps
+	@echo "✔ Key installed: pmoves/secrets/hostinger_vps"
+	@echo "  Claw scripts will now find it at the primary path."
 
 # -------- Brand defaults (branded env + first-run resources) --------
 .PHONY: brand-defaults brand-verify

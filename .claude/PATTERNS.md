@@ -188,6 +188,38 @@ ssh root@pmoves-kvm4-2 'docker exec pmoves-nats-1 nats pub claw.task.assign.v1 .
 
 **Never:** install `nats-py` on the Windows dev host and connect to `localhost:4222` — NATS does not run locally on the 4090 laptop.
 
+### SSH Key Setup (claw scripts)
+
+Claw scripts SSH via key at `pmoves/secrets/hostinger_vps`. The key is **not** synced by the secrets
+funnel (which only handles env vars). Install it once per machine:
+
+```bash
+# One-time: write key from a value you have (paste contents or read from a secure source)
+HOSTINGER_VPS_KEY="$(cat /path/to/hostinger_vps)" make -C pmoves claw-key-install
+# → writes to pmoves/secrets/hostinger_vps (chmod 600, gitignored)
+```
+
+Fallback search order used by claw scripts:
+1. `pmoves/secrets/hostinger_vps` ← primary (use `claw-key-install`)
+2. `$LOCALAPPDATA/Temp/hostinger_vps`
+3. `/tmp/hostinger_vps`
+
+### env.shared Extraction (never `source`)
+
+`pmoves/env.shared` is Docker Compose format, **not valid bash**. Never `source` it — Windows paths
+and section headers cause "command not found" errors and leave vars unset.
+
+**Extract a single variable:**
+```bash
+grep '^MY_VAR=' pmoves/env.shared | cut -d= -f2 | tr -d '"'
+```
+
+**Extract and use in a command:**
+```bash
+SECRETS_DIR=$(grep '^PMOVES_SECRETS_DIR=' pmoves/env.shared | cut -d= -f2 | tr -d '"')
+ssh -i "$SECRETS_DIR/hostinger_vps" root@pmoves-kvm4-2 "..."
+```
+
 ### Cross-Node Task Delegation via Agent Zero MCP
 
 For delegating tasks to remote nodes, use Agent Zero's `/mcp/execute` endpoint — it runs on the remote node, has Tailscale + Docker access, and is the correct abstraction over raw NATS coordination signals.
