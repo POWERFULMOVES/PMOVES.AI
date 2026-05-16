@@ -14,7 +14,8 @@
     "zai": {
       "options": {
         "baseURL": "https://api.z.ai/api/coding/paas/v4",
-        "timeout": 300000
+        "timeout": 300000,
+        "apiKey": "${Z_AI_API_KEY}"
       },
       "models": {
         "glm-5-turbo": { "name": "GLM-5 Turbo" },
@@ -29,7 +30,8 @@
     "minimax": {
       "options": {
         "baseURL": "https://api.minimax.chat/v1",
-        "timeout": 300000
+        "timeout": 300000,
+        "apiKey": "${MINIMAX_API_KEY}"
       },
       "models": {
         "minimax-m2.7": { "name": "MiniMax-M2.7 (1M Context)" },
