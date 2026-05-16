@@ -62,10 +62,10 @@ usage() {
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --node-id)
-      [[ -z "${2:-}" ]] && { echo "ERROR: --node-id requires a value" >&2; usage >&2; exit 1; }
+      [[ -z "${2:-}" || "${2:-}" == --* ]] && { echo "ERROR: --node-id requires a value" >&2; usage >&2; exit 1; }
       NODE_ID="$2"; shift 2 ;;
     --peer)
-      [[ -z "${2:-}" ]] && { echo "ERROR: --peer requires a value" >&2; usage >&2; exit 1; }
+      [[ -z "${2:-}" || "${2:-}" == --* ]] && { echo "ERROR: --peer requires a value" >&2; usage >&2; exit 1; }
       PEER="$2"; shift 2 ;;
     --help|-h)  usage; exit 0 ;;
     *)
