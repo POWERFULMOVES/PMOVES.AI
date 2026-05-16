@@ -10,7 +10,7 @@
 
 | Node | LAN IP | Tailscale IP | Tailscale Hostname | Role | Runner Labels | vCPU / RAM | Cost |
 |------|--------|-------------|--------------------|----- |---------------|------------|------|
-| Z890 (Multi-Boot: Win11 / Ubuntu / Pop / Fedora / Cachy / Nix) | LAN (dual NIC) | `ts:<z890-<distro>>` | pmoves-z890-<distro> | Dev, GPU (RTX 3090 Ti); multi-boot runbook: `deploy/provision/z890/README.md` | `self-hosted, ai-lab` (secondary) | 32C / 128GB | electricity |
+| Z890 (Multi-Boot: Win11 / Ubuntu / Pop / Fedora / Cachy / Nix) | LAN (dual NIC) | `ts:<z890-<distro>>` | pmoves-z890-<distro> | Production ai-lab node, GPU (RTX 3090 Ti); workstation co-located with dev workflow; multi-boot runbook: `deploy/provision/z890/README.md` | `self-hosted, ai-lab` (secondary; re-evaluate after RDNA Phase-C bringup per PR #1472) | 32C / 128GB | electricity |
 | POWERFULMOVES (5090) | LAN (dual NIC) | `ts:<5090-linux>`, `ts:<5090-win>` | pmoves-powerfulmoves, powerfulmoves-1 | Primary GPU (RTX 5090) | `self-hosted, ai-lab, gpu, cuda` | 24C / 64GB | electricity |
 | 4090 Laptop (Windows) | LAN | `ts:<laptop>` | pmoves-4090 | Control Plane, Edge Orchestration, Agent Zero + Claws | — | RTX 4090 | electricity |
 | DGX Spark | LAN | `ts:<dgx-spark>` | pmoves-dgx-spark | Heavyweight Inference (Gemma 4 31B, Nemotron Super 49B, Qwen3-Coder 480B) | `self-hosted, ai-lab, gpu, cuda, spark` (pending) | 20C Arm / 128GB unified LPDDR5X | electricity |
@@ -194,9 +194,9 @@ Primary GPU inference node (RTX 5090, 32GB VRAM). Runs containerized `ai-lab` Gi
 | Channel Monitor | 8097 | Active | — |
 | PMOVES.YT | 8077 | Active | yt |
 
-### Z890 — Development (Local)
+### Z890 — Production ai-lab node (workstation, local Docker Compose)
 
-All services can run locally via Docker Compose profiles. Secondary GPU (RTX 3090 Ti). Self-hosted runner available as fallback.
+Joined to ai-lab as a production node — all services can run locally via Docker Compose profiles, and the box also serves dev workflow co-located on the same hardware. Secondary GPU (RTX 3090 Ti); primary heavyweight inference will shift to RDNA Phase-C (dual R9700) per PR #1472 once USB flash + ROCm install complete. Self-hosted CI runner present.
 
 ---
 

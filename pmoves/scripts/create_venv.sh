@@ -3,8 +3,13 @@ set -euo pipefail
 
 # Create a local Python venv at pmoves/.venv-pmoves and install all service requirements.
 # Usage:
-#   bash pmoves/scripts/create_venv.sh            # basic
-#   INCLUDE_DOCS=1 bash pmoves/scripts/create_venv.sh  # include docs/** requirements
+#   bash pmoves/scripts/create_venv.sh                     # basic
+#   INCLUDE_DOCS=1 bash pmoves/scripts/create_venv.sh      # include docs/** requirements
+#   INCLUDE_BRINGUP=1 bash pmoves/scripts/create_venv.sh   # include bringup toolchain
+#                                                          # (glances + telemetry; see
+#                                                          # pmoves/tools/bringup/requirements.txt)
+#   make -C pmoves venv-bringup                            # canonical Make target wrapping
+#                                                          # check_prereqs.sh + INCLUDE_BRINGUP=1
 
 script_dir="$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 pmoves_root="$(cd -- "${script_dir}/.." && pwd)"
@@ -56,7 +61,7 @@ if [[ ! -x "${venv_python}" ]]; then
 fi
 
 echo "Installing requirements across services/tools..."
-(cd "${pmoves_root}" && INCLUDE_DOCS=${INCLUDE_DOCS:-0} bash "${installer}" "PMOVES.AI" "${venv_python}")
+(cd "${pmoves_root}" && INCLUDE_DOCS=${INCLUDE_DOCS:-0} INCLUDE_BRINGUP=${INCLUDE_BRINGUP:-0} bash "${installer}" "PMOVES.AI" "${venv_python}")
 
 activate_hint="${venv_dir}/bin/activate"
 if [[ ! -f "${activate_hint}" ]]; then

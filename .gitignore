@@ -1,6 +1,14 @@
 # PMOVES.AI gitignore
 
 # =============================================================================
+# Python venvs (machine-local; canonical bringup venv is pmoves/.venv-pmoves/
+# via `make -C pmoves venv-bringup` — see pmoves/scripts/create_venv.sh)
+# =============================================================================
+.venv/
+/venv/
+pmoves/.venv-pmoves/
+
+# =============================================================================
 # AutoClaw / AutoGLM local workspace state (machine-local, not PMOVES code)
 # =============================================================================
 HEARTBEAT.md

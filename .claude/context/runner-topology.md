@@ -6,7 +6,7 @@
 
 | Node | Role | Key Services | Runner |
 |------|------|-------------|--------|
-| **Z890** | Dev + GPU (3090Ti) | All (local Docker Compose) | `self-hosted, ai-lab, gpu, cuda` |
+| **Z890** | Production ai-lab node, GPU (RTX 3090 Ti); workstation co-located with dev workflow | All (local Docker Compose) | `self-hosted, ai-lab, gpu, cuda` |
 | **5090** | Primary GPU (pending) | Future inference | (pending) |
 | **KVM4-1** | API Gateway + Tailscale Egress Exit Node (Phase 9Q) | TensorZero, Agent Zero, Hi-RAG, Archon, Gateway Agent; outbound exit for `pmoves-yt` stack | `self-hosted, vps, kvm4, production` |
 | **KVM4-2** | Data/Storage | Supabase, NATS, Qdrant, Neo4j, Meilisearch, MinIO, monitoring | `self-hosted, vps, kvm4, production` |

@@ -162,6 +162,35 @@ include mk/provider.mk
 include mk/egress.mk
 include mk/yt-cookies.mk
 
+# ----------------------------------------------------------------------------
+# venv + bringup-toolchain prereqs
+# ----------------------------------------------------------------------------
+# pmoves/.venv-pmoves/ hosts the canonical Python toolchain. `venv` creates it
+# with service+tool requirements only. `venv-bringup` adds the operator-facing
+# bringup toolchain (glances, telemetry helpers) and gates on the non-Python
+# prereqs check (jq, make, curl, git, python3).
+#
+# This is the prereq layer the user named on 2026-05-15: glances + bringup
+# binaries are NOT system-wide installs — they live under the venv. Non-Python
+# binaries (make, jq) stay as system binaries, but check_prereqs.sh surfaces
+# any gaps with platform-specific install hints.
+
+.PHONY: check-prereqs
+check-prereqs: ## Verify system binaries required for bringup (jq, make, curl, git, python3)
+	@bash scripts/check_prereqs.sh
+
+.PHONY: venv
+venv: ## Create pmoves/.venv-pmoves and install service + tool requirements
+	@bash scripts/create_venv.sh
+
+.PHONY: venv-bringup
+venv-bringup: check-prereqs ## Bringup-ready venv: service+tool deps PLUS glances/telemetry toolchain
+	@INCLUDE_BRINGUP=1 bash scripts/create_venv.sh
+	@echo
+	@echo "✅ Bringup venv ready at pmoves/.venv-pmoves/"
+	@echo "   Glances: $$(./.venv-pmoves/bin/glances --version 2>&1 | head -1 || echo 'NOT FOUND')"
+	@echo "   Activate: source pmoves/.venv-pmoves/bin/activate"
+
 .PHONY: update-service-docs
 update-service-docs: ## Regenerate service update notes from git metadata
 	@$(PYTHON) scripts/update_service_logs.py $(ARGS)
