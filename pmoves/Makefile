@@ -915,6 +915,14 @@ up-bus: ## Start message bus (NATS)
 	@timeout 30 bash -c 'until docker exec pmoves-nats-1 nc -z localhost 4222 2>/dev/null; do sleep 1; done' || echo "⚠️ NATS may still be starting"
 	@echo "✅ NATS ready"
 
+.PHONY: nats-pub
+nats-pub: ## Publish a NATS message via docker exec (Known Road — run on the node where NATS is local)
+## Usage: make nats-pub SUBJECT=claw.task.assign.v1 PAYLOAD='{"from":"pmoves-4090","to":"pmoves-spark"}'
+## From a remote node: connect to nats://nats:pmoves@pmoves-kvm4-2:4222 via Tailscale hostname
+	@test -n "$(SUBJECT)" || (echo "ERROR: SUBJECT is required" && exit 1)
+	@test -n "$(PAYLOAD)" || (echo "ERROR: PAYLOAD is required" && exit 1)
+	@docker exec pmoves-nats-1 nats pub "$(SUBJECT)" '$(PAYLOAD)' --server nats://nats:pmoves@localhost:4222
+
 .PHONY: up-workers up-workers-core
 up-workers: ## Start worker services (extract, langextract, media)
 	@echo "⚙️ Starting worker services..."

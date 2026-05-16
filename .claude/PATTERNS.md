@@ -163,6 +163,52 @@ When adding a new open-weights model (Gemma, Qwen, Llama, Nemotron, etc.), verif
 
 **Full subject catalog:** `.claude/context/nats-subjects.md`.
 
+### NATS pub Known Road
+
+Publishing NATS messages from an agent session — three paths, choose by location:
+
+**1. On the node where NATS runs locally (KVM4-2, Z890):**
+```bash
+make -C pmoves nats-pub SUBJECT=claw.task.assign.v1 PAYLOAD='{"from":"pmoves-4090","to":"pmoves-spark","task":"cascade-wave-B"}'
+# expands to: docker exec pmoves-nats-1 nats pub <subject> '<payload>' --server nats://nats:pmoves@localhost:4222
+```
+
+**2. Via the `pmoves-nats-mcp` MCP tool (operator opt-in, see PATTERNS.md § NATS MCP server):**
+```
+nats_publish(subject="claw.task.assign.v1", payload={"from": "pmoves-4090", ...})
+```
+
+**3. From a remote node (4090, SPARK, Knuckles) via Tailscale:**
+```bash
+# Use Tailscale hostname — never raw IPs
+nats pub claw.task.assign.v1 '...' --server nats://nats:pmoves@pmoves-kvm4-2:4222
+# OR ssh to KVM4-2 and use path 1
+ssh root@pmoves-kvm4-2 'docker exec pmoves-nats-1 nats pub claw.task.assign.v1 ...'
+```
+
+**Never:** install `nats-py` on the Windows dev host and connect to `localhost:4222` — NATS does not run locally on the 4090 laptop.
+
+### Cross-Node Task Delegation via Agent Zero MCP
+
+For delegating tasks to remote nodes, use Agent Zero's `/mcp/execute` endpoint — it runs on the remote node, has Tailscale + Docker access, and is the correct abstraction over raw NATS coordination signals.
+
+```bash
+# KVM4-1 Agent Zero (public endpoint, always reachable):
+curl -X POST https://api.pmoves.ai/mcp/execute \
+  -H "Authorization: Bearer $MCP_CLIENT_SECRET" \
+  -H "Content-Type: application/json" \
+  -d '{"task": "Validate O2a/O2b orchestration on 5090 — CGP consumers, 4 consumers on geometry.cgp.v1", "priority": "normal"}'
+
+# SPARK Agent Zero direct via Tailscale (use hostname, never IP):
+SPARK_IP=$(tailscale status --json | jq -r '.Peer[] | select(.HostName=="pmoves-spark") | .TailscaleIPs[0]')
+curl -X POST "http://pmoves-spark:8080/mcp/execute" \
+  -H "Authorization: Bearer $MCP_CLIENT_SECRET" \
+  -H "Content-Type: application/json" \
+  -d '{"task": "Open feat/spark-tz-glm5-minimax-sync PRs — Wave B is unblocked"}'
+```
+
+**Why Agent Zero over raw NATS:** Agent Zero executes work on the remote node (Docker exec, git, file edits). A raw `claw.task.assign.v1` publish is advisory only — no guarantee the target acts.
+
 ## Config Migration via brand-defaults
 
 - `brand_defaults.py` skips keys with existing non-placeholder values
