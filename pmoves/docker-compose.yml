@@ -2450,7 +2450,9 @@ services:
     # operator-state surfaces — DARKXSIDE-AZ is the operator on this node, not
     # a peripheral service requesting elevation. Constraints (if any) are
     # operator self-discipline, not architecture.
-    - ./env.shared:/secrets/env.shared:rw
+    # Override: set ENV_SHARED_MODE=ro in env.shared to harden on nodes where
+    # write access is not needed (e.g., read-only observer deployments).
+    - ./env.shared:/secrets/env.shared:${ENV_SHARED_MODE:-rw}
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:80/ >/dev/null || curl -fsS http://localhost:8080/healthz >/dev/null || exit 1"]
       interval: 30s
