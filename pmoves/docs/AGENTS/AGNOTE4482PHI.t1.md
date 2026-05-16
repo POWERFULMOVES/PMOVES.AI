@@ -738,6 +738,7 @@ The pipeline reports success because its validation scope is too narrow. Neither
 - 2026-05-12T16:00:00Z CLAIM ANTIGRAVITY-OPUS scope: Multilingual ingestion hardening - refactor 	ranscribe1.py for provider-agnosticism (process_audio_with_cloud_api), wire 	arget_language and 	ask through orchestrator/registry paths, validate local translation loop via smoke test. Submodule: PMOVES-transcribe-and-fetch.
 - 2026-05-12T17:15:00Z RELEASE ANTIGRAVITY-OPUS scope: Hardening complete. Structural refactor lands cloud_api abstraction; dispatcher logic corrected for Local/Registry/Cloud switching. Metadata injection verified in Markdown output. PR staged in main repo with updated gitlink.
 - 2026-05-12T17:20:00Z CLAIM SPARK scope: Implementation of process_audio_with_cloud_api for Ollama/MiniMax/Alibaba (configurable ase_url); A2UI Remotion hologram geometry scaling (1920x1080 viewport).
+- 2026-05-16T10:30:00Z RELEASE SIDECAR-SPARK scope: Cloud API refactor completed — PR PMOVES-transcribe-and-fetch#76. Provider-agnostic process_audio_with_cloud_api with CLOUD_API_BASE_URL/CLOUD_API_KEY env vars. A2UI hologram geometry scaling (1920x1080) **still pending** — needs DGX SPARK physical access. Claim ping: 4+ days idle on geometry task.
 
 <!-- GRAPHITI_MARK: ANTIGRAVITY-OPUS::MULTILINGUAL-SCALE-HANDOFF::2026-05-12 -->
 
