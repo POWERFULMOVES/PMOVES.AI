@@ -501,3 +501,29 @@ Tools: `nats_publish(subject, payload, headers?)`, `nats_subscribe(subject, time
 
 ### Wave 1 / Wave 2 (operator + service-side)
 See [`docs/superpowers/plans/2026-05-15-pmoves-gap-fill-roadmap.md`](../docs/superpowers/plans/2026-05-15-pmoves-gap-fill-roadmap.md) §§ "Wave 1" and "Wave 2" — API-keyed MCPs (Prometheus/Loki, Sentry, Linear, Brave, Cloudflare, Playwright, Postgres), Supabase schema migrations (`archon_minted_artifacts`, `agent_id` FK), and Archon-side mint subject publishers.
+
+### Pair recipes (developer-tool composition)
+
+Distinct from the FlOO$ service-level pipelines above. These are `.claude/skills/` chains for **developer workflows** — invoked by an agent during a session, not a service-side dataflow.
+
+| Recipe | Chain | Trigger |
+|--------|-------|---------|
+| **CHIT-claim** | `pmoves-mesh-preflight` → `pmoves-chit-sign` → `pmoves-living-docs-refresh` | Committing to a CHIT-aware service (Tokenism, Hi-RAG v2, Consciousness, Evo Controller, A2UI Bridge, AgentGym) |
+| **NATS-introducer** | `pmoves-nats-subject-audit` → `pmoves-chit-sign` → (opt) `pmoves-mesh-preflight` | Adding new NATS publisher/subscriber under `tokenism.*`, `chit.*`, `geometry.*`, `flooz.*`, `minimax.*` |
+| **Submodule-promotion** | `pmoves-submodule-fleet` → `pmoves-living-docs-refresh` → `pmoves-chit-sign` | Before opening a submodule pointer-promotion PR |
+| **Pre-claim** | `pmoves-mesh-preflight` → AGNOTE CLAIM | Every AGNOTE register CLAIM that touches a service |
+| **Marco/Polo** | `pmoves-cipher-memory store` → … sessions, days, agents … → `pmoves-cipher-memory search` | Cross-agent durable knowledge (currently blocked on Cipher host port binding) |
+
+### Node-affinity team aggregations
+
+Each developer skill has a natural node-owner from lane history + service knowledge. Auto-CC the team on PRs that touch each skill's domain.
+
+| Team | Members | Skills owned | Typical PR surface |
+|------|---------|--------------|--------------------|
+| **CHIT signing** | 5090 + 4090 | `pmoves-chit-sign`, `pmoves-cipher-memory` | Trail signing, cross-session memory for CHIT-aware services |
+| **Substrate** | Z890 + 4090 | `pmoves-mesh-preflight`, `pmoves-submodule-fleet` | Node provisioning, fleet health, hardware audit |
+| **NATS hygiene** | SPARK + 5090 | `pmoves-nats-subject-audit`, `pmoves-chit-sign` | Subject catalog consistency, persona/voice/geometry axis |
+| **Visual + sandbox** | SPARK + 5090 + 4090 | `claude-d3js`, `agent-sandbox`, `fork-repository` | Audit visualization, sandboxed mint validation, parallel investigations |
+| **Doc steward** | 5090 + Z890 | `pmoves-living-docs-refresh`, `pmoves-submodule-fleet` | LIVING_DOCS_INDEX freshness, submodule README sync |
+
+> Skill discovery is filesystem-based — adding `.claude/skills/<slug>/SKILL.md` auto-registers the skill in any active Claude session without restart. Use `git checkout <branch> -- .claude/skills` during PR review to live-validate.
