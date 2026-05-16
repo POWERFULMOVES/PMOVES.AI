@@ -766,6 +766,52 @@ The pipeline reports success because its validation scope is too narrow. Neither
 
 <!-- GRAPHITI_MARK: B850-CLAUDE::DOC-AUDIT-TOPOLOGY-CLAIM::2026-05-15 -->
 
+## W6-P5 FlOO$ Architecture Lane — Release (2026-05-16)
+
+- `2026-05-16T01:30:00Z` RELEASE `5090-CLAUDE (opus)` scope: W6-P5 architecture review + Phase A spec DELIVERED via PR #1487 (merged `6c77be860d` on 2026-05-15T19:49Z). Deliverable `pmoves/docs/TAC/TAC_FLOOZ.md` landed on main. Includes pipeline position, additive `persona_overlay` CGP extension (works with PR #1500's per-agent Cipher framing), 4-state persona machine, MOF L4 alignment, Phase A/B/C scope. Codex review on PR #1487 caught the `flooz.cgp.ready.v1` relay ambiguity — corrected to direct publish on existing `tokenism.prosodic.bpm.v1` with `source: "flooz"` attribution. Cross-node review team (4090 + SPARK + DARKXSIDE) acknowledged via PR #1484/#1485/#1487 handoff comments. Next: Phase A code lane gated on §1 + §7 signoff per Village Rule. risks: low — doc-only PR shipped. agent_signature: `ACK::5090-CLAUDE::W6-P5-FLOOZ-ARCH-RELEASE`.
+
+<!-- GRAPHITI_MARK: 5090-CLAUDE::W6-P5-FLOOZ-ARCH-RELEASE::2026-05-16 -->
+
+## O2a/O2b CGP Consumer Orchestration — Validation Report (2026-05-16)
+
+- `2026-05-16T01:35:00Z` REVIEW `5090-CLAUDE` scope: 4090 handoff via NATS `claw.task.assign.v1` (from `pmoves-4090` to `pmoves-powerfulmoves`): validate O2a-O2b CGP consumer orchestration on this node. Task: verify Tokenism + Hi-RAG CGP consumers connect after container restart, check `geometry.cgp.v1` fires within 2s of Flute synthesis, confirm 4 consumers (agentgym, tokenism, hirag, a2ui).
+
+  **Findings (FAIL — no consumer chain existed at validation time, pre-#1503):**
+
+  **Subscriber state (via NATS `connz?subs=true` against `pmoves-nats-1:8222`):**
+  - 21 active NATS connections, 15 unique non-INBOX subjects subscribed.
+  - **ZERO** subscribers on `geometry.cgp.v1` or any `cgp.*` subject.
+  - Only `geometry.*` subscribers: `geometry.swarm.meta.v1` (2 conns).
+  - No JetStream stream for `geometry.cgp.v1`. Only 1 JS stream total (`AGENTZERO`, 0 messages).
+
+  **Code-level subscriber audit (4 target services):**
+  | Service | `geometry.cgp.v1` reference in code? | Subscription type |
+  |---------|-----|-----|
+  | agentgym | 0 files | None — no CGP subscriber code |
+  | tokenism-simulator | 0 files | None on this subject (Tokenism inbound is `tokenism.prosodic.bpm.v1`) |
+  | hi-rag-gateway | 3 files | HTTP endpoint only (`POST` accepts the same payload shape — no NATS subscriber) |
+  | a2ui-nats-bridge | 0 files | None |
+
+  **Service HTTP health (host-side, separate from NATS subscription):**
+  - agentgym :8200 → 200 ✓
+  - tokenism :8103 → 200 ✓
+  - hi-rag-gateway-v2 :8086 → `/` returns 200 (no `/healthz` path); container healthy
+  - a2ui-nats-bridge :9224 → not host-bound (container healthy; Docker Desktop WSL2 silent-bind class)
+  - flute-gateway :8055 → 200 ✓ (would publish but no consumers to receive)
+
+  **Conclusion:** O2a/O2b validation FAILED at the subscription layer **at the time this report was authored**. Flute would emit to `geometry.cgp.v1`, no consumer would receive. The named 4-consumer set did not exist as a NATS subscriber group on this node. Hi-RAG consumed the same payload shape via HTTP push, not NATS.
+
+  **Recommendations for 4090:**
+  1. Confirm the O2a/O2b contract intent: does Flute fan out to consumers via NATS, or via per-service HTTP pushes? Current code paths support the HTTP model for Hi-RAG; the NATS model has no listeners.
+  2. If NATS fan-out is intended, the consumer side needs new subscriber code in agentgym + tokenism + a2ui-nats-bridge (Hi-RAG would need a NATS→`POST /events/cgp` bridge).
+  3. The `a2ui` host port 9224 silent-bind is the same Windows Docker Desktop WSL2 class as Cipher 8105 (see `feedback_docker_desktop_windows_silent_bind.md`). Per-host operator fix, not a code change.
+
+  **POST-MERGE NOTE (added during rebase):** PR #1503 "feat(orchestration): O-1 through O-5 — CGP bus, TTS profile, P7 NATS, voice E2E" landed on main between this validation and merge. It likely supersedes finding #2 above by introducing the CGP bus + voice E2E orchestration. Re-validation needed against post-#1503 main: rerun the `connz?subs=true` subscriber audit and the 4-service code grep to confirm consumers are now wired. Preserving original findings here as an audit checkpoint of the pre-#1503 state.
+
+  **Trail unsigned locally** (no signing material in CLI session). agent_signature: `ACK::5090-CLAUDE::O2a-O2b-CONSUMER-VALIDATION-REPORT`.
+
+<!-- GRAPHITI_MARK: 5090-CLAUDE::O2a-O2b-CGP-CONSUMER-VALIDATION-REPORT::2026-05-16 -->
+
 ## 4090-Prep Pre-Stage Lane — Claim/Release (2026-05-16)
 
 - `2026-05-16T03:00:00Z` CLAIM `B850-CLAUDE (Knuckles, opus 4.7 1M)` scope: Pre-stage 4090-CLAUDE wiring deliverables — P7 Agent Interpreter test harness (`pmoves/scripts/p7-agent-interpreter-test.sh`), Ollama inventory validator (`pmoves/scripts/validate-ollama-inventory.py`), 4090-CLAUDE operational profile (`pmoves/docs/NODE_PROFILES/4090-CLAUDE.md`), B850/Knuckles topology alias (annotate R9700 Workstation row + add condensed B850 row to runner-topology.md). PR: #1501. Branch: `4090-prep/2026-05-16-tts-ollama-profile`. 2 atomic commits. Three-body: delivery=B850-CLAUDE (this), control=DARKXSIDE (on SPARK node per 2026-05-16 cross-node coordination), memory=this trail. risks: low — doc + read-only scripts; no service-side changes. agent_signature: `ACK::B850-CLAUDE::4090-PREP-CLAIM`.
@@ -778,4 +824,3 @@ The pipeline reports success because its validation scope is too narrow. Neither
 - `2026-05-16T03:30:00Z` CLAIM `B850-CLAUDE (Knuckles, opus 4.7 1M)` scope: Cross-node convergence + coordination checklist authoring. Deliverable: `pmoves/docs/AGENTS/AGNOTE_CONVERGENCE_CHECKLIST_2026-05-16.md` — per-node PR inventory, open handoff lanes, convergence gates, DARKXSIDE-on-SPARK operator co-location notes. Also revises 3 prior mis-attributed entries (Z890-CLAUDE → B850-CLAUDE in RDNA Phase-C RELEASE, Gap-Fill Wave 0+0.5 CLAIM/RELEASE, Doc-Audit CLAIM). Branch: `doc-audit/2026-05-15-tac-services-agnote-topology` (PR #1496, OPEN; will update). Three-body: delivery=B850-CLAUDE (this), control=DARKXSIDE (on SPARK), memory=this trail. risks: low — register revisions + new audit doc. agent_signature: `ACK::B850-CLAUDE::CONVERGENCE-CHECKLIST-CLAIM`.
 
 <!-- GRAPHITI_MARK: B850-CLAUDE::CONVERGENCE-CHECKLIST-CLAIM::2026-05-16 -->
-
