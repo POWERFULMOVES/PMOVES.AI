@@ -17,7 +17,8 @@ fi
 echo "Scanning for requirements.txt files..."
 roots=(services tools)
 if [[ "$include_docs" == "1" ]]; then roots+=(docs); fi
-mapfile -t reqs < <(find "${roots[@]}" -type f -name requirements.txt 2>/dev/null || true)
+mapfile -t reqs < <(find "${roots[@]}" -type f -name requirements.txt \
+  -not -path "*/bringup/*" 2>/dev/null || true)
 # INCLUDE_BRINGUP=1 → also install pmoves/tools/bringup/requirements.txt
 # (operator-facing CLI tooling: glances, etc.). Kept separate so the default
 # venv stays focused on service runtime deps.
