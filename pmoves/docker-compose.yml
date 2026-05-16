@@ -2441,6 +2441,16 @@ services:
     - ${AGENT_ZERO_INSTRUMENTS_DIR:-./data/agent-zero/instruments}:/a0/instruments
     - ${AGENT_ZERO_LOG_DIR:-./data/agent-zero/logs}:/a0/logs
     - ${AGENT_ZERO_RUNTIME_DIR:-./data/agent-zero/runtime}:/a0/runtime
+    # Forms layer — persona/cognition profiles consumed by mcp_server.load_form().
+    # Read-only: forms are introspective metadata; runtime never rewrites them.
+    - ./configs/agents/forms:/app/configs/agents/forms:ro
+    # SECURITY NOTE — env.shared read-write mount:
+    # Grants DARKXSIDE-AZ-5090 the ability to fix env.shared parse errors (e.g.,
+    # multi-line SSH key corruption blocking secrets-funnel) without operator
+    # terminal access. Reviewer: this is a meaningful surface change — anything
+    # compromising AZ can rewrite credentials. If unacceptable, change ":rw" to
+    # ":ro" and route edits through a sidecar with explicit per-key API.
+    - ./env.shared:/secrets/env.shared:rw
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:80/ >/dev/null || curl -fsS http://localhost:8080/healthz >/dev/null || exit 1"]
       interval: 30s

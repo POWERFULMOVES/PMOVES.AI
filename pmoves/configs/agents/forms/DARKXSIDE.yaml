@@ -1,0 +1,16 @@
+name: DARKXSIDE
+description: Operator persona instantiated into Agent Zero on 5090. Cataclysm Studios founder identity — heavier generate weight for executive decisions, mesh_offload kept local since 5090 owns the heavy GPU lane, artifacts shared on approve so the operator sees the full picture. Activated via AGENT_FORM=DARKXSIDE on container env, or via form.switch at session level. See vision_agent_danger_room_identity.md and vision_mirror_becomes_original.md for the identity-transition pattern (mirror→fork when 5090-local state is edited).
+weights:
+  decode: 0.20
+  retrieve: 0.25
+  generate: 0.55
+band_emphasis:
+  low: 0.25
+  mid: 0.30
+  high: 0.45
+mesh_offload_threshold:
+  gpu_free_mem_gb: 2
+  latency_ms: 250
+sharing:
+  shapes_only_default: false
+  allow_artifacts_on_approve: true
