@@ -150,9 +150,7 @@ async def _handle_cgp_message(nc: NATS, msg: Msg) -> None:
                 msg.subject,
                 exc,
             )
-            # Still ack JetStream messages so the consumer doesn't loop.
-            await _try_ack(msg)
-            return
+            return  # ack happens in finally block
 
         bpm = _extract_bpm(payload)
         source_agent = _extract_source_agent(payload)
@@ -182,14 +180,14 @@ async def _handle_cgp_message(nc: NATS, msg: Msg) -> None:
                 exc,
             )
 
-        await _try_ack(msg)
-
     except Exception as exc:  # noqa: BLE001 — never let a bad msg kill the loop
         logger.exception(
             "tokenism nats_consumer: unexpected error handling %s — %s",
             msg.subject,
             exc,
         )
+    finally:
+        await _try_ack(msg)
 
 
 async def _try_ack(msg: Msg) -> None:

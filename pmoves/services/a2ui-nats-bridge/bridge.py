@@ -127,6 +127,7 @@ nc: Optional[nats.aio.client.Client] = None
 js: Optional["nats.js.client.JetStreamContext"] = None
 active_ws_connections: set[WebSocket] = set()
 connected_a2ui_surfaces: dict[str, str] = {}  # surface_id -> client_id
+_js_geom_sub_active: bool = False  # True when startup JetStream geometry sub succeeded
 
 
 async def connect_nats() -> None:
@@ -138,15 +139,17 @@ async def connect_nats() -> None:
     Retries up to 5 times with linear backoff (5s, 10s, 15s, 20s, 25s).
 
     Side effects:
-        - Sets global `nc` and `js` variables
+        - Sets global `nc`, `js`, and `_js_geom_sub_active` variables
         - Updates `nats_connected` Prometheus gauge
         - Creates A2UI JetStream stream if not exists
         - Subscribes to geometry.* wildcard subject
 
     Note:
         Logs error but continues if geometry subscription fails (non-critical).
+        When geometry JetStream sub succeeds, per-connection core NATS subs are
+        skipped to prevent double delivery once the JS consumer is wired to forward.
     """
-    global nc, js
+    global nc, js, _js_geom_sub_active
     retry_count = 0
     max_retries = 5
 
@@ -176,16 +179,18 @@ async def connect_nats() -> None:
                     logger.error(f"Failed to create A2UI stream: {e}")
                     raise
 
-            # Subscribe to geometry events for bidirectional communication
+            # Subscribe to geometry events for bidirectional communication.
+            # When this succeeds, per-connection core NATS subs are skipped.
             try:
                 await js.subscribe(
                     GEOMETRY_WILDCARD,
                     "a2ui_geom_sub",
                     stream="GEOMETRY"
                 )
-                logger.info(f"Subscribed to {GEOMETRY_WILDCARD}")
+                _js_geom_sub_active = True
+                logger.info(f"Subscribed to {GEOMETRY_WILDCARD} (JetStream durable)")
             except Exception as e:
-                logger.warning(f"Could not subscribe to geometry: {e}")
+                logger.warning(f"Could not subscribe to geometry via JetStream: {e} — per-connection core subs will handle forwarding")
 
             nats_connected.set(1)
             logger.info("NATS connection established")
@@ -507,10 +512,11 @@ async def client_websocket(websocket: WebSocket):
             sub = await nc.subscribe("a2ui.>", cb=a2ui_handler)
             logger.info(f"Forwarding A2UI events to {client_id}")
 
-            # Subscribe to geometry CGP events (relayed to frontend
-            # geometry/cymatic visualization room).
-            geom_sub = await nc.subscribe(GEOMETRY_CGP_SUBJECT, cb=geometry_handler)
-            logger.info(f"Forwarding {GEOMETRY_CGP_SUBJECT} -> room '{GEOMETRY_WS_ROOM}' to {client_id}")
+            # Subscribe to geometry CGP events only when the startup JetStream
+            # consumer is not active; otherwise that consumer handles delivery.
+            if not _js_geom_sub_active:
+                geom_sub = await nc.subscribe(GEOMETRY_CGP_SUBJECT, cb=geometry_handler)
+                logger.info(f"Forwarding {GEOMETRY_CGP_SUBJECT} -> room '{GEOMETRY_WS_ROOM}' to {client_id}")
 
             # Keep connection alive
             while True:

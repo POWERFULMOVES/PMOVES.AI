@@ -1011,13 +1011,13 @@ async def lifespan(app: FastAPI):
                 logger.info("NATS geometry.swarm.meta listener started (url=%s)", NATS_URL)
                 _content_provenance_task = asyncio.create_task(_content_provenance_worker())
                 logger.info("NATS content.hirag.accepted listener started (url=%s)", NATS_URL)
-                if _geometry_cgp_task is None:
-                    _geometry_cgp_task = asyncio.create_task(subscribe_geometry_cgp())
-                    logger.info(
-                        "NATS geometry.cgp.v1 auto-ingest listener started (url=%s)", NATS_URL
-                    )
             else:
-                logger.info("NATS client unavailable; geometry.swarm.meta/content.hirag.accepted/geometry.cgp listeners skipped")
+                logger.info("NATS client unavailable; geometry.swarm.meta/content.hirag.accepted listeners skipped")
+
+    # CGP subscriber is independent of ShapeStore availability — start unconditionally.
+    if _geometry_cgp_task is None and NATS_URL and hasattr(nats, "connect"):
+        _geometry_cgp_task = asyncio.create_task(subscribe_geometry_cgp())
+        logger.info("NATS geometry.cgp.v1 auto-ingest listener started (url=%s)", NATS_URL)
 
     yield
 
