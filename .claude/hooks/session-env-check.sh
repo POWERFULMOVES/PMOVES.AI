@@ -50,6 +50,13 @@ if command -v git >/dev/null 2>&1; then
     add "Git: branch=$BRANCH worktrees=$WT_COUNT"
 fi
 
+# Emperor-CHIT-Humility disclosure reminder — appended before final emit so the
+# session opens with a posture cue. Kept factual; not preachy.
+add ""
+add "Emperor-CHIT-Humility — open the session by disclosing: (1) What I have"
+add "(repo, branch, worktree, loaded context). (2) What I'm missing (services"
+add "unhealthy, files not read, perms unknown). (3) What I'm about to do."
+
 # Emit additionalContext JSON
 printf '{"hookEventName":"SessionStart","additionalContext":"Environment Check:\\n%s"}' "$STATUS"
 exit 0
