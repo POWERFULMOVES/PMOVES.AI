@@ -179,18 +179,18 @@ async def connect_nats() -> None:
                     logger.error(f"Failed to create A2UI stream: {e}")
                     raise
 
-            # Subscribe to geometry events for bidirectional communication.
-            # When this succeeds, per-connection core NATS subs are skipped.
+            # Register the durable JetStream geometry consumer.
+            # _js_geom_sub_active stays False until a forwarding callback is
+            # wired here — per-connection core NATS subs handle delivery until then.
             try:
                 await js.subscribe(
                     GEOMETRY_WILDCARD,
                     "a2ui_geom_sub",
                     stream="GEOMETRY"
                 )
-                _js_geom_sub_active = True
-                logger.info(f"Subscribed to {GEOMETRY_WILDCARD} (JetStream durable)")
+                logger.info(f"Registered durable JetStream consumer for {GEOMETRY_WILDCARD} (forwarding via core NATS per-connection subs)")
             except Exception as e:
-                logger.warning(f"Could not subscribe to geometry via JetStream: {e} — per-connection core subs will handle forwarding")
+                logger.warning(f"Could not register geometry JetStream consumer: {e} — per-connection core subs will handle forwarding")
 
             nats_connected.set(1)
             logger.info("NATS connection established")
