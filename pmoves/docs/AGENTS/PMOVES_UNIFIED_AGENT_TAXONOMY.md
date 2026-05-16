@@ -4,6 +4,8 @@
 # PMOVES Unified Agent Taxonomy
 _Last updated: 2026-02-15 (deprecated 2026-05-08)_
 
+> **Note**: This document reflects the pre-MOF taxonomy and needs a convergence update to align with the MOF Architecture framework. Updated 2026-05-15.
+
 This taxonomy unifies PMOVES agents, services, and personas into a single
 operational model for production bring-up and long-running orchestration.
 

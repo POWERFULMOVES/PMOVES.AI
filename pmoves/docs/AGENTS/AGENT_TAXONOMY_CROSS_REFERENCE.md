@@ -15,7 +15,7 @@ Master cross-reference for all documents, concepts, and implementation files inv
 | 1 | **Agent Class Taxonomy** | `pmoves/docs/AGENTS/PMOVES_AGENT_CLASS_TAXONOMY.md` | Class hierarchy (Legendary/Standard/Specialized/Utility), 7 types, evolution stages, connections, CHIT toggles | Definition |
 | 2 | **Unified Agent Taxonomy** | `pmoves/docs/AGENTS/PMOVES_UNIFIED_AGENT_TAXONOMY.md` | 6-layer fold model (L0-L5), 5 canonical planes, persona anchors | Foundation |
 | 3 | **Skills (PmovesSKillZ)** | `pmoves/docs/AGENTS/PmovesSKillZ.md` | 5 skill bundles, operator expectations, open-chat+scout vs focus modes | Skills |
-| 4 | **BoTZ Gateway Integration** | `pmoves/docs/AGENTS/BOTZ_GATEWAY_AGENT_INTEGRATION.md` | BoTZ (pull, work distribution) vs Gateway Agent (push, MCP tools), skill levels | Integration |
+| 4 | **BoTZ Gateway Integration (archived 2026-04-19)** | `pmoves/docs/AGENTS/BOTZ_GATEWAY_AGENT_INTEGRATION.md` | BoTZ (pull, work distribution) vs Gateway Agent (push, MCP tools), skill levels | Integration |
 | 5 | **Hyperdimensions Control Plane** | `pmoves/docs/AGENTS/PMOVES_HYPERDIMENSIONS_CONTROL_PLANE.md` | Geometry state vector (delta, kappa, Hz, F, A), control mapping, per-agent CHIT toggles | Control |
 | 6 | **CHIT Implementation Status** | `pmoves/docs/PMOVESCHIT/IMPLEMENTATION_STATUS.md` | 5 math pillars status, CGP versions, NATS subjects, module locations | Status |
 | 7 | **Geometry Bus Integration** | `pmoves/docs/PMOVESCHIT/GEOMETRY_BUS_INTEGRATION.md` | CGP format, point modality types, CGP producers/consumers | Integration |
@@ -65,7 +65,7 @@ Master cross-reference for all documents, concepts, and implementation files inv
 | **5 math pillars** (Dirichlet/Hyperbolic/Merkle/Zeta/Swarm) | #6 CHIT Status | #8 Living Template, #7 Geometry Bus |
 | **CGP packet format** (v0.1/v0.2/v1.0) | #9 CGP v1.0 Spec | #6 CHIT Status, #7 Geometry Bus |
 | **NATS event topology** | #12 NATS Subjects | #13 Geometry NATS, #7 Geometry Bus |
-| **Skill bundles** | #3 PmovesSKillZ | #4 BoTZ Integration |
+| **Skill bundles** | #3 PmovesSKillZ | #4 BoTZ Integration (archived 2026-04-19) |
 | **Type effectiveness** | #1 Agent Class Taxonomy | #16 CLI Helper |
 | **Poincare disk rendering** | Agent Topology Surface | #5 Control Plane, #8 Living Template |
 | **Latent space amplification** | #14 agnotes2 | #8 Living Template (Use Case 2) |
