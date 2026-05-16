@@ -52,13 +52,15 @@ fi
 
 # --- TTS synthesis call ---
 START_NS=$(date +%s%N)
-RESPONSE=$(curl -s --max-time 30 \
+SYN_RAW=$(curl -s --max-time 30 -w "\n%{http_code}" \
     -X POST "http://${TTS_HOST}:${TTS_PORT}${TTS_PATH}" \
     -H "content-type: application/json" \
     -d "$(jq -nc --arg t "$TEXT" '{data:[$t]}')" \
     2>/dev/null)
 END_NS=$(date +%s%N)
 LATENCY_MS=$(( (END_NS - START_NS) / 1000000 ))
+SYN_CODE=$(tail -1 <<< "$SYN_RAW")
+RESPONSE=$(head -n -1 <<< "$SYN_RAW")
 
 if [[ -z "$RESPONSE" ]]; then
     if [[ "$JSON_OUT" -eq 1 ]]; then
@@ -66,6 +68,16 @@ if [[ -z "$RESPONSE" ]]; then
             '{stage:"synthesis", host:$host, port:$port, latency_ms:$lat, result:"EMPTY_BODY"}'
     else
         echo "❌ TTS synthesis returned empty body" >&2
+    fi
+    exit 2
+fi
+if [[ ! "$SYN_CODE" =~ ^2 ]]; then
+    if [[ "$JSON_OUT" -eq 1 ]]; then
+        jq -nc --arg host "$TTS_HOST" --arg port "$TTS_PORT" --argjson lat "$LATENCY_MS" \
+            --arg code "$SYN_CODE" --arg resp "$RESPONSE" \
+            '{stage:"synthesis", host:$host, port:$port, latency_ms:$lat, http_code:$code, raw_response:$resp, result:"HTTP_ERROR"}'
+    else
+        echo "❌ TTS synthesis HTTP ${SYN_CODE}: ${RESPONSE}" >&2
     fi
     exit 2
 fi

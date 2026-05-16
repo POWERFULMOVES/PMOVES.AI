@@ -2,10 +2,10 @@
 """validate-ollama-inventory.py — verify node Ollama model profile matches the canonical profile YAML.
 
 4090-CLAUDE runs this on the laptop to validate its 6-model inventory
-against ``pmoves/configs/profiles/laptop-4090.yaml`` (or any node's profile).
+against ``pmoves/config/profiles/laptop-4090.yaml`` (or any node's profile).
 
 Validates ``n4090.ollama`` TAC node in
-``pmoves/configs/tac_trees/node-4090-laptop.tac.yaml``.
+``pmoves/config/tac_trees/node-4090-laptop.tac.yaml``.
 
 Usage::
 
@@ -27,6 +27,7 @@ import argparse
 import json
 import sys
 import urllib.error
+import urllib.parse
 import urllib.request
 from pathlib import Path
 
@@ -48,8 +49,9 @@ def extract_expected_models(profile: dict) -> set[str]:
 
     PMOVES profiles nest model lists under ``coding_stacks.<stack>.<config>.models:``
     and may also have top-level ``models:`` lists (mixed string + dict shapes).
-    We accept both. Each model is normalized to its base name (no ``:tag`` suffix)
-    and lowercased.
+    We accept both. Model names are preserved with their ``:tag`` suffix so that
+    tag-specific requirements (e.g. ``llama3.2:3b`` vs ``llama3.2:70b``) are
+    enforced. Names are lowercased.
     """
 
     names: set[str] = set()
@@ -58,7 +60,7 @@ def extract_expected_models(profile: dict) -> set[str]:
     hw = profile.get("hardware", {}) or {}
     for v in (hw.get("gpu", {}) or {}).get("models", []) or []:
         if isinstance(v, str):
-            hardware_skus.add(v.strip().lower())
+            hardware_skus.add(v.strip().lower().split(":")[0])
 
     def walk(node, path_segments=("$",)):
         if isinstance(node, dict):
@@ -66,13 +68,15 @@ def extract_expected_models(profile: dict) -> set[str]:
                 if k == "models" and isinstance(v, list):
                     for entry in v:
                         if isinstance(entry, str):
-                            base = entry.split(":")[0].strip().lower()
-                            if base and base not in hardware_skus:
-                                names.add(base)
+                            name = entry.strip().lower()
+                            base = name.split(":")[0]
+                            if name and base not in hardware_skus:
+                                names.add(name)
                         elif isinstance(entry, dict) and entry.get("name"):
-                            base = str(entry["name"]).split(":")[0].strip().lower()
-                            if base and base not in hardware_skus:
-                                names.add(base)
+                            name = str(entry["name"]).strip().lower()
+                            base = name.split(":")[0]
+                            if name and base not in hardware_skus:
+                                names.add(name)
                 else:
                     walk(v, path_segments + (str(k),))
         elif isinstance(node, list):
@@ -85,9 +89,12 @@ def extract_expected_models(profile: dict) -> set[str]:
 
 def fetch_ollama_models(url: str) -> list[dict]:
     """Hit Ollama's ``/api/tags`` and return the models list."""
+    scheme = urllib.parse.urlparse(url).scheme
+    if scheme not in {"http", "https"}:
+        raise ValueError(f"Ollama URL scheme must be http or https, got: {scheme!r}")
     req = urllib.request.Request(f"{url.rstrip('/')}/api/tags",
                                   headers={"Accept": "application/json"})
-    with urllib.request.urlopen(req, timeout=5) as resp:
+    with urllib.request.urlopen(req, timeout=5) as resp:  # noqa: S310
         return json.load(resp).get("models", [])
 
 
@@ -118,6 +125,10 @@ def main() -> int:
         return 2
 
     profile = load_profile(profile_path)
+    if not isinstance(profile, dict):
+        print(f"❌ profile root must be a mapping, got {type(profile).__name__}: {profile_path}",
+              file=sys.stderr)
+        return 2
     expected_names = extract_expected_models(profile)
     if not expected_names:
         print(f"⚠  No models found in {profile_path} — profile may use a non-standard shape.",
@@ -134,20 +145,23 @@ def main() -> int:
                   file=sys.stderr)
         return 1
 
-    live_names = {(m.get("name") or "").split(":")[0].lower() for m in live}
-    live_by_name = {(m.get("name") or "").split(":")[0].lower(): m for m in live}
+    live_names = {(m.get("name") or "").lower() for m in live}
+    live_by_name = {(m.get("name") or "").lower(): m for m in live}
     missing = sorted(expected_names - live_names)
     excess = sorted(live_names - expected_names)
     matched = sorted(expected_names & live_names)
     total_size_gb = sum(gb(m.get("size")) for m in live)
+    excess_size_gb = sum(gb(live_by_name[n].get("size")) for n in excess if n in live_by_name)
+    is_drift = bool(missing) or excess_size_gb > 2.0
 
     report = {
-        "result": "ok" if not missing else "drift",
+        "result": "ok" if not is_drift else "drift",
         "profile": str(profile_path),
         "ollama_url": args.ollama_url,
         "matched": matched,
         "missing_from_ollama": missing,
         "excess_in_ollama": excess,
+        "excess_size_gb": round(excess_size_gb, 2),
         "total_size_gb": round(total_size_gb, 2),
         "vram_budget_gb": args.vram_budget_gb,
         "vram_headroom_gb": round(args.vram_budget_gb - total_size_gb, 2),
@@ -177,7 +191,7 @@ def main() -> int:
                 size = gb(live_by_name[n].get("size"))
                 print(f"   - {n} ({size} GB)     → consider removing or adding to profile")
 
-    return 0 if not missing else 3
+    return 0 if not is_drift else 3
 
 
 if __name__ == "__main__":
