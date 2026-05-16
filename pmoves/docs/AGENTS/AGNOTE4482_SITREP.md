@@ -63,6 +63,7 @@ Waves since last SITREP refresh (2026-04-01). Each links to its AGNOTE4482.md se
 | Multilingual | 2026-05-11 | §Multilingual Translation | Translation tooling |
 | Supply Chain | 2026-05-14 | `research/TANSTACK_SUPPLY_CHAIN_AUDIT` | 16 findings, 6 patched |
 | SPARK Prep | 2026-05-15 | `AGNOTE-dgx-spark.md` | Model deploy script, profile reconciliation |
+| CHIT Hardening | 2026-05-16 | §CHIT Hardening Sprint | 66-file audit, crypto consolidation, CHIT signing for 3 services, compose hardening, doc closure. **Signoff 37/37**. |
 
 ## Fastest Health Check
 
