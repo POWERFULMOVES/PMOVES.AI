@@ -6,10 +6,14 @@ Tests cover:
 - Weekly metrics geometry
 """
 import sys
+import os
 import pytest
 
-# Add service to path
-sys.path.insert(0, "pmoves/services/tokenism-simulator")
+# Add service to path and pmoves package parent for canonical imports
+_service_dir = os.path.join(os.path.dirname(__file__), "..")
+_pmoves_parent = os.path.join(os.path.dirname(__file__), "..", "..", "..")
+sys.path.insert(0, os.path.abspath(_service_dir))
+sys.path.insert(0, os.path.abspath(_pmoves_parent))
 
 from models.simulation import (
     CGPPacket,
@@ -334,4 +338,81 @@ class TestWeeklyMetricsGeometry:
         # Encode week 4
         packet = encoder.encode_simulation_result(result, week=4)
         assert packet.metadata["week"] == 4
+
+
+class TestCHITSigning:
+    """Test CHIT canonical HMAC signing roundtrip on CGPPackets."""
+
+    def test_sign_cgp_packet_with_passphrase(self, monkeypatch):
+        """Signing adds sig.hmac; roundtrip verifies."""
+        monkeypatch.setenv("CHIT_PASSPHRASE", "test-signing-key-a3")
+        # Re-import to pick up env var
+        import importlib
+        import services.chit_encoder as _ce_mod
+        importlib.reload(_ce_mod)
+        encoder = _ce_mod.CHITEncoder()
+
+        packet = CGPPacket(
+            simulation_id="sign-test",
+            geometry={"points": [[0, 1]], "edges": []},
+            metadata={"test": True},
+        )
+        signed = encoder.sign_cgp_packet(packet)
+        assert signed.model_dump()["sig"] is not None
+        assert "hmac" in signed.model_dump()["sig"]
+        # Verify roundtrip
+        assert encoder.verify_cgp_packet(signed) is True
+
+    def test_sign_cgp_packet_dev_mode_no_passphrase(self, monkeypatch):
+        """Without passphrase, returns packet unsigned (dev mode)."""
+        monkeypatch.delenv("CHIT_PASSPHRASE", raising=False)
+        monkeypatch.delenv("CHIT_SIGNING_KEY", raising=False)
+        import importlib
+        import services.chit_encoder as _ce_mod
+        importlib.reload(_ce_mod)
+        encoder = _ce_mod.CHITEncoder()
+
+        packet = CGPPacket(
+            simulation_id="dev-mode-test",
+            geometry={"points": [[0, 1]], "edges": []},
+        )
+        signed = encoder.sign_cgp_packet(packet)
+        # In dev mode, packet returned as-is (no sig)
+        assert signed.model_dump().get("sig") is None
+        # Verify returns True in dev mode
+        assert encoder.verify_cgp_packet(signed) is True
+
+    def test_sign_cgp_dict_with_passphrase(self, monkeypatch):
+        """sign_cgp_dict returns signed dict."""
+        monkeypatch.setenv("CHIT_PASSPHRASE", "test-signing-key-a3")
+        import importlib
+        import services.chit_encoder as _ce_mod
+        importlib.reload(_ce_mod)
+        encoder = _ce_mod.CHITEncoder()
+
+        cgp_dict = {
+            "cgp_version": "0.2",
+            "simulation_id": "dict-test",
+            "geometry": {"points": [[0, 1]]},
+        }
+        signed = encoder.sign_cgp_dict(cgp_dict)
+        assert "sig" in signed
+        assert "hmac" in signed["sig"]
+
+    def test_verify_tampered_packet_fails(self, monkeypatch):
+        """Verification fails when packet is tampered."""
+        monkeypatch.setenv("CHIT_PASSPHRASE", "test-signing-key-a3")
+        import importlib
+        import services.chit_encoder as _ce_mod
+        importlib.reload(_ce_mod)
+        encoder = _ce_mod.CHITEncoder()
+
+        packet = CGPPacket(
+            simulation_id="tamper-test",
+            geometry={"points": [[0, 1]], "edges": []},
+        )
+        signed = encoder.sign_cgp_packet(packet)
+        # Tamper
+        tampered = signed.model_copy(update={"simulation_id": "tampered"})
+        assert encoder.verify_cgp_packet(tampered) is False
 

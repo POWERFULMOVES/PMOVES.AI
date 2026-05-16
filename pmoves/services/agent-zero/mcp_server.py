@@ -21,6 +21,13 @@ try:
 except ModuleNotFoundError:
     # Container fallback: allow direct import when pmoves package wrappers are unavailable.
     from chit import CGP_SPEC_VERSION
+
+# CHIT canonical signing — signs CGPs before gateway post
+try:
+    from pmoves.tools.chit_security import sign_cgp as _sign_cgp
+except Exception:
+    _sign_cgp = None  # type: ignore[assignment]
+
 from services.common.env import get_secret
 from services.common.forms import (
     DEFAULT_AGENT_FORM,
@@ -63,7 +70,34 @@ def load_form(name: str) -> Dict[str, Any]:
     return yaml.safe_load(p.read_text(encoding="utf-8"))
 
 
+def _sign_cgp_if_available(cgp: Dict[str, Any]) -> Dict[str, Any]:
+    """Sign a CGP dict using canonical CHIT signing if available.
+
+    In dev mode (no CHIT_PASSPHRASE), logs warning and returns unsigned.
+    """
+    passphrase = os.environ.get("CHIT_SIGNING_KEY") or os.environ.get("CHIT_PASSPHRASE")
+    if not passphrase:
+        import logging as _log
+        _log.getLogger(__name__).warning(
+            "CHIT_PASSPHRASE not set — publishing CGP unsigned (dev mode)"
+        )
+        return cgp
+    if _sign_cgp is None:
+        import logging as _log
+        _log.getLogger(__name__).warning(
+            "chit_security.sign_cgp unavailable — publishing CGP unsigned"
+        )
+        return cgp
+    try:
+        return _sign_cgp(cgp, passphrase=passphrase)
+    except Exception as exc:
+        import logging as _log
+        _log.getLogger(__name__).error("Failed to sign CGP: %s", exc)
+        return cgp
+
+
 async def geometry_publish_cgp(cgp: Dict[str, Any]) -> Dict[str, Any]:
+    cgp = _sign_cgp_if_available(cgp)
     async with httpx.AsyncClient(timeout=20.0) as client:
         r = await client.post(
             f"{GATEWAY_URL}/geometry/event",

@@ -2,11 +2,15 @@
 
 Preserves the exact Cypher queries from the original linker.py while adding
 proper driver lifecycle management, connection pooling, and error handling.
+
+CHIT signing is available when CHIT_SIGN_NEO4J=true — see chit_signer.py.
 """
 
 from __future__ import annotations
 
 import glob
+import logging
+import os
 from pathlib import Path
 from typing import Any, Optional
 
@@ -15,6 +19,9 @@ from neo4j import GraphDatabase, Driver, ManagedTransaction
 from neo4j.exceptions import ServiceUnavailable, AuthError, Neo4jError
 
 from config import Settings
+
+# CHIT signing — additive, gated by env var
+from chit_signer import sign_neo4j_node, verify_neo4j_node, CHIT_SIGN_NEO4J
 
 logger = structlog.get_logger(__name__)
 
@@ -112,8 +119,17 @@ class Neo4jClient:
         cypher: str,
         parameters: Optional[dict[str, Any]] = None,
     ) -> None:
-        """""""""Execute a write query against Neo4j with proper parameterization."""""""""
+        """""""""Execute a write query against Neo4j with proper parameterization.
+
+        When CHIT_SIGN_NEO4J is enabled, parameters are signed before writing.
+        """""""""
         parameters = parameters or {}
+
+        # CHIT signing — additive, gated by CHIT_SIGN_NEO4J env var
+        if CHIT_SIGN_NEO4J:
+            parameters = sign_neo4j_node(parameters)
+            logger.debug("neo4j.chit_signed", cypher_preview=cypher[:80])
+
         try:
             with self._driver.session(database=self._settings.neo4j_database) as session:
                 session.execute_write(self._run_tx, cypher, parameters)
