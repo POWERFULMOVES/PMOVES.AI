@@ -373,6 +373,14 @@ jobs:
           NEO4J_PASSWORD: ci-validation-placeholder
           MEILI_MASTER_KEY: ci-validation-placeholder
           WGER_DB_PASSWORD: ci-validation-placeholder
+          WGER_SECRET_KEY: ci-validation-placeholder
+          WGER_ADMIN_PASSWORD: ci-validation-placeholder
+          ANON_KEY: ci-validation-placeholder
+          JWT_SECRET: ci-validation-placeholder
+          SERVICE_ROLE_KEY: ci-validation-placeholder
+          SUPABASE_DB_USER: ci-validation-placeholder
+          SUPABASE_DB_PASSWORD: ci-validation-placeholder
+          SUPABASE_SERVICE_ROLE_KEY: ci-validation-placeholder
         run: |
           echo "Validating docker-compose files..."
 
