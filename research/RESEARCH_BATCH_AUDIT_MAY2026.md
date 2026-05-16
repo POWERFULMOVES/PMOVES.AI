@@ -132,10 +132,10 @@ Of the 66 research files audited:
 | **Source** | `MEDIA_VOICE_UX_SUBMODULES_REPORT.md` |
 | **Priority** | **P0** |
 | **Effort** | 4-6 hrs |
-| **Dependencies** | git submodule update --init PMOVES-YT (needs SPARK or network-accessible host) |
+| **Dependencies** | git submodule update --init PMOVES.YT (needs SPARK or network-accessible host) |
 
 **What to do:**
-1. `git submodule update --init PMOVES-YT` — clone the submodule
+1. `git submodule update --init PMOVES.YT` — clone the submodule
 2. Rewrite `main.py` — remove 22-line `exec()` shim, implement proper service entry point
 3. Define YouTube API credentials in `secrets/`
 4. Add NATS integration for pipeline events

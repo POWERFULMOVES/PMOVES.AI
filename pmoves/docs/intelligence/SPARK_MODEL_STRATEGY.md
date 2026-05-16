@@ -266,7 +266,7 @@ Rollback is `ollama run <old-model>` away.
 
 | Document | Relation |
 |---|---|
-| `pmoves/docs/SPARK_MODEL_STRATEGY.md` | Current deployment guide (P0/P1 models, GB10 specs, fine-tuning) |
+| `pmoves/docs/intelligence/SPARK_MODEL_STRATEGY.md` | Current deployment guide (P0/P1 models, GB10 specs, fine-tuning) |
 | `pmoves/config/profiles/dgx-spark-grace-blackwell.yaml` | Hardware profile |
 | `scripts/spark_deploy_models.sh` | Model deployment automation |
 | `pmoves/docs/AGENTS/AGNOTE-dgx-spark.md` | DGX Spark agent note |
