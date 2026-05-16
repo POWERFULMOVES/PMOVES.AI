@@ -36,6 +36,8 @@ A2UI_WS_URL = os.getenv("A2UI_WS_URL", "ws://localhost:9223")
 A2UI_RENDER_SUBJECT = os.getenv("A2UI_RENDER_SUBJECT", "a2ui.render.v1")
 A2UI_REQUEST_SUBJECT = os.getenv("A2UI_REQUEST_SUBJECT", "a2ui.request.v1")
 GEOMETRY_WILDCARD = os.getenv("GEOMETRY_WILDCARD", "geometry.>")
+GEOMETRY_CGP_SUBJECT = os.getenv("GEOMETRY_CGP_SUBJECT", "geometry.cgp.v1")
+GEOMETRY_WS_ROOM = os.getenv("GEOMETRY_WS_ROOM", "geometry")
 PORT = int(os.getenv("PORT", "9224"))
 
 # Logging
@@ -49,6 +51,7 @@ logger = logging.getLogger("a2ui-nats-bridge")
 a2ui_events_published = Counter("a2ui_events_published_total", "A2UI events published to NATS", ["event_type"])
 a2ui_events_received = Counter("a2ui_events_received_total", "Events received from A2UI agents")
 a2ui_events_forwarded = Counter("a2ui_events_forwarded_total", "A2UI events forwarded to WebSocket clients")
+geometry_events_forwarded = Counter("a2ui_geometry_events_forwarded_total", "Geometry CGP events forwarded to WebSocket clients")
 active_websockets = Gauge("a2ui_active_websockets", "Active WebSocket connections")
 nats_connected = Gauge("a2ui_nats_connected", "NATS connection status")
 
@@ -478,12 +481,36 @@ async def client_websocket(websocket: WebSocket):
         except Exception as e:
             logger.warning(f"Failed to forward A2UI message: {e}")
 
+    async def geometry_handler(msg):
+        """Forward NATS geometry.cgp.v1 messages to WebSocket client.
+
+        Wraps the payload in a room envelope so the frontend can route it
+        to the geometry/cymatic visualization room.
+        """
+        try:
+            payload = json.loads(msg.data.decode())
+            envelope = {
+                "room": GEOMETRY_WS_ROOM,
+                "subject": msg.subject,
+                "data": payload,
+            }
+            await websocket.send_text(json.dumps(envelope) + "\n")
+            geometry_events_forwarded.inc()
+        except Exception as e:
+            logger.warning(f"Failed to forward geometry message: {e}")
+
     sub = None
+    geom_sub = None
     try:
         if nc:
             # Subscribe to all A2UI events
             sub = await nc.subscribe("a2ui.>", cb=a2ui_handler)
             logger.info(f"Forwarding A2UI events to {client_id}")
+
+            # Subscribe to geometry CGP events (relayed to frontend
+            # geometry/cymatic visualization room).
+            geom_sub = await nc.subscribe(GEOMETRY_CGP_SUBJECT, cb=geometry_handler)
+            logger.info(f"Forwarding {GEOMETRY_CGP_SUBJECT} -> room '{GEOMETRY_WS_ROOM}' to {client_id}")
 
             # Keep connection alive
             while True:
@@ -497,6 +524,8 @@ async def client_websocket(websocket: WebSocket):
         active_websockets.set(len(active_ws_connections))
         if sub:
             await sub.unsubscribe()
+        if geom_sub:
+            await geom_sub.unsubscribe()
 
 
 def main() -> None:
