@@ -34,7 +34,7 @@ Verify with:
 ```bash
 docker ps --filter name=cipher --format '{{.Names}}\t{{.Ports}}'
 # Expect: pmoves-cipher-api-1   0.0.0.0:8105->3000/tcp (or 127.0.0.1:8105->3000/tcp with the override)
-curl -fsS http://localhost:8105/healthz   # Expect HTTP 200 / healthy JSON
+curl -fsS http://localhost:8105/health   # Expect HTTP 200 / healthy JSON
 ```
 
 ### Option B — Docker Desktop settings adjustment
@@ -58,7 +58,7 @@ If options A and B fail, reach the service from inside the `pmoves_bus` Docker n
 docker ps --filter name=<service> --format '{{.Names}}\t{{.Ports}}'
 
 # 2. Host reaches the service:
-curl -fsS http://localhost:<host-port>/healthz
+curl -fsS http://localhost:<host-port>/health
 
 # 3. The compose default is unchanged in main:
 grep -nE 'CIPHER_BIND' pmoves/docker-compose.yml
