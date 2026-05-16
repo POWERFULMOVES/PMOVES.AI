@@ -372,6 +372,7 @@ jobs:
           QDRANT__API_KEY: ci-validation-placeholder
           NEO4J_PASSWORD: ci-validation-placeholder
           MEILI_MASTER_KEY: ci-validation-placeholder
+          WGER_DB_PASSWORD: ci-validation-placeholder
         run: |
           echo "Validating docker-compose files..."
 
