@@ -82,6 +82,7 @@ from pmoves.services.common.geometry_models import (
     cgp_dict_to_model,
 )
 from pmoves.tools.chit_common import canon as _canon
+from pmoves.tools.chit_security import _pack_floats as _cs_pack_floats, _unpack_floats as _cs_unpack_floats
 
 logger = logging.getLogger(__name__)
 
@@ -161,6 +162,10 @@ class CHITConfig:
 # Security Utilities
 # =============================================================================
 
+# NOTE: This sign_cgp differs from pmoves.tools.chit_security.sign_cgp:
+#   - Uses blake2b for kid derivation instead of env CHIT_SIGNING_KEY_ID
+#   - Adds 'ts' (timestamp) field to sig metadata
+# TODO: Migrate callers to chit_security.sign_cgp in a future phase.
 def sign_cgp(
     cgp: Dict[str, Any],
     passphrase: Optional[str] = None,
@@ -220,6 +225,10 @@ def sign_cgp(
     return doc
 
 
+# NOTE: This verify_cgp differs from pmoves.tools.chit_security.verify_cgp:
+#   - Returns not CHITConfig.require_signature() when sig is missing (fail-open)
+#   - chit_security.verify_cgp returns False when sig is missing
+# TODO: Migrate callers to chit_security.verify_cgp in a future phase.
 def verify_cgp(
     cgp: Dict[str, Any],
     passphrase: Optional[str] = None,
@@ -267,55 +276,23 @@ def verify_cgp(
 
 
 def _pack_floats(arr: List[float]) -> bytes:
-    """Pack float array to bytes.
-
-    Packs length + float32 values for transmission/storage.
-
-    Args:
-        arr: List of floats to pack
-
-    Returns:
-        Packed bytes (big-endian length + float32 data)
-
-    Raises:
-        RuntimeError: If numpy not available
-        ValueError: If array is too large
-    """
-    if not HAS_NUMPY:
-        raise RuntimeError("numpy required for float packing")
+    """Pack float array to bytes with safety limits."""
     if len(arr) > _MAX_FLOATS_UNPACK:
         raise ValueError(f"Float array too large: {len(arr)} > {_MAX_FLOATS_UNPACK}")
-    a = (np.asarray(arr, dtype="float32")).tobytes()
-    return struct.pack(">I", len(arr)) + a
+    return _cs_pack_floats(arr)
 
 
 def _unpack_floats(buf: bytes) -> List[float]:
-    """Unpack bytes to float array.
-
-    Args:
-        buf: Packed bytes from _pack_floats
-
-    Returns:
-        List of floats
-
-    Raises:
-        RuntimeError: If numpy not available
-        ValueError: If data is malformed or too large
-    """
-    if not HAS_NUMPY:
-        raise RuntimeError("numpy required for float unpacking")
+    """Unpack bytes to float array with safety limits."""
     if len(buf) < 4:
         raise ValueError("Buffer too small to contain float count")
-
     n = struct.unpack(">I", buf[:4])[0]
     if n > _MAX_FLOATS_UNPACK:
         raise ValueError(f"Float count too large: {n} > {_MAX_FLOATS_UNPACK}")
-    expected_size = 4 + n * 4  # 4 bytes for count + 4 bytes per float
+    expected_size = 4 + n * 4
     if len(buf) < expected_size:
         raise ValueError(f"Buffer too small: expected {expected_size} bytes, got {len(buf)}")
-
-    a = np.frombuffer(buf[4:4 + n * 4], dtype="float32", count=n)
-    return a.astype(float).tolist()
+    return _cs_unpack_floats(buf)
 
 
 def encrypt_anchor(
