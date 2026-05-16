@@ -10,7 +10,7 @@ From handoff report `reports/handoff_4090_claude_2026-05-14.md`. Actionable item
 
 **Fix Location:** Agent Zero provider config
 - Check: `pmoves/services/agent-zero/` settings or `.a0proj/` for `zai_coding` provider
-- In TensorZero function config: `pmoves/tensorzero/tensorzero.toml` — add `temperature = 0.1` to Z.AI variant
+- In TensorZero function config: `pmoves/tensorzero/config/tensorzero.toml` — add `temperature = 0.1` to Z.AI variant
 - In Agent Zero chat params: override via system prompt or provider config
 
 **Blocked by:** Submodule init (all 50+ submodules empty in Docker container). Run on host:
@@ -40,7 +40,7 @@ git submodule update --init --recursive
 - `workstation_5090` → likely `desktop-9950xd` (closest high-end desktop profile)
 - The 5090 node should use `desktop-9950xd` or a new `desktop-5090` profile should be created
 
-**Fix:** Update `pmoves/scripts/apply_profile.sh` and `Makefile` to use `desktop-9950xd` as default, or create a `desktop-5090` profile.
+**Fix:** Update `pmoves/tools/models/apply_profile.sh` and `Makefile` to use `desktop-9950xd` as default, or create a `desktop-5090` profile.
 
 ---
 
@@ -77,7 +77,7 @@ find Pmoves-cipher -type f | head -5   # Should show TypeScript
 ## 5. GLM-5V-Turbo Missing from SDK (MEDIUM)
 
 `pmoves/providers/zai/sdk.py` MODELS dict missing `GLM-5V-Turbo` entry.
-Blocked by submodule init — file is inside ClawZ submodule.
+File is in the main tree and can be edited directly (no submodule init needed).
 
 ---
 
