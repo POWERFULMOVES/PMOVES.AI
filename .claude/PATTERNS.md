@@ -512,7 +512,8 @@ Distinct from the FlOO$ service-level pipelines above. These are `.claude/skills
 | **NATS-introducer** | `pmoves-nats-subject-audit` → `pmoves-chit-sign` → (opt) `pmoves-mesh-preflight` | Adding new NATS publisher/subscriber under `tokenism.*`, `chit.*`, `geometry.*`, `flooz.*`, `minimax.*` |
 | **Submodule-promotion** | `pmoves-submodule-fleet` → `pmoves-living-docs-refresh` → `pmoves-chit-sign` | Before opening a submodule pointer-promotion PR |
 | **Pre-claim** | `pmoves-mesh-preflight` → AGNOTE CLAIM | Every AGNOTE register CLAIM that touches a service |
-| **Marco/Polo** | `pmoves-cipher-memory store` → … sessions, days, agents … → `pmoves-cipher-memory search` | Cross-agent durable knowledge (currently blocked on Cipher host port binding) |
+| **Marco/Polo (per-agent)** | `pmoves-cipher-memory store` → … this agent's own future sessions … → `pmoves-cipher-memory search` | **Per-agent** durable memory. Cipher is a broker — each agent gets its own cipher session; storage is scoped to that agent. Pending host port binding fix on this Windows Docker Desktop host. |
+| **Cross-agent CHIT trail** | `pmoves-chit-sign` → AGNOTE4482PHI.t1.md row + NATS `chit.signed.v1` | Knowledge other agents need to see (claims, releases, audit). NOT Cipher (per-agent). Cross-agent flow is signed NATS + register. |
 
 ### Node-affinity team aggregations
 
