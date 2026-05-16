@@ -1,80 +1,83 @@
 {
   "$schema": "https://kilo.ai/schemas/project.json",
-  "name": "PMOVES.AI",
-  "description": "Production-ready multi-agent orchestration platform — POWERFULMOVES x DARKXSIDE",
-  "version": "5.14",
-  "node": "5090",
-  "agents": {
-    "primary": "kilocode-glm",
-    "model": "glm-5.1",
-    "modelProvider": "zai",
-    "modelFallback": "glm-4.7",
-    "codingApiEndpoint": "https://api.z.ai/api/coding/paas/v4",
-    "cocreator": "darkxside",
-    "collective": "powerfulmoves",
-    "siblingAgents": ["claude-code", "codex"],
-    "claudeCodeMapping": {
-      "sonnet": "glm-5.1",
-      "opus": "glm-5.1",
-      "haiku": "glm-4.5-air"
+  "default_agent": "kilocode-glm",
+  "model": "zai/glm-5-turbo",
+  "small_model": "zai/glm-4-air",
+  "instructions": [
+    ".claude/CLAUDE.md",
+    "AGENTS.md",
+    ".kilocode/rules/kilorules.md",
+    ".kilocodemodes",
+    ".kilo/agent/**/*.md"
+  ],
+  "provider": {
+    "zai": {
+      "options": {
+        "baseURL": "https://api.z.ai/api/coding/paas/v4",
+        "timeout": 300000,
+        "apiKey": "${Z_AI_API_KEY}"
+      },
+      "models": {
+        "glm-5-turbo": { "name": "GLM-5 Turbo" },
+        "glm-5.1": { "name": "GLM-5.1" },
+        "glm-4.7": { "name": "GLM-4.7" },
+        "glm-4.6": { "name": "GLM-4.6" },
+        "glm-4.6v": { "name": "GLM-4.6V (Vision)" },
+        "glm-4-air": { "name": "GLM-4 Air (Fast)" }
+      },
+      "whitelist": ["glm-*"]
+    },
+    "minimax": {
+      "options": {
+        "baseURL": "https://api.minimax.chat/v1",
+        "timeout": 300000,
+        "apiKey": "${MINIMAX_API_KEY}"
+      },
+      "models": {
+        "minimax-m2.7": { "name": "MiniMax-M2.7 (1M Context)" },
+        "minimax-m2.1": { "name": "MiniMax-M2.1 (100K Context)" }
+      },
+      "whitelist": ["minimax-*"]
     }
   },
-  "commands": {
-    "directory": ".kilo/command",
-    "parallel": ["claude-code", "codex"]
-  },
-  "context": {
-    "claudeMd": ".claude/CLAUDE.md",
-    "agentsMd": "AGENTS.md",
-    "kiloRules": ".kilocode/rules/kilorules.md",
-    "modes": ".kilocodemodes",
-    "agentDefinitions": ".kilo/agent"
-  },
-  "mcpServers": {
+  "mcp": {
     "zai-vision": {
-      "type": "stdio",
-      "command": "npx",
-      "args": ["-y", "@z_ai/mcp-server"],
-      "env": {
+      "type": "local",
+      "command": ["npx", "-y", "@z_ai/mcp-server"],
+      "environment": {
         "Z_AI_API_KEY": "${Z_AI_API_KEY}",
         "Z_AI_MODE": "ZAI"
-      },
-      "description": "GLM-4.6V vision analysis, OCR, UI-to-code"
+      }
     },
     "zai-web-search": {
-      "type": "streamable-http",
+      "type": "remote",
       "url": "https://api.z.ai/api/mcp/web_search_prime/mcp",
-      "headers": {"Authorization": "Bearer ${Z_AI_API_KEY}"},
-      "description": "LLM-optimized web search"
+      "headers": { "Authorization": "Bearer ${Z_AI_API_KEY}" }
     },
     "zai-web-reader": {
-      "type": "streamable-http",
+      "type": "remote",
       "url": "https://api.z.ai/api/mcp/web_reader/mcp",
-      "headers": {"Authorization": "Bearer ${Z_AI_API_KEY}"},
-      "description": "Full webpage content extraction"
+      "headers": { "Authorization": "Bearer ${Z_AI_API_KEY}" }
     },
     "zai-zread": {
-      "type": "streamable-http",
+      "type": "remote",
       "url": "https://api.z.ai/api/mcp/zread/mcp",
-      "headers": {"Authorization": "Bearer ${Z_AI_API_KEY}"},
-      "description": "GitHub repo search and file reading"
+      "headers": { "Authorization": "Bearer ${Z_AI_API_KEY}" }
     }
   },
-  "references": {
-    "agentRegistry": "pmoves/config/agent_registry.yaml",
-    "agentSignatures": "pmoves/config/agent_signatures.yaml",
-    "agnote4482": "pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md",
-    "roadmap": "pmoves/docs/PMOVES.AI PLANS/ROADMAP.md",
-    "nextSteps": "pmoves/docs/NEXT_STEPS.md",
-    "darkxsideSignature": "pmoves/docs/AGENTS/DARKXSIDE_SIGNATURE.md",
-    "krissKross": "pmoves/docs/AGENTS/KRISS_KROSS_ACK.md",
-    "glmDocs": "https://docs.z.ai/devpack/using5.1",
-    "glmApi": "https://docs.z.ai/api-reference/llm/chat-completion",
-    "glmKiloCode": "https://docs.z.ai/scenario-example/develop-tools/kilo",
-    "glmOpenClaw": "https://docs.z.ai/devpack/tool/openclaw",
-    "minimaxIntegration": "pmoves/docs/MINIMAX_INTEGRATION.md",
-    "minimaxKeySetup": "pmoves/docs/MINIMAX_API_KEY_SETUP.md",
-    "minimaxCascade": "pmoves/tools/models/minimax_provider_cascade.yaml",
-    "minimaxSkills": ".kilocode/skills/minimax-*/SKILL.md"
+  "skills": {
+    "paths": [".kilocode/skills"],
+    "urls": []
+  },
+  "permission": {
+    "bash": "allow",
+    "edit": {
+      "**": "allow"
+    },
+    "read": "allow",
+    "zai-vision_*": "allow",
+    "zai-web-search_*": "allow",
+    "zai-web-reader_*": "allow",
+    "zai-zread_*": "allow"
   }
 }
