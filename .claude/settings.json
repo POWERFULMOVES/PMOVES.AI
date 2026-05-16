@@ -31,7 +31,13 @@
       "Bash(netsh interface portproxy show:*)",
       "Bash(make -C pmoves laptop-harden:*)",
       "Bash(make -C pmoves laptop-harden-verify:*)",
-      "Bash(make -C pmoves laptop-harden-remove:*)"
+      "Bash(make -C pmoves laptop-harden-remove:*)",
+      "Bash(docker update --restart no gha-runner-*:*)",
+      "Bash(docker stop gha-runner-*:*)",
+      "Bash(docker start gha-runner-*:*)",
+      "Bash(docker exec gha-runner-*:*)",
+      "Bash(docker logs gha-runner-*:*)",
+      "Bash(docker inspect gha-runner-*:*)"
     ],
     "deny": [
       "Bash(docker compose up -d:*)",
