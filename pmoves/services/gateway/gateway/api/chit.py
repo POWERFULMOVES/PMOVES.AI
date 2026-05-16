@@ -10,7 +10,7 @@ from cryptography.hazmat.primitives import hashes as _hashes  # type: ignore
 
 from pmoves.chit import CGP_SPEC_VERSION
 from services.common.env import get_secret
-from pmoves.tools.chit_security import _unpack_floats
+from pmoves.tools.chit_security import _unpack_floats, verify_cgp as _verify_cgp, decrypt_anchors as _decrypt_anchors
 from pmoves.tools.chit_common import canon
 
 router = APIRouter(tags=["CHIT"])
@@ -59,17 +59,23 @@ def compute_shape_id(cgp: Dict[str, Any]) -> str:
     return hashlib.sha256(canon(doc)).hexdigest()[:16]
 
 def verify_hmac(cgp: Dict[str, Any]) -> bool:
-    sig = cgp.get("sig")
-    if not sig: return not CHIT_REQUIRE_SIGNATURE
-    mac_b64 = sig.get("hmac","")
-    doc = dict(cgp); doc.pop("sig", None)
-    mac2 = hmac.new(_require_chit_passphrase().encode("utf-8"), canon(doc), hashlib.sha256).digest()
-    try:
-        mac1 = base64.b64decode(mac_b64)
-    except Exception:
-        return False
-    return hmac.compare_digest(mac1, mac2)
+    """Verify CGP HMAC signature — delegates to canonical chit_security.verify_cgp.
+
+    Preserved for backward compatibility; internal logic now uses the canonical
+    implementation from pmoves.tools.chit_security.
+    """
+    if not cgp.get("sig"):
+        return not CHIT_REQUIRE_SIGNATURE
+    passphrase = _require_chit_passphrase()
+    return _verify_cgp(cgp, passphrase=passphrase)
 def decrypt_anchor(const: Dict[str, Any]) -> None:
+    """Decrypt an encrypted anchor in-place — delegates to canonical chit_security.
+
+    Uses _unpack_floats from canonical chit_security for float deserialization.
+    The full batch decrypt_anchors from chit_security operates on CGP dicts
+    with super_nodes; this function handles single-constellation inline decryption
+    preserving the gateway's in-place mutation pattern.
+    """
     if "anchor" in const: return
     enc = const.get("anchor_enc")
     if not enc:
