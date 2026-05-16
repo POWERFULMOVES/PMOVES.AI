@@ -2,15 +2,29 @@
 
 > Remote desktop access for the PMOVES fleet via self-hosted RustDesk server.
 >
-> Last updated: 2026-03-28
+> Last updated: 2026-05-16
 
 Canonical operator runbook: `pmoves/docs/operations/FLEET_REMOTE_ACCESS_RUNBOOK.md`
 
 ---
 
+## Activation Status
+
+| State | Date | Notes |
+|-------|------|-------|
+| **Active** | 2026-05-16 | hbbs/hbbr re-activated on KVM2 (fleet shifted back from Tailscale-direct) |
+| Paused | 2026-04-04 | Tailscale-direct experiment — relay bypassed |
+| Initial deploy | 2026-03-28 | First systemd setup |
+
+**Retrieve public IP:** `ssh root@pmoves-kvm2 "curl -sf ifconfig.me"` (needed for hbbs `-r` flag and client config)
+
+**Retrieve relay key:** `ssh root@pmoves-kvm2 "cat /root/id_ed25519.pub"` (distribute to fleet clients via secure channel)
+
+---
+
 ## Server Architecture
 
-**Host:** KVM2 (<KVM2_IP>) — Hostinger VPS, 4C/8GB, Ubuntu
+**Host:** KVM2 (Tailscale: `pmoves-kvm2`) — Hostinger VPS, 4C/8GB, Ubuntu
 **Transport:** Bare-metal systemd services (not Docker)
 
 | Service | Unit | Port(s) | Purpose |
@@ -25,10 +39,19 @@ Canonical operator runbook: `pmoves/docs/operations/FLEET_REMOTE_ACCESS_RUNBOOK.
 The hbbs service MUST include the `-r` relay flag pointing to the server's own public IP:
 
 ```
-ExecStart=/opt/rustdesk-server/hbbs -r <KVM2_IP>
+ExecStart=/opt/rustdesk-server/hbbs -r <KVM2_PUBLIC_IP>
 ```
 
+`<KVM2_PUBLIC_IP>` = `ssh root@pmoves-kvm2 "curl -sf ifconfig.me"` — this must be the VPS public IP, not the Tailscale hostname, because RustDesk clients (Android, iOS, external) connect via the public internet.
+
 Without `-r`, clients behind NAT will fail to relay through the server.
+
+**Quick fix (from dev host with Tailscale):**
+
+```bash
+HOSTINGER_KVM2_IP=$(ssh root@pmoves-kvm2 "curl -sf ifconfig.me") \
+  bash pmoves/scripts/claws/fix-kvm2-rustdesk-relay.sh
+```
 
 ### Firewall (UFW)
 
@@ -61,12 +84,14 @@ All other ports are denied by default.
 
 ## Client Configuration
 
-### Windows / macOS / Linux Desktop
+### Windows / macOS / Linux Desktop (Tailscale-enrolled fleet nodes)
 
 1. Open RustDesk → Settings → Network
-2. Set **ID Server:** `<KVM2_IP>`
-3. Set **Key:** `<RUSTDESK_KEY>`
+2. Set **ID Server:** `pmoves-kvm2` (Tailscale hostname resolves on enrolled nodes)
+3. Set **Key:** `<RUSTDESK_KEY>` — retrieve via `ssh root@pmoves-kvm2 "cat /root/id_ed25519.pub"`
 4. Leave Relay Server blank (server auto-relays via `-r` flag)
+
+**Non-Tailscale clients (external):** use the KVM2 public IP (`ssh root@pmoves-kvm2 "curl -sf ifconfig.me"`) as ID Server.
 
 ### Jetson (Linux, systemd service)
 
@@ -95,11 +120,14 @@ This script:
 
 To regenerate the QR locally:
 ```bash
+KVM2_IP=$(ssh root@pmoves-kvm2 "curl -sf ifconfig.me")
+KVM2_KEY=$(ssh root@pmoves-kvm2 "cat /root/id_ed25519.pub")
 python -c "
-import qrcode, json
-config = json.dumps({'host':'<KVM2_IP>','key':'<RUSTDESK_KEY>','api':'','relay':'<KVM2_IP>'}, separators=(',',':'))
+import qrcode, json, os
+ip = os.environ['KVM2_IP']; key = os.environ['KVM2_KEY']
+config = json.dumps({'host':ip,'key':key,'api':'','relay':ip}, separators=(',',':'))
 qrcode.make(config).save('pmoves/docs/operations/rustdesk-kvm2-qr.png')
-"
+" KVM2_IP=$KVM2_IP KVM2_KEY=$KVM2_KEY
 ```
 
 **Manual fallback** (if QR not available):
@@ -118,7 +146,9 @@ qrcode.make(config).save('pmoves/docs/operations/rustdesk-kvm2-qr.png')
 | `fleet-audit-watcher.sh` | `pmoves/scripts/fleet/` | KVM2 journal watcher → NATS event publisher |
 | `fleet-audit-watcher.service` | `pmoves/scripts/fleet/` | systemd unit file for the watcher |
 
-Claws scripts SSH via key at `$LOCALAPPDATA/Temp/hostinger_vps`.
+Claws scripts SSH via key at `$PMOVES_SECRETS_DIR/hostinger_vps` (fallback: `$LOCALAPPDATA/Temp/hostinger_vps`).
+
+SSH hostname for all KVM2 operations: `root@pmoves-kvm2` (Tailscale — no raw IPs).
 
 ---
 
@@ -127,8 +157,12 @@ Claws scripts SSH via key at `$LOCALAPPDATA/Temp/hostinger_vps`.
 ### Generating Enrollment Tokens
 
 ```bash
+# Get KVM2 public IP first (use pmoves-kvm2 Tailscale hostname for SSH)
+KVM2_IP=$(ssh root@pmoves-kvm2 "curl -sf ifconfig.me")
+KVM2_KEY=$(ssh root@pmoves-kvm2 "cat /root/id_ed25519.pub")
+
 # Owner device (full access, 5-minute window)
-RUSTDESK_RELAY_HOST=<KVM2_IP> RUSTDESK_PUBLIC_KEY=<KEY> CHIT_PASSPHRASE=<secret> \
+RUSTDESK_RELAY_HOST=$KVM2_IP RUSTDESK_PUBLIC_KEY=$KVM2_KEY CHIT_PASSPHRASE=<secret> \
   python pmoves/scripts/fleet/generate-enrollment.py generate --role owner --ttl 5m --device "Pixel 10"
 
 # Partner (limited access, 24-hour window)
@@ -178,13 +212,15 @@ CHIT_PASSPHRASE=<secret> python pmoves/scripts/fleet/generate-enrollment.py veri
 
 ### Installing the Audit Watcher on KVM2
 
+All SSH commands use the Tailscale hostname `pmoves-kvm2` — Tailscale must be enrolled on the dev host.
+
 ```bash
-ssh root@<KVM2_IP> "curl -fsSL -o /tmp/nats-amd64.deb \
+ssh root@pmoves-kvm2 "curl -fsSL -o /tmp/nats-amd64.deb \
   https://github.com/nats-io/natscli/releases/download/v0.3.2/nats-0.3.2-amd64.deb && \
   dpkg -i /tmp/nats-amd64.deb"
-scp pmoves/scripts/fleet/fleet-audit-watcher.sh root@<KVM2_IP>:/opt/pmoves/
-scp pmoves/scripts/fleet/fleet-audit-watcher.service root@<KVM2_IP>:/etc/systemd/system/
-ssh root@<KVM2_IP> "mkdir -p /opt/pmoves /var/log/pmoves && \
+scp pmoves/scripts/fleet/fleet-audit-watcher.sh root@pmoves-kvm2:/opt/pmoves/
+scp pmoves/scripts/fleet/fleet-audit-watcher.service root@pmoves-kvm2:/etc/systemd/system/
+ssh root@pmoves-kvm2 "mkdir -p /opt/pmoves /var/log/pmoves && \
   chmod +x /opt/pmoves/fleet-audit-watcher.sh && \
   systemctl daemon-reload && systemctl enable --now fleet-audit-watcher"
 ```
@@ -203,9 +239,9 @@ Operational notes:
 
 ### Connection drops / intermittent
 
-1. Verify relay flag is set: `ssh root@<KVM2_IP> "grep ExecStart /etc/systemd/system/hbbs.service"`
-   - Must show `-r <KVM2_IP>`
-2. Check server logs: `ssh root@<KVM2_IP> "journalctl -u hbbs -n 20 --no-pager"`
+1. Verify relay flag is set: `ssh root@pmoves-kvm2 "grep ExecStart /etc/systemd/system/hbbs.service"`
+   - Must show `-r <PUBLIC_IP>` (the VPS public IP, not `pmoves-kvm2`)
+2. Check server logs: `ssh root@pmoves-kvm2 "journalctl -u hbbs -n 20 --no-pager"`
 3. On Jetson: verify root config has correct server: `sudo cat /root/.config/rustdesk/RustDesk2.toml`
 
 ### Client not registering
