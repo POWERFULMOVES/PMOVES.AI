@@ -3294,7 +3294,7 @@ services:
     - TORCH_CUDNN_V8_API_ENABLED=1
     - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
     ports: ["${TTS_BIND:-127.0.0.1}:7861:7861"]
-    profiles: ["gpu", "tts"]
+    profiles: ["gpu", "tts", "voice"]
     networks: [pmoves_app, pmoves_monitoring, pmoves_external]  # HuggingFace TTS model downloads
     deploy:
       resources:
