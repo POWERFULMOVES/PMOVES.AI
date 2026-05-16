@@ -234,6 +234,27 @@ Example: `ingest.transcript.ready.v1`
   ```
 - **Subscribers:** CLAW routing dashboards, mesh observers, Discord publisher
 
+## CLAW Agent Delegation Subjects
+
+**`claw.task.assign.v1`**
+- **Direction:** Published by orchestrating agents → Consumed by target node agent runtime
+- **Purpose:** Cross-node agent-to-agent task delegation (cascades, handoffs, wave assignments)
+- **Payload:**
+  ```json
+  {
+    "from": "pmoves-4090",
+    "to": "pmoves-spark",
+    "task": "cascade-wave-B",
+    "files_released": ["pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md"],
+    "after_pr": [1504, 1506, 1507],
+    "note": "Wave A complete. SPARK may open feat/spark-tz-glm5-minimax-sync PRs."
+  }
+  ```
+- **Subscribers:** Target node agent runtime (SPARK, 5090, etc.)
+- **Known Road:** `make -C pmoves nats-pub SUBJECT=claw.task.assign.v1 PAYLOAD='...'`
+  (run on the node where NATS is local — KVM4-2 or Z890; port 4222 is localhost-only per network hardening)
+- **Note:** Not JetStream — fire and forget. Target agent must be subscribed at publish time.
+
 ## autoresearch Experiment Subjects
 
 **`research.autoresearch.result.v1`**
