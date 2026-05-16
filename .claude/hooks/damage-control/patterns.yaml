@@ -1015,6 +1015,13 @@ chitSafePaths:
   # A2A activation — add A0_SET_a2a_server_enabled + MCP_SERVER_TOKEN to agent-zero overlays
   # (fix/a2a-activation-and-gitlink-rewind: enable A2A server endpoint for agent-card discovery)
   - "pmoves/docker-compose.agents.yml"
+  # Z890 compose dedup — remove duplicate container-agent: block introduced by
+  # PR #1035 merge accident (commits e769a9df + 615fbf1c, 2026-03-19, byte-identical
+  # blocks at lines 43-76 and 78-111). YAML strict mode rejects duplicate keys, which
+  # has been silently blocking `make up-z890` for ~8 weeks — Container Agent + nats-leaf
+  # never deployed on Z890 since the duplicate landed. Z890 CLAUDE infra coordinator
+  # authorized 2026-05-16 after git-blame + diff validation (sed-slice diff exit 0).
+  - "pmoves/docker-compose.z890.yml"
 
 # ---------------------------------------------------------------------------
 # PMOVES.AI - GIT SUBMODULES
