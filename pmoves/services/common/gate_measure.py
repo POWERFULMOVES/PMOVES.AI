@@ -39,7 +39,6 @@ from jsonschema import Draft202012Validator, ValidationError
 logger = logging.getLogger(__name__)
 
 DEFAULT_DRIFT_THRESHOLD = 0.3
-DEFAULT_SAMPLE_RATE_HOT = 0.10
 DEFAULT_SAMPLE_RATE_COLD = 1.0
 DRIFT_DYNAMO_COLLECTION = "gate_drift_dynamo"
 GATE_SEMANTIC_MEMORY_COLLECTION = "gate_semantic_memory"
