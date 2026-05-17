@@ -49,6 +49,7 @@ EMBEDDING_MODEL = os.environ.get(
     "GATE_MEASURE_EMBEDDING_MODEL",
     "tensorzero::embedding_model_name::qwen3_embedding_4b_local",
 )
+# Caller responsible for NATS publish
 DRIFT_NATS_SUBJECT = "gate.drift.detected.v1"
 
 
@@ -242,8 +243,7 @@ def measure_junction(
         archon.command.issue.v1. Polarity arbiter rejects when missing.
     sample_rate
         Probability of running the (costly) semantic measure. ``None``
-        defaults to 100% in cold paths and 10% in hot paths — caller
-        decides via env or service config.
+        defaults to 100% (full measurement).
     drift_threshold
         semantic_score below this triggers ``drift_flag=True`` and
         gate.drift.detected.v1 emission.
@@ -252,6 +252,9 @@ def measure_junction(
     capture_drift
         If True (default), drift events are upserted to ``gate_drift_dynamo``
         even when sampling skipped the routine measurement.
+
+    Callers in hot paths should pass a shared ``httpx.Client`` to avoid
+    per-call connection overhead.
     """
 
     measurement_id = str(uuid.uuid4())
@@ -282,6 +285,10 @@ def measure_junction(
             )
             if neighbors:
                 semantic_score = max((n.get("score") or 0.0) for n in neighbors)
+            else:
+                # Cold-start guard: no baseline exists yet, assume conformant
+                # to prevent every valid payload from triggering drift_flag.
+                semantic_score = 1.0
             phrase_anchors = _resolve_phrase_anchors(neighbors, phrase_match_threshold)
 
     drift_flag = bool(syntactic_pass and sampled and vector is not None and semantic_score < drift_threshold)
@@ -316,7 +323,6 @@ def measurement_to_drift_event(measurement: JunctionMeasurement, payload: dict[s
 __all__ = [
     "DEFAULT_DRIFT_THRESHOLD",
     "DEFAULT_SAMPLE_RATE_COLD",
-    "DEFAULT_SAMPLE_RATE_HOT",
     "DRIFT_DYNAMO_COLLECTION",
     "DRIFT_NATS_SUBJECT",
     "GATE_SEMANTIC_MEMORY_COLLECTION",

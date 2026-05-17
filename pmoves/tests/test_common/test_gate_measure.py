@@ -162,3 +162,30 @@ def test_drift_event_payload_has_summary() -> None:
     assert event["junction_id"] == "test.junction"
     assert event["drift_flag"] is True
     assert "subject=test.subject.v1" in event["payload_summary"]
+
+
+def test_empty_neighbors_do_not_trigger_drift_cold_start_guard() -> None:
+    """Cold junction: no baseline in Qdrant yet → semantic_score must be 1.0, not 0.0.
+
+    Without the cold-start guard, semantic_score stays at 0.0 which is below
+    any realistic drift_threshold, causing every valid payload to false-positive.
+    """
+    payload = {"subject": "archon.command.issue.v1", "command": "first-ever-action"}
+    with (
+        patch.object(gate_measure, "_embed", return_value=[0.1] * 16),
+        patch.object(gate_measure, "_qdrant_search", return_value=[]),
+        patch.object(gate_measure, "_qdrant_upsert_drift") as upsert,
+    ):
+        result = gate_measure.measure_junction(
+            junction_id="archon.command.issue.v1",
+            layer="intent",
+            payload=payload,
+            schema=SIMPLE_SCHEMA,
+            sample_rate=1.0,
+            drift_threshold=0.3,
+        )
+    assert result.syntactic_pass is True
+    assert result.semantic_score == pytest.approx(1.0)
+    assert result.drift_flag is False
+    assert result.phrase_anchor == []
+    assert not upsert.called, "no drift event should be captured on cold start"
