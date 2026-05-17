@@ -102,12 +102,39 @@ Agent has no HTTP interface; Cipher Memory exposes `/health`, not `/healthz`).
 
 **MinIO** `:9000` API, `:9001` Console — S3-compatible. Buckets: `assets`, `outputs`.
 
+## Hostinger KVM Fleet
+
+Three KVMs make up the production VPS substrate (see `pmoves/docs/operations/TOPOLOGY.md` lines 20–22, 135–180, 240–243, 258 for the canonical source):
+
+| Host | Tailscale name | Role | Key services | Hub flag |
+|------|---------------|------|--------------|----------|
+| `pmoves-kvm4-1` | `pmoves-kvm4-1` | API gateway | TensorZero `:3030`, Agent Zero `:8080`, Hi-RAG v2 `:8086`, Archon `:8091`, Mesh Agent, Gateway Agent `:8100`, Extract Worker `:8083` | — |
+| `pmoves-kvm4-2` | `pmoves-kvm4-2` | Data hub | **NATS `:4222` (fleet hub, DNS `nats.pmoves.ai`)**, Supabase 13-svc stack, Qdrant `:6333`, Neo4j `:7687`, Meilisearch `:7700`, Prometheus `:9090`, Grafana `:3002`, Loki `:3100`, MinIO `:9000` | NATS-hub |
+| `pmoves-kvm2` | `pmoves-kvm2` | Reverse proxy + relay | nginx `:80/443` (SSL termination), RustDesk `hbbs/hbbr` (rendezvous + relay) | — |
+
+**NATS hub addressing**: `nats://nats:pmoves@pmoves-kvm4-2:4222` (Tailscale) or `nats://nats:pmoves@nats.pmoves.ai:4222` (public DNS). All nodes (5090, 4090, SPARK, B850, Z890) connect here for cross-node fan-out. Local-node NATS instances (e.g. `pmoves-nats-1` on 5090) are NOT leafnoded to the hub by default — for fleet signal dispatch use either an MCP that points at the hub URL or SSH to KVM4-2 then `docker exec ... nats pub`.
+
+**SSH addressing (fallback path)**: `${HOSTINGER_KVM4_N_USER:-root}@${HOSTINGER_KVM4_N_IP:-pmoves-kvm4-N}` per `deploy/scripts/deploy-vps.sh:38`. Key at `$PMOVES_SECRETS_DIR/hostinger_vps` (fallback `$LOCALAPPDATA/Temp/hostinger_vps`).
+
+## MCP Servers — declared in `.claude/mcp.json`
+
+| Server | Transport | Required env | Source path | Notes |
+|--------|-----------|--------------|-------------|-------|
+| `pmoves-cipher` | SSE `localhost:8105/mcp/sse` | none | cipher-api container | Per-host bind broken on Docker Desktop WSL2 (PR #1512 documents the operator-side `CIPHER_BIND` override fix) |
+| `pmoves-nats-fleet` | stdio | `NATS_URL` (declared inline) | `pmoves-nats-mcp/nats_mcp/server.py` | Publishes/subscribes to the fleet hub at KVM4-2. No env.shared dependency. |
+| `docker` | stdio (image `mcp/docker`) | none | Docker socket | Container inspect/exec on the local Docker daemon |
+| `hostinger-mcp` | stdio (npm pkg `hostinger-api-mcp@0.2.1`) | `HOSTINGER_API_KEY` | npm package | No-op until env populated. VPS list/status/reboot, DNS ops, IP mgmt |
+| `tailscale` | stdio (npm pkg `tailscale-mcp@2026.4.10-1`) | `TAILSCALE_API_KEY`, `TAILSCALE_TAILNET` | npm package | No-op until env populated. Tailnet inventory, ACL audit, stale-node sweep |
+
+**Secrets pipeline (canonical)** — never paste API keys in chat. Set in `pmoves/env.tier-api` (or per-tier file), run `make -C pmoves secrets-funnel`, restart the consuming container or Claude Code session. The env.shared multi-line value rule applies: keep secrets single-line escaped or behind `_PATH` references; multi-line bodies break dotenv parsing.
+
 ## Integration Rule — Leverage, Don't Duplicate
 
 - **DO** use Hi-RAG v2 for knowledge retrieval
-- **DO** publish to NATS for event coordination
+- **DO** publish to NATS for event coordination (via `pmoves-nats-fleet` MCP, `make -C pmoves nats-pub`, or AZ `/mcp/execute`)
 - **DO** store artifacts in MinIO via Presign
 - **DO** call Agent Zero MCP API for orchestration
 - **DON'T** build new RAG, search, or monitoring systems
 - **DON'T** create new event buses or message brokers
 - **DON'T** duplicate existing embeddings or indexing
+- **DON'T** paste API keys / secrets in chat — secrets flow through env.tier-* → `make secrets-funnel`
