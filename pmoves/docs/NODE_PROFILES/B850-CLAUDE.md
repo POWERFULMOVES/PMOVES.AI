@@ -22,7 +22,7 @@ Verified via `lspci -nn -d 1002:`, `/sys/class/dmi/id/*`, `lscpu`, `free -h` on 
 | Motherboard | **Gigabyte B850 AI TOP** | `/sys/class/dmi/id/board_name` |
 | BIOS | F4 / 2025-02-17 (AMI) | `/sys/class/dmi/id/bios_version` |
 | CPU | AMD Ryzen 7 9850X3D (8C / 16T) | `lscpu` |
-| RAM | 30 GiB | `free -h` |
+| RAM | 30 GiB usable (32 GB DIMM; ~2 GB hardware-reserved) | `free -h` — see TOPOLOGY.md L81 which says "32GB DDR5" (DIMM spec); both are correct at different precision |
 | GPU 1 | **AMD Radeon AI PRO R9700** (PCI `1002:7551`, rev c0, gfx1201, RDNA4) | `lspci -nn -d 1002:7551` @ `04:00.0` |
 | iGPU | AMD Rembrandt iGPU (PCI `1002:13c0` @ `12:00.0`) — NOT used for ROCm | same scan |
 | PCIe slot 2 (x16) | **Empty at kernel level** — 2nd R9700 operator-pending | `lspci -tv` |
@@ -50,10 +50,10 @@ The PATTERNS section names "Z890" for these teams — that's the legacy referenc
 
 - **Vanilla Ubuntu, no GPU drivers installed**: ROCm 7.1 + amdgpu-dkms still needed. `/dev/kfd` exists (kernel-side KFD) but full driver stack pending.
 - **Docker**: NOT installed. Any local containerized service (Agent Zero, Archon, channel-monitor) deferred until Docker bringup.
-- **uv**: ✅ Installed at `~/snap/code-insiders/2398/.local/bin/uv` (v0.11.14). Per the memory note `feedback_bringup_venv_uv.md`, bringup tooling lives in `pmoves/.venv-pmoves/` via uv.
+- **uv**: ✅ Installed at `~/snap/code-insiders/2398/.local/bin/uv` (v0.11.14). ⚠️ Snap-versioned path — will shift on VS Code snap update. Add `PATH=$HOME/snap/code-insiders/current/.local/bin:$PATH` to `.bashrc` for stability. Per the memory note `feedback_bringup_venv_uv.md`, bringup tooling lives in `pmoves/.venv-pmoves/` via uv.
 - **`pmoves/.venv-pmoves/`**: ✅ Populated. Contains `glances` 4.5.4, `psutil`, `PyYAML` (per Wave-0 venv-bringup target landed in PR #1496).
 - **System binaries gap**: `make` NOT installed (`check_prereqs.sh` flags this). Operator action via `sudo apt install build-essential`.
-- **`gh` CLI**: ✅ Installed at `~/snap/code-insiders/2398/.local/bin/gh` (v2.92.0) and authenticated.
+- **`gh` CLI**: ✅ Installed at `~/snap/code-insiders/2398/.local/bin/gh` (v2.92.0) and authenticated. Same snap-path caveat as `uv` above.
 
 ## Connected services from this node
 

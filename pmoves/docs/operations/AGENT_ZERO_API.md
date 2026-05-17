@@ -13,7 +13,7 @@
 | FastAPI title | `Agent Zero Supervisor` |
 | Version | `0.1.0` (FastAPI app); `v0.9.8.2` (AZ runtime) |
 | Runtime branch / commit | `main` / `fa65fa3ddc12b46efed05bd7884a5aa64209901e` (2026-02-24) |
-| NATS URL | `nats://nats:pmoves@nats:4222` |
+| NATS URL | `${NATS_URL}` (set via env; default `nats://localhost:4222`) |
 | JetStream stream | `AGENTZERO` |
 | Subjects | `agentzero.task.v1`, `agentzero.memory.update` |
 
@@ -87,6 +87,10 @@ Verified via `GET /mcp/commands` on 2026-05-16:
 ## CLI invocation patterns
 
 All examples use `pmoves-powerfulmoves` as the Tailscale hostname; substitute as needed.
+
+> **Auth caveat**: `/healthz` is open (no auth). All other endpoints (`/mcp/*`, `/tasks`, `/memory`, `/sessions`) **may** require `Authorization: Bearer $MCP_CLIENT_SECRET` depending on deployment config. The examples below omit this header for brevity — if you get 401/403, add `-H 'Authorization: Bearer $MCP_CLIENT_SECRET'` to the curl command.
+
+> **Health endpoint convention**: `/healthz` is the repo-wide standard (200+ references). Some services use `/health` or `/api/health` — see `agent_registry.yaml` or `NEXT_PUBLIC_*_HEALTH_PATH` env vars for per-service overrides. The AZ supervisor has fallback logic: `/healthz` → `/api/health` → `/`.
 
 ### Health probe
 ```bash
