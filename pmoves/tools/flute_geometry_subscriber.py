@@ -118,11 +118,13 @@ def decode_state_vector(sv: dict[str, float]) -> dict[str, Any]:
         tonal_clarity    = A
         swarm_fitness    = F
     """
-    delta = sv.get("delta", 0.0)
-    hz_norm = sv.get("Hz", 0.0)
-    kappa = sv.get("kappa", 0.0)
-    A = sv.get("A", 0.0)
-    F = sv.get("F", 0.0)
+    # Clamp all inputs to [0.0, 1.0] per CGP v0.2 spec (defensive)
+    _clamp = lambda v: max(0.0, min(1.0, v))
+    delta = _clamp(sv.get("delta", 0.0))
+    hz_norm = _clamp(sv.get("Hz", 0.0))
+    kappa = _clamp(sv.get("kappa", 0.0))
+    A = _clamp(sv.get("A", 0.0))
+    F = _clamp(sv.get("F", 0.0))
 
     bpm = delta * 120.0 + 60.0
     freq_hz = hz_norm * 523.0
@@ -155,7 +157,7 @@ def validate_cgp_packet(packet: dict[str, Any]) -> list[str]:
     if "super_nodes" not in packet and "control_plane" not in packet:
         issues.append("Missing both super_nodes and control_plane")
     cp = packet.get("control_plane", {})
-    if cp and "state_vector" not in cp:
+    if cp is not None and "state_vector" not in cp:
         # State vector may also be in super_nodes
         sn = packet.get("super_nodes", [])
         if not any("state_vector" in s for s in sn):
