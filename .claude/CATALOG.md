@@ -90,7 +90,7 @@ Agent has no HTTP interface; Cipher Memory exposes `/health`, not `/healthz`).
 
 ## Data Storage
 
-**NATS** `:4222`, `:9222` WS (standalone DoX), `:9223` WS (docked via compose) — JetStream event broker. **Always authenticated:** `nats://nats:pmoves@nats:4222`. Subject catalog: `.claude/context/nats-subjects.md`.
+**NATS** `:4222`, `:9222` WS (standalone DoX), `:9223` WS (docked via compose) — JetStream event broker. **Always authenticated:** `nats://${NATS_USER}:${NATS_PASS}@localhost:4222` (set via `${NATS_URL}` env var in `env.tier-*`). Subject catalog: `.claude/context/nats-subjects.md`.
 
 **Supabase** — 13-service self-hosted stack (profile `supabase-local`). Kong `:8000`, PostgREST `:3000`, Studio `:54323`. Canonical consumer URL: `http://supabase-kong:8000/rest/v1`. Standard vars: `JWT_SECRET`, `ANON_KEY`, `SERVICE_ROLE_KEY` (`SUPABASE_*` aliases for compat). Services: DB (Postgres 17.6.1), GoTrue, PostgREST v14.3, Kong 3.7.1, Realtime v2.72.0, Storage v1.37.1, Studio, imgproxy, pg-meta, Edge Functions, Analytics (Logflare), Vector, Supavisor.
 
@@ -112,7 +112,7 @@ Three KVMs make up the production VPS substrate (see `pmoves/docs/operations/TOP
 | `pmoves-kvm4-2` | `pmoves-kvm4-2` | Data hub | **NATS `:4222` (fleet hub, DNS `nats.pmoves.ai`)**, Supabase 13-svc stack, Qdrant `:6333`, Neo4j `:7687`, Meilisearch `:7700`, Prometheus `:9090`, Grafana `:3002`, Loki `:3100`, MinIO `:9000` | NATS-hub |
 | `pmoves-kvm2` | `pmoves-kvm2` | Reverse proxy + relay | nginx `:80/443` (SSL termination), RustDesk `hbbs/hbbr` (rendezvous + relay) | — |
 
-**NATS hub addressing**: `nats://nats:pmoves@pmoves-kvm4-2:4222` (Tailscale) or `nats://nats:pmoves@nats.pmoves.ai:4222` (public DNS). All nodes (5090, 4090, SPARK, B850, Z890) connect here for cross-node fan-out. Local-node NATS instances (e.g. `pmoves-nats-1` on 5090) are NOT leafnoded to the hub by default — for fleet signal dispatch use either an MCP that points at the hub URL or SSH to KVM4-2 then `docker exec ... nats pub`.
+**NATS hub addressing**: `nats://${NATS_USER}:${NATS_PASS}@pmoves-kvm4-2:4222` (Tailscale-internal, set via `${NATS_URL}`). All nodes (5090, 4090, SPARK, B850, Z890) connect here for cross-node fan-out. Local-node NATS instances (e.g. `pmoves-nats-1` on 5090) are NOT leafnoded to the hub by default — for fleet signal dispatch use either an MCP that points at the hub URL or SSH to KVM4-2 then `docker exec ... nats pub`.
 
 **SSH addressing (fallback path)**: `${HOSTINGER_KVM4_N_USER:-root}@${HOSTINGER_KVM4_N_IP:-pmoves-kvm4-N}` per `deploy/scripts/deploy-vps.sh:38`. Key at `$PMOVES_SECRETS_DIR/hostinger_vps` (fallback `$LOCALAPPDATA/Temp/hostinger_vps`).
 

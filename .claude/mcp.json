@@ -11,7 +11,7 @@
       "args": ["--directory", "./pmoves-cipher-mcp", "run", "python", "-m", "cipher_mcp.server"],
       "env": {
         "CIPHER_URL": "http://localhost:8105",
-        "NATS_URL": "nats://nats:pmoves@nats:4222"
+        "NATS_URL": "${NATS_URL}"
       }
     },
     "docker": {
@@ -56,7 +56,7 @@
         "nats_mcp.server"
       ],
       "env": {
-        "NATS_URL": "nats://nats:pmoves@pmoves-kvm4-2:4222"
+        "NATS_URL": "${NATS_URL}"
       }
     }
   }
