@@ -102,22 +102,22 @@ GET /internal/episodes/bounds → "EOF while parsing a value at line 1 column 0"
 
 ---
 
-### MLF-006 — `pmoves-ai-lab-runner` offline + missing per-node sub-label
+### MLF-006 — `pmoves-ai-lab-runner` offline + missing per-node sub-label  **[RESOLVED 2026-05-18]**
 
 **Severity:** P1
 **Category:** runner topology drift after hardware expansion
 **Discovered:** 2026-05-18 by z890-claude (`gh api repos/POWERFULMOVES/PMOVES.AI/actions/runners`)
 **Symptom:** `pmoves-ai-lab-runner` shows `status: offline`. Labels: `self-hosted, Linux, X64, ai-lab, gpu` — **no per-node sub-label** (e.g. `z890`). Workflow `sync-secrets-local.yml` resolves `[self-hosted, ai-lab]` → routes 100% to `pmoves-spark-ailab` (online). CHIT bundle never reaches Z890.
 **Root cause:** This runner predates the current fleet (SPARK, 5090, B850, 3 KVMs). Before that expansion, "the" ai-lab runner was singular and equivalent to Z890. Now with multiple capable nodes, ai-lab is a class of nodes, not one node — needs per-node sub-labels to route correctly.
-**Fix sequencing:**
-1. **Decision needed:** revive the existing runner on Z890 (Linux/WSL2) OR retire it and adopt Pattern B (artifact upload + per-node pull, see `SECRETS_DISTRIBUTION_PATTERNS.md`) for Z890's Windows-native future.
-2. If revive: bring runner online, add `z890` label via `POST /repos/{owner}/{repo}/actions/runners/{runner_id}/labels` or the runner config UI. The matrix workflow change in `feat/sync-secrets-matrix-multi-node` already expects this sub-label.
-3. If retire: delete the offline runner record + update `sync-secrets-local.yml` matrix default to drop `z890` until Pattern B lands.
-**Authorization signal (2026-05-18, DARKXSIDE):**
-> "yes to option A and review B as method for new nodes when new hardware added"
 
-→ Pattern A (matrix) committed in `feat/sync-secrets-matrix-multi-node`; Pattern B documented in `SECRETS_DISTRIBUTION_PATTERNS.md` as the new-node enrollment path. MLF-006 resolves when the operator picks revive-or-retire for the offline Z890 runner.
-**Fixable status:** Manual (operator decision on runner fate + label edit).
+**Resolution (2026-05-18, DARKXSIDE authorized "commit to pattern b"):** Retired the offline runner. Z890 is Windows-native going forward and uses the artifact-upload + per-node pull enrollment path (Pattern B) documented in `SECRETS_DISTRIBUTION_PATTERNS.md`.
+
+**Actions taken:**
+1. `sync-secrets-local.yml` matrix default changed from `'spark,z890'` → `'spark'` so the workflow no longer attempts to route to an offline runner. Future Linux ai-lab nodes opt in by passing their sub-label via `workflow_dispatch` inputs.
+2. Offline runner record `pmoves-ai-lab-runner` (id=26) deleted via `gh api -X DELETE repos/POWERFULMOVES/PMOVES.AI/actions/runners/26` on 2026-05-18.
+3. Pattern A (matrix) remains live (shipped in PR #1524 → `ba375f24`); Pattern B is the documented enrollment path for any new node.
+
+**Fixable status:** RESOLVED — workflow default matches live runner topology.
 
 ---
 
@@ -153,7 +153,7 @@ make -C pmoves up-tensorzero
 | MLF-003 | OPEN | — | — | — |
 | MLF-004 | OPEN | — | — | — |
 | MLF-005 | OPEN | — | — | — |
-| MLF-006 | OPEN | — | — | — |
+| MLF-006 | RESOLVED | TBD | z890-claude | 2026-05-18 |
 
 ---
 
