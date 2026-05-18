@@ -241,8 +241,16 @@ root:
             expect: "P7 app launches emit NATS events with app name, port, machine"
           context: "shell.run start → NATS publish; shell.run stop → NATS publish"
           agent_hint: z890-claude
-          status: future
-          notes: "Can piggyback on pinokio.js on event handlers"
+          status: in_progress
+          claimed_by: z890-claude
+          claimed_at: "2026-05-18"
+          notes: |
+            Claimed 2026-05-18 by z890-claude (DARKXSIDE authorized).
+            Implementation surface: pinokio.js `on` event handlers in PMOVES launchers
+            under pbnj/pinokio/api/ + D:\pinokio\api\, publishing to NATS subject
+            `pinokio.app.launched.v1` via the existing fleet NATS bus.
+            Unblocks p7.nats.cgp-correlation (already done) downstream consumers and
+            p7.nats.embedding-quality which depend_on this node.
 
         - id: p7.nats.cgp-correlation
           task: "P7-originated actions produce CGP-correlated events"
