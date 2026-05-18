@@ -54,6 +54,7 @@ PMOVES uses a Known Roads model: every dangerous-but-necessary operation has a c
 | Tailscale ACL drift audit | runbook + `pmoves/configs/tailscale-acl-policy.json` | `/fleet:acl-audit` |
 | RustDesk enrollment / QR | `make -C pmoves fleet-enroll ROLE=... DEVICE=...` | `/fleet:enroll` |
 | Submodule working-tree wipe | `git -C <sub> restore --source=HEAD --staged --worktree :/` | — |
+| `docker compose -f <overlay>.yml up` raw | `make -C pmoves overlay-up-<tier>` (see Compose Overlay Layering below) | — |
 | MinIO restart | `make -C pmoves up-minio` | `/minio:status` |
 | Supabase stack restart (13 services) | `make -C pmoves supa-restart` | — |
 | Supabase crash-loop diagnosis | `pmoves/docs/operations/SUPABASE_OPERATIONS.md` | — |
@@ -102,6 +103,24 @@ Set it in the shell that launches Claude Code, or in `.claude/settings.json` `en
 **Extending to a new domain:** add a predicate to `DOMAIN_PATTERNS` in `known_roads.py`. Parse / provability / trail logic is shared — only the per-domain file matcher changes. Codex mirrors `known_roads.py` for cross-agent parity.
 
 **Modifying the hook scripts themselves** (rare, meta) needs an explicit `Edit(.claude/hooks/damage-control/**)` + `Write(.claude/hooks/damage-control/**)` rule in `.claude/settings.local.json` — agents cannot self-grant this. *Using* an existing Known Road needs no permission rule, only the env var.
+
+## Compose Overlay Layering (avoid the single-file trap)
+
+PR #1233 split the compose stack into a base + 6 overlay files (`base.yml` + `core.yml` / `agents.yml` / `media.yml` / `ui.yml` / `workers.yml` / `apps.yml`). **Every overlay references shared networks (`pmoves_data`, `pmoves_api`, `pmoves_app`, `pmoves_bus`, `pmoves_external`, `pmoves_monitoring`) defined canonically in `docker-compose.base.yml:552-616`.**
+
+**The trap:** invoking `docker compose -f docker-compose.<overlay>.yml up -d` raw fails with `service "<svc>" refers to undefined network <name>` because the base layer wasn't included. This has cost the fleet hours of debugging.
+
+**As of 2026-05-18:** each overlay declares its referenced networks as `external: true` so the file parses standalone (clearer error: "network X declared as external, but could not be found"). The trap is reduced but not eliminated — networks must still EXIST at runtime.
+
+| What you want | Correct invocation |
+|---|---|
+| Full stack via overlays | `make -C pmoves overlay-up-full` |
+| Just core / agents / media / ui / workers / apps | `make -C pmoves overlay-up-<tier>` |
+| Monolithic (root `docker-compose.yml`) | `make -C pmoves up-data-tier` / `up-supabase` / `up-core` |
+| Validate a single overlay parses | `docker compose -f pmoves/docker-compose.<overlay>.yml config` ✅ (safe) |
+| Single-overlay `up`, `restart`, `--force-recreate` | **DO NOT** — use the matching `overlay-up-<tier>` target |
+
+**Detail + failure modes + cold-start recovery:** `pmoves/docs/operations/COMPOSE_LAYERING_RUNBOOK.md`.
 
 ## Damage-Control Hook Recovery
 
