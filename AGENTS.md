@@ -2,8 +2,9 @@
 
 ## Project Structure
 
-PMOVES.AI is a modular AI agent platform organized as a **submodule monorepo**.
+PMOVES.AI is a modular AI agent platform organized as a **submodule monorepo**, built on a rooms-on-a-stage topology. P7 (Pinokio 7) is the room-aware stage manager that selects rooms and manages stage transitions.
 
+- **`pmoves/config/rooms/`** — Room catalog (`catalog.json`) and per-room manifest files — the canonical room topology
 - **`pmoves/`** — Core platform: Makefile, docker-compose, configs, services, tools, tests, docs
 - **`PMOVES-*/`** — Git submodules (Agent-Zero, Archon, ClaWZ, Creator, HiRAG, YT, supabase, etc.)
 - **`pmoves/config/`** — Agent registry (`agent_registry.yaml`), model configs, TAC trees
@@ -32,6 +33,10 @@ PMOVES.AI is a modular AI agent platform organized as a **submodule monorepo**.
 | **Claude runbook** | `.claude/CLAUDE.md` — live service map and operator guide |
 | **Codex operator** | `pmoves/docs/AGENTS/CODEX_OPERATOR_HOME.md` — Codex-first runbook |
 | **Sidecar deploy** | `deploy/sidecar/README.md` — standalone deployment on any device |
+| **Rooms on a Stage** | `pmoves/docs/ROOMS_ON_A_STAGE.md` — end-to-end model: rooms, stages, suits, P7 role |
+| **Room Manifest Contract** | `pmoves/docs/ROOM_MANIFEST_CONTRACT.md` — room/notebook interface specification |
+| **P7 Stage Manager** | `pmoves/docs/AGENTS/AGNOTE4482.md` — P7 room-aware stage manager definition |
+| **Room/Stage Prospectus** | `pmoves/docs/AGENTS/AGNOTE_P7_PLAYGROUND.md` — prospectus frame, foyer/war-room/voice-room model |
 
 ## Build & Development Commands
 
