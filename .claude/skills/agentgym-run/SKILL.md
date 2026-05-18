@@ -28,34 +28,38 @@ curl -sf http://localhost:8222/healthz && echo "NATS: OK" || echo "NATS: unreach
 ollama list | grep qwen3 || echo "Ollama qwen3 models not found"
 ```
 
-## Run — Single Environment
+## Run — Single Episode
+
+The current field runner (`pmoves/tools/agentgym_field_runner.py`) runs ONE episode per invocation; batch by looping in shell. CLI accepts `--run <env>`, `--config <profile>`, `--dry-run`, `--list-envs`.
 
 ```bash
+# Validate config + env connectivity without running an episode
+python pmoves/tools/agentgym_field_runner.py --dry-run --run BabyAI
+
 # BabyAI (fastest, < 1GB RAM, no external deps)
-make -C pmoves agentgym-run ENV=BabyAI EPISODES=5
+python pmoves/tools/agentgym_field_runner.py --run BabyAI
 
 # Wordle (good for language model eval)
-make -C pmoves agentgym-run ENV=Wordle EPISODES=10
+python pmoves/tools/agentgym_field_runner.py --run Wordle
 
 # ALFWorld (embodied task planning, ~2GB RAM)
-make -C pmoves agentgym-run ENV=ALFWorld EPISODES=5
+python pmoves/tools/agentgym_field_runner.py --run ALFWorld
+
+# List configured environments with health status
+python pmoves/tools/agentgym_field_runner.py --list-envs
 ```
 
 ## Run — Full Lightweight Battery
 
-```bash
-make -C pmoves agentgym-run-lightweight
-# Runs: BabyAI → TextCraft → Maze → Wordle (sequential, concurrency=1)
-```
-
-## Direct Python (without Make)
+Until a `make agentgym-run-lightweight` wrapper lands, batch via shell:
 
 ```bash
-uv run python -m pmoves.services.agentgym_rl_coordinator.runner \
-  --config pmoves/configs/agentgym/field-runner-4090.yaml \
-  --env BabyAI \
-  --episodes 5
+for env in BabyAI TextCraft Maze Wordle; do
+  python pmoves/tools/agentgym_field_runner.py --run "$env"
+done
 ```
+
+> **TODO (follow-up PR)**: Wrap as `make -C pmoves agentgym-run ENV=X` + `make -C pmoves agentgym-run-lightweight` Make targets so this skill routes through the canonical `with-env.sh` chain. Also: add a `--repeat N` flag to the runner for episode batching without shell looping.
 
 ## NATS Events Published
 
@@ -84,6 +88,6 @@ uv run python -m pmoves.services.agentgym_rl_coordinator.runner \
 - Concurrency is 1 — episodes run sequentially (16GB VRAM budget)
 - Model: `qwen35_9b` (registered in tensorzero.toml) with `qwen3:8b` Ollama fallback
 - Max episode: 300s / 15 rounds — hard limits in field-runner-4090.yaml
-- Capture results for AGNOTE4482 handoff: `make -C pmoves agentgym-results`
+- Capture results for AGNOTE4482 handoff: episode JSON written to `pmoves/data/agentgym/runs/` (a `make -C pmoves agentgym-results` summary target is a pending follow-up)
 - See: `pmoves/configs/agentgym/field-runner-4090.yaml` for full config
 - See: `pmoves/services/agentgym-rl-coordinator/` for the runner service

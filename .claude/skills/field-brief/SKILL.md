@@ -19,7 +19,7 @@ implementation, trail is signed on completion.
 ```bash
 # Create brief for a new feature
 BRIEF_NAME="add-nats-health-check"
-cat > ".kilo/command/${BRIEF_NAME}.md" << 'EOF'
+cat > ".kilo/command/${BRIEF_NAME}.md" << EOF
 # ${BRIEF_NAME}
 
 ## Arguments

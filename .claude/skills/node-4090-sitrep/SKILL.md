@@ -38,7 +38,7 @@ bash .claude/scripts/node-sitrep.sh 2>/dev/null || {
 
 The sitrep produces an audit block suitable for pasting into `AGNOTE4482PHI.t1.md`:
 
-```
+```text
 ## SITREP [4090-claude] 2026-05-18T15:00:00Z
 
 **Node**: pmoves-laptop (4090)
