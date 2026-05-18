@@ -151,6 +151,9 @@ make -C pmoves up-tensorzero
 | MLF-001 | OPEN | — | — | — |
 | MLF-002 | OPEN | — | — | — |
 | MLF-003 | OPEN | — | — | — |
+| MLF-004 | OPEN | — | — | — |
+| MLF-005 | OPEN | — | — | — |
+| MLF-006 | OPEN | — | — | — |
 
 ---
 
