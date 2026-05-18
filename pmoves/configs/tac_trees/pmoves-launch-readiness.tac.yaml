@@ -174,12 +174,23 @@ root:
       context: "CHIT contracts seal owner-keyed data; replay-compresses when owner absent; parks in MinIO; unseals on owner return"
       agent_hint: z890-claude
       status: pending
+      notes: |
+        Lane partition (DARKXSIDE-arbitrated 2026-05-18, in response to CODEX-GPT5
+        ACK request on PR #1526 / issue #1389):
+        - Z890-CLAUDE lane: schema, JWT claim, RLS migration, /chit:decode extension
+          (rationale: Supabase/auth + CHIT-signing infrastructure already resident on Z890)
+        - 5090-CLAUDE lane: owner-presence watcher
+          (rationale: persona/identity awareness already lives on 5090)
+        - Capacity-class (either node): replay-compressor
+          (rationale: same primitive as Stage 6 retrace lifeline — whichever node has
+          capacity claims it; both nodes can implement the worker)
       children:
         - id: stage-3.sealed-record-schema
           task: "adult-swim sealed record schema"
           action:
             type: file_exists
             expect: "pmoves/contracts/schemas/adult-swim/sealed.record.v1.schema.json"
+          agent_hint: z890-claude
           status: pending
 
         - id: stage-3.jwt-claim
@@ -187,6 +198,7 @@ root:
           action:
             type: file_exists
             expect: "pmoves/supabase/functions/auth-claims/index.ts"
+          agent_hint: z890-claude
           status: pending
           notes: "MUST land before RLS migration"
 
@@ -195,6 +207,7 @@ root:
           action:
             type: supabase_migration
             expect: "20260425000100"
+          agent_hint: z890-claude
           status: pending
           notes: "Owner-only + age-verified policies"
 
@@ -203,13 +216,16 @@ root:
           action:
             type: file_exists
             expect: "pmoves/services/replay-compressor/app.py"
+          agent_hint: capacity-class
           status: pending
+          notes: "Capacity-class: either z890-claude or 5090-claude claims when ready. Same primitive as Stage 6 retrace lifeline."
 
         - id: stage-3.unsealer-skill
           task: "/chit:decode skill extended for sealed records"
           action:
             type: manual
             expect: "Skill at .claude/commands/chit/decode.md accepts sealed_record_id and validates owner+age JWT"
+          agent_hint: z890-claude
           status: pending
 
         - id: stage-3.owner-presence
@@ -217,8 +233,12 @@ root:
           action:
             type: file_exists
             expect: "pmoves/services/owner-presence/app.py"
+          agent_hint: 5090-claude
           status: pending
-          notes: "owner.presence.detected.v1 / owner.presence.absent.v1 with hysteresis"
+          notes: |
+            owner.presence.detected.v1 / owner.presence.absent.v1 with hysteresis.
+            Lane assignment 2026-05-18: 5090-CLAUDE — persona/identity awareness lane
+            (DARKXSIDE-arbitrated partition).
 
     # =========================================================================
     # Stage 4: Longbow Definition (v1.1, milestone M6)
