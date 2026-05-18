@@ -694,3 +694,22 @@ services:
         limits:
           cpus: '1.0'
           memory: 512M
+
+# =============================================================================
+# Networks — declared external so this overlay parses standalone.
+# Canonical definitions in docker-compose.base.yml. See
+# pmoves/docs/operations/COMPOSE_LAYERING_RUNBOOK.md.
+# =============================================================================
+networks:
+  pmoves_data:
+    external: true
+  pmoves_api:
+    external: true
+  pmoves_app:
+    external: true
+  pmoves_bus:
+    external: true
+  pmoves_external:
+    external: true
+  pmoves_monitoring:
+    external: true
