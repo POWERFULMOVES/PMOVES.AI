@@ -353,10 +353,8 @@ function Get-NodeSuggestion {
         return @{ type='gpu-5090'; confidence='high'; rationale="Detected NVIDIA RTX 5090 + $($CpuInfo.model) + $RamGb GB RAM (>=64 GB required)" }
     }
 
-    # RTX 4090
-    if ($nvidiaGpus | Where-Object { $_.model -match '4090' }) {
-        return @{ type='gpu-4090'; confidence='high'; rationale="Detected NVIDIA RTX 4090 + $($CpuInfo.model) + $RamGb GB RAM" }
-    }
+    # RTX 4090 — not a supported node type in hostinger-kvm-setup.sh;
+    # falls through to desktop-workstation below
 
     # RDNA4 workstation: AMD Ryzen + >=2 AMD Radeon (gfx1201/R9700/RDNA4)
     $rdna4Match = @($amdGpus | Where-Object { $_.model -match 'R9700|Navi 48|Radeon AI Pro|gfx1201|RDNA.?4' })
@@ -517,5 +515,5 @@ Write-Host "Confidence:          $($suggestion.confidence)"
 Write-Host "Rationale:           $($suggestion.rationale)"
 Write-Host ""
 Write-Host 'To apply:'
-$applyCmd = "  bash deploy/provision/hostinger-kvm-setup.sh --node-type " + $suggestion.type
+$applyCmd = "  bash deploy/provision/hostinger-kvm-setup.sh " + $suggestion.type
 Write-Host $applyCmd
