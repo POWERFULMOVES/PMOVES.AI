@@ -41,8 +41,9 @@ RUN apt-get update \
     && corepack enable \
     && corepack prepare yarn@stable --activate \
     && corepack prepare pnpm@latest --activate \
-    && corepack prepare bun@latest --activate \
+    && curl -fsSL https://bun.sh/install | bash \
     && rm -rf /var/lib/apt/lists/*
+ENV PATH="/root/.bun/bin:$PATH"
 
 ARG ARCHON_GIT_REMOTE=https://github.com/POWERFULMOVES/PMOVES-Archon.git
 # PMOVES-Archon fork default branch is PMOVES.AI-Edition-Hardened, not main.
