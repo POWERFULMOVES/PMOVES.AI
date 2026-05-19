@@ -1,0 +1,169 @@
+##############################################################################
+# PMOVES.AI — DGX Spark (GB10 Grace-Blackwell) Sidecar Compose
+##############################################################################
+# Standalone sidecar for the DGX Spark node with local Ollama inference.
+# ARM64 + NVIDIA Blackwell GPU (SM_110, 128GB unified LPDDR5X).
+#
+# This compose runs ON the DGX Spark host — not remotely.
+# Ollama runs in-container with GPU passthrough (unified memory).
+# Agent Zero sidecar points to local Ollama, not host.docker.internal.
+#
+# Usage:
+#   docker compose -f docker-compose.spark-sidecar.yml up -d
+#   docker compose -f docker-compose.spark-sidecar.yml down
+#
+# Prerequisites:
+#   - NVIDIA Container Toolkit installed (nvidia-container-runtime)
+#   - /etc/docker/daemon.json has "default-runtime": "nvidia"
+#   - ARM64 Docker (stock DGX OS)
+##############################################################################
+services:
+  pmoves-ollama:
+    image: ${PMOVES_OLLAMA_IMAGE:-ollama/ollama:0.18.0}
+    container_name: pmoves-ollama-spark
+    hostname: ollama-spark
+    restart: unless-stopped
+    platform: linux/arm64
+    cap_drop:
+    - ALL
+    cap_add:
+    - NET_BIND_SERVICE
+    - CHOWN
+    - SETGID
+    - SETUID
+    security_opt:
+    - no-new-privileges:true
+    environment:
+    - NVIDIA_VISIBLE_DEVICES=0
+    - OLLAMA_HOST=0.0.0.0:11434
+    - OLLAMA_MODELS=/root/.ollama/models
+    - DOCKED_MODE=${DOCKED_MODE:-false}
+    - TOPOLOGY_MODE=${TOPOLOGY_MODE:-standalone}
+    - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
+    - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
+    # Host env leak guard
+    - SSL_CERT_FILE=
+    - SSL_CERT_DIR=
+    - REQUESTS_CA_BUNDLE=
+    - CURL_CA_BUNDLE=
+    - NODE_EXTRA_CA_CERTS=
+    - HTTP_PROXY=
+    - HTTPS_PROXY=
+    - NO_PROXY=
+    volumes:
+    - pmoves-ollama-models:/root/.ollama/models
+    dns:
+    - ${OLLAMA_DNS_PRIMARY:-1.1.1.1}
+    - ${OLLAMA_DNS_SECONDARY:-8.8.8.8}
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+        limits:
+          cpus: '16.0'
+          memory: 96G
+    ports:
+    - "127.0.0.1:11434:11434"
+    networks:
+    - spark_net
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  agent-zero-spark:
+    image: pmoves-agent-zero:latest
+    container_name: pmoves-agent-zero-spark
+    hostname: agent-zero-spark
+    restart: unless-stopped
+    platform: linux/arm64
+    env_file:
+    - ./env.spark-sidecar
+    cap_drop:
+    - ALL
+    cap_add:
+    - NET_BIND_SERVICE
+    - CHOWN
+    - SETGID
+    - SETUID
+    security_opt:
+    - no-new-privileges:true
+    environment:
+    # Supervisor listens on this port (inner AZ runs on :5000 internally)
+    - PORT=8080
+    - AGENT_FORM=SPARK
+    - TOPOLOGY_MODE=standalone
+    - DOCKED_MODE=false
+    - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
+    - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
+    # LLM: Local Ollama on Spark (in-container, same compose network)
+    - A0_SET_chat_model_provider=openai
+    - A0_SET_chat_model_name=${SPARK_CHAT_MODEL:-qwen3.5:35b-a3b-q4_K_M}
+    - A0_SET_chat_model_api_base=http://pmoves-ollama:11434/v1
+    - A0_SET_util_model_provider=openai
+    - A0_SET_util_model_name=${SPARK_UTIL_MODEL:-qwen3.5:35b-a3b-q4_K_M}
+    - A0_SET_util_model_api_base=http://pmoves-ollama:11434/v1
+    - A0_SET_browser_model_provider=openai
+    - A0_SET_browser_model_name=${SPARK_BROWSER_MODEL:-qwen3.5:35b-a3b-q4_K_M}
+    - A0_SET_browser_model_api_base=http://pmoves-ollama:11434/v1
+    - A0_SET_embed_model_provider=openai
+    - A0_SET_embed_model_name=${SPARK_EMBED_MODEL:-nomic-embed-text}
+    - A0_SET_embed_model_api_base=http://pmoves-ollama:11434/v1
+    # A2A enabled
+    - A0_SET_a2a_server_enabled=true
+    - A0_SET_mcp_server_token=
+    # CHIT dev mode (standalone)
+    - CHIT_REQUIRE_SIGNATURE=false
+    - CHIT_DECRYPT_ANCHORS=false
+    - CHIT_PASSPHRASE=${CHIT_PASSPHRASE:-dev-local-sidecar-override}
+    # JetStream disabled in standalone
+    - AGENTZERO_JETSTREAM=false
+    - AGENTZERO_JS_UNAVAILABLE_THRESHOLD=999
+    # Host env leak guard
+    - SSL_CERT_FILE=
+    - SSL_CERT_DIR=
+    - REQUESTS_CA_BUNDLE=
+    - CURL_CA_BUNDLE=
+    - NODE_EXTRA_CA_CERTS=
+    - HTTP_PROXY=
+    - HTTPS_PROXY=
+    - NO_PROXY=
+    depends_on:
+      pmoves-ollama:
+        condition: service_healthy
+    volumes:
+    - ${SPARK_MEMORY_DIR:-./data/spark/memory}:/a0/memory
+    - ${SPARK_KNOWLEDGE_DIR:-./data/spark/knowledge}:/a0/knowledge
+    - ${SPARK_INSTRUMENTS_DIR:-./data/spark/instruments}:/a0/instruments
+    - ${SPARK_LOG_DIR:-./data/spark/logs}:/a0/logs
+    - ${SPARK_RUNTIME_DIR:-./data/spark/runtime}:/a0/runtime
+    - ${SPARK_USR_DIR:-./usr}:/a0/usr
+    ports:
+    - ${SPARK_BIND:-127.0.0.1}:${SPARK_PORT:-8093}:8080
+    networks:
+    - spark_net
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/healthz >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 45s
+    deploy:
+      resources:
+        limits:
+          cpus: '4.0'
+          memory: 8G
+
+volumes:
+  pmoves-ollama-models:
+    name: pmoves-spark-ollama-models
+
+networks:
+  spark_net:
+    name: spark_net
+    driver: bridge

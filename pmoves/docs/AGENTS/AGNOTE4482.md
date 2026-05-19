@@ -1048,3 +1048,54 @@ Operator requested proper integration of MiniMax Token Plan into PMOVES.AI agent
 - Timestamp: `2026-05-13T05:30:00Z`
 
 <!-- GRAPHITI_MARK: MINIMAX-AGENT::TOKEN-PLAN-PHASE2-INTEGRATION::2026-05-13 -->
+
+## Supply Chain Audit (2026-05-14)
+
+### Work Performed
+- Full TanStack supply chain audit across all PMOVES submodules
+- 16 findings identified across dependency trees
+- 6 findings patched with version pins or replacements
+- Audit report: `research/TANSTACK_SUPPLY_CHAIN_AUDIT_2026-05-14.md`
+- Hardening plan: `research/SUPPLY_CHAIN_HARDENING_PLAN_2026-05-14.md`
+
+### Agent ACK
+- Agent: `AGENT-ZERO-GLM (SIDECAR)`
+- Signature: `ACK::AGENT-ZERO-GLM::SUPPLY-CHAIN-AUDIT`
+- Timestamp: `2026-05-14`
+
+<!-- GRAPHITI_MARK: AGENT-ZERO-GLM::SUPPLY-CHAIN-AUDIT::2026-05-14 -->
+
+## SPARK Model Strategy + Profile Reconciliation (2026-05-15)
+
+### Work Performed
+- Created canonical SPARK model strategy document: `pmoves/docs/SPARK_MODEL_STRATEGY.md` (785 lines)
+- Reconciled hardware profiles for DGX Spark GB10 (128GB unified memory, Blackwell)
+- Documented model deployment strategy: Ollama local (nemotron-3-super:120b), cloud GLM coding, MiniMax
+- Resolved SPARK agent profile configuration gaps
+- Node doc: `pmoves/docs/AGENTS/AGNOTE-dgx-spark.md`
+- Related: `research/LONGBOW_COMPARATIVE_ANALYSIS.md` signoff corrected (36/36), SITREP signoff figures fixed
+
+### Agent ACK
+- Agent: `AGENT-ZERO-GLM (SIDECAR)`
+- Signature: `ACK::AGENT-ZERO-GLM::SPARK-MODEL-STRATEGY`
+- Timestamp: `2026-05-15`
+
+<!-- GRAPHITI_MARK: AGENT-ZERO-GLM::SPARK-MODEL-STRATEGY::2026-05-15 -->
+
+## CHIT Hardening Sprint (2026-05-16)
+
+### Work Performed
+- 66-file security audit across CHIT crypto, signing, and compose hardening
+- Crypto consolidation: unified signing primitives across 3 services (agent-zero, archon, supabase-proxy)
+- CHIT signing enabled for 3 services in compose stack
+- Compose hardening: secret passing, network isolation, health check validation
+- Doc closure: stale signoff figures corrected across LONGBOW, SITREP, and related docs
+- Signoff checklist: **37/37** — all items checked (up from 35/37 on 2026-05-03)
+- Related: `research/LONGBOW_COMPARATIVE_ANALYSIS.md` corrected (36/36), `research/ISSUE_AGNOTE4482_DOC_GAPS.md` (C1+H1 marked RESOLVED)
+
+### Agent ACK
+- Agent: `AGENT-ZERO-GLM (SIDECAR)`
+- Signature: `ACK::AGENT-ZERO-GLM::CHIT-HARDENING-SPRINT`
+- Timestamp: `2026-05-16`
+
+<!-- GRAPHITI_MARK: AGENT-ZERO-GLM::CHIT-HARDENING-SPRINT::2026-05-16 -->

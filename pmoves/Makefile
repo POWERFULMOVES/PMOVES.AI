@@ -161,6 +161,7 @@ include mk/hf.mk
 include mk/provider.mk
 include mk/egress.mk
 include mk/yt-cookies.mk
+include mk/mcp-toolkit.mk
 
 # ----------------------------------------------------------------------------
 # venv + bringup-toolchain prereqs
@@ -1834,6 +1835,44 @@ up-media:
 .PHONY: up-invidious
 up-invidious:
 	@bash -lc '. ./scripts/with-env.sh; INVIDIOUS_BIND="${INVIDIOUS_BIND:-127.0.0.1:3005}" docker compose -p $(PROJECT) --profile invidious up -d invidious invidious-db invidious-companion'
+
+# -------- Standalone sidecar composes (PR #1533 follow-up: PR-2 wraps the raw compose files) --------
+# Each sidecar is its own docker-compose project (separate -p) so it doesn't entangle with the main
+# PMOVES stack. Env files live alongside the compose: `env.<name>-sidecar` (copied from
+# `env.<name>-sidecar.example` on first run if missing — no secrets in the template).
+
+.PHONY: up-darkxside-sidecar down-darkxside-sidecar
+up-darkxside-sidecar: ## Start DARKXSIDE standalone sidecar (port 8092, cloud LLM + host Ollama)
+	@if [ ! -f env.darkxside-sidecar ]; then \
+		echo "📝 Bootstrapping env.darkxside-sidecar from template..."; \
+		cp env.darkxside-sidecar.example env.darkxside-sidecar; \
+	fi
+	@echo "🌑 Starting DARKXSIDE sidecar..."
+	@bash -lc '. ./scripts/with-env.sh; docker compose -p darkxside-sidecar -f docker-compose.darkxside-sidecar.yml --env-file env.darkxside-sidecar up -d'
+	@echo "✔ DARKXSIDE sidecar starting. Health: curl -sf http://127.0.0.1:$${DARKXSIDE_PORT:-8092}/"
+
+down-darkxside-sidecar: ## Stop DARKXSIDE standalone sidecar
+	@echo "🌑 Stopping DARKXSIDE sidecar..."
+	@bash -lc '. ./scripts/with-env.sh; docker compose -p darkxside-sidecar -f docker-compose.darkxside-sidecar.yml --env-file env.darkxside-sidecar stop' >/dev/null 2>&1 || true
+	@bash -lc '. ./scripts/with-env.sh; docker compose -p darkxside-sidecar -f docker-compose.darkxside-sidecar.yml --env-file env.darkxside-sidecar rm -f' >/dev/null 2>&1 || true
+	@echo "✔ DARKXSIDE sidecar stopped."
+
+.PHONY: up-spark-sidecar down-spark-sidecar
+up-spark-sidecar: ## Start DGX Spark standalone sidecar (port 8093, in-container Ollama, NVIDIA GPU passthrough)
+	@if [ ! -f env.spark-sidecar ]; then \
+		echo "📝 Bootstrapping env.spark-sidecar from template..."; \
+		cp env.spark-sidecar.example env.spark-sidecar; \
+	fi
+	@echo "⚡ Starting DGX Spark sidecar (ARM64 + NVIDIA Blackwell)..."
+	@bash -lc '. ./scripts/with-env.sh; docker compose -p spark-sidecar -f docker-compose.spark-sidecar.yml --env-file env.spark-sidecar up -d'
+	@echo "✔ DGX Spark sidecar starting. Health: curl -sf http://127.0.0.1:$${SPARK_PORT:-8093}/"
+	@echo "  GPU check: docker exec pmoves-ollama-spark nvidia-smi"
+
+down-spark-sidecar: ## Stop DGX Spark standalone sidecar
+	@echo "⚡ Stopping DGX Spark sidecar..."
+	@bash -lc '. ./scripts/with-env.sh; docker compose -p spark-sidecar -f docker-compose.spark-sidecar.yml --env-file env.spark-sidecar stop' >/dev/null 2>&1 || true
+	@bash -lc '. ./scripts/with-env.sh; docker compose -p spark-sidecar -f docker-compose.spark-sidecar.yml --env-file env.spark-sidecar rm -f' >/dev/null 2>&1 || true
+	@echo "✔ DGX Spark sidecar stopped."
 
 # TensorZero model gateway stack
 .PHONY: up-tensorzero up-tensorzero-full down-tensorzero-full

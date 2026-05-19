@@ -444,8 +444,13 @@ for line in sys.stdin:
 
 for subnet, members in entries.items():
     if len(members) < 2: continue
+    # Multiple IPs on the same interface (IP aliasing / secondary IPs) are NOT
+    # collisions — only flag when distinct interfaces share a subnet.
+    distinct_ifaces = {iface for iface, _ in members}
+    if len(distinct_ifaces) < 2: continue
     primary = members[0]
     for ghost in members[1:]:
+        if ghost[0] == primary[0]: continue  # same-iface alias, skip
         print(f"{primary[0]}|{primary[1]}|{ghost[0]}|{ghost[1]}|{subnet}")
 ')
 }

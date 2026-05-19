@@ -876,16 +876,23 @@ model = "coding_qwen3_coder_next_80b_local"
 weight = 0.0
 
 # GLM-5-Turbo — KiloCode primary (agentic, tool calling, long chains)
+# Temperature override: Z.AI default is 1.0; coding/agentic workflows need 0.0-0.3
+# per Z.AI coding plan docs + 4090 handoff report 2026-05-14
+# (research/HANDOFF_4090_FIXES_MAY2026.md item #1). 0.1 = deterministic enough
+# for tool-call correctness while preserving small variation for retries.
 [functions.agent_zero.variants.hosted_zai_turbo]
 type = "chat_completion"
 model = "chat_zai_glm5_turbo"
 weight = 0.6
+temperature = 0.1
 
 # GLM-5V-Turbo — vision + coding (frontend, GUI, visual debugging)
+# Same 0.1 override rationale as hosted_zai_turbo above.
 [functions.agent_zero.variants.hosted_zai_vision_turbo]
 type = "chat_completion"
 model = "chat_zai_glm5v_turbo"
 weight = 0.3
+temperature = 0.1
 
 # --- Phase C variants (DGX Spark + dual R9700) — soak at 0.1 ----------------
 # SPARK online 2026-05-10: gemma4:31b + nemotron-3-super:120b both promoted 0.0→0.1 soak.
@@ -1370,23 +1377,32 @@ model = "chat_openrouter"
 [functions.coding_glm]
 type = "chat"
 
+# Coding-focused variants — Z.AI defaults to temperature=1.0 which is too
+# creative for code generation. Override to 0.1 per Z.AI coding plan docs +
+# 4090 handoff report 2026-05-14 (research/HANDOFF_4090_FIXES_MAY2026.md #1).
+# Applies to all 4 coding_glm cloud variants (glm5-turbo, glm5v-turbo, glm5.1,
+# glm-flash) — the entire Z.AI coding endpoint family.
 [functions.coding_glm.variants.cloud_zai_turbo]
 type = "chat_completion"
 model = "chat_zai_glm5_turbo"
 weight = 0.8
+temperature = 0.1
 
 [functions.coding_glm.variants.cloud_zai_vision_turbo]
 type = "chat_completion"
 model = "chat_zai_glm5v_turbo"
 weight = 0.4
+temperature = 0.1
 
 [functions.coding_glm.variants.cloud_zai_glm51]
 type = "chat_completion"
 model = "chat_zai_glm51"
+temperature = 0.1
 
 [functions.coding_glm.variants.cloud_zai_glm_flash]
 type = "chat_completion"
 model = "chat_zai_glm"
+temperature = 0.1
 
 [functions.coding_glm.variants.local_qwen35_9b]
 type = "chat_completion"

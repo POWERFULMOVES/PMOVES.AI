@@ -6,7 +6,7 @@
 [![Docker Hardening Validation](https://github.com/POWERFULMOVES/PMOVES.AI/actions/workflows/hardening-validation.yml/badge.svg)](https://github.com/POWERFULMOVES/PMOVES.AI/actions/workflows/hardening-validation.yml)
 [![Python Tests](https://github.com/POWERFULMOVES/PMOVES.AI/actions/workflows/python-tests.yml/badge.svg)](https://github.com/POWERFULMOVES/PMOVES.AI/actions/workflows/python-tests.yml)
 
-A local-first, multi-agent orchestration platform that coordinates autonomous agents (Agent Zero, Archon), hybrid retrieval (Hi-RAG v2), voice synthesis, media processing, and knowledge graphs — all wired together with NATS event-driven messaging and full Prometheus/Grafana/Loki observability.
+A local-first, multi-agent orchestration platform built on a rooms-on-a-stage model. P7 (Pinokio 7) is the room-aware stage manager that selects rooms, loads suits, and manages stage transitions (rehearsal, live, review, archive). Each room is an agent-owned workspace with bound services, skills, and notebook state — wired together with NATS event-driven messaging and full Prometheus/Grafana/Loki observability.
 
 PMOVES is structured as a **Metal-Organic Framework (MOF)** for distributed machine intelligence — the crystalline lattice through which autonomous agents flow. Operationally, this translates to a **rooms-on-a-stage** model: P7 (Pinokio 7) is the evolving room-aware stage manager that selects rooms, loads suits, and manages stage transitions (rehearsal → live → review → archive). This model grows with the platform — new rooms, stage states, and suit types are added as the topology evolves.
 
@@ -71,13 +71,13 @@ PMOVES' **Metal-Organic Framework** architecture manifests operationally as **ro
 
 **P7 (Pinokio 7)** is the evolving room-aware stage manager: it reads the room catalog, selects the appropriate room profile for a given workload, loads the correct suit, and manages stage transitions. P7's NATS subjects (`p7.nats.launch`, `p7.nats.session`) are the control plane for room entry and lifecycle. As the platform grows, P7's tree adds new rooms, stage states, and suit types — the topology is designed to expand.
 
-Rooms own presentation and session ergonomics; the notebook plane owns durable memory. The [Room Manifest Contract](pmoves/docs/ROOM_MANIFEST_CONTRACT.md) defines the interface; [`pmoves/config/rooms/catalog.json`](pmoves/config/rooms/catalog.json) is the canonical seed catalog. See [AGNOTE4482](pmoves/docs/AGENTS/AGNOTE4482.md) for the full P7 specification.
+Rooms own presentation and session ergonomics; the notebook plane owns durable memory. The [Room Manifest Contract](pmoves/docs/ROOM_MANIFEST_CONTRACT.md) defines the interface; [`pmoves/config/rooms/catalog.json`](pmoves/config/rooms/catalog.json) is the canonical seed catalog. See [Rooms on a Stage Overview](pmoves/docs/ROOMS_ON_A_STAGE.md) for the end-to-end model and [AGNOTE4482](pmoves/docs/AGENTS/AGNOTE4482.md) for the full P7 specification.
 
 ### Room Index
 
 #### 🏗️ Z890 Infra Fabric Room
 **Purpose:** Infrastructure room for topology, service health, secrets discipline, and operator bring-up.
-**Profile:** `z890-infra` · **Agent:** `z890-claude` · **Manifest:** [`z890-infra.room.fabric.json`](pmoves/config/rooms/z890-infra.room.fabric.json)
+**Profile:** `z890-infra` · **Agent:** `z890-claude` · **Stage:** `live` · **Manifest:** [`z890-infra.room.fabric.json`](pmoves/config/rooms/z890-infra.room.fabric.json)
 
 - `pmoves/services/node-registry/` — Multi-host node discovery and health reporting
 - `pmoves/services/resource-detector/` — Hardware capability detection (GPU, CPU, memory)
@@ -93,7 +93,7 @@ Rooms own presentation and session ergonomics; the notebook plane owns durable m
 
 #### 🔭 4090 Field Control Room
 **Purpose:** Scout/control room for review, topology, handoff, and notebook-backed triage.
-**Profile:** `4090-field` · **Agent:** `4090-claude` · **Manifest:** [`4090-field.room.control.json`](pmoves/config/rooms/4090-field.room.control.json)
+**Profile:** `4090-field` · **Agent:** `4090-claude` · **Stage:** `live` · **Manifest:** [`4090-field.room.control.json`](pmoves/config/rooms/4090-field.room.control.json)
 
 - `pmoves/services/agent-zero/` — MCP bridge + decision engine (ingests Supabase + CHIT events)
 - `pmoves/services/archon/` — Agent builder/knowledge management with Supabase CLI realtime + NATS clients
@@ -114,7 +114,7 @@ Rooms own presentation and session ergonomics; the notebook plane owns durable m
 
 #### 🎙️ 5090 Voice Studio
 **Purpose:** Voice-first room for TTS, media pipelines, notebook-backed iteration, and audition workflows.
-**Profile:** `5090-voice` · **Agent:** `5090-claude` · **Manifest:** [`5090-voice.room.studio.json`](pmoves/config/rooms/5090-voice.room.studio.json)
+**Profile:** `5090-voice` · **Agent:** `5090-claude` · **Stage:** `live` · **Manifest:** [`5090-voice.room.studio.json`](pmoves/config/rooms/5090-voice.room.studio.json)
 
 - `pmoves/services/flute-gateway/` — Multimodal voice communication layer (HTTP `:8055`, WebSocket `:8056`) with Pipecat integration and prosodic synthesis
 - `pmoves/services/vibevoice-realtime/` — Real-time voice synthesis service
@@ -127,7 +127,7 @@ Rooms own presentation and session ergonomics; the notebook plane owns durable m
 
 #### 💻 5090 KiloCode GLM Workstation
 **Purpose:** GPU inference specialist node running KiloCode GLM on the GLM Coding Plan. Shares the 5090 with Claude Code and Codex.
-**Profile:** `5090-kilocode` · **Agent:** `5090-kilocode` · **Manifest:** [`5090-kilocode.room.studio.json`](pmoves/config/rooms/5090-kilocode.room.studio.json)
+**Profile:** `5090-kilocode` · **Agent:** `5090-kilocode` · **Stage:** `rehearsal` · **Manifest:** [`5090-kilocode.room.studio.json`](pmoves/config/rooms/5090-kilocode.room.studio.json)
 
 - `pmoves/services/tensorzero-config-api/` — Dynamic TensorZero model configuration API (shared with Infra room)
 - `pmoves/services/gpu-orchestrator/` — GPU resource allocation and scheduling (shared with Infra room)

@@ -49,7 +49,17 @@
       "Bash(docker logs gha-runner-vps:*)",
       "Bash(docker inspect gha-runner-ai-lab:*)",
       "Bash(docker inspect gha-runner-hotfix:*)",
-      "Bash(docker inspect gha-runner-vps:*)"
+      "Bash(docker inspect gha-runner-vps:*)",
+      "Bash(docker exec pmoves-nats-1 nats sub *.test.*:*)",
+      "Bash(docker exec pmoves-nats-1 nats sub test.*:*)",
+      "Bash(docker exec pmoves-nats-1 nats pub test.*:*)",
+      "Bash(docker exec pmoves-nats-1 nats pub *.test.*:*)",
+      "Bash(docker run --rm --network host natsio/nats-box:* nats pub test.*:*)",
+      "Bash(docker run --rm --network host natsio/nats-box:* nats sub test.*:*)",
+      "Bash(docker exec pmoves-agent-zero-1:*)",
+      "Bash(docker exec pmoves-nats-1 nats stream:*)",
+      "Bash(docker exec pmoves-nats-1 nats account info:*)",
+      "Bash(docker exec pmoves-nats-1 nats server info:*)"
     ],
     "deny": [
       "Bash(docker compose up -d:*)",
