@@ -43,19 +43,22 @@ Comprehensive review of 15+ AGNOTE4482-related documents across 7 axes (vision, 
 
 ---
 
-## MEDIUM: Skills and Vision Gaps
+## MEDIUM: Skills and Vision Gaps — DEFERRED (Future Work)
 
-### M1. Remotion/ThreeJS Skills Spec-Only
-Both `remotion-render` and `threejs-render` have complete manifests but no implementation code. Not in agent registry. Potential port conflict: Remotion calls `localhost:8105` (same as Cipher Memory per gap analysis).
+> All M-items are known gaps that require new feature development, not doc fixes.
+> Deferred to future sprint. No action required for AGNOTE4482 closure.
 
-### M2. Pretext Has No Skill Manifest
-`pretextLayout.ts` exists in a2ui-renderer but has no skill manifest. Not integrated into skill system.
+### M1. Remotion/ThreeJS Skills Spec-Only — DEFERRED
+Both `remotion-render` and `threejs-render` have complete manifests but no implementation code. Not in agent registry. Potential port conflict: Remotion calls `localhost:8105` (same as Cipher Memory per gap analysis). **Action:** Implement when video rendering pipeline is prioritized.
 
-### M3. agent_vision_notes.md Empty
-3-line stub in AGENTS/ directory with no content.
+### M2. Pretext Has No Skill Manifest — DEFERRED
+`pretextLayout.ts` exists in `pmoves/services/a2ui-renderer/src/remotion/pretextLayout.ts` but has no skill manifest. Not integrated into skill system. **Action:** Create manifest when pretext layout is promoted to agent-facing skill.
 
-### M4. Unsloth Recipe Targets Fireworks Not Local
-`PMOVES-tensorzero/recipes/supervised_fine_tuning/unsloth/` uses `firectl` + Fireworks API. No SPARK-local deployment path.
+### M3. agent_vision_notes.md — RESOLVED (Deprecated)
+File properly deprecated 2026-05-08 with notice pointing to `FLUTE_VISION_MULTIMODAL.md`. No further action.
+
+### M4. Unsloth Recipe Targets Fireworks Not Local — DEFERRED
+`PMOVES-tensorzero/recipes/supervised_fine_tuning/unsloth/` uses `firectl` + Fireworks API. No SPARK-local deployment path. **Action:** Create SPARK-local Unsloth recipe when on-device fine-tuning is prioritized.
 
 ---
 
@@ -80,11 +83,18 @@ LONGBOW_COMPARATIVE_ANALYSIS.md is confirmed as the **source document** that see
 
 ## Files to Update
 
-- [ ] `research/LONGBOW_COMPARATIVE_ANALYSIS.md` - lines 18, 245
-- [ ] `pmoves/docs/PMOVESCHIT/LIVING_TEMPLATE_AGENT_TAXONOMY.md` - header + CGP samples
-- [ ] `pmoves/docs/AGENTS/IMPLEMENTATION_GAP_ANALYSIS.md` - deprecation header
-- [ ] `pmoves/docs/context/FLUTE_VISION_MULTIMODAL.md` - resolve/remove internal refs
-- [ ] `pmoves/docs/AGENTS/AGENT_TAXONOMY_CROSS_REFERENCE.md` - update BoTZ refs
-- [ ] `pmoves/docs/AGENTS/PMOVES_UNIFIED_AGENT_TAXONOMY.md` - refresh for MOF
-- [ ] `pmoves/docs/AGENTS/agent_vision_notes.md` - populate or delete
-- [ ] New: `pmoves/docs/intelligence/SPARK_MODEL_STRATEGY.md`
+- [x] `research/LONGBOW_COMPARATIVE_ANALYSIS.md` - lines 18, 245 → PR #1502
+- [x] `pmoves/docs/PMOVESCHIT/LIVING_TEMPLATE_AGENT_TAXONOMY.md` - header + CGP samples → prior session
+- [x] `pmoves/docs/AGENTS/IMPLEMENTATION_GAP_ANALYSIS.md` - deprecation header → prior sessions (3 notices)
+- [x] `pmoves/docs/context/FLUTE_VISION_MULTIMODAL.md` - resolve/remove internal refs → deprecation notice added
+- [x] `pmoves/docs/AGENTS/AGENT_TAXONOMY_CROSS_REFERENCE.md` - update BoTZ refs → marked archived 2026-04-19
+- [x] `pmoves/docs/AGENTS/PMOVES_UNIFIED_AGENT_TAXONOMY.md` - refresh for MOF → no active BoTZ refs
+- [x] `pmoves/docs/AGENTS/agent_vision_notes.md` - deprecated 2026-05-08, points to FLUTE_VISION_MULTIMODAL.md
+- [x] New: `pmoves/docs/intelligence/SPARK_MODEL_STRATEGY.md` → delivered (785 lines)
+
+---
+
+## Closure — 2026-05-19
+
+**Status: CLOSED**
+All CRITICAL and HIGH items resolved. MEDIUM items deferred to future sprint (require new feature development, not doc fixes). Checklist verified against actual file state. No further action on AGNOTE4482.
