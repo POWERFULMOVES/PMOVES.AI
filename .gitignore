@@ -122,7 +122,8 @@ yarn-error.log*
 # IDE
 # =============================================================================
 .idea/
-.vscode/
+# .vscode/ is intentionally committed — team-wide workspace config, tasks, and agent defaults
+# Personal/user-specific VSCode files go in .vscode/*.code-workspace (add those to gitignore if needed)
 .history/
 *.swp
 *.swo
