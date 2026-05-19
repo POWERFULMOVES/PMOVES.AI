@@ -5,7 +5,7 @@
   "description": "One-click demo: Agent Zero local + 4090 Claude Code claws + HERMES V4 assist. Stage: rehearsal.",
   "agent_id": "4090-claude",
   "alter": "4090-demo",
-  "room_type": "demo",
+  "room_type": "builder",
   "owner_mode": "alter",
   "shell": {
     "theme": {

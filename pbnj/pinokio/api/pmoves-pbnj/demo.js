@@ -16,8 +16,8 @@ module.exports = {
     {
       method: "shell.run",
       params: {
-        // Agent Zero submodule lives four directories above this launcher file
-        path: "../../../../PMOVES-Agent-Zero",
+        // Use PMOVES_ROOT env var — same convention as all other PBnJ launchers
+        path: "{{envs.PMOVES_ROOT}}/PMOVES-Agent-Zero",
         venv: ".venv",
         message: ["python run_ui.py --port {{local.port}}"],
         on: [{
