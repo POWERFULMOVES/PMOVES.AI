@@ -14,6 +14,7 @@ RUN apt-get update \
         build-essential \
         git \
         curl \
+        unzip \
         ca-certificates \
         gnupg \
         libnss3 \
