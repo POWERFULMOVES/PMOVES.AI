@@ -223,3 +223,48 @@ mappings:
     tensorzero_variant: "llamacpp_rdna4_gemma4_26b_dual"
     lane: "local"
     nodes: [rdna4]
+
+  # --- Phase D: NeMo Hermes V4, Gemma4 Embed, NeMo Omni (2026-05-18) ---
+  # NousResearch Hermes 3 (NeMo-compatible) + Unsloth GGUF variants for local inference.
+  # Gemma4 text-embedding for Geometry Bus / CHIT vector ops.
+  # NeMo Omni VL — multimodal text+vision, Spark-only until quantized variants land.
+  hermes-v4-8b:
+    flare_name: "pmoves/hermes-v4-8b"
+    provider: "ollama"
+    model_id: "hermes3:8b"
+    hf_id: "NousResearch/Hermes-3-Llama-3.1-8B"
+    unsloth_id: "unsloth/Hermes-3-Llama-3.1-8B"
+    tensorzero_variant: "ollama_hermes_v4_8b"
+    lane: "local"
+    # HERMES assist in demo room; Agent Zero subordinate model for reasoning chains
+    nodes: [dgx-spark, 5090, 4090, rdna4]
+    use_case: [reasoning, instruction, agent-zero-subordinate, demo-room]
+
+  hermes-v4-70b:
+    flare_name: "pmoves/hermes-v4-70b"
+    provider: "ollama"
+    model_id: "hermes3:70b"
+    hf_id: "NousResearch/Hermes-3-Llama-3.1-70B"
+    unsloth_id: "unsloth/Hermes-3-Llama-3.1-70B"
+    tensorzero_variant: "ollama_spark_hermes_v4_70b"
+    lane: "local"
+    nodes: [dgx-spark]
+    use_case: [reasoning, instruction, deep-agent]
+
+  gemma4-embed-text:
+    flare_name: "pmoves/gemma4-embed-text"
+    provider: "huggingface"
+    # Sentence-transformers compatible; replaces text-embedding-004 for on-prem vector ops
+    hf_id: "google/gemma-embedding-exp-03-07"
+    lane: "local"
+    nodes: [z890, dgx-spark, rdna4]
+    use_case: [geometry-bus, chit-vector, hirag-embed]
+
+  nemo-omni-vl:
+    flare_name: "pmoves/nemo-omni-vl"
+    provider: "nemo"
+    # NVIDIA NeMo Omni Vision-Language (text + vision); requires NeMo >= 2.1, CUDA 12.4+
+    hf_id: "nvidia/NVLM-D-72B"
+    lane: "local"
+    nodes: [dgx-spark]
+    use_case: [vision, multimodal-reasoning, document-analysis]
