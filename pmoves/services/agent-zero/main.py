@@ -315,11 +315,18 @@ class AgentZeroClient:
             if isinstance(result, dict):
                 return result
             return {"status": "ok", "raw": result}
-        except AgentZeroRequestError as exc:  # pragma: no cover - runtime might not be ready
+        except AgentZeroRequestError as exc:
+            # 404 means the server IS running but has no health endpoint.
+            # This is expected for PMOVES-Agent-Zero fork — treat as healthy.
+            if exc.status_code == 404:
+                logger.info(
+                    "Agent Zero health endpoint returned 404 — "
+                    "server is responding, treating as healthy"
+                )
+                return {"status": "ok", "note": "health endpoint not found (404)"}
             fallback = self._config.health_path_fallback
             if (
-                exc.status_code == 404
-                and fallback
+                fallback
                 and fallback != self._config.health_path
             ):
                 try:
@@ -332,6 +339,13 @@ class AgentZeroClient:
                         return result
                     return {"status": "ok", "raw": result}
                 except AgentZeroRequestError as fallback_exc:
+                    # Same 404 heuristic for fallback path
+                    if fallback_exc.status_code == 404:
+                        logger.info(
+                            "Agent Zero fallback health endpoint returned 404 — "
+                            "server is responding, treating as healthy"
+                        )
+                        return {"status": "ok", "note": "health endpoint not found (404)"}
                     logger.debug(
                         "Agent Zero fallback health check failed: %s", fallback_exc
                     )
