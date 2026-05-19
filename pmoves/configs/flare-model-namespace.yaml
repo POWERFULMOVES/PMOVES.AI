@@ -254,8 +254,9 @@ mappings:
   gemma4-embed-text:
     flare_name: "pmoves/gemma4-embed-text"
     provider: "huggingface"
-    # Sentence-transformers compatible; replaces text-embedding-004 for on-prem vector ops
-    hf_id: "google/gemma-embedding-exp-03-07"
+    # Sentence-transformers compatible on-device model (300M, ~1.2GB)
+    # API equivalent: gemini-embedding-exp-03-07 / GA: gemini-embedding-001
+    hf_id: "google/embeddinggemma-300m"
     lane: "local"
     nodes: [z890, dgx-spark, rdna4]
     use_case: [geometry-bus, chit-vector, hirag-embed]
