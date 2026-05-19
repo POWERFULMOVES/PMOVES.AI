@@ -205,9 +205,8 @@ jobs:
           - name: channel-monitor
             context: ./pmoves/services/channel-monitor
           - name: archon
-            context: ./pmoves/services/archon
-          - name: archon-ui
-            context: ./pmoves/services/archon-ui
+            context: ./pmoves
+            dockerfile: pmoves/services/archon/Dockerfile
           - name: ffmpeg-whisper
             context: ./pmoves/services/ffmpeg-whisper
           - name: hirag-gateway-v2
@@ -260,6 +259,7 @@ jobs:
         uses: docker/build-push-action@v7
         with:
           context: ${{ matrix.service.context }}
+          file: ${{ matrix.service.dockerfile || 'Dockerfile' }}
           push: ${{ github.event_name != 'pull_request' }}
           build-args: |
             PIP_CONSTRAINT=requirements.lock
