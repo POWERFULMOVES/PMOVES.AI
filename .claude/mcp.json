@@ -8,7 +8,14 @@
     "_pmoves-cipher-legacy-python-wrapper": {
       "_disabled": "Replaced 2026-05-15 with direct SSE to Cipher's native MCP endpoint. The Python wrapper called non-existent /api/memory routes. Kept here commented for rollback; remove in follow-up after SSE validated for 2 weeks.",
       "command": "uv",
-      "args": ["--directory", "./pmoves-cipher-mcp", "run", "python", "-m", "cipher_mcp.server"],
+      "args": [
+        "--directory",
+        "./pmoves-cipher-mcp",
+        "run",
+        "python",
+        "-m",
+        "cipher_mcp.server"
+      ],
       "env": {
         "CIPHER_URL": "http://localhost:8105",
         "NATS_URL": "${NATS_URL}"
