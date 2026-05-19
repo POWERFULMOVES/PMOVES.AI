@@ -21,6 +21,16 @@ USER.md
 /config/
 
 # =============================================================================
+# Codex CLI workspace (machine-local agent scratch — not source)
+# =============================================================================
+.codex/
+
+# =============================================================================
+# UNFCU separation/grievance record (private; attorney-review draft per file header)
+# =============================================================================
+pmoves/docs/operations/UNFCU_RECORD_OF_CLAIMS.md
+
+# =============================================================================
 # Infrastructure Secrets (relay keys, QR configs, audits — NEVER COMMIT)
 # =============================================================================
 rustdesk-*-qr.png
