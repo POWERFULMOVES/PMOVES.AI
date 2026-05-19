@@ -161,6 +161,7 @@ include mk/hf.mk
 include mk/provider.mk
 include mk/egress.mk
 include mk/yt-cookies.mk
+include mk/mcp-toolkit.mk
 
 # ----------------------------------------------------------------------------
 # venv + bringup-toolchain prereqs
