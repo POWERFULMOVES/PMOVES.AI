@@ -37,6 +37,11 @@ services:
     - no-new-privileges:true
     environment:
     - PORT=8080
+    # Wrapper polls this URL for inner Agent Zero health. Default is :80, but
+    # standalone AZ runs Uvicorn on :5000 — the docked variant only "worked"
+    # because nginx fronted :80. Without this override the wrapper hits 404
+    # forever and exits with TimeoutError("...runtime to become healthy").
+    - AGENT_ZERO_API_BASE=http://127.0.0.1:5000
     - AGENT_FORM=DARKXSIDE
     - TOPOLOGY_MODE=standalone
     - DOCKED_MODE=false
