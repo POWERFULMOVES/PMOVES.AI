@@ -65,7 +65,7 @@ class AgentZeroRuntimeConfig:
 
     root: Path = field(
         default_factory=lambda: Path(
-            os.environ.get("AGENT_ZERO_ROOT", "/opt/agent-zero")
+            os.environ.get("AGENT_ZERO_ROOT", "/a0")
         )
     )
     entrypoint: str = field(
@@ -77,7 +77,7 @@ class AgentZeroRuntimeConfig:
     extra_args: List[str] = field(default_factory=list)
     api_base_url: str = field(
         default_factory=lambda: os.environ.get(
-            "AGENT_ZERO_API_BASE", "http://127.0.0.1:80"
+            "AGENT_ZERO_API_BASE", "http://127.0.0.1:5000"
         )
     )
     api_key: Optional[str] = field(
