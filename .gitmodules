@@ -107,7 +107,7 @@
 [submodule "PMOVES-E2B-Danger-Room"]
 	path = PMOVES-E2B-Danger-Room
 	url = https://github.com/POWERFULMOVES/PMOVES-E2B-Danger-Room.git
-	branch = PMOVES.AI-Edition-Hardened
+	branch = main
 
 [submodule "PMOVES-E2B-Danger-Room-Desktop"]
 	path = PMOVES-E2B-Danger-Room-Desktop
@@ -117,7 +117,7 @@
 [submodule "PMOVES-Danger-infra"]
 	path = PMOVES-Danger-infra
 	url = https://github.com/POWERFULMOVES/PMOVES-Danger-infra.git
-	branch = PMOVES.AI-Edition-Hardened
+	branch = main
 
 [submodule "PMOVES-E2b-Spells"]
 	path = PMOVES-E2b-Spells
@@ -131,7 +131,7 @@
 [submodule "PMOVES-Pipecat"]
 	path = PMOVES-Pipecat
 	url = https://github.com/POWERFULMOVES/pmoves-pipecat.git
-	branch = PMOVES.AI-Edition-Hardened
+	branch = main
 
 [submodule "PMOVES-Pinokio-Ultimate-TTS-Studio"]
 	path = PMOVES-Pinokio-Ultimate-TTS-Studio
@@ -234,7 +234,7 @@
 [submodule "PMOVES-MAI-UI"]
 	path = PMOVES-MAI-UI
 	url = https://github.com/POWERFULMOVES/PMOVES-MAI-UI.git
-	branch = PMOVES.AI-Edition-Hardened
+	branch = main
 
 # =============================================================================
 # Networking & Infrastructure
@@ -253,7 +253,7 @@
 [submodule "PMOVES-Headscale"]
 	path = PMOVES-Headscale
 	url = https://github.com/POWERFULMOVES/PMOVES-headscale.git
-	branch = PMOVES.AI-Edition-Hardened
+	branch = main
 
 # =============================================================================
 # Data Storage & Database
@@ -279,7 +279,7 @@
 [submodule "Pmoves-cipher"]
 	path = Pmoves-cipher
 	url = https://github.com/POWERFULMOVES/Pmoves-cipher.git
-	branch = PMOVES.AI-Edition-Hardened
+	branch = main
 [submodule "pmoves/integrations/archon"]
 	path = pmoves/integrations/archon
 	url = https://github.com/POWERFULMOVES/PMOVES-Archon.git
