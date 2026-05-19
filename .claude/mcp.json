@@ -41,7 +41,6 @@
         "API_TOKEN": "${HOSTINGER_API_KEY}"
       }
     },
-    3
     "tailscale": {
       "command": "npx",
       "args": [

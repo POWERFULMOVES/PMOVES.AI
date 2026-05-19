@@ -294,3 +294,41 @@ root:
           agent_hint: z890-claude
           status: future
           notes: "Depends on pterm event hooks or custom pinokio.js observer"
+
+    # =========================================================================
+    # Phase 8: MoF (Mixture of Frameworks) Integration
+    # Tracks the unified P7 management surface bridging multiple skill frameworks
+    # Context: pmoves/docs/architecture/PMOVES_MOF_ARCHITECTURE.md
+    # =========================================================================
+    - id: p7.mof
+      task: "MoF integration for P7 lifecycle management"
+      context: "Using a Mixture of Frameworks (pterm, pinokio, gepeto, cipher) to coordinate agentic behavior, terminal execution, and state across the P7 fleet"
+      agent_hint: z890-claude
+      status: pending
+      children:
+        - id: p7.mof.gepeto-pinokio
+          task: "Native Pinokio capabilities leveraged"
+          action:
+            type: manual
+            expect: "Built-in gepeto and pinokio skills coordinate app discovery, launching, and basic coding assistance within P7"
+          context: "Native skills provide baseline interpreter functions"
+          agent_hint: 5090-claude
+          status: done
+
+        - id: p7.mof.pterm
+          task: "pterm bridged for local execution and NATS events"
+          action:
+            type: manual
+            expect: "pterm skill invokes local shell commands and pipes telemetry/events into the pmoves ecosystem"
+          context: "Crucial for crossing the boundary between Pinokio JS space and PMOVES OS space"
+          agent_hint: z890-claude
+          status: pending
+
+        - id: p7.mof.cipher
+          task: "cipher integration for P7 state and alignment"
+          action:
+            type: manual
+            expect: "cipher skill (e.g., cipher-beats) manages state alignment and specialized agent orchestration"
+          context: "Aligns P7 state vectors with the broader PMOVES topological definitions"
+          agent_hint: 4090-claude
+          status: pending

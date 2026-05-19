@@ -16,11 +16,13 @@ pinokio_skills:
   native:
     - pinokio          # Built-in app discovery + launch
     - gepeto           # Built-in code assistant (~/.agents/skills/gepeto)
+    - pterm            # Pinokio terminal interface
   pmoves:
     - pmoves-services  # Docker Compose profile controls
     - pmoves-remote    # Headscale/RustDesk remote access
     - pmoves-agent-zero
     - pmoves-model-registry
+    - cipher           # MoF/P7 state management
 ---
 
 # PBnJ | PMOVES + Pinokio Bridge
