@@ -29,11 +29,12 @@ services:
     environment:
     - PORT=8080
     # NATS_URL from env.tier-agent has credentials: nats://<from-env.shared>
-    - AGENT_ZERO_API_BASE=${AGENT_ZERO_API_BASE:-http://127.0.0.1:80}
+    # Supervisor polls inner AZ on :5000 (standalone Uvicorn default)
+    - AGENT_ZERO_API_BASE=${AGENT_ZERO_API_BASE:-http://127.0.0.1:5000}
     - AGENT_ZERO_HEALTH_PATH=${AGENT_ZERO_HEALTH_PATH:-/healthz}
     - AGENT_ZERO_HEALTH_PATH_FALLBACK=${AGENT_ZERO_HEALTH_PATH_FALLBACK:-/health}
     - AGENT_ZERO_CAPTURE_OUTPUT=${AGENT_ZERO_CAPTURE_OUTPUT:-true}
-    - AGENT_ZERO_EXTRA_ARGS=${AGENT_ZERO_EXTRA_ARGS:---port=80 --host=0.0.0.0}
+    - AGENT_ZERO_EXTRA_ARGS=${AGENT_ZERO_EXTRA_ARGS:-}
     - PYTHONPATH=${AGENT_ZERO_PYTHONPATH:-/app:/app/services}
     - AGENTZERO_JETSTREAM=${AGENTZERO_JETSTREAM:-true}
     - AGENTZERO_JS_UNAVAILABLE_THRESHOLD=${AGENTZERO_JS_UNAVAILABLE_THRESHOLD:-1}
@@ -83,7 +84,6 @@ services:
         condition: service_healthy
     ports:
     - ${AGENT_ZERO_BIND:-127.0.0.1}:${AGENT_ZERO_PORT:-8080}:8080
-    - ${AGENT_ZERO_BIND:-127.0.0.1}:${AGENT_ZERO_UI_PORT:-8081}:80
     volumes:
     - ${AGENT_ZERO_MEMORY_DIR:-./data/agent-zero/memory}:/a0/memory
     - ${AGENT_ZERO_KNOWLEDGE_DIR:-./data/agent-zero/knowledge}:/a0/knowledge
@@ -91,7 +91,7 @@ services:
     - ${AGENT_ZERO_LOG_DIR:-./data/agent-zero/logs}:/a0/logs
     - ${AGENT_ZERO_RUNTIME_DIR:-./data/agent-zero/runtime}:/a0/runtime
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:80/ >/dev/null || curl -fsS http://localhost:8080/healthz >/dev/null || exit 1"]
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/healthz >/dev/null || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -105,6 +105,103 @@ services:
         limits:
           cpus: '2.0'
           memory: 2G
+  # DARKXSIDE — operator leaf node (heavier generate weight, artifacts on approve)
+  # Connects to NATS hub + TensorZero in docked mode. Standalone mode uses
+  # docker-compose.darkxside-sidecar.yml instead (Ollama on host, no NATS).
+  agent-zero-darkxside:
+    <<: *tier-agent-hardened
+    env_file:
+    - env.shared
+    - env.tier-agent
+    cap_drop:
+    - ALL
+    cap_add:
+    - NET_BIND_SERVICE
+    - CHOWN
+    - SETGID
+    - SETUID
+    security_opt:
+    - no-new-privileges:true
+    build:
+      context: .
+      dockerfile: ./services/agent-zero/Dockerfile
+    restart: unless-stopped
+    environment:
+    # Supervisor listens on this port (inner AZ runs on :5000 internally)
+    - PORT=8080
+    - AGENT_ZERO_API_BASE=${AGENT_ZERO_API_BASE:-http://127.0.0.1:5000}
+    - AGENT_ZERO_HEALTH_PATH=${AGENT_ZERO_HEALTH_PATH:-/healthz}
+    - AGENT_ZERO_HEALTH_PATH_FALLBACK=${AGENT_ZERO_HEALTH_PATH_FALLBACK:-/health}
+    - AGENT_ZERO_CAPTURE_OUTPUT=${AGENT_ZERO_CAPTURE_OUTPUT:-true}
+    - AGENT_ZERO_EXTRA_ARGS=${AGENT_ZERO_EXTRA_ARGS:-}
+    - PYTHONPATH=${AGENT_ZERO_PYTHONPATH:-/app:/app/services}
+    - AGENTZERO_JETSTREAM=${AGENTZERO_JETSTREAM:-true}
+    - AGENTZERO_JS_UNAVAILABLE_THRESHOLD=${AGENTZERO_JS_UNAVAILABLE_THRESHOLD:-1}
+    - TENSORZERO_URL=${TENSORZERO_URL:-http://tensorzero-gateway:3000}
+    - CHIT_REQUIRE_SIGNATURE=${CHIT_PROD_REQUIRE_SIGNATURE:-true}
+    - CHIT_DECRYPT_ANCHORS=${CHIT_PROD_DECRYPT_ANCHORS:-true}
+    - CHIT_PASSPHRASE=${CHIT_PROD_PASSPHRASE:?set CHIT_PROD_PASSPHRASE in env.shared}
+    - DOCKED_MODE=${DOCKED_MODE:-true}
+    - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
+    - AGENT_FORM=DARKXSIDE
+    - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
+    - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
+    # LLM routing: TensorZero gateway (same as main agent-zero)
+    - OPENAI_API_KEY=${OPENAI_API_KEY:-tensorzero-routed}
+    - A0_SET_chat_model_provider=openai
+    - A0_SET_chat_model_name=tensorzero::function_name::agent_zero
+    - A0_SET_chat_model_api_base=http://tensorzero-gateway:3000/openai/v1
+    - A0_SET_util_model_provider=openai
+    - A0_SET_util_model_name=tensorzero::function_name::agent_zero
+    - A0_SET_util_model_api_base=http://tensorzero-gateway:3000/openai/v1
+    - A0_SET_embed_model_provider=openai
+    - A0_SET_embed_model_name=openai/tensorzero::embedding_model_name::gemma_embed_local
+    - A0_SET_embed_model_api_base=http://tensorzero-gateway:3000/openai/v1
+    - A0_SET_browser_model_provider=openai
+    - A0_SET_browser_model_name=tensorzero::function_name::agent_zero
+    - A0_SET_browser_model_api_base=http://tensorzero-gateway:3000/openai/v1
+    - A0_SET_a2a_server_enabled=true
+    - A0_SET_mcp_server_token=${DARKXSIDE_MCP_SERVER_TOKEN:-${MCP_SERVER_TOKEN:-}}
+    # Host environment leak guard
+    - SSL_CERT_FILE=
+    - SSL_CERT_DIR=
+    - REQUESTS_CA_BUNDLE=
+    - CURL_CA_BUNDLE=
+    - NODE_EXTRA_CA_CERTS=
+    - HTTP_PROXY=
+    - HTTPS_PROXY=
+    - NO_PROXY=
+    depends_on:
+      nats:
+        condition: service_healthy
+      nats-init:
+        condition: service_completed_successfully
+      tensorzero-gateway:
+        condition: service_healthy
+    ports:
+    - ${DARKXSIDE_BIND:-127.0.0.1}:${DARKXSIDE_PORT:-8092}:8080
+    volumes:
+    - ${DARKXSIDE_MEMORY_DIR:-./data/darkxside/memory}:/a0/memory
+    - ${DARKXSIDE_KNOWLEDGE_DIR:-./data/darkxside/knowledge}:/a0/knowledge
+    - ${DARKXSIDE_INSTRUMENTS_DIR:-./data/darkxside/instruments}:/a0/instruments
+    - ${DARKXSIDE_LOG_DIR:-./data/darkxside/logs}:/a0/logs
+    - ${DARKXSIDE_RUNTIME_DIR:-./data/darkxside/runtime}:/a0/runtime
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/healthz >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+    - pmoves_app
+    - pmoves_bus
+    - pmoves_external
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+
   archon:
     <<: *tier-agent-hardened
     build:

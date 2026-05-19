@@ -244,20 +244,32 @@ function Get-NicCollisions {
                        $_.IPAddress -ne '127.0.0.1' -and
                        $_.IPAddress -notlike '10.255.*' }    # exclude Docker internal
 
-    # Group by subnet prefix (honour PrefixLength; /24 is the common case)
+    # Group by subnet prefix using TRUE CIDR mask (bitwise), not octet truncation.
+    # The earlier octet-floor approach mis-grouped /23, /20, /25, etc. — leading to
+    # missed real collisions on non-/24 networks and false ones on partial-octet masks.
     $bySubnet = @{}
     foreach ($addr in $addrs) {
         $ip = [System.Net.IPAddress]::Parse($addr.IPAddress)
         $pl = [int]$addr.PrefixLength
-        # Build network address string to group by
+        if ($pl -lt 1 -or $pl -gt 32) { continue }
+
+        # Build true network mask from PrefixLength (bitwise AND on each byte)
         $bytes = $ip.GetAddressBytes()
-        $netKey = if ($pl -ge 24) {
-            "$($bytes[0]).$($bytes[1]).$($bytes[2]).0/$pl"
-        } elseif ($pl -ge 16) {
-            "$($bytes[0]).$($bytes[1]).0.0/$pl"
-        } else {
-            "$($bytes[0]).0.0.0/$pl"
+        $netBytes = New-Object byte[] 4
+        for ($i = 0; $i -lt 4; $i++) {
+            $bitsRemaining = $pl - ($i * 8)
+            if ($bitsRemaining -le 0) {
+                $maskByte = 0
+            } elseif ($bitsRemaining -ge 8) {
+                $maskByte = 255
+            } else {
+                # Partial-octet mask: top $bitsRemaining bits set, rest cleared
+                $maskByte = [byte]((0xFF -shl (8 - $bitsRemaining)) -band 0xFF)
+            }
+            $netBytes[$i] = [byte]($bytes[$i] -band $maskByte)
         }
+        $netKey = "$($netBytes[0]).$($netBytes[1]).$($netBytes[2]).$($netBytes[3])/$pl"
+
         if (-not $bySubnet.ContainsKey($netKey)) { $bySubnet[$netKey] = @() }
         $bySubnet[$netKey] += $addr
     }

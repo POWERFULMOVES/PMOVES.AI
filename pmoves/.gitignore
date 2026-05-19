@@ -48,4 +48,13 @@ env.tier-worker
 env.tier-supabase.urlencoded
 env.z890
 env.presign.additions
+
+# Standalone sidecar env files (operator-tuned from .example templates)
+env.darkxside-sidecar
+env.spark-sidecar
+
+# Sidecar data directories (operator-private runtime state)
+data/darkxside/
+data/spark/
+
 .codex/

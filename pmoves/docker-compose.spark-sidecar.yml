@@ -94,6 +94,7 @@ services:
     security_opt:
     - no-new-privileges:true
     environment:
+    # Supervisor listens on this port (inner AZ runs on :5000 internally)
     - PORT=8080
     - AGENT_FORM=SPARK
     - TOPOLOGY_MODE=standalone
@@ -144,11 +145,10 @@ services:
     - ${SPARK_USR_DIR:-./usr}:/a0/usr
     ports:
     - ${SPARK_BIND:-127.0.0.1}:${SPARK_PORT:-8093}:8080
-    - ${SPARK_BIND:-127.0.0.1}:${SPARK_UI_PORT:-8094}:80
     networks:
     - spark_net
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:80/ >/dev/null || curl -fsS http://localhost:8080/ >/dev/null || exit 1"]
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/healthz >/dev/null || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3

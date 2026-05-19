@@ -36,6 +36,7 @@ services:
     security_opt:
     - no-new-privileges:true
     environment:
+    # Supervisor listens on this port (inner AZ runs on :5000 internally)
     - PORT=8080
     - AGENT_FORM=DARKXSIDE
     - TOPOLOGY_MODE=standalone
@@ -85,7 +86,7 @@ services:
     # User config, plugins, forms, skills
     - ${DARKXSIDE_USR_DIR:-./usr}:/a0/usr
     ports:
-    - ${DARKXSIDE_BIND:-127.0.0.1}:${DARKXSIDE_PORT:-8092}:5000
+    - ${DARKXSIDE_BIND:-127.0.0.1}:${DARKXSIDE_PORT:-8092}:8080
     networks:
     - pmoves-net
     - pmoves_app
@@ -94,7 +95,7 @@ services:
     extra_hosts:
     - host.docker.internal:host-gateway
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:5000/ >/dev/null || exit 1"]
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/healthz >/dev/null || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3

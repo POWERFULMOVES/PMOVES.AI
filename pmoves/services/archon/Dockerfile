@@ -14,6 +14,7 @@ RUN apt-get update \
         build-essential \
         git \
         curl \
+        unzip \
         ca-certificates \
         gnupg \
         libnss3 \
@@ -41,7 +42,9 @@ RUN apt-get update \
     && corepack enable \
     && corepack prepare yarn@stable --activate \
     && corepack prepare pnpm@latest --activate \
+    && curl -fsSL https://bun.sh/install | bash \
     && rm -rf /var/lib/apt/lists/*
+ENV PATH="/root/.bun/bin:$PATH"
 
 ARG ARCHON_GIT_REMOTE=https://github.com/POWERFULMOVES/PMOVES-Archon.git
 # PMOVES-Archon fork default branch is PMOVES.AI-Edition-Hardened, not main.
@@ -168,16 +171,15 @@ COPY services /app/services
 # Prepare directories used at runtime
 RUN mkdir -p /app/static/archon-ui /app/config/mcp
 
-# Build the Archon UI if sources are present in the build context
-ARG ARCHON_UI_DIR=archon-ui-main
+# Build the Archon UI from vendored sources (packages/web).
+# Archon uses Bun workspaces — bun is installed via corepack above.
+ARG ARCHON_UI_DIR=vendor/archon/packages/web
 ARG ARCHON_UI_BUILD_DIR=dist
 RUN if [ -d "$ARCHON_UI_DIR" ]; then \
-        cd "$ARCHON_UI_DIR" \
-        && if [ -f pnpm-lock.yaml ]; then pnpm install --frozen-lockfile && pnpm build; \
-           elif [ -f yarn.lock ]; then yarn install --frozen-lockfile && yarn build; \
-           elif [ -f package-lock.json ]; then npm ci && npm run build; \
-           else npm install && npm run build; fi \
-        && mkdir -p "$ARCHON_UI_STATIC_DIR" \
+        echo "→ Building Archon UI from $ARCHON_UI_DIR" && \
+        cd /app/vendor/archon && bun install --frozen-lockfile && \
+        cd "$ARCHON_UI_DIR" && bun run build && \
+        mkdir -p "$ARCHON_UI_STATIC_DIR" \
         && cp -R "$ARCHON_UI_BUILD_DIR"/* "$ARCHON_UI_STATIC_DIR"/; \
     else \
         echo "Archon UI directory '$ARCHON_UI_DIR' not found. Skipping UI build."; \

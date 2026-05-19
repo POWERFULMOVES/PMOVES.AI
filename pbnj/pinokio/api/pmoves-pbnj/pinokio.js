@@ -19,12 +19,14 @@ module.exports = {
       netFix: info.running("net-fix.js"),
       reset: info.running("reset-nettools.js"),
       update: info.running("update.js"),
+      demo: info.running("demo.js"),
     }
 
     let glancesRunning = running.glancesVenv || running.glancesDocker
     let glancesLocal = running.glancesVenv
       ? info.local("glances-start.js")
       : (running.glancesDocker ? info.local("glances-docker.js") : null)
+    let demoLocal = running.demo ? info.local("demo.js") : null
 
     // --------------- Active Terminal States ---------------
     if (running.install) {
@@ -105,6 +107,33 @@ module.exports = {
         icon: "fa-solid fa-server",
         text: "Start KVM4 Stack (K8s)",
         href: "kvm4-up.json",
+      })
+    }
+
+    // ============ Demo Room Section ============
+    if (running.demo) {
+      if (demoLocal && demoLocal.url) {
+        items.push({
+          icon: "fa-solid fa-rocket",
+          text: "Open Demo Room",
+          href: demoLocal.url,
+        }, {
+          icon: "fa-solid fa-terminal",
+          text: "Demo Room Terminal",
+          href: "demo.js",
+        })
+      } else {
+        items.push({
+          icon: "fa-solid fa-spinner",
+          text: "Demo Room (Starting...)",
+          href: "demo.js",
+        })
+      }
+    } else {
+      items.push({
+        icon: "fa-solid fa-rocket",
+        text: "Launch Demo Room",
+        href: "demo.js",
       })
     }
 

@@ -1,0 +1,24 @@
+{
+  "recommendations": [
+    "ms-python.python",
+    "ms-python.vscode-pylance",
+    "ms-python.black-formatter",
+    "ms-python.isort",
+    "charliermarsh.ruff",
+    "redhat.vscode-yaml",
+    "eamodio.gitlens",
+    "github.vscode-pull-request-github",
+    "ms-vscode.makefile-tools",
+    "yzhang.markdown-all-in-one",
+    "DavidAnson.vscode-markdownlint",
+    "PKief.material-icon-theme",
+    "zhuangtongfa.material-theme",
+    "ms-vscode.vscode-docker",
+    "ms-vscode-remote.remote-ssh",
+    "esbenp.prettier-vscode",
+    "usernamehw.errorlens",
+    "streetsidesoftware.code-spell-checker",
+    "GitHub.copilot"
+  ],
+  "unwantedRecommendations": []
+}
