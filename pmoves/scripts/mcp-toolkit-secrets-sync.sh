@@ -11,12 +11,23 @@
 # Re-running with changed values overwrites the keychain entry.
 #
 # Usage:
-#   PMOVES_TIER_FILE=pmoves/env.tier-shared bash pmoves/scripts/mcp-toolkit-secrets-sync.sh
-# Make target: make mcp-toolkit-secrets-sync
+#   # Default: read pmoves/env.shared (the canonical aggregate the secrets-funnel produces)
+#   bash pmoves/scripts/mcp-toolkit-secrets-sync.sh
+#
+#   # Tier-specific override (e.g. for agent-tier-only sync):
+#   PMOVES_TIER_FILE=pmoves/env.tier-agent bash pmoves/scripts/mcp-toolkit-secrets-sync.sh
+#
+# Make target: make -C pmoves mcp-toolkit-secrets-sync
 
 set -euo pipefail
 
-TIER_FILE="${PMOVES_TIER_FILE:-pmoves/env.tier-shared}"
+# Resolve the canonical default relative to this script's location, not the
+# caller's cwd. `make -C pmoves` and direct invocation from repo root both work.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PMOVES_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+DEFAULT_TIER_FILE="${PMOVES_DIR}/env.shared"
+
+TIER_FILE="${PMOVES_TIER_FILE:-${DEFAULT_TIER_FILE}}"
 DRY_RUN="${PMOVES_MCP_DRY_RUN:-0}"
 
 color() { printf '\033[%sm%s\033[0m\n' "$1" "$2"; }

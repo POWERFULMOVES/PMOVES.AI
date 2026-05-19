@@ -10,7 +10,7 @@ mcp-toolkit-help: ## Show Docker MCP Toolkit Make targets
 	@echo "Docker MCP Toolkit targets:"
 	@echo "  mcp-toolkit-bootstrap     Pull + import the canonical PMOVES profile (idempotent)"
 	@echo "                            Override: PMOVES_MCP_PROFILE_REF=<oci-ref> PMOVES_MCP_REFRESH=1"
-	@echo "  mcp-toolkit-secrets-sync  Populate docker-pass-style secrets from env.tier-shared"
+	@echo "  mcp-toolkit-secrets-sync  Populate docker-pass-style secrets from pmoves/env.shared"
 	@echo "                            Override: PMOVES_TIER_FILE=<path> PMOVES_MCP_DRY_RUN=1"
 	@echo "  mcp-toolkit-status        Show profile list + client connections + secret roster"
 	@echo "  mcp-toolkit-help          This message"
@@ -20,7 +20,7 @@ mcp-toolkit-help: ## Show Docker MCP Toolkit Make targets
 mcp-toolkit-bootstrap: ## Pull + import the canonical PMOVES Docker MCP profile (idempotent)
 	@bash scripts/mcp-toolkit-bootstrap.sh
 
-mcp-toolkit-secrets-sync: ## Populate Toolkit keychain from env.tier-shared (skips OAuth secrets)
+mcp-toolkit-secrets-sync: ## Populate Toolkit keychain from pmoves/env.shared (skips OAuth secrets)
 	@bash scripts/mcp-toolkit-secrets-sync.sh
 
 mcp-toolkit-status: ## Show docker mcp profile / client / secret status

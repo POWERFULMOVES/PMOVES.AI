@@ -110,7 +110,7 @@ Same pattern for `cursor`, `vscode`, `codex`, `gemini`, `crush`, `cline`, `conti
 
 **PMOVES bridge** (`make mcp-toolkit-secrets-sync`, see § 7):
 
-The bridge reads `env.tier-shared` (and tier-specific files when relevant) and maps known PMOVES env names to Toolkit secret names:
+The bridge reads `pmoves/env.shared` by default (the canonical aggregate the secrets-funnel produces). Override with `PMOVES_TIER_FILE=pmoves/env.tier-agent` (or any other tier) when syncing a subset. The script resolves its default path relative to its own location, so `make -C pmoves mcp-toolkit-secrets-sync` and direct invocation from repo root both work. It maps known PMOVES env names to Toolkit secret names:
 
 | PMOVES env | Toolkit secret name | Provider |
 |---|---|---|
@@ -145,7 +145,7 @@ Upstream Docker docs note: **"E2B sandboxes now include direct access to the Doc
 | Target | What it does |
 |---|---|
 | `make mcp-toolkit-bootstrap` | Verifies `docker mcp` CLI present, pulls `pmoves_5090_web` profile from OCI, imports it. Idempotent. Per-node. |
-| `make mcp-toolkit-secrets-sync` | Reads `env.tier-shared`, populates `docker-pass`-style Toolkit secrets non-interactively. Skips OAuth-style servers (see § 5). |
+| `make mcp-toolkit-secrets-sync` | Reads `pmoves/env.shared` (override via `PMOVES_TIER_FILE`), populates `docker-pass`-style Toolkit secrets non-interactively. Skips OAuth-style servers (see § 5). |
 | `make mcp-toolkit-status` | `docker mcp profile ls && docker mcp client ls && docker mcp secret ls` — single-shot health. |
 
 Targets live in `pmoves/Makefile`. Scripts live in `pmoves/scripts/mcp-toolkit-*.sh`.
