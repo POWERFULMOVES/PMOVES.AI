@@ -255,3 +255,15 @@ NUL
 !.kilocode/rules/
 !.kilocode/skills/
 Z.AI_MAX_Plan_Developer_Reference.html
+
+# Runtime state files (not version-controlled)
+pmoves/services/agent-zero/.a0-upstream-version
+memory/audit/
+
+# Local document edits (ODS lock files)
+document/
+
+# Bulk subtitle/transcript files
+*.vtt
+# Raw transcript files (bulk, not version-controlled)
+research/transcripts/
