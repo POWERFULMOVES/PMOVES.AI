@@ -9,15 +9,15 @@
 # emits a summary block at the end. Exit code = number of failed phases (0 if all pass).
 #
 # Phases:
-#   P1 CLI + profile presence  (gates everything; missing CLI/profile → SKIP rest)
-#   P2 Client connected        (gates P3+P5 — needs claude-code connected via make mcp-toolkit-connect)
+#   P1 CLI + profile presence  (gates everything; missing CLI/profile → SKIP P2–P5)
+#   P2 Client connected        (worktree-scoped signal; P3/P5 may still PASS via internal gateway)
 #   P3 Tool surface non-empty  (asserts the 25-server bundle's tools are discoverable)
 #   P4 Gateway reachable       (PR #1555 lane: SSE listener on :8090, optional MCP_GATEWAY_AUTH_TOKEN)
 #   P5 context7 round-trip     (low-side-effect tool call through the gateway)
 #
 # Usage:
 #   bash pmoves/tools/verify_pmoves_5090_web_mcp_integration.sh
-#   make -C pmoves mcp-toolkit-verify   # if a target gets added later
+#   make -C pmoves mcp-toolkit-verify
 #
 # Run order with the canonical bootstrap chain:
 #   make -C pmoves mcp-toolkit-bootstrap        # imports profile
@@ -56,6 +56,12 @@ section() {
   printf '\n=== %s ===\n' "$1"
 }
 
+# Set to true when P1 records P2-P5 SKIPs directly — downstream phases check
+# this so they don't re-record and inflate SKIP totals (CodeRabbit P2 thread on
+# PR #1560). Bash 'case' patterns can't elegantly do post-hoc filtering across
+# the recorded results, so set the flag explicitly at the FAIL site.
+p1_blocked_downstream=false
+
 # ----------------------------------------------------------------------------
 section "P1 — CLI + profile presence"
 
@@ -65,6 +71,7 @@ if ! command -v docker >/dev/null 2>&1; then
   record "P3" "SKIP" "P1 failed"
   record "P4" "SKIP" "P1 failed"
   record "P5" "SKIP" "P1 failed"
+  p1_blocked_downstream=true
 else
   if ! docker mcp version >/dev/null 2>&1; then
     record "P1" "FAIL" "'docker mcp' subcommand not available (Docker Desktop with MCP Toolkit required)"
@@ -72,6 +79,7 @@ else
     record "P3" "SKIP" "P1 failed"
     record "P4" "SKIP" "P1 failed"
     record "P5" "SKIP" "P1 failed"
+    p1_blocked_downstream=true
   else
     cli_ver=$(docker mcp version 2>&1 | head -1)
     # Per [[feedback_concurrent_user_edits_diff_first]]: ID column is $1, name is $2.
@@ -84,20 +92,13 @@ else
       record "P3" "SKIP" "P1 failed"
       record "P4" "SKIP" "P1 failed"
       record "P5" "SKIP" "P1 failed"
+      p1_blocked_downstream=true
     fi
   fi
 fi
 
-# Early exit shortcut: if P1 already SKIP'd P2-P5 we still want to summarize.
-already_blocked=false
-for r in "${PHASE_RESULTS[@]}"; do
-  case "$r" in
-    P2\|SKIP*) already_blocked=true ;;
-  esac
-done
-
 # ----------------------------------------------------------------------------
-if ! $already_blocked; then
+if ! $p1_blocked_downstream; then
   section "P2 — Claude Code client connected (this worktree)"
 
   # docker mcp client ls is project-cwd-scoped. Each worktree shows its own
@@ -113,7 +114,7 @@ if ! $already_blocked; then
   elif printf '%s' "$client_state" | grep -qE 'disconnected'; then
     # P3/P5 run against the global gateway (not the per-worktree client), so
     # they can still PASS even with disconnected client. Don't pre-record SKIP
-    # or WARN — let those phases evaluate against their actual surface.
+    # — let those phases evaluate against their actual surface.
     record "P2" "FAIL" "this worktree shows disconnected — run from connected worktree, OR: make -C pmoves mcp-toolkit-connect"
   else
     record "P2" "FAIL" "claude-code state unrecognized: '$client_state'"
@@ -121,50 +122,42 @@ if ! $already_blocked; then
 fi
 
 # ----------------------------------------------------------------------------
-section "P3 — Tool surface non-empty"
+if ! $p1_blocked_downstream; then
+  section "P3 — Tool surface non-empty"
 
-if ! $already_blocked; then
   tool_count=$(docker mcp tools count 2>/dev/null | grep -oE '[0-9]+' | head -1 || echo 0)
   if [ "$tool_count" -gt 0 ] 2>/dev/null; then
     record "P3" "PASS" "$tool_count tools available across profile servers"
   else
     record "P3" "FAIL" "docker mcp tools count returned 0 — gateway may not be running"
   fi
-else
-  for r in "${PHASE_RESULTS[@]}"; do
-    case "$r" in P3*) continue 2 ;; esac
-  done
-  record "P3" "SKIP" "P2 blocked"
 fi
 
 # ----------------------------------------------------------------------------
-section "P4 — Host-side SSE gateway reachable (PR #1555)"
+if ! $p1_blocked_downstream; then
+  section "P4 — Host-side SSE gateway reachable (PR #1555)"
 
-gateway_check_url="http://${GATEWAY_HOST}:${GATEWAY_PORT}/sse"
-gateway_response=$(curl -sS --max-time 5 -o /dev/null -w 'http=%{http_code} bytes=%{size_download}' "$gateway_check_url" 2>&1 || true)
+  gateway_check_url="http://${GATEWAY_HOST}:${GATEWAY_PORT}/sse"
+  gateway_response=$(curl -sS --max-time 5 -o /dev/null -w 'http=%{http_code} bytes=%{size_download}' "$gateway_check_url" 2>&1 || true)
 
-case "$gateway_response" in
-  *http=200*) record "P4" "PASS" "$gateway_check_url responded 200 ($gateway_response)" ;;
-  *http=401* | *http=403*) record "P4" "PASS" "$gateway_check_url responded auth-required ($gateway_response) — SSE listener up, token required for full handshake" ;;
-  *http=000*) record "P4" "FAIL" "$gateway_check_url not reachable (run: make -C pmoves mcp-toolkit-gateway-start)" ;;
-  *) record "P4" "FAIL" "$gateway_check_url unexpected response: $gateway_response" ;;
-esac
+  case "$gateway_response" in
+    *http=200*) record "P4" "PASS" "$gateway_check_url responded 200 ($gateway_response)" ;;
+    *http=401* | *http=403*) record "P4" "PASS" "$gateway_check_url responded auth-required ($gateway_response) — SSE listener up, token required for full handshake" ;;
+    *http=000*) record "P4" "FAIL" "$gateway_check_url not reachable (run: make -C pmoves mcp-toolkit-gateway-start)" ;;
+    *) record "P4" "FAIL" "$gateway_check_url unexpected response: $gateway_response" ;;
+  esac
+fi
 
 # ----------------------------------------------------------------------------
-section "P5 — Tool round-trip ($PROBE_TOOL)"
+if ! $p1_blocked_downstream; then
+  section "P5 — Tool round-trip ($PROBE_TOOL)"
 
-if ! $already_blocked; then
   call_output=$(docker mcp tools call "$PROBE_TOOL" "$PROBE_TOOL_ARG" 2>&1 | head -c 400 || true)
   if [ -n "$call_output" ] && ! echo "$call_output" | grep -qiE "error|not found|failed"; then
     record "P5" "PASS" "$PROBE_TOOL '$PROBE_TOOL_ARG' returned $(echo "$call_output" | wc -c) bytes"
   else
     record "P5" "FAIL" "$PROBE_TOOL call did not return useful output: $(echo "$call_output" | head -c 200)"
   fi
-else
-  for r in "${PHASE_RESULTS[@]}"; do
-    case "$r" in P5*) continue 2 ;; esac
-  done
-  record "P5" "SKIP" "P2 blocked"
 fi
 
 # ----------------------------------------------------------------------------

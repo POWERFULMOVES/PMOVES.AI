@@ -27,7 +27,7 @@ mcp-toolkit-help: ## Show Docker MCP Toolkit Make targets
 	@echo "  mcp-toolkit-gateway-stop  Stop the background gateway"
 	@echo "  mcp-toolkit-gateway-tail  Tail the background gateway log"
 	@echo "  mcp-toolkit-verify        End-to-end fixture: 5 phases (profile, connect, tools, gateway, call)"
-	@echo "                            Override: PROFILE=<name> MCP_GATEWAY_PORT=<n> PROBE_TOOL=<tool>"
+	@echo "                            Override: PROFILE=<name> MCP_GATEWAY_PORT=<n> PROBE_TOOL=<tool> PROBE_TOOL_ARG=<arg>"
 	@echo "  mcp-toolkit-help          This message"
 	@echo
 	@echo "Full guide: pmoves/docs/operations/MCP_TOOLKIT.md"

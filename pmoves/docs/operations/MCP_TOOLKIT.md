@@ -258,7 +258,7 @@ Targets live in `pmoves/Makefile`. Scripts live in `pmoves/scripts/mcp-toolkit-*
 
 **Exit code:** number of failed phases (0 if all PASS). SKIP'd phases don't count as failures (P1 cascades SKIP downstream when CLI absent).
 
-**P2 substring trap (lesson learned):** `docker mcp client ls` emits `claude-code: disconnected` or `claude-code: connected`. A naive `grep -q "connected"` matches BOTH — disconnected substring contains "connected". The fixture uses `grep -qE '^[^a-zA-Z]*claude-code:[[:space:]]+connected[[:space:]]*$'` with an end-anchor to reject the false-positive. See `~/.claude/.../memory/feedback_concurrent_user_edits_diff_first.md` for the broader pattern.
+**P2 substring trap (lesson learned):** `docker mcp client ls` emits `claude-code: disconnected` or `claude-code: connected`. A naive `grep -q "connected"` matches BOTH — disconnected substring contains "connected". The fixture uses `grep -qE '^[^a-zA-Z]*claude-code:[[:space:]]+connected[[:space:]]*$'` with an end-anchor to reject the false-positive. This is a general CLI-table-parsing class — see relevant feedback memory files for the broader pattern.
 
 **P4 + P5 gateway semantics:** P3 + P5 query the global Toolkit gateway (cwd-independent), so they can PASS even when P2 reports the current worktree is disconnected. P4 specifically probes the host-side SSE listener from PR #1555 — that's distinct from the Toolkit's auto-started internal gateway. Treat P3 (internal) and P4 (Lane D-host) as independent surfaces.
 
