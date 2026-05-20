@@ -89,12 +89,16 @@ if [ -z "${MCP_GATEWAY_AUTH_TOKEN:-}" ]; then
   else
     NEW_TOKEN="$(openssl rand -hex 32 2>/dev/null || head -c 64 /dev/urandom | base64 | tr -d '/+=' | head -c 64)"
     export MCP_GATEWAY_AUTH_TOKEN="${NEW_TOKEN}"
-    if [ -w "${PMOVES_DIR}" ]; then
+    # Writability check must target the file we're appending to, not the parent
+    # directory. Two cases work: (a) file exists and is writable, or (b) file
+    # doesn't exist yet but the directory is writable so we can create it.
+    if { [ -e "${ENV_SHARED}" ] && [ -w "${ENV_SHARED}" ]; } \
+       || { [ ! -e "${ENV_SHARED}" ] && [ -w "${PMOVES_DIR}" ]; }; then
       info "generated new MCP_GATEWAY_AUTH_TOKEN and appending to ${ENV_SHARED}"
       printf '\n# Docker MCP Toolkit SSE gateway auth (host: pmoves_5090_web profile)\n' >> "${ENV_SHARED}"
       printf 'MCP_GATEWAY_AUTH_TOKEN=%s\n' "${MCP_GATEWAY_AUTH_TOKEN}" >> "${ENV_SHARED}"
     else
-      warn "cannot persist MCP_GATEWAY_AUTH_TOKEN to ${ENV_SHARED} (read-only). Export it manually in your secrets-funnel and re-run."
+      warn "cannot persist MCP_GATEWAY_AUTH_TOKEN to ${ENV_SHARED} (not writable). Export it manually in your secrets-funnel and re-run."
     fi
   fi
 fi
