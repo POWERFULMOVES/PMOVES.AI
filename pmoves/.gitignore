@@ -59,6 +59,8 @@ data/spark/
 
 # Sidecar user-config volume bind (created at container runtime by Agent Zero)
 # Both DARKXSIDE_USR_DIR and SPARK_USR_DIR default to ./usr in the compose files.
-usr/
+# Anchored to pmoves root with leading slash so nested usr/ dirs in submodules
+# stay tracked (CodeRabbit P2 thread r3273572321 on PR #1556).
+/usr/
 
 .codex/
