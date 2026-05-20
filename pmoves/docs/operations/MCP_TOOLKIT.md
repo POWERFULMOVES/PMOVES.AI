@@ -61,11 +61,11 @@ docker mcp profile ls   # expect pmoves_5090_web listed
 
 Then either start the gateway explicitly (`docker mcp gateway run --profile pmoves_5090_web`) or rely on Docker Desktop's auto-started gateway when the Toolkit is enabled in Desktop settings.
 
-**Per-node status as of 2026-05-19:**
+**Per-node status as of 2026-05-20:**
 
 | Node | Bootstrap state | Notes |
 |---|---|---|
-| 5090 | ✅ Profile imported | Verified via `docker mcp profile ls`. Awaiting `client connect` per Lane A authorization. |
+| 5090 | ✅ Profile imported + ✅ claude-code connected | Lane A connect landed (this PR). `MCP_DOCKER` stdio gateway entry in `.mcp.json`. Restart Claude Code session to consume gateway. |
 | Z890 | unknown | TODO bootstrap when next Z890 session opens |
 | 4090 | unknown | TODO bootstrap during next 4090 session (per [[project_4090_active_lanes_2026_05_16]]) |
 | SPARK | unknown | TODO — likely needs `docker-pass` provider since SPARK is Linux-headless |
@@ -78,6 +78,19 @@ Then either start the gateway explicitly (`docker mcp gateway run --profile pmov
 
 Once the profile is bootstrapped on a node, connect each client that should consume it. **Mutates the client's MCP config — get DARKXSIDE auth first per the auto-mode classifier policy.**
 
+**Wrapped target** (preferred — pre-flights CLI + profile presence, makes pre-connect backups):
+
+```bash
+make -C pmoves mcp-toolkit-connect                # default profile pmoves_5090_web
+make -C pmoves mcp-toolkit-connect PROFILE=other  # override
+```
+
+The wrapper exits non-zero with a clear message if the Toolkit CLI is missing (exit 1), the profile isn't bootstrapped on this node (exit 2), or the underlying connect command fails (exit 3).
+
+**Where the connect actually writes** (≥ Toolkit v0.42.0): a project-scoped `.mcp.json` at the **repository root** (not `.claude/mcp.json`) for `claude-code`. The file contains host-specific env paths (`LOCALAPPDATA`, `ProgramData`, `ProgramFiles` on Windows; different on Linux/macOS) and is **gitignored** — each node generates its own. The pre-existing `.claude/mcp.json` is **not modified** by the Toolkit connect; the legacy entries (`pmoves-cipher` SSE, `docker` mcp/docker stdio, `hostinger-mcp` npx, `tailscale` npx, `pmoves-nats-fleet` uv) coexist with the new `MCP_DOCKER` stdio gateway entry in `.mcp.json`. Claude Code merges both files at startup.
+
+**Direct invocation** (for reference / non-PMOVES contexts):
+
 ```bash
 # Per-repo (recommended for project-scoped agents)
 cd /path/to/PMOVES.AI && docker mcp client connect claude-code --profile pmoves_5090_web
@@ -88,13 +101,26 @@ docker mcp client connect claude-code --profile pmoves_5090_web --global
 
 Same pattern for `cursor`, `vscode`, `codex`, `gemini`, `crush`, `cline`, `continue`, `goose`, `gordon`, `kiro`, `lmstudio`, `opencode`, `sema4`, `zed`, `claude-desktop`. Run `docker mcp client ls` to see current connection state per client per repo.
 
-**Disconnect / cleanup:** `docker mcp client disconnect <client>` reverts the config change. The backup-before-mutate convention (`cp .claude/mcp.json .claude/mcp.json.pre-toolkit-connect.bak`) is recommended for any first-time connect in a shared repo.
+**Disconnect / cleanup:** `docker mcp client disconnect <client>` reverts the config change. The wrapper backs up `.mcp.json` to `.mcp.json.pre-toolkit-connect.bak` (and `.claude/mcp.json` to `.claude/mcp.json.pre-toolkit-connect.bak`) on first invocation — both backup files are gitignored.
 
-**Post-connect dedup checklist** (run after first connect in this repo):
-1. Inspect `.claude/mcp.json` diff against the pre-connect backup.
-2. The legacy `hostinger-mcp` entry (npx hostinger-api-mcp) duplicates the bundled `hostinger-mcp-server`. Decide: keep both (additive, ~2× tool surface but namespaced) OR remove the legacy entry (cleaner).
-3. The legacy `docker` entry (`mcp/docker` stdio) becomes redundant if Toolkit's auto-gateway takes over. Decide based on whether Toolkit's gateway exposes `mcp/docker` as a server (it currently does via `dockerhub` + `docker-docs`).
-4. The three independent entries — `pmoves-cipher` (SSE local), `tailscale` (npx), `pmoves-nats-fleet` (uv local) — stay; they're not in the profile.
+**Post-connect verification:**
+
+```bash
+# Confirm client shows connected with the gateway entry
+docker mcp client ls
+
+# Inspect the new .mcp.json (host-specific paths expected)
+cat .mcp.json | jq .mcpServers
+
+# Restart Claude Code to consume the gateway (per Toolkit prompt)
+# Then verify the tool surface
+docker mcp tools ls
+```
+
+**Post-connect dedup notes** (left additive in this PR — call out for future cleanup):
+1. The legacy `hostinger-mcp` entry in `.claude/mcp.json` (npx hostinger-api-mcp) duplicates the bundled `hostinger-mcp-server` from the profile. Keep both (additive, ~2× tool surface but namespaced) OR remove the legacy entry (cleaner). Decide in a follow-up PR after a few sessions of mixed usage.
+2. The legacy `docker` entry (`mcp/docker` stdio) overlaps with Toolkit's auto-gateway. Toolkit exposes `dockerhub` + `docker-docs` via the profile; the legacy entry's narrow scope (just `mcp/docker`) may still be useful in headless-but-no-Toolkit deployments.
+3. The three independent entries — `pmoves-cipher` (SSE local), `tailscale` (npx), `pmoves-nats-fleet` (uv local) — stay; they're not in the profile.
 
 ---
 
@@ -190,7 +216,7 @@ Upstream Docker docs note: **"E2B sandboxes now include direct access to the Doc
 
 ---
 
-## 7. PMOVES Make targets (this PR adds these)
+## 7. PMOVES Make targets
 
 | Target | What it does |
 |---|---|
@@ -200,6 +226,13 @@ Upstream Docker docs note: **"E2B sandboxes now include direct access to the Doc
 | `make mcp-toolkit-gateway-start` | Run gateway in SSE on a network port (background). See § 6 for security model. |
 | `make mcp-toolkit-gateway-stop` | Graceful stop + force-kill fallback. |
 | `make mcp-toolkit-gateway-tail` | `tail -f` the gateway log. |
+| Target | What it does | Added by |
+|---|---|---|
+| `make mcp-toolkit-bootstrap` | Verifies `docker mcp` CLI present, pulls `pmoves_5090_web` profile from OCI, imports it. Idempotent. Per-node. | PR #1553 |
+| `make mcp-toolkit-secrets-sync` | Reads `pmoves/env.shared` (override via `PMOVES_TIER_FILE`), populates `docker-pass`-style Toolkit secrets non-interactively. Skips OAuth-style servers (see § 5). | PR #1553 |
+| `make mcp-toolkit-connect` | Pre-flights CLI + profile presence, backs up pre-existing `.mcp.json` and `.claude/mcp.json`, runs `docker mcp client connect claude-code --profile $(PROFILE)`. Override profile: `PROFILE=<name>`. Writes a project-scoped `.mcp.json` (gitignored, host-specific env paths). | This PR (Lane A) |
+| `make mcp-toolkit-status` | `docker mcp profile ls && docker mcp client ls && docker mcp secret ls` — single-shot health. | PR #1553 |
+>>>>>>> 3fb2336e4 (feat(mcp): wrap docker mcp client connect as `make mcp-toolkit-connect` (Lane A))
 
 Targets live in `pmoves/Makefile`. Scripts live in `pmoves/scripts/mcp-toolkit-*.sh`.
 

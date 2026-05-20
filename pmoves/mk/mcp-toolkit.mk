@@ -1,10 +1,15 @@
 # pmoves/mk/mcp-toolkit.mk
 #
 # Docker MCP Toolkit fleet operations. See pmoves/docs/operations/MCP_TOOLKIT.md
-# for the full operational guide. These targets do NOT mutate any client's MCP
-# config — `docker mcp client connect` is left as an explicit operator action.
+# for the full operational guide.
+#
+# mcp-toolkit-connect is the only target that MUTATES a client's MCP config
+# (writes .mcp.json at the repo root). It is gated on operator authorization —
+# call explicitly, not as part of a wider chain.
 
 .PHONY: mcp-toolkit-bootstrap mcp-toolkit-secrets-sync mcp-toolkit-status mcp-toolkit-help mcp-toolkit-gateway-start mcp-toolkit-gateway-stop mcp-toolkit-gateway-tail
+.PHONY: mcp-toolkit-bootstrap mcp-toolkit-secrets-sync mcp-toolkit-status mcp-toolkit-connect mcp-toolkit-help
+>>>>>>> 3fb2336e4 (feat(mcp): wrap docker mcp client connect as `make mcp-toolkit-connect` (Lane A))
 
 mcp-toolkit-help: ## Show Docker MCP Toolkit Make targets
 	@echo "Docker MCP Toolkit targets:"
@@ -12,6 +17,8 @@ mcp-toolkit-help: ## Show Docker MCP Toolkit Make targets
 	@echo "                            Override: PMOVES_MCP_PROFILE_REF=<oci-ref> PMOVES_MCP_REFRESH=1"
 	@echo "  mcp-toolkit-secrets-sync  Populate docker-pass-style secrets from pmoves/env.shared"
 	@echo "                            Override: PMOVES_TIER_FILE=<path> PMOVES_MCP_DRY_RUN=1"
+	@echo "  mcp-toolkit-connect       Connect claude-code to the imported profile (writes .mcp.json)"
+	@echo "                            Override: PROFILE=<profile-name>  (default: pmoves_5090_web)"
 	@echo "  mcp-toolkit-status        Show profile list + client connections + secret roster"
 	@echo "  mcp-toolkit-gateway-start Run docker mcp gateway in SSE mode on a TCP port (default 8090, background)"
 	@echo "                            Override: PMOVES_MCP_GATEWAY_PORT, PMOVES_MCP_BLOCK_NETWORK"
@@ -37,6 +44,9 @@ mcp-toolkit-gateway-stop: ## Stop the background gateway started by mcp-toolkit-
 
 mcp-toolkit-gateway-tail: ## Tail the background gateway log
 	@tail -f $${PMOVES_MCP_GATEWAY_LOG:-/tmp/pmoves-mcp-gateway.log}
+mcp-toolkit-connect: ## Connect claude-code to the imported profile (per-node; writes .mcp.json — gitignored)
+	@bash scripts/mcp-toolkit-connect.sh
+>>>>>>> 3fb2336e4 (feat(mcp): wrap docker mcp client connect as `make mcp-toolkit-connect` (Lane A))
 
 mcp-toolkit-status: ## Show docker mcp profile / client / secret status
 	@echo "=== Profiles ==="
