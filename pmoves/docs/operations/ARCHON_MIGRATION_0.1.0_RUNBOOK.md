@@ -71,7 +71,7 @@ There are **11 migration scripts** in `pmoves/integrations/archon/migration/0.1.
 
 1. Open Supabase Studio in your browser:
    ```
-   http://localhost:8000
+   http://127.0.0.1:65433
    ```
    Log in if prompted (credentials in `pmoves/env.shared`, never paste in chat; the secrets pipeline handles this).
 
