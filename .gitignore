@@ -118,6 +118,11 @@ yarn-error.log*
 # =============================================================================
 .claude/settings.local.json
 
+# Claude Code local backup files (created automatically before destructive edits;
+# operator-private rollback safety net. Pattern matches .bak suffix anywhere under .claude/).
+.claude/*.bak
+.claude/**/*.bak
+
 # =============================================================================
 # IDE
 # =============================================================================
