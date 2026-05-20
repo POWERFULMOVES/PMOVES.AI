@@ -125,10 +125,16 @@ jobs:
     permissions:
       contents: read
     steps:
+      # NOTE: disable-hardening is required for Playwright E2E tests.
+      # StepSecurity armour agent kills Runner.Worker for reading /proc/*/mem,
+      # which is a normal Playwright operation for browser process management.
+      # Egress audit logging remains active via egress-policy: audit.
+      # See: https://github.com/POWERFULMOVES/PMOVES.AI/pull/1552#issuecomment
       - name: Harden Runner
         uses: step-security/harden-runner@v2
         with:
           egress-policy: audit
+          disable-hardening: true
 
       - uses: actions/checkout@v4
 
