@@ -15,7 +15,7 @@ PMOVES_MCP_4090_GATEWAY_PID  ?= /tmp/pmoves-4090-mcp-gateway.pid
 .PHONY: mcp-4090-profile-load mcp-4090-profile-build mcp-4090-profile-push mcp-4090-gateway-start mcp-4090-gateway-stop mcp-4090-status
 
 mcp-4090-profile-load: ## [4090-mcp] Register pmoves_4090_web with Docker MCP
-	docker mcp profile import docker/pmoves-4090-web/profile.yaml
+	docker mcp profile load docker/pmoves-4090-web/profile.yaml
 
 mcp-4090-profile-build: ## [4090-mcp] Build pmoves_4090_web image locally (--load, no push)
 	docker buildx build --platform linux/amd64 \
@@ -26,8 +26,7 @@ mcp-4090-profile-push: ## [4090-mcp] Push pmoves_4090_web image to Docker Hub (r
 	docker push docker.io/darkxside/pmoves_4090_web:latest
 
 mcp-4090-gateway-start: ## [4090-mcp] Start D-Proxy SSE gateway on 4090 (port 8089)
-	@PMOVES_MCP_PROFILE_ID=pmoves_4090_web \
-	  PMOVES_MCP_GATEWAY_PORT=$(PMOVES_MCP_4090_GATEWAY_PORT) \
+	@PMOVES_MCP_GATEWAY_PORT=$(PMOVES_MCP_4090_GATEWAY_PORT) \
 	  PMOVES_MCP_GATEWAY_PID=$(PMOVES_MCP_4090_GATEWAY_PID) \
 	  bash scripts/mcp-toolkit-gateway-listen.sh --background
 
