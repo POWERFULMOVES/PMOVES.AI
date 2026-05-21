@@ -171,10 +171,8 @@ Required handoff fields:
   - **OPERATOR (DARKXSIDE)**: Task 6 (upstream republish coordination for `Pmoves-cipher` + `PMOVES-transcribe-and-fetch` with submodule owners — local resolution impossible), Task 10 (SSH fingerprint capture into `pmoves/config/signing_identity_cards.yaml:32-46` per Owner-Decision A), Task 11 (JWT alias sunset confirmation — currently 2026-05-26 per Owner-Decision C). Optional: admin-merge of #1408+#1409 if not delegating CodeRabbit fixes.
   - **Z890-CLAUDE (this lane reserved)**: Task 1 (commit feature-work snapshot to `feature/launch-readiness-stage-0`) and Task 8 (rebase onto origin/main after Tasks 5+7 clear). Awaiting operator green-light on commit granularity (single snapshot vs split-by-cluster).
 
-# =============================================================================
-# MiniMax Parity Lane - Phase 1 Foundation
-# =============================================================================
-# GRAPHITI_MARK: MINIMAX-PARITY::PHASE1::FOUNDATION
+# ======================================================================# MiniMax Parity Lane - Phase 1 Foundation
+# ======================================================================# GRAPHITI_MARK: MINIMAX-PARITY::PHASE1::FOUNDATION
 # Per AGNOTE4482PHI.t1.md Claim Protocol
 
   - `2026-03-30T13:34:39Z` CLAIM `PMOVES-MINIMAX` scope: MiniMax parity lane — provider cascade, TensorZero config, profile binding. Target: parity with GLM coding plan alignment.
@@ -184,10 +182,8 @@ Required handoff fields:
   - Deliverable 4: AGNOTE4482PHI.t1.md CLAIM entry (this entry)
   - Next: Phase 2 skills translation, BoTZ tandem, DARKXSIDE partnership
 
-# =============================================================================
-# MiniMax Parity Lane - Phase 2 Skills Translation
-# =============================================================================
-# GRAPHITI_MARK: MINIMAX-PARITY::PHASE2::SKILLS
+# ======================================================================# MiniMax Parity Lane - Phase 2 Skills Translation
+# ======================================================================# GRAPHITI_MARK: MINIMAX-PARITY::PHASE2::SKILLS
 # Per AGNOTE4482PHI.t1.md Release Protocol
 
 - `2026-03-30T14:27:00Z` RELEASE `PMOVES-MINIMAX` scope: Phase 2 skills translation complete — 9 skills created in `.kilocode/skills/`.
@@ -203,10 +199,8 @@ Required handoff fields:
     - `minimax-cgp-generate/SKILL.md` — CGP content generation
     - `minimax-hyperdims/SKILL.md` — hyperdimensional operations + BoTZ
 
-# =============================================================================
-# MiniMax Parity Lane - Phase 3 BoTZ Tandem Integration
-# =============================================================================
-# GRAPHITI_MARK: MINIMAX-PARITY::PHASE3::BOTZ_TANDEM
+# ======================================================================# MiniMax Parity Lane - Phase 3 BoTZ Tandem Integration
+# ======================================================================# GRAPHITI_MARK: MINIMAX-PARITY::PHASE3::BOTZ_TANDEM
 # Per AGNOTE4482PHI.t1.md Release Protocol
 
 - `2026-03-30T14:43:00Z` RELEASE `PMOVES-MINIMAX` scope: Phase 3 BoTZ tandem integration complete — MiniMax integrated as tactical partner in BoTZ Framework.
@@ -241,10 +235,8 @@ Required handoff fields:
     - Phase 5: Model fabric integration
     - Signoff and release
 
-# =============================================================================
-# MiniMax Parity Lane - Phase 4 DARKXSIDE Partnership
-# =============================================================================
-# GRAPHITI_MARK: MINIMAX-PARITY::PHASE4-5::DARKXSIDE_MODEL_FABRIC
+# ======================================================================# MiniMax Parity Lane - Phase 4 DARKXSIDE Partnership
+# ======================================================================# GRAPHITI_MARK: MINIMAX-PARITY::PHASE4-5::DARKXSIDE_MODEL_FABRIC
 # Per AGNOTE4482PHI.t1.md Release Protocol
 
 - `2026-03-30T14:46:00Z` RELEASE `PMOVES-MINIMAX` scope: Phase 4 DARKXSIDE partnership + Phase 5 Model Fabric integration complete.
@@ -849,3 +841,10 @@ The pipeline reports success because its validation scope is too narrow. Neither
 - `2026-05-21T01:30:00Z` REVIEW `Z890→5090-CLAUDE (opus 4.7 1M)` scope: PR #1567 review-pass response — 6 fixes applied in commit `6aaaa7113b`. **Codex P1** (real): `FinanceEvent.timestamp_iso` renamed to `timestamp` to match `finance.event.v1` canonical field at `TAC_FLOOZ.md:68,84` — without the fix, Phase B code would have silently failed model binding on every real ingress event. **Codex P2** (real): `test_branch_coverage_all_state_pairs` docstring expanded to allow `distance>=2` direct jumps (severity bypass); companion `test_severity_bypass_direct_jump` added. **Mirror pair-review (5090-CLAUDE) #1-4**: severity-ordering semantic note (buoyant=0 ≠ "0 modulation"); MAX_RING_EVENTS bound to `max(HYSTERESIS_WINDOW, 14)` with module-load assert; FLOOZ_PERSONA_OVERRIDE double-gated with FLOOZ_OPERATOR_DEBUG=1; TTL refresh on hysteresis-held step made explicit. **Mirror nit**: `pytest.approx(rel=1e-6)` → `abs=1e-9` (the rel form genuinely fails `-0.067` IEEE-754 representation match). Both Codex threads resolved via GraphQL. Acknowledgement comment posted on PR #1567 detailing all 6 fixes. Pair-review reciprocity loop: convergence-checklist queue empty after L8(mine)+L9(mirror); spec emerged stronger from pair-review than either solo. risks: zero — additive spec clarifications, no code shipped, no compose touched. CHIT trail signed **unsigned-local** on this host (advisory per `make sign-trail`). agent_signature: `ACK::Z890→5090-CLAUDE::W6-P5-FLOOZ-PHASE-B-SPEC-REVIEW-FIXES-2026-05-21`.
 
 <!-- GRAPHITI_MARK: Z890→5090-CLAUDE::W6-P5-FLOOZ-PHASE-B-SPEC-REVIEW-FIXES::2026-05-21 -->
+## Pair-Review Reciprocity Codification — Claim/Release (2026-05-21, OPEN)
+
+- `2026-05-21T03:00:00Z` CLAIM `Z890→5090-CLAUDE (opus 4.7 1M)` scope: Codify pair-review-reciprocity workflow as a durable, discoverable artifact per DARKXSIDE's "scheduled thing" framing on the 5090+mirror reciprocity loop completion. Mirror banked the originating insight as `[[vision_pair_review_reciprocity_tightens_convergence]]` memory; this lane lifts it to two non-memory artifacts that fresh agents (4090-CLAUDE, SPARK, B850, future hands) discover via standard fleet paths: (1) `pmoves/docs/operations/PAIR_REVIEW_RECIPROCITY.md` — full ops guide covering the three orthogonal reviewer surfaces (peer / automated / self), the event-triggered cadence (NOT time-triggered — fires per-PR not per-clock), the four-class observation taxonomy (reasoning-gap / semantic-naming-drift / contract-correctness / defense-in-depth), the high-signal review template, the COMMENTED-not-APPROVED constraint, the GraphQL thread-resolution recipe, and the AGNOTE attribution flow; (2) `.claude/skills/pmoves-pair-review/SKILL.md` — invocable workflow skill (user-invocable: true) that walks the ops guide and pairs naturally with `pmoves-chit-sign`. Branch: `feat/pair-review-reciprocity-codify`. Worktree: `C:/tmp/pmoves-pair-review-codify` (clean off `origin/main@6d1358f3`). Three-body: delivery=Z890→5090-CLAUDE (this), control=DARKXSIDE ("ok to proceed" + "scheduled thing" framing), memory=this trail + mirror's [[vision_pair_review_reciprocity_tightens_convergence]] memory. risks: low — additive new ops doc + new skill dir; no existing file modified except this register and PR body. agent_signature: `ACK::Z890→5090-CLAUDE::PAIR-REVIEW-RECIPROCITY-CODIFY-CLAIM-2026-05-21`.
+
+- `2026-05-21T03:30:00Z` RELEASE `Z890→5090-CLAUDE (opus 4.7 1M)` scope: PR #<TBD> OPEN. Two artifacts landed: `pmoves/docs/operations/PAIR_REVIEW_RECIPROCITY.md` (full ops guide, ~250 lines) + `.claude/skills/pmoves-pair-review/SKILL.md` (invocable wrapper). Both cross-link `[[vision_pair_review_reciprocity_tightens_convergence]]` memory so the codification stays in sync with the originating insight if either evolves. No code shipped — pure workflow capture. **Reciprocity-loop self-consistency check:** this PR itself will receive a pair-review from mirror per the workflow it codifies. If mirror finds gaps or class-of-issue the doc didn't anticipate, the doc gets a follow-up commit per the pattern — meta-consistent. CHIT trail signed **unsigned-local** on this host (advisory per `make sign-trail`). agent_signature: `ACK::Z890→5090-CLAUDE::PAIR-REVIEW-RECIPROCITY-CODIFY-RELEASE-2026-05-21`.
+
+<!-- GRAPHITI_MARK: Z890→5090-CLAUDE::PAIR-REVIEW-RECIPROCITY-CODIFY::2026-05-21 -->
