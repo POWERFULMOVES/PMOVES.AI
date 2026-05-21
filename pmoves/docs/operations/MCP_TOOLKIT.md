@@ -232,9 +232,49 @@ Upstream Docker docs note: **"E2B sandboxes now include direct access to the Doc
 | `make mcp-toolkit-secrets-sync` | Reads `pmoves/env.shared` (override via `PMOVES_TIER_FILE`), populates `docker-pass`-style Toolkit secrets non-interactively. Skips OAuth-style servers (see § 5). | PR #1553 |
 | `make mcp-toolkit-connect` | Pre-flights CLI + profile presence, backs up pre-existing `.mcp.json` and `.claude/mcp.json`, runs `docker mcp client connect claude-code --profile $(PROFILE)`. Override profile: `PROFILE=<name>`. Writes a project-scoped `.mcp.json` (gitignored, host-specific env paths). | This PR (Lane A) |
 | `make mcp-toolkit-status` | `docker mcp profile ls && docker mcp client ls && docker mcp secret ls` — single-shot health. | PR #1553 |
->>>>>>> 3fb2336e4 (feat(mcp): wrap docker mcp client connect as `make mcp-toolkit-connect` (Lane A))
 
 Targets live in `pmoves/Makefile`. Scripts live in `pmoves/scripts/mcp-toolkit-*.sh`.
+
+---
+
+## 7.5. Verification fixture
+
+`pmoves/tools/verify_pmoves_5090_web_mcp_integration.sh` runs a 5-phase end-to-end check against the canonical profile on the local node. Wrap target: `make -C pmoves mcp-toolkit-verify`.
+
+**Phases:**
+
+| Phase | What it checks | When it FAILs |
+|---|---|---|
+| **P1** | `docker mcp version` succeeds + `pmoves_5090_web` profile is imported | CLI missing or profile not bootstrapped — run `mcp-toolkit-bootstrap` |
+| **P2** | `claude-code: connected` for THIS worktree's project scope (cwd-scoped per Toolkit semantics) | run `mcp-toolkit-connect` in the current worktree, OR run the fixture from a connected worktree |
+| **P3** | `docker mcp tools count` > 0 — at least one tool discoverable | gateway runtime broken; check Docker Desktop + Toolkit health |
+| **P4** | Host-side SSE gateway listener (PR #1555) reachable at `http://127.0.0.1:8090/sse` | run `mcp-toolkit-gateway-start` (PR #1555); P4 is gated on PR #1555 landing |
+| **P5** | Round-trip a known low-side-effect tool (`context7-resolve-library-id react` by default) | gateway-broken, tool name drifted, or upstream context7 outage |
+
+**Overrides via env / Make var:**
+- `PROFILE=<name>` — verify a different profile (default `pmoves_5090_web`)
+- `MCP_GATEWAY_PORT=<n>` — different gateway port (default `8090`)
+- `PROBE_TOOL=<tool>` + `PROBE_TOOL_ARG=<arg>` — different round-trip probe (default `context7-resolve-library-id` + `react`)
+
+**Exit code:** number of failed phases (0 if all PASS). SKIP'd phases don't count as failures (P1 cascades SKIP downstream when CLI absent).
+
+**P2 substring trap (lesson learned):** `docker mcp client ls` emits `claude-code: disconnected` or `claude-code: connected`. A naive `grep -q "connected"` matches BOTH — disconnected substring contains "connected". The fixture uses `grep -qE '^[^a-zA-Z]*claude-code:[[:space:]]+connected[[:space:]]*$'` with an end-anchor to reject the false-positive. This is a general CLI-table-parsing class — see relevant feedback memory files for the broader pattern.
+
+**P4 + P5 gateway semantics:** P3 + P5 query the global Toolkit gateway (cwd-independent), so they can PASS even when P2 reports the current worktree is disconnected. P4 specifically probes the host-side SSE listener from PR #1555 — that's distinct from the Toolkit's auto-started internal gateway. Treat P3 (internal) and P4 (Lane D-host) as independent surfaces.
+
+**Sample output (2026-05-20 on 5090 node, before PR #1555 lands):**
+
+```text
+P1    PASS    docker mcp v0.42.0; profile 'pmoves_5090_web' present
+P2    PASS    this worktree: '● claude-code: connected'
+P3    PASS    66 tools available across profile servers
+P4    FAIL    http://127.0.0.1:8090/sse not reachable (run: make -C pmoves mcp-toolkit-gateway-start)
+P5    PASS    context7-resolve-library-id 'react' returned 79 bytes
+
+Totals: 1 FAIL, 0 SKIP, 4 PASS
+```
+
+P4 will pass once PR #1555 merges and `make mcp-toolkit-gateway-start` is run on this node.
 
 ---
 

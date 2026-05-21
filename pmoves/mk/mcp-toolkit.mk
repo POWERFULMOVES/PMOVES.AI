@@ -9,7 +9,7 @@
 
 .PHONY: mcp-toolkit-bootstrap mcp-toolkit-secrets-sync mcp-toolkit-status mcp-toolkit-help mcp-toolkit-gateway-start mcp-toolkit-gateway-stop mcp-toolkit-gateway-tail
 .PHONY: mcp-toolkit-bootstrap mcp-toolkit-secrets-sync mcp-toolkit-status mcp-toolkit-connect mcp-toolkit-help
->>>>>>> 3fb2336e4 (feat(mcp): wrap docker mcp client connect as `make mcp-toolkit-connect` (Lane A))
+.PHONY: mcp-toolkit-bootstrap mcp-toolkit-secrets-sync mcp-toolkit-status mcp-toolkit-verify mcp-toolkit-help
 
 mcp-toolkit-help: ## Show Docker MCP Toolkit Make targets
 	@echo "Docker MCP Toolkit targets:"
@@ -26,6 +26,8 @@ mcp-toolkit-help: ## Show Docker MCP Toolkit Make targets
 	@echo "                             see 'bash scripts/mcp-toolkit-gateway-listen.sh --help' for full list)"
 	@echo "  mcp-toolkit-gateway-stop  Stop the background gateway"
 	@echo "  mcp-toolkit-gateway-tail  Tail the background gateway log"
+	@echo "  mcp-toolkit-verify        End-to-end fixture: 5 phases (profile, connect, tools, gateway, call)"
+	@echo "                            Override: PROFILE=<name> MCP_GATEWAY_PORT=<n> PROBE_TOOL=<tool> PROBE_TOOL_ARG=<arg>"
 	@echo "  mcp-toolkit-help          This message"
 	@echo
 	@echo "Full guide: pmoves/docs/operations/MCP_TOOLKIT.md"
@@ -46,7 +48,6 @@ mcp-toolkit-gateway-tail: ## Tail the background gateway log
 	@tail -f $${PMOVES_MCP_GATEWAY_LOG:-/tmp/pmoves-mcp-gateway.log}
 mcp-toolkit-connect: ## Connect claude-code to the imported profile (per-node; writes .mcp.json — gitignored)
 	@bash scripts/mcp-toolkit-connect.sh
->>>>>>> 3fb2336e4 (feat(mcp): wrap docker mcp client connect as `make mcp-toolkit-connect` (Lane A))
 
 mcp-toolkit-status: ## Show docker mcp profile / client / secret status
 	@echo "=== Profiles ==="
@@ -69,3 +70,6 @@ mcp-toolkit-status: ## Show docker mcp profile / client / secret status
 	else \
 	  echo "not running (no pid file)"; \
 	fi
+
+mcp-toolkit-verify: ## End-to-end MCP Toolkit fixture (5 phases — see tools/verify_pmoves_5090_web_mcp_integration.sh)
+	@bash tools/verify_pmoves_5090_web_mcp_integration.sh
