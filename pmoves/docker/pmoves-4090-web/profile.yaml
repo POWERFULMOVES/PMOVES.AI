@@ -41,7 +41,8 @@ servers:
 
   nats:
     transport: http
-    url: "${NATS_URL}"
+    # NATS monitoring HTTP endpoint (host-mapped from container-internal :8222)
+    url: "http://localhost:${NATS_MONITORING_PORT:-9223}"
 
   huggingface:
     image: mcp/huggingface
@@ -49,9 +50,10 @@ servers:
       HF_TOKEN: "${HF_TOKEN}"
 
 # D-Proxy gateway (host-side, from PR #1555 scripts)
+# Port 8089 — 8090 reserved for retrieval-eval (docker-compose.workers.yml)
 gateway:
   transport: sse
-  port: 8090
+  port: 8089
   auth_token_env: MCP_GATEWAY_AUTH_TOKEN
   block_secrets: true
   # block_network: false — outbound needed for Ollama Pro cloud-proxied models
