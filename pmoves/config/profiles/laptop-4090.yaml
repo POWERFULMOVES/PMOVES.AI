@@ -92,6 +92,7 @@ mcp:
   - compose
   - pmoves-cipher
   - huggingface
+  - pmoves_4090_web
 
 # ═══════════════════════════════════════════════════════════════
 # Cross-Node Awareness — 4090 as Kinetic Claw Host
