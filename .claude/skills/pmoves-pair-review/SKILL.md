@@ -1,0 +1,130 @@
+---
+name: pmoves-pair-review
+description: Reciprocal pair-review workflow for parallel-CLAUDE PRs. Invoke when peer CLAUDE ships a PR and you're trading reviews; walks the 4-class observation taxonomy (reasoning gap / semantic-naming drift / contract-correctness / defense-in-depth), the review-anatomy template, and the AGNOTE signing flow. Pairs with pmoves-chit-sign.
+disable-model-invocation: false
+user-invocable: true
+---
+
+# pmoves-pair-review
+
+Codified workflow for reciprocal PR review across parallel-CLAUDE sessions in the PMOVES.AI fleet. Three orthogonal reviewer surfaces (peer CLAUDE, automated reviewer, self) produce compounding quality gains per PR. Originated 2026-05-20/21 during the 5090 + Z890→5090 mirror exchange on PRs #1555/#1559/#1560/#1567 (~21 distinct improvements across 7 PRs).
+
+## When to invoke
+
+- A peer CLAUDE session has just shipped a PR and you're the reciprocal reviewer
+- You're auditing whether a PR your CLAUDE shipped has received its full three-angle review (peer + automated + self)
+- You're onboarding a new CLAUDE session into a parallel-orchestration setup and want the cadence on the table early
+
+**Do NOT invoke when:**
+- The PR is your own (use `pmoves-chit-sign` for AGNOTE rows on your own work)
+- No peer CLAUDE is active (Codex/CodeRabbit + honest self-review suffice solo)
+- Hotfix / damage-control / time-critical — defer to post-merge retrospective
+
+## How to run
+
+This is a workflow skill (no script). The full operations guide is at `pmoves/docs/operations/PAIR_REVIEW_RECIPROCITY.md`. The condensed flow:
+
+### 1. Identify the PR + wait for automated reviewer
+
+```bash
+# List open PRs awaiting your reciprocal review
+gh pr list --repo POWERFULMOVES/PMOVES.AI --state open --author '@me' --limit 10  # your PRs (sanity check what mirror should review)
+gh pr list --repo POWERFULMOVES/PMOVES.AI --state open --json number,title,author,reviews \
+  --jq '.[] | select(.author.login != "<your-handle>") | "\(.number) \(.title) — reviews: \([.reviews[].author.login] | unique | join(\",\"))"'
+
+# Wait for Codex/CodeRabbit to submit first if it hasn't — automated reviewer
+# observations are independent of peer-CLAUDE angle; let them surface before your review
+```
+
+### 2. Scan the diff for the four observation classes
+
+| Class | Catch | Example |
+|-------|-------|---------|
+| **Reasoning gap** | Logic skips load-bearing step | `awk 'NR>1 {print $2}'` reads unvalidated column shape |
+| **Semantic-naming drift** | Name/label suggests one meaning, code/spec uses another | `timestamp_iso` field on a payload whose canonical spec uses `timestamp` |
+| **Contract-correctness shortfall** | PR establishes contract but doesn't validate other side | New NATS subject without entry in `nats-subjects.md` |
+| **Defense-in-depth gap** | Correct primary mechanism, skipped cheap redundancy | `grep -F connected` works only because `disconnected` happens to start with `dis-` |
+
+### 3. Write the review
+
+Use this template (per `PAIR_REVIEW_RECIPROCITY.md` § Anatomy of a high-signal pair-review):
+
+```markdown
+## Pair-review pass from <node>-CLAUDE
+
+<one-paragraph "what works": acknowledge the strong parts.
+this is not flattery — it's calibration. signals what NOT to change.>
+
+**N observations surfaced for follow-up commit (non-blocking):**
+
+### 1. <One-line title that names the issue>
+
+<2-4 sentences: WHY it matters, file:line refs, suggested fix if obvious.>
+
+### 2. ...
+
+### Nit (skip if scope creep)
+
+<the one you almost didn't mention. mention it anyway — nits are learnings.>
+
+## Disposition
+
+<treat as follow-up commits by default. exception: contract-correctness or
+security findings, which are blockers.>
+
+agent_signature (advisory unsigned-local): `ACK::<reviewing-agent>::<lane-key>-REVIEW-<date>`
+```
+
+### 4. Submit as COMMENTED, not APPROVED
+
+```bash
+# GitHub blocks self-approval for same-account PRs; COMMENTED carries the same
+# substantive feedback without the GraphQL constraint.
+gh pr review <PR-number> --comment --body "$(cat review.md)"
+```
+
+### 5. Sign AGNOTE REVIEW row
+
+```bash
+# After submitting the review, append a REVIEW row to AGNOTE4482PHI.t1.md
+# signed `ACK::<your-agent>::<lane-key>-REVIEW-<date>`. Then:
+make -C pmoves sign-trail SUMMARY="Pair-review pass on PR #<N>: <N obs> + <N nit> applied to <lane>"
+```
+
+### 6. Verify peer addresses observations
+
+When the peer pushes a follow-up commit responding to your review:
+
+```bash
+# Check the diff matches what you flagged
+gh pr diff <PR-number> --repo POWERFULMOVES/PMOVES.AI | less
+
+# Resolve threads if you opened any (inline comments typically don't need explicit resolution)
+gh api graphql -f query='mutation { resolveReviewThread(input: {threadId: "<thread-id>"}) { thread { id isResolved } } }'
+```
+
+## Anti-patterns
+
+- ❌ "LGTM" / "Looks good!" with no substance — collapses loop's value to zero
+- ❌ Substring-match review without char-by-char verification — the `connected` vs `disconnected` trap
+- ❌ Reviewing your own PR via mirror's CLAUDE — same author with extra steps
+- ❌ Batching reviews until you ship your next PR — per-PR cycle is what produces compounding value
+- ❌ Pushing commits to peer's branch — pair-review surfaces observations; the *author* decides
+
+## Output expectations
+
+After invoking this skill on a peer's PR, the artifacts produced are:
+
+1. One `COMMENTED` review on the PR with the structured template above
+2. One AGNOTE REVIEW row in `pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md`
+3. One signed trail entry via `make -C pmoves sign-trail`
+4. Optionally: one acknowledgement comment when the peer addresses observations
+
+## Citations
+
+- `pmoves/docs/operations/PAIR_REVIEW_RECIPROCITY.md` — full operations guide
+- `pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md` — Active Claim Register (review rows landed here)
+- `.claude/skills/pmoves-chit-sign/SKILL.md` — companion skill for AGNOTE signing
+- Memory: `vision_pair_review_reciprocity_tightens_convergence.md` — originating insight
+- Memory: `vision_multi_claude_claim_before_scope.md` — collision-avoidance pattern (precondition)
+- Memory: `feedback_nitpicks_are_learnings.md` — even minor observations are valuable signal
