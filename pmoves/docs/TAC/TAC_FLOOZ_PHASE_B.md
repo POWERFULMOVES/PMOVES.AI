@@ -41,7 +41,7 @@ class FinanceEvent:
     currency:      str             # ISO 4217; FlOO$ operates currency-agnostic in Phase B
     delta_period:  Literal["instantaneous", "weekly", "monthly"]
     source:        Literal["firefly", "wger_subscription", "manual", "agent_inference"]
-    timestamp_iso: str             # ISO-8601 UTC; parsed once at ingress, never re-parsed in hot path
+    timestamp:     str             # ISO-8601 UTC; matches `finance.event.v1` canonical field (TAC_FLOOZ.md §NATS Subjects). Parsed once at ingress, never re-parsed in hot path.
     event_id:      str             # uuid4 — also used as `persona_overlay.trigger_event_id`
 
 @dataclass(frozen=True)
@@ -116,7 +116,15 @@ def test_event_severity_monotonicity():
     """deficit > constrained > stable > buoyant — verify no skipped transitions on a worst-case sequence."""
 
 def test_branch_coverage_all_state_pairs():
-    """For each (prior_state, event_type) ∈ 4×6 matrix, assert the new_state is one of {prior, neighbor}."""
+    """For each (prior_state, event_type) ∈ 4×6 matrix, assert the new_state is one of:
+        - prior  (no transition: same raw_state, or hysteresis-held)
+        - neighbor  (distance-1 transition: gated by hysteresis window)
+        - any  (distance>=2 transition: severity-bypass — e.g., buoyant→distressed allowed immediately).
+    See §Hysteresis Algorithm for the bypass rule. Test must NOT forbid direct jumps."""
+
+def test_severity_bypass_direct_jump():
+    """Distance>=2 transitions skip hysteresis. e.g., prior=buoyant + sustained deficit
+    → distressed in one step (no need to pass through stable/constrained)."""
 ```
 
 Phase B target: **100% branch coverage** on `state_machine.py` and `envelopes.py`. The cache + publisher get integration-level tests, not branch-coverage targets (they are I/O surfaces).
@@ -157,7 +165,7 @@ OUTPUT: new_state S' or hold(C.current_state)
 | **Hysteresis window units** | Event-count (default 2 events), not wall-clock | Wall-clock window forces FlOO$ to maintain timers; event-count is purely functional. Event rate is naturally bounded by `finance.event.v1` publisher cadence. |
 | **Severity-distance bypass** | Yes — if `distance >= 2`, hysteresis is skipped | A user moving from `buoyant` (high spending mode) to `distressed` (deficit detected) should transition *immediately*, not wait for evidence. The audio register matters most when the user's financial reality has dramatically changed. |
 | **Reset on candidate-rejection** | Yes — `consecutive_same_state = 0` when a transition is rejected | A rejected transition still counts as "evidence the user's state is unstable." Resetting forces the next candidate to re-accumulate evidence. |
-| **Severity ordering** | `distressed(3) > constrained(2) > stable(1) > buoyant(0)` | `state_severity_distance(a, b) = abs(severity(a) - severity(b))`. Distressed-to-buoyant = distance 3 (immediate). Buoyant-to-stable = distance 1 (gated by hysteresis window). |
+| **Severity ordering** | `distressed(3) > constrained(2) > stable(1) > buoyant(0)` | **Semantic note:** "severity" here measures *distance from a positive financial state*, not *intensity of voice modulation*. `buoyant=0` (best financial state, largest positive biases) ≠ "0 modulation"; `distressed=3` (worst financial state, largest negative biases). `state_severity_distance(a, b) = abs(severity(a) - severity(b))`. Distressed-to-buoyant = distance 3 (immediate). Buoyant-to-stable = distance 1 (gated by hysteresis window). |
 
 ### Edge cases (must be in test fixture)
 
@@ -203,7 +211,7 @@ class PersonaCache:
 | **Cache key** | `user_id` (string, e.g., `pmoves-user-uuid`) | Persona is per-user. No co-tenancy. |
 | **Eviction policy** | LRU when `len(_store) > max_users`, else TTL-expire on access | LRU prevents unbounded memory growth on a long-running service. TTL-expire-on-access avoids needing a background sweeper goroutine. |
 | **Lock granularity** | Per-user `asyncio.Lock` | Prevents two concurrent `finance.event.v1` events for the same user from racing on hysteresis state. Different users are independent, so global lock would serialize all events unnecessarily. |
-| **TTL refresh on access** | Yes — every successful `step()` refreshes `last_update_unix` | A user actively receiving events keeps their context warm; a user idle for 30 min has their context discarded and treats next event as cold-start. |
+| **TTL refresh on access** | Yes — every `step()` refreshes `last_update_unix`, **including hysteresis-held steps** (where the candidate transition was rejected and current_state is returned unchanged) | A user actively receiving events keeps their context warm. A hysteresis-rejected step is still evidence of user activity — discarding context mid-conversation because the last 30 min were all rejected transitions would defeat the cache's purpose. Only the *absence* of events for `TTL_SECONDS` causes context expiry. |
 | **Invalidation source** | NATS subject `flooz.persona.cache.invalidate.v1` | Operator can force a register reset for a user (e.g., for testing, or after a major life event the user manually signals). Payload: `{"user_id": "...", "reason": "operator-reset"}`. |
 
 ### Concurrency invariants
@@ -245,8 +253,17 @@ from .types import ModulationEnvelope, EconomicState, Register, ArchetypeHint
 HYSTERESIS_WINDOW = 2        # event-count default (env: FLOOZ_HYSTERESIS_EVENTS)
 EMIT_DEBOUNCE_SECONDS = 5    # env: FLOOZ_EMIT_DEBOUNCE_SECONDS
 TTL_SECONDS = 1800           # env: FLOOZ_PERSONA_TTL_SECONDS
-MAX_RING_EVENTS = 14         # rolling-window depth for deficit detection
+MAX_RING_EVENTS = max(HYSTERESIS_WINDOW, 14)  # rolling-window depth for deficit detection
 MAX_BIAS_MAGNITUDE = 0.5     # per-field clamp (TAC_FLOOZ.md §CHIT invariant #1)
+
+# Module-load invariant — fail fast on operator misconfiguration. If an operator
+# overrides FLOOZ_HYSTERESIS_EVENTS to a value larger than MAX_RING_EVENTS,
+# hysteresis history is silently truncated, defeating the algorithm. Assert
+# at import time rather than at first event arrival.
+assert MAX_RING_EVENTS >= HYSTERESIS_WINDOW, (
+    f"MAX_RING_EVENTS ({MAX_RING_EVENTS}) must be >= HYSTERESIS_WINDOW ({HYSTERESIS_WINDOW}). "
+    f"Set FLOOZ_MAX_RING_EVENTS env var to override."
+)
 
 ENVELOPE_TABLE: dict[EconomicState, tuple[Register, ArchetypeHint, ModulationEnvelope]] = {
     "buoyant": (
@@ -350,7 +367,7 @@ tests/services/flooz/fixtures/
 
 1. **No wall-clock in expectations.** Event timestamps are inputs; the test harness feeds them into a frozen-clock fake. The `last_update_unix` field is not asserted in `expect` blocks because it's derived from the harness clock.
 2. **Stable iteration order.** `dict[str, asyncio.Lock]` insertion order is preserved in Python 3.7+; tests must not rely on it for cross-user fixtures (use single-user fixtures).
-3. **Float comparison tolerance.** Bias-field comparisons use `pytest.approx(rel=1e-6)` — exact match against the table constants, no FP drift.
+3. **Float comparison tolerance.** Bias-field comparisons use `pytest.approx(abs=1e-9)` — exact match against the table constants to nanounit precision. **Note:** `rel=1e-6` would *not* satisfy values like `-0.067` (which is `-0.0666666...` truncated to display), since IEEE-754 representation of `-0.067` is not bit-identical to the truncated literal. Use `abs` tolerance for clean semantic intent.
 4. **Cold-start reproducibility.** With `initial_context: null` and a fixed event sequence, the resulting context after N events is byte-identical across runs.
 
 ### Fixture authoring workflow (Phase B-2, post-state-machine)
@@ -380,7 +397,8 @@ All Phase B knobs are env-var-overridable for production tuning without a code c
 | `FLOOZ_PERSONA_TTL_SECONDS` | `1800` | Per-user context TTL (cache expiry) |
 | `FLOOZ_MAX_USERS` | `10000` | LRU cap on in-memory cache |
 | `FLOOZ_MAX_RING_EVENTS` | `14` | Rolling-window depth for deficit detection |
-| `FLOOZ_PERSONA_OVERRIDE` | (unset) | Operator-side force-state: set to `buoyant\|stable\|constrained\|distressed` and FlOO$ skips state machine — useful for demos and Phase C audio-diff capture |
+| `FLOOZ_OPERATOR_DEBUG` | `0` | Gate for `FLOOZ_PERSONA_OVERRIDE`. Must be `1` for override to activate. Prevents accidental env leak from a dev profile forcing a state in production. |
+| `FLOOZ_PERSONA_OVERRIDE` | (unset) | Operator-side force-state: set to `buoyant\|stable\|constrained\|distressed` AND set `FLOOZ_OPERATOR_DEBUG=1` to activate. FlOO$ skips state machine — useful for demos and Phase C audio-diff capture. **Double-gated by design (per mirror pair-review on PR #1567):** if only one of the two env vars is set, override is ignored and a `WARN` log fires on every emit explaining the activation requirement. |
 
 The `FLOOZ_PERSONA_OVERRIDE` knob is **important for Phase C** — capturing audio diffs to prove modulation works requires being able to force each state on demand without crafting fake `finance.event.v1` sequences.
 
