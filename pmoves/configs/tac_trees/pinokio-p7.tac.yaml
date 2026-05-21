@@ -281,9 +281,9 @@ root:
             expect: "Extract Worker processes P7-originated content with EMBEDDING_BACKEND=tensorzero"
           context: "Stack standardized to TensorZero/Qwen3-embedding:4b (PR #1082). Any P7 app that triggers ingestion gets high-quality vectors."
           agent_hint: 5090-claude
-          status: pending
+          status: in_progress
           depends_on: [p7.nats.launch]
-          notes: "Config shipped. Needs Qdrant pmoves_chunks_qwen3 collection created on prod (z890 task)."
+          notes: "Provisioning script + runbook landed via L9 (2026-05-20). Operator runs `python3 pmoves/scripts/provision_qdrant_pmoves_chunks_qwen3.py` against prod Qdrant with QDRANT_URL+QDRANT_API_KEY loaded (Method 1 in QDRANT_PROVISIONING_PMOVES_CHUNKS_QWEN3.md). Dim is 2560 (NOT 3072) per pmoves/services/extract-worker/CLAUDE.md. Status flips to done once operator confirms successful provisioning + first Extract Worker write."
 
         - id: p7.nats.telemetry
           task: "P7 session telemetry on pinokio.telemetry.v1"
