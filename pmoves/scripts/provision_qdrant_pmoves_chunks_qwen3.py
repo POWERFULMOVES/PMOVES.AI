@@ -85,10 +85,21 @@ def main() -> int:
             return 1
     except Exception as exc:
         # qdrant-client surfaces 404 in different ways across versions; treat unknown errors as not-found
-        # only if the error string contains the canonical 404 phrasing
+        # only if the error string contains the canonical 404 phrasing.
         msg = str(exc)
+        msg_lower = msg.lower()
         if "404" in msg or "Not found" in msg or "doesn't exist" in msg:
             existing_dim = None
+        elif any(p in msg_lower for p in (
+            "connection refused", "connection reset", "connection aborted",
+            "timeout", "timed out", "unreachable", "could not resolve",
+            "name or service not known", "dns", "network is unreachable",
+            "no route to host", "transport", "ssl", "tls",
+        )):
+            # Classify network/transport failures as exit code 1 per documented
+            # exit-code contract — operators retry/escalate on 1, debug on 3.
+            print(f"[provision] Qdrant network/transport error during probe: {exc}", file=sys.stderr)
+            return 1
         else:
             print(f"[provision] Unexpected exception during probe: {exc}", file=sys.stderr)
             return 3
