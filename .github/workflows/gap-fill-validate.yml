@@ -52,7 +52,7 @@ jobs:
             pypi.org:443
             files.pythonhosted.org:443
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
       - name: Install PyYAML
@@ -81,7 +81,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: false
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
       - name: Install jq
