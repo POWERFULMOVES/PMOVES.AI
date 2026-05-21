@@ -128,6 +128,56 @@ Cloudflare's 13 OAuth-mediated servers need a one-time browser-mediated `docker 
 
 ## 6. E2B + sandboxed agents
 
+**Architecture decision (2026-05-20): D-Proxy.** Rather than installing the full Toolkit inside every sandbox, the canonical pattern is:
+
+1. **5090 host** runs the gateway in SSE mode on a network port: `make -C pmoves mcp-toolkit-gateway-start` (calls `pmoves/scripts/mcp-toolkit-gateway-listen.sh --background`).
+2. **Sandboxes** receive `MCP_GATEWAY_URL` + `MCP_GATEWAY_AUTH_TOKEN` via `Sandbox.create({envs: {...}})` and connect to the host gateway over HTTPS+SSE.
+3. Secrets stay on the host where the secrets-funnel already runs. Sandboxes never see API keys directly — they ask the gateway, the gateway invokes the tool image with the secret injected, the tool returns the result.
+
+Why D-Proxy and not Docker-in-Docker (D-Inside):
+- Sandbox image stays small (no Docker daemon, no Toolkit CLI)
+- Faster `Sandbox.create()` cold start
+- Single secrets-management surface (host, not host-per-sandbox)
+- Trades a small isolation property (sandbox can call tools but can't inspect them) for a large operational simplification
+
+### Host gateway listener (this PR adds these)
+
+| Target | What it does |
+|---|---|
+| `make mcp-toolkit-gateway-start` | Runs `docker mcp gateway run --profile pmoves_5090_web --transport sse --port 8090` in the background (PID file `/tmp/pmoves-mcp-gateway.pid`, log `/tmp/pmoves-mcp-gateway.log`). Generates and persists `MCP_GATEWAY_AUTH_TOKEN` to `env.shared` on first run. |
+| `make mcp-toolkit-gateway-stop` | SIGTERM → 10s grace → SIGKILL, cleans up PID file. |
+| `make mcp-toolkit-gateway-tail` | `tail -f` on the gateway log. |
+
+Overrides:
+- `PMOVES_MCP_GATEWAY_PORT` — listen port (default 8090)
+- `PMOVES_MCP_GATEWAY_TRANSPORT` — sse / stdio / streaming (default sse)
+- `PMOVES_MCP_BLOCK_NETWORK=1` — adds `--block-network` to forbid tool containers from arbitrary outbound (defense-in-depth; safe default is 0 because most servers in `pmoves_5090_web` need outbound to call Cloudflare/Hostinger APIs)
+
+### Security model
+
+- **SSE auth token** — `MCP_GATEWAY_AUTH_TOKEN` (32-byte hex, auto-generated) prevents DNS rebinding attacks per upstream Docker docs. Persisted to `env.shared`; clients (E2B sandboxes, BoTZ Gateway, Danger Room Desktop) read the same value.
+- **`--block-secrets` default on** — secret values cannot exfil through tool args/responses (upstream Toolkit default).
+- **Bind interface** — for production, prefer binding to a Tailscale interface rather than `0.0.0.0`. Operator-configurable via `PMOVES_MCP_GATEWAY_HOST` (not yet wired; TODO when fleet rollout starts).
+- **Image signature verification** — `--verify-signatures` available but not enabled in this PR. Add via env override when supply-chain audit is tightened.
+
+### Sandbox-side consumption (next PR — Lane D-sandbox)
+
+Pseudocode for the sandbox bootstrap script (lands when `PMOVES-E2B-Danger-Room-Desktop` is customized):
+
+```python
+sandbox = Sandbox.create(envs={
+    "MCP_GATEWAY_URL": "https://pmoves-5090.tail-scale.ts.net:8090/mcp/sse",
+    "MCP_GATEWAY_AUTH_TOKEN": os.environ["MCP_GATEWAY_AUTH_TOKEN"],
+})
+sandbox.commands.run("/usr/local/bin/pmoves-mcp-client-bootstrap.sh")
+```
+
+The bootstrap script inside the sandbox writes a Claude/MCP client config pointing at `$MCP_GATEWAY_URL` and discovers the 25-server tool surface automatically.
+
+---
+
+## 6.x [PRIOR DESIGN — preserved for context]
+
 Upstream Docker docs note: **"E2B sandboxes now include direct access to the Docker MCP Catalog."** What this means for PMOVES:
 
 1. E2B sandbox templates can pull + import the `pmoves_5090_web` profile during startup using the same two-step bootstrap as § 3.
@@ -146,7 +196,10 @@ Upstream Docker docs note: **"E2B sandboxes now include direct access to the Doc
 |---|---|
 | `make mcp-toolkit-bootstrap` | Verifies `docker mcp` CLI present, pulls `pmoves_5090_web` profile from OCI, imports it. Idempotent. Per-node. |
 | `make mcp-toolkit-secrets-sync` | Reads `pmoves/env.shared` (override via `PMOVES_TIER_FILE`), populates `docker-pass`-style Toolkit secrets non-interactively. Skips OAuth-style servers (see § 5). |
-| `make mcp-toolkit-status` | `docker mcp profile ls && docker mcp client ls && docker mcp secret ls` — single-shot health. |
+| `make mcp-toolkit-status` | `docker mcp profile ls && docker mcp client ls && docker mcp secret ls` + gateway PID — single-shot health. |
+| `make mcp-toolkit-gateway-start` | Run gateway in SSE on a network port (background). See § 6 for security model. |
+| `make mcp-toolkit-gateway-stop` | Graceful stop + force-kill fallback. |
+| `make mcp-toolkit-gateway-tail` | `tail -f` the gateway log. |
 
 Targets live in `pmoves/Makefile`. Scripts live in `pmoves/scripts/mcp-toolkit-*.sh`.
 
