@@ -254,6 +254,12 @@ Example: `ingest.transcript.ready.v1`
 - **Known Road:** `make -C pmoves nats-pub SUBJECT=claw.task.assign.v1 PAYLOAD='...'`
   (run on the node where NATS is local — KVM4-2 or Z890; port 4222 is localhost-only per network hardening)
 - **Note:** Not JetStream — fire and forget. Target agent must be subscribed at publish time.
+- **Current 5090-CODEX receive-path snapshot (2026-05-21T04:54Z):**
+  `pmoves-nats-1` reported 21 connections via `connz?subs=1` and 0 subscriptions matching
+  `claw`, `5090`, `codex`, `task`, `chit`, `pinokio`, `branch`, or `owner.presence`.
+  Treat direct receive on `claw.task.assign.v1` as blocked until a persistent target-node
+  subscriber or MCP/NATS bridge is running and visible in `connz?subs=1`.
+  The same snapshot observed no receiver for the branch trail / CHIT / P7 receive-path patterns checked.
 
 ## autoresearch Experiment Subjects
 
@@ -1558,6 +1564,10 @@ nats server report connections
 - **Notes:** Signing key delivered via `CHIT_PASSPHRASE` / `CHIT_SIGNING_KEY` repo secrets.
   Best-effort — publish failure logs and exits 0 without blocking branch operations.
   Gated against fork PRs to prevent RCE on the tailnet-connected ai-lab runner.
+- **Current 5090-CODEX receive-path snapshot (2026-05-21T04:54Z):**
+  `connz?subs=1` on `pmoves-nats-1` showed no live subscription matching `branch`
+  or `chit`. Branch trail publish remains CI-owned; live branch/CHIT receive needs a
+  persistent audit subscriber or MCP/NATS bridge before it can be treated as online.
 
 ## Agent Zero Task Coordination Subjects
 

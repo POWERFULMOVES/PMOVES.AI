@@ -654,6 +654,15 @@ Comprehensive reference of all production services, ports, APIs, and integration
 - **Auth:** `nats://nats:pmoves@nats:4222` (always use authenticated URL)
 - **WebSocket:** DoX standalone uses 9222, docker-compose docked mode uses 9223
 - **Key Subjects:** See `.claude/context/nats-subjects.md`
+- **Health / Monitoring:** `GET /connz?subs=1` on monitor port 8222 from inside
+  `pmoves-nats-1`; the monitor endpoint was not host-bound in the 2026-05-21
+  desktop snapshot.
+- **Current 5090-CODEX Snapshot:** 2026-05-21T04:54Z `connz?subs=1` reported
+  21 connections and 0 subscriptions matching `claw`, `5090`, `codex`, `task`,
+  `chit`, `pinokio`, `branch`, or `owner.presence`.
+- **Blocked Receive Paths:** `claw.task.assign.v1` plus branch trail / CHIT / P7
+  receive-path patterns need a persistent node subscriber or MCP/NATS bridge before
+  direct agent-to-agent receive can be considered restored.
 - **Compose Profile:** Default (always required)
 - **CI Pipeline:** `vendor` (upstream nats:2.10-alpine image)
 
