@@ -173,6 +173,8 @@ Per `pmoves/docs/architecture/PMOVES_MOF_ARCHITECTURE.md`: every PMOVES node is 
 
 **Goal:** State machine implemented + tested. FlOO$ actually modulates.
 
+> **Implementation spec:** [`TAC_FLOOZ_PHASE_B.md`](./TAC_FLOOZ_PHASE_B.md) — deep-spec sibling doc covering state-machine API, hysteresis algorithm with severity-distance bypass, TTL coalescing semantics, modulation-envelope code binding (with fractional-bias normalization), fixture format for 50-event replay, operator config envelope (6 env vars), and acceptance gates. Doc-only spec; Phase B runtime code lands in a follow-on PR.
+
 | Deliverable | File / Surface |
 |-------------|----------------|
 | State machine | `pmoves/services/flooz/state_machine.py` — deterministic, no I/O |
