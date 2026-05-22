@@ -125,6 +125,24 @@ except ImportError:
     pass
 
 try:
+    from .model_fitness import (  # noqa: F401
+        build_model_candidate_record,
+        build_model_fitness_event,
+        normalize_model_fitness,
+        verify_agent_identity,
+        require_trusted_agent_identity,
+    )
+    __all__ += [
+        "build_model_candidate_record",
+        "build_model_fitness_event",
+        "normalize_model_fitness",
+        "verify_agent_identity",
+        "require_trusted_agent_identity",
+    ]
+except ImportError:
+    pass
+
+try:
     from .nats_client import (  # noqa: F401
         NatsConnectionConfig,
         create_nats_connection,

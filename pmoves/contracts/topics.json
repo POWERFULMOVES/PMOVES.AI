@@ -162,6 +162,10 @@
     "geometry.swarm.meta.v1": {
       "schema": "schemas/geometry/swarm.meta.v1.schema.json"
     },
+    "model.fitness.recorded.v1": {
+      "schema": "schemas/model/fitness.recorded.v1.schema.json",
+      "description": "Normalized model fitness score from TensorZero telemetry and optional Pinokio/Unsloth eval metrics."
+    },
     "health.metrics.updated.v1": {
       "schema": "schemas/health/metrics.updated.v1.schema.json"
     },
