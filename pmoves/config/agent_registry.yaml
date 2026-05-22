@@ -15,6 +15,9 @@ external_contributors:
   - claude-opus
   - kilocode
   - codex
+  - agent-zero-codex
+  - hermes
+  - coder_claw
   - gemini
   - cline
   - powerfulmoves
