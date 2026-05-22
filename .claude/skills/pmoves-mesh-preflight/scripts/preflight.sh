@@ -24,8 +24,8 @@ declare -A SPECIAL_PATHS=(
 declare -A SKIP_PORTS=(
   ["7687"]="neo4j-bolt"
   ["4222"]="nats-tcp"
-  ["9222"]="nats-ws"
-  ["9223"]="nats-ws-docked"
+  ["9223"]="nats-ws"
+  ["9222"]="nats-ws-docked"
   ["54323"]="supabase-studio"
 )
 
