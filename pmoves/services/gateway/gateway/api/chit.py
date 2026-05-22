@@ -9,7 +9,10 @@ from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC  # type: ignore
 from cryptography.hazmat.primitives import hashes as _hashes  # type: ignore
 
 from pmoves.chit import CGP_SPEC_VERSION
-from services.common.env import get_secret
+try:
+    from services.common.env import get_secret
+except ModuleNotFoundError:  # package-qualified import path used by repo tests
+    from pmoves.services.common.env import get_secret
 from pmoves.tools.chit_security import _unpack_floats, verify_cgp as _verify_cgp, decrypt_anchors as _decrypt_anchors
 from pmoves.tools.chit_common import canon
 
