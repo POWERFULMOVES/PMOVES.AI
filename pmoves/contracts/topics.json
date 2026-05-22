@@ -140,6 +140,18 @@
     "gen.text.result.v1": {
       "schema": "schemas/gen/text.result.v1.schema.json"
     },
+    "tokenism.attribution.recorded.v1": {
+      "schema": "schemas/tokenism/attribution.recorded.v1.schema.json"
+    },
+    "tokenism.cgp.weekly.v1": {
+      "schema": "schemas/tokenism/cgp.weekly.v1.schema.json"
+    },
+    "tokenism.cgp.ready.v1": {
+      "schema": "schemas/tokenism/cgp.ready.v1.schema.json"
+    },
+    "tokenism.swarm.population.v1": {
+      "schema": "schemas/tokenism/swarm.population.v1.schema.json"
+    },
     "geometry.cgp.v1": {
       "schema": "schemas/geometry/cgp.v1.schema.json"
     },

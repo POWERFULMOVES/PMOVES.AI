@@ -200,6 +200,7 @@ class CGPPacket(BaseModel):
     # Geometric data (hyperbolic representation)
     geometry: dict[str, Any] = Field(..., description="Geometric encoding of data")
     metadata: dict[str, Any] = Field(default_factory=dict, description="Additional metadata")
+    sig: Optional[dict[str, Any]] = Field(default=None, description="CHIT HMAC signature")
 
     class Config:
         json_schema_extra = {

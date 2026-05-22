@@ -3,7 +3,7 @@
   "title": "Geometry Swarm Meta v1",
   "type": "object",
   "required": ["namespace", "modality", "pack_id", "status", "ts"],
-  "additionalProperties": true,
+  "additionalProperties": false,
   "properties": {
     "namespace": { "type": "string" },
     "modality": { "type": "string" },
@@ -11,9 +11,29 @@
     "status": { "type": "string", "enum": ["active", "draft", "archived"] },
     "version": { "type": ["string", "null"] },
     "population_id": { "type": ["string", "null"] },
-    "best_fitness": { "type": ["number", "null"] },
+    "name": { "type": ["string", "null"] },
+    "generation": { "type": ["integer", "null"], "minimum": 0 },
+    "best_week": { "type": ["integer", "null"], "minimum": 0 },
+    "best_fitness": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
+    "avg_fitness": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
+    "fitness_improvement": { "type": ["number", "null"], "minimum": -1, "maximum": 1 },
+    "optimization_target": { "type": ["string", "null"] },
     "metrics": { "type": ["object", "null"], "additionalProperties": true },
-    "ts": { "type": "string", "format": "date-time" }
+    "ts": { "type": "string", "format": "date-time" },
+    "sig": {
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "required": ["alg", "hmac"],
+          "additionalProperties": true,
+          "properties": {
+            "alg": { "type": "string" },
+            "kid": { "type": "string" },
+            "hmac": { "type": "string" }
+          }
+        }
+      ]
+    }
   }
 }
-
