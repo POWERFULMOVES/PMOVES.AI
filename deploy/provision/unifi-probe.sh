@@ -9,18 +9,18 @@
 #   unifi-probe.sh [--json] [--controller URL] [--api-key KEY] [--site SITE]
 #
 # ENV VARS (used if flags omitted):
-#   UNIFI_CONTROLLER_URL  e.g. https://192.168.1.1 or https://unifi-controller:8443
+#   UNIFI_CONTROLLER_URL  e.g. https://unifi-controller or https://unifi-controller:8443
 #   UNIFI_API_KEY         API key from: Unifi Network App → Settings → System → API
 #   UNIFI_SITE            Site name (default: "default")
 #
 # OUTPUT (stdout, JSON):
 #   Healthy:
 #   {
-#     "controller_url": "https://192.168.1.1",
+#     "controller_url": "https://unifi-controller",
 #     "site": "default",
 #     "api_version": "modern" | "legacy",
 #     "managed_devices": [
-#       { "mac": "aa:bb:cc:dd:ee:ff", "hostname": "...", "ip": "192.168.1.x",
+#       { "mac": "aa:bb:cc:dd:ee:ff", "hostname": "...", "ip": "<device-ip>",
 #         "vlan": 10, "port": 3, "uplink_mbps": 1000, "type": "switch|ap|gw|client" }
 #     ],
 #     "host_mac_matches": [

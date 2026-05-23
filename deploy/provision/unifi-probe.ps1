@@ -9,7 +9,7 @@
 #   .\unifi-probe.ps1 [-Json] [-Controller URL] [-ApiKey KEY] [-Site SITE]
 #
 # ENV VARS (used if flags omitted):
-#   UNIFI_CONTROLLER_URL  e.g. https://192.168.1.1
+#   UNIFI_CONTROLLER_URL  e.g. https://unifi-controller or https://unifi-controller:8443
 #   UNIFI_API_KEY         API key from: Unifi Network App → Settings → System → API
 #   UNIFI_SITE            Site name (default: "default")
 #
