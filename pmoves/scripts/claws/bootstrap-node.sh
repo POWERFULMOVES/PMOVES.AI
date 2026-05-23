@@ -17,6 +17,9 @@ SCOPE=""
 TARGET=""
 SKIP_SSH=false
 SKIP_GLANCES=false
+WITH_RUNNER=false
+RUNNER_LANE="ai-lab"
+RUNNER_REPO="POWERFULMOVES/PMOVES.AI"
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -24,6 +27,9 @@ while [[ $# -gt 0 ]]; do
         --target)        TARGET="$2"; shift 2 ;;
         --skip-ssh)      SKIP_SSH=true; shift ;;
         --skip-glances)  SKIP_GLANCES=true; shift ;;
+        --with-runner)   WITH_RUNNER=true; shift ;;
+        --runner-lane)   RUNNER_LANE="$2"; shift 2 ;;
+        --runner-repo)   RUNNER_REPO="$2"; shift 2 ;;
         *)               echo "Unknown: $1"; exit 1 ;;
     esac
 done
@@ -32,11 +38,15 @@ if [[ -z "$SCOPE" || -z "$TARGET" ]]; then
     echo "Usage: bootstrap-node.sh --scope <name> --target <user@host>"
     echo ""
     echo "Options:"
-    echo "  --skip-ssh       Skip SSH connectivity check"
-    echo "  --skip-glances   Skip Glances installation"
+    echo "  --skip-ssh           Skip SSH connectivity check"
+    echo "  --skip-glances       Skip Glances installation"
+    echo "  --with-runner        Register a GitHub Actions runner (idempotent)"
+    echo "  --runner-lane LANE   Runner lane: ai-lab|vps|hotfix (default: ai-lab)"
+    echo "  --runner-repo REPO   GitHub repo for runner (default: POWERFULMOVES/PMOVES.AI)"
     echo ""
     echo "Example:"
     echo "  bootstrap-node.sh --scope 5090 --target root@pmoves-5090"
+    echo "  bootstrap-node.sh --scope 5090 --target root@pmoves-5090 --with-runner --runner-lane ai-lab"
     echo "  bootstrap-node.sh --scope kvm4-1 --target root@\$HOSTINGER_KVM4_1_IP"
     exit 1
 fi
@@ -82,6 +92,16 @@ echo "  Installing gh CLI..."
 ssh "$TARGET" 'which gh > /dev/null 2>&1 && echo "  gh: $(gh --version 2>/dev/null | head -1)" || (mkdir -p /tmp/gh-install && cd /tmp/gh-install && curl -sL "https://github.com/cli/cli/releases/download/v2.73.0/gh_2.73.0_linux_amd64.tar.gz" -o gh.tar.gz && tar xzf gh.tar.gz && cp gh_2.73.0_linux_amd64/bin/gh /usr/local/bin/ && echo "  gh: installed")'
 
 echo ""
+
+# --- Step 3.5: Runner Registration (optional) ---
+if $WITH_RUNNER; then
+    echo "[3.5/5] Registering GitHub Actions runner (lane: $RUNNER_LANE)..."
+    "$SCRIPT_DIR/setup-runner.sh" \
+        --target "$TARGET" \
+        --repo "$RUNNER_REPO" \
+        --lane "$RUNNER_LANE"
+    echo ""
+fi
 
 # --- Step 4: Glances ---
 if ! $SKIP_GLANCES; then
