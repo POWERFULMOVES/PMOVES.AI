@@ -45,12 +45,13 @@ Working now:
 - CGP schema compatibility for `chit.cgp.v0.2` and `chit.cgp.v1.0`.
 - Validated NATS publisher payloads for `tokenism.attribution.recorded.v1`, `tokenism.cgp.weekly.v1`, `tokenism.cgp.ready.v1`, and `tokenism.swarm.population.v1`.
 - Firefly integration modules for calibration and export.
+- Settlement planning contracts for `tokenism.settlement.requested.v1`, `tokenism.settlement.recorded.v1`, and `tokenism.settlement.failed.v1`, with deterministic idempotency keys.
 
 Bounded or planned:
 - Hyperbolic geometry is an embedding/encoding support layer, not a completed proof of economic fairness by itself.
 - Zeta behavior is heuristic and must stay labeled that way until a method design is reviewed.
 - ToKenism swarm records fitness and population metadata. Real PSO/evolutionary operators are handled by the PMOVES model-fitness/EvoSwarm workstream, not hidden in ToKenism.
-- Production token settlement still needs the separate NATS -> FireFly -> contract flow and deployment validation.
+- Live production settlement still needs Firefly executor dry-runs, chain transaction execution, and deployment validation.
 
 ### Key Principles
 
@@ -184,7 +185,7 @@ If the weekly pool is 1000 GRO:
 - Member C (weight 0.15): receives 150 GRO
 - ... etc.
 
-This is the model and contract-facing calculation. Production distribution is a separate settlement workflow and should be implemented through an auditable NATS -> FireFly -> contract path, not as an implicit side effect of CHIT generation.
+This is the model and contract-facing calculation. Production distribution is a separate settlement workflow through signed `tokenism.settlement.*.v1` events, not an implicit side effect of CHIT generation.
 
 ### Phase 6: Verification
 

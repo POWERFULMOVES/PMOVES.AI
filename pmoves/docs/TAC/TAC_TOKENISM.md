@@ -63,6 +63,9 @@ ToKenism is not a standalone service — it is a **CHIT attribution engine** com
 | `tokenism.attribution.recorded.v1` | Publishes | Real-time attribution action recorded |
 | `tokenism.cgp.ready.v1` | Publishes | Generic CGP packet ready for consumption |
 | `tokenism.swarm.population.v1` | Publishes | Swarm fitness/population metadata update |
+| `tokenism.settlement.requested.v1` | Publishes | Signed settlement batch planned from CGP attribution |
+| `tokenism.settlement.recorded.v1` | Publishes | Settlement instruction recorded or idempotently skipped |
+| `tokenism.settlement.failed.v1` | Publishes | Settlement instruction failure with retry metadata |
 | `tokenism.geometry.event.v1` | Consumed from Flute | Legacy direct voice geometry event; still used by services but not one of the hardened ToKenism publisher schemas |
 | `tokenism.prosodic.bpm.v1` | Consumed from Flute | BPM-encoded prosodic timeline event outside the ToKenism CHIT module |
 
@@ -79,7 +82,7 @@ ToKenism **is** the CHIT engine — all CHIT integration radiates from here.
 | Swarm metadata | Active | `swarm-attribution.ts`; records bounded fitness and population summaries only |
 | Zeta spectral filtering | Heuristic | `zeta-filter.ts`; method design still required before stronger claims |
 | BPM/prosodic mapping | External | Implemented in PMOVES voice/prosodic tools, not a ToKenism CHIT module |
-| Smart contract attribution | Planned integration | Contract models exist; production NATS -> FireFly -> contract settlement remains separate |
+| Smart contract attribution | Plan-only settlement interface | Contract models and settlement schemas exist; live Firefly/chain executors remain gated |
 
 ## Production Audit Checklist
 
@@ -128,7 +131,7 @@ Current relevant subjects:
 - Live ToKenism/Flute smoke should confirm `tokenism.prosodic.bpm.v1` packets after W6-P2 publish path
 - Verify Hardhat dependencies, local contract tests, and CI working directory
 - Re-run temp-file and duplicate-layout audits before acting on stale counts
-- Implement auditable NATS -> FireFly -> contract settlement flow separately from CHIT generation
+- Implement signed Firefly and contract settlement executors for `tokenism.settlement.*.v1`
 - Keep zeta labeled heuristic until method design is reviewed
 - Not registered as an agent in `agent_registry.yaml` — operates as library
 
