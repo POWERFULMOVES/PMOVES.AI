@@ -212,7 +212,15 @@ jobs:
           echo "create-pr job did not succeed (result: ${{ needs.create-pr.result }}), skipping post-CI"
           exit 0
 
+      - name: Checkout repository
+        if: needs.create-pr.result == 'success'
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
       - name: Wait for CI checks to complete
+        if: needs.create-pr.result == 'success'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ needs.create-pr.outputs.pr_number }}
