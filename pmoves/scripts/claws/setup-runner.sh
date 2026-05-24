@@ -151,7 +151,8 @@ echo ""
 echo "[docker]"
 if ! $SKIP_DOCKER_CHECK; then
   if ssh_or_dry "which docker > /dev/null 2>&1" 2>/dev/null; then
-    DOCKER_VER=$(ssh -o ConnectTimeout=5 "$TARGET" "docker --version 2>/dev/null" || echo "unknown")
+    DOCKER_VER="unknown (dry-run)"
+    $DRY_RUN || DOCKER_VER=$(ssh -o ConnectTimeout=5 "$TARGET" "docker --version 2>/dev/null" || echo "unknown")
     check "Docker on target" "pass" "$DOCKER_VER"
   else
     check "Docker on target" "fail" "not found — install Docker before registering runner"
@@ -186,8 +187,8 @@ echo ""
 
 # --- Check existing runner state ---
 echo "[runner state]"
-RUNNER_JSON=$(gh api "repos/${REPO}/actions/runners" --paginate --jq \
-  "[.runners[] | select(.name == \"${RUNNER_NAME}\")]" 2>/dev/null || echo "[]")
+RUNNER_JSON=$(gh api "repos/${REPO}/actions/runners" --paginate 2>/dev/null | \
+  jq -sc '[.[].runners[] | select(.name == "'"${RUNNER_NAME}"'")]' 2>/dev/null || echo "[]")
 
 RUNNER_COUNT=$(echo "$RUNNER_JSON" | jq 'length')
 RUNNER_ID=$(echo "$RUNNER_JSON" | jq -r '.[0].id // empty')

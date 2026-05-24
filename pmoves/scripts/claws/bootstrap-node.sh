@@ -99,7 +99,14 @@ if $WITH_RUNNER; then
     "$SCRIPT_DIR/setup-runner.sh" \
         --target "$TARGET" \
         --repo "$RUNNER_REPO" \
-        --lane "$RUNNER_LANE"
+        --lane "$RUNNER_LANE" || {
+        rc=$?
+        if [[ $rc -eq 2 ]]; then
+            echo "  Drifted runner re-registered — verify online status before proceeding"
+        else
+            exit $rc
+        fi
+    }
     echo ""
 fi
 
