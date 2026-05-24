@@ -28,10 +28,12 @@ into Archon mint-skill flow; add `.openclaw-autoclaw/` to `.gitignore` if not pr
 ### Stream 2: autoglm-agents (browser + vision)
 
 ```bash
-# Check if autoglm services are reachable
+# Check if autoglm services are reachable (ports TBD — update once CATALOG.md entries land)
+declare -A AUTOGLM_PORTS=([autoglm-browser-agent]=8200 [autoglm-image-recognition]=8201)
 for svc in autoglm-browser-agent autoglm-image-recognition; do
-  echo -n "$svc: "
-  curl -sf "http://localhost:8200/healthz" -o /dev/null -m 2 2>/dev/null \
+  port="${AUTOGLM_PORTS[$svc]}"
+  echo -n "$svc (:$port): "
+  curl -sf "http://localhost:${port}/healthz" -o /dev/null -m 2 2>/dev/null \
     && echo "UP" || echo "NOT RUNNING"
 done
 ```
