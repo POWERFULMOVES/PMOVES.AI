@@ -660,9 +660,12 @@ Comprehensive reference of all production services, ports, APIs, and integration
 - **Current 5090-CODEX Snapshot:** 2026-05-21T04:54Z `connz?subs=1` reported
   21 connections and 0 subscriptions matching `claw`, `5090`, `codex`, `task`,
   `chit`, `pinokio`, `branch`, or `owner.presence`.
-- **Blocked Receive Paths:** `claw.task.assign.v1` plus branch trail / CHIT / P7
-  receive-path patterns need a persistent node subscriber or MCP/NATS bridge before
-  direct agent-to-agent receive can be considered restored.
+- **5090 Receive Path:** `make -C pmoves nats-agent-inbox` runs a host-side
+  persistent subscriber for `claw.task.assign.v1`, branch trail, CHIT, P7, and
+  owner-presence subjects via `uv run --script`, writing a JSONL inbox outside the
+  repo tree by default. Direct receive is considered restored only after this
+  subscriber, or an equivalent agent runtime, is visible in `connz?subs=1` on the
+  target NATS broker.
 - **Compose Profile:** Default (always required)
 - **CI Pipeline:** `vendor` (upstream nats:2.10-alpine image)
 

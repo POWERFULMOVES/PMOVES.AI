@@ -922,7 +922,11 @@ nats-pub: ## Publish a NATS message via docker exec (Known Road — run on the n
 ## From a remote node: connect to nats://nats:pmoves@pmoves-kvm4-2:4222 via Tailscale hostname
 	@test -n "$(SUBJECT)" || (echo "ERROR: SUBJECT is required" && exit 1)
 	@test -n "$(PAYLOAD)" || (echo "ERROR: PAYLOAD is required" && exit 1)
-	@docker exec pmoves-nats-1 nats pub "$(SUBJECT)" '$(PAYLOAD)' --server nats://nats:pmoves@localhost:4222
+	@bash scripts/with-env.sh uv run --script tools/nats_pub.py --subject "$(SUBJECT)" --payload '$(PAYLOAD)'
+
+.PHONY: nats-agent-inbox
+nats-agent-inbox: ## Run a persistent agent inbox subscriber; visible in NATS connz?subs=1
+	@bash scripts/with-env.sh uv run --script tools/nats_agent_inbox.py
 
 .PHONY: up-workers up-workers-core
 up-workers: ## Start worker services (extract, langextract, media)

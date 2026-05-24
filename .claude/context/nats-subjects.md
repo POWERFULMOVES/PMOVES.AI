@@ -252,13 +252,20 @@ Example: `ingest.transcript.ready.v1`
   ```
 - **Subscribers:** Target node agent runtime (SPARK, 5090, etc.)
 - **Known Road:** `make -C pmoves nats-pub SUBJECT=claw.task.assign.v1 PAYLOAD='...'`
-  (run on the node where NATS is local — KVM4-2 or Z890; port 4222 is localhost-only per network hardening)
+  (host-side `uv run --script tools/nats_pub.py`; run on the node where NATS is local
+  or where `NATS_URL` reaches the hub)
 - **Note:** Not JetStream — fire and forget. Target agent must be subscribed at publish time.
+- **Persistent inbox:** `make -C pmoves nats-agent-inbox` runs
+  `pmoves/tools/nats_agent_inbox.py`, which subscribes to `claw.task.assign.v1`,
+  `branch.>`, `chit.>`, `p7.>`, and `owner.presence.>` and writes a local JSONL
+  inbox outside the repo tree by default. The target uses `uv run --script` so
+  `nats-py` is resolved without mutating host Python. Use this on the target node
+  when a durable receive path is needed before a full agent runtime is online.
 - **Current 5090-CODEX receive-path snapshot (2026-05-21T04:54Z):**
   `pmoves-nats-1` reported 21 connections via `connz?subs=1` and 0 subscriptions matching
   `claw`, `5090`, `codex`, `task`, `chit`, `pinokio`, `branch`, or `owner.presence`.
-  Treat direct receive on `claw.task.assign.v1` as blocked until a persistent target-node
-  subscriber or MCP/NATS bridge is running and visible in `connz?subs=1`.
+  Treat direct receive on `claw.task.assign.v1` as unproved until the persistent
+  inbox or an equivalent agent runtime is running and visible in `connz?subs=1`.
   The same snapshot observed no receiver for the branch trail / CHIT / P7 receive-path patterns checked.
 
 ## autoresearch Experiment Subjects
@@ -1567,7 +1574,8 @@ nats server report connections
 - **Current 5090-CODEX receive-path snapshot (2026-05-21T04:54Z):**
   `connz?subs=1` on `pmoves-nats-1` showed no live subscription matching `branch`
   or `chit`. Branch trail publish remains CI-owned; live branch/CHIT receive needs a
-  persistent audit subscriber or MCP/NATS bridge before it can be treated as online.
+  persistent audit subscriber, `make -C pmoves nats-agent-inbox`, or an equivalent
+  MCP/NATS bridge before it can be treated as online.
 
 ## Agent Zero Task Coordination Subjects
 
