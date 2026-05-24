@@ -413,19 +413,17 @@ jobs:
       - name: Install Cosign
         uses: sigstore/cosign-installer@cad07c2e89fa2edd6e2d7bab4c1aa38e53f76003
 
-      - name: Log in to GHCR (App token preferred)
-        id: login_ghcr_app
-        if: ${{ steps.app_token.outputs.token != '' }}
-        continue-on-error: true
-        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: x-access-token
-          password: ${{ steps.app_token.outputs.token }}
-
-      - name: Log in to GHCR (PAT fallback)
+      # Auth precedence: PAT > App > workflow token.
+      # PAT is preferred because the GitHub App installation lacks org-level
+      # `write:packages` (verified 2026-05-24 — App login succeeds but blob
+      # PUT returns 403 "installation not allowed to Write organization
+      # package"). Since docker/login-action only validates auth-server
+      # acceptance and not push permission, App login was preempting PAT
+      # fallback in the previous order. Swapping the order ensures the
+      # org-scoped PAT (when configured) is tried first.
+      - name: Log in to GHCR (PAT preferred)
         id: login_ghcr_pat
-        if: ${{ steps.login_ghcr_app.outcome != 'success' && env.GHCR_USERNAME != '' && env.GHCR_PAT != '' }}
+        if: ${{ env.GHCR_USERNAME != '' && env.GHCR_PAT != '' }}
         continue-on-error: true
         uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121
         with:
@@ -433,9 +431,19 @@ jobs:
           username: ${{ env.GHCR_USERNAME }}
           password: ${{ env.GHCR_PAT }}
 
+      - name: Log in to GHCR (App token fallback)
+        id: login_ghcr_app
+        if: ${{ steps.login_ghcr_pat.outcome != 'success' && steps.app_token.outputs.token != '' }}
+        continue-on-error: true
+        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: x-access-token
+          password: ${{ steps.app_token.outputs.token }}
+
       - name: Log in to GHCR (workflow token fallback)
         id: login_ghcr_actions
-        if: ${{ steps.login_ghcr_app.outcome != 'success' && steps.login_ghcr_pat.outcome != 'success' }}
+        if: ${{ steps.login_ghcr_pat.outcome != 'success' && steps.login_ghcr_app.outcome != 'success' }}
         continue-on-error: true
         uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121
         with:
@@ -444,9 +452,9 @@ jobs:
           password: ${{ github.token }}
 
       - name: Require GHCR authentication
-        if: ${{ steps.login_ghcr_app.outcome != 'success' && steps.login_ghcr_pat.outcome != 'success' && steps.login_ghcr_actions.outcome != 'success' }}
+        if: ${{ steps.login_ghcr_pat.outcome != 'success' && steps.login_ghcr_app.outcome != 'success' && steps.login_ghcr_actions.outcome != 'success' }}
         run: |
-          echo "::error::Unable to authenticate to GHCR. Check GH_APP_ID/GH_APP_SEC, or GHCR_USERNAME/GHCR_TOKEN."
+          echo "::error::Unable to authenticate to GHCR. Check GHCR_USERNAME/GHCR_TOKEN, GH_APP_ID/GH_APP_SEC, or the default workflow token."
           exit 1
 
       - name: Optional login to Docker Hub
