@@ -39,7 +39,7 @@ GRAPHITI_MARK: `AGNOTE4482::AUTOCLAW::4090-CUSTOMIZATION::2026-05-24`
 
 Following the AGNOTE4482 coding plan alignment policy (local-first, profile-governed, seat/token-aware):
 
-```
+```text
 Local-First Tier (Ollama)
   ├── ollama/qwen3:14b         — daily driver (fits 16GB VRAM)
   ├── ollama/qwen3-embedding:4b — embeddings
@@ -239,6 +239,7 @@ Currently `.kilo/` config is designed for 5090 node (GPU inference node with 32G
 - Point to local Ollama for embeddings
 
 ### Three-Body Split for 4090
+
 | Role | Agent | Tool |
 |------|-------|------|
 | Delivery | AutoClaw (GLM auto) | Code changes via openclaw.json + skills |
@@ -249,7 +250,7 @@ Currently `.kilo/` config is designed for 5090 node (GPU inference node with 32G
 
 ## Implementation Order
 
-```
+```text
 Week 1: Phases 1-2 (Provider Cascade + Memory)
   ├── Day 1: Verify Ollama, pull models
   ├── Day 2: Add Ollama provider to openclaw.json
@@ -278,7 +279,7 @@ Week 4: Phase 6 (Stretch — Agentic Coding)
 
 | Risk | Impact | Mitigation |
 |------|--------|------------|
-| Ollama not installed on 4090 | Blocks Phase 1 | Install via `winget install Ollama.Ollama` |
+| Ollama not installed on 4090 | Blocks Phase 1 | Windows: `winget install Ollama.Ollama`; Linux/macOS: `curl -fsSL https://ollama.com/install.sh \| sh` |
 | VRAM budget exceeded (16GB) | Models OOM | qwen3:14b (~9GB) + embedding:4b (~2.5GB) + OS (~2GB) = ~13.5GB, safe margin |
 | MiniMax/Alibaba API keys unavailable | Blocks those providers | Defer to Phase 1b; proceed with Ollama + GLM only |
 | Cipher Memory not reachable from 4090 | Blocks Cipher plugin | Use file memory as immediate; Cipher when Z890 mesh confirmed |

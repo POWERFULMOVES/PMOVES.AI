@@ -3,7 +3,7 @@ Creates TAC stubs, service contracts, and branch scaffolding for autoclaw/hermes
 
 ## Arguments
 
-- `--stream` — which workstream to scaffold: `browser`, `vision`, `hermes`, or `all` (default: all)
+- `--stream` — which workstream to scaffold: `autoclaw-integration`, `autoglm-agents`, `hermes-4090-evolution`, or `all` (default: all)
 - `--node` — target node profile (default: `4090`)
 
 ## Implementation
@@ -40,7 +40,7 @@ done
 
 Branch: `feat/autoglm-agents`
 TAC node: `n4090.autoclaw.browser-agent`, `n4090.autoclaw.image-recognition`
-Work: define service contracts (port, healthz, fallback chain); add to CATALOG.md;
+Work: define service contracts (port, healthz, fallback chain); add to `.claude/CATALOG.md`;
 add health checks to `/health:quick` skill; document Playwright/Puppeteer fallback.
 
 ### Stream 3: hermes-4090-evolution
