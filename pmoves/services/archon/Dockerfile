@@ -175,10 +175,10 @@ RUN mkdir -p /app/static/archon-ui /app/config/mcp
 # Archon uses Bun workspaces — bun is installed via corepack above.
 ARG ARCHON_UI_DIR=vendor/archon/packages/web
 ARG ARCHON_UI_BUILD_DIR=dist
-RUN if [ -d "$ARCHON_UI_DIR" ]; then \
+RUN if [ -d "/app/$ARCHON_UI_DIR" ]; then \
         echo "→ Building Archon UI from $ARCHON_UI_DIR" && \
         cd /app/vendor/archon && bun install --frozen-lockfile && \
-        cd "$ARCHON_UI_DIR" && bun run build && \
+        cd "/app/$ARCHON_UI_DIR" && bun run build && \
         mkdir -p "$ARCHON_UI_STATIC_DIR" \
         && cp -R "$ARCHON_UI_BUILD_DIR"/* "$ARCHON_UI_STATIC_DIR"/; \
     else \

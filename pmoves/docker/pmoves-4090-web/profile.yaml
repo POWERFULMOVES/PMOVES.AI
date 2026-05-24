@@ -1,0 +1,63 @@
+name: pmoves_4090_web
+description: "PMOVES 4090 coding workstation MCP profile — no TTS, VRAM-aware"
+version: "1.0.0"
+node: laptop-4090
+
+# 4090 VRAM budget — embedded so MCP tool callers can make routing decisions
+vram_budget:
+  total_mb: 16384
+  system_reserve_mb: 2048
+  usable_mb: 14336
+  max_concurrent_models: 2
+  idle_timeout_seconds: 180
+  always_resident: qwen3-embedding:8b
+
+servers:
+  pmoves-cipher:
+    transport: sse
+    url: "http://localhost:8105/mcp/sse"
+
+  docker:
+    image: mcp/docker
+    volumes:
+      - type: bind
+        source: /var/run/docker.sock
+        target: /var/run/docker.sock
+
+  compose:
+    image: mcp/compose
+    volumes:
+      - type: bind
+        source: /var/run/docker.sock
+        target: /var/run/docker.sock
+
+  tensorzero:
+    transport: http
+    url: "http://localhost:3030"
+
+  ollama:
+    transport: http
+    url: "http://localhost:11434"
+
+  nats:
+    transport: http
+    # NATS monitoring HTTP endpoint (host-mapped from container-internal :8222)
+    url: "http://localhost:${NATS_MONITORING_PORT:-9223}"
+
+  huggingface:
+    image: mcp/huggingface
+    env:
+      HF_TOKEN: "${HF_TOKEN}"
+
+# D-Proxy gateway (host-side, from PR #1555 scripts)
+# Port 8089 — 8090 reserved for retrieval-eval (docker-compose.workers.yml)
+gateway:
+  transport: sse
+  port: 8089
+  auth_token_env: MCP_GATEWAY_AUTH_TOKEN
+  block_secrets: true
+  # block_network: false — outbound needed for Ollama Pro cloud-proxied models
+  block_network: false
+
+# TTS servers intentionally excluded — 4090 has no local TTS.
+# Route synthesis to pmoves-5090 Flute gateway at pmoves-5090:8055 via NATS voice channel.

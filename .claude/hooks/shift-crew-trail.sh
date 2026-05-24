@@ -63,17 +63,11 @@ fi
 # Build NATS subject from branch name
 BRANCH="$(git rev-parse --abbrev-ref HEAD 2>/dev/null)" || BRANCH="unknown"
 # Convert feat/w0-pr4-ghost-detector → branch.feat.w0-pr4-ghost-detector.trail.v1
-# Sanitize: only allow alphanumeric, hyphens, dots (reject JSON-injecting chars)
-SAFE_BRANCH="$(echo "$BRANCH" | tr -cd 'a-zA-Z0-9._-')"
-SUBJECT="branch.$(echo "$SAFE_BRANCH" | tr '/' '.').trail.v1"
+SUBJECT="branch.$(echo "$BRANCH" | tr '/' '.').trail.v1"
 
-# Build payload using Python for safe JSON serialization (prevents branch name injection)
-FILE_BASENAME="$(basename "$FILE_PATH")"
-TIMESTAMP="$(date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null)" || TIMESTAMP=""
-if [ -z "$TIMESTAMP" ]; then
-    TIMESTAMP="$($PYTHON_CMD -c 'from datetime import datetime, timezone; print(datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"))' 2>/dev/null)" || TIMESTAMP="unknown"
-fi
-PAYLOAD="$($PYTHON_CMD -c "import json,sys; print(json.dumps({'event':'shift_crew_edit','file':sys.argv[1],'branch':sys.argv[2],'node':'4090-claude','ts':sys.argv[3]}))" "$FILE_BASENAME" "$BRANCH" "$TIMESTAMP" 2>/dev/null)" || PAYLOAD="{}"
+# Build payload
+TIMESTAMP="$(date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || python3 -c 'from datetime import datetime, timezone; print(datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"))')"
+PAYLOAD="{\"event\":\"shift_crew_edit\",\"file\":\"$(basename "$FILE_PATH")\",\"branch\":\"$BRANCH\",\"node\":\"4090-claude\",\"ts\":\"$TIMESTAMP\"}"
 
 # Attempt publish via nats CLI (prefer) or nats-py
 NATS_URL="${NATS_URL:-nats://nats:pmoves@localhost:4222}"

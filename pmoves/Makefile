@@ -162,6 +162,7 @@ include mk/provider.mk
 include mk/egress.mk
 include mk/yt-cookies.mk
 include mk/mcp-toolkit.mk
+include mk/mcp-toolkit-4090.mk
 
 # ----------------------------------------------------------------------------
 # venv + bringup-toolchain prereqs

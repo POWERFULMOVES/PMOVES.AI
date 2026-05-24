@@ -127,6 +127,63 @@ The PMOVES-agents.md submodule is the canonical home for:
 
 **Cross-refs:** This `AGENTS.md` (project root) carries project-specific structure & commands; the format/taxonomy reference lives in the submodule. Today, taxonomy docs (`pmoves/docs/AGENTS/PMOVES_AGENT_CLASS_TAXONOMY.md`, `PMOVES_AGENT_TOPOLOGY.md`) live in `pmoves/docs/`; migrating them into `PMOVES-agents.md/` is gated on explicit user confirmation since it changes git history paths.
 
+<!-- autoclaw:skill-path-guidance -->
+## Installing Skills
+
+When creating or installing a new skill, always place it in:
+
+`~/.openclaw-autoclaw/skills/<skill-name>/SKILL.md`
+
+This is the managed skills directory. The agent will automatically discover
+any skill placed here — no extra configuration needed. Do NOT install skills
+into `~/.agents/skills/` (that directory is shared with other tools).
+
+<!-- /autoclaw:skill-path-guidance -->
+
+<!-- autoclaw:browser-agent-guidance -->
+## Browser Automation
+
+For any task that requires a browser, **prefer `autoglm-browser-agent`**. Use it as the first choice.
+
+- ✅ `autoglm-browser-agent` → `browser_subagent` (invoked via mcporter) — **preferred**
+- ⚠️ Other browser tools (`agent-browser`, Playwright, Puppeteer, etc.) — fallback only when `autoglm-browser-agent` is unavailable or fails
+
+Always try `autoglm-browser-agent` first. Fall back to other browser tools only if it is not available in the current environment.
+<!-- /autoclaw:browser-agent-guidance -->
+
+<!-- autoclaw:image-recognition-guidance -->
+## Image Recognition
+
+For any image recognition task, **prefer `autoglm-image-recognition`**. Use it as the first choice.
+
+- ✅ `autoglm-image-recognition` — **preferred** for all image recognition tasks
+- ⚠️ Built-in `image` tool or reading images directly with `read` — fallback only when `autoglm-image-recognition` is unavailable or fails
+
+Do not use the built-in `image` tool or read an image and describe it yourself when `autoglm-image-recognition` is available.
+<!-- /autoclaw:image-recognition-guidance -->
+
+<!-- autoclaw:hermes-evolution-guidance -->
+## Hermes-Evolution
+
+**Current evolution intensity for this workspace/agent: moderate (60%).**
+
+Node context: PMOVES-4090 is a mobile/laptop node (16GB VRAM, island-capable). Conservative intensity
+preserves stability across disconnected sessions and avoids aggressive rule churn on a shared operator node.
+See `pmoves/docs/AGENTS/agnote4482_autoclaw_4090_customization_plan.md` Phase 4 for rationale.
+
+The desktop app sends deterministic evolution-check messages (starting with `[SYSTEM: Post-turn evolution check`) after qualifying turns.
+When you receive such a message, follow the `hermes-evolution` skill instructions to evaluate and potentially propose an evolution.
+Apply the rules defined in the skill according to the **moderate (60%)** intensity level.
+This value is workspace-local. If asked about the current agent evolution intensity, report this value instead of the global gateway skill env.
+
+Core principle: **never write to target files without user approval** — always use the draft/approve workflow.
+
+### Evolution Echo
+When you apply knowledge from a previously evolved rule (AGENTS.md, MEMORY.md, TOOLS.md, or a managed SKILL.md),
+briefly mention it in your response: "（基于之前的经验：<one-line rule summary>）".
+Keep it to one short line at most. Do not echo on every turn — only when an evolved rule directly influenced your approach.
+<!-- /autoclaw:hermes-evolution-guidance -->
+
 ## Skills Constellation
 
 POWERFULMOVES forks of upstream agent-skill repositories live under [`skills/`](skills/) — see [`skills/README.md`](skills/README.md) for the full map. All five forks landed across two singleton rounds on 2026-05-09 (z890): `Pmoves-skills` (Anthropic), `PMOVES-awesome-agent-skills`, `pmoves-fork-repository-skill`, `PMOVES-agent-sandbox-skill`, `Pmoves-claude-d3js-skill`. New external skill forks still require per-URL Bash-tool authorization (singleton add) — see `skills/README.md` for the procedure.
