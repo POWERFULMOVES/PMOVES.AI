@@ -64,7 +64,7 @@ while [[ $# -gt 0 ]]; do
     --help|-h)
       sed -n '2,/^[^#]/p' "$0" | grep '^#' | sed 's/^# \?//'
       exit 0 ;;
-    *)                echo "Unknown arg: $1"; exit 1 ;;
+    *)                printf '{"skipped":true,"reason":"unknown_arg: %s"}\n' "$1"; exit 0 ;;
   esac
 done
 
@@ -200,8 +200,7 @@ MANAGED_DEVICES_JSON=$(jq -sc '
 UNIFI_MACS=$(echo "$MANAGED_DEVICES_JSON" | jq -r '.[].mac' 2>/dev/null || true)
 
 # --- Cross-check: host MACs vs Unifi ---
-HOST_MAC_MATCHES_JSON="["
-FIRST=true
+HOST_MAC_MATCHES=()
 for mac in "${HOST_MACS[@]}"; do
   nic="${MAC_TO_NIC[$mac]:-unknown}"
   if echo "$UNIFI_MACS" | grep -qx "$mac"; then
@@ -209,36 +208,31 @@ for mac in "${HOST_MACS[@]}"; do
   else
     status="unmanaged"
   fi
-  $FIRST || HOST_MAC_MATCHES_JSON+=","
-  HOST_MAC_MATCHES_JSON+="{\"nic\":\"${nic}\",\"mac\":\"${mac}\",\"status\":\"${status}\"}"
-  FIRST=false
+  HOST_MAC_MATCHES+=("$(jq -nc --arg nic "$nic" --arg mac "$mac" --arg status "$status" \
+    '{nic:$nic,mac:$mac,status:$status}')")
 done
-HOST_MAC_MATCHES_JSON+="]"
+HOST_MAC_MATCHES_JSON="[$(IFS=','; echo "${HOST_MAC_MATCHES[*]}")]"
+[ "${#HOST_MAC_MATCHES[@]}" -eq 0 ] && HOST_MAC_MATCHES_JSON="[]"
 
 # --- Ghost devices: Unifi sees them but host doesn't claim them ---
-GHOST_DEVICES_JSON="["
-FIRST=true
+GHOST_DEVICES=()
 HOST_MAC_LIST=$(printf '%s\n' "${HOST_MACS[@]}")
 while IFS= read -r unic_mac; do
   [[ -z "$unic_mac" ]] && continue
   if ! echo "$HOST_MAC_LIST" | grep -qx "$unic_mac"; then
     hostname=$(echo "$MANAGED_DEVICES_JSON" | \
       jq -r --arg m "$unic_mac" '.[] | select(.mac == $m) | .hostname' 2>/dev/null || echo "")
-    $FIRST || GHOST_DEVICES_JSON+=","
-    GHOST_DEVICES_JSON+="{\"mac\":\"${unic_mac}\",\"hostname\":\"${hostname}\",\"note\":\"seen by Unifi, not on this host\"}"
-    FIRST=false
+    GHOST_DEVICES+=("$(jq -nc --arg mac "$unic_mac" --arg hostname "$hostname" \
+      '{mac:$mac,hostname:$hostname,note:"seen by Unifi, not on this host"}')")
   fi
 done <<< "$UNIFI_MACS"
-GHOST_DEVICES_JSON+="]"
+GHOST_DEVICES_JSON="[$(IFS=','; echo "${GHOST_DEVICES[*]}")]"
+[ "${#GHOST_DEVICES[@]}" -eq 0 ] && GHOST_DEVICES_JSON="[]"
 
 # --- VLAN mismatches ---
 # Host VLAN is determined from the NIC's tagged interface (e.g. eth0.10 = VLAN 10)
 # We check each matched NIC's expected VLAN from Unifi vs what the host reports
-VLAN_MISMATCHES_JSON="[]"
-# (Detailed VLAN mismatch logic requires parsing tagged VLAN interfaces;
-#  for now we flag if Unifi expects a non-zero VLAN but host has no .VLAN sub-interface)
-TMPVLAN="["
-FIRST=true
+VLAN_MISMATCH_ENTRIES=()
 for mac in "${HOST_MACS[@]}"; do
   nic="${MAC_TO_NIC[$mac]:-unknown}"
   unifi_vlan=$(echo "$MANAGED_DEVICES_JSON" | \
@@ -247,13 +241,13 @@ for mac in "${HOST_MACS[@]}"; do
   if [[ "$unifi_vlan" != "0" && "$unifi_vlan" != "null" ]]; then
     # Check if host has a tagged sub-interface for this VLAN
     if ! ip link show 2>/dev/null | grep -qE "^[0-9]+: ${nic}\\.${unifi_vlan}"; then
-      $FIRST || TMPVLAN+=","
-      TMPVLAN+="{\"nic\":\"${nic}\",\"host_vlan\":0,\"unifi_vlan\":${unifi_vlan}}"
-      FIRST=false
+      VLAN_MISMATCH_ENTRIES+=("$(jq -nc --arg nic "$nic" --argjson uv "$unifi_vlan" \
+        '{nic:$nic,host_vlan:0,unifi_vlan:$uv}')")
     fi
   fi
 done
-TMPVLAN+="]"
+TMPVLAN="[$(IFS=','; echo "${VLAN_MISMATCH_ENTRIES[*]}")]"
+[ "${#VLAN_MISMATCH_ENTRIES[@]}" -eq 0 ] && TMPVLAN="[]"
 VLAN_MISMATCHES_JSON="$TMPVLAN"
 
 # --- topology_ok: true if at least one matched and no ghosts ---

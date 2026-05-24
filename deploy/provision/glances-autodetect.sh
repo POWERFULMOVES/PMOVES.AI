@@ -615,7 +615,7 @@ probe_unifi() {
     local probe_script
     probe_script="$(dirname "$(readlink -f "$0")")/unifi-probe.sh"
     if [[ -f "$probe_script" ]]; then
-        UNIFI_TOPOLOGY=$("$probe_script" 2>/dev/null) || UNIFI_TOPOLOGY="null"
+        UNIFI_TOPOLOGY=$(bash "$probe_script" 2>/dev/null) || UNIFI_TOPOLOGY="null"
         # Validate: if output isn't JSON-like, reset to null
         [[ "$UNIFI_TOPOLOGY" == "{"* ]] || UNIFI_TOPOLOGY="null"
     fi

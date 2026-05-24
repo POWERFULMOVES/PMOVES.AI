@@ -28,7 +28,7 @@ param(
 )
 
 Set-StrictMode -Version Latest
-$ErrorActionPreference = "Stop"
+$ErrorActionPreference = "Continue"  # "Stop" would propagate uncaught exceptions as non-zero exit
 
 # --- Resolve from env vars if not passed ---
 if (-not $Controller) { $Controller = $env:UNIFI_CONTROLLER_URL }
@@ -239,7 +239,8 @@ function To-JsonArray($items, [scriptblock]$itemRenderer) {
 }
 
 function Escape-Json([string]$s) {
-    $s -replace '\\', '\\' -replace '"', '\"'
+    $s -replace '\\', '\\' -replace '"', '\"' `
+       -replace "`n", '\n' -replace "`r", '\r' -replace "`t", '\t'
 }
 
 $ManagedDevicesJson = To-JsonArray $ManagedDevices {
