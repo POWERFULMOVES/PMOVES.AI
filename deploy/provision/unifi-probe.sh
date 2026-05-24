@@ -105,8 +105,7 @@ normalize_mac() {
 
 # --- Collect host MACs (from ip link) ---
 HOST_MACS=()
-while IFS= read -r line; do
-  mac=$(echo "$line" | awk '{print $2}')
+while IFS= read -r mac; do
   [[ "$mac" == "00:00:00:00:00:00" ]] && continue
   HOST_MACS+=("$(normalize_mac "$mac")")
 done < <(ip link show 2>/dev/null | grep -i "link/ether" | awk '{print $2}')
