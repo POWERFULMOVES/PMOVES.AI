@@ -31,7 +31,10 @@
 #     "platform_hints":  { "is_pve": false, "is_dgx_os": false, "has_tailscale": false, "has_docker": false },
 #     "suggested_node_type":   "rdna4-workstation",
 #     "suggestion_confidence": "high" | "medium" | "low",
-#     "suggestion_rationale":  "Detected 2x AMD Radeon gfx1201 + Ryzen 9850X3D + 32 GB RAM"
+#     "suggestion_rationale":  "Detected 2x AMD Radeon gfx1201 + Ryzen 9850X3D + 32 GB RAM",
+#     "unifi_topology":        null | { controller_url, site, api_version, managed_devices[],
+#                                       host_mac_matches[], ghost_devices[], vlan_mismatches[],
+#                                       topology_ok, error }
 #   }
 #
 # NODE-TYPE MAPPING:
@@ -604,6 +607,21 @@ suggest_node_type() {
 }
 
 # ---------------------------------------------------------------------------
+# Unifi topology probe (best-effort enrichment — never fails the caller)
+# ---------------------------------------------------------------------------
+UNIFI_TOPOLOGY="null"
+
+probe_unifi() {
+    local probe_script
+    probe_script="$(dirname "$(readlink -f "$0")")/unifi-probe.sh"
+    if [[ -f "$probe_script" ]]; then
+        UNIFI_TOPOLOGY=$(bash "$probe_script" 2>/dev/null) || UNIFI_TOPOLOGY="null"
+        # Validate: if output isn't JSON-like, reset to null
+        [[ "$UNIFI_TOPOLOGY" == "{"* ]] || UNIFI_TOPOLOGY="null"
+    fi
+}
+
+# ---------------------------------------------------------------------------
 # JSON helpers — hand-rolled to avoid jq dependency
 # ---------------------------------------------------------------------------
 json_escape() {
@@ -655,7 +673,8 @@ emit_json() {
   },
   "suggested_node_type": "$(json_escape "$SUGGESTED_NODE_TYPE")",
   "suggestion_confidence": "$(json_escape "$SUGGESTION_CONFIDENCE")",
-  "suggestion_rationale": "$(json_escape "$SUGGESTION_RATIONALE")"
+  "suggestion_rationale": "$(json_escape "$SUGGESTION_RATIONALE")",
+  "unifi_topology": ${UNIFI_TOPOLOGY}
 }
 EOF
 }
@@ -770,6 +789,7 @@ main() {
     fi
 
     if [ "$MODE_JSON" -eq 1 ]; then
+        probe_unifi
         if [ -n "$JSON_FILE" ]; then
             emit_json > "$JSON_FILE"
             log_info "JSON written to: $JSON_FILE"

@@ -31,7 +31,10 @@
 #                          "has_docker": false, "has_wsl2": false, "has_hyper_v": false },
 #     "suggested_node_type":   "gpu-4090",
 #     "suggestion_confidence": "high" | "medium" | "low",
-#     "suggestion_rationale":  "Detected NVIDIA RTX 4090 + Core i9-14900HX + 64 GB RAM"
+#     "suggestion_rationale":  "Detected NVIDIA RTX 4090 + Core i9-14900HX + 64 GB RAM",
+#     "unifi_topology":        $null | { controller_url, site, api_version, managed_devices[],
+#                                        host_mac_matches[], ghost_devices[], vlan_mismatches[],
+#                                        topology_ok, error }
 #   }
 #
 # NODE-TYPE MAPPING (matches glances-autodetect.sh):
@@ -393,6 +396,20 @@ $hints         = Get-PlatformHints
 $nicCollisions = Get-NicCollisions
 $suggestion    = Get-NodeSuggestion -CpuInfo $cpu -RamGb $ramGb -Gpus $gpus -Disks $disks -Nics $nics -OsArch $osRaw.arch
 
+# Unifi topology probe — best-effort, only for JSON output, never fatal
+$unifiTopology = $null
+if ($Json -or $JsonFile) {
+    $probeScript = Join-Path $PSScriptRoot "unifi-probe.ps1"
+    if (Test-Path $probeScript) {
+        try {
+            $probeOut = & $probeScript 2>$null
+            if ($probeOut -and $probeOut.TrimStart().StartsWith('{')) {
+                $unifiTopology = $probeOut | ConvertFrom-Json
+            }
+        } catch { $unifiTopology = $null }
+    }
+}
+
 $result = [ordered]@{
     os = [ordered]@{
         distro  = $osRaw.distro
@@ -429,6 +446,7 @@ $result = [ordered]@{
     suggested_node_type   = $suggestion.type
     suggestion_confidence = $suggestion.confidence
     suggestion_rationale  = $suggestion.rationale
+    unifi_topology        = $unifiTopology
 }
 
 if ($Suggest) {
