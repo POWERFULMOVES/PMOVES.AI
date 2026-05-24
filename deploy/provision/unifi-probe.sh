@@ -53,11 +53,10 @@ set -euo pipefail
 CONTROLLER_URL="${UNIFI_CONTROLLER_URL:-}"
 API_KEY="${UNIFI_API_KEY:-}"
 SITE="${UNIFI_SITE:-default}"
-MODE_JSON=false
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --json)           MODE_JSON=true; shift ;;
+    --json)           shift ;;  # no-op: script always emits JSON
     --controller)     CONTROLLER_URL="$2"; shift 2 ;;
     --api-key)        API_KEY="$2"; shift 2 ;;
     --site)           SITE="$2"; shift 2 ;;
