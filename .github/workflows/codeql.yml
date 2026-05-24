@@ -62,14 +62,16 @@ concurrency:
 jobs:
   analyze:
     name: Analyze (${{ matrix.language }})
-    # PMOVES.AI: Use self-hosted Linux for protected branch/scheduled scans.
-    # For PRs, fall back to GitHub-hosted Linux so scans do not deadlock when
-    # self-hosted Linux runners are offline.
+    # PMOVES.AI: All CodeQL lanes run on GitHub-hosted ubuntu-latest.
+    # Previously scheduled + push-to-main runs used self-hosted (pmoves-kvm2-runner),
+    # but the runner killed the Python query-evaluation lane mid-run consistently
+    # (build/extraction succeed, runner terminates ~3min into query evaluation).
+    # ubuntu-latest validated working in PR #1581 — all 3 language lanes succeed
+    # in ~5-10min total per run.
     # Runner size impacts CodeQL analysis time. To learn more, please see:
     #   - https://gh.io/recommended-hardware-resources-for-running-codeql
     #   - https://gh.io/supported-runners-and-hardware-resources
-    # Consider using larger runners or machines with greater resources for possible analysis time improvements.
-    runs-on: ${{ github.event_name == 'pull_request' && 'ubuntu-latest' || fromJSON('["self-hosted","Linux","X64"]') }}
+    runs-on: ubuntu-latest
     timeout-minutes: 45
     # Allow C/CPP to fail gracefully - this repo is primarily Python/TypeScript
     # C/CPP files only exist in submodules (external dependencies)
