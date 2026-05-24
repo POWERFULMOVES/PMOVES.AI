@@ -4,21 +4,16 @@ description: >
   Run the W0 Substrate hardware probe on the 4090 node.
   Windows: deploy/provision/glances-autodetect.ps1
   Linux: deploy/provision/glances-autodetect.sh
-  Outputs structured YAML: gpu, cpu, nics, nic_collisions, system specs.
-  NOTE: Full wiring is blocked until feat/w0-pr4-ghost-detector merges to main.
+  Outputs structured JSON: gpu, cpu, nics, nic_collisions, unifi_topology, system specs.
+  Pipe through json-to-profile.py to write pmoves/config/profiles/<node>.yaml.
 ---
 
 # 4090:probe — W0 Substrate Hardware Probe
 
 Runs the W0 Substrate hardware probe to capture the 4090 node's system
-profile: GPU, CPU, NIC stats (including collision counters), and system
-memory. Output feeds into the node TAC tree and ghost detector pipeline.
-
-## Status
-
-> **BLOCKED**: Full wiring requires `feat/w0-pr4-ghost-detector` to merge
-> to `main`. After merge, update this SKILL.md with actual script paths and
-> full probe output format.
+profile: GPU, CPU, NIC stats (including collision counters), Unifi network
+topology, and system memory. Output feeds into the node TAC tree and ghost
+detector pipeline.
 
 ## Run (Windows)
 
@@ -28,35 +23,59 @@ memory. Output feeds into the node TAC tree and ghost detector pipeline.
 powershell -ExecutionPolicy Bypass -File deploy/provision/glances-autodetect.ps1
 ```
 
+Optional: write JSON output to file for piping to the profile writer:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File deploy/provision/glances-autodetect.ps1 `
+    --json-file probe.json
+python deploy/provision/json-to-profile.py --json probe.json --node-id pmoves-4090
+```
+
 ## Run (Linux)
 
 ```bash
 bash deploy/provision/glances-autodetect.sh
 ```
 
-## Expected Output Shape
+Pipe directly to profile writer:
 
-```yaml
-node: pmoves-laptop
-timestamp: 2026-05-18T15:00:00Z
-gpu:
-  name: "NVIDIA GeForce RTX 4090 Laptop GPU"
-  memory_total_mb: 16376
-  memory_used_mb: 512
-cpu:
-  brand: "Intel Core i9-13980HX"
-  cores_physical: 24
-  cores_logical: 32
-nics:
-  - name: "Wi-Fi"
-    speed_mbps: 1201
-    nic_collisions: 0
-  - name: "Ethernet"
-    speed_mbps: 1000
-    nic_collisions: 42
-system:
-  ram_total_gb: 64
-  os: "Windows 11 Pro"
+```bash
+bash deploy/provision/glances-autodetect.sh --json-file /tmp/probe.json
+python deploy/provision/json-to-profile.py --json /tmp/probe.json --node-id pmoves-4090
+```
+
+## Profile Auto-Write
+
+`json-to-profile.py` (W0-PR6, merged in PR #1486) converts the probe JSON
+into a canonical node profile YAML at `pmoves/config/profiles/<node-id>.yaml`.
+
+```text
+USAGE:
+  python deploy/provision/json-to-profile.py \
+      --json probe.json \
+      --node-id pmoves-4090 \
+      [--out-dir pmoves/config/profiles/] [--dry-run] [--force]
+```
+
+The profile includes hardware tags, GPU list, Tailscale role, `unifi_topology`
+(null if Unifi probe was skipped), ghost adapter warnings, and compose overrides.
+
+## Expected Probe Output Shape (JSON)
+
+```json
+{
+  "hostname": "PMOVES-4090",
+  "timestamp": "2026-05-18T15:00:00Z",
+  "arch": "x86_64",
+  "suggested_node_type": "gpu-4090",
+  "suggestion_confidence": "high",
+  "cpu": { "model": "Intel Core i9-13980HX", "cores_physical": 24, "cores_logical": 32 },
+  "ram_gb": 64,
+  "gpus": [{ "vendor": "NVIDIA", "model": "RTX 4090 Laptop GPU", "vram_gb": 16 }],
+  "nic_collisions": [],
+  "unifi_topology": null,
+  "os": { "distro": "Windows", "version": "11 Pro" }
+}
 ```
 
 ## Ghost Detector Use
@@ -67,9 +86,10 @@ across two probe runs:
 
 ```bash
 # Run probe twice, 60s apart — diff the nic_collisions values
-powershell -File deploy/provision/glances-autodetect.ps1 > probe1.yaml
+powershell -File deploy/provision/glances-autodetect.ps1 --json-file probe1.json
 sleep 60
-powershell -File deploy/provision/glances-autodetect.ps1 > probe2.yaml
+powershell -File deploy/provision/glances-autodetect.ps1 --json-file probe2.json
+# Compare nic_collisions values between probe1.json and probe2.json
 ```
 
 ## Prerequisites
@@ -77,17 +97,13 @@ powershell -File deploy/provision/glances-autodetect.ps1 > probe2.yaml
 - Glances running with JSON API: `pip install glances[web]` then `glances -w`
 - Windows: PowerShell 5.1+ with `Get-NetAdapterStatistics` available
 - Linux: `glances` + `ip -s link`
-
-## After W0 PR-4 Merge
-
-Once `feat/w0-pr4-ghost-detector` merges:
-1. Update script paths above with the merged paths
-2. Add full probe YAML schema
-3. Wire PR-6 profile auto-write target
-4. Update TAC entry `n4090.shift-crew.probe-wire` status to `done`
+- Profile writer: `pip install pyyaml`
 
 ## Notes
 
-- See PR #1535 for W0 PR-3 + PR-4 changes
+- W0-PR4 (ghost detector/Shift Crew) merged as PR #1591
+- W0-PR5 (Unifi probe) merged as PR #1588
+- W0-PR6 (json-to-profile.py) landed in PR #1486
 - See `node-4090-sitrep` for quick health check (doesn't require glances)
 - See `pmoves/configs/tac_trees/node-4090-laptop.tac.yaml` Phase 6 for probe TAC entries
+- TAC entry `n4090.shift-crew.probe-wire` status: `done` (updated 2026-05-24)
