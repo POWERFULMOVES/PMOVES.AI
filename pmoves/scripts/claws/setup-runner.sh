@@ -270,10 +270,10 @@ if $DRY_RUN; then
   echo "  $DOCKER_CMD"
   check "Container launch" "pass" "dry-run"
 else
-  # Pass auth token via SSH env to keep it out of process args on the target
+  # Send auth on stdin so the secret is not present in local ssh argv or the remote command string.
   # shellcheck disable=SC2029
-  if ssh -o ConnectTimeout=10 "$TARGET" \
-    "export ${AUTH_ENV_VAR}='${AUTH_VAL}'; ${DOCKER_CMD}" > /dev/null 2>&1; then
+  if printf '%s\n' "$AUTH_VAL" | ssh -o ConnectTimeout=10 "$TARGET" \
+    "IFS= read -r ${AUTH_ENV_VAR}; export ${AUTH_ENV_VAR}; ${DOCKER_CMD}" > /dev/null 2>&1; then
     check "Container launch" "pass" "$CONTAINER_NAME started"
   else
     check "Container launch" "fail" "docker run failed on $TARGET"
