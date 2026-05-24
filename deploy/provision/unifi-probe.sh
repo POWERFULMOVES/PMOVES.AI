@@ -80,6 +80,10 @@ emit_error() {
   exit 0
 }
 
+# --- Skip if not configured ---
+[[ -z "$CONTROLLER_URL" ]] && emit_skip "UNIFI_CONTROLLER_URL not set"
+[[ -z "$API_KEY" ]]         && emit_skip "UNIFI_API_KEY not set"
+
 # --- Pre-flight: jq required ---
 if ! command -v jq > /dev/null 2>&1; then
   emit_error "jq_missing"
@@ -89,10 +93,6 @@ fi
 if ! command -v curl > /dev/null 2>&1; then
   emit_error "curl_missing"
 fi
-
-# --- Skip if not configured ---
-[[ -z "$CONTROLLER_URL" ]] && emit_skip "UNIFI_CONTROLLER_URL not set"
-[[ -z "$API_KEY" ]]         && emit_skip "UNIFI_API_KEY not set"
 
 # Strip trailing slash
 CONTROLLER_URL="${CONTROLLER_URL%/}"

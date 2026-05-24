@@ -111,8 +111,10 @@ function Test-ApiEndpoint([string]$Url) {
         $resp = Invoke-WebRequest -Uri $Url @IrmOpts -Method Get -UseBasicParsing 2>$null
         return $resp.StatusCode
     } catch {
-        $code = $_.Exception.Response.StatusCode.value__
-        if ($code) { return $code }
+        $response = $_.Exception.Response
+        if ($null -ne $response -and $null -ne $response.StatusCode) {
+            return [int]$response.StatusCode
+        }
         return 0
     }
 }
