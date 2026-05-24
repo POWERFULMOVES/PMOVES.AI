@@ -104,8 +104,8 @@ if ($DryRun) {
   exit 0
 }
 
-if (-not $Env:DISCORD_WEBHOOK_URL) {
-  Write-Error "DISCORD_WEBHOOK_URL not set -- set it in the scheduled task's environment."
+if (-not $Env:DISCORD_WEBHOOK_URL -or $Env:DISCORD_WEBHOOK_URL.Trim() -eq '') {
+  Write-Error "DISCORD_WEBHOOK_URL not set or blank -- set it in the scheduled task's environment."
   Stop-Transcript | Out-Null
   exit 1
 }

@@ -28,6 +28,13 @@ New-Item -ItemType Directory -Force -Path $wrapperDir | Out-Null
 & '$sweepPath' -StaleDays $StaleDays
 "@ | Set-Content -Path $wrapperPath -Encoding UTF8
 
+# Restrict wrapper to current user only — it contains a plaintext webhook secret.
+$acl = Get-Acl $wrapperPath
+$acl.SetAccessRuleProtection($true, $false)
+$rule = [System.Security.AccessControl.FileSystemAccessRule]::new($Env:USERNAME, "FullControl", "Allow")
+$acl.SetAccessRule($rule)
+Set-Acl -Path $wrapperPath -AclObject $acl
+
 $action  = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$wrapperPath`""
 $trigger = New-ScheduledTaskTrigger -Weekly -DaysOfWeek Monday -At $RunAt
 $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -DontStopOnIdleEnd -RestartCount 2 -RestartInterval (New-TimeSpan -Minutes 5)
