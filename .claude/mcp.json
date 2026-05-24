@@ -65,6 +65,14 @@
       "env": {
         "NATS_URL": "${NATS_URL}"
       }
+    },
+    "pmoves-4090-web": {
+      "_note": "D-Proxy SSE gateway for pmoves_4090_web profile. Requires `make -C pmoves mcp-4090-gateway-start` first. Claude Code skips gracefully if gateway is not running.",
+      "type": "sse",
+      "url": "http://localhost:8089/sse",
+      "headers": {
+        "Authorization": "Bearer ${MCP_GATEWAY_AUTH_TOKEN}"
+      }
     }
   }
 }
