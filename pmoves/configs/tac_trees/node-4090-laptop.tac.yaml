@@ -447,8 +447,8 @@ root:
               2. Wire PR-6 profile auto-write target
               3. Update this TAC entry status to done
           agent_hint: 4090-claude
-          status: future
-          notes: "Blocked on feat/w0-pr4-ghost-detector merge"
+          status: done
+          notes: "Done 2026-05-24: PR #1591 (W0-PR4), PR #1588 (W0-PR5 unifi), PR #1486 (W0-PR6 json-to-profile). SKILL.md updated. unifi_topology wired."
 
         - id: n4090.shift-crew.agentgym-smoke
           task: "Smoke-test agentgym:run against live TensorZero + NATS"

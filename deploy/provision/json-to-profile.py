@@ -180,6 +180,7 @@ def build_profile(data: dict, node_id: str) -> dict:
             "role": map_tailscale_role(suggested_node_type),
             "hostname_pattern": node_id,
         },
+        "unifi_topology": data.get("unifi_topology"),
         "notes": notes,
     }
 
