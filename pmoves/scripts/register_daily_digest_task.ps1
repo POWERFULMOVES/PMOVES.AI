@@ -1,11 +1,12 @@
 # Registers the PMOVES Daily Digest as a Windows Scheduled Task.
-# Run once, elevated.  Reads DISCORD_WEBHOOK_URL from the current shell env at registration time
-# and bakes it into the task's environment via a per-task wrapper, so the task survives reboots.
+# Run once, elevated. Reads DISCORD_WEBHOOK_URL from the current shell env at registration time
+# and bakes it into a per-task wrapper outside the repo tree, so the task survives reboots.
 
 Param(
   [string]$TaskName = "PMOVES Daily Digest",
   [string]$RunAt    = "08:15",   # local time, daily
-  [string]$RepoRoot = "D:\PMOVES.AI\PMOVES.AI"
+  [string]$RepoRoot = "D:\PMOVES.AI\PMOVES.AI",
+  [string]$TaskRoot = "$Env:ProgramData\PMOVES\tasks"
 )
 
 $ErrorActionPreference = 'Stop'
@@ -15,11 +16,13 @@ if (-not $Env:DISCORD_WEBHOOK_URL) {
   exit 1
 }
 
-$wrapperDir  = Join-Path $RepoRoot "pmoves\scripts"
+$wrapperDir  = $TaskRoot
 $wrapperPath = Join-Path $wrapperDir "daily_pmoves_digest_wrapper.ps1"
-$digestPath  = Join-Path $wrapperDir "daily_pmoves_digest.ps1"
+$digestPath  = Join-Path $RepoRoot "pmoves\scripts\daily_pmoves_digest.ps1"
 
-# Wrapper bakes the webhook so Task Scheduler doesn't need env inheritance.
+New-Item -ItemType Directory -Force -Path $wrapperDir | Out-Null
+
+# Wrapper bakes the webhook outside the working tree so Task Scheduler doesn't need env inheritance.
 @"
 `$Env:DISCORD_WEBHOOK_URL = '$Env:DISCORD_WEBHOOK_URL'
 & '$digestPath'

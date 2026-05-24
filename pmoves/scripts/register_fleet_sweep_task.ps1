@@ -1,12 +1,13 @@
 # Registers the PMOVES Weekly Fleet Sweep as a Windows Scheduled Task.
 # Run once, elevated. Bakes $Env:DISCORD_WEBHOOK_URL into a per-task wrapper
-# so the task is independent of the registering shell's env after the fact.
+# outside the repo tree so the task is independent of the registering shell's env after the fact.
 
 Param(
   [string]$TaskName = "PMOVES Weekly Fleet Sweep",
   [string]$RunAt    = "09:30",   # local time, weekly on Monday
   [string]$RepoRoot = "D:\PMOVES.AI\PMOVES.AI",
-  [int]$StaleDays   = 60
+  [int]$StaleDays   = 60,
+  [string]$TaskRoot = "$Env:ProgramData\PMOVES\tasks"
 )
 
 $ErrorActionPreference = 'Stop'
@@ -16,9 +17,11 @@ if (-not $Env:DISCORD_WEBHOOK_URL) {
   exit 1
 }
 
-$wrapperDir  = Join-Path $RepoRoot "pmoves\scripts"
+$wrapperDir  = $TaskRoot
 $wrapperPath = Join-Path $wrapperDir "fleet_stale_node_sweep_wrapper.ps1"
-$sweepPath   = Join-Path $wrapperDir "fleet_stale_node_sweep.ps1"
+$sweepPath   = Join-Path $RepoRoot "pmoves\scripts\fleet_stale_node_sweep.ps1"
+
+New-Item -ItemType Directory -Force -Path $wrapperDir | Out-Null
 
 @"
 `$Env:DISCORD_WEBHOOK_URL = '$Env:DISCORD_WEBHOOK_URL'
