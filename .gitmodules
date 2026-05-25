@@ -38,12 +38,12 @@
 [submodule "PMOVES-BoTZ"]
 	path = PMOVES-BoTZ
 	url = https://github.com/POWERFULMOVES/PMOVES-BoTZ.git
-	branch = PMOVES.AI-Edition-Hardened
+	branch = main
 
 [submodule "PMOVES-BotZ-gateway"]
 	path = PMOVES-BotZ-gateway
 	url = https://github.com/POWERFULMOVES/PMOVES-BotZ-gateway.git
-	branch = PMOVES.AI-Edition-Hardened
+	branch = main
 
 # =============================================================================
 # Knowledge & Research Services
@@ -146,7 +146,7 @@
 [submodule "PMOVES-transcribe-and-fetch"]
 	path = PMOVES-transcribe-and-fetch
 	url = https://github.com/POWERFULMOVES/PMOVES-transcribe-and-fetch.git
-	branch = PMOVES.AI-Edition-Hardened
+	branch = main
 
 # =============================================================================
 # Media & Content Services
@@ -275,7 +275,7 @@
 [submodule "pmoves-e2b-mcp-server"]
 	path = pmoves-e2b-mcp-server
 	url = https://github.com/POWERFULMOVES/pmoves-e2b-mcp-server.git
-	branch = PMOVES.AI-Edition-Hardened
+	branch = main
 [submodule "Pmoves-cipher"]
 	path = Pmoves-cipher
 	url = https://github.com/POWERFULMOVES/Pmoves-cipher.git
