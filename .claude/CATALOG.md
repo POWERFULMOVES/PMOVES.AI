@@ -90,7 +90,7 @@ Agent has no HTTP interface; Cipher Memory exposes `/health`, not `/healthz`).
 
 ## Data Storage
 
-**NATS** `:4222`, `:9222` WS (standalone DoX), `:9223` WS (docked via compose) — JetStream event broker. **Always authenticated:** `nats://${NATS_USER}:${NATS_PASS}@localhost:4222` (set via `${NATS_URL}` env var in `env.tier-*`). Subject catalog: `.claude/context/nats-subjects.md`.
+**NATS** `:4222`, `:9223` WS (standalone DoX), `:9222` WS (docked via parent compose) — JetStream event broker. **Always authenticated:** `nats://${NATS_USER}:${NATS_PASS}@localhost:4222` (set via `${NATS_URL}` env var in `env.tier-*`). Subject catalog: `.claude/context/nats-subjects.md`.
 
 **Supabase** — 13-service self-hosted stack (profile `supabase-local`). Kong `:8000`, PostgREST `:3000`, Studio `:54323`. Canonical consumer URL: `http://supabase-kong:8000/rest/v1`. Standard vars: `JWT_SECRET`, `ANON_KEY`, `SERVICE_ROLE_KEY` (`SUPABASE_*` aliases for compat). Services: DB (Postgres 17.6.1), GoTrue, PostgREST v14.3, Kong 3.7.1, Realtime v2.72.0, Storage v1.37.1, Studio, imgproxy, pg-meta, Edge Functions, Analytics (Logflare), Vector, Supavisor.
 
