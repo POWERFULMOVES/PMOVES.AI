@@ -117,6 +117,12 @@ curl -sS -H "api-key: $QDRANT_API_KEY" "$QDRANT_URL/collections/pmoves_chunks_qw
 # Expect: {"size": 2560, "distance": "Cosine", ...}
 
 # Confirm Extract Worker can write (after first P7-triggered ingestion)
+curl -sS -X POST "http://localhost:${EXTRACT_WORKER_HOST_PORT:-8083}/ingest" \
+  -H "Content-Type: application/json" \
+  -H "X-Context-ID: p7.nats.embedding-quality.manual-smoke" \
+  -d '{"chunks":[{"chunk_id":"p7-nats-embedding-quality-smoke","namespace":"p7","text":"P7 embedding quality smoke for pmoves_chunks_qwen3 2560d Qwen3 collection."}]}'
+# Expect: {"ok": true, "chunks": 1, ...}
+
 docker logs pmoves-extract-worker-1 --tail 20 | grep -i qdrant
 # Expect: successful upserts, no dim-mismatch errors
 ```
