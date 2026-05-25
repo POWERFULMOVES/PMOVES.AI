@@ -82,7 +82,7 @@ ToKenism **is** the CHIT engine — all CHIT integration radiates from here.
 | Swarm metadata | Active | `swarm-attribution.ts`; records bounded fitness and population summaries only |
 | Zeta spectral filtering | Heuristic | `zeta-filter.ts`; method design still required before stronger claims |
 | BPM/prosodic mapping | External | Implemented in PMOVES voice/prosodic tools, not a ToKenism CHIT module |
-| Smart contract attribution | Approval-gated settlement interface | Contract models, settlement schemas, Firefly transaction drafts, manifest-backed chain call drafts, live approval gates, and schema-validated result publishing exist; production deployment remains gated |
+| Smart contract attribution | Approval-gated settlement interface | Contract models, settlement schemas, Firefly transaction drafts, manifest-backed chain call drafts, signed deployment attestation gates, live approval gates, and schema-validated result publishing exist; production activation remains gated |
 
 ## Production Audit Checklist
 
@@ -131,7 +131,7 @@ Current relevant subjects:
 - Live ToKenism/Flute smoke should confirm `tokenism.prosodic.bpm.v1` packets after W6-P2 publish path
 - Wire local Hardhat harness into CI working directory
 - Re-run temp-file and duplicate-layout audits before acting on stale counts
-- Bind production deployment manifests to operator approval and wallet custody records
+- Provide real signed production deployment manifests, RPC/wallet custody references, and FireFly environment binding
 - Keep zeta labeled heuristic until method design is reviewed
 - Not registered as an agent in `agent_registry.yaml` — operates as library
 
