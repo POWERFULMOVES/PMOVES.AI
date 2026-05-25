@@ -269,7 +269,7 @@ If neither project explicitly plans for integration:
 
 Longbow already implements what PMOVES.AI's architecture documents describe as external dependencies. Formalize this relationship rather than building parallel capabilities.
 
-**Concrete action**: Add Longbow to PMOVES.AI's deployment compose stack as the vector memory service. Map CHIT CGP schema to Arrow RecordBatch schema.
+**Concrete action**: Add Longbow to PMOVES.AI's deployment compose stack as the vector memory service. Map CHIT CGP schema and DoX `hyperbolic_projection` output to Arrow RecordBatch schema.
 
 ### R2: Wrap Longbow Operations with CHIT Signing
 
@@ -281,7 +281,7 @@ Every Longbow DoPut (ingest) and DoGet (query) should generate a CHIT trail entr
 
 Longbow's 100+ Prometheus metrics (QPS, latency, memory, evictions) are economic signals. A participant who stores more vectors and queries more frequently is consuming more framework resources.
 
-**Concrete action**: Build a ToKenism-Longbow adapter that maps Prometheus scrape data to Poincare disk economic constellations.
+**Concrete action**: Build a ToKenism-Longbow adapter that maps Prometheus scrape data to Poincare disk economic constellations. DoX now emits deterministic Poincare projection records that can serve as the shape contract for this adapter, while Longbow remains the vector storage/search layer.
 
 ### R4: Use Longbow's Learned Index for EVO SWARM Feature Engineering
 
