@@ -82,7 +82,7 @@ ToKenism **is** the CHIT engine — all CHIT integration radiates from here.
 | Swarm metadata | Active | `swarm-attribution.ts`; records bounded fitness and population summaries only |
 | Zeta spectral filtering | Heuristic | `zeta-filter.ts`; method design still required before stronger claims |
 | BPM/prosodic mapping | External | Implemented in PMOVES voice/prosodic tools, not a ToKenism CHIT module |
-| Smart contract attribution | Firefly approval-gated settlement interface | Contract models, settlement schemas, Firefly transaction drafts, live Firefly approval gate, and schema-validated result publishing exist; chain execution remains gated |
+| Smart contract attribution | Approval-gated settlement interface | Contract models, settlement schemas, Firefly transaction drafts, manifest-backed chain call drafts, live approval gates, and schema-validated result publishing exist; production deployment remains gated |
 
 ## Production Audit Checklist
 
@@ -94,7 +94,7 @@ ToKenism **is** the CHIT engine — all CHIT integration radiates from here.
 | Docker hardening | Yes | Standard patterns applied |
 | NATS auth | Yes | Uses authenticated NATS |
 | `env.shared` format | Resolved | Docker-compatible `KEY=value` syntax in `PMOVES-ToKenism-Multi/env.shared` |
-| Hardhat CI | Open | Verify dependencies and working directory before contract test expansion |
+| Hardhat CI | Partial | Local Hardhat harness verified; CI wiring still needs review |
 | Temp files | Unknown | Re-audit before treating old temp-file count as current |
 | Duplicate layout | Unknown | Re-audit before treating old duplicate-layout count as current |
 
@@ -104,7 +104,7 @@ ToKenism **is** the CHIT engine — all CHIT integration radiates from here.
 |---------|----------|--------|
 | `export` syntax in `env.shared` | P1 | **Resolved** — no `export` prefix in `PMOVES-ToKenism-Multi/env.shared` |
 | NATS_URL missing credentials | P1 | **Resolved** — defaults to `nats://nats:pmoves@nats:4222` |
-| Hardhat CI / local contract test coverage | P2 | **Open** |
+| Hardhat CI / local contract test coverage | P2 | **Partial** — local harness passing; CI wiring still open |
 | Old temp-file and duplicate-layout findings | P3 | Re-audit required; do not reuse stale counts without verification |
 
 ## Prosodic Integration
@@ -129,9 +129,9 @@ Current relevant subjects:
 ## Open Items
 
 - Live ToKenism/Flute smoke should confirm `tokenism.prosodic.bpm.v1` packets after W6-P2 publish path
-- Verify Hardhat dependencies, local contract tests, and CI working directory
+- Wire local Hardhat harness into CI working directory
 - Re-run temp-file and duplicate-layout audits before acting on stale counts
-- Build chain settlement executor after Hardhat/deployment manifest coverage
+- Bind production deployment manifests to operator approval and wallet custody records
 - Keep zeta labeled heuristic until method design is reviewed
 - Not registered as an agent in `agent_registry.yaml` — operates as library
 
