@@ -291,7 +291,14 @@ root:
             should NOT claim GPU or TTS capabilities. It consumes from
             5090 (TTS/GPU) and Z890 (infra/NATS/monitoring).
           agent_hint: 4090-claude
-          status: future
+          status: done
+          notes: >
+            Verified 2026-05-25. pmoves-dox-nats (4223) running without auth.
+            Subscriber confirmed receipt of 427-byte payload on
+            mesh.agent.4090.capabilities.v1. Payload: hostname=PMOVES-4090,
+            role=mobile-relay, has_gpu=false, has_tts=false, consumer_only=true,
+            consumes_from=[5090-claude, z890-claude].
+            Tools: pmoves/tools/nats_pub.py + nats_cap_verify.py.
 
     # =========================================================================
     # Phase 6: Shift Crew Skills + 4090 Gap Fill (2026-05-18)
