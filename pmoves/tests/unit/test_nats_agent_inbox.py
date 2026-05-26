@@ -1,6 +1,6 @@
 import json
 
-from pmoves.tools import nats_agent_inbox, nats_pub
+from pmoves.tools import nats_agent_inbox
 
 
 def test_parse_subjects_defaults_when_empty():
@@ -35,9 +35,5 @@ def test_resolve_host_nats_url_rewrites_docker_dns(monkeypatch):
     monkeypatch.delenv("PMOVES_NATS_NO_HOST_REWRITE", raising=False)
     assert (
         nats_agent_inbox.resolve_host_nats_url("nats://nats:pmoves@nats:4222")
-        == "nats://nats:pmoves@127.0.0.1:4222"
-    )
-    assert (
-        nats_pub.resolve_host_nats_url("nats://nats:pmoves@nats:4222")
         == "nats://nats:pmoves@127.0.0.1:4222"
     )

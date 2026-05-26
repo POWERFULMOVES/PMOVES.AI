@@ -917,17 +917,21 @@ up-bus: ## Start message bus (NATS)
 	@timeout 30 bash -c 'until docker exec pmoves-nats-1 nc -z localhost 4222 2>/dev/null; do sleep 1; done' || echo "⚠️ NATS may still be starting"
 	@echo "✅ NATS ready"
 
+NATS_BOX_IMAGE ?= natsio/nats-box:0.14.5
+NATS_DOCKER_NETWORK ?= pmoves_bus
+
 .PHONY: nats-pub
-nats-pub: ## Publish a NATS message via docker exec (Known Road — run on the node where NATS is local)
+nats-pub: ## Publish a NATS message via the nats-box toolbox container (Known Road — run on the NATS node)
 ## Usage: make nats-pub SUBJECT=claw.task.assign.v1 PAYLOAD='{"from":"pmoves-4090","to":"pmoves-spark"}'
 ## From a remote node: connect to nats://nats:pmoves@pmoves-kvm4-2:4222 via Tailscale hostname
 	@test -n "$(SUBJECT)" || (echo "ERROR: SUBJECT is required" && exit 1)
 	@test -n "$(PAYLOAD)" || (echo "ERROR: PAYLOAD is required" && exit 1)
-	@bash scripts/with-env.sh uv run --script tools/nats_pub.py --subject "$(SUBJECT)" --payload '$(PAYLOAD)'
+	@NATS_URL="$${NATS_URL:-nats://nats:pmoves@nats:4222}"; \
+	  docker run --rm --network "$(NATS_DOCKER_NETWORK)" "$(NATS_BOX_IMAGE)" nats -s "$$NATS_URL" pub "$(SUBJECT)" '$(PAYLOAD)'
 
 .PHONY: nats-agent-inbox
 nats-agent-inbox: ## Run a persistent agent inbox subscriber; visible in NATS connz?subs=1
-	@bash scripts/with-env.sh uv run --script tools/nats_agent_inbox.py
+	@bash -lc '. ./scripts/with-env.sh; exec uv run --script tools/nats_agent_inbox.py'
 
 .PHONY: up-workers up-workers-core
 up-workers: ## Start worker services (extract, langextract, media)
