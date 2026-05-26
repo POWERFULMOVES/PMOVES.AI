@@ -19,6 +19,11 @@
 # Settings -> Resources -> Network if the preflight DNS check fails.
 # The workflow is best-effort (failures do not block CI), so partial connectivity is safe.
 
+# Note on YAML merge keys: when a service redeclares `environment:` after
+# `<<: *runner-base`, the local mapping REPLACES the merged one. To preserve
+# REPO_URL/RUNNER_SCOPE/LABELS while adding ACCESS_TOKEN per runner, we split
+# environment into its own anchor (`x-runner-env`) and merge it inside each
+# runner's `environment:` block.
 x-runner-base: &runner-base
   image: myoung34/github-runner:ubuntu-jammy
   restart: unless-stopped
@@ -28,25 +33,28 @@ x-runner-base: &runner-base
   volumes:
     - /var/run/docker.sock:/var/run/docker.sock
     - /tmp/pmoves-runner:/tmp/pmoves-runner
-  environment:
-    REPO_URL: https://github.com/POWERFULMOVES/PMOVES.AI
-    RUNNER_SCOPE: repo
-    LABELS: self-hosted,ai-lab,Linux,X64
-    RUNNER_NAME_PREFIX: pmoves-4090
-    RANDOM_RUNNER_SUFFIX: "true"
-    RUNNER_WORKDIR: /tmp/pmoves-runner
-    EPHEMERAL: "false"
-    DISABLE_AUTO_UPDATE: "false"
+
+x-runner-env: &runner-env
+  REPO_URL: https://github.com/POWERFULMOVES/PMOVES.AI
+  RUNNER_SCOPE: repo
+  LABELS: self-hosted,ai-lab,Linux,X64
+  RUNNER_NAME_PREFIX: pmoves-4090
+  RANDOM_RUNNER_SUFFIX: "true"
+  RUNNER_WORKDIR: /tmp/pmoves-runner
+  EPHEMERAL: "false"
+  DISABLE_AUTO_UPDATE: "false"
 
 services:
   runner-1:
     <<: *runner-base
     container_name: pmoves-4090-runner-1
     environment:
+      <<: *runner-env
       ACCESS_TOKEN: ${RUNNER_ACCESS_TOKEN}
 
   runner-2:
     <<: *runner-base
     container_name: pmoves-4090-runner-2
     environment:
+      <<: *runner-env
       ACCESS_TOKEN: ${RUNNER_ACCESS_TOKEN}

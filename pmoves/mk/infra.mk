@@ -241,6 +241,9 @@ gha-runner-ctl-setup: gha-runner-ctl-setup-pat gha-runner-ctl-cycle ## Full Phas
 # Compose: pmoves/docker/runner/docker-compose.4090.yml
 
 RUNNER_COMPOSE_4090 := docker/runner/docker-compose.4090.yml
+# Dedicated compose project name so up/down/status/logs operate only on these
+# two containers and never prune services from the implicit `pmoves` project.
+RUNNER_PROJECT_4090 := pmoves-runners-4090
 # Token precedence: GITHUB_PAT (env.tier-agent, repo scope) → gh auth token (dev fallback)
 # GH_PAT_PUBLISH is NOT used — it has GHCR packages:write scope only (wrong for registration)
 _runner_pat = $${GITHUB_PAT:-$$( gh auth token 2>/dev/null )}
@@ -275,19 +278,19 @@ gha-runner-4090-preflight: ## Validate Docker Hub auth + Tailscale DNS + GitHub 
 
 gha-runner-4090-up: gha-runner-4090-preflight ## Start 2 parallel ai-lab Docker runners on the 4090 laptop
 	@_pat="$(call _runner_pat)"; \
-	RUNNER_ACCESS_TOKEN=$$_pat docker compose -f $(RUNNER_COMPOSE_4090) up -d --remove-orphans
+	RUNNER_ACCESS_TOKEN=$$_pat docker compose -p $(RUNNER_PROJECT_4090) -f $(RUNNER_COMPOSE_4090) up -d
 
 gha-runner-4090-down: ## Stop and deregister the 4090 ai-lab Docker runners
-	docker compose -f $(RUNNER_COMPOSE_4090) down
+	docker compose -p $(RUNNER_PROJECT_4090) -f $(RUNNER_COMPOSE_4090) down
 
 gha-runner-4090-status: ## Show 4090 Docker runner containers + GitHub registration state
-	docker compose -f $(RUNNER_COMPOSE_4090) ps
+	docker compose -p $(RUNNER_PROJECT_4090) -f $(RUNNER_COMPOSE_4090) ps
 	@GH_TOKEN="$(call _runner_pat)" \
 	  gh api repos/POWERFULMOVES/PMOVES.AI/actions/runners \
 	    --jq '.runners[] | select(.labels[].name == "ai-lab") | {name, status, busy}'
 
 gha-runner-4090-logs: ## Tail registration/job logs from the 4090 Docker runner containers
-	docker compose -f $(RUNNER_COMPOSE_4090) logs -f --tail=50
+	docker compose -p $(RUNNER_PROJECT_4090) -f $(RUNNER_COMPOSE_4090) logs -f --tail=50
 
 .PHONY: gha-runner-4090-preflight gha-runner-4090-up gha-runner-4090-down gha-runner-4090-status gha-runner-4090-logs
 
