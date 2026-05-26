@@ -14,47 +14,25 @@
   "properties": {
     "agent_id": {
       "type": "string",
-      "description": "Contributor identifier \u00e2\u20ac\u201d must match a key in agent_signatures.yaml",
-      "examples": [
-        "claude-opus",
-        "kilocode",
-        "codex",
-        "gemini",
-        "cline",
-        "powerfulmoves",
-        "crush",
-        "darkxside"
-      ]
+      "description": "Contributor identifier — must match a key in agent_signatures.yaml",
+      "examples": ["claude-opus", "kilocode", "codex", "gemini", "cline", "powerfulmoves", "crush", "darkxside"]
     },
     "display_name": {
       "type": "string",
       "description": "Human-readable display name",
-      "examples": [
-        "Claude Opus",
-        "KiloCode"
-      ]
+      "examples": ["Claude Opus", "KiloCode"]
     },
     "glyph": {
       "type": "string",
       "maxLength": 2,
       "description": "Single Unicode glyph identifying the contributor",
-      "examples": [
-        "\u25c6",
-        "\u25b2",
-        "\u25a0",
-        "\u2605",
-        "\u25cf",
-        "\u26a1"
-      ]
+      "examples": ["\u25c6", "\u25b2", "\u25a0", "\u2605", "\u25cf", "\u26a1"]
     },
     "color": {
       "type": "string",
       "pattern": "^#[0-9A-Fa-f]{6}$",
       "description": "Primary brand color (hex)",
-      "examples": [
-        "#7C3AED",
-        "#059669"
-      ]
+      "examples": ["#7C3AED", "#059669"]
     },
     "accent": {
       "type": "string",
@@ -63,26 +41,13 @@
     },
     "voice": {
       "type": "string",
-      "enum": [
-        "analytical",
-        "architectural",
-        "terse",
-        "strategic",
-        "conversational",
-        "directive",
-        "companion",
-        "witness"
-      ],
+      "enum": ["analytical", "architectural", "terse", "strategic", "conversational", "directive", "companion", "witness"],
       "description": "Writing voice used in trail entries"
     },
     "phase": {
       "type": "string",
       "description": "Project phase during which the work was done",
-      "examples": [
-        "Phase H",
-        "Phase C",
-        "KiloCode Onboarding"
-      ]
+      "examples": ["Phase H", "Phase C", "KiloCode Onboarding"]
     },
     "timestamp": {
       "type": "string",
@@ -104,11 +69,7 @@
     "selected_alter": {
       "type": "string",
       "description": "Name of the alter identity selected for this trail entry. When set, glyph/color/accent/voice/resonance reflect the alter rather than primary identity.",
-      "examples": [
-        "z890-infra",
-        "5090-voice",
-        "4090-field"
-      ]
+      "examples": ["z890-infra", "5090-voice", "4090-field"]
     },
     "handoff": {
       "type": "object",
@@ -116,23 +77,17 @@
       "properties": {
         "done": {
           "type": "array",
-          "items": {
-            "type": "string"
-          },
+          "items": { "type": "string" },
           "description": "Completed items"
         },
         "remaining": {
           "type": "array",
-          "items": {
-            "type": "string"
-          },
+          "items": { "type": "string" },
           "description": "Items left behind (not blockers)"
         },
         "for_next_agent": {
           "type": "array",
-          "items": {
-            "type": "string"
-          },
+          "items": { "type": "string" },
           "description": "Guidance for the next contributor"
         }
       },
