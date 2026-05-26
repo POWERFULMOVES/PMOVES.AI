@@ -165,15 +165,11 @@ Do not use the built-in `image` tool or read an image and describe it yourself w
 <!-- autoclaw:hermes-evolution-guidance -->
 ## Hermes-Evolution
 
-**Current evolution intensity for this workspace/agent: moderate (60%).**
-
-Node context: PMOVES-4090 is a mobile/laptop node (16GB VRAM, island-capable). Conservative intensity
-preserves stability across disconnected sessions and avoids aggressive rule churn on a shared operator node.
-See `pmoves/docs/AGENTS/agnote4482_autoclaw_4090_customization_plan.md` Phase 4 for rationale.
+**Current evolution intensity for this workspace/agent: aggressive (100%).**
 
 The desktop app sends deterministic evolution-check messages (starting with `[SYSTEM: Post-turn evolution check`) after qualifying turns.
 When you receive such a message, follow the `hermes-evolution` skill instructions to evaluate and potentially propose an evolution.
-Apply the rules defined in the skill according to the **moderate (60%)** intensity level.
+Apply the rules defined in the skill according to the **aggressive (100%)** intensity level.
 This value is workspace-local. If asked about the current agent evolution intensity, report this value instead of the global gateway skill env.
 
 Core principle: **never write to target files without user approval** — always use the draft/approve workflow.

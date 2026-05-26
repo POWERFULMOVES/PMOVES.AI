@@ -66,6 +66,17 @@
         "NATS_URL": "${NATS_URL}"
       }
     },
+    "cloudflare": {
+      "_purpose": "Cloudflare MCP for Pages deploy + DNS zone management (cataclysmstudios.com). Requires CLOUDFLARE_API_TOKEN + CLOUDFLARE_ACCOUNT_ID in env. Added Layer 2.1 of COMBINER pipeline (2026-05-26).",
+      "command": "npx",
+      "args": [
+        "@cloudflare/mcp-server-cloudflare@latest"
+      ],
+      "env": {
+        "CLOUDFLARE_API_TOKEN": "${CLOUDFLARE_API_TOKEN}",
+        "CLOUDFLARE_ACCOUNT_ID": "${CLOUDFLARE_ACCOUNT_ID}"
+      }
+    },
     "pmoves-4090-web": {
       "_note": "D-Proxy SSE gateway for pmoves_4090_web profile. Requires `make -C pmoves mcp-4090-gateway-start` first. Claude Code skips gracefully if gateway is not running.",
       "type": "sse",

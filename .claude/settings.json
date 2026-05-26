@@ -190,6 +190,16 @@
             "timeout": 3
           }
         ]
+      },
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/prompt-keyword-surfacer.sh\"",
+            "timeout": 3
+          }
+        ]
       }
     ],
     "SessionStart": [
