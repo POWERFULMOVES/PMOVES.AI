@@ -240,22 +240,29 @@ gha-runner-ctl-setup: gha-runner-ctl-setup-pat gha-runner-ctl-cycle ## Full Phas
 # auto-registration; containers use Docker Desktop WSL2 backend.
 # Compose: pmoves/docker/runner/docker-compose.4090.yml
 
-RUNNER_COMPOSE_4090 := pmoves/docker/runner/docker-compose.4090.yml
+RUNNER_COMPOSE_4090 := docker/runner/docker-compose.4090.yml
 
 gha-runner-4090-up: ## Start 2 parallel ai-lab Docker runners on the 4090 laptop
-	@bash -c "source pmoves/scripts/with-env.sh && \
-	  export GH_PAT_PUBLISH=$${GH_PAT_PUBLISH:?GH_PAT_PUBLISH not set} && \
-	  GH_PAT_PUBLISH=$$GH_PAT_PUBLISH \
-	  docker compose -f $(RUNNER_COMPOSE_4090) up -d --remove-orphans"
+	@if [ -z "$${GH_PAT_PUBLISH}" ]; then \
+	  echo "ERROR: GH_PAT_PUBLISH is required."; \
+	  echo "Set it with: export GH_PAT_PUBLISH=\$$( gh auth token )"; \
+	  exit 1; \
+	fi
+	@if ! docker pull hello-world >/dev/null 2>&1; then \
+	  echo "ERROR: Docker Hub authentication required."; \
+	  echo "Run: docker login"; \
+	  exit 1; \
+	fi
+	GH_PAT_PUBLISH=$${GH_PAT_PUBLISH} docker compose -f $(RUNNER_COMPOSE_4090) up -d --remove-orphans
 
 gha-runner-4090-down: ## Stop and deregister the 4090 ai-lab Docker runners
 	docker compose -f $(RUNNER_COMPOSE_4090) down
 
 gha-runner-4090-status: ## Show 4090 Docker runner containers + GitHub registration state
 	docker compose -f $(RUNNER_COMPOSE_4090) ps
-	@bash -c "source pmoves/scripts/with-env.sh && \
-	  GH_TOKEN=$${GH_PAT_PUBLISH} gh api repos/POWERFULMOVES/PMOVES.AI/actions/runners \
-	    --jq '.runners[] | select(.labels[].name == \"ai-lab\") | {name, status, busy}'"
+	@GH_TOKEN=$${GH_PAT_PUBLISH:-$$( gh auth token 2>/dev/null )} \
+	  gh api repos/POWERFULMOVES/PMOVES.AI/actions/runners \
+	    --jq '.runners[] | select(.labels[].name == "ai-lab") | {name, status, busy}'
 
 gha-runner-4090-logs: ## Tail registration/job logs from the 4090 Docker runner containers
 	docker compose -f $(RUNNER_COMPOSE_4090) logs -f --tail=50
