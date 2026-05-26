@@ -2,8 +2,9 @@
 """Inject Docker Hub credentials from the local credential helper into env.tier-api.
 
 Reads Docker Hub username + PAT from the platform credential helper
-(docker-credential-desktop on Windows, docker-credential-osxkeychain on macOS,
-docker-credential-secretservice on Linux) and writes them into env.tier-api.
+(auto-detected from ~/.docker/config.json credsStore; falls back to
+docker-credential-desktop on Windows and docker-credential-osxkeychain on macOS)
+and writes them into env.tier-api.
 
 Mirrors inject_github_pat_from_gh_cli.py — same atomic-write + chmod pattern.
 
@@ -31,19 +32,41 @@ import platform
 import re
 import subprocess
 import sys
+import urllib.error
+import urllib.request
 
 REGISTRY = "https://index.docker.io/v1/"
 
-HELPERS: dict[str, str] = {
+_PLATFORM_HELPERS: dict[str, str] = {
     "Windows": "docker-credential-desktop",
     "Darwin": "docker-credential-osxkeychain",
-    "Linux": "docker-credential-secretservice",
 }
+
+_USERNAME_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,254}")
+
+
+def _resolve_helper() -> str:
+    """Return the active credential helper name.
+
+    Reads credsStore from ~/.docker/config.json (authoritative source) and
+    falls back to platform defaults when the config is absent or unparseable.
+    """
+    config_path = pathlib.Path.home() / ".docker" / "config.json"
+    if config_path.exists():
+        try:
+            with config_path.open() as f:
+                config = json.load(f)
+            store = config.get("credsStore")
+            if store:
+                return f"docker-credential-{store}"
+        except (json.JSONDecodeError, OSError):
+            pass
+    return _PLATFORM_HELPERS.get(platform.system(), "docker-credential-desktop")
 
 
 def get_creds() -> tuple[str | None, str | None]:
     """Return (username, token) from the platform credential helper, or (None, None)."""
-    helper = HELPERS.get(platform.system(), "docker-credential-desktop")
+    helper = _resolve_helper()
     try:
         result = subprocess.run(
             [helper, "get"],
@@ -76,22 +99,25 @@ def get_creds() -> tuple[str | None, str | None]:
 
 
 def validate(username: str, token: str) -> bool:
-    """Return True if the credentials authenticate successfully against Docker Hub."""
+    """Return True if the credentials authenticate against Docker Hub (read-only probe).
+
+    Uses the Docker Hub login API rather than `docker login` to avoid mutating
+    the operator's active credential store.
+    """
+    payload = json.dumps({"username": username, "password": token}).encode()
+    req = urllib.request.Request(
+        "https://hub.docker.com/v2/users/login/",
+        data=payload,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
     try:
-        result = subprocess.run(
-            ["docker", "login", "--username", username, "--password-stdin"],
-            input=token,
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
-    except FileNotFoundError:
-        print("ERROR: docker CLI not found.", file=sys.stderr)
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            return resp.status == 200
+    except urllib.error.HTTPError:
         return False
-    except subprocess.TimeoutExpired:
-        print("ERROR: docker login timed out.", file=sys.stderr)
+    except OSError:
         return False
-    return result.returncode == 0
 
 
 def inject_into_env_file(env_path: pathlib.Path, username: str, token: str) -> None:
@@ -102,12 +128,12 @@ def inject_into_env_file(env_path: pathlib.Path, username: str, token: str) -> N
         print(f"ERROR: cannot read {env_path}: {e}", file=sys.stderr)
         sys.exit(3)
 
-    def _upsert(text: str, key: str, value: str) -> str:
+    def _upsert(content: str, key: str, value: str) -> str:
         new_line = f"{key}={value}"
-        if re.search(rf"(?m)^{re.escape(key)}=", text):
-            return re.sub(rf"(?m)^{re.escape(key)}=.*$", new_line, text)
-        sep = "" if not text or text.endswith("\n") else "\n"
-        return f"{text}{sep}{new_line}\n"
+        if re.search(rf"(?m)^{re.escape(key)}=", content):
+            return re.sub(rf"(?m)^{re.escape(key)}=.*$", new_line, content)
+        sep = "" if not content or content.endswith("\n") else "\n"
+        return f"{content}{sep}{new_line}\n"
 
     text = _upsert(text, "DOCKERHUB_USERNAME", username)
     text = _upsert(text, "DOCKERHUB_PAT", token)
@@ -132,13 +158,13 @@ def inject_into_env_file(env_path: pathlib.Path, username: str, token: str) -> N
         sys.exit(3)
 
     token_len = len(token)
-    del token  # clear secret from local scope after write
+    del token  # break name binding (best-effort; not a memory wipe)
     print(f"OK: DOCKERHUB_USERNAME={username}, DOCKERHUB_PAT written to {env_path} (token length={token_len})")
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    _default_env = str(pathlib.Path(__file__).parents[1] / "env" / "env.tier-api")
+    _default_env = str(pathlib.Path(__file__).resolve().parents[1] / "env" / "env.tier-api")
     parser.add_argument(
         "--env-file",
         default=_default_env,
@@ -161,9 +187,16 @@ def main() -> None:
         )
         sys.exit(1)
 
+    if not _USERNAME_RE.fullmatch(username):
+        print(
+            f"ERROR: invalid username '{username}' from credential helper.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
     if not validate(username, token):
         print(
-            "[docker-hub-inject] Credentials found but Docker Hub auth failed — PAT may be expired.\n"
+            "[docker-hub-inject] Credentials found but Docker Hub auth failed -- PAT may be expired.\n"
             "  Fix: docker login  (re-authenticate with a fresh PAT)\n"
             "  Then re-run: make -C pmoves docker-hub-inject",
             file=sys.stderr,
@@ -171,14 +204,13 @@ def main() -> None:
         sys.exit(2)
 
     if args.check:
-        del token  # clear secret; check doesn't need it further
+        del token  # break name binding (best-effort; not a memory wipe)
         print(f"[docker-hub-inject] --check passed: {username} authenticated")
         return
 
     env_path = pathlib.Path(args.env_file)
     inject_into_env_file(env_path, username, token)
-    del token  # clear secret from local scope after injection
-    print(f"[docker-hub-inject] OK -- {username} -> {env_path}")
+    del token  # break name binding (best-effort; not a memory wipe)
 
 
 if __name__ == "__main__":

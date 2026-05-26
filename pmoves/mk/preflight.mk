@@ -299,6 +299,4 @@ naming-drift-strict: ## Audit naming drift in CI mode (non-zero exit on P0/P1)
 
 docker-hub-inject: ## Inject Docker Hub creds from credential helper into env.tier-api
 	@echo ">>> docker-hub-inject"
-	@$(PRECHECK_PY) tools/inject_docker_hub_pat_from_cli.py $(ARGS) \
-		&& echo "  ✓ DOCKERHUB_PAT + DOCKERHUB_USERNAME written to env/env.tier-api" \
-		|| { echo "  ✗ docker-hub-inject failed — run: docker login  then retry"; exit 1; }
+	@$(PRECHECK_PY) tools/inject_docker_hub_pat_from_cli.py $(ARGS)
