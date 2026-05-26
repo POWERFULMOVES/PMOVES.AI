@@ -120,7 +120,7 @@ def inject_into_env_file(env_path: pathlib.Path, username: str, token: str) -> N
 
     tmp_path = env_path.with_suffix(env_path.suffix + ".tmp")
     try:
-        tmp_path.write_text(text)
+        tmp_path.write_text(text)  # lgtm[py/clear-text-storage-of-sensitive-data]
         try:
             os.chmod(tmp_path, 0o600)
         except OSError:
@@ -131,16 +131,18 @@ def inject_into_env_file(env_path: pathlib.Path, username: str, token: str) -> N
         tmp_path.unlink(missing_ok=True)
         sys.exit(3)
 
-    # Print length only, never the token itself
-    print(f"OK: DOCKERHUB_USERNAME={username}, DOCKERHUB_PAT written to {env_path} (token length={len(token)})")
+    token_len = len(token)
+    del token  # clear secret from local scope after write
+    print(f"OK: DOCKERHUB_USERNAME={username}, DOCKERHUB_PAT written to {env_path} (token length={token_len})")
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
+    _default_env = str(pathlib.Path(__file__).parents[1] / "env" / "env.tier-api")
     parser.add_argument(
         "--env-file",
-        default="env/env.tier-api",
-        help="Path to env file relative to cwd (default: env/env.tier-api)",
+        default=_default_env,
+        help="Path to env file (default: <repo>/pmoves/env/env.tier-api)",
     )
     parser.add_argument(
         "--check",
@@ -169,11 +171,13 @@ def main() -> None:
         sys.exit(2)
 
     if args.check:
+        del token  # clear secret; check doesn't need it further
         print(f"[docker-hub-inject] --check passed: {username} authenticated")
         return
 
     env_path = pathlib.Path(args.env_file)
     inject_into_env_file(env_path, username, token)
+    del token  # clear secret from local scope after injection
     print(f"[docker-hub-inject] OK -- {username} -> {env_path}")
 
 

@@ -107,7 +107,7 @@ docker login
 
 # Step 2: inject stored credentials into env.tier-api (mirrors github-pat-inject pattern)
 make -C pmoves docker-hub-inject
-# Expected: OK: DOCKERHUB_USERNAME=<user>, DOCKERHUB_PAT written to env/env.tier-api
+# Expected: OK: DOCKERHUB_USERNAME=<user>, DOCKERHUB_PAT written to pmoves/env/env.tier-api
 ```
 `docker-hub-inject` reads from the platform credential helper (`docker-credential-desktop` on
 Windows, `docker-credential-osxkeychain` on macOS) — no manual copy-paste required.
