@@ -112,6 +112,12 @@ def inject_into_env_file(env_path: pathlib.Path, username: str, token: str) -> N
     text = _upsert(text, "DOCKERHUB_USERNAME", username)
     text = _upsert(text, "DOCKERHUB_PAT", token)
 
+    try:
+        env_path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    except OSError as e:
+        print(f"ERROR: cannot create {env_path.parent}: {e}", file=sys.stderr)
+        sys.exit(3)
+
     tmp_path = env_path.with_suffix(env_path.suffix + ".tmp")
     try:
         tmp_path.write_text(text)
@@ -163,12 +169,12 @@ def main() -> None:
         sys.exit(2)
 
     if args.check:
-        print(f"[docker-hub-inject] --check passed: {username} authenticated.")
+        print(f"[docker-hub-inject] --check passed: {username} authenticated")
         return
 
     env_path = pathlib.Path(args.env_file)
     inject_into_env_file(env_path, username, token)
-    print(f"[docker-hub-inject] OK — {username} → {env_path}")
+    print(f"[docker-hub-inject] OK -- {username} -> {env_path}")
 
 
 if __name__ == "__main__":
