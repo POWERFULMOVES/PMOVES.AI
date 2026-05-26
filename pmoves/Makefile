@@ -926,7 +926,8 @@ nats-pub: ## Publish a NATS message via the nats-box toolbox container (Known Ro
 ## From a remote node: connect to nats://nats:pmoves@pmoves-kvm4-2:4222 via Tailscale hostname
 	@test -n "$(SUBJECT)" || (echo "ERROR: SUBJECT is required" && exit 1)
 	@test -n "$(PAYLOAD)" || (echo "ERROR: PAYLOAD is required" && exit 1)
-	@NATS_URL="$${NATS_URL:-nats://nats:pmoves@nats:4222}"; \
+	@. ./scripts/with-env.sh 2>/dev/null || true; \
+	  NATS_URL="$${NATS_URL:-nats://nats:pmoves@nats:4222}"; \
 	  docker run --rm --network "$(NATS_DOCKER_NETWORK)" "$(NATS_BOX_IMAGE)" nats -s "$$NATS_URL" pub "$(SUBJECT)" '$(PAYLOAD)'
 
 .PHONY: nats-agent-inbox
