@@ -123,7 +123,7 @@ def validate(username: str, token: str) -> bool:
 def inject_into_env_file(env_path: pathlib.Path, username: str, token: str) -> None:
     """Update DOCKERHUB_USERNAME and DOCKERHUB_PAT in env_path, appending if absent."""
     try:
-        text = env_path.read_text() if env_path.exists() else ""
+        text = env_path.read_text(encoding="utf-8") if env_path.exists() else ""
     except OSError as e:
         print(f"ERROR: cannot read {env_path}: {e}", file=sys.stderr)
         sys.exit(3)
@@ -146,7 +146,7 @@ def inject_into_env_file(env_path: pathlib.Path, username: str, token: str) -> N
 
     tmp_path = env_path.with_suffix(env_path.suffix + ".tmp")
     try:
-        tmp_path.write_text(text)  # lgtm[py/clear-text-storage-of-sensitive-data]
+        tmp_path.write_text(text, encoding="utf-8")  # lgtm[py/clear-text-storage-of-sensitive-data]
         try:
             os.chmod(tmp_path, 0o600)
         except OSError:
