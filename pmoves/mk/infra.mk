@@ -243,17 +243,17 @@ gha-runner-ctl-setup: gha-runner-ctl-setup-pat gha-runner-ctl-cycle ## Full Phas
 RUNNER_COMPOSE_4090 := docker/runner/docker-compose.4090.yml
 
 gha-runner-4090-up: ## Start 2 parallel ai-lab Docker runners on the 4090 laptop
-	@if [ -z "$${GH_PAT_PUBLISH}" ]; then \
-	  echo "ERROR: GH_PAT_PUBLISH is required."; \
-	  echo "Set it with: export GH_PAT_PUBLISH=\$$( gh auth token )"; \
-	  exit 1; \
-	fi
 	@if ! docker pull hello-world >/dev/null 2>&1; then \
-	  echo "ERROR: Docker Hub authentication required."; \
-	  echo "Run: docker login"; \
+	  echo "ERROR: Docker Hub authentication required. Run: docker login"; \
 	  exit 1; \
 	fi
-	GH_PAT_PUBLISH=$${GH_PAT_PUBLISH} docker compose -f $(RUNNER_COMPOSE_4090) up -d --remove-orphans
+	@_pat="$${GH_PAT_PUBLISH:-$$( gh auth token 2>/dev/null )}"; \
+	if [ -z "$$_pat" ]; then \
+	  echo "ERROR: GH_PAT_PUBLISH unset and gh auth token failed."; \
+	  echo "Set: export GH_PAT_PUBLISH=\$$( gh auth token )"; \
+	  exit 1; \
+	fi; \
+	GH_PAT_PUBLISH=$$_pat docker compose -f $(RUNNER_COMPOSE_4090) up -d --remove-orphans
 
 gha-runner-4090-down: ## Stop and deregister the 4090 ai-lab Docker runners
 	docker compose -f $(RUNNER_COMPOSE_4090) down
