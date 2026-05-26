@@ -241,33 +241,55 @@ gha-runner-ctl-setup: gha-runner-ctl-setup-pat gha-runner-ctl-cycle ## Full Phas
 # Compose: pmoves/docker/runner/docker-compose.4090.yml
 
 RUNNER_COMPOSE_4090 := docker/runner/docker-compose.4090.yml
+# Token precedence: GITHUB_PAT (env.tier-agent, repo scope) → gh auth token (dev fallback)
+# GH_PAT_PUBLISH is NOT used — it has GHCR packages:write scope only (wrong for registration)
+_runner_pat = $${GITHUB_PAT:-$$( gh auth token 2>/dev/null )}
 
-gha-runner-4090-up: ## Start 2 parallel ai-lab Docker runners on the 4090 laptop
-	@if ! docker pull hello-world >/dev/null 2>&1; then \
-	  echo "ERROR: Docker Hub authentication required. Run: docker login"; \
-	  exit 1; \
-	fi
-	@_pat="$${GH_PAT_PUBLISH:-$$( gh auth token 2>/dev/null )}"; \
+gha-runner-4090-preflight: ## Validate Docker Hub auth + Tailscale DNS + GitHub PAT for 4090 runners
+	@echo "=== 4090 Runner Preflight ==="
+	@echo "1/3: Docker Hub connectivity..."
+	@docker pull hello-world >/dev/null 2>&1 \
+	  && echo "  OK  Docker Hub" \
+	  || { echo "  FAIL Docker Hub -- run: docker login"; exit 1; }
+	@echo "2/3: Tailscale DNS from container..."
+	@docker run --rm --network host alpine sh -c \
+	  "nslookup pmoves-kvm4-2 >/dev/null 2>&1" 2>/dev/null \
+	  && echo "  OK  Tailscale DNS (pmoves-kvm4-2 resolved)" \
+	  || { echo "  WARN Tailscale DNS unresolvable from container"; \
+	       echo "       Fix: Docker Desktop -> Settings -> Resources -> Network -> Use system DNS"; \
+	       echo "       Note: branch-trail-emit.yml is best-effort -- DNS failure won't block CI"; }
+	@echo "3/3: GitHub registration token..."
+	@_pat="$(call _runner_pat)"; \
 	if [ -z "$$_pat" ]; then \
-	  echo "ERROR: GH_PAT_PUBLISH unset and gh auth token failed."; \
-	  echo "Set: export GH_PAT_PUBLISH=\$$( gh auth token )"; \
+	  echo "  FAIL No GitHub token available"; \
+	  echo "       Fix: run make secrets-funnel  OR  gh auth login"; \
 	  exit 1; \
 	fi; \
-	GH_PAT_PUBLISH=$$_pat docker compose -f $(RUNNER_COMPOSE_4090) up -d --remove-orphans
+	_login="$$( GH_TOKEN=$$_pat gh api /user --jq '.login' 2>/dev/null )"; \
+	if [ -n "$$_login" ]; then \
+	  echo "  OK  GitHub PAT (authenticated as $$_login)"; \
+	else \
+	  echo "  FAIL GitHub token invalid or expired"; exit 1; \
+	fi
+	@echo "=== Preflight complete ==="
+
+gha-runner-4090-up: gha-runner-4090-preflight ## Start 2 parallel ai-lab Docker runners on the 4090 laptop
+	@_pat="$(call _runner_pat)"; \
+	RUNNER_ACCESS_TOKEN=$$_pat docker compose -f $(RUNNER_COMPOSE_4090) up -d --remove-orphans
 
 gha-runner-4090-down: ## Stop and deregister the 4090 ai-lab Docker runners
 	docker compose -f $(RUNNER_COMPOSE_4090) down
 
 gha-runner-4090-status: ## Show 4090 Docker runner containers + GitHub registration state
 	docker compose -f $(RUNNER_COMPOSE_4090) ps
-	@GH_TOKEN=$${GH_PAT_PUBLISH:-$$( gh auth token 2>/dev/null )} \
+	@GH_TOKEN="$(call _runner_pat)" \
 	  gh api repos/POWERFULMOVES/PMOVES.AI/actions/runners \
 	    --jq '.runners[] | select(.labels[].name == "ai-lab") | {name, status, busy}'
 
 gha-runner-4090-logs: ## Tail registration/job logs from the 4090 Docker runner containers
 	docker compose -f $(RUNNER_COMPOSE_4090) logs -f --tail=50
 
-.PHONY: gha-runner-4090-up gha-runner-4090-down gha-runner-4090-status gha-runner-4090-logs
+.PHONY: gha-runner-4090-preflight gha-runner-4090-up gha-runner-4090-down gha-runner-4090-status gha-runner-4090-logs
 
 
 # ── GPU & Model Serving ──────────────────────────────────────────────

@@ -8,10 +8,15 @@
 # Status: make -C pmoves gha-runner-4090-status
 # Logs  : make -C pmoves gha-runner-4090-logs
 #
+# Token note: ACCESS_TOKEN requires GitHub repo scope for runner registration.
+# RUNNER_ACCESS_TOKEN resolved by make target: GITHUB_PAT (env.tier-agent) -> gh auth token.
+# Do NOT substitute GH_PAT_PUBLISH here (GHCR packages:write only -- wrong scope).
+# See: pmoves/docs/operations/WORKFLOW_RUNNER_MAP.md
+#
 # Networking note: network_mode=host on Docker Desktop gives containers the WSL2 VM network.
-# Tailscale MagicDNS is Windows-side only. For tailnet NATS (NATS_URL_TAILNET), enable
-# "Use system DNS" in Docker Desktop -> Settings -> Resources -> Network, or set
-# NATS_URL_TAILNET to nats://host.docker.internal:<port> for the local NATS instance.
+# Tailscale MagicDNS is Windows-side only. Run make gha-runner-4090-preflight to validate
+# DNS resolution before starting. Enable Use system DNS in Docker Desktop
+# Settings -> Resources -> Network if the preflight DNS check fails.
 # The workflow is best-effort (failures do not block CI), so partial connectivity is safe.
 
 x-runner-base: &runner-base
@@ -38,10 +43,10 @@ services:
     <<: *runner-base
     container_name: pmoves-4090-runner-1
     environment:
-      ACCESS_TOKEN: ${GH_PAT_PUBLISH}
+      ACCESS_TOKEN: ${RUNNER_ACCESS_TOKEN}
 
   runner-2:
     <<: *runner-base
     container_name: pmoves-4090-runner-2
     environment:
-      ACCESS_TOKEN: ${GH_PAT_PUBLISH}
+      ACCESS_TOKEN: ${RUNNER_ACCESS_TOKEN}

@@ -15,6 +15,15 @@
 | **KVM2** | Reverse Proxy / RustDesk Relay | nginx (SSL termination), RustDesk hbbs/hbbr | `self-hosted, vps, kvm2, backup` |
 | **Cloudflare** | Edge | DNS, CI Worker | — |
 
+**4090 Docker Runner Prerequisites** (for `make gha-runner-4090-up`):
+1. `docker login` — Docker Hub auth required to pull `myoung34/github-runner:ubuntu-jammy`
+2. Docker Desktop → Settings → Resources → Network → **Use system DNS** — enables Tailscale MagicDNS hostname resolution from containers (`pmoves-kvm4-2`, etc.); required for `NATS_URL_TAILNET` in `branch-trail-emit.yml`
+3. Token source (resolved automatically in order):
+   - `GITHUB_PAT` from `env.tier-agent` (run `make secrets-funnel` to populate) — correct `repo` scope
+   - `gh auth token` fallback — works on any machine with `gh auth status` logged in
+   - **Do not** use `GH_PAT_PUBLISH` (GHCR `packages:write` scope only — wrong for runner registration)
+4. Validate all three with: `make -C pmoves gha-runner-4090-preflight`
+
 **Phase 9Q — YT egress routing (2026-04-16, PR #1262):** `pmoves-yt`,
 `bgutil-pot-provider`, `invidious-companion`, and `invidious` route all
 outbound HTTP/HTTPS through a Tailscale sidecar (`tailscale-yt-egress`)
