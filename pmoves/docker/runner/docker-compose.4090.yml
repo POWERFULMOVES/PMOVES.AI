@@ -1,0 +1,47 @@
+# pmoves/docker/runner/docker-compose.4090.yml
+#
+# Two parallel GitHub Actions runners for the ai-lab lane on the 4090 Windows/Docker Desktop node.
+# Runs as Linux containers via Docker Desktop (WSL2 backend) alongside the native Windows runner.
+#
+# Start : make -C pmoves gha-runner-4090-up
+# Stop  : make -C pmoves gha-runner-4090-down
+# Status: make -C pmoves gha-runner-4090-status
+# Logs  : make -C pmoves gha-runner-4090-logs
+#
+# Networking note: network_mode=host on Docker Desktop gives containers the WSL2 VM network.
+# Tailscale MagicDNS is Windows-side only. For tailnet NATS (NATS_URL_TAILNET), enable
+# "Use system DNS" in Docker Desktop -> Settings -> Resources -> Network, or set
+# NATS_URL_TAILNET to nats://host.docker.internal:<port> for the local NATS instance.
+# The workflow is best-effort (failures do not block CI), so partial connectivity is safe.
+
+x-runner-base: &runner-base
+  image: myoung34/github-runner:ubuntu-jammy
+  restart: unless-stopped
+  network_mode: host
+  extra_hosts:
+    - "host.docker.internal:host-gateway"
+  volumes:
+    - /var/run/docker.sock:/var/run/docker.sock
+    - /tmp/pmoves-runner:/tmp/pmoves-runner
+  environment:
+    REPO_URL: https://github.com/POWERFULMOVES/PMOVES.AI
+    RUNNER_SCOPE: repo
+    LABELS: self-hosted,ai-lab,Linux,X64
+    RUNNER_NAME_PREFIX: pmoves-4090
+    RANDOM_RUNNER_SUFFIX: "true"
+    RUNNER_WORKDIR: /tmp/pmoves-runner
+    EPHEMERAL: "false"
+    DISABLE_AUTO_UPDATE: "false"
+
+services:
+  runner-1:
+    <<: *runner-base
+    container_name: pmoves-4090-runner-1
+    environment:
+      ACCESS_TOKEN: ${GH_PAT_PUBLISH}
+
+  runner-2:
+    <<: *runner-base
+    container_name: pmoves-4090-runner-2
+    environment:
+      ACCESS_TOKEN: ${GH_PAT_PUBLISH}

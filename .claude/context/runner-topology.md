@@ -9,6 +9,7 @@
 | **Z890** | Production ai-lab node, GPU (RTX 3090 Ti); workstation co-located with dev workflow | All (local Docker Compose) | `self-hosted, ai-lab, gpu, cuda` |
 | **B850 "Knuckles"** (= R9700 Workstation pre-Phase-C) | Heavyweight ROCm Inference target; **current state: 9850X3D / 32GB / 1× R9700 / Ubuntu 24.04.4 / /dev/kfd present / hostname `pmoves-b850-ai-top`**. Hosts the Claude Code dev shell. | All (local Docker Compose, ROCm install operator-pending) | `self-hosted, ai-lab` (target: `+gpu, rocm, rdna4`) |
 | **5090** | Primary GPU (pending) | Future inference | (pending) |
+| **4090 Laptop (PMOVES-4090)** | Mobile relay / PR triage node; Claude Code dev shell | Docker Desktop (WSL2) | `pmoves-ai-lab-win`: `self-hosted, X64, ai-lab, Windows, 4090` (native Windows service) + `pmoves-4090-runner-*`: `self-hosted, ai-lab, Linux, X64` (2× Docker containers via `make gha-runner-4090-up`) |
 | **KVM4-1** | API Gateway + Tailscale Egress Exit Node (Phase 9Q) | TensorZero, Agent Zero, Hi-RAG, Archon, Gateway Agent; outbound exit for `pmoves-yt` stack | `self-hosted, vps, kvm4, production` |
 | **KVM4-2** | Data/Storage | Supabase, NATS, Qdrant, Neo4j, Meilisearch, MinIO, monitoring | `self-hosted, vps, kvm4, production` |
 | **KVM2** | Reverse Proxy / RustDesk Relay | nginx (SSL termination), RustDesk hbbs/hbbr | `self-hosted, vps, kvm2, backup` |
