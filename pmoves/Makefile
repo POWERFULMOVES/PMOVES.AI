@@ -2716,6 +2716,13 @@ ghcr-dispatch-one: ci-runners-check-strict ## Dispatch GHCR workflow for a singl
 ghcr-list: ## List all images in the integrations-ghcr matrix
 	@$(PYTHON) -c "import json,pathlib;[print(e['name']) for e in json.loads(pathlib.Path('$(GHCR_MATRIX_FILE)').read_text())]"
 
+.PHONY: ghcr-matrix-paths-check
+ghcr-matrix-paths-check: ## Validate all in-repo GHCR matrix context/dockerfile paths exist (no Docker build)
+	@$(PYTHON) $(GHCR_PREPUBLISH_SCRIPT) \
+	  --matrix-file "$(GHCR_MATRIX_FILE)" \
+	  --repo-root .. \
+	  --paths-only
+
 .PHONY: deepresearch-smoke
 deepresearch-smoke: ## Publish a sample DeepResearch request and wait for a result (requires worker running)
 	@ENV_FILE="$(CURDIR)/env.shared" bash -lc '. ./scripts/with-env.sh "$$ENV_FILE" && PYTHONPATH="$(CURDIR)/.." python3 tools/deepresearch_smoke.py --timeout $${DEEPRESEARCH_SMOKE_TIMEOUT:-60}'

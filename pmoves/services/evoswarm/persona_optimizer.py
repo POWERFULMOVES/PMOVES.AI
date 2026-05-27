@@ -613,7 +613,7 @@ class PersonaOptimizer:
         )
 
     def _random_velocity(self, rng: random.Random) -> Dict[str, float]:
-        return {field: rng.uniform(-0.08, 0.08) for field in self._numeric_fields()}
+        return {fname: rng.uniform(-0.08, 0.08) for fname in self._numeric_fields()}
 
     def _pso_step(
         self,
@@ -625,17 +625,17 @@ class PersonaOptimizer:
         cognitive: float,
         social: float,
     ) -> None:
-        for field in self._numeric_fields():
-            x = self._get_field(particle.position, field)
-            pbest = self._get_field(particle.best_position, field)
-            gbest = self._get_field(global_best, field)
+        for fname in self._numeric_fields():
+            x = self._get_field(particle.position, fname)
+            pbest = self._get_field(particle.best_position, fname)
+            gbest = self._get_field(global_best, fname)
             velocity = (
-                inertia * particle.velocity.get(field, 0.0)
+                inertia * particle.velocity.get(fname, 0.0)
                 + cognitive * rng.random() * (pbest - x)
                 + social * rng.random() * (gbest - x)
             )
-            particle.velocity[field] = max(-0.2, min(0.2, velocity))
-            self._set_field(particle.position, field, x + particle.velocity[field])
+            particle.velocity[fname] = max(-0.2, min(0.2, velocity))
+            self._set_field(particle.position, fname, x + particle.velocity[fname])
 
     def _crossover_candidates(
         self,
@@ -644,10 +644,10 @@ class PersonaOptimizer:
         rng: random.Random,
     ) -> Dict[str, Any]:
         child = self._clone_candidate(first)
-        for field in self._numeric_fields():
+        for fname in self._numeric_fields():
             alpha = rng.random()
-            value = self._get_field(first, field) * alpha + self._get_field(second, field) * (1 - alpha)
-            self._set_field(child, field, value)
+            value = self._get_field(first, fname) * alpha + self._get_field(second, fname) * (1 - alpha)
+            self._set_field(child, fname, value)
         return child
 
     def _mutate_candidate(
@@ -658,9 +658,9 @@ class PersonaOptimizer:
         scale: float = 0.12,
     ) -> Dict[str, Any]:
         mutated = self._clone_candidate(candidate)
-        for field in self._numeric_fields():
+        for fname in self._numeric_fields():
             if rng.random() <= 0.75:
-                self._set_field(mutated, field, self._get_field(mutated, field) + rng.gauss(0.0, scale))
+                self._set_field(mutated, fname, self._get_field(mutated, fname) + rng.gauss(0.0, scale))
         return mutated
 
     def _normalize_candidate(self, candidate: Dict[str, Any]) -> Dict[str, Any]:
