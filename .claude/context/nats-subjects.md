@@ -252,7 +252,7 @@ Example: `ingest.transcript.ready.v1`
   ```
 - **Subscribers:** Target node agent runtime (SPARK, 5090, etc.)
 - **Known Road:** `make -C pmoves nats-pub SUBJECT=claw.task.assign.v1 PAYLOAD='...'`
-  (host-side `uv run --script tools/nats_pub.py`; run on the node where NATS is local
+  (uses the pinned `natsio/nats-box:0.14.5` toolbox image on `pmoves_bus`; run on the node where NATS is local
   or where `NATS_URL` reaches the hub)
 - **Note:** Not JetStream — fire and forget. Target agent must be subscribed at publish time.
 - **Persistent inbox:** `make -C pmoves nats-agent-inbox` runs

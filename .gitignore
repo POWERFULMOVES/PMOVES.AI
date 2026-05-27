@@ -293,3 +293,7 @@ document/
 *.vtt
 # Raw transcript files (bulk, not version-controlled)
 research/transcripts/
+
+# Docker MCP toolkit local artifacts (not for repo)
+profiles.json
+update.finished

@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ToKenism Settlement Recorded v1",
+  "type": "object",
+  "required": [
+    "settlement_id",
+    "instruction_id",
+    "idempotency_key",
+    "lane",
+    "action",
+    "status",
+    "timestamp",
+    "agent_id",
+    "signature"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "settlement_id": { "type": "string", "pattern": "^settlement_[a-f0-9]{16}$" },
+    "instruction_id": { "type": "string", "pattern": "^settle_inst_[a-f0-9]{16}$" },
+    "idempotency_key": { "type": "string", "pattern": "^[A-Za-z0-9._:-]{16,180}$" },
+    "lane": { "type": "string", "enum": ["firefly", "contract", "manual"] },
+    "action": {
+      "type": "string",
+      "enum": [
+        "grotoken_mint",
+        "foodusd_transfer",
+        "reward_distribute",
+        "group_purchase_settle",
+        "vault_stake",
+        "governance_record"
+      ]
+    },
+    "status": { "type": "string", "enum": ["recorded", "skipped"] },
+    "amount": { "type": "number", "exclusiveMinimum": 0 },
+    "asset": { "type": "string" },
+    "firefly_transaction_id": { "type": "string" },
+    "tx_hash": { "type": "string" },
+    "timestamp": { "type": "string", "format": "date-time" },
+    "agent_id": { "type": "string", "minLength": 1 },
+    "signature": {
+      "type": "object",
+      "required": ["alg", "kid", "hmac"],
+      "additionalProperties": true,
+      "properties": {
+        "alg": { "type": "string", "minLength": 1 },
+        "kid": { "type": "string", "minLength": 1 },
+        "hmac": { "type": "string", "minLength": 1 }
+      }
+    },
+    "metadata": { "type": "object", "additionalProperties": true }
+  }
+}
