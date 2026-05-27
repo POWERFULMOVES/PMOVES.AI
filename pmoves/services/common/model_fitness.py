@@ -225,9 +225,9 @@ def normalize_model_fitness(
 
     training_metrics = training_metrics or {}
     success = clamp01(tensorzero_metrics.get("success_rate"), 0.5)
-    task = clamp01(tensorzero_metrics.get("task_score"), success)
-    tool = clamp01(tensorzero_metrics.get("tool_success_rate"), success)
-    structured = clamp01(tensorzero_metrics.get("structured_output_valid_rate"), success)
+    task = clamp01(tensorzero_metrics.get("task_score"), 0.5)
+    tool = clamp01(tensorzero_metrics.get("tool_success_rate"), 0.5)
+    structured = clamp01(tensorzero_metrics.get("structured_output_valid_rate"), 0.5)
     fallback_penalty = 1.0 - clamp01(tensorzero_metrics.get("fallback_rate"), 0.0)
 
     latency_ms = _safe_nonnegative_float(tensorzero_metrics.get("latency_ms"), None)
@@ -239,7 +239,7 @@ def normalize_model_fitness(
     cost = _safe_nonnegative_float(tensorzero_metrics.get("cost_per_1k_tokens"), None)
     cost_score = 0.5 if cost is None else 1.0 / (1.0 + cost)
 
-    eval_score = clamp01(training_metrics.get("eval_score"), task)
+    eval_score = clamp01(training_metrics.get("eval_score"), 0.5)
     loss = training_metrics.get("loss")
     loss_value = _safe_nonnegative_float(loss, None) if loss is not None else None
     loss_score = 0.5 if loss_value is None else 1.0 / (1.0 + loss_value)

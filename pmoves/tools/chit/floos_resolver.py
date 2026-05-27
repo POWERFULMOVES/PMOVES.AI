@@ -368,6 +368,8 @@ async def publish_hook(
             file=sys.stderr,
         )
     except Exception as exc:
+        if _strict_hooks_enabled():
+            raise
         print(
             f"WARNING: hook '{subject}' publish failed: "
             f"{type(exc).__name__}: {exc}",
