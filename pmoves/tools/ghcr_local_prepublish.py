@@ -210,12 +210,23 @@ def check_paths(entry: dict[str, object], repo_root: pathlib.Path) -> Validation
     dockerfile_rel = str(entry.get("dockerfile", ""))
     tag = f"local/{image_name}:paths-check"
 
+    context_rel_path = pathlib.Path(context_rel)
+    dockerfile_rel_path = pathlib.Path(dockerfile_rel)
+    if context_rel_path.is_absolute() or dockerfile_rel_path.is_absolute():
+        print(f"[FAIL] {name}: paths must be repo-relative, not absolute")
+        return ValidationResult(name=name, tag=tag, build_ok=False, trivy_ok=None, note="paths must be repo-relative")
+
+    repo_root_resolved = repo_root.resolve()
     parts = context_rel.split("/")
     if len(parts) >= 3 and parts[0] == "pmoves" and parts[1] == "integrations":
         _init_submodule(repo_root, "/".join(parts[:3]))
 
-    context_path = (repo_root / context_rel).resolve()
-    dockerfile_path = (repo_root / dockerfile_rel).resolve()
+    context_path = (repo_root / context_rel_path).resolve()
+    dockerfile_path = (repo_root / dockerfile_rel_path).resolve()
+
+    if not context_path.is_relative_to(repo_root_resolved) or not dockerfile_path.is_relative_to(repo_root_resolved):
+        print(f"[FAIL] {name}: path escapes repo root")
+        return ValidationResult(name=name, tag=tag, build_ok=False, trivy_ok=None, note="path escapes repo root")
 
     if not context_path.exists():
         print(f"[FAIL] {name}: context path missing: {context_rel}")
