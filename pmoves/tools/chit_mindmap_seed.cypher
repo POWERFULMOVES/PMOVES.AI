@@ -19,7 +19,7 @@ MERGE (p1:CHITPillar {id: "dirichlet"}) SET p1.name = "Dirichlet Attribution", p
 MERGE (p2:CHITPillar {id: "hyperbolic"}) SET p2.name = "Hyperbolic Encoding", p2.description = "Poincare disk model for hierarchical data representation";
 MERGE (p3:CHITPillar {id: "shape"}) SET p3.name = "Shape Attribution", p3.description = "Merkle tree proofs for verifiable attribution records";
 MERGE (p4:CHITPillar {id: "cgp"}) SET p4.name = "CGP Generation", p4.description = "CHIT Geometry Packet document generation (v1.4.0)";
-MERGE (p5:CHITPillar {id: "swarm"}) SET p5.name = "Swarm Optimization", p5.description = "EVO SWARM fitness evaluation and population tracking";
+MERGE (p5:CHITPillar {id: "swarm"}) SET p5.name = "Swarm Fitness and Optimization", p5.description = "Fitness evaluation and population tracking; real optimization requires operator-specific tests";
 
 // ============================================================
 // GEOMETRY BUS Subjects (NATS Event Channels)

@@ -1,5 +1,5 @@
 # Codex Operator Home (PMOVES)
-_Last updated: 2026-03-28_
+_Last updated: 2026-05-26_
 
 This is the Codex-first operations guide for PMOVES.AI. It mirrors the mature
 Claude setup, but keeps Codex workflows command-first and Makefile-native.
@@ -178,6 +178,35 @@ transcripts, Discord, Jellyfin, or cross-model orchestration.
   - `geometry.cgp.v1`
   - `geometry.swarm.meta.v1`
   - `pmoves.geometry.cgp.ready.v1`
+
+### Big Ball 5090 Codex settlement lanes
+
+Use this lane when work touches CHIT attribution, ToKenism settlement, Model Nexus fitness,
+or 5090 TensorZero validation.
+
+Primary traversal order:
+
+1. `pmoves/docs/AGENTS/AGNOTE4482.md`
+2. `pmoves/docs/AGENTS/AGNOTE4482_SITREP.md`
+3. `pmoves/docs/TOKENISM_PLAN_ALIGNMENT_2026-05-22.md`
+4. `pmoves/docs/TAC/TAC_TOKENISM.md`
+5. `PMOVES-ToKenism-Multi/IMPLEMENTATION_STATUS.md`
+6. `PMOVES-ToKenism-Multi/integrations/contracts/SETTLEMENT_FLOW.md`
+
+Current lanes:
+- `firefly` settlement lane: dry-run drafts, live writes gated by signed executor identity,
+  matching operator approval, and signed deployment attestation.
+- `contract` settlement lane: manifest-backed chain call drafts, live writes gated by signed
+  deployment attestation, RPC/wallet custody references, signed executor identity, and matching
+  operator approval.
+- `model-fitness` lane: parent PMOVES records signed scorecards; trusted optimizer publishing
+  still needs PMOVES-AGENT-ZERO-CODEX/HERMES/Claw identities in live runner topology.
+
+5090 validation checks:
+- `Invoke-WebRequest -UseBasicParsing http://localhost:3030/health`
+- `make -C pmoves submodule-integrity`
+- In `PMOVES-ToKenism-Multi/integrations`: `npm run typecheck`
+- In `PMOVES-ToKenism-Multi/contracts/solidity`: `npm test`
 
 ## EvoSwarm
 

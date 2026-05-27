@@ -139,7 +139,7 @@ class TestValidatorFailClosed:
 
 
 class TestGeometryDecoderSignVerify:
-    """sign_cgp/verify_cgp roundtrip in geometry_decoder."""
+    """geometry_decoder crypto wrappers use canonical chit_security behavior."""
 
     def test_sign_verify_roundtrip(self, monkeypatch):
         monkeypatch.setenv("CHIT_PASSPHRASE", "test-secret-key-for-consolidation")
@@ -149,8 +149,10 @@ class TestGeometryDecoderSignVerify:
         cgp = {"spec": "chit.cgp.v0.1", "super_nodes": [{"constellations": [{"id": "c1"}]}]}
         signed = sign_cgp(cgp, passphrase="test-secret-key-for-consolidation")
         assert "sig" in signed
+        assert signed["sig"]["alg"] == "HMAC-SHA256"
+        assert signed["sig"]["kid"] == "chit-signing-v01"
         assert "hmac" in signed["sig"]
-        assert "ts" in signed["sig"]  # geometry_decoder adds timestamp
+        assert "ts" not in signed["sig"]
 
         assert verify_cgp(signed, passphrase="test-secret-key-for-consolidation")
 
@@ -164,3 +166,51 @@ class TestGeometryDecoderSignVerify:
         signed["spec"] = "tampered"
 
         assert not verify_cgp(signed, passphrase="test-secret-key-for-consolidation")
+
+    def test_unsigned_packet_verifies_false_at_utility_layer(self, monkeypatch):
+        monkeypatch.setenv("CHIT_PASSPHRASE", "test-secret-key-for-consolidation")
+
+        from pmoves.services.common.geometry_decoder import verify_cgp
+
+        cgp = {"spec": "chit.cgp.v1.0", "super_nodes": [{"constellations": [{"id": "c1"}]}]}
+        assert verify_cgp(cgp, passphrase="test-secret-key-for-consolidation") is False
+
+    def test_canonical_and_geometry_signatures_cross_verify(self, monkeypatch):
+        monkeypatch.setenv("CHIT_PASSPHRASE", "test-secret-key-for-consolidation")
+
+        from pmoves.tools.chit_security import sign_cgp as canonical_sign, verify_cgp as canonical_verify
+        from pmoves.services.common.geometry_decoder import sign_cgp as gd_sign, verify_cgp as gd_verify
+
+        cgp = {"spec": "chit.cgp.v1.0", "super_nodes": [{"constellations": [{"id": "c1"}]}]}
+        canonical_signed = canonical_sign(cgp, passphrase="test-secret-key-for-consolidation")
+        geometry_signed = gd_sign(cgp, passphrase="test-secret-key-for-consolidation")
+
+        assert gd_verify(canonical_signed, passphrase="test-secret-key-for-consolidation")
+        assert canonical_verify(geometry_signed, passphrase="test-secret-key-for-consolidation")
+
+    def test_encrypted_packets_cross_decrypt(self, monkeypatch):
+        monkeypatch.setenv("CHIT_PASSPHRASE", "test-secret-key-for-consolidation")
+
+        from pmoves.tools.chit_security import encrypt_anchors as canonical_encrypt, decrypt_anchors as canonical_decrypt
+        from pmoves.services.common.geometry_decoder import encrypt_anchors as gd_encrypt, decrypt_anchors as gd_decrypt
+
+        cgp = {
+            "spec": "chit.cgp.v1.0",
+            "super_nodes": [
+                {
+                    "constellations": [
+                        {"id": "c1", "anchor": [0.1, 0.2, 0.3], "points": [{"id": "p1"}]}
+                    ]
+                }
+            ],
+        }
+
+        canonical_encrypted = canonical_encrypt(cgp, passphrase="test-secret-key-for-consolidation")
+        geometry_decrypted = gd_decrypt(canonical_encrypted, passphrase="test-secret-key-for-consolidation")
+        assert "anchor" in geometry_decrypted["super_nodes"][0]["constellations"][0]
+
+        geometry_encrypted = gd_encrypt(cgp, passphrase="test-secret-key-for-consolidation")
+        canonical_decrypted = canonical_decrypt(geometry_encrypted, passphrase="test-secret-key-for-consolidation")
+        anchor = canonical_decrypted["super_nodes"][0]["constellations"][0]["anchor"]
+        assert len(anchor) == 3
+        assert all(abs(a - b) < 0.01 for a, b in zip(anchor, [0.1, 0.2, 0.3]))

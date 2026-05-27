@@ -57,7 +57,7 @@ Detail files live in `.claude/context/`:
 - `runner-topology.md` — condensed node/runner/team topology
 - `credentials-workflow.md` — credential bootstrap, secrets-funnel, JWT-from-Supabase
 - `services-catalog.md` — full service listing (superset of CATALOG.md)
-- `submodules.md` — complete submodules catalog (20 submodules)
+- `submodules.md` — complete submodules catalog (50 submodules per `git submodule status`)
 - `nats-subjects.md` — comprehensive NATS subject catalog
 - `geometry-nats-subjects.md` — GEOMETRY BUS NATS subjects (`tokenism.*`, `geometry.*`)
 - `mcp-api.md` — Agent Zero MCP API reference

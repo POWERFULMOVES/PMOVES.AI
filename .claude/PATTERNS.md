@@ -355,6 +355,58 @@ Consult `pmoves/configs/skill-pairings.yaml` for 7 defined pipelines. Match task
 
 Commands: `/chit:floos status`, `/chit:floos validate <pairing>`, `make -C pmoves floos-status`. Pairing consultation is **advisory**, not a gate.
 
+## Submodule Documentation Patterns (Known Road)
+
+Three load-bearing patterns surfaced by the CLAUDE.md fleet audit (2026-05-20) and the 8-PR landing wave (2026-05-22). Treat these as canonical when touching submodule docs or driving multi-repo fixes.
+
+### 1. Upstream `CLAUDE.md → AGENTS.md` symlink — overlay, never overwrite
+
+Forks of repos that use the upstream "edit AGENTS.md only" symlink convention (openclaw, some Anthropic-aligned repos) ship a symlink: root `CLAUDE.md` (mode `120000`) points at `AGENTS.md`. The 9-byte file content is the symlink target, **not** a stub. Overwriting it diverges from upstream and breaks future merges.
+
+**Pattern:**
+- Keep root `CLAUDE.md` symlink untouched.
+- Put the PMOVES overlay at **`.claude/CLAUDE.md`** (same pattern other PMOVES submodules use).
+- If `.claude/` is in `.gitignore` (typical for forks shipping agent-private workspaces), change `.claude/` → `.claude/*` and add `!.claude/CLAUDE.md` so the one shared context file can be tracked while everything else (settings, history, caches) stays out.
+- The negate rule must follow the parent directory ignore, and you must use `.claude/*` not `.claude/` — git won't re-include files under a fully-ignored directory.
+
+**Reference:** PMOVES-ClawZ#2 set the pattern.
+
+### 2. `gh pr create` "no commits between" after fresh push — retry with explicit refs
+
+Symptom: immediately after `git push -u origin <branch>` succeeds, `gh pr create --base <base> --head <branch>` fails with:
+```
+GraphQL: Head sha can't be blank, Base sha can't be blank, No commits between main and <branch>, Head ref must be a branch
+```
+
+The branch is on origin, has commits diverged, and `git log origin/main..origin/<branch>` shows them — it's a `gh` lookup race, not a real divergence problem.
+
+**Fix:** retry the create with explicit `--repo` and the `org:branch` head form:
+```bash
+gh pr create \
+  --repo POWERFULMOVES/<repo> \
+  --base <base> \
+  --head POWERFULMOVES:<branch> \
+  --title "..." --body "..."
+```
+
+Don't loop or wait — one retry with the explicit form is usually enough.
+
+### 3. Fleet audit → grep before opening per-finding PRs
+
+When a CLAUDE.md / docs audit (`claude-md-management:claude-md-improver`) cites one line of drift in a submodule, **grep the whole submodule for the same string before opening the PR**. The audit's per-file rubric scans one file at a time and reports the most visible drift, but the same anti-pattern usually repeats across siblings.
+
+**Example:** the audit flagged `tensorzero:3000/v1` in DoX `.claude/CLAUDE.md` line 272. A repo-wide grep showed **four** files with the same drift: `CLAUDE.md`, `docs/AGENT_GUIDE.md`, `docs/DOCKING_GUIDE.md`, `docs/agents/LEVEL3_AGENTS.md`. One PR cleaning four files is far better than four PRs chasing the same defect.
+
+**Workflow:**
+```bash
+# After the audit names a single-line finding in <submodule>:
+cd <submodule>
+git grep -nE '<the-drifted-string>' -- '*.md' '*.yml' '*.toml' '*.ts'  # widen as needed
+# Bundle every occurrence into one focused PR titled by the concern, not the file.
+```
+
+This pattern compounds with [[squash-merge rebase]] — fewer PRs against a submodule means fewer chances of base/dependent collisions when bumping the parent gitlink.
+
 ## PR Review & Merge Workflow
 
 **Skill chain:**

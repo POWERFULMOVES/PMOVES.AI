@@ -1,0 +1,612 @@
+version: 1
+id: pmoves_4090_web
+name: pmoves_4090_web
+servers:
+    - type: image
+      secrets: default
+      image: mcp/context7@sha256:1174e6a29634a83b2be93ac1fefabf63265f498c02c72201fe3464e687dd8836
+      snapshot:
+        server:
+            name: context7
+            type: server
+            image: mcp/context7@sha256:1174e6a29634a83b2be93ac1fefabf63265f498c02c72201fe3464e687dd8836
+            description: Context7 Platform -- Up-to-date code documentation for LLMs and AI code editors.
+            title: Context7
+            icon: https://avatars.githubusercontent.com/u/74989412?s=200&v=4
+            readme: http://desktop.docker.com/mcp/catalog/v3/readme/context7.md
+            remote: {}
+            env:
+                - name: MCP_TRANSPORT
+                  value: stdio
+            tools:
+                - name: get-library-docs
+                  description: ""
+                - name: resolve-library-id
+                  description: ""
+            metadata:
+                pulls: 383509
+                stars: 22
+                githubStars: 53398
+                category: devops
+                tags:
+                    - context7
+                    - devops
+                license: MIT License
+                owner: upstash
+    - type: image
+      secrets: default
+      image: mcp/e2b@sha256:ff4f9608cc4cbe7c477514a4b04e5f2ff5d3beac13ac2d475cf3c00b0be12a76
+      snapshot:
+        server:
+            name: e2b
+            type: server
+            image: mcp/e2b@sha256:ff4f9608cc4cbe7c477514a4b04e5f2ff5d3beac13ac2d475cf3c00b0be12a76
+            description: Giving Claude ability to run code with E2B via MCP (Model Context Protocol).
+            title: E2B
+            icon: https://avatars.githubusercontent.com/u/129434473?s=200&v=4
+            readme: http://desktop.docker.com/mcp/catalog/v3/readme/e2b.md
+            remote: {}
+            secrets:
+                - name: e2b.api_key
+                  env: E2B_API_KEY
+            tools:
+                - name: run_code
+                  description: ""
+            metadata:
+                pulls: 8212
+                stars: 2
+                githubStars: 393
+                category: devops
+                tags:
+                    - e2b
+                    - devops
+                license: Apache License 2.0
+                owner: e2b-dev
+    - type: image
+      secrets: default
+      image: mcp/fetch@sha256:0b2e4fb020b591dcc9f49aac11e2380b3820f0a097e7d370a5227ed8bbe5118c
+      snapshot:
+        server:
+            name: fetch
+            type: server
+            image: mcp/fetch@sha256:0b2e4fb020b591dcc9f49aac11e2380b3820f0a097e7d370a5227ed8bbe5118c
+            description: Fetches a URL from the internet and extracts its contents as markdown.
+            title: Fetch (Reference)
+            icon: https://avatars.githubusercontent.com/u/182288589?s=200&v=4
+            readme: http://desktop.docker.com/mcp/catalog/v3/readme/fetch.md
+            remote: {}
+            tools:
+                - name: fetch
+                  description: ""
+            metadata:
+                pulls: 1458513
+                stars: 54
+                githubStars: 84274
+                category: devops
+                tags:
+                    - fetch
+                    - devops
+                license: Other
+                owner: modelcontextprotocol
+    - type: image
+      config:
+        paths:
+            - C:\POWERFULMOVES\
+            - C:\Users\russe\OneDrive\Documents\GitHub
+      secrets: default
+      image: mcp/filesystem@sha256:35fcf0217ca0d5bf7b0a5bd68fb3b89e08174676c0e0b4f431604512cf7b3f67
+      snapshot:
+        server:
+            name: filesystem
+            type: server
+            image: mcp/filesystem@sha256:35fcf0217ca0d5bf7b0a5bd68fb3b89e08174676c0e0b4f431604512cf7b3f67
+            description: Local filesystem access with configurable allowed paths.
+            title: Filesystem (Reference)
+            icon: https://avatars.githubusercontent.com/u/182288589?s=200&v=4
+            readme: http://desktop.docker.com/mcp/catalog/v3/readme/filesystem.md
+            remote: {}
+            command:
+                - '{{filesystem.paths|volume-target|into}}'
+            volumes:
+                - '{{filesystem.paths|volume|into}}'
+            disableNetwork: true
+            tools:
+                - name: create_directory
+                  description: ""
+                - name: directory_tree
+                  description: ""
+                - name: edit_file
+                  description: ""
+                - name: get_file_info
+                  description: ""
+                - name: list_allowed_directories
+                  description: ""
+                - name: list_directory
+                  description: ""
+                - name: move_file
+                  description: ""
+                - name: read_file
+                  description: ""
+                - name: read_multiple_files
+                  description: ""
+                - name: search_files
+                  description: ""
+                - name: write_file
+                  description: ""
+            config:
+                - description: The MCP server is allowed to access these paths
+                  name: filesystem
+                  properties:
+                    paths:
+                        items:
+                            type: string
+                        type: array
+                  required:
+                    - paths
+                  type: object
+            metadata:
+                pulls: 164036
+                stars: 29
+                githubStars: 84274
+                category: devops
+                tags:
+                    - filesystem
+                    - devops
+                license: Other
+                owner: modelcontextprotocol
+    - type: image
+      secrets: default
+      image: mcp/api-mcp-server@sha256:53ba798e692f99f16af3ce9dd665241251828db9de0c786f1c28371d92fa64cf
+      snapshot:
+        server:
+            name: hostinger-mcp-server
+            type: server
+            image: mcp/api-mcp-server@sha256:53ba798e692f99f16af3ce9dd665241251828db9de0c786f1c28371d92fa64cf
+            description: Interact with Hostinger services over the Hostinger API.
+            title: Hostinger API
+            icon: https://avatars.githubusercontent.com/u/2630767?v=4
+            readme: http://desktop.docker.com/mcp/catalog/v3/readme/hostinger-mcp-server.md
+            remote: {}
+            secrets:
+                - name: hostinger-mcp-server.api_token
+                  env: APITOKEN
+            tools:
+                - name: DNS_deleteDNSRecordsV1
+                  description: ""
+                - name: DNS_getDNSRecordsV1
+                  description: ""
+                - name: DNS_getDNSSnapshotListV1
+                  description: ""
+                - name: DNS_getDNSSnapshotV1
+                  description: ""
+                - name: DNS_resetDNSRecordsV1
+                  description: ""
+                - name: DNS_restoreDNSSnapshotV1
+                  description: ""
+                - name: DNS_updateDNSRecordsV1
+                  description: ""
+                - name: DNS_validateDNSRecordsV1
+                  description: ""
+                - name: VPS_activateFirewallV1
+                  description: ""
+                - name: VPS_attachPublicKeyV1
+                  description: ""
+                - name: VPS_createFirewallRuleV1
+                  description: ""
+                - name: VPS_createNewFirewallV1
+                  description: ""
+                - name: VPS_createNewProjectV1
+                  description: ""
+                - name: VPS_createPTRRecordV1
+                  description: ""
+                - name: VPS_createPostInstallScriptV1
+                  description: ""
+                - name: VPS_createPublicKeyV1
+                  description: ""
+                - name: VPS_createSnapshotV1
+                  description: ""
+                - name: VPS_deactivateFirewallV1
+                  description: ""
+                - name: VPS_deleteFirewallRuleV1
+                  description: ""
+                - name: VPS_deleteFirewallV1
+                  description: ""
+                - name: VPS_deletePTRRecordV1
+                  description: ""
+                - name: VPS_deletePostInstallScriptV1
+                  description: ""
+                - name: VPS_deleteProjectV1
+                  description: ""
+                - name: VPS_deletePublicKeyV1
+                  description: ""
+                - name: VPS_deleteSnapshotV1
+                  description: ""
+                - name: VPS_getActionDetailsV1
+                  description: ""
+                - name: VPS_getActionsV1
+                  description: ""
+                - name: VPS_getAttachedPublicKeysV1
+                  description: ""
+                - name: VPS_getBackupsV1
+                  description: ""
+                - name: VPS_getDataCenterListV1
+                  description: ""
+                - name: VPS_getFirewallDetailsV1
+                  description: ""
+                - name: VPS_getFirewallListV1
+                  description: ""
+                - name: VPS_getMetricsV1
+                  description: ""
+                - name: VPS_getPostInstallScriptV1
+                  description: ""
+                - name: VPS_getPostInstallScriptsV1
+                  description: ""
+                - name: VPS_getProjectContainersV1
+                  description: ""
+                - name: VPS_getProjectContentsV1
+                  description: ""
+                - name: VPS_getProjectListV1
+                  description: ""
+                - name: VPS_getProjectLogsV1
+                  description: ""
+                - name: VPS_getPublicKeysV1
+                  description: ""
+                - name: VPS_getScanMetricsV1
+                  description: ""
+                - name: VPS_getSnapshotV1
+                  description: ""
+                - name: VPS_getTemplateDetailsV1
+                  description: ""
+                - name: VPS_getTemplatesV1
+                  description: ""
+                - name: VPS_getVirtualMachineDetailsV1
+                  description: ""
+                - name: VPS_getVirtualMachinesV1
+                  description: ""
+                - name: VPS_installMonarxV1
+                  description: ""
+                - name: VPS_purchaseNewVirtualMachineV1
+                  description: ""
+                - name: VPS_recreateVirtualMachineV1
+                  description: ""
+                - name: VPS_resetHostnameV1
+                  description: ""
+                - name: VPS_restartProjectV1
+                  description: ""
+                - name: VPS_restartVirtualMachineV1
+                  description: ""
+                - name: VPS_restoreBackupV1
+                  description: ""
+                - name: VPS_restoreSnapshotV1
+                  description: ""
+                - name: VPS_setHostnameV1
+                  description: ""
+                - name: VPS_setNameserversV1
+                  description: ""
+                - name: VPS_setPanelPasswordV1
+                  description: ""
+                - name: VPS_setRootPasswordV1
+                  description: ""
+                - name: VPS_setupPurchasedVirtualMachineV1
+                  description: ""
+                - name: VPS_startProjectV1
+                  description: ""
+                - name: VPS_startRecoveryModeV1
+                  description: ""
+                - name: VPS_startVirtualMachineV1
+                  description: ""
+                - name: VPS_stopProjectV1
+                  description: ""
+                - name: VPS_stopRecoveryModeV1
+                  description: ""
+                - name: VPS_stopVirtualMachineV1
+                  description: ""
+                - name: VPS_syncFirewallV1
+                  description: ""
+                - name: VPS_uninstallMonarxV1
+                  description: ""
+                - name: VPS_updateFirewallRuleV1
+                  description: ""
+                - name: VPS_updatePostInstallScriptV1
+                  description: ""
+                - name: VPS_updateProjectV1
+                  description: ""
+                - name: billing_deletePaymentMethodV1
+                  description: ""
+                - name: billing_disableAutoRenewalV1
+                  description: ""
+                - name: billing_enableAutoRenewalV1
+                  description: ""
+                - name: billing_getCatalogItemListV1
+                  description: ""
+                - name: billing_getPaymentMethodListV1
+                  description: ""
+                - name: billing_getSubscriptionListV1
+                  description: ""
+                - name: billing_setDefaultPaymentMethodV1
+                  description: ""
+                - name: domains_checkDomainAvailabilityV1
+                  description: ""
+                - name: domains_createDomainForwardingV1
+                  description: ""
+                - name: domains_createWHOISProfileV1
+                  description: ""
+                - name: domains_deleteDomainForwardingV1
+                  description: ""
+                - name: domains_deleteWHOISProfileV1
+                  description: ""
+                - name: domains_disableDomainLockV1
+                  description: ""
+                - name: domains_disablePrivacyProtectionV1
+                  description: ""
+                - name: domains_enableDomainLockV1
+                  description: ""
+                - name: domains_enablePrivacyProtectionV1
+                  description: ""
+                - name: domains_getDomainDetailsV1
+                  description: ""
+                - name: domains_getDomainForwardingV1
+                  description: ""
+                - name: domains_getDomainListV1
+                  description: ""
+                - name: domains_getWHOISProfileListV1
+                  description: ""
+                - name: domains_getWHOISProfileUsageV1
+                  description: ""
+                - name: domains_getWHOISProfileV1
+                  description: ""
+                - name: domains_purchaseNewDomainV1
+                  description: ""
+                - name: domains_updateDomainNameserversV1
+                  description: ""
+                - name: hosting_createWebsiteV1
+                  description: ""
+                - name: hosting_deployJsApplication
+                  description: ""
+                - name: hosting_deployStaticWebsite
+                  description: ""
+                - name: hosting_deployWordpressPlugin
+                  description: ""
+                - name: hosting_deployWordpressTheme
+                  description: ""
+                - name: hosting_generateAFreeSubdomainV1
+                  description: ""
+                - name: hosting_importWordpressWebsite
+                  description: ""
+                - name: hosting_listAvailableDatacentersV1
+                  description: ""
+                - name: hosting_listJsDeployments
+                  description: ""
+                - name: hosting_listOrdersV1
+                  description: ""
+                - name: hosting_listWebsitesV1
+                  description: ""
+                - name: hosting_showJsDeploymentLogs
+                  description: ""
+                - name: hosting_verifyDomainOwnershipV1
+                  description: ""
+                - name: reach_createANewContactSegmentV1
+                  description: ""
+                - name: reach_createANewContactV1
+                  description: ""
+                - name: reach_createNewContactsV1
+                  description: ""
+                - name: reach_deleteAContactV1
+                  description: ""
+                - name: reach_getSegmentDetailsV1
+                  description: ""
+                - name: reach_listContactGroupsV1
+                  description: ""
+                - name: reach_listContactsV1
+                  description: ""
+                - name: reach_listProfilesV1
+                  description: ""
+                - name: reach_listSegmentContactsV1
+                  description: ""
+                - name: reach_listSegmentsV1
+                  description: ""
+                - name: v2_getDomainVerificationsDIRECT
+                  description: ""
+            metadata:
+                pulls: 11102
+                stars: 1
+                githubStars: 84
+                category: devops
+                tags:
+                    - devops
+                license: MIT License
+                owner: hostinger
+    - type: image
+      secrets: default
+      image: mcp/memory@sha256:db0c2db07a44b6797eba7a832b1bda142ffc899588aae82c92780cbb2252407f
+      snapshot:
+        server:
+            name: memory
+            type: server
+            image: mcp/memory@sha256:db0c2db07a44b6797eba7a832b1bda142ffc899588aae82c92780cbb2252407f
+            description: Knowledge graph-based persistent memory system.
+            title: Memory (Reference)
+            icon: https://cdn.jsdelivr.net/npm/simple-icons@v7/icons/knowledgebase.svg
+            readme: http://desktop.docker.com/mcp/catalog/v3/readme/memory.md
+            remote: {}
+            volumes:
+                - claude-memory:/app/dist
+            tools:
+                - name: add_observations
+                  description: ""
+                - name: create_entities
+                  description: ""
+                - name: create_relations
+                  description: ""
+                - name: delete_entities
+                  description: ""
+                - name: delete_observations
+                  description: ""
+                - name: delete_relations
+                  description: ""
+                - name: open_nodes
+                  description: ""
+                - name: read_graph
+                  description: ""
+                - name: search_nodes
+                  description: ""
+            metadata:
+                pulls: 435432
+                stars: 27
+                githubStars: 84274
+                category: ai
+                tags:
+                    - mcp
+                    - ai
+                license: Other
+                owner: modelcontextprotocol
+    - type: image
+      secrets: default
+      image: mcp/puppeteer@sha256:c1e2bda6d92d400e900e497b743552a670a33631799c0a6478e91096e389bd27
+      snapshot:
+        server:
+            name: puppeteer
+            type: server
+            image: mcp/puppeteer@sha256:c1e2bda6d92d400e900e497b743552a670a33631799c0a6478e91096e389bd27
+            description: Browser automation and web scraping using Puppeteer.
+            title: Puppeteer (Archived)
+            icon: https://avatars.githubusercontent.com/u/6906516?s=200&v=4
+            readme: http://desktop.docker.com/mcp/catalog/v3/readme/puppeteer.md
+            remote: {}
+            env:
+                - name: DOCKER_CONTAINER
+                  value: "true"
+            tools:
+                - name: puppeteer_click
+                  description: ""
+                - name: puppeteer_evaluate
+                  description: ""
+                - name: puppeteer_fill
+                  description: ""
+                - name: puppeteer_hover
+                  description: ""
+                - name: puppeteer_navigate
+                  description: ""
+                - name: puppeteer_screenshot
+                  description: ""
+                - name: puppeteer_select
+                  description: ""
+            metadata:
+                pulls: 200098
+                stars: 34
+                githubStars: 84274
+                category: devops
+                tags:
+                    - puppeteer
+                    - devops
+                license: Other
+                owner: modelcontextprotocol
+    - type: image
+      secrets: default
+      image: mcp/sequentialthinking@sha256:cd3174b2ecf37738654cf7671fb1b719a225c40a78274817da00c4241f465e5f
+      snapshot:
+        server:
+            name: sequentialthinking
+            type: server
+            image: mcp/sequentialthinking@sha256:cd3174b2ecf37738654cf7671fb1b719a225c40a78274817da00c4241f465e5f
+            description: Dynamic and reflective problem-solving through thought sequences.
+            title: Sequential Thinking (Reference)
+            icon: https://avatars.githubusercontent.com/u/182288589?s=200&v=4
+            readme: http://desktop.docker.com/mcp/catalog/v3/readme/sequentialthinking.md
+            remote: {}
+            tools:
+                - name: sequentialthinking
+                  description: ""
+            metadata:
+                pulls: 298953
+                stars: 30
+                githubStars: 84274
+                category: ai
+                tags:
+                    - mcp
+                    - ai
+                license: Other
+                owner: modelcontextprotocol
+    - type: image
+      secrets: default
+      image: mcp/youtube-transcript@sha256:13e927ab2df1bef7ec0305a5005e36b64cfaf212ee92bf65c440e930a81d37f5
+      snapshot:
+        server:
+            name: youtube_transcript
+            type: server
+            image: mcp/youtube-transcript@sha256:13e927ab2df1bef7ec0305a5005e36b64cfaf212ee92bf65c440e930a81d37f5
+            description: Retrieves transcripts for given YouTube video URLs.
+            title: YouTube Transcripts
+            icon: https://avatars.githubusercontent.com/u/4052902?s=200&v=4
+            readme: http://desktop.docker.com/mcp/catalog/v3/readme/youtube_transcript.md
+            remote: {}
+            tools:
+                - name: get_available_languages
+                  description: ""
+                - name: get_timed_transcript
+                  description: ""
+                - name: get_transcript
+                  description: ""
+                - name: get_video_info
+                  description: ""
+            metadata:
+                pulls: 246747
+                stars: 19
+                githubStars: 374
+                category: search
+                tags:
+                    - youtube
+                    - search
+                license: MIT License
+                owner: jkawamoto
+    - type: remote
+      secrets: default
+      endpoint: https://docs.mcp.cloudflare.com/sse
+      catalog_ref: mcp/docker-mcp-catalog:latest
+      snapshot:
+        server:
+            name: cloudflare-docs
+            type: remote
+            image: ""
+            description: Access the latest documentation on Cloudflare products such as Workers, Pages, R2, D1, KV.
+            title: Cloudflare Docs
+            icon: https://www.cloudflare.com/favicon.ico
+            readme: http://desktop.docker.com/mcp/catalog/v3/readme/cloudflare-docs.md
+            remote:
+                url: https://docs.mcp.cloudflare.com/sse
+                transport_type: sse
+            tools:
+                - name: search_cloudflare_documentation
+                  description: |-
+                    Search the Cloudflare documentation.
+
+                    		This tool should be used to answer any question about Cloudflare products or features, including:
+                    		- Workers, Pages, R2, Images, Stream, D1, Durable Objects, KV, Workflows, Hyperdrive, Queues
+                    		- AI Search, Workers AI, Vectorize, AI Gateway, Browser Rendering
+                    		- Zero Trust, Access, Tunnel, Gateway, Browser Isolation, WARP, DDOS, Magic Transit, Magic WAN
+                    		- CDN, Cache, DNS, Zaraz, Argo, Rulesets, Terraform, Account and Billing
+
+                    		Results are returned as semantically similar chunks to the query.
+                  arguments:
+                    - name: query
+                      type: string
+                      desc: ""
+                  annotations:
+                    title: Search Cloudflare docs
+                - name: migrate_pages_to_workers_guide
+                  description: ALWAYS read this guide before migrating Pages projects to Workers.
+                  arguments: []
+                  annotations:
+                    title: Get Pages migration guide
+            metadata:
+                category: documentation
+                tags:
+                    - documentation
+                    - cloudflare
+                    - cloud
+                    - remote
+                license: Apache License 2.0
+                owner: docker
+secrets:
+    default:
+        provider: docker-desktop-store

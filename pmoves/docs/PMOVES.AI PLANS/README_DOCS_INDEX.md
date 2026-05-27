@@ -1,5 +1,5 @@
 # PMOVES v5 • Documentation Index
-_Last updated: 2026-03-26 — data services provisioning + release cadence refresh_
+_Last updated: 2026-05-22 — Tokenism plan alignment refresh_
 
 ## Directory Map
 
@@ -42,6 +42,7 @@ After the 2026-02-18 reorganization, `pmoves/docs/` is organized as:
 - **Model Source Of Truth (Registry + Profiles + Tooling)** — `../MODEL_SOURCE_OF_TRUTH.md`
 - **Model Fabric Contract (Cross-Integration Abstraction Policy)** — `../MODEL_FABRIC_CONTRACT.md`
   - includes enforced fallback order (`local -> Ollama Cloud -> Cloudflare free tier -> coding-plan lanes`) plus Graphiti+CHIT PR review rails.
+- **Tokenism Plan Alignment (CHIT hardening reality check)** — `../TOKENISM_PLAN_ALIGNMENT_2026-05-22.md`
 - **Python Images Toolchain Canary (weekly build+Trivy bump lane)** — `../../../docs/hardening/PYTHON_IMAGES_TOOLCHAIN_CANARY.md`
 - **Submodule Integration Contract** — `../submodules/SUBMODULE_INTEGRATION_CONTRACT.md`
 - **Submodule Production Release Checklist (deterministic gates + merge order)** — `../integrations/SUBMODULE_PRODUCTION_RELEASE_CHECKLIST.md`

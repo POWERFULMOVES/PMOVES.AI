@@ -13,7 +13,7 @@ Every signed action in PMOVES.AI — every `git commit`, every CHIT trail entry,
 - **Machine-loadable (ML)**: the cryptographic credential that *the verifier* (CI, branch protection, sigstore, NATS HMAC) checks. SSH fingerprint, OpenSSH allowed-signers entry, GPG key id, GitHub App installation id, CI runner label.
 - **Human-readable (H)**: the identity that *the operator* recognizes at a glance and that the trail records for audit. agent_id, glyph, color, voice, role.
 
-A **Signing Identity Card** binds both halves into one record. The trail handshake (`signing_card_id` field on `signature.v2`) lets any audit walk from a CHIT entry → its card → independently verify both halves agree.
+A **Signing Identity Card** binds both halves into one record. The trail handshake (`signing_card_id` field on `signature.v1`) lets any audit walk from a CHIT entry → its card → independently verify both halves agree.
 
 ## The 5×5 invariant
 
@@ -28,7 +28,7 @@ The four channels:
 | **Agent emit** | "Here is who I am, here is what I'm signing with" | Agent reads `signing_identity_cards.yaml`, looks up its `agent_id`, declares `signing_card_id` in the CHIT trail entry it produces |
 | **Operator confirm** | "I recognize this glyph + role + agent_id" | Trail entry renders glyph/color/voice from the card; operator visually confirms before approving |
 | **CI verify** | "The signature on this commit matches the ML half of this card" | branch protection runs `git verify-commit` against `allowed_signers`; runner-label gates on `ci_runner_label` for self-hosted lanes |
-| **Trail record** | "The card_id is recorded alongside the signature for post-hoc audit" | `signature.v2.signing_card_id` (uuid) stamped by `pmoves/tools/sign_trail.py` |
+| **Trail record** | "The card_id is recorded alongside the signature for post-hoc audit" | `signature.v1.signing_card_id` (uuid) stamped by `pmoves/tools/sign_trail.py` |
 
 ## How to issue a new card (operator)
 
@@ -66,7 +66,7 @@ Every CHIT trail entry written by `pmoves/tools/sign_trail.py` will (after Phase
 
 1. Read `pmoves/config/signing_identity_cards.yaml`
 2. Find the active card whose `h.agent_id` matches the calling `--agent-id`
-3. Stamp `signing_card_id` on the `signature.v2` payload
+3. Stamp `signing_card_id` on the `signature.v1` payload
 4. Emit `agent.graphiti.signed.v1` with the card_id included
 
 If no active card exists for the agent_id, the signing tool emits a stderr warning and (in mandatory mode) refuses to sign. This makes "agent without a card" a visible audit failure, not a silent gap.

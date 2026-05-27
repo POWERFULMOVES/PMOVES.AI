@@ -2,6 +2,8 @@
 
 > Technology-Architecture-Context tree for the ToKenism economic simulation and CHIT attribution engine.
 
+**Last reviewed:** 2026-05-22 against `PMOVES-ToKenism-Multi/integrations/contracts/chit/` and the PMOVES tokenism-simulator service.
+
 ## Service Identity
 
 | Field | Value |
@@ -19,16 +21,15 @@
 
 ToKenism is not a standalone service — it is a **CHIT attribution engine** comprising:
 
-1. **9 CHIT TypeScript modules** (`integrations/contracts/chit/`)
-   - `chitEncoder.ts` — CGP packet encoding
-   - `chitDecoder.ts` — CGP packet decoding
-   - `dirichletAttribution.ts` — Dirichlet-weighted contribution scoring
-   - `merkleAttribution.ts` — Merkle tree verification
-   - `chitTypes.ts` — Type definitions for CGP v0.1/v0.2
-   - `musicMapping.ts` — BPM/frequency/note conversion utilities
-   - `poincareDisk.ts` — Hyperbolic geometry embeddings
-   - `zetaSpectrum.ts` — Zeta-inspired spectral filtering
-   - `chitValidator.ts` — CGP packet validation
+1. **CHIT TypeScript modules** (`integrations/contracts/chit/`)
+   - `dirichlet-weights.ts` — Dirichlet-weighted contribution scoring
+   - `shape-attribution.ts` — action records plus SHA-256 / keccak256 Merkle proof verification
+   - `hyperbolic-encoder.ts` — Poincare disk embedding support
+   - `cgp-generator.ts` — deterministic CGP document generation
+   - `swarm-attribution.ts` — bounded fitness and population metadata tracking
+   - `zeta-filter.ts` — zeta-zero-weighted heuristic spectral transform
+   - `chit-nats-publisher.ts` — schema-validated NATS publishing
+   - `index.ts` — factory, exports, and default subject constants
 
 2. **Smart contracts** (Hardhat/Solidity)
    - FoodUSD, GroToken, GroupPurchase, CoopGovernor, RewardsPool
@@ -61,9 +62,12 @@ ToKenism is not a standalone service — it is a **CHIT attribution engine** com
 | `tokenism.cgp.weekly.v1` | Publishes | Weekly CGP economic simulation report |
 | `tokenism.attribution.recorded.v1` | Publishes | Real-time attribution action recorded |
 | `tokenism.cgp.ready.v1` | Publishes | Generic CGP packet ready for consumption |
-| `tokenism.swarm.population.v1` | Publishes | Swarm optimization population update |
-| `tokenism.geometry.event.v1` | (consumed from Flute) | Voice synthesis attribution events |
-| `tokenism.prosodic.bpm.v1` | (consumed from Flute) | BPM-encoded prosodic timeline events |
+| `tokenism.swarm.population.v1` | Publishes | Swarm fitness/population metadata update |
+| `tokenism.settlement.requested.v1` | Publishes | Signed settlement batch planned from CGP attribution |
+| `tokenism.settlement.recorded.v1` | Publishes | Settlement instruction recorded or idempotently skipped |
+| `tokenism.settlement.failed.v1` | Publishes | Settlement instruction failure with retry metadata |
+| `tokenism.geometry.event.v1` | Consumed from Flute | Legacy direct voice geometry event; still used by services but not one of the hardened ToKenism publisher schemas |
+| `tokenism.prosodic.bpm.v1` | Consumed from Flute | BPM-encoded prosodic timeline event outside the ToKenism CHIT module |
 
 ## CHIT Integration Status
 
@@ -71,28 +75,28 @@ ToKenism **is** the CHIT engine — all CHIT integration radiates from here.
 
 | Capability | Status | Notes |
 |------------|--------|-------|
-| CGP v0.1 encoding | Active | Via `chitEncoder.ts` |
-| CGP v0.2 attribution | Active | Dirichlet + Merkle extensions |
-| Dirichlet weighting | Active | `dirichletAttribution.ts` |
-| Merkle verification | Active | `merkleAttribution.ts` |
-| Hyperbolic embedding | Active | `poincareDisk.ts` |
-| Zeta spectral filtering | Active | `zetaSpectrum.ts` |
-| BPM/music mapping | Active | `musicMapping.ts` |
-| Smart contract attribution | Active | On-chain verification |
+| CGP v0.2/v1.0 generation | Active | `cgp-generator.ts`; schemas accept both current compatibility specs |
+| Dirichlet weighting | Active | `dirichlet-weights.ts` |
+| Merkle verification | Active | `shape-attribution.ts`; real SHA-256 and keccak256, order-preserving proof paths |
+| Hyperbolic embedding | Partial | `hyperbolic-encoder.ts`; embedding support, not a proof-backed fairness layer |
+| Swarm metadata | Active | `swarm-attribution.ts`; records bounded fitness and population summaries only |
+| Zeta spectral filtering | Heuristic | `zeta-filter.ts`; method design still required before stronger claims |
+| BPM/prosodic mapping | External | Implemented in PMOVES voice/prosodic tools, not a ToKenism CHIT module |
+| Smart contract attribution | Approval-gated settlement interface | Contract models, settlement schemas, Firefly transaction drafts, manifest-backed chain call drafts, signed deployment attestation gates, live approval gates, and schema-validated result publishing exist; production activation remains gated |
 
 ## Production Audit Checklist
 
 | Requirement | Status | Notes |
 |-------------|--------|-------|
 | `/healthz` endpoint | N/A | Library, not service |
-| `/metrics` (Prometheus) | None | No metrics endpoint |
+| `/metrics` (Prometheus) | N/A | Library has no endpoint; Flask simulator has service metrics |
 | Auth (JWT/Bearer) | Partial | Smart contract auth only |
 | Docker hardening | Yes | Standard patterns applied |
 | NATS auth | Yes | Uses authenticated NATS |
 | `env.shared` format | Resolved | Docker-compatible `KEY=value` syntax in `PMOVES-ToKenism-Multi/env.shared` |
-| Hardhat CI | **Issue** | Wrong `working-directory` in GitHub Actions |
-| Temp files | **Issue** | 4 `.new` temp files need cleanup |
-| Duplicate layout | **Issue** | Duplicate `layout.tsx` found |
+| Hardhat CI | Partial | Local Hardhat harness verified; CI wiring still needs review |
+| Temp files | Unknown | Re-audit before treating old temp-file count as current |
+| Duplicate layout | Unknown | Re-audit before treating old duplicate-layout count as current |
 
 ## Security Stance
 
@@ -100,28 +104,17 @@ ToKenism **is** the CHIT engine — all CHIT integration radiates from here.
 |---------|----------|--------|
 | `export` syntax in `env.shared` | P1 | **Resolved** — no `export` prefix in `PMOVES-ToKenism-Multi/env.shared` |
 | NATS_URL missing credentials | P1 | **Resolved** — defaults to `nats://nats:pmoves@nats:4222` |
-| Hardhat CI wrong `working-directory` | P2 | **Open** |
-| 4 `.new` temp files | P3 | Cleanup needed |
+| Hardhat CI / local contract test coverage | P2 | **Partial** — local harness passing; CI wiring still open |
+| Old temp-file and duplicate-layout findings | P3 | Re-audit required; do not reuse stale counts without verification |
 
-## musicMapping.ts ↔ Prosodic Integration
+## Prosodic Integration
 
-The `musicMapping.ts` module provides the mathematical foundation for BPM-prosodic encoding:
+The old ToKenism TAC referenced a `musicMapping.ts` module, but that file is not part of the current CHIT TypeScript module set. BPM/prosodic encoding now lives in PMOVES voice/prosodic services and tools, with Tokenism consuming or publishing compatible NATS events where required.
 
-| Function | Prosodic Use | Description |
-|----------|-------------|-------------|
-| `midiToFreq()` | Voice pitch | Convert MIDI note to Hz for TTS pitch |
-| `freqToY()` | Pitch contour visualization | Map Hz to visual Y coordinate |
-| `buildTimeline()` | BPM timeline from chunks | Convert ProsodicChunk[] to TimelinePoint[] |
-| Scale definitions | Emotional coloring | Major=happy, Minor=sad, Pentatonic=neutral |
-
-**Scale → Prosodic Boundary Mapping:**
-
-| Scale | Boundary Context | Musical Feel |
-|-------|-----------------|-------------|
-| `pentatonicMajor` | Default speech | Neutral, pleasant |
-| `major` | Excited/positive content | Bright, uplifting |
-| `minor` | Serious/sad content | Somber, reflective |
-| `chromatic` | Technical/rapid content | Dense, information-rich |
+Current relevant subjects:
+- `tokenism.geometry.event.v1` for legacy/direct voice geometry events.
+- `tokenism.prosodic.bpm.v1` for BPM-encoded prosodic timelines.
+- `geometry.cgp.v1` for canonical geometry CGP traffic.
 
 ## Cross-Links
 
@@ -136,9 +129,10 @@ The `musicMapping.ts` module provides the mathematical foundation for BPM-prosod
 ## Open Items
 
 - Live ToKenism/Flute smoke should confirm `tokenism.prosodic.bpm.v1` packets after W6-P2 publish path
-- Hardhat CI wrong `working-directory`
-- 4 `.new` temp files need cleanup
-- Duplicate `layout.tsx` found — needs deduplication
+- Wire local Hardhat harness into CI working directory
+- Re-run temp-file and duplicate-layout audits before acting on stale counts
+- Provide real signed production deployment manifests, RPC/wallet custody references, and FireFly environment binding
+- Keep zeta labeled heuristic until method design is reviewed
 - Not registered as an agent in `agent_registry.yaml` — operates as library
 
 <!-- GRAPHITI_MARK: CLAUDE-OPUS::TAC-TOPOLOGY-AUDIT::2026-02-20 -->
