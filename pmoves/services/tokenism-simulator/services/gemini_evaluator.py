@@ -25,7 +25,7 @@ class GeminiEvoSwarmEvaluator:
             logger.warning("GEMINI_API_KEY not set. GeminiEvoSwarmEvaluator will not function.")
             self.client = None
         else:
-            self.client = genai.Client(api_key=self.key)
+            self.client = genai.Client(api_key=self.api_key)
 
     async def start(self):
         if not self.client:
