@@ -13,6 +13,9 @@ vram_budget:
   always_resident: qwen3-embedding:8b
 
 servers:
+  hostinger:
+    image: mcp/hostinger-mcp-server
+
   pmoves-cipher:
     transport: sse
     url: "http://localhost:8105/mcp/sse"

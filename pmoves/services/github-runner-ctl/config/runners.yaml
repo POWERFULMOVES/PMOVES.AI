@@ -44,6 +44,34 @@ runners:
       - POWERFULMOVES/PMOVES.AI
       - POWERFULMOVES/PMOVES-DoX
 
+  ai-lab-4090-docker:
+    location: local
+    labels:
+      - self-hosted
+      - ai-lab
+      - Linux
+      - X64
+    capabilities:
+      ram: "16GB"
+      docker: "true"
+      runner_count: "2"
+    workloads:
+      - branch-trail-emit
+      - ci-light
+      - pr-triage
+    # health_url intentionally omitted: these runners have no HTTP healthz
+    # endpoint. app.py:178 (`if config.get("health_url"):`) skips the probe
+    # when the key is absent, and the Pydantic model treats it as Optional.
+    # Observe liveness via `docker ps` / `make -C pmoves gha-runner-4090-status`.
+    repositories:
+      - POWERFULMOVES/PMOVES.AI
+    notes: >
+      Two Docker-based Linux runners on the 4090 Windows laptop (Docker Desktop / WSL2 backend).
+      Container names: pmoves-4090-runner-1, pmoves-4090-runner-2.
+      Name prefix: pmoves-4090 (random suffix per start via RANDOM_RUNNER_SUFFIX=true).
+      Start/stop: make -C pmoves gha-runner-4090-up / gha-runner-4090-down.
+      Compose: pmoves/docker/runner/docker-compose.4090.yml.
+
   cloudstartup:
     location: cloud
     labels:
