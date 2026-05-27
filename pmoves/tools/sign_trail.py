@@ -75,8 +75,8 @@ def _resolve_signing_card_id(agent_id: str) -> Optional[str]:
         gate catch it; don't pick one silently here).
 
     Advisory mode per Owner-Decision D: signing continues without a
-    card_id stamp.  When mandatory mode lands the ``signing_card_id``
-    field on signature.v2 is populated by this resolver.
+    card_id stamp.  ``signing_card_id`` is stamped on the ``signature.v1``
+    payload when a card is found; mandatory enforcement is deferred.
     """
     try:
         import yaml  # type: ignore[import-untyped]
