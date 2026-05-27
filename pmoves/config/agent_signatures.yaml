@@ -111,7 +111,7 @@ signatures:
     glyph: "\u233E"              # ⌾ Circle with vertical fill
     color: "#0F766E"
     accent: "#5EEAD4"
-    voice: implementation
+    voice: terse
     co_author: "Coder Claw <coder-claw@pmoves.ai>"
     resonance:
       - coding-agents
