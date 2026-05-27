@@ -32,10 +32,7 @@ BEGIN
   END IF;
 END $$;
 
--- =============================================================================
--- Providers
--- =============================================================================
-
+-- 
 -- Ollama local (primary local provider)
 INSERT INTO pmoves_core.model_providers (name, type, api_base, api_key_env_var, description, active, metadata)
 VALUES (
