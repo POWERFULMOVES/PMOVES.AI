@@ -31,7 +31,10 @@ _REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")
 if _REPO_ROOT not in sys.path:
     sys.path.insert(0, _REPO_ROOT)
 
-from pmoves.services.common.model_fitness import build_model_candidate_record
+from pmoves.services.common.model_fitness import (
+    build_model_candidate_record,
+    require_trusted_agent_identity,
+)
 
 
 @dataclass
@@ -314,6 +317,12 @@ def upsert_to_supabase(fragment: AgentCardFragment) -> bool:
 
 def upsert_candidate_to_supabase(candidate: Dict[str, Any]) -> bool:
     """Upsert a HuggingFace candidate record to Supabase model_candidates."""
+
+    try:
+        require_trusted_agent_identity(str(candidate.get("agent_id") or ""))
+    except ValueError as exc:
+        print(f"Untrusted agent_id for candidate upsert: {exc}", file=sys.stderr)
+        return False
 
     if not candidate.get("signed_trail_ref"):
         print("signed_trail_ref required for candidate persistence; run sign-trail first", file=sys.stderr)

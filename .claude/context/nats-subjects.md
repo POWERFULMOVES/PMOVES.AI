@@ -701,6 +701,23 @@ Example: `ingest.transcript.ready.v1`
 
 ## Voice & Prosodic Subjects
 
+## Tokenism Simulator Subjects
+
+**Service mapping:** Tokenism Simulator listens on host port `8103` mapped to container port `8100`; health endpoint is `GET /healthz`.
+
+**`tokenism.cgp.ready.v1`**
+- **Direction:** Published by Tokenism Simulator -> Consumed by geometry bus workers, extract/deepresearch consumers, and monitoring
+- **Purpose:** Announce a CHIT geometry packet ready for downstream attribution and traversal
+- **Schema:** `pmoves/contracts/schemas/tokenism/cgp.ready.v1.schema.json`
+
+**`tokenism.simulation.result.v1`**
+- **Direction:** Published by Tokenism Simulator -> Consumed by calibration, model-fitness, and monitoring lanes
+- **Purpose:** Economic simulation result metadata
+
+**`tokenism.calibration.result.v1`**
+- **Direction:** Published by Tokenism Simulator -> Consumed by Tokenism calibration observers
+- **Purpose:** Calibration output for simulation/evaluation feedback
+
 **`tokenism.prosodic.bpm.v1`**
 - **Direction:** Published by Flute-Gateway prosodic parser
 - **Purpose:** BPM-encoded prosodic timeline events for CHIT voice attribution

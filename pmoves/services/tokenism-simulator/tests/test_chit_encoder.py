@@ -21,7 +21,8 @@ for _path in (_service_dir, _pmoves_parent):
         sys.path.remove(_path)
 sys.path.insert(0, _pmoves_parent)
 sys.path.insert(0, _service_dir)
-sys.modules.pop("services", None)
+for _module in ("services", "models", "config"):
+    sys.modules.pop(_module, None)
 
 
 def teardown_module(_module):
@@ -41,6 +42,8 @@ def teardown_module(_module):
             sys.modules.pop(module_name, None)
     if _service_dir in sys.path:
         sys.path.remove(_service_dir)
+    if _pmoves_parent in sys.path:
+        sys.path.remove(_pmoves_parent)
 
 from models.simulation import (
     CGPPacket,

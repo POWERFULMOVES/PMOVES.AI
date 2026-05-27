@@ -1477,8 +1477,8 @@ services:
   model-registry:
     <<: *tier-api-hardened
     build:
-      context: ./services/model-registry
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: services/model-registry/Dockerfile
     restart: unless-stopped
     environment:
     - SUPABASE_URL=${MODEL_REGISTRY_SUPABASE_URL:-http://supabase-kong:8000}

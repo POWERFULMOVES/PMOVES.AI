@@ -2,11 +2,11 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "ToKenism Weekly CGP v1",
   "type": "object",
-  "required": ["week", "cgp", "super_node_count", "total_attributions"],
+  "required": ["week", "cgp", "super_node_count", "total_attributions", "cgp_spec"],
   "additionalProperties": false,
   "properties": {
     "week": { "type": "integer", "minimum": 0 },
-    "cgp": { "type": "object", "additionalProperties": true },
+    "cgp": { "$ref": "../geometry/cgp.v1.schema.json" },
     "super_node_count": { "type": "integer", "minimum": 0 },
     "total_attributions": { "type": "integer", "minimum": 0 },
     "gini": { "type": "number", "minimum": 0, "maximum": 1 },

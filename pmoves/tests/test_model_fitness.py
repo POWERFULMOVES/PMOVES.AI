@@ -10,6 +10,7 @@ from pmoves.services.common.model_fitness import (
     normalize_model_fitness,
     verify_agent_identity,
 )
+from pmoves.services.common.events import validate_payload
 from pmoves.tools.hf_model_onboard import ModelCard, generate_model_candidate_record
 
 
@@ -86,6 +87,24 @@ def test_model_fitness_normalization_is_bounded_and_deterministic():
     assert first_metrics["training_score"] > 0.5
 
 
+def test_model_fitness_normalization_tolerates_malformed_metrics():
+    score, metrics = normalize_model_fitness(
+        {
+            "success_rate": "not-a-number",
+            "task_score": float("nan"),
+            "latency_ms": ["bad"],
+            "tokens_per_second": {"bad": True},
+            "cost_per_1k_tokens": "bad",
+        },
+        {"eval_score": "bad", "loss": "bad", "publish_eligible": False},
+    )
+
+    assert 0 <= score <= 1
+    assert metrics["latency_score"] == 1.0
+    assert metrics["throughput_score"] == 0.5
+    assert metrics["cost_score"] == 1.0
+
+
 def test_signed_model_fitness_event_validates_against_contract(monkeypatch):
     monkeypatch.setenv("CHIT_PASSPHRASE", "test-model-fitness-secret")
     event = build_model_fitness_event(
@@ -104,6 +123,7 @@ def test_signed_model_fitness_event_validates_against_contract(monkeypatch):
 
     Draft202012Validator.check_schema(schema)
     Draft202012Validator(schema, format_checker=FormatChecker()).validate(event)
+    validate_payload("model.fitness.recorded.v1", event)
     assert event["signature"]["alg"] == "HMAC-SHA256"
 
 
