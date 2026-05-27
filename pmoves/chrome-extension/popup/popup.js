@@ -104,8 +104,7 @@ $('#tts-btn').addEventListener('click', async () => {
   const castToEdge = $('#cast-to-edge').checked;
   if (!text) return;
   showResult(castToEdge ? 'Routing to Cast Edge...' : 'Synthesizing local audio...');
-  // Force gemini_voice provider logic if cast is checked
-  const opts = castToEdge ? { provider: 'google-genai' } : {};
+  const opts = castToEdge ? { provider: 'vibevoice' } : {};
   const r = await msg({ action: 'fluteSynthesize', text, opts });
   showResult(r?.error ? `Error: ${r.error}` : `Audio: ${r?.duration_seconds ?? '?'}s, format: ${r?.format ?? 'pcm16'}`);
 });
@@ -149,19 +148,19 @@ $('#agent-task-btn').addEventListener('click', async () => {
 
 $('#creator-wan-btn').addEventListener('click', async () => {
   showCreatorResult('Triggering WAN Animate webhook...');
-  const r = await msg({ action: 'creatorWebhook', type: 'wan_to_cgp' });
+  const r = await msg({ action: 'creatorWebhook', type: 'wan-to-cgp' });
   showCreatorResult(r?.error ? `Error: ${r.error}` : 'WAN Animate triggered successfully via n8n.');
 });
 
 $('#creator-qwen-btn').addEventListener('click', async () => {
   showCreatorResult('Triggering Qwen Image Edit+ webhook...');
-  const r = await msg({ action: 'creatorWebhook', type: 'qwen_to_cgp' });
+  const r = await msg({ action: 'creatorWebhook', type: 'qwen-to-cgp' });
   showCreatorResult(r?.error ? `Error: ${r.error}` : 'Qwen Image Edit+ triggered successfully via n8n.');
 });
 
 $('#creator-vibe-btn').addEventListener('click', async () => {
   showCreatorResult('Triggering VibeVoice webhook...');
-  const r = await msg({ action: 'creatorWebhook', type: 'vibevoice_to_cgp' });
+  const r = await msg({ action: 'creatorWebhook', type: 'vibevoice-to-cgp' });
   showCreatorResult(r?.error ? `Error: ${r.error}` : 'VibeVoice triggered successfully via n8n.');
 });
 

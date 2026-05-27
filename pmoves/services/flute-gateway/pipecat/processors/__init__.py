@@ -13,7 +13,11 @@ Processors:
 from .vibevoice import VibeVoiceTTSProcessor
 from .whisper import WhisperSTTProcessor
 from .tensorzero import TensorZeroLLMProcessor
-from .gemini_voice import GeminiVoiceProcessor
+
+try:
+    from .gemini_voice import GeminiVoiceProcessor
+except ImportError:
+    GeminiVoiceProcessor = None  # google-genai not installed
 
 __all__ = [
     "VibeVoiceTTSProcessor",
