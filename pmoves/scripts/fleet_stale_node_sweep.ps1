@@ -31,7 +31,8 @@ $staleThreshold = $now.AddDays(-$StaleDays)
 $peers = @()
 foreach ($prop in $status.Peer.PSObject.Properties) {
   $peer = $prop.Value
-  $lastSeen = if ($peer.LastSeen) { [DateTime]$peer.LastSeen } else { [DateTime]::MinValue }
+  if (-not $peer.LastSeen) { continue }
+  $lastSeen = [DateTime]$peer.LastSeen
   $daysOffline = ($now - $lastSeen).TotalDays
   if ($lastSeen -lt $staleThreshold) {
     $peers += [PSCustomObject]@{
