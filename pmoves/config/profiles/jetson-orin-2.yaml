@@ -11,12 +11,12 @@ hardware:
     cores: 8
     threads: 8
     arch: arm64
-  gpu:
-    type: nvidia-ampere
-    model: "Jetson Orin NX Ampere (integrated)"
-    cuda_cores: 1024
-    compute_capability: "8.7"
-    memory_gb: 16       # unified with CPU
+  gpus:
+    - type: nvidia-ampere
+      model: "Jetson Orin NX Ampere (integrated)"
+      cuda_cores: 1024
+      compute_capability: "8.7"
+      memory_gb: 16       # unified with CPU
   ram_gb: 16
   unified_memory_gb: 16
   storage: "NVMe (M.2)"

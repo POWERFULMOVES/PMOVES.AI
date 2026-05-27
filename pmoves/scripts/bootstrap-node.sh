@@ -164,10 +164,15 @@ if ! docker info >/dev/null 2>&1; then
 fi
 
 if docker network inspect pmoves_bus >/dev/null 2>&1; then
-  ok "pmoves_bus network already exists"
+  actual_subnet=$(docker network inspect pmoves_bus --format '{{range .IPAM.Config}}{{.Subnet}}{{end}}' 2>/dev/null || echo "unknown")
+  if [[ "$actual_subnet" == "172.30.3.0/24" ]]; then
+    ok "pmoves_bus network already exists (subnet=$actual_subnet)"
+  else
+    warn "pmoves_bus exists but subnet mismatch: got=$actual_subnet expected=172.30.3.0/24"
+  fi
 else
-  info "Creating pmoves_bus network (172.30.3.0/24)..."
-  if docker network create --driver bridge --subnet 172.30.3.0/24 pmoves_bus; then
+  info "Creating pmoves_bus network (172.30.3.0/24, internal)..."
+  if docker network create --driver bridge --subnet 172.30.3.0/24 --internal pmoves_bus; then
     ok "pmoves_bus network created — subnet=172.30.3.0/24"
   else
     fail "docker network create pmoves_bus failed — check Docker daemon"
