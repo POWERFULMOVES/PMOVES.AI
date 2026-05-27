@@ -54,6 +54,9 @@ jobs:
           GITHUB_RUN_ID: ${{ github.run_id }}
           RUNNER_NAME: ${{ runner.name }}
           NATS_URL: ${{ secrets.NATS_URL_TAILNET }}
+          NATS_MAX_RECONNECT_ATTEMPTS: 1
+          NATS_RECONNECT_TIME_WAIT: 0.25
+          NATS_CONNECT_TIMEOUT: 2
           CHIT_SIGNING_KEY: ${{ secrets.CHIT_SIGNING_KEY }}
           CHIT_PASSPHRASE: ${{ secrets.CHIT_PASSPHRASE }}
           LOG_LEVEL: INFO

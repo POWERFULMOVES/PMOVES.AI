@@ -64,14 +64,25 @@ CREATE INDEX IF NOT EXISTS idx_model_fitness_lane_score
 ALTER TABLE pmoves_core.model_candidates ENABLE ROW LEVEL SECURITY;
 ALTER TABLE pmoves_core.model_fitness_records ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Public read model candidates" ON pmoves_core.model_candidates
-  FOR SELECT TO public, anon USING (true);
+GRANT SELECT ON pmoves_core.model_candidates TO authenticated;
+GRANT SELECT ON pmoves_core.model_fitness_records TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON pmoves_core.model_candidates TO service_role;
+GRANT SELECT, INSERT, UPDATE, DELETE ON pmoves_core.model_fitness_records TO service_role;
 
-CREATE POLICY "Public read model fitness" ON pmoves_core.model_fitness_records
-  FOR SELECT TO public, anon USING (true);
+CREATE POLICY "Read model candidates" ON pmoves_core.model_candidates
+  FOR SELECT TO authenticated
+  USING (auth.role() = 'authenticated');
+
+CREATE POLICY "Read model fitness" ON pmoves_core.model_fitness_records
+  FOR SELECT TO authenticated
+  USING (auth.role() = 'authenticated');
 
 CREATE POLICY "Service write model candidates" ON pmoves_core.model_candidates
-  FOR ALL TO authenticated USING (true) WITH CHECK (true);
+  FOR ALL TO service_role
+  USING (auth.role() = 'service_role')
+  WITH CHECK (auth.role() = 'service_role');
 
 CREATE POLICY "Service write model fitness" ON pmoves_core.model_fitness_records
-  FOR ALL TO authenticated USING (true) WITH CHECK (true);
+  FOR ALL TO service_role
+  USING (auth.role() = 'service_role')
+  WITH CHECK (auth.role() = 'service_role');

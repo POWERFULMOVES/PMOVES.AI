@@ -37,6 +37,28 @@ logger = logging.getLogger(__name__)
 DEFAULT_NATS_URL = os.getenv("NATS_URL", "")
 
 
+def _env_int(name: str, default: int) -> int:
+    raw = os.getenv(name)
+    if raw is None or raw == "":
+        return default
+    try:
+        return int(raw)
+    except ValueError:
+        logger.warning("%s=%r is not an int; using default %s", name, raw, default)
+        return default
+
+
+def _env_float(name: str, default: float) -> float:
+    raw = os.getenv(name)
+    if raw is None or raw == "":
+        return default
+    try:
+        return float(raw)
+    except ValueError:
+        logger.warning("%s=%r is not a float; using default %s", name, raw, default)
+        return default
+
+
 def _redact_url(url: str) -> str:
     """Return *url* with userinfo removed for safe logging."""
     try:
@@ -63,9 +85,15 @@ class NatsConnectionConfig:
     url: str = field(default_factory=lambda: DEFAULT_NATS_URL)
     servers: Optional[Sequence[str]] = None
     name: Optional[str] = None
-    max_reconnect_attempts: int = 60
-    reconnect_time_wait: float = 2.0
-    connect_timeout: float = 10.0
+    max_reconnect_attempts: int = field(
+        default_factory=lambda: _env_int("NATS_MAX_RECONNECT_ATTEMPTS", 60)
+    )
+    reconnect_time_wait: float = field(
+        default_factory=lambda: _env_float("NATS_RECONNECT_TIME_WAIT", 2.0)
+    )
+    connect_timeout: float = field(
+        default_factory=lambda: _env_float("NATS_CONNECT_TIMEOUT", 10.0)
+    )
     ping_interval: float = 120.0
     max_outstanding_pings: int = 2
     error_cb: Optional[Callable] = None

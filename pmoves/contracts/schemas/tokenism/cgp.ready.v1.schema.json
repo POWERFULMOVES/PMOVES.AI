@@ -5,7 +5,7 @@
   "required": ["cgp", "super_node_count", "source", "cgp_spec", "timestamp"],
   "additionalProperties": false,
   "properties": {
-    "cgp": { "type": "object", "additionalProperties": true },
+    "cgp": { "$ref": "../geometry/cgp.v1.schema.json" },
     "super_node_count": { "type": "integer", "minimum": 0 },
     "week": { "type": "integer", "minimum": 0 },
     "source": { "type": "string", "minLength": 1 },

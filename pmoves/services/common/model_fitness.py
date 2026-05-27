@@ -7,6 +7,7 @@ metrics, but they do not directly activate a model without a signed trail.
 
 from __future__ import annotations
 
+import math
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -67,7 +68,19 @@ def clamp01(value: Any, default: float = 0.0) -> float:
         number = float(value)
     except (TypeError, ValueError):
         number = default
+    if not math.isfinite(number):
+        number = default
     return max(0.0, min(1.0, number))
+
+
+def _safe_nonnegative_float(value: Any, default: float | None = 0.0) -> float | None:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return default
+    if not math.isfinite(number):
+        return default
+    return max(number, 0.0)
 
 
 def estimate_vram_mb(params: int | None, quantization: str = "fp16") -> int | None:
@@ -212,23 +225,24 @@ def normalize_model_fitness(
 
     training_metrics = training_metrics or {}
     success = clamp01(tensorzero_metrics.get("success_rate"), 0.5)
-    task = clamp01(tensorzero_metrics.get("task_score"), success)
-    tool = clamp01(tensorzero_metrics.get("tool_success_rate"), success)
-    structured = clamp01(tensorzero_metrics.get("structured_output_valid_rate"), success)
+    task = clamp01(tensorzero_metrics.get("task_score"), 0.5)
+    tool = clamp01(tensorzero_metrics.get("tool_success_rate"), 0.5)
+    structured = clamp01(tensorzero_metrics.get("structured_output_valid_rate"), 0.5)
     fallback_penalty = 1.0 - clamp01(tensorzero_metrics.get("fallback_rate"), 0.0)
 
-    latency_ms = max(float(tensorzero_metrics.get("latency_ms") or 0.0), 0.0)
-    latency_score = 1.0 if latency_ms <= 0 else 1.0 / (1.0 + latency_ms / 5000.0)
+    latency_ms = _safe_nonnegative_float(tensorzero_metrics.get("latency_ms"), None)
+    latency_score = 0.5 if latency_ms is None else 1.0 / (1.0 + latency_ms / 5000.0)
 
-    tps = max(float(tensorzero_metrics.get("tokens_per_second") or 0.0), 0.0)
+    tps = _safe_nonnegative_float(tensorzero_metrics.get("tokens_per_second"), 0.0)
     throughput_score = min(1.0, tps / 80.0) if tps else 0.5
 
-    cost = max(float(tensorzero_metrics.get("cost_per_1k_tokens") or 0.0), 0.0)
-    cost_score = 1.0 / (1.0 + cost)
+    cost = _safe_nonnegative_float(tensorzero_metrics.get("cost_per_1k_tokens"), None)
+    cost_score = 0.5 if cost is None else 1.0 / (1.0 + cost)
 
-    eval_score = clamp01(training_metrics.get("eval_score"), task)
+    eval_score = clamp01(training_metrics.get("eval_score"), 0.5)
     loss = training_metrics.get("loss")
-    loss_score = 0.5 if loss is None else 1.0 / (1.0 + max(float(loss), 0.0))
+    loss_value = _safe_nonnegative_float(loss, None) if loss is not None else None
+    loss_score = 0.5 if loss_value is None else 1.0 / (1.0 + loss_value)
     publish_score = 1.0 if training_metrics.get("publish_eligible", False) else 0.5
     training_score = (eval_score * 0.6) + (loss_score * 0.25) + (publish_score * 0.15)
 
