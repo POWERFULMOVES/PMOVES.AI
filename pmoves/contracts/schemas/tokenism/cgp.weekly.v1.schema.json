@@ -6,7 +6,7 @@
   "additionalProperties": false,
   "properties": {
     "week": { "type": "integer", "minimum": 0 },
-    "cgp": { "$ref": "../geometry/cgp.v1.schema.json" },
+    "cgp": { "type": "object" },
     "super_node_count": { "type": "integer", "minimum": 0 },
     "total_attributions": { "type": "integer", "minimum": 0 },
     "gini": { "type": "number", "minimum": 0, "maximum": 1 },
@@ -14,6 +14,44 @@
     "cgp_spec": {
       "type": "string",
       "enum": ["chit.cgp.v0.2", "chit.cgp.v1.0"]
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "super_node_count": { "const": 0 },
+          "total_attributions": { "const": 0 }
+        },
+        "required": ["super_node_count", "total_attributions"]
+      },
+      "then": {
+        "properties": {
+          "cgp": { "$ref": "#/$defs/empty_weekly_cgp" }
+        }
+      },
+      "else": {
+        "properties": {
+          "cgp": { "$ref": "../geometry/cgp.v1.schema.json" }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "empty_weekly_cgp": {
+      "type": "object",
+      "required": ["spec", "super_nodes"],
+      "additionalProperties": true,
+      "properties": {
+        "spec": {
+          "type": "string",
+          "enum": ["chit.cgp.v0.2", "chit.cgp.v1.0"]
+        },
+        "super_nodes": {
+          "type": "array",
+          "maxItems": 0
+        }
+      }
     }
   }
 }

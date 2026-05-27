@@ -201,3 +201,29 @@ def test_tokenism_topics_are_registered_and_payloads_validate(contracts_dir: Pat
         schema_path = contracts_dir / topics[topic]["schema"]
         schema = _load_schema(contracts_dir, topics[topic]["schema"])
         _validator(schema, schema_path).validate(payload)
+
+
+@pytest.mark.parametrize("contracts_dir", CONTRACT_DIRS)
+def test_tokenism_weekly_cgp_schema_allows_only_zero_count_empty_reports(contracts_dir: Path):
+    schema_path = contracts_dir / "schemas/tokenism/cgp.weekly.v1.schema.json"
+    schema = _load_schema(contracts_dir, "schemas/tokenism/cgp.weekly.v1.schema.json")
+    validator = _validator(schema, schema_path)
+    empty_week = {
+        "week": 1,
+        "cgp": {
+            "spec": "chit.cgp.v1.0",
+            "summary": "No ToKenism activity for week 1",
+            "super_nodes": [],
+        },
+        "super_node_count": 0,
+        "total_attributions": 0,
+        "cgp_spec": "chit.cgp.v1.0",
+    }
+
+    validator.validate(empty_week)
+
+    with pytest.raises(ValidationError):
+        validator.validate({**empty_week, "super_node_count": 1})
+
+    with pytest.raises(ValidationError):
+        validator.validate({**empty_week, "total_attributions": 1})
