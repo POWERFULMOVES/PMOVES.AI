@@ -986,3 +986,10 @@ The pipeline reports success because its validation scope is too narrow. Neither
 - `2026-05-28T17:02:00Z` UPDATE `SPARK-KIMI` Lane C scope: PMOVES.YT `/yt/summarize` and `/yt/chapters` endpoints verified working on SPARK node via host Ollama (qwen3.5:35b-a3b-q4_K_M). Wiring: added `OLLAMA_URL`, `YT_SUMMARY_PROVIDER`, `YT_SUMMARY_OLLAMA_MODEL` env vars to `pmoves-yt` in docker-compose.yml (PR #1646). Fixed `host.docker.internal` → `172.17.0.1` for Linux Docker. Both endpoints return real AI-generated content. Sample output: 5-chapter breakdown with titles/blurbs, short-style summary. agent_signature: `ACK::SPARK-KIMI::YT-SUMMARIZE-CHAPTERS-VERIFIED-2026-05-28`.
 
 <!-- GRAPHITI_MARK: SPARK-KIMI::YT-SUMMARIZE-CHAPTERS-VERIFIED::2026-05-28 -->
+
+## Big Ball 5090 CODEX Closeout - PR Hygiene, Tokenism Activation Starter (2026-05-27)
+
+- `2026-05-27T14:35:00-04:00` CLAIM `CODEX-GPT5` scope: Close out post-merge Big Ball docs, investigate dirty submodule state, clean merged local worktrees, review/merge remaining Dependabot PR #1561, start Tokenism production activation pack, and record 5090 validation evidence. Branch: `codex/agnote-5090-closeout`. Three-body: delivery=CODEX-GPT5, control=operator approvals in thread, memory=AGNOTE4482/SITREP/NEXT_STEPS/Tokenism alignment docs. agent_signature: `ACK::CODEX-GPT5::BIG-BALL-5090-CLOSEOUT-CLAIM`.
+- `2026-05-27T14:55:00-04:00` RELEASE `CODEX-GPT5` scope: Closeout docs updated on `codex/agnote-5090-closeout`; Tokenism production activation pack starter added; 5090 validation snapshot recorded; PR #1561 reviewed and merged; local merged worktrees `pr1603-review` and `transcribe-lfs-gitlink` removed after clean/merged verification; closeout worktree submodules initialized and `make -C pmoves submodule-integrity` passed. Remaining: Tokenism activation artifacts, trusted optimizer bridge, model fitness persistence, Unsloth runtime setup, Supabase vector/edge-functions health follow-up, zeta method design. agent_signature: `ACK::CODEX-GPT5::BIG-BALL-5090-CLOSEOUT-RELEASE`.
+
+<!-- GRAPHITI_MARK: CODEX-GPT5::BIG-BALL-5090-CLOSEOUT::2026-05-27 -->

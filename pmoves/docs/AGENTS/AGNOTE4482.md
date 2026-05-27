@@ -1126,17 +1126,22 @@ This work ran on branch `codex/big-ball-5090-gap-closure` in the parent PMOVES r
 
 | Lane | Status | Notes |
 |------|--------|-------|
-| CHIT core | Ready for PR review | Merkle hashing, schema coverage, publisher validation, Python crypto consolidation, FloOS hook validation, and gateway fixes were preserved from the closure pass |
+| CHIT core | Merged | PR #1633 landed the review fixes for the Big Ball CHIT closure pass; PR #1638 landed the transcribe LFS gitlink cleanup needed for a clean parent pointer |
 | Hyperbolic geometry | Implemented as embedding support | DoX Poincare projection is wired; still not a proof-backed fairness pillar |
 | Tokenism Firefly settlement | Approval-gated | Dry-run default; live writes require signed executor identity, matching operator approval, and signed deployment attestation |
 | Tokenism contract settlement | Approval/deployment-gated | Dry-run call drafts; live writes require deployment manifest, signed deployment attestation, RPC/wallet custody references, signed executor identity, and matching operator approval |
-| TensorZero 5090 | Healthy for this branch | Health endpoint returned all `ok` during the pass |
+| TensorZero 5090 | Healthy on latest recheck | Health endpoint returned all `ok` during the pass and again on 2026-05-27 from host `POWERFULMOVES` |
 | Model fitness / EvoSwarm | Parent work exists; trust bridge remains | Signed scorecards and deterministic optimizer operators are present, but trusted optimizer publishing still needs live identities/topology |
 | Zeta | Heuristic | Keep labeled heuristic until a method-design doc is accepted |
 
-### PR Readiness
+### PR Closeout
 
-The branch is ready to open a draft PR after this AGNOTE pass. Evidence already collected:
+The Big Ball CHIT/Tokenism hardening lane has moved from draft readiness to merged closeout:
+- PR #1633 merged the `codex/big-ball-5090-gap-closure` review fixes into main.
+- PR #1638 merged the `PMOVES-transcribe-and-fetch` LFS cleanup gitlink update into main.
+- PR #1561, the pinned `sigstore/cosign-installer` patch bump, was reviewed and merged on 2026-05-27 with green checks.
+
+Evidence collected during the implementation pass:
 - ToKenism focused Jest settlement suites: 32 tests passing.
 - ToKenism `npm run typecheck`: passing.
 - ToKenism Hardhat harness: 5 tests passing.
@@ -1145,7 +1150,11 @@ The branch is ready to open a draft PR after this AGNOTE pass. Evidence already 
 - Parent submodule integrity: passing.
 - TensorZero 5090 health: passing.
 
-No open PR existed for `codex/big-ball-5090-gap-closure` at the time of this note.
+Evidence collected during the 2026-05-27 closeout:
+- Host `POWERFULMOVES` reports `NVIDIA GeForce RTX 5090`, 32607 MiB VRAM, driver `595.79`.
+- `http://localhost:3030/health` returns gateway, ClickHouse, Postgres, and Valkey all `ok`.
+- `make -C pmoves submodule-integrity` passes in the closeout worktree with 50 gitlinks, 0 uninitialized, 0 drifted, 0 conflicts.
+- Pinokio root exists at `D:\pinokio`; direct Python `unsloth` import is not installed in the base environment and remains a runtime-lane setup item.
 
 ### Remaining 5090 CODEX Work
 
