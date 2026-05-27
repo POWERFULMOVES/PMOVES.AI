@@ -45,6 +45,32 @@ def test_nats_connection_config_defaults():
     assert config.error_cb is None
 
 
+def test_nats_connection_config_env_overrides(monkeypatch):
+    """NATS timeout/retry behavior can be shortened in best-effort CI paths."""
+    monkeypatch.setenv("NATS_MAX_RECONNECT_ATTEMPTS", "1")
+    monkeypatch.setenv("NATS_RECONNECT_TIME_WAIT", "0.25")
+    monkeypatch.setenv("NATS_CONNECT_TIMEOUT", "2")
+
+    config = NatsConnectionConfig()
+
+    assert config.max_reconnect_attempts == 1
+    assert config.reconnect_time_wait == 0.25
+    assert config.connect_timeout == 2.0
+
+
+def test_nats_connection_config_invalid_env_falls_back(monkeypatch):
+    """Bad env values should not break service startup."""
+    monkeypatch.setenv("NATS_MAX_RECONNECT_ATTEMPTS", "many")
+    monkeypatch.setenv("NATS_RECONNECT_TIME_WAIT", "slow")
+    monkeypatch.setenv("NATS_CONNECT_TIMEOUT", "eventually")
+
+    config = NatsConnectionConfig()
+
+    assert config.max_reconnect_attempts == 60
+    assert config.reconnect_time_wait == 2.0
+    assert config.connect_timeout == 10.0
+
+
 def test_nats_connection_config_custom():
     """NatsConnectionConfig accepts custom values."""
     cb = MagicMock()
