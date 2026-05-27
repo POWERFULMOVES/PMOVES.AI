@@ -150,6 +150,15 @@ def parse_args() -> argparse.Namespace:
         default="local-smoke",
         help="Docker tag suffix for local images.",
     )
+    parser.add_argument(
+        "--paths-only",
+        action="store_true",
+        help=(
+            "Validate that matrix context/dockerfile paths exist without building images. "
+            "Initializes submodules under pmoves/integrations/ shallowly as needed. "
+            "Exits 1 if any path is missing."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -180,6 +189,43 @@ def resolve_entries(
         return [name_to_entry[name] for name in selected_names]
 
     return filtered
+
+
+def _init_submodule(repo_root: pathlib.Path, submodule_rel: str) -> None:
+    target = repo_root / submodule_rel
+    if target.is_dir() and any(target.iterdir()):
+        return
+    print(f"==> Initializing submodule: {submodule_rel}")
+    subprocess.run(
+        ["git", "submodule", "update", "--init", "--depth=1", submodule_rel],
+        cwd=str(repo_root),
+        check=False,
+    )
+
+
+def check_paths(entry: dict[str, object], repo_root: pathlib.Path) -> ValidationResult:
+    name = str(entry.get("name", ""))
+    image_name = str(entry.get("image_name", ""))
+    context_rel = str(entry.get("context", ""))
+    dockerfile_rel = str(entry.get("dockerfile", ""))
+    tag = f"local/{image_name}:paths-check"
+
+    parts = context_rel.split("/")
+    if len(parts) >= 3 and parts[0] == "pmoves" and parts[1] == "integrations":
+        _init_submodule(repo_root, "/".join(parts[:3]))
+
+    context_path = (repo_root / context_rel).resolve()
+    dockerfile_path = (repo_root / dockerfile_rel).resolve()
+
+    if not context_path.exists():
+        print(f"[FAIL] {name}: context path missing: {context_rel}")
+        return ValidationResult(name=name, tag=tag, build_ok=False, trivy_ok=None, note=f"missing context: {context_rel}")
+    if not dockerfile_path.exists():
+        print(f"[FAIL] {name}: dockerfile missing: {dockerfile_rel}")
+        return ValidationResult(name=name, tag=tag, build_ok=False, trivy_ok=None, note=f"missing dockerfile: {dockerfile_rel}")
+
+    print(f"[PASS] {name}: {dockerfile_rel}")
+    return ValidationResult(name=name, tag=tag, build_ok=True, trivy_ok=None, note="paths-only")
 
 
 def build_and_scan(
@@ -317,6 +363,16 @@ def main() -> int:
         f"Selected {len(selected)} integration(s): "
         + ", ".join(str(entry.get("name", "?")) for entry in selected)
     )
+
+    if args.paths_only:
+        results = [check_paths(entry, repo_root) for entry in selected]
+        print_summary(results)
+        failed = [item for item in results if not item.ok]
+        if failed:
+            print(f"\nFAIL: {len(failed)} integration(s) have missing paths.", file=sys.stderr)
+            return 1
+        print(f"\nPASS: all {len(results)} integration path(s) verified.")
+        return 0
 
     try:
         ensure_builder(args.builder)

@@ -7,12 +7,14 @@ on:
       - 'pmoves/docker-compose*.yml'
       - 'pmoves/services/**/Dockerfile*'
       - '.github/workflows/hardening-validation.yml'
+      - '.github/workflows/integrations-ghcr.matrix.json'
   pull_request:
     branches: [main, PMOVES.AI-Edition-Hardened-Integrations, PMOVES.AI-Edition-Hardened]
     paths:
       - 'pmoves/docker-compose*.yml'
       - 'pmoves/services/**/Dockerfile*'
       - '.github/workflows/hardening-validation.yml'
+      - '.github/workflows/integrations-ghcr.matrix.json'
   workflow_dispatch:
 
 concurrency:
@@ -399,6 +401,13 @@ jobs:
             docker compose -f pmoves/monitoring/docker-compose.monitoring.yml config --quiet
             echo "✓ pmoves/monitoring/docker-compose.monitoring.yml is valid"
           fi
+
+      - name: Validate GHCR matrix paths
+        run: |
+          python3 pmoves/tools/ghcr_local_prepublish.py \
+            --matrix-file .github/workflows/integrations-ghcr.matrix.json \
+            --repo-root . \
+            --paths-only
 
       - name: Check for network segmentation
         run: |
