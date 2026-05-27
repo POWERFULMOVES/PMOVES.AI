@@ -8,6 +8,7 @@ on:
       - 'pmoves/services/**/Dockerfile*'
       - '.github/workflows/hardening-validation.yml'
       - '.github/workflows/integrations-ghcr.matrix.json'
+      - 'pmoves/integrations/archon'
   pull_request:
     branches: [main, PMOVES.AI-Edition-Hardened-Integrations, PMOVES.AI-Edition-Hardened]
     paths:
@@ -15,6 +16,7 @@ on:
       - 'pmoves/services/**/Dockerfile*'
       - '.github/workflows/hardening-validation.yml'
       - '.github/workflows/integrations-ghcr.matrix.json'
+      - 'pmoves/integrations/archon'
   workflow_dispatch:
 
 concurrency:
