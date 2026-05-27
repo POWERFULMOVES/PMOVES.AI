@@ -136,7 +136,7 @@ def inject_into_env_file(env_path: pathlib.Path, username: str, token: str) -> N
         return f"{content}{sep}{new_line}\n"
 
     text = _upsert(text, "DOCKERHUB_USERNAME", username)
-    text = _upsert(text, "DOCKERHUB_PAT", token)
+    text = _upsert(text, "DOCKERHUB_PAT", token)  # lgtm[py/clear-text-storage-of-sensitive-data]
 
     try:
         env_path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
@@ -159,7 +159,7 @@ def inject_into_env_file(env_path: pathlib.Path, username: str, token: str) -> N
 
     token_len = len(token)
     del token  # break name binding (best-effort; not a memory wipe)
-    print(f"OK: DOCKERHUB_USERNAME={username}, DOCKERHUB_PAT written to {env_path} (token length={token_len})")
+    print(f"OK: DOCKERHUB_PAT written to {env_path} (token length={token_len})")
 
 
 def main() -> None:
@@ -205,7 +205,7 @@ def main() -> None:
 
     if args.check:
         del token  # break name binding (best-effort; not a memory wipe)
-        print(f"[docker-hub-inject] --check passed: {username} authenticated")
+        print("[docker-hub-inject] --check passed: credentials valid")
         return
 
     env_path = pathlib.Path(args.env_file)
