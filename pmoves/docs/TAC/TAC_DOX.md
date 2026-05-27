@@ -37,7 +37,7 @@
 
 | Capability | Description |
 |------------|-------------|
-| Geometric Intelligence | Deterministic embedding-to-Poincare projection plus Hyperbolic/Manifold3D/Zeta visualization |
+| Geometric Intelligence | Deterministic embedding-to-Poincare projection plus Hyperbolic/Manifold3D/Zeta (heuristic) visualization |
 | CHIT Geometry Bus | WebSocket-based shape-encoded transport |
 | Path Traversal Defense | Excellent — validated in Phase C audit |
 | Fail-closed JWT | Properly implemented authentication |
@@ -94,7 +94,7 @@ Document Input → DoX Processing → Geometry Encoding
                      ↓
               Manifold3D Visualization
                      ↓
-              Zeta-like Spectral View
+              Zeta-like Spectral View (heuristic)
                      ↓
               CHIT Geometry Bus (WebSocket)
                      ↓
