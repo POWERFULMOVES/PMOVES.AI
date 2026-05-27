@@ -186,14 +186,6 @@ api_key_location = "none"
 
 # --- Chat models: Cloud and hosted backbones -------------------------------
 
-[models.chat_gemini_pro]
-routing = ["google_primary"]
-
-[models.chat_gemini_pro.providers.google_primary]
-type = "google_genai"
-model_name = "gemini-1.5-pro"
-api_key_location = "env::GEMINI_API_KEY"
-
 [models.chat_openai_platform]
 routing = ["openai_platform"]
 

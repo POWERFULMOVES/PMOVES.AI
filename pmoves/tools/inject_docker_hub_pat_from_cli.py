@@ -48,14 +48,18 @@ _USERNAME_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,254}")
 def _resolve_helper() -> str:
     """Return the active credential helper name.
 
-    Reads credsStore from ~/.docker/config.json (authoritative source) and
-    falls back to platform defaults when the config is absent or unparseable.
+    Checks per-registry credHelpers first (Docker Hub domains), then falls
+    back to global credsStore, then platform defaults.
     """
+    _DOCKERHUB_DOMAINS = {"index.docker.io", "docker.io", "https://index.docker.io/v1/"}
     config_path = pathlib.Path.home() / ".docker" / "config.json"
     if config_path.exists():
         try:
             with config_path.open() as f:
                 config = json.load(f)
+            for domain, helper in config.get("credHelpers", {}).items():
+                if domain in _DOCKERHUB_DOMAINS:
+                    return f"docker-credential-{helper}"
             store = config.get("credsStore")
             if store:
                 return f"docker-credential-{store}"
