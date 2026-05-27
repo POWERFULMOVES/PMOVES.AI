@@ -75,6 +75,7 @@ add "Emperor-CHIT-Humility — open the session by disclosing: (1) What I have"
 add "(repo, branch, worktree, loaded context). (2) What I'm missing (services"
 add "unhealthy, files not read, perms unknown). (3) What I'm about to do."
 
-# Emit additionalContext JSON
-printf '{"hookEventName":"SessionStart","additionalContext":"Environment Check:\\n%s"}' "$STATUS"
+# Emit additionalContext JSON (escape backslash and double-quote for JSON safety)
+SAFE_STATUS="$(printf '%s' "$STATUS" | sed 's/\\/\\\\/g; s/"/\\"/g')"
+printf '{"hookEventName":"SessionStart","additionalContext":"Environment Check:\\n%s"}' "$SAFE_STATUS"
 exit 0

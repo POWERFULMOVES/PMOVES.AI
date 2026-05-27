@@ -32,7 +32,6 @@ x-runner-base: &runner-base
     - "host.docker.internal:host-gateway"
   volumes:
     - /var/run/docker.sock:/var/run/docker.sock
-    - /tmp/pmoves-runner:/tmp/pmoves-runner
 
 x-runner-env: &runner-env
   REPO_URL: https://github.com/POWERFULMOVES/PMOVES.AI
@@ -48,6 +47,9 @@ services:
   runner-1:
     <<: *runner-base
     container_name: pmoves-4090-runner-1
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /tmp/pmoves-runner-1:/tmp/pmoves-runner
     environment:
       <<: *runner-env
       ACCESS_TOKEN: ${RUNNER_ACCESS_TOKEN}
@@ -55,6 +57,9 @@ services:
   runner-2:
     <<: *runner-base
     container_name: pmoves-4090-runner-2
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /tmp/pmoves-runner-2:/tmp/pmoves-runner
     environment:
       <<: *runner-env
       ACCESS_TOKEN: ${RUNNER_ACCESS_TOKEN}
