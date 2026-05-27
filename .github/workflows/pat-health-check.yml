@@ -28,27 +28,31 @@ jobs:
 
       - name: Notify on failure
         if: failure()
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
+            const body = [
+              "## PAT Health Check Failed",
+              "",
+              "The GH_PAT secret is expired or invalid.",
+              "",
+              "### Immediate Action Required",
+              "1. Create new fine-grained PAT (7-day expiry) at https://github.com/settings/personal-access-tokens/new",
+              "2. Update GH_PAT secret at https://github.com/" + context.repo.owner + "/" + context.repo.repo + "/settings/secrets/actions",
+              "3. Update git remote on sidecar: git remote set-url origin https://pmoves-spark:<TOKEN>@github.com/" + context.repo.owner + "/" + context.repo.repo + ".git",
+              "4. See: deploy/runbooks/github-app-sitrep-and-pat-runbook.md §3.3",
+              "",
+              "### Long-Term Fix",
+              "Migrate to GitHub App token authentication — see §4 of the runbook.",
+              "",
+              "---",
+              "*Auto-created by PAT Health Check workflow*"
+            ].join("\n");
+
             await github.rest.issues.create({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              title: `🔴 GH_PAT Expired — ${new Date().toISOString().split('T')[0]}`,
-              body: `## PAT Health Check Failed
-
-The GH_PAT secret is expired or invalid.
-
-### Immediate Action Required
-1. Create new fine-grained PAT (7-day expiry) at https://github.com/settings/personal-access-tokens/new
-2. Update GH_PAT secret at https://github.com/${context.repo.owner}/${context.repo.repo}/settings/secrets/actions
-3. Update git remote on sidecar: git remote set-url origin https://pmoves-spark:<TOKEN>@github.com/${context.repo.owner}/${context.repo.repo}.git
-4. See: deploy/runbooks/github-app-sitrep-and-pat-runbook.md §3.3
-
-### Long-Term Fix
-Migrate to GitHub App token authentication — see §4 of the runbook.
-
----
-*Auto-created by PAT Health Check workflow*`,
-              labels: ['operations', 'security', 'urgent']
-            })
+              title: "🔴 GH_PAT Expired — " + new Date().toISOString().split("T")[0],
+              body: body,
+              labels: ["operations", "security", "urgent"]
+            });

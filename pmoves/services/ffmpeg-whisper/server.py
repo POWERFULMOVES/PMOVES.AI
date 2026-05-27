@@ -808,7 +808,10 @@ async def transcribe_file(
         with open(src_path, "wb") as fh:
             fh.write(raw_bytes)
 
-        audio_path = os.path.join(tmpdir, "audio.wav")
+        # Distinct converted-output path. Callers (e.g. Flute-Gateway) hardcode
+        # filename='audio.wav', so a fixed 'audio.wav' output here would collide
+        # with src_path and ffmpeg refuses to overwrite its input → exit 2.
+        audio_path = os.path.join(tmpdir, f"converted-{uuid.uuid4().hex}.wav")
         ffmpeg_extract_audio(src_path, audio_path)
 
         transcript = _transcribe_with_provider(

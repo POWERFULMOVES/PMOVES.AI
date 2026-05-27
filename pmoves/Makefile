@@ -161,6 +161,37 @@ include mk/hf.mk
 include mk/provider.mk
 include mk/egress.mk
 include mk/yt-cookies.mk
+include mk/mcp-toolkit.mk
+include mk/mcp-toolkit-4090.mk
+
+# ----------------------------------------------------------------------------
+# venv + bringup-toolchain prereqs
+# ----------------------------------------------------------------------------
+# pmoves/.venv-pmoves/ hosts the canonical Python toolchain. `venv` creates it
+# with service+tool requirements only. `venv-bringup` adds the operator-facing
+# bringup toolchain (glances, telemetry helpers) and gates on the non-Python
+# prereqs check (jq, make, curl, git, python3).
+#
+# This is the prereq layer the user named on 2026-05-15: glances + bringup
+# binaries are NOT system-wide installs — they live under the venv. Non-Python
+# binaries (make, jq) stay as system binaries, but check_prereqs.sh surfaces
+# any gaps with platform-specific install hints.
+
+.PHONY: check-prereqs
+check-prereqs: ## Verify system binaries required for bringup (jq, make, curl, git, python3)
+	@bash scripts/check_prereqs.sh
+
+.PHONY: venv
+venv: ## Create pmoves/.venv-pmoves and install service + tool requirements
+	@bash scripts/create_venv.sh
+
+.PHONY: venv-bringup
+venv-bringup: check-prereqs ## Bringup-ready venv: service+tool deps PLUS glances/telemetry toolchain
+	@INCLUDE_BRINGUP=1 bash scripts/create_venv.sh
+	@echo
+	@echo "✅ Bringup venv ready at pmoves/.venv-pmoves/"
+	@echo "   Glances: $$(./.venv-pmoves/bin/glances --version 2>&1 | head -1 || echo 'NOT FOUND')"
+	@echo "   Activate: source pmoves/.venv-pmoves/bin/activate"
 
 .PHONY: update-service-docs
 update-service-docs: ## Regenerate service update notes from git metadata
@@ -885,6 +916,23 @@ up-bus: ## Start message bus (NATS)
 	@$(DC) up -d nats
 	@timeout 30 bash -c 'until docker exec pmoves-nats-1 nc -z localhost 4222 2>/dev/null; do sleep 1; done' || echo "⚠️ NATS may still be starting"
 	@echo "✅ NATS ready"
+
+NATS_BOX_IMAGE ?= natsio/nats-box:0.14.5
+NATS_DOCKER_NETWORK ?= pmoves_bus
+
+.PHONY: nats-pub
+nats-pub: ## Publish a NATS message via the nats-box toolbox container (Known Road — run on the NATS node)
+## Usage: make nats-pub SUBJECT=claw.task.assign.v1 PAYLOAD='{"from":"pmoves-4090","to":"pmoves-spark"}'
+## From a remote node: connect to nats://nats:pmoves@pmoves-kvm4-2:4222 via Tailscale hostname
+	@test -n "$(SUBJECT)" || (echo "ERROR: SUBJECT is required" && exit 1)
+	@test -n "$(PAYLOAD)" || (echo "ERROR: PAYLOAD is required" && exit 1)
+	@. ./scripts/with-env.sh 2>/dev/null || true; \
+	  NATS_URL="$${NATS_URL:-nats://nats:pmoves@nats:4222}"; \
+	  docker run --rm --network "$(NATS_DOCKER_NETWORK)" "$(NATS_BOX_IMAGE)" nats -s "$$NATS_URL" pub "$(SUBJECT)" '$(PAYLOAD)'
+
+.PHONY: nats-agent-inbox
+nats-agent-inbox: ## Run a persistent agent inbox subscriber; visible in NATS connz?subs=1
+	@bash -lc '. ./scripts/with-env.sh; exec uv run --script tools/nats_agent_inbox.py'
 
 .PHONY: up-workers up-workers-core
 up-workers: ## Start worker services (extract, langextract, media)
@@ -1798,6 +1846,44 @@ up-media:
 up-invidious:
 	@bash -lc '. ./scripts/with-env.sh; INVIDIOUS_BIND="${INVIDIOUS_BIND:-127.0.0.1:3005}" docker compose -p $(PROJECT) --profile invidious up -d invidious invidious-db invidious-companion'
 
+# -------- Standalone sidecar composes (PR #1533 follow-up: PR-2 wraps the raw compose files) --------
+# Each sidecar is its own docker-compose project (separate -p) so it doesn't entangle with the main
+# PMOVES stack. Env files live alongside the compose: `env.<name>-sidecar` (copied from
+# `env.<name>-sidecar.example` on first run if missing — no secrets in the template).
+
+.PHONY: up-darkxside-sidecar down-darkxside-sidecar
+up-darkxside-sidecar: ## Start DARKXSIDE standalone sidecar (port 8092, cloud LLM + host Ollama)
+	@if [ ! -f env.darkxside-sidecar ]; then \
+		echo "📝 Bootstrapping env.darkxside-sidecar from template..."; \
+		cp env.darkxside-sidecar.example env.darkxside-sidecar; \
+	fi
+	@echo "🌑 Starting DARKXSIDE sidecar..."
+	@bash -lc '. ./scripts/with-env.sh; docker compose -p darkxside-sidecar -f docker-compose.darkxside-sidecar.yml --env-file env.darkxside-sidecar up -d'
+	@echo "✔ DARKXSIDE sidecar starting. Health: curl -sf http://127.0.0.1:$${DARKXSIDE_PORT:-8092}/"
+
+down-darkxside-sidecar: ## Stop DARKXSIDE standalone sidecar
+	@echo "🌑 Stopping DARKXSIDE sidecar..."
+	@bash -lc '. ./scripts/with-env.sh; docker compose -p darkxside-sidecar -f docker-compose.darkxside-sidecar.yml --env-file env.darkxside-sidecar stop' >/dev/null 2>&1 || true
+	@bash -lc '. ./scripts/with-env.sh; docker compose -p darkxside-sidecar -f docker-compose.darkxside-sidecar.yml --env-file env.darkxside-sidecar rm -f' >/dev/null 2>&1 || true
+	@echo "✔ DARKXSIDE sidecar stopped."
+
+.PHONY: up-spark-sidecar down-spark-sidecar
+up-spark-sidecar: ## Start DGX Spark standalone sidecar (port 8093, in-container Ollama, NVIDIA GPU passthrough)
+	@if [ ! -f env.spark-sidecar ]; then \
+		echo "📝 Bootstrapping env.spark-sidecar from template..."; \
+		cp env.spark-sidecar.example env.spark-sidecar; \
+	fi
+	@echo "⚡ Starting DGX Spark sidecar (ARM64 + NVIDIA Blackwell)..."
+	@bash -lc '. ./scripts/with-env.sh; docker compose -p spark-sidecar -f docker-compose.spark-sidecar.yml --env-file env.spark-sidecar up -d'
+	@echo "✔ DGX Spark sidecar starting. Health: curl -sf http://127.0.0.1:$${SPARK_PORT:-8093}/"
+	@echo "  GPU check: docker exec pmoves-ollama-spark nvidia-smi"
+
+down-spark-sidecar: ## Stop DGX Spark standalone sidecar
+	@echo "⚡ Stopping DGX Spark sidecar..."
+	@bash -lc '. ./scripts/with-env.sh; docker compose -p spark-sidecar -f docker-compose.spark-sidecar.yml --env-file env.spark-sidecar stop' >/dev/null 2>&1 || true
+	@bash -lc '. ./scripts/with-env.sh; docker compose -p spark-sidecar -f docker-compose.spark-sidecar.yml --env-file env.spark-sidecar rm -f' >/dev/null 2>&1 || true
+	@echo "✔ DGX Spark sidecar stopped."
+
 # TensorZero model gateway stack
 .PHONY: up-tensorzero up-tensorzero-full down-tensorzero-full
 up-tensorzero-full:
@@ -1954,7 +2040,7 @@ hostinger-ssh: ## SSH into Hostinger VPS using CHIT-managed credentials
 	@$(LOAD_ENV_SHARED) bash -lc 'ssh -o StrictHostKeyChecking=no -i <(echo "$$HOSTINGER_SSH_PRIVATE_KEY") $$HOSTINGER_SSH_USER@$$HOSTINGER_SSH_HOST'
 
 # -------- Multi-Claw Fleet (Kilo Code / OpenClaw) --------
-.PHONY: claw-deploy claw-verify claws-status claw-rotate
+.PHONY: claw-deploy claw-verify claws-status claw-rotate claw-key-install
 
 CLAW_SCRIPTS := $(CURDIR)/scripts/claws
 CLAW_SCOPES  := $(CURDIR)/configs/claws/scopes
@@ -1999,6 +2085,15 @@ claw-rotate: ## Rotate tokens on claw: make claw-rotate SCOPE=kvm4-1 [DRY_RUN=1]
 	TARGET="$${!TARGET_VAR:-}"; \
 	if [ -z "$$TARGET" ]; then echo "ERROR: No target for scope $(SCOPE)"; exit 1; fi; \
 	$(CLAW_SCRIPTS)/rotate-tokens.sh --target "$$TARGET" $(if $(DRY_RUN),--dry-run)
+
+.PHONY: claw-key-install
+claw-key-install: ## Install hostinger_vps SSH key: HOSTINGER_VPS_KEY="$(cat /path/to/key)" make claw-key-install
+	@test -n "$(HOSTINGER_VPS_KEY)" || (echo "ERROR: HOSTINGER_VPS_KEY is required" && echo "Usage: HOSTINGER_VPS_KEY=\"\$$(cat /path/to/key)\" make -C pmoves claw-key-install" && exit 1)
+	@mkdir -p $(CURDIR)/secrets
+	@printf '%s\n' "$(HOSTINGER_VPS_KEY)" > $(CURDIR)/secrets/hostinger_vps
+	@chmod 600 $(CURDIR)/secrets/hostinger_vps
+	@echo "✔ Key installed: pmoves/secrets/hostinger_vps"
+	@echo "  Claw scripts will now find it at the primary path."
 
 # -------- Brand defaults (branded env + first-run resources) --------
 .PHONY: brand-defaults brand-verify
@@ -2167,6 +2262,38 @@ voice-follow-stop: ## Stop voice-follow daemon
 
 voice-follow-logs: ## Tail voice-follow logs
 	@[ -f .pmoves_voice_follow.log ] && tail -f .pmoves_voice_follow.log || echo "No voice-follow log found. Run 'make -C pmoves voice-follow-start' first."
+
+# -------- Voice stack health + unified launch --------
+.PHONY: voice-health up-voice
+
+voice-health: ## Check health of full voice stack (NATS, Flute, TTS backends, Voice-Relay)
+	@echo "=== Voice Stack Health ==="
+	@curl -sf http://localhost:4222/healthz > /dev/null 2>&1 \
+	  && echo "  NATS       (:4222) ✔" \
+	  || echo "  NATS       (:4222) ✗  — run: make up-bus"
+	@curl -sf http://localhost:8055/healthz > /dev/null 2>&1 \
+	  && echo "  Flute      (:8055) ✔" \
+	  || echo "  Flute      (:8055) ✗  — run: make overlay-up-media  (needs env.tier-media)"
+	@curl -sf http://localhost:3000/ > /dev/null 2>&1 \
+	  && echo "  VibeVoice  (:3000) ✔  [CPU fallback]" \
+	  || echo "  VibeVoice  (:3000) ✗  — optional; run: make up-voice"
+	@curl -sf http://localhost:7861/gradio_api/info > /dev/null 2>&1 \
+	  && echo "  UltimateTTS(:7861) ✔  [GPU preferred]" \
+	  || echo "  UltimateTTS(:7861) ✗  — GPU nodes only; run: make up-tts-studio"
+	@curl -sf http://localhost:8121/healthz > /dev/null 2>&1 \
+	  && echo "  VoiceRelay (:8121) ✔" \
+	  || echo "  VoiceRelay (:8121) ✗  — run: make up-voice-relay"
+
+up-voice: ## Start voice stack: Flute-Gateway + VibeVoice CPU fallback + Voice-Relay
+	@echo "Starting voice stack (Flute + VibeVoice + Voice-Relay)..."
+	@docker compose -p $(PROJECT) --project-directory $(CURDIR) $(COMPOSE_ENV_FILES) \
+		-f docker-compose.base.yml \
+		-f docker-compose.media.yml \
+		-f docker-compose.voice.yml \
+		--profile media --profile voice \
+		up -d flute-gateway vibevoice voice-relay
+	@echo ""
+	@$(MAKE) --no-print-directory voice-health
 
 .PHONY: voice-follow-smoke voice-agent-discord-smoke
 

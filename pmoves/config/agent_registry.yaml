@@ -15,6 +15,9 @@ external_contributors:
   - claude-opus
   - kilocode
   - codex
+  - agent-zero-codex
+  - hermes
+  - coder_claw
   - gemini
   - cline
   - powerfulmoves
@@ -2225,3 +2228,39 @@ agents:
       beats into named sonic constellations, writes M3U8 playlists, checkpoints to Cipher
       Memory at :8105, emits geometry events to the NATS Geometry Bus for Holographic
       CHIT Block generation. Monitored live via Glances REST API.
+
+  pmoves_ci_bot:
+    name: "PMOVES CI Bot"
+    class: ci
+    primary_type: ci
+    secondary_type: agent
+    port: null
+    health: null
+    layers: [L4]
+    evolution_stage: active
+    nats:
+      publishes:
+        - "branch.<path-segments>.trail.v1"
+      subscribes: []
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: false
+      attribution_gated: true
+    resilience:
+      context_budget: minimal
+      checkpoint_frequency: none
+      recovery_strategy: stateless
+      cipher_categories: []
+    topology:
+      node_affinity: [ai-lab]
+      team: ci
+      ci_runner: ai-lab
+      compose_profile: null
+    signing_card_id: "00000000-0000-4000-8000-000000000035"
+    description: |
+      CI emitter identity for §9.4 branch lifecycle trail (AGNOTE4482 Layer 4).
+      Runs on the tailnet-connected self-hosted ai-lab runner; publishes
+      HMAC-signed branch.<path-segments>.trail.v1 events to NATS via
+      .github/workflows/branch-trail-emit.yml.

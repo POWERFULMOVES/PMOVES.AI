@@ -241,8 +241,16 @@ root:
             expect: "P7 app launches emit NATS events with app name, port, machine"
           context: "shell.run start → NATS publish; shell.run stop → NATS publish"
           agent_hint: z890-claude
-          status: future
-          notes: "Can piggyback on pinokio.js on event handlers"
+          status: in_progress
+          claimed_by: z890-claude
+          claimed_at: "2026-05-18"
+          notes: |
+            Claimed 2026-05-18 by z890-claude (DARKXSIDE authorized).
+            Implementation surface: pinokio.js `on` event handlers in PMOVES launchers
+            under pbnj/pinokio/api/ + D:\pinokio\api\, publishing to NATS subject
+            `pinokio.app.launched.v1` via the existing fleet NATS bus.
+            Unblocks p7.nats.cgp-correlation (already done) downstream consumers and
+            p7.nats.embedding-quality which depend_on this node.
 
         - id: p7.nats.cgp-correlation
           task: "P7-originated actions produce CGP-correlated events"
@@ -273,9 +281,9 @@ root:
             expect: "Extract Worker processes P7-originated content with EMBEDDING_BACKEND=tensorzero"
           context: "Stack standardized to TensorZero/Qwen3-embedding:4b (PR #1082). Any P7 app that triggers ingestion gets high-quality vectors."
           agent_hint: 5090-claude
-          status: pending
+          status: in_progress
           depends_on: [p7.nats.launch]
-          notes: "Config shipped. Needs Qdrant pmoves_chunks_qwen3 collection created on prod (z890 task)."
+          notes: "Provisioning script + runbook landed via L9 (2026-05-20). Operator runs `python3 pmoves/scripts/provision_qdrant_pmoves_chunks_qwen3.py` against prod Qdrant with QDRANT_URL+QDRANT_API_KEY loaded (Method 1 in QDRANT_PROVISIONING_PMOVES_CHUNKS_QWEN3.md). Dim is 2560 (NOT 3072) per pmoves/services/extract-worker/CLAUDE.md. Status flips to done once operator confirms successful provisioning + first Extract Worker write."
 
         - id: p7.nats.telemetry
           task: "P7 session telemetry on pinokio.telemetry.v1"
@@ -286,3 +294,41 @@ root:
           agent_hint: z890-claude
           status: future
           notes: "Depends on pterm event hooks or custom pinokio.js observer"
+
+    # =========================================================================
+    # Phase 8: MoF (Mixture of Frameworks) Integration
+    # Tracks the unified P7 management surface bridging multiple skill frameworks
+    # Context: pmoves/docs/architecture/PMOVES_MOF_ARCHITECTURE.md
+    # =========================================================================
+    - id: p7.mof
+      task: "MoF integration for P7 lifecycle management"
+      context: "Using a Mixture of Frameworks (pterm, pinokio, gepeto, cipher) to coordinate agentic behavior, terminal execution, and state across the P7 fleet"
+      agent_hint: z890-claude
+      status: pending
+      children:
+        - id: p7.mof.gepeto-pinokio
+          task: "Native Pinokio capabilities leveraged"
+          action:
+            type: manual
+            expect: "Built-in gepeto and pinokio skills coordinate app discovery, launching, and basic coding assistance within P7"
+          context: "Native skills provide baseline interpreter functions"
+          agent_hint: 5090-claude
+          status: done
+
+        - id: p7.mof.pterm
+          task: "pterm bridged for local execution and NATS events"
+          action:
+            type: manual
+            expect: "pterm skill invokes local shell commands and pipes telemetry/events into the pmoves ecosystem"
+          context: "Crucial for crossing the boundary between Pinokio JS space and PMOVES OS space"
+          agent_hint: z890-claude
+          status: pending
+
+        - id: p7.mof.cipher
+          task: "cipher integration for P7 state and alignment"
+          action:
+            type: manual
+            expect: "cipher skill (e.g., cipher-beats) manages state alignment and specialized agent orchestration"
+          context: "Aligns P7 state vectors with the broader PMOVES topological definitions"
+          agent_hint: 4090-claude
+          status: pending

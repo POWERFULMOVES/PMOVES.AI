@@ -48,4 +48,19 @@ env.tier-worker
 env.tier-supabase.urlencoded
 env.z890
 env.presign.additions
+
+# Standalone sidecar env files (operator-tuned from .example templates)
+env.darkxside-sidecar
+env.spark-sidecar
+
+# Sidecar data directories (operator-private runtime state)
+data/darkxside/
+data/spark/
+
+# Sidecar user-config volume bind (created at container runtime by Agent Zero)
+# Both DARKXSIDE_USR_DIR and SPARK_USR_DIR default to ./usr in the compose files.
+# Anchored to pmoves root with leading slash so nested usr/ dirs in submodules
+# stay tracked (CodeRabbit P2 thread r3273572321 on PR #1556).
+/usr/
+
 .codex/

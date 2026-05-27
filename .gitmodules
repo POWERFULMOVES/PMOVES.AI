@@ -11,9 +11,14 @@
 #   - Security Hardening: Container security baseline enforcement
 #
 # Branch Strategy:
-#   All submodules track PMOVES.AI-Edition-Hardened branch
-#   Exception: PMOVES-DoX tracks PMOVES.AI-Edition-Hardened-DoX
-#   Reason: DoX has a nested instance of Agent Zero as MCP tool for standalone mode
+#   Most submodules track PMOVES.AI-Edition-Hardened branch
+#   Exceptions tracking main:
+#     - E2B/infra tier: E2B-Danger-Room, Danger-infra, Pipecat, MAI-UI, Headscale, cipher
+#       (independent release cadence from hardened fleet)
+#     - Tooling: ClawZ, skills/* (5 forks — Pmoves-skills, awesome-agent-skills,
+#       fork-repository-skill, agent-sandbox-skill, claude-d3js-skill)
+#   Exception tracking PMOVES.AI-Edition-Hardened-DoX:
+#     - PMOVES-DoX (nested Agent Zero MCP tool for standalone mode)
 #
 # GitHub Actions CI/CD:
 #   Push to hardened triggers automated builds via integrations-ghcr.yml
@@ -38,12 +43,12 @@
 [submodule "PMOVES-BoTZ"]
 	path = PMOVES-BoTZ
 	url = https://github.com/POWERFULMOVES/PMOVES-BoTZ.git
-	branch = PMOVES.AI-Edition-Hardened
+	branch = main
 
 [submodule "PMOVES-BotZ-gateway"]
 	path = PMOVES-BotZ-gateway
 	url = https://github.com/POWERFULMOVES/PMOVES-BotZ-gateway.git
-	branch = PMOVES.AI-Edition-Hardened
+	branch = main
 
 # =============================================================================
 # Knowledge & Research Services
@@ -107,7 +112,7 @@
 [submodule "PMOVES-E2B-Danger-Room"]
 	path = PMOVES-E2B-Danger-Room
 	url = https://github.com/POWERFULMOVES/PMOVES-E2B-Danger-Room.git
-	branch = PMOVES.AI-Edition-Hardened
+	branch = main
 
 [submodule "PMOVES-E2B-Danger-Room-Desktop"]
 	path = PMOVES-E2B-Danger-Room-Desktop
@@ -117,7 +122,7 @@
 [submodule "PMOVES-Danger-infra"]
 	path = PMOVES-Danger-infra
 	url = https://github.com/POWERFULMOVES/PMOVES-Danger-infra.git
-	branch = PMOVES.AI-Edition-Hardened
+	branch = main
 
 [submodule "PMOVES-E2b-Spells"]
 	path = PMOVES-E2b-Spells
@@ -131,7 +136,7 @@
 [submodule "PMOVES-Pipecat"]
 	path = PMOVES-Pipecat
 	url = https://github.com/POWERFULMOVES/pmoves-pipecat.git
-	branch = PMOVES.AI-Edition-Hardened
+	branch = main
 
 [submodule "PMOVES-Pinokio-Ultimate-TTS-Studio"]
 	path = PMOVES-Pinokio-Ultimate-TTS-Studio
@@ -146,7 +151,7 @@
 [submodule "PMOVES-transcribe-and-fetch"]
 	path = PMOVES-transcribe-and-fetch
 	url = https://github.com/POWERFULMOVES/PMOVES-transcribe-and-fetch.git
-	branch = PMOVES.AI-Edition-Hardened
+	branch = main
 
 # =============================================================================
 # Media & Content Services
@@ -234,7 +239,7 @@
 [submodule "PMOVES-MAI-UI"]
 	path = PMOVES-MAI-UI
 	url = https://github.com/POWERFULMOVES/PMOVES-MAI-UI.git
-	branch = PMOVES.AI-Edition-Hardened
+	branch = main
 
 # =============================================================================
 # Networking & Infrastructure
@@ -253,7 +258,7 @@
 [submodule "PMOVES-Headscale"]
 	path = PMOVES-Headscale
 	url = https://github.com/POWERFULMOVES/PMOVES-headscale.git
-	branch = PMOVES.AI-Edition-Hardened
+	branch = main
 
 # =============================================================================
 # Data Storage & Database
@@ -275,11 +280,11 @@
 [submodule "pmoves-e2b-mcp-server"]
 	path = pmoves-e2b-mcp-server
 	url = https://github.com/POWERFULMOVES/pmoves-e2b-mcp-server.git
-	branch = PMOVES.AI-Edition-Hardened
+	branch = main
 [submodule "Pmoves-cipher"]
 	path = Pmoves-cipher
 	url = https://github.com/POWERFULMOVES/Pmoves-cipher.git
-	branch = PMOVES.AI-Edition-Hardened
+	branch = main
 [submodule "pmoves/integrations/archon"]
 	path = pmoves/integrations/archon
 	url = https://github.com/POWERFULMOVES/PMOVES-Archon.git

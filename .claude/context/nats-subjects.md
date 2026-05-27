@@ -234,6 +234,40 @@ Example: `ingest.transcript.ready.v1`
   ```
 - **Subscribers:** CLAW routing dashboards, mesh observers, Discord publisher
 
+## CLAW Agent Delegation Subjects
+
+**`claw.task.assign.v1`**
+- **Direction:** Published by orchestrating agents → Consumed by target node agent runtime
+- **Purpose:** Cross-node agent-to-agent task delegation (cascades, handoffs, wave assignments)
+- **Payload:**
+  ```json
+  {
+    "from": "pmoves-4090",
+    "to": "pmoves-spark",
+    "task": "cascade-wave-B",
+    "files_released": ["pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md"],
+    "after_pr": [1504, 1506, 1507],
+    "note": "Wave A complete. SPARK may open feat/spark-tz-glm5-minimax-sync PRs."
+  }
+  ```
+- **Subscribers:** Target node agent runtime (SPARK, 5090, etc.)
+- **Known Road:** `make -C pmoves nats-pub SUBJECT=claw.task.assign.v1 PAYLOAD='...'`
+  (uses the pinned `natsio/nats-box:0.14.5` toolbox image on `pmoves_bus`; run on the node where NATS is local
+  or where `NATS_URL` reaches the hub)
+- **Note:** Not JetStream — fire and forget. Target agent must be subscribed at publish time.
+- **Persistent inbox:** `make -C pmoves nats-agent-inbox` runs
+  `pmoves/tools/nats_agent_inbox.py`, which subscribes to `claw.task.assign.v1`,
+  `branch.>`, `chit.>`, `p7.>`, and `owner.presence.>` and writes a local JSONL
+  inbox outside the repo tree by default. The target uses `uv run --script` so
+  `nats-py` is resolved without mutating host Python. Use this on the target node
+  when a durable receive path is needed before a full agent runtime is online.
+- **Current 5090-CODEX receive-path snapshot (2026-05-21T04:54Z):**
+  `pmoves-nats-1` reported 21 connections via `connz?subs=1` and 0 subscriptions matching
+  `claw`, `5090`, `codex`, `task`, `chit`, `pinokio`, `branch`, or `owner.presence`.
+  Treat direct receive on `claw.task.assign.v1` as unproved until the persistent
+  inbox or an equivalent agent runtime is running and visible in `connz?subs=1`.
+  The same snapshot observed no receiver for the branch trail / CHIT / P7 receive-path patterns checked.
+
 ## autoresearch Experiment Subjects
 
 **`research.autoresearch.result.v1`**
@@ -1514,6 +1548,34 @@ nats server report connections
   ```json
   {"work_order_id": "wo-123", "workflow_type": "submodule_update", "repos": ["PMOVES.AI"], "changes": [...], "approved": true}
   ```
+
+**`branch.<path-segments>.trail.v1`**
+- **Direction:** Published by `pmoves-ci-bot` (GH Actions) → Consumed by monitoring / audit lane
+- **Purpose:** §9.4 branch lifecycle CHIT trail — emits a HMAC-signed entry on branch create,
+  PR link, merge, and delete. Subject uses dot-separated branch path segments
+  (e.g. `branch.feat.my-feature.trail.v1`). Implemented by `pmoves/services/common/branch_trail.py`
+  (Layer 1 emit primitive) and `.github/workflows/branch-trail-emit.yml` (Layer 4 GH Actions).
+- **Payload:**
+  ```json
+  {
+    "spec": "branch-trail-v1",
+    "branch": "feat/my-feature",
+    "event": "create",
+    "sha": "abc1234",
+    "agent_id": "pmoves-ci-bot",
+    "signing_card_id": "00000000-0000-4000-8000-000000000035",
+    "ecosystem": "github",
+    "timestamp": "2026-05-12T00:00:00Z"
+  }
+  ```
+- **Notes:** Signing key delivered via `CHIT_PASSPHRASE` / `CHIT_SIGNING_KEY` repo secrets.
+  Best-effort — publish failure logs and exits 0 without blocking branch operations.
+  Gated against fork PRs to prevent RCE on the tailnet-connected ai-lab runner.
+- **Current 5090-CODEX receive-path snapshot (2026-05-21T04:54Z):**
+  `connz?subs=1` on `pmoves-nats-1` showed no live subscription matching `branch`
+  or `chit`. Branch trail publish remains CI-owned; live branch/CHIT receive needs a
+  persistent audit subscriber, `make -C pmoves nats-agent-inbox`, or an equivalent
+  MCP/NATS bridge before it can be treated as online.
 
 ## Agent Zero Task Coordination Subjects
 

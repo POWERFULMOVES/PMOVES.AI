@@ -54,6 +54,7 @@ PMOVES uses a Known Roads model: every dangerous-but-necessary operation has a c
 | Tailscale ACL drift audit | runbook + `pmoves/configs/tailscale-acl-policy.json` | `/fleet:acl-audit` |
 | RustDesk enrollment / QR | `make -C pmoves fleet-enroll ROLE=... DEVICE=...` | `/fleet:enroll` |
 | Submodule working-tree wipe | `git -C <sub> restore --source=HEAD --staged --worktree :/` | — |
+| `docker compose -f <overlay>.yml up` raw | `make -C pmoves overlay-up-<tier>` (see Compose Overlay Layering below) | — |
 | MinIO restart | `make -C pmoves up-minio` | `/minio:status` |
 | Supabase stack restart (13 services) | `make -C pmoves supa-restart` | — |
 | Supabase crash-loop diagnosis | `pmoves/docs/operations/SUPABASE_OPERATIONS.md` | — |
@@ -70,6 +71,56 @@ PMOVES uses a Known Roads model: every dangerous-but-necessary operation has a c
 **When raw commands are appropriate:** only when the user explicitly directs. The `ask` prompt surfaces to user for approval.
 
 If a rebuild manifest arrives as raw `docker compose build ...`, translate to the nearest Known Road whenever possible. Use raw build only when no dedicated target exists yet, and still return to the Make-target bring-up path.
+
+## Known Roads — Protected-File Edits via `KNOWN_ROAD`
+
+The Make-target Known Roads above cover dangerous *Bash commands*. Protected *file edits* — paths in `readOnlyPaths` (`pmoves/docker-compose*.yml`, migrations, contract schemas) — have their own Known Road: the **`KNOWN_ROAD` environment variable**, enforced by `.claude/hooks/damage-control/known_roads.py`.
+
+It is not an on/off flag. The value must carry a *provable reason* tied to the specific change:
+
+```bash
+KNOWN_ROAD=<domain>:<reason>
+```
+
+| Part | Values | Meaning |
+|---|---|---|
+| `<domain>` | `compose` (extensible) | which `readOnlyPath` class is opened |
+| `<reason>` | `handoff:<filename>` | the brief at `pmoves/docs/handoffs/<filename>` must exist on disk |
+| | `pr:<number>` / `issue:<number>` | references a tracked PR / issue |
+
+**Example** — editing `pmoves/docker-compose.base.yml` under an approved handoff:
+```bash
+KNOWN_ROAD=compose:handoff:z890-compose-base-network-tier-anchors.md
+```
+Set it in the shell that launches Claude Code, or in `.claude/settings.json` `env` for the duration of the work. **Never bake it into committed settings** — it is per-task, not ambient.
+
+**Provability guarantees:**
+- A bare value (`1`, `true`, arbitrary string) is **not** a Known Road — the edit stays blocked.
+- `handoff:` reasons are checked against the filesystem; a missing brief is rejected.
+- Every granted bypass appends a line to `.claude/hooks/damage-control/known-roads.jsonl` — append-only, git-tracked (`merge=union`), machine-parseable. **Fail-closed:** if the trail line cannot be written, the bypass is denied (an unrecorded bypass is not provable).
+- Scope is narrow: `compose:` opens *only* `pmoves/docker-compose*.yml`. Migrations, contracts, secrets stay blocked regardless.
+
+**Extending to a new domain:** add a predicate to `DOMAIN_PATTERNS` in `known_roads.py`. Parse / provability / trail logic is shared — only the per-domain file matcher changes. Codex mirrors `known_roads.py` for cross-agent parity.
+
+**Modifying the hook scripts themselves** (rare, meta) needs an explicit `Edit(.claude/hooks/damage-control/**)` + `Write(.claude/hooks/damage-control/**)` rule in `.claude/settings.local.json` — agents cannot self-grant this. *Using* an existing Known Road needs no permission rule, only the env var.
+
+## Compose Overlay Layering (avoid the single-file trap)
+
+PR #1233 split the compose stack into a base + 6 overlay files (`base.yml` + `core.yml` / `agents.yml` / `media.yml` / `ui.yml` / `workers.yml` / `apps.yml`). **Every overlay references shared networks (`pmoves_data`, `pmoves_api`, `pmoves_app`, `pmoves_bus`, `pmoves_external`, `pmoves_monitoring`) defined canonically in `docker-compose.base.yml:552-616`.**
+
+**The trap:** invoking `docker compose -f docker-compose.<overlay>.yml up -d` raw fails with `service "<svc>" refers to undefined network <name>` because the base layer wasn't included. This has cost the fleet hours of debugging.
+
+**As of 2026-05-18:** each overlay declares its referenced networks as `external: true` so the file parses standalone (clearer error: "network X declared as external, but could not be found"). The trap is reduced but not eliminated — networks must still EXIST at runtime.
+
+| What you want | Correct invocation |
+|---|---|
+| Full stack via overlays | `make -C pmoves overlay-up-full` |
+| Just core / agents / media / ui / workers / apps | `make -C pmoves overlay-up-<tier>` |
+| Monolithic (root `docker-compose.yml`) | `make -C pmoves up-data-tier` / `up-supabase` / `up-core` |
+| Validate a single overlay parses | `docker compose -f pmoves/docker-compose.<overlay>.yml config` ✅ (safe) |
+| Single-overlay `up`, `restart`, `--force-recreate` | **DO NOT** — use the matching `overlay-up-<tier>` target |
+
+**Detail + failure modes + cold-start recovery:** `pmoves/docs/operations/COMPOSE_LAYERING_RUNBOOK.md`.
 
 ## Damage-Control Hook Recovery
 
@@ -130,6 +181,84 @@ When adding a new open-weights model (Gemma, Qwen, Llama, Nemotron, etc.), verif
 **Agent Observability:** `claude.code.tool.executed.v1`; `agent.graphiti.signed.v1` (emitted by BoTZ gateway; extend to Agent Zero + Archon).
 
 **Full subject catalog:** `.claude/context/nats-subjects.md`.
+
+### NATS pub Known Road
+
+Publishing NATS messages from an agent session — three paths, choose by location:
+
+**1. On the node where NATS runs locally (KVM4-2, Z890):**
+```bash
+make -C pmoves nats-pub SUBJECT=claw.task.assign.v1 PAYLOAD='{"from":"pmoves-4090","to":"pmoves-spark","task":"cascade-wave-B"}'
+# expands to: docker exec pmoves-nats-1 nats pub <subject> '<payload>' --server nats://nats:pmoves@localhost:4222
+```
+
+**2. Via the `pmoves-nats-mcp` MCP tool (operator opt-in, see PATTERNS.md § NATS MCP server):**
+```
+nats_publish(subject="claw.task.assign.v1", payload={"from": "pmoves-4090", ...})
+```
+
+**3. From a remote node (4090, SPARK, Knuckles) via Tailscale:**
+```bash
+# Use Tailscale hostname — never raw IPs
+nats pub claw.task.assign.v1 '...' --server nats://nats:pmoves@pmoves-kvm4-2:4222
+# OR ssh to KVM4-2 and use path 1
+ssh root@pmoves-kvm4-2 'docker exec pmoves-nats-1 nats pub claw.task.assign.v1 ...'
+```
+
+**Never:** install `nats-py` on the Windows dev host and connect to `localhost:4222` — NATS does not run locally on the 4090 laptop.
+
+### SSH Key Setup (claw scripts)
+
+Claw scripts SSH via key at `pmoves/secrets/hostinger_vps`. The key is **not** synced by the secrets
+funnel (which only handles env vars). Install it once per machine:
+
+```bash
+# One-time: write key from a value you have (paste contents or read from a secure source)
+HOSTINGER_VPS_KEY="$(cat /path/to/hostinger_vps)" make -C pmoves claw-key-install
+# → writes to pmoves/secrets/hostinger_vps (chmod 600, gitignored)
+```
+
+Fallback search order used by claw scripts:
+1. `pmoves/secrets/hostinger_vps` ← primary (use `claw-key-install`)
+2. `$LOCALAPPDATA/Temp/hostinger_vps`
+3. `/tmp/hostinger_vps`
+
+### env.shared Extraction (never `source`)
+
+`pmoves/env.shared` is Docker Compose format, **not valid bash**. Never `source` it — Windows paths
+and section headers cause "command not found" errors and leave vars unset.
+
+**Extract a single variable:**
+```bash
+grep '^MY_VAR=' pmoves/env.shared | cut -d= -f2 | tr -d '"'
+```
+
+**Extract and use in a command:**
+```bash
+SECRETS_DIR=$(grep '^PMOVES_SECRETS_DIR=' pmoves/env.shared | cut -d= -f2 | tr -d '"')
+ssh -i "$SECRETS_DIR/hostinger_vps" root@pmoves-kvm4-2 "..."
+```
+
+### Cross-Node Task Delegation via Agent Zero MCP
+
+For delegating tasks to remote nodes, use Agent Zero's `/mcp/execute` endpoint — it runs on the remote node, has Tailscale + Docker access, and is the correct abstraction over raw NATS coordination signals.
+
+```bash
+# KVM4-1 Agent Zero (public endpoint, always reachable):
+curl -X POST https://api.pmoves.ai/mcp/execute \
+  -H "Authorization: Bearer $MCP_CLIENT_SECRET" \
+  -H "Content-Type: application/json" \
+  -d '{"task": "Validate O2a/O2b orchestration on 5090 — CGP consumers, 4 consumers on geometry.cgp.v1", "priority": "normal"}'
+
+# SPARK Agent Zero direct via Tailscale (use hostname, never IP):
+SPARK_IP=$(tailscale status --json | jq -r '.Peer[] | select(.HostName=="pmoves-spark") | .TailscaleIPs[0]')
+curl -X POST "http://pmoves-spark:8080/mcp/execute" \
+  -H "Authorization: Bearer $MCP_CLIENT_SECRET" \
+  -H "Content-Type: application/json" \
+  -d '{"task": "Open feat/spark-tz-glm5-minimax-sync PRs — Wave B is unblocked"}'
+```
+
+**Why Agent Zero over raw NATS:** Agent Zero executes work on the remote node (Docker exec, git, file edits). A raw `claw.task.assign.v1` publish is advisory only — no guarantee the target acts.
 
 ## Config Migration via brand-defaults
 
@@ -226,6 +355,58 @@ Consult `pmoves/configs/skill-pairings.yaml` for 7 defined pipelines. Match task
 
 Commands: `/chit:floos status`, `/chit:floos validate <pairing>`, `make -C pmoves floos-status`. Pairing consultation is **advisory**, not a gate.
 
+## Submodule Documentation Patterns (Known Road)
+
+Three load-bearing patterns surfaced by the CLAUDE.md fleet audit (2026-05-20) and the 8-PR landing wave (2026-05-22). Treat these as canonical when touching submodule docs or driving multi-repo fixes.
+
+### 1. Upstream `CLAUDE.md → AGENTS.md` symlink — overlay, never overwrite
+
+Forks of repos that use the upstream "edit AGENTS.md only" symlink convention (openclaw, some Anthropic-aligned repos) ship a symlink: root `CLAUDE.md` (mode `120000`) points at `AGENTS.md`. The 9-byte file content is the symlink target, **not** a stub. Overwriting it diverges from upstream and breaks future merges.
+
+**Pattern:**
+- Keep root `CLAUDE.md` symlink untouched.
+- Put the PMOVES overlay at **`.claude/CLAUDE.md`** (same pattern other PMOVES submodules use).
+- If `.claude/` is in `.gitignore` (typical for forks shipping agent-private workspaces), change `.claude/` → `.claude/*` and add `!.claude/CLAUDE.md` so the one shared context file can be tracked while everything else (settings, history, caches) stays out.
+- The negate rule must follow the parent directory ignore, and you must use `.claude/*` not `.claude/` — git won't re-include files under a fully-ignored directory.
+
+**Reference:** PMOVES-ClawZ#2 set the pattern.
+
+### 2. `gh pr create` "no commits between" after fresh push — retry with explicit refs
+
+Symptom: immediately after `git push -u origin <branch>` succeeds, `gh pr create --base <base> --head <branch>` fails with:
+```
+GraphQL: Head sha can't be blank, Base sha can't be blank, No commits between main and <branch>, Head ref must be a branch
+```
+
+The branch is on origin, has commits diverged, and `git log origin/main..origin/<branch>` shows them — it's a `gh` lookup race, not a real divergence problem.
+
+**Fix:** retry the create with explicit `--repo` and the `org:branch` head form:
+```bash
+gh pr create \
+  --repo POWERFULMOVES/<repo> \
+  --base <base> \
+  --head POWERFULMOVES:<branch> \
+  --title "..." --body "..."
+```
+
+Don't loop or wait — one retry with the explicit form is usually enough.
+
+### 3. Fleet audit → grep before opening per-finding PRs
+
+When a CLAUDE.md / docs audit (`claude-md-management:claude-md-improver`) cites one line of drift in a submodule, **grep the whole submodule for the same string before opening the PR**. The audit's per-file rubric scans one file at a time and reports the most visible drift, but the same anti-pattern usually repeats across siblings.
+
+**Example:** the audit flagged `tensorzero:3000/v1` in DoX `.claude/CLAUDE.md` line 272. A repo-wide grep showed **four** files with the same drift: `CLAUDE.md`, `docs/AGENT_GUIDE.md`, `docs/DOCKING_GUIDE.md`, `docs/agents/LEVEL3_AGENTS.md`. One PR cleaning four files is far better than four PRs chasing the same defect.
+
+**Workflow:**
+```bash
+# After the audit names a single-line finding in <submodule>:
+cd <submodule>
+git grep -nE '<the-drifted-string>' -- '*.md' '*.yml' '*.toml' '*.ts'  # widen as needed
+# Bundle every occurrence into one focused PR titled by the concern, not the file.
+```
+
+This pattern compounds with [[squash-merge rebase]] — fewer PRs against a submodule means fewer chances of base/dependent collisions when bumping the parent gitlink.
+
 ## PR Review & Merge Workflow
 
 **Skill chain:**
@@ -241,6 +422,59 @@ Commands: `/chit:floos status`, `/chit:floos validate <pairing>`, `make -C pmove
 **After merging:** `/docs:reconcile --update`; `/chit:review-sweep --trail`.
 
 **Full FlOO$ flow:** `make -C pmoves chit-flow-pr-monitor` / `chit-flow-pr-monitor-strict`.
+
+## Merge Hazards — Stacked PRs and Squash-Merge Rebase
+
+Two recurring git/PR-flow gotchas that every PMOVES agent should know before driving a merge sequence.
+
+### Stacked-PR auto-close
+
+When a PR's `base` is another feature branch (stacked PR), merging the base with `--delete-branch` causes GitHub to **auto-close the dependent**. Recovery is awkward (chicken-and-egg: can't reopen without base, can't change base without reopening).
+
+**Prevention (preferred):**
+- **Redirect dependent to `main` first**: `gh pr edit <dep#> --base main` before merging the base, OR
+- **Merge base without `--delete-branch`** and clean up branches manually after all dependents land, OR
+- Avoid stacking — structure dependents off `main` and rely on commit ordering.
+
+**Recovery (if it already happened):**
+```bash
+# 1. Recreate deleted base from main (temporary)
+git push origin origin/main:refs/heads/<deleted-base-branch>
+# 2. Reopen
+gh pr reopen <dep#>
+# 3. Redirect base
+gh pr edit <dep#> --base main
+# 4. Delete the temporary base
+git push origin --delete <deleted-base-branch>
+# 5. Rebase the dependent onto main locally (handle squash-merge case — see below)
+```
+
+### Squash-merge rebase (the "patch already upstream" case)
+
+When a base PR is **squash-merged** to main, the original commits are gone from main's history (replaced by one squash commit with a different SHA). Dependent PRs/branches that still carry the original commits will conflict on rebase because git sees the same content arriving twice.
+
+**Fix:** `git rebase --onto origin/main <last-squash-merged-original-sha>` — this replays only commits **after** the squash-merged ones onto current main, skipping the duplicates.
+
+```bash
+# Dependent's branch has: [base-PR-commit-1] [base-PR-commit-2] [dependent-commit]
+# Main has:               [...] [squash-merge-of-base-PR-commits-1-and-2]
+# Rebase replays only the dependent's own commit:
+git rebase --onto origin/main <sha-of-base-PR-commit-2>
+```
+
+**Detection:** `git rebase origin/main` reports `patch contents already upstream` or hits add/add conflicts on files the base PR introduced.
+
+### Submodule conflict during rebase
+
+When a submodule pointer conflicts during rebase (`UU` for a gitlink, `160000` mode), `git checkout --ours <path>` does **not** reliably take the rebase target's SHA. Use index-direct write instead:
+
+```bash
+git ls-tree origin/main <submodule-path>          # get target SHA
+git update-index --cacheinfo 160000,<target-sha>,<submodule-path>
+git rebase --continue   # or: git commit --amend --no-edit
+```
+
+The hint git prints (`Recursive merging with submodules currently only supports trivial cases. Please manually handle the merging of each conflicted submodule.`) is the canonical signal to switch to this approach.
 
 ## UI Development Checklist
 
@@ -319,6 +553,127 @@ DNS: `pmoves.ai` zone (pending Cloudflare migration). Subdomains: api, agent, ra
 
 Quick refs: `.claude/context/runner-topology.md`, `pmoves/docs/operations/WORKFLOW_RUNNER_MAP.md`, `deploy/HYBRID_RUNNER_STRATEGY.md`.
 
+## PostToolUse format hooks (opt-in)
+
+Two best-effort PostToolUse hooks live at `.claude/hooks/posttool-format/` — operator-gated; **not** wired into `.claude/settings.json` by default.
+
+| Hook | Trigger | Action |
+|------|---------|--------|
+| `python-format.sh` | `Edit`/`Write` on `*.py` | `uv run ruff format` + `uv run ruff check --fix --quiet` (output capped at 20 lines) |
+| `ui-lint.sh` | `Edit`/`Write` under `pmoves/ui/` matching `*.ts*` or `*.js*` | `pnpm lint --fix --max-warnings=0 -- <path>` (falls back to `npx eslint --fix`), capped at 30 lines |
+
+Both hooks read Claude Code's JSON via stdin, parse `tool_input.file_path`, and **always exit 0** — PostToolUse hooks must never block subsequent tool calls. They skip silently when `uv`/`pnpm` is missing or the file no longer exists. `ui-lint.sh` deliberately skips `tsc --noEmit` (too slow inside a hook); run `cd pmoves/ui && pnpm typecheck` separately at PR prep.
+
+Example operator opt-in (`.claude/settings.json`):
+
+```jsonc
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          { "type": "command", "command": ".claude/hooks/posttool-format/python-format.sh" },
+          { "type": "command", "command": ".claude/hooks/posttool-format/ui-lint.sh" }
+        ]
+      }
+    ]
+  }
+}
+```
+
+Source: gap-fill roadmap Wave 0 Task 11 (`docs/superpowers/plans/2026-05-15-pmoves-gap-fill-roadmap.md`).
+
 ## Submodules (pointer)
 
 `PMOVES-Agent-Zero`, `PMOVES-Archon`, `PMOVES.YT`, `PMOVES-Jellyfin`, `PMOVES-Open-Notebook`, `PMOVES-Deep-Serch`, `PMOVES-BoTZ`, `PMOVES-DoX`, `PMOVES-HiRAG`, plus health/wealth integrations and more (20 total). Full catalog: `.claude/context/submodules.md`.
+
+## Gap-fill artifacts (2026-05-15)
+
+Wave 0 of the [gap-fill roadmap](../docs/superpowers/plans/2026-05-15-pmoves-gap-fill-roadmap.md) landed these artifacts (35-item analysis; Tier 1 + Tier 3 scoped to autonomous build).
+
+### Activated constellation skills (pointers)
+| Pointer | Source submodule | Use case |
+|---------|------------------|----------|
+| `.claude/skills/fork-repository/` | `skills/pmoves-fork-repository-skill/` | Fan-out engineering work |
+| `.claude/skills/agent-sandbox/` | `skills/PMOVES-agent-sandbox-skill/` | Isolated execution; pairs with `archon-qa-agent` |
+| `.claude/skills/claude-d3js/` | `skills/Pmoves-claude-d3js-skill/` | D3.js visualizations |
+
+### Composable skills (`.claude/skills/`)
+| Skill | Invocation | Purpose |
+|-------|------------|---------|
+| `pmoves-mesh-preflight` | both | Catalog-driven `/healthz` walk |
+| `pmoves-nats-subject-audit` | Claude-only | Diff declared vs live JetStream subjects |
+| `pmoves-living-docs-refresh` | Claude-only | Surface stale docs from reconcile registry |
+| `pmoves-submodule-fleet` | both | 25+ submodule hygiene + behind-main |
+| `pmoves-chit-sign` | Claude-only | Sign + claim + stage NATS `chit.signed.v1` |
+
+### Governance subagents (`.claude/agents/`)
+| Agent | Role | Trigger |
+|-------|------|---------|
+| `nats-subject-auditor` | Gate new NATS publishers | New publisher/subscriber in diff |
+| `chit-compliance-reviewer` | CHIT-aware service review | PR touches CHIT-aware port |
+| `claim-collision-agent` | Block dual claims | Write/Edit on `AGNOTE4482PHI.t1.md` |
+| `chit-pr-audit-agent` | Control body ACK gate | CHIT-aware service modified |
+| `archon-qa-agent` | Mint flow QA | Between `archon.mint.agent.v1` and `archon.mint.confirmed.v1` |
+
+### Archon mint slash commands (`.claude/commands/archon/`)
+- `/archon:mint-agent` — mint a new PMOVES agent.
+- `/archon:mint-skill` — mint a new skill.
+- `/archon:creator-onboard` — provision a creator identity.
+
+> Mint NATS subjects (`archon.mint.*.v1`, `archon.qa.result.v1`) are Wave 2 service-side work; commands stage payloads for manual publish via `pmoves-nats-mcp` until then.
+
+### Governance hooks (opt-in)
+| Hook | Type | Behavior |
+|------|------|----------|
+| `governance/signoff-gate.sh` | PreToolUse Bash | Blocks `gh pr merge` without 3-body ACK in `AGNOTE4482_SIGNOFF_CHECKLIST.md` |
+| `governance/known-roads-enforcer.py` | PreToolUse Bash | Redirects raw `docker compose up/restart/down` → `make -C pmoves up-*` |
+| `governance/claim-collision-pre.py` | PreToolUse Write/Edit | Blocks dual claims on `AGNOTE4482PHI.t1.md` |
+| `session-env-check.sh` (modified) | SessionStart | Appends Emperor-CHIT-Humility disclosure to `additionalContext` |
+
+Operator opt-in snippet:
+```jsonc
+"PreToolUse": [
+  { "matcher": "Bash", "hooks": [
+    { "type": "command", "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/governance/signoff-gate.sh\"" },
+    { "type": "command", "command": "uv run --quiet \"$CLAUDE_PROJECT_DIR/.claude/hooks/governance/known-roads-enforcer.py\"" }
+  ]},
+  { "matcher": "Edit|Write", "hooks": [
+    { "type": "command", "command": "uv run --quiet \"$CLAUDE_PROJECT_DIR/.claude/hooks/governance/claim-collision-pre.py\"" }
+  ]}
+]
+```
+
+### NATS MCP server (`pmoves-nats-mcp/`)
+Tools: `nats_publish(subject, payload, headers?)`, `nats_subscribe(subject, timeout_seconds?, max_messages?)`. Setup: `cd pmoves-nats-mcp && uv sync && uv run python -m nats_mcp.server`. Wire into `.claude/mcp.json` per the project README — operator opt-in after smoke-test.
+
+### Wave 1 / Wave 2 (operator + service-side)
+See [`docs/superpowers/plans/2026-05-15-pmoves-gap-fill-roadmap.md`](../docs/superpowers/plans/2026-05-15-pmoves-gap-fill-roadmap.md) §§ "Wave 1" and "Wave 2" — API-keyed MCPs (Prometheus/Loki, Sentry, Linear, Brave, Cloudflare, Playwright, Postgres), Supabase schema migrations (`archon_minted_artifacts`, `agent_id` FK), and Archon-side mint subject publishers.
+
+### Pair recipes (developer-tool composition)
+
+Distinct from the FlOO$ service-level pipelines above. These are `.claude/skills/` chains for **developer workflows** — invoked by an agent during a session, not a service-side dataflow.
+
+| Recipe | Chain | Trigger |
+|--------|-------|---------|
+| **CHIT-claim** | `pmoves-mesh-preflight` → `pmoves-chit-sign` → `pmoves-living-docs-refresh` | Committing to a CHIT-aware service (Tokenism, Hi-RAG v2, Consciousness, Evo Controller, A2UI Bridge, AgentGym) |
+| **NATS-introducer** | `pmoves-nats-subject-audit` → `pmoves-chit-sign` → (opt) `pmoves-mesh-preflight` | Adding new NATS publisher/subscriber under `tokenism.*`, `chit.*`, `geometry.*`, `flooz.*`, `minimax.*` |
+| **Submodule-promotion** | `pmoves-submodule-fleet` → `pmoves-living-docs-refresh` → `pmoves-chit-sign` | Before opening a submodule pointer-promotion PR |
+| **Pre-claim** | `pmoves-mesh-preflight` → AGNOTE CLAIM | Every AGNOTE register CLAIM that touches a service |
+| **Marco/Polo (per-agent)** | `pmoves-cipher-memory store` → … this agent's own future sessions … → `pmoves-cipher-memory search` | **Per-agent** durable memory. Cipher is a broker — each agent gets its own cipher session; storage is scoped to that agent. Pending host port binding fix on this Windows Docker Desktop host. |
+| **Cross-agent CHIT trail** | `pmoves-chit-sign` → AGNOTE4482PHI.t1.md row + NATS `chit.signed.v1` | Knowledge other agents need to see (claims, releases, audit). NOT Cipher (per-agent). Cross-agent flow is signed NATS + register. |
+
+### Node-affinity team aggregations
+
+Each developer skill has a natural node-owner from lane history + service knowledge. Auto-CC the team on PRs that touch each skill's domain.
+
+| Team | Members | Skills owned | Typical PR surface |
+|------|---------|--------------|--------------------|
+| **CHIT signing** | 5090 + 4090 | `pmoves-chit-sign`, `pmoves-cipher-memory` | Trail signing, cross-session memory for CHIT-aware services |
+| **Substrate** | Z890 + 4090 | `pmoves-mesh-preflight`, `pmoves-submodule-fleet` | Node provisioning, fleet health, hardware audit |
+| **NATS hygiene** | SPARK + 5090 | `pmoves-nats-subject-audit`, `pmoves-chit-sign` | Subject catalog consistency, persona/voice/geometry axis |
+| **Visual + sandbox** | SPARK + 5090 + 4090 | `claude-d3js`, `agent-sandbox`, `fork-repository` | Audit visualization, sandboxed mint validation, parallel investigations |
+| **Doc steward** | 5090 + Z890 | `pmoves-living-docs-refresh`, `pmoves-submodule-fleet` | LIVING_DOCS_INDEX freshness, submodule README sync |
+
+> Skill discovery is filesystem-based — adding `.claude/skills/<slug>/SKILL.md` auto-registers the skill in any active Claude session without restart. Use `git checkout <branch> -- .claude/skills` during PR review to live-validate.

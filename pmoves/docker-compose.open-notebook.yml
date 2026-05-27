@@ -13,7 +13,7 @@ x-env-tier-worker: &env-tier-worker
 services:
   open-notebook:
     image: ${OPEN_NOTEBOOK_IMAGE:-ghcr.io/powerfulmoves/pmoves-open-notebook:pmoves-latest}
-    # Default points at the PMOVES.AI-Edition-Hardened fork image built from
+    # Default points at the PMOVES.AI-Edition-v1.13 fork image built from
     # the PMOVES-Open-Notebook submodule (TensorZero provider mode, fail-closed
     # auth, USER directive, /healthz + /metrics, Fernet credential encryption,
     # Phase C hardening: NATS auth, no root SurrealDB defaults).

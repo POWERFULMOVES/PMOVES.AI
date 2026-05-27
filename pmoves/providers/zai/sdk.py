@@ -56,22 +56,35 @@ class ZAIProvider:
     BASE_URL = "https://api.z.ai/api/coding/paas/v4"
 
     # Available models from Z.AI GLM Coding Plan
+    # NOTE: Coding Plan API (/api/coding/paas/v4) is TEXT-ONLY — no vision.
+    # Vision requires standard API (/api/paas/v4) via GLM-5V-Turbo (separate endpoint).
+    # Context windows and output tokens per Z.AI docs (2026-05-14).
     MODELS = {
+        "glm-5v-turbo": GLMModelConfig(
+            model_name="glm-5v-turbo",
+            context_window=128000,
+            max_output_tokens=4096,
+            supports_vision=True,
+            supports_function_call=True,
+            supports_thinking=False,
+            supports_openclaw=False,
+            api_endpoint="https://api.z.ai/api/paas/v4",  # Standard API (not coding plan) for vision
+        ),
         "glm-5-turbo": GLMModelConfig(
             model_name="glm-5-turbo",
-            context_window=128000,
-            max_output_tokens=8192,
-            supports_vision=True,
+            context_window=204800,
+            max_output_tokens=131072,
+            supports_vision=False,  # Coding Plan is text-only
             supports_function_call=True,
             supports_thinking=True,  # GLM-5 Turbo supports thinking parameter
             supports_openclaw=True,  # Optimized for OpenClaw scenario
-            api_endpoint="https://api.z.ai/api/paas/v4",  # GLM-5 Turbo endpoint
+            api_endpoint="https://api.z.ai/api/coding/paas/v4",  # GLM Coding Plan endpoint
         ),
         "glm-5.1": GLMModelConfig(
             model_name="glm-5.1",
-            context_window=128000,
-            max_output_tokens=8192,
-            supports_vision=True,
+            context_window=204800,
+            max_output_tokens=131072,
+            supports_vision=False,  # Coding Plan is text-only
             supports_function_call=True,
             supports_thinking=True,  # GLM-5.1 supports thinking parameter
             supports_openclaw=False,
@@ -79,9 +92,9 @@ class ZAIProvider:
         ),
         "glm-5": GLMModelConfig(
             model_name="glm-5",
-            context_window=128000,
-            max_output_tokens=8192,
-            supports_vision=True,
+            context_window=204800,
+            max_output_tokens=131072,
+            supports_vision=False,  # Coding Plan is text-only
             supports_function_call=True,
             supports_thinking=True,
             supports_openclaw=False,
@@ -91,7 +104,7 @@ class ZAIProvider:
             model_name="glm-4.7",
             context_window=128000,
             max_output_tokens=8192,
-            supports_vision=True,
+            supports_vision=False,  # Coding Plan is text-only
             supports_function_call=True,
             supports_thinking=False,
             supports_openclaw=False,
@@ -99,8 +112,8 @@ class ZAIProvider:
         ),
         "glm-4.5-air": GLMModelConfig(
             model_name="glm-4.5-air",
-            context_window=128000,
-            max_output_tokens=4096,
+            context_window=131072,
+            max_output_tokens=16384,
             supports_vision=False,
             supports_function_call=True,
             supports_thinking=False,
@@ -124,7 +137,7 @@ class ZAIProvider:
         message: str,
         model: str = "glm-5-turbo",  # Primary fast model
         max_tokens: int = 4096,
-        temperature: float = 0.7,
+        temperature: float = 0.2,  # GLM-5 defaults to 1.0; override to 0.0-0.3 for coding
         stream: bool = False,
         thinking: bool = None,  # Enable thinking parameter for GLM-5 Turbo/5.1
     ) -> Dict[str, Any]:
@@ -192,7 +205,7 @@ class ZAIProvider:
         message: str,
         model: str = "glm-5-turbo",
         max_tokens: int = 4096,
-        temperature: float = 0.7,
+        temperature: float = 0.2,  # GLM-5 defaults to 1.0; override to 0.0-0.3 for coding
         stream: bool = False,
         thinking: bool = None,
     ) -> Dict[str, Any]:

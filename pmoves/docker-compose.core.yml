@@ -1051,3 +1051,27 @@ services:
         limits:
           cpus: '2.0'
           memory: 4G
+
+# =============================================================================
+# Networks — declared external so this overlay parses standalone.
+# =============================================================================
+# Canonical definitions live in docker-compose.base.yml (lines 552-616).
+# This block exists ONLY so single-file invocations
+# (e.g. `docker compose -f docker-compose.core.yml config`) don't fail
+# with "service refers to undefined network <name>". Networks must still
+# EXIST at runtime — either via a prior `make overlay-up-*` (which layers
+# base.yml first) OR via manual `docker network create`. See
+# pmoves/docs/operations/COMPOSE_LAYERING_RUNBOOK.md for the full pattern.
+networks:
+  pmoves_data:
+    external: true
+  pmoves_api:
+    external: true
+  pmoves_app:
+    external: true
+  pmoves_bus:
+    external: true
+  pmoves_external:
+    external: true
+  pmoves_monitoring:
+    external: true

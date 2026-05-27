@@ -907,3 +907,257 @@ This entry is signed `5090→z890` per `vision_mirror_becomes_original.md`. The 
 - Timestamp: `2026-05-09`
 
 <!-- GRAPHITI_MARK: z890-CLAUDE::CLAUDE-MD-FLEET-MODERNIZE-PHASE2::5090-TO-Z890::2026-05-09 -->
+
+## Multilingual Translation Tooling (2026-05-11)
+
+### Context
+Operator noted that families sharing PMOVES — including non-English-speaking parents — need first-class multilingual support. The Transcribe & Fetch service was the right layer to wire this: ingestion-time translation decouples linguistic prep from the agentic reasoning layer, protecting model integrity and enabling the FlOO$ prosodic layer to work in any language.
+
+### Work Performed
+- Wired `target_language` and `task` (transcribe | translate) across **all 3 transcription paths** in `PMOVES-transcribe-and-fetch`
+- **Local faster-whisper**: `_transcribe_loop_sync` + `transcribe_audio` — language hint + task injected into `model.transcribe()`
+- **Cloud API path**: `process_audio_with_groq` — dynamic endpoint switch between `.transcriptions.create` and `.translations.create`; timestamp fallbacks for translation segments
+- **LLM Registry path**: `process_video` orchestrator — `language` + `task` forwarded to `registry_service.transcribe_audio()`
+- **API surface**: `VideoRequest` and `VideoProcessRequest` Pydantic models expose `target_language` and `task`; propagated via `model_config` dict through `process_video_wrapper.py`
+- **Obsidian markdown output**: All 3 paths now emit `**Detected Language:**` and `**Task:**` metadata headers — downstream LLMs (HiRAG, A2UI) receive explicit linguistic context
+
+### PRs
+| PR | Title | Status |
+|----|-------|--------|
+| [PMOVES-transcribe-and-fetch#66](https://github.com/POWERFULMOVES/PMOVES-transcribe-and-fetch/pull/66) | feat(transcribe): multilingual translation tooling | IN REVIEW |
+| [PMOVES.AI#1461](https://github.com/POWERFULMOVES/PMOVES.AI/pull/1461) | feat: bump PMOVES-transcribe-and-fetch gitlink | IN REVIEW (merge after #66) |
+
+### Handoff Items for SPARK
+- [ ] `refactor(transcribe): rename process_audio_with_groq → process_audio_with_cloud_api` — strip hardcoded Groq URL/key; wire Ollama/MiniMax/Alibaba as providers via `model_config` or env var — **separate PR**
+- [ ] Smoke test: `task=translate` on non-English YouTube video (local faster-whisper + cloud path)
+- [ ] P7 hardware routing prep: vLLM, Llama.cpp, Unsloth endpoints in `LLMRegistryService`
+
+### Handoff Items for 4090-CLAUDE
+- [ ] `fix(transcribe): add @field_validator("task") on VideoRequest` — constrain to `"transcribe" | "translate"` with lowercase normalization
+- [ ] Sign this trail entry and append claim/release to `AGNOTE4482PHI.t1.md`
+
+### Three-Body Pattern
+| Role | Agent | Scope |
+|---|---|---|
+| Delivery | `ANTIGRAVITY-OPUS` | 4 atomic commits, 2 PRs, this trail entry |
+| Control | `4090-CLAUDE` | Code review, task field validator, trail sign-off |
+| Runtime | `SPARK` | Provider rename, smoke tests, P7 hardware prep |
+
+### Design Note
+Translation is handled at the ingestion layer — Whisper/cloud API does the linguistic work before any LLM reasoning begins. This means the Agent Trail always carries explicit language context, the model never has to guess, and FlOO$ prosody can match the source culture's cadence without destructive re-processing downstream. **The yellow bricks are lit. SPARK follows the road.**
+
+### Agent ACK
+- Agent: `ANTIGRAVITY-OPUS`
+- Signature: `ACK::ANTIGRAVITY-OPUS::MULTILINGUAL-TRANSLATION-TOOLING`
+- Timestamp: `2026-05-11`
+
+<!-- GRAPHITI_MARK: ANTIGRAVITY-OPUS::MULTILINGUAL-TRANSLATION-TOOLING::2026-05-11 -->
+
+### ACK::ANTIGRAVITY-OPUS::MULTILINGUAL-TRANSLATION-TOOLING::2026-05-11
+- **Status**: VALIDATED (Local Path)
+- **Validation Results**:
+    - `target_language` and `task` parameters successfully propagated to `WhisperModel.transcribe`.
+    - Markdown metadata injection verified (`**Task:** Translate`, `**Detected Language:** en`).
+    - Renamed `process_audio_with_groq` -> `process_audio_with_cloud_api` for provider-agnosticism.
+    - dispatcher logic refactored for clean engine switching (Local vs Registry vs Cloud API).
+- **Handoff to SPARK/4090-CLAUDE**:
+    - **SPARK**: Complete the implementation of `process_audio_with_cloud_api` to support configurable `base_url` for Ollama/MiniMax/Alibaba (replacing hardcoded Groq endpoints).
+    - **4090-CLAUDE**: Implement strict Pydantic validation for `VideoRequest.task` in `main.py` (ensure values are limited to `["transcribe", "translate"]`).
+    - **SPARK**: Scale Remotion/Three.js hologram geometry in A2UI to fill the 1920x1080 viewport.
+- **Commit Reference**: `feat(transcribe): rename groq to cloud_api and validate multilingual parameters`
+- **Timestamp**: `2026-05-12T16:59:00Z`
+
+<!-- GRAPHITI_MARK: ANTIGRAVITY::MULTILINGUAL-VALIDATION::2026-05-12 -->
+
+## MiniMax Edition Integration — Token Plan Phase 2 (2026-05-13)
+
+### Context
+Operator requested proper integration of MiniMax Token Plan into PMOVES.AI agent and service ecosystem. Based on Token Plan documentation (https://platform.minimax.io/docs/token-plan/intro) and existing AGNOTE4482 MiniMax parity work.
+
+### Work Performed
+
+**Token Plan Integration (New):**
+- Created `minimax-m2.7.yaml` model suit (1M token context, primary)
+- Created `minimax-m2.1.yaml` model suit (100K token context, efficient)
+- Created `minimax_edition.yaml` agent profile (5090/4090/Z890 node affinity)
+- Updated `minimax_provider_cascade.yaml` with Token Plan configuration
+- Added MiniMax NATS subjects to `nats-subjects.md` catalog
+- Updated `agent_signatures.yaml` with `minimax-edition` alter
+
+**Token Plan Details Captured:**
+| Plan | M2.7 Requests/5hr | Speech | Images | Video | Music |
+|------|-------------------|--------|--------|-------|-------|
+| Starter | 1,500 | — | — | — | 100/day |
+| Plus | 4,500 | 4,000 chars/day | 50/day | — | 100/day |
+| Max | 15,000 | 11,000 chars/day | 120/day | 2/day | 100/day |
+| Ultra-Highspeed | 30,000 | 50,000 chars/day | 800/day | 5/day | 100/day |
+
+**Key Integration Points:**
+- `MINIMAX_TOKEN_PLAN_API_KEY` — Token Plan subscription key
+- `MINIMAX_API_KEY` — Pay-as-you-go fallback key
+- M2.7 uses 5-hour rolling window for quota reset
+- Other models use daily quotas
+- Fallback chain: MiniMax → GLM pay-as-you-go
+
+### Files Created/Modified
+| File | Action | Purpose |
+|------|--------|---------|
+| `pmoves/configs/model-suits/minimax-m2.7.yaml` | **NEW** | M2.7 model suit (1M context) |
+| `pmoves/configs/model-suits/minimax-m2.1.yaml` | **NEW** | M2.1 model suit (100K context) |
+| `pmoves/configs/agent-profiles/minimax_edition.yaml` | **NEW** | MiniMax edition agent profile |
+| `pmoves/tools/models/minimax_provider_cascade.yaml` | **EDIT** | Token Plan + model suit refs |
+| `pmoves/.claude/context/nats-subjects.md` | **EDIT** | Added 7 MiniMax subjects |
+| `pmoves/config/agent_signatures.yaml` | **EDIT** | Added minimax-edition alter |
+
+### MiniMax NATS Subjects Added
+- `minimax.character.request.v1` — Character persona requests
+- `minimax.character.response.v1` — Character synthesis response
+- `minimax.voice.prosodic.v1` — Prosodic voice synthesis
+- `minimax.agent.trail.v1` — Agent trail entries
+- `minimax.agent.status.v1` — Health heartbeat
+- `minimax.quota.warning.v1` — Quota low alert
+- `minimax.quota.exhausted.v1` — Quota exhausted alert
+
+### FlOO$ Character Personas Defined
+| Character | Archetype | Voice Register | Temperature |
+|-----------|----------|---------------|-------------|
+| Dr. Bean | Methodical genius, quietly absurd | Measured, precise, deadpan | 0.3 |
+| Mr. Clean | Precise, powerful, no-nonsense | Direct, confident, crisp | 0.1 |
+| PowerPuff Girls | Trio of specialized powers | High energy, distinct | 0.6 |
+
+### Three-Body Pattern
+| Role | Agent | Scope |
+|------|-------|-------|
+| Delivery | `MiniMax Agent` | Model suits, agent profile, NATS subjects, cascade update |
+| Control | Operator | Review, Token Plan API key configuration |
+| Memory | AGNOTE4482 | This trail entry, signoff checklist update |
+
+### Signoff Checklist Status
+⚠️ §Skills Catalog parity pending — MiniMax skills translation from GLM skills not yet complete
+⚠️ §Runtime smoke tests pending — need to verify Token Plan key + quota monitoring
+
+### Handoff Items for Next Agent
+- [ ] Configure `MINIMAX_TOKEN_PLAN_API_KEY` in env.shared
+- [ ] Run smoke test: `curl https://api.minimax.chat/v1/models` with Token Plan key
+- [ ] Validate quota monitoring via NATS subjects
+- [ ] Create MiniMax skills (translate from GLM skills)
+
+### Agent ACK
+- Agent: `MiniMax Agent`
+- Signature: `ACK::MINIMAX-AGENT::TOKEN-PLAN-PHASE2-INTEGRATION`
+- Timestamp: `2026-05-13T05:30:00Z`
+
+<!-- GRAPHITI_MARK: MINIMAX-AGENT::TOKEN-PLAN-PHASE2-INTEGRATION::2026-05-13 -->
+
+## Supply Chain Audit (2026-05-14)
+
+### Work Performed
+- Full TanStack supply chain audit across all PMOVES submodules
+- 16 findings identified across dependency trees
+- 6 findings patched with version pins or replacements
+- Audit report: `research/TANSTACK_SUPPLY_CHAIN_AUDIT_2026-05-14.md`
+- Hardening plan: `research/SUPPLY_CHAIN_HARDENING_PLAN_2026-05-14.md`
+
+### Agent ACK
+- Agent: `AGENT-ZERO-GLM (SIDECAR)`
+- Signature: `ACK::AGENT-ZERO-GLM::SUPPLY-CHAIN-AUDIT`
+- Timestamp: `2026-05-14`
+
+<!-- GRAPHITI_MARK: AGENT-ZERO-GLM::SUPPLY-CHAIN-AUDIT::2026-05-14 -->
+
+## SPARK Model Strategy + Profile Reconciliation (2026-05-15)
+
+### Work Performed
+- Created canonical SPARK model strategy document: `pmoves/docs/SPARK_MODEL_STRATEGY.md` (785 lines)
+- Reconciled hardware profiles for DGX Spark GB10 (128GB unified memory, Blackwell)
+- Documented model deployment strategy: Ollama local (nemotron-3-super:120b), cloud GLM coding, MiniMax
+- Resolved SPARK agent profile configuration gaps
+- Node doc: `pmoves/docs/AGENTS/AGNOTE-dgx-spark.md`
+- Related: `research/LONGBOW_COMPARATIVE_ANALYSIS.md` signoff corrected (36/36), SITREP signoff figures fixed
+
+### Agent ACK
+- Agent: `AGENT-ZERO-GLM (SIDECAR)`
+- Signature: `ACK::AGENT-ZERO-GLM::SPARK-MODEL-STRATEGY`
+- Timestamp: `2026-05-15`
+
+<!-- GRAPHITI_MARK: AGENT-ZERO-GLM::SPARK-MODEL-STRATEGY::2026-05-15 -->
+
+## CHIT Hardening Sprint (2026-05-16)
+
+### Work Performed
+- 66-file security audit across CHIT crypto, signing, and compose hardening
+- Crypto consolidation: unified signing primitives across 3 services (agent-zero, archon, supabase-proxy)
+- CHIT signing enabled for 3 services in compose stack
+- Compose hardening: secret passing, network isolation, health check validation
+- Doc closure: stale signoff figures corrected across LONGBOW, SITREP, and related docs
+- Signoff checklist: **37/37** — all items checked (up from 35/37 on 2026-05-03)
+- Related: `research/LONGBOW_COMPARATIVE_ANALYSIS.md` corrected (36/36), `research/ISSUE_AGNOTE4482_DOC_GAPS.md` (C1+H1 marked RESOLVED)
+
+### Agent ACK
+- Agent: `AGENT-ZERO-GLM (SIDECAR)`
+- Signature: `ACK::AGENT-ZERO-GLM::CHIT-HARDENING-SPRINT`
+- Timestamp: `2026-05-16`
+
+<!-- GRAPHITI_MARK: AGENT-ZERO-GLM::CHIT-HARDENING-SPRINT::2026-05-16 -->
+
+## Big Ball 5090 CODEX Gap Closure (2026-05-25 to 2026-05-26)
+
+### Context
+Operator asked Codex to validate SPARK's cursory PMOVES/CHIT findings, close partial implementation gaps, initialize submodules, validate on the 5090 TensorZero node, and proceed through ToKenism/Tokenism lanes while keeping unfinished math claims honest.
+
+This work ran on branch `codex/big-ball-5090-gap-closure` in the parent PMOVES repo and `codex/tokenism-chit-gap-closure` in `PMOVES-ToKenism-Multi`.
+
+### Work Performed
+- Initialized declared submodules and verified `make -C pmoves submodule-integrity`: 50 gitlinks, 0 uninitialized, 0 drifted.
+- Validated TensorZero 5090 health at `http://localhost:3030/health`: gateway, ClickHouse, Postgres, and Valkey all `ok`.
+- Preserved unrelated dirty `PMOVES-Headscale` generated/testdata marker; not staged or reverted.
+- Landed DoX hyperbolic projection wiring in parent via `PMOVES-DoX` gitlink update.
+- Closed Tokenism settlement lanes in `PMOVES-ToKenism-Multi`:
+  - deterministic settlement planner
+  - signed settlement requested/recorded/failed events
+  - Firefly dry-run executor
+  - live Firefly executor gate
+  - guarded contract settlement executor
+  - signed deployment attestation gate for Firefly and contract live execution
+  - Hardhat ABI manifest export and local sample manifest
+- Updated parent Tokenism matrix docs to distinguish implemented guardrails from remaining production activation.
+
+### Lane Status
+
+| Lane | Status | Notes |
+|------|--------|-------|
+| CHIT core | Ready for PR review | Merkle hashing, schema coverage, publisher validation, Python crypto consolidation, FloOS hook validation, and gateway fixes were preserved from the closure pass |
+| Hyperbolic geometry | Implemented as embedding support | DoX Poincare projection is wired; still not a proof-backed fairness pillar |
+| Tokenism Firefly settlement | Approval-gated | Dry-run default; live writes require signed executor identity, matching operator approval, and signed deployment attestation |
+| Tokenism contract settlement | Approval/deployment-gated | Dry-run call drafts; live writes require deployment manifest, signed deployment attestation, RPC/wallet custody references, signed executor identity, and matching operator approval |
+| TensorZero 5090 | Healthy for this branch | Health endpoint returned all `ok` during the pass |
+| Model fitness / EvoSwarm | Parent work exists; trust bridge remains | Signed scorecards and deterministic optimizer operators are present, but trusted optimizer publishing still needs live identities/topology |
+| Zeta | Heuristic | Keep labeled heuristic until a method-design doc is accepted |
+
+### PR Readiness
+
+The branch is ready to open a draft PR after this AGNOTE pass. Evidence already collected:
+- ToKenism focused Jest settlement suites: 32 tests passing.
+- ToKenism `npm run typecheck`: passing.
+- ToKenism Hardhat harness: 5 tests passing.
+- Hardhat manifest export: passing with and without required deployment attestation.
+- Parent `git diff --check`: passing.
+- Parent submodule integrity: passing.
+- TensorZero 5090 health: passing.
+
+No open PR existed for `codex/big-ball-5090-gap-closure` at the time of this note.
+
+### Remaining 5090 CODEX Work
+
+1. Production activation pack: real deployed contract addresses, RPC/wallet custody references, FireFly environment binding, and operator-signed production manifests.
+2. Trusted optimizer bridge: verify PMOVES-AGENT-ZERO-CODEX, HERMES, and Claw signing identities before accepting optimizer output as trusted.
+3. Model-fitness integration: connect Hugging Face candidate discovery, TensorZero telemetry, and Pinokio/Unsloth eval output into persisted `model.fitness.recorded.v1` scorecards.
+4. P7/5090 runtime checks: validate P7 requirements directly on 5090, NATS leaf path, and TensorZero/Unsloth/Pinokio callable smoke.
+5. Zeta method design: write/review method doc before stronger math claims.
+
+### Agent ACK
+- Agent: `CODEX-GPT5`
+- Signature: `ACK::CODEX-GPT5::BIG-BALL-5090-GAP-CLOSURE`
+- Timestamp: `2026-05-26`
+
+<!-- GRAPHITI_MARK: CODEX-GPT5::BIG-BALL-5090-GAP-CLOSURE::2026-05-26 -->

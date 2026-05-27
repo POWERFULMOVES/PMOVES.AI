@@ -43,7 +43,7 @@ async def main():
                 "control_plane": payload.get("control_plane", {})
             }
 
-            publish_subject = "geometry.packet.decoded.v1"
+            publish_subject = os.environ.get("FLUTE_CGP_DECODED_SUBJECT", "geometry.packet.decoded.v1")
             await nc.publish(publish_subject, json.dumps(decoded_event).encode())
             logger.info(f"Successfully decoded and published to {publish_subject}")
 

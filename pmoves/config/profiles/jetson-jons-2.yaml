@@ -1,0 +1,81 @@
+id: jetson-jons-2
+name: "Jetson Orin Nano Super 8GB — Unit 2"
+description: >
+  NVIDIA Jetson Orin Nano Super 8GB edge inference node. 6-core Cortex-A78AE
+  + Ampere GPU (1024 CUDA cores, SM_87, 67 TOPS) + 8GB unified LPDDR5X.
+  JetPack 6.x (L4T 36.x). Pinokio 7 with gepeto and pmoves-services skills.
+hardware:
+  cpu:
+    vendor: NVIDIA
+    model: "Jetson Orin Nano Super (6-core Cortex-A78AE)"
+    cores: 6
+    threads: 6
+    arch: arm64
+  gpus:
+    - type: nvidia-orin-ampere
+      model: "Orin Nano Super (Ampere SM_87)"
+      gpu_target: sm_87
+      memory_gb: 8            # Unified with CPU (LPDDR5X)
+      cuda_cores: 1024
+      tops: 67
+  ram_gb: 8                   # Unified memory shared with GPU
+  unified_memory_gb: 8
+  storage: "64GB eMMC + NVMe expansion"
+  tags: [edge, jetson, arm64, orin, nano-super, sm_87, unified-memory, pinokio]
+jetpack:
+  target: "6.2"               # L4T 36.4.x — JetPack 7.0 not available for JONS
+  base_image: "nvcr.io/nvidia/l4t-jetpack:r36.4.4"
+  dustynv_image: "dustynv/l4t-pytorch:r36.2.0"
+compose_overrides:
+  - docker-compose.arm64.override.yml
+  - docker-compose.jetson-edge.override.yml
+model_bundles:
+  - whisper-small-int8        # Faster-Whisper INT8
+  - yolov8n-tensorrt          # Nano YOLO + TensorRT
+  - phi3-mini                 # Small LLM (3.8B via Ollama)
+  - gemma3-2b-trt             # Gemma 3 2B via TensorRT
+services:
+  - mesh-agent                # Node announcer (NATS every 15s)
+  - fleet-agent               # Fleet watcher / audit participant
+  - ollama                    # Small model inference (≤8B only)
+  - ffmpeg-whisper            # On-device transcription
+  - media-video               # YOLOv8 object detection
+mcp:
+  - docker
+  - host
+pinokio:
+  enabled: true
+  native_skills:
+    - pinokio                 # Built-in Pinokio app discovery + launch
+    - gepeto                  # Built-in code assistant (~/.agents/skills/gepeto)
+  pbnj_skills:
+    - pmoves-services         # Docker Compose profile controls
+    - pmoves-remote           # Headscale/RustDesk remote access
+messaging:
+  telegram: optional
+  discord: false
+  whatsapp: false
+  webrtc: true
+tailscale:
+  role: edge-node
+  hostname_pattern: "pmoves-jons-2"
+  tags: ["tag:edge", "tag:jetson", "tag:arm64"]
+nats_announce:
+  node_id: pmoves-jons-2
+  tier: edge-inference
+  caps:
+    gpu: orin-nano-super-sm87
+    vram: 8gb-unified
+    cuda: sm_87
+    tops: 67
+    arch: arm64
+    pinokio: true
+    gepeto: true
+notes:
+  - "Orin Nano Super 8GB — 67 TOPS (vs 40 TOPS on Nano 8GB). Memory bandwidth 102 GB/s vs 68 GB/s."
+  - "JetPack 6.x (L4T 36.x). JetPack 7.x target: 7.2 (Q2 2026). Do NOT flash JetPack 7.0 — JONS not supported."
+  - "Docker must use --runtime nvidia. Set in /etc/docker/daemon.json."
+  - "Unified 8GB: keep total model + runtime VRAM under 6GB."
+  - "TensorRT optimization critical — 2-5x speedup over vanilla CUDA."
+  - "Pinokio 7 installed — gepeto built-in skill available at ~/.agents/skills/gepeto."
+  - "Bootstrap: bash pmoves/scripts/bootstrap-node.sh --node-id pmoves-jons-2 --profile jetson-jons-2"

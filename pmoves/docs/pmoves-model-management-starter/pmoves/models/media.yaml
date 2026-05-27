@@ -6,4 +6,4 @@ vision:
 asr:
   jetson_orin_8gb: whisper-small@int8 (faster-whisper)
   laptop_4090:     whisper-large-v2@fp16
-  workstation_5090: whisper-large-v2@fp16
+  desktop-9950xd:   whisper-large-v2@fp16

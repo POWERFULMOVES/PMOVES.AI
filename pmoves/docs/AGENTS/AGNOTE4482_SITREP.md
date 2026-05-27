@@ -4,7 +4,7 @@ GRAPHITI_MARK: `PHI-4482-SITREP::QUICK-ORIENTATION`
 
 > **For:** Any agent dropping into a PMOVES session cold (fresh start, VS Code restart, new node, Husk walk-in).
 > **Rule:** Read this FIRST. It's pointers, not content. Follow the links.
-> **Last refreshed:** 2026-04-01
+> **Last refreshed:** 2026-05-26
 
 ---
 
@@ -42,6 +42,33 @@ Example: `feat/w3-discord-classrooms`, `fix/1287-runner-loop`
 | What shipped recently? | [`AGNOTE4482_ROADMAP_W1-W5.md`](./AGNOTE4482_ROADMAP_W1-W5.md) → Post-Audit Activity |
 | What gaps are still open? | [`README.md`](./README.md) → Known Gaps (P0-P2) |
 | What's the current sprint? | `pmoves/docs/NEXT_STEPS.md` |
+
+## Convergence Wave Index (Apr–May 2026)
+
+Waves since last SITREP refresh (2026-04-01). Each links to its AGNOTE4482.md section.
+
+| Wave | Date | Section | Key Deliverable |
+|------|------|---------|----------------|
+| Launch Prep | 2026-04-23 | §Launch Prep Audit | Runner restart fix, triage outcomes |
+| MOF Architecture | 2026-04-23 | §MOF Architecture Convergence | `PMOVES_MOF_ARCHITECTURE.md` (337 lines) |
+| Grand Convergence | 2026-04-23 | §Grand Convergence Wave | `PMOVES_GRAND_CONVERGENCE.md` (440 lines), 5-layer stack |
+| P1/P2 Verification | 2026-04-24 | §P1/P2 Verification | Agent counts reconciled (15 agents, 67 docs) |
+| Credential Audit | 2026-04-26 | §Credential & Naming-Drift | Signing identity cards, 5×5 trail invariant |
+| NATS Auth P0 | 2026-04-24 | §NATS Auth P0 Resolution | Hardcoded credential defaults removed |
+| 4090 Session | 2026-04-26 | §4090-CLAUDE Session | Coding plan alignment, KiloCode claw config |
+| USB Provisioning | 2026-04-28 | §USB Provisioning Sweep | Tailscale SSH key distribution |
+| W6 Convergence | 2026-04-27→05-02 | §W6 Convergence Wave | NATS defaults, chakra encoder, ToKenism hoist |
+| Cinco de Mayo | 2026-05-05 | §PMOVES.AI Vision | Launch vision + next sprint framing |
+| Fleet Modernization | 2026-05-09 | §CLAUDE.md Fleet Modernization | Claude.md Phase 2 continuation |
+| Multilingual | 2026-05-11 | §Multilingual Translation | Translation tooling |
+| Supply Chain | 2026-05-14 | `research/TANSTACK_SUPPLY_CHAIN_AUDIT` | 16 findings, 6 patched |
+| SPARK Prep | 2026-05-15 | `AGNOTE-dgx-spark.md` | Model deploy script, profile reconciliation |
+| MiniMax Token Plan | 2026-05-13 | §MiniMax Edition Integration | M2.7/M2.1 model suits, agent profile, NATS subjects, FlOO$ personas |
+| CHIT Hardening | 2026-05-16 | §CHIT Hardening Sprint | 66-file audit, crypto consolidation, CHIT signing for 3 services, compose hardening, doc closure. **Signoff 37/37**. |
+| Big Ball 5090 Codex | 2026-05-25→26 | §Big Ball 5090 CODEX Gap Closure | CHIT/ToKenism hardening, DoX hyperbolic projection, Tokenism settlement lanes, TensorZero 5090 health, submodule integrity |
+| Cole Medin Research | 2026-05-16 | `research/COLE_MEDIN_VIDEO_ANALYSIS.md` | 13 recent videos + 1827-item playlist scan, 5 P0/P1 integration recommendations for Nemo Claw, Archon, DGX Spark |
+
+> ~~**⚠️ AGNOTE4482.md section gaps:** Supply Chain, SPARK Prep, and CHIT Hardening were backfilled 2026-05-17.~~ All SITREP wave index entries now have corresponding §-sections.
 
 ## Fastest Health Check
 

@@ -64,7 +64,8 @@ jobs:
             if [[ "${LAST_COMMIT_DATE}" < "${CUTOFF}" ]]; then
               # Check CHIT trail state via NATS subject pattern
               # Branch is considered ACTIVE if recent agent.graphiti.signed.v1 entries
-              # exist on branch.{branch_name}.trail.v1
+              # exist on branch.<path-segments>.trail.v1 (slash → dot encoding,
+              # e.g. feat/foo → branch.feat.foo.trail.v1)
               # In CI context, we check the claim register for CHIT trail references
               CHIT_ACTIVE="false"
               if grep -q "${branch}" pmoves/docs/AGENTS/AGNOTE4482_ROADMAP_W1-W5.md 2>/dev/null; then
@@ -126,21 +127,21 @@ jobs:
           [ "${DRY_RUN}" = "false" ] && MODE="LIVE DELETE"
 
           BODY="## Stale Branch Sweep Report
-
-- **Mode**: ${MODE}
-- **Orphan branches found**: ${ORPHAN_COUNT}
-- **Branches saved by CHIT trail activity**: ${ACTIVE_COUNT}
-- **Cutoff**: ${ORPHAN_DAYS} days
-- **Run**: [${{ github.run_id }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
-
-"
+          
+          - **Mode**: ${MODE}
+          - **Orphan branches found**: ${ORPHAN_COUNT}
+          - **Branches saved by CHIT trail activity**: ${ACTIVE_COUNT}
+          - **Cutoff**: ${ORPHAN_DAYS} days
+          - **Run**: [${{ github.run_id }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+          
+          "
 
           if [ -n "${ORPHANS}" ]; then
             BODY+="### Orphan Branches
-
-| Branch | Reason |
-|--------|--------|
-"
+            
+            | Branch | Reason |
+            |--------|--------|
+            "
             echo -e "${ORPHANS}" | while read -r branch; do
               [ -z "${branch}" ] && continue
               LAST=$(git log -1 --format='%ci (%cr)' "origin/${branch}" 2>/dev/null || echo "unknown")
@@ -151,10 +152,10 @@ jobs:
           fi
 
           BODY+="
-
----
-*Automated by \`.github/workflows/stale-branch-sweep.yml\`*
-"
+          
+          ---
+          *Automated by \`.github/workflows/stale-branch-sweep.yml\`*
+          "
 
           # Find or create the orphan tracking issue
           ISSUE_NUM=$(gh issue list --label "branch-hygiene" --state open --json number --jq '.[0].number' 2>/dev/null || echo "")

@@ -26,9 +26,14 @@ hardware:
 compose_overrides:
   - docker-compose.arm64.override.yml
 model_bundles:
+  # P0 — Agent Zero brain + coding (from SPARK_MODEL_STRATEGY.md, 2026-05-08)
+  - qwen3.5-35b-a3b-q4km        # MoE 3B active, ~20GB, 15-25 tok/s — primary brain
+  - qwen2.5-coder-32b-q4km      # 32B, ~18GB, 12-20 tok/s — MCP forms, code gen
+  # P1 — Quality + general (optional, deploy after P0 soak)
   - gemma-4-31b-fp16            # Spark flagship multimodal
-  - nemotron-3-super-nvfp4      # NVIDIA Nemotron-3-Super 120B-A12B NVFP4 (OML license)
-  - gemma-4-26b-a4b             # Gemma 4 26B-A4B MoE
+  - llama3.3-70b-q4km           # Quality-critical orchestration, ~40GB
+  # P2 — Future evaluation (NVFP4 when Ollama supports SM_110)
+  # - nemotron-3-super-nvfp4    # 120B-A12B NVFP4 — requires NVFP4 support on GB10
 services:
   - mesh-agent                  # Node announcer (NATS every 15s)
   - fleet-agent                 # Fleet watcher / audit participant

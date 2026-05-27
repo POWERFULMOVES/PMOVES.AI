@@ -23,8 +23,10 @@ import asyncio
 import json
 import logging
 import os
+import sys
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import httpx
@@ -37,6 +39,16 @@ from hf_client import (
     fetch_model_config,
     parse_embedding_dimensions,
     parse_model_summary,
+)
+
+_HERE = Path(__file__).resolve()
+for _path in (_HERE.parents[2], _HERE.parents[3]):
+    if str(_path) not in sys.path:
+        sys.path.insert(0, str(_path))
+
+from pmoves.services.common.model_fitness import (  # noqa: E402
+    build_model_fitness_event,
+    require_trusted_agent_identity,
 )
 
 try:
@@ -167,6 +179,54 @@ class ModelDeployment(BaseModel):
     error_message: Optional[str] = None
 
 
+class ModelCandidateRecord(BaseModel):
+    """HuggingFace/autoresearch candidate waiting for validation."""
+
+    id: Optional[str] = None
+    model_id: str
+    hf_id: str
+    task: Optional[str] = None
+    license: Optional[str] = None
+    params: Optional[int] = None
+    context_length: Optional[int] = None
+    capabilities: List[str] = Field(default_factory=list)
+    backend_fit: List[str] = Field(default_factory=list)
+    vram_mb_estimate: Optional[int] = None
+    quantization_support: List[str] = Field(default_factory=list)
+    intended_lane: str = "agent_mesh"
+    validation_status: str = Field(default="candidate", pattern=r'^(candidate|validated|rejected|activated)$')
+    source: str = "huggingface"
+    agent_id: str = "codex"
+    signed_trail_ref: Optional[str] = None
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+
+class ModelFitnessRequest(BaseModel):
+    """Input for normalized model-fitness recording."""
+
+    model_id: str
+    source: str = Field(pattern=r'^(tensorzero|pinokio|unsloth|hf-autoresearch|evoswarm|manual)$')
+    lane: str
+    tensorzero_metrics: Dict[str, Any] = Field(default_factory=dict)
+    training_metrics: Dict[str, Any] = Field(default_factory=dict)
+    run_id: Optional[str] = None
+    agent_id: str
+
+
+class ModelFitnessRecord(BaseModel):
+    """Persisted model-fitness scorecard event."""
+
+    model_id: str
+    source: str
+    lane: str
+    score: float = Field(ge=0, le=1)
+    metrics: Dict[str, Any]
+    run_id: str
+    timestamp: str
+    agent_id: str
+    signature: Dict[str, Any]
+
+
 # ============================================================================
 # Supabase Client
 # ============================================================================
@@ -263,6 +323,35 @@ class SupabaseClient:
             pass
         return await self._request("POST", "model_deployments", data=data)
 
+    async def create_model_candidate(self, candidate: ModelCandidateRecord) -> Dict:
+        """Persist or merge a model candidate record."""
+        data = candidate.model_dump(exclude_unset=True, exclude={"id"})
+        headers = {
+            **self.headers,
+            "Prefer": "resolution=merge-duplicates,return=representation",
+        }
+        url = f"{self.url}/rest/v1/model_candidates?on_conflict=hf_id,intended_lane"
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(url, headers=headers, json=data)
+        if response.status_code >= 400:
+            raise HTTPException(status_code=response.status_code, detail=response.text)
+        return response.json()
+
+    async def create_model_fitness_record(self, record: ModelFitnessRecord) -> Dict:
+        """Persist a normalized model-fitness event."""
+        data = {
+            "model_id": record.model_id,
+            "source": record.source,
+            "lane": record.lane,
+            "score": record.score,
+            "metrics": record.metrics,
+            "run_id": record.run_id,
+            "agent_id": record.agent_id,
+            "signature": record.signature,
+            "recorded_at": record.timestamp,
+        }
+        return await self._request("POST", "model_fitness_records", data=data)
+
 
 # Global Supabase client
 supabase = SupabaseClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
@@ -281,6 +370,7 @@ class RegistryNatsClient:
 
     # Subject we publish on catalog mutations
     PUB_REGISTRY_UPDATED = "model.registry.updated.v1"
+    PUB_MODEL_FITNESS_RECORDED = "model.fitness.recorded.v1"
 
     def __init__(self, nats_url: str, supabase_client: SupabaseClient):
         self.nats_url = nats_url
@@ -344,6 +434,22 @@ class RegistryNatsClient:
             await self._nc.publish(self.PUB_REGISTRY_UPDATED, payload)
         except Exception as e:
             logger.error(f"Error publishing catalog change: {e}")
+
+    async def publish_model_fitness(self, event: Dict[str, Any]) -> None:
+        """Publish a signed model.fitness.recorded.v1 payload."""
+        if not self._nc or not self._connected:
+            logger.warning(
+                "NATS disconnected — model fitness notification dropped: "
+                f"{event.get('model_id')}/{event.get('run_id')}"
+            )
+            return
+        try:
+            await self._nc.publish(
+                self.PUB_MODEL_FITNESS_RECORDED,
+                json.dumps(event).encode(),
+            )
+        except Exception as e:
+            logger.error(f"Error publishing model fitness: {e}")
 
     async def _on_model_loaded(self, msg) -> None:
         """Handle mesh.gpu.model.loaded.v1 — upsert deployment as loaded."""
@@ -592,6 +698,8 @@ async def root():
             "models/{id}": "Get model details",
             "models/{id}/enrich-hf": "Enrich model from HuggingFace metadata",
             "models/enrich-hf-bulk": "Batch-enrich all models with hf_id",
+            "model-candidates": "Register signed HF/autoresearch model candidates",
+            "model-fitness": "Record normalized TensorZero/Pinokio/Unsloth fitness",
             "services/{service}/models": "Get models for a service",
             "tensorzero/config": "Export TensorZero TOML configuration",
             "deployments": "List active GPU deployments"
@@ -670,6 +778,51 @@ async def register_deployment(deployment: ModelDeployment):
             "updated", "deployment", deployment.model_id
         )
     return result
+
+
+@app.post("/api/model-candidates")
+async def register_model_candidate(candidate: ModelCandidateRecord):
+    """Register a signed model candidate from HF/autoresearch."""
+    try:
+        identity = require_trusted_agent_identity(candidate.agent_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    if not candidate.signed_trail_ref:
+        raise HTTPException(
+            status_code=400,
+            detail="signed_trail_ref is required before candidate persistence",
+        )
+    result = await supabase.create_model_candidate(candidate)
+    if nats_client:
+        await nats_client.publish_catalog_change(
+            "candidate_registered",
+            "model_candidate",
+            candidate.hf_id,
+        )
+    return {"identity": identity.to_dict(), "items": result}
+
+
+@app.post("/api/model-fitness", response_model=ModelFitnessRecord)
+async def record_model_fitness(request: ModelFitnessRequest):
+    """Record a signed model fitness scorecard."""
+    try:
+        require_trusted_agent_identity(request.agent_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    event = build_model_fitness_event(
+        model_id=request.model_id,
+        source=request.source,
+        lane=request.lane,
+        tensorzero_metrics=request.tensorzero_metrics,
+        training_metrics=request.training_metrics,
+        run_id=request.run_id,
+        agent_id=request.agent_id,
+    )
+    record = ModelFitnessRecord(**event)
+    await supabase.create_model_fitness_record(record)
+    if nats_client:
+        await nats_client.publish_model_fitness(event)
+    return record
 
 
 # ============================================================================

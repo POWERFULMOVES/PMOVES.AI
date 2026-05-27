@@ -109,6 +109,11 @@
         }
       },
       "additionalProperties": false
+    },
+    "signing_card_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "UUID of the active signing identity card authorizing this signature (5x5 channel #4). Stamped by sign_trail.py from signing_identity_cards.yaml."
     }
   },
   "additionalProperties": false

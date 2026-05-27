@@ -1,0 +1,4 @@
+{"agent": "z890", "domain": "compose", "file": "D:/PMOVES.AI/PMOVES.AI/pmoves/docker-compose.media.yml", "reason": "handoff:compose-overlay-defensive-networks-2026-05-18.md", "session": "unknown", "tool": "Edit", "ts": "2026-05-18T09:19:02Z"}
+{"agent": "z890", "domain": "compose", "file": "D:/PMOVES.AI/PMOVES.AI/pmoves/docker-compose.ui.yml", "reason": "handoff:compose-overlay-defensive-networks-2026-05-18.md", "session": "unknown", "tool": "Edit", "ts": "2026-05-18T09:19:13Z"}
+{"agent": "z890", "domain": "compose", "file": "D:/PMOVES.AI/PMOVES.AI/pmoves/docker-compose.workers.yml", "reason": "handoff:compose-overlay-defensive-networks-2026-05-18.md", "session": "unknown", "tool": "Edit", "ts": "2026-05-18T09:19:17Z"}
+{"agent": "z890", "domain": "compose", "file": "D:/PMOVES.AI/PMOVES.AI/pmoves/docker-compose.apps.yml", "reason": "handoff:compose-overlay-defensive-networks-2026-05-18.md", "session": "unknown", "tool": "Edit", "ts": "2026-05-18T09:19:23Z"}

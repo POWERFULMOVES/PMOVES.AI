@@ -82,6 +82,14 @@ from pmoves.services.common.geometry_models import (
     cgp_dict_to_model,
 )
 from pmoves.tools.chit_common import canon as _canon
+from pmoves.tools.chit_security import (
+    decrypt_anchors as _cs_decrypt_anchors,
+    encrypt_anchors as _cs_encrypt_anchors,
+    sign_cgp as _cs_sign_cgp,
+    verify_cgp as _cs_verify_cgp,
+    _pack_floats as _cs_pack_floats,
+    _unpack_floats as _cs_unpack_floats,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -166,156 +174,45 @@ def sign_cgp(
     passphrase: Optional[str] = None,
     kid: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Sign a CGP with HMAC-SHA256.
+    """Sign a CGP with the canonical CHIT HMAC implementation.
 
     The signature covers the entire CGP except any existing 'sig' field.
-    This allows for integrity verification when CGPs are transmitted
-    over untrusted channels.
-
-    Args:
-        cgp: CGP dictionary to sign (returns a new dict with signature)
-        passphrase: Shared secret for HMAC (defaults to CHIT_PASSPHRASE)
-        kid: Key identifier (defaults to hashed passphrase)
-
-    Returns:
-        A new CGP dict with 'sig' field added
-
-    Example:
-        >>> cgp = {"super_nodes": [...]}
-        >>> signed = sign_cgp(cgp, passphrase="shared-secret")
-        >>> assert "sig" in signed
-        >>> assert "hmac" in signed["sig"]
+    This wrapper preserves the geometry_decoder import path while using
+    pmoves.tools.chit_security as the single source of truth.
     """
-    passphrase = passphrase or CHITConfig.get_passphrase()
-    doc = deepcopy(cgp)
-    ts = int(datetime.now().timestamp())
-    # Key identifier derived via keyed hash with domain separator (not for auth — just an ID tag).
-    # Actual cryptographic integrity uses HMAC-SHA256 below.
-    kid = kid or hashlib.blake2b(
-        b"chit-kid-v1", key=passphrase.encode()[:64], digest_size=8
-    ).hexdigest()
-
-    meta = {
-        "alg": "HMAC-SHA256",
-        "kid": kid,
-        "ts": ts,
-    }
-
-    # Remove existing signature before signing
-    doc_nosig = deepcopy(doc)
-    doc_nosig.pop("sig", None)
-
-    # Compute HMAC
-    mac = hmac.new(
-        passphrase.encode("utf-8"),
-        _canon(doc_nosig),
-        hashlib.sha256,
-    ).digest()
-
-    doc["sig"] = {
-        **meta,
-        "hmac": base64.b64encode(mac).decode("ascii"),
-    }
-
-    return doc
+    return _cs_sign_cgp(cgp, passphrase=passphrase, kid=kid)
 
 
 def verify_cgp(
     cgp: Dict[str, Any],
     passphrase: Optional[str] = None,
 ) -> bool:
-    """Verify HMAC signature on a CGP.
+    """Verify a canonical CHIT HMAC signature on a CGP.
 
-    Args:
-        cgp: CGP dictionary with 'sig' field
-        passphrase: Shared secret for HMAC (defaults to CHIT_PASSPHRASE)
-
-    Returns:
-        True if signature is valid or missing (when not required),
-        False otherwise
-
-    Example:
-        >>> cgp = {"super_nodes": [...], "sig": {"hmac": "..."}}
-        >>> verify_cgp(cgp, passphrase="shared-secret")
-        True
+    Unsigned packets return False at this utility layer. GeometryDecoder
+    decides whether missing signatures are acceptable via require_signature.
     """
-    passphrase = passphrase or CHITConfig.get_passphrase()
-    sig = cgp.get("sig")
-
-    if not sig:
-        return not CHITConfig.require_signature()
-
-    mac_b64 = sig.get("hmac", "")
-    if not mac_b64:
-        return False
-
-    doc_nosig = deepcopy(cgp)
-    doc_nosig.pop("sig", None)
-
-    mac2 = hmac.new(
-        passphrase.encode("utf-8"),
-        _canon(doc_nosig),
-        hashlib.sha256,
-    ).digest()
-
-    try:
-        mac1 = base64.b64decode(mac_b64)
-    except (binascii.Error, ValueError):
-        return False
-
-    return hmac.compare_digest(mac1, mac2)
+    return _cs_verify_cgp(cgp, passphrase=passphrase)
 
 
 def _pack_floats(arr: List[float]) -> bytes:
-    """Pack float array to bytes.
-
-    Packs length + float32 values for transmission/storage.
-
-    Args:
-        arr: List of floats to pack
-
-    Returns:
-        Packed bytes (big-endian length + float32 data)
-
-    Raises:
-        RuntimeError: If numpy not available
-        ValueError: If array is too large
-    """
-    if not HAS_NUMPY:
-        raise RuntimeError("numpy required for float packing")
+    """Pack float array to bytes with safety limits."""
     if len(arr) > _MAX_FLOATS_UNPACK:
         raise ValueError(f"Float array too large: {len(arr)} > {_MAX_FLOATS_UNPACK}")
-    a = (np.asarray(arr, dtype="float32")).tobytes()
-    return struct.pack(">I", len(arr)) + a
+    return _cs_pack_floats(arr)
 
 
 def _unpack_floats(buf: bytes) -> List[float]:
-    """Unpack bytes to float array.
-
-    Args:
-        buf: Packed bytes from _pack_floats
-
-    Returns:
-        List of floats
-
-    Raises:
-        RuntimeError: If numpy not available
-        ValueError: If data is malformed or too large
-    """
-    if not HAS_NUMPY:
-        raise RuntimeError("numpy required for float unpacking")
+    """Unpack bytes to float array with safety limits."""
     if len(buf) < 4:
         raise ValueError("Buffer too small to contain float count")
-
     n = struct.unpack(">I", buf[:4])[0]
     if n > _MAX_FLOATS_UNPACK:
         raise ValueError(f"Float count too large: {n} > {_MAX_FLOATS_UNPACK}")
-    expected_size = 4 + n * 4  # 4 bytes for count + 4 bytes per float
+    expected_size = 4 + n * 4
     if len(buf) < expected_size:
         raise ValueError(f"Buffer too small: expected {expected_size} bytes, got {len(buf)}")
-
-    a = np.frombuffer(buf[4:4 + n * 4], dtype="float32", count=n)
-    return a.astype(float).tolist()
+    return _cs_unpack_floats(buf)
 
 
 def encrypt_anchor(
@@ -460,74 +357,24 @@ def encrypt_anchors(
     passphrase: Optional[str] = None,
     kid: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Encrypt all anchor vectors in a CGP.
+    """Encrypt all anchor vectors with the canonical CHIT implementation.
 
-    Args:
-        cgp: CGP dictionary with anchor vectors
-        passphrase: Encryption key (defaults to CHIT_PASSPHRASE)
-        kid: Optional key identifier for signature
-
-    Returns:
-        A new CGP dict with anchors encrypted and signed
-
-    Example:
-        >>> cgp = {"super_nodes": [{"constellations": [{"anchor": [0.1, 0.2]}]}]}
-        >>> encrypted = encrypt_anchors(cgp)
-        >>> assert "anchor_enc" in encrypted["super_nodes"][0]["constellations"][0]
+    This wrapper preserves the geometry_decoder import path while using
+    pmoves.tools.chit_security as the single source of truth.
     """
-    doc = deepcopy(cgp)
-
-    for s in doc.get("super_nodes", []):
-        for const in s.get("constellations", []):
-            if "anchor" not in const:
-                continue
-
-            enc = encrypt_anchor(
-                const["anchor"],
-                const.get("id", ""),
-                passphrase,
-            )
-            const.pop("anchor", None)
-            const["anchor_enc"] = enc
-
-    # Add signature
-    return sign_cgp(doc, passphrase, kid)
+    return _cs_encrypt_anchors(cgp, passphrase=passphrase, kid=kid)
 
 
 def decrypt_anchors(
     cgp: Dict[str, Any],
     passphrase: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Decrypt all encrypted anchor vectors in a CGP.
+    """Decrypt all encrypted anchor vectors with canonical CHIT crypto.
 
-    Args:
-        cgp: CGP dictionary with encrypted anchors
-        passphrase: Decryption key (defaults to CHIT_PASSPHRASE)
-
-    Returns:
-        A new CGP dict with anchors decrypted
-
-    Example:
-        >>> encrypted = encrypt_anchors(cgp)
-        >>> decrypted = decrypt_anchors(encrypted)
-        >>> assert "anchor" in decrypted["super_nodes"][0]["constellations"][0]
+    This wrapper preserves the geometry_decoder import path while using
+    pmoves.tools.chit_security as the single source of truth.
     """
-    doc = deepcopy(cgp)
-
-    for s in doc.get("super_nodes", []):
-        for const in s.get("constellations", []):
-            enc = const.get("anchor_enc")
-            if not enc:
-                continue
-
-            const["anchor"] = decrypt_anchor(
-                enc,
-                const.get("id", ""),
-                passphrase,
-            )
-            const.pop("anchor_enc", None)
-
-    return doc
+    return _cs_decrypt_anchors(cgp, passphrase=passphrase)
 
 
 # =============================================================================
@@ -616,7 +463,7 @@ class GeometryDecoder:
         # Decrypt anchors if requested
         cgp = deepcopy(cgp_data)
         if decrypt and self._should_decrypt():
-            cgp = decrypt_anchors(cgp, self._get_passphrase())
+            cgp = decrypt_anchors(cgp, self.passphrase)
 
         # Extract geometry data
         geometry = self.extract_geometry(cgp)
@@ -664,7 +511,7 @@ class GeometryDecoder:
         signature_valid = None
 
         if verify_sig and has_signature:
-            signature_valid = verify_cgp(cgp_data, self._get_passphrase())
+            signature_valid = verify_cgp(cgp_data, self.passphrase)
             if not signature_valid and self._require_sig():
                 errors.append("HMAC signature verification failed")
             elif not signature_valid:
