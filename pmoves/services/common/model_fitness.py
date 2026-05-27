@@ -307,7 +307,7 @@ def build_model_fitness_event(
 
 def _load_yaml(path: Path) -> dict[str, Any]:
     if yaml is None:
-        raise RuntimeError("PyYAML is required for agent identity validation")
+        raise ValueError("PyYAML is required for agent identity validation")
     if not path.exists():
         return {}
     return yaml.safe_load(path.read_text(encoding="utf-8")) or {}
