@@ -31,6 +31,7 @@ from typing import Any, Dict, List, Optional
 
 import httpx
 from fastapi import FastAPI, HTTPException, BackgroundTasks, Query
+from jsonschema.exceptions import ValidationError as JsonSchemaValidationError
 from pydantic import BaseModel, Field
 import uvicorn
 
@@ -42,10 +43,14 @@ from hf_client import (
 )
 
 _HERE = Path(__file__).resolve()
-for _path in (_HERE.parents[2], _HERE.parents[3]):
+for _path in _HERE.parents:
+    if not (_path / "pmoves").is_dir():
+        continue
     if str(_path) not in sys.path:
         sys.path.insert(0, str(_path))
+    break
 
+from pmoves.services.common.events import validate_payload  # noqa: E402
 from pmoves.services.common.model_fitness import (  # noqa: E402
     build_model_fitness_event,
     require_trusted_agent_identity,
@@ -818,6 +823,11 @@ async def record_model_fitness(request: ModelFitnessRequest):
         run_id=request.run_id,
         agent_id=request.agent_id,
     )
+    try:
+        validate_payload("model.fitness.recorded.v1", event)
+    except JsonSchemaValidationError as exc:
+        logger.warning("model.fitness.recorded.v1 validation failed: %s", exc)
+        raise HTTPException(status_code=422, detail=f"Invalid model fitness event: {exc}") from exc
     record = ModelFitnessRecord(**event)
     await supabase.create_model_fitness_record(record)
     if nats_client:

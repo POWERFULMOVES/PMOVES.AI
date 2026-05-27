@@ -42,7 +42,7 @@ $principal = New-ScheduledTaskPrincipal -UserId $Env:USERNAME -LogonType Interac
 
 # Unregister-then-register so re-runs of this script update cleanly.
 if (Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue) {
-  Unregister-ScheduledTask -TaskName $TaskName -Confirm:`$false
+  Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false
 }
 
 Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $trigger -Settings $settings -Principal $principal | Out-Null

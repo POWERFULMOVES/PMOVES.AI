@@ -593,6 +593,44 @@ async def e2b_surf_scrape(payload: Dict[str, Any]) -> Dict[str, Any]:
     return _e2b_json_response(response, "surf_scrape")
 
 
+def a2a_strategic_handoff(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Handoff complex reasoning to the Gemini Cognitive Core via TensorZero."""
+    tz = os.environ.get("TENSORZERO_URL", "http://tensorzero-gateway:3030")
+    context = payload.get("context", "")
+    task = payload.get("task", "")
+    
+    if not task:
+        raise ValueError("'task' is required for A2A handoff")
+        
+    system_prompt = (
+        "You are the Gemini Cognitive Core (Amber Star Glyph). "
+        "You have received a Strategic A2A Handoff from a local agent. "
+        "Analyze the provided context and construct a structured JSON execution plan. "
+        "Return strictly JSON."
+    )
+    
+    body = {
+        "model": "chat_gemini_pro",
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": f"Context:\n{context}\n\nTask:\n{task}"}
+        ]
+    }
+    
+    try:
+        r = requests.post(f"{tz}/openai/v1/chat/completions", json=body, timeout=120)
+        r.raise_for_status()
+        data = r.json()
+        content = data.get("choices", [{}])[0].get("message", {}).get("content", "{}")
+        # Attempt to parse json from response
+        try:
+            plan = json.loads(content)
+        except json.JSONDecodeError:
+            plan = {"raw_text": content}
+        return {"ok": True, "plan": plan}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
 COMMAND_REGISTRY: Dict[str, str] = {
     "geometry.publish_cgp": "Publish a constellation graph program to the geometry gateway",
     "geometry.jump": "Jump to a geometry point by ID",
@@ -604,6 +642,7 @@ COMMAND_REGISTRY: Dict[str, str] = {
     "notebook.search": "Search Open Notebook for curated notes",
     "form.get": "Return the currently configured MCP form",
     "form.switch": "Switch the active MCP form",
+    "a2a.strategic_handoff": "Handoff complex reasoning tasks to the Gemini Cognitive Core (context, task)",
     # E2B Agentic Computer Use Commands
     "e2b.sandbox.create": "Create a new E2B sandbox for code execution (duration, memory_mb, cpu_limit)",
     "e2b.sandbox.execute": "Execute code in an existing E2B sandbox (sandbox_id, language, code)",
@@ -662,6 +701,8 @@ async def execute_command_async(cmd: Optional[str], payload: Optional[Dict[str, 
         name = payload.get("name", FORM_NAME)
         new_form = load_form(name)
         return {"ok": True, "form": new_form}
+    if cmd == "a2a.strategic_handoff":
+        return a2a_strategic_handoff(payload)
     # E2B Agentic Computer Use Commands
     if cmd == "e2b.sandbox.create":
         return await e2b_sandbox_create(payload)

@@ -132,7 +132,7 @@ def reconcile_studio_board_publish_completion(
             if value is not None:
                 updated_meta[key] = value
 
-    response = (
+    query = (
         client()
         .table("studio_board")
         .update(
@@ -143,8 +143,10 @@ def reconcile_studio_board_publish_completion(
         )
         .eq("id", row_id)
         .in_("status", ["approved", "publishing"])
-        .execute()
     )
+    if current_request_text:
+        query = query.filter("meta->>publish_request_id", "eq", current_request_text)
+    response = query.execute()
     updated_rows = getattr(response, "data", None) or []
     if updated_rows:
         return True

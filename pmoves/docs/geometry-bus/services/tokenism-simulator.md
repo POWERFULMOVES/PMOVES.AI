@@ -366,13 +366,13 @@ servers: "nats://nats:pmoves@nats:4222"
 ```
 
 **Issue:** No optimizer convergence is visible
-```
+```text
 Solution: Tokenism only publishes simulation and fitness metadata.
 Check the external EvoSwarm/model-fitness consumer for PSO/evolution execution.
 ```
 
 **Issue:** Attribution records not published
-```
+```text
 Solution: Check NATS connectivity and publisher schema validation logs.
 The Flask /api/v1/simulate route is not the same API as the TypeScript CHIT publisher.
 ```

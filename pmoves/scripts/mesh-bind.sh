@@ -3,7 +3,7 @@
 #
 # Verifies pmoves_bus exists with the correct subnet, runs a port-binding reality
 # check, probes NATS reachability from inside the network, and publishes a
-# mesh.node.online.v1 event. Safe to re-run at any time.
+# mesh.node.announce.v1 event. Safe to re-run at any time.
 #
 # Usage:
 #   bash pmoves/scripts/mesh-bind.sh --node-id pmoves-rdna4 [--peer pmoves-spark]
@@ -169,7 +169,7 @@ else
   dim "Ensure NATS is running on pmoves_bus and the container has service-name alias"
 fi
 
-# ── Step 4 — Publish mesh.node.online.v1 ─────────────────────────────────────
+# ── Step 4 — Publish mesh.node.announce.v1 ─────────────────────────────────────
 
 echo ""
 echo "=== Step 4: Mesh Online Announce ==="
@@ -181,17 +181,17 @@ NATS_REACHABLE_FLAG="true"
 PAYLOAD="{\"node_id\":\"$NODE_ID\",\"ts\":$(date +%s),\"nats_reachable\":$NATS_REACHABLE_FLAG}"
 
 if command -v nats >/dev/null 2>&1; then
-  info "Publishing mesh.node.online.v1..."
+  info "Publishing mesh.node.announce.v1..."
   dim "payload: $PAYLOAD"
-  if echo "$PAYLOAD" | nats pub --server "${NATS_URL:-nats://localhost:4222}" mesh.node.online.v1; then
-    ok "Published mesh.node.online.v1"
+  if echo "$PAYLOAD" | nats pub --server "${NATS_URL:-nats://localhost:4222}" mesh.node.announce.v1; then
+    ok "Published mesh.node.announce.v1"
     ONLINE_PUBLISHED="yes"
   else
-    warn "nats pub failed — NATS may not be running; mesh.node.online.v1 publish skipped"
+    warn "nats pub failed — NATS may not be running; mesh.node.announce.v1 publish skipped"
     dim "Re-run mesh-bind once NATS is up to announce this node"
   fi
 else
-  warn "nats CLI not found — mesh.node.online.v1 publish skipped"
+  warn "nats CLI not found — mesh.node.announce.v1 publish skipped"
   dim "Install nats CLI to enable automatic mesh online announce"
 fi
 

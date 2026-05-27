@@ -1063,6 +1063,10 @@ model = "chat_alibaba_qwen"
 type = "chat_completion"
 model = "chat_together"
 
+[functions.archon_work_orders.variants.hosted_gemini]
+type = "chat_completion"
+model = "chat_gemini_pro"
+
 # Archon Code Review (for PR review step)
 [functions.archon_code_review]
 type = "chat"

@@ -327,12 +327,27 @@ async def publish_hook(
     convention-based hook subjects warn by default and fail when
     FLOOS_STRICT_HOOKS=true.
     """
-    env = _build_hook_envelope(
-        subject,
-        payload,
-        correlation_id=correlation_id,
-        source=source,
-    )
+    try:
+        env = _build_hook_envelope(
+            subject,
+            payload,
+            correlation_id=correlation_id,
+            source=source,
+        )
+    except Exception as exc:
+        if _strict_hooks_enabled():
+            raise
+        print(
+            f"WARNING: hook '{subject}' envelope build failed: "
+            f"{type(exc).__name__}: {exc}",
+            file=sys.stderr,
+        )
+        env = _manual_hook_envelope(
+            subject,
+            payload,
+            correlation_id=correlation_id,
+            source=source,
+        )
 
     url = nats_url or os.environ.get(
         "NATS_URL", "nats://nats:pmoves@nats:4222"
@@ -353,6 +368,8 @@ async def publish_hook(
             file=sys.stderr,
         )
     except Exception as exc:
+        if _strict_hooks_enabled():
+            raise
         print(
             f"WARNING: hook '{subject}' publish failed: "
             f"{type(exc).__name__}: {exc}",

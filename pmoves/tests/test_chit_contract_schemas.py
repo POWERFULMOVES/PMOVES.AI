@@ -2,7 +2,7 @@ import json
 from pathlib import Path
 
 import pytest
-from jsonschema import Draft202012Validator, FormatChecker, ValidationError
+from jsonschema import Draft202012Validator, FormatChecker, RefResolver, ValidationError
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -25,9 +25,18 @@ def _load_schema(contracts_dir: Path, rel_path: str) -> dict:
     return json.loads((contracts_dir / rel_path).read_text(encoding="utf-8"))
 
 
-def _validator(schema: dict) -> Draft202012Validator:
+def _validator(schema: dict, schema_path: Path | None = None) -> Draft202012Validator:
     Draft202012Validator.check_schema(schema)
-    return Draft202012Validator(schema, format_checker=FormatChecker())
+    resolver = (
+        RefResolver(base_uri=schema_path.resolve().as_uri(), referrer=schema)
+        if schema_path
+        else None
+    )
+    return Draft202012Validator(
+        schema,
+        resolver=resolver,
+        format_checker=FormatChecker(),
+    )
 
 
 @pytest.mark.parametrize("contracts_dir", CONTRACT_DIRS)
@@ -88,16 +97,26 @@ def test_tokenism_topics_are_registered_and_payloads_validate(contracts_dir: Pat
         },
         "tokenism.cgp.weekly.v1": {
             "week": 1,
-            "cgp": {"spec": "chit.cgp.v1.0", "super_nodes": []},
-            "super_node_count": 0,
+            "cgp": {
+                "spec": "chit.cgp.v1.0",
+                "super_nodes": [
+                    {"constellations": [{"id": "c1", "points": [{"id": "p1"}]}]}
+                ],
+            },
+            "super_node_count": 1,
             "total_attributions": 0,
             "gini": 0.4,
             "poverty_rate": 0.1,
             "cgp_spec": "chit.cgp.v1.0",
         },
         "tokenism.cgp.ready.v1": {
-            "cgp": {"spec": "chit.cgp.v1.0", "super_nodes": []},
-            "super_node_count": 0,
+            "cgp": {
+                "spec": "chit.cgp.v1.0",
+                "super_nodes": [
+                    {"constellations": [{"id": "c1", "points": [{"id": "p1"}]}]}
+                ],
+            },
+            "super_node_count": 1,
             "source": "test",
             "cgp_spec": "chit.cgp.v1.0",
             "timestamp": "2026-05-22T00:00:00Z",
@@ -179,5 +198,32 @@ def test_tokenism_topics_are_registered_and_payloads_validate(contracts_dir: Pat
     }
 
     for topic, payload in samples.items():
+        schema_path = contracts_dir / topics[topic]["schema"]
         schema = _load_schema(contracts_dir, topics[topic]["schema"])
-        _validator(schema).validate(payload)
+        _validator(schema, schema_path).validate(payload)
+
+
+@pytest.mark.parametrize("contracts_dir", CONTRACT_DIRS)
+def test_tokenism_weekly_cgp_schema_allows_only_zero_count_empty_reports(contracts_dir: Path):
+    schema_path = contracts_dir / "schemas/tokenism/cgp.weekly.v1.schema.json"
+    schema = _load_schema(contracts_dir, "schemas/tokenism/cgp.weekly.v1.schema.json")
+    validator = _validator(schema, schema_path)
+    empty_week = {
+        "week": 1,
+        "cgp": {
+            "spec": "chit.cgp.v1.0",
+            "summary": "No ToKenism activity for week 1",
+            "super_nodes": [],
+        },
+        "super_node_count": 0,
+        "total_attributions": 0,
+        "cgp_spec": "chit.cgp.v1.0",
+    }
+
+    validator.validate(empty_week)
+
+    with pytest.raises(ValidationError):
+        validator.validate({**empty_week, "super_node_count": 1})
+
+    with pytest.raises(ValidationError):
+        validator.validate({**empty_week, "total_attributions": 1})
