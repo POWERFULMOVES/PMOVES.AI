@@ -9,11 +9,38 @@ import sys
 import os
 import pytest
 
-# Add service to path and pmoves package parent for canonical imports
-_service_dir = os.path.join(os.path.dirname(__file__), "..")
-_pmoves_parent = os.path.join(os.path.dirname(__file__), "..", "..", "..")
-sys.path.insert(0, os.path.abspath(_service_dir))
-sys.path.insert(0, os.path.abspath(_pmoves_parent))
+# Add service to path and pmoves package parent for canonical imports.
+# The monorepo also has pmoves/services, so make this test's local services
+# package win deterministically if another test preloaded a services module.
+_service_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+_pmoves_parent = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "..", "..", "..", "..")
+)
+for _path in (_service_dir, _pmoves_parent):
+    if _path in sys.path:
+        sys.path.remove(_path)
+sys.path.insert(0, _pmoves_parent)
+sys.path.insert(0, _service_dir)
+sys.modules.pop("services", None)
+
+
+def teardown_module(_module):
+    """Remove tokenism-simulator top-level packages from global test imports."""
+    local_prefixes = ("services", "models", "config")
+    for module_name, module in list(sys.modules.items()):
+        if not any(
+            module_name == prefix or module_name.startswith(f"{prefix}.")
+            for prefix in local_prefixes
+        ):
+            continue
+        module_file = getattr(module, "__file__", "") or ""
+        module_paths = getattr(module, "__path__", []) or []
+        if module_file.startswith(_service_dir) or any(
+            str(module_path).startswith(_service_dir) for module_path in module_paths
+        ):
+            sys.modules.pop(module_name, None)
+    if _service_dir in sys.path:
+        sys.path.remove(_service_dir)
 
 from models.simulation import (
     CGPPacket,
@@ -415,4 +442,3 @@ class TestCHITSigning:
         # Tamper
         tampered = signed.model_copy(update={"simulation_id": "tampered"})
         assert encoder.verify_cgp_packet(tampered) is False
-

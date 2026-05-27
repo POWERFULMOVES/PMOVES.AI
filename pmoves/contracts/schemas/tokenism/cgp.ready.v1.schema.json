@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ToKenism CGP Ready v1",
+  "type": "object",
+  "required": ["cgp", "super_node_count", "source", "cgp_spec", "timestamp"],
+  "additionalProperties": false,
+  "properties": {
+    "cgp": { "type": "object", "additionalProperties": true },
+    "super_node_count": { "type": "integer", "minimum": 0 },
+    "week": { "type": "integer", "minimum": 0 },
+    "source": { "type": "string", "minLength": 1 },
+    "cgp_spec": {
+      "type": "string",
+      "enum": ["chit.cgp.v0.2", "chit.cgp.v1.0"]
+    },
+    "timestamp": { "type": "string", "format": "date-time" }
+  }
+}

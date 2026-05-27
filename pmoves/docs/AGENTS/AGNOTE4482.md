@@ -1099,3 +1099,65 @@ Operator requested proper integration of MiniMax Token Plan into PMOVES.AI agent
 - Timestamp: `2026-05-16`
 
 <!-- GRAPHITI_MARK: AGENT-ZERO-GLM::CHIT-HARDENING-SPRINT::2026-05-16 -->
+
+## Big Ball 5090 CODEX Gap Closure (2026-05-25 to 2026-05-26)
+
+### Context
+Operator asked Codex to validate SPARK's cursory PMOVES/CHIT findings, close partial implementation gaps, initialize submodules, validate on the 5090 TensorZero node, and proceed through ToKenism/Tokenism lanes while keeping unfinished math claims honest.
+
+This work ran on branch `codex/big-ball-5090-gap-closure` in the parent PMOVES repo and `codex/tokenism-chit-gap-closure` in `PMOVES-ToKenism-Multi`.
+
+### Work Performed
+- Initialized declared submodules and verified `make -C pmoves submodule-integrity`: 50 gitlinks, 0 uninitialized, 0 drifted.
+- Validated TensorZero 5090 health at `http://localhost:3030/health`: gateway, ClickHouse, Postgres, and Valkey all `ok`.
+- Preserved unrelated dirty `PMOVES-Headscale` generated/testdata marker; not staged or reverted.
+- Landed DoX hyperbolic projection wiring in parent via `PMOVES-DoX` gitlink update.
+- Closed Tokenism settlement lanes in `PMOVES-ToKenism-Multi`:
+  - deterministic settlement planner
+  - signed settlement requested/recorded/failed events
+  - Firefly dry-run executor
+  - live Firefly executor gate
+  - guarded contract settlement executor
+  - signed deployment attestation gate for Firefly and contract live execution
+  - Hardhat ABI manifest export and local sample manifest
+- Updated parent Tokenism matrix docs to distinguish implemented guardrails from remaining production activation.
+
+### Lane Status
+
+| Lane | Status | Notes |
+|------|--------|-------|
+| CHIT core | Ready for PR review | Merkle hashing, schema coverage, publisher validation, Python crypto consolidation, FloOS hook validation, and gateway fixes were preserved from the closure pass |
+| Hyperbolic geometry | Implemented as embedding support | DoX Poincare projection is wired; still not a proof-backed fairness pillar |
+| Tokenism Firefly settlement | Approval-gated | Dry-run default; live writes require signed executor identity, matching operator approval, and signed deployment attestation |
+| Tokenism contract settlement | Approval/deployment-gated | Dry-run call drafts; live writes require deployment manifest, signed deployment attestation, RPC/wallet custody references, signed executor identity, and matching operator approval |
+| TensorZero 5090 | Healthy for this branch | Health endpoint returned all `ok` during the pass |
+| Model fitness / EvoSwarm | Parent work exists; trust bridge remains | Signed scorecards and deterministic optimizer operators are present, but trusted optimizer publishing still needs live identities/topology |
+| Zeta | Heuristic | Keep labeled heuristic until a method-design doc is accepted |
+
+### PR Readiness
+
+The branch is ready to open a draft PR after this AGNOTE pass. Evidence already collected:
+- ToKenism focused Jest settlement suites: 32 tests passing.
+- ToKenism `npm run typecheck`: passing.
+- ToKenism Hardhat harness: 5 tests passing.
+- Hardhat manifest export: passing with and without required deployment attestation.
+- Parent `git diff --check`: passing.
+- Parent submodule integrity: passing.
+- TensorZero 5090 health: passing.
+
+No open PR existed for `codex/big-ball-5090-gap-closure` at the time of this note.
+
+### Remaining 5090 CODEX Work
+
+1. Production activation pack: real deployed contract addresses, RPC/wallet custody references, FireFly environment binding, and operator-signed production manifests.
+2. Trusted optimizer bridge: verify PMOVES-AGENT-ZERO-CODEX, HERMES, and Claw signing identities before accepting optimizer output as trusted.
+3. Model-fitness integration: connect Hugging Face candidate discovery, TensorZero telemetry, and Pinokio/Unsloth eval output into persisted `model.fitness.recorded.v1` scorecards.
+4. P7/5090 runtime checks: validate P7 requirements directly on 5090, NATS leaf path, and TensorZero/Unsloth/Pinokio callable smoke.
+5. Zeta method design: write/review method doc before stronger math claims.
+
+### Agent ACK
+- Agent: `CODEX-GPT5`
+- Signature: `ACK::CODEX-GPT5::BIG-BALL-5090-GAP-CLOSURE`
+- Timestamp: `2026-05-26`
+
+<!-- GRAPHITI_MARK: CODEX-GPT5::BIG-BALL-5090-GAP-CLOSURE::2026-05-26 -->

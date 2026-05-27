@@ -251,20 +251,22 @@ class PipelineResult:
 # ── NATS Hook Publisher ───────────────────────────────────────────
 
 
-async def publish_hook(
+def _strict_hooks_enabled() -> bool:
+    return os.environ.get("FLOOS_STRICT_HOOKS", "false").lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
+def _manual_hook_envelope(
     subject: str,
     payload: dict,
     *,
     correlation_id: str | None = None,
     source: str = "floos",
-    nats_url: str | None = None,
 ) -> dict:
-    """Publish a hook event to NATS without contract schema validation.
-
-    Builds a lightweight envelope compatible with the PMOVES envelope
-    wire format but skips topics.json lookup (hook subjects are
-    convention-based, not contract-registered).
-    """
     env = {
         "id": str(uuid.uuid4()),
         "topic": subject,
@@ -275,6 +277,62 @@ async def publish_hook(
     }
     if correlation_id:
         env["correlation_id"] = correlation_id
+    return env
+
+
+def _build_hook_envelope(
+    subject: str,
+    payload: dict,
+    *,
+    correlation_id: str | None = None,
+    source: str = "floos",
+) -> dict:
+    """Build a hook envelope, using topics.json validation when registered."""
+    try:
+        from pmoves.services.common.events import envelope as contract_envelope
+
+        return contract_envelope(
+            subject,
+            payload,
+            correlation_id=correlation_id,
+            source=source,
+        )
+    except KeyError:
+        if _strict_hooks_enabled():
+            raise
+        print(
+            f"WARNING: hook '{subject}' is not registered in topics.json; "
+            "publishing without schema validation",
+            file=sys.stderr,
+        )
+        return _manual_hook_envelope(
+            subject,
+            payload,
+            correlation_id=correlation_id,
+            source=source,
+        )
+
+
+async def publish_hook(
+    subject: str,
+    payload: dict,
+    *,
+    correlation_id: str | None = None,
+    source: str = "floos",
+    nats_url: str | None = None,
+) -> dict:
+    """Publish a hook event to NATS.
+
+    Registered subjects are validated through topics.json. Unregistered
+    convention-based hook subjects warn by default and fail when
+    FLOOS_STRICT_HOOKS=true.
+    """
+    env = _build_hook_envelope(
+        subject,
+        payload,
+        correlation_id=correlation_id,
+        source=source,
+    )
 
     url = nats_url or os.environ.get(
         "NATS_URL", "nats://nats:pmoves@nats:4222"
@@ -290,7 +348,10 @@ async def publish_hook(
         finally:
             await nc.close()
     except ImportError:
-        pass  # nats-py not installed, hooks disabled
+        print(
+            f"WARNING: hook '{subject}' not published because nats-py is not installed",
+            file=sys.stderr,
+        )
     except Exception as exc:
         print(
             f"WARNING: hook '{subject}' publish failed: "

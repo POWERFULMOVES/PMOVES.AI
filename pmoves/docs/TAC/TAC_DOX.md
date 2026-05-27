@@ -37,7 +37,7 @@
 
 | Capability | Description |
 |------------|-------------|
-| Geometric Intelligence | Hyperbolic/Manifold3D/Zeta visualization |
+| Geometric Intelligence | Deterministic embedding-to-Poincare projection plus Hyperbolic/Manifold3D/Zeta visualization |
 | CHIT Geometry Bus | WebSocket-based shape-encoded transport |
 | Path Traversal Defense | Excellent — validated in Phase C audit |
 | Fail-closed JWT | Properly implemented authentication |
@@ -60,6 +60,7 @@
 | Hz sensitivity | Yes | `chit_toggles.hz_sensitive: true` |
 | CGP packet generation | Planned | Not yet publishing |
 | Geometry Bus client | Active | WebSocket to Hyperdimensions |
+| Hyperbolic embedding projection | Active | `GeometryEngine.project_embeddings_to_poincare`; exposed on cipher and A2A geometry responses |
 | BPM capable | No | Document-oriented, not prosodic |
 
 ## Production Audit Checklist
@@ -89,11 +90,11 @@ DoX serves as the **geometric intelligence** layer:
 ```
 Document Input → DoX Processing → Geometry Encoding
                      ↓
-              Hyperbolic Embedding
+              Poincare Projection
                      ↓
               Manifold3D Visualization
                      ↓
-              Zeta Spectral Filtering
+              Zeta-like Spectral View
                      ↓
               CHIT Geometry Bus (WebSocket)
                      ↓
@@ -114,6 +115,7 @@ Document Input → DoX Processing → Geometry Encoding
 - NATS auth block entirely missing from `nats.conf`
 - HTTP port assignment needed for `/healthz` and `/metrics`
 - NATS subject declarations needed in agent registry
+- LONGBOW/Arrow bridge still needed for vector storage and retrieval handoff
 - Branch divergence required reset pattern (>100 commits)
 
 <!-- GRAPHITI_MARK: CLAUDE-OPUS::TAC-TOPOLOGY-AUDIT::2026-02-20 -->

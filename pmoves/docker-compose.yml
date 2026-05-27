@@ -2410,12 +2410,7 @@ services:
     - A0_SET_browser_model_name=tensorzero::function_name::agent_zero
     - A0_SET_browser_model_api_base=http://tensorzero-gateway:3000/openai/v1
     - A0_SET_a2a_server_enabled=true
-    # A0_SET_mcp_server_token: intentionally NOT set here. Compose's `${MCP_SERVER_TOKEN:-}`
-    # expansion converts an unset host var to an empty string, which would override any value
-    # supplied via env_file (env.tier-agent / env.shared) and block Agent Zero's token
-    # auto-generation when the operator has not pinned a token. Operators who need to pin a
-    # specific token should set it in env.tier-agent (or pass it via env_file/--env-file),
-    # not via shell environment.
+    - A0_SET_mcp_server_token=${MCP_SERVER_TOKEN:?MCP_SERVER_TOKEN must be set when a2a_server_enabled=true}
     # Host environment leak guard (see x-host-leak-guard docs above)
     - SSL_CERT_FILE=
     - SSL_CERT_DIR=
