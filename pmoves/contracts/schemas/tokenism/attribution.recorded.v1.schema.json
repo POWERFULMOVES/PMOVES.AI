@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ToKenism Attribution Recorded v1",
+  "type": "object",
+  "required": ["chit_id", "address", "action", "amount", "week", "timestamp"],
+  "additionalProperties": false,
+  "properties": {
+    "chit_id": { "type": "string", "minLength": 1 },
+    "address": { "type": "string", "minLength": 1 },
+    "action": { "type": "string", "minLength": 1 },
+    "amount": { "type": "number" },
+    "week": { "type": "integer", "minimum": 0 },
+    "category": { "type": "string" },
+    "merkle_root": {
+      "type": "string",
+      "pattern": "^0x[a-fA-F0-9]{64}$"
+    },
+    "timestamp": { "type": "string", "format": "date-time" }
+  }
+}

@@ -545,16 +545,6 @@ api_key_location = "none"
 # dual-r9700). All weight=0.0 for safe rollout — flip to small % after 48h soak
 # + load test, and after Phase D ships ARM64 multi-arch CI for Spark images.
 
-# Gemma 4 31B on DGX Spark (FP16, unified LPDDR5X)
-[models.ollama_spark_gemma4_31b_fp16]
-routing = ["ollama_spark"]
-
-[models.ollama_spark_gemma4_31b_fp16.providers.ollama_spark]
-type = "openai"
-api_base = "http://pmoves-spark:11434/v1"
-model_name = "gemma4:31b"
-api_key_location = "none"
-
 # Nemotron-3-Super 120B-A12B NVFP4 on DGX Spark
 # HF: nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-NVFP4 (verified HF API 2026-04-19)
 # License: NVIDIA Open Model License (OML). Spark-only — RDNA4 gfx1201 lacks
@@ -566,27 +556,6 @@ routing = ["ollama_spark"]
 type = "openai"
 api_base = "http://pmoves-spark:11434/v1"
 model_name = "nemotron-3-super:120b"
-api_key_location = "none"
-
-# Gemma 4 31B on AMD R9700 (Q4_K_M single-GPU, llama.cpp HIP)
-# Custom fork: tlee933/llama.cpp-rdna4-gfx1201 (ROCm 7.1 + gfx1201 kernels)
-[models.llamacpp_rdna4_gemma4_31b_q4km]
-routing = ["llamacpp_rocm"]
-
-[models.llamacpp_rdna4_gemma4_31b_q4km.providers.llamacpp_rocm]
-type = "openai"
-api_base = "http://pmoves-rdna4:8080/v1"
-model_name = "gemma-4-31b-it-Q4_K_M.gguf"
-api_key_location = "none"
-
-# Gemma 4 26B-A4B MoE on dual R9700 (row-split, --tensor-split 0.5,0.5)
-[models.llamacpp_rdna4_gemma4_26b_dual]
-routing = ["llamacpp_rocm"]
-
-[models.llamacpp_rdna4_gemma4_26b_dual.providers.llamacpp_rocm]
-type = "openai"
-api_base = "http://pmoves-rdna4:8080/v1"
-model_name = "gemma-4-26B-A4B-it-Q4_K_M.gguf"
 api_key_location = "none"
 
 [models.chat_together]
