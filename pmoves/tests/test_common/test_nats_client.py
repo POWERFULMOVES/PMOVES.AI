@@ -1,4 +1,3 @@
-import importlib
 import os
 import sys
 from pathlib import Path
@@ -10,9 +9,7 @@ repo_root = Path(__file__).resolve().parents[3]
 if str(repo_root) not in sys.path:
     sys.path.append(str(repo_root))
 
-sys.modules.setdefault("services", importlib.import_module("pmoves.services"))
-
-from services.common.nats_client import (
+from pmoves.services.common.nats_client import (
     DEFAULT_NATS_URL,
     NatsConnectionConfig,
     create_nats_connection,
@@ -25,7 +22,7 @@ def test_default_nats_url_from_env(monkeypatch):
     monkeypatch.setenv("NATS_URL", "nats://custom:4222")
     # Re-import to pick up env change
     import importlib
-    from services.common import nats_client as nc_mod
+    from pmoves.services.common import nats_client as nc_mod
     importlib.reload(nc_mod)
     assert nc_mod.DEFAULT_NATS_URL == "nats://custom:4222"
     # Restore
@@ -93,7 +90,7 @@ def test_nats_connection_config_custom():
 
 def test_redact_url_strips_userinfo():
     """NATS credentials are not emitted in connection logs."""
-    from services.common import nats_client as nc_mod
+    from pmoves.services.common import nats_client as nc_mod
 
     assert (
         nc_mod._redact_url("nats://pmoves:secret@nats.example:4222")
@@ -130,8 +127,11 @@ async def test_publish_cgp_uses_explicit_nats_url():
     mock_nc = AsyncMock()
     packet = {"spec": "chit.cgp.v0.2", "summary": "test"}
 
-    with patch("services.common.nats_client.nats_connection") as mock_conn_ctx, patch(
-        "services.common.nats_client.traced_publish", new_callable=AsyncMock
+    with patch(
+        "pmoves.services.common.nats_client.nats_connection"
+    ) as mock_conn_ctx, patch(
+        "pmoves.services.common.nats_client.traced_publish",
+        new_callable=AsyncMock,
     ) as mock_publish:
         mock_conn_ctx.return_value.__aenter__.return_value = mock_nc
         result = await publish_cgp(

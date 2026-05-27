@@ -16,6 +16,8 @@ _service_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 _pmoves_parent = os.path.abspath(
     os.path.join(os.path.dirname(__file__), "..", "..", "..", "..")
 )
+_service_dir_was_present = _service_dir in sys.path
+_pmoves_parent_was_present = _pmoves_parent in sys.path
 for _path in (_service_dir, _pmoves_parent):
     if _path in sys.path:
         sys.path.remove(_path)
@@ -40,9 +42,9 @@ def teardown_module(_module):
             str(module_path).startswith(_service_dir) for module_path in module_paths
         ):
             sys.modules.pop(module_name, None)
-    if _service_dir in sys.path:
+    if not _service_dir_was_present and _service_dir in sys.path:
         sys.path.remove(_service_dir)
-    if _pmoves_parent in sys.path:
+    if not _pmoves_parent_was_present and _pmoves_parent in sys.path:
         sys.path.remove(_pmoves_parent)
 
 from models.simulation import (

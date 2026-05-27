@@ -31,6 +31,7 @@ from typing import Any, Dict, List, Optional
 
 import httpx
 from fastapi import FastAPI, HTTPException, BackgroundTasks, Query
+from jsonschema.exceptions import ValidationError as JsonSchemaValidationError
 from pydantic import BaseModel, Field
 import uvicorn
 
@@ -824,7 +825,7 @@ async def record_model_fitness(request: ModelFitnessRequest):
     )
     try:
         validate_payload("model.fitness.recorded.v1", event)
-    except Exception as exc:
+    except JsonSchemaValidationError as exc:
         logger.warning("model.fitness.recorded.v1 validation failed: %s", exc)
         raise HTTPException(status_code=422, detail=f"Invalid model fitness event: {exc}") from exc
     record = ModelFitnessRecord(**event)

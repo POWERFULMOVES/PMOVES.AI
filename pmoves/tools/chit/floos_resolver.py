@@ -342,7 +342,7 @@ async def publish_hook(
             f"{type(exc).__name__}: {exc}",
             file=sys.stderr,
         )
-        return _manual_hook_envelope(
+        env = _manual_hook_envelope(
             subject,
             payload,
             correlation_id=correlation_id,

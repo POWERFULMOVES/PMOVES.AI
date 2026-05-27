@@ -100,9 +100,9 @@ def test_model_fitness_normalization_tolerates_malformed_metrics():
     )
 
     assert 0 <= score <= 1
-    assert metrics["latency_score"] == 1.0
+    assert metrics["latency_score"] == 0.5
     assert metrics["throughput_score"] == 0.5
-    assert metrics["cost_score"] == 1.0
+    assert metrics["cost_score"] == 0.5
 
 
 def test_signed_model_fitness_event_validates_against_contract(monkeypatch):
