@@ -164,11 +164,11 @@ def inject_into_env_file(env_path: pathlib.Path, username: str, token: str) -> N
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    _default_env = str(pathlib.Path(__file__).resolve().parents[1] / "env" / "env.tier-api")
+    _default_env = str(pathlib.Path(__file__).resolve().parents[1] / "env.tier-api")
     parser.add_argument(
         "--env-file",
         default=_default_env,
-        help="Path to env file (default: <repo>/pmoves/env/env.tier-api)",
+        help="Path to env file (default: <repo>/pmoves/env.tier-api)",
     )
     parser.add_argument(
         "--check",
