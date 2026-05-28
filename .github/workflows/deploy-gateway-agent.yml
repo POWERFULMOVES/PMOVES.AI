@@ -68,6 +68,28 @@ jobs:
           submodules: false  # Gateway agent doesn't need submodules
 
       - name: Build Gateway Agent
+        env:
+          # Required by ${:?} guards in docker-compose.yml — CI uses dummy values for build only
+          CHIT_PROD_PASSPHRASE: ci-build-placeholder
+          ANON_KEY: ci-build-placeholder
+          JWT_SECRET: ci-build-placeholder
+          LOGFLARE_PUBLIC_ACCESS_TOKEN: ci-build-placeholder
+          LOGFLARE_PRIVATE_ACCESS_TOKEN: ci-build-placeholder
+          MCP_SERVER_TOKEN: ci-build-placeholder
+          MEILI_MASTER_KEY: ci-build-placeholder
+          MINIO_USER: ci-build-placeholder
+          MINIO_PASSWORD: ci-build-placeholder
+          QDRANT__API_KEY: ci-build-placeholder
+          NEO4J_PASSWORD: ci-build-placeholder
+          SECRET_KEY_BASE: ci-build-placeholder
+          SERVICE_ROLE_KEY: ci-build-placeholder
+          SUPABASE_DB_USER: ci-build-placeholder
+          SUPABASE_DB_PASSWORD: ci-build-placeholder
+          SUPABASE_SERVICE_ROLE_KEY: ci-build-placeholder
+          VAULT_ENC_KEY: ci-build-placeholder
+          WGER_ADMIN_PASSWORD: ci-build-placeholder
+          WGER_DB_PASSWORD: ci-build-placeholder
+          WGER_SECRET_KEY: ci-build-placeholder
         run: |
           cd pmoves
           docker compose build gateway-agent
@@ -90,9 +112,31 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Deploy Gateway Agent
+        env:
+          # Required by ${:?} guards in docker-compose.yml — CI uses dummy values for deploy only
+          CHIT_PROD_PASSPHRASE: ci-deploy-placeholder
+          ANON_KEY: ci-deploy-placeholder
+          JWT_SECRET: ci-deploy-placeholder
+          LOGFLARE_PUBLIC_ACCESS_TOKEN: ci-deploy-placeholder
+          LOGFLARE_PRIVATE_ACCESS_TOKEN: ci-deploy-placeholder
+          MCP_SERVER_TOKEN: ci-deploy-placeholder
+          MEILI_MASTER_KEY: ci-deploy-placeholder
+          MINIO_USER: ci-deploy-placeholder
+          MINIO_PASSWORD: ci-deploy-placeholder
+          QDRANT__API_KEY: ci-deploy-placeholder
+          NEO4J_PASSWORD: ci-deploy-placeholder
+          SECRET_KEY_BASE: ci-deploy-placeholder
+          SERVICE_ROLE_KEY: ci-deploy-placeholder
+          SUPABASE_DB_USER: ci-deploy-placeholder
+          SUPABASE_DB_PASSWORD: ci-deploy-placeholder
+          SUPABASE_SERVICE_ROLE_KEY: ci-deploy-placeholder
+          VAULT_ENC_KEY: ci-deploy-placeholder
+          WGER_ADMIN_PASSWORD: ci-deploy-placeholder
+          WGER_DB_PASSWORD: ci-deploy-placeholder
+          WGER_SECRET_KEY: ci-deploy-placeholder
         run: |
           cd pmoves
-          docker compose --profile gateway up -d gateway-agent
+          docker compose --profile agents up -d gateway-agent
           echo "✓ Gateway Agent deployed"
 
       - name: Wait for health check
@@ -139,12 +183,56 @@ jobs:
           submodules: false  # Gateway agent doesn't need submodules
 
       - name: Build Gateway Agent (VPS)
+        env:
+          # Required by ${:?} guards in docker-compose.yml — CI uses dummy values for build only
+          CHIT_PROD_PASSPHRASE: ci-build-placeholder
+          ANON_KEY: ci-build-placeholder
+          JWT_SECRET: ci-build-placeholder
+          LOGFLARE_PUBLIC_ACCESS_TOKEN: ci-build-placeholder
+          LOGFLARE_PRIVATE_ACCESS_TOKEN: ci-build-placeholder
+          MCP_SERVER_TOKEN: ci-build-placeholder
+          MEILI_MASTER_KEY: ci-build-placeholder
+          MINIO_USER: ci-build-placeholder
+          MINIO_PASSWORD: ci-build-placeholder
+          QDRANT__API_KEY: ci-build-placeholder
+          NEO4J_PASSWORD: ci-build-placeholder
+          SECRET_KEY_BASE: ci-build-placeholder
+          SERVICE_ROLE_KEY: ci-build-placeholder
+          SUPABASE_DB_USER: ci-build-placeholder
+          SUPABASE_DB_PASSWORD: ci-build-placeholder
+          SUPABASE_SERVICE_ROLE_KEY: ci-build-placeholder
+          VAULT_ENC_KEY: ci-build-placeholder
+          WGER_ADMIN_PASSWORD: ci-build-placeholder
+          WGER_DB_PASSWORD: ci-build-placeholder
+          WGER_SECRET_KEY: ci-build-placeholder
         run: |
           cd pmoves
           docker compose -f docker-compose.yml -f docker-compose.vps.override.yml build gateway-agent
           echo "✓ Gateway Agent image built (VPS)"
 
       - name: Deploy Gateway Agent to VPS
+        env:
+          # Required by ${:?} guards in docker-compose.yml — CI uses dummy values for deploy only
+          CHIT_PROD_PASSPHRASE: ci-deploy-placeholder
+          ANON_KEY: ci-deploy-placeholder
+          JWT_SECRET: ci-deploy-placeholder
+          LOGFLARE_PUBLIC_ACCESS_TOKEN: ci-deploy-placeholder
+          LOGFLARE_PRIVATE_ACCESS_TOKEN: ci-deploy-placeholder
+          MCP_SERVER_TOKEN: ci-deploy-placeholder
+          MEILI_MASTER_KEY: ci-deploy-placeholder
+          MINIO_USER: ci-deploy-placeholder
+          MINIO_PASSWORD: ci-deploy-placeholder
+          QDRANT__API_KEY: ci-deploy-placeholder
+          NEO4J_PASSWORD: ci-deploy-placeholder
+          SECRET_KEY_BASE: ci-deploy-placeholder
+          SERVICE_ROLE_KEY: ci-deploy-placeholder
+          SUPABASE_DB_USER: ci-deploy-placeholder
+          SUPABASE_DB_PASSWORD: ci-deploy-placeholder
+          SUPABASE_SERVICE_ROLE_KEY: ci-deploy-placeholder
+          VAULT_ENC_KEY: ci-deploy-placeholder
+          WGER_ADMIN_PASSWORD: ci-deploy-placeholder
+          WGER_DB_PASSWORD: ci-deploy-placeholder
+          WGER_SECRET_KEY: ci-deploy-placeholder
         run: |
           cd pmoves
           docker compose -f docker-compose.yml -f docker-compose.vps.override.yml up -d gateway-agent
@@ -207,7 +295,8 @@ jobs:
       - name: Rollback to previous version
         run: |
           cd pmoves
-          docker compose --profile gateway down gateway-agent
+          docker compose stop gateway-agent || true
+          docker compose rm -f gateway-agent || true
           echo "✓ Gateway Agent stopped (rolled back)"
 
   rollback-vps:
