@@ -1871,7 +1871,12 @@ CF_PAGES_PROJECT ?= cataclysmstudios
 CF_PAGES_DIR ?= ../deploy/cataclysmstudios
 CF_PAGES_BRANCH ?= main
 
-.PHONY: cf-pages-create cf-pages-deploy cf-pages-status
+CF_PAGES_PORT ?= 8788
+
+.PHONY: cf-pages-dev cf-pages-create cf-pages-deploy cf-pages-status
+cf-pages-dev: ## Serve cataclysmstudios locally via wrangler pages dev (http://localhost:CF_PAGES_PORT)
+	@echo "→ Previewing $(CF_PAGES_PROJECT) at http://localhost:$(CF_PAGES_PORT)"
+	npx wrangler pages dev "$(CF_PAGES_DIR)" --port $(CF_PAGES_PORT)
 cf-pages-create: ensure-env-shared ## Create Cloudflare Pages project (one-time bootstrap)
 	@$(LOAD_ENV_SHARED); \
 	if [ -z "$${CLOUDFLARE_API_TOKEN:-}" ]; then \
