@@ -120,11 +120,6 @@ def _require_a2a_auth(authorization: Optional[str], public_mode: bool = False) -
             detail="Token expired",
             headers={"WWW-Authenticate": "Bearer"},
         ) from None
-    except jose_jwt.InvalidSignatureError:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Invalid token signature",
-        ) from None
     except jose_jwt.JWTError:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
