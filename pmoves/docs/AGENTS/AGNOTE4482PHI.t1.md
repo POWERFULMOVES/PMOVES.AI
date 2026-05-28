@@ -965,3 +965,14 @@ The pipeline reports success because its validation scope is too narrow. Neither
 - `2026-05-27T21:35:00Z` RELEASE `SPARK-KIMI` scope: All three fix branches pushed and PRs opened. Validation: channel-monitor healthy on :8097 (YouTube API active), deepresearch healthy on :8098, monitoring stack healthy (Prometheus, Grafana :3002, Loki :3100). n8n (:5678) and Open Notebook (:8503/:5055) also brought up during same session. agent_signature: `ACK::SPARK-KIMI::SPARK-INFRA-BRINGUP-RELEASE-2026-05-27`.
 
 <!-- GRAPHITI_MARK: SPARK-KIMI::SPARK-INFRA-BRINGUP::2026-05-27 -->
+
+## SPARK-KIMI Multi-Lane Claim (2026-05-27)
+
+- `2026-05-27T21:40:00Z` CLAIM `SPARK-KIMI` scope: Three parallel lanes on SPARK node (ARM64 + NVIDIA GB10, 128GB unified):
+  1. **Lane A — A2A Runtime Verification** (`infra/a2a-runtime-verification`): Verify A2A router mounts at `/a2a/v1/*`, test `/.well-known/agent-card.json` discovery, auth via `mcp_server_token`, document secure activation path. Closes Known Gap P0.
+  2. **Lane B — NATS Auth Secondary Batch** (`fix/nats-auth-secondary-batch`): Migrate 21-file secondary batch (vllm-orchestrator, supaserch/app.py, gateway-agent/nats_integration.py, benchmark-runner, agent-zero/python/events/bus.py) from unauthenticated `nats://(nats|localhost):4222` to env-driven `NATS_URL`. Closes Known Gap P0.
+  3. **Lane C — PMOVES.YT Summarize + Chapters** (`feat/yt-summarize-chapters`): Add `/yt/summarize` and `/yt/chapters` endpoints to `pmoves-yt` service using host Ollama (Gemma/qwen3.5, expanded model selection on SPARK). Bounded NEXT_STEPS deliverable.
+  4. **Lane D — SPARK Model Orchestration**: Audit host Ollama model roster against SPARK GB10 capacity (128GB unified), pull qwen3 family updates surfaced via channel-monitor ingestion, update `tensorzero.toml` model entries for local-first routing.
+- Three-body: delivery=SPARK-KIMI, control=operator approval, memory=this trail. agent_signature: `ACK::SPARK-KIMI::MULTI-LANE-CLAIM-2026-05-27`.
+
+<!-- GRAPHITI_MARK: SPARK-KIMI::MULTI-LANE-CLAIM::2026-05-27 -->
