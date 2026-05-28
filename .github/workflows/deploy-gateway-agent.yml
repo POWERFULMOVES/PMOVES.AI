@@ -97,7 +97,7 @@ jobs:
 
       - name: Tag image
         run: |
-          docker tag pmoves/gateway-agent:latest pmoves/gateway-agent:${{ github.sha }}
+          docker tag pmoves-gateway-agent:latest pmoves-gateway-agent:${{ github.sha }}
           echo "✓ Image tagged"
 
   deploy-ai-lab:
