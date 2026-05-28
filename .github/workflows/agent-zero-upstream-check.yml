@@ -36,6 +36,8 @@ jobs:
 
       - name: Detect latest upstream release
         id: detect
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           if [ -n "${{ inputs.upstream_version }}" ]; then
             echo "tag=${{ inputs.upstream_version }}" >> "$GITHUB_OUTPUT"
