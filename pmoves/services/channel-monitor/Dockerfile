@@ -6,7 +6,9 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 
 COPY requirements.txt requirements.lock .
-RUN pip install --no-cache-dir --constraint requirements.lock -r requirements.txt
+RUN sed '/^ *--hash=/d' requirements.lock > /tmp/requirements-nohash.txt && \
+    pip install --no-cache-dir -r /tmp/requirements-nohash.txt && \
+    pip install --no-cache-dir -r requirements.txt
 
 COPY channel_monitor ./channel_monitor
 
