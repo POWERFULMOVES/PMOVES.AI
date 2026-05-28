@@ -958,3 +958,10 @@ The pipeline reports success because its validation scope is too narrow. Neither
 - `2026-05-26T09:30:00-04:00` RELEASE `CODEX-GPT5` scope: CHIT/Tokenism closure stack pushed. ToKenism commits through `32a92c1` add live Firefly gate, guarded contract executor, signed deployment attestation, focused tests, and manifest export. Parent commits through `5db3ca9315` update gitlinks and matrix docs. Validation: TensorZero health all `ok`, `make -C pmoves submodule-integrity` passed with 50 gitlinks and no drift, ToKenism typecheck/Jest/Hardhat/manifest checks passed. Remaining: production activation pack, trusted optimizer bridge, model-fitness integration, 5090 P7/Unsloth/Pinokio smoke, zeta method design. Trail signed unsigned-local; no CHIT signing material available in this Codex session. agent_signature: `ACK::CODEX-GPT5::BIG-BALL-5090-GAP-CLOSURE-RELEASE`.
 
 <!-- GRAPHITI_MARK: CODEX-GPT5::BIG-BALL-5090-GAP-CLOSURE::2026-05-26 -->
+
+## SPARK Node Infrastructure Bring-Up — Claim/Release (2026-05-27)
+
+- `2026-05-27T21:30:00Z` CLAIM `SPARK-KIMI` scope: SPARK node (ARM64 + NVIDIA GB10) full stack bring-up fixes — channel-monitor crash-loop, deepresearch ARM64 build failure, monitoring compose volume/network wiring. Branches: `fix/channel-monitor-google-deps`, `fix/deepresearch-arm64-build`, `fix/monitoring-compose-paths`. PRs: #1642, #1643, #1644. Three-body: delivery=SPARK-KIMI (this session), control=operator approval, memory=this trail. agent_signature: `ACK::SPARK-KIMI::SPARK-INFRA-BRINGUP-CLAIM-2026-05-27`.
+- `2026-05-27T21:35:00Z` RELEASE `SPARK-KIMI` scope: All three fix branches pushed and PRs opened. Validation: channel-monitor healthy on :8097 (YouTube API active), deepresearch healthy on :8098, monitoring stack healthy (Prometheus, Grafana :3002, Loki :3100). n8n (:5678) and Open Notebook (:8503/:5055) also brought up during same session. agent_signature: `ACK::SPARK-KIMI::SPARK-INFRA-BRINGUP-RELEASE-2026-05-27`.
+
+<!-- GRAPHITI_MARK: SPARK-KIMI::SPARK-INFRA-BRINGUP::2026-05-27 -->
