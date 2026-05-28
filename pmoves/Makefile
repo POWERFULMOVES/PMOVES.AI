@@ -1867,6 +1867,53 @@ integration-contract-check-strict: ## Strict integration contract check (missing
 integration-contract-check-baseline: ## Strict contract checks for template + baseline overlays
 	@$(PYTHON) tools/integration_contract_check.py $(INTEGRATION_CONTRACT_BASELINE) --strict-hooks
 
+CF_PAGES_PROJECT ?= cataclysmstudios
+CF_PAGES_DIR ?= ../deploy/cataclysmstudios
+CF_PAGES_BRANCH ?= main
+
+.PHONY: cf-pages-create cf-pages-deploy cf-pages-status
+cf-pages-create: ensure-env-shared ## Create Cloudflare Pages project (one-time bootstrap)
+	@$(LOAD_ENV_SHARED); \
+	if [ -z "$${CLOUDFLARE_API_TOKEN:-}" ]; then \
+	  echo "❌ CLOUDFLARE_API_TOKEN not set — run: make secrets-funnel-sync-from-bundle"; \
+	  exit 1; \
+	fi; \
+	if [ -z "$${CLOUDFLARE_ACCOUNT_ID:-}" ]; then \
+	  echo "❌ CLOUDFLARE_ACCOUNT_ID not set — run: make secrets-funnel-sync-from-bundle"; \
+	  exit 1; \
+	fi; \
+	echo "→ Creating Cloudflare Pages project: $(CF_PAGES_PROJECT)"; \
+	CLOUDFLARE_API_TOKEN="$${CLOUDFLARE_API_TOKEN}" \
+	CLOUDFLARE_ACCOUNT_ID="$${CLOUDFLARE_ACCOUNT_ID}" \
+	npx wrangler pages project create "$(CF_PAGES_PROJECT)" \
+	  --production-branch main 2>&1; \
+	echo "✅ CF Pages project created — now run: make cf-pages-deploy"
+
+cf-pages-deploy: ensure-env-shared ## Deploy cataclysmstudios static site to Cloudflare Pages
+	@$(LOAD_ENV_SHARED); \
+	if [ -z "$${CLOUDFLARE_API_TOKEN:-}" ]; then \
+	  echo "❌ CLOUDFLARE_API_TOKEN not set — run: make secrets-funnel-sync"; \
+	  exit 1; \
+	fi; \
+	if [ -z "$${CLOUDFLARE_ACCOUNT_ID:-}" ]; then \
+	  echo "❌ CLOUDFLARE_ACCOUNT_ID not set — run: make secrets-funnel-sync"; \
+	  exit 1; \
+	fi; \
+	echo "→ Deploying $(CF_PAGES_PROJECT) to Cloudflare Pages..."; \
+	CLOUDFLARE_API_TOKEN="$${CLOUDFLARE_API_TOKEN}" \
+	CLOUDFLARE_ACCOUNT_ID="$${CLOUDFLARE_ACCOUNT_ID}" \
+	npx wrangler pages deploy "$(CF_PAGES_DIR)" \
+	  --project-name "$(CF_PAGES_PROJECT)" \
+	  --branch "$(CF_PAGES_BRANCH)" \
+	  --commit-dirty=true 2>&1; \
+	echo "✅ CF Pages deploy complete"
+
+cf-pages-status: ensure-env-shared ## Check Cloudflare Pages project status
+	@$(LOAD_ENV_SHARED); \
+	CLOUDFLARE_API_TOKEN="$${CLOUDFLARE_API_TOKEN}" \
+	CLOUDFLARE_ACCOUNT_ID="$${CLOUDFLARE_ACCOUNT_ID}" \
+	npx wrangler pages project list 2>&1 | grep -i "$(CF_PAGES_PROJECT)" || echo "(project not found)"
+
 up-cloudflare: ensure-env-shared ## Start the Cloudflare tunnel connector (profile=cloudflare)
 	@$(LOAD_ENV_SHARED); \
 	if [ -z "$$CLOUDFLARE_TUNNEL_TOKEN" ] && [ -z "$$CLOUDFLARE_TUNNEL_NAME" ]; then \
