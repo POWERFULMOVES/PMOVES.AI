@@ -976,3 +976,13 @@ The pipeline reports success because its validation scope is too narrow. Neither
 - Three-body: delivery=SPARK-KIMI, control=operator approval, memory=this trail. agent_signature: `ACK::SPARK-KIMI::MULTI-LANE-CLAIM-2026-05-27`.
 
 <!-- GRAPHITI_MARK: SPARK-KIMI::MULTI-LANE-CLAIM::2026-05-27 -->
+
+## SPARK-KIMI Multi-Lane Progress (2026-05-27)
+
+- `2026-05-27T21:45:00Z` UPDATE `SPARK-KIMI` Lane A scope: A2A runtime verification complete. `/.well-known/agent-card.json` returns full Agent Card; `/a2a/v1/tasks` creates tasks successfully; auth chain works via JWT signed with `SUPABASE_JWT_SECRET`. **Finding**: `server.py:123` references `jose_jwt.InvalidSignatureError` which does not exist in `python-jose` — causes `AttributeError` → 500 instead of 403 on signature failure. Fix: remove broken handler (JWTError catch-all already returns 403). Branch `fix/a2a-jwt-error-handling` pushed, PR #1645 opened. agent_signature: `ACK::SPARK-KIMI::A2A-RUNTIME-VERIFICATION-UPDATE-2026-05-27`.
+
+<!-- GRAPHITI_MARK: SPARK-KIMI::A2A-RUNTIME-VERIFICATION-UPDATE::2026-05-27 -->
+
+- `2026-05-28T17:02:00Z` UPDATE `SPARK-KIMI` Lane C scope: PMOVES.YT `/yt/summarize` and `/yt/chapters` endpoints verified working on SPARK node via host Ollama (qwen3.5:35b-a3b-q4_K_M). Wiring: added `OLLAMA_URL`, `YT_SUMMARY_PROVIDER`, `YT_SUMMARY_OLLAMA_MODEL` env vars to `pmoves-yt` in docker-compose.yml (PR #1646). Fixed `host.docker.internal` → `172.17.0.1` for Linux Docker. Both endpoints return real AI-generated content. Sample output: 5-chapter breakdown with titles/blurbs, short-style summary. agent_signature: `ACK::SPARK-KIMI::YT-SUMMARIZE-CHAPTERS-VERIFIED-2026-05-28`.
+
+<!-- GRAPHITI_MARK: SPARK-KIMI::YT-SUMMARIZE-CHAPTERS-VERIFIED::2026-05-28 -->
