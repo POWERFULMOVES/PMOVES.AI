@@ -4,12 +4,14 @@
 
 - Hostname: `POWERFULMOVES`
 - Branch: `codex/agnote-5090-closeout`
+- Worktree: `C:\Users\russe\.codex\worktrees\agnote-closeout`
 - Base after refresh: `9c5278cb30` (`chore(deps)(deps): bump sigstore/cosign-installer from 4.1.1 to 4.1.2 (#1561)`)
 
 ## Results
 
 | Check | Result | Evidence |
 |-------|--------|----------|
+| Checkout context | PASS | Worktree `C:\Users\russe\.codex\worktrees\agnote-closeout` on branch `codex/agnote-5090-closeout`, refreshed to base `9c5278cb30` before validation |
 | GPU visible | PASS | `NVIDIA GeForce RTX 5090, 32607 MiB, driver 595.79` |
 | TensorZero health | PASS | `http://localhost:3030/health` returned gateway, ClickHouse, Postgres, and Valkey all `ok` |
 | TensorZero container health | PASS | `pmoves-tensorzero-gateway-1` and `pmoves-tensorzero-clickhouse-1` healthy in Docker snapshot |

@@ -3,7 +3,7 @@
 Note: Consolidated plan index at pmoves/docs/PMOVES.AI PLANS/README_DOCS_INDEX.md.
 _Last updated: 2026-05-27_
 
-### Latest changes (May 27, 2026) - Big Ball 5090 closeout
+## Latest changes (May 27, 2026) - Big Ball 5090 closeout
 - Big Ball CHIT/Tokenism hardening is merged: PR `#1633` landed the review-fix branch and PR `#1638` landed the transcribe LFS cleanup gitlink.
 - Dependabot PR `#1561` (`sigstore/cosign-installer` 4.1.1 -> 4.1.2 pinned SHA bump) was reviewed and merged with green checks.
 - Closeout validation on host `POWERFULMOVES` confirms RTX 5090 visibility, TensorZero gateway health, and clean parent submodule integrity after initialization.
@@ -15,7 +15,8 @@ _Last updated: 2026-05-27_
 ## Immediate Actions
 
 1. Finish Tokenism production activation pack.
-   - collect real deployed contract addresses, chain id, RPC endpoint reference, wallet custody reference, FireFly endpoint reference, deployment manifest id, operator approval id, and signed deployment attestation
+   - collect real deployed contract addresses, chain id, RPC endpoint reference, wallet custody reference, FireFly endpoint reference, deployment manifest id, operator approval id, signed deployment attestation, rollback plan, and incident/ops contact list
+   - keep FireFly and contract live execution blocked until the full signed activation pack, rollback plan, incident contacts, and dry-run settlement evidence are present
    - run dry-run settlement end to end before enabling any live executor mode
 
 2. Wire the trusted optimizer bridge.
