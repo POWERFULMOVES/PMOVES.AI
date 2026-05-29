@@ -1,0 +1,122 @@
+# Runner Maintenance — Periodic disk cleanup for self-hosted runners
+# =============================================================================
+# Self-hosted runners accumulate Docker images, BuildKit cache, and workspace
+# artifacts over time. This workflow runs on a schedule to aggressively clean
+# up resources before they cause disk-exhaustion failures.
+#
+# Triggered:
+#   - Nightly at 03:00 UTC
+#   - Manual dispatch (for emergency cleanup)
+#
+# Runners targeted:
+#   - ai-lab   (GPU builds)
+#   - kvm4     (VPS builds)
+#   - kvm2     (legacy VPS)
+
+name: Runner Maintenance
+
+on:
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+    inputs:
+      runner_label:
+        description: 'Specific runner label to target (empty = all)'
+        required: false
+        default: ''
+
+jobs:
+  cleanup-ai-lab:
+    name: Cleanup AI-Lab Runner
+    runs-on: [self-hosted, ai-lab]
+    if: ${{ github.event.inputs.runner_label == '' || github.event.inputs.runner_label == 'ai-lab' }}
+    timeout-minutes: 15
+    steps:
+      - name: Aggressive Docker cleanup
+        run: |
+          set -euxo pipefail
+          echo "Disk before cleanup:"
+          df -h
+          docker system df || true
+
+          # Remove all unused images/containers/volumes/networks older than 48h
+          docker system prune -af --volumes --filter "until=48h" || true
+
+          # Prune BuildKit cache older than 48h
+          docker builder prune -af --filter "until=48h" || true
+
+          # Clean old checkout directories in runner _work
+          RUNNER_WORK="/opt/actions-runner/_work"  # standard path
+          if [ -d "$RUNNER_WORK" ]; then
+            find "$RUNNER_WORK" -mindepth 1 -maxdepth 1 -type d -mtime +3 -exec rm -rf {} + || true
+          fi
+
+          # Clean old diagnostic logs that can accumulate and corrupt
+          DIAG_DIR="/opt/actions-runner/_diag/pages"
+          if [ -d "$DIAG_DIR" ]; then
+            find "$DIAG_DIR" -type f -mtime +1 -delete || true
+          fi
+
+          echo "Disk after cleanup:"
+          df -h
+          docker system df || true
+
+  cleanup-kvm4:
+    name: Cleanup KVM4 Runner
+    runs-on: [self-hosted, kvm4]
+    if: ${{ github.event.inputs.runner_label == '' || github.event.inputs.runner_label == 'kvm4' }}
+    timeout-minutes: 15
+    steps:
+      - name: Aggressive Docker cleanup
+        run: |
+          set -euxo pipefail
+          echo "Disk before cleanup:"
+          df -h
+          docker system df || true
+
+          docker system prune -af --volumes --filter "until=48h" || true
+          docker builder prune -af --filter "until=48h" || true
+
+          RUNNER_WORK="/opt/actions-runner-kvm4/_work"
+          if [ -d "$RUNNER_WORK" ]; then
+            find "$RUNNER_WORK" -mindepth 1 -maxdepth 1 -type d -mtime +3 -exec rm -rf {} + || true
+          fi
+
+          DIAG_DIR="/opt/actions-runner-kvm4/_diag/pages"
+          if [ -d "$DIAG_DIR" ]; then
+            find "$DIAG_DIR" -type f -mtime +1 -delete || true
+          fi
+
+          echo "Disk after cleanup:"
+          df -h
+          docker system df || true
+
+  cleanup-kvm2:
+    name: Cleanup KVM2 Runner
+    runs-on: [self-hosted, kvm2]
+    if: ${{ github.event.inputs.runner_label == '' || github.event.inputs.runner_label == 'kvm2' }}
+    timeout-minutes: 15
+    steps:
+      - name: Aggressive Docker cleanup
+        run: |
+          set -euxo pipefail
+          echo "Disk before cleanup:"
+          df -h
+          docker system df || true
+
+          docker system prune -af --volumes --filter "until=48h" || true
+          docker builder prune -af --filter "until=48h" || true
+
+          RUNNER_WORK="/opt/actions-runner-kvm2/_work"
+          if [ -d "$RUNNER_WORK" ]; then
+            find "$RUNNER_WORK" -mindepth 1 -maxdepth 1 -type d -mtime +3 -exec rm -rf {} + || true
+          fi
+
+          DIAG_DIR="/opt/actions-runner-kvm2/_diag/pages"
+          if [ -d "$DIAG_DIR" ]; then
+            find "$DIAG_DIR" -type f -mtime +1 -delete || true
+          fi
+
+          echo "Disk after cleanup:"
+          df -h
+          docker system df || true
