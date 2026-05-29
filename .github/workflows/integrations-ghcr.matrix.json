@@ -21,7 +21,7 @@
     "build_args": "",
     "platforms": "linux/amd64,linux/arm64",
     "generate_sbom": false,
-    "trivy_ignorefile": ""
+    "trivy_ignorefile": ".github/trivy/archon.trivyignore"
   },
   {
     "name": "archon-ui",
