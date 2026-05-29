@@ -100,6 +100,16 @@ jobs:
           docker tag pmoves-gateway-agent:latest pmoves-gateway-agent:${{ github.sha }}
           echo "✓ Image tagged"
 
+      - name: Clean up old images
+        if: always()
+        run: |
+          set -euxo pipefail
+          # Prune unused gateway-agent images older than 24h to prevent disk bloat
+          docker image prune -a -f --filter "label=com.docker.compose.service=gateway-agent" --filter "until=24h" || true
+          docker image prune -f || true
+          docker container prune -f || true
+          df -h
+
   deploy-ai-lab:
     name: Deploy to AI-Lab
     runs-on: [self-hosted, ai-lab]
@@ -275,6 +285,15 @@ jobs:
             exit 1
           fi
           echo "✓ $count secret keys loaded"
+
+      - name: Clean up old images
+        if: always()
+        run: |
+          set -euxo pipefail
+          docker image prune -a -f --filter "label=com.docker.compose.service=gateway-agent" --filter "until=24h" || true
+          docker image prune -f || true
+          docker container prune -f || true
+          df -h
 
   # ============================================================================
   # Rollback

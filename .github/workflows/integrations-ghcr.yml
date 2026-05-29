@@ -663,6 +663,19 @@ jobs:
           name: ${{ matrix.name }}-trivy
           path: trivy-${{ matrix.name }}.txt
 
+      - name: Clean up pulled image and dangling layers
+        if: ${{ steps.meta.outputs.has_tags == 'true' && always() }}
+        run: |
+          set -euxo pipefail
+          # Remove the image we pulled for Trivy to prevent accumulation on self-hosted runners
+          docker rmi "${{ steps.meta.outputs.primary_tag }}" || true
+          # Aggressive prune: remove unused images older than 24h (keeps BuildKit cache for subsequent matrix jobs)
+          docker image prune -a -f --filter "until=24h" || true
+          docker builder prune -f --filter "until=24h" || true
+          # Clean old runner work directories (>7 days) to prevent checkout artifact bloat
+          find "${{ github.workspace }}/../" -maxdepth 2 -type d -name '_work' -exec find {} -mindepth 1 -maxdepth 1 -type d -mtime +7 -exec rm -rf {} + \; || true
+          df -h
+
       - name: Cosign verify GHCR digest (keyless)
         if: ${{ steps.meta.outputs.has_tags == 'true' && steps.meta.outputs.use_ghcr == 'true' }}
         env:
