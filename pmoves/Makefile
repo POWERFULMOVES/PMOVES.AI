@@ -397,7 +397,7 @@ supa-start: ensure-env-shared ## Start Supabase stack for selected runtime (cli 
 			-e KONG_PG_PASSWORD=$${SUPABASE_DB_PASSWORD:-postgres} \
 			kong:3.7.1 kong migrations bootstrap --yes >/dev/null 2>&1 || true; \
 		$(MAKE) --no-print-directory supa-bootstrap-db; \
-		$(DC) up -d --force-recreate supabase-postgrest supabase-gotrue supabase-kong supabase-realtime supabase-storage supabase-studio supabase-imgproxy supabase-meta supabase-edge-functions supabase-analytics supabase-vector supabase-pooler; \
+		$(DC) --profile supabase-local up -d --force-recreate supabase-postgrest supabase-gotrue supabase-kong supabase-realtime supabase-storage supabase-studio supabase-imgproxy supabase-meta supabase-edge-functions supabase-analytics supabase-vector supabase-pooler; \
 	fi
 	@$(MAKE) --no-print-directory supa-status
 	@$(MAKE) --no-print-directory supa-collation-refresh 2>/dev/null || true
@@ -422,6 +422,12 @@ supa-restart: ## Restart Supabase stack for selected runtime
 	@$(MAKE) --no-print-directory supa-stop
 	@sleep 2
 	@$(MAKE) --no-print-directory supa-start
+
+.PHONY: pooler-recreate
+pooler-recreate: ## Force-recreate supabase-pooler container to pick up env file changes (non-disruptive)
+	@echo "→ Force-recreating supabase-pooler with current env..."
+	@$(DC) --profile supabase-local up -d --force-recreate supabase-pooler
+	@echo "✓ pooler recreated — give it 30s for health check"
 
 supa-status: ## Show Supabase status for selected runtime and export env snapshot when available
 	@echo "🔍 Supabase status (SUPABASE_RUNTIME=$(SUPABASE_RUNTIME)):"
@@ -636,6 +642,50 @@ supabase-bootstrap: ## Apply pending Supabase migrations + seeds (tracked in pub
 		echo "   ⚠️  No initdb directory found"; \
 	fi
 	@echo "✅ Supabase bootstrap complete"
+
+.PHONY: supabase-bootstrap-no-start
+supabase-bootstrap-no-start: ## Apply migrations+seeds against already-running DB (skips supa-start; uses SUPABASE_DB_USER)
+	@echo "🗄️ Applying Supabase schema + seeds (no-start mode)..."
+	@set -euo pipefail; \
+	db=$$(bash "$(SUPABASE_DB_HELPER)" running); \
+	if [ -z "$$db" ]; then echo "❌ Supabase DB container not found — start it first"; exit 1; fi; \
+	pg_user=$$(docker exec "$$db" sh -c 'echo $${POSTGRES_USER:-postgres}'); \
+	echo "   DB container: $$db | pg_user: $$pg_user"; \
+	_psql() { docker exec -i "$$db" psql -U "$$pg_user" -h 127.0.0.1 -d postgres "$$@"; }; \
+	_psql -v ON_ERROR_STOP=1 -c "CREATE TABLE IF NOT EXISTS public.pmoves_bootstrap_history (kind text NOT NULL, filename text NOT NULL, applied_at timestamptz NOT NULL DEFAULT now(), PRIMARY KEY (kind, filename));"; \
+	if [ -d "supabase/migrations" ]; then \
+		for migration in $$(find supabase/migrations -maxdepth 1 -type f -name '*.sql' | LC_ALL=C sort); do \
+			[ -f "$$migration" ] || continue; \
+			name=$$(basename "$$migration"); \
+			applied=$$(_psql -tAc "SELECT 1 FROM public.pmoves_bootstrap_history WHERE kind='migration' AND filename='$$name' LIMIT 1;" | tr -d '[:space:]'); \
+			if [ "$$applied" = "1" ]; then \
+				echo "   SKIP (applied): $$name"; \
+				continue; \
+			fi; \
+			echo "   APPLY: $$name"; \
+			_psql < "$$migration" && \
+			_psql -c "INSERT INTO public.pmoves_bootstrap_history(kind,filename) VALUES('migration','$$name') ON CONFLICT DO NOTHING;" || \
+			echo "   WARN: $$name failed — continuing"; \
+		done; \
+	fi; \
+	if [ -d "supabase/initdb" ]; then \
+		for seed in $$(find supabase/initdb -maxdepth 1 -type f -name '*.sql' | LC_ALL=C sort); do \
+			[ -f "$$seed" ] || continue; \
+			name=$$(basename "$$seed"); \
+			applied=$$(_psql -tAc "SELECT 1 FROM public.pmoves_bootstrap_history WHERE kind='seed' AND filename='$$name' LIMIT 1;" | tr -d '[:space:]'); \
+			if [ "$$applied" = "1" ]; then \
+				echo "   SKIP (applied): $$name"; \
+				continue; \
+			fi; \
+			echo "   APPLY seed: $$name"; \
+			_psql < "$$seed" && \
+			_psql -c "INSERT INTO public.pmoves_bootstrap_history(kind,filename) VALUES('seed','$$name') ON CONFLICT DO NOTHING;" || \
+			echo "   WARN: seed $$name failed — continuing"; \
+		done; \
+	else \
+		echo "   ⚠️  No initdb directory found"; \
+	fi
+	@echo "✅ Supabase bootstrap (no-start) complete"
 
 supabase-bootstrap-mark-applied: ## Mark all migration/seed files as applied in bootstrap history (no SQL execution)
 	@echo "📝 Marking migrations/seeds as applied in public.pmoves_bootstrap_history..."
@@ -1432,6 +1482,74 @@ bootstrap-tier-envs: ## Create missing tier env files from examples (Hardened br
 	else \
 		echo "✓ All tier env files already exist."; \
 	fi
+
+.PHONY: tier-data-patch-missing
+tier-data-patch-missing: ## Append compose-required keys missing from env.tier-data (idempotent)
+	@if [ ! -f env.tier-data ]; then echo "env.tier-data not found"; exit 1; fi; \
+	changed=0; \
+	for key in QDRANT__API_KEY NEO4J_PASSWORD; do \
+		if ! grep -q "^$$key=" env.tier-data 2>/dev/null; then \
+			val=$$(openssl rand -hex 32); \
+			echo "$$key=$$val" >> env.tier-data; \
+			echo "→ Appended $$key to env.tier-data"; \
+			changed=1; \
+		fi; \
+	done; \
+	if ! grep -q "^MINIO_USER=" env.tier-data 2>/dev/null; then \
+		echo "MINIO_USER=minioadmin" >> env.tier-data; \
+		echo "→ Appended MINIO_USER to env.tier-data"; \
+		changed=1; \
+	fi; \
+	if ! grep -q "^MINIO_PASSWORD=" env.tier-data 2>/dev/null; then \
+		val=$$(openssl rand -base64 24 | tr -d '\n='); \
+		echo "MINIO_PASSWORD=$$val" >> env.tier-data; \
+		echo "→ Appended MINIO_PASSWORD to env.tier-data"; \
+		changed=1; \
+	fi; \
+	if ! grep -q "^WGER_DB_PASSWORD=" env.tier-data 2>/dev/null; then \
+		val=$$(openssl rand -base64 24 | tr -d '\n='); \
+		echo "WGER_DB_PASSWORD=$$val" >> env.tier-data; \
+		echo "→ Appended WGER_DB_PASSWORD to env.tier-data"; \
+		changed=1; \
+	fi; \
+	if [ "$$changed" = "0" ]; then echo "✓ env.tier-data already has all required keys"; fi
+
+.PHONY: tier-api-patch-missing
+tier-api-patch-missing: ## Append compose-required keys missing from env.tier-api (idempotent)
+	@if [ ! -f env.tier-api ]; then echo "env.tier-api not found"; exit 1; fi; \
+	changed=0; \
+	for key in WGER_SECRET_KEY WGER_ADMIN_PASSWORD MCP_SERVER_TOKEN; do \
+		if ! grep -q "^$$key=" env.tier-api 2>/dev/null; then \
+			val=$$(openssl rand -base64 32 | tr -d '\n='); \
+			echo "$$key=$$val" >> env.tier-api; \
+			echo "→ Appended $$key to env.tier-api"; \
+			changed=1; \
+		fi; \
+	done; \
+	if [ "$$changed" = "0" ]; then echo "✓ env.tier-api already has all required keys"; fi
+
+.PHONY: tier-supabase-patch-missing
+tier-supabase-patch-missing: ## Append/fix compose-required keys in env.tier-supabase (idempotent)
+	@if [ ! -f env.tier-supabase ]; then echo "env.tier-supabase not found"; exit 1; fi; \
+	changed=0; \
+	for key in SECRET_KEY_BASE LOGFLARE_PUBLIC_ACCESS_TOKEN LOGFLARE_PRIVATE_ACCESS_TOKEN; do \
+		if ! grep -q "^$$key=" env.tier-supabase 2>/dev/null; then \
+			val=$$(openssl rand -base64 48 | tr -d '\n=' | cut -c1-64); \
+			echo "$$key=$$val" >> env.tier-supabase; \
+			echo "→ Appended $$key to env.tier-supabase"; \
+			changed=1; \
+		fi; \
+	done; \
+	_vault_val=$$(grep "^VAULT_ENC_KEY=" env.tier-supabase 2>/dev/null | cut -d= -f2-); \
+	if [ -z "$$_vault_val" ]; then \
+		echo "VAULT_ENC_KEY=$$(openssl rand -hex 16)" >> env.tier-supabase; \
+		echo "→ Appended VAULT_ENC_KEY (32-char hex)"; changed=1; \
+	elif [ "$${#_vault_val}" -ne 32 ]; then \
+		_new_vault=$$(openssl rand -hex 16); \
+		sed -i "s|^VAULT_ENC_KEY=.*|VAULT_ENC_KEY=$$_new_vault|" env.tier-supabase; \
+		echo "→ Fixed VAULT_ENC_KEY (was $${#_vault_val} chars, now 32)"; changed=1; \
+	fi; \
+	if [ "$$changed" = "0" ]; then echo "✓ env.tier-supabase already has all required keys"; fi
 
 .PHONY: populate-tier-envs
 populate-tier-envs: bootstrap-tier-envs ## Populate tier env files with defaults from env.shared and .env.local
