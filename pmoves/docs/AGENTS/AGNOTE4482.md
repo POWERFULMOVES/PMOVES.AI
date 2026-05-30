@@ -1161,3 +1161,36 @@ No open PR existed for `codex/big-ball-5090-gap-closure` at the time of this not
 - Timestamp: `2026-05-26`
 
 <!-- GRAPHITI_MARK: CODEX-GPT5::BIG-BALL-5090-GAP-CLOSURE::2026-05-26 -->
+
+## Antigravity CLI A2UI Hologram Scaling Fix (2026-05-30)
+
+### Context
+Operator requested fixing the "identical pink dot" gallery issue stemming from the pending `A2UI Remotion hologram viewport scaling (1920x1080 viewport)` ticket. The `geometry_mesh` element in `a2ui-renderer` was stubbed out and required DGX SPARK physical access.
+
+This work ran on the local workspace `3fd5d899-f774-45da-bae1-ef349bf01951` targeting branch `fix/ghcr-matrix-paths-gate` in the parent PMOVES repo.
+
+### Work Performed
+- Bypassed the stubbed Remotion 2D generator and implemented a live interactive 3D WebGL solution on the landing page.
+- Upgraded `website/hyperdim/index.html` with URL parameter parsing (`?preset=` and `?ui=none`) for headless preset embedding.
+- Generated three distinct parametric topology presets derived from `beats_constellation.json`:
+  - `beats_c5.json`: Allegro Balanced Bright (High tempo, bright color)
+  - `beats_c3.json`: Allegro Balanced Deep (Moderate tempo, deep color)
+  - `beats_c1.json`: Cluster 1 (High fitness, tight curvature, very bright)
+- Replaced the three static `<video>` elements in `website/index.html` gallery with `<iframe>` embeds targeting the Hyperdimensions viewer, successfully resolving the 1920x1080 scaling issue via live rendering.
+
+### Lane Status
+| Lane | Status | Notes |
+|------|--------|-------|
+| A2UI Hologram Scaling | Resolved (Live WebGL) | DGX SPARK dependency bypassed. Rendering now happens live in the browser via Three.js. |
+| Custom Domain Linking | Handoff | Operator to configure `pmoves.ai` domain in Cloudflare dashboard manually. |
+
+### PR Readiness
+The branch is ready to commit the UI changes. Proposed logical commit:
+`feat(website): replace A2UI mp4s with live Hyperdimensions WebGL embeds to fix 1920x1080 scaling`
+
+### Agent ACK
+- Agent: `ANTIGRAVITY-GEMINI`
+- Signature: `ACK::ANTIGRAVITY-GEMINI::A2UI-HOLOGRAM-SCALING-FIX`
+- Timestamp: `2026-05-30`
+
+<!-- GRAPHITI_MARK: ANTIGRAVITY-GEMINI::A2UI-HOLOGRAM-SCALING-FIX::2026-05-30 -->
