@@ -1256,6 +1256,11 @@ function surface(input) {
             }
 
             function loadPresetFromFile(file) {
+                // Guard against path traversal / arbitrary fetch via ?preset= — only allow plain save filenames.
+                if (!/^[\w-]+\.json$/.test(file)) {
+                    console.error('loadPresetFromFile: rejected unsafe preset name:', file);
+                    return;
+                }
                 fetch('saves/' + file)
                     .then((res) => {
                         if (!res.ok) throw new Error('Failed to load preset');
