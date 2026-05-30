@@ -28,7 +28,7 @@ services:
   # KVM4-1: API Gateway Node
   # ============================================================================
 
-  tensorzero:
+  tensorzero-gateway:
     <<: [*cpu-only, *vps-healthcheck]
     environment:
       # Route GPU-intensive requests to home network via Tailscale mesh
@@ -44,7 +44,7 @@ services:
       dockerfile: Dockerfile  # CPU-only version
     environment:
       - AGENTZERO_MODE=api
-      - TENSORZERO_URL=http://tensorzero:3000
+      - TENSORZERO_URL=http://tensorzero-gateway:3000
 
   hi-rag-gateway-v2:
     <<: [*cpu-only, *vps-healthcheck]
@@ -52,7 +52,7 @@ services:
     build:
       dockerfile: services/hi-rag-gateway-v2/Dockerfile
 
-  archon-server:
+  archon:
     <<: [*cpu-only, *vps-healthcheck]
 
   mesh-agent:
@@ -75,7 +75,7 @@ services:
       - PORT=8100
       - AGENT_ZERO_URL=http://agent-zero:8080
       - CIPHER_URL=http://cipher-api:8105
-      - TENSORZERO_URL=http://tensorzero:3000
+      - TENSORZERO_URL=http://tensorzero-gateway:3000
       - SUPABASE_URL=${SUPABASE_URL:-http://supabase-kong:8000}
       - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY}
       - TOOL_CACHE_TTL=300
