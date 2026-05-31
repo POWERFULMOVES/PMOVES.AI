@@ -105,7 +105,7 @@
     "build_args": "",
     "platforms": "linux/amd64",
     "generate_sbom": false,
-    "trivy_ignorefile": ""
+    "trivy_ignorefile": ".github/trivy/deepresearch.trivyignore"
   },
   {
     "name": "supaserch",
