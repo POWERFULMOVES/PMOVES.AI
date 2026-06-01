@@ -1891,7 +1891,7 @@ cf-pages-create: ensure-env-shared ## Create Cloudflare Pages project (one-time 
 	CLOUDFLARE_API_TOKEN="$${CLOUDFLARE_API_TOKEN}" \
 	CLOUDFLARE_ACCOUNT_ID="$${CLOUDFLARE_ACCOUNT_ID}" \
 	npx wrangler pages project create "$(CF_PAGES_PROJECT)" \
-	  --production-branch main 2>&1 \
+	  --production-branch "$(CF_PAGES_BRANCH)" 2>&1 \
 	  || { echo "❌ wrangler project create failed"; exit 1; }; \
 	echo "✅ CF Pages project created — now run: make cf-pages-deploy"
 
@@ -1917,9 +1917,11 @@ cf-pages-deploy: ensure-env-shared ## Deploy cataclysmstudios static site to Clo
 
 cf-pages-status: ensure-env-shared ## Check Cloudflare Pages project status
 	@$(LOAD_ENV_SHARED); \
-	CLOUDFLARE_API_TOKEN="$${CLOUDFLARE_API_TOKEN}" \
-	CLOUDFLARE_ACCOUNT_ID="$${CLOUDFLARE_ACCOUNT_ID}" \
-	npx wrangler pages project list 2>&1 | grep -i "$(CF_PAGES_PROJECT)" || echo "(project not found)"
+	out=$$(CLOUDFLARE_API_TOKEN="$${CLOUDFLARE_API_TOKEN}" \
+	  CLOUDFLARE_ACCOUNT_ID="$${CLOUDFLARE_ACCOUNT_ID}" \
+	  npx wrangler pages project list 2>&1); rc=$$?; \
+	if [ $$rc -ne 0 ]; then echo "❌ wrangler error (exit $$rc):"; echo "$$out"; exit $$rc; fi; \
+	echo "$$out" | grep -i "$(CF_PAGES_PROJECT)" || echo "(project '$(CF_PAGES_PROJECT)' not found)"
 
 PMOVES_AI_PROJECT ?= pmoves-ai
 PMOVES_AI_DIR     ?= ../website
@@ -1945,7 +1947,7 @@ pmoves-ai-create: ensure-env-shared ## Create pmoves-ai Cloudflare Pages project
 	CLOUDFLARE_API_TOKEN="$${CLOUDFLARE_API_TOKEN}" \
 	CLOUDFLARE_ACCOUNT_ID="$${CLOUDFLARE_ACCOUNT_ID}" \
 	npx wrangler pages project create "$(PMOVES_AI_PROJECT)" \
-	  --production-branch main 2>&1 \
+	  --production-branch "$(PMOVES_AI_BRANCH)" 2>&1 \
 	  || { echo "❌ wrangler project create failed"; exit 1; }; \
 	echo "✅ pmoves-ai Pages project created — now run: make pmoves-ai-deploy"
 
@@ -1971,9 +1973,11 @@ pmoves-ai-deploy: ensure-env-shared ## Deploy pmoves.ai static site to Cloudflar
 
 pmoves-ai-status: ensure-env-shared ## Check pmoves-ai Cloudflare Pages project status
 	@$(LOAD_ENV_SHARED); \
-	CLOUDFLARE_API_TOKEN="$${CLOUDFLARE_API_TOKEN}" \
-	CLOUDFLARE_ACCOUNT_ID="$${CLOUDFLARE_ACCOUNT_ID}" \
-	npx wrangler pages project list 2>&1 | grep -i "$(PMOVES_AI_PROJECT)" || echo "(pmoves-ai project not found)"
+	out=$$(CLOUDFLARE_API_TOKEN="$${CLOUDFLARE_API_TOKEN}" \
+	  CLOUDFLARE_ACCOUNT_ID="$${CLOUDFLARE_ACCOUNT_ID}" \
+	  npx wrangler pages project list 2>&1); rc=$$?; \
+	if [ $$rc -ne 0 ]; then echo "❌ wrangler error (exit $$rc):"; echo "$$out"; exit $$rc; fi; \
+	echo "$$out" | grep -i "$(PMOVES_AI_PROJECT)" || echo "(pmoves-ai project not found)"
 
 up-cloudflare: ensure-env-shared ## Start the Cloudflare tunnel connector (profile=cloudflare)
 	@$(LOAD_ENV_SHARED); \

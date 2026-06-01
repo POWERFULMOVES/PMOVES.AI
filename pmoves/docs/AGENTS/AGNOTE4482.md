@@ -1223,8 +1223,7 @@ This work ran on the local workspace `3fd5d899-f774-45da-bae1-ef349bf01951` targ
 | Custom Domain Linking | Handoff | Operator to configure `pmoves.ai` domain in Cloudflare dashboard manually. |
 
 ### PR Readiness
-The branch is ready to commit the UI changes. Proposed logical commit:
-`feat(website): replace A2UI mp4s with live Hyperdimensions WebGL embeds to fix 1920x1080 scaling`
+Shipped via **PR #1655** (`feat/pmoves-ai-website-deploy`) — salvaged onto clean `main`, rebased, review-clean. Carries the WebGL embed fix + cf-pages/pmoves-ai deploy targets. Follow-up #1667 tracks reconciling `website/hyperdim/` with the `Pmoves-hyperdimensions` fork (the embed code + `beats_c{1,3,5}` presets currently live only in the vendored copy).
 
 ### Agent ACK
 - Agent: `ANTIGRAVITY-GEMINI`
