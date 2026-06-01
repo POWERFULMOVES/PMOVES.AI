@@ -22,11 +22,19 @@
   Content-Security-Policy: default-src 'self'; base-uri 'self'; form-action 'self' mailto:; frame-ancestors 'none'; img-src 'self' data:; style-src 'self'; script-src 'self'; font-src 'self' data:; connect-src 'self'; frame-src https://www.youtube.com https://www.youtube-nocookie.com; object-src 'none'; upgrade-insecure-requests
 
 # --- Hyperdimensions WebGL viewer (embedded as gallery iframes on /) ---
-#   - Overrides the /* rule: this sub-app is framed same-origin by index.html,
-#     and loads three.js (unpkg) + CodeMirror/mathjs (cdnjs) at runtime.
+#   - This sub-app is framed same-origin by index.html, and loads three.js
+#     (unpkg) + CodeMirror/mathjs (cdnjs) at runtime.
+#   - CF Pages STACKS matching _headers rules (a request to /hyperdim/* matches
+#     BOTH /* and this block, and duplicate headers are comma-joined / the
+#     browser enforces the intersection). So we must DETACH the inherited
+#     X-Frame-Options + Content-Security-Policy from /* with the `! ` syntax
+#     before setting the relaxed policy — otherwise /*'s frame-ancestors 'none'
+#     + script-src 'self' still win and the embeds/CDN scripts stay blocked.
 #   - 'unsafe-inline' is required: the viewer ships one inline <script type=module>
 #     and inline <style> (single-file toy app, no nonce pipeline).
 /hyperdim/*
+  ! X-Frame-Options
+  ! Content-Security-Policy
   X-Frame-Options: SAMEORIGIN
   Content-Security-Policy: default-src 'self'; base-uri 'self'; frame-ancestors 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://unpkg.com; font-src 'self' data:; connect-src 'self' https://unpkg.com https://cdnjs.cloudflare.com; object-src 'none'; upgrade-insecure-requests
 
