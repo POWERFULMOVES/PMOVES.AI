@@ -1867,6 +1867,118 @@ integration-contract-check-strict: ## Strict integration contract check (missing
 integration-contract-check-baseline: ## Strict contract checks for template + baseline overlays
 	@$(PYTHON) tools/integration_contract_check.py $(INTEGRATION_CONTRACT_BASELINE) --strict-hooks
 
+CF_PAGES_PROJECT ?= cataclysmstudios
+CF_PAGES_DIR ?= ../deploy/cataclysmstudios
+CF_PAGES_BRANCH ?= main
+
+CF_PAGES_PORT ?= 8788
+
+.PHONY: cf-pages-dev cf-pages-create cf-pages-deploy cf-pages-status
+cf-pages-dev: ## Serve cataclysmstudios locally via wrangler pages dev (http://localhost:CF_PAGES_PORT)
+	@echo "→ Previewing $(CF_PAGES_PROJECT) at http://localhost:$(CF_PAGES_PORT)"
+	npx wrangler pages dev "$(CF_PAGES_DIR)" --port $(CF_PAGES_PORT)
+cf-pages-create: ensure-env-shared ## Create Cloudflare Pages project (one-time bootstrap)
+	@$(LOAD_ENV_SHARED); \
+	if [ -z "$${CLOUDFLARE_API_TOKEN:-}" ]; then \
+	  echo "❌ CLOUDFLARE_API_TOKEN not set — run: make secrets-funnel-sync-from-bundle"; \
+	  exit 1; \
+	fi; \
+	if [ -z "$${CLOUDFLARE_ACCOUNT_ID:-}" ]; then \
+	  echo "❌ CLOUDFLARE_ACCOUNT_ID not set — run: make secrets-funnel-sync-from-bundle"; \
+	  exit 1; \
+	fi; \
+	echo "→ Creating Cloudflare Pages project: $(CF_PAGES_PROJECT)"; \
+	CLOUDFLARE_API_TOKEN="$${CLOUDFLARE_API_TOKEN}" \
+	CLOUDFLARE_ACCOUNT_ID="$${CLOUDFLARE_ACCOUNT_ID}" \
+	npx wrangler pages project create "$(CF_PAGES_PROJECT)" \
+	  --production-branch "$(CF_PAGES_BRANCH)" 2>&1 \
+	  || { echo "❌ wrangler project create failed"; exit 1; }; \
+	echo "✅ CF Pages project created — now run: make cf-pages-deploy"
+
+cf-pages-deploy: ensure-env-shared ## Deploy cataclysmstudios static site to Cloudflare Pages
+	@$(LOAD_ENV_SHARED); \
+	if [ -z "$${CLOUDFLARE_API_TOKEN:-}" ]; then \
+	  echo "❌ CLOUDFLARE_API_TOKEN not set — run: make secrets-funnel-sync"; \
+	  exit 1; \
+	fi; \
+	if [ -z "$${CLOUDFLARE_ACCOUNT_ID:-}" ]; then \
+	  echo "❌ CLOUDFLARE_ACCOUNT_ID not set — run: make secrets-funnel-sync"; \
+	  exit 1; \
+	fi; \
+	echo "→ Deploying $(CF_PAGES_PROJECT) to Cloudflare Pages..."; \
+	CLOUDFLARE_API_TOKEN="$${CLOUDFLARE_API_TOKEN}" \
+	CLOUDFLARE_ACCOUNT_ID="$${CLOUDFLARE_ACCOUNT_ID}" \
+	npx wrangler pages deploy "$(CF_PAGES_DIR)" \
+	  --project-name "$(CF_PAGES_PROJECT)" \
+	  --branch "$(CF_PAGES_BRANCH)" \
+	  --commit-dirty=true 2>&1 \
+	  || { echo "❌ wrangler deploy failed"; exit 1; }; \
+	echo "✅ CF Pages deploy complete"
+
+cf-pages-status: ensure-env-shared ## Check Cloudflare Pages project status
+	@$(LOAD_ENV_SHARED); \
+	out=$$(CLOUDFLARE_API_TOKEN="$${CLOUDFLARE_API_TOKEN}" \
+	  CLOUDFLARE_ACCOUNT_ID="$${CLOUDFLARE_ACCOUNT_ID}" \
+	  npx wrangler pages project list 2>&1); rc=$$?; \
+	if [ $$rc -ne 0 ]; then echo "❌ wrangler error (exit $$rc):"; echo "$$out"; exit $$rc; fi; \
+	echo "$$out" | grep -i "$(CF_PAGES_PROJECT)" || echo "(project '$(CF_PAGES_PROJECT)' not found)"
+
+PMOVES_AI_PROJECT ?= pmoves-ai
+PMOVES_AI_DIR     ?= ../website
+PMOVES_AI_BRANCH  ?= main
+PMOVES_AI_PORT    ?= 8789
+
+.PHONY: pmoves-ai-dev pmoves-ai-create pmoves-ai-deploy pmoves-ai-status
+pmoves-ai-dev: ## Serve pmoves.ai locally via wrangler pages dev (http://localhost:PMOVES_AI_PORT)
+	@echo "→ Previewing $(PMOVES_AI_PROJECT) at http://localhost:$(PMOVES_AI_PORT)"
+	npx wrangler pages dev "$(PMOVES_AI_DIR)" --port $(PMOVES_AI_PORT)
+
+pmoves-ai-create: ensure-env-shared ## Create pmoves-ai Cloudflare Pages project (one-time bootstrap)
+	@$(LOAD_ENV_SHARED); \
+	if [ -z "$${CLOUDFLARE_API_TOKEN:-}" ]; then \
+	  echo "❌ CLOUDFLARE_API_TOKEN not set — run: make secrets-funnel-sync-from-bundle"; \
+	  exit 1; \
+	fi; \
+	if [ -z "$${CLOUDFLARE_ACCOUNT_ID:-}" ]; then \
+	  echo "❌ CLOUDFLARE_ACCOUNT_ID not set — run: make secrets-funnel-sync-from-bundle"; \
+	  exit 1; \
+	fi; \
+	echo "→ Creating Cloudflare Pages project: $(PMOVES_AI_PROJECT)"; \
+	CLOUDFLARE_API_TOKEN="$${CLOUDFLARE_API_TOKEN}" \
+	CLOUDFLARE_ACCOUNT_ID="$${CLOUDFLARE_ACCOUNT_ID}" \
+	npx wrangler pages project create "$(PMOVES_AI_PROJECT)" \
+	  --production-branch "$(PMOVES_AI_BRANCH)" 2>&1 \
+	  || { echo "❌ wrangler project create failed"; exit 1; }; \
+	echo "✅ pmoves-ai Pages project created — now run: make pmoves-ai-deploy"
+
+pmoves-ai-deploy: ensure-env-shared ## Deploy pmoves.ai static site to Cloudflare Pages
+	@$(LOAD_ENV_SHARED); \
+	if [ -z "$${CLOUDFLARE_API_TOKEN:-}" ]; then \
+	  echo "❌ CLOUDFLARE_API_TOKEN not set — run: make secrets-funnel-sync-from-bundle"; \
+	  exit 1; \
+	fi; \
+	if [ -z "$${CLOUDFLARE_ACCOUNT_ID:-}" ]; then \
+	  echo "❌ CLOUDFLARE_ACCOUNT_ID not set — run: make secrets-funnel-sync-from-bundle"; \
+	  exit 1; \
+	fi; \
+	echo "→ Deploying $(PMOVES_AI_PROJECT) to Cloudflare Pages (branch: $(PMOVES_AI_BRANCH))..."; \
+	CLOUDFLARE_API_TOKEN="$${CLOUDFLARE_API_TOKEN}" \
+	CLOUDFLARE_ACCOUNT_ID="$${CLOUDFLARE_ACCOUNT_ID}" \
+	npx wrangler pages deploy "$(PMOVES_AI_DIR)" \
+	  --project-name "$(PMOVES_AI_PROJECT)" \
+	  --branch "$(PMOVES_AI_BRANCH)" \
+	  --commit-dirty=true 2>&1 \
+	  || { echo "❌ wrangler deploy failed"; exit 1; }; \
+	echo "✅ pmoves-ai deploy complete"
+
+pmoves-ai-status: ensure-env-shared ## Check pmoves-ai Cloudflare Pages project status
+	@$(LOAD_ENV_SHARED); \
+	out=$$(CLOUDFLARE_API_TOKEN="$${CLOUDFLARE_API_TOKEN}" \
+	  CLOUDFLARE_ACCOUNT_ID="$${CLOUDFLARE_ACCOUNT_ID}" \
+	  npx wrangler pages project list 2>&1); rc=$$?; \
+	if [ $$rc -ne 0 ]; then echo "❌ wrangler error (exit $$rc):"; echo "$$out"; exit $$rc; fi; \
+	echo "$$out" | grep -i "$(PMOVES_AI_PROJECT)" || echo "(pmoves-ai project not found)"
+
 up-cloudflare: ensure-env-shared ## Start the Cloudflare tunnel connector (profile=cloudflare)
 	@$(LOAD_ENV_SHARED); \
 	if [ -z "$$CLOUDFLARE_TUNNEL_TOKEN" ] && [ -z "$$CLOUDFLARE_TUNNEL_NAME" ]; then \
