@@ -278,6 +278,7 @@ jobs:
           context: integration-src/${{ steps.cfg.outputs.context }}
           file: integration-src/${{ steps.cfg.outputs.dockerfile }}
           push: false
+          pull: true
           build-args: |
             PIP_CONSTRAINT=requirements.lock
             ${{ steps.cfg.outputs.build_args }}
@@ -401,9 +402,43 @@ jobs:
         env:
           MATRIX_NAME: ${{ matrix.name }}
 
+      - name: Validate secrets presence
+        id: secrets_check
+        run: |
+          set -euo pipefail
+          missing=()
+          has_value() { [ -n "$(printenv "$1" || true)" ]; }
+
+          echo "::group::Auth secret audit"
+          if has_value GHCR_USERNAME && has_value GHCR_PAT; then
+            echo "✅ GHCR PAT auth available (GHCR_USERNAME + GHCR_TOKEN/GH_PAT_PUBLISH)"
+          else
+            echo "⚠️ GHCR PAT auth unavailable — will fallback to App token or workflow token"
+            [ -z "$(printenv GHCR_USERNAME || true)" ] && missing+=("GHCR_USERNAME")
+            [ -z "$(printenv GHCR_PAT || true)" ]      && missing+=("GHCR_TOKEN/GH_PAT_PUBLISH")
+          fi
+
+          if has_value GH_APP_CLIENT_ID && has_value GH_APP_SEC; then
+            echo "✅ GitHub App token generation available"
+          else
+            echo "⚠️ GitHub App token unavailable"
+            [ -z "$(printenv GH_APP_CLIENT_ID || true)" ] && missing+=("GH_APP_CLIENT_ID")
+            [ -z "$(printenv GH_APP_SEC || true)" ]       && missing+=("GH_APP_SEC")
+          fi
+          echo "::endgroup::"
+
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "::warning::Missing secrets: ${missing[*]} — GHCR push may fail if no valid auth method remains"
+          fi
+        env:
+          GHCR_USERNAME: ${{ env.GHCR_USERNAME }}
+          GHCR_PAT: ${{ env.GHCR_PAT }}
+          GH_APP_CLIENT_ID: ${{ secrets.GH_APP_CLIENT_ID }}
+          GH_APP_SEC: ${{ secrets.GH_APP_SEC }}
+
       - name: Generate GitHub App token (for clone + GHCR)
         id: app_token
-        uses: actions/create-github-app-token@1b10c78c7865c340bc4f6099eb2f838309f1e8c3
+        uses: actions/create-github-app-token@v3
         with:
           client-id: ${{ secrets.GH_APP_CLIENT_ID }}
           private-key: ${{ secrets.GH_APP_SEC }}
@@ -601,6 +636,7 @@ jobs:
           context: integration-src/${{ steps.cfg.outputs.context }}
           file: integration-src/${{ steps.cfg.outputs.dockerfile }}
           push: true
+          pull: true
           build-args: |
             PIP_CONSTRAINT=requirements.lock
             ${{ steps.cfg.outputs.build_args }}
