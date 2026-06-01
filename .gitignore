@@ -298,3 +298,5 @@ research/transcripts/
 # Docker MCP toolkit local artifacts (not for repo)
 profiles.json
 update.finished
+.kimi/mcp.json
+.kimi/mcp.json.pre-toolkit-connect.bak
