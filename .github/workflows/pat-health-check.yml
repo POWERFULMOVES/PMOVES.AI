@@ -56,12 +56,14 @@ jobs:
           GH_TOKEN: ${{ steps.app_token.outputs.token }}
         run: |
           # App tokens are installation tokens; they don't have a /user endpoint.
-          # Validate by checking org package access (lightweight probe).
-          if gh api /users/${{ github.repository_owner }} >/dev/null 2>&1; then
-            echo "✅ GitHub App token is valid and API-accessible"
+          # Validate by checking package access — this requires packages:read (implicit
+          # in packages:write). A public /users probe would succeed even without
+          # the scope, so we use the package listing endpoint instead.
+          if gh api /users/${{ github.repository_owner }}/packages?package_type=container >/dev/null 2>&1; then
+            echo "✅ GitHub App token is valid and has package scope (packages:read/write)"
           else
-            echo "❌ GitHub App token failed API probe"
-            echo "::warning::GitHub App token may lack permissions or installation may be suspended"
+            echo "❌ GitHub App token failed package-scope probe"
+            echo "::warning::GitHub App token may lack packages:write scope or installation may be suspended"
           fi
 
       - name: Notify on failure
