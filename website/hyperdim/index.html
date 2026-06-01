@@ -347,6 +347,8 @@ function surface(input) {
             camera.updateProjectionMatrix();
         }
 
+        window.addEventListener('resize', resizeRendererToViewport);
+
         resizeRendererToViewport();
 
         const controls = new OrbitControls(camera, renderer.domElement);
@@ -2134,6 +2136,7 @@ function surface(input) {
                 if (viewportDiv) viewportDiv.style.left = '0';
                 const resetBtn = document.getElementById('resetCamera');
                 if (resetBtn) resetBtn.style.display = 'none';
+                resizeRendererToViewport();
             }
 
             if (presetQuery) {
@@ -2149,6 +2152,10 @@ function surface(input) {
                     })
                     .then((cfg) => {
                         applyConfig(cfg);
+                        if (cfg.surface && cfg.surface.code) {
+                            editor.setValue(cfg.surface.code);
+                            applySurface();
+                        }
                     })
                     .catch((err) => {
                         console.error('Failed to load default surface:', err);
