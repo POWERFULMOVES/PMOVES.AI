@@ -1193,7 +1193,10 @@ function surface(input) {
                         return res.json();
                     })
                     .then((list) => {
-                        if (!Array.isArray(list)) return;
+                        if (!Array.isArray(list)) {
+                            loadPresetSelect.innerHTML = '<option value="">Saves list unavailable</option>';
+                            return;
+                        }
                         loadPresetSelect.innerHTML = '';
                         list.forEach((item) => {
                             if (!item || typeof item !== 'object') return;
@@ -1216,7 +1219,8 @@ function surface(input) {
                         }
                     })
                     .catch((err) => {
-                        console.error(err);
+                        console.error('Failed to load saves list:', err);
+                        loadPresetSelect.innerHTML = '<option value="">Could not load saves list</option>';
                     });
             }
 
@@ -1276,8 +1280,18 @@ function surface(input) {
                         hideHeaderPanels();
                     })
                     .catch((err) => {
-                        console.error(err);
-                        alert('Failed to load preset save file.');
+                        console.error('loadPresetFromFile failed:', err);
+                        // In embed mode (?ui=none) a blocking alert() fires inside a
+                        // pointer-events:none iframe the user can't dismiss — fall back
+                        // silently to the default surface instead.
+                        if (isEmbedMode) {
+                            fetch('saves/nautilus.json')
+                                .then((res) => (res.ok ? res.json() : null))
+                                .then((cfg) => { if (cfg) applyConfig(cfg); else updateGeometry(); })
+                                .catch(() => updateGeometry());
+                        } else {
+                            alert('Failed to load preset "' + file + '".');
+                        }
                     });
             }
 
@@ -2128,11 +2142,11 @@ function surface(input) {
                 isCameraTweening = true;
             });
 
-            const urlParams = new URLSearchParams(window.location.search);
-            const presetQuery = urlParams.get('preset');
-            const uiQuery = urlParams.get('ui');
+            const embedParams = new URLSearchParams(window.location.search);
+            const isEmbedMode = embedParams.get('ui') === 'none';
+            const presetQuery = embedParams.get('preset');
 
-            if (uiQuery === 'none') {
+            if (isEmbedMode) {
                 const sidebar = document.getElementById('sidebar');
                 if (sidebar) sidebar.style.display = 'none';
                 const viewportDiv = document.getElementById('viewport');
@@ -2142,9 +2156,7 @@ function surface(input) {
             }
 
             if (presetQuery) {
-                setTimeout(() => {
-                    loadPresetFromFile(presetQuery);
-                }, 100);
+                loadPresetFromFile(presetQuery);
             } else {
                 // Load nautilus by default on startup if no preset
                 fetch('saves/nautilus.json')

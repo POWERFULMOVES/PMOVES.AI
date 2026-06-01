@@ -1891,7 +1891,8 @@ cf-pages-create: ensure-env-shared ## Create Cloudflare Pages project (one-time 
 	CLOUDFLARE_API_TOKEN="$${CLOUDFLARE_API_TOKEN}" \
 	CLOUDFLARE_ACCOUNT_ID="$${CLOUDFLARE_ACCOUNT_ID}" \
 	npx wrangler pages project create "$(CF_PAGES_PROJECT)" \
-	  --production-branch main 2>&1; \
+	  --production-branch main 2>&1 \
+	  || { echo "❌ wrangler project create failed"; exit 1; }; \
 	echo "✅ CF Pages project created — now run: make cf-pages-deploy"
 
 cf-pages-deploy: ensure-env-shared ## Deploy cataclysmstudios static site to Cloudflare Pages
@@ -1910,7 +1911,8 @@ cf-pages-deploy: ensure-env-shared ## Deploy cataclysmstudios static site to Clo
 	npx wrangler pages deploy "$(CF_PAGES_DIR)" \
 	  --project-name "$(CF_PAGES_PROJECT)" \
 	  --branch "$(CF_PAGES_BRANCH)" \
-	  --commit-dirty=true 2>&1; \
+	  --commit-dirty=true 2>&1 \
+	  || { echo "❌ wrangler deploy failed"; exit 1; }; \
 	echo "✅ CF Pages deploy complete"
 
 cf-pages-status: ensure-env-shared ## Check Cloudflare Pages project status
@@ -1943,7 +1945,8 @@ pmoves-ai-create: ensure-env-shared ## Create pmoves-ai Cloudflare Pages project
 	CLOUDFLARE_API_TOKEN="$${CLOUDFLARE_API_TOKEN}" \
 	CLOUDFLARE_ACCOUNT_ID="$${CLOUDFLARE_ACCOUNT_ID}" \
 	npx wrangler pages project create "$(PMOVES_AI_PROJECT)" \
-	  --production-branch main 2>&1; \
+	  --production-branch main 2>&1 \
+	  || { echo "❌ wrangler project create failed"; exit 1; }; \
 	echo "✅ pmoves-ai Pages project created — now run: make pmoves-ai-deploy"
 
 pmoves-ai-deploy: ensure-env-shared ## Deploy pmoves.ai static site to Cloudflare Pages
@@ -1962,7 +1965,8 @@ pmoves-ai-deploy: ensure-env-shared ## Deploy pmoves.ai static site to Cloudflar
 	npx wrangler pages deploy "$(PMOVES_AI_DIR)" \
 	  --project-name "$(PMOVES_AI_PROJECT)" \
 	  --branch "$(PMOVES_AI_BRANCH)" \
-	  --commit-dirty=true 2>&1; \
+	  --commit-dirty=true 2>&1 \
+	  || { echo "❌ wrangler deploy failed"; exit 1; }; \
 	echo "✅ pmoves-ai deploy complete"
 
 pmoves-ai-status: ensure-env-shared ## Check pmoves-ai Cloudflare Pages project status
