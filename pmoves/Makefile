@@ -1928,8 +1928,20 @@ PMOVES_AI_DIR     ?= ../website
 PMOVES_AI_BRANCH  ?= main
 PMOVES_AI_PORT    ?= 8789
 
+# Hyperdimensions viewer: generated from the Pmoves-hyperdimensions submodule
+# (single source of truth) rather than hand-maintained. website/hyperdim/ is
+# gitignored and rebuilt by pmoves-ai-sync-hyperdim before dev/deploy.
+HYPERDIM_SRC ?= $(abspath $(CURDIR)/../Pmoves-hyperdimensions)
+HYPERDIM_DST ?= $(abspath $(CURDIR)/$(PMOVES_AI_DIR)/hyperdim)
+
+.PHONY: pmoves-ai-sync-hyperdim
+pmoves-ai-sync-hyperdim: ## Sync Pmoves-hyperdimensions submodule → website/hyperdim/ (generated; run before deploy)
+	@$(PYTHON) tools/sync_hyperdim.py --src "$(HYPERDIM_SRC)" --dst "$(HYPERDIM_DST)" \
+	  || python tools/sync_hyperdim.py --src "$(HYPERDIM_SRC)" --dst "$(HYPERDIM_DST)" \
+	  || py -3 tools/sync_hyperdim.py --src "$(HYPERDIM_SRC)" --dst "$(HYPERDIM_DST)"
+
 .PHONY: pmoves-ai-dev pmoves-ai-create pmoves-ai-deploy pmoves-ai-status
-pmoves-ai-dev: ## Serve pmoves.ai locally via wrangler pages dev (http://localhost:PMOVES_AI_PORT)
+pmoves-ai-dev: pmoves-ai-sync-hyperdim ## Serve pmoves.ai locally via wrangler pages dev (http://localhost:PMOVES_AI_PORT)
 	@echo "→ Previewing $(PMOVES_AI_PROJECT) at http://localhost:$(PMOVES_AI_PORT)"
 	npx wrangler pages dev "$(PMOVES_AI_DIR)" --port $(PMOVES_AI_PORT)
 
@@ -1951,7 +1963,7 @@ pmoves-ai-create: ensure-env-shared ## Create pmoves-ai Cloudflare Pages project
 	  || { echo "❌ wrangler project create failed"; exit 1; }; \
 	echo "✅ pmoves-ai Pages project created — now run: make pmoves-ai-deploy"
 
-pmoves-ai-deploy: ensure-env-shared ## Deploy pmoves.ai static site to Cloudflare Pages
+pmoves-ai-deploy: pmoves-ai-sync-hyperdim ensure-env-shared ## Deploy pmoves.ai static site to Cloudflare Pages
 	@$(LOAD_ENV_SHARED); \
 	if [ -z "$${CLOUDFLARE_API_TOKEN:-}" ]; then \
 	  echo "❌ CLOUDFLARE_API_TOKEN not set — run: make secrets-funnel-sync-from-bundle"; \
