@@ -298,3 +298,6 @@ research/transcripts/
 # Docker MCP toolkit local artifacts (not for repo)
 profiles.json
 update.finished
+
+# Generated from Pmoves-hyperdimensions submodule via make pmoves-ai-sync-hyperdim
+website/hyperdim/
