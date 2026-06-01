@@ -407,6 +407,42 @@ git grep -nE '<the-drifted-string>' -- '*.md' '*.yml' '*.toml' '*.ts'  # widen a
 
 This pattern compounds with [[squash-merge rebase]] — fewer PRs against a submodule means fewer chances of base/dependent collisions when bumping the parent gitlink.
 
+## Hardened-Branch Reconciliation Patterns
+
+Two diagnostics to run **before** touching a divergent `main ↔ PMOVES.AI-Edition-Hardened` reconciliation. Both turn a scary edit pass into a predictable one. Surfaced during the 2026-05-31 fleet audit (`pmoves/docs/audit/HARDENED_BRANCH_FLEET_AUDIT_2026-05-31.md`).
+
+### 1. Conflict count measures *topology*, not change size
+
+A 132- or 370-conflict merge is almost never 132 large changes — it's a **fork-baseline mismatch**. When `hardened` was rebased onto a different upstream baseline than `main` (common in our upstream forks: firefly-iii/Wealth, open-notebook), git's merge-base is ancient, so nearly every file reads as "changed on both sides." **Check the merge-base first:**
+
+```bash
+git merge-base origin/PMOVES.AI-Edition-Hardened origin/<default>
+git log --oneline --graph origin/PMOVES.AI-Edition-Hardened origin/<default> -30
+# how far back is the common ancestor? recent = real conflicts; ancient = baseline drift
+```
+
+The merge-base age picks the tool:
+| Merge-base | Meaning | Edit pass |
+|-----------|---------|-----------|
+| Recent, few conflicts | genuine divergence | **merge-forward**, resolve per-hunk |
+| Recent, the fix is one commit | isolated fix | **cherry-pick** (don't drag the whole branch) |
+| Ancient, hundreds of conflicts | fork-baseline mismatch | **re-baseline** hardened onto current upstream+hardening, OR cherry-pick only the deploy-critical commits — do NOT brute-force a 300-conflict merge |
+
+The number that matters is **`missing_from_default`** (commits on default that hardened lacks), not the conflict count. A repo can have 370 conflicts but only 6 missing commits — and 5 of those 6 may be upstream merges hardened doesn't want. Reconcile the 1 that matters; don't merge the 370.
+
+### 2. Env-var dependency direction (`:?required` = hard fail, not fallback)
+
+When resolving a compose conflict on an env-var name (e.g. `SUPABASE_JWT_SECRET` vs `JWT_SECRET`), the resolution is **not** a taste call — it's dictated by what the **secrets pipeline actually emits**. Trace the direction before choosing `--ours`/`--theirs`:
+
+```bash
+grep -RInE 'JWT_SECRET|SUPABASE_JWT_SECRET' <repo>/docker-compose*.yml <repo>/.env*.example
+grep -n 'JWT_SECRET' pmoves/env.shared.example   # what the pipeline emits
+```
+
+A Bash-style `${VAR:?message}` guard turns a name **mismatch** into a **hard container-startup failure** (PostgREST/Postgres exits immediately), not a silent empty-string fallback. So the compose MUST reference whatever `env.shared` emits. Resolving such a conflict `--ours` to "keep the hardened version" can silently re-pin a deprecated alias and break boot — verify the alias is still what the pipeline provides, or take the rename (`--theirs`) that matches the pipeline. Worked example: 2026-05-31 DoX `docker-compose.supabase.yml` kept `${SUPABASE_JWT_SECRET:?required}` while the pipeline had sunset it to `JWT_SECRET` → supabase-rest fails to boot.
+
+> **Submodule compose guard gap:** the damage-control `compose` Known Road (`KNOWN_ROAD=compose:pr:<n>`) only matches parent paths containing `/pmoves/` — submodule compose files (`PMOVES-DoX/docker-compose*.yml`) have no sanctioned Edit bypass. To fix a submodule compose, either extend the `_is_compose_target` predicate in `.claude/hooks/damage-control/known_roads.py` (the "extend the tooling, don't work around it" rule), or land the change as a PR authored directly in the submodule repo.
+
 ## PR Review & Merge Workflow
 
 **Skill chain:**
