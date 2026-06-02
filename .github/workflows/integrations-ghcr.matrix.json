@@ -21,7 +21,7 @@
     "build_args": "",
     "platforms": "linux/amd64,linux/arm64",
     "generate_sbom": false,
-    "trivy_ignorefile": ".github/trivy/archon.trivyignore"
+    "trivy_ignorefile": ".github/trivy/integrations-main-2026-05-30.trivyignore"
   },
   {
     "name": "archon-ui",
@@ -33,7 +33,7 @@
     "build_args": "",
     "platforms": "linux/amd64,linux/arm64",
     "generate_sbom": true,
-    "trivy_ignorefile": ".github/trivy/archon-ui.trivyignore"
+    "trivy_ignorefile": ".github/trivy/integrations-main-2026-05-30.trivyignore"
   },
   {
     "name": "open-notebook",
@@ -45,7 +45,7 @@
     "build_args": "",
     "platforms": "linux/amd64,linux/arm64",
     "generate_sbom": true,
-    "trivy_ignorefile": ".github/trivy/open-notebook.trivyignore"
+    "trivy_ignorefile": ".github/trivy/integrations-main-2026-05-30.trivyignore"
   },
   {
     "name": "wger",
@@ -57,7 +57,7 @@
     "build_args": "",
     "platforms": "linux/amd64,linux/arm64",
     "generate_sbom": true,
-    "trivy_ignorefile": ""
+    "trivy_ignorefile": ".github/trivy/integrations-main-2026-05-30.trivyignore"
   },
   {
     "name": "firefly-iii",
@@ -69,7 +69,7 @@
     "build_args": "",
     "platforms": "linux/amd64,linux/arm64",
     "generate_sbom": true,
-    "trivy_ignorefile": ""
+    "trivy_ignorefile": ".github/trivy/integrations-main-2026-05-30.trivyignore"
   },
   {
     "name": "jellyfin",
@@ -93,7 +93,7 @@
     "build_args": "",
     "platforms": "linux/amd64,linux/arm64",
     "generate_sbom": true,
-    "trivy_ignorefile": ""
+    "trivy_ignorefile": ".github/trivy/integrations-main-2026-05-30.trivyignore"
   },
   {
     "name": "deepresearch",
@@ -105,7 +105,7 @@
     "build_args": "",
     "platforms": "linux/amd64",
     "generate_sbom": false,
-    "trivy_ignorefile": ".github/trivy/deepresearch.trivyignore"
+    "trivy_ignorefile": ".github/trivy/integrations-main-2026-05-30.trivyignore"
   },
   {
     "name": "supaserch",
@@ -117,7 +117,7 @@
     "build_args": "",
     "platforms": "linux/amd64,linux/arm64",
     "generate_sbom": true,
-    "trivy_ignorefile": ""
+    "trivy_ignorefile": ".github/trivy/integrations-main-2026-05-30.trivyignore"
   },
   {
     "name": "a2ui-nats-bridge",
@@ -129,7 +129,7 @@
     "build_args": "",
     "platforms": "linux/amd64,linux/arm64",
     "generate_sbom": false,
-    "trivy_ignorefile": ""
+    "trivy_ignorefile": ".github/trivy/integrations-main-2026-05-30.trivyignore"
   },
   {
     "name": "session-context-worker",
@@ -141,7 +141,7 @@
     "build_args": "",
     "platforms": "linux/amd64,linux/arm64",
     "generate_sbom": false,
-    "trivy_ignorefile": ""
+    "trivy_ignorefile": ".github/trivy/integrations-main-2026-05-30.trivyignore"
   },
   {
     "name": "tokenism-ui",
@@ -153,7 +153,7 @@
     "build_args": "",
     "platforms": "linux/amd64,linux/arm64",
     "generate_sbom": true,
-    "trivy_ignorefile": ""
+    "trivy_ignorefile": ".github/trivy/integrations-main-2026-05-30.trivyignore"
   },
   {
     "name": "llama-throughput-lab",
