@@ -7,6 +7,7 @@ from typing import Any, Dict, List, Optional
 
 import anyio
 from fastapi import APIRouter, Body, HTTPException, Request, Depends, WebSocket, WebSocketDisconnect
+from fastapi.responses import RedirectResponse
 import urllib3
 
 from config import (
@@ -26,6 +27,7 @@ from geometry_bus import (
     _room_add, _room_remove, _room_broadcast, _room_broadcast_roster,
     _geometry_context, _get_active_builder_pack,
     _load_codebook, _get_gan_sidecar, _persist_cgp_to_db,
+    get_latest_provenance_hyperdimensions_save,
 )
 import clients.neo4j as _neo4j_mod
 
@@ -169,6 +171,22 @@ def geometry_event(body: Dict[str, Any], _=Depends(require_tailscale)):
     except Exception:
         pass
     return {"ok": True}
+
+
+@router.get("/hyperdimensions/provenance/latest.json")
+def hyperdimensions_latest_provenance(_=Depends(require_tailscale)):
+    latest = get_latest_provenance_hyperdimensions_save()
+    if latest is None:
+        raise HTTPException(404, "No accepted provenance geometry snapshot available yet")
+    return latest
+
+
+@router.get("/hyperdimensions/provenance/view")
+def hyperdimensions_latest_provenance_view(_=Depends(require_tailscale)):
+    return RedirectResponse(
+        url="/hyperdimensions/app/?saveUrl=/hyperdimensions/provenance/latest.json&fallbackSave=saves/chit_manifold.json&liveRoom=geometry",
+        status_code=307,
+    )
 
 
 @router.get("/shape/point/{point_id}/jump")

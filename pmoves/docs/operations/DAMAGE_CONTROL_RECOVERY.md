@@ -198,6 +198,7 @@ Edit the hook source directly — it's not in readOnlyPaths by default.
 - `.claude/hooks/damage-control/edit-tool-damage-control.py` — Edit hook source
 - `.claude/hooks/damage-control/patterns.yaml` — policy file (NOT self-protected)
 - `pmoves/docs/operations/MODEL_ONBOARDING.md` — related ops runbook
+- `pmoves/docs/operations/SUPABASE_OPERATIONS.md` — Supabase crash-loop runbook
 - Historical context: Phase 5.5 Part 2 stuck-hook recovery (2026-04-12)
 
 **`patterns.yaml` intentionally has no `readOnlyPaths` entry for itself.**
@@ -205,3 +206,27 @@ This is by design — the recovery path depends on Edit/Write being able
 to modify the file when the Bash tool is broken. Don't add `patterns.yaml`
 to either `readOnlyPaths` or `zeroAccessPaths` without providing an
 alternative escape hatch.
+
+---
+
+## Supabase container crash-loops (brief pointer)
+
+Not a damage-control hook issue, but the adjacent failure class that
+operators reach for this runbook to debug. Full symptom→fix map in
+[SUPABASE_OPERATIONS.md](./SUPABASE_OPERATIONS.md):
+
+| Container | Symptom | Fix |
+|---|---|---|
+| `supabase-realtime` | `Bad key size` in Erlang crypto | `DB_ENC_KEY` must be 16 raw bytes, registry should use `random_urlsafe 16` |
+| `supabase-studio` | `getaddrinfo EAI_AGAIN <short-id>` | Pin `HOSTNAME=0.0.0.0` in service env |
+| `supabase-edge-functions` | `failed to lookup address information` | Pin `dns: [1.1.1.1, 8.8.8.8]` on service |
+| `supabase-kong` | OOM at 256M during startup | Set `KONG_NGINX_WORKER_PROCESSES=1`, raise memory to 512M |
+| `supabase-kong` | Port declared in HostConfig, empty in NetworkSettings | Switch `KONG_PROXY_BIND` to `0.0.0.0` (Docker Desktop Windows quirk) |
+
+Diagnosis workflow:
+
+```bash
+docker logs <name> --tail 20
+docker events --since 2m --filter container=<name> | grep -E "oom|die"
+docker stats --no-stream <name>
+```

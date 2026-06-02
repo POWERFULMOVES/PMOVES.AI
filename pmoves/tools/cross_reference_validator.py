@@ -42,7 +42,7 @@ KNOWN_SERVICES: Dict[str, int] = {
     "jellyfin-bridge": 8093,
     "publisher-discord": 8094,
     "notebook-sync": 8095,
-    "cipher-memory": 8096,
+    "cipher-memory": 8105,
     "channel-monitor": 8097,
     "deepresearch": 8098,
     "supaserch": 8099,

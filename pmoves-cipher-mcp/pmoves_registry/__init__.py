@@ -15,7 +15,7 @@ def get_cipher_url() -> str:
     Resolution order:
     1. CIPHER_URL environment variable
     2. CIPHER_MEMORY_URL environment variable
-    3. Default: http://localhost:8096 (remapped from Cipher's native 3000 to avoid Grafana conflict)
+    3. Default: http://localhost:8105 (remapped from Cipher's native 3000 to avoid Grafana conflict)
 
     Returns:
         Cipher Memory service URL
@@ -23,7 +23,7 @@ def get_cipher_url() -> str:
     return (
         os.getenv("CIPHER_URL") or
         os.getenv("CIPHER_MEMORY_URL") or
-        "http://localhost:8096"
+        "http://localhost:8105"
     )
 
 

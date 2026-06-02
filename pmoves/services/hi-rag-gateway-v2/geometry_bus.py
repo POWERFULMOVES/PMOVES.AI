@@ -41,6 +41,11 @@ from config import (
     PGDATABASE,
     logger,
 )
+from provenance_ingest import upsert_provenance_payloads
+from provenance_geometry import (
+    provenance_payload_to_cgp,
+    provenance_payload_to_hyperdimensions_save,
+)
 
 # --- Optional heavy dependencies ---
 try:
@@ -143,9 +148,46 @@ _geometry_realtime_task: Optional[asyncio.Task] = None
 _geometry_swarm_task: Optional[asyncio.Task] = None
 _geometry_swarm_stop: Optional[asyncio.Event] = None
 _geometry_swarm_nc = None
+_content_provenance_task: Optional[asyncio.Task] = None
+_content_provenance_stop: Optional[asyncio.Event] = None
+_content_provenance_nc = None
+_geometry_cgp_task: Optional[asyncio.Task] = None
+_geometry_cgp_stop: Optional[asyncio.Event] = None
+_geometry_cgp_nc = None
+_latest_provenance_lock = threading.RLock()
+_latest_provenance_payload: Optional[Dict[str, Any]] = None
+_latest_provenance_cgp: Optional[Dict[str, Any]] = None
+_latest_provenance_hyperdimensions_save: Optional[Dict[str, Any]] = None
 
 _builder_pack_lock = threading.RLock()
 _active_builder_packs: Dict[tuple[str, str], Dict[str, Any]] = {}
+
+
+def _set_latest_provenance_artifacts(
+    payload: Dict[str, Any],
+    cgp: Dict[str, Any],
+    hyperdimensions_save: Dict[str, Any],
+) -> None:
+    global _latest_provenance_payload, _latest_provenance_cgp
+    global _latest_provenance_hyperdimensions_save
+    with _latest_provenance_lock:
+        _latest_provenance_payload = copy.deepcopy(payload)
+        _latest_provenance_cgp = copy.deepcopy(cgp)
+        _latest_provenance_hyperdimensions_save = copy.deepcopy(hyperdimensions_save)
+
+
+def get_latest_provenance_hyperdimensions_save() -> Optional[Dict[str, Any]]:
+    with _latest_provenance_lock:
+        if _latest_provenance_hyperdimensions_save is None:
+            return None
+        return copy.deepcopy(_latest_provenance_hyperdimensions_save)
+
+
+def get_latest_provenance_cgp() -> Optional[Dict[str, Any]]:
+    with _latest_provenance_lock:
+        if _latest_provenance_cgp is None:
+            return None
+        return copy.deepcopy(_latest_provenance_cgp)
 
 
 def _pack_key(namespace: str, modality: Optional[str]) -> tuple[str, str]:
@@ -355,6 +397,198 @@ async def _geometry_swarm_worker() -> None:
                 with contextlib.suppress(Exception):
                     await _geometry_swarm_nc.close()
                 _geometry_swarm_nc = None
+        if stop_event.is_set():
+            break
+
+
+async def _content_provenance_worker() -> None:
+    global _content_provenance_nc, _content_provenance_stop
+    backoff = max(1.0, GEOMETRY_REALTIME_BACKOFF)
+    while True:
+        stop_event = asyncio.Event()
+        try:
+            nc = await nats.connect(servers=[NATS_URL])
+            _content_provenance_nc = nc
+            _content_provenance_stop = stop_event
+
+            async def _handler(msg):
+                try:
+                    decoded = json.loads(msg.data.decode())
+                except Exception:
+                    logger.warning("Invalid content.hirag.accepted payload received")
+                    return
+
+                if isinstance(decoded, dict) and isinstance(decoded.get("payload"), dict):
+                    payload = decoded["payload"]
+                elif isinstance(decoded, dict):
+                    payload = decoded
+                else:
+                    return
+
+                try:
+                    result = await asyncio.to_thread(upsert_provenance_payloads, [payload])
+                    logger.info(
+                        "content.hirag.accepted.v1 -> upserted=%s lexical_indexed=%s chunk=%s",
+                        result.get("upserted"),
+                        result.get("lexical_indexed"),
+                        payload.get("shape_id") or payload.get("content_id"),
+                    )
+                except Exception:
+                    logger.exception("Failed to ingest content.hirag.accepted payload")
+
+                try:
+                    cgp = provenance_payload_to_cgp(payload)
+                    hyperdimensions_save = provenance_payload_to_hyperdimensions_save(payload)
+                    _set_latest_provenance_artifacts(payload, cgp, hyperdimensions_save)
+                    if shape_store is not None:
+                        shape_store.on_geometry_event({"type": "geometry.cgp.v1", "data": cgp})
+                    await _room_broadcast("geometry", {"type": "geometry.cgp.v1", "data": cgp})
+                    await _room_broadcast(
+                        "geometry",
+                        {
+                            "type": "hyperdimensions.save.v1",
+                            "label": f"live:{payload.get('shape_id') or payload.get('content_id') or 'provenance'}",
+                            "shape_id": payload.get("shape_id"),
+                            "content_id": payload.get("content_id"),
+                            "config": hyperdimensions_save,
+                        },
+                    )
+                    logger.info(
+                        "content.hirag.accepted.v1 -> geometry bridged shape=%s points=%s",
+                        payload.get("shape_id") or payload.get("content_id"),
+                        sum(
+                            len((constellation or {}).get("points") or [])
+                            for node in cgp.get("super_nodes", []) or []
+                            for constellation in (node or {}).get("constellations", []) or []
+                        ),
+                    )
+                except Exception:
+                    logger.exception(
+                        "Failed to bridge content.hirag.accepted payload into geometry"
+                    )
+
+            await nc.subscribe("content.hirag.accepted.v1", cb=_handler)
+            await stop_event.wait()
+            break
+        except asyncio.CancelledError:
+            break
+        except Exception:
+            logger.exception(
+                "NATS content.hirag.accepted listener error; retrying in %.1fs", backoff
+            )
+            await asyncio.sleep(backoff)
+        finally:
+            _content_provenance_stop = None
+            if _content_provenance_nc is not None:
+                with contextlib.suppress(Exception):
+                    await _content_provenance_nc.drain()
+                with contextlib.suppress(Exception):
+                    await _content_provenance_nc.close()
+                _content_provenance_nc = None
+        if stop_event.is_set():
+            break
+
+
+# ---------------------------------------------------------------------------
+# NATS geometry.cgp.v1 JetStream subscriber (auto-ingest CGP events)
+# ---------------------------------------------------------------------------
+async def subscribe_geometry_cgp() -> None:
+    """Subscribe to NATS JetStream subject `geometry.cgp.v1` and auto-ingest CGP
+    events into ShapeStore + Postgres via the in-process `_persist_cgp_to_db`
+    pipeline. Uses a durable consumer (`hirag-cgp-consumer`) so missed messages
+    are replayed on reconnect.
+
+    Mirrors the resilience pattern of `_geometry_swarm_worker` /
+    `_content_provenance_worker`: graceful retry on NATS unavailability,
+    structured logging, and clean shutdown via `_geometry_cgp_stop`.
+    """
+    global _geometry_cgp_nc, _geometry_cgp_stop
+    if nats is None or not hasattr(nats, "connect"):
+        logger.info("NATS client unavailable; geometry.cgp.v1 subscriber skipped")
+        return
+    backoff = max(1.0, GEOMETRY_REALTIME_BACKOFF)
+    while True:
+        stop_event = asyncio.Event()
+        try:
+            nc = await nats.connect(servers=[NATS_URL])
+            _geometry_cgp_nc = nc
+            _geometry_cgp_stop = stop_event
+            js = nc.jetstream()
+
+            async def _handler(msg):
+                try:
+                    decoded = json.loads(msg.data.decode())
+                except Exception:
+                    logger.warning("Invalid geometry.cgp.v1 payload received")
+                    with contextlib.suppress(Exception):
+                        await msg.ack()
+                    return
+
+                # Accept either a wrapped event ({"type": "geometry.cgp.v1", "data": {...}})
+                # or a bare CGP payload.
+                payload: Optional[Dict[str, Any]] = None
+                if isinstance(decoded, dict):
+                    if isinstance(decoded.get("data"), dict):
+                        payload = decoded["data"]
+                    elif isinstance(decoded.get("payload"), dict):
+                        payload = decoded["payload"]
+                    else:
+                        payload = decoded
+                if not isinstance(payload, dict):
+                    with contextlib.suppress(Exception):
+                        await msg.ack()
+                    return
+
+                # Apply to in-memory ShapeStore
+                try:
+                    if shape_store is not None:
+                        shape_store.on_geometry_event({"type": "geometry.cgp.v1", "data": payload})
+                except Exception:
+                    logger.exception("ShapeStore failed to apply geometry.cgp.v1 event from NATS")
+
+                # Persist to Postgres via the existing pipeline (sync helper -> thread)
+                if PGHOST and PGUSER and PGPASSWORD and PGDATABASE:
+                    try:
+                        await asyncio.to_thread(_persist_cgp_to_db, payload)
+                    except Exception:
+                        logger.exception("Failed to persist geometry.cgp.v1 payload from NATS")
+
+                # Mirror to WebSocket geometry room subscribers
+                try:
+                    await _room_broadcast("geometry", {"type": "geometry.cgp.v1", "data": payload})
+                except Exception:
+                    logger.exception("Failed to broadcast geometry.cgp.v1 event from NATS")
+
+                with contextlib.suppress(Exception):
+                    await msg.ack()
+
+            await js.subscribe(
+                "geometry.cgp.v1",
+                durable="hirag-cgp-consumer",
+                cb=_handler,
+                manual_ack=True,
+            )
+            logger.info(
+                "NATS JetStream geometry.cgp.v1 listener started (url=%s, durable=hirag-cgp-consumer)",
+                NATS_URL,
+            )
+            await stop_event.wait()
+            break
+        except asyncio.CancelledError:
+            break
+        except Exception:
+            logger.exception(
+                "NATS geometry.cgp.v1 listener error; retrying in %.1fs", backoff
+            )
+            await asyncio.sleep(backoff)
+        finally:
+            _geometry_cgp_stop = None
+            if _geometry_cgp_nc is not None:
+                with contextlib.suppress(Exception):
+                    await _geometry_cgp_nc.drain()
+                with contextlib.suppress(Exception):
+                    await _geometry_cgp_nc.close()
+                _geometry_cgp_nc = None
         if stop_event.is_set():
             break
 
@@ -755,6 +989,8 @@ def _persist_cgp_to_db(cgp: Dict[str, Any]):
 async def lifespan(app: FastAPI):
     """Manage Hi-RAG Gateway lifespan with geometry realtime and swarm workers."""
     global _geometry_realtime_task, _geometry_swarm_task, _geometry_swarm_stop
+    global _content_provenance_task, _content_provenance_stop
+    global _geometry_cgp_task, _geometry_cgp_stop
 
     # Startup
     if shape_store is None:
@@ -773,8 +1009,15 @@ async def lifespan(app: FastAPI):
             if hasattr(nats, "connect"):
                 _geometry_swarm_task = asyncio.create_task(_geometry_swarm_worker())
                 logger.info("NATS geometry.swarm.meta listener started (url=%s)", NATS_URL)
+                _content_provenance_task = asyncio.create_task(_content_provenance_worker())
+                logger.info("NATS content.hirag.accepted listener started (url=%s)", NATS_URL)
             else:
-                logger.info("NATS client unavailable; geometry.swarm.meta listener skipped")
+                logger.info("NATS client unavailable; geometry.swarm.meta/content.hirag.accepted listeners skipped")
+
+    # CGP subscriber is independent of ShapeStore availability — start unconditionally.
+    if _geometry_cgp_task is None and NATS_URL and hasattr(nats, "connect"):
+        _geometry_cgp_task = asyncio.create_task(subscribe_geometry_cgp())
+        logger.info("NATS geometry.cgp.v1 auto-ingest listener started (url=%s)", NATS_URL)
 
     yield
 
@@ -792,3 +1035,19 @@ async def lifespan(app: FastAPI):
             await _geometry_swarm_task
         _geometry_swarm_task = None
     _geometry_swarm_stop = None
+    if _content_provenance_stop is not None:
+        _content_provenance_stop.set()
+    if _content_provenance_task is not None:
+        _content_provenance_task.cancel()
+        with contextlib.suppress(Exception):
+            await _content_provenance_task
+        _content_provenance_task = None
+    _content_provenance_stop = None
+    if _geometry_cgp_stop is not None:
+        _geometry_cgp_stop.set()
+    if _geometry_cgp_task is not None:
+        _geometry_cgp_task.cancel()
+        with contextlib.suppress(Exception):
+            await _geometry_cgp_task
+        _geometry_cgp_task = None
+    _geometry_cgp_stop = None

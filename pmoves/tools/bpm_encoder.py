@@ -26,13 +26,19 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import asyncio
 import json
 import math
 import re
 import sys
 import time
 from typing import Any
-
+try:
+    from pmoves.services.common.chakra import CHAKRA_BANDS, chakra_to_band, freq_to_chakra
+except ImportError:
+    import pathlib as _pl
+    sys.path.insert(0, str(_pl.Path(__file__).resolve().parents[2]))
+    from pmoves.services.common.chakra import CHAKRA_BANDS, chakra_to_band, freq_to_chakra
 # ---------------------------------------------------------------------------
 # Constants (mirrored from musicMapping.ts)
 # ---------------------------------------------------------------------------
@@ -64,6 +70,7 @@ BOUNDARY_PAUSE_MS: dict[str, int] = {
     "BREATH":   130,
     "NONE":     0,
 }
+
 
 # Tempo labels (Italian musical terms)
 TEMPO_LABELS: list[tuple[int, str]] = [
@@ -223,7 +230,6 @@ def degree_to_midi(root_midi: int, degree: int, scale: str = "chromatic") -> int
     octave = degree // steps_per_octave
     step = degree % steps_per_octave
     return root_midi + octave * 12 + pattern[step]
-
 
 # ---------------------------------------------------------------------------
 # Timeline builder (from musicMapping.ts buildTimeline)
@@ -469,6 +475,7 @@ def build_cgp_packet(profile: dict[str, Any], agent_id: str = "4090-claude") -> 
                 "top_k":         max(5, round(state_vector["Hz"] * 20)),
                 "speaking_rate": round(bpm / 120.0, 2),
             },
+            "chakra": freq_to_chakra(avg_freq) if chunks else None,
         },
         "prosodic_profile": {
             "text":               profile.get("text", ""),
@@ -492,6 +499,13 @@ def _cmd_encode(args: argparse.Namespace) -> None:
     if args.cgp:
         packet = build_cgp_packet(profile, agent_id=args.agent_id)
         print(json.dumps(packet, indent=2))
+
+        if args.publish:
+            subject = args.subject or "tokenism.prosodic.bpm.v1"
+            import os as _os
+            from pmoves.services.common.nats_client import publish_cgp as _pub
+            published = asyncio.run(_pub(packet, subject=subject, nats_url=_os.getenv("NATS_URL", "")))
+            print(json.dumps({"nats_published": published, "subject": subject}))
     else:
         print(json.dumps(profile, indent=2))
 
@@ -544,6 +558,8 @@ def main() -> None:
     p_enc.add_argument("--pattern", type=str, default="", help="Text pattern to encode")
     p_enc.add_argument("--cgp", action="store_true", help="Output as CGP v0.2 packet")
     p_enc.add_argument("--agent-id", type=str, default="4090-claude", help="Agent ID for CGP packet")
+    p_enc.add_argument("--publish", action="store_true", help="Publish CGP packet to NATS")
+    p_enc.add_argument("--subject", type=str, default="", help="NATS subject (default: tokenism.prosodic.bpm.v1)")
     p_enc.set_defaults(func=_cmd_encode)
 
     # -- note --

@@ -172,4 +172,26 @@ LIMIT 1000;
 -- FROM tensorzero_config_changes
 -- WHERE timestamp >= now() - INTERVAL 1 DAY
 -- GROUP BY author
--- ORDER BY change_count DESC;
+
+-- =============================================================================
+-- CHIT GATE: Defense-in-depth TTL for TensorZero auto-created inference tables
+-- Added: 2026-04-25 (Cyber Defence Initiative)
+--
+-- TensorZero 2026.1.8 auto-creates these tables in the `default` database when
+-- observability.enabled=true. They store full prompt text + response text.
+-- These TTLs ensure ANY existing data expires per Data Retention Policy T5.
+--
+-- NOTE: observability.enabled is now false (see tensorzero.toml), so no NEW
+-- data is written. These TTLs handle residual data from before the disable.
+-- Run these ONCE on the ClickHouse instance, then they persist.
+-- =============================================================================
+
+-- Safe: use IF EXISTS so these are idempotent on re-run
+ALTER TABLE IF EXISTS default.Inference MODIFY TTL toDateTime(timestamp) + INTERVAL 14 DAY;
+ALTER TABLE IF EXISTS default.Feedback MODIFY TTL toDateTime(timestamp) + INTERVAL 14 DAY;
+ALTER TABLE IF EXISTS default.Demo MODIFY TTL toDateTime(timestamp) + INTERVAL 14 DAY;
+
+-- TensorZero may also create tables in the `tensorzero` database
+ALTER TABLE IF EXISTS tensorzero.Inference MODIFY TTL toDateTime(timestamp) + INTERVAL 14 DAY;
+ALTER TABLE IF EXISTS tensorzero.Feedback MODIFY TTL toDateTime(timestamp) + INTERVAL 14 DAY;
+ALTER TABLE IF EXISTS tensorzero.Demo MODIFY TTL toDateTime(timestamp) + INTERVAL 14 DAY;

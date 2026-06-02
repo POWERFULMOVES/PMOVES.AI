@@ -26,13 +26,18 @@ if ($sshCap.State -ne 'Installed') {
     Write-Host "[1/5] OpenSSH Server already installed"
 }
 
-# 2. Start and enable sshd
-Write-Host "[2/5] Starting sshd service..."
-Start-Service sshd
+# 2. Start and enable sshd + ssh-agent
+# Both services must have StartupType flipped BEFORE Start-Service. sshd's
+# post-install default is Manual (Start-Service accepts that), but ssh-agent
+# ships Disabled — Start-Service on a Disabled service throws and aborts the
+# script under $ErrorActionPreference='Stop'. Always Set-Service first.
+Write-Host "[2/5] Starting sshd + ssh-agent services..."
 Set-Service -Name sshd -StartupType 'Automatic'
-Start-Service ssh-agent
+Start-Service sshd
 Set-Service -Name ssh-agent -StartupType 'Automatic'
+Start-Service ssh-agent
 Write-Host "  sshd: Running (Automatic)"
+Write-Host "  ssh-agent: Running (Automatic)"
 
 # 3. Set default shell to PowerShell
 Write-Host "[3/5] Setting default shell to PowerShell..."
@@ -45,8 +50,17 @@ Write-Host "[4/5] Injecting authorized key..."
 $authKeysPath = "$env:ProgramData\ssh\administrators_authorized_keys"
 New-Item -Path "$env:ProgramData\ssh" -ItemType Directory -Force | Out-Null
 $existing = if (Test-Path $authKeysPath) { Get-Content $authKeysPath -Raw } else { "" }
-if ($existing -notmatch [regex]::Escape("pmoves-claw@pmoves.ai")) {
+# Dedup on the base64 key body (middle field of "type body comment") so any agent
+# pubkey can be re-applied idempotently — not just the default pmoves-claw key.
+$keyBody = ($PubKey -split '\s+')[1]
+if (-not $keyBody) {
+    throw "Invalid -PubKey: expected 'type body [comment]', got: $PubKey"
+}
+if ($existing -notmatch [regex]::Escape($keyBody)) {
     Add-Content -Path $authKeysPath -Value $PubKey
+    Write-Host "  Appended new key (body=$($keyBody.Substring(0, [Math]::Min(20, $keyBody.Length)))...)"
+} else {
+    Write-Host "  Key already present (no-op)"
 }
 icacls $authKeysPath /inheritance:r /grant "Administrators:F" /grant "SYSTEM:F" | Out-Null
 Write-Host "  Key written to: $authKeysPath"

@@ -442,6 +442,16 @@ export default function StudioBoardDashboardPage() {
                         failure stage: {meta.publish_failure_stage}
                       </div>
                     ) : null}
+                    {meta.publish_requested_at && !meta.publish_event_sent_at ? (
+                      <div className="text-xs text-brand-subtle">
+                        publish requested @ {formatDate(meta.publish_requested_at)}
+                      </div>
+                    ) : null}
+                    {meta.publish_failure_reason ? (
+                      <div className="text-xs text-brand-crimson">
+                        publish failed: {meta.publish_failure_reason}
+                      </div>
+                    ) : null}
                     {meta.rejection_reason ? (
                       <div className="text-xs text-brand-crimson">
                         rejected: {meta.rejection_reason}

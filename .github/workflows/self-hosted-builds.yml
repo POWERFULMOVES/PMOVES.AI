@@ -1,34 +1,42 @@
 name: Self-Hosted Builds
 
 on:
-  push:
-    branches: [main, develop]
-    paths:
-      - 'services/**'
-      - 'pmoves/services/**'
-      # Exclude services already built multi-arch by integrations-ghcr.yml
-      - '!pmoves/services/agent-zero/**'
-      - '!pmoves/services/archon/**'
-      - '!pmoves/services/pmoves-yt/**'
-      - 'pmoves/docker/**'
-      - 'Dockerfile*'
-      - 'docker-compose*.yml'
-      - '**/docker-compose*.yml'
-      - '.github/workflows/self-hosted-builds*.yml'
-  pull_request:
-    branches: [main]
-    paths:
-      - 'services/**'
-      - 'pmoves/services/**'
-      # Exclude services already built multi-arch by integrations-ghcr.yml
-      - '!pmoves/services/agent-zero/**'
-      - '!pmoves/services/archon/**'
-      - '!pmoves/services/pmoves-yt/**'
-      - 'pmoves/docker/**'
-      - 'Dockerfile*'
-      - 'docker-compose*.yml'
-      - '**/docker-compose*.yml'
-      - '.github/workflows/self-hosted-builds*.yml'
+  # NOTE: push + pull_request triggers disabled until local builds work.
+  # Self-hosted runners (ai-lab/5090, kvm4) need to be online and stable
+  # AND NATS local must be reachable on the host before automatic
+  # build dispatch is safe. Re-enable both blocks when:
+  #   - 5090 node has completed submodule sync
+  #   - pmoves-nats-1 is exposed to the host (4222/8222 portproxy fixed)
+  #   - self-hosted runners pass a clean dispatch run
+  # Operators: trigger manually via `gh workflow run self-hosted-builds.yml`.
+  # push:
+  #   branches: [main, develop]
+  #   paths:
+  #     - 'services/**'
+  #     - 'pmoves/services/**'
+  #     # Exclude services already built multi-arch by integrations-ghcr.yml
+  #     - '!pmoves/services/agent-zero/**'
+  #     - '!pmoves/services/archon/**'
+  #     - '!pmoves/services/pmoves-yt/**'
+  #     - 'pmoves/docker/**'
+  #     - 'Dockerfile*'
+  #     - 'docker-compose*.yml'
+  #     - '**/docker-compose*.yml'
+  #     - '.github/workflows/self-hosted-builds*.yml'
+  # pull_request:
+  #   branches: [main]
+  #   paths:
+  #     - 'services/**'
+  #     - 'pmoves/services/**'
+  #     # Exclude services already built multi-arch by integrations-ghcr.yml
+  #     - '!pmoves/services/agent-zero/**'
+  #     - '!pmoves/services/archon/**'
+  #     - '!pmoves/services/pmoves-yt/**'
+  #     - 'pmoves/docker/**'
+  #     - 'Dockerfile*'
+  #     - 'docker-compose*.yml'
+  #     - '**/docker-compose*.yml'
+  #     - '.github/workflows/self-hosted-builds*.yml'
   workflow_dispatch:
     inputs:
       deploy_target:
@@ -87,11 +95,11 @@ jobs:
 
       - name: Generate GitHub App token
         id: app_token
-        continue-on-error: true
         uses: actions/create-github-app-token@v3
         with:
-          app-id: ${{ secrets.GH_APP_ID }}
+          client-id: ${{ secrets.GH_APP_CLIENT_ID }}
           private-key: ${{ secrets.GH_APP_SEC }}
+          permission-packages: write
 
       - name: Login to GHCR
         uses: docker/login-action@v4
@@ -183,11 +191,11 @@ jobs:
 
       - name: Generate GitHub App token
         id: app_token
-        continue-on-error: true
         uses: actions/create-github-app-token@v3
         with:
-          app-id: ${{ secrets.GH_APP_ID }}
+          client-id: ${{ secrets.GH_APP_CLIENT_ID }}
           private-key: ${{ secrets.GH_APP_SEC }}
+          permission-packages: write
 
       - name: Login to GHCR
         uses: docker/login-action@v4

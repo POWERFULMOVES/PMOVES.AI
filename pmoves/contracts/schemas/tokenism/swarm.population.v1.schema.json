@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ToKenism Swarm Population v1",
+  "type": "object",
+  "required": ["namespace", "modality", "pack_id", "status", "timestamp"],
+  "additionalProperties": false,
+  "properties": {
+    "namespace": { "type": "string", "minLength": 1 },
+    "modality": { "type": "string", "minLength": 1 },
+    "pack_id": { "type": "string", "minLength": 1 },
+    "status": { "type": "string", "enum": ["active", "draft", "archived"] },
+    "population_id": { "type": ["string", "null"] },
+    "generation": { "type": "integer", "minimum": 0 },
+    "best_fitness": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
+    "metrics": { "type": ["object", "null"], "additionalProperties": true },
+    "timestamp": { "type": "string", "format": "date-time" }
+  }
+}

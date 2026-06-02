@@ -23,7 +23,7 @@
 | TensorZero (3030) | LLM gateway for agent conversations | Yes |
 | NATS (4222) | Event bus for task coordination and mesh announcements | Yes |
 | Supabase PostgREST (3010) | Persistent state and context storage | Yes |
-| Cipher Memory (8096) | Agent plan/checkpoint/completion persistence | Yes |
+| Cipher Memory (8105) | Agent plan/checkpoint/completion persistence | Yes |
 | Neo4j (7474) | Knowledge graph queries | Optional |
 | Qdrant (6333) | Semantic search for agent context | Optional |
 

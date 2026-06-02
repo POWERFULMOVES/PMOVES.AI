@@ -90,7 +90,7 @@ KNOWN_PORTS: Dict[str, int] = {
     "jellyfin-bridge": 8093,
     "publisher-discord": 8094,
     "notebook-sync": 8095,
-    "cipher-memory": 8096,
+    "cipher-memory": 8105,
     "channel-monitor": 8097,
     "prometheus": 9090,
     "grafana": 3000,

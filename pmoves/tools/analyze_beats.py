@@ -74,7 +74,7 @@ class SenseMode(str, enum.Enum):
 DEFAULT_INPUT   = os.environ.get("BEATS_INPUT",    "pmoves/data/beats/soundcloud/darkxside")
 DEFAULT_OUTPUT  = os.environ.get("BEATS_OUTPUT",   "pmoves/data/beats/playlists")
 DEFAULT_NATS    = os.environ.get("NATS_URL",        "")
-DEFAULT_CIPHER  = os.environ.get("CIPHER_URL",      "http://localhost:8096")
+DEFAULT_CIPHER  = os.environ.get("CIPHER_URL",      "http://localhost:8105")
 DEFAULT_GLANCES = os.environ.get("GLANCES_URL",     "http://localhost:61208")
 DEFAULT_OLLAMA  = os.environ.get("OLLAMA_API_BASE", "http://localhost:11434")
 DEFAULT_HIRAG   = os.environ.get("HIRAG_GPU_URL",   "http://localhost:8087")

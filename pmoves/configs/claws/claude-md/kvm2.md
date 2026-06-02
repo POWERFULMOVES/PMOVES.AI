@@ -23,7 +23,7 @@ You may NOT: run docker, access databases, manage agents, or modify application 
 
 | Service | Port | Purpose |
 |---------|------|---------|
-| Headscale | 8181 | Mesh VPN control plane |
+| Headscale | 8096 | Mesh VPN control plane |
 | Cloudflared | — | Cloudflare tunnel daemon |
 | Tailscale | — | Mesh networking |
 

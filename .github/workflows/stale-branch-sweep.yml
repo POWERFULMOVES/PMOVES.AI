@@ -1,0 +1,177 @@
+name: Stale Branch Sweep
+
+on:
+  schedule:
+    - cron: '0 6 * * *'  # Daily at 06:00 UTC
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run (no deletions)'
+        required: false
+        default: 'true'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
+
+permissions:
+  contents: write
+  issues: write
+
+env:
+  DRY_RUN: ${{ github.event.inputs.dry_run || 'true' }}
+  ORPHAN_DAYS: 7
+
+jobs:
+  sweep:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.ACTIONS_PAT || secrets.GITHUB_TOKEN }}
+
+      - name: Identify orphan branches
+        id: orphans
+        run: |
+          set -euo pipefail
+          CUTOFF=$(date -d "${ORPHAN_DAYS} days ago" +%Y-%m-%d)
+          ORPHANS=""
+          ACTIVE_BRANCHES=""
+
+          echo "=== Stale Branch Sweep ==="
+          echo "Cutoff date: ${CUTOFF}"
+          echo "Dry run: ${DRY_RUN}"
+          echo ""
+
+          # Get branches that are not main and not protected
+          for branch in $(git branch -r --format='%(refname:short)' \
+            | grep -v '^origin/main$' \
+            | grep -v '^origin/PMOVES' \
+            | sed 's|^origin/||'); do
+
+            # Check if branch has an open PR
+            PR_COUNT=$(gh pr list --head "${branch}" --state open --json number --jq 'length' 2>/dev/null || echo "0")
+            if [ "${PR_COUNT}" -gt 0 ]; then
+              echo "SKIP ${branch}: has ${PR_COUNT} open PR(s)"
+              continue
+            fi
+
+            # Check last commit date
+            LAST_COMMIT=$(git log -1 --format='%ci' "origin/${branch}")
+            LAST_COMMIT_DATE=$(date -d "${LAST_COMMIT}" +%Y-%m-%d 2>/dev/null || echo "${LAST_COMMIT}")
+
+            if [[ "${LAST_COMMIT_DATE}" < "${CUTOFF}" ]]; then
+              # Check CHIT trail state via NATS subject pattern
+              # Branch is considered ACTIVE if recent agent.graphiti.signed.v1 entries
+              # exist on branch.<path-segments>.trail.v1 (slash → dot encoding,
+              # e.g. feat/foo → branch.feat.foo.trail.v1)
+              # In CI context, we check the claim register for CHIT trail references
+              CHIT_ACTIVE="false"
+              if grep -q "${branch}" pmoves/docs/AGENTS/AGNOTE4482_ROADMAP_W1-W5.md 2>/dev/null; then
+                # Branch referenced in claim register — check if it has recent activity
+                if git log --since="${CUTOFF}" --oneline "origin/${branch}" | grep -qi "chit\|trail\|graphiti"; then
+                  CHIT_ACTIVE="true"
+                fi
+              fi
+
+              if [ "${CHIT_ACTIVE}" = "true" ]; then
+                echo "SKIP ${branch}: CHIT trail activity detected (ACTIVE)"
+                ACTIVE_BRANCHES="${ACTIVE_BRANCHES}${branch}\n"
+              else
+                echo "ORPHAN ${branch}: last commit ${LAST_COMMIT_DATE}, no PR, no CHIT trail"
+                ORPHANS="${ORPHANS}${branch}\n"
+              fi
+            else
+              echo "OK ${branch}: last commit ${LAST_COMMIT_DATE} (within ${ORPHAN_DAYS}d window)"
+            fi
+          done
+
+          # Write outputs
+          echo "orphans<<EOF" >> "$GITHUB_OUTPUT"
+          echo -e "${ORPHANS}" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+
+          echo "active_count<<EOF" >> "$GITHUB_OUTPUT"
+          echo -e "${ACTIVE_BRANCHES}" | grep -c . || echo "0" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+
+          ORPHAN_COUNT=$(echo -e "${ORPHANS}" | grep -c . || echo "0")
+          echo "orphan_count=${ORPHAN_COUNT}" >> "$GITHUB_OUTPUT"
+
+      - name: Delete orphan branches
+        if: env.DRY_RUN == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.ACTIONS_PAT || secrets.GITHUB_TOKEN }}
+        run: |
+          ORPHANS="${{ steps.orphans.outputs.orphans }}"
+          if [ -z "${ORPHANS}" ]; then
+            echo "No orphan branches to delete."
+            exit 0
+          fi
+
+          echo -e "${ORPHANS}" | while read -r branch; do
+            [ -z "${branch}" ] && continue
+            echo "Deleting orphan branch: ${branch}"
+            git push origin --delete "${branch}" || echo "FAILED to delete ${branch}"
+          done
+
+      - name: Post orphan report to issue
+        env:
+          GH_TOKEN: ${{ secrets.ACTIONS_PAT || secrets.GITHUB_TOKEN }}
+        run: |
+          ORPHANS="${{ steps.orphans.outputs.orphans }}"
+          ORPHAN_COUNT="${{ steps.orphans.outputs.orphan_count }}"
+          ACTIVE_COUNT="${{ steps.orphans.outputs.active_count }}"
+          MODE="DRY RUN"
+          [ "${DRY_RUN}" = "false" ] && MODE="LIVE DELETE"
+
+          BODY="## Stale Branch Sweep Report
+          
+          - **Mode**: ${MODE}
+          - **Orphan branches found**: ${ORPHAN_COUNT}
+          - **Branches saved by CHIT trail activity**: ${ACTIVE_COUNT}
+          - **Cutoff**: ${ORPHAN_DAYS} days
+          - **Run**: [${{ github.run_id }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+          
+          "
+
+          if [ -n "${ORPHANS}" ]; then
+            BODY+="### Orphan Branches
+            
+            | Branch | Reason |
+            |--------|--------|
+            "
+            echo -e "${ORPHANS}" | while read -r branch; do
+              [ -z "${branch}" ] && continue
+              LAST=$(git log -1 --format='%ci (%cr)' "origin/${branch}" 2>/dev/null || echo "unknown")
+              BODY+="| \`${branch}\` | No PR, no CHIT trail activity since ${LAST} |\n"
+            done
+          else
+            BODY+="### No orphan branches found. All non-main branches have either an open PR or recent CHIT trail activity."
+          fi
+
+          BODY+="
+          
+          ---
+          *Automated by \`.github/workflows/stale-branch-sweep.yml\`*
+          "
+
+          # Find or create the orphan tracking issue
+          ISSUE_NUM=$(gh issue list --label "branch-hygiene" --state open --json number --jq '.[0].number' 2>/dev/null || echo "")
+          if [ -n "${ISSUE_NUM}" ]; then
+            gh issue comment "${ISSUE_NUM}" --body "${BODY}"
+          else
+            gh issue create \
+              --title "Branch Hygiene: Orphan Branch Report" \
+              --body "${BODY}" \
+              --label "branch-hygiene" \
+              --label "automated"
+          fi
+
+      - name: Summary
+        run: |
+          echo "## Sweep Summary"
+          echo "- Orphan branches: ${{ steps.orphans.outputs.orphan_count }}"
+          echo "- CHIT-saved branches: ${{ steps.orphans.outputs.active_count }}"
+          echo "- Mode: ${DRY_RUN}"

@@ -185,7 +185,7 @@ from pmoves.services.agent_zero.skills import ExampleTool
 
 async def publish_result(subject: str, result: dict):
     nc = NATS()
-    await nc.connect("nats://localhost:4222")
+    await nc.connect("nats://nats:pmoves@nats:4222")
 
     await nc.publish(subject, json.dumps(result).encode())
     await nc.close()

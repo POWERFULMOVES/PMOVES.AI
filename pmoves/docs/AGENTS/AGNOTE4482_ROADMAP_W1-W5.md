@@ -483,41 +483,45 @@ All resolved. No blockers.
 
 > Agents: write your CLAIM here before starting work on a workstream.
 
-| Workstream | Agent | Claimed | Status | Branch |
-|------------|-------|---------|--------|--------|
-| W1 (partial: TTS mesh) | 5090-claude | 2026-03-19 | SHIPPED `2a681471` | main |
-| W1 (theming: render-card, theme API, alt sigs) | claude-opus | 2026-03-20 | SHIPPED #1040, #1042 | main |
-| W1 (remaining: BoTZ CLI bridge) | 5090-claude | 2026-03-20 | CLAIMED — pending 5090 session | — |
-| W2 (devcontainer + SKILL.md) | claude-opus | 2026-03-20 | SHIPPED #1041 | main |
-| W3 (Discord classrooms) | 5090-claude | 2026-03-20 | CLAIMED — pending 5090 session | — |
-| W4 (partial: content stubs) | 5090-claude | 2026-03-19 | SHIPPED `2a681471` | main |
-| W4 (beats pipeline runner) | claude-opus | 2026-03-20 | SHIPPED #1039 | main |
-| W5 (partial: TZ models, TACs) | 5090-claude | 2026-03-19 | SHIPPED `2a681471` | main |
-| W1 (terminal renderer + Gate 3) | 4090-claude | 2026-03-22 | CLAIMED | feat/w1-agent-terminal-theme |
-| W1 (Flute-Gateway Gradio 4.x fix) | 5090-claude | 2026-03-22 | SHIPPED `24305c4f2`, PR #1069 | feat/tts-engine-capabilities-registry |
-| W1 (voice activation: 10-engine sweep) | 5090-claude | 2026-03-22 | VERIFIED — 10/14 Flute, 6/6 STT | (same branch) |
-| Infra (P7 gates + topology sanitize) | z890-claude | 2026-03-22 | SHIPPED PRs #1063, #1064, #1068 | main |
-| Infra (CodeRabbit sweep #1066/#1069) | z890-claude + 4090-claude | 2026-03-22 | SHIPPED PR #1070 | main |
-| W1 (TTS service runners + prosodic endpoint) | z890-claude | 2026-03-23 | SHIPPED PR #1071 (merged by 4090) | main |
-| W1 (prosodic activation + engine verification) | 5090-claude | 2026-03-23 | VERIFIED — prosodic 2/2, CUDA load 13/14 | main |
-| Infra (Discord publisher-discord rebuild + MCP validation) | z890-claude | 2026-03-23 | SHIPPED — container running, MCP+REST validated | feat/discord-publisher-mcp |
-| W6-P1 (Health/Wealth Docker wiring + NATS) | z890-claude | 2026-03-23 | RECOMMENDED — next z890 session | — |
-| W6-P2 (bpm_encoder.py + ToKenism NATS bridge) | 5090-claude | 2026-03-23 | RECOMMENDED — next 5090 session | — |
-| W6-P3 (Persona selector + BoTZ CLI) | 4090-claude | 2026-03-25 | SHIPPED — botz_cli.py (19 tests) | feat/w6-p3-persona-selector |
-| W6-P3 (Voice binding: persona → Flute prosodic) | 5090-claude | 2026-03-23 | RECOMMENDED — after P2 | — |
-| W6-P5 (FlOO$ life-persona-voice pipeline) | claude-opus | 2026-03-23 | RECOMMENDED — architecture review | — |
-| Infra (CHIT CGP Wave 1: Extract Worker + FFmpeg-Whisper) | 4090-claude | 2026-03-24 | SHIPPED `f7dafa56`, `6046d518` | feat/chit-integration-wave-1 |
-| Infra (Embedding standardization: Qwen3-4b/3072d) | 4090-claude | 2026-03-24 | SHIPPED `77888c8b` | feat/chit-integration-wave-1 |
-| Infra (Model Registry HF enrichment) | 4090-claude | 2026-03-24 | SHIPPED `07d06f70` | feat/chit-integration-wave-1 |
-| Infra (Model seed + gpu-models metadata) | 4090-claude | 2026-03-24 | SHIPPED `50ee0022`, `7cfacc8c` | feat/chit-integration-wave-1 |
-| Infra (BoTZ submodule sync d125e8a) | 4090-claude | 2026-03-24 | SHIPPED `63532a6b` | feat/chit-integration-wave-1 |
-| W3/M2 (creator automation activation + Discord canonical lane audit) | codex-gpt5 | 2026-03-25 | RECOMMENDED — scan complete, pending implementation claim | — |
-| W3/M2 (studio-board status UX: approved -> published visibility) | codex-gpt5 | 2026-03-25 | RECOMMENDED — UI follow-through after canonical lane decision | — |
-| W2/W4 (rooms + stage prospectus alignment) | codex-gpt5 | 2026-03-28 | RECOMMENDED — docs update required after room manifest merge wave | — |
-| W2/W5 (Agent Zero upstream `v1.3` baseline vs PMOVES hardened suit gap report) | codex-gpt5 | 2026-03-28 | VERIFIED — upstream at `v1.3`, PMOVES pin still Mar 7 hardened commit | — |
-| Infra (PR review sweep: #1151, #1155, #1156) | 4090-claude | 2026-03-28 | SHIPPED — 74 threads resolved, 3 PRs merged | main |
-| Infra (KiloCode claw config rebase + 18 CR fixes) | 4090-claude | 2026-03-28 | SHIPPED PR #1151 (merged 2026-03-30) | feature/kilo-claw-config |
-| Infra (Provider cascade: 7 CR + 3 Kilo fixes) | 4090-claude | 2026-03-28 | SHIPPED PR #1155 (merged 2026-03-29) | feat/4090-coding-workstation-stack |
+| Workstream | Agent | Claimed | Status | PR | CHIT Trail | Branch |
+|------------|-------|---------|--------|----|------------|--------|
+| W1 (partial: TTS mesh) | 5090-claude | 2026-03-19 | SHIPPED `2a681471` | — | — | main |
+| W1 (theming: render-card, theme API, alt sigs) | claude-opus | 2026-03-20 | SHIPPED | #1040, #1042 | — | main |
+| W1 (remaining: BoTZ CLI bridge) | 5090-claude | 2026-03-20 | CLAIMED — pending 5090 session | — | — | — |
+| W2 (devcontainer + SKILL.md) | claude-opus | 2026-03-20 | SHIPPED | #1041 | — | main |
+| W3 (Discord classrooms) | 5090-claude | 2026-03-20 | CLAIMED — pending 5090 session | — | — | — |
+| W4 (partial: content stubs) | 5090-claude | 2026-03-19 | SHIPPED `2a681471` | — | — | main |
+| W4 (beats pipeline runner) | claude-opus | 2026-03-20 | SHIPPED | #1039 | — | main |
+| W5 (partial: TZ models, TACs) | 5090-claude | 2026-03-19 | SHIPPED `2a681471` | — | — | main |
+| W1 (terminal renderer + Gate 3) | 4090-claude | 2026-03-22 | CLAIMED | — | — | feat/w1-agent-terminal-theme |
+| W1 (Flute-Gateway Gradio 4.x fix) | 5090-claude | 2026-03-22 | SHIPPED `24305c4f2` | #1069 | — | feat/tts-engine-capabilities-registry |
+| W1 (voice activation: 10-engine sweep) | 5090-claude | 2026-03-22 | VERIFIED — 10/14 Flute, 6/6 STT | — | — | (same branch) |
+| Infra (P7 gates + topology sanitize) | z890-claude | 2026-03-22 | SHIPPED | #1063, #1064, #1068 | — | main |
+| Infra (CodeRabbit sweep #1066/#1069) | z890-claude + 4090-claude | 2026-03-22 | SHIPPED | #1070 | — | main |
+| W1 (TTS service runners + prosodic endpoint) | z890-claude | 2026-03-23 | SHIPPED | #1071 | — | main |
+| W1 (prosodic activation + engine verification) | 5090-claude | 2026-03-23 | VERIFIED — prosodic 2/2, CUDA load 13/14 | — | — | main |
+| Infra (Discord publisher-discord rebuild + MCP validation) | z890-claude | 2026-03-23 | SHIPPED — container running, MCP+REST validated | — | — | feat/discord-publisher-mcp |
+| W6-P1 (Health/Wealth Docker wiring + NATS) | z890-claude | 2026-03-23 | RECOMMENDED — issue #1410 | #1410 | — | — |
+| W6-P2 (bpm_encoder.py + ToKenism NATS bridge) | 5090-claude | 2026-03-23 | SHIPPED — `bpm_encoder --publish` + reusable NATS helper | #1411, #1425 | — | main |
+| W6-P3 (Persona selector + BoTZ CLI) | 4090-claude | 2026-03-25 | SHIPPED — botz_cli.py (19 tests) | — | — | feat/w6-p3-persona-selector |
+| W6-P3 (NATS push model: beats_to_voice reactive synthesis) | 4090-claude | 2026-04-27 | SHIPPED — publish + listen loop, 5 tests green | #1402, #1404, #1405, #1406 | — | main |
+| W6-P3 (Voice binding: persona → Flute prosodic) | 5090-claude | 2026-03-23 | READY — P2 shipped; needs 5090 live Flute verification | — | — | — |
+| W6-P5 (FlOO$ life-persona-voice pipeline) | 5090-claude (opus) | 2026-05-20 | IN PROGRESS — Phase A merged (#1487); Phase B spec in flight (`TAC_FLOOZ_PHASE_B.md`) | #1412 | #1487 (Phase A merged) | feat/w6-p5-flooz-phase-b-spec |
+| Infra (CHIT CGP Wave 1: Extract Worker + FFmpeg-Whisper) | 4090-claude | 2026-03-24 | SHIPPED `f7dafa56`, `6046d518` | — | — | feat/chit-integration-wave-1 |
+| Infra (Embedding standardization: Qwen3-4b/3072d) | 4090-claude | 2026-03-24 | SHIPPED `77888c8b` | — | — | feat/chit-integration-wave-1 |
+| Infra (Model Registry HF enrichment) | 4090-claude | 2026-03-24 | SHIPPED `07d06f70` | — | — | feat/chit-integration-wave-1 |
+| Infra (Model seed + gpu-models metadata) | 4090-claude | 2026-03-24 | SHIPPED `50ee0022`, `7cfacc8c` | — | — | feat/chit-integration-wave-1 |
+| Infra (BoTZ submodule sync d125e8a) | 4090-claude | 2026-03-24 | SHIPPED `63532a6b` | — | — | feat/chit-integration-wave-1 |
+| W3/M2 (creator automation activation + Discord canonical lane audit) | codex-gpt5 | 2026-03-25 | RECOMMENDED — scan complete, pending implementation claim | — | — | — |
+| W3/M2 (studio-board status UX: approved -> published visibility) | codex-gpt5 | 2026-03-25 | RECOMMENDED — UI follow-through after canonical lane decision | — | — | — |
+| W2/W4 (rooms + stage prospectus alignment) | codex-gpt5 | 2026-03-28 | RECOMMENDED — docs update required after room manifest merge wave | — | — | — |
+| W2/W5 (Agent Zero upstream `v1.3` baseline vs PMOVES hardened suit gap report) | codex-gpt5 | 2026-03-28 | VERIFIED — upstream at `v1.3`, PMOVES pin still Mar 7 hardened commit | — | — | — |
+| Infra (PR review sweep: #1151, #1155, #1156) | 4090-claude | 2026-03-28 | SHIPPED — 74 threads resolved, 3 PRs merged | #1151, #1155, #1156 | — | main |
+| Infra (KiloCode claw config rebase + 18 CR fixes) | 4090-claude | 2026-03-28 | SHIPPED (merged 2026-03-30) | #1151 | — | feature/kilo-claw-config |
+| Infra (Provider cascade: 7 CR + 3 Kilo fixes) | 4090-claude | 2026-03-28 | SHIPPED (merged 2026-03-29) | #1155 | — | feat/4090-coding-workstation-stack |
+
+> **ORPHANED status**: A claim transitions to ORPHANED when CLAIMED >7 days with no PR and no CHIT trail activity on `branch.<path-segments>.trail.v1` (slash → dot encoding; e.g. `feat/foo` → `branch.feat.foo.trail.v1`). ORPHANED entries trigger branch deletion via `stale-branch-sweep.yml`.
+
 
 ## Recommended Next Steps (Post 2026-03-30 PR Sweep)
 
@@ -553,7 +557,7 @@ All resolved. No blockers.
 | 3 | W6-P1: Health/Wealth Docker wiring | P1 | NATS + /healthz + /metrics |
 | 4 | Jetson Orin onboarding | P2 | Via RustDesk |
 | 5 | NATS leaf node to 5090 | P2 | Flute NATS=connected proves bus healthy |
-| 6 | ~~ClaWz branch/pin repair plan~~ | ~~P2~~ | RESOLVED — synced at `c050805cc`, not orphaned. ClawZ is Pre-Stage, not broken. |
+| 6 | ~~ClaWz branch/pin repair plan~~ | ~~P2~~ | RESOLVED — synced at `f05fd3f547`, not orphaned. ClawZ is Pre-Stage, not broken. |
 | 7 | ~~ClaWz profile-id normalization~~ | ~~P2~~ | RESOLVED — `workstation_5090` alias created by 4090-claude (see `pmoves/config/profiles/workstation_5090.yaml`) |
 | 8 | n8n runner investigation | P1 | `N8N_RUNNERS_ENABLED` already defaults to `true` in docker-compose — check n8n UI workflow activation, auth token, version |
 
@@ -561,7 +565,7 @@ All resolved. No blockers.
 | # | Task | Priority | Notes |
 |---|------|----------|-------|
 | 1 | ~~Publish the Agent Zero `v1.3` gap report~~ | ~~P0~~ | DONE — gap report published. Sync decision (accept pin vs pull v1.3) is a planning call, not a code blocker. |
-| 2 | ~~Publish the PMOVES-ClawZ gap report~~ | ~~P0~~ | DONE — gap report published. ClawZ synced at `c050805cc`, Pre-Stage, not orphaned. |
+| 2 | ~~Publish the PMOVES-ClawZ gap report~~ | ~~P0~~ | DONE — gap report published. ClawZ synced at `f05fd3f547`, Pre-Stage, not orphaned. |
 | 3 | Align AGNOTE/P7/website language around rooms + stage | **P0** | Make the prospectus consistent — rooms are now shipped (#1136-#1143) |
 | 4 | Close Supabase → Agent Zero → Publisher → Discord activation loop | **P0** | Validate `approval_poller.json` + `echo_publisher.json`; n8n runners already enabled — investigate UI activation state |
 | 5 | Pick canonical Discord publish lane | **P0** | Decide between `publisher-discord` NATS subscriber and n8n webhook relay; demote the other |

@@ -1,0 +1,15 @@
+User-agent: *
+Allow: /
+
+# Common LLM crawlers — allowed on the public landing page.
+# Tighten per-path once /demo/* endpoints serve real user data.
+User-agent: GPTBot
+Allow: /
+
+User-agent: ClaudeBot
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+Sitemap: https://pmoves.ai/sitemap.xml

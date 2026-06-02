@@ -32,6 +32,14 @@
       "display_name": "5090 KiloCode GLM Workstation",
       "manifest": "5090-kilocode.room.studio.json",
       "summary": "GPU inference specialist node running KiloCode GLM on the GLM Coding Plan. Shares the 5090 with Claude Code and Codex."
+    },
+    {
+      "room_id": "demo.room.rehearsal",
+      "agent_id": "4090-claude",
+      "alter": "4090-demo",
+      "display_name": "PMOVES Demo Room",
+      "manifest": "demo.room.json",
+      "summary": "One-click demo: Agent Zero local + 4090 Claude Code claws + HERMES V4 assist. Stage: rehearsal."
     }
   ]
 }

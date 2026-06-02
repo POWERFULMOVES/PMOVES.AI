@@ -5,6 +5,7 @@ GRAPHITI_MARK: `AGNOTE4482::AGENT_ZERO::V1_3_GAP`
 > **Purpose**: validate the real upstream Agent Zero release state, compare it against the PMOVES hardened suit, and recommend the sync posture before more room/stage or P7 suit expansion.
 > **Validated on**: 2026-03-28
 > **Scope**: upstream `agent0ai/agent-zero`, PMOVES fork `POWERFULMOVES/PMOVES-Agent-Zero`, and the current local gitlink pin used on the z890 lane.
+> **Sync completed**: 2026-04-25 — Fork synced to upstream v1.9 via Fresh Overlay strategy. Branch `PMOVES.AI-Edition-v1.9` pushed to `POWERFULMOVES/PMOVES-Agent-Zero`. Gap closed from 604 to 0 commits. Old branch `PMOVES.AI-Edition-Hardened` retained as fallback. MiniMax litellm format corrected (openai-compatible → openai).
 
 ---
 

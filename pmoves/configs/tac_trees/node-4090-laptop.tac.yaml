@@ -148,8 +148,8 @@ root:
     # Phase 4: Tailscale Mesh Connectivity
     # =========================================================================
     - id: n4090.mesh
-      task: "Tailscale mesh connectivity to 5090 and Z890"
-      context: "All 3 nodes must be reachable for full fleet operation"
+      task: "Tailscale mesh connectivity to 5090, Z890, and SPARK"
+      context: "All fleet nodes must be reachable for full operation"
       agent_hint: 4090-claude
       children:
         - id: n4090.mesh.status
@@ -158,6 +158,18 @@ root:
             type: shell
             command: "tailscale status"
             expect: "pmoves-laptop online at pmoves-laptop.ts"
+          agent_hint: 4090-claude
+
+        - id: n4090.mesh.ssh-enabled
+          task: "Tailscale SSH enabled on 4090 laptop"
+          action:
+            type: shell
+            command: "tailscale debug features 2>/dev/null | grep -i ssh || tailscale status --json | python -c \"import json,sys; d=json.load(sys.stdin); print('ssh-enabled' if d.get('Self',{}).get('TailscaleSSHEnabled') else 'DISABLED')\""
+            expect: "ssh-enabled (or SSH feature listed in debug features output)"
+          context: >
+            Tailscale SSH allows SPARK and other fleet nodes to SSH into
+            pmoves-laptop without Windows password. Auth via Tailscale identity.
+            Enable with: tailscale set --ssh (operator runs once).
           agent_hint: 4090-claude
 
         - id: n4090.mesh.reach-5090
@@ -177,6 +189,17 @@ root:
             expect: "Pong from pmoves-z890.ts via direct connection"
           agent_hint: 4090-claude
 
+        - id: n4090.mesh.reach-spark
+          task: "Can reach SPARK (pmoves-spark)"
+          action:
+            type: shell
+            command: "tailscale ping pmoves-spark --timeout 5s --c 1"
+            expect: "Pong from pmoves-spark via direct connection"
+          context: >
+            DGX Spark GB10 Grace-Blackwell 128GB — fleet inference backbone.
+            Primary 120B+ model host. Must be tagged tag:gpu in Tailscale admin.
+          agent_hint: 4090-claude
+
         - id: n4090.mesh.z890-services
           task: "Z890 key services reachable"
           action:
@@ -187,6 +210,62 @@ root:
               - Grafana: pmoves-z890.ts:3000
               - Agent Zero: pmoves-z890.ts:8080
             expect: "All Z890 services accessible via Tailscale IP"
+          agent_hint: 4090-claude
+
+    # =========================================================================
+    # Phase 4b: Ollama Model Health
+    # =========================================================================
+    - id: n4090.ollama
+      task: "Ollama model inventory matches laptop-4090.yaml profile"
+      context: "Profile expects: qwen3-embedding:8b, qwen3-vl:8b, qwen3-coder:30b, qwen3.5:9b, qwen3.5:4b, lfm2:24b"
+      agent_hint: 4090-claude
+      children:
+        - id: n4090.ollama.running
+          task: "Ollama service running on :11434"
+          action:
+            type: shell
+            command: "curl -s http://localhost:11434/api/tags | python -c \"import json,sys; names=[m['name'] for m in json.load(sys.stdin)['models']]; required={'qwen3-embedding:8b','qwen3-vl:8b','qwen3-coder:30b','qwen3.5:9b','qwen3.5:4b','lfm2:24b'}; missing=required-set(names); print('ok' if not missing else 'MISSING:'+','.join(sorted(missing)))\""
+            expect: "ok (all 6 profile-expected models present)"
+          agent_hint: 4090-claude
+
+        - id: n4090.ollama.embedding
+          task: "qwen3-embedding:8b resident (always-resident)"
+          action:
+            type: shell
+            command: "curl -s http://localhost:11434/api/tags | python -c \"import json,sys; names=[m['name'] for m in json.load(sys.stdin)['models']]; print('ok' if 'qwen3-embedding:8b' in names else 'MISSING')\""
+            expect: "ok"
+          context: >
+            Always-resident embedding model (4.7GB VRAM).
+            If missing: ollama pull qwen3-embedding:8b
+          agent_hint: 4090-claude
+
+        - id: n4090.ollama.coder
+          task: "qwen3-coder:30b available (coding fallback)"
+          action:
+            type: shell
+            command: "curl -s http://localhost:11434/api/tags | python -c \"import json,sys; names=[m['name'] for m in json.load(sys.stdin)['models']]; print('ok' if 'qwen3-coder:30b' in names else 'MISSING')\""
+            expect: "ok"
+          context: >
+            Primary local coding fallback. ~18GB on disk — partial CPU offload.
+            If missing: ollama pull qwen3-coder:30b (~18GB, 10+ min)
+          agent_hint: 4090-claude
+
+        - id: n4090.ollama.stale-check
+          task: "No pre-2025 stale models on disk"
+          action:
+            type: manual
+            instruction: >
+              Run: ollama list
+              Verify NONE of these appear: gemma2, gemma3, llama3.2,
+              deepseek-r1, deepseek-coder-v2, phi4, qwen2.5, nomic-embed-text,
+              embeddinggemma, llama3.2-vision, jina-embeddings-v2-base-code, functiongemma
+            expect: "Only profile-expected models present"
+          context: >
+            Stale models consume ~67GB disk. Cleanup:
+            ollama rm nomic-embed-text embeddinggemma gemma3:latest gemma3:12b
+            gemma2:latest llama3.2:latest llama3.2-vision qwen2.5:7b qwen2.5vl:7b
+            deepseek-r1:latest deepseek-coder-v2:latest phi4:latest
+            jina-embeddings-v2-base-code functiongemma
           agent_hint: 4090-claude
 
     # =========================================================================
@@ -212,4 +291,180 @@ root:
             should NOT claim GPU or TTS capabilities. It consumes from
             5090 (TTS/GPU) and Z890 (infra/NATS/monitoring).
           agent_hint: 4090-claude
+          status: done
+          notes: >
+            Verified 2026-05-25. pmoves-dox-nats (4223) running without auth.
+            Subscriber confirmed receipt of 427-byte payload on
+            mesh.agent.4090.capabilities.v1. Payload: hostname=PMOVES-4090,
+            role=mobile-relay, has_gpu=false, has_tts=false, consumer_only=true,
+            consumes_from=[5090-claude, z890-claude].
+            Tools: pmoves/tools/nats_pub.py + nats_cap_verify.py.
+
+    # =========================================================================
+    # Phase 6: Shift Crew Skills + 4090 Gap Fill (2026-05-18)
+    # =========================================================================
+    - id: n4090.shift-crew
+      task: "Shift Crew Claude Code skills deployed on 4090"
+      context: >
+        Shift Crew (PR #1168) delivered beats-to-voice, BPM encoder, persona
+        binding, and AgentGym runner tools. Phase 6 adds Claude Code skill
+        wrappers + hooks so these tools are invocable directly from sessions.
+        Added: 7 skills in .claude/skills/, 2 hooks in .claude/hooks/.
+      agent_hint: 4090-claude
+      children:
+
+        # -- Shift Crew Pipeline Skills --
+        - id: n4090.shift-crew.listen
+          task: "shift:listen skill available and functional"
+          action:
+            type: shell
+            command: "ls .claude/skills/shift-listen/SKILL.md"
+            expect: "File exists"
+          context: >
+            Wraps beats_to_voice.py listen (NATS push mode). Subscribes to
+            voice.agent.response.v1, publishes CGP v0.2 to tokenism.prosodic.bpm.v1.
+            disable-model-invocation: true (daemon side-effect).
+          agent_hint: 4090-claude
+          status: done
+          notes: "Added 2026-05-18 — .claude/skills/shift-listen/SKILL.md"
+
+        - id: n4090.shift-crew.from-bpm
+          task: "shift:from-bpm skill available and functional"
+          action:
+            type: shell
+            command: "ls .claude/skills/shift-from-bpm/SKILL.md"
+            expect: "File exists"
+          context: >
+            Single-shot beats-to-voice pipeline. BPM table: 60(sentence/largo),
+            80(breath/adagio), 90(clause/andante), 120(phrase/moderato), 150(none/presto).
+            Persona options: dr-bean, mr-clean, default.
+          agent_hint: 4090-claude
+          status: done
+          notes: "Added 2026-05-18 — .claude/skills/shift-from-bpm/SKILL.md"
+
+        - id: n4090.shift-crew.persona-bind
+          task: "persona:bind skill available for FlOO$ character suits"
+          action:
+            type: shell
+            command: "ls .claude/skills/persona-bind/SKILL.md"
+            expect: "File exists"
+          context: >
+            Binds FlOO$ character suit (Dr.Bean, Mr.Clean, PowerPuff trio) to
+            session voice params via BEATS_VOICE + CGP control_plane.param_surface.
+            Complements W6-P5 persona architecture review (Issue #1412).
+          agent_hint: 4090-claude
+          status: done
+          notes: "Added 2026-05-18 — .claude/skills/persona-bind/SKILL.md"
+
+        # -- 4090 Node Operations Skills --
+        - id: n4090.shift-crew.sitrep
+          task: "4090:sitrep skill replaces manual AGNOTE health check block"
+          action:
+            type: shell
+            command: "ls .claude/skills/node-4090-sitrep/SKILL.md"
+            expect: "File exists"
+          context: >
+            Runs full AGNOTE4482_SITREP.md "Fastest Health Check" as invocable skill.
+            Output formatted as AGNOTE4482 audit record block. Run before CLAIM/RELEASE.
+          agent_hint: 4090-claude
+          status: done
+          notes: "Added 2026-05-18 — .claude/skills/node-4090-sitrep/SKILL.md"
+
+        - id: n4090.shift-crew.field-brief
+          task: "4090:field-brief skill templates KiloCode implementation briefs"
+          action:
+            type: shell
+            command: "ls .claude/skills/field-brief/SKILL.md"
+            expect: "File exists"
+          context: >
+            Templates .kilo/command/<name>.md with Arguments/Implementation/Related/Notes.
+            Three-Body pattern: Claude analysis → KiloCode implementation → trail signing.
+          agent_hint: 4090-claude
+          status: done
+          notes: "Added 2026-05-18 — .claude/skills/field-brief/SKILL.md"
+
+        - id: n4090.shift-crew.probe
+          task: "4090:probe skill wraps W0 Substrate hardware probe"
+          action:
+            type: shell
+            command: "ls .claude/skills/node-4090-probe/SKILL.md"
+            expect: "File exists"
+          context: >
+            Wraps glances-autodetect.ps1 (Windows) / .sh (Linux) for W0 PR-4/PR-6.
+            Full wiring blocked until feat/w0-pr4-ghost-detector merges to main.
+          agent_hint: 4090-claude
+          status: done
+          notes: >
+            Added 2026-05-18 — .claude/skills/node-4090-probe/SKILL.md.
+            BLOCKED: Full probe requires feat/w0-pr4-ghost-detector merge.
+
+        - id: n4090.shift-crew.agentgym
+          task: "agentgym:run skill launches RL sessions via field-runner-4090.yaml"
+          action:
+            type: shell
+            command: "ls .claude/skills/agentgym-run/SKILL.md"
+            expect: "File exists"
+          context: >
+            Launches AgentGym RL session: Qwen 3.5 9B via TensorZero (localhost:3030).
+            7 environments (4 lightweight, 3 moderate). Publishes to agentgym.*.v1 NATS.
+            disable-model-invocation: true (long-running process).
+          agent_hint: 4090-claude
+          status: done
+          notes: "Added 2026-05-18 — .claude/skills/agentgym-run/SKILL.md"
+
+        # -- Hooks --
+        - id: n4090.shift-crew.kilo-brief-hook
+          task: "kilo-brief-check.sh hook validates .kilo/command/ format"
+          action:
+            type: shell
+            command: "ls .claude/hooks/kilo-brief-check.sh"
+            expect: "File exists"
+          context: >
+            PostToolUse hook: after Edit/Write to .kilo/command/*.md, warns if
+            ## Arguments, ## Implementation, ## Related, ## Notes sections are missing.
+            Advisory only — never blocks. Wired in .claude/settings.json PostToolUse.
+          agent_hint: 4090-claude
+          status: done
+          notes: "Added 2026-05-18 — .claude/hooks/kilo-brief-check.sh"
+
+        - id: n4090.shift-crew.trail-hook
+          task: "shift-crew-trail.sh hook emits NATS branch trail on Shift Crew edits"
+          action:
+            type: shell
+            command: "ls .claude/hooks/shift-crew-trail.sh"
+            expect: "File exists"
+          context: >
+            PostToolUse hook: when editing beats_to_voice.py, bpm_encoder.py,
+            beats_to_cgp.py, analyze_beats.py, or geometry_bridge.py — publishes
+            to branch.<path>.trail.v1 on NATS. Local dev-time mirror of
+            branch-trail-emit.yml (§9.4, PR #1462). Graceful skip when NATS down.
+          agent_hint: 4090-claude
+          status: done
+          notes: "Added 2026-05-18 — .claude/hooks/shift-crew-trail.sh"
+
+        # -- Open Items --
+        - id: n4090.shift-crew.probe-wire
+          task: "Wire 4090:probe fully after W0 PR-4 merge"
+          action:
+            type: manual
+            instruction: >
+              After feat/w0-pr4-ghost-detector merges to main:
+              1. Update .claude/skills/node-4090-probe/SKILL.md with actual
+                 script paths and full probe output format
+              2. Wire PR-6 profile auto-write target
+              3. Update this TAC entry status to done
+          agent_hint: 4090-claude
+          status: done
+          notes: "Done 2026-05-24: PR #1591 (W0-PR4), PR #1588 (W0-PR5 unifi), PR #1486 (W0-PR6 json-to-profile). SKILL.md updated. unifi_topology wired."
+
+        - id: n4090.shift-crew.agentgym-smoke
+          task: "Smoke-test agentgym:run against live TensorZero + NATS"
+          action:
+            type: manual
+            instruction: >
+              Run: /agentgym:run with ENV=BabyAI EPISODES=1
+              Verify: TensorZero serves Qwen 3.5 9B, episode completes,
+              NATS subject agentgym.episode.completed.v1 receives payload.
+          agent_hint: 4090-claude
           status: future
+          notes: "Requires TensorZero + NATS both running locally"

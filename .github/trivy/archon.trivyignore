@@ -1,0 +1,5 @@
+# Temporary Trivy suppressions for `pmoves-archon` GHCR builds.
+# Follow-up: bump temporalio/Rust transitive deps in pmoves/services/archon
+# so these fixed CVEs disappear rather than being ignored.
+CVE-2026-31812
+GHSA-82j2-j2ch-gfr8

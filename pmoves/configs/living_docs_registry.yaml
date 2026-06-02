@@ -1,0 +1,100 @@
+# PMOVES.AI Living Documents Registry
+# ============================================================================
+# Files tracked for freshness by `pmoves/tools/docs_reconcile.py`.
+# Each entry: path (relative to repo root), freshness_days (max age before
+# stale), severity (P1/P2/INFO), and an optional description.
+#
+# Stale findings:
+#   severity: P1  → CI fails (`--check` exits 1)
+#   severity: P2  → CI warns but does not fail
+#   severity: INFO → reported but never gates
+#
+# Add new entries here. The reconciler picks them up on the next `--check`.
+# ============================================================================
+
+tracked:
+  # ── Root keystones (CLAUDE.md fleet) ───────────────────────────────────
+  - path: CLAUDE.md
+    freshness_days: 30
+    severity: P2
+    description: "Root keystone — points to BOOTSTRAP/CATALOG/PATTERNS/AGENTS/AGNOTE4482"
+  - path: AGENTS.md
+    freshness_days: 30
+    severity: P2
+    description: "Universal coding-agent format — project structure, build/test commands, canonical doc index"
+
+  # ── .claude tier ──────────────────────────────────────────────────────
+  - path: .claude/BOOTSTRAP.md
+    freshness_days: 30
+    severity: P1
+    description: "Flat foundation — Emperor-CHIT-Humility, Known Roads, MCP entrypoints"
+  - path: .claude/CATALOG.md
+    freshness_days: 14
+    severity: P1
+    description: "Service catalog (ports, URLs, health endpoints) — drifts faster as services move"
+  - path: .claude/PATTERNS.md
+    freshness_days: 30
+    severity: P2
+    description: "Known Roads, CHIT, skill pairings, dev patterns"
+  - path: .claude/PINOKIO_LAUNCHER_GUIDE.md
+    freshness_days: 60
+    severity: INFO
+    description: "Pinokio launcher guide — on-demand context, slow-changing"
+
+  # ── AGNOTE4482 multi-agent coordination family ─────────────────────────
+  - path: pmoves/docs/AGENTS/AGNOTE4482.md
+    freshness_days: 14
+    severity: P1
+    description: "Multi-agent coordination gateway (Three-Body, Village Rule, signoff)"
+  - path: pmoves/docs/AGENTS/AGNOTE4482_SITREP.md
+    freshness_days: 7
+    severity: P1
+    description: "Cold-start sitrep — current convergence state, must stay current"
+  - path: pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md
+    freshness_days: 3
+    severity: P1
+    description: "Active claim register — Village Rule coordination, fastest-moving doc"
+  - path: pmoves/docs/AGENTS/AGNOTE4482_SIGNOFF_CHECKLIST.md
+    freshness_days: 30
+    severity: P1
+    description: "Sign-off checklist — release/governance gate; verified by .claude/hooks/governance/signoff-gate.sh"
+  - path: pmoves/docs/AGENTS/AGNOTE4482_ROADMAP_W1-W5.md
+    freshness_days: 30
+    severity: P1
+    description: "Wave roadmap W1-W5 — operational milestones cited from SITREP"
+  - path: pmoves/docs/audit/CHIT_INTEGRATION_STATUS.md
+    freshness_days: 14
+    severity: P1
+    description: "Per-service CHIT integration tier (Full/Partial/None) — high-velocity"
+  - path: pmoves/docs/AGENTS/AGNOTE4482.BEATS.md
+    freshness_days: 60
+    severity: P2
+    description: "BPM encoding + prosodic bridge spec (referenced by W6 Convergence)"
+  - path: pmoves/docs/AGENTS/AGNOTE4482.FlOO$.md
+    freshness_days: 60
+    severity: P2
+    description: "FlOO$ skill pairings spec (ToKenism bridge)"
+  - path: pmoves/docs/AGENTS/KRISS_KROSS_ACCORD.md
+    freshness_days: 90
+    severity: INFO
+    description: "Multi-agent collision protocol — stable, slow-changing"
+  - path: pmoves/docs/AGENTS/KRISS_KROSS_ACK.md
+    freshness_days: 90
+    severity: INFO
+    description: "KRISS-KROSS ratification witness — stable, slow-changing"
+
+  # ── Navigable index (front-and-center entry point) ─────────────────────
+  - path: LIVING_DOCS_INDEX.md
+    freshness_days: 14
+    severity: P2
+    description: "Navigable index of all living docs + UI/CLI surfaces — operator entry point"
+
+  # ── Architecture thesis ────────────────────────────────────────────────
+  - path: pmoves/docs/architecture/PMOVES_MOF_ARCHITECTURE.md
+    freshness_days: 90
+    severity: INFO
+    description: "MOF architecture thesis — slow-changing"
+  - path: pmoves/docs/architecture/PMOVES_GRAND_CONVERGENCE.md
+    freshness_days: 90
+    severity: INFO
+    description: "Grand Convergence five-layer thesis — slow-changing"

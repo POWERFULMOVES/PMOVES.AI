@@ -1,0 +1,5 @@
+# Render outputs — regenerated via `node scripts/render-provenance-artifact.mjs <request>`
+*.preview.png
+*.preview.mp4
+*.preview.gif
+*.preview.webm

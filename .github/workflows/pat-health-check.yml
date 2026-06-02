@@ -1,0 +1,96 @@
+name: PAT Health Check
+
+on:
+  schedule:
+    - cron: '0 12 * * *'  # Daily at noon UTC
+  workflow_dispatch:
+
+permissions:
+  issues: write
+
+jobs:
+  check:
+    # PRs from forks don't have access to secrets; skip to avoid false negatives.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check GH_PAT validity
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+        run: |
+          if gh api user >/dev/null 2>&1; then
+            echo "✅ GH_PAT is valid"
+            USER=$(gh api user --jq '.login')
+            echo "Authenticated as: $USER"
+          else
+            echo "❌ GH_PAT is EXPIRED or INVALID"
+            echo "::error::GH_PAT needs rotation immediately"
+            exit 1
+          fi
+
+      - name: Check GHCR_TOKEN validity
+        if: ${{ secrets.GHCR_TOKEN != '' }}
+        env:
+          GH_TOKEN: ${{ secrets.GHCR_TOKEN }}
+        run: |
+          if gh api user >/dev/null 2>&1; then
+            echo "✅ GHCR_TOKEN is valid"
+          else
+            echo "❌ GHCR_TOKEN is EXPIRED or INVALID"
+            echo "::warning::GHCR_TOKEN needs rotation"
+          fi
+
+      - name: Check GitHub App token generation
+        if: ${{ secrets.GH_APP_CLIENT_ID != '' && secrets.GH_APP_SEC != '' }}
+        id: app_token
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ secrets.GH_APP_CLIENT_ID }}
+          private-key: ${{ secrets.GH_APP_SEC }}
+          permission-contents: read
+          permission-packages: write
+
+      - name: Verify App token scopes
+        if: steps.app_token.outputs.token != ''
+        env:
+          GH_TOKEN: ${{ steps.app_token.outputs.token }}
+        run: |
+          # App tokens are installation tokens; they don't have a /user endpoint.
+          # Validate by checking org package access (lightweight probe).
+          if gh api /users/${{ github.repository_owner }} >/dev/null 2>&1; then
+            echo "✅ GitHub App token is valid and API-accessible"
+          else
+            echo "❌ GitHub App token failed API probe"
+            echo "::warning::GitHub App token may lack permissions or installation may be suspended"
+          fi
+
+      - name: Notify on failure
+        if: failure()
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const body = [
+              "## PAT Health Check Failed",
+              "",
+              "The GH_PAT secret is expired or invalid.",
+              "",
+              "### Immediate Action Required",
+              "1. Create new fine-grained PAT (7-day expiry) at https://github.com/settings/personal-access-tokens/new",
+              "2. Update GH_PAT secret at https://github.com/" + context.repo.owner + "/" + context.repo.repo + "/settings/secrets/actions",
+              "3. Update git remote on sidecar: git remote set-url origin https://pmoves-spark:<TOKEN>@github.com/" + context.repo.owner + "/" + context.repo.repo + ".git",
+              "4. See: deploy/runbooks/github-app-sitrep-and-pat-runbook.md §3.3",
+              "",
+              "### Long-Term Fix",
+              "Migrate to GitHub App token authentication — see §4 of the runbook.",
+              "",
+              "---",
+              "*Auto-created by PAT Health Check workflow*"
+            ].join("\n");
+
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: "🔴 GH_PAT Expired — " + new Date().toISOString().split("T")[0],
+              body: body,
+              labels: ["operations", "security", "urgent"]
+            });

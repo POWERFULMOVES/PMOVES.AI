@@ -26,6 +26,7 @@ import asyncio
 import json
 import logging
 import os
+import random
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
@@ -34,7 +35,11 @@ from uuid import UUID
 import httpx
 from nats.aio.client import Client as NATS
 
-from services.common.env import get_secret
+try:
+    from services.common.env import get_secret
+except ModuleNotFoundError:
+    from pmoves.services.common.env import get_secret
+from pmoves.tools.chit_security import sign_cgp
 
 logger = logging.getLogger(__name__)
 
@@ -124,6 +129,16 @@ class OptimizationResult:
         }
 
 
+@dataclass
+class _Particle:
+    """Internal deterministic PSO particle for persona parameters."""
+
+    position: Dict[str, Any]
+    velocity: Dict[str, float]
+    best_position: Dict[str, Any]
+    best_fitness: float
+
+
 class PersonaOptimizer:
     """
     EvoSwarm-based persona parameter optimizer.
@@ -153,6 +168,7 @@ class PersonaOptimizer:
         search_space: Optional[PersonaSearchSpace] = None,
         max_iterations: int = 50,
         population_size: int = 20,
+        random_seed: Optional[int] = None,
     ):
         """
         Initialize the Persona Optimizer.
@@ -178,6 +194,7 @@ class PersonaOptimizer:
         self.search_space = search_space or PersonaSearchSpace()
         self.max_iterations = max_iterations
         self.population_size = population_size
+        self.random_seed = random_seed if random_seed is not None else int(os.getenv("EVOSWARM_SEED", "4482"))
 
         self._nc: Optional[NATS] = None
         self._client: Optional[httpx.AsyncClient] = None
@@ -457,14 +474,15 @@ class PersonaOptimizer:
         eval_history: List[Dict[str, Any]]
     ) -> Tuple[Dict[str, Any], float, Dict[str, Any]]:
         """
-        Run EvoSwarm optimization (stub implementation).
+        Run deterministic hybrid PSO/evolution optimization.
 
-        This is a placeholder for the actual EvoSwarm integration.
-        The full implementation would:
-        1. Initialize population within search space
-        2. Evaluate fitness using _compute_fitness
-        3. Apply evolutionary operators (selection, crossover, mutation)
-        4. Return best parameter set
+        The operator keeps the existing persona wire contract while replacing
+        the old temperature-nudge placeholder with actual population search:
+        1. Seed a reproducible particle population around current parameters.
+        2. Evaluate fitness for each candidate.
+        3. Apply PSO velocity updates toward personal/global bests.
+        4. Inject elitism plus crossover/mutation for exploration.
+        5. Return the best parameter set and CHIT-signed provenance.
 
         Args:
             current_params: Current persona parameters
@@ -473,33 +491,252 @@ class PersonaOptimizer:
         Returns:
             Tuple of (optimized_params, fitness_score, metrics)
         """
-        # STUB: Return current params with a placeholder fitness
-        # TODO: Integrate actual EvoSwarm optimization loop
+        rng = random.Random(self.random_seed)
+        baseline = self._normalize_candidate(current_params)
+        baseline_fitness = self._compute_fitness(baseline, eval_history)
+        particles = self._initialize_particles(baseline, eval_history, rng)
 
-        # Compute fitness for current parameters
-        fitness = self._compute_fitness(current_params, eval_history)
+        global_best = baseline
+        global_best_fitness = baseline_fitness
+        rejected = 0
 
-        # Placeholder: slightly perturb parameters to simulate optimization
-        optimized_params = {
-            "temperature": max(0.0, min(1.0, current_params.get("temperature", 0.7) + 0.02)),
-            "behavior_weights": current_params.get("behavior_weights", {
-                "decode": 0.33,
-                "retrieve": 0.34,
-                "generate": 0.33,
-            }),
-            "boosts": current_params.get("boosts", {
-                "entity": 1.0,
-                "keyword": 1.0,
-            }),
-        }
+        for particle in particles:
+            if particle.best_fitness > global_best_fitness:
+                global_best = self._clone_candidate(particle.best_position)
+                global_best_fitness = particle.best_fitness
+
+        inertia = 0.58
+        cognitive = 1.35
+        social = 1.55
+
+        for _iteration in range(max(1, self.max_iterations)):
+            for particle in particles:
+                self._pso_step(
+                    particle,
+                    global_best,
+                    rng,
+                    inertia=inertia,
+                    cognitive=cognitive,
+                    social=social,
+                )
+                particle.position = self._normalize_candidate(particle.position)
+                fitness = self._compute_fitness(particle.position, eval_history)
+
+                if fitness > particle.best_fitness:
+                    particle.best_position = self._clone_candidate(particle.position)
+                    particle.best_fitness = fitness
+
+                if fitness > global_best_fitness:
+                    global_best = self._clone_candidate(particle.position)
+                    global_best_fitness = fitness
+
+            # Preserve an elite and replace the weakest particle with a
+            # crossover/mutation child so categorical operators have a landing
+            # point when model/route fields are added to the search space.
+            weakest = min(particles, key=lambda p: p.best_fitness)
+            parent_a, parent_b = sorted(particles, key=lambda p: p.best_fitness, reverse=True)[:2]
+            child = self._mutate_candidate(
+                self._crossover_candidates(parent_a.best_position, parent_b.best_position, rng),
+                rng,
+            )
+            child = self._normalize_candidate(child)
+            child_fitness = self._compute_fitness(child, eval_history)
+            if child_fitness >= weakest.best_fitness:
+                weakest.position = self._clone_candidate(child)
+                weakest.best_position = self._clone_candidate(child)
+                weakest.best_fitness = child_fitness
+                weakest.velocity = self._random_velocity(rng)
+                if child_fitness > global_best_fitness:
+                    global_best = self._clone_candidate(child)
+                    global_best_fitness = child_fitness
+            else:
+                rejected += 1
 
         metrics = {
+            "operator": "deterministic_hybrid_pso_evolution",
+            "seed": self.random_seed,
+            "iterations": self.max_iterations,
+            "population_size": self.population_size,
             "eval_history_count": len(eval_history),
             "avg_pass_rate": sum(1 for e in eval_history if e.get("pass")) / max(len(eval_history), 1),
+            "baseline_fitness": round(baseline_fitness, 6),
+            "fitness_improvement": round(global_best_fitness - baseline_fitness, 6),
+            "rejected_candidates": rejected,
             "search_space": self.search_space.to_dict(),
         }
+        metrics["provenance"] = self._build_signed_provenance(
+            baseline,
+            global_best,
+            baseline_fitness,
+            global_best_fitness,
+            metrics,
+        )
 
-        return optimized_params, fitness, metrics
+        return global_best, global_best_fitness, metrics
+
+    def _initialize_particles(
+        self,
+        baseline: Dict[str, Any],
+        eval_history: List[Dict[str, Any]],
+        rng: random.Random,
+    ) -> List[_Particle]:
+        particles: List[_Particle] = [
+            _Particle(
+                position=self._clone_candidate(baseline),
+                velocity=self._random_velocity(rng),
+                best_position=self._clone_candidate(baseline),
+                best_fitness=self._compute_fitness(baseline, eval_history),
+            )
+        ]
+
+        for _ in range(max(1, self.population_size) - 1):
+            position = self._mutate_candidate(baseline, rng, scale=0.35)
+            position = self._normalize_candidate(position)
+            particles.append(
+                _Particle(
+                    position=position,
+                    velocity=self._random_velocity(rng),
+                    best_position=self._clone_candidate(position),
+                    best_fitness=self._compute_fitness(position, eval_history),
+                )
+            )
+        return particles
+
+    def _numeric_fields(self) -> Tuple[str, ...]:
+        return (
+            "temperature",
+            "behavior.decode",
+            "behavior.retrieve",
+            "behavior.generate",
+            "boost.entity",
+            "boost.keyword",
+        )
+
+    def _random_velocity(self, rng: random.Random) -> Dict[str, float]:
+        return {fname: rng.uniform(-0.08, 0.08) for fname in self._numeric_fields()}
+
+    def _pso_step(
+        self,
+        particle: _Particle,
+        global_best: Dict[str, Any],
+        rng: random.Random,
+        *,
+        inertia: float,
+        cognitive: float,
+        social: float,
+    ) -> None:
+        for fname in self._numeric_fields():
+            x = self._get_field(particle.position, fname)
+            pbest = self._get_field(particle.best_position, fname)
+            gbest = self._get_field(global_best, fname)
+            velocity = (
+                inertia * particle.velocity.get(fname, 0.0)
+                + cognitive * rng.random() * (pbest - x)
+                + social * rng.random() * (gbest - x)
+            )
+            particle.velocity[fname] = max(-0.2, min(0.2, velocity))
+            self._set_field(particle.position, fname, x + particle.velocity[fname])
+
+    def _crossover_candidates(
+        self,
+        first: Dict[str, Any],
+        second: Dict[str, Any],
+        rng: random.Random,
+    ) -> Dict[str, Any]:
+        child = self._clone_candidate(first)
+        for fname in self._numeric_fields():
+            alpha = rng.random()
+            value = self._get_field(first, fname) * alpha + self._get_field(second, fname) * (1 - alpha)
+            self._set_field(child, fname, value)
+        return child
+
+    def _mutate_candidate(
+        self,
+        candidate: Dict[str, Any],
+        rng: random.Random,
+        *,
+        scale: float = 0.12,
+    ) -> Dict[str, Any]:
+        mutated = self._clone_candidate(candidate)
+        for fname in self._numeric_fields():
+            if rng.random() <= 0.75:
+                self._set_field(mutated, fname, self._get_field(mutated, fname) + rng.gauss(0.0, scale))
+        return mutated
+
+    def _normalize_candidate(self, candidate: Dict[str, Any]) -> Dict[str, Any]:
+        normalized = self._clone_candidate(candidate)
+        normalized["temperature"] = max(
+            self.search_space.temperature[0],
+            min(self.search_space.temperature[1], float(normalized.get("temperature", 0.7))),
+        )
+
+        behavior = normalized.setdefault("behavior_weights", {})
+        decode = max(self.search_space.behavior_decode[0], min(self.search_space.behavior_decode[1], float(behavior.get("decode", 0.33))))
+        retrieve = max(self.search_space.behavior_retrieve[0], min(self.search_space.behavior_retrieve[1], float(behavior.get("retrieve", 0.34))))
+        generate = max(self.search_space.behavior_generate[0], min(self.search_space.behavior_generate[1], float(behavior.get("generate", 0.33))))
+        total = max(decode + retrieve + generate, 1e-9)
+        behavior["decode"] = round(decode / total, 6)
+        behavior["retrieve"] = round(retrieve / total, 6)
+        behavior["generate"] = round(generate / total, 6)
+
+        boosts = normalized.setdefault("boosts", {})
+        boosts["entity"] = round(
+            max(self.search_space.boost_entity_range[0], min(self.search_space.boost_entity_range[1], float(boosts.get("entity", 1.0)))),
+            6,
+        )
+        boosts["keyword"] = round(
+            max(self.search_space.boost_keyword_range[0], min(self.search_space.boost_keyword_range[1], float(boosts.get("keyword", 1.0)))),
+            6,
+        )
+        return normalized
+
+    def _clone_candidate(self, candidate: Dict[str, Any]) -> Dict[str, Any]:
+        return json.loads(json.dumps(candidate))
+
+    def _get_field(self, candidate: Dict[str, Any], field: str) -> float:
+        if field == "temperature":
+            return float(candidate.get("temperature", 0.7))
+        if field.startswith("behavior."):
+            return float(candidate.get("behavior_weights", {}).get(field.split(".", 1)[1], 0.0))
+        if field.startswith("boost."):
+            return float(candidate.get("boosts", {}).get(field.split(".", 1)[1], 0.0))
+        raise KeyError(field)
+
+    def _set_field(self, candidate: Dict[str, Any], field: str, value: float) -> None:
+        if field == "temperature":
+            candidate["temperature"] = value
+            return
+        if field.startswith("behavior."):
+            candidate.setdefault("behavior_weights", {})[field.split(".", 1)[1]] = value
+            return
+        if field.startswith("boost."):
+            candidate.setdefault("boosts", {})[field.split(".", 1)[1]] = value
+            return
+        raise KeyError(field)
+
+    def _build_signed_provenance(
+        self,
+        baseline: Dict[str, Any],
+        best: Dict[str, Any],
+        baseline_fitness: float,
+        best_fitness: float,
+        metrics: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        payload = {
+            "type": "evoswarm.optimization.provenance.v1",
+            "operator": metrics["operator"],
+            "seed": self.random_seed,
+            "baseline_fitness": round(baseline_fitness, 6),
+            "best_fitness": round(best_fitness, 6),
+            "baseline": baseline,
+            "best": best,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+        try:
+            signed = sign_cgp(payload)
+            return {"payload": payload, "signature": signed["sig"]}
+        except RuntimeError as exc:
+            return {"payload": payload, "signature_error": str(exc)}
 
     def _compute_fitness(
         self,
@@ -513,7 +750,7 @@ class PersonaOptimizer:
         1. Temperature proximity to optimal (moderate preferred)
         2. Behavior weight balance (should sum to ~1.0)
         3. Historical pass rate from eval_gates
-        4. Boost weight合理性
+        4. Boost weight sanity
 
         Args:
             parameters: Parameter dictionary to evaluate
@@ -529,7 +766,7 @@ class PersonaOptimizer:
         temp_optimal = self.search_space.temperature[2]  # 0.7
         temp_diff = abs(temp - temp_optimal)
         temp_fitness = max(0.0, 1.0 - temp_diff)  # Penalize deviation from optimal
-        score += temp_fitness * 0.3
+        score += temp_fitness * 0.25
 
         # Behavior weight balance: should sum close to 1.0
         behavior = parameters.get("behavior_weights", {})
@@ -539,12 +776,25 @@ class PersonaOptimizer:
             behavior.get("generate", 0.33)
         )
         balance_fitness = max(0.0, 1.0 - abs(total_weight - 1.0))
-        score += balance_fitness * 0.3
+        score += balance_fitness * 0.25
 
         # Historical pass rate
         if eval_history:
             pass_rate = sum(1 for e in eval_history if e.get("pass")) / len(eval_history)
-            score += pass_rate * 0.4
+            score += pass_rate * 0.35
+        else:
+            score += 0.35
+
+        boosts = parameters.get("boosts", {})
+        entity = boosts.get("entity", 1.0)
+        keyword = boosts.get("keyword", 1.0)
+        midpoint = (
+            (self.search_space.boost_entity_range[1] + self.search_space.boost_keyword_range[1])
+            / 4
+        )
+        boost_diff = abs(entity - midpoint) + abs(keyword - midpoint)
+        boost_fitness = max(0.0, 1.0 - boost_diff / max(midpoint * 2, 1.0))
+        score += boost_fitness * 0.15
 
         return min(1.0, score)
 

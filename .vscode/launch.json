@@ -1,0 +1,58 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Python: Agent Zero (local)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/PMOVES-Agent-Zero/run_ui.py",
+      "args": ["--port", "8080"],
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}/PMOVES-Agent-Zero",
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}/PMOVES-Agent-Zero"
+      }
+    },
+    {
+      "name": "Python: AgentGym RL Runner (BabyAI)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "pmoves.services.agentgym_rl_coordinator.runner",
+      "args": [
+        "--config", "pmoves/configs/agentgym/field-runner-4090.yaml",
+        "--env", "BabyAI",
+        "--episodes", "3"
+      ],
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}",
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}",
+        "NATS_URL": "nats://nats:pmoves@localhost:4222"
+      }
+    },
+    {
+      "name": "Python: beats_to_voice (from-bpm test)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "pmoves.tools.beats_to_voice",
+      "args": ["from-bpm", "--bpm", "90", "--text", "Hello from 4090."],
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}",
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}",
+        "NATS_URL": "nats://nats:pmoves@localhost:4222"
+      }
+    },
+    {
+      "name": "Python: Current File",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${file}",
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}",
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}"
+      }
+    }
+  ]
+}

@@ -34,6 +34,65 @@ mappings:
     lane: "coding_plan"
     nodes: [z890, 5090]
 
+  # --- Anthropic Provider (Meta-Agent Phase 1) ---
+  claude-sonnet-4:
+    flare_name: "pmoves/claude-sonnet-4"
+    provider: "anthropic"
+    model_id: "claude-sonnet-4-5"
+    lane: "cloud"
+    nodes: [z890, 5090]
+    tensorzero_variant: "claude-sonnet-4"
+
+  claude-opus-4:
+    flare_name: "pmoves/claude-opus-4"
+    provider: "anthropic"
+    model_id: "claude-opus-4-5"
+    lane: "cloud"
+    nodes: [z890, 5090]
+    tensorzero_variant: "claude-opus-4"
+
+  claude-haiku-4:
+    flare_name: "pmoves/claude-haiku-4"
+    provider: "anthropic"
+    model_id: "claude-haiku-4-5"
+    lane: "cloud"
+    nodes: [z890, 5090]
+    tensorzero_variant: "claude-haiku-4"
+
+  # --- Z.AI Provider (Meta-Agent Runtime) ---
+  glm-5-1:
+    flare_name: "pmoves/glm-5.1"
+    provider: "zai"
+    model_id: "glm-5.1"
+    lane: "cloud"
+    nodes: [z890, 5090]
+    tensorzero_variant: "glm-5.1"
+    runtime_model: true
+
+  glm-4-plus:
+    flare_name: "pmoves/glm-4-plus"
+    provider: "zai"
+    model_id: "glm-4-plus"
+    lane: "cloud"
+    nodes: [z890, 5090]
+    tensorzero_variant: "glm-4-plus"
+
+  glm-4-air:
+    flare_name: "pmoves/glm-4-air"
+    provider: "zai"
+    model_id: "glm-4-air"
+    lane: "cloud"
+    nodes: [z890, 5090]
+    tensorzero_variant: "glm-4-air"
+
+  glm-4-flash:
+    flare_name: "pmoves/glm-4-flash"
+    provider: "zai"
+    model_id: "glm-4-flash"
+    lane: "cloud"
+    nodes: [z890, 5090]
+    tensorzero_variant: "glm-4-flash"
+
   # --- Local GPU ---
   qwen-coder:
     flare_name: "pmoves/qwen-3-coder-32b"
@@ -126,3 +185,87 @@ mappings:
     model_id: "gemma4:31b"
     lane: "local"
     nodes: [5090, dgx-spark]
+
+  # --- Phase C: DGX Spark (GB10) + dual R9700 (RDNA4) operator aliases ---
+  # All entries target staging endpoints; TensorZero variant weights are 0.0
+  # pending 48h soak + load test (see PR description).
+  spark-gemma4:
+    flare_name: "pmoves/spark-gemma4"
+    provider: "ollama_spark"
+    model_id: "gemma4:31b"
+    tensorzero_variant: "ollama_spark_gemma4_31b_fp16"
+    lane: "local"
+    nodes: [dgx-spark]
+
+  spark-nemotron3:
+    flare_name: "pmoves/spark-nemotron3"
+    provider: "ollama_spark"
+    # HF: nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-NVFP4 (verified 2026-04-19)
+    # Spark-only; NOT viable on RDNA4 gfx1201 (no FP8/FP4 kernels).
+    model_id: "nemotron-3-super-120b-nvfp4"
+    tensorzero_variant: "ollama_spark_nemotron3_super_120b_nvfp4"
+    lane: "local"
+    nodes: [dgx-spark]
+
+  rdna4-gemma4:
+    flare_name: "pmoves/rdna4-gemma4"
+    provider: "llamacpp_rocm"
+    model_id: "gemma-4-31b-it-Q4_K_M.gguf"
+    tensorzero_variant: "llamacpp_rdna4_gemma4_31b_q4km"
+    lane: "local"
+    nodes: [rdna4]
+
+  rdna4-gemma4-dual:
+    flare_name: "pmoves/rdna4-gemma4-dual"
+    provider: "llamacpp_rocm"
+    # Dual-R9700 row-split (--tensor-split 0.5,0.5 --split-mode row)
+    model_id: "gemma-4-26B-A4B-it-Q4_K_M.gguf"
+    tensorzero_variant: "llamacpp_rdna4_gemma4_26b_dual"
+    lane: "local"
+    nodes: [rdna4]
+
+  # --- Phase D: NeMo Hermes V4, Gemma4 Embed, NeMo Omni (2026-05-18) ---
+  # NousResearch Hermes 3 (NeMo-compatible) + Unsloth GGUF variants for local inference.
+  # Gemma4 text-embedding for Geometry Bus / CHIT vector ops.
+  # NeMo Omni VL — multimodal text+vision, Spark-only until quantized variants land.
+  hermes-v4-8b:
+    flare_name: "pmoves/hermes-v4-8b"
+    provider: "ollama"
+    model_id: "hermes3:8b"
+    hf_id: "NousResearch/Hermes-3-Llama-3.1-8B"
+    unsloth_id: "unsloth/Hermes-3-Llama-3.1-8B"
+    tensorzero_variant: "ollama_hermes_v4_8b"
+    lane: "local"
+    # HERMES assist in demo room; Agent Zero subordinate model for reasoning chains
+    nodes: [dgx-spark, 5090, 4090, rdna4]
+    use_case: [reasoning, instruction, agent-zero-subordinate, demo-room]
+
+  hermes-v4-70b:
+    flare_name: "pmoves/hermes-v4-70b"
+    provider: "ollama"
+    model_id: "hermes3:70b"
+    hf_id: "NousResearch/Hermes-3-Llama-3.1-70B"
+    unsloth_id: "unsloth/Hermes-3-Llama-3.1-70B"
+    tensorzero_variant: "ollama_spark_hermes_v4_70b"
+    lane: "local"
+    nodes: [dgx-spark]
+    use_case: [reasoning, instruction, deep-agent]
+
+  gemma4-embed-text:
+    flare_name: "pmoves/gemma4-embed-text"
+    provider: "huggingface"
+    # Sentence-transformers compatible on-device model (300M, ~1.2GB)
+    # API equivalent: gemini-embedding-exp-03-07 / GA: gemini-embedding-001
+    hf_id: "google/embeddinggemma-300m"
+    lane: "local"
+    nodes: [z890, dgx-spark, rdna4]
+    use_case: [geometry-bus, chit-vector, hirag-embed]
+
+  nemo-omni-vl:
+    flare_name: "pmoves/nemo-omni-vl"
+    provider: "nemo"
+    # NVIDIA NeMo Omni Vision-Language (text + vision); requires NeMo >= 2.1, CUDA 12.4+
+    hf_id: "nvidia/NVLM-D-72B"
+    lane: "local"
+    nodes: [dgx-spark]
+    use_case: [vision, multimodal-reasoning, document-analysis]

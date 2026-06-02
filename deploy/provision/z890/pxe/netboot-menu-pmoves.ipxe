@@ -1,0 +1,82 @@
+#!ipxe
+# ──────────────────────────────────────────────────────────────────────────
+# PMOVES Z890 netboot.xyz custom menu
+# ──────────────────────────────────────────────────────────────────────────
+# Chainloaded from netboot.xyz running on the 5090 node. Presents the Z890
+# multi-boot distro catalog as a single iPXE menu so reimaging any slot is
+# one DHCP + TFTP handoff away.
+#
+# To serve from 5090:
+#   make -C pmoves z890-pxe-serve
+# The target starts netboot.xyz (binds to Tailscale IP) and exposes this
+# file over HTTP. The Z890 BIOS is configured to try PXE/iPXE first.
+#
+# If netboot fails (e.g. 5090 down), fall back to:
+#   make -C pmoves z890-media-usb DISTRO=<name>
+# which burns a per-device USB installer using distro-manifest.yaml.
+#
+# Keep ISO URLs in sync with pxe/distro-manifest.yaml. That YAML is the
+# source of truth; this file is a derived menu. When you update the manifest,
+# regenerate this iPXE script from the YAML (future automation TODO).
+
+:start
+menu PMOVES Z890 — Multi-Boot Installer
+item --gap --             ───── Linux fleet-parity ─────
+item ubuntu-24-04         Ubuntu 24.04.2 LTS (primary Linux slot)
+item pop-os-22-04         Pop!_OS 22.04 NVIDIA
+item --gap --             ───── Fedora family ─────
+item fedora-40            Fedora Workstation 40
+item nobara-40            Nobara 40 (NVIDIA preloaded)
+item --gap --             ───── Arch-based ─────
+item cachyos              CachyOS (rolling)
+item --gap --             ───── Declarative ─────
+item nixos-23-11          NixOS 23.11 Gnome
+item --gap --             ───── Utilities ─────
+item shell                Drop to iPXE shell
+item reboot               Reboot
+item --gap --
+choose target && goto ${target}
+
+:ubuntu-24-04
+set iso-url https://releases.ubuntu.com/24.04.2/ubuntu-24.04.2-desktop-amd64.iso
+kernel ${iso-url}/casper/vmlinuz ip=dhcp boot=casper autoinstall ds=nocloud;s=/cdrom/nocloud/
+initrd ${iso-url}/casper/initrd
+boot || goto start
+
+:pop-os-22-04
+set iso-url https://iso.pop-os.org/22.04/amd64/nvidia/24/pop-os_22.04_amd64_nvidia_24.iso
+kernel ${iso-url}/casper/vmlinuz.efi ip=dhcp boot=casper
+initrd ${iso-url}/casper/initrd.gz
+boot || goto start
+
+:fedora-40
+set iso-url https://download.fedoraproject.org/pub/fedora/linux/releases/40/Workstation/x86_64/iso/Fedora-Workstation-Live-x86_64-40-1.14.iso
+kernel ${iso-url}/isolinux/vmlinuz ip=dhcp root=live:${iso-url} rd.live.image quiet
+initrd ${iso-url}/isolinux/initrd.img
+boot || goto start
+
+:nobara-40
+# Operator must supply exact ISO URL via distro-manifest.yaml before using this entry.
+echo Nobara boot entry requires manual ISO URL. Edit pxe/distro-manifest.yaml and regenerate menu.
+sleep 5
+goto start
+
+:cachyos
+set iso-url https://iso.cachyos.org/240401/cachyos-desktop-linux-240401.iso
+kernel ${iso-url}/boot/vmlinuz-linux-cachyos ip=dhcp
+initrd ${iso-url}/boot/initramfs-linux-cachyos.img
+boot || goto start
+
+:nixos-23-11
+set iso-url https://channels.nixos.org/nixos-23.11/latest-nixos-gnome-x86_64-linux.iso
+kernel ${iso-url}/boot/bzImage ip=dhcp init=/nix/store/*/init
+initrd ${iso-url}/boot/initrd
+boot || goto start
+
+:shell
+echo Dropping to iPXE shell. Type 'exit' to return to this menu.
+shell
+goto start
+
+:reboot
+reboot

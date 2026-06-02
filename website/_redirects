@@ -1,0 +1,32 @@
+# Cloudflare Pages redirects + placeholder routes.
+# Format: source  destination  status
+
+# --- Clean URLs (defensive; Pages serves /foo.html at /foo already) ---
+/index.html                     /                      301
+/home                           /                      301
+
+# --- Apex canonicalization (optional; Pages usually handles this) ---
+# https://www.pmoves.ai/*       https://pmoves.ai/:splat  301
+
+# --- Demo placeholders (show the hero until real endpoints ship) ---
+# TODO(founder): repoint /demo/voice to the Flute-Gateway web client
+# and /demo/rag to the Hi-RAG v2 preview once those are live.
+/demo                           /#demos                302
+/demo/voice                     /#demos                302
+/demo/rag                       /#demos                302
+/demo/tour                      /#mobile-node          302
+
+# --- Social-friendly shortlinks ---
+/youtube                        https://www.youtube.com/playlist?list=PLGupOT04oMfok7S8W8Js7lZZIlhM8ufc8  302
+/yt                             https://www.youtube.com/playlist?list=PLGupOT04oMfok7S8W8Js7lZZIlhM8ufc8  302
+# TODO(founder): replace with real Discord invite once server is public.
+/discord                        https://discord.gg/pmoves                                                 302
+/github                         https://github.com/POWERFULMOVES                                          302
+
+# --- Legal stubs (TODO: create /privacy.html /terms.html /security.html) ---
+/privacy                        /#problem              302
+/terms                          /#problem              302
+/security                       /#how                  302
+
+# --- Catch-all 404 to home (optional; uncomment when real 404 page lands) ---
+# /*                            /                      404

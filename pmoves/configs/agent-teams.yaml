@@ -36,7 +36,7 @@ teams:
       - notebook_sync     # Port 8095 — Open Notebook sync
       - dox               # Document intelligence
       - open_notebook     # Knowledge base (SurrealDB)
-      - cipher_memory     # Port 8096 — Knowledge graph memory
+      - cipher_memory     # Port 8105 — Knowledge graph memory
 
   media:
     name: "Media & Voice"
@@ -126,7 +126,7 @@ teams:
     agents:
       - mesh_agent        # Node announcer
       - container_agent   # Port 8111 — Docker networking diagnostics + sidecar bridge
-      - headscale         # Port 8181 — Mesh VPN
+      - headscale         # Port 8096 — Mesh VPN
       - vps_fleet_manager # Hostinger KVM orchestration
       - nemoclaw          # Jetson edge GPU agent (hybrid: Kilo Code + Agent Zero subordinate)
 
@@ -165,6 +165,19 @@ teams:
     agents:
       - wealth            # Firefly III finance tracking
       - health            # wger fitness tracking
+
+  observability:
+    name: "Observability & Monitoring"
+    description: "Metrics, logs, traces, dashboards, and alerting for MOF surface area"
+    node_affinity: [kvm4-1, z890]
+    ci_runner: ai-lab
+    compose_profiles: [monitoring]
+    agents:
+      - metrics_specialist      # Prometheus metrics analysis
+      - dashboard_specialist    # Grafana dashboard management
+      - logs_specialist         # Loki log analysis
+      - tracing_specialist      # Jaeger distributed tracing
+      - llm_observability       # TensorZero LLM performance
 
 # Validation: all agents from agent_registry.yaml must appear in exactly one team
 # Run: python -c "

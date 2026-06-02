@@ -20,7 +20,7 @@ Structured extraction from PMOVES.AI documentation for model fabric alignment re
 | **Local Models** | Llama Throughput Lab listed as domain application for LLM benchmarking. No specific local model configs. |
 | **HuggingFace** | Not referenced. |
 | **Z.AI GLM** | Not referenced. |
-| **Agent Spawning** | Agent evolution pipeline defined: CLI Base -> Stage 1 (NATS connected) -> Stage 2 (CHIT-enabled) -> Mega Evolution. Team formation when context limits reached. 60 agents organized into 12 subsystems. NATS subjects define inter-agent communication. |
+| **Agent Spawning** | Agent evolution pipeline defined: CLI Base -> Stage 1 (NATS connected) -> Stage 2 (CHIT-enabled) -> Mega Evolution. Team formation when context limits reached. 76 agents organized into 12 subsystems. NATS subjects define inter-agent communication. |
 | **TensorZero** | Classified as Standard type, API/LLM tier 2, Stage 1 evolution. Positioned in infrastructure backbone. Archon connects to it. |
 | **Gaps/TODOs** | No explicit gaps. Doc is descriptive ("what is" not "what should be"). Evolution stages are aspirational for most agents. |
 

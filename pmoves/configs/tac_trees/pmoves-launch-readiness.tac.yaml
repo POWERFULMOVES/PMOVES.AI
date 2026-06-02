@@ -1,0 +1,568 @@
+# TAC Tree: PMOVES.AI Launch Readiness
+# Tracks the 12-stage launch sweep covering data-services hardening,
+# Archon/Agent-Zero polarity formalization, P7 privacy primitives,
+# CHIT phrase lexicon, parallel tokenization (stub + hybrid),
+# PR critical-path, room-aware safe start/stop, Tracks reprocessing on 4090,
+# and v1.1 deferrals (Longbow, viz, retrace lifeline).
+#
+# Authoritative plan: C:/Users/DARKXSIDE/.claude/plans/we-need-work-and-partitioned-hearth.md
+# Plight & Plan: pmoves/docs/launch/PLIGHT_AND_PLAN.md
+# PR backlog: pmoves/docs/launch/PR_BACKLOG_CLASSIFICATION.md
+# Validation: scripts/validate_launch_layout.py
+#
+# Key cross-references:
+#   pmoves/docs/architecture/PMOVES_MOF_ARCHITECTURE.md   (canonical MOF spec, PR #1378)
+#   pmoves/docs/architecture/PMOVES_GRAND_CONVERGENCE.md  (5-layer unification, PR #1379)
+#   pmoves/configs/tac_trees/pinokio-p7.tac.yaml          (P7 stage convention)
+#   pmoves/configs/tac_trees/tokenism-chit.tac.yaml       (CHIT prior art)
+#   pmoves/configs/tac_trees/cataclysm-studios.tac.yaml   (business model TAC)
+#   pmoves/configs/tac_trees/observability.tac.yaml       (Prometheus/Grafana TAC)
+#
+# Convention:
+#   action.type: file_exists | file_or | pytest | script | nats_subject |
+#                gh_issue | pr_state | supabase_migration | nats_messages_seen | manual
+#   status: pending | in_progress | done | blocked
+#   agent_hint guides which agent should claim the node
+
+name: "PMOVES.AI Launch Readiness"
+version: "1.0.0"
+description: "Twelve-stage sweep to bring PMOVES.AI from current main to first ship, no dead nodes left behind, every gate junction measured both syntactically and semantically, lifeline operational on day one."
+
+root:
+  id: launch-readiness
+  task: "PMOVES.AI launch readiness sweep"
+  context: "Metroplex moving-city, cranked to 11, no internal bottleneck — pre-launch full audit"
+  agent_hint: z890-claude
+  children:
+
+    # =========================================================================
+    # Stage 0: Initial Layout Validation (BLOCKING all subsequent stages)
+    # =========================================================================
+    - id: stage-0
+      task: "Stage 0 — Initial Layout Validation"
+      context: "Establish layout, file map, tracking issue BEFORE any Stage 1+ edits"
+      agent_hint: z890-claude
+      status: in_progress
+      children:
+        - id: stage-0.tac-tree
+          task: "TAC tree exists (this file)"
+          action:
+            type: file_exists
+            expect: "pmoves/configs/tac_trees/pmoves-launch-readiness.tac.yaml"
+          status: in_progress
+          notes: "Mirrors pinokio-p7.tac.yaml convention"
+
+        - id: stage-0.plight-and-plan
+          task: "Plight & Plan narrative document"
+          action:
+            type: file_exists
+            expect: "pmoves/docs/launch/PLIGHT_AND_PLAN.md"
+          status: in_progress
+          notes: "Short narrative + milestones M0–M6, body of plight-issue"
+
+        - id: stage-0.pr-classification
+          task: "PR backlog classification"
+          action:
+            type: file_exists
+            expect: "pmoves/docs/launch/PR_BACKLOG_CLASSIFICATION.md"
+          status: in_progress
+          notes: "Critical-path / opportunistic / auto-merge / defer table for 9 open PRs"
+
+        - id: stage-0.validation-script
+          task: "Layout validation script"
+          action:
+            type: file_exists
+            expect: "scripts/validate_launch_layout.py"
+          status: in_progress
+          notes: "Reads this TAC tree and validates each node's action.expect"
+
+        - id: stage-0.plight-issue
+          task: "GitHub plight-and-plan tracking issue filed"
+          action:
+            type: gh_issue
+            expect: "[LAUNCH] PMOVES.AI Plight & Plan"
+          status: pending
+          notes: "Body sourced from pmoves/docs/launch/PLIGHT_AND_PLAN.md"
+
+    # =========================================================================
+    # Stage 1: Pre-Launch Hygiene (BLOCKING for all later stages)
+    # =========================================================================
+    - id: stage-1
+      task: "Stage 1 — Pre-Launch Hygiene"
+      context: "Dead-node verdicts, /healthz coverage, Prometheus scrape parity, CHIT integration parity, gate_measure scaffold"
+      agent_hint: z890-claude
+      status: pending
+      children:
+        - id: stage-1.dead-node-verdicts
+          task: "10 dead-node verdicts applied (retire 4, resurrect 3, junction 3)"
+          action:
+            type: file_exists
+            expect: "pmoves/docs/launch/DEAD_NODE_VERDICTS.md"
+          status: pending
+          notes: "Meilisearch retire, Wger retire, Invidious retire, BGUtil retire, Consciousness/PDF-Ingest/Hi-RAG-GPU resurrect, Evo/SupaSerch/Supavisor junction"
+
+        - id: stage-1.healthz-coverage
+          task: "All services expose /healthz"
+          action:
+            type: pytest
+            expect: "pmoves/tests/test_healthz_coverage.py"
+          status: pending
+          notes: "Adds /healthz to Agent Zero, DeepResearch, SupaSerch, Consciousness, Evo, Flute Gateway, Hi-RAG v2 GPU, Neo4j compose-level"
+
+        - id: stage-1.prometheus-scrape-parity
+          task: "Prometheus scrape jobs cover all running services"
+          action:
+            type: pytest
+            expect: "pmoves/tests/test_prometheus_scrape_coverage.py"
+          status: pending
+          notes: "Adds MinIO, ClickHouse, Gateway, Cipher Memory, Consciousness, Evo, Tokenism UI, Supavisor"
+
+        - id: stage-1.chit-parity
+          task: "CHIT signature emit on the None-tier 10 services"
+          action:
+            type: script
+            expect: "pmoves/scripts/codex_parity_check.py"
+          status: pending
+          notes: "PDF Ingest, Media-Video, Media-Audio, Channel Monitor, Presign, Render Webhook, Publisher Discord, Mesh Agent, N8N (sidecar), GPU Orchestrator"
+
+        - id: stage-1.gate-measure-scaffold
+          task: "gate_measure.py shared library + gate_drift_dynamo Qdrant collection"
+          action:
+            type: file_exists
+            expect: "pmoves/services/common/gate_measure.py"
+          status: pending
+          notes: "Cross-cutting principle: every junction emits both syntactic_pass and semantic_score; drift is captured to gate_drift_dynamo collection (Qwen3-Embedding-4B 2560d)"
+
+    # =========================================================================
+    # Stage 2: Polarity Formalization (Archon=1, Agent-Zero=0)
+    # =========================================================================
+    - id: stage-2
+      task: "Stage 2 — Archon/Agent-Zero polarity formalized in data plane"
+      context: "Make 1/0 polarity visible — NATS subjects, signature.v2 layer field, polarity-arbiter service, Neo4j partition"
+      agent_hint: z890-claude
+      status: pending
+      children:
+        - id: stage-2.signature-v2
+          task: "agent-graphiti signature.v2 schema with layer field"
+          action:
+            type: file_exists
+            expect: "pmoves/contracts/schemas/agent-graphiti/signature.v2.schema.json"
+          status: pending
+          notes: "Adds layer enum (intent|execution|arbiter|observation), syntactic_pass, semantic_score, upstream_intent_id, phrase_anchor"
+
+        - id: stage-2.polarity-arbiter
+          task: "polarity-arbiter service deployed"
+          action:
+            type: nats_subject
+            expect: "polarity.arbiter.audit.v1"
+          status: pending
+          notes: "Rejects scope violations between archon.command.* and agent-zero.dispatch.*. Fail-open with Prometheus alert."
+
+        - id: stage-2.neo4j-partition
+          task: "Neo4j :Layer partition migration"
+          action:
+            type: file_exists
+            expect: "pmoves/services/graphiti/migrations/0003_polarity_partition.cypher"
+          status: pending
+          notes: "(:Agent)-[:OPERATES_AT]->(:Layer {name})"
+
+    # =========================================================================
+    # Stage 3: P7 Privacy Primitives (Adult-Swim Sealed Zone + Lifeline)
+    # =========================================================================
+    - id: stage-3
+      task: "Stage 3 — P7-transparent / adult-swim-sealed zone partition"
+      context: "CHIT contracts seal owner-keyed data; replay-compresses when owner absent; parks in MinIO; unseals on owner return"
+      agent_hint: z890-claude
+      status: pending
+      notes: |
+        Lane partition (DARKXSIDE-arbitrated 2026-05-18, in response to CODEX-GPT5
+        ACK request on PR #1526 / issue #1389):
+        - Z890-CLAUDE lane: schema, JWT claim, RLS migration, /chit:decode extension
+          (rationale: Supabase/auth + CHIT-signing infrastructure already resident on Z890)
+        - 5090-CLAUDE lane: owner-presence watcher
+          (rationale: persona/identity awareness already lives on 5090)
+        - Capacity-class (either node): replay-compressor
+          (rationale: same primitive as Stage 6 retrace lifeline — whichever node has
+          capacity claims it; both nodes can implement the worker)
+      children:
+        - id: stage-3.sealed-record-schema
+          task: "adult-swim sealed record schema"
+          action:
+            type: file_exists
+            expect: "pmoves/contracts/schemas/adult-swim/sealed.record.v1.schema.json"
+          agent_hint: z890-claude
+          status: pending
+
+        - id: stage-3.jwt-claim
+          task: "user_age_verified JWT claim Supabase auth function"
+          action:
+            type: file_exists
+            expect: "pmoves/supabase/functions/auth-claims/index.ts"
+          agent_hint: z890-claude
+          status: pending
+          notes: "MUST land before RLS migration"
+
+        - id: stage-3.rls-migration
+          task: "adult_swim_records RLS migration"
+          action:
+            type: supabase_migration
+            expect: "20260425000100"
+          agent_hint: z890-claude
+          status: pending
+          notes: "Owner-only + age-verified policies"
+
+        - id: stage-3.replay-compressor
+          task: "replay-compressor worker (also powers Stage 6 retrace lifeline)"
+          action:
+            type: file_exists
+            expect: "pmoves/services/replay-compressor/app.py"
+          agent_hint: capacity-class
+          status: pending
+          notes: "Capacity-class: either z890-claude or 5090-claude claims when ready. Same primitive as Stage 6 retrace lifeline."
+
+        - id: stage-3.unsealer-skill
+          task: "/chit:decode skill extended for sealed records"
+          action:
+            type: manual
+            expect: "Skill at .claude/commands/chit/decode.md accepts sealed_record_id and validates owner+age JWT"
+          agent_hint: z890-claude
+          status: pending
+
+        - id: stage-3.owner-presence
+          task: "owner-presence watcher service"
+          action:
+            type: file_exists
+            expect: "pmoves/services/owner-presence/app.py"
+          agent_hint: 5090-claude
+          status: pending
+          notes: |
+            owner.presence.detected.v1 / owner.presence.absent.v1 with hysteresis.
+            Lane assignment 2026-05-18: 5090-CLAUDE — persona/identity awareness lane
+            (DARKXSIDE-arbitrated partition).
+
+    # =========================================================================
+    # Stage 4: Longbow Definition (v1.1, milestone M6)
+    # =========================================================================
+    - id: stage-4
+      task: "Stage 4 — Longbow learned-pattern router (v1.1)"
+      context: "PMOVES-Longbow submodule, contextual-bandit route advisory; depends on signature.v2 layer field"
+      agent_hint: 5090-claude
+      status: pending
+      milestone: v1.1
+      children:
+        - id: stage-4.longbow-or-deprecated
+          task: "Longbow defined OR explicit deprecation note"
+          action:
+            type: file_or
+            expect:
+              - "PMOVES-Longbow/services/longbow-router/app.py"
+              - "pmoves/docs/architecture/PMOVES_LONGBOW_DEPRECATED.md"
+          status: pending
+
+    # =========================================================================
+    # Stage 5: Visualization (v1.1)
+    # =========================================================================
+    - id: stage-5
+      task: "Stage 5 — Hyperdimensions live system-state viz (v1.1)"
+      context: "Four feeds (gap-health, polarity-flow, p7-zone, gate-drift), illustration export, Cole+DARKXSIDE dual-witness watch"
+      agent_hint: 5090-claude
+      status: pending
+      milestone: v1.1
+      children:
+        - id: stage-5.viz-feeds-active
+          task: "All four portal feed pills go green within 5s"
+          action:
+            type: manual
+            expect: "Open https://localhost/portal/portal.html, observe four green pills"
+          status: pending
+
+        - id: stage-5.illustration-export
+          task: "Snapshot-to-illustration SVG export"
+          action:
+            type: file_exists
+            expect: "Pmoves-hyperdimensions/portal/feeds/illustration-export.js"
+          status: pending
+
+    # =========================================================================
+    # Stage 6: Retrace Lifeline (v1.1)
+    # =========================================================================
+    - id: stage-6
+      task: "Stage 6 — Retrace lifeline (v1.1)"
+      context: "Same primitive as Stage 3 replay-compressor, pointed at when-Rons-gone-wrong domain"
+      agent_hint: z890-claude
+      status: pending
+      milestone: v1.1
+      children:
+        - id: stage-6.retrace-skill
+          task: "/retrace:invoke skill"
+          action:
+            type: file_exists
+            expect: ".claude/commands/retrace/invoke.md"
+          status: pending
+
+    # =========================================================================
+    # Stage 7: CHIT Phrases & Lexicon (Time-Crystal Anchors)
+    # =========================================================================
+    - id: stage-7
+      task: "Stage 7 — CHIT phrase lexicon as time-crystal anchors"
+      context: "Phrases earn canonical via verified periodic recurrence; semantic gate-measure compares payloads to canonical phrases not just historical traffic"
+      agent_hint: z890-claude
+      status: pending
+      children:
+        - id: stage-7.chit-phrases-table
+          task: "chit_phrases Supabase table + RLS"
+          action:
+            type: supabase_migration
+            expect: "20260425000200"
+          status: pending
+
+        - id: stage-7.time-crystal-scoring
+          task: "time_crystal.py scoring function"
+          action:
+            type: file_exists
+            expect: "pmoves/chit/time_crystal.py"
+          status: pending
+
+        - id: stage-7.seed-phrases-loaded
+          task: "8 seed phrases loaded as canonical_layer=seed"
+          action:
+            type: manual
+            expect: "Run pmoves/scripts/seed_chit_phrases.py and verify 8 rows in chit_phrases"
+          status: pending
+          notes: "Seeds: drift-as-dynamo, same-primitive-two-uses, cranked-to-11-placement, gap-learns, time-crystal-verification, drift-is-feeling, cole-DARKXSIDE-watch-split, semantics-are-time-crystals"
+
+        - id: stage-7.insight-capture-hook
+          task: "insight_capture_hook.py running as PostToolUse"
+          action:
+            type: file_exists
+            expect: "pmoves/scripts/insight_capture_hook.py"
+          status: pending
+          notes: "Auto-captures ★ Insight blocks from agent transcripts"
+
+    # =========================================================================
+    # Stage 8: Tokenization (Parallel: Stub + Hybrid, Defense-in-Stance)
+    # =========================================================================
+    - id: stage-8
+      task: "Stage 8 — Parallel tokenization (work-attestation stub + TradFi+Web3 hybrid)"
+      context: "76+ registered agents waiting for pilots; NFC tap as activation event; money-as-autonomous-agent"
+      agent_hint: 5090-claude
+      status: pending
+      children:
+        - id: stage-8.attestation-event
+          task: "token.work.attested.v1 NATS subject + schema"
+          action:
+            type: file_exists
+            expect: "pmoves/contracts/schemas/token/work.attested.v1.schema.json"
+          status: pending
+
+        - id: stage-8.attestation-table
+          task: "token_attestations Supabase table"
+          action:
+            type: supabase_migration
+            expect: "20260425000300"
+          status: pending
+
+        - id: stage-8.stub-track
+          task: "Work-attestation stub track (regulator-friendly)"
+          action:
+            type: file_exists
+            expect: "pmoves/services/token-stub/app.py"
+          status: pending
+
+        - id: stage-8.hybrid-wallet
+          task: "TradFi+Web3 hybrid track — wallet orchestrator"
+          action:
+            type: file_exists
+            expect: "pmoves/services/wallet-orchestrator/app.py"
+          status: pending
+          notes: "Custodial wallets, Base preferred / Polygon fallback"
+
+        - id: stage-8.hybrid-kyc
+          task: "KYC gateway (Stripe Identity primary, Persona fallback)"
+          action:
+            type: file_exists
+            expect: "pmoves/services/kyc-gateway/app.py"
+          status: pending
+
+        - id: stage-8.hybrid-chain-mint
+          task: "Chain-mint worker"
+          action:
+            type: file_exists
+            expect: "pmoves/services/chain-mint-worker/app.py"
+          status: pending
+
+        - id: stage-8.money-agent
+          task: "Money-agent prototype (recommend-only at launch)"
+          action:
+            type: file_exists
+            expect: "pmoves/services/money-agent/app.py"
+          status: pending
+          notes: "Each minted token spawns a NATS-subscriber money-agent that scores opportunities against pilot's CHIT phrase preferences"
+
+        - id: stage-8.nfc-tap
+          task: "NFC tap activation flow"
+          action:
+            type: nats_subject
+            expect: "nfc.tap.detected.v1"
+          status: pending
+          notes: "NFC tap → owner-presence detected → agent assigned → first attestation minted"
+
+        - id: stage-8.token-verticals
+          task: "Vertical-specific token classes config"
+          action:
+            type: file_exists
+            expect: "pmoves/config/token_verticals.yaml"
+          status: pending
+          notes: "education, scheduling, wellness, manifestation, business, research, creative, other"
+
+    # =========================================================================
+    # Stage 9: PR Critical-Path Resolution
+    # =========================================================================
+    - id: stage-9
+      task: "Stage 9 — Critical-path PRs merged, dependabots cleared, drafts deferred"
+      context: "9 open PRs as of 2026-04-25; resolve #1381 + #1371, opportunistic merge #1385/86/87, auto-merge #1388/#1372"
+      agent_hint: z890-claude
+      status: pending
+      children:
+        - id: stage-9.pr-1381
+          task: "PR #1381 (sign-trail PYTHONPATH, DIRTY) merged"
+          action:
+            type: pr_state
+            expect:
+              number: 1381
+              state: merged
+          status: pending
+          notes: "Blocks Stage 7 (lexicon capture relies on sign-trail)"
+
+        - id: stage-9.pr-1371
+          task: "PR #1371 (A2A activation, BLOCKED) merged"
+          action:
+            type: pr_state
+            expect:
+              number: 1371
+              state: merged
+          status: pending
+          notes: "Blocks Stage 8 (A2A activation is part of agent-fleet pilot pipeline)"
+
+        - id: stage-9.docs-prs
+          task: "Docs PRs #1385, #1386, #1387 merged opportunistically"
+          action:
+            type: manual
+            expect: "All three merged after Stage 1 lands"
+          status: pending
+
+        - id: stage-9.dependabots
+          task: "Dependabot PRs #1388, #1372 merged or closed"
+          action:
+            type: manual
+            expect: "CI green, no breaking changes (uuid 9→14 verified)"
+          status: pending
+
+        - id: stage-9.deferred-drafts
+          task: "Drafts #1373, #1374 retargeted to milestone M6"
+          action:
+            type: manual
+            expect: "PRs labeled v1.1 or moved to milestone"
+          status: pending
+
+    # =========================================================================
+    # Stage 10: Room-Aware Safe Start/Stop (Minimal Stage Hooks)
+    # =========================================================================
+    - id: stage-10
+      task: "Stage 10 — Pause/resume per P7 room"
+      context: "in the rooms we become free learn grow leave return — natural flow, idempotent, checkpointable"
+      agent_hint: z890-claude
+      status: pending
+      children:
+        - id: stage-10.room-sessions-table
+          task: "room_sessions Supabase table"
+          action:
+            type: supabase_migration
+            expect: "20260425000400"
+          status: pending
+
+        - id: stage-10.pause-resume-subjects
+          task: "p7.room.{pause,resume,checkpoint}.v1 NATS subjects active"
+          action:
+            type: nats_subject
+            expect: "p7.room.checkpoint.v1"
+          status: pending
+
+        - id: stage-10.room-orchestrator
+          task: "p7-room-orchestrator service"
+          action:
+            type: file_exists
+            expect: "pmoves/services/p7-room-orchestrator/app.py"
+          status: pending
+
+        - id: stage-10.skill
+          task: "/p7:room skill (pause/resume/status/migrate)"
+          action:
+            type: file_exists
+            expect: ".claude/commands/p7/room.md"
+          status: pending
+
+    # =========================================================================
+    # Stage 11: Tracks Playlist Reprocessing on 4090
+    # =========================================================================
+    - id: stage-11
+      task: "Stage 11 — Reprocess Tracks playlist on 4090 (audio→beats→CHIT pipeline canary)"
+      context: "Owner's musical curation becomes first-class data; first end-to-end smoke test of the audio path"
+      agent_hint: 4090-claude
+      status: pending
+      children:
+        - id: stage-11.audio-reprocess-service
+          task: "audio-reprocess service"
+          action:
+            type: file_exists
+            expect: "pmoves/services/audio-reprocess/app.py"
+          status: pending
+          notes: "Reuses pmoves/tools/analyze_beats.py"
+
+        - id: stage-11.4090-online
+          task: "4090 node online via Tailscale"
+          action:
+            type: manual
+            expect: "make -C pmoves fleet-status shows 5090-powerfulmoves online"
+          status: pending
+          notes: "Per agent-teams.yaml the GPU primary is 5090-powerfulmoves; 4090 laptop is separate"
+
+        - id: stage-11.reprocess-skill
+          task: "/audio:reprocess skill"
+          action:
+            type: file_exists
+            expect: ".claude/commands/audio/reprocess.md"
+          status: pending
+
+        - id: stage-11.reprocess-completed
+          task: "Reprocess job emits at least one media.audio.reprocess.complete.v1 event"
+          action:
+            type: nats_messages_seen
+            expect:
+              subject: media.audio.reprocess.complete.v1
+              min_count: 1
+          status: pending
+
+# =============================================================================
+# Launch gates
+# =============================================================================
+gates:
+  launch-blocking:
+    description: "Required before first ship (M5)"
+    requires:
+      - stage-0
+      - stage-1
+      - stage-2
+      - stage-3
+      - stage-7
+      - stage-8
+      - stage-9
+      - stage-10
+      - stage-11
+
+  v1-1-deferred:
+    description: "Nice-to-have, target milestone M6 (~+30d post-launch)"
+    requires:
+      - stage-4
+      - stage-5
+      - stage-6

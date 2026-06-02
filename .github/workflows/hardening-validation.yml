@@ -7,12 +7,16 @@ on:
       - 'pmoves/docker-compose*.yml'
       - 'pmoves/services/**/Dockerfile*'
       - '.github/workflows/hardening-validation.yml'
+      - '.github/workflows/integrations-ghcr.matrix.json'
+      - 'pmoves/integrations/archon'
   pull_request:
     branches: [main, PMOVES.AI-Edition-Hardened-Integrations, PMOVES.AI-Edition-Hardened]
     paths:
       - 'pmoves/docker-compose*.yml'
       - 'pmoves/services/**/Dockerfile*'
       - '.github/workflows/hardening-validation.yml'
+      - '.github/workflows/integrations-ghcr.matrix.json'
+      - 'pmoves/integrations/archon'
   workflow_dispatch:
 
 concurrency:
@@ -369,6 +373,19 @@ jobs:
           LOGFLARE_PRIVATE_ACCESS_TOKEN: ci-validation-placeholder
           MINIO_USER: ci-validation-placeholder
           MINIO_PASSWORD: ci-validation-placeholder
+          QDRANT__API_KEY: ci-validation-placeholder
+          NEO4J_PASSWORD: ci-validation-placeholder
+          MEILI_MASTER_KEY: ci-validation-placeholder
+          WGER_DB_PASSWORD: ci-validation-placeholder
+          WGER_SECRET_KEY: ci-validation-placeholder
+          WGER_ADMIN_PASSWORD: ci-validation-placeholder
+          ANON_KEY: ci-validation-placeholder
+          JWT_SECRET: ci-validation-placeholder
+          SERVICE_ROLE_KEY: ci-validation-placeholder
+          SUPABASE_DB_USER: ci-validation-placeholder
+          SUPABASE_DB_PASSWORD: ci-validation-placeholder
+          SUPABASE_SERVICE_ROLE_KEY: ci-validation-placeholder
+          MCP_SERVER_TOKEN: ci-validation-placeholder
         run: |
           echo "Validating docker-compose files..."
 
@@ -386,6 +403,13 @@ jobs:
             docker compose -f pmoves/monitoring/docker-compose.monitoring.yml config --quiet
             echo "✓ pmoves/monitoring/docker-compose.monitoring.yml is valid"
           fi
+
+      - name: Validate GHCR matrix paths
+        run: |
+          python3 pmoves/tools/ghcr_local_prepublish.py \
+            --matrix-file .github/workflows/integrations-ghcr.matrix.json \
+            --repo-root . \
+            --paths-only
 
       - name: Check for network segmentation
         run: |

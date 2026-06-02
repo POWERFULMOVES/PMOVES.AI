@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-03-13 02:43 UTC",
+  "generated_at": "2026-04-05 15:09 UTC",
   "manifest": "pmoves/configs/submodule_layer_validation_manifest.json",
   "summary": {
     "submodules": 1,
@@ -12,7 +12,7 @@
       "path": "pmoves-e2b-mcp-server",
       "url": "https://github.com/POWERFULMOVES/pmoves-e2b-mcp-server.git",
       "status_prefix": " ",
-      "commit": "1dcc5234e567439f527457eb34e7539444ee1087",
+      "commit": "12442b7d6c5da3a4fcabc8469fc73b64bc2a5d3e",
       "initialized": true,
       "remote_commit_reachable": "local",
       "required_files_any_ok": true,

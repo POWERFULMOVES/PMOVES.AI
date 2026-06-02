@@ -548,7 +548,7 @@ services:
 
   supabase-db:
     <<: *tier-supabase-hardened
-    image: supabase/postgres:17.6.1.079
+    image: supabase/postgres:17.6.1.108
     restart: unless-stopped
     profiles:
     - supabase-local
@@ -575,6 +575,7 @@ services:
     - ./supabase/initdb:/docker-entrypoint-initdb.d/pmoves-init:ro
     networks:
     - pmoves_data
+    - pmoves_api  # Services on pmoves_api need DB access
 
     deploy:
       resources:
@@ -618,12 +619,13 @@ services:
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
+    # DNS configuration - Docker embedded DNS (default)
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9999/health"]
       interval: 15s
       timeout: 5s
-      retries: 5
-      start_period: 10s
+      retries: 15
+      start_period: 120s
     depends_on:
       supabase-db:
         condition: service_healthy
@@ -631,7 +633,6 @@ services:
     - ${SUPABASE_AUTH_BIND:-127.0.0.1}:${SUPABASE_GOTRUE_PORT:-9999}:9999
     networks:
     - pmoves_api
-    - pmoves_data
 
     deploy:
       resources:
@@ -674,7 +675,6 @@ services:
     - ${SUPABASE_REST_BIND:-127.0.0.1}:${SUPABASE_POSTGREST_PORT:-3000}:3000
     networks:
     - pmoves_api
-    - pmoves_data
 
     deploy:
       resources:
@@ -684,7 +684,6 @@ services:
   supabase-kong:
     <<: *tier-supabase-hardened
     image: kong:3.7.1
-    restart: unless-stopped
     profiles:
     - supabase-local
     environment:
@@ -701,36 +700,54 @@ services:
     - KONG_ADMIN_ERROR_LOG=/dev/stderr
     - KONG_PROXY_LISTEN=0.0.0.0:8000
     - KONG_ADMIN_LISTEN=0.0.0.0:8001  # container-internal; host restriction via Docker port mapping line below
-    # JWT plugin
-    - KONG_PLUGINS=bundled,jwt
+    # JWT plugin (already in bundled — no need to list separately)
+    - KONG_PLUGINS=bundled
     - KONG_NGINX_PROXY_PROXY_BUFFERS=8 16k
+    # Pin to single worker. Kong reads host /proc/cpuinfo for worker count,
+    # not the cpus cgroup limit, so on a 24-core host it would spawn 24
+    # workers × ~80MB each (full plugin load) = ~2GB before accepting any
+    # traffic. `1` matches the 0.5 CPU budget + keeps memory bounded.
+    - KONG_NGINX_WORKER_PROCESSES=1
     # PMOVES context
     - DOCKED_MODE=${DOCKED_MODE:-true}
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
-    entrypoint: ["/bin/sh", "-c", "kong migrations bootstrap --yes 2>/dev/null || true; exec /docker-entrypoint.sh kong docker-start"]
+    entrypoint: ["/bin/sh", "-c", "echo 'Waiting for DNS resolution...'; for i in $(seq 1 30); do nc -z supabase-db 5432 && echo 'Database reachable' && break; echo \"DNS not ready yet ($i/30)...\"; sleep 2; done; kong migrations bootstrap --yes 2>/dev/null || true; exec /docker-entrypoint.sh kong docker-start"]
     healthcheck:
       test: ["CMD", "kong", "health"]
       interval: 15s
       timeout: 5s
-      retries: 5
-      start_period: 60s
+      retries: 10
+      start_period: 120s
     depends_on:
       supabase-db:
         condition: service_healthy
+    restart: unless-stopped
     ports:
-    - ${KONG_PROXY_BIND:-127.0.0.1}:${SUPABASE_KONG_PROXY_PORT:-8000}:8000
-    - ${KONG_ADMIN_BIND:-127.0.0.1}:${SUPABASE_KONG_ADMIN_PORT:-8001}:8001
+    # NOTE: Kong host bind defaults to 0.0.0.0 (not 127.0.0.1) because
+    # Docker Desktop on Windows silently drops explicit 127.0.0.1 binds on
+    # services that declare multiple host ports — the HostConfig declares
+    # the mapping but NetworkSettings.Ports stays empty, host-side forwarder
+    # never activates, and you get connection-refused from the host while
+    # the service is fine on the Docker network. 0.0.0.0 works around it.
+    # Operators who need LAN-isolation should set KONG_PROXY_BIND=127.0.0.1
+    # in env.shared AND confirm Docker Desktop version ≥29.5 (where this
+    # is reportedly fixed upstream).
+    - ${KONG_PROXY_BIND:-0.0.0.0}:${SUPABASE_KONG_PROXY_PORT:-8000}:8000
+    - ${KONG_ADMIN_BIND:-0.0.0.0}:${SUPABASE_KONG_ADMIN_PORT:-8001}:8001
     networks:
     - pmoves_api
-    - pmoves_data
 
     deploy:
       resources:
         limits:
           cpus: '0.5'
-          memory: 256M
+          # 512M fits a single-worker Kong with bundled plugins + DB cache
+          # warmup + modest request headroom. Previously set to 256M which
+          # OOM'd on startup; briefly raised to 1024M to confirm the root
+          # cause was worker-count-driven memory multiplication, not leak.
+          memory: 512M
   supabase-realtime:
     <<: *tier-supabase-hardened
     image: supabase/realtime:v2.72.0
@@ -779,7 +796,6 @@ services:
     - ${SUPABASE_REALTIME_BIND:-127.0.0.1}:${SUPABASE_REALTIME_PORT:-4010}:4000
     networks:
     - pmoves_api
-    - pmoves_data
 
     deploy:
       resources:
@@ -840,7 +856,6 @@ services:
     - ${SUPABASE_STORAGE_BIND:-127.0.0.1}:${SUPABASE_STORAGE_PORT:-5000}:5000
     networks:
     - pmoves_api
-    - pmoves_data
 
     deploy:
       resources:
@@ -875,6 +890,14 @@ services:
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
+    # Bind Studio's Next.js server to all interfaces without a DNS lookup.
+    # Next.js 16+ reads HOSTNAME to pick its listen address; Docker sets
+    # HOSTNAME to the container's short ID by default, and Next.js then
+    # resolves that ID as a DNS name before binding. Resolution fails with
+    # `getaddrinfo EAI_AGAIN` (the short ID isn't registered in Docker's
+    # embedded DNS) and the server exits, kicking the container into a
+    # restart loop. Pinning to 0.0.0.0 skips the lookup entirely.
+    - HOSTNAME=0.0.0.0
     # Healthcheck: External check (Next.js 16 binds to container hostname, not localhost)
     # Note: Official Supabase uses node -e fetch but their image has different network config
     # We rely on container being started successfully (logs show "Ready in Xms")
@@ -894,8 +917,7 @@ services:
     ports:
     - ${SUPABASE_STUDIO_BIND:-127.0.0.1}:${SUPABASE_STUDIO_PORT:-54323}:3000
     networks:
-    - pmoves_api
-    - pmoves_data  # reach supabase-meta, supabase-analytics
+    - pmoves_api  # supabase-meta and analytics reachable via kong on pmoves_api
 
   # ---------------------------------------------------------------------------
   # Supabase imgproxy — image transformation for Storage
@@ -926,7 +948,7 @@ services:
     volumes:
     - supabase-storage-data:/var/lib/storage:ro
     networks:
-    - pmoves_data
+    - pmoves_api
 
   # ---------------------------------------------------------------------------
   # Supabase postgres-meta — database metadata API for Studio
@@ -996,8 +1018,16 @@ services:
       supabase-analytics:
         condition: service_healthy
     networks:
-    - pmoves_api
-    - pmoves_data  # reach supabase-db, supabase-analytics
+    - pmoves_api  # supabase-db and analytics reachable via kong on pmoves_api
+    # Pin upstream resolvers for Deno cold-boot imports. The edge-runtime
+    # image fetches https://deno.land/std@...` at worker-bootstrap time;
+    # Docker's embedded DNS (127.0.0.11) intermittently fails to forward
+    # external queries on Docker Desktop Windows, leaving the worker stuck
+    # in `failed to lookup address information: Temporary failure in name
+    # resolution`. Explicit resolvers avoid the flap.
+    dns:
+    - 1.1.1.1
+    - 8.8.8.8
 
   # ---------------------------------------------------------------------------
   # Supabase Analytics (Logflare) — log analytics backend
@@ -1133,7 +1163,7 @@ services:
           cpus: '0.5'
           memory: 256M
   qdrant:
-    image: qdrant/qdrant:v1.14.1
+    image: qdrant/qdrant:v1.16.0
     restart: unless-stopped
     cap_drop:
     - ALL
@@ -1152,6 +1182,7 @@ services:
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
+    - QDRANT__SERVICE__API_KEY=${QDRANT__API_KEY:?Set QDRANT__API_KEY in env.tier-data}
     volumes:
     - qdrant-data:/qdrant/storage
     healthcheck:
@@ -1167,7 +1198,7 @@ services:
           memory: 4G
   meilisearch:
     <<: *tier-data-hardened
-    image: getmeili/meilisearch:v1.8
+    image: getmeili/meilisearch:v1.34.1
     restart: unless-stopped
     environment:
     - MEILI_ENV=production
@@ -1194,7 +1225,7 @@ services:
           cpus: '2.0'
           memory: 4G
   neo4j:
-    image: neo4j:5.22
+    image: neo4j:5.26.22
     env_file:
     - env.tier-data
     cap_drop:
@@ -1210,9 +1241,15 @@ services:
     - no-new-privileges:true
     restart: unless-stopped
     environment:
-    - NEO4J_AUTH=${NEO4J_AUTH:-neo4j/${NEO4J_PASSWORD:-pm_kDhuaogcUc1oOOVeGMNCkQ}}
+    - NEO4J_AUTH=neo4j/${NEO4J_PASSWORD:?Set NEO4J_PASSWORD in env.tier-data}
     - NEO4J_dbms_security_allow__csv__import__from__file__urls=true
     - NEO4J_server_config_strict__validation_enabled=false
+    # APOC extensions with safe procedure allowlist
+    - NEO4J_apoc_export_file_enabled=true
+    - NEO4J_apoc_import_file_enabled=true
+    - NEO4J_apoc_import_file_use__neo4j__config__true=true
+    - NEO4JLABS_PLUGINS=["apoc"]
+    - NEO4J_dbms_security_procedures_unrestricted=apoc.coll.*,apoc.text.*,apoc.path.*,apoc.algo.*
     - DOCKED_MODE=${DOCKED_MODE:-true}
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
@@ -1241,7 +1278,8 @@ services:
   minio:
     <<: *tier-data-hardened
     # Pinned 2025-02-04: Latest RELEASE tag (MinIO stopped publishing to Docker Hub Oct 2025)
-    image: minio/minio:RELEASE.2025-07-23T15-54-02Z
+    # ⚠️ WARNING: MinIO Community Edition is EOL (archived Feb 2026). Migration to SeaweedFS/Garage/Enterprise planned.
+    image: ${MINIO_IMAGE:-minio/minio:RELEASE.2025-12-20T04-58-37Z}
     command: server /data --console-address ":9001"
     environment:
     - MINIO_ROOT_USER=${MINIO_USER:?Run make brand-defaults}
@@ -1287,6 +1325,7 @@ services:
     - NO_PROXY=
     - QDRANT_URL=${QDRANT_URL:-http://qdrant:6333}
     - QDRANT_COLLECTION=${QDRANT_COLLECTION:-pmoves_chunks_qwen3}
+    - QDRANT__API_KEY=${QDRANT__API_KEY:?Set QDRANT__API_KEY in env.tier-data}
     - SENTENCE_MODEL=${SENTENCE_MODEL:-all-MiniLM-L6-v2}
     - HIRAG_HTTP_PORT=${HIRAG_HTTP_PORT:-8086}
     - GRAPH_BOOST=${GRAPH_BOOST:-0.15}
@@ -1294,9 +1333,10 @@ services:
     - ENTITY_CACHE_MAX=${ENTITY_CACHE_MAX:-10000}
     - USE_MEILI=${USE_MEILI:-true}
     - MEILI_URL=${MEILI_URL:-http://meilisearch:7700}
+    - MEILI_MASTER_KEY=${MEILI_MASTER_KEY:?Set MEILI_MASTER_KEY in env.tier-data}
     - NEO4J_URL=${NEO4J_URL:-bolt://neo4j:7687}
     - NEO4J_USER=${NEO4J_USER:-neo4j}
-    - NEO4J_PASSWORD=${NEO4J_PASSWORD:-pm_kDhuaogcUc1oOOVeGMNCkQ}
+    - NEO4J_PASSWORD=${NEO4J_PASSWORD:?Set NEO4J_PASSWORD in env.tier-data}
     - NEO4J_DICT_REFRESH_SEC=${NEO4J_DICT_REFRESH_SEC:-300}
     - NEO4J_DICT_LIMIT=${NEO4J_DICT_LIMIT:-1000}
     - TAILSCALE_ONLY=${TAILSCALE_ONLY:-false}
@@ -1437,13 +1477,13 @@ services:
   model-registry:
     <<: *tier-api-hardened
     build:
-      context: ./services/model-registry
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: services/model-registry/Dockerfile
     restart: unless-stopped
     environment:
     - SUPABASE_URL=${MODEL_REGISTRY_SUPABASE_URL:-http://supabase-kong:8000}
     - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY:-${SUPABASE_SERVICE_ROLE_KEY:?MODEL_REGISTRY requires SUPABASE_SERVICE_KEY or SUPABASE_SERVICE_ROLE_KEY}}
-    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - NATS_URL=${NATS_URL}
     - MODEL_REGISTRY_PORT=${MODEL_REGISTRY_PORT:-8110}
     - DOCKED_MODE=${DOCKED_MODE:-true}
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
@@ -1499,6 +1539,7 @@ services:
     - HTTPS_PROXY=
     - NO_PROXY=
     - MEILI_URL=${MEILI_URL:-http://meilisearch:7700}
+    - MEILI_MASTER_KEY=${MEILI_MASTER_KEY:?Set MEILI_MASTER_KEY in env.tier-data}
     - SUPA_REST_URL=${SUPA_REST_URL:-http://supabase-kong:8000/rest/v1}
     - SUPA_REST_INTERNAL_URL=${SUPA_REST_INTERNAL_URL:-http://supabase-kong:8000/rest/v1}
     ports:
@@ -1546,7 +1587,7 @@ services:
     - PDF_DEFAULT_NAMESPACE=${PDF_DEFAULT_NAMESPACE:-pmoves}
     - PDF_MAX_PAGES=${PDF_MAX_PAGES:-0}
     - PDF_INGEST_EXTRACT_URL=${PDF_INGEST_EXTRACT_URL:-http://extract-worker:8083/ingest}
-    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - NATS_URL=${NATS_URL}
     depends_on:
       extract-worker:
         condition: service_started
@@ -1655,7 +1696,7 @@ services:
     - NO_PROXY=
     - SUPABASE_URL=${SUPA_REST_INTERNAL_URL:-${SUPA_REST_URL:-http://supabase-kong:8000/rest/v1}}
     - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-}
-    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - NATS_URL=${NATS_URL}
     - MINIO_ENDPOINT=${MINIO_ENDPOINT:-minio:9000}
     - MINIO_SECURE=${MINIO_SECURE:-false}
     depends_on:
@@ -1832,13 +1873,17 @@ services:
     - YT_OUTPUT_BUCKET=${YT_OUTPUT_BUCKET:-outputs}
     - INDEXER_NAMESPACE=${INDEXER_NAMESPACE:-pmoves}
     - SUPA_REST_URL=${PMOVES_YT_SUPA_REST_URL:-${SUPABASE_REST_URL:-http://supabase-kong:8000/rest/v1}}
-    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - NATS_URL=${NATS_URL}
     - YT_NATS_ENABLE=${YT_NATS_ENABLE:-true}
     - HIRAG_URL=${HIRAG_URL:-http://hi-rag-gateway-v2:8086}
-    # Multi-client rotation (Phase 9C): yt-dlp tries clients in order until one succeeds.
-    # 'web' first to use cookies + PO token (highest auth fidelity), then mobile fallbacks
-    # that skip signature checks. 'tv_embedded' last as a known-good for age/region gates.
-    - YT_PLAYER_CLIENT=${YT_PLAYER_CLIENT:-web,mweb,android,ios,tv_embedded}
+    # Multi-client rotation (Phase 9C + 2026-04-21 robustness fix): yt-dlp tries
+    # clients in order until one succeeds. 'default' first uses yt-dlp's own
+    # adaptive rotation (stays current with YouTube client-availability changes
+    # as yt-dlp updates); 'web' + 'mweb' are the auth'd/cookie'd fallbacks;
+    # 'tv_embedded' handles age/region gates; 'android_vr' is the edge-case
+    # client that saved us on videos where `web_safari`/`web` returned no
+    # formats (e.g. @ColeMedin nxHKBq5ZU9U, 6woc6ii-zoE — 2026-04-20 session).
+    - YT_PLAYER_CLIENT=${YT_PLAYER_CLIENT:-default,web,mweb,tv_embedded,android_vr}
     - YT_ENABLE_PO_TOKEN=${YT_ENABLE_PO_TOKEN:-true}
     - YT_USER_AGENT=${YT_USER_AGENT:-Mozilla/5.0 (Macintosh; Intel Mac OS X 14_6) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.6 Safari/605.1.15}
     - YT_COOKIES=${YT_COOKIES:-/app/config/cookies/darkxside.youtube.cookies.txt}
@@ -1851,6 +1896,9 @@ services:
     - YT_WHISPER_MODEL=${YT_WHISPER_MODEL:-small}
     - YT_TRANSCRIPT_DIARIZE=${YT_TRANSCRIPT_DIARIZE:-false}
     - YT_CHANNEL_CHECK_INTERVAL=${YT_CHANNEL_CHECK_INTERVAL:-3600}
+    - OLLAMA_URL=${OLLAMA_URL:-http://pmoves-ollama:11434}
+    - YT_SUMMARY_PROVIDER=${YT_SUMMARY_PROVIDER:-ollama}
+    - YT_SUMMARY_OLLAMA_MODEL=${YT_SUMMARY_OLLAMA_MODEL:-gemma2:9b-instruct}
     - DOCKED_MODE=${DOCKED_MODE:-true}
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
@@ -1936,7 +1984,7 @@ services:
     - OPEN_NOTEBOOK_API_URL=${CHANNEL_MONITOR_OPEN_NOTEBOOK_API_URL:-http://open-notebook:5055}
     # Database URL - points to Supabase DB (note: supabase-db runs on pmoves_data network)
     - CHANNEL_MONITOR_DATABASE_URL=${CHANNEL_MONITOR_DATABASE_URL:-postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD_URLENCODED:-${SUPABASE_DB_PASSWORD_URLENCODED:-${POSTGRES_PASSWORD:-${SUPABASE_DB_PASSWORD:-postgres}}}}@supabase-db:5432/${CHANNEL_MONITOR_DB_NAME:-postgres}}
-    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - NATS_URL=${NATS_URL}
     - DOCKED_MODE=${DOCKED_MODE:-true}
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
@@ -1987,6 +2035,7 @@ services:
     - QDRANT_URL=${QDRANT_URL:-http://qdrant:6333}
     - QDRANT_COLLECTION=${QDRANT_COLLECTION:-pmoves_chunks_qwen3}
     - QDRANT_RECREATE_ON_DIM_MISMATCH=${QDRANT_RECREATE_ON_DIM_MISMATCH:-false}
+    - QDRANT__API_KEY=${QDRANT__API_KEY:?Set QDRANT__API_KEY in env.tier-data}
     - SENTENCE_MODEL=${SENTENCE_MODEL:-all-MiniLM-L6-v2}
     - INDEXER_NAMESPACE=${INDEXER_NAMESPACE:-pmoves}
     - QUERY_NAMESPACE=${QUERY_NAMESPACE:-*}
@@ -1998,9 +2047,10 @@ services:
     - RERANK_FUSION=${RERANK_FUSION:-mul}
     - USE_MEILI=true
     - MEILI_URL=${MEILI_URL:-http://meilisearch:7700}
+    - MEILI_MASTER_KEY=${MEILI_MASTER_KEY:?Set MEILI_MASTER_KEY in env.tier-data}
     - NEO4J_URL=${NEO4J_URL:-bolt://neo4j:7687}
     - NEO4J_USER=${NEO4J_USER:-neo4j}
-    - NEO4J_PASSWORD=${NEO4J_PASSWORD:-pm_kDhuaogcUc1oOOVeGMNCkQ}
+    - NEO4J_PASSWORD=${NEO4J_PASSWORD:?Set NEO4J_PASSWORD in env.tier-data}
     - EMBEDDING_BACKEND=${EMBEDDING_BACKEND:-tensorzero}
     - USE_OLLAMA_EMBED=${USE_OLLAMA_EMBED:-false}
     - OLLAMA_URL=${OLLAMA_URL:-http://pmoves-ollama:11434}
@@ -2079,6 +2129,7 @@ services:
     - QDRANT_URL=${QDRANT_URL:-http://qdrant:6333}
     - QDRANT_COLLECTION=${QDRANT_COLLECTION:-pmoves_chunks_qwen3}
     - QDRANT_RECREATE_ON_DIM_MISMATCH=${QDRANT_RECREATE_ON_DIM_MISMATCH:-false}
+    - QDRANT__API_KEY=${QDRANT__API_KEY:?Set QDRANT__API_KEY in env.tier-data}
     - SENTENCE_MODEL=${SENTENCE_MODEL:-all-MiniLM-L6-v2}
     - HIRAG_HTTP_PORT=${HIRAG_HTTP_PORT:-8086}
     - GRAPH_BOOST=${GRAPH_BOOST:-0.15}
@@ -2086,9 +2137,10 @@ services:
     - ENTITY_CACHE_MAX=${ENTITY_CACHE_MAX:-10000}
     - USE_MEILI=${USE_MEILI:-true}
     - MEILI_URL=${MEILI_URL:-http://meilisearch:7700}
+    - MEILI_MASTER_KEY=${MEILI_MASTER_KEY:?Set MEILI_MASTER_KEY in env.tier-data}
     - NEO4J_URL=${NEO4J_URL:-bolt://neo4j:7687}
     - NEO4J_USER=${NEO4J_USER:-neo4j}
-    - NEO4J_PASSWORD=${NEO4J_PASSWORD:-pm_kDhuaogcUc1oOOVeGMNCkQ}
+    - NEO4J_PASSWORD=${NEO4J_PASSWORD:?Set NEO4J_PASSWORD in env.tier-data}
     - NEO4J_DICT_REFRESH_SEC=${NEO4J_DICT_REFRESH_SEC:-300}
     - NEO4J_DICT_LIMIT=${NEO4J_DICT_LIMIT:-1000}
     - TAILSCALE_ONLY=${TAILSCALE_ONLY:-false}
@@ -2165,6 +2217,7 @@ services:
     - NO_PROXY=
     - QDRANT_URL=${QDRANT_URL:-http://qdrant:6333}
     - QDRANT_COLLECTION=${QDRANT_COLLECTION:-pmoves_chunks_qwen3}
+    - QDRANT__API_KEY=${QDRANT__API_KEY:?Set QDRANT__API_KEY in env.tier-data}
     - SENTENCE_MODEL=${SENTENCE_MODEL:-all-MiniLM-L6-v2}
     - INDEXER_NAMESPACE=${INDEXER_NAMESPACE:-pmoves}
     - QUERY_NAMESPACE=${QUERY_NAMESPACE:-*}
@@ -2260,9 +2313,9 @@ services:
     - -m
     - '8222'
     - --user
-    - ${NATS_USER:-nats}
+    - ${NATS_USER}
     - --pass
-    - ${NATS_PASSWORD:-pmoves}
+    - ${NATS_PASSWORD}
     restart: unless-stopped
     ports:
     # NATS is the mesh-wide event bus — credential-guarded (nats:pmoves@),
@@ -2293,7 +2346,7 @@ services:
     image: natsio/nats-box:0.14.5
     entrypoint: ["/bin/sh", "/scripts/init_streams.sh"]
     environment:
-    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - NATS_URL=${NATS_URL}
     volumes:
     - ./scripts/nats:/scripts:ro
     networks:
@@ -2359,6 +2412,8 @@ services:
     - A0_SET_browser_model_provider=openai
     - A0_SET_browser_model_name=tensorzero::function_name::agent_zero
     - A0_SET_browser_model_api_base=http://tensorzero-gateway:3000/openai/v1
+    - A0_SET_a2a_server_enabled=true
+    - A0_SET_mcp_server_token=${MCP_SERVER_TOKEN:?MCP_SERVER_TOKEN must be set when a2a_server_enabled=true}
     # Host environment leak guard (see x-host-leak-guard docs above)
     - SSL_CERT_FILE=
     - SSL_CERT_DIR=
@@ -2384,6 +2439,18 @@ services:
     - ${AGENT_ZERO_INSTRUMENTS_DIR:-./data/agent-zero/instruments}:/a0/instruments
     - ${AGENT_ZERO_LOG_DIR:-./data/agent-zero/logs}:/a0/logs
     - ${AGENT_ZERO_RUNTIME_DIR:-./data/agent-zero/runtime}:/a0/runtime
+    # Forms layer — persona/cognition profiles consumed by mcp_server.load_form().
+    # Read-only: forms are introspective metadata; runtime never rewrites them.
+    - ./configs/agents/forms:/app/configs/agents/forms:ro
+    # Operator-state mount — env.shared into DARKXSIDE-AZ-5090.
+    # DARKXSIDE is the witness + co-creator identity layer; POWERFULMOVES (this
+    # org / brand / repo) emerges from it. rw is the correct default for
+    # operator-state surfaces — DARKXSIDE-AZ is the operator on this node, not
+    # a peripheral service requesting elevation. Constraints (if any) are
+    # operator self-discipline, not architecture.
+    # Override: set ENV_SHARED_MODE=ro in env.shared to harden on nodes where
+    # write access is not needed (e.g., read-only observer deployments).
+    - ./env.shared:/secrets/env.shared:${ENV_SHARED_MODE:-rw}
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:80/ >/dev/null || curl -fsS http://localhost:8080/healthz >/dev/null || exit 1"]
       interval: 30s
@@ -2428,7 +2495,7 @@ services:
     - SUPABASE_REST_URL=${ARCHON_SUPABASE_REST_URL:-${SUPABASE_REST_URL:-http://supabase-kong:8000/rest/v1}}
     - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-${SERVICE_ROLE_KEY:-${SUPABASE_SECRET_KEY:-}}}
     - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY:-${SUPABASE_SERVICE_ROLE_KEY:-${SERVICE_ROLE_KEY:-${SUPABASE_SECRET_KEY:-}}}}
-    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - NATS_URL=${NATS_URL}
     - SUPA_REST_URL=${ARCHON_SUPABASE_REST_URL:-${SUPABASE_REST_URL:-http://supabase-kong:8000/rest/v1}}
       # TensorZero routing — _sync_openai_compat_env() in services/archon/main.py
       # reads TENSORZERO_BASE_URL and populates OPENAI_COMPATIBLE_BASE_URL* vars
@@ -2496,7 +2563,7 @@ services:
     - NEO4J_URI=bolt://neo4j:7687
     - NEO4J_USER=${NEO4J_USER:-neo4j}
     - NEO4J_PASSWORD=${NEO4J_PASSWORD:-neo4j}
-    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - NATS_URL=${NATS_URL}
     - OLLAMA_BASE_URL=http://pmoves-ollama:11434
     - DOCKED_MODE=${DOCKED_MODE:-true}
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
@@ -2505,7 +2572,7 @@ services:
     - CIPHER_API_TOKEN=${CIPHER_API_TOKEN:-}
     command: ["node", "dist/src/app/index.cjs", "--mode", "api", "--port", "3000", "--host", "0.0.0.0", "--agent", "/app/memAgent/cipher.yml", "--mcp-transport-type", "sse"]
     ports:
-    - "${CIPHER_BIND:-0.0.0.0}:${CIPHER_PORT:-8096}:3000"
+    - "${CIPHER_BIND:-0.0.0.0}:${CIPHER_PORT:-8105}:3000"
     depends_on:
       neo4j:
         condition: service_healthy
@@ -2553,7 +2620,7 @@ services:
     build: ./services/botz-gateway
     restart: unless-stopped
     environment:
-    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - NATS_URL=${NATS_URL}
     - SUPABASE_URL=${SUPABASE_URL:-http://supabase-kong:8000}
     - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_KEY}
     - TENSORZERO_URL=${TENSORZERO_URL:-http://tensorzero-gateway:3000}
@@ -2595,11 +2662,11 @@ services:
     hostname: github-branch-cleanup
     restart: unless-stopped
     environment:
-    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - NATS_URL=${NATS_URL}
     - SERVICE_PORT=8100
     - BRANCH_STALE_DAYS=${BRANCH_STALE_DAYS:-30}
     - DRY_RUN=${DRY_RUN:-true}
-    - PROTECTED_BRANCHES=${PROTECTED_BRANCHES:-main,PMOVES.AI-Edition-Hardened,release-*}
+    - PROTECTED_BRANCHES=${PROTECTED_BRANCHES:-main,PMOVES.AI-Edition-v1.13,release-*}
     - GITHUB_ORG=${GITHUB_ORG:-POWERFULMOVES}
     - GH_APP_ID=${GH_APP_ID:-}
     - GH_APP_INSTALLATION_ID=${GH_APP_INSTALLATION_ID:-}
@@ -2637,7 +2704,7 @@ services:
     hostname: github-issue-triage
     restart: unless-stopped
     environment:
-    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - NATS_URL=${NATS_URL}
     - SERVICE_PORT=8101
     - HIRAG_URL=${HIRAG_URL:-http://hi-rag-gateway-v2:8086}
     - LABEL_CONFIDENCE_THRESHOLD=${LABEL_CONFIDENCE_THRESHOLD:-0.7}
@@ -2679,7 +2746,7 @@ services:
     hostname: a2ui-nats-bridge
     restart: unless-stopped
     environment:
-    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - NATS_URL=${NATS_URL}
     # NATS_URL from env.shared/env.tier-agent has credentials: nats://nats:pmoves@nats:4222
     - A2UI_RENDER_SUBJECT=${A2UI_RENDER_SUBJECT:-a2ui.render.v1}
     - GEOMETRY_WILDCARD=${GEOMETRY_WILDCARD:-geometry.>}
@@ -2719,7 +2786,7 @@ services:
     image: ${DEEPRESEARCH_IMAGE:-}
     restart: unless-stopped
     environment:
-    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - NATS_URL=${NATS_URL}
     # NATS_URL from env.tier-agent has credentials: nats://nats:pmoves@nats:4222
     - DEEPRESEARCH_MODE=${DEEPRESEARCH_MODE:-tensorzero}
     - DEEPRESEARCH_TIMEOUT=${DEEPRESEARCH_TIMEOUT:-600}
@@ -2767,7 +2834,7 @@ services:
     restart: unless-stopped
     environment:
     - SUPASERCH_PORT=${SUPASERCH_PORT:-8099}
-    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - NATS_URL=${NATS_URL}
     - SUPASERCH_PORT=${SUPASERCH_PORT:-8099}
     - HIRAG_URL=${HIRAG_URL:-http://hi-rag-gateway-v2:8086}
     - SUPA_REST_URL=${SUPA_REST_URL:-http://supabase-kong:8000/rest/v1}
@@ -2798,7 +2865,7 @@ services:
       dockerfile: nats-echo/Dockerfile
     restart: unless-stopped
     environment:
-    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - NATS_URL=${NATS_URL}
     - NATS_ECHO_SUBJECT=research.deepresearch.request.v1
     depends_on:
     - nats
@@ -2825,7 +2892,7 @@ services:
       dockerfile: nats-echo/Dockerfile
     restart: unless-stopped
     environment:
-    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - NATS_URL=${NATS_URL}
     - NATS_ECHO_SUBJECT=research.deepresearch.result.v1
     depends_on:
     - nats
@@ -2852,7 +2919,7 @@ services:
       dockerfile: ./services/publisher-discord/Dockerfile
     restart: unless-stopped
     environment:
-    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - NATS_URL=${NATS_URL}
     # NATS_URL from env.shared/env.tier-agent has credentials: nats://nats:pmoves@nats:4222
     - DISCORD_SUBJECTS=${DISCORD_SUBJECTS:-ingest.file.added.v1,ingest.transcript.ready.v1,ingest.summary.ready.v1,ingest.chapters.ready.v1}
     depends_on:
@@ -2971,11 +3038,11 @@ services:
     healthcheck:
       test:
       - CMD-SHELL
-      - wget --spider --tries 1 http://$${CLICKHOUSE_USER:-default}:$${CLICKHOUSE_PASSWORD:-}@$${HOSTNAME:-localhost}:8123/ping
-      start_period: 30s
-      interval: 5s
-      timeout: 2s
-      retries: 5
+      - wget --spider --tries=1 --timeout=5 http://$${CLICKHOUSE_USER:-default}:$${CLICKHOUSE_PASSWORD:-}@127.0.0.1:8123/ping
+      start_period: 90s
+      interval: 10s
+      timeout: 10s
+      retries: 10
     networks:
     - pmoves_data
     deploy:
@@ -3007,7 +3074,7 @@ services:
     - TOGETHER_AI_API_KEY=${TOGETHER_AI_API_KEY:-local-disabled}
     - CLOUDFLARE_API_TOKEN=${CLOUDFLARE_API_TOKEN:-local-disabled}
     - GEMINI_API_KEY=${GEMINI_API_KEY:-local-disabled}
-    - OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=${OTEL_EXPORTER_OTLP_TRACES_ENDPOINT:-}
+    - OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=${OTEL_EXPORTER_OTLP_TRACES_ENDPOINT:-http://pmoves-otel-collector:4317}
     - DOCKED_MODE=${DOCKED_MODE:-true}
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
@@ -3023,6 +3090,7 @@ services:
     - pmoves_api
     - pmoves_bus
     - pmoves_data
+    - pmoves_monitoring
     - pmoves_external
     extra_hosts:
     - host.docker.internal:host-gateway
@@ -3103,7 +3171,7 @@ services:
     - TTS_BASE_URL=${TTS_BASE_URL:-http://ultimate-tts-studio:7861}
     - GPU_ORCHESTRATOR_MAX_MODELS=${GPU_ORCHESTRATOR_MAX_MODELS:-3}
     - GPU_ORCHESTRATOR_VRAM_THRESHOLD=${GPU_ORCHESTRATOR_VRAM_THRESHOLD:-0.9}
-    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - NATS_URL=${NATS_URL}
     - MODEL_REGISTRY_URL=${MODEL_REGISTRY_URL:-http://model-registry:8110}
     volumes:
       # SECURITY: Docker socket required for spawning GPU model containers.
@@ -3195,7 +3263,7 @@ services:
     - EVOSWARM_POLL_SECONDS=${EVOSWARM_POLL_SECONDS:-300}
     - EVOSWARM_SAMPLE_LIMIT=${EVOSWARM_SAMPLE_LIMIT:-25}
     - EVOSWARM_NAMESPACE=${EVOSWARM_NAMESPACE:-}
-    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - NATS_URL=${NATS_URL}
     - CHIT_REQUIRE_SIGNATURE=${CHIT_PROD_REQUIRE_SIGNATURE:-true}
     - CHIT_DECRYPT_ANCHORS=${CHIT_PROD_DECRYPT_ANCHORS:-true}
     - CHIT_PASSPHRASE=${CHIT_PROD_PASSPHRASE:?set CHIT_PROD_PASSPHRASE in env.shared}
@@ -3236,7 +3304,7 @@ services:
     - TORCH_CUDNN_V8_API_ENABLED=1
     - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
     ports: ["${TTS_BIND:-127.0.0.1}:7861:7861"]
-    profiles: ["gpu", "tts"]
+    profiles: ["gpu", "tts", "voice"]
     networks: [pmoves_app, pmoves_monitoring, pmoves_external]  # HuggingFace TTS model downloads
     deploy:
       resources:
@@ -3266,7 +3334,7 @@ services:
     environment:
     # NATS_URL from env.shared/env.tier-media has credentials: nats://nats:pmoves@nats:4222
     - PORT=8055
-    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - NATS_URL=${NATS_URL}
     - SUPABASE_URL=${SUPABASE_INTERNAL_URL:-${SUPABASE_URL:-http://supabase-kong:8000}}
     - TENSORZERO_URL=${TENSORZERO_URL:-http://tensorzero-gateway:3000}
     - DEFAULT_VOICE_PROVIDER=${DEFAULT_VOICE_PROVIDER:-vibevoice}
@@ -3324,7 +3392,7 @@ services:
     - TOKENISM_PORT=${TOKENISM_PORT:-8100}
     - FLASK_ENV=${FLASK_ENV:-production}
     - SECRET_KEY=${SECRET_KEY:-pmoves-tokenism-secret}
-    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - NATS_URL=${NATS_URL}
     - NATS_CLIENT_NAME=tokenism-simulator
     - NATS_JETSTREAM=${NATS_JETSTREAM:-true}
     - TENSORZERO_URL=${TENSORZERO_URL:-http://tensorzero-gateway:3000}
@@ -3390,7 +3458,7 @@ services:
     environment:
     - SERVICE_NAME=consciousness-service
     - SERVICE_PORT=${CONSCIOUSNESS_HOST_PORT:-8106}
-    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - NATS_URL=${NATS_URL}
     - CHIT_PROD_PASSPHRASE=${CHIT_PROD_PASSPHRASE:?set CHIT_PROD_PASSPHRASE in env.shared}
     - SUPABASE_URL=${SUPABASE_URL:-http://supabase-kong:8000}
     - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY:-}
@@ -3425,10 +3493,10 @@ services:
     - PORT=8060
     - FLUTE_GATEWAY_URL=http://flute-gateway:8055
     - ULTIMATE_TTS_URL=${ULTIMATE_TTS_URL:-http://host.docker.internal:7860}
-    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - NATS_URL=${NATS_URL}
     - CHIT_REQUIRE_SIGNATURE=${CHIT_REQUIRE_SIGNATURE:-false}
     - CHIT_DECRYPT_ANCHORS=${CHIT_DECRYPT_ANCHORS:-false}
-    - CHIT_PASSPHRASE=${CHIT_PROD_PASSPHRASE:-changeme}
+    - CHIT_PASSPHRASE=${CHIT_PROD_PASSPHRASE:?set CHIT_PROD_PASSPHRASE in env.shared}
     - SUPABASE_URL=http://supabase-kong:8000
     - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-}
     - MAX_CONCURRENT_CASTS=${MAX_CONCURRENT_CASTS:-4}
@@ -3468,7 +3536,7 @@ services:
     <<: *tier-worker-hardened
     environment:
     - PORT=8121
-    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - NATS_URL=${NATS_URL}
     - VOICE_RELAY_INPUT_SUBJECT=${VOICE_RELAY_INPUT_SUBJECT:-agentzero.task.result.v1}
     - VOICE_RELAY_OUTPUT_SUBJECT=${VOICE_RELAY_OUTPUT_SUBJECT:-voice.agent.response.v1}
     ports: ["${VOICE_RELAY_BIND:-0.0.0.0}:${VOICE_RELAY_PORT:-8121}:8121"]
@@ -3567,7 +3635,7 @@ services:
     restart: unless-stopped
     environment:
     - PORT=8100
-    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - NATS_URL=${NATS_URL}
     - HIRAG_INGEST_URL=${HIRAG_INGEST_URL:-http://hi-rag-gateway-v2:8086/ingest}
     ports:
     - ${SESSION_CONTEXT_BIND:-0.0.0.0}:8102:8100
@@ -3597,19 +3665,21 @@ services:
     restart: unless-stopped
     environment:
       # Database configuration
-    - DATABASE_URL=postgres://wger:${WGER_DB_PASSWORD:-changeme}@wger-db:5432/wger
+    - DATABASE_URL=postgres://wger:${WGER_DB_PASSWORD:?set WGER_DB_PASSWORD in env.tier-data}@wger-db:5432/wger
       # Django configuration
     - DJANGO_ALLOWED_HOSTS=*
-    - DJANGO_SECRET_KEY=${WGER_SECRET_KEY:-changeme}
+    - DJANGO_SECRET_KEY=${WGER_SECRET_KEY:?set WGER_SECRET_KEY in env.tier-api}
     - WGER_ENABLE_REGISTRATION=${WGER_ENABLE_REGISTRATION:-true}
       # NATS configuration for event publishing
-    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - NATS_URL=${NATS_URL}
     - WGER_ENABLE_NATS=${WGER_ENABLE_NATS:-true}
       # Admin credentials
-    - WGER_ADMIN_PASSWORD=${WGER_ADMIN_PASSWORD:-changeme}
+    - WGER_ADMIN_PASSWORD=${WGER_ADMIN_PASSWORD:?set WGER_ADMIN_PASSWORD in env.tier-api}
       # PMOVES integration
     - ENABLE_OBSERVABILITY=${WGER_OBSERVABILITY:-true}
     - PROMETHEUS_MULTIPROC_DIR=/tmp/prometheus
+      # NOTE: /metrics available on port 8000 via ENABLE_OBSERVABILITY;
+      # pmoves_monitoring network added below for Prometheus scrape access
     ports:
     - "${WGER_BIND:-0.0.0.0}:${WGER_PORT:-8000}:8000"
     profiles: ["health", "wger"]
@@ -3617,6 +3687,7 @@ services:
     - pmoves_api
     - pmoves_bus
     - pmoves_data
+    - pmoves_monitoring  # Prometheus scrape access for /metrics
     depends_on:
       wger-db:
         condition: service_healthy
@@ -3626,6 +3697,8 @@ services:
     - wger-static:/home/wger/static
     - wger-media:/home/wger/media
     - wger-prometheus:/tmp/prometheus
+    # NOTE: wger uses /api/v2/health/ natively, not PMOVES-standard /healthz
+    # healthcheck aligned to wger's native path; /healthz shim deferred to PMOVES image overlay
     healthcheck:
       test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v2/health/', timeout=5)"]
       interval: 30s
@@ -3633,12 +3706,6 @@ services:
       retries: 5
       start_period: 40s
 
-  # Wger database - PostgreSQL backend for fitness data
-    deploy:
-      resources:
-        limits:
-          cpus: '1.0'
-          memory: 512M
   wger-db:
     <<: *tier-data-hardened
     image: postgres:15-alpine
@@ -3646,7 +3713,7 @@ services:
     environment:
     - POSTGRES_DB=wger
     - POSTGRES_USER=wger
-    - POSTGRES_PASSWORD=${WGER_DB_PASSWORD:-changeme}
+    - POSTGRES_PASSWORD=${WGER_DB_PASSWORD:?set WGER_DB_PASSWORD in env.tier-data}
     - PGDATA=/var/lib/postgresql/data/pgdata
     volumes:
     - wger-db:/var/lib/postgresql/data
@@ -3712,7 +3779,7 @@ services:
     environment:
     - PORT=${GATEWAY_AGENT_PORT:-8111}
     - AGENT_ZERO_URL=${AGENT_ZERO_URL:-http://agent-zero:8080}
-    - CIPHER_URL=${CIPHER_URL:-http://cipher-api:8096}
+    - CIPHER_URL=${CIPHER_URL:-http://cipher-api:8105}
     - TENSORZERO_URL=${TENSORZERO_URL:-http://tensorzero-gateway:3000}
     - SUPABASE_URL=${SUPABASE_URL:-http://supabase-kong:8000}
     - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY}
@@ -3740,7 +3807,7 @@ services:
     <<: *tier-agent-hardened-rw
     environment:
     - PORT=8104
-    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - NATS_URL=${NATS_URL}
     - GITHUB_PAT=${GITHUB_PAT:-}
     - GITHUB_PAT_FILE=${GITHUB_PAT_FILE:-/run/secrets/github_pat}
     - GITHUB_REPOSITORIES=${GITHUB_REPOSITORIES:-POWERFULMOVES/PMOVES.AI}
@@ -4018,8 +4085,8 @@ services:
     - LLAMA_MODEL_PATH=/models/${LLAMA_MODEL:-model.gguf}
     - LLAMA_SERVER_HOST=127.0.0.1
     - LLAMA_RESULTS_DIR=/results
-    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
-    - CIPHER_MEMORY_URL=${CIPHER_MEMORY_URL:-http://cipher-api:8096}
+    - NATS_URL=${NATS_URL}
+    - CIPHER_MEMORY_URL=${CIPHER_MEMORY_URL:-http://cipher-api:8105}
     - GPU_ORCHESTRATOR_URL=http://gpu-orchestrator:8200
     - METRICS_PORT=8201
     volumes:
@@ -4066,7 +4133,7 @@ services:
     restart: unless-stopped
     environment:
     - SERVICE_PORT=8102
-    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - NATS_URL=${NATS_URL}
     - AGENTZERO_MCP_URL=${AGENTZERO_MCP_URL:-http://agent-zero:8080/mcp/command}
     - DRY_RUN=${GITHUB_AUTOMATION_DRY_RUN:-true}
     - GITHUB_ORG=${GITHUB_ORG:-POWERFULMOVES}
@@ -4105,7 +4172,7 @@ services:
     restart: unless-stopped
     environment:
     - SERVICE_PORT=8103
-    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - NATS_URL=${NATS_URL}
     - AGENTZERO_MCP_URL=${AGENTZERO_MCP_URL:-http://agent-zero:8080/mcp/command}
     - DRY_RUN=${GITHUB_AUTOMATION_DRY_RUN:-true}
     - GITHUB_ORG=${GITHUB_ORG:-POWERFULMOVES}
@@ -4146,7 +4213,7 @@ services:
     restart: unless-stopped
     environment:
     - SERVICE_PORT=8104
-    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - NATS_URL=${NATS_URL}
     - AGENTZERO_MCP_URL=${AGENTZERO_MCP_URL:-http://agent-zero:8080/mcp/command}
     - DRY_RUN=${GITHUB_AUTOMATION_DRY_RUN:-true}
     - GITHUB_ORG=${GITHUB_ORG:-POWERFULMOVES}

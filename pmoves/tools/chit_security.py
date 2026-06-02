@@ -72,7 +72,7 @@ def _get_encryption_key() -> str:
 def sign_cgp(cgp: Dict[str, Any], passphrase: str | None = None, kid: str | None = None) -> Dict[str, Any]:
     signing_key = passphrase or _get_signing_key()
     doc = json.loads(json.dumps(cgp))  # deep copy
-    kid = kid or hashlib.sha256(signing_key.encode()).hexdigest()[:16]
+    kid = kid or os.environ.get("CHIT_SIGNING_KEY_ID") or "chit-signing-v01"
     meta = {"alg": "HMAC-SHA256", "kid": kid}
     doc_nosig = json.loads(json.dumps(doc))
     doc_nosig.pop("sig", None)

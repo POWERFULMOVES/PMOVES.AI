@@ -150,7 +150,7 @@ ExecStart=/bin/sh -c "/usr/bin/docker run --name gpu-orchestrator --rm \\
   -v ${data_root}:/app/data \\
   -e GPU_ORCHESTRATOR_HOST=0.0.0.0 \\
   -e GPU_ORCHESTRATOR_PORT=8200 \\
-  -e GPU_ORCHESTRATOR_NATS_URL=\${GPU_ORCHESTRATOR_NATS_URL:-nats://nats:4222} \\
+  -e GPU_ORCHESTRATOR_NATS_URL=\${GPU_ORCHESTRATOR_NATS_URL:-nats://nats:pmoves@nats:4222} \\
   -e GPU_ORCHESTRATOR_GPU_INDEX=\${GPU_ORCHESTRATOR_GPU_INDEX:-0} \\
   -e GPU_ORCHESTRATOR_VLLM_URL=\${GPU_ORCHESTRATOR_VLLM_URL:-http://host.docker.internal:8100} \\
   -e GPU_ORCHESTRATOR_OLLAMA_URL=\${GPU_ORCHESTRATOR_OLLAMA_URL:-http://pmoves-ollama:11434} \\
@@ -163,8 +163,9 @@ EOF
 
   cat <<'EOF' | tee /etc/default/gpu-orchestrator > /dev/null
 # GPU Orchestrator configuration (env_prefix = GPU_ORCHESTRATOR_)
+# NATS URL default for local dev only; production overrides via secrets-funnel-injected env.
 GPU_ORCHESTRATOR_GPU_INDEX=0
-GPU_ORCHESTRATOR_NATS_URL=nats://nats:4222
+GPU_ORCHESTRATOR_NATS_URL=nats://nats:pmoves@nats:4222
 GPU_ORCHESTRATOR_VLLM_URL=http://host.docker.internal:8100
 GPU_ORCHESTRATOR_OLLAMA_URL=http://pmoves-ollama:11434
 EOF
@@ -258,7 +259,30 @@ configure_gpu_orchestrator
 # RustDesk relay
 configure_rustdesk_server
 
-# Tailscale on host
-curl -fsSL https://tailscale.com/install.sh | sh
+# Tailscale on host (idempotent)
+if ! command -v tailscale >/dev/null 2>&1; then
+  log "Installing Tailscale."
+  curl -fsSL https://tailscale.com/install.sh | sh
+else
+  log "Tailscale already installed."
+fi
 systemctl enable --now tailscaled
-echo "Now run: tailscale up --ssh --accept-routes --tag=tag:pmoves --tag=tag:pve --tag=tag:production"
+
+if tailscale status >/dev/null 2>&1; then
+  log "Tailscale already joined to tailnet: $(tailscale ip -4 2>/dev/null || echo 'unknown')"
+else
+  echo "Now run: tailscale up --ssh --accept-routes --tag=tag:pmoves --tag=tag:pve --tag=tag:production"
+fi
+
+# CHIT-signed completion beacon — best-effort
+if [[ -x /opt/pmoves/pmoves/tools/sign_trail.py ]] && [[ -n "${CHIT_PASSPHRASE:-}" ]]; then
+  log "Emitting CHIT completion beacon."
+  python3 /opt/pmoves/pmoves/tools/sign_trail.py \
+    --agent-id "pve9-postinstall" \
+    --summary "PVE 9 post-install completed on $(hostname)" \
+    --phase "Phase A" 2>/dev/null || log "Beacon emit failed (non-fatal)."
+else
+  log "CHIT beacon skipped (sign_trail.py or CHIT_PASSPHRASE absent)."
+fi
+
+log "PVE 9 post-install complete. Review: systemctl list-unit-files | grep -E 'rustdesk|gpu-orchestrator|ollama-gpu'"

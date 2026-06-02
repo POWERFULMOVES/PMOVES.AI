@@ -1,0 +1,85 @@
+{
+  "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python",
+  "python.analysis.typeCheckingMode": "basic",
+  "python.analysis.autoImportCompletions": true,
+
+  "editor.formatOnSave": true,
+  "editor.rulers": [100],
+  "editor.tabSize": 2,
+  "[python]": {
+    "editor.tabSize": 4,
+    "editor.defaultFormatter": "ms-python.black-formatter"
+  },
+  "[markdown]": {
+    "editor.wordWrap": "on",
+    "editor.quickSuggestions": { "other": false, "comments": false, "strings": false }
+  },
+  "[yaml]": {
+    "editor.tabSize": 2,
+    "editor.autoIndent": "advanced"
+  },
+
+  "files.associations": {
+    "*.tac.yaml": "yaml",
+    "SKILL.md": "markdown",
+    "BOOTSTRAP.md": "markdown",
+    "CATALOG.md": "markdown",
+    "PATTERNS.md": "markdown",
+    "*.room.json": "json",
+    "*.room.control.json": "json",
+    "env.shared": "dotenv",
+    "env.tier-*": "dotenv"
+  },
+
+  "files.exclude": {
+    "**/__pycache__": true,
+    "**/*.pyc": true,
+    "**/.pytest_cache": true,
+    "**/node_modules": true,
+    "**/.git": false
+  },
+
+  "search.exclude": {
+    "**/node_modules": true,
+    "**/__pycache__": true,
+    ".worktrees/**": true,
+    "pmoves-*/": true
+  },
+
+  "terminal.integrated.env.windows": {
+    "NATS_URL": "nats://nats:pmoves@localhost:4222",
+    "CLAUDE_PROJECT_DIR": "${workspaceFolder}",
+    "PMOVES_ENV": "dev"
+  },
+  "terminal.integrated.env.linux": {
+    "NATS_URL": "nats://nats:pmoves@localhost:4222",
+    "CLAUDE_PROJECT_DIR": "${workspaceFolder}",
+    "PMOVES_ENV": "dev"
+  },
+  "terminal.integrated.defaultProfile.windows": "PowerShell",
+
+  "yaml.schemas": {
+    "https://json.schemastore.org/github-workflow.json": ".github/workflows/*.yml",
+    "${workspaceFolder}/pmoves/contracts/schemas/room/room.manifest.v1.schema.json": "pmoves/config/rooms/*.json"
+  },
+  "yaml.customTags": [],
+
+  "git.autofetch": true,
+  "git.enableSmartCommit": true,
+  "git.confirmSync": false,
+  "git.decorations.enabled": true,
+
+  "workbench.colorTheme": "One Dark Pro",
+  "workbench.iconTheme": "material-icon-theme",
+  "workbench.startupEditor": "none",
+
+  "explorer.fileNesting.enabled": true,
+  "explorer.fileNesting.patterns": {
+    "SKILL.md": "*.skill.yaml",
+    "*.tac.yaml": "*.tac.*.yaml",
+    "pinokio.js": "install.js,start.js,update.js,reset.js,pinokio.json",
+    "docker-compose.yml": "docker-compose.*.yml,.env*"
+  },
+
+  "makefile.configureOnOpen": false
+}

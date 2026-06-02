@@ -1,0 +1,85 @@
+# Model Suit: GLM-4-Air (Z.AI)
+# PMOVES.AI Meta-Agent Configuration
+# Provider: Z.AI (Zhipu AI / BigModel)
+
+suit:
+  id: glm-4-air
+  name: GLM-4-Air (Zhipu AI)
+  provider: zai
+  flare_name: pmoves/glm-4-air
+  model_family: glm
+  tier: efficient
+  role: balanced
+
+model_config:
+  context_window: 128000
+  max_output_tokens: 4096
+  supports_vision: false
+  supports_extended_thinking: false
+  supports_function_calling: true
+  temperature_range: [0.0, 1.0]
+  top_p_range: [0.0, 1.0]
+  top_k: null
+
+distillation_pipeline:
+  stages:
+    - name: config_tuning
+      enabled: true
+
+    - name: context_priming
+      enabled: true
+      system_prompt: |
+        You are GLM-4-Air, Zhipu AI's efficient model for balanced performance.
+        You are a bilingual (Chinese-English) assistant optimized for speed and quality.
+        You prefer instruction-format prompts with clear role separation (system, user, assistant, tool).
+        You have a 128K token context window and can use tools.
+
+    - name: model_fine_tune
+      enabled: false
+      reason: "Cloud-only model - no weight updates possible"
+
+    - name: full_distillation
+      enabled: false
+      reason: "Cloud-only model - no weight updates possible"
+
+tensorzero_config:
+  model_name: glm-4-air
+  weight: 0.0  # Need to register in TensorZero
+  routing:
+    - function: general_chat
+      priority: 3
+    - function: bilingual_chat
+      priority: 3
+
+flare_namespace:
+  alias: pmoves/glm-4-air
+  canonical_name: glm-4-air
+  provider_url: https://open.bigmodel.cn/dev/api
+  already_registered: false  # Need to add to flare-model-namespace.yaml
+
+capabilities:
+  - code_generation
+  - reasoning
+  - tools
+  - function_calling
+  - large_context
+  - bilingual
+
+local_fallback:
+  available: false
+  reason: "Z.AI models are cloud-only with no open weights"
+
+cross_agent:
+  agent_zero: full
+  clawz: full
+  archon: full
+  typer: untested
+  pinokio: full
+  a2ui: full
+
+metadata:
+  source: pmoves/meta-agent/zai
+  last_verified: 2026-04-21
+  benchmark_data:
+    - source: "Z.AI Documentation"
+      url: "https://open.bigmodel.cn/dev/api"

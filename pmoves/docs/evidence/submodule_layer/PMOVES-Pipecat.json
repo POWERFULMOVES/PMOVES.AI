@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-03-13 02:45 UTC",
+  "generated_at": "2026-04-05 15:12 UTC",
   "manifest": "pmoves/configs/submodule_layer_validation_manifest.json",
   "summary": {
     "submodules": 1,
@@ -12,13 +12,13 @@
       "path": "PMOVES-Pipecat",
       "url": "https://github.com/POWERFULMOVES/pmoves-pipecat.git",
       "status_prefix": " ",
-      "commit": "fafeaa85fdc663702b72034c19b1ebdf23b4766a",
+      "commit": "a74aa0cc9e99001f86739a7dd1545af737139371",
       "initialized": true,
       "remote_commit_reachable": "local",
       "required_files_any_ok": true,
       "top_level_files_ok": true,
       "nested_gitmodules_ok": true,
-      "python_compile_ok": "pass",
+      "python_compile_ok": "skip",
       "findings": []
     }
   ]

@@ -6,12 +6,37 @@
 
 
 [gateway.observability]
-enabled = true
-async_writes = true
+# CHIT GATE: Disabled per Cyber Defence Initiative (2026-04-25).
+# TensorZero observability.enabled=true auto-creates ClickHouse inference
+# tables that store full prompt text + response text with no TTL.
+# This violates Data Retention Policy T0 classification (prompts are
+# ephemeral) and creates a warrantable data store for user content.
+#
+# RE-ENABLE CONDITIONS (all required):
+# 1. ClickHouse TTL of 14 days on auto-created Inference table
+#    (ALTER TABLE Inference MODIFY TTL timestamp + INTERVAL 14 DAY)
+# 2. Prompt text column dropped or masked in Inference table
+# 3. CHIT_REQUIRE_SIGNATURE=true in production
+# 4. Data Retention Policy section 3.5 updated to reflect prompt storage
+# 5. Security audit confirms no PII in stored prompts
+# 6. Approval: CTO + security lead signed commit message
+#
+# See: docs/data-retention-deletion-policy.md (section 3.5)
+# See: docs/biometric-data-handling-policy.md (section 3.4)
+# CHIT Trail: discovered during production verification 2026-04-25.
+#   Memory system fabricated verified-clean state from policy document
+#   rather than code reality - flagged as CHIT intrusion.
+enabled = false
+async_writes = false
 
-# OTLP export — re-enabled P7 P0.2 (OTel collector in docker-compose.tracing.yml)
+# OTLP export — disabled by default so the gateway boots without the tracing
+# overlay. P7 P0.2 enabled this against docker-compose.tracing.yml, but the
+# tracing stack isn't part of the default bring-up; TensorZero 2026.1.8 panics
+# with "invalid URI . Reason empty string" when enabled=true and the
+# OTEL_EXPORTER_OTLP_TRACES_ENDPOINT env var is unset. Re-enable together
+# with the tracing overlay and a populated endpoint.
 [gateway.export.otlp.traces]
-enabled = true
+enabled = false
 format = "opentelemetry"
 
 # --- Chat models: Agent Zero orchestration (local GPU and edge) ------------
@@ -249,7 +274,7 @@ routing = ["minimax_primary"]
 [models.chat_minimax.providers.minimax_primary]
 type = "openai"
 api_base = "https://api.minimaxi.chat/v1"
-model_name = "MiniMax-Text-01"
+model_name = "MiniMax-M2.7"
 api_key_location = "env::MINIMAX_API_KEY"
 
 # --- GLM 5.1 (Upgraded per Z.AI coding plan docs — PR #1151) ---
@@ -260,6 +285,28 @@ routing = ["zai_glm51"]
 type = "openai"
 api_base = "https://api.z.ai/api/coding/paas/v4"
 model_name = "glm-5.1"
+api_key_location = "env::Z_AI_API_KEY"
+
+# --- GLM-5-Turbo (KiloCode primary — agentic workflows, tool calling, long chains) ---
+# Synced from provider_catalog.yaml: serves coding_glm (w=0.8) + agent_zero (w=0.6)
+[models.chat_zai_glm5_turbo]
+routing = ["zai_glm5_turbo"]
+
+[models.chat_zai_glm5_turbo.providers.zai_glm5_turbo]
+type = "openai"
+api_base = "https://api.z.ai/api/coding/paas/v4"
+model_name = "glm-5-turbo"
+api_key_location = "env::Z_AI_API_KEY"
+
+# --- GLM-5V-Turbo (Vision + coding — frontend recreation, GUI exploration, visual debugging) ---
+# Synced from provider_catalog.yaml: serves coding_glm (w=0.4) + vl_sentinel (w=0.7)
+[models.chat_zai_glm5v_turbo]
+routing = ["zai_glm5v_turbo"]
+
+[models.chat_zai_glm5v_turbo.providers.zai_glm5v_turbo]
+type = "openai"
+api_base = "https://api.z.ai/api/coding/paas/v4"
+model_name = "glm-5v-turbo"
 api_key_location = "env::Z_AI_API_KEY"
 
 # --- Qwen3-Coder 30B MoE (3.3B active — SWE-Bench SOTA, fits 16GB) ---
@@ -384,7 +431,7 @@ model_name = "gemma4:31b"
 api_key_location = "none"
 
 # --- DGX Spark Node Routing (GB10 Grace-Blackwell, 128GB unified LPDDR5X) ---
-# Heavyweight inference via Ollama CUDA backend on pmoves-dgx-spark.
+# Heavyweight inference via Ollama CUDA backend on pmoves-spark.
 # Unified memory fits 200B-param-class models without VRAM copies.
 
 # Gemma 4 31B on DGX Spark (SOTA multimodal, unified memory)
@@ -393,7 +440,7 @@ routing = ["ollama_spark"]
 
 [models.gemma_4_31b_spark.providers.ollama_spark]
 type = "openai"
-api_base = "http://pmoves-dgx-spark:11434/v1"
+api_base = "http://pmoves-spark:11434/v1"
 model_name = "gemma4:31b"
 api_key_location = "none"
 
@@ -403,7 +450,7 @@ routing = ["ollama_spark"]
 
 [models.gemma_4_26b_a4b_spark.providers.ollama_spark]
 type = "openai"
-api_base = "http://pmoves-dgx-spark:11434/v1"
+api_base = "http://pmoves-spark:11434/v1"
 # Ollama publishes the 26B A4B MoE variant as the default ":26b" tag.
 # Verified via registry.ollama.ai manifest API (":26b-a4b" returns 404).
 model_name = "gemma4:26b"
@@ -415,12 +462,12 @@ routing = ["ollama_spark"]
 
 [models.nemotron_super_49b_spark.providers.ollama_spark]
 type = "openai"
-api_base = "http://pmoves-dgx-spark:11434/v1"
+api_base = "http://pmoves-spark:11434/v1"
 model_name = "nemotron:49b"
 api_key_location = "none"
 
 # --- AMD R9700 RDNA4 Node Routing (dual R9700, 64GB VRAM, ROCm 7.1+) ---
-# Heavyweight inference via llama.cpp HIP backend on pmoves-rdna4.
+# Heavyweight inference via llama.cpp HIP backend on pmoves-9850x3d-r9700.
 # Ollama is NOT used here because its bundled ROCm v6 libs lack gfx1201 kernels.
 # Canonical runtime is `llama-server` (OpenAI-compatible, ships with llama.cpp).
 
@@ -430,7 +477,7 @@ routing = ["llamacpp_rocm"]
 
 [models.gemma_4_31b_rocm.providers.llamacpp_rocm]
 type = "openai"
-api_base = "http://pmoves-rdna4:8080/v1"
+api_base = "http://pmoves-9850x3d-r9700:8080/v1"
 model_name = "gemma-4-31b-it-Q4_K_M.gguf"
 api_key_location = "none"
 
@@ -440,8 +487,75 @@ routing = ["llamacpp_rocm"]
 
 [models.gemma_4_26b_a4b_rocm.providers.llamacpp_rocm]
 type = "openai"
-api_base = "http://pmoves-rdna4:8080/v1"
+api_base = "http://pmoves-9850x3d-r9700:8080/v1"
 model_name = "gemma-4-26B-A4B-it-Q4_K_M.gguf"
+api_key_location = "none"
+
+# --- Phase C: DGX Spark (GB10) + dual R9700 (RDNA4) dedicated variants -------
+# Added with new profile YAMLs (dgx-spark-grace-blackwell, workstation-9850x3d-
+# dual-r9700). All weight=0.0 for safe rollout — flip to small % after 48h soak
+# + load test, and after Phase D ships ARM64 multi-arch CI for Spark images.
+
+# Gemma 4 31B on DGX Spark (FP16, unified LPDDR5X)
+[models.ollama_spark_gemma4_31b_fp16]
+routing = ["ollama_spark"]
+
+[models.ollama_spark_gemma4_31b_fp16.providers.ollama_spark]
+type = "openai"
+api_base = "http://pmoves-gb10-spark:11434/v1"
+model_name = "gemma4:31b"
+api_key_location = "none"
+
+# Nemotron-3-Super 120B-A12B NVFP4 on DGX Spark
+# HF: nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-NVFP4 (verified HF API 2026-04-19)
+# License: NVIDIA Open Model License (OML). Spark-only — RDNA4 gfx1201 lacks
+# FP8/NVFP4 kernels in ROCm 7.1 as of this date.
+[models.ollama_spark_nemotron3_super_120b_fp8]
+routing = ["ollama_spark"]
+
+[models.ollama_spark_nemotron3_super_120b_fp8.providers.ollama_spark]
+type = "openai"
+api_base = "http://pmoves-gb10-spark:11434/v1"
+model_name = "nemotron-3-super-120b-nvfp4"
+api_key_location = "none"
+
+# Gemma 4 31B on AMD R9700 (Q4_K_M single-GPU, llama.cpp HIP)
+# Custom fork: tlee933/llama.cpp-rdna4-gfx1201 (ROCm 7.1 + gfx1201 kernels)
+[models.llamacpp_rdna4_gemma4_31b_q4km]
+routing = ["llamacpp_rocm"]
+
+[models.llamacpp_rdna4_gemma4_31b_q4km.providers.llamacpp_rocm]
+type = "openai"
+api_base = "http://pmoves-9850x3d-r9700:8080/v1"
+model_name = "gemma-4-31b-it-Q4_K_M.gguf"
+api_key_location = "none"
+
+# Gemma 4 26B-A4B MoE on dual R9700 (row-split, --tensor-split 0.5,0.5)
+[models.llamacpp_rdna4_gemma4_26b_dual]
+routing = ["llamacpp_rocm"]
+
+[models.llamacpp_rdna4_gemma4_26b_dual.providers.llamacpp_rocm]
+type = "openai"
+api_base = "http://pmoves-9850x3d-r9700:8080/v1"
+model_name = "gemma-4-26B-A4B-it-Q4_K_M.gguf"
+api_key_location = "none"
+
+# --- Phase C: DGX Spark (GB10) + dual R9700 (RDNA4) dedicated variants -------
+# Added with new profile YAMLs (dgx-spark-grace-blackwell, workstation-9850x3d-
+# dual-r9700). All weight=0.0 for safe rollout — flip to small % after 48h soak
+# + load test, and after Phase D ships ARM64 multi-arch CI for Spark images.
+
+# Nemotron-3-Super 120B-A12B NVFP4 on DGX Spark
+# HF: nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-NVFP4 (verified HF API 2026-04-19)
+# License: NVIDIA Open Model License (OML). Spark-only — RDNA4 gfx1201 lacks
+# FP8/NVFP4 kernels in ROCm 7.1 as of this date.
+[models.ollama_spark_nemotron3_super_120b_nvfp4]
+routing = ["ollama_spark"]
+
+[models.ollama_spark_nemotron3_super_120b_nvfp4.providers.ollama_spark]
+type = "openai"
+api_base = "http://pmoves-spark:11434/v1"
+model_name = "nemotron-3-super:120b"
 api_key_location = "none"
 
 [models.chat_together]
@@ -730,6 +844,52 @@ type = "chat_completion"
 model = "coding_qwen3_coder_next_80b_local"
 weight = 0.0
 
+# GLM-5-Turbo — KiloCode primary (agentic, tool calling, long chains)
+# Temperature override: Z.AI default is 1.0; coding/agentic workflows need 0.0-0.3
+# per Z.AI coding plan docs + 4090 handoff report 2026-05-14
+# (research/HANDOFF_4090_FIXES_MAY2026.md item #1). 0.1 = deterministic enough
+# for tool-call correctness while preserving small variation for retries.
+[functions.agent_zero.variants.hosted_zai_turbo]
+type = "chat_completion"
+model = "chat_zai_glm5_turbo"
+weight = 0.6
+temperature = 0.1
+
+# GLM-5V-Turbo — vision + coding (frontend, GUI, visual debugging)
+# Same 0.1 override rationale as hosted_zai_turbo above.
+[functions.agent_zero.variants.hosted_zai_vision_turbo]
+type = "chat_completion"
+model = "chat_zai_glm5v_turbo"
+weight = 0.3
+temperature = 0.1
+
+# --- Phase C variants (DGX Spark + dual R9700) — soak at 0.1 ----------------
+# SPARK online 2026-05-10: gemma4:31b + nemotron-3-super:120b both promoted 0.0→0.1 soak.
+# Nemotron tag verified via /api/tags (nemotron-3-super:120b). R9700 variants remain 0.0.
+# Gemma 4 31B FP16 on DGX Spark
+[functions.agent_zero.variants.ollama_spark_gemma4_31b_fp16]
+type = "chat_completion"
+model = "ollama_spark_gemma4_31b_fp16"
+weight = 0.1
+
+# Nemotron-3-Super 120B on DGX Spark — model verified on SPARK 2026-05-10 (tag: nemotron-3-super:120b)
+[functions.agent_zero.variants.ollama_spark_nemotron3_super_120b_nvfp4]
+type = "chat_completion"
+model = "ollama_spark_nemotron3_super_120b_nvfp4"
+weight = 0.1
+
+# Gemma 4 31B Q4_K_M on single R9700 (llama.cpp HIP)
+[functions.agent_zero.variants.llamacpp_rdna4_gemma4_31b_q4km]
+type = "chat_completion"
+model = "llamacpp_rdna4_gemma4_31b_q4km"
+weight = 0.0
+
+# Gemma 4 26B-A4B MoE on dual R9700 (row-split)
+[functions.agent_zero.variants.llamacpp_rdna4_gemma4_26b_dual]
+type = "chat_completion"
+model = "llamacpp_rdna4_gemma4_26b_dual"
+weight = 0.0
+
 [functions.langextract]
 type = "chat"
 
@@ -903,6 +1063,10 @@ model = "chat_alibaba_qwen"
 type = "chat_completion"
 model = "chat_together"
 
+[functions.archon_work_orders.variants.hosted_gemini]
+type = "chat_completion"
+model = "chat_gemini_pro"
+
 # Archon Code Review (for PR review step)
 [functions.archon_code_review]
 type = "chat"
@@ -1018,6 +1182,12 @@ type = "chat_completion"
 model = "coding_qwen3_coder_480b_cloud"
 weight = 0.0
 
+# Gemma 4 31B FP16 on SPARK — Phase C soak for coding workloads (weight=0.1)
+[functions.coding.variants.spark_gemma4_31b_fp16]
+type = "chat_completion"
+model = "ollama_spark_gemma4_31b_fp16"
+weight = 0.1
+
 # Function: Orchestrator
 [functions.orchestrator]
 type = "chat"
@@ -1117,6 +1287,25 @@ type = "chat_completion"
 model = "gemma_4_26b_a4b_rocm"
 weight = 0.0
 
+# --- Phase C multimodal_large variants — SPARK at 0.1 soak, R9700 at 0.0 ----
+# Gemma 4 31B FP16 on DGX Spark (unified memory, SOTA multimodal)
+[functions.multimodal_large.variants.ollama_spark_gemma4_31b_fp16]
+type = "chat_completion"
+model = "ollama_spark_gemma4_31b_fp16"
+weight = 0.1
+
+# Gemma 4 31B Q4_K_M on single R9700 (dedicated variant distinct from gemma_4_31b_rocm)
+[functions.multimodal_large.variants.llamacpp_rdna4_gemma4_31b_q4km]
+type = "chat_completion"
+model = "llamacpp_rdna4_gemma4_31b_q4km"
+weight = 0.0
+
+# Gemma 4 26B-A4B MoE on dual R9700 (row-split, distinct from gemma_4_26b_a4b_rocm)
+[functions.multimodal_large.variants.llamacpp_rdna4_gemma4_26b_dual]
+type = "chat_completion"
+model = "llamacpp_rdna4_gemma4_26b_dual"
+weight = 0.0
+
 # --- Per-Stack Coding Functions (4090 Coding Workstation) ---
 # Each coding plan gets its own function for independent observability,
 # failover policies, and A/B testing between providers.
@@ -1157,17 +1346,36 @@ model = "coding_qwen3_coder_30b_local"
 type = "chat_completion"
 model = "chat_openrouter"
 
-# GLM Coding Plan (Z.ai GLM-5.1 primary, local fallback)
+# GLM Coding Plan — GLM-5-Turbo primary (synced from provider_catalog.yaml)
 [functions.coding_glm]
 type = "chat"
+
+# Coding-focused variants — Z.AI defaults to temperature=1.0 which is too
+# creative for code generation. Override to 0.1 per Z.AI coding plan docs +
+# 4090 handoff report 2026-05-14 (research/HANDOFF_4090_FIXES_MAY2026.md #1).
+# Applies to all 4 coding_glm cloud variants (glm5-turbo, glm5v-turbo, glm5.1,
+# glm-flash) — the entire Z.AI coding endpoint family.
+[functions.coding_glm.variants.cloud_zai_turbo]
+type = "chat_completion"
+model = "chat_zai_glm5_turbo"
+weight = 0.8
+temperature = 0.1
+
+[functions.coding_glm.variants.cloud_zai_vision_turbo]
+type = "chat_completion"
+model = "chat_zai_glm5v_turbo"
+weight = 0.4
+temperature = 0.1
 
 [functions.coding_glm.variants.cloud_zai_glm51]
 type = "chat_completion"
 model = "chat_zai_glm51"
+temperature = 0.1
 
 [functions.coding_glm.variants.cloud_zai_glm_flash]
 type = "chat_completion"
 model = "chat_zai_glm"
+temperature = 0.1
 
 [functions.coding_glm.variants.local_qwen35_9b]
 type = "chat_completion"

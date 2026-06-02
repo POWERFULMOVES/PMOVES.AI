@@ -1,95 +1,77 @@
-# =============================================================================
-# PMOVES.AI Headscale Configuration
+# Mirrored from PMOVES-Headscale submodule (PMOVES.AI-Edition-Hardened branch)
+# PMOVES.AI Headscale Configuration — v0.28.0
 # =============================================================================
 # Self-hosted Tailscale control server for VPN mesh networking
+# Fork: github.com/POWERFULMOVES/PMOVES-headscale
 # =============================================================================
 
-# Server URL - externally accessible address for clients
 server_url: https://headscale.pmoves.local
-
-# Listen address for the API server
 listen_addr: 0.0.0.0:8096
-
-# Metrics listen address for Prometheus scraping
 metrics_listen_addr: 0.0.0.0:9090
+grpc_listen_addr: 127.0.0.1:50443
+grpc_allow_insecure: false
+disable_check_updates: true
+randomize_client_port: false
 
-# =============================================================================
-# Database Configuration
-# =============================================================================
-db_type: sqlite3
-db_path: /var/lib/headscale/db.sqlite
+noise:
+  private_key_path: /var/lib/headscale/noise_private.key
 
-# =============================================================================
-# ACL Policy
-# =============================================================================
-acl_policy_path: /etc/headscale/acl.yaml
+prefixes:
+  v4: 100.64.0.0/10
+  v6: fd7a:115c:a1e0::/48
+  allocation: sequential
 
-# =============================================================================
-# DERP Relay Configuration
-# =============================================================================
-# Use Tailscale's public DERPs for relay (no self-hosted DERP needed initially)
 derp:
   server:
     enabled: false
   urls:
     - https://controlplane.tailscale.com/derpmap/default
-  # Optional: Override paths for specific DERP regions
-  paths:
-    - /etc/headscale/derp.yaml
+  auto_update_enabled: true
+  update_frequency: 3h
 
-# =============================================================================
-# IP Allocation
-# =============================================================================
-# CGNAT range for Tailscale
-ip_prefixes:
-  - fd7a:115c:a1e0::/48  # IPv6
-  - 100.64.0.0/10        # IPv4
+node:
+  expiry: 0
+  ephemeral:
+    inactivity_timeout: 30m
+  routes:
+    ha:
+      probe_interval: 10s
+      probe_timeout: 5s
 
-# =============================================================================
-# DNS Configuration
-# =============================================================================
-dns_config:
-  # Global nameservers
+database:
+  type: sqlite
+  debug: false
+  gorm:
+    prepare_stmt: true
+    parameterized_queries: true
+    skip_err_record_not_found: true
+    slow_threshold: 1000
+  sqlite:
+    path: /var/lib/headscale/db.sqlite
+    write_ahead_log: true
+    wal_autocheckpoint: 1000
+
+policy:
+  mode: file
+  path: /etc/headscale/acl.yaml
+
+dns:
+  base_domain: ts.pmoves.net
+  override_local_dns: true
   nameservers:
-    - 1.1.1.1
-    - 1.0.0.1
+    global:
+      - 1.1.1.1
+      - 1.0.0.1
 
-  # Split DNS resolutions for specific domains
-  domains:
-    - pmoves.local
-    - pmoves-internal.local
+unix_socket: /var/run/headscale/headscale.sock
+unix_socket_permission: "0770"
 
-  # Magic DNS (enables <hostname>.<namespace>.headscale resolution)
-  magic_dns: true
-
-  # Search domains for DNS resolution
-  search_domains:
-    - pmoves.local
-
-# =============================================================================
-# Logging Configuration
-# =============================================================================
 log:
-  format: text  # text or json
-  level: info   # debug, info, warn, error
+  level: info
+  format: text
 
-# =============================================================================
-# Client Configuration
-# =============================================================================
-# Randomize client port for NAT traversal
-randomize_client_port: true
+logtail:
+  enabled: false
 
-# Disable updates check
-disable_updates_check: false
-
-# =============================================================================
-# Security
-# =============================================================================
-# Enable/disable legacy CLI features
-ephemeral_node_inactivity_timeout: 30m
-
-# =============================================================================
-# Experimental Features
-# =============================================================================
-# Enable WireGuard requested port (for better NAT traversal)
-# wireguard_port: 0
+taildrop:
+  enabled: true

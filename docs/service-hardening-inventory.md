@@ -48,7 +48,7 @@
 |---------|------|------------------|----------------------|-------|
 | agent-zero | 8080/8081 | tier-agent-hardened | No | MCP orchestrator |
 | archon | 8091/3737 | tier-agent-hardened | No | Supabase-driven agents |
-| cipher-api | 8096 | tier-agent-hardened-ro | No | Knowledge-graph memory |
+| cipher-api | 8105 | tier-agent-hardened-ro | No | Knowledge-graph memory |
 | mesh-agent | - | tier-agent-hardened-ro | No | Node announcer |
 | botz-gateway | 8110 | tier-agent-hardened | Yes | Skills marketplace |
 | a2ui-nats-bridge | 9224 | tier-agent-hardened-ro | Yes | NATS bridge |

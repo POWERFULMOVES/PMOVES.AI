@@ -24,6 +24,15 @@
       "Bash(make -C pmoves z890-host-verify:*)",
       "Bash(make -C pmoves z890-host-remove:*)",
       "Bash(make -C pmoves diag-z890:*)",
+      "Bash(make -C pmoves gha-runner-4090-*:*)",
+      "Bash(docker pull hello-world:*)",
+      "Bash(docker run --rm --network host alpine:*)",
+      "Bash(docker update --restart no pmoves-4090-runner-*:*)",
+      "Bash(docker stop pmoves-4090-runner-*:*)",
+      "Bash(docker start pmoves-4090-runner-*:*)",
+      "Bash(docker exec pmoves-4090-runner-*:*)",
+      "Bash(docker logs pmoves-4090-runner-*:*)",
+      "Bash(docker inspect pmoves-4090-runner-*:*)",
       "Bash(curl -sf http://127.0.0.1:8111:*)",
       "Bash(curl -sf http://localhost:8111:*)",
       "Bash(docker exec pmoves-nats-leaf-1:*)",
@@ -31,7 +40,35 @@
       "Bash(netsh interface portproxy show:*)",
       "Bash(make -C pmoves laptop-harden:*)",
       "Bash(make -C pmoves laptop-harden-verify:*)",
-      "Bash(make -C pmoves laptop-harden-remove:*)"
+      "Bash(make -C pmoves laptop-harden-remove:*)",
+      "Bash(docker update --restart no gha-runner-ai-lab:*)",
+      "Bash(docker update --restart no gha-runner-hotfix:*)",
+      "Bash(docker update --restart no gha-runner-vps:*)",
+      "Bash(docker stop gha-runner-ai-lab:*)",
+      "Bash(docker stop gha-runner-hotfix:*)",
+      "Bash(docker stop gha-runner-vps:*)",
+      "Bash(docker start gha-runner-ai-lab:*)",
+      "Bash(docker start gha-runner-hotfix:*)",
+      "Bash(docker start gha-runner-vps:*)",
+      "Bash(docker exec gha-runner-ai-lab:*)",
+      "Bash(docker exec gha-runner-hotfix:*)",
+      "Bash(docker exec gha-runner-vps:*)",
+      "Bash(docker logs gha-runner-ai-lab:*)",
+      "Bash(docker logs gha-runner-hotfix:*)",
+      "Bash(docker logs gha-runner-vps:*)",
+      "Bash(docker inspect gha-runner-ai-lab:*)",
+      "Bash(docker inspect gha-runner-hotfix:*)",
+      "Bash(docker inspect gha-runner-vps:*)",
+      "Bash(docker exec pmoves-nats-1 nats sub *.test.*:*)",
+      "Bash(docker exec pmoves-nats-1 nats sub test.*:*)",
+      "Bash(docker exec pmoves-nats-1 nats pub test.*:*)",
+      "Bash(docker exec pmoves-nats-1 nats pub *.test.*:*)",
+      "Bash(docker run --rm --network host natsio/nats-box:* nats pub test.*:*)",
+      "Bash(docker run --rm --network host natsio/nats-box:* nats sub test.*:*)",
+      "Bash(docker exec pmoves-agent-zero-1:*)",
+      "Bash(docker exec pmoves-nats-1 nats stream:*)",
+      "Bash(docker exec pmoves-nats-1 nats account info:*)",
+      "Bash(docker exec pmoves-nats-1 nats server info:*)"
     ],
     "deny": [
       "Bash(docker compose up -d:*)",
@@ -103,6 +140,26 @@
         ]
       },
       {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/kilo-brief-check.sh\"",
+            "timeout": 3
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/shift-crew-trail.sh\"",
+            "timeout": 5
+          }
+        ]
+      },
+      {
         "matcher": "Skill",
         "hooks": [
           {
@@ -133,6 +190,16 @@
             "timeout": 3
           }
         ]
+      },
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/prompt-keyword-surfacer.sh\"",
+            "timeout": 3
+          }
+        ]
       }
     ],
     "SessionStart": [
@@ -146,7 +213,21 @@
           }
         ]
       }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo \"[pmoves-agent] Sub-agent completed: $(cat | jq -r '.agent_type // \"unknown\"')\" >&2",
+            "timeout": 5
+          }
+        ]
+      }
     ]
+  },
+  "env": {
+    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
   },
   "enabledPlugins": {
     "agent-sdk-dev@claude-plugins-official": true,

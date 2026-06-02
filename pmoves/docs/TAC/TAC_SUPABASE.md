@@ -69,7 +69,7 @@ Supabase is a **self-hosted 13-service platform** providing the unified data lay
 | Render Webhook (8085) | PostgREST API | ComfyUI render callbacks |
 | Jellyfin Bridge (8093) | PostgREST API | Media metadata sync |
 | Channel Monitor (8097) | PostgREST API | Content watch state |
-| Cipher Memory (8096) | PostgREST API | Memory index metadata |
+| Cipher Memory (8105) | PostgREST API | Memory index metadata |
 | Extract Worker (8083) | PostgREST API | Embedding job tracking |
 | UI (A2UI, MAI-UI) | PostgREST + Realtime | Frontend data + live updates |
 | NATS-connected services | Via Supabase data | Event-driven state coordination |

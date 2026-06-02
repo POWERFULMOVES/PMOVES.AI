@@ -1,11 +1,24 @@
 {
+  "_pinned_versions_note": "Dependencies pinned to exact versions on 2026-05-14 to prevent supply chain attacks (F-07). Re-pin after auditing new releases before upgrading. hostinger-api-mcp=0.2.1, tailscale-mcp=2026.4.10-1",
   "mcpServers": {
     "pmoves-cipher": {
+      "type": "sse",
+      "url": "http://localhost:8105/mcp/sse"
+    },
+    "_pmoves-cipher-legacy-python-wrapper": {
+      "_disabled": "Replaced 2026-05-15 with direct SSE to Cipher's native MCP endpoint. The Python wrapper called non-existent /api/memory routes. Kept here commented for rollback; remove in follow-up after SSE validated for 2 weeks.",
       "command": "uv",
-      "args": ["--directory", "./pmoves-cipher-mcp", "run", "python", "-m", "cipher_mcp.server"],
+      "args": [
+        "--directory",
+        "./pmoves-cipher-mcp",
+        "run",
+        "python",
+        "-m",
+        "cipher_mcp.server"
+      ],
       "env": {
-        "CIPHER_URL": "http://localhost:8096",
-        "NATS_URL": "nats://nats:pmoves@nats:4222"
+        "CIPHER_URL": "http://localhost:8105",
+        "NATS_URL": "${NATS_URL}"
       }
     },
     "docker": {
@@ -22,7 +35,7 @@
     "hostinger-mcp": {
       "command": "npx",
       "args": [
-        "hostinger-api-mcp@latest"
+        "hostinger-api-mcp@0.2.1"
       ],
       "env": {
         "API_TOKEN": "${HOSTINGER_API_KEY}"
@@ -31,11 +44,52 @@
     "tailscale": {
       "command": "npx",
       "args": [
-        "tailscale-mcp@latest"
+        "tailscale-mcp@2026.4.10-1"
       ],
       "env": {
         "TAILSCALE_API_KEY": "${TAILSCALE_API_KEY}",
         "TAILSCALE_TAILNET": "${TAILSCALE_TAILNET}"
+      }
+    },
+<<<<<<< HEAD
+    "pmoves-nats-fleet": {
+      "_purpose": "Cross-node NATS publish/subscribe to the fleet hub on KVM4-2. Replaces SSH-from-CLI dance for signal dispatch (e.g., claw.task.assign.v1 SPARK cascades). Server code shipped in PR #1490; this is the .claude/mcp.json registration enabling the tools at runtime.",
+      "command": "uv",
+      "args": [
+        "--directory",
+        "./pmoves-nats-mcp",
+        "run",
+        "python",
+        "-m",
+        "nats_mcp.server"
+      ],
+      "env": {
+        "NATS_URL": "${NATS_URL}"
+      }
+    },
+    "cloudflare": {
+      "_purpose": "Cloudflare MCP for Pages deploy + DNS zone management (cataclysmstudios.com). Requires CLOUDFLARE_API_TOKEN + CLOUDFLARE_ACCOUNT_ID in env. Added Layer 2.1 of COMBINER pipeline (2026-05-26).",
+      "command": "npx",
+      "args": [
+        "@cloudflare/mcp-server-cloudflare@0.2.0"
+      ],
+      "env": {
+        "CLOUDFLARE_API_TOKEN": "${CLOUDFLARE_API_TOKEN}",
+        "CLOUDFLARE_ACCOUNT_ID": "${CLOUDFLARE_ACCOUNT_ID}"
+      }
+    },
+    "pmoves-4090-web": {
+      "_note": "D-Proxy SSE gateway for pmoves_4090_web profile. Requires `make -C pmoves mcp-4090-gateway-start` first. Claude Code skips gracefully if gateway is not running.",
+      "type": "sse",
+      "url": "http://localhost:8089/sse",
+=======
+    "pmoves-4090-web": {
+      "_note": "D-Proxy SSE gateway for pmoves_4090_web profile. Requires `make mcp-4090-gateway-start` first. Claude Code skips gracefully if gateway is not running.",
+      "type": "sse",
+      "url": "http://localhost:8090/sse",
+>>>>>>> c26c5e888 (feat(mcp-toolkit): pmoves_4090_web Docker MCP profile (Lane B/C/E/F))
+      "headers": {
+        "Authorization": "Bearer ${MCP_GATEWAY_AUTH_TOKEN}"
       }
     }
   }

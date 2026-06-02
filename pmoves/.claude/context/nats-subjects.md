@@ -6,7 +6,7 @@ Comprehensive reference of all NATS message subjects used for event-driven commu
 
 ## NATS Configuration
 
-- **Server:** `nats://localhost:4222`
+- **Server:** `nats://nats:pmoves@nats:4222`
 - **JetStream:** Enabled for persistence
 - **Version:** 2.10-alpine
 
@@ -151,6 +151,35 @@ Example: `ingest.transcript.ready.v1`
   }
   ```
 - **Subscribers:** Discord Publisher, Extract Worker, analysis pipelines
+
+## Provenance-First Content Subjects
+
+These subjects carry the `z890` / PMOVES-SPARK parity lane that keeps junk out of HiRAG while preserving semantic shape, provenance, and Hyperdimensions replay data.
+
+**`content.raw.v1`**
+- **Direction:** Published by ingest and messaging surfaces -> Consumed by `content-provenance-gate`, PMOVES-SPARK
+- **Purpose:** Raw message/content payload entering provenance-first shaping before HiRAG
+- **Core Fields:** `content_id`, `text`, `source_ref`, optional `favorite_words`, `aliases`, `labels`
+
+**`content.lexicon.shaped.v1`**
+- **Direction:** Published by `content-provenance-gate` or PMOVES-SPARK -> Consumed by provenance attesters, Hyperdimensions
+- **Purpose:** Context-shaped lexical view of the content with anchors, favorite words, and semantic weights
+- **Core Fields:** `shape_id`, `anchor_terms`, `semantic_weights`, `noise_score`, `semantic_density`
+
+**`content.provenance.attested.v1`**
+- **Direction:** Published by provenance attesters -> Consumed by the HiRAG gate, Hyperdimensions, Hi-RAG v2
+- **Purpose:** Attach CHIT geometry, graphiti mark, and Merkle lineage before deciding whether content is worthy of HiRAG ingest
+- **Core Fields:** `graphiti_mark`, `merkle_root`, `provenance_refs`, `hyperbolic_coords`, `spectral_signature`
+
+**`content.hirag.accepted.v1`**
+- **Direction:** Published by the `content-provenance-gate` -> Consumed by Hi-RAG v2, Hyperdimensions, operators
+- **Purpose:** Content is semantically dense enough and sufficiently attested to enter HiRAG
+- **Core Fields:** `kb_namespace`, `accepted_reason`, `scorecard`
+
+**`content.hirag.rejected.v1`**
+- **Direction:** Published by the `content-provenance-gate` -> Consumed by PMOVES-SPARK, Hyperdimensions, operators
+- **Purpose:** Reject low-signal or weakly attested content before it pollutes HiRAG
+- **Core Fields:** `rejected_reason`, `rejected_reasons`, `scorecard`
 
 **`ingest.summary.ready.v1`**
 - **Direction:** Published by summary generation services
@@ -412,3 +441,122 @@ nats server report connections
 - **`geometry.>`** - Cross-service geometry events (A2UI, Tokenism, DoX, Hyperdimensions)
 
 > **See Also:** [geometry-nats-subjects.md](./geometry-nats-subjects.md) for CGP/CHIT geometry protocol subjects
+
+## MiniMax Edition Subjects
+
+### Character Persona System (FlOO$)
+
+**`minimax.character.request.v1`**
+- **Direction:** Published by clients → Consumed by MiniMax Edition agents
+- **Purpose:** Request character persona synthesis for FlOO$ system
+- **Payload:**
+  ```json
+  {
+    "request_id": "unique-id",
+    "persona": "dr-bean|mr-clean|powerpuff-girls|custom",
+    "context": "task context for persona adaptation",
+    "voice_register": "measured_precise|direct_confident|high_energy",
+    "temperature": 0.1,
+    "speaking_rate": "slow|normal|fast"
+  }
+  ```
+- **Subscribers:** MiniMax Edition agents, 5090-claude
+
+**`minimax.character.response.v1`**
+- **Direction:** Published by MiniMax Edition agents → Consumed by voice pipeline
+- **Purpose:** Character persona synthesis response
+- **Payload:**
+  ```json
+  {
+    "request_id": "matching-request-id",
+    "persona": "synthesized persona config",
+    "response": "generated content in persona voice",
+    "prosodic_config": {
+      "bpm": 120,
+      "scale": "major",
+      "emotion": "positive"
+    }
+  }
+  ```
+
+**`minimax.voice.prosodic.v1`**
+- **Direction:** Published by MiniMax Edition → Consumed by Flute Gateway
+- **Purpose:** Prosodic voice synthesis with BPM/music mapping
+- **Payload:**
+  ```json
+  {
+    "request_id": "unique-id",
+    "text": "voice content",
+    "persona": "persona used",
+    "prosodic_params": {
+      "bpm": 120,
+      "midi_note": 60,
+      "scale": "pentatonicMajor"
+    },
+    "model": "minimax-m2.7"
+  }
+  ```
+
+**`minimax.agent.trail.v1`**
+- **Direction:** Published by MiniMax Edition agents → Consumed by CHIT trail
+- **Purpose:** Agent trail entries for attribution and navigation
+- **Payload:**
+  ```json
+  {
+    "agent_id": "minimax",
+    "trail_entry": {
+      "action": "character_synthesis|voice_generation|reasoning",
+      "context": "task context",
+      "result_summary": "brief result"
+    },
+    "timestamp": "ISO-8601",
+    "hyperdimensions": {
+      "wave_state": "collapsed",
+      "plasmons": 42
+    }
+  }
+  ```
+
+**`minimax.agent.status.v1`**
+- **Direction:** Published by MiniMax Edition agents → Consumed by monitoring
+- **Purpose:** Health heartbeat for MiniMax agents
+- **Payload:**
+  ```json
+  {
+    "agent_id": "minimax_edition",
+    "status": "healthy|degraded|unavailable",
+    "model_loaded": "minimax-m2.7|minimax-m2.1",
+    "quota_remaining": 4500,
+    "quota_reset_window_seconds": 18000,
+    "timestamp": "ISO-8601"
+  }
+  ```
+
+### Token Plan Quota Events
+
+**`minimax.quota.warning.v1`**
+- **Direction:** Published by quota monitor → Consumed by fallback routing
+- **Purpose:** Alert when Token Plan quota is running low
+- **Payload:**
+  ```json
+  {
+    "quota_type": "m2.7|m2.1|speech|image|video|music",
+    "requests_remaining": 500,
+    "requests_used": 4000,
+    "reset_window_seconds": 18000,
+    "recommended_action": "switch_to_payg|wait_for_reset"
+  }
+  ```
+
+**`minimax.quota.exhausted.v1`**
+- **Direction:** Published by quota monitor → Consumed by fallback routing
+- **Purpose:** Alert when Token Plan quota is exhausted
+- **Payload:**
+  ```json
+  {
+    "quota_type": "m2.7|m2.1|speech|image|video|music",
+    "requests_remaining": 0,
+    "reset_window_seconds": 18000,
+    "fallback_action": "switch_to_glm|switch_to_payg"
+  }
+  ```

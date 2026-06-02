@@ -1,6 +1,7 @@
 import json, os, uuid, datetime
 from datetime import timezone
-from jsonschema import validate
+from pathlib import Path
+from jsonschema import Draft202012Validator, FormatChecker, RefResolver, validate
 
 def _contracts_dir() -> str:
     # Priority: explicit env, /app/contracts, repo-relative pmoves/contracts
@@ -26,6 +27,28 @@ def load_schema(topic: str):
     schema_path = os.path.join(CONTRACTS_DIR, topics["topics"][topic]["schema"])
     return json.loads(open(schema_path).read())
 
+def schema_path(topic: str) -> str:
+    topics = json.loads(open(os.path.join(CONTRACTS_DIR, "topics.json")).read())
+    if topic not in topics["topics"]:
+        raise KeyError(f"Unknown topic: {topic}")
+    return os.path.join(CONTRACTS_DIR, topics["topics"][topic]["schema"])
+
+def validate_payload(topic: str, payload: dict):
+    """Validate a topic payload, resolving schema-local relative refs."""
+    path = schema_path(topic)
+    schema = json.loads(open(path).read())
+    resolver = RefResolver(
+        base_uri=Path(path).resolve().as_uri(),
+        referrer=schema,
+    )
+    Draft202012Validator.check_schema(schema)
+    Draft202012Validator(
+        schema,
+        resolver=resolver,
+        format_checker=FormatChecker(),
+    ).validate(payload)
+    return payload
+
 def envelope(topic: str, payload: dict, correlation_id: str|None=None, parent_id: str|None=None, source: str="agent"):
     env = {
         "id": str(uuid.uuid4()),
@@ -37,13 +60,12 @@ def envelope(topic: str, payload: dict, correlation_id: str|None=None, parent_id
     }
     env_schema = json.loads(open(os.path.join(CONTRACTS_DIR, "schemas/common/envelope.schema.json")).read())
     validate(instance=env, schema=env_schema)
-    payload_schema = load_schema(topic)
-    validate(instance=payload, schema=payload_schema)
+    validate_payload(topic, payload)
     if correlation_id: env["correlation_id"] = correlation_id
     if parent_id: env["parent_id"] = parent_id
     return env
 
-NATS_URL = os.environ.get("NATS_URL", "nats://nats:pmoves@nats:4222")
+NATS_URL = os.environ.get("NATS_URL", "")
 
 async def publish(topic: str, payload: dict, *, correlation_id: str | None = None, parent_id: str | None = None, source: str = "agent"):
     """Publish an envelope to NATS and return the envelope."""

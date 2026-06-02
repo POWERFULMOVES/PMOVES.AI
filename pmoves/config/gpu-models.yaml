@@ -7,8 +7,8 @@ models:
   - id: "qwen3:8b"
     provider: ollama
     vram_mb: 6144
-    description: "Qwen3 8B - Fast reasoning and code"
-    priority_default: 5
+    description: "[Reflexive Loadout] Qwen3 8B - Fast reasoning and code"
+    priority_default: 10
     quantization: "Q4_K_M"
     context_length: 8192
 
@@ -79,8 +79,8 @@ models:
   - id: "qwen2-vl:7b"
     provider: ollama
     vram_mb: 6000
-    description: "Qwen2-VL 7B - Vision-language"
-    priority_default: 5
+    description: "[Reflexive Loadout] Qwen2-VL 7B - Vision-language"
+    priority_default: 10
     context_length: 32768
 
   - id: "qwen3-reranker:4b"
@@ -170,6 +170,19 @@ models:
     priority_default: 9
     quantization: "Q4_K_M"
     context_length: 262144
+
+  # Nemotron-3-Super-120B-A12B NVFP4 (DGX Spark — 128GB unified LPDDR5X fits FP8-class footprint)
+  # HF: nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-NVFP4 (verified 2026-04-19 via HF API)
+  # License: NVIDIA Open Model License (OML). NOT viable on RDNA4 gfx1201 (no FP8/FP4 kernels).
+  - id: "nemotron-3-super-120b-nvfp4"
+    provider: ollama
+    vram_mb: 90000                # ~88 GB NVFP4 weights; sits inside 128GB unified with activation headroom
+    hf_id: "nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-NVFP4"
+    description: "NVIDIA Nemotron-3-Super 120B-A12B NVFP4 - Spark-only (unified memory, agentic MoE)"
+    priority_default: 9
+    quantization: "NVFP4"
+    context_length: 131072
+    target_hardware: ["gb10"]
 
   # Embedding Models (Ollama)
   - id: "qwen3-embedding:4b"
@@ -374,3 +387,39 @@ jetson_orin_nano:
   total_vram_mb: 8192  # Shared with system RAM
   system_reserve_mb: 4096
   compute_capability: "8.7"
+
+# NVIDIA DGX Spark (GB10 Grace-Blackwell)
+# Unified LPDDR5X shared between 20-core Arm CPU and Blackwell GPU.
+# Hostname convention: pmoves-gb10-spark. Inference backend: Ollama (ARM64 CUDA).
+gb10:
+  name: "NVIDIA DGX Spark (GB10 Grace-Blackwell)"
+  vendor: "NVIDIA"
+  arch: "grace-blackwell"
+  platform: "arm64"
+  total_vram_mb: 131072           # 128 GB unified LPDDR5X (CPU + GPU share the pool)
+  system_reserve_mb: 16384        # Leave ~16 GB for Arm host OS and inference runtime
+  compute_capability: "11.0"      # SM_110 Blackwell
+  cpu_companion: "20-core Arm (10x Cortex-X925 + 10x Cortex-A725)"
+  inference_backend: "ollama"     # Ollama ARM64 build with CUDA-on-ARM (DGX OS stock)
+  hostname: "pmoves-gb10-spark"
+
+# AMD Radeon AI Pro R9700 (RDNA4, gfx1201)
+# Dual-GPU workstation: 2x 32 GB = 64 GB total VRAM on AMD Ryzen 9850X3D.
+# Hostname convention: pmoves-rdna4. Inference backend: llama.cpp HIP
+# (custom fork tlee933/llama.cpp-rdna4-gfx1201 — ROCm 7.1 + gfx1201 kernels NOT
+# in stock Ollama as of 2026-04). llama-server on :8080 exposes OpenAI-compat
+# API; rocm-smi-exporter on :9835 feeds Prometheus.
+radeon-ai-pro-r9700:
+  name: "AMD Radeon AI Pro R9700 (RDNA4 gfx1201)"
+  vendor: "AMD"
+  arch: "rdna4"
+  gpu_target: "gfx1201"
+  total_vram_mb: 32768            # Per-card; workstation has 2x for 64 GB total
+  system_reserve_mb: 2048
+  rocm_version: "7.1"
+  inference_backend: "llama.cpp-hip"
+  inference_server: "llama-server"
+  tensor_split: "0.5,0.5"         # Dual-GPU row-split mode
+  split_mode: "row"
+  cpu_companion: "AMD Ryzen 9850X3D (8C / 3D V-Cache)"
+  hostname: "pmoves-rdna4"

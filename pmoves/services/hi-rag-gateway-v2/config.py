@@ -61,6 +61,7 @@ from urllib.parse import quote_plus, urlparse
 # Environment variables
 # ---------------------------------------------------------------------------
 QDRANT_URL = os.environ.get("QDRANT_URL", "http://qdrant:6333")
+QDRANT__API_KEY = os.environ.get("QDRANT__API_KEY", "")
 COLL = os.environ.get("QDRANT_COLLECTION", "pmoves_chunks_qwen3")
 MODEL = os.environ.get("SENTENCE_MODEL", "all-MiniLM-L6-v2")
 # EMBEDDING_MODEL can override MODEL for embedding-specific selection.
@@ -225,7 +226,7 @@ TENSORZERO_API_KEY = (os.environ.get("TENSORZERO_API_KEY") or "").strip()
 
 USE_MEILI = os.environ.get("USE_MEILI", "false").lower() == "true"
 MEILI_URL = os.environ.get("MEILI_URL", "http://meilisearch:7700")
-MEILI_API_KEY = os.environ.get("MEILI_API_KEY", "master_key")
+MEILI_API_KEY = os.environ.get("MEILI_API_KEY") or os.environ.get("MEILI_MASTER_KEY", "")
 
 _RERANK_STATUS_CACHE = get_rerank_status()
 

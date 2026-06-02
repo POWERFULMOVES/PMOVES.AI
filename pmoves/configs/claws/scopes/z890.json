@@ -35,7 +35,7 @@
   "mcp_servers": {
     "pmoves-cipher": {
       "type": "sse",
-      "url": "http://localhost:8096/sse"
+      "url": "http://localhost:8105/sse"
     },
     "docker": {
       "command": "docker",

@@ -18,8 +18,10 @@ description: >
 
 metadata:
   total_agents: 62
-  total_skills: 119
+  total_skills: 126
   total_skill_md_files: 6
+  # +7 from feat/shift-crew-4090-skills (PR #1536): shift:listen, shift:from-bpm,
+  # persona:bind, 4090:sitrep, 4090:field-brief, 4090:probe, agentgym:run
   p7_apps_with_skill_md:
     - pmoves-services (infrastructure)
     - pmoves-remote (mesh access)
@@ -43,6 +45,22 @@ metadata:
     - id: kvm4-2
       gpu: none
       role: "Data storage, Supabase, Qdrant"
+    # Fleet expansion 2026-05-18
+    - id: dgx-spark
+      gpu: "GB10 Grace-Blackwell 128GB unified"
+      role: "Primary inference — 70B+ models, NeMo Omni, AgentGym"
+    - id: rdna4
+      gpu: "Dual AMD R9700 64GB VRAM (ROCm 7.1)"
+      role: "Dual-GPU local inference, Gemma4 GGUF row-split"
+    - id: jons-1
+      gpu: "Orin Nano Super 8GB"
+      role: "Edge inference — Jetson fleet node 1 of 3"
+    - id: jons-2
+      gpu: "Orin Nano Super 8GB"
+      role: "Edge inference — Jetson fleet node 2 of 3"
+    - id: jons-3
+      gpu: "Orin Nano Super 8GB"
+      role: "Edge inference — Jetson fleet node 3 of 3"
 
 root:
   id: p7.lifecycle
@@ -277,4 +295,95 @@ root:
             Agents should run without Pinokio for KVM/VPS deployment.
             Docker containers with NATS + MCP are the portable unit.
             Pinokio is the dev/desktop experience.
+          status: planned
+
+    # =========================================================================
+    # Phase 8: MoF Rooms-on-a-Stage (2026-05-18)
+    # P7 is the room-aware stage manager — selects rooms, loads suits,
+    # manages stage lifecycle: rehearsal → live → review → archive
+    # =========================================================================
+    - id: p7.lifecycle.mof_rooms
+      task: "MoF Rooms-on-a-Stage — P7 as room-aware stage manager"
+      context: "Room manifest contract, stage lifecycle, P7 NATS launch control"
+      agent_hint: codex
+      children:
+
+        - id: p7.lifecycle.mof_rooms.contract
+          task: "Room manifest contract"
+          context: |
+            pmoves/docs/ROOM_MANIFEST_CONTRACT.md — canonical schema.
+            Rooms own: shell theme, panels, app bindings, skill surfaces.
+            Notebooks own: durable state (threads, Graphiti).
+            Schema: pmoves/contracts/schemas/room/room.manifest.v1.schema.json
+          status: done
+
+        - id: p7.lifecycle.mof_rooms.catalog
+          task: "Room catalog (5 rooms)"
+          context: |
+            pmoves/config/rooms/catalog.json — 5 rooms registered:
+            - 4090-field.room.control (scout, handoff, triage)
+            - 5090-voice.room.studio (voice, TTS, media)
+            - z890-infra.room.fabric (infra, topology, secrets)
+            - 5090-kilocode.room.studio (GPU inference, KiloCode GLM)
+            - demo.room.rehearsal (new — Agent Zero + 4090 claws + HERMES V4)
+          status: in_progress
+          owner: 4090-claude
+
+        - id: p7.lifecycle.mof_rooms.p7_subjects
+          task: "P7 NATS subjects for room lifecycle"
+          context: |
+            p7.nats.launch — room selection + suit loading trigger
+            p7.nats.session — session state (rehearsal → live → review → archive)
+            room.session.updated.v1 — telemetry events per room
+          status: planned
+
+        - id: p7.lifecycle.mof_rooms.demo
+          task: "Demo room: Agent Zero + 4090 claws + HERMES V4"
+          context: |
+            demo.room.rehearsal — one-click demo showcase room:
+            - Suit 1: agent-zero-local (port dynamic, model: hermes3:8b)
+            - Suit 2: 4090-claws (Claude Code skills auto-loaded)
+            - Suit 3: hermes-v4 (HERMES V4 reasoning assist)
+            Launcher: pbnj/pinokio/api/pmoves-pbnj/demo.js
+            Skill: .claude/skills/demo-room/SKILL.md (/demo:room)
+            NATS trigger: p7.nats.launch {"room":"demo.room.rehearsal"}
+          status: in_progress
+          owner: 4090-claude
+
+    # =========================================================================
+    # Phase 9: Model Catalog Phase D (2026-05-18)
+    # NeMo Hermes V4, Gemma4 Embed, NeMo Omni — fleet-wide model namespace
+    # =========================================================================
+    - id: p7.lifecycle.model_catalog_d
+      task: "Model Catalog Phase D — NeMo Hermes V4 + Gemma4 Embed + NeMo Omni"
+      context: "New model families in flare-model-namespace.yaml Phase D section"
+      agent_hint: codex
+      children:
+
+        - id: p7.lifecycle.model_catalog_d.hermes_v4
+          task: "NeMo Hermes V4 (8B + 70B)"
+          context: |
+            hermes-v4-8b: pmoves/hermes-v4-8b → ollama hermes3:8b
+            hermes-v4-70b: pmoves/hermes-v4-70b → ollama hermes3:70b (Spark only)
+            Unsloth GGUF variants available on HuggingFace.
+            Use case: reasoning, instruction, Agent Zero subordinate, demo room.
+            Pull skill: /model:pull hermes-v4-8b
+          status: planned
+
+        - id: p7.lifecycle.model_catalog_d.gemma4_embed
+          task: "Gemma4 text-embedding for Geometry Bus / CHIT"
+          context: |
+            gemma4-embed-text: pmoves/gemma4-embed-text → HF google/gemma-embedding-exp-03-07
+            Replaces text-embedding-004 for on-prem vector ops.
+            Nodes: z890, dgx-spark, rdna4
+            Use case: geometry-bus, chit-vector, hirag-embed
+          status: planned
+
+        - id: p7.lifecycle.model_catalog_d.nemo_omni
+          task: "NeMo Omni VL (multimodal text+vision)"
+          context: |
+            nemo-omni-vl: pmoves/nemo-omni-vl → HF nvidia/NVLM-D-72B
+            Requires NeMo >= 2.1, CUDA 12.4+.
+            Spark-only until quantized variants land.
+            Use case: vision, multimodal-reasoning, document-analysis
           status: planned

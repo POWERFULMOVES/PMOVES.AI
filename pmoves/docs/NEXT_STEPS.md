@@ -1,7 +1,47 @@
 
 # PMOVES v5 • NEXT_STEPS
 Note: Consolidated plan index at pmoves/docs/PMOVES.AI PLANS/README_DOCS_INDEX.md.
-_Last updated: 2026-03-29_
+_Last updated: 2026-05-27_
+
+## Latest changes (May 27, 2026) - Big Ball 5090 closeout
+- Big Ball CHIT/Tokenism hardening is merged: PR `#1633` landed the review-fix branch and PR `#1638` landed the transcribe LFS cleanup gitlink.
+- Dependabot PR `#1561` (`sigstore/cosign-installer` 4.1.1 -> 4.1.2 pinned SHA bump) was reviewed and merged with green checks.
+- Closeout validation on host `POWERFULMOVES` confirms RTX 5090 visibility, TensorZero gateway health, and clean parent submodule integrity after initialization.
+- Tokenism remains guarded: Firefly and contract settlement lanes are dry-run/approval/deployment-gated until real production manifests, chain/RPC/wallet references, FireFly binding, and operator approvals are signed.
+- New starter docs:
+  - `pmoves/docs/TOKENISM_PRODUCTION_ACTIVATION_PACK_2026-05-27.md`
+  - `pmoves/docs/operations/5090_CODEX_VALIDATION_2026-05-27.md`
+
+## Immediate Actions
+
+1. Finish Tokenism production activation pack.
+   - collect real deployed contract addresses, chain id, RPC endpoint reference, wallet custody reference, FireFly endpoint reference, deployment manifest id, operator approval id, signed deployment attestation, rollback plan, and incident/ops contact list
+   - keep FireFly and contract live execution blocked until the full signed activation pack, rollback plan, incident contacts, and dry-run settlement evidence are present
+   - run dry-run settlement end to end before enabling any live executor mode
+
+2. Wire the trusted optimizer bridge.
+   - verify PMOVES-AGENT-ZERO-CODEX, HERMES, and Claw identities in the registry/signing-card config
+   - accept optimizer output as trusted only when TensorZero fitness evidence and signed Graphiti trail entries agree
+
+3. Complete model-fitness integration.
+   - connect Hugging Face candidate discovery to registry candidates
+   - normalize TensorZero inference telemetry plus Pinokio/Unsloth eval output into persisted `model.fitness.recorded.v1` scorecards
+
+4. Close remaining 5090 runtime setup gaps.
+   - make Unsloth callable in the intended Pinokio/5090 training environment
+   - investigate `pmoves-supabase-vector-1` unhealthy and `pmoves-supabase-edge-functions-1` restart loop from the 2026-05-27 Docker snapshot
+   - keep `make -C pmoves submodule-integrity` green after any new gitlink movement
+
+5. Keep math claims honest.
+   - write the zeta method-design doc before implementation
+   - keep hyperbolic geometry described as embedding support and zeta/swarm as heuristic/tracking until proofs and production operators are validated
+
+### Latest changes (Apr 25, 2026) — Agent Zero Fork Sync Complete
+- Agent Zero fork sync completed: branch `PMOVES.AI-Edition-v1.9` pushed to `POWERFULMOVES/PMOVES-Agent-Zero`, closing the 604-commit gap against upstream v1.9.
+- Fresh Overlay strategy applied: 28 clean cherry-picks + 6 conflicting files re-implemented on v1.9 base.
+- MiniMax litellm_provider format corrected from `openai-compatible` to `openai`.
+- Old branch `PMOVES.AI-Edition-Hardened` (pin 2e000aa, Mar 7) retained as fallback.
+- Next step: boot validation of PMOVES.AI-Edition-v1.9 before switching default branch.
 
 ## Current Status
 
@@ -58,7 +98,7 @@ _Last updated: 2026-03-29_
 - Added Supabase tracking schema `pmoves_core.n8n_workflow_registry` plus `make -C pmoves n8n-sync-supabase-registry` so PMOVES can inventory live workflow state.
 - Next focus: validate the full bootstrap against Postgres-backed n8n, refresh PMOVES.YT from demo to production against the same automation lane, and decide which BotZ/MCP workflows join the shared canonical catalog.
 
-## Immediate Actions
+## Historical Immediate Actions (Mar 2026)
 
 1. Close the current hardened merge lane.
    - merge `PMOVES.YT #4`

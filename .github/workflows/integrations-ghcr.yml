@@ -241,9 +241,23 @@ jobs:
 
           if [ "$cfg_url" = "https://github.com/POWERFULMOVES/PMOVES.AI.git" ]; then
             echo "Using checked-out PMOVES.AI workspace as integration source"
+            # Init pmoves/integrations/* submodules so build contexts under those
+            # paths get materialized. `git archive HEAD` (the prior approach)
+            # only includes gitlink mode 160000 entries — submodule contents
+            # would be missing. Use `git ls-files --recurse-submodules` instead.
+            if [ -f .gitmodules ]; then
+              git config --file .gitmodules --get-regexp '^submodule\..+\.path$' \
+                | awk '{print $2}' \
+                | grep '^pmoves/integrations/' \
+                | while IFS= read -r submod_path; do
+                    echo "→ Initializing submodule ${submod_path}"
+                    git submodule update --init --depth=1 "${submod_path}" 2>&1 \
+                      || echo "  (init failed — continuing without submodule content)"
+                  done
+            fi
             rm -rf integration-src
             mkdir -p integration-src
-            git archive --format=tar HEAD | tar -x -C integration-src
+            git ls-files --recurse-submodules -z | tar --null -T - -cf - | tar -xf - -C integration-src
           else
             git clone --depth=1 --branch "$cfg_ref" "$cfg_url" integration-src
           fi
@@ -264,14 +278,53 @@ jobs:
           context: integration-src/${{ steps.cfg.outputs.context }}
           file: integration-src/${{ steps.cfg.outputs.dockerfile }}
           push: false
+          pull: true
           build-args: |
             PIP_CONSTRAINT=requirements.lock
             ${{ steps.cfg.outputs.build_args }}
           platforms: linux/amd64
 
+  cleanup-self-hosted-runners:
+    name: Cleanup ${{ matrix.runner_label }} runner disk
+    needs: resolve-matrix
+    if: ${{ github.event_name != 'pull_request' }}
+    runs-on: [self-hosted, Linux, X64, "${{ matrix.runner_label }}"]
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        runner_label: [kvm4, kvm2]
+    steps:
+      - name: Free disk before image matrix
+        shell: bash
+        run: |
+          set -euxo pipefail
+          echo "Disk before cleanup:"
+          df -h
+          docker system df || true
+
+          docker system prune -af --volumes --filter "until=24h" || true
+          docker builder prune -af --filter "until=24h" || true
+
+          # Work directories differ by node (for example kvm4-1/kvm4-2).
+          # Keep the current checkout area, but remove stale sibling workspaces.
+          for workdir in "${GITHUB_WORKSPACE}/.." /opt/actions-runner*/_work; do
+            [ -d "$workdir" ] || continue
+            find "$workdir" -mindepth 1 -maxdepth 1 -type d -mtime +3 -exec rm -rf {} \; || true
+          done
+
+          for diagdir in /opt/actions-runner*/_diag/pages; do
+            [ -d "$diagdir" ] || continue
+            find "$diagdir" -type f -mtime +1 -delete || true
+          done
+
+          echo "Disk after cleanup:"
+          df -h
+          docker system df || true
+
   build-publish:
     name: Build ${{ matrix.name }}
-    needs: resolve-matrix
+    needs: [resolve-matrix, cleanup-self-hosted-runners]
     if: ${{ github.event_name != 'pull_request' }}
     # Distribute across all available self-hosted Linux runners for parallel builds.
     runs-on: [self-hosted, Linux, X64]
@@ -284,7 +337,7 @@ jobs:
     strategy:
       fail-fast: false
       # Allow all self-hosted runners (ai-lab, vps, hotfix) to build in parallel.
-      max-parallel: 4
+      max-parallel: 2
       matrix:
         name: ${{ fromJSON(needs.resolve-matrix.outputs.names) }}
 
@@ -349,12 +402,45 @@ jobs:
         env:
           MATRIX_NAME: ${{ matrix.name }}
 
+      - name: Validate secrets presence
+        id: secrets_check
+        run: |
+          set -euo pipefail
+          missing=()
+          has_value() { [ -n "$(printenv "$1" || true)" ]; }
+
+          echo "::group::Auth secret audit"
+          if has_value GHCR_USERNAME && has_value GHCR_PAT; then
+            echo "✅ GHCR PAT auth available (GHCR_USERNAME + GHCR_TOKEN/GH_PAT_PUBLISH)"
+          else
+            echo "⚠️ GHCR PAT auth unavailable — will fallback to App token or workflow token"
+            [ -z "$(printenv GHCR_USERNAME || true)" ] && missing+=("GHCR_USERNAME")
+            [ -z "$(printenv GHCR_PAT || true)" ]      && missing+=("GHCR_TOKEN/GH_PAT_PUBLISH")
+          fi
+
+          if has_value GH_APP_CLIENT_ID && has_value GH_APP_SEC; then
+            echo "✅ GitHub App token generation available"
+          else
+            echo "⚠️ GitHub App token unavailable"
+            [ -z "$(printenv GH_APP_CLIENT_ID || true)" ] && missing+=("GH_APP_CLIENT_ID")
+            [ -z "$(printenv GH_APP_SEC || true)" ]       && missing+=("GH_APP_SEC")
+          fi
+          echo "::endgroup::"
+
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "::warning::Missing secrets: ${missing[*]} — GHCR push may fail if no valid auth method remains"
+          fi
+        env:
+          GHCR_USERNAME: ${{ env.GHCR_USERNAME }}
+          GHCR_PAT: ${{ env.GHCR_PAT }}
+          GH_APP_CLIENT_ID: ${{ secrets.GH_APP_CLIENT_ID }}
+          GH_APP_SEC: ${{ secrets.GH_APP_SEC }}
+
       - name: Generate GitHub App token (for clone + GHCR)
         id: app_token
-        continue-on-error: true
-        uses: actions/create-github-app-token@1b10c78c7865c340bc4f6099eb2f838309f1e8c3
+        uses: actions/create-github-app-token@v3
         with:
-          app-id: ${{ secrets.GH_APP_ID }}
+          client-id: ${{ secrets.GH_APP_CLIENT_ID }}
           private-key: ${{ secrets.GH_APP_SEC }}
           # Explicit token scopes required for clone + GHCR push
           permission-contents: read
@@ -379,9 +465,23 @@ jobs:
 
           if [ "$cfg_url" = "https://github.com/POWERFULMOVES/PMOVES.AI.git" ]; then
             echo "Using checked-out PMOVES.AI workspace as integration source"
+            # Init pmoves/integrations/* submodules so build contexts under those
+            # paths get materialized. `git archive HEAD` (the prior approach)
+            # only includes gitlink mode 160000 entries — submodule contents
+            # would be missing. Use `git ls-files --recurse-submodules` instead.
+            if [ -f .gitmodules ]; then
+              git config --file .gitmodules --get-regexp '^submodule\..+\.path$' \
+                | awk '{print $2}' \
+                | grep '^pmoves/integrations/' \
+                | while IFS= read -r submod_path; do
+                    echo "→ Initializing submodule ${submod_path}"
+                    git submodule update --init --depth=1 "${submod_path}" 2>&1 \
+                      || echo "  (init failed — continuing without submodule content)"
+                  done
+            fi
             rm -rf integration-src
             mkdir -p integration-src
-            git archive --format=tar HEAD | tar -x -C integration-src
+            git ls-files --recurse-submodules -z | tar --null -T - -cf - | tar -xf - -C integration-src
           else
             url="$cfg_url"
             # Prefer App token over PAT for clone authentication
@@ -412,21 +512,19 @@ jobs:
         uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd
 
       - name: Install Cosign
-        uses: sigstore/cosign-installer@cad07c2e89fa2edd6e2d7bab4c1aa38e53f76003
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6
 
-      - name: Log in to GHCR (App token preferred)
-        id: login_ghcr_app
-        if: ${{ steps.app_token.outputs.token != '' }}
-        continue-on-error: true
-        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: x-access-token
-          password: ${{ steps.app_token.outputs.token }}
-
-      - name: Log in to GHCR (PAT fallback)
+      # Auth precedence: PAT > App > workflow token.
+      # PAT is preferred because the GitHub App installation lacks org-level
+      # `write:packages` (verified 2026-05-24 — App login succeeds but blob
+      # PUT returns 403 "installation not allowed to Write organization
+      # package"). Since docker/login-action only validates auth-server
+      # acceptance and not push permission, App login was preempting PAT
+      # fallback in the previous order. Swapping the order ensures the
+      # org-scoped PAT (when configured) is tried first.
+      - name: Log in to GHCR (PAT preferred)
         id: login_ghcr_pat
-        if: ${{ steps.login_ghcr_app.outcome != 'success' && env.GHCR_USERNAME != '' && env.GHCR_PAT != '' }}
+        if: ${{ env.GHCR_USERNAME != '' && env.GHCR_PAT != '' }}
         continue-on-error: true
         uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121
         with:
@@ -434,9 +532,19 @@ jobs:
           username: ${{ env.GHCR_USERNAME }}
           password: ${{ env.GHCR_PAT }}
 
+      - name: Log in to GHCR (App token fallback)
+        id: login_ghcr_app
+        if: ${{ steps.login_ghcr_pat.outcome != 'success' && steps.app_token.outputs.token != '' }}
+        continue-on-error: true
+        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: x-access-token
+          password: ${{ steps.app_token.outputs.token }}
+
       - name: Log in to GHCR (workflow token fallback)
         id: login_ghcr_actions
-        if: ${{ steps.login_ghcr_app.outcome != 'success' && steps.login_ghcr_pat.outcome != 'success' }}
+        if: ${{ steps.login_ghcr_pat.outcome != 'success' && steps.login_ghcr_app.outcome != 'success' }}
         continue-on-error: true
         uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121
         with:
@@ -445,9 +553,9 @@ jobs:
           password: ${{ github.token }}
 
       - name: Require GHCR authentication
-        if: ${{ steps.login_ghcr_app.outcome != 'success' && steps.login_ghcr_pat.outcome != 'success' && steps.login_ghcr_actions.outcome != 'success' }}
+        if: ${{ steps.login_ghcr_pat.outcome != 'success' && steps.login_ghcr_app.outcome != 'success' && steps.login_ghcr_actions.outcome != 'success' }}
         run: |
-          echo "::error::Unable to authenticate to GHCR. Check GH_APP_ID/GH_APP_SEC, or GHCR_USERNAME/GHCR_TOKEN."
+          echo "::error::Unable to authenticate to GHCR. Check GHCR_USERNAME/GHCR_TOKEN, GH_APP_CLIENT_ID/GH_APP_SEC, or the default workflow token."
           exit 1
 
       - name: Optional login to Docker Hub
@@ -528,6 +636,7 @@ jobs:
           context: integration-src/${{ steps.cfg.outputs.context }}
           file: integration-src/${{ steps.cfg.outputs.dockerfile }}
           push: true
+          pull: true
           build-args: |
             PIP_CONSTRAINT=requirements.lock
             ${{ steps.cfg.outputs.build_args }}
@@ -538,7 +647,7 @@ jobs:
 
       - name: Attest build provenance (SLSA L3)
         if: steps.build.outputs.digest != '' && steps.meta.outputs.has_tags == 'true'
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v4
         with:
           subject-name: ${{ env.REGISTRY }}/${{ steps.meta.outputs.ghcr_ns }}/${{ steps.cfg.outputs.image_name }}
           subject-digest: ${{ steps.build.outputs.digest }}
@@ -562,7 +671,13 @@ jobs:
         if: ${{ steps.cfg.outputs.generate_sbom == 'true' && steps.meta.outputs.has_tags == 'true' }}
         run: |
           set -euo pipefail
-          syft packages "${{ steps.meta.outputs.primary_tag }}" -o cyclonedx-json > sbom.cdx.json
+          syft packages "${{ steps.meta.outputs.primary_tag }}" -o cyclonedx-json > sbom.cdx.json &
+          syft_pid=$!
+          while kill -0 "$syft_pid" 2>/dev/null; do
+            echo "Syft SBOM generation still running for ${{ matrix.name }}..."
+            sleep 60
+          done
+          wait "$syft_pid"
           echo "sbom_path=sbom.cdx.json" >> $GITHUB_OUTPUT
 
       - name: Upload SBOM artifact
@@ -590,7 +705,7 @@ jobs:
 
       - name: Trivy vulnerability scan (HIGH/CRITICAL)
         if: ${{ steps.meta.outputs.has_tags == 'true' }}
-        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
         with:
           # Gate on HIGH/CRITICAL with fixes available (vendor/unfixed CVEs are still surfaced by the next step).
           # This avoids blocking nightly builds on upstream issues we can't remediate immediately, while keeping
@@ -607,7 +722,7 @@ jobs:
 
       - name: Trivy vulnerability scan report (includes unfixed)
         if: ${{ steps.meta.outputs.has_tags == 'true' }}
-        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
         with:
           image-ref: ${{ steps.meta.outputs.primary_tag }}
           format: table
@@ -627,6 +742,22 @@ jobs:
         with:
           name: ${{ matrix.name }}-trivy
           path: trivy-${{ matrix.name }}.txt
+
+      - name: Clean up pulled image and dangling layers
+        if: ${{ steps.meta.outputs.has_tags == 'true' && always() }}
+        run: |
+          set -euxo pipefail
+          # Remove the image we pulled for Trivy to prevent accumulation on self-hosted runners
+          docker rmi "${{ steps.meta.outputs.primary_tag }}" || true
+          # Aggressive prune: remove unused images older than 24h (keeps BuildKit cache for subsequent matrix jobs)
+          docker image prune -a -f --filter "until=24h" || true
+          docker builder prune -f --filter "until=24h" || true
+          # Clean old runner work directories (>7 days) to prevent checkout artifact bloat
+          for workdir in "${GITHUB_WORKSPACE}/.." /opt/actions-runner*/_work; do
+            [ -d "$workdir" ] || continue
+            find "$workdir" -mindepth 1 -maxdepth 1 -type d -mtime +7 -exec rm -rf {} \; || true
+          done
+          df -h
 
       - name: Cosign verify GHCR digest (keyless)
         if: ${{ steps.meta.outputs.has_tags == 'true' && steps.meta.outputs.use_ghcr == 'true' }}

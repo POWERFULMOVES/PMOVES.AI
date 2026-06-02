@@ -10,9 +10,9 @@
 #   - batch: groups spans into batches for efficient export
 #   - memory_limiter: prevents OOM under load
 # Exporters:
-#   - jaeger: sends traces to Jaeger all-in-one
+#   - otlp/jaeger: sends traces to Jaeger all-in-one via OTLP
 #   - prometheus: exposes trace metrics for Grafana
-#   - logging: debug exporter for development
+#   - debug: console logging for development
 # =============================================================================
 
 receivers:
@@ -34,26 +34,26 @@ processors:
     spike_limit_mib: 100
 
 exporters:
-  jaeger:
-    endpoint: jaeger:14250
+  otlp/jaeger:
+    endpoint: jaeger:4317
     tls:
       insecure: true
   prometheus:
     endpoint: 0.0.0.0:8889
     namespace: pmoves_otel
-  logging:
-    loglevel: warn
+  debug:
+    verbosity: normal
 
 service:
   pipelines:
     traces:
       receivers: [otlp]
       processors: [memory_limiter, batch]
-      exporters: [jaeger, logging]
+      exporters: [otlp/jaeger, debug]
     metrics:
       receivers: [otlp]
       processors: [memory_limiter, batch]
-      exporters: [prometheus, logging]
+      exporters: [prometheus, debug]
   telemetry:
     logs:
       level: info

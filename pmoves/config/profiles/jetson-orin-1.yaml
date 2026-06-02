@@ -1,0 +1,35 @@
+id: jetson-orin-1
+name: "Jetson Orin NX 16GB — Unit 1"
+description: >
+  NVIDIA Jetson Orin NX 16GB edge inference node. 8-core Cortex-A78AE + Ampere GPU
+  (1024 CUDA cores, SM_87) + 16 GB unified LPDDR5. JetPack 7.0 platform.
+  Lightweight inference workloads — Gemma 3 4B/12B class models at INT4/INT8.
+hardware:
+  cpu:
+    vendor: NVIDIA
+    model: "Jetson Orin NX (8-core Cortex-A78AE)"
+    cores: 8
+    threads: 8
+    arch: arm64
+  gpus:
+    - type: nvidia-ampere
+      model: "Jetson Orin NX Ampere (integrated)"
+      cuda_cores: 1024
+      compute_capability: "8.7"
+      memory_gb: 16       # unified with CPU
+  ram_gb: 16
+  unified_memory_gb: 16
+  storage: "NVMe (M.2)"
+  tags: [edge, jetson, orin, arm64, ampere, sm_87, unified-memory]
+compose_overrides:
+  - docker-compose.arm64.override.yml
+services:
+  - mesh-agent
+  - fleet-agent
+tailscale:
+  role: edge-node
+  hostname_pattern: "pmoves-orin-1"
+notes:
+  - "Unified 16 GB LPDDR5 — GPU and CPU share the pool. Target: Gemma 3 4B INT4, Gemma 3 12B INT8."
+  - "JetPack 7.0 (Ubuntu 22.04 base). Requires jetpack-specific container images."
+  - "Docker must use --runtime nvidia. Set in /etc/docker/daemon.json."

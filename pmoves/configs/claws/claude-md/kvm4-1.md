@@ -41,7 +41,7 @@ You may NOT: run docker, make, ssh to other nodes, or access storage services di
 | Archon | `http://${TS_Z890}:8091` | Agent service (prompts/forms) |
 | TensorZero | `http://${TS_Z890}:3030` | LLM gateway |
 | NATS | `nats://${TS_Z890}:4222` | Message bus |
-| Cipher Memory | `http://${TS_Z890}:8096` | Agent memory |
+| Cipher Memory | `http://${TS_Z890}:8105` | Agent memory |
 | Ollama (Z890) | `http://${TS_Z890}:11434` | GPU model serving |
 
 ## Health Check Commands
