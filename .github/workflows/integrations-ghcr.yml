@@ -303,8 +303,11 @@ jobs:
           df -h
           docker system df || true
 
-          docker system prune -af --volumes --filter "until=24h" || true
-          docker builder prune -af --filter "until=24h" || true
+          # The publish matrix can leave recent BuildKit cache behind on shared
+          # self-hosted nodes. Clear all unused Docker state before the next
+          # image wave so heavy arm64 lanes do not inherit a nearly-full root.
+          docker system prune -af --volumes || true
+          docker builder prune -af || true
 
           # Work directories differ by node (for example kvm4-1/kvm4-2).
           # Keep the current checkout area, but remove stale sibling workspaces.
@@ -336,8 +339,9 @@ jobs:
       attestations: write
     strategy:
       fail-fast: false
-      # Allow all self-hosted runners (ai-lab, vps, hotfix) to build in parallel.
-      max-parallel: 2
+      # The multi-arch publish lanes share Docker roots on self-hosted runners.
+      # Serialize them to keep heavyweight arm64 builds from compounding disk use.
+      max-parallel: 1
       matrix:
         name: ${{ fromJSON(needs.resolve-matrix.outputs.names) }}
 
@@ -503,6 +507,10 @@ jobs:
           set -euxo pipefail
           sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/lib/android || true
           sudo rm -rf /usr/local/share/boost || true
+          docker system df || true
+          docker system prune -af --volumes || true
+          docker builder prune -af || true
+          docker system df || true
           df -h
 
       - name: Set up QEMU
@@ -666,12 +674,46 @@ jobs:
         if: ${{ steps.cfg.outputs.generate_sbom == 'true' && steps.meta.outputs.has_tags == 'true' }}
         uses: anchore/sbom-action/download-syft@e22c389904149dbc22b58101806040fa8d37a610
 
+      - name: Free disk space before SBOM
+        if: ${{ steps.cfg.outputs.generate_sbom == 'true' && steps.meta.outputs.has_tags == 'true' }}
+        run: |
+          set -euxo pipefail
+          docker system df || true
+          docker builder prune -af || true
+          docker image prune -f || true
+          docker container prune -f || true
+          rm -rf "${RUNNER_TEMP:-/tmp}/syft-cache"
+          df -h
+
       - name: Generate SBOMs (CycloneDX)
         id: sbom
         if: ${{ steps.cfg.outputs.generate_sbom == 'true' && steps.meta.outputs.has_tags == 'true' }}
+        env:
+          SYFT_REGISTRY_AUTH_AUTHORITY: ghcr.io
+          SYFT_CACHE_DIR: ${{ runner.temp }}/syft-cache
+          PAT_AUTH_OK: ${{ steps.login_ghcr_pat.outcome == 'success' }}
+          APP_AUTH_OK: ${{ steps.login_ghcr_app.outcome == 'success' }}
+          GHCR_USERNAME: ${{ env.GHCR_USERNAME }}
+          GHCR_PAT: ${{ env.GHCR_PAT }}
+          APP_TOKEN: ${{ steps.app_token.outputs.token }}
+          ACTIONS_ACTOR: ${{ github.actor }}
+          ACTIONS_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          syft packages "${{ steps.meta.outputs.primary_tag }}" -o cyclonedx-json > sbom.cdx.json &
+          if [ "${PAT_AUTH_OK}" = "true" ]; then
+            export SYFT_REGISTRY_AUTH_USERNAME="${GHCR_USERNAME}"
+            export SYFT_REGISTRY_AUTH_PASSWORD="${GHCR_PAT}"
+          elif [ "${APP_AUTH_OK}" = "true" ]; then
+            export SYFT_REGISTRY_AUTH_USERNAME="x-access-token"
+            export SYFT_REGISTRY_AUTH_PASSWORD="${APP_TOKEN}"
+          else
+            export SYFT_REGISTRY_AUTH_USERNAME="${ACTIONS_ACTOR}"
+            export SYFT_REGISTRY_AUTH_PASSWORD="${ACTIONS_TOKEN}"
+          fi
+
+          rm -rf "$SYFT_CACHE_DIR"
+          mkdir -p "$SYFT_CACHE_DIR"
+          syft scan --from registry "${{ steps.meta.outputs.primary_tag }}" -o cyclonedx-json > sbom.cdx.json &
           syft_pid=$!
           while kill -0 "$syft_pid" 2>/dev/null; do
             echo "Syft SBOM generation still running for ${{ matrix.name }}..."
@@ -687,12 +729,13 @@ jobs:
           name: ${{ matrix.name }}-sbom
           path: ${{ steps.sbom.outputs.sbom_path }}
 
-      - name: Free disk space (keep BuildKit cache)
+      - name: Free disk space before Trivy
         run: |
           set -euxo pipefail
           docker system df || true
-          # Remove dangling images and stopped containers but preserve BuildKit
-          # layer cache and volumes for faster subsequent builds.
+          # Images are already pushed. Prefer scanner headroom over retaining
+          # local BuildKit cache on the self-hosted runners.
+          docker builder prune -af || true
           docker image prune -f || true
           docker container prune -f || true
           df -h
@@ -749,9 +792,10 @@ jobs:
           set -euxo pipefail
           # Remove the image we pulled for Trivy to prevent accumulation on self-hosted runners
           docker rmi "${{ steps.meta.outputs.primary_tag }}" || true
-          # Aggressive prune: remove unused images older than 24h (keeps BuildKit cache for subsequent matrix jobs)
-          docker image prune -a -f --filter "until=24h" || true
-          docker builder prune -f --filter "until=24h" || true
+          # Aggressive prune: prevent failed heavy builds from leaving the
+          # shared self-hosted Docker root near capacity for the next lane.
+          docker image prune -a -f || true
+          docker builder prune -af || true
           # Clean old runner work directories (>7 days) to prevent checkout artifact bloat
           for workdir in "${GITHUB_WORKSPACE}/.." /opt/actions-runner*/_work; do
             [ -d "$workdir" ] || continue

@@ -29,10 +29,14 @@ jobs:
           fi
 
       - name: Check GHCR_TOKEN validity
-        if: ${{ secrets.GHCR_TOKEN != '' }}
         env:
           GH_TOKEN: ${{ secrets.GHCR_TOKEN }}
         run: |
+          if [ -z "${GH_TOKEN:-}" ]; then
+            echo "GHCR_TOKEN is not configured; skipping optional token check"
+            exit 0
+          fi
+
           if gh api user >/dev/null 2>&1; then
             echo "✅ GHCR_TOKEN is valid"
           else
@@ -40,8 +44,20 @@ jobs:
             echo "::warning::GHCR_TOKEN needs rotation"
           fi
 
+      - name: Detect GitHub App credentials
+        env:
+          GH_APP_CLIENT_ID: ${{ secrets.GH_APP_CLIENT_ID }}
+          GH_APP_SEC: ${{ secrets.GH_APP_SEC }}
+        run: |
+          if [ -n "${GH_APP_CLIENT_ID:-}" ] && [ -n "${GH_APP_SEC:-}" ]; then
+            echo "HAS_GH_APP=true" >> "$GITHUB_ENV"
+          else
+            echo "HAS_GH_APP=false" >> "$GITHUB_ENV"
+            echo "GitHub App credentials are not configured; skipping optional App token check"
+          fi
+
       - name: Check GitHub App token generation
-        if: ${{ secrets.GH_APP_CLIENT_ID != '' && secrets.GH_APP_SEC != '' }}
+        if: env.HAS_GH_APP == 'true'
         id: app_token
         uses: actions/create-github-app-token@v3
         with:
@@ -51,17 +67,24 @@ jobs:
           permission-packages: write
 
       - name: Verify App token scopes
-        if: steps.app_token.outputs.token != ''
+        if: env.HAS_GH_APP == 'true' && steps.app_token.outputs.token != ''
         env:
           GH_TOKEN: ${{ steps.app_token.outputs.token }}
         run: |
           # App tokens are installation tokens; they don't have a /user endpoint.
-          # Validate by checking org package access (lightweight probe).
-          if gh api /users/${{ github.repository_owner }} >/dev/null 2>&1; then
-            echo "✅ GitHub App token is valid and API-accessible"
+          # Validate the package permission this workflow requests, not only public API reachability.
+          owner_type="$(gh api "/users/${{ github.repository_owner }}" --jq '.type' 2>/dev/null || true)"
+          if [ "$owner_type" = "Organization" ]; then
+            packages_path="/orgs/${{ github.repository_owner }}/packages?package_type=container&per_page=1"
           else
-            echo "❌ GitHub App token failed API probe"
-            echo "::warning::GitHub App token may lack permissions or installation may be suspended"
+            packages_path="/users/${{ github.repository_owner }}/packages?package_type=container&per_page=1"
+          fi
+
+          if gh api "$packages_path" >/dev/null 2>&1; then
+            echo "✅ GitHub App token can access container packages"
+          else
+            echo "❌ GitHub App token failed container package probe"
+            echo "::warning::GitHub App token may lack packages permission or installation may be suspended"
           fi
 
       - name: Notify on failure
