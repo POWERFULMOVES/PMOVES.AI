@@ -14,12 +14,15 @@
   # Content-Security-Policy
   #   - default-src 'self' blocks everything unless explicitly allowed.
   #   - 'self' covers index.html, styles.css, main.js, assets/.
+  #   - frame-src 'self' is required: index.html embeds the /hyperdim/ viewer as
+  #     same-origin gallery iframes. Without 'self' the browser blocks them
+  #     ("Framing ... violates ... frame-src") and the gallery shows black boxes.
   #   - YouTube frames allowed (optional; remove if you don't embed).
   #   - Inline <style> and <script> disallowed — we ship external files only.
   #   - TODO(founder): when Cloudflare Web Analytics is enabled, add
   #     https://static.cloudflareinsights.com to script-src and the
   #     matching connect-src host.
-  Content-Security-Policy: default-src 'self'; base-uri 'self'; form-action 'self' mailto:; frame-ancestors 'none'; img-src 'self' data:; style-src 'self'; script-src 'self'; font-src 'self' data:; connect-src 'self'; frame-src https://www.youtube.com https://www.youtube-nocookie.com; object-src 'none'; upgrade-insecure-requests
+  Content-Security-Policy: default-src 'self'; base-uri 'self'; form-action 'self' mailto:; frame-ancestors 'none'; img-src 'self' data:; style-src 'self'; script-src 'self'; font-src 'self' data:; connect-src 'self'; frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com; object-src 'none'; upgrade-insecure-requests
 
 # --- Hyperdimensions WebGL viewer (embedded as gallery iframes on /) ---
 #   - This sub-app is framed same-origin by index.html, and loads three.js
@@ -32,11 +35,18 @@
 #     + script-src 'self' still win and the embeds/CDN scripts stay blocked.
 #   - 'unsafe-inline' is required: the viewer ships one inline <script type=module>
 #     and inline <style> (single-file toy app, no nonce pipeline).
+#   - 'unsafe-eval' is required: the viewer compiles each preset's parametric
+#     `surface.code` at runtime via `new Function(code + '; return surface;')`
+#     (see fork index.html ~L1696/L1886). Without it the surface never compiles
+#     ("EvalError ... 'unsafe-eval' is not an allowed source") and the canvas
+#     renders solid black. The eval'd code is first-party (our own saves/*.json
+#     presets), the frame is locked to frame-ancestors 'self', and this relaxed
+#     policy is scoped to /hyperdim/* only — root / keeps script-src 'self'.
 /hyperdim/*
   ! X-Frame-Options
   ! Content-Security-Policy
   X-Frame-Options: SAMEORIGIN
-  Content-Security-Policy: default-src 'self'; base-uri 'self'; frame-ancestors 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://unpkg.com; font-src 'self' data:; connect-src 'self' https://unpkg.com https://cdnjs.cloudflare.com; object-src 'none'; upgrade-insecure-requests
+  Content-Security-Policy: default-src 'self'; base-uri 'self'; frame-ancestors 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com https://unpkg.com; font-src 'self' data:; connect-src 'self' https://unpkg.com https://cdnjs.cloudflare.com; object-src 'none'; upgrade-insecure-requests
 
 # --- Long-cache static assets ---
 /assets/*
