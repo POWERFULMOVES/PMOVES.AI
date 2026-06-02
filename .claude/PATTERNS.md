@@ -443,6 +443,24 @@ A Bash-style `${VAR:?message}` guard turns a name **mismatch** into a **hard con
 
 > **Submodule compose guard gap:** the damage-control `compose` Known Road (`KNOWN_ROAD=compose:pr:<n>`) only matches parent paths containing `/pmoves/` — submodule compose files (`PMOVES-DoX/docker-compose*.yml`) have no sanctioned Edit bypass. To fix a submodule compose, either extend the `_is_compose_target` predicate in `.claude/hooks/damage-control/known_roads.py` (the "extend the tooling, don't work around it" rule), or land the change as a PR authored directly in the submodule repo.
 
+### 3. Base-image OS-patch: verify the base default `USER` first (`apt upgrade` is not portable)
+
+A Trivy/CVE backfill that adds `RUN apt-get update && apt-get upgrade -y` to a derived image is **not** a copy-paste across repos. It runs as whatever `USER` the **base image** last set — and many upstream app images drop to a non-root user (`www-data`, `node`, `1001`). Apt as a non-root user fails `Permission denied` (exit 100), which on `main` reddens **every** open PR's matrix check, not just the one you touched. **Check the base's default user before patching:**
+
+```bash
+docker inspect <base-image>:<tag> --format '{{.Config.User}}'   # empty = root; else non-root
+```
+
+The user dictates the form:
+| Base default `USER` | Correct patch |
+|---|---|
+| root (empty) | `RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/*` — as-is |
+| non-root (`www-data`, `node`…) | `USER root` → `RUN apt-get … upgrade …` → **`USER <original>`** (restore it, or the app runs privileged) |
+
+Worked examples (2026-06-02 Lane-A Trivy pass): **wger** (`extras/docker/production`) base runs as **root** → bare `apt upgrade` worked; **firefly-iii** (`fireflyiii/core`) defaults to **`www-data`** → the bare form failed `exit 100` and broke main until fixed to `USER root` → apt → `USER www-data` (PR #1685). The same `USER root → … → USER node` shape applies to node-based upstreams.
+
+> **Read the failed *step*, not the check name.** The red check was "Validate firefly-iii", but the failure was three layers up in `apt` permissions — and it surfaced on *unrelated* PRs because the break was on `main`. When a check goes red across the whole queue after a base-image change, suspect the shared `main` build, fix it there once, then branch-update the queue (it inherits the fix). Don't debug per-PR.
+
 ## PR Review & Merge Workflow
 
 **Skill chain:**
