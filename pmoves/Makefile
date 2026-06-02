@@ -2560,6 +2560,10 @@ up-cipher: ## Start Cipher Memory (knowledge-graph memory for Claude Code / agen
 cipher-health: ## Check Cipher Memory health
 	@curl -sf http://localhost:$${CIPHER_PORT:-8096}/health && echo " ✔ cipher-api healthy" || (echo "✗ cipher-api unhealthy" && exit 1)
 
+.PHONY: spark-health
+spark-health: ## Check SPARK node (DGX Spark) health: Ollama, TensorZero, NATS, Cipher, Agent Zero SPARK
+	@$(PYTHON) scripts/spark_health.py
+
 .PHONY: agents-headless-smoke
 agents-headless-smoke: ## Check Agent Zero and Archon headless services
 	@$(MAKE) health-agent-zero

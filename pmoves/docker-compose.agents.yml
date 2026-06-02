@@ -964,13 +964,6 @@ services:
           cpus: '1.0'
           memory: 512M
 
-  # Ultimate TTS Studio - Multi-engine TTS with 7 engines (Gradio UI)
-    deploy:
-      resources:
-        limits:
-          cpus: '1.0'
-          memory: 512M
-
 # =============================================================================
 # Networks — declared external so this overlay parses standalone.
 # Canonical definitions in docker-compose.base.yml. See
