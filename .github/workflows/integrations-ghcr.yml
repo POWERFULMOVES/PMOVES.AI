@@ -278,14 +278,53 @@ jobs:
           context: integration-src/${{ steps.cfg.outputs.context }}
           file: integration-src/${{ steps.cfg.outputs.dockerfile }}
           push: false
+          pull: true
           build-args: |
             PIP_CONSTRAINT=requirements.lock
             ${{ steps.cfg.outputs.build_args }}
           platforms: linux/amd64
 
+  cleanup-self-hosted-runners:
+    name: Cleanup ${{ matrix.runner_label }} runner disk
+    needs: resolve-matrix
+    if: ${{ github.event_name != 'pull_request' }}
+    runs-on: [self-hosted, Linux, X64, "${{ matrix.runner_label }}"]
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        runner_label: [kvm4, kvm2]
+    steps:
+      - name: Free disk before image matrix
+        shell: bash
+        run: |
+          set -euxo pipefail
+          echo "Disk before cleanup:"
+          df -h
+          docker system df || true
+
+          docker system prune -af --volumes --filter "until=24h" || true
+          docker builder prune -af --filter "until=24h" || true
+
+          # Work directories differ by node (for example kvm4-1/kvm4-2).
+          # Keep the current checkout area, but remove stale sibling workspaces.
+          for workdir in "${GITHUB_WORKSPACE}/.." /opt/actions-runner*/_work; do
+            [ -d "$workdir" ] || continue
+            find "$workdir" -mindepth 1 -maxdepth 1 -type d -mtime +3 -exec rm -rf {} \; || true
+          done
+
+          for diagdir in /opt/actions-runner*/_diag/pages; do
+            [ -d "$diagdir" ] || continue
+            find "$diagdir" -type f -mtime +1 -delete || true
+          done
+
+          echo "Disk after cleanup:"
+          df -h
+          docker system df || true
+
   build-publish:
     name: Build ${{ matrix.name }}
-    needs: resolve-matrix
+    needs: [resolve-matrix, cleanup-self-hosted-runners]
     if: ${{ github.event_name != 'pull_request' }}
     # Distribute across all available self-hosted Linux runners for parallel builds.
     runs-on: [self-hosted, Linux, X64]
@@ -298,7 +337,7 @@ jobs:
     strategy:
       fail-fast: false
       # Allow all self-hosted runners (ai-lab, vps, hotfix) to build in parallel.
-      max-parallel: 4
+      max-parallel: 2
       matrix:
         name: ${{ fromJSON(needs.resolve-matrix.outputs.names) }}
 
@@ -363,9 +402,43 @@ jobs:
         env:
           MATRIX_NAME: ${{ matrix.name }}
 
+      - name: Validate secrets presence
+        id: secrets_check
+        run: |
+          set -euo pipefail
+          missing=()
+          has_value() { [ -n "$(printenv "$1" || true)" ]; }
+
+          echo "::group::Auth secret audit"
+          if has_value GHCR_USERNAME && has_value GHCR_PAT; then
+            echo "✅ GHCR PAT auth available (GHCR_USERNAME + GHCR_TOKEN/GH_PAT_PUBLISH)"
+          else
+            echo "⚠️ GHCR PAT auth unavailable — will fallback to App token or workflow token"
+            [ -z "$(printenv GHCR_USERNAME || true)" ] && missing+=("GHCR_USERNAME")
+            [ -z "$(printenv GHCR_PAT || true)" ]      && missing+=("GHCR_TOKEN/GH_PAT_PUBLISH")
+          fi
+
+          if has_value GH_APP_CLIENT_ID && has_value GH_APP_SEC; then
+            echo "✅ GitHub App token generation available"
+          else
+            echo "⚠️ GitHub App token unavailable"
+            [ -z "$(printenv GH_APP_CLIENT_ID || true)" ] && missing+=("GH_APP_CLIENT_ID")
+            [ -z "$(printenv GH_APP_SEC || true)" ]       && missing+=("GH_APP_SEC")
+          fi
+          echo "::endgroup::"
+
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "::warning::Missing secrets: ${missing[*]} — GHCR push may fail if no valid auth method remains"
+          fi
+        env:
+          GHCR_USERNAME: ${{ env.GHCR_USERNAME }}
+          GHCR_PAT: ${{ env.GHCR_PAT }}
+          GH_APP_CLIENT_ID: ${{ secrets.GH_APP_CLIENT_ID }}
+          GH_APP_SEC: ${{ secrets.GH_APP_SEC }}
+
       - name: Generate GitHub App token (for clone + GHCR)
         id: app_token
-        uses: actions/create-github-app-token@1b10c78c7865c340bc4f6099eb2f838309f1e8c3
+        uses: actions/create-github-app-token@v3
         with:
           client-id: ${{ secrets.GH_APP_CLIENT_ID }}
           private-key: ${{ secrets.GH_APP_SEC }}
@@ -563,6 +636,7 @@ jobs:
           context: integration-src/${{ steps.cfg.outputs.context }}
           file: integration-src/${{ steps.cfg.outputs.dockerfile }}
           push: true
+          pull: true
           build-args: |
             PIP_CONSTRAINT=requirements.lock
             ${{ steps.cfg.outputs.build_args }}
@@ -597,7 +671,13 @@ jobs:
         if: ${{ steps.cfg.outputs.generate_sbom == 'true' && steps.meta.outputs.has_tags == 'true' }}
         run: |
           set -euo pipefail
-          syft packages "${{ steps.meta.outputs.primary_tag }}" -o cyclonedx-json > sbom.cdx.json
+          syft packages "${{ steps.meta.outputs.primary_tag }}" -o cyclonedx-json > sbom.cdx.json &
+          syft_pid=$!
+          while kill -0 "$syft_pid" 2>/dev/null; do
+            echo "Syft SBOM generation still running for ${{ matrix.name }}..."
+            sleep 60
+          done
+          wait "$syft_pid"
           echo "sbom_path=sbom.cdx.json" >> $GITHUB_OUTPUT
 
       - name: Upload SBOM artifact
@@ -673,7 +753,10 @@ jobs:
           docker image prune -a -f --filter "until=24h" || true
           docker builder prune -f --filter "until=24h" || true
           # Clean old runner work directories (>7 days) to prevent checkout artifact bloat
-          find "${{ github.workspace }}/../" -maxdepth 2 -type d -name '_work' -exec find {} -mindepth 1 -maxdepth 1 -type d -mtime +7 -exec rm -rf {} + \; || true
+          for workdir in "${GITHUB_WORKSPACE}/.." /opt/actions-runner*/_work; do
+            [ -d "$workdir" ] || continue
+            find "$workdir" -mindepth 1 -maxdepth 1 -type d -mtime +7 -exec rm -rf {} \; || true
+          done
           df -h
 
       - name: Cosign verify GHCR digest (keyless)

@@ -102,6 +102,7 @@ jobs:
 
       - name: Clean up old images
         if: always()
+        shell: bash
         run: |
           set -euxo pipefail
           # Prune unused gateway-agent images older than 24h to prevent disk bloat
@@ -122,6 +123,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Deploy Gateway Agent
+        shell: bash
         env:
           # Required by ${:?} guards in docker-compose.yml — CI uses dummy values for deploy only
           CHIT_PROD_PASSPHRASE: ci-deploy-placeholder
@@ -146,10 +148,14 @@ jobs:
           WGER_SECRET_KEY: ci-deploy-placeholder
         run: |
           cd pmoves
-          docker compose --profile agents up -d gateway-agent
+          touch env.shared env.shared.generated .env.generated .env.local \
+            env.tier-data env.tier-api env.tier-llm env.tier-worker \
+            env.tier-media env.tier-agent env.tier-ui env.tier-supabase
+          docker compose --profile agents up -d --no-build --no-deps gateway-agent
           echo "✓ Gateway Agent deployed"
 
       - name: Wait for health check
+        shell: bash
         run: |
           echo "Waiting for Gateway Agent to be healthy..."
           for i in {1..30}; do
@@ -164,6 +170,7 @@ jobs:
           exit 1
 
       - name: Verify tool discovery
+        shell: bash
         run: |
           sleep 5  # Give it time to discover tools
           response=$(curl -s http://localhost:8100/tools)
@@ -245,7 +252,10 @@ jobs:
           WGER_SECRET_KEY: ci-deploy-placeholder
         run: |
           cd pmoves
-          docker compose -f docker-compose.yml -f docker-compose.vps.override.yml up -d gateway-agent
+          touch env.shared env.shared.generated .env.generated .env.local \
+            env.tier-data env.tier-api env.tier-llm env.tier-worker \
+            env.tier-media env.tier-agent env.tier-ui env.tier-supabase
+          docker compose -f docker-compose.yml -f docker-compose.vps.override.yml up -d --no-build --no-deps gateway-agent
           echo "✓ Gateway Agent deployed to VPS"
 
       - name: Wait for health check
@@ -288,6 +298,7 @@ jobs:
 
       - name: Clean up old images
         if: always()
+        shell: bash
         run: |
           set -euxo pipefail
           docker image prune -a -f --filter "label=com.docker.compose.service=gateway-agent" --filter "until=24h" || true
@@ -312,8 +323,37 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Rollback to previous version
+        env:
+          # Required by ${:?} guards in docker-compose.yml — rollback should not be blocked by unrelated services.
+          CHIT_PROD_PASSPHRASE: ci-rollback-placeholder
+          ANON_KEY: ci-rollback-placeholder
+          JWT_SECRET: ci-rollback-placeholder
+          LOGFLARE_PUBLIC_ACCESS_TOKEN: ci-rollback-placeholder
+          LOGFLARE_PRIVATE_ACCESS_TOKEN: ci-rollback-placeholder
+          MCP_SERVER_TOKEN: ci-rollback-placeholder
+          MEILI_MASTER_KEY: ci-rollback-placeholder
+          MINIO_USER: ci-rollback-placeholder
+          MINIO_PASSWORD: ci-rollback-placeholder
+          QDRANT__API_KEY: ci-rollback-placeholder
+          NEO4J_PASSWORD: ci-rollback-placeholder
+          SECRET_KEY_BASE: ci-rollback-placeholder
+          SERVICE_ROLE_KEY: ci-rollback-placeholder
+          SUPABASE_DB_USER: ci-rollback-placeholder
+          SUPABASE_DB_PASSWORD: ci-rollback-placeholder
+          SUPABASE_SERVICE_ROLE_KEY: ci-rollback-placeholder
+          VAULT_ENC_KEY: ci-rollback-placeholder
+          WGER_ADMIN_PASSWORD: ci-rollback-placeholder
+          WGER_DB_PASSWORD: ci-rollback-placeholder
+          WGER_SECRET_KEY: ci-rollback-placeholder
+          NATS_URL: nats://localhost:4222
+          PRESIGN_SHARED_SECRET: ci-rollback-placeholder
+          SUPABASE_SERVICE_KEY: ci-rollback-placeholder
+        shell: bash
         run: |
           cd pmoves
+          touch env.shared env.shared.generated .env.generated .env.local \
+            env.tier-data env.tier-api env.tier-llm env.tier-worker \
+            env.tier-media env.tier-agent env.tier-ui env.tier-supabase
           docker compose stop gateway-agent || true
           docker compose rm -f gateway-agent || true
           echo "✓ Gateway Agent stopped (rolled back)"
@@ -331,8 +371,37 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Rollback to previous version
+        env:
+          # Required by ${:?} guards in docker-compose.yml — rollback should not be blocked by unrelated services.
+          CHIT_PROD_PASSPHRASE: ci-rollback-placeholder
+          ANON_KEY: ci-rollback-placeholder
+          JWT_SECRET: ci-rollback-placeholder
+          LOGFLARE_PUBLIC_ACCESS_TOKEN: ci-rollback-placeholder
+          LOGFLARE_PRIVATE_ACCESS_TOKEN: ci-rollback-placeholder
+          MCP_SERVER_TOKEN: ci-rollback-placeholder
+          MEILI_MASTER_KEY: ci-rollback-placeholder
+          MINIO_USER: ci-rollback-placeholder
+          MINIO_PASSWORD: ci-rollback-placeholder
+          QDRANT__API_KEY: ci-rollback-placeholder
+          NEO4J_PASSWORD: ci-rollback-placeholder
+          SECRET_KEY_BASE: ci-rollback-placeholder
+          SERVICE_ROLE_KEY: ci-rollback-placeholder
+          SUPABASE_DB_USER: ci-rollback-placeholder
+          SUPABASE_DB_PASSWORD: ci-rollback-placeholder
+          SUPABASE_SERVICE_ROLE_KEY: ci-rollback-placeholder
+          VAULT_ENC_KEY: ci-rollback-placeholder
+          WGER_ADMIN_PASSWORD: ci-rollback-placeholder
+          WGER_DB_PASSWORD: ci-rollback-placeholder
+          WGER_SECRET_KEY: ci-rollback-placeholder
+          NATS_URL: nats://localhost:4222
+          PRESIGN_SHARED_SECRET: ci-rollback-placeholder
+          SUPABASE_SERVICE_KEY: ci-rollback-placeholder
+        shell: bash
         run: |
           cd pmoves
-          docker compose -f docker-compose.yml -f docker-compose.vps.override.yml down gateway-agent
+          touch env.shared env.shared.generated .env.generated .env.local \
+            env.tier-data env.tier-api env.tier-llm env.tier-worker \
+            env.tier-media env.tier-agent env.tier-ui env.tier-supabase
+          docker compose -f docker-compose.yml -f docker-compose.vps.override.yml stop gateway-agent || true
+          docker compose -f docker-compose.yml -f docker-compose.vps.override.yml rm -f gateway-agent || true
           echo "✓ Gateway Agent stopped (rolled back)"
-
