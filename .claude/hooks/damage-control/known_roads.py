@@ -32,11 +32,19 @@ from typing import Callable, Dict, Tuple
 
 
 def _is_compose_target(normalized_fwd: str) -> bool:
-    """compose domain: pmoves docker-compose*.yml only."""
+    """compose domain: any PMOVES-owned docker-compose*.yml.
+
+    Covers the parent `pmoves/` tree AND submodule compose files
+    (e.g. PMOVES-DoX/docker-compose.supabase.yml). The basename check
+    already restricts to compose files; the path check scopes to the
+    PMOVES.AI working tree (every node/submodule path contains 'pmoves').
+    The Known Road still requires a provable reason (pr:/issue:/handoff:),
+    so this widens *which* compose files can be opened, not the bar to open them.
+    """
     basename = os.path.basename(normalized_fwd).lower()
     if not (basename.startswith("docker-compose") and basename.endswith(".yml")):
         return False
-    return "/pmoves/" in normalized_fwd or normalized_fwd.startswith("pmoves/")
+    return "pmoves" in normalized_fwd.lower()
 
 
 # domain name -> predicate(normalized_forward_slash_path) -> bool
