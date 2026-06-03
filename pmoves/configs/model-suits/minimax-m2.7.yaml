@@ -120,6 +120,10 @@ cross_agent:
   a2ui: full
   kilocode: full  # KiloCode MiniMax edition
 
+huggingface:
+  model_id: MiniMaxAI/MiniMax-M2.7
+  collection: DARKXSIDE/pmoves-68bcb20613cef7a0aa745e0e
+
 metadata:
   source: pmoves/minimax-integration
   last_verified: 2026-05-13

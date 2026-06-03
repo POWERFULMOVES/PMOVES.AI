@@ -1010,6 +1010,16 @@ The pipeline reports success because its validation scope is too narrow. Neither
 
 <!-- GRAPHITI_MARK: Z890-CLAUDE::LANE-A-TRIVY-AND-WORKORDER::2026-06-01 -->
 
+## SPARK Node Infrastructure Recovery (2026-06-01)
+
+- `2026-06-01T19:15:00Z` CLAIM `SPARK-KIMI` scope: SPARK node (ARM64 + NVIDIA GB10) infrastructure recovery — three parallel workstreams:
+  1. **Lane A — env.shared bootstrap**: `pmoves/env.shared` was missing (only `.example` existed). Copied example, seeded generated credentials (MEILI_API_KEY, SERVICE_PASSWORD_POSTGRES, TENSORZERO_CLICKHOUSE_PASSWORD), cleared placeholder defaults, ran `make env-check`. Result: structural pass; 24 optional API keys empty (expected for optional services). No critical blockers.
+  2. **Lane B — Ollama model prune**: Disk was 88% full (312GB models). Pruned `qwen3:235b-a22b-q4_K_M` (142.4GB) and `qwen3.5:35b-a3b-q4_K_M` (23.9GB) as duplicates/oversized. Retained: `qwen3.5:35b-a3b-q8_0` (quality), `qwen3:30b-a3b-q4_K_M` (fast fallback), `nemotron-3-super:120b` (reasoning), `llama3.2:3b` (test), `kimi-k2.6:cloud` (cloud). Disk recovered to **70%** (264G free).
+  3. **Lane C — GitHub runner reinstall**: `pmoves-spark-ailab` was offline (no `/opt/actions-runner-spark`). Downloaded actions-runner-linux-arm64-2.334.0, configured with registration token, replaced old runner, installed as systemd user service (`~/.config/systemd/user/actions-runner-spark.service`) with `RUNNER_ALLOW_RUNNER_REUSE=true`. Runner now **online** with labels `self-hosted, Linux, ai-lab, ARM64, spark`.
+- Three-body: delivery=SPARK-KIMI, control=operator approval, memory=this trail. agent_signature: `ACK::SPARK-KIMI::SPARK-INFRA-RECOVERY-2026-06-01`.
+
+<!-- GRAPHITI_MARK: SPARK-KIMI::SPARK-INFRA-RECOVERY::2026-06-01 -->
+
 ## Postmerge Gateway/PAT CI Stabilization (2026-06-02)
 
 - `2026-06-02T07:23:00-04:00` CLAIM `CODEX-GPT5` scope: Continue postmerge build fixes after #1657 landed; inspect AGNOTE4482/P7 context and live failing `main` runs. Target failures: `Deploy Gateway Agent` health-check red after successful compose deploy, and jobless `.github/workflows/pat-health-check.yml` failure on push. Branch: `codex/fix-postmerge-gateway-pat-ci`. Three-body: delivery=CODEX-GPT5, control=DARKXSIDE/operator direction, memory=this trail. agent_signature: `ACK::CODEX-GPT5::POSTMERGE-GATEWAY-PAT-CI-CLAIM-2026-06-02`.
