@@ -84,6 +84,17 @@
       "headers": {
         "Authorization": "Bearer ${MCP_GATEWAY_AUTH_TOKEN}"
       }
+    },
+    "huggingface": {
+      "_note": "OFFICIAL HuggingFace MCP Server (evalstate/hf-mcp-server). Provides: Model Search, Dataset Search, Spaces/Papers search, Documentation semantic search, Hub repo details, Gradio Space execution. Requires HF_TOKEN for higher rate limits.",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@llmindset/hf-mcp-server"
+      ],
+      "env": {
+        "HF_TOKEN": "${HF_TOKEN}"
+      }
     }
   }
 }

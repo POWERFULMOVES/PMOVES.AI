@@ -80,6 +80,12 @@ cross_agent:
   typer: untested
   pinokio: full
 
+huggingface:
+  model_id: google/gemma-4-31B-it
+  gguf_repo: unsloth/gemma-4-31B-it-GGUF
+  unsloth_repo: unsloth/gemma-4-31B-it-unsloth-bnb-4bit
+  collection: DARKXSIDE/pmoves-68bcb20613cef7a0aa745e0e
+
 metadata:
   source: youtube_benchmark_digital_spaceport
   last_verified: 2026-04-19
