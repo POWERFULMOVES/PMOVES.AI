@@ -43,6 +43,7 @@ jobs:
       - name: Validate Python syntax
         run: |
           python3 -m py_compile pmoves/services/gateway-agent/app.py
+          python3 -m py_compile pmoves/services/gateway-agent/nats_integration.py
           echo "✓ Python syntax valid"
 
       - name: Validate requirements.txt
@@ -90,6 +91,9 @@ jobs:
           WGER_ADMIN_PASSWORD: ci-build-placeholder
           WGER_DB_PASSWORD: ci-build-placeholder
           WGER_SECRET_KEY: ci-build-placeholder
+          NATS_URL: nats://nats:pmoves@nats:4222
+          PRESIGN_SHARED_SECRET: ci-build-placeholder
+          SUPABASE_SERVICE_KEY: ci-build-placeholder
         run: |
           cd pmoves
           docker compose build gateway-agent
@@ -146,6 +150,10 @@ jobs:
           WGER_ADMIN_PASSWORD: ci-deploy-placeholder
           WGER_DB_PASSWORD: ci-deploy-placeholder
           WGER_SECRET_KEY: ci-deploy-placeholder
+          GATEWAY_AGENT_PORT: "8100"
+          NATS_URL: nats://nats:pmoves@nats:4222
+          PRESIGN_SHARED_SECRET: ci-deploy-placeholder
+          SUPABASE_SERVICE_KEY: ci-deploy-placeholder
         run: |
           cd pmoves
           touch env.shared env.shared.generated .env.generated .env.local \
@@ -167,6 +175,8 @@ jobs:
             sleep 2
           done
           echo "✗ Gateway Agent failed health check"
+          docker compose --profile agents ps gateway-agent || true
+          docker compose --profile agents logs --tail=80 gateway-agent || true
           exit 1
 
       - name: Verify tool discovery
@@ -222,6 +232,9 @@ jobs:
           WGER_ADMIN_PASSWORD: ci-build-placeholder
           WGER_DB_PASSWORD: ci-build-placeholder
           WGER_SECRET_KEY: ci-build-placeholder
+          NATS_URL: nats://nats:pmoves@nats:4222
+          PRESIGN_SHARED_SECRET: ci-build-placeholder
+          SUPABASE_SERVICE_KEY: ci-build-placeholder
         run: |
           cd pmoves
           docker compose -f docker-compose.yml -f docker-compose.vps.override.yml build gateway-agent
@@ -250,6 +263,9 @@ jobs:
           WGER_ADMIN_PASSWORD: ci-deploy-placeholder
           WGER_DB_PASSWORD: ci-deploy-placeholder
           WGER_SECRET_KEY: ci-deploy-placeholder
+          NATS_URL: nats://nats:pmoves@nats:4222
+          PRESIGN_SHARED_SECRET: ci-deploy-placeholder
+          SUPABASE_SERVICE_KEY: ci-deploy-placeholder
         run: |
           cd pmoves
           touch env.shared env.shared.generated .env.generated .env.local \
@@ -270,6 +286,8 @@ jobs:
             sleep 2
           done
           echo "✗ Gateway Agent failed health check"
+          docker compose -f docker-compose.yml -f docker-compose.vps.override.yml ps gateway-agent || true
+          docker compose -f docker-compose.yml -f docker-compose.vps.override.yml logs --tail=80 gateway-agent || true
           exit 1
 
       - name: Verify tool discovery
