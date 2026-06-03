@@ -671,7 +671,13 @@ jobs:
         if: ${{ steps.cfg.outputs.generate_sbom == 'true' && steps.meta.outputs.has_tags == 'true' }}
         run: |
           set -euo pipefail
-          syft packages "${{ steps.meta.outputs.primary_tag }}" -o cyclonedx-json > sbom.cdx.json
+          syft packages "${{ steps.meta.outputs.primary_tag }}" -o cyclonedx-json > sbom.cdx.json &
+          syft_pid=$!
+          while kill -0 "$syft_pid" 2>/dev/null; do
+            echo "Syft SBOM generation still running for ${{ matrix.name }}..."
+            sleep 60
+          done
+          wait "$syft_pid"
           echo "sbom_path=sbom.cdx.json" >> $GITHUB_OUTPUT
 
       - name: Upload SBOM artifact

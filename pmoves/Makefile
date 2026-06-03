@@ -163,6 +163,8 @@ include mk/egress.mk
 include mk/yt-cookies.mk
 include mk/mcp-toolkit.mk
 include mk/mcp-toolkit-4090.mk
+include mk/mcp-toolkit-spark.mk
+include mk/unsloth.mk
 
 # ----------------------------------------------------------------------------
 # venv + bringup-toolchain prereqs
@@ -2681,6 +2683,10 @@ up-cipher: ## Start Cipher Memory (knowledge-graph memory for Claude Code / agen
 .PHONY: cipher-health
 cipher-health: ## Check Cipher Memory health
 	@curl -sf http://localhost:$${CIPHER_PORT:-8096}/health && echo " ✔ cipher-api healthy" || (echo "✗ cipher-api unhealthy" && exit 1)
+
+.PHONY: spark-health
+spark-health: ## Check SPARK node (DGX Spark) health: Ollama, TensorZero, NATS, Cipher, Agent Zero SPARK
+	@$(PYTHON) scripts/spark_health.py
 
 .PHONY: agents-headless-smoke
 agents-headless-smoke: ## Check Agent Zero and Archon headless services
