@@ -20,7 +20,7 @@ import hashlib
 import hmac
 import json
 import logging
-import os
+from pmoves.services.common.env import get_secret
 from typing import Any, Dict
 
 logger = logging.getLogger(__name__)
@@ -33,7 +33,7 @@ def _canon(obj: Any) -> bytes:
 
 def _signing_key() -> str:
     """Resolve the HMAC signing key from env (matches canonical priority)."""
-    return os.environ.get("CHIT_SIGNING_KEY") or os.environ.get("CHIT_PASSPHRASE", "")
+    return get_secret("CHIT_SIGNING_KEY") or get_secret("CHIT_PASSPHRASE", "")
 
 
 def sign_cgp(
