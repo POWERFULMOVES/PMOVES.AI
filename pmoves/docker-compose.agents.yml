@@ -451,15 +451,6 @@ services:
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
-    # Host environment leak guard (see x-host-leak-guard docs above)
-    - SSL_CERT_FILE=
-    - SSL_CERT_DIR=
-    - REQUESTS_CA_BUNDLE=
-    - CURL_CA_BUNDLE=
-    - NODE_EXTRA_CA_CERTS=
-    - HTTP_PROXY=
-    - HTTPS_PROXY=
-    - NO_PROXY=
     extra_hosts:
     - host.docker.internal:host-gateway
     ports:
@@ -648,15 +639,6 @@ services:
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
-    # Host environment leak guard (see x-host-leak-guard docs above)
-    - SSL_CERT_FILE=
-    - SSL_CERT_DIR=
-    - REQUESTS_CA_BUNDLE=
-    - CURL_CA_BUNDLE=
-    - NODE_EXTRA_CA_CERTS=
-    - HTTP_PROXY=
-    - HTTPS_PROXY=
-    - NO_PROXY=
     gpus: all
     deploy:
       resources:
