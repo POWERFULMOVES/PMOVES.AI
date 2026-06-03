@@ -10,6 +10,7 @@ Usage:
 import argparse
 import json
 import os
+from pmoves.services.common.env import get_secret
 import sys
 from pathlib import Path
 from typing import Any, Dict
@@ -38,7 +39,7 @@ def main():
     parser = argparse.ArgumentParser(description="Sign/encrypt CGPs via chit_security")
     parser.add_argument("--in", dest="inp", required=True, help="Input CGP JSON file")
     parser.add_argument("--out", dest="outp", required=True, help="Output signed CGP JSON file")
-    parser.add_argument("--passphrase", default=os.environ.get("CHIT_PASSPHRASE", ""),
+    parser.add_argument("--passphrase", default=get_secret("CHIT_PASSPHRASE", ""),
                         help="Passphrase for signing/encryption (or set CHIT_PASSPHRASE)")
     parser.add_argument("--encrypt-anchors", action="store_true", help="Encrypt anchor vectors")
     args = parser.parse_args()

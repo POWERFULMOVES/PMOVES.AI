@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 import os
+from pmoves.services.common.env import get_secret
 from typing import Any, Dict
 from nats.aio.client import Client as NATS
 from chit_signing import verify_cgp
@@ -10,7 +11,7 @@ from geometry_bridge import cgp_subject
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
-_STRICT_MODE = bool(os.environ.get("CHIT_SIGNING_KEY") or os.environ.get("CHIT_PASSPHRASE"))
+_STRICT_MODE = bool(get_secret("CHIT_SIGNING_KEY") or get_secret("CHIT_PASSPHRASE"))
 
 async def main():
     nc = NATS()
