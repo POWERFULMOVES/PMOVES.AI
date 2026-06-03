@@ -79,6 +79,12 @@ cross_agent:
   typer: untested
   pinokio: full
 
+huggingface:
+  model_id: Qwen/Qwen3.6-35B-A3B
+  gguf_repo: unsloth/Qwen3.6-35B-A3B-GGUF
+  unsloth_repo: unsloth/Qwen3.6-35B-A3B-unsloth-bnb-4bit
+  collection: DARKXSIDE/pmoves-68bcb20613cef7a0aa745e0e
+
 metadata:
   source: youtube_benchmark_digital_spaceport
   last_verified: 2026-04-19
