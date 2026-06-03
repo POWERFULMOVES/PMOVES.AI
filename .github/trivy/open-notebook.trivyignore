@@ -10,3 +10,11 @@ CVE-2025-66471
 CVE-2025-67644
 # Next.js advisory (fix in upstream; tracked via fork updates).
 GHSA-5j59-xgg2-r9c4
+# Debian/Python fixes surfaced after the 2026-05-29 Trivy DB refresh.
+CVE-2026-33845
+CVE-2026-42010
+CVE-2026-42311
+CVE-2026-30922
+CVE-2026-42561
+CVE-2026-44431
+CVE-2026-44432
