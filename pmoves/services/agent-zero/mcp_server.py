@@ -75,7 +75,7 @@ def _sign_cgp_if_available(cgp: Dict[str, Any]) -> Dict[str, Any]:
 
     In dev mode (no CHIT_PASSPHRASE), logs warning and returns unsigned.
     """
-    passphrase = os.environ.get("CHIT_SIGNING_KEY") or os.environ.get("CHIT_PASSPHRASE")
+    passphrase = get_secret("CHIT_SIGNING_KEY") or get_secret("CHIT_PASSPHRASE")
     if not passphrase:
         import logging as _log
         _log.getLogger(__name__).warning(

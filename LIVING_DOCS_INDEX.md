@@ -76,7 +76,27 @@ The doc fleet should be reachable from the CLI without operators having to know 
 | Tier-2 on-demand | [`PMOVES-Agent-Zero/`](./PMOVES-Agent-Zero/) | Orchestration / MCP API |
 | Tier-2 on-demand | [`PMOVES-Archon/`](./PMOVES-Archon/) | Agent service architecture |
 | Tier-2 on-demand | [`PMOVES-HiRAG/`](./PMOVES-HiRAG/) | Hi-RAG v2 retrieval gateway |
-| Full registry | [`.claude/context/submodules.md`](./.claude/context/submodules.md) | All 49+ submodules cataloged |
+| Full registry | [`.claude/context/submodules.md`](./.claude/context/submodules.md) | All 54 submodules cataloged |
+
+---
+
+## Archived docs
+
+> The following submodule audit docs are superseded by the AGNOTE4482 convergence record and have been moved to `pmoves/docs/archive/`.
+
+| Original path | Archived to | Status |
+|---------------|-------------|--------|
+| `docs/submodules-upstream-audit.md` | `pmoves/docs/archive/submodules-upstream-audit-2026-01-29.md` | → archived |
+| `docs/submodules-audit-final-summary.md` | `pmoves/docs/archive/submodules-audit-final-summary-2026-02-17.md` | → archived |
+| `pmoves/docs/AGENTS/AGNOTE_P7_PLAYGROUND.md` | `pmoves/docs/archive/AGNOTE_P7_PLAYGROUND-2026-04-10.md` | → archived |
+
+**Note:** All submodule audit findings have been consolidated into [`AGNOTE4482.md`](./pmoves/docs/AGENTS/AGNOTE4482.md) as of the May 9 convergence entry. The individual audit docs above are retained for historical reference only.
+
+## Planned
+
+| Doc | Expected path | Role |
+|-----|---------------|------|
+| DARKXSIDE standalone architecture | `pmoves/docs/architecture/DARKXSIDE_STANDALONE_ARCHITECTURE.md` | Hostinger-deployed DarkXSide isolation topology |
 
 ---
 

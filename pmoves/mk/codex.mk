@@ -100,6 +100,16 @@ secrets-runtime-hydrate: ensure-env-shared ## Pull runtime-emitted labels (Supab
 secrets-funnel-sync: chit-manifest-sync chit-export ## Materialize generated env files from CHIT + secrets manifest
 	@PYTHONPATH="$(CURDIR)/.." $(CODEX_PY) tools/secrets_sync.py generate --manifest pmoves/chit/secrets_manifest.yaml --cgp "$(CHIT_EXPORT_PATH)" $(SECRETS_SYNC_FLAGS)
 
+.PHONY: secrets-funnel-sync-from-bundle
+secrets-funnel-sync-from-bundle: chit-manifest-sync ## Materialize env files from a pre-installed CI CHIT bundle (skips chit-export so CI credentials are not overwritten)
+	@if [ ! -f "$(CHIT_EXPORT_PATH)" ]; then \
+	  echo "❌ No bundle at $(CHIT_EXPORT_PATH) — download via:"; \
+	  echo "   gh run download <RUN_ID> --repo POWERFULMOVES/PMOVES.AI --name chit-bundle-4090-<RUN_ID> --dir \"\$$(dirname $(CHIT_EXPORT_PATH))\""; \
+	  exit 1; \
+	fi
+	@echo "→ Reading CHIT bundle from $(CHIT_EXPORT_PATH)"
+	@PYTHONPATH="$(CURDIR)/.." $(CODEX_PY) tools/secrets_sync.py generate --manifest pmoves/chit/secrets_manifest.yaml --cgp "$(CHIT_EXPORT_PATH)" $(SECRETS_SYNC_FLAGS)
+
 secrets-funnel: ## Portable secrets flow: local hydrate -> CHIT export -> manifest sync -> audit gates (FORCE=1 to overwrite stale)
 	@$(MAKE) --no-print-directory secrets-local-hydrate
 	@$(MAKE) --no-print-directory secrets-runtime-hydrate

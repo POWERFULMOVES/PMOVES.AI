@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import logging
 import os
+from pmoves.services.common.env import get_secret
 from pathlib import Path
 from typing import Any, Optional
 
@@ -60,7 +61,7 @@ except Exception as e:
 
 # Supabase connection for persona lookups
 _SUPABASE_URL = os.getenv("SUPABASE_URL", os.getenv("SUPA_REST_URL", ""))
-_SUPABASE_KEY = os.getenv("SUPABASE_KEY", os.getenv("ANON_KEY", ""))
+_SUPABASE_KEY = get_secret("SUPABASE_KEY", get_secret("ANON_KEY", ""))
 
 # Default engine when nothing else matches
 _DEFAULT_ENGINE = "kitten_tts"

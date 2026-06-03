@@ -4,6 +4,12 @@
 
 ## Current Implementation Truth
 
+Closeout update, 2026-05-27:
+- PR #1633 merged the Big Ball CHIT/Tokenism review-fix lane.
+- PR #1638 merged the `PMOVES-transcribe-and-fetch` LFS cleanup gitlink update.
+- PR #1561 merged the pinned `sigstore/cosign-installer` patch bump after review.
+- Production activation is now the next Tokenism workstream; see `pmoves/docs/TOKENISM_PRODUCTION_ACTIVATION_PACK_2026-05-27.md`.
+
 Working:
 - ToKenism TypeScript CHIT core has real SHA-256 / keccak256 Merkle hashing, order-preserving proof verification, deterministic CGP generation, and schema-validated publisher methods.
 - Tokenism settlement has typed requested/recorded/failed NATS contracts, a deterministic planner, Firefly and contract dry-run executors, live executor gates requiring signed executor identity, matching signed operator approval, signed deployment attestation, manifest-backed chain call drafts, and schema-validated signed result publishing for recorded/failed events.
@@ -40,3 +46,19 @@ Not done:
 2. **Trusted optimizer bridge:** require PMOVES-AGENT-ZERO-CODEX, HERMES, and Claw signing identities before accepting optimizer output as trusted.
 3. **Model-fitness integration:** connect HF candidate discovery, TensorZero telemetry, and Pinokio/Unsloth eval results into persisted `model.fitness.recorded.v1` scorecards.
 4. **Zeta method design:** write and review a method document before replacing the heuristic filter with stronger math claims.
+
+## Production Activation Pack Minimum
+
+No live Tokenism settlement executor should be enabled until this pack exists and is signed:
+- `deployment_manifest_id`
+- `chain_id`
+- `contract_addresses`
+- `rpc_endpoint_ref`
+- `wallet_custody_ref`
+- `firefly_endpoint_ref`
+- `operator_approval_id`
+- `deployment_attestation_sig`
+- `executor_agent_id`
+- `executor_signature`
+- dry-run evidence for Firefly and contract lanes
+- rollback plan and incident contact

@@ -45,17 +45,15 @@ jobs:
           # Prune BuildKit cache older than 48h
           docker builder prune -af --filter "until=48h" || true
 
-          # Clean old checkout directories in runner _work
-          RUNNER_WORK="/opt/actions-runner/_work"  # standard path
-          if [ -d "$RUNNER_WORK" ]; then
-            find "$RUNNER_WORK" -mindepth 1 -maxdepth 1 -type d -mtime +3 -exec rm -rf {} + || true
-          fi
+          for workdir in /opt/actions-runner*/_work; do
+            [ -d "$workdir" ] || continue
+            find "$workdir" -mindepth 1 -maxdepth 1 -type d -mtime +3 -exec rm -rf {} \; || true
+          done
 
-          # Clean old diagnostic logs that can accumulate and corrupt
-          DIAG_DIR="/opt/actions-runner/_diag/pages"
-          if [ -d "$DIAG_DIR" ]; then
-            find "$DIAG_DIR" -type f -mtime +1 -delete || true
-          fi
+          for diagdir in /opt/actions-runner*/_diag/pages; do
+            [ -d "$diagdir" ] || continue
+            find "$diagdir" -type f -mtime +1 -delete || true
+          done
 
           echo "Disk after cleanup:"
           df -h
@@ -77,15 +75,15 @@ jobs:
           docker system prune -af --volumes --filter "until=48h" || true
           docker builder prune -af --filter "until=48h" || true
 
-          RUNNER_WORK="/opt/actions-runner-kvm4/_work"
-          if [ -d "$RUNNER_WORK" ]; then
-            find "$RUNNER_WORK" -mindepth 1 -maxdepth 1 -type d -mtime +3 -exec rm -rf {} + || true
-          fi
+          for workdir in /opt/actions-runner-kvm4*/_work; do
+            [ -d "$workdir" ] || continue
+            find "$workdir" -mindepth 1 -maxdepth 1 -type d -mtime +3 -exec rm -rf {} \; || true
+          done
 
-          DIAG_DIR="/opt/actions-runner-kvm4/_diag/pages"
-          if [ -d "$DIAG_DIR" ]; then
-            find "$DIAG_DIR" -type f -mtime +1 -delete || true
-          fi
+          for diagdir in /opt/actions-runner-kvm4*/_diag/pages; do
+            [ -d "$diagdir" ] || continue
+            find "$diagdir" -type f -mtime +1 -delete || true
+          done
 
           echo "Disk after cleanup:"
           df -h
@@ -107,15 +105,15 @@ jobs:
           docker system prune -af --volumes --filter "until=48h" || true
           docker builder prune -af --filter "until=48h" || true
 
-          RUNNER_WORK="/opt/actions-runner-kvm2/_work"
-          if [ -d "$RUNNER_WORK" ]; then
-            find "$RUNNER_WORK" -mindepth 1 -maxdepth 1 -type d -mtime +3 -exec rm -rf {} + || true
-          fi
+          for workdir in /opt/actions-runner-kvm2*/_work; do
+            [ -d "$workdir" ] || continue
+            find "$workdir" -mindepth 1 -maxdepth 1 -type d -mtime +3 -exec rm -rf {} \; || true
+          done
 
-          DIAG_DIR="/opt/actions-runner-kvm2/_diag/pages"
-          if [ -d "$DIAG_DIR" ]; then
-            find "$DIAG_DIR" -type f -mtime +1 -delete || true
-          fi
+          for diagdir in /opt/actions-runner-kvm2*/_diag/pages; do
+            [ -d "$diagdir" ] || continue
+            find "$diagdir" -type f -mtime +1 -delete || true
+          done
 
           echo "Disk after cleanup:"
           df -h
