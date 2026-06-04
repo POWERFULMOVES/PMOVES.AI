@@ -163,6 +163,8 @@ include mk/egress.mk
 include mk/yt-cookies.mk
 include mk/mcp-toolkit.mk
 include mk/mcp-toolkit-4090.mk
+include mk/mcp-toolkit-spark.mk
+include mk/unsloth.mk
 
 # ----------------------------------------------------------------------------
 # venv + bringup-toolchain prereqs
@@ -397,7 +399,7 @@ supa-start: ensure-env-shared ## Start Supabase stack for selected runtime (cli 
 			-e KONG_PG_PASSWORD=$${SUPABASE_DB_PASSWORD:-postgres} \
 			kong:3.7.1 kong migrations bootstrap --yes >/dev/null 2>&1 || true; \
 		$(MAKE) --no-print-directory supa-bootstrap-db; \
-		$(DC) up -d --force-recreate supabase-postgrest supabase-gotrue supabase-kong supabase-realtime supabase-storage supabase-studio supabase-imgproxy supabase-meta supabase-edge-functions supabase-analytics supabase-vector supabase-pooler; \
+		$(DC) --profile supabase-local up -d --force-recreate supabase-postgrest supabase-gotrue supabase-kong supabase-realtime supabase-storage supabase-studio supabase-imgproxy supabase-meta supabase-edge-functions supabase-analytics supabase-vector supabase-pooler; \
 	fi
 	@$(MAKE) --no-print-directory supa-status
 	@$(MAKE) --no-print-directory supa-collation-refresh 2>/dev/null || true
@@ -422,6 +424,12 @@ supa-restart: ## Restart Supabase stack for selected runtime
 	@$(MAKE) --no-print-directory supa-stop
 	@sleep 2
 	@$(MAKE) --no-print-directory supa-start
+
+.PHONY: pooler-recreate
+pooler-recreate: ## Force-recreate supabase-pooler container to pick up env file changes (non-disruptive)
+	@echo "→ Force-recreating supabase-pooler with current env..."
+	@$(DC) --profile supabase-local up -d --force-recreate supabase-pooler
+	@echo "✓ pooler recreated — give it 30s for health check"
 
 supa-status: ## Show Supabase status for selected runtime and export env snapshot when available
 	@echo "🔍 Supabase status (SUPABASE_RUNTIME=$(SUPABASE_RUNTIME)):"
@@ -636,6 +644,50 @@ supabase-bootstrap: ## Apply pending Supabase migrations + seeds (tracked in pub
 		echo "   ⚠️  No initdb directory found"; \
 	fi
 	@echo "✅ Supabase bootstrap complete"
+
+.PHONY: supabase-bootstrap-no-start
+supabase-bootstrap-no-start: ## Apply migrations+seeds against already-running DB (skips supa-start; uses SUPABASE_DB_USER)
+	@echo "🗄️ Applying Supabase schema + seeds (no-start mode)..."
+	@set -euo pipefail; \
+	db=$$(bash "$(SUPABASE_DB_HELPER)" running); \
+	if [ -z "$$db" ]; then echo "❌ Supabase DB container not found — start it first"; exit 1; fi; \
+	pg_user=$$(docker exec "$$db" sh -c 'echo $${POSTGRES_USER:-postgres}'); \
+	echo "   DB container: $$db | pg_user: $$pg_user"; \
+	_psql() { docker exec -i "$$db" psql -U "$$pg_user" -h 127.0.0.1 -d postgres "$$@"; }; \
+	_psql -v ON_ERROR_STOP=1 -c "CREATE TABLE IF NOT EXISTS public.pmoves_bootstrap_history (kind text NOT NULL, filename text NOT NULL, applied_at timestamptz NOT NULL DEFAULT now(), PRIMARY KEY (kind, filename));"; \
+	if [ -d "supabase/migrations" ]; then \
+		for migration in $$(find supabase/migrations -maxdepth 1 -type f -name '*.sql' | LC_ALL=C sort); do \
+			[ -f "$$migration" ] || continue; \
+			name=$$(basename "$$migration"); \
+			applied=$$(_psql -tAc "SELECT 1 FROM public.pmoves_bootstrap_history WHERE kind='migration' AND filename='$$name' LIMIT 1;" | tr -d '[:space:]'); \
+			if [ "$$applied" = "1" ]; then \
+				echo "   SKIP (applied): $$name"; \
+				continue; \
+			fi; \
+			echo "   APPLY: $$name"; \
+			_psql < "$$migration" && \
+			_psql -c "INSERT INTO public.pmoves_bootstrap_history(kind,filename) VALUES('migration','$$name') ON CONFLICT DO NOTHING;" || \
+			echo "   WARN: $$name failed — continuing"; \
+		done; \
+	fi; \
+	if [ -d "supabase/initdb" ]; then \
+		for seed in $$(find supabase/initdb -maxdepth 1 -type f -name '*.sql' | LC_ALL=C sort); do \
+			[ -f "$$seed" ] || continue; \
+			name=$$(basename "$$seed"); \
+			applied=$$(_psql -tAc "SELECT 1 FROM public.pmoves_bootstrap_history WHERE kind='seed' AND filename='$$name' LIMIT 1;" | tr -d '[:space:]'); \
+			if [ "$$applied" = "1" ]; then \
+				echo "   SKIP (applied): $$name"; \
+				continue; \
+			fi; \
+			echo "   APPLY seed: $$name"; \
+			_psql < "$$seed" && \
+			_psql -c "INSERT INTO public.pmoves_bootstrap_history(kind,filename) VALUES('seed','$$name') ON CONFLICT DO NOTHING;" || \
+			echo "   WARN: seed $$name failed — continuing"; \
+		done; \
+	else \
+		echo "   ⚠️  No initdb directory found"; \
+	fi
+	@echo "✅ Supabase bootstrap (no-start) complete"
 
 supabase-bootstrap-mark-applied: ## Mark all migration/seed files as applied in bootstrap history (no SQL execution)
 	@echo "📝 Marking migrations/seeds as applied in public.pmoves_bootstrap_history..."
@@ -1433,6 +1485,74 @@ bootstrap-tier-envs: ## Create missing tier env files from examples (Hardened br
 		echo "✓ All tier env files already exist."; \
 	fi
 
+.PHONY: tier-data-patch-missing
+tier-data-patch-missing: ## Append compose-required keys missing from env.tier-data (idempotent)
+	@if [ ! -f env.tier-data ]; then echo "env.tier-data not found"; exit 1; fi; \
+	changed=0; \
+	for key in QDRANT__API_KEY NEO4J_PASSWORD; do \
+		if ! grep -q "^$$key=" env.tier-data 2>/dev/null; then \
+			val=$$(openssl rand -hex 32); \
+			echo "$$key=$$val" >> env.tier-data; \
+			echo "→ Appended $$key to env.tier-data"; \
+			changed=1; \
+		fi; \
+	done; \
+	if ! grep -q "^MINIO_USER=" env.tier-data 2>/dev/null; then \
+		echo "MINIO_USER=minioadmin" >> env.tier-data; \
+		echo "→ Appended MINIO_USER to env.tier-data"; \
+		changed=1; \
+	fi; \
+	if ! grep -q "^MINIO_PASSWORD=" env.tier-data 2>/dev/null; then \
+		val=$$(openssl rand -base64 24 | tr -d '\n='); \
+		echo "MINIO_PASSWORD=$$val" >> env.tier-data; \
+		echo "→ Appended MINIO_PASSWORD to env.tier-data"; \
+		changed=1; \
+	fi; \
+	if ! grep -q "^WGER_DB_PASSWORD=" env.tier-data 2>/dev/null; then \
+		val=$$(openssl rand -base64 24 | tr -d '\n='); \
+		echo "WGER_DB_PASSWORD=$$val" >> env.tier-data; \
+		echo "→ Appended WGER_DB_PASSWORD to env.tier-data"; \
+		changed=1; \
+	fi; \
+	if [ "$$changed" = "0" ]; then echo "✓ env.tier-data already has all required keys"; fi
+
+.PHONY: tier-api-patch-missing
+tier-api-patch-missing: ## Append compose-required keys missing from env.tier-api (idempotent)
+	@if [ ! -f env.tier-api ]; then echo "env.tier-api not found"; exit 1; fi; \
+	changed=0; \
+	for key in WGER_SECRET_KEY WGER_ADMIN_PASSWORD MCP_SERVER_TOKEN; do \
+		if ! grep -q "^$$key=" env.tier-api 2>/dev/null; then \
+			val=$$(openssl rand -base64 32 | tr -d '\n='); \
+			echo "$$key=$$val" >> env.tier-api; \
+			echo "→ Appended $$key to env.tier-api"; \
+			changed=1; \
+		fi; \
+	done; \
+	if [ "$$changed" = "0" ]; then echo "✓ env.tier-api already has all required keys"; fi
+
+.PHONY: tier-supabase-patch-missing
+tier-supabase-patch-missing: ## Append/fix compose-required keys in env.tier-supabase (idempotent)
+	@if [ ! -f env.tier-supabase ]; then echo "env.tier-supabase not found"; exit 1; fi; \
+	changed=0; \
+	for key in SECRET_KEY_BASE LOGFLARE_PUBLIC_ACCESS_TOKEN LOGFLARE_PRIVATE_ACCESS_TOKEN; do \
+		if ! grep -q "^$$key=" env.tier-supabase 2>/dev/null; then \
+			val=$$(openssl rand -base64 48 | tr -d '\n=' | cut -c1-64); \
+			echo "$$key=$$val" >> env.tier-supabase; \
+			echo "→ Appended $$key to env.tier-supabase"; \
+			changed=1; \
+		fi; \
+	done; \
+	_vault_val=$$(grep "^VAULT_ENC_KEY=" env.tier-supabase 2>/dev/null | cut -d= -f2-); \
+	if [ -z "$$_vault_val" ]; then \
+		echo "VAULT_ENC_KEY=$$(openssl rand -hex 16)" >> env.tier-supabase; \
+		echo "→ Appended VAULT_ENC_KEY (32-char hex)"; changed=1; \
+	elif [ "$${#_vault_val}" -ne 32 ]; then \
+		_new_vault=$$(openssl rand -hex 16); \
+		sed -i "s|^VAULT_ENC_KEY=.*|VAULT_ENC_KEY=$$_new_vault|" env.tier-supabase; \
+		echo "→ Fixed VAULT_ENC_KEY (was $${#_vault_val} chars, now 32)"; changed=1; \
+	fi; \
+	if [ "$$changed" = "0" ]; then echo "✓ env.tier-supabase already has all required keys"; fi
+
 .PHONY: populate-tier-envs
 populate-tier-envs: bootstrap-tier-envs ## Populate tier env files with defaults from env.shared and .env.local
 	@echo "Populating tier env files with defaults..."
@@ -1748,6 +1868,130 @@ integration-contract-check-strict: ## Strict integration contract check (missing
 
 integration-contract-check-baseline: ## Strict contract checks for template + baseline overlays
 	@$(PYTHON) tools/integration_contract_check.py $(INTEGRATION_CONTRACT_BASELINE) --strict-hooks
+
+CF_PAGES_PROJECT ?= cataclysmstudios
+CF_PAGES_DIR ?= ../deploy/cataclysmstudios
+CF_PAGES_BRANCH ?= main
+
+CF_PAGES_PORT ?= 8788
+
+.PHONY: cf-pages-dev cf-pages-create cf-pages-deploy cf-pages-status
+cf-pages-dev: ## Serve cataclysmstudios locally via wrangler pages dev (http://localhost:CF_PAGES_PORT)
+	@echo "→ Previewing $(CF_PAGES_PROJECT) at http://localhost:$(CF_PAGES_PORT)"
+	npx wrangler pages dev "$(CF_PAGES_DIR)" --port $(CF_PAGES_PORT)
+cf-pages-create: ensure-env-shared ## Create Cloudflare Pages project (one-time bootstrap)
+	@$(LOAD_ENV_SHARED); \
+	if [ -z "$${CLOUDFLARE_API_TOKEN:-}" ]; then \
+	  echo "❌ CLOUDFLARE_API_TOKEN not set — run: make secrets-funnel-sync-from-bundle"; \
+	  exit 1; \
+	fi; \
+	if [ -z "$${CLOUDFLARE_ACCOUNT_ID:-}" ]; then \
+	  echo "❌ CLOUDFLARE_ACCOUNT_ID not set — run: make secrets-funnel-sync-from-bundle"; \
+	  exit 1; \
+	fi; \
+	echo "→ Creating Cloudflare Pages project: $(CF_PAGES_PROJECT)"; \
+	CLOUDFLARE_API_TOKEN="$${CLOUDFLARE_API_TOKEN}" \
+	CLOUDFLARE_ACCOUNT_ID="$${CLOUDFLARE_ACCOUNT_ID}" \
+	npx wrangler pages project create "$(CF_PAGES_PROJECT)" \
+	  --production-branch "$(CF_PAGES_BRANCH)" 2>&1 \
+	  || { echo "❌ wrangler project create failed"; exit 1; }; \
+	echo "✅ CF Pages project created — now run: make cf-pages-deploy"
+
+cf-pages-deploy: ensure-env-shared ## Deploy cataclysmstudios static site to Cloudflare Pages
+	@$(LOAD_ENV_SHARED); \
+	if [ -z "$${CLOUDFLARE_API_TOKEN:-}" ]; then \
+	  echo "❌ CLOUDFLARE_API_TOKEN not set — run: make secrets-funnel-sync"; \
+	  exit 1; \
+	fi; \
+	if [ -z "$${CLOUDFLARE_ACCOUNT_ID:-}" ]; then \
+	  echo "❌ CLOUDFLARE_ACCOUNT_ID not set — run: make secrets-funnel-sync"; \
+	  exit 1; \
+	fi; \
+	echo "→ Deploying $(CF_PAGES_PROJECT) to Cloudflare Pages..."; \
+	CLOUDFLARE_API_TOKEN="$${CLOUDFLARE_API_TOKEN}" \
+	CLOUDFLARE_ACCOUNT_ID="$${CLOUDFLARE_ACCOUNT_ID}" \
+	npx wrangler pages deploy "$(CF_PAGES_DIR)" \
+	  --project-name "$(CF_PAGES_PROJECT)" \
+	  --branch "$(CF_PAGES_BRANCH)" \
+	  --commit-dirty=true 2>&1 \
+	  || { echo "❌ wrangler deploy failed"; exit 1; }; \
+	echo "✅ CF Pages deploy complete"
+
+cf-pages-status: ensure-env-shared ## Check Cloudflare Pages project status
+	@$(LOAD_ENV_SHARED); \
+	out=$$(CLOUDFLARE_API_TOKEN="$${CLOUDFLARE_API_TOKEN}" \
+	  CLOUDFLARE_ACCOUNT_ID="$${CLOUDFLARE_ACCOUNT_ID}" \
+	  npx wrangler pages project list 2>&1); rc=$$?; \
+	if [ $$rc -ne 0 ]; then echo "❌ wrangler error (exit $$rc):"; echo "$$out"; exit $$rc; fi; \
+	echo "$$out" | grep -i "$(CF_PAGES_PROJECT)" || echo "(project '$(CF_PAGES_PROJECT)' not found)"
+
+PMOVES_AI_PROJECT ?= pmoves-ai
+PMOVES_AI_DIR     ?= ../website
+PMOVES_AI_BRANCH  ?= main
+PMOVES_AI_PORT    ?= 8789
+
+# Hyperdimensions viewer: generated from the Pmoves-hyperdimensions submodule
+# (single source of truth) rather than hand-maintained. website/hyperdim/ is
+# gitignored and rebuilt by pmoves-ai-sync-hyperdim before dev/deploy.
+HYPERDIM_SRC ?= $(abspath $(CURDIR)/../Pmoves-hyperdimensions)
+HYPERDIM_DST ?= $(abspath $(CURDIR)/$(PMOVES_AI_DIR)/hyperdim)
+
+.PHONY: pmoves-ai-sync-hyperdim
+pmoves-ai-sync-hyperdim: ## Sync Pmoves-hyperdimensions submodule → website/hyperdim/ (generated; run before deploy)
+	@$(PYTHON) tools/sync_hyperdim.py --src "$(HYPERDIM_SRC)" --dst "$(HYPERDIM_DST)" \
+	  || python tools/sync_hyperdim.py --src "$(HYPERDIM_SRC)" --dst "$(HYPERDIM_DST)" \
+	  || py -3 tools/sync_hyperdim.py --src "$(HYPERDIM_SRC)" --dst "$(HYPERDIM_DST)"
+
+.PHONY: pmoves-ai-dev pmoves-ai-create pmoves-ai-deploy pmoves-ai-status
+pmoves-ai-dev: pmoves-ai-sync-hyperdim ## Serve pmoves.ai locally via wrangler pages dev (http://localhost:PMOVES_AI_PORT)
+	@echo "→ Previewing $(PMOVES_AI_PROJECT) at http://localhost:$(PMOVES_AI_PORT)"
+	npx wrangler pages dev "$(PMOVES_AI_DIR)" --port $(PMOVES_AI_PORT)
+
+pmoves-ai-create: ensure-env-shared ## Create pmoves-ai Cloudflare Pages project (one-time bootstrap)
+	@$(LOAD_ENV_SHARED); \
+	if [ -z "$${CLOUDFLARE_API_TOKEN:-}" ]; then \
+	  echo "❌ CLOUDFLARE_API_TOKEN not set — run: make secrets-funnel-sync-from-bundle"; \
+	  exit 1; \
+	fi; \
+	if [ -z "$${CLOUDFLARE_ACCOUNT_ID:-}" ]; then \
+	  echo "❌ CLOUDFLARE_ACCOUNT_ID not set — run: make secrets-funnel-sync-from-bundle"; \
+	  exit 1; \
+	fi; \
+	echo "→ Creating Cloudflare Pages project: $(PMOVES_AI_PROJECT)"; \
+	CLOUDFLARE_API_TOKEN="$${CLOUDFLARE_API_TOKEN}" \
+	CLOUDFLARE_ACCOUNT_ID="$${CLOUDFLARE_ACCOUNT_ID}" \
+	npx wrangler pages project create "$(PMOVES_AI_PROJECT)" \
+	  --production-branch "$(PMOVES_AI_BRANCH)" 2>&1 \
+	  || { echo "❌ wrangler project create failed"; exit 1; }; \
+	echo "✅ pmoves-ai Pages project created — now run: make pmoves-ai-deploy"
+
+pmoves-ai-deploy: pmoves-ai-sync-hyperdim ensure-env-shared ## Deploy pmoves.ai static site to Cloudflare Pages
+	@$(LOAD_ENV_SHARED); \
+	if [ -z "$${CLOUDFLARE_API_TOKEN:-}" ]; then \
+	  echo "❌ CLOUDFLARE_API_TOKEN not set — run: make secrets-funnel-sync-from-bundle"; \
+	  exit 1; \
+	fi; \
+	if [ -z "$${CLOUDFLARE_ACCOUNT_ID:-}" ]; then \
+	  echo "❌ CLOUDFLARE_ACCOUNT_ID not set — run: make secrets-funnel-sync-from-bundle"; \
+	  exit 1; \
+	fi; \
+	echo "→ Deploying $(PMOVES_AI_PROJECT) to Cloudflare Pages (branch: $(PMOVES_AI_BRANCH))..."; \
+	CLOUDFLARE_API_TOKEN="$${CLOUDFLARE_API_TOKEN}" \
+	CLOUDFLARE_ACCOUNT_ID="$${CLOUDFLARE_ACCOUNT_ID}" \
+	npx wrangler pages deploy "$(PMOVES_AI_DIR)" \
+	  --project-name "$(PMOVES_AI_PROJECT)" \
+	  --branch "$(PMOVES_AI_BRANCH)" \
+	  --commit-dirty=true 2>&1 \
+	  || { echo "❌ wrangler deploy failed"; exit 1; }; \
+	echo "✅ pmoves-ai deploy complete"
+
+pmoves-ai-status: ensure-env-shared ## Check pmoves-ai Cloudflare Pages project status
+	@$(LOAD_ENV_SHARED); \
+	out=$$(CLOUDFLARE_API_TOKEN="$${CLOUDFLARE_API_TOKEN}" \
+	  CLOUDFLARE_ACCOUNT_ID="$${CLOUDFLARE_ACCOUNT_ID}" \
+	  npx wrangler pages project list 2>&1); rc=$$?; \
+	if [ $$rc -ne 0 ]; then echo "❌ wrangler error (exit $$rc):"; echo "$$out"; exit $$rc; fi; \
+	echo "$$out" | grep -i "$(PMOVES_AI_PROJECT)" || echo "(pmoves-ai project not found)"
 
 up-cloudflare: ensure-env-shared ## Start the Cloudflare tunnel connector (profile=cloudflare)
 	@$(LOAD_ENV_SHARED); \
@@ -2439,6 +2683,10 @@ up-cipher: ## Start Cipher Memory (knowledge-graph memory for Claude Code / agen
 .PHONY: cipher-health
 cipher-health: ## Check Cipher Memory health
 	@curl -sf http://localhost:$${CIPHER_PORT:-8096}/health && echo " ✔ cipher-api healthy" || (echo "✗ cipher-api unhealthy" && exit 1)
+
+.PHONY: spark-health
+spark-health: ## Check SPARK node (DGX Spark) health: Ollama, TensorZero, NATS, Cipher, Agent Zero SPARK
+	@$(PYTHON) scripts/spark_health.py
 
 .PHONY: agents-headless-smoke
 agents-headless-smoke: ## Check Agent Zero and Archon headless services

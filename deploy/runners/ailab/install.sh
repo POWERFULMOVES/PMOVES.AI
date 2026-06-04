@@ -223,6 +223,23 @@ EOF
     log_info "Containerized runner started"
 }
 
+setup_docker_cleanup() {
+    log_section "Setting up Docker cleanup cron..."
+
+    # Add weekly Docker cleanup to prevent disk space issues
+    local cron_file="/etc/cron.weekly/docker-cleanup"
+
+    sudo tee "$cron_file" > /dev/null <<'EOF'
+#!/bin/bash
+# Clean up Docker resources weekly (GPU runner compatible)
+docker system prune -af --volumes --filter "until=168h"
+docker builder prune -af --filter "until=168h"
+EOF
+
+    sudo chmod +x "$cron_file"
+    log_info "Docker cleanup cron installed (runs weekly)"
+}
+
 show_verification() {
     log_section "Verification"
 
@@ -273,6 +290,7 @@ main() {
     else
         install_runner_native
         install_systemd_service
+        setup_docker_cleanup
     fi
 
     show_verification

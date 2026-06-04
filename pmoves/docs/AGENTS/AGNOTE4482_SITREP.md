@@ -4,7 +4,7 @@ GRAPHITI_MARK: `PHI-4482-SITREP::QUICK-ORIENTATION`
 
 > **For:** Any agent dropping into a PMOVES session cold (fresh start, VS Code restart, new node, Husk walk-in).
 > **Rule:** Read this FIRST. It's pointers, not content. Follow the links.
-> **Last refreshed:** 2026-05-26
+> **Last refreshed:** 2026-05-27
 
 ---
 
@@ -66,7 +66,9 @@ Waves since last SITREP refresh (2026-04-01). Each links to its AGNOTE4482.md se
 | MiniMax Token Plan | 2026-05-13 | §MiniMax Edition Integration | M2.7/M2.1 model suits, agent profile, NATS subjects, FlOO$ personas |
 | CHIT Hardening | 2026-05-16 | §CHIT Hardening Sprint | 66-file audit, crypto consolidation, CHIT signing for 3 services, compose hardening, doc closure. **Signoff 37/37**. |
 | Big Ball 5090 Codex | 2026-05-25→26 | §Big Ball 5090 CODEX Gap Closure | CHIT/ToKenism hardening, DoX hyperbolic projection, Tokenism settlement lanes, TensorZero 5090 health, submodule integrity |
+| Big Ball Closeout | 2026-05-27 | §Big Ball 5090 CODEX Gap Closure | PR #1633 and #1638 merged, PR #1561 reviewed/merged, Tokenism activation pack started, 5090 validation snapshot recorded |
 | Cole Medin Research | 2026-05-16 | `research/COLE_MEDIN_VIDEO_ANALYSIS.md` | 13 recent videos + 1827-item playlist scan, 5 P0/P1 integration recommendations for Nemo Claw, Archon, DGX Spark |
+| Hardened Reconcile + Auto Mode | 2026-05-31 | §Hardened-Branch Reconciliation + Auto Mode Fleet Config | 38-submodule hardened audit, 5 security gaps closed (incl DoX CVSS 10.0 RCE), 15/17 reconciled, `AUTOMODE_FLEET_CONFIG.md` (**all nodes must apply locally**) |
 
 > ~~**⚠️ AGNOTE4482.md section gaps:** Supply Chain, SPARK Prep, and CHIT Hardening were backfilled 2026-05-17.~~ All SITREP wave index entries now have corresponding §-sections.
 
@@ -119,6 +121,13 @@ Use: `claude --agent delivery-agent` or dispatch via `Agent({subagent_type: "del
 | 4 | `.claude/agents/` | Agent definitions — Three-Body tool restrictions |
 | 5 | `.claude/CLAUDE.md` | Full service catalog (heavy — skim Production Services) |
 | 6 | `pmoves/docs/NEXT_STEPS.md` | Current sprint priorities |
+
+## Current Closeout Truth (2026-05-27)
+
+- Main includes PR #1633 (`fix: address PR 1603 review feedback`) and PR #1638 (`chore: advance transcribe submodule lfs cleanup`).
+- Dependabot PR #1561 (`sigstore/cosign-installer` 4.1.1 -> 4.1.2 pinned action bump) was reviewed and merged with green checks.
+- Tokenism settlement is still approval/deployment-gated, not production-live. The next artifact is `pmoves/docs/TOKENISM_PRODUCTION_ACTIVATION_PACK_2026-05-27.md`.
+- 5090 validation evidence lives in `pmoves/docs/operations/5090_CODEX_VALIDATION_2026-05-27.md`.
 
 ## Cipher Marco/Polo
 

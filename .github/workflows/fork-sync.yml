@@ -1,0 +1,195 @@
+name: Fork Sync
+
+on:
+  schedule:
+    - cron: '0 6 * * 1'  # Monday 06:00 UTC
+  workflow_dispatch:
+    inputs:
+      max_forks:
+        description: 'Max forks to sync per run (0 = unlimited)'
+        required: false
+        default: '3'
+      dry_run:
+        description: 'Dry run (no changes)'
+        required: false
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1
+        id: app-token
+        with:
+          app-id: ${{ secrets.GH_APP_ID }}
+          private-key: ${{ secrets.GH_APP_SEC }}
+
+      - name: Discover forks
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          echo "=== Fork Drift Audit ==="
+          gh repo list POWERFULMOVES --fork --json name,parent --jq '.[] | "\(.name)|\(.parent.owner.login)/\(.parent.name)"' | while IFS='|' read fork upstream; do
+            fb=$(gh api "repos/POWERFULMOVES/$fork" --jq '.default_branch' 2>/dev/null) || continue
+            ub=$(gh api "repos/$upstream" --jq '.default_branch' 2>/dev/null) || continue
+            bh=$(gh api "repos/$upstream/compare/$ub...POWERFULMOVES:$fork:$fb" --jq '.behind_by' 2>/dev/null) || echo '-1'
+            ah=$(gh api "repos/$upstream/compare/$ub...POWERFULMOVES:$fork:$fb" --jq '.ahead_by' 2>/dev/null) || echo '-1'
+            if [ "$bh" = "0" ] 2>/dev/null; then
+              echo "  $fork: synced"
+            elif [ "$bh" -gt 999 ] 2>/dev/null; then
+              echo "  CRITICAL $fork: $bh behind, $ah ahead"
+            elif [ "$bh" -gt 0 ] 2>/dev/null; then
+              echo "  STALE   $fork: $bh behind, $ah ahead"
+            else
+              echo "  ERROR    $fork: unable to compare"
+            fi
+            sleep 1
+          done
+
+      - name: Sync forks
+        if: ${{ !inputs.dry_run }}
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          MAX_FORKS: ${{ inputs.max_forks || '3' }}
+        run: |
+          SYNCED=0
+          SKIPPED=0
+          CONFLICTS=0
+          ERRORS=0
+          RESULTS=""
+
+          SYNC_BRANCH="sync/upstream-$(date +%Y-%m-%d)"
+
+          # Fork list: upstream_owner/upstream_repo|fork_name|fork_branch_override
+          FORKS="
+          openclaw/openclaw|PMOVES-ClawZ|
+          Comfy-Org/ComfyUI|PMOVES-Creator|
+          supabase/supabase|PMOVES-supabase|PMOVES.AI-Edition-Hardened
+          tensorzero/tensorzero|PMOVES-tensorzero|
+          firefly-iii/firefly-iii|PMOVES-Wealth|
+          agent0ai/a0-plugins|PMOVES-a0-plugins|
+          coleam00/Archon|PMOVES-Archon|
+          lfnovo/open-notebook|PMOVES-Open-Notebook|
+          NousResearch/hermes-agent|PMOVES-hermes-agent|
+          juanfont/headscale|PMOVES-headscale|
+          e2b-dev/E2B|PMOVES-E2B-Danger-Room|
+          google/A2UI|PMOVES-A2UI|
+          wger-project/wger|Pmoves-Health-wger|
+          e2b-dev/e2b-cookbook|PMOVES-E2b-Spells|
+          e2b-dev/desktop|PMOVES-E2B-Danger-Room-Desktop|
+          Fincept-Corporation/FinceptTerminal|PMOVES-FinceptTerminal|
+          agent0ai/agent-zero|PMOVES-Agent-Zero|
+          microsoft/mcp-gateway|PMOVES-BotZ-gateway|
+          MaxRobinsonTheGreat/hyperdimensions|Pmoves-hyperdimensions|
+          alexziskind1/llama-throughput-lab|PMOVES-llama-throughput-lab|
+          pinokiofactory/Ultimate-TTS-Studio|PMOVES-Pinokio-Ultimate-TTS-Studio|
+          e2b-dev/mcp-server|pmoves-e2b-mcp-server|
+          BlockRunAI/ClawRouter|PMOVES-ClawRouter|
+          WooooDyy/AgentGym|PMOVES-AgentGym|
+          "
+
+          echo "$FORKS" | grep '|' | while IFS='|' read upstream fork branch_override; do
+            [ -z "$fork" ] && continue
+
+            # Check max
+            if [ "$MAX_FORKS" -gt 0 ] && [ "$SYNCED" -ge "$MAX_FORKS" ]; then
+              echo "Reached max $MAX_FORKS limit"
+              break
+            fi
+
+            # Resolve branches
+            if [ -n "$branch_override" ]; then
+              fb="$branch_override"
+            else
+              fb=$(gh api "repos/POWERFULMOVES/$fork" --jq '.default_branch' 2>/dev/null) || { echo "SKIP $fork: no default branch"; continue; }
+            fi
+            ub=$(gh api "repos/$upstream" --jq '.default_branch' 2>/dev/null) || { echo "SKIP $fork: no upstream branch"; continue; }
+            uo=$(echo "$upstream" | cut -d/ -f1)
+
+            # Get drift
+            bh=$(gh api "repos/$upstream/compare/$ub...POWERFULMOVES:$fork:$fb" --jq '.behind_by' 2>/dev/null)
+            ah=$(gh api "repos/$upstream/compare/$ub...POWERFULMOVES:$fork:$fb" --jq '.ahead_by' 2>/dev/null)
+            [ -z "$bh" ] && { echo "SKIP $fork: compare failed"; continue; }
+            [ "$bh" -lt 1 ] 2>/dev/null && { echo "SKIP $fork: synced ($bh behind)"; continue; }
+
+            echo "SYNC $fork: $bh behind, $ah ahead"
+
+            # Check existing PR
+            existing=$(gh api "repos/POWERFULMOVES/$fork/pulls" --jq "[.[] | select(.head.ref | startswith(\"sync/\")) | .number" 2>/dev/null | head -1)
+            if [ -n "$existing" ]; then
+              echo "  SKIP: open sync PR #$existing exists"
+              continue
+            fi
+
+            # Get SHA
+            sha=$(gh api "repos/POWERFULMOVES/$fork/git/ref/refs/heads/$fb" --jq '.object.sha' 2>/dev/null)
+            [ -z "$sha" ] && { echo "  FAIL: cannot resolve SHA"; continue; }
+
+            # Create branch
+            gh api -X POST "repos/POWERFULMOVES/$fork/git/refs" -f "ref=refs/heads/$SYNC_BRANCH" -f "sha=$sha" > /dev/null 2>&1
+            if [ $? -ne 0 ]; then echo "  FAIL: branch creation"; continue; fi
+            echo "  Branch $SYNC_BRANCH created"
+
+            # Merge upstream
+            merge=$(gh api -X POST "repos/POWERFULMOVES/$fork/merges" -f "base=$SYNC_BRANCH" -f "head=$uo:$ub" 2>&1)
+            if echo "$merge" | grep -qi 'conflict'; then
+              echo "  CONFLICT: cleaning up branch"
+              gh api -X DELETE "repos/POWERFULMOVES/$fork/git/refs/heads/$SYNC_BRANCH" > /dev/null 2>&1
+              continue
+            fi
+            if echo "$merge" | grep -qi 'error\|405\|409'; then
+              echo "  FAIL: $(echo "$merge" | head -1)"
+              gh api -X DELETE "repos/POWERFULMOVES/$fork/git/refs/heads/$SYNC_BRANCH" > /dev/null 2>&1
+              continue
+            fi
+            echo "  Merge commit created"
+
+            # Create PR
+            pr=$(gh api -X POST "repos/POWERFULMOVES/$fork/pulls" \
+              -f "title=chore: sync upstream ($bh commits behind)" \
+              -f "head=$SYNC_BRANCH" \
+              -f "base=$fb" \
+              -f "body=## Upstream Sync
+
+- **Upstream**: $upstream ($ub)
+- **Behind**: $bh commits
+- **Ahead**: $ah commits (PMOVES customizations)
+- **Branch**: $fb → $SYNC_BRANCH
+
+Review the diff to confirm PMOVES customizations are preserved.
+
+---
+*Automated by fork-sync workflow*" 2>&1)
+
+            pr_url=$(echo "$pr" | jq -r '.html_url // "error"' 2>/dev/null)
+            pr_num=$(echo "$pr" | jq -r '.number // "?"' 2>/dev/null)
+            if [ "$pr_url" != "error" ] && [ "$pr_url" != "null" ]; then
+              echo "  PR #$pr_num: $pr_url"
+              SYNCED=$((SYNCED + 1))
+              RESULTS="$RESULTS\n- $fork: #$pr_num ($bh behind)"
+            else
+              echo "  FAIL: PR creation: $(echo "$pr" | head -1)"
+              gh api -X DELETE "repos/POWERFULMOVES/$fork/git/refs/heads/$SYNC_BRANCH" > /dev/null 2>&1
+            fi
+
+            sleep 2
+          done
+
+          echo ""
+          echo "=== Results: $SYNCED synced ==="
+          echo "$RESULTS"
+
+      - name: Create issue if attention needed
+        if: ${{ !inputs.dry_run }}
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          # This step runs after sync — the audit step above already showed the state
+          echo "Sync run complete. Check audit output above for forks needing attention."

@@ -11,6 +11,7 @@ Primary convergence record lives at:
 - `pmoves/docs/AGENTS/GRAPHITI_SIG_REVIEW_2026-02-21.md` (Phase 5 signature and traversal review snapshot)
 - `pmoves/docs/AGENTS/KRISS_KROSS_ACCORD.md` (Codex-led collision overlay and weave protocol)
 - `pmoves/docs/TAC/TAC_MODEL_INFRA_PERSONA_PROD_READINESS.md` (model infrastructure + persona production readiness execution overlay)
+- `pmoves/docs/AGENTS/AUTOMODE_FLEET_CONFIG.md` (**per-node auto-mode `autoMode` block** — every node pastes this into its gitignored `.claude/settings.local.json`; the classifier cannot read checked-in settings)
 
 All agents entering PMOVES lanes should read that file first, then claim work before edits.
 
@@ -1126,17 +1127,22 @@ This work ran on branch `codex/big-ball-5090-gap-closure` in the parent PMOVES r
 
 | Lane | Status | Notes |
 |------|--------|-------|
-| CHIT core | Ready for PR review | Merkle hashing, schema coverage, publisher validation, Python crypto consolidation, FloOS hook validation, and gateway fixes were preserved from the closure pass |
+| CHIT core | Merged | PR #1633 landed the review fixes for the Big Ball CHIT closure pass; PR #1638 landed the transcribe LFS gitlink cleanup needed for a clean parent pointer |
 | Hyperbolic geometry | Implemented as embedding support | DoX Poincare projection is wired; still not a proof-backed fairness pillar |
 | Tokenism Firefly settlement | Approval-gated | Dry-run default; live writes require signed executor identity, matching operator approval, and signed deployment attestation |
 | Tokenism contract settlement | Approval/deployment-gated | Dry-run call drafts; live writes require deployment manifest, signed deployment attestation, RPC/wallet custody references, signed executor identity, and matching operator approval |
-| TensorZero 5090 | Healthy for this branch | Health endpoint returned all `ok` during the pass |
+| TensorZero 5090 | Healthy on latest recheck | Health endpoint returned all `ok` during the pass and again on 2026-05-27 from host `POWERFULMOVES` |
 | Model fitness / EvoSwarm | Parent work exists; trust bridge remains | Signed scorecards and deterministic optimizer operators are present, but trusted optimizer publishing still needs live identities/topology |
 | Zeta | Heuristic | Keep labeled heuristic until a method-design doc is accepted |
 
-### PR Readiness
+### PR Closeout
 
-The branch is ready to open a draft PR after this AGNOTE pass. Evidence already collected:
+The Big Ball CHIT/Tokenism hardening lane has moved from draft readiness to merged closeout:
+- PR #1633 merged the `codex/big-ball-5090-gap-closure` review fixes into main.
+- PR #1638 merged the `PMOVES-transcribe-and-fetch` LFS cleanup gitlink update into main.
+- PR #1561, the pinned `sigstore/cosign-installer` patch bump, was reviewed and merged on 2026-05-27 with green checks.
+
+Evidence collected during the implementation pass:
 - ToKenism focused Jest settlement suites: 32 tests passing.
 - ToKenism `npm run typecheck`: passing.
 - ToKenism Hardhat harness: 5 tests passing.
@@ -1145,7 +1151,11 @@ The branch is ready to open a draft PR after this AGNOTE pass. Evidence already 
 - Parent submodule integrity: passing.
 - TensorZero 5090 health: passing.
 
-No open PR existed for `codex/big-ball-5090-gap-closure` at the time of this note.
+Evidence collected during the 2026-05-27 closeout:
+- Host `POWERFULMOVES` reports `NVIDIA GeForce RTX 5090`, 32607 MiB VRAM, driver `595.79`.
+- `http://localhost:3030/health` returns gateway, ClickHouse, Postgres, and Valkey all `ok`.
+- `make -C pmoves submodule-integrity` passes in the closeout worktree with 50 gitlinks, 0 uninitialized, 0 drifted, 0 conflicts.
+- Pinokio root exists at `D:\pinokio`; direct Python `unsloth` import is not installed in the base environment and remains a runtime-lane setup item.
 
 ### Remaining 5090 CODEX Work
 
@@ -1161,3 +1171,63 @@ No open PR existed for `codex/big-ball-5090-gap-closure` at the time of this not
 - Timestamp: `2026-05-26`
 
 <!-- GRAPHITI_MARK: CODEX-GPT5::BIG-BALL-5090-GAP-CLOSURE::2026-05-26 -->
+
+## Hardened-Branch Reconciliation + Auto Mode Fleet Config (2026-05-31)
+
+### Work Performed
+- **Hardened-branch fleet audit** of all 38 submodules tracking `PMOVES.AI-Edition-Hardened`. Established the deployment invariant **`hardened ⊇ default`** (hardened, which the parent gitlink deploys, must contain every commit on the repo's default branch — else security fixes merged to `main` silently never deploy). Audit doc: `pmoves/docs/audit/HARDENED_BRANCH_FLEET_AUDIT_2026-05-31.md` (PR #1659).
+- **17-agent read-only merge-safety fan-out** (workflow `wf_1fd8647f-03c`) verifying every drifted repo's `main→hardened` merge wouldn't reintroduce an intentionally-removed hardening. Surfaced **5 security gaps** that had merged to `main` but never reached the deployed hardened branch:
+  - **PMOVES-DoX** — CVE-2025-55182 (CVSS 10.0 RCE, Next.js RSC) → PR #172
+  - **PMOVES-BoTZ** — #72 JWT auth-gate → PR #142
+  - **PMOVES-Agent-Zero** — path-containment + drop-root-supervisord (resolved a modify/delete conflict by `git rm`, keeping the removed endpoint deleted) → PR #10
+  - **PMOVES-BotZ-gateway** — #4 log-sanitize → PR #7
+  - **PMOVES-Pinokio-Ultimate-TTS-Studio** — Gradio 127.0.0.1 bind → PR #3
+- **15 of 17 drifted repos reconciled** (5 security + 7 clean + 3 hygiene merge-forwards); parent gitlinks promoted via PRs **#1659 / #1660 / #1661**. Deferred: Open-Notebook, Wealth (heavy upstream divergence, no security gap).
+- **Auto Mode fleet config**: authored `pmoves/docs/AGENTS/AUTOMODE_FLEET_CONFIG.md` — the canonical copy-paste `autoMode` block for `.claude/settings.local.json` (gitignored, so every node must apply locally). Declares POWERFULMOVES org + Tailscale/VPS fleet trusted; adds `allow` for merged-worktree cleanup / gitlink promotion / non-destructive fleet SSH; adds `soft_deny` (hardened-branch rewrite) + `hard_deny` (CHIT/secrets exfil with secrets-funnel carve-out). All arrays keep `"$defaults"`. Validated with `claude auto-mode config` + `critique`.
+
+### Fleet Action Required
+**Every node (5090, 4090, B850, Spark, KVM) must paste the `autoMode` block from `AUTOMODE_FLEET_CONFIG.md` into its own `.claude/settings.local.json`** — the classifier does not read checked-in settings, so this cannot propagate via the repo. Validate per-node with `claude auto-mode config`.
+
+### Key Lessons
+1. `merge_forward_safe` (no hardening undo) and `conflict-free` are orthogonal — a verdict of safe still needs per-repo conflict resolution; resolve via the fix's *shape* (isolated commit → cherry-pick, mega-squash → merge-forward).
+2. The compose damage-control guard has **no Known-Road bypass for submodule paths** (`compose` domain requires `/pmoves/`); resolve submodule compose conflicts git-native (`--ours`/`--theirs`) rather than editing.
+3. Bash loops that build Windows paths (`"...\$repo"`) can silently run git in the **parent superproject** — do submodule git ops one repo per call, forward-slash paths.
+
+### Agent ACK
+- Agent: `Z890-CLAUDE (opus 4.8 1M)`
+- Signature: `ACK::Z890-CLAUDE::HARDENED-RECONCILE-AUTOMODE-FLEET`
+- Timestamp: `2026-05-31`
+
+<!-- GRAPHITI_MARK: Z890-CLAUDE::HARDENED-RECONCILE-AUTOMODE-FLEET::2026-05-31 -->
+
+## Antigravity CLI A2UI Hologram Scaling Fix (2026-05-30)
+
+### Context
+Operator requested fixing the "identical pink dot" gallery issue stemming from the pending `A2UI Remotion hologram viewport scaling (1920x1080 viewport)` ticket. The `geometry_mesh` element in `a2ui-renderer` was stubbed out and required DGX SPARK physical access.
+
+This work ran on the local workspace `3fd5d899-f774-45da-bae1-ef349bf01951` targeting branch `fix/ghcr-matrix-paths-gate` in the parent PMOVES repo.
+
+### Work Performed
+- Bypassed the stubbed Remotion 2D generator and implemented a live interactive 3D WebGL solution on the landing page.
+- Upgraded `website/hyperdim/index.html` with URL parameter parsing (`?preset=` and `?ui=none`) for headless preset embedding.
+- Generated three distinct parametric topology presets derived from `beats_constellation.json`:
+  - `beats_c5.json`: Allegro Balanced Bright (High tempo, bright color)
+  - `beats_c3.json`: Allegro Balanced Deep (Moderate tempo, deep color)
+  - `beats_c1.json`: Cluster 1 (High fitness, tight curvature, very bright)
+- Replaced the three static `<video>` elements in `website/index.html` gallery with `<iframe>` embeds targeting the Hyperdimensions viewer, successfully resolving the 1920x1080 scaling issue via live rendering.
+
+### Lane Status
+| Lane | Status | Notes |
+|------|--------|-------|
+| A2UI Hologram Scaling | Resolved (Live WebGL) | DGX SPARK dependency bypassed. Rendering now happens live in the browser via Three.js. |
+| Custom Domain Linking | Handoff | Operator to configure `pmoves.ai` domain in Cloudflare dashboard manually. |
+
+### PR Readiness
+Shipped via **PR #1655** (`feat/pmoves-ai-website-deploy`) — salvaged onto clean `main`, rebased, review-clean. Carries the WebGL embed fix + cf-pages/pmoves-ai deploy targets. Follow-up #1667 tracks reconciling `website/hyperdim/` with the `Pmoves-hyperdimensions` fork (the embed code + `beats_c{1,3,5}` presets currently live only in the vendored copy).
+
+### Agent ACK
+- Agent: `ANTIGRAVITY-GEMINI`
+- Signature: `ACK::ANTIGRAVITY-GEMINI::A2UI-HOLOGRAM-SCALING-FIX`
+- Timestamp: `2026-05-30`
+
+<!-- GRAPHITI_MARK: ANTIGRAVITY-GEMINI::A2UI-HOLOGRAM-SCALING-FIX::2026-05-30 -->

@@ -1,5 +1,5 @@
 # -- Stage 1: Build dependencies -----------------------------------------
-FROM python:3.11-slim@sha256:9358444059ed78e2975ada2c189f1c1a3144a5dab6f35bff8c981afb38946634 AS builder
+FROM python:3.11-slim@sha256:a3ab0b966bc4e91546a033e22093cb840908979487a9fc0e6e38295747e49ac0 AS builder
 
 WORKDIR /build
 COPY requirements.txt requirements.lock ./
@@ -7,7 +7,7 @@ RUN pip install --no-cache-dir --constraint requirements.lock \
     --prefix=/install -r requirements.txt
 
 # -- Stage 2: Runtime ----------------------------------------------------
-FROM python:3.11-slim@sha256:9358444059ed78e2975ada2c189f1c1a3144a5dab6f35bff8c981afb38946634
+FROM python:3.11-slim@sha256:a3ab0b966bc4e91546a033e22093cb840908979487a9fc0e6e38295747e49ac0
 
 WORKDIR /app
 
