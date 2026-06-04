@@ -199,6 +199,26 @@ providers:
       Both models use the coding plan endpoint at api.z.ai/api/coding/paas/v4 with
       TensorZero routing. Provider parity is maintained through the Nexus contract.
 
+  moonshot:
+    role: cloud_provider
+    sdk_family: openai_compatible
+    transport: http
+    request_shape: nexus.chat.v1
+    response_shape: nexus.chat.v1
+    auth_source: MOONSHOT_API_KEY
+    observability_mode: via_tensorzero_preferred
+    native_strengths:
+      - 128K-200K context windows
+      - CJK-native multilingual reasoning
+      - OpenAI-compatible API
+      - strong coding and agentic task performance
+    adapter_strategy: tensorzero_first
+    fallback_lane: tensorzero
+    served_models:
+      - moonshot-v1-32k
+      - moonshot-v1-128k
+      - moonshot-v1-8k
+
 lanes:
   agent_mesh:
     default_provider: tensorzero

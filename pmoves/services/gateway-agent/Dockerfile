@@ -18,16 +18,16 @@ RUN groupadd -r pmoves --gid=65532 && \
     chown -R pmoves:pmoves /app
 
 # Copy application (after user creation, before USER switch)
-COPY app.py .
+COPY app.py nats_integration.py ./
 
 # Switch to non-root user
 USER pmoves:pmoves
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
-    CMD curl -f http://localhost:8100/healthz || exit 1
+    CMD curl -f "http://localhost:${PORT:-8100}/healthz" || exit 1
 
 # Run the application
 EXPOSE 8100
 
-CMD ["uvicorn", "app:app", "--host", "127.0.0.1", "--port", "8100"]
+CMD ["sh", "-c", "uvicorn app:app --host 0.0.0.0 --port ${PORT:-8100}"]

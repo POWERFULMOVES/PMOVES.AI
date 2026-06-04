@@ -35,7 +35,7 @@ RUN pip install --no-cache-dir --prefix=/install -r requirements-pipecat.txt
 # ── Stage 2: Runtime ─────────────────────────────────────────────
 # Clean image with only runtime shared libs — no gcc, no -dev headers.
 # Runtime: DHI base image — zero-CVE, SLSA Level 3 provenance, Cosign signed
-FROM python:3.11-slim@sha256:9358444059ed78e2975ada2c189f1c1a3144a5dab6f35bff8c981afb38946634
+FROM python:3.11-slim@sha256:a3ab0b966bc4e91546a033e22093cb840908979487a9fc0e6e38295747e49ac0
 
 LABEL org.opencontainers.image.source="https://github.com/POWERFULMOVES/PMOVES.AI"
 LABEL org.opencontainers.image.description="Flute Gateway - Multimodal Voice Communication Layer"

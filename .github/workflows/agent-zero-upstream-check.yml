@@ -30,12 +30,14 @@ jobs:
       current_tag: ${{ steps.read_version.outputs.CURRENT_TAG }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           fetch-depth: 1
 
       - name: Detect latest upstream release
         id: detect
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           if [ -n "${{ inputs.upstream_version }}" ]; then
             echo "tag=${{ inputs.upstream_version }}" >> "$GITHUB_OUTPUT"
@@ -92,7 +94,7 @@ jobs:
       branch_name: ${{ steps.create_pr.outputs.BRANCH_NAME }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Configure git
         run: |
