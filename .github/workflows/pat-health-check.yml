@@ -59,7 +59,7 @@ jobs:
       - name: Check GitHub App token generation
         if: env.HAS_GH_APP == 'true'
         id: app_token
-        uses: actions/create-github-app-token@v3
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3
         with:
           client-id: ${{ secrets.GH_APP_CLIENT_ID }}
           private-key: ${{ secrets.GH_APP_SEC }}
@@ -89,7 +89,7 @@ jobs:
 
       - name: Notify on failure
         if: failure()
-        uses: actions/github-script@v9
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
           script: |
             const body = [
