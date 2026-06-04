@@ -28,7 +28,7 @@ env:
   REGISTRY: ghcr.io
   IMAGE_PREFIX: ghcr.io/${{ github.repository_owner }}
   GHCR_USERNAME: ${{ secrets.GHCR_USERNAME || github.actor }}
-  GHCR_PASSWORD: ${{ secrets.GHCR_TOKEN || secrets.GH_PAT_PUBLISH || github.token }}
+  GHCR_PASSWORD: ${{ secrets.GHCR_TOKEN || github.token }}
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
