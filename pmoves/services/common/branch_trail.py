@@ -31,7 +31,7 @@ Usage::
 from __future__ import annotations
 
 import logging
-import os
+from pmoves.services.common.env import get_secret
 import re
 import time
 from typing import Any, Literal, Optional
@@ -170,8 +170,8 @@ def build_payload(
     # without our branch_event field; sign_cgp() takes any dict.
     effective_passphrase = (
         passphrase
-        or os.environ.get("CHIT_SIGNING_KEY")
-        or os.environ.get("CHIT_PASSPHRASE")
+        or get_secret("CHIT_SIGNING_KEY")
+        or get_secret("CHIT_PASSPHRASE")
     )
     if effective_passphrase:
         payload = sign_cgp(payload, effective_passphrase)
