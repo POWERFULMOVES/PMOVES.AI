@@ -150,7 +150,7 @@ jobs:
           WGER_ADMIN_PASSWORD: ci-deploy-placeholder
           WGER_DB_PASSWORD: ci-deploy-placeholder
           WGER_SECRET_KEY: ci-deploy-placeholder
-          GATEWAY_AGENT_PORT: "8100"
+          GATEWAY_AGENT_PORT: "8111"
           NATS_URL: nats://nats:pmoves@nats:4222
           PRESIGN_SHARED_SECRET: ci-deploy-placeholder
           SUPABASE_SERVICE_KEY: ci-deploy-placeholder
@@ -167,7 +167,7 @@ jobs:
         run: |
           echo "Waiting for Gateway Agent to be healthy..."
           for i in {1..30}; do
-            if curl -sf http://localhost:8100/healthz > /dev/null; then
+            if curl -sf http://localhost:8111/healthz > /dev/null; then
               echo "✓ Gateway Agent is healthy"
               exit 0
             fi
@@ -187,13 +187,13 @@ jobs:
         shell: bash
         run: |
           sleep 5  # Give it time to discover tools
-          response=$(curl -s http://localhost:8100/tools)
+          response=$(curl -s http://localhost:8111/tools)
           tool_count=$(echo "$response" | jq -r '.total // 0')
           echo "✓ Discovered $tool_count MCP tools"
 
           if [ "$tool_count" -gt 0 ]; then
             echo "Sample tools:"
-            curl -s http://localhost:8100/tools | jq -r '.tools[:3] | .[] | "  - \(.name) (\(.category))"'
+            curl -s http://localhost:8111/tools | jq -r '.tools[:3] | .[] | "  - \(.name) (\(.category))"'
           fi
 
   # ============================================================================
@@ -282,7 +282,7 @@ jobs:
         run: |
           echo "Waiting for Gateway Agent to be healthy..."
           for i in {1..60}; do
-            if curl -sf http://localhost:8100/healthz > /dev/null; then
+            if curl -sf http://localhost:8111/healthz > /dev/null; then
               echo "✓ Gateway Agent is healthy"
               exit 0
             fi
@@ -301,18 +301,18 @@ jobs:
       - name: Verify tool discovery
         run: |
           sleep 5  # Give it time to discover tools
-          response=$(curl -s http://localhost:8100/tools)
+          response=$(curl -s http://localhost:8111/tools)
           tool_count=$(echo "$response" | jq -r '.total // 0')
           echo "✓ Discovered $tool_count MCP tools"
 
           if [ "$tool_count" -gt 0 ]; then
             echo "Sample tools:"
-            curl -s http://localhost:8100/tools | jq -r '.tools[:3] | .[] | "  - \(.name) (\(.category))"'
+            curl -s http://localhost:8111/tools | jq -r '.tools[:3] | .[] | "  - \(.name) (\(.category))"'
           fi
 
       - name: Verify secrets loaded
         run: |
-          count=$(curl -sf http://localhost:8100/secrets | jq 'length' 2>/dev/null) || {
+          count=$(curl -sf http://localhost:8111/secrets | jq 'length' 2>/dev/null) || {
             echo "✗ Failed to query secrets endpoint"
             exit 1
           }
