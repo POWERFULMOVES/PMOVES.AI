@@ -16,6 +16,7 @@
 - `tensorzero`: Prepared — TensorZero LLM routing (compose required)
 - `researcher`: GLM-5-turbo for research tasks
 - `code-reviewer`: GLM-5-turbo for code review
+- `minimax`: GLM-5-turbo via MiniMax Token Plan for high-context tasks
 
 ## Deployment Role
 The sidecar is the agent interface for deploying PMOVES.AI on new systems.
@@ -34,6 +35,7 @@ It uses code_execution_remote for host access and the PMOVES Mini CLI for orches
 - CHIT_REQUIRE_SIGNATURE: false (dev mode)
 - CHIT_DECRYPT_ANCHORS: false (dev mode)
 - Flip to true when compose stack is available
+- **Topology gradient**: standalone (unsigned) → docked (signed) → fleet (hardened). Dev mode is standalone; docked enables CHIT signatures; fleet adds JetStream bus + hardened ACLs.
 
 ## JetStream
 - Disabled (AGENTZERO_JETSTREAM=false) — no NATS in standalone mode
@@ -57,4 +59,5 @@ When compose stack is available:
 * For project directories containing `.a0proj/project.json`, NEVER run `git checkout`, `git rebase`, `git merge`, or branch switching directly in `/a0/usr/projects/*/` directories
 * Use git worktrees in `/tmp/` or separate clones in `/tmp/` for checkout/rebase/merge/branch-switch operations to avoid corrupting Agent Zero project configuration files
 * Safe operations on main working directory: `push`, `pull --ff-only`, `fetch`, `status`, `log`, `diff`, `dispatch`
+* **Worktree support**: Use `git worktree` (via Agent Zero worktree tool or CLI) for isolated branch work — creates a separate checkout that doesn't touch the main working copy. Clean up with `git worktree remove` when done.
 6. Restart container
