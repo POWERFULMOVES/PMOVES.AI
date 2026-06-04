@@ -43,6 +43,14 @@ CONFLICT_START = "<<<<<<<"
 CONFLICT_SEP = "======="
 CONFLICT_END = ">>>>>>>"
 
+# Set from --show-collisions; when True, collision bodies are printed (safe:
+# the manifest holds id->label->target mappings, no secret values).
+_SHOW_COLLISIONS = False
+
+
+def _dump_entry(entry: Any) -> str:
+    return yaml.safe_dump(entry, sort_keys=False, default_flow_style=False).rstrip()
+
 
 def split_sides(text: str) -> Tuple[str, str, int]:
     """Reconstruct the 'ours' and 'theirs' full documents from a conflicted file.
@@ -97,8 +105,14 @@ def _top_level_signature(doc: Dict[str, Any]) -> Dict[str, Any]:
     return {k: v for k, v in doc.items() if k != "entries"}
 
 
-def resolve(text: str) -> Tuple[str, List[str]]:
-    """Return (merged_yaml_text, notes). Raises SystemExit(2/3/4) on failure."""
+def resolve(text: str, prefer: str = "none") -> Tuple[str, List[str]]:
+    """Return (merged_yaml_text, notes). Raises SystemExit(2/3/4) on failure.
+
+    prefer: 'none' (refuse collisions — default/safe), 'ours' (take HEAD side for
+    colliding ids), or 'theirs' (take incoming side). prefer is an EXPLICIT human
+    choice made after reviewing --show-collisions; it only affects ids that
+    genuinely collide, never the additive union.
+    """
     if CONFLICT_START not in text:
         print("No conflict markers found — nothing to resolve.", file=sys.stderr)
         raise SystemExit(3)
@@ -137,34 +151,74 @@ def resolve(text: str) -> Tuple[str, List[str]]:
     for eid in sorted(set(ours_entries) & set(theirs_entries)):
         if ours_entries[eid] != theirs_entries[eid]:
             collisions.append(eid)
-    if collisions:
+    if collisions and prefer == "none":
         print(
             "CONTENT COLLISION — these ids exist on BOTH sides with different "
             f"bodies and cannot be auto-unioned: {', '.join(collisions)}.\n"
-            "A human must reconcile these entries.",
+            "A human must reconcile these entries "
+            "(review with --show-collisions, then resolve with --prefer-ours/--prefer-theirs).",
             file=sys.stderr,
         )
+        if _SHOW_COLLISIONS:
+            # The manifest carries no secret VALUES — only id->label->target
+            # mappings — so surfacing the differing bodies is safe and gives the
+            # human what they need to decide. (`git diff secrets_manifest` is
+            # likewise already sanctioned by the damage-control guard.)
+            for eid in collisions:
+                print(f"\n--- collision: {eid} ---", file=sys.stderr)
+                print("OURS (HEAD):", file=sys.stderr)
+                print(_dump_entry(ours_entries[eid]), file=sys.stderr)
+                print("THEIRS (incoming):", file=sys.stderr)
+                print(_dump_entry(theirs_entries[eid]), file=sys.stderr)
+        else:
+            print("(re-run with --show-collisions to see the differing bodies)", file=sys.stderr)
         raise SystemExit(2)
 
-    # Clean additive union: preserve ours' order, then append theirs-only ids.
-    merged_entries: List[Any] = list(ours.get("entries", []))
+    # Union: preserve ours' order; for colliding ids take the prefer side; then
+    # append theirs-only ids. (prefer=='none' already returned above.)
+    collision_set = set(collisions)
     ours_ids = set(ours_entries)
+    merged_entries: List[Any] = []
+    resolved: List[str] = []
+    for entry in ours.get("entries", []):
+        eid = entry["id"]
+        if eid in collision_set:
+            chosen = theirs_entries[eid] if prefer == "theirs" else ours_entries[eid]
+            merged_entries.append(chosen)
+            resolved.append(f"{eid}={prefer}")
+        else:
+            merged_entries.append(entry)
     added: List[str] = []
     for eid in theirs_entries:
         if eid not in ours_ids:
             merged_entries.append(theirs_entries[eid])
             added.append(eid)
 
-    merged = dict(ours)  # preserves top-level key order from ours
-    merged["entries"] = merged_entries
-
     notes = [
         f"hunks={hunks}",
         f"ours_entries={len(ours_entries)}",
         f"theirs_entries={len(theirs_entries)}",
         f"added_from_theirs={len(added)} ({', '.join(added) if added else 'none'})",
+        f"collisions_resolved={len(resolved)} ({', '.join(resolved) if resolved else 'none'})",
         f"total={len(merged_entries)}",
     ]
+
+    # Output strategy: when the chosen base side already contains every id in the
+    # result (i.e. nothing from the other side must be spliced in), write the
+    # base side's text VERBATIM — preserving the manifest's exact formatting and
+    # comments. Only fall back to a structural re-dump when we must merge in
+    # other-side-unique entries (those are new, so no comments are lost).
+    base_text = theirs_text if prefer == "theirs" else ours_text
+    base_ids = set(theirs_entries) if prefer == "theirs" else set(ours_entries)
+    other_entries = ours_entries if prefer == "theirs" else theirs_entries
+    other_only = [eid for eid in other_entries if eid not in base_ids]
+    if not other_only:
+        notes.append("output=verbatim-base (formatting + comments preserved)")
+        return base_text, notes
+
+    merged = dict(ours)  # preserves top-level key order from ours
+    merged["entries"] = merged_entries
+    notes.append(f"output=redump (spliced {len(other_only)} other-side entries; formatting normalized)")
     merged_text = yaml.safe_dump(merged, sort_keys=False, default_flow_style=False, width=4096)
     return merged_text, notes
 
@@ -173,7 +227,19 @@ def main(argv: List[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="Union-merge a conflicted CHIT secrets manifest by id.")
     ap.add_argument("manifest", help="path to the conflicted secrets_manifest*.yaml")
     ap.add_argument("--check", action="store_true", help="report only; do not write")
+    ap.add_argument(
+        "--show-collisions",
+        action="store_true",
+        help="on collision, print the differing entry bodies (id->label->target mappings; no secret values)",
+    )
+    grp = ap.add_mutually_exclusive_group()
+    grp.add_argument("--prefer-ours", action="store_true", help="resolve colliding ids by taking the HEAD side")
+    grp.add_argument("--prefer-theirs", action="store_true", help="resolve colliding ids by taking the incoming side")
     args = ap.parse_args(argv)
+
+    global _SHOW_COLLISIONS
+    _SHOW_COLLISIONS = args.show_collisions
+    prefer = "ours" if args.prefer_ours else "theirs" if args.prefer_theirs else "none"
 
     path = Path(args.manifest)
     if "secrets_manifest" not in path.name:
@@ -184,7 +250,7 @@ def main(argv: List[str] | None = None) -> int:
         return 4
 
     text = path.read_text(encoding="utf-8")
-    merged_text, notes = resolve(text)
+    merged_text, notes = resolve(text, prefer=prefer)
 
     print("CHIT manifest merge — clean additive union:")
     for n in notes:
