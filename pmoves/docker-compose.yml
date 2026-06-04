@@ -3789,7 +3789,7 @@ services:
     profiles: ["agents"]
     networks: [pmoves_api, pmoves_app, pmoves_bus]
     healthcheck:
-      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8111/healthz', timeout=5)"]
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:${GATEWAY_AGENT_PORT:-8111}/healthz', timeout=5)"]
       interval: 30s
       timeout: 10s
       retries: 3
