@@ -17,7 +17,7 @@ env:
   REGISTRY_GHCR: ghcr.io/powerfulmoves
   REGISTRY_DH: powerfulmoves
   GHCR_USERNAME: ${{ secrets.GHCR_USERNAME || github.actor }}
-  GHCR_PASSWORD: ${{ secrets.GHCR_TOKEN || secrets.GH_PAT_PUBLISH || github.token }}
+  GHCR_PASSWORD: ${{ secrets.GHCR_TOKEN || github.token }}
 
 jobs:
   setup-matrix:

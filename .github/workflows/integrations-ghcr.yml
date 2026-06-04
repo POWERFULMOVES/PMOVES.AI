@@ -106,10 +106,10 @@ env:
   REGISTRY: ghcr.io
   # Prefer PAT when supplied (package ownership/ACL edge cases), fallback to workflow token.
   GHCR_USERNAME: ${{ secrets.GHCR_USERNAME || '' }}
-  GHCR_PAT: ${{ secrets.GHCR_TOKEN || secrets.GH_PAT_PUBLISH || '' }}
+  GHCR_PAT: ${{ secrets.GHCR_TOKEN || '' }}
   # Used for cloning other integration repos (private repos require a PAT with repo read).
   # If unset, clones fall back to unauthenticated https (works for public repos only).
-  CI_GIT_CLONE_TOKEN: ${{ secrets.CI_GIT_CLONE_TOKEN || secrets.GH_PAT_PUBLISH || '' }}
+  CI_GIT_CLONE_TOKEN: ${{ secrets.CI_GIT_CLONE_TOKEN || github.token }}
   DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME || secrets.CI_DOCKERHUB_USERNAME }}
   DOCKERHUB_PASSWORD: ${{ secrets.DOCKERHUB_TOKEN || secrets.DOCKERHUB_PAT || secrets.CI_DOCKERHUB_TOKEN }}
 
