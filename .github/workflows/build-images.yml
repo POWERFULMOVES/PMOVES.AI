@@ -17,7 +17,7 @@ env:
   REGISTRY_GHCR: ghcr.io/powerfulmoves
   REGISTRY_DH: powerfulmoves
   GHCR_USERNAME: ${{ secrets.GHCR_USERNAME || github.actor }}
-  GHCR_PASSWORD: ${{ secrets.GHCR_TOKEN || secrets.GH_PAT_PUBLISH || github.token }}
+  GHCR_PASSWORD: ${{ secrets.GHCR_TOKEN || github.token }}
 
 jobs:
   setup-matrix:
@@ -26,14 +26,14 @@ jobs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
     steps:
       - name: Harden Runner
-        uses: step-security/harden-runner@v2
+        uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2
         with:
           egress-policy: audit
           allowed-endpoints: >
             github.com:443
             api.github.com:443
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Parse image matrix
         id: set-matrix
@@ -58,7 +58,7 @@ jobs:
         shell: bash
     steps:
       - name: Harden Runner
-        uses: step-security/harden-runner@v2
+        uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2
         with:
           egress-policy: audit
           allowed-endpoints: >
@@ -73,30 +73,30 @@ jobs:
             security.ubuntu.com:80
             security.ubuntu.com:443
 
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
           submodules: recursive
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
+        uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4
 
       - name: Generate GitHub App token
         id: app_token
-        uses: actions/create-github-app-token@v3
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3
         with:
           client-id: ${{ secrets.GH_APP_CLIENT_ID }}
           private-key: ${{ secrets.GH_APP_SEC }}
           permission-packages: write
 
       - name: Login GHCR
-        uses: docker/login-action@v4
+        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4
         with:
           registry: ghcr.io
           username: ${{ steps.app_token.outputs.token && 'x-access-token' || env.GHCR_USERNAME }}
           password: ${{ steps.app_token.outputs.token || env.GHCR_PASSWORD }}
 
       - name: Login DockerHub (optional)
-        uses: docker/login-action@v4
+        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
@@ -104,7 +104,7 @@ jobs:
 
       - name: Build & push
         id: build
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7
         with:
           context: ${{ matrix.context || format('{0}/{1}', github.workspace, matrix.repo) }}
           file: ${{ matrix.dockerfile || format('{0}/{1}/Dockerfile', github.workspace, matrix.repo) }}
@@ -127,7 +127,7 @@ jobs:
 
       - name: Attest build provenance (SLSA L3)
         if: steps.build.outputs.digest != ''
-        uses: actions/attest-build-provenance@v4
+        uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4
         with:
           subject-name: ${{ env.REGISTRY_GHCR }}/${{ matrix.name }}
           subject-digest: ${{ steps.build.outputs.digest }}
