@@ -29,7 +29,7 @@ Replace the impoverished audio analysis (ffprobe + ffmpeg-lavfi → 4 scalars) w
 - **Purpose:** stateless deterministic embedder. Loads `laion/larger_clap_music`.
 - **HTTP API:** `POST /embed/audio` (multipart wav/mp3 → `{embedding:[512], model_rev, sr}`), `POST /embed/text` (→ 512-d, for semantic text queries), `GET /healthz`, `GET /metrics` (Prometheus).
 - **Optional NATS** (transport = HTTP **+ optional NATS** per decision): responder on `audio.embed.request.v1` → `audio.embed.result.v1`; honors `context_id` / `X-Context-ID` correlation.
-- **Port:** `8112` — in the AI/CHIT service tier (~8086–8113, alongside Hi-RAG/model-registry/evo); verify free against `.claude/CATALOG.md` at impl.
+- **Port:** `8108` — in the AI/CHIT service tier (~8086–8113, alongside Hi-RAG/model-registry/evo). *(Corrected from 8112: 8112/8113/8114 are bound to GitHub-automation services; 8107/8108/8109/8115/8116 verified free — 8108 chosen, next to Consciousness 8106.)*
 - **Deterministic clip/window:** pin the CLAP audio **clip length + hop** (e.g. fixed 10s windows, mean-pooled) as a reproducibility param, consistent across all tracks and tiers — same audio segmentation → same embedding.
 - **Capacity-class / multi-arch:** torch via the repo's `torch.js` per-arch pattern — nvidia `cu128` (4090 sm_89 + 5090 sm_120), Spark GB10 → **NVIDIA arm64 PyTorch container** (SM_110), Knuckles ROCm gfx1201 → **CPU wheel default** (small model), CPU/MPS fallback (MPS = fp32 + `PYTORCH_ENABLE_MPS_FALLBACK=1`). Pin Python 3.10–3.12 (numba/llvmlite aarch64). Post-install check: `torch.cuda.get_arch_list()` + `import librosa,numba`.
 - **Registry:** registered in `pmoves-model-registry` (8110) with model id, revision, license, provenance.
@@ -55,7 +55,7 @@ Audio comes from the **Jellyfin music library** via the **Jellyfin Bridge (`:809
 ```
 Jellyfin music library ──(bridge :8093, item_id)──▶ analyze_beats.py
    ├─ librosa features (CPU, deterministic)
-   ├─ clap-embed (:8112 / NATS) → 512-d audio embedding   ◀── MOF capacity-class node
+   ├─ clap-embed (:8108 / NATS) → 512-d audio embedding   ◀── MOF capacity-class node
    └─ AST tags (optional)            ┌─ low silhouette? → open audio-LLM (semantic, escalated)
    → cluster (silhouette-validated) ─┘
    → CHIT-sign → beats_to_cgp.py → CGP v2 (hyperbolic + attribution + sig) → NATS geometry.cgp.v1
@@ -86,11 +86,14 @@ Jellyfin music library ──(bridge :8093, item_id)──▶ analyze_beats.py
 
 ## 11. Decisions & remaining open items
 **Resolved (2026-06-03):**
-- `clap-embed` **port 8112** in the AI/CHIT tier (verify free at impl).
+- `clap-embed` **port 8108** in the AI/CHIT tier (8112/8113/8114 were already bound to GitHub-automation; 8108 verified free).
 - Semantic tier: **both** Qwen2-Audio + Step-Audio-2-mini available, **config/registry-driven, not hardcoded**.
 - **AST included** in WS-A v1, **model-pluggable** (NVIDIA variants on SPARK GB10 via capacity-class routing).
 
 **Remaining (impl-time):**
 - Exact CLAP clip length/hop value (default 10s/mean-pool — confirm against track lengths).
-- CHIT signing `kid` / key path — reuse existing CHIT signer (`pmoves-chit-sign`).
-- Confirm `clap-embed` port not taken in `.claude/CATALOG.md`.
+
+**Resolved during planning (2026-06-05):**
+- CHIT signing — reuse canonical `pmoves.tools.chit_security.sign_cgp` (HMAC-SHA256, `kid` from `CHIT_SIGNING_KEY_ID` default `chit-signing-v01`, key from `CHIT_SIGNING_KEY`/`CHIT_PASSPHRASE`). Produces `sig:{alg,kid,hmac}` which validates against `cgp.v2.schema.json`.
+- Port confirmed: **8108** (8112/8113/8114 taken). Registered in CATALOG by the impl plan.
+- Implementation plan: `docs/superpowers/plans/2026-06-05-ws-a-audio-grounding.md` (15 TDD tasks).
