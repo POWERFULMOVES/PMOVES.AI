@@ -58,7 +58,7 @@ Over 150–193 commits, upstream near-certainly bumped axios/react-router/vitest
 2. **Bump gitlinks:** update `pmoves/integrations/archon` (and any other affected pins) to the synced fork commits; open-notebook builds from the fork branch directly so its image picks up the sync without a gitlink bump (track the pin anyway).
 3. **Re-run GHCR publish → re-scan.**
 4. **Triage residual only:**
-   - `CVE-2026-44487` (axios, no fix) → justified `.trivyignore` entry **with expiry/review date**.
+   - `CVE-2026-44487` (axios, no fix) → justified `.trivyignore` entry **with expiry/review date**. Note: the GHCR gate for `open-notebook` reads the **shared** `.github/trivy/integrations-main-2026-05-30.trivyignore` (see §6), so the suppression must be added there (or the matrix `trivy_ignorefile` repointed) — adding it to `open-notebook.trivyignore` alone will not unblock the gate.
    - Go `stdlib` (CVE-2026-42504) → rebuild on a newer Go base image (build-arg/base bump), not a dep change.
 
 ## 5. Secondary fleet-hygiene findings (NOT CVE-blocking — separate track)
@@ -71,8 +71,8 @@ From the `pmoves-submodule-fleet` audit (informational):
 These are batch-promotion candidates for a separate `chore(submodules): promote …` pass, independent of the CVE remediation.
 
 ## 6. Existing Trivy suppressions in play
-- `.github/trivy/integrations-main-2026-05-30.trivyignore` (shared, dated) — predates the CVE-2026-444xx wave.
-- `.github/trivy/open-notebook.trivyignore` (per-image).
+- `.github/trivy/integrations-main-2026-05-30.trivyignore` (shared, dated) — predates the CVE-2026-444xx wave. **This is the file the GHCR gate actually consumes for `open-notebook`:** the `integrations-ghcr.matrix.json` entry sets `trivy_ignorefile` to this shared path, and the Trivy gate step passes it as `trivyignores`.
+- `.github/trivy/open-notebook.trivyignore` (per-image file) — **present but NOT wired into the current `open-notebook` matrix entry**, so suppressions added here do not affect the gate until the matrix `trivy_ignorefile` is repointed to it.
 
 Any new suppression added in step 4 must carry a justification + review date (no blanket/unbounded ignores).
 
