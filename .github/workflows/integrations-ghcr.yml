@@ -107,6 +107,8 @@ env:
   # Prefer PAT when supplied (package ownership/ACL edge cases), fallback to workflow token.
   GHCR_USERNAME: ${{ secrets.GHCR_USERNAME || '' }}
   GHCR_PAT: ${{ secrets.GHCR_TOKEN || secrets.GH_PAT_PUBLISH || '' }}
+  GH_APP_ID: ${{ secrets.GH_APP_ID || '' }}
+  GH_APP_SEC: ${{ secrets.GH_APP_SEC || '' }}
   # Used for cloning other integration repos (private repos require a PAT with repo read).
   # If unset, clones fall back to unauthenticated https (works for public repos only).
   CI_GIT_CLONE_TOKEN: ${{ secrets.CI_GIT_CLONE_TOKEN || secrets.GH_PAT_PUBLISH || '' }}
@@ -422,12 +424,12 @@ jobs:
             [ -z "$(printenv GHCR_PAT || true)" ]      && missing+=("GHCR_TOKEN/GH_PAT_PUBLISH")
           fi
 
-          if has_value GH_APP_CLIENT_ID && has_value GH_APP_SEC; then
+          if has_value GH_APP_ID && has_value GH_APP_SEC; then
             echo "✅ GitHub App token generation available"
           else
             echo "⚠️ GitHub App token unavailable"
-            [ -z "$(printenv GH_APP_CLIENT_ID || true)" ] && missing+=("GH_APP_CLIENT_ID")
-            [ -z "$(printenv GH_APP_SEC || true)" ]       && missing+=("GH_APP_SEC")
+            [ -z "$(printenv GH_APP_ID || true)" ]  && missing+=("GH_APP_ID")
+            [ -z "$(printenv GH_APP_SEC || true)" ] && missing+=("GH_APP_SEC")
           fi
           echo "::endgroup::"
 
@@ -437,15 +439,17 @@ jobs:
         env:
           GHCR_USERNAME: ${{ env.GHCR_USERNAME }}
           GHCR_PAT: ${{ env.GHCR_PAT }}
-          GH_APP_CLIENT_ID: ${{ secrets.GH_APP_CLIENT_ID }}
-          GH_APP_SEC: ${{ secrets.GH_APP_SEC }}
+          GH_APP_ID: ${{ env.GH_APP_ID }}
+          GH_APP_SEC: ${{ env.GH_APP_SEC }}
 
       - name: Generate GitHub App token (for clone + GHCR)
         id: app_token
+        if: ${{ env.GH_APP_ID != '' && env.GH_APP_SEC != '' }}
+        continue-on-error: true
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3
         with:
-          client-id: ${{ secrets.GH_APP_CLIENT_ID }}
-          private-key: ${{ secrets.GH_APP_SEC }}
+          app-id: ${{ env.GH_APP_ID }}
+          private-key: ${{ env.GH_APP_SEC }}
           # Explicit token scopes required for clone + GHCR push
           permission-contents: read
           permission-packages: write
@@ -563,7 +567,7 @@ jobs:
       - name: Require GHCR authentication
         if: ${{ steps.login_ghcr_pat.outcome != 'success' && steps.login_ghcr_app.outcome != 'success' && steps.login_ghcr_actions.outcome != 'success' }}
         run: |
-          echo "::error::Unable to authenticate to GHCR. Check GHCR_USERNAME/GHCR_TOKEN, GH_APP_CLIENT_ID/GH_APP_SEC, or the default workflow token."
+          echo "::error::Unable to authenticate to GHCR. Check GHCR_USERNAME/GHCR_TOKEN, GH_APP_ID/GH_APP_SEC, or the default workflow token."
           exit 1
 
       - name: Optional login to Docker Hub
@@ -672,7 +676,16 @@ jobs:
 
       - name: Install Syft (SBOM)
         if: ${{ steps.cfg.outputs.generate_sbom == 'true' && steps.meta.outputs.has_tags == 'true' }}
-        uses: anchore/sbom-action/download-syft@e22c389904149dbc22b58101806040fa8d37a610
+        env:
+          SYFT_VERSION: v1.45.0
+        run: |
+          set -euo pipefail
+          install_dir="${RUNNER_TEMP}/syft-bin"
+          mkdir -p "$install_dir"
+          curl -sSfL "https://github.com/anchore/syft/releases/download/${SYFT_VERSION}/syft_${SYFT_VERSION#v}_linux_amd64.tar.gz" -o "${RUNNER_TEMP}/syft.tar.gz"
+          tar -xzf "${RUNNER_TEMP}/syft.tar.gz" -C "$install_dir" syft
+          sudo install -m 0755 "${install_dir}/syft" /usr/local/bin/syft
+          syft version
 
       - name: Free disk space before SBOM
         if: ${{ steps.cfg.outputs.generate_sbom == 'true' && steps.meta.outputs.has_tags == 'true' }}
