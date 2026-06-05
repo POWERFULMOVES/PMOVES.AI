@@ -166,12 +166,25 @@ jobs:
         shell: bash
         run: |
           echo "Waiting for Gateway Agent to be healthy..."
+          gateway_agent_cid() {
+            docker ps -qf name=gateway-agent | head -1
+          }
           for i in {1..30}; do
             if curl -sf http://localhost:8111/healthz > /dev/null; then
               echo "✓ Gateway Agent is healthy"
               exit 0
             fi
-            echo "Waiting... ($i/30)"
+            cid="$(gateway_agent_cid)"
+            if [ -n "$cid" ]; then
+              status="$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$cid" 2>/dev/null || true)"
+              if [ "$status" = "healthy" ]; then
+                echo "✓ Gateway Agent container is healthy"
+                exit 0
+              fi
+              echo "Waiting... ($i/30, container=${status:-unknown})"
+            else
+              echo "Waiting... ($i/30, container=missing)"
+            fi
             sleep 2
           done
           echo "✗ Gateway Agent failed health check"
@@ -187,13 +200,21 @@ jobs:
         shell: bash
         run: |
           sleep 5  # Give it time to discover tools
-          response=$(curl -s http://localhost:8111/tools)
+          response="$(curl -sf http://localhost:8111/tools 2>/dev/null || true)"
+          if [ -z "$response" ]; then
+            cid="$(docker ps -qf name=gateway-agent | head -1)"
+            if [ -z "$cid" ]; then
+              echo "✗ No gateway-agent container found for tool discovery"
+              exit 1
+            fi
+            response="$(docker exec "$cid" python -c 'import urllib.request; print(urllib.request.urlopen("http://127.0.0.1:8111/tools", timeout=5).read().decode())')"
+          fi
           tool_count=$(echo "$response" | jq -r '.total // 0')
           echo "✓ Discovered $tool_count MCP tools"
 
           if [ "$tool_count" -gt 0 ]; then
             echo "Sample tools:"
-            curl -s http://localhost:8111/tools | jq -r '.tools[:3] | .[] | "  - \(.name) (\(.category))"'
+            echo "$response" | jq -r '.tools[:3] | .[] | "  - \(.name) (\(.category))"'
           fi
 
   # ============================================================================
