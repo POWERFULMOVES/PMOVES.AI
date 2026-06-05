@@ -78,6 +78,19 @@ Each green check should represent:
 - [x] AGNOTE docs, `NEXT_STEPS`, and main `ROADMAP` agree on the current state. <!-- Aligned across #1138-#1147 merge cascade -->
 - [x] The docs do not imply a production-ready suit baseline where one does not exist. <!-- Gap reports explicitly state pin is Mar 7, not v1.3 -->
 - [x] The signoff artifact itself is linked from AGNOTE4482 canon. <!-- Added to AGNOTE4482.md Canonical Pointer section -->
+
+### 9. HERMES Agent Integration
+
+- [x] `hermes-agent` is distinguished from `hermes` (Hermes-3 LLM model persona) in agent_signatures.yaml. <!-- hermes-agent: star glyph, hermes: white star glyph; verified hermes-agent 2026-06-04 -->
+- [x] Room manifest `hermes-agent.room.control.json` defines gateway-oriented room with 3 apps (gateway-webui, mcp-bridge, skill-curator). <!-- Verified hermes-agent 2026-06-04 -->
+- [x] Catalog.json includes `hermes-agent.room.control` entry with schema_version bumped to 1.1.0. <!-- Verified hermes-agent 2026-06-04 -->
+- [x] TAC tree `node-hermes-agent.tac.yaml` covers 8 phases from identity to docs/signoff. <!-- Verified hermes-agent 2026-06-04 -->
+- [x] Node profiles exist for all 6 fleet nodes (Z890, 5090, 4090, Spark, B850/RDNA4, KVM4-1). <!-- pmoves/config/profiles/hermes/*.yaml; verified hermes-agent 2026-06-04 -->
+- [x] Local model mesh documented: Spark 70B primary, 5090 8B+70b staging, Z890/B850/4090 8B only. <!-- Verified hermes-agent 2026-06-04 -->
+- [x] NATS subjects catalogued for Hermes gateway, MCP, skills, cron, and delegation events. <!-- 6 subjects in HERMES_AGENT_INTEGRATION.md; verified hermes-agent 2026-06-04 -->
+- [x] Agent registry updated with hermes_agent entry (port 7700, node affinity includes all 7 nodes). <!-- Verified hermes-agent 2026-06-04 -->
+- [x] Operator skill `.claude/skills/hermes-agent-integration/SKILL.md` created with launch/health/cron/delegate commands. <!-- Verified hermes-agent 2026-06-04 -->
+- [x] Three-Body agent definition `.claude/agents/hermes-agent.md` created with Delivery Body role and bridge contracts. <!-- Verified hermes-agent 2026-06-04 -->
 - [x] Reviewer notes can point to one shared checklist instead of scattered comments. <!-- This file is the single gate -->
 
 

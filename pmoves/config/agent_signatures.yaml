@@ -405,6 +405,27 @@ signatures:
       - quality-gates
     description: "BoTZ validation agent — reviews Architect plans and Builder output for security, compliance, and quality before merge"
 
+
+  hermes-agent:
+    agent_id: "hermes-agent"
+    display_name: "HERMES Agent"
+    glyph: "\u2605"              # ★ Black star (distinct from hermes white star)
+    color: "#047857"
+    accent: "#6EE7B7"
+    voice: analytical
+    co_author: "HERMES Agent <hermes-agent@pmoves.ai>"
+    model_preference: opus        # deployment hint -- needs deep context for integration work
+    node_affinity: [z890, 5090, 4090, kvm4-1]
+    resonance:
+      - gateway-control
+      - skill-curation
+      - cross-platform
+      - hermes-bridge
+      - nats-relay
+      - subagent-delegation
+      - cron-orchestration
+    description: "NousResearch Hermes Agent integration body -- gateway operator, skill curator, NATS bridge, and cross-platform delegator. Distinct from the Hermes-3 LLM model persona (see `hermes` signature above)."
+
 # Voice guide for trail entries:
 #   analytical:     Thorough reasoning, cross-references, structured lists
 #   architectural:  Blueprint format, mode/state descriptions, integration maps
