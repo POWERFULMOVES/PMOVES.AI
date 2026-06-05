@@ -1,0 +1,577 @@
+# ============================================================
+# HERMES Agent Profile: Elder-Melchor / Ageless Beauty Practice Workstation
+# ============================================================
+# OWNER: Nurse Practitioner -- Ageless Beauty Medical Practice
+# Hostname: DESKTOP-4BFJITF (renaming to Elder-Melchor after restart)
+# Processor: Intel Core i7-9750H @ 2.60GHz (6C/12T, laptop)
+# RAM: 32.0 GB installed (31.7 GB usable)
+# GPU: NVIDIA GeForce GTX 1650 4GB (lightweight inference only)
+# Storage: 954 GB total, 605 GB used (~64%)
+# OS: Windows 10 64-bit
+# Network: Wi-Fi (192.168.1.121) + Tailscale (100.82.62.45)
+# Node type: Practice workstation -- cloud-first, HIPAA-aware
+# Added to fleet: 2026-06-04
+# Practice: Ageless Beauty (agelessbeauty.pmovies.ai)
+# ============================================================
+
+practice:
+  name: "Ageless Beauty"
+  domain: "agelessbeauty.pmovies.ai"
+  type: "Medical Aesthetics / Nurse Practitioner Private Practice"
+  owner_role: "Nurse Practitioner"
+  hipaa_compliant: true
+  bpm_enabled: true
+  hosting: "Hostinger (HIPAA-compliant VPS planned)"
+  notes: |
+    This node serves as the practice management workstation for Ageless Beauty.
+    Primary workloads: patient intake automation, appointment scheduling,
+    treatment documentation, billing integration, inventory tracking.
+    Cloud-first model to preserve local resources for EMR/EHR software.
+
+# === MODEL ROUTING: Cloud-First Practice Workstation ===
+# Philosophy: Local GPU (GTX 1650 4GB) reserved for embeddings + lightweight tasks.
+# Heavy inference offloaded to cloud coding plans (Z.AI, MiniMax) or fleet.
+
+model:
+  default: "zai-coding"
+  provider: "zai"
+  env_key: "ZAI_API_KEY"
+  notes: |
+    Z.AI Coding Plan is PRIMARY for this practice workstation.
+    Used for: code generation, automation scripting, document processing,
+    billing workflow automation, PMOVES health/wealth adapter development.
+    Always cloud -- never touches local GPU.
+
+  fallback:
+    provider: "minimax"
+    model: "minimax-text-01"
+    env_key: "MINIMAX_API_KEY"
+    notes: |
+      MiniMax Token Plan is SECONDARY fallback.
+      Used for: creative patient communication, marketing copy,
+      dialogue generation, multi-modal content (before/after descriptions).
+
+  tertiary_fallback:
+    provider: "openrouter"
+    model: "nousresearch/hermes-3"
+    env_key: "OPENROUTER_API_KEY"
+
+# === OLLAMA: Local Embeddings + Lightweight Inference ===
+ollama:
+  enabled: true
+  provider: openai-api
+  base_url: http://localhost:11434/v1
+  api_key: "ollama"
+  role: "embeddings_and_lightweight_only"
+  models:
+    embeddings:
+      - "nomic-embed-text"      # Patient note embeddings, search index
+      - "mxbai-embed-large"     # Advanced semantic search for knowledge base
+    lightweight_inference:
+      - "hermes3:8b"            # Quick local tasks (Q4 quantization recommended)
+      - "gemma4:4b"             # Ultra-lightweight for classification/tagging
+  notes: |
+    GTX 1650 4GB is RESERVED for embeddings + lightweight classification.
+    Do NOT run heavy inference here -- use cloud providers (Z.AI, MiniMax)
+    or fleet offload (Spark 70B, 5090 GPU) for heavy LLM tasks.
+    CPU offload acceptable for embedding models (nomic-embed-text ~500MB).
+
+# === CLOUD PROVIDER HIERARCHY (Practice-Optimized) ===
+provider_hierarchy:
+  tier_1_zai_coding:
+    name: "Z.AI Coding Plan (PRIMARY)"
+    provider: zai
+    model: zai-coding
+    env_key: ZAI_API_KEY
+    use_for:
+      - automation_scripting
+      - billing_workflow_dev
+      - pmoves_health_adapter_code
+      - pmoves_wealth_adapter_code
+      - document_processing
+      - patient_intake_form_logic
+    notes: "Cloud-first. Never touches local GPU. Used for all coding tasks."
+
+  tier_2_minimax:
+    name: "MiniMax Token Plan (SECONDARY)"
+    provider: minimax
+    model: minimax-text-01
+    env_key: MINIMAX_API_KEY
+    use_for:
+      - patient_communication_drafts
+      - marketing_copy_generation
+      - before_after_description_writing
+      - treatment_plan_explanations
+      - social_media_content
+    notes: "Creative + dialogue tasks. Cloud-only."
+
+  tier_3_kimi:
+    name: "Kimi Allegro Coding Plan"
+    provider: kimi-coding
+    model: kimi-k2.6
+    env_key: KIMI_API_KEY
+    use_for:
+      - long_context_document_review
+      - multi_file_practice_policy_analysis
+      - chinese_language_patient_materials
+    notes: "Long-context specialist. Activate for large document batches."
+
+  tier_4_alibaba:
+    name: "Alibaba Coding Plan"
+    provider: alibaba-coding-plan
+    model: qwen-coder
+    env_key: ALIBABA_API_KEY
+    use_for:
+      - code_completion_quick_fixes
+      - unit_test_generation
+      - chinese_coding_tasks
+    notes: "Utility coding plan. Round-robin with Z.AI for load balancing."
+
+  tier_5_openrouter:
+    name: "OpenRouter Fallback"
+    provider: openrouter
+    model: nousresearch/hermes-3
+    env_key: OPENROUTER_API_KEY
+    use_for:
+      - general_inference_when_all_plans_exhausted
+      - frontier_model_access
+    notes: "Pay-per-use fallback. Monitor costs closely."
+
+  tier_6_cli_agents:
+    name: "Frontier CLI Agents"
+    providers:
+      - name: "OpenAI Codex CLI"
+        provider: openai-codex
+        model: codex
+        env_key: OPENAI_CODEX_API_KEY
+        use_for: [pr_automation, github_workflow, pmoves_repo_tasks]
+      - name: "Claude Code Max"
+        provider: copilot-acp
+        model: claude-sonnet-4
+        env_key: GITHUB_TOKEN
+        use_for: [security_review, architecture_review, hipaa_policy_audit]
+
+  tier_7_fleet_offload:
+    name: "Fleet Remote GPU (Heavy Inference)"
+    providers:
+      - name: "Spark DGX-Spark 70B"
+        provider: openai-api
+        model: hermes3:70b
+        base_url: http://pmoves-spark:11434/v1
+        use_for: [large_document_analysis, research_synthesis, training_data_generation]
+      - name: "5090 GPU Offload"
+        provider: openai-api
+        model: hermes3:8b
+        base_url: http://pmoves-5090:11434/v1
+        use_for: [image_gen, video, gpu_heavy_toolsets]
+
+  tier_8_hf_unsloth:
+    name: "HuggingFace / Unsloth (FOLLOW-UP)"
+    status: planned
+    provider: huggingface
+    model: unsloth/hermes3-8b-GGUF
+    env_key: HUGGINGFACE_TOKEN
+    use_for: [local_advanced_optimization, gguf_quantization]
+    notes: |
+      Planned for post-PR integration. llama.cpp + Unsloth on Elder-Melchor
+      for fully offline embedding + lightweight inference.
+
+# === FALLBACK CHAIN (Practice Optimized) ===
+fallback_chain:
+  - tier_1_zai_coding       # PRIMARY: all coding + automation
+  - tier_2_minimax          # SECONDARY: creative + patient comms
+  - tier_3_kimi             # Long-context document batches
+  - tier_4_alibaba          # Utility coding round-robin
+  - tier_5_openrouter       # General fallback
+  - tier_6_cli_agents       # Context-dependent (Codex/Claude)
+  - tier_7_fleet_offload    # Heavy inference to fleet
+  - tier_8_hf_unsloth       # Local advanced (planned)
+
+# === AGENT SETTINGS (Practice Mode) ===
+agent:
+  max_turns: 50
+  tool_use_enforcement: strict
+  task_completion_guidance: true
+  environment_probe: true
+  practice_mode: true
+  hipaa_aware: true
+  redact_phi: true        # Redact patient identifiers in logs
+
+# === TOOLSETS (Practice-Optimized) ===
+toolsets:
+  enabled:
+    - web                 # Research, Hostinger management
+    - terminal            # Local scripting, Docker
+    - file                # Document management
+    - browser             # Web automation, patient portal testing
+    - messaging           # Patient communication (HIPAA-aware)
+    - cronjob             # Scheduled tasks: appointment reminders, backups
+    - skills              # Practice-specific skills
+    - memory              # Patient knowledge base (anonymized)
+    - vision              # Image analysis (before/after photos)
+    - todo                # Task management
+  disabled:
+    - image_gen           # Offload to 5090 or use cloud
+    - video               # Offload to 5090
+    - rl                  # No local GPU headroom
+    - moa                 # No local GPU headroom
+    - computer_use        # Not needed for practice
+    - feishu_doc          # Not needed
+    - feishu_drive        # Not needed
+  practice_specific:
+    - patient_intake      # Planned: custom skill for intake forms
+    - appointment_scheduler # Planned: custom skill for booking
+    - billing_integration   # Planned: PMOVES wealth adapter
+    - inventory_tracker     # Planned: product stock management
+
+# === TERMINAL ===
+terminal:
+  backend: local
+  shell: bash
+  timeout: 180
+  windows_quirks:
+    newline_binding: ctrl_enter
+    path_separator: forward_slash
+    env_allowlist: [SYSTEMROOT, WINDIR, COMSPEC]
+
+# === TTS / STT (Patient Communication) ===
+tts:
+  provider: edge
+  voice: en-US-AriaNeural
+  use_cases:
+    - accessibility_features
+    - patient_notification_audio
+  notes: "Edge TTS is free and offline-capable. No API costs."
+
+stt:
+  enabled: true
+  provider: local
+  local:
+    model: base
+  use_cases:
+    - voice_notes
+    - dictation_for_documentation
+  notes: "Local STT (faster-whisper) for privacy. No cloud voice data."
+
+# === MEMORY (Practice Knowledge Base) ===
+memory:
+  memory_enabled: true
+  user_profile_enabled: true
+  provider: sqlite
+  hipaa_mode: true
+  notes: |
+    All patient data stored in memory MUST be anonymized.
+    Use patient_id hashes, never names or DOB in agent memory.
+    PMOVES CHIT governs memory encryption at rest.
+
+# === DELEGATION ===
+delegation:
+  model: "zai-coding"      # Delegate coding tasks to Z.AI
+  provider: zai
+  max_concurrent_children: 2
+  max_iterations: 30
+  notes: "Children agents run on cloud providers to preserve local resources."
+
+# === GATEWAY ===
+gateway:
+  port: 7700
+  health_endpoint: /api/health
+  platforms:
+    - discord              # Staff communication (HIPAA-aware channels)
+    - telegram             # Patient appointment reminders (opt-in only)
+  battery_saver_disable: true
+  practice_branding:
+    name: "Ageless Beauty"
+    color: "#E91E63"      # Pink brand color
+    logo: "agelessbeauty-logo.png"
+  notes: |
+    Gateway serves practice staff + patient-facing automation.
+    All patient data flows through PMOVES CHIT-secured pipeline.
+
+# === NATS (Practice Mesh) ===
+nats:
+  url: "nats://pmoves-nats:4222"
+  fallback_url: "nats://100.82.62.45:4222"
+  subjects:
+    publish:
+      - hermes.gateway.launched.v1
+      - hermes.gateway.health.v1
+      - hermes.mcp.toolcall.v1
+      - hermes.skill.curated.v1
+      - hermes.cron.executed.v1
+      - hermes.practice.patient_intake.v1      # Practice-specific
+      - hermes.practice.appointment_booked.v1  # Practice-specific
+      - hermes.practice.billing_event.v1       # Practice-specific
+    subscribe:
+      - p7.nats.launch
+      - p7.nats.session
+      - mesh.node.announce.v1
+      - pmoves.health.alert.v1                 # Health integration
+      - pmoves.wealth.transaction.v1           # Wealth integration
+
+# === COMPRESSION ===
+compression:
+  enabled: true
+  threshold: 0.50
+  target_ratio: 0.20
+
+# === DISPLAY ===
+display:
+  skin: default
+  tool_progress: true
+  show_reasoning: false
+  show_cost: true          # Show costs for cloud providers
+
+# === SECURITY (HIPAA-Aware) ===
+security:
+  redact_secrets: true
+  redact_phi: true         # Redact patient identifiers
+  approvals:
+    mode: smart
+  hipaa_compliance:
+    enabled: true
+    phi_redaction_patterns:
+      - '\b\d{3}-\d{2}-\d{4}\b'              # SSN
+      - '\b\d{1,2}[/\-]\d{1,2}[/\-]\d{2,4}\b'  # DOB
+      - '\b[A-Z][a-z]+ [A-Z][a-z]+\b'            # Names (basic)
+    allowed_log_retention_days: 30
+    encryption_at_rest: true
+    audit_logging: true
+
+# === DOCKER MCP TOOLKIT ===
+docker_mcp:
+  enabled: true
+  host: tcp://localhost:2375
+  wsl_integration: true
+  image: nikolaik/python-nodejs:python3.11-nodejs20
+  forward_env: [ZAI_API_KEY, MINIMAX_API_KEY, OPENROUTER_API_KEY]
+  profiles:
+    - name: "practice-web"
+      image: "nginx:alpine"
+      ports: ["8080:80"]
+      use: "Hostinger staging container for agelessbeauty.pmovies.ai"
+    - name: "practice-db"
+      image: "postgres:15-alpine"
+      env: ["POSTGRES_PASSWORD=${DB_PASSWORD}"]
+      use: "Local PostgreSQL for development (Hostinger prod is separate)"
+  notes: |
+    Docker MCP for containerized practice tools.
+    Review after PRs: Add n8n for workflow automation,
+    ComfyUI for image processing (5090 offload),
+    Hi-RAG gateway for knowledge base queries.
+
+# === PMOVES INTEGRATIONS (Health + Wealth + Submodule Fleet) ===
+# All submodules are defined in .gitmodules at repo root.
+# To initialize: git submodule update --init <submodule-path>
+# Full fleet: 50+ submodules across 10 tiers.
+# See: pmoves/docs/AGENTS/AGNOTE4482.md for canonical submodule listing.
+
+pmoves_integrations:
+  # === HEALTH (Submodule: Pmoves-Health-wger) ===
+  # Git: https://github.com/POWERFULMOVES/Pmoves-Health-wger.git
+  # Branch: PMOVES.AI-Edition-Hardened
+  # Status: submodule not initialized
+  health:
+    enabled: true
+    submodule: "Pmoves-Health-wger"
+    submodule_path: "Pmoves-Health-wger/"
+    submodule_git: "https://github.com/POWERFULMOVES/Pmoves-Health-wger.git"
+    submodule_branch: "PMOVES.AI-Edition-Hardened"
+    hipaa_mode: true
+    use_cases:
+      - patient_workout_prescription
+      - treatment_recovery_tracking
+      - wellness_program_management
+    adapter_status: "needs_adaptation_for_practice"
+    adaptation_requirements:
+      - aesthetic_medicine_protocols: "Treatment plans for NP practice"
+      - recovery_timelines: "Post-procedure care tracking"
+      - hipaa_compliance: "BAAs, encryption, audit trails"
+      - wearable_integration: "Apple Health, Fitbit for patient metrics"
+    notes: |
+      Pmoves-Health-wger is a PMOVES.AI-Edition-Hardened submodule.
+      For Ageless Beauty: adapt wger workout plans → patient wellness prescriptions.
+      HIPAA mode: local-only patient data, encrypted sync to Hostinger VPS.
+      Init command: git submodule update --init Pmoves-Health-wger
+
+  # === WEALTH (Submodule: PMOVES-Wealth) ===
+  # Git: https://github.com/POWERFULMOVES/PMOVES-Wealth.git
+  # Branch: PMOVES.AI-Edition-Hardened
+  # Status: submodule not initialized
+  wealth:
+    enabled: true
+    submodule: "PMOVES-Wealth"
+    submodule_path: "PMOVES-Wealth/"
+    submodule_git: "https://github.com/POWERFULMOVES/PMOVES-Wealth.git"
+    submodule_branch: "PMOVES.AI-Edition-Hardened"
+    use_cases:
+      - billing_automation
+      - insurance_claim_processing
+      - inventory_cost_tracking
+      - practice_financial_dashboard
+    adapter_status: "needs_adaptation_for_practice"
+    adaptation_requirements:
+      - medical_billing: "CPT codes, ICD-10, insurance claims"
+      - payment_processing: "Stripe, Square, patient financing"
+      - inventory_mgmt: "Skincare products, supplements"
+    notes: |
+      PMOVES-Wealth is a PMOVES.AI-Edition-Hardened submodule.
+      For Ageless Beauty: add medical billing, insurance claims,
+      patient payment plans, product inventory for practice retail.
+      Init command: git submodule update --init PMOVES-Wealth
+      product inventory valuation.
+
+  # ============================================================
+  # BPM: Three-Layer Bridge Architecture
+  # ============================================================
+  # PMOVES uses "BPM" as a multi-layer bridge -- the same acronym
+  # connects audio rhythm, information geometry, and workflow.
+  # Canonical: AGNOTE4482.BEATS.md + CHIT Visual Tour
+  # ============================================================
+  bpm:
+    enabled: true
+    module: "pmoves-bpm"
+    
+    layer_1_beats_per_minute:
+      name: "Beats Per Minute (Audio/Musical)"
+      description: "Prosodic timing, beat-synced TTS, Flute Gateway"
+      system: "Flute Gateway + ToKenism"
+      nats_subject: "tokenism.prosodic.bpm.v1"
+      flute_gateway:
+        prosodic_analyze: "flute_gateway (media) step in voice pipeline"
+        bpm_sync: "Beat-synchronized synthesis for music/DJ"
+        modifiers:
+          - fast_tempo: "F5-TTS speed 1.4, cross_fade 0.05"
+          - slow_groove: "F5-TTS speed 0.75, cross_fade 0.2"
+      boundary_mapping:
+        - "SENTENCE (350ms pause) → 60 BPM → Largo → Root C4 (262 Hz)"
+        - "CLAUSE   (180ms pause) → 90 BPM → Andante → Root E4 (330 Hz)"
+        - "PHRASE   (100ms pause) → 120 BPM → Allegro → Root G4 (392 Hz)"
+        - "BREATH   (130ms pause) → 80 BPM → Adagio → Root D4 (294 Hz)"
+        - "NONE     (0ms pause)   → 150 BPM → Presto → Root C5 (523 Hz)"
+      practice_use: |
+        Patient education audio -- 60 BPM (Largo) for meditation,
+        90 BPM (Andante) for gentle appointment reminders
+    
+    layer_2_bridge_protocol_module:
+      name: "Bridge Protocol Module (Geometry/Information)"
+      description: "CHIT hyperdimensional encoding -- meaning as geometry"
+      system: "CHIT Cymatic-Holographic Information Transfer"
+      nats_subject: "tokenism.geometry.event.v1"
+      components:
+        - hyperbolic_encoder: "K = -1 curvature, exponential distance"
+        - dirichlet_weights: "Attribution weighting across geometry"
+        - shape_attribution: "SHA-256 Shape ID for 30-day replay"
+        - zeta_filter: "Frequency-domain information filtering"
+        - swarm_attribution: "EVO SWARM population state tracking"
+      chit_types:
+        - cgp: "Computational Geometry Packet"
+        - bpm: "Prosodic/Boundary/Bridge marker"
+        - swarm: "Population-state geometry"
+        - cipher: "Encrypted CHIT for sensitive data"
+      practice_use: |
+        Patient data as CHIT geometry (HIPAA-safe shape IDs),
+        Chakra energy mapped to hyperbolic coordinates
+    
+    layer_3_business_process_management:
+      name: "Business Process Management (Workflow/Clinical)"
+      description: "Ageless Beauty practice automation"
+      workflow_engine: "n8n / temporal / custom (TBD post-PR)"
+      workflows:
+        patient_intake:
+          steps: [check_in, vitals, history, consent]
+          chit: [intake.cgp.ready.v1, consent.geometry.event.v1]
+        insurance_processing:
+          steps: [verify, authorize, submit, track]
+          chit: [insurance.cgp.ready.v1]
+        follow_up:
+          steps: [schedule, reminder, survey, review]
+          chit: [followup.prosodic.bpm.v1]  # 90 BPM voice reminders
+        wellness_plan:
+          steps: [assess, prescribe, track, adjust]
+          chit: [wellness.geometry.event.v1]
+        billing:
+          steps: [invoice, payment, receipt, report]
+          integrations: [PMOVES-Wealth, Stripe, QuickBooks]
+      practice_use: |
+        End-to-end automation from patient arrival to follow-up
+        CHIT-signed checkpoints for HIPAA audit trails
+
+  chit:
+    enabled: true
+    module: "pmoves-cipher"
+    use_cases:
+      - patient_data_encryption
+      - staff_identity_verification
+      - audit_trail_signing
+      - hipaa_compliance_attestation
+    notes: "Cryptographic Handshake for Identity & Trust."
+
+# === POWER MANAGEMENT (Laptop) ===
+power:
+  type: laptop
+  battery_saver:
+    disable_gateway: true
+    reduce_turns: 20
+    disable_toolsets: [image_gen, video]
+    cloud_fallback: true   # Route to cloud when on battery
+  ac_power:
+    full_capabilities: true
+
+# === MONITORING ===
+monitoring:
+  glances:
+    enabled: true
+    config_file: "~/.hermes/profiles/pmoves-hermes-elder/glances.conf"
+    web_ui_port: 61208
+    refresh_rate: 2
+    gpu:
+      enabled: true
+      backend: nvidia-smi
+      discrete: "NVIDIA GeForce GTX 1650"
+      integrated: "Intel UHD Graphics 630"
+    alerts:
+      - condition: "cpu > 80%"
+        action: "route_new_tasks_to_cloud"
+      - condition: "ram > 85%"
+        action: "flush_embedding_cache"
+      - condition: "gpu_vram > 90%"
+        action: "offload_to_spark_or_5090"
+
+# === HOSTINGER HOSTING ===
+hostinger:
+  domain: "agelessbeauty.pmovies.ai"
+  plan: "Business Shared"   # Upgrade to VPS for HIPAA
+  ssl: true
+  cdn: true
+  notes: |
+    Current: Business Shared hosting on Hostinger.
+    HIPAA compliance requires upgrade to VPS + BAA signing.
+    See: pmoves/docs/security/HIPAA_HOSTINGER_GUIDE.md (to be created)
+
+# === THEME / BRANDING (4090 CLAUDE Work) ===
+theme:
+  source: "4090-claude-themes"
+  status: "integrated"
+  assets:
+    - "agelessbeauty-logo.png"
+    - "agelessbeauty-color-palette.json"
+    - "agelessbeauty-typography.css"
+  pinokio_mod:
+    enabled: true
+    name: "HERMES-AgelessBeauty"
+    description: "Custom Pinokio HERMES mod for Ageless Beauty practice"
+    colors:
+      primary: "#E91E63"
+      secondary: "#F8BBD0"
+      accent: "#880E4F"
+      background: "#FFF5F7"
+    fonts:
+      heading: "Playfair Display"
+      body: "Inter"
+  notes: |
+    4090 CLAUDE contributed theme assets for Ageless Beauty.
+    Pinokio HERMES mod allows full CLI customization:
+    --skin agelessbeauty
+    --logo agelessbeauty-logo.png
+    --palette agelessbeauty-color-palette.json

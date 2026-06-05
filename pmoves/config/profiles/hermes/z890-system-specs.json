@@ -1,0 +1,292 @@
+{
+  "node_name": "Elder-Melchor",
+  "hostname": "DESKTOP-4BFJITF",
+  "platform": "Windows-10-10.0.26200-SP0",
+  "machine": "AMD64",
+  "processor": "AMD64",
+  "cpu": {
+    "logical_cores": 12,
+    "physical_cores": 6,
+    "freq_mhz": 2592.0,
+    "freq_max_mhz": 2592.0
+  },
+  "memory": {
+    "total_gb": 31.73,
+    "available_gb": 4.29,
+    "percent_used": 86.5
+  },
+  "disks": [
+    {
+      "device": "C:\\",
+      "mountpoint": "C:\\",
+      "fstype": "NTFS",
+      "total_gb": 936.27,
+      "free_gb": 331.12,
+      "percent_used": 64.6
+    },
+    {
+      "device": "G:\\",
+      "mountpoint": "G:\\",
+      "fstype": "FAT32",
+      "total_gb": 936.27,
+      "free_gb": 314.57,
+      "percent_used": 66.4
+    }
+  ],
+  "network": {
+    "vEthernet (WSL (Hyper-V firewall))": [
+      {
+        "family": "MAC",
+        "address": "00-15-5D-85-46-B0",
+        "netmask": null
+      },
+      {
+        "family": "IPv4",
+        "address": "172.18.144.1",
+        "netmask": "255.255.240.0"
+      },
+      {
+        "family": "unknown",
+        "address": "fe80::1ba5:b26c:ba5e:5397",
+        "netmask": null
+      },
+      {
+        "family": "stats",
+        "bytes_sent": 42777704,
+        "bytes_recv": 1228819,
+        "packets_sent": 105116,
+        "packets_recv": 16205,
+        "errin": 0,
+        "errout": 0,
+        "dropin": 0,
+        "dropout": 0
+      }
+    ],
+    "Local Area Connection* 13": [
+      {
+        "family": "MAC",
+        "address": "7A-20-51-28-53-36",
+        "netmask": null
+      },
+      {
+        "family": "IPv4",
+        "address": "169.254.214.46",
+        "netmask": "255.255.0.0"
+      },
+      {
+        "family": "unknown",
+        "address": "fe80::d977:b431:9bf6:c1c3",
+        "netmask": null
+      },
+      {
+        "family": "stats",
+        "bytes_sent": 0,
+        "bytes_recv": 0,
+        "packets_sent": 0,
+        "packets_recv": 0,
+        "errin": 0,
+        "errout": 0,
+        "dropin": 0,
+        "dropout": 0
+      }
+    ],
+    "Local Area Connection* 14": [
+      {
+        "family": "MAC",
+        "address": "7E-20-51-28-53-36",
+        "netmask": null
+      },
+      {
+        "family": "IPv4",
+        "address": "169.254.206.61",
+        "netmask": "255.255.0.0"
+      },
+      {
+        "family": "unknown",
+        "address": "fe80::e4c6:4938:20a3:6892",
+        "netmask": null
+      },
+      {
+        "family": "stats",
+        "bytes_sent": 0,
+        "bytes_recv": 0,
+        "packets_sent": 0,
+        "packets_recv": 0,
+        "errin": 0,
+        "errout": 0,
+        "dropin": 0,
+        "dropout": 0
+      }
+    ],
+    "Wi-Fi": [
+      {
+        "family": "MAC",
+        "address": "AC-12-03-2F-F7-15",
+        "netmask": null
+      },
+      {
+        "family": "IPv4",
+        "address": "192.168.1.121",
+        "netmask": "255.255.255.0"
+      },
+      {
+        "family": "stats",
+        "bytes_sent": 902203645,
+        "bytes_recv": 10888272686,
+        "packets_sent": 4727196,
+        "packets_recv": 9040726,
+        "errin": 0,
+        "errout": 0,
+        "dropin": 0,
+        "dropout": 0
+      }
+    ],
+    "Wi-Fi 2": [
+      {
+        "family": "MAC",
+        "address": "78-20-51-28-53-36",
+        "netmask": null
+      },
+      {
+        "family": "IPv4",
+        "address": "192.168.1.211",
+        "netmask": "255.255.255.0"
+      },
+      {
+        "family": "unknown",
+        "address": "2606:9400:8a9f:df10:5a75:85de:590:62fe",
+        "netmask": null
+      },
+      {
+        "family": "unknown",
+        "address": "2606:9400:8a9f:df10:196:f95a:9982:1ed2",
+        "netmask": null
+      },
+      {
+        "family": "unknown",
+        "address": "fe80::242b:f3b6:9052:7d8c",
+        "netmask": null
+      },
+      {
+        "family": "stats",
+        "bytes_sent": 32472909,
+        "bytes_recv": 495467019,
+        "packets_sent": 276406,
+        "packets_recv": 1084929,
+        "errin": 0,
+        "errout": 0,
+        "dropin": 0,
+        "dropout": 0
+      }
+    ],
+    "Bluetooth Network Connection": [
+      {
+        "family": "MAC",
+        "address": "AC-12-03-2F-F7-19",
+        "netmask": null
+      },
+      {
+        "family": "IPv4",
+        "address": "169.254.182.77",
+        "netmask": "255.255.0.0"
+      },
+      {
+        "family": "stats",
+        "bytes_sent": 0,
+        "bytes_recv": 0,
+        "packets_sent": 0,
+        "packets_recv": 0,
+        "errin": 0,
+        "errout": 0,
+        "dropin": 0,
+        "dropout": 0
+      }
+    ],
+    "Tailscale": [
+      {
+        "family": "IPv4",
+        "address": "100.82.62.45",
+        "netmask": "255.255.255.255"
+      },
+      {
+        "family": "unknown",
+        "address": "fd7a:115c:a1e0::d33:3e2d",
+        "netmask": null
+      },
+      {
+        "family": "unknown",
+        "address": "fe80::716c:364e:64fc:a0c1",
+        "netmask": null
+      },
+      {
+        "family": "stats",
+        "bytes_sent": 3009828,
+        "bytes_recv": 365352,
+        "packets_sent": 23956,
+        "packets_recv": 5247,
+        "errin": 0,
+        "errout": 0,
+        "dropin": 0,
+        "dropout": 0
+      }
+    ],
+    "OpenVPN Data Channel Offload for Surfshark": [
+      {
+        "family": "IPv4",
+        "address": "169.254.195.96",
+        "netmask": "255.255.0.0"
+      },
+      {
+        "family": "unknown",
+        "address": "fe80::716c:364e:64fc:a0c1",
+        "netmask": null
+      },
+      {
+        "family": "stats",
+        "bytes_sent": 0,
+        "bytes_recv": 0,
+        "packets_sent": 0,
+        "packets_recv": 0,
+        "errin": 0,
+        "errout": 0,
+        "dropin": 0,
+        "dropout": 0
+      }
+    ],
+    "Loopback Pseudo-Interface 1": [
+      {
+        "family": "IPv4",
+        "address": "127.0.0.1",
+        "netmask": "255.0.0.0"
+      },
+      {
+        "family": "unknown",
+        "address": "::1",
+        "netmask": null
+      },
+      {
+        "family": "stats",
+        "bytes_sent": 0,
+        "bytes_recv": 0,
+        "packets_sent": 0,
+        "packets_recv": 0,
+        "errin": 0,
+        "errout": 0,
+        "dropin": 0,
+        "dropout": 0
+      }
+    ]
+  },
+  "gpu": [
+    {
+      "name": "NVIDIA GeForce GTX 1650",
+      "memory_total": "4096 MiB",
+      "memory_free": "3938 MiB",
+      "memory_used": "0 MiB",
+      "temperature_c": "66",
+      "utilization_percent": "0 %",
+      "pci_bus_id": "00000000:01:00.0"
+    }
+  ],
+  "boot_time": 1780434989.2179353
+}

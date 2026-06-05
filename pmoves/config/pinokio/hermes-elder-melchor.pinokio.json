@@ -1,0 +1,90 @@
+{
+  "name": "PMOVES HERMES Agent - Elder-Melchor",
+  "description": "One-click launcher for Hermes Agent gateway on Elder-Melchor node (i7-9750H, GTX 1650)",
+  "version": "1.0.0",
+  "author": "PMOVES.AI",
+  "license": "MIT",
+  "platforms": [
+    "windows"
+  ],
+  "requirements": {
+    "gpu": "optional",
+    "internet": "required"
+  },
+  "install": {
+    "steps": [
+      {
+        "name": "Install Hermes Agent",
+        "command": "pip install hermes-agent",
+        "description": "Installs Hermes Agent from PyPI"
+      },
+      {
+        "name": "Create PMOVES Profile",
+        "command": "hermes profile create pmoves-hermes-elder",
+        "description": "Creates the Elder-Melchor profile"
+      },
+      {
+        "name": "Copy Node Config",
+        "command": "copy pmoves-hermes-elder.yaml %USERPROFILE%\\AppData\\Local\\hermes\\profiles\\pmoves-hermes-elder\\config.yaml",
+        "description": "Copies the Elder-Melchor profile YAML into Hermes"
+      },
+      {
+        "name": "CHIT Secrets Setup",
+        "command": "echo Please populate .env with CHIT secrets",
+        "description": "Manual step: fill in API keys via CHIT funnel"
+      }
+    ]
+  },
+  "start": {
+    "port": 7700,
+    "health": "/api/health",
+    "command": "hermes --profile pmoves-hermes-elder gateway start",
+    "env": {
+      "PMOVES_NODE_ID": "elder-melchor",
+      "PMOVES_PROFILE_VERSION": "1.0.0",
+      "HERMES_CONFIG": "%USERPROFILE%\\AppData\\Local\\hermes\\profiles\\pmoves-hermes-elder\\config.yaml"
+    },
+    "platforms": {
+      "discord": {
+        "enabled": true,
+        "webhook_url": "${DISCORD_WEBHOOK_URL}"
+      },
+      "telegram": {
+        "enabled": true,
+        "bot_token": "${TELEGRAM_BOT_TOKEN}"
+      }
+    },
+    "options": {
+      "auto_restart": true,
+      "battery_saver_disable": true,
+      "log_level": "info"
+    }
+  },
+  "stop": {
+    "command": "hermes --profile pmoves-hermes-elder gateway stop",
+    "graceful_timeout": 30
+  },
+  "update": {
+    "command": "hermes --profile pmoves-hermes-elder update",
+    "check_interval": "24h"
+  },
+  "scripts": {
+    "doctor": "hermes --profile pmoves-hermes-elder doctor",
+    "logs": "hermes --profile pmoves-hermes-elder logs",
+    "status": "hermes --profile pmoves-hermes-elder status",
+    "nats-test": "python pmoves/config/nats/hermes/test-nats-bridge.py",
+    "glances-web": "glances -C pmoves/config/profiles/hermes/z890-glances.conf --webserver"
+  },
+  "dependencies": [
+    "python>=3.11",
+    "git",
+    "nvidia-smi (optional)"
+  ],
+  "notes": [
+    "Node: Elder-Melchor (i7-9750H, GTX 1650 4GB, 32GB RAM, Windows 10)",
+    "Gateway runs on port 7700",
+    "Ollama local models: hermes3:8b (may need Q4/CPU offload due to 4GB VRAM)",
+    "NATS bridge connects to pmoves-nats:4222 (or Tailscale 100.82.62.45:4222 fallback)",
+    "Battery-saver disables gateway on Elder-Melchor laptop"
+  ]
+}
