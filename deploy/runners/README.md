@@ -7,6 +7,7 @@ Self-hosted runner infrastructure for GPU-enabled builds (AI Lab) and cost-effec
 | Host | Labels | Role | Hardware |
 |------|--------|------|----------|
 | **AI Lab** | `self-hosted,ai-lab,gpu,cuda` | GPU builds, model tests | RTX 5090/4090/3090Ti |
+| **SPARK** | `self-hosted,spark,Linux,ARM64` | Full PMOVES.AI node: CHIT, P7, TeraFormer, ClaWZ | GB10 Grace-Blackwell (DGX Spark), 128GB |
 | **cloudstartup** | `self-hosted,vps,cloudstartup,staging` | Staging deploys | Hostinger VPS |
 | **kvm4** | `self-hosted,vps,kvm4,production` | Production deploys | Hostinger VPS |
 | **kvm2** | `self-hosted,vps,kvm2,backup` | Backup/overflow | Hostinger VPS |
