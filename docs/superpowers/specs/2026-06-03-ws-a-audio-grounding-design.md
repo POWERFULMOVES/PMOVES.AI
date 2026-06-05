@@ -28,7 +28,7 @@ Replace the impoverished audio analysis (ffprobe + ffmpeg-lavfi → 4 scalars) w
 ### 4.1 `clap-embed` microservice (new MOF lattice node)
 - **Purpose:** stateless deterministic embedder. Loads `laion/larger_clap_music`.
 - **HTTP API:** `POST /embed/audio` (multipart wav/mp3 → `{embedding:[512], model_rev, sr}`), `POST /embed/text` (→ 512-d, for semantic text queries), `GET /healthz`, `GET /metrics` (Prometheus).
-- **Optional NATS** (transport = HTTP **+ optional NATS** per decision): responder on `audio.embed.request.v1` → `audio.embed.result.v1`; honors `context_id` / `X-Context-ID` correlation.
+- **Optional NATS** (transport = HTTP **+ optional NATS** per decision): responder on `audio.embed.request.v1` → `audio.embed.result.v1`; honors `context_id` / `X-Context-ID` correlation. *(New subjects — register in `.claude/context/nats-subjects.md` at impl per the contract-correctness Known Road; plan Tasks 6/8.)*
 - **Port:** `8108` — in the AI/CHIT service tier (~8086–8113, alongside Hi-RAG/model-registry/evo). *(Corrected from 8112: 8112/8113/8114 are bound to GitHub-automation services; 8107/8108/8109/8115/8116 verified free — 8108 chosen, next to Consciousness 8106.)*
 - **Deterministic clip/window:** pin the CLAP audio **clip length + hop** (e.g. fixed 10s windows, mean-pooled) as a reproducibility param, consistent across all tracks and tiers — same audio segmentation → same embedding.
 - **Capacity-class / multi-arch:** torch via the repo's `torch.js` per-arch pattern — nvidia `cu128` (4090 sm_89 + 5090 sm_120), Spark GB10 → **NVIDIA arm64 PyTorch container** (SM_110), Knuckles ROCm gfx1201 → **CPU wheel default** (small model), CPU/MPS fallback (MPS = fp32 + `PYTORCH_ENABLE_MPS_FALLBACK=1`). Pin Python 3.10–3.12 (numba/llvmlite aarch64). Post-install check: `torch.cuda.get_arch_list()` + `import librosa,numba`.
@@ -52,7 +52,7 @@ Emit packets validating against `cgp.v2.schema.json`, `spec:"chit.cgp.v0.2"`, po
 Audio comes from the **Jellyfin music library** via the **Jellyfin Bridge (`:8093`)**; fingerprints link back by **Jellyfin item id** (provenance). A **backfill mode** processes the existing library (mirrors `JELLYFIN_BACKFILL_PLAN.md`, but for *audio analysis*, not just metadata). **Note (pre-CHIT debt):** the Jellyfin bridge/backfill docs (2025-10-14) use the old `content.published.v1` / Agent-Zero `/events/publish` pattern — flagged for a **CHIT bump** to CHIT-signed CGP events (tracked under WS-E/docs, out of WS-A code scope).
 
 ## 6. Data flow
-```
+```text
 Jellyfin music library ──(bridge :8093, item_id)──▶ analyze_beats.py
    ├─ librosa features (CPU, deterministic)
    ├─ clap-embed (:8108 / NATS) → 512-d audio embedding   ◀── MOF capacity-class node
@@ -76,7 +76,7 @@ Jellyfin music library ──(bridge :8093, item_id)──▶ analyze_beats.py
 
 ## 9. Testing
 - **Unit:** librosa features deterministic; CLAP embed shape/stability (cosine self-distance ≈ 0); HSV/feature transforms; Poincaré encoder (|z|<1, hierarchy parent links).
-- **Integration:** 3 gallery tracks → distinct embeddings (pairwise cosine > τ), clustering separates them, emitted packet **validates against `cgp.v2.schema.json`** with populated hyperbolic/attribution/sig.
+- **Integration:** 3 gallery tracks → distinct embeddings (pairwise cosine **distance** > τ, i.e. similarity < 1−τ — distance not similarity, so identical embeddings fail the gate), clustering separates them, emitted packet **validates against `cgp.v2.schema.json`** with populated hyperbolic/attribution/sig.
 - **Service:** `clap-embed` /healthz, embed roundtrip, CPU-fallback path, NATS responder.
 - **Reproducibility:** same audio twice → identical fingerprint hash; CGP `sig` verifies.
 

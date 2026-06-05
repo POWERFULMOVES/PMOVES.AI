@@ -16,7 +16,7 @@
 - ❌ **Gallery beats_c1/c3/c5 look identical.** Root cause: all three are "Allegro balanced" clusters drawn by the **same toroid formula**; param deltas are subtle; `hue = hz·2π + u` sweeps the *full* rainbow regardless of `hz`. Genotype differs slightly; phenotype barely moves.
 
 ## Pipeline (real files)
-```
+```text
 beats audio → pmoves/tools/beats_to_cgp.py   (track→state_vector: delta/Hz/kappa/A/F; groups→CGP)
             → pmoves/tools/chit_a2ui_bridge.py (CGP → A2UI spec + preset surface.code; inferred_shape)
             → Pmoves-hyperdimensions/saves/*.json  (live Three.js viewer presets)
@@ -66,7 +66,7 @@ CGP semantics (beats_to_cgp.py): `delta`=tempo(0=Largo,1=Presto), `Hz`=centroid(
 ---
 
 ## Dependencies & recommended order
-```
+```text
 WS2 (mapping) ──► WS1 (gallery uses distinct beats)
               └─► WS3 (render distinct geometry)
 ```
