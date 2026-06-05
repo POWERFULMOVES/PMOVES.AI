@@ -378,6 +378,25 @@ jobs:
             security.ubuntu.com:80
             security.ubuntu.com:443
 
+      - name: Free build-host /tmp scratch
+        shell: bash
+        run: |
+          set -euxo pipefail
+          # cleanup-self-hosted-runners is pinned to a kvm4 node, but build-publish
+          # runs on ANY [self-hosted, Linux, X64] runner — which may be a different
+          # host whose /tmp SBOM scratch was never swept (Codex P1 on PR #1717).
+          # Runs FIRST (after Harden Runner, before checkout/config): if this host is
+          # already out of root from stale /tmp/stereoscope-* (the 2026-06-05 incident:
+          # 126G on KVM4-1), checkout and $GITHUB_OUTPUT writes would fail before any
+          # later cleanup could recover. This step needs no repo contents, so it leads.
+          # Mirrors the sweep in cleanup-self-hosted-runners; active scans (minutes
+          # old) are untouched by the -mtime +0 (>~24h) age gate.
+          echo "Build-host disk before /tmp sweep:"; df -h /tmp 2>/dev/null || df -h
+          for pat in 'stereoscope-*' 'sbom-action-*' 'codeql-packaging*' 'codeql.*'; do
+            find /tmp -maxdepth 1 -name "$pat" -mtime +0 -exec rm -rf {} + 2>/dev/null || true
+          done
+          echo "Build-host disk after /tmp sweep:"; df -h /tmp 2>/dev/null || df -h
+
       - name: Checkout (stub)
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
 
@@ -421,23 +440,6 @@ jobs:
           PY
         env:
           MATRIX_NAME: ${{ matrix.name }}
-
-      - name: Free build-host /tmp scratch
-        shell: bash
-        run: |
-          set -euxo pipefail
-          # cleanup-self-hosted-runners is pinned to a kvm4 node, but build-publish
-          # runs on ANY [self-hosted, Linux, X64] runner — which may be a different
-          # host whose /tmp SBOM scratch was never swept (Codex P1 on PR #1717).
-          # Self-clean THIS host's /tmp before the build so it never inherits a full
-          # root (the 2026-06-05 incident: 126G of /tmp/stereoscope-* on KVM4-1).
-          # Mirrors the sweep in cleanup-self-hosted-runners; active scans (minutes
-          # old) are untouched by the -mtime +0 (>~24h) age gate.
-          echo "Build-host disk before /tmp sweep:"; df -h /tmp 2>/dev/null || df -h
-          for pat in 'stereoscope-*' 'sbom-action-*' 'codeql-packaging*' 'codeql.*'; do
-            find /tmp -maxdepth 1 -name "$pat" -mtime +0 -exec rm -rf {} + 2>/dev/null || true
-          done
-          echo "Build-host disk after /tmp sweep:"; df -h /tmp 2>/dev/null || df -h
 
       - name: Validate secrets presence
         id: secrets_check
