@@ -681,3 +681,87 @@ submodule_fleet:
       git: "https://github.com/POWERFULMOVES/PMOVES-ToKenism-Multi.git"
       branch: "PMOVES.AI-Edition-Hardened"
       use: "BPM² shape attribution, SHA-256 Shape IDs for 30-day replay"
+
+
+
+# ============================================================
+# REVISED SCOPE: HERMES Config First, Practice Second
+# ============================================================
+# Date: 2026-06-04
+# Decision: Ageless Beauty practice deferred until HERMES is
+#   fully configured across the fleet. Current website hosting
+#   platform is UNKNOWN and will be researched separately.
+#   Hostinger migration requires separate research task.
+# ============================================================
+
+revised_scope_hermes_config_first:
+  statement: "HERMES configuration and fleet integration is the primary deliverable."
+  priority_order:
+    - "1. HERMES config files (elder-melchor.yaml, TAC tree, registry, skills)"
+    - "2. Fleet profile verification (SPARK + B850 real context)"
+    - "3. Gateway launch and health validation"
+    - "4. NATS bridge soak test"
+    - "5. CHIT signing and PR review"
+    - "6. Ageless Beauty practice (DEFERRED)"
+
+  ageless_beauty_deferred:
+    reason: "Practice integrations require working HERMES gateway first."
+    current_status: "Website hosted on UNKNOWN platform (not Hostinger yet)."
+    research_required:
+      - item: "Identify current Ageless Beauty website host"
+      - item: "Research Hostinger migration path (domain transfer, SSL, WordPress)"
+      - item: "HIPAA compliance review of Hostinger vs current host"
+      - item: "Patient portal requirements (Joomla? WordPress? Custom?)"
+    blocked: true
+    blocked_by:
+      - "HERMES gateway running on elder-melchor"
+      - "Website host identified and documented"
+      - "Hostinger account created (if migration proceeds)"
+
+  fleet_context_plan:
+    phase_1_elder_melchor:
+      status: DONE
+      deliverables:
+        - "Hermes Agent v0.15.1 installed"
+        - "Profile pmoves-hermes-elder created"
+        - "Config validated (hermes doctor)"
+        - "6 atomic commits on main"
+
+    phase_2_spark:
+      status: NEXT
+      node: "spark (GB10 128GB, 70B primary)"
+      goal: "Gather real HERMES config context"
+      steps:
+        - "SSH/tailscale to spark"
+        - "Install Hermes Agent"
+        - "Create profile pmoves-hermes-spark"
+        - "Inspect config.yaml for NeMo model settings"
+        - "Return real config to update spark.yaml DRAFT"
+      estimated_time: "30-60 min"
+      blocked_by: "elder-melchor commits pushed + Z890 review started"
+
+    phase_3_b850_knuckles:
+      status: PENDING
+      node: "b850 (Dual AMD R9700 64GB ROCm)"
+      goal: "Gather real HERMES config context"
+      steps:
+        - "SSH to b850"
+        - "ROCm check (rocm-smi, rocminfo)"
+        - "Install Hermes Agent"
+        - "Create profile pmoves-hermes-knuckles"
+        - "Inspect config.yaml for ROCm flags"
+        - "Return real config to update b850.yaml DRAFT"
+      estimated_time: "30-60 min"
+      blocked_by: "SPARK context gathered"
+
+    phase_4_profile_refinement:
+      status: PENDING
+      goal: "Replace DRAFT profiles with verified ones"
+      deliverable: "New PR: feat(hermes-profile): verified fleet profiles v2"
+      replaces: "DRAFT_PR1_hermes-profiles.md"
+      blocked_by: "SPARK + B850 context gathered"
+
+    phase_5_gateway_validation:
+      status: PENDING
+      goal: "Start HERMES gateway on elder-melchor, verify health"
+      blocked_by: "CHIT secrets populated (OpenRouter, ZAI, etc.)"
