@@ -12,6 +12,7 @@ taxonomy_version: "1.4.0"
 # External contributors — AI agents and humans who contribute via git
 # Links to visual identity in agent_signatures.yaml
 external_contributors:
+  - hermes-agent
   - claude-opus
   - kilocode
   - codex
@@ -2264,3 +2265,46 @@ agents:
       Runs on the tailnet-connected self-hosted ai-lab runner; publishes
       HMAC-signed branch.<path-segments>.trail.v1 events to NATS via
       .github/workflows/branch-trail-emit.yml.
+  hermes_agent:
+    name: "HERMES Agent"
+    class: utility
+    primary_type: agent
+    secondary_type: api
+    port: 7700
+    health: "/api/health"
+    layers: [L0, L1, L2, L4]
+    evolution_stage: stage_1
+    signature: "hermes-agent"
+    nats:
+      publishes:
+        - "hermes.gateway.launched.v1"
+        - "hermes.gateway.health.v1"
+        - "hermes.mcp.toolcall.v1"
+        - "hermes.skill.curated.v1"
+        - "hermes.cron.executed.v1"
+        - "hermes.delegate.completed.v1"
+      subscribes:
+        - "p7.nats.launch"
+        - "p7.nats.session"
+        - "mesh.node.announce.v1"
+    chit_toggles:
+      delta_sensitive: true
+      kappa_sensitive: true
+      hz_sensitive: false
+      swarm_participant: true
+      attribution_gated: true
+    resilience:
+      context_budget: medium
+      checkpoint_frequency: per_action
+      recovery_strategy: cipher_resumable
+      cipher_categories: [agent_plan, agent_checkpoint]
+    topology:
+      node_affinity: [z890, elder-melchor, 5090, 4090, kvm4-1, spark, pmoves-b850, rdna4]
+      team: orchestration
+      ci_runner: ai-lab
+      compose_profile: hermes
+    description: |
+      NousResearch Hermes Agent integration body. Cross-platform gateway operator,
+      skill curator, and NATS bridge. Runs profile-scoped instances per PMOVES node.
+      Publishes gateway lifecycle, MCP tool calls, skill curation, cron completions,
+      and delegation summaries to the NATS bus. Rehearsal stage until soak passes.
