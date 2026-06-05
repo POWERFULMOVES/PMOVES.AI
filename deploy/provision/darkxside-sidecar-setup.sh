@@ -181,11 +181,18 @@ if [ "$MODE" != "--fix-only" ]; then
     log_section "Step 6: Starting DARKXSIDE sidecar"
 
     # Build the docker run command following sidecar README pattern
+    # Port/volume/host-gateway mapping mirrors pmoves/docker-compose.darkxside-sidecar.yml:
+    #   - supervisor listens on container :8080 (NOT :80)
+    #   - persistent data mounts target /a0/* (the image owns /app/services|contracts|configs;
+    #     mounting the host repo over /app would shadow the entrypoint and break startup)
+    #   - host.docker.internal must be aliased to host-gateway on Linux for host Ollama access
     DOCKER_RUN_CMD="docker run -d \
         --name ${CONTAINER_NAME} \
         --restart unless-stopped \
         --hostname darkxside \
-        -p 8092:80 \
+        --add-host host.docker.internal:host-gateway \
+        -p 8092:8080 \
+        -e PORT=8080 \
         -e TOPOLOGY_MODE=standalone \
         -e AGENTZERO_JETSTREAM=false \
         -e CHIT_REQUIRE_SIGNATURE=false \
@@ -193,12 +200,11 @@ if [ "$MODE" != "--fix-only" ]; then
         -e CHIT_PASSPHRASE=dev-local-sidecar-override \
         -e PARENT_SYSTEM=PMOVES.AI \
         -e PARENT_VERSION=1.0.0-hardened \
-        -v ${REPO_DIR}:/app \
-        -v ${DATA_BASE}/memory:/app/data/darkxside/memory \
-        -v ${DATA_BASE}/knowledge:/app/data/darkxside/knowledge \
-        -v ${DATA_BASE}/instruments:/app/data/darkxside/instruments \
-        -v ${DATA_BASE}/logs:/app/data/darkxside/logs \
-        -v ${DATA_BASE}/runtime:/app/data/darkxside/runtime \
+        -v ${DATA_BASE}/memory:/a0/memory \
+        -v ${DATA_BASE}/knowledge:/a0/knowledge \
+        -v ${DATA_BASE}/instruments:/a0/instruments \
+        -v ${DATA_BASE}/logs:/a0/logs \
+        -v ${DATA_BASE}/runtime:/a0/runtime \
         --network pmoves-net-darkxside"
 
     # Add GPU if nvidia-container-runtime is available
