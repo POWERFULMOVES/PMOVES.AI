@@ -99,3 +99,31 @@ Required secrets for PMOVES:
 - [ ] PMOVES-AI profile created (needs custom server selection)
 - [ ] Auth token configured for Hermes integration
 - [ ] Hermes config.yaml updated with MCP gateway URL
+
+
+## Background Process Findings (2026-06-05)
+
+Gateway successfully started on port 8090 with SSE transport:
+- **6 servers loaded** with **182 tools total**
+- Servers active:
+  - `hugging-face` -- 8 tools, 4 prompts, 17 resources
+  - `cloudflare-docs` -- 2 tools, 1 prompt
+  - `github-official` -- 41 tools, 2 prompts, 5 resource templates
+  - `openzeppelin-solidity` -- 8 tools
+  - `openapi` -- 5 tools
+  - `hostinger-mcp-server` -- **118 tools** ✅
+- Internal tools added: mcp-find, mcp-add, mcp-remove, code-mode, mcp-exec, mcp-config-set, mcp-create-profile, mcp-activate-profile, mcp-discover
+- OAuth notification stream failed (expected on Windows without Docker Desktop notifications)
+- Hostinger server **already authenticated** via Docker Desktop
+
+## Authentication Status
+
+| Server | Status | Source |
+|--------|--------|--------|
+| hostinger-mcp-server | ✅ Authenticated | Docker Desktop default profile |
+| github-official | ✅ Authenticated | Docker Desktop secrets store |
+| hugging-face | ⚠️ Needs token | OAuth or HF token |
+| openapi | ✅ No auth needed | Public API |
+| cloudflare-docs | ✅ No auth needed | Public docs |
+| openzeppelin-solidity | ✅ No auth needed | Public API |
+
