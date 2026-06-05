@@ -43,6 +43,25 @@ jobs:
           fetch-depth: 1
           submodules: false
 
+      - name: Ensure uv
+        shell: bash
+        run: |
+          if command -v uv >/dev/null 2>&1; then
+            uv --version
+            exit 0
+          fi
+          py="$(command -v python3 || command -v python || true)"
+          if [ -z "$py" ]; then
+            echo "::error::python3/python is required to bootstrap uv"
+            exit 1
+          fi
+          uv_venv="${RUNNER_TEMP:-$PWD/.tmp}/uv-bootstrap"
+          "$py" -m venv "$uv_venv"
+          "$uv_venv/bin/python" -m pip install --upgrade pip
+          "$uv_venv/bin/python" -m pip install 'uv>=0.5.0'
+          "$uv_venv/bin/uv" --version
+          echo "$uv_venv/bin" >> "$GITHUB_PATH"
+
       - name: Emit lifecycle event
         env:
           PYTHONPATH: ${{ github.workspace }}
