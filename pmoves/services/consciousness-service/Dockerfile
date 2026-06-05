@@ -13,7 +13,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Install dependencies first (cache layer)
 COPY requirements.txt requirements.lock .
-RUN pip install --no-cache-dir --constraint requirements.lock -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.lock
 
 # Copy application code
 COPY *.py ./

@@ -12,6 +12,10 @@ Primary convergence record lives at:
 - `pmoves/docs/AGENTS/KRISS_KROSS_ACCORD.md` (Codex-led collision overlay and weave protocol)
 - `pmoves/docs/TAC/TAC_MODEL_INFRA_PERSONA_PROD_READINESS.md` (model infrastructure + persona production readiness execution overlay)
 - `pmoves/docs/AGENTS/AUTOMODE_FLEET_CONFIG.md` (**per-node auto-mode `autoMode` block** — every node pastes this into its gitignored `.claude/settings.local.json`; the classifier cannot read checked-in settings)
+- `pmoves/docs/AGENTS/HERMES_AGENT_INTEGRATION.md` (HERMES Agent (NousResearch) integration spec — room manifest, TAC tree, 6 node profiles, local model mesh, deployment runbook)
+- `pmoves/configs/tac_trees/node-hermes-agent.tac.yaml` (HERMES Agent integration TAC roadmap)
+- `.claude/agents/hermes-agent.md` (Three-Body Delivery Body agent definition for Hermes Agent)
+- `.claude/skills/hermes-agent-integration/SKILL.md` (Operator skill for launching/managing Hermes gateway)
 
 All agents entering PMOVES lanes should read that file first, then claim work before edits.
 

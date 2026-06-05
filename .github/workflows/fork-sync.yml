@@ -59,6 +59,12 @@ jobs:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           MAX_FORKS: ${{ inputs.max_forks || '3' }}
         run: |
+          # GitHub runs `run:` steps under `bash -e` (errexit). This loop is
+          # best-effort and relies on `cmd; if [ $? -ne 0 ]` and
+          # `|| { ...; continue; }` guards — errexit defeats those (a failing
+          # standalone command aborts the whole step before its check, which is
+          # why the sync died on the first fork). Disable errexit for the loop.
+          set +e
           SYNCED=0
           SKIPPED=0
           CONFLICTS=0
@@ -122,7 +128,7 @@ jobs:
             echo "SYNC $fork: $bh behind, $ah ahead"
 
             # Check existing PR
-            existing=$(gh api "repos/POWERFULMOVES/$fork/pulls" --jq "[.[] | select(.head.ref | startswith(\"sync/\")) | .number" 2>/dev/null | head -1)
+            existing=$(gh api "repos/POWERFULMOVES/$fork/pulls" --jq "[.[] | select(.head.ref | startswith(\"sync/\")) | .number] | .[0] // empty" 2>/dev/null | head -1)
             if [ -n "$existing" ]; then
               echo "  SKIP: open sync PR #$existing exists"
               continue
@@ -152,21 +158,16 @@ jobs:
             echo "  Merge commit created"
 
             # Create PR
+            # NOTE: build the body with printf so every line stays inside this
+            # YAML block scalar's indentation. Zero-indent body lines terminate
+            # the block scalar and make the whole workflow file unparseable
+            # (which silently fails every push as a path-named, 0-job run).
+            pr_body=$(printf '## Upstream Sync\n\n- **Upstream**: %s (%s)\n- **Behind**: %s commits\n- **Ahead**: %s commits (PMOVES customizations)\n- **Branch**: %s → %s\n\nReview the diff to confirm PMOVES customizations are preserved.\n\n---\n*Automated by fork-sync workflow*' "$upstream" "$ub" "$bh" "$ah" "$fb" "$SYNC_BRANCH")
             pr=$(gh api -X POST "repos/POWERFULMOVES/$fork/pulls" \
               -f "title=chore: sync upstream ($bh commits behind)" \
               -f "head=$SYNC_BRANCH" \
               -f "base=$fb" \
-              -f "body=## Upstream Sync
-
-- **Upstream**: $upstream ($ub)
-- **Behind**: $bh commits
-- **Ahead**: $ah commits (PMOVES customizations)
-- **Branch**: $fb → $SYNC_BRANCH
-
-Review the diff to confirm PMOVES customizations are preserved.
-
----
-*Automated by fork-sync workflow*" 2>&1)
+              -f "body=$pr_body" 2>&1)
 
             pr_url=$(echo "$pr" | jq -r '.html_url // "error"' 2>/dev/null)
             pr_num=$(echo "$pr" | jq -r '.number // "?"' 2>/dev/null)

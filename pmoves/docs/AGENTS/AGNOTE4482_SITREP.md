@@ -69,6 +69,7 @@ Waves since last SITREP refresh (2026-04-01). Each links to its AGNOTE4482.md se
 | Big Ball Closeout | 2026-05-27 | §Big Ball 5090 CODEX Gap Closure | PR #1633 and #1638 merged, PR #1561 reviewed/merged, Tokenism activation pack started, 5090 validation snapshot recorded |
 | Cole Medin Research | 2026-05-16 | `research/COLE_MEDIN_VIDEO_ANALYSIS.md` | 13 recent videos + 1827-item playlist scan, 5 P0/P1 integration recommendations for Nemo Claw, Archon, DGX Spark |
 | Hardened Reconcile + Auto Mode | 2026-05-31 | §Hardened-Branch Reconciliation + Auto Mode Fleet Config | 38-submodule hardened audit, 5 security gaps closed (incl DoX CVSS 10.0 RCE), 15/17 reconciled, `AUTOMODE_FLEET_CONFIG.md` (**all nodes must apply locally**) |
+| HERMES Agent Integration | 2026-06-04 | `pmoves/docs/AGENTS/HERMES_AGENT_INTEGRATION.md` | Full NousResearch Hermes Agent integration: room manifest, TAC tree, 6 node profiles (Z890, 5090, 4090, Spark, B850/RDNA4, KVM), agent registry/signature updates, operator skill, Three-Body agent definition. Local model mesh with Spark 70B primary. |
 
 > ~~**⚠️ AGNOTE4482.md section gaps:** Supply Chain, SPARK Prep, and CHIT Hardening were backfilled 2026-05-17.~~ All SITREP wave index entries now have corresponding §-sections.
 
