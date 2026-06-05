@@ -253,7 +253,9 @@ Required handoff fields:
 
   ## Phase 4: DARKXSIDE Triad Integration ✅
 
-  ### DARKXSIDE Signature Update
+  - `2026-06-04T17:00:00-04:00` CLAIM `HERMES-AGENT` scope: NousResearch Hermes Agent integration into PMOVES.AI -- room manifest, TAC tree, 8 node profiles (elder-melchor, z890, 5090, 4090, spark, b850, kvm4-1), agent registry/signature updates, operator skills, OpenShell sandbox_policy, Neotron 3 Ultra research, atomic commits guide. Owner: elder-melchor (z890-claude). Stage: rehearsal -> review. Dependencies: NATS bridge soak, CHIT signing, gateway health validation.
+
+### DARKXSIDE Signature Update
   - **Deliverable:** MiniMax added as tactical partner in DARKXSIDE resonance domains
   - `pmoves/config/agent_signatures.yaml` updated:
     - `darkxside.resonance` expanded with `minimax-tandem`, `tactical-partnership`
