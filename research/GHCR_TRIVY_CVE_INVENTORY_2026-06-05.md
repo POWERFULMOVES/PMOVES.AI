@@ -75,3 +75,38 @@ These are batch-promotion candidates for a separate `chore(submodules): promote 
 - `.github/trivy/open-notebook.trivyignore` (per-image).
 
 Any new suppression added in step 4 must carry a justification + review date (no blanket/unbounded ignores).
+
+## 7. Fleet upstream-drift backlog (fork-sync dry-run, 2026-06-05)
+
+Full per-fork drift vs upstream from `fork-sync.yml` (`workflow_dispatch`, `dry_run=true`, run #27033717581). This is the **fork-branch-vs-upstream** axis (§3a) for the whole fleet — a maintenance backlog beyond the CVE forks. Batch-sync deliberately (large blast radius).
+
+| Fork | Behind | Ahead | Class |
+|---|---:|---:|---|
+| PMOVES-ClawZ | 7504 | 9 | 🔴 CRITICAL |
+| PMOVES-supabase | 2174 | 3 | 🔴 CRITICAL |
+| PMOVES-Creator | 1194 | 12 | 🔴 CRITICAL |
+| PMOVES-hermes-agent | 1009 | 0 | 🔴 CRITICAL |
+| PMOVES-tensorzero | 958 | 1 | 🟡 STALE |
+| PMOVES-Wealth | 790 | 28 | 🟡 STALE |
+| Pmoves-Health-wger | 646 | 9 | 🟡 STALE |
+| PMOVES-A2UI | 479 | 0 | 🟡 STALE |
+| PMOVES-a0-plugins | 343 | 1 | 🟡 STALE |
+| **PMOVES-Archon** | **193** | **13** | 🟡 CVE target |
+| PMOVES-E2B-Danger-Room | 169 | 0 | 🟡 STALE |
+| **PMOVES-Open-Notebook** | **152** | **41** | 🟡 CVE target |
+| PMOVES-headscale | 138 | 5 | 🟡 STALE |
+| PMOVES-project-pegaprox | 103 | 0 | 🟡 STALE |
+| PMOVES-E2b-Spells | 86 | 0 | 🟡 STALE |
+| PMOVES-E2B-Danger-Room-Desktop | 55 | 0 | 🟡 STALE |
+| PMOVES-FinceptTerminal | 50 | 0 | 🟡 STALE |
+| Pmoves-hyperdimensions | 7 | 3 | 🟡 STALE |
+| PMOVES-llama-throughput-lab | 7 | 1 | 🟡 STALE |
+| PMOVES-ClawRouter | 7 | 0 | 🟡 STALE |
+| PMOVES-BotZ-gateway | 7 | 7 | 🟡 STALE |
+| pmoves-e2b-mcp-server | 5 | 0 | 🟡 STALE |
+| PMOVES-Pinokio-Ultimate-TTS-Studio | 5 | 2 | 🟡 STALE |
+| PMOVES-AgentGym | 2 | 3 | 🟡 STALE |
+| PMOVES-autoresearch / LMRL-Gym / PMOVES-MiniMax-MCP / PMOVES-mike | 0 | — | ✅ synced |
+| Pmoves-cipher | ? | ? | ⚠️ unable to compare (private/diverged) |
+
+**Note:** the live remediation run (`dry_run=false`, `max_forks=8`, #27033914982) syncs the first 8 list entries — reaching both CVE forks plus the ClawZ/Creator/supabase/tensorzero/Wealth/a0-plugins CRITICAL+STALE backlog. Forks whose upstream merge conflicts are skipped (branch auto-deleted) and don't count toward the cap. Remaining backlog rows are a later deliberate batch.
