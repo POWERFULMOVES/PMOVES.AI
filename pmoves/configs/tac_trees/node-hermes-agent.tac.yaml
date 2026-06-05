@@ -491,7 +491,7 @@ root:
         - OS: Windows 11 Pro (WRONG) -> Windows 10 (CORRECT)
         - CPU: 20C (WRONG) -> 6 physical / 12 logical @ 2592 MHz (CORRECT)
         - RAM: 32GB (close) -> 31.73 GB (CORRECT)
-        - Network: Wi-Fi 192.168.1.121 + Tailscale 100.82.62.45 + WSL bridge
+        - Network: Wi-Fi <LOCAL_IP_ELDER_MELCHOR> + Tailscale <TAILSCALE_IP_ELDER_MELCHOR> + WSL bridge
         Impact: Model routing matrix, Ollama config, glances thresholds all updated.
         Commit: fix(hermes-profile): correct Z890 GPU from RTX 3090 Ti to GTX 1650
       status: done

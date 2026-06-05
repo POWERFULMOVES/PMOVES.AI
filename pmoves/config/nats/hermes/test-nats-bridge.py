@@ -9,7 +9,7 @@ def test_nats_connectivity():
     """Test NATS server connectivity."""
     hosts = [
         ("pmoves-nats", 4222),
-        ("100.82.62.45", 4222),  # Tailscale fallback
+        ("<TAILSCALE_IP_ELDER_MELCHOR>", 4222),  # Tailscale fallback
     ]
     
     for host, port in hosts:

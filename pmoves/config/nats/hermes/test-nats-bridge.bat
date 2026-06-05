@@ -11,7 +11,7 @@ REM Check NATS connectivity
 python -c "import socket; s=socket.create_connection(('pmoves-nats',4222),5); s.close(); print('OK: pmoves-nats:4222')" 2>nul
 if errorlevel 1 (
     echo Trying Tailscale fallback...
-    python -c "import socket; s=socket.create_connection(('100.82.62.45',4222),5); s.close(); print('OK: 100.82.62.45:4222')" 2>nul
+    python -c "import socket; s=socket.create_connection(('<TAILSCALE_IP_ELDER_MELCHOR>',4222),5); s.close(); print('OK: <TAILSCALE_IP_ELDER_MELCHOR>:4222')" 2>nul
     if errorlevel 1 (
         echo FAILED: NATS not reachable
         exit /b 1

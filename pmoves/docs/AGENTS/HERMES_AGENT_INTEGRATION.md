@@ -668,7 +668,7 @@ Scopes: `hermes-agent`, `hermes-room`, `hermes-profile`, `hermes-skill`, `hermes
 - **Before**: RTX 3090 Ti 24GB, Windows 11 Pro, 20C/32GB
 - **Actual**: GTX 1650 4GB, Windows 10, 6C/12T @ 2.59GHz, 31.73GB RAM
 - **Commit**: `fix(hermes-profile): correct Z890 GPU from RTX 3090 Ti to GTX 1650`
-- **Files updated**: `z890.yaml`, `z890-glances.conf`, `z890-system-specs.json`, `HERMES_AGENT_INTEGRATION.md`
+- **Files updated**: `z890.yaml`, `z890-glances.conf`, `elder-melchor-system-specs.json`, `HERMES_AGENT_INTEGRATION.md`
 
 See full guide: `pmoves/docs/AGENTS/HERMES_ATOMIC_COMMITS.md`
 
@@ -693,7 +693,7 @@ glances --export json --time 60 --quiet
 - RAM: 31.73 GB (alert at 50%/70%/90%)
 - GPU: GTX 1650 4GB (alert at 50%/75%/90% VRAM)
 - Disks: C:\ (NTFS), G:\ (FAT32)
-- Network: Wi-Fi (192.168.1.121), Tailscale (100.82.62.45), WSL bridge
+- Network: Wi-Fi (<LOCAL_IP_ELDER_MELCHOR>), Tailscale (<TAILSCALE_IP_ELDER_MELCHOR>), WSL bridge
 
 **Glances config features:**
 - All network interfaces visible (including virtual)

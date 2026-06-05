@@ -5,7 +5,7 @@
 nats:
   url: "nats://pmoves-nats:4222"
   # Fallback: if pmoves-nats hostname not resolvable, try Tailscale IP
-  fallback_url: "nats://100.82.62.45:4222"
+  fallback_url: "nats://<TAILSCALE_IP_ELDER_MELCHOR>:4222"
   
   # Connection settings
   reconnect_wait: 2

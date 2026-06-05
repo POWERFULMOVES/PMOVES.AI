@@ -39,11 +39,11 @@ Adds the Elder-Melchor node profile as the **Ageless Beauty practice workstation
 - `pmoves/config/profiles/hermes/z890.yaml` (RESTORED)
 - `pmoves/config/profiles/hermes/README.md` (UPDATED)
 - `pmoves/config/profiles/hermes/z890-glances.conf` (NEW)
-- `pmoves/config/profiles/hermes/z890-system-specs.json` (NEW)
+- `pmoves/config/profiles/hermes/elder-melchor-system-specs.json` (NEW)
 
 ## Checklist
 - [x] Atomic commit (one concern: practice workstation profile)
-- [x] Live scan attached (z890-system-specs.json)
+- [x] Live scan attached (elder-melchor-system-specs.json)
 - [x] CHIT signed (pending)
 - [x] Glances config created
 - [x] Provider hierarchy with practice-optimized tiers

@@ -8,7 +8,7 @@
 # GPU: NVIDIA GeForce GTX 1650 4GB (lightweight inference only)
 # Storage: 954 GB total, 605 GB used (~64%)
 # OS: Windows 10 64-bit
-# Network: Wi-Fi (192.168.1.121) + Tailscale (100.82.62.45)
+# Network: Wi-Fi (<LOCAL_IP_ELDER_MELCHOR>) + Tailscale (<TAILSCALE_IP_ELDER_MELCHOR>)
 # Node type: Practice workstation -- cloud-first, HIPAA-aware
 # Added to fleet: 2026-06-04
 # Practice: Ageless Beauty (agelessbeauty.pmovies.ai)
@@ -291,7 +291,7 @@ gateway:
 # === NATS (Practice Mesh) ===
 nats:
   url: "nats://pmoves-nats:4222"
-  fallback_url: "nats://100.82.62.45:4222"
+  fallback_url: "nats://<TAILSCALE_IP_ELDER_MELCHOR>:4222"
   subjects:
     publish:
       - hermes.gateway.launched.v1
