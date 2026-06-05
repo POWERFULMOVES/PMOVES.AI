@@ -295,7 +295,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        runner_label: [kvm4, kvm2]
+        # Both VPS runners (pmoves-kvm4-1-runner, pmoves-kvm4-2-runner) carry the
+        # `kvm4` label; there is NO runner labelled `kvm2`. A `kvm2` matrix leg can
+        # never be scheduled, and because build-publish `needs` this job, that
+        # orphaned leg deadlocks the entire publish (GHCR run 27020807888 hung
+        # queued on "Cleanup kvm2 runner disk", 2026-06-05).
+        runner_label: [kvm4]
     steps:
       - name: Free disk before image matrix
         shell: bash
@@ -321,6 +326,15 @@ jobs:
           for diagdir in /opt/actions-runner*/_diag/pages; do
             [ -d "$diagdir" ] || continue
             find "$diagdir" -type f -mtime +1 -delete || true
+          done
+
+          # Syft/stereoscope SBOM image extractions + anchore sbom-action scratch can
+          # be 20G+ each and live under /tmp — the docker prune above does NOT reclaim
+          # them. Orphaned when a job is cancelled mid-scan, they were the ACTUAL cause
+          # of the 2026-06-05 KVM4-1 disk-full incident (126G across ten /tmp/stereoscope-*
+          # dirs). Sweep entries older than a day; active scans are minutes old and untouched.
+          for pat in 'stereoscope-*' 'sbom-action-*' 'codeql-packaging*' 'codeql.*'; do
+            find /tmp -maxdepth 1 -name "$pat" -mtime +0 -exec rm -rf {} + 2>/dev/null || true
           done
 
           echo "Disk after cleanup:"
