@@ -84,7 +84,7 @@
     "Node: Elder-Melchor (i7-9750H, GTX 1650 4GB, 32GB RAM, Windows 10)",
     "Gateway runs on port 7700",
     "Ollama local models: hermes3:8b (may need Q4/CPU offload due to 4GB VRAM)",
-    "NATS bridge connects to pmoves-nats:4222 (or Tailscale 100.82.62.45:4222 fallback)",
+    "NATS bridge connects to pmoves-nats:4222 (or Tailscale <TAILSCALE_IP_ELDER_MELCHOR>:4222 fallback)",
     "Battery-saver disables gateway on Elder-Melchor laptop"
   ]
 }

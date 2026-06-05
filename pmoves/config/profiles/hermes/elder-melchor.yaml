@@ -2,13 +2,13 @@
 # HERMES Agent Profile: Elder-Melchor / Ageless Beauty Practice Workstation
 # ============================================================
 # OWNER: Nurse Practitioner -- Ageless Beauty Medical Practice
-# Hostname: DESKTOP-4BFJITF (renaming to Elder-Melchor after restart)
+# Hostname: <HOSTNAME_ELDER_MELCHOR> (renaming to Elder-Melchor after restart)
 # Processor: Intel Core i7-9750H @ 2.60GHz (6C/12T, laptop)
 # RAM: 32.0 GB installed (31.7 GB usable)
 # GPU: NVIDIA GeForce GTX 1650 4GB (lightweight inference only)
 # Storage: 954 GB total, 605 GB used (~64%)
 # OS: Windows 10 64-bit
-# Network: Wi-Fi (192.168.1.121) + Tailscale (100.82.62.45)
+# Network: Wi-Fi (<LOCAL_IP_ELDER_MELCHOR>) + Tailscale (<TAILSCALE_IP_ELDER_MELCHOR>)
 # Node type: Practice workstation -- cloud-first, HIPAA-aware
 # Added to fleet: 2026-06-04
 # Practice: Ageless Beauty (agelessbeauty.pmovies.ai)
@@ -291,7 +291,7 @@ gateway:
 # === NATS (Practice Mesh) ===
 nats:
   url: "nats://pmoves-nats:4222"
-  fallback_url: "nats://100.82.62.45:4222"
+  fallback_url: "nats://<TAILSCALE_IP_ELDER_MELCHOR>:4222"
   subjects:
     publish:
       - hermes.gateway.launched.v1
@@ -360,142 +360,44 @@ docker_mcp:
     ComfyUI for image processing (5090 offload),
     Hi-RAG gateway for knowledge base queries.
 
-# === PMOVES INTEGRATIONS (Health + Wealth + Submodule Fleet) ===
-# All submodules are defined in .gitmodules at repo root.
-# To initialize: git submodule update --init <submodule-path>
-# Full fleet: 50+ submodules across 10 tiers.
-# See: pmoves/docs/AGENTS/AGNOTE4482.md for canonical submodule listing.
-
+# === PMOVES INTEGRATIONS (Health + Wealth) ===
 pmoves_integrations:
-  # === HEALTH (Submodule: Pmoves-Health-wger) ===
-  # Git: https://github.com/POWERFULMOVES/Pmoves-Health-wger.git
-  # Branch: PMOVES.AI-Edition-Hardened
-  # Status: submodule not initialized
   health:
     enabled: true
-    submodule: "Pmoves-Health-wger"
-    submodule_path: "Pmoves-Health-wger/"
-    submodule_git: "https://github.com/POWERFULMOVES/Pmoves-Health-wger.git"
-    submodule_branch: "PMOVES.AI-Edition-Hardened"
-    hipaa_mode: true
+    module: "pmoves-health-wger"
     use_cases:
       - patient_workout_prescription
       - treatment_recovery_tracking
       - wellness_program_management
     adapter_status: "needs_adaptation_for_practice"
-    adaptation_requirements:
-      - aesthetic_medicine_protocols: "Treatment plans for NP practice"
-      - recovery_timelines: "Post-procedure care tracking"
-      - hipaa_compliance: "BAAs, encryption, audit trails"
-      - wearable_integration: "Apple Health, Fitbit for patient metrics"
     notes: |
-      Pmoves-Health-wger is a PMOVES.AI-Edition-Hardened submodule.
-      For Ageless Beauty: adapt wger workout plans → patient wellness prescriptions.
-      HIPAA mode: local-only patient data, encrypted sync to Hostinger VPS.
-      Init command: git submodule update --init Pmoves-Health-wger
+      PMOVES Health (Wger integration) needs customization for
+      aesthetic medicine: treatment protocols, recovery timelines,
+      product-specific care instructions.
 
-  # === WEALTH (Submodule: PMOVES-Wealth) ===
-  # Git: https://github.com/POWERFULMOVES/PMOVES-Wealth.git
-  # Branch: PMOVES.AI-Edition-Hardened
-  # Status: submodule not initialized
   wealth:
     enabled: true
-    submodule: "PMOVES-Wealth"
-    submodule_path: "PMOVES-Wealth/"
-    submodule_git: "https://github.com/POWERFULMOVES/PMOVES-Wealth.git"
-    submodule_branch: "PMOVES.AI-Edition-Hardened"
+    module: "pmoves-wealth"
     use_cases:
       - billing_automation
       - insurance_claim_processing
       - inventory_cost_tracking
       - practice_financial_dashboard
     adapter_status: "needs_adaptation_for_practice"
-    adaptation_requirements:
-      - medical_billing: "CPT codes, ICD-10, insurance claims"
-      - payment_processing: "Stripe, Square, patient financing"
-      - inventory_mgmt: "Skincare products, supplements"
     notes: |
-      PMOVES-Wealth is a PMOVES.AI-Edition-Hardened submodule.
-      For Ageless Beauty: add medical billing, insurance claims,
-      patient payment plans, product inventory for practice retail.
-      Init command: git submodule update --init PMOVES-Wealth
+      PMOVES Wealth needs customization for medical billing:
+      CPT codes, insurance integration, payment plans,
       product inventory valuation.
 
-  # ============================================================
-  # BPM: Three-Layer Bridge Architecture
-  # ============================================================
-  # PMOVES uses "BPM" as a multi-layer bridge -- the same acronym
-  # connects audio rhythm, information geometry, and workflow.
-  # Canonical: AGNOTE4482.BEATS.md + CHIT Visual Tour
-  # ============================================================
   bpm:
     enabled: true
     module: "pmoves-bpm"
-    
-    layer_1_beats_per_minute:
-      name: "Beats Per Minute (Audio/Musical)"
-      description: "Prosodic timing, beat-synced TTS, Flute Gateway"
-      system: "Flute Gateway + ToKenism"
-      nats_subject: "tokenism.prosodic.bpm.v1"
-      flute_gateway:
-        prosodic_analyze: "flute_gateway (media) step in voice pipeline"
-        bpm_sync: "Beat-synchronized synthesis for music/DJ"
-        modifiers:
-          - fast_tempo: "F5-TTS speed 1.4, cross_fade 0.05"
-          - slow_groove: "F5-TTS speed 0.75, cross_fade 0.2"
-      boundary_mapping:
-        - "SENTENCE (350ms pause) → 60 BPM → Largo → Root C4 (262 Hz)"
-        - "CLAUSE   (180ms pause) → 90 BPM → Andante → Root E4 (330 Hz)"
-        - "PHRASE   (100ms pause) → 120 BPM → Allegro → Root G4 (392 Hz)"
-        - "BREATH   (130ms pause) → 80 BPM → Adagio → Root D4 (294 Hz)"
-        - "NONE     (0ms pause)   → 150 BPM → Presto → Root C5 (523 Hz)"
-      practice_use: |
-        Patient education audio -- 60 BPM (Largo) for meditation,
-        90 BPM (Andante) for gentle appointment reminders
-    
-    layer_2_bridge_protocol_module:
-      name: "Bridge Protocol Module (Geometry/Information)"
-      description: "CHIT hyperdimensional encoding -- meaning as geometry"
-      system: "CHIT Cymatic-Holographic Information Transfer"
-      nats_subject: "tokenism.geometry.event.v1"
-      components:
-        - hyperbolic_encoder: "K = -1 curvature, exponential distance"
-        - dirichlet_weights: "Attribution weighting across geometry"
-        - shape_attribution: "SHA-256 Shape ID for 30-day replay"
-        - zeta_filter: "Frequency-domain information filtering"
-        - swarm_attribution: "EVO SWARM population state tracking"
-      chit_types:
-        - cgp: "Computational Geometry Packet"
-        - bpm: "Prosodic/Boundary/Bridge marker"
-        - swarm: "Population-state geometry"
-        - cipher: "Encrypted CHIT for sensitive data"
-      practice_use: |
-        Patient data as CHIT geometry (HIPAA-safe shape IDs),
-        Chakra energy mapped to hyperbolic coordinates
-    
-    layer_3_business_process_management:
-      name: "Business Process Management (Workflow/Clinical)"
-      description: "Ageless Beauty practice automation"
-      workflow_engine: "n8n / temporal / custom (TBD post-PR)"
-      workflows:
-        patient_intake:
-          steps: [check_in, vitals, history, consent]
-          chit: [intake.cgp.ready.v1, consent.geometry.event.v1]
-        insurance_processing:
-          steps: [verify, authorize, submit, track]
-          chit: [insurance.cgp.ready.v1]
-        follow_up:
-          steps: [schedule, reminder, survey, review]
-          chit: [followup.prosodic.bpm.v1]  # 90 BPM voice reminders
-        wellness_plan:
-          steps: [assess, prescribe, track, adjust]
-          chit: [wellness.geometry.event.v1]
-        billing:
-          steps: [invoice, payment, receipt, report]
-          integrations: [PMOVES-Wealth, Stripe, QuickBooks]
-      practice_use: |
-        End-to-end automation from patient arrival to follow-up
-        CHIT-signed checkpoints for HIPAA audit trails
+    use_cases:
+      - patient_journey_workflows
+      - appointment_scheduling_process
+      - treatment_consent_workflows
+      - inventory_reorder_automation
+    notes: "Business Process Management for practice operations."
 
   chit:
     enabled: true
@@ -575,3 +477,49 @@ theme:
     --skin agelessbeauty
     --logo agelessbeauty-logo.png
     --palette agelessbeauty-color-palette.json
+
+# === MCP SERVERS (Docker MCP Gateway) ===
+# Connects Hermes to Docker MCP Toolkit for PMOVES integrations
+# Docker MCP Toolkit v0.42.1 with Hostinger, GitHub, HuggingFace servers
+mcp_servers:
+  docker_mcp_gateway:
+    command: "docker"
+    args: ["mcp", "gateway", "run", "--profile", "default", "--transport", "stdio"]
+    env:
+      # Hostinger API token for VPS/domain management
+      APITOKEN: "${HOSTINGER_API_TOKEN}"
+      # GitHub token for PR/repo operations
+      GITHUB_PERSONAL_ACCESS_TOKEN: "${GITHUB_TOKEN}"
+    tools:
+      include:
+        # Hostinger tools for Ageless Beauty migration
+        - hosting_listWebsitesV1
+        - hosting_createWebsiteV1
+        - domains_checkDomainAvailabilityV1
+        - domains_purchaseNewDomainV1
+        - VPS_createNewVirtualMachineV1
+        - DNS_updateDNSRecordsV1
+        - billing_getSubscriptionListV1
+        # GitHub tools for PMOVES repo work
+        - create_pull_request
+        - get_file_contents
+        - search_code
+        - list_issues
+        # HuggingFace tools for model research
+        - hub_repo_search
+        - paper_search
+    notes: |
+      Docker MCP Gateway connects Hermes to 5+ MCP servers:
+      - GitHub Official (36 tools) -- PMOVES repo operations
+      - Hostinger API (78 tools) -- VPS, domain, hosting for Ageless Beauty
+      - Hugging Face (8 tools) -- Model search and research papers
+      - OpenAPI Toolkit (5 tools) -- API spec validation
+      - ThirdWeb (10 tools) -- Smart contract generation
+      
+      Use stdio transport (docker mcp gateway run --transport stdio)
+      which is the Docker-recommended way for client integration.
+      
+      For SSE transport (port 8090), use HTTP server config instead:
+      url: http://localhost:8090/sse
+      headers:
+        Authorization: "Bearer ${MCP_GATEWAY_AUTH_TOKEN}"
