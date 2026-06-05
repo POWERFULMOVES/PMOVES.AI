@@ -2,7 +2,7 @@
 # HERMES Agent Profile: Elder-Melchor / Ageless Beauty Practice Workstation
 # ============================================================
 # OWNER: Nurse Practitioner -- Ageless Beauty Medical Practice
-# Hostname: DESKTOP-4BFJITF (renaming to Elder-Melchor after restart)
+# Hostname: <HOSTNAME_ELDER_MELCHOR> (renaming to Elder-Melchor after restart)
 # Processor: Intel Core i7-9750H @ 2.60GHz (6C/12T, laptop)
 # RAM: 32.0 GB installed (31.7 GB usable)
 # GPU: NVIDIA GeForce GTX 1650 4GB (lightweight inference only)

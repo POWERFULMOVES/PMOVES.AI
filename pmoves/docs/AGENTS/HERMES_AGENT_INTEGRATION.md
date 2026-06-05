@@ -267,7 +267,7 @@ hermes profile use pmoves-hermes-elder
 - **GPU**: NVIDIA GeForce GTX 1650 4GB (discrete) + Intel UHD Graphics 630 128MB (integrated)
 - **Storage**: 954 GB total, ~64% used
 - **OS**: Windows 10 64-bit
-- **Hostname**: DESKTOP-4BFJITF (renaming to Elder-Melchor after restart)
+- **Hostname**: <HOSTNAME_ELDER_MELCHOR> (renaming to Elder-Melchor after restart)
 - **Gateway port**: 7700
 - **Ollama**: localhost:11434
 - **Local models**:
