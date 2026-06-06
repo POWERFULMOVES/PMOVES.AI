@@ -244,6 +244,13 @@ def extract_all(path: Path, mode: SenseMode = SenseMode.glaze) -> dict | None:
             lavfi = ffmpeg_lavfi_analysis(path)
             feat.update(lavfi)
 
+            # CLAP embedding (deterministic grounding tier)
+            from pmoves.tools.clap_client import ClapClient
+            _clap = ClapClient()
+            feat["clap_embedding"] = _clap.embed_audio_bytes(path.read_bytes(), path.name) or []
+            feat["grounding"] = _clap.last_grounding
+            feat.update(librosa_features(path))
+
         feat["tempo_label"]  = _tempo_label(feat["tempo_bpm"])
         feat["energy_label"] = _energy_label(feat["loudness_I"])
         feat["timbre"]       = _timbre_label(feat["spectral_centroid"])
@@ -418,6 +425,34 @@ def cluster(records: list[dict], n_groups: int) -> list[int]:
         StandardScaler().fit_transform(X)
     )
     return labels.tolist()
+
+
+def cluster_on_embeddings(records: list[dict], n_groups: int) -> tuple[list[int], float]:
+    """KMeans on CLAP embeddings, silhouette-validated. Falls back to acoustic
+    feature vector for any record missing an embedding (flagged upstream)."""
+    from sklearn.cluster import KMeans
+    from sklearn.metrics import silhouette_score
+    from sklearn.preprocessing import StandardScaler
+
+    dim = 512
+    X = []
+    for r in records:
+        emb = r.get("clap_embedding")
+        if emb and len(emb) == dim:
+            X.append(emb)
+        else:
+            base = [r.get("tempo_bpm", 90.0) / 200.0,
+                    r.get("spectral_centroid", 2000.0) / 8000.0,
+                    r.get("spectral_flatness", 0.3)]
+            X.append(base + [0.0] * (dim - len(base)))
+    Xs = StandardScaler().fit_transform(np.array(X))
+    n = max(2, min(n_groups, len(records) - 1))
+    labels = KMeans(n_clusters=n, random_state=42, n_init="auto").fit_predict(Xs).tolist()
+    try:
+        sil = round(float(silhouette_score(Xs, labels)), 4)
+    except Exception:
+        sil = 0.0
+    return labels, sil
 
 
 def name_group(members: list[dict]) -> str:

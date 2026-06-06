@@ -21,3 +21,19 @@ def test_librosa_features_deterministic():
     a = librosa_features_from_array(y, sr)
     b = librosa_features_from_array(y, sr)
     assert a == b
+
+
+from pmoves.tools.analyze_beats import cluster_on_embeddings
+
+
+def test_cluster_on_embeddings_separates_two_blobs():
+    import numpy as np
+    rng = np.random.default_rng(0)
+    a = [{"clap_embedding": (np.r_[rng.normal(0, 0.01, 512)] + 1.0).tolist()} for _ in range(6)]
+    b = [{"clap_embedding": (np.r_[rng.normal(0, 0.01, 512)] - 1.0).tolist()} for _ in range(6)]
+    records = a + b
+    labels, sil = cluster_on_embeddings(records, n_groups=2)
+    assert len(labels) == 12
+    assert sil > 0.5                                   # clean separation
+    assert len(set(labels[:6])) == 1                   # first blob one cluster
+    assert labels[0] != labels[6]                      # blobs differ
