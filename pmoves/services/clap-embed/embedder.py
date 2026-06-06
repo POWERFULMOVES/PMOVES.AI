@@ -52,6 +52,10 @@ class Embedder:
             pooled = pooled / norm
         return [round(float(x), 7) for x in pooled]           # rounded -> bit-stable JSON
 
+    def embed_text(self, texts):
+        """Delegate text embedding to the underlying model (real CLAP path)."""
+        return self.model.embed_text(texts)
+
 
 class ClapHFModel:
     """laion CLAP loaded via transformers. Deterministic: eval(), no grad, fp32."""
