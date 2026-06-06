@@ -112,6 +112,19 @@ def _stable_id(name: str) -> str:
     return hashlib.md5(name.encode()).hexdigest()[:12]
 
 
+def fingerprint_hash(rec: dict) -> str:
+    """Stable content hash over the grounding-relevant fields only.
+
+    Excludes volatile fields (timestamps, sense_mode, transient flags) so the
+    same audio + model revision always hashes identically (CI reproducibility)."""
+    keep = ("name", "tempo_bpm", "spectral_centroid", "spectral_flatness",
+            "loudness_LRA", "clap_embedding", "mfcc", "chroma",
+            "spectral_contrast", "tonnetz", "onset_rate")
+    canon = {k: rec[k] for k in keep if k in rec}
+    blob = json.dumps(canon, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return hashlib.sha256(blob).hexdigest()
+
+
 def group_to_cgp(group: dict, fingerprints: dict[str, dict], coherence: float = 0.5) -> dict:
     """
     Convert a sonic group + its member fingerprints to a `geometry.cgp.v1` packet.
