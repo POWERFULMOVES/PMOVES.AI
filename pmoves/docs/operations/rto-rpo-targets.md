@@ -38,14 +38,14 @@ PMOVES segments services into **environment tiers** (`pmoves/env.tier-*`, see `.
 
 ## Per-tier recovery runbooks
 
-Each runbook assumes the node is reachable and Docker is healthy. All commands run from `pmoves/`. Use `make -C pmoves up-<group>` layering — never raw `docker compose up`.
+Each runbook assumes the node is reachable and Docker is healthy. All commands run from the **repo root**. Use `make -C pmoves up-<group>` layering — never raw `docker compose up`.
 
 ### tier-data (RTO 1 hr / RPO 15 min) — the one that matters
 
 1. **Provision the host** (if lost): bring up Docker + restore the named volumes' parent disk. Confirm backups are **not** on the same disk (see Backup Isolation below).
-2. **Start the data tier only:** `make -C pmoves up-core` (Postgres, Qdrant, Neo4j, Meili, MinIO, NATS).
+2. **Start the data tier only** (not `up-core`, which also pulls up workers/agents against an unrestored DB): `make -C pmoves up-supabase` (Postgres), then `make -C pmoves up-data-tier` (Qdrant, Neo4j, Meili, MinIO) and `make -C pmoves up-bus` (NATS) — equivalently `make -C pmoves up-minimal`. Restore state **before** bringing up any dependent tier.
 3. **Restore Postgres:** `cat backups/<ts>/postgres.sql | docker exec -i <postgres> psql -U $POSTGRES_USER -d $POSTGRES_DB` (or PITR replay to the target timestamp for true 15-min RPO).
-4. **Restore Qdrant:** recover the collection from `backups/<ts>/qdrant_snapshot.json` via the Qdrant snapshot recover API.
+4. **Restore Qdrant:** note that `make backup` writes only the **snapshot metadata** (the `POST /collections/$QDRANT_COLLECTION/snapshots` response) to `backups/<ts>/qdrant_snapshot.json` — not the snapshot contents. Use the snapshot name from that JSON to download the actual artifact (`GET /collections/$QDRANT_COLLECTION/snapshots/<name>`, or copy it from Qdrant's snapshot dir), then recover the collection from the downloaded snapshot via the Qdrant snapshot recovery API.
 5. **Restore MinIO:** `mc mirror backups/<ts>/minio_<bucket> local/<bucket>`.
 6. **Restore Meilisearch:** import `backups/<ts>/meili_dump.json` via the dumps API.
 7. **Verify:** `make -C pmoves health-summary` / probe each store; confirm row counts and a known-key read.
