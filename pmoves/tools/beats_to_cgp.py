@@ -228,8 +228,51 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+# Deterministic full-embedding -> 2D projection. A fixed, seeded random matrix
+# per dimensionality means similar 512-d embeddings map to similar 2D angles,
+# so Poincaré placement reflects the WHOLE semantic vector (not just dims 0..1).
+_PROJ_CACHE: dict[int, "np.ndarray"] = {}
+
+
+def _proj_matrix(d: int) -> "np.ndarray":
+    P = _PROJ_CACHE.get(d)
+    if P is None:
+        P = np.random.default_rng(42).standard_normal((d, 2))
+        _PROJ_CACHE[d] = P
+    return P
+
+
+def _project_2d(vec: list[float]) -> "np.ndarray":
+    """Project an arbitrary-length vector to 2D via a fixed seeded matrix.
+
+    Deterministic: same input -> same 2D point -> same Poincaré angle. For
+    vectors shorter than 2 dims, pad with zeros and return as-is (length 2)."""
+    v = np.asarray(vec, dtype=float).reshape(-1)
+    if v.shape[0] < 2:
+        out = np.zeros(2, dtype=float)
+        out[: v.shape[0]] = v
+        return out
+    return v @ _proj_matrix(v.shape[0])
+
+
+def _coerce_mfcc(mfcc, n: int = 20) -> list[float]:
+    """Coerce an mfcc value to a fixed-length-`n` float list (pad/truncate).
+
+    Guards against None or wrong-length mfcc so the constellation spectrum is
+    always `n` plain floats and ``np.mean`` never builds a ragged object array."""
+    if not mfcc:
+        return [0.0] * n
+    out = [0.0] * n
+    for i, x in enumerate(mfcc[:n]):
+        try:
+            out[i] = float(x)
+        except (TypeError, ValueError):
+            out[i] = 0.0
+    return out
+
+
 def _group_anchor_vec(members: list[dict]) -> "np.ndarray":
-    embs = [m["clap_embedding"][:2] for m in members if m.get("clap_embedding")]
+    embs = [_project_2d(m["clap_embedding"]) for m in members if m.get("clap_embedding")]
     if not embs:
         return np.array([0.0, 0.0])
     return np.mean(np.array(embs), axis=0)
@@ -260,7 +303,8 @@ def build_cgp_v2(groups: list[dict], fingerprints: dict[str, dict], coherence: f
         for i, rec in enumerate(members):
             sv = track_to_state_vector(rec)
             tid = _stable_id(rec.get("name", f"track_{i}"))
-            hb_members[gid][tid] = np.array(rec.get("clap_embedding", [0.0, 0.0])[:2] or [0.0, 0.0])
+            emb = rec.get("clap_embedding")
+            hb_members[gid][tid] = _project_2d(emb) if emb else np.array([0.0, 0.0])
             points.append({
                 "id": tid,
                 "label": rec.get("name", f"track_{i}"),
@@ -272,7 +316,8 @@ def build_cgp_v2(groups: list[dict], fingerprints: dict[str, dict], coherence: f
                 "summary": rec.get("name", ""),
                 "meta": {"grounding": rec.get("grounding", "full"),
                          "duration_s": rec.get("duration_s", 0),
-                         "proj_rgb": [sv["Hz"], sv["delta"], abs(sv["kappa"])]},
+                         "proj_rgb": [sv["Hz"], sv["delta"], abs(sv["kappa"])],
+                         "fingerprint_hash": fingerprint_hash(rec)},
             })
         anchor = _group_anchor_vec(members).tolist()
         super_constellations.append({
@@ -280,14 +325,17 @@ def build_cgp_v2(groups: list[dict], fingerprints: dict[str, dict], coherence: f
             "summary": gname,
             "anchor": anchor if anchor else [0.0, 0.0],
             "spectrum": list(np.mean(
-                np.array([m.get("mfcc", [0.0] * 20) for m in members]), axis=0)),
+                np.array([_coerce_mfcc(m.get("mfcc")) for m in members]), axis=0)),
             "points": points,
         })
 
+    # NOTE: created_at is intentionally OMITTED from the signed body. A volatile
+    # timestamp inside the HMAC scope would make the same audio sign differently
+    # every run (spec §7 wants reproducible sigs). Provenance lives in `meta`
+    # instead, and `meta.signed` is deterministic so it is safe to sign.
     cgp = {
         "spec": "chit.cgp.v0.2",
         "summary": "DARKXSIDE beats grounding (WS-A)",
-        "created_at": _now_iso(),
         "meta": {"source": "cipher_beats_analyst", "coherence": round(coherence, 4),
                  "clap_model": os.environ.get("CLAP_MODEL_ID", "laion/larger_clap_music")},
         "hyperbolic": build_hyperbolic_block(hb_groups, hb_members),
@@ -298,7 +346,19 @@ def build_cgp_v2(groups: list[dict], fingerprints: dict[str, dict], coherence: f
             "constellations": super_constellations,
         }],
     }
-    return sign_cgp(cgp, passphrase=os.environ.get("CHIT_PASSPHRASE"))
+
+    # Graceful signing: sign_cgp raises RuntimeError if no CHIT key env is set.
+    # Emit an UNSIGNED but schema-valid packet (sig is optional) rather than crash.
+    # meta.signed is set BEFORE signing so it is covered by the HMAC and the
+    # signature both reproduces (no timestamps) and verifies (verify_cgp signs
+    # everything except `sig`).
+    try:
+        cgp["meta"]["signed"] = True
+        cgp = sign_cgp(cgp, passphrase=os.environ.get("CHIT_PASSPHRASE"))
+    except Exception as e:  # no signing key, or signing backend unavailable
+        console.print(f"  [yellow]CGP signing skipped (unsigned packet):[/] {e}")
+        cgp["meta"]["signed"] = False
+    return cgp
 
 
 def select_builder(v2: bool = True):
@@ -310,9 +370,9 @@ def select_builder(v2: bool = True):
     if v2:
         return build_cgp_v2
     def _legacy(groups, fps, coherence=0.5):
+        built = [group_to_cgp(g, fps, coherence) for g in groups]
         return {"spec": "chit.cgp.v0.2", "super_nodes":
-                [group_to_cgp(g, fps, coherence).get("super_nodes", [{}])[0] for g in groups
-                 if group_to_cgp(g, fps, coherence)]}
+                [c["super_nodes"][0] for c in built if c]}
     return _legacy
 
 

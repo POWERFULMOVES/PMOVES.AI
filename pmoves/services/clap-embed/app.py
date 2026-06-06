@@ -22,7 +22,7 @@ _embedder: Embedder | None = None
 def get_embedder() -> Embedder:
     global _embedder
     if _embedder is None:
-        model = ClapHFModel(Config.MODEL_ID, Config.MODEL_REVISION, Config.DEVICE)
+        model = ClapHFModel(Config.MODEL_ID, Config.MODEL_REVISION, Config.DEVICE, Config.SR)
         _embedder = Embedder(model, Config.SR, Config.CLIP_SECONDS, Config.HOP_SECONDS)
     return _embedder
 
