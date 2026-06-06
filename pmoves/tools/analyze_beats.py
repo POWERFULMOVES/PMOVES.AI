@@ -80,6 +80,39 @@ DEFAULT_OLLAMA  = os.environ.get("OLLAMA_API_BASE", "http://localhost:11434")
 DEFAULT_HIRAG   = os.environ.get("HIRAG_GPU_URL",   "http://localhost:8087")
 
 
+# ── librosa interpretable features (deterministic) ────────────────────────────
+
+def librosa_features_from_array(y: "np.ndarray", sr: int) -> dict:
+    """Deterministic interpretable features from a mono float32 waveform."""
+    import librosa
+    y = np.asarray(y, dtype="float32")
+    tempo, _ = librosa.beat.beat_track(y=y, sr=sr)
+    chroma = librosa.feature.chroma_stft(y=y, sr=sr).mean(axis=1)
+    mfcc = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=20).mean(axis=1)
+    contrast = librosa.feature.spectral_contrast(y=y, sr=sr).mean(axis=1)
+    tonnetz = librosa.feature.tonnetz(y=librosa.effects.harmonic(y), sr=sr).mean(axis=1)
+    onset_env = librosa.onset.onset_detect(y=y, sr=sr, units="time")
+    duration = max(len(y) / sr, 1e-6)
+    centroid = float(librosa.feature.spectral_centroid(y=y, sr=sr).mean())
+    flatness = float(librosa.feature.spectral_flatness(y=y).mean())
+    return {
+        "tempo_bpm": round(float(np.asarray(tempo).item()), 4),
+        "chroma": [round(float(v), 6) for v in chroma],
+        "mfcc": [round(float(v), 6) for v in mfcc],
+        "spectral_contrast": [round(float(v), 6) for v in contrast],
+        "tonnetz": [round(float(v), 6) for v in tonnetz],
+        "onset_rate": round(len(onset_env) / duration, 6),
+        "spectral_centroid": round(centroid, 4),
+        "spectral_flatness": round(flatness, 6),
+    }
+
+
+def librosa_features(path: "Path") -> dict:
+    import librosa
+    y, sr = librosa.load(str(path), sr=22050, mono=True)
+    return librosa_features_from_array(y, sr)
+
+
 # ── ffprobe / ffmpeg lavfi audio analysis ─────────────────────────────────────
 
 def ffprobe_meta(path: Path) -> dict:
