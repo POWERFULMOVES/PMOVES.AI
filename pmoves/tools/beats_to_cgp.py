@@ -288,6 +288,21 @@ def build_cgp_v2(groups: list[dict], fingerprints: dict[str, dict], coherence: f
     return sign_cgp(cgp, passphrase=os.environ.get("CHIT_PASSPHRASE"))
 
 
+def select_builder(v2: bool = True):
+    """Return a (groups, fingerprints, coherence) -> cgp callable.
+
+    v2  -> build_cgp_v2 (whole-packet, signed). Legacy -> per-group group_to_cgp,
+    wrapped so the signature matches.
+    """
+    if v2:
+        return build_cgp_v2
+    def _legacy(groups, fps, coherence=0.5):
+        return {"spec": "chit.cgp.v0.2", "super_nodes":
+                [group_to_cgp(g, fps, coherence).get("super_nodes", [{}])[0] for g in groups
+                 if group_to_cgp(g, fps, coherence)]}
+    return _legacy
+
+
 # ── NATS publish ───────────────────────────────────────────────────────────────
 
 async def publish_cgp(cgp: dict, nats_url: str):
@@ -295,9 +310,10 @@ async def publish_cgp(cgp: dict, nats_url: str):
         import nats as natspy
         nc = await natspy.connect(nats_url)
         await nc.publish(SUBJECT_CGP, json.dumps(cgp).encode())
-        # Also publish the control-plane knob update
-        ctrl = {"group": cgp["label"], "control_plane": cgp.get("control_plane", {})}
-        await nc.publish(SUBJECT_CTRL, json.dumps(ctrl).encode())
+        # Also publish the control-plane knob update (v1 packets only; v2 has no control_plane)
+        if "control_plane" in cgp:
+            ctrl = {"group": cgp.get("label", ""), "control_plane": cgp.get("control_plane", {})}
+            await nc.publish(SUBJECT_CTRL, json.dumps(ctrl).encode())
         await nc.drain()
     except Exception as e:
         console.print(f"  [yellow]NATS publish skipped:[/] {e}")
@@ -336,6 +352,7 @@ def render(
     nats:        str  = typer.Option(DEFAULT_NATS,   "--nats",         help="NATS URL"),
     group:       Optional[str] = typer.Option(None,  "--group",        help="Render only this group name"),
     coherence:   float = typer.Option(0.5,           "--coherence",    help="Silhouette score to embed as swarm fitness F"),
+    v2:          bool  = typer.Option(True, "--v2/--no-v2", help="Emit CGP v2 (hyperbolic+attribution+sig)"),
 ):
     """[bold cyan]Publish sonic group constellations to Hyperdimensions via NATS.[/bold cyan]"""
     groups = load_summary(summary)
@@ -346,6 +363,18 @@ def render(
         if not groups:
             console.print(f"[red]Group '{group}' not found.[/]")
             raise typer.Exit(1)
+
+    if v2:
+        cgp = select_builder(v2=True)(groups, fps, coherence=coherence)
+
+        async def _publish_one():
+            await publish_cgp(cgp, nats)
+            console.print(f"  [green]→[/] Published CGP v2 packet "
+                          f"({len(groups)} groups) to [bold]{SUBJECT_CGP}[/]")
+
+        asyncio.run(_publish_one())
+        console.print(f"\n[bold green]✓ Done.[/] Open Hyperdimensions to see the constellations.")
+        return
 
     table = Table("Group", "Tracks", "delta", "Hz", "kappa", "A", title="CGP State Vectors")
 
@@ -374,6 +403,7 @@ def dump(
     group:        str  = typer.Option(...,              "--group", help="Group name to dump"),
     coherence:    float = typer.Option(0.5,             "--coherence"),
     output:       Optional[str] = typer.Option(None,   "--output", "-o", help="Write JSON to file"),
+    v2:           bool  = typer.Option(True, "--v2/--no-v2", help="Emit CGP v2 (hyperbolic+attribution+sig)"),
 ):
     """[bold]Dump CGP JSON for a group without publishing (inspect mode).[/bold]"""
     groups = load_summary(summary)
@@ -383,7 +413,10 @@ def dump(
         console.print(f"[red]Group '{group}' not found. Available: {[g['group'] for g in groups]}[/]")
         raise typer.Exit(1)
 
-    cgp = group_to_cgp(match, fps, coherence=coherence)
+    if v2:
+        cgp = select_builder(v2=True)([match], fps, coherence=coherence)
+    else:
+        cgp = group_to_cgp(match, fps, coherence=coherence)
     out = json.dumps(cgp, indent=2)
 
     if output:

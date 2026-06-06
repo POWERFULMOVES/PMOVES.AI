@@ -49,3 +49,11 @@ def test_cgp_v2_signature_verifies(monkeypatch):
     groups, fps = _fixtures()
     cgp = build_cgp_v2(groups, fps, coherence=0.8)
     assert verify_cgp(cgp, passphrase="test-key") is True
+
+
+def test_render_dump_uses_v2_by_default(monkeypatch):
+    monkeypatch.setenv("CHIT_PASSPHRASE", "test-key")
+    from pmoves.tools.beats_to_cgp import select_builder
+    groups, fps = _fixtures()
+    cgp = select_builder(v2=True)(groups, fps, coherence=0.7)
+    assert cgp["spec"] == "chit.cgp.v0.2" and "hyperbolic" in cgp
