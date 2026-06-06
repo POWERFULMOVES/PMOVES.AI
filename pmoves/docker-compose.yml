@@ -1515,6 +1515,27 @@ services:
         limits:
           cpus: '1.0'
           memory: 512M
+  clap-embed:
+    build:
+      context: ./services/clap-embed
+      dockerfile: Dockerfile
+    image: pmoves/clap-embed:latest
+    environment:
+      - CLAP_MODEL_ID=${CLAP_MODEL_ID:-laion/larger_clap_music}
+      - CLAP_MODEL_REVISION=${CLAP_MODEL_REVISION:-main}
+      - CLAP_DEVICE=${CLAP_DEVICE:-cpu}
+      - CLAP_EMBED_PORT=8108
+      - NATS_URL=${NATS_URL:-}
+      - MODEL_REGISTRY_URL=${MODEL_REGISTRY_URL:-http://model-registry:8110}
+    ports:
+      - "${CLAP_EMBED_BIND:-0.0.0.0}:8108:8108"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8108/healthz"]
+      interval: 30s
+      timeout: 5s
+      start_period: 60s
+      retries: 3
   extract-worker:
     <<: *tier-worker-hardened
     build: ./services/extract-worker
