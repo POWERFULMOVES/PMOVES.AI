@@ -778,13 +778,28 @@ jobs:
       - name: Free disk space before Trivy
         run: |
           set -euxo pipefail
+          echo "Disk BEFORE reclaim:"; df -h / || true
           docker system df || true
-          # Images are already pushed. Prefer scanner headroom over retaining
-          # local BuildKit cache on the self-hosted runners.
+          # Trivy must download its ~95MB vuln DB into .cache/trivy and pull the
+          # image; on the chronically-tight kvm4 runners that write fails with
+          # "no space left on device" (GHCR run 27042677318). The image is RE-PULLED
+          # in the next step, so a full prune here is safe — reclaim aggressively.
           docker builder prune -af || true
-          docker image prune -f || true
+          docker image prune -af || true        # all unused (image re-pulled next step)
           docker container prune -f || true
-          df -h
+          # NOTE: deliberately NOT 'docker volume prune' — these self-hosted runners
+          # may co-host fleet data-store volumes (neo4j/supabase-db/etc.); pruning
+          # volumes could destroy a temporarily-stopped service's data. Image-layer
+          # reclaim above frees GBs; the Trivy DB needs only ~95MB.
+          # Stale Trivy DB cache can be corrupt/partial after a prior no-space abort;
+          # drop it so the next download starts clean (path per trivy-action cache-dir).
+          rm -rf "${GITHUB_WORKSPACE}/.cache/trivy/db" "${GITHUB_WORKSPACE}/.cache/trivy/fanal" 2>/dev/null || true
+          # Sweep the SBOM/scan scratch that the docker prune does NOT reclaim
+          # (same class as the build-host sweep in #1719) — frees the root volume.
+          for pat in 'stereoscope-*' 'sbom-action-*' 'trivy-*' 'codeql-packaging*' 'codeql.*'; do
+            find /tmp -maxdepth 1 -name "$pat" -mtime +0 -exec rm -rf {} + 2>/dev/null || true
+          done
+          echo "Disk AFTER reclaim:"; df -h / || true
 
       - name: Pull image for Trivy (private GHCR)
         if: ${{ steps.meta.outputs.has_tags == 'true' }}
