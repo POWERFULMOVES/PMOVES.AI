@@ -51,3 +51,36 @@ class Embedder:
         if norm > 0:
             pooled = pooled / norm
         return [round(float(x), 7) for x in pooled]           # rounded -> bit-stable JSON
+
+
+class ClapHFModel:
+    """laion CLAP loaded via transformers. Deterministic: eval(), no grad, fp32."""
+
+    def __init__(self, model_id: str, revision: str = "main", device: str = "cpu"):
+        import torch
+        from transformers import ClapModel, ClapProcessor
+
+        torch.manual_seed(0)
+        self._torch = torch
+        self.device = device
+        self.processor = ClapProcessor.from_pretrained(model_id, revision=revision)
+        self.model = ClapModel.from_pretrained(model_id, revision=revision, torch_dtype=torch.float32)
+        self.model.eval().to(device)
+
+    def embed_windows(self, windows):
+        import numpy as np
+        torch = self._torch
+        with torch.no_grad():
+            inputs = self.processor(audios=[w for w in windows], sampling_rate=48000, return_tensors="pt")
+            inputs = {k: v.to(self.device) for k, v in inputs.items()}
+            feats = self.model.get_audio_features(**inputs)   # (n, 512)
+            return feats.detach().cpu().float().numpy()
+
+    def embed_text(self, texts):
+        import numpy as np
+        torch = self._torch
+        with torch.no_grad():
+            inputs = self.processor(text=list(texts), return_tensors="pt", padding=True)
+            inputs = {k: v.to(self.device) for k, v in inputs.items()}
+            feats = self.model.get_text_features(**inputs)
+            return feats.detach().cpu().float().numpy()

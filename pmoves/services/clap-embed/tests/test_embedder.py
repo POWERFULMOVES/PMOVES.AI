@@ -38,3 +38,17 @@ def test_embed_is_deterministic():
     v1 = emb.embed_audio(audio, 48000)
     v2 = emb.embed_audio(audio, 48000)
     assert v1 == v2  # list equality — bit-identical
+
+
+import os
+import pytest
+
+
+@pytest.mark.skipif(os.environ.get("CLAP_RUN_MODEL_TESTS") != "1",
+                    reason="set CLAP_RUN_MODEL_TESTS=1 to download+run the real CLAP model")
+def test_clap_hf_model_embeds_512():
+    import numpy as np
+    from embedder import ClapHFModel
+    m = ClapHFModel(model_id="laion/larger_clap_music", revision="main", device="cpu")
+    out = m.embed_windows([np.zeros(48000 * 10, dtype="float32")])
+    assert out.shape == (1, 512)
