@@ -60,6 +60,23 @@ def create_app() -> FastAPI:
     def metrics():
         return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
+    @app.on_event("startup")
+    async def _register():
+        import httpx
+        payload = {
+            "service": "clap-embed",
+            "model_id": Config.MODEL_ID,
+            "revision": Config.MODEL_REVISION,
+            "license": "Apache-2.0",
+            "provenance": "laion/larger_clap_music",
+            "endpoint": f"http://clap-embed:{Config.PORT}",
+        }
+        try:
+            async with httpx.AsyncClient(timeout=4) as c:
+                await c.post(f"{Config.REGISTRY_URL}/api/deployments", json=payload)
+        except Exception:
+            pass  # registry offline is non-fatal; service still serves
+
     return app
 
 
