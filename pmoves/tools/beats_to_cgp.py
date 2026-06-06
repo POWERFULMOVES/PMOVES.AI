@@ -58,6 +58,9 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
+from pmoves.tools.cgp_v2_build import build_attribution, build_hyperbolic_block
+from pmoves.tools.chit_security import sign_cgp
+
 app = typer.Typer(
     name="beats-to-cgp",
     help="DARKXSIDE Beats → Hyperdimensions CGP Bridge",
@@ -203,6 +206,86 @@ def group_to_cgp(group: dict, fingerprints: dict[str, dict], coherence: float = 
             }
         }
     }
+
+
+# ── CGP v2 builders ─────────────────────────────────────────────────────────────
+
+def _now_iso() -> str:
+    from datetime import datetime, timezone
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _group_anchor_vec(members: list[dict]) -> "np.ndarray":
+    embs = [m["clap_embedding"][:2] for m in members if m.get("clap_embedding")]
+    if not embs:
+        return np.array([0.0, 0.0])
+    return np.mean(np.array(embs), axis=0)
+
+
+def build_cgp_v2(groups: list[dict], fingerprints: dict[str, dict], coherence: float = 0.5) -> dict:
+    """Assemble a single signed CGP v2 packet across all groups.
+
+    Each track is a point (modality 'audio'); each group is a constellation +
+    a Poincaré hierarchy node; attribution is Dirichlet-weighted by track count.
+    """
+    super_constellations = []
+    hb_groups: dict[str, np.ndarray] = {}
+    hb_members: dict[str, dict[str, np.ndarray]] = {}
+    raw_contrib: dict[str, float] = {}
+
+    for g in groups:
+        gname = g["group"]
+        members = [fingerprints[n] for n in g["tracks"] if n in fingerprints]
+        if not members:
+            continue
+        gid = _stable_id(gname)
+        hb_groups[gid] = _group_anchor_vec(members)
+        hb_members[gid] = {}
+        raw_contrib[gid] = float(len(members))
+
+        points = []
+        for i, rec in enumerate(members):
+            sv = track_to_state_vector(rec)
+            tid = _stable_id(rec.get("name", f"track_{i}"))
+            hb_members[gid][tid] = np.array(rec.get("clap_embedding", [0.0, 0.0])[:2] or [0.0, 0.0])
+            points.append({
+                "id": tid,
+                "label": rec.get("name", f"track_{i}"),
+                "modality": "audio",
+                # Schema requires point.proj to be a scalar number; the RGB-style
+                # projection triple lives in meta.proj_rgb for downstream rendering.
+                "proj": sv["Hz"],
+                "conf": sv["A"],
+                "summary": rec.get("name", ""),
+                "meta": {"grounding": rec.get("grounding", "full"),
+                         "duration_s": rec.get("duration_s", 0),
+                         "proj_rgb": [sv["Hz"], sv["delta"], abs(sv["kappa"])]},
+            })
+        anchor = _group_anchor_vec(members).tolist()
+        super_constellations.append({
+            "id": gid,
+            "summary": gname,
+            "anchor": anchor if anchor else [0.0, 0.0],
+            "spectrum": list(np.mean(
+                np.array([m.get("mfcc", [0.0] * 20) for m in members]), axis=0)),
+            "points": points,
+        })
+
+    cgp = {
+        "spec": "chit.cgp.v0.2",
+        "summary": "DARKXSIDE beats grounding (WS-A)",
+        "created_at": _now_iso(),
+        "meta": {"source": "cipher_beats_analyst", "coherence": round(coherence, 4),
+                 "clap_model": os.environ.get("CLAP_MODEL_ID", "laion/larger_clap_music")},
+        "hyperbolic": build_hyperbolic_block(hb_groups, hb_members),
+        "attribution": build_attribution(raw_contrib),
+        "super_nodes": [{
+            "id": _stable_id("sn_beats"),
+            "label": "Beats Grounding",
+            "constellations": super_constellations,
+        }],
+    }
+    return sign_cgp(cgp, passphrase=os.environ.get("CHIT_PASSPHRASE"))
 
 
 # ── NATS publish ───────────────────────────────────────────────────────────────
