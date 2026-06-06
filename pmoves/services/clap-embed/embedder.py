@@ -31,6 +31,7 @@ def window_audio(audio: np.ndarray, sr: int, clip_seconds: int, hop_seconds: int
 
 class _Model(Protocol):
     def embed_windows(self, windows: List[np.ndarray]) -> np.ndarray: ...
+    def embed_text(self, texts) -> np.ndarray: ...
 
 
 class Embedder:

@@ -77,6 +77,29 @@ def create_app() -> FastAPI:
         except Exception:
             pass  # registry offline is non-fatal; service still serves
 
+    @app.on_event("startup")
+    async def _start_nats():
+        # When NATS_URL is configured, subscribe the responder to
+        # audio.embed.request.v1 so the advertised NATS path actually works.
+        # NATS is optional — failure to connect must not break the HTTP service.
+        app.state.nats_conn = None
+        if not Config.NATS_URL:
+            return
+        try:
+            from nats_responder import run_responder
+            app.state.nats_conn = await run_responder(get_embedder())
+        except Exception:
+            app.state.nats_conn = None  # HTTP endpoints still serve
+
+    @app.on_event("shutdown")
+    async def _stop_nats():
+        nc = getattr(app.state, "nats_conn", None)
+        if nc is not None:
+            try:
+                await nc.drain()
+            except Exception:
+                pass
+
     return app
 
 

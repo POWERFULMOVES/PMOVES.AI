@@ -1516,6 +1516,7 @@ services:
           cpus: '1.0'
           memory: 512M
   clap-embed:
+    <<: *tier-api-hardened
     build:
       context: ./services/clap-embed
       dockerfile: Dockerfile
@@ -1530,12 +1531,28 @@ services:
     ports:
       - "${CLAP_EMBED_BIND:-0.0.0.0}:8108:8108"
     restart: unless-stopped
+    depends_on:
+      nats:
+        condition: service_healthy
+        required: false
+    profiles:
+    - orchestration
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8108/healthz"]
       interval: 30s
       timeout: 5s
       start_period: 60s
       retries: 3
+    networks:
+    - pmoves_api
+    - pmoves_bus
+    extra_hosts:
+    - host.docker.internal:host-gateway
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
   extract-worker:
     <<: *tier-worker-hardened
     build: ./services/extract-worker
