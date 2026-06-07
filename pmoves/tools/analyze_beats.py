@@ -80,6 +80,39 @@ DEFAULT_OLLAMA  = os.environ.get("OLLAMA_API_BASE", "http://localhost:11434")
 DEFAULT_HIRAG   = os.environ.get("HIRAG_GPU_URL",   "http://localhost:8087")
 
 
+# ── librosa interpretable features (deterministic) ────────────────────────────
+
+def librosa_features_from_array(y: "np.ndarray", sr: int) -> dict:
+    """Deterministic interpretable features from a mono float32 waveform."""
+    import librosa
+    y = np.asarray(y, dtype="float32")
+    tempo, _ = librosa.beat.beat_track(y=y, sr=sr)
+    chroma = librosa.feature.chroma_stft(y=y, sr=sr).mean(axis=1)
+    mfcc = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=20).mean(axis=1)
+    contrast = librosa.feature.spectral_contrast(y=y, sr=sr).mean(axis=1)
+    tonnetz = librosa.feature.tonnetz(y=librosa.effects.harmonic(y), sr=sr).mean(axis=1)
+    onset_env = librosa.onset.onset_detect(y=y, sr=sr, units="time")
+    duration = max(len(y) / sr, 1e-6)
+    centroid = float(librosa.feature.spectral_centroid(y=y, sr=sr).mean())
+    flatness = float(librosa.feature.spectral_flatness(y=y).mean())
+    return {
+        "tempo_bpm": round(float(np.asarray(tempo).item()), 4),
+        "chroma": [round(float(v), 6) for v in chroma],
+        "mfcc": [round(float(v), 6) for v in mfcc],
+        "spectral_contrast": [round(float(v), 6) for v in contrast],
+        "tonnetz": [round(float(v), 6) for v in tonnetz],
+        "onset_rate": round(len(onset_env) / duration, 6),
+        "spectral_centroid": round(centroid, 4),
+        "spectral_flatness": round(flatness, 6),
+    }
+
+
+def librosa_features(path: "Path") -> dict:
+    import librosa
+    y, sr = librosa.load(str(path), sr=22050, mono=True)
+    return librosa_features_from_array(y, sr)
+
+
 # ── ffprobe / ffmpeg lavfi audio analysis ─────────────────────────────────────
 
 def ffprobe_meta(path: Path) -> dict:
@@ -210,6 +243,13 @@ def extract_all(path: Path, mode: SenseMode = SenseMode.glaze) -> dict | None:
         if mode in (SenseMode.glaze, SenseMode.gaze, SenseMode.auto):
             lavfi = ffmpeg_lavfi_analysis(path)
             feat.update(lavfi)
+
+            # CLAP embedding (deterministic grounding tier)
+            from pmoves.tools.clap_client import ClapClient
+            _clap = ClapClient()
+            feat["clap_embedding"] = _clap.embed_audio_bytes(path.read_bytes(), path.name) or []
+            feat["grounding"] = _clap.last_grounding
+            feat.update(librosa_features(path))
 
         feat["tempo_label"]  = _tempo_label(feat["tempo_bpm"])
         feat["energy_label"] = _energy_label(feat["loudness_I"])
@@ -385,6 +425,34 @@ def cluster(records: list[dict], n_groups: int) -> list[int]:
         StandardScaler().fit_transform(X)
     )
     return labels.tolist()
+
+
+def cluster_on_embeddings(records: list[dict], n_groups: int) -> tuple[list[int], float]:
+    """KMeans on CLAP embeddings, silhouette-validated. Falls back to acoustic
+    feature vector for any record missing an embedding (flagged upstream)."""
+    from sklearn.cluster import KMeans
+    from sklearn.metrics import silhouette_score
+    from sklearn.preprocessing import StandardScaler
+
+    dim = 512
+    X = []
+    for r in records:
+        emb = r.get("clap_embedding")
+        if emb and len(emb) == dim:
+            X.append(emb)
+        else:
+            base = [r.get("tempo_bpm", 90.0) / 200.0,
+                    r.get("spectral_centroid", 2000.0) / 8000.0,
+                    r.get("spectral_flatness", 0.3)]
+            X.append(base + [0.0] * (dim - len(base)))
+    Xs = StandardScaler().fit_transform(np.array(X))
+    n = max(2, min(n_groups, len(records) - 1))
+    labels = KMeans(n_clusters=n, random_state=42, n_init="auto").fit_predict(Xs).tolist()
+    try:
+        sil = round(float(silhouette_score(Xs, labels)), 4)
+    except Exception:
+        sil = 0.0
+    return labels, sil
 
 
 def name_group(members: list[dict]) -> str:

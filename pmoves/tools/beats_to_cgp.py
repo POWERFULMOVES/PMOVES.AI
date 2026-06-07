@@ -58,6 +58,9 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
+from pmoves.tools.cgp_v2_build import build_attribution, build_hyperbolic_block
+from pmoves.tools.chit_security import sign_cgp
+
 app = typer.Typer(
     name="beats-to-cgp",
     help="DARKXSIDE Beats → Hyperdimensions CGP Bridge",
@@ -107,6 +110,19 @@ def track_to_state_vector(rec: dict) -> dict:
 
 def _stable_id(name: str) -> str:
     return hashlib.md5(name.encode()).hexdigest()[:12]
+
+
+def fingerprint_hash(rec: dict) -> str:
+    """Stable content hash over the grounding-relevant fields only.
+
+    Excludes volatile fields (timestamps, sense_mode, transient flags) so the
+    same audio + model revision always hashes identically (CI reproducibility)."""
+    keep = ("name", "tempo_bpm", "spectral_centroid", "spectral_flatness",
+            "loudness_LRA", "clap_embedding", "mfcc", "chroma",
+            "spectral_contrast", "tonnetz", "onset_rate")
+    canon = {k: rec[k] for k in keep if k in rec}
+    blob = json.dumps(canon, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return hashlib.sha256(blob).hexdigest()
 
 
 def group_to_cgp(group: dict, fingerprints: dict[str, dict], coherence: float = 0.5) -> dict:
@@ -205,6 +221,161 @@ def group_to_cgp(group: dict, fingerprints: dict[str, dict], coherence: float = 
     }
 
 
+# ── CGP v2 builders ─────────────────────────────────────────────────────────────
+
+def _now_iso() -> str:
+    from datetime import datetime, timezone
+    return datetime.now(timezone.utc).isoformat()
+
+
+# Deterministic full-embedding -> 2D projection. A fixed, seeded random matrix
+# per dimensionality means similar 512-d embeddings map to similar 2D angles,
+# so Poincaré placement reflects the WHOLE semantic vector (not just dims 0..1).
+_PROJ_CACHE: dict[int, "np.ndarray"] = {}
+
+
+def _proj_matrix(d: int) -> "np.ndarray":
+    P = _PROJ_CACHE.get(d)
+    if P is None:
+        P = np.random.default_rng(42).standard_normal((d, 2))
+        _PROJ_CACHE[d] = P
+    return P
+
+
+def _project_2d(vec: list[float]) -> "np.ndarray":
+    """Project an arbitrary-length vector to 2D via a fixed seeded matrix.
+
+    Deterministic: same input -> same 2D point -> same Poincaré angle. For
+    vectors shorter than 2 dims, pad with zeros and return as-is (length 2)."""
+    v = np.asarray(vec, dtype=float).reshape(-1)
+    if v.shape[0] < 2:
+        out = np.zeros(2, dtype=float)
+        out[: v.shape[0]] = v
+        return out
+    return v @ _proj_matrix(v.shape[0])
+
+
+def _coerce_mfcc(mfcc, n: int = 20) -> list[float]:
+    """Coerce an mfcc value to a fixed-length-`n` float list (pad/truncate).
+
+    Guards against None or wrong-length mfcc so the constellation spectrum is
+    always `n` plain floats and ``np.mean`` never builds a ragged object array."""
+    if not mfcc:
+        return [0.0] * n
+    out = [0.0] * n
+    for i, x in enumerate(mfcc[:n]):
+        try:
+            out[i] = float(x)
+        except (TypeError, ValueError):
+            out[i] = 0.0
+    return out
+
+
+def _group_anchor_vec(members: list[dict]) -> "np.ndarray":
+    embs = [_project_2d(m["clap_embedding"]) for m in members if m.get("clap_embedding")]
+    if not embs:
+        return np.array([0.0, 0.0])
+    return np.mean(np.array(embs), axis=0)
+
+
+def build_cgp_v2(groups: list[dict], fingerprints: dict[str, dict], coherence: float = 0.5) -> dict:
+    """Assemble a single signed CGP v2 packet across all groups.
+
+    Each track is a point (modality 'audio'); each group is a constellation +
+    a Poincaré hierarchy node; attribution is Dirichlet-weighted by track count.
+    """
+    super_constellations = []
+    hb_groups: dict[str, np.ndarray] = {}
+    hb_members: dict[str, dict[str, np.ndarray]] = {}
+    raw_contrib: dict[str, float] = {}
+
+    for g in groups:
+        gname = g["group"]
+        members = [fingerprints[n] for n in g["tracks"] if n in fingerprints]
+        if not members:
+            continue
+        gid = _stable_id(gname)
+        hb_groups[gid] = _group_anchor_vec(members)
+        hb_members[gid] = {}
+        raw_contrib[gid] = float(len(members))
+
+        points = []
+        for i, rec in enumerate(members):
+            sv = track_to_state_vector(rec)
+            tid = _stable_id(rec.get("name", f"track_{i}"))
+            emb = rec.get("clap_embedding")
+            hb_members[gid][tid] = _project_2d(emb) if emb else np.array([0.0, 0.0])
+            points.append({
+                "id": tid,
+                "label": rec.get("name", f"track_{i}"),
+                "modality": "audio",
+                # Schema requires point.proj to be a scalar number; the RGB-style
+                # projection triple lives in meta.proj_rgb for downstream rendering.
+                "proj": sv["Hz"],
+                "conf": sv["A"],
+                "summary": rec.get("name", ""),
+                "meta": {"grounding": rec.get("grounding", "full"),
+                         "duration_s": rec.get("duration_s", 0),
+                         "proj_rgb": [sv["Hz"], sv["delta"], abs(sv["kappa"])],
+                         "fingerprint_hash": fingerprint_hash(rec)},
+            })
+        anchor = _group_anchor_vec(members).tolist()
+        super_constellations.append({
+            "id": gid,
+            "summary": gname,
+            "anchor": anchor if anchor else [0.0, 0.0],
+            "spectrum": list(np.mean(
+                np.array([_coerce_mfcc(m.get("mfcc")) for m in members]), axis=0)),
+            "points": points,
+        })
+
+    # NOTE: created_at is intentionally OMITTED from the signed body. A volatile
+    # timestamp inside the HMAC scope would make the same audio sign differently
+    # every run (spec §7 wants reproducible sigs). Provenance lives in `meta`
+    # instead, and `meta.signed` is deterministic so it is safe to sign.
+    cgp = {
+        "spec": "chit.cgp.v0.2",
+        "summary": "DARKXSIDE beats grounding (WS-A)",
+        "meta": {"source": "cipher_beats_analyst", "coherence": round(coherence, 4),
+                 "clap_model": os.environ.get("CLAP_MODEL_ID", "laion/larger_clap_music")},
+        "hyperbolic": build_hyperbolic_block(hb_groups, hb_members),
+        "attribution": build_attribution(raw_contrib),
+        "super_nodes": [{
+            "id": _stable_id("sn_beats"),
+            "label": "Beats Grounding",
+            "constellations": super_constellations,
+        }],
+    }
+
+    # Graceful signing: sign_cgp raises RuntimeError if no CHIT key env is set.
+    # Emit an UNSIGNED but schema-valid packet (sig is optional) rather than crash.
+    # meta.signed is set BEFORE signing so it is covered by the HMAC and the
+    # signature both reproduces (no timestamps) and verifies (verify_cgp signs
+    # everything except `sig`).
+    try:
+        cgp["meta"]["signed"] = True
+        cgp = sign_cgp(cgp, passphrase=os.environ.get("CHIT_PASSPHRASE"))
+    except Exception as e:  # no signing key, or signing backend unavailable
+        console.print(f"  [yellow]CGP signing skipped (unsigned packet):[/] {e}")
+        cgp["meta"]["signed"] = False
+    return cgp
+
+
+def select_builder(v2: bool = True):
+    """Return a (groups, fingerprints, coherence) -> cgp callable.
+
+    v2  -> build_cgp_v2 (whole-packet, signed). Legacy -> per-group group_to_cgp,
+    wrapped so the signature matches.
+    """
+    if v2:
+        return build_cgp_v2
+    def _legacy(groups, fps, coherence=0.5):
+        built = [group_to_cgp(g, fps, coherence) for g in groups]
+        return {"spec": "chit.cgp.v0.2", "super_nodes":
+                [c["super_nodes"][0] for c in built if c]}
+    return _legacy
+
+
 # ── NATS publish ───────────────────────────────────────────────────────────────
 
 async def publish_cgp(cgp: dict, nats_url: str):
@@ -212,9 +383,10 @@ async def publish_cgp(cgp: dict, nats_url: str):
         import nats as natspy
         nc = await natspy.connect(nats_url)
         await nc.publish(SUBJECT_CGP, json.dumps(cgp).encode())
-        # Also publish the control-plane knob update
-        ctrl = {"group": cgp["label"], "control_plane": cgp.get("control_plane", {})}
-        await nc.publish(SUBJECT_CTRL, json.dumps(ctrl).encode())
+        # Also publish the control-plane knob update (v1 packets only; v2 has no control_plane)
+        if "control_plane" in cgp:
+            ctrl = {"group": cgp.get("label", ""), "control_plane": cgp.get("control_plane", {})}
+            await nc.publish(SUBJECT_CTRL, json.dumps(ctrl).encode())
         await nc.drain()
     except Exception as e:
         console.print(f"  [yellow]NATS publish skipped:[/] {e}")
@@ -253,6 +425,7 @@ def render(
     nats:        str  = typer.Option(DEFAULT_NATS,   "--nats",         help="NATS URL"),
     group:       Optional[str] = typer.Option(None,  "--group",        help="Render only this group name"),
     coherence:   float = typer.Option(0.5,           "--coherence",    help="Silhouette score to embed as swarm fitness F"),
+    v2:          bool  = typer.Option(True, "--v2/--no-v2", help="Emit CGP v2 (hyperbolic+attribution+sig)"),
 ):
     """[bold cyan]Publish sonic group constellations to Hyperdimensions via NATS.[/bold cyan]"""
     groups = load_summary(summary)
@@ -263,6 +436,18 @@ def render(
         if not groups:
             console.print(f"[red]Group '{group}' not found.[/]")
             raise typer.Exit(1)
+
+    if v2:
+        cgp = select_builder(v2=True)(groups, fps, coherence=coherence)
+
+        async def _publish_one():
+            await publish_cgp(cgp, nats)
+            console.print(f"  [green]→[/] Published CGP v2 packet "
+                          f"({len(groups)} groups) to [bold]{SUBJECT_CGP}[/]")
+
+        asyncio.run(_publish_one())
+        console.print(f"\n[bold green]✓ Done.[/] Open Hyperdimensions to see the constellations.")
+        return
 
     table = Table("Group", "Tracks", "delta", "Hz", "kappa", "A", title="CGP State Vectors")
 
@@ -291,6 +476,7 @@ def dump(
     group:        str  = typer.Option(...,              "--group", help="Group name to dump"),
     coherence:    float = typer.Option(0.5,             "--coherence"),
     output:       Optional[str] = typer.Option(None,   "--output", "-o", help="Write JSON to file"),
+    v2:           bool  = typer.Option(True, "--v2/--no-v2", help="Emit CGP v2 (hyperbolic+attribution+sig)"),
 ):
     """[bold]Dump CGP JSON for a group without publishing (inspect mode).[/bold]"""
     groups = load_summary(summary)
@@ -300,7 +486,10 @@ def dump(
         console.print(f"[red]Group '{group}' not found. Available: {[g['group'] for g in groups]}[/]")
         raise typer.Exit(1)
 
-    cgp = group_to_cgp(match, fps, coherence=coherence)
+    if v2:
+        cgp = select_builder(v2=True)([match], fps, coherence=coherence)
+    else:
+        cgp = group_to_cgp(match, fps, coherence=coherence)
     out = json.dumps(cgp, indent=2)
 
     if output:
