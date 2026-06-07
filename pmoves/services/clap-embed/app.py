@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import io
 import logging
+from urllib.parse import urlsplit, urlunsplit
 
 import librosa
 import numpy as np
@@ -15,6 +16,25 @@ from config import Config
 from embedder import ClapHFModel, Embedder
 
 logger = logging.getLogger("clap-embed")
+
+
+def _redact_url(url: str | None) -> str:
+    """Strip userinfo (user:pass@) from a URL so it is safe to log.
+
+    NATS URLs frequently embed credentials (nats://user:pass@host:4222); logging
+    them raw would leak secrets into observability pipelines.
+    """
+    if not url:
+        return "<unset>"
+    try:
+        p = urlsplit(url)
+        if p.username or p.password:
+            netloc = (p.hostname or "") + (f":{p.port}" if p.port else "")
+            return urlunsplit((p.scheme, netloc, p.path, p.query, p.fragment))
+    except Exception:
+        return "<redacted>"
+    return url
+
 
 REQUESTS = Counter("clap_embed_requests_total", "Total requests", ["endpoint"])
 LATENCY = Histogram("clap_embed_seconds", "Embed latency seconds", ["endpoint"])
@@ -91,14 +111,15 @@ def create_app() -> FastAPI:
         try:
             from nats_responder import run_responder
             app.state.nats_conn = await run_responder(get_embedder())
-        except Exception:
+        except Exception as exc:
             # HTTP endpoints still serve, but the advertised NATS path is dead —
-            # log it so the silent degradation is debuggable.
+            # log it so the silent degradation is debuggable. Redact the URL and
+            # avoid exc_info: NATS URLs/exceptions can echo embedded credentials.
             logger.warning(
-                "clap-embed NATS responder failed to start (NATS_URL=%s); "
+                "clap-embed NATS responder failed to start (NATS_URL=%s): %s; "
                 "HTTP endpoints remain available, NATS embed path disabled",
-                Config.NATS_URL,
-                exc_info=True,
+                _redact_url(Config.NATS_URL),
+                type(exc).__name__,
             )
             app.state.nats_conn = None
 
