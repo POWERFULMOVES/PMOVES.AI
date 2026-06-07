@@ -102,7 +102,9 @@ jobs:
           ERRORS=0
           RESULTS=""
 
-          SYNC_BRANCH="sync/upstream-$(date +%Y-%m-%d)"
+          # Run-id suffix keeps each run's branch unique (avoids colliding with
+          # leftover sync/* branches from earlier runs).
+          SYNC_BRANCH="sync/upstream-$(date +%Y-%m-%d)-${GITHUB_RUN_ID}"
 
           # Fork list: upstream_owner/upstream_repo|fork_name|fork_branch_override
           FORKS="
@@ -165,38 +167,46 @@ jobs:
               continue
             fi
 
-            # Get SHA — GitHub's get-a-reference endpoint takes the ref WITHOUT
-            # the leading refs/ (heads/<branch>, not refs/heads/<branch>). The
-            # doubled form 404s, and --jq then yields the literal "null", which
-            # slips past the -z check and fails create-ref with sha=null.
-            sha=$(gh api "repos/POWERFULMOVES/$fork/git/ref/heads/$fb" --jq '.object.sha' 2>/dev/null)
-            { [ -z "$sha" ] || [ "$sha" = "null" ]; } && { echo "  FAIL: cannot resolve SHA"; continue; }
-
-            # Create branch
-            gh api -X POST "repos/POWERFULMOVES/$fork/git/refs" -f "ref=refs/heads/$SYNC_BRANCH" -f "sha=$sha" > /dev/null 2>&1
-            if [ $? -ne 0 ]; then echo "  FAIL: branch creation"; continue; fi
-            echo "  Branch $SYNC_BRANCH created"
-
-            # Merge upstream
-            merge=$(gh api -X POST "repos/POWERFULMOVES/$fork/merges" -f "base=$SYNC_BRANCH" -f "head=$uo:$ub" 2>&1)
-            if echo "$merge" | grep -qi 'conflict'; then
-              echo "  CONFLICT: cleaning up branch"
-              gh api -X DELETE "repos/POWERFULMOVES/$fork/git/refs/heads/$SYNC_BRANCH" > /dev/null 2>&1
-              continue
+            # --- Local-git merge. The REST /merges API cannot merge a cross-repo
+            # head (owner:branch -> "Head does not exist"), so do the merge in the
+            # runner: clone the fork, pull upstream, merge, push the sync branch,
+            # open a PR. Blobless clone keeps big forks light; a conflicting merge
+            # aborts and skips (those forks get a manual merge). See
+            # pmoves/docs/operations/GITHUB_APP.md.
+            work=$(mktemp -d)
+            d="$work/$fork"
+            if ! git clone --quiet --filter=blob:none --no-tags \
+                "https://x-access-token:${GH_TOKEN}@github.com/POWERFULMOVES/$fork.git" "$d"; then
+              echo "  FAIL: clone"; find "$work" -delete 2>/dev/null; continue
             fi
-            if echo "$merge" | grep -qi 'error\|405\|409'; then
-              echo "  FAIL: $(echo "$merge" | head -1)"
-              gh api -X DELETE "repos/POWERFULMOVES/$fork/git/refs/heads/$SYNC_BRANCH" > /dev/null 2>&1
-              continue
+            git -C "$d" config user.name "pmoves-fork-sync[bot]"
+            git -C "$d" config user.email "pmoves-fork-sync[bot]@users.noreply.github.com"
+            git -C "$d" remote add upstream "https://github.com/$upstream.git"
+            if ! git -C "$d" fetch --quiet --filter=blob:none --no-tags upstream "$ub"; then
+              echo "  FAIL: fetch upstream"; find "$work" -delete 2>/dev/null; continue
             fi
-            echo "  Merge commit created"
+            if ! git -C "$d" checkout --quiet -B "$SYNC_BRANCH" "origin/$fb"; then
+              echo "  FAIL: checkout $fb"; find "$work" -delete 2>/dev/null; continue
+            fi
+            git -C "$d" merge --no-edit "upstream/$ub"
+            if [ $? -ne 0 ]; then
+              echo "  CONFLICT: $bh behind / $ah ahead — needs manual merge, skipping"
+              git -C "$d" merge --abort 2>/dev/null
+              find "$work" -delete 2>/dev/null; continue
+            fi
+            # Push needs the App's Workflows:write when the merge touches
+            # .github/workflows/ (fork-sync's token has full app perms on these repos).
+            if ! git -C "$d" push --quiet origin "$SYNC_BRANCH"; then
+              echo "  FAIL: push (workflow scope / large repo / protected branch?)"
+              find "$work" -delete 2>/dev/null; continue
+            fi
+            find "$work" -delete 2>/dev/null
+            echo "  Merged upstream into $SYNC_BRANCH"
 
-            # Create PR
-            # NOTE: build the body with printf so every line stays inside this
-            # YAML block scalar's indentation. Zero-indent body lines terminate
-            # the block scalar and make the whole workflow file unparseable
-            # (which silently fails every push as a path-named, 0-job run).
-            pr_body=$(printf '## Upstream Sync\n\n- **Upstream**: %s (%s)\n- **Behind**: %s commits\n- **Ahead**: %s commits (PMOVES customizations)\n- **Branch**: %s → %s\n\nReview the diff to confirm PMOVES customizations are preserved.\n\n---\n*Automated by fork-sync workflow*' "$upstream" "$ub" "$bh" "$ah" "$fb" "$SYNC_BRANCH")
+            # Create PR (same-repo: head is just the branch name).
+            # Build the body with printf so every line stays inside this YAML
+            # block scalar's indentation (a zero-indent line would terminate it).
+            pr_body=$(printf '## Upstream Sync\n\n- **Upstream**: %s (%s)\n- **Behind**: %s commits\n- **Ahead**: %s commits (PMOVES customizations)\n- **Branch**: %s -> %s\n\nMerged locally in the runner (blobless clone). Review the diff to confirm PMOVES customizations are preserved.\n\n---\n*Automated by fork-sync workflow*' "$upstream" "$ub" "$bh" "$ah" "$fb" "$SYNC_BRANCH")
             pr=$(gh api -X POST "repos/POWERFULMOVES/$fork/pulls" \
               -f "title=chore: sync upstream ($bh commits behind)" \
               -f "head=$SYNC_BRANCH" \
