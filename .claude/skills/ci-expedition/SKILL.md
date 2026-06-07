@@ -26,8 +26,8 @@ gh run view "$RUN" --json jobs --jq '.jobs[]|select(.name=="Build archon")|.step
 
 | Signature | Cause | Fix |
 |---|---|---|
-| `startup_failure`, **0 jobs**, run shown by file **path** not workflow `name:` | workflow **uncompilable on default branch** (GitHub uses default-branch file for `issue_comment`/`pull_request_review`/push) | Validate YAML: `gh api repos/{o}/{r}/contents/.github/workflows/X.yml?ref=main --jq .content \| base64 -d \| python -c "import yaml,sys;yaml.safe_load(sys.stdin)"`. Common: a `run: \|` block scalar broken by a **zero-indent** PR-body line (build the body with `printf`), or committed `<<<<<<<` conflict markers. |
-| `startup_failure` but **YAML valid AND action SHAs resolve** | **repo Actions allowlist** blocks an action (generic "workflow file issue" message) | `gh api repos/{o}/{r}/actions/permissions/selected-actions`. If `allowed_actions:selected` and the action isn't in `patterns_allowed` → add `vendor/action@*` (PUT the **full** list, replace-not-append, keep `github_owned_allowed`). Tell: job **skips** when its `if:` is false but **startup-fails** when `if:` is true. |
+| `startup_failure`, **0 jobs**, run shown by file **path** not workflow `name:` | workflow **uncompilable on default branch** (GitHub uses default-branch file for `issue_comment`/`pull_request_review`/push) | Validate YAML: `gh api repos/{owner}/{repo}/contents/.github/workflows/X.yml?ref=main --jq .content \| base64 -d \| python -c "import yaml,sys;yaml.safe_load(sys.stdin)"`. Common: a `run: \|` block scalar broken by a **zero-indent** PR-body line (build the body with `printf`), or committed `<<<<<<<` conflict markers. |
+| `startup_failure` but **YAML valid AND action SHAs resolve** | **repo Actions allowlist** blocks an action (generic "workflow file issue" message) | `gh api repos/{owner}/{repo}/actions/permissions/selected-actions`. If `allowed_actions:selected` and the action isn't in `patterns_allowed` → add `vendor/action@*` (PUT the **full** list, replace-not-append, keep `github_owned_allowed`). Tell: job **skips** when its `if:` is false but **startup-fails** when `if:` is true. |
 | Trivy step **`cancelled`** (build+push succeeded) | concurrency cancel (two runs same `ref` in group `workflow-${ref}`) or runner shutdown | Don't chase it. `workflow_dispatch` is **exempt** from `cancel-in-progress` — trigger a manual dispatch for a stable verification run. Cancel redundant dupes. |
 | Trivy **`failure`** + `FATAL ... no space left on device` (DB download) | **runner disk-full**, NOT a CVE | Workflow side: `docker image prune -af` + drop stale `.cache/trivy/db` + sweep `/tmp/{stereoscope,sbom-action,trivy}-*` before Trivy (#1728). Host side: see "Runner hygiene". **NEVER `docker volume prune`** (co-hosts fleet data volumes — `make -C pmoves volume-reset SERVICE=<name>`). |
 | Trivy **`failure`** + real `Total: N (HIGH/CRITICAL)` table | **genuine CVEs** (gate has `ignore-unfixed:true`, so only fixable ones block) | Read the table (below). Bump deps in the fork → bump gitlink → re-run. For a Go-stdlib CVE in a prebuilt binary (esbuild etc.): verify the **embedded Go version** first — a bump only helps if upstream rebuilt with patched Go; else prune the build-only tool from the runtime image. |
@@ -38,14 +38,15 @@ gh run view "$RUN" --json jobs --jq '.jobs[]|select(.name=="Build archon")|.step
 
 ```bash
 JID=$(gh run view "$RUN" --json jobs --jq '.jobs[]|select(.name=="Build archon")|.databaseId')
-gh api "repos/{o}/{r}/actions/jobs/$JID/logs" | sed -E 's/\x1b\[[0-9;]*m//g' > /tmp/job.txt
+gh api "repos/{owner}/{repo}/actions/jobs/$JID/logs" | sed -E 's/\x1b\[[0-9;]*m//g' > /tmp/job.txt
 grep -n "Total: [0-9]" /tmp/job.txt        # find the gating count
 # the table after it: │ Library │ Vulnerability │ Severity │ Status │ Installed │ Fixed │
 ```
 
 Verify an embedded Go version in a flagged binary (no `go` needed):
 ```bash
-python -c "import re;print(sorted(set(re.findall(rb'go1\.\d+(?:\.\d+)?',open(BIN,'rb').read()))))"
+BIN=path/to/binary   # e.g. /app/node_modules/@esbuild/linux-x64/bin/esbuild
+python -c "import re,sys;print(sorted(set(re.findall(rb'go1\.\d+(?:\.\d+)?',open(sys.argv[1],'rb').read()))))" "$BIN"
 # CVE-2026-42504 fixed in go1.25.11/1.26.4 — a binary on go1.26.1 is STILL vulnerable.
 ```
 
