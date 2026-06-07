@@ -14,6 +14,14 @@ on:
         required: false
         type: boolean
         default: true
+      ahead_max:
+        description: 'Skip (label MANUAL) forks with more than this many PMOVES-ahead commits — too much hardening to auto-merge safely. 0 = no limit.'
+        required: false
+        default: '20'
+      behind_max:
+        description: 'Skip (label MANUAL) forks more than this many commits behind upstream — giant diverged clones that conflict + waste runner time. 0 = no limit.'
+        required: false
+        default: '1000'
 
 permissions:
   contents: write
@@ -89,6 +97,8 @@ jobs:
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           MAX_FORKS: ${{ inputs.max_forks || '3' }}
+          AHEAD_MAX: ${{ inputs.ahead_max || '20' }}
+          BEHIND_MAX: ${{ inputs.behind_max || '1000' }}
         run: |
           # GitHub runs `run:` steps under `bash -e` (errexit). This loop is
           # best-effort and relies on `cmd; if [ $? -ne 0 ]` and
@@ -157,6 +167,19 @@ jobs:
             ah=$(gh api "repos/$upstream/compare/$ub...POWERFULMOVES:$fork:$fb" --jq '.ahead_by' 2>/dev/null)
             [ -z "$bh" ] && { echo "SKIP $fork: compare failed"; continue; }
             [ "$bh" -lt 1 ] 2>/dev/null && { echo "SKIP $fork: synced ($bh behind)"; continue; }
+
+            # CRITICAL guard: forks with too much hardening (ahead) or too far
+            # diverged (behind) reliably conflict AND are expensive to clone, so
+            # don't grind them every run — flag for a human manual merge. Set the
+            # ahead_max / behind_max inputs to 0 to disable, or raise to force-attempt.
+            if { [ "$AHEAD_MAX" -gt 0 ] && [ "$ah" -gt "$AHEAD_MAX" ]; } 2>/dev/null; then
+              echo "MANUAL $fork: $bh behind, $ah ahead (ahead > $AHEAD_MAX) — manual merge"
+              continue
+            fi
+            if { [ "$BEHIND_MAX" -gt 0 ] && [ "$bh" -gt "$BEHIND_MAX" ]; } 2>/dev/null; then
+              echo "MANUAL $fork: $bh behind, $ah ahead (behind > $BEHIND_MAX) — manual merge"
+              continue
+            fi
 
             echo "SYNC $fork: $bh behind, $ah ahead"
 
