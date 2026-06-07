@@ -2,7 +2,7 @@ import io
 import wave
 import numpy as np
 from fastapi.testclient import TestClient
-from app import create_app, get_embedder
+from app import create_app, get_embedder, _redact_url
 
 
 class _FakeEmbedder:
@@ -51,3 +51,16 @@ def test_metrics_exposed():
     c.get("/healthz")
     r = c.get("/metrics")
     assert r.status_code == 200 and b"clap_embed_requests_total" in r.content
+
+
+def test_redact_url_strips_credentials():
+    # credentials must never survive into a log line
+    out = _redact_url("nats://user:s3cr3t@nats.internal:4222")
+    assert "s3cr3t" not in out and "user" not in out
+    assert "nats.internal:4222" in out
+
+
+def test_redact_url_passthrough_and_unset():
+    assert _redact_url("nats://nats:4222") == "nats://nats:4222"
+    assert _redact_url(None) == "<unset>"
+    assert _redact_url("") == "<unset>"
