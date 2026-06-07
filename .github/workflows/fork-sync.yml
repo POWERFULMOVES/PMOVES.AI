@@ -134,9 +134,12 @@ jobs:
               continue
             fi
 
-            # Get SHA
-            sha=$(gh api "repos/POWERFULMOVES/$fork/git/ref/refs/heads/$fb" --jq '.object.sha' 2>/dev/null)
-            [ -z "$sha" ] && { echo "  FAIL: cannot resolve SHA"; continue; }
+            # Get SHA — GitHub's get-a-reference endpoint takes the ref WITHOUT
+            # the leading refs/ (heads/<branch>, not refs/heads/<branch>). The
+            # doubled form 404s, and --jq then yields the literal "null", which
+            # slips past the -z check and fails create-ref with sha=null.
+            sha=$(gh api "repos/POWERFULMOVES/$fork/git/ref/heads/$fb" --jq '.object.sha' 2>/dev/null)
+            { [ -z "$sha" ] || [ "$sha" = "null" ]; } && { echo "  FAIL: cannot resolve SHA"; continue; }
 
             # Create branch
             gh api -X POST "repos/POWERFULMOVES/$fork/git/refs" -f "ref=refs/heads/$SYNC_BRANCH" -f "sha=$sha" > /dev/null 2>&1
