@@ -31,9 +31,36 @@ jobs:
           app-id: ${{ secrets.GH_APP_ID }}
           private-key: ${{ secrets.GH_APP_SEC }}
           # Without owner, the minted token is scoped to THIS repo only, so
-          # branch creation / merges on the fork repos 403. owner mints an
-          # installation-wide token covering every repo the app is installed on.
+          # branch creation / merges on the fork repos 403. owner + repositories
+          # mints a token scoped to EXACTLY the forks this workflow syncs
+          # (least privilege — not every repo the app is installed on). Keep this
+          # list in sync with the FORKS string in the "Sync forks" step below.
           owner: ${{ github.repository_owner }}
+          repositories: |
+            PMOVES-ClawZ
+            PMOVES-Creator
+            PMOVES-supabase
+            PMOVES-tensorzero
+            PMOVES-Wealth
+            PMOVES-a0-plugins
+            PMOVES-Archon
+            PMOVES-Open-Notebook
+            PMOVES-hermes-agent
+            PMOVES-headscale
+            PMOVES-E2B-Danger-Room
+            PMOVES-A2UI
+            Pmoves-Health-wger
+            PMOVES-E2b-Spells
+            PMOVES-E2B-Danger-Room-Desktop
+            PMOVES-FinceptTerminal
+            PMOVES-Agent-Zero
+            PMOVES-BotZ-gateway
+            Pmoves-hyperdimensions
+            PMOVES-llama-throughput-lab
+            PMOVES-Pinokio-Ultimate-TTS-Studio
+            pmoves-e2b-mcp-server
+            PMOVES-ClawRouter
+            PMOVES-AgentGym
 
       - name: Discover forks
         env:
