@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import io
+import logging
 
 import librosa
 import numpy as np
@@ -12,6 +13,8 @@ from pydantic import BaseModel
 
 from config import Config
 from embedder import ClapHFModel, Embedder
+
+logger = logging.getLogger("clap-embed")
 
 REQUESTS = Counter("clap_embed_requests_total", "Total requests", ["endpoint"])
 LATENCY = Histogram("clap_embed_seconds", "Embed latency seconds", ["endpoint"])
@@ -89,7 +92,15 @@ def create_app() -> FastAPI:
             from nats_responder import run_responder
             app.state.nats_conn = await run_responder(get_embedder())
         except Exception:
-            app.state.nats_conn = None  # HTTP endpoints still serve
+            # HTTP endpoints still serve, but the advertised NATS path is dead —
+            # log it so the silent degradation is debuggable.
+            logger.warning(
+                "clap-embed NATS responder failed to start (NATS_URL=%s); "
+                "HTTP endpoints remain available, NATS embed path disabled",
+                Config.NATS_URL,
+                exc_info=True,
+            )
+            app.state.nats_conn = None
 
     @app.on_event("shutdown")
     async def _stop_nats():
