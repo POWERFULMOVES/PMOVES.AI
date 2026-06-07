@@ -1,0 +1,97 @@
+name: _app-token
+
+# Reusable workflow — single source of truth for minting a PMOVES.AI GitHub App
+# installation token. Any workflow needing cross-repo / privileged GitHub access
+# should call THIS instead of re-implementing actions/create-github-app-token
+# (which is how SHA-pinning + token-scoping bugs got reintroduced 8 different
+# ways across the fleet). See .claude/context/github-app.md.
+#
+# Best practice baked in here:
+#   - SHA-pinned action (one place to bump)
+#   - owner + repositories  => least-privilege, named-repo scope
+#   - minimal permission-*  => caller opts into only what it needs
+#
+# Usage (caller):
+#   jobs:
+#     token:
+#       uses: ./.github/workflows/_app-token.yml
+#       secrets: inherit
+#       with:
+#         repositories: |
+#           PMOVES-Archon
+#           PMOVES-Open-Notebook
+#         permission-contents: write
+#         permission-pull-requests: write
+#     work:
+#       needs: token
+#       runs-on: ubuntu-latest
+#       steps:
+#         - env:
+#             GH_TOKEN: ${{ needs.token.outputs.token }}
+#           run: gh api ...
+
+on:
+  workflow_call:
+    inputs:
+      owner:
+        description: Installation owner (default = this repo's owner).
+        required: false
+        type: string
+        default: ${{ github.repository_owner }}
+      repositories:
+        description: >
+          Newline-separated repo names to scope the token to. Empty = current
+          repo only. For cross-repo writes, list the EXACT repos — never leave
+          empty with the intent of "all repos" (that is the over-broad footgun).
+        required: false
+        type: string
+        default: ""
+      permission-contents:
+        description: 'read | write (omit for none)'
+        required: false
+        type: string
+        default: ""
+      permission-pull-requests:
+        description: 'read | write (omit for none)'
+        required: false
+        type: string
+        default: ""
+      permission-workflows:
+        description: 'write — ONLY needed when pushing changes under .github/workflows/'
+        required: false
+        type: string
+        default: ""
+      permission-packages:
+        description: 'read | write (omit for none)'
+        required: false
+        type: string
+        default: ""
+    outputs:
+      token:
+        description: Short-lived (<=1h) installation token, auto-revoked at job end.
+        value: ${{ jobs.mint.outputs.token }}
+    secrets:
+      GH_APP_CLIENT_ID:
+        required: true
+      GH_APP_SEC:
+        required: true
+
+permissions: {}
+
+jobs:
+  mint:
+    runs-on: ubuntu-latest
+    outputs:
+      token: ${{ steps.mint.outputs.token }}
+    steps:
+      - uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3
+        id: mint
+        with:
+          client-id: ${{ secrets.GH_APP_CLIENT_ID }}
+          private-key: ${{ secrets.GH_APP_SEC }}
+          owner: ${{ inputs.owner }}
+          repositories: ${{ inputs.repositories }}
+          permission-contents: ${{ inputs.permission-contents }}
+          permission-pull-requests: ${{ inputs.permission-pull-requests }}
+          permission-workflows: ${{ inputs.permission-workflows }}
+          permission-packages: ${{ inputs.permission-packages }}
