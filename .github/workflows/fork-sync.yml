@@ -30,6 +30,10 @@ jobs:
         with:
           app-id: ${{ secrets.GH_APP_ID }}
           private-key: ${{ secrets.GH_APP_SEC }}
+          # Without owner, the minted token is scoped to THIS repo only, so
+          # branch creation / merges on the fork repos 403. owner mints an
+          # installation-wide token covering every repo the app is installed on.
+          owner: ${{ github.repository_owner }}
 
       - name: Discover forks
         env:
