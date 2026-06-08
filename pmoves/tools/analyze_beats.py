@@ -95,7 +95,7 @@ def librosa_features_from_array(y: "np.ndarray", sr: int) -> dict:
     duration = max(len(y) / sr, 1e-6)
     centroid = float(librosa.feature.spectral_centroid(y=y, sr=sr).mean())
     flatness = float(librosa.feature.spectral_flatness(y=y).mean())
-    return {
+    feat = {
         "tempo_bpm": round(float(np.asarray(tempo).item()), 4),
         "chroma": [round(float(v), 6) for v in chroma],
         "mfcc": [round(float(v), 6) for v in mfcc],
@@ -105,6 +105,14 @@ def librosa_features_from_array(y: "np.ndarray", sr: int) -> dict:
         "spectral_centroid": round(centroid, 4),
         "spectral_flatness": round(flatness, 6),
     }
+    # Cymatic grounding: deterministic "sound -> geometry" features
+    # (harmonicity/symmetry + named-frequency detection). See cymatic.py.
+    try:
+        from pmoves.tools.cymatic import cymatic_features
+        feat["cymatic"] = cymatic_features(y, sr)
+    except Exception:
+        feat["cymatic"] = {}
+    return feat
 
 
 def librosa_features(path: "Path") -> dict:
