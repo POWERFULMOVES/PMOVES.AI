@@ -153,12 +153,22 @@ jobs:
               break
             fi
 
-            # Resolve branches
+            # Resolve the fork branch to sync. Precedence:
+            #   1. explicit branch_override (3rd FORKS column)
+            #   2. the branch THIS fork's PMOVES.AI gitlink tracks, from .gitmodules
+            #      — this is the consumable line (usually PMOVES.AI-Edition-Hardened);
+            #      syncing the default branch instead leaves the gitlink un-advanceable.
+            #   3. the fork's default branch
             if [ -n "$branch_override" ]; then
               fb="$branch_override"
             else
-              fb=$(gh api "repos/POWERFULMOVES/$fork" --jq '.default_branch' 2>/dev/null) || { echo "SKIP $fork: no default branch"; continue; }
+              gm="$GITHUB_WORKSPACE/.gitmodules"
+              subpath=$(git config -f "$gm" --get-regexp '\.url$' 2>/dev/null | awk -v f="$fork" '$2 ~ ("/" f "(\\.git)?$") {sub(/\.url$/,"",$1); sub(/^submodule\./,"",$1); print $1; exit}')
+              fb=""
+              [ -n "$subpath" ] && fb=$(git config -f "$gm" --get "submodule.$subpath.branch" 2>/dev/null)
+              [ -z "$fb" ] && { fb=$(gh api "repos/POWERFULMOVES/$fork" --jq '.default_branch' 2>/dev/null) || { echo "SKIP $fork: no default branch"; continue; }; }
             fi
+            echo "  syncing fork branch: $fb"
             ub=$(gh api "repos/$upstream" --jq '.default_branch' 2>/dev/null) || { echo "SKIP $fork: no upstream branch"; continue; }
             uo=$(echo "$upstream" | cut -d/ -f1)
 
