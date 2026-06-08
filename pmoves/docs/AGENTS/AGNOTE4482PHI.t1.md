@@ -253,7 +253,9 @@ Required handoff fields:
 
   ## Phase 4: DARKXSIDE Triad Integration ✅
 
-  ### DARKXSIDE Signature Update
+  - `2026-06-04T17:00:00-04:00` CLAIM `HERMES-AGENT` scope: NousResearch Hermes Agent integration into PMOVES.AI -- HERMES config first, fleet profiles second, Ageless Beauty third. Primary: elder-melchor.yaml + node-hermes-agent.tac.yaml + registry/signature updates + operator skills. Fleet profiles (8 nodes) are DRAFTS pending real context from SPARK/B850. Ageless Beauty practice deferred until HERMES is fully configured. Website migration from current host to Hostinger REQUIRES separate research. Owner: elder-melchor. Stage: rehearsal -> review. Dependencies: (1) HERMES config files reviewed by Z890-Claude, (2) SPARK/B850 context gathering for profile verification, (3) NATS bridge soak, (4) CHIT signing, (5) gateway health validation.
+
+### DARKXSIDE Signature Update
   - **Deliverable:** MiniMax added as tactical partner in DARKXSIDE resonance domains
   - `pmoves/config/agent_signatures.yaml` updated:
     - `darkxside.resonance` expanded with `minimax-tandem`, `tactical-partnership`

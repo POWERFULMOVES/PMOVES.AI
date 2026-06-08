@@ -47,6 +47,8 @@ Agent has no HTTP interface; Cipher Memory exposes `/health`, not `/healthz`).
 
 **Open Notebook** (external, SurrealDB) — Accessed via `$OPEN_NOTEBOOK_API_URL` + token.
 
+**clap-embed** `:8108` — Deterministic CLAP audio/text embedder (MOF lattice node, `laion/larger_clap_music`). `POST /embed/audio`, `POST /embed/text`, `GET /healthz`, `GET /metrics`. Optional NATS `audio.embed.request.v1`/`audio.embed.result.v1`. WS-A grounding layer.
+
 ## Voice & Speech
 
 **Flute-Gateway** `:8055` HTTP, `:8056` WebSocket — Multimodal voice communication with Pipecat. Prosodic TTS. API: `POST /v1/voice/synthesize/prosodic`. Health: `GET /healthz`. Detail: `.claude/context/flute-gateway.md`.

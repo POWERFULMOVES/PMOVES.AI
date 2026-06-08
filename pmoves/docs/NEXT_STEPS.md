@@ -1,7 +1,10 @@
 
 # PMOVES v5 • NEXT_STEPS
 Note: Consolidated plan index at pmoves/docs/PMOVES.AI PLANS/README_DOCS_INDEX.md.
-_Last updated: 2026-05-27_
+_Last updated: 2026-06-05_
+
+## Latest changes (June 5, 2026) - Disaster-recovery targets
+- Added **RTO/RPO targets per service tier**: `pmoves/docs/operations/rto-rpo-targets.md` (closes #1428). Per-tier Recovery Time / Recovery Point objectives anchored to the real `env.tier-*` model, per-tier recovery runbooks citing `make -C pmoves backup` + `up-*` layering, split-brain notes for the NATS island/fleet + Postgres + RustDesk-relay pairs, and a backup-isolation/restore-drill checklist. State concentrates in `tier-data` + `tier-supabase`; everything else is fast rebuild.
 
 ## Latest changes (May 27, 2026) - Big Ball 5090 closeout
 - Big Ball CHIT/Tokenism hardening is merged: PR `#1633` landed the review-fix branch and PR `#1638` landed the transcribe LFS cleanup gitlink.
