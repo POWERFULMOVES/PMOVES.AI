@@ -48,7 +48,7 @@
 [submodule "PMOVES-BotZ-gateway"]
 	path = PMOVES-BotZ-gateway
 	url = https://github.com/POWERFULMOVES/PMOVES-BotZ-gateway.git
-	branch = main
+	branch = PMOVES.AI-Edition-Hardened
 
 # =============================================================================
 # Knowledge & Research Services
