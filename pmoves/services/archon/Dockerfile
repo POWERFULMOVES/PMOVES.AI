@@ -42,7 +42,8 @@ RUN apt-get update \
     && corepack enable \
     && corepack prepare yarn@stable --activate \
     && corepack prepare pnpm@latest --activate \
-    && curl -fsSL https://bun.sh/install | bash \
+    && for i in 1 2 3 4 5; do curl -fsSL https://bun.sh/install | bash && break || { echo "bun install attempt $i failed (transient bun.sh/GitHub-releases 504?), retrying in 15s..."; sleep 15; }; done \
+    && test -x /root/.bun/bin/bun \
     && rm -rf /var/lib/apt/lists/*
 ENV PATH="/root/.bun/bin:$PATH"
 
