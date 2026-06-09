@@ -58,6 +58,27 @@ def test_librosa_features_deterministic():
 from pmoves.tools.analyze_beats import cluster_on_embeddings
 
 
+def test_cluster_on_embeddings_partial_embeddings_no_nan_crash():
+    """Some records have a real 512-d embedding, others are padded/missing.
+    Padding leaves ~509 zero-variance columns -> StandardScaler /0 -> NaN ->
+    KMeans 'array contains NaN' crash. Must return finite labels instead."""
+    import math
+    # Some records have a real 512-d embedding; some are missing it and fall
+    # back to a padded acoustic vector. When an acoustic feature is itself NaN
+    # (degenerate audio upstream), the unsanitised fallback vector carries NaN
+    # into StandardScaler -> KMeans ValueError("Input X contains NaN.").
+    records = [
+        {"clap_embedding": [0.9, 0.1] + [0.0] * 510},
+        {"clap_embedding": [0.1, 0.9] + [0.0] * 510},
+        {"tempo_bpm": float("nan"), "spectral_centroid": 3000.0, "spectral_flatness": 0.2},
+        {"tempo_bpm": 120.0, "spectral_centroid": float("nan"), "spectral_flatness": 0.2},
+    ]
+    labels, sil = cluster_on_embeddings(records, n_groups=2)
+    assert len(labels) == len(records)
+    assert all(isinstance(l, int) for l in labels)
+    assert math.isfinite(sil)
+
+
 def test_cluster_on_embeddings_separates_two_blobs():
     import numpy as np
     rng = np.random.default_rng(0)

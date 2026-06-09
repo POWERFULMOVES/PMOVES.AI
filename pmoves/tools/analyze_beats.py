@@ -474,7 +474,13 @@ def cluster_on_embeddings(records: list[dict], n_groups: int) -> tuple[list[int]
                     r.get("spectral_centroid", 2000.0) / 8000.0,
                     r.get("spectral_flatness", 0.3)]
             X.append(base + [0.0] * (dim - len(base)))
-    Xs = StandardScaler().fit_transform(np.array(X))
+    # Sanitise before scaling: a padded fallback vector can carry NaN from a
+    # degenerate acoustic feature upstream, and on older sklearn a zero-variance
+    # padding column makes StandardScaler divide by zero -> NaN. Either poisons
+    # KMeans (ValueError: Input X contains NaN). Clean both sides.
+    Xarr = np.nan_to_num(np.asarray(X, dtype="float64"), nan=0.0, posinf=0.0, neginf=0.0)
+    Xs = np.nan_to_num(StandardScaler().fit_transform(Xarr),
+                       nan=0.0, posinf=0.0, neginf=0.0)
     n = max(2, min(n_groups, len(records) - 1))
     labels = KMeans(n_clusters=n, random_state=42, n_init="auto").fit_predict(Xs).tolist()
     try:
