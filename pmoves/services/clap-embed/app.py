@@ -8,6 +8,7 @@ from urllib.parse import urlsplit, urlunsplit
 import librosa
 import numpy as np
 from fastapi import Depends, FastAPI, File, HTTPException, Request, UploadFile
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import Response
 from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_latest
 from pydantic import BaseModel
@@ -84,8 +85,12 @@ def create_app() -> FastAPI:
             raw = await file.read(cap + 1)
             if len(raw) > cap:
                 raise HTTPException(status_code=413, detail="audio upload too large")
-            audio, sr = librosa.load(io.BytesIO(raw), sr=None, mono=True)
-            vec = emb.embed_audio(np.asarray(audio, dtype="float32"), int(sr))
+            # Offload blocking decode + inference so concurrent requests aren't
+            # starved on the event loop.
+            audio, sr = await run_in_threadpool(librosa.load, io.BytesIO(raw), sr=None, mono=True)
+            vec = await run_in_threadpool(
+                emb.embed_audio, np.asarray(audio, dtype="float32"), int(sr)
+            )
         return {"embedding": vec, "model_rev": Config.MODEL_REVISION, "sr": Config.SR}
 
     @app.post("/embed/text")
