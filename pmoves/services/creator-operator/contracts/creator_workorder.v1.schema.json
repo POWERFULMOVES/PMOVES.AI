@@ -1,0 +1,33 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "creator_workorder",
+  "type": "object",
+  "required": ["workorder_id", "workflow_id", "knobs", "node_caps", "license_ack"],
+  "additionalProperties": false,
+  "properties": {
+    "workorder_id": {"type": "string", "minLength": 1},
+    "workflow_id": {"type": "string", "minLength": 1},
+    "knobs": {"type": "object"},
+    "node_caps": {
+      "type": "object",
+      "required": ["min_vram_gb", "needs"],
+      "additionalProperties": false,
+      "properties": {
+        "min_vram_gb": {"type": "integer", "minimum": 0},
+        "needs": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "teach": {"type": "boolean"},
+    "creator_ref": {"type": "string"},
+    "license_ack": {
+      "type": "object",
+      "required": ["model", "mode", "ack"],
+      "additionalProperties": false,
+      "properties": {
+        "model": {"type": "string"},
+        "mode": {"type": "string"},
+        "ack": {"type": "boolean"}
+      }
+    }
+  }
+}
