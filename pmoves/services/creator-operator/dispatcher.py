@@ -1,10 +1,13 @@
 """Work-order dispatcher: validate -> route -> decide. Pure handle_workorder is
 unit-tested; run_responder wires it to NATS (live, not unit-tested)."""
 import json
+import logging
 from pathlib import Path
 from schemas import validate_workorder
 from router import route
 from config import Config
+
+log = logging.getLogger(__name__)
 
 
 def handle_workorder(workorder: dict, nodes: list, models: dict) -> dict:
@@ -50,19 +53,26 @@ async def run_responder():  # pragma: no cover - requires live NATS
     nc = await nats.connect(Config.NATS_URL)
 
     async def _cb(m):
-        wo = json.loads(m.data)
-        out = handle_workorder(wo, nodes, models)
-        decision = out["decision"]
-        if decision == "assigned":
-            await nc.publish(Config.SUBJECT_ASSIGNED, json.dumps(out["workorder"]).encode())
-        elif decision == "parked":
-            park_workorder(wo, Config.PENDING_DIR)            # not dropped
-        elif decision in ("refused", "rejected"):
-            await nc.publish(Config.SUBJECT_GUIDANCE, json.dumps({
-                "workorder_id": wo.get("workorder_id"),
-                "decision": decision,
-                "reason": out.get("reason"),
-            }).encode())
+        try:
+            wo = json.loads(m.data)
+            out = handle_workorder(wo, nodes, models)
+            decision = out["decision"]
+            if decision == "assigned":
+                await nc.publish(Config.SUBJECT_ASSIGNED, json.dumps({
+                    "workorder": out["workorder"],
+                    "node_id": out["node_id"],
+                    "reach": out["reach"],
+                }).encode())
+            elif decision == "parked":
+                park_workorder(wo, Config.PENDING_DIR)            # not dropped
+            elif decision in ("refused", "rejected"):
+                await nc.publish(Config.SUBJECT_GUIDANCE, json.dumps({
+                    "workorder_id": wo.get("workorder_id"),
+                    "decision": decision,
+                    "reason": out.get("reason"),
+                }).encode())
+        except Exception:
+            log.exception("creator-operator: dropping bad work-order message")
 
     await nc.subscribe(Config.SUBJECT_WORKORDER, cb=_cb)
     return nc

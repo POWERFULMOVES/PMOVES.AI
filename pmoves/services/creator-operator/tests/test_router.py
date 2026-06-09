@@ -1,5 +1,6 @@
 import copy
-from router import select_node, route
+import pytest
+from router import select_node, route, load_nodes
 from fixtures import VALID_WORKORDER
 
 NODES = [
@@ -47,3 +48,17 @@ def test_route_unknown_workflow_does_not_crash():
     bad["workflow_id"] = "image.not-registered"  # schema-valid string, not in MODELS
     r = route(bad, NODES, MODELS)
     assert r["ok"] is False and r["reason"] == "unknown-workflow"
+
+
+def test_load_nodes_rejects_malformed(tmp_path):
+    # Node missing `reach` must fail at load, not later on node["reach"] access.
+    bad_yaml = tmp_path / "operator_nodes.yaml"
+    bad_yaml.write_text(
+        "nodes:\n"
+        '  - node_id: "broken"\n'
+        "    vram_gb: 8\n"
+        '    caps: ["comfyui"]\n',
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError):
+        load_nodes(bad_yaml)
