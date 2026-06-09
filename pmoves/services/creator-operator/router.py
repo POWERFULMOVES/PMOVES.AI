@@ -29,7 +29,8 @@ def select_node(node_caps: dict, nodes: list):
 
 
 def route(workorder: dict, nodes: list, models: dict) -> dict:
-    """License gate first, then capacity match. Returns a RouteResult dict."""
+    """License gate first, then capacity match. node_caps may be omitted and is
+    then derived from the workflow's registry caps. Returns a RouteResult dict."""
     # workflow_id comes from external input (Archon/Discord) and the schema accepts
     # any non-empty string, so an unregistered id is a routine case, not a crash:
     # surface it as unknown-workflow (dispatcher maps to rejected), never a KeyError.
@@ -40,7 +41,11 @@ def route(workorder: dict, nodes: list, models: dict) -> dict:
     ack = workorder.get("license_ack", {})
     if requires_ack(model) and not ack.get("ack", False):
         return {"ok": False, "node_id": None, "reason": "license-not-acked"}
-    node = select_node(workorder["node_caps"], nodes)
+    # Explicit node_caps win; otherwise derive from the workflow's registry caps.
+    node_caps = workorder.get("node_caps") or model.get("caps")
+    if not node_caps:
+        return {"ok": False, "node_id": None, "reason": "no-caps"}
+    node = select_node(node_caps, nodes)
     if node is None:
         return {"ok": False, "node_id": None, "reason": "no-capacity"}
     # Node shape (node_id/reach present) is guaranteed by load_nodes, which fails

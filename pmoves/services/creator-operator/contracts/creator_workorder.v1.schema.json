@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "creator_workorder",
   "type": "object",
-  "required": ["workorder_id", "workflow_id", "knobs", "node_caps", "license_ack"],
+  "required": ["workorder_id", "workflow_id", "knobs", "license_ack"],
   "additionalProperties": false,
   "properties": {
     "workorder_id": {"type": "string", "minLength": 1},

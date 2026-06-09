@@ -92,3 +92,34 @@ def test_image_excludes_knuckles():
 def test_cuda_workflow_never_selects_rocm_node():
     rocm_only = [{"node_id": "knuckles", "reach": "knuckles", "vram_gb": 32, "caps": ["rocm", "voice"]}]
     assert select_node({"min_vram_gb": 8, "needs": ["cuda"]}, rocm_only) is None
+
+
+MODELS_CAPS = {
+    "voice.omnivoice": {"model_id": "k2-fsa/OmniVoice", "requires_ack": False,
+                        "caps": {"min_vram_gb": 4, "needs": ["voice"]}},
+    "video.ltx": {"model_id": "Lightricks/LTX-Video", "requires_ack": True,
+                  "caps": {"min_vram_gb": 24, "needs": ["cuda", "comfyui"]}},
+}
+
+
+def test_route_derives_caps_from_workflow_when_omitted():
+    wo = {"workorder_id": "wo_v", "workflow_id": "voice.omnivoice", "knobs": {},
+          "license_ack": {"model": "omnivoice", "mode": "local", "ack": True}}  # no node_caps
+    r = route(wo, FLEET, MODELS_CAPS)
+    assert r["ok"] is True and r["node_id"] == "4090"
+
+
+def test_route_explicit_node_caps_overrides_workflow():
+    wo = {"workorder_id": "wo_v", "workflow_id": "voice.omnivoice",
+          "knobs": {}, "node_caps": {"min_vram_gb": 24, "needs": ["cuda", "voice"]},
+          "license_ack": {"model": "omnivoice", "mode": "local", "ack": True}}
+    r = route(wo, FLEET, MODELS_CAPS)
+    assert r["ok"] is True and r["node_id"] == "z890"
+
+
+def test_route_no_caps_anywhere_returns_no_caps():
+    wo = {"workorder_id": "wo_x", "workflow_id": "voice.omnivoice", "knobs": {},
+          "license_ack": {"model": "omnivoice", "mode": "local", "ack": True}}
+    models_nocaps = {"voice.omnivoice": {"model_id": "x", "requires_ack": False}}
+    r = route(wo, FLEET, models_nocaps)
+    assert r["ok"] is False and r["reason"] == "no-caps"
