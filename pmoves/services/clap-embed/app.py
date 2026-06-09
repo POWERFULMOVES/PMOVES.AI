@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import io
 import logging
+from contextlib import asynccontextmanager
 from urllib.parse import urlsplit, urlunsplit
 
 import librosa
@@ -55,8 +56,56 @@ class TextRequest(BaseModel):
     texts: list[str]
 
 
+@asynccontextmanager
+async def _lifespan(app: FastAPI):
+    # --- startup: register with the model registry (non-fatal if offline) ---
+    import httpx
+    payload = {
+        "service": "clap-embed",
+        "model_id": Config.MODEL_ID,
+        "revision": Config.MODEL_REVISION,
+        "license": "Apache-2.0",
+        "provenance": "laion/larger_clap_music",
+        "endpoint": f"http://clap-embed:{Config.PORT}",
+    }
+    try:
+        async with httpx.AsyncClient(timeout=4) as c:
+            await c.post(f"{Config.REGISTRY_URL}/api/deployments", json=payload)
+    except Exception:
+        pass  # registry offline is non-fatal; service still serves
+
+    # --- startup: optional NATS responder (audio.embed.request.v1) ---
+    app.state.nats_conn = None
+    if Config.NATS_URL:
+        try:
+            from nats_responder import run_responder
+            app.state.nats_conn = await run_responder(get_embedder())
+        except Exception as exc:
+            # HTTP endpoints still serve, but the advertised NATS path is dead —
+            # log it so the silent degradation is debuggable. Redact the URL and
+            # avoid exc_info: NATS URLs/exceptions can echo embedded credentials.
+            logger.warning(
+                "clap-embed NATS responder failed to start (NATS_URL=%s): %s; "
+                "HTTP endpoints remain available, NATS embed path disabled",
+                _redact_url(Config.NATS_URL),
+                type(exc).__name__,
+            )
+            app.state.nats_conn = None
+
+    try:
+        yield
+    finally:
+        # --- shutdown: drain NATS connection if one was established ---
+        nc = getattr(app.state, "nats_conn", None)
+        if nc is not None:
+            try:
+                await nc.drain()
+            except Exception:
+                pass
+
+
 def create_app() -> FastAPI:
-    app = FastAPI(title="clap-embed", version="1.0.0")
+    app = FastAPI(title="clap-embed", version="1.0.0", lifespan=_lifespan)
 
     @app.get("/healthz")
     def healthz():
@@ -104,55 +153,6 @@ def create_app() -> FastAPI:
     @app.get("/metrics")
     def metrics():
         return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
-
-    @app.on_event("startup")
-    async def _register():
-        import httpx
-        payload = {
-            "service": "clap-embed",
-            "model_id": Config.MODEL_ID,
-            "revision": Config.MODEL_REVISION,
-            "license": "Apache-2.0",
-            "provenance": "laion/larger_clap_music",
-            "endpoint": f"http://clap-embed:{Config.PORT}",
-        }
-        try:
-            async with httpx.AsyncClient(timeout=4) as c:
-                await c.post(f"{Config.REGISTRY_URL}/api/deployments", json=payload)
-        except Exception:
-            pass  # registry offline is non-fatal; service still serves
-
-    @app.on_event("startup")
-    async def _start_nats():
-        # When NATS_URL is configured, subscribe the responder to
-        # audio.embed.request.v1 so the advertised NATS path actually works.
-        # NATS is optional — failure to connect must not break the HTTP service.
-        app.state.nats_conn = None
-        if not Config.NATS_URL:
-            return
-        try:
-            from nats_responder import run_responder
-            app.state.nats_conn = await run_responder(get_embedder())
-        except Exception as exc:
-            # HTTP endpoints still serve, but the advertised NATS path is dead —
-            # log it so the silent degradation is debuggable. Redact the URL and
-            # avoid exc_info: NATS URLs/exceptions can echo embedded credentials.
-            logger.warning(
-                "clap-embed NATS responder failed to start (NATS_URL=%s): %s; "
-                "HTTP endpoints remain available, NATS embed path disabled",
-                _redact_url(Config.NATS_URL),
-                type(exc).__name__,
-            )
-            app.state.nats_conn = None
-
-    @app.on_event("shutdown")
-    async def _stop_nats():
-        nc = getattr(app.state, "nats_conn", None)
-        if nc is not None:
-            try:
-                await nc.drain()
-            except Exception:
-                pass
 
     return app
 
