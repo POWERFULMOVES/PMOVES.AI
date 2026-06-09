@@ -100,7 +100,7 @@ class Config:
 
 - [ ] **Step 2: Write requirements.txt**
 
-```
+```text
 fastapi>=0.110
 uvicorn>=0.29
 nats-py>=2.6
