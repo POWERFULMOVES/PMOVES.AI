@@ -27,3 +27,13 @@ def test_handle_request_returns_embedding_and_context():
 def test_handle_request_bad_payload_is_flagged_not_raised():
     out = json.loads(handle_request(b"not-json", _FakeEmbedder()))
     assert out["ok"] is False and "error" in out
+
+
+def test_handle_request_rejects_oversized_audio(monkeypatch):
+    # an oversized base64 blob must be rejected BEFORE librosa.load (memory-DoS)
+    import config
+    monkeypatch.setattr(config.Config, "MAX_UPLOAD_BYTES", 1024)
+    big_b64 = base64.b64encode(b"\x00" * 4096).decode()  # 4 KB decoded, over 1 KB cap
+    msg = {"context_id": "ctx-big", "audio_b64": big_b64}
+    out = json.loads(handle_request(json.dumps(msg).encode(), _FakeEmbedder()))
+    assert out["ok"] is False and "error" in out

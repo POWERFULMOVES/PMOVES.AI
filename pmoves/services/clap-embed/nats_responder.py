@@ -20,7 +20,15 @@ SUBJECT_RESULT = "audio.embed.result.v1"
 def handle_request(data: bytes, embedder) -> bytes:
     try:
         msg = json.loads(data)
-        audio_bytes = base64.b64decode(msg["audio_b64"])
+        b64 = msg["audio_b64"]
+        # Bound memory before decode: base64 inflates ~4/3, so an oversized blob
+        # is cheaply detectable from the encoded length. Reject (don't decode).
+        cap = Config.MAX_UPLOAD_BYTES
+        if isinstance(b64, str) and (len(b64) * 3) // 4 > cap:
+            raise ValueError("audio payload too large")
+        audio_bytes = base64.b64decode(b64)
+        if len(audio_bytes) > cap:
+            raise ValueError("audio payload too large")
         audio, sr = librosa.load(io.BytesIO(audio_bytes), sr=None, mono=True)
         vec = embedder.embed_audio(np.asarray(audio, dtype="float32"), int(sr))
         return json.dumps({

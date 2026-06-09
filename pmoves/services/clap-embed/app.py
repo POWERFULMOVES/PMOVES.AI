@@ -7,7 +7,7 @@ from urllib.parse import urlsplit, urlunsplit
 
 import librosa
 import numpy as np
-from fastapi import Depends, FastAPI, File, UploadFile
+from fastapi import Depends, FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.responses import Response
 from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_latest
 from pydantic import BaseModel
@@ -63,10 +63,27 @@ def create_app() -> FastAPI:
                 "sr": Config.SR, "clip_seconds": Config.CLIP_SECONDS, "dim": Config.EMBED_DIM}
 
     @app.post("/embed/audio")
-    async def embed_audio(file: UploadFile = File(...), emb: Embedder = Depends(get_embedder)):
+    async def embed_audio(
+        request: Request,
+        file: UploadFile = File(...),
+        emb: Embedder = Depends(get_embedder),
+    ):
         REQUESTS.labels("embed_audio").inc()
         with LATENCY.labels("embed_audio").time():
-            raw = await file.read()
+            cap = Config.MAX_UPLOAD_BYTES
+            # Cheap reject when the client declares an oversized body.
+            content_length = request.headers.get("content-length")
+            if content_length is not None:
+                try:
+                    if int(content_length) > cap:
+                        raise HTTPException(status_code=413, detail="audio upload too large")
+                except ValueError:
+                    pass  # malformed header; fall through to streaming guard
+            # Streaming guard: read at most cap+1 bytes so an undeclared or lying
+            # Content-Length can't force an unbounded read into memory.
+            raw = await file.read(cap + 1)
+            if len(raw) > cap:
+                raise HTTPException(status_code=413, detail="audio upload too large")
             audio, sr = librosa.load(io.BytesIO(raw), sr=None, mono=True)
             vec = emb.embed_audio(np.asarray(audio, dtype="float32"), int(sr))
         return {"embedding": vec, "model_rev": Config.MODEL_REVISION, "sr": Config.SR}
