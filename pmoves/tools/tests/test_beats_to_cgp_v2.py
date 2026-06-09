@@ -33,6 +33,26 @@ def test_cgp_v2_validates_against_schema(monkeypatch):
     assert cgp["spec"] == "chit.cgp.v0.2"
 
 
+def test_legacy_path_not_mislabeled_as_v2():
+    """The legacy (--no-v2) builder emits point.proj as a 3-element RGB array,
+    which is INVALID under cgp.v2.schema.json (point.proj must be a number).
+    So a legacy packet must NOT claim spec 'chit.cgp.v0.2'. Relabel to v0.1."""
+    from pmoves.tools.beats_to_cgp import group_to_cgp, select_builder
+    groups, fps = _fixtures()
+
+    pkt = group_to_cgp(groups[0], fps, coherence=0.7)
+    pt = pkt["super_nodes"][0]["constellations"][0]["points"][0]
+    # the legacy packet really does carry an array proj (the reason it's not v2)
+    assert isinstance(pt["proj"], list) and len(pt["proj"]) == 3
+    assert pkt["spec"] != "chit.cgp.v0.2", "array-proj packet must not claim v0.2"
+    assert pkt["spec"] == "chit.cgp.v0.1"
+
+    # the select_builder legacy wrapper must agree
+    legacy = select_builder(v2=False)(groups, fps, coherence=0.7)
+    assert legacy["spec"] != "chit.cgp.v0.2"
+    assert legacy["spec"] == "chit.cgp.v0.1"
+
+
 def test_cgp_v2_has_hyperbolic_attribution_sig(monkeypatch):
     monkeypatch.setenv("CHIT_PASSPHRASE", "test-key")
     groups, fps = _fixtures()
