@@ -42,6 +42,9 @@ def route(workorder: dict, nodes: list, models: dict) -> dict:
     if requires_ack(model) and not ack.get("ack", False):
         return {"ok": False, "node_id": None, "reason": "license-not-acked"}
     # Explicit node_caps win; otherwise derive from the workflow's registry caps.
+    # `or` treats an empty/falsy node_caps as absent (fall back to workflow caps);
+    # the work-order schema rejects an empty node_caps object before dispatch, so
+    # this only matters to direct callers of route().
     node_caps = workorder.get("node_caps") or model.get("caps")
     if not node_caps:
         return {"ok": False, "node_id": None, "reason": "no-caps"}
