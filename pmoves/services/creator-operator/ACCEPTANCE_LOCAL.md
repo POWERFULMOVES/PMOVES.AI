@@ -27,7 +27,7 @@ Source: `PMOVES-Creator/installs/IDEOGRAM_ULTRA-COMFYUI-MANAGER_AUTO_INSTALL.bat
 ## Step 1 — bring ComfyUI up (heavy, one-time; ~tens of GB)
 Run the existing 1-click installer (it downloads ComfyUI portable + the nodes +
 the model set, then launches):
-```
+```bat
 PMOVES-Creator\installs\IDEOGRAM_ULTRA-COMFYUI-MANAGER_AUTO_INSTALL.bat
 ```
 If ComfyUI is already installed, instead drop
@@ -51,7 +51,7 @@ With ComfyUI up at `:8188`, a chrome-devtools operator run (guided by
 
 ## Step 3 — assert (the acceptance)
 On the 4090 with ComfyUI up:
-```
+```bat
 set CREATOR_UI_TEST=1
 PYTHONPATH=pmoves/services/creator-operator python -m pytest ^
   pmoves/services/creator-operator/tests/test_integration_ui.py -v

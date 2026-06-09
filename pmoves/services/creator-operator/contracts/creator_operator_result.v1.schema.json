@@ -9,6 +9,8 @@
     "status": {"type": "string", "enum": ["ok", "error"]},
     "artifact": {
       "type": ["object", "null"],
+      "required": ["kind", "path"],
+      "additionalProperties": false,
       "properties": {
         "kind": {"type": "string"},
         "path": {"type": "string"},
