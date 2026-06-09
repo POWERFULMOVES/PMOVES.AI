@@ -1,0 +1,5 @@
+fastapi>=0.110
+uvicorn>=0.29
+nats-py>=2.6
+jsonschema>=4.21
+PyYAML>=6.0
