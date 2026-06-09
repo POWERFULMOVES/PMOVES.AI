@@ -1,0 +1,7 @@
+# Capacity registry. Slice 1: one node (4090). Add Jetson/SPARK/fleet as entries
+# (no code change) — the router impedance-matches by lowest-capacity satisfying node.
+nodes:
+  - node_id: "4090"
+    vram_gb: 24
+    caps: ["comfyui", "browser"]
+    reach: "pmoves-laptop"     # Tailscale hostname (no raw IPs)
