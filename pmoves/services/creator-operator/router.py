@@ -31,4 +31,7 @@ def route(workorder: dict, nodes: list, models: dict) -> dict:
     node = select_node(workorder["node_caps"], nodes)
     if node is None:
         return {"ok": False, "node_id": None, "reason": "no-capacity"}
+    # Slice 1 trusts the node-registry shape (node_id/reach present): operator_nodes.yaml
+    # is a controlled internal file, not user input. Next slice (>1 node) adds a
+    # validate_nodes() at load time so a malformed entry fails there, not on this line.
     return {"ok": True, "node_id": node["node_id"], "reason": "routed", "reach": node["reach"]}
