@@ -22,7 +22,7 @@ pmoves/services/creator-operator/
     creator_workorder.schema.json
     creator_operator_result.schema.json
   schemas.py                # validate_workorder / validate_result (jsonschema)
-  models.py                 # load_models / lookup_model / requires_ack
+  model_registry.py         # load_models / lookup_model / requires_ack  (NOT 'models.py' — collides with pmoves/models namespace pkg)
   router.py                 # load_nodes / select_node / route (capacity + license gate)
   attribution.py            # build_cgp_point / summarize_transcript
   n8n_export.py             # to_n8n_workflow
@@ -307,7 +307,7 @@ git commit -m "feat(creator-operator): work-order + operator-result contract sch
 
 **Files:**
 - Create: `pmoves/config/creator_models.yaml`
-- Create: `pmoves/services/creator-operator/models.py`
+- Create: `pmoves/services/creator-operator/model_registry.py`  (NOT `models.py` — shadows `pmoves/models`)
 - Test: `pmoves/services/creator-operator/tests/test_models.py`
 
 - [ ] **Step 1: Write creator_models.yaml**
@@ -338,7 +338,7 @@ models:
 ```python
 import pytest
 from pathlib import Path
-from models import load_models, lookup_model, requires_ack
+from model_registry import load_models, lookup_model, requires_ack
 
 MODELS = Path(__file__).resolve().parents[3] / "config/creator_models.yaml"
 
@@ -365,7 +365,7 @@ def test_unknown_workflow_raises():
 Run: `PYTHONPATH=pmoves/services/creator-operator python -m pytest pmoves/services/creator-operator/tests/test_models.py -v`
 Expected: FAIL (`ModuleNotFoundError: models`).
 
-- [ ] **Step 4: Write models.py**
+- [ ] **Step 4: Write model_registry.py**
 
 ```python
 """Creator model registry + license-gate helpers."""
@@ -396,7 +396,7 @@ Expected: PASS (3 passed).
 - [ ] **Step 6: Commit**
 
 ```bash
-git add pmoves/config/creator_models.yaml pmoves/services/creator-operator/models.py \
+git add pmoves/config/creator_models.yaml pmoves/services/creator-operator/model_registry.py \
         pmoves/services/creator-operator/tests/test_models.py
 git commit -m "feat(creator-operator): model + license registry"
 ```
@@ -481,7 +481,7 @@ Expected: FAIL (`ModuleNotFoundError: router`).
 """Capacity routing + license gate for creator work-orders."""
 from pathlib import Path
 import yaml
-from models import lookup_model, requires_ack
+from model_registry import lookup_model, requires_ack
 
 
 def load_nodes(path: Path) -> list:
@@ -958,7 +958,7 @@ async def run_responder():  # pragma: no cover - requires live NATS
     import json
     import nats
     from router import load_nodes
-    from models import load_models
+    from model_registry import load_models
 
     nodes = load_nodes(Config.NODES_PATH)
     models = load_models(Config.MODELS_PATH)
