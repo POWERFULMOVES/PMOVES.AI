@@ -62,3 +62,33 @@ def test_load_nodes_rejects_malformed(tmp_path):
     )
     with pytest.raises(ValueError):
         load_nodes(bad_yaml)
+
+
+FLEET = [
+    {"node_id": "4090", "reach": "pmoves-laptop", "vram_gb": 16, "caps": ["cuda", "comfyui", "browser", "voice"]},
+    {"node_id": "5090", "reach": "pmoves-5090", "vram_gb": 32, "caps": ["cuda", "comfyui", "browser", "voice"]},
+    {"node_id": "spark", "reach": "pmoves-spark", "vram_gb": 128, "caps": ["cuda", "comfyui", "browser", "voice"]},
+    {"node_id": "z890", "reach": "pmoves-z890", "vram_gb": 24, "caps": ["cuda", "comfyui", "browser", "voice"]},
+    {"node_id": "knuckles", "reach": "knuckles", "vram_gb": 32, "caps": ["rocm", "voice"]},
+]
+
+
+def test_voice_routes_to_lowest_vram_incl_knuckles():
+    n = select_node({"min_vram_gb": 4, "needs": ["voice"]}, FLEET)
+    assert n["node_id"] == "4090"
+
+
+def test_video_excludes_knuckles_via_cuda_and_vram():
+    n = select_node({"min_vram_gb": 24, "needs": ["cuda", "comfyui"]}, FLEET)
+    assert n["node_id"] == "z890"
+
+
+def test_image_excludes_knuckles():
+    n = select_node({"min_vram_gb": 16, "needs": ["cuda", "comfyui"]}, FLEET)
+    assert n["node_id"] == "4090"
+    assert n["node_id"] != "knuckles"
+
+
+def test_cuda_workflow_never_selects_rocm_node():
+    rocm_only = [{"node_id": "knuckles", "reach": "knuckles", "vram_gb": 32, "caps": ["rocm", "voice"]}]
+    assert select_node({"min_vram_gb": 8, "needs": ["cuda"]}, rocm_only) is None

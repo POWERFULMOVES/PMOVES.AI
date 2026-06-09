@@ -1,7 +1,24 @@
-# Capacity registry. Slice 1: one node (4090). Add Jetson/SPARK/fleet as entries
-# (no code change) — the router impedance-matches by lowest-capacity satisfying node.
+# Capacity registry — the fleet, by capacity class + GPU vendor.
+# caps: gpu vendor (cuda|rocm) + workload tags (comfyui, browser, voice).
+# reach = Tailscale hostname (NEVER a raw 100.x IP).
 nodes:
   - node_id: "4090"
+    reach: "pmoves-laptop"
+    vram_gb: 16
+    caps: ["cuda", "comfyui", "browser", "voice"]
+  - node_id: "5090"
+    reach: "pmoves-5090"
+    vram_gb: 32
+    caps: ["cuda", "comfyui", "browser", "voice"]
+  - node_id: "spark"
+    reach: "pmoves-spark"
+    vram_gb: 128
+    caps: ["cuda", "comfyui", "browser", "voice"]
+  - node_id: "z890"
+    reach: "pmoves-z890"
     vram_gb: 24
-    caps: ["comfyui", "browser"]
-    reach: "pmoves-laptop"     # Tailscale hostname (no raw IPs)
+    caps: ["cuda", "comfyui", "browser", "voice"]
+  - node_id: "knuckles"
+    reach: "knuckles"          # AMD 9850X3D + dual R9700 (ROCm). OmniVoice-on-ROCm = seam.
+    vram_gb: 32
+    caps: ["rocm", "voice"]
