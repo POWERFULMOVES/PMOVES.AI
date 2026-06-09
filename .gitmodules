@@ -280,7 +280,7 @@
 [submodule "pmoves-e2b-mcp-server"]
 	path = pmoves-e2b-mcp-server
 	url = https://github.com/POWERFULMOVES/pmoves-e2b-mcp-server.git
-	branch = main
+	branch = PMOVES.AI-Edition-Hardened
 [submodule "Pmoves-cipher"]
 	path = Pmoves-cipher
 	url = https://github.com/POWERFULMOVES/Pmoves-cipher.git
