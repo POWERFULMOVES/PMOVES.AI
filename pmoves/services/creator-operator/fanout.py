@@ -6,9 +6,9 @@ from attribution import build_cgp_point, summarize_transcript
 from n8n_export import to_n8n_workflow
 
 
-async def emit_result(result: dict, workorder: dict, sinks, *, model_id: str, license: str) -> dict:
+async def emit_result(result: dict, workorder: dict, sinks, *, model_id: str, license_name: str) -> dict:
     validate_result(result)  # raises before any sink sees it
-    cgp = build_cgp_point(result, workorder, model_id=model_id, license=license)
+    cgp = build_cgp_point(result, workorder, model_id=model_id, license_name=license_name)
     result = dict(result, cgp_point=cgp)
     summary = summarize_transcript(result["transcript"])
     n8n_wf = to_n8n_workflow(result, workflow_id=workorder["workflow_id"])

@@ -1,4 +1,5 @@
 import asyncio
+import jsonschema
 from fanout import emit_result
 from fixtures import VALID_RESULT, VALID_WORKORDER
 
@@ -26,7 +27,7 @@ class FakeSinks:
 def test_emit_result_fans_out_all_sinks():
     sinks = FakeSinks()
     asyncio.run(emit_result(VALID_RESULT, VALID_WORKORDER, sinks,
-                            model_id="ideogram-4", license="non-commercial"))
+                            model_id="ideogram-4", license_name="non-commercial"))
     assert sinks.nats and sinks.nats[0][0] == "creator.operator.result.v1"
     assert sinks.notebook and sinks.notebook[0] == VALID_RESULT["transcript"]
     assert sinks.discord and "seed" in sinks.discord[0][0]
@@ -37,7 +38,7 @@ def test_emit_result_validates_before_fanout():
     sinks = FakeSinks()
     bad = dict(VALID_RESULT, status="maybe")
     try:
-        asyncio.run(emit_result(bad, VALID_WORKORDER, sinks, model_id="x", license="y"))
+        asyncio.run(emit_result(bad, VALID_WORKORDER, sinks, model_id="x", license_name="y"))
         assert False, "should have raised on invalid result"
-    except Exception:
+    except jsonschema.ValidationError:
         assert sinks.nats == []  # nothing emitted on invalid result

@@ -142,7 +142,7 @@ Prove the contract **end-to-end on the 4090, workflow = image (Ideogram-Ultra)**
 
 ## Data flow (slice 1)
 
-```
+```text
 Archon (work-order)
    │  archon.workorder.creator.v1
    ▼

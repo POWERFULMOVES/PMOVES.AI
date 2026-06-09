@@ -3,7 +3,7 @@ from fixtures import VALID_RESULT, VALID_WORKORDER
 
 
 def test_build_cgp_point_carries_provenance():
-    p = build_cgp_point(VALID_RESULT, VALID_WORKORDER, model_id="ideogram-4", license="non-commercial")
+    p = build_cgp_point(VALID_RESULT, VALID_WORKORDER, model_id="ideogram-4", license_name="non-commercial")
     assert p["meta"]["model"] == "ideogram-4"
     assert p["meta"]["license"] == "non-commercial"
     assert p["meta"]["workflow_id"] == "image.ideogram-ultra"

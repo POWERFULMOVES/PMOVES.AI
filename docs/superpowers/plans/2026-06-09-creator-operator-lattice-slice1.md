@@ -14,7 +14,7 @@
 
 ## File Structure
 
-```
+```text
 pmoves/services/creator-operator/
   __init__.py
   config.py                 # Config: NATS_URL, paths, ports (env-driven)

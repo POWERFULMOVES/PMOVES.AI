@@ -1,14 +1,14 @@
 """CGP attribution + teaching-summary helpers."""
 
 
-def build_cgp_point(result: dict, workorder: dict, *, model_id: str, license: str) -> dict:
+def build_cgp_point(result: dict, workorder: dict, *, model_id: str, license_name: str) -> dict:
     """A CGP point whose meta carries full provenance + a ref to the harvested recipe."""
     return {
         "meta": {
             "source": "creator-operator",
             "workflow_id": workorder["workflow_id"],
             "model": model_id,
-            "license": license,
+            "license": license_name,
             "knobs": workorder.get("knobs", {}),
             "has_api_prompt": result.get("api_prompt") is not None,
             "workorder_id": result["workorder_id"],

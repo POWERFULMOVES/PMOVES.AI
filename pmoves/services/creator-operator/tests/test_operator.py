@@ -1,3 +1,4 @@
+import jsonschema
 import pytest
 from operator_helpers import parse_workorder, assemble_result
 from fixtures import VALID_WORKORDER
@@ -9,7 +10,7 @@ def test_parse_workorder_validates():
 
 
 def test_parse_workorder_rejects_bad():
-    with pytest.raises(Exception):
+    with pytest.raises(jsonschema.ValidationError):
         parse_workorder({"workorder_id": "x"})
 
 
