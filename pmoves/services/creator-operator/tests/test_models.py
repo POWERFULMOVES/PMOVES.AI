@@ -7,8 +7,9 @@ MODELS = Path(__file__).resolve().parents[3] / "config/creator_models.yaml"
 
 def test_lookup_ideogram_requires_ack():
     m = lookup_model(load_models(MODELS), "image.ideogram-ultra")
-    assert m["model_id"] == "ideogram-4"
-    assert requires_ack(m) is True
+    assert m["model_id"] == "Comfy-Org/Ideogram-4"  # LOCAL weights, not the paid API
+    assert m["mode"] == "local" and m["provider"] == "local"
+    assert requires_ack(m) is True  # license:other not confirmed commercial-OK
     assert m["swap_for"] == "Qwen/Qwen-Image"
 
 

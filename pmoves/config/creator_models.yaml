@@ -1,13 +1,14 @@
-# Creator-pipeline model registry (license-tagged). Gate: non-commercial models
-# are try-locally / BYO at the user's edge ONLY; never server-side/commercial.
+# Creator-pipeline model registry (license-tagged). Gate: any model whose license
+# is not confirmed commercial-OK is try-locally / BYO at the user's edge ONLY
+# (requires_ack=true); never bake it into the hosted/commercial path.
 models:
   image.ideogram-ultra:
-    model_id: ideogram-4
-    provider: api
-    license: non-commercial        # commercial use = the user's own paid API account
-    mode: byo-api-key
-    requires_ack: true
-    swap_for: Qwen/Qwen-Image      # license-clean (Apache-2.0) server-side swap
+    model_id: Comfy-Org/Ideogram-4   # LOCAL fp8 weights (downloaded), NOT the paid Ideogram API
+    provider: local                  # ComfyUI local diffusion weights on the node's GPU
+    license: other                   # HF license:other (custom) — not confirmed commercial-OK
+    mode: local                      # no API key; runs on local weights
+    requires_ack: true               # gate stays: "local" != "commercial-OK"
+    swap_for: Qwen/Qwen-Image        # license-clean (Apache-2.0) hosted/commercial swap
   image.qwen:
     model_id: Qwen/Qwen-Image
     provider: hf

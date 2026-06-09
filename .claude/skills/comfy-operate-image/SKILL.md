@@ -38,6 +38,9 @@ the completeness test asserts every exposed knob has a sentence).
   (the fan-out flags `has_api_prompt:false`). The run is valid; replay isn't.
 
 ## License
-`image.ideogram-ultra` is BYO-API-key (the user's own paid Ideogram account). The
-creator-operator L3 gate refuses to dispatch unless `license_ack.ack` is true.
-For server-side/commercial use, swap to `Qwen/Qwen-Image` (`creator_models.yaml`).
+`image.ideogram-ultra` runs on **local** fp8 weights (`Comfy-Org/Ideogram-4`,
+downloaded to the node) — no API key. Its HF license is `other` (custom), which is
+**not confirmed commercial-OK**, so the creator-operator L3 gate still refuses to
+dispatch unless `license_ack.ack` is true (try-locally / BYO at the user's edge —
+"local" is not "commercial-OK"). For any hosted/commercial path, swap to the
+license-clean `Qwen/Qwen-Image` (Apache-2.0) — see `creator_models.yaml`.
