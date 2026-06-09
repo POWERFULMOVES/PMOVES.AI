@@ -15,6 +15,38 @@ def test_librosa_features_shapes_and_keys():
     assert isinstance(f["tempo_bpm"], float)
 
 
+def _all_finite(d):
+    import math
+    for v in d.values():
+        if isinstance(v, (list, tuple)):
+            for x in v:
+                if isinstance(x, (int, float)) and not math.isfinite(float(x)):
+                    return False
+        elif isinstance(v, (int, float)):
+            if not math.isfinite(float(v)):
+                return False
+    return True
+
+
+def test_librosa_features_silence_and_short_finite():
+    sr = 22050
+    # pure silence: beat_track may raise or yield NaN tempo
+    f_sil = librosa_features_from_array(np.zeros(sr, dtype="float32"), sr)
+    assert _all_finite(f_sil), f"silence produced non-finite values: {f_sil}"
+    assert f_sil["tempo_bpm"] == 0.0
+    # very short clip
+    f_short = librosa_features_from_array(np.zeros(100, dtype="float32"), sr)
+    assert _all_finite(f_short), f"short clip produced non-finite values: {f_short}"
+    assert f_short["tempo_bpm"] == 0.0
+    # non-finite input (NaN/inf can leak from upstream resampling/normalisation):
+    # beat_track raises ParameterError on this; the function must NOT crash and
+    # must coerce tempo to 0.0 with all-finite outputs.
+    y_nan = np.full(sr, np.nan, dtype="float32")
+    f_nan = librosa_features_from_array(y_nan, sr)
+    assert _all_finite(f_nan), f"non-finite input produced non-finite values: {f_nan}"
+    assert f_nan["tempo_bpm"] == 0.0
+
+
 def test_librosa_features_deterministic():
     sr = 22050
     y = np.sin(np.linspace(0, 50, sr * 4)).astype("float32")

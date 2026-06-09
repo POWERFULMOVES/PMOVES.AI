@@ -86,7 +86,22 @@ def librosa_features_from_array(y: "np.ndarray", sr: int) -> dict:
     """Deterministic interpretable features from a mono float32 waveform."""
     import librosa
     y = np.asarray(y, dtype="float32")
-    tempo, _ = librosa.beat.beat_track(y=y, sr=sr)
+    # Guard degenerate input: silence, too-short clips, or non-finite samples
+    # (NaN/inf can leak from upstream resampling/normalisation). librosa's
+    # beat_track raises ParameterError on non-finite buffers and can return a
+    # NaN tempo on silence; either poisons downstream np.mean. Sanitise first.
+    y = np.nan_to_num(y, nan=0.0, posinf=0.0, neginf=0.0)
+    silent = (y.size == 0) or (not np.any(y))
+    if silent:
+        tempo = 0.0
+    else:
+        try:
+            tempo, _ = librosa.beat.beat_track(y=y, sr=sr)
+            tempo = float(np.asarray(tempo).reshape(-1)[0]) if np.asarray(tempo).size else 0.0
+        except Exception:
+            tempo = 0.0
+    if not np.isfinite(tempo):
+        tempo = 0.0
     chroma = librosa.feature.chroma_stft(y=y, sr=sr).mean(axis=1)
     mfcc = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=20).mean(axis=1)
     contrast = librosa.feature.spectral_contrast(y=y, sr=sr).mean(axis=1)
@@ -95,8 +110,14 @@ def librosa_features_from_array(y: "np.ndarray", sr: int) -> dict:
     duration = max(len(y) / sr, 1e-6)
     centroid = float(librosa.feature.spectral_centroid(y=y, sr=sr).mean())
     flatness = float(librosa.feature.spectral_flatness(y=y).mean())
+    chroma = np.nan_to_num(chroma, nan=0.0, posinf=0.0, neginf=0.0)
+    mfcc = np.nan_to_num(mfcc, nan=0.0, posinf=0.0, neginf=0.0)
+    contrast = np.nan_to_num(contrast, nan=0.0, posinf=0.0, neginf=0.0)
+    tonnetz = np.nan_to_num(tonnetz, nan=0.0, posinf=0.0, neginf=0.0)
+    centroid = float(np.nan_to_num(centroid, nan=0.0, posinf=0.0, neginf=0.0))
+    flatness = float(np.nan_to_num(flatness, nan=0.0, posinf=0.0, neginf=0.0))
     feat = {
-        "tempo_bpm": round(float(np.asarray(tempo).item()), 4),
+        "tempo_bpm": round(float(tempo), 4),
         "chroma": [round(float(v), 6) for v in chroma],
         "mfcc": [round(float(v), 6) for v in mfcc],
         "spectral_contrast": [round(float(v), 6) for v in contrast],
