@@ -87,6 +87,42 @@ See `research/SUBMODULE_SYNC_AUDIT_2026-06-07.md` for the live drift backlog.
       batch `chore(submodules): promote` job) and connect fork-PR-merge -> gitlink.
 - [ ] **Fork orphan-branch cleanup** — `stale-branch-sweep.yml` only sweeps
       PMOVES.AI; fork `sync/*` branches accumulate. Add cross-repo cleanup.
+- [x] **Branch-protection automation** — `branch-protection-sync.yml` +
+      `_app-token.yml` `permission-administration` knob (2026-06-09). Closes the
+      audit gap below. **Gated on the operator granting Administration:RW** (see
+      next section).
+
+## Branch protection (consumable / hardened fork branches)
+
+**Audit gap (2026-06-09):** 8 of 11 tracked hardened fork branches had **no
+protection or zero required checks** (supabase, BoTZ, BotZ-gateway,
+e2b-mcp-server, tensorzero, A2UI unprotected; Health-wger, Open-Notebook had a
+rule but 0 checks). A "hardened" branch with no gate is aspirational — nothing
+stopped a force-push from silently stripping the hardening overlay. This never
+surfaced because branch protection was **not** on the original App roadmap.
+
+`branch-protection-sync.yml` (manual dispatch, dry-run by default) derives each
+fork's consumable branch from `.gitmodules` (self-maintaining) and applies one
+**standard policy**:
+
+| Setting | Value | Why |
+|---|---|---|
+| Require PR before merge | yes, **0 approvals** | Blocks direct pushes; 0 lets the App / dependabot self-merge sync PRs (no deadlock). Bump per-fork later. |
+| Force pushes | **blocked** | Prevents history rewrite that strips hardening — the core guarantee. |
+| Deletions | **blocked** | No accidental branch loss. |
+| Conversation resolution | required | Hygiene. |
+| `enforce_admins` | false | Operator break-glass; matches the sanctioned `--admin` merge path. |
+| Required status checks | **null (default)** | Fork CI contexts vary + many need fork-only secrets; requiring an un-greenable check would permanently block the branch. Add per-fork, deliberately. |
+
+> ⚠️ **Operator prerequisite — Administration:RW.** Applying protection needs the
+> App installation to have **Administration: Read & Write** (App settings →
+> Permissions). The in-repo docs disagreed on whether it was granted: the
+> 2026-04-23 permission **matrix** *designed it in* (and lists it on the operator
+> checklist), but the 2026-06-07 live-state list in this doc's header **omits it**
+> — i.e. it was likely never ticked. The live source of truth is the App's
+> Permissions tab. `branch-protection-sync.yml` **self-validates**: if the grant
+> is missing, `create-github-app-token` fails at mint with *"the app does not have
+> permission to request 'administration'"*. Grant it, then re-run dry-run → apply.
 
 ## Security guardrails
 
