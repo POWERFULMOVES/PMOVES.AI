@@ -30,3 +30,16 @@ def test_handle_workorder_parks_no_capacity():
 def test_handle_workorder_rejects_invalid():
     out = handle_workorder({"workorder_id": "x"}, NODES, MODELS)
     assert out["decision"] == "rejected"
+
+
+import json as _json
+from pathlib import Path
+from dispatcher import park_workorder
+
+
+def test_park_workorder_persists(tmp_path):
+    path = park_workorder(VALID_WORKORDER, tmp_path)
+    assert Path(path).exists()
+    saved = _json.loads(Path(path).read_text(encoding="utf-8"))
+    assert saved["workorder_id"] == VALID_WORKORDER["workorder_id"]
+    assert Path(path).name == VALID_WORKORDER["workorder_id"] + ".json"

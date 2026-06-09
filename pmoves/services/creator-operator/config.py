@@ -10,6 +10,7 @@ class Config:
     SUBJECT_WORKORDER = "archon.workorder.creator.v1"
     SUBJECT_RESULT = "creator.operator.result.v1"
     SUBJECT_ASSIGNED = "creator.operator.assigned.v1"
+    SUBJECT_GUIDANCE = "creator.operator.guidance.v1"
     # Registries (repo-relative; overridable for tests)
     REPO_ROOT = Path(os.getenv("PMOVES_REPO_ROOT", Path(__file__).resolve().parents[3]))
     NODES_PATH = Path(os.getenv("CREATOR_NODES_PATH", REPO_ROOT / "pmoves/config/operator_nodes.yaml"))
