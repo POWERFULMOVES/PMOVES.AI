@@ -1,0 +1,17 @@
+# Creator-pipeline model registry (license-tagged). Gate: non-commercial models
+# are try-locally / BYO at the user's edge ONLY; never server-side/commercial.
+models:
+  image.ideogram-ultra:
+    model_id: ideogram-4
+    provider: api
+    license: non-commercial        # commercial use = the user's own paid API account
+    mode: byo-api-key
+    requires_ack: true
+    swap_for: Qwen/Qwen-Image      # license-clean (Apache-2.0) server-side swap
+  image.qwen:
+    model_id: Qwen/Qwen-Image
+    provider: hf
+    license: apache-2.0
+    mode: local
+    requires_ack: false
+    swap_for: null
