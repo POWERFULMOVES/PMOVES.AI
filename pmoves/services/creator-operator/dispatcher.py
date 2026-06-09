@@ -24,6 +24,9 @@ def handle_workorder(workorder: dict, nodes: list, models: dict) -> dict:
         }
     if r["reason"] == "license-not-acked":
         return {"decision": "refused", "reason": r["reason"]}
+    if r["reason"] == "unknown-workflow":
+        # Not parkable — an unregistered workflow won't become valid by waiting.
+        return {"decision": "rejected", "reason": r["reason"]}
     return {"decision": "parked", "reason": r["reason"]}
 
 

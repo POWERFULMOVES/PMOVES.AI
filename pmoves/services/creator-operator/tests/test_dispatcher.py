@@ -32,6 +32,15 @@ def test_handle_workorder_rejects_invalid():
     assert out["decision"] == "rejected"
 
 
+def test_handle_workorder_rejects_unknown_workflow():
+    # schema-valid work-order whose workflow_id is not in the model registry:
+    # must be rejected (not crash, not parked).
+    bad = copy.deepcopy(VALID_WORKORDER)
+    bad["workflow_id"] = "image.not-registered"
+    out = handle_workorder(bad, NODES, MODELS)
+    assert out["decision"] == "rejected" and out["reason"] == "unknown-workflow"
+
+
 import json as _json
 from pathlib import Path
 from dispatcher import park_workorder

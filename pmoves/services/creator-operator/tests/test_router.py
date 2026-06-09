@@ -40,3 +40,10 @@ def test_route_parks_when_no_capacity():
     bad["node_caps"] = {"min_vram_gb": 999, "needs": ["comfyui"]}
     r = route(bad, NODES, MODELS)
     assert r["ok"] is False and r["reason"] == "no-capacity"
+
+
+def test_route_unknown_workflow_does_not_crash():
+    bad = copy.deepcopy(VALID_WORKORDER)
+    bad["workflow_id"] = "image.not-registered"  # schema-valid string, not in MODELS
+    r = route(bad, NODES, MODELS)
+    assert r["ok"] is False and r["reason"] == "unknown-workflow"

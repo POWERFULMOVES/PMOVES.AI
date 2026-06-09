@@ -24,7 +24,13 @@ def select_node(node_caps: dict, nodes: list):
 
 def route(workorder: dict, nodes: list, models: dict) -> dict:
     """License gate first, then capacity match. Returns a RouteResult dict."""
-    model = lookup_model(models, workorder["workflow_id"])
+    # workflow_id comes from external input (Archon/Discord) and the schema accepts
+    # any non-empty string, so an unregistered id is a routine case, not a crash:
+    # surface it as unknown-workflow (dispatcher maps to rejected), never a KeyError.
+    try:
+        model = lookup_model(models, workorder["workflow_id"])
+    except KeyError:
+        return {"ok": False, "node_id": None, "reason": "unknown-workflow"}
     ack = workorder.get("license_ack", {})
     if requires_ack(model) and not ack.get("ack", False):
         return {"ok": False, "node_id": None, "reason": "license-not-acked"}
