@@ -4,8 +4,8 @@ from pathlib import Path
 from jsonschema import validate
 
 _DIR = Path(__file__).resolve().parent / "contracts"
-_WORKORDER = json.loads((_DIR / "creator_workorder.schema.json").read_text(encoding="utf-8"))
-_RESULT = json.loads((_DIR / "creator_operator_result.schema.json").read_text(encoding="utf-8"))
+_WORKORDER = json.loads((_DIR / "creator_workorder.v1.schema.json").read_text(encoding="utf-8"))
+_RESULT = json.loads((_DIR / "creator_operator_result.v1.schema.json").read_text(encoding="utf-8"))
 
 
 def validate_workorder(d: dict) -> None:

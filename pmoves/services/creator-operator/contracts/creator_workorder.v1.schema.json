@@ -11,6 +11,7 @@
     "node_caps": {
       "type": "object",
       "required": ["min_vram_gb", "needs"],
+      "additionalProperties": false,
       "properties": {
         "min_vram_gb": {"type": "integer", "minimum": 0},
         "needs": {"type": "array", "items": {"type": "string"}}
@@ -21,6 +22,7 @@
     "license_ack": {
       "type": "object",
       "required": ["model", "mode", "ack"],
+      "additionalProperties": false,
       "properties": {
         "model": {"type": "string"},
         "mode": {"type": "string"},

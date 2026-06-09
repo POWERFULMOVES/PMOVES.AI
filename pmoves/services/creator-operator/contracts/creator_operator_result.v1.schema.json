@@ -30,5 +30,15 @@
     },
     "cgp_point": {"type": ["object", "null"]},
     "error": {"type": ["string", "null"]}
-  }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "status": { "const": "ok" } }, "required": ["status"] },
+      "then": { "properties": { "artifact": { "type": "object" } }, "required": ["artifact"] }
+    },
+    {
+      "if": { "properties": { "status": { "const": "error" } }, "required": ["status"] },
+      "then": { "properties": { "error": { "type": "string" } }, "required": ["error"] }
+    }
+  ]
 }
