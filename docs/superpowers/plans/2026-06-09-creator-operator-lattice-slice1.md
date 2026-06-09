@@ -30,10 +30,10 @@ pmoves/services/creator-operator/
   operator_helpers.py       # parse_workorder / assemble_result  (agent-side helpers; avoid stdlib 'operator' clash)
   dispatcher.py             # handle_workorder (route + assign/park/refuse) + run_responder
   app.py                    # create_app(): /healthz /metrics + startup subscribe
+  fixtures.py               # shared test fixtures — SERVICE ROOT so `from fixtures import` resolves via PYTHONPATH (repo pytest runs --import-mode=importlib, which does NOT add tests/ to sys.path)
   requirements.txt
   README.md                 # service doc + NATS subjects (catalog registration is an operator action)
-  tests/
-    fixtures.py             # valid/invalid work-order + result dicts
+  tests/                    # ONLY test_*.py here (no __init__.py, no fixtures.py)
     test_schemas.py
     test_models.py
     test_router.py
@@ -58,7 +58,7 @@ PMOVES-Creator/installs/pinokio/image-ideogram/
 
 **Test invocation (all tasks):** from repo root —
 `PYTHONPATH=pmoves/services/creator-operator python -m pytest pmoves/services/creator-operator/tests/<file> -v`
-(the service package imports its own modules flatly, matching clap-embed.)
+(the service imports its own modules flatly via PYTHONPATH, matching clap-embed. The repo's `pmoves/pyproject.toml` sets `--import-mode=importlib`, which does NOT add the `tests/` dir to sys.path — so EVERY importable module, including `fixtures.py`, lives at the SERVICE ROOT, not in `tests/`. `tests/` holds only `test_*.py` and has no `__init__.py`.)
 
 **Data shapes (consistent across all tasks):**
 - **WorkOrder:** `{workorder_id, workflow_id, knobs{}, node_caps{min_vram_gb,int; needs[]}, teach:bool, creator_ref, license_ack{model, mode, ack:bool}}`
@@ -74,7 +74,7 @@ PMOVES-Creator/installs/pinokio/image-ideogram/
 - Create: `pmoves/services/creator-operator/__init__.py` (empty)
 - Create: `pmoves/services/creator-operator/config.py`
 - Create: `pmoves/services/creator-operator/requirements.txt`
-- Create: `pmoves/services/creator-operator/tests/__init__.py` (empty)
+- Create: `pmoves/services/creator-operator/tests/` (dir only — NO `__init__.py`; importable modules incl. `fixtures.py` live at the service root and resolve via `PYTHONPATH`, because the repo runs pytest in `--import-mode=importlib`)
 
 - [ ] **Step 1: Write config.py**
 
@@ -112,7 +112,7 @@ PyYAML>=6.0
 
 ```bash
 git add pmoves/services/creator-operator/__init__.py pmoves/services/creator-operator/config.py \
-        pmoves/services/creator-operator/requirements.txt pmoves/services/creator-operator/tests/__init__.py
+        pmoves/services/creator-operator/requirements.txt
 git commit -m "feat(creator-operator): service scaffold + config"
 ```
 
@@ -124,7 +124,7 @@ git commit -m "feat(creator-operator): service scaffold + config"
 - Create: `pmoves/services/creator-operator/contracts/creator_workorder.schema.json`
 - Create: `pmoves/services/creator-operator/contracts/creator_operator_result.schema.json`
 - Create: `pmoves/services/creator-operator/schemas.py`
-- Create: `pmoves/services/creator-operator/tests/fixtures.py`
+- Create: `pmoves/services/creator-operator/fixtures.py`  (SERVICE ROOT — not tests/)
 - Test: `pmoves/services/creator-operator/tests/test_schemas.py`
 
 - [ ] **Step 1: Write the work-order schema**
@@ -204,7 +204,7 @@ git commit -m "feat(creator-operator): service scaffold + config"
 }
 ```
 
-- [ ] **Step 3: Write fixtures.py**
+- [ ] **Step 3: Write fixtures.py** (at the SERVICE ROOT: `pmoves/services/creator-operator/fixtures.py`)
 
 ```python
 """Shared test fixtures for creator-operator."""
@@ -297,7 +297,7 @@ Expected: PASS (4 passed).
 
 ```bash
 git add pmoves/services/creator-operator/contracts pmoves/services/creator-operator/schemas.py \
-        pmoves/services/creator-operator/tests/fixtures.py pmoves/services/creator-operator/tests/test_schemas.py
+        pmoves/services/creator-operator/fixtures.py pmoves/services/creator-operator/tests/test_schemas.py
 git commit -m "feat(creator-operator): work-order + operator-result contract schemas"
 ```
 
