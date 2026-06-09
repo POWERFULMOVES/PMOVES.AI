@@ -16,3 +16,8 @@ def lookup_model(models: dict, workflow_id: str) -> dict:
 
 def requires_ack(model: dict) -> bool:
     return bool(model.get("requires_ack", False))
+
+
+def lookup_caps(model: dict):
+    """Per-workflow default node caps {min_vram_gb, needs[]}, or None if unset."""
+    return model.get("caps")
