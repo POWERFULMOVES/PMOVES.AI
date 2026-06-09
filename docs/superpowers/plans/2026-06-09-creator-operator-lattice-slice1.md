@@ -1366,3 +1366,13 @@ git commit -m "test(creator-operator): UI-gated live run + harvest-replay accept
 **Type/name consistency:** `validate_workorder`/`validate_result`, `lookup_model`/`requires_ack`, `select_node`/`route`, `build_cgp_point`/`summarize_transcript`, `to_n8n_workflow`, `emit_result`, `parse_workorder`/`assemble_result`, `handle_workorder`/`run_responder`, `create_app` — used consistently across tasks. RouteResult keys (`ok`/`node_id`/`reason`/`reach`) consistent in Tasks 4 & 9. OperatorResult/WorkOrder shapes match the schemas in Task 2 throughout.
 
 **Seams NOT in this plan (later slices, per spec):** LTX/Citron/OmniVoice workflows; Jetson/SPARK/fleet registry entries; Discord *intake*; YT-monitor auto-skill ingestion; headless replay service; Unsloth LoRA; n8n fleet pipeline; gitlink bump for the PMOVES-Creator launcher.
+
+## Post-review addendum (applied during execution)
+
+- **Imports under `--import-mode=importlib`:** the repo's pytest mode means the test dir is NOT added to `sys.path`; every importable module (incl. `fixtures.py`) lives at the service root and resolves via `PYTHONPATH`. `tests/` holds only `test_*.py` (no `__init__.py`).
+- **Generic-name shadowing:** `models.py` → `model_registry.py` (shadowed `pmoves/models`), `operator.py` → `operator_helpers.py` (shadowed stdlib `operator`). `config.py`/`app.py`/`router.py` etc. verified collision-free.
+- **No silent drops (spec Error-handling):** `dispatcher.run_responder` now acts on all four decisions — `assigned`→publish `creator.operator.assigned.v1`, `parked`→persist to `PENDING_DIR` via testable `park_workorder()` (not dropped), `refused`/`rejected`→publish `creator.operator.guidance.v1`. New subject `SUBJECT_GUIDANCE`.
+- **Launcher location:** committed as canonical source under `pmoves/services/creator-operator/pinokio/image-ideogram/`; vendoring into the `PMOVES-Creator` submodule (`installs/pinokio/…`) + the gitlink bump are an explicit follow-up. `start.js` URL capture uses a capture group with `{{input.event[1]}}` per `.claude/PINOKIO_LAUNCHER_GUIDE.md`.
+- **Deferred (cosmetic / next-slice):** FastAPI `on_event`→`lifespan` migration; `validate_nodes()` for the node registry; `install.js` relative asset path verified during the vendoring PR.
+
+**Final state:** 33 passed, 2 skipped (UI-gated), clean tree.
