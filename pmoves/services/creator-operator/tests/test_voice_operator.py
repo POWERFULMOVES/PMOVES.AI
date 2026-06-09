@@ -29,11 +29,23 @@ def test_run_voice_error_path(tmp_path):
 
 
 class _FakeSinks:
-    def __init__(self): self.nats=[]; self.notebook=[]; self.discord=[]; self.n8n=[]
-    async def publish_nats(self, s, p): self.nats.append((s, p))
-    async def write_notebook(self, t): self.notebook.append(t)
-    async def notify_discord(self, s, a): self.discord.append((s, a))
-    async def save_n8n(self, w): self.n8n.append(w)
+    def __init__(self):
+        self.nats = []
+        self.notebook = []
+        self.discord = []
+        self.n8n = []
+
+    async def publish_nats(self, s, p):
+        self.nats.append((s, p))
+
+    async def write_notebook(self, t):
+        self.notebook.append(t)
+
+    async def notify_discord(self, s, a):
+        self.discord.append((s, a))
+
+    async def save_n8n(self, w):
+        self.n8n.append(w)
 
 
 def test_voice_result_fans_out(tmp_path):
