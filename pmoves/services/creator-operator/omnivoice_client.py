@@ -1,7 +1,16 @@
 """OmniVoice client abstraction. The voice operator depends on the OmniVoiceClient
 interface (synthesize -> audio file path); tests inject FakeOmniVoiceClient, and
 production uses RealOmniVoiceClient (gradio_client to the OmniVoice demo at :8001).
-The transport is validated only at the live test (CREATOR_VOICE_TEST)."""
+
+The RealOmniVoiceClient transport was confirmed against a live OmniVoice 0.1.5 demo
+on 2026-06-10 (4090): the demo exposes two named gradio endpoints, NOT a "/tts" call.
+  /_design_fn(text, lang, ns, gs, dn, sp, du, pp, po, gender, age, pitch,
+              whisper, accent, dialect) -> (audio_path, status)
+  /_clone_fn(text, lang, ref_aud, ref_text, instruct, ns, gs, dn, sp, du, pp, po)
+              -> (audio_path, status)
+`du` is Duration (seconds); du<=0 means auto-estimate. Both return a (audio, status)
+tuple whose first element is a server temp .wav path, copied into out_dir to persist."""
+import shutil
 from pathlib import Path
 
 
@@ -36,9 +45,28 @@ class RealOmniVoiceClient:  # pragma: no cover - requires live OmniVoice at :800
     def synthesize(self, *, text: str, voice_ref: str = None, voice_design: str = None) -> str:
         if not text.strip():
             raise OmniVoiceError("empty text")
-        from gradio_client import Client
+        from gradio_client import Client, handle_file
         client = Client(self.base_url)
-        # The exact endpoint name is confirmed at the live test; assemble_result
-        # records whatever path OmniVoice returns.
-        result = client.predict(text, voice_ref or voice_design or "", api_name="/tts")
-        return str(result)
+        if voice_ref:
+            # Voice cloning: ref_aud is a reference audio file; voice_design carries
+            # the optional instruct/transcript hint (ref_text required by the endpoint).
+            result = client.predict(
+                text, "Auto", handle_file(voice_ref), voice_design or "", "",
+                32, 2.0, True, 1.0, 0, True, True,
+                api_name="/_clone_fn",
+            )
+        else:
+            # Voice design: structured knobs default to "Auto" (server-chosen voice).
+            result = client.predict(
+                text, "Auto", 32, 2.0, True, 1.0, 0, True, True,
+                "Auto", "Auto", "Auto", "Auto", "Auto", "Auto",
+                api_name="/_design_fn",
+            )
+        # Endpoints return (audio_path, status); persist the temp .wav into out_dir.
+        audio = result[0] if isinstance(result, (tuple, list)) else result
+        if not audio:
+            raise OmniVoiceError("OmniVoice returned no audio")
+        self.out_dir.mkdir(parents=True, exist_ok=True)
+        dest = self.out_dir / "voice.wav"
+        shutil.copy(audio, dest)
+        return str(dest)

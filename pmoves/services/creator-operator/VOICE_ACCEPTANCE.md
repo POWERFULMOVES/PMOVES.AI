@@ -14,9 +14,20 @@ PYTHONPATH=pmoves/services/creator-operator python -m pytest ^
   pmoves/services/creator-operator/tests/test_integration_voice.py -v
 ```
 Acceptance = a live synth returns a real `.wav` (>1 KB) and the voice operator
-assembles a valid audio operator-result. If the gradio endpoint name differs from
-`/tts`, adjust `RealOmniVoiceClient.synthesize`'s `api_name` (inspect the live app
-via `gradio_client`'s `Client(...).view_api()`).
+assembles a valid audio operator-result.
+
+**Live-verified 2026-06-10 (4090, OmniVoice 0.1.5, Torch 2.8.0+cu128):** gated test
+PASSED — 24 kHz mono 16-bit WAV, ~3 s, peak≈16383 / rms≈2400 (real speech, audible).
+The demo exposes **two** named gradio endpoints — there is no `/tts`:
+- `/_design_fn(text, lang, ns, gs, dn, sp, du, pp, po, gender, age, pitch, whisper,
+  accent, dialect) -> (audio_path, status)` — no reference audio (the default path).
+- `/_clone_fn(text, lang, ref_aud, ref_text, instruct, ns, gs, dn, sp, du, pp, po)
+  -> (audio_path, status)` — voice cloning from a reference audio.
+
+`du` is Duration (seconds); `du<=0` = auto-estimate. `RealOmniVoiceClient.synthesize`
+is wired to these (design by default, clone when `voice_ref` is set) and copies the
+returned temp `.wav` into `out_dir`. Re-inspect with `gradio_client`'s
+`Client(url).view_api(return_format='dict')` if a future OmniVoice release renames them.
 
 ## Fleet / ROCm
 voice.omnivoice routes fleetwide (needs:[voice]); NVIDIA nodes are confirmed.
