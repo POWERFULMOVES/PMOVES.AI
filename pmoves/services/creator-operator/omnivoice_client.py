@@ -24,7 +24,7 @@ class FakeOmniVoiceClient:
     def __init__(self, out_dir):
         self.out_dir = Path(out_dir)
 
-    def synthesize(self, *, text: str, voice_ref: str = None, voice_design: str = None) -> str:
+    def synthesize(self, *, text: str, voice_ref: str | None = None, voice_design: str | None = None) -> str:
         if not text.strip():
             raise OmniVoiceError("empty text")
         self.out_dir.mkdir(parents=True, exist_ok=True)
@@ -42,21 +42,27 @@ class RealOmniVoiceClient:  # pragma: no cover - requires live OmniVoice at :800
         self.base_url = base_url
         self.out_dir = Path(out_dir)
 
-    def synthesize(self, *, text: str, voice_ref: str = None, voice_design: str = None) -> str:
+    def synthesize(self, *, text: str, voice_ref: str | None = None, voice_design: str | None = None) -> str:
         if not text.strip():
             raise OmniVoiceError("empty text")
         from gradio_client import Client, handle_file
         client = Client(self.base_url)
         if voice_ref:
-            # Voice cloning: ref_aud is a reference audio file; voice_design carries
-            # the optional instruct/transcript hint (ref_text required by the endpoint).
+            # /_clone_fn args: (text, lang, ref_aud, ref_text, instruct, ns, gs, dn,
+            # sp, du, pp, po). ref_aud = the reference audio file. Per OmniVoice docs,
+            # `instruct` is the comma-separated speaker-attribute string (e.g.
+            # "female, british accent") and stabilises the clone, so voice_design maps
+            # to instruct. ref_text is the reference *transcript* (left empty here; the
+            # demo's ASR fills it when enabled, or pass it explicitly in a later rev).
             result = client.predict(
-                text, "Auto", handle_file(voice_ref), voice_design or "", "",
+                text, "Auto", handle_file(voice_ref), "", voice_design or "",
                 32, 2.0, True, 1.0, 0, True, True,
                 api_name="/_clone_fn",
             )
         else:
-            # Voice design: structured knobs default to "Auto" (server-chosen voice).
+            # /_design_fn args: (text, lang, ns, gs, dn, sp, du, pp, po, + 6 attribute
+            # dropdowns). The dropdowns default to "Auto" (model-chosen voice); a
+            # structured voice_design can be threaded through them in a later rev.
             result = client.predict(
                 text, "Auto", 32, 2.0, True, 1.0, 0, True, True,
                 "Auto", "Auto", "Auto", "Auto", "Auto", "Auto",
@@ -68,5 +74,8 @@ class RealOmniVoiceClient:  # pragma: no cover - requires live OmniVoice at :800
             raise OmniVoiceError("OmniVoice returned no audio")
         self.out_dir.mkdir(parents=True, exist_ok=True)
         dest = self.out_dir / "voice.wav"
-        shutil.copy(audio, dest)
+        try:
+            shutil.copy(audio, dest)
+        except (FileNotFoundError, PermissionError) as exc:
+            raise OmniVoiceError(f"failed to persist audio from {audio}: {exc}") from exc
         return str(dest)
