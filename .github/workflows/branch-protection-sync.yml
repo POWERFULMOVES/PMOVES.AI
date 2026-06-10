@@ -107,67 +107,85 @@ jobs:
           #   - require a PR before merging (blocks direct pushes to the branch)
           #     with REQUIRED_REVIEWS approvals (default 0 => automation can still
           #     self-merge sync/* + dependabot PRs; the real gates are CodeRabbit
-          #     on the fork + Trivy on the parent gitlink-promote)
+          #     on the fork + the parent gitlink-promote checks)
           #   - NO force pushes (prevents history rewrite that strips hardening)
           #   - NO deletions (prevents accidental branch loss)
           #   - require conversation resolution
           #   - enforce_admins=false (operator/admin can break-glass; matches the
           #     sanctioned --admin merge path for self-authored fleet PRs)
-          #   - required_status_checks=null by default: fork CI contexts vary and
-          #     many need fork-only secrets (E2E/Docker) — requiring one that can
-          #     never go green would PERMANENTLY block the branch. Operators add
-          #     per-fork required contexts later, deliberately.
+          #   - required_status_checks: PRESERVE whatever the branch already has
+          #     (passed in as $1). We never null-out a fork that already gates on
+          #     CI (e.g. Agent-Zero/Archon/DoX) — that would be a downgrade. Naked
+          #     branches get null (operators add per-fork contexts deliberately;
+          #     requiring an un-greenable fork-secret check would permanently block).
+          # Built with jq (not a heredoc) so the body is always valid JSON and
+          # $rsc is injected as real JSON, not interpolated text.
           policy() {
-            cat <<JSON
-          {
-            "required_status_checks": null,
-            "enforce_admins": false,
-            "required_pull_request_reviews": {
-              "required_approving_review_count": ${REQUIRED_REVIEWS},
-              "dismiss_stale_reviews": true
-            },
-            "restrictions": null,
-            "allow_force_pushes": false,
-            "allow_deletions": false,
-            "required_conversation_resolution": true,
-            "required_linear_history": false
-          }
-          JSON
+            jq -cn --argjson rsc "${1:-null}" --argjson rev "${REQUIRED_REVIEWS:-0}" '{
+              required_status_checks: $rsc,
+              enforce_admins: false,
+              required_pull_request_reviews: {required_approving_review_count: $rev, dismiss_stale_reviews: true},
+              restrictions: null,
+              allow_force_pushes: false,
+              allow_deletions: false,
+              required_conversation_resolution: true,
+              required_linear_history: false
+            }'
           }
 
+          APPLIED=0; SKIPPED=0; FAILED=0
           while IFS="$(printf '\t')" read repo branch; do
             [ -z "$repo" ] && continue
 
-            cur=$(gh api "repos/${OWNER}/${repo}/branches/${branch}/protection" \
-                    --jq '"checks=\(.required_status_checks.contexts|length) force=\(.allow_force_pushes.enabled) del=\(.allow_deletions.enabled)"' 2>/dev/null)
-            if [ -n "$cur" ]; then state="protected[$cur]"; else state="UNPROTECTED"; fi
+            # State detection via EXIT CODE — gh api prints the 404/403 error JSON
+            # to stdout, so testing output-emptiness mis-reads every branch as
+            # "protected". Branch on the actual HTTP result instead.
+            cur=$(gh api "repos/${OWNER}/${repo}/branches/${branch}/protection" 2>/tmp/bp_err)
+            rc=$?
+            rsc="null"
+            if [ "$rc" -eq 0 ]; then
+              checks=$(printf '%s' "$cur" | jq -r '.required_status_checks.contexts | length // 0' 2>/dev/null)
+              force=$(printf '%s'  "$cur" | jq -r '.allow_force_pushes.enabled' 2>/dev/null)
+              del=$(printf '%s'    "$cur" | jq -r '.allow_deletions.enabled' 2>/dev/null)
+              state="protected[checks=${checks} force=${force} del=${del}]"
+              # Preserve existing required checks verbatim.
+              rsc=$(printf '%s' "$cur" | jq -c 'if .required_status_checks then {strict: .required_status_checks.strict, contexts: .required_status_checks.contexts} else null end' 2>/dev/null)
+              [ -z "$rsc" ] && rsc="null"
+            elif grep -qiE 'Upgrade to GitHub Pro|make this repository public' /tmp/bp_err; then
+              echo "  s ${repo}@${branch}: SKIP — needs GitHub Pro (private repo) or public visibility"
+              SKIPPED=$((SKIPPED+1)); continue
+            else
+              state="UNPROTECTED"
+            fi
 
             if [ "$ONLY_UNPROTECTED" = "true" ] && [ "$state" != "UNPROTECTED" ]; then
               echo "  = ${repo}@${branch}: ${state} (skip, already protected)"
-              continue
+              SKIPPED=$((SKIPPED+1)); continue
             fi
             if [ "$DRY_RUN" = "true" ]; then
-              echo "  ~ ${repo}@${branch}: ${state} -> WOULD apply standard policy"
+              echo "  ~ ${repo}@${branch}: ${state} -> WOULD apply (preserve checks=${rsc})"
               continue
             fi
 
-            out=$(policy | gh api -X PUT "repos/${OWNER}/${repo}/branches/${branch}/protection" --input - 2>&1)
+            out=$(policy "$rsc" | gh api -X PUT "repos/${OWNER}/${repo}/branches/${branch}/protection" --input - 2>&1)
             if [ $? -eq 0 ]; then
-              echo "  + ${repo}@${branch}: applied"
+              echo "  + ${repo}@${branch}: applied (checks preserved=${rsc})"
+              APPLIED=$((APPLIED+1))
             else
-              echo "  ! ${repo}@${branch}: FAILED"
+              echo "  ! ${repo}@${branch}: FAILED"; FAILED=$((FAILED+1))
               echo "$out" | head -3 | sed 's/^/      /'
               case "$out" in
+                *"Upgrade to GitHub Pro"*|*"make this repository public"*)
+                  echo "      -> needs GitHub Pro (private repo) or public visibility." ;;
                 *403*|*"Resource not accessible"*)
-                  echo "      -> 403: App may lack Administration:write, or the fork" \
-                       "is outside the minted scope. See github-app-permission-matrix.md §8." ;;
+                  echo "      -> 403: App may lack Administration:write, or fork outside minted scope (matrix §8)." ;;
                 *404*|*"Branch not found"*)
-                  echo "      -> 404: tracked branch '${branch}' does not exist on ${repo}" \
-                       "(fix .gitmodules)." ;;
+                  echo "      -> 404: tracked branch '${branch}' missing on ${repo} (fix .gitmodules)." ;;
               esac
             fi
           done < forks.tsv
 
           echo ""
           echo "Done. dry_run=${DRY_RUN} only_unprotected=${ONLY_UNPROTECTED} reviews=${REQUIRED_REVIEWS}"
-          echo "Legend: ~ would-apply  + applied  = skipped(protected)  ! failed"
+          [ "$DRY_RUN" != "true" ] && echo "applied=${APPLIED} skipped=${SKIPPED} failed=${FAILED}"
+          echo "Legend: ~ would-apply  + applied  = skipped(protected)  s skipped(needs-pro)  ! failed"
