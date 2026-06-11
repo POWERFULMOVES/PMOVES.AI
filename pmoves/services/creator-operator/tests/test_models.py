@@ -21,3 +21,24 @@ def test_lookup_qwen_no_ack():
 def test_unknown_workflow_raises():
     with pytest.raises(KeyError):
         lookup_model(load_models(MODELS), "image.nope")
+
+
+from model_registry import lookup_caps  # noqa: E402
+
+
+def test_lookup_caps_voice_is_light_fleetwide():
+    m = lookup_model(load_models(MODELS), "voice.omnivoice")
+    caps = lookup_caps(m)
+    assert caps["min_vram_gb"] == 4 and caps["needs"] == ["voice"]
+    assert requires_ack(m) is False
+
+
+def test_lookup_caps_video_is_cuda_heavy():
+    m = lookup_model(load_models(MODELS), "video.ltx")
+    caps = lookup_caps(m)
+    assert caps["min_vram_gb"] == 24 and "cuda" in caps["needs"]
+    assert requires_ack(m) is True
+
+
+def test_lookup_caps_missing_returns_none():
+    assert lookup_caps({"model_id": "x"}) is None

@@ -41,6 +41,14 @@ def test_handle_workorder_rejects_unknown_workflow():
     assert out["decision"] == "rejected" and out["reason"] == "unknown-workflow"
 
 
+def test_handle_workorder_rejects_no_caps():
+    wo = {"workorder_id": "wo_x", "workflow_id": "image.ideogram-ultra", "knobs": {},
+          "license_ack": {"model": "x", "mode": "local", "ack": True}}
+    models_nocaps = {"image.ideogram-ultra": {"model_id": "x", "requires_ack": False}}
+    out = handle_workorder(wo, NODES, models_nocaps)
+    assert out["decision"] == "rejected" and out["reason"] == "no-caps"
+
+
 import json as _json
 from pathlib import Path
 from dispatcher import park_workorder
