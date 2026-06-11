@@ -99,8 +99,11 @@ const DEFAULT_STILL_FRACTION = 0.5;
 let renderedFrame = null;
 
 if (extension === '.png' || extension === '.jpg' || extension === '.jpeg') {
-  // renderStill validates the frame against composition.durationInFrames.
-  const maxFrame = Math.max(0, composition.durationInFrames - 1);
+  // Bound the still by the DOCUMENT's duration (normalization allows up to 24s),
+  // matching the media path below — otherwise a still can't thumbnail past the
+  // registered 12s/360-frame composition even though the rendered video runs longer.
+  // renderStill validates frame < composition.durationInFrames, so override it too.
+  const maxFrame = Math.max(0, durationInFrames - 1);
   if (frameArg !== null) {
     renderedFrame = Math.min(frameArg, maxFrame);
   } else {
@@ -109,7 +112,7 @@ if (extension === '.png' || extension === '.jpg' || extension === '.jpeg') {
   }
   await renderStill({
     serveUrl,
-    composition,
+    composition: { ...composition, durationInFrames },
     inputProps: { doc },
     output: outputPath,
     imageFormat: extension === '.jpg' || extension === '.jpeg' ? 'jpeg' : 'png',
@@ -134,7 +137,7 @@ console.log(JSON.stringify({
   input: inputPath,
   output: outputPath,
   frame: renderedFrame,
-  durationInFrames: composition.durationInFrames,
+  durationInFrames,
   fps: composition.fps,
   width: composition.width,
   height: composition.height,
