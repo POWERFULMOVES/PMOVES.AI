@@ -1,4 +1,4 @@
-FROM node:20-slim AS builder
+FROM node:24-slim AS builder
 
 WORKDIR /app
 COPY package.json package-lock.json* ./
@@ -6,7 +6,7 @@ RUN npm ci --ignore-scripts
 COPY . .
 RUN npm run build
 
-FROM node:20-slim
+FROM node:24-slim
 
 # Security: non-root user
 RUN groupadd -r pmoves && useradd -r -g pmoves -d /app -s /sbin/nologin pmoves
