@@ -17,14 +17,15 @@ concurrency:
 
 jobs:
   triage:
-    # React only to known automated reviewers, and only when the review carries a body.
-    # (Human reviews and empty "approve" clicks are ignored.)
+    # React only to known automated reviewers. Do NOT also require a non-empty
+    # review body: bots often post findings as inline comments with no top-level
+    # summary, and those are exactly the line-level comments we want to triage —
+    # the action fetches the review's comments itself.
     if: |
-      github.event.review.body != '' &&
-      (github.event.review.user.login == 'coderabbitai' ||
-       github.event.review.user.login == 'coderabbitai[bot]' ||
-       github.event.review.user.login == 'chatgpt-codex-connector' ||
-       github.event.review.user.login == 'chatgpt-codex-connector[bot]')
+      github.event.review.user.login == 'coderabbitai' ||
+      github.event.review.user.login == 'coderabbitai[bot]' ||
+      github.event.review.user.login == 'chatgpt-codex-connector' ||
+      github.event.review.user.login == 'chatgpt-codex-connector[bot]'
     runs-on: ubuntu-latest
     # Least-privilege: reads the diff, posts ONE summary comment. No contents:write
     # (it must not be able to push), no thread-resolution scope.
@@ -43,6 +44,9 @@ jobs:
         uses: anthropics/claude-code-action@eee73e2ae5399c561de4ff038aa7b36a7aa991a7 # v1.0.143
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          # claude-code-action rejects bot-triggered runs by default; this job is
+          # *intentionally* triggered by bot reviews, so allow exactly those bots.
+          allowed_bots: 'coderabbitai[bot],chatgpt-codex-connector[bot]'
           prompt: |
             The automated reviewer "${{ github.event.review.user.login }}" just submitted a review on ${{ github.repository }} PR #${{ github.event.pull_request.number }}.
 
