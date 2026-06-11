@@ -477,6 +477,24 @@ Worked examples (2026-06-02 Lane-A Trivy pass): **wger** (`extras/docker/product
 
 **Full FlOO$ flow:** `make -C pmoves chit-flow-pr-monitor` / `chit-flow-pr-monitor-strict`.
 
+**Verify a claimed fix before asserting it.** Never write "X is fixed/restored" without running the real qualifying case (the actual PR, the actual command) — paraphrased confidence is not evidence. Use the `verifier` subagent for PR claims; it maps each claim to a command and reports exit code + output. (Learned the hard way: a dependabot version bump was asserted to fix an auto-review outage twice before a real PR proved it never did — the fix was elsewhere.)
+
+### Automated review (`claude-code-review.yml`) — failure signatures
+
+When auto-review is red, triage by signature (it is almost never the PR's code):
+
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+| Fails at **~4s**, `oven-sh/setup-bun ... is not allowed` | `claude-code-action` (every version) pulls `oven-sh/setup-bun`; repo Actions allowlist (`sha_pinning_required`) lacks it | Add `oven-sh/setup-bun@*` to `repos/OWNER/REPO/actions/permissions/selected-actions` (operator-authorized — it's a security control; keep `sha_pinning_required` true). **Bumping the action version does NOT fix this.** |
+| Fails at **~40s**, `401 Workflow validation failed … identical content to the default branch` | The PR **edits the review workflow file itself** (supply-chain guard) | **Benign — ignore.** The action says so. Clears once the change lands on `main`; a PR that doesn't touch the workflow reviews clean. |
+| A workflow meant to fire **on bot reviews** never posts | `claude-code-action` default-denies bot triggers | Pass `allowed_bots: 'coderabbitai[bot],chatgpt-codex-connector[bot]'`. |
+
+Health check: `gh run list --workflow=claude-code-review.yml --limit 10` — a wall of `failure` at 4s = allowlist; existence of the file ≠ a working reviewer. The `review-comment-monitor.yml` (triage-only) + the `code-review`/`verifier` subagents are the in-repo operational counterparts.
+
+### Node signatures in the claim register — disambiguate primary vs mirror
+
+Multiple Claude instances can run as the **same node identity** (e.g. a 4090 primary and its 1M-context mirror both signing `4090-CLAUDE`). When two same-named claims race the AGNOTE append slot, **union-merge** (keep both — they're usually non-overlapping lanes), never pick-one. To prevent ambiguity, disambiguate the signature when a mirror is active (`4090-CLAUDE` vs `4090-CLAUDE-mirror`, or distinct `ACK::` scope tags) so `claim-collision-agent` and humans can tell the lanes apart.
+
 ## Merge Hazards — Stacked PRs and Squash-Merge Rebase
 
 Two recurring git/PR-flow gotchas that every PMOVES agent should know before driving a merge sequence.
