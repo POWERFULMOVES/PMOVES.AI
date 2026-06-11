@@ -27,13 +27,15 @@ import logging
 import os
 import re
 import tempfile
+import time
 import uuid
 from pathlib import Path
 
 import torch
 import soundfile as sf
 from fastapi import FastAPI, Header, HTTPException
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
+from prometheus_client import CONTENT_TYPE_LATEST, Counter, Gauge, Histogram, generate_latest
 from pydantic import BaseModel
 
 logger = logging.getLogger("omnivoice_server")
@@ -51,6 +53,27 @@ _state = {"model": None}
 # Flat-catalog id: starts alphanumeric, then alnum/._- — no separators, no leading dot
 # (rejects "..", hidden files, traversal). Used as an allowlist before any path use.
 _SAFE_REF = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
+
+# ---------------------------------------------------------------------------
+# Prometheus metrics (module-level singletons, safe for multi-worker reload)
+# ---------------------------------------------------------------------------
+SYNTH_REQUESTS = Counter(
+    "omnivoice_synth_requests_total",
+    "Total /synthesize requests",
+    ["status"],  # ok | error
+)
+SYNTH_LATENCY = Histogram(
+    "omnivoice_synth_latency_seconds",
+    "End-to-end /synthesize latency in seconds",
+)
+SYNTH_ERRORS = Counter(
+    "omnivoice_synth_errors_total",
+    "Total /synthesize errors (model failures, upstream exceptions)",
+)
+MODEL_LOADED = Gauge(
+    "omnivoice_model_loaded",
+    "1 when the OmniVoice model is resident in VRAM, 0 otherwise",
+)
 
 
 class SynthRequest(BaseModel):
@@ -98,6 +121,7 @@ def _load_model() -> None:
     _state["model"] = OmniVoice.from_pretrained(
         MODEL_ID, device_map=DEVICE, dtype=torch.float16, load_asr=LOAD_ASR,
     )
+    MODEL_LOADED.set(1)
 
 
 @app.get("/healthz")
@@ -113,13 +137,21 @@ def healthz() -> dict:
     }
 
 
+@app.get("/metrics")
+def metrics() -> Response:
+    """Prometheus scrape endpoint — no auth required (metrics are not sensitive)."""
+    return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
+
+
 @app.post("/synthesize")
 def synthesize(req: SynthRequest, x_omnivoice_token: str | None = Header(default=None)):
     _require_auth(x_omnivoice_token)
     model = _state["model"]
     if model is None:
+        SYNTH_REQUESTS.labels(status="error").inc()
         raise HTTPException(status_code=503, detail="model not loaded yet")
     if not req.text.strip():
+        SYNTH_REQUESTS.labels(status="error").inc()
         raise HTTPException(status_code=400, detail="empty text")
     # Only forward set knobs so the model applies its documented defaults otherwise.
     kw = {}
@@ -127,6 +159,7 @@ def synthesize(req: SynthRequest, x_omnivoice_token: str | None = Header(default
         kw["instruct"] = req.instruct
     if req.ref_audio is not None:
         if not LOAD_ASR and not (req.ref_text or "").strip():
+            SYNTH_REQUESTS.labels(status="error").inc()
             raise HTTPException(
                 status_code=400,
                 detail="ref_text required when cloning without ASR (set OMNIVOICE_LOAD_ASR=1)",
@@ -138,6 +171,7 @@ def synthesize(req: SynthRequest, x_omnivoice_token: str | None = Header(default
         kw["duration"] = req.duration
     if req.speed is not None:
         kw["speed"] = req.speed
+    t0 = time.monotonic()
     try:
         audio = model.generate(text=req.text, **kw)
     except Exception as exc:
@@ -145,7 +179,11 @@ def synthesize(req: SynthRequest, x_omnivoice_token: str | None = Header(default
         # an untrusted caller can't fingerprint internals via error text.
         err_id = uuid.uuid4().hex[:8]
         logger.exception("synthesis failed [%s]", err_id)
+        SYNTH_ERRORS.inc()
+        SYNTH_REQUESTS.labels(status="error").inc()
         raise HTTPException(status_code=500, detail=f"synthesis failed (ref {err_id})") from exc
+    SYNTH_LATENCY.observe(time.monotonic() - t0)
+    SYNTH_REQUESTS.labels(status="ok").inc()
     fd, path = tempfile.mkstemp(suffix=".wav")
     os.close(fd)
     sf.write(path, audio[0], SAMPLE_RATE)
