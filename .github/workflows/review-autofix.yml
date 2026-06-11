@@ -18,9 +18,15 @@ concurrency:
 
 jobs:
   autofix:
-    # Fire only when BOTH: (a) a trusted automated reviewer submitted the review,
-    # and (b) a human opted this PR in with the `pr-trim:auto` label.
+    # Fire only when ALL of: (a) the PR is from THIS repo, not a fork; (b) a human
+    # opted it in with the `pr-trim:auto` label; (c) a trusted automated reviewer
+    # submitted the review.
+    # The same-repo gate is load-bearing: `actions/checkout`'s `ref` resolves against
+    # the base repo, so a fork PR whose head branch is named like a base branch (e.g.
+    # `main`) could otherwise make this job check out + push its commit to the WRONG
+    # repo. Restricting to same-repo PRs makes head==base, so the `ref` below is safe.
     if: |
+      github.event.pull_request.head.repo.full_name == github.repository &&
       contains(github.event.pull_request.labels.*.name, 'pr-trim:auto') &&
       (github.event.review.user.login == 'coderabbitai' ||
        github.event.review.user.login == 'coderabbitai[bot]' ||
