@@ -106,7 +106,10 @@ services:
               count: all
               capabilities: [gpu]
     ports:
-      - "0.0.0.0:11434:11434"
+      # Host publish is env-driven (default :11435) so the container Ollama coexists
+      # with a Windows-native Ollama on :11434 — matches docker-compose.yml. The
+      # container still listens on 11434 internally (OLLAMA_HOST above).
+      - "${OLLAMA_BIND:-0.0.0.0}:${OLLAMA_HOST_PORT:-11435}:11434"
     networks:
       - z890_net
     healthcheck:
