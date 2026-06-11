@@ -123,3 +123,30 @@ def test_route_no_caps_anywhere_returns_no_caps():
     models_nocaps = {"voice.omnivoice": {"model_id": "x", "requires_ack": False}}
     r = route(wo, FLEET, models_nocaps)
     assert r["ok"] is False and r["reason"] == "no-caps"
+
+
+# --- WS-I image + WS-A2 anime route off the real registry (handoff 2026-06-08) ---
+
+from pathlib import Path  # noqa: E402
+from model_registry import load_models  # noqa: E402
+from operator_select import operator_kind  # noqa: E402
+
+REGISTRY = Path(__file__).resolve().parents[3] / "config/creator_models.yaml"
+
+
+@pytest.mark.parametrize("workflow_id", ["image.flux-schnell", "anime.animagine-xl"])
+def test_clean_image_anime_route_on_cuda_comfyui_node(workflow_id):
+    # Apache/OpenRAIL clean models: no ack needed, route to a cuda+comfyui node.
+    models = load_models(REGISTRY)
+    wo = {"workorder_id": "wo_clean", "workflow_id": workflow_id, "knobs": {},
+          "license_ack": {"ack": False}}  # no ack supplied -> still must route
+    r = route(wo, FLEET, models)
+    assert r["ok"] is True, r
+    node = next(n for n in FLEET if n["node_id"] == r["node_id"])
+    assert "cuda" in node["caps"] and "comfyui" in node["caps"]
+    assert r["node_id"] != "knuckles"  # rocm-only node excluded by cuda gate
+
+
+@pytest.mark.parametrize("workflow_id", ["image.flux-schnell", "anime.animagine-xl"])
+def test_clean_image_anime_use_comfyui_operator(workflow_id):
+    assert operator_kind(workflow_id) == "comfyui"  # only voice.* is special
