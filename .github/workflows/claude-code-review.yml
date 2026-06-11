@@ -15,6 +15,15 @@ on:
       - 'Makefile'
       - 'pmoves/mk/**'
       - '.github/workflows/**'
+      # Config + behaviour-defining files are as risky as code (a misconfigured
+      # compose/rooms-catalog or a bad agent/skill definition can break prod):
+      - '**.yaml'
+      - '**.yml'
+      - '**.json'
+      - 'pmoves/config/**'
+      - 'pmoves/configs/**'
+      - '.claude/agents/**'
+      - '.claude/skills/**'
 
 concurrency:
   group: claude-review-${{ github.head_ref }}
@@ -28,13 +37,15 @@ jobs:
        github.event.pull_request.author_association == 'MEMBER' ||
        github.event.pull_request.author_association == 'COLLABORATOR')
     runs-on: ubuntu-latest
+    # Least-privilege for a comment-only reviewer: it reads the diff and posts
+    # PR review comments — it does not push commits or write attestations.
+    # (claude.yml keeps contents:write because @claude can apply fix-ups.)
     permissions:
-      contents: write
+      contents: read
       pull-requests: write
       issues: write
       id-token: write
       actions: read
-      attestations: write
 
     steps:
       - name: Checkout repository
