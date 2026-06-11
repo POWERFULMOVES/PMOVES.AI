@@ -25,6 +25,7 @@ Env:
 """
 import logging
 import os
+import re
 import tempfile
 import uuid
 from pathlib import Path
@@ -47,6 +48,10 @@ SAMPLE_RATE = 24000  # OmniVoice emits 24 kHz waveforms (docs/OmniVoice.ipynb)
 app = FastAPI(title="OmniVoice Production Server")
 _state = {"model": None}
 
+# Flat-catalog id: starts alphanumeric, then alnum/._- — no separators, no leading dot
+# (rejects "..", hidden files, traversal). Used as an allowlist before any path use.
+_SAFE_REF = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
+
 
 class SynthRequest(BaseModel):
     text: str
@@ -66,26 +71,23 @@ def _require_auth(token: str | None) -> None:
 
 def _resolve_ref_audio(name: str) -> str:
     """Resolve a client-supplied ref_audio as an opaque id INSIDE the configured
-    reference-voice catalog — never as a raw path. Rejects traversal/absolute/NUL
-    and verifies the resolved path stays under the catalog root."""
+    reference-voice catalog. The client value is validated against a strict allowlist
+    and then matched by NAME against the server-enumerated catalog listing — it is
+    never used to construct an arbitrary filesystem path, so traversal is impossible."""
     if not REFERENCE_VOICE_DIR:
         raise HTTPException(
             status_code=400,
             detail="ref_audio not supported (no OMNIVOICE_REFERENCE_VOICE_DIR configured)",
         )
-    if (
-        not name
-        or "\x00" in name
-        or ".." in Path(name).parts
-        or Path(name).is_absolute()
-        or (len(name) >= 2 and name[1] == ":")  # Windows drive letter
-    ):
+    if not name or "\x00" in name or not _SAFE_REF.fullmatch(name):
         raise HTTPException(status_code=400, detail="invalid ref_audio")
     base = Path(REFERENCE_VOICE_DIR).resolve()
-    target = (base / name).resolve()
-    if target != base and base not in target.parents:
-        raise HTTPException(status_code=400, detail="invalid ref_audio")
-    if not target.is_file():
+    try:
+        catalog = {p.name: p for p in base.iterdir() if p.is_file()}
+    except (FileNotFoundError, NotADirectoryError):
+        raise HTTPException(status_code=400, detail="ref_audio catalog unavailable") from None
+    target = catalog.get(name)  # membership lookup, not path construction
+    if target is None:
         raise HTTPException(status_code=404, detail="ref_audio not found")
     return str(target)
 
