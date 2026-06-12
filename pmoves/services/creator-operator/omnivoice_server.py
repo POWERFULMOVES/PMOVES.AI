@@ -182,11 +182,20 @@ def synthesize(req: SynthRequest, x_omnivoice_token: str | None = Header(default
         SYNTH_ERRORS.inc()
         SYNTH_REQUESTS.labels(status="error").inc()
         raise HTTPException(status_code=500, detail=f"synthesis failed (ref {err_id})") from exc
+    # Persist the wav BEFORE counting success — a write failure (e.g. full /tmp or
+    # libsndfile rejecting the waveform) is an error, not an "ok" with observed latency.
+    try:
+        fd, path = tempfile.mkstemp(suffix=".wav")
+        os.close(fd)
+        sf.write(path, audio[0], SAMPLE_RATE)
+    except Exception as exc:
+        err_id = uuid.uuid4().hex[:8]
+        logger.exception("audio write failed [%s]", err_id)
+        SYNTH_ERRORS.inc()
+        SYNTH_REQUESTS.labels(status="error").inc()
+        raise HTTPException(status_code=500, detail=f"audio write failed (ref {err_id})") from exc
     SYNTH_LATENCY.observe(time.monotonic() - t0)
     SYNTH_REQUESTS.labels(status="ok").inc()
-    fd, path = tempfile.mkstemp(suffix=".wav")
-    os.close(fd)
-    sf.write(path, audio[0], SAMPLE_RATE)
     return FileResponse(path, media_type="audio/wav", filename="voice.wav")
 
 
