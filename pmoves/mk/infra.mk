@@ -244,9 +244,16 @@ RUNNER_COMPOSE_4090 := docker/runner/docker-compose.4090.yml
 # Dedicated compose project name so up/down/status/logs operate only on these
 # two containers and never prune services from the implicit `pmoves` project.
 RUNNER_PROJECT_4090 := pmoves-runners-4090
-# Token precedence: GITHUB_PAT (env.tier-agent, repo scope) → gh auth token (dev fallback)
-# GH_PAT_PUBLISH is NOT used — it has GHCR packages:write scope only (wrong for registration)
-_runner_pat = $${GITHUB_PAT:-$$( gh auth token 2>/dev/null )}
+# Token precedence: GITHUB_PAT (env.tier-agent, repo scope) → gh auth token (dev fallback).
+# IMPORTANT: validate GITHUB_PAT and fall back when it is INVALID, not just unset — a
+# stale env GITHUB_PAT would otherwise deadlock the runner bootstrap (the runner is what
+# refreshes the PAT via sync-secrets-local). GH_PAT_PUBLISH is NOT used (GHCR
+# packages:write scope only — wrong for registration).
+# env files sourced by the make framework can set a STALE GH_TOKEN/GITHUB_TOKEN
+# (e.g. a gist-only token) that poisons `gh` inside recipes — `gh` prefers those
+# env vars over the keyring. Clear them so the GITHUB_PAT validation + the
+# `gh auth token` keyring fallback both see the real credential.
+_runner_pat = $$( env -u GH_TOKEN -u GITHUB_TOKEN sh -c 'p="$${GITHUB_PAT}"; if [ -n "$$p" ] && GH_TOKEN="$$p" gh api /user >/dev/null 2>&1; then printf "%s" "$$p"; else gh auth token 2>/dev/null; fi' )
 
 gha-runner-4090-preflight: ## Validate Docker Hub auth + Tailscale DNS + GitHub PAT for 4090 runners
 	@echo "=== 4090 Runner Preflight ==="
