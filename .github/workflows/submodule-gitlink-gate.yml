@@ -1,0 +1,61 @@
+name: Submodule Gitlink Gate
+
+# PR-time gate enforcing the .gitmodules branch strategy on submodule gitlinks.
+# Catches pointers that are "dangling" (not on the declared tracked branch) or
+# "left/right" (rolled back / sideways) BEFORE they land on main — the class of
+# drift that a stale local submodule checkout silently introduces.
+#
+# Tracked branches are derived from .gitmodules (no hardcoded list), so every
+# submodule — incl. PMOVES.YT, which the scheduled submodule-update-check.yml
+# does not watch — is covered. See .github/scripts/validate_submodule_gitlinks.sh.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  gitlink-gate:
+    name: submodule-gitlink-gate
+    # Self-hosted ai-lab, pinned X64: the ARM64 box (pmoves-spark-ailab) flakes
+    # node-based actions; the X64 ai-lab runners (z890/4090) are node24-capable
+    # for checkout v6. Same routing lesson as branch-trail-emit (PR #1801).
+    runs-on: [self-hosted, ai-lab, X64]
+    timeout-minutes: 15
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2
+        with:
+          egress-policy: audit
+          allowed-endpoints: >
+            github.com:443
+            api.github.com:443
+            codeload.github.com:443
+            objects.githubusercontent.com:443
+
+      - name: Checkout (full history; submodules initialized on demand)
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          # 0 = full history so the validator can read the base-sha gitlink trees.
+          fetch-depth: 0
+          # Submodule forks are PUBLIC, so the repo-scoped GITHUB_TOKEN is enough
+          # (persisted into git config for the on-demand submodule fetches the
+          # validator runs). Per actions/checkout docs, GITHUB_TOKEN is scoped to
+          # THIS repo and cannot read PRIVATE submodules — if any tracked fork is
+          # ever made private, swap this to a read-only PAT (e.g. CATACLYSMSTUDIOS_GH_PAT).
+          token: ${{ secrets.GITHUB_TOKEN }}
+          persist-credentials: true
+          # NOT submodules: true — the validator inits only the CHANGED submodules,
+          # avoiding a 30+ submodule clone on every PR.
+
+      - name: Validate submodule gitlinks against .gitmodules branch strategy
+        run: |
+          chmod +x .github/scripts/validate_submodule_gitlinks.sh
+          .github/scripts/validate_submodule_gitlinks.sh "${{ github.event.pull_request.base.sha }}"
