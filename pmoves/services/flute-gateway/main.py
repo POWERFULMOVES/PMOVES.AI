@@ -913,6 +913,34 @@ async def synthesize_speech_audio(request: SynthesizeRequest):
                 headers={"Content-Disposition": 'attachment; filename="voicebox.wav"'},
             )
 
+        elif provider_name == "omnivoice" and omnivoice_provider:
+            wav_bytes = await omnivoice_provider.synthesize(
+                text=request.text,
+                voice=request.voice,
+                instruct=request.engine if request.engine and request.engine != "omnivoice" else None,
+            )
+            if not wav_bytes:
+                raise HTTPException(status_code=502, detail="OmniVoice returned empty audio.")
+
+            if output_format == "pcm":
+                # Extract PCM from WAV
+                try:
+                    with io.BytesIO(wav_bytes) as buf:
+                        with wave.open(buf, "rb") as wf:
+                            pcm_data = wf.readframes(wf.getnframes())
+                    REQUESTS_TOTAL.labels(endpoint="/v1/voice/synthesize/audio", status="200").inc()
+                    return Response(content=pcm_data, media_type="application/octet-stream")
+                except wave.Error:
+                    REQUESTS_TOTAL.labels(endpoint="/v1/voice/synthesize/audio", status="200").inc()
+                    return Response(content=wav_bytes, media_type="application/octet-stream")
+
+            REQUESTS_TOTAL.labels(endpoint="/v1/voice/synthesize/audio", status="200").inc()
+            return Response(
+                content=wav_bytes,
+                media_type="audio/wav",
+                headers={"Content-Disposition": 'attachment; filename="omnivoice.wav"'},
+            )
+
         if provider_name == "vibevoice" and not vibevoice_provider:
             raise HTTPException(
                 status_code=503,
@@ -928,11 +956,19 @@ async def synthesize_speech_audio(request: SynthesizeRequest):
                 status_code=503,
                 detail="Voicebox provider not configured (set VOICEBOX_URL to the running Voicebox server URL).",
             )
+        if provider_name == "omnivoice" and not omnivoice_provider:
+            raise HTTPException(
+                status_code=503,
+                detail="OmniVoice provider not configured (set OMNIVOICE_URL to the running server URL).",
+            )
         raise HTTPException(status_code=400, detail=f"Provider '{provider_name}' not available")
     except VoiceboxNoProfileError as exc:
         REQUESTS_TOTAL.labels(endpoint="/v1/voice/synthesize/audio", status="503").inc()
         raise HTTPException(status_code=503, detail=str(exc)) from exc
-    except (VibeVoiceBusyError, VibeVoiceNoAudioError, UltimateTTSError, VoiceboxBusyError, VoiceboxError) as exc:
+    except OmniVoiceBusyError as exc:
+        REQUESTS_TOTAL.labels(endpoint="/v1/voice/synthesize/audio", status="503").inc()
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except (VibeVoiceBusyError, VibeVoiceNoAudioError, UltimateTTSError, VoiceboxBusyError, VoiceboxError, OmniVoiceError) as exc:
         REQUESTS_TOTAL.labels(endpoint="/v1/voice/synthesize/audio", status="502").inc()
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     except HTTPException as exc:
@@ -964,9 +1000,10 @@ async def synthesize_prosodic_speech(request: SynthesizeRequest):
         )
         request.engine = resolved_engine
         if not request.provider:
-            # A persona/intent that resolves to engine "omnivoice" routes to the
-            # OmniVoice provider; everything else defaults to ultimate_tts.
-            request.provider = "omnivoice" if resolved_engine == "omnivoice" else "ultimate_tts"
+            # Prosodic synthesis is ultimate_tts-only (BPM chunking is an
+            # ultimate_tts-specific feature), so always route there regardless of
+            # the resolved engine — an omnivoice persona falls back to ultimate_tts.
+            request.provider = "ultimate_tts"
         if not request.voice and "voice" in extra_kwargs:
             request.voice = extra_kwargs.pop("voice")
 
