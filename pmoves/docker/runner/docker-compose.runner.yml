@@ -48,7 +48,10 @@ services:
       - /tmp/pmoves-runner-1:/tmp/pmoves-runner
     environment:
       <<: *runner-env
-      ACCESS_TOKEN: ${RUNNER_ACCESS_TOKEN}
+      # PAT (auto re-registers) OR a pre-minted registration token (RUNNER_TOKEN).
+      # The make target supplies whichever it could resolve; image prefers RUNNER_TOKEN.
+      ACCESS_TOKEN: ${RUNNER_ACCESS_TOKEN:-}
+      RUNNER_TOKEN: ${RUNNER_REG_TOKEN:-}
 
   runner-2:
     <<: *runner-base
@@ -58,4 +61,7 @@ services:
       - /tmp/pmoves-runner-2:/tmp/pmoves-runner
     environment:
       <<: *runner-env
-      ACCESS_TOKEN: ${RUNNER_ACCESS_TOKEN}
+      # PAT (auto re-registers) OR a pre-minted registration token (RUNNER_TOKEN).
+      # The make target supplies whichever it could resolve; image prefers RUNNER_TOKEN.
+      ACCESS_TOKEN: ${RUNNER_ACCESS_TOKEN:-}
+      RUNNER_TOKEN: ${RUNNER_REG_TOKEN:-}

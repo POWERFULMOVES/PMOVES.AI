@@ -312,10 +312,26 @@ RUNNER_NODE ?= host
 RUNNER_COMPOSE := docker/runner/docker-compose.runner.yml
 RUNNER_PROJECT := pmoves-runners-$(RUNNER_NODE)
 
-gha-runner-up: gha-runner-4090-preflight ## Start cross-node ai-lab Docker runners (RUNNER_NODE=z890|4090|5090|…)
+gha-runner-up: ## Start cross-node ai-lab Docker runners (RUNNER_NODE=z890|4090|5090|…)
+	@echo "Resolving runner credential for node '$(RUNNER_NODE)'..."
 	@_pat="$(call _runner_pat)"; \
-	RUNNER_NODE=$(RUNNER_NODE) RUNNER_ACCESS_TOKEN=$$_pat \
-	  docker compose -p $(RUNNER_PROJECT) -f $(RUNNER_COMPOSE) up -d
+	if [ -n "$$_pat" ] && GH_TOKEN="$$_pat" gh api repos/POWERFULMOVES/PMOVES.AI/actions/runners >/dev/null 2>&1; then \
+	  echo "  ✓ validated PAT (repo scope) — ACCESS_TOKEN path (auto re-registers)"; \
+	  RUNNER_NODE=$(RUNNER_NODE) RUNNER_ACCESS_TOKEN="$$_pat" \
+	    docker compose -p $(RUNNER_PROJECT) -f $(RUNNER_COMPOSE) up -d; \
+	else \
+	  echo "  PAT unavailable/under-scoped — minting a registration token via keyring..."; \
+	  _reg="$$( GH_TOKEN= GITHUB_TOKEN= gh api repos/POWERFULMOVES/PMOVES.AI/actions/runners/registration-token -X POST --jq '.token' 2>/dev/null )"; \
+	  if [ -z "$$_reg" ]; then \
+	    echo "  ✗ FAIL: no usable PAT and could not mint a registration token."; \
+	    echo "    Fix: gh auth refresh --scopes admin:org,repo,workflow   (or refresh GITHUB_PAT in env)"; \
+	    exit 1; \
+	  fi; \
+	  echo "  ✓ minted registration token (keyring, repo scope) — RUNNER_TOKEN path"; \
+	  RUNNER_NODE=$(RUNNER_NODE) RUNNER_REG_TOKEN="$$_reg" \
+	    docker compose -p $(RUNNER_PROJECT) -f $(RUNNER_COMPOSE) up -d; \
+	fi
+	@echo "✓ Runners up for '$(RUNNER_NODE)' (project $(RUNNER_PROJECT)). Verify: make gha-runner-status RUNNER_NODE=$(RUNNER_NODE)"
 	@echo "✓ Runners up for node '$(RUNNER_NODE)' (project $(RUNNER_PROJECT)). Verify: make gha-runner-status RUNNER_NODE=$(RUNNER_NODE)"
 
 gha-runner-down: ## Stop + deregister this node's ai-lab Docker runners
