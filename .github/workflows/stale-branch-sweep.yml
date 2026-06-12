@@ -87,17 +87,20 @@ jobs:
             fi
           done
 
-          # Write outputs
-          echo "orphans<<EOF" >> "$GITHUB_OUTPUT"
-          echo -e "${ORPHANS}" >> "$GITHUB_OUTPUT"
-          echo "EOF" >> "$GITHUB_OUTPUT"
-
-          echo "active_count<<EOF" >> "$GITHUB_OUTPUT"
-          echo -e "${ACTIVE_BRANCHES}" | grep -c . || echo "0" >> "$GITHUB_OUTPUT"
-          echo "EOF" >> "$GITHUB_OUTPUT"
-
-          ORPHAN_COUNT=$(echo -e "${ORPHANS}" | grep -c . || echo "0")
-          echo "orphan_count=${ORPHAN_COUNT}" >> "$GITHUB_OUTPUT"
+          # Write outputs. grep -c prints "0" and exits 1 on no-match; the
+          # trailing `|| true` keeps `set -e` from aborting while still
+          # capturing that "0" via the command substitution (the old
+          # `|| echo 0 >> $GITHUB_OUTPUT` sent the real count to stdout, never
+          # to the heredoc, so active_count rendered blank/0 by luck).
+          ORPHAN_COUNT=$(printf '%b' "${ORPHANS}" | grep -c . || true)
+          ACTIVE_COUNT=$(printf '%b' "${ACTIVE_BRANCHES}" | grep -c . || true)
+          {
+            echo "orphans<<EOF"
+            printf '%b\n' "${ORPHANS}"
+            echo "EOF"
+            echo "orphan_count=${ORPHAN_COUNT:-0}"
+            echo "active_count=${ACTIVE_COUNT:-0}"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Delete orphan branches
         if: env.DRY_RUN == 'false'
@@ -137,16 +140,16 @@ jobs:
           "
 
           if [ -n "${ORPHANS}" ]; then
-            BODY+="### Orphan Branches
-            
-            | Branch | Reason |
-            |--------|--------|
-            "
-            echo -e "${ORPHANS}" | while read -r branch; do
+            BODY+=$'### Orphan Branches\n\n| Branch | Reason |\n|--------|--------|\n'
+            # Process substitution (not `echo | while`) so the loop runs in THIS
+            # shell — the old pipe spawned a subshell and every BODY+= row was
+            # discarded on loop exit, leaving the table permanently empty while
+            # the count kept climbing. $'\n' keeps the markdown un-indented.
+            while IFS= read -r branch; do
               [ -z "${branch}" ] && continue
               LAST=$(git log -1 --format='%ci (%cr)' "origin/${branch}" 2>/dev/null || echo "unknown")
-              BODY+="| \`${branch}\` | No PR, no CHIT trail activity since ${LAST} |\n"
-            done
+              BODY+="| \`${branch}\` | No PR, no CHIT trail activity since ${LAST} |"$'\n'
+            done < <(printf '%b' "${ORPHANS}")
           else
             BODY+="### No orphan branches found. All non-main branches have either an open PR or recent CHIT trail activity."
           fi
