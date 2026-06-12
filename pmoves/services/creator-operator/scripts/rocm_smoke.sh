@@ -56,24 +56,14 @@ HEALTHZ_RESPONSE=$(curl -sf --max-time 30 "${BASE_URL}/healthz") || {
 echo "    response: ${HEALTHZ_RESPONSE}"
 
 # Extract status field (portable; no jq dependency)
-HEALTH_STATUS=$(python3 - <<'PYEOF'
-import json, sys
-d = json.loads(sys.stdin.read())
-print(d.get("status", ""))
-PYEOF
-<<< "${HEALTHZ_RESPONSE}")
+HEALTH_STATUS=$(printf '%s' "${HEALTHZ_RESPONSE}" | python3 -c 'import json, sys; print(json.loads(sys.stdin.read()).get("status", ""))')
 
 if [[ "${HEALTH_STATUS}" != "ok" ]]; then
     echo "FAIL: /healthz status='${HEALTH_STATUS}' (expected 'ok' — model may still be loading)" >&2
     exit 2
 fi
 
-SAMPLE_RATE=$(python3 - <<'PYEOF'
-import json, sys
-d = json.loads(sys.stdin.read())
-print(d.get("sample_rate", 0))
-PYEOF
-<<< "${HEALTHZ_RESPONSE}")
+SAMPLE_RATE=$(printf '%s' "${HEALTHZ_RESPONSE}" | python3 -c 'import json, sys; print(json.loads(sys.stdin.read()).get("sample_rate", 0))')
 
 echo "    status=ok, sample_rate=${SAMPLE_RATE}"
 
