@@ -31,6 +31,20 @@ if (-not $bash) {
   throw "bash not found on PATH (install Git for Windows). Needed to run the project Makefile."
 }
 
+# Guard the interval — 0/negative makes RepetitionInterval invalid (silent no-runs).
+if ($IntervalHours -lt 1 -or $IntervalHours -gt 24) {
+  throw "IntervalHours must be 1..24 (got $IntervalHours)."
+}
+
+# Pre-flight: the task runs `make` via a bash login shell. If make isn't on THAT
+# shell's PATH the task silently no-ops — recreating the exact stale-token failure
+# this lever exists to prevent. Fail loudly now instead of discovering it weeks
+# later as a stale token.
+$makeCheck = & $bash.Source -lc "command -v make" 2>$null
+if (-not $makeCheck) {
+  throw "make not found on the bash login-shell PATH; the scheduled task would silently fail. Install make (Git Bash / scoop) or add it to PATH, then re-run."
+}
+
 # Convert the Windows repo path to a bash path: D:\PMOVES.AI -> /d/PMOVES.AI
 $drive   = $RepoDir.Substring(0,1).ToLower()
 $rest    = $RepoDir.Substring(2) -replace '\\','/'

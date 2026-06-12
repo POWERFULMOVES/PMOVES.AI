@@ -19,6 +19,19 @@ REPO_DIR="${REPO_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)}"
 INTERVAL_HOURS="${INTERVAL_HOURS:-6}"
 LOG="$REPO_DIR/.git/token-refresh.log"
 
+# Validate the interval — a non-integer or 0 yields an invalid cron field
+# (`0 */0 * * *` / `0 */abc * * *`) that silently never fires, i.e. the exact
+# stale-token failure this lever exists to prevent.
+case "$INTERVAL_HOURS" in
+  ''|*[!0-9]*)
+    echo "ERROR: INTERVAL_HOURS must be a positive integer (got '$INTERVAL_HOURS')." >&2
+    exit 2 ;;
+esac
+if [ "$INTERVAL_HOURS" -lt 1 ] || [ "$INTERVAL_HOURS" -gt 24 ]; then
+  echo "ERROR: INTERVAL_HOURS must be 1..24 (got $INTERVAL_HOURS)." >&2
+  exit 2
+fi
+
 # Prefer a systemd user timer; fall back to crontab.
 if command -v systemctl >/dev/null 2>&1 && systemctl --user show-environment >/dev/null 2>&1; then
   unit_dir="$HOME/.config/systemd/user"
@@ -46,6 +59,15 @@ WantedBy=timers.target
 EOF
   systemctl --user daemon-reload
   systemctl --user enable --now pmoves-token-refresh.timer
+  # Enable linger so the --user timer keeps running after SSH logout on headless
+  # nodes (5090 / Knuckles / KVMs). Without it the user manager stops at logout
+  # and the refresh silently dies on exactly the unattended nodes that need it.
+  if loginctl enable-linger "$USER" 2>/dev/null; then
+    echo "   Linger: enabled for $USER (timer survives logout)"
+  else
+    echo "   WARN: could not enable-linger — run: sudo loginctl enable-linger $USER"
+    echo "         (otherwise the timer stops at SSH logout on headless nodes)"
+  fi
   echo "OK systemd user timer pmoves-token-refresh.timer enabled (every ${INTERVAL_HOURS}h)."
   echo "   Log:     $LOG"
   echo "   Run now: systemctl --user start pmoves-token-refresh.service"

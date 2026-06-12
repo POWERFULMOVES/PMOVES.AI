@@ -175,7 +175,7 @@ def read_stored_pat(env_path: pathlib.Path) -> str | None:
     if not env_path.exists():
         return None
     try:
-        text = env_path.read_text()
+        text = env_path.read_text(encoding="utf-8")
     except OSError:
         return None
     match = re.search(r"(?m)^GITHUB_PAT=(.*)$", text)
@@ -185,7 +185,7 @@ def read_stored_pat(env_path: pathlib.Path) -> str | None:
 def inject_into_env_file(env_path: pathlib.Path, token: str, quiet: bool = False) -> None:
     """Update GITHUB_PAT=<token> in env_path, creating the file if absent."""
     try:
-        text = env_path.read_text() if env_path.exists() else ""
+        text = env_path.read_text(encoding="utf-8") if env_path.exists() else ""
     except OSError as e:
         print(f"ERROR: cannot read {env_path}: {e}", file=sys.stderr)
         sys.exit(3)
@@ -204,7 +204,9 @@ def inject_into_env_file(env_path: pathlib.Path, token: str, quiet: bool = False
     # Also chmod 0o600 so the file is owner-only readable (holds PAT + all other creds).
     tmp_path = env_path.with_suffix(env_path.suffix + ".tmp")
     try:
-        tmp_path.write_text(text)
+        # encoding pinned to utf-8 — on Windows the default is cp1252, which
+        # corrupts env.shared's 90+ credentials (feedback_encoding_utf8_always).
+        tmp_path.write_text(text, encoding="utf-8")
         try:
             os.chmod(tmp_path, 0o600)
         except OSError:
