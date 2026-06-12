@@ -294,6 +294,37 @@ gha-runner-4090-logs: ## Tail registration/job logs from the 4090 Docker runner 
 
 .PHONY: gha-runner-4090-preflight gha-runner-4090-up gha-runner-4090-down gha-runner-4090-status gha-runner-4090-logs
 
+# ── Cross-node ai-lab runner (docker-compose.runner.yml) ────────────
+# Generalizes the 4090 targets to ANY Docker host via RUNNER_NODE. Same
+# token precedence (GITHUB_PAT → gh auth token) + dedicated per-node compose
+# project so up/down/status/logs only touch that node's runners. Canonical
+# entrypoint — do NOT bring these up with a raw `docker compose up` (skips the
+# pipeline token resolution + preflight).
+#   make -C pmoves gha-runner-up RUNNER_NODE=z890
+RUNNER_NODE ?= host
+RUNNER_COMPOSE := docker/runner/docker-compose.runner.yml
+RUNNER_PROJECT := pmoves-runners-$(RUNNER_NODE)
+
+gha-runner-up: gha-runner-4090-preflight ## Start cross-node ai-lab Docker runners (RUNNER_NODE=z890|4090|5090|…)
+	@_pat="$(call _runner_pat)"; \
+	RUNNER_NODE=$(RUNNER_NODE) RUNNER_ACCESS_TOKEN=$$_pat \
+	  docker compose -p $(RUNNER_PROJECT) -f $(RUNNER_COMPOSE) up -d
+	@echo "✓ Runners up for node '$(RUNNER_NODE)' (project $(RUNNER_PROJECT)). Verify: make gha-runner-status RUNNER_NODE=$(RUNNER_NODE)"
+
+gha-runner-down: ## Stop + deregister this node's ai-lab Docker runners
+	RUNNER_NODE=$(RUNNER_NODE) docker compose -p $(RUNNER_PROJECT) -f $(RUNNER_COMPOSE) down
+
+gha-runner-status: ## Show this node's runner containers + GitHub registration state
+	RUNNER_NODE=$(RUNNER_NODE) docker compose -p $(RUNNER_PROJECT) -f $(RUNNER_COMPOSE) ps
+	@GH_TOKEN="$(call _runner_pat)" \
+	  gh api repos/POWERFULMOVES/PMOVES.AI/actions/runners \
+	    --jq '.runners[] | select(any(.labels[]; .name == "$(RUNNER_NODE)")) | {name, status, busy}'
+
+gha-runner-logs: ## Tail registration/job logs from this node's runner containers
+	RUNNER_NODE=$(RUNNER_NODE) docker compose -p $(RUNNER_PROJECT) -f $(RUNNER_COMPOSE) logs -f --tail=50
+
+.PHONY: gha-runner-up gha-runner-down gha-runner-status gha-runner-logs
+
 
 # ── GPU & Model Serving ──────────────────────────────────────────────
 
