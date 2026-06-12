@@ -234,6 +234,21 @@ gha-runner-ctl-cycle: ## Cycle github-runner-ctl via canonical secrets-funnel + 
 
 gha-runner-ctl-setup: gha-runner-ctl-setup-pat gha-runner-ctl-cycle ## Full Phase 9G path: inject PAT → secrets-funnel → cycle container
 
+gha-token-refresh: ## Idempotent: refresh env.shared GITHUB_PAT from gh keyring IF stale, then funnel-sync (schedule this — see deploy/provision/common/register-token-refresh.*)
+	@echo "=== GHA token refresh (idempotent stale-check; safe to run on a timer) ==="
+	@rc=0; \
+	$(PYTHON) tools/inject_github_pat_from_gh_cli.py --refresh-if-stale --quiet || rc=$$?; \
+	if [ "$$rc" = "75" ]; then \
+		echo "→ GITHUB_PAT was stale; propagating via funnel-sync..."; \
+		$(MAKE) --no-print-directory secrets-funnel-sync 2>&1 || echo "⚠  funnel-sync warnings (tier files validated on next use)"; \
+		echo "✓ token refreshed + propagated"; \
+	elif [ "$$rc" = "0" ]; then \
+		echo "✓ GITHUB_PAT current — no action needed"; \
+	else \
+		echo "✗ refresh failed (rc=$$rc) — keyring token may need: gh auth refresh --scopes admin:org,repo,workflow" >&2; \
+		exit $$rc; \
+	fi
+
 # ── 4090 Parallel Runners (Docker, ai-lab lane) ─────────────────────
 # Two Docker-based Linux runners sharing the ai-lab label alongside
 # pmoves-ai-lab-win (native Windows). Uses ACCESS_TOKEN (PAT) for
