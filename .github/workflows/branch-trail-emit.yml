@@ -34,7 +34,11 @@ jobs:
     # to prevent untrusted code execution (RCE via pull_request from forks).
     if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork == false }}
     name: emit lifecycle trail
-    runs-on: [self-hosted, ai-lab]
+    # Pin to X64: the job uses actions/setup-python + pip, which flakes on the
+    # ARM64 self-hosted runner (pmoves-spark-ailab). X64 ai-lab runners
+    # (pmoves-z890-*, 4090) provide capacity. Honors this workflow's own
+    # "failures never block" contract by not routing onto the flaky host.
+    runs-on: [self-hosted, ai-lab, X64]
     timeout-minutes: 5
     steps:
       - name: Checkout
