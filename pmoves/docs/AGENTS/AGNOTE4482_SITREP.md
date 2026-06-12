@@ -4,7 +4,7 @@ GRAPHITI_MARK: `PHI-4482-SITREP::QUICK-ORIENTATION`
 
 > **For:** Any agent dropping into a PMOVES session cold (fresh start, VS Code restart, new node, Husk walk-in).
 > **Rule:** Read this FIRST. It's pointers, not content. Follow the links.
-> **Last refreshed:** 2026-05-27
+> **Last refreshed:** 2026-06-11
 
 ---
 
@@ -43,7 +43,7 @@ Example: `feat/w3-discord-classrooms`, `fix/1287-runner-loop`
 | What gaps are still open? | [`README.md`](./README.md) → Known Gaps (P0-P2) |
 | What's the current sprint? | `pmoves/docs/NEXT_STEPS.md` |
 
-## Convergence Wave Index (Apr–May 2026)
+## Convergence Wave Index (Apr–Jun 2026)
 
 Waves since last SITREP refresh (2026-04-01). Each links to its AGNOTE4482.md section.
 
@@ -70,6 +70,8 @@ Waves since last SITREP refresh (2026-04-01). Each links to its AGNOTE4482.md se
 | Cole Medin Research | 2026-05-16 | `research/COLE_MEDIN_VIDEO_ANALYSIS.md` | 13 recent videos + 1827-item playlist scan, 5 P0/P1 integration recommendations for Nemo Claw, Archon, DGX Spark |
 | Hardened Reconcile + Auto Mode | 2026-05-31 | §Hardened-Branch Reconciliation + Auto Mode Fleet Config | 38-submodule hardened audit, 5 security gaps closed (incl DoX CVSS 10.0 RCE), 15/17 reconciled, `AUTOMODE_FLEET_CONFIG.md` (**all nodes must apply locally**) |
 | HERMES Agent Integration | 2026-06-04 | `pmoves/docs/AGENTS/HERMES_AGENT_INTEGRATION.md` | Full NousResearch Hermes Agent integration: room manifest, TAC tree, 6 node profiles (Z890, 5090, 4090, Spark, B850/RDNA4, KVM), agent registry/signature updates, operator skill, Three-Body agent definition. Local model mesh with Spark 70B primary. |
+| Z890 Main-Infra Pass | 2026-06-04 | `AGNOTE4482PHI.t1.md` §Z890 Main-Infra Pass | SPARK-drafted PR cluster merged, CI-wide sha-pin outage fixed (#1698), `chit_manifest_merge.py` tooling (#1706/7), gateway port 8111 alignment → VPS deploy green |
+| Z890 Fleet Fork-Sync + Governance | 2026-06-09→11 | `AGNOTE4482PHI.t1.md` §Fleet Fork-Sync Campaign | **All fork-sync drift cleared** (auto-tier + high-ahead Agent-Zero/hyperdimensions/Wealth + CRITICAL-huge ClawZ 8354c/Creator); **branch-protection automation** (31 forks protected, App Administration:RW validated, `branch-protection-sync.yml`); **supabase CRITICAL sync** (#1761 + TAC #1768, Kong gate passed); **Archon CI green** (lint #19 + E2E #20); space-agent public+protected |
 
 > ~~**⚠️ AGNOTE4482.md section gaps:** Supply Chain, SPARK Prep, and CHIT Hardening were backfilled 2026-05-17.~~ All SITREP wave index entries now have corresponding §-sections.
 
