@@ -110,7 +110,7 @@ These services handle primary API requests and orchestration.
 | Model Registry | `docker compose up -d model-registry` | 8110 | `curl http://localhost:8110/healthz` | orchestration |
 | Agent Zero | `docker compose up -d agent-zero` | 8080 | `curl http://localhost:8080/healthz` | agents |
 | Archon | `docker compose up -d archon-server` | 8091 | `curl http://localhost:8091/healthz` | agents |
-| GPU Orchestrator | `docker compose up -d gpu-orchestrator` | 8105 | `curl http://localhost:8105/healthz` | gpu |
+| GPU Orchestrator | `docker compose up -d gpu-orchestrator` | 8200 | `curl http://localhost:8200/healthz` | gpu |
 
 ```bash
 # Start all core services
@@ -268,7 +268,7 @@ echo "Grafana: http://localhost:3002"
         ▼                   ▼                   ▼
 ┌───────────────┐   ┌───────────────┐   ┌───────────────┐
 │  GPU Orches.  │   │ DeepResearch  │   │   Workers     │
-│   (8105)      │   │   (8098)      │   │  (various)    │
+│   (8200)      │   │   (8098)      │   │  (various)    │
 └───────────────┘   └───────────────┘   └───────────────┘
 ```
 

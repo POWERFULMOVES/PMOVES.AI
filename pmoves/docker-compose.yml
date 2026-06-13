@@ -3480,7 +3480,7 @@ services:
       retries: 3
       start_period: 30s
 
-  # Consciousness Service - CHR Algorithm & CGP Generation (port 8105)
+  # Consciousness Service - CHR Algorithm & CGP Generation (port 8106)
     deploy:
       resources:
         limits:
