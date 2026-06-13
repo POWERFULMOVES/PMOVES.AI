@@ -1,0 +1,66 @@
+# Kimi Code CLI configuration template for PMOVES.AI operators.
+# Copy to ~/.kimi/config.toml (or merge the PMOVES sections into your own config).
+#
+# This template wires Kimi Code CLI to the PMOVES.Flare local inference namespace
+# via the Ollama provider on the SPARK node (or any ai-lab node running Ollama).
+#
+# Flare model namespace: pmoves/configs/flare-model-namespace.yaml
+# Model pull skill: .claude/skills/model-pull/SKILL.md
+
+[providers.ollama]
+type = "openai-compatible"
+base_url = "http://localhost:11434/v1"
+api_key = "ollama"
+
+# Hermes V4 8B — general reasoning / agent subordinate
+# Ollama tag: hermes3:8b  |  HF: NousResearch/Hermes-3-Llama-3.1-8B
+[models."pmoves/hermes-v4-8b"]
+provider = "ollama"
+model = "hermes3:8b"
+max_context_size = 131072
+capabilities = ["thinking"]
+display_name = "PMOVES Hermes V4 8B"
+
+# Hermes V4 70B — deep reasoning, Spark-only
+# Ollama tag: hermes3:70b  |  HF: NousResearch/Hermes-3-Llama-3.1-70B
+[models."pmoves/hermes-v4-70b"]
+provider = "ollama"
+model = "hermes3:70b"
+max_context_size = 131072
+capabilities = ["thinking"]
+display_name = "PMOVES Hermes V4 70B (Spark)"
+
+# Qwen 3.5 35B A3B — current local default / utility champion
+[models."pmoves/qwen3.5-35b"]
+provider = "ollama"
+model = "qwen3.5:35b-a3b-q8_0"
+max_context_size = 131072
+capabilities = ["thinking"]
+display_name = "PMOVES Qwen 3.5 35B"
+
+# Nemotron 3 Super 120B — NVIDIA agent model, Spark-only
+[models."pmoves/nemotron-super-120b"]
+provider = "ollama"
+model = "nemotron-3-super:120b"
+max_context_size = 131072
+capabilities = ["thinking"]
+display_name = "PMOVES Nemotron 3 Super 120B"
+
+# Gemma 4 31B — throughput champion
+[models."pmoves/gemma4-31b"]
+provider = "ollama"
+model = "gemma4:31b"
+max_context_size = 131072
+capabilities = ["thinking"]
+display_name = "PMOVES Gemma 4 31B"
+
+# llama3.2 3B — fast test/edge model
+[models."pmoves/llama3.2-3b"]
+provider = "ollama"
+model = "llama3.2:3b"
+max_context_size = 131072
+capabilities = []
+display_name = "PMOVES Llama 3.2 3B"
+
+# Optional: default to local Hermes 8B for offline work.
+# default_model = "pmoves/hermes-v4-8b"
