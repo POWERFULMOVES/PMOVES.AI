@@ -26,10 +26,10 @@ COPY --from=builder --chown=pmoves:pmoves /app/package.json ./
 
 USER pmoves
 ENV NODE_ENV=production
-ENV PORT=8105
-EXPOSE 8105
+ENV PORT=8107
+EXPOSE 8107
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s \
-    CMD curl -f http://localhost:8105/healthz || exit 1
+    CMD curl -f http://localhost:8107/healthz || exit 1
 
 CMD ["node", "dist/index.js"]
