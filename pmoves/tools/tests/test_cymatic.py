@@ -86,6 +86,47 @@ def test_glyph_params_from_features():
     assert p["dominant_hz"] == 528.0
 
 
+def test_glyph_params_driven_by_real_cymatic_features():
+    """Contract: per spec the production call site is
+    cymatic_glyph(**glyph_params_from_features(point.meta.cymatic)), where
+    point.meta.cymatic == cymatic_features(...) output. So cymatic_features MUST
+    emit the keys glyph_params_from_features reads (onset_rate, spectral_centroid
+    / named_frequencies). Drive the params off REAL features, not a hand dict."""
+    # a clean harmonic tone -> a named-frequency / centroid peak should drive
+    # dominant_hz > 0 (currently degrades to 0 because the key is absent).
+    feat_tone = cymatic_features(_tone(528.0), SR)
+    p_tone = glyph_params_from_features(feat_tone)
+    assert p_tone["dominant_hz"] > 0.0, f"dominant_hz stuck at 0: {feat_tone.keys()}"
+
+    # m_radial must respond to onset density rather than being hard-stuck at 1.
+    # A percussive/onset-rich signal should yield more radial rings than a single
+    # sustained tone (which has ~one onset).
+    rng = np.random.default_rng(0)
+    t = np.linspace(0, 2.0, int(SR * 2.0), endpoint=False)
+    # bursts of noise every 100 ms -> many onsets
+    busy = np.zeros_like(t)
+    for start in np.arange(0, 2.0, 0.1):
+        i = int(start * SR)
+        busy[i:i + int(0.02 * SR)] = rng.standard_normal(int(0.02 * SR))
+    busy = (busy / (np.max(np.abs(busy)) + 1e-9)).astype("float32")
+
+    # calm: a single short click near the start, otherwise silence -> ~1 onset.
+    calm = np.zeros_like(t)
+    calm[:int(0.02 * SR)] = rng.standard_normal(int(0.02 * SR))
+    calm = (calm / (np.max(np.abs(calm)) + 1e-9)).astype("float32")
+
+    feat_busy = cymatic_features(busy, SR)
+    feat_calm = cymatic_features(calm, SR)
+    # the contract keys must now be present on real cymatic_features output
+    assert "onset_rate" in feat_busy and "spectral_centroid" in feat_busy
+    assert feat_busy["onset_rate"] > feat_calm["onset_rate"], (
+        f"onset_rate not reflecting density: busy={feat_busy['onset_rate']} "
+        f"calm={feat_calm['onset_rate']}")
+    m_busy = glyph_params_from_features(feat_busy)["m_radial"]
+    m_calm = glyph_params_from_features(feat_calm)["m_radial"]
+    assert m_busy > m_calm, f"m_radial not driven by onset density: busy={m_busy} calm={m_calm}"
+
+
 def test_reproducible_features():
     y = _tone(330.0, harmonics=(1.0, 0.4))
     assert cymatic_features(y, SR) == cymatic_features(y, SR)
