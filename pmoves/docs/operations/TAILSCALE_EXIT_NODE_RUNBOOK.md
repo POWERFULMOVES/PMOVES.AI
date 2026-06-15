@@ -47,6 +47,12 @@ scales to "as many exit nodes as the tailnet can support."
 **Per exit node (vps-deployer agent, or operator `!`):**
 ```bash
 # kvm4-1 (31.97.42.207) and kvm4-2 (167.88.39.80)
+# (0) PREREQUISITE — enable kernel IP forwarding, or the node "advertises" but drops
+#     all routed traffic (control plane OK, data plane dead). Linux exit nodes REQUIRE this:
+echo 'net.ipv4.ip_forward = 1'            | sudo tee -a /etc/sysctl.d/99-tailscale.conf
+echo 'net.ipv6.conf.all.forwarding = 1'   | sudo tee -a /etc/sysctl.d/99-tailscale.conf
+sudo sysctl -p /etc/sysctl.d/99-tailscale.conf
+# (1) advertise + tag (self-approves via the tag:exit autoApprover)
 sudo tailscale up \
   --authkey "${TAILSCALE_EXIT_AUTHKEY}" \
   --advertise-exit-node \
@@ -54,6 +60,9 @@ sudo tailscale up \
   --reset
 # --reset clears prior flags; re-auth is brief. Node re-joins tagged → autoApprover approves.
 ```
+> **Optional perf (high-throughput exit nodes):** enable UDP GRO on the primary NIC —
+> `sudo ethtool -K <iface> rx-udp-gro-forwarding on rx-gro-list off` (persist via networkd/
+> a boot unit). Tailscale recommends it for exit nodes/subnet routers moving real volume.
 New future exit nodes (other users' boxes) use the **same authkey** → advertise + tag +
 auto-approve in one step. No console interaction as the fleet grows.
 
@@ -65,7 +74,11 @@ If you're enabling a node *without* re-tagging (e.g. a quick one-off):
 
 **Advertise (on the node):**
 ```bash
-sudo tailscale set --advertise-exit-node
+# IP forwarding first (see prerequisite above) — required even for the manual path:
+echo 'net.ipv4.ip_forward = 1'          | sudo tee -a /etc/sysctl.d/99-tailscale.conf
+echo 'net.ipv6.conf.all.forwarding = 1' | sudo tee -a /etc/sysctl.d/99-tailscale.conf
+sudo sysctl -p /etc/sysctl.d/99-tailscale.conf
+sudo tailscale set --advertise-exit-node          # stop: --advertise-exit-node=false
 ```
 **Approve (pick one):**
 - **Console:** admin → *Machines* → node → ⋯ → *Edit route settings* → enable **Exit node**.
@@ -92,6 +105,36 @@ curl -sf --max-time 12 https://api.github.com/zen >/dev/null \
   && echo "exit node OK" \
   || { tailscale set --exit-node= ; echo "reverted — exit node unreachable"; }
 ```
+
+### Auto / recommended exit node (scales with the fleet)
+
+Instead of pinning every client to a specific node, let Tailscale pick the lowest-latency
+exit node — so adding kvm4-3/kvm4-N for new users requires **no client reconfiguration**:
+```bash
+tailscale exit-node suggest          # prints the recommended node (latency/location)
+tailscale set --exit-node=<ID|name>  # apply the suggestion
+tailscale exit-node list             # all advertised+approved exit nodes
+```
+(Requires a Standard+ plan.) This is the client-side complement to the server-side
+`tag:exit` autoApprover: new nodes self-approve, clients self-select.
+
+### Enabling a node over the wire (no operator on the box) — what we used 2026-06-15
+
+Admin nodes can drive the node-side setup via **Tailscale SSH** (ACL `ssh` rule:
+`autogroup:admin → *`, root allowed; subject to a periodic browser **check** re-auth):
+```bash
+# IP-forward + advertise in one shot (the kvm2-exit-node.sh configurator, inlined):
+tailscale ssh root@pmoves-kvm4-1 'sysctl -w net.ipv4.ip_forward=1; \
+  sysctl -w net.ipv6.conf.all.forwarding=1; \
+  printf "net.ipv4.ip_forward = 1\nnet.ipv6.conf.all.forwarding = 1\n" \
+    > /etc/sysctl.d/99-tailscale-exit-node.conf; sysctl --system; \
+  tailscale set --advertise-exit-node'
+# if host-key strict-check trips a node, raw ssh TOFU-accepts: ssh -o StrictHostKeyChecking=accept-new ...
+```
+Canonical configurator: `deploy/provision/kvm2-exit-node.sh` (its no-authkey path is
+node-agnostic). **Do NOT** use the Hostinger `recreateVirtualMachine` API to "reinstall
+with config" on **running** prod KVMs (kvm4-1/kvm4-2 host TensorZero/Agent-Zero/Hi-RAG/
+Supabase) — recreate wipes the disk. Recreate-with-post-install is for **fresh** nodes only.
 
 ---
 
@@ -153,6 +196,49 @@ in `.env.generated` even though it's a GitHub secret. **Operator applies this di
 
 ---
 
+## Tailscale Serve — tailnet-internal HTTPS (no nginx hop)
+
+Expose a local service to **tailnet members only**, over auto-TLS MagicDNS
+(`https://<node>.tailcad9b4.ts.net`). Good for giving hosted users clean internal access
+to PMOVES services without the KVM2 nginx / Cloudflare layer:
+```bash
+tailscale serve --bg 8086         # Hi-RAG v2 → https://pmoves-kvm4-1.tailcad9b4.ts.net (members only)
+tailscale serve --bg --set-path=/grafana 3000
+tailscale serve status            # list ; tailscale serve reset  # clear
+```
+`--bg` persists across reboots. Serve is tailnet-private; for public exposure use Funnel.
+
+## Tailscale Funnel — public ingress (alternative to Cloudflare/nginx)
+
+Expose a service to the **public internet** through Tailscale's relays (end-to-end
+encrypted, hides the node IP). **Only ports 443 / 8443 / 10000.** ACL already grants it to
+exit nodes (`nodeAttrs: tag:exit → funnel`); for non-exit nodes add `autogroup:member`.
+```bash
+tailscale funnel --bg --https=443 localhost:3000   # public https://<node>.ts.net
+tailscale funnel status ; tailscale funnel --https=443 localhost:3000 off
+```
+**When to use vs Cloudflare→KVM2-nginx:** Funnel for quick/standalone public endpoints
+(no DNS/cert/port-forward work); keep the Cloudflare/nginx path for `*.pmoves.ai` apex
+routing, WAF, and caching. A port can't be Serve (private) and Funnel (public) at once.
+
+## RustDesk self-hosted — stays on the mesh, NOT Funnel
+
+The self-hosted relay (`hbbs`/`hbbr` on **kvm2**, bare-metal systemd) uses ports
+**21115–21119 TCP/UDP**, which **do not fit Funnel** (443/8443/10000 only). So RustDesk
+rides the **Tailscale mesh directly**: fleet clients target `pmoves-kvm2` (MagicDNS) as the
+rendezvous/relay — no public port-forward needed when every client is on the tailnet
+(the "ScaleTail" intent). Mobile clients must install Tailscale to use the mesh path.
+- Known Roads: `make -C pmoves fleet-rustdesk-fix` (`/fleet:fix-relay`), `/fleet:rustdesk-check`.
+- **P0 blocker:** kvm2 port-22 SSH has been blocked ~45 days → can't manage hbbs/hbbr by
+  normal SSH. **But Tailscale SSH reaches kvm2** (ACL `autogroup:admin → *`, root) — use
+  `tailscale ssh root@pmoves-kvm2 'systemctl status hbbs hbbr'` to manage it over the tailnet,
+  bypassing the dead port-22. (Same channel that enabled the kvm4 exit nodes.)
+- Decision for the growing tailnet: prefer **tailnet-only** RustDesk (close public UFW
+  21115–21119, require clients on the tailnet) for defense-in-depth; keep public ports only
+  while non-Tailscale clients must connect.
+
+---
+
 ## Verify
 
 ```bash
@@ -166,12 +252,16 @@ curl -sf https://api.ipify.org   # expect 31.97.42.207 / 167.88.39.80 / 167.88.3
 
 ## Handoff (2026-06-15)
 
-- **Done:** `pmoves-4090` egress flipped through `pmoves-kvm2` (verified Starlink→KVM IP change + reachability, auto-revert safety).
-- **Follow-up (operator + partner — creator-pipeline operator's new infra role):**
-  1. Mint the `tag:exit` reusable authkey + wire `TAILSCALE_EXIT_AUTHKEY` (and
-     `TAILSCALE_API_KEY`/`TAILSCALE_TAILNET` for the MCP) via `secrets-funnel`.
-  2. vps-deployer: run the tagged `tailscale up` on `pmoves-kvm4-1` + `pmoves-kvm4-2`
-     → advertise + auto-approve.
-  3. Re-point `pmoves-4090` (and other site clients) to `pmoves-kvm4-1` (designated egress)
-     once approved; keep `pmoves-kvm2` as fallback.
-  4. Onboard future user exit nodes with the same authkey (self-approving).
+**Done this session:**
+- `pmoves-4090` egress flipped through `pmoves-kvm2` (verified Starlink→KVM IP change, auto-revert safety).
+- `pmoves-kvm4-1` + `pmoves-kvm4-2`: IP-forwarding enabled + `--advertise-exit-node` set, driven
+  over **Tailscale SSH** from the 4090 (operator authed the SSH check). `kvm4-1` **approved → live**;
+  `kvm4-2` advertised, **pending one console approve** (untagged → not auto-approved).
+
+**Remaining:**
+1. Approve `pmoves-kvm4-2` exit route (console, 1 click) — or wire `TAILSCALE_API_KEY` for the MCP to do it.
+2. (Optional, designated egress) re-point `pmoves-4090` + site clients to `pmoves-kvm4-1`; keep kvm2 fallback.
+   Or adopt **auto exit-node** (`tailscale exit-node suggest`) so clients self-select.
+3. **Scale path for new users' exit nodes:** mint a `tag:exit` reusable authkey + wire
+   `TAILSCALE_EXIT_AUTHKEY` via `secrets-funnel`, then bring nodes up tagged → they advertise +
+   **auto-approve** (no console clicks). This is the durable onboarding road as the tailnet grows.
