@@ -148,6 +148,20 @@
         "autogroup:nonroot"
       ],
       "comment": "Admin SSH access (root allowed for provisioning)"
+    },
+    {
+      "action": "check",
+      "src": [
+        "autogroup:member"
+      ],
+      "dst": [
+        "autogroup:self"
+      ],
+      "users": [
+        "autogroup:nonroot",
+        "root"
+      ],
+      "comment": "Members SSH into their own devices in check mode (multi-tenant self-service; browser re-auth)"
     }
   ],
   "nodeAttrs": [
