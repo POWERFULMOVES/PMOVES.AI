@@ -46,7 +46,7 @@ DEFAULT_INPUT = DATA_DIR / "soundcloud" / "darkxside"
 DEFAULT_PLAYLISTS = DATA_DIR / "playlists"
 DEFAULT_SUMMARY = DEFAULT_PLAYLISTS / "groups_summary.json"
 DEFAULT_FP = DEFAULT_INPUT / ".fingerprints.json"
-DEFAULT_RENDERER = os.environ.get("A2UI_RENDERER_URL", "http://localhost:8105")
+DEFAULT_RENDERER = os.environ.get("A2UI_RENDERER_URL", "http://localhost:8107")
 
 
 def _run_tool(script: str, args: list[str], label: str) -> subprocess.CompletedProcess:
