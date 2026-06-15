@@ -7,6 +7,7 @@
 #   "numpy>=1.26",
 #   "nats-py>=2.7",
 #   "httpx>=0.27",
+#   "jsonschema>=4",
 # ]
 # ///
 """
@@ -392,6 +393,44 @@ async def publish_cgp(cgp: dict, nats_url: str):
         console.print(f"  [yellow]NATS publish skipped:[/] {e}")
 
 
+# ── Schema validation fence ─────────────────────────────────────────────────────
+
+_CGP_V2_SCHEMA_PATH = (
+    Path(__file__).resolve().parent.parent
+    / "contracts" / "schemas" / "geometry" / "cgp.v2.schema.json"
+)
+
+
+def validate_cgp_v2(cgp: dict) -> None:
+    """Reject a schema-invalid CGP v2 packet before it reaches NATS (spec §8).
+
+    On a real validation failure this logs the offending field and raises
+    ``typer.Exit(1)`` so the publish never happens. If the validator library or
+    the schema file is unavailable the check is *skipped with a visible warning*
+    rather than silently — an absent optional dependency is not evidence that the
+    packet is malformed, so we do not block publishing on it.
+    """
+    try:
+        import jsonschema
+    except ImportError:
+        console.print("  [yellow]⚠ CGP v2 schema validation skipped — jsonschema not installed[/]")
+        return
+    try:
+        schema = json.loads(_CGP_V2_SCHEMA_PATH.read_text(encoding="utf-8"))
+    except OSError as e:
+        console.print(f"  [yellow]⚠ CGP v2 schema validation skipped — cannot read {_CGP_V2_SCHEMA_PATH.name}: {e}[/]")
+        return
+    try:
+        jsonschema.validate(cgp, schema)
+    except jsonschema.ValidationError as e:
+        loc = "/".join(str(p) for p in e.absolute_path) or "<root>"
+        console.print(
+            "  [red]✗ CGP v2 packet failed schema validation — refusing to publish.[/]\n"
+            f"    {e.message} (at {loc})"
+        )
+        raise typer.Exit(1)
+
+
 # ── Load helpers ──────────────────────────────────────────────────────────────
 
 def load_summary(path: str) -> list[dict]:
@@ -439,6 +478,7 @@ def render(
 
     if v2:
         cgp = select_builder(v2=True)(groups, fps, coherence=coherence)
+        validate_cgp_v2(cgp)  # spec §8 fence: reject schema-invalid packets before publish
 
         async def _publish_one():
             await publish_cgp(cgp, nats)
