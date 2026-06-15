@@ -3376,6 +3376,9 @@ services:
     - SUPABASE_URL=${SUPABASE_INTERNAL_URL:-${SUPABASE_URL:-http://supabase-kong:8000}}
     - TENSORZERO_URL=${TENSORZERO_URL:-http://tensorzero-gateway:3000}
     - DEFAULT_VOICE_PROVIDER=${DEFAULT_VOICE_PROVIDER:-vibevoice}
+    # Realtime duplex voice agent (/v1/voice/agent: mic→Whisper→LLM→VibeVoice).
+    # Off by default — requires pipecat-ai installed + VibeVoice (7860) running.
+    - PIPECAT_ENABLED=${PIPECAT_ENABLED:-false}
     - ULTIMATE_TTS_URL=${ULTIMATE_TTS_URL:-http://host.docker.internal:7860}
     - ULTIMATE_TTS_TIMEOUT_SEC=${ULTIMATE_TTS_TIMEOUT_SEC:-300}
     - FLUTE_API_KEY=${FLUTE_API_KEY:-}

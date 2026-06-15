@@ -1181,6 +1181,74 @@ async def websocket_tts(websocket: WebSocket):
         await websocket.close()
 
 
+@app.websocket("/v1/voice/agent")
+async def websocket_voice_agent(websocket: WebSocket):
+    """Full-duplex realtime voice agent.
+
+    Pipeline: mic PCM16 in → VAD → STT (Whisper) → LLM (TensorZero) →
+    TTS (VibeVoice) → PCM16 out. This is the entry point that connects a
+    microphone client to the pre-built pipecat pipeline.
+
+    Gated behind ``PIPECAT_ENABLED=true`` *and* pipecat-ai being installed.
+    When disabled/unavailable the socket is accepted then closed with a clear
+    reason, so clients fail fast instead of hanging. Off by default — wiring
+    this route changes no existing behaviour until the operator opts in.
+
+    Client streams binary PCM16 frames (``PIPECAT_SAMPLE_RATE``, default 24 kHz,
+    mono). Server streams binary PCM16 audio + JSON status frames.
+    """
+    await websocket.accept()
+
+    if not PIPECAT_CONFIG.enabled:
+        await websocket.send_json({"type": "error", "message": "Realtime voice agent disabled. Set PIPECAT_ENABLED=true to enable."})
+        await websocket.close()
+        return
+    if not PIPECAT_AVAILABLE:
+        await websocket.send_json({"type": "error", "message": "pipecat-ai not installed; realtime voice agent unavailable."})
+        await websocket.close()
+        return
+    if whisper_provider is None or vibevoice_provider is None:
+        await websocket.send_json({"type": "error", "message": "STT/TTS providers not ready (Whisper + VibeVoice required)."})
+        await websocket.close()
+        return
+
+    try:
+        from pipecat.pipeline.runner import PipelineRunner
+        from pipecat.pipeline.task import PipelineTask
+
+        params = FluteFastAPIWebsocketParams(
+            sample_rate=PIPECAT_CONFIG.sample_rate,
+            vad_enabled=True,
+            vad_start_threshold=PIPECAT_CONFIG.vad_threshold,
+        )
+        transport = FluteFastAPIWebsocketTransport(websocket, params)
+        pipeline = await build_voice_agent_pipeline(
+            transport,
+            VoiceAgentConfig(),
+            vibevoice_provider=vibevoice_provider,
+            whisper_provider=whisper_provider,
+            tensorzero_url=PIPECAT_CONFIG.tensorzero_url,
+        )
+        await websocket.send_json({
+            "type": "ready",
+            "stt": "whisper",
+            "tts": "vibevoice",
+            "llm": PIPECAT_CONFIG.default_llm_model,
+        })
+        await PipelineRunner().run(PipelineTask(pipeline))
+    except Exception:
+        logger.exception("Voice agent pipeline error")
+        try:
+            await websocket.send_json({"type": "error", "message": "Voice agent pipeline error"})
+        except Exception:
+            pass  # WebSocket already closed
+    finally:
+        try:
+            await websocket.close()
+        except Exception:
+            pass
+
+
 # Prometheus metrics endpoint
 @app.get("/metrics")
 async def metrics():
