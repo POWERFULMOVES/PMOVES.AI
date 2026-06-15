@@ -15,6 +15,15 @@ on:
       - 'Makefile'
       - 'pmoves/mk/**'
       - '.github/workflows/**'
+      # Config + behaviour-defining files are as risky as code (a misconfigured
+      # compose/rooms-catalog or a bad agent/skill definition can break prod):
+      - '**.yaml'
+      - '**.yml'
+      - '**.json'
+      - 'pmoves/config/**'
+      - 'pmoves/configs/**'
+      - '.claude/agents/**'
+      - '.claude/skills/**'
 
 concurrency:
   group: claude-review-${{ github.head_ref }}
@@ -28,13 +37,15 @@ jobs:
        github.event.pull_request.author_association == 'MEMBER' ||
        github.event.pull_request.author_association == 'COLLABORATOR')
     runs-on: ubuntu-latest
+    # Least-privilege for a comment-only reviewer: it reads the diff and posts
+    # PR review comments — it does not push commits or write attestations.
+    # (claude.yml keeps contents:write because @claude can apply fix-ups.)
     permissions:
-      contents: write
+      contents: read
       pull-requests: write
       issues: write
       id-token: write
       actions: read
-      attestations: write
 
     steps:
       - name: Checkout repository
@@ -44,7 +55,7 @@ jobs:
 
       - name: Run Claude Code Review
         id: claude-review
-        uses: anthropics/claude-code-action@787c5a0ce96a9a6cfb050ea0c8f4c05f2447c251 # v1.0.133
+        uses: anthropics/claude-code-action@eee73e2ae5399c561de4ff038aa7b36a7aa991a7 # v1.0.143
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           plugin_marketplaces: 'https://github.com/anthropics/claude-code.git'

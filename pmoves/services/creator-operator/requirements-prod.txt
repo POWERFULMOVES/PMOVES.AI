@@ -1,0 +1,13 @@
+# Production voice server (omnivoice_server.py) — heavy ML deps, intentionally
+# SEPARATE from the lightweight service requirements.txt. Install into a dedicated
+# GPU venv (CUDA build of torch). The routing/dispatch service does NOT need these.
+omnivoice>=0.1.5          # k2-fsa OmniVoice model + generate() API (Apache-2.0)
+soundfile>=0.12           # write 24 kHz wav from model output
+fastapi>=0.110            # /healthz + /synthesize + /metrics
+uvicorn>=0.29             # ASGI server
+prometheus_client>=0.20   # /metrics Prometheus scrape endpoint
+# (httpx lives in requirements.txt — ServerOmniVoiceClient is a DISPATCHER-side
+#  client, not a server dep; the prod-server venv does not import it.)
+# torch + torchaudio: install the CUDA build matching the node, e.g.
+#   pip install torch==2.8.0 torchaudio==2.8.0 --index-url https://download.pytorch.org/whl/cu128
+# (or a ROCm build on knuckles — the OmniVoice-on-ROCm seam, TODO-validate)

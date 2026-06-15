@@ -636,11 +636,22 @@ def analyze(
 
     n = min(groups, len(records) // 2)
     console.print(f"\n[bold]Initial cluster[/] — {len(records)} tracks → {n} groups…")
-    labels = cluster(records, n)
+
+    # Primary clustering runs on CLAP embeddings (the WS-A grounding signal, spec §4.2)
+    # whenever any track carries one. cluster_on_embeddings falls back to acoustic
+    # features per-record for tracks missing an embedding, and returns the validating
+    # silhouette directly — so we reuse it as the coherence score instead of recomputing.
+    has_clap = any(len(r.get("clap_embedding") or []) == 512 for r in records)
+    if has_clap:
+        labels, coherence = cluster_on_embeddings(records, n)
+        console.print("  [dim]Clustered on CLAP embeddings (laion/larger_clap_music)[/]")
+    else:
+        labels = cluster(records, n)
+        coherence = measure_coherence(records, labels)
+        console.print("  [dim]No CLAP embeddings present — clustered on acoustic features[/]")
 
     # ── Coherence check + gaze escalation ─────────────────────────────────────
     if sense_mode in (SenseMode.auto, SenseMode.gaze):
-        coherence = measure_coherence(records, labels)
         console.print(f"  [bold]Silhouette coherence score:[/] {coherence:.3f} "
                       f"(threshold: {COHERENCE_THRESHOLD})")
 

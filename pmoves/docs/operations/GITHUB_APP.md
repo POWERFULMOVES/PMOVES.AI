@@ -1,11 +1,18 @@
 # PMOVES.AI GitHub App — platform automation primitive
 
-The **PMOVES.AI** GitHub App is the fleet's cross-repo automation identity. As of
-2026-06-07 it is installed on **All repositories** under `POWERFULMOVES` with
-Read & write on: contents, pull requests, **workflows**, actions, deployments,
-secrets, checks, issues, discussions, environments, packages, pages, security
-events, dependabot, merge queues, commit statuses (+ admin on repository
-projects). That is a powerful primitive — treat it as one, and guard it.
+The **PMOVES.AI** GitHub App is the fleet's cross-repo automation identity. It is
+installed on **All repositories** under `POWERFULMOVES`. Its live permission set
+(validated against the App's Permissions tab **2026-06-09**) is broad — Read &
+write on: **administration**, contents, pull requests, **workflows**, actions,
+actions variables, checks, code, code quality, codespaces (+ lifecycle/secrets),
+commit statuses, custom properties, dependabot (alerts/secrets), deployments,
+discussions, environments, issues, merge queues, packages, pages, repository
+advisories, repository hooks, secret scanning (+ bypass), **secrets**, security
+events, attestations, agent secrets/tasks/variables, copilot agent settings;
+Admin on repository projects. That is a powerful primitive — treat it as one, and
+guard it. (The earlier 2026-06-07 enumeration here **omitted `administration`**;
+it is in fact granted — see § Branch protection. The breadth also strengthens the
+roadmap's "drop unused permissions + rotate `GH_APP_SEC`" item below.)
 
 Credentials (secrets on PMOVES.AI): `GH_APP_CLIENT_ID` (v3 client-id),
 `GH_APP_ID` (v1 app-id, legacy), `GH_APP_SEC` (private key),
@@ -87,6 +94,42 @@ See `research/SUBMODULE_SYNC_AUDIT_2026-06-07.md` for the live drift backlog.
       batch `chore(submodules): promote` job) and connect fork-PR-merge -> gitlink.
 - [ ] **Fork orphan-branch cleanup** — `stale-branch-sweep.yml` only sweeps
       PMOVES.AI; fork `sync/*` branches accumulate. Add cross-repo cleanup.
+- [x] **Branch-protection automation** — `branch-protection-sync.yml` +
+      `_app-token.yml` `permission-administration` knob (2026-06-09). Closes the
+      audit gap below. **App already has Administration:RW** (validated 2026-06-09)
+      — ready to run (dry-run → apply); no operator grant needed.
+
+## Branch protection (consumable / hardened fork branches)
+
+**Audit gap (2026-06-09):** 8 of 11 tracked hardened fork branches had **no
+protection or zero required checks** (supabase, BoTZ, BotZ-gateway,
+e2b-mcp-server, tensorzero, A2UI unprotected; Health-wger, Open-Notebook had a
+rule but 0 checks). A "hardened" branch with no gate is aspirational — nothing
+stopped a force-push from silently stripping the hardening overlay. This never
+surfaced because branch protection was **not** on the original App roadmap.
+
+`branch-protection-sync.yml` (manual dispatch, dry-run by default) derives each
+fork's consumable branch from `.gitmodules` (self-maintaining) and applies one
+**standard policy**:
+
+| Setting | Value | Why |
+|---|---|---|
+| Require PR before merge | yes, **0 approvals** | Blocks direct pushes; 0 lets the App / dependabot self-merge sync PRs (no deadlock). Bump per-fork later. |
+| Force pushes | **blocked** | Prevents history rewrite that strips hardening — the core guarantee. |
+| Deletions | **blocked** | No accidental branch loss. |
+| Conversation resolution | required | Hygiene. |
+| `enforce_admins` | false | Operator break-glass; matches the sanctioned `--admin` merge path. |
+| Required status checks | **null (default)** | Fork CI contexts vary + many need fork-only secrets; requiring an un-greenable check would permanently block the branch. Add per-fork, deliberately. |
+
+> ✅ **Prerequisite satisfied — Administration:RW is granted.** Confirmed against
+> the App's Permissions tab **2026-06-09**: the installation has **Administration:
+> Read & Write** (the 2026-04-23 permission matrix's design was applied; the
+> 2026-06-07 list in this doc's header had simply omitted it). So
+> `branch-protection-sync.yml` runs without any further grant. It still
+> **self-validates**: if the grant were ever revoked, `create-github-app-token`
+> fails at mint with *"the app does not have permission to request
+> 'administration'"*. Operator flow is just: run `dry_run=true` (audit) → re-run
+> `dry_run=false` (apply).
 
 ## Security guardrails
 

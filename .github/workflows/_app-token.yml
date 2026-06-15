@@ -66,6 +66,17 @@ on:
         required: false
         type: string
         default: ""
+      permission-administration:
+        description: >
+          'read | write (omit for none)' — repo settings: branch protection,
+          Pages enablement, runner registration. The App installation must have
+          the Administration permission granted (operator setting, see
+          deploy/runbooks/github-app-permission-matrix.md §8). If it does NOT,
+          minting a token that requests this scope FAILS here — which makes this
+          knob a live validation of the grant.
+        required: false
+        type: string
+        default: ""
     outputs:
       token:
         description: Short-lived (<=1h) installation token, auto-revoked at job end.
@@ -95,3 +106,4 @@ jobs:
           permission-pull-requests: ${{ inputs.permission-pull-requests }}
           permission-workflows: ${{ inputs.permission-workflows }}
           permission-packages: ${{ inputs.permission-packages }}
+          permission-administration: ${{ inputs.permission-administration }}
