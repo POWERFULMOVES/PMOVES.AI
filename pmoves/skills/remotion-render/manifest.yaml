@@ -53,6 +53,21 @@ service:
   alternates:
     - "http://localhost:8105/render/provenance"
 
+# Headless one-shot render (no running service required).
+# Use when the a2ui-renderer service is not up (cold node, CI, local check):
+# runs the Remotion bundler + renderer directly from the package.
+headless_render:
+  cwd: pmoves/services/a2ui-renderer
+  setup: "npm install   # first run also downloads a headless Chromium shell (~108MB, cached)"
+  commands:
+    still: "npm run render:provenance:still   # PNG thumbnail"
+    video: "npm run render:provenance:file    # MP4"
+    custom: "npx tsx scripts/render-provenance-artifact.mjs [--frame N | --frame-fraction 0..1] [input.json] [output.{png,jpg,mp4,webm,gif}]"
+  notes:
+    - "Output kind is chosen by extension: .png/.jpg/.jpeg = still, .mp4/.webm/.gif = full animation."
+    - "Stills default to a mid-timeline frame (--frame-fraction 0.5). Do NOT thumbnail at frame 0: every element reveals from opacity 0 over the first ~70 frames, so frame 0 is a blank intro."
+    - "Override the still frame with --frame <N> (absolute, wins) or --frame-fraction <0..1>. The script clamps to the composition length and reports the chosen frame in its JSON result."
+
 # Dependencies
 dependencies:
   services:

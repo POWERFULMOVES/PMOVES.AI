@@ -201,11 +201,13 @@ Strategic and theoretical foundations (preserve as-is, no regular updates needed
 | Priority | Gap | Owner |
 |----------|-----|-------|
 | ~~P0~~ | ~~BoTZ JWT HAS_JOSE fail-open~~ | **RESOLVED** — BoTZ PR #79 merged. `gateway.py` and `auth.py` both return HTTPException 500 (fail-closed) when HAS_JOSE or JWT_SECRET is missing. Verified 2026-04-01. |
-| P0 | ~100+ unauthenticated NATS references in `pmoves/` (grep: `nats://(nats\|localhost):4222` excluding `@`; count varies by submodule state) | Batch migration not yet started — refs span services, integrations, docs |
-| P0 | A2A server (`/.well-known/agent.json`) — code exists at `services/agent-zero/python/features/a2a/server.py` but compose exposure unconfirmed | Runtime verification needed |
+| ~~P0~~ | ~~~100+ unauthenticated NATS references in `pmoves/`~~ | **CLOSED NON-URGENT (#1690, 2026-06-04)** — deployment already authed via `env.shared`; DoX migrated. Down to ~23 stale `:4222` refs in `pmoves/`; do not sweep the drifted copies (`[[project_nats_auth_lane_b_non_urgent]]`). |
+| P0 | A2A server (`/.well-known/agent.json`) — code at `services/agent-zero/python/features/a2a/server.py`; **now wired into compose** (`docker-compose.agents.yml`) | **Runtime-verify only** — confirm the endpoint serves; exposure gap closed. |
 | ~~P1~~ | ~~BoTZ Gateway integration speculative~~ | **ARCHIVED (2026-04-19)** — BoTZ era doc moved to `archive/founding-strategy/`. Discord now via ClaWZ. |
 | ~~P2~~ | ~~BPM encoder spec exists but `bpm_encoder.py` not implemented~~ | **RESOLVED** — `pmoves/tools/bpm_encoder.py` implemented (574 lines), delivered in PR #1168 (Shift Crew tools, 2026-04-01). |
-| P2 | Observability Map (`OBSERVABILITY_MAP.md`) referenced but doesn't exist | Create from Production Audit Lane C |
+| ~~P2~~ | ~~Observability Map (`OBSERVABILITY_MAP.md`) referenced but doesn't exist~~ | **RESOLVED** — `pmoves/docs/services/monitoring/OBSERVABILITY_MAP.md` now on `main`. |
+
+> **Fleet-governance state (2026-06-11, Z890 campaign):** all fork-sync drift cleared (auto-tier + high-ahead + CRITICAL-huge synced, gitlinks promoted); branch protection applied to 31 naked hardened forks (`branch-protection-sync.yml`, App `Administration:RW` validated); supabase CRITICAL sync landed; Archon CI green (`test` lint + E2E). See claim register § *Fleet Fork-Sync + Branch-Protection + Supabase + Archon CI Campaign (2026-06-09 → 06-11)*.
 
 ---
 

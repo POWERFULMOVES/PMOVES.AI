@@ -234,6 +234,21 @@ gha-runner-ctl-cycle: ## Cycle github-runner-ctl via canonical secrets-funnel + 
 
 gha-runner-ctl-setup: gha-runner-ctl-setup-pat gha-runner-ctl-cycle ## Full Phase 9G path: inject PAT → secrets-funnel → cycle container
 
+gha-token-refresh: ## Idempotent: refresh env.shared GITHUB_PAT from gh keyring IF stale, then funnel-sync (schedule this — see deploy/provision/common/register-token-refresh.*)
+	@echo "=== GHA token refresh (idempotent stale-check; safe to run on a timer) ==="
+	@rc=0; \
+	$(PYTHON) tools/inject_github_pat_from_gh_cli.py --refresh-if-stale --quiet || rc=$$?; \
+	if [ "$$rc" = "75" ]; then \
+		echo "→ GITHUB_PAT was stale; propagating via funnel-sync..."; \
+		$(MAKE) --no-print-directory secrets-funnel-sync 2>&1 || echo "⚠  funnel-sync warnings (tier files validated on next use)"; \
+		echo "✓ token refreshed + propagated"; \
+	elif [ "$$rc" = "0" ]; then \
+		echo "✓ GITHUB_PAT current — no action needed"; \
+	else \
+		echo "✗ refresh failed (rc=$$rc) — keyring token may need: gh auth refresh --scopes admin:org,repo,workflow" >&2; \
+		exit $$rc; \
+	fi
+
 # ── 4090 Parallel Runners (Docker, ai-lab lane) ─────────────────────
 # Two Docker-based Linux runners sharing the ai-lab label alongside
 # pmoves-ai-lab-win (native Windows). Uses ACCESS_TOKEN (PAT) for
@@ -244,9 +259,16 @@ RUNNER_COMPOSE_4090 := docker/runner/docker-compose.4090.yml
 # Dedicated compose project name so up/down/status/logs operate only on these
 # two containers and never prune services from the implicit `pmoves` project.
 RUNNER_PROJECT_4090 := pmoves-runners-4090
-# Token precedence: GITHUB_PAT (env.tier-agent, repo scope) → gh auth token (dev fallback)
-# GH_PAT_PUBLISH is NOT used — it has GHCR packages:write scope only (wrong for registration)
-_runner_pat = $${GITHUB_PAT:-$$( gh auth token 2>/dev/null )}
+# Token precedence: GITHUB_PAT (env.tier-agent, repo scope) → gh auth token (dev fallback).
+# IMPORTANT: validate GITHUB_PAT and fall back when it is INVALID, not just unset — a
+# stale env GITHUB_PAT would otherwise deadlock the runner bootstrap (the runner is what
+# refreshes the PAT via sync-secrets-local). GH_PAT_PUBLISH is NOT used (GHCR
+# packages:write scope only — wrong for registration).
+# env files sourced by the make framework can set a STALE GH_TOKEN/GITHUB_TOKEN
+# (e.g. a gist-only token) that poisons `gh` inside recipes — `gh` prefers those
+# env vars over the keyring. Clear them so the GITHUB_PAT validation + the
+# `gh auth token` keyring fallback both see the real credential.
+_runner_pat = $$( env -u GH_TOKEN -u GITHUB_TOKEN sh -c 'p="$${GITHUB_PAT}"; if [ -n "$$p" ] && GH_TOKEN="$$p" gh api /user >/dev/null 2>&1; then printf "%s" "$$p"; else gh auth token 2>/dev/null; fi' )
 
 gha-runner-4090-preflight: ## Validate Docker Hub auth + Tailscale DNS + GitHub PAT for 4090 runners
 	@echo "=== 4090 Runner Preflight ==="
@@ -293,6 +315,53 @@ gha-runner-4090-logs: ## Tail registration/job logs from the 4090 Docker runner 
 	docker compose -p $(RUNNER_PROJECT_4090) -f $(RUNNER_COMPOSE_4090) logs -f --tail=50
 
 .PHONY: gha-runner-4090-preflight gha-runner-4090-up gha-runner-4090-down gha-runner-4090-status gha-runner-4090-logs
+
+# ── Cross-node ai-lab runner (docker-compose.runner.yml) ────────────
+# Generalizes the 4090 targets to ANY Docker host via RUNNER_NODE. Same
+# token precedence (GITHUB_PAT → gh auth token) + dedicated per-node compose
+# project so up/down/status/logs only touch that node's runners. Canonical
+# entrypoint — do NOT bring these up with a raw `docker compose up` (skips the
+# pipeline token resolution + preflight).
+#   make -C pmoves gha-runner-up RUNNER_NODE=z890
+RUNNER_NODE ?= host
+RUNNER_COMPOSE := docker/runner/docker-compose.runner.yml
+RUNNER_PROJECT := pmoves-runners-$(RUNNER_NODE)
+
+gha-runner-up: ## Start cross-node ai-lab Docker runners (RUNNER_NODE=z890|4090|5090|…)
+	@echo "Resolving runner credential for node '$(RUNNER_NODE)'..."
+	@_pat="$(call _runner_pat)"; \
+	if [ -n "$$_pat" ] && GH_TOKEN="$$_pat" gh api repos/POWERFULMOVES/PMOVES.AI/actions/runners >/dev/null 2>&1; then \
+	  echo "  ✓ validated PAT (repo scope) — ACCESS_TOKEN path (auto re-registers)"; \
+	  RUNNER_NODE=$(RUNNER_NODE) RUNNER_ACCESS_TOKEN="$$_pat" \
+	    docker compose -p $(RUNNER_PROJECT) -f $(RUNNER_COMPOSE) up -d; \
+	else \
+	  echo "  PAT unavailable/under-scoped — minting a registration token via keyring..."; \
+	  _reg="$$( GH_TOKEN= GITHUB_TOKEN= gh api repos/POWERFULMOVES/PMOVES.AI/actions/runners/registration-token -X POST --jq '.token' 2>/dev/null )"; \
+	  if [ -z "$$_reg" ]; then \
+	    echo "  ✗ FAIL: no usable PAT and could not mint a registration token."; \
+	    echo "    Fix: gh auth refresh --scopes admin:org,repo,workflow   (or refresh GITHUB_PAT in env)"; \
+	    exit 1; \
+	  fi; \
+	  echo "  ✓ minted registration token (keyring, repo scope) — RUNNER_TOKEN path"; \
+	  RUNNER_NODE=$(RUNNER_NODE) RUNNER_REG_TOKEN="$$_reg" \
+	    docker compose -p $(RUNNER_PROJECT) -f $(RUNNER_COMPOSE) up -d; \
+	fi
+	@echo "✓ Runners up for '$(RUNNER_NODE)' (project $(RUNNER_PROJECT)). Verify: make gha-runner-status RUNNER_NODE=$(RUNNER_NODE)"
+	@echo "✓ Runners up for node '$(RUNNER_NODE)' (project $(RUNNER_PROJECT)). Verify: make gha-runner-status RUNNER_NODE=$(RUNNER_NODE)"
+
+gha-runner-down: ## Stop + deregister this node's ai-lab Docker runners
+	RUNNER_NODE=$(RUNNER_NODE) docker compose -p $(RUNNER_PROJECT) -f $(RUNNER_COMPOSE) down
+
+gha-runner-status: ## Show this node's runner containers + GitHub registration state
+	RUNNER_NODE=$(RUNNER_NODE) docker compose -p $(RUNNER_PROJECT) -f $(RUNNER_COMPOSE) ps
+	@GH_TOKEN="$(call _runner_pat)" \
+	  gh api repos/POWERFULMOVES/PMOVES.AI/actions/runners \
+	    --jq '.runners[] | select(any(.labels[]; .name == "$(RUNNER_NODE)")) | {name, status, busy}'
+
+gha-runner-logs: ## Tail registration/job logs from this node's runner containers
+	RUNNER_NODE=$(RUNNER_NODE) docker compose -p $(RUNNER_PROJECT) -f $(RUNNER_COMPOSE) logs -f --tail=50
+
+.PHONY: gha-runner-up gha-runner-down gha-runner-status gha-runner-logs
 
 
 # ── GPU & Model Serving ──────────────────────────────────────────────
