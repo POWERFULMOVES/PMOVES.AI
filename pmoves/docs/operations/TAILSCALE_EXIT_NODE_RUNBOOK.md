@@ -109,6 +109,48 @@ It connects once these env vars are present (FOLLOW-UP — credential wiring):
 For a multi-tenant, growing tailnet prefer an **OAuth client** (scopes `devices`,
 `routes`) over a personal access token — it doesn't expire and is auditable.
 
+### Credential wiring (operator-direct — the manifest is zero-access to agents)
+
+`pmoves/chit/secrets_manifest.yaml` is in the damage-control `zeroAccessPaths`
+(`.claude/hooks/damage-control/patterns.yaml`) — **no agent (Edit/Write/Bash) can touch
+it and there is no Known-Road bypass**; it is operator-owned. The MCP env vars are not yet
+declared there (only `tailscale_authkey` is), which is why `TAILSCALE_API_KEY` never lands
+in `.env.generated` even though it's a GitHub secret. **Operator applies this directly:**
+
+1. Add to `pmoves/chit/secrets_manifest.yaml` (next to `tailscale_authkey`):
+   ```yaml
+   - id: tailscale_api_key
+     source: { type: cgp, label: TAILSCALE_API_KEY }
+     targets:
+     - { file: .env.generated, key: TAILSCALE_API_KEY }
+     - { file: env.shared.generated, key: TAILSCALE_API_KEY }
+     - { file: env.tier-agent, key: TAILSCALE_API_KEY }
+     required: false
+   - id: tailscale_tailnet
+     source: { type: cgp, label: TAILSCALE_TAILNET }
+     targets:
+     - { file: .env.generated, key: TAILSCALE_TAILNET }
+     - { file: env.shared.generated, key: TAILSCALE_TAILNET }
+     - { file: env.tier-agent, key: TAILSCALE_TAILNET }
+     required: false
+   ```
+   (Mirrors the working `hostinger_api_token`/`tailscale_authkey` pattern — `.env.generated`
+   is the file the MCP launch env sources, same path that makes the hostinger MCP live.)
+2. Ensure both are in GitHub Secrets (`TAILSCALE_API_KEY` reportedly present; add
+   `TAILSCALE_TAILNET` — value is the tailnet name or `-` for the key's default).
+3. Refresh + distribute through the CHIT pipeline (these targets ARE agent-runnable):
+   ```bash
+   gh workflow run sync-secrets-local.yml --repo POWERFULMOVES/PMOVES.AI -f output_format=cgp
+   make -C pmoves secrets-funnel        # decode CGP → .env.generated + tiers
+   make -C pmoves env-check             # validate cross-tier consistency
+   ```
+4. Restart Claude Code (and the own MCP gateway, `make mcp-4090-gateway-start`, if it
+   serves the tailscale MCP) so the launch env re-reads `.env.generated`.
+5. Verify the MCP connected, then approve the kvm4-1/kvm4-2 exit routes via the MCP.
+
+`TAILSCALE_TAILNET` is not secret (`-` works); if preferred, hardcode it in
+`.claude/mcp.json`'s `tailscale.env` instead of routing it through the manifest.
+
 ---
 
 ## Verify
