@@ -3921,3 +3921,6 @@ overlay-up-apps: ## Start application services via overlay
 overlay-down: ## Stop all overlay services
 	@$(OVERLAY_DC) $(OVERLAY_CORE) $(OVERLAY_AGENTS) $(OVERLAY_MEDIA) $(OVERLAY_UI) $(OVERLAY_WORKERS) $(OVERLAY_APPS) $(OVERLAY_PROFILES_FULL) down
 	@echo "✅ All overlay services stopped"
+
+design-tokens: ## Regenerate pmoves/design token CSS + TS from agent_signatures.yaml
+	cd design && uv run --no-project --with pyyaml python generate.py
