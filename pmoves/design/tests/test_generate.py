@@ -32,3 +32,24 @@ def test_missing_agent_raises_clear_error():
         assert False, "expected KeyError"
     except KeyError as e:
         assert "no-such-agent" in str(e)
+
+
+def test_emit_css_has_data_theme_selector(tmp_path):
+    from generate import emit_css
+    reg = load_registry()
+    theme = json.load(open(DESIGN / "themes" / "pmoves-armor.json"))
+    css = emit_css(theme, resolve_theme(theme, reg))
+    assert '[data-theme="pmoves-armor"]' in css
+    assert "--pm-accent: #7C3AED;" in css
+    # default theme also matches bare :root
+    assert ":root:not([data-theme])" in css
+
+
+def test_emit_ts_exports_theme_map():
+    from generate import emit_ts
+    reg = load_registry()
+    themes = {n: resolve_theme(json.load(open(DESIGN/"themes"/f"{n}.json")), reg)
+              for n in ("pmoves-armor", "darkxside-skin")}
+    ts = emit_ts(themes)
+    assert "export const themes" in ts
+    assert '"--pm-signature": "#E11D48"' in ts
