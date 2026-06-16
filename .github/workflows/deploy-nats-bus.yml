@@ -1,0 +1,72 @@
+# Deploy / restart the NATS event bus on kvm4-2 (the canonical fleet hub) via CI,
+# with no interactive SSH and no Tailscale check-mode re-auth gate.
+#
+# Targets the kvm4-2 runner specifically via the node-unique `kvm4-2` label
+# (both VPS runners share `kvm4`, so that label alone is non-deterministic).
+#
+# Operates on the DURABLE checkout at /opt/PMOVES.AI (not the ephemeral runner
+# _work tree), reusing the env chain + pmoves_external network provisioned there.
+# Prerequisite (one-time, already done 2026-06-16): repo cloned to /opt/PMOVES.AI,
+# `make ensure-env-shared` + seeded env.tier-* + NATS_BIND=<tailnet-ip> in
+# env.tier-data. NATS creds are static `:-` defaults, so no secrets are needed.
+#
+# Uses only `run:` steps (no `uses:`), so it is exempt from the sha-pinning gate.
+
+name: Deploy NATS Bus (kvm4-2)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-nats-bus-kvm4-2
+  cancel-in-progress: false
+
+jobs:
+  deploy-nats:
+    name: Bring up NATS bus on kvm4-2
+    runs-on: [self-hosted, kvm4-2]
+    timeout-minutes: 10
+    steps:
+      - name: Sync durable checkout + bring up NATS bus
+        run: |
+          set -euo pipefail
+          R=/opt/PMOVES.AI
+          if [ ! -d "$R/.git" ]; then
+            echo "::error::Durable checkout $R is missing — run the one-time bootstrap first (clone + ensure-env-shared + seed env.tier-* + NATS_BIND)."
+            exit 1
+          fi
+          cd "$R"
+          git fetch origin main --quiet
+          git checkout -f main
+          git pull --ff-only origin main
+          # The split overlays declare pmoves_external as external:true, so it must
+          # pre-exist. Create idempotently to match base.yml's definition.
+          docker network inspect pmoves_external >/dev/null 2>&1 || \
+            docker network create --driver bridge --subnet 172.30.6.0/24 --gateway 172.30.6.1 pmoves_external
+          make -C pmoves overlay-up-bus
+
+      - name: Verify NATS reachable over tailnet
+        run: |
+          set -euo pipefail
+          # NATS_BIND is the node tailnet IP (mesh-only, not 0.0.0.0), so verify via
+          # the tailnet interface rather than localhost (DNAT'd, not a local socket).
+          tsip="$(tailscale ip -4 2>/dev/null | head -1)"
+          if [ -z "$tsip" ]; then
+            echo "::error::No Tailscale IPv4 address on this node."
+            exit 1
+          fi
+          for i in $(seq 1 20); do
+            if curl -sf --max-time 5 "http://${tsip}:9223/varz" >/dev/null 2>&1; then
+              echo "NATS varz reachable on tailnet :9223 (attempt $i)"
+              curl -sf --max-time 5 "http://${tsip}:9223/varz" \
+                | grep -oE '"version":"[^"]*"|"jetstream":[a-z]*' || true
+              exit 0
+            fi
+            sleep 3
+          done
+          echo "::error::NATS not reachable on tailnet :9223 after retries."
+          docker ps --filter name=nats --format '{{.Names}} {{.Status}}'
+          exit 1
