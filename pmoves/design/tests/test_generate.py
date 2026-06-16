@@ -1,9 +1,9 @@
 # pmoves/design/tests/test_generate.py
-import json, subprocess, sys, pathlib
+import json, sys, pathlib
 DESIGN = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(DESIGN))
 
-from generate import resolve_theme, load_registry  # noqa: E402
+from generate import resolve_theme, load_registry  # noqa: E402  # pyright: ignore[reportMissingImports]
 
 
 def test_resolve_pmoves_armor_accents_from_registry():
@@ -34,8 +34,8 @@ def test_missing_agent_raises_clear_error():
         assert "no-such-agent" in str(e)
 
 
-def test_emit_css_has_data_theme_selector(tmp_path):
-    from generate import emit_css
+def test_emit_css_has_data_theme_selector():
+    from generate import emit_css  # pyright: ignore[reportMissingImports]
     reg = load_registry()
     theme = json.load(open(DESIGN / "themes" / "pmoves-armor.json"))
     css = emit_css(theme, resolve_theme(theme, reg))
@@ -46,7 +46,7 @@ def test_emit_css_has_data_theme_selector(tmp_path):
 
 
 def test_emit_ts_exports_theme_map():
-    from generate import emit_ts
+    from generate import emit_ts  # pyright: ignore[reportMissingImports]
     reg = load_registry()
     themes = {n: resolve_theme(json.load(open(DESIGN/"themes"/f"{n}.json")), reg)
               for n in ("pmoves-armor", "darkxside-skin")}
