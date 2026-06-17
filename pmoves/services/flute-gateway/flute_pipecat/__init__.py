@@ -11,7 +11,7 @@ Key Components:
     edge/       - ESP32 and IoT device bridges
 
 Example:
-    >>> from pipecat import build_voice_agent_pipeline
+    >>> from flute_pipecat import build_voice_agent_pipeline
     >>> pipeline = await build_voice_agent_pipeline(transport, persona="default")
     >>> await PipelineRunner().run(pipeline)
 """
