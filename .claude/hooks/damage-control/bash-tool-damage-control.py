@@ -309,6 +309,23 @@ def check_command(command: str, config: Dict[str, Any]) -> Tuple[bool, bool, str
                     )
                 return True, False, f"Blocked: zero-access path {zero_path} (no operations allowed)"
 
+    # 2b. Bash delete allowlist — explicit, whole-command-anchored exceptions to the
+    # read-only / no-delete blocks below (e.g. clearing git's own orphaned lockfiles).
+    # Deliberately placed AFTER the destructive-pattern block (step 1: rm -rf / rm -f
+    # are already blocked) and AFTER zero-access (step 2, never bypassed), so an
+    # allowlisted command cannot smuggle anything dangerous past those gates. Each
+    # pattern is anchored to the whole command in patterns.yaml, so no chaining.
+    for item in config.get("bashDeleteAllowlist", []):
+        pat = item.get("pattern", "")
+        if not pat:
+            continue
+        try:
+            if re.search(pat, command):
+                return False, False, ""  # explicitly allowed (see patterns.yaml: reason)
+        except re.error as e:
+            print(f"WARNING: Invalid regex in bashDeleteAllowlist: {pat!r} — {e}", file=sys.stderr)
+            continue
+
     # 3. Check for modifications to read-only paths (reads allowed)
     for readonly in read_only_paths:
         blocked, reason = check_path_patterns(command, readonly, READ_ONLY_BLOCKED, "read-only path")
