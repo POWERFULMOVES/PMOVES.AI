@@ -31,6 +31,8 @@ cases = [
     (DEL + "-f " + GIT, True),                # rm -f                    -> BLOCK (step 1)
     (DEL + GIT + " && " + DEL + "yarn.lock", True),   # chaining         -> BLOCK
     (DEL + GIT + " ; echo hi", True),         # chaining via ;           -> BLOCK
+    (DEL + GIT + "\n" + GITI, True),          # newline separator (bash terminator) -> BLOCK
+    (DEL + GIT + "\necho hi", True),          # newline then command     -> BLOCK
 ]
 
 failures = []

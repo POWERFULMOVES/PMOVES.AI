@@ -1049,8 +1049,10 @@ bashDeleteAllowlist:
   # git cannot auto-clear them (it can't distinguish a stale lock from a live
   # one). These are NOT package locks (yarn.lock/uv.lock/etc.) — the *.lock
   # readOnlyPath rightly still guards those. Anchored to a bare `rm` of git's own
-  # internal lockfiles (one or both), no flags, no chaining.
-  - pattern: '^\s*rm\s+((\./)?\.git/(config|index)\.lock\s*)+$'
+  # internal lockfiles (one or both), no flags, no chaining. Separators are
+  # [ \t] only (NOT \s) — a newline terminates the command in Bash, so allowing
+  # \n between operands would let a second line execute as its own command.
+  - pattern: '^[ \t]*rm[ \t]+((\./)?\.git/(config|index)\.lock[ \t]*)+$'
     reason: "Clear orphaned git internal lockfile(s) .git/config.lock|.git/index.lock — they block all git config/index writes and git won't auto-clear them; package locks (*.lock) remain protected"
 
 # ---------------------------------------------------------------------------
