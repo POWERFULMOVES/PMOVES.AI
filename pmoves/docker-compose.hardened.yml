@@ -228,36 +228,6 @@ services:
     security_opt: !override
       - no-new-privileges:true
 
-  publisher:
-    user: "65532:65532"
-    read_only: true
-    tmpfs:
-      - /tmp:size=500M,mode=1777
-      - /home/pmoves/.cache:size=100M,uid=65532,gid=65532
-    cap_drop: ["ALL"]
-    security_opt:
-      - no-new-privileges:true
-
-  analysis-echo:
-    user: "65532:65532"
-    read_only: true
-    tmpfs:
-      - /tmp:size=500M,mode=1777
-      - /home/pmoves/.cache:size=100M,uid=65532,gid=65532
-    cap_drop: ["ALL"]
-    security_opt:
-      - no-new-privileges:true
-
-  graph-linker:
-    user: "65532:65532"
-    read_only: true
-    tmpfs:
-      - /tmp:size=500M,mode=1777
-      - /home/pmoves/.cache:size=100M,uid=65532,gid=65532
-    cap_drop: ["ALL"]
-    security_opt:
-      - no-new-privileges:true
-
   comfy-watcher:
     user: "65532:65532"
     read_only: true
