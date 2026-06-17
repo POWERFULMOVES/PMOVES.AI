@@ -1030,6 +1030,30 @@ chitSafePaths:
 # Use "git submodule update --init --recursive" after .gitmodules changes.
 
 # ---------------------------------------------------------------------------
+# BASH DELETE ALLOWLIST - explicit, anchored exceptions to readOnlyPaths/noDelete
+# ---------------------------------------------------------------------------
+# Each entry's `pattern` is a regex matched against the WHOLE Bash command. A
+# match permits the command despite a readOnlyPaths/noDeletePaths block.
+# Evaluated AFTER bashToolPatterns (so `rm -rf` / `rm -f` are still blocked) and
+# AFTER zeroAccessPaths (never bypassed), but BEFORE read-only/no-delete checks.
+# RULES for new entries:
+#   - Anchor the whole command (^...$) so nothing destructive can be chained on.
+#   - Be SURGICAL — exact paths, never broad globs.
+#   - State a `reason` (recorded in the block/allow trail and code review).
+bashDeleteAllowlist:
+  # Orphaned git internal lockfiles. .git/config.lock and .git/index.lock are
+  # 0-byte sentinels left behind when an interrupted git config/index write dies
+  # between creating the lock and the atomic rename (killed cmd, closed session,
+  # OneDrive/AV holding the handle). While present they block ALL subsequent git
+  # config/index operations (branch -D, push -u, worktree add, add/commit), and
+  # git cannot auto-clear them (it can't distinguish a stale lock from a live
+  # one). These are NOT package locks (yarn.lock/uv.lock/etc.) — the *.lock
+  # readOnlyPath rightly still guards those. Anchored to a bare `rm` of git's own
+  # internal lockfiles (one or both), no flags, no chaining.
+  - pattern: '^\s*rm\s+((\./)?\.git/(config|index)\.lock\s*)+$'
+    reason: "Clear orphaned git internal lockfile(s) .git/config.lock|.git/index.lock — they block all git config/index writes and git won't auto-clear them; package locks (*.lock) remain protected"
+
+# ---------------------------------------------------------------------------
 # READ-ONLY PATHS - Can read, but not write/edit/delete
 # ---------------------------------------------------------------------------
 # Safe to read but should never be modified by AI
