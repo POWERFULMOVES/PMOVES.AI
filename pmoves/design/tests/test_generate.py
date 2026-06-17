@@ -1,5 +1,6 @@
 # pmoves/design/tests/test_generate.py
 import json, sys, pathlib
+import pytest
 DESIGN = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(DESIGN))
 
@@ -27,11 +28,8 @@ def test_resolve_darkxside_skin_signature_leads():
 def test_missing_agent_raises_clear_error():
     reg = load_registry()
     bad = {"name": "x", "accents": {"primary": "no-such-agent", "secondary": "darkxside", "signature": "darkxside"}, "overrides": {}}
-    try:
+    with pytest.raises(KeyError, match="no-such-agent"):
         resolve_theme(bad, reg)
-        assert False, "expected KeyError"
-    except KeyError as e:
-        assert "no-such-agent" in str(e)
 
 
 def test_emit_css_has_data_theme_selector():
@@ -61,19 +59,14 @@ def test_unsafe_registry_value_is_rejected():
     reg = {"x": {"color": "#fff; } body{display:none", "accent": "#fff"},
            "darkxside": load_registry()["darkxside"]}
     theme = {"name": "x", "accents": {"primary": "x", "secondary": "darkxside", "signature": "darkxside"}, "overrides": {}}
-    try:
+    with pytest.raises(ValueError, match="unsafe"):
         resolve_theme(theme, reg)
-        assert False, "expected ValueError on unsafe value"
-    except ValueError as e:
-        assert "unsafe" in str(e)
 
 
 def test_missing_field_on_present_agent_raises_clear_error():
     reg = {"x": {"color": "#abcdef"},  # missing 'accent'
            "darkxside": load_registry()["darkxside"]}
     theme = {"name": "x", "accents": {"primary": "x", "secondary": "darkxside", "signature": "darkxside"}, "overrides": {}}
-    try:
+    with pytest.raises(KeyError) as exc:
         resolve_theme(theme, reg)
-        assert False, "expected KeyError on missing field"
-    except KeyError as e:
-        assert "accent" in str(e) and "x" in str(e)
+    assert "accent" in str(exc.value) and "x" in str(exc.value)

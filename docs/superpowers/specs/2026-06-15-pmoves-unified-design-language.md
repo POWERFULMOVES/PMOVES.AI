@@ -45,7 +45,7 @@ This spec is the **source-of-truth design document**. Code follows in a separate
 
 ## The Engine (what already exists — do not reinvent)
 
-```
+```text
 ┌─ REGISTRY (server of record) ──────────────────────────────────┐
 │ pmoves/config/agent_signatures.yaml                            │
 │   per persona: glyph · color · accent · voice · resonance      │
@@ -133,7 +133,7 @@ The marketing site is rebuilt from A2UI's component catalog (`Card/Column/Row/Te
 
 ## Architecture — the token layer (the A build)
 
-```
+```text
 pmoves/design/
   tokens.base.json        ← brand neutrals (void, ink ramp, surfaces, borders,
                             spacing, radius, easing, type stacks)
@@ -141,11 +141,11 @@ pmoves/design/
     pmoves-armor.json      ← default cool theme (references registry node hues)
     darkxside-skin.json    ← warm crimson persona theme (✦ #E11D48)
   build/
-    tokens.css             ← generated :root{--…} (style-dictionary or a tiny script)
+    tokens.<theme>.css     ← generated per-theme :root[data-theme] CSS (one per theme)
     tokens.ts              ← generated TS object (for A2UI ProvenancePalette + Tailwind)
 ```
 
-- **Generator** reads `agent_signatures.yaml` (single source) → emits `tokens.css` + `tokens.ts`. No hand-copied hex anywhere downstream.
+- **Generator** reads `agent_signatures.yaml` (single source) → emits `tokens.<theme>.css` + `tokens.ts`. No hand-copied hex anywhere downstream.
 - **ThemeProvider** (web): sets `data-theme="pmoves-armor"` on `<html>`, writes the active theme's CSS variables. Swapping the attribute re-skins (this is the A→B seam).
 - **A2UI bridge:** `ProvenancePalette` 7 keys (`background/panel/panelAlt/accent/accentSoft/ink/muted`) populated from `tokens.ts` — so renders match the web.
 - **Tailwind bridge:** `pmoves/ui/tailwind.config.ts` consumes `tokens.ts` (today it hard-codes; switch to import).

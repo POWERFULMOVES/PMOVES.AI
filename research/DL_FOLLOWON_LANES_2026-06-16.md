@@ -9,7 +9,7 @@
 ## The engine (context for any picker-upper)
 
 - **Registry (source of truth):** `pmoves/config/agent_signatures.yaml` — per-persona `glyph/color/accent/voice`. Read-only / additive-only.
-- **DL-1 output (this branch):** `pmoves/design/` — `generate.py` (uv) → `build/tokens.<theme>.css` + `tokens.ts`; `theme-provider.js`; `preview.html`. Tokens: `--pm-bg/-surface/-ink/-accent/-accent-soft/-accent-2/-signature/-radius/-font-*`. Themes: `pmoves-armor` (default, cool) + `darkxside-skin` (warm `✦` crimson).
+- **DL-1 output (this branch):** `pmoves/design/` — `generate.py` (uv) → `build/tokens.<theme>.css` + `tokens.ts`; `theme-provider.js`; `preview.html`. Tokens: `--pm-bg/-surface/-ink/-accent/-accent-soft/-accent-2/-signature/-radius/-space-*/-font-*`. Themes: `pmoves-armor` (default, cool) + `darkxside-skin` (warm `✦` crimson).
 - **4090-owned (need sign-off to modify):** `agent_terminal_theme.py`, `botz_cli.py`, their tests, `botz-gateway/main.py` W1 routes (`/v1/agent/theme/{id}`, `/v1/agent/whoami`).
 
 ## Lanes

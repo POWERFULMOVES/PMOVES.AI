@@ -8,7 +8,7 @@
   "space": { "xs": "4px", "sm": "8px", "md": "16px", "lg": "24px", "xl": "40px" },
   "ease": { "out-expo": "cubic-bezier(0.16,1,0.3,1)", "out-back": "cubic-bezier(0.34,1.56,0.64,1)" },
   "font": {
-    "display": "Orbitron, 'Exo 2', system-ui, sans-serif",
+    "display": "'Orbitron', 'Exo 2', system-ui, sans-serif",
     "body": "'Exo 2', system-ui, sans-serif",
     "mono": "'JetBrains Mono', ui-monospace, monospace"
   }
