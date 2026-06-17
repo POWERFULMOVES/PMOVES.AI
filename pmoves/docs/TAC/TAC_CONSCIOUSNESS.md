@@ -7,7 +7,7 @@ Map consciousness topology via Compressed Geometric Packets (CGP). The Conscious
 
 ## Current State
 
-- **Port:** 8105
+- **Port:** 8106
 - **Team:** Orchestration (agent-teams.yaml)
 - **Dependencies:** Tokenism Simulator (8103), NATS (4222), Neo4j (7474/7687)
 - **CHIT Integration:** Full target (5/5 toggles)
@@ -19,7 +19,7 @@ Map consciousness topology via Compressed Geometric Packets (CGP). The Conscious
   Agent Interactions        Swarm Dynamics
          │                       │
          ▼                       ▼
-   Consciousness Service (8105)
+   Consciousness Service (8106)
          │
     ┌────┼────┐
     │    │    │
@@ -81,7 +81,7 @@ No conflict — the distinction is intentional (transport layer vs payload schem
 ## Verification
 
 ```bash
-curl -s http://localhost:8105/healthz
+curl -s http://localhost:8106/healthz
 nats sub "geometry.cgp.v1" --count=1
 nats sub "tokenism.>" --count=1
 ```
