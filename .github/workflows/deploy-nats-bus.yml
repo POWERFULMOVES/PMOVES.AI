@@ -42,10 +42,8 @@ jobs:
           git fetch origin main --quiet
           git checkout -f main
           git pull --ff-only origin main
-          # The split overlays declare pmoves_external as external:true, so it must
-          # pre-exist. Create idempotently to match base.yml's definition.
-          docker network inspect pmoves_external >/dev/null 2>&1 || \
-            docker network create --driver bridge --subnet 172.30.6.0/24 --gateway 172.30.6.1 pmoves_external
+          # Overlay networks are ensured by overlay-up-bus's ensure-overlay-networks
+          # prerequisite (creates pmoves_bus + pmoves_external if missing).
           make -C pmoves overlay-up-bus
 
       - name: Verify NATS reachable over tailnet
