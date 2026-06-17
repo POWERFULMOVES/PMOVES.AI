@@ -10,6 +10,28 @@ from typing import Callable, Dict
 
 import pytest
 import pytest_asyncio
+import yaml as _yaml
+
+
+def _compose_override_tag(loader, node):
+    """Tolerate Docker Compose custom merge tags (!override, !reset) under PyYAML.
+
+    docker-compose.hardened.yml uses `!override` (Compose 2.24+ replace-don't-append
+    semantics) on list fields. PyYAML's SafeLoader/FullLoader otherwise raise a
+    constructor error on these tags, breaking tests that yaml.safe_load the compose
+    files (e.g. tests/hardening, tests/smoke). Construct the underlying value so the
+    parsed structure matches the post-merge intent.
+    """
+    if isinstance(node, _yaml.SequenceNode):
+        return loader.construct_sequence(node)
+    if isinstance(node, _yaml.MappingNode):
+        return loader.construct_mapping(node)
+    return loader.construct_scalar(node)
+
+
+for _compose_tag in ("!override", "!reset"):
+    _yaml.SafeLoader.add_constructor(_compose_tag, _compose_override_tag)
+    _yaml.FullLoader.add_constructor(_compose_tag, _compose_override_tag)
 
 
 @pytest.fixture(scope="session", autouse=True)
