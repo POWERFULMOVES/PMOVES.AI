@@ -7,7 +7,7 @@ services:
       - /tmp:size=500M,mode=1777
       - /home/pmoves/.cache:size=200M,uid=65532,gid=65532
     cap_drop: ["ALL"]
-    security_opt:
+    security_opt: !override
       - no-new-privileges:true
 
   extract-worker:
@@ -17,7 +17,7 @@ services:
       - /tmp:size=500M,mode=1777
       - /home/pmoves/.cache:size=200M,uid=65532,gid=65532
     cap_drop: ["ALL"]
-    security_opt:
+    security_opt: !override
       - no-new-privileges:true
 
   langextract:
@@ -27,7 +27,7 @@ services:
       - /tmp:size=500M,mode=1777
       - /home/pmoves/.cache:size=200M,uid=65532,gid=65532
     cap_drop: ["ALL"]
-    security_opt:
+    security_opt: !override
       - no-new-privileges:true
 
   presign:
@@ -37,7 +37,7 @@ services:
       - /tmp:size=500M,mode=1777
       - /home/pmoves/.cache:size=200M,uid=65532,gid=65532
     cap_drop: ["ALL"]
-    security_opt:
+    security_opt: !override
       - no-new-privileges:true
 
   render-webhook:
@@ -47,7 +47,7 @@ services:
       - /tmp:size=500M,mode=1777
       - /home/pmoves/.cache:size=200M,uid=65532,gid=65532
     cap_drop: ["ALL"]
-    security_opt:
+    security_opt: !override
       - no-new-privileges:true
 
   retrieval-eval:
@@ -57,7 +57,7 @@ services:
       - /tmp:size=500M,mode=1777
       - /home/pmoves/.cache:size=200M,uid=65532,gid=65532
     cap_drop: ["ALL"]
-    security_opt:
+    security_opt: !override
       - no-new-privileges:true
 
   pdf-ingest:
@@ -67,7 +67,7 @@ services:
       - /tmp:size=500M,mode=1777
       - /home/pmoves/.cache:size=200M,uid=65532,gid=65532
     cap_drop: ["ALL"]
-    security_opt:
+    security_opt: !override
       - no-new-privileges:true
 
   jellyfin-bridge:
@@ -77,7 +77,7 @@ services:
       - /tmp:size=500M,mode=1777
       - /home/pmoves/.cache:size=200M,uid=65532,gid=65532
     cap_drop: ["ALL"]
-    security_opt:
+    security_opt: !override
       - no-new-privileges:true
 
   invidious-companion-proxy:
@@ -99,7 +99,7 @@ services:
       - /home/pmoves/.cache:size=10G,uid=65532,gid=65532
       - /dev/shm:size=4G
     cap_drop: ["ALL"]
-    security_opt:
+    security_opt: !override
       - no-new-privileges:true
     environment:
       - HF_HOME=/home/pmoves/.cache/huggingface
@@ -114,7 +114,7 @@ services:
       - /home/pmoves/.cache:size=10G,uid=65532,gid=65532
       - /dev/shm:size=4G
     cap_drop: ["ALL"]
-    security_opt:
+    security_opt: !override
       - no-new-privileges:true
     environment:
       - HF_HOME=/home/pmoves/.cache/huggingface
@@ -129,7 +129,7 @@ services:
       - /home/pmoves/.cache:size=10G,uid=65532,gid=65532
       - /dev/shm:size=4G
     cap_drop: ["ALL"]
-    security_opt:
+    security_opt: !override
       - no-new-privileges:true
     environment:
       - HF_HOME=/home/pmoves/.cache/huggingface
@@ -144,7 +144,7 @@ services:
       - /home/pmoves/.cache:size=10G,uid=65532,gid=65532
       - /dev/shm:size=4G
     cap_drop: ["ALL"]
-    security_opt:
+    security_opt: !override
       - no-new-privileges:true
     environment:
       - HF_HOME=/home/pmoves/.cache/huggingface
@@ -159,7 +159,7 @@ services:
       - /home/pmoves/.cache:size=10G,uid=65532,gid=65532
       - /dev/shm:size=4G
     cap_drop: ["ALL"]
-    security_opt:
+    security_opt: !override
       - no-new-privileges:true
     environment:
       - HF_HOME=/home/pmoves/.cache/huggingface
@@ -175,7 +175,7 @@ services:
       - /home/pmoves/.cache:size=100M,uid=65532,gid=65532
       - /opt/DeepResearch:size=100M,uid=65532,gid=65532
     cap_drop: ["ALL"]
-    security_opt:
+    security_opt: !override
       - no-new-privileges:true
 
   supaserch:
@@ -185,7 +185,7 @@ services:
       - /tmp:size=500M,mode=1777
       - /home/pmoves/.cache:size=100M,uid=65532,gid=65532
     cap_drop: ["ALL"]
-    security_opt:
+    security_opt: !override
       - no-new-privileges:true
 
   publisher-discord:
@@ -195,7 +195,7 @@ services:
       - /tmp:size=500M,mode=1777
       - /home/pmoves/.cache:size=100M,uid=65532,gid=65532
     cap_drop: ["ALL"]
-    security_opt:
+    security_opt: !override
       - no-new-privileges:true
 
   mesh-agent:
@@ -205,7 +205,7 @@ services:
       - /tmp:size=500M,mode=1777
       - /home/pmoves/.cache:size=100M,uid=65532,gid=65532
     cap_drop: ["ALL"]
-    security_opt:
+    security_opt: !override
       - no-new-privileges:true
 
   nats-echo-req:
@@ -215,7 +215,7 @@ services:
       - /tmp:size=500M,mode=1777
       - /home/pmoves/.cache:size=100M,uid=65532,gid=65532
     cap_drop: ["ALL"]
-    security_opt:
+    security_opt: !override
       - no-new-privileges:true
 
   nats-echo-res:
@@ -225,7 +225,7 @@ services:
       - /tmp:size=500M,mode=1777
       - /home/pmoves/.cache:size=100M,uid=65532,gid=65532
     cap_drop: ["ALL"]
-    security_opt:
+    security_opt: !override
       - no-new-privileges:true
 
   publisher:
@@ -265,7 +265,7 @@ services:
       - /tmp:size=500M,mode=1777
       - /home/pmoves/.cache:size=100M,uid=65532,gid=65532
     cap_drop: ["ALL"]
-    security_opt:
+    security_opt: !override
       - no-new-privileges:true
 
   grayjay-plugin-host:
@@ -286,7 +286,7 @@ services:
       - /tmp:size=1G,mode=1777
       - /home/pmoves/.cache:size=500M,uid=65532,gid=65532
     cap_drop: ["ALL"]
-    security_opt:
+    security_opt: !override
       - no-new-privileges:true
     # Note: Persistent volumes /a0/* are mounted from host, need proper ownership
 
@@ -297,7 +297,7 @@ services:
       - /tmp:size=1G,mode=1777
       - /home/pmoves/.cache:size=2G,uid=65532,gid=65532
     cap_drop: ["ALL"]
-    security_opt:
+    security_opt: !override
       - no-new-privileges:true
     secrets:
       - supabase_service_role_key
@@ -313,7 +313,7 @@ services:
       - /tmp:size=500M,mode=1777
       - /home/pmoves/.cache:size=100M,uid=65532,gid=65532
     cap_drop: ["ALL"]
-    security_opt:
+    security_opt: !override
       - no-new-privileges:true
 
   # Media Ingestion - 10G /tmp, 500M cache
@@ -324,7 +324,7 @@ services:
       - /tmp:size=10G,mode=1777
       - /home/pmoves/.cache:size=500M,uid=65532,gid=65532
     cap_drop: ["ALL"]
-    security_opt:
+    security_opt: !override
       - no-new-privileges:true
 
   # Sync Services - 100M /tmp, 50M cache
@@ -335,7 +335,7 @@ services:
       - /tmp:size=100M,mode=1777
       - /home/pmoves/.cache:size=50M,uid=65532,gid=65532
     cap_drop: ["ALL"]
-    security_opt:
+    security_opt: !override
       - no-new-privileges:true
     # Note: Persistent volume /data is mounted from host, need proper ownership
 
