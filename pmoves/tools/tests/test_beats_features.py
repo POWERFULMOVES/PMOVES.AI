@@ -15,6 +15,38 @@ def test_librosa_features_shapes_and_keys():
     assert isinstance(f["tempo_bpm"], float)
 
 
+def _all_finite(d):
+    import math
+    for v in d.values():
+        if isinstance(v, (list, tuple)):
+            for x in v:
+                if isinstance(x, (int, float)) and not math.isfinite(float(x)):
+                    return False
+        elif isinstance(v, (int, float)):
+            if not math.isfinite(float(v)):
+                return False
+    return True
+
+
+def test_librosa_features_silence_and_short_finite():
+    sr = 22050
+    # pure silence: beat_track may raise or yield NaN tempo
+    f_sil = librosa_features_from_array(np.zeros(sr, dtype="float32"), sr)
+    assert _all_finite(f_sil), f"silence produced non-finite values: {f_sil}"
+    assert f_sil["tempo_bpm"] == 0.0
+    # very short clip
+    f_short = librosa_features_from_array(np.zeros(100, dtype="float32"), sr)
+    assert _all_finite(f_short), f"short clip produced non-finite values: {f_short}"
+    assert f_short["tempo_bpm"] == 0.0
+    # non-finite input (NaN/inf can leak from upstream resampling/normalisation):
+    # beat_track raises ParameterError on this; the function must NOT crash and
+    # must coerce tempo to 0.0 with all-finite outputs.
+    y_nan = np.full(sr, np.nan, dtype="float32")
+    f_nan = librosa_features_from_array(y_nan, sr)
+    assert _all_finite(f_nan), f"non-finite input produced non-finite values: {f_nan}"
+    assert f_nan["tempo_bpm"] == 0.0
+
+
 def test_librosa_features_deterministic():
     sr = 22050
     y = np.sin(np.linspace(0, 50, sr * 4)).astype("float32")
@@ -24,6 +56,27 @@ def test_librosa_features_deterministic():
 
 
 from pmoves.tools.analyze_beats import cluster_on_embeddings
+
+
+def test_cluster_on_embeddings_partial_embeddings_no_nan_crash():
+    """Some records have a real 512-d embedding, others are padded/missing.
+    Padding leaves ~509 zero-variance columns -> StandardScaler /0 -> NaN ->
+    KMeans 'array contains NaN' crash. Must return finite labels instead."""
+    import math
+    # Some records have a real 512-d embedding; some are missing it and fall
+    # back to a padded acoustic vector. When an acoustic feature is itself NaN
+    # (degenerate audio upstream), the unsanitised fallback vector carries NaN
+    # into StandardScaler -> KMeans ValueError("Input X contains NaN.").
+    records = [
+        {"clap_embedding": [0.9, 0.1] + [0.0] * 510},
+        {"clap_embedding": [0.1, 0.9] + [0.0] * 510},
+        {"tempo_bpm": float("nan"), "spectral_centroid": 3000.0, "spectral_flatness": 0.2},
+        {"tempo_bpm": 120.0, "spectral_centroid": float("nan"), "spectral_flatness": 0.2},
+    ]
+    labels, sil = cluster_on_embeddings(records, n_groups=2)
+    assert len(labels) == len(records)
+    assert all(isinstance(l, int) for l in labels)
+    assert math.isfinite(sil)
 
 
 def test_cluster_on_embeddings_separates_two_blobs():

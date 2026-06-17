@@ -43,3 +43,26 @@ models:
     requires_ack: false
     swap_for: null
     caps: {min_vram_gb: 12, needs: ["cuda", "comfyui"]}
+  image.flux-schnell:
+    # FLUX.1-schnell weights are Apache-2.0 (verified handoff 2026-06-08): fast
+    # license-clean drafts, no ack gate. License-clean swap target for the
+    # non-commercial Ideogram-4 (image.ideogram-ultra).
+    model_id: black-forest-labs/FLUX.1-schnell
+    provider: hf
+    license: apache-2.0
+    mode: local
+    requires_ack: false
+    swap_for: null
+    caps: {min_vram_gb: 12, needs: ["cuda", "comfyui"]}
+  anime.animagine-xl:
+    # OpenRAIL++ is commercial-permitted with use-restrictions (verified handoff
+    # 2026-06-08): honor the restrictions, no ack gate for hosted use. SDXL base
+    # is also commercial-OK. License-clean swap target for the non-commercial
+    # ANIMA (anime.anima).
+    model_id: cagliostrolab/animagine-xl-4.0
+    provider: hf
+    license: openrail++
+    mode: local
+    requires_ack: false
+    swap_for: null
+    caps: {min_vram_gb: 8, needs: ["cuda", "comfyui"]}

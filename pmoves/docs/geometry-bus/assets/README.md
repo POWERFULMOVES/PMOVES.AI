@@ -21,7 +21,7 @@ Visual assets for GEOMETRY BUS documentation including Remotion animations, Thre
 ### Remotion Animation (Overview)
 
 **Prerequisites:**
-- A2UI Renderer service running: `http://localhost:8105`
+- A2UI Renderer service running: `http://localhost:8107`
 - Remotion skill available: `/remotion-render`
 
 **Command:**
