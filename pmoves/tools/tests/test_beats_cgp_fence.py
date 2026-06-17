@@ -57,5 +57,6 @@ def test_fence_rejects_v2_packet_missing_extension_blocks(monkeypatch):
     cgp.pop("hyperbolic", None)
     cgp.pop("attribution", None)
     # super_nodes still present → passes JSON-Schema; must be caught by the block check.
-    with pytest.raises(typer.Exit):
+    with pytest.raises(typer.Exit) as exc:
         validate_cgp_v2(cgp)
+    assert exc.value.exit_code == 1  # fail-fast contract: refuse-to-publish exits non-zero
