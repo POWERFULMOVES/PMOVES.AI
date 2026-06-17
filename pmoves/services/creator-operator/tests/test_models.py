@@ -42,3 +42,43 @@ def test_lookup_caps_video_is_cuda_heavy():
 
 def test_lookup_caps_missing_returns_none():
     assert lookup_caps({"model_id": "x"}) is None
+
+
+# --- WS-I image + WS-A2 anime license-clean operators (handoff 2026-06-08) ---
+
+def test_flux_schnell_apache_no_ack():
+    m = lookup_model(load_models(MODELS), "image.flux-schnell")
+    assert m["model_id"] == "black-forest-labs/FLUX.1-schnell"
+    assert m["license"] == "apache-2.0"
+    assert requires_ack(m) is False  # Apache => commercial-OK, no ack gate
+    caps = lookup_caps(m)
+    assert caps["min_vram_gb"] >= 1
+    assert "cuda" in caps["needs"] and "comfyui" in caps["needs"]
+
+
+def test_animagine_xl_openrail_no_ack():
+    m = lookup_model(load_models(MODELS), "anime.animagine-xl")
+    assert m["model_id"] == "cagliostrolab/animagine-xl-4.0"
+    assert m["license"] == "openrail++"  # commercial-permitted-with-restrictions
+    assert requires_ack(m) is False
+    caps = lookup_caps(m)
+    assert caps["min_vram_gb"] >= 1
+    assert "cuda" in caps["needs"] and "comfyui" in caps["needs"]
+
+
+def test_qwen_image_caps_valid():
+    m = lookup_model(load_models(MODELS), "image.qwen")
+    caps = lookup_caps(m)
+    assert "cuda" in caps["needs"] and "comfyui" in caps["needs"]
+    assert requires_ack(m) is False
+
+
+def test_clean_swap_targets_resolve_to_registered_no_ack_models():
+    # Each non-commercial try-locally model must swap_for a registered,
+    # commercial-OK (requires_ack=false) model.
+    models = load_models(MODELS)
+    for wf in ("image.ideogram-ultra", "anime.anima"):
+        swap = models[wf]["swap_for"]
+        assert swap is not None
+        clean = next(m for m in models.values() if m["model_id"] == swap)
+        assert requires_ack(clean) is False

@@ -7,6 +7,7 @@
 #   "numpy>=1.26",
 #   "nats-py>=2.7",
 #   "httpx>=0.27",
+#   "jsonschema>=4",
 # ]
 # ///
 """
@@ -186,7 +187,10 @@ def group_to_cgp(group: dict, fingerprints: dict[str, dict], coherence: float = 
         })
 
     return {
-        "spec":    "chit.cgp.v0.2",
+        # Legacy packet: point.proj is a 3-element RGB array, which is NOT valid
+        # under cgp.v2.schema.json (proj must be a scalar number). Labelled v0.1
+        # so it is not mistaken for / validated as a v0.2 packet.
+        "spec":    "chit.cgp.v0.1",
         "type":    "geometry.cgp.v1",
         "id":      _stable_id(group_name),
         "label":   group_name,
@@ -371,7 +375,7 @@ def select_builder(v2: bool = True):
         return build_cgp_v2
     def _legacy(groups, fps, coherence=0.5):
         built = [group_to_cgp(g, fps, coherence) for g in groups]
-        return {"spec": "chit.cgp.v0.2", "super_nodes":
+        return {"spec": "chit.cgp.v0.1", "super_nodes":
                 [c["super_nodes"][0] for c in built if c]}
     return _legacy
 
@@ -390,6 +394,65 @@ async def publish_cgp(cgp: dict, nats_url: str):
         await nc.drain()
     except Exception as e:
         console.print(f"  [yellow]NATS publish skipped:[/] {e}")
+
+
+# ── Schema validation fence ─────────────────────────────────────────────────────
+
+_CGP_V2_SCHEMA_PATH = (
+    Path(__file__).resolve().parent.parent
+    / "contracts" / "schemas" / "geometry" / "cgp.v2.schema.json"
+)
+
+# The v0.2 extension blocks the shared schema cannot mandate. cgp.v2.schema.json
+# also validates v0.1 packets (spec enum includes "chit.cgp.v0.1"), which
+# legitimately omit these, so they are NOT in the schema's top-level `required`
+# list — `spec` + `super_nodes` alone satisfy it. We enforce them here for
+# packets that advertise the v0.2 spec so a regressed builder cannot publish a v2
+# packet stripped of its advertised hyperbolic/attribution payload.
+_CGP_V2_REQUIRED_BLOCKS = ("hyperbolic", "attribution")
+
+
+def validate_cgp_v2(cgp: dict) -> None:
+    """Reject a schema-invalid CGP v2 packet before it reaches NATS (spec §8).
+
+    On a real validation failure this logs the offending field and raises
+    ``typer.Exit(1)`` so the publish never happens. If the validator library or
+    the schema file is unavailable the check is *skipped with a visible warning*
+    rather than silently — an absent optional dependency is not evidence that the
+    packet is malformed, so we do not block publishing on it.
+
+    The v0.2 extension-block check runs *unconditionally* (it needs no validator
+    library), so a v2 packet missing its hyperbolic/attribution payload is
+    rejected even where ``jsonschema`` is not installed.
+    """
+    # v0.2-spec structural contract — the gap the shared JSON-Schema cannot cover.
+    if cgp.get("spec") == "chit.cgp.v0.2":
+        missing = [b for b in _CGP_V2_REQUIRED_BLOCKS if not isinstance(cgp.get(b), dict)]
+        if missing:
+            console.print(
+                "  [red]✗ CGP v2 packet missing advertised extension block(s) — refusing to publish.[/]\n"
+                f"    missing: {', '.join(missing)}"
+            )
+            raise typer.Exit(1)
+    try:
+        import jsonschema
+    except ImportError:
+        console.print("  [yellow]⚠ CGP v2 schema validation skipped — jsonschema not installed[/]")
+        return
+    try:
+        schema = json.loads(_CGP_V2_SCHEMA_PATH.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as e:
+        console.print(f"  [yellow]⚠ CGP v2 schema validation skipped — cannot read {_CGP_V2_SCHEMA_PATH.name}: {e}[/]")
+        return
+    try:
+        jsonschema.validate(cgp, schema)
+    except jsonschema.ValidationError as e:
+        loc = "/".join(str(p) for p in e.absolute_path) or "<root>"
+        console.print(
+            "  [red]✗ CGP v2 packet failed schema validation — refusing to publish.[/]\n"
+            f"    {e.message} (at {loc})"
+        )
+        raise typer.Exit(1)
 
 
 # ── Load helpers ──────────────────────────────────────────────────────────────
@@ -439,6 +502,7 @@ def render(
 
     if v2:
         cgp = select_builder(v2=True)(groups, fps, coherence=coherence)
+        validate_cgp_v2(cgp)  # spec §8 fence: reject schema-invalid packets before publish
 
         async def _publish_one():
             await publish_cgp(cgp, nats)

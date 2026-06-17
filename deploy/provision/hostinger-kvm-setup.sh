@@ -142,7 +142,7 @@ harden_system() {
     # Install essentials
     log_info "Installing essential packages..."
     DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
-        curl wget git jq unzip htop \
+        curl wget git jq unzip htop make \
         ufw fail2ban \
         ca-certificates gnupg lsb-release \
         uidmap dbus-user-session fuse-overlayfs slirp4netns

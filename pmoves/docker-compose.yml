@@ -2361,7 +2361,13 @@ services:
     - ${NATS_BIND:-0.0.0.0}:${NATS_PORT:-4222}:4222
     - ${NATS_BIND:-0.0.0.0}:${NATS_MONITORING_PORT:-9223}:8222
     networks:
+    # pmoves_bus is internal:true (isolated in-stack mesh bus). A container on an
+    # internal-only network gets NO published-port DNAT rules from Docker, so the
+    # ports above are recorded but never plumbed — Tailscale mesh peers can't reach
+    # 4222/9223 cross-node. Multi-home nats onto the non-internal pmoves_external so
+    # its published ports actually bind, while keeping pmoves_bus for in-stack comms.
     - pmoves_bus
+    - pmoves_external
     environment:
     - DOCKED_MODE=${DOCKED_MODE:-true}
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
@@ -3376,6 +3382,9 @@ services:
     - SUPABASE_URL=${SUPABASE_INTERNAL_URL:-${SUPABASE_URL:-http://supabase-kong:8000}}
     - TENSORZERO_URL=${TENSORZERO_URL:-http://tensorzero-gateway:3000}
     - DEFAULT_VOICE_PROVIDER=${DEFAULT_VOICE_PROVIDER:-vibevoice}
+    # Realtime duplex voice agent (/v1/voice/agent: mic→Whisper→LLM→VibeVoice).
+    # Off by default — requires pipecat-ai installed + VibeVoice (7860) running.
+    - PIPECAT_ENABLED=${PIPECAT_ENABLED:-false}
     - ULTIMATE_TTS_URL=${ULTIMATE_TTS_URL:-http://host.docker.internal:7860}
     - ULTIMATE_TTS_TIMEOUT_SEC=${ULTIMATE_TTS_TIMEOUT_SEC:-300}
     - FLUTE_API_KEY=${FLUTE_API_KEY:-}
@@ -3480,7 +3489,7 @@ services:
       retries: 3
       start_period: 30s
 
-  # Consciousness Service - CHR Algorithm & CGP Generation (port 8105)
+  # Consciousness Service - CHR Algorithm & CGP Generation (port 8106)
     deploy:
       resources:
         limits:

@@ -59,8 +59,14 @@ jobs:
             echo "::error::python3/python is required to bootstrap uv"
             exit 1
           fi
-          uv_venv="${RUNNER_TEMP:-$PWD/.tmp}/uv-bootstrap"
-          "$py" -m venv "$uv_venv"
+          # Bootstrap into $HOME, NOT RUNNER_TEMP. On the hardened self-hosted
+          # runner /tmp (hence RUNNER_TEMP=/tmp/pmoves-runner/_temp) is mounted
+          # noexec, so uv's real binary installs successfully but fails to
+          # execute with "Permission denied" (exit 126). $HOME is on an exec
+          # filesystem. --clear wipes any stale venv from a prior run, since
+          # $HOME persists across jobs on a host (non-ephemeral) runner.
+          uv_venv="${HOME:-$PWD}/.uv-bootstrap"
+          "$py" -m venv --clear "$uv_venv"
           "$uv_venv/bin/python" -m pip install --upgrade pip
           "$uv_venv/bin/python" -m pip install 'uv>=0.5.0'
           "$uv_venv/bin/uv" --version

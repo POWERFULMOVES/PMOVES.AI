@@ -607,7 +607,7 @@ PMOVES skills use manifest.yaml (not SKILL.md), so they need either:
 | P0 | microsoft-foundry (host) | Via code_execution_remote -- model deployment |
 | P1 | gepeto (host) | Via code_execution_remote -- Gepeto integration |
 | P2 | youtube-upload (pmoves) | Via HTTP to gateway-agent:8111 when available |
-| P2 | remotion-render (pmoves) | Via HTTP to a2ui-renderer:8105 when available |
+| P2 | remotion-render (pmoves) | Via HTTP to a2ui-renderer:8107 when available |
 
 ---
 

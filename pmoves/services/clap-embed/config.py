@@ -12,3 +12,6 @@ class Config:
     NATS_URL = os.environ.get("NATS_URL", "")                      # empty disables NATS
     REGISTRY_URL = os.environ.get("MODEL_REGISTRY_URL", "http://model-registry:8110")
     EMBED_DIM = 512
+    # Hard cap on raw audio payload size (bytes) to bound memory before decode.
+    # Default 25 MiB. Applies to both the HTTP upload and the NATS request path.
+    MAX_UPLOAD_BYTES = int(os.environ.get("CLAP_MAX_UPLOAD_BYTES", str(25 * 1024 * 1024)))
