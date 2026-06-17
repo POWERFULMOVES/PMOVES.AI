@@ -1,0 +1,57 @@
+# Tailscale ACL — gitops sync
+#
+# Makes pmoves/configs/tailscale-acl-policy.json the source of truth for the
+# tailnet policy and applies it automatically — closing the "no gitops-apply,
+# apply manually in the console" gap.
+#
+#   pull_request → `test`  : validate the policy + diff it against the live tailnet
+#                            (no changes). Surfaces what a merge would apply.
+#   push to main → `apply` : push the policy file to the tailnet.
+#
+# Prerequisites (operator, one-time — until done this workflow no-ops/fails):
+#   1. Allowlist the THIRD-PARTY action in repo Settings → Actions → "Allow select
+#      actions": add `tailscale/gitops-acl-action@*`. (Its internal actions/setup-go
+#      is first-party and already allowed.) Repo enforces an allowlist + SHA-pinning
+#      for third-party uses — the action below is SHA-pinned to v1.5.2.
+#   2. Repo secrets:
+#        - TS_TAILNET        — the tailnet name (e.g. <org>.github / example.com)
+#        - TAILSCALE_API_KEY — already present (reused here).
+#      A Tailscale OAuth client (scope acl:write, tag:ci) is preferred over a 90-day
+#      API key for durable CI — to switch, replace `api-key:` with
+#      `oauth-client-id:`/`oauth-secret:` (the action supports either, not both).
+
+name: Tailscale ACL (gitops)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'pmoves/configs/tailscale-acl-policy.json'
+      - '.github/workflows/deploy-tailscale-acl.yml'
+  pull_request:
+    paths:
+      - 'pmoves/configs/tailscale-acl-policy.json'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tailscale-acl
+  cancel-in-progress: false
+
+jobs:
+  sync-acl:
+    name: ${{ github.event_name == 'pull_request' && 'test (diff only)' || 'apply' }}
+    # Fork PRs cannot read secrets — skip rather than fail noisily.
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork == false }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Sync ACL policy to tailnet
+        uses: tailscale/gitops-acl-action@5a4a17f5708e9bf96f4ee915a95e9f83c2eebe1a # v1.5.2
+        with:
+          tailnet: ${{ secrets.TS_TAILNET }}
+          api-key: ${{ secrets.TAILSCALE_API_KEY }}
+          policy-file: ./pmoves/configs/tailscale-acl-policy.json
+          action: ${{ github.event_name == 'pull_request' && 'test' || 'apply' }}
