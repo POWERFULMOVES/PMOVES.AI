@@ -53,6 +53,25 @@ def test_metrics_exposed():
     assert r.status_code == 200 and b"clap_embed_requests_total" in r.content
 
 
+def test_embed_audio_rejects_oversized_upload(monkeypatch):
+    # cap uploads low, then send a body larger than the cap -> 413, not 200/500
+    import config
+    monkeypatch.setattr(config.Config, "MAX_UPLOAD_BYTES", 1024)
+    big = _wav_bytes(seconds=2)  # ~192 KB, well over the 1 KB cap
+    assert len(big) > 1024
+    r = _client().post("/embed/audio", files={"file": ("big.wav", big, "audio/wav")})
+    assert r.status_code == 413
+
+
+def test_embed_audio_small_upload_still_ok(monkeypatch):
+    # a normal small upload under the cap still embeds successfully
+    import config
+    monkeypatch.setattr(config.Config, "MAX_UPLOAD_BYTES", 26214400)
+    r = _client().post("/embed/audio", files={"file": ("x.wav", _wav_bytes(), "audio/wav")})
+    assert r.status_code == 200
+    assert len(r.json()["embedding"]) == 512
+
+
 def test_redact_url_strips_credentials():
     # credentials must never survive into a log line
     out = _redact_url("nats://user:s3cr3t@nats.internal:4222")

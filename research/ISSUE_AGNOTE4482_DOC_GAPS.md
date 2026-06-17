@@ -49,7 +49,7 @@ Comprehensive review of 15+ AGNOTE4482-related documents across 7 axes (vision, 
 > Deferred to future sprint. No action required for AGNOTE4482 closure.
 
 ### M1. Remotion/ThreeJS Skills Spec-Only — DEFERRED
-Both `remotion-render` and `threejs-render` have complete manifests but no implementation code. Not in agent registry. Potential port conflict: Remotion calls `localhost:8105` (same as Cipher Memory per gap analysis). **Action:** Implement when video rendering pipeline is prioritized.
+Both `remotion-render` and `threejs-render` have complete manifests. (`remotion-render` is now backed by production code at `pmoves/services/a2ui-renderer/`.) ~~Potential port conflict: Remotion calls `localhost:8105` (same as Cipher Memory per gap analysis).~~ **Resolved** — A2UI Renderer moved 8105→8107 (Cipher Memory keeps host-published 8105). **Action:** Implement `threejs-render` when video rendering pipeline is prioritized.
 
 ### M2. Pretext Has No Skill Manifest — DEFERRED
 `pretextLayout.ts` exists in `pmoves/services/a2ui-renderer/src/remotion/pretextLayout.ts` but has no skill manifest. Not integrated into skill system. **Action:** Create manifest when pretext layout is promoted to agent-facing skill.
