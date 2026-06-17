@@ -1,0 +1,7 @@
+{
+  "name": "pmoves-armor",
+  "label": "PMOVES Armor",
+  "register": "human",
+  "accents": { "primary": "claude-opus", "secondary": "4090-claude", "signature": "darkxside" },
+  "overrides": { "color": { "bg": "#050508", "bg-tint": "#0a0a12" } }
+}

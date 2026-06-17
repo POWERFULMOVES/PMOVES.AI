@@ -3921,3 +3921,17 @@ overlay-up-apps: ## Start application services via overlay
 overlay-down: ## Stop all overlay services
 	@$(OVERLAY_DC) $(OVERLAY_CORE) $(OVERLAY_AGENTS) $(OVERLAY_MEDIA) $(OVERLAY_UI) $(OVERLAY_WORKERS) $(OVERLAY_APPS) $(OVERLAY_PROFILES_FULL) down
 	@echo "✅ All overlay services stopped"
+
+.PHONY: design-tokens design-tokens-check
+
+design-tokens: ## Regenerate pmoves/design token CSS + TS from agent_signatures.yaml
+	cd design && uv run --no-project --with pyyaml python generate.py
+
+design-tokens-check: design-tokens ## Fail if committed pmoves/design/build drifted from generator output
+	@# intent-to-add surfaces NEW untracked build/ artifacts to `git diff` too —
+	@# a plain `git diff` only sees tracked files, so a brand-new generated file
+	@# would otherwise pass the gate silently.
+	@git add --intent-to-add design/build 2>/dev/null || true
+	@git diff --exit-code -- design/build \
+		|| { echo "❌ pmoves/design/build drifted — run 'make -C pmoves design-tokens' and commit"; exit 1; }
+	@echo "✅ design/build matches generator output"
