@@ -3874,12 +3874,23 @@ OVERLAY_PROFILES_WORKERS := --profile workers
 OVERLAY_PROFILES_APPS    := --profile apps
 OVERLAY_PROFILES_FULL    := $(OVERLAY_PROFILES_CORE) $(OVERLAY_PROFILES_AGENTS) $(OVERLAY_PROFILES_MEDIA) $(OVERLAY_PROFILES_UI) $(OVERLAY_PROFILES_WORKERS) $(OVERLAY_PROFILES_APPS)
 
-.PHONY: overlay-up-full overlay-up-bus overlay-up-core overlay-up-agents overlay-up-media overlay-up-ui overlay-up-workers overlay-up-apps overlay-down
+.PHONY: overlay-up-full overlay-up-bus ensure-overlay-networks overlay-up-core overlay-up-agents overlay-up-media overlay-up-ui overlay-up-workers overlay-up-apps overlay-down
 
 overlay-up-full: ## Start ALL services via overlay files (base + all tiers)
 	@echo "🚀 Starting full stack via overlay files..."
 	@$(OVERLAY_DC) $(OVERLAY_CORE) $(OVERLAY_AGENTS) $(OVERLAY_MEDIA) $(OVERLAY_UI) $(OVERLAY_WORKERS) $(OVERLAY_APPS) $(OVERLAY_PROFILES_FULL) up -d
 	@echo "✅ Full stack started (84 services across 6 overlays)"
+
+# ensure-overlay-networks creates the bus overlay networks if missing. The overlay
+# files declare networks `external: true` (so each overlay parses standalone), so they
+# must EXIST at runtime; docker-compose.base.yml owns them but only materializes them
+# in a full `up`. Subnets here MUST match docker-compose.base.yml.
+ensure-overlay-networks: ## Create the bus overlay networks (pmoves_bus, pmoves_external) if missing
+	@docker network inspect pmoves_bus >/dev/null 2>&1 || \
+		docker network create --internal --driver bridge --subnet 172.30.3.0/24 --gateway 172.30.3.1 pmoves_bus >/dev/null
+	@docker network inspect pmoves_external >/dev/null 2>&1 || \
+		docker network create --driver bridge --subnet 172.30.6.0/24 --gateway 172.30.6.1 pmoves_external >/dev/null
+	@echo "✅ overlay bus networks present (pmoves_bus, pmoves_external)"
 
 # overlay-up-bus brings up ONLY the NATS event bus via the split overlays
 # (OVERLAY_DC = base+core), NOT the monolith via DC/STACK_FILES. The monolith's
@@ -3889,7 +3900,7 @@ overlay-up-full: ## Start ALL services via overlay files (base + all tiers)
 # voice-activated CHIT passphrase (e.g. kvm4-2). base.yml/core.yml carry no such
 # guard and core.yml's nats uses NATS_USER/NATS_PASSWORD defaults, so the bus comes
 # up cleanly with the fleet-wide fail-fast guards left fully intact.
-overlay-up-bus: ## Start ONLY the NATS event bus via overlay (no CHIT passphrase / no app services)
+overlay-up-bus: ensure-overlay-networks ## Start ONLY the NATS event bus via overlay (no CHIT passphrase / no app services)
 	@echo "📨 Starting NATS event bus via overlay (base+core, bus-only)..."
 	@$(OVERLAY_DC) $(OVERLAY_CORE) up -d nats nats-init
 	@echo "✅ NATS event bus started (no CHIT passphrase required — app guards untouched)"
