@@ -186,7 +186,10 @@ def group_to_cgp(group: dict, fingerprints: dict[str, dict], coherence: float = 
         })
 
     return {
-        "spec":    "chit.cgp.v0.2",
+        # Legacy packet: point.proj is a 3-element RGB array, which is NOT valid
+        # under cgp.v2.schema.json (proj must be a scalar number). Labelled v0.1
+        # so it is not mistaken for / validated as a v0.2 packet.
+        "spec":    "chit.cgp.v0.1",
         "type":    "geometry.cgp.v1",
         "id":      _stable_id(group_name),
         "label":   group_name,
@@ -371,7 +374,7 @@ def select_builder(v2: bool = True):
         return build_cgp_v2
     def _legacy(groups, fps, coherence=0.5):
         built = [group_to_cgp(g, fps, coherence) for g in groups]
-        return {"spec": "chit.cgp.v0.2", "super_nodes":
+        return {"spec": "chit.cgp.v0.1", "super_nodes":
                 [c["super_nodes"][0] for c in built if c]}
     return _legacy
 

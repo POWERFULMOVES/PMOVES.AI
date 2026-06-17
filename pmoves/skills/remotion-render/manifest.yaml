@@ -47,11 +47,11 @@ output:
 
 # Service endpoint
 service:
-  url: "http://localhost:8105/render"
+  url: "http://localhost:8107/render"
   method: POST
   timeout_ms: 120000
   alternates:
-    - "http://localhost:8105/render/provenance"
+    - "http://localhost:8107/render/provenance"
 
 # Headless one-shot render (no running service required).
 # Use when the a2ui-renderer service is not up (cold node, CI, local check):
@@ -71,7 +71,7 @@ headless_render:
 # Dependencies
 dependencies:
   services:
-    - a2ui-renderer  # Port 8105
+    - a2ui-renderer  # Port 8107
     - minio          # Asset storage
     - presign        # URL generation
   nats_subjects:

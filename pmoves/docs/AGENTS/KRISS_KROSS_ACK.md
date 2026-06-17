@@ -40,7 +40,7 @@ DARKXSIDE, as COCREATOR witness of POWERFULMOVES, formally acknowledges the KRIS
 | Gate | Description | Evidence |
 |------|-------------|----------|
 | RG-1 | No production path invokes dev-only targets | `gh run list --workflow=codeql-analysis.yml --limit 3` |
-| RG-2 | Dynamic port/namespace parity | `make -C pmoves env-check` — A2UI on 8105, Hyperdimensions on 8100 |
+| RG-2 | Dynamic port/namespace parity | `make -C pmoves env-check` — A2UI on 8107, Hyperdimensions on 8100 |
 | RG-3 | Supabase collation/version hygiene | `make -C pmoves verify-all` |
 | RG-4 | Auth unification regression | All protected endpoints fail-closed, CHIT Safe Passage headers present |
 

@@ -49,6 +49,9 @@ from providers import (
     VoiceboxError,
     VoiceboxNoProfileError,
     VoiceboxProvider,
+    OmniVoiceBusyError,
+    OmniVoiceError,
+    OmniVoiceProvider,
     WhisperProvider,
     UltimateTTSError,
     UltimateTTSProvider,
@@ -140,6 +143,9 @@ ULTIMATE_TTS_URL = os.getenv("ULTIMATE_TTS_URL", "http://host.docker.internal:78
 # Voicebox is a Pinokio-managed voice production service (default port 17493).
 # Set VOICEBOX_URL="" to disable. Auto-normalized for Docker contexts below.
 VOICEBOX_URL = os.getenv("VOICEBOX_URL", "http://host.docker.internal:17493")
+# OmniVoice is the production voice server (creator-operator/omnivoice_server.py).
+# Presence of OMNIVOICE_URL enables the provider; default points at its loopback bind.
+OMNIVOICE_URL = os.getenv("OMNIVOICE_URL", "http://127.0.0.1:8002")
 DEFAULT_PROVIDER = os.getenv("DEFAULT_VOICE_PROVIDER", "vibevoice")
 FLUTE_API_KEY = get_secret("FLUTE_API_KEY", "")
 
@@ -191,6 +197,8 @@ def _normalize_vibevoice_url(url: str) -> str:
 VIBEVOICE_URL = _normalize_vibevoice_url(VIBEVOICE_URL)
 # Voicebox runs on the host via Pinokio — same Docker-context normalization applies.
 VOICEBOX_URL = _normalize_vibevoice_url(VOICEBOX_URL)
+# OmniVoice runs on the host (loopback) — same Docker-context normalization applies.
+OMNIVOICE_URL = _normalize_vibevoice_url(OMNIVOICE_URL)
 
 # API Key authentication dependency
 async def verify_api_key(x_api_key: str = Header(None, alias="X-API-Key")):
@@ -234,6 +242,7 @@ vibevoice_provider: Optional[VibeVoiceProvider] = None
 whisper_provider: Optional[WhisperProvider] = None
 ultimate_tts_provider: Optional[UltimateTTSProvider] = None
 voicebox_provider: Optional[VoiceboxProvider] = None
+omnivoice_provider: Optional[OmniVoiceProvider] = None
 nats_client = None
 # Geometry-bus bridge (#1397): module-level singleton, instantiated on first use.
 geometry_bridge: Optional[GeometryBridge] = None
@@ -389,7 +398,7 @@ class ConfigResponse(BaseModel):
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan - startup and shutdown with NATS service announcement."""
-    global vibevoice_provider, whisper_provider, ultimate_tts_provider, voicebox_provider, nats_client
+    global vibevoice_provider, whisper_provider, ultimate_tts_provider, voicebox_provider, omnivoice_provider, nats_client
 
     logger.info("Starting Flute Gateway...")
 
@@ -429,6 +438,14 @@ async def lifespan(app: FastAPI):
     else:
         voicebox_provider = None
         logger.info("Voicebox disabled (set VOICEBOX_URL to enable).")
+
+    # Initialize OmniVoice provider (optional)
+    if OMNIVOICE_URL:
+        omnivoice_provider = OmniVoiceProvider(OMNIVOICE_URL)
+        logger.info("OmniVoice provider enabled at %s", OMNIVOICE_URL)
+    else:
+        omnivoice_provider = None
+        logger.info("OmniVoice disabled (set OMNIVOICE_URL to enable).")
 
     # Initialize NATS (optional)
     try:
@@ -520,6 +537,12 @@ async def health_check():
     else:
         providers["voicebox"] = False
 
+    # Check OmniVoice
+    if omnivoice_provider:
+        providers["omnivoice"] = await omnivoice_provider.health_check()
+    else:
+        providers["omnivoice"] = False
+
     # Check NATS
     nats_status = "connected" if nats_client and nats_client.is_connected else "disconnected"
 
@@ -557,6 +580,8 @@ async def get_config():
         providers.append("ultimate_tts")
     if voicebox_provider:
         providers.append("voicebox")
+    if omnivoice_provider:
+        providers.append("omnivoice")
 
     return ConfigResponse(
         providers=providers,
@@ -594,7 +619,9 @@ async def synthesize_speech(request: SynthesizeRequest):
         )
         request.engine = resolved_engine
         if not request.provider:
-            request.provider = "ultimate_tts"
+            # A persona/intent that resolves to engine "omnivoice" routes to the
+            # OmniVoice provider; everything else defaults to ultimate_tts.
+            request.provider = "omnivoice" if resolved_engine == "omnivoice" else "ultimate_tts"
         if not request.voice and "voice" in extra_kwargs:
             request.voice = extra_kwargs.pop("voice")
 
@@ -695,6 +722,43 @@ async def synthesize_speech(request: SynthesizeRequest):
                 sample_rate=sample_rate,
                 format="wav"
             )
+        elif provider_name == "omnivoice" and omnivoice_provider:
+            audio_data = await omnivoice_provider.synthesize(
+                text=request.text,
+                voice=request.voice,
+                instruct=request.engine if request.engine and request.engine != "omnivoice" else None,
+            )
+            if not audio_data:
+                raise HTTPException(status_code=502, detail="OmniVoice returned empty audio.")
+            duration = time.time() - start_time
+            TTS_DURATION.labels(provider="omnivoice").observe(duration)
+
+            # Parse WAV header to derive actual sample rate and duration
+            try:
+                with io.BytesIO(audio_data) as buf:
+                    with wave.open(buf, "rb") as wf:
+                        sample_rate = wf.getframerate()
+                        frame_count = wf.getnframes()
+                audio_duration = frame_count / sample_rate
+            except wave.Error:
+                audio_duration = len(audio_data) / 48000  # fallback
+                sample_rate = 24000
+
+            REQUESTS_TOTAL.labels(endpoint="/v1/voice/synthesize", status="200").inc()
+
+            # Publish CHIT voice attribution event (best-effort)
+            await _publish_chit_voice_event(
+                provider="omnivoice",
+                text_length=len(request.text),
+                audio_duration=audio_duration,
+                voice=request.voice,
+            )
+
+            return SynthesizeResponse(
+                duration_seconds=audio_duration,
+                sample_rate=sample_rate,
+                format="wav"
+            )
         else:
             if provider_name == "vibevoice" and not vibevoice_provider:
                 raise HTTPException(
@@ -711,13 +775,22 @@ async def synthesize_speech(request: SynthesizeRequest):
                     status_code=503,
                     detail="Voicebox provider not configured (set VOICEBOX_URL to the running Voicebox server URL).",
                 )
+            if provider_name == "omnivoice" and not omnivoice_provider:
+                raise HTTPException(
+                    status_code=503,
+                    detail="OmniVoice provider not configured (set OMNIVOICE_URL to the running OmniVoice server URL).",
+                )
             raise HTTPException(status_code=400, detail=f"Provider '{provider_name}' not available")
 
+    except OmniVoiceBusyError as exc:
+        # OmniVoice model still loading into VRAM — surface as 503 so callers retry.
+        REQUESTS_TOTAL.labels(endpoint="/v1/voice/synthesize", status="503").inc()
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     except VoiceboxNoProfileError as exc:
         # Voicebox first-run not complete — distinct status so operators can act
         REQUESTS_TOTAL.labels(endpoint="/v1/voice/synthesize", status="503").inc()
         raise HTTPException(status_code=503, detail=str(exc)) from exc
-    except (VibeVoiceBusyError, VibeVoiceNoAudioError, UltimateTTSError, VoiceboxBusyError, VoiceboxError) as exc:
+    except (VibeVoiceBusyError, VibeVoiceNoAudioError, UltimateTTSError, VoiceboxBusyError, VoiceboxError, OmniVoiceError) as exc:
         REQUESTS_TOTAL.labels(endpoint="/v1/voice/synthesize", status="502").inc()
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     except HTTPException as exc:
@@ -748,7 +821,9 @@ async def synthesize_speech_audio(request: SynthesizeRequest):
         )
         request.engine = resolved_engine
         if not request.provider:
-            request.provider = "ultimate_tts"
+            # A persona/intent that resolves to engine "omnivoice" routes to the
+            # OmniVoice provider; everything else defaults to ultimate_tts.
+            request.provider = "omnivoice" if resolved_engine == "omnivoice" else "ultimate_tts"
         if not request.voice and "voice" in extra_kwargs:
             request.voice = extra_kwargs.pop("voice")
 
@@ -838,6 +913,34 @@ async def synthesize_speech_audio(request: SynthesizeRequest):
                 headers={"Content-Disposition": 'attachment; filename="voicebox.wav"'},
             )
 
+        elif provider_name == "omnivoice" and omnivoice_provider:
+            wav_bytes = await omnivoice_provider.synthesize(
+                text=request.text,
+                voice=request.voice,
+                instruct=request.engine if request.engine and request.engine != "omnivoice" else None,
+            )
+            if not wav_bytes:
+                raise HTTPException(status_code=502, detail="OmniVoice returned empty audio.")
+
+            if output_format == "pcm":
+                # Extract PCM from WAV
+                try:
+                    with io.BytesIO(wav_bytes) as buf:
+                        with wave.open(buf, "rb") as wf:
+                            pcm_data = wf.readframes(wf.getnframes())
+                    REQUESTS_TOTAL.labels(endpoint="/v1/voice/synthesize/audio", status="200").inc()
+                    return Response(content=pcm_data, media_type="application/octet-stream")
+                except wave.Error:
+                    REQUESTS_TOTAL.labels(endpoint="/v1/voice/synthesize/audio", status="200").inc()
+                    return Response(content=wav_bytes, media_type="application/octet-stream")
+
+            REQUESTS_TOTAL.labels(endpoint="/v1/voice/synthesize/audio", status="200").inc()
+            return Response(
+                content=wav_bytes,
+                media_type="audio/wav",
+                headers={"Content-Disposition": 'attachment; filename="omnivoice.wav"'},
+            )
+
         if provider_name == "vibevoice" and not vibevoice_provider:
             raise HTTPException(
                 status_code=503,
@@ -853,11 +956,19 @@ async def synthesize_speech_audio(request: SynthesizeRequest):
                 status_code=503,
                 detail="Voicebox provider not configured (set VOICEBOX_URL to the running Voicebox server URL).",
             )
+        if provider_name == "omnivoice" and not omnivoice_provider:
+            raise HTTPException(
+                status_code=503,
+                detail="OmniVoice provider not configured (set OMNIVOICE_URL to the running server URL).",
+            )
         raise HTTPException(status_code=400, detail=f"Provider '{provider_name}' not available")
     except VoiceboxNoProfileError as exc:
         REQUESTS_TOTAL.labels(endpoint="/v1/voice/synthesize/audio", status="503").inc()
         raise HTTPException(status_code=503, detail=str(exc)) from exc
-    except (VibeVoiceBusyError, VibeVoiceNoAudioError, UltimateTTSError, VoiceboxBusyError, VoiceboxError) as exc:
+    except OmniVoiceBusyError as exc:
+        REQUESTS_TOTAL.labels(endpoint="/v1/voice/synthesize/audio", status="503").inc()
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except (VibeVoiceBusyError, VibeVoiceNoAudioError, UltimateTTSError, VoiceboxBusyError, VoiceboxError, OmniVoiceError) as exc:
         REQUESTS_TOTAL.labels(endpoint="/v1/voice/synthesize/audio", status="502").inc()
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     except HTTPException as exc:
@@ -889,6 +1000,9 @@ async def synthesize_prosodic_speech(request: SynthesizeRequest):
         )
         request.engine = resolved_engine
         if not request.provider:
+            # Prosodic synthesis is ultimate_tts-only (BPM chunking is an
+            # ultimate_tts-specific feature), so always route there regardless of
+            # the resolved engine — an omnivoice persona falls back to ultimate_tts.
             request.provider = "ultimate_tts"
         if not request.voice and "voice" in extra_kwargs:
             request.voice = extra_kwargs.pop("voice")

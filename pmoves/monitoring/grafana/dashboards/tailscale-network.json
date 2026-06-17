@@ -1,0 +1,271 @@
+{
+  "title": "Tailscale Network Health",
+  "schemaVersion": 38,
+  "version": 1,
+  "tags": [
+    "tailscale",
+    "network",
+    "fleet"
+  ],
+  "panels": [
+    {
+      "type": "timeseries",
+      "title": "Inbound Throughput by Node + Path",
+      "description": "rate(tailscaled_inbound_bytes_total) split by node (instance) and path (direct_ipv4/direct_ipv6/derp/peer_relay_*)",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "rate(tailscaled_inbound_bytes_total[5m]) * 8",
+          "legendFormat": "{{instance}} / {{path}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bps",
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Outbound Throughput by Node + Path",
+      "description": "rate(tailscaled_outbound_bytes_total) split by node (instance) and path",
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "rate(tailscaled_outbound_bytes_total[5m]) * 8",
+          "legendFormat": "{{instance}} / {{path}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bps",
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Inbound Packet Rate by Node + Path",
+      "description": "rate(tailscaled_inbound_packets_total) per node + path",
+      "gridPos": {
+        "x": 0,
+        "y": 8,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "rate(tailscaled_inbound_packets_total[5m])",
+          "legendFormat": "{{instance}} / {{path}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "pps",
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Outbound Packet Rate by Node + Path",
+      "description": "rate(tailscaled_outbound_packets_total) per node + path",
+      "gridPos": {
+        "x": 12,
+        "y": 8,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "rate(tailscaled_outbound_packets_total[5m])",
+          "legendFormat": "{{instance}} / {{path}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "pps",
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "DERP-Relayed Traffic (fallback path)",
+      "description": "Bytes flowing over DERP relays rather than direct. Sustained DERP usage indicates NAT/firewall blocking direct connections.",
+      "gridPos": {
+        "x": 0,
+        "y": 16,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "rate(tailscaled_inbound_bytes_total{path=~\"derp.*\"}[5m]) * 8",
+          "legendFormat": "in {{instance}}"
+        },
+        {
+          "expr": "rate(tailscaled_outbound_bytes_total{path=~\"derp.*\"}[5m]) * 8",
+          "legendFormat": "out {{instance}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bps",
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Advertised vs Approved Routes (exit-node / subnet)",
+      "description": "tailscaled_advertised_routes and tailscaled_approved_routes per node. Gaps mean a node advertises routes the admin has not approved.",
+      "gridPos": {
+        "x": 12,
+        "y": 16,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "tailscaled_advertised_routes",
+          "legendFormat": "advertised {{instance}}"
+        },
+        {
+          "expr": "tailscaled_approved_routes",
+          "legendFormat": "approved {{instance}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 0
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "table",
+      "title": "Node Up (tailscaled metrics scraped)",
+      "description": "up{job=\"node-exporter\"} per fleet node — 1 = node-exporter reachable and exporting tailscaled textfile metrics.",
+      "gridPos": {
+        "x": 0,
+        "y": 24,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "max by (instance) (up{job=\"node-exporter\"})",
+          "legendFormat": "{{instance}}",
+          "format": "table",
+          "instant": true
+        }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "job": true
+            },
+            "renameByName": {
+              "instance": "Node",
+              "Value": "Up"
+            }
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "align": "auto"
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "DOWN",
+                  "color": "red"
+                },
+                "1": {
+                  "text": "UP",
+                  "color": "green"
+                }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Tailscale Health Messages",
+      "description": "tailscaled_health_messages reflects active health warnings reported by tailscaled (e.g. clock skew, DERP unreachable, key expiry). Non-zero warrants investigation.",
+      "gridPos": {
+        "x": 12,
+        "y": 24,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "tailscaled_health_messages",
+          "legendFormat": "{{instance}} {{type}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10
+          }
+        },
+        "overrides": []
+      }
+    }
+  ],
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  }
+}

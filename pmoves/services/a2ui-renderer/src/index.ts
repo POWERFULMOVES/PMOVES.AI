@@ -4,7 +4,7 @@
  * Converts A2UI animation JSON specs into MP4/GIF/WebM via Remotion.
  * Uploads rendered output to MinIO and publishes NATS events.
  *
- * Port: 8105
+ * Port: 8107
  * Health: /healthz
  * Metrics: /metrics
  * Auth: JWT (fail-closed) on /render, /render/chart, and /render/provenance
@@ -31,7 +31,7 @@ import {
 } from './provenanceLivingDoc';
 
 const app = express();
-const PORT = parseInt(process.env.PORT || '8105', 10);
+const PORT = parseInt(process.env.PORT || '8107', 10);
 const sc = StringCodec();
 
 // --- Configuration ---
