@@ -8,7 +8,11 @@
 # Model pull skill: .claude/skills/model-pull/SKILL.md
 
 [providers.ollama]
-type = "openai-compatible"
+# Ollama exposes an OpenAI Chat Completions-compatible API at /v1. Kimi Code's
+# provider type for that protocol is "openai_legacy" (valid types: kimi,
+# openai_legacy, openai_responses, anthropic, gemini, vertexai — there is no
+# "openai-compatible"). See https://moonshotai.github.io/kimi-cli/en/configuration/providers.html
+type = "openai_legacy"
 base_url = "http://localhost:11434/v1"
 api_key = "ollama"
 
