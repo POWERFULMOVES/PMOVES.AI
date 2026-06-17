@@ -1,0 +1,21 @@
+[project]
+name = "pmoves-tailscale-mcp"
+version = "0.1.0"
+description = "MCP bridge over the local tailscale CLI — durable node-local fleet control (exit-node, serve, funnel, ssh, metrics, diagnostics)"
+requires-python = ">=3.11"
+dependencies = [
+  "mcp>=1.0.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0.0", "pytest-asyncio>=0.23.0"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["tailscale_mcp"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"

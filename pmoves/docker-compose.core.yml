@@ -41,7 +41,13 @@ services:
     - ${NATS_BIND:-0.0.0.0}:${NATS_PORT:-4222}:4222
     - ${NATS_BIND:-0.0.0.0}:${NATS_MONITORING_PORT:-9223}:8222
     networks:
+    # pmoves_bus is internal:true (isolated in-stack mesh bus). A container on an
+    # internal-only network gets NO published-port DNAT rules from Docker, so the
+    # ports above are recorded but never plumbed — Tailscale mesh peers can't reach
+    # 4222/9223 cross-node. Multi-home nats onto the non-internal pmoves_external so
+    # its published ports actually bind, while keeping pmoves_bus for in-stack comms.
     - pmoves_bus
+    - pmoves_external
     environment:
     - DOCKED_MODE=${DOCKED_MODE:-true}
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
