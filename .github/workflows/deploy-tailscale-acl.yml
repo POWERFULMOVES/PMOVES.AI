@@ -15,7 +15,7 @@
 #      for third-party uses — the action below is SHA-pinned to v1.5.2.
 #   2. Repo secrets:
 #        - TS_TAILNET        — the tailnet name (e.g. <org>.github / example.com)
-#        - TAILSCALE_API_KEY — already present (reused here).
+#        - TAILSCALE_APIKEY  — already present (reused here; note: no underscore).
 #      A Tailscale OAuth client (scope acl:write, tag:ci) is preferred over a 90-day
 #      API key for durable CI — to switch, replace `api-key:` with
 #      `oauth-client-id:`/`oauth-secret:` (the action supports either, not both).
@@ -52,6 +52,6 @@ jobs:
         uses: tailscale/gitops-acl-action@5a4a17f5708e9bf96f4ee915a95e9f83c2eebe1a # v1.5.2
         with:
           tailnet: ${{ secrets.TS_TAILNET }}
-          api-key: ${{ secrets.TAILSCALE_API_KEY }}
+          api-key: ${{ secrets.TAILSCALE_APIKEY }}
           policy-file: ./pmoves/configs/tailscale-acl-policy.json
           action: ${{ github.event_name == 'pull_request' && 'test' || 'apply' }}
