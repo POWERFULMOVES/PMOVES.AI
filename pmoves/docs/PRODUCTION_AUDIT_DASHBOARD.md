@@ -41,7 +41,7 @@
   - `TAC_PMOVES_YT.md` — YouTube ingestion pipeline (8077)
   - `TAC_EVOSWARM.md` — Evolutionary optimization controller (8113)
   - `TAC_GPU_ORCHESTRATOR.md` — GPU mesh management (8200)
-  - `TAC_CONSCIOUSNESS.md` — CGP consciousness mapping (8105)
+  - `TAC_CONSCIOUSNESS.md` — CGP consciousness mapping (8106)
   - `TAC_GATEWAY_AGENT.md` — MCP tool orchestration gateway (8100)
 - **TAC Integration Topology** updated to v2.1 with complete index
 - **Coverage:** 23 markdown TACs + 12 YAML TACs = 35 total (up from 28)
