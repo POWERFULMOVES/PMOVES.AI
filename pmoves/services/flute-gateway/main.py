@@ -68,7 +68,11 @@ from prosodic import (
 )
 
 # Pipecat integration (optional - enable with PIPECAT_ENABLED=true)
-from pipecat.config import get_pipecat_config
+# NOTE: the local package is `flute_pipecat`, NOT `pipecat`. Naming it `pipecat`
+# would shadow the installed `pipecat-ai` dependency (same top-level name), so the
+# external `pipecat.pipeline.*` runtime imports (see the voice-agent route) would
+# resolve to this local package and raise ModuleNotFoundError.
+from flute_pipecat.config import get_pipecat_config
 PIPECAT_CONFIG = get_pipecat_config()
 
 # NATS service announcement integration
@@ -79,9 +83,9 @@ except ImportError:
     NATS_ANNOUNCE_AVAILABLE = False
 
 try:
-    from pipecat.transports import FluteFastAPIWebsocketTransport, FluteFastAPIWebsocketParams
-    from pipecat.pipelines import VoiceAgentConfig, build_voice_agent_pipeline
-    from pipecat.processors import TensorZeroLLMProcessor
+    from flute_pipecat.transports import FluteFastAPIWebsocketTransport, FluteFastAPIWebsocketParams
+    from flute_pipecat.pipelines import VoiceAgentConfig, build_voice_agent_pipeline
+    from flute_pipecat.processors import TensorZeroLLMProcessor
     PIPECAT_AVAILABLE = True
 except ImportError:
     PIPECAT_AVAILABLE = False
