@@ -3,10 +3,16 @@
 (registry owned by the W1 theme lane — 4090-claude PRs #1065/#1101; do NOT
 modify the registry schema here) + base/theme JSON, emits CSS + TS tokens."""
 from __future__ import annotations
-import json, pathlib
+import json, pathlib, re
 DESIGN = pathlib.Path(__file__).resolve().parent
 REPO = DESIGN.parents[1]
 REGISTRY = REPO / "pmoves" / "config" / "agent_signatures.yaml"
+
+# Reject values that would break out of a CSS declaration or the generated TS
+# string map. The registry is trusted, but a typo (stray ; } " or newline) would
+# otherwise produce broken build/ output that still commits clean — a silent
+# failure. Single quotes/commas/parens are allowed (font stacks, rgba()).
+_UNSAFE = re.compile(r'[;{}"\n\r]')
 
 def load_registry() -> dict:
     import yaml
@@ -17,6 +23,16 @@ def _agent(reg: dict, agent_id: str) -> dict:
     if agent_id not in reg:
         raise KeyError(f"theme references unknown agent id: {agent_id!r}")
     return reg[agent_id]
+
+def _field(agent: dict, field: str, agent_id: str) -> str:
+    if field not in agent:
+        raise KeyError(f"agent {agent_id!r} missing required theme field {field!r}")
+    return agent[field]
+
+def _safe(key: str, val: str) -> str:
+    if not isinstance(val, str) or _UNSAFE.search(val):
+        raise ValueError(f"unsafe/invalid token value for {key!r}: {val!r}")
+    return val
 
 def resolve_theme(theme: dict, reg: dict) -> dict:
     base = json.loads((DESIGN / "tokens.base.json").read_text(encoding="utf-8"))
@@ -33,14 +49,15 @@ def resolve_theme(theme: dict, reg: dict) -> dict:
     # registry-sourced accents
     acc = theme["accents"]
     primary = _agent(reg, acc["primary"]); secondary = _agent(reg, acc["secondary"]); sig = _agent(reg, acc["signature"])
-    v["--pm-accent"] = primary["color"]
-    v["--pm-accent-soft"] = primary["accent"]
-    v["--pm-accent-2"] = secondary["color"]
-    v["--pm-signature"] = sig["color"]
+    v["--pm-accent"] = _field(primary, "color", acc["primary"])
+    v["--pm-accent-soft"] = _field(primary, "accent", acc["primary"])
+    v["--pm-accent-2"] = _field(secondary, "color", acc["secondary"])
+    v["--pm-signature"] = _field(sig, "color", acc["signature"])
     # theme overrides last
     for k, val in theme.get("overrides", {}).get("color", {}).items():
         v[f"--pm-{k}"] = val
-    return v
+    # guard every emitted value against CSS/TS injection (silent-failure trap)
+    return {k: _safe(k, val) for k, val in v.items()}
 
 DEFAULT_THEME = "pmoves-armor"
 

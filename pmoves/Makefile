@@ -3924,3 +3924,8 @@ overlay-down: ## Stop all overlay services
 
 design-tokens: ## Regenerate pmoves/design token CSS + TS from agent_signatures.yaml
 	cd design && uv run --no-project --with pyyaml python generate.py
+
+design-tokens-check: design-tokens ## Fail if committed pmoves/design/build drifted from generator output
+	@git diff --exit-code -- design/build \
+		|| { echo "❌ pmoves/design/build drifted — run 'make -C pmoves design-tokens' and commit"; exit 1; }
+	@echo "✅ design/build matches generator output"
