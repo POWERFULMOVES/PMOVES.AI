@@ -1,5 +1,5 @@
 {
-  "_pinned_versions_note": "Dependencies pinned to exact versions on 2026-05-14 to prevent supply chain attacks (F-07). Re-pin after auditing new releases before upgrading. hostinger-api-mcp=0.2.1, tailscale-mcp=2026.4.10-1",
+  "_pinned_versions_note": "Dependencies pinned to exact versions on 2026-05-14 to prevent supply chain attacks (F-07). Re-pin after auditing new releases before upgrading. hostinger-api-mcp=0.2.1, tailscale-mcp=2026.4.10-1, @supabase/mcp-server-postgrest=0.1.1",
   "mcpServers": {
     "pmoves-cipher": {
       "type": "sse",
@@ -95,6 +95,20 @@
       "env": {
         "HF_TOKEN": "${HF_TOKEN}"
       }
+    },
+    "pmoves-supabase": {
+      "_purpose": "Self-hosted PMOVES Supabase via PostgREST (NOT cloud mcp.supabase.com). Replaces the cloud 'supabase' plugin MCP for data-plane access. apiUrl points at the self-hosted Kong/PostgREST REST endpoint; falls back to local supabase-local Kong :8000 if SUPABASE_REST_URL is unset. PostgREST-based per the 'never raw psql' rule (CATALOG.md canonical http://supabase-kong:8000/rest/v1). Pinned per F-07 supply-chain note above.",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@supabase/mcp-server-postgrest@0.1.1",
+        "--apiUrl",
+        "${SUPABASE_REST_URL:-http://localhost:8000/rest/v1}",
+        "--apiKey",
+        "${SUPABASE_SERVICE_KEY}",
+        "--schema",
+        "public,storage"
+      ]
     }
   }
 }
