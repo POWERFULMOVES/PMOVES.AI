@@ -159,9 +159,12 @@ Maps onto the existing `tag:partner` / `tag:guest`:
 
 ## 8. Caveats / open questions
 
-- **No gitops-apply** for `pmoves/configs/tailscale-acl-policy.json` — every change
-  is applied manually in the admin console. A future apply-workflow (Tailscale API
-  via `TAILSCALE_API_KEY`, already a repo secret) would close this gap.
+- **Gitops-apply is wired in PR #1832** (`tailscale/gitops-acl-action`): a PR that
+  touches `pmoves/configs/tailscale-acl-policy.json` runs `test` (validate + diff vs
+  the live tailnet); merge to `main` runs `apply`. The policy can also be pushed
+  directly via the Tailscale API (`POST /api/v2/tailnet/-/acl`, auth `TAILSCALE_API_KEY`).
+  Prereqs: allowlist the action (done) + add the `TS_TAILNET` secret. So ACL changes
+  are normal merge-to-apply with a preview diff — not console-only.
 - Re-tagging is **destructive to user identity** on each device and is outward-facing
   — operator-gated, staged, auth keys never committed.
 - `acls`→grants is a tailnet-wide change; validate in the console's preview before
