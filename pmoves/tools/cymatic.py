@@ -113,9 +113,36 @@ def named_frequency_tags(y: "np.ndarray", sr: int, tol_cents: float = 60.0,
 
 
 def cymatic_features(y: "np.ndarray", sr: int) -> dict:
-    """All cymatic signal features, for fusion into the CGP point meta."""
+    """All cymatic signal features, for fusion into the CGP point meta.
+
+    Includes onset_rate + spectral_centroid so the spec call site
+    ``cymatic_glyph(**glyph_params_from_features(point.meta.cymatic))`` reads
+    them directly off ``point.meta.cymatic`` (they would otherwise be absent and
+    every production glyph would degrade to m_radial=1, dominant_hz=0).
+    """
+    import librosa
+
     feat = harmonicity_symmetry(y, sr)
     feat["named_frequencies"] = named_frequency_tags(y, sr)
+
+    ya = np.asarray(y, dtype="float32")
+    ya = np.nan_to_num(ya, nan=0.0, posinf=0.0, neginf=0.0)
+    if ya.size == 0 or not np.any(ya):
+        feat["onset_rate"] = 0.0
+        feat["spectral_centroid"] = 0.0
+        return feat
+    duration = max(ya.size / sr, 1e-6)
+    try:
+        onsets = librosa.onset.onset_detect(y=ya, sr=sr, units="time")
+        feat["onset_rate"] = round(len(onsets) / duration, 6)
+    except Exception:
+        feat["onset_rate"] = 0.0
+    try:
+        centroid = float(librosa.feature.spectral_centroid(y=ya, sr=sr).mean())
+        feat["spectral_centroid"] = round(float(
+            np.nan_to_num(centroid, nan=0.0, posinf=0.0, neginf=0.0)), 4)
+    except Exception:
+        feat["spectral_centroid"] = 0.0
     return feat
 
 
