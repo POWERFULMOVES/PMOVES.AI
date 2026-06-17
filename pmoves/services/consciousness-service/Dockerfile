@@ -29,16 +29,16 @@ USER pmoves
 
 # Environment defaults
 ENV SERVICE_NAME=consciousness-service
-ENV SERVICE_PORT=8105
+ENV SERVICE_PORT=8106
 ENV NATS_URL=nats://nats:pmoves@nats:4222
 # CHIT_PROD_PASSPHRASE injected at runtime via docker-compose
 ENV SUPABASE_URL=http://supabase-kong:8000
 ENV PYTHONUNBUFFERED=1
 
-EXPOSE 8105
+EXPOSE 8106
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
-    CMD python -c "import httpx; httpx.get('http://localhost:8105/healthz').raise_for_status()"
+    CMD python -c "import httpx; httpx.get('http://localhost:8106/healthz').raise_for_status()"
 
 CMD ["python", "main.py"]

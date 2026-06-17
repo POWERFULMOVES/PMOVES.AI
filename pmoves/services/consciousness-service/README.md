@@ -6,7 +6,7 @@ Maps consciousness topology via Compressed Geometric Packets (CGP). Bridges the 
 
 ## Quick reference
 
-- **Port**: `:8105`
+- **Port**: `:8106`
 - **Health**: `GET /healthz`
 - **Team**: Orchestration (`pmoves/configs/agent-teams.yaml`)
 - **Dependencies**: Tokenism Simulator (`:8103`), NATS (`:4222`), Neo4j (`:7474` HTTP / `:7687` Bolt)
@@ -18,7 +18,7 @@ Maps consciousness topology via Compressed Geometric Packets (CGP). Bridges the 
 ```
    Agent Interactions ──┐
                         ▼
-                 Consciousness Service (8105)
+                 Consciousness Service (8106)
                         │
                    ┌────┼────┐
                    ▼    ▼    ▼
