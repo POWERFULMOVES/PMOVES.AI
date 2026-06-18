@@ -8,9 +8,14 @@
 #   - `gh pr merge --auto` respects branch protection: the PR only merges after
 #     all required status checks (merge-gate, python-tests, hardening, etc.) pass.
 #     Repo setting "Allow auto-merge" is already enabled.
+#   - Uses `pull_request_target` because Dependabot's `pull_request` GITHUB_TOKEN
+#     is READ-ONLY (so `gh pr merge --auto` would silently no-op). pull_request_target
+#     runs in the BASE-repo context with a writable token. This is safe here ONLY
+#     because the job never checks out or executes the PR's code — it just reads
+#     metadata and enables auto-merge. Do NOT add an actions/checkout of the PR head.
 name: Dependabot auto-merge
 
-on: pull_request
+on: pull_request_target
 
 permissions:
   contents: write
