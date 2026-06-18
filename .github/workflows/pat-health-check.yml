@@ -38,7 +38,7 @@ jobs:
           fi
 
       - name: Reconcile tracker issue (open/comment on failure, auto-close on success)
-        uses: actions/github-script@v9
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           script: |
             const valid = '${{ steps.pat.outputs.valid }}' === 'true';
@@ -71,17 +71,33 @@ jobs:
                 "_This tracker auto-updates daily and auto-closes when the PAT is valid again._",
               ].join("\n");
               if (trackers.length === 0) {
+                // Labels limited to ones that exist in the repo (operations/security/urgent);
+                // a non-existent label makes issues.create 422 and no tracker opens. Dedup is by
+                // the title prefix, not a label, so no extra label is needed.
                 await github.rest.issues.create({
                   owner, repo, title, body,
-                  labels: ["operations", "security", "urgent", "pat-health"],
+                  labels: ["operations", "security", "urgent"],
                 });
                 core.info("Opened new PAT health tracker.");
               } else {
+                // Keep the OLDEST tracker canonical (listForRepo is newest-first) and consolidate:
+                // comment the recurrence on it, close any other open trackers as duplicates so a
+                // single tracker is maintained even during the active incident.
+                const canonical = trackers[trackers.length - 1];
                 await github.rest.issues.createComment({
-                  owner, repo, issue_number: trackers[0].number,
+                  owner, repo, issue_number: canonical.number,
                   body: `Still failing as of ${today}. Run: ${runUrl}`,
                 });
-                core.info(`Updated existing tracker #${trackers[0].number}.`);
+                core.info(`Updated tracker #${canonical.number}.`);
+                for (const dup of trackers) {
+                  if (dup.number === canonical.number) continue;
+                  await github.rest.issues.createComment({
+                    owner, repo, issue_number: dup.number,
+                    body: `Consolidating PAT-expiry tracking into #${canonical.number}; closing this duplicate.`,
+                  });
+                  await github.rest.issues.update({ owner, repo, issue_number: dup.number, state: "closed" });
+                  core.info(`Closed duplicate tracker #${dup.number}.`);
+                }
               }
               core.setFailed("GH_PAT is expired or invalid.");
             } else {
