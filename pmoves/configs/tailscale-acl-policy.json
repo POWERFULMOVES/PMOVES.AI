@@ -1,6 +1,10 @@
 {
   "$schema": "https://tailscale.com/api/v2/tailnet/-/acl",
   "_comment": "PMOVES.AI Tailscale ACL policy \u2014 production hardening stance. Apply at https://login.tailscale.com/admin/acls",
+  "_comment_groups": "group:tenants = third-party tenant USERS subject to SSH check-mode (browser re-auth) on their own devices. Owner/admins are intentionally excluded so fleet ops never hit re-auth. Empty until tenants enroll (an empty group means the check rule matches no one yet).",
+  "groups": {
+    "group:tenants": []
+  },
   "tagOwners": {
     "tag:pmoves": [
       "autogroup:admin"
@@ -113,12 +117,13 @@
     {
       "action": "accept",
       "src": [
-        "autogroup:admin"
+        "autogroup:admin",
+        "autogroup:owner"
       ],
       "dst": [
         "*:*"
       ],
-      "comment": "Admins (DARKXSIDE) have full access"
+      "comment": "Admins + Owner (DARKXSIDE) have full network access. Owner listed explicitly because Tailscale SSH requires BOTH a network-access rule (this) AND an ssh rule; the owner is distinct from autogroup:admin, so without owner here the SSH exemption below is denied at the network layer (port 22 never reached)."
     }
   ],
   "ssh": [
@@ -138,7 +143,8 @@
     {
       "action": "accept",
       "src": [
-        "autogroup:admin"
+        "autogroup:admin",
+        "autogroup:owner"
       ],
       "dst": [
         "*"
@@ -147,12 +153,12 @@
         "root",
         "autogroup:nonroot"
       ],
-      "comment": "Admin SSH access (root allowed for provisioning)"
+      "comment": "Admin + Owner SSH (root allowed for provisioning). Owner role is DISTINCT from Admin and must be listed explicitly, else owner SSH falls through to the tenant check rule."
     },
     {
       "action": "check",
       "src": [
-        "autogroup:member"
+        "group:tenants"
       ],
       "dst": [
         "autogroup:self"
@@ -161,7 +167,7 @@
         "autogroup:nonroot",
         "root"
       ],
-      "comment": "Members SSH into their own devices in check mode (multi-tenant self-service; browser re-auth)"
+      "comment": "Tenants SSH into their own devices in check mode (browser re-auth). checkPeriod omitted: it is Premium/Enterprise-gated in the policy-syntax reference and the value we wanted (12h) is already the default, so omitting it preserves behavior while keeping the policy applyable on Standard/free tailnets. Scoped to group:tenants, NOT autogroup:member, because Tailscale evaluates check BEFORE accept (most-restrictive-first, regardless of rule order) — so excluding owner/admins from this src is the only way to exempt fleet ops from re-auth."
     }
   ],
   "nodeAttrs": [
