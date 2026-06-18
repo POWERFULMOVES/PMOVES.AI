@@ -45,9 +45,26 @@ of the private-key PEM** — these are different things (the repo also has
 
 ## Phase 1 — Prove it (canary, no risk)
 
-Run `test-app-token.yml` via **workflow_dispatch**. It already exercises
-`client-id` + `GH_APP_SEC` and verifies repo access. **Green = token generation fixed.**
-Do not proceed until this is green.
+Run `test-app-token.yml` via **workflow_dispatch** (it may be disabled —
+`gh workflow enable test-app-token.yml` first). It exercises `client-id` +
+`GH_APP_SEC` and verifies repo access. **Green = token GENERATION fixed.** Status
+2026-06-18: **GREEN** ✅ (PEM set, token mints).
+
+> **⚠️ Canary-green is necessary but NOT sufficient.** It proves the App can
+> *authenticate*; it does **not** prove the App has `packages: write` on the
+> **org** or `administration`. The known trap (documented in `GITHUB_APP.md` and
+> in `integrations-ghcr.yml`'s GHCR login comments): **App login can succeed while
+> the package blob PUT 403s** — `"installation not allowed to Write organization
+> package"`. So:
+> - **Before Phase 2** (App-first GHCR *push*): confirm/grant the App
+>   **`packages: write`** at the **organization** level, then push a real image and
+>   confirm the blob upload (not just login) succeeds. Until then, keep PAT/GHCR_TOKEN
+>   first for GHCR push. (PR #1843 attempted App-first GHCR login and was reverted
+>   for exactly this reason.)
+> - **Before Phase 4** (runner registration): confirm/grant **`administration`**.
+> Verify the live grants in the App settings (the repo `…/installation` endpoint
+> needs an App JWT, so check it from a workflow using the minted token, or in the
+> GitHub App admin UI).
 
 ## Phase 2 — Cut over GHCR / build auth (keep fallback)
 
