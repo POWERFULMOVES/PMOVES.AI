@@ -1,0 +1,66 @@
+# Tailscale ACL — gitops sync
+#
+# Makes pmoves/configs/tailscale-acl-policy.json the source of truth for the tailnet
+# policy and applies it automatically — closing the "apply manually in the console" gap.
+#
+#   pull_request → `validate` : lint the policy JSON locally (no secrets). The live
+#                               diff (gitops `test`) can't run on PR because the tailnet
+#                               secret lives in the protected `Prod` environment, which
+#                               only protected branches (main) may access.
+#   push to main → `apply`    : push the policy to the tailnet via the Prod environment.
+#
+# Prerequisites (operator):
+#   1. Allowlist `tailscale/gitops-acl-action@*` in Settings → Actions (done). SHA-pinned below.
+#   2. Prod environment secrets: TS_TAILNET (done) + TAILSCALE_APIKEY (repo-level, reused).
+#      An OAuth client (scope acl:write, tag:ci) is preferred over a 90-day API key for
+#      durable CI — swap `api-key:` → `oauth-client-id:`/`oauth-secret:` to use it.
+#   Note: the Prod env has a wait_timer, so `apply` starts after that delay on merge.
+
+name: Tailscale ACL (gitops)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'pmoves/configs/tailscale-acl-policy.json'
+      - '.github/workflows/deploy-tailscale-acl.yml'
+  pull_request:
+    paths:
+      - 'pmoves/configs/tailscale-acl-policy.json'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tailscale-acl
+  cancel-in-progress: false
+
+jobs:
+  # PR-time guard: catch a malformed policy before it can be merged + applied.
+  # No secrets / no environment, so it runs on any branch (incl. forks).
+  validate:
+    name: validate policy (lint)
+    if: ${{ github.event_name == 'pull_request' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Lint ACL policy JSON
+        run: |
+          python3 -c "import json; json.load(open('pmoves/configs/tailscale-acl-policy.json')); print('OK: tailscale-acl-policy.json parses')"
+
+  # Apply on merge to main. Uses the Prod environment for TS_TAILNET (protected-branch
+  # gated + wait_timer). TAILSCALE_APIKEY is repo-level and available here too.
+  apply:
+    name: apply to tailnet
+    if: ${{ github.event_name == 'push' }}
+    runs-on: ubuntu-latest
+    environment: Prod
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply ACL policy to tailnet
+        uses: tailscale/gitops-acl-action@5a4a17f5708e9bf96f4ee915a95e9f83c2eebe1a # v1.5.2
+        with:
+          tailnet: ${{ secrets.TS_TAILNET }}
+          api-key: ${{ secrets.TAILSCALE_APIKEY }}
+          policy-file: ./pmoves/configs/tailscale-acl-policy.json
+          action: apply
