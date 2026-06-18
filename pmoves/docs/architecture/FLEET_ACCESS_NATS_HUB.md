@@ -49,6 +49,14 @@ This one change fixes three things at once:
 | Storage (JuiceFS nodes) | `tag:pmoves`, `tag:storage` |
 | Inference (TensorZero / Ollama / Agent Zero) | `tag:pmoves`, `tag:inference` |
 
+> **Define the role tags in `tagOwners` first.** `tag:hub`, `tag:storage`, and
+> `tag:inference` are new — add them to `tagOwners` in
+> `pmoves/configs/tailscale-acl-policy.json` (alongside the existing
+> `tag:pmoves`/`tag:gpu`/`tag:vps`/`tag:lab`/`tag:exit`/`tag:partner`/`tag:guest`)
+> **before** assigning them. Tailscale rejects an auth key that advertises a tag
+> not present in `tagOwners`, so the staged re-enroll below would block at the
+> first hub/storage node otherwise.
+>
 > Re-tagging is **outward-facing and per-node** (re-enroll each device with a
 > tagged auth key; the device loses its user identity). Stage it one node at a
 > time and keep auth keys out of git. This is the substance of the long-standing
@@ -86,7 +94,13 @@ services:
     environment:
       - TS_AUTHKEY=${TS_AUTHKEY_JUICEFS}   # ephemeral, tagged auth key (tag:storage)
       - TS_STATE_DIR=/var/lib/tailscale
+      - TS_USERSPACE=false                 # kernel networking. Tailscale's Docker default is
+                                           # userspace, which only handles INBOUND port-forwards;
+                                           # the shared-namespace service needs kernel mode to make
+                                           # OUTBOUND tailnet (MagicDNS / 100.x) connections.
       - TS_EXTRA_ARGS=--advertise-tags=tag:pmoves,tag:storage
+    devices:
+      - /dev/net/tun                       # required by TS_USERSPACE=false (kernel TUN)
     volumes:
       - ts-juicefs-state:/var/lib/tailscale
     cap_add: [NET_ADMIN, SYS_MODULE]
