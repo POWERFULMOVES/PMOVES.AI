@@ -22,7 +22,7 @@ env:
   # GitHub Secrets - Service Credentials
   HOSTINGER_API_KEY: ${{ secrets.HOSTINGER_API_KEY }}
   TAILSCALE_AUTHKEY: ${{ secrets.TAILSCALE_AUTHKEY }}
-  TAILSCALE_API_KEY: ${{ secrets.TAILSCALE_API_KEY }}
+  TAILSCALE_API_KEY: ${{ secrets.TAILSCALE_APIKEY }}
   N8N_API_KEY: ${{ secrets.N8N_API_KEY }}
   POSTMAN_API_KEY: ${{ secrets.POSTMAN_API_KEY }}
   E2B_API_KEY: ${{ secrets.E2B_API_KEY }}
