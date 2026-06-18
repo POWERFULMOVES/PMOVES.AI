@@ -2073,10 +2073,49 @@ up-yt-published: ## Start YouTube ingest stack using published images (no local 
 	@$(DC) -f docker-compose.integrations.images.yml --profile data --profile workers --profile yt up -d bgutil-pot-provider ffmpeg-whisper pmoves-yt
 	@echo "✔ PMOVES.YT started using published image. Override PMOVES_YT_IMAGE to pin versions."
 
-.PHONY: up-agents-hardened up-yt-hardened
+.PHONY: up-agents-hardened up-workers-hardened up-yt-hardened up-core-hardened up-agents-standalone up-agents-auto
 up-agents-hardened: ## Start Agents (NATS, Agent Zero, Archon, Mesh Agent) with hardened security options
 	@$(DC) -f docker-compose.agents.images.yml -f docker-compose.hardened.yml --profile agents up -d nats agent-zero archon mesh-agent deepresearch publisher-discord
 	@echo "✔ Agents started (hardened overrides applied)."
+
+up-workers-hardened: ## Start worker services WITH the hardened overlay (read_only/cap_drop/tmpfs)
+	@echo "⚙️ Starting worker services (hardened)..."
+	@$(DC) -f docker-compose.hardened.yml up -d $(WORKER_SERVICES)
+	@$(MAKE) --no-print-directory wait-workers
+	@echo "✅ Workers ready (hardened overrides applied)"
+
+up-core-hardened: ## Start core in dependency order with HARDENED agents (data tier BEFORE agents)
+	@echo "🧱 Bringing up core in dependency order (data → bus → workers → agents, hardened)…"
+	@$(MAKE) --no-print-directory up-obs
+	@$(MAKE) --no-print-directory up-supabase
+	@$(MAKE) --no-print-directory up-data-tier
+	@$(MAKE) --no-print-directory up-bus
+	@$(MAKE) --no-print-directory up-workers-hardened
+	@$(MAKE) --no-print-directory up-agents-hardened
+	@echo "✅ Core PMOVES services (hardened) started in dependency order."
+
+up-agents-standalone: ## Start Agent Zero + mesh STANDALONE (no Supabase/data tier; TOPOLOGY_MODE=standalone)
+	@echo "🧍 Starting Agent Zero standalone (Docker-DNS discovery, no docked data dependency)…"
+	@TOPOLOGY_MODE=standalone DOCKED_MODE=false $(DC) -f docker-compose.agents.images.yml -f docker-compose.hardened.yml --profile agents up -d nats agent-zero mesh-agent
+	@echo "✔ Agent Zero started standalone (archon/Supabase-dependent services intentionally excluded)."
+
+up-agents-auto: ## Auto-detect: docked agents if Supabase REST reachable, else standalone (service-discovery driven)
+	@# Load the runtime env first: a CLI/non-default-port Supabase writes its real REST
+	@# URL to .supabase.status.env / env.supa.runtime, NOT this recipe's shell. Without
+	@# sourcing them the probe falls back to localhost:8000 and misclassifies a healthy
+	@# Supabase (e.g. CLI on 127.0.0.1:65421) as down, wrongly choosing standalone.
+	@set -e; \
+	[ -f .supabase.status.env ] && . ./.supabase.status.env || true; \
+	[ -f env.supa.runtime ] && . ./env.supa.runtime || true; \
+	base="$${SUPABASE_REST_URL:-$${SUPA_REST_URL:-$${API_URL:-$${SUPABASE_URL:-http://localhost:8000}}}}"; \
+	case "$$base" in */rest/v1|*/rest/v1/) probe_url="$$base";; *) probe_url="$${base%/}/rest/v1/";; esac; \
+	if curl -sf -m 3 "$$probe_url" >/dev/null 2>&1; then \
+		echo "🔌 Supabase reachable at $$probe_url → docked (hardened) agents"; \
+		$(MAKE) --no-print-directory up-agents-hardened; \
+	else \
+		echo "🧍 Supabase NOT reachable ($$probe_url) → standalone agents"; \
+		$(MAKE) --no-print-directory up-agents-standalone; \
+	fi
 
 up-yt-hardened: ## Start YT stack with hardened security options (published images)
 	@$(DC) -f docker-compose.integrations.images.yml -f docker-compose.hardened.yml --profile data --profile workers --profile yt up -d bgutil-pot-provider ffmpeg-whisper pmoves-yt

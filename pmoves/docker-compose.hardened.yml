@@ -207,6 +207,10 @@ services:
     cap_drop: !override ["ALL"]
     security_opt: !override
       - no-new-privileges:true
+    labels:
+      # PMOVES topology tags (cf. Tailscale ACL tags) for standalone/docked discovery
+      com.pmoves.tier: "agent"
+      com.pmoves.topology: "standalone-capable"
 
   nats-echo-req:
     user: "65532:65532"
@@ -258,6 +262,10 @@ services:
     cap_drop: !override ["ALL"]
     security_opt: !override
       - no-new-privileges:true
+    labels:
+      # PMOVES topology tags (cf. Tailscale ACL tags) for standalone/docked discovery
+      com.pmoves.tier: "agent"
+      com.pmoves.topology: "standalone-capable"
     # Note: Persistent volumes /a0/* are mounted from host, need proper ownership
 
   archon:
@@ -269,6 +277,10 @@ services:
     cap_drop: !override ["ALL"]
     security_opt: !override
       - no-new-privileges:true
+    labels:
+      # PMOVES topology tags (cf. Tailscale ACL tags) for standalone/docked discovery
+      com.pmoves.tier: "data-dependent"
+      com.pmoves.topology: "docked-only"
     secrets:
       - supabase_service_role_key
       - supabase_jwt_secret
