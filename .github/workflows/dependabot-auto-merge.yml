@@ -1,0 +1,43 @@
+# Auto-merge Dependabot PRs (patch + minor only) once branch-protection checks pass.
+# Root-cause fix for stale dependency PRs piling up and conflicting (see #1764).
+# Pattern: https://docs.github.com/en/code-security/dependabot/working-with-dependabot/automating-dependabot-with-github-actions
+#
+# Safety:
+#   - Runs ONLY for the dependabot[bot] actor.
+#   - MAJOR updates are NOT auto-merged — they fall through for human review.
+#   - `gh pr merge --auto` respects branch protection: the PR only merges after
+#     all required status checks (merge-gate, python-tests, hardening, etc.) pass.
+#     Repo setting "Allow auto-merge" is already enabled.
+#   - Uses `pull_request_target` because Dependabot's `pull_request` GITHUB_TOKEN
+#     is READ-ONLY (so `gh pr merge --auto` would silently no-op). pull_request_target
+#     runs in the BASE-repo context with a writable token. This is safe here ONLY
+#     because the job never checks out or executes the PR's code — it just reads
+#     metadata and enables auto-merge. Do NOT add an actions/checkout of the PR head.
+name: Dependabot auto-merge
+
+on: pull_request_target
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  dependabot-auto-merge:
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.user.login == 'dependabot[bot]'
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@6c3c2f2c1c457b00c10c4848d6f5491db3b629df # v2.13.1
+        with:
+          egress-policy: audit
+
+      - name: Fetch Dependabot metadata
+        id: meta
+        uses: dependabot/fetch-metadata@21025c705c08248db411dc16f3619e6b5f9ea21a # v2.5.0
+
+      - name: Enable auto-merge for patch + minor updates
+        if: steps.meta.outputs.update-type == 'version-update:semver-patch' || steps.meta.outputs.update-type == 'version-update:semver-minor'
+        run: gh pr merge --auto --squash "$PR_URL"
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
