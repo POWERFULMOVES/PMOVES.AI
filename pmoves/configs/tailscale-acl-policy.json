@@ -117,12 +117,13 @@
     {
       "action": "accept",
       "src": [
-        "autogroup:admin"
+        "autogroup:admin",
+        "autogroup:owner"
       ],
       "dst": [
         "*:*"
       ],
-      "comment": "Admins (DARKXSIDE) have full access"
+      "comment": "Admins + Owner (DARKXSIDE) have full network access. Owner listed explicitly because Tailscale SSH requires BOTH a network-access rule (this) AND an ssh rule; the owner is distinct from autogroup:admin, so without owner here the SSH exemption below is denied at the network layer (port 22 never reached)."
     }
   ],
   "ssh": [
@@ -166,8 +167,7 @@
         "autogroup:nonroot",
         "root"
       ],
-      "checkPeriod": "12h",
-      "comment": "Tenants SSH into their own devices in check mode (browser re-auth). Scoped to group:tenants, NOT autogroup:member, because Tailscale evaluates check BEFORE accept (most-restrictive-first, regardless of rule order) — so excluding owner/admins from this src is the only way to exempt fleet ops from re-auth."
+      "comment": "Tenants SSH into their own devices in check mode (browser re-auth). checkPeriod omitted: it is Premium/Enterprise-gated in the policy-syntax reference and the value we wanted (12h) is already the default, so omitting it preserves behavior while keeping the policy applyable on Standard/free tailnets. Scoped to group:tenants, NOT autogroup:member, because Tailscale evaluates check BEFORE accept (most-restrictive-first, regardless of rule order) — so excluding owner/admins from this src is the only way to exempt fleet ops from re-auth."
     }
   ],
   "nodeAttrs": [
