@@ -1,4 +1,10 @@
 version: 2
+# Grouping + auto-merge rationale (root-cause fix for stale-PR conflicts):
+#   - Each ecosystem groups minor+patch updates into ONE PR per run, so a week's
+#     bumps land as a single reviewable/mergeable unit instead of N PRs that go
+#     stale against each other and against main (the #1764 17-file conflict).
+#   - MAJOR updates are intentionally NOT grouped — they get individual PRs for
+#     human review (and are excluded from auto-merge in dependabot-auto-merge.yml).
 updates:
   # Docker base images in service Dockerfiles
   - package-ecosystem: "docker"
@@ -7,6 +13,11 @@ updates:
       interval: "weekly"
       day: "monday"
       time: "09:00"
+    open-pull-requests-limit: 10
+    groups:
+      docker-services-minor-patch:
+        applies-to: version-updates
+        update-types: ["minor", "patch"]
     labels:
       - "dependencies"
       - "docker"
@@ -21,6 +32,11 @@ updates:
       interval: "weekly"
       day: "monday"
       time: "09:00"
+    open-pull-requests-limit: 10
+    groups:
+      docker-shared-minor-patch:
+        applies-to: version-updates
+        update-types: ["minor", "patch"]
     labels:
       - "dependencies"
       - "docker"
@@ -35,6 +51,11 @@ updates:
       interval: "weekly"
       day: "wednesday"
       time: "09:00"
+    open-pull-requests-limit: 10
+    groups:
+      github-actions-minor-patch:
+        applies-to: version-updates
+        update-types: ["minor", "patch"]
     labels:
       - "dependencies"
       - "ci"
@@ -49,6 +70,11 @@ updates:
       interval: "weekly"
       day: "friday"
       time: "09:00"
+    open-pull-requests-limit: 10
+    groups:
+      agent-zero-pip-minor-patch:
+        applies-to: version-updates
+        update-types: ["minor", "patch"]
     labels:
       - "dependencies"
       - "python"
@@ -63,6 +89,11 @@ updates:
       interval: "weekly"
       day: "friday"
       time: "09:00"
+    open-pull-requests-limit: 10
+    groups:
+      archon-pip-minor-patch:
+        applies-to: version-updates
+        update-types: ["minor", "patch"]
     labels:
       - "dependencies"
       - "python"
@@ -77,6 +108,11 @@ updates:
       interval: "weekly"
       day: "friday"
       time: "09:00"
+    open-pull-requests-limit: 10
+    groups:
+      deepresearch-pip-minor-patch:
+        applies-to: version-updates
+        update-types: ["minor", "patch"]
     labels:
       - "dependencies"
       - "python"
