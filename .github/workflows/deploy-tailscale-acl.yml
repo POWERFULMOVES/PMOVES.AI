@@ -62,6 +62,12 @@ jobs:
         uses: tailscale/gitops-acl-action@5a4a17f5708e9bf96f4ee915a95e9f83c2eebe1a # v1.5.2
         with:
           tailnet: ${{ secrets.TS_TAILNET }}
-          api-key: ${{ secrets.TAILSCALE_APIKEY }}
+          # Prefer an OAuth client (durable — scope acl:write, tag:ci) over a 90-day
+          # API key. The action accepts only ONE of api-key / oauth-secret, so api-key
+          # is blanked when an OAuth secret is present. Falls back to TAILSCALE_APIKEY
+          # when no OAuth client is configured.
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          api-key: ${{ secrets.TS_OAUTH_SECRET != '' && '' || secrets.TAILSCALE_APIKEY }}
           policy-file: ./pmoves/configs/tailscale-acl-policy.json
           action: apply
