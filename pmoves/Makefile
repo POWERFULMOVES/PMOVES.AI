@@ -3210,6 +3210,30 @@ vibevoice-smoke: ## Check VibeVoice realtime /config (requires VibeVoice running
 	curl -sS "http://localhost:$$port/config" | jq .
 
 # ────────────────────────────────────────────────────────────────────────────
+# OMNIVOICE (k2-fsa/OmniVoice production voice server — managed fleet deploy unit)
+# ────────────────────────────────────────────────────────────────────────────
+# Service-local compose at services/creator-operator/docker-compose.omnivoice.yml
+# (opt-in via the `voice` profile). torch/torchaudio are the per-node CUDA build,
+# installed in the image via ARG-driven index URL. SPARK (arm64 + CUDA GB10) needs
+# the arm64/sbsa wheel — see services/creator-operator/SPARK_DEPLOY.md (TODO-confirm-on-node).
+OMNIVOICE_COMPOSE ?= services/creator-operator/docker-compose.omnivoice.yml
+
+.PHONY: omnivoice-build omnivoice-up omnivoice-down
+omnivoice-build: ## Build the OmniVoice voice-server image (amd64 default; pass OMNIVOICE_PLATFORM=linux/arm64 for SPARK)
+	@test -f "$(OMNIVOICE_COMPOSE)" || (echo "✖ $(OMNIVOICE_COMPOSE) missing — operator must install it from SPARK_DEPLOY.md (compose Known Road)" && exit 1)
+	@docker compose -f "$(OMNIVOICE_COMPOSE)" --profile voice build omnivoice-server
+	@echo "✔ OmniVoice image built (image=$${OMNIVOICE_IMAGE:-pmoves-omnivoice:latest})"
+
+omnivoice-up: ## Start the OmniVoice voice server (voice profile; GPU via nvidia runtime)
+	@test -f "$(OMNIVOICE_COMPOSE)" || (echo "✖ $(OMNIVOICE_COMPOSE) missing — operator must install it from SPARK_DEPLOY.md (compose Known Road)" && exit 1)
+	@docker compose -f "$(OMNIVOICE_COMPOSE)" --profile voice up -d omnivoice-server
+	@echo "✔ OmniVoice up at http://$${OMNIVOICE_BIND:-127.0.0.1}:$${OMNIVOICE_HOST_PORT:-8002}/healthz"
+
+omnivoice-down: ## Stop the OmniVoice voice server (keeps the HF model-cache volume)
+	@docker compose -f "$(OMNIVOICE_COMPOSE)" --profile voice down
+	@echo "✔ OmniVoice down (omnivoice-hf-cache volume preserved)"
+
+# ────────────────────────────────────────────────────────────────────────────
 # VOICEBOX (Pinokio-managed voice production service)
 # ────────────────────────────────────────────────────────────────────────────
 # Voicebox is NOT docker-compose managed — it runs as a Pinokio app on the
