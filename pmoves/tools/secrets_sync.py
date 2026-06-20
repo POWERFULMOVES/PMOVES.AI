@@ -120,6 +120,37 @@ def build_outputs(
     return outputs, missing
 
 
+def _drop_multiline(relative: str, values: Mapping[str, str]) -> Dict[str, str]:
+    """Refuse to emit newline-bearing values into a line-based env file.
+
+    Docker Compose `env_file`/`--env-file` and `docker run --env-file` are strictly
+    one ``VAR=VAL`` per line; multi-line values are unsupported even when quoted, so a
+    value with embedded ``\\n``/``\\r`` (e.g. a PEM/OpenSSH private key) splatters across
+    lines and every continuation re-parses as a bogus ``VAR`` — the loader fails with
+    ``unexpected character ... in variable name``. Such secrets must be delivered via the
+    ``*_FILE`` convention (services.common.env.get_secret reads ``KEY`` then ``KEY_FILE``)
+    or Docker ``secrets:`` (mounted at ``/run/secrets/<name>``), never as an inline env var.
+    Refs: https://docs.docker.com/reference/compose-file/services/#env_file ;
+    https://docs.docker.com/compose/how-tos/use-secrets/
+    """
+    safe: Dict[str, str] = {}
+    skipped: List[str] = []
+    for key, value in values.items():
+        if "\n" in value or "\r" in value:
+            skipped.append(key)
+            continue
+        safe[key] = value
+    if skipped:
+        print(
+            f"WARNING: {relative}: skipped {len(skipped)} multi-line secret(s) "
+            f"({', '.join(sorted(skipped))}) — multi-line values corrupt line-based "
+            "env files. Deliver via the *_FILE convention (services.common.env.get_secret) "
+            "or Docker secrets, not an inline env var.",
+            file=sys.stderr,
+        )
+    return safe
+
+
 def write_env_files(
     outputs: Mapping[str, Mapping[str, str]],
     *,
@@ -129,6 +160,7 @@ def write_env_files(
     for relative, values in outputs.items():
         env_path = PROJECT_ROOT / relative
         env_path.parent.mkdir(parents=True, exist_ok=True)
+        values = _drop_multiline(relative, values)
 
         if merge and env_path.exists():
             # Selective rotation: read existing, update only specified keys
@@ -141,6 +173,11 @@ def write_env_files(
                     continue
                 if "=" in stripped:
                     k, v = stripped.split("=", 1)
+                    # Defensive: ignore lines from an already-corrupt file (a prior
+                    # multi-line value leaves continuation lines whose "key" is not a
+                    # valid env identifier) so the corruption is not propagated.
+                    if not k.isidentifier():
+                        continue
                     existing[k] = v
             # Merge: new values override existing for specified keys
             existing.update(values)
