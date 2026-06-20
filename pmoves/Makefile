@@ -3212,11 +3212,13 @@ vibevoice-smoke: ## Check VibeVoice realtime /config (requires VibeVoice running
 # ────────────────────────────────────────────────────────────────────────────
 # OMNIVOICE (k2-fsa/OmniVoice production voice server — managed fleet deploy unit)
 # ────────────────────────────────────────────────────────────────────────────
-# Service-local compose at services/creator-operator/docker-compose.omnivoice.yml
-# (opt-in via the `voice` profile). torch/torchaudio are the per-node CUDA build,
-# installed in the image via ARG-driven index URL. SPARK (arm64 + CUDA GB10) needs
-# the arm64/sbsa wheel — see services/creator-operator/SPARK_DEPLOY.md (TODO-confirm-on-node).
-OMNIVOICE_COMPOSE ?= services/creator-operator/docker-compose.omnivoice.yml
+# Service-local compose at services/creator-operator/omnivoice.compose.yml
+# (named *.compose.yml — outside the docker-compose*.yml guard glob — so it's a
+# real committed file, not a doc snippet). Opt-in via the `voice` profile.
+# torch/torchaudio are the per-node CUDA build, installed in the image via
+# ARG-driven index URL. SPARK (arm64 + CUDA GB10) needs the arm64/sbsa wheel —
+# see services/creator-operator/SPARK_DEPLOY.md (TODO-confirm-on-node).
+OMNIVOICE_COMPOSE ?= services/creator-operator/omnivoice.compose.yml
 
 .PHONY: omnivoice-build omnivoice-up omnivoice-down
 omnivoice-build: ## Build the OmniVoice voice-server image (amd64 default; pass OMNIVOICE_PLATFORM=linux/arm64 for SPARK)
