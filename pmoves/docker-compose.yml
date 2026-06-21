@@ -2438,6 +2438,12 @@ services:
     # A2A protocol — Agent-to-Agent interoperability (AGNOTE4482 Item 2)
     - A2A_DISCOVERY_PUBLIC=${A2A_DISCOVERY_PUBLIC:-false}
     - A2A_TASKS_PUBLIC=${A2A_TASKS_PUBLIC:-false}
+    # PMOVES.Notes plugin (baked into the image at usr/plugins/pmoves_notes).
+    # Defaults match the plugin's own fallbacks; set explicitly so a token can be
+    # supplied and the plugin can be toggled off without rebuilding.
+    - OPEN_NOTEBOOK_API_URL=${OPEN_NOTEBOOK_API_URL:-http://open-notebook:5055}
+    - OPEN_NOTEBOOK_API_TOKEN=${OPEN_NOTEBOOK_API_TOKEN:-}
+    - PMOVES_NOTES_ENABLED=${PMOVES_NOTES_ENABLED:-true}
     # LLM routing: use TensorZero gateway as OpenAI-compatible provider
     # Agent Zero's get_default_value() reads A0_SET_* from env (dotenv priority)
     # Dummy key silences LiteLLM "Missing API Key" warning — TensorZero handles auth

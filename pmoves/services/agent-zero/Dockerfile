@@ -15,6 +15,17 @@ ARG AGENT_ZERO_REF=PMOVES.AI-Edition-Hardened
 RUN git clone --depth=1 --branch ${AGENT_ZERO_REF} \
       ${AGENT_ZERO_REPO} /git/agent-zero
 
+# Bake the PMOVES.Notes A0 plugin into the user plugins dir so it ships in the
+# image (mirrors how the archon image clones its vendor via ARCHON_GIT_REF).
+# It rides forward via the `COPY --from=upstream /git/agent-zero` below, and
+# init-a0.sh copies /git/agent-zero/. -> /a0 at boot, so Agent Zero discovers it
+# under /a0/usr/plugins/pmoves_notes. Drop the nested .git to keep the layer clean.
+ARG A0_PLUGIN_PMOVES_NOTES_REMOTE=https://github.com/POWERFULMOVES/Pmoves-a0-plugin-pmoves-notes.git
+ARG A0_PLUGIN_PMOVES_NOTES_REF=PMOVES.AI-Edition-Hardened
+RUN git clone --depth=1 --single-branch --branch ${A0_PLUGIN_PMOVES_NOTES_REF} \
+      ${A0_PLUGIN_PMOVES_NOTES_REMOTE} /git/agent-zero/usr/plugins/pmoves_notes \
+    && rm -rf /git/agent-zero/usr/plugins/pmoves_notes/.git
+
 # Minimal constraints for upstream transitive deps that have broken releases.
 # Do NOT use requirements.lock here — it pins our direct deps and will
 # conflict with upstream version requirements (e.g. crontab version mismatch).
