@@ -2073,7 +2073,7 @@ up-yt-published: ## Start YouTube ingest stack using published images (no local 
 	@$(DC) -f docker-compose.integrations.images.yml --profile data --profile workers --profile yt up -d bgutil-pot-provider ffmpeg-whisper pmoves-yt
 	@echo "✔ PMOVES.YT started using published image. Override PMOVES_YT_IMAGE to pin versions."
 
-.PHONY: up-agents-hardened up-workers-hardened up-yt-hardened up-core-hardened up-agents-standalone up-agents-auto
+.PHONY: up-agents-hardened up-workers-hardened up-yt-hardened up-core-hardened up-agents-standalone up-agents-auto up-core-capable up-core-gpu
 up-agents-hardened: ## Start Agents (NATS, Agent Zero, Archon, Mesh Agent) with hardened security options
 	@$(DC) -f docker-compose.agents.images.yml -f docker-compose.hardened.yml --profile agents up -d nats agent-zero archon mesh-agent deepresearch publisher-discord
 	@echo "✔ Agents started (hardened overrides applied)."
@@ -2099,23 +2099,43 @@ up-agents-standalone: ## Start Agent Zero + mesh STANDALONE (no Supabase/data ti
 	@TOPOLOGY_MODE=standalone DOCKED_MODE=false $(DC) -f docker-compose.agents.images.yml -f docker-compose.hardened.yml --profile agents up -d nats agent-zero mesh-agent
 	@echo "✔ Agent Zero started standalone (archon/Supabase-dependent services intentionally excluded)."
 
-up-agents-auto: ## Auto-detect: docked agents if Supabase REST reachable, else standalone (service-discovery driven)
-	@# Load the runtime env first: a CLI/non-default-port Supabase writes its real REST
-	@# URL to .supabase.status.env / env.supa.runtime, NOT this recipe's shell. Without
-	@# sourcing them the probe falls back to localhost:8000 and misclassifies a healthy
-	@# Supabase (e.g. CLI on 127.0.0.1:65421) as down, wrongly choosing standalone.
+up-agents-auto: ## Capability-aware bring-up: tier (lean|capable|gpu) picks the service set; within lean, Supabase reachability picks docked-vs-standalone
+	@# Capability-adaptive standalone (docs/architecture/CAPABILITY_ADAPTIVE_STANDALONE.md).
+	@# tier = node_capability_tier.py (PMOVES_NODE_TIER override -> PMOVES_NODE_PROBE json -> lean).
 	@set -e; \
-	[ -f .supabase.status.env ] && . ./.supabase.status.env || true; \
-	[ -f env.supa.runtime ] && . ./env.supa.runtime || true; \
-	base="$${SUPABASE_REST_URL:-$${SUPA_REST_URL:-$${API_URL:-$${SUPABASE_URL:-http://localhost:8000}}}}"; \
-	case "$$base" in */rest/v1|*/rest/v1/) probe_url="$$base";; *) probe_url="$${base%/}/rest/v1/";; esac; \
-	if curl -sf -m 3 "$$probe_url" >/dev/null 2>&1; then \
-		echo "🔌 Supabase reachable at $$probe_url → docked (hardened) agents"; \
-		$(MAKE) --no-print-directory up-agents-hardened; \
-	else \
-		echo "🧍 Supabase NOT reachable ($$probe_url) → standalone agents"; \
-		$(MAKE) --no-print-directory up-agents-standalone; \
-	fi
+	probe_arg=""; [ -n "$${PMOVES_NODE_PROBE:-}" ] && probe_arg="--input $${PMOVES_NODE_PROBE}"; \
+	tier="$$($(PYTHON) tools/node_capability_tier.py --make $$probe_arg </dev/null 2>/dev/null || true)"; \
+	[ -n "$$tier" ] || tier=lean; \
+	echo "🧭 Capability tier: $$tier (override: PMOVES_NODE_TIER=lean|capable|gpu)"; \
+	case "$$tier" in \
+	capable) $(MAKE) --no-print-directory up-core-capable ;; \
+	gpu) $(MAKE) --no-print-directory up-core-gpu ;; \
+	*) \
+		[ -f .supabase.status.env ] && . ./.supabase.status.env || true; \
+		[ -f env.supa.runtime ] && . ./env.supa.runtime || true; \
+		base="$${SUPABASE_REST_URL:-$${SUPA_REST_URL:-$${API_URL:-$${SUPABASE_URL:-http://localhost:8000}}}}"; \
+		case "$$base" in */rest/v1|*/rest/v1/) probe_url="$$base";; *) probe_url="$${base%/}/rest/v1/";; esac; \
+		if curl -sf -m 3 "$$probe_url" >/dev/null 2>&1; then \
+			echo "🔌 lean: Supabase reachable at $$probe_url → docked (hardened) agents"; \
+			$(MAKE) --no-print-directory up-agents-hardened; \
+		else \
+			echo "🧍 lean: Supabase NOT reachable ($$probe_url) → standalone agents"; \
+			$(MAKE) --no-print-directory up-agents-standalone; \
+		fi ;; \
+	esac
+
+up-core-capable: ## Capable tier: dependency-ordered core (data tier BEFORE agents) + Consciousness/CHIT
+	@echo "🧩 Capable tier: hardened dep-ordered core + Consciousness/CHIT (consciousness-service, cipher-api)…"
+	@$(MAKE) --no-print-directory up-core-hardened
+	@$(DC) -f docker-compose.agents.images.yml -f docker-compose.hardened.yml --profile agents up -d consciousness-service cipher-api
+	@echo "✅ Capable tier up (data tier + agents + Consciousness/CHIT)."
+
+up-core-gpu: ## GPU tier: capable tier + GPU services (best-effort; requires NVIDIA container runtime)
+	@$(MAKE) --no-print-directory up-core-capable
+	@echo "🎮 GPU tier: adding GPU services (requires NVIDIA runtime + a GPU override compose)…"
+	@$(DC) -f docker-compose.gpu.yml --profile workers up -d hi-rag-gateway-v2-gpu media-video media-audio \
+		|| echo "⚠ GPU services not started; verify NVIDIA runtime + docker-compose.gpu.yml wiring on this host (Phase 3 live verify)."
+	@echo "✅ GPU tier bring-up attempted (capable + GPU services)."
 
 up-yt-hardened: ## Start YT stack with hardened security options (published images)
 	@$(DC) -f docker-compose.integrations.images.yml -f docker-compose.hardened.yml --profile data --profile workers --profile yt up -d bgutil-pot-provider ffmpeg-whisper pmoves-yt
