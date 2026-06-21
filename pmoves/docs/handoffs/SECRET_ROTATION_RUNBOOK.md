@@ -4,19 +4,19 @@
 
 Rotation makes the git-history value **inert** (that's the fix); history-purge is optional. `bootstrap_env.py` is chitBypass-allowed, so this runs as an elevated agent command — no hand-editing of `env.shared`.
 
-> Generated values use `token_urlsafe` → only `-`/`_` (no `/`/`+`), avoiding connection-string URL-encode fragility.
+> Generated values use `token_urlsafe` → URL-safe Base64 charset (alphanumerics plus `-` and `_`; **no `/` or `+`**), avoiding connection-string URL-encode fragility.
 
 ---
 
 ## 1. Render webhook shared secret (internal HMAC)
-```
+```bash
 make -C pmoves secrets-rotate KEY=RENDER_WEBHOOK_SHARED_SECRET LEN=32
 make -C pmoves up-workers && make -C pmoves up        # restart render-webhook + UI TOGETHER
 ```
 ⚠️ Verifier **fails open if blank** (`render-webhook/webhook.py:62`) — the surgical replace never blanks it, but restart both sides close in time. Also update the GH Actions secret `RENDER_WEBHOOK_SHARED_SECRET` (`sync-secrets-local.yml`).
 
 ## 2. Postgres / Supabase DB password
-```
+```bash
 make -C pmoves secrets-rotate KEY=SUPABASE_DB_PASSWORD LEN=48
 make -C pmoves supa-bootstrap-db     # ALTER postgres/supabase_admin/authenticator roles to new value
 make -C pmoves supa-restart          # bounce all DB consumers with fresh env
@@ -26,7 +26,7 @@ Then push the new value to GH secret `SERVICE_PASSWORD_POSTGRES` + docker secret
 
 ## 3. Jellyfin API key (external — minted via `/Auth/Keys`, no OAuth)
 Mint first (scripted create→verify→revoke, zero-downtime; needs one admin token):
-```
+```bash
 POST /Auth/Keys?app=jellyfin-bridge-<ts>   ;  GET /Auth/Keys → new key value
 make -C pmoves secrets-rotate KEY=JELLYFIN_API_KEY VALUE=<new-key>
 make -C pmoves up-<media/jellyfin-bridge>          # restart consumers (+ jellyfin-ai)

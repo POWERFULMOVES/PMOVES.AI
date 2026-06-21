@@ -76,7 +76,19 @@ def test_generated_value_is_url_safe_no_slash(tmp_path):
     assert "/" not in new and "+" not in new and len(new) == 48
 
 
-def test_rejects_bad_key(tmp_path):
+def test_dedupes_multiple_occurrences(tmp_path):
+    # last-wins env parsers would otherwise let a stale later duplicate survive
+    env = _write(tmp_path / "env.shared", "DUP=old1\nX=1\nDUP=old2\n")
+    be.rotate_secret("DUP", value="fresh", env_path=env)
+    text = env.read_text(encoding="utf-8")
+    assert text.count("DUP=") == 1
+    assert "DUP=fresh" in text and "old1" not in text and "old2" not in text
+    assert "X=1" in text
+
+
+def test_rejects_non_identifier_keys(tmp_path):
     env = _write(tmp_path / "env.shared", "A=1\n")
-    with pytest.raises(ValueError):
-        be.rotate_secret("BAD KEY", value="v", env_path=env)
+    for bad in ("1BAD", "#BAD", "BAD KEY", "BA-D", ""):
+        with pytest.raises(ValueError):
+            be.rotate_secret(bad, value="v", env_path=env)
+    assert env.read_text(encoding="utf-8") == "A=1\n"  # untouched

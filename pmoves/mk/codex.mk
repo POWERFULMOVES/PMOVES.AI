@@ -121,10 +121,10 @@ ifneq ($(SECRETS_FUNNEL_BOOT_USER_TARGET),)
 	@$(MAKE) --no-print-directory $(SECRETS_FUNNEL_BOOT_USER_TARGET)
 endif
 
-secrets-rotate: ## Rotate ONE secret in env.shared then re-funnel. Usage: make secrets-rotate KEY=NAME [VALUE=v] [LEN=48]
-	$(if $(strip $(KEY)),,$(error Usage: make -C pmoves secrets-rotate KEY=<env.shared key> [VALUE=<minted-value>] [LEN=<n>]. Generates a random_urlsafe value when VALUE is omitted.))
+secrets-rotate: ## Rotate ONE secret in env.shared then re-funnel. Usage: make secrets-rotate KEY=NAME [VALUE=v | export PMOVES_ROTATE_VALUE] [LEN=48]
+	$(if $(strip $(KEY)),,$(error Usage: make -C pmoves secrets-rotate KEY=<env.shared key> [VALUE=<minted>] [LEN=<n>]. For values with shell-active chars ($$ ` \ " ') instead: export PMOVES_ROTATE_VALUE=<minted> first. Generates a random_urlsafe value when neither is set.))
 	@echo "→ Rotating $(KEY) in env.shared (surgical, single-line)"
-	@$(CODEX_PY) scripts/bootstrap_env.py --rotate "$(KEY)" $(if $(VALUE),--value "$(VALUE)",) $(if $(LEN),--length $(LEN),)
+	@$(CODEX_PY) scripts/bootstrap_env.py --rotate "$(KEY)" $(if $(PMOVES_ROTATE_VALUE),--value-env PMOVES_ROTATE_VALUE,$(if $(VALUE),--value "$(VALUE)",)) $(if $(LEN),--length $(LEN),)
 	@$(MAKE) --no-print-directory chit-export
 	@$(MAKE) --no-print-directory secrets-funnel
 	@echo "✔ $(KEY) rotated + funnelled. STILL TO DO: (1) restart consumers (e.g. make up-<svc> / supa-restart);"

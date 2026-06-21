@@ -25,6 +25,7 @@ from urllib.parse import urlparse
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_REGISTRY_PATH = REPO_ROOT / "pmoves" / "bootstrap" / "registry.json"
 ENV_SHARED_PATH = REPO_ROOT / "pmoves" / "env.shared"
+_ENV_KEY_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 
 def _warn(msg: str) -> None:
@@ -129,8 +130,10 @@ def rotate_secret(
     Returns the new value; callers MUST NOT log it.
     """
     target = env_path or ENV_SHARED_PATH
-    if not key or "=" in key or any(c.isspace() for c in key):
-        raise ValueError(f"invalid env key: {key!r}")
+    if not _ENV_KEY_RE.match(key or ""):
+        raise ValueError(
+            f"invalid env key (must match [A-Za-z_][A-Za-z0-9_]*): {key!r}"
+        )
     if value is None:
         value = generate_value({"type": gen_type, "length": length})
     if not value:
@@ -151,16 +154,19 @@ def rotate_secret(
     replaced = False
     for raw in original.splitlines():
         stripped = raw.lstrip()
-        if (
-            not replaced
-            and "=" in stripped
+        is_target = (
+            "=" in stripped
             and not stripped.startswith("#")
             and stripped.split("=", 1)[0].strip() == key
-        ):
-            out.append(new_line)
-            replaced = True
-        else:
-            out.append(raw)
+        )
+        if is_target:
+            # Replace the first occurrence; DROP any later duplicates so a stale
+            # later value can't win in last-wins env parsers (chit_encode_secrets).
+            if not replaced:
+                out.append(new_line)
+                replaced = True
+            continue
+        out.append(raw)
     if not replaced:
         out.append(new_line)
     text = "\n".join(out)
@@ -584,7 +590,14 @@ def parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
     parser.add_argument(
         "--value",
         help="Explicit new value for --rotate (e.g. an externally-minted API key). "
-        "If omitted, a value is generated from --gen-type/--length.",
+        "If omitted, a value is generated from --gen-type/--length. "
+        "Prefer --value-env for values with shell-active characters.",
+    )
+    parser.add_argument(
+        "--value-env",
+        metavar="VARNAME",
+        help="Read the --rotate value from this environment variable (shell-safe: "
+        "the secret never passes through argv/make expansion). Overrides --value.",
     )
     parser.add_argument(
         "--length",
@@ -604,17 +617,26 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
     args = parse_args(argv)
 
     if args.rotate:
+        rotate_value = args.value
+        if args.value_env:
+            rotate_value = os.environ.get(args.value_env)
+            if rotate_value is None:
+                _error(f"--value-env {args.value_env}: environment variable not set")
+                return 2
         try:
             rotate_secret(
                 args.rotate,
-                value=args.value,
+                value=rotate_value,
                 length=args.length,
                 gen_type=args.gen_type,
             )
         except (ValueError, FileNotFoundError) as exc:
             _error(str(exc))
             return 2
-        source = "supplied value" if args.value else f"generated {args.gen_type}"
+        source = (
+            "supplied value" if (args.value or args.value_env)
+            else f"generated {args.gen_type}"
+        )
         _info(
             f"Rotated {args.rotate} in env.shared ({source}). "
             "Next: make -C pmoves chit-export && make -C pmoves secrets-funnel, "
