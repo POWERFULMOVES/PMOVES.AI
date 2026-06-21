@@ -66,13 +66,17 @@ def main():
 
     print(f"Wrote {len(sql_lines)} SQL statements to {temp_sql}")
 
-    pgpassword = _db_password()
+    # Pass the password through the subprocess ENVIRONMENT (-e PGPASSWORD with no
+    # value), so the secret never appears in argv — not in `ps` output and not in a
+    # CalledProcessError traceback if docker/psql fails.
+    docker_env = {**os.environ, "PGPASSWORD": _db_password()}
 
-    # Load via Docker (password injected via `-e`, never inlined in a shell string)
-    result = subprocess.run([
-        'docker', 'exec', '-i', '-e', f'PGPASSWORD={pgpassword}', 'pmoves-supabase-db-1',
-        'psql', '-U', 'postgres', '-d', 'pmoves', '-h', 'localhost'
-    ], stdin=open(temp_sql), capture_output=True, text=True)
+    # Load via Docker
+    with open(temp_sql) as sql_file:
+        result = subprocess.run([
+            'docker', 'exec', '-i', '-e', 'PGPASSWORD', 'pmoves-supabase-db-1',
+            'psql', '-U', 'postgres', '-d', 'pmoves', '-h', 'localhost'
+        ], stdin=sql_file, env=docker_env, capture_output=True, text=True)
 
     # Check return code
     result.check_returncode()
@@ -85,10 +89,10 @@ def main():
 
     # Verify
     verify = subprocess.run([
-        'docker', 'exec', '-e', f'PGPASSWORD={pgpassword}', 'pmoves-supabase-db-1',
+        'docker', 'exec', '-e', 'PGPASSWORD', 'pmoves-supabase-db-1',
         'psql', '-U', 'postgres', '-d', 'pmoves', '-h', 'localhost',
         '-t', '-c', 'SELECT COUNT(*) FROM pmoves_core.consciousness_theories'
-    ], capture_output=True, text=True)
+    ], env=docker_env, capture_output=True, text=True)
 
     # Check return code
     verify.check_returncode()
