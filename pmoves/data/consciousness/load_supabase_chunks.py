@@ -2,9 +2,22 @@
 """Load consciousness chunks into Supabase pmoves_core.consciousness_theories table."""
 
 import json
+import os
 import subprocess
 import tempfile
 from pathlib import Path
+
+
+def _db_password() -> str:
+    """Resolve the Postgres password from the environment (never hardcode secrets)."""
+    pw = os.environ.get("POSTGRES_PASSWORD") or os.environ.get("SUPABASE_DB_PASSWORD")
+    if not pw:
+        raise SystemExit(
+            "POSTGRES_PASSWORD (or SUPABASE_DB_PASSWORD) must be set in the environment. "
+            "Source it via the secrets pipeline (e.g. `make -C pmoves secrets-funnel` then "
+            "load env.tier-data), not as a literal in this script."
+        )
+    return pw
 
 
 def escape_sql(value: str) -> str:
@@ -53,11 +66,12 @@ def main():
 
     print(f"Wrote {len(sql_lines)} SQL statements to {temp_sql}")
 
-    # Load via Docker
+    pgpassword = _db_password()
+
+    # Load via Docker (password injected via `-e`, never inlined in a shell string)
     result = subprocess.run([
-        'docker', 'exec', '-i', 'pmoves-supabase-db-1',
-        'bash', '-c',
-        'PGPASSWORD=zode0dl7/JgAaNoVqjzHQ0S5Iq1vi7Tt psql -U postgres -d pmoves -h localhost'
+        'docker', 'exec', '-i', '-e', f'PGPASSWORD={pgpassword}', 'pmoves-supabase-db-1',
+        'psql', '-U', 'postgres', '-d', 'pmoves', '-h', 'localhost'
     ], stdin=open(temp_sql), capture_output=True, text=True)
 
     # Check return code
@@ -71,9 +85,9 @@ def main():
 
     # Verify
     verify = subprocess.run([
-        'docker', 'exec', 'pmoves-supabase-db-1',
-        'bash', '-c',
-        'PGPASSWORD=zode0dl7/JgAaNoVqjzHQ0S5Iq1vi7Tt psql -U postgres -d pmoves -h localhost -t -c "SELECT COUNT(*) FROM pmoves_core.consciousness_theories"'
+        'docker', 'exec', '-e', f'PGPASSWORD={pgpassword}', 'pmoves-supabase-db-1',
+        'psql', '-U', 'postgres', '-d', 'pmoves', '-h', 'localhost',
+        '-t', '-c', 'SELECT COUNT(*) FROM pmoves_core.consciousness_theories'
     ], capture_output=True, text=True)
 
     # Check return code
