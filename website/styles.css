@@ -20,6 +20,8 @@
   --pm-accent-soft:   #A78BFA;
   --pm-signature:     #E11D48;  /* DARKXSIDE ✦ rose-crimson */
   --pm-radius:        14px;
+  --pm-font-display:  'Orbitron', 'Exo 2', system-ui, sans-serif;  /* Megaman × Transformers */
+  --f-display:        var(--pm-font-display);
 
   /* Brand palette — driven from PMOVES tokens (DL-2 unification) */
   --c-bg:        var(--pm-void);          /* was #0b0b10 → true void, matches Notebook */
@@ -57,6 +59,18 @@
   }
 }
 
+/* -------- self-hosted display font (DL-2) ----------------------------------
+   Orbitron (OFL-1.1, see fonts/OFL.txt) — self-hosted woff2 so the brand display
+   font works under the hardened CSP (font-src 'self'; no Google Fonts). Variable
+   weight axis in one file. Body/mono stay system (page keeps zero external reqs). */
+@font-face {
+  font-family: 'Orbitron';
+  font-style: normal;
+  font-weight: 400 900;
+  font-display: swap;
+  src: url('/fonts/orbitron-v35-latin-wght.woff2') format('woff2');
+}
+
 /* -------- reset-ish -------- */
 *, *::before, *::after { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; }
@@ -81,8 +95,10 @@ a:hover, a:focus-visible { color: var(--c-accent-2); }
 button { font: inherit; }
 
 h1, h2, h3, h4 { line-height: 1.15; margin: 0 0 .4em; letter-spacing: -.01em; }
+/* Display headings carry the Orbitron brand face; card-level h3/h4 stay system for readability. */
+h1, h2 { font-family: var(--f-display); }
 h1 { font-size: clamp(2.25rem, 6.5vw, 4.25rem); font-weight: 800; }
-h2 { font-size: clamp(1.6rem, 3.6vw, 2.3rem); font-weight: 750; }
+h2 { font-size: clamp(1.6rem, 3.6vw, 2.3rem); font-weight: 700; }
 h3 { font-size: 1.12rem; font-weight: 650; letter-spacing: 0; }
 p  { margin: 0 0 1rem; color: var(--c-ink-dim); }
 
@@ -125,8 +141,8 @@ p  { margin: 0 0 1rem; color: var(--c-ink-dim); }
   font-weight: 800; letter-spacing: .02em; font-size: 1.05rem;
   color: var(--c-ink);
 }
-.brand-mark { color: var(--c-accent); font-size: 1.1em; }
-.brand-word { }
+.brand-mark { color: var(--c-signature); font-size: 1.1em; }  /* DARKXSIDE ✦ */
+.brand-word { font-family: var(--f-display); letter-spacing: .02em; }
 .brand-dim { color: var(--c-ink-mute); font-weight: 600; }
 
 .site-nav {
@@ -189,14 +205,20 @@ body.nav-open .site-nav a {
   position: relative; overflow: hidden;
   padding: clamp(3rem, 8vw, 6.5rem) 0 clamp(3rem, 7vw, 5.5rem);
 }
+/* DARKXSIDE ✦ signature glow — soft crimson wash behind the hero */
+.hero::after {
+  content: ''; position: absolute; inset: 0; pointer-events: none; z-index: 0;
+  background: radial-gradient(40% 50% at 78% 28%, rgba(225, 29, 72, .16), transparent 70%);
+}
 .hero-inner { position: relative; z-index: 1; max-width: 880px; }
 .eyebrow {
   display: inline-block;
-  font-size: .78rem; letter-spacing: .14em; text-transform: uppercase;
-  color: var(--c-ink-mute);
+  font-size: .78rem; letter-spacing: .17em; text-transform: uppercase;
+  color: var(--c-signature);            /* DARKXSIDE crimson kicker */
+  font-weight: 600;
   margin: 0 0 1.1rem;
   padding: .3rem .65rem;
-  border: 1px solid var(--c-border);
+  border: 1px solid color-mix(in srgb, var(--c-signature) 35%, var(--c-border));
   border-radius: 999px;
 }
 .headline {
@@ -204,7 +226,8 @@ body.nav-open .site-nav a {
   color: var(--c-ink);
 }
 .headline .accent {
-  background: linear-gradient(90deg, var(--c-accent), var(--c-accent-2));
+  /* violet → DARKXSIDE crimson → cyan: the founder signature woven through the headline */
+  background: linear-gradient(100deg, var(--c-accent) 0%, var(--c-signature) 50%, var(--c-accent-2) 100%);
   -webkit-background-clip: text; background-clip: text;
   color: transparent;
 }
