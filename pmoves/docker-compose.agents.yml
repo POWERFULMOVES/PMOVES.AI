@@ -734,14 +734,20 @@ services:
     - CIPHER_API_TOKEN=${CIPHER_API_TOKEN:-}
     command: ["node", "dist/src/app/index.cjs", "--mode", "api", "--port", "3000", "--host", "0.0.0.0", "--agent", "/app/memAgent/cipher.yml", "--mcp-transport-type", "sse"]
     ports:
-    - "${CIPHER_BIND:-0.0.0.0}:${CIPHER_PORT:-8105}:3000"
+    # Default to localhost-only — cipher is now on pmoves_external (host-publishable),
+    # so a 0.0.0.0 default would expose the API/SSE on all interfaces with an empty
+    # CIPHER_API_TOKEN. Operators override CIPHER_BIND for intentional LAN exposure.
+    - "${CIPHER_BIND:-127.0.0.1}:${CIPHER_PORT:-8105}:3000"
     depends_on:
       neo4j:
         condition: service_healthy
       nats:
         condition: service_healthy
     profiles: ["agents"]
-    networks: [pmoves_app, pmoves_data, pmoves_bus]
+    # pmoves_external (non-internal) lets the host-side MCP client reach cipher's
+    # SSE on 127.0.0.1:8105 — pmoves_app/data/bus are internal:true and cannot
+    # publish host ports. CIPHER_BIND defaults to 127.0.0.1 (localhost-only inbound).
+    networks: [pmoves_app, pmoves_data, pmoves_bus, pmoves_external]
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:3000/health"]
       interval: 30s
