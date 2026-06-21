@@ -2475,9 +2475,9 @@ services:
     # BoTZ-gateway (persona/forms) and Hi-RAG are added by their owning lanes once
     # their MCP endpoints land; set BOTZ_MCP_URL / HIRAG_MCP_URL to extend.
     - SUPABASE_REST_URL=${SUPABASE_REST_URL:-http://supabase-kong:8000/rest/v1}
-    - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY:-}
+    - SUPABASE_SERVICE_KEY=${SERVICE_ROLE_KEY:-${SUPABASE_SERVICE_ROLE_KEY:-}}
     - CIPHER_MCP_URL=${CIPHER_MCP_URL:-http://cipher-api:3000/mcp/sse}
-    - 'A0_SET_mcp_servers={"mcpServers":{"docker":{"command":"docker","args":["run","--rm","-i","--mount","type=bind,src=/var/run/docker.sock,dst=/var/run/docker.sock","mcp/docker"]},"pmoves-supabase":{"command":"mcp-server-postgrest","args":["--apiUrl","${SUPABASE_REST_URL:-http://supabase-kong:8000/rest/v1}","--apiKey","${SUPABASE_SERVICE_KEY:-}","--schema","public,storage"]},"cipher":{"type":"sse","url":"${CIPHER_MCP_URL:-http://cipher-api:3000/mcp/sse}"}}}'
+    - 'A0_SET_mcp_servers={"mcpServers":{"docker":{"command":"docker","args":["run","--rm","-i","--mount","type=bind,src=/var/run/docker.sock,dst=/var/run/docker.sock","mcp/docker"]},"pmoves-supabase":{"command":"mcp-server-postgrest","args":["--apiUrl","${SUPABASE_REST_URL:-http://supabase-kong:8000/rest/v1}","--apiKey","${SERVICE_ROLE_KEY:-${SUPABASE_SERVICE_ROLE_KEY:-}}","--schema","public,storage"]},"cipher":{"type":"sse","url":"${CIPHER_MCP_URL:-http://cipher-api:3000/mcp/sse}"}}}'
     # LLM routing: use TensorZero gateway as OpenAI-compatible provider
     # Agent Zero's get_default_value() reads A0_SET_* from env (dotenv priority)
     # Dummy key silences LiteLLM "Missing API Key" warning — TensorZero handles auth
@@ -2546,10 +2546,17 @@ services:
       timeout: 10s
       retries: 3
       start_period: 30s
+    # Grant the runtime user (uid/gid 65532) access to the mounted Docker socket
+    # (root:docker 0660 on Linux hosts) so the docker MCP (mcp/docker) can reach
+    # the daemon without weakening socket perms. DOCKER_GID must match the host's
+    # docker group gid; Docker Desktop (Win/Mac) proxies the socket and ignores it.
+    group_add:
+    - "${DOCKER_GID:-999}"
     networks:
     - pmoves_app
     - pmoves_bus
     - pmoves_external  # Required for LLM provider APIs
+    - pmoves_api  # Reach supabase-kong (PostgREST) for the pmoves-supabase MCP
     deploy:
       resources:
         limits:
