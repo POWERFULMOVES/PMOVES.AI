@@ -37,7 +37,7 @@ else
 SECRETS_FUNNEL_BOOT_USER_TARGET :=
 endif
 
-.PHONY: codex-config codex-audit codex-parity-check codex-parity-check-strict codex-home codex-health-quick secrets-audit tooling-audit tooling-audit-strict chit-export chit-manifest-sync chit-manifest-check secrets-local-hydrate secrets-runtime-hydrate secrets-funnel-sync secrets-funnel a0-plugins-check a0-plugins-check-remote
+.PHONY: codex-config codex-audit codex-parity-check codex-parity-check-strict codex-home codex-health-quick secrets-audit tooling-audit tooling-audit-strict chit-export chit-manifest-sync chit-manifest-check secrets-local-hydrate secrets-runtime-hydrate secrets-funnel-sync secrets-funnel secrets-rotate a0-plugins-check a0-plugins-check-remote
 codex-config: ## Install repo-pinned Codex config into ~/.codex/config.toml
 	@pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/codex_apply_config.ps1
 
@@ -120,6 +120,15 @@ secrets-funnel: ## Portable secrets flow: local hydrate -> CHIT export -> manife
 ifneq ($(SECRETS_FUNNEL_BOOT_USER_TARGET),)
 	@$(MAKE) --no-print-directory $(SECRETS_FUNNEL_BOOT_USER_TARGET)
 endif
+
+secrets-rotate: ## Rotate ONE secret in env.shared then re-funnel. Usage: make secrets-rotate KEY=NAME [VALUE=v] [LEN=48]
+	$(if $(strip $(KEY)),,$(error Usage: make -C pmoves secrets-rotate KEY=<env.shared key> [VALUE=<minted-value>] [LEN=<n>]. Generates a random_urlsafe value when VALUE is omitted.))
+	@echo "→ Rotating $(KEY) in env.shared (surgical, single-line)"
+	@$(CODEX_PY) scripts/bootstrap_env.py --rotate "$(KEY)" $(if $(VALUE),--value "$(VALUE)",) $(if $(LEN),--length $(LEN),)
+	@$(MAKE) --no-print-directory chit-export
+	@$(MAKE) --no-print-directory secrets-funnel
+	@echo "✔ $(KEY) rotated + funnelled. STILL TO DO: (1) restart consumers (e.g. make up-<svc> / supa-restart);"
+	@echo "  (2) rotate any off-box copy (GitHub Actions / Docker secret); (3) for Postgres also run 'make supa-bootstrap-db' to ALTER roles; (4) revoke the OLD value at its source (e.g. Jellyfin /Auth/Keys DELETE)."
 
 a0-plugins-check: ## Validate local Agent0 plugin catalog manifests (structure + field constraints)
 	@$(CODEX_PY) tools/a0_plugins_check.py --catalog-root integrations/agent0-plugins/catalog
