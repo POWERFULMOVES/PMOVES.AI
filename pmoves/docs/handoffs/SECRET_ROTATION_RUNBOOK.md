@@ -32,7 +32,7 @@ make -C pmoves secrets-rotate KEY=JELLYFIN_API_KEY VALUE=<new-key>
 make -C pmoves up-<media/jellyfin-bridge>          # restart consumers (+ jellyfin-ai)
 # verify jellyfin-bridge /System/Info → 200, THEN: DELETE /Auth/Keys/{old_key}
 ```
-Follow-up: `jellyfin-bridge` uses deprecated `X-Emby-Token`/`api_key` — 10.11 added `EnableLegacyAuthorization` (default on), removal planned for 12.0. Migrate to `Authorization: MediaBrowser Token="..."`.
+Auth scheme (verified vs official OpenAPI): the declared `CustomAuthentication` securityScheme is the **`X-Emby-Authorization`** header; **`Authorization: MediaBrowser Client="…" … Token="…"`** is the recommended standard form carrying the same token scheme. `/Auth/Keys` is `RequiresElevation` (admin token). The deprecated token-only forms — `X-Emby-Token` header + `api_key` query param — are removal-bound in 12.0 (10.11 added `EnableLegacyAuthorization`, default on). `jellyfin-bridge` now builds the branded `Authorization: MediaBrowser` header (Client/Device = `JELLYFIN_CLIENT_NAME`, default `PMOVES.AI`) and no longer uses `X-Emby-Token`/`api_key`.
 
 ---
 
