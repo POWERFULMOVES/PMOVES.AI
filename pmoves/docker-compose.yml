@@ -539,11 +539,25 @@ name: pmoves
 
 services:
   # =============================================================================
-  # SUPABASE SELF-HOSTED STACK (2025 Best Practices)
+  # SUPABASE SELF-HOSTED STACK (currency reviewed 2026-06-21)
   # =============================================================================
   # Unified 13-service self-hosted stack (profile: supabase-local)
   # Standard naming: JWT_SECRET, ANON_KEY, SERVICE_ROLE_KEY (SUPABASE_* aliases for compat)
   # JWT: HS256 symmetric
+  #
+  # Currency notes (verified against supabase.com/changelog.md, 2026-06-21):
+  # - On Postgres 17 (supabase/postgres:17.6.1.108) — the 2026-05-18 self-hosted
+  #   PG15->17 migration is already done.
+  # - PENDING on gotrue upgrade: the 2026-06-18 self-hosted change requires
+  #   API_EXTERNAL_URL to INCLUDE /auth/v1 (e.g. https://host -> https://host/auth/v1),
+  #   plus matching OAuth callback (${API_EXTERNAL_URL}/callback) and SAML
+  #   (/auth/v1/sso/saml/*) updates. This stack pins gotrue v2.186.0, which
+  #   PREDATES that change, so API_EXTERNAL_URL must stay WITHOUT /auth/v1 here.
+  #   Apply the /auth/v1 change ONLY together with a gotrue upgrade past the
+  #   change version, and re-test auth (flipping it on v2.186.0 breaks auth).
+  # - OPTIONAL hardening: asymmetric JWT signing keys (ES256/RS256) over the
+  #   current HS256 symmetric secret — larger migration (touches every
+  #   JWT-validating service); tracked separately.
   # =============================================================================
 
   supabase-db:
@@ -590,6 +604,9 @@ services:
     - supabase-local
     environment:
     - GOTRUE_SITE_URL=${SUPABASE_SITE_URL}
+    # gotrue v2.186.0 predates the 2026-06-18 self-hosted change, so this stays
+    # WITHOUT a /auth/v1 suffix. When upgrading gotrue past that change, append
+    # /auth/v1 here and update OAuth callback + SAML routes (see stack header).
     - API_EXTERNAL_URL=${SUPABASE_PUBLIC_URL}
     - GOTRUE_API_HOST=0.0.0.0
     - GOTRUE_API_PORT=9999
