@@ -548,13 +548,17 @@ services:
   # Currency notes (verified against supabase.com/changelog.md, 2026-06-21):
   # - On Postgres 17 (supabase/postgres:17.6.1.108) — the 2026-05-18 self-hosted
   #   PG15->17 migration is already done.
-  # - PENDING on gotrue upgrade: the 2026-06-18 self-hosted change requires
-  #   API_EXTERNAL_URL to INCLUDE /auth/v1 (e.g. https://host -> https://host/auth/v1),
-  #   plus matching OAuth callback (${API_EXTERNAL_URL}/callback) and SAML
-  #   (/auth/v1/sso/saml/*) updates. This stack pins gotrue v2.186.0, which
-  #   PREDATES that change, so API_EXTERNAL_URL must stay WITHOUT /auth/v1 here.
-  #   Apply the /auth/v1 change ONLY together with a gotrue upgrade past the
-  #   change version, and re-test auth (flipping it on v2.186.0 breaks auth).
+  # - CONFIG ALIGNMENT (Supabase discussion #47093, 2026-06-18): the self-hosted
+  #   reference compose now defaults API_EXTERNAL_URL to INCLUDE /auth/v1
+  #   (e.g. https://host -> https://host/auth/v1), WITH matching Kong OAuth
+  #   callback (${API_EXTERNAL_URL}/callback) and SAML (/auth/v1/sso/saml/*)
+  #   routes + GOTRUE_JWT_ISSUER. This is a compose/route alignment applied as a
+  #   SET, not a gotrue-image-version gate. This stack still uses the older
+  #   consistent scheme (API_EXTERNAL_URL = base + Kong routes that add /auth/v1),
+  #   so it is internally consistent and needs no change in isolation. BUT when
+  #   adopting Supabase's updated self-hosted compose defaults OR enabling custom
+  #   OAuth/SAML, move the WHOLE set together (API_EXTERNAL_URL + Kong routes +
+  #   issuer) and re-test auth — applying any one piece alone breaks auth.
   # - OPTIONAL hardening: asymmetric JWT signing keys (ES256/RS256) over the
   #   current HS256 symmetric secret — larger migration (touches every
   #   JWT-validating service); tracked separately.
@@ -604,9 +608,10 @@ services:
     - supabase-local
     environment:
     - GOTRUE_SITE_URL=${SUPABASE_SITE_URL}
-    # gotrue v2.186.0 predates the 2026-06-18 self-hosted change, so this stays
-    # WITHOUT a /auth/v1 suffix. When upgrading gotrue past that change, append
-    # /auth/v1 here and update OAuth callback + SAML routes (see stack header).
+    # Older consistent scheme: base URL here + Kong routes that add /auth/v1.
+    # The 2026-06-18 self-hosted alignment (API_EXTERNAL_URL incl. /auth/v1 +
+    # matching Kong OAuth/SAML routes + issuer) is applied as a SET, not piecemeal
+    # and not gated on the gotrue tag — see the stack header note before changing.
     - API_EXTERNAL_URL=${SUPABASE_PUBLIC_URL}
     - GOTRUE_API_HOST=0.0.0.0
     - GOTRUE_API_PORT=9999
