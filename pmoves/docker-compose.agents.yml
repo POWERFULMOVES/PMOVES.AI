@@ -741,7 +741,10 @@ services:
       nats:
         condition: service_healthy
     profiles: ["agents"]
-    networks: [pmoves_app, pmoves_data, pmoves_bus]
+    # pmoves_external (non-internal) lets the host-side MCP client reach cipher's
+    # SSE on 127.0.0.1:8105 — pmoves_app/data/bus are internal:true and cannot
+    # publish host ports. CIPHER_BIND defaults to 127.0.0.1 (localhost-only inbound).
+    networks: [pmoves_app, pmoves_data, pmoves_bus, pmoves_external]
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:3000/health"]
       interval: 30s
