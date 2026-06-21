@@ -69,6 +69,21 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       libgl1 libglib2.0-0 libsm6 libxext6 curl \
     && rm -rf /var/lib/apt/lists/*
 
+# Orchestrator MCP toolkit dependencies.
+# 1) docker CLI (static binary, pinned) — Agent Zero is the primary orchestrator
+#    and reaches the Docker MCP toolkit (mcp/docker) over the mounted socket via
+#    A0_SET_mcp_servers. Only the client binary is installed (no daemon).
+# 2) @supabase/mcp-server-postgrest — pre-installed globally so the Supabase MCP
+#    runs from a fixed binary instead of a runtime `npx` fetch (the agent runs on
+#    a read-only rootfs; avoiding network/cache writes at startup is intentional).
+ARG DOCKER_CLI_VERSION=27.5.1
+ARG SUPABASE_POSTGREST_MCP_VERSION=0.1.1
+RUN curl -fsSL "https://download.docker.com/linux/static/stable/x86_64/docker-${DOCKER_CLI_VERSION}.tgz" \
+      | tar -xz -C /usr/local/bin --strip-components=1 docker/docker \
+    && docker --version \
+    && npm install -g "@supabase/mcp-server-postgrest@${SUPABASE_POSTGREST_MCP_VERSION}" \
+    && command -v mcp-server-postgrest
+
 # PMOVES Python requirements (overrides upstream pins where needed)
 COPY --chown=65532:65532 services/agent-zero/requirements.txt services/agent-zero/requirements.lock ./
 RUN . /opt/venv-a0/bin/activate \
