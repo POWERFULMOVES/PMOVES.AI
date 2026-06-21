@@ -734,7 +734,10 @@ services:
     - CIPHER_API_TOKEN=${CIPHER_API_TOKEN:-}
     command: ["node", "dist/src/app/index.cjs", "--mode", "api", "--port", "3000", "--host", "0.0.0.0", "--agent", "/app/memAgent/cipher.yml", "--mcp-transport-type", "sse"]
     ports:
-    - "${CIPHER_BIND:-0.0.0.0}:${CIPHER_PORT:-8105}:3000"
+    # Default to localhost-only — cipher is now on pmoves_external (host-publishable),
+    # so a 0.0.0.0 default would expose the API/SSE on all interfaces with an empty
+    # CIPHER_API_TOKEN. Operators override CIPHER_BIND for intentional LAN exposure.
+    - "${CIPHER_BIND:-127.0.0.1}:${CIPHER_PORT:-8105}:3000"
     depends_on:
       neo4j:
         condition: service_healthy
