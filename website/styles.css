@@ -6,21 +6,37 @@
    ------------------------------------------------------------ */
 
 :root {
-  /* Brand palette */
-  --c-bg:        #0b0b10;
-  --c-bg-alt:    #0f0f17;
-  --c-bg-raise:  #151521;
+  /* ── PMOVES design tokens (DL-2) ──────────────────────────────────────────
+     Synced from pmoves/design/build/tokens.pmoves-armor.css (the `pmoves-armor`
+     theme, generated from pmoves/config/agent_signatures.yaml). Inlined rather
+     than linked to keep this page self-contained + CSP-clean (style-src 'self').
+     The --c-* brand palette below is driven from these so the CF site shares one
+     source of truth with the Notebook UI + the token engine. */
+  --pm-void:          #050508;  /* DARKXSIDE / PMOVES true void */
+  --pm-void-elevated: #0a0a0f;
+  --pm-surface:       #12121a;
+  --pm-ink:           #f8f8f8;
+  --pm-accent:        #7C3AED;  /* claude-opus / DARKXSIDE purple */
+  --pm-accent-soft:   #A78BFA;
+  --pm-signature:     #E11D48;  /* DARKXSIDE ✦ rose-crimson */
+  --pm-radius:        14px;
+
+  /* Brand palette — driven from PMOVES tokens (DL-2 unification) */
+  --c-bg:        var(--pm-void);          /* was #0b0b10 → true void, matches Notebook */
+  --c-bg-alt:    var(--pm-void-elevated);
+  --c-bg-raise:  var(--pm-surface);
   --c-border:    #23233a;
-  --c-ink:       #ededf5;       /* ~ AA on --c-bg */
+  --c-ink:       var(--pm-ink);
   --c-ink-dim:   #b8b8c7;
   --c-ink-mute:  #8a8aa0;
-  --c-accent:    #7C3AED;       /* DARKXSIDE purple */
-  --c-accent-2:  #06b6d4;       /* cyan */
+  --c-accent:    var(--pm-accent);        /* DARKXSIDE purple (already matched) */
+  --c-accent-2:  #06b6d4;                 /* cyan — kept */
+  --c-signature: var(--pm-signature);     /* ✦ crimson — DARKXSIDE signature accent */
   --c-accent-ink:#ffffff;
   --c-warn:      #f59e0b;
 
   --radius-sm:  8px;
-  --radius:     14px;
+  --radius:     var(--pm-radius);
   --radius-lg:  22px;
 
   --f-sys: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Helvetica Neue", Arial, sans-serif;
@@ -372,9 +388,10 @@ body.nav-open .site-nav a {
 }
 
 /* -------- badge-live -------- */
+/* "live" carries the DARKXSIDE ✦ signature crimson (ties to Showtime go-live). */
 .badge-live {
-  color: var(--c-accent-2) !important;
-  border-color: color-mix(in srgb, var(--c-accent-2) 45%, var(--c-border)) !important;
+  color: var(--c-signature) !important;
+  border-color: color-mix(in srgb, var(--c-signature) 45%, var(--c-border)) !important;
 }
 
 /* -------- pipeline gallery -------- */
