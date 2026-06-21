@@ -52,6 +52,10 @@
 /assets/*
   Cache-Control: public, max-age=31536000, immutable
 
+# Self-hosted fonts are content-versioned in the filename → safe to cache forever.
+/fonts/*
+  Cache-Control: public, max-age=31536000, immutable
+
 /styles.css
   Cache-Control: public, max-age=3600, must-revalidate
 

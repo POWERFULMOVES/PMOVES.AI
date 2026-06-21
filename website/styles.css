@@ -18,7 +18,8 @@
   --pm-ink:           #f8f8f8;
   --pm-accent:        #7C3AED;  /* claude-opus / DARKXSIDE purple */
   --pm-accent-soft:   #A78BFA;
-  --pm-signature:     #E11D48;  /* DARKXSIDE ✦ rose-crimson */
+  --pm-signature:     #E11D48;  /* DARKXSIDE ✦ rose-crimson (glyphs, borders, large display) */
+  --pm-signature-soft:#FB7185;  /* DARKXSIDE accent — AA-safe crimson for small text on void */
   --pm-radius:        14px;
   --pm-font-display:  'Orbitron', 'Exo 2', system-ui, sans-serif;  /* Megaman × Transformers */
   --f-display:        var(--pm-font-display);
@@ -34,6 +35,7 @@
   --c-accent:    var(--pm-accent);        /* DARKXSIDE purple (already matched) */
   --c-accent-2:  #06b6d4;                 /* cyan — kept */
   --c-signature: var(--pm-signature);     /* ✦ crimson — DARKXSIDE signature accent */
+  --c-signature-soft: var(--pm-signature-soft); /* AA-safe crimson for small text */
   --c-accent-ink:#ffffff;
   --c-warn:      #f59e0b;
 
@@ -214,7 +216,7 @@ body.nav-open .site-nav a {
 .eyebrow {
   display: inline-block;
   font-size: .78rem; letter-spacing: .17em; text-transform: uppercase;
-  color: var(--c-signature);            /* DARKXSIDE crimson kicker */
+  color: var(--c-signature-soft);       /* DARKXSIDE crimson kicker (AA-safe on void) */
   font-weight: 600;
   margin: 0 0 1.1rem;
   padding: .3rem .65rem;
@@ -411,9 +413,10 @@ body.nav-open .site-nav a {
 }
 
 /* -------- badge-live -------- */
-/* "live" carries the DARKXSIDE ✦ signature crimson (ties to Showtime go-live). */
+/* "live" carries the DARKXSIDE ✦ signature crimson (ties to Showtime go-live).
+   Text uses the AA-safe soft tone; the border keeps the deep signature. */
 .badge-live {
-  color: var(--c-signature) !important;
+  color: var(--c-signature-soft) !important;
   border-color: color-mix(in srgb, var(--c-signature) 45%, var(--c-border)) !important;
 }
 
