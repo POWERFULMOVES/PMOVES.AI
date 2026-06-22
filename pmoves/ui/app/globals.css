@@ -75,38 +75,52 @@
   --cataclysm-slate: var(--ink-muted);
 
   /* ─── PMOVES unified design tokens (DL-2) ──────────────────────────────────
-     The unified `--pm-*` vocabulary, mirrored from pmoves/design (the
-     `pmoves-armor` theme generated from agent_signatures.yaml). This Notebook is
-     the surface the armor neutrals were originally lifted from, so the armor
-     values equal the existing `--void`/`--ink-*` above (zero visual change). New
-     components should consume `--pm-*`; the [data-theme="darkxside-skin"] block
-     below makes those re-skin when the DARKXSIDE persona is active. Keep in sync
-     with `make -C pmoves design-tokens`. */
-  --pm-void: #050508;
-  --pm-void-elevated: #0a0a0f;
-  --pm-surface: #12121a;
+     The COMPLETE `--pm-*` vocabulary, mirrored 1:1 from the generated
+     pmoves/design/build/tokens.pmoves-armor.css (the `pmoves-armor` theme, from
+     agent_signatures.yaml). The Notebook build can't @import that file (no
+     postcss-import), so this inlined block IS the token contract here and must
+     stay complete — keep in sync with `make -C pmoves design-tokens`. The
+     Notebook is the surface the armor neutrals were lifted from, so armor values
+     equal the existing `--void`/`--ink-*` above (zero default visual change). */
+  --pm-accent: #7C3AED;          /* claude-opus / DARKXSIDE purple */
+  --pm-accent-2: #0D9488;        /* teal secondary */
+  --pm-accent-soft: #A78BFA;
+  --pm-bg: #050508;
+  --pm-bg-tint: #0a0a12;
+  --pm-border-strong: rgba(255,255,255,0.15);
+  --pm-border-subtle: rgba(255,255,255,0.08);
+  --pm-font-body: 'Exo 2', system-ui, sans-serif;
+  --pm-font-display: 'Orbitron', 'Exo 2', system-ui, sans-serif;
+  --pm-font-mono: 'JetBrains Mono', ui-monospace, monospace;
   --pm-ink: #f8f8f8;
   --pm-ink-dim: #a0a0a8;
+  --pm-ink-inverse: #050508;
   --pm-ink-mute: #606068;
-  --pm-accent: #7C3AED;          /* claude-opus / DARKXSIDE purple */
-  --pm-accent-soft: #A78BFA;
-  --pm-accent-2: #0D9488;        /* teal secondary */
+  --pm-radius: 14px;
   --pm-signature: #E11D48;       /* DARKXSIDE ✦ */
   --pm-signature-soft: #FB7185;  /* AA-safe crimson for small text */
-  --pm-radius: 14px;
-  --pm-font-display: 'Orbitron', 'Exo 2', system-ui, sans-serif;
+  --pm-space-lg: 24px;
+  --pm-space-md: 16px;
+  --pm-space-sm: 8px;
+  --pm-space-xl: 40px;
+  --pm-space-xs: 4px;
+  --pm-surface: #12121a;
+  --pm-void: #050508;
+  --pm-void-elevated: #0a0a0f;
 }
 
 /* DARKXSIDE "skin" theme — set data-theme="darkxside-skin" on <html> to swap the
-   unified `--pm-*` tokens to the warm crimson persona (mirrors
-   pmoves/design/build/tokens.darkxside-skin.css). */
+   unified `--pm-*` tokens to the warm crimson persona. Mirrors the deltas in
+   pmoves/design/build/tokens.darkxside-skin.css. New components should consume
+   `--pm-*`; existing --cata-*/--void usages migrate in a follow-up. */
 :root[data-theme="darkxside-skin"] {
-  --pm-void: #0a0608;
-  --pm-surface: #12121a;
   --pm-accent: #E11D48;          /* darkxside ✦ crimson leads */
-  --pm-accent-soft: #FB7185;
   --pm-accent-2: #7C3AED;        /* violet secondary */
+  --pm-accent-soft: #FB7185;
+  --pm-bg: #0a0608;
+  --pm-bg-tint: #140a0e;
   --pm-signature: #E11D48;
+  --pm-signature-soft: #FB7185;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
