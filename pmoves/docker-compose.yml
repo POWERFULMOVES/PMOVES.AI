@@ -1299,9 +1299,15 @@ services:
           memory: 4G
   minio:
     <<: *tier-data-hardened
-    # Pinned 2025-02-04: Latest RELEASE tag (MinIO stopped publishing to Docker Hub Oct 2025)
-    # ⚠️ WARNING: MinIO Community Edition is EOL (archived Feb 2026). Migration to SeaweedFS/Garage/Enterprise planned.
-    image: ${MINIO_IMAGE:-minio/minio:RELEASE.2025-12-20T04-58-37Z}
+    # Pin = the LAST community RELEASE tag MinIO published to Docker Hub
+    # (RELEASE.2025-09-07T16-13-09Z, 2025-09-07). The prior pin
+    # RELEASE.2025-12-20T04-58-37Z was a phantom — a December date AFTER MinIO
+    # stopped publishing minio/minio community images, so it 404s on the registry
+    # ("not found") and broke every data-tier bring-up. Verified 2026-06-22:
+    # 2025-09-07 is the newest tag on hub.docker.com/r/minio/minio.
+    # ⚠️ MinIO Community Edition is EOL/archived (Feb 2026); this tag is the
+    # ceiling. Migration to SeaweedFS/Garage/Enterprise is the durable fix.
+    image: ${MINIO_IMAGE:-minio/minio:RELEASE.2025-09-07T16-13-09Z}
     command: server /data --console-address ":9001"
     environment:
     - MINIO_ROOT_USER=${MINIO_USER:?Run make brand-defaults}

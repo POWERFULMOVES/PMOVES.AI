@@ -818,9 +818,13 @@ services:
           memory: 4G
   minio:
     <<: *tier-data-hardened
-    # Pinned 2025-02-04: Latest RELEASE tag (MinIO stopped publishing to Docker Hub Oct 2025)
-    # ⚠️ WARNING: MinIO Community Edition is EOL (archived Feb 2026). Migration to SeaweedFS/Garage/Enterprise planned.
-    image: ${MINIO_IMAGE:-minio/minio:RELEASE.2025-12-20T04-58-37Z}
+    # Pin = the LAST community RELEASE tag MinIO published (RELEASE.2025-09-07T16-13-09Z).
+    # The prior RELEASE.2025-12-20T04-58-37Z was a phantom (date after MinIO stopped
+    # publishing minio/minio) and 404s on the registry, breaking up-core / up-core-capable
+    # / overlay-up-core which consume this split compose. Keep in sync with
+    # docker-compose.yml. ⚠️ MinIO Community is EOL (Feb 2026); JuiceFS migration is the
+    # durable fix (docs/architecture/JUICEFS_OBJECT_STORE_MIGRATION.md).
+    image: ${MINIO_IMAGE:-minio/minio:RELEASE.2025-09-07T16-13-09Z}
     command: server /data --console-address ":9001"
     environment:
     - MINIO_ROOT_USER=${MINIO_USER:?Run make brand-defaults}
