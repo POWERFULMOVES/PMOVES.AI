@@ -1,7 +1,7 @@
 # JuiceFS Object-Store Migration (replace EOL MinIO)
 
 **Status:** Design spec (2026-06-22). Build deferred. **Owner lane:** Z890-CLAUDE (#10 JuiceFS↔MinIO).
-**Interim:** PR #1862 repins MinIO to its last real community tag so the data tier works until cutover.
+**Interim:** PR #1862 repins MinIO (both `docker-compose.yml` and the generated split `docker-compose.core.yml`) to its last real community tag. **Until #1862 merges, a normal bring-up still pulls the broken `RELEASE.2025-12-20…` tag and the data profile cannot start** — this spec does not by itself restore the data tier.
 **Related:** `project_supabase_multinode_juicefs_vision` (multi-node dual-write vision), `CAPABILITY_ADAPTIVE_STANDALONE.md` (the data tier this storage layer sits in).
 
 ## 1. Problem
@@ -32,7 +32,7 @@ S3 consumers ──S3──▶ juicefs-gateway (:9000, S3-compatible)
        (Postgres or Redis)     (local volume; later: replicated/object)
 ```
 
-- **S3 gateway:** `juicefs gateway` serves an S3-compatible API (MinIO-derived gateway code) → **drop-in for `minio:9000`**. Consumers change only the endpoint host (or none, if we keep the service DNS name).
+- **S3 gateway:** `juicefs gateway` serves an S3-compatible API (MinIO-derived gateway code) → **drop-in for `minio:9000`**. Consumers change only the endpoint host (or none, if we keep the service DNS name). **Must start with `--multi-buckets`** — JuiceFS Community Edition's gateway otherwise exposes only a single bucket named after the filesystem; `--multi-buckets` is required to serve the existing `assets`/`outputs`/`pmoves-comfyui` buckets (each becomes a top-level dir in the FS). Also set `--keep-etag` for S3 clients that rely on ETags.
 - **Metadata engine:** transactional KV/DB holding the filesystem tree + chunk index.
 - **Data backend:** where chunks live.
 
@@ -42,7 +42,7 @@ S3 consumers ──S3──▶ juicefs-gateway (:9000, S3-compatible)
 |-----------|--------|-----------|
 | Metadata engine | **Postgres** (dedicated DB on `supabase-db`, or a small standalone) | Already in the stack; transactional; supports the multi-node vision better than SQLite. Redis is the alternative (faster, but another stateful service + persistence config). |
 | Data backend | **local volume** initially (`file://` on a hardened named volume) | Simplest durable single-node store; the multi-node dual-write/replicated backend is the follow-on vision. |
-| S3 gateway | `juicefs gateway` on **:9000** | Drop-in endpoint; keep buckets `assets`/`outputs`/`pmoves-comfyui`. |
+| S3 gateway | `juicefs gateway --multi-buckets --keep-etag` on **:9000** | Drop-in endpoint; `--multi-buckets` is REQUIRED on CE to keep the multiple buckets `assets`/`outputs`/`pmoves-comfyui` (else only one FS-named bucket is exposed). |
 | Image | pinned `juicedata/juicefs` (or build) per F-07 supply-chain | Maintained, unlike MinIO community. |
 
 ## 5. Drop-in strategy (minimal churn)
