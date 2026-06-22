@@ -1335,6 +1335,87 @@ services:
         limits:
           cpus: '2.0'
           memory: 4G
+
+  # ── JuiceFS object store (PoC) — durable replacement for EOL MinIO ───────────
+  # See docs/architecture/JUICEFS_OBJECT_STORE_MIGRATION.md. PROFILE-GATED ("juicefs")
+  # so it is purely additive — it does NOT start with the default data tier and does
+  # not touch existing MinIO consumers yet (consumer repoint = Phase 2).
+  # ⚠️ DRAFT / not yet live-verified (deploy-env drift blocks a live run on Z890 —
+  # see handoff z890-deploy-spine-mcp-env-2026-06-22.md). Validate on first run:
+  #   (a) `juicefs` CLI entrypoint in juicedata/mount:ce-v1.3.0,
+  #   (b) `juicefs format`/`gateway` flag syntax + cache dir,
+  #   (c) --multi-buckets exposes assets/outputs/pmoves-comfyui,
+  #   (d) the gateway's S3 creds (MINIO_ROOT_USER/PASSWORD env) match consumers.
+  juicefs-redis:  # metadata engine
+    <<: *tier-data-hardened
+    image: redis:7.4.1-alpine
+    profiles: ["juicefs"]
+    restart: unless-stopped
+    command: ["redis-server", "--save", "60", "1", "--appendonly", "yes"]
+    volumes:
+    - juicefs-meta:/data
+    networks:
+    - pmoves_data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+
+  juicefs-format:  # one-time FS format (idempotent); gateway waits on this
+    <<: *tier-data-hardened
+    image: juicedata/mount:ce-v1.3.0
+    profiles: ["juicefs"]
+    restart: "no"
+    depends_on:
+      juicefs-redis:
+        condition: service_healthy
+    entrypoint: ["sh", "-lc"]
+    command:
+    - "juicefs format --storage file --bucket /data ${JUICEFS_META_URL:-redis://juicefs-redis:6379/1} ${JUICEFS_NAME:-pmoves} || true"
+    volumes:
+    - juicefs-data:/data
+    networks:
+    - pmoves_data
+
+  juicefs-gateway:  # S3-compatible drop-in for minio:9000 (--multi-buckets required on CE)
+    <<: *tier-data-hardened
+    image: juicedata/mount:ce-v1.3.0
+    profiles: ["juicefs"]
+    restart: unless-stopped
+    depends_on:
+      juicefs-redis:
+        condition: service_healthy
+      juicefs-format:
+        condition: service_completed_successfully
+    environment:
+    # juicefs gateway uses the MinIO gateway code: these are the S3 access/secret keys.
+    - MINIO_ROOT_USER=${JUICEFS_S3_USER:-${MINIO_USER:?Run make brand-defaults}}
+    - MINIO_ROOT_PASSWORD=${JUICEFS_S3_PASSWORD:-${MINIO_PASSWORD:?Run make brand-defaults}}
+    entrypoint: ["sh", "-lc"]
+    command:
+    - "juicefs gateway --multi-buckets --keep-etag ${JUICEFS_META_URL:-redis://juicefs-redis:6379/1} 0.0.0.0:9000"
+    volumes:
+    - juicefs-data:/data
+    networks:
+    - pmoves_data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:9000/minio/health/live || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
   hi-rag-gateway:
     <<: *tier-api-hardened
     build:
@@ -4366,6 +4447,8 @@ volumes:
   qdrant-data: {}
   meilisearch-data: {}
   minio-data: {}
+  juicefs-meta: {}   # JuiceFS metadata engine (Redis) persistence (profile: juicefs)
+  juicefs-data: {}   # JuiceFS object-store backend (profile: juicefs)
   # Legacy volume (kept for backward compatibility during migration)
   supabase-data: {}
   # 2025 Supabase integrated volumes
