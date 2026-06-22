@@ -55,10 +55,13 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-    env:
-      OWNER_PKG: ghcr.io/${{ github.repository_owner }}/pmoves-apptoken-canary-owner
-      NOOWNER_PKG: ghcr.io/${{ github.repository_owner }}/pmoves-apptoken-canary-noowner
     steps:
+      - name: Compute lowercase GHCR namespace (Docker repo names must be lowercase)
+        run: |
+          OWNER_LC=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          echo "OWNER_PKG=ghcr.io/${OWNER_LC}/pmoves-apptoken-canary-owner" >> "$GITHUB_ENV"
+          echo "NOOWNER_PKG=ghcr.io/${OWNER_LC}/pmoves-apptoken-canary-noowner" >> "$GITHUB_ENV"
+
       - name: Mint token WITH owner (the proposed fix)
         id: tok_owner
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3
