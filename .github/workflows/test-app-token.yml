@@ -45,91 +45,90 @@ jobs:
           echo ""
           echo "See: deploy/runbooks/github-app-permission-matrix.md"
 
-  # Validates the GHCR org-package push gate (handoff §4, 2026-06-22): the App
-  # installation has packages:write, but the inline create-github-app-token mints
-  # in our build workflows omit `owner:`, so the token is scoped to ONLY the
-  # current repo and CANNOT write org-owned ghcr.io/powerfulmoves/* packages
-  # (blob PUT 403). This canary proves the fix: an owner-scoped token CAN push;
-  # a no-owner token CANNOT. Positive + negative control, separate package names.
+  # Validates Path D (handoff §4, 2026-06-22): POWERFULMOVES is a personal USER
+  # account, and GitHub App installation tokens CANNOT write GHCR packages under a
+  # user namespace (only a PAT can) — that is the real cause of the
+  # `installation not allowed to ... organization package` 403, regardless of
+  # `owner:` scoping. Path D publishes images to an ORG namespace the App CAN
+  # write (CATACLYSM-STUDIOS-INC), with repos staying under POWERFULMOVES.
+  #
+  # This canary isolates the NAMESPACE as the single variable: ONE org-scoped App
+  # token pushes to the org namespace (expect SUCCESS) and to the POWERFULMOVES
+  # user namespace (expect FAIL). Org=success + user=failure proves Path D works
+  # and confirms the user-namespace limitation.
+  #
+  # PREREQ: the PMOVES.AI App must be installed on TARGET_OWNER with org
+  # packages:write. If it is not, the "Mint token" step fails fast — that failure
+  # IS the signal to install the App first.
   ghcr-owner-scope:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+    env:
+      TARGET_OWNER: CATACLYSM-STUDIOS-INC
     steps:
-      - name: Compute lowercase GHCR namespace (Docker repo names must be lowercase)
+      - name: Compute lowercase GHCR namespaces (Docker repo names must be lowercase)
         run: |
-          OWNER_LC=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
-          echo "OWNER_PKG=ghcr.io/${OWNER_LC}/pmoves-apptoken-canary-owner" >> "$GITHUB_ENV"
-          echo "NOOWNER_PKG=ghcr.io/${OWNER_LC}/pmoves-apptoken-canary-noowner" >> "$GITHUB_ENV"
+          ORG_LC=$(echo "${TARGET_OWNER}" | tr '[:upper:]' '[:lower:]')
+          USER_LC=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          echo "ORG_PKG=ghcr.io/${ORG_LC}/pmoves-apptoken-canary" >> "$GITHUB_ENV"
+          echo "USER_PKG=ghcr.io/${USER_LC}/pmoves-apptoken-canary" >> "$GITHUB_ENV"
 
-      - name: Mint token WITH owner (the proposed fix)
-        id: tok_owner
+      - name: Mint org-scoped token (owner=TARGET_OWNER) — fails fast if App not installed there
+        id: tok_org
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3
         with:
           client-id: ${{ secrets.GH_APP_CLIENT_ID }}
           private-key: ${{ secrets.GH_APP_SEC }}
-          owner: ${{ github.repository_owner }}
-          permission-contents: read
-          permission-packages: write
-
-      - name: Mint token WITHOUT owner (current broken behavior — negative control)
-        id: tok_noowner
-        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3
-        with:
-          client-id: ${{ secrets.GH_APP_CLIENT_ID }}
-          private-key: ${{ secrets.GH_APP_SEC }}
-          permission-contents: read
+          owner: ${{ env.TARGET_OWNER }}
           permission-packages: write
 
       - name: Prepare a tiny throwaway image
         run: |
           docker pull hello-world:latest
-          docker tag hello-world:latest "${OWNER_PKG}:canary"
-          docker tag hello-world:latest "${NOOWNER_PKG}:canary"
+          docker tag hello-world:latest "${ORG_PKG}:canary"
+          docker tag hello-world:latest "${USER_PKG}:canary"
 
-      - name: POSITIVE — push with owner-scoped token (expect SUCCESS)
-        id: push_owner
+      - name: POSITIVE — push to ORG namespace with org token (expect SUCCESS)
+        id: push_org
         env:
-          TOK: ${{ steps.tok_owner.outputs.token }}
+          TOK: ${{ steps.tok_org.outputs.token }}
         run: |
           echo "$TOK" | docker login ghcr.io -u x-access-token --password-stdin
-          if docker push "${OWNER_PKG}:canary"; then
-            echo "✅ owner-scoped token CAN write the org package"
+          if docker push "${ORG_PKG}:canary"; then
+            echo "✅ org-scoped token CAN write the ORG package (${ORG_PKG}) — Path D works"
             echo "result=success" >> "$GITHUB_OUTPUT"
           else
-            echo "❌ owner-scoped token FAILED — fix hypothesis (or org packages:write grant) is wrong"
+            echo "❌ org push FAILED — App likely not installed on ${TARGET_OWNER} with packages:write"
             echo "result=failed" >> "$GITHUB_OUTPUT"
             exit 1
           fi
-          docker logout ghcr.io
 
-      - name: NEGATIVE — push with no-owner token (expect 403)
-        id: push_noowner
+      - name: NEGATIVE — push to POWERFULMOVES USER namespace with same token (expect 403)
+        id: push_user
         continue-on-error: true
         env:
-          TOK: ${{ steps.tok_noowner.outputs.token }}
+          TOK: ${{ steps.tok_org.outputs.token }}
         run: |
-          echo "$TOK" | docker login ghcr.io -u x-access-token --password-stdin
-          docker push "${NOOWNER_PKG}:canary"
-          docker logout ghcr.io
+          docker push "${USER_PKG}:canary"
 
-      - name: Assert negative control was REJECTED (proves owner is the differentiator)
+      - name: Assert USER-namespace push was REJECTED (proves namespace is the variable)
         run: |
-          if [ "${{ steps.push_noowner.outcome }}" = "success" ]; then
-            echo "⚠️ no-owner token unexpectedly SUCCEEDED — owner is NOT the (only) factor; re-examine"
+          docker logout ghcr.io || true
+          if [ "${{ steps.push_user.outcome }}" = "success" ]; then
+            echo "⚠️ USER-namespace push unexpectedly SUCCEEDED — re-examine the limitation"
             exit 1
           fi
-          echo "✅ no-owner token was REJECTED as expected"
+          echo "✅ USER-namespace push was REJECTED as expected (App tokens can't write user packages)"
 
       - name: Verdict
         if: always()
         run: |
-          echo "=== GHCR app-token owner-scope verdict ==="
-          echo "owner-scoped push : ${{ steps.push_owner.outputs.result }} (expect success)"
-          echo "no-owner push     : ${{ steps.push_noowner.outcome }} (expect failure)"
+          echo "=== Path D verdict (App-on-org GHCR) ==="
+          echo "org-namespace push  : ${{ steps.push_org.outputs.result }} (expect success)"
+          echo "user-namespace push : ${{ steps.push_user.outcome }} (expect failure)"
           echo ""
-          echo "If owner=success AND no-owner=failure → adding 'owner: \${{ github.repository_owner }}'"
-          echo "to the inline create-github-app-token mints in the GHCR build workflows fixes the 403."
+          echo "org=success + user=failure → Path D is valid: publish to ghcr.io/${TARGET_OWNER,,}/*"
+          echo "via an owner:${TARGET_OWNER} App token; repos stay under POWERFULMOVES."
           echo ""
-          echo "NOTE: leaves a tiny throwaway package ghcr.io/${{ github.repository_owner }}/pmoves-apptoken-canary-owner"
-          echo "      — operator may delete it from the org Packages UI after review."
+          echo "NOTE: leaves a tiny throwaway package ${ORG_PKG} — delete from the org Packages UI after review."
