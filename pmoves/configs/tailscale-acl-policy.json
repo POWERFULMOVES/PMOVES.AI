@@ -94,11 +94,22 @@
     },
     // Admin + Owner SSH (root allowed for provisioning). Owner role is DISTINCT from
     // Admin and must be listed explicitly, else owner SSH falls through to the tenant
-    // check rule below.
+    // check rule below. SSH dst does NOT accept the "*" wildcard (only tags +
+    // autogroup:self, unlike network ACLs which take "*:*"), so the fleet is enumerated
+    // by tag. autogroup:self lets admins/owner reach their own untagged devices.
     {
       "action": "accept",
       "src": ["autogroup:admin", "autogroup:owner"],
-      "dst": ["*"],
+      "dst": [
+        "autogroup:self",
+        "tag:pmoves",
+        "tag:gpu",
+        "tag:vps",
+        "tag:lab",
+        "tag:exit",
+        "tag:partner",
+        "tag:guest"
+      ],
       "users": ["root", "autogroup:nonroot"]
     },
     // Tenants SSH into their OWN devices in check mode (browser re-auth). checkPeriod
