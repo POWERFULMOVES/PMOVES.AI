@@ -145,14 +145,26 @@ host — pinning a different driver orphans existing images.
 sudo cp /etc/docker/daemon.json /etc/docker/daemon.json.bak 2>/dev/null || true
 # KVM4 data tier: bump to max-size 100m / max-file 5 before installing
 sudo install -m 0644 deploy/provision/daemon.json /etc/docker/daemon.json
-jq empty /etc/docker/daemon.json            # validate JSON before restart
-sudo systemctl restart docker               # live-restore keeps containers up
+jq empty /etc/docker/daemon.json            # validate JSON before applying
+sudo systemctl reload docker                # SIGHUP re-reads daemon.json WITHOUT
+                                            # cycling running containers
 ```
+
+> **Reload, don't restart, to apply config.** `systemctl reload docker` (SIGHUP)
+> re-reads `daemon.json` and applies `log-opts` (to new containers) and enables
+> `live-restore` **without stopping running containers**. A `restart` *before*
+> `live-restore` is already active will cycle containers — the setting isn't live
+> yet — so use `reload` for the rollout. Existing containers keep their old
+> `log-opts` until recreated; new containers pick up the limits immediately.
+> If a host genuinely needs a `restart` for an unrelated reason, do it in a
+> maintenance window. (`reload` applies our options; a few daemon options are
+> restart-only, but `log-opts`/`live-restore` are not.)
 
 **ai-lab / Z890 — COORDINATED (claim in `AGNOTE4482PHI.t1.md` first):**
 Z890 is workstation + GPU runner + inference host. Apply off-peak (~midnight
 UTC), drain CI first (`docker ps | grep -q runner` returns nothing), give a
-5-minute warning, confirm no in-flight build, then restart. Use `max-file: 2`.
+5-minute warning, confirm no in-flight build, then `systemctl reload docker`
+(not restart). Use `max-file: 2`.
 
 **Dev nodes / 4090 (Docker Desktop):** set via Settings → Docker Engine (JSON),
 `max-size: 20m`. Desktop ignores `live-restore`.
@@ -170,7 +182,7 @@ df -h /var/lib/docker
 ### Rollback
 
 ```bash
-sudo cp /etc/docker/daemon.json.bak /etc/docker/daemon.json && sudo systemctl restart docker
+sudo cp /etc/docker/daemon.json.bak /etc/docker/daemon.json && sudo systemctl reload docker
 ```
 
 ## Stale Container Cleanup
