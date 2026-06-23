@@ -90,68 +90,48 @@ jobs:
       - name: Prepare a tiny throwaway image
         run: |
           docker pull hello-world:latest
-          docker tag hello-world:latest "${ORG_PKG}:app-create"
-          docker tag hello-world:latest "${ORG_PKG}:pat-seed"
-          docker tag hello-world:latest "${ORG_PKG}:app-write"
+          docker tag hello-world:latest "${USER_PKG}:pat"
+          docker tag hello-world:latest "${ORG_PKG}:pat"
 
-      # DIAGNOSTIC A — can the App token CREATE a brand-new org package?
-      - name: A) App token CREATE (new package)
-        id: app_create
-        continue-on-error: true
-        env:
-          TOK: ${{ steps.tok_org.outputs.token }}
-        run: |
-          echo "$TOK" | docker login ghcr.io -u x-access-token --password-stdin
-          docker push "${ORG_PKG}:app-create"
-          docker logout ghcr.io || true
-
-      # DIAGNOSTIC B — can the existing PAT seed (create) the org package?
-      - name: B) PAT seed (create) with GHCR_TOKEN
-        id: pat_seed
+      # The decision: classic PAT pushing to the USER namespace (production target,
+      # zero repoint). Plus the org namespace for completeness.
+      - name: PAT push → USER namespace ghcr.io/powerfulmoves/* (expect SUCCESS)
+        id: pat_user
         continue-on-error: true
         env:
           PAT: ${{ secrets.GHCR_TOKEN }}
           PAT_USER: ${{ secrets.GHCR_USERNAME }}
         run: |
-          if [ -z "$PAT" ]; then echo "GHCR_TOKEN not set — skipping seed"; exit 1; fi
+          if [ -z "$PAT" ]; then echo "GHCR_TOKEN not set"; exit 1; fi
           echo "$PAT" | docker login ghcr.io -u "${PAT_USER:-x-access-token}" --password-stdin
-          docker push "${ORG_PKG}:pat-seed"
+          docker push "${USER_PKG}:pat"
           docker logout ghcr.io || true
 
-      # DIAGNOSTIC C — once the package EXISTS, can the App token WRITE to it?
-      - name: C) App token WRITE to existing package
-        id: app_write
+      - name: PAT push → ORG namespace ghcr.io/cataclysm-studios-inc/* (info only)
+        id: pat_org
         continue-on-error: true
         env:
-          TOK: ${{ steps.tok_org.outputs.token }}
+          PAT: ${{ secrets.GHCR_TOKEN }}
+          PAT_USER: ${{ secrets.GHCR_USERNAME }}
         run: |
-          echo "$TOK" | docker login ghcr.io -u x-access-token --password-stdin
-          docker push "${ORG_PKG}:app-write"
+          echo "$PAT" | docker login ghcr.io -u "${PAT_USER:-x-access-token}" --password-stdin
+          docker push "${ORG_PKG}:pat"
           docker logout ghcr.io || true
 
       - name: Verdict
         if: always()
         run: |
-          A="${{ steps.app_create.outcome }}"
-          B="${{ steps.pat_seed.outcome }}"
-          C="${{ steps.app_write.outcome }}"
-          echo "=== Path D create-vs-write diagnostic ==="
-          echo "A) App CREATE new org package : $A"
-          echo "B) PAT seed (create)          : $B"
-          echo "C) App WRITE existing package : $C"
+          U="${{ steps.pat_user.outcome }}"
+          O="${{ steps.pat_org.outcome }}"
+          echo "=== classic-PAT GHCR push verdict ==="
+          echo "PAT → user namespace (powerfulmoves)        : $U  (expect success)"
+          echo "PAT → org namespace  (cataclysm-studios-inc) : $O  (info)"
           echo ""
-          if [ "$A" = "success" ]; then
-            echo ">>> ANSWER A: App can create org packages directly — the pending packages:write"
-            echo "    grant is now active. Path D works as-is; repoint can proceed."
-          elif [ "$C" = "success" ]; then
-            echo ">>> ANSWER B (seed model): App CANNOT create, but CAN write an existing package."
-            echo "    Production fix = seed each image once (PAT/UI), then App owns ongoing pushes."
-          elif [ "$B" = "success" ]; then
-            echo ">>> PARTIAL: PAT can create org packages but App still can't write the existing one"
-            echo "    → grant the App write in the package's settings (Manage Actions access)."
+          if [ "$U" = "success" ]; then
+            echo ">>> §4 FIXED by the classic PAT on the USER namespace — stay on"
+            echo "    ghcr.io/powerfulmoves/*, NO repoint needed. Org not required for packages."
           else
-            echo ">>> NEITHER App nor PAT can create org packages → org package-creation policy"
-            echo "    or the PAT lacks org scope. Check CATACLYSM-STUDIOS-INC org package settings."
+            echo ">>> PAT still cannot push the user namespace — check scopes (write:packages) / SSO authorization."
           fi
           echo ""
-          echo "NOTE: may leave throwaway package ${ORG_PKG} — delete from the org Packages UI after review."
+          echo "NOTE: may leave throwaway packages pmoves-apptoken-canary — delete from the Packages UI after review."
