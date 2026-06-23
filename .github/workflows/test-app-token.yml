@@ -90,49 +90,68 @@ jobs:
       - name: Prepare a tiny throwaway image
         run: |
           docker pull hello-world:latest
-          docker tag hello-world:latest "${ORG_PKG}:canary"
-          docker tag hello-world:latest "${USER_PKG}:canary"
+          docker tag hello-world:latest "${ORG_PKG}:app-create"
+          docker tag hello-world:latest "${ORG_PKG}:pat-seed"
+          docker tag hello-world:latest "${ORG_PKG}:app-write"
 
-      - name: POSITIVE — push to ORG namespace with org token (expect SUCCESS)
-        id: push_org
-        env:
-          TOK: ${{ steps.tok_org.outputs.token }}
-        run: |
-          echo "$TOK" | docker login ghcr.io -u x-access-token --password-stdin
-          if docker push "${ORG_PKG}:canary"; then
-            echo "✅ org-scoped token CAN write the ORG package (${ORG_PKG}) — Path D works"
-            echo "result=success" >> "$GITHUB_OUTPUT"
-          else
-            echo "❌ org push FAILED — App likely not installed on ${TARGET_OWNER} with packages:write"
-            echo "result=failed" >> "$GITHUB_OUTPUT"
-            exit 1
-          fi
-
-      - name: NEGATIVE — push to POWERFULMOVES USER namespace with same token (expect 403)
-        id: push_user
+      # DIAGNOSTIC A — can the App token CREATE a brand-new org package?
+      - name: A) App token CREATE (new package)
+        id: app_create
         continue-on-error: true
         env:
           TOK: ${{ steps.tok_org.outputs.token }}
         run: |
-          docker push "${USER_PKG}:canary"
-
-      - name: Assert USER-namespace push was REJECTED (proves namespace is the variable)
-        run: |
+          echo "$TOK" | docker login ghcr.io -u x-access-token --password-stdin
+          docker push "${ORG_PKG}:app-create"
           docker logout ghcr.io || true
-          if [ "${{ steps.push_user.outcome }}" = "success" ]; then
-            echo "⚠️ USER-namespace push unexpectedly SUCCEEDED — re-examine the limitation"
-            exit 1
-          fi
-          echo "✅ USER-namespace push was REJECTED as expected (App tokens can't write user packages)"
+
+      # DIAGNOSTIC B — can the existing PAT seed (create) the org package?
+      - name: B) PAT seed (create) with GHCR_TOKEN
+        id: pat_seed
+        continue-on-error: true
+        env:
+          PAT: ${{ secrets.GHCR_TOKEN }}
+          PAT_USER: ${{ secrets.GHCR_USERNAME }}
+        run: |
+          if [ -z "$PAT" ]; then echo "GHCR_TOKEN not set — skipping seed"; exit 1; fi
+          echo "$PAT" | docker login ghcr.io -u "${PAT_USER:-x-access-token}" --password-stdin
+          docker push "${ORG_PKG}:pat-seed"
+          docker logout ghcr.io || true
+
+      # DIAGNOSTIC C — once the package EXISTS, can the App token WRITE to it?
+      - name: C) App token WRITE to existing package
+        id: app_write
+        continue-on-error: true
+        env:
+          TOK: ${{ steps.tok_org.outputs.token }}
+        run: |
+          echo "$TOK" | docker login ghcr.io -u x-access-token --password-stdin
+          docker push "${ORG_PKG}:app-write"
+          docker logout ghcr.io || true
 
       - name: Verdict
         if: always()
         run: |
-          echo "=== Path D verdict (App-on-org GHCR) ==="
-          echo "org-namespace push  : ${{ steps.push_org.outputs.result }} (expect success)"
-          echo "user-namespace push : ${{ steps.push_user.outcome }} (expect failure)"
+          A="${{ steps.app_create.outcome }}"
+          B="${{ steps.pat_seed.outcome }}"
+          C="${{ steps.app_write.outcome }}"
+          echo "=== Path D create-vs-write diagnostic ==="
+          echo "A) App CREATE new org package : $A"
+          echo "B) PAT seed (create)          : $B"
+          echo "C) App WRITE existing package : $C"
           echo ""
-          echo "org=success + user=failure → Path D is valid: publish to ghcr.io/${TARGET_OWNER,,}/*"
-          echo "via an owner:${TARGET_OWNER} App token; repos stay under POWERFULMOVES."
+          if [ "$A" = "success" ]; then
+            echo ">>> ANSWER A: App can create org packages directly — the pending packages:write"
+            echo "    grant is now active. Path D works as-is; repoint can proceed."
+          elif [ "$C" = "success" ]; then
+            echo ">>> ANSWER B (seed model): App CANNOT create, but CAN write an existing package."
+            echo "    Production fix = seed each image once (PAT/UI), then App owns ongoing pushes."
+          elif [ "$B" = "success" ]; then
+            echo ">>> PARTIAL: PAT can create org packages but App still can't write the existing one"
+            echo "    → grant the App write in the package's settings (Manage Actions access)."
+          else
+            echo ">>> NEITHER App nor PAT can create org packages → org package-creation policy"
+            echo "    or the PAT lacks org scope. Check CATACLYSM-STUDIOS-INC org package settings."
+          fi
           echo ""
-          echo "NOTE: leaves a tiny throwaway package ${ORG_PKG} — delete from the org Packages UI after review."
+          echo "NOTE: may leave throwaway package ${ORG_PKG} — delete from the org Packages UI after review."
