@@ -40,11 +40,13 @@ jobs:
           df -h
           docker system df || true
 
-          # Reclaim images + build cache ONLY. NEVER --volumes: these runners
-          # (esp. SPARK full PMOVES.AI node + ai-lab/Z890) co-host LIVE fleet data
-          # volumes; volume-pruning destroys fleet data whose service is briefly
-          # stopped. Known Road: image/builder prune, never volume prune.
-          docker image prune -af --filter "until=48h" || true
+          # Reclaim stopped containers + images + build cache (system prune,
+          # minus --volumes). NEVER --volumes: these runners (esp. SPARK full
+          # PMOVES.AI node + ai-lab/Z890) co-host LIVE fleet data volumes;
+          # volume-pruning destroys fleet data whose service is briefly stopped.
+          # Known Road: prune containers/images/cache, never volumes
+          # (use `make volume-reset SERVICE=<name>` to reset a volume on purpose).
+          docker system prune -af --filter "until=48h" || true
 
           # Prune BuildKit cache older than 48h
           docker builder prune -af --filter "until=48h" || true
@@ -76,7 +78,7 @@ jobs:
           df -h
           docker system df || true
 
-          docker image prune -af --filter "until=48h" || true
+          docker system prune -af --filter "until=48h" || true
           docker builder prune -af --filter "until=48h" || true
 
           for workdir in /opt/actions-runner*/_work; do
@@ -106,7 +108,7 @@ jobs:
           df -h
           docker system df || true
 
-          docker image prune -af --filter "until=48h" || true
+          docker system prune -af --filter "until=48h" || true
           docker builder prune -af --filter "until=48h" || true
 
           for workdir in /opt/actions-runner-kvm4*/_work; do
@@ -136,7 +138,7 @@ jobs:
           df -h
           docker system df || true
 
-          docker image prune -af --filter "until=48h" || true
+          docker system prune -af --filter "until=48h" || true
           docker builder prune -af --filter "until=48h" || true
 
           for workdir in /opt/actions-runner-kvm2*/_work; do
