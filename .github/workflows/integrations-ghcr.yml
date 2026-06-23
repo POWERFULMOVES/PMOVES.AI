@@ -313,7 +313,11 @@ jobs:
           # The publish matrix can leave recent BuildKit cache behind on shared
           # self-hosted nodes. Clear all unused Docker state before the next
           # image wave so heavy arm64 lanes do not inherit a nearly-full root.
-          docker system prune -af --volumes || true
+          # system prune minus --volumes: reclaims stopped containers + images +
+          # networks + build cache. NEVER --volumes: self-hosted runners co-host
+          # LIVE fleet data volumes; volume-pruning can destroy fleet data
+          # (Known Road: prune containers/images/cache, never volumes).
+          docker system prune -af || true
           docker builder prune -af || true
 
           # Work directories differ by node (for example kvm4-1/kvm4-2).
@@ -545,7 +549,11 @@ jobs:
           sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/lib/android || true
           sudo rm -rf /usr/local/share/boost || true
           docker system df || true
-          docker system prune -af --volumes || true
+          # system prune minus --volumes: reclaims stopped containers + images +
+          # networks + build cache. NEVER --volumes: self-hosted runners co-host
+          # LIVE fleet data volumes; volume-pruning can destroy fleet data
+          # (Known Road: prune containers/images/cache, never volumes).
+          docker system prune -af || true
           docker builder prune -af || true
           docker system df || true
           df -h
