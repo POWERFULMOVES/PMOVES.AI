@@ -35,6 +35,20 @@ jobs:
     permissions:
       contents: read
     steps:
+      - name: Clear stale nested-submodule state (durable fix for #1871)
+        shell: bash
+        run: |
+          # Self-hosted runners reuse their _work dir. A pre-#1871 checkout of
+          # PMOVES-transcribe-and-fetch (off-branch commit lacking .gitmodules)
+          # makes actions/checkout's recursive submodule clean-phase exit 128.
+          # Deinit + remove the stale submodule working tree so checkout starts
+          # clean. No-op on fresh/ephemeral runners (no prior .git in workspace).
+          ws="${GITHUB_WORKSPACE}"
+          sub="PMOVES-transcribe-and-fetch"
+          if [ -e "$ws/.git" ]; then
+            git -C "$ws" submodule deinit -f "$sub" 2>/dev/null || true
+          fi
+          rm -rf "$ws/$sub" 2>/dev/null || true
       - name: Checkout code
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
@@ -63,6 +77,20 @@ jobs:
       contents: read
     needs: validate
     steps:
+      - name: Clear stale nested-submodule state (durable fix for #1871)
+        shell: bash
+        run: |
+          # Self-hosted runners reuse their _work dir. A pre-#1871 checkout of
+          # PMOVES-transcribe-and-fetch (off-branch commit lacking .gitmodules)
+          # makes actions/checkout's recursive submodule clean-phase exit 128.
+          # Deinit + remove the stale submodule working tree so checkout starts
+          # clean. No-op on fresh/ephemeral runners (no prior .git in workspace).
+          ws="${GITHUB_WORKSPACE}"
+          sub="PMOVES-transcribe-and-fetch"
+          if [ -e "$ws/.git" ]; then
+            git -C "$ws" submodule deinit -f "$sub" 2>/dev/null || true
+          fi
+          rm -rf "$ws/$sub" 2>/dev/null || true
       - name: Checkout code
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
@@ -123,6 +151,20 @@ jobs:
       contents: read
     needs: build-ai-lab
     steps:
+      - name: Clear stale nested-submodule state (durable fix for #1871)
+        shell: bash
+        run: |
+          # Self-hosted runners reuse their _work dir. A pre-#1871 checkout of
+          # PMOVES-transcribe-and-fetch (off-branch commit lacking .gitmodules)
+          # makes actions/checkout's recursive submodule clean-phase exit 128.
+          # Deinit + remove the stale submodule working tree so checkout starts
+          # clean. No-op on fresh/ephemeral runners (no prior .git in workspace).
+          ws="${GITHUB_WORKSPACE}"
+          sub="PMOVES-transcribe-and-fetch"
+          if [ -e "$ws/.git" ]; then
+            git -C "$ws" submodule deinit -f "$sub" 2>/dev/null || true
+          fi
+          rm -rf "$ws/$sub" 2>/dev/null || true
       - name: Checkout code
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
 
@@ -229,6 +271,20 @@ jobs:
       contents: read
     needs: validate
     steps:
+      - name: Clear stale nested-submodule state (durable fix for #1871)
+        shell: bash
+        run: |
+          # Self-hosted runners reuse their _work dir. A pre-#1871 checkout of
+          # PMOVES-transcribe-and-fetch (off-branch commit lacking .gitmodules)
+          # makes actions/checkout's recursive submodule clean-phase exit 128.
+          # Deinit + remove the stale submodule working tree so checkout starts
+          # clean. No-op on fresh/ephemeral runners (no prior .git in workspace).
+          ws="${GITHUB_WORKSPACE}"
+          sub="PMOVES-transcribe-and-fetch"
+          if [ -e "$ws/.git" ]; then
+            git -C "$ws" submodule deinit -f "$sub" 2>/dev/null || true
+          fi
+          rm -rf "$ws/$sub" 2>/dev/null || true
       - name: Checkout code
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
@@ -366,6 +422,20 @@ jobs:
     needs: deploy-ai-lab
     if: failure() || cancelled()
     steps:
+      - name: Clear stale nested-submodule state (durable fix for #1871)
+        shell: bash
+        run: |
+          # Self-hosted runners reuse their _work dir. A pre-#1871 checkout of
+          # PMOVES-transcribe-and-fetch (off-branch commit lacking .gitmodules)
+          # makes actions/checkout's recursive submodule clean-phase exit 128.
+          # Deinit + remove the stale submodule working tree so checkout starts
+          # clean. No-op on fresh/ephemeral runners (no prior .git in workspace).
+          ws="${GITHUB_WORKSPACE}"
+          sub="PMOVES-transcribe-and-fetch"
+          if [ -e "$ws/.git" ]; then
+            git -C "$ws" submodule deinit -f "$sub" 2>/dev/null || true
+          fi
+          rm -rf "$ws/$sub" 2>/dev/null || true
       - name: Checkout code
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
 
@@ -414,6 +484,20 @@ jobs:
     needs: deploy-vps
     if: failure() || cancelled()
     steps:
+      - name: Clear stale nested-submodule state (durable fix for #1871)
+        shell: bash
+        run: |
+          # Self-hosted runners reuse their _work dir. A pre-#1871 checkout of
+          # PMOVES-transcribe-and-fetch (off-branch commit lacking .gitmodules)
+          # makes actions/checkout's recursive submodule clean-phase exit 128.
+          # Deinit + remove the stale submodule working tree so checkout starts
+          # clean. No-op on fresh/ephemeral runners (no prior .git in workspace).
+          ws="${GITHUB_WORKSPACE}"
+          sub="PMOVES-transcribe-and-fetch"
+          if [ -e "$ws/.git" ]; then
+            git -C "$ws" submodule deinit -f "$sub" 2>/dev/null || true
+          fi
+          rm -rf "$ws/$sub" 2>/dev/null || true
       - name: Checkout code
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
 
