@@ -74,12 +74,16 @@ jobs:
           echo "ORG_PKG=ghcr.io/${ORG_LC}/pmoves-apptoken-canary" >> "$GITHUB_ENV"
           echo "USER_PKG=ghcr.io/${USER_LC}/pmoves-apptoken-canary" >> "$GITHUB_ENV"
 
-      - name: Mint org-scoped token (owner=TARGET_OWNER) — fails fast if App not installed there
+      - name: Mint org-scoped token (new org App; fails fast if App/secrets not set)
         id: tok_org
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3
         with:
-          client-id: ${{ secrets.GH_APP_CLIENT_ID }}
-          private-key: ${{ secrets.GH_APP_SEC }}
+          # New dedicated org App (owned by + installed on CATACLYSM-STUDIOS-INC,
+          # scope = Packages: write). Falls back to the legacy GH_APP_* secrets only
+          # if the new ones are unset, so this is harmless before the operator
+          # creates the org App.
+          client-id: ${{ secrets.GHCR_APP_CLIENT_ID || secrets.GH_APP_CLIENT_ID }}
+          private-key: ${{ secrets.GHCR_APP_SEC || secrets.GH_APP_SEC }}
           owner: ${{ env.TARGET_OWNER }}
           permission-packages: write
 
