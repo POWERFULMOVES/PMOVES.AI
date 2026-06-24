@@ -32,13 +32,15 @@ services:
     - DJANGO_SECRET_KEY=${WGER_SECRET_KEY:?set WGER_SECRET_KEY in env.tier-api}
     - WGER_ENABLE_REGISTRATION=${WGER_ENABLE_REGISTRATION:-true}
       # NATS configuration for event publishing
-    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - NATS_URL=${NATS_URL}
     - WGER_ENABLE_NATS=${WGER_ENABLE_NATS:-true}
       # Admin credentials
     - WGER_ADMIN_PASSWORD=${WGER_ADMIN_PASSWORD:?set WGER_ADMIN_PASSWORD in env.tier-api}
       # PMOVES integration
     - ENABLE_OBSERVABILITY=${WGER_OBSERVABILITY:-true}
     - PROMETHEUS_MULTIPROC_DIR=/tmp/prometheus
+      # NOTE: /metrics available on port 8000 via ENABLE_OBSERVABILITY;
+      # pmoves_monitoring network added below for Prometheus scrape access
     ports:
     - "${WGER_BIND:-0.0.0.0}:${WGER_PORT:-8000}:8000"
     profiles: ["health", "wger"]
@@ -46,6 +48,7 @@ services:
     - pmoves_api
     - pmoves_bus
     - pmoves_data
+    - pmoves_monitoring  # Prometheus scrape access for /metrics
     depends_on:
       wger-db:
         condition: service_healthy
@@ -55,6 +58,8 @@ services:
     - wger-static:/home/wger/static
     - wger-media:/home/wger/media
     - wger-prometheus:/tmp/prometheus
+    # NOTE: wger uses /api/v2/health/ natively, not PMOVES-standard /healthz
+    # healthcheck aligned to wger's native path; /healthz shim deferred to PMOVES image overlay
     healthcheck:
       test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v2/health/', timeout=5)"]
       interval: 30s
@@ -62,12 +67,6 @@ services:
       retries: 5
       start_period: 40s
 
-  # Wger database - PostgreSQL backend for fitness data
-    deploy:
-      resources:
-        limits:
-          cpus: '1.0'
-          memory: 512M
   wger-db:
     <<:
       env_file:
@@ -129,7 +128,7 @@ services:
     build: ./services/botz-gateway
     restart: unless-stopped
     environment:
-    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - NATS_URL=${NATS_URL}
     - SUPABASE_URL=${SUPABASE_URL:-http://supabase-kong:8000}
     - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_KEY}
     - TENSORZERO_URL=${TENSORZERO_URL:-http://tensorzero-gateway:3000}
@@ -195,10 +194,18 @@ services:
     - YT_OUTPUT_BUCKET=${YT_OUTPUT_BUCKET:-outputs}
     - INDEXER_NAMESPACE=${INDEXER_NAMESPACE:-pmoves}
     - SUPA_REST_URL=${PMOVES_YT_SUPA_REST_URL:-${SUPABASE_REST_URL:-http://supabase-kong:8000/rest/v1}}
-    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - NATS_URL=${NATS_URL}
     - YT_NATS_ENABLE=${YT_NATS_ENABLE:-true}
     - HIRAG_URL=${HIRAG_URL:-http://hi-rag-gateway-v2:8086}
-    - YT_PLAYER_CLIENT=${YT_PLAYER_CLIENT:-android}
+    # Multi-client rotation (Phase 9C + 2026-04-21 robustness fix): yt-dlp tries
+    # clients in order until one succeeds. 'default' first uses yt-dlp's own
+    # adaptive rotation (stays current with YouTube client-availability changes
+    # as yt-dlp updates); 'web' + 'mweb' are the auth'd/cookie'd fallbacks;
+    # 'tv_embedded' handles age/region gates; 'android_vr' is the edge-case
+    # client that saved us on videos where `web_safari`/`web` returned no
+    # formats (e.g. @ColeMedin nxHKBq5ZU9U, 6woc6ii-zoE — 2026-04-20 session).
+    - YT_PLAYER_CLIENT=${YT_PLAYER_CLIENT:-default,web,mweb,tv_embedded,android_vr}
+    - YT_ENABLE_PO_TOKEN=${YT_ENABLE_PO_TOKEN:-true}
     - YT_USER_AGENT=${YT_USER_AGENT:-Mozilla/5.0 (Macintosh; Intel Mac OS X 14_6) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.6 Safari/605.1.15}
     - YT_COOKIES=${YT_COOKIES:-/app/config/cookies/darkxside.youtube.cookies.txt}
     - BGUTIL_HTTP_BASE_URL=${BGUTIL_HTTP_BASE_URL:-http://bgutil-pot-provider:4416}
@@ -210,6 +217,9 @@ services:
     - YT_WHISPER_MODEL=${YT_WHISPER_MODEL:-small}
     - YT_TRANSCRIPT_DIARIZE=${YT_TRANSCRIPT_DIARIZE:-false}
     - YT_CHANNEL_CHECK_INTERVAL=${YT_CHANNEL_CHECK_INTERVAL:-3600}
+    - OLLAMA_URL=${OLLAMA_URL:-http://pmoves-ollama:11434}
+    - YT_SUMMARY_PROVIDER=${YT_SUMMARY_PROVIDER:-ollama}
+    - YT_SUMMARY_OLLAMA_MODEL=${YT_SUMMARY_OLLAMA_MODEL:-gemma2:9b-instruct}
     - DOCKED_MODE=${DOCKED_MODE:-true}
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
@@ -250,20 +260,3 @@ services:
         limits:
           cpus: '1.0'
           memory: 512M
-
-# =============================================================================
-# Networks — declared external so this overlay parses standalone.
-# Canonical definitions in docker-compose.base.yml. See
-# pmoves/docs/operations/COMPOSE_LAYERING_RUNBOOK.md.
-# =============================================================================
-networks:
-  pmoves_data:
-    external: true
-  pmoves_api:
-    external: true
-  pmoves_app:
-    external: true
-  pmoves_bus:
-    external: true
-  pmoves_external:
-    external: true

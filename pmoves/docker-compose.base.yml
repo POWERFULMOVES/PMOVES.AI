@@ -515,40 +515,6 @@ volumes:
   wger-media: {}
   wger-prometheus: {}
   pmoves-yt-data: {}
-# ── Network-Tier Anchors (§1465 PR-A) ─────────────────────────────────────────
-# Reference these in service definitions to guarantee correct tier membership.
-# Pattern: <<: *x-network-<tier>
-#
-# Usage example:
-#   networks:
-#     - pmoves_bus      # <<: *x-network-bus-hardened implies this tier
-#
-# These anchors document intent; compose merges them at parse time.
-
-x-network-internal-only: &x-network-internal-only
-  # Air-gapped internal bridge — no outbound internet
-  driver: bridge
-  internal: true
-
-x-network-bus-hardened: &x-network-bus-hardened
-  # NATS message bus — internal, high-trust, no internet
-  # Containers on this tier: NATS, services consuming NATS (agent-zero, archon, flute-gateway)
-  driver: bridge
-  internal: true
-
-x-network-external-bridged: &x-network-external-bridged
-  # Internet-capable bridge — for LLM API calls, pip installs, upstream services
-  # Only pmoves_external uses this tier. Restrict attach via service-tier anchors.
-  driver: bridge
-  internal: false
-
-x-network-tailnet-published: &x-network-tailnet-published
-  # Tailnet-reachable network (internet-capable + port-forwarded via Tailscale)
-  # Windows Docker Desktop: bind to 0.0.0.0, restrict at Tailscale ACL layer.
-  # See: pmoves/docs/operations/DOCKER_NETWORK_HARDENING.md §Windows Docker Desktop
-  driver: bridge
-  internal: false
-
 networks:
   pmoves_data:
     name: pmoves_data
@@ -603,12 +569,11 @@ networks:
   cataclysm:
     external: true
     name: cataclysm-net
-  # External network for services requiring internet access (YouTube API, LLM providers, etc.)
+  # External network for services requiring internet access (YouTube API, LLM providers, etc.).
+  # Declared external because it is SHARED across stacks (the overlay/NATS stack multi-homes
+  # nats here too) — a compose-managed network can't be adopted by a second stack (the other
+  # stack sees an unlabeled "foreign" net → "incorrect label" error). Created out-of-band by
+  # clean_networks.py (make-target paths) or an inline guard (raw CI deploy paths).
   pmoves_external:
+    external: true
     name: pmoves_external
-    driver: bridge
-    ipam:
-      driver: default
-      config:
-      - subnet: 172.30.6.0/24
-        gateway: 172.30.6.1
