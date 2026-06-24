@@ -24,7 +24,7 @@
       "parameters": {
         "authentication": "none",
         "requestMethod": "POST",
-        "url": "http://comfyui:8188/prompt",
+        "url": "={{ $env.COMFYUI_URL || 'http://comfyui:8188' }}/prompt",
         "jsonParameters": true,
         "options": {},
         "sendBody": true,
