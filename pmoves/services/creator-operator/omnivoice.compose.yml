@@ -22,7 +22,13 @@ services:
     platform: ${OMNIVOICE_PLATFORM:-}   # SPARK: linux/arm64
     restart: unless-stopped
     ports:
-      - "${OMNIVOICE_BIND:-127.0.0.1}:${OMNIVOICE_HOST_PORT:-8002}:8002"
+      # Default bind 0.0.0.0 so in-stack consumers can reach it: flute-gateway
+      # normalizes OMNIVOICE_URL 127.0.0.1 -> host.docker.internal (main.py:183),
+      # which on Linux/bridge Docker resolves to the host GATEWAY interface, not
+      # loopback — a 127.0.0.1-published port would be unreachable there. Access
+      # is gated by OMNIVOICE_TOKEN. Restrict to host-only with OMNIVOICE_BIND=127.0.0.1
+      # (or a firewall) on exposed nodes where no in-container consumer needs it.
+      - "${OMNIVOICE_BIND:-0.0.0.0}:${OMNIVOICE_HOST_PORT:-8002}:8002"
     environment:
       - OMNIVOICE_HOST=0.0.0.0
       - OMNIVOICE_PORT=8002
