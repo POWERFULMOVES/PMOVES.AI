@@ -347,6 +347,29 @@ jobs:
       - name: Checkout
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
 
+      - name: Check split overlays are in sync with source (drift gate)
+        run: |
+          # The split overlays (docker-compose.{base,core,agents,media,ui,workers,apps}.yml)
+          # are generated from docker-compose.yml. Regenerate and fail on any drift so the
+          # secondary up-overlay-* path can't silently diverge. ruamel pinned for byte-stable
+          # rendering (must match the Makefile COMPOSE_SPLIT_RUN pin).
+          python3 -m pip install --quiet "ruamel.yaml==0.19.1"
+          python3 pmoves/scripts/split_compose.py >/dev/null
+          # Use `git status --porcelain` (not `git diff --exit-code`): diff exits 0 for
+          # UNtracked files, so a PR that deletes a generated overlay would regenerate it
+          # as untracked and slip past. Porcelain catches modified AND untracked/missing.
+          DRIFT="$(git status --porcelain -- \
+              pmoves/docker-compose.base.yml pmoves/docker-compose.core.yml \
+              pmoves/docker-compose.agents.yml pmoves/docker-compose.media.yml \
+              pmoves/docker-compose.ui.yml pmoves/docker-compose.workers.yml \
+              pmoves/docker-compose.apps.yml)"
+          if [ -n "$DRIFT" ]; then
+            echo "$DRIFT"
+            echo "::error::Split overlays are out of sync with docker-compose.yml (modified or missing). Run 'make -C pmoves compose-split' and commit the regenerated overlays."
+            exit 1
+          fi
+          echo "Split overlays are in sync with docker-compose.yml."
+
       - name: Materialize compose env files from templates
         run: |
           set -euo pipefail
