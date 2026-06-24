@@ -3940,7 +3940,9 @@ neo4j-restore: ## Restore Neo4j from backup (usage: make neo4j-restore BACKUP=ba
 # The split overlays are GENERATED from docker-compose.yml by scripts/split_compose.py.
 # Never hand-edit them (damage-control blocks it) — edit the source and regenerate.
 # ruamel.yaml is pinned so CI and local renders are byte-identical (drift gate).
-COMPOSE_SPLIT_RUN := uv run --with ruamel.yaml==0.19.1 python scripts/split_compose.py
+# --no-project: pmoves/pyproject.toml documents that uv run here must skip project
+# discovery, else it syncs the whole workspace (cryptography, dev deps) before running.
+COMPOSE_SPLIT_RUN := uv run --no-project --with ruamel.yaml==0.19.1 python scripts/split_compose.py
 COMPOSE_SPLIT_FILES := docker-compose.base.yml docker-compose.core.yml \
 	docker-compose.agents.yml docker-compose.media.yml docker-compose.ui.yml \
 	docker-compose.workers.yml docker-compose.apps.yml
@@ -3951,8 +3953,11 @@ compose-split: ## Regenerate the split compose overlays from docker-compose.yml
 
 compose-split-check: ## Drift gate: fail if committed overlays differ from regenerated output
 	@cd $(CURDIR) && $(COMPOSE_SPLIT_RUN) >/dev/null
-	@cd $(CURDIR) && git diff --exit-code -- $(COMPOSE_SPLIT_FILES) \
-	  || { echo "ERROR: split overlays out of sync with docker-compose.yml — run 'make -C pmoves compose-split' and commit"; exit 1; }
+	@cd $(CURDIR) && if [ -n "$$(git status --porcelain -- $(COMPOSE_SPLIT_FILES))" ]; then \
+	    echo "ERROR: split overlays out of sync with docker-compose.yml (modified or missing) — run 'make -C pmoves compose-split' and commit"; \
+	    git status --porcelain -- $(COMPOSE_SPLIT_FILES); \
+	    exit 1; \
+	  fi
 
 OVERLAY_BASE    := -f docker-compose.base.yml
 OVERLAY_CORE    := -f docker-compose.core.yml
