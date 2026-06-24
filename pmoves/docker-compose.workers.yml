@@ -44,6 +44,7 @@ services:
     - HTTPS_PROXY=
     - NO_PROXY=
     - MEILI_URL=${MEILI_URL:-http://meilisearch:7700}
+    - MEILI_MASTER_KEY=${MEILI_MASTER_KEY:?Set MEILI_MASTER_KEY in env.tier-data}
     - SUPA_REST_URL=${SUPA_REST_URL:-http://supabase-kong:8000/rest/v1}
     - SUPA_REST_INTERNAL_URL=${SUPA_REST_INTERNAL_URL:-http://supabase-kong:8000/rest/v1}
     ports:
@@ -91,7 +92,7 @@ services:
     - PDF_DEFAULT_NAMESPACE=${PDF_DEFAULT_NAMESPACE:-pmoves}
     - PDF_MAX_PAGES=${PDF_MAX_PAGES:-0}
     - PDF_INGEST_EXTRACT_URL=${PDF_INGEST_EXTRACT_URL:-http://extract-worker:8083/ingest}
-    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - NATS_URL=${NATS_URL}
     depends_on:
       extract-worker:
         condition: service_started
@@ -190,7 +191,7 @@ services:
     restart: unless-stopped
     environment:
     - PORT=8100
-    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - NATS_URL=${NATS_URL}
     - HIRAG_INGEST_URL=${HIRAG_INGEST_URL:-http://hi-rag-gateway-v2:8086/ingest}
     ports:
     - ${SESSION_CONTEXT_BIND:-0.0.0.0}:8102:8100
@@ -235,7 +236,7 @@ services:
     image: ${DEEPRESEARCH_IMAGE:-}
     restart: unless-stopped
     environment:
-    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - NATS_URL=${NATS_URL}
     # NATS_URL from env.tier-agent has credentials: nats://nats:pmoves@nats:4222
     - DEEPRESEARCH_MODE=${DEEPRESEARCH_MODE:-tensorzero}
     - DEEPRESEARCH_TIMEOUT=${DEEPRESEARCH_TIMEOUT:-600}
@@ -297,7 +298,7 @@ services:
     restart: unless-stopped
     environment:
     - SUPASERCH_PORT=${SUPASERCH_PORT:-8099}
-    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - NATS_URL=${NATS_URL}
     - SUPASERCH_PORT=${SUPASERCH_PORT:-8099}
     - HIRAG_URL=${HIRAG_URL:-http://hi-rag-gateway-v2:8086}
     - SUPA_REST_URL=${SUPA_REST_URL:-http://supabase-kong:8000/rest/v1}
@@ -341,7 +342,7 @@ services:
     - OPEN_NOTEBOOK_API_URL=${CHANNEL_MONITOR_OPEN_NOTEBOOK_API_URL:-http://open-notebook:5055}
     # Database URL - points to Supabase DB (note: supabase-db runs on pmoves_data network)
     - CHANNEL_MONITOR_DATABASE_URL=${CHANNEL_MONITOR_DATABASE_URL:-postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD_URLENCODED:-${SUPABASE_DB_PASSWORD_URLENCODED:-${POSTGRES_PASSWORD:-${SUPABASE_DB_PASSWORD:-postgres}}}}@supabase-db:5432/${CHANNEL_MONITOR_DB_NAME:-postgres}}
-    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - NATS_URL=${NATS_URL}
     - DOCKED_MODE=${DOCKED_MODE:-true}
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
@@ -413,7 +414,7 @@ services:
       dockerfile: ./services/publisher-discord/Dockerfile
     restart: unless-stopped
     environment:
-    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - NATS_URL=${NATS_URL}
     # NATS_URL from env.shared/env.tier-agent has credentials: nats://nats:pmoves@nats:4222
     - DISCORD_SUBJECTS=${DISCORD_SUBJECTS:-ingest.file.added.v1,ingest.transcript.ready.v1,ingest.summary.ready.v1,ingest.chapters.ready.v1}
     depends_on:
@@ -455,13 +456,13 @@ services:
       - no-new-privileges:true
 
     build:
-      context: ./services/model-registry
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: services/model-registry/Dockerfile
     restart: unless-stopped
     environment:
     - SUPABASE_URL=${MODEL_REGISTRY_SUPABASE_URL:-http://supabase-kong:8000}
     - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY:-${SUPABASE_SERVICE_ROLE_KEY:?MODEL_REGISTRY requires SUPABASE_SERVICE_KEY or SUPABASE_SERVICE_ROLE_KEY}}
-    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - NATS_URL=${NATS_URL}
     - MODEL_REGISTRY_PORT=${MODEL_REGISTRY_PORT:-8110}
     - DOCKED_MODE=${DOCKED_MODE:-true}
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
@@ -568,7 +569,7 @@ services:
     hostname: github-branch-cleanup
     restart: unless-stopped
     environment:
-    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - NATS_URL=${NATS_URL}
     - SERVICE_PORT=8100
     - BRANCH_STALE_DAYS=${BRANCH_STALE_DAYS:-30}
     - DRY_RUN=${DRY_RUN:-true}
@@ -610,7 +611,7 @@ services:
     hostname: github-issue-triage
     restart: unless-stopped
     environment:
-    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - NATS_URL=${NATS_URL}
     - SERVICE_PORT=8101
     - HIRAG_URL=${HIRAG_URL:-http://hi-rag-gateway-v2:8086}
     - LABEL_CONFIDENCE_THRESHOLD=${LABEL_CONFIDENCE_THRESHOLD:-0.7}
@@ -652,7 +653,7 @@ services:
     restart: unless-stopped
     environment:
     - SERVICE_PORT=8102
-    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - NATS_URL=${NATS_URL}
     - AGENTZERO_MCP_URL=${AGENTZERO_MCP_URL:-http://agent-zero:8080/mcp/command}
     - DRY_RUN=${GITHUB_AUTOMATION_DRY_RUN:-true}
     - GITHUB_ORG=${GITHUB_ORG:-POWERFULMOVES}
@@ -691,7 +692,7 @@ services:
     restart: unless-stopped
     environment:
     - SERVICE_PORT=8103
-    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - NATS_URL=${NATS_URL}
     - AGENTZERO_MCP_URL=${AGENTZERO_MCP_URL:-http://agent-zero:8080/mcp/command}
     - DRY_RUN=${GITHUB_AUTOMATION_DRY_RUN:-true}
     - GITHUB_ORG=${GITHUB_ORG:-POWERFULMOVES}
@@ -732,7 +733,7 @@ services:
     restart: unless-stopped
     environment:
     - SERVICE_PORT=8104
-    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - NATS_URL=${NATS_URL}
     - AGENTZERO_MCP_URL=${AGENTZERO_MCP_URL:-http://agent-zero:8080/mcp/command}
     - DRY_RUN=${GITHUB_AUTOMATION_DRY_RUN:-true}
     - GITHUB_ORG=${GITHUB_ORG:-POWERFULMOVES}
@@ -770,11 +771,15 @@ services:
     <<: *tier-agent-hardened-rw
     environment:
     - PORT=8104
-    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - NATS_URL=${NATS_URL}
+    - GITHUB_PAT=${GITHUB_PAT:-}
     - GITHUB_PAT_FILE=${GITHUB_PAT_FILE:-/run/secrets/github_pat}
     - GITHUB_REPOSITORIES=${GITHUB_REPOSITORIES:-POWERFULMOVES/PMOVES.AI}
     - REFRESH_INTERVAL_SECONDS=${GITHUB_RUNNER_REFRESH_INTERVAL:-60}
     - LOG_LEVEL=${GITHUB_RUNNER_CTL_LOG_LEVEL:-INFO}
+    - SSL_CERT_FILE=
+    - SSL_CERT_DIR=
+    - REQUESTS_CA_BUNDLE=
     depends_on: [nats]
     ports: ["${GITHUB_RUNNER_CTL_BIND:-0.0.0.0}:8104:8104"]
     volumes:
@@ -794,22 +799,3 @@ services:
         limits:
           cpus: '0.5'
           memory: 256M
-
-# =============================================================================
-# Networks — declared external so this overlay parses standalone.
-# Canonical definitions in docker-compose.base.yml. See
-# pmoves/docs/operations/COMPOSE_LAYERING_RUNBOOK.md.
-# =============================================================================
-networks:
-  pmoves_data:
-    external: true
-  pmoves_api:
-    external: true
-  pmoves_app:
-    external: true
-  pmoves_bus:
-    external: true
-  pmoves_external:
-    external: true
-  pmoves_monitoring:
-    external: true

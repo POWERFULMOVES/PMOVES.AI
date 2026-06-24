@@ -180,7 +180,7 @@ services:
     - NO_PROXY=
     - SUPABASE_URL=${SUPA_REST_INTERNAL_URL:-${SUPA_REST_URL:-http://supabase-kong:8000/rest/v1}}
     - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-}
-    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - NATS_URL=${NATS_URL}
     - MINIO_ENDPOINT=${MINIO_ENDPOINT:-minio:9000}
     - MINIO_SECURE=${MINIO_SECURE:-false}
     depends_on:
@@ -268,7 +268,7 @@ services:
     - TORCH_CUDNN_V8_API_ENABLED=1
     - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
     ports: ["${TTS_BIND:-127.0.0.1}:7861:7861"]
-    profiles: ["gpu", "tts"]
+    profiles: ["gpu", "tts", "voice"]
     networks: [pmoves_app, pmoves_monitoring, pmoves_external]  # HuggingFace TTS model downloads
     deploy:
       resources:
@@ -298,10 +298,13 @@ services:
     environment:
     # NATS_URL from env.shared/env.tier-media has credentials: nats://nats:pmoves@nats:4222
     - PORT=8055
-    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - NATS_URL=${NATS_URL}
     - SUPABASE_URL=${SUPABASE_INTERNAL_URL:-${SUPABASE_URL:-http://supabase-kong:8000}}
     - TENSORZERO_URL=${TENSORZERO_URL:-http://tensorzero-gateway:3000}
     - DEFAULT_VOICE_PROVIDER=${DEFAULT_VOICE_PROVIDER:-vibevoice}
+    # Realtime duplex voice agent (/v1/voice/agent: mic→Whisper→LLM→VibeVoice).
+    # Off by default — requires pipecat-ai installed + VibeVoice (7860) running.
+    - PIPECAT_ENABLED=${PIPECAT_ENABLED:-false}
     - ULTIMATE_TTS_URL=${ULTIMATE_TTS_URL:-http://host.docker.internal:7860}
     - ULTIMATE_TTS_TIMEOUT_SEC=${ULTIMATE_TTS_TIMEOUT_SEC:-300}
     - FLUTE_API_KEY=${FLUTE_API_KEY:-}
@@ -354,7 +357,7 @@ services:
     - PORT=8060
     - FLUTE_GATEWAY_URL=http://flute-gateway:8055
     - ULTIMATE_TTS_URL=${ULTIMATE_TTS_URL:-http://host.docker.internal:7860}
-    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - NATS_URL=${NATS_URL}
     - CHIT_REQUIRE_SIGNATURE=${CHIT_REQUIRE_SIGNATURE:-false}
     - CHIT_DECRYPT_ANCHORS=${CHIT_DECRYPT_ANCHORS:-false}
     - CHIT_PASSPHRASE=${CHIT_PROD_PASSPHRASE:?set CHIT_PROD_PASSPHRASE in env.shared}
@@ -397,7 +400,7 @@ services:
     <<: *tier-worker-hardened
     environment:
     - PORT=8121
-    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - NATS_URL=${NATS_URL}
     - VOICE_RELAY_INPUT_SUBJECT=${VOICE_RELAY_INPUT_SUBJECT:-agentzero.task.result.v1}
     - VOICE_RELAY_OUTPUT_SUBJECT=${VOICE_RELAY_OUTPUT_SUBJECT:-voice.agent.response.v1}
     ports: ["${VOICE_RELAY_BIND:-0.0.0.0}:${VOICE_RELAY_PORT:-8121}:8121"]
@@ -560,7 +563,7 @@ services:
     - TTS_BASE_URL=${TTS_BASE_URL:-http://ultimate-tts-studio:7861}
     - GPU_ORCHESTRATOR_MAX_MODELS=${GPU_ORCHESTRATOR_MAX_MODELS:-3}
     - GPU_ORCHESTRATOR_VRAM_THRESHOLD=${GPU_ORCHESTRATOR_VRAM_THRESHOLD:-0.9}
-    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - NATS_URL=${NATS_URL}
     - MODEL_REGISTRY_URL=${MODEL_REGISTRY_URL:-http://model-registry:8110}
     volumes:
       # SECURITY: Docker socket required for spawning GPU model containers.
@@ -617,7 +620,7 @@ services:
     - LLAMA_MODEL_PATH=/models/${LLAMA_MODEL:-model.gguf}
     - LLAMA_SERVER_HOST=127.0.0.1
     - LLAMA_RESULTS_DIR=/results
-    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - NATS_URL=${NATS_URL}
     - CIPHER_MEMORY_URL=${CIPHER_MEMORY_URL:-http://cipher-api:8105}
     - GPU_ORCHESTRATOR_URL=http://gpu-orchestrator:8200
     - METRICS_PORT=8201
@@ -694,22 +697,3 @@ services:
         limits:
           cpus: '1.0'
           memory: 512M
-
-# =============================================================================
-# Networks — declared external so this overlay parses standalone.
-# Canonical definitions in docker-compose.base.yml. See
-# pmoves/docs/operations/COMPOSE_LAYERING_RUNBOOK.md.
-# =============================================================================
-networks:
-  pmoves_data:
-    external: true
-  pmoves_api:
-    external: true
-  pmoves_app:
-    external: true
-  pmoves_bus:
-    external: true
-  pmoves_external:
-    external: true
-  pmoves_monitoring:
-    external: true
