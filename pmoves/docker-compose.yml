@@ -3975,8 +3975,9 @@ services:
           cpus: '2.0'
           memory: 4G
   invidious-companion:
-    # Quay tags churn; default to latest unless explicitly pinned via env.
-    image: ${INVIDIOUS_COMPANION_IMAGE:-quay.io/invidious/invidious-companion:latest}
+    # F-07: pinned by digest for reproducible/supply-chain-safe default.
+    # Override INVIDIOUS_COMPANION_IMAGE (e.g. ...:latest) to track newer builds.
+    image: ${INVIDIOUS_COMPANION_IMAGE:-quay.io/invidious/invidious-companion@sha256:4dbe5c51811cf049ceeb690fe39040896734acce9c0dd7344519d6e2b4345c0b}
     restart: unless-stopped
     env_file:
     - env.shared
@@ -4014,8 +4015,9 @@ services:
           cpus: '1.0'
           memory: 512M
   invidious:
-    # Quay tags churn; default to latest unless explicitly pinned via env.
-    image: ${INVIDIOUS_IMAGE:-quay.io/invidious/invidious:latest}
+    # F-07: pinned by digest for reproducible/supply-chain-safe default.
+    # Override INVIDIOUS_IMAGE (e.g. ...:latest) to track newer builds.
+    image: ${INVIDIOUS_IMAGE:-quay.io/invidious/invidious@sha256:9d972ea5930c2e170b3c4d49bdd9fa09bf03f077d555f58747342062dffc5876}
     restart: unless-stopped
     env_file:
     - env.shared
@@ -4086,7 +4088,10 @@ services:
           cpus: '1.0'
           memory: 512M
   grayjay-server:
-    image: registry.gitlab.futo.org/videostreaming/grayjay/grayjay:latest
+    # F-07: env-overridable so it can be pinned at deploy (previously a hard :latest).
+    # TODO: pin default by digest — FUTO registry (registry.gitlab.futo.org) was
+    # unreachable from the authoring node, so digest could not be resolved here.
+    image: ${GRAYJAY_IMAGE:-registry.gitlab.futo.org/videostreaming/grayjay/grayjay:latest}
     restart: unless-stopped
     env_file:
     - env.shared.generated
