@@ -72,9 +72,11 @@ root:
             type: grep
             target: "pmoves/docker-compose.yml"
             # Bounded [\s\S] span: tac_runner re.search has no DOTALL, so `.*`
-            # can't cross YAML lines. Window covers the service block's anchor
-            # line without reaching the next service (keeps the check's teeth).
-            pattern: "cast-tts-gateway:[\\s\\S]{0,400}tier-agent-hardened-ro"
+            # can't cross YAML lines. Anchored to the 2-space-indented service
+            # KEY line (literal \n + 2 spaces — no MULTILINE in tac_runner) so a
+            # rename that keeps the `pmoves-cast-tts-gateway:` image tag can't
+            # false-pass. Window stops short of the next service (keeps teeth).
+            pattern: "\\n  cast-tts-gateway:[\\s\\S]{0,400}tier-agent-hardened-ro"
             expect: "<<: *tier-agent-hardened-ro, user: 65532:65532"
           context: "Resource limits: 1 CPU, 512M memory"
           agent_hint: 4090-claude
@@ -419,8 +421,10 @@ root:
             target: "pmoves/docker-compose.yml"
             # Bounded [\s\S] span (see cg.health.hardening): match the service
             # block's `user: "65532:65532"` line without crossing into the next
-            # service. `.*` alone never matched (no DOTALL) — false-fail, not a gap.
-            pattern: "cast-tts-gateway:[\\s\\S]{0,1200}user: \"65532"
+            # service. Anchored to the service KEY line (\n + 2 spaces) so a
+            # rename keeping the image tag can't false-pass. `.*` alone never
+            # matched (no DOTALL) — false-fail, not a gap.
+            pattern: "\\n  cast-tts-gateway:[\\s\\S]{0,1200}user: \"65532"
             expect: "Non-root uid 65532, read_only FS, cap_drop ALL"
           context: "tier-agent-hardened-ro anchor applied"
           agent_hint: 4090-claude
