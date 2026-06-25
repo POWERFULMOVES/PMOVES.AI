@@ -34,10 +34,11 @@ curl -sf --max-time 12 https://api.ipify.org   # expect 167.88.39.80 (kvm4-2)
 The MCP entry in `.claude/mcp.json` is already correct (expects `TAILSCALE_API_KEY` + `TAILSCALE_TAILNET`). Gaps found today:
 - GH secret exists but is named **`TAILSCALE_APIKEY`** (no underscore) — the manifest source mapping must point the env var `TAILSCALE_API_KEY` at it.
 - **`TAILSCALE_TAILNET` is absent** from GH secrets — value is `tailcad9b4.ts.net` (or `-` for the key's default).
-- Neither key is in `pmoves/chit/secrets_manifest.yaml` (zero-access → **no agent edit, no Known-Road bypass**; only the authkey is declared).
+- Neither key is in the CHIT manifest (zero-access → **no agent edit, no Known-Road bypass**; only the authkey is declared).
+- **Edit the v2 source of truth, not v1:** `make -C pmoves secrets-funnel` runs `chit-manifest-sync`, which **regenerates `secrets_manifest.yaml` (v1) FROM `secrets_manifest_v2.yaml`** (`pmoves/mk/codex.mk` → `tools/chit_manifest_sync.py --source v2 --dest v1`). Entries added to v1 are dropped before `.env.generated` is produced.
 
 Operator steps (exact entries in `TAILSCALE_EXIT_NODE_RUNBOOK.md` §credential-wiring):
-1. Add `TAILSCALE_API_KEY` (← GH `TAILSCALE_APIKEY`) and `TAILSCALE_TAILNET` (=`tailcad9b4.ts.net`) to the secrets manifest.
+1. Add `TAILSCALE_API_KEY` (← GH `TAILSCALE_APIKEY`) and `TAILSCALE_TAILNET` (=`tailcad9b4.ts.net`) to **`pmoves/chit/secrets_manifest_v2.yaml`** (the source of truth — v1 is generated from it).
 2. `make -C pmoves secrets-funnel` → materializes `.env.generated`.
 3. Relaunch the session/MCP host so the launch env re-reads `.env.generated`.
    Then 4090 can run `netcheck`/`exit_node`/`serve`/`ping` directly for deeper testing.
