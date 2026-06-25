@@ -245,6 +245,24 @@ up-bots: ## Start bot services (BotZ gateway)
 	@$(DC) --profile data --profile workers --profile botz up -d botz-gateway
 	@echo "✔ Bots up (botz-gateway)."
 
+# --- JuiceFS object-store PoC (replaces EOL MinIO; see docs/architecture/JUICEFS_OBJECT_STORE_MIGRATION.md) ---
+.PHONY: up-juicefs down-juicefs juicefs-status
+up-juicefs: ensure-env-shared bootstrap-tier-envs ## Start the JuiceFS PoC: redis metadata + one-time format + S3 gateway (profile=juicefs)
+	@$(DC) --profile juicefs up -d juicefs-redis juicefs-format juicefs-gateway
+	@echo "✔ JuiceFS PoC started. S3 endpoint: juicefs-gateway:9000 (drop-in for minio:9000)."
+	@echo "  Creds: JUICEFS_S3_USER/PASSWORD (fallback MINIO_USER/PASSWORD — run 'make brand-defaults' if unset)."
+	@echo "  Check:  make juicefs-status   |   Stop: make down-juicefs"
+
+down-juicefs: ## Stop + remove JuiceFS PoC services (juicefs-meta/juicefs-data volumes preserved)
+	@$(DC) --profile juicefs stop juicefs-gateway juicefs-format juicefs-redis 2>/dev/null || true
+	@$(DC) --profile juicefs rm -f juicefs-gateway juicefs-format juicefs-redis 2>/dev/null || true
+	@echo "✔ JuiceFS PoC stopped (volumes kept; wipe with: docker volume rm $(PROJECT)_juicefs-meta $(PROJECT)_juicefs-data)."
+
+juicefs-status: ## Show JuiceFS PoC container state + gateway health
+	@$(DC) --profile juicefs ps juicefs-redis juicefs-format juicefs-gateway
+	@echo "--- gateway health probe ---"
+	@$(DC) --profile juicefs exec -T juicefs-gateway sh -lc 'curl -fsS http://localhost:9000/minio/health/live && echo " GATEWAY S3 HEALTHY"' 2>/dev/null || echo "gateway not healthy yet (give it ~15s after up; check 'make juicefs-status')"
+
 # =============================================================================
 # CLAWZ (OpenClaw) — Standalone submodule with own docker-compose.yml
 # =============================================================================
