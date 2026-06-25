@@ -892,6 +892,17 @@ services:
         limits:
           cpus: '2.0'
           memory: 4G
+
+  # ── JuiceFS object store (PoC) — durable replacement for EOL MinIO ───────────
+  # See docs/architecture/JUICEFS_OBJECT_STORE_MIGRATION.md. PROFILE-GATED ("juicefs")
+  # so it is purely additive — it does NOT start with the default data tier and does
+  # not touch existing MinIO consumers yet (consumer repoint = Phase 2).
+  # ⚠️ DRAFT / not yet live-verified (deploy-env drift blocks a live run on Z890 —
+  # see handoff z890-deploy-spine-mcp-env-2026-06-22.md). Validate on first run:
+  #   (a) `juicefs` CLI entrypoint in juicedata/mount:ce-v1.3.0,
+  #   (b) `juicefs format`/`gateway` flag syntax + cache dir,
+  #   (c) --multi-buckets exposes assets/outputs/pmoves-comfyui,
+  #   (d) the gateway's S3 creds (MINIO_ROOT_USER/PASSWORD env) match consumers.
   tensorzero-clickhouse:
     <<: &tier-llm-hardened
       env_file:

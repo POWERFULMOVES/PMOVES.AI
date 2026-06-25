@@ -494,6 +494,8 @@ volumes:
   qdrant-data: {}
   meilisearch-data: {}
   minio-data: {}
+  juicefs-meta: {}   # JuiceFS metadata engine (Redis) persistence (profile: juicefs)
+  juicefs-data: {}   # JuiceFS object-store backend (profile: juicefs)
   # Legacy volume (kept for backward compatibility during migration)
   supabase-data: {}
   # 2025 Supabase integrated volumes
