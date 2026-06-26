@@ -118,6 +118,12 @@ SERVICE_GROUPS = {
         "botz-gateway",
         "pmoves-yt",
     ],
+    "juicefs": [
+        "juicefs-redis",
+        "juicefs-format",
+        "juicefs-gateway",
+        "juicefs-smoke",
+    ],
 }
 
 # All known services
@@ -132,6 +138,7 @@ OVERLAY_DESCRIPTIONS = {
     "ui": "UI Services",
     "workers": "Worker Services",
     "apps": "Applications",
+    "juicefs": "JuiceFS Object Store (S3 gateway PoC)",
 }
 
 
