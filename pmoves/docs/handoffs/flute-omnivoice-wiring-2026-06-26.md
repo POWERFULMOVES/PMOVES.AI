@@ -1,3 +1,16 @@
+---
+graphiti_mark: handoff.flute-omnivoice-wiring.2026-06-26
+branch: chore/omnivoice-4090-bringup
+pr_numbers: [1885]
+scope: Wire flute-gateway → OmniVoice — add OMNIVOICE_URL/TOKEN/TIMEOUT to the
+  flute-gateway env and flip the default TTS provider (env template + compose) to omnivoice.
+risks: Flips the fleet default vibevoice→omnivoice (env-reversible via DEFAULT_VOICE_PROVIDER);
+  touches z890's vibevoice lane (path intact). Joint host deploy needs OMNIVOICE_BIND=0.0.0.0 + token.
+next_actions: Joint-deploy bring OmniVoice up 0.0.0.0+OMNIVOICE_TOKEN; add OMNIVOICE_TOKEN to secrets pipeline; z890 awareness of default flip.
+chit_artifact_path: n/a (docs + compose wiring; no CHIT artifact)
+agent_signature: 4090-claude
+---
+
 # Flute-Gateway → OmniVoice Wiring (2026-06-26)
 
 **By:** 4090-CLAUDE. **Known Road handoff** authorizing the compose edit
