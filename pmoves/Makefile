@@ -264,6 +264,9 @@ down-juicefs: ## Stop + remove JuiceFS PoC services (juicefs-meta/juicefs-data v
 	@$(JUICEFS_DC) --profile juicefs rm -f juicefs-gateway juicefs-format juicefs-redis 2>/dev/null || true
 	@echo "✔ JuiceFS PoC stopped (volumes kept; wipe with: docker volume rm $(PROJECT)_juicefs-meta $(PROJECT)_juicefs-data)."
 
+juicefs-smoke: ## S3 round-trip + multi-bucket smoke test against a running gateway (needs: make up-juicefs)
+	@$(JUICEFS_DC) --profile juicefs --profile juicefs-smoke run --rm juicefs-smoke
+
 juicefs-status: ## Show JuiceFS PoC container state + gateway health
 	@$(JUICEFS_DC) --profile juicefs ps juicefs-redis juicefs-format juicefs-gateway
 	@echo "--- gateway health probe ---"

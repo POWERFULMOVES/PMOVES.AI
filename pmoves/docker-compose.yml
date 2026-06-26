@@ -1416,6 +1416,21 @@ services:
         limits:
           cpus: '2.0'
           memory: 2G
+
+  juicefs-smoke:  # one-off S3 round-trip + multi-bucket test (profile juicefs-smoke; never auto-starts)
+    image: minio/mc@sha256:a7fe349ef4bd8521fb8497f55c6042871b2ae640607cf99d9bede5e9bdf11727
+    profiles: ["juicefs-smoke"]
+    depends_on:
+      juicefs-gateway:
+        condition: service_healthy
+    environment:
+    - MC_HOST_jfs=http://${JUICEFS_S3_USER:-pmovesjfs}:${JUICEFS_S3_PASSWORD:-pmovesjfs-secret-2026}@juicefs-gateway:9000
+    entrypoint: ["sh", "-lc"]
+    command:
+    - "set -e; mc mb -p jfs/assets jfs/outputs; printf 'hello-juicefs-2026' | mc pipe jfs/assets/smoke.txt; echo '--- GET ---'; mc cat jfs/assets/smoke.txt; echo; echo '--- multi-bucket list (assets+outputs => --multi-buckets works) ---'; mc ls jfs/"
+    networks:
+    - pmoves_data
+    restart: "no"
   hi-rag-gateway:
     <<: *tier-api-hardened
     build:

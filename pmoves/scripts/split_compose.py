@@ -122,6 +122,7 @@ SERVICE_GROUPS = {
         "juicefs-redis",
         "juicefs-format",
         "juicefs-gateway",
+        "juicefs-smoke",
     ],
 }
 
