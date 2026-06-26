@@ -3972,7 +3972,7 @@ neo4j-restore: ## Restore Neo4j from backup (usage: make neo4j-restore BACKUP=ba
 COMPOSE_SPLIT_RUN := uv run --no-project --with ruamel.yaml==0.19.1 python scripts/split_compose.py
 COMPOSE_SPLIT_FILES := docker-compose.base.yml docker-compose.core.yml \
 	docker-compose.agents.yml docker-compose.media.yml docker-compose.ui.yml \
-	docker-compose.workers.yml docker-compose.apps.yml
+	docker-compose.workers.yml docker-compose.apps.yml docker-compose.juicefs.yml
 
 .PHONY: compose-split compose-split-check
 compose-split: ## Regenerate the split compose overlays from docker-compose.yml

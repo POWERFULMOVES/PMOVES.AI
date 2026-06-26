@@ -1378,7 +1378,10 @@ services:
         condition: service_healthy
     entrypoint: ["sh", "-lc"]
     command:
-    - "juicefs format --storage file --bucket /data ${JUICEFS_META_URL:-redis://juicefs-redis:6379/1} ${JUICEFS_NAME:-pmoves} || true"
+    # No `|| true`: juicefs format is idempotent (re-run on a formatted FS exits 0),
+    # so a non-zero exit here is a REAL error and must fail the service_completed_successfully
+    # gate rather than releasing the gateway against an unformatted volume.
+    - "juicefs format --storage file --bucket /data ${JUICEFS_META_URL:-redis://juicefs-redis:6379/1} ${JUICEFS_NAME:-pmoves}"
     volumes:
     - juicefs-data:/data
     networks:
@@ -1424,7 +1427,8 @@ services:
       juicefs-gateway:
         condition: service_healthy
     environment:
-    - MC_HOST_jfs=http://${JUICEFS_S3_USER:-pmovesjfs}:${JUICEFS_S3_PASSWORD:-pmovesjfs-secret-2026}@juicefs-gateway:9000
+    # Same credential chain as juicefs-gateway (no baked-in secret) so smoke auth always matches.
+    - MC_HOST_jfs=http://${JUICEFS_S3_USER:-${MINIO_USER:?Run make brand-defaults}}:${JUICEFS_S3_PASSWORD:-${MINIO_PASSWORD:?Run make brand-defaults}}@juicefs-gateway:9000
     entrypoint: ["sh", "-lc"]
     command:
     - "set -e; mc mb -p jfs/assets jfs/outputs; printf 'hello-juicefs-2026' | mc pipe jfs/assets/smoke.txt; echo '--- GET ---'; mc cat jfs/assets/smoke.txt; echo; echo '--- multi-bucket list (assets+outputs => --multi-buckets works) ---'; mc ls jfs/"
