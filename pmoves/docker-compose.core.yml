@@ -412,21 +412,27 @@ services:
     - KONG_ADMIN_ERROR_LOG=/dev/stderr
     - KONG_PROXY_LISTEN=0.0.0.0:8000
     - KONG_ADMIN_LISTEN=0.0.0.0:8001  # container-internal; host restriction via Docker port mapping line below
-    # JWT plugin
-    - KONG_PLUGINS=bundled,jwt
+    # JWT plugin (already in bundled — no need to list separately)
+    - KONG_PLUGINS=bundled
     - KONG_NGINX_PROXY_PROXY_BUFFERS=8 16k
+    # Pin to single worker. Kong reads host /proc/cpuinfo for worker count,
+    # not the cpus cgroup limit, so on a 24-core host it would spawn 24
+    # workers × ~80MB each (full plugin load) = ~2GB before accepting any
+    # traffic. `1` matches the 0.5 CPU budget + keeps memory bounded.
+    - KONG_NGINX_WORKER_PROCESSES=1
     # PMOVES context
     - DOCKED_MODE=${DOCKED_MODE:-true}
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
-    entrypoint: ["/bin/sh", "-c", "kong migrations bootstrap --yes 2>/dev/null || true; exec /docker-entrypoint.sh kong docker-start"]
+    # Wait for Postgres using a pure shell redirect (kong:3.7.1 does not ship `nc`).
+    entrypoint: ["/bin/sh", "-c", "for i in $(seq 1 30); do if >/dev/tcp/supabase-db/5432 2>/dev/null; then echo 'Database reachable'; break; fi; echo \"DB not ready ($i/30)...\"; sleep 2; done; kong migrations bootstrap --yes 2>/dev/null || kong migrations up --yes 2>/dev/null || true; exec /docker-entrypoint.sh kong docker-start"]
     healthcheck:
       test: ["CMD", "kong", "health"]
       interval: 15s
       timeout: 5s
-      retries: 5
-      start_period: 60s
+      retries: 10
+      start_period: 120s
     depends_on:
       supabase-db:
         condition: service_healthy
@@ -441,7 +447,10 @@ services:
       resources:
         limits:
           cpus: '0.5'
-          memory: 256M
+          # 512M fits a single-worker Kong with bundled plugins + DB cache
+          # warmup + modest request headroom. Previously set to 256M which
+          # OOM'd on startup.
+          memory: 512M
   supabase-edge-functions:
     <<: *tier-supabase-hardened
     image: supabase/edge-runtime:v1.70.0
