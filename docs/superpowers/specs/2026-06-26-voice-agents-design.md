@@ -62,6 +62,8 @@ Make agent and voice-agent expressiveness uniform across **all** flute-gateway T
 
 **`engine_specific` shapes:** `omnivoice{ref_audio, instruct, ref_text}` · `voicebox{profile_id, voice_type, language}` · `ultimate_tts{primary_engine, fallback_engines[], <engine>_voice}` · `vibevoice{voice_preset}`.
 
+> **`ref_audio_path` vs `engine_specific.omnivoice.ref_audio`:** `ref_audio_path` is the **canonical** stored audio location (the `juicefs://…` URI, single source of truth); `engine_specific.omnivoice.ref_audio` is the **engine-resolved, mount-relative** path **derived** from it at routing time (e.g. `/voices/<name>.wav` inside the OmniVoice container) — never an independent value. If `engine_specific.omnivoice.ref_audio` is absent, the gateway derives it from `ref_audio_path`.
+
 **Capability matrix** (drives realtime vs batch routing; persist as config YAML or table):
 
 | Engine | clone | design | streaming | langs | native profile store | role |
@@ -71,7 +73,7 @@ Make agent and voice-agent expressiveness uniform across **all** flute-gateway T
 | Ultimate-TTS | ✅ F5/Fish zero-shot | ❌ | ✅ SSE (Higgs/Chatterbox) | en/multi | none (preset id) | RVC clone synthesis + stream |
 | VibeVoice | ❌ | ❌ | ✅ WS | en | preset only | realtime preset agent |
 
-**Routing rule:** realtime `/v1/voice/agent` → streaming-capable (VibeVoice, Ultimate-TTS); clone/design batch (`/synthesize`, `/try`) → OmniVoice/Voicebox; cloned-voice synthesis → Ultimate-TTS RVC.
+**Routing rule:** `/v1/voice/agent` is **WS-duplex to the client**; server-side it routes to a streaming-capable engine — **VibeVoice** (native WS, true bidirectional for live back-and-forth) or **Ultimate-TTS** (SSE is unidirectional engine→gateway, so it is *bridged* into the WS for streamed TTS-only replies, not full duplex). Clone/design batch (`/synthesize`, `/try`) → OmniVoice/Voicebox; cloned-voice synthesis → Ultimate-TTS RVC.
 
 ## 4. Registry Decision (concrete)
 
@@ -92,7 +94,7 @@ Enrollment writes temp-file then atomic `rename` into `enrolled/`; cross-node mu
 
 **Interim (ships now, MinIO):** dedicated `voices/` bucket (`catalogs/default | enrolled/<user> | youtube/<channel>`), object versioning on for concurrent-write safety. OmniVoice catalog dir = host FUSE mount (`s3fs`) or NFS re-export bound read-only into the container. Single env switch `S3_ENDPOINT` (minio:9000 → juicefs-gateway:9000) with fallback. Cross-node reach via Tailscale MagicDNS (`OMNIVOICE_URL` → `pmoves-<node>.<tailnet>.ts.net:8002`); `127.0.0.1` already normalized to `host.docker.internal` (`main.py:183`).
 
-**Z890 coordination (gates):** JuiceFS Phase-1 PoC stabilization (`docker-compose.juicefs.yml`, PR #1865); confirm S3-gateway `presign_post`/`presigned_get` parity before consumers cut over (`MEDIA_DATA_ARCHITECTURE_PLAN.md:14`); Tailscale ACL must list `tag:storage` in `tagOwners` before tagged auth keys (`:20`); mirror final MinIO image to GHCR before Feb 2027 as EOL contingency.
+**Z890 coordination (gates):** JuiceFS Phase-1 PoC stabilization (`docker-compose.juicefs.yml`, PR #1865); confirm S3-gateway `presign_post`/`presigned_get` parity before consumers cut over (`MEDIA_DATA_ARCHITECTURE_PLAN.md:14`); the tailnet ACL policy must list `tag:storage` in its `tagOwners` block before any `tag:storage` auth keys are issued (Headscale/Tailscale ACL policy — see `pmoves/docs/network/TOPOLOGY.md`); mirror final MinIO image to GHCR before Feb 2027 as EOL contingency.
 
 ## 6. Media Enrollment Workflow (`voice:enroll`)
 
@@ -115,7 +117,7 @@ Enrollment writes temp-file then atomic `rename` into `enrolled/`; cross-node mu
 
 **FLOW A — Talk** (reuse `/v1/voice/agent` WS, `main.py:1302-1367`): browser mic → PCM16 24 kHz binary frames; receives `transcription`/`llm_text`/audio. New work is frontend (`pmoves/ui/app/demo/voice-agent`) + extend handshake to accept `{persona_id, voice_id}`. Per-connection rate-limit inside the WS transport (frames/sec).
 
-**FLOW B — Try** (new, thin): `GET /v1/voice/registry` (from `voice_profiles`, with sample preview) + `POST /v1/voice/try {text, voice_id}` → routes to OmniVoice `/synthesize` with `ref_audio`. No training.
+**FLOW B — Try** (new, thin): `GET /v1/voice/registry` — implemented as a thin **alias/view of `GET /v1/voice/profiles`** (§4, the single registry route) returning the same rows plus a `sample_preview_url`; S1 ships `/profiles` and S3 adds `/registry` as the alias (no second store, no divergence) — plus `POST /v1/voice/try {text, voice_id}` → routes to OmniVoice `/synthesize` with `ref_audio`. No training.
 
 **FLOW C — Clone:** record ~10 s → `POST /v1/voice/clone/register` (multipart) → `VoiceCloningProvider.register_voice_sample()` → status poll `GET /v1/voice/clone/status/{persona_id}` → on `completed`, voice appears under "My Voices". **Blocker:** `synthesize_cloned()` is `NotImplementedError` (`cloning.py:451`) — must wire Ultimate-TTS RVC synthesis to finish C.
 
@@ -123,7 +125,7 @@ Enrollment writes temp-file then atomic `rename` into `enrolled/`; cross-node mu
 
 ## 8. Rights / Consent / Provenance Model (enforceable)
 
-**Table `voice_cloning_provenance`** (FK `voice_persona_id`): `source_type` (YOUTUBE|MOVIE|OWNED_RECORDING|SYNTHETIC|CHARACTER_OWNED), `source_url`, `source_timestamp_start/end`, `source_title`, **`rights_basis`** (OWNED|LICENSED|CONSENTED|PUBLIC_DOMAIN|CHARACTER_OWNED), `consent_method`, `consent_date`, `consent_artifact_uri`, `capturer_identity`, `attribution_required`, `notes`, audit fields. Unique on `(voice_persona_id, source_url, source_timestamp_start)`.
+**Table `voice_cloning_provenance`** (FK **`voice_profile_name` → `voice_profiles.name`**, the registry source of truth; nullable `voice_persona_id` retained only for legacy persona-sourced rows): `source_type` (YOUTUBE|MOVIE|OWNED_RECORDING|SYNTHETIC|CHARACTER_OWNED), `source_url`, `source_timestamp_start/end`, `source_title`, **`rights_basis`** — the set of **permitted** bases (OWNED|LICENSED|CONSENTED|PUBLIC_DOMAIN|CHARACTER_OWNED); `LICENSED` covers commercial-OK Creative Commons (CC-BY, CC0). **Non-commercial inputs (CC-BY-NC) are never a `rights_basis` value** — they are rejected at the enrollment gate (§8) and never persisted — `consent_method`, `consent_date`, `consent_artifact_uri`, `capturer_identity`, `attribution_required`, `notes`, audit fields. Unique on `(voice_profile_name, source_url, source_timestamp_start)`. This keys provenance to the same identity the synthesis gate looks up (voice slug, §8), so newly-enrolled voices that were never a `voice_persona` still have a valid FK target.
 
 **Enforcement (hard gate, two places):**
 - **Enrollment** — no silent enrollment from URLs; license check mirrors the image/music model gate (`feedback_open_source_only`): non-commercial (CC-BY-NC) source → **BLOCK**. CONSENTED requires a recorded consent artifact; CHARACTER_OWNED/LICENSED require uploaded agreement (202 until attached).
@@ -145,6 +147,12 @@ Enrollment writes temp-file then atomic `rename` into `enrolled/`; cross-node mu
 | **S8 — Clone flow** | finish `synthesize_cloned()` ↔ Ultimate-TTS RVC; browser record/poll UI; "My Voices" | **5090** (GPU/RVC) | provider skeleton exists; RVC synth + UI new |
 | **S9 — Multi-node rollout** | mount remaining nodes; consistency <30 s; decommission MinIO `voices/` | **Z890-JuiceFS** | — |
 | **S10 — Jellyfin enroll + polish** | jellyfin-bridge source path; auto-enroll dialogue; speaker-verify (Pyannote); revocation/audit dashboard | **5090 + codex** | bridge exists; enroll path + verify new |
+
+**Documentation obligations (per repo convention):** each stage's implementation PR — **not this design doc** — registers its new surface in the canonical catalogs as it lands:
+- New endpoints/ports → `.claude/context/services-catalog.md` (flute-gateway `:8055` `/v1/voice/{registry,try,clone/*}` at S1/S3/S8; creator-operator `/voice/enroll` at S6).
+- New NATS subjects → `.claude/context/nats-subjects.md` (`voice.registry.update.v1` at S1; `voice.enroll.lock.request`/`grant` + `voice.enrollment.completed.v1` at S6/S7).
+
+Cataloging not-yet-built endpoints/subjects in this spec would pollute the live catalogs (which document *existing* services), so registration is sequenced with each stage.
 
 Critical path to first user value: **S1 → S3** (Try, no clone). Talk (S4) parallels. Clone (S8) depends on S5 (gate) + S2 + RVC wiring.
 
