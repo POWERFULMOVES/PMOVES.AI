@@ -159,6 +159,7 @@ No row is a hard lane assignment.
 | KVM4-2 | VPS / data-storage | Storage-optimized | Data/storage tier |
 | KVM2 | VPS / exit-proxy | Minimal compute; network-only | Exit proxy; RustDesk ScaleTail relay |
 | (floating) | Inherits host node | Varies | CODEX-GPT5, CLAUDE-OPUS, PMOVES-MINIMAX — no fixed node |
+| MISSLING-LINK | Laptop / light-GPU dev (legacy) | i7-7700HQ 4c/8t; 16GB RAM; GTX 1070 8GB (Pascal sm_61); Win 11 Pro | **Hermes Agent** host node (not Claude Code/Codex); small/quantized model inference + CPU dev/ops; node doc: [`AGNOTE-pmoves-missling-link.md`](./AGNOTE-pmoves-missling-link.md) |
 
 ---
 

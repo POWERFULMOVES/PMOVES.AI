@@ -953,3 +953,46 @@ Translation is handled at the ingestion layer — Whisper/cloud API does the lin
 
 <!-- GRAPHITI_MARK: ANTIGRAVITY-OPUS::MULTILINGUAL-TRANSLATION-TOOLING::2026-05-11 -->
 
+## Fleet Onboarding: PMOVES-MISSLING-LINK (2026-06-23)
+
+### Work Performed
+- Onboarded PMOVES-MISSLING-LINK — **the first Hermes-Agent-native node** in the PMOVES fleet.
+- Hardware scanned via CIM + nvidia-smi: Intel i7-7700HQ 4c/8t @ 2.80GHz, 16 GB RAM, NVIDIA GTX 1070 8 GB GDDR5 (Pascal sm_61, driver 546.33), Windows 11 Pro, D: 48 GB free.
+- Added node-capacity row to `AGNOTE4482_SITREP.md` (Laptop / light-GPU dev, legacy Pascal).
+- Seeded signing identity card `00000000-0000-4000-8000-000000000013` (agent_id `missling-link`, h-only — ML half pending operator ssh-keygen per Owner-Decision A).
+- Created node doc `pmoves/docs/AGENTS/AGNOTE-pmoves-missling-link.md` (mirrors AGNOTE-dgx-spark.md structure).
+- Continues the W0 Substrate cross-platform-onboarding lane (Z890-CLAUDE 2026-05-09).
+
+### Key Findings
+
+| Finding | Status | Evidence |
+|---------|--------|----------|
+| Node registered in SITREP capacity table | **RESOLVED** | `AGNOTE4482_SITREP.md` MISSLING-LINK row added |
+| Signing card seeded for `missling-link` | **RESOLVED** | `signing_identity_cards.yaml` card `…0013` (h-only) |
+| Node doc authored | **RESOLVED** | `AGNOTE-pmoves-missling-link.md` (mirrors dgx-spark template) |
+| Hermes Agent as a fleet member | **NEW CAPABILITY** | First node whose primary agent runtime is Hermes Agent (not Claude Code/Codex/KiloCode) |
+| Tailscale mesh enrollment | **PENDING** | Operator action |
+| SSH fingerprint for signing card | **PENDING** | Operator `ssh-keygen` (Owner-Decision A) |
+
+### Handoff Notes
+- This node's primary agent is **Hermes Agent** — AGNOTE4482's Claude-Code-centric Three-Body enforcement (`.claude/agents/` frontmatter `disallowedTools`) does not apply here. The Hermes-native translation lives in the `pmoves-convergence` skill (claim register, branch naming, Three-Body via `delegate_task` roles). Read-only Control bodies are advisory on Hermes, not hard-enforced.
+- Capacity advisory: legacy Pascal GPU — small/quantized inference + dev/ops only; not a full-stack or heavy-inference host.
+- ML half of the signing card is intentionally null until the operator runs `ssh-keygen` on this host (matches the audit policy and the `darkxside` card precedent).
+
+### Files Changed
+| File | Change |
+|------|--------|
+| `pmoves/docs/AGENTS/AGNOTE4482_SITREP.md` | MISSLING-LINK row in node-capacity table |
+| `pmoves/config/signing_identity_cards.yaml` | Card `…0013` (missling-link, h-only) |
+| `pmoves/docs/AGENTS/AGNOTE-pmoves-missling-link.md` | New — node doc mirroring AGNOTE-dgx-spark.md |
+| `pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md` | CLAIM/RELEASE entries (this lane) |
+| `pmoves/docs/AGENTS/AGNOTE4482.md` | This audit section |
+
+### Agent ACK
+- Agent: `MISSING-LINK-HERMES`
+- Signature: `ACK::MISSING-LINK-HERMES::FLEET-ONBOARD-MISSLING-LINK`
+- Timestamp: `2026-06-23T16:23:45Z`
+- Branch Cleanup: none (docs-only lane)
+
+<!-- GRAPHITI_MARK: MISSING-LINK-HERMES::FLEET-ONBOARD-MISSLING-LINK::2026-06-23 -->
+
