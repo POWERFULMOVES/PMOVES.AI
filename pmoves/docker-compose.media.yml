@@ -25,7 +25,7 @@ services:
     build: ./services/media-video
     restart: unless-stopped
     environment:
-    - MINIO_ENDPOINT=${MINIO_ENDPOINT:-minio:9000}
+    - MINIO_ENDPOINT=${MINIO_ENDPOINT:-${S3_ENDPOINT:-minio:9000}}
     - MINIO_SECURE=${MINIO_SECURE:-false}
     - MINIO_ACCESS_KEY=${MINIO_USER:?Run make brand-defaults}
     - MINIO_SECRET_KEY=${MINIO_PASSWORD:?Run make brand-defaults}
@@ -63,7 +63,7 @@ services:
     build: ./services/media-audio
     restart: unless-stopped
     environment:
-    - MINIO_ENDPOINT=${MINIO_ENDPOINT:-minio:9000}
+    - MINIO_ENDPOINT=${MINIO_ENDPOINT:-${S3_ENDPOINT:-minio:9000}}
     - MINIO_SECURE=${MINIO_SECURE:-false}
     - MINIO_ACCESS_KEY=${MINIO_USER:?Run make brand-defaults}
     - MINIO_SECRET_KEY=${MINIO_PASSWORD:?Run make brand-defaults}
@@ -101,7 +101,7 @@ services:
       dockerfile: pmoves/services/ffmpeg-whisper/Dockerfile
     restart: unless-stopped
     environment:
-    - MINIO_ENDPOINT=${MINIO_ENDPOINT:-minio:9000}
+    - MINIO_ENDPOINT=${MINIO_ENDPOINT:-${S3_ENDPOINT:-minio:9000}}
     - MINIO_SECURE=${MINIO_SECURE:-false}
     - MINIO_ACCESS_KEY=${MINIO_USER:?Run make brand-defaults}
     - MINIO_SECRET_KEY=${MINIO_PASSWORD:?Run make brand-defaults}
@@ -181,7 +181,7 @@ services:
     - SUPABASE_URL=${SUPA_REST_INTERNAL_URL:-${SUPA_REST_URL:-http://supabase-kong:8000/rest/v1}}
     - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-}
     - NATS_URL=${NATS_URL}
-    - MINIO_ENDPOINT=${MINIO_ENDPOINT:-minio:9000}
+    - MINIO_ENDPOINT=${MINIO_ENDPOINT:-${S3_ENDPOINT:-minio:9000}}
     - MINIO_SECURE=${MINIO_SECURE:-false}
     depends_on:
       nats:
@@ -676,11 +676,11 @@ services:
     <<: *tier-worker-hardened
     environment:
       # NATS_URL from env.shared/env.tier-worker has credentials: nats://nats:pmoves@nats:4222
-    - MINIO_ENDPOINT=${MINIO_ENDPOINT:-minio:9000}
+    - MINIO_ENDPOINT=${MINIO_ENDPOINT:-${S3_ENDPOINT:-minio:9000}}
     - MINIO_ACCESS_KEY=${MINIO_USER:?Run make brand-defaults}
     - MINIO_SECRET_KEY=${MINIO_PASSWORD:?Run make brand-defaults}
     - MINIO_BUCKET=${MINIO_BUCKET:-pmoves-comfyui}
-    - PUBLIC_BASE_URL=${PUBLIC_BASE_URL:-http://minio:9000}
+    - PUBLIC_BASE_URL=${PUBLIC_BASE_URL:-${S3_PUBLIC_BASE_URL:-http://${MINIO_ENDPOINT:-${S3_ENDPOINT:-minio:9000}}}}
     - PRESIGN_EXPIRES_HOURS=${PRESIGN_EXPIRES_HOURS:-24}
     depends_on:
       nats:
