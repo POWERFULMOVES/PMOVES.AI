@@ -57,14 +57,23 @@ These resolve the §10 open questions and add binding architectural direction:
     **join / sign up** to access; not open to the public internet.
   - **Any live public hosting** uses **light engines only (Kokoro / OmniVoice / small)** so a
     hosting Jetson/light node can't be overrun. `VOICE_CLONING_ENABLED=false` for public stays.
+  - **Clone availability is mesh-gated (operator, 2026-06-28):** `VOICE_CLONING_ENABLED=false` on
+    public ≠ "no clone." Voice cloning **IS available to registered nodes on the Tailscale mesh**
+    (via Pinokio / MCP / A2A), authenticated and hard-gated by the consent/provenance model (§8).
+    The **public website** keeps clone OFF and instead serves **pre-canned examples** + a
+    **pass-through to the creator pipeline** that turns the live topology / agents / actions
+    (real CHIT trails) into illustrative demos of PMOVES building itself. So: **clone on the mesh,
+    demos on the web.** (The CHIT-trail-as-animated-story creator surface is its own roadmap thread —
+    see `[[vision_chit_trail_creator_storytelling]]`.)
 - **Voice RBAC (Q9) — post-launch via Supabase RLS** (operator, 2026-06-28): Wave-1 ships
   **creator-scoped ownership only** (a voice belongs to its `created_by`); full multi-tenant
   ownership/sharing ("who may clone Alice's voice?") lands later via RLS on `voice_profiles`,
   so S1-S8 are not blocked on it now.
 
-**Still open (lower-urgency — gated behind the disabled-public clone posture):** Q6 speaker-verify
-depth, Q7 multilingual representation, Q8 CHIT-signing for clone events, Q10 async clone-training
-job location. These bind the clone/enroll flow, which is private/disabled-public for now.
+**Still open — needed for the mesh clone flow (clone is enabled on the tailnet, so these now bind
+real work, not deferred):** Q6 speaker-verify depth, Q7 multilingual representation, Q8 CHIT-signing
+for clone events, Q10 async clone-training job location. Public-website demos don't touch them
+(pre-canned), but the mesh clone path (S8) does — settle before S8 lands.
 
 ## 2. Architecture Overview
 
