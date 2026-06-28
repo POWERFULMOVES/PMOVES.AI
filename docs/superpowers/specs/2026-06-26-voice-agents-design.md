@@ -28,7 +28,12 @@ Make agent and voice-agent expressiveness uniform across **all** flute-gateway T
 
 These resolve the §10 open questions and add binding architectural direction:
 
-- **JuiceFS metadata engine = Postgres** (tier-data), not Redis. (Q1)
+- **JuiceFS metadata engine — target = Postgres** (tier-data), not Redis. (Q1)
+  ⚠️ *Current state:* the JuiceFS PoC compose defaults to **Redis** (`juicefs-redis`,
+  `docker-compose.yml` `JUICEFS_META_URL=redis://juicefs-redis:6379/1`). Postgres is the
+  **decided target**; migrating the JuiceFS metadata engine Redis→Postgres is a **Z890
+  task** (gate it before the voice path relies on JuiceFS at S7 — until then the voice
+  catalog uses the MinIO-interim path, §5).
 - **Topology = host-or-standalone, hardware-impedance-matched** (Q2): every voice engine
   can run **standalone on a node** OR be **hosted by a capable node for others** (a small
   node taps a host instead of running the engine locally). Engine selection is by
@@ -181,7 +186,7 @@ Critical path to first user value: **S1 → S3** (Try, no clone). Talk (S4) para
 
 **Q1–Q5 RESOLVED 2026-06-28 — see §1a Operator Decisions.**
 
-1. ✅ **JuiceFS metadata engine** → **Postgres** (tier-data).
+1. ✅ **JuiceFS metadata engine** → **target Postgres** (tier-data). *Current PoC defaults to Redis (`juicefs-redis`); Redis→Postgres migration is a Z890 task, gated before the voice path uses JuiceFS at S7 (MinIO-interim until then).*
 2. ✅ **Topology** → **host-or-standalone, hardware-impedance-matched** (heavy hosts SPARK/5090/Z890/KNUCKLES serve or run full Ultimate-TTS; light nodes 4090/elder-melchor/missling-link/Jetsons run small engines or tap a host). Not a single fixed instance.
 3. ⬜ **Ultimate-TTS RVC synthesis API signature** — still needed to unblock S8 `synthesize_cloned()` (`{rvc_model, rvc_index, text} → audio`?).
 4. ✅ **Voice-design surface** → **engine-sourced** (per-engine declared capability/TAC), not a global freeform string. Agents select engine by purpose/hardware; design controls come from that engine.
