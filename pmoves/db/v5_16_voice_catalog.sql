@@ -47,6 +47,13 @@ CREATE TABLE IF NOT EXISTS pmoves_core.voice_profiles (
     updated_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
     deleted_at         TIMESTAMPTZ,
     CONSTRAINT voice_profiles_name_slug  CHECK (name ~ '^[a-zA-Z0-9_-]{3,64}$'),
+    -- JSON/media shape integrity (CodeRabbit): writers can't persist malformed
+    -- payloads that break tag filtering or gateway routing.
+    CONSTRAINT voice_profiles_tags_array_chk       CHECK (jsonb_typeof(tags) = 'array'),
+    CONSTRAINT voice_profiles_engine_specific_chk  CHECK (jsonb_typeof(engine_specific) = 'object'),
+    CONSTRAINT voice_profiles_grounding_object_chk CHECK (jsonb_typeof(grounding) = 'object'),
+    CONSTRAINT voice_profiles_sample_rate_chk      CHECK (sample_rate_hz > 0),
+    CONSTRAINT voice_profiles_audio_duration_chk   CHECK (audio_duration_sec IS NULL OR audio_duration_sec >= 0),
     CONSTRAINT voice_profiles_engine_chk CHECK (engine IN ('omnivoice','vibevoice','voicebox','ultimate_tts')),
     CONSTRAINT voice_profiles_rights_chk CHECK (
         rights_basis IS NULL OR rights_basis IN
@@ -84,6 +91,25 @@ DROP TRIGGER IF EXISTS trg_voice_profiles_touch ON pmoves_core.voice_profiles;
 CREATE TRIGGER trg_voice_profiles_touch
     BEFORE UPDATE ON pmoves_core.voice_profiles
     FOR EACH ROW EXECUTE FUNCTION pmoves_core.touch_voice_profiles_updated_at();
+
+-- created_by is IMMUTABLE (CodeRabbit): the denormalized voice_profile_grants.owner_id
+-- is set from created_by at grant time, so silently changing created_by would desync
+-- grant RLS. Ownership transfer is out of scope for S1 (would be a deliberate,
+-- service-role re-grant flow). Reject any attempt to change it on UPDATE.
+CREATE OR REPLACE FUNCTION pmoves_core.voice_profiles_created_by_immutable()
+RETURNS trigger AS $$
+BEGIN
+    IF NEW.created_by IS DISTINCT FROM OLD.created_by THEN
+        RAISE EXCEPTION 'voice_profiles.created_by is immutable (was %, got %)', OLD.created_by, NEW.created_by;
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_voice_profiles_created_by_immutable ON pmoves_core.voice_profiles;
+CREATE TRIGGER trg_voice_profiles_created_by_immutable
+    BEFORE UPDATE OF created_by ON pmoves_core.voice_profiles
+    FOR EACH ROW EXECUTE FUNCTION pmoves_core.voice_profiles_created_by_immutable();
 
 -- Denormalize owner onto grants (SECURITY DEFINER → bypasses RLS, no recursion).
 CREATE OR REPLACE FUNCTION pmoves_core.set_voice_grant_owner()
@@ -128,10 +154,18 @@ CREATE POLICY voice_profiles_read ON pmoves_core.voice_profiles
         )
     );
 
--- Owner manages their own rows.
+-- Owner manages their own rows — INSERT + UPDATE only (no hard DELETE; soft-delete
+-- via deleted_at is the lifecycle contract — CodeRabbit). Hard DELETE is service_role
+-- only (grants below), preserving retention/provenance + cascade safety.
 DROP POLICY IF EXISTS voice_profiles_owner_write ON pmoves_core.voice_profiles;
-CREATE POLICY voice_profiles_owner_write ON pmoves_core.voice_profiles
-    FOR ALL
+DROP POLICY IF EXISTS voice_profiles_owner_insert ON pmoves_core.voice_profiles;
+CREATE POLICY voice_profiles_owner_insert ON pmoves_core.voice_profiles
+    FOR INSERT
+    WITH CHECK (created_by = NULLIF(current_setting('request.jwt.claim.sub', true), '')::uuid);
+
+DROP POLICY IF EXISTS voice_profiles_owner_update ON pmoves_core.voice_profiles;
+CREATE POLICY voice_profiles_owner_update ON pmoves_core.voice_profiles
+    FOR UPDATE
     USING (created_by = NULLIF(current_setting('request.jwt.claim.sub', true), '')::uuid)
     WITH CHECK (created_by = NULLIF(current_setting('request.jwt.claim.sub', true), '')::uuid);
 
@@ -165,7 +199,9 @@ BEGIN
     EXECUTE 'GRANT USAGE ON SCHEMA pmoves_core TO anon, authenticated, service_role';
     -- Read for anon/authenticated (RLS still gates rows); write for authenticated + service_role.
     EXECUTE 'GRANT SELECT ON pmoves_core.voice_profiles TO anon, authenticated, service_role';
-    EXECUTE 'GRANT INSERT, UPDATE, DELETE ON pmoves_core.voice_profiles TO authenticated, service_role';
+    -- authenticated: INSERT/UPDATE only (soft-delete via deleted_at); hard DELETE is service_role.
+    EXECUTE 'GRANT INSERT, UPDATE ON pmoves_core.voice_profiles TO authenticated';
+    EXECUTE 'GRANT INSERT, UPDATE, DELETE ON pmoves_core.voice_profiles TO service_role';
     EXECUTE 'GRANT SELECT, INSERT, UPDATE, DELETE ON pmoves_core.voice_profile_grants TO authenticated, service_role';
 END $$;
 
