@@ -26,6 +26,14 @@ CREATE TABLE IF NOT EXISTS pmoves_core.voice_profiles (
     sample_path        TEXT,
     sample_rate_hz     INTEGER NOT NULL DEFAULT 24000,
     audio_duration_sec REAL,
+    -- Grounding: ties a voice to the grounded-persona / consciousness-shape substrate
+    -- (v5_12/v5_14 personas, v5_15 consciousness). A voice is part of an agent's grounded
+    -- identity (MOF/prosodic), not a bare clip — it may be grounded in a MIX of paradigm
+    -- leaders/proponents, or map a social-media personality back to a consciousness shape.
+    -- Shape (illustrative; resolved by flute-gateway/consciousness at startup grounding):
+    --   {"persona_ids":[...], "consciousness_shape":"...", "paradigm":"...",
+    --    "proponents":[{"name":"...","weight":0.5,"ref_audio":"..."}], "blend":"weighted"}
+    grounding          JSONB NOT NULL DEFAULT '{}'::jsonb,
     -- Provenance / rights (full record in voice_cloning_provenance, S5; inline mirror here)
     provenance         TEXT,
     rights_basis       TEXT,                                 -- owned|licensed|consented|public_domain|character_owned
