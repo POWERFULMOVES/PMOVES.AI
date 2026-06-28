@@ -70,10 +70,12 @@ These resolve the §10 open questions and add binding architectural direction:
   ownership/sharing ("who may clone Alice's voice?") lands later via RLS on `voice_profiles`,
   so S1-S8 are not blocked on it now.
 
-**Still open — needed for the mesh clone flow (clone is enabled on the tailnet, so these now bind
-real work, not deferred):** Q6 speaker-verify depth, Q7 multilingual representation, Q8 CHIT-signing
-for clone events, Q10 async clone-training job location. Public-website demos don't touch them
-(pre-canned), but the mesh clone path (S8) does — settle before S8 lands.
+**Pending operator confirmation — bind the mesh clone flow (clone is enabled on the tailnet):**
+Q6 speaker-verify depth, Q7 multilingual representation, Q8 CHIT-signing for clone events,
+Q10 async clone-training job location. These have design context already (Q7 ↔ the §3
+`engine_specific`/`tags` language fields; Q8 ↔ the existing CHIT CGP publish in §8), so they're
+*finalize*, not *design-from-scratch*. Public-website demos don't touch them (pre-canned); the
+mesh clone path (S8) does — confirm before S8 lands.
 
 ## 2. Architecture Overview
 
