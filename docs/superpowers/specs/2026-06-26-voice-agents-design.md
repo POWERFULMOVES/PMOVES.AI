@@ -57,6 +57,14 @@ These resolve the §10 open questions and add binding architectural direction:
     **join / sign up** to access; not open to the public internet.
   - **Any live public hosting** uses **light engines only (Kokoro / OmniVoice / small)** so a
     hosting Jetson/light node can't be overrun. `VOICE_CLONING_ENABLED=false` for public stays.
+- **Voice RBAC (Q9) — post-launch via Supabase RLS** (operator, 2026-06-28): Wave-1 ships
+  **creator-scoped ownership only** (a voice belongs to its `created_by`); full multi-tenant
+  ownership/sharing ("who may clone Alice's voice?") lands later via RLS on `voice_profiles`,
+  so S1-S8 are not blocked on it now.
+
+**Still open (lower-urgency — gated behind the disabled-public clone posture):** Q6 speaker-verify
+depth, Q7 multilingual representation, Q8 CHIT-signing for clone events, Q10 async clone-training
+job location. These bind the clone/enroll flow, which is private/disabled-public for now.
 
 ## 2. Architecture Overview
 

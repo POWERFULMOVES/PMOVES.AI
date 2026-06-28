@@ -44,8 +44,19 @@ Cannot be validated without the running data tier (deploy spine). Per stage: log
 issuance + a PostgREST/realtime/storage round-trip; confirm the JWKS endpoint is reachable,
 tokens carry a `kid`, and verifiers select the correct key.
 
-## 7. Open questions (OPERATOR)
-1. **Key custody:** file-mounted secret vs **AWS-KMS** (gotrue v2.191) vs CHIT-managed?
+## 7. Operator decisions / open questions
+
+**Decided (operator, 2026-06-28):**
+1. **Key custody → file-mounted Docker secret** (the `_FILE`-mounted convention used across
+   `pmoves/services/**`) for the initial rollout. **CHIT-managed custody is a follow-up** —
+   migrate the private key into the CHIT secrets pipeline (voice-activated prod-credential
+   model) once the file-mounted path is validated. AWS-KMS not chosen (avoids AWS dependency).
+
+**Still open:**
 2. **ANON/SERVICE_ROLE keys:** keep HS256 in a permanent dual-key JWKS, or **re-mint** (and roll to all consumers)?
 3. **Rotation cadence** once on JWKS?
 4. **Audit:** any RLS / `auth.jwt()` consumers or middleware that string-match the algorithm or shared secret (would break on the flip)?
+
+> Note for S1: with file-mounted custody, the RS256 private key mounts as
+> `GOTRUE_JWT_KEYS_FILE` (or equivalent JWKS file) — no plaintext key in env. The dual-key
+> JWKS (S1) holds the current HS256 key + the new RS256 key during the transition.
