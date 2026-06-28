@@ -140,7 +140,9 @@ ALTER TABLE pmoves_core.voice_profile_grants ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS voice_profiles_service_bypass ON pmoves_core.voice_profiles;
 CREATE POLICY voice_profiles_service_bypass ON pmoves_core.voice_profiles
     FOR ALL
-    USING (jwt_claim_role() = 'service_role');
+    TO service_role
+    USING (true)
+    WITH CHECK (true);
 
 -- Read: active+undeleted AND (public OR owner OR explicitly granted).
 DROP POLICY IF EXISTS voice_profiles_read ON pmoves_core.voice_profiles;
@@ -176,7 +178,9 @@ CREATE POLICY voice_profiles_owner_update ON pmoves_core.voice_profiles
 DROP POLICY IF EXISTS voice_profile_grants_service_bypass ON pmoves_core.voice_profile_grants;
 CREATE POLICY voice_profile_grants_service_bypass ON pmoves_core.voice_profile_grants
     FOR ALL
-    USING (jwt_claim_role() = 'service_role');
+    TO service_role
+    USING (true)
+    WITH CHECK (true);
 
 -- Voice owner manages grants on their voices — checks the DENORMALIZED owner_id
 -- (no subquery into voice_profiles → breaks the recursive RLS policy dependency).
