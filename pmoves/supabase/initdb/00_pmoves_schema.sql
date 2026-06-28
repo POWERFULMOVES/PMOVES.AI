@@ -25,13 +25,6 @@ alter table if exists schema_migrations
 
 create schema if not exists pmoves_core;
 
--- pmoves_kb is exposed to PostgREST via SUPABASE_SCHEMA/PGRST_DB_SCHEMAS, so the
--- schema MUST exist at first boot or PostgREST fails with PGRST125 (schema not
--- found) before `make -C pmoves db-migrate` (db/v5_12, v5_13) has run. Create it
--- here in initdb the same way as pmoves_core; table DDL + REST grants still land
--- via the db/v5_* migrations.
-create schema if not exists pmoves_kb;
-
 create table if not exists pmoves_core.agent (
   id uuid primary key default gen_random_uuid(),
   name text not null,
