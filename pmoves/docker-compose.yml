@@ -602,7 +602,7 @@ services:
           memory: 4G
   supabase-gotrue:
     <<: *tier-supabase-hardened
-    image: supabase/gotrue:v2.186.0
+    image: supabase/gotrue:v2.191.0
     restart: unless-stopped
     profiles:
     - supabase-local
