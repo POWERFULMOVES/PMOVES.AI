@@ -15,7 +15,8 @@ The PoC used Redis. For production use Postgres on the existing `supabase-db`:
   `supabase/initdb/00_2_juicefs_meta_schema.sql` → `create schema if not exists juicefs_meta`.
 - Set the meta URL (env.shared / deploy):
   ```
-  JUICEFS_META_URL=postgres://<SUPABASE_DB_USER>:<SUPABASE_DB_PASSWORD>@supabase-db:5432/postgres?search_path=juicefs_meta&sslmode=disable
+  # single-quote the value: the `&` before sslmode would otherwise background the shell command
+  JUICEFS_META_URL='postgres://<SUPABASE_DB_USER>:<SUPABASE_DB_PASSWORD>@supabase-db:5432/postgres?search_path=juicefs_meta&sslmode=disable'
   ```
   (Both `juicefs format` and `juicefs gateway` read `JUICEFS_META_URL`; default is the redis PoC.)
 - `juicefs-redis` is then unused — leave it in the `juicefs` profile for PoC/fallback, or drop it from the bring-up service list once Postgres is validated.
@@ -35,29 +36,26 @@ so each is a top-level dir. `make juicefs-mirror` (step 3) creates them via `mc 
 Run an `mc` job on the `pmoves_data` network (where both MinIO and the JuiceFS gateway live)
 with an alias for each. Substitute the live S3 creds (`MINIO_USER/MINIO_PASSWORD`, and
 `JUICEFS_S3_USER/JUICEFS_S3_PASSWORD` — which default to the same MinIO creds):
+`minio/mc`'s entrypoint **is `mc`** (and the image has no shell), so loop in the **host** shell
+and run one container per `mc` subcommand:
 ```
-docker run --rm --network pmoves_data \
-  -e MC_HOST_minio="http://$MINIO_USER:$MINIO_PASSWORD@minio:9000" \
-  -e MC_HOST_jfs="http://$JUICEFS_S3_USER:$JUICEFS_S3_PASSWORD@juicefs-gateway:9000" \
-  minio/mc sh -lc '
-    for b in assets outputs pmoves-comfyui; do
-      mc mb -p "jfs/$b" || true
-      mc mirror --overwrite "minio/$b" "jfs/$b"
-    done'
+export MC_MINIO="http://$MINIO_USER:$MINIO_PASSWORD@minio:9000"
+export MC_JFS="http://$JUICEFS_S3_USER:$JUICEFS_S3_PASSWORD@juicefs-gateway:9000"
+for b in assets outputs pmoves-comfyui; do
+  docker run --rm --network pmoves_data -e MC_HOST_jfs="$MC_JFS" minio/mc mb -p "jfs/$b" || true
+  docker run --rm --network pmoves_data -e MC_HOST_minio="$MC_MINIO" -e MC_HOST_jfs="$MC_JFS" \
+    minio/mc mirror --overwrite "minio/$b" "jfs/$b"
+done
 ```
 (Pin `minio/mc` to the digest used elsewhere in the repo for a repeatable run.)
 
 ## 4. Validate parity (before flipping anything)
 ```
-docker run --rm --network pmoves_data \
-  -e MC_HOST_minio="http://$MINIO_USER:$MINIO_PASSWORD@minio:9000" \
-  -e MC_HOST_jfs="http://$JUICEFS_S3_USER:$JUICEFS_S3_PASSWORD@juicefs-gateway:9000" \
-  minio/mc sh -lc '
-    for b in assets outputs pmoves-comfyui; do
-      echo "== $b =="
-      echo "  minio: $(mc ls --recursive minio/$b | wc -l) objects"
-      echo "  jfs:   $(mc ls --recursive jfs/$b | wc -l) objects"
-    done'
+for b in assets outputs pmoves-comfyui; do
+  echo "== $b =="
+  echo "  minio: $(docker run --rm --network pmoves_data -e MC_HOST_minio="$MC_MINIO" minio/mc ls --recursive "minio/$b" | wc -l) objects"
+  echo "  jfs:   $(docker run --rm --network pmoves_data -e MC_HOST_jfs="$MC_JFS"   minio/mc ls --recursive "jfs/$b"   | wc -l) objects"
+done
 ```
 Counts (and a `du`/size spot-check) must match per bucket. Then spot-check a presigned GET from
 a real consumer (e.g. `presign`) against the JuiceFS gateway before proceeding.
