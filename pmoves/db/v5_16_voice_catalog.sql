@@ -30,9 +30,13 @@ CREATE TABLE IF NOT EXISTS pmoves_core.voice_profiles (
     -- (v5_12/v5_14 personas, v5_15 consciousness). A voice is part of an agent's grounded
     -- identity (MOF/prosodic), not a bare clip — it may be grounded in a MIX of paradigm
     -- leaders/proponents, or map a social-media personality back to a consciousness shape.
-    -- Shape (illustrative; resolved by flute-gateway/consciousness at startup grounding):
-    --   {"persona_ids":[...], "consciousness_shape":"...", "paradigm":"...",
+    -- Shape (resolved by flute-gateway/consciousness at startup grounding). Keys map to
+    -- the real substrate PKs: persona_ids → v5_12 pmoves_core.personas.persona_id (uuid);
+    -- consciousness_theory_id → v5_15 pmoves_core.consciousness_theories.id (text):
+    --   {"persona_ids":[...], "consciousness_theory_id":"...", "paradigm":"...",
     --    "proponents":[{"name":"...","weight":0.5,"ref_audio":"..."}], "blend":"weighted"}
+    -- NOTE: paradigm/proponents have no backing table yet — the canonical grounding shape
+    -- is pinned in the design spec §3 and validated in the S1b loader/validate path.
     grounding          JSONB NOT NULL DEFAULT '{}'::jsonb,
     -- Provenance / rights (full record in voice_cloning_provenance, S5; inline mirror here)
     provenance         TEXT,
@@ -136,7 +140,7 @@ ALTER TABLE pmoves_core.voice_profile_grants ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS voice_profiles_service_bypass ON pmoves_core.voice_profiles;
 CREATE POLICY voice_profiles_service_bypass ON pmoves_core.voice_profiles
     FOR ALL
-    USING (current_setting('request.jwt.claim.role', true) = 'service_role');
+    USING (jwt_claim_role() = 'service_role');
 
 -- Read: active+undeleted AND (public OR owner OR explicitly granted).
 DROP POLICY IF EXISTS voice_profiles_read ON pmoves_core.voice_profiles;
@@ -145,11 +149,11 @@ CREATE POLICY voice_profiles_read ON pmoves_core.voice_profiles
     USING (
         is_active AND deleted_at IS NULL AND (
             is_public
-            OR created_by = NULLIF(current_setting('request.jwt.claim.sub', true), '')::uuid
+            OR created_by = auth.uid()
             OR EXISTS (
                 SELECT 1 FROM pmoves_core.voice_profile_grants g
                 WHERE g.voice_profile_id = pmoves_core.voice_profiles.id
-                  AND g.grantee = NULLIF(current_setting('request.jwt.claim.sub', true), '')::uuid
+                  AND g.grantee = auth.uid()
             )
         )
     );
@@ -161,37 +165,32 @@ DROP POLICY IF EXISTS voice_profiles_owner_write ON pmoves_core.voice_profiles;
 DROP POLICY IF EXISTS voice_profiles_owner_insert ON pmoves_core.voice_profiles;
 CREATE POLICY voice_profiles_owner_insert ON pmoves_core.voice_profiles
     FOR INSERT
-    WITH CHECK (created_by = NULLIF(current_setting('request.jwt.claim.sub', true), '')::uuid);
+    WITH CHECK (created_by = auth.uid());
 
 DROP POLICY IF EXISTS voice_profiles_owner_update ON pmoves_core.voice_profiles;
 CREATE POLICY voice_profiles_owner_update ON pmoves_core.voice_profiles
     FOR UPDATE
-    USING (created_by = NULLIF(current_setting('request.jwt.claim.sub', true), '')::uuid)
-    WITH CHECK (created_by = NULLIF(current_setting('request.jwt.claim.sub', true), '')::uuid);
+    USING (created_by = auth.uid())
+    WITH CHECK (created_by = auth.uid());
 
 DROP POLICY IF EXISTS voice_profile_grants_service_bypass ON pmoves_core.voice_profile_grants;
 CREATE POLICY voice_profile_grants_service_bypass ON pmoves_core.voice_profile_grants
     FOR ALL
-    USING (current_setting('request.jwt.claim.role', true) = 'service_role');
+    USING (jwt_claim_role() = 'service_role');
 
 -- Voice owner manages grants on their voices — checks the DENORMALIZED owner_id
 -- (no subquery into voice_profiles → breaks the recursive RLS policy dependency).
 DROP POLICY IF EXISTS voice_profile_grants_owner ON pmoves_core.voice_profile_grants;
 CREATE POLICY voice_profile_grants_owner ON pmoves_core.voice_profile_grants
     FOR ALL
-    USING (owner_id = NULLIF(current_setting('request.jwt.claim.sub', true), '')::uuid)
-    WITH CHECK (owner_id = NULLIF(current_setting('request.jwt.claim.sub', true), '')::uuid);
+    USING (owner_id = auth.uid())
+    WITH CHECK (owner_id = auth.uid());
 
 -- Grantee may read their own grant row.
 DROP POLICY IF EXISTS voice_profile_grants_grantee_read ON pmoves_core.voice_profile_grants;
 CREATE POLICY voice_profile_grants_grantee_read ON pmoves_core.voice_profile_grants
     FOR SELECT
-    USING (grantee = NULLIF(current_setting('request.jwt.claim.sub', true), '')::uuid);
-
-DROP POLICY IF EXISTS voice_profile_grants_grantee_read ON pmoves_core.voice_profile_grants;
-CREATE POLICY voice_profile_grants_grantee_read ON pmoves_core.voice_profile_grants
-    FOR SELECT
-    USING (grantee = NULLIF(current_setting('request.jwt.claim.sub', true), '')::uuid);
+    USING (grantee = auth.uid());
 
 -- PostgREST grants (mirror v5_13_pmoves_core_rest_grants.sql) ------------------
 DO $$
