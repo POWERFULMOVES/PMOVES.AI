@@ -35,5 +35,5 @@ python3 main.py
 
 | Env var | Default | Purpose |
 |---|---|---|
-| `NATS_URL` | `nats://nats:pmoves@nats:4222` | NATS connection URL |
-| `SPARK_SHAPE_SECRET` | `
+| `NATS_URL` | `nats://nats:pmoves@nats:4222` | NATS connection URL (credentials redacted in logs) |
+| `SPARK_SHAPE_SECRET` | _(empty)_ | HMAC key for signing shaped/handshake packets. Also reads `SPARK_SHAPE_SECRET_FILE` (Docker secret mount). |

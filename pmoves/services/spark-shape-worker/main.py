@@ -31,8 +31,29 @@ from typing import Any
 import nats
 from nats.aio.client import Client as NATS
 
+def _secret(key: str, default: str = "") -> str:
+    """Read {key} from env, falling back to the {key}_FILE mount (Docker secret convention)."""
+    val = os.environ.get(key)
+    if val:
+        return val
+    file_path = os.environ.get(f"{key}_FILE")
+    if file_path and os.path.exists(file_path):
+        with open(file_path, encoding="utf-8") as fh:
+            return fh.read().strip()
+    return default
+
+
+def _redact_url(url: str) -> str:
+    """Strip embedded credentials (user:pass@) from a connection URL for logging."""
+    if "://" in url:
+        scheme, rest = url.split("://", 1)
+        if "@" in rest:
+            return f"{scheme}://***@{rest.split('@', 1)[1]}"
+    return url
+
+
 NATS_URL = os.environ.get("NATS_URL", "nats://nats:pmoves@nats:4222")
-SHAPE_SECRET = os.environ.get("SPARK_SHAPE_SECRET", "")
+SHAPE_SECRET = _secret("SPARK_SHAPE_SECRET", "")
 
 SUBSCRIBE_SUBJECT = "mesh.gpu.inference.result.v1"
 PUBLISH_SHAPED = "content.lexicon.shaped.v1"
@@ -110,6 +131,10 @@ class ShapeWorker:
             print(f"[shape-worker] dropping non-JSON message: {exc}", file=sys.stderr)
             return
 
+        if not isinstance(raw, dict):
+            print(f"[shape-worker] dropping non-object JSON message: {type(raw).__name__}", file=sys.stderr)
+            return
+
         shaped = self._shape(raw)
         data = json.dumps(shaped, default=str).encode("utf-8")
 
@@ -130,7 +155,7 @@ class ShapeWorker:
     async def run(self) -> int:
         self.nc = await nats.connect(self.nats_url)
         self.sub = await self.nc.subscribe(SUBSCRIBE_SUBJECT, cb=self._on_result)
-        print(f"[shape-worker] connected to {self.nats_url}")
+        print(f"[shape-worker] connected to {_redact_url(self.nats_url)}")
         print(f"[shape-worker] subscribed to {SUBSCRIBE_SUBJECT}")
 
         loop = asyncio.get_running_loop()
