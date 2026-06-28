@@ -69,6 +69,24 @@
       "capabilities": ["pr-triage", "thread-classify", "risk-notes"],
       "pinned": false,
       "status": "active"
+    },
+    {
+      "app_id": "mcp-e2b",
+      "kind": "custom",
+      "route": "/mcp/e2b",
+      "provider": "pmoves-e2b-mcp-server",
+      "action_namespace": "mcp.v1.e2b",
+      "capabilities": ["sandbox", "execution", "artifacts"],
+      "status": "planned"
+    },
+    {
+      "app_id": "mcp-hirag",
+      "kind": "custom",
+      "route": "/mcp/hirag",
+      "provider": "pmoves-hirag-mcp",
+      "action_namespace": "mcp.v1.hirag",
+      "capabilities": ["retrieve", "graph", "search", "notebook"],
+      "status": "planned"
     }
   ],
   "notebook": {
@@ -189,6 +207,112 @@
       },
       "enabled": true,
       "tags": ["identity", "review", "discovery"]
+    },
+    {
+      "binding_id": "e2b-mcp-bridge",
+      "skill_id": "pmoves_e2b_mcp",
+      "room_id": "4090-field.room.control",
+      "display_name": "E2B Sandbox MCP Bridge",
+      "intent": ["sandbox", "execution", "artifacts"],
+      "activation": {
+        "invocation_mode": "explicit",
+        "trigger_phrases": ["open e2b mcp", "run sandbox"],
+        "requires_selection": false
+      },
+      "surface": {
+        "app_id": "mcp-e2b",
+        "target": "sidebar",
+        "route": "/mcp/e2b"
+      },
+      "execution": {
+        "mode": "background",
+        "run_as": "room-service",
+        "stream": "events",
+        "max_steps": 4
+      },
+      "context": {
+        "sources": ["room-state", "agent-registry"],
+        "include_last_turns": 2,
+        "notebook_writeback": true,
+        "artifact_types": ["json"]
+      },
+      "outputs": [
+        {
+          "target": "room-state",
+          "delivery": "replace",
+          "path": "mcp/e2b/last-result",
+          "artifact_type": "json"
+        },
+        {
+          "target": "chat-response",
+          "delivery": "notify",
+          "artifact_type": "text"
+        }
+      ],
+      "guardrails": {
+        "require_approval": true,
+        "max_runtime_sec": 120,
+        "fail_open": true,
+        "one_active_run": true
+      },
+      "enabled": false,
+      "tags": ["mcp", "e2b", "planned"],
+      "metadata": {
+        "status": "planned"
+      }
+    },
+    {
+      "binding_id": "hirag-mcp-bridge",
+      "skill_id": "pmoves_hirag_mcp",
+      "room_id": "4090-field.room.control",
+      "display_name": "HiRAG MCP Bridge",
+      "intent": ["retrieve", "graph", "search", "notebook"],
+      "activation": {
+        "invocation_mode": "explicit",
+        "trigger_phrases": ["open hirag mcp", "search graph"],
+        "requires_selection": false
+      },
+      "surface": {
+        "app_id": "mcp-hirag",
+        "target": "sidebar",
+        "route": "/mcp/hirag"
+      },
+      "execution": {
+        "mode": "background",
+        "run_as": "room-service",
+        "stream": "events",
+        "max_steps": 4
+      },
+      "context": {
+        "sources": ["room-state", "notebook-thread", "agent-registry"],
+        "include_last_turns": 2,
+        "notebook_writeback": true,
+        "artifact_types": ["json"]
+      },
+      "outputs": [
+        {
+          "target": "room-state",
+          "delivery": "replace",
+          "path": "mcp/hirag/last-result",
+          "artifact_type": "json"
+        },
+        {
+          "target": "chat-response",
+          "delivery": "notify",
+          "artifact_type": "text"
+        }
+      ],
+      "guardrails": {
+        "require_approval": false,
+        "max_runtime_sec": 60,
+        "fail_open": true,
+        "one_active_run": true
+      },
+      "enabled": false,
+      "tags": ["mcp", "hirag", "planned"],
+      "metadata": {
+        "status": "planned"
+      }
     }
   ],
   "team_refs": ["orchestration", "research"],
