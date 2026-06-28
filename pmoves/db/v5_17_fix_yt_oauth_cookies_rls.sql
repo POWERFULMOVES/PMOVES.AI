@@ -7,13 +7,18 @@
 -- policy is dead code (service_role still reaches the table only via its separate BYPASSRLS).
 --
 -- Corrective migration (do NOT edit an already-applied migration): drop + recreate the
--- policy with the repo-standard helper `jwt_claim_role()` used by the applied migrations
--- (pmoves/supabase/migrations/20250204000000_channel_monitor_tables.sql:105). Idempotent.
+-- policy targeting the Postgres `service_role` role directly (TO service_role) — the
+-- dependency-free idiom used by applied migrations (service_catalog.sql:73). This avoids
+-- BOTH the removed `request.jwt.claim.role` GUC AND `jwt_claim_role()` (which is NOT
+-- defined anywhere in repo SQL — using it would abort CREATE POLICY after the DROP,
+-- leaving the table policy-less). PostgREST connects service-key requests AS service_role,
+-- so TO service_role + USING(true) is the correct service-only access. Idempotent.
 -- Audit ref: [[reference_supabase_rls_accessor_idiom]].
 
 DROP POLICY IF EXISTS yt_oauth_cookies_service_role_all ON pmoves_core.yt_oauth_cookies;
 CREATE POLICY yt_oauth_cookies_service_role_all
     ON pmoves_core.yt_oauth_cookies
     FOR ALL
-    USING (jwt_claim_role() = 'service_role')
-    WITH CHECK (jwt_claim_role() = 'service_role');
+    TO service_role
+    USING (true)
+    WITH CHECK (true);
