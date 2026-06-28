@@ -49,10 +49,14 @@ CREATE INDEX IF NOT EXISTS voice_profiles_engine_idx ON pmoves_core.voice_profil
 CREATE INDEX IF NOT EXISTS voice_profiles_owner_idx  ON pmoves_core.voice_profiles (created_by);
 CREATE INDEX IF NOT EXISTS voice_profiles_tags_gin   ON pmoves_core.voice_profiles USING GIN (tags);
 
--- Sharing grants (Q9: "who may use/clone Alice's voice") ---------------------
+-- Sharing grants (Q9: "who may use/clone Alice's voice"). owner_id is DENORMALIZED
+-- from voice_profiles.created_by so the grants RLS policy never reads back into
+-- voice_profiles (breaks the recursive policy dependency); kept authoritative by a
+-- SECURITY DEFINER trigger, not the inserter.
 CREATE TABLE IF NOT EXISTS pmoves_core.voice_profile_grants (
     voice_profile_id UUID NOT NULL REFERENCES pmoves_core.voice_profiles(id) ON DELETE CASCADE,
     grantee          UUID NOT NULL,                          -- auth.uid()
+    owner_id         UUID,                                   -- = voice_profiles.created_by (trigger-maintained)
     can_clone        BOOLEAN NOT NULL DEFAULT false,         -- false = use-only; true = may clone-from
     granted_by       UUID,
     granted_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -72,6 +76,22 @@ DROP TRIGGER IF EXISTS trg_voice_profiles_touch ON pmoves_core.voice_profiles;
 CREATE TRIGGER trg_voice_profiles_touch
     BEFORE UPDATE ON pmoves_core.voice_profiles
     FOR EACH ROW EXECUTE FUNCTION pmoves_core.touch_voice_profiles_updated_at();
+
+-- Denormalize owner onto grants (SECURITY DEFINER → bypasses RLS, no recursion).
+CREATE OR REPLACE FUNCTION pmoves_core.set_voice_grant_owner()
+RETURNS trigger AS $$
+BEGIN
+    SELECT created_by INTO NEW.owner_id
+        FROM pmoves_core.voice_profiles
+        WHERE id = NEW.voice_profile_id;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pmoves_core, pg_temp;
+
+DROP TRIGGER IF EXISTS trg_voice_grant_owner ON pmoves_core.voice_profile_grants;
+CREATE TRIGGER trg_voice_grant_owner
+    BEFORE INSERT OR UPDATE OF voice_profile_id ON pmoves_core.voice_profile_grants
+    FOR EACH ROW EXECUTE FUNCTION pmoves_core.set_voice_grant_owner();
 
 -- Row Level Security (Q9) -----------------------------------------------------
 -- jwt sub (user id) helper: NULLIF guards an empty/absent claim from a uuid cast error.
@@ -112,17 +132,19 @@ CREATE POLICY voice_profile_grants_service_bypass ON pmoves_core.voice_profile_g
     FOR ALL
     USING (current_setting('request.jwt.claim.role', true) = 'service_role');
 
--- Voice owner manages grants on their voices; grantee may read their own grant.
+-- Voice owner manages grants on their voices — checks the DENORMALIZED owner_id
+-- (no subquery into voice_profiles → breaks the recursive RLS policy dependency).
 DROP POLICY IF EXISTS voice_profile_grants_owner ON pmoves_core.voice_profile_grants;
 CREATE POLICY voice_profile_grants_owner ON pmoves_core.voice_profile_grants
     FOR ALL
-    USING (
-        EXISTS (
-            SELECT 1 FROM pmoves_core.voice_profiles p
-            WHERE p.id = voice_profile_grants.voice_profile_id
-              AND p.created_by = NULLIF(current_setting('request.jwt.claim.sub', true), '')::uuid
-        )
-    );
+    USING (owner_id = NULLIF(current_setting('request.jwt.claim.sub', true), '')::uuid)
+    WITH CHECK (owner_id = NULLIF(current_setting('request.jwt.claim.sub', true), '')::uuid);
+
+-- Grantee may read their own grant row.
+DROP POLICY IF EXISTS voice_profile_grants_grantee_read ON pmoves_core.voice_profile_grants;
+CREATE POLICY voice_profile_grants_grantee_read ON pmoves_core.voice_profile_grants
+    FOR SELECT
+    USING (grantee = NULLIF(current_setting('request.jwt.claim.sub', true), '')::uuid);
 
 DROP POLICY IF EXISTS voice_profile_grants_grantee_read ON pmoves_core.voice_profile_grants;
 CREATE POLICY voice_profile_grants_grantee_read ON pmoves_core.voice_profile_grants
