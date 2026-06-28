@@ -24,6 +24,35 @@ agent_signature: 4090-claude (synthesized from a 6-agent research fan-out)
 
 Make agent and voice-agent expressiveness uniform across **all** flute-gateway TTS engines (OmniVoice, VibeVoice, Voicebox, Ultimate-TTS) by introducing one engine-agnostic **voice-profile contract** backed by Supabase (truth/routing) and JuiceFS (shared audio, MinIO interim), so any node can resolve, clone, and synthesize the same voice. New voices enroll **fast and durably** from media (`pmoves-yt` first, Jellyfin next) through reuse of existing `ffmpeg-whisper` extract/transcribe and a thin `voice:enroll` glue, gated by an enforceable rights/consent/provenance check (open-source/CC-BY only, per DARKXSIDE policy). A web demo lets anyone **talk / try / clone**. Principles: deterministic tools for grounding (extract, ASR-gate, hash) and models only for genuine synthesis; reuse existing services over new microservices; registry is the single discovery/routing layer while each engine keeps its native profile storage; consent is a hard gate, not a checkbox.
 
+## 1a. Operator Decisions (2026-06-28) — authoritative
+
+These resolve the §10 open questions and add binding architectural direction:
+
+- **JuiceFS metadata engine = Postgres** (tier-data), not Redis. (Q1)
+- **Topology = host-or-standalone, hardware-impedance-matched** (Q2): every voice engine
+  can run **standalone on a node** OR be **hosted by a capable node for others** (a small
+  node taps a host instead of running the engine locally). Engine selection is by
+  **purpose + available hardware/engines**, not a fixed default. Node→engine map:
+  - **Heavy hosts (run larger / whole Ultimate-TTS, serve others):** SPARK, 5090, Z890, KNUCKLES.
+  - **Light nodes (run small engine locally OR tap a host):** 4090, elder-melchor,
+    missling-link, Jetsons — small/light engines only (OmniVoice, Voicebox, **Kokoro**).
+  - Resolution: the registry profile names an `engine`; routing picks a **reachable
+    instance** of that engine (local if present, else a hosting node over Tailscale
+    MagicDNS) — `OMNIVOICE_URL`/per-engine URLs already normalize host targets.
+- **Voice-design / control surface is ENGINE-SOURCED** (Q3): `instruct`/design params are
+  **declared per engine** (engine capability/TAC), not a global freeform string. OmniVoice
+  is *one* engine; an agent selects among many by purpose/hardware, and the design controls
+  available come from that engine's declared surface. (Drives the capability matrix in §3
+  becoming the source of truth for what each engine exposes.)
+- **Demo posture (Q4/Q5) — no meter to be burned:**
+  - **Public (pmoves.ai):** **pre-canned** voice-over-agent-trails — narrated chronicles of
+    agent exploits / agent summaries / examples of voice agents. **Pre-rendered audio, not
+    live synthesis** (zero per-visitor GPU cost).
+  - **Live voice agents:** **private, on the Tailscale tailnet** — interested parties
+    **join / sign up** to access; not open to the public internet.
+  - **Any live public hosting** uses **light engines only (Kokoro / OmniVoice / small)** so a
+    hosting Jetson/light node can't be overrun. `VOICE_CLONING_ENABLED=false` for public stays.
+
 ## 2. Architecture Overview
 
 ```
@@ -150,12 +179,14 @@ Critical path to first user value: **S1 → S3** (Try, no clone). Talk (S4) para
 
 ## 10. Open Questions for the Operator
 
-1. **JuiceFS metadata engine** — Redis vs Postgres (tier-data) for the voice path? Drives S7 timing and the <5 s vs ~30 s visibility decision.
-2. **OmniVoice topology** — single shared instance via Tailscale Funnel, or replicas on 4090/5090 sharing the mount? (latency vs cost; benchmark before S7).
-3. **Ultimate-TTS RVC synthesis API signature** — needed to unblock S8 `synthesize_cloned()` (`{rvc_model, rvc_index, text} → audio`?).
-4. **`instruct` (OmniVoice design)** — freeform string or controlled enum (warm/professional/energetic) to prevent prompt-injection and ensure reproducible re-synthesis?
-5. **Public clone enablement** — keep `VOICE_CLONING_ENABLED=false` default; which jurisdictions/retention policy for the demo? Legal review gate before public clone.
-6. **Speaker-verification depth** — ship Wave-1 clone with consent-audio only, or block OWNED enrollment on Pyannote liveness from day one (deepfake-spoof risk)?
+**Q1–Q5 RESOLVED 2026-06-28 — see §1a Operator Decisions.**
+
+1. ✅ **JuiceFS metadata engine** → **Postgres** (tier-data).
+2. ✅ **Topology** → **host-or-standalone, hardware-impedance-matched** (heavy hosts SPARK/5090/Z890/KNUCKLES serve or run full Ultimate-TTS; light nodes 4090/elder-melchor/missling-link/Jetsons run small engines or tap a host). Not a single fixed instance.
+3. ⬜ **Ultimate-TTS RVC synthesis API signature** — still needed to unblock S8 `synthesize_cloned()` (`{rvc_model, rvc_index, text} → audio`?).
+4. ✅ **Voice-design surface** → **engine-sourced** (per-engine declared capability/TAC), not a global freeform string. Agents select engine by purpose/hardware; design controls come from that engine.
+5. ✅ **Demo posture** → **public = pre-canned voice-over-agent-trails** (no live synthesis); **live voice agents = private Tailscale, join/sign-up**; light engines (Kokoro/OmniVoice) only for any live public hosting; `VOICE_CLONING_ENABLED=false` public stays.
+6. ⬜ **Speaker-verification depth** — ship Wave-1 clone with consent-audio only, or block OWNED enrollment on Pyannote liveness from day one (deepfake-spoof risk)?
 7. **Multilingual representation** — single profile with `tags=[multilingual,en,es]` + `instruct` language control, or separate per-language profiles?
 8. **CHIT signing for clone events** — should clone training/synthesis be CHIT-signed like normal synthesis (confirm against `CHIT_INTEGRATION_STATUS.md`)?
 9. **Voice RBAC** — multi-tenant ownership/sharing ("who may clone Alice's voice?") in scope now, or post-launch via Supabase RLS?
