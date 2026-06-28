@@ -187,7 +187,9 @@ Critical path to first user value: **S1 → S3** (Try, no clone). Talk (S4) para
 4. ✅ **Voice-design surface** → **engine-sourced** (per-engine declared capability/TAC), not a global freeform string. Agents select engine by purpose/hardware; design controls come from that engine.
 5. ✅ **Demo posture** → **public = pre-canned voice-over-agent-trails** (no live synthesis); **live voice agents = private Tailscale, join/sign-up**; light engines (Kokoro/OmniVoice) only for any live public hosting; `VOICE_CLONING_ENABLED=false` public stays.
 6. ⬜ **Speaker-verification depth** — ship Wave-1 clone with consent-audio only, or block OWNED enrollment on Pyannote liveness from day one (deepfake-spoof risk)?
-7. **Multilingual representation** — single profile with `tags=[multilingual,en,es]` + `instruct` language control, or separate per-language profiles?
-8. **CHIT signing for clone events** — should clone training/synthesis be CHIT-signed like normal synthesis (confirm against `CHIT_INTEGRATION_STATUS.md`)?
-9. **Voice RBAC** — multi-tenant ownership/sharing ("who may clone Alice's voice?") in scope now, or post-launch via Supabase RLS?
-10. **Where does the async clone-training job live** — flute-gateway `voice.training.request.v1`, creator-operator, or n8n with approval gates?
+7. ✅ **Multilingual + translation** (2026-06-28) → **yes**: a profile carries `tags=[multilingual,…]` with per-request **language control** AND a **translation** capability (translate source text before synthesis). Engine language support comes from the engine-sourced capability surface (§1a/Q4).
+8. ✅ **CHIT signing for clone events** (2026-06-28) → **yes, if clone is kept** — clone training + cloned synthesis are CHIT-signed like normal synthesis (provenance rides CGP `meta`, §8).
+9. ✅ **Voice RBAC** (2026-06-28) → **yes, via Supabase** — multi-tenant ownership/sharing enforced with **Supabase RLS** on `voice_profiles`/`voice_cloning_provenance` (owner + grant model).
+10. ⬜ **Where does the async clone-training job live** — flute-gateway `voice.training.request.v1`, creator-operator, or n8n with approval gates? (decide at S8)
+
+> **Still open (later-stage, non-blocking for S1–S4):** Q3 (Ultimate-TTS RVC API sig → S8), Q6 (speaker-verify depth → clone wave), Q10 (clone-job home → S8).
