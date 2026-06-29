@@ -44,7 +44,7 @@ Symptoms (diagnosed 2026-06-29): `/yt/ingest` → "Sign in to confirm you're not
 ### 3.1 Acquire core — `pmoves/tools/google_oauth.py`
 Generalize `yt_oauth_flow.py` into a provider-agnostic-shaped Google core:
 
-- **Flow:** Google `InstalledAppFlow.run_local_server(port=0, prompt="consent")` → loopback `127.0.0.1:<random>`. Removes the fixed `:8199` redirect and its console-registration requirement.
+- **Flow:** build on the canonical **`google-auth-oauthlib`** library — `InstalledAppFlow.from_client_config(...).run_local_server(port=0, prompt="consent")` → loopback `127.0.0.1:<random>`. This **replaces** the existing hand-rolled `http.server` callback + manual code-exchange (`_OAuthCallbackHandler`, `_build_auth_url`, `_exchange_code`) — ~80 lines of bespoke OAuth security code deleted in favor of the audited library. Removes the fixed `:8199` redirect and its console-registration requirement. Adds `google-auth-oauthlib` as a declared dependency (currently absent).
 - **Inputs (env):** `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`. **Back-compat aliases:** fall back to `CHANNEL_MONITOR_GOOGLE_CLIENT_ID/SECRET` so no secret churn (the YT refresh already reuses channel-monitor's client per Phase 9Q.2).
 - **Encryption:** `VAULT_ENC_KEY` (Fernet) — unchanged.
 - **Subcommands:** `auth` (consent + store), `status`, `refresh` (mint access token from stored refresh token), `revoke`.
