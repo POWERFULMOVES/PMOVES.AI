@@ -61,4 +61,5 @@ exclude_lines = [
 [project.optional-dependencies]
 dev = [
     "cryptography",
+    "google-auth-oauthlib>=1.2.0",
 ]
