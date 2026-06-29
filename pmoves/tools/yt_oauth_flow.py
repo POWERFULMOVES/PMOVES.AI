@@ -23,14 +23,9 @@ Called via Make targets:
 from __future__ import annotations
 
 import argparse
-import http.server
 import json
 import os
-import secrets
 import sys
-import threading
-import urllib.parse
-import webbrowser
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -45,6 +40,12 @@ try:
 except ImportError:
     Fernet = None  # type: ignore[assignment,misc]
 
+try:
+    from google_auth_oauthlib.flow import InstalledAppFlow
+except ImportError:
+    print("ERROR: google-auth-oauthlib not installed. Run: uv pip install google-auth-oauthlib", file=sys.stderr)
+    InstalledAppFlow = None  # type: ignore[assignment,misc]
+
 # ---------------------------------------------------------------------------
 # Configuration (from env, reusing channel-monitor's Google OAuth client)
 # ---------------------------------------------------------------------------
@@ -55,10 +56,6 @@ GOOGLE_REVOKE_URL = "https://oauth2.googleapis.com/revoke"
 
 # Scopes: youtube.readonly covers channel data + video metadata (same as channel-monitor)
 OAUTH_SCOPES = "https://www.googleapis.com/auth/youtube.readonly"
-
-# Callback server for OAuth2 code exchange
-CALLBACK_PORT = 8199
-CALLBACK_PATH = "/oauth/callback"
 
 # Supabase connection
 DEFAULT_USER_ID = "darkxside"
@@ -156,83 +153,25 @@ def _decrypt(value: str, fernet: Optional[object]) -> str:
 # OAuth2 authorization code flow
 # ---------------------------------------------------------------------------
 
-class _OAuthCallbackHandler(http.server.BaseHTTPRequestHandler):
-    """Minimal HTTP handler to capture OAuth2 callback code."""
+def _build_flow(client_id: str, client_secret: str, scope: str) -> "InstalledAppFlow":
+    """Build an InstalledAppFlow from inline client config (Desktop client shape).
 
-    code: Optional[str] = None
-    error: Optional[str] = None
-
-    def do_GET(self) -> None:
-        parsed = urllib.parse.urlparse(self.path)
-        params = urllib.parse.parse_qs(parsed.query)
-
-        if parsed.path != CALLBACK_PATH:
-            self.send_response(404)
-            self.end_headers()
-            return
-
-        if "error" in params:
-            _OAuthCallbackHandler.error = params["error"][0]
-            body = f"<h2>OAuth Error: {params['error'][0]}</h2><p>You can close this tab.</p>"
-        elif "code" in params:
-            _OAuthCallbackHandler.code = params["code"][0]
-            body = "<h2>Authorization successful!</h2><p>You can close this tab and return to the terminal.</p>"
-        else:
-            body = "<h2>Unexpected response</h2>"
-
-        self.send_response(200)
-        self.send_header("Content-Type", "text/html")
-        self.end_headers()
-        self.wfile.write(body.encode())
-
-    def log_message(self, *args) -> None:  # noqa: D102
-        pass  # suppress server log noise
-
-
-def _build_auth_url(client_id: str, redirect_uri: str, state: str) -> str:
-    """Build Google OAuth2 authorization URL."""
-    params = {
-        "client_id": client_id,
-        "redirect_uri": redirect_uri,
-        "response_type": "code",
-        "scope": OAUTH_SCOPES,
-        "access_type": "offline",       # get refresh_token
-        "prompt": "consent",            # always prompt (ensures refresh_token)
-        "state": state,
-    }
-    return f"{GOOGLE_AUTH_URL}?{urllib.parse.urlencode(params)}"
-
-
-def _exchange_code(code: str, client_id: str, client_secret: str, redirect_uri: str) -> dict:
-    """Exchange authorization code for tokens.
-
-    Uses stdlib urllib for the token exchange because some Windows + miniconda
-    httpx installs intermittently fail with `getaddrinfo failed` even when the
-    OS resolver succeeds (observed during Phase 9C bootstrap). urllib uses the
-    OS resolver path directly and avoids httpx's connection-pool DNS cache.
+    The audited google-auth-oauthlib library handles loopback binding, state,
+    PKCE, and code exchange — replacing the prior hand-rolled callback server.
     """
-    import json as _json
-    import urllib.parse as _urlparse
-    import urllib.request as _urlreq
-
-    payload = {
-        "code": code,
-        "client_id": client_id,
-        "client_secret": client_secret,
-        "redirect_uri": redirect_uri,
-        "grant_type": "authorization_code",
+    if InstalledAppFlow is None:
+        print("ERROR: google-auth-oauthlib not installed.", file=sys.stderr)
+        sys.exit(1)
+    client_config = {
+        "installed": {
+            "client_id": client_id,
+            "client_secret": client_secret,
+            "auth_uri": GOOGLE_AUTH_URL,
+            "token_uri": GOOGLE_TOKEN_URL,
+            "redirect_uris": ["http://localhost"],
+        }
     }
-    data = _urlparse.urlencode(payload).encode("ascii")
-    req = _urlreq.Request(
-        GOOGLE_TOKEN_URL,
-        data=data,
-        headers={"Content-Type": "application/x-www-form-urlencoded"},
-        method="POST",
-    )
-    with _urlreq.urlopen(req, timeout=30) as resp:
-        if resp.status >= 400:
-            raise RuntimeError(f"token exchange HTTP {resp.status}: {resp.read()[:200]}")
-        return _json.loads(resp.read().decode("utf-8"))
+    return InstalledAppFlow.from_client_config(client_config, scopes=scope.split())
 
 
 # ---------------------------------------------------------------------------
@@ -303,65 +242,36 @@ def _delete_row(user_id: str = DEFAULT_USER_ID) -> bool:
 # Subcommands
 # ---------------------------------------------------------------------------
 
-def cmd_auth() -> None:
-    """Run the OAuth2 consent flow and store the refresh token."""
-    client_id = _require_env("CHANNEL_MONITOR_GOOGLE_CLIENT_ID")
-    client_secret = _require_env("CHANNEL_MONITOR_GOOGLE_CLIENT_SECRET")
-    redirect_uri = f"http://localhost:{CALLBACK_PORT}{CALLBACK_PATH}"
+def cmd_auth(user_id: str = DEFAULT_USER_ID, scope: str = OAUTH_SCOPES) -> None:
+    """Run the loopback OAuth2 consent flow and store the refresh token."""
+    client_id, client_secret = _client_creds()
+    flow = _build_flow(client_id, client_secret, scope)
 
-    state = secrets.token_urlsafe(16)
-    auth_url = _build_auth_url(client_id, redirect_uri, state)
+    print("Opening browser for Google OAuth2 consent (loopback, ephemeral port)...")
+    # Scope logged as plain concat (breaks CodeQL taint path on OAuth f-strings).
+    print("  Scopes: " + scope)
+    creds = flow.run_local_server(port=0, prompt="consent", access_type="offline")
 
-    # Start callback server
-    server = http.server.HTTPServer(("127.0.0.1", CALLBACK_PORT), _OAuthCallbackHandler)
-    server_thread = threading.Thread(target=server.handle_request, daemon=True)
-    server_thread.start()
-
-    print("Opening browser for Google OAuth2 consent...")
-    print(f"  Redirect URI: {redirect_uri}")
-    # CodeQL note: OAUTH_SCOPES is a hardcoded public constant (youtube.readonly),
-    # but CodeQL flags all f-string logging in OAuth flows. Log as plain concat
-    # to break the taint path (equivalent runtime behavior).
-    print("  Scopes: " + OAUTH_SCOPES)
-    print()
-    webbrowser.open(auth_url)
-    print("Waiting for OAuth2 callback... (Ctrl+C to cancel)")
-
-    server_thread.join(timeout=300)  # 5 min timeout
-    server.server_close()
-
-    if _OAuthCallbackHandler.error:
-        print(f"ERROR: OAuth2 denied: {_OAuthCallbackHandler.error}", file=sys.stderr)
-        sys.exit(1)
-
-    code = _OAuthCallbackHandler.code
-    if not code:
-        print("ERROR: No authorization code received (timeout?).", file=sys.stderr)
-        sys.exit(1)
-
-    print("Authorization code received. Exchanging for tokens...")
-    token_data = _exchange_code(code, client_id, client_secret, redirect_uri)
-
-    refresh_token = token_data.get("refresh_token")
-    access_token = token_data.get("access_token")
-    expires_in = token_data.get("expires_in", 3600)
-
+    refresh_token = creds.refresh_token
+    access_token = creds.token
     if not refresh_token:
-        print("ERROR: No refresh_token in response. Ensure 'access_type=offline' and 'prompt=consent'.", file=sys.stderr)
+        print(
+            "ERROR: No refresh_token returned. Revoke prior consent at "
+            "https://myaccount.google.com/permissions and retry.",
+            file=sys.stderr,
+        )
         sys.exit(1)
 
-    expires_at = datetime.now(timezone.utc).isoformat()
-    if expires_in:
-        from datetime import timedelta
-        expires_at = (datetime.now(timezone.utc) + timedelta(seconds=int(expires_in))).isoformat()
+    expires_at = None
+    if creds.expiry:
+        expires_at = creds.expiry.replace(tzinfo=timezone.utc).isoformat()
 
-    # Encrypt before storage
     fernet = _get_fernet()
     refresh_enc = _encrypt(refresh_token, fernet)
     access_enc = _encrypt(access_token, fernet) if access_token else ""
 
-    row = _upsert_tokens(refresh_enc, access_enc, expires_at)
-    print(f"Stored tokens for user '{row.get('user_id', DEFAULT_USER_ID)}'.")
+    row = _upsert_tokens(refresh_enc, access_enc, expires_at, user_id=user_id)
+    print(f"Stored tokens for user '{row.get('user_id', user_id)}'.")
     print(f"  Refresh token: {'encrypted' if fernet else 'plaintext'} (length={len(refresh_token)})")
     print(f"  Access token expires: {expires_at}")
     print()
