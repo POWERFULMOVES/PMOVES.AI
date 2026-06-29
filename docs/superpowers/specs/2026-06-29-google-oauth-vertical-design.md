@@ -19,7 +19,7 @@ PMOVES has **three contradictory Google-OAuth implementations** plus a manual co
 | channel-monitor `:8097/api/oauth/google/*` | service-internal | own token table | service down (same missing creds) |
 | manual `darkxside.youtube.cookies.txt` | n/a | flat Netscape file | **anonymous-only** → bot-gated |
 
-Symptoms (diagnosed 2026-06-29): `/yt/ingest` → "Sign in to confirm you're not a bot"; refresher logs `404` on `pmoves_core.yt_oauth_cookies` (PostgREST exposes only `public`) + "No refresh token stored"; `make yt-cookies-check` → `CHANNEL_MONITOR_GOOGLE_CLIENT_ID/SECRET` not configured.
+Symptoms (diagnosed 2026-06-29): `/yt/ingest` → "Sign in to confirm you're not a bot"; "No refresh token stored"; `make yt-cookies-check` → `CHANNEL_MONITOR_GOOGLE_CLIENT_ID/SECRET` not configured. **Live re-verification 2026-06-29 narrowed the root cause to credentials only:** the `pmoves_core.yt_oauth_cookies` table exists, PostgREST already exposes `pmoves_core`, and all pipeline services are healthy — the prior "404 on `pmoves_core`" was historical, not current. The single blocker is the absent OAuth credential set (Google client + `VAULT_ENC_KEY` + Supabase service vars), all confirmed missing via `with-env.sh`.
 
 **Immediate driver:** unblock YouTube ingestion to pull a transcript + frame screenshots from a design video. **Durable goal:** one canonical Google-OAuth acquire path that both consumers (YT cookies, channel-monitor) use, generalizable to other providers.
 
@@ -57,8 +57,10 @@ Generalize `yt_oauth_flow.py` into a provider-agnostic-shaped Google core:
 - **Key:** `(user_id, provider, scope_set)`. CLI writes one row under a fixed operator `user_id`; the future web surface writes rows for other users under the **same** store + RLS. **This is the multi-tenant seam** — option 2 adds a surface, not a new store.
 - **Why Supabase over the CHIT bundle:** OAuth refresh tokens are per-user and rotate; the CHIT bundle (`env.cgp.json`) is for static org-wide API keys. Mixing them breaks the rotation model.
 
-### 3.3 PostgREST exposure (the 404 fix) — **DECIDED**
-Add `pmoves_core` to `PGRST_DB_SCHEMAS` (currently `public` only). Config change, **not a secret**. Keeps tokens isolated in their own schema with their own RLS; minimal blast radius vs. relocating the table. Requires a PostgREST restart. Verify the exposed schema list does not unintentionally surface other `pmoves_core` tables without RLS (audit as a task in the plan).
+### 3.3 PostgREST exposure (the 404 fix) — **VERIFIED ALREADY SATISFIED (2026-06-29)**
+Original decision was to add `pmoves_core` to `PGRST_DB_SCHEMAS`. **Verification on the live 5090 found it already exposed:** both `docker-compose.yml:660` and `docker-compose.core.yml:493` default `PGRST_DB_SCHEMAS=${SUPABASE_SCHEMA:-public,pmoves_core}`, `SUPABASE_SCHEMA` is **not** overridden, and `pmoves_core.yt_oauth_cookies` **exists** (`to_regclass` non-null). The prior-session 404 was historical (pre-migration / pre-creds), not a current blocker.
+
+**Remaining task (verify-only, no config change):** PostgREST caches the schema at startup (container is 35h old). Confirm the running instance actually serves the table; if it 404s, trigger a schema-cache reload (`NOTIFY pgrst, 'reload schema'`) or restart PostgREST — **no env/secret change**. Also audit that exposing `pmoves_core` doesn't surface other tables without RLS.
 
 ### 3.4 Consumers route through the core
 - **YT cookie chain:** `yt-cookie-refresher` calls `google_oauth refresh` for an access token → harvests cookies → `yt-cookie-writer` writes the Netscape file `pmoves-yt` already reads. (Cookie chain unchanged; only the token source is canonicalized.)
