@@ -104,10 +104,12 @@ add_stream MESH_GPU \
   --replicas 1
 
 # ---------- CONTENT_PROVENANCE (SPARK shaped packets / provenance) ----------
+# Use limits retention so early content.* messages are not discarded before
+# the durable consumers from the reference topology are attached.
 add_stream CONTENT_PROVENANCE \
   --subjects "content.>" \
   --storage file \
-  --retention interest \
+  --retention limits \
   --max-age 2160h \
   --max-bytes 2147483648 \
   --discard old \
