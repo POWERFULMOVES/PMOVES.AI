@@ -49,9 +49,33 @@ A node declares a **capability set** (illustrative, extend as needed):
 
 **Funnel-to-safe, not fail-to-open:** if the selected capability would require exposing a protected surface (Clause 3) and the safe variant is unavailable, activation **refuses and explains**, it does not silently widen a bind.
 
+## 3a. Clause 2b — Identity & blast-radius (auth tiers)
+
+Identity is a Clause-2 capability with its own safe-variant routing. PMOVES uses a
+**three-tier** auth model — easy to enter, gated in reach:
+
+| Tier | Mechanism | Scope |
+|---|---|---|
+| **Identity (front door)** | Google OAuth — one friendly sign-in | Establishes *who*. Cheap to enter; user attribution and the online boundary key off it. |
+| **CHIT (local master key)** | CHIT present on a node auto-unlocks/bypasses **local** surfaces (the same auto-unlock as damage-control Known Roads) | Establishes *how far, locally*. CHIT-on-node is sufficient for local unlock. |
+| **Online gate (blast radius)** | A separate, stricter gate on egress / cross-node / public surfaces | Establishes *how far, outward*. Identity ≠ blanket access; crossing the online boundary is independently gated. |
+
+**Principle: easy auth ≠ wide auth.** Google gets the operator *in* cheaply; CHIT decides
+what that unlocks *locally*; the online boundary is a third, independent gate. Local
+master-key unlock is safe precisely *because* the online gate is separate — "master key
+for local, but gated before online."
+
+**"Choose where to apply"** = the operator selects *which* surfaces the identity unlocks;
+auth-scope is itself capability-routing (Clause 2). The bring-up updater gate (showtime
+`/updater/gate`) and the Hermes OpenShell egress policy are both instances:
+CHIT-unlock + a Google session admit the action *locally*, while blast-radius scoping
+bounds what it may *reach*.
+
 ## 4. Clause 3 — Safe-opening guard
 
 **Rule:** Any service bound to a **reachable** interface (`0.0.0.0`, LAN, or mesh) **MUST** be auth-gated. Activation verifies *bind-scope vs auth-presence* and refuses/funnels when a reachable bind lacks a credential gate. Exposure is opt-in and reviewed, never the accidental default.
+
+**"Reachable" has two altitudes.** Per Clause 2b, the same surface sits behind different gates depending on *how far* it reaches: **LAN/mesh** reach is gated by CHIT local-unlock (the local master key), while **online/public/egress** reach is the strictest, *independent* gate (the blast-radius tier of Clause 2b). A surface that is safe on the mesh is **not** automatically safe online — clearing the local gate never implies clearing the online one. The safe-opening preflight therefore evaluates auth-presence *per altitude*, not once.
 
 This **extends** `PORT_BINDING_MODEL.md`, which already governs *bind scope* (the four-tier model, the `*_BIND` override pattern, `make -C pmoves port-audit`). The contract adds the **bind→auth coupling** that the binding model does not yet assert:
 
