@@ -10,6 +10,11 @@
 #   BOTZ_COORDINATION      botz.>        limits   7d   500MB
 #   MESH_GPU               mesh.gpu.>    limits   7d   1GB   (DGX Spark GB10 GPU mesh)
 #   CONTENT_PROVENANCE     content.>     interest 90d  2GB   (SPARK shaped packets / provenance)
+#
+# NOTE: The catch-all MESH_GPU and CONTENT_PROVENANCE streams supersede the
+# reference-only YAMLs in pmoves/nats/mesh_gpu_streams.yaml and
+# pmoves/nats/content_provenance_streams.yaml. No service currently creates
+# those granular streams; this script is the canonical creator.
 
 set -u
 # Note: set -e intentionally omitted — add_stream returns non-zero on real
