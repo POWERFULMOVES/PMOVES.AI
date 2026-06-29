@@ -53,5 +53,18 @@ class TestClientCreds(unittest.TestCase):
                 oauth._client_creds()
 
 
+class TestArgParsing(unittest.TestCase):
+    def test_defaults(self):
+        ns = oauth._parse_args(["status"])
+        self.assertEqual(ns.command, "status")
+        self.assertEqual(ns.user_id, oauth.DEFAULT_USER_ID)
+        self.assertEqual(ns.scopes, oauth.OAUTH_SCOPES)
+
+    def test_overrides(self):
+        ns = oauth._parse_args(["auth", "--user-id", "u2", "--scopes", "s1 s2"])
+        self.assertEqual(ns.user_id, "u2")
+        self.assertEqual(ns.scopes, "s1 s2")
+
+
 if __name__ == "__main__":
     unittest.main()

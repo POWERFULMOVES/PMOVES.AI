@@ -295,9 +295,9 @@ def cmd_auth(user_id: str = DEFAULT_USER_ID, scope: str = OAUTH_SCOPES) -> None:
     print("Next: make yt-cookies-refresh  (to harvest initial cookie set)")
 
 
-def cmd_status() -> None:
+def cmd_status(user_id: str = DEFAULT_USER_ID) -> None:
     """Show current cookie/token state."""
-    row = _get_status()
+    row = _get_status(user_id)
     if not row:
         print("No OAuth credentials stored.")
         print("Run: make yt-cookies-auth")
@@ -316,9 +316,9 @@ def cmd_status() -> None:
         print(f"Last error:        {row['refresh_error_message']}")
 
 
-def cmd_revoke() -> None:
+def cmd_revoke(user_id: str = DEFAULT_USER_ID) -> None:
     """Revoke stored credentials."""
-    row = _get_status()
+    row = _get_status(user_id)
     if not row:
         print("No credentials to revoke.")
         return
@@ -334,7 +334,7 @@ def cmd_revoke() -> None:
         except Exception as e:
             print(f"Google revoke failed (non-fatal): {e}")
 
-    if _delete_row():
+    if _delete_row(user_id):
         print("Supabase row deleted.")
     else:
         print("WARNING: Supabase delete failed.", file=sys.stderr)
@@ -356,27 +356,34 @@ def cmd_refresh() -> None:
 # CLI entry point
 # ---------------------------------------------------------------------------
 
-def main() -> None:
-    """CLI entry point."""
+def _parse_args(argv: "Optional[list[str]]" = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="YouTube OAuth2 cookie refresh — Phase 9Q.2",
+        description="Google OAuth2 token acquire — Phase 9Q.2 / OAuth vertical",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__,
     )
-    parser.add_argument(
-        "command",
-        choices=["auth", "refresh", "status", "revoke"],
-        help="Subcommand to run",
-    )
-    args = parser.parse_args()
+    parser.add_argument("command", choices=["auth", "refresh", "status", "revoke"],
+                        help="Subcommand to run")
+    parser.add_argument("--user-id", default=DEFAULT_USER_ID,
+                        help="Token owner key (multi-tenant; default operator)")
+    parser.add_argument("--scopes", default=OAUTH_SCOPES,
+                        help="Space-delimited OAuth scopes")
+    parser.add_argument("--account-label", default="",
+                        help="Human label for the account (informational)")
+    return parser.parse_args(argv)
 
-    commands = {
-        "auth": cmd_auth,
-        "refresh": cmd_refresh,
-        "status": cmd_status,
-        "revoke": cmd_revoke,
-    }
-    commands[args.command]()
+
+def main() -> None:
+    """CLI entry point."""
+    args = _parse_args()
+    if args.command == "auth":
+        cmd_auth(user_id=args.user_id, scope=args.scopes)
+    elif args.command == "status":
+        cmd_status(user_id=args.user_id)
+    elif args.command == "revoke":
+        cmd_revoke(user_id=args.user_id)
+    else:
+        cmd_refresh()
 
 
 if __name__ == "__main__":
