@@ -76,6 +76,23 @@ def _require_env(key: str) -> str:
     return val
 
 
+def _client_creds() -> "tuple[str, str]":
+    """Return (client_id, client_secret), preferring GOOGLE_OAUTH_* with a
+    back-compat fallback to CHANNEL_MONITOR_GOOGLE_* (Phase 9Q.2 reused those).
+    Exits with an error if neither pair is configured.
+    """
+    client_id = _env("GOOGLE_OAUTH_CLIENT_ID") or _env("CHANNEL_MONITOR_GOOGLE_CLIENT_ID")
+    client_secret = _env("GOOGLE_OAUTH_CLIENT_SECRET") or _env("CHANNEL_MONITOR_GOOGLE_CLIENT_SECRET")
+    if not client_id or not client_secret:
+        print(
+            "ERROR: Google OAuth client not configured. Set GOOGLE_OAUTH_CLIENT_ID/"
+            "SECRET (or CHANNEL_MONITOR_GOOGLE_CLIENT_ID/SECRET) in env.shared.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    return client_id, client_secret
+
+
 def _supabase_url() -> str:
     """Canonical Supabase REST URL base (Kong gateway, no path suffix).
 
