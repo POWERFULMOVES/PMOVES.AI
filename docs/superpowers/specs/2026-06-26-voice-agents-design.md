@@ -49,6 +49,16 @@ These resolve the §10 open questions and add binding architectural direction:
   is *one* engine; an agent selects among many by purpose/hardware, and the design controls
   available come from that engine's declared surface. (Drives the capability matrix in §3
   becoming the source of truth for what each engine exposes.)
+- **Accessibility / capability-routing — no capability is the sole path (2026-06-29):**
+  voice in/out is **optional per node**, routed by what the node *has*. A node without a
+  microphone is **not** locked out: it uses **text-in** for agent interaction; a node
+  without a local speaker routes **TTS-out to an available cast/Nest target** (or falls
+  back to **text-out**). **Z890 (no mic, has Nest speakers) is the canonical testbed**
+  for the text-in → Nest-TTS-out path. This is an instance of capability-routing (Clause 2)
+  in the **Safe-Activation Contract** (`pmoves/docs/security/SAFE_ACTIVATION_CONTRACT.md`):
+  PMOVES funnels the operator to the safe variant for their capability set rather than
+  failing on a missing one. (CHIT unseal follows the same rule — voice OR typed OR key-file
+  — but that lives in the CHIT-unseal follow-up, not this voice spec.)
 - **Demo posture (Q4/Q5) — no meter to be burned:**
   - **Public (pmoves.ai):** **pre-canned** voice-over-agent-trails — narrated chronicles of
     agent exploits / agent summaries / examples of voice agents. **Pre-rendered audio, not
