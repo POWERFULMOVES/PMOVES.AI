@@ -184,6 +184,38 @@ def _decrypt(value: str, fernet: Optional[object]) -> str:
         return value  # already plaintext or wrong key
 
 
+def _allow_plaintext() -> bool:
+    """True only when the operator explicitly opts into unencrypted token storage."""
+    return _env("YT_OAUTH_ALLOW_PLAINTEXT").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _require_encryption(fernet: Optional[object]) -> None:
+    """Fail closed before persisting tokens: refuse plaintext storage unless opted in.
+
+    OAuth refresh tokens are long-lived credentials. Silently storing them in
+    plaintext when ``VAULT_ENC_KEY`` is unset or ``cryptography`` is missing is a
+    footgun (the row is then indistinguishable from ciphertext). Abort unless the
+    operator explicitly sets ``YT_OAUTH_ALLOW_PLAINTEXT`` for local/dev use.
+    """
+    if fernet is not None:
+        return
+    if _allow_plaintext():
+        print(
+            "WARNING: YT_OAUTH_ALLOW_PLAINTEXT set — storing OAuth tokens UNENCRYPTED "
+            "(local/dev only).",
+            file=sys.stderr,
+        )
+        return
+    print(
+        "ERROR: refusing to store OAuth tokens unencrypted. Encryption is unavailable "
+        "(set VAULT_ENC_KEY and install 'cryptography'). Refresh tokens are long-lived "
+        "credentials; plaintext storage is a footgun. To override for local/dev ONLY, "
+        "set YT_OAUTH_ALLOW_PLAINTEXT=1.",
+        file=sys.stderr,
+    )
+    sys.exit(1)
+
+
 # ---------------------------------------------------------------------------
 # OAuth2 authorization code flow
 # ---------------------------------------------------------------------------
@@ -302,6 +334,7 @@ def cmd_auth(user_id: str = DEFAULT_USER_ID, scope: str = OAUTH_SCOPES) -> None:
         expires_at = creds.expiry.replace(tzinfo=timezone.utc).isoformat()
 
     fernet = _get_fernet()
+    _require_encryption(fernet)  # fail closed: never silently store a plaintext refresh token
     refresh_enc = _encrypt(refresh_token, fernet)
     access_enc = _encrypt(access_token, fernet) if access_token else ""
 

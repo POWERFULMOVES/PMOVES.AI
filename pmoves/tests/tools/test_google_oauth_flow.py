@@ -98,5 +98,28 @@ class TestArgParsing(unittest.TestCase):
         self.assertEqual(ns.scopes, "s1 s2")
 
 
+class TestRequireEncryption(unittest.TestCase):
+    """Fail-closed guard: never silently persist a plaintext OAuth refresh token."""
+
+    def test_passes_when_fernet_present(self):
+        with mock.patch.dict(os.environ, {}, clear=True):
+            oauth._require_encryption(object())  # no exception, no opt-in needed
+
+    def test_aborts_when_fernet_none_and_no_optin(self):
+        with mock.patch.dict(os.environ, {}, clear=True):
+            with self.assertRaises(SystemExit):
+                oauth._require_encryption(None)
+
+    def test_allows_plaintext_with_explicit_optin(self):
+        with mock.patch.dict(os.environ, {"YT_OAUTH_ALLOW_PLAINTEXT": "1"}, clear=True):
+            oauth._require_encryption(None)  # opted in → warns but does not abort
+
+    def test_optin_is_falsey_by_default(self):
+        with mock.patch.dict(os.environ, {"YT_OAUTH_ALLOW_PLAINTEXT": "0"}, clear=True):
+            self.assertFalse(oauth._allow_plaintext())
+        with mock.patch.dict(os.environ, {"YT_OAUTH_ALLOW_PLAINTEXT": "yes"}, clear=True):
+            self.assertTrue(oauth._allow_plaintext())
+
+
 if __name__ == "__main__":
     unittest.main()
