@@ -206,6 +206,13 @@ BEGIN
     EXECUTE 'GRANT INSERT, UPDATE ON pmoves_core.voice_profiles TO authenticated';
     EXECUTE 'GRANT INSERT, UPDATE, DELETE ON pmoves_core.voice_profiles TO service_role';
     EXECUTE 'GRANT SELECT, INSERT, UPDATE, DELETE ON pmoves_core.voice_profile_grants TO authenticated, service_role';
+    -- anon needs SELECT on voice_profile_grants too: the voice_profiles_read RLS policy
+    -- references it in an EXISTS subquery, and PostgreSQL checks the subquery table
+    -- privilege with the CALLER's grants. Without this, anon SELECT on public
+    -- voice_profiles fails with "permission denied for table voice_profile_grants"
+    -- (Codex P2, #1909). RLS still returns 0 grant rows for anon (no policy matches a
+    -- NULL auth.uid()), so the EXISTS correctly evaluates false and is_public rows return.
+    EXECUTE 'GRANT SELECT ON pmoves_core.voice_profile_grants TO anon';
 END $$;
 
 COMMENT ON TABLE pmoves_core.voice_profiles IS
