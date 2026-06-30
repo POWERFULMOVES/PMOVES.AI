@@ -149,12 +149,12 @@ class ShapeWorker:
             "labels": [
                 "spark",
                 "gpu",
-                raw_message.get("model_id", "unknown"),
+                str(raw_message.get("model_id", "unknown")),
             ],
             "meta": {
                 "source_subject": SUBSCRIBE_SUBJECT,
-                "source_node": raw_message.get("node_id") or raw_message.get("node", "unknown"),
-                "source_model": raw_message.get("model_id", "unknown"),
+                "source_node": str(raw_message.get("node_id") or raw_message.get("node", "unknown")),
+                "source_model": str(raw_message.get("model_id", "unknown")),
                 "request_id": request_id,
                 "shaped_at": datetime.now(timezone.utc).isoformat(),
                 "inference": {
