@@ -615,6 +615,18 @@ supa-use-remote: ## Write .env.local from remote Supabase template (fill remote 
 	@rm -f env.supa.runtime
 	@echo "✅ .env.local updated for remote Supabase runtime template"
 
+.PHONY: db-apply-migration
+db-apply-migration: ## Known Road: mirror a versioned db/v5_*.sql into the ledgered supabase/migrations/ path. Usage: make db-apply-migration SRC=db/v5_16_voice_catalog.sql DST=20260628000000_voice_catalog.sql
+	@test -n "$(SRC)" || { echo "❌ SRC required (e.g. db/v5_16_voice_catalog.sql)"; exit 1; }
+	@test -n "$(DST)" || { echo "❌ DST required (e.g. 20260628000000_voice_catalog.sql)"; exit 1; }
+	@case "$(SRC)" in db/v5_*.sql) : ;; *) echo "❌ SRC must be a versioned db/v5_*.sql source-of-truth"; exit 1 ;; esac
+	@case "$(DST)" in */*) echo "❌ DST must be a bare filename, not a path"; exit 1 ;; esac
+	@case "$(DST)" in *.sql) : ;; *) echo "❌ DST must end in .sql"; exit 1 ;; esac
+	@test -f "$(SRC)" || { echo "❌ SRC not found: $(SRC)"; exit 1; }
+	@test ! -e "supabase/migrations/$(DST)" || { echo "❌ refusing to overwrite existing supabase/migrations/$(DST)"; exit 1; }
+	@cp "$(SRC)" "supabase/migrations/$(DST)"
+	@cmp -s "$(SRC)" "supabase/migrations/$(DST)" && echo "✅ mirrored $(SRC) -> supabase/migrations/$(DST) (verbatim)" || { echo "❌ verbatim copy verification failed"; exit 1; }
+
 supa-migrate: ## Apply SQL files from supabase/migrations into active Supabase DB container
 	@echo "🗄️ Applying Supabase migrations..."
 	@if [ ! -d "supabase/migrations" ]; then \
