@@ -72,6 +72,10 @@ jobs:
             "pmoves/supabase/migrations/20260628000000_voice_catalog.sql"
             "pmoves/supabase/migrations/20260628000100_fix_yt_oauth_cookies_rls.sql"
             "pmoves/supabase/migrations/20260630000000_voice_catalog_anon_grant.sql"
+            # pmoves_kb schema grants — reviewed: `anon` needs schema USAGE for
+            # PostgREST public read paths through RLS-gated objects; no blanket
+            # USING(true) policies are added here.
+            "pmoves/supabase/migrations/20260630000000_pmoves_kb_schema.sql"
           )
           echo "Scanning ${#files[@]} SQL files for 'USING true' or 'to anon'..."
           # Fail on blanket USING true or explicit anon grants outside dev
