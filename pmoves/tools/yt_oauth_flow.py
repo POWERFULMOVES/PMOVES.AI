@@ -67,15 +67,6 @@ def _env(key: str, default: str = "") -> str:
     return os.environ.get(key, default).strip()
 
 
-def _require_env(key: str) -> str:
-    """Read env var or exit with error."""
-    val = _env(key)
-    if not val:
-        print(f"ERROR: {key} not set. Check env.shared.", file=sys.stderr)
-        sys.exit(1)
-    return val
-
-
 def _client_creds() -> "tuple[str, str]":
     """Return (client_id, client_secret) from the first configured pair, in order:
       1. GOOGLE_OAUTH_CLIENT_ID/SECRET   — dedicated YT-OAuth client (if set)
@@ -105,6 +96,21 @@ def _client_creds() -> "tuple[str, str]":
     return client_id, client_secret
 
 
+def _service_role_key() -> str:
+    """Supabase service-role key, accepting SERVICE_ROLE_KEY (canonical local name)
+    or SUPABASE_SERVICE_ROLE_KEY (the GitHub-secret / secrets-sync name).
+    """
+    key = _env("SERVICE_ROLE_KEY") or _env("SUPABASE_SERVICE_ROLE_KEY")
+    if not key:
+        print(
+            "ERROR: SERVICE_ROLE_KEY (or SUPABASE_SERVICE_ROLE_KEY) not set. "
+            "Run the secrets-funnel.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    return key
+
+
 def _supabase_url() -> str:
     """Canonical Supabase REST URL base (Kong gateway, no path suffix).
 
@@ -122,7 +128,7 @@ def _supabase_url() -> str:
 
 def _supabase_headers() -> dict:
     """Headers for Supabase PostgREST (service_role for RLS bypass)."""
-    key = _require_env("SERVICE_ROLE_KEY")
+    key = _service_role_key()
     return {
         "apikey": key,
         "Authorization": f"Bearer {key}",

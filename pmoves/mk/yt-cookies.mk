@@ -23,10 +23,12 @@ yt-cookies-check: ## Preflight: verify Google OAuth + Supabase env vars are set
 	[ -z "$$csec" ] && csec=$$(bash scripts/with-env.sh printenv CHANNEL_MONITOR_GOOGLE_CLIENT_SECRET 2>/dev/null || true); \
 	if [ -z "$$cid" ] || [ "$$cid" = "YOUR_GOOGLE_CLIENT_ID_HERE.apps.googleusercontent.com" ]; then echo "✗ client id (GOOGLE_OAUTH_CLIENT_ID / GOOGLE_CLIENT_ID / CHANNEL_MONITOR_*): not configured"; hard=$$((hard+1)); else echo "✓ client id: set (length=$${#cid})"; fi; \
 	if [ -z "$$csec" ] || [ "$$csec" = "GOCSPX-YOUR_CLIENT_SECRET_HERE" ]; then echo "✗ client secret (GOOGLE_OAUTH_CLIENT_SECRET / GOOGLE_CLIENT_SECRET / CHANNEL_MONITOR_*): not configured"; hard=$$((hard+1)); else echo "✓ client secret: set (length=$${#csec})"; fi; \
-	for var in SERVICE_ROLE_KEY SUPABASE_URL; do \
-		val=$$(bash scripts/with-env.sh printenv $$var 2>/dev/null || true); \
-		if [ -z "$$val" ]; then echo "✗ $$var: not configured (required to store the token)"; hard=$$((hard+1)); else echo "✓ $$var: set (length=$${#val})"; fi; \
-	done; \
+	srk=$$(bash scripts/with-env.sh printenv SERVICE_ROLE_KEY 2>/dev/null || true); \
+	[ -z "$$srk" ] && srk=$$(bash scripts/with-env.sh printenv SUPABASE_SERVICE_ROLE_KEY 2>/dev/null || true); \
+	if [ -z "$$srk" ]; then echo "✗ SERVICE_ROLE_KEY (or SUPABASE_SERVICE_ROLE_KEY): not configured (required to store the token)"; hard=$$((hard+1)); else echo "✓ service role key: set (length=$${#srk})"; fi; \
+	surl=$$(bash scripts/with-env.sh printenv SUPABASE_URL 2>/dev/null || true); \
+	[ -z "$$surl" ] && surl=$$(bash scripts/with-env.sh printenv SUPA_REST_URL 2>/dev/null || true); \
+	if [ -z "$$surl" ]; then echo "⚠ SUPABASE_URL/SUPA_REST_URL: not set — defaults to http://supabase-kong:8000 (fine in-compose)"; else echo "✓ supabase url: set"; fi; \
 	venc=$$(bash scripts/with-env.sh printenv VAULT_ENC_KEY 2>/dev/null || true); \
 	if [ -z "$$venc" ]; then echo "⚠ VAULT_ENC_KEY: not set — token would be stored UNENCRYPTED (set it before auth)"; else echo "✓ VAULT_ENC_KEY: set (length=$${#venc})"; fi; \
 	if [ $$hard -gt 0 ]; then \

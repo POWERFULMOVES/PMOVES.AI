@@ -67,6 +67,24 @@ class TestClientCreds(unittest.TestCase):
                 oauth._client_creds()
 
 
+class TestServiceRoleKey(unittest.TestCase):
+    def test_prefers_service_role_key(self):
+        env = {"SERVICE_ROLE_KEY": "srk", "SUPABASE_SERVICE_ROLE_KEY": "supa-srk"}
+        with mock.patch.dict(os.environ, env, clear=True):
+            self.assertEqual(oauth._service_role_key(), "srk")
+
+    def test_falls_back_to_supabase_service_role_key(self):
+        # secrets-sync provides SUPABASE_SERVICE_ROLE_KEY (the GH secret name).
+        env = {"SUPABASE_SERVICE_ROLE_KEY": "supa-srk"}
+        with mock.patch.dict(os.environ, env, clear=True):
+            self.assertEqual(oauth._service_role_key(), "supa-srk")
+
+    def test_exits_when_neither_set(self):
+        with mock.patch.dict(os.environ, {}, clear=True):
+            with self.assertRaises(SystemExit):
+                oauth._service_role_key()
+
+
 class TestArgParsing(unittest.TestCase):
     def test_defaults(self):
         ns = oauth._parse_args(["status"])
