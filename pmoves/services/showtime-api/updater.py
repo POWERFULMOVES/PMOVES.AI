@@ -66,9 +66,12 @@ SKIP_CHIT_ENV_KEY = "SHOWTIME_UPDATER_SKIP_CHIT"
 SAFE_DEFAULT_BLAST_RADIUS: tuple[str, ...] = (
     "loki",
     "open-notebook",
-    "cipher-memory",
-    "supabase-rest",
+    "supabase-postgrest",  # canonical compose service name (not "supabase-rest")
 )
+# NOTE: Cipher (cipher-api) is intentionally NOT here. In compose it is
+# `<<: *tier-agent-hardened` (agent-tier) and `build:`-only (no registry image),
+# so `docker compose pull` cannot fetch it and an image-refresh updater must not
+# touch it. It is hard-forbidden via AGENT_TIER_SERVICES below (Codex on #1905).
 
 # Agent-tier services are hard-forbidden from any update radius. Restarting an
 # agent mid-flight loses in-flight reasoning state, so the updater refuses.
@@ -80,6 +83,7 @@ AGENT_TIER_SERVICES: frozenset[str] = frozenset(
         "botz-gateway",
         "supaserch",
         "evo-controller",
+        "cipher-api",  # tier-agent-hardened + build-only in compose — never pull/restart
     }
 )
 
@@ -91,8 +95,7 @@ GLOBAL_TOKENS: frozenset[str] = frozenset({"all", "global", "*", "everything"})
 KNOWN_UPDATABLE_SERVICES: tuple[str, ...] = (
     "loki",
     "open-notebook",
-    "cipher-memory",
-    "supabase-rest",
+    "supabase-postgrest",  # canonical compose service name (not "supabase-rest")
     "tensorzero-gateway",
     "channel-monitor",
     "showtime-api",
@@ -415,6 +418,22 @@ def run_update(
             acted.append(exec_fn(svc))
         except Exception as exc:  # one bad service must not nuke the rest
             acted.append({"service": svc, "ok": False, "detail": [f"{type(exc).__name__}: {exc}"]})
+
+    # Fail the summary when any target pull failed — otherwise automation/CLI would
+    # report success (exit 0) while one or all services were not actually updated.
+    failed = [a for a in acted if isinstance(a, dict) and not a.get("ok")]
+    if failed:
+        failed_names = [a.get("service", "?") for a in failed]
+        return {
+            **base,
+            "status": "failed",
+            "reason": (
+                f"{len(failed)}/{len(targets)} service pull(s) failed: {failed_names} "
+                f"(blast radius otherwise valid)"
+            ),
+            "acted_on": acted,
+            "skipped": skipped,
+        }
 
     return {
         **base,

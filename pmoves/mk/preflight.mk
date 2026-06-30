@@ -150,8 +150,13 @@ preflight: ## Full preflight: env check + quick readiness + Codex health summary
 
 showtime: bringup-showtime ## Alias for bringup-showtime
 
+# COMPOSE_FILE so the updater's `docker compose pull` resolves services that live in
+# overlays (loki → monitoring, open-notebook → its own file) and the base stack
+# (cipher-api, supabase-postgrest, …). Without it, pull only sees docker-compose.yml
+# and can't resolve the default blast-radius targets. ':' separator (Linux runners).
+SHOWTIME_COMPOSE_FILE := docker-compose.yml:docker-compose.open-notebook.yml:monitoring/docker-compose.monitoring.yml
 showtime-update: ## CHIT+OAuth-gated, blast-radius-scoped showtime updater (data-tier safe default)
-	@$(PRECHECK_PY) tools/showtime_trigger_update.py $(ARGS)
+	@COMPOSE_FILE="$(SHOWTIME_COMPOSE_FILE)" COMPOSE_PATH_SEPARATOR=":" $(PRECHECK_PY) tools/showtime_trigger_update.py $(ARGS)
 
 showtime-links: ## Build clickable UI/API verification pages and worker snapshot
 	@$(PRECHECK_PY) tools/showtime_verify_links.py $(ARGS)

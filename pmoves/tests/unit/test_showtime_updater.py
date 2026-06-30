@@ -254,5 +254,61 @@ class TestSkipChitWarns:
         assert not any("bypass" in r.message.lower() for r in caplog.records)
 
 
+class TestPullFailureSummary:
+    """run_update must NOT report ok when a service pull fails (Codex P2 on #1905)."""
+
+    def test_failed_pull_yields_failed_status(self) -> None:
+        result = updater.run_update(
+            ["loki", "open-notebook"],
+            candidates=["loki", "open-notebook"],
+            dirty_check=lambda: False,
+            executor=lambda svc: {"service": svc, "ok": svc != "open-notebook", "detail": ["x"]},
+        )
+        assert result["status"] == "failed"
+        assert "open-notebook" in result["reason"]
+
+    def test_all_ok_pull_yields_ok_status(self) -> None:
+        result = updater.run_update(
+            ["loki"],
+            candidates=["loki"],
+            dirty_check=lambda: False,
+            executor=lambda svc: {"service": svc, "ok": True, "detail": ["x"]},
+        )
+        assert result["status"] == "ok"
+
+    def test_executor_exception_yields_failed_status(self) -> None:
+        def boom(svc: str) -> dict:
+            raise RuntimeError("registry unreachable")
+
+        result = updater.run_update(
+            ["loki"],
+            candidates=["loki"],
+            dirty_check=lambda: False,
+            executor=boom,
+        )
+        assert result["status"] == "failed"
+
+
+class TestCanonicalServiceNames:
+    """Default radius uses canonical compose service names (Codex P1 on #1905)."""
+
+    def test_canonical_names_in_default_radius(self) -> None:
+        assert "supabase-postgrest" in updater.SAFE_DEFAULT_BLAST_RADIUS
+        # Non-canonical / legacy names must be gone.
+        assert "supabase-rest" not in updater.SAFE_DEFAULT_BLAST_RADIUS
+        assert "cipher-memory" not in updater.SAFE_DEFAULT_BLAST_RADIUS
+
+    def test_cipher_api_is_forbidden_not_pulled(self) -> None:
+        # cipher-api is agent-tier + build-only in compose: never in the pull radius,
+        # and hard-forbidden (Codex follow-up on #1905).
+        assert "cipher-api" not in updater.SAFE_DEFAULT_BLAST_RADIUS
+        assert "cipher-api" not in updater.KNOWN_UPDATABLE_SERVICES
+        assert "cipher-api" in updater.AGENT_TIER_SERVICES
+
+    def test_default_radius_only_pullable_image_services(self) -> None:
+        # Every default-radius service must be a registry-image (pullable) service.
+        assert set(updater.SAFE_DEFAULT_BLAST_RADIUS) == {"loki", "open-notebook", "supabase-postgrest"}
+
+
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-q"]))
