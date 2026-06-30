@@ -247,16 +247,18 @@ async def health_all():
 
 
 @app.get("/updater/gate")
-async def updater_gate(
-    skip_chit: bool = Query(
-        False,
-        description="Escape hatch for headless CI: bypass the CHIT factor only "
-        "(must be explicit; also settable via SHOWTIME_UPDATER_SKIP_CHIT).",
-    ),
-):
-    """Two-factor updater gate. Unlocked ONLY when BOTH a non-placeholder CHIT
-    passphrase AND a Google session token are present. Fails closed."""
-    return evaluate_gate(skip_chit=skip_chit)
+async def updater_gate():
+    """Two-factor updater gate (non-placeholder CHIT passphrase AND Google
+    session token). Fails closed.
+
+    **Coarse by design** (Safe-Activation Contract Clause 3 — a reachable surface
+    must not leak its security posture): returns only ``{"unlocked": bool}`` so a
+    caller who can reach showtime-api cannot enumerate *which* factor is absent.
+    The per-factor breakdown stays in-process (lifespan/CLI call ``evaluate_gate``
+    directly). The CHIT escape hatch is **env-only** (``SHOWTIME_UPDATER_SKIP_CHIT``)
+    and is never accepted over HTTP."""
+    gate = evaluate_gate()
+    return {"unlocked": bool(gate.get("unlocked", False))}
 
 
 @app.get("/sse/events")

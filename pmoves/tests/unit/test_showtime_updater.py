@@ -12,6 +12,7 @@ pytest only) and load ``updater.py`` by file path (its directory,
 from __future__ import annotations
 
 import importlib.util
+import logging
 from pathlib import Path
 from types import ModuleType
 
@@ -208,6 +209,49 @@ class TestImageDigests:
         out = updater.check_image_digests(["loki"])
         assert "loki" in out
         assert set(out["loki"].keys()) >= {"digest", "expected", "match", "error"}
+
+
+# ---------------------------------------------------------------------------
+# check_git_rev — detached HEAD honesty (nit fix)
+# ---------------------------------------------------------------------------
+class TestCheckGitRevDetached:
+    def test_detached_head_reports_behind_unknown(self, monkeypatch) -> None:
+        import types
+
+        calls = []
+
+        def fake_run(cmd, cwd=None):
+            calls.append(cmd)
+            if cmd[:3] == ["git", "rev-parse", "HEAD"]:
+                return types.SimpleNamespace(returncode=0, stdout="abc123\n")
+            if cmd[:3] == ["git", "rev-parse", "--abbrev-ref"]:
+                return types.SimpleNamespace(returncode=0, stdout="HEAD\n")
+            raise AssertionError(f"unexpected git call on detached HEAD: {cmd}")
+
+        monkeypatch.setattr(updater, "_run", fake_run)
+        out = updater.check_git_rev()
+        assert out["branch"] == "HEAD"
+        assert out["behind"] is None  # honest unknown, not a misleading bool
+        assert out["ok"] is True
+        assert "detached" in out["error"].lower()
+        # ls-remote must NOT run on a detached HEAD
+        assert not any(c[:2] == ["git", "ls-remote"] for c in calls)
+
+
+# ---------------------------------------------------------------------------
+# Skip-CHIT escape hatch is never silent (defense-in-depth)
+# ---------------------------------------------------------------------------
+class TestSkipChitWarns:
+    def test_skip_logs_warning_when_dropping_chit(self, caplog) -> None:
+        with caplog.at_level(logging.WARNING, logger="showtime.updater"):
+            updater.evaluate_gate({"GOOGLE_SESSION_TOKEN": "x"}, skip_chit=True)
+        assert any("bypass" in r.message.lower() for r in caplog.records)
+
+    def test_no_warning_when_chit_present(self, caplog) -> None:
+        env = {"CHIT_PASSPHRASE": "a-real-passphrase", "GOOGLE_SESSION_TOKEN": "x"}
+        with caplog.at_level(logging.WARNING, logger="showtime.updater"):
+            updater.evaluate_gate(env, skip_chit=True)
+        assert not any("bypass" in r.message.lower() for r in caplog.records)
 
 
 if __name__ == "__main__":

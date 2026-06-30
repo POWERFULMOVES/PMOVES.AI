@@ -23,10 +23,13 @@ Safety model
 """
 from __future__ import annotations
 
+import logging
 import os
 import subprocess
 from pathlib import Path
 from typing import Callable, Iterable, Mapping, Sequence
+
+logger = logging.getLogger("showtime.updater")
 
 # ---------------------------------------------------------------------------
 # Placeholder detection — mirrors pmoves/tools/topology_chit_gate.py
@@ -162,6 +165,16 @@ def evaluate_gate(
         skip = bool(skip_chit) or _is_true(e.get(SKIP_CHIT_ENV_KEY))
         chit_present = chit_passphrase_present(e)
         chit_ok = chit_present or skip
+        if skip and not chit_present:
+            # The escape hatch is actively dropping the CHIT factor. This is
+            # CI/dev-only — never use it on a reachable deployment (it collapses
+            # two-factor to Google-session-only on a component that can pull +
+            # restart data-tier services). WARN so it is never silent.
+            logger.warning(
+                "CHIT factor BYPASSED via escape hatch (%s/skip_chit) — "
+                "CI/dev only; do not use on a reachable deployment.",
+                SKIP_CHIT_ENV_KEY,
+            )
         google_ok = google_session_present(e)
         unlocked = bool(chit_ok and google_ok)
 
@@ -224,7 +237,16 @@ def check_git_rev(repo_root: Path | None = None) -> dict[str, object]:
         branch = branch_res.stdout.strip() if branch_res.returncode == 0 else "HEAD"
         out["branch"] = branch
 
-        ref = f"refs/heads/{branch}" if branch and branch != "HEAD" else "HEAD"
+        if not branch or branch == "HEAD":
+            # Detached HEAD: comparing the local sha against origin's *default*
+            # branch head would be misleading, so report behind as unknown
+            # rather than a dishonest true/false.
+            out["behind"] = None
+            out["error"] = "detached HEAD — behind unknown"
+            out["ok"] = True
+            return out
+
+        ref = f"refs/heads/{branch}"
         remote = _run(["git", "ls-remote", "origin", ref], cwd=root)
         if remote.returncode != 0:
             out["error"] = "git ls-remote failed"
