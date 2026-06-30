@@ -2323,6 +2323,11 @@ mcp_servers:
     action_namespace: "mcp.v1.cipher"
     capabilities: ["cipher", "chit", "announce", "health"]
     rooms: ["z890-infra.room.fabric"]
+    # grounding_source: a discovering agent fetches startup grounding here
+    # (Cipher Memory = agent_plan/checkpoint/completion + CHIT trail). See §4a
+    # of docs/superpowers/specs/2026-06-26-voice-agents-design.md and
+    # pmoves/docs/voice/S1C_DISCOVERY_NAMING_MAP.md.
+    grounding_source: true
     status: "planned"
 
   pmoves_e2b_mcp:
@@ -2345,6 +2350,11 @@ mcp_servers:
     action_namespace: "mcp.v1.hirag"
     capabilities: ["retrieve", "graph", "search", "notebook"]
     rooms: ["4090-field.room.control", "hermes-agent.room.control"]
+    # grounding_source: a discovering agent fetches startup grounding here
+    # (Hi-RAG hybrid vector+graph+full-text retrieval). See §4a of
+    # docs/superpowers/specs/2026-06-26-voice-agents-design.md and
+    # pmoves/docs/voice/S1C_DISCOVERY_NAMING_MAP.md.
+    grounding_source: true
     status: "planned"
 
   pmoves_nats_mcp:
@@ -2367,6 +2377,29 @@ mcp_servers:
     action_namespace: "mcp.v1.tailscale"
     capabilities: ["network", "devices", "authkeys", "tailnet"]
     rooms: ["z890-infra.room.fabric"]
+    status: "planned"
+
+  # Voice discovery shim (S1c, §4a "two planes, one join key"). Makes the voice
+  # capability reachable through the same agent_registry → room plane as every
+  # other capability. flute-gateway is the backing provider; the `resolves` join
+  # bridges this discovery plane to the voice_profiles TRUTH plane (v5_16) by the
+  # voice `name` slug. Truth + routing (engine_specific, RLS, media) stays in
+  # pmoves_core.voice_profiles — this shim is intentionally thin.
+  pmoves_voice_mcp:
+    name: "pmoves-voice-mcp"
+    submodule: null
+    class: utility
+    transport: "sse"
+    endpoint: "${PMOVES_VOICE_MCP_ENDPOINT:-http://flute-gateway:8055/sse}"
+    action_namespace: "mcp.v1.voice"
+    capabilities: ["voice", "tts", "voice-select", "clone"]
+    rooms: ["5090-voice.room.studio"]
+    # resolves: NET-NEW join from this discovery entry to the voice truth plane.
+    # A runtime resolves an agent-selected voice slug against the registry table.
+    resolves:
+      registry: supabase
+      table: pmoves_core.voice_profiles
+      by: name
     status: "planned"
 
 # ── A2A Server Registry ─────────────────────────────────────────────────────
