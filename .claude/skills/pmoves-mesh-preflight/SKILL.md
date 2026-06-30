@@ -40,8 +40,24 @@ flute-gateway           | 8055 | 503    | 3
 FAIL: 1 service(s) unhealthy
 ```
 
+## Companion: safe-opening audit (Clause 3)
+
+This skill checks *liveness* (is the service up?). It does **not** check whether a
+reachable surface is auth-gated. That is the **bind → auth coupling** from
+Clause 3 of the [Safe-Activation Contract](../../../pmoves/docs/security/SAFE_ACTIVATION_CONTRACT.md):
+
+- `make -C pmoves port-audit` — *where* a service binds (loopback vs mesh).
+- `make -C pmoves safe-opening-audit` — *whether* each reachable (non-loopback)
+  surface is auth-gated; fails closed on any UNVERIFIED/UNGATED reachable bind.
+
+Run the safe-opening audit before opening any surface on the mesh: a green
+health check on a reachable-but-ungated service is exactly the "opened
+unwittingly" case the contract exists to prevent.
+
 ## Citations
 
+- `pmoves/docs/security/SAFE_ACTIVATION_CONTRACT.md` — parent invariant (Clause 3)
+- `pmoves/tools/safe_opening_audit.py` — the bind→auth checker
 - `.claude/CATALOG.md` — authoritative port catalog
 - `pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md` — Active Claim Register (record preflight result alongside CLAIM)
 - `.claude/PATTERNS.md` § Known Roads — companion recipe
