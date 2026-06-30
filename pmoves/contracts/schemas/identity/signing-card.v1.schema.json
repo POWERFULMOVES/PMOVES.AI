@@ -1,0 +1,109 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "pmoves://contracts/schemas/identity/signing-card.v1.schema.json",
+  "title": "Signing Identity Card v1",
+  "description": "CHIT signing identity card: binds a machine-readable key/material proof (ml) with a human-readable agent identity (h) so that every signed trail entry can be audited back to a specific card.",
+  "type": "object",
+  "required": ["card_id", "ml", "h", "issued_at", "active"],
+  "additionalProperties": false,
+  "properties": {
+    "card_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Stable UUID for this signing card. Recorded in signature.v1 payloads as signing_card_id."
+    },
+    "ml": {
+      "type": "object",
+      "required": ["primary_method"],
+      "additionalProperties": false,
+      "description": "Machine-learnt / machine-readable proof of signing authority.",
+      "properties": {
+        "primary_method": {
+          "type": "string",
+          "enum": ["ssh", "gpg", "github-app"],
+          "description": "The canonical attestation method used with this card."
+        },
+        "ssh_fingerprint": {
+          "type": ["string", "null"],
+          "description": "OpenSSH public-key fingerprint when primary_method is ssh."
+        },
+        "ssh_allowed_signers_line": {
+          "type": ["string", "null"],
+          "description": "allowed_signers file entry used by ssh-keygen -Y verify."
+        },
+        "gpg_key_id": {
+          "type": ["string", "null"],
+          "description": "Long-form GPG key ID or fingerprint when primary_method is gpg."
+        },
+        "github_app_installation_id": {
+          "type": ["integer", "null"],
+          "description": "GitHub App installation ID when primary_method is github-app."
+        },
+        "ci_runner_label": {
+          "type": ["string", "null"],
+          "description": "Optional self-hosted runner label that may only sign when running on a matching runner."
+        }
+      }
+    },
+    "h": {
+      "type": "object",
+      "required": ["agent_id", "glyph", "color", "role"],
+      "additionalProperties": false,
+      "description": "Human-readable identity metadata displayed in audit UIs and trail visualizations.",
+      "properties": {
+        "agent_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Canonical agent identifier from agent_registry.yaml."
+        },
+        "display_name": {
+          "type": "string",
+          "description": "Human-friendly display label (optional but recommended)."
+        },
+        "glyph": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2,
+          "description": "One- or two-character glyph used in compact UI badges."
+        },
+        "color": {
+          "type": "string",
+          "pattern": "^#[0-9A-Fa-f]{6}$",
+          "description": "Hex color for UI rendering of this agent's identity."
+        },
+        "voice": {
+          "type": "string",
+          "description": "Optional voice/persona identifier for spoken audit playback."
+        },
+        "role": {
+          "type": "string",
+          "enum": ["operator", "agent", "runner", "service-account"],
+          "description": "Classification of the identity's operating role."
+        }
+      }
+    },
+    "issued_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO-8601 timestamp when the card was first issued."
+    },
+    "rotated_at": {
+      "type": ["string", "null"],
+      "format": "date-time",
+      "description": "ISO-8601 timestamp of the last rotation/re-key, if any."
+    },
+    "active": {
+      "type": "boolean",
+      "description": "Whether this card may currently be used to sign CHIT trail entries."
+    },
+    "supersedes_card_id": {
+      "type": ["string", "null"],
+      "format": "uuid",
+      "description": "If this card replaces an older card, the superseded card_id."
+    },
+    "notes": {
+      "type": "string",
+      "description": "Free-form audit notes (e.g., node assignment, rotation reason)."
+    }
+  }
+}
