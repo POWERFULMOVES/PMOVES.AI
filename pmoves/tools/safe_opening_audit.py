@@ -26,11 +26,22 @@ Usage:
 """
 import sys
 
-from pmoves.tools.port_audit import (
-    audit_ports,
-    load_mesh_allowed_services,
-    parse_compose_config,
-)
+# Robust import: works both as a package module (`python -m pmoves.tools.safe_opening_audit`
+# / pytest from repo root) and via the documented `python tools/safe_opening_audit.py` /
+# `make -C pmoves safe-opening-audit` path (cwd=pmoves, so sys.path[0] is pmoves/tools and
+# the package-qualified import would raise ModuleNotFoundError before any audit runs).
+try:  # pragma: no cover - import-path shim
+    from pmoves.tools.port_audit import (
+        audit_ports,
+        load_mesh_allowed_services,
+        parse_compose_config,
+    )
+except ModuleNotFoundError:  # pragma: no cover - import-path shim
+    from port_audit import (  # type: ignore[no-redef]
+        audit_ports,
+        load_mesh_allowed_services,
+        parse_compose_config,
+    )
 
 LOOPBACK = "127.0.0.1"
 
@@ -46,8 +57,13 @@ AUTH_GATES: dict[str, dict[str, str]] = {
     },
     "nats": {
         "gate": "token-creds",
-        "evidence": "NATS deployment authed via env.shared credentials "
+        "evidence": "NATS client port authed via env.shared --user/--pass "
                     "(see project_nats_auth_lane_b; confirm per node).",
+        # The gate covers ONLY the client port (4222). The NATS monitoring endpoint
+        # (8222) has NO auth/authz (per NATS docs) — without scoping the gate to its
+        # ports, a reachable monitoring bind would be falsely reported GATED. Listing
+        # ports here means any other reachable nats port (e.g. 8222) is UNVERIFIED.
+        "ports": ["4222"],
     },
 }
 
@@ -79,17 +95,31 @@ def audit_auth_coupling(
             continue
         svc = f["service"]
         gate = auth_gates.get(svc)
-        if gate is None:
+        # A gate may scope itself to specific container ports (e.g. NATS gates the
+        # client port 4222 but NOT the unauthed monitoring port 8222). When "ports"
+        # is present and this finding's container_port is not covered, the gate does
+        # not apply to this surface → UNVERIFIED (fail-closed), not a false GATED.
+        gate_ports = (gate or {}).get("ports")
+        port_covered = (
+            gate_ports is None or str(f.get("container_port", "")) in [str(p) for p in gate_ports]
+        )
+        if gate is None or not port_covered:
             status = "UNVERIFIED"
         elif gate.get("gate", "").lower() in ("none", "ungated", ""):
             status = "UNGATED"
         else:
             status = "GATED"
+        # Don't attribute the service's gate to a surface the gate doesn't cover.
+        shown_gate = (gate or {}).get("gate", "") if port_covered else ""
+        shown_evidence = (gate or {}).get("evidence", "") if port_covered else (
+            f"gate '{(gate or {}).get('gate', '')}' covers ports "
+            f"{(gate or {}).get('ports')}, not this port" if gate else ""
+        )
         results.append({
             **f,
             "auth_status": status,
-            "gate": (gate or {}).get("gate", ""),
-            "evidence": (gate or {}).get("evidence", ""),
+            "gate": shown_gate,
+            "evidence": shown_evidence,
         })
     return results
 

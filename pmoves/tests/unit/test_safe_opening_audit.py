@@ -203,3 +203,45 @@ class TestMain:
         err = capsys.readouterr().err
         assert "ERROR" in err
         assert "failing closed" in err
+
+
+def _finding_port(service: str, bind: str, container_port: str, host_port: str = "8080") -> dict:
+    """port_audit-shaped finding with an explicit container_port."""
+    return {
+        "service": service,
+        "host_port": host_port,
+        "container_port": container_port,
+        "bind": bind,
+        "expected": "127.0.0.1",
+        "status": "OK",
+    }
+
+
+class TestPortScopedGate:
+    """A gate with a 'ports' list covers only those container ports (NATS monitoring fix)."""
+
+    def test_gated_port_is_gated(self) -> None:
+        # nats gate covers 4222 (client) → reachable 4222 is GATED.
+        r = audit_auth_coupling([_finding_port("nats", "0.0.0.0", "4222")], AUTH_GATES)
+        assert r[0]["auth_status"] == "GATED"
+
+    def test_uncovered_port_is_unverified(self) -> None:
+        # nats monitoring 8222 is NOT in the gate's ports → UNVERIFIED, not a false GATED.
+        r = audit_auth_coupling([_finding_port("nats", "0.0.0.0", "8222")], AUTH_GATES)
+        assert r[0]["auth_status"] == "UNVERIFIED"
+        assert r[0]["gate"] == ""  # don't attribute the client-port gate to the monitoring port
+
+    def test_no_ports_key_covers_all_ports(self) -> None:
+        # agent-zero has no 'ports' scope → any reachable port stays GATED (back-compat).
+        r = audit_auth_coupling([_finding_port("agent-zero", "0.0.0.0", "55555")], AUTH_GATES)
+        assert r[0]["auth_status"] == "GATED"
+
+
+class TestImportShim:
+    """The module imports under both run styles (package + cwd=pmoves/tools)."""
+
+    def test_port_audit_symbols_imported(self) -> None:
+        import pmoves.tools.safe_opening_audit as m
+        assert callable(m.audit_ports)
+        assert callable(m.parse_compose_config)
+        assert callable(m.load_mesh_allowed_services)
