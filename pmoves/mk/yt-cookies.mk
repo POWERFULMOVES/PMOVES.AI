@@ -16,11 +16,13 @@ yt-cookies-check: ## Preflight: verify Google OAuth + Supabase env vars are set
 	@echo "=== YT Cookies: preflight check ==="
 	@hard=0; \
 	cid=$$(bash scripts/with-env.sh printenv GOOGLE_OAUTH_CLIENT_ID 2>/dev/null || true); \
+	[ -z "$$cid" ] && cid=$$(bash scripts/with-env.sh printenv GOOGLE_CLIENT_ID 2>/dev/null || true); \
 	[ -z "$$cid" ] && cid=$$(bash scripts/with-env.sh printenv CHANNEL_MONITOR_GOOGLE_CLIENT_ID 2>/dev/null || true); \
 	csec=$$(bash scripts/with-env.sh printenv GOOGLE_OAUTH_CLIENT_SECRET 2>/dev/null || true); \
+	[ -z "$$csec" ] && csec=$$(bash scripts/with-env.sh printenv GOOGLE_CLIENT_SECRET 2>/dev/null || true); \
 	[ -z "$$csec" ] && csec=$$(bash scripts/with-env.sh printenv CHANNEL_MONITOR_GOOGLE_CLIENT_SECRET 2>/dev/null || true); \
-	if [ -z "$$cid" ] || [ "$$cid" = "YOUR_GOOGLE_CLIENT_ID_HERE.apps.googleusercontent.com" ]; then echo "✗ GOOGLE_OAUTH_CLIENT_ID (or CHANNEL_MONITOR_*): not configured"; hard=$$((hard+1)); else echo "✓ client id: set (length=$${#cid})"; fi; \
-	if [ -z "$$csec" ] || [ "$$csec" = "GOCSPX-YOUR_CLIENT_SECRET_HERE" ]; then echo "✗ GOOGLE_OAUTH_CLIENT_SECRET (or CHANNEL_MONITOR_*): not configured"; hard=$$((hard+1)); else echo "✓ client secret: set (length=$${#csec})"; fi; \
+	if [ -z "$$cid" ] || [ "$$cid" = "YOUR_GOOGLE_CLIENT_ID_HERE.apps.googleusercontent.com" ]; then echo "✗ client id (GOOGLE_OAUTH_CLIENT_ID / GOOGLE_CLIENT_ID / CHANNEL_MONITOR_*): not configured"; hard=$$((hard+1)); else echo "✓ client id: set (length=$${#cid})"; fi; \
+	if [ -z "$$csec" ] || [ "$$csec" = "GOCSPX-YOUR_CLIENT_SECRET_HERE" ]; then echo "✗ client secret (GOOGLE_OAUTH_CLIENT_SECRET / GOOGLE_CLIENT_SECRET / CHANNEL_MONITOR_*): not configured"; hard=$$((hard+1)); else echo "✓ client secret: set (length=$${#csec})"; fi; \
 	for var in SERVICE_ROLE_KEY SUPABASE_URL; do \
 		val=$$(bash scripts/with-env.sh printenv $$var 2>/dev/null || true); \
 		if [ -z "$$val" ]; then echo "✗ $$var: not configured (required to store the token)"; hard=$$((hard+1)); else echo "✓ $$var: set (length=$${#val})"; fi; \

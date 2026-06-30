@@ -20,6 +20,9 @@ This is the single canonical walkthrough for provisioning Google OAuth so PMOVES
    - Publish the consent screen (test mode is sufficient for development).
 
 ## 3. Create an OAuth Desktop Client
+
+> **Reuse first:** PMOVES already has a **Desktop** Google client — the one the `google-workspace` MCP skill uses, stored as `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` (GitHub secrets + `env.shared`). The acquire flow accepts it directly (no new client needed). To reuse it, just confirm **YouTube Data API v3** is enabled on *that* client's project and `youtube.readonly` is on its consent screen (§2). Only create a new client below if you want a dedicated YT one.
+
 1. Go to **APIs & Services → Credentials**.
 2. Click **Create credentials → OAuth client ID**.
 3. Select **Desktop app** and choose a descriptive name (e.g., `PMOVES.YT Desktop`).
@@ -51,7 +54,7 @@ SERVICE_ROLE_KEY=<supabase service-role key>
 SUPABASE_URL=http://supabase-kong:8000
 ```
 
-> `CHANNEL_MONITOR_GOOGLE_CLIENT_ID/SECRET` are still accepted as a **fallback** for the client id/secret (Phase 9Q.2 reused them), but `GOOGLE_OAUTH_*` is preferred. Verify with `make -C pmoves yt-cookies-check`.
+> **Client id/secret resolution order:** `GOOGLE_OAUTH_CLIENT_ID/SECRET` (dedicated) → `GOOGLE_CLIENT_ID/SECRET` (the shared google-workspace Desktop client — already in GitHub secrets) → `CHANNEL_MONITOR_GOOGLE_CLIENT_ID/SECRET` (legacy). If you reuse the workspace client you only need `VAULT_ENC_KEY`, `SERVICE_ROLE_KEY`, and `SUPABASE_URL` newly funneled. Verify with `make -C pmoves yt-cookies-check`.
 
 ## 6. Token Storage
 The CLI stores the token **directly** in `pmoves_core.yt_oauth_cookies` (Fernet-encrypted with `VAULT_ENC_KEY`), keyed by `user_id`. No manual `curl` to channel-monitor is needed — the cookie-refresher and channel-monitor both read this row.

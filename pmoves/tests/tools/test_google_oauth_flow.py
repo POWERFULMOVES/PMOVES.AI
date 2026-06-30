@@ -33,11 +33,25 @@ class TestClientCreds(unittest.TestCase):
         env = {
             "GOOGLE_OAUTH_CLIENT_ID": "desktop-id",
             "GOOGLE_OAUTH_CLIENT_SECRET": "desktop-secret",
+            "GOOGLE_CLIENT_ID": "ws-id",
+            "GOOGLE_CLIENT_SECRET": "ws-secret",
             "CHANNEL_MONITOR_GOOGLE_CLIENT_ID": "legacy-id",
             "CHANNEL_MONITOR_GOOGLE_CLIENT_SECRET": "legacy-secret",
         }
         with mock.patch.dict(os.environ, env, clear=True):
             self.assertEqual(oauth._client_creds(), ("desktop-id", "desktop-secret"))
+
+    def test_falls_back_to_workspace_google_client(self):
+        # GOOGLE_CLIENT_ID/SECRET = the existing google-workspace MCP Desktop
+        # client; reuse it before the channel-monitor legacy names.
+        env = {
+            "GOOGLE_CLIENT_ID": "ws-id",
+            "GOOGLE_CLIENT_SECRET": "ws-secret",
+            "CHANNEL_MONITOR_GOOGLE_CLIENT_ID": "legacy-id",
+            "CHANNEL_MONITOR_GOOGLE_CLIENT_SECRET": "legacy-secret",
+        }
+        with mock.patch.dict(os.environ, env, clear=True):
+            self.assertEqual(oauth._client_creds(), ("ws-id", "ws-secret"))
 
     def test_falls_back_to_channel_monitor_vars(self):
         env = {
