@@ -22,9 +22,11 @@ Consequences if an operator clicks **Update** with the default (unset) config:
 2. `git clean -ffd` then **deletes all untracked PMOVES custom code** — including
    `chit/`, `pmoves_announcer/`, and the PMOVES `health` / `registry` / `common`
    modules — because they do not exist in upstream.
-3. The updater's **branch list is hardcoded** and does **not** include
-   `PMOVES.AI-Edition-Hardened`, so it cannot target (or stay on) the PMOVES
-   hardened fork branch even if pointed at the fork remote.
+3. The updater **defaults to `branch=main` and resolves only vX.Y release tags
+   reachable from that branch** (`tag --merged`); the PMOVES
+   `PMOVES.AI-Edition-Hardened` branch is neither the default nor carries
+   upstream-style release tags, so the button cannot target (or stay on) the
+   hardened fork even if pointed at the fork remote.
 
 Net effect: a single UI click can wipe the PMOVES customizations that make this
 an orchestrator-grade Agent Zero, and silently revert to vanilla upstream.
@@ -47,10 +49,11 @@ updater — see below.
 
 ## (c) Operational rule: never use the in-app "Update" button
 
-Because the updater's branch list is hardcoded and **excludes
-`PMOVES.AI-Edition-Hardened`**, the in-app updater cannot advance the fork on its
-canonical hardened branch even with the remote pinned. The env fix only limits
-blast radius; it does not make the button safe for advancing the fork.
+Because the updater **defaults to `branch=main` and resolves vX.Y release tags
+reachable from it** — and `PMOVES.AI-Edition-Hardened` is neither the default nor
+carries those tags — the in-app updater cannot advance the fork on its canonical
+hardened branch even with the remote pinned. The env fix only limits blast
+radius; it does not make the button safe for advancing the fork.
 
 **Operators must advance the fork via a worktree merge-forward**, e.g.:
 
@@ -70,5 +73,5 @@ Then bump the submodule gitlink in PMOVES.AI through the normal PR flow.
 
 - `PMOVES-Agent-Zero/docker/run/fs/exe/self_update_manager.py`
   (`OFFICIAL_REPO_URL`, `A0_SELF_UPDATE_REMOTE_URL`, post-fetch `git clean -ffd`,
-  hardcoded branch list).
+  `branch=main` default + vX.Y release-tag resolution).
 - `pmoves/env.shared.example` — `A0_SELF_UPDATE_REMOTE_URL` declaration.
