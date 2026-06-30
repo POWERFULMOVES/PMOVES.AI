@@ -473,6 +473,10 @@ def test_validate_forbidden_consciousness_shape():
     assert any("consciousness_shape" in e for e in data["errors"])
 
 
+_UUID1 = "11111111-1111-1111-1111-111111111111"
+_UUID2 = "22222222-2222-2222-2222-222222222222"
+
+
 @requires_deps
 def test_validate_grounding_pk_resolution(monkeypatch):
     import main
@@ -485,23 +489,64 @@ def test_validate_grounding_pk_resolution(monkeypatch):
         return handler
 
     # all ids resolve -> valid
-    monkeypatch.setattr(vr.httpx, "AsyncClient", _factory(make_handler(["p1", "p2"])))
+    monkeypatch.setattr(vr.httpx, "AsyncClient", _factory(make_handler([_UUID1, _UUID2])))
     client = TestClient(main.app)
     resp = client.post("/v1/voice/validate",
                        json={"engine": "vibevoice",
                              "engine_specific": {"voice_preset": "p"},
-                             "grounding": {"persona_ids": ["p1", "p2"]}}, headers=AUTH)
+                             "grounding": {"persona_ids": [_UUID1, _UUID2]}}, headers=AUTH)
     assert resp.status_code == 200
     assert resp.json()["valid"] is True
 
     # a missing id -> invalid
-    monkeypatch.setattr(vr.httpx, "AsyncClient", _factory(make_handler(["p1"])))
+    monkeypatch.setattr(vr.httpx, "AsyncClient", _factory(make_handler([_UUID1])))
     resp = client.post("/v1/voice/validate",
                        json={"engine": "vibevoice",
                              "engine_specific": {"voice_preset": "p"},
-                             "grounding": {"persona_ids": ["p1", "p2"]}}, headers=AUTH)
+                             "grounding": {"persona_ids": [_UUID1, _UUID2]}}, headers=AUTH)
     assert resp.json()["valid"] is False
     assert any("persona_ids" in e for e in resp.json()["errors"])
+
+
+@requires_deps
+def test_validate_grounding_malformed_uuid_rejected_without_query(monkeypatch):
+    """A non-UUID persona_id is a hard error caught locally (no PostgREST call)."""
+    import main
+
+    def handler(method, url, headers, params, body):
+        raise AssertionError("must not query substrate for a malformed UUID")
+
+    monkeypatch.setattr(vr.httpx, "AsyncClient", _factory(handler))
+    client = TestClient(main.app)
+    resp = client.post("/v1/voice/validate",
+                       json={"engine": "vibevoice",
+                             "engine_specific": {"voice_preset": "p"},
+                             "grounding": {"persona_ids": ["not-a-uuid"]}}, headers=AUTH)
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["valid"] is False
+    assert any("malformed UUID" in e for e in data["errors"])
+
+
+@requires_deps
+def test_validate_grounding_client_error_is_hard_error(monkeypatch):
+    """A PostgREST 400 (bad input) is a rejection, not an 'unreachable' warning."""
+    import main
+
+    def handler(method, url, headers, params, body):
+        return _FakeResp(400, {"code": "22P02", "message": "invalid input syntax"})
+
+    monkeypatch.setattr(vr.httpx, "AsyncClient", _factory(handler))
+    client = TestClient(main.app)
+    resp = client.post("/v1/voice/validate",
+                       json={"engine": "vibevoice",
+                             "engine_specific": {"voice_preset": "p"},
+                             "grounding": {"persona_ids": [_UUID1]}}, headers=AUTH)
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["valid"] is False
+    assert any("rejected by substrate" in e for e in data["errors"])
+    assert data["warnings"] == []  # NOT excused as unreachable
 
 
 @requires_deps
@@ -516,8 +561,117 @@ def test_validate_grounding_unreachable_is_warning_not_error(monkeypatch):
     resp = client.post("/v1/voice/validate",
                        json={"engine": "vibevoice",
                              "engine_specific": {"voice_preset": "p"},
-                             "grounding": {"persona_ids": ["p1"]}}, headers=AUTH)
+                             "grounding": {"persona_ids": [_UUID1]}}, headers=AUTH)
     assert resp.status_code == 200
     data = resp.json()
     assert data["valid"] is True  # unverifiable != invalid
     assert any("unreachable" in w for w in data["warnings"])
+
+
+# --- review-fix regression tests --------------------------------------------
+
+@requires_deps
+def test_registry_load_filters_soft_deleted(monkeypatch):
+    """The registry query must exclude soft-deleted rows (deleted_at IS NULL)."""
+    seen = {}
+
+    def handler(method, url, headers, params, body):
+        seen["params"] = params
+        return _FakeResp(200, [_profile_row(name="alice")])
+
+    monkeypatch.setattr(vr.httpx, "AsyncClient", _factory(handler))
+    reg = VoiceRegistry("http://supabase.test", "k")
+    import asyncio
+    assert asyncio.run(reg.load()) is True
+    assert seen["params"].get("deleted_at") == "is.null"
+    assert seen["params"].get("is_active") == "eq.true"
+
+
+@requires_deps
+def test_hook_clears_slug_when_no_provider_voice():
+    """A matched profile with no provider-native voice must NOT leak the slug."""
+    import main
+    reg = VoiceRegistry("http://x", "k")
+    # omnivoice design profile: instruct only, no ref_audio / ref_audio_path.
+    reg._cache = {"design-1": VoiceProfile.from_row(_profile_row(
+        name="design-1", engine="omnivoice",
+        engine_specific={"instruct": "calm narrator"}, ref_audio_path=None))}
+    reg._healthy = True
+
+    req = main.SynthesizeRequest(text="hi", voice="design-1")
+    with patch("main.voice_registry", reg):
+        matched = main._resolve_voice_profile(req)
+    assert matched is True
+    assert req.provider == "omnivoice"
+    assert req.engine == "calm narrator"   # instruct -> engine slot
+    assert req.voice is None               # slug cleared, not leaked
+
+
+@requires_deps
+def test_hook_noop_when_registry_unhealthy():
+    """Honor the health gate: do not read the cache when unhealthy."""
+    import main
+    reg = VoiceRegistry("http://x", "k")
+    reg._cache = {"alice": VoiceProfile.from_row(_profile_row(name="alice"))}
+    reg._healthy = False  # unhealthy -> must no-op
+    req = main.SynthesizeRequest(text="hi", voice="alice")
+    with patch("main.voice_registry", reg):
+        assert main._resolve_voice_profile(req) is False
+    assert req.provider is None  # untouched
+
+
+@requires_deps
+def test_capability_ultimate_tts_requires_voice_key():
+    from voice_registry import validate_capability
+    # primary_engine present but the derived voice key missing -> error
+    errs = validate_capability("ultimate_tts", {"primary_engine": "f5_tts"})
+    assert any("f5_tts_voice" in e for e in errs)
+    # voice key present -> ok
+    assert validate_capability(
+        "ultimate_tts", {"primary_engine": "f5_tts", "f5_tts_voice": "vx"}) == []
+
+
+@requires_deps
+def test_env_int_guards_malformed_ttl(monkeypatch):
+    monkeypatch.setenv("VOICE_REGISTRY_TTL_SECONDS", "not-an-int")
+    assert vr._env_int("VOICE_REGISTRY_TTL_SECONDS", 300) == 300
+
+
+@requires_deps
+def test_create_profile_invalid_name_pattern_422():
+    import main
+    reg = VoiceRegistry("http://x", "k")
+    reg._healthy = True
+    with patch("main.voice_registry", reg):
+        client = TestClient(main.app)
+        # "ab" is too short (<3) and "bad name!" has illegal chars
+        for bad in ["ab", "bad name!"]:
+            resp = client.post("/v1/voice/profiles",
+                               json={"name": bad, "engine": "vibevoice",
+                                     "engine_specific": {"voice_preset": "p"}}, headers=AUTH)
+            assert resp.status_code == 422, bad
+
+
+@requires_deps
+def test_create_profile_publishes_invalidation(monkeypatch):
+    """After a successful write, peer instances are notified via NATS."""
+    import main
+    reg = VoiceRegistry("http://x", "k")
+    reg._healthy = True
+    created = _profile_row(name="new-slug", engine="vibevoice",
+                           engine_specific={"voice_preset": "p"})
+
+    def handler(method, url, headers, params, body):
+        return _FakeResp(201, [created])
+
+    mock_nats = AsyncMock()
+    mock_nats.publish = AsyncMock()
+    monkeypatch.setattr(main.httpx, "AsyncClient", _factory(handler))
+    with patch("main.voice_registry", reg), patch("main.nats_client", mock_nats):
+        client = TestClient(main.app)
+        resp = client.post("/v1/voice/profiles",
+                           json={"name": "new-slug", "engine": "vibevoice",
+                                 "engine_specific": {"voice_preset": "p"}}, headers=AUTH)
+    assert resp.status_code == 201
+    mock_nats.publish.assert_awaited_once()
+    assert mock_nats.publish.await_args.args[0] == "voice.registry.update.v1"

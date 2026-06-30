@@ -30,14 +30,41 @@ import os
 import time
 from dataclasses import dataclass, field
 from typing import Any, Optional
+from uuid import UUID
 
 import httpx
 
 logger = logging.getLogger("flute-gateway.voice_registry")
 
+
+def _env_int(name: str, default: int) -> int:
+    """Parse an int env var, falling back (with a WARNING) on malformed input.
+
+    A bad ``VOICE_REGISTRY_TTL_SECONDS`` must not crash module import before
+    graceful degradation can even run.
+    """
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    try:
+        return int(raw)
+    except (ValueError, TypeError):
+        logger.warning("voice_registry: invalid %s=%r; using %d", name, raw, default)
+        return default
+
+
+def _is_uuid(value: Any) -> bool:
+    """Local UUID well-formedness check (avoids a PostgREST 400 on uuid columns)."""
+    try:
+        UUID(str(value))
+        return True
+    except (ValueError, AttributeError, TypeError):
+        return False
+
+
 # --- constants ---------------------------------------------------------------
 
-DEFAULT_TTL_SECONDS = int(os.getenv("VOICE_REGISTRY_TTL_SECONDS", "300"))  # 5-min TTL
+DEFAULT_TTL_SECONDS = _env_int("VOICE_REGISTRY_TTL_SECONDS", 300)  # 5-min TTL
 VOICE_PROFILES_TABLE = "voice_profiles"        # pmoves_core.voice_profiles via PostgREST
 PMOVES_CORE_SCHEMA = "pmoves_core"             # PostgREST Accept-Profile / Content-Profile
 REGISTRY_UPDATE_SUBJECT = "voice.registry.update.v1"  # NATS invalidation subject
@@ -149,7 +176,14 @@ class VoiceRegistry:
                 resp = await client.get(
                     f"{self._url}/rest/v1/{VOICE_PROFILES_TABLE}",
                     headers=self._read_headers(),
-                    params={"is_active": "eq.true", "select": "*"},
+                    # The service-role key bypasses the voice_profiles_read RLS
+                    # predicate that excludes soft-deleted rows, so honor the
+                    # soft-delete lifecycle explicitly: deleted_at IS NULL.
+                    params={
+                        "is_active": "eq.true",
+                        "deleted_at": "is.null",
+                        "select": "*",
+                    },
                 )
         except httpx.HTTPError as exc:
             logger.warning("voice_registry: Supabase unreachable (%s) — registry disabled", exc)
@@ -383,8 +417,13 @@ def validate_capability(engine: str, engine_specific: dict) -> list[str]:
         if not (es.get("profile_id") or es.get("voice_type")):
             errors.append("voicebox requires engine_specific.profile_id or engine_specific.voice_type")
     elif engine == "ultimate_tts":
-        if not es.get("primary_engine"):
+        primary = es.get("primary_engine")
+        if not primary:
             errors.append("ultimate_tts requires engine_specific.primary_engine")
+        elif not es.get(f"{primary}_voice"):
+            # select_provider_and_params reads engine_specific[f"{primary}_voice"];
+            # without it the profile resolves with no provider voice.
+            errors.append(f"ultimate_tts requires engine_specific.{primary}_voice")
     elif engine == "omnivoice":
         if not (es.get("ref_audio") or es.get("instruct")):
             errors.append("omnivoice requires engine_specific.ref_audio (clone) or engine_specific.instruct (design)")
@@ -398,16 +437,20 @@ async def _resolve_pks(
     *,
     supabase_url: str,
     supabase_key: str,
-) -> Optional[set[str]]:
-    """Return the set of values that resolve in pmoves_core.<table>.<pk_column>.
+) -> tuple[str, set[str]]:
+    """Resolve values against pmoves_core.<table>.<pk_column>.
 
-    Returns None when the substrate is unreachable (caller treats as a warning,
-    not a hard error).
+    Returns ``(status, resolved_set)`` where status is one of:
+        * ``"ok"``           — query succeeded; resolved_set holds matches.
+        * ``"unreachable"``  — network error / 5xx / unconfigured → caller WARNS
+                               (transient; not a rejection).
+        * ``"client_error"`` — PostgREST 4xx (bad input/filter, e.g. malformed
+                               UUID) → caller treats as a hard validation error.
     """
     if not values:
-        return set()
+        return "ok", set()
     if not supabase_url or not supabase_key:
-        return None
+        return "unreachable", set()
     url = supabase_url.rstrip("/")
     in_list = ",".join(str(v) for v in values)
     try:
@@ -422,16 +465,19 @@ async def _resolve_pks(
                 params={pk_column: f"in.({in_list})", "select": pk_column},
             )
     except httpx.HTTPError:
-        return None
+        return "unreachable", set()
+    if 400 <= resp.status_code < 500:
+        # Bad client input (malformed filter/value) — reject, don't excuse it.
+        return "client_error", set()
     if resp.status_code != 200:
-        return None
+        return "unreachable", set()
     try:
         rows = resp.json()
     except (ValueError, TypeError):
-        return None
+        return "unreachable", set()
     if not isinstance(rows, list):
-        return None
-    return {str(r.get(pk_column)) for r in rows if isinstance(r, dict)}
+        return "unreachable", set()
+    return "ok", {str(r.get(pk_column)) for r in rows if isinstance(r, dict)}
 
 
 async def validate_grounding(
@@ -447,7 +493,8 @@ async def validate_grounding(
         * persona_ids[] each must resolve in pmoves_core.personas
         * consciousness_theory_id must resolve in pmoves_core.consciousness_theories
         * deferred keys (paradigm/proponents/blend/...) -> warnings
-        * substrate unreachable while resolving a PK -> warning (NOT a hard error)
+        * malformed persona UUID or PostgREST 4xx -> hard error (rejected input)
+        * substrate unreachable / 5xx while resolving a PK -> warning (transient)
     """
     errors: list[str] = []
     warnings: list[str] = []
@@ -467,36 +514,45 @@ async def validate_grounding(
                 f"grounding key '{key}' has no backing table yet (deferred, not validated)"
             )
 
-    # persona_ids[]
+    # persona_ids[] -> personas.persona_id (uuid). Validate UUIDs locally first so
+    # bad input is a hard error rather than a PostgREST 400 excused as "unreachable".
     persona_ids = grounding.get("persona_ids")
     if persona_ids is not None:
         if not isinstance(persona_ids, list):
             errors.append("grounding.persona_ids must be an array")
         elif persona_ids:
-            table, pk = GROUNDING_PK_RESOLVERS["persona_ids"]
-            resolved = await _resolve_pks(
-                table, pk, [str(v) for v in persona_ids],
-                supabase_url=supabase_url, supabase_key=supabase_key,
-            )
-            if resolved is None:
-                warnings.append("grounding.persona_ids unverifiable (substrate unreachable)")
+            malformed = [str(v) for v in persona_ids if not _is_uuid(v)]
+            if malformed:
+                errors.append(f"grounding.persona_ids contains malformed UUID(s): {malformed}")
             else:
-                missing = [str(v) for v in persona_ids if str(v) not in resolved]
-                if missing:
-                    errors.append(f"grounding.persona_ids do not resolve in personas: {missing}")
+                table, pk = GROUNDING_PK_RESOLVERS["persona_ids"]
+                status, resolved = await _resolve_pks(
+                    table, pk, [str(v) for v in persona_ids],
+                    supabase_url=supabase_url, supabase_key=supabase_key,
+                )
+                if status == "client_error":
+                    errors.append("grounding.persona_ids rejected by substrate (invalid input)")
+                elif status == "unreachable":
+                    warnings.append("grounding.persona_ids unverifiable (substrate unreachable)")
+                else:
+                    missing = [str(v) for v in persona_ids if str(v) not in resolved]
+                    if missing:
+                        errors.append(f"grounding.persona_ids do not resolve in personas: {missing}")
 
-    # consciousness_theory_id
+    # consciousness_theory_id -> consciousness_theories.id (text; no UUID pre-check)
     theory_id = grounding.get("consciousness_theory_id")
     if theory_id is not None:
         if not isinstance(theory_id, str):
             errors.append("grounding.consciousness_theory_id must be a string")
         else:
             table, pk = GROUNDING_PK_RESOLVERS["consciousness_theory_id"]
-            resolved = await _resolve_pks(
+            status, resolved = await _resolve_pks(
                 table, pk, [theory_id],
                 supabase_url=supabase_url, supabase_key=supabase_key,
             )
-            if resolved is None:
+            if status == "client_error":
+                errors.append("grounding.consciousness_theory_id rejected by substrate (invalid input)")
+            elif status == "unreachable":
                 warnings.append(
                     "grounding.consciousness_theory_id unverifiable (substrate unreachable)"
                 )

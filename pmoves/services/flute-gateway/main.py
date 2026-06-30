@@ -280,7 +280,7 @@ def _resolve_voice_profile(request: "SynthesizeRequest") -> bool:
     unset, ``engine`` is already pinned, or the slug is unknown — preserving the
     existing DEFAULT_PROVIDER behaviour (graceful degradation).
     """
-    if voice_registry is None or not request.voice or request.engine:
+    if voice_registry is None or not voice_registry.healthy or not request.voice or request.engine:
         return False
     profile = voice_registry.get(request.voice)
     if profile is None:
@@ -289,8 +289,10 @@ def _resolve_voice_profile(request: "SynthesizeRequest") -> bool:
     request.provider = provider_name
     if params.get("engine"):
         request.engine = params["engine"]
-    if params.get("voice"):
-        request.voice = params["voice"]
+    # The registry slug is NOT a provider-native voice. Replace it with the
+    # resolved provider voice, or CLEAR it (None) so the provider falls back to
+    # its own default — never leak the slug as a preset/ref_audio.
+    request.voice = params.get("voice")
     return True
 
 
@@ -443,7 +445,13 @@ class ConfigResponse(BaseModel):
 
 class VoiceProfileIn(BaseModel):
     """Create/register payload for a voice profile (pmoves_core.voice_profiles)."""
-    name: str = Field(..., description="Slug selector (^[a-zA-Z0-9_-]{3,64}$)")
+    name: str = Field(
+        ...,
+        # pydantic v2 uses `pattern=` (v1's `regex=`); enforce the v5_16 slug
+        # CHECK at input time so /v1/voice/profiles can't persist a bad slug.
+        pattern=r"^[a-zA-Z0-9_-]{3,64}$",
+        description="Slug selector (^[a-zA-Z0-9_-]{3,64}$)",
+    )
     engine: str = Field(..., description="omnivoice|vibevoice|voicebox|ultimate_tts")
     engine_specific: Dict[str, Any] = Field(default_factory=dict)
     display_name: Optional[str] = None
@@ -1412,6 +1420,21 @@ async def create_voice_profile(body: VoiceProfileIn) -> Dict[str, Any]:
             voice_registry.upsert_local(VoiceProfile.from_row(row))
         except (KeyError, TypeError):
             logger.warning("voice_registry: created row missing fields, cache not warmed")
+    # Notify peer gateway instances to refresh so they don't serve stale data
+    # until their TTL elapses. Fire-and-forget on the shared invalidation subject
+    # (this instance is subscribed too, which reconciles its warm cache from DB).
+    if nats_client is not None and isinstance(row, dict):
+        try:
+            await nats_client.publish(
+                REGISTRY_UPDATE_SUBJECT,
+                json.dumps({
+                    "op": "upsert",
+                    "name": row.get("name"),
+                    "ts": datetime.now(timezone.utc).isoformat(),
+                }).encode("utf-8"),
+            )
+        except Exception as exc:  # best-effort; the TTL loop is the safety net
+            logger.warning("voice_registry: failed to publish %s (%s)", REGISTRY_UPDATE_SUBJECT, exc)
     REQUESTS_TOTAL.labels(endpoint="/v1/voice/profiles", status="201").inc()
     return row
 
