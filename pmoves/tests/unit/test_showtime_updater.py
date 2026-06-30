@@ -294,9 +294,20 @@ class TestCanonicalServiceNames:
 
     def test_canonical_names_in_default_radius(self) -> None:
         assert "supabase-postgrest" in updater.SAFE_DEFAULT_BLAST_RADIUS
-        assert "cipher-api" in updater.SAFE_DEFAULT_BLAST_RADIUS
+        # Non-canonical / legacy names must be gone.
         assert "supabase-rest" not in updater.SAFE_DEFAULT_BLAST_RADIUS
         assert "cipher-memory" not in updater.SAFE_DEFAULT_BLAST_RADIUS
+
+    def test_cipher_api_is_forbidden_not_pulled(self) -> None:
+        # cipher-api is agent-tier + build-only in compose: never in the pull radius,
+        # and hard-forbidden (Codex follow-up on #1905).
+        assert "cipher-api" not in updater.SAFE_DEFAULT_BLAST_RADIUS
+        assert "cipher-api" not in updater.KNOWN_UPDATABLE_SERVICES
+        assert "cipher-api" in updater.AGENT_TIER_SERVICES
+
+    def test_default_radius_only_pullable_image_services(self) -> None:
+        # Every default-radius service must be a registry-image (pullable) service.
+        assert set(updater.SAFE_DEFAULT_BLAST_RADIUS) == {"loki", "open-notebook", "supabase-postgrest"}
 
 
 if __name__ == "__main__":

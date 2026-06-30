@@ -66,9 +66,12 @@ SKIP_CHIT_ENV_KEY = "SHOWTIME_UPDATER_SKIP_CHIT"
 SAFE_DEFAULT_BLAST_RADIUS: tuple[str, ...] = (
     "loki",
     "open-notebook",
-    "cipher-api",          # canonical compose service name (not "cipher-memory")
     "supabase-postgrest",  # canonical compose service name (not "supabase-rest")
 )
+# NOTE: Cipher (cipher-api) is intentionally NOT here. In compose it is
+# `<<: *tier-agent-hardened` (agent-tier) and `build:`-only (no registry image),
+# so `docker compose pull` cannot fetch it and an image-refresh updater must not
+# touch it. It is hard-forbidden via AGENT_TIER_SERVICES below (Codex on #1905).
 
 # Agent-tier services are hard-forbidden from any update radius. Restarting an
 # agent mid-flight loses in-flight reasoning state, so the updater refuses.
@@ -80,6 +83,7 @@ AGENT_TIER_SERVICES: frozenset[str] = frozenset(
         "botz-gateway",
         "supaserch",
         "evo-controller",
+        "cipher-api",  # tier-agent-hardened + build-only in compose — never pull/restart
     }
 )
 
@@ -91,7 +95,6 @@ GLOBAL_TOKENS: frozenset[str] = frozenset({"all", "global", "*", "everything"})
 KNOWN_UPDATABLE_SERVICES: tuple[str, ...] = (
     "loki",
     "open-notebook",
-    "cipher-api",          # canonical compose service name (not "cipher-memory")
     "supabase-postgrest",  # canonical compose service name (not "supabase-rest")
     "tensorzero-gateway",
     "channel-monitor",
