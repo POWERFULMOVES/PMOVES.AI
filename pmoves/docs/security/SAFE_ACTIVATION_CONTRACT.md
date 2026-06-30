@@ -45,7 +45,7 @@ A node declares a **capability set** (illustrative, extend as needed):
 
 **Instances of this clause already in flight:**
 - **CHIT unseal** must offer **voice OR typed OR key-file** (the mic block's fix). Design lives in the CHIT unseal follow-up; this contract is its parent.
-- **No-mic user mode**: text-in → **Nest TTS-out**. Z890 (no mic, has Nest speakers) is the canonical testbed — see the voice-agents design spec §1a accessibility requirement.
+- **No-mic user mode**: text-in → **Nest TTS-out**. Z890 (no mic, has Nest speakers) is the canonical testbed — *to be added* to the voice-agents design spec §1a as an accessibility requirement (owned by the voice lane; this is a forward reference until that section lands).
 
 **Funnel-to-safe, not fail-to-open:** if the selected capability would require exposing a protected surface (Clause 3) and the safe variant is unavailable, activation **refuses and explains**, it does not silently widen a bind.
 
@@ -75,7 +75,7 @@ bounds what it may *reach*.
 
 **Rule:** Any service bound to a **reachable** interface (`0.0.0.0`, LAN, or mesh) **MUST** be auth-gated. Activation verifies *bind-scope vs auth-presence* and refuses/funnels when a reachable bind lacks a credential gate. Exposure is opt-in and reviewed, never the accidental default.
 
-**"Reachable" has two altitudes.** Per Clause 2b, the same surface sits behind different gates depending on *how far* it reaches: **LAN/mesh** reach is gated by CHIT local-unlock (the local master key), while **online/public/egress** reach is the strictest, *independent* gate (the blast-radius tier of Clause 2b). A surface that is safe on the mesh is **not** automatically safe online — clearing the local gate never implies clearing the online one. The safe-opening preflight therefore evaluates auth-presence *per altitude*, not once.
+**"Reachable" has two altitudes.** Per Clause 2b, the same surface sits behind different gates depending on *how far* it reaches: **LAN/mesh** reach is gated by CHIT local-unlock (the local master key), while **online/public/egress** reach is the strictest, *independent* gate (the blast-radius tier of Clause 2b). A surface that is safe on the mesh is **not** automatically safe online — clearing the local gate never implies clearing the online one. Evaluating auth-presence *per altitude* (distinguishing mesh-reach from online-reach) is the **v2 target**. The **v1 implementation** (#1904 `safe_opening_audit.py`) covers the **single-altitude subset**: any non-loopback bind is treated as reachable and must be gated — the conservative floor of this clause (mesh-reachable ⊆ reachable), so the tool never *under*-gates relative to the contract.
 
 This **extends** `PORT_BINDING_MODEL.md`, which already governs *bind scope* (the four-tier model, the `*_BIND` override pattern, `make -C pmoves port-audit`). The contract adds the **bind→auth coupling** that the binding model does not yet assert:
 
