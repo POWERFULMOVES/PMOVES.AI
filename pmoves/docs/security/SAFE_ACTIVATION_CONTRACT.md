@@ -45,7 +45,7 @@ A node declares a **capability set** (illustrative, extend as needed):
 
 **Instances of this clause already in flight:**
 - **CHIT unseal** must offer **voice OR typed OR key-file** (the mic block's fix). Design lives in the CHIT unseal follow-up; this contract is its parent.
-- **No-mic user mode**: text-in → **Nest TTS-out**. Z890 (no mic, has Nest speakers) is the canonical testbed — *to be added* to the voice-agents design spec §1a as an accessibility requirement (owned by the voice lane; this is a forward reference until that section lands).
+- **No-mic user mode**: text-in → **Nest TTS-out**. Z890 (no mic, has Nest speakers) is the canonical testbed — codified in the voice-agents design spec [§1a accessibility / capability-routing bullet](../../../docs/superpowers/specs/2026-06-26-voice-agents-design.md) (#1910, owned by the voice lane).
 
 **Funnel-to-safe, not fail-to-open:** if the selected capability would require exposing a protected surface (Clause 3) and the safe variant is unavailable, activation **refuses and explains**, it does not silently widen a bind.
 
@@ -116,7 +116,7 @@ The mic/CHIT decision is one walk through this flow: a no-mic node (Clause 1 gap
 1. **Safe-opening preflight** — extend `pmoves-mesh-preflight` (or a sibling skill) from a *health* check into a *bind-scope vs auth-presence* check. Pairs with the damage-control topology-leakage guard (that guards committed docs; this guards runtime activation) and with `make port-audit` (that checks bind policy; this checks the auth coupling).
 2. **Capability-router** — node capability declaration + operator selection + safe-variant resolution.
 3. **CHIT multi-path unseal** — voice OR typed OR key-file (Clause 2 instance #1). Its own design doc.
-4. **No-mic user mode** — text-in → Nest TTS-out (Clause 2 instance #2). Voice-agents spec §1a accessibility requirement.
+4. **No-mic user mode** — text-in → Nest TTS-out (Clause 2 instance #2). Landed: voice-agents spec §1a accessibility bullet (#1910).
 
 ## 7. Verification (deploy-gated)
 
