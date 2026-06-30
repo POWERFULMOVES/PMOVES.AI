@@ -14,51 +14,41 @@
 
 yt-cookies-check: ## Preflight: verify Google OAuth + Supabase env vars are set
 	@echo "=== YT Cookies: preflight check ==="
-	@hard=0; \
-	cid=$$(bash scripts/with-env.sh printenv GOOGLE_OAUTH_CLIENT_ID 2>/dev/null || true); \
-	[ -z "$$cid" ] && cid=$$(bash scripts/with-env.sh printenv GOOGLE_CLIENT_ID 2>/dev/null || true); \
-	[ -z "$$cid" ] && cid=$$(bash scripts/with-env.sh printenv CHANNEL_MONITOR_GOOGLE_CLIENT_ID 2>/dev/null || true); \
-	csec=$$(bash scripts/with-env.sh printenv GOOGLE_OAUTH_CLIENT_SECRET 2>/dev/null || true); \
-	[ -z "$$csec" ] && csec=$$(bash scripts/with-env.sh printenv GOOGLE_CLIENT_SECRET 2>/dev/null || true); \
-	[ -z "$$csec" ] && csec=$$(bash scripts/with-env.sh printenv CHANNEL_MONITOR_GOOGLE_CLIENT_SECRET 2>/dev/null || true); \
+	@bash -lc 'set -a; . ./scripts/with-env.sh >/dev/null 2>&1; set +a; set +eu; hard=0; \
+	cid="$${GOOGLE_OAUTH_CLIENT_ID:-$${GOOGLE_CLIENT_ID:-$${CHANNEL_MONITOR_GOOGLE_CLIENT_ID:-}}}"; \
+	csec="$${GOOGLE_OAUTH_CLIENT_SECRET:-$${GOOGLE_CLIENT_SECRET:-$${CHANNEL_MONITOR_GOOGLE_CLIENT_SECRET:-}}}"; \
+	srk="$${SERVICE_ROLE_KEY:-$${SUPABASE_SERVICE_ROLE_KEY:-}}"; \
+	surl="$${SUPABASE_URL:-$${SUPA_REST_URL:-}}"; \
+	venc="$${VAULT_ENC_KEY:-}"; \
 	if [ -z "$$cid" ] || [ "$$cid" = "YOUR_GOOGLE_CLIENT_ID_HERE.apps.googleusercontent.com" ]; then echo "✗ client id (GOOGLE_OAUTH_CLIENT_ID / GOOGLE_CLIENT_ID / CHANNEL_MONITOR_*): not configured"; hard=$$((hard+1)); else echo "✓ client id: set (length=$${#cid})"; fi; \
 	if [ -z "$$csec" ] || [ "$$csec" = "GOCSPX-YOUR_CLIENT_SECRET_HERE" ]; then echo "✗ client secret (GOOGLE_OAUTH_CLIENT_SECRET / GOOGLE_CLIENT_SECRET / CHANNEL_MONITOR_*): not configured"; hard=$$((hard+1)); else echo "✓ client secret: set (length=$${#csec})"; fi; \
-	srk=$$(bash scripts/with-env.sh printenv SERVICE_ROLE_KEY 2>/dev/null || true); \
-	[ -z "$$srk" ] && srk=$$(bash scripts/with-env.sh printenv SUPABASE_SERVICE_ROLE_KEY 2>/dev/null || true); \
 	if [ -z "$$srk" ]; then echo "✗ SERVICE_ROLE_KEY (or SUPABASE_SERVICE_ROLE_KEY): not configured (required to store the token)"; hard=$$((hard+1)); else echo "✓ service role key: set (length=$${#srk})"; fi; \
-	surl=$$(bash scripts/with-env.sh printenv SUPABASE_URL 2>/dev/null || true); \
-	[ -z "$$surl" ] && surl=$$(bash scripts/with-env.sh printenv SUPA_REST_URL 2>/dev/null || true); \
 	if [ -z "$$surl" ]; then echo "⚠ SUPABASE_URL/SUPA_REST_URL: not set — defaults to http://supabase-kong:8000 (fine in-compose)"; else echo "✓ supabase url: set"; fi; \
-	venc=$$(bash scripts/with-env.sh printenv VAULT_ENC_KEY 2>/dev/null || true); \
 	if [ -z "$$venc" ]; then echo "⚠ VAULT_ENC_KEY: not set — token would be stored UNENCRYPTED (set it before auth)"; else echo "✓ VAULT_ENC_KEY: set (length=$${#venc})"; fi; \
-	if [ $$hard -gt 0 ]; then \
-		echo ""; echo "ERROR: $$hard required var(s) missing. Set them in env.shared via the secrets-funnel."; \
-		echo "See PMOVES_YT_GOOGLE_OAUTH_DESKTOP_SETUP.md for the walkthrough."; \
-		exit 1; \
-	fi; \
-	echo ""; echo "✓ Preflight passed. Ready for: make yt-cookies-auth"
+	if [ $$hard -gt 0 ]; then echo ""; echo "ERROR: $$hard required var(s) missing. Set them in env.shared via the secrets-funnel."; echo "See PMOVES_YT_GOOGLE_OAUTH_DESKTOP_SETUP.md for the walkthrough."; exit 1; fi; \
+	echo ""; echo "✓ Preflight passed. Ready for: make yt-cookies-auth"'
 
 yt-cookies-auth: yt-cookies-check ## One-time OAuth2 consent flow (opens browser)
 	@echo "=== YT Cookies: OAuth2 consent flow ==="
 	@echo "This opens a browser for Google OAuth2 consent."
 	@echo "Sign in with the YouTube account that has access to target content."
 	@echo ""
-	@bash scripts/with-env.sh $(PYTHON) tools/yt_oauth_flow.py auth
+	@bash -lc '. ./scripts/with-env.sh; $(PYTHON) tools/yt_oauth_flow.py auth'
 	@echo ""
 	@echo "✓ Refresh token stored in Supabase Vault."
 	@echo "Next: make yt-cookies-refresh  (to harvest initial cookie set)"
 
 yt-cookies-refresh: ## Force a cookie refresh cycle (Playwright harvest + encrypt + store)
 	@echo "=== YT Cookies: manual refresh ==="
-	@bash scripts/with-env.sh $(PYTHON) tools/yt_oauth_flow.py refresh
+	@bash -lc '. ./scripts/with-env.sh; $(PYTHON) tools/yt_oauth_flow.py refresh'
 
 yt-cookies-status: ## Show cookie refresh state (last refresh, expiry, vault entry)
 	@echo "=== YT Cookies: status ==="
-	@bash scripts/with-env.sh $(PYTHON) tools/yt_oauth_flow.py status
+	@bash -lc '. ./scripts/with-env.sh; $(PYTHON) tools/yt_oauth_flow.py status'
 
 yt-cookies-revoke: ## Revoke stored OAuth credentials (forces re-consent on next auth)
 	@echo "=== YT Cookies: revoke ==="
-	@bash scripts/with-env.sh $(PYTHON) tools/yt_oauth_flow.py revoke
+	@bash -lc '. ./scripts/with-env.sh; $(PYTHON) tools/yt_oauth_flow.py revoke'
 	@echo ""
 	@echo "✓ Vault entry removed. Run 'make yt-cookies-auth' to re-consent."
 
@@ -79,10 +69,10 @@ yt-cookies-bootstrap: yt-cookies-check ## ONE-CLICK: OAuth consent + first cooki
 	@echo "=== YT Cookies: one-click bootstrap ==="
 	@echo "Step 1/2: opening browser for Google OAuth2 consent..."
 	@echo "          (a tab should open automatically — click 'Allow')"
-	@bash scripts/with-env.sh $(PYTHON) tools/yt_oauth_flow.py auth
+	@bash -lc '. ./scripts/with-env.sh; $(PYTHON) tools/yt_oauth_flow.py auth'
 	@echo ""
 	@echo "Step 2/2: triggering first cookie harvest (Playwright + Supabase)..."
-	@bash scripts/with-env.sh $(PYTHON) tools/yt_oauth_flow.py refresh || \
+	@bash -lc '. ./scripts/with-env.sh; $(PYTHON) tools/yt_oauth_flow.py refresh' || \
 	  (echo "Note: refresh CLI is a placeholder; production refresh runs via the yt-cookie-refresher service. Pinging it now..." && \
 	   curl -fsS -X POST http://localhost:8115/refresh 2>/dev/null || \
 	   echo "Refresher service not yet up. Run 'make up-yt-cookies' then 'curl -X POST http://localhost:8115/refresh'.")
