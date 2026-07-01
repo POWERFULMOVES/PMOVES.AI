@@ -104,7 +104,7 @@ jobs:
 
       - name: Build & push
         id: build
-        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
         with:
           context: ${{ matrix.context || format('{0}/{1}', github.workspace, matrix.repo) }}
           file: ${{ matrix.dockerfile || format('{0}/{1}/Dockerfile', github.workspace, matrix.repo) }}
@@ -127,7 +127,7 @@ jobs:
 
       - name: Attest build provenance (SLSA L3)
         if: steps.build.outputs.digest != ''
-        uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4
+        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4
         with:
           subject-name: ${{ env.REGISTRY_GHCR }}/${{ matrix.name }}
           subject-digest: ${{ steps.build.outputs.digest }}
