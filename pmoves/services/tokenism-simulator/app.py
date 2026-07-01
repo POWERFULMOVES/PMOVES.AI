@@ -31,6 +31,7 @@ sys.path.insert(0, str(service_dir))
 
 from config import config
 from api.simulation import simulation_bp
+from api.contracts import contracts_bp
 from nats_consumer import start_nats_consumer
 
 # Configure structured logging
@@ -110,6 +111,7 @@ def create_app() -> Flask:
 
     # Register blueprints
     app.register_blueprint(simulation_bp)
+    app.register_blueprint(contracts_bp)
 
     # Root endpoint
     @app.route('/')
