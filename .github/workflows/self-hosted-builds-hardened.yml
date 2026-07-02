@@ -98,7 +98,7 @@ jobs:
           password: ${{ steps.app_token.outputs.token || env.GHCR_PASSWORD }}
 
       - name: Build Ollama CUDA
-        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
         with:
           context: ./services/ollama
           file: ./services/ollama/Dockerfile.cuda
@@ -131,7 +131,7 @@ jobs:
           category: trivy-ollama-cuda
 
       - name: Build Hi-RAG GPU
-        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
         with:
           context: ./services/hirag-gateway
           file: ./services/hirag-gateway/Dockerfile.gpu
@@ -256,7 +256,7 @@ jobs:
           password: ${{ steps.app_token.outputs.token || env.GHCR_PASSWORD }}
 
       - name: Build ${{ matrix.service.name }}
-        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
         with:
           context: ${{ matrix.service.context }}
           file: ${{ matrix.service.dockerfile || 'Dockerfile' }}
