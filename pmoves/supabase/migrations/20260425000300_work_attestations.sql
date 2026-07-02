@@ -53,7 +53,7 @@ DROP POLICY IF EXISTS "work_attestations_svc_all" ON pmoves_core.work_attestatio
 DROP POLICY IF EXISTS "work_attestations_auth_read" ON pmoves_core.work_attestations;
 
 CREATE POLICY "work_attestations_svc_all" ON pmoves_core.work_attestations
-  FOR ALL TO service_role USING (true) WITH CHECK (true);
+  FOR ALL TO service_role USING (auth.role() = 'service_role') WITH CHECK (auth.role() = 'service_role');
 
 CREATE POLICY "work_attestations_auth_read" ON pmoves_core.work_attestations
-  FOR SELECT TO authenticated USING (true);
+  FOR SELECT TO authenticated USING (auth.uid() = contributor_id OR auth.uid() IS NOT NULL);

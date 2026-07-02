@@ -52,10 +52,10 @@ DROP POLICY IF EXISTS "chit_phrases_svc_all" ON pmoves_core.chit_phrases;
 DROP POLICY IF EXISTS "chit_phrases_auth_read" ON pmoves_core.chit_phrases;
 
 CREATE POLICY "chit_phrases_svc_all" ON pmoves_core.chit_phrases
-  FOR ALL TO service_role USING (true) WITH CHECK (true);
+  FOR ALL TO service_role USING (auth.role() = 'service_role') WITH CHECK (auth.role() = 'service_role');
 
 CREATE POLICY "chit_phrases_auth_read" ON pmoves_core.chit_phrases
-  FOR SELECT TO authenticated USING (true);
+  FOR SELECT TO authenticated USING (auth.uid() IS NOT NULL);
 
 -- Seed 8 canonical phrases (validation: verify 8 rows in chit_phrases)
 INSERT INTO pmoves_core.chit_phrases (phrase_canonical, category, weight) VALUES

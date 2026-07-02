@@ -41,7 +41,7 @@ DROP POLICY IF EXISTS "adult_swim_age_verified_write" ON pmoves_core.adult_swim_
 -- Anon deny-all
 -- Service role full access
 CREATE POLICY "adult_swim_svc_all" ON pmoves_core.adult_swim_records
-  FOR ALL TO service_role USING (true) WITH CHECK (true);
+  FOR ALL TO service_role USING (auth.role() = 'service_role') WITH CHECK (auth.role() = 'service_role');
 
 -- Owner-only read
 CREATE POLICY "adult_swim_owner_read" ON pmoves_core.adult_swim_records

@@ -59,7 +59,7 @@ DROP POLICY IF EXISTS "room_sessions_svc_all" ON pmoves_core.room_sessions;
 DROP POLICY IF EXISTS "room_sessions_auth_read" ON pmoves_core.room_sessions;
 
 CREATE POLICY "room_sessions_svc_all" ON pmoves_core.room_sessions
-  FOR ALL TO service_role USING (true) WITH CHECK (true);
+  FOR ALL TO service_role USING (auth.role() = 'service_role') WITH CHECK (auth.role() = 'service_role');
 
 CREATE POLICY "room_sessions_auth_read" ON pmoves_core.room_sessions
-  FOR SELECT TO authenticated USING (true);
+  FOR SELECT TO authenticated USING (auth.uid() IS NOT NULL);
