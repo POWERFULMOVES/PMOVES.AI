@@ -1,5 +1,5 @@
 # PMOVES Agent Registry — Single Source of Truth
-# Last updated: 2026-03-15
+# Last updated: 2026-07-02
 #
 # This file encodes every agent's class, type(s), tier, layers,
 # NATS subjects, health endpoint, CHIT toggles, and evolution stage.
@@ -7,7 +7,7 @@
 # Query with: python -m pmoves.tools.agent_taxonomy_helper list
 # Docs: pmoves/docs/AGENTS/PMOVES_AGENT_CLASS_TAXONOMY.md
 
-taxonomy_version: "1.4.0"
+taxonomy_version: "1.5.0"
 
 # External contributors — AI agents and humans who contribute via git
 # Links to visual identity in agent_signatures.yaml
@@ -309,7 +309,7 @@ agents:
     class: standard
     primary_type: agent
     secondary_type: api
-    port: 8100
+    port: 8111   # compose default GATEWAY_AGENT_PORT (8110 reserved for model-registry)
     health: "/healthz"
     layers: [L0, L2, L4]
     evolution_stage: stage_1
