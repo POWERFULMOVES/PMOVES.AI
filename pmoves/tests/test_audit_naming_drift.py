@@ -70,13 +70,14 @@ def test_audit_json_mode_emits_summary() -> None:
 
 @pytest.mark.skipif(not SCRIPT.exists(), reason="audit script not present")
 def test_cards_summary_active_count_matches_seed() -> None:
-    """signing_identity_cards.yaml seeded 16 active cards (Phase 2)."""
+    """Snapshot of active cards (refreshed 2026-07-02: seed 16 -> 22 after
+    hermes/coder_claw/agent-zero-codex wave + b850-claude/hermes-agent cards)."""
     _run_audit()
     data = json.loads(DRIFT_REPORT.read_text(encoding="utf-8"))
-    assert data["cards_summary"]["active"] == 16
+    assert data["cards_summary"]["active"] == 22
     by_role = data["cards_summary"]["by_role"]
     assert by_role.get("operator") == 1
-    assert by_role.get("agent") == 9  # 7 base + z890/5090/4090 personas (z890 + 5090 + 4090 + 7 base agents - operator counted separately = 9 here actually = 6 base agents (claude/codex/kilocode/gemini/cline/crush) + 3 nodes = 9)
+    assert by_role.get("agent") == 13  # 6 base + z890/5090/4090/b850 nodes + hermes-agent + 2 persona alters
     assert by_role.get("service-account") == 1
     assert by_role.get("runner") == 5
 
