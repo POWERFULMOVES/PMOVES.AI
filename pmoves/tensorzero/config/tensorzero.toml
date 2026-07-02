@@ -467,6 +467,7 @@ model_name = "nemotron:49b"
 api_key_location = "none"
 
 # --- AMD R9700 RDNA4 Node Routing (dual R9700, 64GB VRAM, ROCm 7.1+) ---
+# Port 8090: 8080 is reserved for Agent Zero fleet-wide (HERMES_AGENT_INTEGRATION.md).
 # Heavyweight inference via llama.cpp HIP backend on pmoves-9850x3d-r9700.
 # Ollama is NOT used here because its bundled ROCm v6 libs lack gfx1201 kernels.
 # Canonical runtime is `llama-server` (OpenAI-compatible, ships with llama.cpp).
@@ -477,7 +478,7 @@ routing = ["llamacpp_rocm"]
 
 [models.gemma_4_31b_rocm.providers.llamacpp_rocm]
 type = "openai"
-api_base = "http://pmoves-9850x3d-r9700:8080/v1"
+api_base = "http://pmoves-9850x3d-r9700:8090/v1"
 model_name = "gemma-4-31b-it-Q4_K_M.gguf"
 api_key_location = "none"
 
@@ -487,7 +488,7 @@ routing = ["llamacpp_rocm"]
 
 [models.gemma_4_26b_a4b_rocm.providers.llamacpp_rocm]
 type = "openai"
-api_base = "http://pmoves-9850x3d-r9700:8080/v1"
+api_base = "http://pmoves-9850x3d-r9700:8090/v1"
 model_name = "gemma-4-26B-A4B-it-Q4_K_M.gguf"
 api_key_location = "none"
 
@@ -526,7 +527,7 @@ routing = ["llamacpp_rocm"]
 
 [models.llamacpp_rdna4_gemma4_31b_q4km.providers.llamacpp_rocm]
 type = "openai"
-api_base = "http://pmoves-9850x3d-r9700:8080/v1"
+api_base = "http://pmoves-9850x3d-r9700:8090/v1"
 model_name = "gemma-4-31b-it-Q4_K_M.gguf"
 api_key_location = "none"
 
@@ -536,7 +537,7 @@ routing = ["llamacpp_rocm"]
 
 [models.llamacpp_rdna4_gemma4_26b_dual.providers.llamacpp_rocm]
 type = "openai"
-api_base = "http://pmoves-9850x3d-r9700:8080/v1"
+api_base = "http://pmoves-9850x3d-r9700:8090/v1"
 model_name = "gemma-4-26B-A4B-it-Q4_K_M.gguf"
 api_key_location = "none"
 
@@ -1414,3 +1415,198 @@ type = "chat_completion"
 model = "chat_openrouter"
 
 
+
+# =====================================================================
+# Cloud-hybrid tiers (2026-07-02, spec rev 4): cloud coding plans
+# orchestrate; local models are worker siblings. Sibling escalation is
+# same-family only. Worker model rows are REGISTRY-MANAGED (Supabase via
+# model-registry :8110) — no hardcoded local model IDs in this file.
+# =====================================================================
+
+# --- Kilo Code (coding plan, OpenRouter-compatible gateway) ---
+# Verified 2026-07-02 via GET https://api.kilocode.ai/api/openrouter/models
+[models.chat_kilocode]
+routing = ["kilocode_primary"]
+
+[models.chat_kilocode.providers.kilocode_primary]
+type = "openai"
+api_base = "https://api.kilocode.ai/api/openrouter"
+model_name = "kilo-auto/balanced"
+api_key_location = "env::KILOCODE_API_KEY"
+
+# --- Ollama Cloud (Ollama Pro plan) ---
+# Verified 2026-07-02 via this account's model list (glm-5.2 present)
+[models.chat_ollama_cloud_default]
+routing = ["ollama_cloud_primary"]
+
+[models.chat_ollama_cloud_default.providers.ollama_cloud_primary]
+type = "openai"
+api_base = "https://ollama.com/v1"
+model_name = "glm-5.2"
+api_key_location = "env::OLLAMA_API_KEY"
+
+# --- HuggingFace Inference Router (orchestrator fallback) ---
+# Verified 2026-07-02 via GET https://router.huggingface.co/v1/models
+[models.chat_hf_router]
+routing = ["hf_router_primary"]
+
+[models.chat_hf_router.providers.hf_router_primary]
+type = "openai"
+api_base = "https://router.huggingface.co/v1"
+model_name = "Qwen/Qwen3-Coder-30B-A3B-Instruct"
+api_key_location = "env::HF_TOKEN"
+
+# ============================================================================
+# BEGIN REGISTRY-MANAGED MODELS (generated — do not hand-edit)
+# Source of truth: model-registry :8110 (Supabase pmoves_core.*).
+# Refresh: python pmoves/tools/tz_registry_sync.py
+# Bootstrap state: lane aliases route to same-family CLOUD PARENTS until
+# signed local candidates are promoted through /api/model-candidates.
+# ============================================================================
+
+[models.registry_worker_glm]
+routing = ["bootstrap_parent"]
+
+[models.registry_worker_glm.providers.bootstrap_parent]
+type = "openai"
+api_base = "https://api.z.ai/api/coding/paas/v4"
+model_name = "glm-5.1"
+api_key_location = "env::Z_AI_API_KEY"
+
+[models.registry_worker_qwen]
+routing = ["bootstrap_parent"]
+
+[models.registry_worker_qwen.providers.bootstrap_parent]
+type = "openai"
+api_base = "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"
+model_name = "qwen3-coder-plus"
+api_key_location = "env::ALIBABA_PRO_CODING_PLAN"
+
+[models.registry_worker_hermes]
+routing = ["bootstrap_parent"]
+
+# Verified 2026-07-02 via GET https://openrouter.ai/api/v1/models
+[models.registry_worker_hermes.providers.bootstrap_parent]
+type = "openai"
+api_base = "https://openrouter.ai/api/v1"
+model_name = "nousresearch/hermes-4-70b"
+api_key_location = "env::OPENROUTER_API_KEY"
+
+[models.registry_worker_kimi]
+routing = ["bootstrap_parent"]
+
+[models.registry_worker_kimi.providers.bootstrap_parent]
+type = "openai"
+api_base = "https://api.moonshot.ai/v1"
+model_name = "moonshot-v1-32k"
+api_key_location = "env::MOONSHOT_API_KEY"
+
+# ============================================================================
+# END REGISTRY-MANAGED MODELS
+# ============================================================================
+
+# --- Orchestrator functions (cloud coding plans) ---
+
+[functions.pmoves_orchestrator_coding]
+type = "chat"
+
+[functions.pmoves_orchestrator_coding.variants.cloud_zai_glm51]
+type = "chat_completion"
+model = "chat_zai_glm51"
+temperature = 0.2
+max_tokens = 8192
+weight = 1.0
+
+[functions.pmoves_orchestrator_coding.variants.cloud_kimi]
+type = "chat_completion"
+model = "chat_moonshot"
+temperature = 0.2
+max_tokens = 8192
+weight = 0.0
+
+[functions.pmoves_orchestrator_coding.variants.cloud_alibaba]
+type = "chat_completion"
+model = "chat_alibaba_qwen"
+temperature = 0.2
+max_tokens = 8192
+weight = 0.0
+
+[functions.pmoves_orchestrator_coding.variants.cloud_kilocode]
+type = "chat_completion"
+model = "chat_kilocode"
+temperature = 0.2
+max_tokens = 8192
+weight = 0.0
+
+[functions.pmoves_orchestrator_coding.variants.cloud_ollama_default]
+type = "chat_completion"
+model = "chat_ollama_cloud_default"
+temperature = 0.2
+max_tokens = 8192
+weight = 0.0
+
+[functions.pmoves_orchestrator_coding.variants.cloud_hf_router]
+type = "chat_completion"
+model = "chat_hf_router"
+temperature = 0.2
+max_tokens = 8192
+weight = 0.0
+
+[functions.pmoves_orchestrator_chat]
+type = "chat"
+
+[functions.pmoves_orchestrator_chat.variants.cloud_ollama_default]
+type = "chat_completion"
+model = "chat_ollama_cloud_default"
+temperature = 0.7
+max_tokens = 8192
+weight = 1.0
+
+[functions.pmoves_orchestrator_chat.variants.cloud_zai_glm51]
+type = "chat_completion"
+model = "chat_zai_glm51"
+temperature = 0.7
+max_tokens = 8192
+weight = 0.0
+
+# --- Worker functions: registry lane aliases ONLY (no-hardcoded-models gate) ---
+
+[functions.pmoves_worker_glm]
+type = "chat"
+
+[functions.pmoves_worker_glm.variants.lane]
+type = "chat_completion"
+model = "registry_worker_glm"
+temperature = 0.2
+max_tokens = 8192
+weight = 1.0
+
+[functions.pmoves_worker_qwen]
+type = "chat"
+
+[functions.pmoves_worker_qwen.variants.lane]
+type = "chat_completion"
+model = "registry_worker_qwen"
+temperature = 0.2
+max_tokens = 8192
+weight = 1.0
+
+[functions.pmoves_worker_hermes]
+type = "chat"
+
+[functions.pmoves_worker_hermes.variants.lane]
+type = "chat_completion"
+model = "registry_worker_hermes"
+temperature = 0.7
+max_tokens = 8192
+weight = 1.0
+
+[functions.pmoves_worker_kimi]
+type = "chat"
+
+[functions.pmoves_worker_kimi.variants.lane]
+type = "chat_completion"
+model = "registry_worker_kimi"
+temperature = 0.2
+max_tokens = 8192
+weight = 1.0
