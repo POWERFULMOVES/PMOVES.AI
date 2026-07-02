@@ -93,6 +93,7 @@ SERVICE_GROUPS = {
     ],
     "workers": [
         "extract-worker",
+        "spark-shape-worker",
         "pdf-ingest",
         "langextract",
         "notebook-sync",
