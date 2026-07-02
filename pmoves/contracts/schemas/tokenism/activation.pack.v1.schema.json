@@ -1,0 +1,202 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ToKenism Activation Pack v1",
+  "type": "object",
+  "required": [
+    "spec",
+    "deployment_manifest_id",
+    "environment",
+    "chain_id",
+    "network",
+    "contract_addresses",
+    "rpc_endpoint_ref",
+    "wallet_custody_ref",
+    "firefly_endpoint_ref",
+    "operator_approval_id",
+    "deployment_attestation",
+    "deployment_attestation_sig",
+    "executor_agent_id",
+    "executor_signature",
+    "dry_run_evidence",
+    "rollback_plan",
+    "created_at",
+    "signature"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "spec": { "type": "string", "const": "tokenism.activation.pack.v1" },
+    "deployment_manifest_id": { "type": "string", "minLength": 1 },
+    "environment": { "type": "string", "minLength": 1 },
+    "chain_id": { "type": "integer", "minimum": 1 },
+    "network": { "type": "string", "minLength": 1 },
+    "contract_addresses": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": false,
+      "properties": {
+        "GroToken": { "$ref": "#/$defs/address" },
+        "FoodUSD": { "$ref": "#/$defs/address" },
+        "GroupPurchase": { "$ref": "#/$defs/address" },
+        "GroVault": { "$ref": "#/$defs/address" },
+        "CoopGovernor": { "$ref": "#/$defs/address" },
+        "SettlementExecutor": { "$ref": "#/$defs/address" }
+      }
+    },
+    "rpc_endpoint_ref": {
+      "type": "string",
+      "minLength": 1,
+      "not": { "pattern": "^https?://" }
+    },
+    "wallet_custody_ref": {
+      "type": "string",
+      "minLength": 1,
+      "not": { "pattern": "^0x[a-fA-F0-9]{64}$" }
+    },
+    "firefly_endpoint_ref": {
+      "type": "string",
+      "minLength": 1,
+      "not": { "pattern": "^https?://" }
+    },
+    "operator_approval_id": { "type": "string", "minLength": 1 },
+    "deployment_attestation": { "$ref": "#/$defs/deployment_attestation" },
+    "deployment_attestation_sig": { "$ref": "#/$defs/signature" },
+    "executor_agent_id": { "type": "string", "minLength": 1 },
+    "executor_signature": { "$ref": "#/$defs/signature" },
+    "dry_run_evidence": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/dry_run_evidence" }
+    },
+    "rollback_plan": { "$ref": "#/$defs/rollback_plan" },
+    "created_at": { "type": "string", "format": "date-time" },
+    "expires_at": { "type": "string", "format": "date-time" },
+    "signature": { "$ref": "#/$defs/signature" }
+  },
+  "$defs": {
+    "address": {
+      "type": "string",
+      "pattern": "^0x[a-fA-F0-9]{40}$"
+    },
+    "signature": {
+      "type": "object",
+      "required": ["alg", "kid", "hmac"],
+      "additionalProperties": true,
+      "properties": {
+        "alg": { "type": "string", "minLength": 1 },
+        "kid": { "type": "string", "minLength": 1 },
+        "hmac": { "type": "string", "minLength": 1 }
+      }
+    },
+    "deployment_approval": {
+      "type": "object",
+      "required": ["approval_id", "scope", "approved_by", "approved_at", "signature"],
+      "additionalProperties": false,
+      "properties": {
+        "approval_id": { "type": "string", "minLength": 1 },
+        "scope": { "type": "string", "const": "settlement_deployment_manifest" },
+        "approved_by": { "type": "string", "minLength": 1 },
+        "approved_at": { "type": "string", "format": "date-time" },
+        "expires_at": { "type": "string", "format": "date-time" },
+        "signature": { "$ref": "#/$defs/signature" }
+      }
+    },
+    "deployment_attestation": {
+      "type": "object",
+      "required": ["manifest_id", "environment", "approvals", "signed_at", "signature"],
+      "additionalProperties": false,
+      "properties": {
+        "manifest_id": { "type": "string", "minLength": 1 },
+        "environment": { "type": "string", "minLength": 1 },
+        "rpc_ref": { "type": "string", "minLength": 1 },
+        "wallet_custody": {
+          "type": "object",
+          "required": ["custody_type", "signer_ref"],
+          "additionalProperties": false,
+          "properties": {
+            "custody_type": {
+              "type": "string",
+              "enum": ["local", "hardware", "vault", "mpc", "fireblocks", "other"]
+            },
+            "signer_ref": { "type": "string", "minLength": 1 },
+            "policy_ref": { "type": "string" },
+            "operator_ref": { "type": "string" }
+          }
+        },
+        "firefly": {
+          "type": "object",
+          "required": ["instance_ref", "environment"],
+          "additionalProperties": false,
+          "properties": {
+            "instance_ref": { "type": "string", "minLength": 1 },
+            "environment": { "type": "string", "minLength": 1 },
+            "account_ref": { "type": "string" }
+          }
+        },
+        "approvals": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/deployment_approval" }
+        },
+        "signed_at": { "type": "string", "format": "date-time" },
+        "expires_at": { "type": "string", "format": "date-time" },
+        "signature": { "$ref": "#/$defs/signature" }
+      }
+    },
+    "dry_run_evidence": {
+      "type": "object",
+      "required": [
+        "evidence_id",
+        "lane",
+        "settlement_id",
+        "result_ref",
+        "passed",
+        "run_at",
+        "reviewed_by",
+        "signature"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "evidence_id": { "type": "string", "minLength": 1 },
+        "lane": { "type": "string", "enum": ["firefly", "contract"] },
+        "settlement_id": { "type": "string", "pattern": "^settlement_[a-f0-9]{16}$" },
+        "result_ref": { "type": "string", "minLength": 1 },
+        "passed": { "type": "boolean", "const": true },
+        "run_at": { "type": "string", "format": "date-time" },
+        "reviewed_by": { "type": "string", "minLength": 1 },
+        "signature": { "$ref": "#/$defs/signature" }
+      }
+    },
+    "rollback_plan": {
+      "type": "object",
+      "required": ["disable_switch", "affected_subjects", "steps", "incident_contacts"],
+      "additionalProperties": false,
+      "properties": {
+        "disable_switch": { "type": "string", "minLength": 1 },
+        "affected_subjects": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "steps": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "incident_contacts": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["name", "contact_ref"],
+            "additionalProperties": false,
+            "properties": {
+              "name": { "type": "string", "minLength": 1 },
+              "contact_ref": { "type": "string", "minLength": 1 },
+              "role": { "type": "string" }
+            }
+          }
+        }
+      }
+    }
+  }
+}
