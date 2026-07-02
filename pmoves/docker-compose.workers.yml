@@ -78,6 +78,45 @@ services:
         limits:
           cpus: '1.0'
           memory: 512M
+  spark-shape-worker:
+    <<: *tier-worker-hardened
+    build: ./services/spark-shape-worker
+    restart: unless-stopped
+    environment:
+    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - SPARK_SHAPE_SECRET=${SPARK_SHAPE_SECRET:-}
+    - MESH_PASSPHRASE=${MESH_PASSPHRASE:-}
+    # Host environment leak guard (see x-host-leak-guard docs above)
+    - SSL_CERT_FILE=
+    - SSL_CERT_DIR=
+    - REQUESTS_CA_BUNDLE=
+    - CURL_CA_BUNDLE=
+    - NODE_EXTRA_CA_CERTS=
+    - HTTP_PROXY=
+    - HTTPS_PROXY=
+    - NO_PROXY=
+    profiles:
+    - workers
+    - orchestration
+    networks:
+    - pmoves_app
+    - pmoves_bus
+    extra_hosts:
+    - host.docker.internal:host-gateway
+    depends_on:
+      nats:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import os; exit(0 if os.path.exists('/proc/1/cmdline') else 1)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
   pdf-ingest:
     <<: *tier-worker-hardened
     build:

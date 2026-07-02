@@ -50,7 +50,7 @@ jobs:
           fi
           rm -rf "$ws/$sub" 2>/dev/null || true
       - name: Checkout code
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           submodules: false  # Gateway agent doesn't need submodules
 
@@ -92,7 +92,7 @@ jobs:
           fi
           rm -rf "$ws/$sub" 2>/dev/null || true
       - name: Checkout code
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           submodules: false  # Gateway agent doesn't need submodules
 
@@ -166,7 +166,7 @@ jobs:
           fi
           rm -rf "$ws/$sub" 2>/dev/null || true
       - name: Checkout code
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       - name: Deploy Gateway Agent
         shell: bash
@@ -286,7 +286,7 @@ jobs:
           fi
           rm -rf "$ws/$sub" 2>/dev/null || true
       - name: Checkout code
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           submodules: false  # Gateway agent doesn't need submodules
 
@@ -437,7 +437,7 @@ jobs:
           fi
           rm -rf "$ws/$sub" 2>/dev/null || true
       - name: Checkout code
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       - name: Rollback to previous version
         env:
@@ -499,7 +499,7 @@ jobs:
           fi
           rm -rf "$ws/$sub" 2>/dev/null || true
       - name: Checkout code
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       - name: Rollback to previous version
         env:

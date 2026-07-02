@@ -678,6 +678,9 @@ services:
     - PGRST_DB_USE_LEGACY_GUCS=false
     - PGRST_APP_SETTINGS_JWT_SECRET=${JWT_SECRET:-${SUPABASE_JWT_SECRET:-}}
     - PGRST_APP_SETTINGS_JWT_EXP=${JWT_EXPIRY:-${SUPABASE_JWT_EXP:-3600}}
+    # Extra search_path so pmoves_core and pmoves_kb objects are addressable
+    # without fully-qualified names. Must match env.tier-supabase.example.
+    - PGRST_DB_EXTRA_SEARCH_PATH=${PGRST_DB_EXTRA_SEARCH_PATH:-pmoves_core,pmoves_kb,public}
     # API configuration
     - PGRST_DB_SCHEMAS=${SUPABASE_SCHEMA:-public,pmoves_core}
     - PGRST_ANON_ROLE=${SUPABASE_ANON_ROLE:-anon}
@@ -697,6 +700,7 @@ services:
     - ${SUPABASE_REST_BIND:-127.0.0.1}:${SUPABASE_POSTGREST_PORT:-3000}:3000
     networks:
     - pmoves_api
+    - pmoves_public
 
     deploy:
       resources:
@@ -735,7 +739,8 @@ services:
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
-    entrypoint: ["/bin/sh", "-c", "echo 'Waiting for DNS resolution...'; for i in $(seq 1 30); do nc -z supabase-db 5432 && echo 'Database reachable' && break; echo \"DNS not ready yet ($i/30)...\"; sleep 2; done; kong migrations bootstrap --yes 2>/dev/null || true; exec /docker-entrypoint.sh kong docker-start"]
+    # Wait for Postgres using a pure shell redirect (kong:3.7.1 does not ship `nc`).
+    entrypoint: ["/bin/bash", "-c", "for i in $(seq 1 30); do if >/dev/tcp/supabase-db/5432 2>/dev/null; then echo 'Database reachable'; break; fi; echo \"DB not ready ($i/30)...\"; sleep 2; done; kong migrations bootstrap --yes 2>/dev/null || kong migrations up --yes 2>/dev/null || true; exec /docker-entrypoint.sh kong docker-start"]
     healthcheck:
       test: ["CMD", "kong", "health"]
       interval: 15s
@@ -747,19 +752,15 @@ services:
         condition: service_healthy
     restart: unless-stopped
     ports:
-    # NOTE: Kong host bind defaults to 0.0.0.0 (not 127.0.0.1) because
-    # Docker Desktop on Windows silently drops explicit 127.0.0.1 binds on
-    # services that declare multiple host ports — the HostConfig declares
-    # the mapping but NetworkSettings.Ports stays empty, host-side forwarder
-    # never activates, and you get connection-refused from the host while
-    # the service is fine on the Docker network. 0.0.0.0 works around it.
-    # Operators who need LAN-isolation should set KONG_PROXY_BIND=127.0.0.1
-    # in env.shared AND confirm Docker Desktop version ≥29.5 (where this
-    # is reportedly fixed upstream).
-    - ${KONG_PROXY_BIND:-0.0.0.0}:${SUPABASE_KONG_PROXY_PORT:-8000}:8000
-    - ${KONG_ADMIN_BIND:-0.0.0.0}:${SUPABASE_KONG_ADMIN_PORT:-8001}:8001
+    # Default host bind tightened to 127.0.0.1 for safer standalone/sidecar
+    # operation. Override with KONG_PROXY_BIND / KONG_ADMIN_BIND in env.shared
+    # if you need LAN access or are on Docker Desktop versions <29.5 where
+    # explicit loopback binds were silently dropped on multi-port services.
+    - ${KONG_PROXY_BIND:-127.0.0.1}:${SUPABASE_KONG_PROXY_PORT:-8000}:8000
+    - ${KONG_ADMIN_BIND:-127.0.0.1}:${SUPABASE_KONG_ADMIN_PORT:-8001}:8001
     networks:
     - pmoves_api
+    - pmoves_public
 
     deploy:
       resources:
@@ -1739,6 +1740,45 @@ services:
         limits:
           cpus: '1.0'
           memory: 512M
+  spark-shape-worker:
+    <<: *tier-worker-hardened
+    build: ./services/spark-shape-worker
+    restart: unless-stopped
+    environment:
+    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - SPARK_SHAPE_SECRET=${SPARK_SHAPE_SECRET:-}
+    - MESH_PASSPHRASE=${MESH_PASSPHRASE:-}
+    # Host environment leak guard (see x-host-leak-guard docs above)
+    - SSL_CERT_FILE=
+    - SSL_CERT_DIR=
+    - REQUESTS_CA_BUNDLE=
+    - CURL_CA_BUNDLE=
+    - NODE_EXTRA_CA_CERTS=
+    - HTTP_PROXY=
+    - HTTPS_PROXY=
+    - NO_PROXY=
+    profiles:
+    - workers
+    - orchestration
+    networks:
+    - pmoves_app
+    - pmoves_bus
+    extra_hosts:
+    - host.docker.internal:host-gateway
+    depends_on:
+      nats:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import os; exit(0 if os.path.exists('/proc/1/cmdline') else 1)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
   pdf-ingest:
     <<: *tier-worker-hardened
     build:
@@ -4507,6 +4547,18 @@ networks:
       config:
       - subnet: 172.30.4.0/24
         gateway: 172.30.4.1
+  # Non-internal bridge for services that expose host-facing ports.
+  # Kong proxy/admin and PostgREST REST port attach here; the services still
+  # default to 127.0.0.1 host binds for safer standalone operation.
+  pmoves_public:
+    name: pmoves_public
+    driver: bridge
+    internal: false
+    ipam:
+      driver: default
+      config:
+      - subnet: 172.30.7.0/24
+        gateway: 172.30.7.1
   pmoves_api:
     name: pmoves_api
     driver: bridge

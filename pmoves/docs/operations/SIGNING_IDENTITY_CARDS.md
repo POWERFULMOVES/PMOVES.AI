@@ -1,7 +1,7 @@
 # 5×5 Signing Identity Cards
 
 **Companion to:** `pmoves/config/signing_identity_cards.yaml` (the registry)
-**Schema:** `pmoves/contracts/schemas/identity/signing-card.v1.schema.json` (see §6 — pending land)
+**Schema:** `pmoves/contracts/schemas/identity/signing-card.v1.schema.json` (landed 2026-06-30, PR #1925)
 **Plan reference:** `~/.claude/plans/we-need-work-and-partitioned-hearth.md` (Phase 2)
 
 ---

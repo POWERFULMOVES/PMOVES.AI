@@ -80,3 +80,14 @@ Rooms do NOT own:
 - [Roadmap W1-W5](AGENTS/AGNOTE4482_ROADMAP_W1-W5.md) — prospectus alignment
 - [Signoff Checklist](AGENTS/AGNOTE4482_SIGNOFF_CHECKLIST.md) — 1.4 coherence gate
 - [CnC Architecture](architecture/PMOVES_CnC.md) — P7 as stage manager in command-and-control context
+
+## CHIT Signing-Card Activation Checklist
+
+Before a room transitions from `rehearsal` → `live`, the following must be satisfied:
+
+- [ ] A signing-card row exists in `pmoves/config/signing_identity_cards.yaml` for the room's operating agent, and `signing-card.v1.schema.json` validates it.
+- [ ] The room manifest declares `meta.chit.card_id` (or the owning skill provides a card ID at runtime) and the card has `active: true`.
+- [ ] `make sign-trail AGENT=<agent_id>` succeeds (`signed`) or `unsigned-local` advisory is explicitly accepted for the stage transition.
+- [ ] The room's declared `mcp_servers` and `a2a_servers` exist in `pmoves/config/agent_registry.yaml` and are reachable in the target topology mode (`standalone`/`docked`/`fleet`).
+- [ ] `CHIT_REQUIRE_SIGNATURE` / `CHIT_DECRYPT_ANCHORS` toggles in `sidecar.env` match the intended topology gradient.
+- [ ] `PGRST_DB_EXTRA_SEARCH_PATH` includes every schema the room's skills touch.

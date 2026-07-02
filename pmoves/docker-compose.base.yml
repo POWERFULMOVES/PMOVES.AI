@@ -527,6 +527,18 @@ networks:
       config:
       - subnet: 172.30.4.0/24
         gateway: 172.30.4.1
+  # Non-internal bridge for services that expose host-facing ports.
+  # Kong proxy/admin and PostgREST REST port attach here; the services still
+  # default to 127.0.0.1 host binds for safer standalone operation.
+  pmoves_public:
+    name: pmoves_public
+    driver: bridge
+    internal: false
+    ipam:
+      driver: default
+      config:
+      - subnet: 172.30.7.0/24
+        gateway: 172.30.7.1
   pmoves_api:
     name: pmoves_api
     driver: bridge
