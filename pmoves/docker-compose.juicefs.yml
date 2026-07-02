@@ -1,0 +1,114 @@
+##############################################################################
+# PMOVES.AI - Docker Compose Overlay: JuiceFS Object Store (S3 gateway PoC)
+##############################################################################
+# Services: juicefs tier
+# Always combine with base: docker compose -f docker-compose.base.yml -f docker-compose.juicefs.yml up -d
+#
+# Generated from docker-compose.yml by scripts/split_compose.py
+##############################################################################
+services:
+  juicefs-redis:  # metadata engine
+    <<: &tier-data-hardened
+      env_file:
+      - env.shared
+      - env.tier-data
+      cap_drop:
+      - ALL
+      cap_add:
+      - NET_BIND_SERVICE
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - SETGID
+      - SETUID
+      security_opt:
+      - no-new-privileges:true
+
+    image: redis:7.4.1-alpine
+    profiles: ["juicefs"]
+    restart: unless-stopped
+    command: ["redis-server", "--save", "60", "1", "--appendonly", "yes"]
+    volumes:
+    - juicefs-meta:/data
+    networks:
+    - pmoves_data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+
+  juicefs-format:  # one-time FS format (idempotent); gateway waits on this
+    <<: *tier-data-hardened
+    image: juicedata/mount:ce-v1.3.0
+    profiles: ["juicefs"]
+    restart: "no"
+    depends_on:
+      juicefs-redis:
+        condition: service_healthy
+    entrypoint: ["sh", "-lc"]
+    command:
+    # No `|| true`: juicefs format is idempotent (re-run on a formatted FS exits 0),
+    # so a non-zero exit here is a REAL error and must fail the service_completed_successfully
+    # gate rather than releasing the gateway against an unformatted volume.
+    - "juicefs format --storage file --bucket /data ${JUICEFS_META_URL:-redis://juicefs-redis:6379/1} ${JUICEFS_NAME:-pmoves}"
+    volumes:
+    - juicefs-data:/data
+    networks:
+    - pmoves_data
+
+  juicefs-gateway:  # S3-compatible drop-in for minio:9000 (--multi-buckets required on CE)
+    <<: *tier-data-hardened
+    image: juicedata/mount:ce-v1.3.0
+    profiles: ["juicefs"]
+    restart: unless-stopped
+    depends_on:
+      juicefs-redis:
+        condition: service_healthy
+      juicefs-format:
+        condition: service_completed_successfully
+    environment:
+    # juicefs gateway uses the MinIO gateway code: these are the S3 access/secret keys.
+    - MINIO_ROOT_USER=${JUICEFS_S3_USER:-${MINIO_USER:?Run make brand-defaults}}
+    - MINIO_ROOT_PASSWORD=${JUICEFS_S3_PASSWORD:-${MINIO_PASSWORD:?Run make brand-defaults}}
+    entrypoint: ["sh", "-lc"]
+    command:
+    - "juicefs gateway --multi-buckets --keep-etag ${JUICEFS_META_URL:-redis://juicefs-redis:6379/1} 0.0.0.0:9000"
+    volumes:
+    - juicefs-data:/data
+    networks:
+    - pmoves_data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:9000/minio/health/live || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+
+  juicefs-smoke:  # one-off S3 round-trip + multi-bucket test (profile juicefs-smoke; never auto-starts)
+    image: minio/mc@sha256:a7fe349ef4bd8521fb8497f55c6042871b2ae640607cf99d9bede5e9bdf11727
+    profiles: ["juicefs-smoke"]
+    depends_on:
+      juicefs-gateway:
+        condition: service_healthy
+    environment:
+    # Same credential chain as juicefs-gateway (no baked-in secret) so smoke auth always matches.
+    - MC_HOST_jfs=http://${JUICEFS_S3_USER:-${MINIO_USER:?Run make brand-defaults}}:${JUICEFS_S3_PASSWORD:-${MINIO_PASSWORD:?Run make brand-defaults}}@juicefs-gateway:9000
+    entrypoint: ["sh", "-lc"]
+    command:
+    - "set -e; mc mb -p jfs/assets jfs/outputs; printf 'hello-juicefs-2026' | mc pipe jfs/assets/smoke.txt; echo '--- GET ---'; mc cat jfs/assets/smoke.txt; echo; echo '--- multi-bucket list (assets+outputs
+      => --multi-buckets works) ---'; mc ls jfs/"
+    networks:
+    - pmoves_data
+    restart: "no"

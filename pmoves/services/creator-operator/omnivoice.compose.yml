@@ -1,0 +1,60 @@
+# omnivoice.compose.yml — OmniVoice production voice server deploy unit.
+# (Named *.compose.yml, NOT docker-compose*.yml, so it lives outside the
+#  damage-control compose-Known-Road glob and can be a real committed file.)
+# Opt-in via the `creator` or `voice` profiles. Build context = THIS directory
+# (omnivoice_server.py does not import services.common). GPU via the NVIDIA
+# container runtime (deploy.resources reservation), not baked into the image.
+#   docker compose -f services/creator-operator/omnivoice.compose.yml \
+#     --profile voice up -d omnivoice-server
+#   (or: make -C pmoves omnivoice-up)
+# SPARK (arm64+CUDA GB10): set OMNIVOICE_PLATFORM=linux/arm64 + the arm64 torch
+# wheel ARGs — see SPARK_DEPLOY.md (TODO-confirm-on-node).
+services:
+  omnivoice-server:
+    build:
+      context: .
+      dockerfile: Dockerfile.omnivoice
+      args:
+        CUDA_BASE_TAG: ${OMNIVOICE_CUDA_BASE_TAG:-12.8.1-runtime-ubuntu22.04}
+        TORCH_INDEX_URL: ${OMNIVOICE_TORCH_INDEX_URL:-https://download.pytorch.org/whl/cu128}
+        TORCH_SPEC: ${OMNIVOICE_TORCH_SPEC:-torch torchaudio}
+    image: ${OMNIVOICE_IMAGE:-pmoves-omnivoice:latest}
+    platform: ${OMNIVOICE_PLATFORM:-}   # SPARK: linux/arm64
+    restart: unless-stopped
+    ports:
+      # Default bind 0.0.0.0 so in-stack consumers can reach it: flute-gateway
+      # normalizes OMNIVOICE_URL 127.0.0.1 -> host.docker.internal (main.py:183),
+      # which on Linux/bridge Docker resolves to the host GATEWAY interface, not
+      # loopback — a 127.0.0.1-published port would be unreachable there. Access
+      # is gated by OMNIVOICE_TOKEN. Restrict to host-only with OMNIVOICE_BIND=127.0.0.1
+      # (or a firewall) on exposed nodes where no in-container consumer needs it.
+      - "${OMNIVOICE_BIND:-0.0.0.0}:${OMNIVOICE_HOST_PORT:-8002}:8002"
+    environment:
+      - OMNIVOICE_HOST=0.0.0.0
+      - OMNIVOICE_PORT=8002
+      - OMNIVOICE_DEVICE=${OMNIVOICE_DEVICE:-cuda:0}
+      - OMNIVOICE_TOKEN=${OMNIVOICE_TOKEN:-}
+      - OMNIVOICE_MODEL=${OMNIVOICE_MODEL:-k2-fsa/OmniVoice}
+      - OMNIVOICE_LOAD_ASR=${OMNIVOICE_LOAD_ASR:-0}
+      - OMNIVOICE_REFERENCE_VOICE_DIR=${OMNIVOICE_REFERENCE_VOICE_DIR:-}
+      - HF_HOME=/cache/huggingface
+    volumes:
+      - omnivoice-hf-cache:/cache/huggingface
+      # Optional ref-voice catalog (clone mode), read-only host bind:
+      # - ${OMNIVOICE_REFERENCE_VOICE_HOST_DIR:-./voices}:/voices:ro
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8002/healthz"]
+      interval: 30s
+      timeout: 5s
+      start_period: 120s
+      retries: 5
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              capabilities: [gpu]
+              count: ${OMNIVOICE_GPU_COUNT:-all}
+    profiles: ["creator", "voice"]
+volumes:
+  omnivoice-hf-cache: {}

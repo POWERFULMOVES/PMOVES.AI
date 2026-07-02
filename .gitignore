@@ -54,6 +54,9 @@ pmoves/env.shared
 pmoves/env.mesh-bind.local
 pmoves/.supabase.status.env
 pmoves/env.supa.runtime
+# Bootstrap-generated env fragments + supabase env (can carry live secrets)
+pmoves/env.*.additions
+pmoves/env.supabase
 secrets/
 !pmoves/integrations/**/secrets/
 !pmoves/integrations/**/secrets/labels.yaml

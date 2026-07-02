@@ -338,3 +338,15 @@
 	path = skills/Pmoves-claude-d3js-skill
 	url = https://github.com/POWERFULMOVES/Pmoves-claude-d3js-skill.git
 	branch = main
+[submodule "pmoves-cipher-mcp"]
+	path = pmoves-cipher-mcp
+	url = https://github.com/POWERFULMOVES/pmoves-cipher-mcp.git
+	branch = PMOVES.AI-Edition-Hardened
+[submodule "PMOVES-jcodemunch-mcp"]
+	path = PMOVES-jcodemunch-mcp
+	url = https://github.com/POWERFULMOVES/PMOVES-jcodemunch-mcp.git
+	branch = main
+[submodule "pmoves-hirag-mcp"]
+	path = pmoves-hirag-mcp
+	url = https://github.com/POWERFULMOVES/pmoves-hirag-mcp.git
+	branch = main

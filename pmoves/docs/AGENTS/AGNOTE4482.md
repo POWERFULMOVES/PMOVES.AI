@@ -1235,3 +1235,27 @@ Shipped via **PR #1655** (`feat/pmoves-ai-website-deploy`) — salvaged onto cle
 - Timestamp: `2026-05-30`
 
 <!-- GRAPHITI_MARK: ANTIGRAVITY-GEMINI::A2UI-HOLOGRAM-SCALING-FIX::2026-05-30 -->
+
+## CHIT Signing-Card Schema + Room Activation Checklist (2026-06-30)
+
+### Work Performed
+- Canonical schema landed: `pmoves/contracts/schemas/identity/signing-card.v1.schema.json`.
+- Audit script `pmoves/scripts/audit_naming_drift.py` now loads the canonical schema from disk, falling back to the previous inline literal for stale environments.
+- Added the CHIT / room activation checklist below to this file and to `pmoves/docs/ROOMS_ON_A_STAGE.md` and `pmoves/docs/ROOM_MANIFEST_CONTRACT.md`.
+
+### CHIT / room activation checklist (must be complete before a room transitions `planned` → `active`)
+
+- [ ] Room manifest has a valid `card_id` in `meta.chit.card_id` or the room skill has an active signing card row in `pmoves/config/signing_identity_cards.yaml`.
+- [ ] `signing-card.v1.schema.json` validates the referenced card (`card_id` UUID, `ml.primary_method` in `[ssh,gpg,github-app]`, `h.agent_id` matches registry, `active=true`).
+- [ ] `pmoves/config/signing_identity_cards.yaml` has an entry for the room's operating agent with matching `ssh_fingerprint` / `github_app_installation_id` / `gpg_key_id`.
+- [ ] `make sign-trail AGENT=<agent_id>` returns `status: signed` or `unsigned-local` advisories are explicitly accepted for the transition.
+- [ ] Room's `mcp_servers` and `a2a_servers` (if any) are present in `pmoves/config/agent_registry.yaml` and reachable in the target topology mode.
+- [ ] `PGRST_DB_EXTRA_SEARCH_PATH` includes the schemas the room touches; PostgREST returns HTTP 200 on a representative schema-qualified endpoint.
+- [ ] `CHIT_REQUIRE_SIGNATURE` / `CHIT_DECRYPT_ANCHORS` toggles are documented in `sidecar.env` for the target topology gradient (`standalone` → `docked` → `fleet`).
+
+### Agent ACK
+- Agent: `AGENT-ZERO-0`
+- Signature: `ACK::AGENT-ZERO-0::CHIT-SIGNING-CARD-SCHEMA-CARVEOUT`
+- Timestamp: `2026-06-30T23:50:00Z`
+
+<!-- GRAPHITI_MARK: AGENT-ZERO-0::CHIT-SIGNING-CARD-SCHEMA-CARVEOUT::2026-06-30 -->

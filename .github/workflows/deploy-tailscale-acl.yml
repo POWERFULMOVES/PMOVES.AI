@@ -27,6 +27,7 @@ on:
   pull_request:
     paths:
       - 'pmoves/configs/tailscale-acl-policy.json'
+  workflow_dispatch: {}
 
 permissions:
   contents: read
@@ -43,24 +44,33 @@ jobs:
     if: ${{ github.event_name == 'pull_request' }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - name: Lint ACL policy JSON
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - name: Lint ACL policy (HuJSON)
         run: |
-          python3 -c "import json; json.load(open('pmoves/configs/tailscale-acl-policy.json')); print('OK: tailscale-acl-policy.json parses')"
+          # The policy is HuJSON (// comments, like the live tailnet format). Strip
+          # // line comments, then parse as JSON. No functional value contains "//",
+          # so this is safe for this file.
+          python3 -c "import json,re; s=open('pmoves/configs/tailscale-acl-policy.json',encoding='utf-8').read(); json.loads(re.sub(r'(?m)//.*$','',s)); print('OK: HuJSON policy parses')"
 
   # Apply on merge to main. Uses the Prod environment for TS_TAILNET (protected-branch
   # gated + wait_timer). TAILSCALE_APIKEY is repo-level and available here too.
   apply:
     name: apply to tailnet
-    if: ${{ github.event_name == 'push' }}
+    if: ${{ github.event_name == 'push' || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     environment: Prod
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - name: Apply ACL policy to tailnet
         uses: tailscale/gitops-acl-action@5a4a17f5708e9bf96f4ee915a95e9f83c2eebe1a # v1.5.2
         with:
           tailnet: ${{ secrets.TS_TAILNET }}
-          api-key: ${{ secrets.TAILSCALE_APIKEY }}
+          # Prefer an OAuth client (durable — scope acl:write, tag:ci) over a 90-day
+          # API key. The action accepts only ONE of api-key / oauth-secret, so api-key
+          # is blanked when an OAuth secret is present. Falls back to TAILSCALE_APIKEY
+          # when no OAuth client is configured.
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          api-key: ${{ secrets.TS_OAUTH_SECRET != '' && '' || secrets.TAILSCALE_APIKEY }}
           policy-file: ./pmoves/configs/tailscale-acl-policy.json
           action: apply

@@ -53,6 +53,7 @@ def resolve_theme(theme: dict, reg: dict) -> dict:
     v["--pm-accent-soft"] = _field(primary, "accent", acc["primary"])
     v["--pm-accent-2"] = _field(secondary, "color", acc["secondary"])
     v["--pm-signature"] = _field(sig, "color", acc["signature"])
+    v["--pm-signature-soft"] = _field(sig, "accent", acc["signature"])  # AA-safe small-text crimson
     # theme overrides last
     for k, val in theme.get("overrides", {}).get("color", {}).items():
         v[f"--pm-{k}"] = val

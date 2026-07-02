@@ -31,9 +31,9 @@ services:
     - -m
     - '8222'
     - --user
-    - ${NATS_USER:-nats}
+    - ${NATS_USER}
     - --pass
-    - ${NATS_PASSWORD:-pmoves}
+    - ${NATS_PASSWORD}
     restart: unless-stopped
     ports:
     # NATS is the mesh-wide event bus — credential-guarded (nats:pmoves@),
@@ -70,7 +70,7 @@ services:
     image: natsio/nats-box:0.14.5
     entrypoint: ["/bin/sh", "/scripts/init_streams.sh"]
     environment:
-    - NATS_URL=${NATS_URL:-nats://nats:pmoves@nats:4222}
+    - NATS_URL=${NATS_URL}
     volumes:
     - ./scripts/nats:/scripts:ro
     networks:
@@ -134,6 +134,7 @@ services:
     - ./supabase/initdb:/docker-entrypoint-initdb.d/pmoves-init:ro
     networks:
     - pmoves_data
+    - pmoves_api  # Services on pmoves_api need DB access
 
     deploy:
       resources:
@@ -142,12 +143,16 @@ services:
           memory: 4G
   supabase-gotrue:
     <<: *tier-supabase-hardened
-    image: supabase/gotrue:v2.186.0
+    image: supabase/gotrue:v2.191.0
     restart: unless-stopped
     profiles:
     - supabase-local
     environment:
     - GOTRUE_SITE_URL=${SUPABASE_SITE_URL}
+    # Older consistent scheme: base URL here + Kong routes that add /auth/v1.
+    # The 2026-06-18 self-hosted alignment (API_EXTERNAL_URL incl. /auth/v1 +
+    # matching Kong OAuth/SAML routes + issuer) is applied as a SET, not piecemeal
+    # and not gated on the gotrue tag — see the stack header note before changing.
     - API_EXTERNAL_URL=${SUPABASE_PUBLIC_URL}
     - GOTRUE_API_HOST=0.0.0.0
     - GOTRUE_API_PORT=9999
@@ -177,12 +182,13 @@ services:
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
+    # DNS configuration - Docker embedded DNS (default)
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9999/health"]
       interval: 15s
       timeout: 5s
-      retries: 5
-      start_period: 10s
+      retries: 15
+      start_period: 120s
     depends_on:
       supabase-db:
         condition: service_healthy
@@ -190,7 +196,6 @@ services:
     - ${SUPABASE_AUTH_BIND:-127.0.0.1}:${SUPABASE_GOTRUE_PORT:-9999}:9999
     networks:
     - pmoves_api
-    - pmoves_data
 
     deploy:
       resources:
@@ -245,7 +250,6 @@ services:
     - ${SUPABASE_REALTIME_BIND:-127.0.0.1}:${SUPABASE_REALTIME_PORT:-4010}:4000
     networks:
     - pmoves_api
-    - pmoves_data
 
     deploy:
       resources:
@@ -306,7 +310,6 @@ services:
     - ${SUPABASE_STORAGE_BIND:-127.0.0.1}:${SUPABASE_STORAGE_PORT:-5000}:5000
     networks:
     - pmoves_api
-    - pmoves_data
 
     deploy:
       resources:
@@ -395,7 +398,6 @@ services:
   supabase-kong:
     <<: *tier-supabase-hardened
     image: kong:3.7.1
-    restart: unless-stopped
     profiles:
     - supabase-local
     environment:
@@ -412,36 +414,52 @@ services:
     - KONG_ADMIN_ERROR_LOG=/dev/stderr
     - KONG_PROXY_LISTEN=0.0.0.0:8000
     - KONG_ADMIN_LISTEN=0.0.0.0:8001  # container-internal; host restriction via Docker port mapping line below
-    # JWT plugin
-    - KONG_PLUGINS=bundled,jwt
+    # JWT plugin (already in bundled — no need to list separately)
+    - KONG_PLUGINS=bundled
     - KONG_NGINX_PROXY_PROXY_BUFFERS=8 16k
+    # Pin to single worker. Kong reads host /proc/cpuinfo for worker count,
+    # not the cpus cgroup limit, so on a 24-core host it would spawn 24
+    # workers × ~80MB each (full plugin load) = ~2GB before accepting any
+    # traffic. `1` matches the 0.5 CPU budget + keeps memory bounded.
+    - KONG_NGINX_WORKER_PROCESSES=1
     # PMOVES context
     - DOCKED_MODE=${DOCKED_MODE:-true}
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
-    entrypoint: ["/bin/sh", "-c", "kong migrations bootstrap --yes 2>/dev/null || true; exec /docker-entrypoint.sh kong docker-start"]
+    # Wait for Postgres using a pure shell redirect (kong:3.7.1 does not ship `nc`).
+    entrypoint: ["/bin/bash", "-c", "for i in $(seq 1 30); do if >/dev/tcp/supabase-db/5432 2>/dev/null; then echo 'Database reachable'; break; fi; echo \"DB not ready ($i/30)...\"; sleep 2; done; kong
+        migrations bootstrap --yes 2>/dev/null || kong migrations up --yes 2>/dev/null || true; exec /docker-entrypoint.sh kong docker-start"]
     healthcheck:
       test: ["CMD", "kong", "health"]
       interval: 15s
       timeout: 5s
-      retries: 5
-      start_period: 60s
+      retries: 10
+      start_period: 120s
     depends_on:
       supabase-db:
         condition: service_healthy
+    restart: unless-stopped
     ports:
+    # Default host bind tightened to 127.0.0.1 for safer standalone/sidecar
+    # operation. Override with KONG_PROXY_BIND / KONG_ADMIN_BIND in env.shared
+    # if you need LAN access or are on Docker Desktop versions <29.5 where
+    # explicit loopback binds were silently dropped on multi-port services.
     - ${KONG_PROXY_BIND:-127.0.0.1}:${SUPABASE_KONG_PROXY_PORT:-8000}:8000
     - ${KONG_ADMIN_BIND:-127.0.0.1}:${SUPABASE_KONG_ADMIN_PORT:-8001}:8001
     networks:
     - pmoves_api
-    - pmoves_data
+    - pmoves_public
 
     deploy:
       resources:
         limits:
           cpus: '0.5'
-          memory: 256M
+          # 512M fits a single-worker Kong with bundled plugins + DB cache
+          # warmup + modest request headroom. Previously set to 256M which
+          # OOM'd on startup; briefly raised to 1024M to confirm the root
+          # cause was worker-count-driven memory multiplication, not leak.
+          memory: 512M
   supabase-edge-functions:
     <<: *tier-supabase-hardened
     image: supabase/edge-runtime:v1.70.0
@@ -468,7 +486,16 @@ services:
       supabase-analytics:
         condition: service_healthy
     networks:
-    - pmoves_api
+    - pmoves_api  # supabase-db and analytics reachable via kong on pmoves_api
+    # Pin upstream resolvers for Deno cold-boot imports. The edge-runtime
+    # image fetches https://deno.land/std@...` at worker-bootstrap time;
+    # Docker's embedded DNS (127.0.0.11) intermittently fails to forward
+    # external queries on Docker Desktop Windows, leaving the worker stuck
+    # in `failed to lookup address information: Temporary failure in name
+    # resolution`. Explicit resolvers avoid the flap.
+    dns:
+    - 1.1.1.1
+    - 8.8.8.8
 
   # ---------------------------------------------------------------------------
   # Supabase Analytics (Logflare) — log analytics backend
@@ -495,6 +522,9 @@ services:
     - PGRST_DB_USE_LEGACY_GUCS=false
     - PGRST_APP_SETTINGS_JWT_SECRET=${JWT_SECRET:-${SUPABASE_JWT_SECRET:-}}
     - PGRST_APP_SETTINGS_JWT_EXP=${JWT_EXPIRY:-${SUPABASE_JWT_EXP:-3600}}
+    # Extra search_path so pmoves_core and pmoves_kb objects are addressable
+    # without fully-qualified names. Must match env.tier-supabase.example.
+    - PGRST_DB_EXTRA_SEARCH_PATH=${PGRST_DB_EXTRA_SEARCH_PATH:-pmoves_core,pmoves_kb,public}
     # API configuration
     - PGRST_DB_SCHEMAS=${SUPABASE_SCHEMA:-public,pmoves_core}
     - PGRST_ANON_ROLE=${SUPABASE_ANON_ROLE:-anon}
@@ -514,7 +544,7 @@ services:
     - ${SUPABASE_REST_BIND:-127.0.0.1}:${SUPABASE_POSTGREST_PORT:-3000}:3000
     networks:
     - pmoves_api
-    - pmoves_data
+    - pmoves_public
 
     deploy:
       resources:
@@ -640,6 +670,14 @@ services:
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
+    # Bind Studio's Next.js server to all interfaces without a DNS lookup.
+    # Next.js 16+ reads HOSTNAME to pick its listen address; Docker sets
+    # HOSTNAME to the container's short ID by default, and Next.js then
+    # resolves that ID as a DNS name before binding. Resolution fails with
+    # `getaddrinfo EAI_AGAIN` (the short ID isn't registered in Docker's
+    # embedded DNS) and the server exits, kicking the container into a
+    # restart loop. Pinning to 0.0.0.0 skips the lookup entirely.
+    - HOSTNAME=0.0.0.0
     # Healthcheck: External check (Next.js 16 binds to container hostname, not localhost)
     # Note: Official Supabase uses node -e fetch but their image has different network config
     # We rely on container being started successfully (logs show "Ready in Xms")
@@ -672,6 +710,7 @@ services:
   supabase-vector:
     <<: *tier-supabase-hardened
     image: timberio/vector:0.28.1-alpine
+    command: ["--config", "/etc/vector/vector.yml"]
     restart: unless-stopped
     profiles:
     - supabase-local
@@ -818,9 +857,15 @@ services:
           memory: 4G
   minio:
     <<: *tier-data-hardened
-    # Pinned 2025-02-04: Latest RELEASE tag (MinIO stopped publishing to Docker Hub Oct 2025)
-    # ⚠️ WARNING: MinIO Community Edition is EOL (archived Feb 2026). Migration to SeaweedFS/Garage/Enterprise planned.
-    image: ${MINIO_IMAGE:-minio/minio:RELEASE.2025-12-20T04-58-37Z}
+    # Pin = the LAST community RELEASE tag MinIO published to Docker Hub
+    # (RELEASE.2025-09-07T16-13-09Z, 2025-09-07). The prior pin
+    # RELEASE.2025-12-20T04-58-37Z was a phantom — a December date AFTER MinIO
+    # stopped publishing minio/minio community images, so it 404s on the registry
+    # ("not found") and broke every data-tier bring-up. Verified 2026-06-22:
+    # 2025-09-07 is the newest tag on hub.docker.com/r/minio/minio.
+    # ⚠️ MinIO Community Edition is EOL/archived (Feb 2026); this tag is the
+    # ceiling. Migration to SeaweedFS/Garage/Enterprise is the durable fix.
+    image: ${MINIO_IMAGE:-minio/minio:RELEASE.2025-09-07T16-13-09Z}
     command: server /data --console-address ":9001"
     environment:
     - MINIO_ROOT_USER=${MINIO_USER:?Run make brand-defaults}
@@ -848,6 +893,17 @@ services:
         limits:
           cpus: '2.0'
           memory: 4G
+
+  # ── JuiceFS object store (PoC) — durable replacement for EOL MinIO ───────────
+  # See docs/architecture/JUICEFS_OBJECT_STORE_MIGRATION.md. PROFILE-GATED ("juicefs")
+  # so it is purely additive — it does NOT start with the default data tier and does
+  # not touch existing MinIO consumers yet (consumer repoint = Phase 2).
+  # ⚠️ DRAFT / not yet live-verified (deploy-env drift blocks a live run on Z890 —
+  # see handoff z890-deploy-spine-mcp-env-2026-06-22.md). Validate on first run:
+  #   (a) `juicefs` CLI entrypoint in juicedata/mount:ce-v1.3.0,
+  #   (b) `juicefs format`/`gateway` flag syntax + cache dir,
+  #   (c) --multi-buckets exposes assets/outputs/pmoves-comfyui,
+  #   (d) the gateway's S3 creds (MINIO_ROOT_USER/PASSWORD env) match consumers.
   tensorzero-clickhouse:
     <<: &tier-llm-hardened
       env_file:
@@ -880,11 +936,11 @@ services:
     healthcheck:
       test:
       - CMD-SHELL
-      - wget --spider --tries 1 http://$${CLICKHOUSE_USER:-default}:$${CLICKHOUSE_PASSWORD:-}@$${HOSTNAME:-localhost}:8123/ping
-      start_period: 30s
-      interval: 5s
-      timeout: 2s
-      retries: 5
+      - wget --spider --tries=1 --timeout=5 http://$${CLICKHOUSE_USER:-default}:$${CLICKHOUSE_PASSWORD:-}@127.0.0.1:8123/ping
+      start_period: 90s
+      interval: 10s
+      timeout: 10s
+      retries: 10
     networks:
     - pmoves_data
     deploy:
@@ -916,7 +972,7 @@ services:
     - TOGETHER_AI_API_KEY=${TOGETHER_AI_API_KEY:-local-disabled}
     - CLOUDFLARE_API_TOKEN=${CLOUDFLARE_API_TOKEN:-local-disabled}
     - GEMINI_API_KEY=${GEMINI_API_KEY:-local-disabled}
-    - OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=${OTEL_EXPORTER_OTLP_TRACES_ENDPOINT:-}
+    - OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=${OTEL_EXPORTER_OTLP_TRACES_ENDPOINT:-http://pmoves-otel-collector:4317}
     - DOCKED_MODE=${DOCKED_MODE:-true}
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
@@ -932,6 +988,7 @@ services:
     - pmoves_api
     - pmoves_bus
     - pmoves_data
+    - pmoves_monitoring
     - pmoves_external
     extra_hosts:
     - host.docker.internal:host-gateway
@@ -1057,27 +1114,54 @@ services:
         limits:
           cpus: '2.0'
           memory: 4G
+  clap-embed:
+    <<:
+      env_file:
+      - env.shared
+      - env.tier-api
+      cap_drop:
+      - ALL
+      cap_add:
+      - NET_BIND_SERVICE
+      - CHOWN
+      - SETGID
+      - SETUID
+      security_opt:
+      - no-new-privileges:true
 
-# =============================================================================
-# Networks — declared external so this overlay parses standalone.
-# =============================================================================
-# Canonical definitions live in docker-compose.base.yml (lines 552-616).
-# This block exists ONLY so single-file invocations
-# (e.g. `docker compose -f docker-compose.core.yml config`) don't fail
-# with "service refers to undefined network <name>". Networks must still
-# EXIST at runtime — either via a prior `make overlay-up-*` (which layers
-# base.yml first) OR via manual `docker network create`. See
-# pmoves/docs/operations/COMPOSE_LAYERING_RUNBOOK.md for the full pattern.
-networks:
-  pmoves_data:
-    external: true
-  pmoves_api:
-    external: true
-  pmoves_app:
-    external: true
-  pmoves_bus:
-    external: true
-  pmoves_external:
-    external: true
-  pmoves_monitoring:
-    external: true
+    build:
+      context: ./services/clap-embed
+      dockerfile: Dockerfile
+    image: pmoves/clap-embed:latest
+    environment:
+    - CLAP_MODEL_ID=${CLAP_MODEL_ID:-laion/larger_clap_music}
+    - CLAP_MODEL_REVISION=${CLAP_MODEL_REVISION:-main}
+    - CLAP_DEVICE=${CLAP_DEVICE:-cpu}
+    - CLAP_EMBED_PORT=8108
+    - NATS_URL=${NATS_URL:-}
+    - MODEL_REGISTRY_URL=${MODEL_REGISTRY_URL:-http://model-registry:8110}
+    ports:
+    - "${CLAP_EMBED_BIND:-0.0.0.0}:8108:8108"
+    restart: unless-stopped
+    depends_on:
+      nats:
+        condition: service_healthy
+        required: false
+    profiles:
+    - orchestration
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8108/healthz"]
+      interval: 30s
+      timeout: 5s
+      start_period: 60s
+      retries: 3
+    networks:
+    - pmoves_api
+    - pmoves_bus
+    extra_hosts:
+    - host.docker.internal:host-gateway
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G

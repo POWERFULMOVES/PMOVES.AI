@@ -15,6 +15,17 @@ ARG AGENT_ZERO_REF=PMOVES.AI-Edition-Hardened
 RUN git clone --depth=1 --branch ${AGENT_ZERO_REF} \
       ${AGENT_ZERO_REPO} /git/agent-zero
 
+# Bake the PMOVES.Notes A0 plugin into the user plugins dir so it ships in the
+# image (mirrors how the archon image clones its vendor via ARCHON_GIT_REF).
+# It rides forward via the `COPY --from=upstream /git/agent-zero` below, and
+# init-a0.sh copies /git/agent-zero/. -> /a0 at boot, so Agent Zero discovers it
+# under /a0/usr/plugins/pmoves_notes. Drop the nested .git to keep the layer clean.
+ARG A0_PLUGIN_PMOVES_NOTES_REMOTE=https://github.com/POWERFULMOVES/Pmoves-a0-plugin-pmoves-notes.git
+ARG A0_PLUGIN_PMOVES_NOTES_REF=PMOVES.AI-Edition-Hardened
+RUN git clone --depth=1 --single-branch --branch ${A0_PLUGIN_PMOVES_NOTES_REF} \
+      ${A0_PLUGIN_PMOVES_NOTES_REMOTE} /git/agent-zero/usr/plugins/pmoves_notes \
+    && rm -rf /git/agent-zero/usr/plugins/pmoves_notes/.git
+
 # Minimal constraints for upstream transitive deps that have broken releases.
 # Do NOT use requirements.lock here — it pins our direct deps and will
 # conflict with upstream version requirements (e.g. crontab version mismatch).
@@ -57,6 +68,21 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       build-essential python3-dev ffmpeg tesseract-ocr poppler-utils \
       libgl1 libglib2.0-0 libsm6 libxext6 curl \
     && rm -rf /var/lib/apt/lists/*
+
+# Orchestrator MCP toolkit dependencies.
+# 1) docker CLI (static binary, pinned) — Agent Zero is the primary orchestrator
+#    and reaches the Docker MCP toolkit (mcp/docker) over the mounted socket via
+#    A0_SET_mcp_servers. Only the client binary is installed (no daemon).
+# 2) @supabase/mcp-server-postgrest — pre-installed globally so the Supabase MCP
+#    runs from a fixed binary instead of a runtime `npx` fetch (the agent runs on
+#    a read-only rootfs; avoiding network/cache writes at startup is intentional).
+ARG DOCKER_CLI_VERSION=27.5.1
+ARG SUPABASE_POSTGREST_MCP_VERSION=0.1.1
+RUN curl -fsSL "https://download.docker.com/linux/static/stable/x86_64/docker-${DOCKER_CLI_VERSION}.tgz" \
+      | tar -xz -C /usr/local/bin --strip-components=1 docker/docker \
+    && docker --version \
+    && npm install -g "@supabase/mcp-server-postgrest@${SUPABASE_POSTGREST_MCP_VERSION}" \
+    && command -v mcp-server-postgrest
 
 # PMOVES Python requirements (overrides upstream pins where needed)
 COPY --chown=65532:65532 services/agent-zero/requirements.txt services/agent-zero/requirements.lock ./
