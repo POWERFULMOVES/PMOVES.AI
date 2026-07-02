@@ -43,15 +43,17 @@ jobs:
           GH_TOKEN: ${{ needs.mint.outputs.token }}
         run: |
           set -euo pipefail
-          if gh api installation >/dev/null 2>&1; then
+          # Installation tokens cannot call GET /installation (that needs JWT-level
+          # App auth). The correct installation-scoped probe is GET /installation/repositories,
+          # which lists repos the installation can access. A 200 = installation active.
+          if gh api /installation/repositories >/dev/null 2>&1; then
             echo "valid=true" >> "$GITHUB_OUTPUT"
-            # installation slug/app_slug are safe to log — not secrets
-            SLUG=$(gh api installation --jq '.app_slug // "unknown"' 2>/dev/null || echo "unknown")
-            echo "detail=App installation valid (app: ${SLUG})" >> "$GITHUB_OUTPUT"
-            echo "✅ GitHub App installation is valid (${SLUG})"
+            COUNT=$(gh api /installation/repositories --jq '.total_count // "unknown"' 2>/dev/null || echo "unknown")
+            echo "detail=App installation active (${COUNT} repos accessible)" >> "$GITHUB_OUTPUT"
+            echo "✅ GitHub App installation is active (${COUNT} repos)"
           else
             echo "valid=false" >> "$GITHUB_OUTPUT"
-            echo "detail=App token minted but installation probe failed (401/403)" >> "$GITHUB_OUTPUT"
+            echo "detail=App token minted but installation/repositories probe failed (401/403)" >> "$GITHUB_OUTPUT"
             echo "::warning::GitHub App installation is invalid — reconciling tracker issue"
           fi
 
