@@ -49,15 +49,37 @@ export interface ProvenanceLivingDocSummary {
   shape_id_present: boolean;
 }
 
-const DEFAULT_PALETTE: ProvenancePalette = {
-  background: '#0f172a',
-  panel: 'rgba(15, 23, 42, 0.82)',
-  panelAlt: 'rgba(30, 41, 59, 0.78)',
-  accent: '#fb7185',
-  accentSoft: '#67e8f9',
-  ink: '#f8fafc',
-  muted: '#cbd5e1',
+// DL-2: palettes sourced from the PMOVES design token engine
+// (pmoves/design/build/tokens.{pmoves-armor,darkxside-skin}.css, generated from
+// pmoves/config/agent_signatures.yaml). Kept as literals here because this
+// renderer is a separate bundle; values mirror the generated tokens 1:1. If the
+// tokens change, update these to match (one source of truth = the registry).
+
+// Canonical PMOVES "armor" (cool): void bg, violet accent (claude-opus),
+// teal secondary (4090). Default for generic provenance docs.
+export const ARMOR_PALETTE: ProvenancePalette = {
+  background: '#050508',               // --pm-void
+  panel: 'rgba(18, 18, 26, 0.82)',     // --pm-surface @ .82
+  panelAlt: 'rgba(10, 10, 15, 0.78)',  // --pm-void-elevated @ .78
+  accent: '#7C3AED',                   // --pm-accent (claude-opus / DARKXSIDE purple)
+  accentSoft: '#0D9488',               // --pm-accent-2 (teal secondary)
+  ink: '#f8f8f8',                      // --pm-ink
+  muted: '#a0a0a8',                    // --pm-ink-dim
 };
+
+// DARKXSIDE "skin" (warm): ✦ crimson signature lead. Pass this for
+// DARKXSIDE-attributed provenance docs (the portal surface).
+export const SKIN_PALETTE: ProvenancePalette = {
+  background: '#0a0608',               // --pm-bg (skin)
+  panel: 'rgba(18, 18, 26, 0.82)',     // --pm-surface @ .82
+  panelAlt: 'rgba(20, 10, 14, 0.78)',  // --pm-bg-tint @ .78
+  accent: '#E11D48',                   // --pm-accent (darkxside ✦ crimson)
+  accentSoft: '#FB7185',               // --pm-accent-soft (darkxside accent)
+  ink: '#f8f8f8',                      // --pm-ink
+  muted: '#a0a0a8',                    // --pm-ink-dim
+};
+
+const DEFAULT_PALETTE: ProvenancePalette = ARMOR_PALETTE;
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));

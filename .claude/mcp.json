@@ -1,5 +1,5 @@
 {
-  "_pinned_versions_note": "Dependencies pinned to exact versions on 2026-05-14 to prevent supply chain attacks (F-07). Re-pin after auditing new releases before upgrading. hostinger-api-mcp=0.2.1, tailscale-mcp=2026.4.10-1, @supabase/mcp-server-postgrest=0.1.1",
+  "_pinned_versions_note": "Dependencies pinned to exact versions on 2026-05-14 to prevent supply chain attacks (F-07). Re-pin after auditing new releases before upgrading. hostinger-api-mcp=0.2.1, tailscale-mcp=2026.4.10-1, @supabase/mcp-server-postgrest=0.1.1, postgres-mcp=0.3.0",
   "mcpServers": {
     "pmoves-cipher": {
       "type": "sse",
@@ -109,6 +109,18 @@
         "--schema",
         "public"
       ]
+    },
+    "supabase-db": {
+      "_purpose": "Postgres MCP (crystaldba/postgres-mcp 'Postgres MCP Pro') for the SELF-HOSTED Supabase Postgres — the DDL/RLS/migration sibling of pmoves-supabase. Does what PostgREST CANNOT: run SQL, inspect schema + RLS policies, apply migrations, EXPLAIN/health/index analysis. DELIBERATE, SCOPED EXCEPTION to the 'never raw psql' rule (CATALOG.md): data-plane CRUD still goes through pmoves-supabase (PostgREST); this is for schema/migration/RLS work only (the same class as bootstrap's docker-exec psql).",
+      "_setup": "Set SUPABASE_DB_URI to a HOST-reachable connection string: postgresql://pmoves:<SUPABASE_DB_PASSWORD>@<host>:<port>/pmoves (the Supabase CLI stack publishes Postgres on a host port — use localhost/host.docker.internal + that port, NOT the internal 'supabase-db' service name). access-mode=unrestricted enables DDL/DML for migrations/RLS; use --access-mode=restricted for read-only audits.",
+      "command": "uvx",
+      "args": [
+        "postgres-mcp@0.3.0",
+        "--access-mode=unrestricted"
+      ],
+      "env": {
+        "DATABASE_URI": "${SUPABASE_DB_URI}"
+      }
     }
   }
 }

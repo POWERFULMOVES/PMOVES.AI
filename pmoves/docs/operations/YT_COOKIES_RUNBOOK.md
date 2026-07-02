@@ -1,7 +1,9 @@
 # YT Cookie Refresh Runbook
 
 **Phase:** 9Q.2
-**Last updated:** 2026-04-17
+**Last updated:** 2026-06-29
+
+> **Client setup:** see `PMOVES_YT_GOOGLE_OAUTH_DESKTOP_SETUP.md` (canonical). The OAuth callback uses an **ephemeral loopback port** via `google-auth-oauthlib` (Desktop client) — there is no fixed `:8199` redirect to register.
 
 ## Overview
 

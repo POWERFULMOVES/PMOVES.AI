@@ -343,3 +343,14 @@ Example:
 - `pmoves/config/agent_signatures.yaml`
 - `plans/KILOCODE_PMOVES_INTEGRATION_PLAN.md`
 
+## CHIT Signing-Card Activation Checklist
+
+A room manifest is not considered activated until the following are true:
+
+- [ ] `meta.chit.card_id` is present and non-empty, or the room skill supplies an active card at runtime.
+- [ ] The referenced card passes `pmoves/contracts/schemas/identity/signing-card.v1.schema.json` validation with `active: true`.
+- [ ] `pmoves/config/signing_identity_cards.yaml` has a row for the room's operating agent with matching key material (`ssh_fingerprint`, `gpg_key_id`, or `github_app_installation_id`).
+- [ ] `make sign-trail AGENT=<agent_id>` returns a signed or explicitly accepted `unsigned-local` advisory before the room transitions to `live`.
+- [ ] All `mcp_servers` / `a2a_servers` declared in the manifest are present in `pmoves/config/agent_registry.yaml` and reachable in the target topology mode.
+- [ ] `CHIT_REQUIRE_SIGNATURE` / `CHIT_DECRYPT_ANCHORS` values in `sidecar.env` match the intended topology gradient (`standalone` → `docked` → `fleet`).
+

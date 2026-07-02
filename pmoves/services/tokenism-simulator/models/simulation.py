@@ -37,8 +37,8 @@ class SimulationParameters(BaseModel):
     """Parameters for token economy simulation."""
 
     # Initial conditions
-    initial_participants: int = Field(default=1000, description="Number of initial participants")
-    initial_token_supply: float = Field(default=1_000_000, description="Initial token supply")
+    initial_participants: int = Field(default=1000, ge=1, description="Number of initial participants")
+    initial_token_supply: float = Field(default=1_000_000, ge=0, description="Initial token supply")
 
     # Economic parameters
     token_velocity: float = Field(default=2.0, ge=0, le=10, description="Token velocity per year")

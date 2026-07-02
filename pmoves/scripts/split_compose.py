@@ -93,6 +93,7 @@ SERVICE_GROUPS = {
     ],
     "workers": [
         "extract-worker",
+        "spark-shape-worker",
         "pdf-ingest",
         "langextract",
         "notebook-sync",
@@ -118,6 +119,12 @@ SERVICE_GROUPS = {
         "botz-gateway",
         "pmoves-yt",
     ],
+    "juicefs": [
+        "juicefs-redis",
+        "juicefs-format",
+        "juicefs-gateway",
+        "juicefs-smoke",
+    ],
 }
 
 # All known services
@@ -132,6 +139,7 @@ OVERLAY_DESCRIPTIONS = {
     "ui": "UI Services",
     "workers": "Worker Services",
     "apps": "Applications",
+    "juicefs": "JuiceFS Object Store (S3 gateway PoC)",
 }
 
 
@@ -150,6 +158,14 @@ def make_header(name: str, desc: str) -> str:
 
 
 def main():
+    # Windows consoles default to cp1252 and choke on the ✓/✗ status glyphs
+    # (and any non-ASCII in the compose file). Force UTF-8 stdout so a routine
+    # regen / drift-check never crashes on encoding.
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
+
     compose_dir = Path(__file__).resolve().parent.parent
     src = compose_dir / "docker-compose.yml"
 
@@ -161,7 +177,7 @@ def main():
     yaml.preserve_quotes = True
     yaml.width = 200
 
-    with open(src) as f:
+    with open(src, encoding="utf-8") as f:
         data = yaml.load(f)
 
     services = data.get("services", {})
@@ -203,7 +219,7 @@ def main():
     )
 
     base_path = compose_dir / "docker-compose.base.yml"
-    with open(base_path, "w") as f:
+    with open(base_path, "w", encoding="utf-8", newline="\n") as f:
         f.write(base_header)
         yaml.dump(base, f)
     svc_count = sum(len(v) for v in SERVICE_GROUPS.values())
@@ -224,7 +240,7 @@ def main():
 
         header = make_header(group_name, OVERLAY_DESCRIPTIONS[group_name])
         out_path = compose_dir / f"docker-compose.{group_name}.yml"
-        with open(out_path, "w") as f:
+        with open(out_path, "w", encoding="utf-8", newline="\n") as f:
             f.write(header)
             yaml.dump(overlay, f)
         print(f"✓ docker-compose.{group_name}.yml ({len(overlay_services)} services)")
@@ -239,7 +255,7 @@ def main():
     print("\nValidating YAML syntax...")
     for fpath in sorted(compose_dir.glob("docker-compose.*.yml")):
         try:
-            with open(fpath) as f:
+            with open(fpath, encoding="utf-8") as f:
                 yaml.load(f)
             print(f"  ✓ {fpath.name}")
         except Exception as e:

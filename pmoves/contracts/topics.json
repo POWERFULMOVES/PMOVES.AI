@@ -152,6 +152,10 @@
     "tokenism.swarm.population.v1": {
       "schema": "schemas/tokenism/swarm.population.v1.schema.json"
     },
+    "tokenism.activation.pack.v1": {
+      "schema": "schemas/tokenism/activation.pack.v1.schema.json",
+      "description": "Signed Tokenism production activation artifact binding deployment manifest, endpoint references, dry-run evidence, rollback, and approvals."
+    },
     "tokenism.settlement.requested.v1": {
       "schema": "schemas/tokenism/settlement.requested.v1.schema.json",
       "description": "Signed Tokenism settlement batch planned from CGP attribution for Firefly/contract executors."
