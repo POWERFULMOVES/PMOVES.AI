@@ -1,0 +1,72 @@
+# NATS Bridge Configuration: Elder-Melchor Node
+# PMOVES.AI HERMES Agent Integration
+# Updated: 2026-06-04
+
+nats:
+  url: "nats://pmoves-nats:4222"
+  # Fallback: if pmoves-nats hostname not resolvable, try Tailscale IP
+  fallback_url: "nats://<TAILSCALE_IP_ELDER_MELCHOR>:4222"
+  
+  # Connection settings
+  reconnect_wait: 2
+  max_reconnect_attempts: 10
+  ping_interval: 30
+  
+  # Authentication (populated via CHIT secrets funnel)
+  # auth_token: ${NATS_AUTH_TOKEN}
+  
+# Subject mappings for HERMES Agent -> PMOVES mesh
+publish:
+  # Hermes gateway lifecycle events
+  - subject: "hermes.gateway.launched.v1"
+    description: "Hermes gateway started on this node"
+    payload: "{node_id, timestamp, port, profile}"
+    
+  - subject: "hermes.gateway.health.v1"
+    description: "Periodic health heartbeat"
+    payload: "{node_id, status, uptime_seconds, memory_mb}"
+    interval_seconds: 60
+    
+  - subject: "hermes.mcp.toolcall.v1"
+    description: "MCP tool invocation event"
+    payload: "{tool_name, args_hash, duration_ms, success}"
+    
+  - subject: "hermes.skill.curated.v1"
+    description: "Skill installed or updated"
+    payload: "{skill_name, version, source_url, installed_by}"
+    
+  - subject: "hermes.cron.executed.v1"
+    description: "Cron job finished execution"
+    payload: "{job_name, schedule, exit_code, output_length}"
+    
+  - subject: "hermes.delegate.completed.v1"
+    description: "Subagent delegation finished"
+    payload: "{task_id, parent_agent, child_agent, result_summary}"
+
+subscribe:
+  # PMOVES mesh events this node listens for
+  - subject: "p7.nats.launch"
+    description: "P7 stage manager launch signal"
+    action: "acknowledge presence"
+    
+  - subject: "p7.nats.session"
+    description: "P7 session coordination"
+    action: "join or leave session"
+    
+  - subject: "mesh.node.announce.v1"
+    description: "Other nodes announcing presence"
+    action: "update node registry"
+    
+  - subject: "inference.request.70b.v1"
+    description: "Request for 70B model inference"
+    action: "forward to Spark node if local insufficient"
+    forward_to: "pmoves-spark:11434"
+
+# JetStream (optional persistence)
+jetstream:
+  enabled: false  # Enable when pmoves-nats has JetStream configured
+  stream_name: "HERMES_EVENTS"
+  subjects: ["hermes.>"]
+  retention: "limits"
+  max_msgs: 10000
+  max_age: "24h"

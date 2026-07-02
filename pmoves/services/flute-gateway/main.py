@@ -49,6 +49,9 @@ from providers import (
     VoiceboxError,
     VoiceboxNoProfileError,
     VoiceboxProvider,
+    OmniVoiceBusyError,
+    OmniVoiceError,
+    OmniVoiceProvider,
     WhisperProvider,
     UltimateTTSError,
     UltimateTTSProvider,
@@ -64,8 +67,25 @@ from prosodic import (
     stitch_chunks,
 )
 
+# Voice "S1" profile registry (pmoves_core.voice_profiles, v5_16). No import cycle:
+# voice_registry never imports main.
+from voice_registry import (
+    ENGINE_VALUES,
+    REGISTRY_UPDATE_SUBJECT,
+    VoiceProfile,
+    VoiceRegistry,
+    grounding_contract,
+    select_provider_and_params,
+    validate_capability,
+    validate_grounding,
+)
+
 # Pipecat integration (optional - enable with PIPECAT_ENABLED=true)
-from pipecat.config import get_pipecat_config
+# NOTE: the local package is `flute_pipecat`, NOT `pipecat`. Naming it `pipecat`
+# would shadow the installed `pipecat-ai` dependency (same top-level name), so the
+# external `pipecat.pipeline.*` runtime imports (see the voice-agent route) would
+# resolve to this local package and raise ModuleNotFoundError.
+from flute_pipecat.config import get_pipecat_config
 PIPECAT_CONFIG = get_pipecat_config()
 
 # NATS service announcement integration
@@ -76,9 +96,9 @@ except ImportError:
     NATS_ANNOUNCE_AVAILABLE = False
 
 try:
-    from pipecat.transports import FluteFastAPIWebsocketTransport, FluteFastAPIWebsocketParams
-    from pipecat.pipelines import VoiceAgentConfig, build_voice_agent_pipeline
-    from pipecat.processors import TensorZeroLLMProcessor
+    from flute_pipecat.transports import FluteFastAPIWebsocketTransport, FluteFastAPIWebsocketParams
+    from flute_pipecat.pipelines import VoiceAgentConfig, build_voice_agent_pipeline
+    from flute_pipecat.processors import TensorZeroLLMProcessor
     PIPECAT_AVAILABLE = True
 except ImportError:
     PIPECAT_AVAILABLE = False
@@ -140,6 +160,9 @@ ULTIMATE_TTS_URL = os.getenv("ULTIMATE_TTS_URL", "http://host.docker.internal:78
 # Voicebox is a Pinokio-managed voice production service (default port 17493).
 # Set VOICEBOX_URL="" to disable. Auto-normalized for Docker contexts below.
 VOICEBOX_URL = os.getenv("VOICEBOX_URL", "http://host.docker.internal:17493")
+# OmniVoice is the production voice server (creator-operator/omnivoice_server.py).
+# Presence of OMNIVOICE_URL enables the provider; default points at its loopback bind.
+OMNIVOICE_URL = os.getenv("OMNIVOICE_URL", "http://127.0.0.1:8002")
 DEFAULT_PROVIDER = os.getenv("DEFAULT_VOICE_PROVIDER", "vibevoice")
 FLUTE_API_KEY = get_secret("FLUTE_API_KEY", "")
 
@@ -191,6 +214,8 @@ def _normalize_vibevoice_url(url: str) -> str:
 VIBEVOICE_URL = _normalize_vibevoice_url(VIBEVOICE_URL)
 # Voicebox runs on the host via Pinokio — same Docker-context normalization applies.
 VOICEBOX_URL = _normalize_vibevoice_url(VOICEBOX_URL)
+# OmniVoice runs on the host (loopback) — same Docker-context normalization applies.
+OMNIVOICE_URL = _normalize_vibevoice_url(OMNIVOICE_URL)
 
 # API Key authentication dependency
 async def verify_api_key(x_api_key: str = Header(None, alias="X-API-Key")):
@@ -234,9 +259,41 @@ vibevoice_provider: Optional[VibeVoiceProvider] = None
 whisper_provider: Optional[WhisperProvider] = None
 ultimate_tts_provider: Optional[UltimateTTSProvider] = None
 voicebox_provider: Optional[VoiceboxProvider] = None
+omnivoice_provider: Optional[OmniVoiceProvider] = None
 nats_client = None
 # Geometry-bus bridge (#1397): module-level singleton, instantiated on first use.
 geometry_bridge: Optional[GeometryBridge] = None
+# Voice "S1" registry (preloaded in lifespan; None until startup runs).
+voice_registry: Optional[VoiceRegistry] = None
+voice_registry_task: Optional[asyncio.Task] = None
+
+
+def _resolve_voice_profile(request: "SynthesizeRequest") -> bool:
+    """Spec §4 cascade step 1: explicit ``voice`` slug -> registry.
+
+    Mutates the REQUEST object in place (provider/engine/voice) so the value is
+    read by the downstream ``provider_name = request.provider or DEFAULT_PROVIDER``
+    assignment and the if/elif dispatch. Returns True when a profile matched, so
+    the caller can skip the persona/intent branch (voice slug wins the cascade).
+
+    No-op (returns False) when the registry is absent/unhealthy, ``voice`` is
+    unset, ``engine`` is already pinned, or the slug is unknown — preserving the
+    existing DEFAULT_PROVIDER behaviour (graceful degradation).
+    """
+    if voice_registry is None or not voice_registry.healthy or not request.voice or request.engine:
+        return False
+    profile = voice_registry.get(request.voice)
+    if profile is None:
+        return False
+    provider_name, params = select_provider_and_params(profile, DEFAULT_PROVIDER)
+    request.provider = provider_name
+    if params.get("engine"):
+        request.engine = params["engine"]
+    # The registry slug is NOT a provider-native voice. Replace it with the
+    # resolved provider voice, or CLEAR it (None) so the provider falls back to
+    # its own default — never leak the slug as a preset/ref_audio.
+    request.voice = params.get("voice")
+    return True
 
 
 async def _publish_chit_voice_event(
@@ -386,10 +443,45 @@ class ConfigResponse(BaseModel):
     features: Dict[str, bool]
 
 
+class VoiceProfileIn(BaseModel):
+    """Create/register payload for a voice profile (pmoves_core.voice_profiles)."""
+    name: str = Field(
+        ...,
+        # pydantic v2 uses `pattern=` (v1's `regex=`); enforce the v5_16 slug
+        # CHECK at input time so /v1/voice/profiles can't persist a bad slug.
+        pattern=r"^[a-zA-Z0-9_-]{3,64}$",
+        description="Slug selector (^[a-zA-Z0-9_-]{3,64}$)",
+    )
+    engine: str = Field(..., description="omnivoice|vibevoice|voicebox|ultimate_tts")
+    engine_specific: Dict[str, Any] = Field(default_factory=dict)
+    display_name: Optional[str] = None
+    description: Optional[str] = None
+    tags: List[str] = Field(default_factory=list)
+    grounding: Dict[str, Any] = Field(default_factory=dict)
+    ref_audio_path: Optional[str] = None
+    sample_rate_hz: int = 24000
+    rights_basis: Optional[str] = None
+
+
+class ValidateRequest(BaseModel):
+    """Validate a prospective engine/engine_specific/grounding combination."""
+    engine: str
+    engine_specific: Dict[str, Any] = Field(default_factory=dict)
+    grounding: Dict[str, Any] = Field(default_factory=dict)
+
+
+class ValidateResponse(BaseModel):
+    """Result of /v1/voice/validate."""
+    valid: bool
+    errors: List[str] = Field(default_factory=list)
+    warnings: List[str] = Field(default_factory=list)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan - startup and shutdown with NATS service announcement."""
-    global vibevoice_provider, whisper_provider, ultimate_tts_provider, voicebox_provider, nats_client
+    global vibevoice_provider, whisper_provider, ultimate_tts_provider, voicebox_provider, omnivoice_provider, nats_client
+    global voice_registry, voice_registry_task
 
     logger.info("Starting Flute Gateway...")
 
@@ -430,6 +522,14 @@ async def lifespan(app: FastAPI):
         voicebox_provider = None
         logger.info("Voicebox disabled (set VOICEBOX_URL to enable).")
 
+    # Initialize OmniVoice provider (optional)
+    if OMNIVOICE_URL:
+        omnivoice_provider = OmniVoiceProvider(OMNIVOICE_URL)
+        logger.info("OmniVoice provider enabled at %s", OMNIVOICE_URL)
+    else:
+        omnivoice_provider = None
+        logger.info("OmniVoice disabled (set OMNIVOICE_URL to enable).")
+
     # Initialize NATS (optional)
     try:
         import nats
@@ -466,6 +566,15 @@ async def lifespan(app: FastAPI):
         _cgp_task = asyncio.create_task(_cgp_consumer_main())
         logger.info("CGP consumer started on subject %s", cgp_subject())
 
+    # Preload the voice "S1" registry. load() never raises — an unhealthy/empty
+    # registry simply leaves the existing DEFAULT_PROVIDER cascade unchanged.
+    voice_registry = VoiceRegistry(SUPABASE_URL, SUPABASE_KEY)
+    _vr_loaded = await voice_registry.load()
+    logger.info("voice_registry: healthy=%s count=%d", _vr_loaded, voice_registry.count)
+    voice_registry_task = asyncio.create_task(voice_registry.run_ttl_loop())
+    if nats_client is not None:
+        await voice_registry.subscribe(nats_client)  # voice.registry.update.v1
+
     logger.info("Flute Gateway started successfully")
     yield
 
@@ -475,6 +584,12 @@ async def lifespan(app: FastAPI):
         _cgp_task.cancel()
         try:
             await _cgp_task
+        except asyncio.CancelledError:
+            pass
+    if voice_registry_task and not voice_registry_task.done():
+        voice_registry_task.cancel()
+        try:
+            await voice_registry_task
         except asyncio.CancelledError:
             pass
     if nats_client:
@@ -520,6 +635,12 @@ async def health_check():
     else:
         providers["voicebox"] = False
 
+    # Check OmniVoice
+    if omnivoice_provider:
+        providers["omnivoice"] = await omnivoice_provider.health_check()
+    else:
+        providers["omnivoice"] = False
+
     # Check NATS
     nats_status = "connected" if nats_client and nats_client.is_connected else "disconnected"
 
@@ -557,6 +678,8 @@ async def get_config():
         providers.append("ultimate_tts")
     if voicebox_provider:
         providers.append("voicebox")
+    if omnivoice_provider:
+        providers.append("omnivoice")
 
     return ConfigResponse(
         providers=providers,
@@ -570,6 +693,7 @@ async def get_config():
             "stt_stream": False,  # TODO: Implement
             "voice_cloning": False,  # TODO: Implement
             "personas": True,
+            "voice_profiles": bool(voice_registry and voice_registry.healthy),
         }
     )
 
@@ -586,15 +710,18 @@ async def synthesize_speech(request: SynthesizeRequest):
     import time
     start_time = time.time()
 
-    # Resolve persona/intent to engine if not explicitly set
-    if (request.persona_id or request.intent) and not request.engine:
+    # Spec §4 cascade: explicit voice slug -> registry (mutates request in place),
+    # else fall through to persona/intent resolution if no profile matched.
+    if not _resolve_voice_profile(request) and (request.persona_id or request.intent) and not request.engine:
         from persona_selector import resolve_persona_engine
         resolved_engine, extra_kwargs = await resolve_persona_engine(
             request.persona_id, request.intent,
         )
         request.engine = resolved_engine
         if not request.provider:
-            request.provider = "ultimate_tts"
+            # A persona/intent that resolves to engine "omnivoice" routes to the
+            # OmniVoice provider; everything else defaults to ultimate_tts.
+            request.provider = "omnivoice" if resolved_engine == "omnivoice" else "ultimate_tts"
         if not request.voice and "voice" in extra_kwargs:
             request.voice = extra_kwargs.pop("voice")
 
@@ -695,6 +822,43 @@ async def synthesize_speech(request: SynthesizeRequest):
                 sample_rate=sample_rate,
                 format="wav"
             )
+        elif provider_name == "omnivoice" and omnivoice_provider:
+            audio_data = await omnivoice_provider.synthesize(
+                text=request.text,
+                voice=request.voice,
+                instruct=request.engine if request.engine and request.engine != "omnivoice" else None,
+            )
+            if not audio_data:
+                raise HTTPException(status_code=502, detail="OmniVoice returned empty audio.")
+            duration = time.time() - start_time
+            TTS_DURATION.labels(provider="omnivoice").observe(duration)
+
+            # Parse WAV header to derive actual sample rate and duration
+            try:
+                with io.BytesIO(audio_data) as buf:
+                    with wave.open(buf, "rb") as wf:
+                        sample_rate = wf.getframerate()
+                        frame_count = wf.getnframes()
+                audio_duration = frame_count / sample_rate
+            except wave.Error:
+                audio_duration = len(audio_data) / 48000  # fallback
+                sample_rate = 24000
+
+            REQUESTS_TOTAL.labels(endpoint="/v1/voice/synthesize", status="200").inc()
+
+            # Publish CHIT voice attribution event (best-effort)
+            await _publish_chit_voice_event(
+                provider="omnivoice",
+                text_length=len(request.text),
+                audio_duration=audio_duration,
+                voice=request.voice,
+            )
+
+            return SynthesizeResponse(
+                duration_seconds=audio_duration,
+                sample_rate=sample_rate,
+                format="wav"
+            )
         else:
             if provider_name == "vibevoice" and not vibevoice_provider:
                 raise HTTPException(
@@ -711,13 +875,22 @@ async def synthesize_speech(request: SynthesizeRequest):
                     status_code=503,
                     detail="Voicebox provider not configured (set VOICEBOX_URL to the running Voicebox server URL).",
                 )
+            if provider_name == "omnivoice" and not omnivoice_provider:
+                raise HTTPException(
+                    status_code=503,
+                    detail="OmniVoice provider not configured (set OMNIVOICE_URL to the running OmniVoice server URL).",
+                )
             raise HTTPException(status_code=400, detail=f"Provider '{provider_name}' not available")
 
+    except OmniVoiceBusyError as exc:
+        # OmniVoice model still loading into VRAM — surface as 503 so callers retry.
+        REQUESTS_TOTAL.labels(endpoint="/v1/voice/synthesize", status="503").inc()
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     except VoiceboxNoProfileError as exc:
         # Voicebox first-run not complete — distinct status so operators can act
         REQUESTS_TOTAL.labels(endpoint="/v1/voice/synthesize", status="503").inc()
         raise HTTPException(status_code=503, detail=str(exc)) from exc
-    except (VibeVoiceBusyError, VibeVoiceNoAudioError, UltimateTTSError, VoiceboxBusyError, VoiceboxError) as exc:
+    except (VibeVoiceBusyError, VibeVoiceNoAudioError, UltimateTTSError, VoiceboxBusyError, VoiceboxError, OmniVoiceError) as exc:
         REQUESTS_TOTAL.labels(endpoint="/v1/voice/synthesize", status="502").inc()
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     except HTTPException as exc:
@@ -740,15 +913,18 @@ async def synthesize_speech_audio(request: SynthesizeRequest):
     - `output_format=wav` returns `audio/wav` (PCM16 mono, 24kHz)
     - `output_format=pcm` returns raw PCM16 bytes (`application/octet-stream`)
     """
-    # Resolve persona/intent to engine if not explicitly set
-    if (request.persona_id or request.intent) and not request.engine:
+    # Spec §4 cascade: explicit voice slug -> registry (mutates request in place),
+    # else fall through to persona/intent resolution if no profile matched.
+    if not _resolve_voice_profile(request) and (request.persona_id or request.intent) and not request.engine:
         from persona_selector import resolve_persona_engine
         resolved_engine, extra_kwargs = await resolve_persona_engine(
             request.persona_id, request.intent,
         )
         request.engine = resolved_engine
         if not request.provider:
-            request.provider = "ultimate_tts"
+            # A persona/intent that resolves to engine "omnivoice" routes to the
+            # OmniVoice provider; everything else defaults to ultimate_tts.
+            request.provider = "omnivoice" if resolved_engine == "omnivoice" else "ultimate_tts"
         if not request.voice and "voice" in extra_kwargs:
             request.voice = extra_kwargs.pop("voice")
 
@@ -838,6 +1014,34 @@ async def synthesize_speech_audio(request: SynthesizeRequest):
                 headers={"Content-Disposition": 'attachment; filename="voicebox.wav"'},
             )
 
+        elif provider_name == "omnivoice" and omnivoice_provider:
+            wav_bytes = await omnivoice_provider.synthesize(
+                text=request.text,
+                voice=request.voice,
+                instruct=request.engine if request.engine and request.engine != "omnivoice" else None,
+            )
+            if not wav_bytes:
+                raise HTTPException(status_code=502, detail="OmniVoice returned empty audio.")
+
+            if output_format == "pcm":
+                # Extract PCM from WAV
+                try:
+                    with io.BytesIO(wav_bytes) as buf:
+                        with wave.open(buf, "rb") as wf:
+                            pcm_data = wf.readframes(wf.getnframes())
+                    REQUESTS_TOTAL.labels(endpoint="/v1/voice/synthesize/audio", status="200").inc()
+                    return Response(content=pcm_data, media_type="application/octet-stream")
+                except wave.Error:
+                    REQUESTS_TOTAL.labels(endpoint="/v1/voice/synthesize/audio", status="200").inc()
+                    return Response(content=wav_bytes, media_type="application/octet-stream")
+
+            REQUESTS_TOTAL.labels(endpoint="/v1/voice/synthesize/audio", status="200").inc()
+            return Response(
+                content=wav_bytes,
+                media_type="audio/wav",
+                headers={"Content-Disposition": 'attachment; filename="omnivoice.wav"'},
+            )
+
         if provider_name == "vibevoice" and not vibevoice_provider:
             raise HTTPException(
                 status_code=503,
@@ -853,11 +1057,19 @@ async def synthesize_speech_audio(request: SynthesizeRequest):
                 status_code=503,
                 detail="Voicebox provider not configured (set VOICEBOX_URL to the running Voicebox server URL).",
             )
+        if provider_name == "omnivoice" and not omnivoice_provider:
+            raise HTTPException(
+                status_code=503,
+                detail="OmniVoice provider not configured (set OMNIVOICE_URL to the running server URL).",
+            )
         raise HTTPException(status_code=400, detail=f"Provider '{provider_name}' not available")
     except VoiceboxNoProfileError as exc:
         REQUESTS_TOTAL.labels(endpoint="/v1/voice/synthesize/audio", status="503").inc()
         raise HTTPException(status_code=503, detail=str(exc)) from exc
-    except (VibeVoiceBusyError, VibeVoiceNoAudioError, UltimateTTSError, VoiceboxBusyError, VoiceboxError) as exc:
+    except OmniVoiceBusyError as exc:
+        REQUESTS_TOTAL.labels(endpoint="/v1/voice/synthesize/audio", status="503").inc()
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except (VibeVoiceBusyError, VibeVoiceNoAudioError, UltimateTTSError, VoiceboxBusyError, VoiceboxError, OmniVoiceError) as exc:
         REQUESTS_TOTAL.labels(endpoint="/v1/voice/synthesize/audio", status="502").inc()
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     except HTTPException as exc:
@@ -881,14 +1093,18 @@ async def synthesize_prosodic_speech(request: SynthesizeRequest):
 
     The prosodic timeline includes BPM encoding compatible with CHIT CGP events.
     """
-    # Resolve persona/intent to engine if not explicitly set
-    if (request.persona_id or request.intent) and not request.engine:
+    # Spec §4 cascade: explicit voice slug -> registry (mutates request in place),
+    # else fall through to persona/intent resolution if no profile matched.
+    if not _resolve_voice_profile(request) and (request.persona_id or request.intent) and not request.engine:
         from persona_selector import resolve_persona_engine
         resolved_engine, extra_kwargs = await resolve_persona_engine(
             request.persona_id, request.intent,
         )
         request.engine = resolved_engine
         if not request.provider:
+            # Prosodic synthesis is ultimate_tts-only (BPM chunking is an
+            # ultimate_tts-specific feature), so always route there regardless of
+            # the resolved engine — an omnivoice persona falls back to ultimate_tts.
             request.provider = "ultimate_tts"
         if not request.voice and "voice" in extra_kwargs:
             request.voice = extra_kwargs.pop("voice")
@@ -1123,6 +1339,125 @@ async def get_persona(persona_id: str) -> Dict[str, Any]:
         raise HTTPException(status_code=500, detail="Failed to fetch persona") from exc
 
 
+# Voice profile registry endpoints (S1: pmoves_core.voice_profiles)
+@app.get("/v1/voice/profiles", dependencies=[Depends(verify_api_key)])
+async def list_voice_profiles(
+    engine: Optional[str] = None,
+    tag: Optional[str] = None,
+    rights: Optional[str] = None,
+) -> Dict[str, Any]:
+    """List voice profiles from the in-memory registry, optionally filtered.
+
+    Returns ``{"profiles": [], "healthy": False}`` (HTTP 200) when the registry
+    is absent/unhealthy (graceful degradation — table not migrated, Supabase
+    unreachable, etc.).
+    """
+    if voice_registry is None or not voice_registry.healthy:
+        REQUESTS_TOTAL.labels(endpoint="/v1/voice/profiles", status="200").inc()
+        return {"profiles": [], "healthy": False, "count": 0}
+    rows = voice_registry.list(engine=engine, tag=tag, rights=rights)
+    REQUESTS_TOTAL.labels(endpoint="/v1/voice/profiles", status="200").inc()
+    return {"profiles": [p.raw for p in rows], "healthy": True, "count": len(rows)}
+
+
+@app.get("/v1/voice/profiles/{name}", dependencies=[Depends(verify_api_key)])
+async def get_voice_profile(name: str) -> Dict[str, Any]:
+    """Resolve a single voice profile by slug."""
+    profile = voice_registry.get(name) if voice_registry else None
+    if profile is None:
+        raise HTTPException(status_code=404, detail="voice profile not found")
+    REQUESTS_TOTAL.labels(endpoint="/v1/voice/profiles/{name}", status="200").inc()
+    return profile.raw
+
+
+@app.post("/v1/voice/profiles", status_code=201, dependencies=[Depends(verify_api_key)])
+async def create_voice_profile(body: VoiceProfileIn) -> Dict[str, Any]:
+    """Create/register a voice profile (service-gated via verify_api_key).
+
+    Validates the engine + capability matrix + grounding contract before any
+    Supabase write. Writes to pmoves_core via PostgREST (Content-Profile header),
+    then warms the in-memory cache so the new slug resolves immediately.
+    """
+    if body.engine not in ENGINE_VALUES:
+        raise HTTPException(status_code=422, detail=f"engine must be one of {ENGINE_VALUES}")
+    cap_errors = validate_capability(body.engine, body.engine_specific)
+    g_errors, g_warnings = await validate_grounding(
+        body.grounding, supabase_url=SUPABASE_URL, supabase_key=SUPABASE_KEY,
+    )
+    if cap_errors or g_errors:
+        raise HTTPException(
+            status_code=422,
+            detail={"capability": cap_errors, "grounding": g_errors, "warnings": g_warnings},
+        )
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.post(
+                f"{SUPABASE_URL}/rest/v1/voice_profiles",
+                headers={
+                    "apikey": SUPABASE_KEY,
+                    "Authorization": f"Bearer {SUPABASE_KEY}",
+                    "Content-Type": "application/json",
+                    # pmoves_core schema is not the default PostgREST profile.
+                    "Content-Profile": "pmoves_core",
+                    "Accept-Profile": "pmoves_core",
+                    "Prefer": "return=representation",
+                },
+                json=body.model_dump(exclude_none=True),
+            )
+    except httpx.HTTPError as exc:
+        REQUESTS_TOTAL.labels(endpoint="/v1/voice/profiles", status="502").inc()
+        raise HTTPException(status_code=502, detail=f"voice_profiles write failed: {exc}") from exc
+
+    if resp.status_code not in (200, 201):
+        REQUESTS_TOTAL.labels(endpoint="/v1/voice/profiles", status=str(resp.status_code)).inc()
+        raise HTTPException(status_code=resp.status_code, detail=(resp.text or "")[:300])
+
+    payload = resp.json()
+    row = payload[0] if isinstance(payload, list) and payload else payload
+    if voice_registry is not None and isinstance(row, dict):
+        try:
+            voice_registry.upsert_local(VoiceProfile.from_row(row))
+        except (KeyError, TypeError):
+            logger.warning("voice_registry: created row missing fields, cache not warmed")
+    # Notify peer gateway instances to refresh so they don't serve stale data
+    # until their TTL elapses. Fire-and-forget on the shared invalidation subject
+    # (this instance is subscribed too, which reconciles its warm cache from DB).
+    if nats_client is not None and isinstance(row, dict):
+        try:
+            await nats_client.publish(
+                REGISTRY_UPDATE_SUBJECT,
+                json.dumps({
+                    "op": "upsert",
+                    "name": row.get("name"),
+                    "ts": datetime.now(timezone.utc).isoformat(),
+                }).encode("utf-8"),
+            )
+        except Exception as exc:  # best-effort; the TTL loop is the safety net
+            logger.warning("voice_registry: failed to publish %s (%s)", REGISTRY_UPDATE_SUBJECT, exc)
+    REQUESTS_TOTAL.labels(endpoint="/v1/voice/profiles", status="201").inc()
+    return row
+
+
+@app.get("/v1/voice/validate")
+async def voice_validate_contract() -> Dict[str, Any]:
+    """Introspection: engines + the grounding contract (keys -> substrate PKs)."""
+    REQUESTS_TOTAL.labels(endpoint="/v1/voice/validate", status="200").inc()
+    return grounding_contract()
+
+
+@app.post("/v1/voice/validate", dependencies=[Depends(verify_api_key)], response_model=ValidateResponse)
+async def voice_validate(body: ValidateRequest) -> ValidateResponse:
+    """Validate engine capability + grounding contract (grounding keys -> real PKs)."""
+    errors = validate_capability(body.engine, body.engine_specific)
+    g_errors, g_warnings = await validate_grounding(
+        body.grounding, supabase_url=SUPABASE_URL, supabase_key=SUPABASE_KEY,
+    )
+    errors = list(errors) + list(g_errors)
+    REQUESTS_TOTAL.labels(endpoint="/v1/voice/validate", status="200").inc()
+    return ValidateResponse(valid=not errors, errors=errors, warnings=g_warnings)
+
+
 # WebSocket TTS streaming endpoint
 @app.websocket("/v1/voice/stream/tts")
 async def websocket_tts(websocket: WebSocket):
@@ -1179,6 +1514,74 @@ async def websocket_tts(websocket: WebSocket):
             pass  # WebSocket already closed
     finally:
         await websocket.close()
+
+
+@app.websocket("/v1/voice/agent")
+async def websocket_voice_agent(websocket: WebSocket):
+    """Full-duplex realtime voice agent.
+
+    Pipeline: mic PCM16 in → VAD → STT (Whisper) → LLM (TensorZero) →
+    TTS (VibeVoice) → PCM16 out. This is the entry point that connects a
+    microphone client to the pre-built pipecat pipeline.
+
+    Gated behind ``PIPECAT_ENABLED=true`` *and* pipecat-ai being installed.
+    When disabled/unavailable the socket is accepted then closed with a clear
+    reason, so clients fail fast instead of hanging. Off by default — wiring
+    this route changes no existing behaviour until the operator opts in.
+
+    Client streams binary PCM16 frames (``PIPECAT_SAMPLE_RATE``, default 24 kHz,
+    mono). Server streams binary PCM16 audio + JSON status frames.
+    """
+    await websocket.accept()
+
+    if not PIPECAT_CONFIG.enabled:
+        await websocket.send_json({"type": "error", "message": "Realtime voice agent disabled. Set PIPECAT_ENABLED=true to enable."})
+        await websocket.close()
+        return
+    if not PIPECAT_AVAILABLE:
+        await websocket.send_json({"type": "error", "message": "pipecat-ai not installed; realtime voice agent unavailable."})
+        await websocket.close()
+        return
+    if whisper_provider is None or vibevoice_provider is None:
+        await websocket.send_json({"type": "error", "message": "STT/TTS providers not ready (Whisper + VibeVoice required)."})
+        await websocket.close()
+        return
+
+    try:
+        from pipecat.pipeline.runner import PipelineRunner
+        from pipecat.pipeline.task import PipelineTask
+
+        params = FluteFastAPIWebsocketParams(
+            sample_rate=PIPECAT_CONFIG.sample_rate,
+            vad_enabled=True,
+            vad_start_threshold=PIPECAT_CONFIG.vad_threshold,
+        )
+        transport = FluteFastAPIWebsocketTransport(websocket, params)
+        pipeline = await build_voice_agent_pipeline(
+            transport,
+            VoiceAgentConfig(),
+            vibevoice_provider=vibevoice_provider,
+            whisper_provider=whisper_provider,
+            tensorzero_url=PIPECAT_CONFIG.tensorzero_url,
+        )
+        await websocket.send_json({
+            "type": "ready",
+            "stt": "whisper",
+            "tts": "vibevoice",
+            "llm": PIPECAT_CONFIG.default_llm_model,
+        })
+        await PipelineRunner().run(PipelineTask(pipeline))
+    except Exception:
+        logger.exception("Voice agent pipeline error")
+        try:
+            await websocket.send_json({"type": "error", "message": "Voice agent pipeline error"})
+        except Exception:
+            pass  # WebSocket already closed
+    finally:
+        try:
+            await websocket.close()
+        except Exception:
+            pass
 
 
 # Prometheus metrics endpoint

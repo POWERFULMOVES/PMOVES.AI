@@ -1,177 +1,145 @@
+// PMOVES.AI Tailscale ACL policy - production hardening stance (HuJSON).
+// Source of truth: applied to the tailnet by .github/workflows/deploy-tailscale-acl.yml
+// (gitops-pusher rejects non-standard fields like "$schema"/"_comment"/per-rule
+// "comment", so all documentation here is HuJSON // comments).
 {
-  "$schema": "https://tailscale.com/api/v2/tailnet/-/acl",
-  "_comment": "PMOVES.AI Tailscale ACL policy \u2014 production hardening stance. Apply at https://login.tailscale.com/admin/acls",
-  "tagOwners": {
-    "tag:pmoves": [
-      "autogroup:admin"
-    ],
-    "tag:gpu": [
-      "autogroup:admin"
-    ],
-    "tag:vps": [
-      "autogroup:admin"
-    ],
-    "tag:lab": [
-      "autogroup:admin"
-    ],
-    "tag:exit": [
-      "autogroup:admin"
-    ],
-    "tag:partner": [
-      "autogroup:admin"
-    ],
-    "tag:guest": [
-      "autogroup:admin"
-    ]
+  // group:tenants = third-party tenant USERS subject to SSH check-mode (browser
+  // re-auth) on their OWN devices. Owner/admins are intentionally excluded so fleet
+  // ops never hit re-auth. Empty until tenants enroll (an empty group means the SSH
+  // check rule below matches no one yet).
+  "groups": {
+    "group:tenants": []
   },
+
+  "tagOwners": {
+    "tag:pmoves": ["autogroup:admin"],
+    "tag:gpu": ["autogroup:admin"],
+    "tag:vps": ["autogroup:admin"],
+    "tag:lab": ["autogroup:admin"],
+    "tag:exit": ["autogroup:admin"],
+    "tag:partner": ["autogroup:admin"],
+    "tag:guest": ["autogroup:admin"]
+  },
+
   "acls": [
+    // Full mesh: all PMOVES nodes can reach each other on all ports.
     {
       "action": "accept",
-      "src": [
-        "tag:pmoves"
-      ],
-      "dst": [
-        "tag:pmoves:*"
-      ],
-      "comment": "Full mesh: all PMOVES nodes can reach each other on all ports"
+      "src": ["tag:pmoves"],
+      "dst": ["tag:pmoves:*"]
     },
+    // Lab nodes can reach GPU nodes for inference.
     {
       "action": "accept",
-      "src": [
-        "tag:lab"
-      ],
-      "dst": [
-        "tag:gpu:*"
-      ],
-      "comment": "Lab nodes can reach GPU nodes for inference"
+      "src": ["tag:lab"],
+      "dst": ["tag:gpu:*"]
     },
+    // Partner access: Agent Zero API + UI, TensorZero Gateway only.
     {
       "action": "accept",
-      "src": [
-        "tag:partner"
-      ],
-      "dst": [
-        "tag:gpu:3030",
-        "tag:gpu:8080",
-        "tag:gpu:8081"
-      ],
-      "comment": "Partner access: Agent Zero API + UI, TensorZero Gateway only"
+      "src": ["tag:partner"],
+      "dst": ["tag:gpu:3030", "tag:gpu:8080", "tag:gpu:8081"]
     },
+    // Guest demo: Agent Zero UI only.
     {
       "action": "accept",
-      "src": [
+      "src": ["tag:guest"],
+      "dst": ["tag:gpu:8081"]
+    },
+    // Exit node consume: pmoves + lab only. tag:partner and tag:guest intentionally
+    // excluded - partner is limited to 3030/8080/8081 and guest to 8081 per the
+    // RUSTDESK_SELF_HOSTED.md role matrix; full internet egress would be a privilege
+    // escalation vs the documented role limits.
+    {
+      "action": "accept",
+      "src": ["tag:pmoves", "tag:lab"],
+      "dst": ["autogroup:internet:*"]
+    },
+    // DGX Spark: Ollama inference + NIM API.
+    {
+      "action": "accept",
+      "src": ["tag:pmoves"],
+      "dst": ["tag:gpu:11434", "tag:gpu:8200"]
+    },
+    // DGX Spark: Lab nodes can access inference.
+    {
+      "action": "accept",
+      "src": ["tag:lab"],
+      "dst": ["tag:gpu:11434", "tag:gpu:8200"]
+    },
+    // GPU nodes can reach PMOVES mesh services (NATS, Supabase, etc).
+    {
+      "action": "accept",
+      "src": ["tag:gpu"],
+      "dst": ["tag:pmoves:*"]
+    },
+    // Admins + Owner (DARKXSIDE) have full network access. Owner is listed explicitly
+    // because Tailscale SSH requires BOTH a network-access rule (this) AND an ssh rule;
+    // the owner is distinct from autogroup:admin, so without owner here the SSH
+    // exemption below is denied at the network layer (port 22 never reached).
+    {
+      "action": "accept",
+      "src": ["autogroup:admin", "autogroup:owner"],
+      "dst": ["*:*"]
+    }
+  ],
+
+  "ssh": [
+    // SSH between PMOVES nodes - non-root only for hardening.
+    {
+      "action": "accept",
+      "src": ["tag:pmoves"],
+      "dst": ["tag:pmoves"],
+      "users": ["autogroup:nonroot"]
+    },
+    // Admin + Owner SSH (root allowed for provisioning). Owner role is DISTINCT from
+    // Admin and must be listed explicitly, else owner SSH falls through to the tenant
+    // check rule below. SSH dst does NOT accept the "*" wildcard (only tags +
+    // autogroup:self, unlike network ACLs which take "*:*"), so the fleet is enumerated
+    // by tag. autogroup:self lets admins/owner reach their own untagged devices.
+    {
+      "action": "accept",
+      "src": ["autogroup:admin", "autogroup:owner"],
+      "dst": [
+        "autogroup:self",
+        "tag:pmoves",
+        "tag:gpu",
+        "tag:vps",
+        "tag:lab",
+        "tag:exit",
+        "tag:partner",
         "tag:guest"
       ],
-      "dst": [
-        "tag:gpu:8081"
-      ],
-      "comment": "Guest demo: Agent Zero UI only"
+      "users": ["root", "autogroup:nonroot"]
     },
+    // Tenants SSH into their OWN devices in check mode (browser re-auth). checkPeriod
+    // omitted: it is Premium/Enterprise-gated in the policy-syntax reference and the
+    // value we wanted (12h) is already the default, so omitting it keeps the policy
+    // applyable on Standard/free tailnets. Scoped to group:tenants, NOT
+    // autogroup:member, because Tailscale evaluates check BEFORE accept
+    // (most-restrictive-first, regardless of rule order) - so excluding owner/admins
+    // from this src is the only way to exempt fleet ops from re-auth.
     {
-      "action": "accept",
-      "src": [
-        "tag:pmoves",
-        "tag:lab"
-      ],
-      "dst": [
-        "autogroup:internet:*"
-      ],
-      "comment": "Exit node consume: pmoves + lab only. tag:partner and tag:guest intentionally excluded — partner is limited to 3030/8080/8081 and guest to 8081 per RUSTDESK_SELF_HOSTED.md role matrix; granting them full internet egress would be a privilege escalation vs the documented role limits."
-    },
-    {
-      "action": "accept",
-      "src": [
-        "tag:pmoves"
-      ],
-      "dst": [
-        "tag:gpu:11434",
-        "tag:gpu:8200"
-      ],
-      "comment": "DGX Spark: Ollama inference + NIM API"
-    },
-    {
-      "action": "accept",
-      "src": [
-        "tag:lab"
-      ],
-      "dst": [
-        "tag:gpu:11434",
-        "tag:gpu:8200"
-      ],
-      "comment": "DGX Spark: Lab nodes can access inference"
-    },
-    {
-      "action": "accept",
-      "src": [
-        "tag:gpu"
-      ],
-      "dst": [
-        "tag:pmoves:*"
-      ],
-      "comment": "GPU nodes can reach PMOVES mesh services (NATS, Supabase, etc)"
-    },
-    {
-      "action": "accept",
-      "src": [
-        "autogroup:admin"
-      ],
-      "dst": [
-        "*:*"
-      ],
-      "comment": "Admins (DARKXSIDE) have full access"
+      "action": "check",
+      "src": ["group:tenants"],
+      "dst": ["autogroup:self"],
+      "users": ["autogroup:nonroot", "root"]
     }
   ],
-  "ssh": [
-    {
-      "action": "accept",
-      "src": [
-        "tag:pmoves"
-      ],
-      "dst": [
-        "tag:pmoves"
-      ],
-      "users": [
-        "autogroup:nonroot"
-      ],
-      "comment": "SSH between PMOVES nodes \u2014 non-root only for hardening"
-    },
-    {
-      "action": "accept",
-      "src": [
-        "autogroup:admin"
-      ],
-      "dst": [
-        "*"
-      ],
-      "users": [
-        "root",
-        "autogroup:nonroot"
-      ],
-      "comment": "Admin SSH access (root allowed for provisioning)"
-    }
-  ],
+
   "nodeAttrs": [
+    // Exit nodes can use Tailscale Funnel for public ingress.
     {
-      "target": [
-        "tag:exit"
-      ],
-      "attr": [
-        "funnel"
-      ],
-      "comment": "Exit nodes can use Tailscale Funnel for public ingress"
+      "target": ["tag:exit"],
+      "attr": ["funnel"]
     }
   ],
+
   "autoApprovers": {
-    "exitNode": [
-      "tag:exit"
-    ],
+    "exitNode": ["tag:exit"],
     "routes": {
-      "0.0.0.0/0": [
-        "tag:exit"
-      ],
-      "::/0": [
-        "tag:exit"
-      ]
+      "0.0.0.0/0": ["tag:exit"],
+      "::/0": ["tag:exit"]
     }
   }
 }

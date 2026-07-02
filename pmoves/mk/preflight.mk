@@ -1,4 +1,4 @@
-.PHONY: env-bootstrap-lite env-setup env-check preflight flight-check flight-check-retro preflight-retro showtime bringup-showtime smoke-showtime showtime-links showtime-links-open showtime-links-strict submodule-integrity submodule-layer-validate submodule-layer-validate-one submodule-layer-validate-all submodule-layer-validate-all-strict submodule-layer-validate-strict submodule-branch-policy-check audit-layers audit-layers-static audit-layers-runtime ci-runners-check ci-runners-check-strict ci-runners-map ci-runners-map-strict ci-runners-lockdown ci-runners-lockdown-strict ci-runners-local-cert-up ci-runners-local-cert-down ci-runners-local-cert-status ci-queue-sitrep ci-queue-drain-nonpr ci-queue-drain-nonpr-apply skill-registry-validate auth-alignment auth-alignment-strict topology-chit-gate topology-chit-gate-strict pr-monitor pr-monitor-strict pr-monitor-chit-packet pr-trim-analyze pr-trim-resolve pr-trim-report pr-trim floos-status floos-pr-monitor-validate floos-pr-monitor-resolve floos-pr-monitor-run-dry chit-flow-pr-monitor chit-flow-pr-monitor-strict ports-resolve sign-trail naming-drift-check naming-drift-strict docker-hub-inject
+.PHONY: env-bootstrap-lite env-setup env-check preflight flight-check flight-check-retro preflight-retro showtime bringup-showtime smoke-showtime showtime-links showtime-links-open showtime-links-strict submodule-integrity submodule-layer-validate submodule-layer-validate-one submodule-layer-validate-all submodule-layer-validate-all-strict submodule-layer-validate-strict submodule-branch-policy-check audit-layers audit-layers-static audit-layers-runtime ci-runners-check ci-runners-check-strict ci-runners-map ci-runners-map-strict ci-runners-lockdown ci-runners-lockdown-strict ci-runners-local-cert-up ci-runners-local-cert-down ci-runners-local-cert-status ci-queue-sitrep ci-queue-drain-nonpr ci-queue-drain-nonpr-apply skill-registry-validate auth-alignment auth-alignment-strict topology-chit-gate topology-chit-gate-strict pr-monitor pr-monitor-strict pr-monitor-chit-packet pr-trim-analyze pr-trim-resolve pr-trim-report pr-trim floos-status floos-pr-monitor-validate floos-pr-monitor-resolve floos-pr-monitor-run-dry chit-flow-pr-monitor chit-flow-pr-monitor-strict ports-resolve sign-trail naming-drift-check naming-drift-strict docker-hub-inject showtime-update
 
 # Force UTF-8 output on Windows (cp1252 chokes on Unicode/emoji in pr-trim et al.)
 export PYTHONIOENCODING ?= utf-8
@@ -149,6 +149,14 @@ preflight: ## Full preflight: env check + quick readiness + Codex health summary
 	@$(MAKE) --no-print-directory codex-health-quick || true
 
 showtime: bringup-showtime ## Alias for bringup-showtime
+
+# COMPOSE_FILE so the updater's `docker compose pull` resolves services that live in
+# overlays (loki → monitoring, open-notebook → its own file) and the base stack
+# (cipher-api, supabase-postgrest, …). Without it, pull only sees docker-compose.yml
+# and can't resolve the default blast-radius targets. ':' separator (Linux runners).
+SHOWTIME_COMPOSE_FILE := docker-compose.yml:docker-compose.open-notebook.yml:monitoring/docker-compose.monitoring.yml
+showtime-update: ## CHIT+OAuth-gated, blast-radius-scoped showtime updater (data-tier safe default)
+	@COMPOSE_FILE="$(SHOWTIME_COMPOSE_FILE)" COMPOSE_PATH_SEPARATOR=":" $(PRECHECK_PY) tools/showtime_trigger_update.py $(ARGS)
 
 showtime-links: ## Build clickable UI/API verification pages and worker snapshot
 	@$(PRECHECK_PY) tools/showtime_verify_links.py $(ARGS)

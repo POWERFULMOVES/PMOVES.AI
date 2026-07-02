@@ -34,14 +34,43 @@ jobs:
     # to prevent untrusted code execution (RCE via pull_request from forks).
     if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork == false }}
     name: emit lifecycle trail
-    runs-on: [self-hosted, ai-lab]
+    # Pin to X64: the job uses actions/setup-python + pip, which flakes on the
+    # ARM64 self-hosted runner (pmoves-spark-ailab). X64 ai-lab runners
+    # (pmoves-z890-*, 4090) provide capacity. Honors this workflow's own
+    # "failures never block" contract by not routing onto the flaky host.
+    runs-on: [self-hosted, ai-lab, X64]
     timeout-minutes: 5
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           fetch-depth: 1
           submodules: false
+
+      - name: Ensure uv
+        shell: bash
+        run: |
+          if command -v uv >/dev/null 2>&1; then
+            uv --version
+            exit 0
+          fi
+          py="$(command -v python3 || command -v python || true)"
+          if [ -z "$py" ]; then
+            echo "::error::python3/python is required to bootstrap uv"
+            exit 1
+          fi
+          # Bootstrap into $HOME, NOT RUNNER_TEMP. On the hardened self-hosted
+          # runner /tmp (hence RUNNER_TEMP=/tmp/pmoves-runner/_temp) is mounted
+          # noexec, so uv's real binary installs successfully but fails to
+          # execute with "Permission denied" (exit 126). $HOME is on an exec
+          # filesystem. --clear wipes any stale venv from a prior run, since
+          # $HOME persists across jobs on a host (non-ephemeral) runner.
+          uv_venv="${HOME:-$PWD}/.uv-bootstrap"
+          "$py" -m venv --clear "$uv_venv"
+          "$uv_venv/bin/python" -m pip install --upgrade pip
+          "$uv_venv/bin/python" -m pip install 'uv>=0.5.0'
+          "$uv_venv/bin/uv" --version
+          echo "$uv_venv/bin" >> "$GITHUB_PATH"
 
       - name: Emit lifecycle event
         env:

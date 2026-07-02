@@ -1,0 +1,88 @@
+# HERMES Agent Profile: 4090 Laptop
+# Hardware: RTX 4090 Mobile 16GB
+# Node: pmoves-4090 (mobile)
+# Last updated: 2026-06-04
+
+model:
+  default: "ollama/hermes3:8b"
+  provider: "ollama"
+  base_url: "http://localhost:11434"
+  fallback:
+    provider: "openrouter"
+    model: "nousresearch/hermes-3"
+
+agent:
+  max_turns: 50
+  tool_use_enforcement: strict
+
+terminal:
+  backend: local
+  shell: bash
+  timeout: 180
+
+toolsets:
+  enabled:
+    - web
+    - terminal
+    - file
+    - messaging
+    - skills
+    - memory
+
+tts:
+  provider: edge
+
+stt:
+  enabled: true
+  provider: local
+  local:
+    model: base
+
+memory:
+  memory_enabled: true
+  user_profile_enabled: true
+  provider: sqlite
+
+delegation:
+  model: "ollama/hermes3:8b"
+  provider: ollama
+  max_concurrent_children: 2
+  max_iterations: 30
+
+gateway:
+  port: 7700
+  health_endpoint: /api/health
+  battery_saver_disable: true
+  platforms:
+    - discord
+    - telegram
+
+nats:
+  url: "nats://pmoves-nats:4222"
+  subjects:
+    publish:
+      - hermes.gateway.launched.v1
+      - hermes.gateway.health.v1
+      - hermes.mcp.toolcall.v1
+      - hermes.skill.curated.v1
+      - hermes.cron.executed.v1
+      - hermes.delegate.completed.v1
+    subscribe:
+      - p7.nats.launch
+      - p7.nats.session
+
+compression:
+  enabled: true
+  threshold: 0.50
+  target_ratio: 0.20
+
+display:
+  skin: default
+  tool_progress: true
+  show_reasoning: false
+  show_cost: false
+
+security:
+  redact_secrets: true
+  approvals:
+    mode: manual

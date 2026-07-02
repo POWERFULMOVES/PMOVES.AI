@@ -1,0 +1,31 @@
+version: 1
+id: pmoves-ai
+name: PMOVES.AI Profile
+servers:
+    - type: image
+      secrets: default
+      image: ghcr.io/github/github-mcp-server@sha256:d2550953f8050bc5a1c8f80d1678766f66f60bbfbcd953fdeaf661fe4269bd95
+      tools:
+        - create_pull_request
+        - get_file_contents
+        - list_issues
+        - search_code
+    - type: image
+      secrets: default
+      image: mcp/api-mcp-server@sha256:53ba798e692f99f16af3ce9dd665241251828db9de0c786f1c28371d92fa64cf
+      tools:
+        - hosting_listWebsitesV1
+        - hosting_createWebsiteV1
+        - domains_checkDomainAvailabilityV1
+        - domains_purchaseNewDomainV1
+        - VPS_createNewVirtualMachineV1
+        - VPS_getVirtualMachinesV1
+        - DNS_updateDNSRecordsV1
+        - billing_getSubscriptionListV1
+    - type: remote
+      secrets: default
+      endpoint: https://huggingface.co/mcp
+      tools:
+        - hf_whoami
+        - hub_repo_search
+        - paper_search

@@ -26,7 +26,7 @@ jobs:
   sweep:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           fetch-depth: 0
           token: ${{ secrets.ACTIONS_PAT || secrets.GITHUB_TOKEN }}
@@ -38,6 +38,7 @@ jobs:
           CUTOFF=$(date -d "${ORPHAN_DAYS} days ago" +%Y-%m-%d)
           ORPHANS=""
           ACTIVE_BRANCHES=""
+          UNMERGED_BRANCHES=""
 
           echo "=== Stale Branch Sweep ==="
           echo "Cutoff date: ${CUTOFF}"
@@ -78,26 +79,51 @@ jobs:
               if [ "${CHIT_ACTIVE}" = "true" ]; then
                 echo "SKIP ${branch}: CHIT trail activity detected (ACTIVE)"
                 ACTIVE_BRANCHES="${ACTIVE_BRANCHES}${branch}\n"
-              else
-                echo "ORPHAN ${branch}: last commit ${LAST_COMMIT_DATE}, no PR, no CHIT trail"
+                continue
+              fi
+
+              # Merge-status gate. Only branches whose work has ALREADY landed
+              # are safe to auto-delete: a stale branch with a merged PR, or one
+              # fully reachable from main, is just a leftover pointer. A stale
+              # branch with NO merged PR AND unique commits is unmerged WORK —
+              # protect it (report-only, never delete). This closes the
+              # squash-merge data-loss trap: the old classifier keyed only on
+              # age + open-PR + CHIT-trail, so a LIVE-DELETE run would have
+              # destroyed unmerged branches alongside merged leftovers
+              # ([gone] != merged — PMOVES squash-merges, so a landed branch's
+              # original commits are NOT ancestors of main, hence the PR check).
+              MERGED_PR=$(gh pr list --head "${branch}" --state merged --json number --jq 'length' 2>/dev/null || echo "0")
+              if [ "${MERGED_PR}" -gt 0 ] || git merge-base --is-ancestor "origin/${branch}" origin/main 2>/dev/null; then
+                echo "ORPHAN ${branch}: stale, landed (merged PR or in main), no open PR — safe to delete"
                 ORPHANS="${ORPHANS}${branch}\n"
+              else
+                echo "PROTECT ${branch}: stale + no open PR but NOT merged — unmerged work, report-only"
+                UNMERGED_BRANCHES="${UNMERGED_BRANCHES}${branch}\n"
               fi
             else
               echo "OK ${branch}: last commit ${LAST_COMMIT_DATE} (within ${ORPHAN_DAYS}d window)"
             fi
           done
 
-          # Write outputs
-          echo "orphans<<EOF" >> "$GITHUB_OUTPUT"
-          echo -e "${ORPHANS}" >> "$GITHUB_OUTPUT"
-          echo "EOF" >> "$GITHUB_OUTPUT"
-
-          echo "active_count<<EOF" >> "$GITHUB_OUTPUT"
-          echo -e "${ACTIVE_BRANCHES}" | grep -c . || echo "0" >> "$GITHUB_OUTPUT"
-          echo "EOF" >> "$GITHUB_OUTPUT"
-
-          ORPHAN_COUNT=$(echo -e "${ORPHANS}" | grep -c . || echo "0")
-          echo "orphan_count=${ORPHAN_COUNT}" >> "$GITHUB_OUTPUT"
+          # Write outputs. grep -c prints "0" and exits 1 on no-match; the
+          # trailing `|| true` keeps `set -e` from aborting while still
+          # capturing that "0" via the command substitution (the old
+          # `|| echo 0 >> $GITHUB_OUTPUT` sent the real count to stdout, never
+          # to the heredoc, so active_count rendered blank/0 by luck).
+          ORPHAN_COUNT=$(printf '%b' "${ORPHANS}" | grep -c . || true)
+          ACTIVE_COUNT=$(printf '%b' "${ACTIVE_BRANCHES}" | grep -c . || true)
+          UNMERGED_COUNT=$(printf '%b' "${UNMERGED_BRANCHES}" | grep -c . || true)
+          {
+            echo "orphans<<EOF"
+            printf '%b\n' "${ORPHANS}"
+            echo "EOF"
+            echo "unmerged<<EOF"
+            printf '%b\n' "${UNMERGED_BRANCHES}"
+            echo "EOF"
+            echo "orphan_count=${ORPHAN_COUNT:-0}"
+            echo "active_count=${ACTIVE_COUNT:-0}"
+            echo "unmerged_count=${UNMERGED_COUNT:-0}"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Delete orphan branches
         if: env.DRY_RUN == 'false'
@@ -121,34 +147,46 @@ jobs:
           GH_TOKEN: ${{ secrets.ACTIONS_PAT || secrets.GITHUB_TOKEN }}
         run: |
           ORPHANS="${{ steps.orphans.outputs.orphans }}"
+          UNMERGED="${{ steps.orphans.outputs.unmerged }}"
           ORPHAN_COUNT="${{ steps.orphans.outputs.orphan_count }}"
           ACTIVE_COUNT="${{ steps.orphans.outputs.active_count }}"
+          UNMERGED_COUNT="${{ steps.orphans.outputs.unmerged_count }}"
           MODE="DRY RUN"
           [ "${DRY_RUN}" = "false" ] && MODE="LIVE DELETE"
 
           BODY="## Stale Branch Sweep Report
-          
+
           - **Mode**: ${MODE}
-          - **Orphan branches found**: ${ORPHAN_COUNT}
+          - **Landed leftovers (safe-delete)**: ${ORPHAN_COUNT}
+          - **Stale + unmerged (protected, NOT deleted)**: ${UNMERGED_COUNT}
           - **Branches saved by CHIT trail activity**: ${ACTIVE_COUNT}
           - **Cutoff**: ${ORPHAN_DAYS} days
           - **Run**: [${{ github.run_id }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
-          
+
           "
 
           if [ -n "${ORPHANS}" ]; then
-            BODY+="### Orphan Branches
-            
-            | Branch | Reason |
-            |--------|--------|
-            "
-            echo -e "${ORPHANS}" | while read -r branch; do
+            BODY+=$'### Landed Leftovers (merged/in-main, no open PR — eligible for delete)\n\n| Branch | Reason |\n|--------|--------|\n'
+            # Process substitution (not `echo | while`) so the loop runs in THIS
+            # shell — the old pipe spawned a subshell and every BODY+= row was
+            # discarded on loop exit, leaving the table permanently empty while
+            # the count kept climbing. $'\n' keeps the markdown un-indented.
+            while IFS= read -r branch; do
               [ -z "${branch}" ] && continue
               LAST=$(git log -1 --format='%ci (%cr)' "origin/${branch}" 2>/dev/null || echo "unknown")
-              BODY+="| \`${branch}\` | No PR, no CHIT trail activity since ${LAST} |\n"
-            done
+              BODY+="| \`${branch}\` | Landed (merged PR or in main), no open PR, last commit ${LAST} |"$'\n'
+            done < <(printf '%b' "${ORPHANS}")
           else
-            BODY+="### No orphan branches found. All non-main branches have either an open PR or recent CHIT trail activity."
+            BODY+=$'### No landed-leftover branches. Every stale non-main branch is either covered by an open PR, protected by CHIT trail, or unmerged (listed below).'
+          fi
+
+          if [ -n "${UNMERGED}" ]; then
+            BODY+=$'\n\n### Stale + Unmerged — PROTECTED (human decision required, never auto-deleted)\n\nThese branches are stale and have no open PR, but their work has NOT landed in main. Revive (open a PR) or consciously delete — the sweep will never touch them.\n\n| Branch | Last commit |\n|--------|-------------|\n'
+            while IFS= read -r branch; do
+              [ -z "${branch}" ] && continue
+              LAST=$(git log -1 --format='%ci (%cr)' "origin/${branch}" 2>/dev/null || echo "unknown")
+              BODY+="| \`${branch}\` | ${LAST} |"$'\n'
+            done < <(printf '%b' "${UNMERGED}")
           fi
 
           BODY+="

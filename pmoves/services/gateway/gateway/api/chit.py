@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 CHIT_REQUIRE_SIGNATURE = os.getenv("CHIT_REQUIRE_SIGNATURE","false").lower()=="true"
 CHIT_DECRYPT_ANCHORS = os.getenv("CHIT_DECRYPT_ANCHORS","false").lower()=="true"
-_CHIT_PASSPHRASE: str | None = os.getenv("CHIT_PASSPHRASE")
+_CHIT_PASSPHRASE: str | None = get_secret("CHIT_PASSPHRASE")
 
 def _require_chit_passphrase() -> str:
     """Fail-closed accessor — raises only when passphrase is actually needed."""

@@ -1,0 +1,59 @@
+name: Submodule Gitlink Gate
+
+# PR-time gate enforcing the .gitmodules branch strategy on submodule gitlinks.
+# Catches pointers that are "dangling" (not on the declared tracked branch) or
+# "left/right" (rolled back / sideways) BEFORE they land on main — the class of
+# drift a stale local submodule checkout silently introduces.
+#
+# Tracked branches + fork slugs are derived from .gitmodules (no hardcoded list),
+# so every submodule — incl. PMOVES.YT, which the scheduled submodule-update-
+# check.yml does not watch — is covered. See .github/scripts/validate_submodule_gitlinks.sh.
+#
+# Runner choice: GitHub-hosted ubuntu-latest, deliberately. The gate is API-based
+# (gh compare, no submodule clone, shallow superproject fetch) so it's tiny — and
+# the self-hosted ai-lab runners hit "No space left on device" doing a full-history
+# checkout (disk-constrained dockerized runners). A required gate must not depend
+# on self-hosted disk/availability; GitHub-hosted gives a clean disk every run and
+# the submodule forks are PUBLIC so the repo-scoped GITHUB_TOKEN is sufficient.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  gitlink-gate:
+    name: submodule-gitlink-gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2
+        with:
+          egress-policy: audit
+          allowed-endpoints: >
+            github.com:443
+            api.github.com:443
+
+      - name: Checkout (shallow — only HEAD; base fetched next)
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          fetch-depth: 1
+          persist-credentials: true
+
+      - name: Fetch base commit (for the gitlink diff)
+        run: git fetch --depth=1 origin "${{ github.event.pull_request.base.sha }}"
+
+      - name: Validate submodule gitlinks against .gitmodules branch strategy
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          chmod +x .github/scripts/validate_submodule_gitlinks.sh
+          .github/scripts/validate_submodule_gitlinks.sh "${{ github.event.pull_request.base.sha }}"

@@ -1,0 +1,68 @@
+# Creator-pipeline model registry (license-tagged + capacity-tagged). Gate: any
+# model whose license is not confirmed commercial-OK is try-locally/BYO at the
+# user's edge (requires_ack=true); never bake into the hosted/commercial path.
+# caps: per-workflow default node requirements (min_vram_gb + needs[]).
+models:
+  voice.omnivoice:
+    model_id: k2-fsa/OmniVoice
+    provider: local
+    license: apache-2.0
+    mode: local
+    requires_ack: false
+    swap_for: null
+    caps: {min_vram_gb: 4, needs: ["voice"]}
+  image.ideogram-ultra:
+    model_id: Comfy-Org/Ideogram-4
+    provider: local
+    license: other
+    mode: local
+    requires_ack: true
+    swap_for: Qwen/Qwen-Image
+    caps: {min_vram_gb: 16, needs: ["cuda", "comfyui"]}
+  anime.anima:
+    model_id: circlestone-labs/Anima
+    provider: local
+    license: other
+    mode: local
+    requires_ack: true
+    swap_for: cagliostrolab/animagine-xl-4.0
+    caps: {min_vram_gb: 6, needs: ["comfyui"]}
+  video.ltx:
+    model_id: Lightricks/LTX-Video
+    provider: local
+    license: other
+    mode: local
+    requires_ack: true
+    swap_for: null
+    caps: {min_vram_gb: 24, needs: ["cuda", "comfyui"]}
+  image.qwen:
+    model_id: Qwen/Qwen-Image
+    provider: hf
+    license: apache-2.0
+    mode: local
+    requires_ack: false
+    swap_for: null
+    caps: {min_vram_gb: 12, needs: ["cuda", "comfyui"]}
+  image.flux-schnell:
+    # FLUX.1-schnell weights are Apache-2.0 (verified handoff 2026-06-08): fast
+    # license-clean drafts, no ack gate. License-clean swap target for the
+    # non-commercial Ideogram-4 (image.ideogram-ultra).
+    model_id: black-forest-labs/FLUX.1-schnell
+    provider: hf
+    license: apache-2.0
+    mode: local
+    requires_ack: false
+    swap_for: null
+    caps: {min_vram_gb: 12, needs: ["cuda", "comfyui"]}
+  anime.animagine-xl:
+    # OpenRAIL++ is commercial-permitted with use-restrictions (verified handoff
+    # 2026-06-08): honor the restrictions, no ack gate for hosted use. SDXL base
+    # is also commercial-OK. License-clean swap target for the non-commercial
+    # ANIMA (anime.anima).
+    model_id: cagliostrolab/animagine-xl-4.0
+    provider: hf
+    license: openrail++
+    mode: local
+    requires_ack: false
+    swap_for: null
+    caps: {min_vram_gb: 8, needs: ["cuda", "comfyui"]}

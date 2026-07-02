@@ -107,6 +107,8 @@ env:
   # Prefer PAT when supplied (package ownership/ACL edge cases), fallback to workflow token.
   GHCR_USERNAME: ${{ secrets.GHCR_USERNAME || '' }}
   GHCR_PAT: ${{ secrets.GHCR_TOKEN || secrets.GH_PAT_PUBLISH || '' }}
+  GH_APP_ID: ${{ secrets.GH_APP_ID || '' }}
+  GH_APP_SEC: ${{ secrets.GH_APP_SEC || '' }}
   # Used for cloning other integration repos (private repos require a PAT with repo read).
   # If unset, clones fall back to unauthenticated https (works for public repos only).
   CI_GIT_CLONE_TOKEN: ${{ secrets.CI_GIT_CLONE_TOKEN || secrets.GH_PAT_PUBLISH || '' }}
@@ -122,7 +124,7 @@ jobs:
       names: ${{ steps.resolve.outputs.names }}
     steps:
       - name: Checkout (matrix config)
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
 
       - name: Resolve integration matrix
         id: resolve
@@ -173,12 +175,12 @@ jobs:
 
     steps:
       - name: Harden Runner
-        uses: step-security/harden-runner@6c3c2f2c1c457b00c10c4848d6f5491db3b629df
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411
         with:
           egress-policy: audit
 
       - name: Checkout (stub)
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
 
       - name: Load integration config
         id: cfg
@@ -270,10 +272,10 @@ jobs:
           df -h
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd
+        uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5
 
       - name: Build (PR validation, no push)
-        uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a
         with:
           context: integration-src/${{ steps.cfg.outputs.context }}
           file: integration-src/${{ steps.cfg.outputs.dockerfile }}
@@ -293,7 +295,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        runner_label: [kvm4, kvm2]
+        # Both VPS runners (pmoves-kvm4-1-runner, pmoves-kvm4-2-runner) carry the
+        # `kvm4` label; there is NO runner labelled `kvm2`. A `kvm2` matrix leg can
+        # never be scheduled, and because build-publish `needs` this job, that
+        # orphaned leg deadlocks the entire publish (GHCR run 27020807888 hung
+        # queued on "Cleanup kvm2 runner disk", 2026-06-05).
+        runner_label: [kvm4]
     steps:
       - name: Free disk before image matrix
         shell: bash
@@ -303,8 +310,15 @@ jobs:
           df -h
           docker system df || true
 
-          docker system prune -af --volumes --filter "until=24h" || true
-          docker builder prune -af --filter "until=24h" || true
+          # The publish matrix can leave recent BuildKit cache behind on shared
+          # self-hosted nodes. Clear all unused Docker state before the next
+          # image wave so heavy arm64 lanes do not inherit a nearly-full root.
+          # system prune minus --volumes: reclaims stopped containers + images +
+          # networks + build cache. NEVER --volumes: self-hosted runners co-host
+          # LIVE fleet data volumes; volume-pruning can destroy fleet data
+          # (Known Road: prune containers/images/cache, never volumes).
+          docker system prune -af || true
+          docker builder prune -af || true
 
           # Work directories differ by node (for example kvm4-1/kvm4-2).
           # Keep the current checkout area, but remove stale sibling workspaces.
@@ -316,6 +330,15 @@ jobs:
           for diagdir in /opt/actions-runner*/_diag/pages; do
             [ -d "$diagdir" ] || continue
             find "$diagdir" -type f -mtime +1 -delete || true
+          done
+
+          # Syft/stereoscope SBOM image extractions + anchore sbom-action scratch can
+          # be 20G+ each and live under /tmp — the docker prune above does NOT reclaim
+          # them. Orphaned when a job is cancelled mid-scan, they were the ACTUAL cause
+          # of the 2026-06-05 KVM4-1 disk-full incident (126G across ten /tmp/stereoscope-*
+          # dirs). Sweep entries older than a day; active scans are minutes old and untouched.
+          for pat in 'stereoscope-*' 'sbom-action-*' 'codeql-packaging*' 'codeql.*'; do
+            find /tmp -maxdepth 1 -name "$pat" -mtime +0 -exec rm -rf {} + 2>/dev/null || true
           done
 
           echo "Disk after cleanup:"
@@ -336,14 +359,15 @@ jobs:
       attestations: write
     strategy:
       fail-fast: false
-      # Allow all self-hosted runners (ai-lab, vps, hotfix) to build in parallel.
-      max-parallel: 2
+      # The multi-arch publish lanes share Docker roots on self-hosted runners.
+      # Serialize them to keep heavyweight arm64 builds from compounding disk use.
+      max-parallel: 1
       matrix:
         name: ${{ fromJSON(needs.resolve-matrix.outputs.names) }}
 
     steps:
       - name: Harden Runner
-        uses: step-security/harden-runner@6c3c2f2c1c457b00c10c4848d6f5491db3b629df
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411
         with:
           egress-policy: audit
           allowed-endpoints: >
@@ -358,8 +382,27 @@ jobs:
             security.ubuntu.com:80
             security.ubuntu.com:443
 
+      - name: Free build-host /tmp scratch
+        shell: bash
+        run: |
+          set -euxo pipefail
+          # cleanup-self-hosted-runners is pinned to a kvm4 node, but build-publish
+          # runs on ANY [self-hosted, Linux, X64] runner — which may be a different
+          # host whose /tmp SBOM scratch was never swept (Codex P1 on PR #1717).
+          # Runs FIRST (after Harden Runner, before checkout/config): if this host is
+          # already out of root from stale /tmp/stereoscope-* (the 2026-06-05 incident:
+          # 126G on KVM4-1), checkout and $GITHUB_OUTPUT writes would fail before any
+          # later cleanup could recover. This step needs no repo contents, so it leads.
+          # Mirrors the sweep in cleanup-self-hosted-runners; active scans (minutes
+          # old) are untouched by the -mtime +0 (>~24h) age gate.
+          echo "Build-host disk before /tmp sweep:"; df -h /tmp 2>/dev/null || df -h
+          for pat in 'stereoscope-*' 'sbom-action-*' 'codeql-packaging*' 'codeql.*'; do
+            find /tmp -maxdepth 1 -name "$pat" -mtime +0 -exec rm -rf {} + 2>/dev/null || true
+          done
+          echo "Build-host disk after /tmp sweep:"; df -h /tmp 2>/dev/null || df -h
+
       - name: Checkout (stub)
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
 
       - name: Load integration config
         id: cfg
@@ -418,12 +461,12 @@ jobs:
             [ -z "$(printenv GHCR_PAT || true)" ]      && missing+=("GHCR_TOKEN/GH_PAT_PUBLISH")
           fi
 
-          if has_value GH_APP_CLIENT_ID && has_value GH_APP_SEC; then
+          if has_value GH_APP_ID && has_value GH_APP_SEC; then
             echo "✅ GitHub App token generation available"
           else
             echo "⚠️ GitHub App token unavailable"
-            [ -z "$(printenv GH_APP_CLIENT_ID || true)" ] && missing+=("GH_APP_CLIENT_ID")
-            [ -z "$(printenv GH_APP_SEC || true)" ]       && missing+=("GH_APP_SEC")
+            [ -z "$(printenv GH_APP_ID || true)" ]  && missing+=("GH_APP_ID")
+            [ -z "$(printenv GH_APP_SEC || true)" ] && missing+=("GH_APP_SEC")
           fi
           echo "::endgroup::"
 
@@ -433,15 +476,17 @@ jobs:
         env:
           GHCR_USERNAME: ${{ env.GHCR_USERNAME }}
           GHCR_PAT: ${{ env.GHCR_PAT }}
-          GH_APP_CLIENT_ID: ${{ secrets.GH_APP_CLIENT_ID }}
-          GH_APP_SEC: ${{ secrets.GH_APP_SEC }}
+          GH_APP_ID: ${{ env.GH_APP_ID }}
+          GH_APP_SEC: ${{ env.GH_APP_SEC }}
 
       - name: Generate GitHub App token (for clone + GHCR)
         id: app_token
-        uses: actions/create-github-app-token@v3
+        if: ${{ env.GH_APP_ID != '' && env.GH_APP_SEC != '' }}
+        continue-on-error: true
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3
         with:
-          client-id: ${{ secrets.GH_APP_CLIENT_ID }}
-          private-key: ${{ secrets.GH_APP_SEC }}
+          app-id: ${{ env.GH_APP_ID }}
+          private-key: ${{ env.GH_APP_SEC }}
           # Explicit token scopes required for clone + GHCR push
           permission-contents: read
           permission-packages: write
@@ -503,13 +548,21 @@ jobs:
           set -euxo pipefail
           sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/lib/android || true
           sudo rm -rf /usr/local/share/boost || true
+          docker system df || true
+          # system prune minus --volumes: reclaims stopped containers + images +
+          # networks + build cache. NEVER --volumes: self-hosted runners co-host
+          # LIVE fleet data volumes; volume-pruning can destroy fleet data
+          # (Known Road: prune containers/images/cache, never volumes).
+          docker system prune -af || true
+          docker builder prune -af || true
+          docker system df || true
           df -h
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@ce360397dd3f832beb865e1373c09c0e9f86d70a
+        uses: docker/setup-qemu-action@96fe6ef7f33517b61c61be40b68a1882f3264fb8
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd
+        uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5
 
       - name: Install Cosign
         uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6
@@ -526,7 +579,7 @@ jobs:
         id: login_ghcr_pat
         if: ${{ env.GHCR_USERNAME != '' && env.GHCR_PAT != '' }}
         continue-on-error: true
-        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121
+        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ env.GHCR_USERNAME }}
@@ -536,7 +589,7 @@ jobs:
         id: login_ghcr_app
         if: ${{ steps.login_ghcr_pat.outcome != 'success' && steps.app_token.outputs.token != '' }}
         continue-on-error: true
-        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121
+        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee
         with:
           registry: ${{ env.REGISTRY }}
           username: x-access-token
@@ -546,7 +599,7 @@ jobs:
         id: login_ghcr_actions
         if: ${{ steps.login_ghcr_pat.outcome != 'success' && steps.login_ghcr_app.outcome != 'success' }}
         continue-on-error: true
-        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121
+        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -555,12 +608,12 @@ jobs:
       - name: Require GHCR authentication
         if: ${{ steps.login_ghcr_pat.outcome != 'success' && steps.login_ghcr_app.outcome != 'success' && steps.login_ghcr_actions.outcome != 'success' }}
         run: |
-          echo "::error::Unable to authenticate to GHCR. Check GHCR_USERNAME/GHCR_TOKEN, GH_APP_CLIENT_ID/GH_APP_SEC, or the default workflow token."
+          echo "::error::Unable to authenticate to GHCR. Check GHCR_USERNAME/GHCR_TOKEN, GH_APP_ID/GH_APP_SEC, or the default workflow token."
           exit 1
 
       - name: Optional login to Docker Hub
         if: ${{ env.DOCKERHUB_USERNAME && env.DOCKERHUB_PASSWORD }}
-        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121
+        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee
         with:
           registry: docker.io
           username: ${{ env.DOCKERHUB_USERNAME }}
@@ -631,7 +684,7 @@ jobs:
       - name: Build and push (multi-arch)
         if: ${{ steps.meta.outputs.has_tags == 'true' }}
         id: build
-        uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a
         with:
           context: integration-src/${{ steps.cfg.outputs.context }}
           file: integration-src/${{ steps.cfg.outputs.dockerfile }}
@@ -647,7 +700,7 @@ jobs:
 
       - name: Attest build provenance (SLSA L3)
         if: steps.build.outputs.digest != '' && steps.meta.outputs.has_tags == 'true'
-        uses: actions/attest-build-provenance@v4
+        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4
         with:
           subject-name: ${{ env.REGISTRY }}/${{ steps.meta.outputs.ghcr_ns }}/${{ steps.cfg.outputs.image_name }}
           subject-digest: ${{ steps.build.outputs.digest }}
@@ -664,14 +717,63 @@ jobs:
 
       - name: Install Syft (SBOM)
         if: ${{ steps.cfg.outputs.generate_sbom == 'true' && steps.meta.outputs.has_tags == 'true' }}
-        uses: anchore/sbom-action/download-syft@e22c389904149dbc22b58101806040fa8d37a610
+        env:
+          SYFT_VERSION: v1.45.0
+        run: |
+          set -euo pipefail
+          install_dir="${RUNNER_TEMP}/syft-bin"
+          mkdir -p "$install_dir"
+          curl -sSfL "https://github.com/anchore/syft/releases/download/${SYFT_VERSION}/syft_${SYFT_VERSION#v}_linux_amd64.tar.gz" -o "${RUNNER_TEMP}/syft.tar.gz"
+          tar -xzf "${RUNNER_TEMP}/syft.tar.gz" -C "$install_dir" syft
+          sudo install -m 0755 "${install_dir}/syft" /usr/local/bin/syft
+          syft version
+
+      - name: Free disk space before SBOM
+        if: ${{ steps.cfg.outputs.generate_sbom == 'true' && steps.meta.outputs.has_tags == 'true' }}
+        run: |
+          set -euxo pipefail
+          docker system df || true
+          docker builder prune -af || true
+          docker image prune -f || true
+          docker container prune -f || true
+          rm -rf "${RUNNER_TEMP:-/tmp}/syft-cache"
+          df -h
 
       - name: Generate SBOMs (CycloneDX)
         id: sbom
         if: ${{ steps.cfg.outputs.generate_sbom == 'true' && steps.meta.outputs.has_tags == 'true' }}
+        env:
+          SYFT_REGISTRY_AUTH_AUTHORITY: ghcr.io
+          SYFT_CACHE_DIR: ${{ runner.temp }}/syft-cache
+          PAT_AUTH_OK: ${{ steps.login_ghcr_pat.outcome == 'success' }}
+          APP_AUTH_OK: ${{ steps.login_ghcr_app.outcome == 'success' }}
+          GHCR_USERNAME: ${{ env.GHCR_USERNAME }}
+          GHCR_PAT: ${{ env.GHCR_PAT }}
+          APP_TOKEN: ${{ steps.app_token.outputs.token }}
+          ACTIONS_ACTOR: ${{ github.actor }}
+          ACTIONS_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          syft packages "${{ steps.meta.outputs.primary_tag }}" -o cyclonedx-json > sbom.cdx.json
+          if [ "${PAT_AUTH_OK}" = "true" ]; then
+            export SYFT_REGISTRY_AUTH_USERNAME="${GHCR_USERNAME}"
+            export SYFT_REGISTRY_AUTH_PASSWORD="${GHCR_PAT}"
+          elif [ "${APP_AUTH_OK}" = "true" ]; then
+            export SYFT_REGISTRY_AUTH_USERNAME="x-access-token"
+            export SYFT_REGISTRY_AUTH_PASSWORD="${APP_TOKEN}"
+          else
+            export SYFT_REGISTRY_AUTH_USERNAME="${ACTIONS_ACTOR}"
+            export SYFT_REGISTRY_AUTH_PASSWORD="${ACTIONS_TOKEN}"
+          fi
+
+          rm -rf "$SYFT_CACHE_DIR"
+          mkdir -p "$SYFT_CACHE_DIR"
+          syft scan --from registry "${{ steps.meta.outputs.primary_tag }}" -o cyclonedx-json > sbom.cdx.json &
+          syft_pid=$!
+          while kill -0 "$syft_pid" 2>/dev/null; do
+            echo "Syft SBOM generation still running for ${{ matrix.name }}..."
+            sleep 60
+          done
+          wait "$syft_pid"
           echo "sbom_path=sbom.cdx.json" >> $GITHUB_OUTPUT
 
       - name: Upload SBOM artifact
@@ -681,15 +783,31 @@ jobs:
           name: ${{ matrix.name }}-sbom
           path: ${{ steps.sbom.outputs.sbom_path }}
 
-      - name: Free disk space (keep BuildKit cache)
+      - name: Free disk space before Trivy
         run: |
           set -euxo pipefail
+          echo "Disk BEFORE reclaim:"; df -h / || true
           docker system df || true
-          # Remove dangling images and stopped containers but preserve BuildKit
-          # layer cache and volumes for faster subsequent builds.
-          docker image prune -f || true
+          # Trivy must download its ~95MB vuln DB into .cache/trivy and pull the
+          # image; on the chronically-tight kvm4 runners that write fails with
+          # "no space left on device" (GHCR run 27042677318). The image is RE-PULLED
+          # in the next step, so a full prune here is safe — reclaim aggressively.
+          docker builder prune -af || true
+          docker image prune -af || true        # all unused (image re-pulled next step)
           docker container prune -f || true
-          df -h
+          # NOTE: deliberately NOT 'docker volume prune' — these self-hosted runners
+          # may co-host fleet data-store volumes (neo4j/supabase-db/etc.); pruning
+          # volumes could destroy a temporarily-stopped service's data. Image-layer
+          # reclaim above frees GBs; the Trivy DB needs only ~95MB.
+          # Stale Trivy DB cache can be corrupt/partial after a prior no-space abort;
+          # drop it so the next download starts clean (path per trivy-action cache-dir).
+          rm -rf "${GITHUB_WORKSPACE}/.cache/trivy/db" "${GITHUB_WORKSPACE}/.cache/trivy/fanal" 2>/dev/null || true
+          # Sweep the SBOM/scan scratch that the docker prune does NOT reclaim
+          # (same class as the build-host sweep in #1719) — frees the root volume.
+          for pat in 'stereoscope-*' 'sbom-action-*' 'trivy-*' 'codeql-packaging*' 'codeql.*'; do
+            find /tmp -maxdepth 1 -name "$pat" -mtime +0 -exec rm -rf {} + 2>/dev/null || true
+          done
+          echo "Disk AFTER reclaim:"; df -h / || true
 
       - name: Pull image for Trivy (private GHCR)
         if: ${{ steps.meta.outputs.has_tags == 'true' }}
@@ -743,9 +861,10 @@ jobs:
           set -euxo pipefail
           # Remove the image we pulled for Trivy to prevent accumulation on self-hosted runners
           docker rmi "${{ steps.meta.outputs.primary_tag }}" || true
-          # Aggressive prune: remove unused images older than 24h (keeps BuildKit cache for subsequent matrix jobs)
-          docker image prune -a -f --filter "until=24h" || true
-          docker builder prune -f --filter "until=24h" || true
+          # Aggressive prune: prevent failed heavy builds from leaving the
+          # shared self-hosted Docker root near capacity for the next lane.
+          docker image prune -a -f || true
+          docker builder prune -af || true
           # Clean old runner work directories (>7 days) to prevent checkout artifact bloat
           for workdir in "${GITHUB_WORKSPACE}/.." /opt/actions-runner*/_work; do
             [ -d "$workdir" ] || continue

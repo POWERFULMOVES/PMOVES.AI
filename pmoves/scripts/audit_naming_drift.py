@@ -83,15 +83,14 @@ HOST_LEAK_GUARD_HINT = "host-leak-guard"
 
 SEVERITY_RANK = {"P0": 0, "P1": 1, "P2": 2}
 
-# Inline copy of pmoves/contracts/schemas/identity/signing-card.v1.schema.json.
-# The canonical path is read-only via damage-control policy (intentional —
-# schemas are versioned, not mutated), and adding a new file there requires
-# extending patterns.yaml which is out of scope for a credential-audit lane.
-# Until the policy carve-out lands, this dict is the single source of truth
-# the audit validates cards against.  When the file ships at the canonical
-# path, replace the literal with a load-from-disk and keep the dict as a
-# fallback for environments without jsonschema installed.
-SIGNING_CARD_V1_SCHEMA: dict[str, Any] = {
+_SIGNING_CARD_V1_SCHEMA_PATH = (
+    Path(__file__).parent.parent / "contracts" / "schemas" / "identity" / "signing-card.v1.schema.json"
+)
+
+# Fallback inline copy of pmoves/contracts/schemas/identity/signing-card.v1.schema.json.
+# Used when the canonical schema file is not present (e.g., stale checkout) or when
+# jsonschema is unavailable. Prefer the on-disk schema so the audit stays in sync.
+_SIGNING_CARD_V1_SCHEMA_LITERAL: dict[str, Any] = {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "title": "Signing Identity Card v1",
     "type": "object",
@@ -132,6 +131,16 @@ SIGNING_CARD_V1_SCHEMA: dict[str, Any] = {
         "notes": {"type": "string"},
     },
 }
+
+
+def _load_signing_card_schema() -> dict[str, Any]:
+    try:
+        return _read_json(_SIGNING_CARD_V1_SCHEMA_PATH)
+    except Exception:
+        return _SIGNING_CARD_V1_SCHEMA_LITERAL
+
+
+SIGNING_CARD_V1_SCHEMA: dict[str, Any] = _load_signing_card_schema()
 
 
 @dataclass

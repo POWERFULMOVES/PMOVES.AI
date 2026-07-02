@@ -63,13 +63,18 @@
       "type": "remote",
       "url": "https://api.z.ai/api/mcp/zread/mcp",
       "headers": { "Authorization": "Bearer ${Z_AI_API_KEY}" }
+    },
+    "docker": {
+      "type": "local",
+      "command": ["mcp-docker"],
+      "environment": {}
     }
   },
   "skills": {
     "paths": [".kilocode/skills"],
     "urls": []
   },
-  "permission": {
+    "permission": {
     "bash": "allow",
     "edit": {
       "**": "allow"
@@ -78,6 +83,7 @@
     "zai-vision_*": "allow",
     "zai-web-search_*": "allow",
     "zai-web-reader_*": "allow",
-    "zai-zread_*": "allow"
+    "zai-zread_*": "allow",
+    "docker_*": "allow"
   }
 }

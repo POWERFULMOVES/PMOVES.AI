@@ -10,6 +10,7 @@
 #
 # Runners targeted:
 #   - ai-lab   (GPU builds)
+#   - spark    (ARM64 full PMOVES.AI node)
 #   - kvm4     (VPS builds)
 #   - kvm2     (legacy VPS)
 
@@ -39,10 +40,45 @@ jobs:
           df -h
           docker system df || true
 
-          # Remove all unused images/containers/volumes/networks older than 48h
-          docker system prune -af --volumes --filter "until=48h" || true
+          # Reclaim stopped containers + images + build cache (system prune,
+          # minus --volumes). NEVER --volumes: these runners (esp. SPARK full
+          # PMOVES.AI node + ai-lab/Z890) co-host LIVE fleet data volumes;
+          # volume-pruning destroys fleet data whose service is briefly stopped.
+          # Known Road: prune containers/images/cache, never volumes
+          # (use `make volume-reset SERVICE=<name>` to reset a volume on purpose).
+          docker system prune -af --filter "until=48h" || true
 
           # Prune BuildKit cache older than 48h
+          docker builder prune -af --filter "until=48h" || true
+
+          for workdir in /opt/actions-runner*/_work; do
+            [ -d "$workdir" ] || continue
+            find "$workdir" -mindepth 1 -maxdepth 1 -type d -mtime +3 -exec rm -rf {} \; || true
+          done
+
+          for diagdir in /opt/actions-runner*/_diag/pages; do
+            [ -d "$diagdir" ] || continue
+            find "$diagdir" -type f -mtime +1 -delete || true
+          done
+
+          echo "Disk after cleanup:"
+          df -h
+          docker system df || true
+
+  cleanup-spark:
+    name: Cleanup SPARK Runner
+    runs-on: [self-hosted, spark]
+    if: ${{ github.event.inputs.runner_label == '' || github.event.inputs.runner_label == 'spark' }}
+    timeout-minutes: 15
+    steps:
+      - name: Aggressive Docker cleanup
+        run: |
+          set -euxo pipefail
+          echo "Disk before cleanup:"
+          df -h
+          docker system df || true
+
+          docker system prune -af --filter "until=48h" || true
           docker builder prune -af --filter "until=48h" || true
 
           for workdir in /opt/actions-runner*/_work; do
@@ -72,7 +108,7 @@ jobs:
           df -h
           docker system df || true
 
-          docker system prune -af --volumes --filter "until=48h" || true
+          docker system prune -af --filter "until=48h" || true
           docker builder prune -af --filter "until=48h" || true
 
           for workdir in /opt/actions-runner-kvm4*/_work; do
@@ -102,7 +138,7 @@ jobs:
           df -h
           docker system df || true
 
-          docker system prune -af --volumes --filter "until=48h" || true
+          docker system prune -af --filter "until=48h" || true
           docker builder prune -af --filter "until=48h" || true
 
           for workdir in /opt/actions-runner-kvm2*/_work; do

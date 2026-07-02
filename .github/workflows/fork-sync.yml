@@ -1,0 +1,273 @@
+name: Fork Sync
+
+on:
+  schedule:
+    - cron: '0 6 * * 1'  # Monday 06:00 UTC
+  workflow_dispatch:
+    inputs:
+      max_forks:
+        description: 'Max forks to sync per run (0 = unlimited)'
+        required: false
+        default: '3'
+      dry_run:
+        description: 'Dry run (no changes)'
+        required: false
+        type: boolean
+        default: true
+      ahead_max:
+        description: 'Skip (label MANUAL) forks with more than this many PMOVES-ahead commits — too much hardening to auto-merge safely. 0 = no limit.'
+        required: false
+        default: '20'
+      behind_max:
+        description: 'Skip (label MANUAL) forks more than this many commits behind upstream — giant diverged clones that conflict + waste runner time. 0 = no limit.'
+        required: false
+        default: '1000'
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      - uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        id: app-token
+        with:
+          app-id: ${{ secrets.GH_APP_ID }}
+          private-key: ${{ secrets.GH_APP_SEC }}
+          # Without owner, the minted token is scoped to THIS repo only, so
+          # branch creation / merges on the fork repos 403. owner + repositories
+          # mints a token scoped to EXACTLY the forks this workflow syncs
+          # (least privilege — not every repo the app is installed on). Keep this
+          # list in sync with the FORKS string in the "Sync forks" step below.
+          owner: ${{ github.repository_owner }}
+          repositories: |
+            PMOVES-ClawZ
+            PMOVES-Creator
+            PMOVES-supabase
+            PMOVES-tensorzero
+            PMOVES-Wealth
+            PMOVES-a0-plugins
+            PMOVES-Archon
+            PMOVES-Open-Notebook
+            PMOVES-hermes-agent
+            PMOVES-headscale
+            PMOVES-E2B-Danger-Room
+            PMOVES-A2UI
+            Pmoves-Health-wger
+            PMOVES-E2b-Spells
+            PMOVES-E2B-Danger-Room-Desktop
+            PMOVES-FinceptTerminal
+            PMOVES-Agent-Zero
+            PMOVES-BotZ-gateway
+            Pmoves-hyperdimensions
+            PMOVES-llama-throughput-lab
+            PMOVES-Pinokio-Ultimate-TTS-Studio
+            pmoves-e2b-mcp-server
+            PMOVES-ClawRouter
+            PMOVES-AgentGym
+
+      - name: Discover forks
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          echo "=== Fork Drift Audit ==="
+          gh repo list POWERFULMOVES --fork --json name,parent --jq '.[] | "\(.name)|\(.parent.owner.login)/\(.parent.name)"' | while IFS='|' read fork upstream; do
+            fb=$(gh api "repos/POWERFULMOVES/$fork" --jq '.default_branch' 2>/dev/null) || continue
+            ub=$(gh api "repos/$upstream" --jq '.default_branch' 2>/dev/null) || continue
+            bh=$(gh api "repos/$upstream/compare/$ub...POWERFULMOVES:$fork:$fb" --jq '.behind_by' 2>/dev/null) || echo '-1'
+            ah=$(gh api "repos/$upstream/compare/$ub...POWERFULMOVES:$fork:$fb" --jq '.ahead_by' 2>/dev/null) || echo '-1'
+            if [ "$bh" = "0" ] 2>/dev/null; then
+              echo "  $fork: synced"
+            elif [ "$bh" -gt 999 ] 2>/dev/null; then
+              echo "  CRITICAL $fork: $bh behind, $ah ahead"
+            elif [ "$bh" -gt 0 ] 2>/dev/null; then
+              echo "  STALE   $fork: $bh behind, $ah ahead"
+            else
+              echo "  ERROR    $fork: unable to compare"
+            fi
+            sleep 1
+          done
+
+      - name: Sync forks
+        if: ${{ !inputs.dry_run }}
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          MAX_FORKS: ${{ inputs.max_forks || '3' }}
+          AHEAD_MAX: ${{ inputs.ahead_max || '20' }}
+          BEHIND_MAX: ${{ inputs.behind_max || '1000' }}
+        run: |
+          # GitHub runs `run:` steps under `bash -e` (errexit). This loop is
+          # best-effort and relies on `cmd; if [ $? -ne 0 ]` and
+          # `|| { ...; continue; }` guards — errexit defeats those (a failing
+          # standalone command aborts the whole step before its check, which is
+          # why the sync died on the first fork). Disable errexit for the loop.
+          set +e
+          SYNCED=0
+          SKIPPED=0
+          CONFLICTS=0
+          ERRORS=0
+          RESULTS=""
+
+          # Run-id suffix keeps each run's branch unique (avoids colliding with
+          # leftover sync/* branches from earlier runs).
+          SYNC_BRANCH="sync/upstream-$(date +%Y-%m-%d)-${GITHUB_RUN_ID}"
+
+          # Fork list: upstream_owner/upstream_repo|fork_name|fork_branch_override
+          FORKS="
+          openclaw/openclaw|PMOVES-ClawZ|
+          Comfy-Org/ComfyUI|PMOVES-Creator|
+          supabase/supabase|PMOVES-supabase|PMOVES.AI-Edition-Hardened
+          tensorzero/tensorzero|PMOVES-tensorzero|
+          firefly-iii/firefly-iii|PMOVES-Wealth|
+          agent0ai/a0-plugins|PMOVES-a0-plugins|
+          coleam00/Archon|PMOVES-Archon|
+          lfnovo/open-notebook|PMOVES-Open-Notebook|
+          NousResearch/hermes-agent|PMOVES-hermes-agent|
+          juanfont/headscale|PMOVES-headscale|
+          e2b-dev/E2B|PMOVES-E2B-Danger-Room|
+          google/A2UI|PMOVES-A2UI|
+          wger-project/wger|Pmoves-Health-wger|
+          e2b-dev/e2b-cookbook|PMOVES-E2b-Spells|
+          e2b-dev/desktop|PMOVES-E2B-Danger-Room-Desktop|
+          Fincept-Corporation/FinceptTerminal|PMOVES-FinceptTerminal|
+          agent0ai/agent-zero|PMOVES-Agent-Zero|
+          microsoft/mcp-gateway|PMOVES-BotZ-gateway|
+          MaxRobinsonTheGreat/hyperdimensions|Pmoves-hyperdimensions|
+          alexziskind1/llama-throughput-lab|PMOVES-llama-throughput-lab|
+          pinokiofactory/Ultimate-TTS-Studio|PMOVES-Pinokio-Ultimate-TTS-Studio|
+          e2b-dev/mcp-server|pmoves-e2b-mcp-server|
+          BlockRunAI/ClawRouter|PMOVES-ClawRouter|
+          WooooDyy/AgentGym|PMOVES-AgentGym|
+          "
+
+          echo "$FORKS" | grep '|' | while IFS='|' read upstream fork branch_override; do
+            [ -z "$fork" ] && continue
+
+            # Check max
+            if [ "$MAX_FORKS" -gt 0 ] && [ "$SYNCED" -ge "$MAX_FORKS" ]; then
+              echo "Reached max $MAX_FORKS limit"
+              break
+            fi
+
+            # Resolve the fork branch to sync. Precedence:
+            #   1. explicit branch_override (3rd FORKS column)
+            #   2. the branch THIS fork's PMOVES.AI gitlink tracks, from .gitmodules
+            #      — this is the consumable line (usually PMOVES.AI-Edition-Hardened);
+            #      syncing the default branch instead leaves the gitlink un-advanceable.
+            #   3. the fork's default branch
+            if [ -n "$branch_override" ]; then
+              fb="$branch_override"
+            else
+              gm="$GITHUB_WORKSPACE/.gitmodules"
+              subpath=$(git config -f "$gm" --get-regexp '\.url$' 2>/dev/null | awk -v f="$fork" '$2 ~ ("/" f "(\\.git)?$") {sub(/\.url$/,"",$1); sub(/^submodule\./,"",$1); print $1; exit}')
+              fb=""
+              [ -n "$subpath" ] && fb=$(git config -f "$gm" --get "submodule.$subpath.branch" 2>/dev/null)
+              [ -z "$fb" ] && { fb=$(gh api "repos/POWERFULMOVES/$fork" --jq '.default_branch' 2>/dev/null) || { echo "SKIP $fork: no default branch"; continue; }; }
+            fi
+            echo "  syncing fork branch: $fb"
+            ub=$(gh api "repos/$upstream" --jq '.default_branch' 2>/dev/null) || { echo "SKIP $fork: no upstream branch"; continue; }
+            uo=$(echo "$upstream" | cut -d/ -f1)
+
+            # Get drift
+            bh=$(gh api "repos/$upstream/compare/$ub...POWERFULMOVES:$fork:$fb" --jq '.behind_by' 2>/dev/null)
+            ah=$(gh api "repos/$upstream/compare/$ub...POWERFULMOVES:$fork:$fb" --jq '.ahead_by' 2>/dev/null)
+            [ -z "$bh" ] && { echo "SKIP $fork: compare failed"; continue; }
+            [ "$bh" -lt 1 ] 2>/dev/null && { echo "SKIP $fork: synced ($bh behind)"; continue; }
+
+            # CRITICAL guard: forks with too much hardening (ahead) or too far
+            # diverged (behind) reliably conflict AND are expensive to clone, so
+            # don't grind them every run — flag for a human manual merge. Set the
+            # ahead_max / behind_max inputs to 0 to disable, or raise to force-attempt.
+            if { [ "$AHEAD_MAX" -gt 0 ] && [ "$ah" -gt "$AHEAD_MAX" ]; } 2>/dev/null; then
+              echo "MANUAL $fork: $bh behind, $ah ahead (ahead > $AHEAD_MAX) — manual merge"
+              continue
+            fi
+            if { [ "$BEHIND_MAX" -gt 0 ] && [ "$bh" -gt "$BEHIND_MAX" ]; } 2>/dev/null; then
+              echo "MANUAL $fork: $bh behind, $ah ahead (behind > $BEHIND_MAX) — manual merge"
+              continue
+            fi
+
+            echo "SYNC $fork: $bh behind, $ah ahead"
+
+            # Check existing PR
+            existing=$(gh api "repos/POWERFULMOVES/$fork/pulls" --jq "[.[] | select(.head.ref | startswith(\"sync/\")) | .number] | .[0] // empty" 2>/dev/null | head -1)
+            if [ -n "$existing" ]; then
+              echo "  SKIP: open sync PR #$existing exists"
+              continue
+            fi
+
+            # --- Local-git merge. The REST /merges API cannot merge a cross-repo
+            # head (owner:branch -> "Head does not exist"), so do the merge in the
+            # runner: clone the fork, pull upstream, merge, push the sync branch,
+            # open a PR. Blobless clone keeps big forks light; a conflicting merge
+            # aborts and skips (those forks get a manual merge). See
+            # pmoves/docs/operations/GITHUB_APP.md.
+            work=$(mktemp -d)
+            d="$work/$fork"
+            if ! git clone --quiet --filter=blob:none --no-tags \
+                "https://x-access-token:${GH_TOKEN}@github.com/POWERFULMOVES/$fork.git" "$d"; then
+              echo "  FAIL: clone"; find "$work" -delete 2>/dev/null; continue
+            fi
+            git -C "$d" config user.name "pmoves-fork-sync[bot]"
+            git -C "$d" config user.email "pmoves-fork-sync[bot]@users.noreply.github.com"
+            git -C "$d" remote add upstream "https://github.com/$upstream.git"
+            if ! git -C "$d" fetch --quiet --filter=blob:none --no-tags upstream "$ub"; then
+              echo "  FAIL: fetch upstream"; find "$work" -delete 2>/dev/null; continue
+            fi
+            if ! git -C "$d" checkout --quiet -B "$SYNC_BRANCH" "origin/$fb"; then
+              echo "  FAIL: checkout $fb"; find "$work" -delete 2>/dev/null; continue
+            fi
+            git -C "$d" merge --no-edit "upstream/$ub"
+            if [ $? -ne 0 ]; then
+              echo "  CONFLICT: $bh behind / $ah ahead — needs manual merge, skipping"
+              git -C "$d" merge --abort 2>/dev/null
+              find "$work" -delete 2>/dev/null; continue
+            fi
+            # Push needs the App's Workflows:write when the merge touches
+            # .github/workflows/ (fork-sync's token has full app perms on these repos).
+            if ! git -C "$d" push --quiet origin "$SYNC_BRANCH"; then
+              echo "  FAIL: push (workflow scope / large repo / protected branch?)"
+              find "$work" -delete 2>/dev/null; continue
+            fi
+            find "$work" -delete 2>/dev/null
+            echo "  Merged upstream into $SYNC_BRANCH"
+
+            # Create PR (same-repo: head is just the branch name).
+            # Build the body with printf so every line stays inside this YAML
+            # block scalar's indentation (a zero-indent line would terminate it).
+            pr_body=$(printf '## Upstream Sync\n\n- **Upstream**: %s (%s)\n- **Behind**: %s commits\n- **Ahead**: %s commits (PMOVES customizations)\n- **Branch**: %s -> %s\n\nMerged locally in the runner (blobless clone). Review the diff to confirm PMOVES customizations are preserved.\n\n---\n*Automated by fork-sync workflow*' "$upstream" "$ub" "$bh" "$ah" "$fb" "$SYNC_BRANCH")
+            pr=$(gh api -X POST "repos/POWERFULMOVES/$fork/pulls" \
+              -f "title=chore: sync upstream ($bh commits behind)" \
+              -f "head=$SYNC_BRANCH" \
+              -f "base=$fb" \
+              -f "body=$pr_body" 2>&1)
+
+            pr_url=$(echo "$pr" | jq -r '.html_url // "error"' 2>/dev/null)
+            pr_num=$(echo "$pr" | jq -r '.number // "?"' 2>/dev/null)
+            if [ "$pr_url" != "error" ] && [ "$pr_url" != "null" ]; then
+              echo "  PR #$pr_num: $pr_url"
+              SYNCED=$((SYNCED + 1))
+              RESULTS="$RESULTS\n- $fork: #$pr_num ($bh behind)"
+            else
+              echo "  FAIL: PR creation: $(echo "$pr" | head -1)"
+              gh api -X DELETE "repos/POWERFULMOVES/$fork/git/refs/heads/$SYNC_BRANCH" > /dev/null 2>&1
+            fi
+
+            sleep 2
+          done
+
+          echo ""
+          echo "=== Results: $SYNCED synced ==="
+          echo "$RESULTS"
+
+      - name: Create issue if attention needed
+        if: ${{ !inputs.dry_run }}
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          # This step runs after sync — the audit step above already showed the state
+          echo "Sync run complete. Check audit output above for forks needing attention."

@@ -11,7 +11,7 @@ Composable procedural skill that ties three existing surfaces together:
 
 1. `/chit:sign-trail` slash command (CHIT signature emission)
 2. `pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md` Active Claim Register (CLAIM / RELEASE bookkeeping)
-3. `chit.signed.v1` NATS subject (downstream observers — Consciousness :8105, Tokenism :8103, Evo Controller :8113)
+3. `chit.signed.v1` NATS subject (downstream observers — Consciousness :8106, Tokenism :8103, Evo Controller :8113)
 
 The NATS leg is **staged but not auto-published** until the `pmoves-nats-mcp` server is wired into `.claude/mcp.json`. Until then, this skill emits a structured message body the operator (or a future hook) can publish.
 
@@ -51,7 +51,7 @@ The NATS leg is **staged but not auto-published** until the `pmoves-nats-mcp` se
 6. **Note NATS-publish gating.** Publishing to `chit.signed.v1` requires the `pmoves-nats-mcp` server to be active in `.claude/mcp.json`. If not present, save the prepared message under your working notes and surface it in the PR description under a `## Pending NATS Publish` heading so the operator (or a future hook) can dispatch it.
 7. **Cross-reference CHIT integration tier.** Open `pmoves/docs/audit/CHIT_INTEGRATION_STATUS.md`, locate the affected service, and confirm its tier (Full / Partial / None). Include this `tier` in the NATS body (step 5). If `None`, raise a warning in the PR — CHIT-aware behavior should not regress to None.
 8. **Update LIVING_DOCS_INDEX if needed.** If the signed change touches a living-doc-tracked artifact, run `pmoves-living-docs-refresh` to confirm the relevant doc has been regenerated; otherwise the signature claims freshness that doesn't exist.
-9. **Smoke-test the consumer side (optional).** If the affected service is `Consciousness :8105` or `Tokenism :8103`, hit its `/healthz` and tail recent logs to confirm it would have consumed `chit.signed.v1` once published. Reuse `pmoves-mesh-preflight` for this check.
+9. **Smoke-test the consumer side (optional).** If the affected service is `Consciousness :8106` or `Tokenism :8103`, hit its `/healthz` and tail recent logs to confirm it would have consumed `chit.signed.v1` once published. Reuse `pmoves-mesh-preflight` for this check.
 10. **Record completion.** Append a final RELEASE row in AGNOTE4482PHI.t1.md (if you previously held a CLAIM), and link the trail-id in the PR body so reviewers can chain the audit.
 
 ## Inputs expected at invocation time

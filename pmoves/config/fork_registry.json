@@ -1,0 +1,101 @@
+{
+  "_doc": "Fork registry for PMOVES.AI. Curated list of forks intended for upstream sync. See research/fork-sync-api-reference.md for API docs.",
+  "_generated": "2026-06-03",
+  "_source": "Curated from pmoves.tools.fork_sync.FORK_CONFIG + API-verified upstreams",
+  "org": "POWERFULMOVES",
+  "forks": {
+    "PMOVES-ClawZ": {
+      "upstream": "openclaw/openclaw"
+    },
+    "PMOVES-Creator": {
+      "upstream": "Comfy-Org/ComfyUI"
+    },
+    "PMOVES-supabase": {
+      "upstream": "supabase/supabase",
+      "branch": "PMOVES.AI-Edition-Hardened"
+    },
+    "PMOVES-tensorzero": {
+      "upstream": "tensorzero/tensorzero"
+    },
+    "PMOVES-Wealth": {
+      "upstream": "firefly-iii/firefly-iii"
+    },
+    "PMOVES-a0-plugins": {
+      "upstream": "agent0ai/a0-plugins"
+    },
+    "PMOVES-Archon": {
+      "upstream": "coleam00/Archon"
+    },
+    "PMOVES-Open-Notebook": {
+      "upstream": "lfnovo/open-notebook"
+    },
+    "PMOVES-hermes-agent": {
+      "upstream": "NousResearch/hermes-agent",
+      "skip": "synced"
+    },
+    "PMOVES-headscale": {
+      "upstream": "juanfont/headscale"
+    },
+    "PMOVES-E2B-Danger-Room": {
+      "upstream": "e2b-dev/E2B"
+    },
+    "PMOVES-A2UI": {
+      "upstream": "google/A2UI"
+    },
+    "Pmoves-Health-wger": {
+      "upstream": "wger-project/wger"
+    },
+    "PMOVES-E2b-Spells": {
+      "upstream": "e2b-dev/e2b-cookbook"
+    },
+    "PMOVES-E2B-Danger-Room-Desktop": {
+      "upstream": "e2b-dev/desktop"
+    },
+    "PMOVES-FinceptTerminal": {
+      "upstream": "Fincept-Corporation/FinceptTerminal"
+    },
+    "PMOVES-Agent-Zero": {
+      "upstream": "agent0ai/agent-zero"
+    },
+    "PMOVES-BotZ-gateway": {
+      "upstream": "microsoft/mcp-gateway"
+    },
+    "Pmoves-hyperdimensions": {
+      "upstream": "MaxRobinsonTheGreat/hyperdimensions"
+    },
+    "PMOVES-llama-throughput-lab": {
+      "upstream": "alexziskind1/llama-throughput-lab"
+    },
+    "PMOVES-Pinokio-Ultimate-TTS-Studio": {
+      "upstream": "pinokiofactory/Ultimate-TTS-Studio"
+    },
+    "pmoves-e2b-mcp-server": {
+      "upstream": "e2b-dev/mcp-server"
+    },
+    "PMOVES-ClawRouter": {
+      "upstream": "BlockRunAI/ClawRouter"
+    },
+    "PMOVES-AgentGym": {
+      "upstream": "WooooDyy/AgentGym"
+    },
+    "PMOVES-autoresearch": {
+      "upstream": "karpathy/autoresearch",
+      "skip": "synced"
+    },
+    "LMRL-Gym": {
+      "upstream": "abdulhaim/LMRL-Gym",
+      "skip": "synced"
+    },
+    "PMOVES-MiniMax-MCP": {
+      "upstream": "MiniMax-AI/MiniMax-MCP",
+      "skip": "synced"
+    },
+    "PMOVES-mike": {
+      "upstream": "willchen96/mike",
+      "skip": "synced"
+    }
+  },
+  "_excluded": {
+    "Pmoves-cipher": "No common ancestor with upstream \u2014 cannot sync via merge API"
+  }
+}

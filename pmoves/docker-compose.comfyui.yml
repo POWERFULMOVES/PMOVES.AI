@@ -1,34 +1,55 @@
+# ComfyUI render engine — SELF-HOST config (PMOVES.AI runs its own fleet GPUs).
+#
+# Runtime is a deliberate, node-impedance-matched choice — pipeline consumers
+# target ${COMFYUI_URL:-http://comfyui:8188}, so ComfyUI can run EITHER as this
+# containerized service OR as a host app, without changing the pipeline:
+#
+#   * 5090 (32GB, image/video workhorse): run THIS service —
+#       make -C pmoves comfyui-up        (profile: creator)
+#   * 4090 workstation: skip this service, run ComfyUI via Pinokio/desktop and
+#     set COMFYUI_URL=http://host.docker.internal:8188 (host-gateway wired below).
+#
+# De-RunPod: builds from upstream source (services/comfyui/Dockerfile) instead
+# of the vendor `runpod/comfyui` image. GPU image — validate the build on-node.
+# See pmoves/docs/handoffs/creator-comfyui-selfhost-config-2026-06-24.md.
 services:
   comfyui:
-    # ComfyUI is a creator-workstation component. This service is optional and
-    # intended for local/dev convenience when you want n8n to call ComfyUI over
-    # the docker network (see pmoves_comfy_gen flow).
-    image: ${COMFYUI_IMAGE:-runpod/comfyui:latest}
+    # Default: locally-built self-host image. Override COMFYUI_IMAGE to pin a
+    # pre-built GHCR tag, or comment out `build:` to use a vetted external image.
+    image: ${COMFYUI_IMAGE:-ghcr.io/powerfulmoves/pmoves-comfyui:pmoves-latest}
+    build:
+      context: ./services/comfyui
+      dockerfile: Dockerfile
+      args:
+        COMFYUI_REF: ${COMFYUI_REF:-v0.3.40}
     restart: unless-stopped
-    # RunPod image clones ComfyUI from GitHub on first start — needs external
-    # network access. Services on only internal: true networks (pmoves_api,
-    # pmoves_data) cannot resolve external DNS because iptables drops forwarding
-    # packets. Adding pmoves_external (non-internal) provides the route.
+    # ComfyUI pulls custom-node deps from the internet on first run; the
+    # host-gateway also lets sibling services reach a host/Pinokio ComfyUI.
     dns:
       - 1.1.1.1
       - 8.8.8.8
     extra_hosts:
       - "host.docker.internal:host-gateway"
     environment:
-      # Most ComfyUI images honor CLI_ARGS; if not, the image default should still bind :8188.
       - CLI_ARGS=--listen 0.0.0.0 --port 8188
     ports:
       - "${COMFYUI_HOST_PORT:-8188}:8188"
     volumes:
-      # Keep all models/outputs persistent. If you prefer bind mounts, override with COMFYUI_DATA_DIR and adjust the mapping.
-      - comfyui-data:/workspace
+      # Persist heavy/stateful surfaces as SUBPATHS only — never mount over
+      # /opt/ComfyUI (that would hide the baked source). Outputs are also
+      # shipped to MinIO by comfy-watcher.
+      - comfyui-models:/opt/ComfyUI/models
+      - comfyui-output:/opt/ComfyUI/output
+      - comfyui-input:/opt/ComfyUI/input
+      - comfyui-custom-nodes:/opt/ComfyUI/custom_nodes
+      - comfyui-user:/opt/ComfyUI/user
     profiles: ["creator"]
     deploy:
       resources:
         reservations:
           devices:
             - driver: nvidia
-              capabilities: [compute,utility]
+              capabilities: [compute, utility]
               count: ${GPU_COUNT:-all}
     networks: [api_tier, data_tier, external_tier]
 
@@ -44,4 +65,8 @@ networks:
     name: pmoves_external
 
 volumes:
-  comfyui-data: {}
+  comfyui-models: {}
+  comfyui-output: {}
+  comfyui-input: {}
+  comfyui-custom-nodes: {}
+  comfyui-user: {}

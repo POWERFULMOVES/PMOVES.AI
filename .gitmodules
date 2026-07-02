@@ -48,7 +48,7 @@
 [submodule "PMOVES-BotZ-gateway"]
 	path = PMOVES-BotZ-gateway
 	url = https://github.com/POWERFULMOVES/PMOVES-BotZ-gateway.git
-	branch = main
+	branch = PMOVES.AI-Edition-Hardened
 
 # =============================================================================
 # Knowledge & Research Services
@@ -280,7 +280,7 @@
 [submodule "pmoves-e2b-mcp-server"]
 	path = pmoves-e2b-mcp-server
 	url = https://github.com/POWERFULMOVES/pmoves-e2b-mcp-server.git
-	branch = main
+	branch = PMOVES.AI-Edition-Hardened
 [submodule "Pmoves-cipher"]
 	path = Pmoves-cipher
 	url = https://github.com/POWERFULMOVES/Pmoves-cipher.git
@@ -337,4 +337,16 @@
 [submodule "skills/Pmoves-claude-d3js-skill"]
 	path = skills/Pmoves-claude-d3js-skill
 	url = https://github.com/POWERFULMOVES/Pmoves-claude-d3js-skill.git
+	branch = main
+[submodule "pmoves-cipher-mcp"]
+	path = pmoves-cipher-mcp
+	url = https://github.com/POWERFULMOVES/pmoves-cipher-mcp.git
+	branch = PMOVES.AI-Edition-Hardened
+[submodule "PMOVES-jcodemunch-mcp"]
+	path = PMOVES-jcodemunch-mcp
+	url = https://github.com/POWERFULMOVES/PMOVES-jcodemunch-mcp.git
+	branch = main
+[submodule "pmoves-hirag-mcp"]
+	path = pmoves-hirag-mcp
+	url = https://github.com/POWERFULMOVES/pmoves-hirag-mcp.git
 	branch = main

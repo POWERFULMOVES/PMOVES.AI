@@ -1,0 +1,7 @@
+{
+  "name": "darkxside-skin",
+  "label": "DARKXSIDE Skin",
+  "register": "human",
+  "accents": { "primary": "darkxside", "secondary": "claude-opus", "signature": "darkxside" },
+  "overrides": { "color": { "bg": "#0a0608", "bg-tint": "#140a0e" } }
+}

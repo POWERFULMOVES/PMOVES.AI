@@ -8,6 +8,11 @@ from .voicebox import (
     VoiceboxNoProfileError,
     VoiceboxProvider,
 )
+from .omnivoice import (
+    OmniVoiceBusyError,
+    OmniVoiceError,
+    OmniVoiceProvider,
+)
 from .whisper import WhisperProvider
 from .ultimate_tts import UltimateTTSError, UltimateTTSProvider
 from .cloning import VoiceCloningProvider, CloningSynthesisProvider
@@ -21,6 +26,9 @@ __all__ = [
     "VoiceboxError",
     "VoiceboxBusyError",
     "VoiceboxNoProfileError",
+    "OmniVoiceProvider",
+    "OmniVoiceError",
+    "OmniVoiceBusyError",
     "WhisperProvider",
     "UltimateTTSProvider",
     "UltimateTTSError",
