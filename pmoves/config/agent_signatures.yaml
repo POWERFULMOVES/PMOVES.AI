@@ -317,6 +317,23 @@ signatures:
         resonance: [infrastructure, persistence-modeling, supabase-integration, docker-hardening]
         description: "Infrastructure mode — Docker hardening, Prometheus, Pinokio launchers, ACL, network fabric"
 
+  b850-claude:
+    agent_id: "b850-claude"
+    display_name: "B850 Claude"
+    glyph: "⌬"              # Benzene ring — MOF lattice node (Knuckles)
+    color: "#DC2626"             # AMD Red
+    accent: "#F87171"
+    voice: analytical             # data-tier + ROCm focused, structured, evidence-first
+    co_author: "B850 Claude (pmoves-b850) <b850@pmoves.ai>"
+    specialization: rocm-data-tier-coordinator
+    routes_to: [rocm-inference, data-tier-ops, model-registry-ops, tensorzero-routing, hermes-standup]
+    resonance:
+      - rocm-dual-gpu
+      - data-tier
+      - dynamic-model-plane
+      - cloud-hybrid-workers
+    description: "Data-tier + ROCm coordinator on B850 Knuckles (dual R9700 64GB, ROCm 7.1) — dynamic model plane, TensorZero routing, HERMES/Agent Zero standup"
+
   5090-claude:
     agent_id: "5090-claude"
     display_name: "5090 Claude"
