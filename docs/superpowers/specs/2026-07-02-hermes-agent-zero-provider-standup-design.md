@@ -57,6 +57,67 @@ temperature/sampling defaults, and capability flags, sourced from one canon
 (`pmoves/configs/model-suits/`). PMOVES fits each model like a glove; no model
 is forced into another model's shape.
 
+## Rev 4 — Topology context (4-agent repo fan-out, 2026-07-02)
+
+Four parallel explorations (P7/pbnj, Archon minting, runner fabric, agent
+inventory) grounded this standup in the real topology. Findings that bind:
+
+**Identity & trust (Archon lane).** Two decoupled systems: Archon's mint
+factory is spec'd but stubbed (zero live `archon.mint.*` publishers; MCP tools
+and `POST /api/agents` 404). The LIVE trust gate is the 3-YAML ledger —
+`agent_signatures.yaml` + `agent_registry.yaml` + an **active card in
+`signing_identity_cards.yaml`** — enforced by
+`require_trusted_agent_identity()` (`pmoves/services/common/model_fitness.py:316-366`),
+which guards `POST /api/model-candidates` and `/api/model-fitness`.
+**Blocking gap:** `hermes-agent` has signature+registry entries but NO signing
+card; `b850-claude` has NO entries at all (z890/5090/4090-claude do). Without
+PR 0 below, the dynamic model pipeline 403s. Proper registration = 3-YAML
+entries **plus** the archon-qa-agent gate review (QA validates NATS namespace,
+branded defaults, CHIT tier) — either alone is a bypass.
+
+**P7 / pbnj (the stage).** pbnj = "PMOVES Batch Node Jobs" (peanut butter &
+jelly) — the launcher pack at `pbnj/pinokio/api/*` (includes an existing
+`pmoves-model-registry` launcher). P7 control plane: `p7.nats.launch` (room+
+suits) and `p7.nats.session` (stage), published by pbnj hooks
+(`pmoves-pbnj/demo.js`, `nats-session-hook.js`). `hermes-agent.room.control`
+already exists in `catalog.json` with a `p7{}` block — the standup publishes
+launch/session events on bring-up. The Pinokio model-selector extends the
+pbnj pack, not a new location. Known bug to fix en route: `demo.js:46` uses
+`2>nul` (cmd.exe-ism; creates a file named `nul` on Linux).
+
+**Runner fabric (where agents execute).** Two fabrics conflated in
+`.claude/context/runner-topology.md`: (A) GitHub self-hosted CI runners
+(ai-lab/vps/hotfix/spark/kvm4-1/kvm4-2/kvm2/cloudstartup — SPARK, hotfix,
+cloudstartup missing from the doc) and (B) model runners (Knuckles
+llama-server gfx1201 fork, SPARK Ollama-ARM64, TensorZero routing plane).
+Announcement plane: `mesh-agent` → `mesh.node.announce.v1` every 15s →
+`node-registry` :8115 → Supabase (queryable REST). Cloudflare today = CI
+orchestration Worker (routing only, routes commented out) + tunnel + R2;
+**Workers AI inference is a planned fallback tier, not wired** — that is the
+"will need cloud" follow-up lane. Port conflict confirmed: the Knuckles node
+profile (`workstation-9850x3d-dual-r9700.yaml`) documents llama-server :8080,
+colliding with Agent Zero — the :8090 move must update that profile too.
+
+**Agent inventory (who exists where).** Five layers: (a) compose agent
+services (agent-zero 8080/8081, archon 8091/8051/8052, gateway-agent **8111**
+— topology doc wrongly says 8100, hi-rag family, mesh-agent, cipher 8105,
+a2ui-bridge 9224, consciousness 8106, evo 8113); (b) node-named CLI
+contributors (z890/5090/4090-claude — **no b850-claude**); (c) 19
+`.claude/agents/` subagent defs; (d) external contributor agents (kilocode,
+codex, hermes-agent, gemini…); (e) persona suits (FlOO$, P7-loaded, not in
+registry). Registry has 79 agents; `PMOVES_AGENT_TOPOLOGY.md` lists ~59 and
+claims 76 — it is meant to be regenerated from the registry
+(`python -m pmoves.tools.agent_taxonomy_helper mermaid`). Delegation paths:
+A0 `/mcp/*` live; A2A server on but discovery/tasks flags default false;
+`mesh.node.announce.v1` live; `agent.peer.heartbeat.v1` not yet.
+
+**Consequence — delivery gains a PR 0 (foundational, before providers):**
+trust-ledger entries for `b850-claude` + `hermes-agent` (3 YAMLs, QA-gated),
+topology regeneration + port/room-count/stub-link corrections, runner-fabric
+doc refresh (two-fabric split, add SPARK/hotfix/cloudstartup). Cloudflare
+Workers AI provider wiring and Archon mint-pipeline liveness are recorded as
+follow-up lanes, not this session's scope.
+
 ## Verified current state (2026-07-02, live probes)
 
 | Component | State |

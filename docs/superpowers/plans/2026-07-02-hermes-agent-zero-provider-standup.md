@@ -23,7 +23,59 @@
 
 ---
 
-## PR 1 — feat(providers): cloud tier + registry-managed worker lanes — branch `feat/provider-cloud-hybrid-tier`
+## PR 0 — feat(identity)+docs(topology): trust ledger + topology refresh — branch `feat/topology-trust-refresh` (PREREQUISITE)
+
+Rationale (spec rev 4): `require_trusted_agent_identity()` (`pmoves/services/common/model_fitness.py:316-366`) demands presence in ALL THREE of `agent_signatures.yaml`, `agent_registry.yaml`, and an ACTIVE card in `signing_identity_cards.yaml`. Today `hermes-agent` lacks a card and `b850-claude` lacks all three — every `POST /api/model-candidates` in PR 2 would 403. Topology docs have drifted from the registry and this correction is foundational context for the whole convergence (operator directive).
+
+### Task 0a: Trust-ledger entries for b850-claude + hermes-agent (QA-gated)
+
+**Files:**
+- Modify: `pmoves/config/agent_signatures.yaml` (add `b850-claude` signature block, modeled on `z890-claude`'s; distinct glyph/color)
+- Modify: `pmoves/config/agent_registry.yaml` (add `b850-claude` to `external_contributors:`; verify `hermes-agent` entries at `:15` and `:2277` remain intact)
+- Modify: `pmoves/config/signing_identity_cards.yaml` (add ACTIVE cards for `b850-claude` and `hermes-agent`, modeled on the `z890-claude` and `hermes` cards; `ml` half may be pending per the file header convention — `h.agent_id` must match exactly)
+
+- [ ] **Step 1:** Read the three existing exemplar blocks (`z890-claude` in all three files, `hermes` card at `signing_identity_cards.yaml:98`) and mirror their exact schema.
+- [ ] **Step 2:** Add the entries. Verify: `python3 -c "import yaml; [yaml.safe_load(open(f)) for f in ['pmoves/config/agent_signatures.yaml','pmoves/config/agent_registry.yaml','pmoves/config/signing_identity_cards.yaml']]; print('OK')"`
+- [ ] **Step 3:** Prove the gate opens — from repo root:
+
+```bash
+cd pmoves && python3 -c "
+from services.common.model_fitness import verify_agent_identity
+for a in ('b850-claude','hermes-agent'):
+    print(a, verify_agent_identity(a))
+"
+```
+
+Expected: both verify (adjust import path to the module's actual API after reading `model_fitness.py:316-366`).
+
+- [ ] **Step 4:** Dispatch the `archon-qa-agent` subagent to review the new identity entries (NATS namespace, branded defaults, name-collision, CHIT tier) — record PASS in the commit body. This honors the Archon gate even though the mint runtime is stubbed.
+- [ ] **Step 5:** Commit: `feat(identity): trust-ledger entries for b850-claude + hermes-agent (QA-gated)`
+
+### Task 0b: Topology regeneration + corrections
+
+**Files:**
+- Regenerate: `pmoves/docs/AGENTS/PMOVES_AGENT_TOPOLOGY.md` via `python -m pmoves.tools.agent_taxonomy_helper mermaid` (from `pmoves/`; read the helper's --help first — regenerate, don't hand-edit)
+- Modify: `.claude/context/runner-topology.md` — split into "CI runner fabric" and "model runner fabric" sections; add missing rows: `pmoves-spark-runner` (self-hosted,spark,ARM64, `/opt/actions-runner-spark`), `hotfix` lane (`local_cert_runners.py:45`), `cloudstartup,staging`; fix Z890-as-primary framing (dev host is B850/Knuckles); note Workers AI = planned fallback tier, CI Worker routes commented out
+- Modify: `pmoves/config/agent_registry.yaml` header — `taxonomy_version: 1.5.0`, updated date
+- Modify: `CLAUDE.md` / `pmoves/docs/ROOMS_ON_A_STAGE.md` P7 links — point to `pmoves/docs/archive/AGNOTE_P7_PLAYGROUND-2026-04-10.md` (the named doc is a 2-line stub)
+- Modify: `.claude/commands/archon/mint-agent.md:36` — room list 4 → the 6 rooms in `catalog.json`
+- Fix: `pbnj/pinokio/api/pmoves-pbnj/demo.js:46` — `2>nul` → `2>/dev/null` (cmd.exe-ism creates a literal `nul` file on Linux)
+
+- [ ] **Step 1:** Run the generator; diff against the hand-edited doc; keep generator output (it reflects the 79-agent registry; old doc listed ~59 and claimed 76).
+- [ ] **Step 2:** Apply the runner-topology, link, room-list, and demo.js fixes. Gateway-agent port corrections (8100→8111) ride along wherever the topology doc mentions it.
+- [ ] **Step 3:** `cd pmoves && python -m pytest tests/ -q` green; `make -C pmoves naming-drift-check || true` (no NEW findings).
+- [ ] **Step 4:** Commit per scope (`docs(topology): regenerate from registry v1.5.0`, `docs(runners): two-fabric split + SPARK/hotfix/cloudstartup`, `fix(pbnj): 2>nul → 2>/dev/null in demo.js`), push, open PR 0:
+
+```bash
+git push -u origin feat/topology-trust-refresh
+gh pr create --base main --title "feat(identity)+docs(topology): b850-claude/hermes-agent trust ledger + topology refresh" --body "Foundational for the cloud-hybrid standup (spec rev 4). Unblocks model-registry trusted-identity gate. 🤖 Generated with [Claude Code](https://claude.com/claude-code)"
+```
+
+Recorded follow-up lanes (NOT this session): Cloudflare Workers AI provider wiring ("will need cloud" tier), Archon mint-pipeline liveness (`archon.mint.*` publishers), A2A discovery/tasks public flags, `agent.peer.heartbeat.v1`.
+
+---
+
+## PR 1 — feat(providers): cloud tier + registry-managed worker lanes — branch `feat/provider-cloud-hybrid-tier` (stacked on PR 0)
 
 ### Task 1: Claim the lane and cut the branch
 
@@ -140,13 +192,14 @@ git commit -m "feat(providers): add kilocode, ollama_cloud, huggingface provider
 - Consumes: `tz_model_key`s from Task 2; existing `chat_zai_glm51`, `chat_moonshot`, `chat_alibaba_qwen`.
 - Produces: functions `pmoves_orchestrator_coding`, `pmoves_orchestrator_chat`, `pmoves_worker_glm`, `pmoves_worker_qwen`, `pmoves_worker_hermes`, `pmoves_worker_kimi`; lane-alias models `registry_worker_glm`, `registry_worker_qwen`, `registry_worker_hermes`, `registry_worker_kimi` inside the REGISTRY-MANAGED markers (bootstrap = cloud parents). Task 4's sync tool owns everything between the markers from then on.
 
-- [ ] **Step 1: Port fix**
+- [ ] **Step 1: Port fix (TZ + node profile — both document llama-server on 8080, which Agent Zero owns)**
 
 ```bash
 sed -i 's|http://pmoves-9850x3d-r9700:8080/v1|http://pmoves-9850x3d-r9700:8090/v1|g' pmoves/tensorzero/config/tensorzero.toml
+grep -n "8080" pmoves/config/profiles/workstation-9850x3d-dual-r9700.yaml   # update llama-server port refs to 8090
 ```
 
-Add above the first `llamacpp_rocm` block: `# Port 8090: 8080 is reserved for Agent Zero fleet-wide (HERMES_AGENT_INTEGRATION.md).`
+Add above the first `llamacpp_rocm` block: `# Port 8090: 8080 is reserved for Agent Zero fleet-wide (HERMES_AGENT_INTEGRATION.md).` Include the node-profile edit in this commit.
 
 - [ ] **Step 2: Cloud model blocks** (model_name values = the verified ids committed in Task 2; keep the two files in lockstep):
 
@@ -779,7 +832,17 @@ security:
 - [ ] **Step 5:** Delegation smoke: `hermes chat -q "Use delegate_task to have a subagent reply with the single word: sibling"` → runs on `pmoves_worker_hermes`.
 - [ ] **Step 6:** Populate profile `.env` (only `NATS_URL` needed — TZ holds provider keys); verify gitignore covers `.hermes` patterns (add `**/.hermes/` if missing — commit in Task 12).
 
-### Task 11: Gateway + NATS + Agent Zero
+### Task 11: Gateway + NATS + Agent Zero + P7 stage events
+
+- [ ] **Step 0 (P7 hook):** On bring-up, announce the room to the stage manager using the existing pbnj hooks (they take `node_id` args — node-agnostic):
+
+```bash
+node pbnj/pinokio/api/pmoves-pbnj/nats-launch-hook.js hermes-agent.room.control rehearsal pmoves-b850 2>/dev/null \
+  || nats pub p7.nats.launch '{"room":"hermes-agent.room.control","stage":"rehearsal","suits":["hermes-gateway"],"node":"pmoves-b850"}' --server "$NATS_URL"
+node pbnj/pinokio/api/pmoves-pbnj/nats-session-hook.js pmoves-b850 hermes-agent.room.control start 2>/dev/null || true
+```
+
+(Read both hook scripts for exact argv before running; the room's `p7{}` block in `pmoves/config/rooms/hermes-agent.room.control.json:219-228` defines the subjects.)
 
 - [ ] **Step 1:** `hermes --profile pmoves-hermes-knuckles gateway run &` then `curl -sf http://localhost:7700/api/health`.
 - [ ] **Step 2:** NATS observation: `nats sub "hermes.>" --count 1 --timeout 30s` via nats-box on `pmoves_pmoves_bus` (env `$NATS_URL`). If this Hermes build has no native NATS publisher: record GAP "NATS bridge = TAC Phase 4 item" — do not fake.
@@ -817,9 +880,12 @@ gh pr create --base main --title "feat(hermes): Knuckles live standup — dynami
 
 ### Task 13: Pinokio launcher — local model selection driving the registry APIs
 
-**Files:**
-- Create: `pmoves/integrations/pinokio/pmoves-model-selector/{pinokio.json,pinokio.js,install.js,start.js,select-model.js,reset.js,update.js,README.md}`
-- Live: `ln -sfn <repo>/pmoves/integrations/pinokio/pmoves-model-selector ~/pinokio/api/pmoves-model-selector`
+**Location decision (spec rev 4):** the launcher lives in the **pbnj pack** — `pbnj/pinokio/api/` — alongside the existing `pmoves-model-registry` launcher there. FIRST read `pbnj/pinokio/api/pmoves-model-registry/` end-to-end: if it already covers model selection, EXTEND it (add select-model.js + the :8090 llama-server lane) instead of creating a sibling; create `pbnj/pinokio/api/pmoves-model-selector/` only if the existing launcher's scope genuinely differs (registry service bring-up vs model selection UI).
+
+**Files (if creating new):**
+- Create: `pbnj/pinokio/api/pmoves-model-selector/{pinokio.json,pinokio.js,install.js,start.js,select-model.js,reset.js,update.js,README.md}`
+- Live: `ln -sfn <repo>/pbnj/pinokio/api/pmoves-model-selector ~/pinokio/api/pmoves-model-selector`
+- Wire P7: after start, publish stage events via `pbnj/pinokio/api/pmoves-pbnj/nats-{launch,session}-hook.js` (same pattern as Task 11 Step 0)
 
 **MANDATORY pre-work (CLAUDE.md Pinokio workflow):** load `.claude/PINOKIO_LAUNCHER_GUIDE.md`; `PINOKIO_HOME=/home/pmoves-knuckles/pinokio` (verified from `~/.pinokio/config.json`); example lock-in `prototype/system/examples/mochi/start.js`; URL capture via `on: [{event: "/(http:\\/\\/[0-9.:]+)/", done: true}]` + `local.set {url: "{{input.event[1]}}"}`.
 
