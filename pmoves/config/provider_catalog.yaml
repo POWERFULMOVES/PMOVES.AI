@@ -696,3 +696,79 @@ providers:
             weight: 0.1                             # soak — model verified on pmoves-spark 2026-05-10
         strength_ref: null
         vram_mb: 90000                 # NVFP4 quant; fits 128 GB unified with headroom
+
+  # ---------------------------------------------------------------------------
+  # Kilo Code — coding plan (OpenRouter-compatible gateway)
+  # Verified 2026-07-02: GET https://api.kilocode.ai/api/openrouter/models
+  # (335 models; kilo-auto/* are Kilo's own plan-routed lanes).
+  # NOTE: kilocode.ai (no api. prefix) 308-redirects — use api.kilocode.ai.
+  # ---------------------------------------------------------------------------
+  kilocode:
+    env_var: KILOCODE_API_KEY
+    key_pattern: ".*"
+    api_base: "https://api.kilocode.ai/api/openrouter"
+    tz_type: openai
+    tier: llm
+    coding_stack: kilocode_plan
+    models:
+      chat_kilocode:
+        model_name: "kilo-auto/balanced"   # Kilo plan-routed lane (provider picks model)
+        tz_model_key: chat_kilocode
+        serves:
+          - function: pmoves_orchestrator_coding
+            variant_name: cloud_kilocode
+            role: secondary
+            weight: 0.0
+        strength_ref: null
+        vram_mb: 0
+
+  # ---------------------------------------------------------------------------
+  # Ollama Cloud — Ollama Pro plan (hosted models at ollama.com)
+  # Verified 2026-07-02: glm-5.2 present in this account's model list
+  # (~/.hermes/ollama_cloud_models_cache.json — also kimi-k2.7-code,
+  # qwen3-coder:480b, nemotron-3-ultra as future lanes).
+  # ---------------------------------------------------------------------------
+  ollama_cloud:
+    env_var: OLLAMA_API_KEY
+    key_pattern: ".*"
+    api_base: "https://ollama.com/v1"
+    tz_type: openai
+    tier: llm
+    models:
+      chat_ollama_cloud_default:
+        model_name: "glm-5.2"
+        tz_model_key: chat_ollama_cloud_default
+        serves:
+          - function: pmoves_orchestrator_chat
+            variant_name: cloud_ollama_default
+            role: primary
+            weight: 0.0
+          - function: pmoves_orchestrator_coding
+            variant_name: cloud_ollama_default
+            role: fallback
+            weight: 0.0
+        strength_ref: null
+        vram_mb: 0
+
+  # ---------------------------------------------------------------------------
+  # HuggingFace Inference Router — orchestrator fallback + Unsloth weights source
+  # Verified 2026-07-02: GET https://router.huggingface.co/v1/models
+  # (123 models; Qwen/Qwen3-Coder-30B-A3B-Instruct live).
+  # ---------------------------------------------------------------------------
+  huggingface:
+    env_var: HF_TOKEN
+    key_pattern: "^hf_"
+    api_base: "https://router.huggingface.co/v1"
+    tz_type: openai
+    tier: llm
+    models:
+      chat_hf_router:
+        model_name: "Qwen/Qwen3-Coder-30B-A3B-Instruct"
+        tz_model_key: chat_hf_router
+        serves:
+          - function: pmoves_orchestrator_coding
+            variant_name: cloud_hf_router
+            role: fallback
+            weight: 0.0
+        strength_ref: null
+        vram_mb: 0
