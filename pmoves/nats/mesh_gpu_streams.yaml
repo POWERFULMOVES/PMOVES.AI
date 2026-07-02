@@ -1,6 +1,13 @@
 # JetStream stream definitions for mesh.gpu.* NATS subjects
 # Referenced by: DGX Spark TAC tree (pmoves/configs/tac_trees/dgx-spark.tac.yaml)
-# Deploy via: nats stream add --config pmoves/nats/mesh_gpu_streams.yaml
+#
+# NOTE (2026-06-29): This file is now reference-only / superseded.
+# The live topology uses a single catch-all stream created by
+# `pmoves/scripts/nats/init_streams.sh`:
+#   MESH_GPU  -> subjects mesh.gpu.>
+# The granular stream/consumer layout below documents the intended
+# subject namespace and durable-consumer design; services attach to the
+# catch-all stream directly. Do not deploy from this file.
 
 streams:
   - name: mesh_gpu_inference

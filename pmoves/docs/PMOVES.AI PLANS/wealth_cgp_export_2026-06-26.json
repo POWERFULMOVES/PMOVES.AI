@@ -1,0 +1,18 @@
+{
+  "schema_version": "chit.cgp.v0.2",
+  "envelope_type": "geometry.wealth.v1",
+  "run_id": "tokenism-run-2026-06-26-001",
+  "label": "Swarm_Economy_Week1",
+  "state_vector": {
+    "delta": 0.4,
+    "kappa": -0.76,
+    "Hz": 0.16,
+    "A": 0.5,
+    "F": 0.325
+  },
+  "anchor": [5.924, 9.335, 3.592],
+  "signature": "mock-signature-dev-mode",
+  "signed_at": "2026-06-26T07:10:00Z",
+  "source_simulation_id": "baseline-week-1",
+  "source_url": "http://tokenism-simulator:8100/api/v1/simulate"
+}

@@ -1,6 +1,15 @@
 # JetStream stream definitions for provenance-first content shaping on the z890 lane.
 # Referenced by: PMOVES_SPARK_PROVENANCE_PARITY.md
-# Deploy via: nats stream add --config pmoves/nats/content_provenance_streams.yaml
+#
+# NOTE (2026-06-29): This file is now reference-only / superseded.
+# The live topology uses a single catch-all stream created by
+# `pmoves/scripts/nats/init_streams.sh`:
+#   CONTENT_PROVENANCE  -> subjects content.>
+# That stream carries content.raw.v1, content.lexicon.shaped.v1,
+# content.provenance.attested.v1, content.hirag.accepted.v1, and
+# content.hirag.rejected.v1. The consumer layout below documents the
+# intended durable-consumer design; services attach to the catch-all
+# stream directly. Do not deploy from this file.
 
 streams:
   - name: content_provenance

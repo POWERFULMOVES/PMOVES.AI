@@ -307,7 +307,7 @@ def metrics():
         as configured in the Prometheus scrape configuration. The metrics
         include labels for scenario type and status (success/error/queued).
     """
-    return generate_latest(), 200
+    return generate_latest(), 200, {'Content-Type': 'text/plain; version=0.0.4; charset=utf-8'}
 
 
 @simulation_bp.route('/api/v1/simulate', methods=['POST'])

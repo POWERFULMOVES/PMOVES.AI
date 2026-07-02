@@ -70,6 +70,15 @@
       "capabilities": ["pipeline-health", "artifact-preview", "render-status"],
       "pinned": false,
       "status": "active"
+    },
+    {
+      "app_id": "mcp-voice",
+      "kind": "custom",
+      "route": "/mcp/voice",
+      "provider": "pmoves-voice-mcp",
+      "action_namespace": "mcp.v1.voice",
+      "capabilities": ["voice", "tts", "voice-select", "clone"],
+      "status": "planned"
     }
   ],
   "notebook": {
@@ -190,6 +199,59 @@
       },
       "enabled": true,
       "tags": ["preflight", "voice", "pipeline"]
+    },
+    {
+      "binding_id": "voice-mcp-bridge",
+      "skill_id": "pmoves_voice_mcp",
+      "room_id": "5090-voice.room.studio",
+      "display_name": "Voice MCP Bridge",
+      "intent": ["voice", "tts"],
+      "activation": {
+        "invocation_mode": "explicit",
+        "trigger_phrases": ["open voice mcp", "select a voice", "resolve voice profile"],
+        "requires_selection": false
+      },
+      "surface": {
+        "app_id": "mcp-voice",
+        "target": "sidebar",
+        "route": "/mcp/voice"
+      },
+      "execution": {
+        "mode": "background",
+        "run_as": "room-service",
+        "stream": "events",
+        "max_steps": 4
+      },
+      "context": {
+        "sources": ["agent-registry", "persona", "room-state"],
+        "include_last_turns": 2,
+        "notebook_writeback": true,
+        "artifact_types": ["json", "audio"]
+      },
+      "outputs": [
+        {
+          "target": "room-state",
+          "delivery": "replace",
+          "path": "mcp/voice/last-result",
+          "artifact_type": "json"
+        },
+        {
+          "target": "chat-response",
+          "delivery": "notify",
+          "artifact_type": "text"
+        }
+      ],
+      "guardrails": {
+        "require_approval": false,
+        "max_runtime_sec": 60,
+        "fail_open": true,
+        "one_active_run": true
+      },
+      "enabled": false,
+      "tags": ["mcp", "voice", "planned"],
+      "metadata": {
+        "status": "planned"
+      }
     }
   ],
   "team_refs": ["media", "evolution"],
