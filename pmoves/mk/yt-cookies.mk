@@ -12,27 +12,31 @@
 
 .PHONY: yt-cookies-auth yt-cookies-refresh yt-cookies-status yt-cookies-revoke yt-cookies-check yt-cookies-bootstrap yt-ingest-bootstrap yt-ingest-bootstrap-noegress up-yt-cookies build-yt-image
 
-yt-cookies-check: ## Preflight: verify Google OAuth client env vars are set
+yt-cookies-check: ## Preflight: verify Google OAuth + Supabase env vars are set
 	@echo "=== YT Cookies: preflight check ==="
-	@missing=0; \
-	for var in CHANNEL_MONITOR_GOOGLE_CLIENT_ID CHANNEL_MONITOR_GOOGLE_CLIENT_SECRET; do \
-		val=$$(bash scripts/with-env.sh printenv $$var 2>/dev/null || true); \
-		if [ -z "$$val" ] || [ "$$val" = "YOUR_GOOGLE_CLIENT_ID_HERE.apps.googleusercontent.com" ] || [ "$$val" = "GOCSPX-YOUR_CLIENT_SECRET_HERE" ]; then \
-			echo "✗ $$var: not configured"; \
-			missing=$$((missing + 1)); \
-		else \
-			echo "✓ $$var: set (length=$${#val})"; \
-		fi; \
-	done; \
-	if [ $$missing -gt 0 ]; then \
-		echo ""; \
-		echo "ERROR: $$missing required env var(s) missing."; \
-		echo "Set them in pmoves/env.shared. See env.shared.example for guidance."; \
-		echo "These are the SAME credentials used by channel-monitor."; \
+	@hard=0; \
+	cid=$$(bash scripts/with-env.sh printenv GOOGLE_OAUTH_CLIENT_ID 2>/dev/null || true); \
+	[ -z "$$cid" ] && cid=$$(bash scripts/with-env.sh printenv GOOGLE_CLIENT_ID 2>/dev/null || true); \
+	[ -z "$$cid" ] && cid=$$(bash scripts/with-env.sh printenv CHANNEL_MONITOR_GOOGLE_CLIENT_ID 2>/dev/null || true); \
+	csec=$$(bash scripts/with-env.sh printenv GOOGLE_OAUTH_CLIENT_SECRET 2>/dev/null || true); \
+	[ -z "$$csec" ] && csec=$$(bash scripts/with-env.sh printenv GOOGLE_CLIENT_SECRET 2>/dev/null || true); \
+	[ -z "$$csec" ] && csec=$$(bash scripts/with-env.sh printenv CHANNEL_MONITOR_GOOGLE_CLIENT_SECRET 2>/dev/null || true); \
+	if [ -z "$$cid" ] || [ "$$cid" = "YOUR_GOOGLE_CLIENT_ID_HERE.apps.googleusercontent.com" ]; then echo "✗ client id (GOOGLE_OAUTH_CLIENT_ID / GOOGLE_CLIENT_ID / CHANNEL_MONITOR_*): not configured"; hard=$$((hard+1)); else echo "✓ client id: set (length=$${#cid})"; fi; \
+	if [ -z "$$csec" ] || [ "$$csec" = "GOCSPX-YOUR_CLIENT_SECRET_HERE" ]; then echo "✗ client secret (GOOGLE_OAUTH_CLIENT_SECRET / GOOGLE_CLIENT_SECRET / CHANNEL_MONITOR_*): not configured"; hard=$$((hard+1)); else echo "✓ client secret: set (length=$${#csec})"; fi; \
+	srk=$$(bash scripts/with-env.sh printenv SERVICE_ROLE_KEY 2>/dev/null || true); \
+	[ -z "$$srk" ] && srk=$$(bash scripts/with-env.sh printenv SUPABASE_SERVICE_ROLE_KEY 2>/dev/null || true); \
+	if [ -z "$$srk" ]; then echo "✗ SERVICE_ROLE_KEY (or SUPABASE_SERVICE_ROLE_KEY): not configured (required to store the token)"; hard=$$((hard+1)); else echo "✓ service role key: set (length=$${#srk})"; fi; \
+	surl=$$(bash scripts/with-env.sh printenv SUPABASE_URL 2>/dev/null || true); \
+	[ -z "$$surl" ] && surl=$$(bash scripts/with-env.sh printenv SUPA_REST_URL 2>/dev/null || true); \
+	if [ -z "$$surl" ]; then echo "⚠ SUPABASE_URL/SUPA_REST_URL: not set — defaults to http://supabase-kong:8000 (fine in-compose)"; else echo "✓ supabase url: set"; fi; \
+	venc=$$(bash scripts/with-env.sh printenv VAULT_ENC_KEY 2>/dev/null || true); \
+	if [ -z "$$venc" ]; then echo "⚠ VAULT_ENC_KEY: not set — token would be stored UNENCRYPTED (set it before auth)"; else echo "✓ VAULT_ENC_KEY: set (length=$${#venc})"; fi; \
+	if [ $$hard -gt 0 ]; then \
+		echo ""; echo "ERROR: $$hard required var(s) missing. Set them in env.shared via the secrets-funnel."; \
+		echo "See PMOVES_YT_GOOGLE_OAUTH_DESKTOP_SETUP.md for the walkthrough."; \
 		exit 1; \
 	fi; \
-	echo ""; \
-	echo "✓ Preflight passed. Ready for: make yt-cookies-auth"
+	echo ""; echo "✓ Preflight passed. Ready for: make yt-cookies-auth"
 
 yt-cookies-auth: yt-cookies-check ## One-time OAuth2 consent flow (opens browser)
 	@echo "=== YT Cookies: OAuth2 consent flow ==="

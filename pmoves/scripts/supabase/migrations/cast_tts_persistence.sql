@@ -22,7 +22,8 @@ ALTER TABLE pmoves_core.cast_voice_profiles ENABLE ROW LEVEL SECURITY;
 CREATE POLICY cast_voice_profiles_service_bypass
     ON pmoves_core.cast_voice_profiles
     FOR ALL
-    USING (current_setting('request.jwt.claim.role', true) = 'service_role');
+    TO service_role
+    USING (true);
 
 -- Scheduled announcements -------------------------------------------------
 CREATE TABLE IF NOT EXISTS pmoves_core.cast_scheduled_announcements (
@@ -44,4 +45,5 @@ ALTER TABLE pmoves_core.cast_scheduled_announcements ENABLE ROW LEVEL SECURITY;
 CREATE POLICY cast_scheduled_service_bypass
     ON pmoves_core.cast_scheduled_announcements
     FOR ALL
-    USING (current_setting('request.jwt.claim.role', true) = 'service_role');
+    TO service_role
+    USING (true);

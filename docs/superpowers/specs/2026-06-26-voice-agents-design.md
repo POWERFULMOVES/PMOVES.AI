@@ -49,6 +49,16 @@ These resolve the §10 open questions and add binding architectural direction:
   is *one* engine; an agent selects among many by purpose/hardware, and the design controls
   available come from that engine's declared surface. (Drives the capability matrix in §3
   becoming the source of truth for what each engine exposes.)
+- **Accessibility / capability-routing — no capability is the sole path (2026-06-29):**
+  voice in/out is **optional per node**, routed by what the node *has*. A node without a
+  microphone is **not** locked out: it uses **text-in** for agent interaction; a node
+  without a local speaker routes **TTS-out to an available cast/Nest target** (or falls
+  back to **text-out**). **Z890 (no mic, has Nest speakers) is the canonical testbed**
+  for the text-in → Nest-TTS-out path. This is an instance of capability-routing (Clause 2)
+  in the **Safe-Activation Contract** (`pmoves/docs/security/SAFE_ACTIVATION_CONTRACT.md`):
+  PMOVES funnels the operator to the safe variant for their capability set rather than
+  failing on a missing one. (CHIT unseal follows the same rule — voice OR typed OR key-file
+  — but that lives in the CHIT-unseal follow-up, not this voice spec.)
 - **Demo posture (Q4/Q5) — no meter to be burned:**
   - **Public (pmoves.ai):** **pre-canned** voice-over-agent-trails — narrated chronicles of
     agent exploits / agent summaries / examples of voice agents. **Pre-rendered audio, not
@@ -57,6 +67,25 @@ These resolve the §10 open questions and add binding architectural direction:
     **join / sign up** to access; not open to the public internet.
   - **Any live public hosting** uses **light engines only (Kokoro / OmniVoice / small)** so a
     hosting Jetson/light node can't be overrun. `VOICE_CLONING_ENABLED=false` for public stays.
+  - **Clone availability is mesh-gated (operator, 2026-06-28):** `VOICE_CLONING_ENABLED=false` on
+    public ≠ "no clone." Voice cloning **IS available to registered nodes on the Tailscale mesh**
+    (via Pinokio / MCP / A2A), authenticated and hard-gated by the consent/provenance model (§8).
+    The **public website** keeps clone OFF and instead serves **pre-canned examples** + a
+    **pass-through to the creator pipeline** that turns the live topology / agents / actions
+    (real CHIT trails) into illustrative demos of PMOVES building itself. So: **clone on the mesh,
+    demos on the web.** (The CHIT-trail-as-animated-story creator surface is its own roadmap thread —
+    see `[[vision_chit_trail_creator_storytelling]]`.)
+- **Voice RBAC (Q9) — post-launch via Supabase RLS** (operator, 2026-06-28): Wave-1 ships
+  **creator-scoped ownership only** (a voice belongs to its `created_by`); full multi-tenant
+  ownership/sharing ("who may clone Alice's voice?") lands later via RLS on `voice_profiles`,
+  so S1-S8 are not blocked on it now.
+
+**Pending operator confirmation — bind the mesh clone flow (clone is enabled on the tailnet):**
+Q6 speaker-verify depth, Q7 multilingual representation, Q8 CHIT-signing for clone events,
+Q10 async clone-training job location. These have design context already (Q7 ↔ the §3
+`engine_specific`/`tags` language fields; Q8 ↔ the existing CHIT CGP publish in §8), so they're
+*finalize*, not *design-from-scratch*. Public-website demos don't touch them (pre-canned); the
+mesh clone path (S8) does — confirm before S8 lands.
 
 ## 2. Architecture Overview
 
@@ -96,6 +125,16 @@ These resolve the §10 open questions and add binding architectural direction:
 
 **`engine_specific` shapes:** `omnivoice{ref_audio, instruct, ref_text}` · `voicebox{profile_id, voice_type, language}` · `ultimate_tts{primary_engine, fallback_engines[], <engine>_voice}` · `vibevoice{voice_preset}`.
 
+**`grounding` JSONB — a CONTRACT (not illustrative).** Keys resolve to the real substrate PKs; `/validate` (S1b) enforces the shape:
+```
+{ "persona_ids": uuid[]          → v5_12 pmoves_core.personas.persona_id,
+  "consciousness_theory_id": text → v5_15 pmoves_core.consciousness_theories.id,
+  "paradigm": text,
+  "paradigm_proponent_ids": id[]  → NEEDS a backing table or a named resolver (none yet),
+  "proponents": [{name, weight, ref_audio}], "blend": "weighted" }
+```
+Use `consciousness_theory_id` (NOT `consciousness_shape` — v5_15 has no "shape" column). A voice grounded in a blend of paradigm proponents resolves through this; grounding is the cross-lane spine (see §4a), not a voice-only column.
+
 **Capability matrix** (drives realtime vs batch routing; persist as config YAML or table):
 
 | Engine | clone | design | streaming | langs | native profile store | role |
@@ -115,6 +154,22 @@ These resolve the §10 open questions and add binding architectural direction:
 - **flute-gateway consistency:** preload registry in `main.py` lifespan into an in-process cache; refresh on 5-min TTL; invalidate on NATS `voice.registry.update.v1`. `select_provider_and_params()` priority: explicit `voice` slug → registry; else `persona_id` → `resolve_persona_engine()` (unchanged, `persona_selector.py:71-154`); else `intent`; else `DEFAULT_VOICE_PROVIDER` (omnivoice, PR #1885).
 - **Voicebox bootstrap:** on empty Voicebox (`VoiceboxNoProfileError`), auto-create a preset (Kokoro `af_bella`), cache its UUID into a profile row.
 - **New endpoints:** `GET /v1/voice/profiles` (list/filter by tag/engine/rights), `GET /v1/voice/profiles/{name}`, `POST /v1/voice/profiles`, `POST /v1/voice/profiles/{name}/validate` (checks requested params against capability matrix).
+- **RLS uses dependency-free, repo-standard accessors** — `auth.uid()` (owner/sub; Supabase built-in, used in `channel_monitor_tables.sql`) and **`TO service_role`** (Postgres-role-targeted policies for service access; `service_catalog.sql:73`). **Do NOT use** the PostgREST-9.0-removed `request.jwt.claim.*` GUCs (resolve empty → dead RLS) **nor `jwt_claim_role()`** (NOT defined anywhere in repo SQL — using it aborts `CREATE POLICY`). Applied in #1890 (v5_16) + #1897.
+
+## 4a. Convergence — Voice as a Discoverable Capability (two planes, one join key)
+
+The voice-agent pair-review (#1890 ↔ SPARK #1893 agent_registry MCP/A2A discovery ↔ #1894 room MCP apps/bindings) found three lanes picking **divergent idioms** for "register a capability": voice = Postgres table + closed engine enum (#1890); MCP/A2A servers = open YAML + env (#1893); rooms = skill-name bindings (#1894). Voice is therefore **not discoverable** via `agent_registry`, and **grounding lives only on a voice row** — an agent's grounded identity (#1890) and its discoverable capabilities (#1893/#1894) sit in disjoint substrates with no join key.
+
+**Principle — two planes, one join key.** `voice_profiles` stays the *truth + routing* plane (rich engine_specific, RLS, media). Add a thin *discovery shim* so voice is reachable through the same `agent_registry → room` plane as every other capability. Don't collapse one into the other; bridge them.
+
+1. **Discovery plane (#1893):** register voice as an `mcp_servers` entry — `name: pmoves-voice-mcp`, `class: flute_gateway`, `action_namespace: mcp.v1.voice`, `capabilities: [voice, tts, voice-select, clone]`, `endpoint_env: PMOVES_VOICE_MCP_ENDPOINT`, `rooms: ["5090-voice.room.studio"]`, and a `resolves: {registry: supabase, table: pmoves_core.voice_profiles, by: name}` join to the truth plane.
+2. **Room plane (#1894):** add `app_id: mcp-voice` + a `skill_binding` (`intent:[voice,tts]`, `context.sources:[agent-registry, persona]`) in `5090-voice.room.studio`; runtime resolves a `voice_profiles` row by `name` slug.
+3. **Shared capability vocabulary** (single union list incl. `voice`/`tts`); room app `capabilities` *reference* the registry list, validator cross-checks (kills the double source of truth).
+4. **Lifecycle-key policy:** `status` (planned/active = *deployment* lifecycle) is shared across the DB + YAML registries (voice `status` derived from `is_active`); `evolution_stage` (agent *maturity*) is orthogonal — not a synonym.
+5. **Naming map (one documented chain):** `registry_key (snake)` ↔ `name/provider (kebab)` ↔ `action_namespace (mcp.v1.<x>)` ↔ `voice name (slug)`.
+6. **Grounding becomes the shared spine:** mark `hirag`/`cipher` mcp_servers with `grounding_source: true` so a discovering agent knows where to retrieve startup grounding. Resolution becomes one path: **room discovery → agent-registry (grounding_source) → voice_profiles.grounding → personas(v5_12) / consciousness_theories(v5_15) / paradigm-proponents.**
+
+This is delivered as **S1c** (§9) — a cross-lane PR after SPARK #1893/#1894 land; none of the three current PRs block on it.
 
 ## 5. JuiceFS Cross-Node Voice Storage
 
@@ -170,6 +225,8 @@ Enrollment writes temp-file then atomic `rename` into `enrolled/`; cross-node mu
 | Stage | Scope | Lane | Built / New |
 |---|---|---|---|
 | **S1 — Registry contract** | `voice_profiles` table + migration `v5_16`; flute-gateway lifespan preload + cache + `select_provider_and_params`; `GET/POST /v1/voice/profiles`, `/validate` | **4090** | `cast_tts_persistence`/`persona_selector` exist; table+endpoints new |
+| **S1-gate — migration applier** | confirm `pmoves/db/v5_16` (and v5_15) actually apply: `apply_migrations_docker.sh` globs only `pmoves/supabase/migrations/*.sql` → move v5_16 there OR wire the `pmoves/db` lexical-order applier (after v5_13 grants). **Gates #1890 applying in standard deploys.** | **Z890-DB** | runner exists; path-wire new |
+| **S1c — Voice discovery unification** (§4a) | register voice in `agent_registry` (`mcp.v1.voice`, caps `voice/tts`) + `5090-voice.room.studio` binding; `grounding_source:true` on hirag/cipher; shared capability vocab; validator cross-checks (`app_id→apps[]`, registry↔manifest); naming-map doc | **cross-lane** (4090 + SPARK) | after #1893/#1894 land; none block on it |
 | **S2 — Capability matrix + routing** | capability YAML/table; realtime-vs-batch routing; Voicebox bootstrap preset | **4090** | providers exist; matrix+routing new |
 | **S3 — Vertical slice: Try** | enable `OMNIVOICE_REFERENCE_VOICE_DIR` (3-5 seed voices, MinIO interim), `GET /registry`, `POST /try`, demo Try page + consent checkbox + basic rate-limit | **4090** | OmniVoice `/synthesize` exists; registry/try/UI new |
 | **S4 — Talk demo** | frontend WS duplex page; handshake `{persona_id, voice_id}`; per-conn rate-limit | **4090** | `/v1/voice/agent` exists; UI + handshake new |

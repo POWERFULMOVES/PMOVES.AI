@@ -58,6 +58,8 @@ except ImportError:
     create_a2a_router = None
     _A2A_ROUTER_AVAILABLE = False
 
+_A2A_ENABLED = os.environ.get("A2A_ENABLED", "true").lower() in ("true", "1", "yes", "on")
+
 
 @dataclass
 class AgentZeroRuntimeConfig:
@@ -668,12 +670,15 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="Agent Zero Supervisor", lifespan=lifespan)
 
 # Mount A2A protocol routes
-if _A2A_ROUTER_AVAILABLE:
+if _A2A_ROUTER_AVAILABLE and _A2A_ENABLED:
     a2a_router = create_a2a_router()
     app.include_router(a2a_router)
     logger.info("A2A protocol routes mounted (/.well-known/agent-card.json, /a2a/v1/*)")
 else:
-    logger.warning("A2A router not available — python.features.a2a.server import failed")
+    if not _A2A_ROUTER_AVAILABLE:
+        logger.warning("A2A router not available — python.features.a2a.server import failed")
+    else:
+        logger.info("A2A protocol routes disabled via A2A_ENABLED=false")
 
 # Prometheus metrics
 from prometheus_client import (

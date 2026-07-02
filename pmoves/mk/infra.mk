@@ -14,6 +14,7 @@ VALID_SERVICES := neo4j tensorzero-clickhouse meilisearch qdrant minio supabase-
        tailscale-docker-up tailscale-docker-down tailscale-docker-status tailscale-docker-ip \
        fleet-status fleet-rustdesk-fix fleet-enroll fleet-stale-audit \
        up-ollama up-gpu-orchestrator up-vllm model-pull gpu-status port-audit \
+       safe-opening-audit \
 
 volume-reset: ## Reset a service volume: make volume-reset SERVICE=tensorzero-clickhouse
 	@if [ -z "$(SERVICE)" ]; then \
@@ -424,6 +425,15 @@ port-audit: ## Audit Docker port bindings for unexpected 0.0.0.0 exposure
 	}
 	@$(PYTHON) tools/port_audit.py
 	@echo "=== Port audit complete ==="
+
+safe-opening-audit: ## Audit reachable surfaces for the bind->auth coupling (Safe-Activation Contract Clause 3)
+	@echo "=== Safe-Opening Audit (bind -> auth coupling) ==="
+	@docker compose config --format json >/dev/null 2>&1 || { \
+	  echo "ERROR: docker compose config failed; aborting safe-opening audit."; \
+	  exit 1; \
+	}
+	@$(PYTHON) tools/safe_opening_audit.py
+	@echo "=== Safe-opening audit complete ==="
 
 # ── Branch Management ─────────────────────────────────────────────────
 branch-audit: ## List stale remote branches with age and merge status

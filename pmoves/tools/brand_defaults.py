@@ -366,6 +366,21 @@ def _ensure_agent_zero_defaults(text: str) -> str:
     if _is_blank_or_placeholder(events_token):
         text = _set_kv(text, "AGENT_ZERO_EVENTS_TOKEN", _strong_random(32))
 
+    # A0_SELF_UPDATE_REMOTE_URL: pin the in-app self-updater at the PMOVES fork.
+    # Without this, Agent Zero's webUI "Update" button defaults to upstream
+    # agent0ai/agent-zero and its post-fetch `git clean -ffd` wipes the PMOVES
+    # custom modules. Upserting here (not just env.shared.example) is what reaches
+    # EXISTING installs — ensure_env_shared only copies the example when env.shared
+    # is missing, so the example default alone never lands on already-provisioned
+    # nodes (Codex P1 #1906). See pmoves/docs/security/AGENT_ZERO_SELF_UPDATER.md.
+    self_update_remote = _get_kv(text, "A0_SELF_UPDATE_REMOTE_URL")
+    if not self_update_remote:
+        text = _set_kv(
+            text,
+            "A0_SELF_UPDATE_REMOTE_URL",
+            "https://github.com/POWERFULMOVES/PMOVES-Agent-Zero.git",
+        )
+
     return text
 
 

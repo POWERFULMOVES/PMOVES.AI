@@ -615,6 +615,18 @@ supa-use-remote: ## Write .env.local from remote Supabase template (fill remote 
 	@rm -f env.supa.runtime
 	@echo "✅ .env.local updated for remote Supabase runtime template"
 
+.PHONY: db-apply-migration
+db-apply-migration: ## Known Road: mirror a versioned db/v5_*.sql into the ledgered supabase/migrations/ path. Usage: make db-apply-migration SRC=db/v5_16_voice_catalog.sql DST=20260628000000_voice_catalog.sql
+	@test -n "$(SRC)" || { echo "❌ SRC required (e.g. db/v5_16_voice_catalog.sql)"; exit 1; }
+	@test -n "$(DST)" || { echo "❌ DST required (e.g. 20260628000000_voice_catalog.sql)"; exit 1; }
+	@case "$(SRC)" in db/v5_*.sql) : ;; *) echo "❌ SRC must be a versioned db/v5_*.sql source-of-truth"; exit 1 ;; esac
+	@case "$(DST)" in */*) echo "❌ DST must be a bare filename, not a path"; exit 1 ;; esac
+	@case "$(DST)" in *.sql) : ;; *) echo "❌ DST must end in .sql"; exit 1 ;; esac
+	@test -f "$(SRC)" || { echo "❌ SRC not found: $(SRC)"; exit 1; }
+	@test ! -e "supabase/migrations/$(DST)" || { echo "❌ refusing to overwrite existing supabase/migrations/$(DST)"; exit 1; }
+	@cp "$(SRC)" "supabase/migrations/$(DST)"
+	@cmp -s "$(SRC)" "supabase/migrations/$(DST)" && echo "✅ mirrored $(SRC) -> supabase/migrations/$(DST) (verbatim)" || { echo "❌ verbatim copy verification failed"; exit 1; }
+
 supa-migrate: ## Apply SQL files from supabase/migrations into active Supabase DB container
 	@echo "🗄️ Applying Supabase migrations..."
 	@if [ ! -d "supabase/migrations" ]; then \
@@ -639,18 +651,18 @@ supabase-bootstrap: ## Apply pending Supabase migrations + seeds (tracked in pub
 	@set -euo pipefail; \
 	db=$$(bash "$(SUPABASE_DB_HELPER)" running); \
 	if [ -z "$$db" ]; then echo "❌ Supabase DB container not found"; exit 1; fi; \
-	docker exec -i "$$db" psql -v ON_ERROR_STOP=1 -U postgres -d postgres -c "CREATE TABLE IF NOT EXISTS public.pmoves_bootstrap_history (kind text NOT NULL, filename text NOT NULL, applied_at timestamptz NOT NULL DEFAULT now(), PRIMARY KEY (kind, filename));"; \
+	docker exec -i "$$db" psql -v ON_ERROR_STOP=1 -U ${POSTGRES_USER:-pmoves} -d ${POSTGRES_DB:-pmoves} -c "CREATE TABLE IF NOT EXISTS public.pmoves_bootstrap_history (kind text NOT NULL, filename text NOT NULL, applied_at timestamptz NOT NULL DEFAULT now(), PRIMARY KEY (kind, filename));"; \
 	if [ -d "supabase/migrations" ]; then \
 		for migration in $$(find supabase/migrations -maxdepth 1 -type f -name '*.sql' | LC_ALL=C sort); do \
 			[ -f "$$migration" ] || continue; \
 			name=$$(basename "$$migration"); \
-			applied=$$(docker exec -i "$$db" psql -U postgres -d postgres -tAc "SELECT 1 FROM public.pmoves_bootstrap_history WHERE kind='migration' AND filename='$$name' LIMIT 1;" | tr -d '[:space:]'); \
+			applied=$$(docker exec -i "$$db" psql -U ${POSTGRES_USER:-pmoves} -d ${POSTGRES_DB:-pmoves} -tAc "SELECT 1 FROM public.pmoves_bootstrap_history WHERE kind='migration' AND filename='$$name' LIMIT 1;" | tr -d '[:space:]'); \
 			if [ "$$applied" = "1" ]; then \
 				echo "   Skipping migration (already applied): $$name"; \
 				continue; \
 			fi; \; echo "   Applying migration: $$name"; \
-			docker exec -i "$$db" psql -v ON_ERROR_STOP=1 -U postgres -d postgres < "$$migration"; \
-			docker exec -i "$$db" psql -v ON_ERROR_STOP=1 -U postgres -d postgres -c "INSERT INTO public.pmoves_bootstrap_history(kind, filename) VALUES ('migration', '$$name') ON CONFLICT DO NOTHING;"; \
+			docker exec -i "$$db" psql -v ON_ERROR_STOP=1 -U ${POSTGRES_USER:-pmoves} -d ${POSTGRES_DB:-pmoves} < "$$migration"; \
+			docker exec -i "$$db" psql -v ON_ERROR_STOP=1 -U ${POSTGRES_USER:-pmoves} -d ${POSTGRES_DB:-pmoves} -c "INSERT INTO public.pmoves_bootstrap_history(kind, filename) VALUES ('migration', '$$name') ON CONFLICT DO NOTHING;"; \
 		done; \
 	else \
 		echo "   ⚠️  No migrations directory found"; \
@@ -659,13 +671,13 @@ supabase-bootstrap: ## Apply pending Supabase migrations + seeds (tracked in pub
 		for seed in $$(find supabase/initdb -maxdepth 1 -type f -name '*.sql' | LC_ALL=C sort); do \
 			[ -f "$$seed" ] || continue; \
 			name=$$(basename "$$seed"); \
-			applied=$$(docker exec -i "$$db" psql -U postgres -d postgres -tAc "SELECT 1 FROM public.pmoves_bootstrap_history WHERE kind='seed' AND filename='$$name' LIMIT 1;" | tr -d '[:space:]'); \
+			applied=$$(docker exec -i "$$db" psql -U ${POSTGRES_USER:-pmoves} -d ${POSTGRES_DB:-pmoves} -tAc "SELECT 1 FROM public.pmoves_bootstrap_history WHERE kind='seed' AND filename='$$name' LIMIT 1;" | tr -d '[:space:]'); \
 			if [ "$$applied" = "1" ]; then \
 				echo "   Skipping seed (already applied): $$name"; \
 				continue; \
 			fi; \; echo "   Applying seed: $$name"; \
-			docker exec -i "$$db" psql -v ON_ERROR_STOP=1 -U postgres -d postgres < "$$seed"; \
-			docker exec -i "$$db" psql -v ON_ERROR_STOP=1 -U postgres -d postgres -c "INSERT INTO public.pmoves_bootstrap_history(kind, filename) VALUES ('seed', '$$name') ON CONFLICT DO NOTHING;"; \
+			docker exec -i "$$db" psql -v ON_ERROR_STOP=1 -U ${POSTGRES_USER:-pmoves} -d ${POSTGRES_DB:-pmoves} < "$$seed"; \
+			docker exec -i "$$db" psql -v ON_ERROR_STOP=1 -U ${POSTGRES_USER:-pmoves} -d ${POSTGRES_DB:-pmoves} -c "INSERT INTO public.pmoves_bootstrap_history(kind, filename) VALUES ('seed', '$$name') ON CONFLICT DO NOTHING;"; \
 		done; \
 	else \
 		echo "   ⚠️  No initdb directory found"; \
@@ -680,7 +692,7 @@ supabase-bootstrap-no-start: ## Apply migrations+seeds against already-running D
 	if [ -z "$$db" ]; then echo "❌ Supabase DB container not found — start it first"; exit 1; fi; \
 	pg_user=$$(docker exec "$$db" sh -c 'echo $${POSTGRES_USER:-postgres}'); \
 	echo "   DB container: $$db | pg_user: $$pg_user"; \
-	_psql() { docker exec -i "$$db" psql -U "$$pg_user" -h 127.0.0.1 -d postgres "$$@"; }; \
+	_psql() { docker exec -i "$$db" psql -U "$$pg_user" -h 127.0.0.1 -d ${POSTGRES_DB:-pmoves} "$$@"; }; \
 	_psql -v ON_ERROR_STOP=1 -c "CREATE TABLE IF NOT EXISTS public.pmoves_bootstrap_history (kind text NOT NULL, filename text NOT NULL, applied_at timestamptz NOT NULL DEFAULT now(), PRIMARY KEY (kind, filename));"; \
 	if [ -d "supabase/migrations" ]; then \
 		for migration in $$(find supabase/migrations -maxdepth 1 -type f -name '*.sql' | LC_ALL=C sort); do \
@@ -722,17 +734,17 @@ supabase-bootstrap-mark-applied: ## Mark all migration/seed files as applied in 
 	@set -euo pipefail; \
 	db=$$(bash "$(SUPABASE_DB_HELPER)" running); \
 	if [ -z "$$db" ]; then echo "❌ Supabase DB container not found"; exit 1; fi; \
-	docker exec -i "$$db" psql -v ON_ERROR_STOP=1 -U postgres -d postgres -c "CREATE TABLE IF NOT EXISTS public.pmoves_bootstrap_history (kind text NOT NULL, filename text NOT NULL, applied_at timestamptz NOT NULL DEFAULT now(), PRIMARY KEY (kind, filename));"; \
+	docker exec -i "$$db" psql -v ON_ERROR_STOP=1 -U ${POSTGRES_USER:-pmoves} -d ${POSTGRES_DB:-pmoves} -c "CREATE TABLE IF NOT EXISTS public.pmoves_bootstrap_history (kind text NOT NULL, filename text NOT NULL, applied_at timestamptz NOT NULL DEFAULT now(), PRIMARY KEY (kind, filename));"; \
 	if [ -d "supabase/migrations" ]; then \
 		for migration in $$(find supabase/migrations -maxdepth 1 -type f -name '*.sql' | LC_ALL=C sort); do \
 			name=$$(basename "$$migration"); \
-			docker exec -i "$$db" psql -v ON_ERROR_STOP=1 -U postgres -d postgres -c "INSERT INTO public.pmoves_bootstrap_history(kind, filename) VALUES ('migration', '$$name') ON CONFLICT DO NOTHING;"; \
+			docker exec -i "$$db" psql -v ON_ERROR_STOP=1 -U ${POSTGRES_USER:-pmoves} -d ${POSTGRES_DB:-pmoves} -c "INSERT INTO public.pmoves_bootstrap_history(kind, filename) VALUES ('migration', '$$name') ON CONFLICT DO NOTHING;"; \
 		done; \
 	fi; \
 	if [ -d "supabase/initdb" ]; then \
 		for seed in $$(find supabase/initdb -maxdepth 1 -type f -name '*.sql' | LC_ALL=C sort); do \
 			name=$$(basename "$$seed"); \
-			docker exec -i "$$db" psql -v ON_ERROR_STOP=1 -U postgres -d postgres -c "INSERT INTO public.pmoves_bootstrap_history(kind, filename) VALUES ('seed', '$$name') ON CONFLICT DO NOTHING;"; \
+			docker exec -i "$$db" psql -v ON_ERROR_STOP=1 -U ${POSTGRES_USER:-pmoves} -d ${POSTGRES_DB:-pmoves} -c "INSERT INTO public.pmoves_bootstrap_history(kind, filename) VALUES ('seed', '$$name') ON CONFLICT DO NOTHING;"; \
 		done; \
 	fi
 	@echo "✅ Bootstrap history updated"
@@ -1592,7 +1604,7 @@ populate-tier-envs: bootstrap-tier-envs ## Populate tier env files with defaults
 		echo "✓ Populated env.tier-data"; \
 	fi; \
 	if [ -f "env.tier-supabase" ]; then \
-		if grep -q "your_jwt_secret_here\|your_anon_key_here\|your_service_role_key_here" env.tier-supabase 2>/dev/null; then \; echo "Generating Supabase secrets with proper JWT tokens..."; \
+		if grep -q "your_jwt_secret_here\|your_anon_key_here\|your_service_role_key_here" env.tier-supabase 2>/dev/null; then echo "Generating Supabase secrets with proper JWT tokens..."; \
 			if [ -x scripts/supabase/generate-keys.sh ]; then \
 				scripts/supabase/generate-keys.sh > env.tier-supabase; \
 				echo "✓ Populated env.tier-supabase (via generate-keys.sh with valid JWTs)"; \

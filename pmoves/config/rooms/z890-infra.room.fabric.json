@@ -75,6 +75,33 @@
       "action_namespace": "graphiti",
       "capabilities": ["trail", "audit", "release-state"],
       "pinned": false
+    },
+    {
+      "app_id": "mcp-cipher",
+      "kind": "custom",
+      "route": "/mcp/cipher",
+      "provider": "pmoves-cipher-mcp",
+      "action_namespace": "mcp.v1.cipher",
+      "capabilities": ["cipher", "chit", "announce", "health"],
+      "status": "planned"
+    },
+    {
+      "app_id": "mcp-nats",
+      "kind": "custom",
+      "route": "/mcp/nats",
+      "provider": "pmoves-nats-mcp",
+      "action_namespace": "mcp.v1.nats",
+      "capabilities": ["publish", "subscribe", "jetstream", "health"],
+      "status": "planned"
+    },
+    {
+      "app_id": "mcp-tailscale",
+      "kind": "custom",
+      "route": "/mcp/tailscale",
+      "provider": "pmoves-tailscale-mcp",
+      "action_namespace": "mcp.v1.tailscale",
+      "capabilities": ["network", "devices", "authkeys", "tailnet"],
+      "status": "planned"
     }
   ],
   "notebook": {
@@ -195,6 +222,165 @@
       },
       "enabled": true,
       "tags": ["secrets", "chit", "graphiti"]
+    },
+    {
+      "binding_id": "cipher-mcp-bridge",
+      "skill_id": "pmoves_cipher_mcp",
+      "room_id": "z890-infra.room.fabric",
+      "display_name": "Cipher MCP Bridge",
+      "intent": ["cipher", "chit", "memory"],
+      "activation": {
+        "invocation_mode": "explicit",
+        "trigger_phrases": ["open cipher mcp", "cipher bridge"],
+        "requires_selection": false
+      },
+      "surface": {
+        "app_id": "mcp-cipher",
+        "target": "sidebar",
+        "route": "/mcp/cipher"
+      },
+      "execution": {
+        "mode": "background",
+        "run_as": "room-service",
+        "stream": "events",
+        "max_steps": 4
+      },
+      "context": {
+        "sources": ["room-state", "graphiti-trail", "agent-registry"],
+        "include_last_turns": 2,
+        "notebook_writeback": true,
+        "artifact_types": ["json"]
+      },
+      "outputs": [
+        {
+          "target": "room-state",
+          "delivery": "replace",
+          "path": "mcp/cipher/last-result",
+          "artifact_type": "json"
+        },
+        {
+          "target": "chat-response",
+          "delivery": "notify",
+          "artifact_type": "text"
+        }
+      ],
+      "guardrails": {
+        "require_approval": false,
+        "max_runtime_sec": 60,
+        "fail_open": true,
+        "one_active_run": true
+      },
+      "enabled": false,
+      "tags": ["mcp", "cipher", "planned"],
+      "metadata": {
+        "status": "planned"
+      }
+    },
+    {
+      "binding_id": "nats-mcp-bridge",
+      "skill_id": "pmoves_nats_mcp",
+      "room_id": "z890-infra.room.fabric",
+      "display_name": "NATS MCP Bridge",
+      "intent": ["nats", "messaging", "ops"],
+      "activation": {
+        "invocation_mode": "explicit",
+        "trigger_phrases": ["open nats mcp", "nats bridge"],
+        "requires_selection": false
+      },
+      "surface": {
+        "app_id": "mcp-nats",
+        "target": "sidebar",
+        "route": "/mcp/nats"
+      },
+      "execution": {
+        "mode": "background",
+        "run_as": "room-service",
+        "stream": "events",
+        "max_steps": 4
+      },
+      "context": {
+        "sources": ["room-state", "open-apps", "agent-registry"],
+        "include_last_turns": 2,
+        "notebook_writeback": true,
+        "artifact_types": ["json"]
+      },
+      "outputs": [
+        {
+          "target": "room-state",
+          "delivery": "replace",
+          "path": "mcp/nats/last-result",
+          "artifact_type": "json"
+        },
+        {
+          "target": "chat-response",
+          "delivery": "notify",
+          "artifact_type": "text"
+        }
+      ],
+      "guardrails": {
+        "require_approval": false,
+        "max_runtime_sec": 60,
+        "fail_open": true,
+        "one_active_run": true
+      },
+      "enabled": false,
+      "tags": ["mcp", "nats", "planned"],
+      "metadata": {
+        "status": "planned"
+      }
+    },
+    {
+      "binding_id": "tailscale-mcp-bridge",
+      "skill_id": "pmoves_tailscale_mcp",
+      "room_id": "z890-infra.room.fabric",
+      "display_name": "Tailscale MCP Bridge",
+      "intent": ["tailscale", "network", "authkeys"],
+      "activation": {
+        "invocation_mode": "explicit",
+        "trigger_phrases": ["open tailscale mcp", "tailnet mcp"],
+        "requires_selection": false
+      },
+      "surface": {
+        "app_id": "mcp-tailscale",
+        "target": "sidebar",
+        "route": "/mcp/tailscale"
+      },
+      "execution": {
+        "mode": "background",
+        "run_as": "room-service",
+        "stream": "events",
+        "max_steps": 4
+      },
+      "context": {
+        "sources": ["room-state", "agent-registry"],
+        "include_last_turns": 2,
+        "notebook_writeback": true,
+        "artifact_types": ["json"]
+      },
+      "outputs": [
+        {
+          "target": "room-state",
+          "delivery": "replace",
+          "path": "mcp/tailscale/last-result",
+          "artifact_type": "json"
+        },
+        {
+          "target": "chat-response",
+          "delivery": "notify",
+          "artifact_type": "text"
+        }
+      ],
+      "guardrails": {
+        "require_approval": false,
+        "max_runtime_sec": 60,
+        "fail_open": true,
+        "one_active_run": true
+      },
+      "enabled": false,
+      "tags": ["mcp", "tailscale", "planned"],
+      "metadata": {
+        "status": "planned"
+      }
     }
   ],
   "team_refs": ["orchestration", "data", "infra"],
