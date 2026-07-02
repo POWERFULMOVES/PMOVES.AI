@@ -3,10 +3,13 @@
 
 -- Enable UUID extension if not already enabled
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+
+CREATE SCHEMA IF NOT EXISTS pmoves_core;
 
 -- Main simulations table
 CREATE TABLE IF NOT EXISTS pmoves_core.simulations (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   simulation_id TEXT NOT NULL UNIQUE,
   scenario TEXT NOT NULL CHECK (scenario IN ('optimistic', 'baseline', 'pessimistic', 'stress_test', 'custom')),
 
@@ -41,7 +44,7 @@ CREATE TABLE IF NOT EXISTS pmoves_core.simulations (
 
 -- Weekly metrics table
 CREATE TABLE IF NOT EXISTS pmoves_core.simulation_weekly_metrics (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   simulation_id UUID NOT NULL REFERENCES pmoves_core.simulations(id) ON DELETE CASCADE,
 
   week_number INTEGER NOT NULL CHECK (week_number >= 0),
@@ -70,7 +73,7 @@ CREATE TABLE IF NOT EXISTS pmoves_core.simulation_weekly_metrics (
 
 -- Calibration data table
 CREATE TABLE IF NOT EXISTS pmoves_core.simulation_calibration (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   calibration_id TEXT NOT NULL UNIQUE,
   simulation_id UUID NOT NULL REFERENCES pmoves_core.simulations(id) ON DELETE CASCADE,
 
