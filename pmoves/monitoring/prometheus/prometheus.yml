@@ -182,6 +182,7 @@ scrape_configs:
           - http://host.docker.internal:8087/              # hi-rag v2 GPU
           - http://presign:8080/healthz                    # presign
           - http://archon:8091/healthz                     # archon
+          - http://pmoves-firefly:8080/                      # firefly-iii (upstream Laravel, no /healthz)
           - http://host.docker.internal:8097/healthz        # channel monitor
           - http://host.docker.internal:4000                # tensorzero playground
           - http://host.docker.internal:8055/healthz        # flute-gateway
