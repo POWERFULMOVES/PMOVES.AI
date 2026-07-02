@@ -1,14 +1,16 @@
 name: GitHub App Health Check
 
 # Checks the PMOVES.AI GitHub App installation daily (replaces the old
-# GH_PAT user-context probe). Instead of testing a 30-day-expiring fine-grained
-# PAT with `gh api user`, this mints a short-lived App installation token via
-# the reusable `_app-token.yml` workflow and probes the installation metadata.
+# GH_PAT user-context probe). The validation is simple and robust:
+#
+#   create-github-app-token SUCCEEDS → App credentials valid + installation active
+#   create-github-app-token FAILS    → App credentials invalid or installation revoked
+#
+# No fragile API probe needed — the token mint action itself is the health check.
 # If the App private key (GH_APP_SEC) is rotated, expired, or the installation
-# is suspended, this opens ONE tracker issue, comments on subsequent failures,
-# and auto-closes when the App is valid again.
-# Title matching is by the "🔴 GitHub App" prefix so it also adopts/closes the
-# legacy "🔴 GH_PAT" issues created before this migration.
+# is suspended, minting fails and this opens ONE tracker issue, comments on
+# subsequent failures, and auto-closes when the App is valid again.
+# Title matching adopts/closes legacy "🔴 GH_PAT" issues from the old probe.
 
 on:
   schedule:
@@ -33,53 +35,26 @@ jobs:
   check:
     needs: mint
     runs-on: ubuntu-latest
-    outputs:
-      valid: ${{ steps.app.outputs.valid }}
-      detail: ${{ steps.app.outputs.detail }}
+    if: always()
     steps:
-      - name: Probe App installation validity
-        id: app
-        env:
-          GH_TOKEN: ${{ needs.mint.outputs.token }}
-        run: |
-          set -euo pipefail
-          # Installation tokens cannot call GET /installation (that needs JWT-level
-          # App auth). The correct installation-scoped probe is GET /installation/repositories,
-          # which lists repos the installation can access. A 200 = installation active.
-          if gh api /installation/repositories >/dev/null 2>&1; then
-            echo "valid=true" >> "$GITHUB_OUTPUT"
-            COUNT=$(gh api /installation/repositories --jq '.total_count // "unknown"' 2>/dev/null || echo "unknown")
-            echo "detail=App installation active (${COUNT} repos accessible)" >> "$GITHUB_OUTPUT"
-            echo "✅ GitHub App installation is active (${COUNT} repos)"
-          else
-            echo "valid=false" >> "$GITHUB_OUTPUT"
-            echo "detail=App token minted but installation/repositories probe failed (401/403)" >> "$GITHUB_OUTPUT"
-            echo "::warning::GitHub App installation is invalid — reconciling tracker issue"
-          fi
-
-      - name: Failure diagnostics (mint succeeded but probe failed)
-        if: steps.app.outputs.valid == 'false'
-        env:
-          GH_TOKEN: ${{ needs.mint.outputs.token }}
-        run: |
-          echo "### Diagnostics"
-          echo "- Token minted: yes (reusable workflow succeeded)"
-          echo "- Installation probe: FAILED"
-          echo "- Likely causes: App suspended, permissions revoked, or installation removed"
-          echo "- Token preview (first 12 chars): ${GH_TOKEN:0:12}..."
-
       - name: Reconcile tracker issue (open/comment on failure, auto-close on success)
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           script: |
-            const valid = '${{ steps.app.outputs.valid }}' === 'true';
-            const detail = '${{ steps.app.outputs.detail }}';
+            // The mint job succeeding IS the health validation.
+            // create-github-app-token fails if GH_APP_SEC is invalid or the
+            // installation is suspended/revoked. No API probe needed.
+            const valid = '${{ needs.mint.result }}' === 'success';
             const prefix = process.env.TITLE_PREFIX;
             const legacyPrefix = process.env.LEGACY_PREFIX;
             const title = process.env.ISSUE_TITLE;
             const today = new Date().toISOString().split('T')[0];
             const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
             const { owner, repo } = context.repo;
+
+            const detail = valid
+              ? 'App token minted successfully (create-github-app-token succeeded)'
+              : `App token mint FAILED (mint job result: ${{ needs.mint.result }})`;
 
             // Find existing open tracker(s) — match new App prefix AND legacy PAT prefix.
             const open = await github.paginate(github.rest.issues.listForRepo, {
@@ -96,9 +71,11 @@ jobs:
                 "",
                 `**Detail:** ${detail}`,
                 "",
-                "The PMOVES.AI GitHub App installation is invalid — the reusable",
-                "`_app-token.yml` workflow minted a token, but the installation probe",
-                "(`gh api installation`) returned 401/403.",
+                "The PMOVES.AI GitHub App installation is invalid — `create-github-app-token`",
+                "could not mint a token. This means either:",
+                "- `GH_APP_SEC` (private key) is rotated, expired, or malformed",
+                "- `GH_APP_CLIENT_ID` is incorrect",
+                "- The App installation is suspended or revoked",
                 "",
                 "### Immediate action (operator)",
                 `1. Verify the App installation: https://github.com/organizations/${owner}/settings/apps`,
@@ -136,7 +113,7 @@ jobs:
                   core.info(`Closed duplicate tracker #${dup.number}.`);
                 }
               }
-              core.setFailed("GitHub App installation is invalid.");
+              core.setFailed("GitHub App installation is invalid — token mint failed.");
             } else {
               for (const t of trackers) {
                 await github.rest.issues.createComment({
