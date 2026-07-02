@@ -1,101 +1,162 @@
 # Design: Node-Aware HERMES + Agent Zero Provider Standup (Knuckles + SPARK)
 
-**Date:** 2026-07-02
+**Date:** 2026-07-02 (rev 2 — cloud-hybrid inversion per operator)
 **Node:** B850 / PMOVES-Knuckles (dual AMD R9700 64GB, ROCm 7.1)
 **Author:** B850-CLAUDE
-**Status:** Approved by operator (DARKXSIDE) 2026-07-02
+**Status:** Rev 2 pending operator re-approval
 **AGNOTE lane:** HERMES integration TAC `phase_3_b850_knuckles` (PENDING → this session) + `phase_2_spark` (config-only, node offline)
 
 ## Goal
 
-Stand up node-aware, PMOVES-aware HERMES Agent and Agent Zero on Knuckles, with
-TensorZero as the single routing brain across all subscribed providers:
-z.ai Coding Plan, Ollama Pro (ollama.com cloud), Kilo Code plan, Kimi (Moonshot)
-coding plan, Alibaba (DashScope) coding plan, HuggingFace router, and local
-Unsloth GGUF serving via a Pinokio launcher. SPARK gets identical wiring as
-config + runbook, applied live when the node reappears on the tailnet.
+Stand up node-aware, PMOVES-aware HERMES Agent and Agent Zero on Knuckles as a
+**cloud-hybrid system**: the subscribed **cloud coding plans are the
+orchestrator tier** (z.ai Coding Plan, Kimi/Moonshot coding plan, Alibaba/
+DashScope coding plan, Kilo Code plan, Ollama Pro cloud), and **local models
+are the autonomous worker siblings of their cloud counterparts** — bounded
+subagents that adsorb skill from their cloud parents through CHIT-signed agent
+trails (the MOF gap-size transfer mechanism). TensorZero routes both tiers.
+HuggingFace/Unsloth supply the local worker weights; a Pinokio launcher manages
+local model selection/serving on this node. SPARK gets identical wiring as
+config + runbook, applied live when it reappears on the tailnet.
+
+**Primary quality bar: model & provider support best practices.** Every model
+entry — cloud or local — carries correct context length, max output tokens,
+temperature/sampling defaults, and capability flags, sourced from one canon
+(`pmoves/configs/model-suits/`). PMOVES fits each model like a glove; no model
+is forced into another model's shape.
 
 ## Verified current state (2026-07-02, live probes)
 
 | Component | State |
 |---|---|
-| TensorZero gateway :3030 | Healthy (gateway/clickhouse/postgres/valkey ok); catalog is ollama_local + generic cloud only |
-| Ollama :11434 | Native, v0.30.5, ROCm backend |
+| TensorZero gateway :3030 | Healthy (gateway/clickhouse/postgres/valkey ok); catalog has ollama_local qwen3.5 family + generic cloud; **no coding-plan providers** |
+| Ollama :11434 | Native v0.30.5 ROCm; **only `nomic-embed-text` pulled** — no local chat/worker models yet |
 | NATS | Healthy (`pmoves-nats-1`) |
 | Hermes Agent | Installed v0.15.1 (20 commits behind) via `PINOKIO_HOME/api/hermes-agent.pinokio.git`; `default` profile → ollama-cloud `glm-5.2`; gateway stopped; auth.json holds MiniMax OAuth only |
 | Agent Zero | Container not running on this node |
-| SPARK (`pmoves-spark` 100.89.7.106) | Offline, last seen <1h — flappy; two stale spark hostnames also on tailnet |
+| SPARK (`pmoves-spark` 100.89.7.106) | Offline, last seen <1h — flappy |
+| Model suits | `pmoves/configs/model-suits/` already defines per-model `model_config` (context_window, max_output_tokens, temperature_range, capability flags) for glm-4.7/5.1/5-turbo, qwen3.6, minimax, claude, nemotron — **this is the parameter canon** |
 | Provider secrets | `pmoves/bootstrap/registry.json` has **no** ZAI/MOONSHOT/DASHSCOPE/KILOCODE/HF/OLLAMA_API_KEY entries — funnel cannot provision them yet |
 
-## Architecture
-
-TensorZero is the impedance matcher (MOF role): every agent points at TZ's
-OpenAI-compatible endpoint; TZ owns the cascade.
+## Architecture — cloud orchestrators, local worker siblings
 
 ```
-Hermes (pmoves-hermes-knuckles) ─┐
-Agent Zero (8080) ───────────────┼─▶ TensorZero :3030 (/openai/v1)
-Kilo / other agents ─────────────┘        │
-   ┌──────────────┬───────────────┬───────┴──────┬────────────┬─────────────┐
- ollama_local  llamacpp_unsloth  ollama_cloud   zai        kimi/alibaba  kilocode/HF
- (ROCm :11434) (GGUF row-split,  (Pro plan,     (GLM       (Moonshot /  (fallback)
-                Pinokio launcher) ollama.com)    coding)     DashScope)
+                    ORCHESTRATOR TIER (cloud coding plans)
+   z.ai GLM ─── Kimi/Moonshot ─── Alibaba Qwen ─── Kilo Code ─── Ollama Pro
+       │              │                │               │             │
+       └──────────────┴───────┬────────┴───────────────┴─────────────┘
+                              ▼
+                   TensorZero :3030 (/openai/v1)
+              routing + observability + CHIT trail hooks
+                              ▼
+                    WORKER TIER (local siblings, this node)
+   glm4 local ──── kimi-dev local ── qwen3-coder local ── hermes3:8b ── Unsloth GGUF
+   (Ollama ROCm)   (pending fit)     (Ollama ROCm)        (Ollama)      (llama.cpp-ROCm
+                                                                         row-split, Pinokio)
+                              ▼
+        Agent trails: hermes.delegate.completed.v1 + CHIT signing
+        (cloud parent delegates bounded work → local sibling executes
+         → trail records provenance → MOF skill transfer)
 ```
+
+Hermes and Agent Zero both point at TensorZero. Orchestrator sessions resolve
+to cloud functions; subagent/worker delegations resolve to local-sibling
+functions. One path, goal-oriented, with room to branch: new providers or
+siblings are added as rows in the pairing matrix, not new architectures.
+
+### Sibling pairing matrix (cloud parent ↔ local worker)
+
+| Family | Cloud parent (plan) | Local worker sibling | Node fit (64GB ROCm) | Status |
+|---|---|---|---|---|
+| GLM | z.ai Coding Plan (`glm-5.x`) | `glm4:9b` (Ollama) | ~6GB — easy | pull at standup |
+| Qwen | Alibaba DashScope (`qwen3-coder`) | `qwen3-coder:30b` (Ollama) | ~20GB Q4 — fits | pull at standup |
+| Kimi | Moonshot coding plan (`kimi-k2.x`) | Kimi-Dev-72B GGUF Q4 row-split | ~40GB — fits dual R9700 | pending validation |
+| Hermes | Ollama Pro / OpenRouter (`hermes` family) | `hermes3:8b` (Ollama) | ~5GB — easy | pull at standup |
+| Open pool | Ollama Pro cloud (`glm-5.2`, others) | same-tag local pulls where published | varies | as-needed |
+| HF | HF router (fallback) | Unsloth GGUFs via llama.cpp-ROCm :8090 | varies | Pinokio launcher |
+
+70B+ dense models remain SPARK-only per integration spec; Knuckles caps at
+~40GB Q4 MoE/row-split.
 
 ### Provider blocks (TensorZero, all OpenAI-compatible)
 
-| Provider key | Base URL | Credential (canonical) | Plan |
+| Provider key | Tier | Credential (canonical) | Plan |
 |---|---|---|---|
-| `ollama_local` | `http://<node-ollama>:11434/v1` | none | local ROCm/CUDA |
-| `llamacpp_unsloth` | `http://localhost:8090/v1` | none | Unsloth GGUF via llama.cpp-ROCm |
-| `ollama_cloud` | `https://ollama.com/v1` | `OLLAMA_API_KEY` | Ollama Pro |
-| `zai` | z.ai coding endpoint | `ZAI_API_KEY` (+`ZAI_API_KEYS` pool) | GLM Coding Plan |
-| `kimi` | Moonshot API | `MOONSHOT_API_KEY` (alias KIMI_API_KEY) | Kimi coding plan |
-| `alibaba` | DashScope compatible-mode | `DASHSCOPE_API_KEY` (alias ALIBABA_API_KEY) | Alibaba coding plan |
-| `kilocode` | Kilo Code OpenRouter-compatible | `KILOCODE_API_KEY` | Kilo Code plan |
-| `huggingface` | HF router | `HF_TOKEN` | HF Pro / Inference |
+| `zai` | orchestrator | `ZAI_API_KEY` (+`ZAI_API_KEYS` pool) | GLM Coding Plan |
+| `kimi` | orchestrator | `MOONSHOT_API_KEY` (alias KIMI_API_KEY) | Kimi coding plan |
+| `alibaba` | orchestrator | `DASHSCOPE_API_KEY` (alias ALIBABA_API_KEY) | Alibaba coding plan |
+| `kilocode` | orchestrator | `KILOCODE_API_KEY` | Kilo Code plan |
+| `ollama_cloud` | orchestrator | `OLLAMA_API_KEY` | Ollama Pro |
+| `huggingface` | fallback | `HF_TOKEN` | HF router |
+| `ollama_local` | worker | none | local ROCm :11434 |
+| `llamacpp_unsloth` | worker | none | Unsloth GGUF :8090 |
 
-Exact vendor base URLs are confirmed against current provider docs at
-implementation time, not hardcoded from memory.
+Vendor base URLs are confirmed against current provider docs at implementation
+time, not hardcoded from memory.
 
 ### Routing functions
 
-- `pmoves_coding`: ollama_local → zai → kimi → alibaba → kilocode → huggingface
-- `pmoves_chat`: ollama_local → ollama_cloud → kilocode → huggingface
-- `pmoves_embed`: ollama_local (gemma/nomic embed) → huggingface
+- `pmoves_orchestrator_coding`: zai → kimi → alibaba → kilocode → ollama_cloud → huggingface
+- `pmoves_orchestrator_chat`: ollama_cloud → zai → kilocode → huggingface
+- `pmoves_worker_glm` / `pmoves_worker_qwen` / `pmoves_worker_hermes` /
+  `pmoves_worker_kimi`: local sibling first → **same-family cloud parent** as
+  fallback (sibling escalation, never cross-family — keeps trails meaningful)
+- `pmoves_embed`: ollama_local (nomic/gemma embed) → huggingface
 
-### Node awareness
+Each function variant pins per-model parameters **from the model suit**:
+context window, max output tokens, temperature (coding ≈0.1–0.3, chat ≈0.7,
+per suit `temperature_range`), stop/tool-call behavior.
 
-- Profiles keyed by node id. Knuckles carries the ROCm dual-R9700 local tier;
-  `spark.yaml` carries 70B-primary local tier with identical TZ wiring.
-- Tailscale mesh fallback (`pmoves-spark:11434`, `pmoves-5090:11434`) stays in
-  config; activates automatically when peers are online.
-- 70B models remain SPARK-only per integration spec.
+### Model-suit canon (the "glove")
+
+- Every model referenced by TZ or Hermes has a suit file in
+  `pmoves/configs/model-suits/` (existing files reused; new worker suits added:
+  `glm-4-9b-worker.yaml`, `qwen3-coder-30b-worker.yaml`,
+  `hermes3-8b-worker.yaml`, `kimi-dev-72b-worker.yaml`).
+- Suits declare `model_config` (context_window, max_output_tokens,
+  temperature_range, capability flags) + worker/orchestrator `tier` + sibling
+  linkage (`sibling_of: glm-5.1` etc.).
+- A small generator/check keeps TZ TOML and suits in sync (drift check in
+  tests, mirroring the naming-drift gate pattern).
+
+### Agent trails (the point of the exercise)
+
+- Every worker delegation publishes `hermes.delegate.completed.v1` (and Agent
+  Zero equivalents) with `signing_card_id` per the 5×5 trail handshake
+  invariant — cloud parent, worker sibling, task, and outcome all on the trail.
+- Trails feed Cipher/CHIT memory so worker siblings accumulate provenance-
+  signed experience from their cloud parents (MOF adsorption).
 
 ### HERMES standup (Knuckles)
 
 1. `hermes update` (20 commits behind), then `hermes doctor`.
-2. Create `pmoves-hermes-knuckles` profile from repo `pmoves/config/profiles/hermes/b850.yaml`,
-   upgraded: model provider → TZ endpoint, provider fallbacks per cascade,
-   NATS subjects per integration spec (publish `hermes.gateway.*` etc.,
-   subscribe `p7.nats.launch/session`, `mesh.node.announce.v1`).
-3. Secrets into `~/.hermes/profiles/pmoves-hermes-knuckles/.env` via secrets
-   funnel — never committed.
-4. Gateway on :7700 (Tailscale-internal), verify `/api/health`, observe
+2. Create `pmoves-hermes-knuckles` profile: **default model = cloud
+   orchestrator via TZ**; `delegation.model` = local worker sibling via TZ;
+   NATS subjects per integration spec.
+3. Secrets into profile `.env` via secrets funnel — never committed.
+4. Gateway :7700 (Tailscale-internal); verify `/api/health`; observe
    `hermes.gateway.health.v1` on NATS.
 
 ### Agent Zero standup (Knuckles)
 
-- Bring up via compose (agent tier), model env pointed at TZ.
-- Verify `/healthz` on 8080 and MCP surface (`/mcp/*`).
+- Bring up via compose (agent tier); chat/utility model envs → TZ orchestrator
+  function; subordinate-agent model env → TZ worker function.
+- Verify `/healthz` on 8080 and MCP surface.
 
 ### Pinokio local model selection
 
-- Extend/add launcher in `PINOKIO_HOME/api/` for llama.cpp-ROCm serving Unsloth
-  GGUFs row-split across both R9700s (`HIP_VISIBLE_DEVICES=0,1`), exposing
-  OpenAI-compatible :8090, registered in TZ as `llamacpp_unsloth`.
-- Launcher follows Pinokio guide (`.claude/PINOKIO_LAUNCHER_GUIDE.md`); mirrors
-  an existing example script; URL capture via the mandated `on/local.set` pattern.
+- Launcher in `PINOKIO_HOME/api/` for llama.cpp-ROCm serving Unsloth GGUFs
+  row-split across both R9700s (`HIP_VISIBLE_DEVICES=0,1`), OpenAI-compatible
+  :8090, registered in TZ as `llamacpp_unsloth`.
+- Follows `.claude/PINOKIO_LAUNCHER_GUIDE.md`; mirrors an example script; URL
+  capture via the mandated `on`/`local.set` pattern.
+
+### Node awareness
+
+- Knuckles profile carries the ROCm dual-R9700 worker tier; `spark.yaml`
+  carries the 70B-worker tier with identical TZ wiring.
+- Tailscale mesh worker fallback (`pmoves-spark:11434`, `pmoves-5090:11434`)
+  configured; activates when peers are online.
 
 ### Naming canon
 
@@ -105,35 +166,39 @@ aliases (CANONICAL_NAMES.md) — no new drift.
 
 ## Deliverables — 3 stacked PRs (<400 lines each)
 
-1. **feat(providers):** `bootstrap/registry.json` slots (ZAI_API_KEY[S],
-   MOONSHOT_API_KEY, DASHSCOPE_API_KEY, KILOCODE_API_KEY, HF_TOKEN,
-   OLLAMA_API_KEY) + `env.tier-llm.example` + TensorZero provider/model/function
-   blocks.
+1. **feat(providers):** registry slots (ZAI_API_KEY[S], MOONSHOT_API_KEY,
+   DASHSCOPE_API_KEY, KILOCODE_API_KEY, HF_TOKEN, OLLAMA_API_KEY) +
+   `env.tier-llm.example` + TZ provider/model/function blocks + worker suit
+   files + suit↔TZ drift check.
 2. **feat(hermes-profile)+feat(agent-zero):** Knuckles profile v2 (`b850.yaml`),
-   `spark.yaml` v2, TAC status flips (`phase_3_b850_knuckles` → done,
-   node profiles → done for b850), Agent Zero TZ wiring, AGNOTE convergence
-   entry + CLAIM/RELEASE in `AGNOTE4482PHI.t1.md` (identity: B850-CLAUDE).
+   `spark.yaml` v2, worker model pulls, TAC status flips, Agent Zero TZ wiring,
+   AGNOTE convergence entry + CLAIM/RELEASE in `AGNOTE4482PHI.t1.md`
+   (identity: B850-CLAUDE).
 3. **feat(pinokio)+docs(spark):** Unsloth/llama.cpp launcher + SPARK apply
    runbook.
 
-Live standup happens alongside PR 2; PR 1 must land (or at least exist locally)
-first so env slots exist.
+Live standup happens alongside PR 2; PR 1 must exist first so env slots exist.
 
 ## Error handling / gaps surfaced to operator
 
 - Providers with empty keys are wired but reported as a fill-list (operator
   updates GH/CHIT source, reruns `make -C pmoves secrets-funnel`).
 - SPARK offline → runbook only; retry live apply if it reappears mid-session.
+- Kimi local sibling (Kimi-Dev-72B Q4 row-split) is pending-validation; the
+  worker function falls back to its cloud parent until validated.
 - Hermes `.env`/`auth.json` never committed (gitignore verified).
 - `env.tier-llm` is zero-access to agents (damage-control) — all edits go
   through registry + example + funnel, never direct.
 
 ## Testing
 
-- TZ: `curl /openai/v1/chat/completions` per model alias (skip/flag empty-key providers).
-- Hermes: `hermes doctor`, `hermes chat -q` smoke through TZ, gateway health,
-  NATS subject observation.
+- TZ: `curl /openai/v1/chat/completions` per function (orchestrator + worker);
+  empty-key providers skipped and flagged.
+- Parameter fidelity: assert TZ model entries match suit `model_config`
+  (context window, max tokens, temperature) via the drift check.
+- Hermes: `hermes doctor`, orchestrator smoke, one `delegate_task` worker smoke
+  with trail observed on NATS.
 - Agent Zero: `/healthz`, MCP status skill.
 - Repo: `cd pmoves && python -m pytest tests/ -q` before each PR.
-- Signoff: HERMES section of `AGNOTE4482_SIGNOFF_CHECKLIST.md` items ticked
-  for what this session actually verified.
+- Signoff: HERMES section of `AGNOTE4482_SIGNOFF_CHECKLIST.md` ticked for what
+  this session actually verified.
