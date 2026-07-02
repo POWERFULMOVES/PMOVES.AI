@@ -49,12 +49,8 @@ EXCEPTION WHEN OTHERS THEN
 END $$;
 
 -- Drop existing policies if re-running
-DROP POLICY IF EXISTS "work_attestations_anon_deny" ON pmoves_core.work_attestations;
 DROP POLICY IF EXISTS "work_attestations_svc_all" ON pmoves_core.work_attestations;
 DROP POLICY IF EXISTS "work_attestations_auth_read" ON pmoves_core.work_attestations;
-
-CREATE POLICY "work_attestations_anon_deny" ON pmoves_core.work_attestations
-  FOR ALL TO anon USING (false) WITH CHECK (false);
 
 CREATE POLICY "work_attestations_svc_all" ON pmoves_core.work_attestations
   FOR ALL TO service_role USING (true) WITH CHECK (true);

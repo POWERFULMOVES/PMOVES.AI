@@ -34,15 +34,11 @@ EXCEPTION WHEN OTHERS THEN
 END $$;
 
 -- Drop existing policies if re-running
-DROP POLICY IF EXISTS "adult_swim_anon_deny" ON pmoves_core.adult_swim_records;
 DROP POLICY IF EXISTS "adult_swim_svc_all" ON pmoves_core.adult_swim_records;
 DROP POLICY IF EXISTS "adult_swim_owner_read" ON pmoves_core.adult_swim_records;
 DROP POLICY IF EXISTS "adult_swim_age_verified_write" ON pmoves_core.adult_swim_records;
 
 -- Anon deny-all
-CREATE POLICY "adult_swim_anon_deny" ON pmoves_core.adult_swim_records
-  FOR ALL TO anon USING (false) WITH CHECK (false);
-
 -- Service role full access
 CREATE POLICY "adult_swim_svc_all" ON pmoves_core.adult_swim_records
   FOR ALL TO service_role USING (true) WITH CHECK (true);

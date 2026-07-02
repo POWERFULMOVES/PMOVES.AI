@@ -48,12 +48,8 @@ EXCEPTION WHEN OTHERS THEN
 END $$;
 
 -- Drop existing policies if re-running
-DROP POLICY IF EXISTS "chit_phrases_anon_deny" ON pmoves_core.chit_phrases;
 DROP POLICY IF EXISTS "chit_phrases_svc_all" ON pmoves_core.chit_phrases;
 DROP POLICY IF EXISTS "chit_phrases_auth_read" ON pmoves_core.chit_phrases;
-
-CREATE POLICY "chit_phrases_anon_deny" ON pmoves_core.chit_phrases
-  FOR ALL TO anon USING (false) WITH CHECK (false);
 
 CREATE POLICY "chit_phrases_svc_all" ON pmoves_core.chit_phrases
   FOR ALL TO service_role USING (true) WITH CHECK (true);

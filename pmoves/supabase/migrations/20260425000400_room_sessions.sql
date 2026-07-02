@@ -55,12 +55,8 @@ EXCEPTION WHEN OTHERS THEN
 END $$;
 
 -- Drop existing policies if re-running
-DROP POLICY IF EXISTS "room_sessions_anon_deny" ON pmoves_core.room_sessions;
 DROP POLICY IF EXISTS "room_sessions_svc_all" ON pmoves_core.room_sessions;
 DROP POLICY IF EXISTS "room_sessions_auth_read" ON pmoves_core.room_sessions;
-
-CREATE POLICY "room_sessions_anon_deny" ON pmoves_core.room_sessions
-  FOR ALL TO anon USING (false) WITH CHECK (false);
 
 CREATE POLICY "room_sessions_svc_all" ON pmoves_core.room_sessions
   FOR ALL TO service_role USING (true) WITH CHECK (true);
