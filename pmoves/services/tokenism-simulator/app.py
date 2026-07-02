@@ -157,7 +157,8 @@ def create_app() -> Flask:
 
     # Subscribe to geometry.cgp.v1 in a background asyncio thread so the
     # rhythm tracker has live BPM input from the voice synthesis pipeline.
-    _spawn_nats_consumer()
+    if os.getenv('TOKENISM_DISABLE_NATS_CONSUMER', '').lower() not in {'1', 'true', 'yes'}:
+        _spawn_nats_consumer()
 
     return app
 
