@@ -1,9 +1,41 @@
 # Design: Node-Aware HERMES + Agent Zero Provider Standup (Knuckles + SPARK)
 
-**Date:** 2026-07-02 (rev 2 — cloud-hybrid inversion per operator)
+**Date:** 2026-07-02 (rev 3 — dynamic model plane: no hardcoded models, Supabase + APIs)
 **Node:** B850 / PMOVES-Knuckles (dual AMD R9700 64GB, ROCm 7.1)
 **Author:** B850-CLAUDE
-**Status:** Rev 2 pending operator re-approval
+**Status:** Rev 3 pending operator re-approval
+
+## Rev 3 correction (operator, 2026-07-02)
+
+**No hardcoded local model IDs anywhere in committed config.** Model selection
+is API- and Supabase-driven, using infrastructure that already exists:
+
+| Component | Port | Role |
+|---|---|---|
+| `model-registry` | 8110 | Supabase-backed model catalog ("replaces hardcoded TensorZero configuration"); generates TZ TOML from DB; `POST /api/model-candidates` **requires trusted agent identity + `signed_trail_ref`** — agent trails enforced at the API; `/api/models/{id}/enrich-hf` pulls HF metadata; `/api/model-fitness` records scored evidence |
+| `gpu-orchestrator` | 8200 | Load/unload/optimize with VRAM tracking; `ollama_client` + `vllm_client` + `model_lifecycle` |
+| `vllm-orchestrator` | — | Serves HF-native weights; `tensorzero.py` registers running vLLM instances as TZ providers dynamically |
+| `spark-shape-worker` | — | Node-agnostic sidecar: subscribes to GPU inference results on NATS, emits `content.lexicon.shaped.v1` + `mesh.shape.handshake.v1` CHIT shape capsules — the worker-tier trail emitter |
+| Supabase tables | — | `pmoves_core.model_candidates`, `pmoves_core.model_fitness_records` (migration `20260522000000`, RLS tightened `20260527`) |
+
+Worker sibling selection flow (replaces rev 2's pinned matrix):
+1. **Research** current-best sibling per family lane via the HuggingFace
+   plugin/MCP (model search + `hf-mem` VRAM fit vs 64GB ROCm) + registry
+   `enrich-hf`.
+2. **Register** as signed candidate: `POST /api/model-candidates` with CHIT
+   `signed_trail_ref` (pmoves-chit-sign).
+3. **Score** via smoke runs → `POST /api/model-fitness`.
+4. **Load** via gpu-orchestrator (`POST /models/load`); serve via vLLM
+   (dynamic TZ registration) or llama.cpp/Ollama per backend fit.
+5. **Shape** inference results onto the mesh via a shape-worker sidecar on
+   Knuckles (same contract SPARK uses).
+
+The rev 2 sibling matrix below is retained **as family-lane examples only** —
+actual IDs resolve at standup from live HF/provider APIs and land in Supabase,
+never in committed YAML/TOML. Cloud provider endpoints + routing functions
+remain static config (they are API contracts, not model picks); worker model
+rows in TZ are generated from the registry (marker-delimited section refreshed
+by a sync tool), so the TOML carries them as build artifacts, not hand edits.
 **AGNOTE lane:** HERMES integration TAC `phase_3_b850_knuckles` (PENDING → this session) + `phase_2_spark` (config-only, node offline)
 
 ## Goal
