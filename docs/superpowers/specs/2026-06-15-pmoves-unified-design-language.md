@@ -178,6 +178,8 @@ pmoves/design/
 | **DL-3** | Persona-adaptive runtime resolver (`whoami` → theme); Showtime drives "live" skin | B |
 | **DL-4** | CF site rebuilt from A2UI components (demonstrative); optional light theme | C + D5 |
 
+> _DL-3.1 landed 2026-07-03: runtime accent-override resolver (`setPersona` via `GET /v1/agent/theme/{id}`, `?agent=` identity, Showtime SSE live-flip) proven on `pmoves/design/preview`. Spec: `docs/superpowers/specs/2026-07-02-dl-3-persona-adaptive-resolver-design.md`. Slices 3.2 (Notebook) / 3.3 (CF, A2UI) pending._
+
 Each phase = its own plan → reviewed PR. DL-1 is the next plan to write.
 
 ---

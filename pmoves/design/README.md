@@ -74,3 +74,11 @@ the **W1 theme lane (4090-claude, PRs #1065/#1101)**. DL-1 consumes it with
 **additive reads only** and does not touch any W1-owned file
 (`pmoves/tools/agent_terminal_theme.py`, `pmoves/tools/botz_cli.py`,
 `pmoves/services/botz-gateway/main.py`, or the registry itself).
+
+## DL-3 persona resolver (runtime accent-override)
+
+`setPersona(id, {alter, gw})` overlays the active agent's accent family
+(`--pm-accent`, `--pm-accent-soft`, `--pm-accent-2`) from `GET /v1/agent/theme/{id}`
+onto the current base theme. `--pm-signature` (the reserved ✦ crimson) is never
+touched. Identity is `?agent=<id>[&alter=<name>]`; Showtime `:9225` `/sse/events`
+drives `data-stage="live"`. Tests: `make -C pmoves design-test-js` (node --test, no deps).
