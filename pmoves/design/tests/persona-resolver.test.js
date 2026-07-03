@@ -31,3 +31,13 @@ test("fetchAgentTheme throws on non-ok", async () => {
   const fetchImpl = async () => ({ ok: false, status: 404, json: async () => ({}) });
   await assert.rejects(() => fetchAgentTheme("nope", { fetchImpl }), /404/);
 });
+
+test("fetchAgentTheme passes an AbortSignal to fetch (timeout wiring)", async () => {
+  let seenOpts;
+  const fetchImpl = async (_url, opts) => {
+    seenOpts = opts;
+    return { ok: true, status: 200, json: async () => ({ color: "#000" }) };
+  };
+  await fetchAgentTheme("x", { fetchImpl });
+  assert.ok(seenOpts && seenOpts.signal, "fetch should receive an options.signal");
+});

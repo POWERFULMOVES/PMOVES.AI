@@ -13,12 +13,18 @@ export function personaThemeVars(theme) {
   return out;
 }
 
-/** Parse ?agent=<id>&alter=<name>&gw=<url> -> {id, alter, gw} | null. */
+// Only a loopback gateway may be supplied via ?gw= — the value becomes a fetch
+// base URL whose JSON is reflected into --pm-* props, so an arbitrary host would
+// be an injection vector. Dev-testing knob stays useful; cross-origin is blocked.
+const TRUSTED_GW = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
+
+/** Parse ?agent=<id>&alter=<name>&gw=<url> -> {id, alter, gw} | null. gw is null unless loopback. */
 export function resolvePersonaFromURL(search) {
   const p = new URLSearchParams(search || "");
   const id = p.get("agent");
   if (!id) return null;
-  return { id, alter: p.get("alter") || null, gw: p.get("gw") || null };
+  const gw = p.get("gw");
+  return { id, alter: p.get("alter") || null, gw: gw && TRUSTED_GW.test(gw) ? gw : null };
 }
 
 /** Showtime event (or bare state string) -> "live" | null. */

@@ -14,8 +14,10 @@ $("toggle").addEventListener("click", () => toggleTheme());
 
 // Populate persona dropdown from the gateway signature registry.
 async function loadPersonas() {
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), 5000); // fail fast if the gateway hangs
   try {
-    const res = await fetch(`${GW}/v1/agent/signatures`);
+    const res = await fetch(`${GW}/v1/agent/signatures`, { signal: ctl.signal });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const { signatures } = await res.json();
     SIGNATURES = signatures;
@@ -27,6 +29,8 @@ async function loadPersonas() {
     }
   } catch (e) {
     status(`gateway offline (${GW}) — base theme only`);
+  } finally {
+    clearTimeout(timer);
   }
 }
 
@@ -40,9 +44,12 @@ function populateAlters(id) {
   }
 }
 
-async function apply() {
-  const id = $("persona").value;
-  const alter = $("alter").value || null;
+// Apply a persona. An explicit override (from ?agent=) wins over the dropdown,
+// so a URL persona still resolves even if its option never loaded (gateway/CORS
+// offline) — otherwise a stale/empty dropdown would silently clear the persona.
+async function apply(override = {}) {
+  const id = override.id ?? $("persona").value;
+  const alter = override.alter ?? ($("alter").value || null);
   if (!id) { clearPersona(); status("base theme"); return; }
   try {
     await setPersona(id, { alter, gw: GW });
@@ -53,14 +60,14 @@ async function apply() {
 }
 
 $("persona").addEventListener("change", () => { populateAlters($("persona").value); apply(); });
-$("alter").addEventListener("change", apply);
+$("alter").addEventListener("change", () => apply());
 $("live").addEventListener("change", (e) => applyStage(e.target.checked ? "live" : null));
 
 await loadPersonas();
-// honor ?agent= on load
+// honor ?agent= on load — apply the URL id directly (dropdown is just UI state)
 if (url && url.id) {
   $("persona").value = url.id;
   populateAlters(url.id);
   if (url.alter) $("alter").value = url.alter;
-  await apply();
+  await apply({ id: url.id, alter: url.alter || null });
 }

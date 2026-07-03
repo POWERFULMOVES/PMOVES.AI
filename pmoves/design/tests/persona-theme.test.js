@@ -30,11 +30,18 @@ test("personaThemeVars tolerates missing fields", () => {
 // Task 3 — resolvePersonaFromURL
 import { resolvePersonaFromURL } from "../persona-theme.js";
 
-test("resolvePersonaFromURL parses agent/alter/gw", () => {
+test("resolvePersonaFromURL parses agent/alter and a localhost gw", () => {
   assert.deepEqual(
-    resolvePersonaFromURL("?agent=darkxside&alter=ghost&gw=http://h:8054"),
-    { id: "darkxside", alter: "ghost", gw: "http://h:8054" }
+    resolvePersonaFromURL("?agent=darkxside&alter=ghost&gw=http://localhost:8054"),
+    { id: "darkxside", alter: "ghost", gw: "http://localhost:8054" }
   );
+});
+
+test("resolvePersonaFromURL rejects a non-localhost gw (injection guard)", () => {
+  // A crafted ?gw= would otherwise redirect persona fetches to an attacker host,
+  // whose JSON gets reflected into --pm-* custom props. Only localhost is trusted.
+  assert.equal(resolvePersonaFromURL("?agent=x&gw=https://evil.example").gw, null);
+  assert.equal(resolvePersonaFromURL("?agent=x&gw=http://127.0.0.1:9225").gw, "http://127.0.0.1:9225");
 });
 
 test("resolvePersonaFromURL defaults alter/gw to null", () => {

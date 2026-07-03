@@ -36,3 +36,17 @@ test("setPersona fetches then applies (injected fetch + root)", async () => {
   await setPersona("claude-opus", { root, fetchImpl });
   assert.equal(root.props["--pm-accent"], "#7C3AED");
 });
+
+test("setPersona is latest-wins: a slow earlier call cannot overwrite a newer one", async () => {
+  const root = fakeRoot();
+  let releaseSlow;
+  const slow = new Promise((r) => { releaseSlow = r; });
+  // First call resolves LAST (after the second), simulating out-of-order fetch.
+  const slowFetch = async () => { await slow; return { ok: true, status: 200, json: async () => ({ color: "#SLOW" }) }; };
+  const fastFetch = async () => ({ ok: true, status: 200, json: async () => ({ color: "#FAST" }) });
+  const p1 = setPersona("a", { root, fetchImpl: slowFetch });
+  await setPersona("b", { root, fetchImpl: fastFetch }); // newer, wins
+  releaseSlow();
+  await p1; // older resolves now but must be ignored
+  assert.equal(root.props["--pm-accent"], "#FAST");
+});
