@@ -47,3 +47,18 @@ test("resolvePersonaFromURL returns null with no agent", () => {
   assert.equal(resolvePersonaFromURL(""), null);
   assert.equal(resolvePersonaFromURL("?foo=1"), null);
 });
+
+// Task 4 — stageFromShowtimeEvent
+import { stageFromShowtimeEvent } from "../persona-theme.js";
+
+test("stageFromShowtimeEvent: showtime -> live", () => {
+  assert.equal(stageFromShowtimeEvent({ state: "showtime" }), "live");
+  assert.equal(stageFromShowtimeEvent("showtime"), "live");
+});
+
+test("stageFromShowtimeEvent: hold/preflight/junk -> null", () => {
+  assert.equal(stageFromShowtimeEvent({ state: "hold" }), null);
+  assert.equal(stageFromShowtimeEvent({ state: "preflight" }), null);
+  assert.equal(stageFromShowtimeEvent(null), null);
+  assert.equal(stageFromShowtimeEvent({}), null);
+});

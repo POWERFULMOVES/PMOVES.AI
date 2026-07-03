@@ -20,3 +20,9 @@ export function resolvePersonaFromURL(search) {
   if (!id) return null;
   return { id, alter: p.get("alter") || null, gw: p.get("gw") || null };
 }
+
+/** Showtime event (or bare state string) -> "live" | null. */
+export function stageFromShowtimeEvent(evt) {
+  const state = typeof evt === "string" ? evt : evt && evt.state;
+  return state === "showtime" ? "live" : null;
+}
