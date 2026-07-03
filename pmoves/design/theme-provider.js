@@ -1,15 +1,16 @@
-// pmoves/design/theme-provider.js — dependency-free theme switch.
-// DL-3 will extend setPersona() to resolve via BoTZ Gateway /v1/agent/theme/{id}.
+// pmoves/design/theme-provider.js — dependency-free theme switch + persona resolver.
+// DL-1: setTheme/toggleTheme (data-theme). DL-3: setPersona() resolves the active
+// agent's accent family via the BoTZ Gateway /v1/agent/theme/{id} (accent-override).
+import { personaThemeVars } from "./persona-theme.js";
+import { fetchAgentTheme } from "./persona-resolver.js";
+
 export function setTheme(name) { document.documentElement.setAttribute("data-theme", name); }
 export function currentTheme() { return document.documentElement.getAttribute("data-theme") || "pmoves-armor"; }
 export function toggleTheme(a = "pmoves-armor", b = "darkxside-skin") {
   setTheme(currentTheme() === a ? b : a);
 }
 
-// DL-3 — persona accent-override layer (Task 6).
-import { personaThemeVars } from "./persona-theme.js";
-import { fetchAgentTheme } from "./persona-resolver.js";
-
+// DL-3 — persona accent-override layer.
 const PERSONA_VARS = ["--pm-accent", "--pm-accent-soft", "--pm-accent-2"];
 
 /** Apply an accent-family override from a gateway theme object onto a root element. */
