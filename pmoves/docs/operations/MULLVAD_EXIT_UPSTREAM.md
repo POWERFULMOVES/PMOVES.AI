@@ -58,35 +58,37 @@ default route), plus **policy routing** so ONLY Tailscale-forwarded traffic uses
    `mullvad-cli relay set ...` on any box) for the designated egress KVM(s). Per memory,
    `pmoves-kvm4-1` is the designated Phase-9Q egress; `pmoves-kvm2` stays a plain
    Tailscale exit fallback. Recommend starting with **one KVM as a canary**.
-2. **Stage the secret.** The generated files are never hand-edited — `secrets_sync.py`
-   regenerates every `env.tier-*` from the manifest (it's manifest-driven: only keys with
-   an `entries` record project), and `chit-manifest-sync` regenerates the v1
-   `secrets_manifest.yaml` from the v2 source. A brand-new key needs two inputs:
-   - **[operator-only, one-time] routing entry** in `pmoves/chit/secrets_manifest_v2.yaml`
-     — declares WHERE the key projects (no secret value). This file is `zeroAccessPaths`
-     with no CLI to append it and Known Roads scoped only to `compose`, so the operator
-     adds it directly (or adds a new Known-Road domain):
-     ```yaml
-     - id: mullvad_us_nyc_conf
-       source: {type: cgp, label: MULLVAD_US_NYC_CONF_B64}
-       targets: [{file: env.tier-agent, key: MULLVAD_US_NYC_CONF_B64}]
-       required: false
+2. **Stage the secret. No manifest is ever hand-edited** — every `secrets_manifest*.yaml`
+   is a machine-emitted build artifact (a hand-edit is overwritten on the next funnel).
+   `generate_chit_v2.py` emits v2 (tier per key from the `TIER_MAPPING` **code dict**,
+   generate_chit_v2.py:8-100; base entries from the ToKenism-Multi / per-submodule contract),
+   and `chit-manifest-sync` emits v1 from v2. `secrets_sync.py generate` is manifest-driven
+   (only keys with an `entries` record route to a tier file). A brand-new key needs two inputs,
+   both away from the YAML:
+   - **[agent — CODE, not YAML] tier routing.** So the delivered value is readable back from an
+     agent-accessible tier file, add the key to the `TIER_MAPPING` dict in
+     `pmoves/tools/generate_chit_v2.py` and regenerate the manifest artifact:
+     ```python
+     # pmoves/tools/generate_chit_v2.py  (Tier 5: Agent)
+     "MULLVAD_US_NYC_CONF_B64": "agent",
      ```
-     (Optional [agent-doable]: also add `MULLVAD_US_NYC_CONF_B64=` to `env.shared.example`
-     to document the key, as `SUPABASE_DB_URI` in #1918.)
+     The routing lives in code + the submodule contract; the manifest is re-emitted from it —
+     the `zeroAccessPaths` YAML is never touched by hand. (Optional [agent]: also add
+     `MULLVAD_US_NYC_CONF_B64=` to `env.shared.example` to document the key, as `SUPABASE_DB_URI`
+     in #1918.)
    - **[operator supplies value → agent runs] the value**, written *programmatically* by
-     the sanctioned `secrets-rotate` tool — **not a hand-edit**. `bootstrap_env.py` is a
-     `chitBypassPatterns` writer (`patterns.yaml:839,855`), so it may surgically
+     `secrets-rotate` — it touches **only `env.shared`**, never a manifest. `bootstrap_env.py`
+     is a `chitBypassPatterns` writer (`patterns.yaml:839,855`), so it may surgically
      single-line-write the zero-access `env.shared`; the value is passed via an env var so
      it never hits argv/shell history. The `.conf` is multi-line → base64 to one line first:
      ```bash
      export PMOVES_ROTATE_VALUE="$(base64 -w0 mullvad-us-nyc.conf)"   # operator holds the WG key
      make -C pmoves secrets-rotate KEY=MULLVAD_US_NYC_CONF_B64        # write env.shared → chit-export → secrets-funnel
      ```
-     `secrets-rotate` auto-chains the full funnel (`mk/codex.mk`; `bootstrap_env.py:109`;
-     `deploy:secrets-funnel` skill), so `MULLVAD_US_NYC_CONF_B64` lands in `env.tier-agent`
-     (routed by step-2a's entry). CHIT slash-commands (`/chit:encode`) are GEOMETRY-BUS
-     packets, NOT secrets. **Never commit the `.conf` or the b64.**
+     `secrets-rotate` (codex.mk:124-129; `bootstrap_env.py:109`) auto-chains the full funnel,
+     so `MULLVAD_US_NYC_CONF_B64` lands in `env.tier-agent` (routed by the TIER_MAPPING entry).
+     CHIT slash-commands (`/chit:encode`) are GEOMETRY-BUS packets, NOT secrets. **Never commit
+     the `.conf` or the b64.**
 3. **Deliver to the KVM [agent-doable]** (decode from the generated tier env → pipe over
    Tailscale SSH → 0600; no b64 blob ever lands on the VPS; precedent = `deploy-claw.sh`):
    ```bash
