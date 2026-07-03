@@ -227,7 +227,7 @@ root:
             TTS: edge (local). STT: faster-whisper (base).
             Notes: ROCm stack required (rocm-dev, hip-runtime). Not CUDA.
             Row-split inference tested with Gemma4 GGUF; Hermes GGUF pending.
-          status: planned
+          status: done   # 2026-07-03: pmoves-hermes-knuckles profile live (v0.18.0), TZ-first, registry lanes
           owner: b850-claude
 
         - id: hermes.integration.profile.node_kvm
@@ -728,7 +728,7 @@ revised_scope_hermes_config_first:
         - "6 atomic commits on main"
 
     phase_2_spark:
-      status: NEXT
+      status: CONFIG-READY   # spark.yaml v2 (TZ-first) landed 2026-07-03; node offline on tailnet — apply via SPARK_HERMES_APPLY runbook
       node: "spark (GB10 128GB, 70B primary)"
       goal: "Gather real HERMES config context"
       steps:
@@ -741,7 +741,7 @@ revised_scope_hermes_config_first:
       blocked_by: "elder-melchor commits pushed + Z890 review started"
 
     phase_3_b850_knuckles:
-      status: PENDING
+      status: DONE   # 2026-07-03 live standup: hermes v0.18 profile, dynamic model plane, worker_qwen promoted
       node: "b850 (Dual AMD R9700 64GB ROCm)"
       goal: "Gather real HERMES config context"
       steps:
