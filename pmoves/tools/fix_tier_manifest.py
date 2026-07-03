@@ -22,6 +22,7 @@ TIER_MAPPING = {
     "SUPABASE_JWT_SECRET": ["env.tier-api"],
 
     # env.tier-llm: ALL external LLM provider API keys (security fence)
+    "ALIBABA_PRO_CODING_PLAN": ["env.tier-llm"],
     "ANTHROPIC_API_KEY": ["env.tier-llm"],
     "COHERE_API_KEY": ["env.tier-llm"],
     "DEEPSEEK_API_KEY": ["env.tier-llm"],
@@ -30,7 +31,10 @@ TIER_MAPPING = {
     "GEMINI_API_KEY": ["env.tier-llm"],
     "GOOGLE_API_KEY": ["env.tier-llm"],
     "GROQ_API_KEY": ["env.tier-llm"],
+    "HF_TOKEN": ["env.tier-llm"],
+    "KILOCODE_API_KEY": ["env.tier-llm"],
     "MISTRAL_API_KEY": ["env.tier-llm"],
+    "MOONSHOT_API_KEY": ["env.tier-llm"],
     "OPENAI_API_KEY": ["env.tier-llm"],
     "OPENAI_API_BASE": ["env.tier-llm"],
     "OPENAI_COMPATIBLE_BASE_URL": ["env.tier-llm"],
@@ -39,9 +43,12 @@ TIER_MAPPING = {
     "TOGETHER_AI_API_KEY": ["env.tier-llm"],
     "VOYAGE_API_KEY": ["env.tier-llm"],
     "XAI_API_KEY": ["env.tier-llm"],
+    "Z_AI_API_KEY": ["env.tier-llm"],
+    "DASHSCOPE_API_KEY": ["env.tier-llm"],
 
     # env.tier-llm also gets TensorZero and Ollama config
     "OLLAMA_BASE_URL": ["env.tier-llm"],
+    "OLLAMA_API_KEY": ["env.tier-llm"],
     "TENSORZERO_API_KEY": ["env.tier-llm"],
 
     # env.tier-agent: Agent orchestration
