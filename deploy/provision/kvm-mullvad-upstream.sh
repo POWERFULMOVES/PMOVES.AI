@@ -61,10 +61,18 @@ while [ $# -gt 0 ]; do
     --prio)   PRIO="${2:-}"; shift 2 ;;
     --dry-run) DRY=1; shift ;;
     --down)   DOWN=1; shift ;;
-    -h|--help) sed -n '2,45p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,36p' "$0"; exit 0 ;;
     *) err "unknown arg: $1"; exit 2 ;;
   esac
 done
+
+# Validate every value that flows into run()/eval and into the persisted wg-quick
+# PostUp/PostDown hooks (which wg-quick later executes as root). Allowlist only:
+# numeric table/priority, interface-name characters. Closes root command injection.
+[[ "$TABLE" =~ ^[0-9]+$ ]]         || { err "invalid --table (numeric only): $TABLE"; exit 2; }
+[[ "$PRIO"  =~ ^[0-9]+$ ]]         || { err "invalid --prio (numeric only): $PRIO"; exit 2; }
+[[ "$TS_IF" =~ ^[A-Za-z0-9._-]+$ ]] || { err "invalid --ts-if: $TS_IF"; exit 2; }
+[ -z "$WAN_IF" ] || [[ "$WAN_IF" =~ ^[A-Za-z0-9._-]+$ ]] || { err "invalid --wan-if: $WAN_IF"; exit 2; }
 
 [ "$(id -u)" = "0" ] || { err "must run as root"; exit 1; }
 
@@ -82,7 +90,10 @@ if [ "$DOWN" = "1" ]; then
   run "ip rule del iif $TS_IF lookup $TABLE priority $PRIO 2>/dev/null || true"
   run "ip -6 rule del iif $TS_IF lookup $TABLE priority $PRIO 2>/dev/null || true"
   run "iptables -t nat -D POSTROUTING -o $IF_NAME -j MASQUERADE 2>/dev/null || true"
+  run "ip6tables -t nat -D POSTROUTING -o $IF_NAME -j MASQUERADE 2>/dev/null || true"
   run "iptables -D FORWARD -i $TS_IF ! -o $IF_NAME -j DROP 2>/dev/null || true"
+  run "ip6tables -D FORWARD -i $TS_IF ! -o $IF_NAME -j DROP 2>/dev/null || true"
+  run "rm -f $WG_CONF"   # scrub the persisted Mullvad PrivateKey on full teardown
   info "Torn down. Tailscale exit traffic reverts to the naked uplink."
   exit 0
 fi
@@ -109,21 +120,43 @@ info "ts-if=$TS_IF  wan-if=$WAN_IF  table=$TABLE  prio=$PRIO  config=$CONFIG"
 # for forwarded traffic is done explicitly via a dedicated table + ip rule.
 step "Writing $WG_CONF (Table=off + PostUp/PostDown policy routing)"
 build_conf() {
-  # Strip any existing Table=, DNS stays (used only by the tunnel), inject hooks.
-  awk 'BEGIN{IGNORECASE=1} !/^[[:space:]]*Table[[:space:]]*=/{print}' "$CONFIG"
-  cat <<EOF
-
-# ── injected by kvm-mullvad-upstream.sh ──
+  # wg-quick treats Table/MTU/PostUp/PostDown as [Interface] extensions. They MUST
+  # sit inside the [Interface] section — if appended after [Peer], wg-quick passes
+  # them to `wg` as peer keys and `wg-quick up` fails. So we inject immediately
+  # after the [Interface] header. We also strip any existing Table= and DNS= lines:
+  #   - Table=  → we force our own (Table=off + policy routing)
+  #   - DNS=    → Mullvad's DNS (10.64.0.1) is installed via resolvconf into the
+  #               KVM's OWN resolver; with Table=off + iif-only policy routing the
+  #               host has no route to it, breaking apt/control-plane DNS. Forwarded
+  #               fleet traffic resolves via the client's resolver, not the KVM's.
+  local inject
+  inject=$(cat <<EOF
+# -- injected by kvm-mullvad-upstream.sh (Interface extensions; before [Peer]) --
 Table = off
 MTU = 1420
-PostUp   = ip route add default dev %i table ${TABLE}; ip -6 route add default dev %i table ${TABLE} 2>/dev/null || true
-PostUp   = ip rule add iif ${TS_IF} lookup ${TABLE} priority ${PRIO}; ip -6 rule add iif ${TS_IF} lookup ${TABLE} priority ${PRIO} 2>/dev/null || true
+PostUp   = ip route add default dev %i table ${TABLE} 2>/dev/null || true
+PostUp   = ip -6 route add default dev %i table ${TABLE} 2>/dev/null || true
+PostUp   = ip rule add iif ${TS_IF} lookup ${TABLE} priority ${PRIO} 2>/dev/null || true
+PostUp   = ip -6 rule add iif ${TS_IF} lookup ${TABLE} priority ${PRIO} 2>/dev/null || true
 PostUp   = iptables -t nat -C POSTROUTING -o %i -j MASQUERADE 2>/dev/null || iptables -t nat -A POSTROUTING -o %i -j MASQUERADE
+PostUp   = ip6tables -t nat -C POSTROUTING -o %i -j MASQUERADE 2>/dev/null || ip6tables -t nat -A POSTROUTING -o %i -j MASQUERADE
 PostUp   = iptables -C FORWARD -i ${TS_IF} ! -o %i -j DROP 2>/dev/null || iptables -A FORWARD -i ${TS_IF} ! -o %i -j DROP
-PostDown = ip rule del iif ${TS_IF} lookup ${TABLE} priority ${PRIO} 2>/dev/null || true; ip -6 rule del iif ${TS_IF} lookup ${TABLE} priority ${PRIO} 2>/dev/null || true
+PostUp   = ip6tables -C FORWARD -i ${TS_IF} ! -o %i -j DROP 2>/dev/null || ip6tables -A FORWARD -i ${TS_IF} ! -o %i -j DROP
+PostDown = ip rule del iif ${TS_IF} lookup ${TABLE} priority ${PRIO} 2>/dev/null || true
+PostDown = ip -6 rule del iif ${TS_IF} lookup ${TABLE} priority ${PRIO} 2>/dev/null || true
 PostDown = iptables -t nat -D POSTROUTING -o %i -j MASQUERADE 2>/dev/null || true
+PostDown = ip6tables -t nat -D POSTROUTING -o %i -j MASQUERADE 2>/dev/null || true
 PostDown = iptables -D FORWARD -i ${TS_IF} ! -o %i -j DROP 2>/dev/null || true
+PostDown = ip6tables -D FORWARD -i ${TS_IF} ! -o %i -j DROP 2>/dev/null || true
 EOF
+)
+  awk -v inject="$inject" '
+    BEGIN{IGNORECASE=1; injected=0}
+    /^[[:space:]]*Table[[:space:]]*=/ {next}
+    /^[[:space:]]*DNS[[:space:]]*=/   {next}
+    {print}
+    (injected==0 && $0 ~ /^[[:space:]]*\[Interface\][[:space:]]*$/){print inject; injected=1}
+  ' "$CONFIG"
 }
 if [ "$DRY" = "1" ]; then
   echo -e "  ${YELLOW}would write $WG_CONF:${NC}"; build_conf | sed 's/^/    | /'

@@ -41,7 +41,12 @@ default route), plus **policy routing** so ONLY Tailscale-forwarded traffic uses
 - **MTU 1420** on `mlv0` (Mullvad default). The client↔exit hop is Tailscale (≈1280);
   the exit↔internet hop is Mullvad — not a single double-encapsulated packet, so 1420
   is correct. If you see stalls on large transfers, drop to 1380 (nested-WG PMTUD).
-- **DNS:** keep Mullvad's `DNS = 10.64.0.1` (in the .conf) to avoid DNS leaks.
+- **DNS:** the script **strips** the Mullvad `DNS = 10.64.0.1` line from the written
+  config. `wg-quick` installs `DNS` into the KVM's *own* resolver via resolvconf; with
+  `Table=off` + `iif`-only policy routing the host has no route to that private resolver,
+  so keeping it would break the KVM's own apt / Tailscale-control-plane DNS. Forwarded
+  fleet traffic resolves via the *client's* resolver (MagicDNS), not the KVM's — so the
+  egress IP is still Mullvad's, without hijacking the exit node's management DNS.
 
 ## Scripts (both in `deploy/provision/`)
 
@@ -115,8 +120,9 @@ default route), plus **policy routing** so ONLY Tailscale-forwarded traffic uses
   additive and survive, but after a `tailscaled` upgrade re-run the healthcheck.
 - **Relay failover / key rotation:** swap the `.conf` and `wg-quick down mlv0 && up mlv0`
   (or re-run the script). Consider a cron that pings `mlv0`'s handshake age.
-- **IPv6:** rules mirror v4; if the KVM has no usable v6 uplink, the kill-switch still
-  fails v6 closed. Disable v6 exit advertisement if it causes issues.
+- **IPv6:** the kill-switch and MASQUERADE are mirrored with explicit `ip6tables` rules
+  (not just the v6 policy route), so forwarded v6 traffic fails closed the same way v4
+  does — it may leave only via `mlv0`. Disable v6 exit advertisement if it causes issues.
 - **Two planes, never conflated:** *advertise* (node-local, this script + Tailscale) vs
   *approve* (tailnet admin/autoApprover). This script touches only the node-local plane.
 
