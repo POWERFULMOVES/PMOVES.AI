@@ -26,3 +26,12 @@ export function stageFromShowtimeEvent(evt) {
   const state = typeof evt === "string" ? evt : evt && evt.state;
   return state === "showtime" ? "live" : null;
 }
+
+/** Map a signature's alters -> [{value, label}] for a picker. value matches the gateway /alter/{name} route. */
+export function alterOptions(signature) {
+  const alters = (signature && signature.alters) || [];
+  return alters.map((a) => ({
+    value: a.name || a.id || a.display_name,
+    label: a.display_name || a.name || a.id,
+  }));
+}

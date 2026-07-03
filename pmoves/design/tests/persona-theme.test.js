@@ -62,3 +62,22 @@ test("stageFromShowtimeEvent: hold/preflight/junk -> null", () => {
   assert.equal(stageFromShowtimeEvent(null), null);
   assert.equal(stageFromShowtimeEvent({}), null);
 });
+
+import { alterOptions } from "../persona-theme.js";
+
+test("alterOptions maps a signature's alters to {value,label}", () => {
+  const sig = { alters: [
+    { name: "minimax-ghost", display_name: "MiniMax Ghost" },
+    { id: "z890-infra" },
+  ]};
+  assert.deepEqual(alterOptions(sig), [
+    { value: "minimax-ghost", label: "MiniMax Ghost" },
+    { value: "z890-infra", label: "z890-infra" },
+  ]);
+});
+
+test("alterOptions is empty for no alters", () => {
+  assert.deepEqual(alterOptions({}), []);
+  assert.deepEqual(alterOptions(null), []);
+  assert.deepEqual(alterOptions({ alters: [] }), []);
+});
