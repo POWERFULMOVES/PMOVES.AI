@@ -109,6 +109,7 @@ ${TOML}
 RDEOF
 )
     if command -v systemctl >/dev/null && systemctl list-units --type=service 2>/dev/null | grep -q rustdesk; then
+      sudo mkdir -p /root/.config/rustdesk
       echo \"\$TOML\" | sudo tee /root/.config/rustdesk/RustDesk2.toml >/dev/null
       mkdir -p \$HOME/.config/rustdesk && echo \"\$TOML\" > \$HOME/.config/rustdesk/RustDesk2.toml
       sudo systemctl restart rustdesk || true
