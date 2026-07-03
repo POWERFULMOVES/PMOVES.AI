@@ -36,6 +36,35 @@ def _extract_registry_tables(registry_toml_text: str) -> str:
     return "\n".join(out).strip() + ("\n" if out else "")
 
 
+def synthesize_lane_blocks(models_payload: dict) -> str:
+    """Build [models.registry_*] TOML from /api/models items carrying
+    registry_* aliases. Data-driven: model ids, api_base, and lane names all
+    come from Supabase rows — nothing hardcoded here."""
+    out: list[str] = []
+    for item in models_payload.get("items", []):
+        aliases = [
+            a.get("alias") for a in (item.get("aliases") or [])
+            if isinstance(a, dict) and str(a.get("alias", "")).startswith("registry_")
+        ]
+        if not aliases:
+            continue
+        api_base = item.get("api_base") or "http://pmoves-ollama:11434/v1"
+        provider_type = "openai"  # all local backends are OpenAI-compatible
+        for alias in aliases:
+            out.extend([
+                f"[models.{alias}]",
+                'routing = ["local_active"]',
+                "",
+                f"[models.{alias}.providers.local_active]",
+                f'type = "{provider_type}"',
+                f'api_base = "{api_base}"',
+                f'model_name = "{item["model_id"]}"',
+                'api_key_location = "none"',
+                "",
+            ])
+    return "\n".join(out).strip() + ("\n" if out else "")
+
+
 def sync_registry_section(static_toml_text: str, registry_toml_text: str) -> str:
     begin = BEGIN_RE.search(static_toml_text)
     end = END_RE.search(static_toml_text)
@@ -54,13 +83,19 @@ def sync_registry_section(static_toml_text: str, registry_toml_text: str) -> str
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--registry-url", default="http://127.0.0.1:8110")
+    ap.add_argument("--models-json", help="Path to a saved /api/models JSON payload; lane blocks are synthesized from aliases instead of fetching the registry TOML")
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
 
-    with urllib.request.urlopen(
-        f"{args.registry_url}/api/tensorzero/config", timeout=15
-    ) as resp:
-        registry_text = resp.read().decode("utf-8")
+    if args.models_json:
+        import json
+        payload = json.loads(Path(args.models_json).read_text(encoding="utf-8"))
+        registry_text = synthesize_lane_blocks(payload)
+    else:
+        with urllib.request.urlopen(
+            f"{args.registry_url}/api/tensorzero/config", timeout=15
+        ) as resp:
+            registry_text = resp.read().decode("utf-8")
     static_text = TZ_TOML.read_text(encoding="utf-8")
     merged = sync_registry_section(static_text, registry_text)
     if args.dry_run:

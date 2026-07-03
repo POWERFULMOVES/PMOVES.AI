@@ -67,3 +67,22 @@ def test_idempotent():
 def test_missing_markers_raises():
     with pytest.raises(ValueError):
         sync_registry_section("[models.x]\nrouting = []\n", REGISTRY)
+
+
+def test_synthesize_lane_blocks_from_models_payload():
+    import tomllib as _toml
+    from tools.tz_registry_sync import synthesize_lane_blocks
+    payload = {"items": [
+        {"model_id": "some-model:tag",
+         "api_base": "http://backend:1234/v1",
+         "aliases": [{"alias": "registry_worker_x", "context": "c"},
+                     {"alias": "friendly-name", "context": "c"}]},
+        {"model_id": "no-lane-model", "aliases": []},
+    ]}
+    body = synthesize_lane_blocks(payload)
+    parsed = _toml.loads(body)
+    lane = parsed["models"]["registry_worker_x"]["providers"]["local_active"]
+    assert lane["model_name"] == "some-model:tag"
+    assert lane["api_base"] == "http://backend:1234/v1"
+    assert "friendly-name" not in parsed["models"]   # only registry_* synthesized
+    assert len(parsed["models"]) == 1
