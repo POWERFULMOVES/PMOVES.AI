@@ -32,7 +32,7 @@ GREEN='\033[0;32m'; YELLOW='\033[1;33m'; RED='\033[0;31m'; CYAN='\033[0;36m'; NC
 info() { echo -e "${GREEN}[ok]${NC} $*"; }
 warn() { echo -e "${YELLOW}[warn]${NC} $*"; }
 err()  { echo -e "${RED}[fail]${NC} $*"; }
-head() { echo -e "\n${CYAN}=== $* ===${NC}"; }
+section() { echo -e "\n${CYAN}=== $* ===${NC}"; }  # NOT `head` — that shadows coreutils head(1)
 
 MODE="status"
 ONLY_NODE=""
@@ -68,7 +68,7 @@ fi
 
 # ── STATUS MODE (safe) ──────────────────────────────────────────────────────
 if [ "$MODE" = "status" ]; then
-  head "Exit-node status (${#EXIT_NODES[@]} advertising)"
+  section "Exit-node status (${#EXIT_NODES[@]} advertising)"
   printf "%-22s %-16s %-8s %-10s\n" "NODE" "TS-IP" "ONLINE" "PING"
   for row in "${EXIT_NODES[@]}"; do
     IFS=$'\t' read -r name ip online id <<< "$row"
@@ -83,7 +83,7 @@ if [ "$MODE" = "status" ]; then
       printf "${YELLOW}%-22s %-16s %-8s %-10s${NC}\n" "$name" "$ip" "$online" "$ping"
     fi
   done
-  head "Local netcheck"
+  section "Local netcheck"
   tailscale netcheck 2>/dev/null | sed -n '1,20p' || warn "netcheck unavailable"
   echo
   info "Status probe complete. For a real egress/leak test:  $0 --mode egress"
@@ -111,7 +111,7 @@ sleep 2
 BASE_IP="$(curl -fsS --max-time "$CURL_TIMEOUT" https://am.i.mullvad.net/json 2>/dev/null | jq -r '.ip' 2>/dev/null || echo '?')"
 info "Baseline (no exit) egress IP: ${BASE_IP}"
 
-head "Egress test"
+section "Egress test"
 printf "%-22s %-16s %-9s %-16s %s\n" "NODE" "EGRESS-IP" "MULLVAD?" "COUNTRY/CITY" "VERDICT"
 for row in "${EXIT_NODES[@]}"; do
   IFS=$'\t' read -r name ip online id <<< "$row"
