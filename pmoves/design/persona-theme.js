@@ -12,3 +12,11 @@ export function personaThemeVars(theme) {
   }
   return out;
 }
+
+/** Parse ?agent=<id>&alter=<name>&gw=<url> -> {id, alter, gw} | null. */
+export function resolvePersonaFromURL(search) {
+  const p = new URLSearchParams(search || "");
+  const id = p.get("agent");
+  if (!id) return null;
+  return { id, alter: p.get("alter") || null, gw: p.get("gw") || null };
+}

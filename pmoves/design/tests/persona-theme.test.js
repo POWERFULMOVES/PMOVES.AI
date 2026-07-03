@@ -26,3 +26,24 @@ test("personaThemeVars tolerates missing fields", () => {
   assert.deepEqual(personaThemeVars(null), {});
   assert.deepEqual(personaThemeVars({ color: "#abc" }), { "--pm-accent": "#abc" });
 });
+
+// Task 3 — resolvePersonaFromURL
+import { resolvePersonaFromURL } from "../persona-theme.js";
+
+test("resolvePersonaFromURL parses agent/alter/gw", () => {
+  assert.deepEqual(
+    resolvePersonaFromURL("?agent=darkxside&alter=ghost&gw=http://h:8054"),
+    { id: "darkxside", alter: "ghost", gw: "http://h:8054" }
+  );
+});
+
+test("resolvePersonaFromURL defaults alter/gw to null", () => {
+  assert.deepEqual(resolvePersonaFromURL("?agent=4090-claude"), {
+    id: "4090-claude", alter: null, gw: null,
+  });
+});
+
+test("resolvePersonaFromURL returns null with no agent", () => {
+  assert.equal(resolvePersonaFromURL(""), null);
+  assert.equal(resolvePersonaFromURL("?foo=1"), null);
+});
