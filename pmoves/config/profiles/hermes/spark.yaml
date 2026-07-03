@@ -2,22 +2,27 @@
 # Hardware: GB10 Grace-Blackwell 128GB unified memory
 # Node: pmoves-spark
 # Role: PRIMARY inference node for 70B+ models and NeMo Omni
-# Last updated: 2026-06-04
+# Last updated: 2026-07-03 (cloud-hybrid rev 4 — TZ-first, registry lanes; NO pinned local model IDs — dynamic model plane selects 70B-class workers per hf-mem fit on 128GB unified)
 
 model:
-  default: "ollama/hermes3:70b"
-  provider: "ollama"
-  base_url: "http://localhost:11434"
-  fallback:
-    provider: "openrouter"
-    model: "nousresearch/hermes-3"
-  auxiliary:
-    vision:
-      provider: "openrouter"
-      model: "anthropic/claude-sonnet-4"
-    compression:
-      provider: "openrouter"
-      model: "google/gemini-1.5-flash"
+  default: "tensorzero::function_name::pmoves_orchestrator_coding"
+  provider: tensorzero
+
+providers:
+  tensorzero:
+    name: tensorzero
+    base_url: "http://127.0.0.1:3030/openai/v1"   # or fleet TZ via Tailscale
+    api_key: "none"
+    api_mode: chat_completions
+    default_model: "tensorzero::function_name::pmoves_orchestrator_coding"
+    context_length: 128000
+    models:
+      - "tensorzero::function_name::pmoves_orchestrator_coding"
+      - "tensorzero::function_name::pmoves_orchestrator_chat"
+      - "tensorzero::function_name::pmoves_worker_glm"
+      - "tensorzero::function_name::pmoves_worker_qwen"
+      - "tensorzero::function_name::pmoves_worker_hermes"
+      - "tensorzero::function_name::pmoves_worker_kimi"
 
 agent:
   max_turns: 90
@@ -62,9 +67,9 @@ memory:
   provider: sqlite
 
 delegation:
-  model: "ollama/hermes3:70b"
-  provider: ollama
-  max_concurrent_children: 3
+  model: "tensorzero::function_name::pmoves_worker_hermes"
+  provider: tensorzero
+  max_concurrent_children: 4
   max_iterations: 50
 
 gateway:
@@ -76,7 +81,7 @@ gateway:
     - slack
 
 nats:
-  url: "nats://pmoves-nats:4222"
+  url: "${NATS_URL}"   # authenticated form via secrets funnel
   subjects:
     publish:
       - hermes.gateway.launched.v1
@@ -109,31 +114,7 @@ security:
     mode: smart
 
 # Spark-specific model catalog (local Ollama + HuggingFace)
-local_models:
-  ollama:
-    - hermes3:8b
-    - hermes3:70b
-  vllm_tensorrt:
-    - repo: "nvidia/Nemotron-3-Ultra"
-      name: nemotron3-ultra
-      backend: vllm  # or TensorRT-LLM for max throughput
-      quantization: none
-      context_length: 128000
-      vram_required: "~80GB"
-      notes: "550B MoE / 55B active. PRIMARY for agent harnesses. 300+ tok/sec. Best open model on Pinchbench."
-      agent_harness_optimized: true
-      training_recipes_available: true
-  huggingface:
-    - repo: "nvidia/NVLM-D-72B"
-      name: nemo-omni-vl
-      local_dir: "~/.cache/huggingface/nemo-omni-vl"
-      backend: nemo
-      min_version: "2.1"
-    - repo: "google/gemma-embedding-exp-03-07"
-      name: gemma4-embed
-      local_dir: "~/.cache/huggingface/gemma4-embed"
-      backend: sentence-transformers
-    - repo: "unsloth/Hermes-3-Llama-3.1-70B"
-      name: unsloth-hermes-70b-gguf
-      local_dir: "~/.cache/huggingface/unsloth-hermes-70b"
-      backend: llama-cpp
+# Local model inventory is DYNAMIC: candidates are registered via
+# model-registry :8110 (CHIT-signed, hf-mem sized for 128GB unified memory)
+# and promoted to registry_worker_* lanes. No pinned IDs here.
+local_models: dynamic-model-plane
