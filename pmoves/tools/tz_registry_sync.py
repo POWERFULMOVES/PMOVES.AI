@@ -65,12 +65,30 @@ def synthesize_lane_blocks(models_payload: dict) -> str:
     return "\n".join(out).strip() + ("\n" if out else "")
 
 
+def _table_names(body: str) -> set[str]:
+    return {m.group(1) for m in re.finditer(r"^\[models\.(registry_[A-Za-z0-9_]+)\]", body, re.M)}
+
+
 def sync_registry_section(static_toml_text: str, registry_toml_text: str) -> str:
     begin = BEGIN_RE.search(static_toml_text)
     end = END_RE.search(static_toml_text)
     if not begin or not end or end.start() < begin.end():
         raise ValueError("REGISTRY-MANAGED MODELS markers missing or malformed")
     body = _extract_registry_tables(registry_toml_text)
+    # Merge: lanes absent from the registry payload keep their existing
+    # (bootstrap cloud-parent) blocks so function references never dangle.
+    existing = _extract_registry_tables(static_toml_text[begin.end():end.start()])
+    incoming = _table_names(body)
+    kept: list[str] = []
+    keep = False
+    for line in existing.splitlines():
+        header = re.match(r"^\[models\.(registry_[A-Za-z0-9_]+)", line)
+        if header:
+            keep = header.group(1) not in incoming
+        if keep:
+            kept.append(line)
+    if kept:
+        body = (body.rstrip() + "\n\n" + "\n".join(kept).strip() + "\n") if body.strip() else "\n".join(kept).strip() + "\n"
     return (
         static_toml_text[: begin.end()]
         + "\n\n"

@@ -86,3 +86,42 @@ def test_synthesize_lane_blocks_from_models_payload():
     assert lane["api_base"] == "http://backend:1234/v1"
     assert "friendly-name" not in parsed["models"]   # only registry_* synthesized
     assert len(parsed["models"]) == 1
+
+
+def test_merge_preserves_lanes_absent_from_registry():
+    import tomllib as _toml
+    static = """
+# BEGIN REGISTRY-MANAGED MODELS
+[models.registry_worker_a]
+routing = ["bootstrap_parent"]
+
+[models.registry_worker_a.providers.bootstrap_parent]
+type = "openai"
+api_base = "https://cloud.example/v1"
+model_name = "cloud-parent-a"
+api_key_location = "none"
+
+[models.registry_worker_b]
+routing = ["bootstrap_parent"]
+
+[models.registry_worker_b.providers.bootstrap_parent]
+type = "openai"
+api_base = "https://cloud.example/v1"
+model_name = "cloud-parent-b"
+api_key_location = "none"
+# END REGISTRY-MANAGED MODELS
+"""
+    registry = """
+[models.registry_worker_a]
+routing = ["local_active"]
+
+[models.registry_worker_a.providers.local_active]
+type = "openai"
+api_base = "http://local:1/v1"
+model_name = "local-a"
+api_key_location = "none"
+"""
+    out = sync_registry_section(static, registry)
+    parsed = _toml.loads(out)
+    assert parsed["models"]["registry_worker_a"]["providers"]["local_active"]["model_name"] == "local-a"
+    assert parsed["models"]["registry_worker_b"]["providers"]["bootstrap_parent"]["model_name"] == "cloud-parent-b"
