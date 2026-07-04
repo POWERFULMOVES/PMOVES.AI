@@ -18,14 +18,62 @@ export function applyStage(stage, root = document.documentElement) {
 /**
  * Subscribe to Showtime SSE and call onState(stage) on each event.
  * EventSourceImpl is injectable for tests. opts.onError(err) surfaces a broken
- * feed (CORS/4xx) instead of silently freezing on the last stage. Returns { close() }.
+ * feed (CORS/4xx) instead of silently freezing on the last stage.
+ *
+ * Spec D4 poll fallback: when SSE errors (or EventSource is unavailable), poll
+ * GET {gw}/health/all -> {state} and map it through stageFromShowtimeEvent so the
+ * live flip still works over a broken feed. Injectables (fetchImpl/setIntervalImpl/
+ * clearIntervalImpl) keep tests hermetic; opts.pollMs overrides the 5s interval;
+ * opts.poll === false disables polling (SSE-only). Returns { close() }.
  */
 export function watchShowtime(opts = {}) {
   const gw = String(opts.gw || DEFAULT_GW).replace(/\/+$/, "");
   const onState = opts.onState || (() => {});
   const onError = opts.onError || (() => {});
   const ES = opts.EventSourceImpl || (typeof EventSource !== "undefined" ? EventSource : null);
-  if (!ES) return { close() {} };
+
+  // --- Poll fallback wiring (spec D4). ---
+  const pollEnabled = opts.poll !== false;
+  const fetchImpl = opts.fetchImpl || (typeof fetch !== "undefined" ? fetch.bind(globalThis) : null);
+  const setIntervalImpl = opts.setIntervalImpl || (typeof setInterval !== "undefined" ? setInterval : null);
+  const clearIntervalImpl = opts.clearIntervalImpl || (typeof clearInterval !== "undefined" ? clearInterval : null);
+  const pollMs = opts.pollMs || 5000;
+  const canPoll = pollEnabled && !!fetchImpl && !!setIntervalImpl;
+  let pollTimer = null;
+  let ticking = false; // guard against overlapping ticks
+
+  async function pollTick() {
+    if (ticking) return;
+    ticking = true;
+    try {
+      const res = await fetchImpl(gw + "/health/all");
+      if (res && res.ok) {
+        const json = await res.json();
+        onState(stageFromShowtimeEvent(json));
+      }
+    } catch {
+      // Best-effort: never throw out of the timer.
+    } finally {
+      ticking = false;
+    }
+  }
+  function startPolling() {
+    if (!canPoll || pollTimer !== null) return;
+    pollTimer = setIntervalImpl(pollTick, pollMs);
+  }
+  function stopPolling() {
+    if (pollTimer !== null && clearIntervalImpl) {
+      clearIntervalImpl(pollTimer);
+      pollTimer = null;
+    }
+  }
+
+  // No EventSource in this environment: poll directly if possible.
+  if (!ES) {
+    startPolling();
+    return { close: () => stopPolling() };
+  }
+
   const es = new ES(gw + "/sse/events");
   const handleFrame = (m) => {
     let data;
@@ -37,6 +85,14 @@ export function watchShowtime(opts = {}) {
   if (typeof es.addEventListener === "function") {
     for (const evt of LIVE_EVENTS) es.addEventListener(evt, handleFrame);
   }
-  es.onerror = (e) => onError(e, es.readyState);
-  return { close: () => es.close() };
+  es.onerror = (e) => {
+    onError(e, es.readyState);
+    startPolling(); // fall back to /health/all when the feed breaks
+  };
+  return {
+    close: () => {
+      stopPolling();
+      es.close();
+    },
+  };
 }

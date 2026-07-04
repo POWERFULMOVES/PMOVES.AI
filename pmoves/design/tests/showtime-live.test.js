@@ -75,3 +75,85 @@ test("watchShowtime surfaces SSE failures via onError", () => {
   NamedES.last.fail();
   assert.equal(errs.length, 1);
 });
+
+// --- Spec D4 poll fallback: GET {gw}/health/all -> {state} -> onState(stage). ---
+
+test("watchShowtime polls /health/all after an SSE error", async () => {
+  const seen = [];
+  let inst;
+  class StubES {
+    constructor(url) { this.url = url; inst = this; }
+    close() { this.closed = true; }
+  }
+  let tickFn = null;
+  const setIntervalImpl = (fn) => { tickFn = fn; return 42; };
+  let fetchedUrl = null;
+  const fetchImpl = async (url) => {
+    fetchedUrl = url;
+    return { ok: true, json: async () => ({ state: "showtime" }) };
+  };
+  watchShowtime({
+    gw: "http://localhost:9225",
+    EventSourceImpl: StubES,
+    fetchImpl,
+    setIntervalImpl,
+    onState: (s) => seen.push(s),
+  });
+  assert.equal(tickFn, null); // no poll before the SSE fails
+  inst.onerror(new Error("sse down"));
+  assert.equal(typeof tickFn, "function"); // poll started on error
+  await tickFn();
+  assert.deepEqual(seen, ["live"]);
+  assert.equal(fetchedUrl, "http://localhost:9225/health/all");
+});
+
+test("watchShowtime polls when EventSource is unavailable", async () => {
+  const seen = [];
+  let tickFn = null;
+  const setIntervalImpl = (fn) => { tickFn = fn; return 1; };
+  const fetchImpl = async () => ({ ok: true, json: async () => ({ state: "showtime" }) });
+  watchShowtime({
+    EventSourceImpl: null,
+    fetchImpl,
+    setIntervalImpl,
+    onState: (s) => seen.push(s),
+  });
+  assert.equal(typeof tickFn, "function"); // polls straight away with no SSE
+  await tickFn();
+  assert.deepEqual(seen, ["live"]);
+});
+
+test("watchShowtime close() clears the poll timer", () => {
+  const cleared = [];
+  const setIntervalImpl = () => 99;
+  const clearIntervalImpl = (h) => cleared.push(h);
+  const fetchImpl = async () => ({ ok: true, json: async () => ({ state: "hold" }) });
+  const handle = watchShowtime({
+    EventSourceImpl: null,
+    fetchImpl,
+    setIntervalImpl,
+    clearIntervalImpl,
+    onState: () => {},
+  });
+  handle.close();
+  assert.deepEqual(cleared, [99]);
+});
+
+test("watchShowtime poll:false disables the fallback", () => {
+  let called = false;
+  const setIntervalImpl = () => { called = true; return 1; };
+  let inst;
+  class StubES {
+    constructor(url) { this.url = url; inst = this; }
+    close() {}
+  }
+  watchShowtime({
+    EventSourceImpl: StubES,
+    fetchImpl: async () => ({ ok: true, json: async () => ({}) }),
+    setIntervalImpl,
+    poll: false,
+    onState: () => {},
+  });
+  inst.onerror(new Error("down"));
+  assert.equal(called, false); // SSE-only: no polling even on error
+});
