@@ -2773,15 +2773,15 @@ up-jellyfin:
 up-agents-stack: ## Start Agents (NATS, Agent Zero, Archon, Cipher Memory, etc.) preferring submodule builds
 	@$(DC) --profile agents up -d nats agent-zero archon mesh-agent deepresearch publisher-discord cipher-api
 
-.PHONY: up-cipher
-up-cipher: ## Start Cipher Memory (knowledge-graph memory for Claude Code / agents)
-	@$(DC) --profile agents up -d --build cipher-api
-	@echo "✔ Cipher Memory ready at http://localhost:$${CIPHER_PORT:-8096}"
-
 .PHONY: up-notebooklm
 up-notebooklm: ## Start the NotebookLM MCP agent (stdio MCP; reached via docker exec). Set GOOGLE_REFRESH_TOKEN in env.shared for live queries.
 	@$(DC) --profile agents up -d --build notebooklm-agent
 	@echo "✔ NotebookLM MCP agent up (stdio via docker exec; needs GOOGLE_REFRESH_TOKEN for live NotebookLM calls)"
+
+.PHONY: up-cipher
+up-cipher: ## Start Cipher Memory (knowledge-graph memory for Claude Code / agents)
+	@$(DC) --profile agents up -d --build cipher-api
+	@echo "✔ Cipher Memory ready at http://localhost:$${CIPHER_PORT:-8096}"
 
 .PHONY: cipher-health
 cipher-health: ## Check Cipher Memory health
@@ -4100,3 +4100,18 @@ design-tokens-check: design-tokens ## Fail if committed pmoves/design/build drif
 
 design-test-js: ## Run the pmoves/design JS unit tests (node --test, no npm deps)
 	node --test design/tests/*.test.js
+
+.PHONY: design-vendor design-vendor-check
+
+design-vendor: ## Resync the vendored design engine into ui/lib/persona/ from canonical design/
+	@for f in persona-theme persona-resolver theme-provider showtime-live; do \
+		cp design/$$f.js ui/lib/persona/$$f.js; \
+	done
+	@echo "✅ ui/lib/persona resynced from design/"
+
+design-vendor-check: ## Fail if the vendored ui/lib/persona/*.js drifted from canonical design/
+	@for f in persona-theme persona-resolver theme-provider showtime-live; do \
+		diff -q design/$$f.js ui/lib/persona/$$f.js \
+			|| { echo "❌ pmoves/ui/lib/persona drifted — run 'make -C pmoves design-vendor' and commit"; exit 1; }; \
+	done
+	@echo "✅ ui/lib/persona matches design/ source"
