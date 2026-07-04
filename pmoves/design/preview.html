@@ -10,6 +10,18 @@
 <body>
   <header><h1>PMOVES Design Tokens</h1>
     <button id="toggle" class="cta">Toggle armor / skin</button></header>
+  <section class="persona-bar">
+    <label>Persona
+      <select id="persona"><option value="">— base theme —</option></select>
+    </label>
+    <label>Alter
+      <select id="alter"><option value="">— none —</option></select>
+    </label>
+    <label class="live-toggle">
+      <input type="checkbox" id="live"> simulate Showtime <span class="star">✦</span> live
+    </label>
+    <span id="persona-status" class="status" role="status"></span>
+  </section>
   <section class="swatches">
     <span class="sw" data-var="--pm-accent">accent</span>
     <span class="sw" data-var="--pm-accent-2">accent-2</span>
