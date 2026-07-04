@@ -33,7 +33,7 @@ Agent has no HTTP interface; Cipher Memory exposes `/health`, not `/healthz`).
 
 **Channel Monitor** `:8097` — External content watcher (YouTube channels). Posts to PMOVES.YT `/yt/ingest`.
 
-**Cipher Memory** `:8105` — Knowledge-graph memory (Neo4j backend). MCP bridge at `pmoves-cipher-mcp/` (stdio). API: `POST /api/memory`, `GET /api/memory/search?q=...`. Health: `GET /health`. MCP tools: `pmoves_cipher_store`, `pmoves_cipher_search`, `pmoves_cipher_store_reasoning`, `pmoves_cipher_reasoning_patterns`.
+**Cipher Memory** `:8105` — Knowledge-graph memory (Neo4j backend). MCP bridge at `pmoves-cipher-mcp/` (stdio). Live surface: MCP over SSE at `/mcp/sse` + health `GET /health` (both verified 200, 2026-07-04). NOTE: the `/api/memory` REST paths previously documented return **404** — use the MCP tools, not a REST API. MCP tools: `pmoves_cipher_store`, `pmoves_cipher_search`, `pmoves_cipher_store_reasoning`, `pmoves_cipher_reasoning_patterns`.
 
 ## Retrieval & Knowledge Services
 
@@ -112,7 +112,7 @@ Three KVMs make up the production VPS substrate (see `pmoves/docs/operations/TOP
 
 | Host | Tailscale name | Role | Key services | Hub flag |
 |------|---------------|------|--------------|----------|
-| `pmoves-kvm4-1` | `pmoves-kvm4-1` | API gateway | TensorZero `:3030`, Agent Zero `:8080`, Hi-RAG v2 `:8086`, Archon `:8091`, Mesh Agent, Gateway Agent `:8100`, Extract Worker `:8083` | — |
+| `pmoves-kvm4-1` | `pmoves-kvm4-1` | API gateway | TensorZero `:3030`, Agent Zero `:8080`, Hi-RAG v2 `:8086` (⚠ NOT currently deployed — :8086 down / no container, verified 2026-07-04), Archon `:8091`, Mesh Agent, Gateway Agent `:8100`, Extract Worker `:8083` | — |
 | `pmoves-kvm4-2` | `pmoves-kvm4-2` | Data hub | **NATS `:4222` (fleet hub, DNS `nats.pmoves.ai`)**, Supabase 13-svc stack, Qdrant `:6333`, Neo4j `:7687`, Meilisearch `:7700`, Prometheus `:9090`, Grafana `:3002`, Loki `:3100`, MinIO `:9000` | NATS-hub |
 | `pmoves-kvm2` | `pmoves-kvm2` | Reverse proxy + relay | nginx `:80/443` (SSL termination), RustDesk `hbbs/hbbr` (rendezvous + relay) | — |
 
