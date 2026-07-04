@@ -1,0 +1,23 @@
+id: notebooklm-agent
+name: NotebookLM MCP Agent
+description: Integrates NotebookLM and Google Services via Universal OAuth to provide source-grounded research, document querying, and Notebook management.
+required_commands:
+  - docker
+environment:
+  - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+  - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+  - GOOGLE_REFRESH_TOKEN=${GOOGLE_REFRESH_TOKEN}
+setup_instructions:
+  - Ensure Google Universal OAuth credentials are set in the environment (e.g., .env.local).
+  - Start notebooklm-agent container (`docker compose -f docker-compose.agents.yml up -d notebooklm-agent`).
+transport: stdio
+command: docker
+args:
+  - exec
+  - -i
+  - docker-compose-notebooklm-agent-1
+  - node
+  - dist/index.js
+tools:
+  - notebooklm_list_notebooks
+  - notebooklm_query

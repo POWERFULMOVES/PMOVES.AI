@@ -2264,3 +2264,32 @@ agents:
       Runs on the tailnet-connected self-hosted ai-lab runner; publishes
       HMAC-signed branch.<path-segments>.trail.v1 events to NATS via
       .github/workflows/branch-trail-emit.yml.
+  notebooklm_agent:
+    name: "NotebookLM Agent"
+    class: standard
+    primary_type: agent
+    secondary_type: api
+    port: null
+    health: null
+    layers: [L0, L2, L4]
+    evolution_stage: stage_1
+    nats:
+      publishes: []
+      subscribes: []
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: false
+      attribution_gated: false
+    resilience:
+      context_budget: medium
+      checkpoint_frequency: per_action
+      recovery_strategy: stateless
+      cipher_categories: []
+    topology:
+      node_affinity: [kvm4-1, z890, 5090]
+      team: research
+      ci_runner: ai-lab
+      compose_profile: agents
+    description: "NotebookLM integration agent for source-grounded research, document querying, and Audio Overview generation via MCP."
