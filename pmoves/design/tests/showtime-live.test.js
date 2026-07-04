@@ -68,8 +68,12 @@ test("watchShowtime flips on the NAMED showtime.all_green.v1 frame (real backend
 
 test("watchShowtime surfaces SSE failures via onError", () => {
   const errs = [];
+  // poll:false keeps this focused on the onError callback — without it, the
+  // fail() below would start a real setInterval poll (no injected timer here)
+  // that never clears, leaking a handle and hanging `node --test`.
   watchShowtime({
     EventSourceImpl: NamedES,
+    poll: false,
     onError: (e) => errs.push(e),
   });
   NamedES.last.fail();
