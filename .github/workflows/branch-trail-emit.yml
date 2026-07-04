@@ -52,31 +52,35 @@ jobs:
           submodules: false
 
       - name: Ensure uv
+        # Best-effort: bootstrap failure must never block the branch op (§9.4).
+        continue-on-error: true
         shell: bash
         run: |
           if command -v uv >/dev/null 2>&1; then
             uv --version
             exit 0
           fi
-          py="$(command -v python3 || command -v python || true)"
-          if [ -z "$py" ]; then
-            echo "::error::python3/python is required to bootstrap uv"
-            exit 1
-          fi
-          # Bootstrap into $HOME, NOT RUNNER_TEMP. On the hardened self-hosted
-          # runner /tmp (hence RUNNER_TEMP=/tmp/pmoves-runner/_temp) is mounted
-          # noexec, so uv's real binary installs successfully but fails to
-          # execute with "Permission denied" (exit 126). $HOME is on an exec
-          # filesystem. --clear wipes any stale venv from a prior run, since
-          # $HOME persists across jobs on a host (non-ephemeral) runner.
-          uv_venv="${HOME:-$PWD}/.uv-bootstrap"
-          "$py" -m venv --clear "$uv_venv"
-          "$uv_venv/bin/python" -m pip install --upgrade pip
-          "$uv_venv/bin/python" -m pip install 'uv>=0.5.0'
-          "$uv_venv/bin/uv" --version
-          echo "$uv_venv/bin" >> "$GITHUB_PATH"
+          # Standalone installer — NO python3-venv / ensurepip dependency. The
+          # previous `python -m venv` bootstrap failed on kvm4-2 (system python
+          # lacks the split python3.12-venv package). This drops a static uv
+          # binary into $HOME/.local/bin, arch-aware (ARM64 + X64).
+          #
+          # Install into $HOME, NOT RUNNER_TEMP. On the hardened self-hosted
+          # runner /tmp (RUNNER_TEMP=/tmp/pmoves-runner/_temp) is mounted noexec,
+          # so a binary there installs but fails to execute (exit 126). $HOME is
+          # on an exec filesystem and persists across jobs on a host runner.
+          export HOME="${HOME:-$PWD}"
+          bindir="$HOME/.local/bin"
+          mkdir -p "$bindir"
+          curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR="$bindir" sh
+          echo "$bindir" >> "$GITHUB_PATH"
+          "$bindir/uv" --version
 
       - name: Emit lifecycle event
+        # Best-effort: a missing trail never blocks the branch op (§9.4). The
+        # script already exits 0 on NATS failure; this also survives a runner
+        # where uv couldn't bootstrap at all.
+        continue-on-error: true
         env:
           PYTHONPATH: ${{ github.workspace }}
           GITHUB_EVENT_NAME: ${{ github.event_name }}
@@ -94,6 +98,12 @@ jobs:
           CHIT_PASSPHRASE: ${{ secrets.CHIT_PASSPHRASE }}
           LOG_LEVEL: INFO
         # uv manages its own Python + package cache — no Actions tool-cache
-        # installer (.exe) required. Avoids setup-python@v6 reinstall bug on
-        # self-hosted Windows runners (python-3.11.9-amd64.exe not found).
-        run: uv run --with 'nats-py>=2.6.0' --with 'PyYAML>=6.0' --with 'jsonschema>=4.0' python .github/scripts/branch_trail_ci.py
+        # installer (.exe) required. Pin uv's cache + temp onto exec-mounted
+        # $HOME: the hardened runner mounts /tmp noexec, so uv's ephemeral
+        # `--with` env would fail to execute python there (exit 126) on kvm4-2.
+        shell: bash
+        run: |
+          export HOME="${HOME:-$PWD}"
+          export UV_CACHE_DIR="$HOME/.cache/uv" TMPDIR="$HOME/.uv-tmp"
+          mkdir -p "$UV_CACHE_DIR" "$TMPDIR"
+          uv run --with 'nats-py>=2.6.0' --with 'PyYAML>=6.0' --with 'jsonschema>=4.0' python .github/scripts/branch_trail_ci.py
