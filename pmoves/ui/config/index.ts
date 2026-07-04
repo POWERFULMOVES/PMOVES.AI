@@ -6,6 +6,8 @@ export type UIConfig = {
   supabaseRealtimeUrl?: string;
   apiUrl: string;
   websocketUrl: string;
+  botzGatewayUrl: string;
+  showtimeUrl: string;
 };
 
 const getRequiredEnv = (...keys: string[]): string => {
@@ -37,4 +39,6 @@ export const uiConfig: UIConfig = {
   supabaseRealtimeUrl: getOptionalEnv("NEXT_PUBLIC_SUPABASE_REALTIME_URL", "SUPABASE_REALTIME_URL"),
   apiUrl: getOptionalEnv("NEXT_PUBLIC_PMOVES_API_URL", "PMOVES_API_URL") ?? "http://localhost:8080",
   websocketUrl: getOptionalEnv("NEXT_PUBLIC_PMOVES_WS_URL", "PMOVES_WS_URL") ?? "ws://localhost:8080",
+  botzGatewayUrl: getOptionalEnv("NEXT_PUBLIC_BOTZ_GATEWAY_URL") ?? "http://localhost:8054",
+  showtimeUrl: getOptionalEnv("NEXT_PUBLIC_SHOWTIME_URL") ?? "http://localhost:9225",
 };

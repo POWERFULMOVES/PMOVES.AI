@@ -82,3 +82,22 @@ the **W1 theme lane (4090-claude, PRs #1065/#1101)**. DL-1 consumes it with
 onto the current base theme. `--pm-signature` (the reserved ✦ crimson) is never
 touched. Identity is `?agent=<id>[&alter=<name>]`; Showtime `:9225` `/sse/events`
 drives `data-stage="live"`. Tests: `make -C pmoves design-test-js` (node --test, no deps).
+
+### DL-3.2 — Showtime live: SSE + `/health/all` poll fallback
+
+`watchShowtime({gw, onState, onError})` opens the SSE and, per spec D4, **falls back
+to polling `GET {gw}/health/all`** when the SSE connection errors or `EventSource`
+is unavailable — so the live flip survives a broken/blocked feed. `opts.pollMs`
+(default 5000) tunes the interval; `opts.poll === false` disables it (SSE-only).
+`close()` stops both the SSE and the poll. All I/O is injectable (`fetchImpl`,
+`EventSourceImpl`, `setIntervalImpl`/`clearIntervalImpl`) for hermetic tests.
+
+### Vendored into Notebook
+
+Notebook (`pmoves/ui`, Next.js) can't import across the `ui ↔ design` boundary
+(standalone `outputFileTracingRoot` is pinned to the ui dir), so the four engine
+files are **vendored** verbatim into `pmoves/ui/lib/persona/` with co-located
+`.d.ts`. `pmoves/design` stays canonical; **drift is guarded** by
+`make -C pmoves design-vendor-check` (resync with `make -C pmoves design-vendor`).
+The Notebook mount is `components/PersonaStageController.tsx` (persona overlay +
+live subscription) + `components/LiveStageBadge.tsx` (the ✦ LIVE pill).
