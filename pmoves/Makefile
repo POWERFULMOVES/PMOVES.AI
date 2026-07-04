@@ -4095,3 +4095,18 @@ design-tokens-check: design-tokens ## Fail if committed pmoves/design/build drif
 
 design-test-js: ## Run the pmoves/design JS unit tests (node --test, no npm deps)
 	node --test design/tests/*.test.js
+
+.PHONY: design-vendor design-vendor-check
+
+design-vendor: ## Resync the vendored design engine into ui/lib/persona/ from canonical design/
+	@for f in persona-theme persona-resolver theme-provider showtime-live; do \
+		cp design/$$f.js ui/lib/persona/$$f.js; \
+	done
+	@echo "✅ ui/lib/persona resynced from design/"
+
+design-vendor-check: ## Fail if the vendored ui/lib/persona/*.js drifted from canonical design/
+	@for f in persona-theme persona-resolver theme-provider showtime-live; do \
+		diff -q design/$$f.js ui/lib/persona/$$f.js \
+			|| { echo "❌ pmoves/ui/lib/persona drifted — run 'make -C pmoves design-vendor' and commit"; exit 1; }; \
+	done
+	@echo "✅ ui/lib/persona matches design/ source"
