@@ -421,6 +421,11 @@ body.nav-open .site-nav a {
   background: #000;
   pointer-events: none;
 }
+/* The Catalog Star-Chart embed is interactive (hover tooltips + clickable family
+   legend), unlike the display-only hologram embeds — re-enable pointer events for it. */
+.gallery-item iframe[src*="beats-constellation"] {
+  pointer-events: auto;
+}
 .gallery-item figcaption {
   padding: .75rem 1rem .85rem;
   display: flex;
