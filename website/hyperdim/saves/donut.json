@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "display": {
+    "autoRotate": true,
+    "showAxes": false,
+    "showSurface": true,
+    "showWireframe": false,
+    "dirIntensity": 0.8,
+    "shininess": 40,
+    "camera": {
+      "position": {
+        "x": 13.701472447124324,
+        "y": -4.502183112726335,
+        "z": 9.999999999991294
+      },
+      "target": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      }
+    }
+  },
+  "parameters": {
+    "uMin": 0,
+    "uMax": 6.28318,
+    "vMin": 0,
+    "vMax": 6.28318,
+    "uSegs": 150,
+    "vSegs": 100
+  },
+  "extraParameters": [
+  ],
+  "surface": {
+    "code": "function surface(input) {\n    const u = input.u;\n    const v = input.v;\n    \n    // Torus Dimensions\n    const R = 3.5; // Major radius\n    const r = 1.6; // Minor radius (thickness)\n    \n    // Base Torus Coordinates\n    let x = (R + r * Math.cos(v)) * Math.cos(u);\n    let y = (R + r * Math.cos(v)) * Math.sin(u);\n    let z = r * Math.sin(v);\n    \n    // --- Frosting Logic ---\n    // Frosting sits on top (z > 0) and drips down\n    // Drips are modulated by sine waves around the ring (u)\n    // 'drip' is the v-threshold where frosting ends\n    // Basic top half is v in [0, PI]\n    // Let's say frosting goes down to v = PI/4 on average\n    \n    const dripFrequency = 12;\n    const dripAmplitude = 0.6;\n    const dripNoise = 0.2 * Math.sin(u * 25);\n    const dripLimit = 0.8 + dripAmplitude * Math.sin(u * dripFrequency) + dripNoise;\n    \n    // v is 0 at the outside equator, PI/2 at top, PI at inside equator\n    // We want frosting on the top half. \n    // Let's normalize 'v' so top (PI/2) is the center of frosting.\n    // Actually, simpler: frosting is everywhere z is high enough relative to the tube.\n    // sin(v) is height. \n    \n    let isFrosting = false;\n    if (Math.sin(v) > -0.2) { // mostly top half\n        // Check wavy boundary\n        // Boundary condition: is v close to the drip limit?\n        // Let's define coverage based on v angle.\n        // Top is v=PI/2 (approx 1.57)\n        // Frosting extends from v=0.5 to v=2.6 (roughly)\n        // Let's map v to a \"top-ness\" factor.\n        \n        // Drips happen at the edge of the frosting.\n        // Let's effectively displace the surface outwards slightly where there is frosting.\n    }\n    \n    // Robust Frosting Check:\n    // We use the 'v' parameter directly.\n    // Frosting covers v from roughly 0.2 to 2.9 (covering the top arc)\n    // We add sine waves to the edges.\n    \n    const edge1 = 0.1 + 0.3 * Math.sin(u * dripFrequency) + 0.1 * Math.sin(u * 30);\n    const edge2 = 3.0 + 0.3 * Math.sin(u * dripFrequency + 2) + 0.1 * Math.sin(u * 30);\n    \n    if (v > edge1 && v < edge2) {\n        isFrosting = true;\n        // Puff out the frosting slightly\n        const thick = 0.15;\n        // Smooth taper at edges to look like fluid\n        let taper = 1;\n        const edgeDist = Math.min(Math.abs(v - edge1), Math.abs(v - edge2));\n        if (edgeDist < 0.2) taper = smoothStep(0, 0.2, edgeDist);\n        \n        const frostingThick = thick * taper;\n        \n        // Apply thickness in normal direction (which is just radial for a torus cross-section)\n        x += frostingThick * Math.cos(v) * Math.cos(u);\n        y += frostingThick * Math.cos(v) * Math.sin(u);\n        z += frostingThick * Math.sin(v);\n    }\n    \n    // --- Sprinkles ---\n    // Random-looking sprinkles on top\n    // We use high-frequency sine waves to simulate pseudorandom spots\n    let isSprinkle = false;\n    if (isFrosting) {\n        // Create a grid pattern\n        const su = u * 40;\n        const sv = v * 20;\n        // Check if we are inside a \"sprinkle capsule\"\n        // Simple noise check\n        const noise = Math.sin(su) * Math.cos(sv) + Math.sin(su*2.3 + sv*1.7);\n        if (noise > 1.8) {\n            isSprinkle = true;\n            // Raise sprinkle\n            const sprinkleHeight = 0.08;\n            x += sprinkleHeight * Math.cos(v) * Math.cos(u);\n            y += sprinkleHeight * Math.cos(v) * Math.sin(u);\n            z += sprinkleHeight * Math.sin(v);\n        }\n    }\n\n    // --- Colors ---\n    // Dough: Golden Brown\n    let r_out = 0.85, g_out = 0.65, b_out = 0.35;\n    \n    if (isSprinkle) {\n        // Rainbow sprinkles!\n        // Use u to vary color\n        const hue = Math.abs(Math.sin(u * 5)) * 6;\n        if (hue < 1) { r_out=1; g_out=0; b_out=0; } // Red\n        else if (hue < 2) { r_out=1; g_out=1; b_out=0; } // Yellow\n        else if (hue < 3) { r_out=0; g_out=1; b_out=0; } // Green\n        else if (hue < 4) { r_out=0; g_out=1; b_out=1; } // Cyan\n        else if (hue < 5) { r_out=0; g_out=0; b_out=1; } // Blue\n        else { r_out=1; g_out=0; b_out=1; } // Magenta\n    } else if (isFrosting) {\n        // Pink Strawberry Frosting\n        r_out = 1.0; g_out = 0.6; b_out = 0.75;\n        // Add subtle gloss highlight\n        r_out += 0.05 * Math.sin(u*10);\n    }\n\n    return {\n        x, y, z,\n        r: r_out,\n        g: g_out,\n        b: b_out,\n        a: 1\n    };\n}\n\nfunction smoothStep(edge0, edge1, x) {\n    const t = Math.max(0, Math.min(1, (x - edge0) / (edge1 - edge0)));\n    return t * t * (3 - 2 * t);\n}"
+  },
+  "outputs": {
+    "coordConversion": "none",
+    "rgbToHsv": false
+  }
+}

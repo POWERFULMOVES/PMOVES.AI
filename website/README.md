@@ -15,19 +15,12 @@ website/
 ├── robots.txt         # Allow all + LLM-crawler-friendly
 ├── sitemap.xml        # Root index only for now
 ├── README.md          # This file
-├── fonts/             # Self-hosted display font (CSP-clean; see fonts/README.md)
-│   ├── orbitron-v35-latin-wght.woff2  # Orbitron (OFL-1.1), variable wght
-│   ├── OFL.txt
-│   └── README.md
 └── assets/            # Favicons + README with asset spec
     ├── favicon.svg
     └── README.md
 ```
 
-HTML+CSS+JS uncompressed total is under ~50 KB; gzipped under ~15 KB. The
-self-hosted Orbitron woff2 adds ~11.8 KB on first paint (already compressed,
-cached for a year via `_headers`) — it is the page's only binary asset and is
-served same-origin to stay CSP-clean.
+Uncompressed total is under ~50 KB. Gzipped is under ~15 KB.
 
 ## Tagline decision
 
