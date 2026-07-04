@@ -8,14 +8,14 @@ environment:
   - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
   - GOOGLE_REFRESH_TOKEN=${GOOGLE_REFRESH_TOKEN}
 setup_instructions:
-  - Ensure Google Universal OAuth credentials are set in the environment (e.g., .env.local).
-  - Start notebooklm-agent container (`docker compose -f docker-compose.agents.yml up -d notebooklm-agent`).
+  - Ensure Google Universal OAuth credentials are set in env.shared (GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET / GOOGLE_REFRESH_TOKEN).
+  - Start via the canonical make pipeline (base+agents compose, COMPOSE_ENV_FILES injected) - run "make -C pmoves secrets-funnel" then "make -C pmoves up-notebooklm". The container is named pmoves-notebooklm-agent-1.
 transport: stdio
 command: docker
 args:
   - exec
   - -i
-  - docker-compose-notebooklm-agent-1
+  - pmoves-notebooklm-agent-1
   - node
   - dist/index.js
 tools:
