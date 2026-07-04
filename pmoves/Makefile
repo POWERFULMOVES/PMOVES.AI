@@ -2773,6 +2773,11 @@ up-jellyfin:
 up-agents-stack: ## Start Agents (NATS, Agent Zero, Archon, Cipher Memory, etc.) preferring submodule builds
 	@$(DC) --profile agents up -d nats agent-zero archon mesh-agent deepresearch publisher-discord cipher-api
 
+.PHONY: up-notebooklm
+up-notebooklm: ## Start the NotebookLM MCP agent (stdio MCP; reached via docker exec). Set GOOGLE_REFRESH_TOKEN in env.shared for live queries.
+	@$(DC) --profile agents up -d --build notebooklm-agent
+	@echo "✔ NotebookLM MCP agent up (stdio via docker exec; needs GOOGLE_REFRESH_TOKEN for live NotebookLM calls)"
+
 .PHONY: up-cipher
 up-cipher: ## Start Cipher Memory (knowledge-graph memory for Claude Code / agents)
 	@$(DC) --profile agents up -d --build cipher-api
