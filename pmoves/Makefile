@@ -2778,6 +2778,11 @@ up-cipher: ## Start Cipher Memory (knowledge-graph memory for Claude Code / agen
 	@$(DC) --profile agents up -d --build cipher-api
 	@echo "✔ Cipher Memory ready at http://localhost:$${CIPHER_PORT:-8096}"
 
+.PHONY: up-notebooklm
+up-notebooklm: ## Start the NotebookLM MCP agent (stdio MCP; reached via docker exec). Set GOOGLE_REFRESH_TOKEN in env.shared for live queries.
+	@$(DC) --profile agents up -d --build notebooklm-agent
+	@echo "✔ NotebookLM MCP agent up (stdio via docker exec; needs GOOGLE_REFRESH_TOKEN for live NotebookLM calls)"
+
 .PHONY: cipher-health
 cipher-health: ## Check Cipher Memory health
 	@curl -sf http://localhost:$${CIPHER_PORT:-8096}/health && echo " ✔ cipher-api healthy" || (echo "✗ cipher-api unhealthy" && exit 1)
