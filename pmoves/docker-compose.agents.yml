@@ -965,17 +965,29 @@ services:
           memory: 512M
 
   # Ultimate TTS Studio - Multi-engine TTS with 7 engines (Gradio UI)
-    deploy:
-      resources:
-        limits:
-          cpus: '1.0'
-          memory: 512M
 
 # =============================================================================
 # Networks — declared external so this overlay parses standalone.
 # Canonical definitions in docker-compose.base.yml. See
 # pmoves/docs/operations/COMPOSE_LAYERING_RUNBOOK.md.
 # =============================================================================
+  notebooklm-agent:
+    build:
+      context: ./services/notebooklm-agent
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+      - GOOGLE_REFRESH_TOKEN=${GOOGLE_REFRESH_TOKEN}
+    profiles: ["agents"]
+    networks: [pmoves_app, pmoves_external]
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+
 networks:
   pmoves_data:
     external: true
