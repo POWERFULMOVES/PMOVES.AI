@@ -1194,3 +1194,29 @@ The branch is ready to commit the UI changes. Proposed logical commit:
 - Timestamp: `2026-05-30`
 
 <!-- GRAPHITI_MARK: ANTIGRAVITY-GEMINI::A2UI-HOLOGRAM-SCALING-FIX::2026-05-30 -->
+
+## NotebookLM MCP Agent Integration (2026-07-04)
+
+### Work Performed
+- **Scaffolding:** Created `pmoves/services/notebooklm-agent` with `package.json`, `tsconfig.json`, `Dockerfile`, and initial MCP `src/index.ts` using `@modelcontextprotocol/sdk`.
+- **Registry:** Added `notebooklm_agent` (Class: `standard`, Type: `api`) to `pmoves/config/agent_registry.yaml`.
+- **Config:** Created `pmoves/config/mcp/notebooklm-agent.yaml` for MCP tool exposure.
+- **Compose:** Added `notebooklm-agent` service to `pmoves/docker-compose.agents.yml` (and fixed a duplicate floating `deploy:` block).
+- **Env:** Added Universal Google OAuth placeholders (`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REFRESH_TOKEN`) to `pmoves/env.shared.example`.
+- **Validation:** Validated `docker compose config`, `npm run build`, and `make preflight`.
+
+### Files Changed
+| File | Change |
+|------|--------|
+| `pmoves/services/notebooklm-agent/*` | **New** — Node.js TS MCP service |
+| `pmoves/config/agent_registry.yaml` | `notebooklm_agent` added |
+| `pmoves/config/mcp/notebooklm-agent.yaml` | **New** — MCP Gateway mapping |
+| `pmoves/docker-compose.agents.yml` | Service injected, broken deploy block fixed |
+| `pmoves/env.shared.example` | OAuth placeholders added |
+
+### Agent ACK
+- Agent: `ANTIGRAVITY`
+- Signature: `ACK::ANTIGRAVITY::NOTEBOOKLM-MCP-AGENT-INTEGRATION`
+- Timestamp: `2026-07-04T10:00:00Z`
+
+<!-- GRAPHITI_MARK: ANTIGRAVITY::NOTEBOOKLM-MCP-AGENT-INTEGRATION::2026-07-04 -->

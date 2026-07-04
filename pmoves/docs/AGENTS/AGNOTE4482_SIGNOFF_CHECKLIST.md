@@ -121,3 +121,4 @@ Use one row per participating reviewer/agent. Add rows instead of overwriting ol
 - `pmoves/docs/AGENTS/AGNOTE4482_CLAWZ_GAP_REPORT.md`
 - `pmoves/docs/NEXT_STEPS.md`
 - `pmoves/docs/PMOVES.AI PLANS/ROADMAP.md`
+| `ANTIGRAVITY` | integration | NotebookLM MCP Agent integration (service, registry, compose, mcp mapping). Build & preflight validation completed. | SIGNED | 2026-07-04 | NotebookLM tools mapped via Universal Google OAuth. |
