@@ -33,7 +33,7 @@ Agent has no HTTP interface; Cipher Memory exposes `/health`, not `/healthz`).
 
 **Channel Monitor** `:8097` — External content watcher (YouTube channels). Posts to PMOVES.YT `/yt/ingest`.
 
-**Cipher Memory** `:8105` — Knowledge-graph memory (Neo4j backend). MCP bridge at `pmoves-cipher-mcp/` (stdio). Live surface: MCP over SSE at `/mcp/sse` + health `GET /health` (both verified 200, 2026-07-04). NOTE: the `/api/memory` REST paths previously documented return **404** — use the MCP tools, not a REST API. MCP tools: `pmoves_cipher_store`, `pmoves_cipher_search`, `pmoves_cipher_store_reasoning`, `pmoves_cipher_reasoning_patterns`.
+**Cipher Memory** `:8105` — Knowledge-graph memory (Neo4j backend). MCP bridge at `pmoves-cipher-mcp/` (stdio). Live surface: MCP over SSE at `/sse` (Express route `src/app/mcp/mcp_sse_server.ts`; matches `.claude/mcp.json`) + streamable-http at `/http`; health `GET /health` / `/healthz`. **Auth (submodule ed701ca):** all routes require `Authorization: Bearer <token>` EXCEPT the public paths `/health`, `/healthz`, `/.well-known/` — so `/sse` is not anonymously reachable. NOTE: the `/api/memory` + `/api/memory/search` REST paths previously documented do **not exist** (no such route in Cipher submodule source) — use the MCP tools over `/sse`, not a REST API. MCP tools: `pmoves_cipher_store`, `pmoves_cipher_search`, `pmoves_cipher_store_reasoning`, `pmoves_cipher_reasoning_patterns`.
 
 ## Retrieval & Knowledge Services
 
