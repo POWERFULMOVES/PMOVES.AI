@@ -1,0 +1,129 @@
+# Cataclysm Studios Inc — Users (org + access overlay)
+# OWNS humans. REFERENCES agents/nodes (canonical: pmoves/configs/agent-teams.yaml)
+# and personas (pmoves/docs/AGENTS/PERSONAS.md). Do NOT re-list agent/node specs here.
+# tailnet HOSTNAMES only (never IPs). See README.md for the schema.
+version: 1
+
+# ─────────────────────────── HUMANS (owned) ───────────────────────────
+humans:
+  - id: darkxside
+    display_name: "DARKXSIDE (Russell Richardson)"
+    role: "Founder / Operator — Emperor (final signoff, direction)"
+    contact: cataclysmstudios@gmail.com
+    tier: owner
+    guilds: [core, infra-cloud, governance]
+    contributor_ref: "agent-teams.yaml → External Contributors: powerfulmoves"
+    access:
+      tailscale: { member: true, groups: [admin] }
+      rustdesk:  { enrolled: true, role: owner }
+  # Add collaborators / DAO members / Fordham Hill pilot participants:
+  # - id: <handle>
+  #   display_name: ""
+  #   role: ""
+  #   contact: ""        # TODO
+  #   tier: member
+  #   guilds: []
+  #   access: { tailscale: { member: true, groups: [] }, rustdesk: { enrolled: false, role: guest } }
+
+# ─────────────── ACTORS (agents & nodes — referenced, access only) ───────────────
+actors:
+  # -- agents (definition + role live in agent-teams.yaml; persona in PERSONAS.md) --
+  - id: claude-4090
+    kind: agent
+    ref: "agent-teams.yaml → External Contributors: claude-opus"
+    persona: null            # TODO: link a PERSONAS.md persona if one applies
+    host: pmoves-4090
+    guilds: [infra-cloud, delivery]
+    access:
+      tailscale: { via_host: pmoves-4090 }
+      rustdesk:  { via_host: pmoves-4090, role: owner }
+
+  - id: kilocode
+    kind: agent
+    ref: "agent-teams.yaml → External Contributors: kilocode"
+    persona: null
+    host: pmoves-5090
+    guilds: [delivery]
+    access: { tailscale: { via_host: pmoves-5090 } }
+
+  - id: codex
+    kind: agent
+    ref: "agent-teams.yaml → External Contributors: codex"
+    guilds: [delivery]
+
+  - id: cipher
+    kind: agent
+    ref: "agent-teams.yaml → Research & Knowledge: cipher_memory (:8105)"
+    guilds: [core]
+
+  - id: minimax-floos
+    kind: agent
+    ref: "agent-teams.yaml → Media & Voice: <TODO confirm entry>"
+    persona: "PERSONAS.md → FlOO$ suits (Dr. Bean / Mr. Clean / PowerPuff)"
+    guilds: [voice]
+
+  # -- nodes (hardware in node profiles / agent-teams node_affinity; access here) --
+  - id: node-4090
+    kind: node
+    ref: "agent-teams.yaml node_affinity: powerfulmoves; profile: pmoves/config/profiles/4090.yaml"
+    tailnet_host: pmoves-4090
+    exit_node: false
+    guilds: [core, infra-cloud]
+    access:
+      tailscale: { member: true, groups: [admin] }
+      rustdesk:  { enrolled: false, role: owner }   # staged: enroll-4090-rustdesk.cmd
+
+  - id: node-5090
+    kind: node
+    ref: "agent-teams.yaml node_affinity: <TODO>; profile: pmoves/config/profiles/5090.yaml"
+    tailnet_host: pmoves-5090   # TODO confirm
+    exit_node: false
+    guilds: [infra-cloud]
+
+  - id: node-spark
+    kind: node
+    ref: "profile: pmoves/config/profiles/spark.yaml"   # TODO confirm node_affinity name
+    tailnet_host: pmoves-spark
+    exit_node: false
+    guilds: [infra-cloud]
+
+  - id: node-z890
+    kind: node
+    ref: "agent-teams.yaml node_affinity: z890; profile: pmoves/config/profiles/z890.yaml"
+    tailnet_host: pmoves-z890   # TODO confirm
+    exit_node: false
+    guilds: [infra-cloud]
+    # NOTE: Windows reinstall in progress — re-enroll RustDesk via rustdesk-enroll.ps1 after.
+
+  - id: node-knuckles
+    kind: node
+    ref: "profile: pmoves/config/profiles/knuckles.yaml"   # TODO confirm node_affinity name
+    tailnet_host: pmoves-knuckles   # TODO confirm
+    exit_node: false
+    guilds: [infra-cloud]
+
+  - id: node-kvm2
+    kind: node
+    ref: "agent-teams.yaml node_affinity: kvm2"
+    tailnet_host: pmoves-kvm2
+    exit_node: true
+    guilds: [infra-cloud]
+    access: { tailscale: { member: true, groups: [infra], exit_tag: tag:exit } }
+    # RustDesk relay host (hbbs/hbbr) — the fleet's self-hosted rendezvous.
+
+  - id: node-kvm4-1
+    kind: node
+    ref: "agent-teams.yaml node_affinity: kvm4-1"
+    tailnet_host: pmoves-kvm4-1
+    exit_node: true
+    guilds: [infra-cloud]
+    access: { tailscale: { member: true, groups: [infra], exit_tag: tag:exit } }
+    # Designated Phase-9Q egress — Mullvad WG upstream target.
+
+  - id: node-kvm4-2
+    kind: node
+    ref: "agent-teams.yaml node_affinity: kvm4-2"
+    tailnet_host: pmoves-kvm4-2
+    exit_node: true
+    guilds: [infra-cloud]
+    access: { tailscale: { member: true, groups: [infra], exit_tag: tag:exit } }
