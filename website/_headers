@@ -7,7 +7,9 @@
 # is NOT set on /* here; it is set per-document-route instead:
 #   - /            → strict marketing policy
 #   - /hyperdim/*  → looser policy the WebGL viewer needs (eval + cdnjs/unpkg)
-# CSP only affects document responses, and the only document routes are / and /hyperdim/*
+#   - /embeds/beats-constellation/* → stricter canvas-embed policy (no eval, no CDN hosts)
+# CSP only affects document responses; the document routes are /, /hyperdim/*, and
+# /embeds/beats-constellation/*
 # (everything else in _redirects is a 30x redirect or an off-site link).
 
 /*
