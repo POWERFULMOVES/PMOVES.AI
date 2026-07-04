@@ -143,6 +143,27 @@ test("watchShowtime close() clears the poll timer", () => {
   assert.deepEqual(cleared, [99]);
 });
 
+test("watchShowtime stops polling once an SSE frame recovers the feed", () => {
+  const cleared = [];
+  let inst;
+  class StubES {
+    constructor(url) { this.url = url; inst = this; }
+    close() { this.closed = true; }
+  }
+  const setIntervalImpl = () => 77;
+  const clearIntervalImpl = (h) => cleared.push(h);
+  watchShowtime({
+    EventSourceImpl: StubES,
+    fetchImpl: async () => ({ ok: true, json: async () => ({ state: "hold" }) }),
+    setIntervalImpl,
+    clearIntervalImpl,
+    onState: () => {},
+  });
+  inst.onerror(new Error("blip")); // starts the poll (timer 77)
+  inst.onmessage({ data: JSON.stringify({ state: "showtime" }) }); // SSE recovered
+  assert.deepEqual(cleared, [77]); // poll was stopped on recovery
+});
+
 test("watchShowtime poll:false disables the fallback", () => {
   let called = false;
   const setIntervalImpl = () => { called = true; return 1; };

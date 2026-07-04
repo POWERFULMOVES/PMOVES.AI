@@ -76,6 +76,9 @@ export function watchShowtime(opts = {}) {
 
   const es = new ES(gw + "/sse/events");
   const handleFrame = (m) => {
+    // A live SSE frame means the feed recovered — the poll is only a fallback,
+    // so stop it rather than run both after a reconnect.
+    stopPolling();
     let data;
     try { data = JSON.parse(m.data); } catch { return; }
     onState(stageFromShowtimeEvent(data));
