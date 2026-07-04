@@ -18,6 +18,7 @@ from contextlib import asynccontextmanager
 from uuid import UUID, uuid4
 
 from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 import nats
@@ -161,6 +162,24 @@ app = FastAPI(
     description="Coordinates work item distribution across BoTZ CLI instances",
     version="0.1.0",
     lifespan=lifespan
+)
+
+# CORS — the persona-adaptive preview (5090 DL-3) fetches /v1/agent/theme/* and
+# /v1/agent/whoami cross-origin. Explicit allow-list (never "*"), env-overridable;
+# mirrors showtime-api's SHOWTIME_CORS_ORIGINS pattern. Same-lane consistency.
+_cors_origins = [
+    o.strip()
+    for o in os.environ.get(
+        "BOTZ_GATEWAY_CORS_ORIGINS", "http://localhost:3000,http://localhost:9225"
+    ).split(",")
+    if o.strip()
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_cors_origins,
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["*"],
 )
 
 
