@@ -41,6 +41,7 @@ test("watchShowtime maps an SSE 'showtime' message to onState('live')", () => {
   const handle = watchShowtime({
     gw: "http://localhost:9225",
     EventSourceImpl: StubES,
+    poll: false, // this test covers SSE→onState mapping only, not the poll
     onState: (s) => seen.push(s),
   });
   assert.equal(inst.url, "http://localhost:9225/sse/events");
@@ -56,6 +57,7 @@ test("watchShowtime flips on the NAMED showtime.all_green.v1 frame (real backend
   const seen = [];
   watchShowtime({
     EventSourceImpl: NamedES,
+    poll: false, // covers the NAMED-frame→onState mapping only, not the poll
     onState: (s) => seen.push(s),
   });
   // Real Showtime emits `event: showtime.all_green.v1` — onmessage never fires for this.
@@ -143,25 +145,55 @@ test("watchShowtime close() clears the poll timer", () => {
   assert.deepEqual(cleared, [99]);
 });
 
-test("watchShowtime stops polling once an SSE frame recovers the feed", () => {
-  const cleared = [];
+test("watchShowtime polls while live so it can catch the exit SSE never announces", () => {
+  // The backend only publishes `showtime.all_green.v1` on ENTERING showtime — it
+  // never sends a hold/preflight frame — so once live, the /health/all poll is the
+  // only thing that can clear the badge. Entering live must therefore start a poll.
+  let started = 0;
   let inst;
   class StubES {
     constructor(url) { this.url = url; inst = this; }
-    close() { this.closed = true; }
+    close() {}
   }
-  const setIntervalImpl = () => 77;
-  const clearIntervalImpl = (h) => cleared.push(h);
+  const setIntervalImpl = () => { started += 1; return 55; };
   watchShowtime({
     EventSourceImpl: StubES,
-    fetchImpl: async () => ({ ok: true, json: async () => ({ state: "hold" }) }),
+    fetchImpl: async () => ({ ok: true, json: async () => ({ state: "showtime" }) }),
     setIntervalImpl,
-    clearIntervalImpl,
+    clearIntervalImpl: () => {},
     onState: () => {},
   });
-  inst.onerror(new Error("blip")); // starts the poll (timer 77)
-  inst.onmessage({ data: JSON.stringify({ state: "showtime" }) }); // SSE recovered
-  assert.deepEqual(cleared, [77]); // poll was stopped on recovery
+  assert.equal(started, 0); // idle before going live
+  inst.onmessage({ data: JSON.stringify({ state: "showtime" }) }); // SSE: entered live
+  assert.equal(started, 1); // poll started to watch for the (SSE-silent) exit
+});
+
+test("watchShowtime clears and stops polling when the poll sees a non-live state", async () => {
+  const seen = [];
+  const cleared = [];
+  let inst;
+  let tickFn = null;
+  class StubES {
+    constructor(url) { this.url = url; inst = this; }
+    close() {}
+  }
+  let state = "showtime";
+  const setIntervalImpl = (fn) => { tickFn = fn; return 88; };
+  const clearIntervalImpl = (h) => cleared.push(h);
+  const fetchImpl = async () => ({ ok: true, json: async () => ({ state }) });
+  watchShowtime({
+    EventSourceImpl: StubES,
+    fetchImpl,
+    setIntervalImpl,
+    clearIntervalImpl,
+    onState: (s) => seen.push(s),
+  });
+  inst.onmessage({ data: JSON.stringify({ state: "showtime" }) }); // live → poll started
+  assert.equal(typeof tickFn, "function");
+  state = "hold"; // services fall back; SSE stays silent
+  await tickFn(); // poll observes the exit
+  assert.deepEqual(seen, ["live", null]); // badge cleared via the poll
+  assert.deepEqual(cleared, [88]); // and the poll stopped (SSE healthy, not live)
 });
 
 test("watchShowtime poll:false disables the fallback", () => {

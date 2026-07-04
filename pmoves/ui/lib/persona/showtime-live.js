@@ -41,22 +41,8 @@ export function watchShowtime(opts = {}) {
   const canPoll = pollEnabled && !!fetchImpl && !!setIntervalImpl;
   let pollTimer = null;
   let ticking = false; // guard against overlapping ticks
+  let sseDown = false;
 
-  async function pollTick() {
-    if (ticking) return;
-    ticking = true;
-    try {
-      const res = await fetchImpl(gw + "/health/all");
-      if (res && res.ok) {
-        const json = await res.json();
-        onState(stageFromShowtimeEvent(json));
-      }
-    } catch {
-      // Best-effort: never throw out of the timer.
-    } finally {
-      ticking = false;
-    }
-  }
   function startPolling() {
     if (!canPoll || pollTimer !== null) return;
     pollTimer = setIntervalImpl(pollTick, pollMs);
@@ -67,21 +53,50 @@ export function watchShowtime(opts = {}) {
       pollTimer = null;
     }
   }
+  // Poll while LIVE or while the SSE feed is DOWN. The backend only publishes
+  // `showtime.all_green.v1` when ENTERING showtime — it never sends a hold/
+  // preflight frame — so SSE can turn the badge on but never off. The /health/all
+  // poll returns the real current state, so it is the only way to clear once
+  // live. When SSE is healthy the poll is idle unless we are live (waiting for
+  // the exit SSE won't announce), which bounds the probe cost to live sessions.
+  function reconcilePoll(stage) {
+    if (stage === "live" || sseDown) startPolling();
+    else stopPolling();
+  }
+  function emit(stage) {
+    onState(stage);
+    reconcilePoll(stage);
+  }
 
-  // No EventSource in this environment: poll directly if possible.
+  async function pollTick() {
+    if (ticking) return;
+    ticking = true;
+    try {
+      const res = await fetchImpl(gw + "/health/all");
+      if (res && res.ok) {
+        const json = await res.json();
+        emit(stageFromShowtimeEvent(json));
+      }
+    } catch {
+      // Best-effort: never throw out of the timer.
+    } finally {
+      ticking = false;
+    }
+  }
+
+  // No EventSource in this environment: the poll is the sole state source.
   if (!ES) {
+    sseDown = true;
     startPolling();
     return { close: () => stopPolling() };
   }
 
   const es = new ES(gw + "/sse/events");
   const handleFrame = (m) => {
-    // A live SSE frame means the feed recovered — the poll is only a fallback,
-    // so stop it rather than run both after a reconnect.
-    stopPolling();
+    sseDown = false; // a frame means the feed is healthy again
     let data;
     try { data = JSON.parse(m.data); } catch { return; }
-    onState(stageFromShowtimeEvent(data));
+    emit(stageFromShowtimeEvent(data));
   };
   // Unnamed frames (tests / any default `message`) + the backend's NAMED subjects.
   es.onmessage = handleFrame;
@@ -90,6 +105,7 @@ export function watchShowtime(opts = {}) {
   }
   es.onerror = (e) => {
     onError(e, es.readyState);
+    sseDown = true;
     startPolling(); // fall back to /health/all when the feed breaks
   };
   return {
