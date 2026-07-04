@@ -1,0 +1,72 @@
+# Cataclysm Studios Inc — Org Guilds (people / access groups)
+# DISTINCT from the 11 functional agent teams in pmoves/configs/agent-teams.yaml
+# (cross-linked via functional_teams). members reference ids in users.yaml
+# (humans + actors). access_policy drives provisioning. See README.md.
+version: 1
+
+groups:
+  - id: core
+    label: "Core"
+    purpose: "Founding operators + primary decision-makers (Emperor + memory)."
+    charter: null
+    functional_teams: []
+    members: [darkxside, cipher, node-4090]
+    access_policy:
+      tailscale_group: admin
+      exit_tag: null
+      rustdesk_role: owner
+
+  - id: governance
+    label: "DAO Governance"
+    purpose: "DAO constitution, attribution, org audit (L5-LEGENDARY)."
+    charter: L2-DESIGN/constitution/Cataclysm_DAO_Constitution_v0.1.md
+    functional_teams: [Evolution & CHIT]
+    members: [darkxside]
+    access_policy:
+      tailscale_group: null
+      exit_tag: null
+      rustdesk_role: null
+
+  - id: infra-cloud
+    label: "Infra Cloud Guild"
+    purpose: "Fleet infrastructure — runners, exit nodes, deploys, secrets, mesh."
+    charter: L2-DESIGN/charters/Infra_Cloud_Guild_Charter_v0.1.md
+    functional_teams: [Infrastructure & Networking, Observability & Monitoring]
+    members:
+      [darkxside, claude-4090, kilocode, node-spark, node-5090, node-4090,
+       node-z890, node-knuckles, node-kvm2, node-kvm4-1, node-kvm4-2]
+    access_policy:
+      tailscale_group: infra
+      exit_tag: tag:exit        # exit-node members self-approve via a tag:exit authkey
+      rustdesk_role: owner
+
+  - id: delivery
+    label: "Delivery Guild"
+    purpose: "Implementation lane — Three-Body delivery (code, review, field briefs)."
+    charter: null
+    functional_teams: [Sandbox & Execution]
+    members: [claude-4090, kilocode, codex]
+    access_policy:
+      tailscale_group: infra
+      exit_tag: null
+      rustdesk_role: null
+
+  - id: voice
+    label: "Voice / FlOO$ Guild"
+    purpose: "Persona voice pipeline — character suits, TTS, prosodic packets."
+    charter: null
+    functional_teams: [Media & Voice]
+    members: [minimax-floos]
+    access_policy:
+      tailscale_group: null
+      exit_tag: null
+      rustdesk_role: null
+
+  # Add a guild by appending here; charters live in L2-DESIGN/charters/.
+  # - id: <handle>
+  #   label: ""
+  #   purpose: ""
+  #   charter: null
+  #   functional_teams: []
+  #   members: []
+  #   access_policy: { tailscale_group: null, exit_tag: null, rustdesk_role: null }
