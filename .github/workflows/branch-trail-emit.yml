@@ -34,11 +34,15 @@ jobs:
     # to prevent untrusted code execution (RCE via pull_request from forks).
     if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork == false }}
     name: emit lifecycle trail
-    # Pin to X64: the job uses actions/setup-python + pip, which flakes on the
-    # ARM64 self-hosted runner (pmoves-spark-ailab). X64 ai-lab runners
-    # (pmoves-z890-*, 4090) provide capacity. Honors this workflow's own
-    # "failures never block" contract by not routing onto the flaky host.
-    runs-on: [self-hosted, ai-lab, X64]
+    # Fleet-wide: any online tailnet Linux self-hosted runner may emit the trail.
+    # The previous `[self-hosted, ai-lab, X64]` required an intersection no online
+    # runner satisfies — the sole `ai-lab` runner (pmoves-spark-ailab) is ARM64,
+    # and the X64 runners (kvm4) carry no `ai-lab` label — so every run queued
+    # forever and the §9.4 trail never emitted. `Linux` is the widest label the
+    # fleet shares; the arch-agnostic "Ensure uv" step below makes any of them
+    # (ARM64 or X64) viable, and kvm4-2 is itself the tailnet NATS broker.
+    # The fork-PR guard above keeps untrusted code off these trusted runners.
+    runs-on: [self-hosted, Linux]
     timeout-minutes: 5
     steps:
       - name: Checkout
