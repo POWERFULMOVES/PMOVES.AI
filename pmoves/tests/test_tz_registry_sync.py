@@ -64,6 +64,37 @@ def test_idempotent():
     assert once == twice
 
 
+# Normal bootstrap-state export: model-registry names tables from sanitized
+# model_id values (e.g. [models.qwen3_8b]); no registry_* aliases are seeded.
+REGISTRY_NO_ALIASES = """
+[models.qwen3_8b]
+routing = ["ollama"]
+
+[models.qwen3_8b.providers.ollama]
+type = "openai"
+api_base = "http://pmoves-ollama:11434/v1"
+model_name = "qwen3:8b"
+api_key_location = "none"
+"""
+
+
+def test_preserves_bootstrap_lanes_when_registry_has_no_aliases():
+    # With no registry_* tables in the export, the bootstrap lanes inside the
+    # markers must survive rather than be spliced away (dangling model refs).
+    out = sync_registry_section(STATIC, REGISTRY_NO_ALIASES)
+    parsed = tomllib.loads(out)
+    assert "registry_worker_glm" in parsed["models"]
+    glm = parsed["models"]["registry_worker_glm"]["providers"]["bootstrap_parent"]
+    assert glm["model_name"] == "old"  # original bootstrap lane untouched
+    assert "chat_static" in parsed["models"]
+    assert "f" in parsed["functions"]
+
+
+def test_empty_registry_export_preserves_bootstrap_lanes():
+    out = sync_registry_section(STATIC, "")
+    assert out == STATIC
+
+
 def test_missing_markers_raises():
     with pytest.raises(ValueError):
         sync_registry_section("[models.x]\nrouting = []\n", REGISTRY)

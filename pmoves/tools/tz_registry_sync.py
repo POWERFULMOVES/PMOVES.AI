@@ -42,6 +42,15 @@ def sync_registry_section(static_toml_text: str, registry_toml_text: str) -> str
     if not begin or not end or end.start() < begin.end():
         raise ValueError("REGISTRY-MANAGED MODELS markers missing or malformed")
     body = _extract_registry_tables(registry_toml_text)
+    if not body.strip():
+        # The registry export has no [models.registry_*] tables. This is the
+        # normal bootstrap state: model-registry names tables from sanitized
+        # model_id values (e.g. [models.qwen3_8b]) and no registry_* aliases are
+        # seeded until local candidates are promoted. Splicing an empty body here
+        # would delete the hand-authored bootstrap lanes that pmoves_worker_*
+        # functions reference, leaving TensorZero with dangling model refs. Skip
+        # the splice and preserve the existing bootstrap lanes instead.
+        return static_toml_text
     return (
         static_toml_text[: begin.end()]
         + "\n\n"
