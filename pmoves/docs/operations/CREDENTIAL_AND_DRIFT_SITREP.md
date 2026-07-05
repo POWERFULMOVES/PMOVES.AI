@@ -32,15 +32,20 @@ This SITREP captures the current state of the GitHub credential chain, commit-si
 
 ## 2. GitHub App Migration State
 
-App registered at GitHub; `GH_APP_ID`, `GH_APP_CLIENT_ID`, `GH_APP_INSTALLATION_ID` all present. **`GH_APP_PRIVATE_KEY` is missing.** The repo's 4 build/integration workflows pass `GH_APP_SEC` (the OAuth client secret) where `actions/create-github-app-token` expects a PEM. The action fails silently because every call site is wrapped in `continue-on-error: true`, and the workflows fall back to PAT-based GHCR login. This is the **highest-leverage P0 fix** — uploading the PEM to `GH_APP_PRIVATE_KEY` and patching 4 workflows immediately removes 5 of the 7 PAT-surface dependencies.
+App registered at GitHub; `GH_APP_ID`, `GH_APP_CLIENT_ID`, `GH_APP_INSTALLATION_ID` all present. **`GH_APP_PRIVATE_KEY` is missing.** The repo's 8 workflows pass `GH_APP_SEC` (the OAuth client secret) where `actions/create-github-app-token` expects a PEM, across **10 call sites**. The action fails silently (call sites fall back to PAT-based GHCR login). This is the **highest-leverage P0 fix** — uploading the PEM to `GH_APP_PRIVATE_KEY` and patching all 8 workflows immediately removes 5 of the 7 PAT-surface dependencies.
 
-| Workflow | Lines | Current key arg | Required key arg |
-|---|---|---|---|
-| `build-images.yml` | 85–88 | `GH_APP_SEC` | `GH_APP_PRIVATE_KEY` |
-| `integrations-ghcr.yml` | 354–357 | `GH_APP_SEC` | `GH_APP_PRIVATE_KEY` |
-| `self-hosted-builds.yml` | 90–93, 186–189 | `GH_APP_SEC` | `GH_APP_PRIVATE_KEY` |
-| `self-hosted-builds-hardened.yml` | 87–90, 246–249 | `GH_APP_SEC` | `GH_APP_PRIVATE_KEY` |
-| `test-app-token.yml` | 15–18 | `GH_APP_SEC` | `GH_APP_PRIVATE_KEY` |
+| Workflow | Line(s) | Current key arg | Required key arg | Audit-detected |
+|---|---|---|---|---|
+| `_app-token.yml` | 102 | `secrets.GH_APP_SEC` | `GH_APP_PRIVATE_KEY` | ✅ |
+| `branch-protection-sync.yml` | 90 | `secrets.GH_APP_SEC` | `GH_APP_PRIVATE_KEY` | ✅ |
+| `build-images.yml` | 88 | `secrets.GH_APP_SEC` | `GH_APP_PRIVATE_KEY` | ✅ |
+| `fork-sync.yml` | 40 | `secrets.GH_APP_SEC` | `GH_APP_PRIVATE_KEY` | ✅ |
+| `self-hosted-builds.yml` | 101, 197 | `secrets.GH_APP_SEC` | `GH_APP_PRIVATE_KEY` | ✅ (×2) |
+| `self-hosted-builds-hardened.yml` | 90, 248 | `secrets.GH_APP_SEC` | `GH_APP_PRIVATE_KEY` | ✅ (×2) |
+| `test-app-token.yml` | 18 | `secrets.GH_APP_SEC` | `GH_APP_PRIVATE_KEY` | ✅ |
+| `integrations-ghcr.yml` | 489 | `env.GH_APP_SEC` | `GH_APP_PRIVATE_KEY` | ❌ (env-context) |
+
+**Audit coverage:** `audit_naming_drift.py` (`workflow.pem_misuse`) detects **9** of these 10 sites. Its regex matches only the `secrets.GH_APP_SEC` context, so the `integrations-ghcr.yml:489` site — which passes the misused key via `env.GH_APP_SEC` — is a **false-negative** the audit misses. The `test_pem_misuse_count_matches_sitrep` guard asserts the audit-detected count of 9. Widening the regex to also catch `env.GH_APP_SEC` (raising the count to 10) is a follow-up worth a separate look.
 
 **Two sync-secrets workflows still require direct PAT** (`sync-secrets-local.yml`, `sync-secrets-spark.yml`) and have no App-token migration scaffolded.
 
@@ -75,7 +80,7 @@ App registered at GitHub; `GH_APP_ID`, `GH_APP_CLIENT_ID`, `GH_APP_INSTALLATION_
 |---|---|---|---|---|---|
 | 1 | JWT secret aliasing | `JWT_SECRET`, `SUPABASE_JWT_SECRET`, `GOTRUE_JWT_SECRET` (l.599), `PGRST_JWT_SECRET` (l.650/655/814), `API_JWT_SECRET` (l.775), `AUTH_JWT_SECRET` (l.878), `METRICS_JWT_SECRET` | **P0** | `JWT_SECRET` (Supabase signs; everything downstream HMACs the same key) | `bootstrap/registry.json §services.supabase` |
 | 2 | SERVICE_ROLE_KEY aliasing | `SERVICE_ROLE_KEY`, `SUPABASE_SERVICE_ROLE_KEY` (l.603/1003/1446/2477), `SUPABASE_SERVICE_KEY` (l.812/877/1483/1696), `RENDER_WEBHOOK_SUPABASE_SERVICE_ROLE_KEY` (l.1446), `SUPABASE_SECRET_KEY` (l.2477) | **P0** | `SERVICE_ROLE_KEY` | `bootstrap/registry.json §services.supabase` |
-| 3 | `GH_APP_SEC` mis-named PEM | OAuth client secret passed where PEM expected in 4 workflows (see §2) | **P0** | `GH_APP_PRIVATE_KEY` (new secret) | `.github/workflows/*` + repo secrets |
+| 3 | `GH_APP_SEC` mis-named PEM | OAuth client secret passed where PEM expected in 8 workflows / 10 sites (9 audit-detected; see §2) | **P0** | `GH_APP_PRIVATE_KEY` (new secret) | `.github/workflows/*` + repo secrets |
 | 4 | Transcribe-and-fetch gitlink | ghost SHA `322f05f7a` vs reachable `aef3a86` | **P0** *(PR #1371 closes)* | `aef3a86` | `.gitmodules` + AGNOTE4482 |
 | 5 | MCP token compose override | `${MCP_SERVER_TOKEN:-}` empty default at `pmoves/docker-compose.yml:2411` and `pmoves/docker-compose.agents.yml:67` shadows env_file | **P1** *(PR #1371 partial)* | omit from compose; source from `env.tier-agent` only | compose files |
 | 6 | Health-endpoint global claim | `services-catalog.md` claims `/healthz` global; `agent_registry.yaml` lists 9 distinct paths (`/health`, `/api/health`, `/gradio_api/info`, `/ready`, etc.) | **P1** *(PR #1385 closes)* | per-service entry authoritative | `agent_registry.yaml` |
