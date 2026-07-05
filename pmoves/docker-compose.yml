@@ -3335,6 +3335,9 @@ services:
     - VENICE_API_KEY=${VENICE_API_KEY:-local-disabled}
     - Z_AI_API_KEY=${Z_AI_API_KEY:-local-disabled}
     - ALIBABA_PRO_CODING_PLAN=${ALIBABA_PRO_CODING_PLAN:-local-disabled}
+    - OLLAMA_API_KEY=${OLLAMA_API_KEY:-local-disabled}
+    - KILOCODE_API_KEY=${KILOCODE_API_KEY:-local-disabled}
+    - HF_TOKEN=${HF_TOKEN:-local-disabled}
     - MINIMAX_API_KEY=${MINIMAX_API_KEY:-local-disabled}
     - TOGETHER_AI_API_KEY=${TOGETHER_AI_API_KEY:-local-disabled}
     - CLOUDFLARE_API_TOKEN=${CLOUDFLARE_API_TOKEN:-local-disabled}

@@ -70,18 +70,20 @@ def test_audit_json_mode_emits_summary() -> None:
 
 @pytest.mark.skipif(not SCRIPT.exists(), reason="audit script not present")
 def test_cards_summary_active_count_matches_seed() -> None:
-    """signing_identity_cards.yaml seeded 21 active cards.
+    """Snapshot of active cards (refreshed 2026-07-05: seed 16 -> 23).
 
-    Phase 2 baseline (16) plus fleet growth on main: +ci-bot and +evaluator
-    role cards, additional agent personas, and the missling-link Hermes node
-    persona (card ...0013) added by this onboarding branch.
+    Union of the cloud-hybrid standup wave (b850-claude/hermes-agent +
+    2 persona alters, agent -> 13) and the fleet growth already on main
+    (+ci-bot and +evaluator role cards, plus the missling-link Hermes
+    node persona card ...0013), which together bring the agent role to 14.
     """
     _run_audit()
     data = json.loads(DRIFT_REPORT.read_text(encoding="utf-8"))
-    assert data["cards_summary"]["active"] == 21
+    assert data["cards_summary"]["active"] == 23
     by_role = data["cards_summary"]["by_role"]
     assert by_role.get("operator") == 1
-    assert by_role.get("agent") == 12  # base agents + node personas (z890/5090/4090/missling-link) + fleet growth
+    # 6 base + z890/5090/4090/b850 nodes + hermes-agent + 2 persona alters + missling-link
+    assert by_role.get("agent") == 14
     assert by_role.get("service-account") == 1
     assert by_role.get("runner") == 5
     assert by_role.get("ci-bot") == 1

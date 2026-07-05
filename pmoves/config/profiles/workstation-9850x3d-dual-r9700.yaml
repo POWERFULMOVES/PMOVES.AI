@@ -5,7 +5,7 @@ description: >
   AMD workstation with Ryzen 9850X3D (8C / 3D V-Cache) and dual Radeon AI Pro
   R9700 (RDNA4 gfx1201, 2x 32 GB = 64 GB total VRAM). Inference backend:
   llama.cpp HIP via custom fork `tlee933/llama.cpp-rdna4-gfx1201` (ROCm 7.1 +
-  gfx1201 kernels NOT in stock Ollama as of 2026-04). llama-server on :8080
+  gfx1201 kernels NOT in stock Ollama as of 2026-04). llama-server on :8090
   exposes OpenAI-compatible API; rocm-smi-exporter on :9835 feeds Prometheus.
   Dual-GPU mode: --tensor-split 0.5,0.5 --split-mode row.
 hardware:
@@ -32,7 +32,7 @@ hardware:
 inference_backend: "llama.cpp-hip"
 inference_server:
   name: llama-server
-  port: 8080                        # OpenAI-compatible API
+  port: 8090                        # OpenAI-compatible API (8080 reserved for Agent Zero fleet-wide)
   fork: "tlee933/llama.cpp-rdna4-gfx1201"
   notes: "Stock Ollama lacks gfx1201 kernels — must use this fork."
 dual_gpu_flags:
@@ -48,7 +48,7 @@ model_bundles:
 services:
   - mesh-agent                    # Node announcer (NATS every 15s)
   - fleet-agent                   # Fleet watcher / audit participant
-  - llama-server                  # OpenAI-compatible inference endpoint (:8080)
+  - llama-server                  # OpenAI-compatible inference endpoint (:8090)
   - rocm-smi-exporter             # Prometheus GPU metrics (:9835)
 mcp:
   - docker
