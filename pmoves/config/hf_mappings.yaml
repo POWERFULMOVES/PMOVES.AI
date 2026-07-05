@@ -34,11 +34,11 @@ text_generation:
   google:
     - hf_id: google/gemma-4-E2B-it
       pmoves_name: gemma4-e2b
-      tier: small
-      params: 2B
+      tier: medium
+      params: 5.12B   # "E2B" = MatFormer 2B-effective; actual params 5.12B (7.2GB Q4) — not a <=3B edge model
       context: 128000
       ollama_variant: gemma4:e2b
-      recommended_for: [utility, edge]
+      recommended_for: [utility]
       release_date: 2026
 
     - hf_id: google/gemma-4-E4B-it

@@ -16,9 +16,9 @@ cpu_only_edge:
       variant: q4_0
       reason: "Fastest 3.8B model with 128K context"
     fallback:
-      name: gemma4-e2b
+      name: qwen2.5-3b
       variant: q4_0
-      reason: "Gemma 4 E2B — Apache-2.0, efficient 2B multimodal (text+image), 128K context"
+      reason: "Qwen2.5 3B — Apache-2.0, fits the 3B edge cap (Gemma 4 E2B is 5.12B actual — too large for CPU edge)"
   use_cases:
     orchestrator: phi3-mini:q4_0
     coding: phi3-mini:q4_0
@@ -229,7 +229,7 @@ botz_components:
 
   # Auditor (Haiku review - fast, cost-effective)
   auditor:
-    cpu_only: gemma4-e2b:q4_0
+    cpu_only: qwen2.5-3b:q4_0
     consumer_8gb: qwen2.5-3b:q4_0
     midrange_16gb: qwen2.5-3b:q4_0
     ai_workstation_32gb: qwen3.5-4b:q4_k_m
@@ -342,13 +342,13 @@ nvidia_optimized:
 ollama_models:
   small:
     - phi3:3.8b-mini-128k-instruct
-    - gemma4:e2b
     - qwen2.5:3b
 
   medium:
     - qwen2.5:7b
     - qwen2.5:14b
     - llama3.1:8b
+    - gemma4:e2b
     - gemma4:e4b
     - qwen2.5-coder:7b
     - deepseek-coder:6.7b
