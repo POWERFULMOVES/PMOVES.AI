@@ -10,3 +10,8 @@ h1 { font-family: var(--pm-font-display); }
 .shard{width:0;height:0;border-left:14px solid transparent;border-right:14px solid transparent;border-bottom:24px solid var(--pm-accent-2)}
 .hex{width:26px;height:23px;background:var(--pm-surface);border:1px solid var(--pm-accent);clip-path:polygon(25% 0,75% 0,100% 50%,75% 100%,25% 100%,0 50%)}
 .star{font-size:28px;color:var(--pm-signature)}
+.persona-bar { display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; margin: 1rem 0; }
+.persona-bar select { background: var(--pm-surface); color: var(--pm-ink); border: 1px solid var(--pm-accent-soft); padding: .25rem .5rem; }
+.persona-bar .status { opacity: .7; font-size: .85rem; }
+/* Showtime "live": intensify the reserved ✦ crimson signature (never recolored). */
+:root[data-stage="live"] .star { color: var(--pm-signature); text-shadow: 0 0 .5rem var(--pm-signature); }

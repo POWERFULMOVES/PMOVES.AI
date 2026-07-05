@@ -98,6 +98,7 @@
   --pm-ink-mute: #606068;
   --pm-radius: 14px;
   --pm-signature: #E11D48;       /* DARKXSIDE ✦ */
+  --pm-signature-glow: none;     /* off unless data-stage="live" — see DL-3.2 block */
   --pm-signature-soft: #FB7185;  /* AA-safe crimson for small text */
   --pm-space-lg: 24px;
   --pm-space-md: 16px;
@@ -121,6 +122,20 @@
   --pm-bg-tint: #140a0e;
   --pm-signature: #E11D48;
   --pm-signature-soft: #FB7185;
+}
+
+/* DL-3.2 — Showtime "live" edge: intensify the ✦ signature mark, never recolor it.
+   The glow is driven by the EXISTING `--pm-signature` value (not reassigned here —
+   canon guard). A signature-bearing element consumes `--pm-signature-glow` via the
+   `.pm-live-mark` utility below; off by default, lit only while the stage is live. */
+:root[data-stage="live"] {
+  --pm-signature-glow: 0 0 .6rem var(--pm-signature),
+    0 0 1.25rem color-mix(in srgb, var(--pm-signature) 55%, transparent);
+}
+
+.pm-live-mark {
+  color: var(--pm-signature);
+  text-shadow: var(--pm-signature-glow);
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════

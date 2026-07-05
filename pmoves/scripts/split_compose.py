@@ -58,6 +58,7 @@ SERVICE_GROUPS = {
         "hi-rag-gateway-v2-gpu",
         "mesh-agent",
         "cipher-api",
+        "notebooklm-agent",
         "a2ui-nats-bridge",
         "nats-echo-req",
         "nats-echo-res",

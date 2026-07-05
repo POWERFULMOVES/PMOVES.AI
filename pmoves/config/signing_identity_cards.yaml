@@ -218,6 +218,27 @@ cards:
       voice: terse
       role: agent
 
+  - card_id: "00000000-0000-4000-8000-000000000013"
+    issued_at: "2026-06-23T16:23:45Z"
+    active: true
+    ml:
+      primary_method: ssh
+      ssh_fingerprint: null   # operator-provided when ssh-keygen lands on PMOVES-MISSLING-LINK
+      ssh_allowed_signers_line: null
+    h:
+      agent_id: "missling-link"
+      display_name: "Missing Link Hermes"
+      glyph: "❖"        # ❖ decorative diamond — missing-link / bridge junction
+      color: "#DB2777"   # pink-600 — distinct from existing node palette
+      voice: analytical
+      role: agent
+    notes: |
+      PMOVES-MISSLING-LINK node — runs Hermes Agent (Nous Research) rather than
+      Claude Code/Codex. Seeded h-only on fleet onboarding (2026-06-23) per audit
+      policy "cards seeded only when an agent_id starts emitting trail entries."
+      ML half (ssh_fingerprint) pending operator ssh-keygen (Owner-Decision A).
+      Capacity: i7-7700HQ 4c/8t, 16GB RAM, GTX 1070 8GB (Pascal sm_61), Win 11.
+
   # ---- Service account: GitHub App ----
   - card_id: "00000000-0000-4000-8000-000000000020"
     issued_at: "2026-04-26T14:06:00Z"

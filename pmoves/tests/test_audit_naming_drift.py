@@ -53,7 +53,7 @@ def test_audit_writes_node_diff() -> None:
 
 @pytest.mark.skipif(not SCRIPT.exists(), reason="audit script not present")
 def test_audit_strict_fails_on_p0() -> None:
-    """The repo currently has 7 P0 PEM-misuse findings (per sitrep §2)."""
+    """The repo currently has 9 P0 PEM-misuse findings (per sitrep §2)."""
     result = _run_audit("--strict", "--severity", "P0")
     assert result.returncode == 1, "strict mode must fail when P0 findings exist"
 
@@ -70,25 +70,41 @@ def test_audit_json_mode_emits_summary() -> None:
 
 @pytest.mark.skipif(not SCRIPT.exists(), reason="audit script not present")
 def test_cards_summary_active_count_matches_seed() -> None:
-    """Snapshot of active cards (refreshed 2026-07-02: seed 16 -> 22 after
-    hermes/coder_claw/agent-zero-codex wave + b850-claude/hermes-agent cards)."""
+    """Snapshot of active cards (refreshed 2026-07-05: seed 16 -> 23).
+
+    Union of the cloud-hybrid standup wave (b850-claude/hermes-agent +
+    2 persona alters, agent -> 13) and the fleet growth already on main
+    (+ci-bot and +evaluator role cards, plus the missling-link Hermes
+    node persona card ...0013), which together bring the agent role to 14.
+    """
     _run_audit()
     data = json.loads(DRIFT_REPORT.read_text(encoding="utf-8"))
-    assert data["cards_summary"]["active"] == 22
+    assert data["cards_summary"]["active"] == 23
     by_role = data["cards_summary"]["by_role"]
     assert by_role.get("operator") == 1
-    assert by_role.get("agent") == 13  # 6 base + z890/5090/4090/b850 nodes + hermes-agent + 2 persona alters
+    # 6 base + z890/5090/4090/b850 nodes + hermes-agent + 2 persona alters + missling-link
+    assert by_role.get("agent") == 14
     assert by_role.get("service-account") == 1
     assert by_role.get("runner") == 5
+    assert by_role.get("ci-bot") == 1
+    assert by_role.get("evaluator") == 1
 
 
 @pytest.mark.skipif(not SCRIPT.exists(), reason="audit script not present")
 def test_pem_misuse_count_matches_sitrep() -> None:
-    """SITREP §2 enumerates 5 workflows w/ 7 GH_APP_SEC misuse sites."""
+    """SITREP §2 enumerates 8 workflows w/ 10 GH_APP_SEC misuse sites.
+
+    The audit's ``workflow.pem_misuse`` check matches only the
+    ``secrets.GH_APP_SEC`` context, so it detects 9 of the 10 sites; the
+    ``integrations-ghcr.yml`` site passes the misused key via
+    ``env.GH_APP_SEC`` and is a known audit false-negative (see
+    ``CREDENTIAL_AND_DRIFT_SITREP.md`` §2). This guard tracks the
+    audit-detected count.
+    """
     _run_audit()
     data = json.loads(DRIFT_REPORT.read_text(encoding="utf-8"))
     pem_findings = [f for f in data["findings"] if f["check"] == "workflow.pem_misuse"]
-    assert len(pem_findings) == 7
+    assert len(pem_findings) == 9
 
 
 # Unit tests for helpers — import directly

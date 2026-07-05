@@ -178,6 +178,10 @@ pmoves/design/
 | **DL-3** | Persona-adaptive runtime resolver (`whoami` → theme); Showtime drives "live" skin | B |
 | **DL-4** | CF site rebuilt from A2UI components (demonstrative); optional light theme | C + D5 |
 
+> _DL-3.1 landed 2026-07-03: runtime accent-override resolver (`setPersona` via `GET /v1/agent/theme/{id}`, `?agent=` identity, Showtime SSE live-flip) proven on `pmoves/design/preview`. Spec: `docs/superpowers/specs/2026-07-02-dl-3-persona-adaptive-resolver-design.md`._
+>
+> _DL-3.2 landed 2026-07-04: Notebook (`pmoves/ui`) adoption — design engine vendored to `ui/lib/persona/` (drift-guarded by `design-vendor-check`) + `PersonaStageController`/`LiveStageBadge` mounted in `NotebookWorkbenchView`; `watchShowtime` gained a `/health/all` poll fallback (spec D4); Notebook origin `:4482` added to `showtime-api` + `botz-gateway` CORS. Slice 3.3 (CF `--c-*`, A2UI `ProvenancePalette`) pending._
+
 Each phase = its own plan → reviewed PR. DL-1 is the next plan to write.
 
 ---
@@ -194,6 +198,6 @@ Each phase = its own plan → reviewed PR. DL-1 is the next plan to write.
 1. **Generator tool:** style-dictionary vs a ~50-line `uv` script. **Resolved (author's call, pending objection):** lean `uv` script, repo-native.
 2. **Fonts:** **RESOLVED (D2c):** Orbitron / Exo 2 / JetBrains as *defaults*, tokenized + modular (swappable per theme), self-hosted woff2.
 3. **`pmoves/design/` location:** repo-root `pmoves/design/` vs under `website/`. **Resolved (author's call, pending objection):** repo-root — shareable across all surfaces.
-4. **Showtime → web:** does DL-3 consume `showtime.all_green.v1` over SSE (`:9225/sse/events`) directly, or via the existing A2UI NATS bridge? **Deferred to DL-3 plan.**
+4. **Showtime → web:** does DL-3 consume `showtime.all_green.v1` over SSE (`:9225/sse/events`) directly, or via the existing A2UI NATS bridge? **RESOLVED (DL-3 spec D4 / shipped 3.1–3.2):** SSE-direct (`GET /sse/events`, named `showtime.all_green.v1` frame) with a `GET /health/all` poll fallback — the A2UI NATS bridge is **not** required in the browser path.
 
 > With Q1–Q3 resolved and Q4 deferred, this spec is ready for review → DL-1 plan.
