@@ -70,15 +70,22 @@ def test_audit_json_mode_emits_summary() -> None:
 
 @pytest.mark.skipif(not SCRIPT.exists(), reason="audit script not present")
 def test_cards_summary_active_count_matches_seed() -> None:
-    """signing_identity_cards.yaml seeded 16 active cards (Phase 2)."""
+    """signing_identity_cards.yaml seeded 21 active cards.
+
+    Phase 2 baseline (16) plus fleet growth on main: +ci-bot and +evaluator
+    role cards, additional agent personas, and the missling-link Hermes node
+    persona (card ...0013) added by this onboarding branch.
+    """
     _run_audit()
     data = json.loads(DRIFT_REPORT.read_text(encoding="utf-8"))
-    assert data["cards_summary"]["active"] == 16
+    assert data["cards_summary"]["active"] == 21
     by_role = data["cards_summary"]["by_role"]
     assert by_role.get("operator") == 1
-    assert by_role.get("agent") == 9  # 7 base + z890/5090/4090 personas (z890 + 5090 + 4090 + 7 base agents - operator counted separately = 9 here actually = 6 base agents (claude/codex/kilocode/gemini/cline/crush) + 3 nodes = 9)
+    assert by_role.get("agent") == 12  # base agents + node personas (z890/5090/4090/missling-link) + fleet growth
     assert by_role.get("service-account") == 1
     assert by_role.get("runner") == 5
+    assert by_role.get("ci-bot") == 1
+    assert by_role.get("evaluator") == 1
 
 
 @pytest.mark.skipif(not SCRIPT.exists(), reason="audit script not present")
