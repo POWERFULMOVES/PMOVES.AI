@@ -30,32 +30,36 @@ text_generation:
       recommended_for: [orchestrator, coding]
       release_date: 2024-06
 
-  # Google Models
+  # Google Models — Gemma 4 (Apache-2.0, ungated). Retired legacy Gemma 2 (license:gemma, gated).
   google:
-    - hf_id: google/gemma-2-2b-it
-      pmoves_name: gemma-2-2b
+    - hf_id: google/gemma-4-E2B-it
+      pmoves_name: gemma4-e2b
       tier: small
       params: 2B
-      context: 8192
-      ollama_variant: gemma-2:2b
-      recommended_for: [utility]
+      context: 128000
+      ollama_variant: gemma4:e2b
+      recommended_for: [utility, edge]
+      release_date: 2026
 
-    - hf_id: google/gemma-2-9b
-      pmoves_name: gemma-2-9b
+    - hf_id: google/gemma-4-E4B-it
+      pmoves_name: gemma4-e4b
       tier: medium
-      params: 9B
-      context: 8192
-      ollama_variant: gemma-2:9b
+      params: 4B
+      context: 128000
+      ollama_variant: gemma4:e4b
       recommended_for: [orchestrator, utility]
+      release_date: 2026
 
-    - hf_id: google/gemma-2-27b
-      pmoves_name: gemma-2-27b
+    - hf_id: google/gemma-4-31B-it
+      pmoves_name: gemma4-31b
       tier: large
-      params: 27B
-      context: 8192
+      params: 31B
+      context: 262144
       vllm_only: true
       tp_size: 2
+      ollama_variant: gemma4:31b
       recommended_for: [orchestrator, research]
+      release_date: 2026
 
   # Alibaba Qwen Models
   Qwen:
@@ -369,12 +373,12 @@ embeddings:
       dimensions: 1024
       ollama_variant: bge-large
 
-    - hf_id: BAAI/bge-m3
-      pmoves_name: gemma-embedding-300m
+    - hf_id: Qwen/Qwen3-Embedding-0.6B
+      pmoves_name: qwen3-embedding-0.6b
       tier: small
-      params: 300M
+      params: 0.6B
       dimensions: 1024
-      ollama_variant: embeddinggemma:300m
+      ollama_variant: qwen3-embedding:0.6b
 
   nomic-ai:
     - hf_id: nomic-ai/nomic-embed-text-v1.5
@@ -430,11 +434,6 @@ gated_models:
     - hf_id: meta-llama/Llama-3.1-70B-Instruct
       requires_access: true
       instructions: https://huggingface.co/meta-llama/Llama-3.1-70B-Instruct
-
-  google:
-    - hf_id: google/gemma-2-27b
-      requires_access: true
-      instructions: https://huggingface.co/google/gemma-2-27b
 
 # =============================================================================
 # Quantization Variants
@@ -544,7 +543,7 @@ download_priority:
   starter:
     1. qwen2.5-3b:q4_k_m
     2. phi3-mini:q4_k_m
-    3. gemma-embedding-300m:f16
+    3. qwen3-embedding-0.6b:f16
 
   # Single GPU (12-16GB)
   single_gpu:
