@@ -112,6 +112,23 @@
       ],
       "users": ["root", "autogroup:nonroot"]
     },
+    // Fleet-management exception: tag:lab nodes may root-SSH the VPS/exit nodes.
+    // WHY THIS EXISTS (deliberate deviation from "tags never get root"): the day-to-day
+    // management workstations (pmoves-4090, pmoves-z890) are TAGGED compute nodes
+    // (tag:gpu+tag:lab) because they also serve Ollama inference — so they have no
+    // user identity and can NEVER match the autogroup:admin/owner rule above. Without
+    // this rule, no fleet node can reach the KVM exit nodes as root over the mesh, which
+    // blocks exit-node/Mullvad-upstream provisioning (see MULLVAD_EXIT_UPSTREAM.md).
+    // SCOPE: src is tag:lab (4090, z890, and the KVMs themselves — all fleet infra),
+    // dst is only tag:vps + tag:exit (the KVMs). NOT tag:pmoves/tag:gpu — this does not
+    // grant root to the whole mesh, only to the exit-node concentrators. Silent accept
+    // (no check-mode: tagged sources have no user to re-auth as).
+    {
+      "action": "accept",
+      "src": ["tag:lab"],
+      "dst": ["tag:vps", "tag:exit"],
+      "users": ["root", "autogroup:nonroot"]
+    },
     // Tenants SSH into their OWN devices in check mode (browser re-auth). checkPeriod
     // omitted: it is Premium/Enterprise-gated in the policy-syntax reference and the
     // value we wanted (12h) is already the default, so omitting it keeps the policy
