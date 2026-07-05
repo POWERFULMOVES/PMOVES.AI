@@ -53,7 +53,7 @@ def test_audit_writes_node_diff() -> None:
 
 @pytest.mark.skipif(not SCRIPT.exists(), reason="audit script not present")
 def test_audit_strict_fails_on_p0() -> None:
-    """The repo currently has 7 P0 PEM-misuse findings (per sitrep §2)."""
+    """The repo currently has 9 P0 PEM-misuse findings (per sitrep §2)."""
     result = _run_audit("--strict", "--severity", "P0")
     assert result.returncode == 1, "strict mode must fail when P0 findings exist"
 
@@ -90,11 +90,19 @@ def test_cards_summary_active_count_matches_seed() -> None:
 
 @pytest.mark.skipif(not SCRIPT.exists(), reason="audit script not present")
 def test_pem_misuse_count_matches_sitrep() -> None:
-    """SITREP §2 enumerates 5 workflows w/ 7 GH_APP_SEC misuse sites."""
+    """SITREP §2 enumerates 8 workflows w/ 10 GH_APP_SEC misuse sites.
+
+    The audit's ``workflow.pem_misuse`` check matches only the
+    ``secrets.GH_APP_SEC`` context, so it detects 9 of the 10 sites; the
+    ``integrations-ghcr.yml`` site passes the misused key via
+    ``env.GH_APP_SEC`` and is a known audit false-negative (see
+    ``CREDENTIAL_AND_DRIFT_SITREP.md`` §2). This guard tracks the
+    audit-detected count.
+    """
     _run_audit()
     data = json.loads(DRIFT_REPORT.read_text(encoding="utf-8"))
     pem_findings = [f for f in data["findings"] if f["check"] == "workflow.pem_misuse"]
-    assert len(pem_findings) == 7
+    assert len(pem_findings) == 9
 
 
 # Unit tests for helpers — import directly
