@@ -1,0 +1,33 @@
+# Semantic Cache overlay (#1427)
+# Usage: docker compose -f docker-compose.yml -f docker-compose.cache.yml up
+
+services:
+  semantic-cache:
+    build:
+      context: ./services/semantic-cache
+      dockerfile: Dockerfile
+    container_name: pmoves-semantic-cache
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    environment:
+      CACHE_DATABASE_URL: ${CACHE_DATABASE_URL:-postgresql://pmoves:pmoves@supabase-db:5432/pmoves}
+      CACHE_HIRAG_GATEWAY_URL: ${CACHE_HIRAG_GATEWAY_URL:-http://hi-rag-gateway-v2:8086}
+      CACHE_TENSORZERO_URL: ${CACHE_TENSORZERO_URL:-http://tensorzero-gateway:3000/openai/v1}
+      CACHE_OLLAMA_URL: ${CACHE_OLLAMA_URL:-http://pmoves-ollama:11434}
+      CACHE_CIPHER_ENABLED: ${CACHE_CIPHER_ENABLED:-true}
+      CACHE_CIPHER_MCP_URL: ${CACHE_CIPHER_MCP_URL:-http://pmoves-cipher-mcp:8105}
+      CACHE_TOKENISM_ENABLED: ${CACHE_TOKENISM_ENABLED:-true}
+      CACHE_NATS_URL: ${CACHE_NATS_URL:-nats://nats:pmoves@nats:4222}
+      CACHE_SIMILARITY_THRESHOLD: ${CACHE_SIMILARITY_THRESHOLD:-0.90}
+      CACHE_TTL_CHAT_SECS: ${CACHE_TTL_CHAT_SECS:-300}
+      CACHE_EMBEDDING_MODEL: ${CACHE_EMBEDDING_MODEL:-qwen3_embedding_4b_local}
+      CACHE_EMBEDDING_DIM: ${CACHE_EMBEDDING_DIM:-2560}
+    networks:
+      - pmoves_app
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:3001/healthz')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s

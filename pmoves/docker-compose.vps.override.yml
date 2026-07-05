@@ -70,9 +70,9 @@ services:
     image: pmoves/gateway-agent:latest
     container_name: pmoves-gateway-agent
     ports:
-      - "8100:8100"
+      - "8111:8111"
     environment:
-      - PORT=8100
+      - PORT=8111
       - AGENT_ZERO_URL=http://agent-zero:8080
       - CIPHER_URL=http://cipher-api:8105
       - TENSORZERO_URL=http://tensorzero-gateway:3000

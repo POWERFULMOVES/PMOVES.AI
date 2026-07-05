@@ -1,7 +1,7 @@
 # Work-Order: Archon fork-sync + NATS-auth batch
 
 **Opened:** 2026-06-01 · **By:** Z890-CLAUDE · **Source:** SPARK KIMI handoff (PR #1668) submodule lanes, refined during the 2026-06-01 Lane-A pass.
-**Status:** OPEN — two independent lanes, pick up cold.
+**Status:** CLOSED 2026-06-02 — Lane 1 done; Lane 2 scoped → non-urgent (no churn). See **CLOSEOUT** at the bottom.
 
 > Lane A (base-image Trivy) is **done** for open-notebook / wger / tokenism (PRs merged + gitlinks promoted #1671). This work-order captures the **two remaining lanes**: archon (needs a fork-sync, not a quick edit) and the NATS-auth batch.
 
@@ -52,6 +52,28 @@ The handoff's "111 files" is inflated by vendored nested submodules (`external/*
 
 ### Per-repo flow
 Edit code/compose → local smoke if feasible → PR into the submodule `PMOVES.AI-Edition-Hardened` → parent gitlink bump. Watch the GraphQL rate limit (5000/hr) — batch PRs, don't burst.
+
+---
+
+## CLOSEOUT (2026-06-02, Z890-CLAUDE)
+
+### Lane 1 — Archon fork-sync: **DONE**
+Fork `PMOVES-Archon` synced to upstream `coleam00/Archon` `main` (0.4.1), PMOVES customizations preserved, base landed as `oven/bun:1.3.14-slim` (both stages — the work-order's "node:18→22-alpine" was pre-sync; upstream 0.4.x replaced the node UI base with bun). Local build validated, merged as Archon `#15`, parent gitlinks reconciled (`#1674`), vendored `pmoves/integrations/archon` retired in favor of the single fork source of truth. Branch protection on the fork adjusted for solo operator (`enforce_admins:false`, `required_pull_request_reviews:null`, kept `required_status_checks:[test,docker-build]`).
+
+### Lane 2 — NATS-auth batch: **scoped → NON-URGENT, no edit sweep**
+Scope-and-report (per the "check if already fixed first" rule) overturned the handoff's "~17 urgent files." Deployment is **already authenticated**; the remaining `nats://nats:4222` literals are not active endpoints. Evidence:
+
+| Surface | Grep finding | Verdict |
+|---|---|---|
+| `env.shared.example:30` | `NATS_URL=nats://nats:pmoves@nats:4222` (authed) | pipeline emits the authed form |
+| All production wiring | reads `os.getenv("NATS_URL", …)` first; **0** consumers of the bare constant | env always wins → already authed |
+| PMOVES-DoX (`config.py`, `system.py`, `chit_service.py`) | already `if nats_url in ("nats://nats:4222","nats://nats:pmoves@nats:4222")` — **normalizes both forms** | **done** (#1375 / #1292) — editing = redoing |
+| `pmoves_health/__init__.py` `checker.nats(":4222")` | inside `if __name__=="__main__": async def example_usage()` | **example code** — cosmetic |
+| `pmoves_announcer/__init__.py` `getenv("NATS_URL",":4222")` | env read first; `:4222` is the unreachable fallback | defense-in-depth nit only |
+| `pmoves_registry.NATS = ":4222"` | class constant, **0 direct consumers** (`ServiceURLs.NATS` / `.get("NATS")`) | cosmetic |
+| ~30 triple copies across repos + `*/external/` | md5 **differs** per repo (cipher-mcp 557d…, Wealth f5e4…, Creator 2fb9…) | **drifted**, not live-synced vendored — no clean single-source fix |
+
+**Decision:** do **not** run a 30-file `:4222→pmoves@:4222` sweep across hardened branches — it is pure churn for a non-issue (the deployment-active path is already authed via `env.shared`). If fallback hardening is ever wanted as defense-in-depth, do it **once at the canonical `pmoves-cipher-mcp`** package (`pyproject.toml`, the authoring home of the triple) and re-vendor — tracked as a separate **low-priority refactor**, not a NATS-auth security patch. The `pmoves_health` example-code string can be flipped opportunistically when those files are next touched for another reason.
 
 ---
 

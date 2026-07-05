@@ -182,6 +182,7 @@ scrape_configs:
           - http://host.docker.internal:8087/              # hi-rag v2 GPU
           - http://presign:8080/healthz                    # presign
           - http://archon:8091/healthz                     # archon
+          - http://pmoves-firefly:8080/                      # firefly-iii (upstream Laravel, no /healthz)
           - http://host.docker.internal:8097/healthz        # channel monitor
           - http://host.docker.internal:4000                # tensorzero playground
           - http://host.docker.internal:8055/healthz        # flute-gateway
@@ -245,3 +246,20 @@ scrape_configs:
   # - job_name: channel_monitor
   #   static_configs:
   #     - targets: ["channel-monitor:8097"]
+
+  # === Tailscale fleet metrics (Added 2026-06-15) ===
+  # DISABLED by default. Tailscale client metrics (tailscaled_inbound_bytes_total,
+  # tailscaled_outbound_bytes_total, tailscaled_*_packets_total, advertised/approved
+  # routes, health) are exported per node via node-exporter's textfile collector.
+  # Each node runs `tailscale metrics write` on a systemd timer; node-exporter on
+  # :9100 surfaces the result; Prometheus scrapes node-exporter over the tailnet.
+  # This avoids opening the Tailscale local API (:5252) or needing a Tailscale API key.
+  # Setup + unit files: tailscale-textfile-collector.md (this directory).
+  # To enable: confirm node-exporter + timer on each node, then uncomment.
+  # - job_name: node-exporter
+  #   static_configs:
+  #     - targets:
+  #         - pmoves-kvm2:9100
+  #         - pmoves-kvm4-1:9100
+  #         - pmoves-kvm4-2:9100
+  #         - pmoves-4090:9100

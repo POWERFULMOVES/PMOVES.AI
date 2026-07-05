@@ -22,7 +22,7 @@ env:
   # GitHub Secrets - Service Credentials
   HOSTINGER_API_KEY: ${{ secrets.HOSTINGER_API_KEY }}
   TAILSCALE_AUTHKEY: ${{ secrets.TAILSCALE_AUTHKEY }}
-  TAILSCALE_API_KEY: ${{ secrets.TAILSCALE_API_KEY }}
+  TAILSCALE_API_KEY: ${{ secrets.TAILSCALE_APIKEY }}
   N8N_API_KEY: ${{ secrets.N8N_API_KEY }}
   POSTMAN_API_KEY: ${{ secrets.POSTMAN_API_KEY }}
   E2B_API_KEY: ${{ secrets.E2B_API_KEY }}
@@ -35,14 +35,29 @@ jobs:
     permissions:
       contents: read
     steps:
+      - name: Clear stale nested-submodule state (durable fix for #1871)
+        shell: bash
+        run: |
+          # Self-hosted runners reuse their _work dir. A pre-#1871 checkout of
+          # PMOVES-transcribe-and-fetch (off-branch commit lacking .gitmodules)
+          # makes actions/checkout's recursive submodule clean-phase exit 128.
+          # Deinit + remove the stale submodule working tree so checkout starts
+          # clean. No-op on fresh/ephemeral runners (no prior .git in workspace).
+          ws="${GITHUB_WORKSPACE}"
+          sub="PMOVES-transcribe-and-fetch"
+          if [ -e "$ws/.git" ]; then
+            git -C "$ws" submodule deinit -f "$sub" 2>/dev/null || true
+          fi
+          rm -rf "$ws/$sub" 2>/dev/null || true
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           submodules: false  # Gateway agent doesn't need submodules
 
       - name: Validate Python syntax
         run: |
           python3 -m py_compile pmoves/services/gateway-agent/app.py
+          python3 -m py_compile pmoves/services/gateway-agent/nats_integration.py
           echo "✓ Python syntax valid"
 
       - name: Validate requirements.txt
@@ -62,8 +77,22 @@ jobs:
       contents: read
     needs: validate
     steps:
+      - name: Clear stale nested-submodule state (durable fix for #1871)
+        shell: bash
+        run: |
+          # Self-hosted runners reuse their _work dir. A pre-#1871 checkout of
+          # PMOVES-transcribe-and-fetch (off-branch commit lacking .gitmodules)
+          # makes actions/checkout's recursive submodule clean-phase exit 128.
+          # Deinit + remove the stale submodule working tree so checkout starts
+          # clean. No-op on fresh/ephemeral runners (no prior .git in workspace).
+          ws="${GITHUB_WORKSPACE}"
+          sub="PMOVES-transcribe-and-fetch"
+          if [ -e "$ws/.git" ]; then
+            git -C "$ws" submodule deinit -f "$sub" 2>/dev/null || true
+          fi
+          rm -rf "$ws/$sub" 2>/dev/null || true
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           submodules: false  # Gateway agent doesn't need submodules
 
@@ -90,6 +119,9 @@ jobs:
           WGER_ADMIN_PASSWORD: ci-build-placeholder
           WGER_DB_PASSWORD: ci-build-placeholder
           WGER_SECRET_KEY: ci-build-placeholder
+          NATS_URL: nats://nats:pmoves@nats:4222
+          PRESIGN_SHARED_SECRET: ci-build-placeholder
+          SUPABASE_SERVICE_KEY: ci-build-placeholder
         run: |
           cd pmoves
           docker compose build gateway-agent
@@ -119,8 +151,22 @@ jobs:
       contents: read
     needs: build-ai-lab
     steps:
+      - name: Clear stale nested-submodule state (durable fix for #1871)
+        shell: bash
+        run: |
+          # Self-hosted runners reuse their _work dir. A pre-#1871 checkout of
+          # PMOVES-transcribe-and-fetch (off-branch commit lacking .gitmodules)
+          # makes actions/checkout's recursive submodule clean-phase exit 128.
+          # Deinit + remove the stale submodule working tree so checkout starts
+          # clean. No-op on fresh/ephemeral runners (no prior .git in workspace).
+          ws="${GITHUB_WORKSPACE}"
+          sub="PMOVES-transcribe-and-fetch"
+          if [ -e "$ws/.git" ]; then
+            git -C "$ws" submodule deinit -f "$sub" 2>/dev/null || true
+          fi
+          rm -rf "$ws/$sub" 2>/dev/null || true
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       - name: Deploy Gateway Agent
         shell: bash
@@ -146,6 +192,10 @@ jobs:
           WGER_ADMIN_PASSWORD: ci-deploy-placeholder
           WGER_DB_PASSWORD: ci-deploy-placeholder
           WGER_SECRET_KEY: ci-deploy-placeholder
+          GATEWAY_AGENT_PORT: "8111"
+          NATS_URL: nats://nats:pmoves@nats:4222
+          PRESIGN_SHARED_SECRET: ci-deploy-placeholder
+          SUPABASE_SERVICE_KEY: ci-deploy-placeholder
         run: |
           cd pmoves
           touch env.shared env.shared.generated .env.generated .env.local \
@@ -158,28 +208,55 @@ jobs:
         shell: bash
         run: |
           echo "Waiting for Gateway Agent to be healthy..."
+          gateway_agent_cid() {
+            docker ps -qf name=gateway-agent | head -1
+          }
           for i in {1..30}; do
-            if curl -sf http://localhost:8100/healthz > /dev/null; then
+            if curl -sf http://localhost:8111/healthz > /dev/null; then
               echo "✓ Gateway Agent is healthy"
               exit 0
             fi
-            echo "Waiting... ($i/30)"
+            cid="$(gateway_agent_cid)"
+            if [ -n "$cid" ]; then
+              status="$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$cid" 2>/dev/null || true)"
+              if [ "$status" = "healthy" ]; then
+                echo "✓ Gateway Agent container is healthy"
+                exit 0
+              fi
+              echo "Waiting... ($i/30, container=${status:-unknown})"
+            else
+              echo "Waiting... ($i/30, container=missing)"
+            fi
             sleep 2
           done
           echo "✗ Gateway Agent failed health check"
+          # Raw docker (NOT `docker compose`): the compose file carries ${VAR:?}
+          # guards for OTHER services (supabase-db, pmoves-yt) that aren't set in
+          # this step's env, so a compose parse fails before it can show anything.
+          docker ps -a --filter name=gateway-agent --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}' || true
+          cid=$(docker ps -aqf name=gateway-agent | head -1)
+          if [ -n "$cid" ]; then docker logs --tail=120 "$cid" 2>&1 || true; else echo "(no gateway-agent container found)"; fi
           exit 1
 
       - name: Verify tool discovery
         shell: bash
         run: |
           sleep 5  # Give it time to discover tools
-          response=$(curl -s http://localhost:8100/tools)
+          response="$(curl -sf http://localhost:8111/tools 2>/dev/null || true)"
+          if [ -z "$response" ]; then
+            cid="$(docker ps -qf name=gateway-agent | head -1)"
+            if [ -z "$cid" ]; then
+              echo "✗ No gateway-agent container found for tool discovery"
+              exit 1
+            fi
+            response="$(docker exec "$cid" python -c 'import urllib.request; print(urllib.request.urlopen("http://127.0.0.1:8111/tools", timeout=5).read().decode())')"
+          fi
           tool_count=$(echo "$response" | jq -r '.total // 0')
           echo "✓ Discovered $tool_count MCP tools"
 
           if [ "$tool_count" -gt 0 ]; then
             echo "Sample tools:"
-            curl -s http://localhost:8100/tools | jq -r '.tools[:3] | .[] | "  - \(.name) (\(.category))"'
+            echo "$response" | jq -r '.tools[:3] | .[] | "  - \(.name) (\(.category))"'
           fi
 
   # ============================================================================
@@ -194,8 +271,22 @@ jobs:
       contents: read
     needs: validate
     steps:
+      - name: Clear stale nested-submodule state (durable fix for #1871)
+        shell: bash
+        run: |
+          # Self-hosted runners reuse their _work dir. A pre-#1871 checkout of
+          # PMOVES-transcribe-and-fetch (off-branch commit lacking .gitmodules)
+          # makes actions/checkout's recursive submodule clean-phase exit 128.
+          # Deinit + remove the stale submodule working tree so checkout starts
+          # clean. No-op on fresh/ephemeral runners (no prior .git in workspace).
+          ws="${GITHUB_WORKSPACE}"
+          sub="PMOVES-transcribe-and-fetch"
+          if [ -e "$ws/.git" ]; then
+            git -C "$ws" submodule deinit -f "$sub" 2>/dev/null || true
+          fi
+          rm -rf "$ws/$sub" 2>/dev/null || true
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           submodules: false  # Gateway agent doesn't need submodules
 
@@ -222,6 +313,9 @@ jobs:
           WGER_ADMIN_PASSWORD: ci-build-placeholder
           WGER_DB_PASSWORD: ci-build-placeholder
           WGER_SECRET_KEY: ci-build-placeholder
+          NATS_URL: nats://nats:pmoves@nats:4222
+          PRESIGN_SHARED_SECRET: ci-build-placeholder
+          SUPABASE_SERVICE_KEY: ci-build-placeholder
         run: |
           cd pmoves
           docker compose -f docker-compose.yml -f docker-compose.vps.override.yml build gateway-agent
@@ -250,6 +344,9 @@ jobs:
           WGER_ADMIN_PASSWORD: ci-deploy-placeholder
           WGER_DB_PASSWORD: ci-deploy-placeholder
           WGER_SECRET_KEY: ci-deploy-placeholder
+          NATS_URL: nats://nats:pmoves@nats:4222
+          PRESIGN_SHARED_SECRET: ci-deploy-placeholder
+          SUPABASE_SERVICE_KEY: ci-deploy-placeholder
         run: |
           cd pmoves
           touch env.shared env.shared.generated .env.generated .env.local \
@@ -262,7 +359,7 @@ jobs:
         run: |
           echo "Waiting for Gateway Agent to be healthy..."
           for i in {1..60}; do
-            if curl -sf http://localhost:8100/healthz > /dev/null; then
+            if curl -sf http://localhost:8111/healthz > /dev/null; then
               echo "✓ Gateway Agent is healthy"
               exit 0
             fi
@@ -270,23 +367,29 @@ jobs:
             sleep 2
           done
           echo "✗ Gateway Agent failed health check"
+          # Raw docker (NOT `docker compose`): the compose file carries ${VAR:?}
+          # guards for OTHER services (supabase-db, pmoves-yt) that aren't set in
+          # this step's env, so a compose parse fails before it can show anything.
+          docker ps -a --filter name=gateway-agent --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}' || true
+          cid=$(docker ps -aqf name=gateway-agent | head -1)
+          if [ -n "$cid" ]; then docker logs --tail=120 "$cid" 2>&1 || true; else echo "(no gateway-agent container found)"; fi
           exit 1
 
       - name: Verify tool discovery
         run: |
           sleep 5  # Give it time to discover tools
-          response=$(curl -s http://localhost:8100/tools)
+          response=$(curl -s http://localhost:8111/tools)
           tool_count=$(echo "$response" | jq -r '.total // 0')
           echo "✓ Discovered $tool_count MCP tools"
 
           if [ "$tool_count" -gt 0 ]; then
             echo "Sample tools:"
-            curl -s http://localhost:8100/tools | jq -r '.tools[:3] | .[] | "  - \(.name) (\(.category))"'
+            curl -s http://localhost:8111/tools | jq -r '.tools[:3] | .[] | "  - \(.name) (\(.category))"'
           fi
 
       - name: Verify secrets loaded
         run: |
-          count=$(curl -sf http://localhost:8100/secrets | jq 'length' 2>/dev/null) || {
+          count=$(curl -sf http://localhost:8111/secrets | jq 'length' 2>/dev/null) || {
             echo "✗ Failed to query secrets endpoint"
             exit 1
           }
@@ -319,8 +422,22 @@ jobs:
     needs: deploy-ai-lab
     if: failure() || cancelled()
     steps:
+      - name: Clear stale nested-submodule state (durable fix for #1871)
+        shell: bash
+        run: |
+          # Self-hosted runners reuse their _work dir. A pre-#1871 checkout of
+          # PMOVES-transcribe-and-fetch (off-branch commit lacking .gitmodules)
+          # makes actions/checkout's recursive submodule clean-phase exit 128.
+          # Deinit + remove the stale submodule working tree so checkout starts
+          # clean. No-op on fresh/ephemeral runners (no prior .git in workspace).
+          ws="${GITHUB_WORKSPACE}"
+          sub="PMOVES-transcribe-and-fetch"
+          if [ -e "$ws/.git" ]; then
+            git -C "$ws" submodule deinit -f "$sub" 2>/dev/null || true
+          fi
+          rm -rf "$ws/$sub" 2>/dev/null || true
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       - name: Rollback to previous version
         env:
@@ -367,8 +484,22 @@ jobs:
     needs: deploy-vps
     if: failure() || cancelled()
     steps:
+      - name: Clear stale nested-submodule state (durable fix for #1871)
+        shell: bash
+        run: |
+          # Self-hosted runners reuse their _work dir. A pre-#1871 checkout of
+          # PMOVES-transcribe-and-fetch (off-branch commit lacking .gitmodules)
+          # makes actions/checkout's recursive submodule clean-phase exit 128.
+          # Deinit + remove the stale submodule working tree so checkout starts
+          # clean. No-op on fresh/ephemeral runners (no prior .git in workspace).
+          ws="${GITHUB_WORKSPACE}"
+          sub="PMOVES-transcribe-and-fetch"
+          if [ -e "$ws/.git" ]; then
+            git -C "$ws" submodule deinit -f "$sub" 2>/dev/null || true
+          fi
+          rm -rf "$ws/$sub" 2>/dev/null || true
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       - name: Rollback to previous version
         env:

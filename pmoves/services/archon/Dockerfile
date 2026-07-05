@@ -42,7 +42,8 @@ RUN apt-get update \
     && corepack enable \
     && corepack prepare yarn@stable --activate \
     && corepack prepare pnpm@latest --activate \
-    && curl -fsSL https://bun.sh/install | bash \
+    && for i in 1 2 3 4 5; do curl -fsSL https://bun.sh/install | bash && break || { echo "bun install attempt $i failed (transient bun.sh/GitHub-releases 504?), retrying in 15s..."; sleep 15; }; done \
+    && test -x /root/.bun/bin/bun \
     && rm -rf /var/lib/apt/lists/*
 ENV PATH="/root/.bun/bin:$PATH"
 
@@ -180,10 +181,20 @@ RUN if [ -d "/app/$ARCHON_UI_DIR" ]; then \
         cd /app/vendor/archon && bun install --frozen-lockfile && \
         cd "/app/$ARCHON_UI_DIR" && bun run build && \
         mkdir -p "$ARCHON_UI_STATIC_DIR" \
-        && cp -R "$ARCHON_UI_BUILD_DIR"/* "$ARCHON_UI_STATIC_DIR"/; \
+        && cp -R "$ARCHON_UI_BUILD_DIR"/* "$ARCHON_UI_STATIC_DIR"/ && \
+        echo "→ Pruning JS build-only deps from runtime image" && \
+        find /app/vendor/archon -type d -name node_modules -prune -exec rm -rf {} + && \
+        rm -rf /root/.bun/install/cache; \
     else \
         echo "Archon UI directory '$ARCHON_UI_DIR' not found. Skipping UI build."; \
     fi
+
+# Rationale: the UI is compiled to static assets (copied to ARCHON_UI_STATIC_DIR)
+# and the runtime is the Python server — the JS build toolchain (esbuild & co.)
+# under vendor/archon/**/node_modules is build-only. Removing it in the SAME layer
+# keeps build tools out of the shipped image (clears e.g. esbuild's embedded Go
+# stdlib CVE-2026-42504, which no released esbuild has yet rebuilt away) and
+# shrinks the image. Python sources under vendor/archon/python are retained.
 
 # Security: Run as non-root user
 RUN groupadd -r pmoves --gid=65532 && \

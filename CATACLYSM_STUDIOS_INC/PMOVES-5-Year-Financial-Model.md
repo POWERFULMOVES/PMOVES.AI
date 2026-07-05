@@ -1,5 +1,7 @@
 # PMOVES.AI 5-YEAR FINANCIAL PROJECTIONS
 
+> ⚠️ **Superseded:** A mid-2026 climate update is available at `PMOVES-5-Year-Financial-Model-2026-06.md`. The document below is preserved as the January 2026 base case.
+
 ## Post-DAO Restructuring (Updated January 6, 2026)
 
 ---

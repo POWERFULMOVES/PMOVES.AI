@@ -75,6 +75,9 @@ services:
       - /var/www/html/storage/framework/sessions:noexec,nosuid
       - /var/www/html/storage/framework/views:noexec,nosuid
       - /var/www/html/storage/framework/cache:noexec,nosuid
+    # Health check — Firefly III is upstream Laravel with no /healthz endpoint.
+    # Probe the /api/v1/about route (Firefly-specific health indicator).
+    # Matches the Archon/agent-zero blackbox pattern for upstream services.
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:8080/api/v1/about || exit 1"]
       interval: 30s

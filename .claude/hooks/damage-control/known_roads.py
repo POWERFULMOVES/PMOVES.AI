@@ -37,14 +37,23 @@ def _is_compose_target(normalized_fwd: str) -> bool:
     Covers the parent `pmoves/` tree AND submodule compose files
     (e.g. PMOVES-DoX/docker-compose.supabase.yml). The basename check
     already restricts to compose files; the path check scopes to the
-    PMOVES.AI working tree (every node/submodule path contains 'pmoves').
+    PMOVES.AI working tree by matching an actual PMOVES-owned path *segment*
+    (`pmoves`, or any `pmoves-*` / `pmoves.*` submodule/root dir). Anchoring to
+    segments rather than a bare substring avoids classifying an unrelated path
+    that merely contains the bytes "pmoves" (e.g. `/tmp/evilpmoves/...`).
     The Known Road still requires a provable reason (pr:/issue:/handoff:),
     so this widens *which* compose files can be opened, not the bar to open them.
     """
     basename = os.path.basename(normalized_fwd).lower()
     if not (basename.startswith("docker-compose") and basename.endswith(".yml")):
         return False
-    return "pmoves" in normalized_fwd.lower()
+    # Anchor to path segments — not a bare `"pmoves" in ...` substring. normalized_fwd
+    # is already forward-slash normalized (os.path.normpath + backslash->slash).
+    parts = normalized_fwd.lower().split("/")
+    return any(
+        p == "pmoves" or p.startswith("pmoves-") or p.startswith("pmoves.")
+        for p in parts
+    )
 
 
 # domain name -> predicate(normalized_forward_slash_path) -> bool

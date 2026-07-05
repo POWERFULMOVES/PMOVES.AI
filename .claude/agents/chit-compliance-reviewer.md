@@ -1,6 +1,6 @@
 ---
 name: chit-compliance-reviewer
-description: Reviews PRs modifying CHIT-aware services to ensure CHIT signing patterns and tier guarantees are preserved. Example — invoked when a diff touches Tokenism Simulator (8103), Hi-RAG v2 (8086/8087), Consciousness (8105), Evo Controller (8113), or A2UI NATS Bridge (9224).
+description: Reviews PRs modifying CHIT-aware services to ensure CHIT signing patterns and tier guarantees are preserved. Example — invoked when a diff touches Tokenism Simulator (8103), Hi-RAG v2 (8086/8087), Consciousness (8106), Evo Controller (8113), or A2UI NATS Bridge (9224).
 tools: Read, Grep, Glob, Bash
 ---
 

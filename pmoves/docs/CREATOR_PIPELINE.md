@@ -145,5 +145,5 @@ ComfyUI workflows stored in PMOVES-Creator repository:
 - **Render Webhook** (port 8085) — ComfyUI callback handler
 - **MinIO** (port 9000) — Asset storage
 - **Presign** (port 8088) — Signed URL generation
-- **A2UI Renderer** (port 8105) — Remotion animation engine
+- **A2UI Renderer** (port 8107) — Remotion animation engine
 - **Hyperdimensions** — Three.js parametric surfaces

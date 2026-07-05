@@ -399,15 +399,32 @@ body.nav-open .site-nav a {
   display: flex;
   flex-direction: column;
 }
-.gallery-item iframe {
+.gallery-item video {
   width: 100%;
   aspect-ratio: 16 / 9;
-  min-height: 300px;
+  object-fit: cover;
   display: block;
+  background: #000;
+}
+/* Live Hyperdimensions WebGL embeds (replaced the old mp4s).
+   Kept in the stylesheet — not inline style= — so the strict marketing
+   CSP (style-src 'self') applies without 'unsafe-inline'.
+   pointer-events: none keeps the gallery embeds display-only. */
+.gallery-item iframe {
+  width: 100%;
+  height: 100%;
+  min-height: 300px;
+  aspect-ratio: 16 / 9;
   border: none;
   border-radius: 8px;
+  display: block;
   background: #000;
   pointer-events: none;
+}
+/* The Catalog Star-Chart embed is interactive (hover tooltips + clickable family
+   legend), unlike the display-only hologram embeds — re-enable pointer events for it. */
+.gallery-item iframe[src*="beats-constellation"] {
+  pointer-events: auto;
 }
 .gallery-item figcaption {
   padding: .75rem 1rem .85rem;
@@ -437,7 +454,7 @@ body.nav-open .site-nav a {
   gap: 1rem;
   align-items: flex-start;
 }
-@media (min-width: 720px) {
+@media (min-width: 700px) {
   .gallery-pipeline-note {
     flex-direction: row;
     align-items: center;

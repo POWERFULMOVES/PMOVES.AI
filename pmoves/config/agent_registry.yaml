@@ -12,6 +12,7 @@ taxonomy_version: "1.4.0"
 # External contributors — AI agents and humans who contribute via git
 # Links to visual identity in agent_signatures.yaml
 external_contributors:
+  - hermes-agent
   - claude-opus
   - kilocode
   - codex
@@ -2264,3 +2265,181 @@ agents:
       Runs on the tailnet-connected self-hosted ai-lab runner; publishes
       HMAC-signed branch.<path-segments>.trail.v1 events to NATS via
       .github/workflows/branch-trail-emit.yml.
+  hermes_agent:
+    name: "HERMES Agent"
+    class: utility
+    primary_type: agent
+    secondary_type: api
+    port: 7700
+    health: "/api/health"
+    layers: [L0, L1, L2, L4]
+    evolution_stage: stage_1
+    signature: "hermes-agent"
+    nats:
+      publishes:
+        - "hermes.gateway.launched.v1"
+        - "hermes.gateway.health.v1"
+        - "hermes.mcp.toolcall.v1"
+        - "hermes.skill.curated.v1"
+        - "hermes.cron.executed.v1"
+        - "hermes.delegate.completed.v1"
+      subscribes:
+        - "p7.nats.launch"
+        - "p7.nats.session"
+        - "mesh.node.announce.v1"
+    chit_toggles:
+      delta_sensitive: true
+      kappa_sensitive: true
+      hz_sensitive: false
+      swarm_participant: true
+      attribution_gated: true
+    resilience:
+      context_budget: medium
+      checkpoint_frequency: per_action
+      recovery_strategy: cipher_resumable
+      cipher_categories: [agent_plan, agent_checkpoint]
+    topology:
+      node_affinity: [z890, elder-melchor, 5090, 4090, kvm4-1, spark, pmoves-b850, rdna4]
+      team: orchestration
+      ci_runner: ai-lab
+      compose_profile: hermes
+    description: |
+      NousResearch Hermes Agent integration body. Cross-platform gateway operator,
+      skill curator, and NATS bridge. Runs profile-scoped instances per PMOVES node.
+      Publishes gateway lifecycle, MCP tool calls, skill curation, cron completions,
+      and delegation summaries to the NATS bus. Rehearsal stage until soak passes.
+  notebooklm_agent:
+    name: "NotebookLM Agent"
+    class: standard
+    primary_type: agent
+    secondary_type: api
+    port: null
+    health: null
+    layers: [L0, L2, L4]
+    evolution_stage: stage_1
+    nats:
+      publishes: []
+      subscribes: []
+    chit_toggles:
+      delta_sensitive: false
+      kappa_sensitive: false
+      hz_sensitive: false
+      swarm_participant: false
+      attribution_gated: false
+    resilience:
+      context_budget: medium
+      checkpoint_frequency: per_action
+      recovery_strategy: stateless
+      cipher_categories: []
+    topology:
+      node_affinity: [kvm4-1, z890, 5090]
+      team: research
+      ci_runner: ai-lab
+      compose_profile: agents
+    description: "NotebookLM integration agent for source-grounded research, document querying, and Audio Overview generation via MCP."
+
+
+# ── MCP Server Registry ─────────────────────────────────────────────────────
+# Root-level MCP servers that can be bound into room manifests as skills.
+# Endpoints are resolved at runtime via env.shared; status reflects compose
+# integration readiness. `action_namespace` matches room.manifest app entries.
+mcp_servers:
+  pmoves_cipher_mcp:
+    name: "pmoves-cipher-mcp"
+    submodule: "pmoves-cipher-mcp"
+    class: utility
+    transport: "sse"
+    endpoint: "${PMOVES_CIPHER_MCP_ENDPOINT:-http://pmoves-cipher-mcp:8080/sse}"
+    action_namespace: "mcp.v1.cipher"
+    capabilities: ["cipher", "chit", "announce", "health"]
+    rooms: ["z890-infra.room.fabric"]
+    # grounding_source: a discovering agent fetches startup grounding here
+    # (Cipher Memory = agent_plan/checkpoint/completion + CHIT trail). See §4a
+    # of docs/superpowers/specs/2026-06-26-voice-agents-design.md and
+    # pmoves/docs/voice/S1C_DISCOVERY_NAMING_MAP.md.
+    grounding_source: true
+    status: "planned"
+
+  pmoves_e2b_mcp:
+    name: "pmoves-e2b-mcp-server"
+    submodule: "pmoves-e2b-mcp-server"
+    class: utility
+    transport: "sse"
+    endpoint: "${PMOVES_E2B_MCP_ENDPOINT:-http://pmoves-e2b-mcp:8080/sse}"
+    action_namespace: "mcp.v1.e2b"
+    capabilities: ["sandbox", "execution", "artifacts"]
+    rooms: ["4090-field.room.control", "hermes-agent.room.control"]
+    status: "planned"
+
+  pmoves_hirag_mcp:
+    name: "pmoves-hirag-mcp"
+    submodule: "pmoves-hirag-mcp"
+    class: utility
+    transport: "sse"
+    endpoint: "${PMOVES_HIRAG_MCP_ENDPOINT:-http://pmoves-hirag-mcp:8080/sse}"
+    action_namespace: "mcp.v1.hirag"
+    capabilities: ["retrieve", "graph", "search", "notebook"]
+    rooms: ["4090-field.room.control", "hermes-agent.room.control"]
+    # grounding_source: a discovering agent fetches startup grounding here
+    # (Hi-RAG hybrid vector+graph+full-text retrieval). See §4a of
+    # docs/superpowers/specs/2026-06-26-voice-agents-design.md and
+    # pmoves/docs/voice/S1C_DISCOVERY_NAMING_MAP.md.
+    grounding_source: true
+    status: "planned"
+
+  pmoves_nats_mcp:
+    name: "pmoves-nats-mcp"
+    submodule: "pmoves-nats-mcp"
+    class: utility
+    transport: "sse"
+    endpoint: "${PMOVES_NATS_MCP_ENDPOINT:-http://pmoves-nats-mcp:8080/sse}"
+    action_namespace: "mcp.v1.nats"
+    capabilities: ["publish", "subscribe", "jetstream", "health"]
+    rooms: ["z890-infra.room.fabric", "hermes-agent.room.control"]
+    status: "planned"
+
+  pmoves_tailscale_mcp:
+    name: "pmoves-tailscale-mcp"
+    submodule: "pmoves-tailscale-mcp"
+    class: utility
+    transport: "sse"
+    endpoint: "${PMOVES_TAILSCALE_MCP_ENDPOINT:-http://pmoves-tailscale-mcp:8080/sse}"
+    action_namespace: "mcp.v1.tailscale"
+    capabilities: ["network", "devices", "authkeys", "tailnet"]
+    rooms: ["z890-infra.room.fabric"]
+    status: "planned"
+
+  # Voice discovery shim (S1c, §4a "two planes, one join key"). Makes the voice
+  # capability reachable through the same agent_registry → room plane as every
+  # other capability. flute-gateway is the backing provider; the `resolves` join
+  # bridges this discovery plane to the voice_profiles TRUTH plane (v5_16) by the
+  # voice `name` slug. Truth + routing (engine_specific, RLS, media) stays in
+  # pmoves_core.voice_profiles — this shim is intentionally thin.
+  pmoves_voice_mcp:
+    name: "pmoves-voice-mcp"
+    submodule: null
+    class: utility
+    transport: "sse"
+    endpoint: "${PMOVES_VOICE_MCP_ENDPOINT:-http://flute-gateway:8055/sse}"
+    action_namespace: "mcp.v1.voice"
+    capabilities: ["voice", "tts", "voice-select", "clone"]
+    rooms: ["5090-voice.room.studio"]
+    # resolves: NET-NEW join from this discovery entry to the voice truth plane.
+    # A runtime resolves an agent-selected voice slug against the registry table.
+    resolves:
+      registry: supabase
+      table: pmoves_core.voice_profiles
+      by: name
+    status: "planned"
+
+# ── A2A Server Registry ─────────────────────────────────────────────────────
+a2a_servers:
+  agent_zero_a2a:
+    name: "Agent Zero A2A"
+    agent_id: "agent_zero"
+    endpoint: "${A2A_AGENT_ZERO_ENDPOINT:-http://agent-zero:8080}"
+    discovery_path: "/.well-known/agent-card.json"
+    tasks_path: "/a2a/v1/tasks"
+    auth: "supabase_jwt"
+    enabled_by_default: false
+    status: "active"

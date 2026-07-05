@@ -1,3 +1,19 @@
+# This file aggregates tool config (pytest, coverage) and a `dev` extra for the
+# pmoves/ workspace. It is NOT a distributable package — `[tool.uv] package =
+# false` tells uv to manage the environment without building/installing it.
+# The minimal `[project]` table exists only so uv stops rejecting the file with
+# "project.name field is not set" (which the `[project.optional-dependencies]`
+# table below otherwise triggers, forcing every `uv run` here to need
+# --no-project).
+[project]
+name = "pmoves-workspace"
+version = "0.0.0"
+requires-python = ">=3.11"
+description = "PMOVES.AI workspace tooling config + dev extra (non-distributable)"
+
+[tool.uv]
+package = false
+
 [tool.pytest.ini_options]
 # Pytest configuration for PMOVES.AI unified test framework
 # This file complements pytest.ini in the repository root
@@ -61,4 +77,5 @@ exclude_lines = [
 [project.optional-dependencies]
 dev = [
     "cryptography",
+    "google-auth-oauthlib>=1.2.0",
 ]

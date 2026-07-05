@@ -12,6 +12,10 @@ Primary convergence record lives at:
 - `pmoves/docs/AGENTS/KRISS_KROSS_ACCORD.md` (Codex-led collision overlay and weave protocol)
 - `pmoves/docs/TAC/TAC_MODEL_INFRA_PERSONA_PROD_READINESS.md` (model infrastructure + persona production readiness execution overlay)
 - `pmoves/docs/AGENTS/AUTOMODE_FLEET_CONFIG.md` (**per-node auto-mode `autoMode` block** — every node pastes this into its gitignored `.claude/settings.local.json`; the classifier cannot read checked-in settings)
+- `pmoves/docs/AGENTS/HERMES_AGENT_INTEGRATION.md` (HERMES Agent (NousResearch) integration spec — room manifest, TAC tree, 6 node profiles, local model mesh, deployment runbook)
+- `pmoves/configs/tac_trees/node-hermes-agent.tac.yaml` (HERMES Agent integration TAC roadmap)
+- `.claude/agents/hermes-agent.md` (Three-Body Delivery Body agent definition for Hermes Agent)
+- `.claude/skills/hermes-agent-integration/SKILL.md` (Operator skill for launching/managing Hermes gateway)
 
 All agents entering PMOVES lanes should read that file first, then claim work before edits.
 
@@ -1231,3 +1235,72 @@ Shipped via **PR #1655** (`feat/pmoves-ai-website-deploy`) — salvaged onto cle
 - Timestamp: `2026-05-30`
 
 <!-- GRAPHITI_MARK: ANTIGRAVITY-GEMINI::A2UI-HOLOGRAM-SCALING-FIX::2026-05-30 -->
+
+## CHIT Signing-Card Schema + Room Activation Checklist (2026-06-30)
+
+### Work Performed
+- Canonical schema landed: `pmoves/contracts/schemas/identity/signing-card.v1.schema.json`.
+- Audit script `pmoves/scripts/audit_naming_drift.py` now loads the canonical schema from disk, falling back to the previous inline literal for stale environments.
+- Added the CHIT / room activation checklist below to this file and to `pmoves/docs/ROOMS_ON_A_STAGE.md` and `pmoves/docs/ROOM_MANIFEST_CONTRACT.md`.
+
+### CHIT / room activation checklist (must be complete before a room transitions `planned` → `active`)
+
+- [ ] Room manifest has a valid `card_id` in `meta.chit.card_id` or the room skill has an active signing card row in `pmoves/config/signing_identity_cards.yaml`.
+- [ ] `signing-card.v1.schema.json` validates the referenced card (`card_id` UUID, `ml.primary_method` in `[ssh,gpg,github-app]`, `h.agent_id` matches registry, `active=true`).
+- [ ] `pmoves/config/signing_identity_cards.yaml` has an entry for the room's operating agent with matching `ssh_fingerprint` / `github_app_installation_id` / `gpg_key_id`.
+- [ ] `make sign-trail AGENT=<agent_id>` returns `status: signed` or `unsigned-local` advisories are explicitly accepted for the transition.
+- [ ] Room's `mcp_servers` and `a2a_servers` (if any) are present in `pmoves/config/agent_registry.yaml` and reachable in the target topology mode.
+- [ ] `PGRST_DB_EXTRA_SEARCH_PATH` includes the schemas the room touches; PostgREST returns HTTP 200 on a representative schema-qualified endpoint.
+- [ ] `CHIT_REQUIRE_SIGNATURE` / `CHIT_DECRYPT_ANCHORS` toggles are documented in `sidecar.env` for the target topology gradient (`standalone` → `docked` → `fleet`).
+
+### Agent ACK
+- Agent: `AGENT-ZERO-0`
+- Signature: `ACK::AGENT-ZERO-0::CHIT-SIGNING-CARD-SCHEMA-CARVEOUT`
+- Timestamp: `2026-06-30T23:50:00Z`
+
+<!-- GRAPHITI_MARK: AGENT-ZERO-0::CHIT-SIGNING-CARD-SCHEMA-CARVEOUT::2026-06-30 -->
+
+
+## Fleet Onboarding: PMOVES-MISSLING-LINK (2026-06-23)
+
+### Work Performed
+- Onboarded PMOVES-MISSLING-LINK — **the first Hermes-Agent-native node** in the PMOVES fleet.
+- Hardware scanned via CIM + nvidia-smi: Intel i7-7700HQ 4c/8t @ 2.80GHz, 16 GB RAM, NVIDIA GTX 1070 8 GB GDDR5 (Pascal sm_61, driver 546.33), Windows 11 Pro, D: 48 GB free.
+- Added node-capacity row to `AGNOTE4482_SITREP.md` (Laptop / light-GPU dev, legacy Pascal).
+- Seeded signing identity card `00000000-0000-4000-8000-000000000013` (agent_id `missling-link`, h-only — ML half pending operator ssh-keygen per Owner-Decision A).
+- Created node doc `pmoves/docs/AGENTS/AGNOTE-pmoves-missling-link.md` (mirrors AGNOTE-dgx-spark.md structure).
+- Continues the W0 Substrate cross-platform-onboarding lane (Z890-CLAUDE 2026-05-09).
+
+### Key Findings
+
+| Finding | Status | Evidence |
+|---------|--------|----------|
+| Node registered in SITREP capacity table | **RESOLVED** | `AGNOTE4482_SITREP.md` MISSLING-LINK row added |
+| Signing card seeded for `missling-link` | **RESOLVED** | `signing_identity_cards.yaml` card `…0013` (h-only) |
+| Node doc authored | **RESOLVED** | `AGNOTE-pmoves-missling-link.md` (mirrors dgx-spark template) |
+| Hermes Agent as a fleet member | **NEW CAPABILITY** | First node whose primary agent runtime is Hermes Agent (not Claude Code/Codex/KiloCode) |
+| Tailscale mesh enrollment | **PENDING** | Operator action |
+| SSH fingerprint for signing card | **PENDING** | Operator `ssh-keygen` (Owner-Decision A) |
+
+### Handoff Notes
+- This node's primary agent is **Hermes Agent** — AGNOTE4482's Claude-Code-centric Three-Body enforcement (`.claude/agents/` frontmatter `disallowedTools`) does not apply here. The Hermes-native translation lives in the `pmoves-convergence` skill (claim register, branch naming, Three-Body via `delegate_task` roles). Read-only Control bodies are advisory on Hermes, not hard-enforced.
+- Capacity advisory: legacy Pascal GPU — small/quantized inference + dev/ops only; not a full-stack or heavy-inference host.
+- ML half of the signing card is intentionally null until the operator runs `ssh-keygen` on this host (matches the audit policy and the `darkxside` card precedent).
+
+### Files Changed
+| File | Change |
+|------|--------|
+| `pmoves/docs/AGENTS/AGNOTE4482_SITREP.md` | MISSLING-LINK row in node-capacity table |
+| `pmoves/config/signing_identity_cards.yaml` | Card `…0013` (missling-link, h-only) |
+| `pmoves/docs/AGENTS/AGNOTE-pmoves-missling-link.md` | New — node doc mirroring AGNOTE-dgx-spark.md |
+| `pmoves/docs/AGENTS/AGNOTE4482PHI.t1.md` | CLAIM/RELEASE entries (this lane) |
+| `pmoves/docs/AGENTS/AGNOTE4482.md` | This audit section |
+
+### Agent ACK
+- Agent: `MISSING-LINK-HERMES`
+- Signature: `ACK::MISSING-LINK-HERMES::FLEET-ONBOARD-MISSLING-LINK`
+- Timestamp: `2026-06-23T16:23:45Z`
+- Branch Cleanup: none (docs-only lane)
+
+<!-- GRAPHITI_MARK: MISSING-LINK-HERMES::FLEET-ONBOARD-MISSLING-LINK::2026-06-23 -->
+

@@ -1,0 +1,110 @@
+[
+    {
+        "file": "sphere_tutorial.json",
+        "name": "Sphere (Tutorial)"
+    },
+    {
+        "file": "hypersphere.json",
+        "name": "Hypersphere (5-Sphere)"
+    },
+    {
+        "file": "torus.json",
+        "name": "Torus"
+    },
+    {
+        "file": "mobius_strip.json",
+        "name": "Möbius Strip"
+    },
+    {
+        "file": "klein_bottle.json",
+        "name": "Klein Bottle"
+    },
+    {
+        "file": "torus_knot.json",
+        "name": "Torus Knot"
+    },
+    {
+        "file": "trefoil_knot.json",
+        "name": "Trefoil Knot"
+    },
+    {
+        "file": "breather_surface.json",
+        "name": "Breather Surface"
+    },
+    {
+        "file": "dini_surface.json",
+        "name": "Dini's Surface"
+    },
+    {
+        "file": "hopf_fibration.json",
+        "name": "Hopf Fibration"
+    },
+    {
+        "file": "shells.json",
+        "name": "Shells"
+    },
+    {
+        "file": "nautilus.json",
+        "name": "Nautilus"
+    },
+    {
+        "file": "planet.json",
+        "name": "Planet"
+    },
+    {
+        "file": "ocean_planet.json",
+        "name": "Ocean Planet"
+    },
+    {
+        "file": "rose.json",
+        "name": "Flower"
+    },
+    {
+        "file": "jellyfish.json",
+        "name": "Jellyfish"
+    },
+    {
+        "file": "hotdog.json",
+        "name": "Hotdog"
+    },
+    {
+        "file": "donut.json",
+        "name": "Donut"
+    },
+    {
+        "file": "cosmic_bloom.json",
+        "name": "Cosmic Bloom"
+    },
+    {
+        "file": "mandelbulb.json",
+        "name": "Mandelbulb"
+    },
+    {
+        "file": "weierstrass.json",
+        "name": "Weierstrass Asteroid"
+    },
+    {
+        "file": "perceptron.json",
+        "name": "Perceptron"
+    },
+    {
+        "file": "mlp.json",
+        "name": "Multi-Layer Perceptron"
+    },
+    {
+        "file": "fourier.json",
+        "name": "Fourier Surface"
+    },
+    {
+        "file": "taylor.json",
+        "name": "Taylor Surface"
+    },
+    {
+        "file": "chit_manifold.json",
+        "name": "⚡ CHIT Manifold"
+    },
+    {
+        "file": "beats_constellation.json",
+        "name": "🎵 Beats Constellation (DARKXSIDE)"
+    }
+]

@@ -1,4 +1,16 @@
-name: PAT Health Check
+name: GitHub App Health Check
+
+# Checks the PMOVES.AI GitHub App installation daily (replaces the old
+# GH_PAT user-context probe). The validation is simple and robust:
+#
+#   create-github-app-token SUCCEEDS → App credentials valid + installation active
+#   create-github-app-token FAILS    → App credentials invalid or installation revoked
+#
+# No fragile API probe needed — the token mint action itself is the health check.
+# If the App private key (GH_APP_SEC) is rotated, expired, or the installation
+# is suspended, minting fails and this opens ONE tracker issue, comments on
+# subsequent failures, and auto-closes when the App is valid again.
+# Title matching adopts/closes legacy "🔴 GH_PAT" issues from the old probe.
 
 on:
   schedule:
@@ -8,89 +20,107 @@ on:
 permissions:
   issues: write
 
+env:
+  ISSUE_TITLE: "🔴 GitHub App installation invalid or misconfigured"
+  TITLE_PREFIX: "🔴 GitHub App"
+  LEGACY_PREFIX: "🔴 GH_PAT"  # adopt/close legacy PAT trackers
+
 jobs:
+  mint:
+    uses: ./.github/workflows/_app-token.yml
+    secrets: inherit
+    with:
+      permission-contents: read
+
   check:
-    # PRs from forks don't have access to secrets; skip to avoid false negatives.
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    needs: mint
     runs-on: ubuntu-latest
+    if: always()
     steps:
-      - name: Check GH_PAT validity
-        env:
-          GH_TOKEN: ${{ secrets.GH_PAT }}
-        run: |
-          if gh api user >/dev/null 2>&1; then
-            echo "✅ GH_PAT is valid"
-            USER=$(gh api user --jq '.login')
-            echo "Authenticated as: $USER"
-          else
-            echo "❌ GH_PAT is EXPIRED or INVALID"
-            echo "::error::GH_PAT needs rotation immediately"
-            exit 1
-          fi
-
-      - name: Check GHCR_TOKEN validity
-        if: ${{ secrets.GHCR_TOKEN != '' }}
-        env:
-          GH_TOKEN: ${{ secrets.GHCR_TOKEN }}
-        run: |
-          if gh api user >/dev/null 2>&1; then
-            echo "✅ GHCR_TOKEN is valid"
-          else
-            echo "❌ GHCR_TOKEN is EXPIRED or INVALID"
-            echo "::warning::GHCR_TOKEN needs rotation"
-          fi
-
-      - name: Check GitHub App token generation
-        if: ${{ secrets.GH_APP_CLIENT_ID != '' && secrets.GH_APP_SEC != '' }}
-        id: app_token
-        uses: actions/create-github-app-token@v3
-        with:
-          client-id: ${{ secrets.GH_APP_CLIENT_ID }}
-          private-key: ${{ secrets.GH_APP_SEC }}
-          permission-contents: read
-          permission-packages: write
-
-      - name: Verify App token scopes
-        if: steps.app_token.outputs.token != ''
-        env:
-          GH_TOKEN: ${{ steps.app_token.outputs.token }}
-        run: |
-          # App tokens are installation tokens; they don't have a /user endpoint.
-          # Validate by checking org package access (lightweight probe).
-          if gh api /users/${{ github.repository_owner }} >/dev/null 2>&1; then
-            echo "✅ GitHub App token is valid and API-accessible"
-          else
-            echo "❌ GitHub App token failed API probe"
-            echo "::warning::GitHub App token may lack permissions or installation may be suspended"
-          fi
-
-      - name: Notify on failure
-        if: failure()
-        uses: actions/github-script@v9
+      - name: Reconcile tracker issue (open/comment on failure, auto-close on success)
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           script: |
-            const body = [
-              "## PAT Health Check Failed",
-              "",
-              "The GH_PAT secret is expired or invalid.",
-              "",
-              "### Immediate Action Required",
-              "1. Create new fine-grained PAT (7-day expiry) at https://github.com/settings/personal-access-tokens/new",
-              "2. Update GH_PAT secret at https://github.com/" + context.repo.owner + "/" + context.repo.repo + "/settings/secrets/actions",
-              "3. Update git remote on sidecar: git remote set-url origin https://pmoves-spark:<TOKEN>@github.com/" + context.repo.owner + "/" + context.repo.repo + ".git",
-              "4. See: deploy/runbooks/github-app-sitrep-and-pat-runbook.md §3.3",
-              "",
-              "### Long-Term Fix",
-              "Migrate to GitHub App token authentication — see §4 of the runbook.",
-              "",
-              "---",
-              "*Auto-created by PAT Health Check workflow*"
-            ].join("\n");
+            // The mint job succeeding IS the health validation.
+            // create-github-app-token fails if GH_APP_SEC is invalid or the
+            // installation is suspended/revoked. No API probe needed.
+            const valid = '${{ needs.mint.result }}' === 'success';
+            const prefix = process.env.TITLE_PREFIX;
+            const legacyPrefix = process.env.LEGACY_PREFIX;
+            const title = process.env.ISSUE_TITLE;
+            const today = new Date().toISOString().split('T')[0];
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const { owner, repo } = context.repo;
 
-            await github.rest.issues.create({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              title: "🔴 GH_PAT Expired — " + new Date().toISOString().split("T")[0],
-              body: body,
-              labels: ["operations", "security", "urgent"]
+            const detail = valid
+              ? 'App token minted successfully (create-github-app-token succeeded)'
+              : `App token mint FAILED (mint job result: ${{ needs.mint.result }})`;
+
+            // Find existing open tracker(s) — match new App prefix AND legacy PAT prefix.
+            const open = await github.paginate(github.rest.issues.listForRepo, {
+              owner, repo, state: 'open', per_page: 100,
             });
+            const trackers = open.filter(i =>
+              !i.pull_request &&
+              (i.title.startsWith(prefix) || i.title.startsWith(legacyPrefix))
+            );
+
+            if (!valid) {
+              const body = [
+                "## GitHub App Health Check Failed",
+                "",
+                `**Detail:** ${detail}`,
+                "",
+                "The PMOVES.AI GitHub App installation is invalid — `create-github-app-token`",
+                "could not mint a token. This means either:",
+                "- `GH_APP_SEC` (private key) is rotated, expired, or malformed",
+                "- `GH_APP_CLIENT_ID` is incorrect",
+                "- The App installation is suspended or revoked",
+                "",
+                "### Immediate action (operator)",
+                `1. Verify the App installation: https://github.com/organizations/${owner}/settings/apps`,
+                "2. Check if `GH_APP_SEC` (private key) was rotated — update the secret:",
+                `   https://github.com/${owner}/${repo}/settings/secrets/actions`,
+                "3. Confirm the App is not suspended and has the required permissions.",
+                "",
+                "### Context",
+                "This check replaced the old `GH_PAT` user-context probe (30-day expiry",
+                "outage). See `deploy/runbooks/github-app-sitrep-and-pat-runbook.md` §4.",
+                "",
+                "_This tracker auto-updates daily and auto-closes when the App is valid again._",
+              ].join("\n");
+              if (trackers.length === 0) {
+                await github.rest.issues.create({
+                  owner, repo, title, body,
+                  labels: ["operations", "security", "urgent"],
+                });
+                core.info("Opened new GitHub App health tracker.");
+              } else {
+                // Keep the OLDEST tracker canonical and consolidate duplicates.
+                const canonical = trackers[trackers.length - 1];
+                await github.rest.issues.createComment({
+                  owner, repo, issue_number: canonical.number,
+                  body: `Still failing as of ${today}. ${detail}. Run: ${runUrl}`,
+                });
+                core.info(`Updated tracker #${canonical.number}.`);
+                for (const dup of trackers) {
+                  if (dup.number === canonical.number) continue;
+                  await github.rest.issues.createComment({
+                    owner, repo, issue_number: dup.number,
+                    body: `Consolidating App-health tracking into #${canonical.number}; closing this duplicate.`,
+                  });
+                  await github.rest.issues.update({ owner, repo, issue_number: dup.number, state: "closed" });
+                  core.info(`Closed duplicate tracker #${dup.number}.`);
+                }
+              }
+              core.setFailed("GitHub App installation is invalid — token mint failed.");
+            } else {
+              for (const t of trackers) {
+                await github.rest.issues.createComment({
+                  owner, repo, issue_number: t.number,
+                  body: `✅ GitHub App installation is valid again as of ${today} — ${detail}. Auto-closing. Run: ${runUrl}`,
+                });
+                await github.rest.issues.update({ owner, repo, issue_number: t.number, state: "closed" });
+                core.info(`Auto-closed resolved tracker #${t.number}.`);
+              }
+            }

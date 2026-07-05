@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from pathlib import Path
 from typing import Iterable
@@ -27,10 +28,45 @@ SCHEMA_DIR = PMOVES_ROOT / "contracts" / "schemas" / "room"
 CATALOG_PATH = ROOM_DIR / "catalog.json"
 ROOM_SCHEMA_PATH = SCHEMA_DIR / "room.manifest.v1.schema.json"
 SKILL_SCHEMA_PATH = SCHEMA_DIR / "skill.binding.v1.schema.json"
+REGISTRY_PATH = PMOVES_ROOT / "config" / "agent_registry.yaml"
+
+# action_namespace values for MCP discovery entries all live under mcp_servers in
+# agent_registry.yaml; only those entries declare action_namespace, so a flat
+# regex extraction yields exactly the registered MCP namespaces (no yaml dep).
+_MCP_NS_RE = re.compile(r"""^\s*action_namespace:\s*["']?([^"'\s]+)["']?\s*$""", re.MULTILINE)
 
 
 def read_json(path: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8-sig"))
+
+
+def load_registered_mcp_namespaces() -> set[str]:
+    """Return MCP action_namespaces registered in agent_registry.yaml (mcp_servers)."""
+    if not REGISTRY_PATH.exists():
+        return set()
+    text = REGISTRY_PATH.read_text(encoding="utf-8")
+    return {ns for ns in _MCP_NS_RE.findall(text) if ns.startswith("mcp.")}
+
+
+def check_app_registry_consistency(
+    manifest: dict, registered_ns: set[str]
+) -> None:
+    """Cross-check: every room app bound to an MCP namespace (mcp.*) must resolve
+    to a registered mcp_servers entry in agent_registry.yaml. Non-MCP apps (the
+    common case) are untouched, keeping this check non-breaking for existing rooms.
+    Skips silently if the registry could not be read (no namespaces extracted)."""
+    if not registered_ns:
+        return
+    for app in manifest.get("apps", []):
+        namespace = app.get("action_namespace")
+        if not isinstance(namespace, str) or not namespace.startswith("mcp."):
+            continue
+        if namespace not in registered_ns:
+            raise ValueError(
+                f"app {app.get('app_id', '<unknown>')!r} references MCP "
+                f"action_namespace {namespace!r} with no matching mcp_servers "
+                f"entry in agent_registry.yaml"
+            )
 
 
 def build_validator() -> jsonschema.Draft202012Validator:
@@ -95,6 +131,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     catalog = read_json(CATALOG_PATH)
     validator = build_validator()
+    registered_ns = load_registered_mcp_namespaces()
     matched = list(iter_catalog_entries(catalog, args.room_id))
 
     if not matched:
@@ -103,6 +140,7 @@ def main(argv: list[str] | None = None) -> int:
     seen_ids: set[str] = set()
     for entry in matched:
         manifest_path, manifest = validate_entry(entry, validator)
+        check_app_registry_consistency(manifest, registered_ns)
         room_id = manifest["room_id"]
         if room_id in seen_ids:
             raise ValueError(f"duplicate room_id in selection: {room_id}")

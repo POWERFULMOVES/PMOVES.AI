@@ -10,6 +10,7 @@ This is the starter pack for moving Tokenism settlement from guarded dry-run int
 - The transcribe LFS cleanup gitlink is merged through PR #1638.
 - Settlement executors support dry-run operation and live gates.
 - Firefly and contract live execution require signed executor identity, matching operator approval, signed deployment attestation, and manifest-backed environment references.
+- The activation artifact is now represented by `tokenism.activation.pack.v1` and validated by `PMOVES-ToKenism-Multi/integrations/contracts/tokenism-activation-pack.ts`; the schema is mirrored at `pmoves/contracts/schemas/tokenism/activation.pack.v1.schema.json`.
 
 ## Required Artifacts
 
@@ -43,6 +44,7 @@ This is the starter pack for moving Tokenism settlement from guarded dry-run int
 
 - `make -C pmoves submodule-integrity` passes before any gitlink change.
 - ToKenism settlement tests pass before executor promotion.
+- `tokenism.activation.pack.v1` validates against the contract schema and rejects raw RPC URLs, raw wallet private keys, placeholder refs, missing dry-run evidence, mismatched deployment manifest ids, and untrusted executor ids.
 - Dry-run Firefly and contract outputs match schema and signing policy.
 - Live executor rejects missing approval, mismatched approval, missing deployment attestation, and unsigned executor identity.
 - Operator can disable live mode without redeploying code.

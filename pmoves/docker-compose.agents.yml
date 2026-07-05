@@ -28,13 +28,12 @@ services:
     restart: unless-stopped
     environment:
     - PORT=8080
-    # NATS_URL from env.tier-agent has credentials: nats://<from-env.shared>
-    # Supervisor polls inner AZ on :5000 (standalone Uvicorn default)
-    - AGENT_ZERO_API_BASE=${AGENT_ZERO_API_BASE:-http://127.0.0.1:5000}
+    # NATS_URL from env.tier-agent has credentials: nats://nats:pmoves@nats:4222
+    - AGENT_ZERO_API_BASE=${AGENT_ZERO_API_BASE:-http://127.0.0.1:80}
     - AGENT_ZERO_HEALTH_PATH=${AGENT_ZERO_HEALTH_PATH:-/healthz}
     - AGENT_ZERO_HEALTH_PATH_FALLBACK=${AGENT_ZERO_HEALTH_PATH_FALLBACK:-/health}
-    - AGENT_ZERO_CAPTURE_OUTPUT=${AGENT_ZERO_CAPTURE_OUTPUT:-true}
-    - AGENT_ZERO_EXTRA_ARGS=${AGENT_ZERO_EXTRA_ARGS:-}
+    - AGENT_ZERO_CAPTURE_OUTPUT=${AGENT_ZERO_CAPTURE_OUTPUT:-false}
+    - AGENT_ZERO_EXTRA_ARGS=${AGENT_ZERO_EXTRA_ARGS:---port=80 --host=0.0.0.0}
     - PYTHONPATH=${AGENT_ZERO_PYTHONPATH:-/app:/app/services}
     - AGENTZERO_JETSTREAM=${AGENTZERO_JETSTREAM:-true}
     - AGENTZERO_JS_UNAVAILABLE_THRESHOLD=${AGENTZERO_JS_UNAVAILABLE_THRESHOLD:-1}
@@ -46,6 +45,27 @@ services:
     - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
     - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
     - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
+    # A2A protocol — Agent-to-Agent interoperability (AGNOTE4482 Item 2)
+    - A2A_DISCOVERY_PUBLIC=${A2A_DISCOVERY_PUBLIC:-false}
+    - A2A_TASKS_PUBLIC=${A2A_TASKS_PUBLIC:-false}
+    # PMOVES.Notes plugin (baked into the image at usr/plugins/pmoves_notes).
+    # Defaults match the plugin's own fallbacks; set explicitly so a token can be
+    # supplied and the plugin can be toggled off without rebuilding.
+    - OPEN_NOTEBOOK_API_URL=${OPEN_NOTEBOOK_API_URL:-http://open-notebook:5055}
+    - OPEN_NOTEBOOK_API_TOKEN=${OPEN_NOTEBOOK_API_TOKEN:-}
+    - PMOVES_NOTES_ENABLED=${PMOVES_NOTES_ENABLED:-true}
+    # Orchestrator MCP toolkit — Agent Zero is the primary orchestrator and acts
+    # as an MCP *client* to the PMOVES service mesh. A0 reads A0_SET_mcp_servers
+    # (standard {"mcpServers":{...}} schema) via get_default_value(). Servers:
+    #   docker          — full container control over the mounted socket (mcp/docker)
+    #   pmoves-supabase — self-hosted PostgREST data plane (pre-installed in image)
+    #   cipher          — Consciousness/CHIT persistent memory over SSE
+    # BoTZ-gateway (persona/forms) and Hi-RAG are added by their owning lanes once
+    # their MCP endpoints land; set BOTZ_MCP_URL / HIRAG_MCP_URL to extend.
+    - SUPABASE_REST_URL=${SUPABASE_REST_URL:-http://supabase-kong:8000/rest/v1}
+    - SUPABASE_SERVICE_KEY=${SERVICE_ROLE_KEY:-${SUPABASE_SERVICE_ROLE_KEY:-}}
+    - CIPHER_MCP_URL=${CIPHER_MCP_URL:-http://cipher-api:3000/mcp/sse}
+    - 'A0_SET_mcp_servers={"mcpServers":{"docker":{"command":"docker","args":["run","--rm","-i","--mount","type=bind,src=/var/run/docker.sock,dst=/var/run/docker.sock","mcp/docker"]},"pmoves-supabase":{"command":"mcp-server-postgrest","args":["--apiUrl","${SUPABASE_REST_URL:-http://supabase-kong:8000/rest/v1}","--apiKey","${SERVICE_ROLE_KEY:-${SUPABASE_SERVICE_ROLE_KEY:-}}","--schema","public,storage"]},"cipher":{"type":"sse","url":"${CIPHER_MCP_URL:-http://cipher-api:3000/mcp/sse}"}}}'
     # LLM routing: use TensorZero gateway as OpenAI-compatible provider
     # Agent Zero's get_default_value() reads A0_SET_* from env (dotenv priority)
     # Dummy key silences LiteLLM "Missing API Key" warning — TensorZero handles auth
@@ -65,7 +85,7 @@ services:
     - A0_SET_browser_model_name=tensorzero::function_name::agent_zero
     - A0_SET_browser_model_api_base=http://tensorzero-gateway:3000/openai/v1
     - A0_SET_a2a_server_enabled=true
-    - A0_SET_mcp_server_token=${MCP_SERVER_TOKEN:-}
+    - A0_SET_mcp_server_token=${MCP_SERVER_TOKEN:?MCP_SERVER_TOKEN must be set when a2a_server_enabled=true}
     # Host environment leak guard (see x-host-leak-guard docs above)
     - SSL_CERT_FILE=
     - SSL_CERT_DIR=
@@ -84,124 +104,52 @@ services:
         condition: service_healthy
     ports:
     - ${AGENT_ZERO_BIND:-127.0.0.1}:${AGENT_ZERO_PORT:-8080}:8080
+    - ${AGENT_ZERO_BIND:-127.0.0.1}:${AGENT_ZERO_UI_PORT:-8081}:80
     volumes:
     - ${AGENT_ZERO_MEMORY_DIR:-./data/agent-zero/memory}:/a0/memory
     - ${AGENT_ZERO_KNOWLEDGE_DIR:-./data/agent-zero/knowledge}:/a0/knowledge
     - ${AGENT_ZERO_INSTRUMENTS_DIR:-./data/agent-zero/instruments}:/a0/instruments
     - ${AGENT_ZERO_LOG_DIR:-./data/agent-zero/logs}:/a0/logs
     - ${AGENT_ZERO_RUNTIME_DIR:-./data/agent-zero/runtime}:/a0/runtime
+    # Forms layer — persona/cognition profiles consumed by mcp_server.load_form().
+    # Read-only: forms are introspective metadata; runtime never rewrites them.
+    - ./configs/agents/forms:/app/configs/agents/forms:ro
+    # Operator-state mount — env.shared into DARKXSIDE-AZ-5090.
+    # DARKXSIDE is the witness + co-creator identity layer; POWERFULMOVES (this
+    # org / brand / repo) emerges from it. rw is the correct default for
+    # operator-state surfaces — DARKXSIDE-AZ is the operator on this node, not
+    # a peripheral service requesting elevation. Constraints (if any) are
+    # operator self-discipline, not architecture.
+    # Override: set ENV_SHARED_MODE=ro in env.shared to harden on nodes where
+    # write access is not needed (e.g., read-only observer deployments).
+    - ./env.shared:/secrets/env.shared:${ENV_SHARED_MODE:-rw}
+    # Docker socket for the orchestrator's docker MCP (mcp/docker via
+    # A0_SET_mcp_servers). This grants Agent Zero full container control — an
+    # intentional posture for the primary orchestrator. Note: :ro on the socket
+    # is cosmetic (the Docker API is bidirectional regardless of file mode).
+    - ${DOCKER_SOCK:-/var/run/docker.sock}:/var/run/docker.sock
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/healthz >/dev/null || exit 1"]
+      test: ["CMD-SHELL", "curl -fsS http://localhost:80/ >/dev/null || curl -fsS http://localhost:8080/healthz >/dev/null || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 30s
+    # Grant the runtime user (uid/gid 65532) access to the mounted Docker socket
+    # (root:docker 0660 on Linux hosts) so the docker MCP (mcp/docker) can reach
+    # the daemon without weakening socket perms. DOCKER_GID must match the host's
+    # docker group gid; Docker Desktop (Win/Mac) proxies the socket and ignores it.
+    group_add:
+    - "${DOCKER_GID:-999}"
     networks:
     - pmoves_app
     - pmoves_bus
     - pmoves_external  # Required for LLM provider APIs
+    - pmoves_api  # Reach supabase-kong (PostgREST) for the pmoves-supabase MCP
     deploy:
       resources:
         limits:
           cpus: '2.0'
           memory: 2G
-  # DARKXSIDE — operator leaf node (heavier generate weight, artifacts on approve)
-  # Connects to NATS hub + TensorZero in docked mode. Standalone mode uses
-  # docker-compose.darkxside-sidecar.yml instead (Ollama on host, no NATS).
-  agent-zero-darkxside:
-    <<: *tier-agent-hardened
-    env_file:
-    - env.shared
-    - env.tier-agent
-    cap_drop:
-    - ALL
-    cap_add:
-    - NET_BIND_SERVICE
-    - CHOWN
-    - SETGID
-    - SETUID
-    security_opt:
-    - no-new-privileges:true
-    build:
-      context: .
-      dockerfile: ./services/agent-zero/Dockerfile
-    restart: unless-stopped
-    environment:
-    # Supervisor listens on this port (inner AZ runs on :5000 internally)
-    - PORT=8080
-    - AGENT_ZERO_API_BASE=${AGENT_ZERO_API_BASE:-http://127.0.0.1:5000}
-    - AGENT_ZERO_HEALTH_PATH=${AGENT_ZERO_HEALTH_PATH:-/healthz}
-    - AGENT_ZERO_HEALTH_PATH_FALLBACK=${AGENT_ZERO_HEALTH_PATH_FALLBACK:-/health}
-    - AGENT_ZERO_CAPTURE_OUTPUT=${AGENT_ZERO_CAPTURE_OUTPUT:-true}
-    - AGENT_ZERO_EXTRA_ARGS=${AGENT_ZERO_EXTRA_ARGS:-}
-    - PYTHONPATH=${AGENT_ZERO_PYTHONPATH:-/app:/app/services}
-    - AGENTZERO_JETSTREAM=${AGENTZERO_JETSTREAM:-true}
-    - AGENTZERO_JS_UNAVAILABLE_THRESHOLD=${AGENTZERO_JS_UNAVAILABLE_THRESHOLD:-1}
-    - TENSORZERO_URL=${TENSORZERO_URL:-http://tensorzero-gateway:3000}
-    - CHIT_REQUIRE_SIGNATURE=${CHIT_PROD_REQUIRE_SIGNATURE:-true}
-    - CHIT_DECRYPT_ANCHORS=${CHIT_PROD_DECRYPT_ANCHORS:-true}
-    - CHIT_PASSPHRASE=${CHIT_PROD_PASSPHRASE:?set CHIT_PROD_PASSPHRASE in env.shared}
-    - DOCKED_MODE=${DOCKED_MODE:-true}
-    - TOPOLOGY_MODE=${TOPOLOGY_MODE:-docked}
-    - AGENT_FORM=DARKXSIDE
-    - PARENT_SYSTEM=${PARENT_SYSTEM:-PMOVES.AI}
-    - PARENT_VERSION=${PARENT_VERSION:-1.0.0-hardened}
-    # LLM routing: TensorZero gateway (same as main agent-zero)
-    - OPENAI_API_KEY=${OPENAI_API_KEY:-tensorzero-routed}
-    - A0_SET_chat_model_provider=openai
-    - A0_SET_chat_model_name=tensorzero::function_name::agent_zero
-    - A0_SET_chat_model_api_base=http://tensorzero-gateway:3000/openai/v1
-    - A0_SET_util_model_provider=openai
-    - A0_SET_util_model_name=tensorzero::function_name::agent_zero
-    - A0_SET_util_model_api_base=http://tensorzero-gateway:3000/openai/v1
-    - A0_SET_embed_model_provider=openai
-    - A0_SET_embed_model_name=openai/tensorzero::embedding_model_name::gemma_embed_local
-    - A0_SET_embed_model_api_base=http://tensorzero-gateway:3000/openai/v1
-    - A0_SET_browser_model_provider=openai
-    - A0_SET_browser_model_name=tensorzero::function_name::agent_zero
-    - A0_SET_browser_model_api_base=http://tensorzero-gateway:3000/openai/v1
-    - A0_SET_a2a_server_enabled=true
-    - A0_SET_mcp_server_token=${DARKXSIDE_MCP_SERVER_TOKEN:-${MCP_SERVER_TOKEN:-}}
-    # Host environment leak guard
-    - SSL_CERT_FILE=
-    - SSL_CERT_DIR=
-    - REQUESTS_CA_BUNDLE=
-    - CURL_CA_BUNDLE=
-    - NODE_EXTRA_CA_CERTS=
-    - HTTP_PROXY=
-    - HTTPS_PROXY=
-    - NO_PROXY=
-    depends_on:
-      nats:
-        condition: service_healthy
-      nats-init:
-        condition: service_completed_successfully
-      tensorzero-gateway:
-        condition: service_healthy
-    ports:
-    - ${DARKXSIDE_BIND:-127.0.0.1}:${DARKXSIDE_PORT:-8092}:8080
-    volumes:
-    - ${DARKXSIDE_MEMORY_DIR:-./data/darkxside/memory}:/a0/memory
-    - ${DARKXSIDE_KNOWLEDGE_DIR:-./data/darkxside/knowledge}:/a0/knowledge
-    - ${DARKXSIDE_INSTRUMENTS_DIR:-./data/darkxside/instruments}:/a0/instruments
-    - ${DARKXSIDE_LOG_DIR:-./data/darkxside/logs}:/a0/logs
-    - ${DARKXSIDE_RUNTIME_DIR:-./data/darkxside/runtime}:/a0/runtime
-    healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/healthz >/dev/null || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
-    networks:
-    - pmoves_app
-    - pmoves_bus
-    - pmoves_external
-    deploy:
-      resources:
-        limits:
-          cpus: '2.0'
-          memory: 2G
-
   archon:
     <<: *tier-agent-hardened
     build:
@@ -213,7 +161,7 @@ services:
     restart: unless-stopped
     environment:
       # SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY from env.tier-agent
-      # NATS_URL from env.tier-agent has credentials: nats://<from-env.shared>
+      # NATS_URL from env.tier-agent has credentials: nats://nats:pmoves@nats:4222
     - PORT=8091
     - ENVIRONMENT=${ENVIRONMENT:-production}
     - ARCHON_ENV=${ARCHON_ENV:-production}
@@ -306,7 +254,7 @@ services:
     profiles: ["agents"]
     networks: [pmoves_api, pmoves_app, pmoves_bus]
     healthcheck:
-      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8111/healthz', timeout=5)"]
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:${GATEWAY_AGENT_PORT:-8111}/healthz', timeout=5)"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -349,6 +297,7 @@ services:
     - NO_PROXY=
     - QDRANT_URL=${QDRANT_URL:-http://qdrant:6333}
     - QDRANT_COLLECTION=${QDRANT_COLLECTION:-pmoves_chunks_qwen3}
+    - QDRANT__API_KEY=${QDRANT__API_KEY:?Set QDRANT__API_KEY in env.tier-data}
     - SENTENCE_MODEL=${SENTENCE_MODEL:-all-MiniLM-L6-v2}
     - HIRAG_HTTP_PORT=${HIRAG_HTTP_PORT:-8086}
     - GRAPH_BOOST=${GRAPH_BOOST:-0.15}
@@ -356,9 +305,10 @@ services:
     - ENTITY_CACHE_MAX=${ENTITY_CACHE_MAX:-10000}
     - USE_MEILI=${USE_MEILI:-true}
     - MEILI_URL=${MEILI_URL:-http://meilisearch:7700}
+    - MEILI_MASTER_KEY=${MEILI_MASTER_KEY:?Set MEILI_MASTER_KEY in env.tier-data}
     - NEO4J_URL=${NEO4J_URL:-bolt://neo4j:7687}
     - NEO4J_USER=${NEO4J_USER:-neo4j}
-    - NEO4J_PASSWORD=${NEO4J_PASSWORD:-pm_kDhuaogcUc1oOOVeGMNCkQ}
+    - NEO4J_PASSWORD=${NEO4J_PASSWORD:?Set NEO4J_PASSWORD in env.tier-data}
     - NEO4J_DICT_REFRESH_SEC=${NEO4J_DICT_REFRESH_SEC:-300}
     - NEO4J_DICT_LIMIT=${NEO4J_DICT_LIMIT:-1000}
     - TAILSCALE_ONLY=${TAILSCALE_ONLY:-false}
@@ -415,6 +365,7 @@ services:
     - QDRANT_URL=${QDRANT_URL:-http://qdrant:6333}
     - QDRANT_COLLECTION=${QDRANT_COLLECTION:-pmoves_chunks_qwen3}
     - QDRANT_RECREATE_ON_DIM_MISMATCH=${QDRANT_RECREATE_ON_DIM_MISMATCH:-false}
+    - QDRANT__API_KEY=${QDRANT__API_KEY:?Set QDRANT__API_KEY in env.tier-data}
     - SENTENCE_MODEL=${SENTENCE_MODEL:-all-MiniLM-L6-v2}
     - INDEXER_NAMESPACE=${INDEXER_NAMESPACE:-pmoves}
     - QUERY_NAMESPACE=${QUERY_NAMESPACE:-*}
@@ -424,11 +375,12 @@ services:
     - RERANK_TOPN=${RERANK_TOPN:-50}
     - RERANK_K=${RERANK_K:-10}
     - RERANK_FUSION=${RERANK_FUSION:-mul}
-    - USE_MEILI=${USE_MEILI:-false}
+    - USE_MEILI=true
     - MEILI_URL=${MEILI_URL:-http://meilisearch:7700}
+    - MEILI_MASTER_KEY=${MEILI_MASTER_KEY:?Set MEILI_MASTER_KEY in env.tier-data}
     - NEO4J_URL=${NEO4J_URL:-bolt://neo4j:7687}
     - NEO4J_USER=${NEO4J_USER:-neo4j}
-    - NEO4J_PASSWORD=${NEO4J_PASSWORD:-pm_kDhuaogcUc1oOOVeGMNCkQ}
+    - NEO4J_PASSWORD=${NEO4J_PASSWORD:?Set NEO4J_PASSWORD in env.tier-data}
     - EMBEDDING_BACKEND=${EMBEDDING_BACKEND:-tensorzero}
     - USE_OLLAMA_EMBED=${USE_OLLAMA_EMBED:-false}
     - OLLAMA_URL=${OLLAMA_URL:-http://pmoves-ollama:11434}
@@ -507,6 +459,7 @@ services:
     - QDRANT_URL=${QDRANT_URL:-http://qdrant:6333}
     - QDRANT_COLLECTION=${QDRANT_COLLECTION:-pmoves_chunks_qwen3}
     - QDRANT_RECREATE_ON_DIM_MISMATCH=${QDRANT_RECREATE_ON_DIM_MISMATCH:-false}
+    - QDRANT__API_KEY=${QDRANT__API_KEY:?Set QDRANT__API_KEY in env.tier-data}
     - SENTENCE_MODEL=${SENTENCE_MODEL:-all-MiniLM-L6-v2}
     - HIRAG_HTTP_PORT=${HIRAG_HTTP_PORT:-8086}
     - GRAPH_BOOST=${GRAPH_BOOST:-0.15}
@@ -514,9 +467,10 @@ services:
     - ENTITY_CACHE_MAX=${ENTITY_CACHE_MAX:-10000}
     - USE_MEILI=${USE_MEILI:-true}
     - MEILI_URL=${MEILI_URL:-http://meilisearch:7700}
+    - MEILI_MASTER_KEY=${MEILI_MASTER_KEY:?Set MEILI_MASTER_KEY in env.tier-data}
     - NEO4J_URL=${NEO4J_URL:-bolt://neo4j:7687}
     - NEO4J_USER=${NEO4J_USER:-neo4j}
-    - NEO4J_PASSWORD=${NEO4J_PASSWORD:-pm_kDhuaogcUc1oOOVeGMNCkQ}
+    - NEO4J_PASSWORD=${NEO4J_PASSWORD:?Set NEO4J_PASSWORD in env.tier-data}
     - NEO4J_DICT_REFRESH_SEC=${NEO4J_DICT_REFRESH_SEC:-300}
     - NEO4J_DICT_LIMIT=${NEO4J_DICT_LIMIT:-1000}
     - TAILSCALE_ONLY=${TAILSCALE_ONLY:-false}
@@ -607,6 +561,7 @@ services:
     - NO_PROXY=
     - QDRANT_URL=${QDRANT_URL:-http://qdrant:6333}
     - QDRANT_COLLECTION=${QDRANT_COLLECTION:-pmoves_chunks_qwen3}
+    - QDRANT__API_KEY=${QDRANT__API_KEY:?Set QDRANT__API_KEY in env.tier-data}
     - SENTENCE_MODEL=${SENTENCE_MODEL:-all-MiniLM-L6-v2}
     - INDEXER_NAMESPACE=${INDEXER_NAMESPACE:-pmoves}
     - QUERY_NAMESPACE=${QUERY_NAMESPACE:-*}
@@ -691,7 +646,7 @@ services:
       retries: 5
       start_period: 120s
   # ── NATS Message Bus — JetStream-enabled event broker ──────────────────
-  # Auth: nats://<from-env.shared> | Monitoring: :8222/varz
+  # Auth: nats://nats:pmoves@nats:4222 | Monitoring: :8222/varz
   # See: pmoves/docs/NATS_CONFIGURATION.md
   mesh-agent:
     <<: &tier-agent-hardened-ro
@@ -712,7 +667,7 @@ services:
     build: ./services/mesh-agent
     restart: unless-stopped
     environment:
-    # NATS_URL from env.shared/env.tier-agent has credentials: nats://<from-env.shared>
+    # NATS_URL from env.shared/env.tier-agent has credentials: nats://nats:pmoves@nats:4222
     - HIRAG_URL=${HIRAG_URL:-http://hi-rag-gateway-v2-gpu:8086}
     - ANNOUNCE_SEC=${ANNOUNCE_SEC:-15}
     depends_on: [nats]
@@ -752,14 +707,20 @@ services:
     - CIPHER_API_TOKEN=${CIPHER_API_TOKEN:-}
     command: ["node", "dist/src/app/index.cjs", "--mode", "api", "--port", "3000", "--host", "0.0.0.0", "--agent", "/app/memAgent/cipher.yml", "--mcp-transport-type", "sse"]
     ports:
-    - "${CIPHER_BIND:-0.0.0.0}:${CIPHER_PORT:-8105}:3000"
+    # Default to localhost-only — cipher is now on pmoves_external (host-publishable),
+    # so a 0.0.0.0 default would expose the API/SSE on all interfaces with an empty
+    # CIPHER_API_TOKEN. Operators override CIPHER_BIND for intentional LAN exposure.
+    - "${CIPHER_BIND:-127.0.0.1}:${CIPHER_PORT:-8105}:3000"
     depends_on:
       neo4j:
         condition: service_healthy
       nats:
         condition: service_healthy
     profiles: ["agents"]
-    networks: [pmoves_app, pmoves_data, pmoves_bus]
+    # pmoves_external (non-internal) lets the host-side MCP client reach cipher's
+    # SSE on 127.0.0.1:8105 — pmoves_app/data/bus are internal:true and cannot
+    # publish host ports. CIPHER_BIND defaults to 127.0.0.1 (localhost-only inbound).
+    networks: [pmoves_app, pmoves_data, pmoves_bus, pmoves_external]
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:3000/health"]
       interval: 30s
@@ -771,6 +732,23 @@ services:
         limits:
           cpus: '1.0'
           memory: 512M
+  notebooklm-agent:
+    build:
+      context: ./services/notebooklm-agent
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+    - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+    - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+    - GOOGLE_REFRESH_TOKEN=${GOOGLE_REFRESH_TOKEN}
+    profiles: ["agents"]
+    networks: [pmoves_app, pmoves_external]
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+
   a2ui-nats-bridge:
     <<: *tier-agent-hardened-ro
     build: ./services/a2ui-nats-bridge
@@ -780,7 +758,7 @@ services:
     restart: unless-stopped
     environment:
     - NATS_URL=${NATS_URL}
-    # NATS_URL from env.shared/env.tier-agent has credentials: nats://<from-env.shared>
+    # NATS_URL from env.shared/env.tier-agent has credentials: nats://nats:pmoves@nats:4222
     - A2UI_RENDER_SUBJECT=${A2UI_RENDER_SUBJECT:-a2ui.render.v1}
     - GEOMETRY_WILDCARD=${GEOMETRY_WILDCARD:-geometry.>}
     - PORT=9224
@@ -907,7 +885,7 @@ services:
     image: ${EVO_CONTROLLER_IMAGE:-ghcr.io/powerfulmoves/pmoves-evo-controller:latest}
     restart: unless-stopped
     environment:
-    # NATS_URL from env.tier-agent has credentials: nats://<from-env.shared>
+    # NATS_URL from env.tier-agent has credentials: nats://nats:pmoves@nats:4222
     - PORT=8113
     - SUPA_REST_URL=${SUPA_REST_INTERNAL_URL:-${SUPA_REST_URL:-http://supabase-kong:8000/rest/v1}}
     - EVOSWARM_POLL_SECONDS=${EVOSWARM_POLL_SECONDS:-300}
@@ -930,60 +908,9 @@ services:
       retries: 3
       start_period: 15s
 
-  space-agent:
-    <<: *tier-agent-hardened
-    image: node:22-slim
-    working_dir: /app
-    restart: unless-stopped
-    environment:
-    - PORT=3010
-    - SINGLE_USER_APP=true
-    - PMOVES_NATS_URL=${PMOVES_NATS_URL:-nats://nats:pmoves@nats:4222}
-    - PMOVES_BRIDGE_API_KEY=${PMOVES_BRIDGE_API_KEY:?set PMOVES_BRIDGE_API_KEY in env.shared}
-    - PMOVES_NATS_SUBJECT_PREFIX=pmoves.space
-    - CUSTOMWARE_PATH=/app/customware
-    volumes:
-    - ${SPACE_AGENT_SRC:-../PMOVES-space-agent/pmoves}:/app/pmoves
-    - ${SPACE_AGENT_DATA:-./data/space-agent}:/app/customware
-    command: sh -c "cp -r /app/pmoves/server /app/server && cp -r /app/pmoves/app /app/app && npm install && node space serve"
-    ports: ["${SPACE_AGENT_BIND:-127.0.0.1}:${SPACE_AGENT_PORT:-3010}:3010"]
-    depends_on:
-      nats:
-        condition: service_healthy
-    profiles: ["agents"]
-    networks: [pmoves_app, pmoves_bus]
-    healthcheck:
-      test: ["CMD", "node", "-e", "const http=require('http');http.get('http://localhost:3010/api/health',r=>{r.statusCode===200?process.exit(0):process.exit(1)}).on('error',()=>process.exit(1))"]
-      interval: 15s
-      timeout: 5s
-      retries: 3
-      start_period: 30s
-    deploy:
-      resources:
-        limits:
-          cpus: '1.0'
-          memory: 512M
-
   # Ultimate TTS Studio - Multi-engine TTS with 7 engines (Gradio UI)
     deploy:
       resources:
         limits:
           cpus: '1.0'
           memory: 512M
-
-# =============================================================================
-# Networks — declared external so this overlay parses standalone.
-# Canonical definitions in docker-compose.base.yml. See
-# pmoves/docs/operations/COMPOSE_LAYERING_RUNBOOK.md.
-# =============================================================================
-networks:
-  pmoves_data:
-    external: true
-  pmoves_api:
-    external: true
-  pmoves_app:
-    external: true
-  pmoves_bus:
-    external: true
-  pmoves_external:
-    external: true

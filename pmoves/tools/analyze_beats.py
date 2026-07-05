@@ -80,6 +80,68 @@ DEFAULT_OLLAMA  = os.environ.get("OLLAMA_API_BASE", "http://localhost:11434")
 DEFAULT_HIRAG   = os.environ.get("HIRAG_GPU_URL",   "http://localhost:8087")
 
 
+# ── librosa interpretable features (deterministic) ────────────────────────────
+
+def librosa_features_from_array(y: "np.ndarray", sr: int) -> dict:
+    """Deterministic interpretable features from a mono float32 waveform."""
+    import librosa
+    y = np.asarray(y, dtype="float32")
+    # Guard degenerate input: silence, too-short clips, or non-finite samples
+    # (NaN/inf can leak from upstream resampling/normalisation). librosa's
+    # beat_track raises ParameterError on non-finite buffers and can return a
+    # NaN tempo on silence; either poisons downstream np.mean. Sanitise first.
+    y = np.nan_to_num(y, nan=0.0, posinf=0.0, neginf=0.0)
+    silent = (y.size == 0) or (not np.any(y))
+    if silent:
+        tempo = 0.0
+    else:
+        try:
+            tempo, _ = librosa.beat.beat_track(y=y, sr=sr)
+            tempo = float(np.asarray(tempo).reshape(-1)[0]) if np.asarray(tempo).size else 0.0
+        except Exception:
+            tempo = 0.0
+    if not np.isfinite(tempo):
+        tempo = 0.0
+    chroma = librosa.feature.chroma_stft(y=y, sr=sr).mean(axis=1)
+    mfcc = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=20).mean(axis=1)
+    contrast = librosa.feature.spectral_contrast(y=y, sr=sr).mean(axis=1)
+    tonnetz = librosa.feature.tonnetz(y=librosa.effects.harmonic(y), sr=sr).mean(axis=1)
+    onset_env = librosa.onset.onset_detect(y=y, sr=sr, units="time")
+    duration = max(len(y) / sr, 1e-6)
+    centroid = float(librosa.feature.spectral_centroid(y=y, sr=sr).mean())
+    flatness = float(librosa.feature.spectral_flatness(y=y).mean())
+    chroma = np.nan_to_num(chroma, nan=0.0, posinf=0.0, neginf=0.0)
+    mfcc = np.nan_to_num(mfcc, nan=0.0, posinf=0.0, neginf=0.0)
+    contrast = np.nan_to_num(contrast, nan=0.0, posinf=0.0, neginf=0.0)
+    tonnetz = np.nan_to_num(tonnetz, nan=0.0, posinf=0.0, neginf=0.0)
+    centroid = float(np.nan_to_num(centroid, nan=0.0, posinf=0.0, neginf=0.0))
+    flatness = float(np.nan_to_num(flatness, nan=0.0, posinf=0.0, neginf=0.0))
+    feat = {
+        "tempo_bpm": round(float(tempo), 4),
+        "chroma": [round(float(v), 6) for v in chroma],
+        "mfcc": [round(float(v), 6) for v in mfcc],
+        "spectral_contrast": [round(float(v), 6) for v in contrast],
+        "tonnetz": [round(float(v), 6) for v in tonnetz],
+        "onset_rate": round(len(onset_env) / duration, 6),
+        "spectral_centroid": round(centroid, 4),
+        "spectral_flatness": round(flatness, 6),
+    }
+    # Cymatic grounding: deterministic "sound -> geometry" features
+    # (harmonicity/symmetry + named-frequency detection). See cymatic.py.
+    try:
+        from pmoves.tools.cymatic import cymatic_features
+        feat["cymatic"] = cymatic_features(y, sr)
+    except Exception:
+        feat["cymatic"] = {}
+    return feat
+
+
+def librosa_features(path: "Path") -> dict:
+    import librosa
+    y, sr = librosa.load(str(path), sr=22050, mono=True)
+    return librosa_features_from_array(y, sr)
+
+
 # ── ffprobe / ffmpeg lavfi audio analysis ─────────────────────────────────────
 
 def ffprobe_meta(path: Path) -> dict:
@@ -210,6 +272,13 @@ def extract_all(path: Path, mode: SenseMode = SenseMode.glaze) -> dict | None:
         if mode in (SenseMode.glaze, SenseMode.gaze, SenseMode.auto):
             lavfi = ffmpeg_lavfi_analysis(path)
             feat.update(lavfi)
+
+            # CLAP embedding (deterministic grounding tier)
+            from pmoves.tools.clap_client import ClapClient
+            _clap = ClapClient()
+            feat["clap_embedding"] = _clap.embed_audio_bytes(path.read_bytes(), path.name) or []
+            feat["grounding"] = _clap.last_grounding
+            feat.update(librosa_features(path))
 
         feat["tempo_label"]  = _tempo_label(feat["tempo_bpm"])
         feat["energy_label"] = _energy_label(feat["loudness_I"])
@@ -387,6 +456,40 @@ def cluster(records: list[dict], n_groups: int) -> list[int]:
     return labels.tolist()
 
 
+def cluster_on_embeddings(records: list[dict], n_groups: int) -> tuple[list[int], float]:
+    """KMeans on CLAP embeddings, silhouette-validated. Falls back to acoustic
+    feature vector for any record missing an embedding (flagged upstream)."""
+    from sklearn.cluster import KMeans
+    from sklearn.metrics import silhouette_score
+    from sklearn.preprocessing import StandardScaler
+
+    dim = 512
+    X = []
+    for r in records:
+        emb = r.get("clap_embedding")
+        if emb and len(emb) == dim:
+            X.append(emb)
+        else:
+            base = [r.get("tempo_bpm", 90.0) / 200.0,
+                    r.get("spectral_centroid", 2000.0) / 8000.0,
+                    r.get("spectral_flatness", 0.3)]
+            X.append(base + [0.0] * (dim - len(base)))
+    # Sanitise before scaling: a padded fallback vector can carry NaN from a
+    # degenerate acoustic feature upstream, and on older sklearn a zero-variance
+    # padding column makes StandardScaler divide by zero -> NaN. Either poisons
+    # KMeans (ValueError: Input X contains NaN). Clean both sides.
+    Xarr = np.nan_to_num(np.asarray(X, dtype="float64"), nan=0.0, posinf=0.0, neginf=0.0)
+    Xs = np.nan_to_num(StandardScaler().fit_transform(Xarr),
+                       nan=0.0, posinf=0.0, neginf=0.0)
+    n = max(2, min(n_groups, len(records) - 1))
+    labels = KMeans(n_clusters=n, random_state=42, n_init="auto").fit_predict(Xs).tolist()
+    try:
+        sil = round(float(silhouette_score(Xs, labels)), 4)
+    except Exception:
+        sil = 0.0
+    return labels, sil
+
+
 def name_group(members: list[dict]) -> str:
     avg_bpm   = np.mean([r["tempo_bpm"] for r in members])
     avg_lufs  = np.mean([r["loudness_I"] for r in members])
@@ -533,11 +636,22 @@ def analyze(
 
     n = min(groups, len(records) // 2)
     console.print(f"\n[bold]Initial cluster[/] — {len(records)} tracks → {n} groups…")
-    labels = cluster(records, n)
+
+    # Primary clustering runs on CLAP embeddings (the WS-A grounding signal, spec §4.2)
+    # whenever any track carries one. cluster_on_embeddings falls back to acoustic
+    # features per-record for tracks missing an embedding, and returns the validating
+    # silhouette directly — so we reuse it as the coherence score instead of recomputing.
+    has_clap = any(len(r.get("clap_embedding") or []) == 512 for r in records)
+    if has_clap:
+        labels, coherence = cluster_on_embeddings(records, n)
+        console.print("  [dim]Clustered on CLAP embeddings (laion/larger_clap_music)[/]")
+    else:
+        labels = cluster(records, n)
+        coherence = measure_coherence(records, labels)
+        console.print("  [dim]No CLAP embeddings present — clustered on acoustic features[/]")
 
     # ── Coherence check + gaze escalation ─────────────────────────────────────
     if sense_mode in (SenseMode.auto, SenseMode.gaze):
-        coherence = measure_coherence(records, labels)
         console.print(f"  [bold]Silhouette coherence score:[/] {coherence:.3f} "
                       f"(threshold: {COHERENCE_THRESHOLD})")
 

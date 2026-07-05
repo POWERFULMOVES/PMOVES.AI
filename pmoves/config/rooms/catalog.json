@@ -1,5 +1,5 @@
 {
-  "schema_version": "1.0.0",
+  "schema_version": "1.1.0",
   "rooms": [
     {
       "room_id": "4090-field.room.control",
@@ -40,6 +40,14 @@
       "display_name": "PMOVES Demo Room",
       "manifest": "demo.room.json",
       "summary": "One-click demo: Agent Zero local + 4090 Claude Code claws + HERMES V4 assist. Stage: rehearsal."
+    },
+    {
+      "room_id": "hermes-agent.room.control",
+      "agent_id": "hermes-agent",
+      "alter": "hermes-agent",
+      "display_name": "HERMES Agent Control Room",
+      "manifest": "hermes-agent.room.control.json",
+      "summary": "Cross-platform gateway control room for Hermes Agent (NousResearch) integration. Manages profiles, skills, cron jobs, gateway instances, and NATS bridge telemetry."
     }
   ]
 }

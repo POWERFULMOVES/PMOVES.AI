@@ -2,6 +2,17 @@
 
 > Technology-Architecture-Context tree for the Tailscale mesh VPN layer — node registration, auth key management, exit node routing, DNS, and the Headscale self-hosted migration path.
 
+## Current State (2026-06-15) — supersedes stale tables below
+
+Tailnet `tailcad9b4.ts.net`. Authoritative runbook: [`../operations/TAILSCALE_EXIT_NODE_RUNBOOK.md`](../operations/TAILSCALE_EXIT_NODE_RUNBOOK.md).
+
+- **Exit nodes: ALL 3 KVMs live + approved** — `pmoves-kvm2` (167.88.38.57), `pmoves-kvm4-1` (31.97.42.207, designated egress), `pmoves-kvm4-2` (167.88.39.80). Each has IP forwarding (sysctl) + `--advertise-exit-node`; kvm4-1/kvm4-2 enabled over Tailscale SSH on 2026-06-15, routes approved in console. `pmoves-4090` egresses via kvm4-1 (clients can also auto-select via `tailscale exit-node suggest`).
+- **Tailscale SSH server enabled on all KVMs** (`RunSSH=true`) — ACL `ssh: autogroup:admin → * (root)` + a member self-SSH `check` rule. This is the out-of-band fleet management plane and **retires the kvm2 blocked-port-22 P0** (manage hbbs/hbbr over the tailnet).
+- **MCP control (two complementary)**: npm `tailscale-mcp` (admin API — ACL/routes/devices, needs `TAILSCALE_API_KEY`, wiring pending) + **custom `pmoves-tailscale-mcp/`** (local CLI wrapper — exit-node/serve/funnel/ssh/metrics/netcheck/ping, no creds; PR #1821).
+- **Serve/Funnel** sanctioned: `tailscale serve` (tailnet HTTPS — Jellyfin/Pinokio) + `tailscale funnel` (public 443/8443/10000). ACL `nodeAttrs: tag:exit → funnel`.
+- **Observability**: tailscaled Prometheus metrics → node-exporter textfile collector → Grafana "Tailscale Network Health" (PR #1822).
+- **Still open**: `TAILSCALE_API_KEY`/`TAILSCALE_TAILNET` wiring for the admin MCP (operator-direct manifest edit); `tag:exit` reusable authkey for auto-approving new exit nodes; Headscale migration (unchanged, planned).
+
 ## Service Identity
 
 | Field | Value |
@@ -145,8 +156,13 @@ Target: **Headscale** (self-hosted on KVM2)
 
 | Requirement | Status | Notes |
 |-------------|--------|-------|
-| All production nodes on tailnet | Partial | KVM nodes + POWERFULMOVES connected; offline: nano, laptop, pixel |
-| Exit node approved | GREEN | KVM2 approved as exit node |
+| All production nodes on tailnet | Partial | KVM nodes + 4090 + POWERFULMOVES connected; offline: nano, laptop, pixel |
+| Exit nodes approved | GREEN | **All 3 KVMs** (kvm2, kvm4-1, kvm4-2) advertised + approved (2026-06-15) |
+| Tailscale SSH (out-of-band mgmt) | GREEN | `RunSSH=true` on all KVMs; retires kvm2 blocked-port-22 |
+| Local control MCP | GREEN | `pmoves-tailscale-mcp/` (CLI wrapper) — PR #1821; registration operator-opt-in |
+| Admin-API MCP creds | Pending | `TAILSCALE_API_KEY`/`TAILSCALE_TAILNET` manifest wiring (operator-direct) |
+| Metrics → observability | GREEN | tailscaled metrics → node-exporter textfile → Grafana (PR #1822) |
+| Auto-onboarding (tag:exit authkey) | Pending | mint reusable tagged authkey → new exit nodes self-approve |
 | Auth key rotation | Partial | Reusable keys don't expire; single-use keys have 90d TTL |
 | Headscale readiness | Pending | Submodule tracked, deployment not started |
 | Firewall rules per node | GREEN | VPS provisioned with ufw |
